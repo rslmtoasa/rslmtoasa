@@ -1767,6 +1767,14 @@ contains
          if (canonical_chi0_backend == 'realspace_gf') then
             kq_eigensolve_cpu_seconds = 0.0_rp
             chi0_result = realspace_batch%q_response(iq)
+         else if (is_gamma) then
+            ! At exact Gamma, k+q is the same folded endpoint as k.  Reuse
+            ! the canonical solve instead of diagonalizing the identical
+            ! Hamiltonians a second time; this also preserves a common basis
+            ! in degenerate subspaces for the explicit transition vertices.
+            eigenvalues_kq = eigenvalues_k
+            eigenvectors_kq = eigenvectors_k
+            kq_eigensolve_cpu_seconds = 0.0_rp
          else
             kq_workset = reciprocal_obj%k_workset%shifted(config%q_points(:, iq))
             call cpu_time(t_profile_start)

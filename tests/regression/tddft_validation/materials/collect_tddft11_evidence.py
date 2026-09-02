@@ -172,13 +172,15 @@ def collect_material(root: Path, material: str, stem: str) -> dict[str, Any]:
             "quadratic_small_q_dispersion": "not assessed: bare chi0 selected-point probe has no enhanced magnon mode fit",
             "lkag_frozen_magnon_reference": "not assessed: no independent same-ground-state reference run in this bounded probe",
             "ni_path_backfolding": "not assessed: no dense reciprocal path/backfolding audit in this bounded probe",
+            "ni_reference_connectivity": "not assessed: the retained VAL-19 cutoff deck has no fcc hopping neighbor in the current lattice-unit setup",
             "damping_stoner_convergence": "not assessed: no eta/k-mesh/frequency convergence sweep",
         },
         "release_gate_pass": False,
         "release_gate_reason": (
             "The bounded probe exercises all three bare-chi0 routes, but the native route disagrees "
             "pointwise with the two K-space routes and the K-space raw Ward residual is nonzero; "
-            "dense q^2, independent references, Ni path, and convergence sweeps remain unassessed."
+            "the retained Ni reference deck has no hopping neighbor, and dense q^2, independent "
+            "references, Ni path, and convergence sweeps remain unassessed."
         ),
     }
 
@@ -198,7 +200,7 @@ def main() -> None:
     evidence = {
         "campaign": "TDDFT-11",
         "date": "2026-09-02",
-        "source_revision": "working tree before TDDFT-11 commit",
+        "source_revision": "working tree after Gamma endpoint reuse and native cluster-to-site mapping fixes",
         "materials": {
             material: collect_material(root, material, stem)
             for material, stem in MATERIALS.items()

@@ -7,8 +7,8 @@
         "max_abs_matrix_difference": 46.362154468654985,
         "pairwise_max_abs_matrix_difference": {
           "eigenpairs_vs_kspace_lehmann": 46.362154468654985,
-          "eigenpairs_vs_realspace_gf": 6.938558711613947,
-          "kspace_lehmann_vs_realspace_gf": 39.61863047487817
+          "eigenpairs_vs_realspace_gf": 5.452978285360707,
+          "kspace_lehmann_vs_realspace_gf": 41.09139825337254
         },
         "pass": false,
         "pointwise_tolerance": 1e-08
@@ -72,7 +72,7 @@
         "tail_assessed": false
       },
       "release_gate_pass": false,
-      "release_gate_reason": "The bounded probe exercises all three bare-chi0 routes, but the native route disagrees pointwise with the two K-space routes and the K-space raw Ward residual is nonzero; dense q^2, independent references, Ni path, and convergence sweeps remain unassessed.",
+      "release_gate_reason": "The bounded probe exercises all three bare-chi0 routes, but the native route disagrees pointwise with the two K-space routes and the K-space raw Ward residual is nonzero; the retained Ni reference deck has no hopping neighbor, and dense q^2, independent references, Ni path, and convergence sweeps remain unassessed.",
       "routes": {
         "eigenpairs": {
           "backend": "eigenpairs",
@@ -83,15 +83,15 @@
           "q_files": [
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_eigenpairs_q000001_chi0.dat",
-              "sha256": "a0a1421df808b22628d68fc851ac988c814b97ba1271b190b88446d5a56897b7"
+              "sha256": "651535b1bceff10456f02158738f507027cddf127c127bb343e24f778606e7c4"
             },
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_eigenpairs_q000002_chi0.dat",
-              "sha256": "489171d88a4330883aae1de8bb6adad8ffc28a68f4ee21a5007c4e2a7c78d057"
+              "sha256": "d2fca14f9b522cfae754f5aeafe029deec3dab648da22a875d2721920b9f15e9"
             },
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_eigenpairs_q000003_chi0.dat",
-              "sha256": "16c69f8c90bcb5150f5cadf61bf0b5f6b15c8ece1e7d66aae84cf66693a2d9fb"
+              "sha256": "ef84a6d92f4b4a2e185912ea164d28d0f68a25c33e6345420e9d7b66331c58a0"
             }
           ],
           "real_space_cutoff": 0.0,
@@ -113,15 +113,15 @@
           "q_files": [
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_kspace_lehmann_q000001_chi0.dat",
-              "sha256": "d6b47e6540b618449e449c55da62b7142b68738161d2ab824170470c8f22c749"
+              "sha256": "7e5fbc0e15e432abd4ec253ad5eb89e4189897b1f901443946970455ef530a0b"
             },
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_kspace_lehmann_q000002_chi0.dat",
-              "sha256": "9cb494dd60aeef8d8027bfe0c8d98eca2a80643d337be7ba351a7741597163e5"
+              "sha256": "24441d4131b4af740bf64da94a26c791253549d62d5a4df70ba97210f22ae536"
             },
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_kspace_lehmann_q000003_chi0.dat",
-              "sha256": "e8310ae88056b043d478131e6f9b94600a016703e9a6231102f4b6c4cb542d03"
+              "sha256": "0e8d90588b83cefff9d10eb68f2d362a6a57cbc7792abd6cbfa5ad17eeeb9f51"
             }
           ],
           "real_space_cutoff": 0.0,
@@ -143,15 +143,15 @@
           "q_files": [
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_realspace_gf_q000001_chi0.dat",
-              "sha256": "fdbb4de39b7ed1361f4dbb55615627e701dd0193c24ab2ab35054cf0ae9d800b"
+              "sha256": "dbb361f27d9866f88cc7ccd1f3c02450f22b539d95f96b221cbfb49455d61bda"
             },
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_realspace_gf_q000002_chi0.dat",
-              "sha256": "89adabde5c648dec31611b3133f2c95579140eb431aff79390ab10edbe130dd0"
+              "sha256": "7df32c8fed37b10520fd2df66b71d9115c49a9cbb3a8ef0fba7a11b60e447ad7"
             },
             {
               "path": "tests/regression/tddft_validation/materials/bccFe/tddft11_fe_realspace_gf_q000003_chi0.dat",
-              "sha256": "2fbbba072106a440b50f555fcadaf519e15d9290f470ef3443021ca057ec7658"
+              "sha256": "c806c8150e50c1b2d4c86c7cb3a8523ed52e883b07c47a5077be7624f490ed3b"
             }
           ],
           "real_space_cutoff": 8.5836,
@@ -169,6 +169,7 @@
         "damping_stoner_convergence": "not assessed: no eta/k-mesh/frequency convergence sweep",
         "lkag_frozen_magnon_reference": "not assessed: no independent same-ground-state reference run in this bounded probe",
         "ni_path_backfolding": "not assessed: no dense reciprocal path/backfolding audit in this bounded probe",
+        "ni_reference_connectivity": "not assessed: the retained VAL-19 cutoff deck has no fcc hopping neighbor in the current lattice-unit setup",
         "quadratic_small_q_dispersion": "not assessed: bare chi0 selected-point probe has no enhanced magnon mode fit"
       }
     },
@@ -242,7 +243,7 @@
         "tail_assessed": false
       },
       "release_gate_pass": false,
-      "release_gate_reason": "The bounded probe exercises all three bare-chi0 routes, but the native route disagrees pointwise with the two K-space routes and the K-space raw Ward residual is nonzero; dense q^2, independent references, Ni path, and convergence sweeps remain unassessed.",
+      "release_gate_reason": "The bounded probe exercises all three bare-chi0 routes, but the native route disagrees pointwise with the two K-space routes and the K-space raw Ward residual is nonzero; the retained Ni reference deck has no hopping neighbor, and dense q^2, independent references, Ni path, and convergence sweeps remain unassessed.",
       "routes": {
         "eigenpairs": {
           "backend": "eigenpairs",
@@ -253,15 +254,15 @@
           "q_files": [
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_eigenpairs_q000001_chi0.dat",
-              "sha256": "81385235b2455e0e125a9ee6063a024b28249649e04532a758f6d9b47dd841d0"
+              "sha256": "240854ad5ee54654a2d7550c0d0d51a6c97b7497091684b11cbe1f32833825cc"
             },
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_eigenpairs_q000002_chi0.dat",
-              "sha256": "0f9a6aeb8782cbe70d7e5447738f79b54ec6de47cfafc245e09768b81e7ff0fe"
+              "sha256": "249cfe560e8c35b306a23ae5a9ef2e9b22b127a397b140a594d70831252e4ce7"
             },
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_eigenpairs_q000003_chi0.dat",
-              "sha256": "20547b42a9d2e14454f847b118565545478ab24378d9fe7f3f5689b63d75c84d"
+              "sha256": "3fe5710f9e2282d17a3a6b6a7cce8a6749df6ed00486bdafc744f7244c420bdf"
             }
           ],
           "real_space_cutoff": 0.0,
@@ -283,15 +284,15 @@
           "q_files": [
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_kspace_lehmann_q000001_chi0.dat",
-              "sha256": "266f0f8541fd5be02c87cba7a2d992861897e240fb36b2a5ed069e628dd2f50e"
+              "sha256": "32b4e66ffa78386d1c008ed7a18a3cf4d1ea6e50ccbe6f51898a306135c80bfe"
             },
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_kspace_lehmann_q000002_chi0.dat",
-              "sha256": "128ab8fed2b728cbc7f897da358cf18de0d1e687e35ef2a785b2ef9d15ca793c"
+              "sha256": "3cd10d5efe059293539ad699f9abb014ee08c8706ba0bd3c290f05da42168c0b"
             },
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_kspace_lehmann_q000003_chi0.dat",
-              "sha256": "8039a334be61e41a12ee879c54a191f2ebdff65ba454648a9d1d82d41c612517"
+              "sha256": "f620c51c6aa0d04744ea915591bff223e631a2b20738e448a7fc05fe926c7fc9"
             }
           ],
           "real_space_cutoff": 0.0,
@@ -313,15 +314,15 @@
           "q_files": [
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_realspace_gf_q000001_chi0.dat",
-              "sha256": "b88c6bd937541f0bee74383fe1c114f636bbf88412bc5fd32ccf949eb603d8fa"
+              "sha256": "52802abaa64b048cb81eff10392b3c40053afb89508c8a78971dc61ab7d7b8b0"
             },
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_realspace_gf_q000002_chi0.dat",
-              "sha256": "5c188ef819a6ff47c5aeebf0ad354e88a0c44969d116696b02eeed14e4b76680"
+              "sha256": "d3e5c2ed90e3af3160b09646a2a52023e9b96598dc49c78f55724bd30ee12c44"
             },
             {
               "path": "tests/regression/tddft_validation/materials/fccNi/tddft11_ni_realspace_gf_q000003_chi0.dat",
-              "sha256": "7be374f34bc25c2503c5aa933f2406423e1a722b0dc973c2545f1d4df0e20cbb"
+              "sha256": "b22e116c0eee261544db3896fecbb88c8e2d11c8695a567b62ae5bdba27b1ecf"
             }
           ],
           "real_space_cutoff": 23.03627574066607,
@@ -339,9 +340,10 @@
         "damping_stoner_convergence": "not assessed: no eta/k-mesh/frequency convergence sweep",
         "lkag_frozen_magnon_reference": "not assessed: no independent same-ground-state reference run in this bounded probe",
         "ni_path_backfolding": "not assessed: no dense reciprocal path/backfolding audit in this bounded probe",
+        "ni_reference_connectivity": "not assessed: the retained VAL-19 cutoff deck has no fcc hopping neighbor in the current lattice-unit setup",
         "quadratic_small_q_dispersion": "not assessed: bare chi0 selected-point probe has no enhanced magnon mode fit"
       }
     }
   },
-  "source_revision": "working tree before TDDFT-11 commit"
+  "source_revision": "working tree after Gamma endpoint reuse and native cluster-to-site mapping fixes"
 }

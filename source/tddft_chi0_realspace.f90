@@ -150,7 +150,14 @@ contains
          if (iatom < 1 .or. iatom > size(lattice_obj%cr, 2) .or. jatom < 1 .or. jatom > size(lattice_obj%cr, 2)) then
             error stop 'native real-space provider: lattice pair atom is outside coordinates'
          end if
-         pairs(ip, :) = [iatom, jatom]
+         ! `jatom` is a cluster-atom index, whereas response channels use the
+         ! periodic unit-cell site index.  Keep the cluster coordinate for
+         ! the Fourier phase, but fold only the channel label through iz.
+         if (.not. allocated(lattice_obj%iz) .or. lattice_obj%iz(jatom) < 1 .or. &
+             lattice_obj%iz(jatom) > size(site_orbital_counts)) then
+            error stop 'native real-space provider: cluster atom has no valid response-site mapping'
+         end if
+         pairs(ip, :) = [iatom, lattice_obj%iz(jatom)]
          rvec(:, ip) = realspace_pair_vector(lattice_obj, iatom, jatom)
       end do
       source_options = tddft_realspace_chi0_options()

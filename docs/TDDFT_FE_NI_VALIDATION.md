@@ -45,7 +45,7 @@ equivalence tolerance is `1e-8`.
 
 | material | eigenpairs vs K-space Lehmann | eigenpairs vs native RS | K-space Lehmann vs native RS | backend gate |
 |---|---:|---:|---:|---|
-| bcc Fe | 46.36215447 | 6.93855871 | 39.61863047 | **FAIL** |
+| bcc Fe | 46.36215447 | 5.45297829 | 41.09139825 | **FAIL** |
 | fcc Ni | 44.63152833 | 61.13543750 | 16.91914306 | **FAIL** |
 
 The native runs do exercise the intended `G_ab(R,z), G_ba(-R,z) →
@@ -63,7 +63,7 @@ not altered in post-processing.
 
 ## Implementation work completed
 
-The native production attachment had three integration defects exposed by this
+The native production attachment had four integration defects exposed by this
 campaign and fixed on the current branch:
 
 1. A missing explicit `ijpair` list now causes the native bulk stack to build
@@ -78,6 +78,22 @@ campaign and fixed on the current branch:
 3. Native bare-`chi0` output no longer appends dynamic Gamma metadata to a
    Goldstone file it deliberately does not create; common q-loop deallocation
    is also guarded for the native path.
+4. The native provider now maps a cluster atom in `ijpair(:,2)` through the
+   cluster `iz` array to its periodic response-site label, while retaining the
+   cluster coordinate for the Fourier phase. Without this distinction, every
+   nonlocal pair in a one-site bcc/fcc cell was silently discarded by the
+   site-projected response contraction. The regenerated Fe native output now
+   has a nonzero q dependence.
+
+The Ni restart used by this bounded probe remains the existing VAL-19 deck
+(`alat=6.650`, `ct=4`, `r2=16`). Under the current lattice units its nearest
+fcc image is 4.7027 Å, so that deck builds an atomic-like neighbor map with no
+hopping. A diagnostic attempt to enlarge the cutoff to include that image
+instead exposed a non-Hermitian reciprocal Hamiltonian before eigensolution.
+Consequently the present Ni numbers are an implementation/reference-state
+diagnostic, not evidence of an itinerant Ni validation; a consistent Ni
+ground-state/restart must be regenerated before the TDDFT-11 gate can be
+reopened.
 
 The pre-recursion cutoff is a performance and locality control, not a tail
 convergence claim. A release run must sweep `realspace_rmax` (or provide an
@@ -99,7 +115,8 @@ tail before a local zone can replace the full embedding cluster.
 
 The campaign must still resolve the three-route normalization/integration
 disagreement, provide a validated native static-limit kernel, and rerun with
-freshly converged Fe/Ni ground states. Only then should it add dense small-q
+freshly converged and internally consistent Fe/Ni ground states (including a
+connected Ni neighbor map). Only then should it add dense small-q
 mode paths and a demonstrated `omega=Dq^2` window, same-ground-state LKAG and
 frozen-magnon/GBT references, Ni reciprocal-path/backfolding checks, and
 eta/k-mesh/frequency/R-space convergence sweeps.
