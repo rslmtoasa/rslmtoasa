@@ -1,20 +1,24 @@
-# TDDFT-08: longitudinal susceptibility and relaxation (prototype disabled)
+# TDDFT-08: longitudinal susceptibility and relaxation (superseded)
 
 ## Current production status
 
-`channel = 'longitudinal'` is deliberately **unavailable** in the production
-susceptibility driver. It terminates before reading or using a longitudinal
-static file. The earlier prototype must be rebuilt on the WR-04 real
-static-limit machinery and validated before it can be exposed as a runnable
-calculation. In particular, no output from the present code supports an LLB
-parameter or `alpha_parallel` claim.
+The finite-field calibration prototype described here is no longer the
+production route.  TDDFT-13 now exposes `channel = 'longitudinal'` as the
+coupled site-major `(charge,m_z)` response, with ground-state-derived local
+ALSDA and projected Hartree screening.  See
+[`docs/TDDFT_LONGITUDINAL.md`](../TDDFT_LONGITUDINAL.md) for the active route.
+
+The static-field reader, fit types, and unit coverage remain as compatibility
+APIs for the TDDFT-08 record.  Their controls are optional and are not read by
+the TDDFT-13 production driver.  No output supports an LLB parameter or
+`alpha_parallel` claim.
 
 The interface and file format below are retained as a design record for that
 future reactivation; they are not a supported input recipe.
 
 ## Reserved input and finite-field data
 
-When this route is revalidated, its proposed `&tddft` controls are:
+The retained compatibility controls are:
 
 ```fortran
 channel = 'longitudinal'
@@ -33,7 +37,7 @@ mz_site_nsite`. A future implementation must require at least one matched
 `+DeltaB/-DeltaB` pair for every source site and multiple field magnitudes to
 make a real linearity check meaningful.
 
-## Reactivation requirements
+## Historical prototype requirements
 
 Before this route is enabled, it must be restricted to a defined collinear,
 no-SOC scope and demonstrate all of the following:

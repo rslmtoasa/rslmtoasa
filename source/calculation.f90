@@ -62,7 +62,7 @@ module calculation_mod
    use tddft_backend_mod, only: tddft_chi0_backend, tddft_eigenpair_backend, tddft_kspace_lehmann_backend, &
       tddft_realspace_gf_backend, canonical_tddft_backend_name, make_tddft_chi0_backend
    use tddft_chi0_realspace_mod, only: tddft_realspace_chi0_options, tddft_native_realspace_gf_provider
-   use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS, RESPONSE_MZ
+   use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS
    use response_vertices_mod, only: response_channel
    use tddft_four_component_mod, only: build_four_component_chi_ks, build_four_component_kernel, &
       evaluate_four_component_zero_modes, tddft_four_component_zero_mode_diagnostics
@@ -74,9 +74,8 @@ module calculation_mod
       spectral_weight_correction_is_acceptable, &
       write_goldstone_diagnostics_text, append_goldstone_column_correction_text
    use tddft_modes_mod, only: tddft_mode_options, tddft_mode_result, analyze_tddft_modes, write_tddft_modes_text
-   use tddft_longitudinal_mod, only: tddft_longitudinal_options, tddft_longitudinal_static_result, &
-      tddft_longitudinal_result, read_longitudinal_static_fields, build_longitudinal_static_response, &
-      build_longitudinal_kernel, calibrate_longitudinal_response, write_longitudinal_report
+   use tddft_longitudinal_mod, only: build_charge_longitudinal_channels, build_charge_longitudinal_kernel, &
+      append_longitudinal_response_metadata
 #ifdef USE_MPI
    use mpi
 #endif
@@ -1236,9 +1235,6 @@ contains
       type(tddft_goldstone_column_correction) :: pair_correction
       type(tddft_mode_options) :: mode_options
       type(tddft_mode_result) :: mode_result
-      type(tddft_longitudinal_options) :: longitudinal_options
-      type(tddft_longitudinal_static_result) :: longitudinal_static
-      type(tddft_longitudinal_result) :: longitudinal_result
       type(tddft_four_component_zero_mode_diagnostics) :: full_zero_mode_diagnostics
       class(tddft_chi0_backend), allocatable :: chi0_backend
       type(lmto_pair_operator_tile_source), target :: pair_operator_source
@@ -1252,14 +1248,13 @@ contains
       real(rp), allocatable :: signed_moments(:)
       complex(rp), allocatable :: all_xi_reverse(:, :, :, :), all_loss_reverse(:, :, :, :)
       complex(rp), allocatable :: all_xi_pair_reverse(:, :, :, :), all_loss_pair_reverse(:, :, :, :)
-      real(rp), allocatable :: m0(:), static_fields(:), static_moments(:, :)
       real(rp) :: response_eta, t_profile_start, t_profile_stop, kq_eigensolve_cpu_seconds
       real(rp) :: response_electron_count, response_band_energy, electron_count_tolerance
       real(rp) :: bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak, pair_corrected_gamma_peak
       real(rp) :: bare_gamma_peak_reverse, legacy_gamma_peak_reverse, pair_gamma_peak_reverse
       real(rp) :: pair_corrected_gamma_peak_reverse
       real(rp) :: raw_pair_minimum_spectral_weight, corrected_pair_minimum_spectral_weight
-      integer, allocatable :: site_orbital_counts(:), static_sources(:)
+      integer, allocatable :: site_orbital_counts(:)
       integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, nresponse
       integer :: corrected_minimum_location(2)
       logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_full_response, is_gamma, has_gamma
@@ -1276,6 +1271,8 @@ contains
          if (rank == 0) call g_logger%info('TDDFT susceptibility route disabled by &tddft enabled=.false.', __FILE__, __LINE__)
          return
       end if
+      is_longitudinal = config%channel == 'longitudinal'
+      is_full_response = config%channel == 'full'
       canonical_chi0_backend = canonical_tddft_backend_name(config%chi0_backend)
       if (len_trim(canonical_chi0_backend) == 0) then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: unknown chi0 backend '''// &
@@ -1340,6 +1337,7 @@ contains
       ! rebuild the normal-state Hamiltonian from that ground-state potential.
       call get_mpi_variables(rank, lattice_obj%nrec)
       self_obj = self(bands_obj, mix_obj)
+      self_obj%xc_response_derivatives_requested = is_longitudinal
       call self_obj%refresh_xc_response_kernel()
       if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham()
       call hamiltonian_obj%build_bulkham()
@@ -1370,8 +1368,6 @@ contains
          call g_logger%fatal('[calculation.post_processing_susceptibility]: response temperature is unresolved.', __FILE__, __LINE__)
       end if
       reciprocal_obj%temperature = config%electronic_temperature
-      is_longitudinal = config%channel == 'longitudinal'
-      is_full_response = config%channel == 'full'
       circular_reverse = .not. is_longitudinal .and. .not. is_full_response .and. &
          trim(config%circular_channel) == 'both'
       primary_minus_plus = trim(config%circular_channel) == 'minus_plus'
@@ -1420,31 +1416,33 @@ contains
          end do
       end if
 
-      allocate(site_orbital_counts(lattice_obj%nrec), left_channels(lattice_obj%nrec), right_channels(lattice_obj%nrec), &
-         left_channels_reverse(lattice_obj%nrec), right_channels_reverse(lattice_obj%nrec))
-      site_orbital_counts = norb
-      do iq = 1, lattice_obj%nrec
-         if (is_longitudinal) then
-            ! sigma_z is diagonal in the collinear spin basis: the generic
-            ! vertex engine therefore retains same-spin electron-hole pairs.
-            left_channels(iq) = response_channel(iq, RESPONSE_MZ)
-            right_channels(iq) = response_channel(iq, RESPONSE_MZ)
-         else if (primary_minus_plus) then
-            left_channels(iq) = response_channel(iq, RESPONSE_MINUS)
-            right_channels(iq) = response_channel(iq, RESPONSE_PLUS)
-            left_channels_reverse(iq) = response_channel(iq, RESPONSE_PLUS)
-            right_channels_reverse(iq) = response_channel(iq, RESPONSE_MINUS)
-         else
-            left_channels(iq) = response_channel(iq, RESPONSE_PLUS)
-            right_channels(iq) = response_channel(iq, RESPONSE_MINUS)
-            left_channels_reverse(iq) = response_channel(iq, RESPONSE_MINUS)
-            right_channels_reverse(iq) = response_channel(iq, RESPONSE_PLUS)
-         end if
-      end do
-      if (is_full_response) then
+      if (is_longitudinal) then
+         nresponse = 2*lattice_obj%nrec
+      else if (is_full_response) then
          nresponse = 4*lattice_obj%nrec
       else
          nresponse = lattice_obj%nrec
+      end if
+      allocate(site_orbital_counts(lattice_obj%nrec), left_channels(nresponse), right_channels(nresponse), &
+         left_channels_reverse(lattice_obj%nrec), right_channels_reverse(lattice_obj%nrec))
+      site_orbital_counts = norb
+      if (is_longitudinal) then
+         call build_charge_longitudinal_channels(lattice_obj%nrec, left_channels)
+         right_channels = left_channels
+      else
+         do iq = 1, lattice_obj%nrec
+            if (primary_minus_plus) then
+               left_channels(iq) = response_channel(iq, RESPONSE_MINUS)
+               right_channels(iq) = response_channel(iq, RESPONSE_PLUS)
+               left_channels_reverse(iq) = response_channel(iq, RESPONSE_PLUS)
+               right_channels_reverse(iq) = response_channel(iq, RESPONSE_MINUS)
+            else
+               left_channels(iq) = response_channel(iq, RESPONSE_PLUS)
+               right_channels(iq) = response_channel(iq, RESPONSE_MINUS)
+               left_channels_reverse(iq) = response_channel(iq, RESPONSE_MINUS)
+               right_channels_reverse(iq) = response_channel(iq, RESPONSE_PLUS)
+            end if
+         end do
       end if
       chi0_options%eta = config%eta
       chi0_options%electronic_temperature = config%electronic_temperature
@@ -1453,7 +1451,9 @@ contains
       chi0_options%occupation_prune_tolerance = config%occupation_tolerance
       chi0_options%k_mesh_shape = reciprocal_obj%nk_mesh
       chi0_options%response_projection = config%response_projection
-      if (primary_minus_plus) then
+      if (is_longitudinal) then
+         chi0_options%circular_channel = 'charge_mz'
+      else if (primary_minus_plus) then
          chi0_options%circular_channel = 'minus_plus'
       else
          chi0_options%circular_channel = 'plus_minus'
@@ -1496,15 +1496,6 @@ contains
             "gf_integration='mixed_contour' requires a complex-energy native source.", __FILE__, __LINE__)
       end if
       has_external_field = control_obj%do_comom .or. control_obj%constraints_enable
-      if (is_longitudinal .and. has_soc) then
-         call g_logger%fatal('[calculation.post_processing_susceptibility]: TDDFT-08 longitudinal response is restricted to collinear no-SOC calculations.', &
-            __FILE__, __LINE__)
-      end if
-      if (is_longitudinal) then
-         call g_logger%fatal('[calculation.post_processing_susceptibility]: longitudinal TDDFT remains a prototype and is '// &
-            'unavailable until its static calibration is rebuilt on the WR-04 real static-limit machinery; no LLB claim is supported.', &
-            __FILE__, __LINE__)
-      end if
       if (canonical_chi0_backend == 'kspace_lehmann' .and. config%chi0_backend == 'green' .and. rank == 0) then
          call g_logger%warning('[calculation.post_processing_susceptibility]: chi0_backend=''green'' currently selects the '// &
             'K-space Lehmann backend backed by the eigenpair-resolvent reference, not a native RS Green-function provider; '// &
@@ -1615,8 +1606,8 @@ contains
       end if
 
       ! The Gamma/static KS batch is shared by both channels.  Transverse uses
-      ! it for Goldstone diagnostics; longitudinal instead calibrates its own
-      ! kernel from independently converged symmetric +/- Bz calculations.
+      ! it for Goldstone diagnostics; longitudinal uses it only as the exact
+      ! zero-frequency bare response reference for the common Dyson path.
       allocate(omega_static(1))
       omega_static = 0.0_rp
       ! A native real-space source is dynamic-first in TDDFT-07.  Do not
@@ -1705,20 +1696,23 @@ contains
          ! Goldstone diagnostic; those require the future native static-limit
          ! provider documented in TDDFT-07.
       else if (is_longitudinal) then
-         longitudinal_options%pair_tolerance = config%longitudinal_pair_tolerance
-         longitudinal_options%linearity_tolerance = config%longitudinal_linearity_tolerance
-         longitudinal_options%static_agreement_tolerance = config%longitudinal_static_agreement_tolerance
-         longitudinal_options%fit_omega_min = config%longitudinal_fit_omega_min
-         longitudinal_options%fit_omega_max = config%longitudinal_fit_omega_max
-         call read_longitudinal_static_fields(trim(config%longitudinal_static_file), lattice_obj%nrec, static_sources, &
-            static_fields, static_moments)
-         call build_longitudinal_static_response(static_sources, static_fields, static_moments, longitudinal_options, &
-            longitudinal_static)
-         allocate(m0(lattice_obj%nrec))
-         do isite = 1, lattice_obj%nrec
-            m0(isite) = self_obj%xc_response_provider%site(isite)%spin_population
-         end do
-         call build_longitudinal_kernel(chi0_static%chi(:, :, 1), cmplx(longitudinal_static%chi, 0.0_rp, rp), kernel)
+         ! The coupled longitudinal kernel is derived from the converged
+         ! ground-state XC route and the same projected charge metric used by
+         ! the charge response.  No independently supplied static-field file
+         ! and no rigid-rotation/Goldstone constraint enter this branch.
+         if (.not. allocated(charge_obj%amad) .or. size(charge_obj%amad, 1) /= lattice_obj%nrec .or. &
+            size(charge_obj%amad, 2) /= lattice_obj%nrec) then
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: longitudinal TDDFT requires an nrec-by-nrec projected Coulomb kernel.', &
+               __FILE__, __LINE__)
+         end if
+         allocate(coulomb_site(lattice_obj%nrec, lattice_obj%nrec))
+         coulomb_site = charge_obj%amad
+         call self_obj%xc_response_provider%longitudinal_response_capability(full_response_supported, full_response_capability_reason)
+         if (.not. full_response_supported) then
+            call g_logger%fatal('[calculation.post_processing_susceptibility]: channel=''longitudinal'' is unavailable for XC route '''// &
+               trim(self_obj%xc_response_provider%functional_label)//''': '//trim(full_response_capability_reason), __FILE__, __LINE__)
+         end if
+         call build_charge_longitudinal_kernel(self_obj%xc_response_provider, coulomb_site, kernel)
       else if (is_full_response) then
          ! The common XC provider is the sole source of ALSDA derivatives;
          ! the charge response additionally uses the projected Madelung
@@ -1800,15 +1794,16 @@ contains
       end if
 
       has_gamma = any(maxval(abs(config%q_points), dim=1) <= 1.0e-12_rp)
-      if (is_longitudinal .and. .not. has_gamma) then
-         call g_logger%fatal('[calculation.post_processing_susceptibility]: longitudinal response requires q=Gamma for static acceptance.', &
-            __FILE__, __LINE__)
-      end if
       ! Selecting a pair-potential backend is itself a request to construct
       ! the raw Xi shadow data at every requested (q,omega), even if the user
       ! has disabled the optional text products.
       dyson_options%diagonalize_xi = config%output_modes
       dyson_options%diagonalize_loss = config%output_modes
+      if (is_longitudinal) then
+         dyson_options%circular_channel = 'charge_mz'
+      else
+         dyson_options%circular_channel = chi0_options%circular_channel
+      end if
       if (config%output_modes) then
          allocate(all_xi(nresponse, nresponse, nw, nq), all_loss(nresponse, nresponse, nw, nq), all_trace_loss(nw, nq))
          all_xi = cmplx(0.0_rp, 0.0_rp, rp)
@@ -1982,12 +1977,16 @@ contains
                if (config%output_xi .or. config%output_chi) then
                   if (pair_backend) then
                      write(filename, '(a,"_q",i6.6,"_legacy_dyson.dat")') trim(config%output_prefix), iq
+                  else if (is_longitudinal) then
+                     write(filename, '(a,"_q",i6.6,"_longitudinal_dyson.dat")') trim(config%output_prefix), iq
                   else
                      write(filename, '(a,"_q",i6.6,"_dyson.dat")') trim(config%output_prefix), iq
                   end if
                   call write_tddft_dyson_text(trim(filename), omega, dyson_result)
                   call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
                      rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'legacy_site_scalar_raw')
+                  if (is_longitudinal) call append_longitudinal_response_metadata(trim(filename), kernel, &
+                     self_obj%xc_response_provider%functional_label)
                end if
             end if
             if (pair_backend) then
@@ -2049,14 +2048,6 @@ contains
                   end if
                end if
                call pair_operator_source%clear()
-            end if
-            if (is_longitudinal .and. is_gamma) then
-               call calibrate_longitudinal_response(m0, chi0_static%chi(:, :, 1), cmplx(longitudinal_static%chi, 0.0_rp, rp), &
-                  omega, dyson_result%chi, longitudinal_options, longitudinal_result)
-               write(filename, '(a,"_q",i6.6,"_longitudinal.dat")') trim(config%output_prefix), iq
-               call write_longitudinal_report(trim(filename), omega, response_eta, longitudinal_static, longitudinal_result)
-               call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), rank, &
-                  has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'longitudinal_static')
             end if
             if (config%output_modes) then
                if (legacy_backend) then
@@ -2233,7 +2224,7 @@ contains
             call g_logger%fatal('[calculation.post_processing_susceptibility]: cannot write manifest', __FILE__, __LINE__)
          end if
          if (is_longitudinal) then
-            write(unit, '(a)') '# TDDFT longitudinal chi_KS manifest; static calibration is reported at Gamma'
+            write(unit, '(a)') '# TDDFT coupled charge-longitudinal manifest; site-major (charge,m_z) response'
          else
             write(unit, '(a)') '# TDDFT transverse chi_KS manifest; one self-describing output file per q point'
          end if
@@ -2249,6 +2240,8 @@ contains
             write(unit, '(a)') '# q_index q1 q2 q3 chi0_file pair_raw_dyson_file pair_corrected_dyson_file'
          else if (pair_backend) then
             write(unit, '(a)') '# q_index q1 q2 q3 chi0_file pair_raw_dyson_file'
+         else if (is_longitudinal) then
+            write(unit, '(a)') '# q_index q1 q2 q3 chi0_file longitudinal_dyson_file'
          else
             write(unit, '(a)') '# q_index q1 q2 q3 chi0_file legacy_raw_dyson_file'
          end if
@@ -2273,6 +2266,9 @@ contains
             else if (pair_backend) then
                write(pair_filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
                write(unit, '(i0,3(1x,es24.16),2(1x,a))') iq, config%q_points(:, iq), trim(chi0_filename), trim(pair_filename)
+            else if (is_longitudinal) then
+               write(legacy_filename, '(a,"_q",i6.6,"_longitudinal_dyson.dat")') trim(config%output_prefix), iq
+               write(unit, '(i0,3(1x,es24.16),2(1x,a))') iq, config%q_points(:, iq), trim(chi0_filename), trim(legacy_filename)
             else
                write(legacy_filename, '(a,"_q",i6.6,"_dyson.dat")') trim(config%output_prefix), iq
                write(unit, '(i0,3(1x,es24.16),2(1x,a))') iq, config%q_points(:, iq), trim(chi0_filename), trim(legacy_filename)
@@ -2533,7 +2529,10 @@ contains
          write(unit, '(a)') '# full_response_capability = not selected; production full response is capability-gated'
       end if
       if (trim(config%channel) == 'longitudinal') then
-         write(unit, '(a)') '# longitudinal_capability = unavailable pending WR-04 static-limit calibration'
+         write(unit, '(a)') '# longitudinal_capability = coupled charge-m_z response with ground-state ALSDA plus Hartree'
+         write(unit, '(a)') '# longitudinal_response_basis = site-major (charge,m_z); Hartree is charge-charge only'
+         write(unit, '(a)') '# longitudinal_goldstone_constraint = none'
+         write(unit, '(a)') '# longitudinal_llb_status = susceptibility output only; no damping or LLB parameter is inferred'
       else
          write(unit, '(a)') '# longitudinal_capability = not selected; LLB readiness is not claimed'
       end if

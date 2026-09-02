@@ -1,16 +1,19 @@
 !------------------------------------------------------------------------------
 ! RS-LMTO-ASA
 !------------------------------------------------------------------------------
-!> @brief Static finite-field calibration and low-frequency longitudinal fit.
+!> @brief Coupled charge/longitudinal-spin response and legacy static helpers.
 !>
-!> This module deliberately contains no independent response summation or
-!> Dyson implementation.  The generalized TDDFT chi_KS engine supplies the
-!> dynamic matrices and tddft_dyson_mod performs their enhancement.  Here we
-!> only turn independently converged +/- Bz calculations into chi_parallel(0),
-!> obtain U_parallel from inverse susceptibilities, and fit the resulting
-!> local response in the code’s retarded (+i eta) convention.
+!> The production adapters below reuse the generalized TDDFT chi_KS engine and
+!> tddft_dyson_mod.  The original independently converged +/- Bz calibration
+!> and low-frequency fit are retained as TDDFT-08 compatibility APIs, while
+!> TDDFT-13 provides the coupled charge/longitudinal kernel assembly.
 module tddft_longitudinal_mod
    use precision_mod, only: rp
+   use response_components_mod, only: RESPONSE_CHARGE, RESPONSE_MZ
+   use response_vertices_mod, only: response_channel
+   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs
+   use tddft_chi0_green_mod, only: green_function_provider, green_chi0_options, build_chi_ks_from_green_functions
+   use xc_response_kernel_mod, only: xc_response_kernel_provider
    implicit none
 
    private
@@ -51,8 +54,132 @@ module tddft_longitudinal_mod
    public :: build_longitudinal_kernel
    public :: calibrate_longitudinal_response
    public :: write_longitudinal_report
+   public :: longitudinal_index
+   public :: build_charge_longitudinal_channels
+   public :: build_charge_longitudinal_chi_ks
+   public :: build_charge_longitudinal_chi_ks_from_green_functions
+   public :: build_charge_longitudinal_kernel
+   public :: append_longitudinal_response_metadata
 
 contains
+
+   !> Site-major index for the coupled longitudinal basis:
+   !> (charge(site=1), m_z(site=1), charge(site=2), m_z(site=2), ...).
+   pure integer function longitudinal_index(site, component) result(index)
+      integer, intent(in) :: site, component
+
+      if (site < 1 .or. (component /= RESPONSE_CHARGE .and. component /= RESPONSE_MZ)) then
+         error stop 'longitudinal_index: invalid site or component'
+      end if
+      index = 2*(site-1) + merge(1, 2, component == RESPONSE_CHARGE)
+   end function longitudinal_index
+
+   subroutine build_charge_longitudinal_channels(nsite, channels)
+      integer, intent(in) :: nsite
+      type(response_channel), allocatable, intent(out) :: channels(:)
+      integer :: isite
+
+      if (nsite < 1) error stop 'build_charge_longitudinal_channels: nsite must be positive'
+      allocate(channels(2*nsite))
+      do isite = 1, nsite
+         channels(longitudinal_index(isite, RESPONSE_CHARGE)) = response_channel(isite, RESPONSE_CHARGE)
+         channels(longitudinal_index(isite, RESPONSE_MZ)) = response_channel(isite, RESPONSE_MZ)
+      end do
+   end subroutine build_charge_longitudinal_channels
+
+   !> Common eigenpair adapter for the coupled charge/longitudinal basis.
+   subroutine build_charge_longitudinal_chi_ks(k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, eigenvectors_kq, &
+      site_orbital_counts, omega, options, result)
+      real(rp), intent(in) :: k_weights(:), eigenvalues_k(:, :), eigenvalues_kq(:, :), omega(:)
+      complex(rp), intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
+      integer, intent(in) :: site_orbital_counts(:)
+      type(tddft_chi0_options), intent(in) :: options
+      type(tddft_chi0_result), intent(out) :: result
+      type(response_channel), allocatable :: channels(:)
+
+      call build_charge_longitudinal_channels(size(site_orbital_counts), channels)
+      call build_chi_ks_from_eigenpairs(k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_kq, eigenvectors_kq, &
+         site_orbital_counts, channels, channels, omega, options, result)
+   end subroutine build_charge_longitudinal_chi_ks
+
+   !> Common K-space Green-function adapter.  Native real-space GF remains a
+   !> deliberate capability guard in the production driver until its
+   !> multi-component Fourier source is derived.
+   subroutine build_charge_longitudinal_chi_ks_from_green_functions(one_particle, k_weights, site_orbital_counts, omega, &
+      options, result)
+      class(green_function_provider), intent(in) :: one_particle
+      real(rp), intent(in) :: k_weights(:), omega(:)
+      integer, intent(in) :: site_orbital_counts(:)
+      type(green_chi0_options), intent(in) :: options
+      type(tddft_chi0_result), intent(out) :: result
+      type(response_channel), allocatable :: channels(:)
+
+      call build_charge_longitudinal_channels(size(site_orbital_counts), channels)
+      call build_chi_ks_from_green_functions(one_particle, k_weights, site_orbital_counts, channels, channels, omega, &
+         options, result)
+   end subroutine build_charge_longitudinal_chi_ks_from_green_functions
+
+   !> Assemble K=f_H+f_xc in the same site-major basis as the bare response.
+   !> Hartree is charge-charge only; the local XC block is the ground-state
+   !> XC functional projected (n,m_z) ALSDA Hessian.  No Goldstone projection
+   !> is applied because charge/longitudinal fluctuations are not rigid-spin
+   !> rotations.
+   subroutine build_charge_longitudinal_kernel(provider, coulomb_site, kernel)
+      type(xc_response_kernel_provider), intent(in) :: provider
+      real(rp), intent(in) :: coulomb_site(:, :)
+      complex(rp), intent(out) :: kernel(:, :)
+      integer :: nsite, isite, jsite, icharge, ispin, jcharge
+      logical :: supported
+      character(len=256) :: reason
+
+      if (.not. allocated(provider%site)) error stop 'build_charge_longitudinal_kernel: XC provider is not initialized'
+      nsite = size(provider%site)
+      if (nsite < 1 .or. any(shape(coulomb_site) /= [nsite, nsite]) .or. &
+          any(shape(kernel) /= [2*nsite, 2*nsite])) then
+         error stop 'build_charge_longitudinal_kernel: incompatible site or response dimensions'
+      end if
+      call provider%longitudinal_response_capability(supported, reason)
+      if (.not. supported) error stop 'build_charge_longitudinal_kernel: '//trim(reason)
+
+      kernel = cmplx(0.0_rp, 0.0_rp, rp)
+      do isite = 1, nsite
+         icharge = longitudinal_index(isite, RESPONSE_CHARGE)
+         ispin = longitudinal_index(isite, RESPONSE_MZ)
+         kernel(icharge, icharge) = cmplx(provider%site(isite)%dvxc_dn, 0.0_rp, rp)
+         kernel(icharge, ispin) = cmplx(provider%site(isite)%dvxc_dm, 0.0_rp, rp)
+         kernel(ispin, icharge) = cmplx(provider%site(isite)%dbxc_dn, 0.0_rp, rp)
+         kernel(ispin, ispin) = cmplx(provider%site(isite)%dbxc_dm, 0.0_rp, rp)
+      end do
+      do isite = 1, nsite
+         icharge = longitudinal_index(isite, RESPONSE_CHARGE)
+         do jsite = 1, nsite
+            jcharge = longitudinal_index(jsite, RESPONSE_CHARGE)
+            kernel(icharge, jcharge) = kernel(icharge, jcharge) + cmplx(coulomb_site(isite, jsite), 0.0_rp, rp)
+         end do
+      end do
+   end subroutine build_charge_longitudinal_kernel
+
+   subroutine append_longitudinal_response_metadata(filename, kernel, functional_label)
+      character(len=*), intent(in) :: filename
+      complex(rp), intent(in) :: kernel(:, :)
+      character(len=*), intent(in) :: functional_label
+      integer :: unit, ios
+
+      open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
+      if (ios /= 0) error stop 'append_longitudinal_response_metadata: cannot open output file'
+      write(unit, '(a)') '# longitudinal_response_metadata_begin'
+      write(unit, '(a)') '# response_basis = site-major (charge,m_z) coupled longitudinal block'
+      write(unit, '(a,i0)') '# response_dimension = ', size(kernel, 1)
+      write(unit, '(a)') '# response_index = 2*(site-1)+1 charge; 2*(site-1)+2 m_z'
+      write(unit, '(a)') '# kernel_provenance = ground-state XC local ALSDA Hessian plus projected Hartree'
+      write(unit, '(a)') '# hartree_block = charge-charge only; supplied in Rydberg response metric'
+      write(unit, '(a,a)') '# xc_functional = ', trim(functional_label)
+      write(unit, '(a)') '# goldstone_constraint = none; longitudinal fluctuations are not rigid rotations'
+      write(unit, '(a)') '# eta_role = numerical broadening only; no damping or linewidth is inferred'
+      write(unit, '(a)') '# llb_mapping = not performed; susceptibility output is the input to future dissipative analysis'
+      write(unit, '(a)') '# longitudinal_response_metadata_end'
+      close(unit)
+   end subroutine append_longitudinal_response_metadata
 
    !> Read independently converged SCF results.  The first non-comment record
    !> is `nsite nrecords`; each following record is
@@ -102,7 +229,7 @@ contains
       integer :: nsite, nrecord, isource, ir, jr, npair, ipair, min_pair
       integer, allocatable :: plus_record(:), minus_record(:)
       real(rp), allocatable :: slopes(:, :)
-      real(rp) :: b, scale
+      real(rp) :: scale
 
       nsite = size(moments, 1); nrecord = size(moments, 2)
       if (size(source) /= nrecord .or. size(field) /= nrecord .or. nsite < 1) then

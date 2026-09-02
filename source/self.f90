@@ -45,7 +45,8 @@ module self_mod
    use mix_mod
    use reciprocal_mod
    use electrostatics_multipole_mod, only: compute_dipole_moments
-   use xc_response_kernel_mod, only: xc_response_kernel_provider, xc_response_radial_projection
+   use xc_response_kernel_mod, only: xc_response_kernel_provider, xc_response_radial_projection, &
+      xc_longitudinal_derivatives, evaluate_longitudinal_xc_derivatives
    use math_mod
    use precision_mod, only: rp
    use timer_mod, only: g_timer
@@ -305,6 +306,10 @@ module self_mod
       !> Ground-state XC data populated at the VXC0SP SCF call site.  This is
       !> the only permissible source of a transverse TDDFT kernel.
       type(xc_response_kernel_provider) :: xc_response_provider
+      !> Request the local longitudinal XC Hessian while VXC0SP evaluates the
+      !> ground-state functional.  It is enabled only by the TDDFT longitudinal
+      !> route; ordinary SCF and transverse runs retain their existing cost.
+      logical :: xc_response_derivatives_requested = .false.
 
    contains
       procedure :: build_from_file
@@ -3903,6 +3908,7 @@ contains
       real(rp) :: Bxc_up, Bxc_dw, Bxc_tot
       real(rp), allocatable :: vxc_up_radial(:), vxc_down_radial(:), exc_radial(:)
       logical :: use_libxc_gga, use_legacy_gga
+      type(xc_longitudinal_derivatives) :: longitudinal_derivatives
       !.. External Calls ..
       ! external EVXC
       !
@@ -3922,6 +3928,13 @@ contains
       ! In particular, a direct/predefined libXC LDA selector must not enter a
       ! legacy IXC>=8 branch merely because its TXC integer is large.
       use_legacy_gga = IXC == 5 .or. IXC == 8 .or. IXC == 9
+      if (this%xc_response_derivatives_requested .and. n_radial_spin_channels /= 2) then
+         call g_logger%fatal('Longitudinal TDDFT requires two spin-resolved radial XC channels.', __FILE__, __LINE__)
+      end if
+      if (this%xc_response_derivatives_requested .and. (use_libxc_gga .or. IXC == 8 .or. IXC == 9)) then
+         call g_logger%fatal('Longitudinal TDDFT currently requires a local (LDA/ALDA) XC route; GGA f_xc is not implemented.', &
+            __FILE__, __LINE__)
+      end if
       !
       ! Constraining field related hacks below
       Bxc_up = 0.0d0
@@ -4098,6 +4111,12 @@ contains
             ! response spinor’s first block; channel 2 is spin down.
             ! Preserve that ordering in the radial B_xc*m projection.
             call xc_projection%accumulate(WGT*DRDI, RHO(IR, 2), RHO(IR, 1), VXC2, VXC1)
+            if (this%xc_response_derivatives_requested) then
+               call evaluate_longitudinal_xc_derivatives(xc_obj, tRHO(IR, 2), tRHO(IR, 1), RHO3, RHOD, RHODD, R, &
+                  longitudinal_derivatives)
+               call xc_projection%accumulate_longitudinal_derivatives(WGT*DRDI, RHO(IR, 2), RHO(IR, 1), &
+                  longitudinal_derivatives)
+            end if
             RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
             RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*(VXC1 + B_fsm)
             !RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*VXC1

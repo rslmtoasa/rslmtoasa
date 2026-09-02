@@ -27,6 +27,17 @@ module xc_response_kernel_mod
       real(rp) :: bxc_energy = 0.0_rp
    end type xc_response_sample
 
+   !> Local adiabatic derivatives in the charge/spin variables used by the
+   !> longitudinal response.  The finite-difference evaluator below calls
+   !> exactly the ground-state XCPOT_hybrid route; it is intentionally not a
+   !> derivative of an assembled LMTO Hamiltonian.
+   type, public :: xc_longitudinal_derivatives
+      real(rp) :: dvxc_dn = 0.0_rp
+      real(rp) :: dvxc_dm = 0.0_rp
+      real(rp) :: dbxc_dn = 0.0_rp
+      real(rp) :: dbxc_dm = 0.0_rp
+   end type xc_longitudinal_derivatives
+
    type, public :: xc_response_site
       ! Site-projected spin population n_up - n_down; it is not a Tesla field
       ! or a magnetic moment in SI units.
@@ -38,6 +49,7 @@ module xc_response_kernel_mod
       ! Radial ASA spin population used to define the projected ALSDA
       ! stiffness.  It is retained separately from spin_population, whose
       ! value is the response-projector population (P_site sigma).
+      real(rp) :: radial_charge_population = 0.0_rp
       real(rp) :: radial_spin_population = 0.0_rp
       ! Numerator of the radial ALSDA projection, retained until the
       ! P_site-sigma population has been supplied.
@@ -53,6 +65,10 @@ module xc_response_kernel_mod
       real(rp) :: dvxc_dm = 0.0_rp
       real(rp) :: dbxc_dn = 0.0_rp
       real(rp) :: dbxc_dm = 0.0_rp
+      real(rp) :: dvxc_dn_moment = 0.0_rp
+      real(rp) :: dvxc_dm_moment = 0.0_rp
+      real(rp) :: dbxc_dn_moment = 0.0_rp
+      real(rp) :: dbxc_dm_moment = 0.0_rp
       ! Circular (m+/- = mx +/- i my, sigma+/- = sigma_x +/- i sigma_y)
       ! transverse ALSDA scalar.  The unhalved circular operators require the
       ! explicit 1/2 in Bxc/(2 M).  It must not be used in Cartesian x/y.
@@ -64,6 +80,7 @@ module xc_response_kernel_mod
       logical :: has_dvxc_dm = .false.
       logical :: has_dbxc_dn = .false.
       logical :: has_dbxc_dm = .false.
+      logical :: has_radial_longitudinal_derivatives = .false.
       logical :: has_k_perp_circular = .false.
       logical :: has_radial_projection = .false.
       logical :: has_magnetization_direction = .false.
@@ -80,9 +97,18 @@ module xc_response_kernel_mod
       real(rp) :: spin_abs_population = 0.0_rp
       real(rp) :: vxc_spin_difference = 0.0_rp
       real(rp) :: vxc_spin_difference_abs = 0.0_rp
+      ! Density-weighted moments of the local longitudinal ALSDA derivatives.
+      ! They are normalized only after the response-projector population is
+      ! known, preserving the distinction between radial and site projectors.
+      real(rp) :: dvxc_dn_moment = 0.0_rp
+      real(rp) :: dvxc_dm_moment = 0.0_rp
+      real(rp) :: dbxc_dn_moment = 0.0_rp
+      real(rp) :: dbxc_dm_moment = 0.0_rp
+      logical :: has_longitudinal_derivatives = .false.
    contains
       procedure :: clear => xc_radial_projection_clear
       procedure :: accumulate => xc_radial_projection_accumulate
+      procedure :: accumulate_longitudinal_derivatives => xc_radial_projection_accumulate_longitudinal
    end type xc_response_radial_projection
 
    type, public :: xc_response_kernel_provider
@@ -102,9 +128,11 @@ module xc_response_kernel_mod
       procedure :: set_site_magnetization_direction => xc_kernel_set_site_magnetization_direction
       procedure :: set_site_derivatives => xc_kernel_set_site_derivatives
       procedure :: full_response_capability => xc_kernel_full_response_capability
+      procedure :: longitudinal_response_capability => xc_kernel_longitudinal_response_capability
    end type xc_response_kernel_provider
 
    public :: evaluate_ground_state_xc_sample
+   public :: evaluate_longitudinal_xc_derivatives
    public :: circular_transverse_kernel
    public :: cartesian_transverse_kernel
 
@@ -133,6 +161,57 @@ contains
       sample%bxc_energy = 0.5_rp*(v_up - v_down)
    end function evaluate_ground_state_xc_sample
 
+   !> Evaluate the local ALSDA Hessian of the same XC functional used by the
+   !> converged ground state.  n=rho_up+rho_down and m=rho_up-rho_down.  The
+   !> radial derivatives are held fixed during the perturbation, which is the
+   !> adiabatic *local* derivative; callers therefore reject GGA routes until
+   !> their nonlocal radial f_xc is implemented.
+   subroutine evaluate_longitudinal_xc_derivatives(functional, rho_down, rho_up, rho_total, rho_gradient, &
+      rho_laplacian, radius, derivatives)
+      class(xc), intent(in) :: functional
+      real(rp), intent(in) :: rho_down, rho_up, rho_total, radius
+      real(rp), intent(in) :: rho_gradient(2), rho_laplacian(2)
+      type(xc_longitudinal_derivatives), intent(out) :: derivatives
+      real(rp) :: step_n, step_m, scale, vsp, vsm, bsp, bsm, dummy_exc
+
+      derivatives = xc_longitudinal_derivatives()
+      if (rho_total <= tiny(1.0_rp) .or. rho_down < 0.0_rp .or. rho_up < 0.0_rp) return
+      scale = max(max(abs(rho_total), abs(rho_down)), max(abs(rho_up), 1.0e-12_rp))
+      step_n = min(1.0e-5_rp*scale, 0.25_rp*min(rho_down, rho_up))
+      step_m = min(1.0e-5_rp*scale, 0.25_rp*min(rho_down, rho_up))
+      if (step_n <= tiny(1.0_rp) .or. step_m <= tiny(1.0_rp)) return
+
+      call evaluate_scalar_and_field(functional, rho_down + 0.5_rp*step_n, rho_up + 0.5_rp*step_n, &
+         rho_total + step_n, rho_gradient, rho_laplacian, radius, vsp, bsp)
+      call evaluate_scalar_and_field(functional, rho_down - 0.5_rp*step_n, rho_up - 0.5_rp*step_n, &
+         rho_total - step_n, rho_gradient, rho_laplacian, radius, vsm, bsm)
+      derivatives%dvxc_dn = (vsp-vsm)/(2.0_rp*step_n)
+      derivatives%dbxc_dn = (bsp-bsm)/(2.0_rp*step_n)
+
+      call evaluate_scalar_and_field(functional, rho_down - 0.5_rp*step_m, rho_up + 0.5_rp*step_m, &
+         rho_total, rho_gradient, rho_laplacian, radius, vsp, bsp)
+      call evaluate_scalar_and_field(functional, rho_down + 0.5_rp*step_m, rho_up - 0.5_rp*step_m, &
+         rho_total, rho_gradient, rho_laplacian, radius, vsm, bsm)
+      derivatives%dvxc_dm = (vsp-vsm)/(2.0_rp*step_m)
+      derivatives%dbxc_dm = (bsp-bsm)/(2.0_rp*step_m)
+
+   contains
+
+      subroutine evaluate_scalar_and_field(functional, down, up, total, gradient, laplacian, radius, scalar, field)
+         class(xc), intent(in) :: functional
+         real(rp), intent(in) :: down, up, total, gradient(2), laplacian(2), radius
+         real(rp), intent(out) :: scalar, field
+         real(rp) :: vdown, vup
+
+         dummy_exc = 0.0_rp
+         vdown = 0.0_rp
+         vup = 0.0_rp
+         call functional%XCPOT_hybrid(down, up, total, gradient, laplacian, radius, vdown, vup, dummy_exc)
+         scalar = 0.5_rp*(vup+vdown)
+         field = 0.5_rp*(vup-vdown)
+      end subroutine evaluate_scalar_and_field
+   end subroutine evaluate_longitudinal_xc_derivatives
+
    subroutine xc_radial_projection_clear(this)
       class(xc_response_radial_projection), intent(inout) :: this
       this%charge_population = 0.0_rp
@@ -142,6 +221,11 @@ contains
       this%spin_abs_population = 0.0_rp
       this%vxc_spin_difference = 0.0_rp
       this%vxc_spin_difference_abs = 0.0_rp
+      this%dvxc_dn_moment = 0.0_rp
+      this%dvxc_dm_moment = 0.0_rp
+      this%dbxc_dn_moment = 0.0_rp
+      this%dbxc_dm_moment = 0.0_rp
+      this%has_longitudinal_derivatives = .false.
    end subroutine xc_radial_projection_clear
 
    !> Accumulate an XC sample already evaluated by VXC0SP.  No second XC
@@ -163,6 +247,21 @@ contains
       this%vxc_spin_difference = this%vxc_spin_difference + radial_weight*(vxc_up - vxc_down)
       this%vxc_spin_difference_abs = this%vxc_spin_difference_abs + radial_weight*abs(vxc_up - vxc_down)
    end subroutine xc_radial_projection_accumulate
+
+   subroutine xc_radial_projection_accumulate_longitudinal(this, radial_weight, rho_down, rho_up, derivatives)
+      class(xc_response_radial_projection), intent(inout) :: this
+      real(rp), intent(in) :: radial_weight, rho_down, rho_up
+      type(xc_longitudinal_derivatives), intent(in) :: derivatives
+      real(rp) :: charge_density, spin_density
+
+      charge_density = rho_up + rho_down
+      spin_density = rho_up - rho_down
+      this%dvxc_dn_moment = this%dvxc_dn_moment + radial_weight*charge_density**2*derivatives%dvxc_dn
+      this%dvxc_dm_moment = this%dvxc_dm_moment + radial_weight*charge_density*spin_density*derivatives%dvxc_dm
+      this%dbxc_dn_moment = this%dbxc_dn_moment + radial_weight*spin_density*charge_density*derivatives%dbxc_dn
+      this%dbxc_dm_moment = this%dbxc_dm_moment + radial_weight*spin_density**2*derivatives%dbxc_dm
+      this%has_longitudinal_derivatives = .true.
+   end subroutine xc_radial_projection_accumulate_longitudinal
 
    subroutine xc_kernel_initialize(this, nsite, functional_label)
       class(xc_response_kernel_provider), intent(inout) :: this
@@ -218,6 +317,7 @@ contains
 
       call require_site(this, isite, 'record_radial_projection')
       mrad = projection%spin_population
+      this%site(isite)%radial_charge_population = projection%charge_population
       this%site(isite)%radial_spin_population = mrad
       if (abs(projection%charge_population) > tiny(1.0_rp)) then
          this%site(isite)%vxc_scalar = projection%vxc_charge_moment/projection%charge_population
@@ -228,7 +328,17 @@ contains
       this%site(isite)%radial_spin_abs_population = projection%spin_abs_population
       this%site(isite)%radial_vxc_spin_difference = projection%vxc_spin_difference
       this%site(isite)%radial_vxc_spin_difference_abs = projection%vxc_spin_difference_abs
+      this%site(isite)%dvxc_dn_moment = projection%dvxc_dn_moment
+      this%site(isite)%dvxc_dm_moment = projection%dvxc_dm_moment
+      this%site(isite)%dbxc_dn_moment = projection%dbxc_dn_moment
+      this%site(isite)%dbxc_dm_moment = projection%dbxc_dm_moment
+      this%site(isite)%has_radial_longitudinal_derivatives = projection%has_longitudinal_derivatives
+      this%site(isite)%has_dvxc_dn = .false.
+      this%site(isite)%has_dvxc_dm = .false.
+      this%site(isite)%has_dbxc_dn = .false.
+      this%site(isite)%has_dbxc_dm = .false.
       this%site(isite)%has_radial_projection = .true.
+      call finalize_site_longitudinal_derivatives(this%site(isite))
       call finalize_site_k_perp(this%site(isite))
    end subroutine xc_kernel_record_radial_projection
 
@@ -245,6 +355,7 @@ contains
       this%site(isite)%signed_spin_population = spin_population
       this%site(isite)%has_signed_spin_population = .true.
       call finalize_site_k_perp(this%site(isite))
+      call finalize_site_longitudinal_derivatives(this%site(isite))
    end subroutine xc_kernel_set_site_spin_population
 
    subroutine xc_kernel_set_site_signed_spin_population(this, isite, spin_population)
@@ -292,6 +403,33 @@ contains
       site%k_perp_circular = tddft_circular_source_factor*site%bxc_energy/site%spin_population
       site%has_k_perp_circular = .true.
    end subroutine finalize_site_k_perp
+
+   subroutine finalize_site_longitudinal_derivatives(site)
+      type(xc_response_site), intent(inout) :: site
+      real(rp) :: charge_population, spin_population
+
+      if (.not. site%has_radial_projection .or. .not. site%has_radial_longitudinal_derivatives) return
+      ! The radial derivative moments are already density-weighted.  Their
+      ! normalization is by the same site-projector populations as the
+      ! response vertices, not by an independently inferred radial moment.
+      charge_population = site%radial_charge_population
+      spin_population = site%spin_population
+      if (abs(charge_population) <= tiny(1.0_rp) .or. abs(spin_population) <= tiny(1.0_rp)) then
+         site%has_dvxc_dn = .false.
+         site%has_dvxc_dm = .false.
+         site%has_dbxc_dn = .false.
+         site%has_dbxc_dm = .false.
+         return
+      end if
+      site%dvxc_dn = site%dvxc_dn_moment/charge_population**2
+      site%dvxc_dm = site%dvxc_dm_moment/(charge_population*spin_population)
+      site%dbxc_dn = site%dbxc_dn_moment/(charge_population*spin_population)
+      site%dbxc_dm = site%dbxc_dm_moment/spin_population**2
+      site%has_dvxc_dn = .true.
+      site%has_dvxc_dm = .true.
+      site%has_dbxc_dn = .true.
+      site%has_dbxc_dm = .true.
+   end subroutine finalize_site_longitudinal_derivatives
 
    subroutine xc_kernel_set_site_derivatives(this, isite, dvxc_dn, dvxc_dm, dbxc_dn, dbxc_dm, k_perp_circular, &
       derivatives_validated)
@@ -376,6 +514,29 @@ contains
       supported = .true.
       reason = 'validated full ALSDA derivatives supplied by selected XC route'
    end subroutine xc_kernel_full_response_capability
+
+   subroutine xc_kernel_longitudinal_response_capability(this, supported, reason)
+      class(xc_response_kernel_provider), intent(in) :: this
+      logical, intent(out) :: supported
+      character(len=*), intent(out) :: reason
+      integer :: isite
+
+      supported = .false.
+      reason = 'ground-state longitudinal ALSDA derivatives are unavailable'
+      if (.not. allocated(this%site)) then
+         reason = 'XC response provider is not initialized'
+         return
+      end if
+      do isite = 1, size(this%site)
+         if (.not. this%site(isite)%has_dvxc_dn .or. .not. this%site(isite)%has_dvxc_dm .or. &
+             .not. this%site(isite)%has_dbxc_dn .or. .not. this%site(isite)%has_dbxc_dm) then
+            write(reason, '(a,i0)') 'site lacks ground-state longitudinal XC derivatives: ', isite
+            return
+         end if
+      end do
+      supported = .true.
+      reason = 'ground-state XC longitudinal ALSDA derivatives'
+   end subroutine xc_kernel_longitudinal_response_capability
 
    subroutine require_site(this, isite, caller)
       class(xc_response_kernel_provider), intent(in) :: this

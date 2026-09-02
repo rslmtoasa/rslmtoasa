@@ -1,20 +1,115 @@
 !------------------------------------------------------------------------------
-! TDDFT-08 -- symmetric finite-field longitudinal calibration and relaxation.
+! TDDFT-13 -- coupled charge/longitudinal response, plus TDDFT-08 compatibility.
 !------------------------------------------------------------------------------
 program test_tddft_longitudinal
    use precision_mod, only: rp
+   use response_components_mod, only: RESPONSE_CHARGE, RESPONSE_MZ
+   use response_vertices_mod, only: response_channel
+   use xc_response_kernel_mod, only: xc_response_kernel_provider, xc_response_radial_projection
    use tddft_longitudinal_mod, only: tddft_longitudinal_options, tddft_longitudinal_static_result, &
-      tddft_longitudinal_result, build_longitudinal_static_response, calibrate_longitudinal_response
+      tddft_longitudinal_result, build_longitudinal_static_response, calibrate_longitudinal_response, &
+      longitudinal_index, build_charge_longitudinal_channels, build_charge_longitudinal_kernel, &
+      build_charge_longitudinal_chi_ks
+   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result
    implicit none
 
    logical :: failed
 
    failed = .false.
+   call test_coupled_basis_and_kernel()
+   call test_coupled_eigenpair_adapter()
    call test_symmetric_static_calibration_and_fit()
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'
 
 contains
+
+   subroutine test_coupled_basis_and_kernel()
+      integer, parameter :: nsite = 2
+      type(response_channel), allocatable :: channels(:)
+      type(xc_response_kernel_provider) :: provider, projected_provider
+      type(xc_response_radial_projection) :: projection
+      complex(rp) :: kernel(2*nsite, 2*nsite)
+      complex(rp) :: projected_kernel(2, 2)
+      real(rp) :: coulomb(nsite, nsite)
+      logical :: supported
+      character(len=128) :: reason
+
+      call build_charge_longitudinal_channels(nsite, channels)
+      call check_true('charge index is site-major', longitudinal_index(1, RESPONSE_CHARGE) == 1 .and. &
+         longitudinal_index(1, RESPONSE_MZ) == 2 .and. longitudinal_index(2, RESPONSE_CHARGE) == 3 .and. &
+         longitudinal_index(2, RESPONSE_MZ) == 4)
+      call check_true('coupled channel list has two entries per site', size(channels) == 2*nsite .and. &
+         channels(1)%component == RESPONSE_CHARGE .and. channels(2)%component == RESPONSE_MZ .and. &
+         channels(3)%component == RESPONSE_CHARGE .and. channels(4)%component == RESPONSE_MZ)
+
+      call provider%initialize(nsite, 'synthetic-LDA')
+      call provider%set_site_derivatives(1, 1.0_rp, 2.0_rp, 3.0_rp, 4.0_rp)
+      call provider%set_site_derivatives(2, 5.0_rp, 6.0_rp, 7.0_rp, 8.0_rp)
+      coulomb = reshape([2.0_rp, 0.2_rp, 0.2_rp, 3.0_rp], [nsite, nsite])
+      call build_charge_longitudinal_kernel(provider, coulomb, kernel)
+      call check_complex_matrix('coupled local/Hartree kernel', kernel, expected_longitudinal_kernel())
+      call provider%longitudinal_response_capability(supported, reason)
+      call check_true('longitudinal derivative capability is explicit', supported .and. len_trim(reason) > 0)
+
+      ! Production records keep raw radial moments until the response-site
+      ! population is available; verify that normalization is not performed
+      ! against an unrelated radial spin integral.
+      call projected_provider%initialize(1, 'synthetic-LDA')
+      projection%charge_population = 2.0_rp
+      projection%spin_population = 1.0_rp
+      projection%dvxc_dn_moment = 8.0_rp
+      projection%dvxc_dm_moment = 6.0_rp
+      projection%dbxc_dn_moment = 4.0_rp
+      projection%dbxc_dm_moment = 2.0_rp
+      projection%has_longitudinal_derivatives = .true.
+      call projected_provider%record_radial_projection(1, projection)
+      call projected_provider%set_site_spin_population(1, 1.0_rp)
+      call build_charge_longitudinal_kernel(projected_provider, reshape([0.0_rp], [1, 1]), projected_kernel)
+      call check_complex_matrix('radial longitudinal derivative normalization', projected_kernel, &
+         cmplx(reshape([2.0_rp, 2.0_rp, 3.0_rp, 2.0_rp], [2, 2]), 0.0_rp, rp))
+   end subroutine test_coupled_basis_and_kernel
+
+   subroutine test_coupled_eigenpair_adapter()
+      integer, parameter :: nsite = 1, nmat = 4, nk = 1, nw = 1
+      real(rp) :: weights(nk), eigenvalues(nmat, nk), omega(nw)
+      complex(rp) :: eigenvectors(nmat, nmat, nk)
+      type(tddft_chi0_options) :: options
+      type(tddft_chi0_result) :: result
+
+      weights = 1.0_rp
+      eigenvalues(:, 1) = [-1.0_rp, -0.5_rp, 0.5_rp, 1.0_rp]
+      eigenvectors = cmplx(0.0_rp, 0.0_rp, rp)
+      eigenvectors(:, :, 1) = cmplx(0.0_rp, 0.0_rp, rp)
+      eigenvectors(1, 1, 1) = 1.0_rp
+      eigenvectors(2, 2, 1) = 1.0_rp
+      eigenvectors(3, 3, 1) = 1.0_rp
+      eigenvectors(4, 4, 1) = 1.0_rp
+      omega = [0.2_rp]
+      options%eta = 0.01_rp
+      options%fermi_level = 0.0_rp
+      options%electronic_temperature = 0.0_rp
+      call build_charge_longitudinal_chi_ks(weights, eigenvalues, eigenvectors, eigenvalues, eigenvectors, [2], omega, &
+         options, result)
+      call check_true('coupled eigenpair adapter returns (0,z) matrix', allocated(result%chi) .and. &
+         all(shape(result%chi) == [2, 2, 1]))
+   end subroutine test_coupled_eigenpair_adapter
+
+   function expected_longitudinal_kernel() result(expected)
+      complex(rp) :: expected(4, 4)
+
+      expected = cmplx(0.0_rp, 0.0_rp, rp)
+      expected(1, 1) = 3.0_rp
+      expected(1, 2) = 2.0_rp
+      expected(2, 1) = 3.0_rp
+      expected(2, 2) = 4.0_rp
+      expected(1, 3) = 0.2_rp
+      expected(3, 1) = 0.2_rp
+      expected(3, 3) = 8.0_rp
+      expected(3, 4) = 6.0_rp
+      expected(4, 3) = 7.0_rp
+      expected(4, 4) = 8.0_rp
+   end function expected_longitudinal_kernel
 
    subroutine test_symmetric_static_calibration_and_fit()
       integer, parameter :: nsite = 2, nrecords = 8, nw = 5

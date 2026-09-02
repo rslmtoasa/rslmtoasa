@@ -95,7 +95,7 @@ def test_pair_potential_shadow_outputs_are_explicit_and_use_direct_xi() -> None:
     assert "goldstone_correction_applied = " in source
 
 
-def test_prototype_routes_and_full_alsda_are_explicitly_capability_gated() -> None:
+def test_longitudinal_and_full_alsda_routes_are_explicitly_capability_gated() -> None:
     root = Path(__file__).resolve().parents[2]
     calculation = (root / "source" / "calculation.f90").read_text()
     four_component = (root / "source" / "tddft_four_component.f90").read_text()
@@ -104,7 +104,11 @@ def test_prototype_routes_and_full_alsda_are_explicitly_capability_gated() -> No
     assert "2.0_rp*circular_transverse_kernel" in xc_kernel
     assert "full_response_capability" in calculation
     assert "channel=''full'' is unavailable" in calculation
-    assert "longitudinal TDDFT remains a prototype" in calculation
+    assert "build_charge_longitudinal_channels" in calculation
+    assert "build_charge_longitudinal_kernel" in calculation
+    assert "channel=''longitudinal'' is unavailable" in calculation
+    assert "longitudinal TDDFT remains a prototype" not in calculation
+    assert "longitudinal_goldstone_constraint = none" in calculation
     assert "eigenpair-resolvent reference, not a native RS Green-function provider" in calculation
 
 
@@ -171,7 +175,7 @@ if __name__ == "__main__":
     test_static_ward_and_ground_state_provenance_are_not_dynamic_defaults()
     test_controlled_goldstone_correction_rescales_only_pair_potential_columns()
     test_pair_potential_shadow_outputs_are_explicit_and_use_direct_xi()
-    test_prototype_routes_and_full_alsda_are_explicitly_capability_gated()
+    test_longitudinal_and_full_alsda_routes_are_explicitly_capability_gated()
     test_goldstone_correction_input_error_is_rejected_before_response_setup()
     test_response_mesh_resolves_inherited_fermi_after_eigenpairs()
     test_eigenpair_baseline_boundary_rejects_unsupported_response_branches()

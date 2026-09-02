@@ -381,10 +381,14 @@ contains
          end if
       end if
       if (this%channel == 'longitudinal') then
-         if (len_trim(this%longitudinal_static_file) == 0 .or. this%longitudinal_pair_tolerance <= 0.0_rp .or. &
+         ! TDDFT-13 derives the adiabatic longitudinal kernel from the
+         ! converged ground-state XC route.  The TDDFT-08 finite-field file
+         ! remains a compatibility input for the legacy unit API, but it is
+         ! no longer required or consumed by the production response driver.
+         if (this%longitudinal_pair_tolerance <= 0.0_rp .or. &
              this%longitudinal_linearity_tolerance < 0.0_rp .or. this%longitudinal_static_agreement_tolerance < 0.0_rp .or. &
              this%longitudinal_fit_omega_max < this%longitudinal_fit_omega_min) then
-            call g_logger%fatal('[tddft_config]: longitudinal response requires a static +/- field file and valid fit tolerances', &
+            call g_logger%fatal('[tddft_config]: longitudinal response requires valid legacy-fit tolerances', &
                __FILE__, __LINE__)
          end if
       end if

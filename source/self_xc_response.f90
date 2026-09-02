@@ -27,7 +27,7 @@ contains
       integer :: ia
 
 #ifdef USE_MPI
-      allocate(packed(7, this%lattice%nrec))
+      allocate(packed(13, this%lattice%nrec))
       packed = 0.0_rp
       do ia = 1, this%lattice%nrec
          if (this%xc_response_provider%site(ia)%has_radial_projection) then
@@ -38,6 +38,17 @@ contains
             packed(5, ia) = this%xc_response_provider%site(ia)%radial_vxc_spin_difference
             packed(6, ia) = this%xc_response_provider%site(ia)%radial_vxc_spin_difference_abs
             packed(7, ia) = 1.0_rp
+            packed(8, ia) = this%xc_response_provider%site(ia)%radial_charge_population
+            if (this%xc_response_provider%site(ia)%has_radial_longitudinal_derivatives) then
+               ! Retain raw radial moments until the response-projector
+               ! population has been synchronized below.  Normalizing on a
+               ! single MPI rank would use an incomplete population.
+               packed(9, ia) = this%xc_response_provider%site(ia)%dvxc_dn_moment
+               packed(10, ia) = this%xc_response_provider%site(ia)%dvxc_dm_moment
+               packed(11, ia) = this%xc_response_provider%site(ia)%dbxc_dn_moment
+               packed(12, ia) = this%xc_response_provider%site(ia)%dbxc_dm_moment
+               packed(13, ia) = 1.0_rp
+            end if
          end if
       end do
       call MPI_ALLREDUCE(MPI_IN_PLACE, packed, product(shape(packed)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -52,8 +63,20 @@ contains
             this%xc_response_provider%site(ia)%radial_spin_abs_population = packed(4, ia)
             this%xc_response_provider%site(ia)%radial_vxc_spin_difference = packed(5, ia)
             this%xc_response_provider%site(ia)%radial_vxc_spin_difference_abs = packed(6, ia)
+            this%xc_response_provider%site(ia)%radial_charge_population = packed(8, ia)
             this%xc_response_provider%site(ia)%has_radial_projection = .true.
             this%xc_response_provider%site(ia)%has_k_perp_circular = .false.
+            this%xc_response_provider%site(ia)%has_radial_longitudinal_derivatives = packed(13, ia) > 0.5_rp
+            if (packed(13, ia) > 0.5_rp) then
+               this%xc_response_provider%site(ia)%dvxc_dn_moment = packed(9, ia)
+               this%xc_response_provider%site(ia)%dvxc_dm_moment = packed(10, ia)
+               this%xc_response_provider%site(ia)%dbxc_dn_moment = packed(11, ia)
+               this%xc_response_provider%site(ia)%dbxc_dm_moment = packed(12, ia)
+               this%xc_response_provider%site(ia)%has_dvxc_dn = .false.
+               this%xc_response_provider%site(ia)%has_dvxc_dm = .false.
+               this%xc_response_provider%site(ia)%has_dbxc_dn = .false.
+               this%xc_response_provider%site(ia)%has_dbxc_dm = .false.
+            end if
          end if
       end do
       deallocate(packed)
