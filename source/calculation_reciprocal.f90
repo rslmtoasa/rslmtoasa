@@ -1,12 +1,16 @@
 submodule(calculation_mod) calculation_reciprocal
 
+#ifdef USE_SAFE_ALLOC
+   use safe_alloc_mod, only: g_safe_alloc
+#endif
+
 contains
 
    !> @brief Build the shared object stack for a post-processing driver.
    module subroutine prepare_post_processing_stack(this, use_paoflow, use_exchange_pairs, energy_mesh_before_hamiltonian, &
                                                    stochastic_moments, control_obj, lattice_obj, charge_obj, mix_obj, &
                                                    energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj, &
-                                                   preprocessing_route)
+                                                   preprocessing_route, native_realspace_pairs)
       class(calculation), intent(in) :: this
       logical, intent(in) :: use_paoflow
       logical, intent(in) :: use_exchange_pairs
@@ -23,8 +27,10 @@ contains
       type(green), target, intent(inout) :: green_obj
       type(bands), target, intent(inout) :: bands_obj
       character(len=*), intent(in), optional :: preprocessing_route
+      logical, intent(in), optional :: native_realspace_pairs
       character(len=sl) :: route
-      integer :: i
+      integer :: i, j, pair_index
+      logical :: build_native_pairs
 
       control_obj = control(this%fname)
       lattice_obj = lattice(control_obj)
@@ -82,10 +88,46 @@ contains
       end if
 
       call lattice_obj%atomlist()
+
+      ! Native TDDFT needs G_ij for every response-site/cluster-site
+      ! displacement, while the ordinary post-processing stack only allocates
+      ! the explicit exchange pair list from &lattice.  A missing list used to
+      ! reach recur_*_ij with njij=0 and fail inside an unguarded ijpair access.
+      ! Build the minimal complete bulk list here, before recursion/green
+      ! construction, and leave explicit user lists untouched.
+      build_native_pairs = present(native_realspace_pairs) .and. native_realspace_pairs
+      if (build_native_pairs .and. trim(route) == 'B' .and. lattice_obj%njij == 0) then
+         if (.not. allocated(lattice_obj%cr) .or. lattice_obj%kk < 1 .or. lattice_obj%nrec < 1) then
+            call g_logger%fatal('[calculation.prepare_post_processing_stack]: native real-space TDDFT cannot build '// &
+               'automatic pairs before a valid bulk cluster is available.', __FILE__, __LINE__)
+         end if
+         lattice_obj%njij = lattice_obj%nrec*lattice_obj%kk
+#ifdef USE_SAFE_ALLOC
+         if (allocated(lattice_obj%ijpair)) call g_safe_alloc%deallocate('lattice.ijpair', lattice_obj%ijpair)
+         call g_safe_alloc%allocate('lattice.ijpair', lattice_obj%ijpair, (/lattice_obj%njij, 2/))
+#else
+         if (allocated(lattice_obj%ijpair)) deallocate(lattice_obj%ijpair)
+         allocate(lattice_obj%ijpair(lattice_obj%njij, 2))
+#endif
+         pair_index = 0
+         do i = 1, lattice_obj%nrec
+            do j = 1, lattice_obj%kk
+               pair_index = pair_index + 1
+               lattice_obj%ijpair(pair_index, :) = [i, j]
+            end do
+         end do
+         call g_logger%info('[calculation.prepare_post_processing_stack]: native real-space TDDFT generated '// &
+            int2str(lattice_obj%njij)//' central-cell-to-cluster Green-function pairs.', __FILE__, __LINE__)
+      end if
       if (present(preprocessing_route)) then
          ! Spin dynamics consumes the active recursion atoms, matching the
          ! normal preprocessing ownership and the original SD partition.
          call get_mpi_variables(rank, lattice_obj%nrec)
+      else if (build_native_pairs) then
+         ! The native source consumes all generated pair moments.  The regular
+         ! TDDFT setup later switches back to nrec ownership for k-space site
+         ! work; this first mapping must cover the pair recursion itself.
+         call get_mpi_variables(rank, lattice_obj%njij)
       else if (use_exchange_pairs) then
          call get_mpi_variables(rank, lattice_obj%njij)
       else

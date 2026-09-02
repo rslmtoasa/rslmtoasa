@@ -1,0 +1,88 @@
+! TDDFT-11 bcc Fe: K-space Lehmann-GF chi0 selected-point deck.
+&calculation
+pre_processing = 'none'
+post_processing = 'susceptibility'
+verbose = T
+/
+&lattice
+rc = 009
+alat = 2.86120
+crystal_sym = 'bcc'
+wav = 1.40880
+ntype = 1
+ct(1) = 3.0d0
+r2 = 9.00d0
+/
+&atoms
+database = '../../../../../results/validation/VAL-18_bccFe/dispersion_nk16/'
+label(1) = 'Fe'
+/
+&self
+nstep = 1
+conv_thr = 1.0e-9
+use_kspace = .true.
+soc_scale = 0.0d0
+fix_soc = .true.
+/
+&energy
+fermi = -0.069612
+energy_min = -2.0
+energy_max = 0.8
+channels_ldos = 401
+/
+&reciprocal
+nk1 = 4
+nk2 = 4
+nk3 = 4
+k_offset_x = 0.0
+k_offset_y = 0.0
+k_offset_z = 0.0
+use_symmetry_reduction = .false.
+use_time_reversal = .false.
+dos_method = 'tetrahedron'
+temperature = 300.0
+auto_find_fermi = .true.
+reciprocal_mode = 'ham_only'
+/
+&control
+calctype = 'B'
+nsp = 1
+lld = 21
+recur = 'block'
+/
+&mix
+beta = 0.15
+mixtype = 'broyden'
+/
+&hamiltonian
+hoh = .false.
+/
+&tddft
+enabled = .true.
+channel = 'transverse'
+chi0_backend = 'kspace_lehmann'
+xi_backend = 'legacy_site_scalar'
+response_projection = 'site'
+q_mode = 'list'
+q_coordinates = 'direct'
+q_file = 'q_selected.dat'
+omega_min = 0.0
+omega_max = 0.002
+nomega = 3
+eta = 0.0005
+electronic_temperature = 300.0
+band_first = 1
+band_last = 0
+occupation_tolerance = 1.0e-14
+green_eta = 0.00025
+green_energy_min = -2.0
+green_energy_max = 0.8
+green_energy_points = 2001
+output_prefix = 'tddft11_fe_kspace_lehmann'
+output_chi0 = .true.
+output_xi = .false.
+output_chi = .false.
+output_modes = .false.
+output_stoner = .true.
+goldstone_mode = 'diagnose'
+/

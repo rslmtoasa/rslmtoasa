@@ -251,7 +251,7 @@ module calculation_mod
                                                        energy_mesh_before_hamiltonian, stochastic_moments, &
                                                        control_obj, lattice_obj, charge_obj, mix_obj, energy_obj, &
                                                        hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj, &
-                                                       preprocessing_route)
+                                                       preprocessing_route, native_realspace_pairs)
          class(calculation), intent(in) :: this
          logical, intent(in) :: use_paoflow, use_exchange_pairs
          logical, intent(in) :: energy_mesh_before_hamiltonian, stochastic_moments
@@ -266,6 +266,7 @@ module calculation_mod
          type(green), target, intent(inout) :: green_obj
          type(bands), target, intent(inout) :: bands_obj
          character(len=*), intent(in), optional :: preprocessing_route
+         logical, intent(in), optional :: native_realspace_pairs
       end subroutine prepare_post_processing_stack
 
       module subroutine run_intersite_moments(control_obj, recursion_obj)
@@ -1272,7 +1273,8 @@ contains
             trim(config%chi0_backend)//'''.', __FILE__, __LINE__)
       end if
       call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, &
-         charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj)
+         charge_obj, mix_obj, energy_obj, hamiltonian_obj, recursion_obj, dos_obj, green_obj, bands_obj, &
+         native_realspace_pairs=(canonical_chi0_backend == 'realspace_gf'))
       if (control_obj%calctype /= 'B') then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: eigenpair TDDFT currently requires calctype=''B''.', &
             __FILE__, __LINE__)
@@ -1478,6 +1480,14 @@ contains
             call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space TDDFT currently requires '// &
                'serial atom ownership; MPI reduction of chi0(R,omega) is not silently approximated.', __FILE__, __LINE__)
          end if
+         ! The common response setup above maps ownership to response sites so
+         ! k-space spin moments and eigenpairs use the normal nrec layout.  The
+         ! native source instead consumes every generated pair; restore the
+         ! pair mapping immediately before intersite recursion.  This is a
+         ! no-op in serial execution except for extending g2l_map from nrec to
+         ! njij, but it prevents all non-self real-space pairs from remaining
+         ! silently zero.
+         call get_mpi_variables(rank, lattice_obj%njij)
          call run_intersite_moments(control_obj, recursion_obj)
          call green_obj%calculate_intersite_gf()
          call realspace_source%initialize_from_green(green_obj, lattice_obj, site_orbital_counts, left_channels, &
@@ -1489,6 +1499,7 @@ contains
             call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space provider attachment failed.', &
                __FILE__, __LINE__)
          end select
+         call get_mpi_variables(rank, lattice_obj%nrec)
       end if
 
       ! k eigenpairs are independent of q and are therefore reused on each q
@@ -1912,12 +1923,14 @@ contains
                end if
             end if
          end if
-         if (is_gamma .and. .not. is_longitudinal .and. .not. is_full_response) then
+         if (is_gamma .and. .not. is_longitudinal .and. .not. is_full_response .and. &
+             canonical_chi0_backend /= 'realspace_gf') then
             write(filename, '(a,"_goldstone.dat")') trim(config%output_prefix)
             call append_dynamic_gamma_peaks(trim(filename), bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak, &
                pair_corrected_gamma_peak)
          end if
-         deallocate(eigenvalues_kq, eigenvectors_kq)
+         if (allocated(eigenvalues_kq)) deallocate(eigenvalues_kq)
+         if (allocated(eigenvectors_kq)) deallocate(eigenvectors_kq)
       end do
 
       if (config%output_modes) then
