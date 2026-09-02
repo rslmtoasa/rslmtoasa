@@ -116,6 +116,8 @@ module tddft_chi0_mod
       real(rp) :: real_space_tail_norm = 0.0_rp
       real(rp) :: real_space_tail_ratio = 0.0_rp
       real(rp) :: real_space_last_shell_norm = 0.0_rp
+      real(rp) :: real_space_pair_integration_cpu_seconds = 0.0_rp
+      real(rp) :: real_space_fourier_cpu_seconds = 0.0_rp
       real(rp) :: real_space_tail_tolerance = 0.0_rp
       logical :: real_space_tail_assessed = .false.
    end type tddft_chi0_metadata

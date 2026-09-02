@@ -82,6 +82,7 @@ add_library(${PROJECT_NAME} STATIC
     sparse.f90
     report.f90
     tddft_conventions.f90
+    tddft_performance.f90
     response_components.f90
     tddft_circular.f90
     response_basis.f90

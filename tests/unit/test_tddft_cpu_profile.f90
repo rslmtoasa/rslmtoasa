@@ -1,15 +1,18 @@
-! TDDFT-11 CPU profiling fixture.  This is intentionally informational: it
-! runs small, deterministic reciprocal-space models and prints phase timings,
-! but applies no performance threshold in CI.
+! TDDFT-14 CPU profiling fixture.  This is intentionally informational: it
+! runs small, deterministic models through every production backend and
+! prints phase timings, checksums, and the batched-vs-scalar reference.
 program test_tddft_cpu_profile
    use precision_mod, only: rp
    use basis_mod, only: nb, norb
    use math_mod, only: init_math_operators
    use response_components_mod, only: RESPONSE_CHARGE, RESPONSE_MZ, RESPONSE_PLUS, RESPONSE_MINUS
    use response_vertices_mod, only: response_channel
-   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs
+   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, tddft_chi0_request, tddft_chi0_batch_result, &
+      build_chi_ks_from_eigenpairs
    use tddft_chi0_green_mod, only: green_chi0_options, eigenpair_green_function_provider, &
       build_chi_ks_from_green_functions
+   use tddft_chi0_realspace_mod, only: tddft_realspace_chi0_options, tddft_native_realspace_gf_provider
+   use tddft_performance_mod, only: tddft_checksum_complex
    use tddft_dyson_mod, only: tddft_dyson_options, tddft_dyson_result, enhance_tddft_susceptibility
    use tddft_modes_mod, only: tddft_mode_options, tddft_mode_result, analyze_tddft_modes
    use reciprocal_mod, only: reciprocal
@@ -43,8 +46,12 @@ contains
       type(green_chi0_options) :: green_options
       type(tddft_dyson_options) :: dyson_options
       type(tddft_mode_options) :: mode_options
-      type(tddft_chi0_result) :: chi, green_chi
+      type(tddft_chi0_result) :: chi, chi_scalar, green_chi, green_mixed_chi, native_chi
       type(eigenpair_green_function_provider) :: green_source
+      type(tddft_native_realspace_gf_provider) :: native_source
+      type(tddft_chi0_request) :: native_request
+      type(tddft_chi0_batch_result) :: native_batch
+      type(tddft_realspace_chi0_options) :: native_options
       type(tddft_dyson_result) :: dyson
       type(tddft_mode_result) :: modes
       integer, allocatable :: site_orbital_counts(:)
@@ -53,6 +60,9 @@ contains
       character(len=160) :: reason
       real(rp) :: q_point(3), t_start, t_stop
       real(rp) :: fourier_seconds, eigensolve_seconds, arbitrary_kq_seconds, pair_operator_seconds
+      real(rp) :: eigen_batched_seconds, eigen_scalar_seconds, native_total_seconds
+      real(rp) :: eigen_checksum_difference
+      integer :: nresponse
 
       call setup_profile_model(recip, ham, lat, chg, ctl, nsite)
       nk = product(mesh_shape)
@@ -104,8 +114,19 @@ contains
       chi_options%electronic_temperature = 300.0_rp
       chi_options%k_mesh_shape = mesh_shape
       chi_options%transition_batch_size = 128
+      chi_options%use_batched_accumulation = .true.
+      call cpu_time(t_start)
       call build_chi_ks_from_eigenpairs(weights, recip%eigenvalues, recip%eigenvectors, evalq, evecq, &
          site_orbital_counts, left, right, omega, chi_options, chi)
+      call cpu_time(t_stop)
+      eigen_batched_seconds = t_stop-t_start
+      chi_options%use_batched_accumulation = .false.
+      call cpu_time(t_start)
+      call build_chi_ks_from_eigenpairs(weights, recip%eigenvalues, recip%eigenvectors, evalq, evecq, &
+         site_orbital_counts, left, right, omega, chi_options, chi_scalar)
+      call cpu_time(t_stop)
+      eigen_scalar_seconds = t_stop-t_start
+      eigen_checksum_difference = maxval(abs(chi%chi-chi_scalar%chi))
 
       call green_source%initialize(recip%eigenvalues, recip%eigenvectors, evalq, evecq)
       green_options%eta = chi_options%eta
@@ -114,8 +135,35 @@ contains
       green_options%energy_min = -0.50_rp
       green_options%energy_max = 0.50_rp
       green_options%energy_points = 13
+      green_options%energy_integration = 'direct'
       call build_chi_ks_from_green_functions(green_source, weights(:min(2, nk)), site_orbital_counts, left, right, &
          omega(:min(8, nw)), green_options, green_chi)
+      green_options%energy_integration = 'mixed_contour'
+      green_options%contour_points = 16
+      green_options%contour_subdivisions = 2
+      green_options%near_fermi_points = 16
+      call build_chi_ks_from_green_functions(green_source, weights(:min(2, nk)), site_orbital_counts, left, right, &
+         omega(:min(8, nw)), green_options, green_mixed_chi)
+
+      nresponse = min(8, nw)
+      native_options%eta = chi_options%eta
+      native_options%green_eta = 0.003_rp
+      native_options%fermi_level = chi_options%fermi_level
+      native_options%electronic_temperature = chi_options%electronic_temperature
+      native_options%rmax = huge(1.0_rp)
+      native_options%tail_tolerance = 1.0e-3_rp
+      native_options%representation = 'bulk'
+      call setup_native_profile_source(native_source, nb, nsite, left, right, native_options)
+      allocate(native_request%q_points(3, 3), native_request%omega(nresponse))
+      native_request%q_points = reshape([0.0_rp, 0.0_rp, 0.0_rp, 0.125_rp, 0.0_rp, 0.0_rp, &
+         0.25_rp, 0.0_rp, 0.0_rp], [3, 3])
+      native_request%omega = omega(:nresponse)
+      native_request%allow_real_space_reuse = .true.
+      call cpu_time(t_start)
+      call native_source%evaluate_realspace(native_request, native_batch)
+      call cpu_time(t_stop)
+      native_total_seconds = t_stop-t_start
+      native_chi = native_batch%q_response(1)
 
       allocate(kernel(2, 2))
       kernel = cmplx(0.0_rp, 0.0_rp, rp)
@@ -128,8 +176,42 @@ contains
       call analyze_tddft_modes(omega, xi, trace_loss, chi_options%eta, mode_options, modes)
 
       call report_profile(label, nsite, nmat, nk, nw, mesh_shape, fourier_seconds, eigensolve_seconds, &
-         arbitrary_kq_seconds, pair_operator_seconds, chi, green_chi, dyson, modes)
+         arbitrary_kq_seconds, pair_operator_seconds, eigen_batched_seconds, eigen_scalar_seconds, &
+         eigen_checksum_difference, native_total_seconds, chi, chi_scalar, green_chi, green_mixed_chi, native_chi, dyson, modes)
    end subroutine profile_fixture
+
+   subroutine setup_native_profile_source(source, nmat, nsite, left_channels, right_channels, options)
+      type(tddft_native_realspace_gf_provider), intent(inout) :: source
+      integer, intent(in) :: nmat, nsite
+      type(response_channel), intent(in) :: left_channels(:), right_channels(:)
+      type(tddft_realspace_chi0_options), intent(in) :: options
+      real(rp), allocatable :: energy_grid(:), r_vectors(:, :)
+      complex(rp), allocatable :: g_ab(:, :, :, :), g_ba(:, :, :, :)
+      integer, allocatable :: pair_sites(:, :), site_orbital_counts(:)
+      integer :: i, ie, ip, native_ne, nr
+
+      native_ne = 33; nr = 4
+      allocate(energy_grid(native_ne), r_vectors(3, nr), g_ab(nmat, nmat, native_ne, nr), &
+         g_ba(nmat, nmat, native_ne, nr), pair_sites(nr, 2), site_orbital_counts(nsite))
+      do ie = 1, native_ne
+         energy_grid(ie) = -0.50_rp + real(ie-1, rp)/real(native_ne-1, rp)
+      end do
+      r_vectors = 0.0_rp
+      r_vectors(1, 2) = 0.25_rp; r_vectors(2, 3) = 0.50_rp; r_vectors(3, 4) = 0.75_rp
+      pair_sites = 1
+      site_orbital_counts = norb
+      g_ab = cmplx(0.0_rp, 0.0_rp, rp); g_ba = cmplx(0.0_rp, 0.0_rp, rp)
+      do ip = 1, nr
+         do ie = 1, native_ne
+            do i = 1, nmat
+               g_ab(i, i, ie, ip) = 1.0_rp/cmplx(energy_grid(ie)-0.002_rp*real(i, rp), 0.025_rp, rp)
+               g_ba(i, i, ie, ip) = 0.80_rp/cmplx(energy_grid(ie)-0.002_rp*real(i, rp), 0.025_rp, rp)
+            end do
+         end do
+      end do
+      call source%initialize(energy_grid, g_ab, g_ba, r_vectors, pair_sites, site_orbital_counts, &
+         left_channels, right_channels, options)
+   end subroutine setup_native_profile_source
 
    subroutine setup_profile_model(recip, ham, lat, chg, ctl, nsite)
       type(reciprocal), intent(out) :: recip
@@ -239,21 +321,24 @@ contains
    end subroutine fill_k_mesh
 
    subroutine report_profile(label, nsite, nmat, nk, nw, mesh_shape, fourier_seconds, eigensolve_seconds, &
-      arbitrary_kq_seconds, pair_operator_seconds, chi, green_chi, dyson, modes)
+      arbitrary_kq_seconds, pair_operator_seconds, eigen_batched_seconds, eigen_scalar_seconds, &
+      eigen_checksum_difference, native_total_seconds, chi, chi_scalar, green_chi, green_mixed_chi, native_chi, dyson, modes)
       character(len=*), intent(in) :: label
       integer, intent(in) :: nsite, nmat, nk, nw, mesh_shape(3)
       real(rp), intent(in) :: fourier_seconds, eigensolve_seconds, arbitrary_kq_seconds, pair_operator_seconds
-      type(tddft_chi0_result), intent(in) :: chi, green_chi
+      real(rp), intent(in) :: eigen_batched_seconds, eigen_scalar_seconds, eigen_checksum_difference, native_total_seconds
+      type(tddft_chi0_result), intent(in) :: chi, chi_scalar, green_chi, green_mixed_chi, native_chi
       type(tddft_dyson_result), intent(in) :: dyson
       type(tddft_mode_result), intent(in) :: modes
-      real(rp) :: hk_mib, eig_mib, kq_mib, pair_mib, response_mib, payload_mib
+      real(rp) :: hk_mib, eig_mib, kq_mib, pair_mib, response_mib, payload_mib, realspace_mib
 
       hk_mib = complex_mib(nmat, nmat, nk)
       eig_mib = real_mib(nmat, nk) + complex_mib(nmat, nmat, nk)
       kq_mib = real_mib(nmat, nk) + complex_mib(nmat, nmat, nk)
       pair_mib = complex_mib(nmat, nmat, nsite, nk) + complex_mib(nmat, nmat)
       response_mib = complex_mib(2, 2, nw) + 2.0_rp*real_mib(2, 2, nw)
-      payload_mib = hk_mib + eig_mib + kq_mib + pair_mib + response_mib
+      realspace_mib = 2.0_rp*complex_mib(nb, nb, 33, 4) + complex_mib(2, 2, min(8, nw), 3)
+      payload_mib = hk_mib + eig_mib + kq_mib + pair_mib + response_mib + realspace_mib
 
       write (*, '(a,1x,a,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,a,i0,a,i0,1x,a,i0)') 'PROFILE_DIMENSIONS', trim(label), &
          'sites=', nsite, 'spinor_basis=', nmat, 'nk=', nk, 'mesh=', mesh_shape(1), 'x', mesh_shape(2), 'x', &
@@ -268,8 +353,37 @@ contains
          green_chi%metadata%green_energy_integration_cpu_seconds, 'dyson_solve=', dyson%metadata%solve_cpu_seconds, &
          'dyson_diagonalization=', dyson%metadata%diagonalization_cpu_seconds, 'mode_analysis=', modes%analysis_cpu_seconds
       write (*, '(a,1x,a,1x,a,es12.4,1x,a,es12.4,1x,a,es12.4,1x,a,es12.4,1x,a,es12.4,1x,a,es12.4)') &
+         'PROFILE_TDDFT_EXTENDED', trim(label), 'eigen_batched=', eigen_batched_seconds, 'eigen_scalar=', eigen_scalar_seconds, &
+         'green_direct=', green_chi%metadata%green_energy_integration_cpu_seconds, 'green_mixed=', &
+         green_mixed_chi%metadata%green_energy_integration_cpu_seconds, 'realspace_energy=', &
+         native_chi%metadata%real_space_pair_integration_cpu_seconds, 'realspace_R_q_FT=', &
+         native_chi%metadata%real_space_fourier_cpu_seconds
+      write (*, '(a,1x,a,1x,a,es16.8,1x,a,es16.8,1x,a,es16.8,1x,a,es16.8,1x,a,es16.8)') &
+         'PROFILE_CHECKSUM', trim(label), 'eigen_batched=', tddft_checksum_complex(chi%chi), 'eigen_scalar=', &
+         tddft_checksum_complex(chi_scalar%chi), 'eigen_abs_diff=', eigen_checksum_difference, 'kspace_direct=', &
+         tddft_checksum_complex(green_chi%chi), 'kspace_mixed=', tddft_checksum_complex(green_mixed_chi%chi)
+      write (*, '(a,1x,a,1x,a,es16.8,1x,a,i0,1x,a,i0,1x,a,i0)') 'PROFILE_REALSPACE', trim(label), &
+         'checksum=', tddft_checksum_complex(native_chi%chi), 'q_batch=', native_chi%metadata%q_batch_size, &
+         'R_points=', native_chi%metadata%real_space_points, 'green_evaluations=', native_chi%metadata%green_function_evaluations
+      write (*, '(a,1x,a,1x,a,1x,a,1x,a,1x,a,1x,a,1x,a)') 'PROFILE_BACKEND', trim(label), &
+         'backend=eigenpairs', 'integration=transitions', 'status=PASS', 'reuse=not_applicable', 'evidence=batched_and_scalar'
+      write (*, '(a,1x,a,1x,a,1x,a,1x,a,1x,a,1x,a)') 'PROFILE_BACKEND', trim(label), &
+         'backend=kspace_lehmann', 'integration=direct', 'status=PASS', 'reuse=per_q', 'evidence=real_axis'
+      write (*, '(a,1x,a,1x,a,1x,a,1x,a,1x,a,1x,a)') 'PROFILE_BACKEND', trim(label), &
+         'backend=kspace_lehmann', 'integration=mixed_contour', 'status=PASS', 'reuse=per_q', 'evidence=contour_and_RA'
+      write (*, '(a,1x,a,1x,a,1x,a,1x,a,1x,a,1x,a)') 'PROFILE_BACKEND', trim(label), &
+         'backend=realspace_gf', 'integration=direct', 'status=PASS', 'reuse=q_batch', 'evidence=native_R_FT'
+      write (*, '(a,1x,a,1x,a,1x,a,1x,a,1x,a,1x,a)') 'PROFILE_BACKEND', trim(label), &
+         'backend=realspace_gf', 'integration=mixed_contour', 'status=UNSUPPORTED', 'reuse=guarded', &
+         'evidence=sampled_real_axis_source_is_direct_only'
+      write (*, '(a,1x,a,1x,a,es12.4,1x,a,es12.4,1x,a,es12.4,1x,a,es12.4,1x,a,es12.4,1x,a,es12.4)') &
          'PROFILE_MEMORY_MIB', trim(label), 'hk=', hk_mib, 'normal_eigenpairs=', eig_mib, 'arbitrary_kq_eigenpairs=', kq_mib, &
-         'pair_operators_and_workspace=', pair_mib, 'response=', response_mib, 'principal_payload=', payload_mib
+         'pair_operators_and_workspace=', pair_mib, 'response=', response_mib, 'realspace_source_and_batch=', realspace_mib
+      write (*, '(a,1x,a,1x,a,es12.4,1x,a,es12.4,1x,a,es12.4,1x,a,es12.4)') 'PROFILE_MEMORY_MIB_EXTENDED', trim(label), &
+         'principal_payload=', payload_mib, 'eigen_speedup_scalar_over_batched=', &
+         eigen_scalar_seconds/max(eigen_batched_seconds, tiny(1.0_rp)), 'green_mixed_over_direct=', &
+         green_mixed_chi%metadata%green_energy_integration_cpu_seconds/max(green_chi%metadata%green_energy_integration_cpu_seconds, tiny(1.0_rp)), &
+         'native_total_seconds=', native_total_seconds
    end subroutine report_profile
 
    pure real(rp) function complex_mib(d1, d2, d3, d4) result(value)

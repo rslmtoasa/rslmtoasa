@@ -1,0 +1,97 @@
+{
+  "schema": "rslmto.tddft-performance.v1",
+  "benchmark": "TDDFT-14 backend and MPI performance campaign",
+  "source_commit": "a167e57 (TDDFT-14 working tree)",
+  "build": {
+    "compiler": "GNU Fortran 13.3.0",
+    "build_type": "Debug",
+    "openmp_threads": 2,
+    "mpi_ranks": 1,
+    "profile_command": "build/bin/UnitTddftCpuProfile",
+    "profile_repetitions": 1,
+    "profile_wall_seconds": 11.3594963
+  },
+  "fixtures": {
+    "bccFe_one_site": {
+      "dimensions": {"sites": 1, "spinor_basis": 18, "nk": 16, "nw": 96},
+      "seconds": {
+        "H_G_fourier_assembly": 0.002756,
+        "H_G_k_eigensolution": 0.000016,
+        "H_G_arbitrary_kq": 0.000263,
+        "H_G_pair_operator_construction": 0.004480,
+        "eigenpairs_batched": 0.033961,
+        "eigenpairs_scalar_reference": 0.520390,
+        "kspace_direct_GF_and_energy": 0.028060,
+        "kspace_mixed_contour_GF_and_energy": 0.226710,
+        "realspace_energy_integration": 0.131230,
+        "realspace_R_q_FT": 0.000008,
+        "dyson": 0.000109,
+        "spectral_analysis": 0.000424
+      },
+      "memory_mib": {
+        "principal_payload": 1.6441,
+        "realspace_source_and_q_batch": 1.3066
+      },
+      "speedups": {
+        "scalar_over_batched_eigenpairs": 15.3232,
+        "mixed_over_direct_kspace": 8.0795
+      },
+      "checksums": {
+        "eigenpairs_batched": -0.00975919343,
+        "eigenpairs_scalar": -0.00975919343,
+        "eigenpairs_absolute_difference": 0.0,
+        "kspace_direct": -419.855089,
+        "kspace_mixed_contour": -70.9218872,
+        "realspace_direct": -165361.429
+      }
+    },
+    "fccNi_two_site": {
+      "dimensions": {"sites": 2, "spinor_basis": 36, "nk": 32, "nw": 192},
+      "seconds": {
+        "H_G_fourier_assembly": 0.004468,
+        "H_G_k_eigensolution": 0.000004,
+        "H_G_arbitrary_kq": 0.003960,
+        "H_G_pair_operator_construction": 0.025793,
+        "eigenpairs_batched": 0.496470,
+        "eigenpairs_scalar_reference": 8.033100,
+        "kspace_direct_GF_and_energy": 0.169200,
+        "kspace_mixed_contour_GF_and_energy": 1.473700,
+        "realspace_energy_integration": 0.135960,
+        "realspace_R_q_FT": 0.000009,
+        "dyson": 0.000126,
+        "spectral_analysis": 0.000867
+      },
+      "memory_mib": {
+        "principal_payload": 4.5315,
+        "realspace_source_and_q_batch": 1.3066
+      },
+      "speedups": {
+        "scalar_over_batched_eigenpairs": 16.1804,
+        "mixed_over_direct_kspace": 8.7098
+      },
+      "checksums": {
+        "eigenpairs_batched": -0.0199890244,
+        "eigenpairs_scalar": -0.0199890244,
+        "eigenpairs_absolute_difference": 2.75489246e-21,
+        "kspace_direct": -239.333827,
+        "kspace_mixed_contour": 28.0867766,
+        "realspace_direct": -154378.668
+      }
+    }
+  },
+  "mpi_validation": {
+    "build": "/tmp/rslmto_tddft_mpi_clean",
+    "runtime": "OpenMPI",
+    "ranks": 4,
+    "test": "UnitTddftPerformance_mpi",
+    "result": "PASS",
+    "strategy": "R-blocks -> collective chi0(R,w) -> batched q FT",
+    "q_duplication_factor": 4.0,
+    "owner_q_count_per_rank": 3,
+    "R_block_count_per_rank": 12
+  },
+  "gpu": {
+    "status": "deferred",
+    "reason": "No measured GPU crossover evidence is available on this host; small kernels are overhead dominated."
+  }
+}

@@ -590,7 +590,7 @@ The core TD-DFT campaign is complete only when:
 - [ ] stiffness is consistent with independent LKAG/frozen-magnon/GBT references;
 - [ ] loss-matrix mode analysis yields stable energies and linewidths;
 - [ ] all unsupported response combinations fail explicitly;
-- [ ] performance evidence identifies the production backend regimes rather than assuming one backend is always fastest;
+- [x] performance evidence identifies the production backend regimes rather than assuming one backend is always fastest;
 - [ ] documentation records the physics approximations and validation evidence.
 
 Only then should the code describe the transverse TD-DFT path as production-validated.

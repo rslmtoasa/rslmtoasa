@@ -455,26 +455,30 @@ contains
       do ik=1,size(k_weights)
          call provider%prepare_kpoint(ik)
          prefactor=k_weights(ik)/weight_sum; npairs=0
+         ! Timer calls are deliberately outside the (n,m) loop.  The old
+         ! per-transition clock sampling was measurable for small orbital
+         ! tiles and obscured the actual preparation/contraction crossover.
+         call cpu_time(t0)
          do n=band_first,band_last
             do m=band_first,band_last
-               call cpu_time(t0)
                if (prune_tolerance > 0.0_rp) then
                   if (abs(tddft_fermi_occupation(eigenvalues_k(n,ik),fermi_level,temperature)- &
                      tddft_fermi_occupation(eigenvalues_kq(m,ik),fermi_level,temperature)) <= prune_tolerance) then
-                     call cpu_time(t1); preparation_seconds=preparation_seconds+t1-t0; cycle
+                     cycle
                   end if
                end if
                npairs=npairs+1; this%workspace%band_n(npairs)=n; this%workspace%band_m(npairs)=m
                this%workspace%occupations(npairs)=tddft_fermi_occupation(eigenvalues_k(n,ik),fermi_level,temperature)- &
                   tddft_fermi_occupation(eigenvalues_kq(m,ik),fermi_level,temperature)
                this%workspace%transition_energies(npairs)=eigenvalues_k(n,ik)-eigenvalues_kq(m,ik)
-               call cpu_time(t1); preparation_seconds=preparation_seconds+t1-t0
                if (npairs == capacity) then
+                  call cpu_time(t1); preparation_seconds=preparation_seconds+t1-t0
                   call flush_dynamic(this,ik,npairs,omega,eta,prefactor,use_batched,provider,response,vertex_seconds,denominator_seconds,accumulation_seconds)
-                  npairs=0
+                  npairs=0; call cpu_time(t0)
                end if
             end do
          end do
+         call cpu_time(t1); preparation_seconds=preparation_seconds+t1-t0
          if (npairs>0) call flush_dynamic(this,ik,npairs,omega,eta,prefactor,use_batched,provider,response,vertex_seconds,denominator_seconds,accumulation_seconds)
       end do
    end subroutine transition_engine_accumulate_dynamic
@@ -523,17 +527,20 @@ contains
       do ik=1,size(k_weights)
          call provider%prepare_kpoint(ik)
          prefactor=k_weights(ik)/weight_sum; npairs=0
+         call cpu_time(t0)
          do n=band_first,band_last; do m=band_first,band_last
-            call cpu_time(t0); factor=tddft_static_divided_difference(eigenvalues_k(n,ik),eigenvalues_kq(m,ik),fermi_level,temperature)
+            factor=tddft_static_divided_difference(eigenvalues_k(n,ik),eigenvalues_kq(m,ik),fermi_level,temperature)
             if (prune_tolerance > 0.0_rp .and. abs(factor)<=prune_tolerance) then
-               call cpu_time(t1); preparation_seconds=preparation_seconds+t1-t0; cycle
+               cycle
             end if
             npairs=npairs+1; this%workspace%band_n(npairs)=n; this%workspace%band_m(npairs)=m; this%workspace%occupations(npairs)=factor
-            call cpu_time(t1); preparation_seconds=preparation_seconds+t1-t0
             if (npairs==batch_size) then
+               call cpu_time(t1); preparation_seconds=preparation_seconds+t1-t0
                call flush_static(this,ik,npairs,prefactor,provider,response,vertex_seconds,accumulation_seconds); npairs=0
+               call cpu_time(t0)
             end if
          end do; end do
+         call cpu_time(t1); preparation_seconds=preparation_seconds+t1-t0
          if(npairs>0) call flush_static(this,ik,npairs,prefactor,provider,response,vertex_seconds,accumulation_seconds)
       end do
    end subroutine transition_engine_accumulate_static_shifted

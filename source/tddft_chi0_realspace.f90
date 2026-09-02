@@ -47,6 +47,8 @@ module tddft_chi0_realspace_mod
       real(rp) :: omitted_tail_norm = 0.0_rp
       real(rp) :: tail_ratio = 0.0_rp
       real(rp) :: last_shell_norm = 0.0_rp
+      real(rp) :: pair_integration_cpu_seconds = 0.0_rp
+      real(rp) :: fourier_cpu_seconds = 0.0_rp
       logical :: tail_assessed = .false.
       logical :: converged = .false.
       character(len=48) :: status = 'not assessed'
@@ -240,8 +242,11 @@ contains
       real(rp), allocatable :: radii(:)
       complex(rp), allocatable :: left_ops(:, :, :), right_ops(:, :, :), pair_response(:, :, :)
       real(rp), allocatable :: pair_norms(:)
+      complex(rp), allocatable :: f0(:, :), f1(:, :), gr0(:, :), gr1(:, :), grm(:, :), rev0(:, :), &
+         adv_reverse0(:, :), adv_forward0(:, :), advm(:, :), work1(:, :), work2(:, :), work3(:, :)
       integer :: ip, iw, ikeep, nkeep, nleft, nright, nw, nblock
       real(rp) :: effective_cutoff, selected_norm, omitted_norm, total_norm
+      real(rp) :: t_start, t_stop
 
       call validate_realspace_source(energy_grid, g_ab, g_ba, r_vectors, pair_sites, site_orbital_counts, &
          left_channels, right_channels)
@@ -259,8 +264,15 @@ contains
          keep(ip) = radii(ip) <= options%rmax + 16.0_rp*epsilon(1.0_rp)*max(1.0_rp, radii(ip))
       end do
       nkeep = count(keep)
-      if (nkeep < 1) error stop 'build_chi0_from_realspace_gf: Rmax removes every real-space pair'
-      effective_cutoff = maxval(pack(radii, keep))
+      if (nkeep < 1 .and. size(r_vectors, 2) > 0) error stop 'build_chi0_from_realspace_gf: Rmax removes every real-space pair'
+      if (nkeep > 0) then
+         effective_cutoff = maxval(pack(radii, keep))
+      else
+         ! A rank with no locally owned R block is a valid member of an
+         ! MPI-distributed native source.  Its zero contribution is reduced
+         ! with the other ranks before the common q Fourier batch is used.
+         effective_cutoff = 0.0_rp
+      end if
       allocate(result%chi_r(nleft, nright, nw, nkeep), result%r_vectors(3, nkeep))
       result%chi_r = cmplx(0.0_rp, 0.0_rp, rp)
       ikeep = 0
@@ -274,14 +286,20 @@ contains
       call make_local_operators(left_channels, site_orbital_counts, nblock, left_ops)
       call make_local_operators(right_channels, site_orbital_counts, nblock, right_ops)
       allocate(pair_response(nleft, nright, nw), pair_norms(size(keep)))
+      allocate(f0(nleft, nright), f1(nleft, nright), gr0(nblock, nblock), gr1(nblock, nblock), &
+         grm(nblock, nblock), rev0(nblock, nblock), adv_reverse0(nblock, nblock), &
+         adv_forward0(nblock, nblock), advm(nblock, nblock), work1(nblock, nblock), &
+         work2(nblock, nblock), work3(nblock, nblock))
       pair_response = cmplx(0.0_rp, 0.0_rp, rp)
       selected_norm = 0.0_rp; omitted_norm = 0.0_rp; total_norm = 0.0_rp; pair_norms = 0.0_rp
       ikeep = 0
+      call cpu_time(t_start)
       do ip = 1, size(keep)
          pair_response = cmplx(0.0_rp, 0.0_rp, rp)
          do iw = 1, nw
             call integrate_pair_response(energy_grid, g_ab(:, :, :, ip), g_ba(:, :, :, ip), pair_sites(ip, :), &
-               left_channels, right_channels, left_ops, right_ops, omega(iw), options, pair_response(:, :, iw))
+               left_channels, right_channels, left_ops, right_ops, omega(iw), options, f0, f1, gr0, gr1, grm, rev0, &
+               adv_reverse0, adv_forward0, advm, work1, work2, work3, pair_response(:, :, iw))
          end do
          pair_norms(ip) = sum(abs(pair_response))
          total_norm = total_norm + pair_norms(ip)
@@ -293,6 +311,9 @@ contains
             omitted_norm = omitted_norm + pair_norms(ip)
          end if
       end do
+      call cpu_time(t_stop)
+      result%diagnostics%pair_integration_cpu_seconds = t_stop-t_start
+      call cpu_time(t_start)
       if (present(q_points)) then
          call fourier_transform_realspace_chi0(result%chi_r, result%r_vectors, q_points, options%representation, &
             options%fourier_axes, result%chi_q)
@@ -300,6 +321,8 @@ contains
          allocate(result%chi_q(nleft, nright, nw, 1))
          result%chi_q = cmplx(0.0_rp, 0.0_rp, rp)
       end if
+      call cpu_time(t_stop)
+      result%diagnostics%fourier_cpu_seconds = t_stop-t_start
       result%diagnostics%input_points = size(keep)
       result%diagnostics%selected_points = nkeep
       result%diagnostics%omitted_points = size(keep)-nkeep
@@ -451,6 +474,8 @@ contains
       result%metadata%real_space_tail_norm = diagnostics%omitted_tail_norm
       result%metadata%real_space_tail_ratio = diagnostics%tail_ratio
       result%metadata%real_space_last_shell_norm = diagnostics%last_shell_norm
+      result%metadata%real_space_pair_integration_cpu_seconds = diagnostics%pair_integration_cpu_seconds
+      result%metadata%real_space_fourier_cpu_seconds = diagnostics%fourier_cpu_seconds
       result%metadata%real_space_tail_tolerance = options%tail_tolerance
       result%metadata%real_space_tail_assessed = diagnostics%tail_assessed
       result%metadata%convergence_status = diagnostics%status
@@ -459,48 +484,47 @@ contains
    end subroutine make_response_from_q
 
    subroutine integrate_pair_response(energy_grid, g_ab, g_ba, pair_sites, left_channels, right_channels, &
-      left_ops, right_ops, omega, options, response)
+      left_ops, right_ops, omega, options, f0, f1, gr0, gr1, grm, rev0, adv_reverse0, adv_forward0, advm, work1, work2, &
+      work3, response)
       real(rp), intent(in) :: energy_grid(:), omega
       complex(rp), intent(in) :: g_ab(:, :, :), g_ba(:, :, :), left_ops(:, :, :), right_ops(:, :, :)
       integer, intent(in) :: pair_sites(:)
       type(response_channel), intent(in) :: left_channels(:), right_channels(:)
       type(tddft_realspace_chi0_options), intent(in) :: options
+      complex(rp), intent(inout) :: f0(:, :), f1(:, :), gr0(:, :), gr1(:, :), grm(:, :), rev0(:, :), &
+         adv_reverse0(:, :), adv_forward0(:, :), advm(:, :), work1(:, :), work2(:, :), work3(:, :)
       complex(rp), intent(out) :: response(:, :)
-      complex(rp), allocatable :: f0(:, :), f1(:, :)
       integer :: ie
       real(rp) :: lo, hi, h
 
       response = cmplx(0.0_rp, 0.0_rp, rp)
       lo = energy_grid(1) + abs(omega); hi = energy_grid(size(energy_grid)) - abs(omega)
       if (hi <= lo) error stop 'integrate_pair_response: Green energy grid does not cover omega'
-      allocate(f0(size(response, 1), size(response, 2)), f1(size(response, 1), size(response, 2)))
       do ie = 1, size(energy_grid)-1
          if (energy_grid(ie) < lo .or. energy_grid(ie+1) > hi) cycle
          call response_integrand(energy_grid(ie), energy_grid, g_ab, g_ba, pair_sites, left_channels, right_channels, &
-            left_ops, right_ops, omega, options, f0)
+            left_ops, right_ops, omega, options, gr0, gr1, grm, rev0, adv_reverse0, adv_forward0, advm, work1, work2, work3, f0)
          call response_integrand(energy_grid(ie+1), energy_grid, g_ab, g_ba, pair_sites, left_channels, right_channels, &
-            left_ops, right_ops, omega, options, f1)
+            left_ops, right_ops, omega, options, gr0, gr1, grm, rev0, adv_reverse0, adv_forward0, advm, work1, work2, work3, f1)
          h = energy_grid(ie+1)-energy_grid(ie)
          response = response + 0.5_rp*h*(f0+f1)
       end do
    end subroutine integrate_pair_response
 
    subroutine response_integrand(energy, energy_grid, g_ab, g_ba, pair_sites, left_channels, right_channels, &
-      left_ops, right_ops, omega, options, response)
+      left_ops, right_ops, omega, options, gr0, gr1, grm, rev0, adv_reverse0, adv_forward0, advm, work1, work2, work3, response)
       real(rp), intent(in) :: energy, energy_grid(:), omega
       complex(rp), intent(in) :: g_ab(:, :, :), g_ba(:, :, :), left_ops(:, :, :), right_ops(:, :, :)
       integer, intent(in) :: pair_sites(:)
       type(response_channel), intent(in) :: left_channels(:), right_channels(:)
       type(tddft_realspace_chi0_options), intent(in) :: options
+      complex(rp), intent(inout) :: gr0(:, :), gr1(:, :), grm(:, :), rev0(:, :), adv_reverse0(:, :), adv_forward0(:, :), advm(:, :)
+      complex(rp), intent(inout) :: work1(:, :), work2(:, :), work3(:, :)
       complex(rp), intent(out) :: response(:, :)
-      complex(rp), allocatable :: gr0(:, :), gr1(:, :), grm(:, :), rev0(:, :), adv_reverse0(:, :), adv_forward0(:, :), advm(:, :)
       complex(rp) :: bubble
-      integer :: nblock, il, ir
+      integer :: il, ir
       real(rp) :: occupation
 
-      nblock = size(g_ab, 1)
-      allocate(gr0(nblock, nblock), gr1(nblock, nblock), grm(nblock, nblock), rev0(nblock, nblock), &
-         adv_reverse0(nblock, nblock), adv_forward0(nblock, nblock), advm(nblock, nblock))
       call interpolate_block(energy_grid, g_ab, energy, gr0)
       call interpolate_block(energy_grid, g_ba, energy, rev0)
       call interpolate_block(energy_grid, g_ab, energy+omega, gr1)
@@ -514,8 +538,8 @@ contains
          if (left_channels(il)%site /= pair_sites(1)) cycle
          do ir = 1, size(right_channels)
             if (right_channels(ir)%site /= pair_sites(2)) cycle
-            bubble = trace_four_local(left_ops(:, :, il), gr1, right_ops(:, :, ir), rev0-adv_reverse0) + &
-               trace_four_local(left_ops(:, :, il), gr0-adv_forward0, right_ops(:, :, ir), advm)
+            bubble = trace_four_local(left_ops(:, :, il), gr1, right_ops(:, :, ir), rev0-adv_reverse0, work1, work2, work3) + &
+               trace_four_local(left_ops(:, :, il), gr0-adv_forward0, right_ops(:, :, ir), advm, work1, work2, work3)
             response(il, ir) = -occupation*bubble/(2.0_rp*pi*i_unit)
          end do
       end do
@@ -544,15 +568,17 @@ contains
       block = (1.0_rp-weight)*values(:, :, ie) + weight*values(:, :, ie+1)
    end subroutine interpolate_block
 
-   function trace_four_local(a, b, c, d) result(value)
+   function trace_four_local(a, b, c, d, work1, work2, work3) result(value)
       complex(rp), intent(in) :: a(:, :), b(:, :), c(:, :), d(:, :)
+      complex(rp), intent(out) :: work1(:, :), work2(:, :), work3(:, :)
       complex(rp) :: value
-      complex(rp), allocatable :: ab(:, :), abc(:, :), abcd(:, :)
       integer :: ie
 
-      allocate(ab(size(a, 1), size(a, 2)), abc(size(a, 1), size(a, 2)), abcd(size(a, 1), size(a, 2)))
-      ab = matmul(a, b); abc = matmul(ab, c); abcd = matmul(abc, d)
-      value = sum([(abcd(ie, ie), ie=1, size(abcd, 1))])
+      work1 = matmul(a, b); work2 = matmul(work1, c); work3 = matmul(work2, d)
+      value = cmplx(0.0_rp, 0.0_rp, rp)
+      do ie = 1, size(work3, 1)
+         value = value + work3(ie, ie)
+      end do
    end function trace_four_local
 
    subroutine make_local_operators(channels, site_orbital_counts, nblock, local_ops)
@@ -592,7 +618,9 @@ contains
       real(rp) :: outer_radius
       integer :: ip
 
-      outer_radius = maxval(pack(radii, keep)); value = 0.0_rp
+      value = 0.0_rp
+      if (count(keep) == 0) return
+      outer_radius = maxval(pack(radii, keep))
       do ip = 1, size(keep)
          if (keep(ip) .and. radii(ip) >= outer_radius-16.0_rp*epsilon(1.0_rp)*max(1.0_rp, outer_radius)) then
             value = value + pair_norms(ip)

@@ -860,6 +860,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitTddftDirectXi PROPERTIES LABELS "unit;tddft;xi;ward")
   add_fortran_unit_test(UnitTddftCpuProfile ${TestDIR}/unit/test_tddft_cpu_profile.f90)
   set_tests_properties(UnitTddftCpuProfile PROPERTIES LABELS "performance;tddft;profile")
+  add_fortran_unit_test(UnitTddftPerformance ${TestDIR}/unit/test_tddft_performance.f90)
+  set_tests_properties(UnitTddftPerformance PROPERTIES LABELS "unit;tddft;performance;mpi;decomposition")
   # ACC-06 is an opt-in benchmark driver.  It deliberately is not registered
   # as a CTest test because timing campaigns need controlled repetitions and
   # may select a CUDA device explicitly.
@@ -959,6 +961,11 @@ if (RUN_UNIT_TESTS)
       set_tests_properties("UnitParallelContext_mpi_${_parallel_context_ranks}" PROPERTIES
         LABELS "unit;mpi;parallel_context" PROCESSORS ${_parallel_context_ranks})
     endforeach()
+    add_test(NAME UnitTddftPerformance_mpi
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 ${_rslmto_mpi_unit_preflags}
+              $<TARGET_FILE:UnitTddftPerformance> ${MPIEXEC_POSTFLAGS})
+    set_tests_properties(UnitTddftPerformance_mpi PROPERTIES
+      LABELS "unit;tddft;performance;mpi;decomposition" PROCESSORS 4)
   endif()
   add_test(NAME UnitGbtOracles
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_oracles.py)

@@ -74,6 +74,7 @@ module calculation_mod
       spectral_weight_correction_is_acceptable, &
       write_goldstone_diagnostics_text, append_goldstone_column_correction_text
    use tddft_modes_mod, only: tddft_mode_options, tddft_mode_result, analyze_tddft_modes, write_tddft_modes_text
+   use tddft_performance_mod, only: tddft_mpi_plan, make_tddft_mpi_plan
    use tddft_longitudinal_mod, only: build_charge_longitudinal_channels, build_charge_longitudinal_kernel, &
       append_longitudinal_response_metadata
 #ifdef USE_MPI
@@ -1237,6 +1238,7 @@ contains
       type(tddft_mode_result) :: mode_result
       type(tddft_four_component_zero_mode_diagnostics) :: full_zero_mode_diagnostics
       class(tddft_chi0_backend), allocatable :: chi0_backend
+      type(tddft_mpi_plan) :: tddft_plan
       type(lmto_pair_operator_tile_source), target :: pair_operator_source
       type(response_channel), allocatable :: left_channels(:), right_channels(:), left_channels_reverse(:), right_channels_reverse(:)
       real(rp), allocatable :: omega(:), omega_static(:), eigenvalues_k(:, :), eigenvalues_kq(:, :)
@@ -1405,8 +1407,16 @@ contains
       end if
 
       nq = size(config%q_points, 2)
-      call get_mpi_range(rank, nq, iq_start, iq_end, nq_per_rank, region_tag='tddft-q')
       nw = config%nomega
+      tddft_plan = make_tddft_mpi_plan(canonical_chi0_backend, config%gf_integration, nq, nw, &
+         product(reciprocal_obj%nk_mesh), lattice_obj%njij, rank, numprocs, .true., config%green_energy_points)
+      ! The planner owner range is used for q-labelled output.  The native
+      ! R-GF compute range is intentionally wider: all q points are transformed
+      ! after the local R blocks have been reduced, preserving q amortization.
+      iq_start = tddft_plan%owner_q%first
+      iq_end = tddft_plan%owner_q%last
+      nq_per_rank = tddft_plan%owner_q%count
+      if (rank == 0) call tddft_plan%emit(label='production')
       allocate(omega(nw))
       if (nw == 1) then
          omega(1) = config%omega_min
@@ -1505,10 +1515,6 @@ contains
       if (.not. is_full_response) call make_tddft_chi0_backend(config%chi0_backend, chi0_backend)
 
       if (canonical_chi0_backend == 'realspace_gf') then
-         if (numprocs /= 1) then
-            call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space TDDFT currently requires '// &
-               'serial atom ownership; MPI reduction of chi0(R,omega) is not silently approximated.', __FILE__, __LINE__)
-         end if
          ! The common response setup above maps ownership to response sites so
          ! k-space spin moments and eigenpairs use the normal nrec layout.  The
          ! native source instead consumes every generated pair; restore the
@@ -1842,9 +1848,11 @@ contains
          select type (chi0_backend)
          type is (tddft_realspace_gf_backend)
             call chi0_backend%evaluate_grid(config%q_points, omega, realspace_batch)
+            call reduce_native_realspace_batch(realspace_batch)
             if (circular_reverse) then
                call chi0_backend%initialize(realspace_source_reverse)
                call chi0_backend%evaluate_grid(config%q_points, omega, realspace_batch_reverse)
+               call reduce_native_realspace_batch(realspace_batch_reverse)
                call chi0_backend%initialize(realspace_source)
             end if
          class default
@@ -3427,6 +3435,45 @@ contains
       this%do_damping = .false.
       this%do_inertia = .false.
    end subroutine restore_to_default
+
+   !> Reduce locally owned R-block contributions while retaining the complete
+   !> q batch on every rank.  The native source is therefore parallel over its
+   !> expensive real-space/energy work, but q Fourier phases are evaluated once
+   !> per rank for the whole requested path and q-labelled files remain owned by
+   !> the normal output range.
+   subroutine reduce_native_realspace_batch(batch)
+      type(tddft_chi0_batch_result), intent(inout) :: batch
+#ifdef USE_MPI
+      integer :: local_counts(2), global_counts(2)
+      real(rp) :: local_tail, global_tail
+      integer :: iq
+
+      do iq = 1, size(batch%q_response)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, batch%q_response(iq)%chi, size(batch%q_response(iq)%chi), &
+            MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%re_chi = real(batch%q_response(iq)%chi, rp)
+         batch%q_response(iq)%im_chi = aimag(batch%q_response(iq)%chi)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, batch%q_response(iq)%site_diagonal_spectrum, &
+            size(batch%q_response(iq)%site_diagonal_spectrum), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, batch%q_response(iq)%stoner_spectral_map, &
+            size(batch%q_response(iq)%stoner_spectral_map), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, batch%q_response(iq)%trace_spectrum, &
+            size(batch%q_response(iq)%trace_spectrum), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         local_counts = [batch%q_response(iq)%metadata%real_space_points, &
+            batch%q_response(iq)%metadata%real_space_omitted_points]
+         call MPI_ALLREDUCE(local_counts, global_counts, 2, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_points = global_counts(1)
+         batch%q_response(iq)%metadata%real_space_omitted_points = global_counts(2)
+         local_tail = batch%q_response(iq)%metadata%real_space_tail_norm
+         call MPI_ALLREDUCE(local_tail, global_tail, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         batch%q_response(iq)%metadata%real_space_tail_norm = global_tail
+      end do
+      if (size(batch%q_response) > 0) batch%metadata = batch%q_response(1)%metadata
+#else
+      ! Serial builds already hold the complete real-space source locally.
+      continue
+#endif
+   end subroutine reduce_native_realspace_batch
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
