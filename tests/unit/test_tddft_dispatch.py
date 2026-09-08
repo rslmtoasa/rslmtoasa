@@ -71,7 +71,7 @@ def test_controlled_goldstone_correction_rescales_only_pair_potential_columns() 
     goldstone = (root / "source" / "tddft_goldstone.f90").read_text()
     assert "goldstone_mode=correct requires" in source
     assert "build_goldstone_column_correction(pair_xi_static%xi" in source
-    assert "pair_operator_source%initialize(reciprocal_obj, signed_moments, config%q_points(:, iq), &" in source
+    assert "pair_operator_source%initialize(reciprocal_obj, moment_amplitudes, config%q_points(:, iq), &" in source
     assert "pair_correction%scales" in source
     assert "pair_operators_corrected" not in source
     assert "_pair_corrected_dyson.dat" in source

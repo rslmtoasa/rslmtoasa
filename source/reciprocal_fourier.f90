@@ -298,10 +298,12 @@ contains
    !> for before hxc/ee collapse; its directed-bond phase is the normal
    !> H(k)=sum_R H(R) exp(+i k.R) phase: left endpoints carry k and right
    !> endpoints carry k+q. The optional q=0 default preserves WR-02 callers.
-   module subroutine build_lmto_pair_potential_at_kpoint(this, response_site, k_point, signed_moment, qminus, qplus, supported, reason, q_point, metadata)
+   !> `moment_amplitude` is the positive orientation-to-moment Jacobian
+   !> denominator; signed site m_z is not consumed by this builder.
+   module subroutine build_lmto_pair_potential_at_kpoint(this, response_site, k_point, moment_amplitude, qminus, qplus, supported, reason, q_point, metadata)
       class(reciprocal), intent(inout) :: this
       integer, intent(in) :: response_site
-      real(rp), intent(in) :: k_point(3), signed_moment
+      real(rp), intent(in) :: k_point(3), moment_amplitude
       complex(rp), intent(out) :: qminus(:, :), qplus(:, :)
       logical, intent(out) :: supported
       character(len=*), intent(out), optional :: reason
@@ -403,8 +405,8 @@ contains
             end do
          end do
       end do
-      call lmto_circular_pair_potential(dh_dx, dh_dy, signed_moment, qminus, qplus, supported, local_reason)
-      if (supported) call lmto_circular_pair_potential_from_reverse(dh_dx_reverse, dh_dy_reverse, signed_moment, qplus, supported, local_reason)
+      call lmto_circular_pair_potential(dh_dx, dh_dy, moment_amplitude, qminus, qplus, supported, local_reason)
+      if (supported) call lmto_circular_pair_potential_from_reverse(dh_dx_reverse, dh_dy_reverse, moment_amplitude, qplus, supported, local_reason)
       if (present(reason)) reason = trim(local_reason)
       deallocate(dh_dx, dh_dy, dh_dx_reverse, dh_dy_reverse)
    end subroutine build_lmto_pair_potential_at_kpoint

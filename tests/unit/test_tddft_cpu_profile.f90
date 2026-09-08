@@ -100,7 +100,7 @@ contains
       do ik = 1, nk
          do isite = 1, nsite
             call recip%build_lmto_pair_potential_at_kpoint(isite, recip%k_points(:, ik), &
-               merge(2.0_rp, -2.0_rp, isite == 1), pair_ops(:, :, isite, ik), qplus, supported, reason, q_point)
+               2.0_rp, pair_ops(:, :, isite, ik), qplus, supported, reason, q_point)
             if (.not. supported) error stop 'test_tddft_cpu_profile: pair-potential profile fixture unsupported: '//trim(reason)
          end do
       end do

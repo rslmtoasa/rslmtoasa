@@ -111,9 +111,11 @@ module calculation_mod
    !> Streamed LMTO Q^- producer for TD-DFT pair-potential Xi.  It owns its
    !> small site-data vectors and two reusable construction matrices; the
    !> transition provider owns the one-k `(nmat,nmat,nright)` tile it fills.
+   !> Pair normalization stores positive moment amplitudes only; signed m_z is
+   !> kept separately by the Goldstone diagnostics.
    type, extends(pair_operator_tile_source) :: lmto_pair_operator_tile_source
       type(reciprocal), pointer :: reciprocal_obj => null()
-      real(rp), allocatable :: signed_moments(:), column_scales(:)
+      real(rp), allocatable :: moment_amplitudes(:), column_scales(:)
       real(rp) :: q_point(3) = 0.0_rp
       complex(rp), allocatable :: qminus(:, :), qplus(:, :)
       logical :: use_qplus = .false.
@@ -1251,7 +1253,7 @@ contains
       complex(rp), allocatable :: all_xi_pair(:, :, :, :), all_loss_pair(:, :, :, :)
       real(rp), allocatable :: all_trace_loss(:, :), all_trace_loss_pair(:, :), all_trace_loss_reverse(:, :), all_trace_loss_pair_reverse(:, :)
       real(rp), allocatable :: coulomb_site(:, :), magnetization(:, :), site_moments(:, :)
-      real(rp), allocatable :: signed_moments(:)
+      real(rp), allocatable :: signed_mz(:), moment_amplitudes(:)
       complex(rp), allocatable :: all_xi_reverse(:, :, :, :), all_loss_reverse(:, :, :, :)
       complex(rp), allocatable :: all_xi_pair_reverse(:, :, :, :), all_loss_pair_reverse(:, :, :, :)
       real(rp) :: response_eta, t_profile_start, t_profile_stop, kq_eigensolve_cpu_seconds
@@ -1600,14 +1602,15 @@ contains
          call g_logger%fatal(trim(electron_count_message)// &
             '. Check reciprocal total_electrons and whether the response band window can represent the target count.', __FILE__, __LINE__)
       end if
-      allocate(site_moments(3, lattice_obj%nrec), signed_moments(lattice_obj%nrec))
+      allocate(site_moments(3, lattice_obj%nrec), signed_mz(lattice_obj%nrec), moment_amplitudes(lattice_obj%nrec))
       call self_obj%compute_kspace_spin_moments_spinor(reciprocal_obj, site_moments)
       do isite = 1, lattice_obj%nrec
          ! A transverse Goldstone vector is signed.  Replacing this by its
          ! magnitude breaks reversed and multi-sublattice reference states.
          call self_obj%xc_response_provider%set_site_spin_population(isite, abs(site_moments(3, isite)))
          call self_obj%xc_response_provider%set_site_signed_spin_population(isite, site_moments(3, isite))
-         signed_moments(isite) = site_moments(3, isite)
+         signed_mz(isite) = site_moments(3, isite)
+         moment_amplitudes(isite) = sqrt(sum(site_moments(:, isite)**2))
          if (sqrt(sum(site_moments(:, isite)**2)) > tiny(1.0_rp)) then
             call self_obj%xc_response_provider%set_site_magnetization_direction(isite, site_moments(:, isite))
          end if
@@ -1696,11 +1699,11 @@ contains
          end if
       end if
       if (pair_backend) then
-         call pair_operator_source%initialize(reciprocal_obj, signed_moments, [0.0_rp, 0.0_rp, 0.0_rp], &
+         call pair_operator_source%initialize(reciprocal_obj, moment_amplitudes, [0.0_rp, 0.0_rp, 0.0_rp], &
             use_qplus=primary_minus_plus)
          call build_static_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
             site_orbital_counts, left_channels, pair_operator_source, chi0_options, pair_xi_static)
-         call evaluate_raw_xi_diagnostics(pair_xi_static%xi(:, :, 1), cmplx(signed_moments, 0.0_rp, rp), pair_goldstone, &
+         call evaluate_raw_xi_diagnostics(pair_xi_static%xi(:, :, 1), cmplx(signed_mz, 0.0_rp, rp), pair_goldstone, &
             response_basis='site', kernel_provenance='direct LMTO ham_only transverse pair-potential Xi')
          if (config%goldstone_mode == 'correct') then
             if (has_soc .or. has_external_field) then
@@ -1708,16 +1711,16 @@ contains
                pair_correction%rejected = .true.
                pair_correction%decision = 'Goldstone correction is unavailable with SOC or an external symmetry-breaking field'
             else
-               call build_goldstone_column_correction(pair_xi_static%xi(:, :, 1), cmplx(signed_moments, 0.0_rp, rp), &
+               call build_goldstone_column_correction(pair_xi_static%xi(:, :, 1), cmplx(signed_mz, 0.0_rp, rp), &
                   pair_correction)
             end if
          end if
          if (circular_reverse) then
-            call pair_operator_source%initialize(reciprocal_obj, signed_moments, [0.0_rp, 0.0_rp, 0.0_rp], &
+            call pair_operator_source%initialize(reciprocal_obj, moment_amplitudes, [0.0_rp, 0.0_rp, 0.0_rp], &
                use_qplus=.not. primary_minus_plus)
             call build_static_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
                site_orbital_counts, left_channels_reverse, pair_operator_source, chi0_options_reverse, pair_xi_static_reverse)
-            call evaluate_raw_xi_diagnostics(pair_xi_static_reverse%xi(:, :, 1), cmplx(signed_moments, 0.0_rp, rp), &
+            call evaluate_raw_xi_diagnostics(pair_xi_static_reverse%xi(:, :, 1), cmplx(signed_mz, 0.0_rp, rp), &
                pair_goldstone_reverse, response_basis='site', kernel_provenance='direct LMTO reverse circular pair-potential Xi')
          end if
          call pair_operator_source%clear()
@@ -2021,7 +2024,7 @@ contains
                end if
             end if
             if (pair_backend) then
-               call pair_operator_source%initialize(reciprocal_obj, signed_moments, config%q_points(:, iq), &
+               call pair_operator_source%initialize(reciprocal_obj, moment_amplitudes, config%q_points(:, iq), &
                   use_qplus=primary_minus_plus)
                call build_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
                   eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels, pair_operator_source, omega, &
@@ -2041,7 +2044,7 @@ contains
                      raw_pair_minimum_spectral_weight)
                end if
                if (config%goldstone_mode == 'correct') then
-                  call pair_operator_source%initialize(reciprocal_obj, signed_moments, config%q_points(:, iq), &
+                  call pair_operator_source%initialize(reciprocal_obj, moment_amplitudes, config%q_points(:, iq), &
                      pair_correction%scales, use_qplus=primary_minus_plus)
                   call build_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
                      eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels, pair_operator_source, omega, &
@@ -2113,7 +2116,7 @@ contains
                   end if
                end if
                if (pair_backend) then
-                  call pair_operator_source%initialize(reciprocal_obj, signed_moments, config%q_points(:, iq), &
+                  call pair_operator_source%initialize(reciprocal_obj, moment_amplitudes, config%q_points(:, iq), &
                      use_qplus=.not. primary_minus_plus)
                   call build_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
                      eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels_reverse, pair_operator_source, omega, &
@@ -2129,7 +2132,7 @@ contains
                         rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_reverse_potential_raw')
                   end if
                   if (config%goldstone_mode == 'correct') then
-                     call pair_operator_source%initialize(reciprocal_obj, signed_moments, config%q_points(:, iq), &
+                     call pair_operator_source%initialize(reciprocal_obj, moment_amplitudes, config%q_points(:, iq), &
                         pair_correction%scales, use_qplus=.not. primary_minus_plus)
                      call build_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
                         eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels_reverse, pair_operator_source, omega, &
@@ -2376,10 +2379,10 @@ contains
       close(unit)
    end subroutine append_pair_correction_spectral_weight_diagnostic
 
-   subroutine initialize_lmto_pair_operator_source(this, reciprocal_obj, signed_moments, q_point, column_scales, use_qplus)
+   subroutine initialize_lmto_pair_operator_source(this, reciprocal_obj, moment_amplitudes, q_point, column_scales, use_qplus)
       class(lmto_pair_operator_tile_source), intent(inout) :: this
       type(reciprocal), target, intent(inout) :: reciprocal_obj
-      real(rp), intent(in) :: signed_moments(:)
+      real(rp), intent(in) :: moment_amplitudes(:)
       real(rp), intent(in) :: q_point(3)
       real(rp), intent(in), optional :: column_scales(:)
       logical, intent(in), optional :: use_qplus
@@ -2390,8 +2393,8 @@ contains
          call g_logger%fatal('[calculation.lmto_pair_operator_source]: reciprocal mesh is unavailable.', __FILE__, __LINE__)
       end if
       nright = reciprocal_obj%lattice%nrec
-      if (size(signed_moments) /= nright) then
-         call g_logger%fatal('[calculation.lmto_pair_operator_source]: signed-moment shape is incompatible.', __FILE__, __LINE__)
+      if (size(moment_amplitudes) /= nright) then
+         call g_logger%fatal('[calculation.lmto_pair_operator_source]: moment-amplitude shape is incompatible.', __FILE__, __LINE__)
       end if
       if (present(column_scales)) then
          if (size(column_scales) /= nright) then
@@ -2402,8 +2405,8 @@ contains
       end if
       nmat = 2*norb*nright
       this%reciprocal_obj => reciprocal_obj
-      allocate(this%signed_moments(nright))
-      this%signed_moments = signed_moments
+      allocate(this%moment_amplitudes(nright))
+      this%moment_amplitudes = moment_amplitudes
       this%q_point = q_point
       if (present(use_qplus)) this%use_qplus = use_qplus
       allocate(this%qminus(nmat, nmat), this%qplus(nmat, nmat))
@@ -2423,7 +2426,7 @@ contains
       logical :: supported
       character(len=160) :: reason
 
-      if (.not. associated(this%reciprocal_obj) .or. .not. allocated(this%signed_moments)) then
+      if (.not. associated(this%reciprocal_obj) .or. .not. allocated(this%moment_amplitudes)) then
          error stop 'LMTO pair operator source is not configured'
       end if
       nright = this%reciprocal_obj%lattice%nrec
@@ -2434,7 +2437,7 @@ contains
       end if
       do isite = 1, nright
          call this%reciprocal_obj%build_lmto_pair_potential_at_kpoint(isite, this%reciprocal_obj%k_points(:, ik), &
-            this%signed_moments(isite), this%qminus, this%qplus, supported, reason, this%q_point)
+            this%moment_amplitudes(isite), this%qminus, this%qplus, supported, reason, this%q_point)
          if (.not. supported) then
             call g_logger%fatal('[calculation.lmto_pair_operator_source]: pair-potential construction rejected: '// &
                trim(reason), __FILE__, __LINE__)
@@ -2453,7 +2456,7 @@ contains
       class(lmto_pair_operator_tile_source), intent(inout) :: this
       if (allocated(this%qminus)) deallocate(this%qminus)
       if (allocated(this%qplus)) deallocate(this%qplus)
-      if (allocated(this%signed_moments)) deallocate(this%signed_moments)
+      if (allocated(this%moment_amplitudes)) deallocate(this%moment_amplitudes)
       if (allocated(this%column_scales)) deallocate(this%column_scales)
       nullify(this%reciprocal_obj)
       this%q_point = 0.0_rp
@@ -2470,17 +2473,17 @@ contains
    !> as the two endpoint eigensystems.  Q is intentionally retained per k:
    !> replacing it by a site scalar or an average here would reintroduce the
    !> projection/multiplication ordering defect repaired by WR-03.
-   subroutine build_pair_potential_operators(reciprocal_obj, k_points, signed_moments, q_point, operators)
+   subroutine build_pair_potential_operators(reciprocal_obj, k_points, moment_amplitudes, q_point, operators)
       type(reciprocal), intent(inout) :: reciprocal_obj
-      real(rp), intent(in) :: k_points(:, :), signed_moments(:), q_point(3)
+      real(rp), intent(in) :: k_points(:, :), moment_amplitudes(:), q_point(3)
       complex(rp), allocatable, intent(out) :: operators(:, :, :, :)
       complex(rp), allocatable :: qminus(:, :), qplus(:, :)
       integer :: nmat, ik, isite
       logical :: supported
       character(len=160) :: reason
 
-      if (size(k_points, 1) /= 3 .or. size(signed_moments) /= reciprocal_obj%lattice%nrec) then
-         call g_logger%fatal('[calculation.build_pair_potential_operators]: incompatible k-point or signed-moment shape.', &
+      if (size(k_points, 1) /= 3 .or. size(moment_amplitudes) /= reciprocal_obj%lattice%nrec) then
+         call g_logger%fatal('[calculation.build_pair_potential_operators]: incompatible k-point or moment-amplitude shape.', &
             __FILE__, __LINE__)
       end if
       nmat = 2*norb*reciprocal_obj%lattice%nrec
@@ -2488,7 +2491,7 @@ contains
       operators = cmplx(0.0_rp, 0.0_rp, rp)
       do ik = 1, size(k_points, 2)
          do isite = 1, reciprocal_obj%lattice%nrec
-            call reciprocal_obj%build_lmto_pair_potential_at_kpoint(isite, k_points(:, ik), signed_moments(isite), &
+            call reciprocal_obj%build_lmto_pair_potential_at_kpoint(isite, k_points(:, ik), moment_amplitudes(isite), &
                qminus, qplus, supported, reason, q_point)
             if (.not. supported) then
                call g_logger%fatal('[calculation.build_pair_potential_operators]: pair-potential construction rejected: '// &
@@ -2528,7 +2531,7 @@ contains
       write(unit, '(a)') '# pair_potential_static_solver = real q=0 omega=0 Fermi divided difference; dynamic eta excluded'
       write(unit, '(a)') '# pair_potential_provenance = analytic transverse rotation of ordinary LMTO ham_only operator'
       write(unit, '(a)') '# pair_potential_representation = k-resolved reciprocal ham_only coefficient basis'
-      write(unit, '(a)') '# signed_moment_source = reconstructed occupied P_site sigma_z population'
+      write(unit, '(a)') '# signed_mz_source = reconstructed occupied P_site sigma_z population for Goldstone displacement'
       write(unit, '(a)') '# pair_potential_raw_goldstone_end'
       close(unit)
    end subroutine append_pair_goldstone_diagnostics
@@ -2602,11 +2605,11 @@ contains
       if (index(xi_backend_label, 'pair_potential') > 0) then
          write(unit, '(a)') '# pair_potential_provenance = analytic transverse rotation of ordinary LMTO ham_only operator'
          write(unit, '(a)') '# pair_potential_representation = k-resolved reciprocal ham_only coefficient basis'
-         write(unit, '(a)') '# signed_moment_source = reconstructed occupied P_site sigma_z population'
+         write(unit, '(a)') '# signed_mz_source = reconstructed occupied P_site sigma_z population for Goldstone displacement'
          write(unit, '(a,a)') '# reciprocal_mode = ', trim(reciprocal_mode)
       else
          write(unit, '(a)') '# pair_potential_provenance = not used by this output'
-         write(unit, '(a)') '# signed_moment_source = reconstructed occupied P_site sigma_z population'
+         write(unit, '(a)') '# signed_mz_source = reconstructed occupied P_site sigma_z population for Goldstone displacement'
          write(unit, '(a,a)') '# reciprocal_mode = ', trim(reciprocal_mode)
       end if
       write(unit, '(a,a)') '# response_projection = ', trim(config%response_projection)

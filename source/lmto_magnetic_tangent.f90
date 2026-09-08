@@ -70,6 +70,9 @@ contains
    end subroutine lmto_bond_value
 
    ! Complete directional derivative at fixed LMTO potential parameters.
+   ! `delta_mom_i/j` are Cartesian variations of the unit LMTO moment
+   ! orientations.  The pair-potential caller converts this orientation
+   ! tangent to a moment derivative with the separate positive site amplitude.
    pure subroutine lmto_bond_tangent(hhh, wx0_i, wx1_i, wx0_j, wx1_j, c1_i, &
                                      mom_i, mom_j, delta_mom_i, delta_mom_j, onsite, delta_hhmag)
       complex(rp), intent(in) :: hhh(:, :), wx0_i(:), wx1_i(:), wx0_j(:), wx1_j(:), c1_i(:)

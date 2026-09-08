@@ -4,6 +4,10 @@ program test_lmto_pair_potential
    use lmto_magnetic_tangent_mod, only: lmto_bond_value, lmto_bond_tangent, lmto_hhmag_to_spinor
    use lmto_pair_potential_mod, only: lmto_circular_pair_potential, lmto_bloch_phase, lmto_endpoint_phases, &
       lmto_circular_pair_potential_from_reverse, lmto_pair_transition_metadata, lmto_transition_metadata, lmto_unfold_site_spinors
+   use response_components_mod, only: RESPONSE_PLUS
+   use response_vertices_mod, only: response_channel
+   use tddft_chi0_mod, only: tddft_chi0_options
+   use tddft_xi_mod, only: tddft_direct_xi_result, build_static_direct_xi_from_k_dependent_eigenpairs
    use reciprocal_mod, only: reciprocal
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
@@ -15,19 +19,23 @@ program test_lmto_pair_potential
    real(rp), parameter :: tol = 2.0e-9_rp
    real(rp) :: maximum_error
    logical :: failed
+   external :: zheev
 
    maximum_error = 0.0_rp; failed = .false.
    call g_logger%init()
    call init_math_operators()
-   call test_rotation_oracle_and_adjoint()
+   call test_rotation_oracle_and_adjoint([0.0_rp,0.0_rp,1.0_rp])
+   call test_rotation_oracle_and_adjoint([0.0_rp,0.0_rp,-1.0_rp])
    call test_unequal_orbital_negative_control()
-   call test_signed_moment_and_bloch_phase()
+   call test_moment_amplitude_and_bloch_phase()
    call test_finite_q_endpoint_phases_and_gauge()
    call test_commensurate_supercell_oracle()
    call test_reciprocal_service_fixture()
    call test_reciprocal_two_site_identity()
    call test_full_normal_builder_rotation_oracle()
    call test_two_sublattice_service_supercell_oracle()
+   call test_two_sublattice_goldstone_oracle()
+   call test_one_site_pair_goldstone_covariance()
    write(*,'(a,es12.4)') 'LMTO pair-potential maximum error: ', maximum_error
    if (failed .or. maximum_error > tol) error stop 1
    write(*,'(a)') 'RESULT: PASS'
@@ -39,14 +47,15 @@ contains
       if(error>tol) then; failed=.true.; write(*,'(a,a,a,es12.4)') 'FAIL ',trim(label),': ',error; end if
    end subroutine check
 
-   subroutine test_rotation_oracle_and_adjoint()
+   subroutine test_rotation_oracle_and_adjoint(orientation)
       complex(rp)::h(2,2),w0(2),w1(2),c0(2),c1(2),dxh(2,2,4),dyh(2,2,4),vp(2,2,4),vm(2,2,4)
       complex(rp)::dx(4,4),dy(4,4),qminus(4,4),qplus(4,4),fd(4,4),total(4,4),txh(2,2,4),tyh(2,2,4)
       complex(rp)::dx_reverse(4,4),dy_reverse(4,4)
-      real(rp)::ez(3),ex(3),ey(3),theta
+      real(rp), intent(in) :: orientation(3)
+      real(rp)::ez(3),ex(3),ey(3),theta,x_error,y_error
       logical::supported
       character(len=120)::reason
-      call sample(h,w0,w1,c0,c1); ez=[0.0_rp,0.0_rp,1.0_rp]; ex=[1.0_rp,0.0_rp,0.0_rp]; ey=[0.0_rp,1.0_rp,0.0_rp]
+      call sample(h,w0,w1,c0,c1); ez=orientation; ex=[1.0_rp,0.0_rp,0.0_rp]; ey=[0.0_rp,1.0_rp,0.0_rp]
       call lmto_bond_tangent(h,w0,w1,w0,w1,c1,ez,ez,ex,[0.0_rp,0.0_rp,0.0_rp],.true.,dxh)
       call lmto_bond_tangent(h,w0,w1,w0,w1,c1,ez,ez,ey,[0.0_rp,0.0_rp,0.0_rp],.true.,dyh)
       call lmto_hhmag_to_spinor(dxh,dx); call lmto_hhmag_to_spinor(dyh,dy)
@@ -57,14 +66,15 @@ contains
       if(.not.supported) then; failed=.true.; return; end if
       call check(maxval(abs(qplus-transpose(conjg(qminus)))), 'Qplus equals adjoint Qminus')
       theta=5.0e-5_rp
-      call lmto_bond_value(h,w0,w1,w0,w1,c0,c1,[sin(theta),0.0_rp,cos(theta)],ez,.true.,vp)
-      call lmto_bond_value(h,w0,w1,w0,w1,c0,c1,[sin(-theta),0.0_rp,cos(theta)],ez,.true.,vm)
+      call lmto_bond_value(h,w0,w1,w0,w1,c0,c1,sin(theta)*ex+cos(theta)*ez,ez,.true.,vp)
+      call lmto_bond_value(h,w0,w1,w0,w1,c0,c1,sin(-theta)*ex+cos(theta)*ez,ez,.true.,vm)
       call lmto_hhmag_to_spinor((vp-vm)/(2.0_rp*theta),fd)
-      call check(maxval(abs(fd-dx)), 'one-site x finite-rotation oracle')
-      call lmto_bond_value(h,w0,w1,w0,w1,c0,c1,[0.0_rp,sin(theta),cos(theta)],ez,.true.,vp)
-      call lmto_bond_value(h,w0,w1,w0,w1,c0,c1,[0.0_rp,sin(-theta),cos(theta)],ez,.true.,vm)
+      x_error=maxval(abs(fd-dx)); call check(x_error, 'one-site x finite-rotation oracle')
+      call lmto_bond_value(h,w0,w1,w0,w1,c0,c1,sin(theta)*ey+cos(theta)*ez,ez,.true.,vp)
+      call lmto_bond_value(h,w0,w1,w0,w1,c0,c1,sin(-theta)*ey+cos(theta)*ez,ez,.true.,vm)
       call lmto_hhmag_to_spinor((vp-vm)/(2.0_rp*theta),fd)
-      call check(maxval(abs(fd-dy)), 'one-site y finite-rotation oracle')
+      y_error=maxval(abs(fd-dy)); call check(y_error, 'one-site y finite-rotation oracle')
+      write(*,'(a,1x,f5.1,a,2(1x,es12.4))') 'Centered tangent errors z=',orientation(3),':',x_error,y_error
       ! A rigid rotation of both endpoints is the moment-weighted sum of the
       ! separately normalised site pair potentials (M_i=M_j=2 here).
       call lmto_bond_tangent(h,w0,w1,w0,w1,c1,ez,ez,ex,ex,.true.,txh)
@@ -72,10 +82,10 @@ contains
       call lmto_hhmag_to_spinor(txh,dx); call lmto_hhmag_to_spinor(tyh,dy)
       call lmto_circular_pair_potential(dx,dy,2.0_rp,qminus,qplus,supported,reason)
       total = 2.0_rp*qminus
-      call lmto_bond_value(h,w0,w1,w0,w1,c0,c1,[sin(theta),0.0_rp,cos(theta)], &
-         [sin(theta),0.0_rp,cos(theta)],.true.,vp)
-      call lmto_bond_value(h,w0,w1,w0,w1,c0,c1,[sin(-theta),0.0_rp,cos(theta)], &
-         [sin(-theta),0.0_rp,cos(theta)],.true.,vm)
+      call lmto_bond_value(h,w0,w1,w0,w1,c0,c1,sin(theta)*ex+cos(theta)*ez, &
+         sin(theta)*ex+cos(theta)*ez,.true.,vp)
+      call lmto_bond_value(h,w0,w1,w0,w1,c0,c1,sin(-theta)*ex+cos(theta)*ez, &
+         sin(-theta)*ex+cos(theta)*ez,.true.,vm)
       call lmto_hhmag_to_spinor((vp-vm)/(2.0_rp*theta),fd)
       ! This is D_x; compare it to the circular relation after rebuilding D_y.
       call check(maxval(abs((total+transpose(conjg(total)))-fd)), 'rigid endpoint moment-weighted identity')
@@ -93,19 +103,144 @@ contains
       if(maxval(abs(q-scalar))<1.0e-3_rp) then; failed=.true.; write(*,'(a)') 'FAIL unequal-orbital operator collapsed to site scalar'; end if
    end subroutine test_unequal_orbital_negative_control
 
-   subroutine test_signed_moment_and_bloch_phase()
+   subroutine test_moment_amplitude_and_bloch_phase()
       complex(rp)::dx(2,2),dy(2,2),qm(2,2),qp(2,2),phase
       logical::supported; character(len=80)::reason
       dx=cmplx(0.0_rp,0.0_rp,rp); dy=dx; dx(1,2)=cmplx(2.0_rp,0.0_rp,rp)
+      call lmto_circular_pair_potential(dx,dy,2.0_rp,qm,qp,supported,reason)
+      if (.not. supported) then; failed=.true.; write(*,'(a,a)') 'FAIL positive moment amplitude rejected: ',trim(reason); return; end if
+      call check(abs(qm(1,2)-0.5_rp), 'positive moment-amplitude normalization')
       call lmto_circular_pair_potential(dx,dy,-2.0_rp,qm,qp,supported,reason)
-      call check(abs(qm(1,2)+0.5_rp), 'signed reversed-sublattice normalization')
+      if(supported) then; failed=.true.; write(*,'(a)') 'FAIL negative moment amplitude was accepted'; end if
       phase=lmto_bloch_phase([0.0_rp,0.0_rp,0.0_rp],[2.0_rp,0.0_rp,0.0_rp])
       call check(abs(phase-cmplx(1.0_rp,0.0_rp,rp)), 'q=0 Bloch phase convention')
       phase=lmto_bloch_phase([0.25_rp,0.0_rp,0.0_rp],[2.0_rp,0.0_rp,0.0_rp])
       call check(abs(phase-cmplx(-1.0_rp,0.0_rp,rp)), 'q=0-compatible Bloch phase convention')
       call lmto_circular_pair_potential(dx,dy,0.0_rp,qm,qp,supported,reason)
-      if(supported) then; failed=.true.; write(*,'(a)') 'FAIL zero signed moment was accepted'; end if
-   end subroutine test_signed_moment_and_bloch_phase
+      if(supported) then; failed=.true.; write(*,'(a)') 'FAIL zero moment amplitude was accepted'; end if
+      call lmto_circular_pair_potential(dx,dy,1.0e-13_rp,qm,qp,supported,reason)
+      if(supported) then; failed=.true.; write(*,'(a)') 'FAIL sub-tolerance moment amplitude was accepted'; end if
+   end subroutine test_moment_amplitude_and_bloch_phase
+
+   ! TDCOV-02 Oracle A: the Hamiltonian and pair vertex are both assembled
+   ! from a genuine one-site LMTO fixture.  Reversing the underlying LMTO
+   ! orientation must not reverse the phase-sensitive static Goldstone branch.
+   subroutine test_one_site_pair_goldstone_covariance()
+      type(reciprocal) :: recip
+      type(hamiltonian), target :: ham
+      type(lattice), target :: lat
+      type(charge), target :: chg
+      type(control), target :: ctl
+      type(response_channel) :: left_channels(1)
+      type(tddft_chi0_options) :: options
+      type(tddft_direct_xi_result) :: xi_plus, xi_minus, xi_legacy_minus
+      real(rp), allocatable :: eigenvalues(:, :)
+      complex(rp), allocatable :: eigenvectors(:, :, :), operators(:, :, :, :), qplus(:, :), hamiltonian_matrix(:, :)
+      real(rp) :: goldstone_plus, goldstone_minus
+
+      call setup_reciprocal_service_fixture(recip,ham,lat,chg,ctl)
+      allocate(hamiltonian_matrix(2*norb,2*norb), qplus(2*norb,2*norb), operators(2*norb,2*norb,1,1))
+      allocate(eigenvalues(2*norb,1), eigenvectors(2*norb,2*norb,1))
+      left_channels(1)=response_channel(1,RESPONSE_PLUS)
+      ! The completed fixture has positive absolute energies, so place the
+      ! chemical potential between the lower and upper spin manifolds.  This
+      ! keeps the Hamiltonian and the pair vertex on the same fixture while
+      ! providing an occupied-to-empty Goldstone transition.
+      ! The active fixture carries a positive M=1.5 moment; inactive orbitals
+      ! remain outside the occupied window and have zero transverse tangent.
+      options%fermi_level=0.7_rp; options%electronic_temperature=0.0_rp
+      options%band_first=1; options%band_last=2*norb; options%eta=1.0e-8_rp
+
+      call one_site_pair_goldstone_state(recip,lat,[0.0_rp,0.0_rp,1.0_rp],hamiltonian_matrix,qplus, &
+         eigenvalues,eigenvectors,operators)
+      call build_static_direct_xi_from_k_dependent_eigenpairs([1.0_rp],eigenvalues,eigenvectors,[norb],left_channels, &
+         operators,options,xi_plus)
+      goldstone_plus=real(xi_plus%xi(1,1,1),rp)
+
+      call one_site_pair_goldstone_state(recip,lat,[0.0_rp,0.0_rp,-1.0_rp],hamiltonian_matrix,qplus, &
+         eigenvalues,eigenvectors,operators)
+      call build_static_direct_xi_from_k_dependent_eigenpairs([1.0_rp],eigenvalues,eigenvectors,[norb],left_channels, &
+         operators,options,xi_minus)
+      goldstone_minus=real(xi_minus%xi(1,1,1),rp)
+
+      ! Explicitly replay the pre-patch -z call: the old API supplied the
+      ! signed m_z=-M as the Jacobian denominator, which negated this same
+      ! physical Q.  This is a regression record, not a production sign.
+      operators=-operators
+      call build_static_direct_xi_from_k_dependent_eigenpairs([1.0_rp],eigenvalues,eigenvectors,[norb],left_channels, &
+         operators,options,xi_legacy_minus)
+
+      write(*,'(a,2(1x,es16.8))') 'One-site pair Goldstone eigenvalues (+z,-z):',goldstone_plus,goldstone_minus
+      write(*,'(a,2(1x,es16.8))') 'Pre-patch signed-denominator replay (+z,-z):',goldstone_plus,real(xi_legacy_minus%xi(1,1,1),rp)
+      call check(abs(goldstone_plus-1.0_rp),'one-site +z pair Goldstone eigenvalue')
+      call check(abs(goldstone_minus-1.0_rp),'one-site -z pair Goldstone eigenvalue')
+      call check(abs(goldstone_plus-goldstone_minus),'one-site global spin-reversal Goldstone covariance')
+      call check(abs(real(xi_legacy_minus%xi(1,1,1),rp)+1.0_rp),'pre-patch -z signed-denominator replay')
+   end subroutine test_one_site_pair_goldstone_covariance
+
+   subroutine one_site_pair_goldstone_state(recip,lat,orientation,hamiltonian_matrix,qplus,eigenvalues,eigenvectors,operators)
+      type(reciprocal), intent(inout) :: recip
+      type(lattice), intent(inout) :: lat
+      real(rp), intent(in) :: orientation(3)
+      complex(rp), intent(out) :: hamiltonian_matrix(:,:),qplus(:,:),operators(:,:,:,:)
+      real(rp), intent(out) :: eigenvalues(:,:)
+      complex(rp), intent(out) :: eigenvectors(:,:,:)
+      complex(rp) :: qminus(size(qplus,1),size(qplus,2))
+      logical :: supported
+      character(len=160) :: reason
+      integer :: nmat, lwork, info
+      complex(rp), allocatable :: work(:)
+      real(rp), allocatable :: rwork(:)
+
+      lat%symbolic_atoms(1)%potential%mom=orientation
+      lat%symbolic_atoms(1)%potential%wx1=cmplx(0.0_rp,0.0_rp,rp)
+      lat%symbolic_atoms(1)%potential%cx1=cmplx(0.0_rp,0.0_rp,rp)
+      lat%symbolic_atoms(1)%potential%wx1(1:2)=cmplx(0.31_rp,0.0_rp,rp)
+      lat%symbolic_atoms(1)%potential%cx1(1:2)=cmplx(-1.0_rp,0.0_rp,rp)
+      call build_one_site_normal_hamiltonian(orientation,lat%symbolic_atoms(1)%potential%wx0, &
+         lat%symbolic_atoms(1)%potential%wx1,lat%symbolic_atoms(1)%potential%cx1,lat%sbar(:,:,:,1),hamiltonian_matrix)
+      call recip%build_lmto_pair_potential_at_kpoint(1,[0.0_rp,0.0_rp,0.0_rp],1.5_rp,qminus,qplus,supported,reason)
+      if (.not.supported) error stop 'one_site_pair_goldstone_state: pair-potential construction failed: '//trim(reason)
+      nmat=size(hamiltonian_matrix,1); lwork=lwork_for_zheev(nmat)
+      allocate(work(lwork),rwork(max(1,3*nmat-2)))
+      eigenvectors(:,:,1)=hamiltonian_matrix
+      call zheev('V','U',nmat,eigenvectors(:,:,1),nmat,eigenvalues(:,1),work,size(work),rwork,info)
+      if (info/=0) error stop 'one_site_pair_goldstone_state: zheev failed'
+      operators(:,:,1,1)=qminus
+      deallocate(work,rwork)
+   end subroutine one_site_pair_goldstone_state
+
+   subroutine build_one_site_normal_hamiltonian(orientation,wx0,wx1,cx1,sbar,hamiltonian_matrix)
+      real(rp), intent(in) :: orientation(3)
+      complex(rp), intent(in) :: wx0(:),wx1(:),cx1(:),sbar(:,:,:)
+      complex(rp), intent(out) :: hamiltonian_matrix(:,:)
+      complex(rp) :: h(norb,norb),c0(norb),hhmag(norb,norb,4),spinor(2*norb,2*norb)
+      integer :: ineigh
+
+      hamiltonian_matrix=cmplx(0.0_rp,0.0_rp,rp)
+      c0=cmplx(0.0_rp,0.0_rp,rp)
+      do ineigh=1,3
+         h=transpose(sbar(:,:,ineigh))
+         call lmto_bond_value(h,wx0,wx1,wx0,wx1,c0,cx1,orientation,orientation,ineigh==1,hhmag)
+         call lmto_hhmag_to_spinor(hhmag,spinor)
+         hamiltonian_matrix=hamiltonian_matrix+spinor
+      end do
+   end subroutine build_one_site_normal_hamiltonian
+
+   integer function lwork_for_zheev(nmat)
+      integer, intent(in) :: nmat
+      complex(rp) :: query(1)
+      real(rp), allocatable :: rwork(:)
+      complex(rp), allocatable :: matrix(:,:)
+      real(rp), allocatable :: eigenvalues(:)
+      integer :: info
+      allocate(matrix(nmat,nmat),eigenvalues(nmat),rwork(max(1,3*nmat-2)))
+      matrix=cmplx(0.0_rp,0.0_rp,rp); eigenvalues=0.0_rp
+      call zheev('V','U',nmat,matrix,nmat,eigenvalues,query,-1,rwork,info)
+      if (info/=0) error stop 'lwork_for_zheev: workspace query failed'
+      lwork_for_zheev=max(1,int(real(query(1),rp)))
+      deallocate(matrix,eigenvalues,rwork)
+   end function lwork_for_zheev
 
    subroutine test_finite_q_endpoint_phases_and_gauge()
       real(rp)::k(3),q(3),d(3),tau(3,2)
@@ -176,7 +311,7 @@ contains
          failed=.true.; write(*,'(a)') 'FAIL finite-q reciprocal service did not retain endpoint phases'
       end if
       call recip%build_lmto_pair_potential_at_kpoint(1,k,0.0_rp,q_half,qplus,supported,reason,qhalf)
-      if(supported) then; failed=.true.; write(*,'(a)') 'FAIL reciprocal service accepted zero signed moment'; end if
+      if(supported) then; failed=.true.; write(*,'(a)') 'FAIL reciprocal service accepted zero moment amplitude'; end if
       recip%reciprocal_mode='generalized_overlap_proxy'
       call recip%build_lmto_pair_potential_at_kpoint(1,k,2.0_rp,q_half,qplus,supported,reason,qhalf)
       if(supported) then; failed=.true.; write(*,'(a)') 'FAIL reciprocal service accepted overlap proxy'; end if
@@ -236,7 +371,7 @@ contains
       call recip%build_lmto_pair_potential_at_kpoint(1,[0.17_rp,0.0_rp,0.0_rp],2.0_rp,qa,qplus,supported,reason,[0.5_rp,0.0_rp,0.0_rp])
       if(.not.supported) then; failed=.true.; write(*,'(a,a)') 'FAIL two-site response a: ',trim(reason); return; end if
       call check(maxval(abs(qplus-transpose(conjg(qa)))), 'two-site response a reverse Qplus')
-      call recip%build_lmto_pair_potential_at_kpoint(2,[0.17_rp,0.0_rp,0.0_rp],-2.0_rp,qb,qplus,supported,reason,[0.5_rp,0.0_rp,0.0_rp])
+      call recip%build_lmto_pair_potential_at_kpoint(2,[0.17_rp,0.0_rp,0.0_rp],2.0_rp,qb,qplus,supported,reason,[0.5_rp,0.0_rp,0.0_rp])
       if(.not.supported) then; failed=.true.; write(*,'(a,a)') 'FAIL two-site response b: ',trim(reason); return; end if
       call check(maxval(abs(qa(nblock+1:nmat,nblock+1:nmat))), 'same-type site a does not leak to site b onsite block')
       call check(maxval(abs(qb(1:nblock,1:nblock))), 'same-type site b does not leak to site a onsite block')
@@ -254,7 +389,7 @@ contains
       allocate(lat%ib(2),lat%atlist(2),lat%iz(2),lat%num(2),lat%nn(2,3),lat%sbar(norb,norb,3,2),lat%symbolic_atoms(2))
       lat%ib=[1,2]; lat%atlist=[1,2]; lat%iz=[1,2]; lat%num=[1,2]; lat%nn(1,:)=[3,2,2]; lat%nn(2,:)=[3,1,1]; lat%sbar=cmplx(0.0_rp,0.0_rp,rp)
       do isite=1,2
-         call lat%symbolic_atoms(isite)%restore_to_default(); lat%symbolic_atoms(isite)%potential%mom=[0.0_rp,0.0_rp,1.0_rp]
+         call lat%symbolic_atoms(isite)%restore_to_default(); lat%symbolic_atoms(isite)%potential%mom=[0.0_rp,0.0_rp,merge(1.0_rp,-1.0_rp,isite==1)]
          lat%symbolic_atoms(isite)%potential%wx0=cmplx(1.0_rp,0.0_rp,rp); lat%symbolic_atoms(isite)%potential%wx1=cmplx(0.31_rp,0.0_rp,rp); lat%symbolic_atoms(isite)%potential%cx1=cmplx(0.23_rp,0.0_rp,rp)
          do i=1,norb
             lat%sbar(i,i,1,isite)=cmplx(0.12_rp,0.0_rp,rp); lat%sbar(i,i,2,isite)=cmplx(0.37_rp,0.0_rp,rp); lat%sbar(i,i,3,isite)=cmplx(0.37_rp,0.0_rp,rp)
@@ -284,7 +419,7 @@ contains
       type(charge), target :: chg
       type(control), target :: ctl
       integer :: nmat
-      real(rp) :: theta, signed_moment(2), moments_plus(3,2), moments_minus(3,2)
+      real(rp) :: theta, moment_amplitude(2), moments_plus(3,2), moments_minus(3,2)
       complex(rp), allocatable :: qminus(:, :, :), qplus(:, :, :), hplus(:,:), hminus(:,:), fdx(:,:), fdy(:,:), qfd(:,:), &
          hzero(:,:), spin_rotation(:,:), predicted(:,:)
       logical :: supported
@@ -292,30 +427,31 @@ contains
       integer :: isite
 
       call setup_two_site_reciprocal_fixture(recip,ham,lat,chg,ctl)
-      nmat=4*norb; theta=1.0e-8_rp; signed_moment=[2.0_rp,-2.0_rp]
+      nmat=4*norb; theta=1.0e-8_rp; moment_amplitude=[2.0_rp,2.0_rp]
       allocate(qminus(nmat,nmat,2),qplus(nmat,nmat,2),hplus(nmat,nmat),hminus(nmat,nmat),fdx(nmat,nmat),fdy(nmat,nmat), &
          qfd(nmat,nmat),hzero(nmat,nmat),spin_rotation(nmat,nmat),predicted(nmat,nmat))
       do isite=1,2
-         call recip%build_lmto_pair_potential_at_kpoint(isite,[0.0_rp,0.0_rp,0.0_rp],signed_moment(isite), &
+         call recip%build_lmto_pair_potential_at_kpoint(isite,[0.0_rp,0.0_rp,0.0_rp],moment_amplitude(isite), &
             qminus(:,:,isite),qplus(:,:,isite),supported,reason,[0.0_rp,0.0_rp,0.0_rp])
          if(.not.supported) then; failed=.true.; write(*,'(a,a)') 'FAIL full-builder service: ',trim(reason); return; end if
-         moments_plus=0.0_rp; moments_plus(3,:)=1.0_rp; moments_minus=moments_plus
-         moments_plus(1,isite)=sin(theta); moments_plus(3,isite)=cos(theta)
-         moments_minus(1,isite)=-sin(theta); moments_minus(3,isite)=cos(theta)
+         moments_plus=0.0_rp; moments_plus(3,:)=[1.0_rp,-1.0_rp]; moments_minus=moments_plus
+         moments_plus(1,isite)=sin(theta); moments_plus(3,isite)=merge(cos(theta),-cos(theta),isite==1)
+         moments_minus(1,isite)=-sin(theta); moments_minus(3,isite)=merge(cos(theta),-cos(theta),isite==1)
          call build_two_site_normal_hamiltonian(ham,moments_plus,hplus)
          call build_two_site_normal_hamiltonian(ham,moments_minus,hminus)
          fdx=(hplus-hminus)/(2.0_rp*theta)
-         moments_plus=0.0_rp; moments_plus(3,:)=1.0_rp; moments_minus=moments_plus
-         moments_plus(2,isite)=sin(theta); moments_plus(3,isite)=cos(theta)
-         moments_minus(2,isite)=-sin(theta); moments_minus(3,isite)=cos(theta)
+         moments_plus=0.0_rp; moments_plus(3,:)=[1.0_rp,-1.0_rp]; moments_minus=moments_plus
+         moments_plus(2,isite)=sin(theta); moments_plus(3,isite)=merge(cos(theta),-cos(theta),isite==1)
+         moments_minus(2,isite)=-sin(theta); moments_minus(3,isite)=merge(cos(theta),-cos(theta),isite==1)
          call build_two_site_normal_hamiltonian(ham,moments_plus,hplus)
          call build_two_site_normal_hamiltonian(ham,moments_minus,hminus)
          fdy=(hplus-hminus)/(2.0_rp*theta)
-         qfd=(fdx-i_unit*fdy)/(2.0_rp*signed_moment(isite))
+         qfd=(fdx-i_unit*fdy)/(2.0_rp*moment_amplitude(isite))
          call check(maxval(abs(qfd-qminus(:,:,isite))), 'q=0 full normal-builder finite rotation')
       end do
-      moments_plus=0.0_rp; moments_plus(3,:)=cos(theta); moments_plus(1,:)=sin(theta)
-      moments_minus=0.0_rp; moments_minus(3,:)=1.0_rp
+      moments_plus=0.0_rp; moments_plus(:,1)=[sin(theta),0.0_rp,cos(theta)]
+      moments_plus(:,2)=[-sin(theta),0.0_rp,-cos(theta)]
+      moments_minus=0.0_rp; moments_minus(3,:)=[1.0_rp,-1.0_rp]
       call build_two_site_normal_hamiltonian(ham,moments_plus,hplus)
       call build_two_site_normal_hamiltonian(ham,moments_minus,hzero)
       call spin_rotation_about_y(theta,2*norb,spin_rotation)
@@ -354,6 +490,74 @@ contains
       call test_two_sublattice_service_supercell_q(3,2)
    end subroutine test_two_sublattice_service_supercell_oracle
 
+   ! TDCOV-02 Oracle C: the two primitive sites have genuinely opposite LMTO
+   ! orientations, while both pair operators use positive amplitudes.  The
+   ! signed site vector is reserved for the acoustic Goldstone displacement.
+   subroutine test_two_sublattice_goldstone_oracle()
+      type(reciprocal) :: recip
+      type(hamiltonian), target :: ham
+      type(lattice), target :: lat
+      type(charge), target :: chg
+      type(control), target :: ctl
+      type(response_channel) :: left_channels(2)
+      type(tddft_chi0_options) :: options
+      type(tddft_direct_xi_result) :: xi
+      real(rp) :: moments(3,2), goldstone(2), action(2), eigenvalues(4*norb,1)
+      complex(rp), allocatable :: hzero(:,:),eigenvectors(:,:,:),operators(:,:,:,:)
+      complex(rp) :: qminus(4*norb,4*norb),qplus(4*norb,4*norb)
+      logical :: supported
+      character(len=160) :: reason
+      integer :: isite,info,nmat,lwork
+      complex(rp), allocatable :: work(:)
+      real(rp), allocatable :: rwork(:)
+
+      call setup_two_site_goldstone_fixture(recip,ham,lat,chg,ctl)
+      nmat=4*norb; allocate(hzero(nmat,nmat),eigenvectors(nmat,nmat,1),operators(nmat,nmat,2,1))
+      moments=0.0_rp; moments(:,1)=[0.0_rp,0.0_rp,1.0_rp]; moments(:,2)=[0.0_rp,0.0_rp,-1.0_rp]
+      call build_two_site_normal_hamiltonian(ham,moments,hzero)
+      eigenvectors(:,:,1)=hzero; lwork=lwork_for_zheev(nmat); allocate(work(lwork),rwork(max(1,3*nmat-2)))
+      call zheev('V','U',nmat,eigenvectors(:,:,1),nmat,eigenvalues(:,1),work,size(work),rwork,info)
+      if(info/=0) error stop 'two-sublattice Goldstone oracle: zheev failed'
+      left_channels(1)=response_channel(1,RESPONSE_PLUS); left_channels(2)=response_channel(2,RESPONSE_PLUS)
+      options%fermi_level=0.5_rp; options%electronic_temperature=0.0_rp; options%band_first=1; options%band_last=nmat; options%eta=1.0e-8_rp
+      do isite=1,2
+         call recip%build_lmto_pair_potential_at_kpoint(isite,[0.0_rp,0.0_rp,0.0_rp],2.0_rp,qminus,qplus,supported,reason)
+         if(.not.supported) error stop 'two-sublattice Goldstone oracle: pair-potential construction failed'
+         operators(:,:,isite,1)=qminus
+      end do
+      call build_static_direct_xi_from_k_dependent_eigenpairs([1.0_rp],eigenvalues,eigenvectors,[norb,norb],left_channels, &
+         operators,options,xi)
+      goldstone=[1.0_rp,-1.0_rp]; action=real(matmul(xi%xi(:,:,1),cmplx(goldstone,0.0_rp,rp)),rp)
+      write(*,'(a,2(1x,es16.8))') 'Two-sublattice Goldstone action (+z,-z):',action
+      call check(maxval(abs(action-goldstone)), 'actual +/-z two-sublattice Goldstone identity')
+      call ham%clear_texture_moments(); ham%magnetic_representation='periodic_nc'
+      deallocate(work,rwork)
+   end subroutine test_two_sublattice_goldstone_oracle
+
+   subroutine setup_two_site_goldstone_fixture(recip,ham,lat,chg,ctl)
+      type(reciprocal), intent(out) :: recip
+      type(hamiltonian), target, intent(out) :: ham
+      type(lattice), target, intent(out) :: lat
+      type(charge), target, intent(out) :: chg
+      type(control), target, intent(out) :: ctl
+      integer :: isite,iorb
+
+      call setup_two_site_reciprocal_fixture(recip,ham,lat,chg,ctl)
+      ! Make an actual two-sublattice collinear system with independent local
+      ! spin manifolds.  The inactive orbitals sit above the Fermi level and
+      ! the first active LMTO channels carry the positive M=1.5 response.
+      lat%sbar=cmplx(0.0_rp,0.0_rp,rp)
+      do isite=1,2
+         lat%symbolic_atoms(isite)%potential%wx1=cmplx(0.0_rp,0.0_rp,rp)
+         lat%symbolic_atoms(isite)%potential%cx1=cmplx(0.0_rp,0.0_rp,rp)
+         lat%symbolic_atoms(isite)%potential%wx1(1:2)=cmplx(0.31_rp,0.0_rp,rp)
+         lat%symbolic_atoms(isite)%potential%cx1(1:2)=cmplx(-1.0_rp,0.0_rp,rp)
+         do iorb=1,norb
+            lat%sbar(iorb,iorb,1,isite)=cmplx(merge(0.5_rp,0.8_rp,iorb<=2),0.0_rp,rp)
+         end do
+      end do
+   end subroutine setup_two_site_goldstone_fixture
+
    subroutine test_two_sublattice_service_supercell_q(ncell,response_site)
       integer, intent(in) :: ncell,response_site
       type(reciprocal) :: recip
@@ -362,21 +566,21 @@ contains
       type(charge), target :: chg
       type(control), target :: ctl
       integer :: nmat,itheta
-      real(rp) :: q(3),theta(3),signed_moment,error(3),relative_error
+      real(rp) :: q(3),theta(3),moment_amplitude,error(3),relative_error
       complex(rp), allocatable :: qminus(:,:),qplus(:,:),oracle(:,:)
       logical :: supported
       character(len=160) :: reason
 
       call setup_two_site_reciprocal_fixture(recip,ham,lat,chg,ctl)
       nmat=4*norb; q=[1.0_rp/real(ncell,rp),0.0_rp,0.0_rp]
-      signed_moment=merge(2.0_rp,-2.0_rp,response_site==1)
+      moment_amplitude=2.0_rp
       allocate(qminus(nmat,nmat),qplus(nmat,nmat),oracle(nmat,nmat))
-      call recip%build_lmto_pair_potential_at_kpoint(response_site,[0.0_rp,0.0_rp,0.0_rp],signed_moment, &
+      call recip%build_lmto_pair_potential_at_kpoint(response_site,[0.0_rp,0.0_rp,0.0_rp],moment_amplitude, &
          qminus,qplus,supported,reason,q)
       if(.not.supported) then; failed=.true.; write(*,'(a,a)') 'FAIL two-sublattice reciprocal service: ',trim(reason); return; end if
       theta=[2.5e-4_rp,1.25e-4_rp,6.25e-5_rp]
       do itheta=1,3
-         call two_sublattice_supercell_qminus(ham,ncell,q(1),response_site,signed_moment,theta(itheta),oracle)
+         call two_sublattice_supercell_qminus(ham,ncell,q(1),response_site,moment_amplitude,theta(itheta),oracle)
          error(itheta)=maxval(abs(oracle-qminus))
       end do
       relative_error=error(3)/max(maxval(abs(qminus)),tiny(1.0_rp))
@@ -423,10 +627,10 @@ contains
       end do
    end subroutine build_two_site_normal_hamiltonian
 
-   subroutine two_sublattice_supercell_qminus(ham,ncell,q,response_site,signed_moment,theta,qminus)
+   subroutine two_sublattice_supercell_qminus(ham,ncell,q,response_site,moment_amplitude,theta,qminus)
       type(hamiltonian), intent(inout) :: ham
       integer, intent(in) :: ncell,response_site
-      real(rp), intent(in) :: q,signed_moment,theta
+      real(rp), intent(in) :: q,moment_amplitude,theta
       complex(rp), intent(out) :: qminus(:,:)
       complex(rp) :: dxcos(size(qminus,1),size(qminus,2)),dxsin(size(qminus,1),size(qminus,2))
       complex(rp) :: dycos(size(qminus,1),size(qminus,2)),dysin(size(qminus,1),size(qminus,2))
@@ -436,7 +640,7 @@ contains
       call two_sublattice_supercell_derivative(ham,ncell,q,response_site,2,.true.,theta,dycos)
       call two_sublattice_supercell_derivative(ham,ncell,q,response_site,2,.false.,theta,dysin)
       dx=dxcos+i_unit*dxsin; dy=dycos+i_unit*dysin
-      qminus=(dx-i_unit*dy)/(2.0_rp*signed_moment)
+      qminus=(dx-i_unit*dy)/(2.0_rp*moment_amplitude)
    end subroutine two_sublattice_supercell_qminus
 
    subroutine two_sublattice_supercell_derivative(ham,ncell,q,response_site,component,is_cosine,theta,derivative)
@@ -462,9 +666,15 @@ contains
       real(rp), intent(in) :: q,theta
       logical, intent(in) :: is_cosine
       real(rp), intent(out) :: moments(:,:)
-      integer :: icell,isite
+      integer :: icell,isite,local_site
       real(rp) :: tau(2),phase,amplitude
-      tau=[0.0_rp,0.25_rp]; moments=0.0_rp; moments(3,:)=1.0_rp
+      tau=[0.0_rp,0.25_rp]; moments=0.0_rp
+      do icell=1,ncell
+         do local_site=1,2
+            isite=2*(icell-1)+local_site
+            moments(3,isite)=merge(1.0_rp,-1.0_rp,local_site==1)
+         end do
+      end do
       do icell=1,ncell
          isite=2*(icell-1)+response_site
          phase=2.0_rp*acos(-1.0_rp)*q*(real(icell-1,rp)+tau(response_site))

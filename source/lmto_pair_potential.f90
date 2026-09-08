@@ -1,13 +1,14 @@
 !------------------------------------------------------------------------------
 ! Pair-potential algebra shared by the reciprocal LMTO provider and its oracle.
-! `signed_moment` is deliberately an explicit input: potential%mom is only a
-! unit orientation and must never be used as the response normalization.
+! `moment_amplitude` is deliberately an explicit input: potential%mom is only
+! a unit orientation and must never be used as the response normalization.
 !------------------------------------------------------------------------------
 module lmto_pair_potential_mod
    use precision_mod, only: rp
    use math_mod, only: i_unit
    implicit none
    private
+   real(rp), parameter :: moment_amplitude_tolerance = 1.0e-12_rp
    public :: lmto_circular_pair_potential
    public :: lmto_circular_pair_potential_from_reverse
    public :: lmto_bloch_phase
@@ -25,9 +26,9 @@ module lmto_pair_potential_mod
 
 contains
 
-   subroutine lmto_circular_pair_potential(dh_dx, dh_dy, signed_moment, qminus, qplus, supported, reason)
+   subroutine lmto_circular_pair_potential(dh_dx, dh_dy, moment_amplitude, qminus, qplus, supported, reason)
       complex(rp), intent(in) :: dh_dx(:, :), dh_dy(:, :)
-      real(rp), intent(in) :: signed_moment
+      real(rp), intent(in) :: moment_amplitude
       complex(rp), intent(out) :: qminus(:, :), qplus(:, :)
       logical, intent(out) :: supported
       character(len=*), intent(out), optional :: reason
@@ -39,11 +40,11 @@ contains
          if (present(reason)) reason = 'incompatible Cartesian tangent matrix shapes'
          return
       end if
-      if (abs(signed_moment) <= tiny(1.0_rp)) then
-         if (present(reason)) reason = 'signed response moment is zero or unavailable'
+      if (moment_amplitude <= moment_amplitude_tolerance) then
+         if (present(reason)) reason = 'positive response moment amplitude is zero or unavailable'
          return
       end if
-      qminus = (dh_dx - i_unit*dh_dy)/(2.0_rp*signed_moment)
+      qminus = (dh_dx - i_unit*dh_dy)/(2.0_rp*moment_amplitude)
       qplus = transpose(conjg(qminus))
       supported = .true.
       if (present(reason)) reason = 'ordinary ham_only LMTO pair potential'
@@ -54,9 +55,9 @@ contains
    !> and columns in the K=k+q coefficient space.  It is deliberately a
    !> different input from the absorption-side tangent so Q+ is not created by
    !> assigning the adjoint of Q-.
-   subroutine lmto_circular_pair_potential_from_reverse(dh_dx_reverse, dh_dy_reverse, signed_moment, qplus, supported, reason)
+   subroutine lmto_circular_pair_potential_from_reverse(dh_dx_reverse, dh_dy_reverse, moment_amplitude, qplus, supported, reason)
       complex(rp), intent(in) :: dh_dx_reverse(:, :), dh_dy_reverse(:, :)
-      real(rp), intent(in) :: signed_moment
+      real(rp), intent(in) :: moment_amplitude
       complex(rp), intent(out) :: qplus(:, :)
       logical, intent(out) :: supported
       character(len=*), intent(out), optional :: reason
@@ -68,11 +69,11 @@ contains
          if (present(reason)) reason = 'incompatible reverse Cartesian tangent matrix shapes'
          return
       end if
-      if (abs(signed_moment) <= tiny(1.0_rp)) then
-         if (present(reason)) reason = 'signed response moment is zero or unavailable'
+      if (moment_amplitude <= moment_amplitude_tolerance) then
+         if (present(reason)) reason = 'positive response moment amplitude is zero or unavailable'
          return
       end if
-      qplus = (dh_dx_reverse + i_unit*dh_dy_reverse)/(2.0_rp*signed_moment)
+      qplus = (dh_dx_reverse + i_unit*dh_dy_reverse)/(2.0_rp*moment_amplitude)
       supported = .true.
       if (present(reason)) reason = 'ordinary ham_only LMTO reverse pair potential'
    end subroutine lmto_circular_pair_potential_from_reverse

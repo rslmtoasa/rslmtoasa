@@ -1260,10 +1260,10 @@ module reciprocal_mod
    !> Construct Q_a^-/Q_a^+ in the ordinary ham_only coefficient basis.  With
    !> q_point present it is the finite-q (k+q,k) endpoint-phase operator.
    !> The response-site index is a primitive site identity, not an atom type.
-   module subroutine build_lmto_pair_potential_at_kpoint(this, response_site, k_point, signed_moment, qminus, qplus, supported, reason, q_point, metadata)
+   module subroutine build_lmto_pair_potential_at_kpoint(this, response_site, k_point, moment_amplitude, qminus, qplus, supported, reason, q_point, metadata)
       class(reciprocal), intent(inout) :: this
       integer, intent(in) :: response_site
-      real(rp), intent(in) :: k_point(3), signed_moment
+      real(rp), intent(in) :: k_point(3), moment_amplitude
       complex(rp), intent(out) :: qminus(:, :), qplus(:, :)
       logical, intent(out) :: supported
       character(len=*), intent(out), optional :: reason
