@@ -20,6 +20,8 @@ module tddft_circular_mod
    public :: circular_channel_components
    public :: circular_channel_code
    public :: is_circular_channel_code
+   public :: opposite_circular_channel
+   public :: circular_channel_file_tag
 
 contains
 
@@ -77,6 +79,47 @@ contains
       valid = channel == TDDFT_CIRCULAR_BOTH .or. channel == TDDFT_CIRCULAR_PLUS_MINUS .or. &
          channel == TDDFT_CIRCULAR_MINUS_PLUS
    end function is_circular_channel_code
+
+   !> Return the opposite ordered circular correlator.  BOTH is a request for
+   !> the pair, rather than an ordered response object, and therefore maps to
+   !> itself so callers can validate it before constructing vertices.
+   pure integer function opposite_circular_channel(channel) result(opposite)
+      integer, intent(in) :: channel
+
+      select case (channel)
+      case (TDDFT_CIRCULAR_PLUS_MINUS)
+         opposite = TDDFT_CIRCULAR_MINUS_PLUS
+      case (TDDFT_CIRCULAR_MINUS_PLUS)
+         opposite = TDDFT_CIRCULAR_PLUS_MINUS
+      case default
+         opposite = TDDFT_CIRCULAR_BOTH
+      end select
+   end function opposite_circular_channel
+
+   !> Return the filename tag for an ordered channel.
+   !>
+   !> The selected `plus_minus` response retains the historical empty tag for
+   !> compatibility.  Every other ordered product is explicitly labelled from
+   !> the channel code, so a selected `minus_plus` primary product cannot be
+   !> mistaken for the historical `plus_minus` file.
+   pure function circular_channel_file_tag(channel, historical_primary) result(tag)
+      integer, intent(in) :: channel
+      logical, intent(in), optional :: historical_primary
+      character(len=16) :: tag
+      logical :: keep_historical_name
+
+      keep_historical_name = .false.
+      if (present(historical_primary)) keep_historical_name = historical_primary
+      tag = ''
+      select case (channel)
+      case (TDDFT_CIRCULAR_PLUS_MINUS)
+         if (.not. keep_historical_name) tag = '_plus_minus'
+      case (TDDFT_CIRCULAR_MINUS_PLUS)
+         tag = '_minus_plus'
+      case default
+         tag = '_unspecified'
+      end select
+   end function circular_channel_file_tag
 
    pure function lower_ascii(input) result(output)
       character(len=*), intent(in) :: input

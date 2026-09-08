@@ -939,6 +939,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitTddftBackendEquivalence PROPERTIES LABELS "unit;tddft;equivalence;backend;TDDFT-09")
   add_fortran_unit_test(UnitTddftAfFerriChirality ${TestDIR}/unit/test_tddft_af_ferri_chirality.f90)
   set_tests_properties(UnitTddftAfFerriChirality PROPERTIES LABELS "unit;tddft;AF;ferri;chirality;TDDFT-12")
+  add_fortran_unit_test(UnitTddftCircularCovariance ${TestDIR}/unit/test_tddft_circular_covariance.f90)
+  set_tests_properties(UnitTddftCircularCovariance PROPERTIES LABELS "unit;tddft;circular;covariance;TDCOV-03")
   add_test(NAME TddftCrossMilestoneEquivalence
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_tddft_cross_milestone_equivalence.py
       --binary-dir ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})

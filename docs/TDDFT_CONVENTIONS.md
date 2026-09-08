@@ -14,8 +14,10 @@ spectral-weight normalization changes.
 For multi-sublattice transverse runs, `&tddft circular_channel='both'`
 (the default) evaluates the ordered `+-` and `-+` responses independently.
 The primary `+-` files retain the historical names; reverse-channel products
-carry the `_minus_plus_` suffix and every response metadata record identifies
-its ordered channel.
+carry the `_minus_plus` suffix and every response metadata record identifies
+its ordered channel.  When `circular_channel='minus_plus'` is selected, the
+primary products carry `_minus_plus` and the opposite `plus_minus` products
+carry `_plus_minus`; no filename is inferred from a generic `reverse` label.
 
 ## 1. Electronic basis and Pauli algebra
 

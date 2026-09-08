@@ -65,7 +65,9 @@ module calculation_mod
       tddft_realspace_gf_backend, canonical_tddft_backend_name, make_tddft_chi0_backend
    use tddft_chi0_realspace_mod, only: tddft_realspace_chi0_options, tddft_native_realspace_gf_provider, &
       reduce_realspace_chi0_batch, install_realspace_occupation
-   use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS
+   use tddft_circular_mod, only: TDDFT_CIRCULAR_BOTH, TDDFT_CIRCULAR_PLUS_MINUS, TDDFT_CIRCULAR_MINUS_PLUS, &
+      circular_channel_name, circular_channel_code, circular_channel_components, opposite_circular_channel, &
+      circular_channel_file_tag, is_circular_channel_code
    use response_vertices_mod, only: response_channel
    use tddft_four_component_mod, only: build_four_component_chi_ks, build_four_component_kernel, &
       evaluate_four_component_zero_modes, tddft_four_component_zero_mode_diagnostics
@@ -1269,12 +1271,15 @@ contains
       integer :: corrected_minimum_location(2)
       logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_full_response, is_gamma, has_gamma
       logical :: pair_backend, legacy_backend, raw_pair_spectral_weight_ok, corrected_spectral_weight_ok, &
-         correction_spectral_weight_ok, full_response_supported, circular_reverse, primary_minus_plus
+         correction_spectral_weight_ok, full_response_supported, circular_reverse
+      integer :: primary_circular_channel, reverse_circular_channel
+      integer :: left_component, right_component, left_component_reverse, right_component_reverse
       character(len=sl) :: filename, chi0_filename, legacy_filename, pair_filename
       character(len=256) :: full_response_capability_reason
       character(len=32) :: canonical_chi0_backend
       character(len=384) :: electron_count_message
       character(len=640) :: spectral_weight_message
+      character(len=16) :: primary_circular_name, reverse_circular_name, primary_file_tag, reverse_file_tag
 
       config = tddft_config(this%fname)
       if (.not. config%enabled) then
@@ -1392,9 +1397,19 @@ contains
       end if
       reciprocal_obj%temperature = config%electronic_temperature
       config%response_auto_find_fermi = reciprocal_obj%auto_find_fermi
+      primary_circular_channel = circular_channel_code(config%circular_channel)
+      if (primary_circular_channel == TDDFT_CIRCULAR_BOTH) primary_circular_channel = TDDFT_CIRCULAR_PLUS_MINUS
+      if (primary_circular_channel /= TDDFT_CIRCULAR_PLUS_MINUS .and. &
+          primary_circular_channel /= TDDFT_CIRCULAR_MINUS_PLUS) then
+         call g_logger%fatal('[calculation.post_processing_susceptibility]: invalid ordered circular channel.', __FILE__, __LINE__)
+      end if
+      reverse_circular_channel = opposite_circular_channel(primary_circular_channel)
+      primary_circular_name = circular_channel_name(primary_circular_channel)
+      reverse_circular_name = circular_channel_name(reverse_circular_channel)
+      primary_file_tag = circular_channel_file_tag(primary_circular_channel, historical_primary=.true.)
+      reverse_file_tag = circular_channel_file_tag(reverse_circular_channel)
       circular_reverse = .not. is_longitudinal .and. .not. is_full_response .and. &
-         trim(config%circular_channel) == 'both'
-      primary_minus_plus = trim(config%circular_channel) == 'minus_plus'
+         circular_channel_code(config%circular_channel) == TDDFT_CIRCULAR_BOTH
       pair_backend = config%xi_backend == 'pair_potential' .or. config%xi_backend == 'compare'
       legacy_backend = config%xi_backend == 'legacy_site_scalar' .or. config%xi_backend == 'compare'
       if (canonical_chi0_backend == 'realspace_gf' .and. (is_longitudinal .or. is_full_response)) then
@@ -1462,18 +1477,13 @@ contains
          call build_charge_longitudinal_channels(lattice_obj%nrec, left_channels)
          right_channels = left_channels
       else
+         call circular_channel_components(primary_circular_channel, left_component, right_component)
+         call circular_channel_components(reverse_circular_channel, left_component_reverse, right_component_reverse)
          do iq = 1, lattice_obj%nrec
-            if (primary_minus_plus) then
-               left_channels(iq) = response_channel(iq, RESPONSE_MINUS)
-               right_channels(iq) = response_channel(iq, RESPONSE_PLUS)
-               left_channels_reverse(iq) = response_channel(iq, RESPONSE_PLUS)
-               right_channels_reverse(iq) = response_channel(iq, RESPONSE_MINUS)
-            else
-               left_channels(iq) = response_channel(iq, RESPONSE_PLUS)
-               right_channels(iq) = response_channel(iq, RESPONSE_MINUS)
-               left_channels_reverse(iq) = response_channel(iq, RESPONSE_MINUS)
-               right_channels_reverse(iq) = response_channel(iq, RESPONSE_PLUS)
-            end if
+            left_channels(iq) = response_channel(iq, left_component)
+            right_channels(iq) = response_channel(iq, right_component)
+            left_channels_reverse(iq) = response_channel(iq, left_component_reverse)
+            right_channels_reverse(iq) = response_channel(iq, right_component_reverse)
          end do
       end if
       has_external_field = control_obj%do_comom .or. control_obj%constraints_enable
@@ -1520,18 +1530,12 @@ contains
       chi0_options%response_projection = config%response_projection
       if (is_longitudinal) then
          chi0_options%circular_channel = 'charge_mz'
-      else if (primary_minus_plus) then
-         chi0_options%circular_channel = 'minus_plus'
       else
-         chi0_options%circular_channel = 'plus_minus'
+         chi0_options%circular_channel = primary_circular_name
       end if
       call install_tddft_occupation(chi0_options, response_occupation)
       chi0_options_reverse = chi0_options
-      if (primary_minus_plus) then
-         chi0_options_reverse%circular_channel = 'plus_minus'
-      else
-         chi0_options_reverse%circular_channel = 'minus_plus'
-      end if
+      if (.not. is_longitudinal .and. .not. is_full_response) chi0_options_reverse%circular_channel = reverse_circular_name
 
       green_options%eta = config%eta
       green_options%green_eta = config%green_eta
@@ -1700,7 +1704,7 @@ contains
       end if
       if (pair_backend) then
          call pair_operator_source%initialize(reciprocal_obj, moment_amplitudes, [0.0_rp, 0.0_rp, 0.0_rp], &
-            use_qplus=primary_minus_plus)
+            use_qplus=primary_circular_channel == TDDFT_CIRCULAR_MINUS_PLUS)
          call build_static_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
             site_orbital_counts, left_channels, pair_operator_source, chi0_options, pair_xi_static)
          call evaluate_raw_xi_diagnostics(pair_xi_static%xi(:, :, 1), cmplx(signed_mz, 0.0_rp, rp), pair_goldstone, &
@@ -1717,7 +1721,7 @@ contains
          end if
          if (circular_reverse) then
             call pair_operator_source%initialize(reciprocal_obj, moment_amplitudes, [0.0_rp, 0.0_rp, 0.0_rp], &
-               use_qplus=.not. primary_minus_plus)
+               use_qplus=reverse_circular_channel == TDDFT_CIRCULAR_MINUS_PLUS)
             call build_static_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
                site_orbital_counts, left_channels_reverse, pair_operator_source, chi0_options_reverse, pair_xi_static_reverse)
             call evaluate_raw_xi_diagnostics(pair_xi_static_reverse%xi(:, :, 1), cmplx(signed_mz, 0.0_rp, rp), &
@@ -1805,18 +1809,20 @@ contains
             end if
          end if
          if (rank == 0) then
-            write(filename, '(a,"_goldstone.dat")') trim(config%output_prefix)
+            write(filename, '(a,a,"_goldstone.dat")') trim(config%output_prefix), trim(primary_file_tag)
             call write_goldstone_diagnostics_text(trim(filename), goldstone_result)
             if (pair_backend) call append_pair_goldstone_diagnostics(trim(filename), goldstone_result%raw, pair_goldstone)
             if (config%goldstone_mode == 'correct') call append_goldstone_column_correction_text(trim(filename), pair_correction)
             call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
-               rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'goldstone_compare')
+               rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'goldstone_compare', &
+               circular_channel=primary_circular_channel)
             if (circular_reverse) then
-               write(filename, '(a,"_minus_plus_goldstone.dat")') trim(config%output_prefix)
+               write(filename, '(a,a,"_goldstone.dat")') trim(config%output_prefix), trim(reverse_file_tag)
                call write_goldstone_diagnostics_text(trim(filename), goldstone_result_reverse)
                if (pair_backend) call append_pair_goldstone_diagnostics(trim(filename), goldstone_result_reverse%raw, pair_goldstone_reverse)
                call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
-                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'goldstone_reverse_compare')
+                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'goldstone_reverse_compare', &
+                  circular_channel=reverse_circular_channel)
             end if
          end if
          if (config%goldstone_mode == 'correct' .and. .not. pair_correction%applied) then
@@ -1957,10 +1963,11 @@ contains
          response_eta = chi0_result%metadata%eta
          if (is_gamma) bare_gamma_peak = observed_loss_peak(omega, chi0_result%trace_spectrum)
          if (config%output_chi0 .or. config%output_stoner) then
-            write(filename, '(a,"_q",i6.6,"_chi0.dat")') trim(config%output_prefix), iq
+            write(filename, '(a,"_q",i6.6,a,"_chi0.dat")') trim(config%output_prefix), iq, trim(primary_file_tag)
             call write_chi_ks_text(trim(filename), omega, chi0_result)
             call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), rank, &
-               has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'shared_chi_ks')
+               has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'shared_chi_ks', &
+               circular_channel=primary_circular_channel)
          end if
          if (circular_reverse) then
             chi0_options_reverse%q_direct = config%q_points(:, iq)
@@ -1994,14 +2001,15 @@ contains
             end if
             chi0_result_reverse%metadata%q_direct = config%q_points(:, iq)
             chi0_result_reverse%metadata%response_projection = config%response_projection
-            chi0_result_reverse%metadata%circular_channel = 'minus_plus'
+            chi0_result_reverse%metadata%circular_channel = reverse_circular_name
             chi0_result_reverse%metadata%arbitrary_kq_cpu_seconds = kq_eigensolve_cpu_seconds
             if (is_gamma) bare_gamma_peak_reverse = observed_loss_peak(omega, chi0_result_reverse%trace_spectrum)
             if (config%output_chi0 .or. config%output_stoner) then
-               write(filename, '(a,"_q",i6.6,"_minus_plus_chi0.dat")') trim(config%output_prefix), iq
+               write(filename, '(a,"_q",i6.6,a,"_chi0.dat")') trim(config%output_prefix), iq, trim(reverse_file_tag)
                call write_chi_ks_text(trim(filename), omega, chi0_result_reverse)
                call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), rank, &
-                  has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'shared_reverse_chi_ks')
+                  has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'shared_reverse_chi_ks', &
+                  circular_channel=reverse_circular_channel)
             end if
          end if
          if (need_dyson) then
@@ -2010,22 +2018,23 @@ contains
                if (is_gamma) legacy_gamma_peak = observed_loss_peak(omega, dyson_result%trace_spectral_weight)
                if (config%output_xi .or. config%output_chi) then
                   if (pair_backend) then
-                     write(filename, '(a,"_q",i6.6,"_legacy_dyson.dat")') trim(config%output_prefix), iq
+                     write(filename, '(a,"_q",i6.6,a,"_legacy_dyson.dat")') trim(config%output_prefix), iq, trim(primary_file_tag)
                   else if (is_longitudinal) then
                      write(filename, '(a,"_q",i6.6,"_longitudinal_dyson.dat")') trim(config%output_prefix), iq
                   else
-                     write(filename, '(a,"_q",i6.6,"_dyson.dat")') trim(config%output_prefix), iq
+                     write(filename, '(a,"_q",i6.6,a,"_dyson.dat")') trim(config%output_prefix), iq, trim(primary_file_tag)
                   end if
                   call write_tddft_dyson_text(trim(filename), omega, dyson_result)
                   call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
-                     rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'legacy_site_scalar_raw')
+                     rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'legacy_site_scalar_raw', &
+                     circular_channel=primary_circular_channel)
                   if (is_longitudinal) call append_longitudinal_response_metadata(trim(filename), kernel, &
                      self_obj%xc_response_provider%functional_label)
                end if
             end if
             if (pair_backend) then
                call pair_operator_source%initialize(reciprocal_obj, moment_amplitudes, config%q_points(:, iq), &
-                  use_qplus=primary_minus_plus)
+                  use_qplus=primary_circular_channel == TDDFT_CIRCULAR_MINUS_PLUS)
                call build_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
                   eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels, pair_operator_source, omega, &
                   chi0_options, pair_xi_result)
@@ -2036,16 +2045,17 @@ contains
                   dyson_pair_result%site_spectral_weight, [size(dyson_pair_result%site_spectral_weight)]))
                if (is_gamma) pair_gamma_peak = observed_loss_peak(omega, dyson_pair_result%trace_spectral_weight)
                if (config%output_xi .or. config%output_chi) then
-                  write(filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
+                  write(filename, '(a,"_q",i6.6,a,"_pair_dyson.dat")') trim(config%output_prefix), iq, trim(primary_file_tag)
                   call write_tddft_dyson_text(trim(filename), omega, dyson_pair_result)
                   call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
-                     rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_raw')
+                     rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_raw', &
+                     circular_channel=primary_circular_channel)
                   call append_pair_spectral_weight_diagnostic(trim(filename), 'raw_pair', raw_pair_spectral_weight_ok, &
                      raw_pair_minimum_spectral_weight)
                end if
                if (config%goldstone_mode == 'correct') then
                   call pair_operator_source%initialize(reciprocal_obj, moment_amplitudes, config%q_points(:, iq), &
-                     pair_correction%scales, use_qplus=primary_minus_plus)
+                     pair_correction%scales, use_qplus=primary_circular_channel == TDDFT_CIRCULAR_MINUS_PLUS)
                   call build_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
                      eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels, pair_operator_source, omega, &
                      chi0_options, pair_xi_corrected_result)
@@ -2061,10 +2071,11 @@ contains
                      dyson_pair_result%site_spectral_weight, [size(dyson_pair_result%site_spectral_weight)]), reshape( &
                      dyson_pair_corrected_result%site_spectral_weight, [size(dyson_pair_corrected_result%site_spectral_weight)]))
                   if (config%output_xi .or. config%output_chi) then
-                     write(filename, '(a,"_q",i6.6,"_pair_corrected_dyson.dat")') trim(config%output_prefix), iq
+                     write(filename, '(a,"_q",i6.6,a,"_pair_corrected_dyson.dat")') trim(config%output_prefix), iq, trim(primary_file_tag)
                      call write_tddft_dyson_text(trim(filename), omega, dyson_pair_corrected_result)
                      call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
-                     rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_corrected')
+                     rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_corrected', &
+                     circular_channel=primary_circular_channel)
                      call append_goldstone_column_correction_text(trim(filename), pair_correction)
                      call append_pair_spectral_weight_diagnostic(trim(filename), 'corrected_pair', corrected_spectral_weight_ok, &
                         corrected_pair_minimum_spectral_weight)
@@ -2102,22 +2113,23 @@ contains
             if (circular_reverse) then
                response_eta = chi0_result_reverse%metadata%eta
                dyson_options_reverse = dyson_options
-               dyson_options_reverse%circular_channel = 'minus_plus'
+               dyson_options_reverse%circular_channel = reverse_circular_name
                if (legacy_backend) then
                   call enhance_tddft_susceptibility(chi0_result_reverse%chi, kernel, response_eta, dyson_options_reverse, &
                      dyson_result_reverse)
                   if (is_gamma) legacy_gamma_peak_reverse = observed_loss_peak(omega, &
                      dyson_result_reverse%trace_spectral_weight)
                   if (config%output_xi .or. config%output_chi) then
-                     write(filename, '(a,"_q",i6.6,"_minus_plus_legacy_dyson.dat")') trim(config%output_prefix), iq
+                     write(filename, '(a,"_q",i6.6,a,"_legacy_dyson.dat")') trim(config%output_prefix), iq, trim(reverse_file_tag)
                      call write_tddft_dyson_text(trim(filename), omega, dyson_result_reverse)
                      call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
-                        rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'legacy_reverse_site_scalar_raw')
+                        rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'legacy_reverse_site_scalar_raw', &
+                        circular_channel=reverse_circular_channel)
                   end if
                end if
                if (pair_backend) then
                   call pair_operator_source%initialize(reciprocal_obj, moment_amplitudes, config%q_points(:, iq), &
-                     use_qplus=.not. primary_minus_plus)
+                     use_qplus=reverse_circular_channel == TDDFT_CIRCULAR_MINUS_PLUS)
                   call build_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
                      eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels_reverse, pair_operator_source, omega, &
                      chi0_options_reverse, pair_xi_result_reverse)
@@ -2126,14 +2138,15 @@ contains
                   if (is_gamma) pair_gamma_peak_reverse = observed_loss_peak(omega, &
                      dyson_pair_result_reverse%trace_spectral_weight)
                   if (config%output_xi .or. config%output_chi) then
-                     write(filename, '(a,"_q",i6.6,"_minus_plus_pair_dyson.dat")') trim(config%output_prefix), iq
+                     write(filename, '(a,"_q",i6.6,a,"_pair_dyson.dat")') trim(config%output_prefix), iq, trim(reverse_file_tag)
                      call write_tddft_dyson_text(trim(filename), omega, dyson_pair_result_reverse)
                      call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
-                        rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_reverse_potential_raw')
+                        rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_reverse_potential_raw', &
+                        circular_channel=reverse_circular_channel)
                   end if
                   if (config%goldstone_mode == 'correct') then
                      call pair_operator_source%initialize(reciprocal_obj, moment_amplitudes, config%q_points(:, iq), &
-                        pair_correction%scales, use_qplus=.not. primary_minus_plus)
+                        pair_correction%scales, use_qplus=reverse_circular_channel == TDDFT_CIRCULAR_MINUS_PLUS)
                      call build_direct_xi_from_operator_source(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
                         eigenvalues_kq, eigenvectors_kq, site_orbital_counts, left_channels_reverse, pair_operator_source, omega, &
                         chi0_options_reverse, pair_xi_corrected_result_reverse)
@@ -2141,10 +2154,11 @@ contains
                         pair_xi_corrected_result_reverse%xi, response_eta, dyson_options_reverse, &
                         dyson_pair_corrected_result_reverse)
                      if (config%output_xi .or. config%output_chi) then
-                        write(filename, '(a,"_q",i6.6,"_minus_plus_pair_corrected_dyson.dat")') trim(config%output_prefix), iq
+                        write(filename, '(a,"_q",i6.6,a,"_pair_corrected_dyson.dat")') trim(config%output_prefix), iq, trim(reverse_file_tag)
                         call write_tddft_dyson_text(trim(filename), omega, dyson_pair_corrected_result_reverse)
                         call append_tddft_metadata(trim(filename), config, iq, reciprocal_obj%nk_mesh, config%q_points(:, iq), &
-                           rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_reverse_potential_corrected')
+                           rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_reverse_potential_corrected', &
+                           circular_channel=reverse_circular_channel)
                         call append_goldstone_column_correction_text(trim(filename), pair_correction)
                      end if
                   end if
@@ -2170,10 +2184,10 @@ contains
          end if
          if (is_gamma .and. .not. is_longitudinal .and. .not. is_full_response .and. &
              canonical_chi0_backend /= 'realspace_gf') then
-            write(filename, '(a,"_goldstone.dat")') trim(config%output_prefix)
+            write(filename, '(a,a,"_goldstone.dat")') trim(config%output_prefix), trim(primary_file_tag)
             call append_dynamic_gamma_peaks(trim(filename), bare_gamma_peak, legacy_gamma_peak, pair_gamma_peak, &
                pair_corrected_gamma_peak, bare_gamma_peak_reverse, legacy_gamma_peak_reverse, pair_gamma_peak_reverse, &
-               pair_corrected_gamma_peak_reverse)
+               pair_corrected_gamma_peak_reverse, reverse_circular_channel)
          end if
          if (allocated(eigenvalues_kq)) deallocate(eigenvalues_kq)
          if (allocated(eigenvectors_kq)) deallocate(eigenvectors_kq)
@@ -2203,47 +2217,52 @@ contains
          if (rank == 0) then
             call analyze_tddft_modes(omega, all_xi, all_trace_loss, response_eta, mode_options, mode_result, all_loss)
             if (pair_backend .and. legacy_backend) then
-               write(filename, '(a,"_legacy_modes.dat")') trim(config%output_prefix)
+               write(filename, '(a,a,"_legacy_modes.dat")') trim(config%output_prefix), trim(primary_file_tag)
             else if (pair_backend) then
-               write(filename, '(a,"_pair_modes.dat")') trim(config%output_prefix)
+               write(filename, '(a,a,"_pair_modes.dat")') trim(config%output_prefix), trim(primary_file_tag)
             else
-               write(filename, '(a,"_modes.dat")') trim(config%output_prefix)
+               write(filename, '(a,a,"_modes.dat")') trim(config%output_prefix), trim(primary_file_tag)
             end if
             call write_tddft_modes_text(trim(filename), omega, response_eta, mode_result)
             if (legacy_backend) then
                call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
-                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'legacy_site_scalar_raw')
+                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'legacy_site_scalar_raw', &
+                  circular_channel=primary_circular_channel)
             else
                call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
-                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_raw')
+                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_raw', &
+                  circular_channel=primary_circular_channel)
             end if
             if (pair_backend .and. legacy_backend) then
                call analyze_tddft_modes(omega, all_xi_pair, all_trace_loss_pair, response_eta, mode_options, mode_result, all_loss_pair)
-               write(filename, '(a,"_pair_modes.dat")') trim(config%output_prefix)
+               write(filename, '(a,a,"_pair_modes.dat")') trim(config%output_prefix), trim(primary_file_tag)
                call write_tddft_modes_text(trim(filename), omega, response_eta, mode_result)
                call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
-                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_raw')
+                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'pair_potential_raw', &
+                  circular_channel=primary_circular_channel)
             end if
             if (circular_reverse) then
                call analyze_tddft_modes(omega, all_xi_reverse, all_trace_loss_reverse, response_eta, mode_options, mode_result, &
                   all_loss_reverse)
                if (legacy_backend) then
-                  write(filename, '(a,"_minus_plus_legacy_modes.dat")') trim(config%output_prefix)
+                  write(filename, '(a,a,"_legacy_modes.dat")') trim(config%output_prefix), trim(reverse_file_tag)
                else if (pair_backend) then
-                  write(filename, '(a,"_minus_plus_pair_modes.dat")') trim(config%output_prefix)
+                  write(filename, '(a,a,"_pair_modes.dat")') trim(config%output_prefix), trim(reverse_file_tag)
                else
-                  write(filename, '(a,"_minus_plus_modes.dat")') trim(config%output_prefix)
+                  write(filename, '(a,a,"_modes.dat")') trim(config%output_prefix), trim(reverse_file_tag)
                end if
                call write_tddft_modes_text(trim(filename), omega, response_eta, mode_result)
                call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
-                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'reverse_circular_raw')
+                  rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'reverse_circular_raw', &
+                  circular_channel=reverse_circular_channel)
                if (pair_backend .and. legacy_backend) then
                   call analyze_tddft_modes(omega, all_xi_pair_reverse, all_trace_loss_pair_reverse, response_eta, mode_options, &
                      mode_result, all_loss_pair_reverse)
-                  write(filename, '(a,"_minus_plus_pair_modes.dat")') trim(config%output_prefix)
+                  write(filename, '(a,a,"_pair_modes.dat")') trim(config%output_prefix), trim(reverse_file_tag)
                   call write_tddft_modes_text(trim(filename), omega, response_eta, mode_result)
                   call append_tddft_metadata(trim(filename), config, 0, reciprocal_obj%nk_mesh, [0.0_rp, 0.0_rp, 0.0_rp], &
-                     rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'reverse_pair_potential_raw')
+                     rank, has_soc, has_external_field, trim(reciprocal_obj%reciprocal_mode), 'reverse_pair_potential_raw', &
+                     circular_channel=reverse_circular_channel)
                end if
             end if
          end if
@@ -2264,7 +2283,8 @@ contains
          end if
          if (.not. is_longitudinal .and. .not. is_full_response) then
             write(unit, '(a,a)') '# primary_circular_channel = ', trim(chi0_options%circular_channel)
-            if (circular_reverse) write(unit, '(a)') '# reverse_circular_channel = minus_plus; files carry the _minus_plus_ suffix'
+            if (circular_reverse) write(unit, '(a,a,a,a)') '# reverse_circular_channel = ', trim(reverse_circular_name), &
+               '; files carry the ', trim(reverse_file_tag)
          end if
          if (pair_backend .and. legacy_backend .and. config%goldstone_mode == 'correct') then
             write(unit, '(a)') '# q_index q1 q2 q3 chi0_file legacy_raw_dyson_file pair_raw_dyson_file pair_corrected_dyson_file'
@@ -2280,25 +2300,25 @@ contains
             write(unit, '(a)') '# q_index q1 q2 q3 chi0_file legacy_raw_dyson_file'
          end if
          do iq = 1, nq
-            write(chi0_filename, '(a,"_q",i6.6,"_chi0.dat")') trim(config%output_prefix), iq
+            write(chi0_filename, '(a,"_q",i6.6,a,"_chi0.dat")') trim(config%output_prefix), iq, trim(primary_file_tag)
             if (pair_backend .and. legacy_backend .and. config%goldstone_mode == 'correct') then
-               write(legacy_filename, '(a,"_q",i6.6,"_legacy_dyson.dat")') trim(config%output_prefix), iq
-               write(pair_filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
-               write(filename, '(a,"_q",i6.6,"_pair_corrected_dyson.dat")') trim(config%output_prefix), iq
+               write(legacy_filename, '(a,"_q",i6.6,a,"_legacy_dyson.dat")') trim(config%output_prefix), iq, trim(primary_file_tag)
+               write(pair_filename, '(a,"_q",i6.6,a,"_pair_dyson.dat")') trim(config%output_prefix), iq, trim(primary_file_tag)
+               write(filename, '(a,"_q",i6.6,a,"_pair_corrected_dyson.dat")') trim(config%output_prefix), iq, trim(primary_file_tag)
                write(unit, '(i0,3(1x,es24.16),4(1x,a))') iq, config%q_points(:, iq), trim(chi0_filename), &
                   trim(legacy_filename), trim(pair_filename), trim(filename)
             else if (pair_backend .and. legacy_backend) then
-               write(legacy_filename, '(a,"_q",i6.6,"_legacy_dyson.dat")') trim(config%output_prefix), iq
-               write(pair_filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
+               write(legacy_filename, '(a,"_q",i6.6,a,"_legacy_dyson.dat")') trim(config%output_prefix), iq, trim(primary_file_tag)
+               write(pair_filename, '(a,"_q",i6.6,a,"_pair_dyson.dat")') trim(config%output_prefix), iq, trim(primary_file_tag)
                write(unit, '(i0,3(1x,es24.16),3(1x,a))') iq, config%q_points(:, iq), trim(chi0_filename), &
                   trim(legacy_filename), trim(pair_filename)
             else if (pair_backend .and. config%goldstone_mode == 'correct') then
-               write(pair_filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
-               write(filename, '(a,"_q",i6.6,"_pair_corrected_dyson.dat")') trim(config%output_prefix), iq
+               write(pair_filename, '(a,"_q",i6.6,a,"_pair_dyson.dat")') trim(config%output_prefix), iq, trim(primary_file_tag)
+               write(filename, '(a,"_q",i6.6,a,"_pair_corrected_dyson.dat")') trim(config%output_prefix), iq, trim(primary_file_tag)
                write(unit, '(i0,3(1x,es24.16),3(1x,a))') iq, config%q_points(:, iq), trim(chi0_filename), &
                   trim(pair_filename), trim(filename)
             else if (pair_backend) then
-               write(pair_filename, '(a,"_q",i6.6,"_pair_dyson.dat")') trim(config%output_prefix), iq
+               write(pair_filename, '(a,"_q",i6.6,a,"_pair_dyson.dat")') trim(config%output_prefix), iq, trim(primary_file_tag)
                write(unit, '(i0,3(1x,es24.16),2(1x,a))') iq, config%q_points(:, iq), trim(chi0_filename), trim(pair_filename)
             else if (is_longitudinal) then
                write(legacy_filename, '(a,"_q",i6.6,"_longitudinal_dyson.dat")') trim(config%output_prefix), iq
@@ -2327,11 +2347,18 @@ contains
    end function observed_loss_peak
 
    subroutine append_dynamic_gamma_peaks(filename, bare_peak, legacy_peak, pair_peak, pair_corrected_peak, &
-      bare_peak_reverse, legacy_peak_reverse, pair_peak_reverse, pair_corrected_peak_reverse)
+      bare_peak_reverse, legacy_peak_reverse, pair_peak_reverse, pair_corrected_peak_reverse, reverse_channel)
       character(len=*), intent(in) :: filename
       real(rp), intent(in) :: bare_peak, legacy_peak, pair_peak, pair_corrected_peak
       real(rp), intent(in), optional :: bare_peak_reverse, legacy_peak_reverse, pair_peak_reverse, pair_corrected_peak_reverse
+      integer, intent(in) :: reverse_channel
       integer :: unit, ios
+      character(len=16) :: reverse_name
+
+      if (.not. is_circular_channel_code(reverse_channel) .or. reverse_channel == TDDFT_CIRCULAR_BOTH) then
+         call g_logger%fatal('[calculation.append_dynamic_gamma_peaks]: invalid reverse circular channel.', __FILE__, __LINE__)
+      end if
+      reverse_name = circular_channel_name(reverse_channel)
 
       open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
       if (ios /= 0) call g_logger%fatal('[calculation.append_dynamic_gamma_peaks]: cannot append Gamma peaks', __FILE__, __LINE__)
@@ -2342,10 +2369,18 @@ contains
          write(unit, '(a,es24.16)') '# dynamic_pair_corrected_gamma_loss_peak_Ry = ', pair_corrected_peak
       end if
       if (present(bare_peak_reverse)) then
-         if (bare_peak_reverse >= 0.0_rp) write(unit, '(a,es24.16)') '# dynamic_minus_plus_bare_gamma_loss_peak_Ry = ', bare_peak_reverse
-         if (legacy_peak_reverse >= 0.0_rp) write(unit, '(a,es24.16)') '# dynamic_minus_plus_legacy_raw_gamma_loss_peak_Ry = ', legacy_peak_reverse
-         if (pair_peak_reverse >= 0.0_rp) write(unit, '(a,es24.16)') '# dynamic_minus_plus_pair_raw_gamma_loss_peak_Ry = ', pair_peak_reverse
-         if (pair_corrected_peak_reverse >= 0.0_rp) write(unit, '(a,es24.16)') '# dynamic_minus_plus_pair_corrected_gamma_loss_peak_Ry = ', &
+         if (legacy_peak_reverse < -0.5_rp .or. pair_peak_reverse < -0.5_rp .or. &
+             pair_corrected_peak_reverse < -0.5_rp) then
+            call g_logger%fatal('[calculation.append_dynamic_gamma_peaks]: incomplete reverse peak record.', __FILE__, __LINE__)
+         end if
+         if (bare_peak_reverse >= 0.0_rp) write(unit, '(a,es24.16)') &
+            '# dynamic_'//trim(reverse_name)//'_bare_gamma_loss_peak_Ry = ', bare_peak_reverse
+         if (legacy_peak_reverse >= 0.0_rp) write(unit, '(a,es24.16)') &
+            '# dynamic_'//trim(reverse_name)//'_legacy_raw_gamma_loss_peak_Ry = ', legacy_peak_reverse
+         if (pair_peak_reverse >= 0.0_rp) write(unit, '(a,es24.16)') &
+            '# dynamic_'//trim(reverse_name)//'_pair_raw_gamma_loss_peak_Ry = ', pair_peak_reverse
+         if (pair_corrected_peak_reverse >= 0.0_rp) write(unit, '(a,es24.16)') &
+            '# dynamic_'//trim(reverse_name)//'_pair_corrected_gamma_loss_peak_Ry = ', &
             pair_corrected_peak_reverse
       end if
       write(unit, '(a)') '# dynamic Gamma peaks are observed loss-grid maxima; raw and corrected records remain distinct'
@@ -2537,7 +2572,7 @@ contains
    end subroutine append_pair_goldstone_diagnostics
 
    subroutine append_tddft_metadata(filename, config, iq, k_mesh, q_point, mpi_rank, has_soc, has_external_field, &
-      reciprocal_mode, xi_backend_label)
+      reciprocal_mode, xi_backend_label, circular_channel)
       character(len=*), intent(in) :: filename
       type(tddft_config), intent(in) :: config
       integer, intent(in) :: iq, k_mesh(3), mpi_rank
@@ -2545,6 +2580,7 @@ contains
       logical, intent(in) :: has_soc, has_external_field
       character(len=*), intent(in) :: reciprocal_mode
       character(len=*), intent(in) :: xi_backend_label
+      integer, intent(in), optional :: circular_channel
       integer :: unit, ios
       real(rp) :: effective_green_eta
       character(len=32) :: canonical_backend, output_circular_channel
@@ -2556,13 +2592,15 @@ contains
       if (effective_green_eta <= 0.0_rp) effective_green_eta = 0.5_rp*config%eta
       output_circular_channel = 'not applicable'
       if (trim(config%channel) == 'transverse') then
-         if (index(trim(xi_backend_label), 'reverse') > 0) then
-            output_circular_channel = 'minus_plus'
-         else if (trim(config%circular_channel) == 'minus_plus') then
-            output_circular_channel = 'minus_plus'
-         else
-            output_circular_channel = 'plus_minus'
+         if (.not. present(circular_channel)) then
+            call g_logger%fatal('[calculation.append_tddft_metadata]: transverse output has no circular channel object.', &
+               __FILE__, __LINE__)
          end if
+         if (.not. is_circular_channel_code(circular_channel) .or. circular_channel == TDDFT_CIRCULAR_BOTH) then
+            call g_logger%fatal('[calculation.append_tddft_metadata]: transverse output has an invalid circular channel object.', &
+               __FILE__, __LINE__)
+         end if
+         output_circular_channel = circular_channel_name(circular_channel)
       end if
       write(unit, '(a)') '# production_metadata_begin'
       write(unit, '(a)') '# provenance_schema = rslmto.tddft.production.v1'
