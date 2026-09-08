@@ -51,18 +51,20 @@ module calculation_mod
    use basis_mod, only: basis_init, norb
    use magnetic_representation_mod, only: periodic_nc, gbt_single_q
    use tddft_config_mod, only: tddft_config
+   use tddft_occupation_mod, only: tddft_response_occupation_state
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, tddft_chi0_batch_result, build_chi_ks_from_eigenpairs, &
-      build_static_chi_ks_from_eigenpairs, write_chi_ks_text
+      build_static_chi_ks_from_eigenpairs, write_chi_ks_text, install_tddft_occupation
    use tddft_xi_mod, only: tddft_direct_xi_result, build_direct_xi_from_operator_source, &
       build_static_direct_xi_from_operator_source
    use tddft_transition_engine_mod, only: pair_operator_tile_source
    use tddft_chi0_green_mod, only: green_chi0_options, eigenpair_green_function_provider, &
       build_chi_ks_from_green_functions, build_static_chi_ks_from_green_functions, &
-      build_static_four_component_chi_ks_from_green_functions, build_four_component_chi_ks_from_green_functions
+      build_static_four_component_chi_ks_from_green_functions, build_four_component_chi_ks_from_green_functions, &
+      install_green_occupation
    use tddft_backend_mod, only: tddft_chi0_backend, tddft_eigenpair_backend, tddft_kspace_lehmann_backend, &
       tddft_realspace_gf_backend, canonical_tddft_backend_name, make_tddft_chi0_backend
    use tddft_chi0_realspace_mod, only: tddft_realspace_chi0_options, tddft_native_realspace_gf_provider, &
-      reduce_realspace_chi0_batch
+      reduce_realspace_chi0_batch, install_realspace_occupation
    use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS
    use response_vertices_mod, only: response_channel
    use tddft_four_component_mod, only: build_four_component_chi_ks, build_four_component_kernel, &
@@ -1219,6 +1221,7 @@ contains
       type(self) :: self_obj
       type(reciprocal), target :: reciprocal_obj
       type(tddft_config) :: config
+      type(tddft_response_occupation_state) :: response_occupation
       type(tddft_chi0_options) :: chi0_options, chi0_options_reverse
       type(green_chi0_options) :: green_options, green_options_reverse
       type(eigenpair_green_function_provider), target :: green_source
@@ -1372,12 +1375,13 @@ contains
       reciprocal_obj%use_symmetry_reduction = .false.
       reciprocal_obj%use_time_reversal = .false.
       call reciprocal_obj%generate_mp_mesh()
-      ! TDDFT inherits the canonical reciprocal occupation contract.  Its
-      ! Fermi level is resolved only after complete response-mesh eigenpairs
-      ! exist, so a coarser SCF-mesh value cannot change the response count.
-      config%ground_state_fermi_level = reciprocal_obj%fermi_level
+      ! The ground-state occupation contract comes from the input/SCF energy
+      ! object.  Do not use reciprocal's constructor default (zero) as
+      ! provenance; seed the response object from the actual ground-state EF.
+      config%ground_state_fermi_level = energy_obj%fermi
       config%ground_state_electronic_temperature = reciprocal_obj%temperature
       config%ground_state_electron_count = reciprocal_obj%total_electrons
+      reciprocal_obj%fermi_level = config%ground_state_fermi_level
       if (.not. config%electronic_temperature_overridden) then
          config%electronic_temperature = config%ground_state_electronic_temperature
       end if
@@ -1385,6 +1389,7 @@ contains
          call g_logger%fatal('[calculation.post_processing_susceptibility]: response temperature is unresolved.', __FILE__, __LINE__)
       end if
       reciprocal_obj%temperature = config%electronic_temperature
+      config%response_auto_find_fermi = reciprocal_obj%auto_find_fermi
       circular_reverse = .not. is_longitudinal .and. .not. is_full_response .and. &
          trim(config%circular_channel) == 'both'
       primary_minus_plus = trim(config%circular_channel) == 'minus_plus'
@@ -1469,11 +1474,46 @@ contains
             end if
          end do
       end if
+      has_external_field = control_obj%do_comom .or. control_obj%constraints_enable
+      if (canonical_chi0_backend == 'kspace_lehmann' .and. config%chi0_backend == 'green' .and. rank == 0) then
+         call g_logger%warning('[calculation.post_processing_susceptibility]: chi0_backend=''green'' currently selects the '// &
+            'K-space Lehmann backend backed by the eigenpair-resolvent reference, not a native RS Green-function provider; '// &
+            'native RS response is selected with chi0_backend=''realspace_gf''.', &
+            __FILE__, __LINE__)
+      end if
+      if (.not. is_full_response) call make_tddft_chi0_backend(config%chi0_backend, chi0_backend)
+
+      ! k eigenpairs are independent of q and are therefore reused on each q
+      ! worker.  k+q eigenpairs remain caller-owned and exact at off-mesh q.
+      call reciprocal_obj%calculate_eigenpairs_at_kpoints(reciprocal_obj%k_workset%points, eigenvalues_k, eigenvectors_k)
+
+      ! `*_out.nml` restart files retain the potential and its direction but
+      ! not the scalar site moment `mtot`.  The XC radial projection recorded
+      ! by refresh_xc_response_kernel must be normalized by the same occupied
+      ! P_site sigma population used by the response vertices.  Reconstruct it
+      ! from the complete, unreduced response mesh rather than relying on that
+      ! non-serialized legacy cache.
+      reciprocal_obj%eigenvalues = eigenvalues_k
+      reciprocal_obj%eigenvectors = eigenvectors_k
+      ! Resolve the response occupation exactly once on the complete response
+      ! mesh.  A fixed reciprocal EF is inherited byte-for-byte; only the
+      ! explicit auto-find policy may replace it with a response-mesh solve.
+      reciprocal_obj%fermi_level = config%ground_state_fermi_level
+      response_band_energy = reciprocal_obj%calculate_canonical_band_energy(find_fermi=config%response_auto_find_fermi, &
+         electron_count=response_electron_count)
+      config%fermi_level = reciprocal_obj%fermi_level
+      config%response_electron_count = response_electron_count
+      if (config%response_auto_find_fermi) then
+         config%response_fermi_source = 'response_mesh_recomputed'
+         config%response_fermi_policy = 'auto_find_fermi'
+      else
+         config%response_fermi_source = 'ground_state_inherited'
+         config%response_fermi_policy = 'fixed_ground_state'
+      end if
+      call response_occupation%set(config%fermi_level, config%electronic_temperature, config%occupation_tolerance, &
+         config%band_first, config%band_last, config%response_fermi_source, config%response_fermi_policy)
+
       chi0_options%eta = config%eta
-      chi0_options%electronic_temperature = config%electronic_temperature
-      chi0_options%band_first = config%band_first
-      chi0_options%band_last = config%band_last
-      chi0_options%occupation_prune_tolerance = config%occupation_tolerance
       chi0_options%k_mesh_shape = reciprocal_obj%nk_mesh
       chi0_options%response_projection = config%response_projection
       if (is_longitudinal) then
@@ -1483,15 +1523,16 @@ contains
       else
          chi0_options%circular_channel = 'plus_minus'
       end if
+      call install_tddft_occupation(chi0_options, response_occupation)
       chi0_options_reverse = chi0_options
       if (primary_minus_plus) then
          chi0_options_reverse%circular_channel = 'plus_minus'
       else
          chi0_options_reverse%circular_channel = 'minus_plus'
       end if
+
       green_options%eta = config%eta
       green_options%green_eta = config%green_eta
-      green_options%electronic_temperature = config%electronic_temperature
       green_options%energy_min = config%green_energy_min
       green_options%energy_max = config%green_energy_max
       green_options%energy_points = config%green_energy_points
@@ -1503,13 +1544,13 @@ contains
       green_options%k_mesh_shape = reciprocal_obj%nk_mesh
       green_options%response_projection = config%response_projection
       green_options%circular_channel = chi0_options%circular_channel
+      call install_green_occupation(green_options, response_occupation)
       green_options_reverse = green_options
       green_options_reverse%circular_channel = chi0_options_reverse%circular_channel
+
       realspace_options%eta = config%eta
       realspace_options%green_eta = config%green_eta
       realspace_options%energy_integration = config%gf_integration
-      realspace_options%fermi_level = config%fermi_level
-      realspace_options%electronic_temperature = config%electronic_temperature
       realspace_options%contour_points = config%contour_points
       realspace_options%contour_subdivisions = config%contour_subdivisions
       realspace_options%near_fermi_points = config%near_fermi_points
@@ -1520,25 +1561,13 @@ contains
       realspace_options%representation = config%realspace_representation
       realspace_options%fourier_axes = config%realspace_fourier_axes
       realspace_options%circular_channel = chi0_options%circular_channel
+      call install_realspace_occupation(realspace_options, response_occupation)
       realspace_options_reverse = realspace_options
       realspace_options_reverse%circular_channel = chi0_options_reverse%circular_channel
-      has_external_field = control_obj%do_comom .or. control_obj%constraints_enable
-      if (canonical_chi0_backend == 'kspace_lehmann' .and. config%chi0_backend == 'green' .and. rank == 0) then
-         call g_logger%warning('[calculation.post_processing_susceptibility]: chi0_backend=''green'' currently selects the '// &
-            'K-space Lehmann backend backed by the eigenpair-resolvent reference, not a native RS Green-function provider; '// &
-            'native RS response is selected with chi0_backend=''realspace_gf''.', &
-            __FILE__, __LINE__)
-      end if
-      if (.not. is_full_response) call make_tddft_chi0_backend(config%chi0_backend, chi0_backend)
 
       if (canonical_chi0_backend == 'realspace_gf') then
-         ! The common response setup above maps ownership to response sites so
-         ! k-space spin moments and eigenpairs use the normal nrec layout.  The
-         ! native source instead consumes every generated pair; restore the
-         ! pair mapping immediately before intersite recursion.  This is a
-         ! no-op in serial execution except for extending g2l_map from nrec to
-         ! njij, but it prevents all non-self real-space pairs from remaining
-         ! silently zero.
+         ! The native source is attached only after the shared occupation state
+         ! has been resolved; it can therefore never retain the old sentinel.
          call get_mpi_variables(rank, lattice_obj%njij)
          call run_intersite_moments(control_obj, recursion_obj)
          call cpu_time(t_realspace_gf_start)
@@ -1556,50 +1585,10 @@ contains
          type is (tddft_realspace_gf_backend)
             call chi0_backend%initialize(realspace_source)
          class default
-            call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space provider attachment failed.', &
-               __FILE__, __LINE__)
-         end select
-         call get_mpi_variables(rank, lattice_obj%nrec)
-      end if
-
-      ! k eigenpairs are independent of q and are therefore reused on each q
-      ! worker.  k+q eigenpairs remain caller-owned and exact at off-mesh q.
-      call reciprocal_obj%calculate_eigenpairs_at_kpoints(reciprocal_obj%k_workset%points, eigenvalues_k, eigenvectors_k)
-
-      ! `*_out.nml` restart files retain the potential and its direction but
-      ! not the scalar site moment `mtot`.  The XC radial projection recorded
-      ! by refresh_xc_response_kernel must be normalized by the same occupied
-      ! P_site sigma population used by the response vertices.  Reconstruct it
-      ! from the complete, unreduced response mesh rather than relying on that
-      ! non-serialized legacy cache.
-      reciprocal_obj%eigenvalues = eigenvalues_k
-      reciprocal_obj%eigenvectors = eigenvectors_k
-      ! Resolve the chemical potential on the actual complete response mesh
-      ! after its eigenpairs exist.  There is deliberately no &tddft EF input:
-      ! the response remains at the reciprocal ground-state electron count.
-      response_band_energy = reciprocal_obj%calculate_canonical_band_energy(find_fermi=.true., &
-         electron_count=response_electron_count)
-      config%fermi_level = reciprocal_obj%fermi_level
-      config%response_electron_count = response_electron_count
-      chi0_options%fermi_level = config%fermi_level
-      green_options%fermi_level = config%fermi_level
-      if (canonical_chi0_backend == 'realspace_gf') then
-         realspace_source%options%fermi_level = config%fermi_level
-         realspace_source%options%electronic_temperature = config%electronic_temperature
-         if (circular_reverse) then
-            realspace_source_reverse%options%fermi_level = config%fermi_level
-            realspace_source_reverse%options%electronic_temperature = config%electronic_temperature
-         end if
-         select type (chi0_backend)
-         type is (tddft_realspace_gf_backend)
-            ! The backend owns a provider copy.  Reattach after the response
-            ! mesh resolves EF so the native bubble uses the same occupations
-            ! as the ground-state response contract.
-            call chi0_backend%initialize(realspace_source)
-         class default
             call g_logger%fatal('[calculation.post_processing_susceptibility]: native real-space backend reattachment failed.', &
                __FILE__, __LINE__)
          end select
+         call get_mpi_variables(rank, lattice_obj%nrec)
       end if
       electron_count_tolerance = 1.0e-8_rp*max(1.0_rp, config%ground_state_electron_count)
       if (abs(response_electron_count-config%ground_state_electron_count) > electron_count_tolerance) then
@@ -1607,7 +1596,7 @@ contains
             '[calculation.post_processing_susceptibility]: response electron count does not match target: target=', &
             config%ground_state_electron_count, ', recomputed=', response_electron_count, ', dN=', &
             response_electron_count-config%ground_state_electron_count, ', ground_EF=', config%ground_state_fermi_level, &
-            ', response_EF=', config%fermi_level, ', response EF is derived from the response mesh'
+            ', response_EF=', config%fermi_level, ', response_policy=', trim(config%response_fermi_policy)
          call g_logger%fatal(trim(electron_count_message)// &
             '. Check reciprocal total_electrons and whether the response band window can represent the target count.', __FILE__, __LINE__)
       end if
@@ -2646,6 +2635,9 @@ contains
       write(unit, '(a,es24.16)') '# electronic_temperature_K = ', config%electronic_temperature
       write(unit, '(a,es24.16)') '# ground_state_electronic_temperature_K = ', config%ground_state_electronic_temperature
       write(unit, '(a,es24.16)') '# response_fermi_level_Ry = ', config%fermi_level
+      write(unit, '(a,a)') '# response_fermi_level_source = ', trim(config%response_fermi_source)
+      write(unit, '(a,a)') '# response_fermi_level_policy = ', trim(config%response_fermi_policy)
+      write(unit, '(a,l1)') '# response_auto_find_fermi = ', config%response_auto_find_fermi
       write(unit, '(a,l1)') '# response_electronic_temperature_overridden = ', config%electronic_temperature_overridden
       write(unit, '(a,2(1x,es24.16))') '# ground_state_response_electron_count = ', &
          config%ground_state_electron_count, config%response_electron_count

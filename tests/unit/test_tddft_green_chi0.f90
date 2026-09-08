@@ -154,9 +154,11 @@ contains
       left(1) = response_channel(1, RESPONSE_PLUS); left(2) = response_channel(2, RESPONSE_PLUS)
       right(1) = response_channel(1, RESPONSE_MINUS); right(2) = response_channel(2, RESPONSE_MINUS)
       eigen_options%eta = 0.001_rp
+      eigen_options%fermi_level = 0.0_rp
       eigen_options%electronic_temperature = 2000.0_rp
       green_options%eta = eigen_options%eta
       green_options%green_eta = 0.0005_rp
+      green_options%fermi_level = eigen_options%fermi_level
       green_options%electronic_temperature = eigen_options%electronic_temperature
       green_options%energy_min = -0.35_rp; green_options%energy_max = 0.35_rp
       green_options%energy_points = 16001
@@ -230,6 +232,7 @@ contains
       left = [response_channel(1, RESPONSE_PLUS), response_channel(1, RESPONSE_MINUS)]
       right = [response_channel(1, RESPONSE_MINUS), response_channel(1, RESPONSE_PLUS)]
       options%eta = 0.003_rp
+      options%fermi_level = 0.0_rp
       options%energy_min = -1.0_rp; options%energy_max = 1.0_rp; options%energy_points = 12001
       omega_negative = -omega_positive
       call source%initialize(eval, evec, eval, evec)

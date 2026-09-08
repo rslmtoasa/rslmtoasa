@@ -47,6 +47,8 @@ module tddft_config_mod
       real(rp) :: ground_state_electronic_temperature, ground_state_fermi_level, ground_state_electron_count
       real(rp) :: response_electron_count
       logical :: electronic_temperature_overridden
+      logical :: response_auto_find_fermi
+      character(len=48) :: response_fermi_source, response_fermi_policy
       integer :: band_first, band_last
       real(rp) :: occupation_tolerance
       !> Real-axis GF bubble controls.  A zero green_eta means eta/2, and a
@@ -111,6 +113,9 @@ contains
       this%ground_state_electron_count = -1.0_rp
       this%response_electron_count = -1.0_rp
       this%electronic_temperature_overridden = .false.
+      this%response_auto_find_fermi = .false.
+      this%response_fermi_source = 'unresolved'
+      this%response_fermi_policy = 'unresolved'
       this%band_first = 1
       this%band_last = 0
       this%occupation_tolerance = 0.0_rp

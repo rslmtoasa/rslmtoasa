@@ -14,6 +14,7 @@ module tddft_chi0_mod
    use math_mod, only: pi
    use response_vertices_mod, only: response_channel, response_transition_vertex
    use tddft_conventions_mod, only: tddft_retarded_denominator
+   use tddft_occupation_mod, only: tddft_response_occupation_state, validate_response_occupation_fields
    use tddft_transition_engine_mod, only: tddft_transition_engine, site_channel_vertex_provider, &
       make_site_channel_vertex_provider
    implicit none
@@ -36,7 +37,7 @@ module tddft_chi0_mod
    !> TDDFT-11 equivalence tests and by performance investigations.
    type, public :: tddft_chi0_options
       real(rp) :: eta = 0.0_rp
-      real(rp) :: fermi_level = 0.0_rp
+      real(rp) :: fermi_level = huge(1.0_rp)
       real(rp) :: electronic_temperature = 0.0_rp
       integer :: band_first = 1
       integer :: band_last = 0
@@ -47,6 +48,9 @@ module tddft_chi0_mod
       real(rp) :: q_direct(3) = 0.0_rp
       character(len=32) :: response_projection = 'site'
       character(len=16) :: circular_channel = 'plus_minus'
+      type(tddft_response_occupation_state) :: occupation_state
+      character(len=48) :: fermi_source = 'unresolved'
+      character(len=48) :: fermi_policy = 'unresolved'
    end type tddft_chi0_options
 
    !> Reproducibility metadata written with every chi_KS output.
@@ -64,7 +68,7 @@ module tddft_chi0_mod
       character(len=16) :: circular_channel = 'unspecified'
       character(len=80) :: eta_role = 'numerical broadening; not a physical linewidth'
       real(rp) :: eta = 0.0_rp
-      real(rp) :: fermi_level = 0.0_rp
+      real(rp) :: fermi_level = huge(1.0_rp)
       real(rp) :: electronic_temperature = 0.0_rp
       real(rp) :: electronic_kT = 0.0_rp
       real(rp) :: k_weight_sum = 0.0_rp
@@ -129,6 +133,8 @@ module tddft_chi0_mod
       real(rp) :: real_space_tail_tolerance = 0.0_rp
       logical :: real_space_tail_assessed = .false.
       logical :: real_space_source_covers_cutoff = .false.
+      character(len=48) :: fermi_source = 'unresolved'
+      character(len=48) :: fermi_policy = 'unresolved'
    end type tddft_chi0_metadata
 
    !> Response and directly consumable KS/Stoner spectral products.  The
@@ -176,8 +182,44 @@ module tddft_chi0_mod
    public :: tddft_fermi_occupation
    public :: tddft_static_divided_difference
    public :: write_chi_ks_text
+   public :: install_tddft_occupation
+   public :: validate_tddft_chi0_options
 
 contains
+
+   subroutine install_tddft_occupation(options, state)
+      type(tddft_chi0_options), intent(inout) :: options
+      type(tddft_response_occupation_state), intent(in) :: state
+
+      call state%validate('install_tddft_occupation')
+      options%occupation_state = state
+      options%fermi_level = state%fermi_level
+      options%electronic_temperature = state%electronic_temperature
+      options%occupation_prune_tolerance = state%occupation_tolerance
+      options%band_first = state%band_first
+      options%band_last = state%band_last
+      options%fermi_source = state%fermi_source
+      options%fermi_policy = state%fermi_policy
+   end subroutine install_tddft_occupation
+
+   subroutine validate_tddft_chi0_options(options, context)
+      type(tddft_chi0_options), intent(in) :: options
+      character(len=*), intent(in) :: context
+
+      call validate_response_occupation_fields(options%fermi_level, options%electronic_temperature, &
+         options%occupation_prune_tolerance, options%band_first, options%band_last, context)
+      if (options%occupation_state%fermi_is_resolved) then
+         call options%occupation_state%validate(trim(context)//': occupation_state')
+         if (options%fermi_level /= options%occupation_state%fermi_level .or. &
+             options%electronic_temperature /= options%occupation_state%electronic_temperature .or. &
+             options%occupation_prune_tolerance /= options%occupation_state%occupation_tolerance .or. &
+             options%band_first /= options%occupation_state%band_first .or. options%band_last /= options%occupation_state%band_last .or. &
+             trim(options%fermi_source) /= trim(options%occupation_state%fermi_source) .or. &
+             trim(options%fermi_policy) /= trim(options%occupation_state%fermi_policy)) then
+            error stop trim(context)//': response occupation state and backend fields diverge'
+         end if
+      end if
+   end subroutine validate_tddft_chi0_options
 
    !> Stable Fermi occupation using the existing reciprocal-space temperature
    !> convention (temperature in K, energies in Ry).  It intentionally shares
@@ -352,6 +394,8 @@ contains
       call build_spectral_products(left_channels, right_channels, result)
       result%metadata%eta = options%eta
       result%metadata%fermi_level = options%fermi_level
+      result%metadata%fermi_source = options%fermi_source
+      result%metadata%fermi_policy = options%fermi_policy
       result%metadata%electronic_temperature = options%electronic_temperature
       result%metadata%electronic_kT = max(options%electronic_temperature*tddft_kB_Ry_per_K, &
          tddft_occupation_kT_floor)
@@ -460,6 +504,8 @@ contains
       result%metadata%eta_is_numerical = .false.
       result%metadata%static_limit = .true.
       result%metadata%fermi_level = options%fermi_level
+      result%metadata%fermi_source = options%fermi_source
+      result%metadata%fermi_policy = options%fermi_policy
       result%metadata%electronic_temperature = options%electronic_temperature
       result%metadata%electronic_kT = max(options%electronic_temperature*tddft_kB_Ry_per_K, tddft_occupation_kT_floor)
       result%metadata%k_weight_sum = weight_sum
@@ -569,6 +615,8 @@ contains
       write(unit, '(a,a)') '# energy_integration = ', trim(result%metadata%energy_integration)
       write(unit, '(a,es24.16)') '# eta_Ry = ', result%metadata%eta
       write(unit, '(a,es24.16)') '# fermi_level_Ry = ', result%metadata%fermi_level
+      write(unit, '(a,a)') '# fermi_level_source = ', trim(result%metadata%fermi_source)
+      write(unit, '(a,a)') '# fermi_level_policy = ', trim(result%metadata%fermi_policy)
       write(unit, '(a,es24.16)') '# electronic_temperature_K = ', result%metadata%electronic_temperature
       write(unit, '(a,es24.16)') '# electronic_kT_Ry = ', result%metadata%electronic_kT
       write(unit, '(a,3(1x,i0))') '# k_mesh_shape =', result%metadata%k_mesh_shape
@@ -704,6 +752,7 @@ contains
 
       eta_required = .true.
       if (present(require_eta)) eta_required = require_eta
+      call validate_tddft_chi0_options(options, 'build_chi_ks_from_eigenpairs')
       if (nk <= 0 .or. nbands <= 0 .or. nspinor <= 0 .or. nleft <= 0 .or. nright <= 0 .or. nw <= 0) then
          error stop 'build_chi_ks_from_eigenpairs: empty input is not valid'
       end if

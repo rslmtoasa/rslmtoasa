@@ -14,6 +14,7 @@ module tddft_chi0_realspace_mod
    use response_vertices_mod, only: response_channel, site_projected_operator
    use tddft_chi0_mod, only: tddft_chi0_result, tddft_chi0_request, tddft_chi0_batch_result, &
       tddft_fermi_occupation, tddft_kB_Ry_per_K, tddft_occupation_kT_floor
+   use tddft_occupation_mod, only: tddft_response_occupation_state, validate_response_occupation_fields
    use tddft_backend_mod, only: tddft_realspace_chi0_provider, tddft_backend_capabilities
    use green_mod, only: green
    use lattice_mod, only: lattice
@@ -29,8 +30,11 @@ module tddft_chi0_realspace_mod
       real(rp) :: eta = 0.01_rp
       real(rp) :: green_eta = 0.0_rp
       character(len=24) :: energy_integration = 'direct'
-      real(rp) :: fermi_level = 0.0_rp
+      real(rp) :: fermi_level = huge(1.0_rp)
       real(rp) :: electronic_temperature = 0.0_rp
+      integer :: band_first = 1
+      integer :: band_last = 0
+      real(rp) :: occupation_tolerance = 0.0_rp
       real(rp) :: rmax = huge(1.0_rp)
       real(rp) :: tail_tolerance = 1.0e-3_rp
       ! `full_tail` is the validation/reference mode.  `production` skips
@@ -44,6 +48,9 @@ module tddft_chi0_realspace_mod
       integer :: contour_subdivisions = 8
       integer :: near_fermi_points = 128
       real(rp) :: contour_height = 0.0_rp
+      type(tddft_response_occupation_state) :: occupation_state
+      character(len=48) :: fermi_source = 'unresolved'
+      character(len=48) :: fermi_policy = 'unresolved'
       real(rp) :: metric(3, 3) = reshape([1.0_rp, 0.0_rp, 0.0_rp, &
          0.0_rp, 1.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 1.0_rp], [3, 3])
    end type tddft_realspace_chi0_options
@@ -148,8 +155,44 @@ module tddft_chi0_realspace_mod
    public :: fourier_transform_realspace_green
    public :: check_realspace_pair_reversal
    public :: reduce_realspace_chi0_batch
+   public :: install_realspace_occupation
+   public :: validate_realspace_options
 
 contains
+
+   subroutine install_realspace_occupation(options, state)
+      type(tddft_realspace_chi0_options), intent(inout) :: options
+      type(tddft_response_occupation_state), intent(in) :: state
+
+      call state%validate('install_realspace_occupation')
+      options%occupation_state = state
+      options%fermi_level = state%fermi_level
+      options%electronic_temperature = state%electronic_temperature
+      options%band_first = state%band_first
+      options%band_last = state%band_last
+      options%occupation_tolerance = state%occupation_tolerance
+      options%fermi_source = state%fermi_source
+      options%fermi_policy = state%fermi_policy
+   end subroutine install_realspace_occupation
+
+   subroutine validate_realspace_options(options, context)
+      type(tddft_realspace_chi0_options), intent(in) :: options
+      character(len=*), intent(in) :: context
+
+      call validate_response_occupation_fields(options%fermi_level, options%electronic_temperature, &
+         options%occupation_tolerance, options%band_first, options%band_last, context)
+      if (options%occupation_state%fermi_is_resolved) then
+         call options%occupation_state%validate(trim(context)//': occupation_state')
+         if (options%fermi_level /= options%occupation_state%fermi_level .or. &
+             options%electronic_temperature /= options%occupation_state%electronic_temperature .or. &
+             options%band_first /= options%occupation_state%band_first .or. options%band_last /= options%occupation_state%band_last .or. &
+             options%occupation_tolerance /= options%occupation_state%occupation_tolerance .or. &
+             trim(options%fermi_source) /= trim(options%occupation_state%fermi_source) .or. &
+             trim(options%fermi_policy) /= trim(options%occupation_state%fermi_policy)) then
+            error stop trim(context)//': response occupation state and real-space backend fields diverge'
+         end if
+      end if
+   end subroutine validate_realspace_options
 
    subroutine initialize_native_realspace_provider(this, energy_grid, g_ab, g_ba, r_vectors, pair_sites, &
       site_orbital_counts, left_channels, right_channels, options)
@@ -159,9 +202,13 @@ contains
       integer, intent(in) :: pair_sites(:, :), site_orbital_counts(:)
       type(response_channel), intent(in) :: left_channels(:), right_channels(:)
       type(tddft_realspace_chi0_options), intent(in), optional :: options
+      type(tddft_realspace_chi0_options) :: source_options
 
       call validate_realspace_source(energy_grid, g_ab, g_ba, r_vectors, pair_sites, site_orbital_counts, &
          left_channels, right_channels)
+      source_options = tddft_realspace_chi0_options()
+      if (present(options)) source_options = options
+      call validate_realspace_options(source_options, 'native real-space provider initialization')
       this%energy_grid = energy_grid
       this%g_ab = g_ab
       this%g_ba = g_ba
@@ -171,8 +218,7 @@ contains
       this%left_channels = left_channels
       this%right_channels = right_channels
       if (allocated(this%complex_source)) deallocate(this%complex_source)
-      this%options = tddft_realspace_chi0_options()
-      if (present(options)) this%options = options
+      this%options = source_options
       this%build_count = 0
       this%source_green_cpu_seconds = 0.0_rp
       this%initialized = .true.
@@ -398,6 +444,7 @@ contains
 
       call validate_realspace_source(energy_grid, g_ab, g_ba, r_vectors, pair_sites, site_orbital_counts, &
          left_channels, right_channels)
+      call validate_realspace_options(options, 'build_chi0_from_realspace_gf')
       if (size(omega) < 1 .or. options%eta <= 0.0_rp .or. options%tail_tolerance < 0.0_rp) then
          error stop 'build_chi0_from_realspace_gf: invalid frequency or broadening options'
       end if
@@ -547,6 +594,7 @@ contains
       logical :: repeated_frequency, full_tail_mode
 
       call validate_realspace_geometry(r_vectors, pair_sites, site_orbital_counts, left_channels, right_channels)
+      call validate_realspace_options(options, 'build_chi0_from_realspace_gf_mixed_contour')
       if (size(omega) < 1 .or. options%eta <= 0.0_rp .or. options%tail_tolerance < 0.0_rp .or. &
           options%electronic_temperature < 0.0_rp) then
          error stop 'build_chi0_from_realspace_gf_mixed_contour: invalid options'
@@ -1330,7 +1378,10 @@ contains
       result%metadata%eta = options%eta
       result%metadata%green_eta = resolved_green_eta(options)
       result%metadata%fermi_level = options%fermi_level
+      result%metadata%fermi_source = options%fermi_source
+      result%metadata%fermi_policy = options%fermi_policy
       result%metadata%electronic_temperature = options%electronic_temperature
+      result%metadata%occupation_prune_tolerance = options%occupation_tolerance
       result%metadata%electronic_kT = max(options%electronic_temperature*tddft_kB_Ry_per_K, tddft_occupation_kT_floor)
       result%metadata%q_direct = q_point
       result%metadata%omega_min = minval(omega); result%metadata%omega_max = maxval(omega); result%metadata%omega_points = nw

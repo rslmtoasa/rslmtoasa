@@ -34,6 +34,7 @@ contains
 
       weights = 1.0_rp; eval(:, 1) = [-0.10_rp, 0.10_rp]; omega = 0.07_rp
       options%eta = 0.003_rp
+      options%fermi_level = 0.0_rp
       evec = cmplx(0.0_rp, 0.0_rp, rp); evec(1, 1, 1) = 1.0_rp; evec(2, 2, 1) = 1.0_rp
       evecq = evec
       call build_four_component_chi_ks(weights, eval, evec, eval, evecq, [1], omega, options, full)

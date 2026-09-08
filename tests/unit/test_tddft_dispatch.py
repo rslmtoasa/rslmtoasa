@@ -128,10 +128,10 @@ def test_response_mesh_resolves_inherited_fermi_after_eigenpairs() -> None:
     source = (root / "source" / "calculation.f90").read_text()
     namelist = (root / "source" / "include_codes" / "namelists" / "tddft.f90").read_text()
     assert source.index("calculate_eigenpairs_at_kpoints(reciprocal_obj%k_workset%points") < source.index(
-        "calculate_canonical_band_energy(find_fermi=.true."
+        "calculate_canonical_band_energy(find_fermi=config%response_auto_find_fermi"
     )
     assert "response electron count does not match target: target=" in source
-    assert "There is deliberately no &tddft EF input" in source
+    assert "config%response_auto_find_fermi = reciprocal_obj%auto_find_fermi" in source
     assert "fermi_level" not in namelist
 
 

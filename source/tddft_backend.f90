@@ -12,9 +12,9 @@ module tddft_backend_mod
    use precision_mod, only: rp
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, tddft_chi0_request, &
       tddft_chi0_batch_result, tddft_chi0_metadata, build_chi_ks_from_eigenpairs, &
-      build_static_chi_ks_from_eigenpairs_at_q
+      build_static_chi_ks_from_eigenpairs_at_q, validate_tddft_chi0_options
    use tddft_chi0_green_mod, only: green_chi0_options, eigenpair_green_function_provider, &
-      build_chi_ks_from_green_functions, build_static_chi_ks_from_green_functions
+      build_chi_ks_from_green_functions, build_static_chi_ks_from_green_functions, validate_green_chi0_options
    use response_vertices_mod, only: response_channel
    implicit none
 
@@ -475,8 +475,12 @@ contains
       this%site_orbital_counts = site_orbital_counts
       this%left_channels = left_channels
       this%right_channels = right_channels
+      call validate_tddft_chi0_options(options, 'initialize_eigenpair_backend')
       this%options = options
-      if (present(green_options)) this%green_options = green_options
+      if (present(green_options)) then
+         call validate_green_chi0_options(green_options, 'initialize_eigenpair_backend Green options')
+         this%green_options = green_options
+      end if
    end subroutine initialize_eigenpair_backend
 
    subroutine evaluate_eigenpair_backend(this, request, result)

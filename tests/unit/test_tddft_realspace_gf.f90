@@ -249,7 +249,7 @@ contains
       counts = [1]; left(1)%site = 1; left(1)%component = RESPONSE_PLUS
       right(1)%site = 1; right(1)%component = RESPONSE_MINUS
       omega = [0.1_rp]; q_points = 0.0_rp
-      native_options%eta = 0.1_rp; native_options%green_eta = 0.05_rp
+      native_options%eta = 0.1_rp; native_options%green_eta = 0.05_rp; native_options%fermi_level = 0.0_rp
       call native_provider%initialize(energy, g_ab, g_ba, r_vectors, pair_sites, counts, left, right, native_options)
       allocate(request%q_points(3, 1), request%omega(1)); request%q_points = q_points; request%omega = omega
       call native_provider%evaluate_realspace(request, native_batch)
@@ -259,6 +259,7 @@ contains
       weights = [1.0_rp]
       call kspace_provider%initialize(eigenvalues, eigenvectors, eigenvalues, eigenvectors)
       kspace_options%eta = 0.1_rp; kspace_options%green_eta = 0.05_rp; kspace_options%energy_min = -0.9_rp
+      kspace_options%fermi_level = 0.0_rp
       kspace_options%energy_max = 0.9_rp; kspace_options%energy_points = 361
       call build_chi_ks_from_green_functions(kspace_provider, weights, counts, left, right, omega, kspace_options, kspace_result)
       call assert_close(native_batch%q_response(1)%chi(1, 1, 1), kspace_result%chi(1, 1, 1), 2.0e-10_rp, &

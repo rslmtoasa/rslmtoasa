@@ -910,6 +910,13 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitTddftContour PROPERTIES LABELS "unit;tddft;green;contour;TDDFT-08")
   add_fortran_unit_test(UnitTddftBackend ${TestDIR}/unit/test_tddft_backend.f90)
   set_tests_properties(UnitTddftBackend PROPERTIES LABELS "unit;tddft;backend;interface;batch")
+  add_fortran_unit_test(UnitTddftOccupationLifecycle ${TestDIR}/unit/test_tddft_occupation_lifecycle.f90)
+  set_tests_properties(UnitTddftOccupationLifecycle PROPERTIES LABELS "unit;tddft;occupation;lifecycle;TDCOV-01")
+  add_test(NAME UnitTddftUnresolvedOccupation
+    COMMAND UnitTddftOccupationLifecycle --negative)
+  set_tests_properties(UnitTddftUnresolvedOccupation PROPERTIES
+    LABELS "unit;tddft;occupation;negative;TDCOV-01"
+    WILL_FAIL TRUE)
   add_fortran_unit_test(UnitTddftRealspaceGF ${TestDIR}/unit/test_tddft_realspace_gf.f90)
   set_tests_properties(UnitTddftRealspaceGF PROPERTIES LABELS "unit;tddft;realspace;green;chi0;fourier")
   add_fortran_unit_test(UnitTddftRealspaceTruncation ${TestDIR}/unit/test_tddft_realspace_truncation.f90)

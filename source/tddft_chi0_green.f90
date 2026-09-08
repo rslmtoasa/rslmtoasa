@@ -27,6 +27,7 @@ module tddft_chi0_green_mod
    use response_vertices_mod, only: response_channel, site_projected_operator
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, tddft_fermi_occupation, &
       tddft_occupation_kT_floor, build_static_chi_ks_from_eigenpairs_at_q
+   use tddft_occupation_mod, only: tddft_response_occupation_state, validate_response_occupation_fields
    implicit none
 
    private
@@ -77,8 +78,11 @@ module tddft_chi0_green_mod
    type, public :: green_chi0_options
       real(rp) :: eta = 0.0_rp
       real(rp) :: green_eta = 0.0_rp
-      real(rp) :: fermi_level = 0.0_rp
+      real(rp) :: fermi_level = huge(1.0_rp)
       real(rp) :: electronic_temperature = 0.0_rp
+      integer :: band_first = 1
+      integer :: band_last = 0
+      real(rp) :: occupation_tolerance = 0.0_rp
       real(rp) :: energy_min = huge(1.0_rp)
       real(rp) :: energy_max = -huge(1.0_rp)
       integer :: energy_points = 2001
@@ -91,6 +95,9 @@ module tddft_chi0_green_mod
       real(rp) :: q_direct(3) = 0.0_rp
       character(len=32) :: response_projection = 'site'
       character(len=16) :: circular_channel = 'plus_minus'
+      type(tddft_response_occupation_state) :: occupation_state
+      character(len=48) :: fermi_source = 'unresolved'
+      character(len=48) :: fermi_policy = 'unresolved'
    end type green_chi0_options
 
    !> Canonical KS-response provider.  It is deliberately independent of
@@ -120,8 +127,44 @@ module tddft_chi0_green_mod
    public :: build_static_chi_ks_from_green_functions
    public :: build_static_four_component_chi_ks_from_green_functions
    public :: build_four_component_chi_ks_from_green_functions
+   public :: install_green_occupation
+   public :: validate_green_chi0_options
 
 contains
+
+   subroutine install_green_occupation(options, state)
+      type(green_chi0_options), intent(inout) :: options
+      type(tddft_response_occupation_state), intent(in) :: state
+
+      call state%validate('install_green_occupation')
+      options%occupation_state = state
+      options%fermi_level = state%fermi_level
+      options%electronic_temperature = state%electronic_temperature
+      options%band_first = state%band_first
+      options%band_last = state%band_last
+      options%occupation_tolerance = state%occupation_tolerance
+      options%fermi_source = state%fermi_source
+      options%fermi_policy = state%fermi_policy
+   end subroutine install_green_occupation
+
+   subroutine validate_green_chi0_options(options, context)
+      type(green_chi0_options), intent(in) :: options
+      character(len=*), intent(in) :: context
+
+      call validate_response_occupation_fields(options%fermi_level, options%electronic_temperature, &
+         options%occupation_tolerance, options%band_first, options%band_last, context)
+      if (options%occupation_state%fermi_is_resolved) then
+         call options%occupation_state%validate(trim(context)//': occupation_state')
+         if (options%fermi_level /= options%occupation_state%fermi_level .or. &
+             options%electronic_temperature /= options%occupation_state%electronic_temperature .or. &
+             options%band_first /= options%occupation_state%band_first .or. options%band_last /= options%occupation_state%band_last .or. &
+             options%occupation_tolerance /= options%occupation_state%occupation_tolerance .or. &
+             trim(options%fermi_source) /= trim(options%occupation_state%fermi_source) .or. &
+             trim(options%fermi_policy) /= trim(options%occupation_state%fermi_policy)) then
+            error stop trim(context)//': response occupation state and Green backend fields diverge'
+         end if
+      end if
+   end subroutine validate_green_chi0_options
 
    subroutine initialize_green_chi0_provider(this, one_particle, options)
       class(green_chi0_provider), intent(inout) :: this
@@ -130,6 +173,7 @@ contains
 
       if (allocated(this%one_particle)) deallocate(this%one_particle)
       allocate(this%one_particle, source=one_particle)
+      call validate_green_chi0_options(options, 'green_chi0_provider%initialize')
       this%options = options
    end subroutine initialize_green_chi0_provider
 
@@ -251,6 +295,7 @@ contains
       type(tddft_chi0_result), intent(out) :: result
       type(green_chi0_provider) :: provider
 
+      call validate_green_chi0_options(options, 'build_chi_ks_from_green_functions')
       call provider%initialize(one_particle, options)
       call provider%build(k_weights, site_orbital_counts, left_channels, right_channels, omega, result)
    end subroutine build_chi_ks_from_green_functions
@@ -268,9 +313,16 @@ contains
       type(tddft_chi0_result), intent(out) :: result
       type(tddft_chi0_options) :: static_options
 
+      call validate_green_chi0_options(options, 'build_static_chi_ks_from_green_functions')
       static_options%eta = 0.0_rp
       static_options%fermi_level = options%fermi_level
       static_options%electronic_temperature = options%electronic_temperature
+      static_options%band_first = options%band_first
+      static_options%band_last = options%band_last
+      static_options%occupation_prune_tolerance = options%occupation_tolerance
+      static_options%fermi_source = options%fermi_source
+      static_options%fermi_policy = options%fermi_policy
+      static_options%occupation_state = options%occupation_state
       static_options%k_mesh_shape = options%k_mesh_shape
       static_options%q_direct = options%q_direct
       static_options%response_projection = options%response_projection
@@ -397,6 +449,8 @@ contains
       result%metadata%integration_energy_max = energy_max
       result%metadata%integration_energy_points = ne
       result%metadata%fermi_level = this%options%fermi_level
+      result%metadata%fermi_source = this%options%fermi_source
+      result%metadata%fermi_policy = this%options%fermi_policy
       result%metadata%electronic_temperature = this%options%electronic_temperature
       result%metadata%electronic_kT = max(this%options%electronic_temperature*6.3336814e-6_rp, tddft_occupation_kT_floor)
       result%metadata%k_weight_sum = weight_sum
@@ -405,6 +459,7 @@ contains
       result%metadata%available_band_count = nmat
       result%metadata%band_first = 1
       result%metadata%band_last = nmat
+      result%metadata%occupation_prune_tolerance = this%options%occupation_tolerance
       result%metadata%green_energy_integration_cpu_seconds = t_stop-t_start
       result%metadata%green_function_evaluations = nk*(2*ne+2*ne*nw)
       result%metadata%contour_points = 0
@@ -567,11 +622,14 @@ contains
       result%metadata%integration_energy_points = 2*(2+this%options%contour_subdivisions)*this%options%contour_points + &
          3*this%options%near_fermi_points
       result%metadata%fermi_level = this%options%fermi_level
+      result%metadata%fermi_source = this%options%fermi_source
+      result%metadata%fermi_policy = this%options%fermi_policy
       result%metadata%electronic_temperature = this%options%electronic_temperature
       result%metadata%electronic_kT = max(this%options%electronic_temperature*6.3336814e-6_rp, tddft_occupation_kT_floor)
       result%metadata%k_weight_sum = weight_sum; result%metadata%k_mesh_shape = this%options%k_mesh_shape
       result%metadata%nk = nk; result%metadata%available_band_count = nmat
       result%metadata%band_first = 1; result%metadata%band_last = nmat
+      result%metadata%occupation_prune_tolerance = this%options%occupation_tolerance
       result%metadata%green_energy_integration_cpu_seconds = t_stop-t_start
       result%metadata%contour_points = this%options%contour_points
       result%metadata%contour_subdivisions = this%options%contour_subdivisions
