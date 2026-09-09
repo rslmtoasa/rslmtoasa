@@ -82,6 +82,8 @@ module tddft_config_mod
       procedure :: constructor
    end interface tddft_config
 
+   public :: response_temperature_is_overridden
+
 contains
 
    function constructor(fname) result(obj)
@@ -246,7 +248,10 @@ contains
       this%nomega = nomega
       this%omega_min = omega_min; this%omega_max = omega_max; this%eta = eta
       this%electronic_temperature = electronic_temperature
-      this%electronic_temperature_overridden = electronic_temperature >= 0.0_rp
+      ! Presence of a namelist key is not provenance.  The response driver
+      ! resolves inheritance against the actual SCF temperature first, then
+      ! records whether the resolved value differs from that ground state.
+      this%electronic_temperature_overridden = .false.
       this%band_first = band_first; this%band_last = band_last
       this%occupation_tolerance = occupation_tolerance
       this%green_eta = green_eta
@@ -372,7 +377,6 @@ contains
          end if
       end if
       if (this%nomega < 1 .or. this%omega_max < this%omega_min .or. this%eta <= 0.0_rp .or. &
-          (this%electronic_temperature_overridden .and. this%electronic_temperature < 0.0_rp) .or. &
           this%band_first < 1 .or. this%band_last < 0 .or. &
           this%occupation_tolerance < 0.0_rp .or. len_trim(this%output_prefix) == 0) then
          call g_logger%fatal('[tddft_config]: invalid frequency, band, temperature, or output settings', __FILE__, __LINE__)
@@ -424,6 +428,14 @@ contains
             __FILE__, __LINE__)
       end if
    end subroutine validate_scalar_settings
+
+   pure logical function response_temperature_is_overridden(response_temperature, ground_state_temperature) result(overridden)
+      real(rp), intent(in) :: response_temperature, ground_state_temperature
+      real(rp) :: tolerance
+
+      tolerance = 64.0_rp*epsilon(1.0_rp)*max(1.0_rp, abs(ground_state_temperature), abs(response_temperature))
+      overridden = abs(response_temperature-ground_state_temperature) > tolerance
+   end function response_temperature_is_overridden
 
    subroutine read_q_file(this, filename)
       class(tddft_config), intent(inout) :: this

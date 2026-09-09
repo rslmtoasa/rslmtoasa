@@ -42,6 +42,7 @@ program test_tddft_performance
    call check_true('R-GF preserves q amortization', plan%preserves_realspace_reuse .and. plan%q_fourier_is_batched .and. &
       plan%requires_collective_reduction, failed)
    call check_true('R-GF partitions R blocks first', index(trim(plan%strategy), 'R-blocks') > 0 .and. plan%r%count == 12, failed)
+   call check_true('R-GF retains its explicit energy/source axis', plan%ne == 1024 .and. plan%energy%count == 256, failed)
    call plan%emit(label='plan_contract')
 #ifdef USE_MPI
    if (mpi_size > 1) then
@@ -53,12 +54,15 @@ program test_tddft_performance
    end if
 #endif
 
-   plan = make_tddft_mpi_plan('eigenpairs', 'not_applicable', 12, 64, 256, 0, 2, 4, .true.)
+   plan = make_tddft_mpi_plan('eigenpairs', 'not_applicable', 12, 64, 256, 0, 2, 4, .true., 0)
    call check_true('reciprocal backend owns a q range', plan%q%first == 7 .and. plan%q%last == 9 .and. &
       trim(plan%strategy) == 'q-outer / omega-inner', failed)
-   plan = make_tddft_mpi_plan('kspace_lehmann', 'direct', 1, 64, 256, 0, 2, 4, .true.)
+   call check_true('eigenpair planner has no GF energy axis', plan%ne == 0 .and. plan%energy%count == 0 .and. &
+      plan%energy%last == 0, failed)
+   plan = make_tddft_mpi_plan('kspace_lehmann', 'direct', 1, 64, 256, 0, 2, 4, .true., 0)
    call check_true('frequency fallback keeps the q point complete', plan%q%count == 1 .and. plan%omega%count == 16 .and. &
       index(trim(plan%strategy), 'omega-outer') > 0, failed)
+   call check_true('K-space Lehmann planner has no GF energy axis', plan%ne == 0 .and. plan%energy%count == 0, failed)
 
    values = [cmplx(1.0_rp, 2.0_rp, rp), cmplx(3.0_rp, 4.0_rp, rp)]
    call check_true('scientific checksum is deterministic', abs(tddft_checksum_complex(values)-23.0_rp) < 1.0e-12_rp, failed)

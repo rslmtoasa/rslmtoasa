@@ -3,7 +3,7 @@
 !------------------------------------------------------------------------------
 program test_tddft_config
    use precision_mod, only: rp
-   use tddft_config_mod, only: tddft_config
+   use tddft_config_mod, only: tddft_config, response_temperature_is_overridden
    implicit none
 
    logical :: failed
@@ -263,7 +263,11 @@ contains
       write(unit, '(a)') '/'
       close(unit)
       temperature_overridden = tddft_config('unit_tddft_config.nml')
-      call assert_true('explicit response temperature is auditable', temperature_overridden%electronic_temperature_overridden)
+      call assert_true('explicit response temperature is retained for lifecycle resolution', &
+         temperature_overridden%electronic_temperature == 420.0_rp .and. .not. temperature_overridden%electronic_temperature_overridden)
+      call assert_true('temperature provenance compares resolved values, not key presence', &
+         .not. response_temperature_is_overridden(300.0_rp, 300.0_rp) .and. &
+         response_temperature_is_overridden(420.0_rp, 300.0_rp))
       open(newunit=unit, file='unit_tddft_config.nml', status='old')
       close(unit, status='delete')
    end subroutine test_ground_state_provenance_defaults

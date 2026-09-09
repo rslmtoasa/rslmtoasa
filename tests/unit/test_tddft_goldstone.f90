@@ -319,7 +319,7 @@ contains
       type(tddft_goldstone_result) :: result
       complex(rp) :: chi(1, 1)
       integer :: unit, ios
-      logical :: found_identity, found_rank, found_signed, found_provenance, found_r_b, found_alias
+      logical :: found_identity, found_malformed_identity, found_rank, found_signed, found_provenance, found_r_b, found_alias
       character(len=512) :: line
 
       call provider%initialize(1, 'unit diagnostic output XC')
@@ -332,12 +332,13 @@ contains
       call evaluate_goldstone(chi, provider, options, result)
       call write_goldstone_diagnostics_text('unit_tddft_goldstone_diagnostics.dat', result)
       open(newunit=unit, file='unit_tddft_goldstone_diagnostics.dat', status='old', action='read', iostat=ios)
-      found_identity = .false.; found_rank = .false.; found_signed = .false.
+      found_identity = .false.; found_malformed_identity = .false.; found_rank = .false.; found_signed = .false.
       found_provenance = .false.; found_r_b = .false.; found_alias = .false.
       do while (ios == 0)
          read(unit, '(a)', iostat=ios) line
          if (ios /= 0) exit
          found_identity = found_identity .or. index(line, '# raw_identity_consistent = ') == 1
+         found_malformed_identity = found_malformed_identity .or. index(line, 'raw_identity_consistentF') > 0
          found_rank = found_rank .or. index(line, '# response_space_rank = ') == 1
          found_signed = found_signed .or. index(line, 'raw_signed_magnetization') > 0
          found_provenance = found_provenance .or. index(line, 'VXC0SP') > 0
@@ -347,6 +348,7 @@ contains
       end do
       close(unit, status='delete')
       call assert_true('raw_identity_consistent output has a separated value', found_identity)
+      call assert_true('raw_identity_consistent output is not concatenated with its value', .not. found_malformed_identity)
       call assert_true('response-space rank is present in the header', found_rank)
       call assert_true('signed site magnetization is written', found_signed)
       call assert_true('independent Bxc provenance is written', found_provenance)

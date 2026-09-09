@@ -3,7 +3,7 @@
 !------------------------------------------------------------------------------
 !> @brief Bare finite-temperature Kohn-Sham response from spinor eigenpairs.
 !>
-!> This is the reference eigenpair backend for TDDFT.  Frequencies and eta are
+!> This is the explicit eigenpair backend for TDDFT.  Frequencies and eta are
 !> energies in Rydberg and the denominator is retarded,
 !> `omega + e_n - e_m + i*eta`.  The right transition factor is evaluated as
 !> `<m|B|n>` rather than obtained by assuming that B is Hermitian.  That
@@ -12,8 +12,7 @@
 module tddft_chi0_mod
    use precision_mod, only: rp
    use math_mod, only: pi
-   use response_vertices_mod, only: response_channel, response_transition_vertex
-   use tddft_conventions_mod, only: tddft_retarded_denominator
+   use response_vertices_mod, only: response_channel
    use tddft_occupation_mod, only: tddft_response_occupation_state, validate_response_occupation_fields
    use tddft_transition_engine_mod, only: tddft_transition_engine, site_channel_vertex_provider, &
       make_site_channel_vertex_provider
@@ -28,13 +27,11 @@ module tddft_chi0_mod
    real(rp), parameter, public :: tddft_kB_Ry_per_K = 6.3336814e-6_rp
    real(rp), parameter, public :: tddft_occupation_kT_floor = 1.0e-10_rp
 
-   !> Inputs controlling the exact all-band reference path.  A zero
+   !> Inputs controlling the exact all-band transition path.  A zero
    !> occupation_prune_tolerance disables pruning; a positive value is an
-   !> explicitly approximate performance option.  The batched accumulator is
-   !> algebraically identical to the scalar reference path; it merely groups
-   !> rank-one transition updates into BLAS GEMM calls.  Keeping the reference
-   !> path selectable is intentional: it is the CPU numerical oracle used by
-   !> TDDFT-11 equivalence tests and by performance investigations.
+   !> explicitly approximate performance option.  The shared transition engine
+   !> has a selectable scalar reduction for deterministic equivalence tests and
+   !> a batched BLAS path for production performance.
    type, public :: tddft_chi0_options
       real(rp) :: eta = 0.0_rp
       real(rp) :: fermi_level = huge(1.0_rp)
@@ -264,13 +261,9 @@ contains
       type(tddft_chi0_options), intent(in) :: options
       type(tddft_chi0_result), intent(out) :: result
 
-      integer :: nk, nbands, nspinor, nleft, nright, nw, ik, n, m, iw, npairs, batch_size
+      integer :: nk, nbands, nspinor, nleft, nright, nw, batch_size
       integer :: band_first, band_last
-      real(rp) :: weight_sum, occupation_difference, transition_energy, prefactor, t_start, t_stop
-      complex(rp) :: denominator
-      complex(rp), allocatable :: left_vertex(:), right_vertex(:)
-      complex(rp), allocatable :: left_batch(:, :), right_batch(:, :), weighted_left(:, :), denominator_batch(:)
-      real(rp), allocatable :: occupation_batch(:), transition_energy_batch(:)
+      real(rp) :: weight_sum
       type(tddft_transition_engine) :: engine
       type(site_channel_vertex_provider) :: provider
 
@@ -302,102 +295,6 @@ contains
          options%use_batched_accumulation, provider, result%chi, result%metadata%vertex_cpu_seconds, &
          result%metadata%transition_preparation_cpu_seconds, result%metadata%denominator_cpu_seconds, &
          result%metadata%accumulation_cpu_seconds)
-
-      ! Kept below temporarily as the independent scalar oracle spelling.  The
-      ! public adapter above always uses the shared engine; tests can compare
-      ! its deterministic batch-one route against this retained reference.
-      if (.false.) then
-      allocate(left_vertex(nleft), right_vertex(nright))
-
-      ! The scalar route is deliberately retained as the exact reduction-order
-      ! reference.  The default route has the same transition ordering and
-      ! denominator convention but accumulates a bounded transition tile with
-      ! zgemm(N,T), avoiding one temporary outer-product per transition.
-      if (options%use_batched_accumulation) then
-         batch_size = min(options%transition_batch_size, (band_last-band_first+1)**2)
-         allocate(left_batch(nleft, batch_size), right_batch(nright, batch_size), weighted_left(nleft, batch_size), &
-            denominator_batch(batch_size), occupation_batch(batch_size), transition_energy_batch(batch_size))
-         do ik = 1, nk
-            prefactor = k_weights(ik)/weight_sum
-            npairs = 0
-            do n = band_first, band_last
-               do m = band_first, band_last
-                  occupation_difference = tddft_fermi_occupation(eigenvalues_k(n, ik), options%fermi_level, &
-                     options%electronic_temperature) - tddft_fermi_occupation(eigenvalues_kq(m, ik), &
-                     options%fermi_level, options%electronic_temperature)
-                  if (options%occupation_prune_tolerance > 0.0_rp) then
-                     if (abs(occupation_difference) <= options%occupation_prune_tolerance) cycle
-                  end if
-                  npairs = npairs + 1
-                  call cpu_time(t_start)
-                  do iw = 1, nleft
-                     left_batch(iw, npairs) = response_transition_vertex(left_channels(iw), site_orbital_counts, &
-                        eigenvectors_k(:, n, ik), eigenvectors_kq(:, m, ik))
-                  end do
-                  ! Do not replace this with conjg(vertex(right,n,m)): B is
-                  ! generally non-Hermitian in a circular channel.  The Kubo
-                  ! factor remains <n|A|m><m|B|n> in both accumulation paths.
-                  do iw = 1, nright
-                     right_batch(iw, npairs) = response_transition_vertex(right_channels(iw), site_orbital_counts, &
-                        eigenvectors_kq(:, m, ik), eigenvectors_k(:, n, ik))
-                  end do
-                  call cpu_time(t_stop)
-                  result%metadata%vertex_cpu_seconds = result%metadata%vertex_cpu_seconds + t_stop-t_start
-                  occupation_batch(npairs) = occupation_difference
-                  transition_energy_batch(npairs) = eigenvalues_k(n, ik) - eigenvalues_kq(m, ik)
-                  if (npairs == batch_size) then
-                     call accumulate_transition_batch(result%chi, omega, options%eta, prefactor, left_batch, right_batch, &
-                        occupation_batch, transition_energy_batch, npairs, weighted_left, denominator_batch, result%metadata)
-                     npairs = 0
-                  end if
-               end do
-            end do
-            if (npairs > 0) then
-               call accumulate_transition_batch(result%chi, omega, options%eta, prefactor, left_batch, right_batch, &
-                  occupation_batch, transition_energy_batch, npairs, weighted_left, denominator_batch, result%metadata)
-            end if
-         end do
-         deallocate(left_batch, right_batch, weighted_left, denominator_batch, occupation_batch, transition_energy_batch)
-      else
-         do ik = 1, nk
-            prefactor = k_weights(ik)/weight_sum
-            do n = band_first, band_last
-               do m = band_first, band_last
-                  occupation_difference = tddft_fermi_occupation(eigenvalues_k(n, ik), options%fermi_level, &
-                     options%electronic_temperature) - tddft_fermi_occupation(eigenvalues_kq(m, ik), &
-                     options%fermi_level, options%electronic_temperature)
-                  if (options%occupation_prune_tolerance > 0.0_rp) then
-                     if (abs(occupation_difference) <= options%occupation_prune_tolerance) cycle
-                  end if
-                  call cpu_time(t_start)
-                  do iw = 1, nleft
-                     left_vertex(iw) = response_transition_vertex(left_channels(iw), site_orbital_counts, &
-                        eigenvectors_k(:, n, ik), eigenvectors_kq(:, m, ik))
-                  end do
-                  do iw = 1, nright
-                     right_vertex(iw) = response_transition_vertex(right_channels(iw), site_orbital_counts, &
-                        eigenvectors_kq(:, m, ik), eigenvectors_k(:, n, ik))
-                  end do
-                  call cpu_time(t_stop)
-                  result%metadata%vertex_cpu_seconds = result%metadata%vertex_cpu_seconds + t_stop-t_start
-                  transition_energy = eigenvalues_k(n, ik) - eigenvalues_kq(m, ik)
-                  do iw = 1, nw
-                     call cpu_time(t_start)
-                     denominator = tddft_retarded_denominator(omega(iw), transition_energy, options%eta)
-                     call cpu_time(t_stop)
-                     result%metadata%denominator_cpu_seconds = result%metadata%denominator_cpu_seconds + t_stop-t_start
-                     call cpu_time(t_start)
-                     result%chi(:, :, iw) = result%chi(:, :, iw) + prefactor*occupation_difference* &
-                        outer_product(left_vertex, right_vertex)/denominator
-                     call cpu_time(t_stop)
-                     result%metadata%accumulation_cpu_seconds = result%metadata%accumulation_cpu_seconds + t_stop-t_start
-                  end do
-               end do
-            end do
-         end do
-      end if
-      deallocate(left_vertex, right_vertex)
-      end if
 
       result%re_chi = real(result%chi, rp)
       result%im_chi = aimag(result%chi)
@@ -696,53 +593,6 @@ contains
       end do
       close(unit)
    end subroutine write_chi_ks_text
-
-   function outer_product(left, right) result(product)
-      complex(rp), intent(in) :: left(:), right(:)
-      complex(rp) :: product(size(left), size(right))
-      integer :: ileft, iright
-
-      do iright = 1, size(right)
-         do ileft = 1, size(left)
-            product(ileft, iright) = left(ileft)*right(iright)
-         end do
-      end do
-   end function outer_product
-
-   !> Accumulate one bounded transition tile for every requested frequency.
-   !> `right_vertices` is transposed, not conjugate-transposed: the response
-   !> convention is v_A v_B, where v_B was already evaluated as <m|B|n>.
-   subroutine accumulate_transition_batch(chi, omega, eta, prefactor, left_vertices, right_vertices, &
-      occupation_difference, transition_energy, npairs, weighted_left, denominators, metadata)
-      complex(rp), intent(inout) :: chi(:, :, :)
-      real(rp), intent(in) :: omega(:), eta, prefactor, occupation_difference(:), transition_energy(:)
-      complex(rp), intent(in) :: left_vertices(:, :), right_vertices(:, :)
-      integer, intent(in) :: npairs
-      complex(rp), intent(inout) :: weighted_left(:, :), denominators(:)
-      type(tddft_chi0_metadata), intent(inout) :: metadata
-      integer :: iw, ipair
-      real(rp) :: t_start, t_stop
-
-      if (npairs < 1 .or. npairs > size(left_vertices, 2) .or. size(right_vertices, 2) < npairs .or. &
-          size(weighted_left, 2) < npairs .or. size(denominators) < npairs) then
-         error stop 'accumulate_transition_batch: incompatible transition tile'
-      end if
-      do iw = 1, size(omega)
-         call cpu_time(t_start)
-         denominators(1:npairs) = tddft_retarded_denominator(omega(iw), transition_energy(1:npairs), eta)
-         do ipair = 1, npairs
-            weighted_left(:, ipair) = prefactor*occupation_difference(ipair)*left_vertices(:, ipair)/denominators(ipair)
-         end do
-         call cpu_time(t_stop)
-         metadata%denominator_cpu_seconds = metadata%denominator_cpu_seconds + t_stop-t_start
-         call cpu_time(t_start)
-         call zgemm('N', 'T', size(chi, 1), size(chi, 2), npairs, cmplx(1.0_rp, 0.0_rp, rp), &
-            weighted_left, size(weighted_left, 1), right_vertices, size(right_vertices, 1), cmplx(1.0_rp, 0.0_rp, rp), &
-            chi(:, :, iw), size(chi, 1))
-         call cpu_time(t_stop)
-         metadata%accumulation_cpu_seconds = metadata%accumulation_cpu_seconds + t_stop-t_start
-      end do
-   end subroutine accumulate_transition_batch
 
    subroutine build_spectral_products(left_channels, right_channels, result)
       type(response_channel), intent(in) :: left_channels(:), right_channels(:)

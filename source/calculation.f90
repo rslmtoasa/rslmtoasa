@@ -50,7 +50,7 @@ module calculation_mod
    use logger_mod, only: g_logger
    use basis_mod, only: basis_init, norb
    use magnetic_representation_mod, only: periodic_nc, gbt_single_q
-   use tddft_config_mod, only: tddft_config
+   use tddft_config_mod, only: tddft_config, response_temperature_is_overridden
    use tddft_occupation_mod, only: tddft_response_occupation_state
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, tddft_chi0_batch_result, build_chi_ks_from_eigenpairs, &
       build_static_chi_ks_from_eigenpairs, write_chi_ks_text, install_tddft_occupation
@@ -1271,7 +1271,7 @@ contains
       real(rp) :: pair_corrected_gamma_peak_reverse
       real(rp) :: raw_pair_minimum_spectral_weight, corrected_pair_minimum_spectral_weight
       integer, allocatable :: site_orbital_counts(:)
-      integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, ik, nresponse
+      integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, ik, nresponse, planner_energy_points
       integer :: corrected_minimum_location(2)
       logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_full_response, is_gamma, has_gamma
       logical :: pair_backend, legacy_backend, raw_pair_spectral_weight_ok, corrected_spectral_weight_ok, &
@@ -1398,12 +1398,14 @@ contains
       config%ground_state_electronic_temperature = reciprocal_obj%temperature
       config%ground_state_electron_count = reciprocal_obj%total_electrons
       reciprocal_obj%fermi_level = config%ground_state_fermi_level
-      if (.not. config%electronic_temperature_overridden) then
+      if (config%electronic_temperature < 0.0_rp) then
          config%electronic_temperature = config%ground_state_electronic_temperature
       end if
       if (config%electronic_temperature < 0.0_rp) then
          call g_logger%fatal('[calculation.post_processing_susceptibility]: response temperature is unresolved.', __FILE__, __LINE__)
       end if
+      config%electronic_temperature_overridden = response_temperature_is_overridden(config%electronic_temperature, &
+         config%ground_state_electronic_temperature)
       reciprocal_obj%temperature = config%electronic_temperature
       config%response_auto_find_fermi = reciprocal_obj%auto_find_fermi
       primary_circular_channel = circular_channel_code(config%circular_channel)
@@ -1454,8 +1456,13 @@ contains
 
       nq = size(config%q_points, 2)
       nw = config%nomega
+      planner_energy_points = 0
+      ! Only native R-GF integrates an energy/source-grid axis.  Exact
+      ! eigenpair and K-space Lehmann paths are transition sums and must not
+      ! inherit the real-axis default merely because it exists in the input.
+      if (canonical_chi0_backend == 'realspace_gf') planner_energy_points = config%green_energy_points
       tddft_plan = make_tddft_mpi_plan(canonical_chi0_backend, config%gf_integration, nq, nw, &
-         product(reciprocal_obj%nk_mesh), lattice_obj%njij, rank, numprocs, .true., config%green_energy_points)
+         product(reciprocal_obj%nk_mesh), lattice_obj%njij, rank, numprocs, .true., planner_energy_points)
       ! The planner owner range is used for q-labelled output.  The native
       ! R-GF compute range is intentionally wider: all q points are transformed
       ! after the local R blocks have been reduced, preserving q amortization.
@@ -2802,11 +2809,11 @@ contains
       write(unit, '(a,l1)') '# chi0_backend_alias = ', trim(config%chi0_backend) /= trim(canonical_backend)
       select case (trim(canonical_backend))
       case ('eigenpairs')
-         write(unit, '(a)') '# chi0_backend_implementation = explicit eigenpair transition reference'
+         write(unit, '(a)') '# chi0_backend_implementation = explicit eigenpair transition-pole sum'
          write(unit, '(a)') '# chi0_backend_capability = transparent transition sums; exact k and k+q endpoint arrays'
       case ('kspace_lehmann')
-         write(unit, '(a)') '# chi0_backend_implementation = K-space Lehmann Green-function bubble'
-         write(unit, '(a)') '# chi0_backend_capability = periodic K-space GF response; Lehmann resolvent source'
+         write(unit, '(a)') '# chi0_backend_implementation = K-space Lehmann transition-pole sum'
+         write(unit, '(a)') '# chi0_backend_capability = spectral k and k+q endpoint transition sums; no energy-axis quadrature'
       case ('realspace_gf')
          write(unit, '(a)') '# chi0_backend_implementation = native real-space G(R,z) to chi0(R,omega) to q transform'
          write(unit, '(a)') '# chi0_backend_capability = native RS GF bare transverse response; no implicit G(R) to G(k) conversion'
@@ -2861,7 +2868,8 @@ contains
       write(unit, '(a,l1)') '# kq_endpoint_folded = ', config%kq_endpoint_folded
       write(unit, '(a,3(1x,i0))') '# kq_reciprocal_shift_first = ', config%kq_reciprocal_shift
       write(unit, '(a,i0)') '# kq_folded_endpoint_count = ', config%kq_folded_endpoint_count
-      write(unit, '(a)') '# shifted_workset_policy = complete_BZ_only; reduced irreducible weights are rejected for finite-q endpoints'
+      write(unit, '(a)') '# shifted_workset_policy = complete_BZ_only; requested symmetry reduction is overridden for finite-q endpoints'
+      write(unit, '(a)') '# symmetry_reduction_override = applied; complete BZ workset is mandatory for shifted k+q endpoint pairing'
       write(unit, '(a,3(1x,i0))') '# k_mesh =', k_mesh
       write(unit, '(a,es24.16)') '# omega_min_Ry = ', config%omega_min
       write(unit, '(a,es24.16)') '# omega_max_Ry = ', config%omega_max
@@ -2883,20 +2891,34 @@ contains
       write(unit, '(a,2(1x,i0))') '# band_window_first_last = ', config%band_first, config%band_last
       write(unit, '(a,es24.16)') '# occupation_prune_tolerance = ', config%occupation_tolerance
       write(unit, '(a,es24.16)') '# green_eta_Ry = ', config%green_eta
-      if (trim(canonical_backend) == 'kspace_lehmann' .or. trim(canonical_backend) == 'realspace_gf') then
+      if (trim(canonical_backend) == 'realspace_gf') then
          write(unit, '(a,es24.16)') '# green_eta_effective_Ry = ', effective_green_eta
          write(unit, '(a)') '# green_eta_policy = zero input means response eta/2; one-particle half-width combines to response eta'
       else
-         write(unit, '(a)') '# green_eta_effective_Ry = not applicable to explicit eigenpair transitions'
-         write(unit, '(a)') '# green_eta_policy = Green-function controls are ignored by the eigenpair backend'
+         write(unit, '(a)') '# green_eta_effective_Ry = not applicable to transition-pole backend'
+         write(unit, '(a)') '# green_eta_policy = Green-function controls are ignored by this transition-pole backend'
       end if
-      write(unit, '(a,2(1x,es24.16))') '# green_energy_window_Ry = ', config%green_energy_min, config%green_energy_max
-      write(unit, '(a,i0)') '# green_energy_points = ', config%green_energy_points
-      write(unit, '(a,a)') '# energy_integration = ', trim(config%gf_integration)
-      write(unit, '(a,i0)') '# contour_points_per_segment = ', config%contour_points
-      write(unit, '(a,i0)') '# contour_horizontal_subdivisions = ', config%contour_subdivisions
-      write(unit, '(a,i0)') '# near_fermi_points = ', config%near_fermi_points
-      write(unit, '(a,es24.16)') '# contour_height_Ry = ', config%contour_height
+      if (trim(canonical_backend) == 'realspace_gf') then
+         if (config%green_energy_min < huge(1.0_rp)/2.0_rp .and. config%green_energy_max > -huge(1.0_rp)/2.0_rp) then
+            write(unit, '(a,2(1x,es24.16))') '# green_energy_window_Ry = ', config%green_energy_min, config%green_energy_max
+         else
+            write(unit, '(a)') '# green_energy_window_Ry = unset; backend derives the source spectrum window'
+         end if
+         write(unit, '(a,i0)') '# green_energy_points = ', config%green_energy_points
+         write(unit, '(a,a)') '# energy_integration = ', trim(config%gf_integration)
+         write(unit, '(a,i0)') '# contour_points_per_segment = ', config%contour_points
+         write(unit, '(a,i0)') '# contour_horizontal_subdivisions = ', config%contour_subdivisions
+         write(unit, '(a,i0)') '# near_fermi_points = ', config%near_fermi_points
+         write(unit, '(a,es24.16)') '# contour_height_Ry = ', config%contour_height
+      else
+         write(unit, '(a)') '# green_energy_window_Ry = not applicable to transition-pole backend'
+         write(unit, '(a)') '# green_energy_points = not applicable to transition-pole backend'
+         write(unit, '(a)') '# energy_integration = not applicable; transition poles are summed directly'
+         write(unit, '(a)') '# contour_points_per_segment = not applicable to transition-pole backend'
+         write(unit, '(a)') '# contour_horizontal_subdivisions = not applicable to transition-pole backend'
+         write(unit, '(a)') '# near_fermi_points = not applicable to transition-pole backend'
+         write(unit, '(a)') '# contour_height_Ry = not applicable to transition-pole backend'
+      end if
       write(unit, '(a,es24.16)') '# realspace_rmax_request_Angstrom = ', config%realspace_rmax
       write(unit, '(a,es24.16)') '# realspace_source_rmax_request_Angstrom = ', config%realspace_source_rmax
       write(unit, '(a,es24.16)') '# realspace_tail_tolerance = ', config%realspace_tail_tolerance

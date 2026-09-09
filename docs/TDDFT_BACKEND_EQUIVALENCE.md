@@ -5,7 +5,7 @@ transverse response `chi0`.  The campaign exercises the three response routes
 through their public backend interfaces:
 
 - explicit eigenpair transitions;
-- the K-space Lehmann Green-function bubble;
+- the exact K-space Lehmann transition-pole sum;
 - the native real-space `G(R,z) -> chi0(R,omega) -> Fourier transform` path.
 
 The test is registered as `UnitTddftBackendEquivalence`.  It can be run after
@@ -29,7 +29,7 @@ the complete complex 2x2 response matrix, its Frobenius-norm error, and its
 eigenvalues.
 
 Exact static response is tested separately from the finite-eta dynamic
-`omega=0` diagnostic. The eigenpair and K-space GF routes use their analytic
+`omega=0` diagnostic. The eigenpair and K-space Lehmann routes use their analytic
 zero-frequency divided differences. The native R-GF route independently
 integrates the retarded/advanced static contour identity on its real-space
 Green-function source, then transforms `chi0(R,0)` over the q batch. No route
@@ -47,26 +47,32 @@ Ry, `eta=0.02` Ry, and `gamma=eta/2` for the main pointwise campaign.
 
 | comparison or diagnostic | maximum reported value | acceptance envelope |
 |---|---:|---:|
-| eigenpair vs K-GF matrix | `4.4099e-2` | `5.0e-2` |
+| eigenpair vs K-space transition-pole matrix | `0` | `1.0e-11` |
 | eigenpair vs native R-GF matrix | `4.4098e-2` | `5.0e-2` |
-| K-GF vs native R-GF matrix | `4.2528e-4` | `1.0e-3` |
-| eigenvalue comparison, global matrix norm | `3.2266e-2` | `5.0e-2` |
-| exact static eigenpair vs K-GF | `0` | `1.0e-11` |
-| exact static eigenpair vs K-GF, finite q | `0` | `1.0e-11` |
+| production K-space vs native R-GF matrix | `4.4098e-2` | `5.0e-2` |
+| independent GF-bubble vs native R-GF matrix | `4.2528e-4` | `1.0e-3` |
+| eigenvalue comparison, eigenpair vs K-space | `0` | `1.0e-11` |
+| eigenvalue comparison, eigenpair vs native R-GF | `3.2266e-2` | `5.0e-2` |
+| exact static eigenpair vs K-space | `0` | `1.0e-11` |
+| exact static eigenpair vs K-space, finite q | `0` | `1.0e-11` |
 | exact static eigenpair vs native R-GF, q=0 | `2.9175e-3` | `8.0e-2` |
 | exact static eigenpair vs native R-GF, finite q | `2.9306e-3` | `8.0e-2` |
 | exact static raw Ward residuals, eigen/K/native | `0`, `0`, `2.9175e-3` | spread `8.0e-2` |
 | positive-frequency spectral sum residual | `6.8195e-2` | `8.0e-2` |
 | contour relative error | `3.1231e-7` | `5.0e-3` |
 
-The pointwise envelope is set by the stable `nk=2,4,8` results (about
-`4.4e-2`) and the independently checked eigenvalue norm (about `3.2e-2`),
-not by a loose absolute comparison.  The tighter `1e-3` K/R envelope is
-supported by the R-cutoff and eta/gamma ladders: the full-source K/R error is
-`4.25e-4`, and the eta-ladder values are `5.70e-4`, `3.49e-4`, and `3.42e-4`
-for `(eta,gamma)=(0.04,0.02)`, `(0.02,0.01)`, and `(0.01,0.005)` Ry.  The
-eta ladder uses 4001, 8001, and 16001 energy points respectively so energy
-quadrature does not dominate the broadening comparison.
+The exact eigenpair/K-space tolerance is `1e-11` because both production
+backends evaluate the same finite-temperature transition-pole sum, with no
+energy-axis quadrature.  The broader `5e-2` native-physical envelope applies
+when that exact sum is compared with the independently integrated native
+R-GF source; it covers the observed stable `nk=2,4,8` response and its
+eigenvalue norm without being used as the exact-backend gate.  The separate
+`1e-3` GF-bubble/R-GF envelope is supported by the R-cutoff and eta/gamma
+ladders: the full-source error is `4.25e-4`, and the eta-ladder values are
+`5.70e-4`, `3.49e-4`, and `3.42e-4` for `(eta,gamma)=(0.04,0.02)`,
+`(0.02,0.01)`, and `(0.01,0.005)` Ry.  The eta ladder uses 4001, 8001, and
+16001 energy points respectively so energy quadrature does not dominate that
+independent broadening comparison.
 
 The finite-grid spectral integral reaches values `3.8407`, `3.7272`, and
 `3.7319` against the fixture target `4.0`; these residuals are recorded as a

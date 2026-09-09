@@ -39,7 +39,8 @@ program test_tddft_backend_equivalence
    integer, parameter :: nq_main = 3, nw_main = 2
    integer, parameter :: nsum = 161
    real(rp), parameter :: main_eta = 0.02_rp
-   real(rp), parameter :: pointwise_tolerance = 5.0e-2_rp
+   real(rp), parameter :: exact_equivalence_tolerance = 1.0e-11_rp
+   real(rp), parameter :: native_physical_tolerance = 5.0e-2_rp
    real(rp), parameter :: kspace_realspace_tolerance = 1.0e-3_rp
    real(rp), parameter :: static_tolerance = 1.0e-11_rp
    real(rp), parameter :: native_static_tolerance = 8.0e-2_rp
@@ -70,7 +71,7 @@ program test_tddft_backend_equivalence
    real(rp) :: k_errors(3), r_errors(3), energy_k_errors(3), energy_r_errors(3)
    real(rp) :: contour_errors(3), contour_relative_errors(3), eta_kr_errors(3), eta_ek_errors(3)
    real(rp) :: r_cutoff_errors(3), r_tail_ratios(3), sum_rule_values(3), sum_rule_residuals(3)
-   real(rp) :: main_ek_max, main_er_max, main_kr_max, main_ek_eigen_max, main_er_eigen_max
+   real(rp) :: main_ek_max, main_er_max, main_kspace_r_max, main_gf_r_max, main_ek_eigen_max, main_er_eigen_max
    real(rp) :: static_error, static_k_error_q0, static_k_error_qfinite, static_r_error_q0, static_r_error_qfinite
    real(rp) :: static_ward_residuals(3), spectral_target, negative_sign_error, negative_factor_error
    complex(rp) :: bxc_static(2), magnetization(2)
@@ -103,7 +104,7 @@ program test_tddft_backend_equivalence
 
    ! Main pointwise campaign: all three backends see the same q/omega grid.
    call run_campaign(4, 8001, q_main, omega_main, main_eta, huge(1.0_rp), main_campaign)
-   call compare_campaign(main_campaign, main_ek_max, main_er_max, main_kr_max, main_ek_eigen_max, main_er_eigen_max)
+   call compare_campaign(main_campaign, main_ek_max, main_er_max, main_kspace_r_max, main_gf_r_max, main_ek_eigen_max, main_er_eigen_max)
 
    ! Exact static is deliberately separate from finite-eta dynamic omega=0.
    ! Exercise all three independently: the R-GF source integrates its own
@@ -177,11 +178,11 @@ program test_tddft_backend_equivalence
    ! Test-only negative controls deliberately perturb a valid backend result.
    negative_sign_error = max_backend_error(-main_campaign%chi_kspace, main_campaign%chi_eigen)
    negative_factor_error = max_backend_error(2.0_rp*main_campaign%chi_kspace, main_campaign%chi_eigen)
-   negative_sign_detected = negative_sign_error > pointwise_tolerance
-   negative_factor_detected = negative_factor_error > pointwise_tolerance
+   negative_sign_detected = negative_sign_error > exact_equivalence_tolerance
+   negative_factor_detected = negative_factor_error > exact_equivalence_tolerance
 
-   write (*, '(a,5(1x,es14.6))') 'TDDFT09 summary ek er kr eigk eigr', main_ek_max, main_er_max, main_kr_max, &
-      main_ek_eigen_max, main_er_eigen_max
+   write (*, '(a,6(1x,es14.6))') 'TDDFT09 summary ek er kspace-r gf-r eigk eigr', main_ek_max, main_er_max, &
+      main_kspace_r_max, main_gf_r_max, main_ek_eigen_max, main_er_eigen_max
    write (*, '(a,3(1x,es14.6))') 'TDDFT09 eta kr', eta_kr_errors
    write (*, '(a,3(1x,es14.6))') 'TDDFT09 eta ek', eta_ek_errors
    write (*, '(a,3(1x,es14.6))') 'TDDFT09 contour rel', contour_relative_errors
@@ -193,7 +194,8 @@ program test_tddft_backend_equivalence
    call get_command_argument(1, evidence_path, length=command_length, status=ios)
    if (ios /= 0 .or. command_length == 0) evidence_path = ''
    if (len_trim(evidence_path) > 0) then
-      call write_evidence(trim(evidence_path), main_campaign, omega_main, q_main, main_ek_max, main_er_max, main_kr_max, &
+      call write_evidence(trim(evidence_path), main_campaign, omega_main, q_main, main_ek_max, main_er_max, main_kspace_r_max, &
+         main_gf_r_max, &
          main_ek_eigen_max, main_er_eigen_max, static_k_error_q0, static_k_error_qfinite, static_eigen_ward, &
          static_kspace_ward, static_realspace_ward, static_r_error_q0, static_r_error_qfinite, &
          native_static_supported, zero_ward_residuals, &
@@ -202,14 +204,16 @@ program test_tddft_backend_equivalence
          ne_levels, contour_errors, contour_relative_errors, contour_levels, eta_kr_errors, eta_ek_errors, eta_levels, &
          eta_ne_levels, &
          negative_sign_error, negative_factor_error, negative_sign_detected, negative_factor_detected, &
-         pointwise_tolerance, kspace_realspace_tolerance)
+         exact_equivalence_tolerance, native_physical_tolerance, kspace_realspace_tolerance)
       write (*, '(a,1x,a)') 'TDDFT09 evidence written to', trim(evidence_path)
    end if
 
-   call check_true('all main pointwise eigenpair/K-GF comparisons pass', main_ek_max <= pointwise_tolerance)
-   call check_true('all main pointwise eigenpair/R-GF comparisons pass', main_er_max <= pointwise_tolerance)
-   call check_true('all main K-GF/R-GF comparisons pass', main_kr_max <= kspace_realspace_tolerance)
-   call check_true('main matrix eigenvalue comparisons pass', max(main_ek_eigen_max, main_er_eigen_max) <= pointwise_tolerance)
+   call check_true('all main pointwise eigenpair/K-space transition-pole comparisons pass', main_ek_max <= exact_equivalence_tolerance)
+   call check_true('all main pointwise eigenpair/R-GF physical comparisons pass', main_er_max <= native_physical_tolerance)
+   call check_true('production K-space/R-GF physical comparison passes', main_kspace_r_max <= native_physical_tolerance)
+   call check_true('independent GF-bubble/R-GF comparison passes', main_gf_r_max <= kspace_realspace_tolerance)
+   call check_true('main matrix eigenpair/K-space eigenvalue comparisons pass', main_ek_eigen_max <= exact_equivalence_tolerance)
+   call check_true('main matrix eigenpair/R-GF eigenvalue comparisons pass', main_er_eigen_max <= native_physical_tolerance)
    call check_true('exact static eigenpair/K-GF comparison passes', static_passed)
    call check_true('all three backends advertise exact static support', native_static_supported)
    call check_true('native static metadata excludes dynamic eta', static_realspace%metadata%static_limit .and. &
@@ -583,17 +587,20 @@ contains
       end do
    end function integrate_positive_loss
 
-   subroutine compare_campaign(campaign, max_ek, max_er, max_kr, max_ek_eigen, max_er_eigen)
+   subroutine compare_campaign(campaign, max_ek, max_er, max_kspace_r, max_gf_r, max_ek_eigen, max_er_eigen)
       type(campaign_result), intent(in) :: campaign
-      real(rp), intent(out) :: max_ek, max_er, max_kr, max_ek_eigen, max_er_eigen
+      real(rp), intent(out) :: max_ek, max_er, max_kspace_r, max_gf_r, max_ek_eigen, max_er_eigen
       integer :: iq, iw
 
-      max_ek = 0.0_rp; max_er = 0.0_rp; max_kr = 0.0_rp; max_ek_eigen = 0.0_rp; max_er_eigen = 0.0_rp
+      max_ek = 0.0_rp; max_er = 0.0_rp; max_kspace_r = 0.0_rp; max_gf_r = 0.0_rp
+      max_ek_eigen = 0.0_rp; max_er_eigen = 0.0_rp
       do iq = 1, campaign%nq
          do iw = 1, campaign%nw
             max_ek = max(max_ek, matrix_error(campaign%chi_kspace(:, :, iw, iq), campaign%chi_eigen(:, :, iw, iq)))
             max_er = max(max_er, matrix_error(campaign%chi_realspace(:, :, iw, iq), campaign%chi_eigen(:, :, iw, iq)))
-            max_kr = max(max_kr, matrix_error(campaign%chi_realspace(:, :, iw, iq), &
+            max_kspace_r = max(max_kspace_r, matrix_error(campaign%chi_realspace(:, :, iw, iq), &
+               campaign%chi_kspace(:, :, iw, iq)))
+            max_gf_r = max(max_gf_r, matrix_error(campaign%chi_realspace(:, :, iw, iq), &
                campaign%chi_gf_bubble(:, :, iw, iq)))
             max_ek_eigen = max(max_ek_eigen, matrix_eigen_error(campaign%chi_kspace(:, :, iw, iq), &
                campaign%chi_eigen(:, :, iw, iq)))
@@ -683,16 +690,16 @@ contains
       end if
    end subroutine check_true
 
-   subroutine write_evidence(path, main, omega, q_points, max_ek, max_er, max_kr, max_ek_eigen, max_er_eigen, &
+   subroutine write_evidence(path, main, omega, q_points, max_ek, max_er, max_kspace_r, max_gf_r, max_ek_eigen, max_er_eigen, &
       static_k_error_q0, static_k_error_qfinite, static_eigen_ward, static_kspace_ward, static_realspace_ward, &
       static_r_error_q0, static_r_error_qfinite, &
       native_static_supported, zero_ward, sum_values, sum_residuals, &
       sum_target, k_errors, r_errors, nk_values, r_errors_cutoff, r_tail, r_values, energy_k, energy_r, ne_values, &
       contour_errors_local, contour_relative, contour_values, eta_kr, eta_ek, eta_values, eta_energy_points, negative_sign, negative_factor, &
-      sign_detected, factor_detected, comparison_tol, kr_tol)
+      sign_detected, factor_detected, exact_tol, native_tol, kr_tol)
       character(len=*), intent(in) :: path
       type(campaign_result), intent(in) :: main
-      real(rp), intent(in) :: omega(:), q_points(:, :), max_ek, max_er, max_kr, max_ek_eigen, max_er_eigen
+      real(rp), intent(in) :: omega(:), q_points(:, :), max_ek, max_er, max_kspace_r, max_gf_r, max_ek_eigen, max_er_eigen
       real(rp), intent(in) :: static_k_error_q0, static_k_error_qfinite
       type(tddft_ward_diagnostics), intent(in) :: static_eigen_ward, static_kspace_ward, static_realspace_ward
       real(rp), intent(in) :: static_r_error_q0, static_r_error_qfinite
@@ -706,7 +713,7 @@ contains
       real(rp), intent(in) :: eta_kr(:), eta_ek(:), eta_values(:), negative_sign, negative_factor
       integer, intent(in) :: eta_energy_points(:)
       logical, intent(in) :: sign_detected, factor_detected
-      real(rp), intent(in) :: comparison_tol, kr_tol
+      real(rp), intent(in) :: exact_tol, native_tol, kr_tol
       integer :: unit, ios, iq, iw, ilevel
 
       open(newunit=unit, file=trim(path), status='replace', action='write', iostat=ios)
@@ -717,8 +724,8 @@ contains
       write(unit, '(a,i0,a,i0,a,i0,a,i0,a)') '  "settings": {"nk": ', main%nk, ', "energy_points": ', main%ne, &
          ', "q_points": ', main%nq, ', "omega_points": ', main%nw, ','
       write(unit, '(a,es24.16,a,es24.16,a)') '    "eta": ', main%eta, ', "green_eta": ', 0.5_rp*main%eta, ','
-      write(unit, '(a,es24.16,a,es24.16,a)') '    "pointwise_relative_tolerance": ', comparison_tol, &
-         ', "kspace_realspace_tolerance": ', kr_tol, ','
+      write(unit, '(a,es24.16,a,es24.16,a,es24.16,a)') '    "exact_equivalence_tolerance": ', exact_tol, &
+         ', "native_physical_tolerance": ', native_tol, ', "kspace_realspace_tolerance": ', kr_tol, ','
       write(unit, '(a,es24.16,a,es24.16,a)') '    "energy_window": [', energy_window_min, ', ', energy_window_max, &
          '], "energy_unit": "Rydberg", "eta_role": "numerical"},'
       write(unit, '(a)') '  "pointwise": ['
@@ -729,9 +736,10 @@ contains
          end do
       end do
       write(unit, '(a)') '  ],'
-      write(unit, '(a,es24.16,a,es24.16,a,es24.16,a,es24.16,a,es24.16,a)') &
+      write(unit, '(a,es24.16,a,es24.16,a,es24.16,a,es24.16,a,es24.16,a,es24.16,a)') &
          '  "summary": {"max_eigenpair_vs_kspace": ', max_ek, &
-         ', "max_eigenpair_vs_realspace": ', max_er, ', "max_kspace_vs_realspace": ', max_kr, &
+         ', "max_eigenpair_vs_realspace": ', max_er, ', "max_kspace_vs_realspace": ', max_kspace_r, &
+         ', "max_gf_bubble_vs_realspace": ', max_gf_r, &
          ', "max_eigenvalue_vs_kspace": ', max_ek_eigen, ', "max_eigenvalue_vs_realspace": ', max_er_eigen, '},'
       write(unit, '(a,es24.16,a,es24.16,a,es24.16,a,es24.16,a,es24.16,a,es24.16,a,es24.16,a,a,a)') &
          '  "static": {"eigenpair_vs_kspace": ', static_k_error_q0, ', "eigenpair_vs_kspace_finite_q": ', &

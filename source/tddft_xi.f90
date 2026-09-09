@@ -9,10 +9,8 @@
 !> LMTO representation until after its transition matrix elements are formed.
 module tddft_xi_mod
    use precision_mod, only: rp
-   use tddft_conventions_mod, only: tddft_retarded_denominator
-   use response_vertices_mod, only: response_channel, response_transition_vertex, weighted_transition_vertex
-   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_metadata, tddft_fermi_occupation, &
-      tddft_kB_Ry_per_K, tddft_occupation_kT_floor, tddft_static_divided_difference
+   use response_vertices_mod, only: response_channel
+   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_metadata, tddft_kB_Ry_per_K, tddft_occupation_kT_floor
    use tddft_transition_engine_mod, only: tddft_transition_engine, pair_operator_vertex_provider, &
       pair_operator_tile_source, make_pair_operator_vertex_provider
    implicit none
@@ -125,9 +123,8 @@ contains
       type(tddft_chi0_options), intent(in) :: options
       type(tddft_direct_xi_result), intent(out) :: result
 
-      integer :: nk, nbands, nspinor, nleft, nright, ik, n, m, band_first, band_last
-      real(rp) :: weight_sum, prefactor, factor
-      complex(rp), allocatable :: left_vertex(:), right_vertex(:)
+      integer :: nk, nbands, nspinor, nleft, nright, band_first, band_last
+      real(rp) :: weight_sum
       type(tddft_transition_engine) :: engine
       type(pair_operator_vertex_provider) :: provider
       integer :: batch_size
@@ -157,23 +154,6 @@ contains
          band_first, band_last, options%occupation_prune_tolerance, batch_size, provider, result%xi, &
          result%metadata%vertex_cpu_seconds, result%metadata%transition_preparation_cpu_seconds, &
          result%metadata%accumulation_cpu_seconds)
-      if (.false.) then
-      allocate(left_vertex(nleft), right_vertex(nright))
-      do ik = 1, nk
-         prefactor = k_weights(ik)/weight_sum
-         do n = band_first, band_last
-            do m = band_first, band_last
-               factor = tddft_static_divided_difference(eigenvalues(n, ik), eigenvalues(m, ik), options%fermi_level, &
-                  options%electronic_temperature)
-               if (options%occupation_prune_tolerance > 0.0_rp .and. abs(factor) <= options%occupation_prune_tolerance) cycle
-               call build_transition_vertices(left_channels, weighted_right_operators(:, :, :, ik), site_orbital_counts, &
-                  eigenvectors(:, n, ik), eigenvectors(:, m, ik), left_vertex, right_vertex)
-               result%xi(:, :, 1) = result%xi(:, :, 1) + prefactor*factor*outer_product(left_vertex, right_vertex)
-            end do
-         end do
-      end do
-      deallocate(left_vertex, right_vertex)
-      end if
    end subroutine build_static_direct_xi_from_k_dependent_eigenpairs
 
    !> Assemble Xi_ab=sum (f_n-f_m)V_a W_b/(omega+en-em+i eta), where the
@@ -190,13 +170,9 @@ contains
       type(tddft_chi0_options), intent(in) :: options
       type(tddft_direct_xi_result), intent(out) :: result
 
-      integer :: nk, nbands, nspinor, nleft, nright, nw, ik, n, m, iw, npairs, batch_size
+      integer :: nk, nbands, nspinor, nleft, nright, nw, batch_size
       integer :: band_first, band_last
-      real(rp) :: weight_sum, occupation_difference, transition_energy, prefactor, t_start, t_stop
-      complex(rp) :: denominator
-      complex(rp), allocatable :: left_vertex(:), right_vertex(:)
-      complex(rp), allocatable :: left_batch(:, :), right_batch(:, :), weighted_left(:, :), denominator_batch(:)
-      real(rp), allocatable :: occupation_batch(:), transition_energy_batch(:)
+      real(rp) :: weight_sum
       type(tddft_transition_engine) :: engine
       type(pair_operator_vertex_provider) :: provider
 
@@ -221,79 +197,6 @@ contains
          options%use_batched_accumulation, provider, result%xi, result%metadata%vertex_cpu_seconds, &
          result%metadata%transition_preparation_cpu_seconds, result%metadata%denominator_cpu_seconds, &
          result%metadata%accumulation_cpu_seconds)
-      if (.false.) then
-      allocate(left_vertex(nleft), right_vertex(nright))
-
-      if (options%use_batched_accumulation) then
-         batch_size = min(options%transition_batch_size, (band_last-band_first+1)**2)
-         result%metadata%transition_batch_size = batch_size
-         allocate(left_batch(nleft, batch_size), right_batch(nright, batch_size), weighted_left(nleft, batch_size), &
-            denominator_batch(batch_size), occupation_batch(batch_size), transition_energy_batch(batch_size))
-         do ik = 1, nk
-            prefactor = k_weights(ik)/weight_sum; npairs = 0
-            do n = band_first, band_last
-               do m = band_first, band_last
-                  occupation_difference = tddft_fermi_occupation(eigenvalues_k(n, ik), options%fermi_level, &
-                     options%electronic_temperature) - tddft_fermi_occupation(eigenvalues_kq(m, ik), &
-                     options%fermi_level, options%electronic_temperature)
-                  if (options%occupation_prune_tolerance > 0.0_rp) then
-                     if (abs(occupation_difference) <= options%occupation_prune_tolerance) cycle
-                  end if
-                  npairs = npairs + 1
-                  call cpu_time(t_start)
-                  call build_transition_vertices(left_channels, weighted_right_operators, site_orbital_counts, &
-                     eigenvectors_k(:, n, ik), eigenvectors_kq(:, m, ik), left_batch(:, npairs), right_batch(:, npairs))
-                  call cpu_time(t_stop)
-                  result%metadata%vertex_cpu_seconds = result%metadata%vertex_cpu_seconds + t_stop-t_start
-                  occupation_batch(npairs) = occupation_difference
-                  transition_energy_batch(npairs) = eigenvalues_k(n, ik) - eigenvalues_kq(m, ik)
-                  if (npairs == batch_size) then
-                     call accumulate_direct_xi_batch(result%xi, omega, options%eta, prefactor, left_batch, right_batch, &
-                        occupation_batch, transition_energy_batch, npairs, weighted_left, denominator_batch, result%metadata)
-                     npairs = 0
-                  end if
-               end do
-            end do
-            if (npairs > 0) then
-               call accumulate_direct_xi_batch(result%xi, omega, options%eta, prefactor, left_batch, right_batch, &
-                  occupation_batch, transition_energy_batch, npairs, weighted_left, denominator_batch, result%metadata)
-            end if
-         end do
-         deallocate(left_batch, right_batch, weighted_left, denominator_batch, occupation_batch, transition_energy_batch)
-      else
-         do ik = 1, nk
-            prefactor = k_weights(ik)/weight_sum
-            do n = band_first, band_last
-               do m = band_first, band_last
-                  occupation_difference = tddft_fermi_occupation(eigenvalues_k(n, ik), options%fermi_level, &
-                     options%electronic_temperature) - tddft_fermi_occupation(eigenvalues_kq(m, ik), &
-                     options%fermi_level, options%electronic_temperature)
-                  if (options%occupation_prune_tolerance > 0.0_rp) then
-                     if (abs(occupation_difference) <= options%occupation_prune_tolerance) cycle
-                  end if
-                  call cpu_time(t_start)
-                  call build_transition_vertices(left_channels, weighted_right_operators, site_orbital_counts, &
-                     eigenvectors_k(:, n, ik), eigenvectors_kq(:, m, ik), left_vertex, right_vertex)
-                  call cpu_time(t_stop)
-                  result%metadata%vertex_cpu_seconds = result%metadata%vertex_cpu_seconds + t_stop-t_start
-                  transition_energy = eigenvalues_k(n, ik) - eigenvalues_kq(m, ik)
-                  do iw = 1, nw
-                     call cpu_time(t_start)
-                     denominator = tddft_retarded_denominator(omega(iw), transition_energy, options%eta)
-                     call cpu_time(t_stop)
-                     result%metadata%denominator_cpu_seconds = result%metadata%denominator_cpu_seconds + t_stop-t_start
-                     call cpu_time(t_start)
-                     result%xi(:, :, iw) = result%xi(:, :, iw) + prefactor*occupation_difference* &
-                        outer_product(left_vertex, right_vertex)/denominator
-                     call cpu_time(t_stop)
-                     result%metadata%accumulation_cpu_seconds = result%metadata%accumulation_cpu_seconds + t_stop-t_start
-                  end do
-               end do
-            end do
-         end do
-      end if
-      deallocate(left_vertex, right_vertex)
-      end if
    end subroutine build_direct_xi_from_eigenpairs
 
    !> K-resolved variant of the direct construction.  The last dimension of
@@ -310,13 +213,9 @@ contains
       type(tddft_chi0_options), intent(in) :: options
       type(tddft_direct_xi_result), intent(out) :: result
 
-      integer :: nk, nbands, nspinor, nleft, nright, nw, ik, n, m, iw, npairs, batch_size
+      integer :: nk, nbands, nspinor, nleft, nright, nw, batch_size
       integer :: band_first, band_last
-      real(rp) :: weight_sum, occupation_difference, transition_energy, prefactor, t_start, t_stop
-      complex(rp) :: denominator
-      complex(rp), allocatable :: left_vertex(:), right_vertex(:)
-      complex(rp), allocatable :: left_batch(:, :), right_batch(:, :), weighted_left(:, :), denominator_batch(:)
-      real(rp), allocatable :: occupation_batch(:), transition_energy_batch(:)
+      real(rp) :: weight_sum
       type(tddft_transition_engine) :: engine
       type(pair_operator_vertex_provider) :: provider
 
@@ -344,124 +243,7 @@ contains
          options%use_batched_accumulation, provider, result%xi, result%metadata%vertex_cpu_seconds, &
          result%metadata%transition_preparation_cpu_seconds, result%metadata%denominator_cpu_seconds, &
          result%metadata%accumulation_cpu_seconds)
-      if (.false.) then
-      allocate(left_vertex(nleft), right_vertex(nright))
-
-      if (options%use_batched_accumulation) then
-         batch_size = min(options%transition_batch_size, (band_last-band_first+1)**2)
-         result%metadata%transition_batch_size = batch_size
-         allocate(left_batch(nleft, batch_size), right_batch(nright, batch_size), weighted_left(nleft, batch_size), &
-            denominator_batch(batch_size), occupation_batch(batch_size), transition_energy_batch(batch_size))
-         do ik = 1, nk
-            prefactor = k_weights(ik)/weight_sum; npairs = 0
-            do n = band_first, band_last
-               do m = band_first, band_last
-                  occupation_difference = tddft_fermi_occupation(eigenvalues_k(n, ik), options%fermi_level, &
-                     options%electronic_temperature) - tddft_fermi_occupation(eigenvalues_kq(m, ik), &
-                     options%fermi_level, options%electronic_temperature)
-                  if (options%occupation_prune_tolerance > 0.0_rp) then
-                     if (abs(occupation_difference) <= options%occupation_prune_tolerance) cycle
-                  end if
-                  npairs = npairs + 1
-                  call cpu_time(t_start)
-                  call build_transition_vertices(left_channels, weighted_right_operators(:, :, :, ik), site_orbital_counts, &
-                     eigenvectors_k(:, n, ik), eigenvectors_kq(:, m, ik), left_batch(:, npairs), right_batch(:, npairs))
-                  call cpu_time(t_stop)
-                  result%metadata%vertex_cpu_seconds = result%metadata%vertex_cpu_seconds + t_stop-t_start
-                  occupation_batch(npairs) = occupation_difference
-                  transition_energy_batch(npairs) = eigenvalues_k(n, ik) - eigenvalues_kq(m, ik)
-                  if (npairs == batch_size) then
-                     call accumulate_direct_xi_batch(result%xi, omega, options%eta, prefactor, left_batch, right_batch, &
-                        occupation_batch, transition_energy_batch, npairs, weighted_left, denominator_batch, result%metadata)
-                     npairs = 0
-                  end if
-               end do
-            end do
-            if (npairs > 0) call accumulate_direct_xi_batch(result%xi, omega, options%eta, prefactor, left_batch, right_batch, &
-               occupation_batch, transition_energy_batch, npairs, weighted_left, denominator_batch, result%metadata)
-         end do
-         deallocate(left_batch, right_batch, weighted_left, denominator_batch, occupation_batch, transition_energy_batch)
-      else
-         do ik = 1, nk
-            prefactor = k_weights(ik)/weight_sum
-            do n = band_first, band_last
-               do m = band_first, band_last
-                  occupation_difference = tddft_fermi_occupation(eigenvalues_k(n, ik), options%fermi_level, &
-                     options%electronic_temperature) - tddft_fermi_occupation(eigenvalues_kq(m, ik), &
-                     options%fermi_level, options%electronic_temperature)
-                  if (options%occupation_prune_tolerance > 0.0_rp) then
-                     if (abs(occupation_difference) <= options%occupation_prune_tolerance) cycle
-                  end if
-                  call cpu_time(t_start)
-                  call build_transition_vertices(left_channels, weighted_right_operators(:, :, :, ik), site_orbital_counts, &
-                     eigenvectors_k(:, n, ik), eigenvectors_kq(:, m, ik), left_vertex, right_vertex)
-                  call cpu_time(t_stop)
-                  result%metadata%vertex_cpu_seconds = result%metadata%vertex_cpu_seconds + t_stop-t_start
-                  transition_energy = eigenvalues_k(n, ik) - eigenvalues_kq(m, ik)
-                  do iw = 1, nw
-                     denominator = tddft_retarded_denominator(omega(iw), transition_energy, options%eta)
-                     result%xi(:, :, iw) = result%xi(:, :, iw) + prefactor*occupation_difference* &
-                        outer_product(left_vertex, right_vertex)/denominator
-                  end do
-               end do
-            end do
-         end do
-      end if
-      deallocate(left_vertex, right_vertex)
-      end if
    end subroutine build_direct_xi_from_k_dependent_eigenpairs
-
-   subroutine build_transition_vertices(left_channels, operators, site_orbital_counts, n_spinor, m_spinor, left, right)
-      type(response_channel), intent(in) :: left_channels(:)
-      complex(rp), intent(in) :: operators(:, :, :), n_spinor(:), m_spinor(:)
-      integer, intent(in) :: site_orbital_counts(:)
-      complex(rp), intent(out) :: left(:), right(:)
-      integer :: ia
-
-      do ia = 1, size(left_channels)
-         left(ia) = response_transition_vertex(left_channels(ia), site_orbital_counts, n_spinor, m_spinor)
-      end do
-      do ia = 1, size(right)
-         right(ia) = weighted_transition_vertex(operators(:, :, ia), m_spinor, n_spinor)
-      end do
-   end subroutine build_transition_vertices
-
-   subroutine accumulate_direct_xi_batch(xi, omega, eta, prefactor, left_vertices, right_vertices, occupations, &
-      transition_energies, npairs, weighted_left, denominators, metadata)
-      complex(rp), intent(inout) :: xi(:, :, :)
-      real(rp), intent(in) :: omega(:), eta, prefactor, occupations(:), transition_energies(:)
-      complex(rp), intent(in) :: left_vertices(:, :), right_vertices(:, :)
-      integer, intent(in) :: npairs
-      complex(rp), intent(inout) :: weighted_left(:, :), denominators(:)
-      type(tddft_chi0_metadata), intent(inout) :: metadata
-      integer :: iw
-      real(rp) :: t_start, t_stop
-
-      do iw = 1, size(omega)
-         call cpu_time(t_start)
-         denominators(1:npairs) = tddft_retarded_denominator(omega(iw), transition_energies(1:npairs), eta)
-         call cpu_time(t_stop)
-         metadata%denominator_cpu_seconds = metadata%denominator_cpu_seconds + t_stop-t_start
-         weighted_left(:, 1:npairs) = left_vertices(:, 1:npairs)*spread( &
-            cmplx(prefactor*occupations(1:npairs), 0.0_rp, rp)/denominators(1:npairs), dim=1, ncopies=size(left_vertices, 1))
-         call cpu_time(t_start)
-         xi(:, :, iw) = xi(:, :, iw) + matmul(weighted_left(:, 1:npairs), transpose(right_vertices(:, 1:npairs)))
-         call cpu_time(t_stop)
-         metadata%accumulation_cpu_seconds = metadata%accumulation_cpu_seconds + t_stop-t_start
-      end do
-   end subroutine accumulate_direct_xi_batch
-
-   function outer_product(left, right) result(product)
-      complex(rp), intent(in) :: left(:), right(:)
-      complex(rp) :: product(size(left), size(right))
-      integer :: i, j
-
-      do j = 1, size(right)
-         do i = 1, size(left)
-            product(i, j) = left(i)*right(j)
-         end do
-      end do
-   end function outer_product
 
    subroutine set_direct_xi_metadata(metadata, options, nk, nbands, band_first, band_last, weight_sum)
       type(tddft_chi0_metadata), intent(out) :: metadata

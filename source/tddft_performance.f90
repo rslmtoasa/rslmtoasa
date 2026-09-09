@@ -125,7 +125,10 @@ contains
       plan%nw = max(0, nw)
       plan%nk = max(0, nk)
       plan%nr = max(0, nr)
-      plan%ne = plan%nw
+      ! An energy axis is backend-specific.  Keep it absent unless the caller
+      ! explicitly supplies the number of source-energy nodes; frequency
+      ! points are not a valid substitute for a GF energy grid.
+      plan%ne = 0
       if (present(ne)) plan%ne = max(0, ne)
 
       call split_tddft_work(plan%rank, plan%size, plan%nq, plan%owner_q)
@@ -210,12 +213,13 @@ contains
       if (present(unit)) output_unit = unit
       output_label = 'response'
       if (present(label)) output_label = trim(label)
-      write(output_unit, '(a,1x,a,1x,a,a,1x,a,a,1x,a,i0,1x,a,i0,1x,a,a,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,l1,1x,a,l1,1x,a,es12.4)') &
+      write(output_unit, '(a,1x,a,1x,a,a,1x,a,a,1x,a,i0,1x,a,i0,1x,a,a,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,l1,1x,a,l1,1x,a,es12.4)') &
          'TDDFT_PERF_PLAN', trim(output_label), 'backend=', trim(this%backend), 'integration=', trim(this%integration), &
          'rank=', this%rank, 'size=', this%size, 'strategy=', trim(this%strategy), 'q_first=', this%q%first, &
          'q_last=', this%q%last, 'q_count=', this%q%count, 'owner_q_first=', this%owner_q%first, &
          'owner_q_last=', this%owner_q%last, 'r_first=', this%r%first, 'r_last=', this%r%last, &
-         'energy_first=', this%energy%first, 'energy_last=', this%energy%last, 'reuse=', this%preserves_realspace_reuse, &
+         'energy_first=', this%energy%first, 'energy_last=', this%energy%last, 'energy_count=', this%energy%count, &
+         'reuse=', this%preserves_realspace_reuse, &
          'collective=', this%requires_collective_reduction, 'q_duplication=', this%q_duplication_factor
    end subroutine emit_tddft_mpi_plan
 
