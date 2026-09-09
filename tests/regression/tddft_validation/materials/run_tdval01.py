@@ -37,6 +37,12 @@ MATERIALS = {
     },
 }
 
+FAILURE_PATTERNS = (
+    ("periodic neighbor vector mapping", re.compile(r"VECTOR NOT FOUND|^\s*atom:\s*\d+", re.IGNORECASE | re.MULTILINE)),
+    ("input contract error", re.compile(r"invalid .*input|namelist|input contract", re.IGNORECASE)),
+    ("runtime fatal", re.compile(r"fatal error|error stop|fortran runtime error|segmentation fault", re.IGNORECASE)),
+)
+
 
 def replace_value(text: str, key: str, value: str, quoted: bool = False) -> str:
     replacement = f"'{value}'" if quoted else value
@@ -58,8 +64,17 @@ def q_text(values: list[tuple[float, float, float]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def prepare_run(source_deck: Path, run_dir: Path, mesh: int, q_values: list[tuple[float, float, float]],
-                prefix: str, q_set: str) -> Path:
+def prepare_run(
+    source_deck: Path,
+    run_dir: Path,
+    mesh: int,
+    q_values: list[tuple[float, float, float]],
+    prefix: str,
+    q_set: str,
+    eta: float,
+    omega_max: float,
+    nomega: int,
+) -> Path:
     text = source_deck.read_text(encoding="utf-8")
     database = namelist_value(text, "database")
     if database is None:
@@ -85,9 +100,9 @@ def prepare_run(source_deck: Path, run_dir: Path, mesh: int, q_values: list[tupl
     text = replace_value(text, "output_xi", ".true.")
     text = replace_value(text, "output_chi", ".true.")
     text = replace_value(text, "omega_min", "-0.002" if q_set == "covariance" else "0.0")
-    text = replace_value(text, "omega_max", "0.002" if q_set == "covariance" else "0.02")
-    text = replace_value(text, "nomega", "9" if q_set == "covariance" else "101")
-    text = replace_value(text, "eta", "0.0002")
+    text = replace_value(text, "omega_max", "0.002" if q_set == "covariance" else f"{omega_max:.16g}")
+    text = replace_value(text, "nomega", "9" if q_set == "covariance" else str(nomega))
+    text = replace_value(text, "eta", f"{eta:.16g}")
     text = replace_value(text, "output_modes", ".false." if q_set == "covariance" else ".true.")
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "input.nml").write_text(text, encoding="utf-8")
@@ -111,9 +126,15 @@ def run_one(binary: Path, run_dir: Path) -> dict[str, Any]:
     )
     (run_dir / "stdout.log").write_text(completed.stdout, encoding="utf-8")
     (run_dir / "stderr.log").write_text(completed.stderr, encoding="utf-8")
+    combined_output = completed.stdout + "\n" + completed.stderr
+    diagnostic = next(
+        (label for label, pattern in FAILURE_PATTERNS if pattern.search(combined_output)),
+        None,
+    )
     return {
-        "status": "PASS" if completed.returncode == 0 else "FAIL",
+        "status": "PASS" if completed.returncode == 0 and diagnostic is None else "FAIL",
         "returncode": completed.returncode,
+        "diagnostic": diagnostic,
         "directory": str(run_dir),
     }
 
@@ -125,11 +146,42 @@ def main() -> int:
     parser.add_argument("--mesh", type=int, nargs="+", default=[8, 12, 16])
     parser.add_argument("--material", choices=["fe", "ni", "both"], default="both")
     parser.add_argument("--continue-on-error", action="store_true")
-    parser.add_argument("--q-set", choices=["both", "commensurate", "arbitrary", "covariance"], default="both")
+    parser.add_argument(
+        "--q-set",
+        choices=["both", "commensurate", "lowq", "arbitrary", "covariance"],
+        default="both",
+    )
+    parser.add_argument(
+        "--eta",
+        type=float,
+        default=None,
+        help="response broadening in Ry (default: 2e-4; lowq default: 2e-5)",
+    )
+    parser.add_argument(
+        "--omega-max",
+        type=float,
+        default=None,
+        help="upper response frequency in Ry (default: 0.02; lowq default: 0.005)",
+    )
+    parser.add_argument(
+        "--nomega",
+        type=int,
+        default=None,
+        help="number of response frequencies (default: 101; lowq default: 251)",
+    )
+    parser.add_argument(
+        "--output-root",
+        type=Path,
+        default=None,
+        help="result directory (default: results/validation/TDVAL-01_FE_NI/runs)",
+    )
     args = parser.parse_args()
     repo = args.repo.resolve()
     binary = (args.binary or repo / "build" / "bin" / "rslmto.x").resolve()
-    output_root = repo / "results" / "validation" / "TDVAL-01_FE_NI" / "runs"
+    output_root = args.output_root or repo / "results" / "validation" / "TDVAL-01_FE_NI" / "runs"
+    if not output_root.is_absolute():
+        output_root = repo / output_root
+    output_root = output_root.resolve()
     selected = ["fe", "ni"] if args.material == "both" else [args.material]
     records: list[dict[str, Any]] = []
 
@@ -141,16 +193,43 @@ def main() -> int:
             # q=(0,1/N,2/N) is commensurate with the mesh under the direct
             # reciprocal-coordinate convention.
             commensurate = [(0.0, 0.0, 0.0), (1.0 / mesh, 0.0, 0.0), (2.0 / mesh, 0.0, 0.0)]
+            lowq = [(0.0, 0.0, 0.0), (0.005, 0.0, 0.0), (0.01, 0.0, 0.0), (0.015, 0.0, 0.0)]
             arbitrary = [(0.0, 0.0, 0.0), (0.01375, 0.0, 0.0)]
             q_sets = [("commensurate", commensurate), ("arbitrary", arbitrary),
+                      ("lowq", lowq),
                       ("covariance", [(0.0, 0.0, 0.0), (0.01375, 0.0, 0.0), (-0.01375, 0.0, 0.0)])]
-            if args.q_set != "both":
+            if args.q_set == "both":
+                q_sets = [item for item in q_sets if item[0] != "lowq"]
+            else:
                 q_sets = [item for item in q_sets if item[0] == args.q_set]
             for label, q_values in q_sets:
                 run_dir = output_root / material / f"{label}_nk{mesh:02d}"
                 prefix = f"tdval01_{material}_{label}_nk{mesh:02d}"
-                prepare_run(source_deck, run_dir, mesh, q_values, prefix, label)
-                record = {"material": spec["label"], "mesh": [mesh, mesh, mesh], "q_set": label, "q_direct": q_values}
+                run_eta = args.eta if args.eta is not None else (2.0e-5 if label == "lowq" else 2.0e-4)
+                run_omega_max = args.omega_max if args.omega_max is not None else (0.005 if label == "lowq" else 0.02)
+                run_nomega = args.nomega if args.nomega is not None else (251 if label == "lowq" else 101)
+                if run_eta <= 0.0 or run_omega_max <= 0.0 or run_nomega < 2:
+                    raise ValueError("eta and omega-max must be positive and nomega must be at least two")
+                prepare_run(
+                    source_deck,
+                    run_dir,
+                    mesh,
+                    q_values,
+                    prefix,
+                    label,
+                    run_eta,
+                    run_omega_max,
+                    run_nomega,
+                )
+                record = {
+                    "material": spec["label"],
+                    "mesh": [mesh, mesh, mesh],
+                    "q_set": label,
+                    "q_direct": q_values,
+                    "eta_Ry": run_eta,
+                    "omega_max_Ry": 0.002 if label == "covariance" else run_omega_max,
+                    "nomega": 9 if label == "covariance" else run_nomega,
+                }
                 record.update(run_one(binary, run_dir))
                 records.append(record)
                 print(f"{record['status']:4s} {material} {label} N={mesh}")

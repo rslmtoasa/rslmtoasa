@@ -61,12 +61,34 @@ def chi0_rows(path: Path) -> dict[tuple[float, int, int], complex]:
     return rows
 
 
-def scalar_from_file(path: Path, key: str) -> float | None:
-    prefix = key + " "
+def scalar_from_file(path: Path, key: str, aliases: tuple[str, ...] = ()) -> float | None:
+    """Read a scalar from both legacy and current Goldstone text schemas.
+
+    Legacy files use ``key value`` records, while current files use commented
+    metadata records such as ``# raw_r_Xi = value``.  The aliases are explicit
+    schema migrations rather than a broad numeric scrape, so missing
+    diagnostics remain visible to the caller.
+    """
+    keys = (key, *aliases)
     for line in path.read_text().splitlines():
-        if line.startswith(prefix):
-            fields = line.split()
-            return float(fields[1])
+        record = line.strip()
+        if record.startswith("#"):
+            record = record[1:].strip()
+        if " = " in record:
+            candidate, value = record.split(" = ", 1)
+            if candidate.strip() not in keys:
+                continue
+            fields = value.split()
+        else:
+            fields = record.split()
+            if not fields or fields[0] not in keys:
+                continue
+            fields = fields[1:]
+        if fields:
+            try:
+                return float(fields[0])
+            except ValueError:
+                continue
     return None
 
 
@@ -178,13 +200,22 @@ def collect_material(root: Path, material: str, stem: str) -> dict[str, Any]:
             "path": str(path.relative_to(root)),
             "sha256": sha256(path),
             "raw_closest_eigenvalue": scalar_from_file(path, "raw_closest_eigenvalue"),
-            "raw_residual": scalar_from_file(path, "raw_residual"),
-            "raw_ward_residual": scalar_from_file(path, "raw_ward_residual"),
-            "raw_dm_residual": scalar_from_file(path, "raw_dm_residual"),
+            "raw_residual": scalar_from_file(path, "raw_residual", ("raw_r_Xi",)),
+            "raw_ward_residual": scalar_from_file(path, "raw_ward_residual", ("raw_r_B",)),
+            "raw_dm_residual": scalar_from_file(path, "raw_dm_residual", ("raw_r_Xi",)),
         }
 
     max_backend_difference = max(pairwise.values())
-    goldstone_residual = max(item["raw_residual"] for item in goldstone.values())
+    residuals = [item["raw_residual"] for item in goldstone.values() if item["raw_residual"] is not None]
+    missing_residual_routes = [route for route, item in goldstone.items() if item["raw_residual"] is None]
+    goldstone_residual = max(residuals) if residuals else None
+    goldstone_status = (
+        "complete"
+        if goldstone and not missing_residual_routes
+        else "incomplete_diagnostic"
+        if goldstone
+        else "unavailable"
+    )
     native_route = routes["realspace_gf"]
     return {
         "deck_scope": {
@@ -214,8 +245,10 @@ def collect_material(root: Path, material: str, stem: str) -> dict[str, Any]:
                 else "not available"
             ),
             "maximum_raw_residual": goldstone_residual,
+            "raw_residual_missing_routes": missing_residual_routes,
+            "diagnostic_status": goldstone_status,
             "gapless_tolerance": GOLDSTONE_TOLERANCE,
-            "pass": goldstone_residual <= GOLDSTONE_TOLERANCE,
+            "pass": goldstone_status == "complete" and goldstone_residual <= GOLDSTONE_TOLERANCE,
         },
         "native_realspace_coverage": {
             "real_space_points": native_route["real_space_points"],
