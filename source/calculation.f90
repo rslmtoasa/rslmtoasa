@@ -83,6 +83,8 @@ module calculation_mod
    use tddft_performance_mod, only: tddft_mpi_plan, make_tddft_mpi_plan
    use tddft_longitudinal_mod, only: build_charge_longitudinal_channels, build_charge_longitudinal_kernel, &
       append_longitudinal_response_metadata
+   use lmto_pair_potential_mod, only: lmto_pair_transition_metadata, lmto_transition_metadata, &
+      lmto_unfold_site_spinors, lmto_fourier_phase_convention
 #ifdef USE_MPI
    use mpi
 #endif
@@ -1252,6 +1254,7 @@ contains
       type(response_channel), allocatable :: left_channels(:), right_channels(:), left_channels_reverse(:), right_channels_reverse(:)
       real(rp), allocatable :: omega(:), omega_static(:), eigenvalues_k(:, :), eigenvalues_kq(:, :)
       type(kpoint_workset) :: kq_workset
+      type(lmto_pair_transition_metadata) :: endpoint_metadata
       complex(rp), allocatable :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :), kernel(:, :), all_xi(:, :, :, :), all_loss(:, :, :, :)
       complex(rp), allocatable :: all_xi_pair(:, :, :, :), all_loss_pair(:, :, :, :)
       real(rp), allocatable :: all_trace_loss(:, :), all_trace_loss_pair(:, :), all_trace_loss_reverse(:, :), all_trace_loss_pair_reverse(:, :)
@@ -1268,7 +1271,7 @@ contains
       real(rp) :: pair_corrected_gamma_peak_reverse
       real(rp) :: raw_pair_minimum_spectral_weight, corrected_pair_minimum_spectral_weight
       integer, allocatable :: site_orbital_counts(:)
-      integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, nresponse
+      integer :: iq, iq_start, iq_end, nq_per_rank, nq, nw, unit, ios, isite, ik, nresponse
       integer :: corrected_minimum_location(2)
       logical :: has_soc, has_external_field, need_dyson, is_longitudinal, is_full_response, is_gamma, has_gamma
       logical :: pair_backend, legacy_backend, raw_pair_spectral_weight_ok, corrected_spectral_weight_ok, &
@@ -1380,11 +1383,16 @@ contains
       end if
       ! Response uses a complete reciprocal mesh.  A reduced mesh cannot in
       ! general be paired with k+q without response-specific symmetry weights.
+      if (rank == 0 .and. reciprocal_obj%use_symmetry_reduction) then
+         call g_logger%warning('[calculation.post_processing_susceptibility]: symmetry reduction requested for TD-DFT was overridden; '// &
+            'finite-q endpoint shifting requires the complete BZ under the current response contract.', __FILE__, __LINE__)
+      end if
       reciprocal_obj%use_symmetry_reduction = .false.
       reciprocal_obj%use_time_reversal = .false.
       call reciprocal_obj%generate_mp_mesh()
+      config%fourier_phase_convention = lmto_fourier_phase_convention
       ! The ground-state occupation contract comes from the input/SCF energy
-      ! object.  Do not use reciprocal's constructor default (zero) as
+      ! object.  Do not use the reciprocal constructor default (zero) as
       ! provenance; seed the response object from the actual ground-state EF.
       config%ground_state_fermi_level = energy_obj%fermi
       config%ground_state_electronic_temperature = reciprocal_obj%temperature
@@ -1919,6 +1927,23 @@ contains
       end if
       do iq = iq_start, iq_end
          is_gamma = maxval(abs(config%q_points(:, iq))) <= 1.0e-12_rp
+         config%q_cartesian = matmul(reciprocal_obj%reciprocal_vectors, config%q_points(:, iq))
+         config%kq_endpoint_folded = .false.
+         config%kq_reciprocal_shift = 0
+         config%kq_folded_endpoint_count = 0
+         if (canonical_chi0_backend /= 'realspace_gf') then
+            ! Count the actual endpoint translations used by this q on the
+            ! complete response mesh.  A single first shift is retained as a
+            ! compact debug value; the count makes mixed-shift meshes explicit.
+            do ik = 1, size(reciprocal_obj%k_workset%points, 2)
+               endpoint_metadata = lmto_transition_metadata(reciprocal_obj%k_workset%points(:, ik), config%q_points(:, iq))
+               if (endpoint_metadata%unfolded_gauge_required) then
+                  config%kq_endpoint_folded = .true.
+                  config%kq_folded_endpoint_count = config%kq_folded_endpoint_count + 1
+                  if (config%kq_folded_endpoint_count == 1) config%kq_reciprocal_shift = endpoint_metadata%reciprocal_shift
+               end if
+            end do
+         end if
          bare_gamma_peak = -1.0_rp; legacy_gamma_peak = -1.0_rp; pair_gamma_peak = -1.0_rp
          pair_corrected_gamma_peak = -1.0_rp
          bare_gamma_peak_reverse = -1.0_rp; legacy_gamma_peak_reverse = -1.0_rp; pair_gamma_peak_reverse = -1.0_rp
@@ -1941,9 +1966,21 @@ contains
             call cpu_time(t_profile_stop)
             kq_eigensolve_cpu_seconds = t_profile_stop-t_profile_start
          end if
+         if (canonical_chi0_backend /= 'realspace_gf') then
+            ! The arbitrary endpoint solver intentionally diagonalizes the
+            ! folded Hamiltonian.  Convert those target spinors to the
+            ! explicitly unfolded representation used by the direct-phase
+            ! pair vertex exactly once; the initial k endpoint is unchanged.
+            call unfold_kq_eigenvectors_for_response(reciprocal_obj, config%q_points(:, iq), eigenvectors_kq)
+         end if
          ! The workset folds k+q into the Hamiltonian BZ, while the requested
          ! direct-basis path coordinate is retained in output provenance.
          chi0_options%q_direct = config%q_points(:, iq)
+         chi0_options%q_cartesian = config%q_cartesian
+         chi0_options%fourier_phase_convention = config%fourier_phase_convention
+         chi0_options%kq_endpoint_folded = config%kq_endpoint_folded
+         chi0_options%kq_reciprocal_shift = config%kq_reciprocal_shift
+         chi0_options%kq_folded_endpoint_count = config%kq_folded_endpoint_count
          green_options%q_direct = config%q_points(:, iq)
          if (canonical_chi0_backend == 'realspace_gf') then
             ! The complete q batch was evaluated above.  No G(k), k+q, or
@@ -1983,6 +2020,11 @@ contains
          ! direct-basis q; the folded k+q points remain an implementation
          ! detail of the reciprocal workset.
          chi0_result%metadata%q_direct = config%q_points(:, iq)
+         chi0_result%metadata%q_cartesian = config%q_cartesian
+         chi0_result%metadata%fourier_phase_convention = config%fourier_phase_convention
+         chi0_result%metadata%kq_endpoint_folded = config%kq_endpoint_folded
+         chi0_result%metadata%kq_reciprocal_shift = config%kq_reciprocal_shift
+         chi0_result%metadata%kq_folded_endpoint_count = config%kq_folded_endpoint_count
          chi0_result%metadata%response_projection = config%response_projection
          chi0_result%metadata%arbitrary_kq_cpu_seconds = kq_eigensolve_cpu_seconds
          response_eta = chi0_result%metadata%eta
@@ -1996,6 +2038,11 @@ contains
          end if
          if (circular_reverse) then
             chi0_options_reverse%q_direct = config%q_points(:, iq)
+            chi0_options_reverse%q_cartesian = config%q_cartesian
+            chi0_options_reverse%fourier_phase_convention = config%fourier_phase_convention
+            chi0_options_reverse%kq_endpoint_folded = config%kq_endpoint_folded
+            chi0_options_reverse%kq_reciprocal_shift = config%kq_reciprocal_shift
+            chi0_options_reverse%kq_folded_endpoint_count = config%kq_folded_endpoint_count
             green_options_reverse%q_direct = config%q_points(:, iq)
             if (canonical_chi0_backend == 'realspace_gf') then
                chi0_result_reverse = realspace_batch_reverse%q_response(iq)
@@ -2025,6 +2072,11 @@ contains
                end select
             end if
             chi0_result_reverse%metadata%q_direct = config%q_points(:, iq)
+            chi0_result_reverse%metadata%q_cartesian = config%q_cartesian
+            chi0_result_reverse%metadata%fourier_phase_convention = config%fourier_phase_convention
+            chi0_result_reverse%metadata%kq_endpoint_folded = config%kq_endpoint_folded
+            chi0_result_reverse%metadata%kq_reciprocal_shift = config%kq_reciprocal_shift
+            chi0_result_reverse%metadata%kq_folded_endpoint_count = config%kq_folded_endpoint_count
             chi0_result_reverse%metadata%response_projection = config%response_projection
             chi0_result_reverse%metadata%circular_channel = reverse_circular_name
             chi0_result_reverse%metadata%arbitrary_kq_cpu_seconds = kq_eigensolve_cpu_seconds
@@ -2218,6 +2270,12 @@ contains
          if (allocated(eigenvectors_kq)) deallocate(eigenvectors_kq)
       end do
 
+      ! The mode records are q=0 aggregates.  Do not let the final dynamic q
+      ! iteration leak its endpoint-folding provenance into those records.
+      config%q_cartesian = 0.0_rp
+      config%kq_endpoint_folded = .false.
+      config%kq_reciprocal_shift = 0
+      config%kq_folded_endpoint_count = 0
       if (config%output_modes) then
 #ifdef USE_MPI
          call MPI_ALLREDUCE(MPI_IN_PLACE, all_xi, size(all_xi), MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -2478,6 +2536,50 @@ contains
       close(unit)
    end subroutine append_pair_correction_spectral_weight_diagnostic
 
+   !> Route-U endpoint contract for the production finite-q path.  The
+   !> arbitrary-k eigensolver returns eigenvectors of H([k+q]_BZ); this
+   !> boundary restores the direct endpoint gauge before any chi0 or Xi
+   !> transition is accumulated.  Pair operators retain the matching direct
+   !> Fourier phase and are therefore not gauge-transformed a second time.
+   subroutine unfold_kq_eigenvectors_for_response(reciprocal_obj, q_point, eigenvectors_kq)
+      type(reciprocal), intent(in) :: reciprocal_obj
+      real(rp), intent(in) :: q_point(3)
+      complex(rp), allocatable, intent(inout) :: eigenvectors_kq(:, :, :)
+      complex(rp), allocatable :: unfolded(:, :, :)
+      real(rp), allocatable :: tau_direct(:, :)
+      type(lmto_pair_transition_metadata) :: metadata
+      integer :: nsite, ik
+
+      if (.not. associated(reciprocal_obj%lattice) .or. .not. allocated(reciprocal_obj%lattice%crd) .or. &
+          reciprocal_obj%lattice%alat <= tiny(1.0_rp)) then
+         call g_logger%fatal('[calculation.unfold_kq_eigenvectors_for_response]: primitive site positions are unavailable.', &
+            __FILE__, __LINE__)
+      end if
+      nsite = reciprocal_obj%lattice%nrec
+      if (nsite < 1 .or. size(reciprocal_obj%lattice%crd, 1) /= 3 .or. size(reciprocal_obj%lattice%crd, 2) < nsite .or. &
+          size(eigenvectors_kq, 3) /= size(reciprocal_obj%k_workset%points, 2)) then
+         call g_logger%fatal('[calculation.unfold_kq_eigenvectors_for_response]: endpoint/site layout is incompatible.', &
+            __FILE__, __LINE__)
+      end if
+      allocate(tau_direct(3, nsite), unfolded(size(eigenvectors_kq, 1), size(eigenvectors_kq, 2), size(eigenvectors_kq, 3)))
+      ! lattice%crd is stored as Cartesian primitive-cell coordinates in
+      ! units of alat.  The Fourier gauge needs coordinates in the direct
+      ! primitive basis, matching ham_vec_type_direct in the assembler.
+      if (reciprocal_obj%lattice%a_cart_inv_ready) then
+         tau_direct = matmul(reciprocal_obj%lattice%a_cart_inv, &
+            reciprocal_obj%lattice%crd(:, 1:nsite)/reciprocal_obj%lattice%alat)
+      else
+         tau_direct = matmul(inverse_3x3(reciprocal_obj%lattice%a), &
+            reciprocal_obj%lattice%crd(:, 1:nsite)/reciprocal_obj%lattice%alat)
+      end if
+      do ik = 1, size(eigenvectors_kq, 3)
+         metadata = lmto_transition_metadata(reciprocal_obj%k_workset%points(:, ik), q_point)
+         call lmto_unfold_site_spinors(metadata, tau_direct, eigenvectors_kq(:, :, ik), unfolded(:, :, ik))
+      end do
+      call move_alloc(unfolded, eigenvectors_kq)
+      deallocate(tau_direct)
+   end subroutine unfold_kq_eigenvectors_for_response
+
    subroutine initialize_lmto_pair_operator_source(this, reciprocal_obj, moment_amplitudes, q_point, column_scales, use_qplus)
       class(lmto_pair_operator_tile_source), intent(inout) :: this
       type(reciprocal), target, intent(inout) :: reciprocal_obj
@@ -2524,6 +2626,7 @@ contains
       integer :: isite, nmat, nright
       logical :: supported
       character(len=160) :: reason
+      type(lmto_pair_transition_metadata) :: metadata
 
       if (.not. associated(this%reciprocal_obj) .or. .not. allocated(this%moment_amplitudes)) then
          error stop 'LMTO pair operator source is not configured'
@@ -2536,11 +2639,15 @@ contains
       end if
       do isite = 1, nright
          call this%reciprocal_obj%build_lmto_pair_potential_at_kpoint(isite, this%reciprocal_obj%k_points(:, ik), &
-            this%moment_amplitudes(isite), this%qminus, this%qplus, supported, reason, this%q_point)
+            this%moment_amplitudes(isite), this%qminus, this%qplus, supported, reason, this%q_point, metadata)
          if (.not. supported) then
             call g_logger%fatal('[calculation.lmto_pair_operator_source]: pair-potential construction rejected: '// &
                trim(reason), __FILE__, __LINE__)
          end if
+         ! Production uses Route U: the caller unfolds the target eigenvectors
+         ! once after the folded arbitrary-k solve, and this service retains
+         ! the direct-phase pair operators in that same representation.  Do
+         ! not apply a second row gauge here.
          if (this%use_qplus) then
             operator_tile(:, :, isite) = this%qplus
          else
@@ -2577,6 +2684,7 @@ contains
       real(rp), intent(in) :: k_points(:, :), moment_amplitudes(:), q_point(3)
       complex(rp), allocatable, intent(out) :: operators(:, :, :, :)
       complex(rp), allocatable :: qminus(:, :), qplus(:, :)
+      type(lmto_pair_transition_metadata) :: metadata
       integer :: nmat, ik, isite
       logical :: supported
       character(len=160) :: reason
@@ -2591,7 +2699,7 @@ contains
       do ik = 1, size(k_points, 2)
          do isite = 1, reciprocal_obj%lattice%nrec
             call reciprocal_obj%build_lmto_pair_potential_at_kpoint(isite, k_points(:, ik), moment_amplitudes(isite), &
-               qminus, qplus, supported, reason, q_point)
+               qminus, qplus, supported, reason, q_point, metadata)
             if (.not. supported) then
                call g_logger%fatal('[calculation.build_pair_potential_operators]: pair-potential construction rejected: '// &
                   trim(reason), __FILE__, __LINE__)
@@ -2738,9 +2846,15 @@ contains
       write(unit, '(a)') '# source_hamiltonian_provenance = same ground-state first-order scalar-relativistic ham_only Hamiltonian as SCF'
       write(unit, '(a,a)') '# q_mode = ', trim(config%q_mode)
       write(unit, '(a,a)') '# q_coordinates = ', trim(config%q_coordinates)
-      write(unit, '(a)') '# q_coordinate_unit = fractional reciprocal-lattice coordinates; spatial phase is exp(-i q.R)'
+      write(unit, '(a)') '# q_coordinate_unit = fractional reciprocal-lattice coordinates; q_cartesian includes 2*pi/a'
       write(unit, '(a,i0)') '# q_index = ', iq
       write(unit, '(a,3(1x,es24.16))') '# q_direct =', q_point
+      write(unit, '(a,3(1x,es24.16))') '# q_cartesian =', config%q_cartesian
+      write(unit, '(a,a)') '# fourier_phase_convention = ', trim(config%fourier_phase_convention)
+      write(unit, '(a,l1)') '# kq_endpoint_folded = ', config%kq_endpoint_folded
+      write(unit, '(a,3(1x,i0))') '# kq_reciprocal_shift_first = ', config%kq_reciprocal_shift
+      write(unit, '(a,i0)') '# kq_folded_endpoint_count = ', config%kq_folded_endpoint_count
+      write(unit, '(a)') '# shifted_workset_policy = complete_BZ_only; reduced irreducible weights are rejected for finite-q endpoints'
       write(unit, '(a,3(1x,i0))') '# k_mesh =', k_mesh
       write(unit, '(a,es24.16)') '# omega_min_Ry = ', config%omega_min
       write(unit, '(a,es24.16)') '# omega_max_Ry = ', config%omega_max

@@ -17,6 +17,11 @@ module kpoint_workset_mod
       integer :: global_start = 1
       integer :: global_end = 0
       logical :: distributed = .false.
+      ! Finite-q response weights are valid only for a complete BZ under the
+      ! current endpoint implementation.  A reduced workset may still be
+      ! useful to other callers, but shifted() must reject it rather than
+      ! copying irreducible weights into a changed little group.
+      logical :: complete_bz = .true.
       real(rp), allocatable :: points(:, :)       ! (3,nk_local), fractional
       real(rp), allocatable :: weights(:)         ! (nk_local)
       integer, allocatable :: local_to_global(:)  ! (nk_local)
@@ -37,12 +42,14 @@ module kpoint_workset_mod
 
 contains
 
-   !> Construct from a complete caller list.  The constructor copies precisely
-   !> the selected owned tile, so there is no second mutable full-mesh copy.
-   function make_kpoint_workset(points, weights, context, distributed) result(workset)
+   !> Construct from a caller list with an explicit finite-q completeness
+   !> contract.  The constructor copies precisely the selected owned tile, so
+   !> there is no second mutable full-mesh copy.
+   function make_kpoint_workset(points, weights, context, distributed, complete_bz) result(workset)
       real(rp), intent(in) :: points(:, :), weights(:)
       type(parallel_context), intent(in) :: context
       logical, intent(in) :: distributed
+      logical, intent(in) :: complete_bz
       type(kpoint_workset) :: workset
 
       if (size(points, 1) /= 3 .or. size(weights) /= size(points, 2)) then
@@ -51,6 +58,7 @@ contains
       workset%nk_global = size(weights)
       workset%distributed = distributed
       call workset%select_tile(points, weights, context, distributed)
+      workset%complete_bz = complete_bz
       call workset%validate()
    end function make_kpoint_workset
 
@@ -61,7 +69,7 @@ contains
       type(parallel_context), intent(in) :: context
       type(kpoint_workset) :: workset
 
-      workset = make_kpoint_workset(points, weights, context, .false.)
+      workset = make_kpoint_workset(points, weights, context, .false., .true.)
    end function make_replicated_kpoint_workset
 
    subroutine restore_to_default(this)
@@ -75,6 +83,7 @@ contains
       this%global_start = 1
       this%global_end = 0
       this%distributed = .false.
+      this%complete_bz = .true.
    end subroutine restore_to_default
 
    subroutine destructor(this)
@@ -147,11 +156,17 @@ contains
       real(rp), intent(in) :: q_point(3)
       type(kpoint_workset) :: kq_workset
 
+      if (.not. this%complete_bz) then
+         call g_logger%fatal('kpoint_workset%shifted: finite-q endpoint shifting requires a complete BZ workset; '// &
+            'reduced irreducible weights cannot be reused after k+q changes the little group.', __FILE__, __LINE__)
+      end if
+
       kq_workset%nk_global = this%nk_global
       kq_workset%nk_local = this%nk_local
       kq_workset%global_start = this%global_start
       kq_workset%global_end = this%global_end
       kq_workset%distributed = this%distributed
+      kq_workset%complete_bz = this%complete_bz
       allocate(kq_workset%points(3, this%nk_local), kq_workset%weights(this%nk_local), &
                kq_workset%local_to_global(this%nk_local), kq_workset%global_to_local(this%nk_global))
       kq_workset%points = this%points + spread(q_point, dim=2, ncopies=this%nk_local)

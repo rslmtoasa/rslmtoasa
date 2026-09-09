@@ -479,6 +479,12 @@ contains
       metadata%occupation_prune_tolerance = options%occupation_prune_tolerance
       metadata%batched_accumulation = options%use_batched_accumulation
       metadata%circular_channel = options%circular_channel
+      metadata%q_direct = options%q_direct
+      metadata%q_cartesian = options%q_cartesian
+      metadata%fourier_phase_convention = options%fourier_phase_convention
+      metadata%kq_endpoint_folded = options%kq_endpoint_folded
+      metadata%kq_reciprocal_shift = options%kq_reciprocal_shift
+      metadata%kq_folded_endpoint_count = options%kq_folded_endpoint_count
       if (options%use_batched_accumulation) metadata%transition_batch_size = options%transition_batch_size
    end subroutine set_direct_xi_metadata
 

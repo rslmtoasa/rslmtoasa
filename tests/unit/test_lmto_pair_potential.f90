@@ -3,11 +3,14 @@ program test_lmto_pair_potential
    use math_mod, only: i_unit, init_math_operators, hcpx
    use lmto_magnetic_tangent_mod, only: lmto_bond_value, lmto_bond_tangent, lmto_hhmag_to_spinor
    use lmto_pair_potential_mod, only: lmto_circular_pair_potential, lmto_bloch_phase, lmto_endpoint_phases, &
-      lmto_circular_pair_potential_from_reverse, lmto_pair_transition_metadata, lmto_transition_metadata, lmto_unfold_site_spinors
-   use response_components_mod, only: RESPONSE_PLUS
-   use response_vertices_mod, only: response_channel
-   use tddft_chi0_mod, only: tddft_chi0_options
-   use tddft_xi_mod, only: tddft_direct_xi_result, build_static_direct_xi_from_k_dependent_eigenpairs
+      lmto_circular_pair_potential_from_reverse, lmto_pair_transition_metadata, lmto_transition_metadata, &
+      lmto_unfold_site_spinors, lmto_apply_folded_target_gauge, lmto_fourier_phase_convention
+   use response_components_mod, only: RESPONSE_PLUS, RESPONSE_MINUS
+   use response_vertices_mod, only: response_channel, weighted_transition_vertex, site_projected_operator
+   use tddft_conventions_mod, only: tddft_retarded_denominator
+   use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, tddft_fermi_occupation
+   use tddft_xi_mod, only: tddft_direct_xi_result, build_static_direct_xi_from_k_dependent_eigenpairs, &
+      build_direct_xi_from_k_dependent_eigenpairs
    use reciprocal_mod, only: reciprocal
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
@@ -29,6 +32,7 @@ program test_lmto_pair_potential
    call test_unequal_orbital_negative_control()
    call test_moment_amplitude_and_bloch_phase()
    call test_finite_q_endpoint_phases_and_gauge()
+   call test_finite_q_two_site_bz_crossing_oracle()
    call test_commensurate_supercell_oracle()
    call test_reciprocal_service_fixture()
    call test_reciprocal_two_site_identity()
@@ -272,6 +276,242 @@ contains
       vertex_fold=sum(conjg(folded(:,1))*matmul(qfold,ket(:,1)))
       call check(abs(vertex_unfold-vertex_fold), 'folded/unfolded physical transition vertex')
    end subroutine test_finite_q_endpoint_phases_and_gauge
+
+   ! TDKQ-01 decisive oracle.  The two-site cell has tau_A=0 and tau_B=1/4,
+   ! and k+q=0.65 crosses the +1 reciprocal-cell boundary.  Route U uses
+   ! the explicit endpoint spinors u_U=U_G^dagger u_F and the direct-phase
+   ! pair operators Q_U.  Route F uses the production representation: the
+   ! endpoint eigensolve returns u_F and the pair operator rows are changed
+   ! to Q_F=U_G Q_U exactly once.
+   subroutine test_finite_q_two_site_bz_crossing_oracle()
+      type(reciprocal) :: recip
+      type(hamiltonian), target :: ham
+      type(lattice), target :: lat
+      type(charge), target :: chg
+      type(control), target :: ctl
+      type(lmto_pair_transition_metadata) :: metadata
+      type(response_channel) :: left_channels(2), right_channels(2)
+      type(tddft_chi0_options) :: options
+      type(tddft_chi0_result) :: chi_unfolded, chi_folded
+      type(tddft_direct_xi_result) :: xi_unfolded
+      real(rp), allocatable :: eigenvalues_k(:, :), eigenvalues_kq(:, :)
+      complex(rp), allocatable :: eigenvectors_k(:, :, :), target_folded(:, :, :), target_unfolded(:, :, :)
+      complex(rp), allocatable :: operators_unfolded(:, :, :, :), operators_folded(:, :, :, :), qplus(:, :)
+      complex(rp), allocatable :: left_operators_unfolded(:, :, :), left_operators_folded(:, :, :), &
+         xi_oracle_unfolded(:, :, :), xi_oracle_folded(:, :, :), xi_oracle_missing(:, :, :), local_operator(:, :)
+      real(rp) :: k(3), q(3), tau(3, 2), omega(1), transition_error, missing_transition_error
+      real(rp) :: chi_error, xi_error, missing_xi_error, normalization
+      logical :: supported
+      character(len=160) :: reason
+      integer :: nmat, nblock, ilocal, isite, n, m
+
+      call setup_two_site_reciprocal_fixture(recip, ham, lat, chg, ctl)
+      nblock = 2*norb
+      nmat = 2*nblock
+      k = [0.45_rp, 0.0_rp, 0.0_rp]
+      q = [0.20_rp, 0.0_rp, 0.0_rp]
+      tau(:, 1) = [0.0_rp, 0.0_rp, 0.0_rp]
+      tau(:, 2) = [0.25_rp, 0.0_rp, 0.0_rp]
+      metadata = lmto_transition_metadata(k, q)
+      if (.not. metadata%unfolded_gauge_required .or. metadata%reciprocal_shift(1) /= 1 .or. &
+          maxval(abs(metadata%kq_unfolded-[0.65_rp,0.0_rp,0.0_rp])) > 1.0e-14_rp .or. &
+          maxval(abs(metadata%kq_folded-[-0.35_rp,0.0_rp,0.0_rp])) > 1.0e-14_rp) then
+         failed = .true.
+         write(*, '(a)') 'FAIL two-site BZ-crossing fixture did not cross the expected reciprocal boundary'
+         return
+      end if
+
+      allocate(eigenvalues_k(nmat, 1), eigenvalues_kq(nmat, 1), eigenvectors_k(nmat, nmat, 1), &
+         target_folded(nmat, nmat, 1), target_unfolded(nmat, nmat, 1), operators_unfolded(nmat, nmat, 2, 1), &
+         operators_folded(nmat, nmat, 2, 1), left_operators_unfolded(nmat, nmat, 2), &
+         left_operators_folded(nmat, nmat, 2), xi_oracle_unfolded(2, 2, 1), xi_oracle_folded(2, 2, 1), &
+         xi_oracle_missing(2, 2, 1), qplus(nmat, nmat))
+      if (nmat /= 4*norb) error stop 'two-site BZ-crossing fixture assumes the active sp basis'
+      eigenvalues_k(:, 1) = [(real(ilocal, rp)-0.5_rp*real(nmat+1, rp), ilocal=1,nmat)]
+      eigenvalues_kq = eigenvalues_k
+
+      ! The initial k endpoint is a nontrivial site-mixed orthonormal basis.
+      ! The folded target is the canonical basis; its unfolded counterpart is
+      ! generated only by the derived site gauge, not by a second phase rule.
+      eigenvectors_k = cmplx(0.0_rp, 0.0_rp, rp)
+      do ilocal = 1, nblock
+         normalization = 1.0_rp/sqrt(2.0_rp)
+         eigenvectors_k(ilocal, ilocal, 1) = cmplx(normalization, 0.0_rp, rp)
+         eigenvectors_k(nblock+ilocal, ilocal, 1) = cmplx(normalization, 0.0_rp, rp)
+         eigenvectors_k(ilocal, nblock+ilocal, 1) = cmplx(-normalization, 0.0_rp, rp)
+         eigenvectors_k(nblock+ilocal, nblock+ilocal, 1) = cmplx(normalization, 0.0_rp, rp)
+      end do
+      target_folded = cmplx(0.0_rp, 0.0_rp, rp)
+      do ilocal = 1, nmat
+         target_folded(ilocal, ilocal, 1) = cmplx(1.0_rp, 0.0_rp, rp)
+      end do
+      call lmto_unfold_site_spinors(metadata, tau, target_folded(:,:,1), target_unfolded(:,:,1))
+      call check(maxval(abs(target_unfolded(1:nblock,:,:)-target_folded(1:nblock,:,:))), &
+         'two-site unfolded A-site coefficients')
+      call check(maxval(abs(target_unfolded(nblock+1:nmat,:,:)- &
+         exp(cmplx(0.0_rp, -0.5_rp*acos(-1.0_rp), rp))*target_folded(nblock+1:nmat,:,:))), &
+         'two-site unfolded B-site coefficients')
+
+      do isite = 1, 2
+         call recip%build_lmto_pair_potential_at_kpoint(isite, k, 2.0_rp, operators_unfolded(:,:,isite,1), qplus, &
+            supported, reason, q)
+         if (.not. supported) then
+            failed = .true.
+            write(*, '(a,a)') 'FAIL two-site BZ-crossing pair service: ', trim(reason)
+            return
+         end if
+         operators_folded(:,:,isite,1) = operators_unfolded(:,:,isite,1)
+         call lmto_apply_folded_target_gauge(metadata, tau, operators_folded(:,:,isite,1))
+      end do
+
+      transition_error = 0.0_rp
+      missing_transition_error = 0.0_rp
+      do isite = 1, 2
+         do n = 1, nmat
+            do m = 1, nmat
+               transition_error = max(transition_error, abs(weighted_transition_vertex(operators_unfolded(:,:,isite,1), &
+                  target_unfolded(:,m,1), eigenvectors_k(:,n,1))-weighted_transition_vertex(operators_folded(:,:,isite,1), &
+                  target_folded(:,m,1), eigenvectors_k(:,n,1))))
+               missing_transition_error = max(missing_transition_error, abs(weighted_transition_vertex( &
+                  operators_unfolded(:,:,isite,1), target_folded(:,m,1), eigenvectors_k(:,n,1))-weighted_transition_vertex( &
+                  operators_unfolded(:,:,isite,1), target_unfolded(:,m,1), eigenvectors_k(:,n,1))))
+            end do
+         end do
+      end do
+      call check(transition_error, 'two-site folded/unfolded pair-potential transition amplitudes')
+      if (missing_transition_error < 1.0e-6_rp) then
+         failed = .true.
+         write(*, '(a,es12.4)') 'FAIL intentionally omitted two-site endpoint gauge was not detected: ', missing_transition_error
+      end if
+
+      left_channels(1) = response_channel(1, RESPONSE_PLUS)
+      left_channels(2) = response_channel(2, RESPONSE_PLUS)
+      right_channels(1) = response_channel(1, RESPONSE_MINUS)
+      right_channels(2) = response_channel(2, RESPONSE_MINUS)
+      do isite = 1, 2
+         local_operator = site_projected_operator(left_channels(isite), [norb, norb])
+         left_operators_unfolded(:,:,isite) = local_operator
+         left_operators_folded(:,:,isite) = local_operator
+         call apply_target_column_gauge(metadata, tau, left_operators_folded(:,:,isite))
+         deallocate(local_operator)
+      end do
+      options%eta = 0.03_rp
+      options%fermi_level = 0.0_rp
+      options%electronic_temperature = 0.0_rp
+      options%band_first = 1
+      options%band_last = nmat
+      options%transition_batch_size = nmat*nmat
+      options%use_batched_accumulation = .false.
+      options%q_direct = q
+      options%q_cartesian = q
+      options%fourier_phase_convention = lmto_fourier_phase_convention
+      options%kq_endpoint_folded = .true.
+      options%kq_reciprocal_shift = metadata%reciprocal_shift
+      options%kq_folded_endpoint_count = 1
+      omega = [0.35_rp]
+      call build_chi_ks_from_eigenpairs([1.0_rp], eigenvalues_k, eigenvectors_k, eigenvalues_kq, target_unfolded, &
+         [norb, norb], left_channels, right_channels, omega, options, chi_unfolded)
+      call build_chi_ks_from_eigenpairs([1.0_rp], eigenvalues_k, eigenvectors_k, eigenvalues_kq, target_folded, &
+         [norb, norb], left_channels, right_channels, omega, options, chi_folded)
+      chi_error = maxval(abs(chi_unfolded%chi-chi_folded%chi))
+      call check(chi_error, 'two-site folded/unfolded chi0')
+
+      call build_direct_xi_from_k_dependent_eigenpairs([1.0_rp], eigenvalues_k, eigenvectors_k, eigenvalues_kq, target_unfolded, &
+         [norb, norb], left_channels, operators_unfolded, omega, options, xi_unfolded)
+      call build_finite_q_xi_oracle(eigenvalues_k, eigenvectors_k, target_unfolded, [norb, norb], &
+         left_operators_unfolded, operators_unfolded, omega, options, xi_oracle_unfolded)
+      call build_finite_q_xi_oracle(eigenvalues_k, eigenvectors_k, target_folded, [norb, norb], &
+         left_operators_folded, operators_folded, omega, options, xi_oracle_folded)
+      ! Negative control: omit the target endpoint gauge from the response
+      ! factor.  This is the old folded-eigenvector path while
+      ! retaining the correctly transformed pair operator; it must not agree.
+      call build_finite_q_xi_oracle(eigenvalues_k, eigenvectors_k, target_folded, [norb, norb], &
+         left_operators_unfolded, operators_folded, omega, options, xi_oracle_missing)
+      call check(maxval(abs(xi_unfolded%xi-xi_oracle_unfolded)), 'two-site Xi transition-engine oracle')
+      xi_error = maxval(abs(xi_oracle_unfolded-xi_oracle_folded))
+      missing_xi_error = maxval(abs(xi_oracle_unfolded-xi_oracle_missing))
+      call check(xi_error, 'two-site folded/unfolded Xi')
+      if (missing_xi_error < 1.0e-6_rp) then
+         failed = .true.
+         write(*, '(a,es12.4)') 'FAIL intentionally omitted two-site Xi endpoint gauge was not detected: ', missing_xi_error
+      end if
+      write(*, '(a,4(1x,es12.4))') 'TDKQ-01 two-site errors transition/chi0/Xi/missing-gauge:', &
+         transition_error, chi_error, xi_error, missing_xi_error
+   end subroutine test_finite_q_two_site_bz_crossing_oracle
+
+   subroutine apply_target_column_gauge(metadata, tau_direct, operator)
+      type(lmto_pair_transition_metadata), intent(in) :: metadata
+      real(rp), intent(in) :: tau_direct(:, :)
+      complex(rp), intent(inout) :: operator(:, :)
+      integer :: nsite, nblock, isite, ibeg, iend
+      complex(rp) :: phase
+
+      nsite = size(tau_direct, 2)
+      nblock = size(operator, 1)/nsite
+      do isite = 1, nsite
+         ibeg = (isite-1)*nblock+1
+         iend = isite*nblock
+         phase = exp(cmplx(0.0_rp, -2.0_rp*acos(-1.0_rp)*dot_product( &
+            real(metadata%reciprocal_shift, rp), tau_direct(:, isite)), rp))
+         operator(:, ibeg:iend) = phase*operator(:, ibeg:iend)
+      end do
+   end subroutine apply_target_column_gauge
+
+   ! Small dense Xi oracle used only by the two-site representation test.  It
+   ! supplies the folded-route transformed response operator explicitly,
+   ! which the production Route-U choice does not need to expose.
+   subroutine build_finite_q_xi_oracle(eigenvalues, eigenvectors_k, eigenvectors_kq, site_orbital_counts, &
+      left_operators, right_operators, omega, options, xi)
+      real(rp), intent(in) :: eigenvalues(:, :)
+      complex(rp), intent(in) :: eigenvectors_k(:, :, :), eigenvectors_kq(:, :, :)
+      integer, intent(in) :: site_orbital_counts(:)
+      complex(rp), intent(in) :: left_operators(:, :, :), right_operators(:, :, :, :)
+      real(rp), intent(in) :: omega(:)
+      type(tddft_chi0_options), intent(in) :: options
+      complex(rp), intent(out) :: xi(:, :, :)
+      integer :: nk, nband, nleft, nright, nw, ik, n, m, iw, ia, ib
+      real(rp) :: prefactor, occupation_difference, transition_energy
+      complex(rp) :: left_vertex, right_vertex, denominator
+
+      nk = size(eigenvalues, 2)
+      nband = size(eigenvalues, 1)
+      nleft = size(left_operators, 3)
+      nright = size(right_operators, 3)
+      nw = size(xi, 3)
+      if (nk < 1 .or. size(eigenvectors_k, 3) /= nk .or. size(eigenvectors_kq, 2) /= nband .or. &
+          size(eigenvectors_kq, 1) /= size(eigenvectors_k, 1) .or. size(left_operators, 1) /= size(eigenvectors_k, 1) .or. &
+          any(shape(left_operators(:,:,1)) /= [size(eigenvectors_k,1), size(eigenvectors_k,1)]) .or. &
+          size(right_operators, 1) /= size(eigenvectors_k, 1) .or. size(right_operators, 2) /= size(eigenvectors_k, 1) .or. &
+          size(right_operators, 4) /= nk .or. size(xi, 1) /= nleft .or. size(xi, 2) /= nright .or. &
+          nw < 1 .or. size(omega) /= nw) then
+         error stop 'build_finite_q_xi_oracle: incompatible dense fixture shapes'
+      end if
+      if (sum(site_orbital_counts)*2 /= size(eigenvectors_k, 1)) error stop 'build_finite_q_xi_oracle: site layout mismatch'
+      xi = cmplx(0.0_rp, 0.0_rp, rp)
+      do ik = 1, nk
+         prefactor = 1.0_rp/real(nk, rp)
+         do n = 1, nband
+            do m = 1, nband
+               occupation_difference = tddft_fermi_occupation(eigenvalues(n, ik), options%fermi_level, &
+                  options%electronic_temperature)-tddft_fermi_occupation(eigenvalues(m, ik), options%fermi_level, &
+                  options%electronic_temperature)
+               transition_energy = eigenvalues(n, ik)-eigenvalues(m, ik)
+               do iw = 1, nw
+                  denominator = tddft_retarded_denominator(omega(iw), transition_energy, options%eta)
+                  do ia = 1, nleft
+                     left_vertex = weighted_transition_vertex(left_operators(:,:,ia), eigenvectors_k(:,n,ik), &
+                        eigenvectors_kq(:,m,ik))
+                     do ib = 1, nright
+                        right_vertex = weighted_transition_vertex(right_operators(:,:,ib,ik), eigenvectors_kq(:,m,ik), &
+                           eigenvectors_k(:,n,ik))
+                        xi(ia,ib,iw) = xi(ia,ib,iw)+prefactor*occupation_difference*left_vertex*right_vertex/denominator
+                     end do
+                  end do
+               end do
+            end do
+         end do
+      end do
+   end subroutine build_finite_q_xi_oracle
 
    ! Exercise the production assembler with a completed minimal ordinary-LMTO
    ! object.  Geometry is supplied through the same direct-displacement cache

@@ -66,6 +66,12 @@ module tddft_config_mod
       real(rp) :: longitudinal_pair_tolerance, longitudinal_linearity_tolerance
       real(rp) :: longitudinal_static_agreement_tolerance, longitudinal_fit_omega_min, longitudinal_fit_omega_max
       logical :: output_chi0, output_xi, output_chi, output_modes, output_stoner
+      ! Filled by the production q loop for self-describing endpoint-gauge
+      ! metadata.  These are runtime provenance fields, not input controls.
+      real(rp) :: q_cartesian(3)
+      character(len=128) :: fourier_phase_convention
+      logical :: kq_endpoint_folded
+      integer :: kq_reciprocal_shift(3), kq_folded_endpoint_count
       real(rp), allocatable :: q_points(:, :)
    contains
       procedure :: restore_to_default
@@ -144,6 +150,11 @@ contains
       this%output_chi = .false.
       this%output_modes = .false.
       this%output_stoner = .true.
+      this%q_cartesian = 0.0_rp
+      this%fourier_phase_convention = 'unresolved'
+      this%kq_endpoint_folded = .false.
+      this%kq_reciprocal_shift = 0
+      this%kq_folded_endpoint_count = 0
       if (allocated(this%q_points)) deallocate(this%q_points)
       allocate(this%q_points(3, 1))
       this%q_points = 0.0_rp

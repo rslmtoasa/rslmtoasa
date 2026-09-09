@@ -26,6 +26,28 @@ def test_production_route_is_mpi_over_q_and_uses_exact_kq_service() -> None:
     assert "MPI_ALLREDUCE(MPI_IN_PLACE, all_xi" in source
 
 
+def test_finite_q_endpoint_gauge_contract_is_explicit_and_single_route() -> None:
+    root = Path(__file__).resolve().parents[2]
+    calculation = (root / "source" / "calculation.f90").read_text()
+    pair = (root / "source" / "lmto_pair_potential.f90").read_text()
+    workset = (root / "source" / "kpoint_workset.f90").read_text()
+    config = (root / "source" / "tddft_config.f90").read_text()
+    assert "subroutine unfold_kq_eigenvectors_for_response" in calculation
+    assert "call lmto_unfold_site_spinors" in calculation
+    assert "a_cart_inv_ready" in calculation
+    assert "crd(:, 1:nsite)/reciprocal_obj%lattice%alat" in calculation
+    assert "Production uses Route U" in calculation
+    assert "call lmto_apply_folded_target_gauge" not in calculation
+    assert "H(k)=sum_d H(d) exp(+i 2*pi*k.d)" in pair
+    assert "logical, intent(in) :: complete_bz" in workset
+    assert "finite-q endpoint shifting requires a complete BZ workset" in workset
+    assert "symmetry reduction requested for TD-DFT was overridden" in calculation
+    for field in ("q_cartesian", "fourier_phase_convention", "kq_endpoint_folded", "kq_reciprocal_shift",
+                  "kq_folded_endpoint_count"):
+        assert field in calculation
+        assert field in config
+
+
 def test_response_reconstructs_signed_restart_site_moments_before_alsda_kernel() -> None:
     source = (Path(__file__).resolve().parents[2] / "source" / "calculation.f90").read_text()
     assert "reciprocal_obj%eigenvalues = eigenvalues_k" in source
@@ -219,6 +241,7 @@ def test_pair_correction_compares_corrected_loss_to_raw_pair_loss() -> None:
 if __name__ == "__main__":
     test_susceptibility_dispatch_is_registered()
     test_production_route_is_mpi_over_q_and_uses_exact_kq_service()
+    test_finite_q_endpoint_gauge_contract_is_explicit_and_single_route()
     test_response_reconstructs_signed_restart_site_moments_before_alsda_kernel()
     test_static_ward_and_ground_state_provenance_are_not_dynamic_defaults()
     test_controlled_goldstone_correction_rescales_only_pair_potential_columns()

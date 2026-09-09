@@ -46,6 +46,11 @@ module tddft_chi0_mod
       logical :: use_batched_accumulation = .true.
       integer :: transition_batch_size = 128
       real(rp) :: q_direct(3) = 0.0_rp
+      real(rp) :: q_cartesian(3) = 0.0_rp
+      character(len=128) :: fourier_phase_convention = 'unresolved'
+      logical :: kq_endpoint_folded = .false.
+      integer :: kq_reciprocal_shift(3) = 0
+      integer :: kq_folded_endpoint_count = 0
       character(len=32) :: response_projection = 'site'
       character(len=16) :: circular_channel = 'plus_minus'
       type(tddft_response_occupation_state) :: occupation_state
@@ -99,6 +104,11 @@ module tddft_chi0_mod
       integer :: contour_gf_evaluations = 0
       logical :: contour_deformation = .false.
       real(rp) :: q_direct(3) = 0.0_rp
+      real(rp) :: q_cartesian(3) = 0.0_rp
+      character(len=128) :: fourier_phase_convention = 'unresolved'
+      logical :: kq_endpoint_folded = .false.
+      integer :: kq_reciprocal_shift(3) = 0
+      integer :: kq_folded_endpoint_count = 0
       real(rp) :: omega_min = 0.0_rp
       real(rp) :: omega_max = 0.0_rp
       integer :: omega_points = 0
@@ -409,6 +419,11 @@ contains
       result%metadata%batched_accumulation = options%use_batched_accumulation
       if (options%use_batched_accumulation) result%metadata%transition_batch_size = batch_size
       result%metadata%q_direct = options%q_direct
+      result%metadata%q_cartesian = options%q_cartesian
+      result%metadata%fourier_phase_convention = options%fourier_phase_convention
+      result%metadata%kq_endpoint_folded = options%kq_endpoint_folded
+      result%metadata%kq_reciprocal_shift = options%kq_reciprocal_shift
+      result%metadata%kq_folded_endpoint_count = options%kq_folded_endpoint_count
       result%metadata%omega_min = minval(omega)
       result%metadata%omega_max = maxval(omega)
       result%metadata%omega_points = nw
@@ -518,6 +533,11 @@ contains
       result%metadata%batched_accumulation = .true.
       result%metadata%transition_batch_size = batch_size
       result%metadata%q_direct = options%q_direct
+      result%metadata%q_cartesian = options%q_cartesian
+      result%metadata%fourier_phase_convention = options%fourier_phase_convention
+      result%metadata%kq_endpoint_folded = options%kq_endpoint_folded
+      result%metadata%kq_reciprocal_shift = options%kq_reciprocal_shift
+      result%metadata%kq_folded_endpoint_count = options%kq_folded_endpoint_count
       result%metadata%omega_min = 0.0_rp
       result%metadata%omega_max = 0.0_rp
       result%metadata%omega_points = 1
@@ -576,6 +596,11 @@ contains
       write(unit, '(a,a)') '# eta_role = ', trim(result%metadata%eta_role)
       write(unit, '(a)') '# stoner_landau_map = site-diagonal KS loss; q resolution is supplied by the per-q output files'
       write(unit, '(a,3(1x,es24.16))') '# q_direct = ', result%metadata%q_direct
+      write(unit, '(a,3(1x,es24.16))') '# q_cartesian = ', result%metadata%q_cartesian
+      write(unit, '(a,a)') '# fourier_phase_convention = ', trim(result%metadata%fourier_phase_convention)
+      write(unit, '(a,l1)') '# kq_endpoint_folded = ', result%metadata%kq_endpoint_folded
+      write(unit, '(a,3(1x,i0))') '# kq_reciprocal_shift_first = ', result%metadata%kq_reciprocal_shift
+      write(unit, '(a,i0)') '# kq_folded_endpoint_count = ', result%metadata%kq_folded_endpoint_count
       write(unit, '(a,l1)') '# static_limit = ', result%metadata%static_limit
       write(unit, '(a,l1)') '# eta_is_numerical = ', result%metadata%eta_is_numerical
       write(unit, '(a,a)') '# chi0_backend = ', trim(result%metadata%backend)

@@ -15,6 +15,13 @@ module lmto_pair_potential_mod
    public :: lmto_endpoint_phases
    public :: lmto_transition_metadata
    public :: lmto_unfold_site_spinors
+   public :: lmto_apply_folded_target_gauge
+
+   ! The reciprocal Hamiltonian and the finite-q pair vertices use the same
+   ! sign: H(k) = sum_d H(d) exp(+i 2*pi*k.d).  This is exported so response
+   ! output and tests cannot silently invent a different endpoint convention.
+   character(len=128), parameter, public :: lmto_fourier_phase_convention = &
+      'H(k)=sum_d H(d) exp(+i 2*pi*k.d); right endpoint uses exp(+i 2*pi*(k+q).d)'
 
    type, public :: lmto_pair_transition_metadata
       real(rp) :: k(3) = 0.0_rp
@@ -121,5 +128,37 @@ contains
          spinors_unfolded(ibeg:iend,:) = phase*spinors_folded(ibeg:iend,:)
       end do
    end subroutine lmto_unfold_site_spinors
+
+   !> Transform an operator with a folded target (bra) endpoint into the
+   !> explicitly unfolded endpoint representation.
+   !>
+   !> With H(k+G)=U_G^dagger H(k) U_G and
+   !> U_G(i)=exp(+i 2*pi*G.tau_i), an unfolded target spinor is
+   !> u_unfolded=U_G^dagger u_folded.  Therefore
+   !> <u_unfolded|Q_unfolded|v> = <u_folded|U_G Q_unfolded|v>.
+   !> This row-only operation is retained for the Route-F equivalence oracle;
+   !> production uses Route U and leaves the direct-phase Q unchanged.  The
+   !> ket endpoint is the unshifted k representation.
+   subroutine lmto_apply_folded_target_gauge(metadata, tau_direct, operator)
+      type(lmto_pair_transition_metadata), intent(in) :: metadata
+      real(rp), intent(in) :: tau_direct(:, :)
+      complex(rp), intent(inout) :: operator(:, :)
+      integer :: nsite, nblock, isite, ibeg, iend
+      complex(rp) :: phase
+
+      nsite = size(tau_direct, 2)
+      if (size(tau_direct, 1) /= 3 .or. nsite < 1 .or. size(operator, 1) /= size(operator, 2) .or. &
+          mod(size(operator, 1), nsite) /= 0) then
+         error stop 'lmto_apply_folded_target_gauge: incompatible site gauge shape'
+      end if
+      nblock = size(operator, 1)/nsite
+      do isite = 1, nsite
+         ibeg = (isite-1)*nblock+1
+         iend = isite*nblock
+         phase = exp(cmplx(0.0_rp, 2.0_rp*acos(-1.0_rp)*dot_product( &
+            real(metadata%reciprocal_shift, rp), tau_direct(:, isite)), rp))
+         operator(ibeg:iend, :) = phase*operator(ibeg:iend, :)
+      end do
+   end subroutine lmto_apply_folded_target_gauge
 
 end module lmto_pair_potential_mod

@@ -880,13 +880,13 @@ contains
             if (size(this%k_weights) /= nk_global) then
                call g_logger%fatal('setup_k_mesh_distribution: k-point weight shape is invalid.', __FILE__, __LINE__)
             end if
-            this%k_workset = make_kpoint_workset(this%k_points, this%k_weights, g_parallel_context, enable_distribution)
+            this%k_workset = make_kpoint_workset(this%k_points, this%k_weights, g_parallel_context, enable_distribution, .true.)
          else
          ! Hamiltonian-only mesh callers historically did not need integration
          ! weights.  Give their ownership object neutral unit weights without
          ! materializing a second compatibility array.
             allocate(unit_weights(nk_global)); unit_weights = 1.0_rp
-            this%k_workset = make_kpoint_workset(this%k_points, unit_weights, g_parallel_context, enable_distribution)
+            this%k_workset = make_kpoint_workset(this%k_points, unit_weights, g_parallel_context, enable_distribution, .true.)
             deallocate(unit_weights)
          end if
       else if (have_k_path) then
@@ -894,7 +894,7 @@ contains
          ! k_points compatibility view.  It still needs an authoritative
          ! replicated workset for the shared reciprocal assembly path.
          allocate(unit_weights(nk_global)); unit_weights = 1.0_rp
-         this%k_workset = make_kpoint_workset(this%k_path, unit_weights, g_parallel_context, .false.)
+         this%k_workset = make_kpoint_workset(this%k_path, unit_weights, g_parallel_context, .false., .false.)
          deallocate(unit_weights)
       else
          call g_logger%fatal('setup_k_mesh_distribution: no complete k-point mesh or path is available.', __FILE__, __LINE__)

@@ -26,7 +26,7 @@ program test_kpoint_workset
       total_owned = 0
       do worker_rank = 0, worker_size-1
          context%rank = worker_rank; context%size = worker_size
-         workset = make_kpoint_workset(points, weights, context, .true.)
+         workset = make_kpoint_workset(points, weights, context, .true., .true.)
          call check('distributed count', workset%nk_local >= 0, failed)
          call check('distributed map shape', size(workset%global_to_local) == 5, failed)
          do ik = 1, workset%nk_local
@@ -39,7 +39,7 @@ program test_kpoint_workset
    end do
 
    context%rank = 3; context%size = 4
-   workset = make_kpoint_workset(points(:, 1:2), weights(1:2), context, .true.)
+   workset = make_kpoint_workset(points(:, 1:2), weights(1:2), context, .true., .true.)
    call check('zero-work rank count', workset%nk_local == 0, failed)
    call check('zero-work range', workset%global_start == 1 .and. workset%global_end == 0, failed)
    call check('zero-work allocated arrays', size(workset%points, 2) == 0 .and. size(workset%weights) == 0, failed)
@@ -47,6 +47,7 @@ program test_kpoint_workset
    context%rank = 0; context%size = 4
    workset = make_replicated_kpoint_workset(points, weights, context)
    call check('replicated ownership', .not. workset%distributed .and. workset%nk_local == 5, failed)
+   call check('replicated workset is complete BZ', workset%complete_bz, failed)
    call check('replicated raw weight sum', abs(workset%weight_sum() - sum(weights)) < 1.0e-14_rp, failed)
    call workset%fold()
    call check('boundary folds to negative edge', workset%points(1, 2) == -0.5_rp, failed)
@@ -57,6 +58,7 @@ program test_kpoint_workset
    call check('q shift leaves base untouched', workset%points(1, 1) == -0.5_rp, failed)
    call check('q shift follows fold convention', shifted%points(1, 1) == 0.0_rp, failed)
    call check('q shift preserves weights', all(shifted%weights == workset%weights), failed)
+   call check('shifted workset preserves complete BZ contract', shifted%complete_bz, failed)
 
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'

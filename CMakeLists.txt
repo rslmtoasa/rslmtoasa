@@ -722,6 +722,10 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitKspaceOccupations ${TestDIR}/unit/test_kspace_occupations.f90)
   add_fortran_unit_test(UnitParallelContext ${TestDIR}/unit/test_parallel_context.f90)
   add_fortran_unit_test(UnitKpointWorkset ${TestDIR}/unit/test_kpoint_workset.f90)
+  add_fortran_unit_test(UnitKpointWorksetReducedReject ${TestDIR}/unit/test_kpoint_workset_reduced_rejection.f90)
+  set_tests_properties(UnitKpointWorksetReducedReject PROPERTIES
+    LABELS "unit;reciprocal;finite-q;workset;contract"
+    WILL_FAIL TRUE)
   set_tests_properties(UnitParallelContext PROPERTIES LABELS "unit;mpi;parallel_context")
   add_test(NAME UnitParallelContext_cuda_override COMMAND $<TARGET_FILE:UnitParallelContext>)
   set_tests_properties(UnitParallelContext_cuda_override PROPERTIES

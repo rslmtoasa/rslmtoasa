@@ -58,7 +58,7 @@ program test_kspace_occupations
    obj%k_start = k_start
    obj%k_end = k_end
    obj%k_mesh_distributed_active = numprocs > 1
-   obj%k_workset = make_kpoint_workset(points_full, weights_full, context, numprocs > 1)
+   obj%k_workset = make_kpoint_workset(points_full, weights_full, context, numprocs > 1, .true.)
    obj%temperature = temperature
    obj%total_electrons = target_electrons
    obj%auto_find_fermi = .true.
