@@ -7,27 +7,7 @@ an ordinary CTest correctness gate.
 The output schema is `rslmto.accelerator-benchmark.v1`. Each record includes
 the command, warm-up/repetition samples, required environment metadata, and
 the dimensions supplied by the caller. Missing accelerator fields are kept as
-`null` so CPU and later GPU records have the same shape. Existing
-`UnitTddftCpuProfile` output is parsed into separate reciprocal phase records
-for Fourier assembly, normal eigensolution, arbitrary-k eigensolution, and
-memory estimates.
-
-## Run a component profile
-
-```bash
-python3 tests/benchmarks/benchmark_harness.py run \
-  --name reciprocal_cpu_profile \
-  --class component \
-  --labels performance component reciprocal eigensolver fourier \
-  --build-dir build \
-  --output results/benchmarks/reciprocal_cpu_profile.json \
-  --command build/bin/UnitTddftCpuProfile
-```
-
-The command must be placed last because all remaining arguments after
-`--command` are passed to the executable. Use `--warmups 1 --repetitions 5`
-for a normal measurement campaign. The default is one warm-up and three
-recorded runs.
+`null` so CPU and later GPU records have the same shape.
 
 ## KPM-G1.2 transport campaign
 
@@ -96,7 +76,6 @@ with a trusted production binary and scratch directory:
 python3 tests/benchmarks/benchmark_harness.py run-manifest \
   --manifest tests/benchmarks/manifest.json \
   --binary build-acc00/bin/rslmto.x \
-  --profile-binary build-acc00/bin/UnitTddftCpuProfile \
   --build-dir build-acc00 --warmups 1 --repetitions 3 \
   --scratch-root /tmp/rslmto-acc00 \
   --output-dir results/benchmarks
@@ -107,10 +86,8 @@ Chebyshev RS entries into `control%gpu_plugin=true`; reciprocal entries remain
 CPU routes, and the current nsp=2 scalar-Lanczos fixture remains CPU-only by
 design.
 
-Run one entry with `--name reciprocal_si_sp`, or omit `--profile-binary` when
-running only production entries; the optional `reciprocal_cpu_profile` entry
-is skipped automatically in that case. For a single production command, the
-equivalent explicit form is:
+Run one entry with `--name reciprocal_si_sp`. For a single production command,
+the equivalent explicit form is:
 
 ```bash
 python3 tests/benchmarks/benchmark_harness.py run \

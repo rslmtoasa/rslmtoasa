@@ -361,12 +361,11 @@ writing; the skeleton below reflects the post-T9 layout):
      plugin pattern (C API + `iso_c_binding` wrapper module + CPU fallback,
      as in `rsrec_cuda_plugin.f90`) rather than inventing a second GPU
      convention.
-   - **Linear-response TDDFT:** the χ₀ building blocks are the retarded
-     Green's functions on the energy mesh (`green.f90` cores,
-     `energy_mesh`/`en` handling in `bands.f90`) and the intersite GF
-     machinery; describe where a new `post_processing_susceptibility` would
-     register in `calculation.f90` (`check_post_processing`,
-     `prepare_post_processing_stack`) and which existing pieces it reuses.
+   - **Linear-response TDDFT:** the legacy response implementation has been
+     removed for the literature-locked clean-room redevelopment.  Use
+     `docs/dev/RS_LMTO_TDDFT_cleanroom_Luna/README.md` and its master blueprint
+     as the governing design record; ordinary Green-function infrastructure is
+     retained independently of that future response layer.
    - **Lehmann-representation Green's functions:** entry point belongs in the
      **reciprocal family**, not `green.f90` — the required eigenpairs only
      exist on the k-space diagonalization route. Plan for a new

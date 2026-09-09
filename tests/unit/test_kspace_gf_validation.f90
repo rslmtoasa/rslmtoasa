@@ -7,7 +7,8 @@
 !> @brief Independent validation of the orthogonal K-space Lehmann resolvent.
 !> @details This test deliberately uses only the pure Green-function kernels
 !>          and deterministic finite Hermitian fixtures.  It does not build a
-!>          TD-DFT response or depend on an LMTO ground-state calculation.
+!>          response implementation or depend on an LMTO ground-state
+!>          calculation.
 !>
 !>          The direct-inverse oracle is [z I - H(k)]^(-1), while the tested
 !>          Lehmann object is sum_n |psi_n><psi_n|/(z-e_n).  The fixture also
@@ -138,7 +139,7 @@ contains
       call check_true('nonmagnetic transverse and z components vanish', error_transverse <= tol_spectral)
 
       ! A collinear magnetic splitting keeps x/y zero but produces a finite z
-      ! component, which is the spin convention consumed by TD-DFT vertices.
+      ! component, which is the spin convention used by Pauli decomposition.
       evals = [-0.80_rp, 0.35_rp, -0.25_rp, 0.92_rp]
       call lehmann_kspace_resolvent(evals, evecs, z, g2)
       g3(:, :, 1) = g2

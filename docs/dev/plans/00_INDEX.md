@@ -35,7 +35,6 @@ audit and the reconciliation record. Two consequences worth knowing:
 
 ```
 B1 GBT fix ──────────────┐
-                          ├─→ B11 LR-TDDFT (magnons)
 B2 reciprocal_green ──┬──┤
    (two backends)     │   ├─→ B3 Bloch spectral functions
                       │   ├─→ B5 route-agnostic G(E) post-processing
@@ -167,5 +166,4 @@ only listed gate existence, not whether each had been signed — see
 | `B8_cpa_dlm_kspace.md` | k-space CPA + DLM | L | OPUS | not started |
 | `B9_rs_cpa_dlm.md` | Real-space CPA/DLM | L | OPUS | not started |
 | `B10_dmft_sigma_provider.md` | Σ-provider API (Hubbard-I first) | M | OPUS | not started |
-| `B11_lr_tddft.md` | Transverse χ magnons | XL | OPUS | not started |
 | `B12_couplings.md` | e-ph / e-magnon Σ roadmap | XL | OPUS | not started |

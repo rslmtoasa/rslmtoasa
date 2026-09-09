@@ -2,7 +2,7 @@
 
 **Target branch:** `fable_v3`  
 **Phase:** III-A — Performance and accelerator establishment  
-**Status entering this phase:** TEST, STAB, and VAL campaigns completed; GBT and TD-DFT remain separate Development tracks and are not on the accelerator critical path.
+**Status entering this phase:** TEST, STAB, and VAL campaigns completed; GBT remains a separate Development track and TD-DFT follows the Luna clean-room sequence, neither on the accelerator critical path.
 
 ---
 
@@ -90,7 +90,7 @@ A new abstraction is acceptable only when at least two real production consumers
 The following are explicitly outside the initial accelerator critical path:
 
 - GBT-specific GPU kernels;
-- TD-DFT-specific GPU kernels;
+- future response-specific GPU kernels;
 - GPU atomic/radial LMTO;
 - GPU electrostatics;
 - GPU surface/interface orchestration;
@@ -103,7 +103,7 @@ The following are explicitly outside the initial accelerator critical path:
 - automatic GPU H(k) assembly before profiling;
 - changing validated CPU numerical algorithms merely to resemble GPU code.
 
-GBT and TD-DFT may later benefit automatically from shared reciprocal infrastructure after their scientific Development issues are resolved.
+GBT and future response work may later benefit automatically from shared reciprocal infrastructure after their scientific Development issues are resolved.
 
 ---
 
@@ -272,7 +272,7 @@ Defer:
 - higher-order overlap paths not already scientifically established;
 - noncollinear/SOC extensions until ordinary support is correct;
 - GBT;
-- TD-DFT;
+- future response implementation;
 - GPU H(k) assembly;
 - device-resident spectral handoff;
 - asynchronous multi-buffer execution;
@@ -583,16 +583,16 @@ Python may:
 
 Unless this task explicitly extends scope, do not add:
 - GBT-specific support;
-- TDDFT-specific support;
+- future response-specific support;
 - GPU H(k) assembly;
 - generalized eigensolvers;
 - multi-GPU collectives;
 - HIP;
 - asynchronous stream pipelines.
 
-9. GBT/TDDFT
+9. GBT and future response work
 
-GBT and TDDFT remain Development tracks.
+GBT remains a Development track; response work follows the Luna clean-room package.
 
 Shared validated infrastructure may later serve them, but do not use them as
 the accelerator correctness oracle in Phase III-A.
@@ -1912,7 +1912,7 @@ Record:
 - Lehmann status.
 
 ### Deferred
-State clearly that GBT- and TD-DFT-specific GPU claims are not part of this release gate.
+State clearly that GBT- and response-specific GPU claims are not part of this release gate.
 
 ## Performance report
 
@@ -1952,6 +1952,6 @@ Update developer/accelerator documentation with build requirements, backend sele
 - [ ] MPI+CUDA checked where hardware permits
 - [ ] lean CPU gate remains green
 - [ ] accelerator correctness gate passes
-- [ ] GBT/TDDFT accelerator scope explicitly deferred
+- [ ] GBT/response accelerator scope explicitly deferred
 
 **Commit message:** `Document validated accelerator support`

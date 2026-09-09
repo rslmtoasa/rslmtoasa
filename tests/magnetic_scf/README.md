@@ -1,11 +1,17 @@
-# XCR-04 magnetic SCF campaign
+# XCR-04 historical magnetic SCF campaign
 
-This directory contains the reproducible ordinary `nsp=2`, `q=0` collinear
-campaign and its compact scalar results.  It uses fresh-start atomic data,
+This directory contains the historical ordinary `nsp=2`, `q=0` collinear
+campaign and its compact scalar results. It predates the LR-00 clean-room
+purge; its optional response-provider diagnostics are not active at current
+HEAD. It uses fresh-start atomic data,
 four outer iterations of a temporary `B_fsm` seed for nonzero labels, then
 continues without the seed.  No constraint namelist is enabled.
 
-Run it from the repository root with:
+The runner is reproducible at the pre-LR-00 archive point. At current HEAD,
+use the stored files as historical evidence; the optional diagnostic namelist
+controls were retired with the response-provider purge.
+
+Run it from the repository root at the archive point with:
 
 ```bash
 python3 tests/magnetic_scf/run_magnetic_scf_regression.py \

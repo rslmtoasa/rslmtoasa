@@ -48,7 +48,7 @@ support/kernel module.
 | Recursion | `source/recursion.f90` (`recursion_mod`) | `recursion_core.f90`, `recursion_haydock.f90`, `recursion_chebyshev.f90`, `recursion_transport.f90`; hot kernels remain in `haydock_fast.f90` and `chebyshev_fast.f90` |
 | Calculation / workflow dispatch | `source/calculation.f90` (`calculation_mod`) | `calculation_preprocessing.f90`, `calculation_reciprocal.f90` |
 | Green functions | `source/green.f90` (`green_mod`) | `green_lifecycle.f90`, `green_lanczos.f90`, `green_block.f90`, `green_chebyshev.f90` |
-| SCF and atomic stack | `source/self.f90` (`self_mod`) | `self_reciprocal.f90`, `self_xc_response.f90`; supporting physical state is in `potential.f90`, `charge.f90`, and related lattice/atomic files |
+| SCF and atomic stack | `source/self.f90` (`self_mod`) | `self_reciprocal.f90`; supporting physical state is in `potential.f90`, `charge.f90`, and related lattice/atomic files |
 | Charge / electrostatics | `source/charge.f90` (`charge_mod`) | `charge_interface.f90`, `charge_madelung_2d.f90` |
 | Exchange | `source/exchange.f90` (`exchange_mod`) | `exchange_dynamics.f90` (damping and inertia); `conductivity.f90` remains its own transport module |
 | Reciprocal space | `source/reciprocal.f90` (`reciprocal_mod`) | `reciprocal_lifecycle.f90`, `reciprocal_backend.f90`, `reciprocal_fourier.f90`, `reciprocal_bands.f90`, `reciprocal_dos.f90`, `reciprocal_projection.f90`, `reciprocal_occupations.f90`, `reciprocal_spin_density.f90`, `reciprocal_moments.f90`, `reciprocal_green.f90`, `reciprocal_bsf.f90` |
@@ -145,7 +145,7 @@ benchmarking.  Compilation or an unasserted smoke run alone is insufficient.
 | Exchange and conductivity | Validated | `quick` exchange coverage and the `conductivity` functional group, including Pt and PAOFLOW routes |
 | Interfaces and vacuum leads | Experimental | Focused unit/wiring and Cu fixtures exist; unresolved interface/vacuum limitations remain below |
 | Spin dynamics | Experimental (scoped equilibrium loop validated in VAL-13) | The deterministic one-site bcc-Fe LMTO-to-Depondt-to-electronic-refresh loop is validated in VAL-13; the broader spin-dynamics family remains outside the claim |
-| TDDFT / response | Development | Extensive conventions and unit tests exist, but active response work and limited end-to-end validation remain |
+| TDDFT / response | Clean-room redevelopment | The former response implementation, tests, and validation claims were purged; follow `docs/dev/RS_LMTO_TDDFT_cleanroom_Luna/README.md` |
 | GPU reciprocal acceleration | Development | Not part of this CPU Debug gate; no production-maturity evidence is recorded here |
 
 ## Known issues retained after STAB

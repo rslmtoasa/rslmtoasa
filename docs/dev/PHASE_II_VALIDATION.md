@@ -80,8 +80,7 @@ in [CMakeLists.txt](../../CMakeLists.txt) is authoritative.
 | GBT frozen magnons: single-sublattice bcc-Fe sweep | **Validated (scoped)** | [VAL-17 report](VAL-17_GBT_HARMONIC_GOLDSTONE.md), [Val17GbtHarmonicGoldstone](../../CMakeLists.txt), and the [frozen-magnon fixture](../../tests/scf/cases.json) pin the direct cone-angle invariant and output columns. | The same-q gauge subtraction resolves the severe angle dependence, but finite-mesh stiffness convergence remains open; no material stiffness value is promoted. | Establish a denser/shifted-mesh stiffness envelope and an independent production comparison before making a material-accuracy claim. |
 | GBT multi-sublattice automatic branches | **Experimental (scoped)** | [VAL-17 report](VAL-17_GBT_HARMONIC_GOLDSTONE.md) remeasures reciprocal FeCo Gamma, the in-phase acoustic eigenvector, the independent RS Gamma limit, and the small-q mesh axis. | The historical reciprocal Gamma gap is closed on the current route, but the 12^3-to-16^3 small-q stiffness shift is still large and finite-q RS data are not a stiffness comparator. | Converge the reciprocal small-q stiffness across denser/shifted meshes and add an independent finite-q production/reference comparison before promotion. |
 | GBT CCOR audited two-centre slice | **Experimental** | [WP6b CCOR report](GBT_WP6B_CCOR_REPORT.md) links dense/reverse-bond/Hermiticity oracles and production probes; current unit source is [test_gbt_wp6_ccor.py](../../tests/unit/test_gbt_wp6_ccor.py). | The report excludes SOC, incomplete overlap modes, local-cluster assembly, and other terms. | Expand only per combination after its algebraic covariance and end-to-end evidence exist; no broad GBT+CCOR promotion. |
-| TDDFT response kernels, \(\chi_\mathrm{KS}\), Dyson/modes, longitudinal, and four-component unit contracts | **Experimental** | Current unit registrations are in [CMakeLists.txt](../../CMakeLists.txt), with cross-milestone checks in [test_tddft_cross_milestone_equivalence.py](../../tests/unit/test_tddft_cross_milestone_equivalence.py). | No current material validation is claimed by the unit suite. | Retain the unit contracts and meet the real-material gate in the [TDDFT-07 campaign](TDDFT-07_VALIDATION.md). |
-| TDDFT transverse material response/magnons and damping interpretation | **Development** | Deterministic campaign checker and its limits are recorded in [TDDFT-07](TDDFT-07_VALIDATION.md); [VAL-18](VAL-18_TDDFT_BCC_FE.md) records the failed bcc-Fe gate and [VAL-19](VAL-19_TDDFT_FCC_NI.md) records the failed fcc-Ni itinerancy campaign. CMake's `TddftValidationCampaign` is tooling, not scientific regression. | The Fe gate failed on raw legacy Ward mesh stability, small-\(q\) quadratic dispersion, pair-potential mode extraction, and incomplete Jij stiffness evidence. Ni additionally has a 2 μB/non-mature reference state, orientation-dependent pair-Xi Goldstone sign, negative dynamic spectral weights, and no coherent mode. The intended material physics is not established. | Resolve the classified Fe and Ni blockers, including the theoretical and numerical response conventions, then repeat raw Goldstone, convergence, independent stiffness, collective/Stoner, and multi-η evidence before any material promotion. |
+| TDDFT response implementation and material validation | **Clean-room redevelopment** | The legacy response implementation, tests, fixtures, and validation reports were purged. The governing literature contracts and task order are in [the Luna clean-room package](RS_LMTO_TDDFT_cleanroom_Luna/README.md). | No TDDFT executable path or validation claim is active at this head. | Complete the clean-room task sequence and establish fresh evidence before restoring any TDDFT support claim. |
 
 ## Final closure record — 2026-08-17
 
@@ -91,9 +90,8 @@ scoped to the rows above. In particular, the following are not promoted:
 
 - GBT as a general material method; only the recorded single-\(q\), algebraic,
   single-sublattice, and other explicitly scoped contracts retain validation.
-- TDDFT as a material-response method; response-kernel unit contracts remain
-  Experimental and the Fe/Ni material gates remain Development after failed
-  physical acceptance tests.
+- TDDFT as a material-response method; the former implementation and evidence
+  were removed to establish the clean-room baseline described above.
 - Noncollinear/SOC onsite U/J, intersite Hubbard-V, vacuum GF/self-energy,
   four-region vacuum gaps, and impurity-in-surface as supported combinations;
   each is an explicit Development/support limitation above.
@@ -110,7 +108,7 @@ production physics source or workflow was changed for this closure.
 | Conductivity gate | Pass: 4/4, excluding heavy VAL-09 which also passes |
 | Compact Phase-II subsets | VAL-04, VAL-05, VAL-07, VAL-08, VAL-09, VAL-12, VAL-13, VAL-15, and VAL-17 pass; their material/convergence evidence remains scoped as in the rows above |
 | VAL-16 commensurate-supercell campaign | Fail: the current-head q=1/2 reference supercell did not converge within the campaign's 100 steps; the comparison is not closed |
-| TDDFT material campaigns | VAL-18 Fe and VAL-19 Ni remain failed gates; no promotion |
+| TDDFT material campaigns | Removed with the clean-room purge; no validation claim |
 
 The one stale-build symptom found during the audit was closed by rebuilding:
 the current source's `HUBBARD_LDM_CHECK` and direct-G report writers were then

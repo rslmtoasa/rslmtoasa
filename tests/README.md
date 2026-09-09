@@ -14,9 +14,6 @@ the case-file format and how to add cases:
   conductivity, bands, DOS, orbital moments, PAOFLOW import).
 - [`benchmarks/README.md`](benchmarks/README.md) — ACC-00 repeated-run JSON benchmark
   harness and comparison tool.
-- [`regression/tddft_validation/README.md`](regression/tddft_validation/README.md) —
-  deterministic transverse LR-TDDFT evidence fixture and the material-campaign
-  manifest checker.
 
 ## CTest tiers and selectors
 

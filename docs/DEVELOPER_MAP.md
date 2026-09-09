@@ -228,14 +228,7 @@ fallback, exactly as `rsrec_cuda_plugin.f90` does for the recursion kernels
 — do not invent a second GPU convention.
 
 ### Linear-response TDDFT
-The χ₀ building blocks are the retarded Green's functions on the energy mesh
-(`green.f90`'s per-site/intersite cores) and the `energy`/`en` mesh handling
-in `bands.f90`. A new `post_processing_susceptibility` would register in
-`calculation.f90` the same way `exchange`/`conductivity` do: add the string
-to `check_post_processing`'s allowed list (line ~1195) and add a case to the
-`post_processing` select-case in `process()` (line ~203), then reuse
-`prepare_post_processing_stack` for the common pre-processing/Hamiltonian
-setup rather than duplicating it.
+The legacy TD-DFT response implementation has been removed for clean-room redevelopment. The governing contracts and task order are in [the Luna clean-room package](dev/RS_LMTO_TDDFT_cleanroom_Luna/README.md).
 
 ### Lehmann-representation Green's functions
 Entry point belongs in the **reciprocal family**, not `green.f90` — the

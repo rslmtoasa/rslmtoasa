@@ -20,10 +20,8 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
   only; the convergence failure has not been diagnosed or relaxed by changing
   tolerances.
 - **Retained unresolved scientific defects:** GBT small-\(q\) stiffness remains
-  mesh-sensitive (the 12³-to-16³ shift is about 55%); bcc-Fe and fcc-Ni TDDFT
-  material gates remain failed, with the raw Ward/Goldstone, mode extraction,
-  stiffness, spectral-weight, and reference-state issues recorded in
-  `VAL-18_TDDFT_BCC_FE.md` and `VAL-19_TDDFT_FCC_NI.md`.
+  mesh-sensitive (the 12³-to-16³ shift is about 55%). TDDFT evidence is
+  intentionally absent after the clean-room purge.
 - **Explicit support limitations:** GBT+SOC, GBT local-cluster/impurity,
   GBT intersite Hubbard-V, noncollinear/SOC onsite U/J, vacuum GF/self-energy,
   and the four-region `A | vacuum-gap | B` layout are not silently promoted;
@@ -46,12 +44,6 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
   `-fcheck=all,no-recursion`. This preserves bounds, DO-loop, memory, and
   pointer checks while excluding the faulty recursion instrumentation. A clean
   GNU 14.2.0 Debug build links the main executable and every unit executable.
-- **Resolved Intel ifx compilation errors:** `lmto_pair_potential.f90` redundantly declared
-  `lmto_pair_transition_metadata` in both a module PUBLIC statement and a
-  `type, public` declaration. The same redundancy for
-  `lmto_endpoint_tangent_record` in `lmto_magnetic_tangent.f90` was also
-  removed. A clean ifx 2025.3.3 Debug build now compiles and links the main
-  executable and every unit-test executable.
 - **Resolved diagnostic-unit blockers, verified on 2026-08-11:**
   `UnitDysonEquivalence` now masks only the divide-by-zero exception generated
   internally by oneMKL `zheev`, clearing that library status flag before
@@ -59,16 +51,15 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
   restored as independent algebra/source-contract oracles. With GNU 14.2.0 and
   `-fcheck=all,no-recursion -ffpe-trap=invalid,zero,overflow -finit-real=snan`,
   `ctest -L unit` passes 40/40.
-- **Reproduction:** configure with the RF-01 debug command in
-  `docs/dev/plans/RF_CPU_RECIPROCAL_REFACTOR.md`, then run both
+- **Reproduction:** configure the project's GNU Debug build, then run both
   `cmake --build build-rf-debug --parallel` and
   `ctest --test-dir build-rf-debug -L unit --output-on-failure`. The GNU
   configuration adds `-fcheck=all,no-recursion`; the ifx configuration uses
   `-check all -traceback -fpe0 -init=snan`. Both build cleanly. Those
   diagnostic repairs modified no reference files.
 - **Impact:** the GNU Release/OpenMP build with the same source and CUDA
-  disabled builds successfully; focused reciprocal and TD-DFT unit tests
-  and the complete Debug unit suite pass in the GNU 14 configuration.
+  disabled builds successfully; focused reciprocal tests and the complete
+  Debug unit suite pass in the GNU 14 configuration.
 - **Found:** RF-01 baseline characterization, before production changes.
 
 ## [RESOLVED 2026-08-12, fixture repair] `Example_k_space_scf_bccFe` exercised recursion, not k-space SCF
@@ -251,8 +242,8 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
 - **Status before VAL-17:** partially re-measured and not closed. The current
   reciprocal Gamma gate is now closed by VAL-17; the remaining open item is
   finite-q stiffness convergence, and the multi-branch spectrum remains the
-  validation target for blueprint **B11** (linear-response TDDFT /
-  transverse magnons) for the general (non-collinear-reference) case. See
+  validation target for the B11 clean-room response redevelopment for the
+  general (non-collinear-reference) case. See
   `docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md` (T5) and commit `d86fe42`.
 
 ## `processing = 'sd'` (spin dynamics) workflow orchestration

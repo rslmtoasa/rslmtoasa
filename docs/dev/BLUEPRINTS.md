@@ -22,7 +22,6 @@ correction is this code's pragmatic accuracy upgrade.
 
 ```
 B1 GBT fix ──────────────┐
-                          ├─→ B11 LR-TDDFT (magnons)
 B2 reciprocal_green ──┬──┤
    (two backends)     │   ├─→ B3 Bloch spectral functions
                       │   ├─→ B5 route-agnostic G(E) post-processing
@@ -75,7 +74,7 @@ later becomes the validation target for B11.
 
 **Motivation.** One k-space GF engine that (a) feeds the *existing*
 real-space consumers untouched, (b) is the substrate for BSF, CPA, DMFT,
-LR-TDDFT, and all Σ(E) physics.
+future clean-room response work, and all Σ(E) physics.
 
 **Design: one filler API, two backends.**
 New submodule `reciprocal_green.f90` of `reciprocal_mod` (post-T9 pattern),
@@ -397,31 +396,13 @@ charge self-consistency. Minimal basis + B4 makes the lattice side cheap.
 
 ---
 
-## B11. Linear-response TDDFT — transverse magnons
+## B11. Linear-response TDDFT — clean-room redevelopment
 
-**Motivation.** True dynamical magnons ω(q) with Landau damping, beyond the
-adiabatic J(q) picture; the flagship spectroscopy deliverable.
+The former response implementation and its validation claims have been purged.
+The literature-locked contracts, blocker policy, and implementation order now
+live in the [Luna clean-room package](RS_LMTO_TDDFT_cleanroom_Luna/README.md).
+No replacement TD-DFT physics is implied by this roadmap entry.
 
-**Design.** Transverse susceptibility route:
-χ₀^{+−}(q, ω) from eigenpair pairs (B2 backend E products across k and
-k+q; GPU-batched), then RPA/ALDA Dyson χ = χ₀ [1 − f_xc χ₀]⁻¹ with the
-ASA-local xc kernel. Registered as `post_processing_susceptibility`
-(insertion points already recorded in `DEVELOPER_MAP.md`). Enforce the
-Goldstone condition by the standard kernel-rescaling (sum-rule) correction —
-document it, don't hide it.
-
-**Validation (this is where B1 pays off).**
-1. Goldstone: ω(q→0) → 0 after sum-rule enforcement; report the bare
-   violation as a quality metric.
-2. Small-q slope vs spin-wave stiffness from B1 frozen magnons and from
-   J_ij sums — three-way consistency.
-3. bcc Fe / fcc Ni dispersion vs published LR-TDDFT and experiment
-   (semi-quantitative).
-
-**Effort/Risk:** L / medium-high (kernel + Goldstone hygiene).
-**Dependencies:** B1 (validation target + conventions), B2, B4 (χ₀ cost).
-
----
 
 ## B12. Couplings roadmap — e–magnon, e–phonon, phonon–magnon
 

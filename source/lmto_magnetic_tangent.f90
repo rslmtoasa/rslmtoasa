@@ -1,7 +1,7 @@
 !------------------------------------------------------------------------------
-! Endpoint-resolved first variations of the ordinary noncollinear LMTO bond.
-! This module is deliberately independent of hamiltonian_mod so that the
-! value-and-tangent algebra has a small, side-effect-free test seam.
+! Ordinary noncollinear LMTO bond-value algebra.
+! This module is deliberately independent of hamiltonian_mod so the
+! ground-state Hamiltonian assembly has a small, side-effect-free seam.
 !------------------------------------------------------------------------------
 module lmto_magnetic_tangent_mod
    use precision_mod, only: rp
@@ -10,24 +10,7 @@ module lmto_magnetic_tangent_mod
    private
 
    public :: lmto_bond_value
-   public :: lmto_bond_tangent
    public :: lmto_hhmag_to_spinor
-   public :: lmto_make_endpoint_record
-   public :: lmto_ordinary_tangent_supported
-
-   type, public :: lmto_endpoint_tangent_record
-      ! Response identities are site identities, never chemical-type keys.
-      integer :: source_site = 0
-      integer :: neighbor_site = 0
-      integer :: source_type = 0
-      integer :: neighbor_type = 0
-      integer :: directed_bond = 0
-      integer :: operator_generation = 0
-      real(rp) :: displacement(3) = 0.0_rp
-      logical :: onsite_owned_by_source = .false.
-      logical :: supported = .false.
-      character(len=32) :: provenance = 'ham0m_nc_endpoint_tangent_v1'
-   end type lmto_endpoint_tangent_record
 
 contains
 
@@ -69,44 +52,8 @@ contains
       end do
    end subroutine lmto_bond_value
 
-   ! Complete directional derivative at fixed LMTO potential parameters.
-   ! `delta_mom_i/j` are Cartesian variations of the unit LMTO moment
-   ! orientations.  The pair-potential caller converts this orientation
-   ! tangent to a moment derivative with the separate positive site amplitude.
-   pure subroutine lmto_bond_tangent(hhh, wx0_i, wx1_i, wx0_j, wx1_j, c1_i, &
-                                     mom_i, mom_j, delta_mom_i, delta_mom_j, onsite, delta_hhmag)
-      complex(rp), intent(in) :: hhh(:, :), wx0_i(:), wx1_i(:), wx0_j(:), wx1_j(:), c1_i(:)
-      real(rp), intent(in) :: mom_i(3), mom_j(3), delta_mom_i(3), delta_mom_j(3)
-      logical, intent(in) :: onsite
-      complex(rp), intent(out) :: delta_hhmag(:, :, :)
-      integer :: ilm, jlm, idir
-      complex(rp) :: delta_dot, delta_cross(3), delta_momc_i(3), delta_momc_j(3)
-
-      delta_hhmag = cmplx(0.0_rp, 0.0_rp, rp)
-      delta_dot = cmplx(dot_product(delta_mom_i, mom_j) + dot_product(mom_i, delta_mom_j), 0.0_rp, rp)
-      delta_momc_i = cmplx(delta_mom_i, 0.0_rp, rp)
-      delta_momc_j = cmplx(delta_mom_j, 0.0_rp, rp)
-      delta_cross = cmplx(cross3(delta_mom_i, mom_j) + cross3(mom_i, delta_mom_j), 0.0_rp, rp)
-
-      do jlm = 1, size(hhh, 2)
-         do ilm = 1, size(hhh, 1)
-            delta_hhmag(ilm, jlm, 4) = wx1_i(ilm)*hhh(ilm, jlm)*wx1_j(jlm)*delta_dot
-            do idir = 1, 3
-               delta_hhmag(ilm, jlm, idir) = &
-                  (wx1_i(ilm)*hhh(ilm, jlm)*wx0_j(jlm))*delta_momc_i(idir) + &
-                  (wx0_i(ilm)*hhh(ilm, jlm)*wx1_j(jlm))*delta_momc_j(idir) + &
-                  i_unit*wx1_i(ilm)*hhh(ilm, jlm)*wx1_j(jlm)*delta_cross(idir)
-            end do
-         end do
-      end do
-      if (.not. onsite) return
-      do ilm = 1, size(hhh, 1)
-         do idir = 1, 3
-            delta_hhmag(ilm, ilm, idir) = delta_hhmag(ilm, ilm, idir) + c1_i(ilm)*delta_momc_i(idir)
-         end do
-      end do
-   end subroutine lmto_bond_tangent
-
+   ! Convert the ordinary four-channel bond value into a spinor block for
+   ! ground-state noncollinear and GBT Hamiltonian consumers.
    pure subroutine lmto_hhmag_to_spinor(hhmag, spinor)
       complex(rp), intent(in) :: hhmag(:, :, :)
       complex(rp), intent(out) :: spinor(:, :)
@@ -124,27 +71,6 @@ contains
          end do
       end do
    end subroutine lmto_hhmag_to_spinor
-
-   pure function lmto_make_endpoint_record(source_site, neighbor_site, source_type, neighbor_type, &
-                                           directed_bond, operator_generation, displacement, supported) result(record)
-      integer, intent(in) :: source_site, neighbor_site, source_type, neighbor_type
-      integer, intent(in) :: directed_bond, operator_generation
-      real(rp), intent(in) :: displacement(3)
-      logical, intent(in) :: supported
-      type(lmto_endpoint_tangent_record) :: record
-      record%source_site = source_site; record%neighbor_site = neighbor_site
-      record%source_type = source_type; record%neighbor_type = neighbor_type
-      record%directed_bond = directed_bond; record%operator_generation = operator_generation
-      record%displacement = displacement; record%onsite_owned_by_source = norm2(displacement) <= 0.01_rp
-      record%supported = supported
-   end function lmto_make_endpoint_record
-
-   pure logical function lmto_ordinary_tangent_supported(is_gbt, has_hoh, has_ccor, has_hubbard, has_local_axis, &
-                                                         has_soc, has_external_field)
-      logical, intent(in) :: is_gbt, has_hoh, has_ccor, has_hubbard, has_local_axis, has_soc, has_external_field
-      lmto_ordinary_tangent_supported = .not. (is_gbt .or. has_hoh .or. has_ccor .or. has_hubbard .or. has_local_axis .or. &
-                                                has_soc .or. has_external_field)
-   end function lmto_ordinary_tangent_supported
 
    pure function cross3(a, b) result(c)
       real(rp), intent(in) :: a(3), b(3)

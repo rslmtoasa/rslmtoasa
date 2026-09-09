@@ -1,11 +1,13 @@
-# XCR-04 — Magnetic SCF closure after XC reconciliation
+# XCR-04 — Historical magnetic SCF closure after XC reconciliation
 
 ## Scope and conclusion
 
-This audit is limited to the ordinary `nsp=2`, `q=0` collinear path.  No GBT
-source or GBT diagnostic was changed.  The production path now has opt-in
-feedback diagnostics, explicit fresh/restart provenance, a removable magnetic
-seed, and a radial ATOMSC residual audit.
+This historical audit is limited to the ordinary `nsp=2`, `q=0` collinear
+path. No GBT source or GBT diagnostic was changed. The pre-LR-00 production
+path had opt-in feedback diagnostics, explicit fresh/restart provenance, a
+removable magnetic seed, and a radial ATOMSC residual audit. Those optional
+response-provider diagnostic hooks are not active after the clean-room purge;
+the stored results remain ordinary-SCF traceability evidence.
 
 The bounded evidence does not support promoting a converged high-spin fcc-Fe
 fixed point: the six-step multi-seed campaign remains outside the outer SCF
@@ -114,7 +116,7 @@ the existing FSM/constraint route supplies it.
 
 ## Temporary magnetic seed
 
-The new self controls are:
+The pre-LR-00 self controls were:
 
 ```fortran
 magnetic_scf_diagnostics = .true.
@@ -132,7 +134,7 @@ fixed-spin calculation.
 
 ## fcc-Fe seed sweep
 
-The reproducible campaign is
+The pre-LR-00 reproducible campaign was
 [`run_magnetic_scf_regression.py`](../tests/magnetic_scf/run_magnetic_scf_regression.py),
 with `a=3.683 Å`, `r_WS=1.43930285 Å`, common structure/k-point setup, and
 nominal basin labels `0, 0.1, 0.5, 1, 2, 3`.  These labels are deliberately
@@ -175,7 +177,10 @@ The compact table is
 [`magnetic_scf_regression.csv`](../tests/magnetic_scf/results/magnetic_scf_regression.csv)
 and its configuration metadata is
 [`metadata.json`](../tests/magnetic_scf/results/metadata.json).  The campaign
-was run with:
+was run before LR-00 with:
+
+At current HEAD, use the stored files as historical evidence; the optional
+diagnostic namelist controls were retired with the response-provider purge.
 
 ```bash
 python3 tests/magnetic_scf/run_magnetic_scf_regression.py \

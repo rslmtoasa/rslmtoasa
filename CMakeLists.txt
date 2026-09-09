@@ -464,12 +464,6 @@ foreach(_i RANGE ${_triad_last})
     LABELS "functional;regression;triad" TIMEOUT "${_triad_timeout}")
 endforeach()
 
-# Small no-binary fixture: this checks report parsing and campaign policy only;
-# it is tooling, not scientific regression evidence.
-add_test(NAME TddftValidationCampaign
-  COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/regression/tddft_validation/test_validation.py")
-set_tests_properties(TddftValidationCampaign PROPERTIES LABELS "tooling;tddft" TIMEOUT 30)
-
   add_test(NAME Val04LdaUPhysics
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val04_lda_u.py"
       "--binary" "${TestBinary}"
@@ -653,8 +647,6 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitVxc0spGgaOrigin PROPERTIES LABELS "unit;xc;gga;legacy;origin;production-path")
   add_fortran_unit_test(UnitAtomscResidualControls ${TestDIR}/unit/test_atomsc_residual_controls.f90)
   set_tests_properties(UnitAtomscResidualControls PROPERTIES LABELS "unit;xc;atomsc;scf;residual;control")
-  add_fortran_unit_test(UnitMagneticScfFeedback ${TestDIR}/unit/test_magnetic_scf_feedback.f90)
-  set_tests_properties(UnitMagneticScfFeedback PROPERTIES LABELS "unit;xc;magnetic;scf;feedback")
   if(ENABLE_LIBXC)
     add_fortran_unit_test(UnitLibxcXcBaseline ${TestDIR}/unit/test_libxc_xc_baseline.f90)
     set_tests_properties(UnitLibxcXcBaseline PROPERTIES LABELS "unit;libxc;xc")
@@ -766,10 +758,6 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitStructureConstantsBackends PROPERTIES
     LABELS "unit;structure_constants;strux;legacy_strux"
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/Testing/structure_constants")
-  add_fortran_unit_test(UnitLmtoMagneticTangents ${TestDIR}/unit/test_lmto_magnetic_tangents.f90)
-  set_tests_properties(UnitLmtoMagneticTangents PROPERTIES LABELS "unit;tddft;ward;lmto;tangent")
-  add_fortran_unit_test(UnitLmtoPairPotential ${TestDIR}/unit/test_lmto_pair_potential.f90)
-  set_tests_properties(UnitLmtoPairPotential PROPERTIES LABELS "unit;tddft;ward;lmto;pair-potential")
   add_fortran_unit_test(UnitSpinDensity ${TestDIR}/unit/test_spin_density.f90)
   set_tests_properties(UnitSpinDensity PROPERTIES LABELS "unit;gbt;wp7;density")
   add_fortran_unit_test(UnitAbspinlibIntegrators ${TestDIR}/validation/test_abspinlib_integrators.f90)
@@ -850,22 +838,6 @@ if (RUN_UNIT_TESTS)
     set_tests_properties(ReciprocalCudaLehmann PROPERTIES
       LABELS "unit;cuda;reciprocal;lehmann;green;contraction" SKIP_RETURN_CODE 77)
   endif()
-  add_fortran_unit_test(UnitResponseConventions ${TestDIR}/unit/test_response_conventions.f90)
-  set_tests_properties(UnitResponseConventions PROPERTIES LABELS "unit;tddft;conventions")
-  add_fortran_unit_test(UnitTddftWardConventions ${TestDIR}/unit/test_tddft_ward_conventions.f90)
-  set_tests_properties(UnitTddftWardConventions PROPERTIES LABELS "unit;tddft;ward;conventions")
-  add_fortran_unit_test(UnitResponseVertices ${TestDIR}/unit/test_response_vertices.f90)
-  set_tests_properties(UnitResponseVertices PROPERTIES LABELS "unit;tddft;vertices")
-  add_fortran_unit_test(UnitTddftChiKS ${TestDIR}/unit/test_tddft_chi_ks.f90)
-  set_tests_properties(UnitTddftChiKS PROPERTIES LABELS "unit;tddft;chi_ks;stoner")
-  add_fortran_unit_test(UnitTddftTransitionWorkspace ${TestDIR}/unit/test_tddft_transition_workspace.f90)
-  set_tests_properties(UnitTddftTransitionWorkspace PROPERTIES LABELS "unit;tddft;workspace")
-  add_fortran_unit_test(UnitTddftDirectXi ${TestDIR}/unit/test_tddft_direct_xi.f90)
-  set_tests_properties(UnitTddftDirectXi PROPERTIES LABELS "unit;tddft;xi;ward")
-  add_fortran_unit_test(UnitTddftCpuProfile ${TestDIR}/unit/test_tddft_cpu_profile.f90)
-  set_tests_properties(UnitTddftCpuProfile PROPERTIES LABELS "performance;tddft;profile")
-  add_fortran_unit_test(UnitTddftPerformance ${TestDIR}/unit/test_tddft_performance.f90)
-  set_tests_properties(UnitTddftPerformance PROPERTIES LABELS "unit;tddft;performance;mpi;decomposition")
   # ACC-06 is an opt-in benchmark driver.  It deliberately is not registered
   # as a CTest test because timing campaigns need controlled repetitions and
   # may select a CUDA device explicitly.
@@ -908,54 +880,6 @@ if (RUN_UNIT_TESTS)
     target_link_libraries(ReciprocalAccP1bPhysicalSCF ${COMMON_LIBRARIES})
   endif()
   set_target_properties(ReciprocalAccP1bPhysicalSCF PROPERTIES LINKER_LANGUAGE "Fortran")
-  add_fortran_unit_test(UnitTddftGreenChiKS ${TestDIR}/unit/test_tddft_green_chi0.f90)
-  set_tests_properties(UnitTddftGreenChiKS PROPERTIES LABELS "unit;tddft;chi_ks;green")
-  add_fortran_unit_test(UnitTddftContour ${TestDIR}/unit/test_tddft_contour.f90)
-  set_tests_properties(UnitTddftContour PROPERTIES LABELS "unit;tddft;green;contour;TDDFT-08")
-  add_fortran_unit_test(UnitTddftBackend ${TestDIR}/unit/test_tddft_backend.f90)
-  set_tests_properties(UnitTddftBackend PROPERTIES LABELS "unit;tddft;backend;interface;batch")
-  add_fortran_unit_test(UnitTddftOccupationLifecycle ${TestDIR}/unit/test_tddft_occupation_lifecycle.f90)
-  set_tests_properties(UnitTddftOccupationLifecycle PROPERTIES LABELS "unit;tddft;occupation;lifecycle;TDCOV-01")
-  add_test(NAME UnitTddftUnresolvedOccupation
-    COMMAND UnitTddftOccupationLifecycle --negative)
-  set_tests_properties(UnitTddftUnresolvedOccupation PROPERTIES
-    LABELS "unit;tddft;occupation;negative;TDCOV-01"
-    WILL_FAIL TRUE)
-  add_fortran_unit_test(UnitTddftRealspaceGF ${TestDIR}/unit/test_tddft_realspace_gf.f90)
-  set_tests_properties(UnitTddftRealspaceGF PROPERTIES LABELS "unit;tddft;realspace;green;chi0;fourier")
-  add_fortran_unit_test(UnitTddftRealspaceTruncation ${TestDIR}/unit/test_tddft_realspace_truncation.f90)
-  set_tests_properties(UnitTddftRealspaceTruncation PROPERTIES LABELS "unit;tddft;realspace;truncation;performance;R2-04")
-  add_fortran_unit_test(UnitTddftRealspaceMPICorrectness ${TestDIR}/unit/test_tddft_realspace_mpi.f90)
-  set_tests_properties(UnitTddftRealspaceMPICorrectness PROPERTIES LABELS "unit;tddft;realspace;green;chi0;mpi;R2-01")
-  add_fortran_unit_test(UnitTddftGoldstone ${TestDIR}/unit/test_tddft_goldstone.f90)
-  set_tests_properties(UnitTddftGoldstone PROPERTIES LABELS "unit;tddft;goldstone;alsda")
-  add_fortran_unit_test(UnitTddftWard ${TestDIR}/unit/test_tddft_ward.f90)
-  set_tests_properties(UnitTddftWard PROPERTIES LABELS "unit;tddft;ward;goldstone;kernel")
-  add_fortran_unit_test(UnitTddftDysonModes ${TestDIR}/unit/test_tddft_dyson_modes.f90)
-  set_tests_properties(UnitTddftDysonModes PROPERTIES LABELS "unit;tddft;dyson;modes;damping")
-  add_fortran_unit_test(UnitTddftLongitudinal ${TestDIR}/unit/test_tddft_longitudinal.f90)
-  set_tests_properties(UnitTddftLongitudinal PROPERTIES LABELS "unit;tddft;longitudinal;relaxation")
-  add_fortran_unit_test(UnitTddftFourComponent ${TestDIR}/unit/test_tddft_four_component.f90)
-  set_tests_properties(UnitTddftFourComponent PROPERTIES LABELS "unit;tddft;four-component;soc;noncollinear")
-  add_fortran_unit_test(UnitTddftConfig ${TestDIR}/unit/test_tddft_config.f90)
-  set_tests_properties(UnitTddftConfig PROPERTIES LABELS "unit;tddft;input;dispatch")
-  add_fortran_unit_test(UnitTddftBackendEquivalence ${TestDIR}/unit/test_tddft_backend_equivalence.f90)
-  set_tests_properties(UnitTddftBackendEquivalence PROPERTIES LABELS "unit;tddft;equivalence;backend;TDDFT-09")
-  add_fortran_unit_test(UnitTddftAfFerriChirality ${TestDIR}/unit/test_tddft_af_ferri_chirality.f90)
-  set_tests_properties(UnitTddftAfFerriChirality PROPERTIES LABELS "unit;tddft;AF;ferri;chirality;TDDFT-12")
-  add_fortran_unit_test(UnitTddftCircularCovariance ${TestDIR}/unit/test_tddft_circular_covariance.f90)
-  set_tests_properties(UnitTddftCircularCovariance PROPERTIES LABELS "unit;tddft;circular;covariance;TDCOV-03")
-  add_test(NAME TddftCrossMilestoneEquivalence
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_tddft_cross_milestone_equivalence.py
-      --binary-dir ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-  set_tests_properties(TddftCrossMilestoneEquivalence PROPERTIES
-    LABELS "unit;tddft;equivalence;TDDFT-03-10" TIMEOUT 120)
-  add_test(NAME UnitTddftDispatch
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_tddft_dispatch.py)
-  set_tests_properties(UnitTddftDispatch PROPERTIES LABELS "tooling;tddft;dispatch")
-  add_test(NAME UnitKspaceGFValidationSource
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_kspace_gf_validation_source.py)
-  set_tests_properties(UnitKspaceGFValidationSource PROPERTIES LABELS "tooling;green;lehmann;kspace;validation")
   set_tests_properties(UnitKspaceOccupations PROPERTIES LABELS "unit;gbt;wp2;wp5")
   if(ENABLE_MPI AND MPI_Fortran_FOUND)
     # Homebrew Open MPI on macOS runners may report only one available slot,
@@ -977,18 +901,6 @@ if (RUN_UNIT_TESTS)
                 $<TARGET_FILE:UnitParallelContext> ${MPIEXEC_POSTFLAGS})
       set_tests_properties("UnitParallelContext_mpi_${_parallel_context_ranks}" PROPERTIES
         LABELS "unit;mpi;parallel_context" PROCESSORS ${_parallel_context_ranks})
-    endforeach()
-    add_test(NAME UnitTddftPerformance_mpi
-      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 ${_rslmto_mpi_unit_preflags}
-              $<TARGET_FILE:UnitTddftPerformance> ${MPIEXEC_POSTFLAGS})
-    set_tests_properties(UnitTddftPerformance_mpi PROPERTIES
-      LABELS "unit;tddft;performance;mpi;decomposition" PROCESSORS 4)
-    foreach(_realspace_mpi_ranks IN ITEMS 1 2 4)
-      add_test(NAME "UnitTddftRealspaceMPICorrectness_mpi_${_realspace_mpi_ranks}"
-        COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${_realspace_mpi_ranks} ${_rslmto_mpi_unit_preflags}
-                $<TARGET_FILE:UnitTddftRealspaceMPICorrectness> ${MPIEXEC_POSTFLAGS})
-      set_tests_properties("UnitTddftRealspaceMPICorrectness_mpi_${_realspace_mpi_ranks}" PROPERTIES
-        LABELS "unit;tddft;realspace;green;chi0;mpi;R2-01" PROCESSORS ${_realspace_mpi_ranks})
     endforeach()
   endif()
   add_test(NAME UnitGbtOracles

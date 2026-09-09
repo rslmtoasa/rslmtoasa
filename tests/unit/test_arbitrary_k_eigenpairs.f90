@@ -1,5 +1,5 @@
 !------------------------------------------------------------------------------
-! TDDFT-01 -- arbitrary-k reciprocal eigenpair service
+! Reciprocal arbitrary-k eigenpair service
 !------------------------------------------------------------------------------
 program test_arbitrary_k_eigenpairs
    use precision_mod, only: rp
@@ -88,7 +88,7 @@ program test_arbitrary_k_eigenpairs
       failed = .true.
    end if
 
-   ! A q=0 response call is also the normal mesh eigensystem at the same k.
+   ! A q=0 eigenpair call is also the normal mesh eigensystem at the same k.
    recip%k_points(:, 1) = k0
    recip%reciprocal_tile_size = 1
    call recip%execution_backend%execution_metrics(execute_before, combined_before, assemble_before, input_solve_before)

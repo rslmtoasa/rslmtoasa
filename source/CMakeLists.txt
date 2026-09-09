@@ -34,7 +34,6 @@ add_library(${PROJECT_NAME} STATIC
     magnetic_representation.f90
     gbt_structure.f90
     lmto_magnetic_tangent.f90
-    lmto_pair_potential.f90
     spin_density.f90
     hamiltonian.f90
     hamiltonian_build.f90
@@ -81,32 +80,11 @@ add_library(${PROJECT_NAME} STATIC
     recursion_transport.f90
     sparse.f90
     report.f90
-    tddft_conventions.f90
-    tddft_performance.f90
-    response_components.f90
-    tddft_circular.f90
-    response_basis.f90
-    response_vertices.f90
-    tddft_occupation.f90
-    tddft_config.f90
-    tddft_transition_engine.f90
-    tddft_chi0.f90
-    tddft_xi.f90
-    tddft_chi0_green.f90
-    tddft_backend.f90
-    tddft_chi0_realspace.f90
-    tddft_dyson.f90
-    tddft_longitudinal.f90
-    tddft_ward.f90
-    tddft_goldstone.f90
-    tddft_four_component.f90
-    tddft_modes.f90
     rsrec_cuda_plugin.f90
     safe_alloc.f90
     sigma_provider.f90
     self.f90
     self_reciprocal.f90
-    self_xc_response.f90
     bounds.f90
     spglib_interface.f90
     spin_dynamics.f90
@@ -117,7 +95,6 @@ add_library(${PROJECT_NAME} STATIC
     vacuum_lead.f90
     xc_radial.f90
     xc.f90
-    xc_response_kernel.f90
 )
 
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")

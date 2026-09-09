@@ -49,7 +49,6 @@ module reciprocal_mod
    use symmetry_mod, only: symmetry
    use basis_mod, only: bdg_mode, lmax_basis, nb, norb, spin_off
    use spin_density_mod, only: spin_density
-   use lmto_pair_potential_mod, only: lmto_pair_transition_metadata
    use mpi_mod, only: rank, numprocs, ierr, get_mpi_range, g_parallel_context, get_cuda_device_override
    use kpoint_workset_mod, only: kpoint_workset, make_kpoint_workset
 #ifdef USE_MPI
@@ -561,7 +560,6 @@ module reciprocal_mod
       procedure :: build_hamiltonian_at_kpoint
       procedure :: make_reciprocal_assembler
       procedure :: make_execution_backend
-      procedure :: build_lmto_pair_potential_at_kpoint
       procedure :: calculate_eigenpairs_at_kpoints
       procedure :: require_replicated_k_workset
       procedure :: set_basis_sizes
@@ -1256,20 +1254,6 @@ module reciprocal_mod
       real(rp), intent(in) :: k_point(3)
       complex(rp), intent(out) :: hk_result(:, :)
    end subroutine build_hamiltonian_at_kpoint
-
-   !> Construct Q_a^-/Q_a^+ in the ordinary ham_only coefficient basis.  With
-   !> q_point present it is the finite-q (k+q,k) endpoint-phase operator.
-   !> The response-site index is a primitive site identity, not an atom type.
-   module subroutine build_lmto_pair_potential_at_kpoint(this, response_site, k_point, moment_amplitude, qminus, qplus, supported, reason, q_point, metadata)
-      class(reciprocal), intent(inout) :: this
-      integer, intent(in) :: response_site
-      real(rp), intent(in) :: k_point(3), moment_amplitude
-      complex(rp), intent(out) :: qminus(:, :), qplus(:, :)
-      logical, intent(out) :: supported
-      character(len=*), intent(out), optional :: reason
-      real(rp), intent(in), optional :: q_point(3)
-      type(lmto_pair_transition_metadata), intent(out), optional :: metadata
-   end subroutine build_lmto_pair_potential_at_kpoint
 
    !> @brief Return caller-owned eigenpairs at arbitrary reciprocal-space points.
    !> @details Points are folded into the reciprocal primitive cell, repeated

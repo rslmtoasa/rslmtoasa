@@ -228,7 +228,11 @@ contains
       green_obj = green(dos_obj)
       bands_obj = bands(green_obj)
       self_obj = self(bands_obj, mix_obj)
-      self_obj%use_kspace = trim(scf_route) == 'reciprocal'
+      if (trim(scf_route) == 'reciprocal') then
+         self_obj%use_kspace = .true.
+      else
+         self_obj%use_kspace = .false.
+      end if
       if (nstep > 0) self_obj%nstep = nstep
 
       if (trim(scf_route) == 'reciprocal') then
@@ -239,7 +243,7 @@ contains
          self_obj%reciprocal_scf_cache = reciprocal(ham)
          call self_obj%reciprocal_scf_cache%make_execution_backend(backend_name)
          if (.not. allocated(self_obj%reciprocal_scf_cache%execution_backend)) then
-            write (*, '(a)') 'SCF_B0C status=UNSUPPORTED reason=backend_initialization_failed'
+            write (*, '(a)') 'ACCP1B_SCF status=UNSUPPORTED reason=backend_initialization_failed'
             return
          end if
          if (trim(backend_name) == 'cuda') then
@@ -247,13 +251,13 @@ contains
             type is (cuda_reciprocal_backend)
                strategy_status = backend%set_solver_strategy(solver_strategy)
                if (strategy_status /= 0) then
-                  write (*, '(a)') 'SCF_B0C status=UNSUPPORTED reason=solver_strategy_initialization_failed'
+                  write (*, '(a)') 'ACCP1B_SCF status=UNSUPPORTED reason=solver_strategy_initialization_failed'
                   return
                end if
                gpu_device = backend%device
                call backend%memory_info(gpu_free_bytes, gpu_total_bytes)
             class default
-               write (*, '(a)') 'SCF_B0C status=UNSUPPORTED reason=wrong_backend_type'
+               write (*, '(a)') 'ACCP1B_SCF status=UNSUPPORTED reason=wrong_backend_type'
                return
             end select
          end if
@@ -262,7 +266,7 @@ contains
          if (len_trim(dos_method) > 0) self_obj%reciprocal_scf_cache%dos_method = trim(dos_method)
       else
          if (trim(backend_name) == 'cuda' .and. .not. rsrec_cuda_plugin_compiled()) then
-            write (*, '(a)') 'SCF_B0C status=UNSUPPORTED reason=rs_cuda_plugin_not_compiled'
+            write (*, '(a)') 'ACCP1B_SCF status=UNSUPPORTED reason=rs_cuda_plugin_not_compiled'
             return
          end if
       end if
@@ -295,7 +299,7 @@ contains
          rs_gpu_used = associated(self_obj%recursion%gpu_backend)
          fallback_detected = trim(backend_name) == 'cuda' .and. .not. rs_gpu_used
          if (fallback_detected) then
-            write (*, '(a)') 'SCF_B0C status=UNSUPPORTED reason=real_space_cuda_fallback'
+            write (*, '(a)') 'ACCP1B_SCF status=UNSUPPORTED reason=real_space_cuda_fallback'
             return
          end if
       end if
@@ -360,7 +364,7 @@ contains
       converged_word = 'false'
       if (self_obj%converged) converged_word = 'true'
       write (*, '(*(a,1x))') &
-         'SCF_B0C', &
+         'ACCP1B_SCF', &
          'status=PASS', &
          'scf_route='//trim(scf_route), &
          'backend='//trim(backend_name), &
@@ -379,7 +383,7 @@ contains
          'near_ef_value_3='//real_token(near_ef_values(3)), &
          'near_ef_value_4='//real_token(near_ef_values(4)), &
          'scf_residual='//real_token(self_obj%mix%delta)
-      write (*, '(A,1X,*(A,1X))') 'SCF_B0C_RESULT', &
+      write (*, '(A,1X,*(A,1X))') 'ACCP1B_SCF_RESULT', &
          'benchmark_level='//trim(benchmark_level), &
          'scf_route='//trim(scf_route), &
          'backend='//trim(backend_name), &

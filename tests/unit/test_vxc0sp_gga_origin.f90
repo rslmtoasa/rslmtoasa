@@ -6,7 +6,6 @@ program test_vxc0sp_gga_origin
    use self_mod, only: self, vxc0sp, vxc0sp_pbe_origin_derivatives
    use xc_mod, only: xc
    use xc_radial_mod, only: radgra
-   use xc_response_kernel_mod, only: xc_response_radial_projection
    implicit none
 
    integer, parameter :: nr = 96
@@ -47,7 +46,6 @@ contains
       character(len=*), intent(in) :: label
       real(rp), allocatable :: rofi(:), stored_rho(:, :), t_rho(:, :), d_rho(:, :), d2_rho(:, :), potential(:, :)
       real(rp), allocatable :: rho0(:), rhoeps(:), rhomu(:)
-      type(xc_response_radial_projection) :: projection
       real(rp) :: expected_up, expected_down, expected_exc, wrong_up, wrong_down, wrong_exc
       real(rp) :: n(2), nd(2), ndd(2), wrong_ndd(2), origin_nd(2), origin_ndd(2), origin_rhopp(2), density
       real(rp) :: ob4pi, z
@@ -82,7 +80,7 @@ contains
 
       potential = 0.0_rp
       call vxc0sp(production_path, functional, z, mesh_a, mesh_b, rofi, stored_rho, nr, potential, rho0, &
-                  rhoeps, rhomu, nsp, 0.0_rp, projection)
+                  rhoeps, rhomu, nsp, 0.0_rp)
 
       origin_rhopp = 0.0_rp
       origin_rhopp(1) = d2_rho(1, 1)

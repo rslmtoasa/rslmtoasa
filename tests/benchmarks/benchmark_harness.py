@@ -8,12 +8,6 @@ compared across runs.
 
 Examples:
 
-  python3 tests/benchmarks/benchmark_harness.py run \
-    --name reciprocal_cpu_profile --class component \
-    --labels performance microbenchmark reciprocal eigensolver \
-    --command build/bin/UnitTddftCpuProfile \
-    --output results/benchmarks/reciprocal_cpu_profile.json
-
   python3 tests/benchmarks/benchmark_harness.py compare \
     results/benchmarks/cpu.json results/benchmarks/gpu.json
 """
@@ -136,23 +130,6 @@ KPM_RECONSTRUCTION_CHILDREN = (
 )
 KPM_GAMMA_CHILDREN = ("D_gamma_basis", "D_gamma_fill")
 
-PROFILE_DIMENSIONS = re.compile(
-    r"^PROFILE_DIMENSIONS\s+(?P<label>\S+)\s+"
-    r"sites=(?P<sites>\d+)\s+spinor_basis=(?P<matrix_dimension>\d+)\s+"
-    r"nk=(?P<k_points>\d+)\s+mesh=\s*(?P<mesh>.*?)\s+"
-    r"nw=(?P<energy_points>\d+)\s*$"
-)
-PROFILE_RECIPROCAL = re.compile(
-    r"^PROFILE_RECIPROCAL\s+(?P<label>\S+)\s+"
-    r"fourier_assembly=\s*(?P<fourier_assembly_s>\S+)\s+"
-    r"k_eigensolution=\s*(?P<eigensolver_s>\S+)\s+"
-    r"arbitrary_kq_assembly_eigensolution=\s*(?P<arbitrary_k_eigensolver_s>\S+)\s+"
-    r"pair_operator_construction=\s*(?P<pair_operator_s>\S+)\s*$"
-)
-PROFILE_MEMORY = re.compile(
-    r"^PROFILE_MEMORY_MIB\s+(?P<label>\S+)\s+"
-    r"(?P<rest>.*)$"
-)
 KPM_PROFILE = re.compile(r"^KPM_PROFILE\s+(?P<rest>.*)$")
 ACC06_DIMENSIONS = re.compile(
     r"^ACC06_DIMENSIONS\s+fixture=(?P<fixture>\S+)\s+"
@@ -498,7 +475,7 @@ def validate_kpm_profile(
 
 
 def parse_profile_output(output: str) -> list[dict[str, Any]]:
-    """Extract phase records emitted by the existing CPU profile executable."""
+    """Extract structured timing records emitted by benchmark commands."""
 
     dimensions: dict[str, dict[str, Any]] = {}
     records: dict[str, dict[str, Any]] = {}
@@ -584,31 +561,6 @@ def parse_profile_output(output: str) -> list[dict[str, Any]]:
             record = records.setdefault(label, {"name": label})
             record["metrics"] = {key: float(value) for key, value in values.items()}
             continue
-        match = PROFILE_DIMENSIONS.match(line.strip())
-        if match:
-            values = match.groupdict()
-            label = values.pop("label")
-            dimensions[label] = {
-                key: _number(value) for key, value in values.items()
-            }
-            continue
-        match = PROFILE_RECIPROCAL.match(line.strip())
-        if match:
-            values = match.groupdict()
-            label = values.pop("label")
-            record = records.setdefault(label, {"name": label})
-            record["metrics"] = {
-                key: float(value) for key, value in values.items()
-            }
-            continue
-        match = PROFILE_MEMORY.match(line.strip())
-        if match:
-            label = match.group("label")
-            record = records.setdefault(label, {"name": label})
-            record.setdefault("metrics", {}).update(
-                {f"{key}_mib": value for key, value in _parse_key_values(match.group("rest")).items()}
-            )
-
     for label, record in records.items():
         if label in dimensions:
             record["metadata"] = dimensions[label]
@@ -1124,7 +1076,6 @@ def run_manifest(args: argparse.Namespace) -> int:
     values = {
         "repo": str(repo),
         "binary": str(args.binary.resolve()),
-        "profile_binary": str(args.profile_binary.resolve()) if args.profile_binary else "",
         "gpu_flag": "--gpu-plugin" if args.gpu_plugin else "",
         "python": sys.executable,
         "scratch_root": str(args.scratch_root.resolve()),
@@ -1132,18 +1083,6 @@ def run_manifest(args: argparse.Namespace) -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     for entry in manifest["benchmarks"]:
         if selected and entry["name"] not in selected:
-            continue
-        needs_profile_binary = any(
-            "{profile_binary}" in token for token in entry.get("command", [])
-        )
-        if needs_profile_binary and not args.profile_binary:
-            message = (
-                f"benchmark {entry['name']!r} requires --profile-binary; "
-                "skipping optional profile entry"
-            )
-            if entry["name"] in selected:
-                raise ValueError(message)
-            print(f"SKIP {message}")
             continue
         command = _expand_manifest_command(entry["command"], values)
         metadata = capture_environment(
@@ -1193,7 +1132,6 @@ def main(argv: list[str] | None = None) -> int:
     manifest_parser = subparsers.add_parser("run-manifest", help="run the production benchmark inventory")
     manifest_parser.add_argument("--manifest", type=Path, required=True)
     manifest_parser.add_argument("--binary", type=Path, required=True)
-    manifest_parser.add_argument("--profile-binary", type=Path)
     manifest_parser.add_argument("--gpu-plugin", action="store_true",
                                  help="Pass --gpu-plugin to manifest commands that opt into CUDA recursion")
     manifest_parser.add_argument("--output-dir", type=Path, required=True)

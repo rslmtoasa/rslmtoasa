@@ -45,8 +45,6 @@ module self_mod
    use mix_mod
    use reciprocal_mod
    use electrostatics_multipole_mod, only: compute_dipole_moments
-   use xc_response_kernel_mod, only: xc_response_kernel_provider, xc_response_radial_projection, &
-      xc_longitudinal_derivatives, evaluate_longitudinal_xc_derivatives
    use math_mod
    use precision_mod, only: rp
    use timer_mod, only: g_timer
@@ -123,18 +121,12 @@ module self_mod
       logical :: constraint_diagnostics_header_written
       !> True after the optional WP12 SCF trace has received its header.
       logical :: gbt_scf_diagnostics_header_written
-      !> True after the optional ordinary collinear magnetic trace has its header.
-      logical :: magnetic_scf_diagnostics_header_written
-      !> True after the optional ATOMSC residual audit has its header.
-      logical :: atomic_scf_residual_header_written
       !> User-controlled temporary symmetry-breaking field state.  This is
       !> deliberately separate from the persistent constraint machinery.
       logical :: magnetic_seed_active
       integer :: magnetic_seed_steps
       real(rp) :: magnetic_seed_field
-      logical :: magnetic_scf_diagnostics
       logical :: magnetic_seed_enable
-      integer :: magnetic_scf_outer_iteration
       !> Measured moment entering the current SCF iteration.  `mix%mag_old`
       !> intentionally stores the frame marker, not this physical vector.
       real(rp), dimension(:, :), allocatable :: gbt_scf_in_moment
@@ -303,13 +295,6 @@ module self_mod
       logical :: use_kspace
       !> Cached reciprocal helper for k-space SCF branch (reused across iterations).
       type(reciprocal), allocatable :: reciprocal_scf_cache
-      !> Ground-state XC data populated at the VXC0SP SCF call site.  This is
-      !> the only permissible source of a transverse TDDFT kernel.
-      type(xc_response_kernel_provider) :: xc_response_provider
-      !> Request the local longitudinal XC Hessian while VXC0SP evaluates the
-      !> ground-state functional.  It is enabled only by the TDDFT longitudinal
-      !> route; ordinary SCF and transverse runs retain their existing cost.
-      logical :: xc_response_derivatives_requested = .false.
 
    contains
       procedure :: build_from_file
@@ -323,14 +308,10 @@ module self_mod
       procedure :: potential_checksum
       procedure :: report
       procedure :: lmtst
-      procedure :: refresh_xc_response_kernel
       procedure :: is_converged
       procedure, private :: initialize_constraint_state
       procedure, private :: initialize_gbt_scf_diagnostics
-      procedure, private :: initialize_magnetic_scf_diagnostics
       procedure, private :: set_magnetic_seed_state
-      procedure, private :: write_magnetic_scf_diagnostics
-      procedure, private :: write_atomic_scf_residual
       procedure, private :: apply_constraints
       procedure, private :: mix_magnetic_state
       procedure, private :: write_gbt_scf_diagnostics
@@ -366,9 +347,7 @@ module self_mod
       !> @endnote
       procedure :: potpar
       procedure, private :: write_kspace_scf_dos_outputs
-      !> Occupied-state site moments in the response projector.  Besides the
-      !> optional k-space SCF branch, LR-TDDFT uses this after reading a
-      !> restart: legacy *_out.nml files do not serialize `mtot`.
+      !> Occupied-state site moments used by the optional k-space SCF branch.
       procedure :: compute_kspace_spin_moments_spinor
       final :: destructor
    end type self
@@ -385,13 +364,6 @@ module self_mod
          real(rp), intent(out) :: site_mom(3, this%lattice%nrec)
       end subroutine compute_kspace_spin_moments_spinor
 
-      module subroutine refresh_xc_response_kernel(this)
-         class(self), intent(inout) :: this
-      end subroutine refresh_xc_response_kernel
-
-      module subroutine synchronize_xc_response_provider(this)
-         class(self), intent(inout) :: this
-      end subroutine synchronize_xc_response_provider
    end interface
 
    interface self
@@ -531,7 +503,6 @@ contains
       soc_scale = this%soc_scale
       cold = this%cold
       use_kspace = this%use_kspace
-      magnetic_scf_diagnostics = this%magnetic_scf_diagnostics
       magnetic_seed_enable = this%magnetic_seed_enable
       magnetic_seed_steps = this%magnetic_seed_steps
       magnetic_seed_field = this%magnetic_seed_field
@@ -644,12 +615,10 @@ contains
       this%init = init
       this%cold = cold
       this%use_kspace = use_kspace
-      this%magnetic_scf_diagnostics = magnetic_scf_diagnostics
       this%magnetic_seed_enable = magnetic_seed_enable
       this%magnetic_seed_steps = magnetic_seed_steps
       this%magnetic_seed_field = magnetic_seed_field
       this%magnetic_seed_active = .false.
-      this%magnetic_scf_outer_iteration = 0
       if (this%magnetic_seed_enable) then
          if (associated(this%control) .and. this%control%constraints_enable) then
             call g_logger%fatal('magnetic_seed_enable cannot be combined with persistent magnetic constraints.', __FILE__, __LINE__)
@@ -673,7 +642,6 @@ contains
          end if
          if (this%control%gbt_scf_diagnostics) call this%initialize_gbt_scf_diagnostics()
       end if
-      if (this%magnetic_scf_diagnostics) call this%initialize_magnetic_scf_diagnostics()
       if (associated(this%hamiltonian) .and. associated(this%control)) then
          if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q .and. &
              trim(this%control%density_policy) == sd_relaxed_reference) then
@@ -708,29 +676,6 @@ contains
       this%gbt_scf_diagnostics_header_written = .true.
    end subroutine initialize_gbt_scf_diagnostics
 
-   !> Initialize the ordinary q=0 collinear magnetic feedback trace.
-   !> Columns are deliberately scalar and human-readable; no GBT state is
-   !> involved in this file.
-   subroutine initialize_magnetic_scf_diagnostics(this)
-      class(self), intent(inout) :: this
-      integer :: unit, io_status
-
-      this%magnetic_scf_diagnostics_header_written = .false.
-      this%atomic_scf_residual_header_written = .false.
-      if (rank /= 0) return
-      open(newunit=unit, file='magnetic_scf_diagnostics.dat', status='replace', action='write', iostat=io_status)
-      if (io_status /= 0) then
-         call g_logger%warning('Could not open magnetic_scf_diagnostics.dat; ordinary magnetic trace disabled.', &
-                               __FILE__, __LINE__)
-         return
-      end if
-      write(unit, '(a)') '# frame=ordinary q=0 collinear active spin frame; energies=Ry; moments=mu_B'
-      write(unit, '(a)') '# one row per outer iteration, site, and l; up/down follow potential channel convention'
-      write(unit, '(a)') '# iteration site l element ql_up ql_down ql_up_minus_down radial_rho_up_minus_down radial_abs_spin radial_vxc_up_minus_down radial_abs_vxc_up_minus_down C_up C_down C_up_minus_down moment_x moment_y moment_z moment_magnitude'
-      close(unit)
-      this%magnetic_scf_diagnostics_header_written = .true.
-   end subroutine initialize_magnetic_scf_diagnostics
-
    !> Set or release the explicitly requested temporary B_fsm seed.
    !> No constraint target, mixer state, or magnetic moment is modified here.
    subroutine set_magnetic_seed_state(this, iteration)
@@ -748,73 +693,6 @@ contains
       end if
       this%magnetic_seed_active = active_now
    end subroutine set_magnetic_seed_state
-
-   !> Append the ordinary feedback quantities after the final atomic update of
-   !> an outer iteration.  The XC radial fields are supplied by the exact
-   !> VXC0SP call used to build the current potential.
-   subroutine write_magnetic_scf_diagnostics(this, iteration)
-      class(self), intent(in) :: this
-      integer, intent(in) :: iteration
-      integer :: ia, plusbulk, l, lmax_site, unit, io_status
-      real(rp) :: q_up, q_down, c_up, c_down, radial_spin, radial_abs_spin
-      real(rp) :: radial_dvxc, radial_abs_dvxc, moment_magnitude
-
-      if (.not. this%magnetic_scf_diagnostics .or. rank /= 0) return
-      if (.not. this%magnetic_scf_diagnostics_header_written) return
-      if (.not. allocated(this%xc_response_provider%site)) return
-      open(newunit=unit, file='magnetic_scf_diagnostics.dat', status='unknown', action='write', &
-           position='append', iostat=io_status)
-      if (io_status /= 0) return
-      do ia = 1, this%lattice%nrec
-         plusbulk = this%lattice%nbulk + ia
-         lmax_site = min(this%symbolic_atom(plusbulk)%potential%lmax, lmax_basis)
-         radial_spin = this%xc_response_provider%site(ia)%radial_spin_population
-         radial_abs_spin = this%xc_response_provider%site(ia)%radial_spin_abs_population
-         radial_dvxc = this%xc_response_provider%site(ia)%radial_vxc_spin_difference
-         radial_abs_dvxc = this%xc_response_provider%site(ia)%radial_vxc_spin_difference_abs
-         moment_magnitude = this%symbolic_atom(plusbulk)%potential%mtot
-         do l = 0, lmax_site
-            q_up = this%symbolic_atom(plusbulk)%potential%ql(1, l, 1)
-            q_down = this%symbolic_atom(plusbulk)%potential%ql(1, l, 2)
-            c_up = this%symbolic_atom(plusbulk)%potential%c(l, 1)
-            c_down = this%symbolic_atom(plusbulk)%potential%c(l, 2)
-            write(unit, '(3i8,1x,a10,14(1x,es20.12))') iteration, ia, l, &
-               this%symbolic_atom(plusbulk)%element%symbol, q_up, q_down, q_up-q_down, &
-               radial_spin, radial_abs_spin, radial_dvxc, radial_abs_dvxc, c_up, c_down, c_up-c_down, &
-               this%symbolic_atom(plusbulk)%potential%mx, this%symbolic_atom(plusbulk)%potential%my, &
-               this%symbolic_atom(plusbulk)%potential%mz, moment_magnitude
-         end do
-      end do
-      close(unit)
-   end subroutine write_magnetic_scf_diagnostics
-
-   !> Record both the historical unweighted ATOMSC L1 residual and the
-   !> radial-quadrature residual.  The stored RHO is r^2 times the physical
-   !> spherical density, so DRDI=d r/d(log r) is required by the integral.
-   subroutine write_atomic_scf_residual(this, outer_iteration, site, inner_iteration, drho_control, &
-                                        drho_integrated, beta, q_integrated)
-      class(self), intent(inout) :: this
-      integer, intent(in) :: outer_iteration, site, inner_iteration
-      real(rp), intent(in) :: drho_control, drho_integrated, beta, q_integrated
-      integer :: unit, io_status
-      character(len=sl) :: filename
-
-      if (.not. this%magnetic_scf_diagnostics) return
-      if (rank == 0) then
-         filename = 'atomic_scf_residuals.dat'
-      else
-         write(filename, '("atomic_scf_residuals.rank",i0,".dat")') rank
-      end if
-      open(newunit=unit, file=trim(filename), status='unknown', action='write', position='append', iostat=io_status)
-      if (io_status /= 0) return
-      if (.not. this%atomic_scf_residual_header_written) then
-         write(unit, '(a)') '# outer_iteration site inner_iteration drho_control drho_integrated beta q_integrated'
-         this%atomic_scf_residual_header_written = .true.
-      end if
-      write(unit, '(3i8,4(1x,es20.12))') outer_iteration, site, inner_iteration, drho_control, &
-         drho_integrated, beta, q_integrated
-      close(unit)
-   end subroutine write_atomic_scf_residual
 
    !> Capture the fixed reference directions and the optional initial field.
    !> The state is stored on the same symbolic atoms consumed by the RS and
@@ -1169,12 +1047,10 @@ contains
 
       this%cold = .false.
       this%use_kspace = .false.
-      this%magnetic_scf_diagnostics = .false.
       this%magnetic_seed_enable = .false.
       this%magnetic_seed_steps = 0
       this%magnetic_seed_field = 0.0_rp
       this%magnetic_seed_active = .false.
-      this%magnetic_scf_outer_iteration = 0
       if (allocated(this%constraint_reference)) deallocate(this%constraint_reference)
       allocate(this%constraint_reference(3, this%lattice%nrec))
       this%constraint_reference = 0.0_rp
@@ -1191,8 +1067,6 @@ contains
       this%constraint_iteration = 0
       this%constraint_diagnostics_header_written = .false.
       this%gbt_scf_diagnostics_header_written = .false.
-      this%magnetic_scf_diagnostics_header_written = .false.
-      this%atomic_scf_residual_header_written = .false.
 
       if (associated(this%lattice)) then
          if (present(full)) then
@@ -1289,7 +1163,6 @@ contains
       nstep = this%nstep
       init = this%init
       cold = this%cold
-      magnetic_scf_diagnostics = this%magnetic_scf_diagnostics
       magnetic_seed_enable = this%magnetic_seed_enable
       magnetic_seed_steps = this%magnetic_seed_steps
       magnetic_seed_field = this%magnetic_seed_field
@@ -1345,7 +1218,6 @@ contains
       nstep = this%nstep
       init = this%init
       cold = this%cold
-      magnetic_scf_diagnostics = this%magnetic_scf_diagnostics
       magnetic_seed_enable = this%magnetic_seed_enable
       magnetic_seed_steps = this%magnetic_seed_steps
       magnetic_seed_field = this%magnetic_seed_field
@@ -1399,7 +1271,6 @@ contains
       niter = 0
       do i = 1, this%nstep
          call g_scf_benchmark_profile%start_iteration(i)
-         this%magnetic_scf_outer_iteration = i
          call this%set_magnetic_seed_state(i)
          if (this%cold .and. i==1) then
             if (this%use_kspace) then
@@ -1514,7 +1385,6 @@ contains
 
          this%physical_total_energy = sum(this%symbolic_atom(:)%potential%etot)
          call this%write_gbt_scf_diagnostics(i)
-         call this%write_magnetic_scf_diagnostics(i)
          total_energy = this%physical_total_energy
          magnetic_moment = sum(this%symbolic_atom(this%lattice%nbulk + 1:this%lattice%nbulk + this%lattice%nrec)%potential%mtot)
          call g_scf_benchmark_profile%finish_iteration(this%mix%delta, total_energy, this%en%fermi, magnetic_moment)
@@ -1991,7 +1861,6 @@ contains
       integer :: ia, na_glob, pot_size
    
       call g_timer%start('atomic-scf')
-      call this%xc_response_provider%initialize(this%lattice%nrec, 'SCF-XCPOT')
    
       !=========================================================================
       !                       MAKE SFC ATOMIC SPHERE
@@ -2019,8 +1888,6 @@ contains
       end do
       deallocate (T_comm)
 #endif
-
-      call synchronize_xc_response_provider(this)
 
       !=========================================================================
       !      TRANSFORM POTENTIAL BASIS FROM ORTHOGONAL TO TIGHT-BINDING
@@ -2318,7 +2185,6 @@ contains
 
       real(rp), dimension(:, :), allocatable :: v
       real(rp), dimension(:), allocatable :: rofi
-      type(xc_response_radial_projection) :: xc_projection
 
       ! Iterative variables
       integer :: LMAX, NSP
@@ -2326,8 +2192,7 @@ contains
 
       if (rank == 0) call g_logger%info(atom%element%symbol, __FILE__, __LINE__)
 
-      call this%atomsc(atom, v, rofi, "RHO", xc_projection, isite)
-      if (present(isite)) call this%xc_response_provider%record_radial_projection(isite, xc_projection)
+      call this%atomsc(atom, v, rofi, "RHO")
 
       this%VZT(1, 1) = this%VZT(2, 1)
       this%VZT(1, 2) = this%VZT(2, 2)
@@ -2365,23 +2230,20 @@ contains
       end if
    end function lmtst
 
-   subroutine atomsc(this, atom, v, rofi, job, xc_projection, isite)
+   subroutine atomsc(this, atom, v, rofi, job)
       class(self), intent(inout) :: this
       class(symbolic_atom), intent(inout) :: atom
       type(xc) :: xc_obj
       real(rp), dimension(:, :), allocatable, intent(out) :: v
       real(rp), dimension(:), allocatable, intent(out) :: rofi
       character(LEN=3), intent(in) :: JOB
-      type(xc_response_radial_projection), intent(out) :: xc_projection
-      integer, intent(in), optional :: isite
 
       integer, parameter :: NCMX = 50
       integer, parameter :: NVMX = 20
 
       real(rp), dimension(2) :: RVH, RHO0, REPS, RMU, SEV, SEC
       real(rp) :: B_fsm, B, deg, DFCORE, AMGM, EA, RPB, DL, DRHO_CONTROL, DRHO_INTEGRATED, TOL, TOLRSQ, BETA, VHRMAX, VSUM, TL, BETA1, VNUCL, SUM, RHO0T, WGT, DRDI, RHOMU, RHOVH, ZVNUCL, OB4PI
-      integer :: ISP, ncore, nval, l, n_radial_spin_channels, lmax, konf, IFCORE, LCORE, KONFIG, IPR, NR, IR, ITER, NITER, IPR1, II
-      integer :: qn_default, site_id
+      integer :: ISP, ncore, nval, l, n_radial_spin_channels, lmax, konf, qn_default, IFCORE, LCORE, KONFIG, IPR, NR, IR, ITER, NITER, IPR1, II
       logical :: LAST
 
       real(rp), dimension(NCMX) :: EC
@@ -2389,10 +2251,6 @@ contains
       real(rp), dimension(2) :: VRMAX
       real(rp), dimension(:, :), allocatable :: rho_in, rho
       real(rp), dimension(2) :: qval
-
-      call xc_projection%clear()
-      site_id = 0
-      if (present(isite)) site_id = isite
 
       ipr = 0
       ! This is a local radial/XC channel count.  It intentionally remains
@@ -2581,7 +2439,7 @@ contains
          call POISS0(atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, VHRMAX, V, RVH, VSUM, n_radial_spin_channels)
          VNUCL = V(1, 1)
          !call VXC0SP_old(atom%element%atomic_number, atom%a, B, rofi, rho_in, NR, V, RHO0, REPS, RMU, NSP)
-         call this%VXC0SP(xc_obj, atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, V, RHO0, REPS, RMU, n_radial_spin_channels, B_fsm, xc_projection)
+         call this%VXC0SP(xc_obj, atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, V, RHO0, REPS, RMU, n_radial_spin_channels, B_fsm)
          call this%NEWRHO(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho, atom%potential%PL, atom%potential%QL, SEC, SEV, EC, EV, TL, n_radial_spin_channels, IPR1)
          DRHO_CONTROL = 0.d0
          DRHO_INTEGRATED = 0.d0
@@ -2601,8 +2459,6 @@ contains
                SUM = SUM + WGT*DRDI*RHO(IR, ISP)
             end do
          end do
-         call this%write_atomic_scf_residual(this%magnetic_scf_outer_iteration, site_id, ITER, DRHO_CONTROL, &
-                                             DRHO_INTEGRATED, BETA1, SUM)
          if (LAST) exit
          if (IPR >= 3 .or. (IPR >= 2 .and. (DRHO_CONTROL < TOL .or. ITER == 1 .or. ITER == NITER - 1))) then
             write (6, 10004) ITER, SUM, DRHO_CONTROL, VNUCL, RHO0T, VSUM, BETA1
@@ -3873,7 +3729,7 @@ contains
       end if
    end subroutine POISS0
 
-   subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, n_radial_spin_channels, B_fsm, xc_projection)
+   subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, n_radial_spin_channels, B_fsm)
       !  ADDS XC PART TO SPHERICAL POTENTIAL, MAKES INTEGRALS RHOMU AND RHOEP
       !
       ! use xcdata
@@ -3896,7 +3752,6 @@ contains
       real(rp), dimension(NR, n_radial_spin_channels), intent(in) :: RHO
       real(rp), dimension(NR, n_radial_spin_channels), intent(inout) :: V
       real(rp), intent(in)  :: B_fsm
-      type(xc_response_radial_projection), intent(out) :: xc_projection
       !
       !.. Local Scalars ..
       integer :: IR, ISP, IXC
@@ -3905,10 +3760,8 @@ contains
                   RHO1, R, RCE
       real(rp), dimension(NR, n_radial_spin_channels) :: RHOP, RHOPP, tRHO
       real(rp), dimension(2) :: RHOD, RHODD
-      real(rp) :: Bxc_up, Bxc_dw, Bxc_tot
       real(rp), allocatable :: vxc_up_radial(:), vxc_down_radial(:), exc_radial(:)
       logical :: use_libxc_gga, use_legacy_gga
-      type(xc_longitudinal_derivatives) :: longitudinal_derivatives
       !.. External Calls ..
       ! external EVXC
       !
@@ -3928,18 +3781,8 @@ contains
       ! In particular, a direct/predefined libXC LDA selector must not enter a
       ! legacy IXC>=8 branch merely because its TXC integer is large.
       use_legacy_gga = IXC == 5 .or. IXC == 8 .or. IXC == 9
-      if (this%xc_response_derivatives_requested .and. n_radial_spin_channels /= 2) then
-         call g_logger%fatal('Longitudinal TDDFT requires two spin-resolved radial XC channels.', __FILE__, __LINE__)
-      end if
-      if (this%xc_response_derivatives_requested .and. (use_libxc_gga .or. IXC == 8 .or. IXC == 9)) then
-         call g_logger%fatal('Longitudinal TDDFT currently requires a local (LDA/ALDA) XC route; GGA f_xc is not implemented.', &
-            __FILE__, __LINE__)
-      end if
       !
       ! Constraining field related hacks below
-      Bxc_up = 0.0d0
-      Bxc_dw = 0.0d0
-      call xc_projection%clear()
       !
       ! Extrapolate density to core point
       do ISP = 1, n_radial_spin_channels
@@ -4107,34 +3950,13 @@ contains
                WGT = 1.d0/3.d0
             end if
             DRDI = A*(rofi(IR) + B)
-            ! RHO(:,1)/VXC1 is spin-up in the same +z convention as the
-            ! response spinor’s first block; channel 2 is spin down.
-            ! Preserve that ordering in the radial B_xc*m projection.
-            call xc_projection%accumulate(WGT*DRDI, RHO(IR, 2), RHO(IR, 1), VXC2, VXC1)
-            if (this%xc_response_derivatives_requested) then
-               call evaluate_longitudinal_xc_derivatives(xc_obj, tRHO(IR, 2), tRHO(IR, 1), RHO3, RHOD, RHODD, R, &
-                  longitudinal_derivatives)
-               call xc_projection%accumulate_longitudinal_derivatives(WGT*DRDI, RHO(IR, 2), RHO(IR, 1), &
-                  longitudinal_derivatives)
-            end if
             RHOEPS(1) = RHOEPS(1) + WGT*DRDI*RHO(IR, 1)*EXC1
             RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*(VXC1 + B_fsm)
             !RHOMU(1) = RHOMU(1) + WGT*DRDI*RHO(IR, 1)*VXC1
             RHOEPS(2) = RHOEPS(2) + WGT*DRDI*RHO(IR, 2)*EXC1
             RHOMU(2) = RHOMU(2) + WGT*DRDI*RHO(IR, 2)*(VXC2 - B_fsm)
             !RHOMU(2) = RHOMU(2) + WGT*DRDI*RHO(IR, 2)*VXC2
-            !Bxc_up=Bxc_up + WGT*DRDI*VXC1
-            !Bxc_dw=Bxc_dw + WGT*DRDI*VXC2
-            Bxc_up = Bxc_up + WGT*DRDI*VXC1
-            Bxc_dw = Bxc_dw + WGT*DRDI*VXC2
          end do
-         !write(*, *)wgt, drdi, exc1, vxc1, vxc2
-         Bxc_tot = Bxc_up - Bxc_dw
-         ! RHOEPS=RHOEPS/4.0d0
-         ! AB comment
-      !!! if(this%lattice%control%do_asd) this%bxc(this%lattice%control%asd_atom)=Bxc_tot
-         !print *, ´B_XC´, Bxc_tot, rhomu(1)-rhomu(2)
-         !print *, ´b_XC´, 235e3*Bxc_tot, 235e3*(rhomu(1)-rhomu(2))
       end if
    end subroutine VXC0SP
 

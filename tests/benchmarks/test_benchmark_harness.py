@@ -20,17 +20,6 @@ from benchmark_harness import (  # noqa: E402
 
 
 def main() -> int:
-    output = """\
-PROFILE_DIMENSIONS bccFe_one_site sites=1 spinor_basis=9 nk=16 mesh=4 x 4 x 1 nw=96
-PROFILE_RECIPROCAL bccFe_one_site fourier_assembly=1.0E-02 k_eigensolution=2.0E-02 arbitrary_kq_assembly_eigensolution=3.0E-02 pair_operator_construction=4.0E-02
-PROFILE_MEMORY_MIB bccFe_one_site hk=1.0 normal_eigenpairs=2.0 arbitrary_kq_eigenpairs=3.0 pair_operators_and_workspace=4.0 response=5.0 principal_payload=6.0
-"""
-    records = parse_profile_output(output)
-    assert len(records) == 1
-    assert records[0]["metadata"]["matrix_dimension"] == 9
-    assert records[0]["metrics"]["eigensolver_s"] == 0.02
-    assert records[0]["metrics"]["principal_payload_mib"] == 6.0
-
     kpm = parse_profile_output(
         "KPM_PROFILE backend=cpu precision=cpu_fp64 estimator=per_type "
         "N=144 nnz=5184 M=500 lld=150 Ntrace=1 bytes_h2d=0 bytes_d2h=0 "

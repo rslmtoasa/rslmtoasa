@@ -3,8 +3,7 @@ submodule(hamiltonian_mod) hamiltonian_build
       normalize_magnetic_representation, select_endpoint_moments, texture_bulk_reuse_is_valid
    use gbt_structure_mod, only: gbt_endpoint_link, gbt_lift_orbital_block, gbt_contract_collinear, &
                                 gbt_reference_moment_is_collinear
-   use lmto_magnetic_tangent_mod, only: lmto_bond_value, lmto_bond_tangent, lmto_endpoint_tangent_record, &
-      lmto_make_endpoint_record, lmto_ordinary_tangent_supported
+   use lmto_magnetic_tangent_mod, only: lmto_bond_value
 
 contains
 
@@ -1811,8 +1810,6 @@ contains
                              ' lmax='//int2str(this%charge%lattice%symbolic_atoms(jt)%potential%lmax), __FILE__, __LINE__)
       end if
 
-      ! Shared value seam. The tangent provider below invokes the same algebraic
-      ! coefficients before endpoint terms are collapsed into hxc/ee.
       if (this%hoh) then
          call lmto_bond_value(hhhc, this%charge%lattice%symbolic_atoms(it)%potential%wx0(1:norb), &
             this%charge%lattice%symbolic_atoms(it)%potential%wx1(1:norb), this%charge%lattice%symbolic_atoms(jt)%potential%wx0(1:norb), &
@@ -1826,106 +1823,6 @@ contains
       end if
 
    end subroutine ham0m_nc
-
-   module subroutine ham0m_nc_tangent(this, ia, ja, it, jt, vet, hhh, delta_mom_i, delta_mom_j, &
-                                      delta_hhmag, supported, reason)
-      class(hamiltonian), intent(in) :: this
-      integer, intent(in) :: ia, ja, it, jt
-      real(rp), intent(in) :: vet(3), hhh(norb, norb), delta_mom_i(3), delta_mom_j(3)
-      complex(rp), intent(out) :: delta_hhmag(norb, norb, 4)
-      logical, intent(out) :: supported
-      character(len=*), intent(out), optional :: reason
-      real(rp) :: mom_i(3), mom_j(3), vv
-      complex(rp) :: hhhc(norb, norb)
-      logical :: valid
-
-      call lmto_tangent_capability(this, supported, reason)
-      delta_hhmag = cmplx(0.0_rp, 0.0_rp, rp)
-      if (.not. supported) return
-      if (trim(this%magnetic_representation) == explicit_texture) then
-         call select_endpoint_moments(this%magnetic_representation, ia, ja, &
-            this%charge%lattice%symbolic_atoms(it)%potential%mom, this%charge%lattice%symbolic_atoms(jt)%potential%mom, &
-            this%texture_moments, mom_i, mom_j, valid)
-      else
-         mom_i = this%charge%lattice%symbolic_atoms(it)%potential%mom
-         mom_j = this%charge%lattice%symbolic_atoms(jt)%potential%mom
-         valid = .true.
-      end if
-      if (.not. valid) then
-         supported = .false.
-         if (present(reason)) reason = 'invalid explicit_texture endpoint identity'
-         return
-      end if
-      vv = norm2(vet)
-      hhhc = cmplx(hhh, 0.0_rp, rp)
-      call lmto_bond_tangent(hhhc, this%charge%lattice%symbolic_atoms(it)%potential%wx0(1:norb), &
-         this%charge%lattice%symbolic_atoms(it)%potential%wx1(1:norb), this%charge%lattice%symbolic_atoms(jt)%potential%wx0(1:norb), &
-         this%charge%lattice%symbolic_atoms(jt)%potential%wx1(1:norb), this%charge%lattice%symbolic_atoms(it)%potential%cx1(1:norb), &
-         mom_i, mom_j, delta_mom_i, delta_mom_j, vv <= 0.01_rp, delta_hhmag)
-   end subroutine ham0m_nc_tangent
-
-   module subroutine ham0m_nc_endpoint_tangents(this, ia, ja, it, jt, directed_bond, vet, hhh, &
-                                                left_tangent, right_tangent, record, supported, reason)
-      class(hamiltonian), intent(in) :: this
-      integer, intent(in) :: ia, ja, it, jt, directed_bond
-      real(rp), intent(in) :: vet(3), hhh(norb, norb)
-      complex(rp), intent(out) :: left_tangent(norb, norb, 4, 3), right_tangent(norb, norb, 4, 3)
-      type(lmto_endpoint_tangent_record), intent(out) :: record
-      logical, intent(out) :: supported
-      character(len=*), intent(out), optional :: reason
-      character(len=160) :: local_reason
-      real(rp) :: delta(3)
-      integer :: idir
-
-      local_reason = 'ordinary first-order CPU LMTO endpoint tangent'
-      left_tangent = cmplx(0.0_rp, 0.0_rp, rp); right_tangent = cmplx(0.0_rp, 0.0_rp, rp)
-      supported = .true.
-      do idir = 1, 3
-         delta = 0.0_rp; delta(idir) = 1.0_rp
-         call this%ham0m_nc_tangent(ia, ja, it, jt, vet, hhh, delta, [0.0_rp, 0.0_rp, 0.0_rp], &
-                                     left_tangent(:, :, :, idir), supported, local_reason)
-         if (.not. supported) exit
-         call this%ham0m_nc_tangent(ia, ja, it, jt, vet, hhh, [0.0_rp, 0.0_rp, 0.0_rp], delta, &
-                                     right_tangent(:, :, :, idir), supported, local_reason)
-         if (.not. supported) exit
-      end do
-      record = lmto_make_endpoint_record(ia, ja, it, jt, directed_bond, this%operator_generation, vet, supported)
-      if (present(reason)) reason = trim(local_reason)
-   end subroutine ham0m_nc_endpoint_tangents
-
-   subroutine lmto_tangent_capability(this, supported, reason)
-      class(hamiltonian), intent(in) :: this
-      logical, intent(out) :: supported
-      character(len=*), intent(out), optional :: reason
-      character(len=160) :: message
-
-      supported = lmto_ordinary_tangent_supported(trim(this%magnetic_representation) == gbt_single_q, this%hoh, &
-         this%ccor_2c, this%hubbard_u_general_check .or. this%hubbard_v_check .or. this%hubbard_u_impurity_check, this%local_axis, &
-         lmto_has_active_soc(this), this%control%do_comom .or. this%control%constraints_enable)
-      message = 'ordinary first-order CPU LMTO tangent'
-      if (trim(this%magnetic_representation) == gbt_single_q) then
-         message = 'GBT bond gauge has no endpoint tangent implementation'
-      else if (this%hoh) then
-         message = 'HOH/generalized-overlap terms have no complete tangent'
-      else if (this%ccor_2c) then
-         message = 'two-centre CCOR has no complete endpoint tangent'
-      else if (this%hubbard_u_general_check .or. this%hubbard_v_check .or. this%hubbard_u_impurity_check) then
-         message = 'Hubbard U/V correction has no complete endpoint tangent'
-      else if (this%local_axis) then
-         message = 'local-axis transformation has no documented tangent'
-      else if (lmto_has_active_soc(this)) then
-         message = 'SOC Hamiltonian has no complete endpoint tangent'
-      else if (this%control%do_comom .or. this%control%constraints_enable) then
-         message = 'constraining/FSM field provenance has no complete tangent'
-      end if
-      if (present(reason)) reason = trim(message)
-   end subroutine lmto_tangent_capability
-
-   logical function lmto_has_active_soc(this)
-      class(hamiltonian), intent(in) :: this
-      lmto_has_active_soc = .false.
-      if (allocated(this%lsham)) lmto_has_active_soc = maxval(abs(this%lsham)) > tiny(1.0_rp)
-   end function lmto_has_active_soc
 
    !> @brief Build noncollinear local hopping data for one cluster atom.
    !> @details Walks the neighbor list around atom ia, obtains orbital hopping
