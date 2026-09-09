@@ -1927,7 +1927,11 @@ contains
       end if
       do iq = iq_start, iq_end
          is_gamma = maxval(abs(config%q_points(:, iq))) <= 1.0e-12_rp
-         config%q_cartesian = matmul(reciprocal_obj%reciprocal_vectors, config%q_points(:, iq))
+         ! `reciprocal_vectors` is built from the dimensionless primitive
+         ! vectors in lattice%a.  The physical real-space basis is
+         ! `alat*lattice%a`, so Cartesian q must carry the inverse-length
+         ! factor here rather than in the fractional input coordinates.
+         config%q_cartesian = matmul(reciprocal_obj%reciprocal_vectors, config%q_points(:, iq)) / lattice_obj%alat
          config%kq_endpoint_folded = .false.
          config%kq_reciprocal_shift = 0
          config%kq_folded_endpoint_count = 0
@@ -2491,9 +2495,12 @@ contains
          write(unit, '(a,es24.16)') '# dynamic_pair_corrected_gamma_loss_peak_Ry = ', pair_corrected_peak
       end if
       if (present(bare_peak_reverse)) then
-         if (legacy_peak_reverse < -0.5_rp .or. pair_peak_reverse < -0.5_rp .or. &
-             pair_corrected_peak_reverse < -0.5_rp) then
-            call g_logger%fatal('[calculation.append_dynamic_gamma_peaks]: incomplete reverse peak record.', __FILE__, __LINE__)
+         ! The bare reverse channel is always evaluated.  Legacy, pair, and
+         ! corrected peaks are optional because their corresponding Dyson
+         ! products may not have been requested by this deck; -1 is the
+         ! explicit unavailable sentinel for those derived records.
+         if (bare_peak_reverse < -0.5_rp) then
+            call g_logger%fatal('[calculation.append_dynamic_gamma_peaks]: incomplete reverse bare peak record.', __FILE__, __LINE__)
          end if
          if (bare_peak_reverse >= 0.0_rp) write(unit, '(a,es24.16)') &
             '# dynamic_'//trim(reverse_name)//'_bare_gamma_loss_peak_Ry = ', bare_peak_reverse
@@ -2846,7 +2853,7 @@ contains
       write(unit, '(a)') '# source_hamiltonian_provenance = same ground-state first-order scalar-relativistic ham_only Hamiltonian as SCF'
       write(unit, '(a,a)') '# q_mode = ', trim(config%q_mode)
       write(unit, '(a,a)') '# q_coordinates = ', trim(config%q_coordinates)
-      write(unit, '(a)') '# q_coordinate_unit = fractional reciprocal-lattice coordinates; q_cartesian includes 2*pi/a'
+      write(unit, '(a)') '# q_coordinate_unit = direct fractional reciprocal-lattice coordinates; q_cartesian_unit = inverse Angstrom'
       write(unit, '(a,i0)') '# q_index = ', iq
       write(unit, '(a,3(1x,es24.16))') '# q_direct =', q_point
       write(unit, '(a,3(1x,es24.16))') '# q_cartesian =', config%q_cartesian

@@ -8,10 +8,18 @@ verbose = T
 rc = 009
 alat = 2.86120
 crystal_sym = 'bcc'
+pbc = .true.
+b1 = .true.
+b2 = .true.
+b3 = .true.
+n1 = 4
+n2 = 4
+n3 = 4
 wav = 1.40880
 ntype = 1
 ct(1) = 3.0d0
 r2 = 9.00d0
+strux_backend = 'strux_lib'
 /
 &atoms
 database = '../../../../../results/validation/VAL-18_bccFe/dispersion_nk16/'

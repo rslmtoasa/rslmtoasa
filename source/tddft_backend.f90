@@ -14,7 +14,7 @@ module tddft_backend_mod
       tddft_chi0_batch_result, tddft_chi0_metadata, build_chi_ks_from_eigenpairs, &
       build_static_chi_ks_from_eigenpairs_at_q, validate_tddft_chi0_options
    use tddft_chi0_green_mod, only: green_chi0_options, eigenpair_green_function_provider, &
-      build_chi_ks_from_green_functions, build_static_chi_ks_from_green_functions, validate_green_chi0_options
+      build_chi_ks_from_lehmann_provider, build_static_chi_ks_from_green_functions, validate_green_chi0_options
    use response_vertices_mod, only: response_channel
    implicit none
 
@@ -94,9 +94,9 @@ module tddft_backend_mod
       procedure :: capabilities => eigenpair_backend_capabilities
    end type tddft_eigenpair_backend
 
-   !> K-space Lehmann adapter.  It uses the same endpoint data as the
-   !> eigenpair adapter, but exercises the one-particle GF bubble independently
-   !> of the explicit transition denominator implementation.
+   !> K-space Lehmann adapter.  It uses the same K/K+q spectral endpoint data
+   !> as the eigenpair adapter and evaluates the exact finite-eta pole sum;
+   !> the standalone GF bubble remains available for contour/quadrature tests.
    type, extends(tddft_eigenpair_backend), public :: tddft_kspace_lehmann_backend
    contains
       procedure :: evaluate => evaluate_kspace_lehmann_backend
@@ -553,9 +553,9 @@ contains
          options%fermi_level = this%options%fermi_level
          options%electronic_temperature = this%options%electronic_temperature
          options%k_mesh_shape = this%options%k_mesh_shape
-         call build_chi_ks_from_green_functions(source, this%k_weights, this%site_orbital_counts, &
+         call build_chi_ks_from_lehmann_provider(source, this%k_weights, this%site_orbital_counts, &
             this%left_channels, this%right_channels, request%omega, options, result%q_response(iq))
-         call annotate_result(result%q_response(iq), TDDFT_BACKEND_KSPACE_LEHMANN, 'K-space Lehmann GF bubble', &
+         call annotate_result(result%q_response(iq), TDDFT_BACKEND_KSPACE_LEHMANN, 'K-space Lehmann transition-pole sum', &
             request%q_points(:, iq), nq, size(request%omega))
          result%q_response(iq)%metadata%endpoint_provenance = 'K-space Lehmann resolvents at k and k+q endpoints'
       end do

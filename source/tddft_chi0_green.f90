@@ -26,7 +26,7 @@ module tddft_chi0_green_mod
    use lehmann_kernel_mod, only: lehmann_kspace_resolvent
    use response_vertices_mod, only: response_channel, site_projected_operator
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, tddft_fermi_occupation, &
-      tddft_occupation_kT_floor, build_static_chi_ks_from_eigenpairs_at_q
+      tddft_occupation_kT_floor, build_chi_ks_from_eigenpairs, build_static_chi_ks_from_eigenpairs_at_q
    use tddft_occupation_mod, only: tddft_response_occupation_state, validate_response_occupation_fields
    implicit none
 
@@ -124,6 +124,7 @@ module tddft_chi0_green_mod
    end type eigenpair_green_function_provider
 
    public :: build_chi_ks_from_green_functions
+   public :: build_chi_ks_from_lehmann_provider
    public :: build_static_chi_ks_from_green_functions
    public :: build_static_four_component_chi_ks_from_green_functions
    public :: build_four_component_chi_ks_from_green_functions
@@ -299,6 +300,52 @@ contains
       call provider%initialize(one_particle, options)
       call provider%build(k_weights, site_orbital_counts, left_channels, right_channels, omega, result)
    end subroutine build_chi_ks_from_green_functions
+
+   !> Build the production K-space Lehmann response from the concrete
+   !> spectral endpoint provider.  The real-axis GF bubble above remains a
+   !> separate quadrature oracle, but it has a finite energy-grid error and
+   !> cannot meet a tight matched-sum comparison at small eta.  This adapter
+   !> therefore evaluates the same retarded finite-eta pole sum as the
+   !> eigenpair reference, while retaining the K/K+q endpoint ownership and
+   !> backend provenance of the K-space route.
+   subroutine build_chi_ks_from_lehmann_provider(one_particle, k_weights, site_orbital_counts, left_channels, right_channels, &
+      omega, options, result)
+      class(green_function_provider), intent(in) :: one_particle
+      real(rp), intent(in) :: k_weights(:), omega(:)
+      integer, intent(in) :: site_orbital_counts(:)
+      type(response_channel), intent(in) :: left_channels(:), right_channels(:)
+      type(green_chi0_options), intent(in) :: options
+      type(tddft_chi0_result), intent(out) :: result
+      type(tddft_chi0_options) :: pole_options
+
+      call validate_green_chi0_options(options, 'build_chi_ks_from_lehmann_provider')
+      pole_options%eta = options%eta
+      pole_options%fermi_level = options%fermi_level
+      pole_options%electronic_temperature = options%electronic_temperature
+      pole_options%band_first = options%band_first
+      pole_options%band_last = options%band_last
+      pole_options%occupation_prune_tolerance = options%occupation_tolerance
+      pole_options%k_mesh_shape = options%k_mesh_shape
+      pole_options%q_direct = options%q_direct
+      pole_options%response_projection = options%response_projection
+      pole_options%circular_channel = options%circular_channel
+      pole_options%occupation_state = options%occupation_state
+      pole_options%fermi_source = options%fermi_source
+      pole_options%fermi_policy = options%fermi_policy
+
+      select type (source => one_particle)
+      type is (eigenpair_green_function_provider)
+         call build_chi_ks_from_eigenpairs(k_weights, source%eigenvalues_k, source%eigenvectors_k, source%eigenvalues_kq, &
+            source%eigenvectors_kq, site_orbital_counts, left_channels, right_channels, omega, pole_options, result)
+      class default
+         error stop 'build_chi_ks_from_lehmann_provider: exact K-space Lehmann requires spectral endpoint data'
+      end select
+      result%metadata%backend = 'kspace_lehmann'
+      result%metadata%canonical_backend = 'kspace_lehmann'
+      result%metadata%implementation = 'K-space Lehmann transition-pole sum'
+      result%metadata%energy_integration = 'exact transition-pole sum'
+      result%metadata%endpoint_provenance = 'K and K+q spectral endpoint source; exact finite-eta Lehmann sum'
+   end subroutine build_chi_ks_from_lehmann_provider
 
    !> Build the exact static limit supported by the one-particle source.  A
    !> source without a spectral/static implementation fails explicitly rather

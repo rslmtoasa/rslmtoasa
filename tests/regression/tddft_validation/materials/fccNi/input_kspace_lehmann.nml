@@ -6,19 +6,23 @@ verbose = T
 /
 &lattice
 rc = 030
-alat = 6.650
+alat = 3.520
 crystal_sym = 'fcc'
 pbc = .true.
+b1 = .true.
+b2 = .true.
+b3 = .true.
 n1 = 4
 n2 = 4
 n3 = 4
 wav = 1.410
 ntype = 1
-ct(1) = 4.0d0
-r2 = 16.0d0
+ct(1) = 5.0d0
+r2 = 25.0d0
+strux_backend = 'strux_lib'
 /
 &atoms
-database = '../../../../../results/validation/VAL-19_fccNi/scf_weak/'
+database = '../../../../../results/validation/TDVAL-01_FE_NI/ground_state/fccNi/'
 label(1) = 'Ni'
 /
 &self
@@ -29,7 +33,7 @@ soc_scale = 0.0d0
 fix_soc = .true.
 /
 &energy
-fermi = -0.045779
+fermi = 0.1010233902012761
 energy_min = -2.0
 energy_max = 1.5
 channels_ldos = 401

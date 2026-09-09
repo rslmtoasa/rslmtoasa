@@ -6,9 +6,13 @@
 ! same one-particle poles, but the three chi0 paths remain independent:
 !
 !   eigenpairs: explicit transition denominators;
-!   K-GF:      energy-integrated Lehmann resolvents;
+!   K-GF:      exact K-space Lehmann transition-pole adapter;
 !   R-GF:      inverse discrete Fourier transformed G(R,z), followed by a
 !              susceptibility transform (never a G(R)->G(k) runtime route).
+!
+! The standalone energy-integrated K-space GF bubble is retained as a
+! separate diagnostic for the native R-space quadrature comparison; it is
+! not confused with the exact production K-space Lehmann result.
 !
 ! An optional first command-line argument names a JSON evidence file.  CTest
 ! runs the executable without an argument; developers can regenerate the
@@ -55,6 +59,7 @@ program test_tddft_backend_equivalence
       logical :: native_static_supported = .false.
       complex(rp), allocatable :: chi_eigen(:, :, :, :)
       complex(rp), allocatable :: chi_kspace(:, :, :, :)
+      complex(rp), allocatable :: chi_gf_bubble(:, :, :, :)
       complex(rp), allocatable :: chi_realspace(:, :, :, :)
       real(rp), allocatable :: tail_ratio(:)
       integer :: native_builds = 0
@@ -162,7 +167,7 @@ program test_tddft_backend_equivalence
    ! each ladder point instead of assuming broadening independence.
    do ilevel = 1, size(eta_levels)
       call run_campaign(4, eta_ne_levels(ilevel), q_two, omega_two, eta_levels(ilevel), huge(1.0_rp), campaign)
-      eta_kr_errors(ilevel) = max_backend_error(campaign%chi_realspace, campaign%chi_kspace)
+      eta_kr_errors(ilevel) = max_backend_error(campaign%chi_realspace, campaign%chi_gf_bubble)
       eta_ek_errors(ilevel) = max_backend_error(campaign%chi_kspace, campaign%chi_eigen)
    end do
 
@@ -242,6 +247,8 @@ contains
       type(green_chi0_options) :: green_options
       type(tddft_realspace_chi0_options) :: realspace_options
       type(tddft_native_realspace_gf_provider) :: native_provider
+      type(eigenpair_green_function_provider) :: green_source
+      type(tddft_chi0_result) :: green_bubble
       class(tddft_chi0_backend), allocatable :: eigen_backend, kspace_backend, realspace_backend
       type(tddft_chi0_batch_result) :: eigen_batch, kspace_batch, realspace_batch
       type(tddft_backend_capabilities) :: capabilities
@@ -301,12 +308,20 @@ contains
       output%eta = eta_value; output%rmax = rmax
       output%native_static_supported = capabilities%supports_static_limit
       allocate(output%chi_eigen(2, 2, output%nw, output%nq), output%chi_kspace(2, 2, output%nw, output%nq), &
-         output%chi_realspace(2, 2, output%nw, output%nq), output%tail_ratio(output%nq))
+         output%chi_gf_bubble(2, 2, output%nw, output%nq), output%chi_realspace(2, 2, output%nw, output%nq), &
+         output%tail_ratio(output%nq))
       do iq = 1, output%nq
          output%chi_eigen(:, :, :, iq) = eigen_batch%q_response(iq)%chi
          output%chi_kspace(:, :, :, iq) = kspace_batch%q_response(iq)%chi
          output%chi_realspace(:, :, :, iq) = realspace_batch%q_response(iq)%chi
          output%tail_ratio(iq) = realspace_batch%q_response(iq)%metadata%real_space_tail_ratio
+         ! Retain the energy-integrated GF bubble as the independent
+         ! quadrature comparison with native R-GF.  The factory K-space
+         ! result remains the exact production Lehmann result.
+         green_options%q_direct = q_points(:, iq)
+         call green_source%initialize(eval, evec, evalq(:, :, iq), evecq(:, :, :, iq))
+         call build_chi_ks_from_green_functions(green_source, weights, [1], left, right, omega, green_options, green_bubble)
+         output%chi_gf_bubble(:, :, :, iq) = green_bubble%chi
       end do
       select type (realspace_backend)
       type is (tddft_realspace_gf_backend)
@@ -578,7 +593,8 @@ contains
          do iw = 1, campaign%nw
             max_ek = max(max_ek, matrix_error(campaign%chi_kspace(:, :, iw, iq), campaign%chi_eigen(:, :, iw, iq)))
             max_er = max(max_er, matrix_error(campaign%chi_realspace(:, :, iw, iq), campaign%chi_eigen(:, :, iw, iq)))
-            max_kr = max(max_kr, matrix_error(campaign%chi_realspace(:, :, iw, iq), campaign%chi_kspace(:, :, iw, iq)))
+            max_kr = max(max_kr, matrix_error(campaign%chi_realspace(:, :, iw, iq), &
+               campaign%chi_gf_bubble(:, :, iw, iq)))
             max_ek_eigen = max(max_ek_eigen, matrix_eigen_error(campaign%chi_kspace(:, :, iw, iq), &
                campaign%chi_eigen(:, :, iw, iq)))
             max_er_eigen = max(max_er_eigen, matrix_eigen_error(campaign%chi_realspace(:, :, iw, iq), &

@@ -46,6 +46,8 @@ def test_finite_q_endpoint_gauge_contract_is_explicit_and_single_route() -> None
                   "kq_folded_endpoint_count"):
         assert field in calculation
         assert field in config
+    assert "config%q_cartesian = matmul(reciprocal_obj%reciprocal_vectors, config%q_points(:, iq)) / lattice_obj%alat" in calculation
+    assert "q_cartesian_unit = inverse Angstrom" in calculation
 
 
 def test_response_reconstructs_signed_restart_site_moments_before_alsda_kernel() -> None:
