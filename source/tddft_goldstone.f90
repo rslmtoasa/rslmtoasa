@@ -12,10 +12,11 @@
 !> static Xi; it never injects a finite-eta inverse chi_KS as a kernel.
 module tddft_goldstone_mod
    use precision_mod, only: rp
-   use xc_response_kernel_mod, only: xc_response_kernel_provider, circular_transverse_kernel
+   use xc_response_kernel_mod, only: xc_response_kernel_provider, circular_transverse_kernel, &
+      build_independent_circular_bxc_source
    use tddft_ward_mod, only: tddft_ward_diagnostics, tddft_lounis_repair, tddft_goldstone_projection, &
       evaluate_static_ward_identity, evaluate_ward_from_xi, reconstruct_lounis_kernel, project_goldstone_eigenvalue, &
-      derive_kernel_from_static_xi
+      derive_kernel_from_static_xi, tddft_static_dynamic_diagnostics
    implicit none
 
    private
@@ -39,6 +40,12 @@ module tddft_goldstone_mod
       logical :: has_soc = .false.
       logical :: has_external_field = .false.
       character(len=16) :: circular_channel = 'plus_minus'
+      ! A production comparison is valid only when both routes describe the
+      ! same collinear SOC-off q=0 reference.  Branch/sign strictness is hard;
+      ! magnitude equivalence remains an explicit, opt-in gate.
+      logical :: require_independent_ward = .false.
+      logical :: compare_reference_applicable = .false.
+      logical :: compare_strict_magnitude = .false.
    end type tddft_goldstone_options
 
    type, public :: tddft_goldstone_diagnostics
@@ -46,10 +53,20 @@ module tddft_goldstone_mod
       logical :: has_bare_spectral_gap = .false.
       real(rp) :: bare_spectral_gap = -1.0_rp
       real(rp) :: residual = -1.0_rp
+      real(rp) :: xi_residual = -1.0_rp
       real(rp) :: closest_eigenvalue_distance = -1.0_rp
+      complex(rp) :: closest_eigenvalue_delta = cmplx(0.0_rp, 0.0_rp, rp)
       ! `magnetization_overlap` is retained as the right overlap for
       ! compatibility with existing campaign readers.
       real(rp) :: magnetization_overlap = -1.0_rp
+      real(rp) :: normalized_magnitude_overlap = -1.0_rp
+      complex(rp) :: normalized_phase_overlap = cmplx(0.0_rp, 0.0_rp, rp)
+      ! Sign-sensitive action character: <m|Xi|m>/<m|m>.  Unlike an
+      ! absolute eigenvector overlap, this is +1 for the Goldstone branch and
+      ! -1 for the deliberately injected anti-Goldstone branch in a scalar
+      ! one-site reference.
+      complex(rp) :: phase_sensitive_overlap = cmplx(0.0_rp, 0.0_rp, rp)
+      complex(rp) :: branch_phase = cmplx(0.0_rp, 0.0_rp, rp)
       real(rp) :: left_magnetization_overlap = -1.0_rp
       real(rp) :: biorthogonal_magnetization_overlap = -1.0_rp
       real(rp) :: imaginary_norm = -1.0_rp
@@ -60,10 +77,28 @@ module tddft_goldstone_mod
       complex(rp), allocatable :: left_eigenvectors(:, :)
       complex(rp), allocatable :: closest_eigenvector(:)
       complex(rp), allocatable :: closest_left_eigenvector(:)
+      complex(rp), allocatable :: signed_magnetization(:)
+      integer :: response_space_rank = 0
       ! First-class raw Ward record.  The legacy fields above remain for
       ! campaign compatibility; this component carries basis and provenance.
       type(tddft_ward_diagnostics) :: ward
    end type tddft_goldstone_diagnostics
+
+   type, public :: tddft_xi_compare_diagnostics
+      logical :: available = .false.
+      logical :: reference_applicable = .false.
+      logical :: plus_one_branch_identified = .false.
+      logical :: opposite_branch_detected = .false.
+      logical :: hard_branch_failure = .false.
+      logical :: magnitude_equivalent = .false.
+      logical :: strict_magnitude_gate = .false.
+      character(len=160) :: policy = 'not applicable'
+      real(rp) :: legacy_xi_residual = -1.0_rp
+      real(rp) :: pair_xi_residual = -1.0_rp
+      real(rp) :: relative_frobenius_mismatch = -1.0_rp
+      type(tddft_goldstone_diagnostics) :: legacy
+      type(tddft_goldstone_diagnostics) :: pair
+   end type tddft_xi_compare_diagnostics
 
    type, public :: tddft_goldstone_result
       complex(rp), allocatable :: k_perp(:)
@@ -72,6 +107,8 @@ module tddft_goldstone_mod
       complex(rp), allocatable :: xi_corrected(:, :)
       type(tddft_goldstone_diagnostics) :: raw
       type(tddft_goldstone_diagnostics) :: corrected
+      type(tddft_static_dynamic_diagnostics) :: static_dynamic
+      type(tddft_xi_compare_diagnostics) :: xi_compare
       logical :: sum_rule_requested = .false.
       logical :: sum_rule_applied = .false.
       logical :: sum_rule_disabled_by_symmetry_breaking = .false.
@@ -103,6 +140,7 @@ module tddft_goldstone_mod
    public :: construct_transverse_xi
    public :: evaluate_goldstone
    public :: evaluate_raw_xi_diagnostics
+   public :: compare_xi_goldstone_branches
    public :: build_goldstone_column_correction
    public :: rescale_xi_columns
    public :: rescale_pair_potential_columns
@@ -149,13 +187,17 @@ contains
    !> sum-rule correction.  `bare_spectral_gap`, when present, must be the
    !> caller’s independently determined lowest bare spin-flip transition; it
    !> is not inferred from one complex chi_KS matrix sample.
-   subroutine evaluate_goldstone(chi_ks_static, provider, options, result, bare_spectral_gap)
+   subroutine evaluate_goldstone(chi_ks_static, provider, options, result, bare_spectral_gap, moment_amplitudes)
       complex(rp), intent(in) :: chi_ks_static(:, :)
       type(xc_response_kernel_provider), intent(in) :: provider
       type(tddft_goldstone_options), intent(in) :: options
       type(tddft_goldstone_result), intent(out) :: result
       real(rp), intent(in), optional :: bare_spectral_gap
-      complex(rp), allocatable :: magnetization(:), bxc(:), kernel(:, :), repaired_kernel(:, :), projected_xi(:, :)
+      real(rp), intent(in), optional :: moment_amplitudes(:)
+      complex(rp), allocatable :: magnetization(:), bxc(:), repaired_kernel(:, :), projected_xi(:, :)
+      real(rp), allocatable :: response_amplitudes(:), signed_magnetization(:)
+      logical :: independent_bxc_available
+      character(len=160) :: bxc_provenance
       integer :: mode, isite
       character(len=16) :: policy
 
@@ -175,15 +217,39 @@ contains
       result%sum_rule_requested = mode == GOLDSTONE_SUM_RULE
       if (mode /= GOLDSTONE_OFF) then
          call calculate_diagnostics(result%xi_raw, magnetization, result%raw, bare_spectral_gap)
-         allocate(bxc(size(magnetization)), kernel(size(magnetization), size(magnetization)))
-         kernel = cmplx(0.0_rp, 0.0_rp, rp)
-         do isite = 1, size(magnetization)
-            bxc(isite) = result%k_perp(isite)*magnetization(isite)
-            kernel(isite, isite) = result%k_perp(isite)
-         end do
-         call evaluate_static_ward_identity(chi_ks_static, bxc, magnetization, result%raw%ward, kernel=kernel, &
-            response_basis='site', bxc_provenance='ground-state XC response provider', &
-            kernel_provenance='site-projected transverse ALSDA K_xc')
+         allocate(response_amplitudes(size(magnetization)), signed_magnetization(size(magnetization)), bxc(size(magnetization)))
+         if (present(moment_amplitudes)) then
+            if (size(moment_amplitudes) /= size(magnetization)) then
+               error stop 'evaluate_goldstone: supplied moment amplitudes and response dimensions are incompatible'
+            end if
+            response_amplitudes = moment_amplitudes
+         else
+            response_amplitudes = 0.0_rp
+            do isite = 1, size(magnetization)
+               response_amplitudes(isite) = provider%site(isite)%spin_population
+            end do
+         end if
+         signed_magnetization = real(magnetization, rp)
+         independent_bxc_available = all([(provider%site(isite)%has_radial_projection .and. &
+            provider%site(isite)%has_signed_spin_population .and. &
+            response_amplitudes(isite) > tiny(1.0_rp) .and. abs(signed_magnetization(isite)) > tiny(1.0_rp), &
+            isite=1,size(magnetization))])
+         if (independent_bxc_available) then
+            call build_independent_circular_bxc_source(provider, response_amplitudes, signed_magnetization, bxc, bxc_provenance)
+            call evaluate_static_ward_identity(chi_ks_static, bxc, magnetization, result%raw%ward, response_basis='site', &
+               bxc_provenance=trim(bxc_provenance), kernel_provenance='independent VXC0SP radial ground-state source', &
+               bxc_is_independent=.true.)
+         else
+            if (options%require_independent_ward) then
+               error stop 'evaluate_goldstone: independent VXC0SP B_xc source is required but unavailable'
+            end if
+            ! Keep synthetic/legacy unit callers usable, but make the
+            ! non-independent nature impossible to mistake for r_B in output.
+            bxc = result%k_perp*magnetization
+            call evaluate_static_ward_identity(chi_ks_static, bxc, magnetization, result%raw%ward, response_basis='site', &
+               bxc_provenance='derived debug source: K_perp*m_G (not independent)', &
+               kernel_provenance='site-projected transverse ALSDA K_xc; derived identity only', bxc_is_independent=.false.)
+         end if
       end if
 
       select case (policy)
@@ -483,11 +549,13 @@ contains
 
       open(newunit=unit, file=filename, status='replace', action='write', iostat=ios)
       if (ios /= 0) error stop 'write_goldstone_diagnostics_text: cannot open output file'
-      write(unit, '(a)') '# legacy Xi = chi_KS K_perp; K_perp provenance = xc_response_kernel'
-      write(unit, '(a)') '# Ward identity = chi_KS(0,0) B_xc - m; Dm = m-chi_KS K_xc m'
+      write(unit, '(a)') '# Xi = direct pair-potential or site-projected response-space operator'
+      write(unit, '(a)') '# Ward identity = chi_KS(0,0) B_xc,circ,src - m_G = 0'
+      write(unit, '(a)') '# B_xc,circ,src = signed_magnetization/moment_amplitude * bxc_spin_moment/(2*moment_amplitude)'
       write(unit, '(a)') '# raw Goldstone diagnostics are retained for every non-off mode'
       write(unit, '(a,a)') '# goldstone_policy = ', trim(result%goldstone_policy)
       write(unit, '(a,a)') '# circular_channel = ', trim(result%circular_channel)
+      if (result%raw%available) write(unit, '(a,i0)') '# response_space_rank = ', result%raw%response_space_rank
       write(unit, '(a,l1)') '# legacy_site_scalar_correction_requested = ', result%sum_rule_requested
       write(unit, '(a,l1)') '# legacy_site_scalar_correction_applied = ', result%sum_rule_applied
       write(unit, '(a,l1)') '# legacy_site_scalar_correction_disabled = ', result%sum_rule_disabled_by_symmetry_breaking
@@ -512,6 +580,8 @@ contains
       end if
       call write_one_diagnostics(unit, 'raw', result%raw)
       if (result%sum_rule_applied) call write_one_diagnostics(unit, 'legacy_site_scalar_corrected', result%corrected)
+      if (result%static_dynamic%available) call write_static_dynamic_diagnostics(unit, result%static_dynamic)
+      if (result%xi_compare%available) call write_xi_compare_diagnostics(unit, result%xi_compare)
       if (allocated(result%k_perp)) then
          do i = 1, size(result%k_perp)
             write(unit, '(a,1x,i0,2(1x,es24.16))') 'kernel_raw', i, real(result%k_perp(i), rp), aimag(result%k_perp(i))
@@ -532,6 +602,7 @@ contains
       real(rp), intent(in), optional :: bare_spectral_gap
       complex(rp), allocatable :: residual_vector(:)
       real(rp) :: norm_m, norm_right, norm_left, matrix_norm
+      complex(rp), allocatable :: response_on_m(:)
       integer :: i
 
       call diagonalize_nonhermitian(xi, diagnostics%eigenvalues, diagnostics%eigenvectors, diagnostics%left_eigenvectors)
@@ -544,6 +615,7 @@ contains
       end do
       diagnostics%closest_eigenvalue = diagnostics%eigenvalues(diagnostics%closest_eigenvalue_index)
       diagnostics%closest_eigenvalue_distance = abs(diagnostics%closest_eigenvalue - cmplx(1.0_rp, 0.0_rp, rp))
+      diagnostics%closest_eigenvalue_delta = diagnostics%closest_eigenvalue - cmplx(1.0_rp, 0.0_rp, rp)
       allocate(diagnostics%closest_eigenvector(size(magnetization)))
       diagnostics%closest_eigenvector = diagnostics%eigenvectors(:, diagnostics%closest_eigenvalue_index)
       allocate(diagnostics%closest_left_eigenvector(size(magnetization)))
@@ -553,16 +625,29 @@ contains
       norm_left = sqrt(sum(abs(diagnostics%closest_left_eigenvector)**2))
       diagnostics%magnetization_overlap = abs(dot_product(magnetization, diagnostics%closest_eigenvector))/ &
          (norm_m*norm_right)
+      diagnostics%normalized_magnitude_overlap = diagnostics%magnetization_overlap
+      diagnostics%normalized_phase_overlap = dot_product(magnetization, diagnostics%closest_eigenvector)/ &
+         (norm_m*norm_right)
       diagnostics%left_magnetization_overlap = abs(dot_product(diagnostics%closest_left_eigenvector, magnetization))/ &
          (norm_left*norm_m)
       diagnostics%biorthogonal_magnetization_overlap = abs(dot_product(diagnostics%closest_left_eigenvector, magnetization)* &
          dot_product(magnetization, diagnostics%closest_eigenvector))/(norm_left*norm_right*norm_m**2)
       allocate(residual_vector(size(magnetization)))
       residual_vector = matmul(xi, magnetization) - magnetization
-      diagnostics%residual = sqrt(sum(abs(residual_vector)**2))/norm_m
+      diagnostics%xi_residual = sqrt(sum(abs(residual_vector)**2))/norm_m
+      diagnostics%residual = diagnostics%xi_residual
+      allocate(response_on_m(size(magnetization)))
+      response_on_m = matmul(xi, magnetization)
+      diagnostics%phase_sensitive_overlap = dot_product(magnetization, response_on_m)/(norm_m**2)
+      if (abs(diagnostics%closest_eigenvalue) > tiny(1.0_rp)) then
+         diagnostics%branch_phase = diagnostics%closest_eigenvalue/abs(diagnostics%closest_eigenvalue)
+      end if
       matrix_norm = sqrt(sum(abs(xi)**2))
       diagnostics%imaginary_norm = sqrt(sum(aimag(xi)**2))/max(1.0_rp, matrix_norm)
       diagnostics%available = .true.
+      diagnostics%response_space_rank = size(xi, 1)
+      allocate(diagnostics%signed_magnetization(size(magnetization)))
+      diagnostics%signed_magnetization = magnetization
       call evaluate_ward_from_xi(xi, magnetization, diagnostics%ward, response_basis='active response basis', &
          kernel_provenance='Xi = chi_KS K_xc; raw operator before any repair')
       if (present(bare_spectral_gap)) then
@@ -570,6 +655,63 @@ contains
          diagnostics%bare_spectral_gap = bare_spectral_gap
       end if
    end subroutine calculate_diagnostics
+
+   !> Compare the legacy response-space Xi with an independently assembled
+   !> pair-potential Xi.  In an explicitly applicable q=0 collinear SOC-off
+   !> reference, branch/sign errors are hard failures.  Magnitude mismatch is
+   !> reported but is gated only when the caller has established mathematical
+   !> equivalence of the two approximations.
+   subroutine compare_xi_goldstone_branches(legacy_xi, pair_xi, magnetization, comparison, strict_magnitude, &
+      reference_applicable)
+      complex(rp), intent(in) :: legacy_xi(:, :), pair_xi(:, :), magnetization(:)
+      type(tddft_xi_compare_diagnostics), intent(out) :: comparison
+      logical, intent(in), optional :: strict_magnitude
+      logical, intent(in), optional :: reference_applicable
+      real(rp) :: legacy_norm, pair_norm, difference_norm
+      logical :: strict, applicable
+
+      if (size(legacy_xi, 1) /= size(legacy_xi, 2) .or. size(pair_xi, 1) /= size(pair_xi, 2) .or. &
+          any(shape(legacy_xi) /= shape(pair_xi)) .or. size(magnetization) /= size(legacy_xi, 1)) then
+         error stop 'compare_xi_goldstone_branches: Xi and magnetization dimensions are incompatible'
+      end if
+      if (sqrt(sum(abs(magnetization)**2)) <= tiny(1.0_rp)) then
+         error stop 'compare_xi_goldstone_branches: magnetization is zero'
+      end if
+      strict = .false.
+      if (present(strict_magnitude)) strict = strict_magnitude
+      applicable = .true.
+      if (present(reference_applicable)) applicable = reference_applicable
+      comparison%available = .true.
+      comparison%reference_applicable = applicable
+      comparison%strict_magnitude_gate = strict
+      if (applicable) then
+         comparison%policy = 'q=0 collinear SOC-off: +1 branch hard; magnitude report-only unless strict gate is true'
+      else
+         comparison%policy = 'reference not applicable: report branch and magnitude diagnostics without a validation gate'
+      end if
+      call calculate_diagnostics(legacy_xi, magnetization, comparison%legacy)
+      call calculate_diagnostics(pair_xi, magnetization, comparison%pair)
+      comparison%legacy_xi_residual = comparison%legacy%xi_residual
+      comparison%pair_xi_residual = comparison%pair%xi_residual
+      legacy_norm = sqrt(sum(abs(legacy_xi)**2))
+      pair_norm = sqrt(sum(abs(pair_xi)**2))
+      difference_norm = sqrt(sum(abs(legacy_xi-pair_xi)**2))
+      comparison%relative_frobenius_mismatch = difference_norm/max(1.0_rp, legacy_norm, pair_norm)
+      comparison%magnitude_equivalent = comparison%relative_frobenius_mismatch <= 1.0e-8_rp
+      comparison%plus_one_branch_identified = comparison%legacy%closest_eigenvalue_distance <= 0.5_rp .and. &
+         comparison%pair%closest_eigenvalue_distance <= 0.5_rp .and. comparison%legacy%xi_residual <= 0.5_rp .and. &
+         comparison%pair%xi_residual <= 0.5_rp
+      comparison%opposite_branch_detected = real(comparison%legacy%phase_sensitive_overlap, rp) < 0.0_rp .or. &
+         real(comparison%pair%phase_sensitive_overlap, rp) < 0.0_rp .or. &
+         (abs(comparison%legacy%closest_eigenvalue+cmplx(1.0_rp, 0.0_rp, rp)) < &
+         abs(comparison%legacy%closest_eigenvalue-cmplx(1.0_rp, 0.0_rp, rp))) .or. &
+         (abs(comparison%pair%closest_eigenvalue+cmplx(1.0_rp, 0.0_rp, rp)) < &
+         abs(comparison%pair%closest_eigenvalue-cmplx(1.0_rp, 0.0_rp, rp)))
+      comparison%hard_branch_failure = applicable .and. (.not. comparison%plus_one_branch_identified .or. &
+         comparison%opposite_branch_detected)
+      if (applicable .and. strict) comparison%hard_branch_failure = comparison%hard_branch_failure .or. &
+         .not. comparison%magnitude_equivalent
+   end subroutine compare_xi_goldstone_branches
 
    subroutine diagonalize_nonhermitian(matrix, eigenvalues, eigenvectors, left_eigenvectors)
       complex(rp), intent(in) :: matrix(:, :)
@@ -637,41 +779,96 @@ contains
 
       write(unit, '(a,a,a,l1)') '# ', trim(prefix), '_available = ', diagnostics%available
       if (.not. diagnostics%available) return
-      write(unit, '(a,a,a,2(1x,es24.16))') trim(prefix), '_closest_eigenvalue', '', &
+      write(unit, '(a,a,a,2(1x,es24.16))') '# ', trim(prefix), '_closest_eigenvalue = ', &
          real(diagnostics%closest_eigenvalue, rp), aimag(diagnostics%closest_eigenvalue)
-      write(unit, '(a,a,a,es24.16)') trim(prefix), '_closest_eigenvalue_distance', '', diagnostics%closest_eigenvalue_distance
-      write(unit, '(a,a,a,es24.16)') trim(prefix), '_magnetization_overlap', '', diagnostics%magnetization_overlap
-      write(unit, '(a,a,a,es24.16)') trim(prefix), '_left_magnetization_overlap', '', diagnostics%left_magnetization_overlap
-      write(unit, '(a,a,a,es24.16)') trim(prefix), '_biorthogonal_magnetization_overlap', '', diagnostics%biorthogonal_magnetization_overlap
-      write(unit, '(a,a,a,es24.16)') trim(prefix), '_imaginary_norm', '', diagnostics%imaginary_norm
-      write(unit, '(a,a,a,es24.16)') trim(prefix), '_residual', '', diagnostics%residual
+      write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_closest_eigenvalue_distance = ', diagnostics%closest_eigenvalue_distance
+      write(unit, '(a,a,a,2(1x,es24.16))') '# ', trim(prefix), '_closest_eigenvalue_delta = ', &
+         real(diagnostics%closest_eigenvalue_delta, rp), aimag(diagnostics%closest_eigenvalue_delta)
+      write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_normalized_magnitude_overlap = ', &
+         diagnostics%normalized_magnitude_overlap
+      write(unit, '(a,a,a,2(1x,es24.16))') '# ', trim(prefix), '_normalized_phase_overlap = ', &
+         real(diagnostics%normalized_phase_overlap, rp), aimag(diagnostics%normalized_phase_overlap)
+      write(unit, '(a,a,a,2(1x,es24.16))') '# ', trim(prefix), '_phase_sensitive_overlap = ', &
+         real(diagnostics%phase_sensitive_overlap, rp), aimag(diagnostics%phase_sensitive_overlap)
+      write(unit, '(a,a,a,2(1x,es24.16))') '# ', trim(prefix), '_branch_phase = ', &
+         real(diagnostics%branch_phase, rp), aimag(diagnostics%branch_phase)
+      write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_left_magnetization_overlap = ', diagnostics%left_magnetization_overlap
+      write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_biorthogonal_magnetization_overlap = ', &
+         diagnostics%biorthogonal_magnetization_overlap
+      write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_imaginary_norm = ', diagnostics%imaginary_norm
+      write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_r_Xi = ', diagnostics%xi_residual
+      write(unit, '(a,a,a,i0)') '# ', trim(prefix), '_response_space_rank = ', diagnostics%response_space_rank
       if (diagnostics%ward%available) then
-         write(unit, '(a,a,a,es24.16)') trim(prefix), '_ward_residual', '', diagnostics%ward%ward_residual
-         write(unit, '(a,a,a,es24.16)') trim(prefix), '_dm_residual', '', diagnostics%ward%dm_residual
-         write(unit, '(a,a,a,es24.16)') trim(prefix), '_bxc_kernel_residual', '', diagnostics%ward%bxc_kernel_residual
-         write(unit, '(a,a,a,es24.16)') trim(prefix), '_magnetization_norm', '', diagnostics%ward%magnetization_norm
-         write(unit, '(a,a,a,es24.16)') trim(prefix), '_bxc_norm', '', diagnostics%ward%bxc_norm
-         write(unit, '(a,a,a,l1)') trim(prefix), '_identity_consistent', '', diagnostics%ward%identity_consistent
-         write(unit, '(a,a,a)') trim(prefix), '_response_basis = ', trim(diagnostics%ward%response_basis)
-         write(unit, '(a,a,a)') trim(prefix), '_bxc_provenance = ', trim(diagnostics%ward%bxc_provenance)
-         write(unit, '(a,a,a)') trim(prefix), '_kernel_provenance = ', trim(diagnostics%ward%kernel_provenance)
+         if (diagnostics%ward%independent_bxc) write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_r_B = ', diagnostics%ward%r_b
+         write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_magnetization_norm = ', diagnostics%ward%magnetization_norm
+         write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_bxc_norm = ', diagnostics%ward%bxc_norm
+         write(unit, '(a,a,a,l1)') '# ', trim(prefix), '_identity_consistent = ', diagnostics%ward%identity_consistent
+         write(unit, '(a,a,a,l1)') '# ', trim(prefix), '_independent_bxc = ', diagnostics%ward%independent_bxc
+         write(unit, '(a,a,a)') '# ', trim(prefix), '_diagnostic_kind = ', trim(diagnostics%ward%diagnostic_kind)
+         write(unit, '(a,a,a)') '# ', trim(prefix), '_response_basis = ', trim(diagnostics%ward%response_basis)
+         write(unit, '(a,a,a)') '# ', trim(prefix), '_bxc_provenance = ', trim(diagnostics%ward%bxc_provenance)
+         write(unit, '(a,a,a)') '# ', trim(prefix), '_kernel_provenance = ', trim(diagnostics%ward%kernel_provenance)
       end if
       if (diagnostics%has_bare_spectral_gap) then
-         write(unit, '(a,a,a,es24.16)') trim(prefix), '_bare_spectral_gap', '', diagnostics%bare_spectral_gap
+         write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_bare_spectral_gap = ', diagnostics%bare_spectral_gap
       end if
       do i = 1, size(diagnostics%eigenvalues)
-         write(unit, '(a,a,1x,i0,2(1x,es24.16))') trim(prefix), '_eigenvalue', i, real(diagnostics%eigenvalues(i), rp), &
+         write(unit, '(a,a,a,1x,i0,2(1x,es24.16))') '# ', trim(prefix), '_eigenvalue', i, real(diagnostics%eigenvalues(i), rp), &
             aimag(diagnostics%eigenvalues(i))
       end do
       do i = 1, size(diagnostics%closest_eigenvector)
-         write(unit, '(a,a,1x,i0,2(1x,es24.16))') trim(prefix), '_closest_eigenvector', i, &
+         write(unit, '(a,a,a,1x,i0,2(1x,es24.16))') '# ', trim(prefix), '_closest_eigenvector', i, &
             real(diagnostics%closest_eigenvector(i), rp), aimag(diagnostics%closest_eigenvector(i))
       end do
       do i = 1, size(diagnostics%closest_left_eigenvector)
-         write(unit, '(a,a,1x,i0,2(1x,es24.16))') trim(prefix), '_closest_left_eigenvector', i, &
+         write(unit, '(a,a,a,1x,i0,2(1x,es24.16))') '# ', trim(prefix), '_closest_left_eigenvector', i, &
             real(diagnostics%closest_left_eigenvector(i), rp), aimag(diagnostics%closest_left_eigenvector(i))
       end do
+      if (allocated(diagnostics%signed_magnetization)) then
+         do i = 1, size(diagnostics%signed_magnetization)
+            write(unit, '(a,a,a,1x,i0,a,2(1x,es24.16))') '# ', trim(prefix), '_signed_magnetization', i, ' = ', &
+               real(diagnostics%signed_magnetization(i), rp), aimag(diagnostics%signed_magnetization(i))
+         end do
+      end if
    end subroutine write_one_diagnostics
+
+   subroutine write_static_dynamic_diagnostics(unit, diagnostics)
+      integer, intent(in) :: unit
+      type(tddft_static_dynamic_diagnostics), intent(in) :: diagnostics
+      integer :: i
+
+      write(unit, '(a)') '# static_dynamic_diagnostic = exact static divided difference versus dynamic omega=0 eta ladder'
+      write(unit, '(a,l1)') '# static_dynamic_available = ', diagnostics%available
+      write(unit, '(a,l1)') '# static_dynamic_eta_ladder_valid = ', diagnostics%eta_ladder_valid
+      write(unit, '(a,i0)') '# static_dynamic_response_space_rank = ', diagnostics%response_space_rank
+      write(unit, '(a,a)') '# static_dynamic_response_basis = ', trim(diagnostics%response_basis)
+      write(unit, '(a,a)') '# static_dynamic_q_provenance = ', trim(diagnostics%q_provenance)
+      write(unit, '(a,es24.16)') '# static_dynamic_static_norm = ', diagnostics%static_norm
+      write(unit, '(a,es24.16)') '# static_dynamic_denominator_floor = ', diagnostics%denominator_floor
+      write(unit, '(a,es24.16)') '# static_dynamic_smallest_eta = ', diagnostics%smallest_eta
+      write(unit, '(a,es24.16)') '# static_dynamic_smallest_eta_residual = ', diagnostics%smallest_eta_residual
+      do i = 1, diagnostics%eta_count
+         write(unit, '(a,i0,3(1x,es24.16))') '# static_dynamic_eta_residual', i, diagnostics%eta(i), &
+            diagnostics%residual(i), diagnostics%difference_norm(i)
+      end do
+   end subroutine write_static_dynamic_diagnostics
+
+   subroutine write_xi_compare_diagnostics(unit, comparison)
+      integer, intent(in) :: unit
+      type(tddft_xi_compare_diagnostics), intent(in) :: comparison
+
+      write(unit, '(a)') '# xi_compare_diagnostic = legacy versus direct pair-potential Goldstone reference'
+      write(unit, '(a,l1)') '# xi_compare_reference_applicable = ', comparison%reference_applicable
+      write(unit, '(a,l1)') '# xi_compare_plus_one_branch_identified = ', comparison%plus_one_branch_identified
+      write(unit, '(a,l1)') '# xi_compare_opposite_branch_detected = ', comparison%opposite_branch_detected
+      write(unit, '(a,l1)') '# xi_compare_hard_branch_failure = ', comparison%hard_branch_failure
+      write(unit, '(a,l1)') '# xi_compare_strict_magnitude_gate = ', comparison%strict_magnitude_gate
+      write(unit, '(a,l1)') '# xi_compare_magnitude_equivalent = ', comparison%magnitude_equivalent
+      write(unit, '(a,a)') '# xi_compare_policy = ', trim(comparison%policy)
+      write(unit, '(a,es24.16)') '# xi_compare_legacy_r_Xi = ', comparison%legacy_xi_residual
+      write(unit, '(a,es24.16)') '# xi_compare_pair_r_Xi = ', comparison%pair_xi_residual
+      write(unit, '(a,es24.16)') '# xi_compare_relative_frobenius_mismatch = ', comparison%relative_frobenius_mismatch
+   end subroutine write_xi_compare_diagnostics
 
    subroutine write_ward_record(unit, prefix, diagnostics)
       integer, intent(in) :: unit
@@ -680,8 +877,11 @@ contains
 
       write(unit, '(a,a,a,l1)') '# ', trim(prefix), '_available = ', diagnostics%available
       if (.not. diagnostics%available) return
-      write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_ward_residual = ', diagnostics%ward_residual
-      write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_dm_residual = ', diagnostics%dm_residual
+      if (diagnostics%independent_bxc) write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), '_r_B = ', diagnostics%r_b
+      if (diagnostics%derived_identity) write(unit, '(a,a,a,es24.16)') '# ', trim(prefix), &
+         '_derived_identity_residual = ', diagnostics%derived_identity_residual
+      write(unit, '(a,a,a,l1)') '# ', trim(prefix), '_independent_bxc = ', diagnostics%independent_bxc
+      write(unit, '(a,a,a,a)') '# ', trim(prefix), '_diagnostic_kind = ', trim(diagnostics%diagnostic_kind)
       write(unit, '(a,a,a,a)') '# ', trim(prefix), '_response_basis = ', trim(diagnostics%response_basis)
       write(unit, '(a,a,a,a)') '# ', trim(prefix), '_kernel_provenance = ', trim(diagnostics%kernel_provenance)
    end subroutine write_ward_record

@@ -6,6 +6,7 @@ program test_tddft_chi_ks
    use math_mod, only: pi
    use response_components_mod, only: RESPONSE_CHARGE, RESPONSE_MZ, RESPONSE_PLUS, RESPONSE_MINUS
    use response_vertices_mod, only: response_channel
+   use tddft_ward_mod, only: tddft_static_dynamic_diagnostics, evaluate_static_dynamic_consistency
    use tddft_chi0_mod, only: tddft_chi0_options, tddft_chi0_result, build_chi_ks_from_eigenpairs, &
       build_static_chi_ks_from_eigenpairs, build_static_chi_ks_from_eigenpairs_at_q, &
       tddft_static_divided_difference, write_chi_ks_text
@@ -21,6 +22,7 @@ program test_tddft_chi_ks
    call test_convergence_controls()
    call test_static_divided_difference_and_eta_independence()
    call test_static_nonzero_q_and_provenance()
+   call test_static_dynamic_eta_ladder_finite_q()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -268,6 +270,42 @@ contains
       write (*, '(a,1x,es24.16,1x,es24.16)') 'BASELINE static q=0.25/ReChi/Stoner', &
          real(result%chi(1, 1, 1), rp), result%trace_spectrum(1)
    end subroutine test_static_nonzero_q_and_provenance
+
+   subroutine test_static_dynamic_eta_ladder_finite_q()
+      integer, parameter :: nk = 4
+      real(rp) :: weights(nk), eval(2, nk), evalq(2, nk), eta(3), omega_zero(1)
+      complex(rp) :: evec(2, 2, nk), evecq(2, 2, nk), chi_dynamic(1, 1, 3)
+      type(response_channel) :: left(1), right(1)
+      type(tddft_chi0_options) :: options, dynamic_options
+      type(tddft_chi0_result) :: static_result, dynamic_result
+      type(tddft_static_dynamic_diagnostics) :: diagnostics
+      integer :: i
+
+      left(1) = response_channel(1, RESPONSE_PLUS)
+      right(1) = response_channel(1, RESPONSE_MINUS)
+      weights = [1.0_rp, 2.0_rp, 1.0_rp, 3.0_rp]
+      call build_spin_split_fixture(1, 0.030_rp, eval, evalq, evec, evecq)
+      options%eta = 0.0_rp
+      options%fermi_level = 0.0_rp
+      options%electronic_temperature = 700.0_rp
+      options%k_mesh_shape = [nk, 1, 1]
+      options%q_direct = [0.0_rp, 0.0_rp, 0.25_rp]
+      call build_static_chi_ks_from_eigenpairs_at_q(weights, eval, evec, evalq, evecq, [1], left, right, options, static_result)
+      omega_zero = 0.0_rp
+      eta = [0.01_rp, 0.003_rp, 0.001_rp]
+      do i = 1, size(eta)
+         dynamic_options = options
+         dynamic_options%eta = eta(i)
+         call build_chi_ks_from_eigenpairs(weights, eval, evec, evalq, evecq, [1], left, right, omega_zero, &
+            dynamic_options, dynamic_result)
+         chi_dynamic(:, :, i) = dynamic_result%chi(:, :, 1)
+      end do
+      call evaluate_static_dynamic_consistency(static_result%chi(:, :, 1), chi_dynamic, eta, diagnostics, &
+         response_basis='site circular', q_provenance='finite +q endpoint fixture')
+      call check_true('finite-q static/dynamic eta ladder is valid', diagnostics%available .and. diagnostics%eta_ladder_valid)
+      call check_true('finite-q eta->0 improves static continuity', diagnostics%residual(3) < diagnostics%residual(1))
+      call check_true('finite-q static/dynamic response rank is explicit', diagnostics%response_space_rank == 1)
+   end subroutine test_static_dynamic_eta_ladder_finite_q
 
    subroutine build_spin_split_fixture(q_shift, hopping, eval, evalq, evec, evecq)
       integer, intent(in) :: q_shift

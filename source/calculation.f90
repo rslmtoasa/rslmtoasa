@@ -65,6 +65,7 @@ module calculation_mod
       tddft_realspace_gf_backend, canonical_tddft_backend_name, make_tddft_chi0_backend
    use tddft_chi0_realspace_mod, only: tddft_realspace_chi0_options, tddft_native_realspace_gf_provider, &
       reduce_realspace_chi0_batch, install_realspace_occupation
+   use tddft_ward_mod, only: tddft_static_dynamic_diagnostics, evaluate_static_dynamic_consistency
    use tddft_circular_mod, only: TDDFT_CIRCULAR_BOTH, TDDFT_CIRCULAR_PLUS_MINUS, TDDFT_CIRCULAR_MINUS_PLUS, &
       circular_channel_name, circular_channel_code, circular_channel_components, opposite_circular_channel, &
       circular_channel_file_tag, is_circular_channel_code
@@ -75,7 +76,7 @@ module calculation_mod
       enhance_tddft_susceptibility_from_xi, write_tddft_dyson_text
    use tddft_goldstone_mod, only: tddft_goldstone_options, tddft_goldstone_result, evaluate_goldstone, &
       tddft_goldstone_diagnostics, tddft_goldstone_column_correction, evaluate_raw_xi_diagnostics, &
-      build_goldstone_column_correction, spectral_weights_are_nonnegative, &
+      compare_xi_goldstone_branches, build_goldstone_column_correction, spectral_weights_are_nonnegative, &
       spectral_weight_correction_is_acceptable, &
       write_goldstone_diagnostics_text, append_goldstone_column_correction_text
    use tddft_modes_mod, only: tddft_mode_options, tddft_mode_result, analyze_tddft_modes, write_tddft_modes_text
@@ -1778,11 +1779,35 @@ contains
          goldstone_options%has_soc = has_soc
          goldstone_options%has_external_field = has_external_field
          goldstone_options%circular_channel = chi0_options%circular_channel
-         call evaluate_goldstone(chi0_static%chi(:, :, 1), self_obj%xc_response_provider, goldstone_options, goldstone_result)
+         goldstone_options%require_independent_ward = .true.
+         goldstone_options%compare_reference_applicable = pair_backend .and. legacy_backend .and. .not. has_soc .and. &
+            .not. has_external_field
+         call evaluate_goldstone(chi0_static%chi(:, :, 1), self_obj%xc_response_provider, goldstone_options, goldstone_result, &
+            moment_amplitudes=moment_amplitudes)
+         if (canonical_chi0_backend == 'eigenpairs') then
+            call evaluate_static_dynamic_eta_ladder(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+               site_orbital_counts, left_channels, right_channels, chi0_static%chi(:, :, 1), chi0_options, &
+               goldstone_result%static_dynamic, 'Gamma q=0 eigenpair static/dynamic continuity')
+         end if
          if (circular_reverse) then
             goldstone_options%circular_channel = chi0_options_reverse%circular_channel
             call evaluate_goldstone(chi0_static_reverse%chi(:, :, 1), self_obj%xc_response_provider, goldstone_options, &
-               goldstone_result_reverse)
+               goldstone_result_reverse, moment_amplitudes=moment_amplitudes)
+            if (canonical_chi0_backend == 'eigenpairs') then
+               call evaluate_static_dynamic_eta_ladder(reciprocal_obj%k_weights, eigenvalues_k, eigenvectors_k, &
+                  site_orbital_counts, left_channels_reverse, right_channels_reverse, chi0_static_reverse%chi(:, :, 1), &
+                  chi0_options_reverse, goldstone_result_reverse%static_dynamic, 'Gamma q=0 reverse circular static/dynamic continuity')
+            end if
+         end if
+         if (pair_backend .and. legacy_backend) then
+            call compare_xi_goldstone_branches(goldstone_result%xi_raw, pair_xi_static%xi(:, :, 1), &
+               cmplx(signed_mz, 0.0_rp, rp), goldstone_result%xi_compare, &
+               strict_magnitude=goldstone_options%compare_strict_magnitude, &
+               reference_applicable=goldstone_options%compare_reference_applicable)
+            if (goldstone_result%xi_compare%reference_applicable .and. goldstone_result%xi_compare%hard_branch_failure) then
+               call g_logger%fatal('[calculation.post_processing_susceptibility]: legacy and pair-potential Xi disagree on the '// &
+                  'applicable q=0 Goldstone branch/sign.', __FILE__, __LINE__)
+            end if
          end if
          ! A finite-eta inverse chi_KS remains diagnostic only.  It is generally
          ! complex; using it as a frequency-independent adiabatic kernel forces
@@ -2332,6 +2357,45 @@ contains
       end if
    end subroutine post_processing_susceptibility
 
+   !> Compare the exact Gamma divided-difference response with a controlled
+   !> omega=0 dynamic eta ladder.  This is a continuity diagnostic only: the
+   !> finite-eta matrices never enter the static Ward identity or Dyson kernel.
+   subroutine evaluate_static_dynamic_eta_ladder(k_weights, eigenvalues_k, eigenvectors_k, site_orbital_counts, &
+      left_channels, right_channels, chi_static, base_options, diagnostics, q_provenance)
+      real(rp), intent(in) :: k_weights(:), eigenvalues_k(:, :)
+      complex(rp), intent(in) :: eigenvectors_k(:, :, :), chi_static(:, :)
+      integer, intent(in) :: site_orbital_counts(:)
+      type(response_channel), intent(in) :: left_channels(:), right_channels(:)
+      type(tddft_chi0_options), intent(in) :: base_options
+      type(tddft_static_dynamic_diagnostics), intent(out) :: diagnostics
+      character(len=*), intent(in) :: q_provenance
+      real(rp), parameter :: eta_fraction(3) = [1.0_rp, 0.5_rp, 0.25_rp]
+      real(rp) :: eta_ladder(3)
+      real(rp) :: omega_zero(1)
+      complex(rp), allocatable :: chi_dynamic(:, :, :)
+      type(tddft_chi0_options) :: eta_chi0_options
+      type(tddft_chi0_result) :: eta_chi0_result
+      integer :: i
+
+      if (base_options%eta <= 0.0_rp) then
+         call g_logger%fatal('[calculation.evaluate_static_dynamic_eta_ladder]: dynamic eta must be positive.', &
+            __FILE__, __LINE__)
+      end if
+      eta_ladder = base_options%eta*eta_fraction
+      omega_zero = 0.0_rp
+      allocate(chi_dynamic(size(chi_static, 1), size(chi_static, 2), size(eta_ladder)))
+      do i = 1, size(eta_ladder)
+         eta_chi0_options = base_options
+         eta_chi0_options%eta = eta_ladder(i)
+         call build_chi_ks_from_eigenpairs(k_weights, eigenvalues_k, eigenvectors_k, eigenvalues_k, eigenvectors_k, &
+            site_orbital_counts, left_channels, right_channels, omega_zero, eta_chi0_options, eta_chi0_result)
+         chi_dynamic(:, :, i) = eta_chi0_result%chi(:, :, 1)
+      end do
+      call evaluate_static_dynamic_consistency(chi_static, chi_dynamic, eta_ladder, diagnostics, response_basis='site', &
+         q_provenance=trim(q_provenance))
+      deallocate(chi_dynamic)
+   end subroutine evaluate_static_dynamic_eta_ladder
+
    !> Report observed dynamic Gamma maxima separately from the real static
    !> Ward operator.  These are grid-resolved loss maxima, not a correction or
    !> a fitted frequency shift, and retain both legacy and pair raw routes.
@@ -2542,27 +2606,39 @@ contains
       character(len=*), intent(in) :: filename
       type(tddft_goldstone_diagnostics), intent(in) :: legacy_diagnostics
       type(tddft_goldstone_diagnostics), intent(in) :: diagnostics
-      integer :: unit, ios
+      integer :: unit, ios, i
 
       open(newunit=unit, file=filename, status='old', position='append', action='write', iostat=ios)
       if (ios /= 0) call g_logger%fatal('[calculation.append_pair_goldstone_diagnostics]: cannot append pair diagnostics', &
          __FILE__, __LINE__)
       write(unit, '(a)') '# pair_potential_raw_goldstone_begin'
-      write(unit, '(a,es24.16)') '# legacy_site_scalar_raw_residual = ', legacy_diagnostics%residual
-      write(unit, '(a,es24.16)') '# legacy_site_scalar_raw_magnetization_overlap = ', legacy_diagnostics%magnetization_overlap
+      write(unit, '(a,es24.16)') '# legacy_site_scalar_raw_r_Xi = ', legacy_diagnostics%xi_residual
+      write(unit, '(a,es24.16)') '# legacy_site_scalar_raw_phase_sensitive_overlap_re = ', &
+         real(legacy_diagnostics%phase_sensitive_overlap, rp)
       write(unit, '(a,l1)') '# pair_potential_raw_available = ', diagnostics%available
-      write(unit, '(a,es24.16)') '# pair_potential_raw_residual = ', diagnostics%residual
+      write(unit, '(a,es24.16)') '# pair_potential_raw_r_Xi = ', diagnostics%xi_residual
       write(unit, '(a,2(1x,es24.16))') '# pair_potential_raw_closest_eigenvalue = ', real(diagnostics%closest_eigenvalue, rp), &
          aimag(diagnostics%closest_eigenvalue)
-      write(unit, '(a,es24.16)') '# pair_potential_raw_magnetization_overlap = ', diagnostics%magnetization_overlap
-      write(unit, '(a,es24.16)') '# pair_potential_raw_left_magnetization_overlap = ', diagnostics%left_magnetization_overlap
-      write(unit, '(a,es24.16)') '# pair_potential_raw_biorthogonal_magnetization_overlap = ', &
-         diagnostics%biorthogonal_magnetization_overlap
+      write(unit, '(a,2(1x,es24.16))') '# pair_potential_raw_closest_eigenvalue_delta = ', &
+         real(diagnostics%closest_eigenvalue_delta, rp), aimag(diagnostics%closest_eigenvalue_delta)
+      write(unit, '(a,es24.16)') '# pair_potential_raw_normalized_magnitude_overlap = ', diagnostics%normalized_magnitude_overlap
+      write(unit, '(a,2(1x,es24.16))') '# pair_potential_raw_phase_sensitive_overlap = ', &
+         real(diagnostics%phase_sensitive_overlap, rp), aimag(diagnostics%phase_sensitive_overlap)
       write(unit, '(a,es24.16)') '# pair_potential_raw_imaginary_norm = ', diagnostics%imaginary_norm
-      write(unit, '(a,es24.16)') '# pair_potential_raw_ward_residual = ', diagnostics%ward%ward_residual
-      write(unit, '(a,es24.16)') '# pair_potential_raw_dm_residual = ', diagnostics%ward%dm_residual
+      write(unit, '(a,i0)') '# pair_potential_raw_response_space_rank = ', diagnostics%response_space_rank
+      if (diagnostics%ward%derived_identity) write(unit, '(a,es24.16)') &
+         '# pair_potential_raw_derived_identity_residual = ', diagnostics%ward%derived_identity_residual
+      if (diagnostics%ward%independent_bxc) write(unit, '(a,es24.16)') '# pair_potential_raw_r_B = ', diagnostics%ward%r_b
+      write(unit, '(a,l1)') '# pair_potential_raw_independent_bxc = ', diagnostics%ward%independent_bxc
+      write(unit, '(a,a)') '# pair_potential_raw_diagnostic_kind = ', trim(diagnostics%ward%diagnostic_kind)
       write(unit, '(a,a)') '# pair_potential_raw_response_basis = ', trim(diagnostics%ward%response_basis)
       write(unit, '(a,a)') '# pair_potential_raw_kernel_provenance = ', trim(diagnostics%ward%kernel_provenance)
+      if (allocated(diagnostics%signed_magnetization)) then
+         do i = 1, size(diagnostics%signed_magnetization)
+            write(unit, '(a,i0,2(1x,es24.16))') '# pair_potential_raw_signed_magnetization', i, &
+               real(diagnostics%signed_magnetization(i), rp), aimag(diagnostics%signed_magnetization(i))
+         end do
+      end if
       write(unit, '(a)') '# pair_potential_static_solver = real q=0 omega=0 Fermi divided difference; dynamic eta excluded'
       write(unit, '(a)') '# pair_potential_provenance = analytic transverse rotation of ordinary LMTO ham_only operator'
       write(unit, '(a)') '# pair_potential_representation = k-resolved reciprocal ham_only coefficient basis'

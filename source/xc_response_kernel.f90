@@ -133,6 +133,7 @@ module xc_response_kernel_mod
 
    public :: evaluate_ground_state_xc_sample
    public :: evaluate_longitudinal_xc_derivatives
+   public :: build_independent_circular_bxc_source
    public :: circular_transverse_kernel
    public :: cartesian_transverse_kernel
 
@@ -485,6 +486,52 @@ contains
 
       kernel = tddft_circular_operator_factor*circular_transverse_kernel(provider, isite)
    end function cartesian_transverse_kernel
+
+   !> Build the independent circular Ward source from the ground-state XC
+   !> quadrature.  The radial numerator is retained directly from VXC0SP;
+   !> `moment_amplitude` is the positive response-projector amplitude and
+   !> `signed_magnetization` supplies the laboratory-frame Goldstone sign.
+   !>
+   !> For the unhalved O+/O- measurement vertices used by TDDFT,
+   !>
+   !>   Bxc_circ,src(i) = s_i * N_B(i)/(2 M_i),
+   !>   s_i = m_G(i)/M_i,
+   !>
+   !> where N_B is `site%bxc_spin_moment`.  This is independent of the
+   !> response kernel slot `k_perp_circular`; the latter is N_B/(2 M_i^2).
+   subroutine build_independent_circular_bxc_source(provider, moment_amplitude, signed_magnetization, source, provenance)
+      type(xc_response_kernel_provider), intent(in) :: provider
+      real(rp), intent(in) :: moment_amplitude(:), signed_magnetization(:)
+      complex(rp), allocatable, intent(out) :: source(:)
+      character(len=*), intent(out), optional :: provenance
+      real(rp) :: orientation
+      integer :: isite
+
+      if (.not. allocated(provider%site)) then
+         error stop 'build_independent_circular_bxc_source: XC response provider is not initialized'
+      end if
+      if (size(moment_amplitude) /= size(provider%site) .or. size(signed_magnetization) /= size(provider%site)) then
+         error stop 'build_independent_circular_bxc_source: site/moment dimensions are incompatible'
+      end if
+      allocate(source(size(provider%site)))
+      do isite = 1, size(provider%site)
+         if (.not. provider%site(isite)%has_radial_projection) then
+            error stop 'build_independent_circular_bxc_source: independent VXC0SP radial provenance is absent'
+         end if
+         if (moment_amplitude(isite) <= tiny(1.0_rp)) then
+            error stop 'build_independent_circular_bxc_source: moment amplitude must be positive'
+         end if
+         if (abs(signed_magnetization(isite)) <= tiny(1.0_rp)) then
+            error stop 'build_independent_circular_bxc_source: signed Goldstone magnetization is zero'
+         end if
+         orientation = signed_magnetization(isite)/moment_amplitude(isite)
+         if (abs(abs(orientation)-1.0_rp) > 1.0e-8_rp) then
+            error stop 'build_independent_circular_bxc_source: collinear signed magnetization is not +/- its amplitude'
+         end if
+         source(isite) = cmplx(orientation*provider%site(isite)%bxc_spin_moment/(2.0_rp*moment_amplitude(isite)), 0.0_rp, rp)
+      end do
+      if (present(provenance)) provenance = 'VXC0SP radial bxc_spin_moment / (2*moment_amplitude), signed Goldstone orientation'
+   end subroutine build_independent_circular_bxc_source
 
    subroutine xc_kernel_full_response_capability(this, supported, reason)
       class(xc_response_kernel_provider), intent(in) :: this

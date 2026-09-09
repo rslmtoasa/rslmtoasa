@@ -1,11 +1,11 @@
 !------------------------------------------------------------------------------
 ! RS-LMTO-ASA
 !------------------------------------------------------------------------------
-!> @brief Ground-state Ward identity and explicit Goldstone repairs.
+!> @brief Independent Ward diagnostics and explicit Goldstone repairs.
 !>
 !> The physical object checked here is
 !>
-!>   chi_KS(0,0) B_xc - m = 0,    B_xc = K_xc m.
+!>   chi_KS(0,0) B_xc,circ - m_G = 0.
 !>
 !> The routines accept the active response basis explicitly and retain the
 !> uncorrected vector residual.  Sum-rule reconstruction and eigenvalue
@@ -27,6 +27,9 @@ module tddft_ward_mod
    type, public :: tddft_ward_diagnostics
       logical :: available = .false.
       logical :: identity_consistent = .false.
+      logical :: independent_bxc = .false.
+      logical :: derived_identity = .false.
+      character(len=32) :: diagnostic_kind = 'unrecorded'
       character(len=32) :: response_basis = 'unrecorded'
       character(len=160) :: bxc_provenance = 'unrecorded'
       character(len=160) :: kernel_provenance = 'unrecorded'
@@ -34,8 +37,11 @@ module tddft_ward_mod
       real(rp) :: bxc_norm = -1.0_rp
       real(rp) :: chi_bxc_norm = -1.0_rp
       real(rp) :: ward_residual = -1.0_rp
-      ! Alias used by response reports that predate the explicit Ward name.
+      ! Compatibility alias.  Production reports use the named residuals below
+      ! and never present this field as an independent physics check.
       real(rp) :: residual = -1.0_rp
+      real(rp) :: r_b = -1.0_rp
+      real(rp) :: derived_identity_residual = -1.0_rp
       real(rp) :: dm_residual = -1.0_rp
       real(rp) :: bxc_kernel_residual = -1.0_rp
       real(rp) :: imaginary_norm = -1.0_rp
@@ -45,6 +51,24 @@ module tddft_ward_mod
       complex(rp), allocatable :: ward_vector(:)
       complex(rp), allocatable :: d_m_vector(:)
    end type tddft_ward_diagnostics
+
+   !> Comparison of exact static divided-difference chi_KS with dynamic
+   !> chi_KS(omega=0+i eta) along an explicitly supplied eta ladder.
+   type, public :: tddft_static_dynamic_diagnostics
+      logical :: available = .false.
+      logical :: eta_ladder_valid = .false.
+      character(len=32) :: response_basis = 'unrecorded'
+      character(len=32) :: q_provenance = 'unrecorded'
+      integer :: response_space_rank = 0
+      integer :: eta_count = 0
+      real(rp) :: static_norm = -1.0_rp
+      real(rp) :: denominator_floor = 0.0_rp
+      real(rp) :: smallest_eta = -1.0_rp
+      real(rp) :: smallest_eta_residual = -1.0_rp
+      real(rp), allocatable :: eta(:)
+      real(rp), allocatable :: residual(:)
+      real(rp), allocatable :: difference_norm(:)
+   end type tddft_static_dynamic_diagnostics
 
    type, public :: tddft_lounis_repair
       logical :: requested = .false.
@@ -82,6 +106,7 @@ module tddft_ward_mod
 
    public :: evaluate_static_ward_identity
    public :: evaluate_ward_from_xi
+   public :: evaluate_static_dynamic_consistency
    public :: reconstruct_lounis_kernel
    public :: project_goldstone_eigenvalue
    public :: derive_kernel_from_static_xi
@@ -89,21 +114,29 @@ module tddft_ward_mod
 
 contains
 
-   !> Evaluate chi_KS B_xc-m and, when K_xc is supplied, Dm=m-chi_KS K_xc m.
+   !> Evaluate chi_KS B_xc,circ-m_G.  `bxc_is_independent` must be true when
+   !> the source comes from the ground-state XC provenance rather than from
+   !> applying the kernel under test to m_G.  The optional kernel is retained
+   !> solely as an explicitly labelled derived/debug identity.
    !> `kernel` is the full operator in the active response basis, not an
    !> implicit site scalar.  The optional provenance strings are emitted with
    !> the residual so an apparently small number cannot lose its origin.
    subroutine evaluate_static_ward_identity(chi_ks, bxc, magnetization, diagnostics, kernel, response_basis, &
-      bxc_provenance, kernel_provenance)
+      bxc_provenance, kernel_provenance, bxc_is_independent)
       complex(rp), intent(in) :: chi_ks(:, :), bxc(:), magnetization(:)
       type(tddft_ward_diagnostics), intent(out) :: diagnostics
       complex(rp), intent(in), optional :: kernel(:, :)
       character(len=*), intent(in), optional :: response_basis, bxc_provenance, kernel_provenance
+      logical, intent(in), optional :: bxc_is_independent
       complex(rp), allocatable :: bxc_from_kernel(:)
       real(rp) :: denom
 
       call require_square_vector(chi_ks, bxc, magnetization, 'evaluate_static_ward_identity')
       diagnostics%available = .true.
+      diagnostics%diagnostic_kind = 'direct Ward source'
+      diagnostics%independent_bxc = .false.
+      if (present(bxc_is_independent)) diagnostics%independent_bxc = bxc_is_independent
+      diagnostics%derived_identity = .not. diagnostics%independent_bxc
       if (present(response_basis)) diagnostics%response_basis = trim(response_basis)
       if (present(bxc_provenance)) diagnostics%bxc_provenance = trim(bxc_provenance)
       if (present(kernel_provenance)) diagnostics%kernel_provenance = trim(kernel_provenance)
@@ -124,6 +157,11 @@ contains
       denom = max(diagnostics%magnetization_norm, tiny(1.0_rp))
       diagnostics%ward_residual = vector_norm(diagnostics%ward_vector)/denom
       diagnostics%residual = diagnostics%ward_residual
+      if (diagnostics%independent_bxc) then
+         diagnostics%r_b = diagnostics%ward_residual
+      else
+         diagnostics%derived_identity_residual = diagnostics%ward_residual
+      end if
       diagnostics%d_m_vector = cmplx(0.0_rp, 0.0_rp, rp)
       if (present(kernel)) then
          if (size(kernel, 1) /= size(kernel, 2) .or. size(kernel, 1) /= size(magnetization)) then
@@ -157,6 +195,9 @@ contains
       end if
       if (vector_norm(magnetization) <= tiny(1.0_rp)) error stop 'evaluate_ward_from_xi: magnetization is zero'
       diagnostics%available = .true.
+      diagnostics%diagnostic_kind = 'pair Xi action'
+      diagnostics%independent_bxc = .false.
+      diagnostics%derived_identity = .true.
       diagnostics%bxc_provenance = 'not supplied; Xi-only diagnostic'
       diagnostics%kernel_provenance = 'Xi operator supplied directly'
       if (present(response_basis)) diagnostics%response_basis = trim(response_basis)
@@ -174,10 +215,59 @@ contains
       denom = max(diagnostics%magnetization_norm, tiny(1.0_rp))
       diagnostics%ward_residual = vector_norm(diagnostics%ward_vector)/denom
       diagnostics%residual = diagnostics%ward_residual
+      diagnostics%derived_identity_residual = diagnostics%ward_residual
       diagnostics%dm_residual = vector_norm(diagnostics%d_m_vector)/denom
       diagnostics%identity_consistent = diagnostics%ward_residual <= static_imaginary_tolerance
       diagnostics%imaginary_norm = matrix_imaginary_norm(xi)
    end subroutine evaluate_ward_from_xi
+
+   !> Compare an exact static divided-difference response against a dynamic
+   !> omega=0 response for every positive eta in a supplied ladder.  A single
+   !> broadening is deliberately rejected: it cannot establish an eta->0
+   !> continuity trend.
+   subroutine evaluate_static_dynamic_consistency(chi_static, chi_dynamic, eta, diagnostics, response_basis, q_provenance, &
+      denominator_floor)
+      complex(rp), intent(in) :: chi_static(:, :), chi_dynamic(:, :, :)
+      real(rp), intent(in) :: eta(:)
+      type(tddft_static_dynamic_diagnostics), intent(out) :: diagnostics
+      character(len=*), intent(in), optional :: response_basis, q_provenance
+      real(rp), intent(in), optional :: denominator_floor
+      integer :: i
+      real(rp) :: floor_value
+
+      if (size(chi_static, 1) /= size(chi_static, 2)) then
+         error stop 'evaluate_static_dynamic_consistency: static response must be square'
+      end if
+      if (size(chi_dynamic, 1) /= size(chi_static, 1) .or. size(chi_dynamic, 2) /= size(chi_static, 2) .or. &
+          size(chi_dynamic, 3) /= size(eta)) then
+         error stop 'evaluate_static_dynamic_consistency: static/dynamic/eta dimensions are incompatible'
+      end if
+      if (size(eta) < 2) error stop 'evaluate_static_dynamic_consistency: eta ladder requires at least two points'
+      if (any(eta <= 0.0_rp)) error stop 'evaluate_static_dynamic_consistency: eta ladder must be strictly positive'
+      if (any(eta(:size(eta)-1) <= eta(2:))) then
+         error stop 'evaluate_static_dynamic_consistency: eta ladder must decrease toward zero'
+      end if
+      floor_value = epsilon(1.0_rp)
+      if (present(denominator_floor)) floor_value = denominator_floor
+      if (floor_value <= 0.0_rp) error stop 'evaluate_static_dynamic_consistency: denominator floor must be positive'
+
+      diagnostics%available = .true.
+      diagnostics%eta_ladder_valid = .true.
+      diagnostics%response_space_rank = size(chi_static, 1)
+      diagnostics%eta_count = size(eta)
+      diagnostics%static_norm = matrix_frobenius_norm(chi_static)
+      diagnostics%denominator_floor = floor_value
+      diagnostics%smallest_eta = eta(size(eta))
+      if (present(response_basis)) diagnostics%response_basis = trim(response_basis)
+      if (present(q_provenance)) diagnostics%q_provenance = trim(q_provenance)
+      allocate(diagnostics%eta(size(eta)), diagnostics%residual(size(eta)), diagnostics%difference_norm(size(eta)))
+      diagnostics%eta = eta
+      do i = 1, size(eta)
+         diagnostics%difference_norm(i) = matrix_frobenius_norm(chi_static-chi_dynamic(:, :, i))
+         diagnostics%residual(i) = diagnostics%difference_norm(i)/max(diagnostics%static_norm, floor_value)
+      end do
+      diagnostics%smallest_eta_residual = diagnostics%residual(size(eta))
+   end subroutine evaluate_static_dynamic_consistency
 
    !> Reconstruct a local active-basis K_xc from the static Ward equation.
    !>
@@ -390,18 +480,20 @@ contains
 
       open(newunit=unit, file=filename, status='replace', action='write', iostat=ios)
       if (ios /= 0) error stop 'write_ward_diagnostics_text: cannot open output file'
-      write(unit, '(a)') '# Ward identity: chi_KS(0,0) B_xc - m; Dm = m-chi_KS K_xc m'
+      write(unit, '(a)') '# Ward identity: chi_KS(0,0) B_xc,circ,src - m_G = 0; B_xc,circ,src is independent VXC0SP data'
       write(unit, '(a,l1)') '# ward_available = ', diagnostics%available
       write(unit, '(a,l1)') '# ward_identity_consistent = ', diagnostics%identity_consistent
+      write(unit, '(a,l1)') '# independent_bxc = ', diagnostics%independent_bxc
+      write(unit, '(a,a)') '# diagnostic_kind = ', trim(diagnostics%diagnostic_kind)
       write(unit, '(a,a)') '# response_basis = ', trim(diagnostics%response_basis)
       write(unit, '(a,a)') '# bxc_provenance = ', trim(diagnostics%bxc_provenance)
       write(unit, '(a,a)') '# kernel_provenance = ', trim(diagnostics%kernel_provenance)
       if (diagnostics%available) then
          write(unit, '(a,es24.16)') '# magnetization_norm = ', diagnostics%magnetization_norm
          write(unit, '(a,es24.16)') '# bxc_norm = ', diagnostics%bxc_norm
-         write(unit, '(a,es24.16)') '# ward_residual = ', diagnostics%ward_residual
-         write(unit, '(a,es24.16)') '# dm_residual = ', diagnostics%dm_residual
-         write(unit, '(a,es24.16)') '# bxc_kernel_residual = ', diagnostics%bxc_kernel_residual
+         if (diagnostics%independent_bxc) write(unit, '(a,es24.16)') '# r_B = ', diagnostics%r_b
+         if (diagnostics%derived_identity) write(unit, '(a,es24.16)') '# derived_identity_residual = ', &
+            diagnostics%derived_identity_residual
       end if
       close(unit)
    end subroutine write_ward_diagnostics_text
@@ -504,6 +596,11 @@ contains
       complex(rp), intent(in) :: matrix(:, :)
       norm = sqrt(sum(aimag(matrix)**2))/max(1.0_rp, sqrt(sum(abs(matrix)**2)))
    end function matrix_imaginary_norm
+
+   real(rp) function matrix_frobenius_norm(matrix) result(norm)
+      complex(rp), intent(in) :: matrix(:, :)
+      norm = sqrt(sum(abs(matrix)**2))
+   end function matrix_frobenius_norm
 
    elemental logical function finite_real(value)
       real(rp), intent(in) :: value

@@ -42,10 +42,11 @@ def test_transverse_production_keeps_ordered_circular_channels_separate() -> Non
     assert "circular_channel = 'both'" in config
     assert "left_channels_reverse" in source
     assert "right_channels_reverse" in source
-    assert "_minus_plus_chi0.dat" in source
-    assert "_minus_plus_legacy_dyson.dat" in source
-    assert "_minus_plus_pair_dyson.dat" in source
-    assert "use_qplus=.not. primary_minus_plus" in source
+    assert '"_chi0.dat")' in source
+    assert '"_legacy_dyson.dat")' in source
+    assert '"_pair_dyson.dat")' in source
+    assert "circular_channel_file_tag(reverse_circular_channel)" in source
+    assert "use_qplus=primary_circular_channel == TDDFT_CIRCULAR_MINUS_PLUS" in source
     assert "signed_site_populations(provider)" in (root / "source" / "tddft_goldstone.f90").read_text()
 
 
@@ -92,7 +93,7 @@ def test_pair_potential_shadow_outputs_are_explicit_and_use_direct_xi() -> None:
     assert "enhance_tddft_susceptibility_from_xi" in source
     assert '_legacy_dyson.dat' in source
     assert '_pair_dyson.dat' in source
-    assert "pair_potential_raw_residual" in source
+    assert "pair_potential_raw_r_Xi" in source
     assert "goldstone_correction_applied = " in source
 
 

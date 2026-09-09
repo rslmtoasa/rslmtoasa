@@ -3,9 +3,10 @@
 !------------------------------------------------------------------------------
 program test_tddft_goldstone
    use precision_mod, only: rp
-   use xc_response_kernel_mod, only: xc_response_kernel_provider
+   use xc_response_kernel_mod, only: xc_response_kernel_provider, build_independent_circular_bxc_source
    use tddft_goldstone_mod, only: tddft_goldstone_options, tddft_goldstone_result, &
-      tddft_goldstone_diagnostics, build_site_projected_k_perp, construct_transverse_xi, evaluate_goldstone, &
+      tddft_goldstone_diagnostics, tddft_xi_compare_diagnostics, build_site_projected_k_perp, construct_transverse_xi, &
+      evaluate_goldstone, compare_xi_goldstone_branches, &
       tddft_goldstone_column_correction, evaluate_raw_xi_diagnostics, build_goldstone_column_correction, &
       rescale_xi_columns, spectral_weights_are_nonnegative, spectral_weight_correction_is_acceptable, &
       write_goldstone_diagnostics_text
@@ -23,6 +24,10 @@ program test_tddft_goldstone
    call test_raw_residual_convergence_controls()
    call test_signed_magnetization_diagnostics()
    call test_explicit_goldstone_policies()
+   call test_independent_bxc_source_and_ward()
+   call test_anti_goldstone_is_phase_aware()
+   call test_compare_branch_policy()
+   call test_diagnostic_output_contract()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -230,6 +235,124 @@ contains
       call assert_true('explicit Halle policy is applied by Goldstone driver', result%projection%applied)
       call assert_real('Goldstone driver projected kernel', real(result%kernel_corrected(1, 1), rp), 1.0_rp)
    end subroutine test_explicit_goldstone_policies
+
+   subroutine test_independent_bxc_source_and_ward()
+      type(xc_response_kernel_provider) :: provider
+      type(tddft_goldstone_options) :: options
+      type(tddft_goldstone_result) :: result
+      complex(rp), allocatable :: source(:)
+      complex(rp) :: chi(2, 2)
+      real(rp) :: amplitudes(2), signed_magnetization(2)
+      character(len=160) :: provenance
+
+      call provider%initialize(2, 'unit independent VXC0SP')
+      amplitudes = [2.0_rp, 1.0_rp]
+      signed_magnetization = [2.0_rp, -1.0_rp]
+      provider%site(1)%spin_population = amplitudes(1)
+      provider%site(2)%spin_population = amplitudes(2)
+      provider%site(1)%signed_spin_population = signed_magnetization(1)
+      provider%site(2)%signed_spin_population = signed_magnetization(2)
+      provider%site(:)%has_signed_spin_population = .true.
+      provider%site(:)%has_radial_projection = .true.
+      provider%site(1)%bxc_spin_moment = 8.0_rp
+      provider%site(2)%bxc_spin_moment = 4.0_rp
+      provider%site(1)%k_perp_circular = 1.0_rp
+      provider%site(2)%k_perp_circular = 2.0_rp
+      provider%site(:)%has_k_perp_circular = .true.
+      call build_independent_circular_bxc_source(provider, amplitudes, signed_magnetization, source, provenance)
+      call assert_real('independent +z circular source', real(source(1), rp), 2.0_rp)
+      call assert_real('independent -z circular source carries sign', real(source(2), rp), -2.0_rp)
+      call assert_true('independent source provenance is explicit', index(provenance, 'VXC0SP') > 0)
+
+      chi = cmplx(0.0_rp, 0.0_rp, rp)
+      chi(1, 1) = 1.0_rp
+      chi(2, 2) = 0.5_rp
+      options%require_independent_ward = .true.
+      call evaluate_goldstone(chi, provider, options, result)
+      call assert_true('production-style independent Ward record is available', result%raw%ward%independent_bxc)
+      call assert_real('independent r_B is zero for the direct source', result%raw%ward%r_b, 0.0_rp)
+      call assert_true('signed multisublattice Goldstone vector is retained', &
+         real(result%raw%signed_magnetization(1), rp) > 0.0_rp .and. real(result%raw%signed_magnetization(2), rp) < 0.0_rp)
+   end subroutine test_independent_bxc_source_and_ward
+
+   subroutine test_anti_goldstone_is_phase_aware()
+      type(tddft_goldstone_diagnostics) :: positive, negative
+      complex(rp) :: xi_positive(1, 1), xi_negative(1, 1), m(1)
+
+      xi_positive(1, 1) = 1.0_rp
+      xi_negative(1, 1) = -1.0_rp
+      m(1) = 2.0_rp
+      call evaluate_raw_xi_diagnostics(xi_positive, m, positive)
+      call evaluate_raw_xi_diagnostics(xi_negative, m, negative)
+      call assert_real('positive Goldstone magnitude overlap', positive%normalized_magnitude_overlap, 1.0_rp)
+      call assert_real('anti-Goldstone magnitude overlap alone is still one', negative%normalized_magnitude_overlap, 1.0_rp)
+      call assert_complex('positive Goldstone phase-sensitive action', positive%phase_sensitive_overlap, cmplx(1.0_rp, 0.0_rp, rp))
+      call assert_complex('anti-Goldstone phase-sensitive action is negative', negative%phase_sensitive_overlap, &
+         cmplx(-1.0_rp, 0.0_rp, rp))
+      call assert_complex('anti-Goldstone complex distance to +1', negative%closest_eigenvalue_delta, cmplx(-2.0_rp, 0.0_rp, rp))
+      call assert_true('anti-Goldstone branch is not identified as +1', negative%closest_eigenvalue_distance > 1.0_rp)
+   end subroutine test_anti_goldstone_is_phase_aware
+
+   subroutine test_compare_branch_policy()
+      type(tddft_xi_compare_diagnostics) :: comparison
+      complex(rp) :: legacy(2, 2), pair(2, 2), anti(2, 2), m(2)
+
+      legacy = cmplx(0.0_rp, 0.0_rp, rp)
+      pair = legacy
+      anti = legacy
+      legacy(1, 1) = 0.98_rp; legacy(2, 2) = 0.97_rp
+      pair(1, 1) = 1.0_rp; pair(2, 2) = 1.0_rp
+      anti(1, 1) = -1.0_rp; anti(2, 2) = -1.0_rp
+      m = [cmplx(1.0_rp, 0.0_rp, rp), cmplx(1.0_rp, 0.0_rp, rp)]
+      call compare_xi_goldstone_branches(legacy, pair, m, comparison)
+      call assert_true('compare policy accepts matching +1 branches', comparison%plus_one_branch_identified .and. &
+         .not. comparison%hard_branch_failure)
+      call compare_xi_goldstone_branches(legacy, anti, m, comparison)
+      call assert_true('compare policy hard-fails opposite Goldstone branch', comparison%hard_branch_failure .and. &
+         comparison%opposite_branch_detected)
+      call assert_true('compare policy does not require magnitude equivalence by default', .not. comparison%strict_magnitude_gate)
+   end subroutine test_compare_branch_policy
+
+   subroutine test_diagnostic_output_contract()
+      type(xc_response_kernel_provider) :: provider
+      type(tddft_goldstone_options) :: options
+      type(tddft_goldstone_result) :: result
+      complex(rp) :: chi(1, 1)
+      integer :: unit, ios
+      logical :: found_identity, found_rank, found_signed, found_provenance, found_r_b, found_alias
+      character(len=512) :: line
+
+      call provider%initialize(1, 'unit diagnostic output XC')
+      call provider%set_site_spin_population(1, 2.0_rp)
+      call provider%set_site_signed_spin_population(1, 2.0_rp)
+      provider%site(1)%has_radial_projection = .true.
+      provider%site(1)%bxc_spin_moment = 4.0_rp
+      call provider%set_site_derivatives(1, k_perp_circular=0.5_rp)
+      chi(1, 1) = 0.5_rp
+      call evaluate_goldstone(chi, provider, options, result)
+      call write_goldstone_diagnostics_text('unit_tddft_goldstone_diagnostics.dat', result)
+      open(newunit=unit, file='unit_tddft_goldstone_diagnostics.dat', status='old', action='read', iostat=ios)
+      found_identity = .false.; found_rank = .false.; found_signed = .false.
+      found_provenance = .false.; found_r_b = .false.; found_alias = .false.
+      do while (ios == 0)
+         read(unit, '(a)', iostat=ios) line
+         if (ios /= 0) exit
+         found_identity = found_identity .or. index(line, '# raw_identity_consistent = ') == 1
+         found_rank = found_rank .or. index(line, '# response_space_rank = ') == 1
+         found_signed = found_signed .or. index(line, 'raw_signed_magnetization') > 0
+         found_provenance = found_provenance .or. index(line, 'VXC0SP') > 0
+         found_r_b = found_r_b .or. index(line, '# raw_r_B = ') == 1
+         found_alias = found_alias .or. index(line, 'ward_residual') > 0 .or. index(line, 'dm_residual') > 0 .or. &
+            index(line, 'bxc_kernel_residual') > 0
+      end do
+      close(unit, status='delete')
+      call assert_true('raw_identity_consistent output has a separated value', found_identity)
+      call assert_true('response-space rank is present in the header', found_rank)
+      call assert_true('signed site magnetization is written', found_signed)
+      call assert_true('independent Bxc provenance is written', found_provenance)
+      call assert_true('independent r_B is written', found_r_b)
+      call assert_true('tautological residual aliases are absent from output', .not. found_alias)
+   end subroutine test_diagnostic_output_contract
 
    subroutine make_provider(provider, moment, kernel)
       type(xc_response_kernel_provider), intent(out) :: provider

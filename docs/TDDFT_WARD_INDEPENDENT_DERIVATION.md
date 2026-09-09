@@ -5,7 +5,7 @@ changed as part of this task.
 
 ## Determination
 
-The current implementation fixes the following convention:
+The implementation fixes the following convention:
 
 * \(H_{\rm spin}=H_0\sigma_0+\mathbf H\mathbin{\cdot}\boldsymbol{\sigma}\).
 * \(B^E_{\rm xc}=(V_{\uparrow}-V_{\downarrow})/2\), with no leading minus.
@@ -22,11 +22,11 @@ The current implementation fixes the following convention:
 
 An independent ground-state XC field exists: converged
 `XCPOT_hybrid` output is accumulated by `VXC0SP` in
-`xc_response_radial_projection%bxc_spin_moment`. The current Ward diagnostic
-instead passes `k_perp_circular*m_G` as `bxc`, which is the derived
-product under test, not independent evidence. TDWARD-02 should expose the
-direct radial provenance and construct the signed source from it. The radial
-site projection and orbital LMTO pair tangent must not be assumed equivalent.
+`xc_response_radial_projection%bxc_spin_moment`. TDWARD-02 exposes that
+radial provenance and constructs the signed source from it; the fallback
+`k_perp_circular*m_G` path is retained only for explicitly non-production
+debug/unit callers and is labelled as derived. The radial site projection
+and orbital LMTO pair tangent must not be assumed equivalent.
 
 ## 1. Ground-state Hamiltonian convention
 
@@ -259,12 +259,14 @@ The legacy site-kernel construction is the separate
 that value in Cartesian components. `build_site_projected_k_perp` copies
 the circular scalar into the Goldstone layer. `evaluate_goldstone` then
 forms `xi_raw=construct_transverse_xi(chi_static,k_perp)` and, for its
-Ward report, forms `bxc=k_perp*m_G`.
+production Ward report, forms
+`bxc=signed_magnetization/moment_amplitude*bxc_spin_moment/(2*moment_amplitude)`
+from the independent radial numerator.
 `evaluate_raw_xi_diagnostics` instead evaluates the raw pair action
 `Xi*m_G-m_G`. Finally, `evaluate_static_ward_identity` evaluates
-`chi*bxc-m_G` and separately records the difference between supplied
-`bxc` and `kernel*m_G`; it cannot make the supplied vector
-independent by provenance label alone.
+`chi*bxc-m_G`, with `r_B` enabled only for the independent source. Xi-only
+records carry `derived_identity_residual`; a debug `K*m_G` source is never
+reported as independent by provenance label alone.
 
 ## 7. Provenance map and narrow TDWARD-02 plumbing
 
@@ -313,8 +315,12 @@ UnitLmtoMagneticTangents      max error 4.8566E-10
 
 The pair fixture also reports two-sublattice signed action
 `(+z,-z) = (1,-1)` and a pre-repair reverse-sign negative control.
+`UnitTddftGoldstone` additionally verifies independent radial `r_B`,
+phase-sensitive anti-Goldstone rejection, output labels, and branch policy;
+`UnitTddftChiKS` exercises the static/dynamic eta ladder at finite `+q`.
 These checks do not prove equivalence of the radial provider and full-LMTO
-source; that remains the TDWARD-02 plumbing obligation.
+source; they verify that any mismatch remains observable rather than being
+hidden by a tautological diagnostic.
 
 ## Risks and non-claims
 
@@ -322,5 +328,5 @@ source; that remains the TDWARD-02 plumbing obligation.
   local-aligned energy coefficient; `site%k_perp_circular*m_G` is derived.
 * `hxc`, `cx1`, and pair tangents are effective LMTO
   Hamiltonian quantities and may contain transformed/hopping contributions.
-* Finite-\(\eta\) dynamic response, Gamma-only checks, absolute-value
-  magnetization, and tolerance changes cannot establish this static identity.
+* Finite-\(\eta\) dynamic response is continuity evidence only; it never
+  supplies the static Ward field or a repaired kernel.
