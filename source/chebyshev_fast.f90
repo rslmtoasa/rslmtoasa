@@ -23,11 +23,12 @@
 !------------------------------------------------------------------------------
 module chebyshev_fast_mod
    use iso_c_binding, only: c_ptr
+   use math_mod, only: i_unit, jackson_kernel
    implicit none
    private
    public :: cheb_moments_fast, cheb_moments_fast_batched
    public :: cheb_moments_fast_mkl_batch, cheb_moments_fast_mkl_sparse
-   public :: cheb_green_fast, cheb_fast_reset_cache
+   public :: cheb_green_fast, cheb_green_complex, cheb_fast_reset_cache
    public :: cheb_moments_stochastic_fast, cheb_moments_orbital_fast
    integer, parameter :: sp = selected_real_kind(6, 37)
    integer, parameter :: rp = selected_real_kind(15, 307)
@@ -1365,6 +1366,51 @@ contains
       end do
       deallocate (g0_atom, mu_sp, F)
    end subroutine cheb_green_fast
+
+   !> @brief Reconstruct one complex-energy Chebyshev Green function.
+   !> @details This is the complex-energy counterpart of `cheb_green_fast` and
+   !>          uses the same Jackson weights, zeroth-moment convention, and
+   !>          retarded transfer factor as the native RS Chebyshev eta route:
+   !>
+   !>             G(z) ~= sum_n g_n c_n [-i exp(-i n acos(w))]
+   !>                    / sqrt(a^2 - (z-b)^2),  w=(z-b)/a.
+   !>
+   !>          The caller supplies moments of the scaled effective operator,
+   !>          `mu(:,:,n) = <psi|T_(n-1)((H_eff-b)/a)|psi>`.
+   !>          Keeping this small contraction separate makes the finite-system
+   !>          dense-resolvent oracle independent of the moment-generation
+   !>          implementation while exercising the production reconstruction
+   !>          coefficients.
+   !> @param[in] mu Chebyshev moments, shape (nb,nb,n_mom).
+   !> @param[in] nb Block dimension.
+   !> @param[in] n_mom Number of moments / polynomial order.
+   !> @param[in] z Complex energy, normally with positive imaginary part.
+   !> @param[in] a Scaling half-width and @param[in] b scaling center.
+   !> @param[out] g Green-function block at z.
+   subroutine cheb_green_complex(mu, nb, n_mom, z, a, b, g)
+      integer, intent(in) :: nb, n_mom
+      complex(rp), intent(in) :: mu(nb, nb, n_mom)
+      complex(rp), intent(in) :: z
+      real(rp), intent(in) :: a, b
+      complex(rp), intent(out) :: g(nb, nb)
+      real(rp), allocatable :: kernel(:)
+      complex(rp) :: theta, denominator, coefficient
+      integer :: i
+
+      if (n_mom < 1 .or. a <= 0.0_rp) error stop 'cheb_green_complex: invalid order or scaling'
+
+      allocate(kernel(n_mom))
+      call jackson_kernel(n_mom, kernel)
+      g = (0.0_rp, 0.0_rp)
+      theta = acos((z-cmplx(b, 0.0_rp, rp))/cmplx(a, 0.0_rp, rp))
+      denominator = sqrt(cmplx(a*a, 0.0_rp, rp) - (z-cmplx(b, 0.0_rp, rp))**2)
+      do i = 1, n_mom
+         coefficient = kernel(i)*merge(1.0_rp, 2.0_rp, i == 1)*(-i_unit)* &
+            exp(-i_unit*real(i-1, rp)*theta)/denominator
+         g = g + coefficient*mu(:, :, i)
+      end do
+      deallocate(kernel)
+   end subroutine cheb_green_complex
 
    subroutine prepare_moments_sp(mu_in, nb, n_mom, natoms, mu_out)
       integer, intent(in) :: nb, n_mom, natoms

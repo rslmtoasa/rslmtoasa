@@ -9,7 +9,7 @@
 
 submodule (green_mod) green_chebyshev
 
-   use chebyshev_fast_mod, only: cheb_green_fast
+   use chebyshev_fast_mod, only: cheb_green_fast, cheb_green_complex
    use math_mod, only: i_unit, jackson_kernel, t_polynomial
    use mpi_mod, only: atoms_per_process, start_atom, end_atom, g2l_map
    use rsrec_cuda_plugin_mod, only: rsrec_cuda_backend, get_gpu_context, rsrec_cuda_plugin_compiled
@@ -132,64 +132,19 @@ contains
       complex(rp), dimension(nb, nb, 4), intent(inout) :: g_ef
       complex(rp), intent(in) :: eta
       integer, intent(in) :: fermi_point
-      ! Local variables
-      real(rp), dimension(:), allocatable :: kernel
-      real(rp), dimension(:, :), allocatable :: polycheb
-      real(rp), dimension(:), allocatable :: w, wscale
-      real(rp) :: wstep, eps, wmin, wmax, a, b, emin_win, emax_win
-      complex(rp) :: exp_factor
-      integer :: ie, i, j, k, l, m, n
+      real(rp) :: a, b, emin_win, emax_win
+      integer :: n
 
       g_ef = 0.0d0
 
-      allocate (kernel(this%control%lld*2 + 2), polycheb(this%en%channels_ldos + 10, 0:this%control%lld*2 + 2), w(this%en%channels_ldos + 10), &
-                wscale(this%en%channels_ldos + 10))
-      ! Defining rescaling coeficients
       call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
       a = (emax_win - emin_win)/(2 - 0.3_rp)
       b = (emax_win + emin_win)/2.0_rp
 
-      wscale(:) = (this%en%ene(:) - b)/a
-
-      ! Calculating the Jackson Kernel
-      call jackson_kernel((this%control%lld)*2 + 2, kernel)
-
-      ! Calculating the Lorentz Kernel
-!    call lorentz_kernel(this%control%lld, kernel, 4.0d0)
-
       do n = 1, 4 ! Loop on the number of on-site GFs to calculate the inter-site GFs
-         ! Multiply the moments with the kernel
-         do l = 1, nb
-            do m = 1, nb
-               this%recursion%mu_ng(l, m, :, n + istart - 1) = this%recursion%mu_n(l, m, :, n + istart - 1)*kernel(:)
-            end do
-         end do
-         this%recursion%mu_ng(:, :, 2:size(kernel), n + istart - 1) = this%recursion%mu_ng(:, :, 2:size(kernel), n + istart - 1)*2.0_rp
-
-         ! Calculate the Chebyshev polynomials
-         call t_polynomial(size(w), size(kernel), wscale(:), polycheb)
-
-         ! Calculate the density of states
-         !$omp parallel do default(shared) private(ie, i, exp_factor, l,m)
-         do ie = fermi_point, fermi_point
-            do i = 1, size(kernel)
-               exp_factor = -i_unit*exp(-i_unit*(i - 1)*acos(((this%en%ene(ie) + eta) - b)/a))
-               do l = 1, nb
-                  do m = 1, nb
-                     g_ef(l, m, n) = g_ef(l, m, n) + this%recursion%mu_ng(l, m, i, n + istart - 1)*exp_factor
-                  end do
-               end do
-            end do
-            do l = 1, nb
-               do m = 1, nb
-                  g_ef(l, m, n) = g_ef(l, m, n)/((sqrt((a**2) - (((this%en%ene(ie) + eta) - b)**2))))
-               end do
-            end do
-         end do
-         !$omp end parallel do
+         call cheb_green_complex(this%recursion%mu_n(:, :, :, n + istart - 1), &
+            nb, size(this%recursion%mu_n, 3), cmplx(this%en%ene(fermi_point), 0.0_rp, rp) + eta, a, b, g_ef(:, :, n))
       end do  ! End loop on n
-
-      deallocate (kernel, polycheb, w, wscale)
    end subroutine chebyshev_green_ij_eta
 
    !---------------------------------------------------------------------------

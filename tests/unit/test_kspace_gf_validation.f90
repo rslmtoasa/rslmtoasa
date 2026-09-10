@@ -39,7 +39,9 @@ program test_kspace_gf_validation
 
    failed = .false.
    call test_lehmann_matches_direct_inverse()
+   call test_resolvent_residual()
    call test_retarded_advanced_and_asymptotics()
+   call test_degenerate_subspace_invariance()
    call test_spin_blocks_and_limits()
    call test_dos_from_lehmann()
    call profile_batched_complex_energies()
@@ -57,14 +59,16 @@ contains
       real(rp) :: h_eval(nmat, nk)
       real(rp) :: kfrac(3, nk)
       complex(rp) :: h_k(nmat, nmat, nk), h_vec(nmat, nmat, nk)
-      complex(rp) :: z_values(5), sigma0(nmat, nmat), g_leh(nmat, nmat), g_inv(nmat, nmat)
+      complex(rp) :: z_values(8), sigma0(nmat, nmat), g_leh(nmat, nmat), g_inv(nmat, nmat)
       real(rp) :: max_error
       integer :: ik, iz
 
       call build_fixture(h_k, h_eval, h_vec, kfrac)
       sigma0 = (0.0_rp, 0.0_rp)
-      z_values = [cmplx(-0.73_rp, 0.17_rp, rp), cmplx(0.22_rp, 0.41_rp, rp), &
-         cmplx(1.10_rp, 0.08_rp, rp), cmplx(-0.31_rp, -0.27_rp, rp), cmplx(0.66_rp, -0.12_rp, rp)]
+      z_values = [cmplx(-2.20_rp, 0.17_rp, rp), cmplx(-0.73_rp, 0.17_rp, rp), &
+         cmplx(0.22_rp, 0.41_rp, rp), cmplx(1.10_rp, 0.08_rp, rp), &
+         cmplx(2.20_rp, 0.17_rp, rp), cmplx(-0.31_rp, -0.27_rp, rp), &
+         cmplx(0.66_rp, -0.12_rp, rp), cmplx(100.0_rp, 0.4_rp, rp)]
 
       max_error = 0.0_rp
       do ik = 1, nk
@@ -78,6 +82,29 @@ contains
       call check_true('Lehmann and direct inverse agree', max_error <= tol_inverse)
    end subroutine test_lehmann_matches_direct_inverse
 
+   subroutine test_resolvent_residual()
+      real(rp) :: h_eval(nmat, nk), kfrac(3, nk)
+      complex(rp) :: h_k(nmat, nmat, nk), h_vec(nmat, nmat, nk)
+      complex(rp) :: g_leh(nmat, nmat), residual(nmat, nmat), identity(nmat, nmat)
+      complex(rp), parameter :: z = cmplx(0.22_rp, 0.41_rp, rp)
+      real(rp) :: max_residual
+      integer :: ik, i
+
+      call build_fixture(h_k, h_eval, h_vec, kfrac)
+      identity = (0.0_rp, 0.0_rp)
+      do i = 1, nmat
+         identity(i, i) = (1.0_rp, 0.0_rp)
+      end do
+      max_residual = 0.0_rp
+      do ik = 1, nk
+         call lehmann_kspace_resolvent(h_eval(:, ik), h_vec(:, :, ik), z, g_leh)
+         residual = matmul(z*identity-h_k(:, :, ik), g_leh)-identity
+         max_residual = max(max_residual, maxval(abs(residual)))
+      end do
+      write (*, '(a,es12.4)') 'Test 1b (resolvent residual) max_err = ', max_residual
+      call check_true('Lehmann resolvent residual', max_residual <= tol_identity)
+   end subroutine test_resolvent_residual
+
    subroutine test_retarded_advanced_and_asymptotics()
       real(rp) :: h_eval(nmat, nk)
       real(rp) :: kfrac(3, nk)
@@ -85,7 +112,7 @@ contains
       complex(rp) :: g_ret(nmat, nmat), g_adv(nmat, nmat), spectral(nmat, nmat), g_high(nmat, nmat)
       complex(rp) :: identity(nmat, nmat)
       real(rp), parameter :: energy = 0.13_rp, eta = 0.17_rp
-      real(rp) :: advanced_error, hermitian_error, min_diagonal, asymptotic_error
+      real(rp) :: advanced_error, hermitian_error, min_diagonal, min_density, asymptotic_error
       integer :: i
 
       call build_fixture(h_k, h_eval, h_vec, kfrac)
@@ -95,6 +122,7 @@ contains
       advanced_error = maxval(abs(g_adv-transpose(conjg(g_ret))))
       hermitian_error = maxval(abs(spectral-transpose(conjg(spectral))))
       min_diagonal = minval(real([(spectral(i, i), i=1,nmat)]))
+      min_density = minval(real([(-aimag(g_ret(i, i))/pi, i=1,nmat)]))
 
       identity = (0.0_rp, 0.0_rp)
       do i = 1, nmat
@@ -106,12 +134,38 @@ contains
       write (*, '(a,es12.4)') 'Test 2 (retarded/advanced identity) max_err = ', advanced_error
       write (*, '(a,es12.4)') 'Test 2 (spectral Hermiticity)      max_err = ', hermitian_error
       write (*, '(a,es12.4)') 'Test 2 (spectral diagonal minimum) value   = ', min_diagonal
+      write (*, '(a,es12.4)') 'Test 2 (retarded density minimum) value   = ', min_density
       write (*, '(a,es12.4)') 'Test 2 (large-|z| zG-I)            max_err = ', asymptotic_error
       call check_true('retarded/advanced conjugate identity', advanced_error <= tol_spectral)
       call check_true('spectral function is Hermitian', hermitian_error <= tol_spectral)
       call check_true('retarded spectral diagonal is non-negative', min_diagonal >= -tol_spectral)
+      call check_true('retarded -Im(G)/pi diagonal is non-negative', min_density >= -tol_spectral)
       call check_true('large-|z| asymptotics', asymptotic_error <= tol_identity)
    end subroutine test_retarded_advanced_and_asymptotics
+
+   subroutine test_degenerate_subspace_invariance()
+      integer, parameter :: ndegen = 4
+      real(rp) :: evals(ndegen)
+      complex(rp) :: c(ndegen, ndegen), c_rot(ndegen, ndegen), rotation(2, 2)
+      complex(rp) :: g0(ndegen, ndegen), g_rot(ndegen, ndegen)
+      complex(rp), parameter :: z = cmplx(0.37_rp, 0.19_rp, rp)
+      real(rp) :: error
+      integer :: i
+
+      call identity_matrix(c)
+      evals = [-0.8_rp, -0.8_rp, 0.25_rp, 1.1_rp]
+      rotation(1, 1) = cmplx(cos(0.37_rp), 0.0_rp, rp)
+      rotation(2, 1) = cmplx(sin(0.37_rp), 0.0_rp, rp)
+      rotation(1, 2) = cmplx(-sin(0.37_rp), 0.0_rp, rp)
+      rotation(2, 2) = cmplx(cos(0.37_rp), 0.0_rp, rp)
+      c_rot = c
+      c_rot(:, 1:2) = matmul(c(:, 1:2), rotation)
+      call lehmann_kspace_resolvent(evals, c, z, g0)
+      call lehmann_kspace_resolvent(evals, c_rot, z, g_rot)
+      error = maxval(abs(g0-g_rot))
+      write (*, '(a,es12.4)') 'Test 2b (degenerate-subspace gauge) max_err = ', error
+      call check_true('degenerate eigenspace rotation leaves GF invariant', error <= tol_spectral)
+   end subroutine test_degenerate_subspace_invariance
 
    subroutine test_spin_blocks_and_limits()
       real(rp) :: evals(4)

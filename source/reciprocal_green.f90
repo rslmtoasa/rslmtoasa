@@ -8,7 +8,8 @@
 !> Anders Bergman
 !
 ! DESCRIPTION:
-!> k-space Green’s-function engine (milestone B2, flagship). One filler API,
+!> k-space coefficient-space Green’s-function engine (milestone B2, flagship).
+!> One filler API,
 !> two backends, populating the SAME arrays on the `green` object that the
 !> real-space recursion route fills (`gij/gji`, the `gij_eta` Fermi-point
 !> ladder, and the torque-resolved `ginmag`/`gi{x,y,z}` families). Downstream
@@ -38,7 +39,9 @@
 !>   * contour : retarded, z(ie) = en%ene(ie) + i*green_eta, matching `bgreen`
 !>               (z = e(ei) + eta with eta = i*eta_imag).
 !>   * fermi   : physical `en%fermi` (NEVER the chebfermi-scaled variable).
-!>   * repr.   : screened/auxiliary LMTO blocks, pre-`auxiliary_gij`.
+!>   * repr.   : orthogonal LMTO coefficient-space blocks. Physical/radial
+!>               augmentation and screened/auxiliary representation transforms
+!>               are separate operations and are not asserted by this engine.
 !------------------------------------------------------------------------------
 submodule(reciprocal_mod) reciprocal_green
    use lehmann_kernel_mod, only: lehmann_pair_block, pauli_decompose_block
