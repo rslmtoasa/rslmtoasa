@@ -32,6 +32,7 @@ module symbolic_atom_mod
    use potential_mod
    use math_mod
    use logger_mod, only: g_logger
+   use radial_ground_state_mod, only: radial_ground_state
    implicit none
 
    private
@@ -82,6 +83,9 @@ module symbolic_atom_mod
 
       type(element) :: element
       type(potential) :: potential
+      ! Exact radial density/XC state retained by the converged atomic update.
+      ! This is intentionally separate from compressed LMTO potential data.
+      type(radial_ground_state) :: radial_ground_state
    contains
       procedure :: build_from_file
       procedure :: restore_to_default

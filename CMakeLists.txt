@@ -569,6 +569,24 @@ endforeach()
   set_tests_properties(Val21GbtWp12Scf PROPERTIES
     LABELS "validation;functional;magnetic;gbt;wp12;scf;frame"
     TIMEOUT 1800)
+
+  add_test(NAME Val22LrRadialGroundState
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val22_lr_radial_ground_state.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val22_lr_radial_ground_state")
+  set_tests_properties(Val22LrRadialGroundState PROPERTIES
+    LABELS "validation;functional;lr-01;radial;magnetic;ground-state"
+    TIMEOUT 1800)
+  if (ENABLE_LIBXC)
+    add_test(NAME Val22LrRadialGroundStateLibxc
+      COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val22_lr_radial_ground_state.py"
+        "--binary" "${TestBinary}"
+        "--txc" "101"
+        "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val22_lr_radial_ground_state_libxc")
+    set_tests_properties(Val22LrRadialGroundStateLibxc PROPERTIES
+      LABELS "validation;functional;lr-01;radial;magnetic;ground-state;libxc"
+      TIMEOUT 1800)
+  endif()
 endif (RUN_REG_TESTS)
 
 ##############################################################################################
@@ -602,6 +620,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitBasisDimensions PROPERTIES LABELS "unit;basis")
   add_fortran_unit_test(UnitLrBasisRadial ${TestDIR}/unit/test_lr_basis_radial.f90)
   set_tests_properties(UnitLrBasisRadial PROPERTIES LABELS "unit;lr-basis;radial;normalization;legacy-reference")
+  add_fortran_unit_test(UnitLrRadialGroundState ${TestDIR}/unit/test_lr_radial_ground_state.f90)
+  set_tests_properties(UnitLrRadialGroundState PROPERTIES LABELS "unit;lr-01;radial;ground-state;magnetic")
   add_fortran_unit_test(UnitLrBasisAngular ${TestDIR}/unit/test_lr_basis_angular.f90)
   set_tests_properties(UnitLrBasisAngular PROPERTIES LABELS "unit;lr-basis;angular;representation;spdf-guard")
   add_fortran_unit_test(UnitLrBasisAugmentation ${TestDIR}/unit/test_lr_basis_augmentation.f90)

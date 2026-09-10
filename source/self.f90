@@ -34,6 +34,7 @@ module self_mod
    use charge_mod
    use xc_mod
    use xc_radial_mod, only: radgra
+   use radial_ground_state_mod, only: radial_ground_state
    use recursion_mod
    use density_of_states_mod
    use green_mod
@@ -2145,6 +2146,16 @@ contains
          close(newunit)
          close(10)
          close(20)
+         ! Persist the exact radial ground-state contract for audit and for
+         ! consumers running after the atomic temporaries have expired.  The
+         ! in-memory copy on symbolic_atom is the primary accessor; these
+         ! files are a small, machine-readable evidence seam.
+         do ia = 1, this%lattice%nrec
+            call this%symbolic_atom(this%lattice%nbulk + ia)%radial_ground_state%set_reported_moment(magmom(ia, :))
+            call this%symbolic_atom(this%lattice%nbulk + ia)%radial_ground_state%write_file( &
+               'radial_ground_state_'//trim(this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol)//'_'// &
+               trim(fmt('i0', ia))//'.dat', ia)
+         end do
       end if
 
       ! Print angle betweens magnetic and orbital moments
@@ -2533,7 +2544,16 @@ contains
          call POISS0(atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, VHRMAX, V, RVH, VSUM, n_radial_spin_channels)
          VNUCL = V(1, 1)
          !call VXC0SP_old(atom%element%atomic_number, atom%a, B, rofi, rho_in, NR, V, RHO0, REPS, RMU, NSP)
-         call this%VXC0SP(xc_obj, atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, V, RHO0, REPS, RMU, n_radial_spin_channels, B_fsm)
+         if (LAST) then
+            ! LAST is entered only after the preceding density was mixed and
+            ! the final accepted radial residual has been tested.  Capture
+            ! this VXC evaluation, not an initial or pre-mixing state.
+            call this%VXC0SP(xc_obj, atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, V, RHO0, REPS, RMU, &
+                             n_radial_spin_channels, B_fsm, atom%radial_ground_state)
+         else
+            call this%VXC0SP(xc_obj, atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, V, RHO0, REPS, RMU, &
+                             n_radial_spin_channels, B_fsm)
+         end if
          call this%NEWRHO(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho, atom%potential%PL, atom%potential%QL, SEC, SEV, EC, EV, TL, n_radial_spin_channels, IPR1)
          DRHO_CONTROL = 0.d0
          DRHO_INTEGRATED = 0.d0
@@ -2553,6 +2573,9 @@ contains
                SUM = SUM + WGT*DRDI*RHO(IR, ISP)
             end do
          end do
+         if (LAST) then
+            call atom%radial_ground_state%mark_accepted(ITER, DRHO_CONTROL)
+         end if
          if (LAST) exit
          if (IPR >= 3 .or. (IPR >= 2 .and. (DRHO_CONTROL < TOL .or. ITER == 1 .or. ITER == NITER - 1))) then
             write (6, 10004) ITER, SUM, DRHO_CONTROL, VNUCL, RHO0T, VSUM, BETA1
@@ -3823,7 +3846,7 @@ contains
       end if
    end subroutine POISS0
 
-   subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, n_radial_spin_channels, B_fsm)
+   subroutine VXC0SP(this, xc_obj, Z, A, B, rofi, RHO, NR, V, RHO0, RHOEPS, RHOMU, n_radial_spin_channels, B_fsm, snapshot)
       !  ADDS XC PART TO SPHERICAL POTENTIAL, MAKES INTEGRALS RHOMU AND RHOEP
       !
       ! use xcdata
@@ -3846,6 +3869,7 @@ contains
       real(rp), dimension(NR, n_radial_spin_channels), intent(in) :: RHO
       real(rp), dimension(NR, n_radial_spin_channels), intent(inout) :: V
       real(rp), intent(in)  :: B_fsm
+      type(radial_ground_state), intent(inout), optional :: snapshot
       !
       !.. Local Scalars ..
       integer :: IR, ISP, IXC
@@ -3908,8 +3932,13 @@ contains
          end if
       end do
 
+      ! Keep the exact multiplicative XC arrays available until the caller
+      ! decides whether this is the accepted final radial iteration.  They
+      ! are otherwise automatic temporaries, which was the LR-01 lifetime
+      ! blocker.
+      allocate (vxc_up_radial(NR), vxc_down_radial(NR))
       if (use_libxc_gga) then
-         allocate (vxc_up_radial(NR), vxc_down_radial(NR), exc_radial(NR))
+         allocate (exc_radial(NR))
          if (n_radial_spin_channels == 1) then
             call xc_obj%xcpot_libxc_gga_radial(A, B, rofi, 0.5d0*tRHO(:, 1), 0.5d0*tRHO(:, 1), &
                                                0.5d0*RHOP(:, 1), 0.5d0*RHOP(:, 1), &
@@ -3949,6 +3978,8 @@ contains
             call xc_obj%XCPOT_hybrid(RHO2, RHO1, tRHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC)
          end if
          V(1, 1) = V(1, 1) + VXC1
+         vxc_up_radial(1) = VXC1
+         vxc_down_radial(1) = VXC2
          do IR = 2, NR
             if (use_libxc_gga) then
                VXC1 = vxc_up_radial(IR)
@@ -3970,6 +4001,8 @@ contains
                call xc_obj%XCPOT_hybrid(RHO2, RHO1, RHO(1, 1), RHOD, RHODD, R, VXC2, VXC1, EXC1)
             end if
             V(IR, 1) = V(IR, 1) + VXC1
+            vxc_up_radial(IR) = VXC1
+            vxc_down_radial(IR) = VXC2
             WGT = 2*(MOD(IR + 1, 2) + 1)/3.d0
             if (IR == 1 .or. IR == NR) then
                WGT = 1.d0/3.d0
@@ -4007,6 +4040,8 @@ contains
          !V(1, 2) = V(1, 2) + VXC2
          V(1, 1) = V(1, 1) + VXC1 + B_fsm
          V(1, 2) = V(1, 2) + VXC2 - B_fsm
+         vxc_up_radial(1) = VXC1
+         vxc_down_radial(1) = VXC2
          do IR = 2, NR
             R = rofi(IR)
             RCE = R*R
@@ -4039,6 +4074,8 @@ contains
             ! Insertion of constraining field for FSM
             V(IR, 1) = V(IR, 1) + VXC1 + B_fsm
             V(IR, 2) = V(IR, 2) + VXC2 - B_fsm
+            vxc_up_radial(IR) = VXC1
+            vxc_down_radial(IR) = VXC2
             WGT = 2*(MOD(IR + 1, 2) + 1)/3.d0
             if (IR == 1 .or. IR == NR) then
                WGT = 1.d0/3.d0
@@ -4051,6 +4088,35 @@ contains
             RHOMU(2) = RHOMU(2) + WGT*DRDI*RHO(IR, 2)*(VXC2 - B_fsm)
             !RHOMU(2) = RHOMU(2) + WGT*DRDI*RHO(IR, 2)*VXC2
          end do
+      end if
+      if (present(snapshot)) then
+         if (n_radial_spin_channels /= 2) then
+            error stop 'VXC0SP snapshot requires two local radial spin channels'
+         end if
+         call snapshot%capture(A, B, rofi, RHO, RHO0, vxc_up_radial, vxc_down_radial, V, B_fsm)
+         snapshot%xc_provenance%backend_name = xc_obj%backend_name
+         snapshot%xc_provenance%txch = xc_obj%TXCH
+         snapshot%xc_provenance%functional_name = xc_obj%functional_name
+         snapshot%xc_provenance%mapping_quality = xc_obj%mapping_quality
+         snapshot%xc_provenance%txc = xc_obj%txc
+         snapshot%xc_provenance%libxc_family = xc_obj%libxc_family
+         snapshot%xc_provenance%libxc_nspin = xc_obj%libxc_nspin
+         snapshot%xc_provenance%use_libxc = xc_obj%use_libxc
+         snapshot%xc_provenance%spin_polarized = (n_radial_spin_channels == 2)
+         snapshot%xc_provenance%radial_gga = use_libxc_gga .or. use_legacy_gga
+         if (allocated(xc_obj%libxc_func_id)) then
+            snapshot%xc_provenance%n_components = size(xc_obj%libxc_func_id)
+            allocate(snapshot%xc_provenance%component_ids(size(xc_obj%libxc_func_id)))
+            snapshot%xc_provenance%component_ids = xc_obj%libxc_func_id
+            if (allocated(xc_obj%libxc_component_family)) then
+               allocate(snapshot%xc_provenance%component_families(size(xc_obj%libxc_component_family)))
+               snapshot%xc_provenance%component_families = xc_obj%libxc_component_family
+            end if
+            if (allocated(xc_obj%libxc_component_kind)) then
+               allocate(snapshot%xc_provenance%component_kinds(size(xc_obj%libxc_component_kind)))
+               snapshot%xc_provenance%component_kinds = xc_obj%libxc_component_kind
+            end if
+         end if
       end if
    end subroutine VXC0SP
 
