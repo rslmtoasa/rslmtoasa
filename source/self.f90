@@ -66,6 +66,11 @@ module self_mod
    public :: atomsc_solver_tolerance, atomsc_mixing_beta, atomsc_should_stop
    public :: vxc0sp_pbe_origin_derivatives
    public :: vxc0sp
+   !> Deterministic audit hook used by LR-BASIS-00 tests.  It calls the live
+   !> RSEQSR/PHDFSR machinery; it does not provide an alternative radial solver.
+   public :: legacy_radial_fixture
+   !> Test-only seam that invokes the unchanged production NEWRHO routine.
+   public :: legacy_newrho_fixture
    ! The atomic/XC radial representation has two local spin eigenchannels.
    ! This is independent of control%nsp, which selects the global Hamiltonian
    ! mode (and is not a channel-count field).
@@ -371,6 +376,95 @@ module self_mod
    end interface self
 
 contains
+
+   !> @brief Generate one deterministic scalar-relativistic radial channel
+   !>        through the unchanged production RSEQSR/PHDFSR routines.
+   !>
+   !> This is an audit/test seam only.  The caller supplies a radial mesh and
+   !> potential; all numerical work remains in the legacy routines below.
+   subroutine legacy_radial_fixture(z, l, a, b, rofi, potential, energy, g, gp, gpp, boundary_slope)
+      real(rp), intent(in) :: z, a, b
+      integer, intent(in) :: l
+      real(rp), intent(in) :: rofi(:), potential(:)
+      real(rp), intent(out) :: energy
+      real(rp), allocatable, intent(out) :: g(:, :), gp(:, :), gpp(:, :)
+      real(rp), intent(in), optional :: boundary_slope
+      real(rp) :: val, slo, sum_norm, phi, dphi, phip, dphip, p
+      integer :: nr, nre, nn
+
+      nr = size(rofi)
+      if (nr < 35 .or. size(potential) /= nr .or. mod(nr, 2) == 0) then
+         error stop 'legacy_radial_fixture: use an odd radial mesh with at least 35 points'
+      end if
+      allocate(g(nr, 2), gp(nr, 2), gpp(nr, 2))
+      g = 0.0_rp
+      gp = 0.0_rp
+      gpp = 0.0_rp
+      energy = -0.5_rp
+      val = rofi(nr)
+      slo = 1.0_rp
+      if (present(boundary_slope)) slo = boundary_slope
+      nn = 0
+      call RSEQSR(-10.0_rp, 10.0_rp, energy, 1.0e-12_rp, z, l, nn, val, slo, potential, g, sum_norm, &
+                  a, b, rofi, nr, nre, 0)
+      val = val/sqrt(sum_norm)
+      slo = slo/sqrt(sum_norm)
+      call PHDFSR(z, l, potential, energy, a, b, rofi, nr, g, val, slo, gp, gpp, phi, dphi, phip, dphip, p, &
+                  1.0e-12_rp, nn)
+   end subroutine legacy_radial_fixture
+
+   !> Invoke the unchanged production NEWRHO routine for a deterministic
+   !> valence-only fixture.  This is an audit/test seam; it does not duplicate
+   !> or alter the legacy NEWRHO numerical machinery.
+   subroutine legacy_newrho_fixture(lmax, z, a, b, rofi, potential, energies, ql, rho)
+      integer, intent(in) :: lmax
+      real(rp), intent(in) :: z, a, b, rofi(:), potential(:, :), energies(:, :), ql(:, :, :)
+      real(rp), intent(out) :: rho(:, :)
+      type(self) :: audit_state
+      type(control), target :: audit_control
+      type(symbolic_atom) :: audit_atom
+      real(rp), allocatable :: pl(:, :), sumec(:), sumev(:), ec(:), ev(:)
+      integer :: nr, nval, l, ispin, ival
+
+      nr = size(rofi)
+      if (lmax < 0 .or. lmax > 2 .or. size(potential, 1) /= nr .or. size(potential, 2) /= 2 .or. &
+          any(shape(rho) /= [nr, 2]) .or. any(shape(energies) /= [lmax + 1, 2]) .or. &
+          any(shape(ql) /= [3, lmax + 1, 2])) then
+         error stop 'legacy_newrho_fixture: inconsistent fixture dimensions'
+      end if
+
+      audit_control%hyperfine = .false.
+      audit_state%control => audit_control
+      allocate(audit_state%vtn(nr, 2), audit_state%vzt(nr, 2), audit_state%fun2(nr, lmax + 1, 2), &
+               audit_state%phi_amp(nr, lmax + 1, 2))
+      audit_state%vtn = 0.0_rp
+      audit_state%vzt = 0.0_rp
+      audit_state%fun2 = 0.0_rp
+      audit_state%phi_amp = 0.0_rp
+
+      call audit_atom%restore_to_default()
+      audit_atom%element%atomic_number = z
+      audit_atom%element%f_core = 0
+      audit_atom%potential%lmax = lmax
+      allocate(pl(lmax + 1, 2), sumec(2), sumev(2), ec(10), ev(2*(lmax + 1)))
+      do ispin = 1, 2
+         do l = 0, lmax
+            pl(l + 1, ispin) = real(l + 1, rp) + 0.25_rp
+         end do
+      end do
+      ev = 0.0_rp
+      ival = 0
+      do ispin = 1, 2
+         do l = 0, lmax
+            ival = ival + 1
+            ev(ival) = energies(l + 1, ispin)
+         end do
+      end do
+      call audit_state%newrho(audit_atom, z, lmax, a, b, nr, rofi, potential, rho, pl, ql, sumec, sumev, &
+                              ec, ev, 1.0e-12_rp, 2, 0)
+      nval = 2*(lmax + 1)
+      if (size(ev) /= nval) error stop 'legacy_newrho_fixture: invalid valence fixture'
+   end subroutine legacy_newrho_fixture
    pure function atomsc_solver_tolerance(iteration, drho_control, tolrsq) result(tolerance)
       integer, intent(in) :: iteration
       real(rp), intent(in) :: drho_control, tolrsq

@@ -34,6 +34,7 @@ add_library(${PROJECT_NAME} STATIC
     magnetic_representation.f90
     gbt_structure.f90
     lmto_magnetic_tangent.f90
+    lmto_radial_augmentation.f90
     spin_density.f90
     hamiltonian.f90
     hamiltonian_build.f90
