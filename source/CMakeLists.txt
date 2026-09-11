@@ -84,6 +84,7 @@ add_library(${PROJECT_NAME} STATIC
     response_angular_basis.f90
     response_basis_mapping.f90
     lr_response_space.f90
+    lr_pauli_transition_vertex.f90
     sparse.f90
     report.f90
     rsrec_cuda_plugin.f90

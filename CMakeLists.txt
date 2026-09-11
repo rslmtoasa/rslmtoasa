@@ -638,6 +638,15 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrResponseBasis PROPERTIES LABELS "unit;lr-02;response-basis;angular;radial;gauge;blocked-guard")
   add_fortran_unit_test(UnitLrResponseSpace ${TestDIR}/unit/test_lr_response_space.f90)
   set_tests_properties(UnitLrResponseSpace PROPERTIES LABELS "unit;lr-04;response-space;metric;operator-algebra")
+  add_fortran_unit_test(UnitLrPauliTransitionVertex ${TestDIR}/unit/test_lr_pauli_transition_vertex.f90)
+  set_tests_properties(UnitLrPauliTransitionVertex PROPERTIES LABELS "unit;lr-05;pauli;transition-vertex;angular;gauge")
+  foreach(_lr05_guard soc overlap noncollinear spdf additive)
+    add_test(NAME UnitLrPauliTransitionVertexReject${_lr05_guard}
+      COMMAND UnitLrPauliTransitionVertex ${_lr05_guard})
+    set_tests_properties(UnitLrPauliTransitionVertexReject${_lr05_guard} PROPERTIES
+      LABELS "unit;lr-05;pauli;transition-vertex;negative;capability"
+      WILL_FAIL TRUE)
+  endforeach()
   add_fortran_unit_test(UnitGreenLifecycle ${TestDIR}/unit/test_green_lifecycle.f90)
   set_tests_properties(UnitGreenLifecycle PROPERTIES LABELS "unit;green;lifecycle")
   add_fortran_unit_test(UnitXcSelectorSemantics ${TestDIR}/unit/test_xc_selector_semantics.f90)
