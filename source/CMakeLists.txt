@@ -90,6 +90,7 @@ add_library(${PROJECT_NAME} STATIC
     lr_alsda_kernel.f90
     lr_goldstone_sumrule.f90
     lr_goldstone_correction.f90
+    tddft_dyson.f90
     sparse.f90
     report.f90
     rsrec_cuda_plugin.f90
