@@ -50,6 +50,12 @@ interaction route is `direct_alsda`.  `goldstone_sumrule` remains an explicit
 service route, while the `goldstone_correction` switch is rejected until its
 separate TDVAL evidence is complete; it is never silently applied.
 
+The native-RSGF capability audit closes the finite/provider prerequisites R0–R2
+but does not register a native backend here. That production lifecycle seam is
+the separate TDRUN-02 task; this document therefore remains the reciprocal
+baseline and does not claim native material execution. See
+[`RSGF_CAPABILITY_CLOSURE.md`](RSGF_CAPABILITY_CLOSURE.md).
+
 The old `post_processing='susceptibility'` spelling is rejected with a
 migration error.  `&tddft` is feature-off when absent.  Ordinary calculations
 therefore do not enter the driver.

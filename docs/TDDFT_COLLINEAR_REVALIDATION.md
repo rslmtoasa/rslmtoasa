@@ -12,6 +12,13 @@ capability has a final `BLOCKED` verdict. No response equation, kernel,
 Green-function transformation, Goldstone correction, or empirical parameter
 was changed.
 
+The later [`RSGF_CAPABILITY_CLOSURE.md`](RSGF_CAPABILITY_CLOSURE.md) supersedes
+the historical LR-REP-00 native-response blocker for R0–R2: representation,
+endpoint augmentation, and finite/provider bare-response capability are closed
+within their documented scopes. This report remains **BLOCKED** for TDVAL R4
+material validation, and the R3 production-driver registration is a separate
+pending task.
+
 ## TDVAL-01R — production revalidation
 
 ### 1. Preflight and stopping decision

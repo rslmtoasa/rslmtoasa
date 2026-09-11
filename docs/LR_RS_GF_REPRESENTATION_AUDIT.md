@@ -338,3 +338,23 @@ The formal target is the screened-LMTO/KKR representation framework described in
 together with the Eq. (3.56)/(3.57) convention cited by the live source comments
 to Turek et al., *Electronic Structure of Disordered Alloys, Surfaces and
 Interfaces*.
+
+## Subsequent RSGF-CLOSE-01 closure
+
+The `BLOCKED` native-response statement above was correct at this audit’s
+starting point (`68b7fc9736a7c1460b2b3b377d3a28ce9ab82559`): the physical
+radial/Pauli endpoint adapter and native response service did not yet exist.
+Subsequent tasks added and tested those seams:
+
+- RSGF-00 supplies the four-branch two-endpoint Pauli augmentation, including
+  onsite/offsite resolvent contact terms;
+- RSGF-01R calls that adapter for directed native GF blocks, assembles the full
+  real-space bubble and q phase, and returns the LR-04 canonical response;
+- the focused finite/provider tests compare the complete response against the
+  independent spectral and reciprocal-GF references.
+
+Therefore the historical blocker is **superseded for R0–R2** within the
+documented finite/provider baseline. Production-driver registration remains R3
+and is intentionally pending TDRUN-02; Fe/Ni material validation remains R4
+and is intentionally pending TDVAL-01R. The authoritative current ledger is
+[`RSGF_CAPABILITY_CLOSURE.md`](RSGF_CAPABILITY_CLOSURE.md).

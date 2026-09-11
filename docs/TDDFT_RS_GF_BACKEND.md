@@ -31,6 +31,12 @@ driver remains reciprocal-only for TDDFT, as specified by TDRUN-01.  A
 production material validation through `calculation.f90` therefore remains
 outside this task.
 
+The subsequent [`RSGF_CAPABILITY_CLOSURE.md`](RSGF_CAPABILITY_CLOSURE.md)
+reconciles this scope with LR-REP-00: R0–R2 are closed for the documented
+finite/provider baseline, while production-driver registration is R3 and
+remains pending TDRUN-02. This document does not promote finite/backend
+evidence to production or Fe/Ni material validation.
+
 ## Coefficient-GF contract
 
 For a pair `(left_site,right_site,R)`, the provider returns
