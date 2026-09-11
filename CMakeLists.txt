@@ -642,6 +642,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrPauliTransitionVertex PROPERTIES LABELS "unit;lr-05;pauli;transition-vertex;angular;gauge")
   add_fortran_unit_test(UnitLrKsSusceptibility ${TestDIR}/unit/test_lr_ks_susceptibility.f90)
   set_tests_properties(UnitLrKsSusceptibility PROPERTIES LABELS "unit;lr-06;ks-susceptibility;lehmann;covariance")
+  add_fortran_unit_test(UnitLrGfSusceptibility ${TestDIR}/unit/test_lr_gf_susceptibility.f90)
+  set_tests_properties(UnitLrGfSusceptibility PROPERTIES LABELS "unit;lr-gf-02;ks-susceptibility;reciprocal-gf;crosscheck")
   foreach(_lr05_guard soc overlap noncollinear spdf additive)
     add_test(NAME UnitLrPauliTransitionVertexReject${_lr05_guard}
       COMMAND UnitLrPauliTransitionVertex ${_lr05_guard})
