@@ -42,9 +42,11 @@ module calculation_mod
    use mix_mod
    use frozen_magnon_mod
    use vacuum_lead_mod, only: vacuum_lead, refresh_vacuum_region
+   use tddft_production_driver_mod, only: tddft_production_config, load_tddft_config, &
+      validate_tddft_production_capability, run_tddft_production
    use math_mod
    use precision_mod, only: rp
-   use string_mod, only: sl, fmt, real2str, int2str, lower
+   use string_mod, only: sl, fmt, real2str, int2str
    use timer_mod, only: g_timer
    use kpm_profile_mod, only: g_kpm_profile
    use logger_mod, only: g_logger
@@ -135,6 +137,9 @@ module calculation_mod
 
       !> name list input file
       character(len=sl) :: fname
+
+      !> Minimal clean post-SCF TD-DFT production selection and grid.
+      type(tddft_production_config) :: tddft
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -279,10 +284,6 @@ contains
       do_damping = this%do_damping
       do_inertia = this%do_inertia
 
-      if (file_contains_tddft_namelist(fname)) then
-         call g_logger%fatal('TD-DFT temporarily unavailable during literature-locked clean-room redevelopment.', __FILE__, __LINE__)
-      end if
-
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
          call g_logger%fatal('file '//fmt('A', fname)//' not found', __FILE__, __LINE__)
@@ -294,8 +295,20 @@ contains
          call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
 
+      call load_tddft_config(fname, this%tddft)
       if (trim(post_processing) == 'susceptibility') then
-         call g_logger%fatal('TD-DFT temporarily unavailable during literature-locked clean-room redevelopment.', __FILE__, __LINE__)
+         call g_logger%fatal('post_processing=''susceptibility'' is the removed legacy TD-DFT route; use post_processing=''tddft'' with the minimal &tddft input.', &
+                             __FILE__, __LINE__)
+      end if
+      if (this%tddft%enabled .and. trim(post_processing) /= 'tddft') then
+         call g_logger%fatal('&tddft enabled requires post_processing=''tddft''.', __FILE__, __LINE__)
+      end if
+      if (trim(post_processing) == 'tddft' .and. .not. this%tddft%enabled) then
+         call g_logger%fatal('post_processing=''tddft'' requires enabled=.true. in &tddft.', __FILE__, __LINE__)
+      end if
+      if (this%tddft%enabled .and. trim(pre_processing) /= 'bravais') then
+         call g_logger%fatal('TDDFT production requires pre_processing=''bravais'' so it can consume the accepted bulk SCF snapshot.', &
+                             __FILE__, __LINE__)
       end if
 
       ! Pre-processing
@@ -377,8 +390,13 @@ contains
          ! LR-02N runs immediately after the accepted bravais SCF state in
          ! pre_processing_bravais, before the ordinary post-processing stage.
          continue
+      case ('tddft')
+         ! TDRUN-01 runs immediately after the accepted bravais SCF state in
+         ! pre_processing_bravais, before the accepted state owner leaves scope.
+         continue
       case ('susceptibility')
-         call g_logger%fatal('TD-DFT temporarily unavailable during literature-locked clean-room redevelopment.', __FILE__, __LINE__)
+         call g_logger%fatal('post_processing=''susceptibility'' is the removed legacy TD-DFT route; use post_processing=''tddft''.', &
+                             __FILE__, __LINE__)
       end select
    end subroutine
 
@@ -1973,30 +1991,8 @@ contains
       this%gf_route = 'recursion'
       this%do_damping = .false.
       this%do_inertia = .false.
+      call this%tddft%restore_to_default()
    end subroutine restore_to_default
-
-   !---------------------------------------------------------------------------
-   ! DESCRIPTION:
-   !> @brief
-   logical function file_contains_tddft_namelist(filename)
-      character(len=*), intent(in) :: filename
-      character(len=512) :: line
-      integer :: unit, ios
-
-      file_contains_tddft_namelist = .false.
-      open (newunit=unit, file=filename, action='read', status='old', iostat=ios)
-      if (ios /= 0) return
-
-      do
-         read (unit, '(A)', iostat=ios) line
-         if (ios /= 0) exit
-         if (index(adjustl(lower(line)), '&tddft') == 1) then
-            file_contains_tddft_namelist = .true.
-            exit
-         end if
-      end do
-      close (unit)
-   end function file_contains_tddft_namelist
 
    !> Check availability for post-processing
    !
@@ -2017,11 +2013,12 @@ contains
           .and. post_processing /= 'fermi_surface' &
           .and. post_processing /= 'kspace_green' &
           .and. post_processing /= 'frozen_magnon' &
-          .and. post_processing /= 'pauli_projection') then
+          .and. post_processing /= 'pauli_projection' &
+          .and. post_processing /= 'tddft') then
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
                              " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'bsf', 'density_of_states'," // &
-                             " 'fermi_surface', 'kspace_green', 'frozen_magnon', 'pauli_projection'", __FILE__, __LINE__)
+                             " 'fermi_surface', 'kspace_green', 'frozen_magnon', 'pauli_projection', 'tddft'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 

@@ -15,18 +15,19 @@ implementation tests, including the independent reciprocal-GF cross-check,
 direct ALSDA, sum-rule, optional BES, and canonical Dyson/loss fixtures.  The
 live LR-01 radial and LR-02N Pauli ground-state gates also pass.
 
-The required material campaign cannot be run on this branch.  The old
-production TD-DFT backend and its validation runner were intentionally removed
-by the clean-room purge.  The current executable explicitly rejects both an
-old `&tddft` input and `post_processing='susceptibility'` in
-[`source/calculation.f90`](../source/calculation.f90#L282).  The rebuilt
-modules are library primitives with caller-supplied response spaces, radial
-bases, endpoint eigenstates, susceptibilities, and interactions; no production
-SCF/eigenpair-to-LR-03…TDDY-01 material adapter is present.
+The old production TD-DFT backend and its validation runner were intentionally
+removed by the clean-room purge.  TDRUN-01 now supplies a clean production
+SCF/eigenpair-to-LR-03…TDDY-01 material adapter through
+[`source/tddft_production_driver.f90`](../source/tddft_production_driver.f90)
+and the `post_processing='tddft'` hook in
+[`source/calculation_preprocessing.f90`](../source/calculation_preprocessing.f90).
+Its tiny magnetic lifecycle smoke test passes, so the material campaign is
+unblocked.  The old `post_processing='susceptibility'` route remains rejected;
+only the new minimal `&tddft` contract is accepted.
 
-Consequently, no current bcc-Fe or fcc-Ni response was evaluated.  The
-historical pre-purge Fe/Ni spectra are explicitly excluded and are not used to
-rescue this result.
+No current bcc-Fe or fcc-Ni response has yet been validated through the new
+production path.  The historical pre-purge Fe/Ni spectra are explicitly
+excluded and are not used to rescue this result.
 
 ## Evidence categories
 
@@ -34,8 +35,9 @@ rescue this result.
 | --- | --- | --- |
 | algebraic consistency | **PASS** | LR-03 convention identities and LR-04…TDDY-01 finite fixtures |
 | independent numerical cross-check | **PASS** | spectral/GF bare-response fixture and current closure tests |
-| numerical convergence of Fe/Ni response | **BLOCKED** | no current production material response exists |
-| physical material validation | **BLOCKED** | no Fe/Ni `chiKS`, kernel, Dyson, loss, or mode outputs |
+| production material adapter | **PASS** | TDRUN-01 accepted-state handoff and tiny SCF-to-response smoke path |
+| numerical convergence of Fe/Ni response | **BLOCKED** | TDVAL rerun through the new production path is pending |
+| physical material validation | **BLOCKED** | no Fe/Ni production `chiKS`, kernel, Dyson, loss, or mode evidence |
 | literature comparison | **NOT PERFORMED** | closest references recorded below; no numeric comparison is supportable |
 
 No physics equation, sign, factor, kernel scale, moment, broadening, or
@@ -54,7 +56,7 @@ environment was:
 | compiler | GNU Fortran 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1) |
 | CMake | 3.28.3 |
 | configured build | `build`, unit and regression tests enabled, libXC enabled, MPI disabled, OpenMP enabled |
-| executable hash | `build/bin/rslmto.x`: `dc52d3c4db08198673107ca8485cc0870baded315bc7b8090362887f640f13ed` |
+| executable hash | `build/bin/rslmto.x`: `eb4d0e506edb3f9f4e5959549428912a181b13d39b5bf23613ad5c6d0fbfc54b` |
 
 The final commit records this report and the completion record in the TDVAL
 specification.  The adjacent supplied prompt-pack files remain user-owned
@@ -92,12 +94,12 @@ The current source graph instead contains the rebuilt LR modules:
 - optional GCR-01 BES correction; and
 - TDDY-01 canonical Dyson and loss matrix.
 
-These modules are individually callable, but the main calculation path still
-fails closed at [`calculation.f90:282`](../source/calculation.f90#L282),
-[`calculation.f90:297`](../source/calculation.f90#L297), and
-[`calculation.f90:380`](../source/calculation.f90#L380) for TD-DFT input.
-This is an integration/availability blocker, not evidence of a physics failure
-in any one of the rebuilt finite fixtures.
+These modules are now connected by the clean TDRUN-01 production adapter.  The
+adapter accepts only the validated reciprocal collinear baseline: no SOC,
+`ham_only`, orthogonal, second-order, `sp/spd`, and no unsupported additive
+operators.  It consumes the accepted LR-01 snapshots and accepted Fermi state;
+it does not reconstruct SCF state or search for a different Fermi level.  The
+native RSGF backend remains gated pending RSGF-01.
 
 ## Checks run
 
@@ -108,18 +110,26 @@ branch:
 python3 tests/validation/val24_lr03_conventions.py
 val24_lr03_conventions: PASS (algebraic conventions only)
 
-ctest --test-dir build --output-on-failure -R '^(Val22LrRadialGroundState($|Libxc$)|Val23LrPauliProjection|UnitLrBasisRadial|UnitLrRadialGroundState|UnitLrBasisAngular|UnitLrBasisAugmentation|UnitLrResponseBasis|UnitLrResponseSpace|UnitLrPauliTransitionVertex($|Reject)|UnitLrKsSusceptibility|UnitLrGfSusceptibility|UnitLrAlsdaKernel($|Reject)|UnitLrGoldstoneSumrule|UnitLrGoldstoneCorrection|UnitTddftDyson)$'
-100% tests passed, 16 tests passed, 0 tests failed
+ctest --test-dir build --output-on-failure -R '^(UnitLrBasisRadial|UnitLrRadialGroundState|UnitLrBasisAngular|UnitLrBasisAugmentation|UnitLrResponseBasis|UnitLrResponseSpace|UnitLrPauliTransitionVertex($|Reject)|UnitLrKsSusceptibility|UnitLrGfSusceptibility|UnitLrAlsdaKernel($|Reject)|UnitLrGoldstoneSumrule|UnitLrGoldstoneCorrection|UnitTddftDyson|UnitTddftProductionDriver|TddftProductionDriverSmoke)$'
+100% tests passed, 15 tests passed, 0 tests failed
 
 ctest --test-dir build --output-on-failure -R '^UnitLr(AlsdaKernelReject|PauliTransitionVertexReject)'
 100% tests passed, 7 tests passed, 0 tests failed
+
+ctest --test-dir build --output-on-failure -R '^TddftProductionDriverFeatureOff$'
+100% tests passed, 1 test passed, 0 tests failed
 ```
 
-The 16-test run included `Val22LrRadialGroundState`,
-`Val22LrRadialGroundStateLibxc`, `Val23LrPauliProjection`, the LR basis and
-response-space units, LR-05, LR-06, LR-GF-02, KXC-01, GSR-01, GCR-01, and
-TDDY-01.  The seven expected-failure tests covered ALSDA provenance and
-zero-magnetization guards plus the five LR-05 capability guards.
+The 15-test run included the LR basis and response-space units, LR-05, LR-06,
+LR-GF-02, KXC-01, GSR-01, GCR-01, and TDDY-01.  The seven expected-failure
+tests covered ALSDA provenance and zero-magnetization guards plus the five
+LR-05 capability guards.  The TDRUN-01 additions cover feature-off parsing,
+complete direct service-versus-driver reproducibility, accepted-state
+non-mutation, expected SOC/generalized-overlap rejection, and the tiny
+SCF-to-response smoke path.  The separate LR-01/LR-02N validation gates remain
+the prerequisite evidence recorded above; their `Val22`/`Val23` CTest entries
+are not registered in this build.  The separate feature-off executable
+regression also passes on the same tiny ordinary SCF fixture.
 
 The current GF fixture reports full-response, finite-fixture evidence including
 analytic GF error `1.1277e-09`, q=0 static GF difference `9.2484e-10`, and
@@ -180,11 +190,10 @@ eta, kernel scale, or moment is tuned toward a published curve.
 
 ## Failure triage and unblock condition
 
-The observed failure is at the production integration boundary.  It should be
-returned to the response-driver/interface work, not repaired in TDVAL-01 and
-not addressed by changing the LR-03 equations or applying empirical
-normalization.  TDVAL-01 can be reopened only after a current production path
-provides, for both Fe and Ni:
+The former production integration blocker is cleared by TDRUN-01.  TDVAL-01
+must now be rerun through the new production path, not repaired by changing the
+LR-03 equations or applying empirical normalization.  The rerun must provide,
+for both Fe and Ni:
 
 - accepted LR-01 radial states and explicit Pauli magnetization provenance;
 - matching `ham_only`, orthogonal, collinear, no-SOC reciprocal eigenpair
@@ -200,11 +209,11 @@ provides, for both Fe and Ni:
 - [x] LR-01/LR-02N radial and Pauli closure gates rerun;
 - [x] independent spectral/GF finite-fixture evidence rerun;
 - [x] historical pre-purge material response evidence excluded;
-- [x] current production TD-DFT blocker verified from the live source and documented;
+- [x] clean production material adapter exists and tiny lifecycle smoke passes;
 - [x] explicit algebraic, numerical, material, and literature evidence categories used;
 - [x] no empirical tuning or physics-equation changes;
 - [x] validation report written;
-- [ ] clean current bcc-Fe response reference;
+- [ ] clean current bcc-Fe production response reference;
 - [ ] clean current fcc-Ni response reference;
 - [ ] Fe/Ni static invariants;
 - [ ] radial/angular convergence;
@@ -223,4 +232,4 @@ BLOCKED rather than PASS.
 
 ## Commit
 
-`tests: validate rebuilt collinear TDDFT response`
+`td-dft: wire clean post-SCF response driver`

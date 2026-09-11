@@ -25,7 +25,8 @@ contracts.  They are removed from the active build and source tree.
 - `source/tddft_circular.f90` — circular-channel conventions and routing.
 - `source/tddft_config.f90` — `&tddft` parser and validation.
 - `source/tddft_conventions.f90` — old response factors and denominators.
-- `source/tddft_dyson.f90` — old susceptibility enhancement/Dyson output.
+- `source/tddft_dyson.f90` — legacy susceptibility layer was removed; the
+  active file is now the clean TDDY-01 canonical Dyson/loss service.
 - `source/tddft_four_component.f90` — old four-component response path.
 - `source/tddft_goldstone.f90` — old Goldstone diagnostics and corrections.
 - `source/tddft_longitudinal.f90` — old charge/longitudinal response.
@@ -61,7 +62,8 @@ contracts.  They are removed from the active build and source tree.
 
 ### TD-DFT-specific input, tests, and validation artifacts
 
-- `source/include_codes/namelists/tddft.f90` — removed with the parser.
+- `source/include_codes/namelists/tddft.f90` — the legacy parser was removed;
+  TDRUN-01 now uses this path for the minimal clean production namelist.
 - `source/self_xc_response.f90` — removed with the TD-DFT response-provider
   synchronization hooks.
 - `tests/unit/test_tddft_*.f90` and `tests/unit/test_tddft_*.py` — expected
@@ -122,8 +124,9 @@ to ordinary SCF, band, DOS, transport, exchange, and Green-function paths.
 These files contain ordinary paths plus TD-DFT dispatch or dependency edges;
 the listed TD-DFT portions are removed while unrelated paths are retained.
 
-- `source/calculation.f90` — remove susceptibility dispatch, response imports,
-  response helper types/routines, and accept no old TD-DFT input.
+- `source/calculation.f90` — remove the old susceptibility dispatch and
+  response helper types/routines; retain only the TDRUN-01 minimal production
+  input hook.
 - `source/calculation_reciprocal.f90` — remove native real-space response-pair
   setup; retain the shared ordinary post-processing stack.
 - `source/hamiltonian.f90` — remove tangent interfaces and pair-response type
@@ -140,10 +143,11 @@ the listed TD-DFT portions are removed while unrelated paths are retained.
 
 ## User-facing clean-room contract
 
-Any `post_processing='susceptibility'` request or input containing the old
-`&tddft` namelist fails explicitly with:
+Any `post_processing='susceptibility'` request, or an unsupported/legacy
+`&tddft` form, fails explicitly.  The clean minimal `&tddft` form is accepted
+only with `post_processing='tddft'`.  The old route fails with:
 
-`TD-DFT temporarily unavailable during literature-locked clean-room redevelopment.`
+`post_processing='susceptibility' is the removed legacy TD-DFT route; use post_processing='tddft' with the minimal &tddft input.`
 
 No old response equation, sign, factor, basis, radial approximation, kernel,
 Goldstone correction, or mode-analysis implementation is replaced or inferred

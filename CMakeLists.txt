@@ -652,6 +652,30 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrGoldstoneCorrection PROPERTIES LABELS "unit;gcr-01;goldstone;correction;bes;optional")
   add_fortran_unit_test(UnitTddftDyson ${TestDIR}/unit/test_tddft_dyson.f90)
   set_tests_properties(UnitTddftDyson PROPERTIES LABELS "unit;tddft;tddy-01;dyson;loss;metric;covariance")
+  add_fortran_unit_test(UnitTddftProductionDriver ${TestDIR}/unit/test_tddft_production_driver.f90)
+  set_tests_properties(UnitTddftProductionDriver PROPERTIES LABELS "unit;tddft;tdrun-01;orchestration;reproducibility")
+  add_test(NAME UnitTddftProductionDriverRejectSoc
+    COMMAND UnitTddftProductionDriver soc)
+  set_tests_properties(UnitTddftProductionDriverRejectSoc PROPERTIES
+    LABELS "unit;tddft;tdrun-01;negative;capability;soc"
+    WILL_FAIL TRUE)
+  add_test(NAME UnitTddftProductionDriverRejectGeneralizedOverlap
+    COMMAND UnitTddftProductionDriver overlap)
+  set_tests_properties(UnitTddftProductionDriverRejectGeneralizedOverlap PROPERTIES
+    LABELS "unit;tddft;tdrun-01;negative;capability;generalized-overlap"
+    WILL_FAIL TRUE)
+  add_test(NAME TddftProductionDriverSmoke
+    COMMAND ${TestBinary}
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftProductionDriverSmoke PROPERTIES
+    LABELS "integration;tddft;tdrun-01;scf;accepted-state;reciprocal;smoke"
+    TIMEOUT 180)
+  add_test(NAME TddftProductionDriverFeatureOff
+    COMMAND ${TestBinary} input_feature_off.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftProductionDriverFeatureOff PROPERTIES
+    LABELS "integration;tddft;tdrun-01;scf;feature-off;regression"
+    TIMEOUT 180)
   add_test(NAME UnitLrAlsdaKernelRejectProvenance
     COMMAND UnitLrAlsdaKernel provenance)
   set_tests_properties(UnitLrAlsdaKernelRejectProvenance PROPERTIES
@@ -1189,6 +1213,10 @@ endif (RUN_EXAMPLE_TESTS)
 ##############################################################################################
 # Include CPack
 INCLUDE(${LOCAL_MODULE_PATH}/git-watcher.cmake)
+# The response driver writes the same build identifier into production output
+# provenance.  The global definition above is evaluated after the library
+# target is created, so apply it explicitly to the library as well.
+target_compile_definitions(${PROJECT_NAME} PRIVATE ${gitlabel})
 message(STATUS "Git version info : ${gitversion}.")
 # Set package properties
 set(CPACK_PACKAGE_NAME "rslmto")

@@ -260,6 +260,7 @@ contains
       type(dos), target :: dos_obj
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
+      type(reciprocal), target :: reciprocal_obj
       integer :: i
 
       ! Constructing control object
@@ -294,6 +295,14 @@ contains
       ! Creating hamiltonian object
       hamiltonian_obj = hamiltonian(charge_obj)
 
+      if (this%tddft%enabled) then
+         ! The reciprocal object is only the post-SCF eigenpair service. It
+         ! points at this accepted Hamiltonian and does not create a second
+         ! ground-state or Fermi-level reconstruction.
+         reciprocal_obj = reciprocal(hamiltonian_obj)
+         call validate_tddft_production_capability(this%tddft, control_obj, lattice_obj, hamiltonian_obj, reciprocal_obj)
+      end if
+
       ! Creating recursion object
       recursion_obj = recursion(hamiltonian_obj, energy_obj, sparse(hamiltonian_obj))
 
@@ -311,6 +320,14 @@ contains
       call g_timer%start('self-consistency')
       call self_obj%run()
       call g_timer%stop('self-consistency')
+
+      if (this%tddft%enabled) then
+         ! TDRUN-01 consumes the accepted LR-01 snapshots before report/save
+         ! can release the SCF-owned object graph. The driver does not mutate
+         ! SCF state; only its dedicated reciprocal cache is populated.
+         call run_tddft_production(this%tddft, control_obj, lattice_obj, hamiltonian_obj, energy_obj, reciprocal_obj, &
+                                   self_obj%converged)
+      end if
 
       if (trim(this%post_processing) == 'pauli_projection') call self_obj%quantify_pauli_projection()
       call self_obj%report()
