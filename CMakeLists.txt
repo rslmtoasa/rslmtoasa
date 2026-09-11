@@ -648,6 +648,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrAlsdaKernel PROPERTIES LABELS "unit;kxc-01;alsda;transverse;response-kernel")
   add_fortran_unit_test(UnitLrGoldstoneSumrule ${TestDIR}/unit/test_lr_goldstone_sumrule.f90)
   set_tests_properties(UnitLrGoldstoneSumrule PROPERTIES LABELS "unit;gsr-01;goldstone;sum-rule;response-kernel")
+  add_fortran_unit_test(UnitLrGoldstoneCorrection ${TestDIR}/unit/test_lr_goldstone_correction.f90)
+  set_tests_properties(UnitLrGoldstoneCorrection PROPERTIES LABELS "unit;gcr-01;goldstone;correction;bes;optional")
   add_test(NAME UnitLrAlsdaKernelRejectProvenance
     COMMAND UnitLrAlsdaKernel provenance)
   set_tests_properties(UnitLrAlsdaKernelRejectProvenance PROPERTIES
