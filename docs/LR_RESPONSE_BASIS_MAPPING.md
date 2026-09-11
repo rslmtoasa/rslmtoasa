@@ -20,10 +20,11 @@ component, LMTO coefficients, explicit Pauli operator, and Gaunt coefficients.
 This is a response-space mapping statement, not a claim that it reproduces the
 full scalar-relativistic `NEWRHO` density. [BASIS MAPPING]
 
-The remaining required numerical closure is to quantify the scalar-relativistic
+The remaining required numerical closure is recorded in
+docs/LR_SR_PAULI_NUMERICAL_CLOSURE.md. It quantifies the scalar-relativistic
 ground-state density/moment difference from the Pauli projection for the LR-01
-Fe fixture, preferably with Ni as a second case. No arbitrary pass tolerance is
-assigned in LR-02R. [DEFERRED]
+Fe fixture; no arbitrary pass tolerance is assigned. Ni remains deferred
+because no comparable accepted LR-01 Ni fixture is present. [NUMERICAL EVIDENCE]
 
 No `chiKS`/`chi0`, Dyson equation, XC kernel, Ward/Goldstone correction, or
 mode extraction was added.

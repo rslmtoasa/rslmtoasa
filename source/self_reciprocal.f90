@@ -13,6 +13,62 @@ submodule(self_mod) self_reciprocal
 contains
 
    !=========================================================================
+   !  LR-02N SCALAR-RELATIVISTIC -> PAULI GROUND-STATE PROJECTION
+   !=========================================================================
+   module subroutine quantify_pauli_projection(this)
+      use pauli_ground_state_projection_mod, only: pauli_ground_state_projection
+      class(self), intent(inout) :: this
+
+      type(reciprocal) :: reciprocal_obj
+      integer :: ia
+      logical :: use_shifted_kmesh
+
+      if (this%control%nsp /= 1 .or. this%control%has_soc()) then
+         call g_logger%fatal('[self.quantify_pauli_projection]: LR-02N requires control%nsp=1 (scalar-relativistic collinear mode).', &
+                             __FILE__, __LINE__)
+      end if
+      if (this%hamiltonian%ccor_2c .or. this%hamiltonian%hubbard_u_general_check .or. &
+          this%hamiltonian%hubbard_u_impurity_check .or. this%hamiltonian%hubbard_u_sc_check .or. &
+          this%hamiltonian%hubbard_v_check) then
+         call g_logger%fatal('[self.quantify_pauli_projection]: LR-02N requires a Hamiltonian without additive CCOR or Hubbard terms.', &
+                             __FILE__, __LINE__)
+      end if
+
+      ! The k-space SCF branch already owns the accepted-potential spectrum.
+      ! Reuse it so the diagnostic cannot silently change its mesh, weights, or
+      ! eigensolver.  The ordinary real-space SCF route constructs the same
+      ! reciprocal object from the final accepted potential below.
+      if (allocated(this%reciprocal_scf_cache)) then
+         if (allocated(this%reciprocal_scf_cache%eigenvalues) .and. &
+             allocated(this%reciprocal_scf_cache%eigenvectors)) then
+            this%reciprocal_scf_cache%fermi_level = this%en%fermi
+            call pauli_ground_state_projection(this%reciprocal_scf_cache, this%symbolic_atom, &
+                                               this%lattice%nbulk, 'lr02n_pauli_projection')
+            return
+         end if
+      end if
+
+      do ia = 1, this%lattice%nrec
+         call this%symbolic_atom(ia)%build_pot()
+      end do
+      call this%hamiltonian%build_bulkham()
+
+      reciprocal_obj = reciprocal(this%hamiltonian)
+      reciprocal_obj%fermi_level = this%en%fermi
+      reciprocal_obj%auto_find_fermi = .false.
+      use_shifted_kmesh = sum(abs(reciprocal_obj%k_offset)) > 1.0e-12_rp
+      if (reciprocal_obj%use_symmetry_reduction) then
+         call reciprocal_obj%generate_reduced_kpoint_mesh(reciprocal_obj%nk_mesh, use_shifted_kmesh)
+      else
+         call reciprocal_obj%generate_mp_mesh()
+      end if
+      call reciprocal_obj%build_kspace_hamiltonian()
+      call reciprocal_obj%diagonalize_hamiltonian()
+      call pauli_ground_state_projection(reciprocal_obj, this%symbolic_atom, this%lattice%nbulk, &
+                                         'lr02n_pauli_projection')
+   end subroutine quantify_pauli_projection
+
+   !=========================================================================
    !      WRITE k-SPACE SCF DOS OUTPUTS IN LEGACY-COMPATIBLE FILE FORMAT
    !=========================================================================
    module subroutine write_kspace_scf_dos_outputs(this, reciprocal_obj)

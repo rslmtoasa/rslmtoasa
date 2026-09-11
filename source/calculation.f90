@@ -373,6 +373,10 @@ contains
          call this%post_processing_kspace_green()
       case ('frozen_magnon')
          call this%post_processing_frozen_magnon()
+      case ('pauli_projection')
+         ! LR-02N runs immediately after the accepted bravais SCF state in
+         ! pre_processing_bravais, before the ordinary post-processing stage.
+         continue
       case ('susceptibility')
          call g_logger%fatal('TD-DFT temporarily unavailable during literature-locked clean-room redevelopment.', __FILE__, __LINE__)
       end select
@@ -2012,11 +2016,12 @@ contains
           .and. post_processing /= 'density_of_states' &
           .and. post_processing /= 'fermi_surface' &
           .and. post_processing /= 'kspace_green' &
-          .and. post_processing /= 'frozen_magnon') then
+          .and. post_processing /= 'frozen_magnon' &
+          .and. post_processing /= 'pauli_projection') then
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
                              " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'bsf', 'density_of_states'," // &
-                             " 'fermi_surface', 'kspace_green', 'frozen_magnon'", __FILE__, __LINE__)
+                             " 'fermi_surface', 'kspace_green', 'frozen_magnon', 'pauli_projection'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 

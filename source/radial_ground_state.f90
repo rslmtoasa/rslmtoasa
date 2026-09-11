@@ -60,6 +60,24 @@ module radial_ground_state_mod
       real(rp), allocatable :: n_up(:), n_down(:)
       real(rp), allocatable :: vxc_up(:), vxc_down(:)
 
+      ! Accepted scalar-relativistic radial data used by LR-02N.  The
+      ! large-component arrays are the production POTPAR solutions at the
+      ! accepted potential parameters; the small component and the explicit
+      ! correction term are retained only for the diagnostic decomposition.
+      real(rp), allocatable :: pauli_large(:, :, :), pauli_large_dot(:, :, :)
+      real(rp), allocatable :: pauli_small(:, :, :)
+      real(rp), allocatable :: pauli_sr_correction(:, :, :)
+      real(rp), allocatable :: pauli_enu(:, :)
+      logical :: pauli_basis_valid = .false.
+      integer :: pauli_lmax = -1
+
+      ! The reciprocal LMTO eigensystem contains valence states.  Frozen core
+      ! charge is retained separately so the LR-02N comparison measures the
+      ! projection difference rather than a valence/core bookkeeping offset.
+      real(rp), allocatable :: core_weighted_up(:), core_weighted_down(:)
+      real(rp), allocatable :: core_pauli_weighted_up(:), core_pauli_weighted_down(:)
+      logical :: core_density_valid = .false.
+
       ! Convention-neutral and explicitly named derived fields.
       real(rp), allocatable :: delta_vxc(:)
       real(rp), allocatable :: vxc_scalar(:)
@@ -80,6 +98,9 @@ module radial_ground_state_mod
    contains
       procedure :: clear
       procedure :: capture
+      procedure :: begin_pauli_basis
+      procedure :: set_pauli_basis_channel
+      procedure :: capture_core_density
       procedure :: mark_accepted
       procedure :: set_reported_moment
       procedure :: log_mesh_integral
@@ -131,6 +152,15 @@ contains
       if (allocated(this%n_down)) deallocate(this%n_down)
       if (allocated(this%vxc_up)) deallocate(this%vxc_up)
       if (allocated(this%vxc_down)) deallocate(this%vxc_down)
+      if (allocated(this%pauli_large)) deallocate(this%pauli_large)
+      if (allocated(this%pauli_large_dot)) deallocate(this%pauli_large_dot)
+      if (allocated(this%pauli_small)) deallocate(this%pauli_small)
+      if (allocated(this%pauli_sr_correction)) deallocate(this%pauli_sr_correction)
+      if (allocated(this%pauli_enu)) deallocate(this%pauli_enu)
+      if (allocated(this%core_weighted_up)) deallocate(this%core_weighted_up)
+      if (allocated(this%core_weighted_down)) deallocate(this%core_weighted_down)
+      if (allocated(this%core_pauli_weighted_up)) deallocate(this%core_pauli_weighted_up)
+      if (allocated(this%core_pauli_weighted_down)) deallocate(this%core_pauli_weighted_down)
       if (allocated(this%delta_vxc)) deallocate(this%delta_vxc)
       if (allocated(this%vxc_scalar)) deallocate(this%vxc_scalar)
       if (allocated(this%bxc_pauli)) deallocate(this%bxc_pauli)
@@ -144,6 +174,9 @@ contains
       this%b = 0.0_rp
       this%rmax = 0.0_rp
       this%constraining_field_ry = 0.0_rp
+      this%pauli_basis_valid = .false.
+      this%pauli_lmax = -1
+      this%core_density_valid = .false.
       this%integrated_n_up = 0.0_rp
       this%integrated_n_down = 0.0_rp
       this%integrated_spin_number = 0.0_rp
@@ -209,6 +242,69 @@ contains
       this%integrated_spin_number = this%integrated_n_up - this%integrated_n_down
       this%integrated_moment_muB = this%integrated_spin_number
    end subroutine capture
+
+   subroutine begin_pauli_basis(this, lmax)
+      class(radial_ground_state), intent(inout) :: this
+      integer, intent(in) :: lmax
+
+      integer :: nr
+
+      if (.not. this%valid .or. .not. allocated(this%r)) then
+         error stop 'radial_ground_state%begin_pauli_basis: no captured radial state'
+      end if
+      if (lmax < 0) error stop 'radial_ground_state%begin_pauli_basis: invalid lmax'
+
+      if (allocated(this%pauli_large)) deallocate(this%pauli_large, this%pauli_large_dot, &
+         this%pauli_small, this%pauli_sr_correction, this%pauli_enu)
+      nr = size(this%r)
+      allocate(this%pauli_large(nr, lmax + 1, 2), this%pauli_large_dot(nr, lmax + 1, 2), &
+               this%pauli_small(nr, lmax + 1, 2), this%pauli_sr_correction(nr, lmax + 1, 2), &
+               this%pauli_enu(lmax + 1, 2))
+      this%pauli_large = 0.0_rp
+      this%pauli_large_dot = 0.0_rp
+      this%pauli_small = 0.0_rp
+      this%pauli_sr_correction = 0.0_rp
+      this%pauli_enu = 0.0_rp
+      this%pauli_lmax = lmax
+      this%pauli_basis_valid = .false.
+   end subroutine begin_pauli_basis
+
+   subroutine set_pauli_basis_channel(this, l, ispin, enu, large, large_dot, small, sr_correction)
+      class(radial_ground_state), intent(inout) :: this
+      integer, intent(in) :: l, ispin
+      real(rp), intent(in) :: enu
+      real(rp), intent(in) :: large(:), large_dot(:), small(:), sr_correction(:)
+
+      if (.not. allocated(this%pauli_large) .or. l < 0 .or. l > this%pauli_lmax .or. &
+          ispin < 1 .or. ispin > 2 .or. any([size(large), size(large_dot), size(small), size(sr_correction)] /= size(this%r))) then
+         error stop 'radial_ground_state%set_pauli_basis_channel: inconsistent basis channel'
+      end if
+      this%pauli_large(:, l + 1, ispin) = large
+      this%pauli_large_dot(:, l + 1, ispin) = large_dot
+      this%pauli_small(:, l + 1, ispin) = small
+      this%pauli_sr_correction(:, l + 1, ispin) = sr_correction
+      this%pauli_enu(l + 1, ispin) = enu
+      this%pauli_basis_valid = .true.
+   end subroutine set_pauli_basis_channel
+
+   subroutine capture_core_density(this, core_weighted, core_pauli_weighted)
+      class(radial_ground_state), intent(inout) :: this
+      real(rp), intent(in) :: core_weighted(:, :), core_pauli_weighted(:, :)
+
+      if (.not. this%valid .or. size(core_weighted, 1) /= size(this%r) .or. &
+          size(core_weighted, 2) /= 2 .or. any(shape(core_pauli_weighted) /= shape(core_weighted))) then
+         error stop 'radial_ground_state%capture_core_density: inconsistent core dimensions'
+      end if
+      if (allocated(this%core_weighted_up)) deallocate(this%core_weighted_up, this%core_weighted_down, &
+         this%core_pauli_weighted_up, this%core_pauli_weighted_down)
+      allocate(this%core_weighted_up(size(this%r)), this%core_weighted_down(size(this%r)), &
+               this%core_pauli_weighted_up(size(this%r)), this%core_pauli_weighted_down(size(this%r)))
+      this%core_weighted_up = core_weighted(:, 1)
+      this%core_weighted_down = core_weighted(:, 2)
+      this%core_pauli_weighted_up = core_pauli_weighted(:, 1)
+      this%core_pauli_weighted_down = core_pauli_weighted(:, 2)
+      this%core_density_valid = .true.
+   end subroutine capture_core_density
 
    subroutine mark_accepted(this, inner_iteration, residual_control)
       class(radial_ground_state), intent(inout) :: this

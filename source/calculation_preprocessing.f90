@@ -312,6 +312,7 @@ contains
       call self_obj%run()
       call g_timer%stop('self-consistency')
 
+      if (trim(this%post_processing) == 'pauli_projection') call self_obj%quantify_pauli_projection()
       call self_obj%report()
 
       call save_state(lattice_obj%symbolic_atoms)

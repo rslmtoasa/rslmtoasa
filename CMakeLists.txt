@@ -587,6 +587,14 @@ endforeach()
       LABELS "validation;functional;lr-01;radial;magnetic;ground-state;libxc"
       TIMEOUT 1800)
   endif()
+
+  add_test(NAME Val23LrPauliProjection
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val23_lr_pauli_projection.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val23_lr_pauli_projection")
+  set_tests_properties(Val23LrPauliProjection PROPERTIES
+    LABELS "validation;functional;lr-02n;radial;pauli;magnetic;ground-state"
+    TIMEOUT 3600)
 endif (RUN_REG_TESTS)
 
 ##############################################################################################
