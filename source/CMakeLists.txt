@@ -87,6 +87,7 @@ add_library(${PROJECT_NAME} STATIC
     lr_pauli_transition_vertex.f90
     lr_ks_susceptibility.f90
     lr_gf_susceptibility.f90
+    lr_alsda_kernel.f90
     sparse.f90
     report.f90
     rsrec_cuda_plugin.f90

@@ -644,6 +644,18 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrKsSusceptibility PROPERTIES LABELS "unit;lr-06;ks-susceptibility;lehmann;covariance")
   add_fortran_unit_test(UnitLrGfSusceptibility ${TestDIR}/unit/test_lr_gf_susceptibility.f90)
   set_tests_properties(UnitLrGfSusceptibility PROPERTIES LABELS "unit;lr-gf-02;ks-susceptibility;reciprocal-gf;crosscheck")
+  add_fortran_unit_test(UnitLrAlsdaKernel ${TestDIR}/unit/test_lr_alsda_kernel.f90)
+  set_tests_properties(UnitLrAlsdaKernel PROPERTIES LABELS "unit;kxc-01;alsda;transverse;response-kernel")
+  add_test(NAME UnitLrAlsdaKernelRejectProvenance
+    COMMAND UnitLrAlsdaKernel provenance)
+  set_tests_properties(UnitLrAlsdaKernelRejectProvenance PROPERTIES
+    LABELS "unit;kxc-01;alsda;negative;provenance"
+    WILL_FAIL TRUE)
+  add_test(NAME UnitLrAlsdaKernelRejectZeroMagnetization
+    COMMAND UnitLrAlsdaKernel zero)
+  set_tests_properties(UnitLrAlsdaKernelRejectZeroMagnetization PROPERTIES
+    LABELS "unit;kxc-01;alsda;negative;low-m"
+    WILL_FAIL TRUE)
   foreach(_lr05_guard soc overlap noncollinear spdf additive)
     add_test(NAME UnitLrPauliTransitionVertexReject${_lr05_guard}
       COMMAND UnitLrPauliTransitionVertex ${_lr05_guard})
