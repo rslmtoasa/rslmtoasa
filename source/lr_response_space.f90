@@ -57,6 +57,8 @@ module lr_response_space_mod
    interface response_local_operator
       module procedure response_local_operator_site_radial
       module procedure response_local_operator_site_radial_channel
+      module procedure response_local_operator_complex_site_radial
+      module procedure response_local_operator_complex_site_radial_channel
    end interface response_local_operator
 
 contains
@@ -234,6 +236,48 @@ contains
          operator(flat, flat) = cmplx(values(item%site, item%radial_point, item%channel), 0.0_rp, rp)
       end do
    end subroutine response_local_operator_site_radial_channel
+
+   !> Complex-valued spherical local scalar.  This has exactly the same
+   !> pointwise/canonical action as the real overload and is needed by static
+   !> response routes evaluated with a finite retarded broadening.
+   subroutine response_local_operator_complex_site_radial(space, values, operator)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: values(:, :)
+      complex(rp), intent(out) :: operator(:, :)
+      type(response_super_index) :: item
+      integer :: flat
+
+      call require_operator(space, operator, 'response_local_operator: result shape mismatch')
+      if (size(values, 1) /= space%nsite .or. size(values, 2) /= space%npoint) then
+         error stop 'response_local_operator: site/radial scalar shape mismatch'
+      end if
+      operator = cmplx(0.0_rp, 0.0_rp, rp)
+      do flat = 1, space%ndim
+         call response_unflatten_superindex(flat, space%nsite, space%response_lmax, &
+            space%npoint, space%nchannel, item)
+         operator(flat, flat) = values(item%site, item%radial_point)
+      end do
+   end subroutine response_local_operator_complex_site_radial
+
+   subroutine response_local_operator_complex_site_radial_channel(space, values, operator)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: values(:, :, :)
+      complex(rp), intent(out) :: operator(:, :)
+      type(response_super_index) :: item
+      integer :: flat
+
+      call require_operator(space, operator, 'response_local_operator: result shape mismatch')
+      if (size(values, 1) /= space%nsite .or. size(values, 2) /= space%npoint .or. &
+          size(values, 3) /= space%nchannel) then
+         error stop 'response_local_operator: site/radial/channel scalar shape mismatch'
+      end if
+      operator = cmplx(0.0_rp, 0.0_rp, rp)
+      do flat = 1, space%ndim
+         call response_unflatten_superindex(flat, space%nsite, space%response_lmax, &
+            space%npoint, space%nchannel, item)
+         operator(flat, flat) = values(item%site, item%radial_point, item%channel)
+      end do
+   end subroutine response_local_operator_complex_site_radial_channel
 
    !> Metric adjoint is defined by <x,B y>_W=<B^dagger x,y>_W.
    !> The origin entries form a null subspace of the quadrature metric.  The

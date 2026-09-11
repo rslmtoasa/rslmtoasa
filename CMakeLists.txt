@@ -646,6 +646,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrGfSusceptibility PROPERTIES LABELS "unit;lr-gf-02;ks-susceptibility;reciprocal-gf;crosscheck")
   add_fortran_unit_test(UnitLrAlsdaKernel ${TestDIR}/unit/test_lr_alsda_kernel.f90)
   set_tests_properties(UnitLrAlsdaKernel PROPERTIES LABELS "unit;kxc-01;alsda;transverse;response-kernel")
+  add_fortran_unit_test(UnitLrGoldstoneSumrule ${TestDIR}/unit/test_lr_goldstone_sumrule.f90)
+  set_tests_properties(UnitLrGoldstoneSumrule PROPERTIES LABELS "unit;gsr-01;goldstone;sum-rule;response-kernel")
   add_test(NAME UnitLrAlsdaKernelRejectProvenance
     COMMAND UnitLrAlsdaKernel provenance)
   set_tests_properties(UnitLrAlsdaKernelRejectProvenance PROPERTIES

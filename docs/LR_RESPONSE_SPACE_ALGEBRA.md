@@ -170,7 +170,9 @@ pointwise action at the origin. For a local radial scalar `K_a(r_i)`,
 Thus a local operator is diagonal in site, `L`, `M`, radial coordinate, and
 channel. The rank-2 API accepts `K_a(r_i)` shared by all channels; the rank-3
 API permits a separate scalar for each channel. No angular quadrature is
-introduced.
+introduced. Both APIs have real and complex overloads; the latter preserves a
+finite-broadening complex static interaction without changing the pointwise
+operator rule.
 
 The metric adjoint is fixed by
 
