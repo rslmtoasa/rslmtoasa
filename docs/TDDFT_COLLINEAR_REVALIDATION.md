@@ -1,4 +1,263 @@
-# TDVAL-01 — rebuilt collinear TD-DFT validation
+# TDVAL-01R — production revalidation of the rebuilt collinear TD-DFT stack
+
+**Campaign date:** 2026-09-11
+**Branch:** `fable_v4`
+**Starting HEAD:** `4381bc1ea6d85e66354a3df3306db4200c765cee`
+**Status:** **BLOCKED** at preflight; no Fe/Ni material validation is claimed.
+
+This section supersedes the historical TDVAL-01 report below. It records the
+production revalidation decision required by TDVAL-01R, including the evidence
+actually rerun from the live branch. The campaign stops when a required
+capability has a final `BLOCKED` verdict. No response equation, kernel,
+Green-function transformation, Goldstone correction, or empirical parameter
+was changed.
+
+## TDVAL-01R — production revalidation
+
+### 1. Preflight and stopping decision
+
+The initial worktree had no tracked modifications and contained only the
+supplied untracked post-LR03 prompt-pack files. The exact initial state was:
+
+```text
+## fable_v4...origin/fable_v4
+?? docs/dev/RS_LMTO_TDDFT_post_LR03/00_POST_LR03_MASTER_BLUEPRINT.md
+?? docs/dev/RS_LMTO_TDDFT_post_LR03/11_RSGF-01_REALSPACE_GF_RESPONSE_BACKEND.md
+?? docs/dev/RS_LMTO_TDDFT_post_LR03/12_NC-00_NONCOLLINEAR_FEASIBILITY.md
+?? docs/dev/RS_LMTO_TDDFT_post_LR03/13_SV-00_STERNHEIMER_FEASIBILITY.md
+?? docs/dev/RS_LMTO_TDDFT_post_LR03/README.md
+?? docs/dev/RS_LMTO_TDDFT_post_LR03_prompt_pack.zip
+```
+
+Final verdicts were read from the evidence documents, not inferred from
+filenames:
+
+| prerequisite | evidence | final verdict used by TDVAL-01R |
+| --- | --- | --- |
+| LR-GF-01 | [`LR-GF-01_GF_CONTRACT_EVIDENCE.md`](LR-GF-01_GF_CONTRACT_EVIDENCE.md) | **PASS** for the orthogonal reciprocal coefficient-space GF contract |
+| LR-BASIS-00 | [`LR-BASIS-00_RADIAL_AUGMENTATION_EVIDENCE.md`](LR-BASIS-00_RADIAL_AUGMENTATION_EVIDENCE.md) | **PASS** for the stated baseline |
+| LR-01 | [`LR_RADIAL_GROUND_STATE_AUDIT.md`](LR_RADIAL_GROUND_STATE_AUDIT.md) | **PASS** for the accepted scalar-relativistic collinear radial contract |
+| LR-02R | [`LR_RESPONSE_BASIS_MAPPING.md`](LR_RESPONSE_BASIS_MAPPING.md) | **PARTIAL PASS**; exact scalar-relativistic response is blocked |
+| SR→Pauli closure | [`LR_SR_PAULI_NUMERICAL_CLOSURE.md`](LR_SR_PAULI_NUMERICAL_CLOSURE.md) | **PASS** as a measured Fe closure diagnostic; no arbitrary physical threshold |
+| LR-03 | [`LR_TDDFT_CONVENTIONS.md`](LR_TDDFT_CONVENTIONS.md) | **PASS** for locked no-SOC collinear conventions |
+| LR-04 | [`LR_RESPONSE_SPACE_ALGEBRA.md`](LR_RESPONSE_SPACE_ALGEBRA.md) | **PASS** for canonical response-space algebra |
+| LR-05 | [`LR_PAULI_TRANSITION_VERTEX.md`](LR_PAULI_TRANSITION_VERTEX.md) | **PASS** for the supported Pauli/no-SOC primitive and guards |
+| LR-06 | [`LR_KS_SUSCEPTIBILITY.md`](LR_KS_SUSCEPTIBILITY.md) | **PASS** for spectral/Lehmann finite oracles |
+| LR-GF-02 | [`LR_GF_SUSCEPTIBILITY_CROSSCHECK.md`](LR_GF_SUSCEPTIBILITY_CROSSCHECK.md) | **PASS** for the independent reciprocal-GF finite cross-check |
+| KXC-01 | [`KXC_ALSDA_TRANSVERSE_KERNEL.md`](KXC_ALSDA_TRANSVERSE_KERNEL.md) | **PASS** for algebraic and finite-fixture evidence only |
+| GSR-01 | [`GOLDSTONE_SUMRULE_INTERACTION.md`](GOLDSTONE_SUMRULE_INTERACTION.md) | **PARTIAL PASS**; service fixtures pass, deliberate full-response identity is blocked |
+| GCR-01 | [`GOLDSTONE_EIGENVALUE_CORRECTION.md`](GOLDSTONE_EIGENVALUE_CORRECTION.md) | **PASS** for optional finite-matrix gates |
+| TDDY-01 | [`TDDFT_DYSON_AND_LOSS.md`](TDDFT_DYSON_AND_LOSS.md) | **PASS** for finite-matrix Dyson/loss evidence |
+| LR-REP-00 | [`LR_RS_GF_REPRESENTATION_AUDIT.md`](LR_RS_GF_REPRESENTATION_AUDIT.md) | **BLOCKED** for native RS physical radial/Pauli response promotion |
+| RSGF-00 | [`RSGF_ENDPOINT_AUGMENTATION.md`](RSGF_ENDPOINT_AUGMENTATION.md) | **PASS** for the finite endpoint oracle only |
+| RSGF-01R | [`TDDFT_RS_GF_BACKEND.md`](TDDFT_RS_GF_BACKEND.md) | **PARTIAL PASS** for finite/provider-oracle evidence; production material execution is not claimed |
+| TDRUN-01 | [`TDDFT_PRODUCTION_DRIVER.md`](TDDFT_PRODUCTION_DRIVER.md) | **PASS** for reciprocal baseline and tiny lifecycle smoke; native RSGF is not exposed |
+
+The LR-REP-00 final verdict is the stopping condition. RSGF-01R has a finite
+response implementation and passing unit oracle, but its own claim boundary
+excludes production-driver material execution. TDVAL-01R therefore does not
+proceed to Fe/Ni response generation, convergence ladders, or literature
+comparison.
+
+### 2. Production-driver evidence
+
+The focused prerequisite/closure run passed 26/26 tests, and the native finite
+response oracle passed 1/1:
+
+```text
+100% tests passed, 26 tests passed, 0 tests failed
+100% tests passed, 1 test passed, 0 tests failed
+```
+
+The tests include LR-01, LR-02 response basis, LR-04, LR-05, LR-06, LR-GF-02,
+KXC-01, GSR-01, GCR-01, TDDY-01, TDRUN-01, capability guards, RSGF-00, and
+`UnitLrRsGfSusceptibility`. `TddftProductionDriverSmoke` proves the actual
+`SCF → accepted LR-01 snapshot → reciprocal eigenpair handoff → TDRUN →
+LR-05/LR-06 → KXC-01 → TDDY-01` lifecycle on a tiny fixture, including
+accepted-state non-mutation. It does not prove a converged Fe response. The
+production `backend` contract currently accepts only `lehmann` and
+`reciprocal_gf`.
+
+The verification build was GNU Fortran 13.3.0, CMake 3.28.3, Ninja, Debug,
+OpenMP enabled, MPI disabled, libXC enabled, unit tests enabled, and regression
+tests disabled. The executable hash at verification was
+`77e4f1a9c3d946c661b5e9f18582124c24ab6226851bd75544459e37448b57ea`.
+
+### 3. Ground-state provenance
+
+The canonical Fe foundation uses `tests/scf/cases/bulk/bccFe`, scalar-relativistic
+collinear `nsp=1`, legacy Barth-Hedin XC, 300 K Fermi-Dirac occupations, an
+8×8×8 full mesh, and the documented SR→Pauli diagnostic. Its reported
+integrated SR and Pauli moments are 2.1038582410 and 2.1487266935 μB. This is
+an explicit approximation diagnostic, not a tuning target.
+
+The available Ni deck is
+`results/validation/TDVAL-01_FE_NI/ground_state/fccNi/input.nml`: `alat=3.520
+Å`, fcc, `wav=1.410`, `ct=5`, `r2=25`, 16×16×16 mesh, 300 K, and `ham_only`.
+Its evidence explicitly says that no comparable accepted LR-01 Pauli closure
+is present. It is not promoted to a TDVAL response reference.
+
+No Fe/Ni TDVAL output was generated after the preflight stop. Per-run metadata
+for this campaign is consequently **not available**: exact commit, input,
+structure/ASA data, XC provenance, moment, Fermi state, temperature, meshes,
+basis, response cutoff, q/ω/η, backend, interaction route, correction status,
+projection metric, and build details.
+
+### 4. Fe baseline
+
+**BLOCKED / not run.** Fe LR-01 and SR→Pauli foundation evidence is available,
+but no current TDVAL Fe response exists through all required bare backends.
+
+### 5. Ni baseline
+
+**BLOCKED / deferred.** A documented Ni deck exists, but no current accepted
+LR-01/LR-02 Pauli response snapshot comparable to Fe is available.
+
+### 6. Spectral versus reciprocal-GF
+
+**[NUMERICAL CROSS-CHECK] PARTIAL PASS.** LR-06 and LR-GF-02 agree on the
+complete finite response-space fixtures, including static q=0 and an off-mesh
+folded-q case. No material comparison was run.
+
+### 7. Spectral versus native-RSGF
+
+**[NUMERICAL CROSS-CHECK] PARTIAL PASS for finite fixtures; BLOCKED for
+material validation.** `UnitLrRsGfSusceptibility` passes full radial/angular
+finite dense/provider, phase, and bubble oracles; RSGF-00 passes its endpoint
+oracle. Native providers remain callback seams and are not selected by TDRUN.
+
+### 8. Coefficient-GF / augmentation / bubble decomposition
+
+| layer | finite evidence | Fe/Ni material status |
+| --- | --- | --- |
+| coefficient GF | dense complex-energy inverse/provider contract | **BLOCKED / not run** |
+| endpoint augmentation | RSGF-00 dense, spectral, provider, and negative controls | **BLOCKED / not run** |
+| real-space bubble/integration | full response-space native-versus-spectral oracle | **BLOCKED / not run** |
+
+No susceptibility-only scalar is used to conceal an unmeasured coefficient or
+endpoint error.
+
+### 9. Recursion/Chebyshev convergence
+
+**BLOCKED / not run.** The native block-recursion and Chebyshev types expose
+independent controls, but no production material callback is wired into
+TDRUN. The accepted terminator is not under audit; no three-depth or
+three-order material ladder is claimed.
+
+### 10. k-mesh convergence
+
+**BLOCKED / not run.** No Fe/Ni response exists from which to track static
+`chiKS`, Goldstone residuals, finite-q energies, or continuum features across
+three meshes.
+
+### 11. eta convergence
+
+**BLOCKED / not run.** No material peak positions, widths, static responses, or
+backend differences were generated for three broadenings. No eta→0
+extrapolation or undocumented width subtraction is made.
+
+### 12. Radial/angular convergence
+
+**BLOCKED / not run.** The production radial mesh remains the reference. For
+`spd`, formal complete response content is `L_max=4`; a reduced cutoff would
+be an approximation and was not called exact.
+
+### 13. Raw Goldstone and interaction routes
+
+**[ALGEBRAIC] PASS; [MATERIAL VALIDATION] BLOCKED.** Finite tests exercise raw
+diagnostics and separate direct ALSDA, sum-rule, and optional BES objects.
+GSR-01 retains an explicit blocked full-response identity diagnostic. No Fe/Ni
+q=0 residual, rigid-rotation overlap, denominator eigenvalue, or correction
+effect is available.
+
+| route | material status |
+| --- | --- |
+| direct ALSDA / KXC-01 | **DEFERRED** |
+| Lounis sum-rule / GSR-01 | **DEFERRED** |
+| optional BES / GCR-01 | **DEFERRED**; production selection remains gated |
+
+### 14. Long-wavelength magnons
+
+**BLOCKED / not run.** No production q sequence, loss-peak extraction,
+quadratic fit, stiffness, or fit-window sensitivity is claimed.
+
+### 15. Spectral function and loss matrix
+
+**BLOCKED / not run for materials.** TDDY-01 finite tests validate loss
+algebra and near-pole diagnostics, but no Fe/Ni Stoner continuum, collective
+branch, or intrinsic-versus-eta damping result was generated.
+
+### 16. q↔−q covariance and BZ gauge
+
+**[ALGEBRAIC] PASS for finite contracts; [MATERIAL VALIDATION] BLOCKED.**
+LR-03/LR-06/TDDY-01 cover covariance and folded-q fixtures, and RSGF covers
+its finite phase. Required converged Fe/Ni commensurate and arbitrary/folded
+production q checks were not run. No odd-in-q material component was
+symmetrized away.
+
+### 17. Literature comparison
+
+**[LITERATURE COMPARISON] DEFERRED.** No converged Fe/Ni TDVAL result exists
+to compare with compatible Halle/BES lineage or experimental references. No
+parameter was tuned toward literature.
+
+### 18. Failure attribution
+
+The blocker belongs to the RSGF/representation integration boundary, not
+TDVAL. The owning next layer is:
+
+```text
+native block/Chebyshev provider
+    -> accepted-state production callback
+    -> RSGF-00 Pauli endpoint adapter
+    -> RSGF-01R bubble
+    -> TDRUN backend selection and provenance
+```
+
+TDVAL must be reopened only after LR-REP-00/RSGF-01R have a non-blocked
+production verdict and the reciprocal baseline is generated from the same
+accepted state. TDVAL itself is not patched to bypass the blocker.
+
+### 19. Claims discipline
+
+- **[ALGEBRAIC]** conventions, identities, and service guards;
+- **[NUMERICAL CROSS-CHECK]** independent finite spectral/GF comparisons;
+- **[MATERIAL VALIDATION]** unavailable for Fe/Ni in this stopped run;
+- **[LITERATURE COMPARISON]** deferred because material validation is absent.
+
+No claim of “TD-DFT validated” is made.
+
+### 20. Final per-route verdict
+
+```text
+spectral bare response:            PARTIAL PASS  (finite/algebraic only)
+reciprocal-GF bare response:       PARTIAL PASS  (finite cross-check only)
+native-RSGF bare response:         BLOCKED       (no production material route)
+
+direct ALSDA interacting response: DEFERRED      (no Fe/Ni material run)
+sum-rule interacting response:     DEFERRED      (no Fe/Ni material run)
+optional BES-corrected response:   DEFERRED      (material route not selected)
+
+bcc Fe:                            BLOCKED
+fcc Ni:                            BLOCKED
+production lifecycle:              PARTIAL PASS  (tiny reciprocal smoke only)
+overall certified baseline:        BLOCKED       (TDVAL-01R material validation)
+```
+
+The native-RSGF blocker does not invalidate the independent finite reciprocal
+cross-check. Conversely, the reciprocal finite cross-check does not validate
+native-RSGF production material execution.
+
+## Commit record
+
+Important blockers remain; the evidence is committed with a message that does
+not imply successful validation:
+
+```text
+docs: record TDVAL-01R preflight blocker
+```
+
+## Historical TDVAL-01 report (superseded)
 
 **Campaign date:** 2026-09-11
 **Status:** **BLOCKED for physical Fe/Ni validation**
