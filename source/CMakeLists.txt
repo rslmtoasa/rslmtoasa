@@ -85,6 +85,7 @@ add_library(${PROJECT_NAME} STATIC
     response_basis_mapping.f90
     lr_response_space.f90
     lr_pauli_transition_vertex.f90
+    lr_gf_endpoint_augmentation.f90
     lr_ks_susceptibility.f90
     lr_gf_susceptibility.f90
     lr_alsda_kernel.f90
