@@ -363,7 +363,7 @@ contains
                do m = 1, 2*l + 1
                   mls = l*l + m + ((lmaxi + 1)**2)*(s - 1) ! composed index
                   ! Sqrt(Delta) matrix of atom i
-                  cdelta_i(mls, mls) = cmplx(this%symbolic_atom(this%lattice%iz(atom_i))%potential%dele(l, s), 0.0_rp)
+                  cdelta_i(mls, mls) = cmplx(this%symbolic_atom(this%lattice%iz(atom_i))%potential%dele(l, s), 0.0_rp, rp)
                end do
             end do
          end do
@@ -372,7 +372,7 @@ contains
                do m = 1, 2*l + 1
                   mls = l*l + m + ((lmaxj + 1)**2)*(s - 1) ! composed index
                   ! Sqrt(Delta) matrix of atom j
-                  cdelta_j(mls, mls) = cmplx(this%symbolic_atom(this%lattice%iz(atom_j))%potential%dele(l, s), 0.0_rp)
+                  cdelta_j(mls, mls) = cmplx(this%symbolic_atom(this%lattice%iz(atom_j))%potential%dele(l, s), 0.0_rp, rp)
                end do
             end do
          end do
@@ -433,8 +433,8 @@ contains
                mls = l*l + m + ((size(screening_in, 1))**2)*(s - 1) ! Composed diagonal index
                ! The screening constants can be of any atoms (i or j), because they will act only
                ! when i = j.
-               temp1 = cmplx(screening_in(l, s), 0.0_rp) ! Screening constants (in)
-               temp2 = cmplx(screening_out(l, s), 0.0_rp) ! Screening constants (out)
+               temp1 = cmplx(screening_in(l, s), 0.0_rp, rp) ! Screening constants (in)
+               temp2 = cmplx(screening_out(l, s), 0.0_rp, rp) ! Screening constants (out)
                do ie = 1, size(pmat_in_atom_i, 3) ! Energy channel
                   pmat_resc1(mls, mls, ie) = pmat_in_atom_i(mls, mls, ie)/pmat_out_atom_i(mls, mls, ie)
                   pmat_resc2(mls, mls, ie) = pmat_in_atom_j(mls, mls, ie)/pmat_out_atom_j(mls, mls, ie)

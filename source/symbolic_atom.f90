@@ -493,10 +493,10 @@ contains
          do l = 0, l_max ! l index
             do m = 1, 2*l + 1
                mls = l*l + m + ((l_max + 1)**2)*(s - 1) ! Composed diagonal index
-               temp1 = cmplx(this%potential%c(l, s) + this%potential%vmad, 0.0_rp)
-               temp2 = cmplx(this%potential%dele(l, s), 0.0_rp)
+               temp1 = cmplx(this%potential%c(l, s) + this%potential%vmad, 0.0_rp, rp)
+               temp2 = cmplx(this%potential%dele(l, s), 0.0_rp, rp)
                do ie = 1, size(energy_array)
-                  temp3 = cmplx(energy_array(ie), 0.0_rp)
+                  temp3 = cmplx(energy_array(ie), 0.0_rp, rp)
                   pmat(mls, mls, ie) = (temp3 - temp1)/(temp2*temp2)
                end do
             end do
@@ -536,8 +536,8 @@ contains
          do l = 0, size(screening_in, 1) - 1 ! lmax
             do m = 1, 2*l + 1
                mls = l*l + m + ((size(screening_in, 1))**2)*(s - 1) ! Composed diagonal index
-               temp1 = cmplx(screening_in(l, s), 0.0_rp) ! Screening constants (in)
-               temp2 = cmplx(screening_out(l, s), 0.0_rp) ! Screening constants (out)
+               temp1 = cmplx(screening_in(l, s), 0.0_rp, rp) ! Screening constants (in)
+               temp2 = cmplx(screening_out(l, s), 0.0_rp, rp) ! Screening constants (out)
                do ie = 1, size(pmat_in, 3) ! Energy channel
                   pmat_out(mls, mls, ie) = pmat_in(mls, mls, ie)/(cone + ((temp1 - temp2)*pmat_in(mls, mls, ie)))
                end do
