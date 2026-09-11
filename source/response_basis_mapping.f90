@@ -15,6 +15,9 @@ module response_basis_mapping_mod
    implicit none
    private
 
+   !> Sign of the live reciprocal/Fourier convention exp(+i 2*pi*k.R).
+   integer, parameter, public :: response_fourier_phase_sign = 1
+
    type, public :: response_super_index
       integer :: site = 0
       integer :: response_l = 0
@@ -33,6 +36,7 @@ module response_basis_mapping_mod
    public :: response_physical_density
    public :: response_log_mesh_integral
    public :: response_endpoint_phase
+   public :: response_real_space_phase
    public :: response_site_gauge
    public :: response_apply_site_gauge
    public :: response_mapping_supported
@@ -140,6 +144,18 @@ contains
       angle = -2.0_rp*response_angular_pi*dot_product(reciprocal_vector, site_tau)
       phase = cmplx(cos(angle), sin(angle), rp)
    end function response_endpoint_phase
+
+   !> Fourier phase for a real-space response pair.  `translation` is the
+   !> direct-lattice pair translation and the endpoint displacement is
+   !> R+tau_right-tau_left, matching reciprocal_fourier and LR-03.
+   pure complex(rp) function response_real_space_phase(reciprocal_vector, translation, tau_left, tau_right) result(phase)
+      real(rp), intent(in) :: reciprocal_vector(3), translation(3), tau_left(3), tau_right(3)
+      real(rp) :: angle
+
+      angle = real(response_fourier_phase_sign, rp)*2.0_rp*response_angular_pi*dot_product(reciprocal_vector, &
+         translation + tau_right - tau_left)
+      phase = cmplx(cos(angle), sin(angle), rp)
+   end function response_real_space_phase
 
    subroutine response_site_gauge(site_tau, reciprocal_vector, gauge)
       real(rp), intent(in) :: site_tau(:, :), reciprocal_vector(3)

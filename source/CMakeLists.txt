@@ -88,6 +88,7 @@ add_library(${PROJECT_NAME} STATIC
     lr_gf_endpoint_augmentation.f90
     lr_ks_susceptibility.f90
     lr_gf_susceptibility.f90
+    lr_rs_gf_susceptibility.f90
     lr_alsda_kernel.f90
     lr_goldstone_sumrule.f90
     lr_goldstone_correction.f90
