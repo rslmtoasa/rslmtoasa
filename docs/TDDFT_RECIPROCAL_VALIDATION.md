@@ -162,3 +162,126 @@ These values are diagnostic evidence rather than a physics acceptance
 criterion.
 
 No Fe/Ni material validation is claimed by TDVK-01.
+
+## TDVK-02 bcc Fe Gamma smoke
+
+**Status:** BLOCKED at the complete-space LR-06 dense response evaluation.
+
+This slice used the live tracked material files under
+[`tests/scf/cases/bulk/bccFe`](../tests/scf/cases/bulk/bccFe) as the source and
+did not modify them.  The reproducible response deck is
+[`input_fe_reference_gamma.nml`](../tests/integration/tddft_driver_smoke/input_fe_reference_gamma.nml).
+
+### Checklist
+
+- [x] Rebuilt the current reciprocal production path before material execution.
+- [x] Preserved the tracked Fe ground-state files and recorded the exact deck
+  adaptation below.
+- [x] Reached an accepted scalar-relativistic, collinear Fe SCF state and
+  passed the TDRUN-01 capability gate.
+- [x] Configured `lehmann`, `chi_plus`, Gamma, complete product space,
+  `eta=0.02 Ry`, Goldstone off, and no full-matrix text output.
+- [x] Kept native RSGF, channel changes, eta tuning, Goldstone repair, and
+  response-physics changes out of scope.
+- [ ] Complete-space Gamma `omega=0` returned a finite serialized result.
+- [ ] NaN/Inf and initialized-result checks could be made on a response output.
+- [ ] The post-static `omega=0.02, 0.05 Ry` diagnostic set was run.
+- [ ] TDVK-02 PASS.
+
+### Live tracked Fe provenance
+
+| item | tracked/live value or observed result |
+| --- | --- |
+| structure | one-site bcc Fe; `alat=2.86120`, `wav=1.40880`, `ct(1)=3.0`, `r2=9.00`, `rc=080` |
+| basis | `lmax=2` (`spd`) from `Fe.nml`; one response site |
+| XC | legacy RS-LMTO, `TXC=1`, Barth-Hedin |
+| spin representation | tracked deck was `nsp=2`; response-certified adapter used `nsp=1` (collinear scalar-relativistic, no SOC) |
+| Hamiltonian | tracked deck had `hoh=.false.`; response-certified adapter used `hoh=.true.` and `kspace_ham_order='second'` |
+| reciprocal state | `ham_only`, LAPACK, `8x8x8=512` Gamma-centered points, no symmetry or time-reversal reduction |
+| smearing | tetrahedron DOS, `T=300 K`, fixed-Fermi input (`auto_find_fermi=.false.`) |
+| accepted SCF | fresh tracked-Fe run accepted at iteration 37 with `conv_thr=1e-6`; residual `6.903e-7` in the Debug execution |
+| accepted moment / EF | `2.267442 mu_B` and approximately `-0.085122 Ry` in the accepted Debug log (Release rerun: `2.267442 mu_B`, `-0.085119 Ry` at displayed precision) |
+| LR-01 / SR→Pauli | accepted radial snapshot was handed to the driver; no-SOC Pauli provenance was accepted by the TDRUN-01 gate |
+
+The `nsp` and `hoh` changes are representation requirements of the certified
+TDVK reciprocal baseline, not response fitting.  The added SCF
+`conv_thr=1e-6` is the established accepted-state criterion used by the live
+LR-01 oracle; the strict default (`5e-9`) stalled near `4.5e-8` after 100
+steps on this fresh atomic start.  No lattice, XC, magnetic seed, eta,
+channel, sign, factor, or kernel scale was changed.
+
+### Exact input adaptation
+
+Relative to the tracked `tests/scf/cases/bulk/bccFe/input.nml`, the adapter:
+
+```text
+calculation: add post_processing='tddft'
+self:       nstep 1 -> 50; add conv_thr=1.0e-6
+control:    nsp 2 -> 1
+hamiltonian: hoh .false. -> .true.
+add &reciprocal:
+  nk1=nk2=nk3=8; zero offsets; symmetry/time-reversal/shift disabled;
+  tetrahedron; temperature=300; fixed EF; reciprocal_mode=ham_only;
+  reciprocal_backend=lapack; kspace_ham_order=second
+add &tddft:
+  enabled; channel=chi_plus; q=(0,0,0); eta=0.02; response_lmax=-1;
+  interaction_route=direct_alsda; goldstone_correction=.false.;
+  backend=lehmann; reciprocal_backend_crosscheck=.false.;
+  write_full_matrix=.false.; explicit omega grid=(0.00,0.02,0.05) Ry
+```
+
+The original tracked `&lattice`, `&atoms`, `&energy`, and `&mix` values were
+otherwise retained verbatim in the adapter.
+
+### Gate and response evidence
+
+The accepted run logged:
+
+```text
+Converged!0.0000006903
+Generated Monkhorst-Pack mesh with 512 k-points
+build_kspace_hamiltonian: K-space Hamiltonian built successfully
+Kanpur mapping: reciprocal_mode=ham_only
+Kanpur mapping: Hamiltonian-only mode (TB-like).
+```
+
+For Fe's 495-point radial mesh, `response_lmax=-1` expands the complete
+`lmax=2` product to angular cutoff 4, with
+
+```text
+angular harmonics = 1 + 3 + 5 + 7 + 9 = 25
+response dimension = 1 site * 25 harmonics * 495 radial points * 1 channel
+                  = 12,375
+```
+
+One dense complex(kind=8) `12,375 x 12,375` matrix is 153,140,625 elements
+and about 2.45 GB decimal.  The current production lifecycle allocates
+multiple dense bare, Dyson, and result matrices even when
+`write_full_matrix=.false.`; that option suppresses text serialization, not
+the in-memory matrices.  The Debug three-frequency attempt and a separate
+Release static attempt both reached the response call but produced no
+`tddft_fe_gamma.dat`.  The Release static attempt was stopped after roughly
+192 seconds in the complete-space response evaluation.  Consequently there
+are no response-side finite/NaN diagnostics, output q/omega records, or
+post-static finite-frequency evidence to claim.
+
+The owning blocker is the current dense LR-06/production-driver material
+allocation for the required complete Fe product space.  Per the campaign
+failure rule, no response equation, vertex, eta, kernel, or acceptance physics
+was changed to work around it.
+
+### Checks and next action
+
+The existing reciprocal prerequisites remain green:
+
+```text
+cmake --build build -j2                         PASS
+ctest --test-dir build --output-on-failure -R '^TddftProductionDriverSmoke$'  PASS (1/1)
+separate Release build in /tmp/tdvk02-build    PASS
+```
+
+TDVK-03 is not started.  The next task should be a narrowly scoped mechanical
+review of the dense LR-06/production-driver allocation and a streaming or
+matrix-free material-smoke design, followed by a rerun of TDVK-02 after
+orchestrator approval.  It must preserve the complete response space and the
+current response equations.
