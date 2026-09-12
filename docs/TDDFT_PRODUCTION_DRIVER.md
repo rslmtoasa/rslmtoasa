@@ -1,6 +1,7 @@
 # TDRUN-01 — clean post-SCF TD-DFT production driver
 
-Status: implemented for the validated reciprocal collinear baseline.
+Status: implemented for the validated reciprocal baseline and the registered
+native-RSGF production baseline; Fe/Ni material validation remains TDVAL-01R.
 
 This document describes the production seam added after the LR-00 purge.  It
 does not add response equations or a second TD-DFT implementation.  The
@@ -37,7 +38,12 @@ The active calculation contract is:
   response_lmax = -1                   ! default: complete 2*lmax product
   interaction_route = 'direct_alsda'
   goldstone_correction = .false.
-  backend = 'lehmann'
+  backend = 'lehmann'                 ! lehmann/spectral, reciprocal_gf, native_rsgf
+  reciprocal_backend_crosscheck = .false. ! opt-in reciprocal validation diagnostic
+  native_rsgf_provider = 'auto'       ! auto, block, or chebyshev
+  gf_integration_points = 2001        ! reciprocal/native GF Simpson mesh
+  gf_integration_eta = 0.0            ! native/reciprocal spectral broadening
+  gf_energy_margin = 1.0
   write_full_matrix = .true.
   output_file = 'tddft_response.dat'
 /
@@ -50,10 +56,10 @@ interaction route is `direct_alsda`.  `goldstone_sumrule` remains an explicit
 service route, while the `goldstone_correction` switch is rejected until its
 separate TDVAL evidence is complete; it is never silently applied.
 
-The native-RSGF capability audit closes the finite/provider prerequisites R0–R2
-but does not register a native backend here. That production lifecycle seam is
-the separate TDRUN-02 task; this document therefore remains the reciprocal
-baseline and does not claim native material execution. See
+The native-RSGF capability audit closes the finite/provider prerequisites R0–R2,
+and TDRUN-02 registers the native route through the same accepted-state
+lifecycle. The registration is an integration result, not Fe/Ni material
+validation. See
 [`RSGF_CAPABILITY_CLOSURE.md`](RSGF_CAPABILITY_CLOSURE.md).
 
 The old `post_processing='susceptibility'` spelling is rejected with a
@@ -99,8 +105,8 @@ input parse
     -> SCF / ATOMSC
     -> accepted LR-01 snapshot
     -> reciprocal eigenpairs and exact k+q endpoint snapshots
-    -> TDRUN-01 response request batch
-    -> LR-05 vertex -> LR-06/LR-GF-02 chiKS
+    -> TDRUN response request batch
+    -> LR-06, LR-GF-02, or native-RSGF chiKS
     -> KXC-01 or explicit GSR-01 interaction
     -> TDDY-01 Dyson and loss
     -> provenance/result output
@@ -140,15 +146,38 @@ The driver invokes existing services only:
 
 1. `evaluate_pauli_transition_vertex` through the selected susceptibility
    service;
-2. `evaluate_lr_ks_susceptibility` for spectral/Lehmann `chiKS`, or the
-   explicitly selected `evaluate_lr_gf_susceptibility` reciprocal-GF route;
+2. `evaluate_lr_ks_susceptibility` for spectral/Lehmann `chiKS`,
+   `evaluate_lr_gf_susceptibility` for reciprocal GF, or the public
+   `evaluate_lr_rs_gf_susceptibility` service for explicitly selected native
+   RSGF;
 3. `evaluate_lr_alsda_kernel` for the direct interaction, or the explicit
    `evaluate_lr_goldstone_sumrule` route when selected; and
 4. `evaluate_tddft_dyson` for enhanced susceptibility and loss output.
 
 No susceptibility, augmentation, Kxc, Goldstone, or mode-extraction formula
-is present in the calculation layer or in the driver.  The native RSGF
-backend is not exposed by this task; it remains gated until RSGF-01 passes.
+is present in the calculation layer or in the driver. The native provider
+returns the same LR-04 response result type and metadata as the reciprocal
+routes, then uses the common KXC/Dyson path.
+
+### Reciprocal backend cross-check diagnostic
+
+`reciprocal_backend_crosscheck = .true.` is an opt-in validation diagnostic
+for a prepared production sweep. For each requested `(q, omega)`, it evaluates
+both `evaluate_lr_ks_susceptibility` and `evaluate_lr_gf_susceptibility` on the
+same accepted state, endpoint, response space, radial bases, channel, eta, and
+GF controls. It stores the canonical LR-04 matrix difference
+`chi_lehmann - chi_reciprocal_gf` together with the Lehmann/GF norms, absolute
+and relative Frobenius differences, and maximum element difference.
+
+The flag defaults to `.false.`. It is not a third backend and does not select,
+average, replace, or otherwise modify the configured production backend. The
+selected bare response remains the sole input to KXC/Dyson. No agreement
+threshold is applied; the metrics are evidence for the orchestrator to assess.
+When enabled, the GF controls `gf_integration_points`, `gf_integration_eta`,
+and `gf_energy_margin` are validated even if `backend='lehmann'`. The complete
+delta matrices remain in the result object, and the output writer emits the
+per-point scalar metrics and delta entries as comment-prefixed diagnostic
+records.
 
 ## Output provenance
 
@@ -190,6 +219,9 @@ The TDRUN-01 tests are registered in the top-level CTest graph:
   through SCF, accepted LR-01 snapshot, reciprocal eigenpairs, one Gamma q,
   and one frequency.  It is an integration/lifecycle smoke test, not a
   material-accuracy test;
+- `TddftProductionDriverNativeSmoke`: the same accepted-state lifecycle with
+  `backend='native_rsgf'`, a registered block provider, a complete on-site
+  pair workset, native provenance, and the common KXC/Dyson path; and
 - `TddftProductionDriverFeatureOff`: the same ordinary SCF fixture with no
   `&tddft` group, confirming the feature-off path does not enter the driver.
 
@@ -198,6 +230,7 @@ Useful commands from the configured build are:
 ```text
 ctest --test-dir build --output-on-failure -R 'UnitTddftProductionDriver'
 ctest --test-dir build --output-on-failure -R 'TddftProductionDriverSmoke'
+ctest --test-dir build --output-on-failure -R 'TddftProductionDriverNativeSmoke'
 ```
 
 The direct reproducibility test compares the complete `chiKS`, enhanced, and
@@ -207,12 +240,13 @@ this task.
 
 ## TDVAL handoff
 
-The production material adapter now exists and has a passing tiny lifecycle
-smoke path.  This unblocks material validation work, but it does not validate
-Fe or Ni.  TDVAL-01 must be rerun for bcc Fe and fcc Ni through
+The production native-RSGF material adapter is now available and has a passing
+tiny lifecycle smoke path plus a direct-service equivalence check. This
+unblocks material validation work, but it does not validate Fe or Ni.
+TDVAL-01R must be rerun for bcc Fe and fcc Ni through
 `post_processing='tddft'`, with its stated q/mesh/eta convergence, static
-invariant, route separation, and literature-comparison evidence.  No Fe/Ni
-spectrum, stiffness, damping, or literature agreement is claimed by TDRUN-01.
+invariant, route separation, and literature-comparison evidence. No Fe/Ni
+spectrum, stiffness, damping, or literature agreement is claimed by TDRUN-02.
 
 ## Commit
 

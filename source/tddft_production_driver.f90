@@ -12,13 +12,15 @@
 module tddft_production_driver_mod
 
    use precision_mod, only: rp
-   use mpi_mod, only: rank
-   use string_mod, only: lower
+   use mpi_mod, only: rank, numprocs
+   use string_mod, only: lower, int2str
    use control_mod, only: control
    use lattice_mod, only: lattice
    use hamiltonian_mod, only: hamiltonian
    use energy_mod, only: energy
    use reciprocal_mod, only: reciprocal
+   use recursion_mod, only: recursion
+   use green_mod, only: green
    use symbolic_atom_mod, only: symbolic_atom
    use radial_ground_state_mod, only: radial_ground_state
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
@@ -27,11 +29,15 @@ module tddft_production_driver_mod
       lr_ks_susceptibility_result, lr_snapshot_from_reciprocal, lr_q_endpoint_from_reciprocal, &
       evaluate_lr_ks_susceptibility
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
+   use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
+      evaluate_lr_rs_gf_susceptibility
+   use tddft_native_rsgf_provider_mod, only: tddft_native_rsgf_provider
    use lr_alsda_kernel_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, evaluate_lr_alsda_kernel
    use lr_goldstone_sumrule_mod, only: lr_goldstone_sumrule_request, lr_goldstone_sumrule_result, &
       evaluate_lr_goldstone_sumrule
    use tddft_dyson_mod, only: tddft_dyson_request, tddft_dyson_result, evaluate_tddft_dyson, &
       lr_dyson_route_direct_alsda, lr_dyson_route_goldstone_sumrule
+   use logger_mod, only: g_logger
    implicit none
    private
 
@@ -43,6 +49,7 @@ module tddft_production_driver_mod
 
    character(len=*), parameter, public :: tddft_driver_backend_lehmann = 'lehmann'
    character(len=*), parameter, public :: tddft_driver_backend_reciprocal_gf = 'reciprocal_gf'
+   character(len=*), parameter, public :: tddft_driver_backend_native_rsgf = 'native_rsgf'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -61,6 +68,8 @@ module tddft_production_driver_mod
       character(len=48) :: interaction_route = tddft_driver_route_direct_alsda
       logical :: goldstone_correction = .false.
       character(len=32) :: backend = tddft_driver_backend_lehmann
+      logical :: reciprocal_backend_crosscheck = .false.
+      character(len=32) :: native_rsgf_provider = 'auto'
       integer :: gf_integration_points = 2001
       real(rp) :: gf_integration_eta = 0.0_rp
       real(rp) :: gf_energy_margin = 1.0_rp
@@ -98,11 +107,20 @@ module tddft_production_driver_mod
       complex(rp), allocatable :: ks_susceptibility(:, :, :, :)
       complex(rp), allocatable :: enhanced_susceptibility(:, :, :, :)
       complex(rp), allocatable :: loss_matrix(:, :, :, :)
+      logical :: reciprocal_backend_crosscheck = .false.
+      logical, allocatable :: reciprocal_crosscheck_valid(:, :) ! (frequency,q)
+      real(rp), allocatable :: reciprocal_crosscheck_norm_lehmann(:, :) ! (frequency,q)
+      real(rp), allocatable :: reciprocal_crosscheck_norm_gf(:, :) ! (frequency,q)
+      real(rp), allocatable :: reciprocal_crosscheck_difference_frobenius(:, :) ! (frequency,q)
+      real(rp), allocatable :: reciprocal_crosscheck_relative_frobenius(:, :) ! (frequency,q)
+      real(rp), allocatable :: reciprocal_crosscheck_difference_infinity(:, :) ! (frequency,q)
+      complex(rp), allocatable :: reciprocal_crosscheck_delta(:, :, :, :) ! (I,J,frequency,q)
       character(len=128) :: status = 'not evaluated'
       character(len=48) :: interaction_route = ''
       character(len=32) :: backend = ''
       character(len=64) :: goldstone_correction_status = 'not selected'
       character(len=256) :: interaction_provenance = ''
+      character(len=256) :: bare_response_provenance = ''
    end type tddft_production_result
 
    public :: load_tddft_config
@@ -126,6 +144,8 @@ contains
       this%interaction_route = tddft_driver_route_direct_alsda
       this%goldstone_correction = .false.
       this%backend = tddft_driver_backend_lehmann
+      this%reciprocal_backend_crosscheck = .false.
+      this%native_rsgf_provider = 'auto'
       this%gf_integration_points = 2001
       this%gf_integration_eta = 0.0_rp
       this%gf_energy_margin = 1.0_rp
@@ -165,6 +185,8 @@ contains
       interaction_route = tddft_driver_route_direct_alsda
       goldstone_correction = .false.
       backend = tddft_driver_backend_lehmann
+      reciprocal_backend_crosscheck = .false.
+      native_rsgf_provider = 'auto'
       gf_integration_points = 2001
       gf_integration_eta = 0.0_rp
       gf_energy_margin = 1.0_rp
@@ -199,6 +221,8 @@ contains
       config%interaction_route = trim(lower(interaction_route))
       config%goldstone_correction = goldstone_correction
       config%backend = trim(lower(backend))
+      config%reciprocal_backend_crosscheck = reciprocal_backend_crosscheck
+      config%native_rsgf_provider = trim(lower(native_rsgf_provider))
       config%gf_integration_points = gf_integration_points
       config%gf_integration_eta = gf_integration_eta
       config%gf_energy_margin = gf_energy_margin
@@ -250,15 +274,23 @@ contains
       if (config%goldstone_correction) then
          error stop 'TDDFT input: Goldstone correction requires separate validated TDVAL evidence; it is not silently applied'
       end if
-      if (trim(config%backend) /= tddft_driver_backend_lehmann .and. &
-          trim(config%backend) /= tddft_driver_backend_reciprocal_gf) then
-         error stop 'TDDFT input: unsupported backend; use lehmann or reciprocal_gf'
+      if (trim(config%backend) /= tddft_driver_backend_lehmann .and. trim(config%backend) /= 'spectral' .and. &
+          trim(config%backend) /= tddft_driver_backend_reciprocal_gf .and. &
+          trim(config%backend) /= tddft_driver_backend_native_rsgf) then
+         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf or native_rsgf'
       end if
-      if (trim(config%backend) == tddft_driver_backend_reciprocal_gf) then
+      if (trim(config%backend) == tddft_driver_backend_reciprocal_gf .or. &
+          trim(config%backend) == tddft_driver_backend_native_rsgf .or. config%reciprocal_backend_crosscheck) then
          if (config%gf_integration_points < 3 .or. mod(config%gf_integration_points, 2) == 0) then
-            error stop 'TDDFT input: reciprocal_gf requires an odd gf_integration_points value >= 3'
+            error stop 'TDDFT input: reciprocal_gf or backend crosscheck requires an odd gf_integration_points value >= 3'
          end if
-         if (config%gf_energy_margin <= 0.0_rp) error stop 'TDDFT input: gf_energy_margin must be positive'
+         if (config%gf_energy_margin <= 0.0_rp) error stop 'TDDFT input: reciprocal-GF crosscheck requires gf_energy_margin positive'
+      end if
+      if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
+         if (trim(config%native_rsgf_provider) /= 'auto' .and. trim(config%native_rsgf_provider) /= 'block' .and. &
+             trim(config%native_rsgf_provider) /= 'block_recursion' .and. trim(config%native_rsgf_provider) /= 'chebyshev') then
+            error stop 'TDDFT input: native_rsgf_provider must be auto, block or chebyshev'
+         end if
       end if
       if (len_trim(config%output_file) == 0) error stop 'TDDFT input: output_file must not be empty'
       if (route == tddft_driver_route_goldstone_sumrule) then
@@ -344,18 +376,39 @@ contains
       if (config%response_lmax > 2*state%basis_lmax) then
          error stop 'TDDFT capability gate: response_lmax exceeds the accepted angular-product cutoff'
       end if
+      if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
+         if (lattice_obj%njij < 1) then
+            error stop 'TDDFT capability gate: native_rsgf requires a complete lattice%ijpair set'
+         end if
+         if (numprocs /= 1) then
+            error stop 'TDDFT capability gate: native_rsgf registered baseline requires a serial replicated pair workset'
+         end if
+         if (trim(config%native_rsgf_provider) == 'block' .or. trim(config%native_rsgf_provider) == 'block_recursion') then
+            if (trim(lower(control_obj%recur)) /= 'block') then
+               error stop 'TDDFT capability gate: native block provider requires control%recur=block'
+            end if
+         else if (trim(config%native_rsgf_provider) == 'chebyshev') then
+            if (trim(lower(control_obj%recur)) /= 'chebyshev') then
+               error stop 'TDDFT capability gate: native Chebyshev provider requires control%recur=chebyshev'
+            end if
+         else if (trim(lower(control_obj%recur)) /= 'block' .and. trim(lower(control_obj%recur)) /= 'chebyshev') then
+            error stop 'TDDFT capability gate: native_rsgf requires control%recur=block or chebyshev'
+         end if
+      end if
    end subroutine validate_tddft_production_capability
 
    !> Run the response after SCF has accepted its state. The input objects are
    !> read-only except for the dedicated reciprocal eigenpair service cache.
    subroutine run_tddft_production(config, control_obj, lattice_obj, hamiltonian_obj, energy_obj, reciprocal_obj, &
-                                   scf_converged)
+                                   recursion_obj, green_obj, scf_converged)
       type(tddft_production_config), intent(in) :: config
       type(control), intent(in) :: control_obj
       type(lattice), target, intent(in) :: lattice_obj
       type(hamiltonian), intent(in) :: hamiltonian_obj
       type(energy), intent(in) :: energy_obj
       type(reciprocal), intent(inout) :: reciprocal_obj
+      type(recursion), target, intent(inout) :: recursion_obj
+      type(green), target, intent(inout) :: green_obj
       logical, intent(in) :: scf_converged
 
       type(radial_ground_state), pointer :: ground_states(:)
@@ -364,6 +417,8 @@ contains
       type(lr_electronic_state), target :: left_state
       type(lr_electronic_state), allocatable, target :: endpoints(:)
       type(tddft_production_result) :: result
+      type(tddft_native_rsgf_provider), target :: native_provider
+      real(rp), allocatable, target :: native_site_positions(:, :)
       real(rp) :: ignore_real
       integer :: first, last, nsite, response_lmax, isite, iq
 
@@ -429,7 +484,16 @@ contains
       do iq = 1, size(config%q_list, 2)
          call lr_q_endpoint_from_reciprocal(reciprocal_obj, left_state, config%q_list(:, iq), endpoints(iq))
       end do
-      call evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result)
+      if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
+         call native_provider%initialize(config%native_rsgf_provider, green_obj, recursion_obj, hamiltonian_obj, &
+            lattice_obj, reciprocal_obj, radial_bases)
+         allocate(native_site_positions(3, nsite))
+         native_site_positions = 0.0_rp
+         call evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
+            native_provider, native_provider%pairs, native_site_positions)
+      else
+         call evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result)
+      end if
       call write_tddft_production_output(config, result, control_obj, lattice_obj, ground_states, response_space, reciprocal_obj)
       ! The production result has already been serialized. Release the dense
       ! response matrices before the accepted-state owner leaves scope; this
@@ -437,6 +501,13 @@ contains
       if (allocated(result%ks_susceptibility)) deallocate(result%ks_susceptibility)
       if (allocated(result%enhanced_susceptibility)) deallocate(result%enhanced_susceptibility)
       if (allocated(result%loss_matrix)) deallocate(result%loss_matrix)
+      if (allocated(result%reciprocal_crosscheck_delta)) deallocate(result%reciprocal_crosscheck_delta)
+      if (allocated(result%reciprocal_crosscheck_valid)) deallocate(result%reciprocal_crosscheck_valid)
+      if (allocated(result%reciprocal_crosscheck_norm_lehmann)) deallocate(result%reciprocal_crosscheck_norm_lehmann)
+      if (allocated(result%reciprocal_crosscheck_norm_gf)) deallocate(result%reciprocal_crosscheck_norm_gf)
+      if (allocated(result%reciprocal_crosscheck_difference_frobenius)) deallocate(result%reciprocal_crosscheck_difference_frobenius)
+      if (allocated(result%reciprocal_crosscheck_relative_frobenius)) deallocate(result%reciprocal_crosscheck_relative_frobenius)
+      if (allocated(result%reciprocal_crosscheck_difference_infinity)) deallocate(result%reciprocal_crosscheck_difference_infinity)
       if (allocated(result%q_list)) deallocate(result%q_list)
       if (allocated(result%frequencies)) deallocate(result%frequencies)
    end subroutine run_tddft_production
@@ -444,7 +515,8 @@ contains
    !> Evaluate an already prepared request batch. This is the reproducibility
    !> seam: tests and validation can compare it directly with service calls,
    !> without reconstructing SCF state.
-   subroutine evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result)
+   subroutine evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
+                                              native_provider, native_pairs, native_site_positions)
       type(tddft_production_config), intent(in) :: config
       type(response_space_layout), target, intent(in) :: response_space
       type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
@@ -452,6 +524,9 @@ contains
       type(lr_electronic_state), target, intent(in) :: left_state
       type(lr_electronic_state), target, intent(in) :: endpoints(:)
       type(tddft_production_result), intent(out) :: result
+      class(lr_rs_gf_provider), target, intent(inout), optional :: native_provider
+      type(lr_rs_gf_pair), intent(in), optional :: native_pairs(:)
+      real(rp), target, intent(in), optional :: native_site_positions(:, :)
 
       type(lr_alsda_kernel_request) :: kxc_request
       type(lr_alsda_kernel_result) :: kxc_result
@@ -464,7 +539,8 @@ contains
       real(rp), allocatable :: magnetization(:, :), static_frequency(:)
       integer :: iq, i0, ndim
 
-      call validate_prepared_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints)
+      call validate_prepared_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, &
+         native_provider, native_pairs)
       ndim = response_space%ndim
       result%nq = size(config%q_list, 2)
       result%nfrequency = size(config%frequencies)
@@ -472,6 +548,8 @@ contains
       result%response_lmax = response_space%response_lmax
       result%interaction_route = trim(config%interaction_route)
       result%backend = trim(config%backend)
+      result%reciprocal_backend_crosscheck = config%reciprocal_backend_crosscheck
+      result%bare_response_provenance = ''
       result%q_list = config%q_list
       result%frequencies = config%frequencies
       allocate(result%ks_susceptibility(ndim, ndim, result%nfrequency, result%nq), &
@@ -480,6 +558,22 @@ contains
       result%ks_susceptibility = cmplx(0.0_rp, 0.0_rp, rp)
       result%enhanced_susceptibility = cmplx(0.0_rp, 0.0_rp, rp)
       result%loss_matrix = cmplx(0.0_rp, 0.0_rp, rp)
+      if (config%reciprocal_backend_crosscheck) then
+         allocate(result%reciprocal_crosscheck_valid(result%nfrequency, result%nq), &
+            result%reciprocal_crosscheck_norm_lehmann(result%nfrequency, result%nq), &
+            result%reciprocal_crosscheck_norm_gf(result%nfrequency, result%nq), &
+            result%reciprocal_crosscheck_difference_frobenius(result%nfrequency, result%nq), &
+            result%reciprocal_crosscheck_relative_frobenius(result%nfrequency, result%nq), &
+            result%reciprocal_crosscheck_difference_infinity(result%nfrequency, result%nq), &
+            result%reciprocal_crosscheck_delta(ndim, ndim, result%nfrequency, result%nq))
+         result%reciprocal_crosscheck_valid = .false.
+         result%reciprocal_crosscheck_norm_lehmann = 0.0_rp
+         result%reciprocal_crosscheck_norm_gf = 0.0_rp
+         result%reciprocal_crosscheck_difference_frobenius = 0.0_rp
+         result%reciprocal_crosscheck_relative_frobenius = 0.0_rp
+         result%reciprocal_crosscheck_difference_infinity = 0.0_rp
+         result%reciprocal_crosscheck_delta = cmplx(0.0_rp, 0.0_rp, rp)
+      end if
 
       allocate(magnetization(size(ground_states), response_space%npoint))
       do iq = 1, size(ground_states)
@@ -503,7 +597,8 @@ contains
          allocate(static_frequency(1))
          static_frequency(1) = 0.0_rp
          call evaluate_bare_response(config, response_space, radial_bases, left_state, endpoints(i0), &
-                                     config%q_list(:, i0), static_frequency, static_result)
+                                     config%q_list(:, i0), static_frequency, static_result, native_provider, native_pairs, &
+                                     native_site_positions)
          gsr_request%response_space => response_space
          gsr_request%static_susceptibility = static_result%susceptibility(:, :, 1)
          gsr_request%magnetization = magnetization
@@ -518,8 +613,21 @@ contains
       end select
 
       do iq = 1, size(config%q_list, 2)
+         if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
+            call g_logger%info('TDRUN-02 native RSGF sweep: ndim='//int2str(ndim)//' radial_points='// &
+               int2str(response_space%npoint)//' integration_points='//int2str(config%gf_integration_points), __FILE__, __LINE__)
+         end if
          call evaluate_bare_response(config, response_space, radial_bases, left_state, endpoints(iq), &
-                                     config%q_list(:, iq), config%frequencies, bare_result)
+                                     config%q_list(:, iq), config%frequencies, bare_result, native_provider, native_pairs, &
+                                     native_site_positions)
+         if (config%reciprocal_backend_crosscheck) then
+            call evaluate_reciprocal_backend_crosscheck(config, response_space, radial_bases, left_state, endpoints(iq), &
+               config%q_list(:, iq), config%frequencies, bare_result, result%reciprocal_crosscheck_valid(:, iq), &
+               result%reciprocal_crosscheck_norm_lehmann(:, iq), result%reciprocal_crosscheck_norm_gf(:, iq), &
+               result%reciprocal_crosscheck_difference_frobenius(:, iq), result%reciprocal_crosscheck_relative_frobenius(:, iq), &
+               result%reciprocal_crosscheck_difference_infinity(:, iq), result%reciprocal_crosscheck_delta(:, :, :, iq))
+         end if
+         result%bare_response_provenance = bare_result%response_space_metadata
          dyson_request%response_space => response_space
          dyson_request%q = config%q_list(:, iq)
          dyson_request%frequencies = config%frequencies
@@ -540,13 +648,16 @@ contains
       result%initialized = .true.
    end subroutine evaluate_tddft_production_sweep
 
-   subroutine validate_prepared_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints)
+   subroutine validate_prepared_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, &
+                                      native_provider, native_pairs)
       type(tddft_production_config), intent(in) :: config
       type(response_space_layout), intent(in) :: response_space
       type(lmto_radial_basis), intent(in) :: radial_bases(:)
       type(radial_ground_state), intent(in) :: ground_states(:)
       type(lr_electronic_state), intent(in) :: left_state
       type(lr_electronic_state), intent(in) :: endpoints(:)
+      class(lr_rs_gf_provider), intent(in), optional :: native_provider
+      type(lr_rs_gf_pair), intent(in), optional :: native_pairs(:)
       integer :: iq
 
       call validate_tddft_config(config)
@@ -559,9 +670,19 @@ contains
       do iq = 1, size(endpoints)
          call endpoints(iq)%validate('TDDFT production driver:q_endpoint_state')
       end do
+      if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
+         if (.not. present(native_provider) .or. .not. present(native_pairs)) then
+            error stop 'TDDFT production driver: native_rsgf requires a registered provider and complete pair set'
+         end if
+         if (size(native_pairs) < 1) error stop 'TDDFT production driver: native_rsgf pair set is empty'
+         if (native_provider%nbasis_per_site < 1) then
+            error stop 'TDDFT production driver: native_rsgf provider is not initialized'
+         end if
+      end if
    end subroutine validate_prepared_sweep
 
-   subroutine evaluate_bare_response(config, response_space, radial_bases, left_state, endpoint, q, frequencies, result)
+   subroutine evaluate_bare_response(config, response_space, radial_bases, left_state, endpoint, q, frequencies, result, &
+                                     native_provider, native_pairs, native_site_positions)
       type(tddft_production_config), intent(in) :: config
       type(response_space_layout), target, intent(in) :: response_space
       type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
@@ -569,34 +690,131 @@ contains
       type(lr_electronic_state), target, intent(in) :: endpoint
       real(rp), intent(in) :: q(3), frequencies(:)
       type(lr_ks_susceptibility_result), intent(out) :: result
-      type(lr_ks_susceptibility_request) :: ks_request
-      type(lr_gf_susceptibility_request) :: gf_request
+      class(lr_rs_gf_provider), target, intent(inout), optional :: native_provider
+      type(lr_rs_gf_pair), intent(in), optional :: native_pairs(:)
+      real(rp), target, intent(in), optional :: native_site_positions(:, :)
+      type(lr_rs_gf_susceptibility_request) :: native_request
 
-      if (trim(config%backend) == tddft_driver_backend_lehmann) then
-         ks_request%q = q
-         ks_request%frequencies = frequencies
-         ks_request%eta = config%eta
-         ks_request%channel = config%channel
-         ks_request%response_space => response_space
-         ks_request%radial_bases => radial_bases
-         ks_request%electronic_state => left_state
-         ks_request%q_endpoint_state => endpoint
-         call evaluate_lr_ks_susceptibility(ks_request, result)
+      if (trim(config%backend) == tddft_driver_backend_lehmann .or. trim(config%backend) == 'spectral') then
+         call evaluate_lehmann_backend(response_space, radial_bases, left_state, endpoint, q, frequencies, config%eta, &
+            config%channel, result)
+      else if (trim(config%backend) == tddft_driver_backend_reciprocal_gf) then
+         call evaluate_reciprocal_gf_backend(config, response_space, radial_bases, left_state, endpoint, q, frequencies, result)
+      else if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
+         if (.not. present(native_provider) .or. .not. present(native_pairs)) then
+            error stop 'TDDFT production driver: native_rsgf request lacks its registered provider/pair set'
+         end if
+         native_request%q = q
+         native_request%frequencies = frequencies
+         native_request%eta = config%eta
+         native_request%channel = config%channel
+         native_request%integration_points = config%gf_integration_points
+         native_request%integration_eta = config%gf_integration_eta
+         native_request%energy_margin = config%gf_energy_margin
+         native_request%energy_min = minval(left_state%eigenvalues)
+         native_request%energy_max = maxval(left_state%eigenvalues)
+         native_request%fermi_level = left_state%fermi_level
+         native_request%temperature = left_state%temperature
+         native_request%response_space => response_space
+         native_request%radial_bases => radial_bases
+         native_request%provider => native_provider
+         native_request%pairs = native_pairs
+         if (present(native_site_positions)) native_request%site_positions => native_site_positions
+         call evaluate_lr_rs_gf_susceptibility(native_request, result)
       else
-         gf_request%q = q
-         gf_request%frequencies = frequencies
-         gf_request%eta = config%eta
-         gf_request%channel = config%channel
-         gf_request%integration_points = config%gf_integration_points
-         gf_request%integration_eta = config%gf_integration_eta
-         gf_request%energy_margin = config%gf_energy_margin
-         gf_request%response_space => response_space
-         gf_request%radial_bases => radial_bases
-         gf_request%electronic_state => left_state
-         gf_request%q_endpoint_state => endpoint
-         call evaluate_lr_gf_susceptibility(gf_request, result)
+         error stop 'TDDFT production driver: backend was not validated'
       end if
    end subroutine evaluate_bare_response
+
+   subroutine evaluate_lehmann_backend(response_space, radial_bases, left_state, endpoint, q, frequencies, eta, channel, result)
+      type(response_space_layout), target, intent(in) :: response_space
+      type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
+      type(lr_electronic_state), target, intent(in) :: left_state, endpoint
+      real(rp), intent(in) :: q(3), frequencies(:), eta
+      character(len=*), intent(in) :: channel
+      type(lr_ks_susceptibility_result), intent(out) :: result
+      type(lr_ks_susceptibility_request) :: request
+
+      request%q = q
+      request%frequencies = frequencies
+      request%eta = eta
+      request%channel = channel
+      request%response_space => response_space
+      request%radial_bases => radial_bases
+      request%electronic_state => left_state
+      request%q_endpoint_state => endpoint
+      call evaluate_lr_ks_susceptibility(request, result)
+   end subroutine evaluate_lehmann_backend
+
+   subroutine evaluate_reciprocal_gf_backend(config, response_space, radial_bases, left_state, endpoint, q, frequencies, result)
+      type(tddft_production_config), intent(in) :: config
+      type(response_space_layout), target, intent(in) :: response_space
+      type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
+      type(lr_electronic_state), target, intent(in) :: left_state, endpoint
+      real(rp), intent(in) :: q(3), frequencies(:)
+      type(lr_ks_susceptibility_result), intent(out) :: result
+      type(lr_gf_susceptibility_request) :: request
+
+      request%q = q
+      request%frequencies = frequencies
+      request%eta = config%eta
+      request%channel = config%channel
+      request%integration_points = config%gf_integration_points
+      request%integration_eta = config%gf_integration_eta
+      request%energy_margin = config%gf_energy_margin
+      request%response_space => response_space
+      request%radial_bases => radial_bases
+      request%electronic_state => left_state
+      request%q_endpoint_state => endpoint
+      call evaluate_lr_gf_susceptibility(request, result)
+   end subroutine evaluate_reciprocal_gf_backend
+
+   subroutine evaluate_reciprocal_backend_crosscheck(config, response_space, radial_bases, left_state, endpoint, q, frequencies, &
+                                                     selected_result, valid, norm_lehmann, norm_gf, difference_frobenius, &
+                                                     relative_frobenius, difference_infinity, delta)
+      type(tddft_production_config), intent(in) :: config
+      type(response_space_layout), target, intent(in) :: response_space
+      type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
+      type(lr_electronic_state), target, intent(in) :: left_state, endpoint
+      real(rp), intent(in) :: q(3), frequencies(:)
+      type(lr_ks_susceptibility_result), intent(in) :: selected_result
+      logical, intent(out) :: valid(:)
+      real(rp), intent(out) :: norm_lehmann(:), norm_gf(:), difference_frobenius(:), relative_frobenius(:), difference_infinity(:)
+      complex(rp), intent(out) :: delta(:, :, :)
+      type(lr_ks_susceptibility_result) :: lehmann_result, gf_result
+      integer :: ifrequency
+
+      if (trim(config%backend) == tddft_driver_backend_lehmann .or. trim(config%backend) == 'spectral') then
+         lehmann_result = selected_result
+         call evaluate_reciprocal_gf_backend(config, response_space, radial_bases, left_state, endpoint, q, frequencies, gf_result)
+      else if (trim(config%backend) == tddft_driver_backend_reciprocal_gf) then
+         call evaluate_lehmann_backend(response_space, radial_bases, left_state, endpoint, q, frequencies, config%eta, &
+            config%channel, lehmann_result)
+         gf_result = selected_result
+      else
+         call evaluate_lehmann_backend(response_space, radial_bases, left_state, endpoint, q, frequencies, config%eta, &
+            config%channel, lehmann_result)
+         call evaluate_reciprocal_gf_backend(config, response_space, radial_bases, left_state, endpoint, q, frequencies, gf_result)
+      end if
+
+      if (size(valid) /= size(frequencies) .or. size(norm_lehmann) /= size(frequencies) .or. &
+          size(norm_gf) /= size(frequencies) .or. size(difference_frobenius) /= size(frequencies) .or. &
+          size(relative_frobenius) /= size(frequencies) .or. size(difference_infinity) /= size(frequencies) .or. &
+          any(shape(delta) /= [response_space%ndim, response_space%ndim, size(frequencies)])) then
+         error stop 'TDDFT production driver: crosscheck output shape mismatch'
+      end if
+
+      do ifrequency = 1, size(frequencies)
+         delta(:, :, ifrequency) = lehmann_result%susceptibility(:, :, ifrequency) - gf_result%susceptibility(:, :, ifrequency)
+         difference_frobenius(ifrequency) = sqrt(sum(abs(delta(:, :, ifrequency))**2))
+         norm_lehmann(ifrequency) = sqrt(sum(abs(lehmann_result%susceptibility(:, :, ifrequency))**2))
+         norm_gf(ifrequency) = sqrt(sum(abs(gf_result%susceptibility(:, :, ifrequency))**2))
+         relative_frobenius(ifrequency) = difference_frobenius(ifrequency)/ &
+            max(norm_lehmann(ifrequency), norm_gf(ifrequency), tiny(1.0_rp))
+         difference_infinity(ifrequency) = maxval(abs(delta(:, :, ifrequency)))
+      end do
+      valid = .true.
+   end subroutine evaluate_reciprocal_backend_crosscheck
 
    subroutine radial_basis_from_snapshot(state, basis)
       type(radial_ground_state), intent(in) :: state
@@ -687,6 +905,35 @@ contains
       write(unit, '(a,a)') '# interaction_provenance = ', trim(result%interaction_provenance)
       write(unit, '(a,a)') '# goldstone_correction = ', trim(result%goldstone_correction_status)
       write(unit, '(a,a)') '# backend = ', trim(config%backend)
+      if (config%reciprocal_backend_crosscheck) then
+         write(unit, '(a)') '# reciprocal_backend_crosscheck = enabled (validation diagnostic; selected backend remains authoritative)'
+         write(unit, '(a)') '# crosscheck_metrics columns: q_index omega_Ry valid norm_lehmann norm_reciprocal_gf difference_frobenius relative_frobenius difference_infinity'
+         do iq = 1, result%nq
+            do iw = 1, result%nfrequency
+               write(unit, '(a,i0,1x,es24.16,1x,l1,5(1x,es24.16))') '# crosscheck_metrics ', iq, result%frequencies(iw), &
+                  result%reciprocal_crosscheck_valid(iw, iq), result%reciprocal_crosscheck_norm_lehmann(iw, iq), &
+                  result%reciprocal_crosscheck_norm_gf(iw, iq), result%reciprocal_crosscheck_difference_frobenius(iw, iq), &
+                  result%reciprocal_crosscheck_relative_frobenius(iw, iq), result%reciprocal_crosscheck_difference_infinity(iw, iq)
+            end do
+         end do
+         write(unit, '(a)') '# crosscheck_delta columns: q_index omega_Ry matrix_i matrix_j delta_real delta_imag'
+         do iq = 1, result%nq
+            do iw = 1, result%nfrequency
+               do j = 1, result%ndim
+                  do i = 1, result%ndim
+                     write(unit, '(a,i0,1x,es24.16,1x,2(i0,1x),2(es24.16,1x))') '# crosscheck_delta ', iq, &
+                        result%frequencies(iw), i, j, real(result%reciprocal_crosscheck_delta(i, j, iw, iq), rp), &
+                        aimag(result%reciprocal_crosscheck_delta(i, j, iw, iq))
+                  end do
+               end do
+            end do
+         end do
+      end if
+      if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
+         write(unit, '(a,a)') '# native_rsgf_provider = ', trim(config%native_rsgf_provider)
+         write(unit, '(a,a)') '# native_rsgf_provenance = ', trim(result%bare_response_provenance)
+         write(unit, '(a)') '# native_rsgf_route = coefficient-GF -> RSGF endpoint augmentation -> LR-04 canonical -> common KXC/Dyson'
+      end if
       if (config%write_full_matrix) then
          write(unit, '(a)') '# output_matrix_mode = full'
          write(unit, '(a)') '# columns: q_index omega_Ry matrix_i matrix_j loss_real loss_imag chiKS_real chiKS_imag enhanced_real enhanced_imag'

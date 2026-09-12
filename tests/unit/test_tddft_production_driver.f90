@@ -9,28 +9,46 @@ program test_tddft_production_driver
    use lr_response_space_mod, only: response_space_layout
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, evaluate_lr_ks_susceptibility
+   use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
    use lr_alsda_kernel_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, evaluate_lr_alsda_kernel
+   use lr_rs_gf_susceptibility_mod, only: lr_rs_dense_gf_provider, lr_rs_gf_pair, &
+      lr_rs_gf_susceptibility_request, evaluate_lr_rs_gf_susceptibility
    use tddft_dyson_mod, only: tddft_dyson_request, tddft_dyson_result, evaluate_tddft_dyson
    implicit none
 
    character(len=32) :: argument
    type(tddft_capability_state) :: capability
    type(tddft_production_config) :: config
+   type(tddft_production_config) :: parsed_config
    type(radial_ground_state), target :: ground(1)
    type(lmto_radial_basis), target :: radial(1)
    type(response_space_layout), target :: space
    type(lr_electronic_state), target :: state, endpoint
    type(lr_ks_susceptibility_request) :: ks_request
    type(lr_ks_susceptibility_result) :: ks_direct
+   type(lr_gf_susceptibility_request) :: gf_request
+   type(lr_ks_susceptibility_result) :: gf_direct
    type(lr_alsda_kernel_request) :: kxc_request
    type(lr_alsda_kernel_result) :: kxc_direct
    type(tddft_dyson_request) :: dyson_request
    type(tddft_dyson_result) :: dyson_direct
    type(tddft_production_result) :: driver_result
+   type(tddft_production_result) :: crosscheck_result
+   type(tddft_production_result) :: native_driver_result
+   type(lr_rs_dense_gf_provider), target :: native_provider
+   complex(rp) :: native_hamiltonian(8, 8), native_hgamma(8, 8)
+   type(lr_rs_gf_susceptibility_request) :: native_request
+   type(lr_ks_susceptibility_result) :: native_direct
+   type(lr_rs_gf_pair) :: native_pairs(1)
    real(rp) :: mesh(5), evals(2, 1), weights(1), kpoints(3, 1), occupations(2, 1)
    complex(rp) :: vectors(8, 2, 1)
    real(rp), allocatable :: saved_vup(:), saved_vdn(:), saved_nup(:), saved_ndn(:), saved_m(:)
+   complex(rp), allocatable :: expected_delta(:, :, :)
+   real(rp) :: expected_norm_lehmann, expected_norm_gf, expected_difference_frobenius
+   real(rp) :: expected_relative_frobenius, expected_difference_infinity
    logical :: ok
+   integer :: i, parser_unit, parser_ios
+   character(len=128) :: parser_fixture
    character(len=128) :: reason
 
    call get_command_argument(1, argument)
@@ -47,6 +65,20 @@ program test_tddft_production_driver
    call load_tddft_config('this-file-is-not-a-production-input', config)
    if (config%enabled .or. config%present) error stop 'feature-off TDDFT parser default changed'
 
+   parser_fixture = 'tdv_k01_parser_default.nml'
+   open(newunit=parser_unit, file=parser_fixture, status='replace', action='write', iostat=parser_ios)
+   if (parser_ios /= 0) error stop 'could not create TDVK-01 parser fixture'
+   write(parser_unit, '(a)') '&tddft'
+   write(parser_unit, '(a)') ' enabled = .true.'
+   write(parser_unit, '(a)') '/'
+   close(parser_unit)
+   call load_tddft_config(parser_fixture, parsed_config)
+   open(newunit=parser_unit, file=parser_fixture, status='old', iostat=parser_ios)
+   if (parser_ios == 0) close(parser_unit, status='delete')
+   if (.not. parsed_config%present .or. .not. parsed_config%enabled .or. parsed_config%reciprocal_backend_crosscheck) then
+      error stop 'absent reciprocal backend crosscheck flag did not default to false'
+   end if
+
    ok = tddft_capability_is_supported(capability, reason)
    if (.not. ok) error stop 'baseline capability unexpectedly rejected'
 
@@ -62,6 +94,10 @@ program test_tddft_production_driver
    config%response_lmax = 2
    config%interaction_route = 'direct_alsda'
    config%backend = 'lehmann'
+   config%reciprocal_backend_crosscheck = .false.
+   config%gf_integration_points = 101
+   config%gf_integration_eta = 0.005_rp
+   config%gf_energy_margin = 1.0_rp
 
    allocate(saved_vup(size(ground(1)%vxc_up)), saved_vdn(size(ground(1)%vxc_down)), &
             saved_nup(size(ground(1)%n_up)), saved_ndn(size(ground(1)%n_down)), saved_m(size(ground(1)%n_up)))
@@ -81,6 +117,19 @@ program test_tddft_production_driver
    ks_request%electronic_state => state
    ks_request%q_endpoint_state => endpoint
    call evaluate_lr_ks_susceptibility(ks_request, ks_direct)
+
+   gf_request%q = config%q_list(:, 1)
+   gf_request%frequencies = config%frequencies
+   gf_request%eta = config%eta
+   gf_request%channel = config%channel
+   gf_request%integration_points = config%gf_integration_points
+   gf_request%integration_eta = config%gf_integration_eta
+   gf_request%energy_margin = config%gf_energy_margin
+   gf_request%response_space => space
+   gf_request%radial_bases => radial
+   gf_request%electronic_state => state
+   gf_request%q_endpoint_state => endpoint
+   call evaluate_lr_gf_susceptibility(gf_request, gf_direct)
 
    kxc_request%response_space => space
    kxc_request%ground_states => ground
@@ -115,7 +164,106 @@ program test_tddft_production_driver
        maxval(abs(ground(1)%n_up - saved_nup)) > 0.0_rp .or. maxval(abs(ground(1)%n_down - saved_ndn)) > 0.0_rp) then
       error stop 'production response mutated accepted radial state'
    end if
-   write(*, '(a)') 'UnitTddftProductionDriver: PASS (feature-off, direct reproducibility, no state mutation)'
+
+   if (driver_result%reciprocal_backend_crosscheck) error stop 'crosscheck was enabled in the flag-off fixture'
+   if (allocated(driver_result%reciprocal_crosscheck_valid)) then
+      error stop 'flag-off production result unexpectedly contains crosscheck diagnostics'
+   end if
+
+   ! The opt-in diagnostic evaluates both reciprocal services but must leave
+   ! the selected Lehmann production path, including Dyson and loss, alone.
+   config%reciprocal_backend_crosscheck = .true.
+   call evaluate_tddft_production_sweep(config, space, radial, ground, state, [endpoint], crosscheck_result)
+   if (.not. crosscheck_result%reciprocal_backend_crosscheck .or. &
+       .not. all(crosscheck_result%reciprocal_crosscheck_valid)) then
+      error stop 'enabled reciprocal backend crosscheck did not produce valid diagnostics'
+   end if
+   if (any(crosscheck_result%reciprocal_crosscheck_norm_lehmann < 0.0_rp) .or. &
+       any(crosscheck_result%reciprocal_crosscheck_norm_gf < 0.0_rp) .or. &
+       any(crosscheck_result%reciprocal_crosscheck_difference_frobenius < 0.0_rp) .or. &
+       any(crosscheck_result%reciprocal_crosscheck_relative_frobenius < 0.0_rp) .or. &
+       any(crosscheck_result%reciprocal_crosscheck_difference_infinity < 0.0_rp)) then
+      error stop 'reciprocal backend crosscheck diagnostics are negative'
+   end if
+   if (any(crosscheck_result%reciprocal_crosscheck_norm_lehmann /= crosscheck_result%reciprocal_crosscheck_norm_lehmann) .or. &
+       any(crosscheck_result%reciprocal_crosscheck_norm_gf /= crosscheck_result%reciprocal_crosscheck_norm_gf) .or. &
+       any(crosscheck_result%reciprocal_crosscheck_difference_frobenius /= &
+          crosscheck_result%reciprocal_crosscheck_difference_frobenius) .or. &
+       any(crosscheck_result%reciprocal_crosscheck_relative_frobenius /= &
+          crosscheck_result%reciprocal_crosscheck_relative_frobenius) .or. &
+       any(crosscheck_result%reciprocal_crosscheck_difference_infinity /= &
+          crosscheck_result%reciprocal_crosscheck_difference_infinity)) then
+      error stop 'reciprocal backend crosscheck diagnostics are not finite'
+   end if
+   if (maxval(abs(crosscheck_result%ks_susceptibility - driver_result%ks_susceptibility)) > 0.0_rp .or. &
+       maxval(abs(crosscheck_result%enhanced_susceptibility - driver_result%enhanced_susceptibility)) > 0.0_rp .or. &
+       maxval(abs(crosscheck_result%loss_matrix - driver_result%loss_matrix)) > 0.0_rp) then
+      error stop 'enabling reciprocal backend crosscheck changed the selected production result'
+   end if
+   allocate(expected_delta(space%ndim, space%ndim, size(config%frequencies)))
+   expected_delta = ks_direct%susceptibility - gf_direct%susceptibility
+   if (maxval(abs(crosscheck_result%reciprocal_crosscheck_delta(:, :, :, 1) - expected_delta)) > 0.0_rp) then
+      error stop 'crosscheck delta does not match independently evaluated reciprocal services'
+   end if
+   expected_norm_lehmann = sqrt(sum(abs(ks_direct%susceptibility(:, :, 1))**2))
+   expected_norm_gf = sqrt(sum(abs(gf_direct%susceptibility(:, :, 1))**2))
+   expected_difference_frobenius = sqrt(sum(abs(expected_delta(:, :, 1))**2))
+   expected_relative_frobenius = expected_difference_frobenius/max(expected_norm_lehmann, expected_norm_gf, tiny(1.0_rp))
+   expected_difference_infinity = maxval(abs(expected_delta(:, :, 1)))
+   if (abs(crosscheck_result%reciprocal_crosscheck_norm_lehmann(1, 1) - expected_norm_lehmann) > 0.0_rp .or. &
+       abs(crosscheck_result%reciprocal_crosscheck_norm_gf(1, 1) - expected_norm_gf) > 0.0_rp .or. &
+       abs(crosscheck_result%reciprocal_crosscheck_difference_frobenius(1, 1) - expected_difference_frobenius) > 0.0_rp .or. &
+       abs(crosscheck_result%reciprocal_crosscheck_relative_frobenius(1, 1) - expected_relative_frobenius) > 0.0_rp .or. &
+       abs(crosscheck_result%reciprocal_crosscheck_difference_infinity(1, 1) - expected_difference_infinity) > 0.0_rp) then
+      error stop 'crosscheck metrics do not match independent norm calculations'
+   end if
+   write(*, '(a,5(1x,es14.6))') 'TDVK-01 example crosscheck (normL normGF dF relF dInf) =', &
+      crosscheck_result%reciprocal_crosscheck_norm_lehmann(1, 1), crosscheck_result%reciprocal_crosscheck_norm_gf(1, 1), &
+      crosscheck_result%reciprocal_crosscheck_difference_frobenius(1, 1), &
+      crosscheck_result%reciprocal_crosscheck_relative_frobenius(1, 1), &
+      crosscheck_result%reciprocal_crosscheck_difference_infinity(1, 1)
+
+   ! R3 reproducibility seam: the native production route must forward the
+   ! same prepared request to the public native-RSGF service.  The fixture
+   ! provider is deliberately independent of reciprocal GF code.
+   config%backend = 'native_rsgf'
+   config%native_rsgf_provider = 'auto'
+   config%gf_integration_points = 3
+   config%gf_integration_eta = 0.005_rp
+   config%gf_energy_margin = 1.0_rp
+   native_hamiltonian = cmplx(0.0_rp, 0.0_rp, rp)
+   native_hgamma = cmplx(0.0_rp, 0.0_rp, rp)
+   do i = 1, 8
+      native_hamiltonian(i, i) = cmplx(0.05_rp*real(i, rp), 0.0_rp, rp)
+      native_hgamma(i, i) = cmplx(0.10_rp, 0.0_rp, rp)
+   end do
+   call native_provider%initialize(native_hamiltonian, native_hgamma, 8, .true.)
+   native_pairs(1)%left_site = 1
+   native_pairs(1)%right_site = 1
+   native_pairs(1)%translation = 0.0_rp
+   native_request%q = config%q_list(:, 1)
+   native_request%frequencies = config%frequencies
+   native_request%eta = config%eta
+   native_request%channel = config%channel
+   native_request%integration_points = config%gf_integration_points
+   native_request%integration_eta = config%gf_integration_eta
+   native_request%energy_margin = config%gf_energy_margin
+   native_request%energy_min = minval(state%eigenvalues)
+   native_request%energy_max = maxval(state%eigenvalues)
+   native_request%fermi_level = state%fermi_level
+   native_request%temperature = state%temperature
+   native_request%response_space => space
+   native_request%radial_bases => radial
+   native_request%provider => native_provider
+   native_request%pairs = native_pairs
+   call evaluate_lr_rs_gf_susceptibility(native_request, native_direct)
+
+   call evaluate_tddft_production_sweep(config, space, radial, ground, state, [endpoint], native_driver_result, &
+      native_provider, native_pairs)
+   if (maxval(abs(native_driver_result%ks_susceptibility(:, :, :, 1) - native_direct%susceptibility)) > 2.0e-12_rp) then
+      error stop 'native production driver and direct RSGF service disagree'
+   end if
+   write(*, '(a)') 'UnitTddftProductionDriver: PASS (feature-off, direct reproducibility, native RSGF/service equivalence, no state mutation)'
 
 contains
 

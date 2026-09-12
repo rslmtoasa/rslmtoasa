@@ -99,3 +99,66 @@ loss, or literature-comparison result is established here.
 **Preflight verdict: PASS** for the reciprocal prerequisites and focused tests,
 with native RSGF explicitly deferred and the existing dirty-worktree scope
 recorded above.
+
+## TDVK-01 reciprocal backend crosscheck diagnostic
+
+**Status:** PASS for orchestration and finite-fixture numerical evidence only.
+
+### Implementation checklist
+
+- [x] Added `reciprocal_backend_crosscheck`, defaulting to `.false.`.
+- [x] Reused LR-06 Lehmann and LR-GF-02 reciprocal-GF services on the same
+  prepared state and exact endpoint.
+- [x] Retained the selected backend as the authoritative KXC/Dyson input.
+- [x] Stored the full canonical LR-04 delta and per-`(q,omega)` norm metrics.
+- [x] Emitted validation metrics and delta records without imposing a
+  material acceptance threshold.
+- [x] Added parser/default, flag-off, flag-on, independent-metric, and
+  selected-result invariance checks to `UnitTddftProductionDriver`.
+- [x] Left LR-06, LR-GF-02, native-RSGF, and Goldstone equations untouched.
+
+### Implementation evidence
+
+The driver now evaluates the configured backend first. When the diagnostic is
+enabled, it reuses that selected result when it is already Lehmann or
+reciprocal-GF, evaluates only the other reciprocal service, and computes
+
+```text
+delta  = chi_lehmann - chi_reciprocal_gf
+dF     = sqrt(sum(abs(delta)**2))
+normL  = sqrt(sum(abs(chi_lehmann)**2))
+normGF = sqrt(sum(abs(chi_reciprocal_gf)**2))
+relF   = dF / max(normL, normGF, tiny)
+dInf   = maxval(abs(delta))
+```
+
+The result retains `reciprocal_crosscheck_delta` in the canonical matrix
+layout `(I,J,frequency,q)` and the five scalar diagnostics in
+`(frequency,q)` arrays. The output writer records the metrics and each delta
+element as comment-prefixed diagnostic records. The flag-off path does not
+allocate or mark any crosscheck result valid.
+
+### Focused test evidence
+
+```text
+cmake --build build --target UnitTddftProductionDriver -j2
+ctest --test-dir build --output-on-failure -R '^UnitTddftProductionDriver$'
+```
+
+The test covers the absent parser flag default, flag-off no-op behavior, both
+reciprocal service results on the same prepared fixture, independent metric
+recalculation, finite/nonnegative diagnostics, and byte-stable selected
+Lehmann/Dyson/loss results when the diagnostic is enabled. It prints one tiny
+fixture example in the form
+`normL normGF dF relF dInf`; the exact values are recorded by the focused test
+run:
+
+```text
+normL = 7.749380E+02  normGF = 4.675770E+02  dF = 3.074647E+02
+relF = 3.967604E-01  dInf = 1.596306E+02
+```
+
+These values are diagnostic evidence rather than a physics acceptance
+criterion.
+
+No Fe/Ni material validation is claimed by TDVK-01.
