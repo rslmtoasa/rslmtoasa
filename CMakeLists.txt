@@ -660,6 +660,11 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrProductGfQuadratureAudit PROPERTIES
     LABELS "unit;tdvk-03a;lr-gf-02;quadrature-audit;reciprocal-gf"
     DISABLED TRUE)
+  add_test(NAME UnitLrProductGfMixedEigenvectors
+    COMMAND UnitLrProductGfQuadratureAudit mixed)
+  set_tests_properties(UnitLrProductGfMixedEigenvectors PROPERTIES
+    LABELS "unit;tdvk-03b;lr-gf-02;quadrature-audit;reciprocal-gf;mixed-eigenvectors"
+    DISABLED TRUE)
   add_test(NAME UnitLrProductGfSusceptibilityRejectIntegrationEta
     COMMAND UnitLrProductGfSusceptibility reject_integration_eta)
   set_tests_properties(UnitLrProductGfSusceptibilityRejectIntegrationEta PROPERTIES

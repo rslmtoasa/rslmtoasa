@@ -491,3 +491,12 @@ GF BUBBLE PERFORMANCE REMEDIATION REQUIRED BEFORE FE
 ```
 
 TDVK-02 and TDVK-03 material status remain unchanged.
+
+## TDVK-03B mixed-eigenvector reciprocal-GF closure
+
+**Status:** PASS for the deterministic complex mixed-eigenvector numerical
+oracle; GF/Lehmann convergence, off-diagonal spectral moments, finite-q
+`chi_minus`, and the `<1e-10` basis-rotation invariant are recorded in
+[`TDDFT_RECIPROCAL_GF_QUADRATURE_AUDIT.md`](TDDFT_RECIPROCAL_GF_QUADRATURE_AUDIT.md).
+Production response equations, material inputs, and TDVK-02/TDVK-03 material
+status are unchanged.

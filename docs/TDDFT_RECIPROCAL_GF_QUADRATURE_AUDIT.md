@@ -366,3 +366,133 @@ ctest --test-dir build --output-on-failure -R \
 Result: **4/4 passed**. This includes the historical `UnitLrGfSusceptibility`,
 the unchanged R3 representation test at its original 21/41-point samples,
 the compact Lehmann fixture, and the existing integration-eta guard.
+
+## TDVK-03B — mixed-eigenvector reciprocal-GF numerical closure
+
+**Status: PASS for the requested mixed-eigenvector numerical oracle; no
+material-validation claim and no change to the TDVK-02/TDVK-03 material
+status.** This is a small extension of the TDVK-03A harness. It changes only
+the finite electronic fixture and leaves the radial/product fixture and all
+response equations unchanged.
+
+### Fixture and construction
+
+The mixed run retains `nbasis=8`, `nbands=8`, `nk=2`, one site,
+`response_lmax=2`, product dimension 27, and the TDVK-03A radial mesh,
+nonconstant `phi`, nonconstant `phidot`, and circular product channels. For
+each k point it constructs a deterministic dense complex Hermitian matrix,
+then obtains eigenvalues/eigenvectors with the project LAPACK Hermitian
+solver (`zheev`). No eigenvector was supplied analytically. The occupations
+are generated with `lr_fermi_dirac_occupation`.
+
+The resulting spectrum and density evidence were:
+
+| quantity | value |
+| --- | ---: |
+| eigenvalue minimum / maximum | `-7.29939766e-01` / `7.57911598e-01` Ry |
+| absolute Hamiltonian off-diagonal minimum / maximum | `1.78756818e-02` / `8.09891968e-02` |
+| absolute imaginary off-diagonal minimum / maximum | `2.50000000e-03` / `1.58000000e-02` |
+
+The maximum exact off-diagonal moment magnitudes, with the maximum imaginary
+part also shown, were:
+
+| p | `max|offdiag(M_p)|` | `max|offdiag(N_p)|` | `max|Im(M_p)|` | `max|Im(N_p)|` |
+| ---: | ---: | ---: | ---: | ---: |
+| 0 | `6.22483590e-16` | `1.64223182e-01` | `9.45424294e-17` | `1.24159062e-02` |
+| 1 | `8.09891968e-02` | `2.84054116e-02` | `1.58000000e-02` | `6.86771733e-03` |
+| 2 | `1.15642327e-01` | `1.97147502e-02` | `7.97040000e-03` | `4.66495775e-03` |
+
+`M_0` is the identity by completeness, so its off-diagonal value is the
+expected roundoff floor. `N_0`, `M_1`, `N_1`, `M_2`, and `N_2` contain the
+intended complex off-diagonal structure.
+
+### Spectral-moment ladder
+
+The exact matrices were formed directly as
+`sum_n epsilon_n**p * c_n * c_n^H` and, independently, with the explicit
+Fermi factor for `N_p`. The numerical matrices were obtained only by
+integrating the unchanged `build_weighted_resolvent` spectral function. All
+three samples use `energy_margin=1.0 Ry` and satisfy `h/integration_eta <=
+0.5`. The actual response integration interval is
+`[-1.72993977, 1.75791160] Ry`.
+
+| `integration_eta` (Ry) | `n` | `k` | `rM0 / rN0` | `rM1 / rN1` | `rM2 / rN2` |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0.0100 | 801 | 1 | `3.9814e-03 / 6.9955e-02` | `4.3695e-03 / 1.0440e-02` | `4.4972e-03 / 8.5990e-03` |
+| 0.0100 | 801 | 2 | `3.9661e-03 / 3.1142e-02` | `4.2154e-03 / 1.1120e-02` | `4.3556e-03 / 9.2760e-03` |
+| 0.0050 | 1601 | 1 | `2.1541e-03 / 4.0613e-02` | `2.2334e-03 / 5.3055e-03` | `2.2724e-03 / 4.1921e-03` |
+| 0.0050 | 1601 | 2 | `1.8440e-03 / 1.5909e-02` | `2.0588e-03 / 5.4556e-03` | `2.0996e-03 / 4.5939e-03` |
+| 0.0025 | 3201 | 1 | `1.1909e-03 / 2.1048e-02` | `1.2676e-03 / 2.6573e-03` | `1.2843e-03 / 2.0933e-03` |
+| 0.0025 | 3201 | 2 | `1.1104e-03 / 8.1836e-03` | `1.0585e-03 / 2.7200e-03` | `1.0093e-03 / 2.0980e-03` |
+
+The three grids use `n=801,1601,3201`, respectively; each has
+`h/integration_eta=0.43598142`. The residuals decrease with the integration
+width as expected for the finite-width real-axis oracle.
+
+### Compact GF versus compact Lehmann
+
+At every width the existing compact GF and compact Lehmann production
+evaluators were called for `chi_plus`, Gamma, and frequencies 0 and 0.17 Ry.
+No `1e-5` acceptance target was imposed.
+
+| `integration_eta` | `n` | frequency (Ry) | `dF` | `rF` | `dInf` |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0.0100 | 801 | 0.00 | `1.18262574e+02` | `6.25572231e-02` | `8.49495870e+01` |
+| 0.0100 | 801 | 0.17 | `7.57664350e+02` | `1.67776533e-01` | `6.53553625e+02` |
+| 0.0050 | 1601 | 0.00 | `6.27848939e+01` | `3.32112558e-02` | `4.53038051e+01` |
+| 0.0050 | 1601 | 0.17 | `4.20603809e+02` | `9.31381404e-02` | `3.62981733e+02` |
+| 0.0025 | 3201 | 0.00 | `3.23556549e+01` | `1.71151350e-02` | `2.33071677e+01` |
+| 0.0025 | 3201 | 0.17 | `2.22097968e+02` | `4.91811804e-02` | `1.91729926e+02` |
+
+The GF/Lehmann discrepancy decreases monotonically at both frequencies as
+`integration_eta` decreases. The required finite-q finest-width sample,
+`chi_minus` at `q=(0.23,0,0)`, `omega=0`, `n=3201`, and margin 1.0 Ry, was
+finite and gave `dF=3.23556549e+01`, `rF=1.71151350e-02`, and
+`dInf=2.33071677e+01`.
+
+### Basis-rotation invariant
+
+The harness generates a dense deterministic unitary `Q` numerically with the
+same LAPACK Hermitian eigensolver, forms `H'=Q^H H Q`, rotates the numerical
+eigenvectors to `Q^H c_n`, and transforms every component vertex as
+`V'=Q^H V Q`. The rotated Hamiltonian eigenpair residual was
+`4.58803410e-16`.
+
+The production compact API does not accept an externally supplied vertex
+tensor. Therefore the rotation part stays in the test harness: it uses the
+same component tensor, resolvent construction, two Kubo contractions, and
+Lehmann pair sum locally; the unrotated local results were checked against
+the production compact evaluators first. The maximum unrotated local-versus-
+production differences were `0.00000000e+00` for GF and
+`1.01684599e-12` for Lehmann.
+
+At the resolved `n=801`, `integration_eta=0.010 Ry`, margin 1.0 Ry sample:
+
+| frequency (Ry) | relative GF rotation difference | relative Lehmann rotation difference |
+| ---: | ---: | ---: |
+| 0.00 | `1.40494438e-15` | `1.40259015e-15` |
+| 0.17 | `1.41060297e-15` | `1.24564983e-15` |
+
+Both are below the required `1e-10` invariant threshold.
+
+### Commands and test registration
+
+The mixed audit was run with:
+
+```text
+cmake -S . -B build -DRUN_UNIT_TESTS=ON -DENABLE_OPENMP=ON \
+  -DENABLE_MPI=OFF -DENABLE_LIBXC=ON
+cmake --build build --target UnitLrProductGfQuadratureAudit -j2
+build/bin/UnitLrProductGfQuadratureAudit mixed_one 1
+build/bin/UnitLrProductGfQuadratureAudit mixed_one 2
+build/bin/UnitLrProductGfQuadratureAudit mixed_one 3
+build/bin/UnitLrProductGfQuadratureAudit mixed_q
+build/bin/UnitLrProductGfQuadratureAudit mixed_rotation
+```
+
+`UnitLrProductGfMixedEigenvectors` is registered as a disabled CTest audit,
+matching the existing TDVK-03A audit because the resolved GF runs are
+multi-minute diagnostic samples. The mixed fixture therefore does not run in
+the default CTest set. No `0.001 Ry` / 600-second regime was run, no
+production physics or material input was changed, and no Fe/native-RSGF
+claim is made.
