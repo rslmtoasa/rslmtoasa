@@ -1834,6 +1834,7 @@ contains
       logical :: do_str_
       real(rp), dimension(:, :, :), allocatable :: set
       real(rp), dimension(3) :: ret
+      real(rp), dimension(:, :), allocatable :: scaled_cr
 
       ! Open files
       open (12, file='map', form='unformatted')
@@ -1846,6 +1847,18 @@ contains
       nnmx = 5250
       nomx = this%ntot
       kk = this%kk
+      if (kk <= 0 .or. kk > size(this%cr, 2)) then
+         call g_logger%fatal('structb: invalid active coordinate count', __FILE__, __LINE__)
+         return
+      end if
+      ! Scale only active coordinates. Array expressions in CALL arguments
+      ! can create ndim-sized stack temporaries with some compilers.
+      allocate (scaled_cr(3, kk))
+      do i = 1, kk
+         do j = 1, 3
+            scaled_cr(j, i) = this%cr(j, i)*this%alat
+         end do
+      end do
       allocate (nn(kk, nnmx))
       nm = nnmx
       write (17, *) 'irec', this%nrec, this%irec
@@ -1854,7 +1867,7 @@ contains
       write (17, 10000) kk
       write (17, 10001)
       write (17, 10002) (i, (this%cr(j, i)*this%alat, j=1, 3), i=1, max(this%nmax, this%ntype))
-      call this%nncal(this%ct, this%cr*this%alat, 3, kk, this%iz, nn, kk, nm, mapa, this%ntype)
+      call this%nncal(this%ct, scaled_cr, 3, kk, this%iz, nn, kk, nm, mapa, this%ntype)
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.nn', this%nn, (/this%kk, nm + 1/))
@@ -1875,7 +1888,7 @@ contains
 #endif
       write (17, *) 'ndi=', kk
       write (17, *) 'remd'
-      call this%remd(this%cr*this%alat, this%num, this%iu, this%nn, kk, this%ntot, nomx, kk, nnmx, set, idnn, ret)
+      call this%remd(scaled_cr, this%num, this%iu, this%nn, kk, this%ntot, nomx, kk, nnmx, set, idnn, ret)
       write (17, *) 'outmap', this%nmax, maxval(this%irec)
       call outmap(17, this%iz, this%nn, this%num, kk, nnmx, max(this%nmax, maxval(this%irec)))
       write (17, 10003) kk, nm
@@ -1885,9 +1898,10 @@ contains
             ia = this%iu(ii)
             nr = this%nn(ia, 1)
             write (17, '(1x, a, i5, a, i5)') 'Sbar atom no:', ii, ' Ntot:', this%ntot
-            call this%dbar1(ia, ncut*this%r2, this%wav, this%cr*this%alat, kk, kk, this%control%npold, nr, ii)
+            call this%dbar1(ia, ncut*this%r2, this%wav, scaled_cr, kk, kk, this%control%npold, nr, ii)
          end do
       end if
+      deallocate (scaled_cr)
 10000 format(i5)
 10001 format(" LATTICE COORDINATES")
 10002 format(2(i5, 3f8.4))
