@@ -136,6 +136,15 @@ module lr_ks_susceptibility_mod
       module procedure evaluate_lr_product_ks_susceptibility_explicit
    end interface evaluate_lr_product_ks_susceptibility
 
+   interface
+      subroutine zgerc(m, n, alpha, x, incx, y, incy, a, lda)
+         import :: rp
+         integer, intent(in) :: m, n, incx, incy, lda
+         complex(rp), intent(in) :: alpha, x(*), y(*)
+         complex(rp), intent(inout) :: a(lda, *)
+      end subroutine zgerc
+   end interface
+
 contains
 
    !> Numerically stable Fermi occupation.  This is an explicit helper only;
@@ -459,7 +468,7 @@ contains
       complex(rp), allocatable :: transition(:)
       complex(rp) :: denominator, pair_factor
       real(rp) :: weight_sum, occupation_difference
-      integer :: ik, ib, jb, ifrequency, i, j, channel_kind
+      integer :: ik, ib, jb, ifrequency, channel_kind
 
       call validate_product_susceptibility_inputs(product_basis, left_state, right_state, request, channel_kind)
       call left_state%validate('evaluate_lr_product_ks_susceptibility:left_state')
@@ -509,12 +518,8 @@ contains
                      request%eta, rp)
                   pair_factor = cmplx(2.0_rp*left_state%k_weights(ik)/weight_sum, 0.0_rp, rp)* &
                      occupation_difference/denominator
-                  do j = 1, product_basis%product_dimension
-                     do i = 1, product_basis%product_dimension
-                        result%susceptibility(i, j, ifrequency) = result%susceptibility(i, j, ifrequency) + &
-                           pair_factor*transition(i)*conjg(transition(j))
-                     end do
-                  end do
+                  call zgerc(product_basis%product_dimension, product_basis%product_dimension, pair_factor, transition, 1, &
+                     transition, 1, result%susceptibility(:, :, ifrequency), product_basis%product_dimension)
                end do
             end do
          end do

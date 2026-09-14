@@ -716,6 +716,15 @@ if (RUN_UNIT_TESTS)
     LABELS "integration;tddft;tdvk-04;accepted-state;finite-q;covariance"
     DISABLED TRUE
     TIMEOUT 7200)
+  add_test(NAME TddftProductConvergence
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/tdvk05_fe_convergence.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/tdvk05_fe_convergence"
+      "--output" "${CMAKE_BINARY_DIR}/Testing/validation/tdvk05_fe_convergence.json")
+  set_tests_properties(TddftProductConvergence PROPERTIES
+    LABELS "validation;tddft;tdvk-05;accepted-state;convergence;compact-lehmann"
+    DISABLED TRUE
+    TIMEOUT 7200)
   add_test(NAME UnitLrAlsdaKernelRejectProvenance
     COMMAND UnitLrAlsdaKernel provenance)
   set_tests_properties(UnitLrAlsdaKernelRejectProvenance PROPERTIES

@@ -76,7 +76,7 @@ program test_tddft_production_driver
    open(newunit=parser_unit, file=parser_fixture, status='old', iostat=parser_ios)
    if (parser_ios == 0) close(parser_unit, status='delete')
    if (.not. parsed_config%present .or. .not. parsed_config%enabled .or. parsed_config%reciprocal_backend_crosscheck .or. &
-       parsed_config%gf_closure_audit) then
+       parsed_config%gf_closure_audit .or. .not. allocated(parsed_config%eta_values) .or. size(parsed_config%eta_values) /= 1) then
       error stop 'optional TDDFT audit flags did not default to false'
    end if
    open(newunit=parser_unit, file=parser_fixture, status='replace', action='write', iostat=parser_ios)
@@ -89,6 +89,24 @@ program test_tddft_production_driver
    open(newunit=parser_unit, file=parser_fixture, status='old', iostat=parser_ios)
    if (parser_ios == 0) close(parser_unit, status='delete')
    if (.not. parsed_config%gf_closure_audit) error stop 'TDVK-03 GF closure audit flag did not parse'
+
+   open(newunit=parser_unit, file=parser_fixture, status='replace', action='write', iostat=parser_ios)
+   if (parser_ios /= 0) error stop 'could not create TDVK-05 eta-ladder parser fixture'
+   write(parser_unit, '(a)') '&tddft'
+   write(parser_unit, '(a)') ' enabled = .true., backend = ''product_convergence'''
+   write(parser_unit, '(a)') ' n_q = 2, q_list = 0.0, 0.0, 0.0, 0.125, 0.0, 0.0'
+   write(parser_unit, '(a)') ' n_omega = 2, use_omega_grid = .true., omega_grid = 0.0, 0.02'
+   write(parser_unit, '(a)') ' n_eta = 3, eta_grid = 0.02, 0.01, 0.005'
+   write(parser_unit, '(a)') '/'
+   close(parser_unit)
+   call load_tddft_config(parser_fixture, parsed_config)
+   open(newunit=parser_unit, file=parser_fixture, status='old', iostat=parser_ios)
+   if (parser_ios == 0) close(parser_unit, status='delete')
+   if (.not. allocated(parsed_config%eta_values) .or. size(parsed_config%eta_values) /= 3 .or. &
+       maxval(abs(parsed_config%eta_values - [0.02_rp, 0.01_rp, 0.005_rp])) > 1.0e-14_rp .or. &
+       abs(parsed_config%eta - 0.02_rp) > 1.0e-14_rp) then
+      error stop 'TDVK-05 physical eta ladder did not parse'
+   end if
 
    ok = tddft_capability_is_supported(capability, reason)
    if (.not. ok) error stop 'baseline capability unexpectedly rejected'

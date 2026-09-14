@@ -28,8 +28,8 @@ program test_lr_lmto_product_response
    real(rp), parameter :: tolerance = 1.0e-10_rp
    real(rp) :: radius(nr)
    type(lmto_radial_basis) :: radial_sp, radial_spd
-   type(response_space_layout) :: space_sp, space_spd
-   type(lmto_product_response_basis) :: product_sp, product_plus, product_minus
+   type(response_space_layout) :: space_sp, space_spd, space_spd_reduced
+   type(lmto_product_response_basis) :: product_sp, product_plus, product_minus, product_reduced
    type(pauli_vertex_capabilities) :: capabilities
    real(rp) :: eigenvalues(nstate)
    complex(rp) :: eigenvectors(nstate, nstate)
@@ -47,6 +47,7 @@ program test_lr_lmto_product_response
    call build_fixture_eigensystem(eigenvalues, eigenvectors)
    call space_sp%initialize(nsite, 2, radius, mesh_a, mesh_b, 1)
    call space_spd%initialize(nsite, 4, radius, mesh_a, mesh_b, 1)
+   call space_spd_reduced%initialize(nsite, 2, radius, mesh_a, mesh_b, 1)
 
    mode = ''
    call get_command_argument(1, mode)
@@ -68,12 +69,15 @@ program test_lr_lmto_product_response
    call product_sp%initialize(space_sp, [radial_sp], lmto_product_channel_plus, .false.)
    call product_plus%initialize(space_spd, [radial_spd], lmto_product_channel_plus, .false.)
    call product_minus%initialize(space_spd, [radial_spd], lmto_product_channel_minus, .false.)
+   call product_reduced%initialize(space_spd_reduced, [radial_spd], lmto_product_channel_plus, .false.)
    call check_inventory(product_sp, 1, [8, 8, 4], 52, failed)
    call check_inventory(product_plus, 2, [12, 16, 16, 8, 4], 232, failed)
    call check_inventory(product_minus, 2, [12, 16, 16, 8, 4], 232, failed)
+   call check_inventory(product_reduced, 2, [12, 16, 16], 140, failed)
    call check_flat_mapping(product_sp, failed)
    call check_flat_mapping(product_plus, failed)
    call check_flat_mapping(product_minus, failed)
+   call check_flat_mapping(product_reduced, failed)
    call check_svd_blocks(product_sp, radial_sp, space_sp, failed, maximum_reconstruction, maximum_orthogonality)
    call check_svd_blocks(product_plus, radial_spd, space_spd, failed, maximum_reconstruction, maximum_orthogonality)
    call check_svd_blocks(product_minus, radial_spd, space_spd, failed, maximum_reconstruction, maximum_orthogonality)

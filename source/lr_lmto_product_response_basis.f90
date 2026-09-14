@@ -183,8 +183,8 @@ contains
          error stop 'lmto_product_response_basis: invalid circular channel'
       end if
       lmax = radial_bases(1)%lmax
-      if (lmax < 0 .or. lmax > 2 .or. space%response_lmax /= 2*lmax) then
-         error stop 'lmto_product_response_basis: unsupported or incomplete angular product space'
+      if (lmax < 0 .or. lmax > 2 .or. space%response_lmax > 2*lmax) then
+         error stop 'lmto_product_response_basis: unsupported angular product space'
       end if
       if (space%npoint < 3 .or. size(space%radius) /= space%npoint .or. &
           size(space%radial_weights) /= space%npoint) then

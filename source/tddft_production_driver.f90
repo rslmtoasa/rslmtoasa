@@ -62,6 +62,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_product_lehmann = 'product_lehmann'
    character(len=*), parameter, public :: tddft_driver_backend_product_gf = 'product_gf'
    character(len=*), parameter, public :: tddft_driver_backend_product_finite_q = 'product_finite_q'
+   character(len=*), parameter, public :: tddft_driver_backend_product_convergence = 'product_convergence'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -75,6 +76,7 @@ module tddft_production_driver_mod
       character(len=32) :: channel = 'chi_plus'
       real(rp), allocatable :: q_list(:, :) ! (3,nq)
       real(rp), allocatable :: frequencies(:)
+      real(rp), allocatable :: eta_values(:) ! physical response eta values for validation campaigns
       real(rp) :: eta = 0.01_rp
       integer :: response_lmax = -1
       character(len=48) :: interaction_route = tddft_driver_route_direct_alsda
@@ -167,9 +169,11 @@ contains
       this%output_file = 'tddft_response.dat'
       if (allocated(this%q_list)) deallocate(this%q_list)
       if (allocated(this%frequencies)) deallocate(this%frequencies)
-      allocate(this%q_list(3, 1), this%frequencies(1))
+      if (allocated(this%eta_values)) deallocate(this%eta_values)
+      allocate(this%q_list(3, 1), this%frequencies(1), this%eta_values(1))
       this%q_list = 0.0_rp
       this%frequencies = 0.0_rp
+      this%eta_values = this%eta
    end subroutine tddft_config_restore
 
    !> Read only the new minimal &tddft group. No legacy TD-DFT type is
@@ -177,7 +181,7 @@ contains
    subroutine load_tddft_config(filename, config)
       character(len=*), intent(in) :: filename
       type(tddft_production_config), intent(out) :: config
-      integer :: unit, ios, n_q_local = 1, n_omega_local = 1, iq, iw
+      integer :: unit, ios, n_q_local = 1, n_omega_local = 1, n_eta_local = 1, iq, iw
       logical :: found
       character(len=512) :: line
 
@@ -195,6 +199,9 @@ contains
       omega_min = 0.0_rp
       omega_max = 0.0_rp
       eta = 0.01_rp
+      n_eta = 1
+      eta_grid = 0.0_rp
+      eta_grid(1) = eta
       response_lmax = -1
       interaction_route = tddft_driver_route_direct_alsda
       goldstone_correction = .false.
@@ -247,13 +254,16 @@ contains
 
       n_q_local = n_q
       n_omega_local = n_omega
+      n_eta_local = n_eta
       if (n_q_local < 1 .or. n_q_local > tddft_max_q) error stop 'TDDFT parser: n_q is outside [1,tddft_max_q]'
       if (n_omega_local < 1 .or. n_omega_local > tddft_max_omega) then
          error stop 'TDDFT parser: n_omega is outside [1,tddft_max_omega]'
       end if
+      if (n_eta_local < 1 .or. n_eta_local > 16) error stop 'TDDFT parser: n_eta is outside [1,16]'
       if (allocated(config%q_list)) deallocate(config%q_list)
       if (allocated(config%frequencies)) deallocate(config%frequencies)
-      allocate(config%q_list(3, n_q_local), config%frequencies(n_omega_local))
+      if (allocated(config%eta_values)) deallocate(config%eta_values)
+      allocate(config%q_list(3, n_q_local), config%frequencies(n_omega_local), config%eta_values(n_eta_local))
       config%nq = n_q_local
       config%nfrequency = n_omega_local
       config%q_list = q_list(:, 1:n_q_local)
@@ -265,6 +275,12 @@ contains
          do iw = 1, n_omega_local
             config%frequencies(iw) = omega_min + real(iw - 1, rp)*(omega_max - omega_min)/real(n_omega_local - 1, rp)
          end do
+      end if
+      if (n_eta_local == 1) then
+         config%eta_values(1) = eta
+      else
+         config%eta_values = eta_grid(1:n_eta_local)
+         config%eta = config%eta_values(1)
       end if
       do iq = 1, n_q_local
          if (any(config%q_list(:, iq) /= config%q_list(:, iq))) error stop 'TDDFT parser: q contains NaN'
@@ -281,6 +297,10 @@ contains
          error stop 'TDDFT input: unsupported response channel; use chi_plus or chi_minus'
       end if
       if (config%eta <= 0.0_rp) error stop 'TDDFT input: eta must be positive'
+      if (.not. allocated(config%eta_values) .or. size(config%eta_values) < 1 .or. &
+          any(config%eta_values <= 0.0_rp)) then
+         error stop 'TDDFT input: every physical response eta must be positive'
+      end if
       if (config%response_lmax < -1) error stop 'TDDFT input: response_lmax must be -1 or a nonnegative cutoff'
       if (config%response_lmax > 4) error stop 'TDDFT input: response_lmax above 4 is outside the validated sp/spd product baseline'
       route = trim(config%interaction_route)
@@ -295,8 +315,12 @@ contains
           trim(config%backend) /= tddft_driver_backend_native_rsgf .and. &
           trim(config%backend) /= tddft_driver_backend_product_lehmann .and. &
           trim(config%backend) /= tddft_driver_backend_product_gf .and. &
-          trim(config%backend) /= tddft_driver_backend_product_finite_q) then
-         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf or product_finite_q'
+          trim(config%backend) /= tddft_driver_backend_product_finite_q .and. &
+          trim(config%backend) /= tddft_driver_backend_product_convergence) then
+         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q or product_convergence'
+      end if
+      if (trim(config%backend) /= tddft_driver_backend_product_convergence .and. size(config%eta_values) /= 1) then
+         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence'
       end if
       if (trim(config%backend) == tddft_driver_backend_reciprocal_gf .or. &
           trim(config%backend) == tddft_driver_backend_native_rsgf .or. config%reciprocal_backend_crosscheck) then
@@ -319,6 +343,14 @@ contains
             error stop 'TDDFT input: product_finite_q requires an odd gf_integration_points value >= 3'
          end if
          if (config%gf_energy_margin <= 0.0_rp) error stop 'TDDFT input: product_finite_q requires gf_energy_margin positive'
+      end if
+      if (trim(config%backend) == tddft_driver_backend_product_convergence) then
+         if (size(config%q_list, 2) < 2) then
+            error stop 'TDDFT input: product_convergence requires Gamma and one finite q'
+         end if
+         if (size(config%frequencies) < 2) then
+            error stop 'TDDFT input: product_convergence requires static and low finite omega'
+         end if
       end if
       if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
          if (trim(config%native_rsgf_provider) /= 'auto' .and. trim(config%native_rsgf_provider) /= 'block' .and. &
@@ -532,6 +564,13 @@ contains
          ! representative finite-q GF spots.  It never enters KXC, Goldstone,
          ! Dyson, loss, or the dense point-space result container.
          call run_tddft_product_finite_q(config, response_space, radial_bases, ground_states, left_state, endpoints)
+         return
+      end if
+      if (trim(config%backend) == tddft_driver_backend_product_convergence) then
+         ! TDVK-05 is a compact numerical-convergence seam.  It evaluates the
+         ! Lehmann service over the prescribed q/omega/physical-eta grid and
+         ! stops before GF, KXC, Goldstone, Dyson, loss, or mode fitting.
+         call run_tddft_product_convergence(config, response_space, radial_bases, ground_states, left_state, endpoints)
          return
       end if
       if (trim(config%backend) == tddft_driver_backend_product_gf) then
@@ -836,6 +875,125 @@ contains
          ' product_dimension=', product%product_dimension, ' covariance_q_index=', covariance_q_index, &
          ' gf_spots=', n_gf_spots
    end subroutine run_tddft_product_finite_q
+
+   !> TDVK-05 compact Lehmann convergence campaign.  The caller supplies one
+   !> accepted SCF state and its exact q endpoints; this routine varies only
+   !> the physical response eta values and records complete compact-matrix
+   !> diagnostics.  It deliberately stops before reciprocal GF, KXC,
+   !> Goldstone, Dyson, loss, and mode interpretation.
+   subroutine run_tddft_product_convergence(config, response_space, radial_bases, ground_states, left_state, endpoints)
+      type(tddft_production_config), intent(in) :: config
+      type(response_space_layout), intent(in) :: response_space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(radial_ground_state), intent(in) :: ground_states(:)
+      type(lr_electronic_state), target, intent(in) :: left_state
+      type(lr_electronic_state), target, intent(in) :: endpoints(:)
+      type(lmto_product_response_basis), target :: product_plus, product_minus
+      type(lmto_product_response_basis), pointer :: product
+      type(lr_product_ks_susceptibility_request) :: request
+      type(lr_product_ks_susceptibility_result) :: result
+      integer :: unit, iq, ieta, ifrequency, isite, response_l
+      real(rp) :: accepted_moment, runtime_start, runtime_end
+      real(rp) :: frobenius_norm, maximum_element, trace_real, trace_imag
+      complex(rp) :: trace
+      logical :: finite_response, rank_stable
+
+      if (size(endpoints) /= size(config%q_list, 2)) then
+         error stop 'TDVK-05 convergence: q endpoint count differs from q_list'
+      end if
+      call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
+      call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
+      if (trim(config%channel) == 'chi_plus') then
+         product => product_plus
+      else
+         product => product_minus
+      end if
+      if (product%product_dimension < 1) error stop 'TDVK-05 convergence: compact product space is empty'
+
+      accepted_moment = 0.0_rp
+      do isite = 1, size(ground_states)
+         accepted_moment = accepted_moment + ground_states(isite)%integrated_moment_muB
+      end do
+      rank_stable = .true.
+      do response_l = 0, product%response_lmax
+         rank_stable = rank_stable .and. product%blocks(1, response_l)%rank_stable
+      end do
+
+      open(newunit=unit, file=trim(config%output_file), status='replace', action='write')
+      write(unit, '(a)') '# TDVK-05 Fe compact bare-response numerical convergence'
+      write(unit, '(a,a)') '# build_version = ', trim(tddft_build_version)
+      write(unit, '(a)') '# backend = product_convergence'
+      write(unit, '(a)') '# no reciprocal-GF ladder, KXC, Goldstone, Dyson, loss, mode fitting, or point-space response allocation'
+      write(unit, '(a,i0)') '# accepted_state_nbasis = ', left_state%nbasis
+      write(unit, '(a,i0)') '# accepted_state_nbands = ', left_state%nbands
+      write(unit, '(a,i0)') '# accepted_state_nk = ', left_state%nk
+      write(unit, '(a,es24.16)') '# accepted_state_EF_Ry = ', left_state%fermi_level
+      write(unit, '(a,es24.16)') '# accepted_state_temperature_K = ', left_state%temperature
+      write(unit, '(a,es24.16)') '# accepted_state_moment_muB = ', accepted_moment
+      write(unit, '(a,es24.16)') '# accepted_state_radial_residual_control = ', ground_states(1)%accepted_residual_control
+      write(unit, '(a,a)') '# accepted_state_reciprocal_mode = ', trim(left_state%reciprocal_mode)
+      write(unit, '(a,a)') '# accepted_state_hamiltonian_order = ', trim(left_state%hamiltonian_order)
+      write(unit, '(a,a)') '# accepted_state_provenance = ', &
+         'one reconverged Fe SCF state; all q/omega/eta rows reuse its eigenpairs, occupations, EF, temperature, and weights'
+      write(unit, '(a,a)') '# channel = ', trim(config%channel)
+      write(unit, '(a,es24.16)') '# primary_eta_Ry = ', config%eta
+      write(unit, '(a,i0)') '# response_lmax = ', response_space%response_lmax
+      if (response_space%response_lmax == 4) then
+         write(unit, '(a)') '# response_space_label = complete certified spd product span'
+      else
+         write(unit, '(a)') '# response_space_label = reduced approximate response cutoff'
+      end if
+      write(unit, '(a,i0)') '# product_unpruned_dimension = ', product%unpruned_dimension
+      write(unit, '(a,i0)') '# product_dimension = ', product%product_dimension
+      write(unit, '(a,l1)') '# product_rank_stable_all_L = ', rank_stable
+      write(unit, '(a,i0,4(es24.16,1x))') '# radial_mesh_identity = ', size(ground_states(1)%r), ground_states(1)%a, &
+         ground_states(1)%b, ground_states(1)%rmax, sum(ground_states(1)%r)
+      write(unit, '(a,a)') '# radial_mesh_provenance = ', &
+         'accepted direct LR-01 logarithmic mesh; no decimation or material-dependent radial truncation'
+      write(unit, '(a,a)') '# xc_provenance = ', trim(ground_states(1)%xc_provenance%functional_name)//' / '// &
+         trim(ground_states(1)%xc_provenance%backend_name)
+      write(unit, '(a,i0)') '# eta_count = ', size(config%eta_values)
+      write(unit, '(a,*(es24.16,1x))') '# eta_values_Ry = ', config%eta_values
+      write(unit, '(a,a)') '# columns: eta_index eta_Ry q_index qx qy qz omega_Ry frobenius_norm max_abs_element trace_real trace_imag transitions_evaluated occupation_skips runtime_cpu_seconds finite'
+
+      do ieta = 1, size(config%eta_values)
+         do iq = 1, size(config%q_list, 2)
+            request%q = config%q_list(:, iq)
+            request%frequencies = config%frequencies
+            request%eta = config%eta_values(ieta)
+            request%channel = config%channel
+            request%product_basis => product
+            request%electronic_state => left_state
+            request%q_endpoint_state => endpoints(iq)
+            call cpu_time(runtime_start)
+            call evaluate_lr_product_ks_susceptibility(request, result)
+            call cpu_time(runtime_end)
+            finite_response = all(ieee_is_finite(real(result%susceptibility, rp))) .and. &
+               all(ieee_is_finite(aimag(result%susceptibility)))
+            if (.not. finite_response) then
+               error stop 'TDVK-05 convergence: compact Lehmann response contains NaN or Inf'
+            end if
+            do ifrequency = 1, size(result%frequencies)
+               frobenius_norm = sqrt(sum(abs(result%susceptibility(:, :, ifrequency))**2))
+               maximum_element = maxval(abs(result%susceptibility(:, :, ifrequency)))
+               trace = cmplx(0.0_rp, 0.0_rp, rp)
+               do isite = 1, result%product_dimension
+                  trace = trace + result%susceptibility(isite, isite, ifrequency)
+               end do
+               trace_real = real(trace, rp)
+               trace_imag = aimag(trace)
+               write(unit, '(i0,1x,es24.16,1x,i0,1x,3(es24.16,1x),es24.16,1x,4(es24.16,1x),2(i0,1x),es24.16,1x,l1)') &
+                  ieta, config%eta_values(ieta), iq, config%q_list(:, iq), result%frequencies(ifrequency), frobenius_norm, &
+                  maximum_element, trace_real, trace_imag, result%ntransitions_evaluated, result%noccupation_skips, &
+                  runtime_end - runtime_start, finite_response
+            end do
+         end do
+      end do
+      close(unit)
+      write(*, '(a,i0,a,i0,a,i0,a,i0)') 'TDVK-05 Fe compact convergence: q_count=', size(config%q_list, 2), &
+         ' omega_count=', size(config%frequencies), ' eta_count=', size(config%eta_values), &
+         ' product_dimension=', product%product_dimension
+   end subroutine run_tddft_product_convergence
 
    subroutine compact_covariance_residual(plus_product, minus_product, plus_result, minus_result, residual)
       type(lmto_product_response_basis), intent(in) :: plus_product, minus_product

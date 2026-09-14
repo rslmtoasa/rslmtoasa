@@ -847,6 +847,31 @@ Return the tables, exact settings, failures if any, and
 
 Then stop at the mandatory TDVK-05 review gate.
 
+## TDVK-05 result
+
+`PASS CANDIDATE` — the compact bare Fe response is finite and numerically
+stable over the required `4^3`, `8^3`, and `12^3` meshes, the physical
+`eta={0.02,0.01,0.005}` Ry ladder at `8^3`, and the full/reduced response-cutoff
+diagnostic. The complete measured evidence is appended to
+`docs/TDDFT_RECIPROCAL_VALIDATION.md`. No convergence threshold was invented,
+and no KXC, Goldstone, Dyson, loss, or mode-interpretation route was entered.
+
+## TDVK-05 completion checklist
+
+- [x] Recorded live HEAD/status and the accepted TDVK-03/04 evidence.
+- [x] Reconverged the same physical Fe setup independently on `4^3`, `8^3`, and `12^3`.
+- [x] Recorded each accepted mesh, moment, EF, radial residual, and LR provenance.
+- [x] Evaluated compact Lehmann Gamma-static, certified finite-q-static, and low-finite-omega rows on every mesh.
+- [x] Ran the physical response-eta ladder `0.02`, `0.01`, `0.005` Ry at `8^3` without changing GF integration controls.
+- [x] Evaluated the complete `response_lmax=4` (`-1`) `spd` product span without truncation.
+- [x] Evaluated the `response_lmax=2` reduced diagnostic and labeled it explicitly approximate.
+- [x] Recorded unpruned/retained product dimensions, all-L rank stability, and direct radial-mesh provenance.
+- [x] Ran only the representative TDVK-04 reciprocal-GF spot checks at the selected `8^3` settings.
+- [x] Appended the `TDVK-05 Fe numerical convergence` evidence section to `docs/TDDFT_RECIPROCAL_VALIDATION.md`.
+- [x] Returned `PASS CANDIDATE` without inventing a material convergence threshold.
+- [x] Stopped at the mandatory TDVK-05 review gate.
+- [x] Committed as `tests: map Fe reciprocal TDDFT convergence`.
+
 ## Commit
 
 `tests: map Fe reciprocal TDDFT convergence`

@@ -35,10 +35,12 @@ The active calculation contract is:
   omega_min = 0.00
   omega_max = 0.20
   eta = 0.01
+  n_eta = 1                            ! product_convergence physical-eta ladder
+  eta_grid = 0.01                      ! first n_eta values are used
   response_lmax = -1                   ! default: complete 2*lmax product
   interaction_route = 'direct_alsda'
   goldstone_correction = .false.
-  backend = 'lehmann'                 ! lehmann/spectral, reciprocal_gf, native_rsgf, product_lehmann, product_finite_q
+  backend = 'lehmann'                 ! lehmann/spectral, reciprocal_gf, native_rsgf, product_lehmann, product_finite_q, product_convergence
   reciprocal_backend_crosscheck = .false. ! opt-in reciprocal validation diagnostic
   native_rsgf_provider = 'auto'       ! auto, block, or chebyshev
   gf_integration_points = 2001        ! reciprocal/native GF Simpson mesh
@@ -73,6 +75,15 @@ arbitrary q points, checks exact folded endpoints and the established circular
 q↔-q covariance, then performs representative compact reciprocal-GF spot checks.
 It reuses one accepted state and stops before KXC, GSR, Dyson, loss, and mode
 interpretation.
+
+`backend='product_convergence'` is the TDVK-05 validation-only branch. It
+reconverges the accepted Fe state independently for each input mesh, evaluates
+the complete compact Lehmann response over all requested q/omega points, and
+uses `n_eta`/`eta_grid` for a physical response-eta ladder. It records complete
+product dimensions, rank stability, radial provenance, and finite-matrix
+diagnostics, then stops before reciprocal GF, KXC, GSR, Dyson, loss, and mode
+interpretation. The `response_lmax=2` path is an explicitly approximate
+diagnostic; `response_lmax=-1` remains the complete `spd` product span.
 
 The old `post_processing='susceptibility'` spelling is rejected with a
 migration error.  `&tddft` is feature-off when absent.  Ordinary calculations

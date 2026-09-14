@@ -759,3 +759,128 @@ acceptance threshold.
 TDVK-04 therefore returns **PASS CANDIDATE** to the orchestrator for the
 finite-q bare-response gate. Downstream dispersion, magnon, stiffness,
 damping, and literature work remains outside this milestone.
+
+## TDVK-05 Fe numerical convergence
+
+TDVK-05 was run against live build
+`pre_tddft_cleanroom_20260909-35-g2a84-dirty` using the new validation-only
+`backend='product_convergence'`. Each mesh case performed its own SCF with the
+same physical bcc Fe input (`ham_only`, LAPACK, second-order k-space
+Hamiltonian, tetrahedron occupations, 300 K, no symmetry reduction or time
+reversal), then reused only that accepted state for its compact Lehmann sweep.
+The selected 8³ state also ran the two TDVK-04-certified reciprocal-GF spots;
+GF `integration_eta=0.001` Ry was kept separate from the physical response
+eta ladder. Every campaign log reported `Converged!`, every serialized
+response row was finite, and no KXC, Goldstone, Dyson, loss, or mode-fitting
+route was entered.
+
+### Accepted states and product provenance
+
+| case | generated mesh / nk | response cutoff | EF (Ry) | moment (μB) | SCF residual control | product unpruned / retained | all-L rank stable |
+|---|---:|---:|---:|---:|---:|---:|:---:|
+| `mesh4_full` | 4³ / 64 | complete `L=4` | -0.0851199488840 | 2.267462473383 | 4.1283e-7 | 232 / 232 | T |
+| `mesh8_full_eta_ladder` | 8³ / 512 | complete `L=4` | -0.0851199488840 | 2.267462473383 | 4.1283e-7 | 232 / 232 | T |
+| `mesh12_full` | 12³ / 1728 | complete `L=4` | -0.0851199488840 | 2.267462473383 | 4.1283e-7 | 232 / 232 | T |
+| `mesh8_reduced_lmax2` | 8³ / 512 | reduced `L=2` (approximate) | -0.0851199488840 | 2.267462473383 | 4.1283e-7 | 140 / 140 | T |
+
+All cases used `nbasis=18`, `nbands=18`, `temperature=300 K`,
+`reciprocal_mode=ham_only`, and `hamiltonian_order=second`. The accepted state
+provenance is one independently reconverged Fe SCF state per case; q/omega/eta
+rows within a case reuse its eigenpairs, occupations, EF, temperature, and
+weights. The equal printed EF/moment values are recorded observations, not
+cross-mesh constraints.
+
+### k-mesh dependence — complete product span, physical eta = 0.01 Ry
+
+The table reports the required Gamma-static, certified finite-q-static, and
+low-finite-omega (`Gamma`, 0.02 Ry) points. `trace` is shown as real + i
+imaginary; runtime is the compact Lehmann evaluator CPU time for the two
+frequencies in that q request.
+
+| mesh | q | omega (Ry) | Frobenius norm | max element | trace | runtime (s) |
+|---:|---|---:|---:|---:|---:|---:|
+| 4³ | Gamma | 0.00 | 3.930186 | 1.920684 | -13.716734 - 0.553225i | 15.4664 |
+| 4³ | (0.125,0,0) | 0.00 | 4.166316 | 2.043431 | -14.620085 - 0.781799i | 15.9747 |
+| 4³ | Gamma | 0.02 | 4.361765 | 2.153108 | -15.032238 - 0.814079i | 15.4664 |
+| 8³ | Gamma | 0.00 | 3.935090 | 1.916506 | -13.623680 - 0.461280i | 122.9355 |
+| 8³ | (0.125,0,0) | 0.00 | 3.883498 | 1.896669 | -13.516282 - 0.472147i | 124.8851 |
+| 8³ | Gamma | 0.02 | 4.360642 | 2.153881 | -14.818109 - 0.734805i | 122.9355 |
+| 12³ | Gamma | 0.00 | 3.944379 | 1.928807 | -13.573441 - 0.525218i | 410.1865 |
+| 12³ | (0.125,0,0) | 0.00 | 3.953125 | 1.930425 | -13.776751 - 0.593291i | 416.0425 |
+| 12³ | Gamma | 0.02 | 4.379360 | 2.168057 | -14.838767 - 0.815430i | 410.1865 |
+
+The complete-span rows evaluated 104770/61118 transitions/skips on 8³ and
+347612/212260 transitions/skips on 12³ for Gamma (the finite-q counts were
+106697/59191 and 355508/204364, respectively). No non-finite value occurred.
+The coarse 4³ result is separated from the 8³/12³ values, while the latter
+show a bounded mesh trend for this bare-response diagnostic; no material
+acceptance threshold is asserted here.
+
+### Physical response-eta dependence — complete product span, 8³
+
+The q and frequency points are identical for all three physical eta values.
+These rows do not use or vary the GF integration controls.
+
+| eta (Ry) | q | omega (Ry) | Frobenius norm | max element | trace |
+|---:|---|---:|---:|---:|---:|
+| 0.020 | Gamma | 0.00 | 3.902158 | 1.907050 | -13.432158 - 0.957331i |
+| 0.010 | Gamma | 0.00 | 3.935090 | 1.916506 | -13.623680 - 0.461280i |
+| 0.005 | Gamma | 0.00 | 3.944643 | 1.918894 | -13.681335 - 0.226607i |
+| 0.020 | (0.125,0,0) | 0.00 | 3.841013 | 1.876618 | -13.311860 - 0.980295i |
+| 0.010 | (0.125,0,0) | 0.00 | 3.883498 | 1.896669 | -13.516282 - 0.472147i |
+| 0.005 | (0.125,0,0) | 0.00 | 3.898781 | 1.904782 | -13.585594 - 0.230868i |
+
+The corresponding low-finite-omega rows were also evaluated at each eta;
+their Gamma norms were 4.322279, 4.360642, and 4.370845 for eta 0.020,
+0.010, and 0.005 Ry, respectively. The observed decrease in the imaginary
+trace with decreasing physical eta is recorded as a numerical trend only;
+there is no eta-to-zero extrapolation.
+
+### Full versus reduced response cutoff — 8³, eta = 0.01 Ry
+
+The complete `response_lmax=-1` request resolves to `L=4` and retains the
+232-dimensional certified `spd` product span. The `response_lmax=2` request
+retains a 140-dimensional span and is an explicitly approximate diagnostic,
+not a production replacement.
+
+| q | omega (Ry) | full `L=4` norm / max | reduced `L=2` norm / max | full trace | reduced trace |
+|---|---:|---:|---:|---:|---:|
+| Gamma | 0.00 | 3.935090 / 1.916506 | 3.273866 / 1.916506 | -13.623680 - 0.461280i | -7.156546 - 0.273685i |
+| (0.125,0,0) | 0.00 | 3.883498 / 1.896669 | 3.224647 / 1.896669 | -13.516282 - 0.472147i | -7.042038 - 0.264890i |
+| Gamma | 0.02 | 4.360642 / 2.153881 | 3.646223 / 2.153881 | -14.818109 - 0.734805i | -7.836362 - 0.412388i |
+
+Both product constructions reported all-L rank stability. The reduced result
+is retained solely to expose cutoff sensitivity and is not substituted for the
+complete span.
+
+### Direct radial and product-basis provenance
+
+| item | recorded value |
+|---|---|
+| radial identity | `nr=495`, `a=0.0200000000000`, `b=1.36280409302648e-4`, `rmax=2.66219999999995`, `sum(r)=134.378214448223` |
+| radial provenance | accepted direct LR-01 logarithmic mesh; no decimation or material-dependent radial truncation |
+| XC provenance | Barth-Hedin / legacy RS-LMTO |
+| complete product | `spd`, `L=4`, unpruned 232, retained 232, all-L rank stable `T` |
+| reduced diagnostic | `L=2`, unpruned 140, retained 140, all-L rank stable `T`, approximate only |
+
+No site-only response, radial decimation, or product-mode truncation was used.
+
+### Representative reciprocal-GF spot checks
+
+The selected 8³ accepted state used physical response `eta=0.01 Ry`,
+`integration_points=6401`, and `integration_eta=0.001 Ry`. These are the two
+TDVK-04-certified representative spots, not a GF convergence ladder.
+
+| q index | q | h / integration eta | `||chi_L||_F` | `||chi_GF||_F` | dF | rF | dInf | wall (s) |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 2 | (0.125,0,0) | 0.59414678 | 3.883498 | 3.865953 | 2.519235e-2 | 6.487024e-3 | 1.353574e-2 | 17.6671 |
+| 4 | (0.23,0.07,-0.11) | 0.60049971 | 3.815074 | 3.799173 | 2.968604e-2 | 7.781250e-3 | 1.291837e-2 | 18.0983 |
+
+Both GF spot responses were finite. The compact Lehmann and GF matrices use
+the same accepted eigenpairs, occupations, EF, temperature, radial mesh,
+product basis, channel, and physical eta.
+
+TDVK-05 therefore returns **PASS CANDIDATE** to the orchestrator. The evidence
+supports proceeding only through the mandatory review gate; interaction,
+Goldstone, Dyson, dispersion, magnon, stiffness, damping, and literature work
+remain outside this milestone.
