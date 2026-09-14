@@ -38,9 +38,9 @@ module charge_mod
    !> Module´s main structure
    type, public :: charge
       !> Lattice
-      class(lattice), pointer :: lattice
+      class(lattice), pointer :: lattice => null()
       !> Symbolic atom
-      class(symbolic_atom), dimension(:), pointer :: symbolic_atom
+      class(symbolic_atom), dimension(:), pointer :: symbolic_atom => null()
 
       !> Bulkmat variables
       real(rp), dimension(:), allocatable :: w
@@ -150,6 +150,8 @@ contains
    subroutine destructor(this)
       type(charge) :: this
 #ifdef USE_SAFE_ALLOC
+      if (allocated(this%bulk_charge)) call g_safe_alloc%deallocate('charge.bulk_charge', this%bulk_charge)
+      if (allocated(this%amad)) call g_safe_alloc%deallocate('charge.amad', this%amad)
       if (allocated(this%wsimp)) call g_safe_alloc%deallocate('charge.wsimp', this%wsimp)
       if (allocated(this%wssurf)) call g_safe_alloc%deallocate('charge.wssurf', this%wssurf)
       if (allocated(this%dss)) call g_safe_alloc%deallocate('charge.dss', this%dss)
@@ -193,6 +195,8 @@ contains
       if (allocated(this%dg)) call g_safe_alloc%deallocate('charge.dg', this%dg)
       if (allocated(this%dq)) call g_safe_alloc%deallocate('charge.dq', this%dq)
 #else
+      if (allocated(this%bulk_charge)) deallocate (this%bulk_charge)
+      if (allocated(this%amad)) deallocate (this%amad)
       if (allocated(this%wsimp)) deallocate (this%wsimp)
       if (allocated(this%wssurf)) deallocate (this%wssurf)
       if (allocated(this%dss)) deallocate (this%dss)
@@ -318,6 +322,7 @@ contains
       allocate (this%bulk_charge(this%lattice%nbulk))
 #endif
 
+      this%bulk_charge = 0.0_rp
       this%dq(:) = 0.0d0
       this%vmix = 1.0d0
       ! For surfmat
@@ -580,11 +585,16 @@ contains
    subroutine bulkmat(this)
       class(charge), intent(inout) :: this
       real(rp) :: alatbulkmat, tol, alat0, vol, awald0, awald
-      real(rp), dimension(3, this%lattice%ndim) :: tau
+      real(rp), allocatable :: tau(:, :), rlat(:, :), dlat(:, :), work(:), amad(:, :)
       real(rp), dimension(3, 3) :: rb, qb
-      integer :: nsize, nbmx, nkrmx, nkdmx, j7rlat, j7dlat, j7work, j7amad, lmxst, nkr, nkd
+      integer :: nkrmx, nkdmx, lmxst, nkr, nkd, ntot
       logical :: isopen
       integer :: i, j
+      ntot = this%lattice%ntot
+      if (ntot <= 0 .or. ntot > size(this%lattice%crd, 2)) then
+         call g_logger%fatal('bulkmat: invalid basis coordinate count', __FILE__, __LINE__)
+         return
+      end if
       inquire (unit=10, opened=isopen)
       if (isopen) then
          call g_logger%fatal('charge%bulkmat, file ves.out: Unit 10 is already open', __FILE__, __LINE__)
@@ -600,35 +610,23 @@ contains
          open (unit=11, file='mad.mat', form='unformatted')
       end if
 
-      ! Defining some parameters. Need to find a way to set them automatically in
-      ! the future
-      nsize = 4000000
-      nbmx = 5500
-#ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('charge.w', this%w, nsize)
-#else
-      allocate (this%w(nsize))
-#endif
-      call wkinit(this)
-
       nkrmx = 3000
       nkdmx = 3000
+      allocate (tau(3, ntot), rlat(3, nkrmx), dlat(3, nkdmx))
+      allocate (work(max(nkdmx, nkrmx)))
       awald0 = 3
       tol = 1.0d-06
       alat0 = 0.0
 
       alatbulkmat = this%lattice%alat/0.52917721d0
       call RDISTN(this%lattice%crd, tau, this%lattice%ntot, this%gx, this%gy, this%gz, this%gt)
-      call DEFRR(this, J7RLAT, 3*NKRMX)
-      call DEFRR(this, J7DLAT, 3*NKDMX)
-      call DEFRR(this, J7WORK, MAX0(NKDMX, NKRMX))
       LMXST = 5
       call LATTC(AWALD0, TOL, alatbulkmat, ALAT0, this%lattice%a, this%GX, this%GY, this%GZ, this%GT, RB, QB, LMXST,     &
-   &  VOL, AWALD, this%W(J7DLAT), NKD, this%W(J7RLAT), NKR, NKDMX, NKRMX, this%W(J7WORK))
-      call RLSE(this, J7WORK)
-      call DEFRR(this, J7AMAD, this%lattice%ntot*this%lattice%ntot)
+   &  VOL, AWALD, dlat, NKD, rlat, NKR, NKDMX, NKRMX, work)
+      deallocate (work)
+      allocate (amad(ntot, ntot))
       call MADMAT(this%lattice%ntot, TAU, AWALD, alatbulkmat, VOL,                              &
-   &   this%W(J7RLAT), NKR, this%W(J7DLAT), NKD, this%W(J7AMAD))
+   &   rlat, NKR, dlat, NKD, amad)
       close (10)
       close (11)
    end subroutine bulkmat
@@ -1799,9 +1797,10 @@ contains
    subroutine madmat(NBAS, TAU, A, ALAT, VOL, RLAT, NKR, DLAT, NKD, AMAD)
 ! ....MAKES MADELUNG MATRIX
       ! Input and output
-      integer, parameter :: nbmx = 2000
       integer, intent(inout) :: nkr, nkd, nbas
-      real(rp), dimension(3, nbmx), intent(inout) :: tau, dlat, rlat
+      real(rp), dimension(3, nbas), intent(inout) :: tau
+      real(rp), dimension(3, nkd), intent(inout) :: dlat
+      real(rp), dimension(3, nkr), intent(inout) :: rlat
       real(rp), dimension(nbas, nbas), intent(inout) :: amad
       real(rp), intent(inout) :: a, alat, vol
       ! Local variables
@@ -1859,9 +1858,10 @@ contains
                     LMAX, VOL, AWALD, DLAT, NKD, RLAT, NKR, NKDMX, NKRMX, WORK)
       ! Input and output
       integer, intent(inout) :: lmax, nkd, nkr, nkdmx, nkrmx
-      real(rp), dimension(3, nkrmx), intent(inout) :: rlat, dlat
+      real(rp), dimension(3, nkrmx), intent(inout) :: rlat
+      real(rp), dimension(3, nkdmx), intent(inout) :: dlat
       real(rp), dimension(3, 3), intent(inout) :: rb0, rb, qb
-      real(rp), dimension(1), intent(inout) :: work
+      real(rp), dimension(max(nkdmx, nkrmx)), intent(inout) :: work
       real(rp) :: tol, alat, alat0, g1, g2, g3, gt, vol, as, awald
       ! Local variables
       real(rp), dimension(3, 3) :: qb0
