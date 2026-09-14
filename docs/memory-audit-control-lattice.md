@@ -112,3 +112,22 @@ Required follow-up validation: bulk bccFe, file-based lattice with ct, fcc2/hcp,
 a no-neighbour map, map-capacity exhaustion under bounds checking, and both
 USE_SAFE_ALLOC configurations. Compare numerical outputs with the base commit;
 measure peak memory separately.
+
+## Follow-up: stack pressure in structb
+
+The reported bcc-Fe crash disappears with an unlimited stack. Source inspection
+identified three CALL arguments using this%cr*this%alat. With the default
+ndim=9,900,000 and eight-byte reals, each full expression represents 237,600,000
+bytes (about 226.6 MiB), although the callees consume only (3,kk).
+Compiler placement of these temporaries on the stack is a strong explanation,
+not yet a runtime-confirmed diagnosis.
+
+The follow-up replaces these expressions with one local allocatable
+scaled_cr(3,kk), filled with scalar loops and reused by nncal, remd and dbar1.
+It is explicitly released after use. At kk=10000 its storage is 240,000 bytes.
+This resolves the coordinate-expression item above; the oversized retained
+bravais arrays themselves remain a separate issue.
+
+Validation: source readback verified. Rebuild and run the same bcc-Fe input
+under the original finite stack limit, then compare numerical outputs with
+the unlimited-stack reference. No local compiler/runtime test was available.
