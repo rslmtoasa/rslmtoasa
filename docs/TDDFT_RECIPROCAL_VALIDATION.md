@@ -310,3 +310,34 @@ The detailed evidence is in
 The next task should be the orchestrator-approved mechanical design of a
 complete-space streaming or matrix-free LR-06 material smoke that preserves the
 current equations and radial mesh.
+
+## TDVK-02R0b scaled LMTO product-basis conditioning
+
+**Status: PASS for accepted-Fe radial conditioning; live Fe transition-span
+spot check remains unavailable.** This is a numerical representation audit,
+not material response validation. TDVK-02R0 remains **BLOCKED** at the dense
+complete-space LR-06 response, and TDVK-02R0 remains the separate algebraic
+closure audit.
+
+- [x] Direct LAPACK SVD of `W^(1/2) Btilde` used for every one-site Fe
+  `L=0..4` block; unscaled Gram eigenvalues were not used as rank decisions.
+- [x] Accepted Fe setup/provenance recorded at HEAD
+  `c76b096e6ef28de27e16e91acfc0a9437720e7f8`: `nr=495`, canonical moment
+  `2.267442 mu_B`, `EF` approximately `-0.085122 Ry`, residual `6.903e-7`.
+- [x] Fe column norms, complete singular spectra, condition estimates, and
+  ranks at `tau1/tau10/tau100` recorded for both circular channels.
+- [x] Fe ranks are stable: `12/12/12`, `16/16/16`, `16/16/16`, `8/8/8`, and
+  `4/4/4` for `L=0..4`; retained `Nprod=232` at all three thresholds.
+- [x] Synthetic TDVK-02R0 `spd` fixture rerun; original raw-Gram evidence was
+  preserved. Its one-rank `L=1,2` sensitivity shifts are fixture-only.
+- [ ] Live Gamma Fe nearest, deeper, and non-negligible-norm transition-span
+  residuals at all thresholds; reciprocal eigenvectors are not persisted in
+  the accepted radial snapshot artifact.
+- [x] No compressed LR-06, LR-GF-02, KXC, Dyson, driver, Fe-physics, eta,
+  response-cutoff, or radial-mesh change was committed.
+
+Detailed spectra and provenance are in
+[`docs/LR_LMTO_PRODUCT_RESPONSE_BASIS.md`](LR_LMTO_PRODUCT_RESPONSE_BASIS.md).
+The next task should be the orchestrator-approved mechanical design of a
+complete-space streaming or matrix-free LR-06 material smoke, including a
+minimal persisted Gamma eigenpair artifact to finish the R0b live span check.

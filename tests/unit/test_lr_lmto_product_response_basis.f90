@@ -24,10 +24,11 @@ program test_lr_lmto_product_response_basis
    real(rp), parameter :: mesh_a = 0.03_rp, mesh_b = 0.10_rp, nuclear_z = 1.0_rp
    real(rp), parameter :: closure_tolerance = 1.0e-10_rp
    real(rp) :: radius(nr)
-   type(lmto_radial_basis) :: radial_sp, radial_spd
-   type(response_space_layout) :: space_sp, space_spd
+   type(lmto_radial_basis) :: radial_sp, radial_spd, radial_fe
+   type(response_space_layout) :: space_sp, space_spd, space_fe
    type(pauli_vertex_capabilities) :: capabilities
    logical :: failed
+   character(len=512) :: fe_file
 
    type :: candidate_descriptor
       integer :: l = 0
@@ -50,6 +51,13 @@ program test_lr_lmto_product_response_basis
 
    call inventory_and_spectra(radial_sp, space_sp, 1, failed)
    call inventory_and_spectra(radial_spd, space_spd, 2, failed)
+   call scaled_svd_audit(radial_spd, space_spd, failed)
+   if (command_argument_count() > 0) then
+      call get_command_argument(1, fe_file)
+      call load_radial_basis_dump(trim(fe_file), radial_fe)
+      call space_fe%initialize(1, 4, radial_fe%rofi, radial_fe%mesh_a, radial_fe%mesh_b, 1)
+      call scaled_svd_audit(radial_fe, space_fe, failed, 'accepted Fe')
+   end if
    call energy_affine_oracle(radial_spd, failed)
    call gf_component_oracle(radial_spd, failed)
    call lr05_closure_oracle(radial_spd, space_spd, capabilities, failed)
@@ -58,7 +66,7 @@ program test_lr_lmto_product_response_basis
       write (*, '(a)') 'UnitLrLmtoProductResponseBasis: FAIL'
       error stop 1
    end if
-   write (*, '(a)') 'UnitLrLmtoProductResponseBasis: PASS (inventory, Gram spectra, LR-05 closure, affine, LR-GF-02)'
+   write (*, '(a)') 'UnitLrLmtoProductResponseBasis: PASS (inventory, Gram/SVD spectra, LR-05 closure, affine, LR-GF-02)'
 
 contains
 
@@ -172,6 +180,142 @@ contains
          end do
       end do
    end subroutine inventory_and_spectra
+
+   subroutine scaled_svd_audit(radial, space, failed, audit_label)
+      type(lmto_radial_basis), intent(in) :: radial
+      type(response_space_layout), intent(in) :: space
+      logical, intent(inout) :: failed
+      character(len=*), intent(in), optional :: audit_label
+      type(candidate_descriptor), allocatable :: candidates(:)
+      complex(rp), allocatable :: weighted_basis(:, :), u(:, :), vt(:, :), work(:)
+      complex(rp) :: work_query(1)
+      real(rp), allocatable :: column_norm(:), singular_values(:), rwork(:)
+      real(rp) :: tau1, sigma_min, condition_estimate
+      integer :: response_l, channel, spin_left, spin_right, nr_local, ncolumn, nsv, lwork, info
+      integer :: ir, k, rank1, rank10, rank100
+      character(len=5) :: channel_label
+      character(len=64) :: label
+      external :: zgesvd
+
+      nr_local = space%npoint
+      label = 'spd fixture'
+      if (present(audit_label)) label = audit_label
+      write (*, '(a,a,a)') 'SCALED SVD audit basis=', trim(label), &
+         ' (direct LAPACK zgesvd; no Gram eigensolve)'
+      do channel = 1, 2
+         if (channel == 1) then
+            spin_left = 1
+            spin_right = 2
+            channel_label = 'plus'
+         else
+            spin_left = 2
+            spin_right = 1
+            channel_label = 'minus'
+         end if
+         do response_l = 0, space%response_lmax
+            call enumerate_candidates(radial%lmax, response_l, candidates)
+            ncolumn = size(candidates)
+            nsv = min(nr_local, ncolumn)
+            allocate(weighted_basis(nr_local, ncolumn), column_norm(ncolumn), singular_values(nsv), &
+               u(1, 1), vt(1, 1), rwork(max(1, 5*nsv)))
+            weighted_basis = cmplx(0.0_rp, 0.0_rp, rp)
+            do k = 1, ncolumn
+               do ir = 1, nr_local
+                  weighted_basis(ir, k) = cmplx(radial_product(radial, ir, candidates(k)%l, &
+                     candidates(k)%lp, spin_left, spin_right, candidates(k)%p, candidates(k)%q), 0.0_rp, rp)
+               end do
+            end do
+            do k = 1, ncolumn
+               column_norm(k) = sqrt(sum(space%radial_weights*real(weighted_basis(:, k)*conjg(weighted_basis(:, k)), rp)))
+               if (.not. ieee_is_finite(column_norm(k)) .or. column_norm(k) <= tiny(1.0_rp)) then
+                  write (*, '(a,i0,a,i0,a,es12.4)') 'SVD invalid column norm L=', response_l, ' column=', k, &
+                     ' norm=', column_norm(k)
+                  failed = .true.
+               else
+                  weighted_basis(:, k) = sqrt(space%radial_weights)*weighted_basis(:, k)/column_norm(k)
+               end if
+            end do
+            if (failed) then
+               deallocate(candidates, weighted_basis, column_norm, singular_values, u, vt, rwork)
+               return
+            end if
+            call zgesvd('N', 'N', nr_local, ncolumn, weighted_basis, nr_local, singular_values, u, 1, vt, 1, &
+               work_query, -1, rwork, info)
+            lwork = max(1, nint(real(work_query(1), rp)))
+            allocate(work(lwork))
+            call zgesvd('N', 'N', nr_local, ncolumn, weighted_basis, nr_local, singular_values, u, 1, vt, 1, &
+               work, lwork, rwork, info)
+            deallocate(work)
+            if (info /= 0) then
+               write (*, '(a,i0)') 'SVD zgesvd info=', info
+               failed = .true.
+               deallocate(candidates, weighted_basis, column_norm, singular_values, u, vt, rwork)
+               return
+            end if
+            tau1 = real(max(nr_local, ncolumn), rp)*epsilon(1.0_rp)*singular_values(1)
+            rank1 = count(singular_values > tau1)
+            rank10 = count(singular_values > 10.0_rp*tau1)
+            rank100 = count(singular_values > 100.0_rp*tau1)
+            sigma_min = singular_values(nsv)
+            condition_estimate = singular_values(1)/sigma_min
+            write (*, '(a,1x,a,1x,a,i0,1x,a,i0,1x,a,es16.8,1x,a,es16.8,1x,a,es16.8,1x,a,es16.8)') &
+               'SVD', trim(channel_label), 'L=', response_l, 'ncand=', ncolumn, 'dmin=', minval(column_norm), &
+               'dmax=', maxval(column_norm), 'sigma_max=', singular_values(1), 'sigma_min=', sigma_min
+            write (*, '(a,es16.8,1x,a,es16.8,1x,a,i0,1x,a,i0,1x,a,i0)') '  condition=', condition_estimate, &
+               'tau1=', tau1, 'rank_tau1=', rank1, 'rank_tau10=', rank10, 'rank_tau100=', rank100
+            write (*, '(a)', advance='no') '  singular_values:'
+            do k = 1, nsv
+               write (*, '(1x,es20.12)', advance='no') singular_values(k)
+            end do
+            write (*, *)
+            if (rank1 /= rank10 .or. rank1 /= rank100) then
+               write (*, '(a)') '  REVIEW REQUIRED: retained rank changes across sensitivity thresholds.'
+            end if
+            deallocate(candidates, weighted_basis, column_norm, singular_values, u, vt, rwork)
+         end do
+      end do
+   end subroutine scaled_svd_audit
+
+   subroutine load_radial_basis_dump(filename, basis)
+      character(len=*), intent(in) :: filename
+      type(lmto_radial_basis), intent(out) :: basis
+      character(len=256) :: line
+      integer :: unit, ios, npoint, lmax, ir, l, ispin, ir_read, l_read, spin_read
+      real(rp) :: mesh_a_read, mesh_b_read, radius_read, phi_read, dot_read, enu_read
+
+      open (newunit=unit, file=filename, status='old', action='read', iostat=ios)
+      if (ios /= 0) error stop 'load_radial_basis_dump: could not open radial extraction'
+      read (unit, '(a)', iostat=ios) line
+      read (unit, '(a)', iostat=ios) line
+      read (line(index(line, '=') + 1:), *) npoint
+      read (unit, '(a)', iostat=ios) line
+      read (line(index(line, '=') + 1:), *) lmax
+      read (unit, '(a)', iostat=ios) line
+      read (line(index(line, '=') + 1:), *) mesh_a_read
+      read (unit, '(a)', iostat=ios) line
+      read (line(index(line, '=') + 1:), *) mesh_b_read
+      read (unit, '(a)', iostat=ios) line
+      call basis%initialize(npoint, lmax, 2)
+      basis%mesh_a = mesh_a_read
+      basis%mesh_b = mesh_b_read
+      do ispin = 1, 2
+         do l = 0, lmax
+            do ir = 1, npoint
+               read (unit, *, iostat=ios) ir_read, l_read, spin_read, radius_read, phi_read, dot_read, enu_read
+               if (ios /= 0 .or. ir_read /= ir .or. l_read /= l .or. spin_read /= ispin) then
+                  error stop 'load_radial_basis_dump: malformed radial extraction'
+               end if
+               basis%rofi(ir) = radius_read
+               basis%phi_large(ir, l + 1, ispin) = phi_read
+               basis%phidot_large(ir, l + 1, ispin) = dot_read
+               basis%enu_work(l + 1, ispin) = enu_read
+               basis%enu_radial(l + 1, ispin) = enu_read
+            end do
+         end do
+      end do
+      basis%channel_present = .true.
+      close (unit)
+   end subroutine load_radial_basis_dump
 
    subroutine build_candidate_block(radial, space, response_l, response_m, channel, candidates, basis)
       type(lmto_radial_basis), intent(in) :: radial
