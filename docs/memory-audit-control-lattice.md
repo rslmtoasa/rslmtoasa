@@ -164,3 +164,46 @@ its original sizing read; full lifecycle/reinitialization and safe-allocation
 accounting are not certified; bravais shrinking needs consumer analysis.
 Numerical equivalence and peak RSS remain unmeasured. The reported bulkmat
 crash remains the next charge-stage issue, outside this patch.
+
+## Charge stage: constructor and bulkmat
+
+Reviewed charge construction from pre_processing_bravais. The lattice and
+symbolic_atom pointers borrow existing targets; they now start null.
+The constructor allocates wssurf(nbas), dq(nrec) and bulk_charge(nbulk)
+after lattice dimensions are available. bulk_charge now starts at zero.
+The destructor explicitly accounts for bulk_charge and amad under
+USE_SAFE_ALLOC (automatic allocatable cleanup already handles their lifetime).
+
+Confirmed source of substantial stack pressure: bulkmat declared the automatic
+array tau(3,ndim) while RDISTN fills only ntot entries. This was 226.6 MiB for
+the default ndim at eight bytes per real. tau is now allocatable (3,ntot).
+
+bulkmat now uses separate local rlat(3,3000), dlat(3,3000), work(3000)
+and amad(ntot,ntot) allocations. It no longer allocates this%w(4000000) or
+calls the saved-state WKINIT/DEFRR/RLSE allocator. work is released after
+LATTC; the remaining local arrays are automatically released on return.
+The legacy routines and w component remain for now, but bulkmat does not use
+them, and charge-state output will no longer include that scratch workspace.
+
+MADMAT now declares tau(3,nbas), rlat(3,nkr), dlat(3,nkd) instead of assigning
+all three a hard-coded 2000-column extent. LATTC declares dlat against nkdmx,
+rlat against nkrmx, and work against max(nkdmx,nkrmx), consistent with LGEN.
+The original Ewald parameters, conversion constant, vector order, Madelung
+computation and mad.mat output are preserved.
+
+Validation: branch source readback verified; GitHub full build running when
+this report was written. No local runtime or numerical equivalence test was
+performed. Test bcc-Fe with a finite stack and compare mad.mat with the original
+unlimited-stack result. Repeated bulkmat calls should also be exercised.
+
+Open charge items:
+- build_from_file exposes many array names in the namelist but only provisions
+  wssurf; unsupported array inputs and malformed input handling need review.
+- restore_to_default still assumes one-time construction; repeated resets need
+  a lifecycle policy.
+- bulkpot has automatic nrec-sized arrays, reloads an nbas-square matrix, and
+  does not check the allocation status it requests.
+- Surface/impurity matrix allocation and consumers have not been fully audited.
+- The Ewald vector capacity remains 3000; LGEN guards it before writing.
+- Numerical issues in the legacy Ewald helpers require separate evaluation;
+  this patch changes storage and dimensions, not their algorithms.
