@@ -27,6 +27,8 @@ module lr_product_gf_susceptibility_mod
 
    character(len=*), parameter :: product_representation = &
       'weighted-orthonormal LMTO product representation'
+   character(len=*), parameter, public :: lr_product_gf_contraction_scalar = 'scalar'
+   character(len=*), parameter, public :: lr_product_gf_contraction_optimized = 'optimized'
 
    type, public :: lr_product_gf_susceptibility_request
       real(rp) :: q(3) = 0.0_rp
@@ -36,6 +38,7 @@ module lr_product_gf_susceptibility_mod
       integer :: integration_points = 2001
       real(rp) :: integration_eta = 0.0_rp
       real(rp) :: energy_margin = 1.0_rp
+      character(len=16) :: contraction_backend = lr_product_gf_contraction_optimized
       type(lmto_product_response_basis), pointer :: product_basis => null()
       type(lr_electronic_state), pointer :: electronic_state => null()
       type(lr_electronic_state), pointer :: q_endpoint_state => null()
@@ -51,8 +54,11 @@ module lr_product_gf_susceptibility_mod
       real(rp) :: actual_integration_eta = 0.0_rp
       real(rp) :: energy_min = 0.0_rp
       real(rp) :: energy_max = 0.0_rp
+      real(rp) :: energy_spacing = 0.0_rp
+      real(rp) :: spacing_over_integration_eta = 0.0_rp
       character(len=128) :: response_representation = ''
       character(len=512) :: response_space_metadata = ''
+      character(len=16) :: contraction_backend = ''
       logical :: point_response_allocated = .false.
       integer(int64) :: component_vertex_memory_bytes = 0_int64
       integer(int64) :: gf_matrix_memory_bytes = 0_int64
@@ -65,6 +71,15 @@ module lr_product_gf_susceptibility_mod
       real(rp) :: time_per_energy_kpoint = 0.0_rp
       complex(rp), allocatable :: susceptibility(:, :, :) ! (product,product,frequency)
    end type lr_product_gf_susceptibility_result
+
+   type :: lr_product_gf_contraction_workspace
+      complex(rp), allocatable :: vertices_flat(:, :, :)
+      complex(rp), allocatable :: vertices_transpose(:, :, :)
+      complex(rp), allocatable :: transformed(:, :)
+      complex(rp), allocatable :: contribution(:, :)
+      complex(rp), allocatable :: temporary(:, :)
+      logical, allocatable :: active_component(:)
+   end type lr_product_gf_contraction_workspace
 
    public :: evaluate_lr_product_gf_susceptibility
 
@@ -82,7 +97,9 @@ contains
       real(rp) :: integration_eta, energy_min, energy_max, step, energy, fermi_weight
       real(rp) :: quadrature_weight, weight_sum, cpu_start, cpu_stop
       integer(int64) :: wall_start, wall_stop, clock_rate
-      integer :: channel_kind, nbasis, nfrequency, ne, ie, ik, ifrequency
+      integer :: channel_kind, contraction_kind, nbasis, nfrequency, ne, ie, ik, ifrequency
+      logical :: use_optimized_contraction
+      type(lr_product_gf_contraction_workspace) :: contraction_workspace
 
       if (.not. associated(request%product_basis) .or. .not. associated(request%electronic_state) .or. &
           .not. associated(request%q_endpoint_state)) then
@@ -92,7 +109,8 @@ contains
       left_state => request%electronic_state
       right_state => request%q_endpoint_state
 
-      call validate_product_gf_inputs(product_basis, left_state, right_state, request, channel_kind)
+      call validate_product_gf_inputs(product_basis, left_state, right_state, request, channel_kind, contraction_kind)
+      use_optimized_contraction = contraction_kind == 1
       call left_state%validate('evaluate_lr_product_gf_susceptibility:left_state')
       call right_state%validate('evaluate_lr_product_gf_susceptibility:q_endpoint_state')
 
@@ -105,6 +123,7 @@ contains
       call system_clock(wall_start, clock_rate)
       call cpu_time(cpu_start)
       call product_basis%component_vertex_tensor(vertices)
+      if (use_optimized_contraction) call initialize_product_gf_contraction_workspace(contraction_workspace, vertices)
       nbasis = left_state%nbasis
       nfrequency = size(request%frequencies)
       ne = request%integration_points
@@ -147,9 +166,15 @@ contains
                   cmplx(energy + request%frequencies(ifrequency), request%eta, rp), right_gr)
                call build_weighted_resolvent(left_state, ik, &
                   cmplx(energy - request%frequencies(ifrequency), -request%eta, rp), left_ga)
-               call accumulate_product_gf_bubble(vertices, left_a, right_a, right_gr, left_ga, &
-                  fermi_weight*quadrature_weight*2.0_rp*left_state%k_weights(ik)/weight_sum, &
-                  result%susceptibility(:, :, ifrequency))
+               if (use_optimized_contraction) then
+                  call accumulate_product_gf_bubble_optimized(vertices, left_a, right_a, right_gr, left_ga, &
+                     fermi_weight*quadrature_weight*2.0_rp*left_state%k_weights(ik)/weight_sum, &
+                     result%susceptibility(:, :, ifrequency), contraction_workspace)
+               else
+                  call accumulate_product_gf_bubble_scalar(vertices, left_a, right_a, right_gr, left_ga, &
+                     fermi_weight*quadrature_weight*2.0_rp*left_state%k_weights(ik)/weight_sum, &
+                     result%susceptibility(:, :, ifrequency))
+               end if
             end do
          end do
       end do
@@ -164,7 +189,14 @@ contains
       result%actual_integration_eta = integration_eta
       result%energy_min = energy_min
       result%energy_max = energy_max
+      result%energy_spacing = step
+      result%spacing_over_integration_eta = step/integration_eta
       result%response_representation = product_representation
+      if (use_optimized_contraction) then
+         result%contraction_backend = lr_product_gf_contraction_optimized
+      else
+         result%contraction_backend = lr_product_gf_contraction_scalar
+      end if
       result%point_response_allocated = .false.
       result%nbasis = nbasis
       result%nk = left_state%nk
@@ -181,15 +213,19 @@ contains
       else
          result%channel = lr_channel_minus
       end if
-      write (result%response_space_metadata, '(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,l1)') &
+      write (result%response_space_metadata, '(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,l1,a,es12.4,a,es12.4,a,a,a,a)') &
          'product_dimension=', product_basis%product_dimension, ' component_vertex_bytes=', &
          result%component_vertex_memory_bytes, ' gf_matrix_bytes=', result%gf_matrix_memory_bytes, &
          ' susceptibility_bytes=', result%susceptibility_memory_bytes, ' energy_points=', ne, &
          ' k_points=', left_state%nk, ' frequencies=', nfrequency, ' point_response_allocated=', &
-         result%point_response_allocated
+         result%point_response_allocated, ' energy_spacing=', result%energy_spacing, &
+         ' h_over_integration_eta=', result%spacing_over_integration_eta, ' contraction_backend=', &
+         trim(result%contraction_backend), ' accepted_state=', 'shared_request_snapshots'
    end subroutine evaluate_lr_product_gf_susceptibility
 
-   subroutine accumulate_product_gf_bubble(vertices, left_a, right_a, right_gr, left_ga, scale, susceptibility)
+   !> Reference contraction retained for the TDVK-03 optimization oracle.
+   !> It is intentionally close to the LR-GF-02 scalar implementation.
+   subroutine accumulate_product_gf_bubble_scalar(vertices, left_a, right_a, right_gr, left_ga, scale, susceptibility)
       complex(rp), intent(in) :: vertices(:, :, :, :), left_a(:, :, :), right_a(:, :, :), &
          right_gr(:, :, :), left_ga(:, :, :)
       real(rp), intent(in) :: scale
@@ -202,7 +238,7 @@ contains
 
       product_dimension = size(susceptibility, 1)
       if (size(susceptibility, 2) /= product_dimension .or. size(vertices, 4) /= product_dimension) then
-         error stop 'accumulate_product_gf_bubble: product matrix shape mismatch'
+         error stop 'accumulate_product_gf_bubble_scalar: product matrix shape mismatch'
       end if
       do component_i = 1, 4
          left_power_i = mod(component_i - 1, 2)
@@ -241,13 +277,103 @@ contains
             end do
          end do
       end do
-   end subroutine accumulate_product_gf_bubble
+   end subroutine accumulate_product_gf_bubble_scalar
 
-   subroutine validate_product_gf_inputs(product_basis, left_state, right_state, request, channel_kind)
+   subroutine initialize_product_gf_contraction_workspace(workspace, vertices)
+      type(lr_product_gf_contraction_workspace), intent(out) :: workspace
+      complex(rp), intent(in) :: vertices(:, :, :, :)
+      integer :: nb, nb2, product_dimension, component, i
+
+      nb = size(vertices, 1)
+      nb2 = nb*nb
+      product_dimension = size(vertices, 4)
+      allocate(workspace%vertices_flat(nb2, product_dimension, 4), &
+         workspace%vertices_transpose(nb2, product_dimension, 4), workspace%transformed(nb2, product_dimension), &
+         workspace%contribution(product_dimension, product_dimension), workspace%temporary(nb, nb), &
+         workspace%active_component(4))
+      do component = 1, 4
+         workspace%vertices_flat(:, :, component) = reshape(vertices(:, :, component, :), [nb2, product_dimension])
+         do i = 1, product_dimension
+            workspace%vertices_transpose(:, i, component) = reshape(transpose(vertices(:, :, component, i)), [nb2])
+         end do
+         workspace%active_component(component) = maxval(abs(vertices(:, :, component, :))) /= 0.0_rp
+      end do
+   end subroutine initialize_product_gf_contraction_workspace
+
+   !> Matrix-backed equivalent of accumulate_product_gf_bubble_scalar.
+   !>
+   !> For each pair of affine vertex components, the transformed vertices are
+   !> flattened into columns.  The complete response block is then one dense
+   !> matrix product rather than a product-dimension squared loop over scalar
+   !> Frobenius contractions.  The two products below are exactly the two
+   !> Kubo terms used by the scalar oracle; no Lehmann data or point response
+   !> matrix is introduced here.
+   subroutine accumulate_product_gf_bubble_optimized(vertices, left_a, right_a, right_gr, left_ga, scale, susceptibility, &
+                                                     workspace)
+      complex(rp), intent(in) :: vertices(:, :, :, :), left_a(:, :, :), right_a(:, :, :), &
+         right_gr(:, :, :), left_ga(:, :, :)
+      real(rp), intent(in) :: scale
+      complex(rp), intent(inout) :: susceptibility(:, :)
+      type(lr_product_gf_contraction_workspace), intent(inout) :: workspace
+
+      integer :: component_i, component_j, left_power_i, right_power_i, left_power_j, right_power_j
+      integer :: combined_left, combined_right, i, j, nb, nb2, product_dimension
+
+      nb = size(left_a, 1)
+      nb2 = nb*nb
+      product_dimension = size(susceptibility, 1)
+      if (size(left_a, 2) /= nb .or. size(right_a, 1) /= nb .or. size(right_a, 2) /= nb .or. &
+          size(right_gr, 1) /= nb .or. size(right_gr, 2) /= nb .or. size(left_ga, 1) /= nb .or. &
+          size(left_ga, 2) /= nb .or. size(susceptibility, 2) /= product_dimension .or. &
+          size(vertices, 1) /= nb .or. size(vertices, 2) /= nb .or. size(vertices, 3) /= 4 .or. &
+          size(vertices, 4) /= product_dimension) then
+         error stop 'accumulate_product_gf_bubble_optimized: product matrix shape mismatch'
+      end if
+      if (.not. allocated(workspace%vertices_flat) .or. size(workspace%vertices_flat, 1) /= nb2 .or. &
+          size(workspace%vertices_flat, 2) /= product_dimension .or. size(workspace%vertices_flat, 3) /= 4) then
+         error stop 'accumulate_product_gf_bubble_optimized: workspace shape mismatch'
+      end if
+
+      do component_i = 1, 4
+         left_power_i = mod(component_i - 1, 2)
+         right_power_i = (component_i - 1)/2
+         if (.not. workspace%active_component(component_i)) cycle
+         do component_j = 1, 4
+            left_power_j = mod(component_j - 1, 2)
+            right_power_j = (component_j - 1)/2
+            if (.not. workspace%active_component(component_j)) cycle
+            combined_left = left_power_i + left_power_j + 1
+            combined_right = right_power_i + right_power_j + 1
+
+            ! First Kubo term, with column i equal to vec(A_L V_i G_R).
+            do i = 1, product_dimension
+               workspace%temporary = matmul(matmul(left_a(:, :, combined_left), vertices(:, :, component_i, i)), &
+                  right_gr(:, :, combined_right))
+               workspace%transformed(:, i) = reshape(workspace%temporary, [nb2])
+            end do
+            workspace%contribution = matmul(transpose(workspace%transformed), &
+               conjg(workspace%vertices_flat(:, :, component_j)))
+            susceptibility = susceptibility + scale*workspace%contribution
+
+            ! Second Kubo term, with column j equal to
+            ! vec(A_R V_j^dagger G_L^A) and row i equal to vec(V_i^T)^T.
+            do j = 1, product_dimension
+               workspace%temporary = matmul(matmul(right_a(:, :, combined_right), &
+                  conjg(transpose(vertices(:, :, component_j, j)))), left_ga(:, :, combined_left))
+               workspace%transformed(:, j) = reshape(workspace%temporary, [nb2])
+            end do
+            workspace%contribution = matmul(transpose(workspace%vertices_transpose(:, :, component_i)), &
+               workspace%transformed)
+            susceptibility = susceptibility + scale*workspace%contribution
+         end do
+      end do
+   end subroutine accumulate_product_gf_bubble_optimized
+
+   subroutine validate_product_gf_inputs(product_basis, left_state, right_state, request, channel_kind, contraction_kind)
       type(lmto_product_response_basis), intent(in) :: product_basis
       type(lr_electronic_state), intent(in) :: left_state, right_state
       type(lr_product_gf_susceptibility_request), intent(in) :: request
-      integer, intent(out) :: channel_kind
+      integer, intent(out) :: channel_kind, contraction_kind
 
       real(rp) :: expected_k(3), expected_occupation, scale
       integer :: ik, ib, expected_nbasis
@@ -260,6 +386,14 @@ contains
          error stop 'evaluate_lr_product_gf_susceptibility: integration_points must be odd and at least three'
       end if
       if (request%energy_margin <= 0.0_rp) error stop 'evaluate_lr_product_gf_susceptibility: energy_margin must be positive'
+      select case (trim(request%contraction_backend))
+      case (lr_product_gf_contraction_optimized, 'blas', 'matrix')
+         contraction_kind = 1
+      case (lr_product_gf_contraction_scalar, 'oracle')
+         contraction_kind = 2
+      case default
+         error stop 'evaluate_lr_product_gf_susceptibility: contraction_backend must be optimized or scalar'
+      end select
       select case (trim(request%channel))
       case ('plus', 'chi_plus')
          channel_kind = 1

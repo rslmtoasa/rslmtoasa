@@ -702,6 +702,13 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(TddftProductionDriverFeatureOff PROPERTIES
     LABELS "integration;tddft;tdrun-01;scf;feature-off;regression"
     TIMEOUT 180)
+  add_test(NAME TddftProductGfClosure
+    COMMAND ${TestBinary} input_tdvk03_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftProductGfClosure PROPERTIES
+    LABELS "integration;tddft;tdvk-03;accepted-state;product-gf;closure"
+    DISABLED TRUE
+    TIMEOUT 7200)
   add_test(NAME UnitLrAlsdaKernelRejectProvenance
     COMMAND UnitLrAlsdaKernel provenance)
   set_tests_properties(UnitLrAlsdaKernelRejectProvenance PROPERTIES

@@ -500,3 +500,97 @@ oracle; GF/Lehmann convergence, off-diagonal spectral moments, finite-q
 [`TDDFT_RECIPROCAL_GF_QUADRATURE_AUDIT.md`](TDDFT_RECIPROCAL_GF_QUADRATURE_AUDIT.md).
 Production response equations, material inputs, and TDVK-02/TDVK-03 material
 status are unchanged.
+
+## TDVK-03 Fe reciprocal-backend closure
+
+**Status: `BLOCKED — RECIPROCAL GF MATERIAL COST`.** The independent
+real-axis GF/Kubo contraction is now production-owned for the compact GF
+service and has passed its scalar oracle at roundoff precision. The accepted
+Fe state and complete 232-coordinate closure harness are implemented, but the
+first controlled Fe GF sample did not return within a practical bounded run
+after the identical-state handoff. No material GF↔Lehmann verdict or physical
+interpretation is claimed.
+
+### Implementation-oracle evidence
+
+The optimized contraction remains an independent real-axis construction. It
+uses the existing weighted resolvents, spectral discontinuities, Simpson
+weights, Fermi/k-point prefactor, both Kubo terms, component vertices, signs,
+transposes, and conjugations. The scalar implementation remains available as
+the correctness oracle. The optimized path uses a matrix contraction and
+reuses invariant flattened vertices and scratch arrays for one evaluator call;
+it does not call the Lehmann accumulator or construct point-space response
+matrices.
+
+On the existing nontrivial compact fixture, with identical inputs and the
+complete compact result matrix compared before timing:
+
+| quantity | value |
+|---|---:|
+| `||chi_scalar||_F` | `1.08638325e+03` |
+| `||chi_opt||_F` | `1.08638325e+03` |
+| `dF` | `1.46752295e-14` |
+| relative Frobenius difference | `1.35083356e-17` |
+| `dInf` | `1.42177919e-14` |
+| scalar wall time | `7.89120799e-01 s` |
+| optimized wall time | `1.14153735e-01 s` |
+| speedup | `6.91279001x` |
+
+The already-landed TDVK-03B mixed-complex-eigensystem regression also passes;
+its independent LAPACK-generated complex Hermitian fixture, off-diagonal
+resolvents, finite-q channel, and basis-rotation invariant are recorded in
+[`TDDFT_RECIPROCAL_GF_QUADRATURE_AUDIT.md`](TDDFT_RECIPROCAL_GF_QUADRATURE_AUDIT.md).
+
+### Accepted Fe state and closure harness
+
+The committed audit input is
+[`input_tdvk03_fe.nml`](../tests/integration/tddft_driver_smoke/input_tdvk03_fe.nml).
+It uses the tracked bcc-Fe `spd` ground-state input, `response_lmax=-1`,
+Gamma, `chi_plus`, `omega=0`, physical `eta=0.04 Ry`, complete product space,
+and the existing GF controls (`gf_integration_points`,
+`gf_integration_eta`, and `gf_energy_margin`). The CTest entry is disabled
+because this is a multi-minute-to-hour material audit, not a default unit
+test.
+
+The isolated fresh-state run reached the accepted handoff once:
+
+| quantity | accepted value |
+|---|---:|
+| SCF residual | `1.912e-7` |
+| `nbasis / nbands` | `18 / 18` |
+| k mesh | `8x8x8 = 512` points |
+| Fermi level | `-8.51204947e-02 Ry` |
+| temperature | `300 K` |
+| spin moment | `2.267442 mu_B` |
+| compact product dimension | `232` |
+
+The driver forms the product basis, compact Lehmann result, and every GF
+sample after that handoff. All samples point to the same left state, exact
+Gamma endpoint, occupations, eigenvectors/eigenvalues, Fermi level,
+temperature, radial basis, product basis, channel, and physical response
+eta. It does not reconverge SCF between controls.
+
+The planned material ladder is explicit in the driver: width values
+`0.010`, `0.005`, `0.0025`, and `0.001 Ry`; Simpson grids resolved to
+`h/integration_eta <= 0.4`; a base/fine Simpson comparison; and margins
+`0.60`, `1.00`, and `2.00 Ry`. Each report includes complete compact-matrix
+`dF`, relative Frobenius difference, `dInf`, both norms, physical eta,
+integration eta, bounds, margin, point count, spacing, spacing ratio, and
+wall time.
+
+The first controlled sample entered the closure audit after the accepted
+handoff but was stopped before its GF result returned. Therefore there is no
+honest Fe GF integration table to report, and the material checklist remains
+open under the prescribed blocker rule:
+
+- [x] mixed-complex reciprocal-GF regression;
+- [x] scalar-versus-optimized complete-matrix oracle;
+- [x] independent optimized real-axis GF/Kubo route;
+- [x] one accepted Fe state reused by Lehmann and all planned GF controls;
+- [x] complete 232-coordinate Gamma `chi_plus`, static closure harness;
+- [x] separate Simpson, integration-width, and energy-window controls;
+- [x] complete matrix diagnostics and provenance output;
+- [ ] practical Fe GF ladder and material backend closure — blocked by runtime.
+
+No final GF↔Lehmann tolerance was invented, and no KXC, Dyson, Goldstone,
+or physical interpretation was added.

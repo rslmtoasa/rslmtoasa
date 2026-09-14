@@ -75,9 +75,20 @@ program test_tddft_production_driver
    call load_tddft_config(parser_fixture, parsed_config)
    open(newunit=parser_unit, file=parser_fixture, status='old', iostat=parser_ios)
    if (parser_ios == 0) close(parser_unit, status='delete')
-   if (.not. parsed_config%present .or. .not. parsed_config%enabled .or. parsed_config%reciprocal_backend_crosscheck) then
-      error stop 'absent reciprocal backend crosscheck flag did not default to false'
+   if (.not. parsed_config%present .or. .not. parsed_config%enabled .or. parsed_config%reciprocal_backend_crosscheck .or. &
+       parsed_config%gf_closure_audit) then
+      error stop 'optional TDDFT audit flags did not default to false'
    end if
+   open(newunit=parser_unit, file=parser_fixture, status='replace', action='write', iostat=parser_ios)
+   if (parser_ios /= 0) error stop 'could not create TDVK-03 parser fixture'
+   write(parser_unit, '(a)') '&tddft'
+   write(parser_unit, '(a)') ' enabled = .true., gf_closure_audit = .true.'
+   write(parser_unit, '(a)') '/'
+   close(parser_unit)
+   call load_tddft_config(parser_fixture, parsed_config)
+   open(newunit=parser_unit, file=parser_fixture, status='old', iostat=parser_ios)
+   if (parser_ios == 0) close(parser_unit, status='delete')
+   if (.not. parsed_config%gf_closure_audit) error stop 'TDVK-03 GF closure audit flag did not parse'
 
    ok = tddft_capability_is_supported(capability, reason)
    if (.not. ok) error stop 'baseline capability unexpectedly rejected'

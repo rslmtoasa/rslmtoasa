@@ -84,6 +84,7 @@ module tddft_production_driver_mod
       integer :: gf_integration_points = 2001
       real(rp) :: gf_integration_eta = 0.0_rp
       real(rp) :: gf_energy_margin = 1.0_rp
+      logical :: gf_closure_audit = .false.
       logical :: write_full_matrix = .true.
       character(len=256) :: output_file = 'tddft_response.dat'
    contains
@@ -160,6 +161,7 @@ contains
       this%gf_integration_points = 2001
       this%gf_integration_eta = 0.0_rp
       this%gf_energy_margin = 1.0_rp
+      this%gf_closure_audit = .false.
       this%write_full_matrix = .true.
       this%output_file = 'tddft_response.dat'
       if (allocated(this%q_list)) deallocate(this%q_list)
@@ -201,6 +203,7 @@ contains
       gf_integration_points = 2001
       gf_integration_eta = 0.0_rp
       gf_energy_margin = 1.0_rp
+      gf_closure_audit = .false.
       write_full_matrix = .true.
       output_file = 'tddft_response.dat'
 
@@ -237,6 +240,7 @@ contains
       config%gf_integration_points = gf_integration_points
       config%gf_integration_eta = gf_integration_eta
       config%gf_energy_margin = gf_energy_margin
+      config%gf_closure_audit = gf_closure_audit
       config%write_full_matrix = write_full_matrix
       config%output_file = trim(output_file)
 
@@ -512,10 +516,14 @@ contains
          return
       end if
       if (trim(config%backend) == tddft_driver_backend_product_gf) then
-         ! TDVK-02R3 is a guarded compact-GF execution/performance smoke only.
-         ! It stops at the independent real-axis product response and never
-         ! enters KXC, Goldstone, Dyson, loss, or the point-space result path.
-         call run_tddft_product_gf_smoke(config, response_space, radial_bases, left_state, endpoints)
+         ! Product-GF remains a bare-response validation seam.  The optional
+         ! closure audit reuses this already accepted reciprocal state for the
+         ! Lehmann reference and every GF control sample.
+         if (config%gf_closure_audit) then
+            call run_tddft_product_gf_closure(config, response_space, radial_bases, left_state, endpoints)
+         else
+            call run_tddft_product_gf_smoke(config, response_space, radial_bases, left_state, endpoints)
+         end if
          return
       end if
       if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
@@ -677,6 +685,161 @@ contains
       write (*, '(a,i0,a,i0,a,i0)') '  gf_matrix_bytes=', result%gf_matrix_memory_bytes, &
          ' susceptibility_bytes=', result%susceptibility_memory_bytes, ' product_dimension=', result%product_dimension
    end subroutine run_tddft_product_gf_smoke
+
+   !> TDVK-03 accepted-state closure audit.  The SCF handoff above has already
+   !> prepared one immutable reciprocal state and all exact folded endpoints.
+   !> This routine deliberately evaluates the compact Lehmann reference once,
+   !> then varies only GF integration controls while keeping those snapshots
+   !> and the complete 232-coordinate product basis fixed.
+   subroutine run_tddft_product_gf_closure(config, response_space, radial_bases, left_state, endpoints)
+      type(tddft_production_config), intent(in) :: config
+      type(response_space_layout), intent(in) :: response_space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(lr_electronic_state), target, intent(in) :: left_state
+      type(lr_electronic_state), target, intent(in) :: endpoints(:)
+      type(lmto_product_response_basis), target :: product_plus, product_minus
+      type(lr_product_ks_susceptibility_request) :: lehmann_request
+      type(lr_product_ks_susceptibility_result) :: lehmann_result
+      real(rp), parameter :: eta_scale(4) = [10.0_rp, 5.0_rp, 2.5_rp, 1.0_rp]
+      real(rp), parameter :: margin_increment(3) = [0.0_rp, 0.4_rp, 1.4_rp]
+      real(rp) :: integration_eta, base_integration_eta, margin
+      integer :: gamma_index, i, integration_points
+      logical :: finite_response
+
+      gamma_index = find_gamma_q(config%q_list)
+      if (gamma_index > size(endpoints)) error stop 'TDVK-03 closure: Gamma endpoint is unavailable'
+      call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
+      call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
+      if (product_plus%product_dimension /= 232 .or. product_minus%product_dimension /= 232) then
+         error stop 'TDVK-03 closure: accepted Fe product dimension is not 232'
+      end if
+
+      lehmann_request%q = config%q_list(:, gamma_index)
+      lehmann_request%frequencies = [0.0_rp]
+      lehmann_request%eta = config%eta
+      lehmann_request%channel = config%channel
+      lehmann_request%electronic_state => left_state
+      lehmann_request%q_endpoint_state => endpoints(gamma_index)
+      if (trim(config%channel) == 'chi_plus') then
+         lehmann_request%product_basis => product_plus
+      else
+         lehmann_request%product_basis => product_minus
+      end if
+      call evaluate_lr_product_ks_susceptibility(lehmann_request, lehmann_result)
+      finite_response = all(ieee_is_finite(real(lehmann_result%susceptibility, rp))) .and. &
+         all(ieee_is_finite(aimag(lehmann_result%susceptibility)))
+      if (.not. finite_response) error stop 'TDVK-03 closure: Lehmann reference contains NaN or Inf'
+
+      base_integration_eta = config%gf_integration_eta
+      if (base_integration_eta <= 0.0_rp) base_integration_eta = config%eta/40.0_rp
+      if (base_integration_eta <= 0.0_rp .or. base_integration_eta >= config%eta) then
+         error stop 'TDVK-03 closure: invalid base integration_eta'
+      end if
+      write (*, '(a)') 'TDVK-03 Fe reciprocal-backend closure: one accepted state, complete compact product space'
+      write (*, '(a,i0,a,i0,a,i0,a,es16.8,a,es16.8,a,a)') '  accepted_state nbasis=', left_state%nbasis, &
+         ' nbands=', left_state%nbands, ' nk=', left_state%nk, ' EF_Ry=', left_state%fermi_level, &
+         ' temperature_K=', left_state%temperature, ' moment provenance=accepted LR-01 radial snapshot'
+      write (*, '(a,3(es16.8,1x),a,a,a,i0)') '  q=', config%q_list(:, gamma_index), ' channel=', trim(config%channel), &
+         ' product_dimension=', product_plus%product_dimension
+
+      ! Width ladder.  The point count is derived from the same accepted
+      ! energy span for each width so h/integration_eta remains controlled.
+      do i = 1, size(eta_scale)
+         integration_eta = eta_scale(i)*base_integration_eta
+         integration_points = resolved_simpson_points(left_state, endpoints(gamma_index), integration_eta, &
+            config%gf_energy_margin)
+         if (i == size(eta_scale)) integration_points = max(integration_points, config%gf_integration_points)
+         call report_product_gf_closure_sample('eta_ladder', config, response_space, product_plus, product_minus, &
+            left_state, endpoints(gamma_index), lehmann_result, integration_points, integration_eta, config%gf_energy_margin)
+      end do
+
+      ! Simpson-resolution ladder at the narrowest controlled width.  Both
+      ! grids are resolved; their difference isolates remaining mesh error.
+      integration_points = resolved_simpson_points(left_state, endpoints(gamma_index), base_integration_eta, &
+         config%gf_energy_margin)
+      integration_points = max(integration_points, config%gf_integration_points)
+      call report_product_gf_closure_sample('simpson_base', config, response_space, product_plus, product_minus, &
+         left_state, endpoints(gamma_index), lehmann_result, integration_points, base_integration_eta, config%gf_energy_margin)
+      call report_product_gf_closure_sample('simpson_fine', config, response_space, product_plus, product_minus, &
+         left_state, endpoints(gamma_index), lehmann_result, 2*(integration_points - 1) + 1, base_integration_eta, &
+         config%gf_energy_margin)
+
+      ! Energy-window ladder.  Choose a resolved grid independently at every
+      ! margin so the window comparison is not contaminated by coarse Simpson
+      ! spacing.
+      do i = 1, size(margin_increment)
+         margin = config%gf_energy_margin + margin_increment(i)
+         integration_points = resolved_simpson_points(left_state, endpoints(gamma_index), base_integration_eta, margin)
+         call report_product_gf_closure_sample('window_ladder', config, response_space, product_plus, product_minus, &
+            left_state, endpoints(gamma_index), lehmann_result, integration_points, base_integration_eta, margin)
+      end do
+      write (*, '(a)') 'TDVK-03 Fe reciprocal-backend closure: audit complete; evidence returned without physical interpretation'
+   end subroutine run_tddft_product_gf_closure
+
+   integer function resolved_simpson_points(left_state, right_state, integration_eta, margin) result(points)
+      type(lr_electronic_state), intent(in) :: left_state, right_state
+      real(rp), intent(in) :: integration_eta, margin
+      real(rp) :: span
+      integer :: intervals
+
+      span = max(maxval(left_state%eigenvalues), maxval(right_state%eigenvalues)) - &
+         min(minval(left_state%eigenvalues), minval(right_state%eigenvalues)) + 2.0_rp*margin
+      intervals = ceiling(span/(0.4_rp*integration_eta))
+      if (intervals < 2) intervals = 2
+      if (mod(intervals, 2) /= 0) intervals = intervals + 1
+      points = intervals + 1
+   end function resolved_simpson_points
+
+   subroutine report_product_gf_closure_sample(tag, config, response_space, product_plus, product_minus, left_state, endpoint, &
+                                               lehmann_result, integration_points, integration_eta, energy_margin)
+      character(len=*), intent(in) :: tag
+      type(tddft_production_config), intent(in) :: config
+      type(response_space_layout), intent(in) :: response_space
+      type(lmto_product_response_basis), target, intent(in) :: product_plus, product_minus
+      type(lr_electronic_state), target, intent(in) :: left_state, endpoint
+      type(lr_product_ks_susceptibility_result), intent(in) :: lehmann_result
+      integer, intent(in) :: integration_points
+      real(rp), intent(in) :: integration_eta, energy_margin
+      type(lr_product_gf_susceptibility_request) :: gf_request
+      type(lr_product_gf_susceptibility_result) :: gf_result
+      real(rp) :: norm_lehmann, norm_gf, difference_frobenius, relative_frobenius, difference_infinity
+      logical :: finite_response
+      type(lmto_product_response_basis), pointer :: product
+
+      if (trim(config%channel) == 'chi_plus') then
+         product => product_plus
+      else
+         product => product_minus
+      end if
+      gf_request%q = config%q_list(:, find_gamma_q(config%q_list))
+      gf_request%frequencies = [0.0_rp]
+      gf_request%eta = config%eta
+      gf_request%channel = config%channel
+      gf_request%integration_points = integration_points
+      gf_request%integration_eta = integration_eta
+      gf_request%energy_margin = energy_margin
+      gf_request%product_basis => product
+      gf_request%electronic_state => left_state
+      gf_request%q_endpoint_state => endpoint
+      call evaluate_lr_product_gf_susceptibility(gf_request, gf_result)
+      finite_response = all(ieee_is_finite(real(gf_result%susceptibility, rp))) .and. &
+         all(ieee_is_finite(aimag(gf_result%susceptibility)))
+      if (.not. finite_response) error stop 'TDVK-03 closure: GF response contains NaN or Inf'
+      norm_lehmann = sqrt(sum(abs(lehmann_result%susceptibility(:, :, 1))**2))
+      norm_gf = sqrt(sum(abs(gf_result%susceptibility(:, :, 1))**2))
+      difference_frobenius = sqrt(sum(abs(lehmann_result%susceptibility(:, :, 1) - &
+         gf_result%susceptibility(:, :, 1))**2))
+      relative_frobenius = difference_frobenius/max(norm_lehmann, norm_gf, tiny(1.0_rp))
+      difference_infinity = maxval(abs(lehmann_result%susceptibility(:, :, 1) - gf_result%susceptibility(:, :, 1)))
+      write (*, '(a,a,a,i0,4(a,es16.8))') '  ', trim(tag), ' N=', integration_points, &
+         ' eta=', config%eta, ' integration_eta=', integration_eta, ' margin=', energy_margin, &
+         ' energy_min=', gf_result%energy_min
+      write (*, '(a,8(a,es16.8))') '    ', ' energy_max=', gf_result%energy_max, ' h=', gf_result%energy_spacing, &
+         ' h_over_eta=', gf_result%spacing_over_integration_eta, ' norm_lehmann=', norm_lehmann, &
+         ' norm_gf=', norm_gf, ' dF=', difference_frobenius, ' rF=', relative_frobenius, &
+         ' dInf=', difference_infinity
+      write (*, '(a,a,es16.8)') '    ', ' wall_s=', gf_result%wall_time_seconds
+   end subroutine report_product_gf_closure_sample
 
    subroutine run_product_transition_oracle(response_space, radial_bases, product, left_state, right_state, channel_kind, maximum_error)
       type(response_space_layout), intent(in) :: response_space

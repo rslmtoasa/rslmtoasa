@@ -22,7 +22,8 @@ program test_lr_product_gf_susceptibility
       lr_channel_plus, lr_channel_minus, lr_fermi_dirac_occupation, evaluate_lr_product_ks_susceptibility
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
    use lr_product_gf_susceptibility_mod, only: lr_product_gf_susceptibility_request, &
-      lr_product_gf_susceptibility_result, evaluate_lr_product_gf_susceptibility
+      lr_product_gf_susceptibility_result, lr_product_gf_contraction_scalar, &
+      lr_product_gf_contraction_optimized, evaluate_lr_product_gf_susceptibility
    implicit none
 
    integer, parameter :: nr = 7, orbital_lmax = 1, response_lmax = 2, nsite = 1
@@ -72,11 +73,11 @@ program test_lr_product_gf_susceptibility
    end if
 
    call run_case(product_plus, lr_channel_plus, q_gamma, q_gamma, 21, state, endpoint, failed, &
-      maximum_projection_residual)
+      maximum_projection_residual, .true.)
    call run_case(product_plus, lr_channel_plus, q_gamma, q_gamma, 41, state, endpoint, failed, &
-      maximum_projection_residual)
+      maximum_projection_residual, .false.)
    call run_case(product_minus, lr_channel_minus, q_finite, q_finite, 21, state, endpoint, failed, &
-      maximum_projection_residual)
+      maximum_projection_residual, .false.)
 
    if (maxval(abs(state%eigenvalues - eigenvalues)) > 0.0_rp .or. &
        maxval(abs(state%eigenvectors - eigenvectors)) > 0.0_rp .or. &
@@ -218,7 +219,8 @@ contains
       deallocate(vertices, reference, r1_coordinates, reference_coordinates, contraction)
    end subroutine component_vertex_checks
 
-   subroutine run_case(product, channel, q, endpoint_q, integration_points, state, endpoint, failed, maximum_residual)
+   subroutine run_case(product, channel, q, endpoint_q, integration_points, state, endpoint, failed, maximum_residual, &
+                       compare_contractions)
       type(lmto_product_response_basis), target, intent(in) :: product
       character(len=*), intent(in) :: channel
       real(rp), intent(in) :: q(3), endpoint_q(3)
@@ -237,6 +239,10 @@ contains
       type(lr_product_ks_susceptibility_result) :: lehmann_result
       complex(rp), allocatable :: reference(:, :, :)
       real(rp) :: absolute, reference_norm, relative, diagnostic_relative, d_inf
+      logical, intent(in) :: compare_contractions
+      type(lr_product_gf_susceptibility_result) :: scalar_gf_result
+      real(rp) :: optimized_norm, scalar_norm, contraction_difference, contraction_relative, contraction_d_inf, &
+         scalar_wall, optimized_wall, speedup
 
       call endpoint%initialize(state%eigenvalues, state%eigenvectors, &
          spread(endpoint_q, 2, nk), state%k_weights, state%occupations, state%fermi_level, state%temperature)
@@ -270,6 +276,7 @@ contains
       product_gf_request%integration_points = integration_points
       product_gf_request%integration_eta = 0.0_rp
       product_gf_request%energy_margin = energy_margin
+      product_gf_request%contraction_backend = lr_product_gf_contraction_optimized
       product_gf_request%product_basis => product
       product_gf_request%electronic_state => state
       product_gf_request%q_endpoint_state => endpoint
@@ -279,6 +286,30 @@ contains
           product_gf_result%point_response_allocated .or. product_gf_result%product_dimension /= product%product_dimension .or. &
           trim(product_gf_result%response_representation) /= 'weighted-orthonormal LMTO product representation') then
          failed = .true.
+      end if
+      if (trim(product_gf_result%contraction_backend) /= lr_product_gf_contraction_optimized .or. &
+          product_gf_result%energy_spacing <= 0.0_rp .or. product_gf_result%spacing_over_integration_eta <= 0.0_rp) then
+         failed = .true.
+      end if
+      if (compare_contractions) then
+         product_gf_request%contraction_backend = lr_product_gf_contraction_scalar
+         call evaluate_lr_product_gf_susceptibility(product_gf_request, scalar_gf_result)
+         optimized_norm = sqrt(sum(abs(product_gf_result%susceptibility)**2))
+         scalar_norm = sqrt(sum(abs(scalar_gf_result%susceptibility)**2))
+         contraction_difference = sqrt(sum(abs(product_gf_result%susceptibility - scalar_gf_result%susceptibility)**2))
+         contraction_relative = contraction_difference/max(optimized_norm, scalar_norm, epsilon(1.0_rp))
+         contraction_d_inf = maxval(abs(product_gf_result%susceptibility - scalar_gf_result%susceptibility))
+         scalar_wall = scalar_gf_result%wall_time_seconds
+         optimized_wall = product_gf_result%wall_time_seconds
+         speedup = scalar_wall/max(optimized_wall, epsilon(1.0_rp))
+         write (*, '(a,es16.8,a,es16.8,a,es16.8,a,es16.8,a,es16.8,a,es16.8,a,es16.8,a,es16.8)') &
+            'GF contraction oracle norm_scalar=', scalar_norm, ' norm_optimized=', optimized_norm, &
+            ' dF=', contraction_difference, ' rF=', contraction_relative, ' dInf=', contraction_d_inf, &
+            ' wall_scalar=', scalar_wall, ' wall_optimized=', optimized_wall, ' speedup=', speedup
+         if (trim(scalar_gf_result%contraction_backend) /= lr_product_gf_contraction_scalar .or. &
+             contraction_relative >= tolerance .or. contraction_d_inf >= tolerance*max(1.0_rp, scalar_norm)) then
+            failed = .true.
+         end if
       end if
       allocate(reference(product%product_dimension, product%product_dimension, nfrequency))
       call project_point_gf_to_product(product, point_gf_result%susceptibility, reference)
