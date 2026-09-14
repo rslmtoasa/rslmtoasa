@@ -1,9 +1,11 @@
 # TDVK-03A — reciprocal-GF real-axis quadrature closure audit
 
-**Status: Case A — `REAL-AXIS GF FORMULATION NUMERICALLY CONSISTENT`**
+**Status: Historical TDVK-03A fixture audit; the TDVK-03R factorized backend
+and Fe closure evidence are recorded below.**
 
-This is a fixture-level numerical audit. It does not change the TDVK-02 or
-TDVK-03 material status, and it does not claim a Fe response calculation.
+The original TDVK-03A section is a fixture-level numerical audit. The later
+TDVK-03R section records the separate performance remediation and the resumed
+Fe backend closure; neither section adds physical interpretation.
 
 ## Provenance and scope
 
@@ -496,3 +498,120 @@ multi-minute diagnostic samples. The mixed fixture therefore does not run in
 the default CTest set. No `0.001 Ry` / 600-second regime was run, no
 production physics or material input was changed, and no Fe/native-RSGF
 claim is made.
+
+## TDVK-03R — real-axis GF quadrature/contraction factorization
+
+**Status: PASS for the blocker remediation; the parent TDVK-03 result is
+`PASS CANDIDATE`.** This section records the implementation and numerical
+evidence for the factorized reciprocal-GF backend. The scalar implementation
+and the `38102e1` optimized dense-resolvent implementation remain compiled
+and callable as correctness oracles.
+
+### Algebraic reordering and independence
+
+For each k point, the four existing component vertices are transformed as
+`Vtilde(I,p,q,n,m)=<L n|V(I,p,q)|R m>`. The factorized transition amplitude is
+then formed directly from the GF component-vertex path:
+
+```text
+T(I,n,m) = sum_(p,q=0,1) epsilon_L(n)^p epsilon_R(m)^q Vtilde(I,p,q,n,m)
+```
+
+The real-energy loop still explicitly performs the same Simpson integral. It
+accumulates only the scalar band-pair kernel:
+
+```text
+K_nm(k,omega) = sum_E w_E f(E) 2 w_k/sum(w_k)
+                [a_Ln(E; integration_eta) g_Rm^R(E+omega; eta)
+                 + a_Rm(E; integration_eta) g_Ln^A(E-omega; eta)]
+```
+
+where `a=i(GR-GA)/(2*pi)` uses the finite integration broadening and the
+shifted denominators retain the physical response broadening. After the
+quadrature, the complete compact matrix is formed as
+`chi(I,J)+=sum_nm K_nm T(I,n,m) T(J,n,m)*`. Thus the factorized backend
+commutes only finite band sums and the compact contraction through the
+existing real-axis integral; it does not substitute the Lehmann kernel or
+call the Lehmann accumulator. The exact `component=1+p+2*q` convention,
+both Kubo terms, circular channels, q endpoint, occupations, k weights,
+factor of two, signs, conjugations, and complete 232-coordinate product
+space are unchanged.
+
+### Correctness hierarchy
+
+The transition-factorization oracle on the mixed-complex fixture produced:
+
+| channel | maximum absolute error | maximum relative error |
+|---|---:|---:|
+| `chi_plus` | `1.73046935e-15` | `2.13050107e-16` |
+| `chi_minus` | `1.38624879e-16` | `1.53171174e-16` |
+
+The compact unit fixture's maximum GF transition residual was `1.2064e-16`.
+The complete compact matrix was then compared on identical states, q,
+channel, frequency, physical eta, integration eta, energy window, and
+Simpson grid. Pairwise values below are ordered `scalar/optimized`,
+`scalar/factorized`, `optimized/factorized`.
+
+| fixture | omega (Ry) | all three norms | pairwise `dF` | pairwise `rF` | pairwise `dInf` |
+|---|---:|---:|---|---|---|
+| mixed Gamma | `0.00`, `0.17` | `1.79506145e+03` | `1.1081e-14`, `5.0295e-12`, `5.0284e-12` | `6.1728e-18`, `2.8018e-15`, `2.8012e-15` | `7.3241e-15`, `3.8666e-12`, `3.8666e-12` |
+| mixed q=`(0.23,0,0)` | `0.00` | `1.86403113e+03` | `6.9717e-14`, `1.2277e-11`, `1.2266e-11` | `3.7401e-17`, `6.5860e-15`, `6.5804e-15` | `6.2841e-14`, `9.0982e-12`, `9.0982e-12` |
+
+All pairwise relative differences are below the existing `1e-10` response
+regression threshold, including Gamma/static, finite frequency, finite q,
+complex eigenvectors, and nonconstant endpoint-energy dependence.
+
+### Performance evidence
+
+Correctness was decided before timing. Timings below are in the same pair
+order for speedup and in `scalar`, `optimized`, `factorized` order for wall
+time:
+
+| fixture | integration points | wall time (s) | speedup |
+|---|---:|---|---|
+| mixed Gamma, 0/0.17 Ry | `801` | `30.2637 / 4.22790 / 0.00296218` | `7.158 / 1.0217e4 / 1.4273e3` |
+| mixed finite q, 0 Ry | `3201` | `61.6816 / 8.96611 / 0.00593637` | `6.879 / 1.0390e4 / 1.5104e3` |
+| compact unit Gamma/static | `21` | `0.787328 / 0.112390 / 0.000502181` | `7.005 / 1.5678e3 / 2.2380e2` |
+| compact unit finite q | `21` | `0.795392 / 0.112959 / 0.000492368` | `7.041 / 1.6154e3 / 2.2942e2` |
+
+For the Fe accepted state, the factorized evaluator reports no dense GF matrix
+allocation. Its major allocations are approximately 4.81 MB for the complete
+component vertex tensor, 1.20 MB for one-k transition amplitudes, and 0.86 MB
+for the compact 232-by-232 response.
+
+### Resumed Fe TDVK-03 closure
+
+The same production input and one accepted `8x8x8` Fe state were used for the
+complete Gamma `chi_plus`, `omega=0`, `eta=0.04 Ry` ladder. The accepted state
+was `18` basis states/bands, `EF=-8.51191027e-02 Ry`, `T=300 K`, moment
+`2.267445 mu_B`, and SCF residual `6.617e-7`. The compact product dimension
+was `232`; every sample reused this state and the exact Gamma endpoint.
+
+| sample | integration eta (Ry) | N | margin (Ry) | h/integration eta | `||chi_L||_F` | `||chi_GF||_F` | dF | rF | dInf | wall (s) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| eta ladder | `0.0100` | `953` | `0.60` | `0.399426` | `3.79995096` | `3.61768630` | `2.57226666e-01` | `6.76921014e-02` | `1.40114603e-01` | `7.67390` |
+| eta ladder | `0.0050` | `1903` | `0.60` | `0.399846` | `3.79995096` | `3.70701147` | `1.28850597e-01` | `3.39084894e-02` | `7.03065297e-02` | `9.34962` |
+| eta ladder | `0.0025` | `3805` | `0.60` | `0.399846` | `3.79995096` | `3.75267245` | `6.48187541e-02` | `1.70577870e-02` | `3.53119546e-02` | `12.7772` |
+| eta ladder / Simpson base / window 0.60 | `0.0010` | `9509` | `0.60` | `0.399931` | `3.79995096` | `3.78102764` | `2.58386514e-02` | `6.79973285e-03` | `1.40767444e-02` | `23.0595 / 23.1370 / 23.0656` |
+| Simpson fine | `0.0010` | `19017` | `0.60` | `0.199965` | `3.79995096` | `3.78098824` | `2.58942459e-02` | `6.81436317e-03` | `1.40921415e-02` | `40.3156` |
+| window 1.00 | `0.0010` | `11509` | `1.00` | `0.399943` | `3.79995096` | `3.78117876` | `2.57510806e-02` | `6.77668760e-03` | `1.40222232e-02` | `26.7371` |
+| window 2.00 | `0.0010` | `16509` | `2.00` | `0.399960` | `3.79995096` | `3.78130496` | `2.56779024e-02` | `6.75742994e-03` | `1.39758163e-02` | `35.8025` |
+
+The GF/Lehmann discrepancy decreases monotonically across the integration_eta
+ladder. The base/fine Simpson change and the margin changes are small relative
+to the finite-width trend. The first controlled Fe sample completed in
+`7.67390 s`; all later prescribed controls completed, so the original material
+cost gate is open. No final material GF↔Lehmann tolerance was invented.
+
+### Commands
+
+```text
+cmake --build build -j2 --target UnitLrProductGfSusceptibility \
+  UnitLrProductGfQuadratureAudit UnitTddftProductionDriver rslmto.x
+ctest --test-dir build --output-on-failure -R \
+  '^(UnitLrLmtoProductResponseBasis|UnitLrLmtoProductResponse|UnitLrLmtoProductStrictRankGuard|UnitLrProductKsSusceptibility|UnitLrGfSusceptibility|UnitLrProductGfSusceptibility|UnitLrProductGfSusceptibilityRejectIntegrationEta|UnitTddftProductionDriver)$'
+```
+
+Result: **8/8 focused tests passed**. The disabled long-form mixed audit was
+also run directly for `mixed_one 1` and `mixed_q`; the Fe production closure
+run completed with no GF errors or non-finite compact response.

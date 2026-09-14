@@ -14,13 +14,16 @@ program test_lr_product_gf_quadrature_audit
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
    use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, &
       lmto_product_channel_plus, lmto_product_channel_minus
+   use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state
    use lr_ks_susceptibility_mod, only: lr_electronic_state, &
       lr_product_ks_susceptibility_request, lr_product_ks_susceptibility_result, &
       lr_channel_plus, lr_channel_minus, lr_fermi_dirac_occupation, &
       evaluate_lr_product_ks_susceptibility
    use lr_gf_susceptibility_mod, only: build_weighted_resolvent
    use lr_product_gf_susceptibility_mod, only: lr_product_gf_susceptibility_request, &
-      lr_product_gf_susceptibility_result, evaluate_lr_product_gf_susceptibility
+      lr_product_gf_susceptibility_result, evaluate_lr_product_gf_susceptibility, &
+      build_lr_product_gf_transition_amplitudes, lr_product_gf_contraction_scalar, &
+      lr_product_gf_contraction_optimized, lr_product_gf_contraction_factorized
    implicit none
 
    integer, parameter :: nr = 7, orbital_lmax = 1, response_lmax = 2, nsite = 1
@@ -73,6 +76,8 @@ program test_lr_product_gf_quadrature_audit
 
    if (index(trim(mode), 'mixed') == 1) then
       write (*, '(a)') 'TDVK-03B mixed-eigenvector reciprocal-GF closure audit'
+      call report_transition_factorization_oracle(product_plus, 'chi_plus')
+      call report_transition_factorization_oracle(product_minus, 'chi_minus')
    else
       write (*, '(a)') 'TDVK-03A reciprocal-GF quadrature audit'
    end if
@@ -124,13 +129,13 @@ program test_lr_product_gf_quadrature_audit
       call report_mixed_fixture()
       call report_moments('mixed_one', state, mixed_eta_points(selected_index), mixed_eta_values(selected_index), 1.0_rp)
       call report_response('mixed_one', product_plus, lr_channel_plus, q_gamma, gamma_frequencies, &
-         mixed_eta_points(selected_index), mixed_eta_values(selected_index), 1.0_rp)
+         mixed_eta_points(selected_index), mixed_eta_values(selected_index), 1.0_rp, .true.)
    case ('mixed_q')
       call report_mixed_fixture()
       call require_resolved_mesh(mixed_eta_points(nmixed), mixed_eta_values(nmixed), 1.0_rp, state)
       call report_moments('mixed_q', state, mixed_eta_points(nmixed), mixed_eta_values(nmixed), 1.0_rp)
       call report_response('mixed_q', product_minus, lr_channel_minus, q_finite, static_frequency, &
-         mixed_eta_points(nmixed), mixed_eta_values(nmixed), 1.0_rp)
+         mixed_eta_points(nmixed), mixed_eta_values(nmixed), 1.0_rp, .true.)
    case ('mixed_rotation')
       call report_mixed_fixture()
       call run_rotation_oracle()
@@ -250,6 +255,40 @@ contains
          end do
       end do
    end subroutine build_mixed_electronic_fixture
+
+   subroutine report_transition_factorization_oracle(product, channel)
+      type(lmto_product_response_basis), intent(in) :: product
+      character(len=*), intent(in) :: channel
+      complex(rp), allocatable :: vertices(:, :, :, :), transitions(:, :, :), reference(:)
+      type(pauli_endpoint_state) :: left_band, right_band
+      real(rp) :: absolute_error, relative_error, maximum_absolute, maximum_relative, scale
+      integer, parameter :: selected_left(3) = [1, 3, 5], selected_right(3) = [2, 8, 7]
+      integer :: pair
+
+      call product%component_vertex_tensor(vertices)
+      allocate(transitions(nbands, nbands, product%product_dimension), reference(product%product_dimension))
+      call build_lr_product_gf_transition_amplitudes(vertices, state, 1, state, 1, transitions)
+      maximum_absolute = 0.0_rp
+      maximum_relative = 0.0_rp
+      do pair = 1, size(selected_left)
+         call left_band%initialize(state%eigenvalues(selected_left(pair), 1), &
+            state%eigenvectors(:, selected_left(pair), 1))
+         call right_band%initialize(state%eigenvalues(selected_right(pair), 1), &
+            state%eigenvectors(:, selected_right(pair), 1))
+         call product%transition_coordinates(left_band, right_band, reference)
+         scale = max(sqrt(sum(abs(reference)**2)), epsilon(1.0_rp))
+         absolute_error = sqrt(sum(abs(transitions(selected_left(pair), selected_right(pair), :) - reference)**2))
+         relative_error = absolute_error/scale
+         maximum_absolute = max(maximum_absolute, absolute_error)
+         maximum_relative = max(maximum_relative, relative_error)
+      end do
+      if (maximum_relative >= 1.0e-10_rp) then
+         error stop 'test_lr_product_gf_quadrature_audit: GF transition factorization oracle failed'
+      end if
+      write (*, '(a,1x,a,1x,a,es16.8,1x,a,es16.8)') 'TRANSITION_FACTORIZATION', 'channel='//trim(channel), &
+         'max_abs=', maximum_absolute, 'max_rel=', maximum_relative
+      deallocate(vertices, transitions, reference)
+   end subroutine report_transition_factorization_oracle
 
    subroutine report_mixed_fixture()
       complex(rp), allocatable :: moment(:, :), moment_fermi(:, :)
@@ -471,14 +510,16 @@ contains
       end do
    end subroutine exact_moment
 
-   subroutine report_response(phase, product, channel, q, frequencies, ne, integration_eta, margin)
+   subroutine report_response(phase, product, channel, q, frequencies, ne, integration_eta, margin, compare_contractions)
       character(len=*), intent(in) :: phase, channel
       type(lmto_product_response_basis), target, intent(in) :: product
       real(rp), intent(in) :: q(3), frequencies(:), integration_eta, margin
       integer, intent(in) :: ne
+      logical, intent(in), optional :: compare_contractions
 
       type(lr_product_gf_susceptibility_request) :: gf_request
       type(lr_product_gf_susceptibility_result) :: gf_result
+      type(lr_product_gf_susceptibility_result) :: optimized_result, scalar_result
       type(lr_product_ks_susceptibility_request) :: lehmann_request
       type(lr_product_ks_susceptibility_result) :: lehmann_result
       type(lr_electronic_state), target :: local_endpoint
@@ -494,10 +535,23 @@ contains
       gf_request%integration_points = ne
       gf_request%integration_eta = integration_eta
       gf_request%energy_margin = margin
+      gf_request%contraction_backend = lr_product_gf_contraction_factorized
       gf_request%product_basis => product
       gf_request%electronic_state => state
       gf_request%q_endpoint_state => local_endpoint
       call evaluate_lr_product_gf_susceptibility(gf_request, gf_result)
+
+      if (present(compare_contractions)) then
+         if (compare_contractions) then
+            gf_request%contraction_backend = lr_product_gf_contraction_optimized
+            call evaluate_lr_product_gf_susceptibility(gf_request, optimized_result)
+            gf_request%contraction_backend = lr_product_gf_contraction_scalar
+            call evaluate_lr_product_gf_susceptibility(gf_request, scalar_result)
+            do ifrequency = 1, size(frequencies)
+               call report_three_way_contraction(phase, frequencies(ifrequency), scalar_result, optimized_result, gf_result)
+            end do
+         end if
+      end if
 
       lehmann_request%q = q
       lehmann_request%frequencies = frequencies
@@ -529,6 +583,58 @@ contains
       deallocate(local_endpoint%k_points, local_endpoint%k_weights, local_endpoint%eigenvalues, &
          local_endpoint%eigenvectors, local_endpoint%occupations)
    end subroutine report_response
+
+   subroutine report_three_way_contraction(phase, frequency, scalar_result, optimized_result, factorized_result)
+      character(len=*), intent(in) :: phase
+      real(rp), intent(in) :: frequency
+      type(lr_product_gf_susceptibility_result), intent(in) :: scalar_result, optimized_result, factorized_result
+      real(rp) :: norm_scalar, norm_optimized, norm_factorized
+      real(rp) :: scalar_optimized_dF, scalar_factorized_dF, optimized_factorized_dF
+      real(rp) :: scalar_optimized_rF, scalar_factorized_rF, optimized_factorized_rF
+      real(rp) :: scalar_optimized_dInf, scalar_factorized_dInf, optimized_factorized_dInf
+      real(rp) :: scale
+
+      norm_scalar = sqrt(sum(abs(scalar_result%susceptibility(:, :, 1))**2))
+      norm_optimized = sqrt(sum(abs(optimized_result%susceptibility(:, :, 1))**2))
+      norm_factorized = sqrt(sum(abs(factorized_result%susceptibility(:, :, 1))**2))
+      scalar_optimized_dF = matrix_difference(scalar_result%susceptibility(:, :, 1), &
+         optimized_result%susceptibility(:, :, 1))
+      scalar_factorized_dF = matrix_difference(scalar_result%susceptibility(:, :, 1), &
+         factorized_result%susceptibility(:, :, 1))
+      optimized_factorized_dF = matrix_difference(optimized_result%susceptibility(:, :, 1), &
+         factorized_result%susceptibility(:, :, 1))
+      scale = max(norm_scalar, norm_optimized, norm_factorized, epsilon(1.0_rp))
+      scalar_optimized_rF = scalar_optimized_dF/scale
+      scalar_factorized_rF = scalar_factorized_dF/scale
+      optimized_factorized_rF = optimized_factorized_dF/scale
+      scalar_optimized_dInf = maxval(abs(scalar_result%susceptibility(:, :, 1) - &
+         optimized_result%susceptibility(:, :, 1)))
+      scalar_factorized_dInf = maxval(abs(scalar_result%susceptibility(:, :, 1) - &
+         factorized_result%susceptibility(:, :, 1)))
+      optimized_factorized_dInf = maxval(abs(optimized_result%susceptibility(:, :, 1) - &
+         factorized_result%susceptibility(:, :, 1)))
+      if (max(scalar_optimized_rF, scalar_factorized_rF, optimized_factorized_rF) >= 1.0e-10_rp .or. &
+          max(scalar_optimized_dInf, scalar_factorized_dInf, optimized_factorized_dInf) >= 1.0e-10_rp*max(1.0_rp, scale)) then
+         error stop 'test_lr_product_gf_quadrature_audit: three-way GF contraction oracle failed'
+      end if
+      write (*, '(a,1x,a,1x,a,es16.8)') 'THREE_WAY', 'phase='//trim(phase), 'frequency=', frequency
+      write (*, '(a,1x,a,3(1x,es16.8))') 'THREE_WAY', 'norms=', norm_scalar, norm_optimized, norm_factorized
+      write (*, '(a,1x,a,3(1x,es16.8))') 'THREE_WAY', 'dF=', scalar_optimized_dF, scalar_factorized_dF, optimized_factorized_dF
+      write (*, '(a,1x,a,3(1x,es16.8))') 'THREE_WAY', 'rF=', scalar_optimized_rF, scalar_factorized_rF, optimized_factorized_rF
+      write (*, '(a,1x,a,3(1x,es16.8))') 'THREE_WAY', 'dInf=', scalar_optimized_dInf, scalar_factorized_dInf, optimized_factorized_dInf
+      write (*, '(a,1x,a,3(1x,es16.8))') 'THREE_WAY', 'wall=', scalar_result%wall_time_seconds, &
+         optimized_result%wall_time_seconds, factorized_result%wall_time_seconds
+      write (*, '(a,1x,a,3(1x,es16.8))') 'THREE_WAY', 'speedup=', &
+         scalar_result%wall_time_seconds/max(optimized_result%wall_time_seconds, epsilon(1.0_rp)), &
+         scalar_result%wall_time_seconds/max(factorized_result%wall_time_seconds, epsilon(1.0_rp)), &
+         optimized_result%wall_time_seconds/max(factorized_result%wall_time_seconds, epsilon(1.0_rp))
+   end subroutine report_three_way_contraction
+
+   real(rp) function matrix_difference(lhs, rhs) result(difference)
+      complex(rp), intent(in) :: lhs(:, :), rhs(:, :)
+
+      difference = sqrt(sum(abs(lhs - rhs)**2))
+   end function matrix_difference
 
    subroutine run_rotation_oracle()
       integer, parameter :: ne = 801

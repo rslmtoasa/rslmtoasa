@@ -503,24 +503,57 @@ status are unchanged.
 
 ## TDVK-03 Fe reciprocal-backend closure
 
-**Status: `BLOCKED — RECIPROCAL GF MATERIAL COST`.** The independent
-real-axis GF/Kubo contraction is now production-owned for the compact GF
-service and has passed its scalar oracle at roundoff precision. The accepted
-Fe state and complete 232-coordinate closure harness are implemented, but the
-first controlled Fe GF sample did not return within a practical bounded run
-after the identical-state handoff. No material GF↔Lehmann verdict or physical
+**Status: `TDVK-03 PASS CANDIDATE`.** TDVK-03R reordered the same real-axis
+GF/Kubo calculation so that the compact response contraction occurs after the
+energy quadrature. The mixed-complex regression, transition factorization
+oracle, and three-way scalar/optimized/factorized complete-matrix oracle pass.
+The accepted Fe state now completes the prescribed GF ladder in practical
+single-sample runtimes. This is a backend-closure result only; no physical
 interpretation is claimed.
 
 ### Implementation-oracle evidence
 
-The optimized contraction remains an independent real-axis construction. It
-uses the existing weighted resolvents, spectral discontinuities, Simpson
-weights, Fermi/k-point prefactor, both Kubo terms, component vertices, signs,
-transposes, and conjugations. The scalar implementation remains available as
-the correctness oracle. The optimized path uses a matrix contraction and
-reuses invariant flattened vertices and scratch arrays for one evaluator call;
-it does not call the Lehmann accumulator or construct point-space response
-matrices.
+The scalar and `38102e1` optimized dense-resolvent contractions remain
+available as correctness oracles. The new default `factorized` backend keeps
+the existing four component vertices, transforms them to the left/right
+eigenbases once per k point, and forms
+`T(I,n,m)=sum_pq epsilon_L(n)^p epsilon_R(m)^q Vtilde(I,p,q,n,m)`.
+It then performs the explicit Simpson real-axis integral only for the scalar
+band-pair kernel
+`K_nm=sum_E w_E f(E) 2 w_k/sum(w_k) [a_Ln g_Rm^R + a_Rm g_Ln^A]`, retaining
+both Kubo terms, finite `integration_eta`, physical `eta`, occupations, k
+weights, signs, conjugations, and the exact endpoint convention. Finally it
+forms `chi(I,J)=sum_nm K_nm T(I,n,m) T(J,n,m)*` with a matrix product.
+The factorized path does not call the Lehmann accumulator, substitute a
+Lehmann occupation-difference denominator, truncate the 232-dimensional
+space, or construct the point-space response matrix.
+
+### Transition and three-way oracle evidence
+
+On the mixed-complex fixture, the GF component-vertex-to-eigenbasis transition
+amplitudes matched the certified compact transition coordinates as follows:
+
+| channel | maximum absolute error | maximum relative error |
+|---|---:|---:|
+| `chi_plus` | `1.73046935e-15` | `2.13050107e-16` |
+| `chi_minus` | `1.38624879e-16` | `1.53171174e-16` |
+
+The independent mixed-complex Gamma/static and finite-frequency checks and the
+mixed-complex finite-q check compare the complete compact matrices from all
+three GF backends. In each row below, pairwise columns are ordered
+`scalar/optimized`, `scalar/factorized`, and `optimized/factorized`; timings
+are ordered `scalar`, `optimized`, `factorized`.
+
+| fixture | omega (Ry) | norm (all three) | pairwise `rF` | pairwise `dInf` | wall time (s) | speedup (`scalar/optimized`, `scalar/factorized`, `optimized/factorized`) |
+|---|---:|---:|---|---|---|---|
+| mixed Gamma | `0.00` and `0.17` | `1.79506145e+03` | `6.17e-18`, `2.80e-15`, `2.80e-15` | `7.32e-15`, `3.87e-12`, `3.87e-12` | `30.2637`, `4.22790`, `0.00296218` | `7.158`, `1.0217e4`, `1.4273e3` |
+| mixed finite q=`(0.23,0,0)` | `0.00` | `1.86403113e+03` | `3.74e-17`, `6.59e-15`, `6.58e-15` | `6.28e-14`, `9.10e-12`, `9.10e-12` | `61.6816`, `8.96611`, `0.00593637` | `6.879`, `1.0390e4`, `1.5104e3` |
+
+The compact unit fixture independently reports factorized relative
+differences of `9.28695e-16` (Gamma/static case) and `4.97532e-16`
+(finite-q case) against scalar, with maximum transition residual
+`1.2064e-16`. Correctness was checked before using these timings as a
+benchmark.
 
 On the existing nontrivial compact fixture, with identical inputs and the
 complete compact result matrix compared before timing:
@@ -578,19 +611,59 @@ The planned material ladder is explicit in the driver: width values
 integration eta, bounds, margin, point count, spacing, spacing ratio, and
 wall time.
 
-The first controlled sample entered the closure audit after the accepted
-handoff but was stopped before its GF result returned. Therefore there is no
-honest Fe GF integration table to report, and the material checklist remains
-open under the prescribed blocker rule:
+The accepted Fe state used by the completed run was:
+
+| quantity | accepted value |
+|---|---:|
+| SCF residual | `6.617e-7` |
+| `nbasis / nbands` | `18 / 18` |
+| k mesh | `8x8x8 = 512` |
+| Fermi level | `-8.51191027e-02 Ry` |
+| temperature | `300 K` |
+| spin moment | `2.267445 mu_B` |
+| compact product dimension | `232` |
+
+The product basis, Lehmann response, and all GF samples reused this same
+accepted state, including eigenpairs, occupations, Fermi level, temperature,
+radial/product basis, channel, exact Gamma endpoint, and physical
+`eta=0.04 Ry`. The GF evaluator reported no point-response allocation. For
+the Fe state its major factorized allocations were approximately 4.81 MB for
+the component vertices, 1.20 MB for the per-k transition amplitudes, and
+0.86 MB for the compact response; the dense GF matrix allocation was zero.
+
+The completed Gamma `chi_plus`, `omega=0`, physical `eta=0.04 Ry` ladder was:
+
+| sample | `integration_eta` (Ry) | `N` | margin (Ry) | `h/integration_eta` | `||chi_L||_F` | `||chi_GF||_F` | `dF` | `rF` | `dInf` | wall (s) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| eta ladder | `0.0100` | `953` | `0.60` | `0.399426` | `3.79995096` | `3.61768630` | `2.57226666e-01` | `6.76921014e-02` | `1.40114603e-01` | `7.67390` |
+| eta ladder | `0.0050` | `1903` | `0.60` | `0.399846` | `3.79995096` | `3.70701147` | `1.28850597e-01` | `3.39084894e-02` | `7.03065297e-02` | `9.34962` |
+| eta ladder | `0.0025` | `3805` | `0.60` | `0.399846` | `3.79995096` | `3.75267245` | `6.48187541e-02` | `1.70577870e-02` | `3.53119546e-02` | `12.7772` |
+| eta ladder / Simpson base / window 0.60 | `0.0010` | `9509` | `0.60` | `0.399931` | `3.79995096` | `3.78102764` | `2.58386514e-02` | `6.79973285e-03` | `1.40767444e-02` | `23.0595` / `23.1370` / `23.0656` |
+| Simpson fine | `0.0010` | `19017` | `0.60` | `0.199965` | `3.79995096` | `3.78098824` | `2.58942459e-02` | `6.81436317e-03` | `1.40921415e-02` | `40.3156` |
+| window 1.00 | `0.0010` | `11509` | `1.00` | `0.399943` | `3.79995096` | `3.78117876` | `2.57510806e-02` | `6.77668760e-03` | `1.40222232e-02` | `26.7371` |
+| window 2.00 | `0.0010` | `16509` | `2.00` | `0.399960` | `3.79995096` | `3.78130496` | `2.56779024e-02` | `6.75742994e-03` | `1.39758163e-02` | `35.8025` |
+
+The eta ladder is monotonic toward the compact Lehmann result. The base/fine
+Simpson change is small relative to the remaining finite-width envelope, and
+the window changes are similarly subdominant; no window or tolerance tuning
+was applied. The first controlled Fe sample, `N=953`, completed in `7.67390 s`.
+
+The TDVK-03 completion checklist is now:
 
 - [x] mixed-complex reciprocal-GF regression;
+- [x] GF component-vertex to eigenbasis transition-factorization oracle;
 - [x] scalar-versus-optimized complete-matrix oracle;
+- [x] scalar/optimized/factorized complete-matrix three-way oracle at Gamma,
+  finite frequency, mixed-complex, and finite q;
+- [x] factorized backend retains explicit Simpson real-axis quadrature, finite
+  `integration_eta`, physical `eta`, both Kubo terms, and backend independence;
 - [x] independent optimized real-axis GF/Kubo route;
 - [x] one accepted Fe state reused by Lehmann and all planned GF controls;
 - [x] complete 232-coordinate Gamma `chi_plus`, static closure harness;
 - [x] separate Simpson, integration-width, and energy-window controls;
 - [x] complete matrix diagnostics and provenance output;
-- [ ] practical Fe GF ladder and material backend closure — blocked by runtime.
+- [x] practical Fe GF ladder and material backend closure after quadrature factorization.
 
-No final GF↔Lehmann tolerance was invented, and no KXC, Dyson, Goldstone,
-or physical interpretation was added.
+No final GF↔Lehmann material tolerance was invented. No KXC, Dyson,
+Goldstone, or physical interpretation was added; the `PASS CANDIDATE` status
+is returned to the orchestrator for the parent milestone.
