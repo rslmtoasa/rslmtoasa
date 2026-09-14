@@ -656,6 +656,10 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrGfSusceptibility PROPERTIES LABELS "unit;lr-gf-02;ks-susceptibility;reciprocal-gf;crosscheck")
   add_fortran_unit_test(UnitLrProductGfSusceptibility ${TestDIR}/unit/test_lr_product_gf_susceptibility.f90)
   set_tests_properties(UnitLrProductGfSusceptibility PROPERTIES LABELS "unit;tdvk-02r3;lr-gf-02;product-basis;reciprocal-gf")
+  add_fortran_unit_test(UnitLrProductGfQuadratureAudit ${TestDIR}/unit/test_lr_product_gf_quadrature_audit.f90)
+  set_tests_properties(UnitLrProductGfQuadratureAudit PROPERTIES
+    LABELS "unit;tdvk-03a;lr-gf-02;quadrature-audit;reciprocal-gf"
+    DISABLED TRUE)
   add_test(NAME UnitLrProductGfSusceptibilityRejectIntegrationEta
     COMMAND UnitLrProductGfSusceptibility reject_integration_eta)
   set_tests_properties(UnitLrProductGfSusceptibilityRejectIntegrationEta PROPERTIES

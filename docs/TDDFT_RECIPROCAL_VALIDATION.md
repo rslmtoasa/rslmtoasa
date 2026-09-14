@@ -469,3 +469,25 @@ Focused verification (all 7 passed):
 ```text
 ctest --test-dir build --output-on-failure -R '^(UnitLrLmtoProductResponseBasis|UnitLrLmtoProductResponse|UnitLrLmtoProductStrictRankGuard|UnitLrProductKsSusceptibility|UnitLrGfSusceptibility|UnitLrProductGfSusceptibility|UnitLrProductGfSusceptibilityRejectIntegrationEta)$'
 ```
+
+## TDVK-03A — reciprocal-GF real-axis quadrature closure audit
+
+**Status: Case A — `REAL-AXIS GF FORMULATION NUMERICALLY CONSISTENT` for the
+nontrivial R3 finite-basis fixture only.** The fixed-eta Simpson ladder,
+spectral moments, integration-eta ladder, energy-window ladder, timings, and
+the unchanged historical LR-GF-02 cross-check are recorded in
+[`TDDFT_RECIPROCAL_GF_QUADRATURE_AUDIT.md`](TDDFT_RECIPROCAL_GF_QUADRATURE_AUDIT.md).
+
+The compact GF response approaches the independent compact Lehmann response
+as `integration_eta` decreases at fixed physical `eta=0.04 Ry`; resolved
+mesh and window changes are smaller than that finite-width envelope. The
+aspirational `rF<1e-5` was not reached at the smallest prescribed finite
+integration width, so no extrapolation or tuning was applied. The audit did
+not modify GF physics, KXC, GSR, Dyson, Goldstone logic, product vertices, or
+the response broadening, and did not run Fe. Timing records:
+
+```text
+GF BUBBLE PERFORMANCE REMEDIATION REQUIRED BEFORE FE
+```
+
+TDVK-02 and TDVK-03 material status remain unchanged.
