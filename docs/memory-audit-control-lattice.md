@@ -131,3 +131,36 @@ bravais arrays themselves remain a separate issue.
 Validation: source readback verified. Rebuild and run the same bcc-Fe input
 under the original finite stack limit, then compare numerical outputs with
 the unlimited-stack reference. No local compiler/runtime test was available.
+
+## Follow-up: constructor sizing and dbar1
+
+The input.nml constructor now discovers ndim, ntype, nclu, njij and njijk
+before allocating array-valued namelist storage. The scanner masks strings
+(including doubled quotes) and comments, scans the first lattice group,
+and supports records longer than its input buffer. Array values are left to
+the normal Fortran namelist reader. The deliberate failed read is removed
+from build_from_file; the final data read must succeed.
+
+restore_to_default now creates zero-length izp/no/crd placeholders.
+build_from_file allocates their configured ndim extent only after dimension
+discovery and initializes fresh storage. ct is allocated to ntype directly.
+This avoids the preliminary default-ndim allocation when the input overrides
+ndim and eliminates the former ndim-sized ct temporary. It does not remove
+the final ndim-sized cluster workspace or change cluster construction.
+
+dbar1 now allocates local sbar after clusba returns nt, removes an unused cr
+array, checks integer extent products, and checks output cluster capacity
+before copying. Physical cutoffs and cluster ordering are unchanged.
+
+Focused regression script: python3 tests/memory/test_lattice_dimensions.py.
+It compiles the actual scanner extracted from lattice.f90 with bounds checks,
+substitutes only a minimal logger, and verifies subsequent Fortran namelist
+reading. Cases cover dimensions before/after arrays, comments, strings,
+doubled quotes, long records, repeats, nulls and invalid dimensions.
+A dedicated GitHub workflow runs it. No local compiler was available.
+
+Remaining: build_from_lattice (the separate lattice.nml reader) still uses
+its original sizing read; full lifecycle/reinitialization and safe-allocation
+accounting are not certified; bravais shrinking needs consumer analysis.
+Numerical equivalence and peak RSS remain unmeasured. The reported bulkmat
+crash remains the next charge-stage issue, outside this patch.

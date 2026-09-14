@@ -1,0 +1,18 @@
+name: Lattice dimension reader checks
+on:
+  push:
+    paths:
+      - 'source/lattice.f90'
+      - 'tests/memory/test_lattice_dimensions.py'
+      - '.github/workflows/lattice-memory.yml'
+  pull_request:
+    paths:
+      - 'source/lattice.f90'
+      - 'tests/memory/test_lattice_dimensions.py'
+      - '.github/workflows/lattice-memory.yml'
+jobs:
+  dimensions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: python3 tests/memory/test_lattice_dimensions.py

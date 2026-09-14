@@ -439,6 +439,173 @@ contains
    !
    !> @param[in] fname Namelist file
    !---------------------------------------------------------------------------
+   ! Read allocation dimensions without transferring any namelist arrays.
+   ! Strings and comments are masked before scanning the first lattice group.
+   subroutine read_lattice_dimensions(fname, ndim, ntype, nclu, njij, njijk)
+      use iso_fortran_env, only: iostat_end, iostat_eor
+      character(len=*), intent(in) :: fname
+      integer, intent(inout) :: ndim, ntype, nclu, njij, njijk
+      character(len=:), allocatable :: text, word, value
+      character(len=4096) :: chunk
+      character :: quote, ch
+      integer :: unit, ios, count, p, first, q, n, code, depth, number
+      logical :: in_group, found
+
+      text = ''
+      open (newunit=unit, file=fname, status='old', action='read', iostat=ios)
+      if (ios /= 0) then
+         call g_logger%fatal('Cannot open lattice input: '//trim(fname), __FILE__, __LINE__)
+         return
+      end if
+      do
+         read (unit, '(A)', advance='no', size=count, iostat=ios) chunk
+         if (count > 0) text = text//chunk(:count)
+         if (ios == iostat_eor) then
+            text = text//achar(10)
+         else if (ios == iostat_end) then
+            exit
+         else if (ios /= 0) then
+            close (unit)
+            call g_logger%fatal('Cannot read lattice input', __FILE__, __LINE__)
+            return
+         end if
+      end do
+      close (unit)
+
+      n = len(text)
+      p = 1
+      quote = ' '
+      do while (p <= n)
+         ch = text(p:p)
+         if (quote /= ' ') then
+            text(p:p) = ' '
+            if (ch == quote) then
+               if (p < n) then
+                  if (text(p + 1:p + 1) == quote) then
+                     text(p + 1:p + 1) = ' '
+                     p = p + 2
+                     cycle
+                  end if
+               end if
+               quote = ' '
+            end if
+         else if (ch == "'" .or. ch == '"') then
+            quote = ch
+            text(p:p) = ' '
+         else if (ch == '!') then
+            do while (p <= n)
+               if (text(p:p) == achar(10)) exit
+               text(p:p) = ' '
+               p = p + 1
+            end do
+            cycle
+         else
+            code = iachar(ch)
+            if (code >= iachar('A') .and. code <= iachar('Z')) text(p:p) = achar(code + 32)
+         end if
+         p = p + 1
+      end do
+
+      p = 1
+      depth = 0
+      in_group = .false.
+      found = .false.
+      do while (p <= n)
+         ch = text(p:p)
+         if (ch == '&' .or. ch == achar(36)) then
+            if (in_group) exit
+            p = p + 1
+            first = p
+            do while (p <= n)
+               if (index('abcdefghijklmnopqrstuvwxyz_', text(p:p)) == 0) exit
+               p = p + 1
+            end do
+            in_group = text(first:p - 1) == 'lattice'
+            if (in_group) found = .true.
+            cycle
+         end if
+         if (.not. in_group) then
+            p = p + 1
+            cycle
+         end if
+         if (ch == '/') exit
+         if (ch == '(') depth = depth + 1
+         if (ch == ')') depth = depth - 1
+         if (depth /= 0 .or. index('abcdefghijklmnopqrstuvwxyz_', ch) == 0) then
+            p = p + 1
+            cycle
+         end if
+         first = p
+         do while (p <= n)
+            if (index('abcdefghijklmnopqrstuvwxyz_0123456789', text(p:p)) == 0) exit
+            p = p + 1
+         end do
+         word = text(first:p - 1)
+         select case (word)
+         case ('ndim', 'ntype', 'nclu', 'njij', 'njijk')
+         case default
+            cycle
+         end select
+         q = p
+         do while (q <= n)
+            if (index(' '//achar(9)//achar(10)//achar(13), text(q:q)) == 0) exit
+            q = q + 1
+         end do
+         if (q > n) cycle
+         if (text(q:q) /= '=') cycle
+         q = q + 1
+         do while (q <= n)
+            if (index(' '//achar(9)//achar(10)//achar(13), text(q:q)) == 0) exit
+            q = q + 1
+         end do
+         if (q > n) cycle
+         ! A null assignment leaves the previous/default dimension unchanged.
+         if (index('+-0123456789', text(q:q)) == 0) cycle
+         first = q
+         do while (q <= n)
+            if (index(' ,/'//achar(9)//achar(10)//achar(13), text(q:q)) /= 0) exit
+            q = q + 1
+         end do
+         value = text(first:q - 1)
+         select case (word)
+         case ('ndim')
+            number = ndim
+         case ('ntype')
+            number = ntype
+         case ('nclu')
+            number = nclu
+         case ('njij')
+            number = njij
+         case ('njijk')
+            number = njijk
+         end select
+         read (value, *, iostat=ios) number
+         if (ios /= 0) then
+            call g_logger%fatal('Invalid lattice dimension: '//word, __FILE__, __LINE__)
+            return
+         end if
+         select case (word)
+         case ('ndim')
+            ndim = number
+         case ('ntype')
+            ntype = number
+         case ('nclu')
+            nclu = number
+         case ('njij')
+            njij = number
+         case ('njijk')
+            njijk = number
+         end select
+         p = q
+      end do
+      if (.not. found) then
+         call g_logger%fatal('Missing lattice namelist', __FILE__, __LINE__)
+      end if
+      if (ndim <= 0 .or. min(ntype, nclu, njij, njijk) < 0) then
+         call g_logger%fatal('Invalid lattice allocation dimensions', __FILE__, __LINE__)
+      end if
+   end subroutine read_lattice_dimensions
+
    subroutine build_from_file(this, fname)
       class(lattice), intent(inout) :: this
       character(len=*), intent(in), optional :: fname
@@ -454,6 +621,8 @@ contains
       else
          fname_ = this%control%fname
       end if
+
+      call read_lattice_dimensions(fname_, this%ndim, this%ntype, this%nclu, this%njij, this%njijk)
 
       ! Save previous values
       ! Bulk initialization
@@ -483,6 +652,7 @@ contains
          deallocate (this%izp)
          allocate (this%izp(this%ndim))
 #endif
+         this%izp = 0
       end if
       if (size(this%no) .ne. this%ndim) then
 #ifdef USE_SAFE_ALLOC
@@ -492,6 +662,7 @@ contains
          deallocate (this%no)
          allocate (this%no(this%ndim))
 #endif
+         this%no = 0
       end if
       if (size(this%crd) .ne. 3*this%ndim) then
 #ifdef USE_SAFE_ALLOC
@@ -501,6 +672,7 @@ contains
          deallocate (this%crd)
          allocate (this%crd(3, this%ndim))
 #endif
+         this%crd = 0
       end if
 
       call move_alloc(this%izp, izp)
@@ -517,6 +689,7 @@ contains
          deallocate (this%inclu)
          allocate (this%inclu(this%nclu, 3))
 #endif
+         this%inclu = 0
       end if
       call move_alloc(this%inclu, inclu)
 
@@ -530,60 +703,53 @@ contains
       njijk = this%njijk
       call move_alloc(this%ijktrio, ijktrio)
 
-      ! Pre-size ct before the first read. ntype is unknown at this point
-      ! (local ntype = 0 from restore_to_default), so ct has size 0. 1000 is
-      ! a safe upper bound for atom types; the resize check below will shrink
-      ! it to the actual ntype read from the file.
-      if (.not. allocated(ct)) then
-         allocate (ct(size(izp)))
-      else if (size(ct) == 0) then
-         deallocate (ct)
-         allocate (ct(size(izp)))
-      end if
-
-      open (newunit=funit, file=fname_, action='read', iostat=iostatus, status='old')
-      if (iostatus /= 0) then
-         call g_logger%fatal('file '//fmt('A', trim(fname_))//'not found', __FILE__, __LINE__)
-      end if
-
-      read (funit, nml=lattice, iostat=iostatus)
-
       if (size(izp) .ne. ndim) then
          deallocate (izp)
          allocate (izp(ndim))
+         izp = 0
       end if
       if (size(no) .ne. ndim) then
          deallocate (no)
          allocate (no(ndim))
+         no = 0
       end if
       if (size(crd) .ne. 3*ndim) then
          deallocate (crd)
          allocate (crd(3, ndim))
+         crd = 0
       end if
       if (size(inclu) .ne. 3*nclu) then
          deallocate (inclu)
          allocate (inclu(nclu, 3))
+         inclu = 0
       end if
 
       if (size(ijpair) .ne. 2*njij) then
          deallocate (ijpair)
          allocate (ijpair(njij, 2))
+         ijpair = 0
       end if
 
       if (size(ct) .ne. ntype) then
          deallocate (ct)
          allocate (ct(ntype))
+         ct = 0
       end if
 
       if (size(ijktrio, 1) /= njijk .or. size(ijktrio, 2) /= 6) then
          deallocate (ijktrio)
          allocate (ijktrio(njijk, 6))
+         ijktrio = 0
       end if
 
-      rewind (funit)
+      open (newunit=funit, file=fname_, action='read', iostat=iostatus, status='old')
+      if (iostatus /= 0) then
+         call g_logger%fatal('Cannot open lattice input: '//trim(fname_), __FILE__, __LINE__)
+         return
+      end if
       read (funit, nml=lattice, iostat=iostatus)
-      if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
+      if (iostatus /= 0) then
+         call g_logger%fatal('Error while reading lattice namelist', __FILE__, __LINE__)
          call g_logger%error(fmt('iostatus = , I0', iostatus), __FILE__, __LINE__)
       end if
       close (funit)
@@ -970,17 +1136,17 @@ contains
       this%n2 = 0
       this%n3 = 0
 #ifdef USE_SAFE_ALLOC
-      call g_safe_alloc%allocate('lattice.izp', this%izp, (/this%ndim/))
-      call g_safe_alloc%allocate('lattice.no', this%no, (/this%ndim/))
-      call g_safe_alloc%allocate('lattice.crd', this%crd, (/3, this%ndim/))
+      call g_safe_alloc%allocate('lattice.izp', this%izp, (/0/))
+      call g_safe_alloc%allocate('lattice.no', this%no, (/0/))
+      call g_safe_alloc%allocate('lattice.crd', this%crd, (/3, 0/))
       call g_safe_alloc%allocate('lattice.inclu', this%inclu, (/this%nclu, 3/))
       call g_safe_alloc%allocate('lattice.ijpair', this%ijpair, (/this%njij, 2/))
       call g_safe_alloc%allocate('lattice.ijktrio', this%ijktrio, (/this%njijk, 6/))
       call g_safe_alloc%allocate('lattice.chargetrf_type', this%chargetrf_type, (/this%nbas/))
       call g_safe_alloc%allocate('lattice.ct', this%ct, (/this%ntype/))
 #else
-      allocate (this%izp(this%ndim), this%no(this%ndim))
-      allocate (this%crd(3, this%ndim))
+      allocate (this%izp(0), this%no(0))
+      allocate (this%crd(3, 0))
       allocate (this%inclu(this%nclu, 3))
       allocate (this%ijpair(this%njij, 2))
       allocate (this%ijktrio(this%njijk, 6))
@@ -2212,21 +2378,32 @@ contains
       integer :: i, j, k, m, na, nrl, nt
       real(rp), dimension(:), allocatable :: bet, wk
       real(rp), dimension(:), allocatable :: a
-      real(rp), dimension(:, :), allocatable :: cr
       real(rp), dimension(:, :), allocatable :: s
       real(rp), dimension(:, :, :), allocatable :: sbar
       !
       ! External Calls
       !external CLUSBA, MICHA
 
-      nt = 5250 !350
-      allocate (cr(3, nt))
-      allocate (sbar(np, np, nt))
+      nt = 0
       call this%clusba(r2, crd, ia, nat, ndi, nt)
       write (17, 10000) nt
       write (17, 10001) ((this%sbarvec(j, i), j=1, 3), i=1, nt)
+      ! Guard default-integer products before forming dense matrix extents.
+      if (np < 9 .or. nt <= 0) then
+         call g_logger%fatal('dbar1: invalid orbital or cluster dimension', __FILE__, __LINE__)
+         return
+      end if
+      if (nt > huge(nrl)/np) then
+         call g_logger%fatal('dbar1: orbital dimension overflow', __FILE__, __LINE__)
+         return
+      end if
       nrl = np*nt
+      if (real(nrl, rp)*(real(nrl, rp) + 1.0_rp) > real(huge(na), rp)) then
+         call g_logger%fatal('dbar1: packed matrix dimension overflow', __FILE__, __LINE__)
+         return
+      end if
       na = (nrl*(nrl + 1))/2
+      allocate (sbar(np, np, nt))
       allocate (a(na))
       allocate (bet(nrl))
       allocate (wk(nrl))
@@ -2236,6 +2413,10 @@ contains
       ! Saving parameters to be used in the Hamiltonian build
       call this%clusba((r2/9.0d0), crd, ia, nat, ndi, nt)
 
+      if (nt > size(sbar, 3) .or. nt > size(this%sbar, 3)) then
+         call g_logger%fatal('dbar1: output cluster exceeds sbar capacity', __FILE__, __LINE__)
+         return
+      end if
       do m = 1, nt
          do i = 1, 9
             do j = 1, 9
@@ -2250,7 +2431,7 @@ contains
       !    write(*, ´(9f10.4)´)((real(this%sbar(i, j, m, ia))), j=1, 9)
       !  end do
       !end do
-      deallocate (a, bet, cr, wk, s, sbar)
+      deallocate (a, bet, wk, s, sbar)
       return
 
 10000 format(i5)
