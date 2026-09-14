@@ -11,6 +11,7 @@
 !------------------------------------------------------------------------------
 module tddft_production_driver_mod
 
+   use, intrinsic :: ieee_arithmetic
    use precision_mod, only: rp
    use mpi_mod, only: rank, numprocs
    use string_mod, only: lower, int2str
@@ -24,10 +25,16 @@ module tddft_production_driver_mod
    use symbolic_atom_mod, only: symbolic_atom
    use radial_ground_state_mod, only: radial_ground_state
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
+   use response_basis_mapping_mod, only: response_super_index, response_flatten_superindex
    use lr_response_space_mod, only: response_space_layout, response_operator_trace
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, lr_snapshot_from_reciprocal, lr_q_endpoint_from_reciprocal, &
-      evaluate_lr_ks_susceptibility
+      evaluate_lr_ks_susceptibility, lr_product_ks_susceptibility_request, &
+      lr_product_ks_susceptibility_result, evaluate_lr_product_ks_susceptibility
+   use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state, pauli_vertex_capabilities, &
+      pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
+   use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
+      lmto_product_channel_minus
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
@@ -50,6 +57,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_lehmann = 'lehmann'
    character(len=*), parameter, public :: tddft_driver_backend_reciprocal_gf = 'reciprocal_gf'
    character(len=*), parameter, public :: tddft_driver_backend_native_rsgf = 'native_rsgf'
+   character(len=*), parameter, public :: tddft_driver_backend_product_lehmann = 'product_lehmann'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -276,8 +284,9 @@ contains
       end if
       if (trim(config%backend) /= tddft_driver_backend_lehmann .and. trim(config%backend) /= 'spectral' .and. &
           trim(config%backend) /= tddft_driver_backend_reciprocal_gf .and. &
-          trim(config%backend) /= tddft_driver_backend_native_rsgf) then
-         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf or native_rsgf'
+          trim(config%backend) /= tddft_driver_backend_native_rsgf .and. &
+          trim(config%backend) /= tddft_driver_backend_product_lehmann) then
+         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf or product_lehmann'
       end if
       if (trim(config%backend) == tddft_driver_backend_reciprocal_gf .or. &
           trim(config%backend) == tddft_driver_backend_native_rsgf .or. config%reciprocal_backend_crosscheck) then
@@ -484,6 +493,14 @@ contains
       do iq = 1, size(config%q_list, 2)
          call lr_q_endpoint_from_reciprocal(reciprocal_obj, left_state, config%q_list(:, iq), endpoints(iq))
       end do
+      if (trim(config%backend) == tddft_driver_backend_product_lehmann) then
+         ! TDVK-02R2 is a bare-response validation seam only.  It stops at
+         ! the naturally prepared reciprocal handoff and never enters KXC,
+         ! Goldstone, Dyson, loss, or the dense point-space result container.
+         call run_tddft_product_bare_smoke(config, response_space, radial_bases, ground_states, left_state, endpoints, &
+            reciprocal_obj)
+         return
+      end if
       if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
          call native_provider%initialize(config%native_rsgf_provider, green_obj, recursion_obj, hamiltonian_obj, &
             lattice_obj, reciprocal_obj, radial_bases)
@@ -511,6 +528,277 @@ contains
       if (allocated(result%q_list)) deallocate(result%q_list)
       if (allocated(result%frequencies)) deallocate(result%frequencies)
    end subroutine run_tddft_production
+
+   !> TDVK-02R2 validation-only handoff.  The accepted reciprocal snapshot is
+   !> already naturally available here, so the live transition oracle and the
+   !> compact bare response can be exercised without persisting eigenpairs or
+   !> entering the full KXC/Dyson production lifecycle.
+   subroutine run_tddft_product_bare_smoke(config, response_space, radial_bases, ground_states, left_state, endpoints, reciprocal_obj)
+      type(tddft_production_config), intent(in) :: config
+      type(response_space_layout), intent(in) :: response_space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(radial_ground_state), intent(in) :: ground_states(:)
+      type(lr_electronic_state), target, intent(in) :: left_state
+      type(lr_electronic_state), target, intent(in) :: endpoints(:)
+      type(reciprocal), intent(in) :: reciprocal_obj
+      type(lmto_product_response_basis), target :: product_plus, product_minus
+      type(lr_product_ks_susceptibility_request) :: request
+      type(lr_product_ks_susceptibility_result) :: result
+      integer :: gamma_index, channel_kind
+      real(rp) :: wall_start, wall_end, maximum_transition_error
+      real(rp) :: accepted_moment
+      logical :: finite_response
+      integer :: isite
+
+      gamma_index = find_gamma_q(config%q_list)
+      if (gamma_index > size(endpoints)) error stop 'TDVK-02R2 product smoke: Gamma endpoint is unavailable'
+      call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
+      call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
+      if (product_plus%product_dimension /= 232 .or. product_minus%product_dimension /= 232) then
+         error stop 'TDVK-02R2 product smoke: accepted Fe product dimension is not 232'
+      end if
+
+      maximum_transition_error = 0.0_rp
+      do channel_kind = 1, 2
+         if (channel_kind == 1) then
+            call run_product_transition_oracle(response_space, radial_bases, product_plus, left_state, endpoints(gamma_index), &
+               lmto_product_channel_plus, maximum_transition_error)
+         else
+            call run_product_transition_oracle(response_space, radial_bases, product_minus, left_state, endpoints(gamma_index), &
+               lmto_product_channel_minus, maximum_transition_error)
+         end if
+      end do
+
+      request%q = config%q_list(:, gamma_index)
+      request%frequencies = config%frequencies
+      request%eta = config%eta
+      request%channel = config%channel
+      request%electronic_state => left_state
+      request%q_endpoint_state => endpoints(gamma_index)
+      if (trim(config%channel) == 'chi_plus') then
+         request%product_basis => product_plus
+      else
+         request%product_basis => product_minus
+      end if
+      call cpu_time(wall_start)
+      call evaluate_lr_product_ks_susceptibility(request, result)
+      call cpu_time(wall_end)
+      finite_response = all(ieee_is_finite(real(result%susceptibility, rp))) .and. &
+         all(ieee_is_finite(aimag(result%susceptibility)))
+      if (.not. finite_response) error stop 'TDVK-02R2 product smoke: compact response contains NaN or Inf'
+
+      accepted_moment = 0.0_rp
+      do isite = 1, size(ground_states)
+         accepted_moment = accepted_moment + ground_states(isite)%integrated_moment_muB
+      end do
+      call write_tddft_product_bare_smoke(config, result, reciprocal_obj, accepted_moment, maximum_transition_error, &
+         wall_end - wall_start)
+      write (*, '(a,i0,a,es12.4,a,es12.4)') 'TDVK-02R2 compact Fe smoke: Nprod=', result%product_dimension, &
+         ' runtime_cpu_s=', wall_end - wall_start, ' max_transition_error=', maximum_transition_error
+   end subroutine run_tddft_product_bare_smoke
+
+   subroutine run_product_transition_oracle(response_space, radial_bases, product, left_state, right_state, channel_kind, maximum_error)
+      type(response_space_layout), intent(in) :: response_space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(lmto_product_response_basis), intent(in) :: product
+      type(lr_electronic_state), intent(in) :: left_state, right_state
+      integer, intent(in) :: channel_kind
+      real(rp), intent(inout) :: maximum_error
+      type(pauli_vertex_capabilities) :: capabilities
+      type(pauli_endpoint_state) :: left_band, right_band
+      complex(rp), allocatable :: point_transition(:), product_coordinates(:), reference_coordinates(:)
+      complex(rp) :: operator_matrix(2, 2)
+      integer :: selected_left(3), selected_right(3), ik, itransition
+      real(rp) :: error
+
+      call select_live_transitions(product, left_state, right_state, selected_left, selected_right, ik)
+      allocate(point_transition(response_space%ndim), product_coordinates(product%product_dimension), &
+         reference_coordinates(product%product_dimension))
+      capabilities = pauli_vertex_capabilities()
+      if (channel_kind == lmto_product_channel_plus) then
+         operator_matrix = pauli_sigma_plus_matrix()
+      else
+         operator_matrix = pauli_sigma_minus_matrix()
+      end if
+      do itransition = 1, size(selected_left)
+         call left_band%initialize(left_state%eigenvalues(selected_left(itransition), ik), &
+            left_state%eigenvectors(:, selected_left(itransition), ik))
+         call right_band%initialize(right_state%eigenvalues(selected_right(itransition), ik), &
+            right_state%eigenvectors(:, selected_right(itransition), ik))
+         call evaluate_pauli_transition_vertex(response_space, radial_bases, left_band, right_band, operator_matrix, &
+            capabilities, point_transition)
+         call product%transition_coordinates(left_band, right_band, product_coordinates)
+         call project_point_transition(response_space, product, point_transition, reference_coordinates)
+         error = sqrt(sum(abs(product_coordinates - reference_coordinates)**2))/ &
+            max(sqrt(sum(abs(reference_coordinates)**2)), epsilon(1.0_rp))
+         maximum_error = max(maximum_error, error)
+         write (*, '(a,a,a,i0,a,es12.4)') 'TDVK-02R2 live transition channel=', &
+            product_channel_name(channel_kind), ' index=', itransition, ' residual=', error
+         if (error >= 1.0e-10_rp .or. .not. ieee_is_finite(error)) then
+            error stop 'TDVK-02R2 live transition oracle failed'
+         end if
+      end do
+      deallocate(point_transition, product_coordinates, reference_coordinates)
+   end subroutine run_product_transition_oracle
+
+   subroutine select_live_transitions(product, left_state, right_state, selected_left, selected_right, selected_k)
+      type(lmto_product_response_basis), intent(in) :: product
+      type(lr_electronic_state), intent(in) :: left_state, right_state
+      integer, intent(out) :: selected_left(:), selected_right(:), selected_k
+      type(pauli_endpoint_state) :: left_band, right_band
+      complex(rp), allocatable :: coordinates(:)
+      real(rp) :: score, norm, nearest_score, deepest_energy
+      real(rp), parameter :: occupation_tolerance = 1.0e-8_rp, coordinate_tolerance = 1.0e-12_rp
+      integer :: ik, ib, jb, nearest_left, nearest_right, deep_left, deep_right, first_left, first_right
+      integer :: additional_left, additional_right
+
+      if (size(selected_left) < 3 .or. size(selected_right) /= size(selected_left)) then
+         error stop 'TDVK-02R2 transition selector: output shape mismatch'
+      end if
+      selected_k = 1
+      do ik = 2, left_state%nk
+         if (sum(left_state%k_points(:, ik)**2) < sum(left_state%k_points(:, selected_k)**2)) selected_k = ik
+      end do
+      allocate(coordinates(product%product_dimension))
+      nearest_score = huge(1.0_rp)
+      deepest_energy = huge(1.0_rp)
+      nearest_left = 0
+      nearest_right = 0
+      deep_left = 0
+      deep_right = 0
+      first_left = 0
+      first_right = 0
+      do ib = 1, left_state%nbands
+         do jb = 1, right_state%nbands
+            if (left_state%occupations(ib, selected_k) <= 0.5_rp + occupation_tolerance .or. &
+                right_state%occupations(jb, selected_k) >= 0.5_rp - occupation_tolerance .or. &
+                left_state%occupations(ib, selected_k) - right_state%occupations(jb, selected_k) <= occupation_tolerance) cycle
+            call left_band%initialize(left_state%eigenvalues(ib, selected_k), left_state%eigenvectors(:, ib, selected_k))
+            call right_band%initialize(right_state%eigenvalues(jb, selected_k), right_state%eigenvectors(:, jb, selected_k))
+            call product%transition_coordinates(left_band, right_band, coordinates)
+            norm = sqrt(sum(abs(coordinates)**2))
+            if (norm <= coordinate_tolerance) cycle
+            if (first_left == 0) then
+               first_left = ib
+               first_right = jb
+            end if
+            score = abs(left_state%eigenvalues(ib, selected_k) - left_state%fermi_level) + &
+               abs(right_state%eigenvalues(jb, selected_k) - right_state%fermi_level)
+            if (score < nearest_score) then
+               nearest_score = score
+               nearest_left = ib
+               nearest_right = jb
+            end if
+            if (left_state%eigenvalues(ib, selected_k) < left_state%fermi_level - 0.20_rp .and. &
+                left_state%eigenvalues(ib, selected_k) < deepest_energy) then
+               deepest_energy = left_state%eigenvalues(ib, selected_k)
+               deep_left = ib
+               deep_right = jb
+            end if
+         end do
+      end do
+      if (nearest_left == 0 .or. first_left == 0) error stop 'TDVK-02R2 transition selector: no nonzero Fe Gamma transition'
+      if (deep_left == 0) then
+         deep_left = first_left
+         deep_right = first_right
+      end if
+      additional_left = 0
+      additional_right = 0
+      do ib = 1, left_state%nbands
+         do jb = 1, right_state%nbands
+            if (ib == nearest_left .and. jb == nearest_right) cycle
+            if (ib == deep_left .and. jb == deep_right) cycle
+            if (left_state%occupations(ib, selected_k) <= 0.5_rp + occupation_tolerance .or. &
+                right_state%occupations(jb, selected_k) >= 0.5_rp - occupation_tolerance .or. &
+                left_state%occupations(ib, selected_k) - right_state%occupations(jb, selected_k) <= occupation_tolerance) cycle
+            call left_band%initialize(left_state%eigenvalues(ib, selected_k), left_state%eigenvectors(:, ib, selected_k))
+            call right_band%initialize(right_state%eigenvalues(jb, selected_k), right_state%eigenvectors(:, jb, selected_k))
+            call product%transition_coordinates(left_band, right_band, coordinates)
+            if (sqrt(sum(abs(coordinates)**2)) > coordinate_tolerance) then
+               additional_left = ib
+               additional_right = jb
+               exit
+            end if
+         end do
+         if (additional_left /= 0) exit
+      end do
+      if (additional_left == 0) error stop 'TDVK-02R2 transition selector: fewer than three distinct transitions'
+      selected_left = [nearest_left, deep_left, additional_left]
+      selected_right = [nearest_right, deep_right, additional_right]
+      deallocate(coordinates)
+   end subroutine select_live_transitions
+
+   subroutine project_point_transition(response_space, product, point_transition, product_coordinates)
+      type(response_space_layout), intent(in) :: response_space
+      type(lmto_product_response_basis), intent(in) :: product
+      complex(rp), intent(in) :: point_transition(:)
+      complex(rp), intent(out) :: product_coordinates(:)
+      type(response_super_index) :: item
+      integer :: product_flat, site, response_l, response_m, product_mode, ir, point_flat
+
+      if (size(point_transition) /= response_space%ndim .or. size(product_coordinates) /= product%product_dimension) then
+         error stop 'TDVK-02R2 transition projection: vector shape mismatch'
+      end if
+      product_coordinates = cmplx(0.0_rp, 0.0_rp, rp)
+      do product_flat = 1, product%product_dimension
+         call product%unflatten_index(product_flat, site, response_l, response_m, product_mode)
+         do ir = 1, response_space%npoint
+            item = response_super_index(site, response_l, response_m, ir, 1)
+            call response_flatten_superindex(item, response_space%nsite, response_space%response_lmax, &
+               response_space%npoint, response_space%nchannel, point_flat)
+            product_coordinates(product_flat) = product_coordinates(product_flat) + &
+               conjg(product%blocks(site, response_l)%weighted_modes(ir, product_mode))* &
+               sqrt(response_space%radial_weights(ir))*point_transition(point_flat)
+         end do
+      end do
+   end subroutine project_point_transition
+
+   subroutine write_tddft_product_bare_smoke(config, result, reciprocal_obj, accepted_moment, maximum_transition_error, runtime)
+      type(tddft_production_config), intent(in) :: config
+      type(lr_product_ks_susceptibility_result), intent(in) :: result
+      type(reciprocal), intent(in) :: reciprocal_obj
+      real(rp), intent(in) :: accepted_moment, maximum_transition_error, runtime
+      integer :: unit, ifrequency, i
+      real(rp) :: frobenius_norm, maximum_element, memory_bytes
+      complex(rp) :: trace
+
+      memory_bytes = 16.0_rp*real(result%product_dimension*result%product_dimension*size(result%frequencies), rp)
+      open(newunit=unit, file=trim(config%output_file), status='replace', action='write')
+      write(unit, '(a)') '# TDVK-02R2 compact Lehmann bare response; no KXC or Dyson invoked'
+      write(unit, '(a,a)') '# build_version = ', trim(tddft_build_version)
+      write(unit, '(a,i0)') '# product_dimension = ', result%product_dimension
+      write(unit, '(a,es24.16)') '# response_matrix_memory_bytes = ', memory_bytes
+      write(unit, '(a,es24.16)') '# response_matrix_memory_MiB = ', memory_bytes/(1024.0_rp**2)
+      write(unit, '(a,es24.16)') '# runtime_cpu_seconds = ', runtime
+      write(unit, '(a,es24.16)') '# accepted_moment_muB = ', accepted_moment
+      write(unit, '(a,es24.16)') '# EF_Ry = ', reciprocal_obj%fermi_level
+      write(unit, '(a,es24.16)') '# eta_Ry = ', config%eta
+      write(unit, '(a,es24.16)') '# maximum_live_transition_residual = ', maximum_transition_error
+      write(unit, '(a,l1)') '# finite_response = ', all(ieee_is_finite(real(result%susceptibility, rp))) .and. &
+         all(ieee_is_finite(aimag(result%susceptibility)))
+      write(unit, '(a)') '# columns: omega_Ry frobenius_norm max_abs_element trace_real trace_imag'
+      do ifrequency = 1, size(result%frequencies)
+         frobenius_norm = sqrt(sum(abs(result%susceptibility(:, :, ifrequency))**2))
+         maximum_element = maxval(abs(result%susceptibility(:, :, ifrequency)))
+         trace = cmplx(0.0_rp, 0.0_rp, rp)
+         do i = 1, result%product_dimension
+            trace = trace + result%susceptibility(i, i, ifrequency)
+         end do
+         write(unit, '(5(es24.16,1x))') result%frequencies(ifrequency), frobenius_norm, maximum_element, &
+            real(trace, rp), aimag(trace)
+      end do
+      close(unit)
+   end subroutine write_tddft_product_bare_smoke
+
+   character(len=5) function product_channel_name(channel_kind) result(value)
+      integer, intent(in) :: channel_kind
+
+      if (channel_kind == lmto_product_channel_plus) then
+         value = 'plus '
+      else
+         value = 'minus'
+      end if
+   end function product_channel_name
 
    !> Evaluate an already prepared request batch. This is the reproducibility
    !> seam: tests and validation can compare it directly with service calls,
@@ -654,8 +942,8 @@ contains
       type(response_space_layout), intent(in) :: response_space
       type(lmto_radial_basis), intent(in) :: radial_bases(:)
       type(radial_ground_state), intent(in) :: ground_states(:)
-      type(lr_electronic_state), intent(in) :: left_state
-      type(lr_electronic_state), intent(in) :: endpoints(:)
+      type(lr_electronic_state), target, intent(in) :: left_state
+      type(lr_electronic_state), target, intent(in) :: endpoints(:)
       class(lr_rs_gf_provider), intent(in), optional :: native_provider
       type(lr_rs_gf_pair), intent(in), optional :: native_pairs(:)
       integer :: iq

@@ -554,8 +554,8 @@ available before susceptibility accumulation.
 - [x] LR-04 metric norm and Euclidean product-coordinate norm agree below
   `1e-10` for transitions in the certified fixture span.
 - [x] No `Sigma^{-1}` is used in the transition path.
-- [ ] Live Fe Gamma transition oracle; deferred to TDVK-02R2 because the
-  existing accepted snapshot does not persist reciprocal eigenvectors.
+- [x] Live Fe Gamma transition oracle completed in TDVK-02R2 at the natural
+  reciprocal-state handoff; the maximum residual was `1.5853e-15`.
 - [x] LR-06 accumulation, LR-GF-02, KXC, Dyson, Goldstone logic, driver,
   eta, Fe inputs/physics, radial mesh, and response cutoff were not changed.
 
@@ -568,7 +568,116 @@ ctest --test-dir build -R '^(UnitLrLmtoProductResponse|UnitLrLmtoProductStrictRa
 ```
 
 Result: all three tests passed, including the expected-failure strict rank
-guard. Do not proceed to compressed LR-06 from this slice. The next task is
-TDVK-02R2: use the naturally available reciprocal Fe state before susceptibility
-accumulation to complete the live Gamma transition-span oracle, while keeping
-LR-06 itself unchanged.
+guard. The deferred live transition oracle and compact Lehmann response are
+completed in TDVK-02R2 below; this R1 section itself did not alter LR-06.
+
+## TDVK-02R2 — compact Lehmann susceptibility
+
+**Status: PASS for the compact weighted-orthonormal Lehmann bare response.**
+This closes the TDVK-02 Lehmann bare-response blocker in product space; the
+overall TDVK-02 verdict remains unchanged because the full reciprocal TD-DFT
+lifecycle still awaits compact GF, kernel, and Dyson representations.
+
+The new `lr_product_ks_susceptibility_request` and separate
+`lr_product_ks_susceptibility_result` use the existing R1
+`lmto_product_response_basis`. The evaluator keeps the legacy
+`evaluate_lr_ks_susceptibility` point-grid implementation intact and copies its
+occupation skip, exact endpoint, k-weight normalization, factor of two,
+retarded denominator, eta, and circular-channel conventions mechanically. Each
+runtime transition is a `pauli_endpoint_state` pair passed to the R1 analytical
+product transition map; the compact evaluator allocates no LR-05 point-space
+transition vector and never forms a `12,375 x 12,375` response matrix.
+
+### Independent fixture equivalence
+
+The standalone `UnitLrProductKsSusceptibility` fixture compares the compact
+matrix with an independently projected legacy LR-06 canonical matrix. It covers
+both circular channels, Gamma and finite q, static and finite omega, and two eta
+values. The oracle reconstructs point values only on positive LR-04 metric
+coordinates and projects with `U^H W^(1/2)`, as required by the product-space
+definition.
+
+```text
+maximum fixture equivalence residual = 1.1599e-15
+maximum pair/denominator residual    = 0.0000e+00
+maximum snapshot mutation            = 0.0000e+00
+product dimensions                   = unpruned 52, retained 33 (fixture)
+```
+
+The retained dimension 33 is a property of the deliberately small diagnostic
+fixture. The strict accepted-Fe basis below remains the complete 232-coordinate
+span.
+
+### Live Fe Gamma transition oracle
+
+At the accepted bcc-Fe reciprocal handoff, the deterministic nearest,
+deeper, and additional nonzero occupied-to-unoccupied transition checks passed
+against the independent projection of the unchanged LR-05 point vertex:
+
+| channel | nearest | deeper | additional | maximum |
+| --- | ---: | ---: | ---: | ---: |
+| `chi_plus` | `7.1340e-16` | `7.8162e-16` | `7.7067e-16` | `7.8162e-16` |
+| `chi_minus` | `1.1110e-15` | `1.4846e-15` | `1.5853e-15` | `1.5853e-15` |
+
+All relative residuals are below `1e-10`. No reciprocal eigenpair artifact was
+persisted; the oracle ran before compact susceptibility accumulation at the
+existing production handoff.
+
+### Accepted Fe compact bare-response smoke
+
+The isolated production run used the accepted one-site bcc-Fe state with the
+documented `8x8x8=512` Gamma-centered mesh, scalar-relativistic collinear
+`ham_only`, second-order/HOH Hamiltonian, `chi_plus`, Gamma q, effective
+`response_lmax=4` complete product space, `eta=0.02 Ry`, Goldstone off, and no
+KXC/Dyson invocation. The SCF handoff reproduced residual `6.903e-7`, moment
+`2.2674448 mu_B`, and `EF=-0.0851220945 Ry`.
+
+```text
+product dimension                 = 232
+compact matrix storage (3 omega)  = 2,583,552 bytes = 2.463867 MiB
+compact accumulation CPU time     = 176.099 s
+maximum live transition residual  = 1.5852725e-15
+finite response                  = true
+```
+
+The three-frequency diagnostics were finite:
+
+| omega (Ry) | Frobenius norm | max element | trace (real, imag) |
+| ---: | ---: | ---: | ---: |
+| `0.00` | `3.9021824` | `1.9070632` | `(-13.432226, -0.9573512)` |
+| `0.02` | `4.3223096` | `2.1402761` | `(-14.604437, -1.4373174)` |
+| `0.05` | `5.2184192` | `2.6271858` | `(-17.120934, -2.6547583)` |
+
+### R2 checklist and reproducibility
+
+- [x] Separate compact request/result types and explicit weighted-orthonormal
+  representation metadata added.
+- [x] Legacy LR-06 point-grid evaluator left unchanged.
+- [x] Exact LR-06 transition prefactor, occupation skip, endpoint, denominator,
+  eta, and circular channel retained.
+- [x] Runtime compact path uses R1 product coordinates and no point transition
+  allocation.
+- [x] Independent fixture equivalence passes below `1e-10` for both channels,
+  q/omega/eta combinations, with immutable snapshots.
+- [x] Live Fe Gamma nearest/deeper/additional transition oracle passes below
+  `1e-10` in both channels.
+- [x] Complete accepted Fe Gamma compact bare response evaluates all 232 product
+  coordinates and remains finite through `omega=0.05 Ry`.
+- [x] KXC, GSR, Dyson/loss, Goldstone, LR-GF-02, eta, Fe physics, radial mesh,
+  and TDVK-03 were not changed or invoked.
+- [x] TDVK-02 was not relabelled as a full lifecycle PASS.
+
+Focused command:
+
+```text
+ctest --test-dir build --output-on-failure -R '^(UnitLrLmtoProductResponseBasis|UnitLrLmtoProductResponse|UnitLrLmtoProductStrictRankGuard|UnitLrProductKsSusceptibility)$'
+```
+
+Result: all four retained R0/R0b/R1 tests and the R2 fixture test passed. The
+accepted-Fe smoke was run from an isolated temporary directory using the same
+tracked material deck with only `backend='product_lehmann'` and
+`fresh_start=.true.` for the validation handoff; the tracked deck was restored
+afterward.
+
+The next task is the orchestrator-approved compact reciprocal-GF equivalence
+design (then compact KXC/Dyson integration), without starting TDVK-03.

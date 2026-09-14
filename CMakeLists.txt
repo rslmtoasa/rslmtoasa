@@ -648,6 +648,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrLmtoProductStrictRankGuard PROPERTIES
     LABELS "unit;tdvk-02r1;product-basis;negative;rank-guard"
     WILL_FAIL TRUE)
+  add_fortran_unit_test(UnitLrProductKsSusceptibility ${TestDIR}/unit/test_lr_product_ks_susceptibility.f90)
+  set_tests_properties(UnitLrProductKsSusceptibility PROPERTIES LABELS "unit;tdvk-02r2;lr-06;product-basis;lehmann")
   add_fortran_unit_test(UnitLrKsSusceptibility ${TestDIR}/unit/test_lr_ks_susceptibility.f90)
   set_tests_properties(UnitLrKsSusceptibility PROPERTIES LABELS "unit;lr-06;ks-susceptibility;lehmann;covariance")
   add_fortran_unit_test(UnitLrGfSusceptibility ${TestDIR}/unit/test_lr_gf_susceptibility.f90)

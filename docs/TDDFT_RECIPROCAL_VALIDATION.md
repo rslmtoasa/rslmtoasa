@@ -361,11 +361,58 @@ the material driver.
   `1.1448e-15` and `3.6871e-15`.
 - [x] Production rank sensitivity fails closed; the existing pathological
   fixture is only exercised in explicitly non-strict diagnostic mode.
-- [ ] Live Fe Gamma transition oracle; deferred to TDVK-02R2 because the
-  accepted artifact does not persist reciprocal eigenvectors.
+- [x] Live Fe Gamma transition oracle completed in TDVK-02R2 at the natural
+  reciprocal-state handoff; the maximum residual was `1.5853e-15`.
 - [x] No compressed LR-06 or susceptibility path was added.
 
 Detailed API, spectra, oracle residuals, and the R1 checklist are in
 [`docs/LR_LMTO_PRODUCT_RESPONSE_BASIS.md`](LR_LMTO_PRODUCT_RESPONSE_BASIS.md).
-Next task: TDVK-02R2 live Fe Gamma transition-span validation at the existing
-LR-05/LR-06 handoff, before any compressed LR-06 work.
+TDVK-02R2 below completes the deferred live transition-span validation before
+compact Lehmann accumulation.
+
+## TDVK-02R2 compact LMTO-product Lehmann response
+
+**Status: PASS for compact Lehmann bare-response execution; the overall
+TDVK-02 verdict remains BLOCKED for the full reciprocal TD-DFT lifecycle.**
+
+This slice adds a separate product-space LR-06 evaluator using the certified R1
+transition coordinates. It preserves the legacy point-grid LR-06 evaluator and
+uses the weighted-orthonormal representation
+`chi_P = U^H W^(1/2) chi_raw W^(1/2) U`. Product coordinates therefore use the
+ordinary Euclidean adjoint and no extra radial weight or LR-04 right-weighted
+`B=chi_raw*W` naming is introduced.
+
+### Evidence
+
+- [x] Independent fixture projection: both channels, Gamma and finite q, static
+  and finite omega, and two eta values agree with legacy LR-06 at a maximum
+  relative residual of `1.1599e-15`.
+- [x] Independent pair/denominator accumulation agrees at `0.0000e+00`; the
+  occupation skip count and immutable electronic snapshots also pass.
+- [x] Live accepted-Fe Gamma LR-05-to-R1 transition oracle passes for the
+  nearest/deeper/additional transitions in both channels, with maximum
+  residual `1.5852725e-15`.
+- [x] Accepted bcc-Fe compact Gamma smoke evaluates the complete 232-coordinate
+  product space and is finite for `omega=0, 0.02, 0.05 Ry` at `eta=0.02 Ry`.
+- [x] Compact storage for the three-frequency 232x232 result is `2.463867 MiB`
+  and measured compact accumulation CPU time is `176.099 s`.
+- [x] No point-space transition allocation occurs in the compact evaluator; the
+  point-grid vector is used only by the live validation oracle.
+- [x] KXC, GSR, Dyson/loss, Goldstone, LR-GF-02, Fe physics, eta, and TDVK-03
+  remain untouched and the compact smoke stops before KXC/Dyson.
+
+The accepted handoff reproduced the documented Fe values: SCF residual
+`6.903e-7`, moment `2.2674448 mu_B`, and `EF=-0.0851220945 Ry`. The compact
+smoke is a validation-only branch selected by `backend='product_lehmann'` at
+the naturally prepared reciprocal handoff; it is not a full TDDFT PASS route.
+
+The focused test is registered as `UnitLrProductKsSusceptibility` and is run
+with:
+
+```text
+ctest --test-dir build --output-on-failure -R '^(UnitLrLmtoProductResponseBasis|UnitLrLmtoProductResponse|UnitLrLmtoProductStrictRankGuard|UnitLrProductKsSusceptibility)$'
+```
+
+All four retained R0/R0b/R1 product tests and the R2 fixture test passed. The
+next task is compact reciprocal-GF equivalence, followed by compact kernel and
+Dyson representation integration under orchestrator approval.

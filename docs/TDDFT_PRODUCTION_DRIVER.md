@@ -38,7 +38,7 @@ The active calculation contract is:
   response_lmax = -1                   ! default: complete 2*lmax product
   interaction_route = 'direct_alsda'
   goldstone_correction = .false.
-  backend = 'lehmann'                 ! lehmann/spectral, reciprocal_gf, native_rsgf
+  backend = 'lehmann'                 ! lehmann/spectral, reciprocal_gf, native_rsgf, product_lehmann
   reciprocal_backend_crosscheck = .false. ! opt-in reciprocal validation diagnostic
   native_rsgf_provider = 'auto'       ! auto, block, or chebyshev
   gf_integration_points = 2001        ! reciprocal/native GF Simpson mesh
@@ -61,6 +61,11 @@ and TDRUN-02 registers the native route through the same accepted-state
 lifecycle. The registration is an integration result, not Fe/Ni material
 validation. See
 [`RSGF_CAPABILITY_CLOSURE.md`](RSGF_CAPABILITY_CLOSURE.md).
+
+`backend='product_lehmann'` is a TDVK-02R2 validation-only branch. It evaluates
+the bare KS Lehmann response in the weighted-orthonormal LMTO product basis at
+the naturally prepared reciprocal handoff, then stops before KXC, GSR, Dyson,
+and loss. It is not a full TD-DFT lifecycle backend.
 
 The old `post_processing='susceptibility'` spelling is rejected with a
 migration error.  `&tddft` is feature-off when absent.  Ordinary calculations

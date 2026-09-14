@@ -18,6 +18,8 @@ module lr_ks_susceptibility_mod
       response_vector_norm, response_raw_to_canonical
    use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state, pauli_vertex_capabilities, &
       pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
+   use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
+      lmto_product_channel_minus
    implicit none
    private
 
@@ -86,16 +88,53 @@ module lr_ks_susceptibility_mod
       complex(rp), allocatable :: susceptibility(:, :, :) ! (I,J,frequency)
    end type lr_ks_susceptibility_result
 
+   !> Request metadata for the compact weighted-orthonormal product response.
+   !>
+   !> This is deliberately a separate request type from LR-06.  A compact
+   !> result must never be mistaken for an LR-04 point-space matrix whose
+   !> dimension is `response_space%ndim`.
+   type, public :: lr_product_ks_susceptibility_request
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      character(len=32) :: channel = lr_channel_plus
+      type(lmto_product_response_basis), pointer :: product_basis => null()
+      type(lr_electronic_state), pointer :: electronic_state => null()
+      type(lr_electronic_state), pointer :: q_endpoint_state => null()
+   end type lr_product_ks_susceptibility_request
+
+   !> Result in the weighted-orthonormal LMTO product representation.
+   type, public :: lr_product_ks_susceptibility_result
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      character(len=32) :: channel = ''
+      character(len=128) :: response_representation = ''
+      character(len=256) :: response_space_metadata = ''
+      integer :: product_dimension = 0
+      integer :: transition_dimension = 0
+      integer :: ntransitions_evaluated = 0
+      integer :: noccupation_skips = 0
+      logical :: point_space_transition_allocated = .false.
+      complex(rp), allocatable :: susceptibility(:, :, :) ! (product,product,frequency)
+   end type lr_product_ks_susceptibility_result
+
    public :: lr_fermi_dirac_occupation
    public :: lr_snapshot_from_reciprocal
    public :: lr_q_endpoint_from_reciprocal
    public :: evaluate_lr_ks_susceptibility
+   public :: evaluate_lr_product_ks_susceptibility
    public :: evaluate_lr_static_residual
 
    interface evaluate_lr_ks_susceptibility
       module procedure evaluate_lr_ks_susceptibility_request
       module procedure evaluate_lr_ks_susceptibility_explicit
    end interface evaluate_lr_ks_susceptibility
+
+   interface evaluate_lr_product_ks_susceptibility
+      module procedure evaluate_lr_product_ks_susceptibility_request
+      module procedure evaluate_lr_product_ks_susceptibility_explicit
+   end interface evaluate_lr_product_ks_susceptibility
 
 contains
 
@@ -393,6 +432,155 @@ contains
       write (result%response_space_metadata, '(a,i0,a,i0,a,i0,a,i0)') 'ndim=', space%ndim, &
          ' nsite=', space%nsite, ' radial_points=', space%npoint, ' channels=', space%nchannel
    end subroutine evaluate_lr_ks_susceptibility_explicit
+
+   subroutine evaluate_lr_product_ks_susceptibility_request(request, result)
+      type(lr_product_ks_susceptibility_request), intent(in) :: request
+      type(lr_product_ks_susceptibility_result), intent(out) :: result
+
+      if (.not. associated(request%product_basis) .or. .not. associated(request%electronic_state) .or. &
+          .not. associated(request%q_endpoint_state)) then
+         error stop 'evaluate_lr_product_ks_susceptibility: request references are incomplete'
+      end if
+      call evaluate_lr_product_ks_susceptibility_explicit(request%product_basis, request%electronic_state, &
+         request%q_endpoint_state, request, result)
+   end subroutine evaluate_lr_product_ks_susceptibility_request
+
+   !> Accumulate the LR-06 Lehmann response directly in the weighted
+   !> orthonormal LMTO product representation.  The point-grid LR-06 routine
+   !> above remains the canonical legacy implementation and is intentionally
+   !> not routed through this evaluator.
+   subroutine evaluate_lr_product_ks_susceptibility_explicit(product_basis, left_state, right_state, request, result)
+      type(lmto_product_response_basis), intent(in) :: product_basis
+      type(lr_electronic_state), intent(in) :: left_state, right_state
+      type(lr_product_ks_susceptibility_request), intent(in) :: request
+      type(lr_product_ks_susceptibility_result), intent(out) :: result
+
+      type(pauli_endpoint_state) :: left_band, right_band
+      complex(rp), allocatable :: transition(:)
+      complex(rp) :: denominator, pair_factor
+      real(rp) :: weight_sum, occupation_difference
+      integer :: ik, ib, jb, ifrequency, i, j, channel_kind
+
+      call validate_product_susceptibility_inputs(product_basis, left_state, right_state, request, channel_kind)
+      call left_state%validate('evaluate_lr_product_ks_susceptibility:left_state')
+      call right_state%validate('evaluate_lr_product_ks_susceptibility:q_endpoint_state')
+
+      allocate(result%susceptibility(product_basis%product_dimension, product_basis%product_dimension, &
+         size(request%frequencies)), transition(product_basis%product_dimension))
+      result%susceptibility = cmplx(0.0_rp, 0.0_rp, rp)
+      result%q = request%q
+      allocate(result%frequencies(size(request%frequencies)))
+      result%frequencies = request%frequencies
+      result%eta = request%eta
+      result%product_dimension = product_basis%product_dimension
+      result%transition_dimension = product_basis%product_dimension
+      result%ntransitions_evaluated = 0
+      result%noccupation_skips = 0
+      result%point_space_transition_allocated = .false.
+      result%response_representation = 'weighted-orthonormal LMTO product representation'
+      write (result%response_space_metadata, '(a,i0,a,i0,a,i0,a)') &
+         'product_dimension=', product_basis%product_dimension, ' unpruned_dimension=', &
+         product_basis%unpruned_dimension, ' transition_dimension=', product_basis%product_dimension, &
+         '; no point-space transition allocation'
+      if (channel_kind == 1) then
+         result%channel = lr_channel_plus
+      else
+         result%channel = lr_channel_minus
+      end if
+
+      weight_sum = sum(left_state%k_weights)
+      ! This is the LR-06 full finite spectrum loop.  In particular, the
+      ! occupation test, denominator, k-weight normalization, factor of two,
+      ! and retarded eta are copied mechanically from the point evaluator.
+      do ik = 1, left_state%nk
+         do ib = 1, left_state%nbands
+            call left_band%initialize(left_state%eigenvalues(ib, ik), left_state%eigenvectors(:, ib, ik))
+            do jb = 1, right_state%nbands
+               occupation_difference = left_state%occupations(ib, ik) - right_state%occupations(jb, ik)
+               if (occupation_difference == 0.0_rp) then
+                  result%noccupation_skips = result%noccupation_skips + 1
+                  cycle
+               end if
+               call right_band%initialize(right_state%eigenvalues(jb, ik), right_state%eigenvectors(:, jb, ik))
+               call product_basis%transition_coordinates(left_band, right_band, transition)
+               result%ntransitions_evaluated = result%ntransitions_evaluated + 1
+               do ifrequency = 1, size(request%frequencies)
+                  denominator = cmplx(request%frequencies(ifrequency) + left_band%energy - right_band%energy, &
+                     request%eta, rp)
+                  pair_factor = cmplx(2.0_rp*left_state%k_weights(ik)/weight_sum, 0.0_rp, rp)* &
+                     occupation_difference/denominator
+                  do j = 1, product_basis%product_dimension
+                     do i = 1, product_basis%product_dimension
+                        result%susceptibility(i, j, ifrequency) = result%susceptibility(i, j, ifrequency) + &
+                           pair_factor*transition(i)*conjg(transition(j))
+                     end do
+                  end do
+               end do
+            end do
+         end do
+      end do
+   end subroutine evaluate_lr_product_ks_susceptibility_explicit
+
+   subroutine validate_product_susceptibility_inputs(product_basis, left_state, right_state, request, channel_kind)
+      type(lmto_product_response_basis), intent(in) :: product_basis
+      type(lr_electronic_state), intent(in) :: left_state, right_state
+      type(lr_product_ks_susceptibility_request), intent(in) :: request
+      integer, intent(out) :: channel_kind
+      real(rp) :: expected_k(3), scale
+      integer :: ik, expected_nbasis
+
+      if (.not. allocated(request%frequencies) .or. size(request%frequencies) < 1) then
+         error stop 'evaluate_lr_product_ks_susceptibility: at least one frequency is required'
+      end if
+      if (request%eta <= 0.0_rp) error stop 'evaluate_lr_product_ks_susceptibility: retarded eta must be positive'
+      select case (trim(request%channel))
+      case ('plus', 'chi_plus')
+         channel_kind = 1
+      case ('minus', 'chi_minus')
+         channel_kind = 2
+      case default
+         error stop 'evaluate_lr_product_ks_susceptibility: channel must be chi_plus or chi_minus'
+      end select
+      if (product_basis%circular_channel /= merge(lmto_product_channel_plus, lmto_product_channel_minus, channel_kind == 1)) then
+         error stop 'evaluate_lr_product_ks_susceptibility: product/channel provenance differs'
+      end if
+      if (.not. allocated(product_basis%blocks) .or. product_basis%nsite < 1 .or. &
+          product_basis%product_dimension < 1 .or. product_basis%response_lmax < 0) then
+         error stop 'evaluate_lr_product_ks_susceptibility: product representation is not initialized'
+      end if
+      expected_nbasis = 2*(product_basis%orbital_lmax + 1)**2*product_basis%nsite
+      if (left_state%nbasis /= expected_nbasis .or. right_state%nbasis /= expected_nbasis) then
+         error stop 'evaluate_lr_product_ks_susceptibility: eigensystem basis is incompatible with product representation'
+      end if
+      if (left_state%nk /= right_state%nk .or. left_state%nbands /= right_state%nbands .or. &
+          left_state%nbasis /= right_state%nbasis) then
+         error stop 'evaluate_lr_product_ks_susceptibility: left and k+q endpoint dimensions differ'
+      end if
+      if (maxval(abs(left_state%k_weights - right_state%k_weights)) > state_match_tolerance) then
+         error stop 'evaluate_lr_product_ks_susceptibility: k weights differ between endpoints'
+      end if
+      scale = max(1.0_rp, abs(left_state%fermi_level), abs(right_state%fermi_level), &
+         abs(left_state%temperature), abs(right_state%temperature), abs(left_state%energy_zero), &
+         abs(right_state%energy_zero))
+      if (abs(left_state%fermi_level - right_state%fermi_level) > state_match_tolerance*scale .or. &
+          abs(left_state%temperature - right_state%temperature) > state_match_tolerance*scale .or. &
+          abs(left_state%energy_zero - right_state%energy_zero) > state_match_tolerance*scale) then
+         error stop 'evaluate_lr_product_ks_susceptibility: EF/temperature/energy-zero provenance differs'
+      end if
+      if (trim(left_state%reciprocal_mode) /= 'ham_only' .or. trim(right_state%reciprocal_mode) /= 'ham_only' .or. &
+          trim(left_state%hamiltonian_order) /= 'second' .or. trim(right_state%hamiltonian_order) /= 'second' .or. &
+          .not. left_state%orthogonal .or. .not. right_state%orthogonal .or. .not. left_state%collinear .or. &
+          .not. right_state%collinear .or. left_state%has_soc .or. right_state%has_soc .or. &
+          left_state%has_extra_operator .or. right_state%has_extra_operator) then
+         error stop 'evaluate_lr_product_ks_susceptibility: representation is outside the LR-06 baseline'
+      end if
+      do ik = 1, left_state%nk
+         expected_k = fold_fractional_kpoint(left_state%k_points(:, ik) + request%q)
+         if (maxval(abs(expected_k - right_state%k_points(:, ik))) > endpoint_match_tolerance) then
+            error stop 'evaluate_lr_product_ks_susceptibility: k+q endpoint is not the exact folded endpoint'
+         end if
+      end do
+   end subroutine validate_product_susceptibility_inputs
 
    !> Apply the raw q=0 static response to a separately supplied field and
    !> compare it with the separately supplied ground-state magnetization.
