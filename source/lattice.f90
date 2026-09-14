@@ -43,7 +43,7 @@ module lattice_mod
    !> Module´s main structure
    type, public :: lattice
       !> Charge
-      class(control), pointer :: control
+      class(control), pointer :: control => null()
 
       ! General variables
 
@@ -464,6 +464,7 @@ contains
       ntype = this%ntype
       crystal_sym = this%crystal_sym
       a = this%a
+      alat = this%alat
       wav = this%wav
       celldm = this%celldm
       b1 = this%b1
@@ -574,7 +575,7 @@ contains
          allocate (ct(ntype))
       end if
 
-      if (size(ijktrio) .ne. 2*njijk) then
+      if (size(ijktrio, 1) /= njijk .or. size(ijktrio, 2) /= 6) then
          deallocate (ijktrio)
          allocate (ijktrio(njijk, 6))
       end if
@@ -670,6 +671,7 @@ contains
          a, crd, &
          ct, izp, no, iu, ib, irec, ct
 
+      call move_alloc(this%ct, ct)
       call move_alloc(this%crd, crd)
       call move_alloc(this%izp, izp)
       call move_alloc(this%no, no)
@@ -714,7 +716,7 @@ contains
       !this%r2 = r2
       this%nbulk = 0
 
-      !call move_alloc(ct, this%ct)
+      call move_alloc(ct, this%ct)
       call move_alloc(izp, this%izp)
       call move_alloc(no, this%no)
       call move_alloc(ib, this%ib)
@@ -831,8 +833,8 @@ contains
          a(:, 3) = [0.50000000, 0.50000000, 0.00000000]
          this%crd(:, 1) = [0.00, 0.00, 0.00]
          this%crd(:, 2) = [0.50, 0.50, 0.50]
-         this%izp(:) = [1, 2]
-         this%no(:) = [1, 2]
+         this%izp(1:2) = [1, 2]
+         this%no(1:2) = [1, 2]
          this%nbulk_bulk = 2
          this%ntot = 2
          if (this%control%calctype == 'B') then
@@ -901,8 +903,8 @@ contains
          this%crd(3, 2) = (0.5d0)*this%celldm
          this%nbulk_bulk = 2
          this%ntot = 2
-         this%izp(:) = [1, 2]
-         this%no(:) = [1, 2]
+         this%izp(1:2) = [1, 2]
+         this%no(1:2) = [1, 2]
          if (this%control%calctype == 'B') then
             this%nrec = this%nbulk_bulk
             this%nbulk = 0
@@ -944,6 +946,11 @@ contains
       class(lattice) :: this
       logical, intent(in), optional :: full
 
+      this%alat = 0.0_rp
+      this%rc = 0.0_rp
+      this%r2 = 0.0_rp
+      this%a = 0.0_rp
+      this%crystal_sym = ''
       this%ndim = 9900000
       this%npe = 49
       this%nclu = 0
@@ -981,7 +988,8 @@ contains
       allocate (this%ct(this%ntype))
 #endif
 
-      this%izp = 0.0d0
+      this%no = 0
+      this%izp = 0
       this%crd = 0.d0
       this%inclu = 0.0d0
       this%ijpair = 0.0d0
@@ -1838,9 +1846,7 @@ contains
       nnmx = 5250
       nomx = this%ntot
       kk = this%kk
-      allocate (set(3, nomx, nnmx)); set = 0.0d0
       allocate (nn(kk, nnmx))
-      allocate (idnn(nnmx))
       nm = nnmx
       write (17, *) 'irec', this%nrec, this%irec
       write (17, *) 'irec type', this%iz(this%irec(:))
@@ -1855,9 +1861,13 @@ contains
 #else
       allocate (this%nn(this%kk, nm + 1))
 #endif
-      do ii = 1, nm + 1
-         this%nn(:, ii) = nn(:, ii)
-      end do
+      ! nm includes the count column; keep the spare column initialized.
+      this%nn = 0
+      this%nn(:, 1:nm) = nn(:, 1:nm)
+      deallocate (nn)
+      nnmx = size(this%nn, 2)
+      allocate (set(3, nomx, nnmx)); set = 0.0_rp
+      allocate (idnn(nnmx))
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('lattice.sbar', this%sbar, (/9, 9, nm, this%ntot/))
 #else
@@ -1869,6 +1879,7 @@ contains
       write (17, *) 'outmap', this%nmax, maxval(this%irec)
       call outmap(17, this%iz, this%nn, this%num, kk, nnmx, max(this%nmax, maxval(this%irec)))
       write (17, 10003) kk, nm
+      deallocate (set, idnn)
       if (do_str) then
          do ii = 1, this%ntot
             ia = this%iu(ii)
@@ -2959,7 +2970,7 @@ contains
       integer, intent(in) :: I, J
       real(rp), intent(in) :: R2
       real(rp) :: DD
-      real(rp), dimension(50), intent(in) :: CT
+      real(rp), dimension(*), intent(in) :: CT
       ! Local variables
       real(rp) :: CTM, CTSM
 
@@ -3042,7 +3053,7 @@ contains
       ! Output
       integer, intent(inout) :: NM
       integer, dimension(ND, NM), intent(inout) :: NN
-      real(rp), dimension(50), intent(inout) :: CT
+      real(rp), dimension(*), intent(inout) :: CT
       ! External function
       integer, external :: NGBR
       ! Intrinsic function
@@ -3053,7 +3064,7 @@ contains
       real(rp), dimension(3) :: DDUM
       real(rp), dimension(NM) :: DUM
 
-      NNMAX = 0
+      NNMAX = 1 ! Column one stores the count, even without neighbours.
       IADD = 1
       if (IZP(1) < 0) then
          NN(1, 1) = 1
@@ -3094,6 +3105,11 @@ contains
                ID = NGBR(IIP, JJP, R2, DUM, CT)
                !       if (ID /= 0 .and. ( IZP(I) > NTOT  .or. IZP(J) > NTOT) ) then
                if (ID /= 0) then
+                  ! Check both rows before writing a new neighbour.
+                  if (NN(I, 1) >= NM .or. NN(J, 1) >= NM) then
+                     call g_logger%fatal('nncal: neighbour map capacity exceeded', __FILE__, __LINE__)
+                     return
+                  end if
                   ID = NN(I, 1) + 1
                   NN(I, 1) = ID
                   !         NN(I, ID) = IZP(J)

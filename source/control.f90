@@ -286,9 +286,9 @@ contains
       linear_out = this%linear_out
       cond_calctype = this%cond_calctype
 
-      open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
+      open (newunit=funit, file=fname_, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
-         call g_logger%fatal('file '//fmt('A', fname)//' not found', __FILE__, __LINE__)
+         call g_logger%fatal('file '//fmt('A', fname_)//' not found', __FILE__, __LINE__)
       end if
 
       read (funit, nml=control, iostat=iostatus)
@@ -353,6 +353,10 @@ contains
       implicit none
       class(control), intent(out) :: this
 
+      this%nlim = 0
+      this%nsp = 0 ! Invalid until supplied by the input file.
+      this%nmdir = 0
+      this%asd_atom = 0
       this%calctype = ''
       this%npold = 9
       this%llsp = 16
@@ -427,19 +431,24 @@ contains
       concb = this%concb
       ruban = this%ruban
       do_comom = this%do_comom
+      recur = this%recur
+      random_vec_num = this%random_vec_num
+      cond_ll = this%cond_ll
+      linear_in = this%linear_in
+      linear_out = this%linear_out
+      cond_calctype = this%cond_calctype
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
       else if (present(unit)) then
          write (unit, nml=control)
       else if (present(file)) then
-         open (unit=newunit, file=file)
+         open (newunit=newunit, file=file)
          write (newunit, nml=control)
          close (newunit)
       else
          write (*, nml=control)
       end if
-      close (newunit)
    end subroutine print_state
 
    !---------------------------------------------------------------------------
@@ -509,6 +518,12 @@ contains
    subroutine check_all(this)
       implicit none
       class(control) :: this
+      if (this%nsp < 1 .or. this%nsp > 4) then
+         call g_logger%fatal('control%nsp must be between 1 and 4', __FILE__, __LINE__)
+      end if
+      if (this%nlim < 0) then
+         call g_logger%fatal('control%nlim must be nonnegative', __FILE__, __LINE__)
+      end if
       if (this%calctype /= 'B' &
           .and. this%calctype /= 'S' &
           .and. this%calctype /= 'I') then
