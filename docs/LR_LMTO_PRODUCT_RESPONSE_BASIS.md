@@ -417,3 +417,158 @@ the orchestrator-approved mechanical design of a complete-space streaming or
 matrix-free LR-06 material smoke, with a minimal persisted Gamma eigenpair
 artifact so this live transition-span check can be completed without forming
 `chiKS`.
+
+## TDVK-02R1 — production product-space representation
+
+**Status: PASS for the reusable representation and fixture transition vertex.**
+R0/R0b remain the independent algebraic and conditioning audits. R1 adds the
+production coordinate object and analytical transition map, but deliberately
+does not connect either one to LR-06 accumulation. The TDVK-02 dense material
+response remains **BLOCKED**, and the optional live Fe transition check is
+deferred to TDVK-02R2 because the accepted snapshot does not persist the
+reciprocal eigenstate needed by that check.
+
+### API ownership and indexing
+
+The new module is
+`source/lr_lmto_product_response_basis.f90`, owned by
+`lr_lmto_product_response_basis_mod`. Its public representation is
+`lmto_product_response_basis`; each object is initialized for one explicit
+circular channel with:
+
+```text
+call product%initialize(space, radial_bases, circular_channel, strict_rank)
+```
+
+`strict_rank` defaults to true. A production initialization fails closed if
+`rank_tau1`, `rank_tau10`, and `rank_tau100` disagree. The unit fixture passes
+`strict_rank=.false.` only to expose the existing R0b sensitivity warning; it
+then checks the stored disagreement and a separate negative CTest proves the
+strict guard.
+
+For every `(site,L,selected circular channel)` block the object owns:
+
+- ordered candidate descriptors `(l,l',p,q)`;
+- complete column norms `D` and singular spectrum `Sigma`;
+- retained weighted orthonormal radial modes `U`;
+- retained `V^H` rows for reconstruction audits;
+- the forward candidate map `F`;
+- all three diagnostic thresholds/ranks and a stability flag.
+
+The SVD is independent of `M` and is constructed once per `(site,L,channel)`.
+The deterministic flat coordinate order is site, `L`, `M=-L..L`, then
+retained product mode. `flat_index` and `unflatten_index` provide the inverse
+mapping. The initial certified API requires `space%nchannel=1`, as required by
+the one-explicit-channel response contract.
+
+### SVD and forward transition map
+
+For each block, the module constructs the exact R0/R0b candidate matrix and
+the existing LR-04 radial metric, then calls direct LAPACK `zgesvd` on
+
+```text
+A = W^(1/2) B D^(-1)
+```
+
+It never forms `A^H A` to determine the basis. The retained production map is
+stored exactly as
+
+```text
+F = Sigma V^H D
+z = F t
+```
+
+where `t` is the analytical candidate coefficient vector. The runtime
+transition path contains no inverse singular-value operation and does not
+reconstruct point-space modes. `U` is retained for the later local-operator
+projection task.
+
+The analytical evaluator uses the existing LMTO orbital order, `response_gaunt`,
+the selected circular spin ordering, and endpoint energies. For `chi_plus` it
+uses `(sigma_L,sigma_R)=(1,2)`; for `chi_minus` it uses `(2,1)`. Its candidate
+coefficients are the exact ordered-sector sums
+
+```text
+t_(a,L,M,l,l',p,q) = E_left^p E_right^q
+  * sum_(m,m') conjg(c_left[a,l,m,sigma_L])
+                       * c_right[a,l',m',sigma_R]
+                       * G^(L,M)_(l,m,l',m')
+```
+
+No extra factor, phase, Pauli normalization, radial weight, or pair prefactor
+is introduced. LR-05 remains the point-grid authority.
+
+### Fixture dimensions and rank guard
+
+On the existing `nr=51`, legacy `spd` fixture, the exact unpruned dimensions
+are still `sp=52` and `spd=232`. With the fixture's deliberately pathological
+radial dynamic range, the relaxed diagnostic representation retains `sp=33`
+and `spd=109` coordinates. The `spd` ranks are `7/6/6` at `L=1,2`, so default
+strict production initialization rejects this fixture rather than silently
+choosing a threshold. This is expected fixture guard evidence, not a physical
+compression policy.
+
+The accepted Fe R0b basis has stable full ranks `12,16,16,8,4` at all three
+thresholds, so its production representation remains the full 232-coordinate
+product span. No Fe candidate direction is truncated by R1.
+
+### Independent LR-05 oracle
+
+`tests/unit/test_lr_lmto_product_response.f90` constructs a deterministic
+Hermitian 18-state fixture, selects the R0 pairs `(1,2)`, `(3,8)`, `(5,12)`,
+and `(9,18)`, and tests four endpoint-energy/eigenvector transitions in each
+circular channel. For each transition it independently constructs
+`T_candidate=B t`, projects the unchanged LR-05 vector as
+`z_reference=U^H W^(1/2) T`, and compares it with `z_product=F t`.
+
+Observed maxima over both channels and all four pairs are:
+
+```text
+candidate-space reconstruction residual  = 3.1313e-16
+orthonormal-coordinate residual         = 7.4467e-16
+metric-norm versus product-norm residual = 1.1448e-15
+retained weighted-SVD reconstruction     = 3.6871e-15
+U^H U identity residual                  = 1.3323e-15
+```
+
+All are below `1e-10`. This is fixture-level representation evidence, not a
+Fe material response result. The requested live Fe Gamma nearest/deeper/
+non-negligible-norm transition spot check was not attempted by introducing a
+new global eigenpair artifact or invasive driver hook; it is explicitly
+deferred to TDVK-02R2, where the reciprocal electronic state is naturally
+available before susceptibility accumulation.
+
+### R1 checklist and reproducibility
+
+- [x] Reusable `lmto_product_response_basis_mod` added outside `calculation.f90`.
+- [x] Exact ordered candidate descriptors and `sp=52`/`spd=232` inventory retained.
+- [x] Deterministic `(site,L,M,product_mode)` flat-index roundtrip implemented.
+- [x] Direct weighted SVD and retained `U`, `V^H`, `Sigma`, `D`, and `F` stored.
+- [x] Strict rank-sensitivity guard fails closed; fixture diagnostic mode is
+  explicitly non-production and covered by a negative test.
+- [x] Analytical candidate coefficients use the exact LR-05 orbital, Gaunt,
+  circular-spin, and endpoint-energy conventions.
+- [x] Independent candidate-space `T_candidate` versus unchanged LR-05 oracle
+  passes for multiple deterministic eigenvector pairs and both channels.
+- [x] `z_product=F t` versus projected LR-05 `z_reference` passes below `1e-10`.
+- [x] LR-04 metric norm and Euclidean product-coordinate norm agree below
+  `1e-10` for transitions in the certified fixture span.
+- [x] No `Sigma^{-1}` is used in the transition path.
+- [ ] Live Fe Gamma transition oracle; deferred to TDVK-02R2 because the
+  existing accepted snapshot does not persist reciprocal eigenvectors.
+- [x] LR-06 accumulation, LR-GF-02, KXC, Dyson, Goldstone logic, driver,
+  eta, Fe inputs/physics, radial mesh, and response cutoff were not changed.
+
+Focused commands:
+
+```text
+cmake -S . -B build
+cmake --build build --target UnitLrLmtoProductResponse -j2
+ctest --test-dir build -R '^(UnitLrLmtoProductResponse|UnitLrLmtoProductStrictRankGuard|UnitLrLmtoProductResponseBasis)$' --output-on-failure
+```
+
+Result: all three tests passed, including the expected-failure strict rank
+guard. Do not proceed to compressed LR-06 from this slice. The next task is
+TDVK-02R2: use the naturally available reciprocal Fe state before susceptibility
+accumulation to complete the live Gamma transition-span oracle, while keeping
+LR-06 itself unchanged.

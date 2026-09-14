@@ -642,6 +642,12 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrPauliTransitionVertex PROPERTIES LABELS "unit;lr-05;pauli;transition-vertex;angular;gauge")
   add_fortran_unit_test(UnitLrLmtoProductResponseBasis ${TestDIR}/unit/test_lr_lmto_product_response_basis.f90)
   set_tests_properties(UnitLrLmtoProductResponseBasis PROPERTIES LABELS "unit;tdvk-02r0;lr-05;lr-gf-02;product-basis;audit")
+  add_fortran_unit_test(UnitLrLmtoProductResponse ${TestDIR}/unit/test_lr_lmto_product_response.f90)
+  set_tests_properties(UnitLrLmtoProductResponse PROPERTIES LABELS "unit;tdvk-02r1;lr-05;product-basis;transition-vertex")
+  add_test(NAME UnitLrLmtoProductStrictRankGuard COMMAND $<TARGET_FILE:UnitLrLmtoProductResponse> strict)
+  set_tests_properties(UnitLrLmtoProductStrictRankGuard PROPERTIES
+    LABELS "unit;tdvk-02r1;product-basis;negative;rank-guard"
+    WILL_FAIL TRUE)
   add_fortran_unit_test(UnitLrKsSusceptibility ${TestDIR}/unit/test_lr_ks_susceptibility.f90)
   set_tests_properties(UnitLrKsSusceptibility PROPERTIES LABELS "unit;lr-06;ks-susceptibility;lehmann;covariance")
   add_fortran_unit_test(UnitLrGfSusceptibility ${TestDIR}/unit/test_lr_gf_susceptibility.f90)

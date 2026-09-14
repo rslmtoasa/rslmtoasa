@@ -315,7 +315,7 @@ current equations and radial mesh.
 
 **Status: PASS for accepted-Fe radial conditioning; live Fe transition-span
 spot check remains unavailable.** This is a numerical representation audit,
-not material response validation. TDVK-02R0 remains **BLOCKED** at the dense
+not material response validation. TDVK-02 remains **BLOCKED** at the dense
 complete-space LR-06 response, and TDVK-02R0 remains the separate algebraic
 closure audit.
 
@@ -341,3 +341,31 @@ Detailed spectra and provenance are in
 The next task should be the orchestrator-approved mechanical design of a
 complete-space streaming or matrix-free LR-06 material smoke, including a
 minimal persisted Gamma eigenpair artifact to finish the R0b live span check.
+
+## TDVK-02R1 production LMTO product basis and transition vertex
+
+**Status: PASS for fixture-level representation/vertex closure; no change to
+the TDVK-02 BLOCKED material verdict.** The reusable scaled-SVD product
+representation and analytical `z=F t` transition map are implemented without
+modifying LR-05, LR-06 accumulation, LR-GF-02, KXC, Dyson, Goldstone logic, or
+the material driver.
+
+- [x] `sp=52` and `spd=232` unpruned inventories retained with deterministic
+  product-coordinate indexing.
+- [x] Direct weighted SVD stores `D`, `Sigma`, retained `U`, `V^H`, and the
+  forward map `F=Sigma V^H D`; no inverse singular values are used at runtime.
+- [x] Candidate-space and orthonormal-coordinate oracles agree with unchanged
+  LR-05 below `1e-10` for four deterministic eigenvector pairs in both
+  circular channels; maxima are `3.1313e-16` and `7.4467e-16` respectively.
+- [x] Metric norm closure and retained-SVD reconstruction pass; maxima are
+  `1.1448e-15` and `3.6871e-15`.
+- [x] Production rank sensitivity fails closed; the existing pathological
+  fixture is only exercised in explicitly non-strict diagnostic mode.
+- [ ] Live Fe Gamma transition oracle; deferred to TDVK-02R2 because the
+  accepted artifact does not persist reciprocal eigenvectors.
+- [x] No compressed LR-06 or susceptibility path was added.
+
+Detailed API, spectra, oracle residuals, and the R1 checklist are in
+[`docs/LR_LMTO_PRODUCT_RESPONSE_BASIS.md`](LR_LMTO_PRODUCT_RESPONSE_BASIS.md).
+Next task: TDVK-02R2 live Fe Gamma transition-span validation at the existing
+LR-05/LR-06 handoff, before any compressed LR-06 work.
