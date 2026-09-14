@@ -46,6 +46,7 @@ module lr_gf_susceptibility_mod
    end type lr_gf_susceptibility_request
 
    public :: evaluate_lr_gf_susceptibility
+   public :: build_weighted_resolvent
 
 contains
 

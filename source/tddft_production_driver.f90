@@ -36,6 +36,8 @@ module tddft_production_driver_mod
    use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
       lmto_product_channel_minus
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
+   use lr_product_gf_susceptibility_mod, only: lr_product_gf_susceptibility_request, &
+      lr_product_gf_susceptibility_result, evaluate_lr_product_gf_susceptibility
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
    use tddft_native_rsgf_provider_mod, only: tddft_native_rsgf_provider
@@ -58,6 +60,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_reciprocal_gf = 'reciprocal_gf'
    character(len=*), parameter, public :: tddft_driver_backend_native_rsgf = 'native_rsgf'
    character(len=*), parameter, public :: tddft_driver_backend_product_lehmann = 'product_lehmann'
+   character(len=*), parameter, public :: tddft_driver_backend_product_gf = 'product_gf'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -285,8 +288,9 @@ contains
       if (trim(config%backend) /= tddft_driver_backend_lehmann .and. trim(config%backend) /= 'spectral' .and. &
           trim(config%backend) /= tddft_driver_backend_reciprocal_gf .and. &
           trim(config%backend) /= tddft_driver_backend_native_rsgf .and. &
-          trim(config%backend) /= tddft_driver_backend_product_lehmann) then
-         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf or product_lehmann'
+          trim(config%backend) /= tddft_driver_backend_product_lehmann .and. &
+          trim(config%backend) /= tddft_driver_backend_product_gf) then
+         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann or product_gf'
       end if
       if (trim(config%backend) == tddft_driver_backend_reciprocal_gf .or. &
           trim(config%backend) == tddft_driver_backend_native_rsgf .or. config%reciprocal_backend_crosscheck) then
@@ -294,6 +298,12 @@ contains
             error stop 'TDDFT input: reciprocal_gf or backend crosscheck requires an odd gf_integration_points value >= 3'
          end if
          if (config%gf_energy_margin <= 0.0_rp) error stop 'TDDFT input: reciprocal-GF crosscheck requires gf_energy_margin positive'
+      end if
+      if (trim(config%backend) == tddft_driver_backend_product_gf) then
+         if (config%gf_integration_points < 3 .or. mod(config%gf_integration_points, 2) == 0) then
+            error stop 'TDDFT input: product_gf requires an odd gf_integration_points value >= 3'
+         end if
+         if (config%gf_energy_margin <= 0.0_rp) error stop 'TDDFT input: product_gf requires gf_energy_margin positive'
       end if
       if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
          if (trim(config%native_rsgf_provider) /= 'auto' .and. trim(config%native_rsgf_provider) /= 'block' .and. &
@@ -501,6 +511,13 @@ contains
             reciprocal_obj)
          return
       end if
+      if (trim(config%backend) == tddft_driver_backend_product_gf) then
+         ! TDVK-02R3 is a guarded compact-GF execution/performance smoke only.
+         ! It stops at the independent real-axis product response and never
+         ! enters KXC, Goldstone, Dyson, loss, or the point-space result path.
+         call run_tddft_product_gf_smoke(config, response_space, radial_bases, left_state, endpoints)
+         return
+      end if
       if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
          call native_provider%initialize(config%native_rsgf_provider, green_obj, recursion_obj, hamiltonian_obj, &
             lattice_obj, reciprocal_obj, radial_bases)
@@ -596,6 +613,70 @@ contains
       write (*, '(a,i0,a,es12.4,a,es12.4)') 'TDVK-02R2 compact Fe smoke: Nprod=', result%product_dimension, &
          ' runtime_cpu_s=', wall_end - wall_start, ' max_transition_error=', maximum_transition_error
    end subroutine run_tddft_product_bare_smoke
+
+   !> TDVK-02R3 accepted-Fe compact reciprocal-GF smoke.  This is deliberately
+   !> separate from the legacy point-grid reciprocal-GF backend and is not a
+   !> production interaction/Dyson route.
+   subroutine run_tddft_product_gf_smoke(config, response_space, radial_bases, left_state, endpoints)
+      type(tddft_production_config), intent(in) :: config
+      type(response_space_layout), intent(in) :: response_space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(lr_electronic_state), target, intent(in) :: left_state
+      type(lr_electronic_state), target, intent(in) :: endpoints(:)
+      type(lmto_product_response_basis), target :: product_plus, product_minus
+      type(lr_product_gf_susceptibility_request) :: request
+      type(lr_product_gf_susceptibility_result) :: result
+      integer :: gamma_index, channel_kind, i
+      real(rp) :: frobenius, maximum_element
+      complex(rp) :: trace
+      logical :: finite_response
+
+      gamma_index = find_gamma_q(config%q_list)
+      if (gamma_index > size(endpoints)) error stop 'TDVK-02R3 product GF smoke: Gamma endpoint is unavailable'
+      call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
+      call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
+      if (product_plus%product_dimension /= 232 .or. product_minus%product_dimension /= 232) then
+         error stop 'TDVK-02R3 product GF smoke: accepted Fe product dimension is not 232'
+      end if
+
+      request%q = config%q_list(:, gamma_index)
+      request%frequencies = [0.0_rp]
+      request%eta = config%eta
+      request%channel = config%channel
+      request%integration_points = config%gf_integration_points
+      request%integration_eta = config%gf_integration_eta
+      request%energy_margin = config%gf_energy_margin
+      request%electronic_state => left_state
+      request%q_endpoint_state => endpoints(gamma_index)
+      if (trim(config%channel) == 'chi_plus') then
+         request%product_basis => product_plus
+      else
+         request%product_basis => product_minus
+      end if
+      call evaluate_lr_product_gf_susceptibility(request, result)
+      finite_response = all(ieee_is_finite(real(result%susceptibility, rp))) .and. &
+         all(ieee_is_finite(aimag(result%susceptibility)))
+      if (.not. finite_response) error stop 'TDVK-02R3 product GF smoke: compact response contains NaN or Inf'
+
+      frobenius = sqrt(sum(abs(result%susceptibility(:, :, 1))**2))
+      maximum_element = maxval(abs(result%susceptibility(:, :, 1)))
+      trace = cmplx(0.0_rp, 0.0_rp, rp)
+      do i = 1, result%product_dimension
+         trace = trace + result%susceptibility(i, i, 1)
+      end do
+      write (*, '(a)') 'TDVK-02R3 compact reciprocal-GF Fe smoke: execution/performance evidence only — not quadrature convergence'
+      write (*, '(a,l1,a,i0,a,i0,a,es12.4)') '  finite=', finite_response, ' Nprod=', result%product_dimension, &
+         ' integration_points=', result%integration_points, ' integration_eta=', result%actual_integration_eta
+      write (*, '(a,es12.4,a,es12.4,a,2(es12.4,1x))') '  Frobenius_norm=', frobenius, &
+         ' max_element=', maximum_element, ' trace=', real(trace, rp), aimag(trace)
+      write (*, '(a,es12.4,a,es12.4,a,es12.4,a,i0,a,i0,a,i0,a,i0)') '  wall_s=', result%wall_time_seconds, &
+         ' cpu_s=', result%cpu_time_seconds, ' time_per_energy_kpoint_s=', result%time_per_energy_kpoint, &
+         ' energy_points=', result%integration_points, &
+         ' k_points=', result%nk, ' frequencies=', result%nfrequency, &
+         ' component_vertex_bytes=', result%component_vertex_memory_bytes
+      write (*, '(a,i0,a,i0,a,i0)') '  gf_matrix_bytes=', result%gf_matrix_memory_bytes, &
+         ' susceptibility_bytes=', result%susceptibility_memory_bytes, ' product_dimension=', result%product_dimension
+   end subroutine run_tddft_product_gf_smoke
 
    subroutine run_product_transition_oracle(response_space, radial_bases, product, left_state, right_state, channel_kind, maximum_error)
       type(response_space_layout), intent(in) :: response_space

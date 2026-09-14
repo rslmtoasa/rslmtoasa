@@ -681,3 +681,75 @@ afterward.
 
 The next task is the orchestrator-approved compact reciprocal-GF equivalence
 design (then compact KXC/Dyson integration), without starting TDVK-03.
+
+## TDVK-02R3 — compact reciprocal-GF susceptibility
+
+**Status: PASS for representation-level compact reciprocal-GF equivalence; the
+overall TDVK-02 lifecycle remains incomplete.** KXC/GSR/Dyson and Goldstone
+integration were not changed, and TDVK-03 was not started.
+
+The new `lr_product_gf_susceptibility_mod` implements the existing LR-GF-02
+real-axis Green-function/Kubo construction directly in the weighted-orthonormal
+LMTO product representation. The product-basis helper
+`component_vertex_tensor` uses the stored candidate descriptors and
+`forward_transform = Sigma V^H D`, with component ordering `1+p+2*q`, the
+certified circular spin block, existing orbital indexing, and
+`response_gaunt`. It adds no radial factor, Pauli factor, or inverse singular
+value. The evaluator reuses `build_weighted_resolvent`, retains the existing
+retarded/advanced resolvents, spectral function, two Kubo terms, Simpson rule,
+Fermi/k-point prefactor, endpoint validation, and automatic
+`integration_eta=eta/40` guard. It accumulates directly into product
+coordinates and reports `point_response_allocated=.false.`.
+
+### Representation evidence
+
+- [x] The independent component/R1 oracle passes for both circular channels;
+  maximum relative residual: `6.3396e-16`.
+- [x] The independent projection of the unchanged point-grid LR-GF-02 result
+  passes for Gamma/static and finite-frequency cases, two odd Simpson sizes,
+  and finite-q/`chi_minus`; maximum relative residual: `1.4205e-15`.
+- [x] The compact fixture retains product dimension `27` in each channel.
+  The accepted Fe contract remains the complete strict product dimension `232`.
+- [x] Fixture compact memory is `110592` bytes for component vertices,
+  `18432` bytes for the six GF matrices, and `23328` bytes for one
+  `27x27` susceptibility matrix. No point-response matrix is allocated.
+- [x] Electronic-state snapshots remain immutable; the explicit integration-
+  eta guard rejects `integration_eta >= eta`.
+
+The compact reciprocal-GF route retains the independent real-axis
+Green-function/Kubo construction and does not call the Lehmann susceptibility
+accumulator.
+
+### Compact Lehmann diagnostic
+
+The R2 compact Lehmann result was compared only as a diagnostic after the
+point-GF projection passed. No threshold is assigned and no integration
+control was tuned:
+
+| case | `d_F` | `r_F` | `d_inf` |
+| --- | ---: | ---: | ---: |
+| `chi_plus`, Gamma, 21 points | `4.2963e3` | `3.9547` | `3.5597e3` |
+| `chi_plus`, Gamma, 41 points | `4.2434e3` | `4.6331` | `3.4043e3` |
+| `chi_minus`, finite q, 21 points | `1.8018e3` | `2.2550` | `7.7385e2` |
+
+### Guarded Fe execution smoke
+
+A validation-only `product_gf` driver branch was added for the accepted Fe
+handoff. It requires the strict `Nprod=232` basis and reports the requested
+execution/performance fields, but stops before KXC, Goldstone, Dyson, and loss.
+The tracked Fe input was temporarily configured for the requested 21-point
+Gamma, `omega=0`, `eta=0.02 Ry` smoke and restored afterward. The run did not
+reach the accepted reciprocal-state handoff: the 50-step SCF preparation ended
+with `diff=2.11269464e-2` against `conv_thr=1e-6`. Consequently there is no
+Fe compact-GF timing or response value to report. This is an accepted-state
+preparation/performance blocker, not a representation-equivalence failure.
+No 2001-point Fe run was attempted.
+
+Focused verification:
+
+```text
+ctest --test-dir build --output-on-failure -R '^(UnitLrLmtoProductResponseBasis|UnitLrLmtoProductResponse|UnitLrLmtoProductStrictRankGuard|UnitLrProductKsSusceptibility|UnitLrGfSusceptibility|UnitLrProductGfSusceptibility|UnitLrProductGfSusceptibilityRejectIntegrationEta)$'
+```
+
+Result: 7/7 tests passed, including the retained LR-GF-02 point evaluator and
+the fail-closed integration-eta test.

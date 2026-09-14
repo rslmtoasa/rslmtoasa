@@ -654,6 +654,13 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrKsSusceptibility PROPERTIES LABELS "unit;lr-06;ks-susceptibility;lehmann;covariance")
   add_fortran_unit_test(UnitLrGfSusceptibility ${TestDIR}/unit/test_lr_gf_susceptibility.f90)
   set_tests_properties(UnitLrGfSusceptibility PROPERTIES LABELS "unit;lr-gf-02;ks-susceptibility;reciprocal-gf;crosscheck")
+  add_fortran_unit_test(UnitLrProductGfSusceptibility ${TestDIR}/unit/test_lr_product_gf_susceptibility.f90)
+  set_tests_properties(UnitLrProductGfSusceptibility PROPERTIES LABELS "unit;tdvk-02r3;lr-gf-02;product-basis;reciprocal-gf")
+  add_test(NAME UnitLrProductGfSusceptibilityRejectIntegrationEta
+    COMMAND UnitLrProductGfSusceptibility reject_integration_eta)
+  set_tests_properties(UnitLrProductGfSusceptibilityRejectIntegrationEta PROPERTIES
+    LABELS "unit;tdvk-02r3;negative;integration-controls"
+    WILL_FAIL TRUE)
   add_fortran_unit_test(UnitLrAlsdaKernel ${TestDIR}/unit/test_lr_alsda_kernel.f90)
   set_tests_properties(UnitLrAlsdaKernel PROPERTIES LABELS "unit;kxc-01;alsda;transverse;response-kernel")
   add_fortran_unit_test(UnitLrGoldstoneSumrule ${TestDIR}/unit/test_lr_goldstone_sumrule.f90)

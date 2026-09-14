@@ -71,6 +71,7 @@ module lr_lmto_product_response_basis_mod
       procedure :: unflatten_index => lmto_product_unflatten_index
       procedure :: candidate_coefficients => lmto_product_candidate_coefficients
       procedure :: transition_coordinates => lmto_product_transition_coordinates
+      procedure :: component_vertex_tensor => lmto_product_component_vertex_tensor
    end type lmto_product_response_basis
 
    public :: lmto_product_candidate_count
@@ -425,6 +426,73 @@ contains
          end do
       end do
    end subroutine lmto_product_transition_coordinates
+
+   !> Construct the four energy-moment LMTO vertex components directly in the
+   !> retained product representation.  The candidate map already contains
+   !> the radial product information, so this routine adds only the orbital
+   !> Gaunt factor and the selected circular spin block.
+   !>
+   !> Component ordering is `1+p+2*q`.  The tensor is indexed as
+   !> `(electronic-left, electronic-right, component, product-coordinate)` and
+   !> contains no point-space response allocation.
+   subroutine lmto_product_component_vertex_tensor(this, vertices)
+      class(lmto_product_response_basis), intent(in) :: this
+      complex(rp), allocatable, intent(out) :: vertices(:, :, :, :)
+
+      integer :: norb, nbasis, flat, site, response_l, response_m, product_mode
+      integer :: p, q, component, k, iorb, jorb, spin_left, spin_right
+      integer :: orbital_l, orbital_lp, orbital_m, orbital_mp, offset
+      real(rp) :: gaunt
+
+      if (.not. allocated(this%blocks) .or. this%nsite < 1 .or. this%product_dimension < 1) then
+         error stop 'lmto_product_component_vertex_tensor: representation is uninitialized'
+      end if
+      norb = (this%orbital_lmax + 1)**2
+      nbasis = 2*norb*this%nsite
+      allocate(vertices(nbasis, nbasis, 4, this%product_dimension))
+      vertices = cmplx(0.0_rp, 0.0_rp, rp)
+
+      if (this%circular_channel == lmto_product_channel_plus) then
+         spin_left = 1
+         spin_right = 2
+      else if (this%circular_channel == lmto_product_channel_minus) then
+         spin_left = 2
+         spin_right = 1
+      else
+         error stop 'lmto_product_component_vertex_tensor: invalid circular channel'
+      end if
+
+      do flat = 1, this%product_dimension
+         call this%unflatten_index(flat, site, response_l, response_m, product_mode)
+         offset = (site - 1)*2*norb
+         do p = 0, 1
+            do q = 0, 1
+               component = 1 + p + 2*q
+               do k = 1, this%blocks(site, response_l)%ncandidate
+                  if (this%blocks(site, response_l)%candidates(k)%p /= p .or. &
+                      this%blocks(site, response_l)%candidates(k)%q /= q) cycle
+                  orbital_l = this%blocks(site, response_l)%candidates(k)%l
+                  orbital_lp = this%blocks(site, response_l)%candidates(k)%lp
+                  do iorb = 1, norb
+                     if (lmto_orbital_l(iorb) /= orbital_l) cycle
+                     orbital_m = iorb - orbital_l*orbital_l - orbital_l - 1
+                     do jorb = 1, norb
+                        if (lmto_orbital_l(jorb) /= orbital_lp) cycle
+                        orbital_mp = jorb - orbital_lp*orbital_lp - orbital_lp - 1
+                        gaunt = response_gaunt(orbital_l, orbital_m, orbital_lp, orbital_mp, &
+                           response_l, response_m)
+                        vertices(offset + (spin_left - 1)*norb + iorb, &
+                           offset + (spin_right - 1)*norb + jorb, component, flat) = &
+                           vertices(offset + (spin_left - 1)*norb + iorb, &
+                           offset + (spin_right - 1)*norb + jorb, component, flat) + &
+                           this%blocks(site, response_l)%forward_transform(product_mode, k)*cmplx(gaunt, 0.0_rp, rp)
+                     end do
+                  end do
+               end do
+            end do
+         end do
+      end do
+   end subroutine lmto_product_component_vertex_tensor
 
    pure real(rp) function endpoint_component(radial, ir, l, spin, power) result(value)
       type(lmto_radial_basis), intent(in) :: radial

@@ -416,3 +416,56 @@ ctest --test-dir build --output-on-failure -R '^(UnitLrLmtoProductResponseBasis|
 All four retained R0/R0b/R1 product tests and the R2 fixture test passed. The
 next task is compact reciprocal-GF equivalence, followed by compact kernel and
 Dyson representation integration under orchestrator approval.
+
+## TDVK-02R3 — compact reciprocal-GF susceptibility
+
+**Status: PASS for compact representation equivalence; not a full TDVK-02
+lifecycle PASS.** The implementation is confined to a separate product-space
+GF evaluator and a product-basis component-vertex helper. KXC, GSR, Dyson,
+Goldstone, eta conventions, Fe physics, and the native real-space GF route
+were not changed; TDVK-03 was not started.
+
+The new route uses the existing LR-GF-02 real-axis resolvents and Kubo bubble:
+retarded/advanced Green functions, `A=i(GR-GA)/(2*pi)`, moments `p=0..2`,
+both Kubo terms, Simpson quadrature, the existing Fermi/k-point prefactor,
+the exact q endpoint, and automatic `integration_eta=eta/40` with the strict
+`integration_eta < eta` guard. Its compact vertices are built directly from
+the R1 candidate descriptors and `forward_transform=Sigma V^H D`, with
+component ordering `1+p+2*q`, no radial or Pauli factor, and only the
+certified circular spin block. The result is written directly in
+`chi_P=U^H W^(1/2) chi_raw W^(1/2) U`; no point-space response matrix is
+constructed.
+
+Representation evidence:
+
+- component/R1 maximum residual: `6.3396e-16`;
+- maximum independently projected point-GF residual: `1.4205e-15`;
+- both circular channels, Gamma and finite q, static and finite omega, and
+  21/41-point odd Simpson cases pass;
+- focused fixture product dimension: `27` per channel; accepted Fe strict
+  product dimension: `232`;
+- focused fixture memory: component vertices `110592` bytes, GF matrices
+  `18432` bytes, and one compact susceptibility `23328` bytes.
+
+The compact reciprocal-GF route retains the independent real-axis
+Green-function/Kubo construction and does not call the Lehmann susceptibility
+accumulator.
+
+The compact Lehmann comparison remains diagnostic only. The reported
+`(d_F,r_F,d_inf)` values were `(4.2963e3,3.9547,3.5597e3)` for `chi_plus`
+Gamma/21, `(4.2434e3,4.6331,3.4043e3)` for `chi_plus` Gamma/41, and
+`(1.8018e3,2.2550,7.7385e2)` for finite-q `chi_minus`/21. These values are
+not a physics acceptance threshold and were not used to tune GF controls.
+
+The guarded accepted-Fe `product_gf` smoke was configured for Gamma,
+`omega=0`, `eta=0.02 Ry`, automatic `eta/40`, and 21 integration points.
+It stopped during the 50-step SCF preparation at `diff=2.11269464e-2` and
+therefore did not reach the accepted handoff or produce Fe GF timing/result
+data. This is recorded as an execution/performance blocker, not as a failure
+of the representation oracle. No 2001-point run was made.
+
+Focused verification (all 7 passed):
+
+```text
+ctest --test-dir build --output-on-failure -R '^(UnitLrLmtoProductResponseBasis|UnitLrLmtoProductResponse|UnitLrLmtoProductStrictRankGuard|UnitLrProductKsSusceptibility|UnitLrGfSusceptibility|UnitLrProductGfSusceptibility|UnitLrProductGfSusceptibilityRejectIntegrationEta)$'
+```
