@@ -285,3 +285,28 @@ review of the dense LR-06/production-driver allocation and a streaming or
 matrix-free material-smoke design, followed by a rerun of TDVK-02 after
 orchestrator approval.  It must preserve the complete response space and the
 current response equations.
+
+## TDVK-02R0 LMTO radial-product response-basis closure audit
+
+**Status:** PASS for algebraic representation closure; no material-validation
+claim and no change to the TDVK-02 BLOCKED verdict.
+
+- [x] Exact ordered-pair inventory: `sp=52`, `spd=232` candidates.
+- [x] Gram spectra, diagnostic rank/nullity, and condition estimates recorded
+  for all `sp`/`spd`, `L`, `M`, and both circular blocks.
+- [x] Existing LR-05 point-grid vectors reconstructed with the LR-04 metric;
+  maximum relative residual `1.6517e-11 < 1e-10`.
+- [x] Energy-affine endpoint oracle passed at maximum relative residual
+  `2.2191e-16`.
+- [x] LR-GF-02 four-component radial factors matched exactly at printed
+  precision; private-helper duplication seam documented.
+- [x] Fe `spd` complete point space recorded as 12,375 coordinates versus 232
+  unpruned product coordinates (53.34x coordinate reduction).
+- [x] TDVK-02 was not changed to PASS; TDVK-03 was not started; no production
+  product-basis LR-06 path was added.
+
+The detailed evidence is in
+[`docs/LR_LMTO_PRODUCT_RESPONSE_BASIS.md`](LR_LMTO_PRODUCT_RESPONSE_BASIS.md).
+The next task should be the orchestrator-approved mechanical design of a
+complete-space streaming or matrix-free LR-06 material smoke that preserves the
+current equations and radial mesh.
