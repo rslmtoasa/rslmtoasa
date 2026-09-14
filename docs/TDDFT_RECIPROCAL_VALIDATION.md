@@ -763,18 +763,16 @@ damping, and literature work remains outside this milestone.
 ## TDVK-05 Fe numerical convergence
 
 TDVK-05 was run against live build
-`pre_tddft_cleanroom_20260909-35-g2a84-dirty` using the new validation-only
-`backend='product_convergence'`. Each mesh case performed its own SCF with the
-same physical bcc Fe input (`ham_only`, LAPACK, second-order k-space
-Hamiltonian, tetrahedron occupations, 300 K, no symmetry reduction or time
-reversal), then reused only that accepted state for its compact Lehmann sweep.
-The selected 8³ state also ran the two TDVK-04-certified reciprocal-GF spots;
-GF `integration_eta=0.001` Ry was kept separate from the physical response
-eta ladder. Every campaign log reported `Converged!`, every serialized
-response row was finite, and no KXC, Goldstone, Dyson, loss, or mode-fitting
-route was entered.
+`pre_tddft_cleanroom_20260909-35-g2a84-dirty` using the validation-only
+`backend='product_convergence'`. Each isolated process accepts the converged
+real-space Fe state and then regenerates the requested complete reciprocal
+mesh. The convergence comparison treats the accepted real-space potential,
+radial data, moment, and EF as fixed handoff inputs; only reciprocal sampling
+and quantities derived from it are convergence evidence. Every campaign log
+reported `Converged!`, every serialized response row was finite, and no KXC,
+Goldstone, Dyson, loss, or mode-fitting route was entered.
 
-### Accepted states and product provenance
+### Accepted-state and mesh provenance
 
 | case | generated mesh / nk | response cutoff | EF (Ry) | moment (μB) | SCF residual control | product unpruned / retained | all-L rank stable |
 |---|---:|---:|---:|---:|---:|---:|:---:|
@@ -784,11 +782,39 @@ route was entered.
 | `mesh8_reduced_lmax2` | 8³ / 512 | reduced `L=2` (approximate) | -0.0851199488840 | 2.267462473383 | 4.1283e-7 | 140 / 140 | T |
 
 All cases used `nbasis=18`, `nbands=18`, `temperature=300 K`,
-`reciprocal_mode=ham_only`, and `hamiltonian_order=second`. The accepted state
-provenance is one independently reconverged Fe SCF state per case; q/omega/eta
-rows within a case reuse its eigenpairs, occupations, EF, temperature, and
-weights. The equal printed EF/moment values are recorded observations, not
-cross-mesh constraints.
+`reciprocal_mode=ham_only`, and `hamiltonian_order=second`. Within each
+process, the response rows reuse the accepted eigenpairs, occupations, EF,
+temperature, and weights. The equal printed EF/moment values are fixed
+accepted-state provenance, not cross-mesh convergence evidence. The mesh
+comparison is therefore more precisely described as independently regenerated
+reciprocal samplings of an accepted real-space state.
+
+### Fixed versus mesh-dependent quantities
+
+The live handoff is explicit: after SCF, the driver sets
+`reciprocal_obj%fermi_level = energy_obj%fermi`, sets
+`auto_find_fermi = .false.`, builds and diagonalizes the requested mesh, and
+then calls `calculate_canonical_band_energy(.false.)`. The immutable LR
+snapshot regenerates explicit Fermi occupations from those eigenvalues, the
+accepted EF, and 300 K. No reciprocal response path solves EF or rebuilds the
+real-space potential/radial functions.
+
+| quantity | provenance classification | live source/path |
+|---|---|---|
+| potential | **FIXED ACCEPTED-STATE INPUT** | converged real-space SCF objects handed to the production driver |
+| radial functions | **FIXED ACCEPTED-STATE INPUT** | accepted `radial_ground_state`/LR radial basis; product SVD uses its direct radial mesh |
+| magnetic moment | **FIXED ACCEPTED-STATE INPUT** | accepted SCF ground-state integrated moment |
+| EF | **FIXED ACCEPTED-STATE INPUT** | `energy_obj%fermi` copied to `reciprocal_obj%fermi_level`; `auto_find_fermi=.false.` |
+| reciprocal eigenvalues | **RECOMPUTED PER RESPONSE K MESH** | `generate_mp_mesh` → k-space Hamiltonian → `diagonalize_hamiltonian` |
+| reciprocal eigenvectors | **RECOMPUTED PER RESPONSE K MESH** | same requested-mesh diagonalization, copied into the LR snapshot |
+| k vectors | **RECOMPUTED PER RESPONSE K MESH** | complete replicated `k_workset` generated from `nk_mesh` |
+| k weights | **RECOMPUTED PER RESPONSE K MESH** | complete-BZ workset weights, normalized by the canonical occupation service |
+| occupations | **DERIVED PER RESPONSE K MESH** | explicit Fermi function of each mesh eigenvalue at fixed EF and 300 K |
+| electron-count/BZ occupation integral | **DERIVED PER RESPONSE K MESH** | `evaluate_eigenvalue_occupations` over that mesh's eigenvalues/weights |
+| compact `chiKS` | **DERIVED PER RESPONSE K MESH** | compact Lehmann contraction from the immutable mesh-specific LR states |
+
+The optional mesh-specific EF values below are diagnostics from the existing
+reciprocal Fermi solver only; they are never fed back into the response.
 
 ### k-mesh dependence — complete product span, physical eta = 0.01 Ry
 
@@ -884,3 +910,122 @@ TDVK-05 therefore returns **PASS CANDIDATE** to the orchestrator. The evidence
 supports proceeding only through the mandatory review gate; interaction,
 Goldstone, Dyson, dispersion, magnon, stiffness, damping, and literature work
 remain outside this milestone.
+
+## TDVK-05 review-gate closure — genuine reciprocal convergence
+
+This closure was executed from local starting HEAD `c9f60a6`
+(`tests: map Fe reciprocal TDDFT convergence`). The requested live
+`git fetch origin fable_v4` could not authenticate because the environment had
+no usable GitHub SSH key (`Permission denied (publickey)`); the local branch
+was already at `origin/fable_v4` before the closure edits. Unrelated worktree
+changes were preserved. No TDVK-05R1/R2 task or TDVK-06 work was started.
+
+### Runtime mesh provenance and fixed-EF consequence
+
+The closure harness launches a fresh executable process and scratch directory
+for every case. It parses the generated `.kpoints`, `.basis`, and `.matrix`
+artifacts; requested mesh labels are never substituted for runtime values. The
+SHA-256 fingerprint is over the complete serialized runtime k-point/weight
+data rows, not an expected mesh generated by the harness.
+
+| case | requested mesh | actual mesh | actual nk | weight sum | first / middle / last representative k | full-list+weight SHA-256 |
+|---|---:|---:|---:|---:|---|---|
+| `mesh4_full` | `4³` | `4×4×4` | 64 | 1.000000000000000 | `(-.375,-.375,-.375)` / `(.375,.375,-.125)` / `(.375,.375,.375)` | `6d9e66cc3a27885cccefbd9ab5ad973e3fb2fea2e536c0a93bbb8e8aec11a224` |
+| `mesh8_full_eta_ladder` | `8³` | `8×8×8` | 512 | 1.000000000000000 | `(-.4375,-.4375,-.4375)` / `(.4375,.4375,-.0625)` / `(.4375,.4375,.4375)` | `1cbe24b64cb808294ebdf221e5227e84d97ae147d9c219c1f7ea93071782d9d5` |
+| `mesh12_full` | `12³` | `12×12×12` | 1728 | 1.000000000000019 | `(-.458333,-.458333,-.458333)` / `(.458333,.458333,-.041667)` / `(.458333,.458333,.458333)` | `cbf15c1e15c8e657635005a071a17e5ead5db64637b2d1938b3dc5e2326b347f` |
+| `mesh12_full_eta005_corner` | `12³` | `12×12×12` | 1728 | 1.000000000000019 | same as `mesh12_full` | same as `mesh12_full` |
+| `mesh8_reduced_lmax2` | `8³` | `8×8×8` | 512 | 1.000000000000000 | same as `mesh8_full_eta_ladder` | same as `mesh8_full_eta_ladder` |
+
+The three distinct full-product meshes have distinct fingerprints. The two
+same-mesh controls intentionally have matching fingerprints, while their
+response cutoffs/eta values differ. Every full-product case also reported
+finite actual eigenvalue summaries, explicit occupation integrals, and finite
+response rows:
+
+| mesh | eigenvalue min / max / mean (Ry) | fixed EF (Ry) | `N_e(EF_fixed)` | target | `N_e-target` | diagnostic `EF_mesh-EF_fixed` (Ry) |
+|---:|---:|---:|---:|---:|---:|---:|
+| `4³` | `-0.639497 / 1.832958 / 0.334832` | `-0.0851199488840` | 8.0588317182 | 8.0 | `+0.0588317182` | `-0.0048321241` |
+| `8³` | `-0.701285 / 1.901255 / 0.334832` | `-0.0851199488840` | 8.0250873032 | 8.0 | `+0.0250873032` | `-0.0021707836` |
+| `12³` | `-0.713278 / 1.916099 / 0.334832` | `-0.0851199488840` | 8.0410737796 | 8.0 | `+0.0410737796` | `-0.0027549013` |
+
+`N_e` is evaluated by the live reciprocal occupation service from each
+mesh's eigenvalues and weights, using the accepted EF and 300 K Fermi
+function. The diagnostic EF values use the existing reciprocal solver only;
+they were not fed back. These numbers are reported without an invented
+acceptance tolerance. The fixed-EF error is finite and visible, including its
+non-monotonic 4³→8³→12³ variation, so it is not mislabeled as convergence of
+the fixed state.
+
+### Full compact operator: 8³ versus 12³
+
+At Gamma, `omega=0`, physical `eta=0.01 Ry`, and complete `L=4` product
+space, both runtime artifacts have dimension 232 and all-L rank stability `T`.
+The serialized weighted radial modes have identical keys and zero
+max-absolute difference at the printed precision. Direct comparison is
+therefore valid; the independently computed overlap unitarity residual is
+`6.7785e-15` (maximum over product blocks). The basis contains 27,720
+radial-mode records; singular values span `1.7249e-08` to `2.6300033`.
+
+| `||chi_8||_F` | `||chi_12||_F` | full-matrix `dF` | relative Frobenius | `dInf` | trace difference |
+|---:|---:|---:|---:|---:|---|
+| 3.9350904558 | 3.9443793459 | 0.0465725977 | 0.0118073323 | 0.0123013720 | `-0.0502389601 + 0.0639382156i` (abs `0.0813145038`) |
+
+This is an operator-level comparison of all 232² compact entries, not a
+comparison reconstructed from scalar norms or traces.
+
+### Dense-k/small-eta cross-corner
+
+The additional complete-product `12³`, `eta=0.005 Ry`, Gamma-static operator
+has norm `3.9535660858`, max element `1.9312253771`, and trace
+`-13.6244005649 - 0.2592802812i`. Full-matrix comparisons use the same
+directly aligned basis:
+
+| reference | comparison | `dF` | relative Frobenius | `dInf` | trace-difference abs |
+|---|---|---:|---:|---:|---:|
+| `12³/.005` | `12³/.01` | 0.0977841369 | 0.0247331485 | 0.0530814717 | 0.2707764187 |
+| `12³/.005` | `8³/.005` | 0.0473418518 | 0.0119744683 | 0.0123314194 | 0.0656438537 |
+| `12³/.005` | `8³/.01` | 0.1011838735 | 0.0255930649 | 0.0547607152 | 0.2020009859 |
+
+The corner is finite and does not expose a new uncontrolled instability in
+the reported compact operator diagnostics. No two-dimensional k/eta grid or
+material threshold was introduced.
+
+### Controlled TDVK-04 reciprocal-GF spots
+
+The same isolated 8³ physical setup, q points, `eta=0.01 Ry`,
+`integration_eta=0.001 Ry`, energy window, and complete product basis were
+rerun with 9,601 Simpson points. The resulting `h/integration_eta` values
+are approximately 0.4 and satisfy the established `<=0.5` quadrature
+criterion.
+
+| q | `N_E` | `||chi_L||_F` | `||chi_GF||_F` | `dF` | `rF` | `dInf` | `h` | `h/integration_eta` | wall (s) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `(0.125,0,0)` | 9601 | 3.8834982379 | 3.8655712209 | 0.0262306332 | 0.0067543827 | 0.0142047377 | 0.0003960979 | 0.3960978521 | 26.7473 |
+| `(0.23,0.07,-0.11)` | 9601 | 3.8150738956 | 3.8004892411 | 0.0287407267 | 0.0075334653 | 0.0123889886 | 0.0004003331 | 0.4003331403 | 26.9724 |
+
+For comparison, the previous under-resolved 6,401-point run had
+`h/integration_eta=0.59414678` and `0.60049971`, with `(dF,rF,dInf)` of
+`(0.02519235,0.00648702,0.01353573)` and
+`(0.02968604,0.00778125,0.01291837)` respectively. Both runs were finite;
+the new table makes the quadrature control explicit without hard-coding an
+expected response value.
+
+### Harness audit and closure decision
+
+The closure harness audit passed the following checks: one fresh subprocess
+and unique scratch directory per case; actual requested-vs-generated mesh
+dimensions and k-list row counts; distinct full-mesh fingerprints; matching
+same-mesh control fingerprints; fresh, uniquely named runtime artifacts;
+actual eigenvalue/occupation headers; no baseline scalar substitution; and no
+expected fingerprint generation. The driver has no cross-process response
+cache, and the harness rejects any artifact reuse without matching runtime
+provenance. Product responses are populated from parsed runtime rows and full
+matrix artifacts.
+
+Subject to orchestrator review of the explicitly reported fixed-EF
+occupation errors, this closure satisfies the eight review-gate evidence
+requirements and returns:
+
+**TDVK-05 REVIEW-GATE PASS CANDIDATE**
+
+This is the final TDVK-05 gate result. No KXC/GSR or TDVK-06 work was started.

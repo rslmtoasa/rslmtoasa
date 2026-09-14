@@ -849,8 +849,8 @@ Then stop at the mandatory TDVK-05 review gate.
 
 ## TDVK-05 result
 
-`PASS CANDIDATE` — the compact bare Fe response is finite and numerically
-stable over the required `4^3`, `8^3`, and `12^3` meshes, the physical
+`PASS CANDIDATE` — the compact bare Fe response is finite and fully
+instrumented over the required `4^3`, `8^3`, and `12^3` meshes, the physical
 `eta={0.02,0.01,0.005}` Ry ladder at `8^3`, and the full/reduced response-cutoff
 diagnostic. The complete measured evidence is appended to
 `docs/TDDFT_RECIPROCAL_VALIDATION.md`. No convergence threshold was invented,
@@ -859,7 +859,7 @@ and no KXC, Goldstone, Dyson, loss, or mode-interpretation route was entered.
 ## TDVK-05 completion checklist
 
 - [x] Recorded live HEAD/status and the accepted TDVK-03/04 evidence.
-- [x] Reconverged the same physical Fe setup independently on `4^3`, `8^3`, and `12^3`.
+- [x] Regenerated distinct `4^3`, `8^3`, and `12^3` reciprocal samplings from the accepted real-space handoff; fixed accepted-state values were not counted as mesh convergence.
 - [x] Recorded each accepted mesh, moment, EF, radial residual, and LR provenance.
 - [x] Evaluated compact Lehmann Gamma-static, certified finite-q-static, and low-finite-omega rows on every mesh.
 - [x] Ran the physical response-eta ladder `0.02`, `0.01`, `0.005` Ry at `8^3` without changing GF integration controls.
@@ -875,6 +875,16 @@ and no KXC, Goldstone, Dyson, loss, or mode-interpretation route was entered.
 ## Commit
 
 `tests: map Fe reciprocal TDDFT convergence`
+
+## Review-gate closure
+
+The subsequent review-gate closure added runtime k-mesh fingerprints,
+fixed-EF occupation diagnostics, full compact-operator comparisons, the
+`12^3, eta=0.005` cross-corner, and controlled 9,601-point TDVK-04 GF spots.
+It corrected the fixed-state provenance wording in
+`docs/TDDFT_RECIPROCAL_VALIDATION.md`, preserved unrelated worktree changes,
+and stopped at this mandatory gate without creating a TDVK-05R1/R2 task or
+starting TDVK-06.
 
 
 <!-- FILE: 04_REVIEW_GATE_AFTER_TDVK-05.md -->

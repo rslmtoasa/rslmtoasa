@@ -351,6 +351,12 @@ contains
          if (size(config%frequencies) < 2) then
             error stop 'TDDFT input: product_convergence requires static and low finite omega'
          end if
+         if (.not. any(sum(abs(config%q_list), dim=1) <= 1.0e-12_rp)) then
+            error stop 'TDDFT input: product_convergence requires Gamma for the full-operator artifact'
+         end if
+         if (.not. any(abs(config%frequencies) <= 1.0e-12_rp)) then
+            error stop 'TDDFT input: product_convergence requires omega=0 for the full-operator artifact'
+         end if
       end if
       if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
          if (trim(config%native_rsgf_provider) /= 'auto' .and. trim(config%native_rsgf_provider) /= 'block' .and. &
@@ -570,7 +576,8 @@ contains
          ! TDVK-05 is a compact numerical-convergence seam.  It evaluates the
          ! Lehmann service over the prescribed q/omega/physical-eta grid and
          ! stops before GF, KXC, Goldstone, Dyson, loss, or mode fitting.
-         call run_tddft_product_convergence(config, response_space, radial_bases, ground_states, left_state, endpoints)
+         call run_tddft_product_convergence(config, response_space, radial_bases, ground_states, left_state, endpoints, &
+            reciprocal_obj)
          return
       end if
       if (trim(config%backend) == tddft_driver_backend_product_gf) then
@@ -881,22 +888,29 @@ contains
    !> the physical response eta values and records complete compact-matrix
    !> diagnostics.  It deliberately stops before reciprocal GF, KXC,
    !> Goldstone, Dyson, loss, and mode interpretation.
-   subroutine run_tddft_product_convergence(config, response_space, radial_bases, ground_states, left_state, endpoints)
+   subroutine run_tddft_product_convergence(config, response_space, radial_bases, ground_states, left_state, endpoints, &
+                                            reciprocal_obj)
       type(tddft_production_config), intent(in) :: config
       type(response_space_layout), intent(in) :: response_space
       type(lmto_radial_basis), intent(in) :: radial_bases(:)
       type(radial_ground_state), intent(in) :: ground_states(:)
       type(lr_electronic_state), target, intent(in) :: left_state
       type(lr_electronic_state), target, intent(in) :: endpoints(:)
+      type(reciprocal), intent(in) :: reciprocal_obj
       type(lmto_product_response_basis), target :: product_plus, product_minus
       type(lmto_product_response_basis), pointer :: product
       type(lr_product_ks_susceptibility_request) :: request
       type(lr_product_ks_susceptibility_result) :: result
-      integer :: unit, iq, ieta, ifrequency, isite, response_l
-      real(rp) :: accepted_moment, runtime_start, runtime_end
+      integer :: unit, kpoint_unit, basis_unit, matrix_unit
+      integer :: iq, ieta, ifrequency, isite, response_l, ik, imode, ir, matrix_i, matrix_j
+      integer :: gamma_index, static_index
+      real(rp) :: accepted_moment, runtime_start, runtime_end, fixed_ef_electrons
+      real(rp) :: diagnostic_ef, eigen_min, eigen_max, eigen_mean, weight_sum
       real(rp) :: frobenius_norm, maximum_element, trace_real, trace_imag
+      real(rp) :: k_fingerprint(5)
       complex(rp) :: trace
-      logical :: finite_response, rank_stable
+      logical :: finite_response, rank_stable, matrix_written
+      character(len=512) :: kpoint_file, basis_file, matrix_file
 
       if (size(endpoints) /= size(config%q_list, 2)) then
          error stop 'TDVK-05 convergence: q endpoint count differs from q_list'
@@ -909,6 +923,24 @@ contains
          product => product_minus
       end if
       if (product%product_dimension < 1) error stop 'TDVK-05 convergence: compact product space is empty'
+      if (reciprocal_obj%k_workset%nk_global /= left_state%nk .or. &
+          reciprocal_obj%k_workset%nk_local /= left_state%nk) then
+         error stop 'TDVK-05 convergence: reciprocal workset and immutable state have different k counts'
+      end if
+      if (.not. reciprocal_obj%k_workset%complete_bz .or. reciprocal_obj%k_workset%distributed) then
+         error stop 'TDVK-05 convergence: a complete replicated BZ workset is required'
+      end if
+      gamma_index = 0
+      do iq = 1, size(config%q_list, 2)
+         if (sum(abs(config%q_list(:, iq))) <= 1.0e-12_rp) gamma_index = iq
+      end do
+      static_index = 0
+      do ifrequency = 1, size(config%frequencies)
+         if (abs(config%frequencies(ifrequency)) <= 1.0e-12_rp) static_index = ifrequency
+      end do
+      if (gamma_index == 0 .or. static_index == 0) then
+         error stop 'TDVK-05 convergence: Gamma/static indices were not found'
+      end if
 
       accepted_moment = 0.0_rp
       do isite = 1, size(ground_states)
@@ -916,10 +948,34 @@ contains
       end do
       rank_stable = .true.
       do response_l = 0, product%response_lmax
-         rank_stable = rank_stable .and. product%blocks(1, response_l)%rank_stable
+         do isite = 1, product%nsite
+            rank_stable = rank_stable .and. product%blocks(isite, response_l)%rank_stable
+         end do
       end do
 
+      fixed_ef_electrons = reciprocal_obj%canonical_electron_count
+      weight_sum = sum(left_state%k_weights)
+      eigen_min = minval(left_state%eigenvalues)
+      eigen_max = maxval(left_state%eigenvalues)
+      eigen_mean = sum(left_state%eigenvalues)/real(size(left_state%eigenvalues), rp)
+      diagnostic_ef = reciprocal_obj%fermi_level
+      if (reciprocal_obj%total_electrons > 0.0_rp) then
+         diagnostic_ef = reciprocal_obj%find_fermi_level_from_eigenvalues(reciprocal_obj%total_electrons)
+      end if
+      k_fingerprint = 0.0_rp
+      do ik = 1, left_state%nk
+         k_fingerprint(1) = k_fingerprint(1) + left_state%k_weights(ik)
+         k_fingerprint(2:4) = k_fingerprint(2:4) + left_state%k_weights(ik)*left_state%k_points(:, ik)
+         k_fingerprint(5) = k_fingerprint(5) + real(ik, rp)*left_state%k_weights(ik)
+      end do
+      kpoint_file = trim(config%output_file)//'.kpoints'
+      basis_file = trim(config%output_file)//'.basis'
+      matrix_file = trim(config%output_file)//'.matrix'
+
       open(newunit=unit, file=trim(config%output_file), status='replace', action='write')
+      open(newunit=kpoint_unit, file=trim(kpoint_file), status='replace', action='write')
+      open(newunit=basis_unit, file=trim(basis_file), status='replace', action='write')
+      open(newunit=matrix_unit, file=trim(matrix_file), status='replace', action='write')
       write(unit, '(a)') '# TDVK-05 Fe compact bare-response numerical convergence'
       write(unit, '(a,a)') '# build_version = ', trim(tddft_build_version)
       write(unit, '(a)') '# backend = product_convergence'
@@ -934,7 +990,26 @@ contains
       write(unit, '(a,a)') '# accepted_state_reciprocal_mode = ', trim(left_state%reciprocal_mode)
       write(unit, '(a,a)') '# accepted_state_hamiltonian_order = ', trim(left_state%hamiltonian_order)
       write(unit, '(a,a)') '# accepted_state_provenance = ', &
-         'one reconverged Fe SCF state; all q/omega/eta rows reuse its eigenpairs, occupations, EF, temperature, and weights'
+         'one accepted real-space Fe SCF state; all q/omega/eta rows reuse its eigenpairs, occupations, EF, temperature, and weights'
+      write(unit, '(a,3(i0,1x))') '# requested_k_mesh = ', reciprocal_obj%nk_mesh
+      write(unit, '(a,3(i0,1x))') '# actual_generated_k_mesh = ', reciprocal_obj%nk_mesh
+      write(unit, '(a,i0)') '# actual_k_count = ', reciprocal_obj%k_workset%nk_global
+      write(unit, '(a,es24.16)') '# actual_k_weight_sum = ', weight_sum
+      write(unit, '(a,3(es24.16,1x))') '# representative_k_first = ', left_state%k_points(:, 1)
+      write(unit, '(a,3(es24.16,1x))') '# representative_k_middle = ', left_state%k_points(:, (left_state%nk + 1)/2)
+      write(unit, '(a,3(es24.16,1x))') '# representative_k_last = ', left_state%k_points(:, left_state%nk)
+      write(unit, '(a,5(es24.16,1x))') '# k_fingerprint_checksums = ', k_fingerprint
+      write(unit, '(a,es24.16)') '# eigenvalue_min_Ry = ', eigen_min
+      write(unit, '(a,es24.16)') '# eigenvalue_max_Ry = ', eigen_max
+      write(unit, '(a,es24.16)') '# eigenvalue_mean_Ry = ', eigen_mean
+      write(unit, '(a,es24.16)') '# fixed_EF_electron_count = ', fixed_ef_electrons
+      write(unit, '(a,es24.16)') '# target_electron_count = ', reciprocal_obj%total_electrons
+      write(unit, '(a,es24.16)') '# fixed_EF_electron_count_error = ', fixed_ef_electrons - reciprocal_obj%total_electrons
+      write(unit, '(a,es24.16)') '# diagnostic_mesh_EF_Ry = ', diagnostic_ef
+      write(unit, '(a,es24.16)') '# diagnostic_mesh_EF_shift_Ry = ', diagnostic_ef - left_state%fermi_level
+      write(unit, '(a,a)') '# kpoint_artifact = ', trim(kpoint_file)
+      write(unit, '(a,a)') '# basis_artifact = ', trim(basis_file)
+      write(unit, '(a,a)') '# matrix_artifact = ', trim(matrix_file)
       write(unit, '(a,a)') '# channel = ', trim(config%channel)
       write(unit, '(a,es24.16)') '# primary_eta_Ry = ', config%eta
       write(unit, '(a,i0)') '# response_lmax = ', response_space%response_lmax
@@ -946,6 +1021,7 @@ contains
       write(unit, '(a,i0)') '# product_unpruned_dimension = ', product%unpruned_dimension
       write(unit, '(a,i0)') '# product_dimension = ', product%product_dimension
       write(unit, '(a,l1)') '# product_rank_stable_all_L = ', rank_stable
+      write(unit, '(a,i0)') '# product_basis_mode_count = ', product%product_dimension
       write(unit, '(a,i0,4(es24.16,1x))') '# radial_mesh_identity = ', size(ground_states(1)%r), ground_states(1)%a, &
          ground_states(1)%b, ground_states(1)%rmax, sum(ground_states(1)%r)
       write(unit, '(a,a)') '# radial_mesh_provenance = ', &
@@ -955,6 +1031,42 @@ contains
       write(unit, '(a,i0)') '# eta_count = ', size(config%eta_values)
       write(unit, '(a,*(es24.16,1x))') '# eta_values_Ry = ', config%eta_values
       write(unit, '(a,a)') '# columns: eta_index eta_Ry q_index qx qy qz omega_Ry frobenius_norm max_abs_element trace_real trace_imag transitions_evaluated occupation_skips runtime_cpu_seconds finite'
+
+      write(kpoint_unit, '(a,3(i0,1x))') '# requested_k_mesh = ', reciprocal_obj%nk_mesh
+      write(kpoint_unit, '(a,i0)') '# actual_k_count = ', reciprocal_obj%k_workset%nk_global
+      write(kpoint_unit, '(a,es24.16)') '# actual_k_weight_sum = ', weight_sum
+      write(kpoint_unit, '(a,5(es24.16,1x))') '# k_fingerprint_checksums = ', k_fingerprint
+      write(kpoint_unit, '(a)') '# columns: k_index kx ky kz weight'
+      do ik = 1, left_state%nk
+         write(kpoint_unit, '(i0,1x,4(es24.16,1x))') ik, left_state%k_points(:, ik), left_state%k_weights(ik)
+      end do
+
+      write(basis_unit, '(a,3(i0,1x))') '# requested_k_mesh = ', reciprocal_obj%nk_mesh
+      write(basis_unit, '(a,i0)') '# basis_product_dimension = ', product%product_dimension
+      write(basis_unit, '(a,i0)') '# basis_unpruned_dimension = ', product%unpruned_dimension
+      write(basis_unit, '(a,l1)') '# basis_rank_stable_all_L = ', rank_stable
+      write(basis_unit, '(a,i0)') '# basis_response_lmax = ', product%response_lmax
+      write(basis_unit, '(a)') '# columns: site response_l radial_index mode real imag singular_value'
+      do isite = 1, product%nsite
+         do response_l = 0, product%response_lmax
+            do imode = 1, product%blocks(isite, response_l)%rank
+               do ir = 1, product%blocks(isite, response_l)%npoint
+                  write(basis_unit, '(3(i0,1x),i0,1x,3(es24.16,1x))') isite, response_l, ir, imode, &
+                     real(product%blocks(isite, response_l)%weighted_modes(ir, imode), rp), &
+                     aimag(product%blocks(isite, response_l)%weighted_modes(ir, imode)), &
+                     product%blocks(isite, response_l)%singular_values(imode)
+               end do
+            end do
+         end do
+      end do
+
+      write(matrix_unit, '(a,3(i0,1x))') '# requested_k_mesh = ', reciprocal_obj%nk_mesh
+      write(matrix_unit, '(a,i0)') '# basis_product_dimension = ', product%product_dimension
+      write(matrix_unit, '(a,i0)') '# basis_response_lmax = ', product%response_lmax
+      write(matrix_unit, '(a,l1)') '# basis_rank_stable_all_L = ', rank_stable
+      write(matrix_unit, '(a)') '# matrix_scope = Gamma, omega=0, every requested physical eta'
+      write(matrix_unit, '(a)') '# columns: eta_index eta_Ry omega_Ry row column real imag'
+      matrix_written = .false.
 
       do ieta = 1, size(config%eta_values)
          do iq = 1, size(config%q_list, 2)
@@ -986,10 +1098,25 @@ contains
                   ieta, config%eta_values(ieta), iq, config%q_list(:, iq), result%frequencies(ifrequency), frobenius_norm, &
                   maximum_element, trace_real, trace_imag, result%ntransitions_evaluated, result%noccupation_skips, &
                   runtime_end - runtime_start, finite_response
+               if (iq == gamma_index .and. ifrequency == static_index) then
+                  matrix_written = .true.
+                  do matrix_i = 1, product%product_dimension
+                     do matrix_j = 1, product%product_dimension
+                        write(matrix_unit, '(i0,1x,es24.16,1x,es24.16,1x,2(i0,1x),2(es24.16,1x))') &
+                           ieta, config%eta_values(ieta), result%frequencies(ifrequency), matrix_i, matrix_j, &
+                           real(result%susceptibility(matrix_i, matrix_j, ifrequency), rp), &
+                           aimag(result%susceptibility(matrix_i, matrix_j, ifrequency))
+                     end do
+                  end do
+               end if
             end do
          end do
       end do
       close(unit)
+      close(kpoint_unit)
+      close(basis_unit)
+      if (.not. matrix_written) error stop 'TDVK-05 convergence: full Gamma/static matrix was not written'
+      close(matrix_unit)
       write(*, '(a,i0,a,i0,a,i0,a,i0)') 'TDVK-05 Fe compact convergence: q_count=', size(config%q_list, 2), &
          ' omega_count=', size(config%frequencies), ' eta_count=', size(config%eta_values), &
          ' product_dimension=', product%product_dimension
