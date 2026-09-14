@@ -30,7 +30,7 @@ module tddft_production_driver_mod
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, lr_snapshot_from_reciprocal, lr_q_endpoint_from_reciprocal, &
       evaluate_lr_ks_susceptibility, lr_product_ks_susceptibility_request, &
-      lr_product_ks_susceptibility_result, evaluate_lr_product_ks_susceptibility
+      lr_product_ks_susceptibility_result, evaluate_lr_product_ks_susceptibility, lr_channel_plus, lr_channel_minus
    use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state, pauli_vertex_capabilities, &
       pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
    use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
@@ -61,6 +61,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_native_rsgf = 'native_rsgf'
    character(len=*), parameter, public :: tddft_driver_backend_product_lehmann = 'product_lehmann'
    character(len=*), parameter, public :: tddft_driver_backend_product_gf = 'product_gf'
+   character(len=*), parameter, public :: tddft_driver_backend_product_finite_q = 'product_finite_q'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -293,8 +294,9 @@ contains
           trim(config%backend) /= tddft_driver_backend_reciprocal_gf .and. &
           trim(config%backend) /= tddft_driver_backend_native_rsgf .and. &
           trim(config%backend) /= tddft_driver_backend_product_lehmann .and. &
-          trim(config%backend) /= tddft_driver_backend_product_gf) then
-         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann or product_gf'
+          trim(config%backend) /= tddft_driver_backend_product_gf .and. &
+          trim(config%backend) /= tddft_driver_backend_product_finite_q) then
+         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf or product_finite_q'
       end if
       if (trim(config%backend) == tddft_driver_backend_reciprocal_gf .or. &
           trim(config%backend) == tddft_driver_backend_native_rsgf .or. config%reciprocal_backend_crosscheck) then
@@ -308,6 +310,15 @@ contains
             error stop 'TDDFT input: product_gf requires an odd gf_integration_points value >= 3'
          end if
          if (config%gf_energy_margin <= 0.0_rp) error stop 'TDDFT input: product_gf requires gf_energy_margin positive'
+      end if
+      if (trim(config%backend) == tddft_driver_backend_product_finite_q) then
+         if (size(config%q_list, 2) < 4) then
+            error stop 'TDDFT input: product_finite_q requires Gamma, q, -q, and an arbitrary q'
+         end if
+         if (config%gf_integration_points < 3 .or. mod(config%gf_integration_points, 2) == 0) then
+            error stop 'TDDFT input: product_finite_q requires an odd gf_integration_points value >= 3'
+         end if
+         if (config%gf_energy_margin <= 0.0_rp) error stop 'TDDFT input: product_finite_q requires gf_energy_margin positive'
       end if
       if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
          if (trim(config%native_rsgf_provider) /= 'auto' .and. trim(config%native_rsgf_provider) /= 'block' .and. &
@@ -515,6 +526,14 @@ contains
             reciprocal_obj)
          return
       end if
+      if (trim(config%backend) == tddft_driver_backend_product_finite_q) then
+         ! TDVK-04 is a compact bare-response validation seam.  It evaluates
+         ! all requested q points, the prescribed covariance pair, and only
+         ! representative finite-q GF spots.  It never enters KXC, Goldstone,
+         ! Dyson, loss, or the dense point-space result container.
+         call run_tddft_product_finite_q(config, response_space, radial_bases, ground_states, left_state, endpoints)
+         return
+      end if
       if (trim(config%backend) == tddft_driver_backend_product_gf) then
          ! Product-GF remains a bare-response validation seam.  The optional
          ! closure audit reuses this already accepted reciprocal state for the
@@ -621,6 +640,322 @@ contains
       write (*, '(a,i0,a,es12.4,a,es12.4)') 'TDVK-02R2 compact Fe smoke: Nprod=', result%product_dimension, &
          ' runtime_cpu_s=', wall_end - wall_start, ' max_transition_error=', maximum_transition_error
    end subroutine run_tddft_product_bare_smoke
+
+   !> TDVK-04 accepted-Fe finite-q compact validation.  The Lehmann service is
+   !> evaluated at every requested q, while the independent product-GF service
+   !> is used only for two representative finite-q spots.  This routine owns
+   !> diagnostics and serialization only; it does not introduce response
+   !> physics or enter the point-space KXC/Dyson lifecycle.
+   subroutine run_tddft_product_finite_q(config, response_space, radial_bases, ground_states, left_state, endpoints)
+      type(tddft_production_config), intent(in) :: config
+      type(response_space_layout), intent(in) :: response_space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(radial_ground_state), intent(in) :: ground_states(:)
+      type(lr_electronic_state), target, intent(in) :: left_state
+      type(lr_electronic_state), target, intent(in) :: endpoints(:)
+      type(lmto_product_response_basis), target :: product_plus, product_minus
+      type(lmto_product_response_basis), pointer :: product, opposite_product
+      type(lr_product_ks_susceptibility_request) :: lehmann_request, covariance_request
+      type(lr_product_ks_susceptibility_result) :: lehmann_result, covariance_result
+      type(lr_product_gf_susceptibility_request) :: gf_request
+      type(lr_product_gf_susceptibility_result) :: gf_result
+      integer :: unit, iq, gamma_index, covariance_q_index, negative_q_index, arbitrary_q_index
+      integer :: gf_q_index, gf_spot, n_gf_spots, ifrequency
+      real(rp) :: accepted_moment, norm_lehmann, maximum_element, covariance_residual
+      real(rp) :: difference_frobenius, relative_frobenius, difference_infinity
+      real(rp) :: trace_real, trace_imag, q_folded(3), endpoint_first_k(3), endpoint_first(3), endpoint_last(3)
+      real(rp) :: endpoint_error, q_tolerance
+      integer :: endpoint_unique_count
+      logical :: finite_response, covariance_checked
+      character(len=32) :: channel, opposite_channel
+
+      q_tolerance = 2.0e-11_rp
+      gamma_index = find_gamma_q(config%q_list)
+      covariance_q_index = find_first_nonzero_q(config%q_list)
+      negative_q_index = find_matching_q(config%q_list, -config%q_list(:, covariance_q_index), q_tolerance)
+      if (negative_q_index == 0) then
+         error stop 'TDVK-04 finite-q validation: exact negative q is not present in q_list'
+      end if
+      arbitrary_q_index = find_arbitrary_q(config%q_list, gamma_index, covariance_q_index, negative_q_index)
+      if (arbitrary_q_index == 0) then
+         error stop 'TDVK-04 finite-q validation: arbitrary off-mesh q is not present in q_list'
+      end if
+
+      call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
+      call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
+      if (product_plus%product_dimension /= 232 .or. product_minus%product_dimension /= 232) then
+         error stop 'TDVK-04 finite-q validation: accepted Fe product dimension is not 232'
+      end if
+      if (trim(config%channel) == 'chi_plus') then
+         product => product_plus
+         opposite_product => product_minus
+         channel = lr_channel_plus
+         opposite_channel = lr_channel_minus
+      else
+         product => product_minus
+         opposite_product => product_plus
+         channel = lr_channel_minus
+         opposite_channel = lr_channel_plus
+      end if
+
+      accepted_moment = 0.0_rp
+      do iq = 1, size(ground_states)
+         accepted_moment = accepted_moment + ground_states(iq)%integrated_moment_muB
+      end do
+
+      n_gf_spots = 2
+      open(newunit=unit, file=trim(config%output_file), status='replace', action='write')
+      write(unit, '(a)') '# TDVK-04 Fe finite-q compact bare-response validation'
+      write(unit, '(a,a)') '# build_version = ', trim(tddft_build_version)
+      write(unit, '(a)') '# backend = product_finite_q'
+      write(unit, '(a)') '# no KXC, Goldstone, Dyson, loss, mode fitting, or point-space response allocation'
+      write(unit, '(a,i0)') '# product_dimension = ', product%product_dimension
+      write(unit, '(a,i0)') '# response_angular_cutoff = ', response_space%response_lmax
+      write(unit, '(a,i0)') '# accepted_state_nbasis = ', left_state%nbasis
+      write(unit, '(a,i0)') '# accepted_state_nbands = ', left_state%nbands
+      write(unit, '(a,i0)') '# accepted_state_nk = ', left_state%nk
+      write(unit, '(a,es24.16)') '# accepted_state_EF_Ry = ', left_state%fermi_level
+      write(unit, '(a,es24.16)') '# accepted_state_temperature_K = ', left_state%temperature
+      write(unit, '(a,es24.16)') '# accepted_state_moment_muB = ', accepted_moment
+      write(unit, '(a,a)') '# accepted_state_reciprocal_mode = ', trim(left_state%reciprocal_mode)
+      write(unit, '(a,a)') '# accepted_state_hamiltonian_order = ', trim(left_state%hamiltonian_order)
+      write(unit, '(a,a)') '# accepted_state_provenance = ', &
+         'same reciprocal eigenpairs, occupations, EF, temperature, radial mesh, product basis, channel, eta'
+      write(unit, '(a,a)') '# q_convention = ', 'literal direct reciprocal coordinates; folded k endpoints use [-1/2,1/2)'
+      write(unit, '(a,es24.16)') '# eta_Ry = ', config%eta
+      write(unit, '(a,a)') '# q_metadata columns: q_index supplied_qx supplied_qy supplied_qz folded_qx folded_qy folded_qz endpoint_max_abs_error endpoint_first_kx endpoint_first_ky endpoint_first_kz endpoint_first_folded_kx endpoint_first_folded_ky endpoint_first_folded_kz endpoint_last_folded_kx endpoint_last_folded_ky endpoint_last_folded_kz endpoint_unique_count'
+      write(unit, '(a,a)') '# lehmann_metrics columns: q_index supplied_qx supplied_qy supplied_qz frobenius_norm max_abs_element trace_real trace_imag transitions_evaluated finite'
+      write(unit, '(a,a)') '# covariance columns: q_index negative_q_index omega_Ry residual channel negative_channel'
+      write(unit, '(a,a)') '# covariance convention: chi(q,w) compared with C*conjg(chi(-q,-w))*C; C includes (L,M)->(L,-M), (-1)^M, and compact radial-basis transport'
+      write(unit, '(a,a)') '# gf_metrics columns: q_index supplied_qx supplied_qy supplied_qz integration_points integration_eta h_over_integration_eta norm_lehmann norm_gf dF rF dInf wall_seconds finite'
+
+      covariance_checked = .false.
+      do iq = 1, size(config%q_list, 2)
+         call finite_q_endpoint_metadata(left_state, endpoints(iq), config%q_list(:, iq), q_folded, endpoint_error, &
+            endpoint_first_k, endpoint_first, endpoint_last, endpoint_unique_count)
+         if (endpoint_error > q_tolerance) then
+            error stop 'TDVK-04 finite-q validation: endpoint metadata failed exact folding check'
+         end if
+
+         lehmann_request%q = config%q_list(:, iq)
+         lehmann_request%frequencies = config%frequencies
+         lehmann_request%eta = config%eta
+         lehmann_request%channel = channel
+         lehmann_request%product_basis => product
+         lehmann_request%electronic_state => left_state
+         lehmann_request%q_endpoint_state => endpoints(iq)
+         call evaluate_lr_product_ks_susceptibility(lehmann_request, lehmann_result)
+         finite_response = all(ieee_is_finite(real(lehmann_result%susceptibility, rp))) .and. &
+            all(ieee_is_finite(aimag(lehmann_result%susceptibility)))
+         if (.not. finite_response) then
+            error stop 'TDVK-04 finite-q validation: compact Lehmann response contains NaN or Inf'
+         end if
+         norm_lehmann = sqrt(sum(abs(lehmann_result%susceptibility(:, :, 1))**2))
+         maximum_element = maxval(abs(lehmann_result%susceptibility(:, :, 1)))
+         trace_real = 0.0_rp
+         trace_imag = 0.0_rp
+         do ifrequency = 1, product%product_dimension
+            trace_real = trace_real + real(lehmann_result%susceptibility(ifrequency, ifrequency, 1), rp)
+            trace_imag = trace_imag + aimag(lehmann_result%susceptibility(ifrequency, ifrequency, 1))
+         end do
+         write(unit, '(i0,1x,4(es24.16,1x),3(es24.16,1x),i0,1x,l1)') iq, config%q_list(:, iq), norm_lehmann, &
+            maximum_element, trace_real, trace_imag, lehmann_result%ntransitions_evaluated, finite_response
+         write(unit, '(i0,1x,3(es24.16,1x),3(es24.16,1x),es24.16,1x,9(es24.16,1x),i0)') iq, config%q_list(:, iq), &
+            q_folded, endpoint_error, endpoint_first_k, endpoint_first, endpoint_last, endpoint_unique_count
+
+         if (iq == covariance_q_index) then
+            covariance_request%q = -config%q_list(:, iq)
+            covariance_request%frequencies = -config%frequencies
+            covariance_request%eta = config%eta
+            covariance_request%channel = opposite_channel
+            covariance_request%product_basis => opposite_product
+            covariance_request%electronic_state => left_state
+            covariance_request%q_endpoint_state => endpoints(negative_q_index)
+            call evaluate_lr_product_ks_susceptibility(covariance_request, covariance_result)
+            call compact_covariance_residual(product, opposite_product, lehmann_result, covariance_result, covariance_residual)
+            if (.not. ieee_is_finite(covariance_residual)) then
+               error stop 'TDVK-04 finite-q validation: covariance residual is not finite'
+            end if
+            write(unit, '(i0,1x,i0,1x,es24.16,1x,es24.16,1x,a,1x,a)') iq, negative_q_index, config%frequencies(1), &
+               covariance_residual, trim(channel), trim(opposite_channel)
+            write(*, '(a,3(es16.8,1x),a,3(es16.8,1x),a,es12.4)') 'TDVK-04 covariance q=', config%q_list(:, iq), &
+               ' -q=', config%q_list(:, negative_q_index), ' max_abs_residual=', covariance_residual
+            covariance_checked = .true.
+         end if
+      end do
+      if (.not. covariance_checked) error stop 'TDVK-04 finite-q validation: covariance pair was not evaluated'
+
+      do gf_spot = 1, n_gf_spots
+         if (gf_spot == 1) then
+            gf_q_index = covariance_q_index
+         else
+            gf_q_index = arbitrary_q_index
+         end if
+         gf_request%q = config%q_list(:, gf_q_index)
+         gf_request%frequencies = config%frequencies
+         gf_request%eta = config%eta
+         gf_request%channel = channel
+         gf_request%integration_points = config%gf_integration_points
+         gf_request%integration_eta = config%gf_integration_eta
+         gf_request%energy_margin = config%gf_energy_margin
+         gf_request%contraction_backend = 'factorized'
+         gf_request%product_basis => product
+         gf_request%electronic_state => left_state
+         gf_request%q_endpoint_state => endpoints(gf_q_index)
+         call evaluate_lr_product_gf_susceptibility(gf_request, gf_result)
+         finite_response = all(ieee_is_finite(real(gf_result%susceptibility, rp))) .and. &
+            all(ieee_is_finite(aimag(gf_result%susceptibility)))
+         if (.not. finite_response) error stop 'TDVK-04 finite-q validation: compact GF response contains NaN or Inf'
+         lehmann_request%q = config%q_list(:, gf_q_index)
+         lehmann_request%frequencies = config%frequencies
+         lehmann_request%eta = config%eta
+         lehmann_request%channel = channel
+         lehmann_request%product_basis => product
+         lehmann_request%electronic_state => left_state
+         lehmann_request%q_endpoint_state => endpoints(gf_q_index)
+         call evaluate_lr_product_ks_susceptibility(lehmann_request, lehmann_result)
+         norm_lehmann = sqrt(sum(abs(lehmann_result%susceptibility(:, :, 1))**2))
+         difference_frobenius = sqrt(sum(abs(lehmann_result%susceptibility(:, :, 1) - &
+            gf_result%susceptibility(:, :, 1))**2))
+         relative_frobenius = difference_frobenius/max(norm_lehmann, &
+            sqrt(sum(abs(gf_result%susceptibility(:, :, 1))**2)), tiny(1.0_rp))
+         difference_infinity = maxval(abs(lehmann_result%susceptibility(:, :, 1) - &
+            gf_result%susceptibility(:, :, 1)))
+         call finite_q_endpoint_metadata(left_state, endpoints(gf_q_index), config%q_list(:, gf_q_index), q_folded, &
+            endpoint_error, endpoint_first_k, endpoint_first, endpoint_last, endpoint_unique_count)
+         write(unit, '(i0,1x,3(es24.16,1x),i0,1x,8(es24.16,1x),l1)') gf_q_index, config%q_list(:, gf_q_index), &
+            gf_result%integration_points, gf_result%actual_integration_eta, gf_result%spacing_over_integration_eta, &
+            norm_lehmann, sqrt(sum(abs(gf_result%susceptibility(:, :, 1))**2)), difference_frobenius, &
+            relative_frobenius, difference_infinity, gf_result%wall_time_seconds, finite_response
+         write(*, '(a,i0,a,es12.4,a,es12.4,a,es12.4,a,es12.4)') 'TDVK-04 GF q index=', gf_q_index, &
+            ' dF=', difference_frobenius, ' rF=', relative_frobenius, ' dInf=', difference_infinity, &
+            ' wall_s=', gf_result%wall_time_seconds
+      end do
+      close(unit)
+      write(*, '(a,i0,a,i0,a,i0,a,i0)') 'TDVK-04 Fe finite-q compact validation: q_count=', size(config%q_list, 2), &
+         ' product_dimension=', product%product_dimension, ' covariance_q_index=', covariance_q_index, &
+         ' gf_spots=', n_gf_spots
+   end subroutine run_tddft_product_finite_q
+
+   subroutine compact_covariance_residual(plus_product, minus_product, plus_result, minus_result, residual)
+      type(lmto_product_response_basis), intent(in) :: plus_product, minus_product
+      type(lr_product_ks_susceptibility_result), intent(in) :: plus_result, minus_result
+      real(rp), intent(out) :: residual
+      complex(rp), allocatable :: transport(:, :), mapped(:, :), block_transport(:, :)
+      integer :: site, response_l, response_m, plus_first, minus_first, rank_plus, rank_minus
+      real(rp) :: angular_sign
+
+      if (plus_product%product_dimension /= minus_product%product_dimension .or. &
+          any(shape(plus_result%susceptibility) /= shape(minus_result%susceptibility))) then
+         error stop 'TDVK-04 covariance: compact plus/minus dimensions differ'
+      end if
+      allocate(transport(plus_product%product_dimension, minus_product%product_dimension))
+      transport = cmplx(0.0_rp, 0.0_rp, rp)
+      do site = 1, plus_product%nsite
+         do response_l = 0, plus_product%response_lmax
+            rank_plus = plus_product%blocks(site, response_l)%rank
+            rank_minus = minus_product%blocks(site, response_l)%rank
+            allocate(block_transport(rank_plus, rank_minus))
+            ! The weighted modes are the orthonormal compact radial bases.  The
+            ! endpoint-adjoint relation transports minus(-q) coordinates from
+            ! its -M block into the plus(q) M block without comparing SVD
+            ! representatives directly.
+            block_transport = matmul(conjg(transpose(plus_product%blocks(site, response_l)%weighted_modes)), &
+               conjg(minus_product%blocks(site, response_l)%weighted_modes))
+            do response_m = -response_l, response_l
+               plus_first = plus_product%flat_index(site, response_l, response_m, 1)
+               minus_first = minus_product%flat_index(site, response_l, -response_m, 1)
+               angular_sign = merge(-1.0_rp, 1.0_rp, mod(abs(response_m), 2) == 1)
+               transport(plus_first:plus_first + rank_plus - 1, minus_first:minus_first + rank_minus - 1) = &
+                  angular_sign*block_transport
+            end do
+            deallocate(block_transport)
+         end do
+      end do
+      allocate(mapped(plus_product%product_dimension, plus_product%product_dimension))
+      mapped = matmul(transport, matmul(conjg(minus_result%susceptibility(:, :, 1)), conjg(transpose(transport))))
+      residual = maxval(abs(plus_result%susceptibility(:, :, 1) - mapped))
+      deallocate(mapped, transport)
+   end subroutine compact_covariance_residual
+
+   subroutine finite_q_endpoint_metadata(left_state, endpoint, q, q_folded, endpoint_error, endpoint_first_k, endpoint_first, &
+                                         endpoint_last, unique_count)
+      type(lr_electronic_state), intent(in) :: left_state, endpoint
+      real(rp), intent(in) :: q(3)
+      real(rp), intent(out) :: q_folded(3), endpoint_error, endpoint_first_k(3), endpoint_first(3), endpoint_last(3)
+      integer, intent(out) :: unique_count
+      real(rp) :: expected(3)
+      integer :: ik, iu
+
+      if (left_state%nk /= endpoint%nk) error stop 'TDVK-04 metadata: endpoint k-point count differs'
+      q_folded = fold_fractional_kpoint(q)
+      endpoint_error = 0.0_rp
+      endpoint_first_k = left_state%k_points(:, 1)
+      endpoint_first = endpoint%k_points(:, 1)
+      endpoint_last = endpoint%k_points(:, endpoint%nk)
+      unique_count = 0
+      do ik = 1, endpoint%nk
+         expected = fold_fractional_kpoint(left_state%k_points(:, ik) + q)
+         endpoint_error = max(endpoint_error, maxval(abs(expected - endpoint%k_points(:, ik))))
+         if (ik == 1) endpoint_first = endpoint%k_points(:, ik)
+         endpoint_last = endpoint%k_points(:, ik)
+         iu = 1
+         do while (iu < ik)
+            if (all(endpoint%k_points(:, ik) == endpoint%k_points(:, iu))) exit
+            iu = iu + 1
+         end do
+         if (iu == ik) unique_count = unique_count + 1
+      end do
+   end subroutine finite_q_endpoint_metadata
+
+   integer function find_first_nonzero_q(q_list) result(index_nonzero)
+      real(rp), intent(in) :: q_list(:, :)
+      integer :: iq
+
+      index_nonzero = 0
+      do iq = 1, size(q_list, 2)
+         if (sum(abs(q_list(:, iq))) > 1.0e-12_rp) then
+            index_nonzero = iq
+            return
+         end if
+      end do
+      error stop 'TDVK-04 finite-q validation: no nonzero q was supplied'
+   end function find_first_nonzero_q
+
+   integer function find_matching_q(q_list, target, tolerance) result(index_match)
+      real(rp), intent(in) :: q_list(:, :), target(3), tolerance
+      integer :: iq
+
+      index_match = 0
+      do iq = 1, size(q_list, 2)
+         if (maxval(abs(q_list(:, iq) - target)) <= tolerance) then
+            index_match = iq
+            return
+         end if
+      end do
+   end function find_matching_q
+
+   integer function find_arbitrary_q(q_list, gamma_index, covariance_index, negative_index) result(index_arbitrary)
+      real(rp), intent(in) :: q_list(:, :)
+      integer, intent(in) :: gamma_index, covariance_index, negative_index
+      integer :: iq
+
+      index_arbitrary = 0
+      do iq = 1, size(q_list, 2)
+         if (iq /= gamma_index .and. iq /= covariance_index .and. iq /= negative_index .and. &
+             sum(abs(q_list(:, iq))) > 1.0e-12_rp) then
+            index_arbitrary = iq
+            return
+         end if
+      end do
+   end function find_arbitrary_q
+
+   pure function fold_fractional_kpoint(k_point) result(folded)
+      real(rp), intent(in) :: k_point(3)
+      real(rp) :: folded(3)
+
+      folded = k_point - floor(k_point + 0.5_rp)
+   end function fold_fractional_kpoint
 
    !> TDVK-02R3 accepted-Fe compact reciprocal-GF smoke.  This is deliberately
    !> separate from the legacy point-grid reciprocal-GF backend and is not a

@@ -667,3 +667,95 @@ The TDVK-03 completion checklist is now:
 No final GF↔Lehmann material tolerance was invented. No KXC, Dyson,
 Goldstone, or physical interpretation was added; the `PASS CANDIDATE` status
 is returned to the orchestrator for the parent milestone.
+
+## TDVK-04 Fe finite-q endpoint, folding, and covariance
+
+**Status: PASS CANDIDATE.** The prescribed finite-q compact bare-response
+validation completed on the accepted bcc-Fe reciprocal state. This is endpoint,
+folding, covariance, and representative backend evidence only; no magnon,
+dispersion, stiffness, damping, or literature claim is made.
+
+The implementation is the validation-only `backend='product_finite_q'` branch
+in [`tddft_production_driver.f90`](../source/tddft_production_driver.f90). It
+allocates the strict 232-coordinate weighted-orthonormal product representation,
+runs compact Lehmann at every q first, and then runs two factorized compact GF
+spot checks. It does not allocate the legacy point-response matrix and does not
+enter KXC, Goldstone, Dyson, loss, or mode fitting. The reproducible input is
+[`input_tdvk04_fe.nml`](../tests/integration/tddft_driver_smoke/input_tdvk04_fe.nml);
+the CTest registration is intentionally disabled because the material run takes
+several minutes and is run manually for this evidence.
+
+### Accepted state and controls
+
+| quantity | value |
+|---|---:|
+| SCF control / final report RMS difference | `conv_thr=1e-6` / `~1e-6` |
+| `nbasis / nbands` | `18 / 18` |
+| k mesh | `8x8x8 = 512` points |
+| Fermi level | `-8.5120871761e-02 Ry` |
+| temperature | `300 K` |
+| accepted LR-01 integrated moment | `2.26745419 mu_B` |
+| compact product dimension | `232` |
+| response angular cutoff | `4` (complete `spd` product space) |
+| channel / physical eta | `chi_plus` / `0.04 Ry` |
+| GF controls | `N=6401`, `integration_eta=0.001 Ry`, margin `0.60 Ry` |
+
+The state provenance is one immutable reciprocal `ham_only`, second-order,
+orthonormal, collinear, no-SOC eigensystem handoff. The same eigenpairs,
+occupations, Fermi level, temperature, direct radial mesh, compact basis,
+channel, and physical eta were used for every row.
+
+### Literal q set and endpoint metadata
+
+The q values are direct reciprocal coordinates, reported without symmetry-line
+labels. Every endpoint has 512 unique folded points and maximum exact-folding
+error zero at the recorded precision.
+
+| index | supplied q | folded q | first folded endpoint | last folded endpoint | unique | max error |
+|---:|---|---|---|---|---:|---:|
+| 1 | `(0, 0, 0)` | `(0, 0, 0)` | `(-0.4375,-0.4375,-0.4375)` | `(0.4375,0.4375,0.4375)` | 512 | `0.0` |
+| 2 | `(0.125, 0, 0)` | `(0.125, 0, 0)` | `(-0.3125,-0.4375,-0.4375)` | `(-0.4375,0.4375,0.4375)` | 512 | `0.0` |
+| 3 | `(-0.125, 0, 0)` | `(-0.125, 0, 0)` | `(0.4375,-0.4375,-0.4375)` | `(0.3125,0.4375,0.4375)` | 512 | `0.0` |
+| 4 | `(0.23,0.07,-0.11)` | `(0.23,0.07,-0.11)` | `(-0.2075,-0.3675,0.4525)` | `(-0.3325,-0.4925,0.3275)` | 512 | `0.0` |
+
+### Compact Lehmann diagnostics
+
+All matrices were finite. The trace is the ordinary compact-coordinate diagonal
+trace; it is retained as a diagnostic and is not interpreted as a mode.
+
+| q index | supplied q | `||chi||_F` | max element | trace real | trace imag | transitions |
+|---:|---|---:|---:|---:|---:|---:|
+| 1 | `(0,0,0)` | `3.79995937` | `1.87067728` | `-12.87280517` | `-1.94800930` | 104768 |
+| 2 | `(0.125,0,0)` | `3.72587755` | `1.82476632` | `-12.73979612` | `-1.96270817` | 106697 |
+| 3 | `(-0.125,0,0)` | `3.72587755` | `1.82476632` | `-12.73979612` | `-1.96270817` | 106697 |
+| 4 | `(0.23,0.07,-0.11)` | `3.60351169` | `1.73660268` | `-12.55186727` | `-2.03122412` | 106521 |
+
+### q↔-q covariance
+
+At `omega=0`, the full compact matrices at q index 2 and q index 3 satisfy
+the established LR-03/LR-06 retarded/advanced circular covariance with maximum
+absolute residual `1.44868418e-15`. In compact coordinates the existing identity
+is represented by the `M→-M`, `(-1)^M` angular map and the orthonormal radial
+mode transport between the plus and minus product bases; no new response
+formula, channel swap, Fourier sign, or hand-inserted phase was introduced.
+
+| q | -q | channel pair | omega (Ry) | max full-matrix residual |
+|---|---|---|---:|---:|
+| `(0.125,0,0)` | `(-0.125,0,0)` | `chi_plus` / `chi_minus` | `0.0` | `1.44868418e-15` |
+
+### Representative finite-q compact GF checks
+
+The factorized reciprocal-GF route used the same accepted state, product basis,
+physical eta, endpoint snapshots, and q values as Lehmann. These are the two
+post-Lehmann representative checks required by TDVK-04, not a new GF
+convergence ladder. The differences are reported without inventing a material
+acceptance threshold.
+
+| q index | q | `h/integration_eta` | `||chi_L||_F` | `||chi_GF||_F` | `d_F` | `r_F` | `d_inf` | wall (s) |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 2 | `(0.125,0,0)` | `0.59414714` | `3.72587755` | `3.70930128` | `2.27443844e-2` | `6.10443689e-3` | `1.22972669e-2` | `17.3901` |
+| 4 | `(0.23,0.07,-0.11)` | `0.60050009` | `3.60351169` | `3.58766009` | `2.54495298e-2` | `7.06242465e-3` | `1.25762706e-2` | `17.3541` |
+
+TDVK-04 therefore returns **PASS CANDIDATE** to the orchestrator for the
+finite-q bare-response gate. Downstream dispersion, magnon, stiffness,
+damping, and literature work remains outside this milestone.

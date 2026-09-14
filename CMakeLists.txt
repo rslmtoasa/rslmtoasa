@@ -709,6 +709,13 @@ if (RUN_UNIT_TESTS)
     LABELS "integration;tddft;tdvk-03;accepted-state;product-gf;closure"
     DISABLED TRUE
     TIMEOUT 7200)
+  add_test(NAME TddftProductFiniteQ
+    COMMAND ${TestBinary} input_tdvk04_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftProductFiniteQ PROPERTIES
+    LABELS "integration;tddft;tdvk-04;accepted-state;finite-q;covariance"
+    DISABLED TRUE
+    TIMEOUT 7200)
   add_test(NAME UnitLrAlsdaKernelRejectProvenance
     COMMAND UnitLrAlsdaKernel provenance)
   set_tests_properties(UnitLrAlsdaKernelRejectProvenance PROPERTIES

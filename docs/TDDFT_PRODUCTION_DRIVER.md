@@ -38,7 +38,7 @@ The active calculation contract is:
   response_lmax = -1                   ! default: complete 2*lmax product
   interaction_route = 'direct_alsda'
   goldstone_correction = .false.
-  backend = 'lehmann'                 ! lehmann/spectral, reciprocal_gf, native_rsgf, product_lehmann
+  backend = 'lehmann'                 ! lehmann/spectral, reciprocal_gf, native_rsgf, product_lehmann, product_finite_q
   reciprocal_backend_crosscheck = .false. ! opt-in reciprocal validation diagnostic
   native_rsgf_provider = 'auto'       ! auto, block, or chebyshev
   gf_integration_points = 2001        ! reciprocal/native GF Simpson mesh
@@ -66,6 +66,13 @@ validation. See
 the bare KS Lehmann response in the weighted-orthonormal LMTO product basis at
 the naturally prepared reciprocal handoff, then stops before KXC, GSR, Dyson,
 and loss. It is not a full TD-DFT lifecycle backend.
+
+`backend='product_finite_q'` is the TDVK-04 validation-only branch. It evaluates
+the same compact bare Lehmann response at literal Gamma, finite, negative, and
+arbitrary q points, checks exact folded endpoints and the established circular
+q↔-q covariance, then performs representative compact reciprocal-GF spot checks.
+It reuses one accepted state and stops before KXC, GSR, Dyson, loss, and mode
+interpretation.
 
 The old `post_processing='susceptibility'` spelling is rejected with a
 migration error.  `&tddft` is feature-off when absent.  Ordinary calculations
