@@ -207,3 +207,52 @@ Open charge items:
 - The Ewald vector capacity remains 3000; LGEN guards it before writing.
 - Numerical issues in the legacy Ewald helpers require separate evaluation;
   this patch changes storage and dimensions, not their algorithms.
+
+## Hamiltonian stage and surface/impurity compatibility review
+
+User's finite-stack run now reaches chbar_nc. That routine declared cralat
+as an automatic (3,size(cr,2)) array, preserving the original ndim capacity.
+It now allocates (3,kk), fills it with scalar operations, and reuses it for
+both clusba and the PBC wrapped-coordinate call. For default ndim this removes
+a 226.6 MiB automatic array; actual stack failure attribution still requires
+the user's rebuilt run.
+
+Before the Hamiltonian, all four calculation workflows construct charge after
+the final lattice transformations, structb and atomlist. Mix and energy
+construction also precede Hamiltonian construction. The charge/lattice pointers
+therefore refer to live targets in these workflows. No transformation ordering
+was changed.
+
+Hamiltonian hmag stores neighbour-indexed blocks but was allocated with kk;
+it is now sized to maxval(nn(:,1))+1, matching the Hamiltonian neighbour
+capacity. All accesses found use neighbour indices in chbar_nc/build_bulkham/
+build_locham. The SAFE_ALLOC constructor now uses the maximum neighbour count,
+as the normal allocation path already did, instead of the first atom's count.
+Duplicate SAFE_ALLOC allocations of hall_glob and ee_glob were removed.
+
+Parallel read-only comparison against 49c0031 found no concrete introduced
+regression in pre_processing_buildsurf, pre_processing_newclubulk or
+pre_processing_newclusurf. calculation.f90 and lattice build_surf_full/newclu
+remain unchanged. Relevant order:
+- buildsurf: build_data, bravais, build_surf_full, structb, atomlist, charge,
+  build_alelay, surfmat.
+- newclubulk: build_data, bravais, newclu, structb, atomlist, charge, impmad,
+  get_charge_transf.
+- newclusurf: build_data, bravais, build_surf_full, newclu, structb, atomlist,
+  charge, impmad, get_charge_transf.
+Thus active coordinate workspaces use the transformed kk. remd's scratch
+width matches the map row-count capacity. The bulkmat/MADMAT/LATTC changes
+are not on these three charge initialization paths.
+
+Existing issues, not attributed to this patch: surface/impurity changes in
+ntype can exceed the constructor's ct extent; newclu has a fixed
+nn(150000,200); build_surf_full uses maxval over allocated iz capacity and
+has a large unused automatic rotated_cr; newclu has duplicate safe
+deallocation code. The separate lattice.nml sizing pass remains unchanged.
+
+Validation: pushed Hamiltonian source readback verified. Full GitHub builds
+are running. No numerical validation of surface, impurity, HOH, PBC or
+USE_SAFE_ALLOC has been established for this patch. Required next checks:
+the user's bcc-Fe finite-stack run and representative surface, bulk-impurity
+and surface-impurity outputs compared with the original unlimited-stack
+reference. Source compatibility review is not a guarantee of equivalence.
