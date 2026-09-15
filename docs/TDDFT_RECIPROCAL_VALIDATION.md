@@ -1267,3 +1267,114 @@ equation blocker above remains part of the candidate evidence.  Denominator
 diagnostics were explicitly not performed because the compact Dyson
 representation is not certified; they remain for TDVK-07.  No spectrum,
 mode, or magnon claim is made.
+
+### TDVK-06G compact GSR action-consistency closure
+
+The raw TDVK-06 GSR table immediately above is retained as pre-closure
+evidence.  The live preflight started at exact HEAD
+`647e85811cd74699ea5231cecd823176d14242a3` on branch `fable_v4`; only
+pre-existing untracked design/fixture artifacts were present.  The suspected
+inconsistency was confirmed: the old GSR columns were built as
+`P K_j m00_point`, while the final compact interaction action was
+`P K(u) R P m00_point`.
+
+The corrected contract is now used in both places:
+
+```text
+c = P m00_point
+m00_compact_point = R c
+f_j = Kc_j c = P K_j m00_compact_point
+Gamma_j = chiKS_compact f_j
+Kc(u)c = sum_j u_j f_j
+```
+
+The GSR SVD policy is unchanged: `ZGELSS`, `RCOND=-1`, the same unknown
+parameterization, rank detection, interaction basis, and physical state.  No
+regularization, singular-value tuning, coefficient constraint, rescaling, or
+zero-mode enforcement was added.  Occupation provenance is stated literally:
+occupations are deterministically reconstructed from the accepted reciprocal
+state using the same EF, temperature, and Fermi function, followed by the
+accepted eigenvector/POTPAR large-component/frozen-core projection.
+
+#### Magnetization-span closure
+
+The weighted metric is the existing compact radial metric and is reported for
+the normalized `m00=sqrt(4*pi)*m_pauli` point vector.  The accepted 232-mode
+production span gives:
+
+| component | weighted norm | projection residual norm | relative residual |
+|---|---:|---:|---:|
+| total | 7.773573515982192e-1 | 8.409024617442748e-4 | 1.081745043017100e-3 |
+| valence | 7.685880466137061e-1 | 7.601625625367819e-5 | 9.890377112758315e-5 |
+| frozen core | 1.206209398815398e-2 | 7.755761936722918e-4 | 6.429863624292558e-2 |
+
+These are diagnostics only.  The total physical magnetization, including the
+core contribution, was retained unchanged.
+
+#### Independent action oracles
+
+`UnitLrCompactGsrActionConsistency` independently reconstructs point space and
+evaluates `P K_j R c` with nested loops for several retained L=0 operators,
+then compares that result with `Kc_j c`.  It exercises both a physical rigid
+magnetization vector and a deterministic mixed complex compact vector.  It
+also compares a nontrivial assembled `sum_j u_j f_j` with the assembled
+compact operator action and calls the live GSR builder so the old inconsistent
+column construction would fail.
+
+| oracle | result |
+|---|---:|
+| physical single-operator max difference | 1.42108547e-14 |
+| mixed compact single-operator max difference | 3.03692168e-14 |
+| assembled action norm (sum / matrix) | 3.80303612e1 / 3.80303612e1 |
+| assembled action absolute difference | 4.78298717e-15 |
+| assembled action relative difference | 1.76925424e-16 |
+| live Gamma-column max difference | 7.10542736e-15 |
+
+The unit fixture also reports solve-vs-reconstructed residual difference
+relative `2.01321542e-16`; the production run records the corresponding raw
+conditioning-amplified values below.
+
+#### Corrected Fe GSR result
+
+The same accepted 12³ state was rerun at both requested etas.  The `solve`
+columns are the actual `Gamma*u-g` residual; `reconstructed` is
+`chiKS_compact*Kc(u)c-g`.  `difference` is their vector difference.  The
+assembled-action relative value is the independent matrix-action check.
+
+| eta (Ry) | rank | singular min/max | condition | coefficient norm | solve norm / relative | reconstructed norm / relative | residual difference norm / scaled relative | assembled action relative | runtime (s) | status |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 0.010 | 12/12 | 1.804605412204494e-13 / 6.237019428771885e1 | 3.456167972561261e14 | 1.478410860198400e10 | 5.298462141362839e-3 / 6.815996826336072e-3 | 5.311556938395065e-3 / 6.832842109482741e-3 | 4.132700481968813e-4 / 1.597760230141209e-14 | 2.553137732836307e-14 | 0.108888 | `BLOCKED: GSR rank/conditioning` |
+| 0.005 | 12/12 | 1.804116193828506e-13 / 6.245659388557259e1 | 3.461894200563311e14 | 1.474764177022102e10 | 5.302883042908892e-3 / 6.821683920082049e-3 | 5.369965817435924e-3 / 6.907979899194294e-3 | 8.185585709960676e-4 / 3.163704027151049e-14 | 7.741112665751001e-14 | 0.109459 | `BLOCKED: GSR rank/conditioning` |
+
+The two rows each have 232 compact equations and 12 unknowns.  The remaining
+per-eta raw fields are:
+
+| eta (Ry) | residual-difference max component | max residual component | rigid overlap (real, imag) |
+|---:|---:|---:|---:|
+| 0.010 | 3.305468880612335e-4 | 3.782271659661408e-3 | -3.108013805113175e-4, 4.648594557940931e-5 |
+| 0.005 | 6.535864189757058e-4 | 3.784947756599312e-3 | 6.207431728365203e-4, -1.425601111746728e-5 |
+
+The unchanged SVD setting is recorded as `svd_rcond=-1`; the effective
+machine-precision cutoffs are `1.384896514971398e-14` and
+`1.386814971428509e-14`.  The compact assembled action itself agrees at
+roundoff relative to its approximately `2.59e10` norm.  Its absolute
+roundoff is amplified by the approximately `1.48e10` least-squares
+coefficients, which explains the nonzero residual-difference norms without
+reintroducing the former orders-of-magnitude representation mismatch.
+
+The raw direct ALSDA rows and settings above are unchanged; no ALSDA source,
+normalization, channel, sign, prefactor, or physical eta was modified.  The
+corrected GSR outcome is therefore a meaningful numerical blocker from rank/
+conditioning, not a claim about Goldstone physics.  The compact action oracle
+passed, so this is not `BLOCKED — COMPACT GSR OPERATOR ACTION`; the measured
+magnetization projection defect is reported but no response-space or core
+remediation is authorized.
+
+The TDVK-06G result is:
+
+```text
+TDVK-06 GSR CLOSURE PASS CANDIDATE
+BLOCKED — GSR RANK/CONDITIONING
+```
+
+No denominator, spectrum, mode, or TDVK-07 work was started.

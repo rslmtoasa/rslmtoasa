@@ -27,6 +27,7 @@ module lr_compact_static_interaction_mod
    private
 
    real(rp), parameter, public :: lr_compact_gsr_residual_tolerance = 1.0e-9_rp
+   real(rp), parameter, public :: lr_compact_gsr_action_tolerance = 1.0e-10_rp
    character(len=*), parameter, public :: lr_compact_representation = &
       'weighted-orthonormal LMTO product representation; U=sqrt(W)V'
    character(len=*), parameter, public :: lr_compact_mapping_contract = &
@@ -52,11 +53,25 @@ module lr_compact_static_interaction_mod
       integer :: unknowns = 0
       integer :: rank = 0
       real(rp) :: condition_number = huge(1.0_rp)
+      real(rp) :: svd_rcond = -1.0_rp
+      real(rp) :: svd_cutoff = huge(1.0_rp)
+      real(rp) :: coefficient_norm = huge(1.0_rp)
       real(rp) :: equation_residual_norm = huge(1.0_rp)
       real(rp) :: equation_relative_residual = huge(1.0_rp)
       real(rp) :: residual_norm = huge(1.0_rp)
       real(rp) :: relative_residual = huge(1.0_rp)
+      real(rp) :: residual_difference_norm = huge(1.0_rp)
+      real(rp) :: residual_difference_relative = huge(1.0_rp)
+      real(rp) :: residual_difference_max_component = huge(1.0_rp)
       real(rp) :: max_residual_component = huge(1.0_rp)
+      real(rp) :: assembled_action_sum_norm = huge(1.0_rp)
+      real(rp) :: assembled_action_matrix_norm = huge(1.0_rp)
+      real(rp) :: assembled_action_difference_norm = huge(1.0_rp)
+      real(rp) :: assembled_action_difference_relative = huge(1.0_rp)
+      real(rp) :: assembled_action_difference_max_component = huge(1.0_rp)
+      real(rp) :: magnetization_weighted_norm = huge(1.0_rp)
+      real(rp) :: magnetization_projection_residual_norm = huge(1.0_rp)
+      real(rp) :: magnetization_projection_relative_residual = huge(1.0_rp)
       complex(rp) :: rigid_overlap = cmplx(0.0_rp, 0.0_rp, rp)
       logical :: rank_deficient = .true.
       logical :: blocked = .true.
@@ -68,6 +83,7 @@ module lr_compact_static_interaction_mod
    public :: compact_project_local_operator
    public :: compact_apply_local_operator
    public :: compact_project_magnetization
+   public :: compact_weighted_projection_diagnostics
    public :: evaluate_compact_goldstone_sumrule
 
    interface compact_project_local_operator
@@ -236,6 +252,45 @@ contains
       end if
    end subroutine compact_project_magnetization
 
+   !> Report the weighted point-space norm of a vector and its defect from a
+   !> compact reconstruction.  This is the same diagonal radial metric used
+   !> by compact_project_point_vector and compact_reconstruct_point_vector.
+   subroutine compact_weighted_projection_diagnostics(space, point_vector, projected_point_vector, weighted_norm, &
+                                                      residual_norm, relative_residual)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: point_vector(:), projected_point_vector(:)
+      real(rp), intent(out) :: weighted_norm, residual_norm, relative_residual
+      integer :: site, response_l, response_m, ir, channel, flat
+      real(rp) :: weight
+      type(response_super_index) :: item
+
+      if (size(point_vector) /= space%ndim .or. size(projected_point_vector) /= space%ndim) then
+         error stop 'compact projection diagnostics: point vector shape mismatch'
+      end if
+      weighted_norm = 0.0_rp
+      residual_norm = 0.0_rp
+      do site = 1, space%nsite
+         do response_l = 0, space%response_lmax
+            do response_m = -response_l, response_l
+               do ir = 1, space%npoint
+                  weight = space%radial_weights(ir)
+                  if (weight <= 0.0_rp) cycle
+                  do channel = 1, space%nchannel
+                     item = response_super_index(site, response_l, response_m, ir, channel)
+                     call response_flatten_superindex(item, space%nsite, space%response_lmax, &
+                        space%npoint, space%nchannel, flat)
+                     weighted_norm = weighted_norm + weight*abs(point_vector(flat))**2
+                     residual_norm = residual_norm + weight*abs(point_vector(flat) - projected_point_vector(flat))**2
+                  end do
+               end do
+            end do
+         end do
+      end do
+      weighted_norm = sqrt(weighted_norm)
+      residual_norm = sqrt(residual_norm)
+      relative_residual = residual_norm/max(weighted_norm, tiny(1.0_rp))
+   end subroutine compact_weighted_projection_diagnostics
+
    !> Solve the independent compact local LCMM/GSR equation.  The published
    !> U_LCMM radial function is represented in the retained L=0 product span;
    !> each unknown basis function is reconstructed to point space and mapped
@@ -246,8 +301,9 @@ contains
       complex(rp), intent(in) :: static_susceptibility(:, :)
       real(rp), intent(in) :: magnetization(:, :)
       type(lr_compact_gsr_result), intent(out) :: result
-      complex(rp), allocatable :: target(:), target_point(:), field_basis(:, :), gamma(:, :)
+      complex(rp), allocatable :: target(:), target_point(:), target_point_compact(:), field_basis(:, :), gamma(:, :)
       complex(rp), allocatable :: point_u(:), point_field(:), values(:, :), field(:), response(:), residual(:)
+      complex(rp), allocatable :: assembled_field(:), solve_residual(:), residual_difference(:)
       complex(rp), allocatable :: a_work(:, :), b_work(:, :), work(:), work_query(:)
       real(rp), allocatable :: rwork(:)
       integer, allocatable :: unknown_site(:), unknown_mode(:)
@@ -267,10 +323,14 @@ contains
       nunknown = l0_rank
       if (nunknown < 1) error stop 'evaluate_compact_goldstone_sumrule: no retained L=0 interaction modes'
       four_pi = 4.0_rp*response_angular_pi
-      allocate(target(nrow), target_point(space%ndim), field_basis(nrow, nunknown), gamma(nrow, nunknown), &
+      allocate(target(nrow), target_point(space%ndim), target_point_compact(space%ndim), field_basis(nrow, nunknown), gamma(nrow, nunknown), &
          unknown_site(nunknown), unknown_mode(nunknown), point_u(space%ndim), point_field(space%ndim), &
-         values(space%nsite, space%npoint), field(nrow), response(nrow), residual(nrow))
+         values(space%nsite, space%npoint), field(nrow), response(nrow), residual(nrow), assembled_field(nrow), &
+         solve_residual(nrow), residual_difference(nrow))
       call compact_project_magnetization(space, product, magnetization, target, target_point)
+      call compact_reconstruct_point_vector(space, product, target, target_point_compact)
+      call compact_weighted_projection_diagnostics(space, target_point, target_point_compact, result%magnetization_weighted_norm, &
+         result%magnetization_projection_residual_norm, result%magnetization_projection_relative_residual)
       field_basis = cmplx(0.0_rp, 0.0_rp, rp)
       unknown = 0
       do site = 1, product%nsite
@@ -286,8 +346,11 @@ contains
                call response_flatten_superindex(item, space%nsite, space%response_lmax, &
                   space%npoint, space%nchannel, point_flat)
                ! U_LCMM = weighted-mode/sqrt(W) times the compact unknown.
+               ! The GSR column must act on R*c, not on the unprojected
+               ! physical magnetization.  This makes it the same action as
+               ! Kc*c used after the solve.
                point_field(point_flat) = four_pi*product%blocks(site, 0)%weighted_modes(ir, mode)/sqrt_weight * &
-                  target_point(point_flat)
+                  target_point_compact(point_flat)
             end do
             call compact_project_point_vector(space, product, point_field, field_basis(:, unknown))
          end do
@@ -313,6 +376,7 @@ contains
          work, lwork, rwork, info)
       if (info /= 0) error stop 'evaluate_compact_goldstone_sumrule: ZGELSS failed'
       result%solution = b_work(1:nunknown, 1)
+      result%coefficient_norm = sqrt(sum(abs(result%solution)**2))
 
       allocate(result%gamma(nrow, nunknown), result%magnetization_response(nrow), result%generated_field(nrow), &
          result%generated_response(nrow), result%residual_vector(nrow), result%u_lcmm(space%nsite, space%npoint), &
@@ -347,15 +411,36 @@ contains
          end do
       end do
       call compact_project_local_operator(space, product, values, result%canonical_interaction)
+      assembled_field = cmplx(0.0_rp, 0.0_rp, rp)
+      do unknown = 1, nunknown
+         assembled_field = assembled_field + result%solution(unknown)*field_basis(:, unknown)
+      end do
       result%generated_field = matmul(result%canonical_interaction, target)
+      result%assembled_action_sum_norm = sqrt(sum(abs(assembled_field)**2))
+      result%assembled_action_matrix_norm = sqrt(sum(abs(result%generated_field)**2))
+      result%assembled_action_difference_norm = sqrt(sum(abs(assembled_field - result%generated_field)**2))
+      result%assembled_action_difference_relative = result%assembled_action_difference_norm / &
+         max(result%assembled_action_matrix_norm, tiny(1.0_rp))
+      result%assembled_action_difference_max_component = maxval(abs(assembled_field - result%generated_field))
       result%generated_response = matmul(static_susceptibility, result%generated_field)
       residual = result%generated_response - target
       result%residual_vector = residual
-      result%equation_residual_norm = sqrt(sum(abs(matmul(gamma, result%solution) - target)**2))
+      solve_residual = matmul(gamma, result%solution) - target
+      residual_difference = solve_residual - residual
+      result%equation_residual_norm = sqrt(sum(abs(solve_residual)**2))
       target_norm = sqrt(sum(abs(target)**2))
       result%equation_relative_residual = result%equation_residual_norm/max(target_norm, tiny(1.0_rp))
       result%residual_norm = sqrt(sum(abs(residual)**2))
       result%relative_residual = result%residual_norm/max(target_norm, tiny(1.0_rp))
+      result%residual_difference_norm = sqrt(sum(abs(residual_difference)**2))
+      ! Scale the residual difference by the larger of the equation right-hand
+      ! side and the assembled action.  When both residuals are at roundoff,
+      ! scaling by either residual itself would manufacture a meaningless O(1)
+      ! relative difference; for an ill-conditioned solve, the assembled-action
+      ! scale also exposes roundoff amplified by the large coefficients.
+      result%residual_difference_relative = result%residual_difference_norm / &
+         max(max(target_norm, result%assembled_action_matrix_norm), tiny(1.0_rp))
+      result%residual_difference_max_component = maxval(abs(residual_difference))
       result%max_residual_component = maxval(abs(residual))
       result%rigid_overlap = sum(conjg(residual)*target)
       largest_singular = maxval(result%singular_values)
@@ -366,17 +451,22 @@ contains
       if (result%rank == nunknown .and. smallest_positive < huge(1.0_rp)) then
          result%condition_number = largest_singular/smallest_positive
       end if
+      result%svd_rcond = rcond
+      result%svd_cutoff = epsilon(1.0_rp)*largest_singular
       result%equation_rows = nrow
       result%unknowns = nunknown
       result%rank_deficient = result%rank < nunknown
-      result%blocked = result%rank_deficient .or. result%equation_relative_residual > lr_compact_gsr_residual_tolerance .or. &
+      result%blocked = result%rank_deficient .or. result%assembled_action_difference_relative > lr_compact_gsr_action_tolerance .or. &
+         result%equation_relative_residual > lr_compact_gsr_residual_tolerance .or. &
          result%relative_residual > lr_compact_gsr_residual_tolerance
       if (result%rank_deficient) then
-         result%status = 'BLOCKED: compact GSR Gamma is rank deficient'
+         result%status = 'BLOCKED: GSR rank/conditioning'
+      else if (result%assembled_action_difference_relative > lr_compact_gsr_action_tolerance) then
+         result%status = 'BLOCKED: compact GSR operator action'
       else if (result%equation_relative_residual > lr_compact_gsr_residual_tolerance) then
-         result%status = 'BLOCKED: compact GSR equation residual exceeds tolerance'
+         result%status = 'BLOCKED: GSR rank/conditioning'
       else if (result%relative_residual > lr_compact_gsr_residual_tolerance) then
-         result%status = 'BLOCKED: compact full-response GSR residual exceeds tolerance'
+         result%status = 'BLOCKED: GSR rank/conditioning'
       else
          result%blocked = .false.
          result%status = 'PASS: independent compact LCMM sum-rule identity'

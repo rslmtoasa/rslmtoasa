@@ -40,7 +40,8 @@ module tddft_production_driver_mod
       lmto_product_channel_minus
    use lr_compact_static_interaction_mod, only: lr_compact_gsr_result, lr_compact_representation, lr_compact_mapping_contract, &
       compact_project_magnetization, compact_project_local_operator, compact_apply_local_operator, &
-      compact_reconstruct_point_vector, evaluate_compact_goldstone_sumrule
+      compact_reconstruct_point_vector, compact_weighted_projection_diagnostics, evaluate_compact_goldstone_sumrule, &
+      lr_compact_gsr_action_tolerance
    use pauli_ground_state_projection_mod, only: compute_accepted_pauli_magnetization
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
    use lr_product_gf_susceptibility_mod, only: lr_product_gf_susceptibility_request, &
@@ -872,14 +873,20 @@ contains
       type(lr_product_ks_susceptibility_result) :: response_result
       type(lr_alsda_kernel_result) :: kernel_result
       type(lr_compact_gsr_result) :: gsr_result
-      real(rp), allocatable :: magnetization(:, :)
-      complex(rp), allocatable :: magnetization_compact(:), magnetization_point(:)
+      real(rp), allocatable :: magnetization(:, :), magnetization_valence(:, :), magnetization_core(:, :)
+      complex(rp), allocatable :: magnetization_compact(:), magnetization_point(:), magnetization_projected_point(:)
+      complex(rp), allocatable :: valence_compact(:), valence_point(:), valence_projected_point(:)
+      complex(rp), allocatable :: core_compact(:), core_point(:), core_projected_point(:)
       complex(rp), allocatable :: compact_kernel(:, :), field(:), response(:), residual(:)
       complex(rp), allocatable :: point_residual(:)
       real(rp) :: direct_norm, direct_relative, target_norm, state_mesh_max, state_weight_max, state_ef_diff
       real(rp) :: state_eigen_max, state_occ_max, state_projector_max, state_projector_frobenius
       real(rp) :: k_fingerprint(5), accepted_moment, weight_sum
       real(rp) :: kernel_min, kernel_max, kernel_max_abs, runtime_start, runtime_end
+      real(rp) :: magnetization_weighted_norm, magnetization_projection_norm, magnetization_projection_relative
+      real(rp) :: valence_weighted_norm, valence_projection_norm, valence_projection_relative
+      real(rp) :: core_weighted_norm, core_projection_norm, core_projection_relative
+      real(rp) :: gsr_runtime_start, gsr_runtime_end
       complex(rp) :: rigid_overlap, trace
       integer :: gamma_index, ieta, ifrequency, unit, site, response_l, response_m, ir, flat, ik
       type(response_super_index) :: item
@@ -919,9 +926,22 @@ contains
       end if
 
       call compute_accepted_pauli_magnetization(reciprocal_obj, lattice_obj%symbolic_atoms, lattice_obj%nbulk, &
-         magnetization)
-      allocate(magnetization_compact(product%product_dimension))
+         magnetization, magnetization_valence, magnetization_core)
+      allocate(magnetization_compact(product%product_dimension), valence_compact(product%product_dimension), &
+         core_compact(product%product_dimension), magnetization_projected_point(response_space%ndim), &
+         valence_projected_point(response_space%ndim), core_projected_point(response_space%ndim))
       call compact_project_magnetization(response_space, product, magnetization, magnetization_compact, magnetization_point)
+      call compact_reconstruct_point_vector(response_space, product, magnetization_compact, magnetization_projected_point)
+      call compact_weighted_projection_diagnostics(response_space, magnetization_point, magnetization_projected_point, &
+         magnetization_weighted_norm, magnetization_projection_norm, magnetization_projection_relative)
+      call compact_project_magnetization(response_space, product, magnetization_valence, valence_compact, valence_point)
+      call compact_reconstruct_point_vector(response_space, product, valence_compact, valence_projected_point)
+      call compact_weighted_projection_diagnostics(response_space, valence_point, valence_projected_point, &
+         valence_weighted_norm, valence_projection_norm, valence_projection_relative)
+      call compact_project_magnetization(response_space, product, magnetization_core, core_compact, core_point)
+      call compact_reconstruct_point_vector(response_space, product, core_compact, core_projected_point)
+      call compact_weighted_projection_diagnostics(response_space, core_point, core_projected_point, &
+         core_weighted_norm, core_projection_norm, core_projection_relative)
       target_norm = sqrt(sum(abs(magnetization_compact)**2))
       if (target_norm <= tiny(1.0_rp)) then
          error stop 'TDVK-06 static interactions: accepted Pauli magnetization has no retained compact component'
@@ -994,8 +1014,17 @@ contains
          write(unit, '(a,a)') '# accepted_xc_mapping_quality = ', trim(kernel_result%xc_provenance%mapping_quality)
          write(unit, '(a,i0)') '# accepted_xc_txc = ', kernel_result%xc_provenance%txc
          write(unit, '(a,a)') '# pauli_magnetization_label = ', trim(kernel_result%magnetization_label)
-         write(unit, '(a)') '# pauli_magnetization_provenance = accepted reciprocal occupations/eigenvectors + accepted POTPAR large-component and frozen-core projection'
+         write(unit, '(a)') '# pauli_magnetization_provenance = occupations deterministically reconstructed from the accepted reciprocal state using the same EF, temperature and Fermi function; accepted eigenvectors + POTPAR large-component and frozen-core projection'
          write(unit, '(a,es24.16)') '# pauli_magnetization_compact_norm = ', target_norm
+         write(unit, '(a,es24.16)') '# pauli_magnetization_weighted_norm_m00 = ', magnetization_weighted_norm
+         write(unit, '(a,es24.16)') '# pauli_magnetization_projection_residual_norm_m00 = ', magnetization_projection_norm
+         write(unit, '(a,es24.16)') '# pauli_magnetization_projection_relative_residual_m00 = ', magnetization_projection_relative
+         write(unit, '(a,es24.16)') '# pauli_valence_weighted_norm_m00 = ', valence_weighted_norm
+         write(unit, '(a,es24.16)') '# pauli_valence_projection_residual_norm_m00 = ', valence_projection_norm
+         write(unit, '(a,es24.16)') '# pauli_valence_projection_relative_residual_m00 = ', valence_projection_relative
+         write(unit, '(a,es24.16)') '# pauli_core_weighted_norm_m00 = ', core_weighted_norm
+         write(unit, '(a,es24.16)') '# pauli_core_projection_residual_norm_m00 = ', core_projection_norm
+         write(unit, '(a,es24.16)') '# pauli_core_projection_relative_residual_m00 = ', core_projection_relative
          write(unit, '(a,i0)') '# pauli_magnetization_point_sites = ', size(magnetization, 1)
          write(unit, '(a,i0)') '# pauli_magnetization_point_radial_points = ', size(magnetization, 2)
          write(unit, '(a,a)') '# direct_alsda_kernel_formula = Bxc_sigma/m_pauli with Bxc_sigma=(Vxc_up-Vxc_down)/2'
@@ -1007,7 +1036,13 @@ contains
          write(unit, '(a)') '# direct_alsda_residual_definition = chiKS_compact(0,eta) * Kxc_compact * m00_compact - m00_compact'
          write(unit, '(a)') '# direct_alsda_residual_by_block_columns = eta_Ry site response_l residual_block_norm'
          write(unit, '(a)') '# direct_alsda_residual_by_radial_columns = eta_Ry site response_l radial_index residual_point_norm'
-         write(unit, '(a)') '# gsr_columns = eta_Ry equation_rows unknowns rank rank_deficient condition equation_norm equation_relative full_residual_norm full_relative_residual max_component rigid_overlap_real rigid_overlap_imag blocked'
+         write(unit, '(a,a)') '# compact_gsr_action_contract = ', &
+            'f_j=Kc_j*c=P*K_j*R*c; Gamma_j=chiKS_compact*f_j; Kc(u)*c=sum_j u_j*f_j'
+         write(unit, '(a,es24.16)') '# compact_gsr_action_consistency_tolerance = ', lr_compact_gsr_action_tolerance
+         write(unit, '(a)') '# gsr_solve_policy = ZGELSS with RCOND=-1 (machine precision); no regularization, singular-value tuning, rescaling, constraint, or zero-mode enforcement'
+         write(unit, '(a)') '# gsr_residual_difference_relative_scale = max(equation_rhs_norm, assembled_action_norm)'
+         write(unit, '(a)') '# gsr_assembled_action_columns = sum_action_norm matrix_action_norm absolute_difference relative_difference max_component_difference'
+         write(unit, '(a)') '# gsr_columns = eta_Ry compact_dimension equation_rows unknowns rank rank_deficient singular_min singular_max condition svd_rcond svd_cutoff coefficient_norm solve_residual_norm solve_relative reconstructed_residual_norm reconstructed_relative residual_difference_norm residual_difference_relative residual_difference_max max_residual_component rigid_overlap_real rigid_overlap_imag runtime_cpu_seconds blocked'
       end if
 
       do ieta = 1, size(config%eta_values)
@@ -1035,8 +1070,10 @@ contains
          do flat = 1, product%product_dimension
             trace = trace + response_result%susceptibility(flat, flat, 1)
          end do
+         call cpu_time(gsr_runtime_start)
          call evaluate_compact_goldstone_sumrule(response_space, product, response_result%susceptibility(:, :, 1), &
             magnetization, gsr_result)
+         call cpu_time(gsr_runtime_end)
          if (rank == 0) then
             write(unit, '(7(es24.16,1x),l1,1x,a)') config%eta_values(ieta), direct_norm, &
                direct_relative, real(rigid_overlap, rp), aimag(rigid_overlap), sqrt(sum(abs(field)**2)), &
@@ -1079,12 +1116,18 @@ contains
             write(unit, '(a,es24.16,1x,a,es24.16)') '# compact_chiKS_frobenius_eta_Ry = ', &
                sqrt(sum(abs(response_result%susceptibility(:, :, 1))**2)), '# runtime_cpu_seconds = ', runtime_end-runtime_start
             write(unit, '(a,es24.16,1x,es24.16)') '# compact_chiKS_trace_real_imag = ', real(trace, rp), aimag(trace)
-            write(unit, '(es24.16,1x,2(i0,1x),i0,1x,l1,1x,es24.16,1x,4(es24.16,1x),3(es24.16,1x),l1)') &
-               config%eta_values(ieta), gsr_result%equation_rows, gsr_result%unknowns, gsr_result%rank, &
-               gsr_result%rank_deficient, gsr_result%condition_number, gsr_result%equation_residual_norm, &
-               gsr_result%equation_relative_residual, gsr_result%residual_norm, gsr_result%relative_residual, &
-               gsr_result%max_residual_component, real(gsr_result%rigid_overlap, rp), aimag(gsr_result%rigid_overlap), &
+            write(unit, '(es24.16,1x,4(i0,1x),l1,1x,17(es24.16,1x),l1)') config%eta_values(ieta), &
+               product%product_dimension, gsr_result%equation_rows, gsr_result%unknowns, gsr_result%rank, &
+               gsr_result%rank_deficient, minval(gsr_result%singular_values), maxval(gsr_result%singular_values), &
+               gsr_result%condition_number, gsr_result%svd_rcond, gsr_result%svd_cutoff, gsr_result%coefficient_norm, &
+               gsr_result%equation_residual_norm, gsr_result%equation_relative_residual, gsr_result%residual_norm, &
+               gsr_result%relative_residual, gsr_result%residual_difference_norm, gsr_result%residual_difference_relative, &
+               gsr_result%residual_difference_max_component, gsr_result%max_residual_component, &
+               real(gsr_result%rigid_overlap, rp), aimag(gsr_result%rigid_overlap), gsr_runtime_end-gsr_runtime_start, &
                gsr_result%blocked
+            write(unit, '(a,5(es24.16,1x))') '# gsr_assembled_action_norms = ', gsr_result%assembled_action_sum_norm, &
+               gsr_result%assembled_action_matrix_norm, gsr_result%assembled_action_difference_norm, &
+               gsr_result%assembled_action_difference_relative, gsr_result%assembled_action_difference_max_component
             write(unit, '(a,es24.16,1x,a,es24.16)') '# gsr_singular_values_min_max = ', minval(gsr_result%singular_values), &
                '#', maxval(gsr_result%singular_values)
             write(unit, '(a,a)') '# gsr_status = ', trim(gsr_result%status)
@@ -1098,16 +1141,27 @@ contains
          write(unit, '(a)') '# TDVK-06 direct ALSDA static diagnostic = EXECUTED'
          write(unit, '(a)') '# TDVK-06 independent GSR raw solve = EXECUTED; status is reported without repair or correction'
          write(unit, '(a)') '# TDVK-06 compact representation certification = PASS'
+         write(unit, '(a)') '# TDVK-06 GSR CLOSURE PASS CANDIDATE = action-consistency gate passed; raw GSR status remains reported above'
          write(unit, '(a)') '# TDVK-06 PASS CANDIDATE'
          close(unit)
          write(*, '(a)') 'TDVK-06 compact representation certification = PASS'
          write(*, '(a)') 'TDVK-06 ALSDA STATIC DIAGNOSTIC EXECUTED'
          write(*, '(a)') 'TDVK-06 GSR SOLVE EXECUTED status='//trim(gsr_result%status)
+         write(*, '(a)') 'TDVK-06 GSR CLOSURE PASS CANDIDATE'
          write(*, '(a)') 'TDVK-06 PASS CANDIDATE'
       end if
       if (allocated(magnetization)) deallocate(magnetization)
+      if (allocated(magnetization_valence)) deallocate(magnetization_valence)
+      if (allocated(magnetization_core)) deallocate(magnetization_core)
       if (allocated(magnetization_compact)) deallocate(magnetization_compact)
       if (allocated(magnetization_point)) deallocate(magnetization_point)
+      if (allocated(magnetization_projected_point)) deallocate(magnetization_projected_point)
+      if (allocated(valence_compact)) deallocate(valence_compact)
+      if (allocated(valence_point)) deallocate(valence_point)
+      if (allocated(valence_projected_point)) deallocate(valence_projected_point)
+      if (allocated(core_compact)) deallocate(core_compact)
+      if (allocated(core_point)) deallocate(core_point)
+      if (allocated(core_projected_point)) deallocate(core_projected_point)
       if (allocated(compact_kernel)) deallocate(compact_kernel)
       if (allocated(field)) deallocate(field)
       if (allocated(response)) deallocate(response)

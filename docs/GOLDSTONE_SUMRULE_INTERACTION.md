@@ -221,12 +221,16 @@ Gamma * u = m00,
 Gamma(:,j) = chiKS_compact(0,eta) * [4*pi*U_j*m00]
 ```
 
-is solved with LAPACK `ZGELSS` and `RCOND=-1`.  The complete compact response
-residual is evaluated independently as
-`chiKS_compact * K_eff * m00 - m00`.  Rank, singular values, condition,
-equation residual, full residual, and status are all written.  Rank deficiency
-or a residual above `1e-9` is reported as `BLOCKED`; the returned least-squares
-vector is never promoted through regularization or a null-space choice.
+is solved with LAPACK `ZGELSS` and `RCOND=-1`.  The GSR columns use the
+compact-representable source `m00_compact_point=R*c`, so each column is
+`f_j=P*K_j*R*c=Kc_j*c`, exactly the action used by the final compact operator.
+The complete compact response residual is evaluated as
+`chiKS_compact * K_eff * m00 - m00`, and is compared with the actual linear
+system residual.  Rank, singular values, condition, coefficient norm, action
+consistency, equation residual comparison, and status are all written.  Rank
+deficiency, action inconsistency, or a residual above `1e-9` is reported as
+`BLOCKED`; the returned least-squares vector is never promoted through
+regularization or a null-space choice.
 
 The point/product mapping is the certified TDVK-06 contract
 `c=U^H sqrt(W)x`, `x=inv(sqrt(W))Uc`, and `Kc=U^H K U`.  The unit oracle and

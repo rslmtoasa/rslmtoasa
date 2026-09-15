@@ -62,7 +62,7 @@ def validate_output(path: Path) -> dict[str, object]:
             block_rows.append(fields)
         elif len(fields) == 5:
             continue
-        elif len(fields) == 14 and fields[-1] in {"T", "F"}:
+        elif len(fields) == 24 and fields[-1] in {"T", "F"}:
             gsr_rows.append(fields)
         else:
             raise RuntimeError(f"unexpected TDVK-06 data row: {line}")
@@ -83,8 +83,19 @@ def validate_output(path: Path) -> dict[str, object]:
         raise RuntimeError("TDVK-06 channel is not chi_plus")
     if headers.get("pauli_magnetization_label") != "pauli_projected":
         raise RuntimeError("TDVK-06 Pauli magnetization label is not pauli_projected")
+    for key in (
+        "pauli_magnetization_weighted_norm_m00",
+        "pauli_magnetization_projection_residual_norm_m00",
+        "pauli_magnetization_projection_relative_residual_m00",
+        "pauli_valence_projection_relative_residual_m00",
+        "pauli_core_projection_relative_residual_m00",
+    ):
+        if not math.isfinite(number(headers.get(key, "nan"))):
+            raise RuntimeError(f"missing or non-finite magnetization projection diagnostic: {key}")
     if not lines or "# TDVK-06 PASS CANDIDATE" not in lines:
         raise RuntimeError("TDVK-06 PASS CANDIDATE marker is missing")
+    if not any(line.startswith("# TDVK-06 GSR CLOSURE PASS CANDIDATE") for line in lines):
+        raise RuntimeError("TDVK-06 GSR closure candidate marker is missing")
     radial_rows = [line.split() for line in lines if line and not line.startswith("#") and len(line.split()) == 5]
     if len(direct_rows) != 2 or len(gsr_rows) != 2 or len(block_rows) != 10 or len(radial_rows) != 4940 or len(statuses) != 2:
         raise RuntimeError(
@@ -95,9 +106,13 @@ def validate_output(path: Path) -> dict[str, object]:
     if not all(math.isfinite(value) for row in direct_values for value in row):
         raise RuntimeError("direct ALSDA residual diagnostics are not finite")
     for row in gsr_rows:
-        values = [number(value) for value in row[5:13]]
+        if int(row[1]) != 232:
+            raise RuntimeError("GSR compact dimension is inconsistent with the production product space")
+        values = [number(value) for index, value in enumerate(row) if index not in {5, 23}]
         if not all(math.isfinite(value) for value in values):
             raise RuntimeError("GSR diagnostic contains a non-finite value")
+        if number(row[17]) > 1.0e-8:
+            raise RuntimeError("GSR solve and reconstructed residuals are not mutually consistent")
     if not all(status.startswith(("PASS:", "BLOCKED:")) for status in statuses):
         raise RuntimeError(f"unexpected GSR status: {statuses}")
     return {

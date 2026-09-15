@@ -39,11 +39,13 @@ contains
    !> large-component/core projection used by the LR-02N diagnostic, but it is
    !> exposed as data for the static TDVK-06 interaction services.  No EF,
    !> occupation, radial basis, or response-space object is rebuilt here.
-   subroutine compute_accepted_pauli_magnetization(reciprocal_obj, atoms, nbulk, magnetization)
+   subroutine compute_accepted_pauli_magnetization(reciprocal_obj, atoms, nbulk, magnetization, &
+                                                   valence_magnetization, core_magnetization)
       type(reciprocal), intent(in) :: reciprocal_obj
       type(symbolic_atom), intent(in) :: atoms(:)
       integer, intent(in) :: nbulk
       real(rp), allocatable, intent(out) :: magnetization(:, :)
+      real(rp), allocatable, intent(out), optional :: valence_magnetization(:, :), core_magnetization(:, :)
 
       integer :: isite, atom_index, nsite, nmat, norb_site, nr, lmax, ir, ik, ik_global, ib, iorb, ispin, l
       real(rp), allocatable :: valence_weighted(:, :), pauli_weighted(:, :)
@@ -83,6 +85,14 @@ contains
       end do
       allocate(magnetization(nsite, nr))
       magnetization = 0.0_rp
+      if (present(valence_magnetization)) then
+         allocate(valence_magnetization(nsite, nr))
+         valence_magnetization = 0.0_rp
+      end if
+      if (present(core_magnetization)) then
+         allocate(core_magnetization(nsite, nr))
+         core_magnetization = 0.0_rp
+      end if
 
       do isite = 1, nsite
          atom_index = nbulk + isite
@@ -123,10 +133,31 @@ contains
             if (ir == 1) then
                magnetization(isite, ir) = origin_density(pauli_weighted(:, 1), atoms(atom_index)%radial_ground_state%r) - &
                   origin_density(pauli_weighted(:, 2), atoms(atom_index)%radial_ground_state%r)
+               if (present(valence_magnetization)) then
+                  valence_magnetization(isite, ir) = origin_density(valence_weighted(:, 1), &
+                     atoms(atom_index)%radial_ground_state%r) - origin_density(valence_weighted(:, 2), &
+                     atoms(atom_index)%radial_ground_state%r)
+               end if
+               if (present(core_magnetization)) then
+                  core_magnetization(isite, ir) = origin_density(&
+                     atoms(atom_index)%radial_ground_state%core_pauli_weighted_up, &
+                     atoms(atom_index)%radial_ground_state%r) - origin_density(&
+                     atoms(atom_index)%radial_ground_state%core_pauli_weighted_down, &
+                     atoms(atom_index)%radial_ground_state%r)
+               end if
             else
                magnetization(isite, ir) = pauli_weighted(ir, 1)/(4.0_rp*RADIAL_PI* &
                   atoms(atom_index)%radial_ground_state%r(ir)**2) - &
                   pauli_weighted(ir, 2)/(4.0_rp*RADIAL_PI*atoms(atom_index)%radial_ground_state%r(ir)**2)
+               if (present(valence_magnetization)) then
+                  valence_magnetization(isite, ir) = (valence_weighted(ir, 1) - valence_weighted(ir, 2))/ &
+                     (4.0_rp*RADIAL_PI*atoms(atom_index)%radial_ground_state%r(ir)**2)
+               end if
+               if (present(core_magnetization)) then
+                  core_magnetization(isite, ir) = (atoms(atom_index)%radial_ground_state%core_pauli_weighted_up(ir) - &
+                     atoms(atom_index)%radial_ground_state%core_pauli_weighted_down(ir))/ &
+                     (4.0_rp*RADIAL_PI*atoms(atom_index)%radial_ground_state%r(ir)**2)
+               end if
             end if
          end do
          deallocate(valence_weighted, pauli_weighted)
