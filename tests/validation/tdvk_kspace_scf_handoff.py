@@ -292,7 +292,15 @@ def transport_matrix(matrix: list[list[complex]], transport: list[list[complex]]
     return matrix_multiply(matrix_multiply(transport, matrix), transport_adjoint)
 
 
-def run_case(binary: Path, runner: Path, template: Path, fe_database: Path, scratch_root: Path, case: Case) -> dict[str, object]:
+def run_case(
+    binary: Path,
+    runner: Path,
+    template: Path,
+    fe_database: Path,
+    scratch_root: Path,
+    case: Case,
+    expected_product_dimension: int | None = 232,
+) -> dict[str, object]:
     workdir = scratch_root / case.name
     if workdir.exists():
         shutil.rmtree(workdir)
@@ -325,8 +333,11 @@ def run_case(binary: Path, runner: Path, template: Path, fe_database: Path, scra
         raise RuntimeError(f"{case.name}: missing k-space-SCF convergence or direct accepted-state provenance")
     if headers.get("reciprocal_rebuild_performed_for_tddft", "T").upper() != "F":
         raise RuntimeError(f"{case.name}: TDDFT reports a reciprocal rebuild")
-    if int(headers["product_dimension"]) != 232:
-        raise RuntimeError(f"{case.name}: product dimension is not the complete 232-dimensional span")
+    product_dimension = int(headers["product_dimension"])
+    if expected_product_dimension is not None and product_dimension != expected_product_dimension:
+        raise RuntimeError(
+            f"{case.name}: product dimension {product_dimension} does not match expected {expected_product_dimension}"
+        )
     if len(rows) != len(case.eta_values) or any(int(row["q_index"]) != 1 or abs(float(row["omega_Ry"])) > 1.0e-12 for row in rows):
         raise RuntimeError(f"{case.name}: response is not the requested Gamma/static eta set")
 
@@ -346,8 +357,12 @@ def run_case(binary: Path, runner: Path, template: Path, fe_database: Path, scra
         raise RuntimeError(f"{case.name}: actual response mesh differs from requested mesh")
     basis_headers, basis = parse_basis_artifact(artifact_paths["basis_artifact"])
     matrix_headers, matrices = parse_matrix_artifact(artifact_paths["matrix_artifact"])
-    if int(basis_headers["basis_product_dimension"]) != 232 or int(matrix_headers["basis_product_dimension"]) != 232:
-        raise RuntimeError(f"{case.name}: basis/matrix artifacts are not complete 232-dimensional artifacts")
+    basis_dimension = int(basis_headers["basis_product_dimension"])
+    matrix_dimension = int(matrix_headers["basis_product_dimension"])
+    if basis_dimension != product_dimension or matrix_dimension != product_dimension:
+        raise RuntimeError(f"{case.name}: basis/matrix artifacts disagree with response dimension")
+    if expected_product_dimension is not None and (basis_dimension != expected_product_dimension or matrix_dimension != expected_product_dimension):
+        raise RuntimeError(f"{case.name}: basis/matrix artifacts are not the complete 232-dimensional artifacts")
 
     result: dict[str, object] = {
         "name": case.name,
@@ -369,7 +384,7 @@ def run_case(binary: Path, runner: Path, template: Path, fe_database: Path, scra
         "response_rows": rows,
         "response_artifacts": {key: str(path) for key, path in artifact_paths.items()},
         "input_diff": str(workdir / "input_diff.patch"),
-        "product_dimension": 232,
+        "product_dimension": product_dimension,
         "rank_stable_all_L": headers["product_rank_stable_all_L"].upper() == "T",
         "radial_residual_control": header_number(headers, "accepted_state_radial_residual_control"),
         "elapsed_wall_seconds": elapsed,

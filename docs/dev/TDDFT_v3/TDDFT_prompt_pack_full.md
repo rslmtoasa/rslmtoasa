@@ -1305,6 +1305,29 @@ minimal ladder if all gates execute cleanly.
 TDVK-08 checklist verdict:
 `PASS CANDIDATE`
 
+## TDVK-08 Ni 16³ convergence closure
+
+Run only the narrow fcc-Ni material-convergence closure after the parent
+TDVK-08 replication. Keep the accepted 12³ state as the full methodology
+replication state. Do not repeat finite-q, reciprocal-GF, ALSDA, Dyson, loss,
+or interacting covariance layers at 16³ unless the closure is materially
+misleading and the orchestrator explicitly selects a follow-up.
+
+- [x] Fresh 16³ self-consistent k-space SCF.
+- [x] SCF-owned EF and occupations.
+- [x] Same-state TDDFT handoff.
+- [x] Complete product basis.
+- [x] Gamma eta=.01 full matrix.
+- [x] 12³→16³ full operator comparison.
+- [x] Gamma eta=.005 diagnostic on the same accepted state.
+- [x] Convergence sequence assessed against 8³→12³.
+- [x] No unnecessary downstream reruns.
+
+TDVK-08 16³ convergence closure:
+`PASS CANDIDATE`
+
+TDVK-09 remains not started.
+
 
 <!-- FILE: 10_TDVK-09_EVIDENCE_HANDOFF.md -->
 

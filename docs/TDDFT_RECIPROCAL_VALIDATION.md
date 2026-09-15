@@ -1848,3 +1848,131 @@ validator were executed directly and passed their applicable checks. No
 TDVK-09 work was started.
 
 Exact TDVK-08 verdict: **`TDVK-08 PASS CANDIDATE`**.
+
+### TDVK-08 Ni 16³ convergence closure
+
+**Status: `TDVK-08 16³ CONVERGENCE CLOSURE PASS CANDIDATE`.** This is the
+narrow material-convergence closure requested after the parent TDVK-08
+replication. The parent 12³ state remains the full methodology-replication
+state; the fresh 16³ state is the convergence-closure state. No finite-q, GF,
+ALSDA, Dyson, loss, or interacting covariance layer was rerun at 16³.
+
+The closure started from commit `c024bf032b18251cb525a4bc36f35b61c6dbab02`
+(`tests: replicate reciprocal TDDFT validation on Ni`) on `fable_v4`. It used
+the tracked TDVAL-cited Ni deck
+[`results/validation/TDVAL-01_FE_NI/ground_state/fccNi/input.nml`](../results/validation/TDVAL-01_FE_NI/ground_state/fccNi/input.nml),
+with `nsp=1`, `hoh=.false.`, `use_kspace=.true.`, automatic EF, reciprocal
+`ham_only`, and explicit second-order `kspace_ham_order`. The 16³ case was a
+fresh self-consistent process; the input EF was not used as an authority.
+
+#### Fresh SCF convergence sequence
+
+| quantity | 8³ | 12³ | 16³ |
+|---|---:|---:|---:|
+| SCF converged | yes | yes | yes |
+| iterations | 19 | 25 | 28 |
+| EF (Ry) | `0.101425838720095` | `0.0993250704330853` | `0.0996370444485081` |
+| target electrons | `10.0` | `10.0` | `10.0` |
+| accepted electrons | `9.99999999995219` | `9.99999999997506` | `10.0000000000465` |
+| accepted electron error | `−4.7808868e−11` | `−2.4941826e−11` | `4.6494364e−11` |
+| moment (muB) | `0.572263088319057` | `0.666608793349899` | `0.635301187294982` |
+| SCF residual | `7.9827464e−10` | `4.1363358e−10` | `7.6669128e−10` |
+| actual mesh / k points | `8x8x8 / 512` | `12x12x12 / 1728` | `16x16x16 / 4096` |
+| weight sum | `1.0` | `1.000000000000019` | `1.0` |
+| mesh fingerprint | `1cbe24b64cb808294ebdf221e5227e84d97ae147d9c219c1f7ea93071782d9d5` | `cbf15c1e15c8e657635005a071a17e5ead5db64637b2d1938b3dc5e2326b347f` | `ddc8717c8140237061d3dd20d6529741fc19212520e39993773154b147c88718` |
+
+The three runtime fingerprints are distinct, and the 16³ artifact contains
+the actual 4096-point mesh. Its fresh accepted SCF state and TDDFT state have
+identical mesh, weights, EF, eigenvalues, occupations, and gauge-invariant
+projector arrays to the printed precision (all reported continuity
+differences are zero). The TDDFT output reports
+`accepted_kspace_scf_cache` and `reciprocal_rebuild_performed_for_tddft=F`.
+
+#### Complete 16³ compact basis
+
+The complete one-site `spd` product span has response `Lmax=4`, 232 candidate
+dimensions, 232 retained dimensions, and serialized singular-value rank 232.
+The 27,720 basis records were retained without pruning. The runtime rank was
+stable at `tau1`, `10*tau1`, and `100*tau1` in every response-L block:
+
+| response L | candidate / M | retained rank / M | `tau1` | rank at `tau1/10*tau1/100*tau1` | singular-value range |
+|---:|---:|---:|---:|---:|---:|
+| 0 | 12 | 12 | `2.4524054e−13` | `12 / 12 / 12` | `1.6627018e−6 … 2.2312428` |
+| 1 | 16 | 16 | `2.7441255e−13` | `16 / 16 / 16` | `4.7970191e−9 … 2.4966551` |
+| 2 | 16 | 16 | `2.7963829e−13` | `16 / 16 / 16` | `7.9789260e−9 … 2.5441998` |
+| 3 | 8 | 8 | `2.1495545e−13` | `8 / 8 / 8` | `1.6245609e−5 … 1.9557036` |
+| 4 | 4 | 4 | `1.9807758e−13` | `4 / 4 / 4` | `4.7922298e−4 … 1.8021457` |
+
+The complete 16³ Gamma matrix archive is runtime-only at
+`/tmp/tdvk08c_ni_16/kspace_scf_mesh16/tddft_kspace_scf_16.dat.matrix`; it has
+11,741,294 bytes and SHA-256
+`c7fec0e06de5715f3da5c7625e5b24961e8298b5e42e7870794a4407b43fbebf`.
+
+#### Complete Gamma response and transported comparison
+
+The full compact Lehmann matrices at `q=Gamma`, `omega=0`, `eta=.01 Ry` are:
+
+| mesh | product dimension | `||chi||F` | trace chi (real, imag) |
+|---:|---:|---:|---:|
+| 8³ | 232 | `4.2930649368` | `−13.7467739375, −1.2355581327` |
+| 12³ | 232 | `4.2570685426` | `−13.5206193521, −1.2387839966` |
+| 16³ | 232 | `4.2779535812` | `−13.6433224866, −1.2718439158` |
+
+The accepted cross-basis overlap was used without assuming unitarity. For
+12³→16³, the basis key set matched, the overlap unitarity residual was
+`0.2904806716`, the maximum singular-value difference was
+`5.0276666e−4`, and the complete 12³/16³ operator comparison was:
+
+| comparison | `dF` | relative `dF` | `dInf` | trace-difference abs |
+|---|---:|---:|---:|---:|
+| 8³→12³, transported | `0.2055849067` | `0.0478876769` | `0.0473212476` | `0.2261775913` |
+| 12³→16³, transported | `0.1630531402` | `0.0381147521` | `0.0173417219` | `0.1270787845` |
+
+The raw-coordinate 12³→16³ values are `dF=0.1630329929`, relative
+`dF=0.0381100425`, and `dInf=0.0173414396`. A weighted point-space
+Hilbert-Schmidt comparison was not implemented; the established full
+transported operator comparison is the accepted cross-basis diagnostic.
+
+#### Convergence increments
+
+| increment | `|Delta EF|` (Ry) | `|Delta moment|` (muB) | bare-norm change | complete-operator `dF` |
+|---|---:|---:|---:|---:|
+| 8³→12³ | `0.0021007683` | `0.0943457050` | `0.0359963942` | `0.2055849067` |
+| 12³→16³ | `0.0003119740` | `0.0313076061` | `0.0208850386` | `0.1630531402` |
+
+All four increments decrease from 12³→16³. No universal percentage threshold
+was imposed; the sequence itself shows a smaller EF, moment, bare-norm, and
+complete-operator increment. The moment moves toward the denser-mesh value
+with a substantially smaller increment, while the complete response remains
+finite and in the same 232-dimensional span.
+
+#### 16³ eta=.005 diagnostic
+
+The smaller broadening was evaluated in the same accepted 16³ SCF process and
+state, without an SCF rerun:
+
+| 16³ eta (Ry) | `||chi||F` | trace chi (real, imag) | response CPU seconds |
+|---:|---:|---:|---:|
+| `.010` | `4.2779535812` | `−13.6433224866, −1.2718439158` | `241.8588` |
+| `.005` | `4.3254506637` | `−13.8596960638, −0.6708223638` | `228.2733` |
+
+For 16³ eta=.005 versus eta=.01, `dF=0.2908762215`, relative
+`dF=0.0672476105`, and `dInf=0.1743495184`. The existing 12³ diagnostic was
+relative `dF=0.0650390228` and `dInf=0.1678699890`; the small increase at 16³
+does not expose a new instability: both matrices are finite, the product
+dimension and rank remain unchanged, and all SVD sensitivity ranks remain
+stable. No eta→0 extrapolation was made.
+
+#### Closure decision and focused tests
+
+The dedicated validator
+`tests/validation/tdvk08c_ni_16.py` checked fresh 16³ SCF, actual mesh and
+fingerprint provenance, SCF-owned occupations/EF, direct accepted-state
+handoff, no reciprocal rebuild, complete basis and full matrix artifacts,
+cross-basis transport, same-state eta=.005 reuse, distinct 8³/12³/16³
+fingerprints, and stale/cross-mesh artifact safeguards. The weighted
+point-space Hilbert-Schmidt diagnostic was intentionally disabled because it
+would require new infrastructure. No downstream 16³ reruns were launched,
+and TDVK-09 was not started.
+
+Exact closure result: **`TDVK-08 16³ CONVERGENCE CLOSURE PASS CANDIDATE`**.
