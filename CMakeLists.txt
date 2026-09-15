@@ -682,6 +682,9 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrGoldstoneCorrection PROPERTIES LABELS "unit;gcr-01;goldstone;correction;bes;optional")
   add_fortran_unit_test(UnitTddftDyson ${TestDIR}/unit/test_tddft_dyson.f90)
   set_tests_properties(UnitTddftDyson PROPERTIES LABELS "unit;tddft;tddy-01;dyson;loss;metric;covariance")
+  add_fortran_unit_test(UnitTddftCompactDysonOracle ${TestDIR}/unit/test_tddft_compact_dyson_oracle.f90)
+  set_tests_properties(UnitTddftCompactDysonOracle PROPERTIES
+    LABELS "unit;tddft;tdvk-07;compact;dyson;loss;representation-oracle;complex;noncommuting")
   add_fortran_unit_test(UnitTddftProductionDriver ${TestDIR}/unit/test_tddft_production_driver.f90)
   set_tests_properties(UnitTddftProductionDriver PROPERTIES LABELS "unit;tddft;tdrun-01;orchestration;reproducibility")
   add_test(NAME UnitTddftProductionDriverRejectSoc
@@ -742,6 +745,15 @@ if (RUN_UNIT_TESTS)
       "--output" "${CMAKE_BINARY_DIR}/Testing/validation/tdvk06_fe_static_interactions.json")
   set_tests_properties(TddftStaticInteractions PROPERTIES
     LABELS "validation;tddft;tdvk-06;accepted-state;static;alsda;gsr;compact"
+    DISABLED TRUE
+    TIMEOUT 7200)
+  add_test(NAME TddftCompactDysonFe
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/tdvk07_fe_dyson_loss.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/tdvk07_fe_dyson_loss"
+      "--output" "${CMAKE_BINARY_DIR}/Testing/validation/tdvk07_fe_dyson_loss.json")
+  set_tests_properties(TddftCompactDysonFe PROPERTIES
+    LABELS "validation;tddft;tdvk-07;accepted-state;compact;dyson;loss;alsda;covariance"
     DISABLED TRUE
     TIMEOUT 7200)
   add_test(NAME UnitLrAlsdaKernelRejectProvenance

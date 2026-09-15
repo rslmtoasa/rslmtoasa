@@ -41,6 +41,8 @@ module tddft_dyson_mod
       'direct_alsda_goldstone_corrected'
    character(len=*), parameter, public :: lr_dyson_response_representation = &
       'LR-04 canonical right-weighted B=A*W'
+   character(len=*), parameter, public :: lr_dyson_compact_response_representation = &
+      'orthonormal compact LMTO product representation'
    character(len=*), parameter, public :: lr_dyson_loss_convention = &
       'L=-(chi-chi^dagger_W)/(2*i*pi); canonical metric-adjoint form'
    character(len=*), parameter, public :: lr_dyson_convention = &
@@ -61,6 +63,10 @@ module tddft_dyson_mod
       real(rp), allocatable :: frequencies(:)
       real(rp) :: eta = 0.0_rp
       character(len=32) :: channel = ''
+      ! When true, the matrices are already in the accepted orthonormal
+      ! compact product representation.  The response_space pointer is then
+      ! optional and no point-space metric is inserted into Dyson or loss.
+      logical :: compact_orthonormal = .false.
       complex(rp), allocatable :: ks_susceptibility(:, :, :)
       complex(rp), allocatable :: canonical_interaction(:, :)
       character(len=48) :: interaction_route = lr_dyson_route_direct_alsda
@@ -75,6 +81,7 @@ module tddft_dyson_mod
       real(rp), allocatable :: frequencies(:)
       real(rp) :: eta = 0.0_rp
       character(len=32) :: channel = ''
+      logical :: compact_orthonormal = .false.
       character(len=48) :: interaction_route = ''
       character(len=256) :: interaction_provenance = ''
       character(len=512) :: electronic_state_provenance = ''
@@ -91,12 +98,16 @@ module tddft_dyson_mod
       real(rp), allocatable :: denominator_min_singular_value(:)
       real(rp), allocatable :: denominator_max_singular_value(:)
       real(rp), allocatable :: denominator_condition_number(:)
+      real(rp), allocatable :: denominator_min_magnitude_eigenvalue(:)
       integer, allocatable :: solve_info(:)
       logical, allocatable :: solve_succeeded(:)
       logical, allocatable :: near_singular_collective_pole(:)
       logical, allocatable :: numerically_singular(:)
       logical, allocatable :: ill_conditioned(:)
       real(rp), allocatable :: loss_metric_hermiticity_residual(:)
+      real(rp), allocatable :: dyson_residual_frobenius(:)
+      real(rp), allocatable :: dyson_residual_relative(:)
+      real(rp), allocatable :: dyson_residual_infinity(:)
       character(len=256), allocatable :: frequency_status(:)
    end type tddft_dyson_result
 
@@ -124,36 +135,56 @@ contains
 
       type(response_space_layout), pointer :: space
       complex(rp), allocatable :: identity(:, :), product(:, :), denominator(:, :), enhanced(:, :), loss(:, :)
+      complex(rp), allocatable :: residual(:, :)
       integer :: n, nw, iw
+      logical :: compact
 
-      if (.not. associated(request%response_space)) then
-         error stop 'evaluate_tddft_dyson: response-space reference is incomplete'
+      compact = request%compact_orthonormal
+      if (compact) then
+         call validate_compact_request(request, n)
+      else
+         if (.not. associated(request%response_space)) then
+            error stop 'evaluate_tddft_dyson: response-space reference is incomplete'
+         end if
+         space => request%response_space
+         call validate_request(request, space)
+         n = space%ndim
       end if
-      space => request%response_space
-      call validate_request(request, space)
 
-      n = space%ndim
       nw = size(request%frequencies)
       allocate(result%frequencies(nw), result%ks_susceptibility(n, n, nw), &
          result%canonical_interaction(n, n), result%denominator(n, n, nw), &
          result%enhanced_susceptibility(n, n, nw), result%loss_matrix(n, n, nw), &
          result%denominator_min_singular_value(nw), result%denominator_max_singular_value(nw), &
-         result%denominator_condition_number(nw), result%solve_info(nw), result%solve_succeeded(nw), &
+         result%denominator_condition_number(nw), result%denominator_min_magnitude_eigenvalue(nw), &
+         result%solve_info(nw), result%solve_succeeded(nw), &
          result%near_singular_collective_pole(nw), result%numerically_singular(nw), result%ill_conditioned(nw), &
-         result%loss_metric_hermiticity_residual(nw), result%frequency_status(nw))
+         result%loss_metric_hermiticity_residual(nw), result%dyson_residual_frobenius(nw), &
+         result%dyson_residual_relative(nw), result%dyson_residual_infinity(nw), result%frequency_status(nw))
 
-      allocate(identity(n, n), product(n, n), denominator(n, n), enhanced(n, n), loss(n, n))
-      call response_identity_operator(space, identity)
+      allocate(identity(n, n), product(n, n), denominator(n, n), enhanced(n, n), loss(n, n), residual(n, n))
+      if (compact) then
+         identity = cmplx(0.0_rp, 0.0_rp, rp)
+         do iw = 1, n
+            identity(iw, iw) = cmplx(1.0_rp, 0.0_rp, rp)
+         end do
+      else
+         call response_identity_operator(space, identity)
+      end if
 
       result%q = request%q
       result%frequencies = request%frequencies
       result%eta = request%eta
       result%channel = trim(request%channel)
+      result%compact_orthonormal = compact
+      if (compact) result%response_representation = lr_dyson_compact_response_representation
       result%interaction_route = trim(request%interaction_route)
       result%interaction_provenance = trim(request%interaction_provenance)
       result%electronic_state_provenance = trim(request%electronic_state_provenance)
       result%response_space_metadata = trim(request%response_space_metadata)
-      if (len_trim(result%response_space_metadata) == 0) then
+      if (len_trim(result%response_space_metadata) == 0 .and. compact) then
+         write (result%response_space_metadata, '(a,i0,a)') 'dimension=', n, '; orthonormal compact product space'
+      else if (len_trim(result%response_space_metadata) == 0) then
          write (result%response_space_metadata, '(a,i0,a,i0,a,i0,a,i0,a,i0)') 'ndim=', n, &
             ' active_dimension=', space%active_dimension, ' nsite=', space%nsite, &
             ' radial_points=', space%npoint, ' channels=', space%nchannel
@@ -165,8 +196,12 @@ contains
          ! Both operands are canonical LR-04 operators.  This ordinary
          ! multiplication is exactly the LR-04 composition rule; no W is
          ! inserted here.
-         call response_compose_operators(space, request%ks_susceptibility(:, :, iw), &
-            request%canonical_interaction, product)
+         if (compact) then
+            product = matmul(request%ks_susceptibility(:, :, iw), request%canonical_interaction)
+         else
+            call response_compose_operators(space, request%ks_susceptibility(:, :, iw), &
+               request%canonical_interaction, product)
+         end if
          denominator = identity - product
          result%denominator(:, :, iw) = denominator
 
@@ -174,6 +209,7 @@ contains
             result%denominator_condition_number(iw), result%denominator_min_singular_value(iw), &
             result%denominator_max_singular_value(iw), result%numerically_singular(iw), &
             result%ill_conditioned(iw))
+         call minimum_magnitude_eigenvalue(denominator, result%denominator_min_magnitude_eigenvalue(iw))
          result%enhanced_susceptibility(:, :, iw) = enhanced
          result%solve_succeeded(iw) = result%solve_info(iw) == 0 .and. .not. result%numerically_singular(iw)
          result%near_singular_collective_pole(iw) = result%solve_info(iw) == 0 .and. &
@@ -192,13 +228,27 @@ contains
             result%frequency_status(iw) = 'PASS: Dyson solve'
          end if
 
+         residual = matmul(denominator, enhanced) - request%ks_susceptibility(:, :, iw)
+         result%dyson_residual_frobenius(iw) = sqrt(sum(abs(residual)**2))
+         result%dyson_residual_relative(iw) = result%dyson_residual_frobenius(iw)/ &
+            max(sqrt(sum(abs(request%ks_susceptibility(:, :, iw))**2)), tiny(1.0_rp))
+         result%dyson_residual_infinity(iw) = maxval(abs(residual))
+
          if (result%solve_info(iw) == 0) then
-            loss = tddft_loss_matrix(space, enhanced)
+            if (compact) then
+               loss = tddft_loss_matrix(enhanced)
+            else
+               loss = tddft_loss_matrix(space, enhanced)
+            end if
          else
             loss = cmplx(0.0_rp, 0.0_rp, rp)
          end if
          result%loss_matrix(:, :, iw) = loss
-         result%loss_metric_hermiticity_residual(iw) = loss_matrix_hermiticity_residual(space, loss)
+         if (compact) then
+            result%loss_metric_hermiticity_residual(iw) = loss_matrix_hermiticity_residual(loss)
+         else
+            result%loss_metric_hermiticity_residual(iw) = loss_matrix_hermiticity_residual(space, loss)
+         end if
       end do
 
       if (any(result%solve_info /= 0) .or. any(result%numerically_singular)) then
@@ -360,6 +410,54 @@ contains
       end if
    end subroutine validate_request
 
+   subroutine validate_compact_request(request, n)
+      type(tddft_dyson_request), intent(in) :: request
+      integer, intent(out) :: n
+
+      if (.not. allocated(request%frequencies) .or. size(request%frequencies) < 1) then
+         error stop 'evaluate_tddft_dyson: at least one frequency is required'
+      end if
+      if (request%eta <= 0.0_rp) error stop 'evaluate_tddft_dyson: retarded eta must be positive'
+      if (len_trim(request%channel) == 0) error stop 'evaluate_tddft_dyson: circular channel provenance is required'
+      select case (trim(request%channel))
+      case ('plus', 'minus', 'chi_plus', 'chi_minus')
+      case default
+         error stop 'evaluate_tddft_dyson: channel must be plus/minus or chi_plus/chi_minus'
+      end select
+      select case (trim(request%interaction_route))
+      case (lr_dyson_route_direct_alsda)
+         if (index(trim(request%interaction_provenance), 'KXC-01') /= 1) then
+            error stop 'evaluate_tddft_dyson: direct_alsda requires KXC-01 interaction provenance'
+         end if
+      case (lr_dyson_route_goldstone_sumrule)
+         if (index(trim(request%interaction_provenance), 'GSR-01') /= 1) then
+            error stop 'evaluate_tddft_dyson: goldstone_sumrule requires GSR-01 interaction provenance'
+         end if
+      case (lr_dyson_route_direct_alsda_goldstone_corrected)
+         if (index(trim(request%interaction_provenance), 'GCR-01') /= 1) then
+            error stop 'evaluate_tddft_dyson: corrected route requires GCR-01 interaction provenance'
+         end if
+      case default
+         error stop 'evaluate_tddft_dyson: interaction route is not an explicit supported choice'
+      end select
+      if (len_trim(request%interaction_provenance) == 0) then
+         error stop 'evaluate_tddft_dyson: interaction provenance is required'
+      end if
+      if (len_trim(request%electronic_state_provenance) == 0) then
+         error stop 'evaluate_tddft_dyson: electronic-state provenance is required'
+      end if
+      if (.not. allocated(request%ks_susceptibility) .or. .not. allocated(request%canonical_interaction)) then
+         error stop 'evaluate_tddft_dyson: compact chiKS and interaction are required'
+      end if
+      n = size(request%canonical_interaction, 1)
+      if (n < 1 .or. size(request%canonical_interaction, 2) /= n) then
+         error stop 'evaluate_tddft_dyson: compact interaction must be nonempty and square'
+      end if
+      if (any(shape(request%ks_susceptibility) /= [n, n, size(request%frequencies)])) then
+         error stop 'evaluate_tddft_dyson: compact chiKS/frequency shape mismatch'
+      end if
+   end subroutine validate_compact_request
+
    !> Solve one already-formed Dyson denominator and report its singular values.
    subroutine solve_tddft_denominator(denominator, rhs, solution, info, condition_number, min_singular_value, &
                                       max_singular_value, numerically_singular, ill_conditioned)
@@ -452,5 +550,39 @@ contains
          condition_number = huge(1.0_rp)
       end if
    end subroutine singular_value_diagnostics
+
+   !> Return the smallest eigenvalue magnitude of a denominator for the raw
+   !> static/pole diagnostic.  This is diagnostic only; the solve continues to
+   !> use the unmodified denominator and LAPACK zgesv.
+   subroutine minimum_magnitude_eigenvalue(matrix, minimum_magnitude)
+      complex(rp), intent(in) :: matrix(:, :)
+      real(rp), intent(out) :: minimum_magnitude
+      complex(rp), allocatable :: work_matrix(:, :), eigenvalues(:), work(:)
+      complex(rp) :: work_query(1), vl_dummy(1, 1), vr_dummy(1, 1)
+      real(rp), allocatable :: rwork(:)
+      integer :: n, lwork, info
+      external :: zgeev
+
+      n = size(matrix, 1)
+      if (size(matrix, 2) /= n .or. n < 1) error stop 'minimum_magnitude_eigenvalue: matrix must be nonempty and square'
+      allocate(work_matrix(n, n), eigenvalues(n), rwork(max(1, 2*n)))
+      work_matrix = matrix
+      call zgeev('N', 'N', n, work_matrix, n, eigenvalues, vl_dummy, 1, vr_dummy, 1, work_query, -1, rwork, info)
+      if (info /= 0) then
+         minimum_magnitude = huge(1.0_rp)
+         deallocate(work_matrix, eigenvalues, rwork)
+         return
+      end if
+      lwork = max(1, nint(real(work_query(1), rp)))
+      allocate(work(lwork))
+      work_matrix = matrix
+      call zgeev('N', 'N', n, work_matrix, n, eigenvalues, vl_dummy, 1, vr_dummy, 1, work, lwork, rwork, info)
+      if (info == 0) then
+         minimum_magnitude = minval(abs(eigenvalues))
+      else
+         minimum_magnitude = huge(1.0_rp)
+      end if
+      deallocate(work_matrix, eigenvalues, work, rwork)
+   end subroutine minimum_magnitude_eigenvalue
 
 end module tddft_dyson_mod

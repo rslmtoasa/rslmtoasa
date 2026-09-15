@@ -1378,3 +1378,188 @@ BLOCKED — GSR RANK/CONDITIONING
 ```
 
 No denominator, spectrum, mode, or TDVK-07 work was started.
+
+## TDVK-07 — compact Dyson certification and first Fe loss response
+
+TDVK-07 was executed as one parent milestone.  The initial live classification
+was **COMPACT ADAPTER EXISTS BUT NOT CERTIFIED**: the repository already had a
+point-space Dyson/loss service and compact bare/static adapters, but no
+independent point-space-to-compact interacting oracle or returned Dyson
+residual.  The preflight started at `8ccf40945e84048ad5c76f54901ef19c1986ae39`
+on `fable_v4`; the requested `git fetch --dry-run origin fable_v4` was
+attempted but could not resolve `github.com` in this environment, so the
+current checked-out accepted history was used.  The accepted TDVK-03 through
+TDVK-06/06G evidence remains unchanged.
+
+### Compact Dyson and loss contract
+
+The new `backend='compact_dyson'` seam consumes the accepted compact Lehmann
+response and direct ALSDA interaction in the orthonormal product basis.  With
+`U` the retained weighted-orthonormal modes and `W` the point radial metric,
+the live maps are `c=U^H sqrt(W) x`, `x=inv(sqrt(W)) U c`, and
+`Kc=U^H K_point U`.  The exact solved equation is
+
+```text
+D = I - chiKS*Kxc
+D*chi = chiKS
+```
+
+using LAPACK `zgesv`, without an explicit inverse, denominator shift,
+pseudoinverse, or extra damping.  Compact loss is the ordinary orthonormal
+LR-03 form `L=-(chi-chi^H)/(2*i*pi)`.  The legacy LR-04 point-space metric
+path remains intact.  Every compact solve now records the minimum-magnitude
+denominator eigenvalue and Frobenius, relative-Frobenius, and infinity-norm
+Dyson residuals.
+
+### Independent compact Dyson oracle
+
+`UnitTddftCompactDysonOracle` uses a separate pivoted point-space Gaussian
+solve and an explicit point-to-compact projection.  Its two-site,
+multi-angular/multi-radial-sector fixture has point dimension 40, active
+compact dimension 32, complex off-diagonal bare response, finite imaginary
+parts, and a non-diagonal compact interaction.  It also exercises wrong-order,
+wrong-sign, and conjugation/projection negative controls.
+
+| quantity | value |
+|---|---:|
+| point projected `||chi||_F` | `6.0297496489765390e-1` |
+| compact Dyson `||chi||_F` | `6.0297496489765434e-1` |
+| complete-matrix `dF` | `3.7740745696804097e-15` |
+| relative `dF` | `6.2590899944262202e-15` |
+| `dInf` | `2.9736722724136411e-16` |
+| loss `dF` / relative `dF` / `dInf` | `3.2737677930040462e-16` / `6.0147183523127362e-15` / `3.1831773794510138e-17` |
+| Dyson residual `||R||_F` / relative / `dInf` | `1.6337780085177669e-16` / `2.7566246189202793e-16` / `4.1635622116700069e-17` |
+| denominator min/max singular value | `9.7730348896982311e-1` / `1.0018403725472564` |
+| denominator condition number | `1.0251067184905864` |
+
+The independent oracle passed.  No production Dyson helper was used to
+construct the point-side expected matrix.
+
+### Accepted Fe state and production provenance
+
+The material run used the already accepted self-consistent reciprocal state:
+
+| quantity | value |
+|---|---:|
+| state source / cache reuse | `accepted_kspace_scf_cache` / `T` |
+| requested and actual mesh | `12 x 12 x 12` / `12 x 12 x 12` |
+| accepted k-point count | `1728` |
+| `nbasis / nbands` | `18 / 18` |
+| compact product dimension | `232` |
+| SCF-owned EF | `-8.7568835307212323e-2 Ry` |
+| accepted integrated moment | `2.1593566634778334 mu_B` |
+| SCF/TDDFT EF difference | `0.0 Ry` |
+| TDDFT reciprocal rebuild | `F` |
+| interaction route | `direct_alsda` (`KXC-01`) |
+| Goldstone/BES/GCR | `OFF` |
+| GSR | diagnostic only — blocked by conditioning; not used |
+
+The state artifact reports zero for the mesh, weight, eigenvalue, occupation,
+projector maximum, and projector Frobenius continuity diagnostics.  The
+complete run used collinear, no-SOC, `ham_only`, second-order reciprocal data
+and the same radial/product provenance as TDVK-06.
+
+### Static Gamma direct-ALSDA denominator
+
+The raw Gamma `omega=0` denominator was solved at both requested physical
+broadenings with no Goldstone repair:
+
+| eta (Ry) | min singular value | max singular value | condition number | min-magnitude eigenvalue | residual `||R||_F` | status |
+|---:|---:|---:|---:|---:|---:|---|
+| `0.010` | `4.5209751379550793e-2` | `1.3215442974481579` | `2.9231399357925177e1` | `6.0216492056121805e-2` | `8.0361561689605297e-15` | `PASS: Dyson solve` |
+| `0.005` | `2.5530759206329818e-2` | `1.3218389361711425` | `5.1774368536734315e1` | `3.4011403777666691e-2` | `1.2207418850205729e-14` | `PASS: Dyson solve` |
+
+Relative residuals were `1.9899552933802163e-15` and
+`3.0151007446503428e-15`; residual `dInf` values were
+`4.4109757722268270e-15` and `7.5300811425197117e-15`.  A rigid-vector overlap
+is unavailable in the existing Dyson eigensolver API.  The denominator was
+not shifted, rescaled, regularized, or corrected.
+
+### Raw dynamic Fe response
+
+The complete raw archive is
+`/tmp/tdvk07_fe_dyson_loss_final4/run/tdvk07_fe.dat` (114 MB); it contains
+`645888 = 3 x 4 x 232 x 232` raw matrix rows for `chiKS`, interacting `chi`,
+and loss.  The state artifact is
+`/tmp/tdvk07_fe_dyson_loss_final4/run/tdvk07_fe.dat.state`.  The literal q
+set is `[(0,0,0),(1/12,0,0),(-1/12,0,0)]` in direct reciprocal coordinates;
+the physical eta is `0.010 Ry`; the frequency grid is
+`[0.00, 0.01, 0.02, 0.05] Ry`.
+
+The table reports the ordinary compact Frobenius norms, real loss trace,
+minimum denominator singular value, condition number, and Frobenius Dyson
+residual.  The loss-trace imaginary part was zero in every displayed row; no
+absolute-value or positivity clipping was applied.
+
+| q | omega (Ry) | `||chiKS||F` | `||chi||F` | loss trace | min sv(D) | cond(D) | `||R||F` |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `(0,0,0)` | 0.00 | 4.03836016 | 49.77580249 | 15.27185931 | 4.52097514e-2 | 29.2313994 | 8.03615617e-15 |
+| `(0,0,0)` | 0.01 | 4.25636051 | 42.94528950 | 11.58592868 | 5.40253724e-2 | 25.1496531 | 5.11404128e-15 |
+| `(0,0,0)` | 0.02 | 4.51036401 | 26.66870312 | 4.72156359 | 9.02358657e-2 | 15.5634970 | 5.95723893e-15 |
+| `(0,0,0)` | 0.05 | 5.57728318 | 12.12828969 | 2.00116469 | 2.39602928e-1 | 6.78426936 | 2.14578431e-15 |
+| `(1/12,0,0)` | 0.00 | 4.01360632 | 46.36193072 | 13.38992098 | 4.80780602e-2 | 27.4054653 | 1.14314783e-14 |
+| `(1/12,0,0)` | 0.01 | 4.23116028 | 45.16805657 | 13.14690632 | 5.08902375e-2 | 26.6061939 | 2.04185766e-14 |
+| `(1/12,0,0)` | 0.02 | 4.48629725 | 27.98533874 | 5.44235098 | 8.52196652e-2 | 16.4162476 | 9.32404828e-15 |
+| `(1/12,0,0)` | 0.05 | 5.55963882 | 12.14803141 | 2.23247320 | 2.38415109e-1 | 6.80052522 | 3.37683093e-15 |
+| `(-1/12,0,0)` | 0.00 | 4.01360632 | 46.36193072 | 13.38992098 | 4.80780602e-2 | 27.4054653 | 1.08431280e-14 |
+| `(-1/12,0,0)` | 0.01 | 4.23116028 | 45.16805657 | 13.14690632 | 5.08902375e-2 | 26.6061939 | 2.23738387e-14 |
+| `(-1/12,0,0)` | 0.02 | 4.48629725 | 27.98533874 | 5.44235098 | 8.52196652e-2 | 16.4162476 | 8.37095498e-15 |
+| `(-1/12,0,0)` | 0.05 | 5.55963882 | 12.14803141 | 2.23247320 | 2.38415109e-1 | 6.80052522 | 3.48935947e-15 |
+
+No row was dropped and no dynamic row was assigned a magnon, stiffness,
+damping, linewidth, or literature interpretation.
+
+### Interacting q/−q covariance
+
+The complete interacting matrices at `q=(1/12,0,0)` and
+`-q=(-1/12,0,0)` were compared through the established compact angular and
+radial transport.  For the loss matrix the LR-03 anti-Hermitian definition
+adds the required overall minus under the conjugated covariance map; this is
+the live loss convention, not a phase patch.
+
+| omega (Ry) | full-matrix residual | loss difference | min-sv difference | condition difference |
+|---:|---:|---:|---:|---:|
+| 0.00 | `1.7785297711503093e-12` | `4.9382720135326963e-13` | `1.3253287356462806e-15` | `7.9225515037251171e-13` |
+| 0.01 | `3.9189507768747024e-13` | `8.704148513061227e-14` | `1.5959455978986625e-16` | `9.9475983006414026e-14` |
+| 0.02 | `9.0096846912623023e-13` | `2.8110846983508964e-13` | `2.4286128663675299e-15` | `4.7961634663806763e-13` |
+| 0.05 | `3.8461817592460480e-14` | `6.3282712403633923e-15` | `1.5543122344752192e-15` | `3.6415315207705135e-14` |
+
+The interacting covariance gate passed without phase patching or correction.
+
+### Independent GF bare spot
+
+One representative Gamma bare spot was evaluated with the factorized
+reciprocal-GF backend and compared with compact Lehmann.  It used the
+TDVK-03-controlled `N=6401`, `integration_eta=0.001 Ry`, `margin=0.60 Ry`
+quadrature; the measured `h/integration_eta` was `0.5974959562`.
+
+| q | omega (Ry) | `dF` | relative `dF` | `dInf` |
+|---|---:|---:|---:|---:|
+| `(0,0,0)` | 0.01 | `3.0436682581871682e-2` | `7.1508704478307136e-3` | `1.6112102190921553e-2` |
+
+The GF route was a bare spot check only; it did not replace the compact
+Lehmann input to Dyson and no GF spectrum was generated.
+
+### Tests and verdict
+
+The focused test set passed 7/7:
+
+```text
+UnitLrProductKsSusceptibility
+UnitLrCompactStaticInteraction
+UnitLrCompactGsrActionConsistency
+UnitLrAlsdaKernel
+UnitTddftDyson
+UnitTddftCompactDysonOracle
+UnitTddftProductionDriver
+```
+
+The material validator
+`tests/validation/tdvk07_fe_dyson_loss.py` passed and wrote
+`/tmp/tdvk07_fe_dyson_loss_final4.json`.  The CTest registration
+`TddftCompactDysonFe` is intentionally `DISABLED` because it is a multi-minute
+12³ material campaign; it was executed directly by the validator and is not
+counted among the 7/7 focused unit tests.  No pre-existing passing test was
+disabled, and no TDVK-08 code was started.
+
+Exact result: **TDVK-07 PASS CANDIDATE**.

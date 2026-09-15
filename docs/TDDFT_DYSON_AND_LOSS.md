@@ -15,6 +15,42 @@ one explicitly selected KXC-01, GSR-01, or GCR-01 route.  It does not select or
 reconstruct an interaction route, and it does not use the retired pair-`Xi`
 enhancement path.
 
+## TDVK-07 compact representation contract
+
+TDVK-07 certifies the same Dyson service in the accepted orthonormal LMTO
+product representation.  If `U` contains the retained weighted-orthonormal
+product modes and `W` is the point radial metric, the compact coordinate maps
+are
+
+\[
+ c=U^H W^{1/2}x,\qquad x=W^{-1/2}Uc,
+ \]
+
+and a local point operator is supplied as
+
+\[
+ K_c=U^H K_{point}U.
+\]
+
+For `request%compact_orthonormal=.true.`, the service therefore uses ordinary
+compact multiplication with no point-space metric insertion:
+
+\[
+ D_c=I-\chi^{KS}_cK_c,\qquad D_c\chi_c=\chi^{KS}_c.
+\]
+
+The solve remains LAPACK `zgesv` with the complete `chiKS` matrix as the
+right-hand side; no inverse, denominator shift, pseudoinverse, or additional
+eta is used.  Compact loss is the ordinary orthonormal form
+`L=-(chi-chi^H)/(2*i*pi)`.  The legacy point-space path and its LR-04 metric
+adjoint remain unchanged.
+
+The result now records the minimum-magnitude denominator eigenvalue and the
+Frobenius, relative-Frobenius, and infinity-norm Dyson residuals.  TDVK-07's
+independent point-space projection oracle uses a separate pivoted Gaussian
+solve and separate explicit projection; it is not a second call to the Dyson
+helper.
+
 ## Discrete LR-04 Dyson equation
 
 LR-04 stores a nonlocal raw pointwise operator `A` as the canonical
@@ -148,6 +184,13 @@ ctest --test-dir build --output-on-failure -R '^UnitTddftDyson$'
 ```
 
 Result: `UnitTddftDyson` passed (1/1 test).
+
+`UnitTddftCompactDysonOracle` is the TDVK-07 compact gate.  Its two-site,
+multi-sector complex/noncommuting fixture compares an independently solved
+point-space response projected into compact space with the live compact Dyson
+solve.  It reports `dF=3.7740745696804097e-15`, relative `dF=6.2590899944262202e-15`,
+`dInf=2.9736722724136411e-16`, loss `dF=3.2737677930040462e-16`, and Dyson
+residual relative `2.7566246189202793e-16`.
 
 ## Scope boundary
 

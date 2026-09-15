@@ -40,7 +40,7 @@ The active calculation contract is:
   response_lmax = -1                   ! default: complete 2*lmax product
   interaction_route = 'direct_alsda'
   goldstone_correction = .false.
-  backend = 'lehmann'                 ! lehmann/spectral, reciprocal_gf, native_rsgf, product_lehmann, product_finite_q, product_convergence
+  backend = 'lehmann'                 ! lehmann/spectral, reciprocal_gf, native_rsgf, product_lehmann, product_finite_q, product_convergence, compact_dyson
   reciprocal_backend_crosscheck = .false. ! opt-in reciprocal validation diagnostic
   native_rsgf_provider = 'auto'       ! auto, block, or chebyshev
   gf_integration_points = 2001        ! reciprocal/native GF Simpson mesh
@@ -84,6 +84,16 @@ product dimensions, rank stability, radial provenance, and finite-matrix
 diagnostics, then stops before reciprocal GF, KXC, GSR, Dyson, loss, and mode
 interpretation. The `response_lmax=2` path is an explicitly approximate
 diagnostic; `response_lmax=-1` remains the complete `spd` product span.
+
+`backend='compact_dyson'` is the TDVK-07 accepted-state production seam.  It
+requires the direct ALSDA route, the accepted 12³ reciprocal cache, and the
+complete 232-dimensional orthonormal product space.  It evaluates compact
+Lehmann `chiKS`, projects direct ALSDA as `U^H K_point U`, solves
+`(I-chiKS*Kxc) chi=chiKS` with the common Dyson service, and writes complete
+raw interacting/loss matrices plus denominator residuals.  It also records
+the prescribed Gamma eta pair, interacting q/−q covariance, and configured
+representative bare GF spot checks.  GSR/BES/GCR and all mode or stiffness
+interpretation remain outside this backend.
 
 The old `post_processing='susceptibility'` spelling is rejected with a
 migration error.  `&tddft` is feature-off when absent.  Ordinary calculations

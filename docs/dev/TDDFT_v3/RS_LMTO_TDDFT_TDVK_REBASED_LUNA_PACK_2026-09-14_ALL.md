@@ -1327,6 +1327,24 @@ Return:
 
 Then stop for physics interpretation.
 
+## TDVK-07 completion checklist
+
+- [x] accepted 12³ reciprocal SCF state reused with SCF/TDDFT continuity checks;
+- [x] compact Dyson uses the documented orthonormal product-space equation;
+- [x] independent nontrivial point-space-to-compact Dyson oracle executed;
+- [x] complete-matrix `dF`, relative `dF`, `dInf`, denominator conditioning, and algebraic residual recorded;
+- [x] independent compact-vs-point loss oracle passed with the live LR-03 sign convention;
+- [x] direct ALSDA Gamma denominator evaluated at `eta=.01` and `eta=.005`;
+- [x] Gamma, exact mesh-commensurate `+q`, and exact `-q` raw interacting responses executed;
+- [x] complete compact interacting/loss matrices retained for all 3×4 q/ω samples;
+- [x] interacting q/−q full-matrix covariance, loss comparison, and denominator diagnostics passed;
+- [x] one controlled reciprocal-GF bare spot check executed with the TDVK-03 quadrature;
+- [x] no GSR production kernel, BES/GCR correction, mode assignment, stiffness, damping, or literature comparison used;
+- [x] required documentation, focused tests, and material validation harness updated.
+
+TDVK-07 checklist verdict:
+PASS CANDIDATE
+
 ## Commit
 
 `tests: generate first Fe reciprocal TDDFT loss response`
