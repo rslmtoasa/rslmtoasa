@@ -13,6 +13,170 @@ submodule(self_mod) self_reciprocal
 contains
 
    !=========================================================================
+   !       FINALIZE THE ACCEPTED RECIPROCAL k-SPACE SCF STATE
+   !=========================================================================
+   !> The SCF DOS pass diagonalizes the Hamiltonian before mixing the newly
+   !> computed moments into the accepted potential.  At convergence the
+   !> difference is normally small, but the production handoff must not rely
+   !> on that approximation.  Rebuild and diagonalize once, on the already
+   !> accepted final potential, then solve EF from that same eigensystem.
+   !> This routine deliberately does not map a new density back into SCF or
+   !> perform another mixer update: it only refreshes the state being handed
+   !> to TDDFT.
+   module subroutine finalize_kspace_scf_state(this)
+      class(self), intent(inout) :: this
+      integer :: ia
+
+      if (.not. this%use_kspace) return
+      if (.not. this%converged) then
+         call g_logger%fatal('self%finalize_kspace_scf_state: a non-converged k-space state cannot be handed to TDDFT.', &
+                             __FILE__, __LINE__)
+      end if
+      if (.not. allocated(this%reciprocal_scf_cache)) then
+         call g_logger%fatal('self%finalize_kspace_scf_state: reciprocal SCF cache is missing.', __FILE__, __LINE__)
+      end if
+
+      select case (this%control%calctype)
+      case ('B')
+         do ia = 1, this%lattice%nrec
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%has_soc()) call this%hamiltonian%build_lsham()
+         call this%hamiltonian%build_bulkham()
+      case ('S', 'I', 'L')
+         do ia = 1, this%lattice%ntype
+            call this%symbolic_atom(ia)%build_pot()
+         end do
+         if (this%control%has_soc()) call this%hamiltonian%build_lsham()
+         call this%hamiltonian%build_bulkham()
+         if (this%control%calctype == 'I') call this%hamiltonian%build_locham()
+      case default
+         call g_logger%fatal('self%finalize_kspace_scf_state: unsupported calculation type.', __FILE__, __LINE__)
+      end select
+
+      call this%reciprocal_scf_cache%build_kspace_hamiltonian()
+      call this%reciprocal_scf_cache%diagonalize_hamiltonian()
+      this%reciprocal_scf_cache%auto_find_fermi = .true.
+      this%bands%eband = this%reciprocal_scf_cache%calculate_canonical_band_energy(.true.)
+      this%en%fermi = this%reciprocal_scf_cache%fermi_level
+      call this%reciprocal_scf_cache%require_replicated_k_workset('self%finalize_kspace_scf_state')
+   end subroutine finalize_kspace_scf_state
+
+   !=========================================================================
+   !       SERIALIZE THE ACCEPTED k-SPACE SCF STATE FOR HANDOFF AUDIT
+   !=========================================================================
+   !> The state file intentionally records the complete mesh, eigenvalues,
+   !> explicit occupations, and occupation-weighted one-particle density
+   !> matrix.  The latter is a gauge-invariant eigenvector/subspace identity
+   !> diagnostic, so phase choices or rotations inside an occupied degenerate
+   !> block cannot create a false mismatch.
+   module subroutine write_kspace_scf_state_artifact(this, filename)
+      class(self), intent(in) :: this
+      character(len=*), intent(in) :: filename
+      integer :: unit, ik, ib, i, j, nbasis, nbands, nk
+      real(rp) :: kT, occupation, argument, weight_sum, k_fingerprint(5), moment
+      real(rp), allocatable :: occupations(:)
+      complex(rp), allocatable :: density_matrix(:, :)
+      character(len=32) :: state_source
+
+      if (.not. allocated(this%reciprocal_scf_cache)) then
+         call g_logger%fatal('self%write_kspace_scf_state_artifact: reciprocal SCF cache is missing.', __FILE__, __LINE__)
+      end if
+      call this%reciprocal_scf_cache%require_replicated_k_workset('self%write_kspace_scf_state_artifact')
+      if (.not. allocated(this%reciprocal_scf_cache%eigenvalues) .or. &
+          .not. allocated(this%reciprocal_scf_cache%eigenvectors) .or. &
+          .not. allocated(this%reciprocal_scf_cache%k_workset%points) .or. &
+          .not. allocated(this%reciprocal_scf_cache%k_workset%weights)) then
+         call g_logger%fatal('self%write_kspace_scf_state_artifact: accepted reciprocal eigensystem is incomplete.', &
+                             __FILE__, __LINE__)
+      end if
+      if (rank /= 0) return
+
+      nbands = size(this%reciprocal_scf_cache%eigenvalues, 1)
+      nk = size(this%reciprocal_scf_cache%eigenvalues, 2)
+      nbasis = size(this%reciprocal_scf_cache%eigenvectors, 1)
+      if (size(this%reciprocal_scf_cache%k_workset%points, 2) /= nk .or. &
+          size(this%reciprocal_scf_cache%k_workset%weights) /= nk .or. &
+          size(this%reciprocal_scf_cache%eigenvectors, 2) /= nbands .or. &
+          size(this%reciprocal_scf_cache%eigenvectors, 3) /= nk) then
+         call g_logger%fatal('self%write_kspace_scf_state_artifact: accepted state array shapes disagree.', __FILE__, __LINE__)
+      end if
+
+      weight_sum = sum(this%reciprocal_scf_cache%k_workset%weights)
+      k_fingerprint = 0.0_rp
+      do ik = 1, nk
+         k_fingerprint(1) = k_fingerprint(1) + this%reciprocal_scf_cache%k_workset%weights(ik)
+         k_fingerprint(2:4) = k_fingerprint(2:4) + this%reciprocal_scf_cache%k_workset%weights(ik) * &
+                               this%reciprocal_scf_cache%k_workset%points(:, ik)
+         k_fingerprint(5) = k_fingerprint(5) + real(ik, rp) * this%reciprocal_scf_cache%k_workset%weights(ik)
+      end do
+      moment = 0.0_rp
+      do ik = 1, this%lattice%nrec
+         moment = moment + this%symbolic_atom(this%lattice%nbulk + ik)%potential%mtot
+      end do
+      kT = max(this%reciprocal_scf_cache%temperature*6.3336814e-6_rp, 1.0e-10_rp)
+      allocate(occupations(nbands), density_matrix(nbasis, nbasis))
+
+      state_source = 'accepted_kspace_scf'
+      open(newunit=unit, file=trim(filename), status='replace', action='write')
+      write(unit, '(a)') '# reciprocal state-consistency artifact'
+      write(unit, '(a,a)') '# state_role = ', trim(state_source)
+      write(unit, '(a,l1)') '# scf_converged = ', this%converged
+      write(unit, '(a,i0)') '# scf_iterations = ', this%converged_iteration
+      write(unit, '(a,3(i0,1x))') '# requested_k_mesh = ', this%reciprocal_scf_cache%nk_mesh
+      write(unit, '(a,3(i0,1x))') '# actual_k_mesh = ', this%reciprocal_scf_cache%nk_mesh
+      write(unit, '(a,i0)') '# actual_k_count = ', nk
+      write(unit, '(a,i0)') '# nbasis = ', nbasis
+      write(unit, '(a,i0)') '# nbands = ', nbands
+      write(unit, '(a,es24.16)') '# k_weight_sum = ', weight_sum
+      write(unit, '(a,5(es24.16,1x))') '# k_fingerprint_checksums = ', k_fingerprint
+      write(unit, '(a,es24.16)') '# fermi_level_Ry = ', this%reciprocal_scf_cache%fermi_level
+      write(unit, '(a,es24.16)') '# target_electron_count = ', this%reciprocal_scf_cache%total_electrons
+      write(unit, '(a,es24.16)') '# accepted_electron_count = ', this%reciprocal_scf_cache%canonical_electron_count
+      write(unit, '(a,es24.16)') '# accepted_electron_count_error = ', &
+         this%reciprocal_scf_cache%canonical_electron_count - this%reciprocal_scf_cache%total_electrons
+      write(unit, '(a,es24.16)') '# scf_moment_muB = ', moment
+      write(unit, '(a,es24.16)') '# scf_residual = ', this%mix%delta
+      write(unit, '(a,es24.16)') '# scf_physical_total_energy_Ry = ', this%physical_total_energy
+      write(unit, '(a,es24.16)') '# accepted_potential_checksum = ', this%potential_checksum()
+      write(unit, '(a,es24.16)') '# temperature_K = ', this%reciprocal_scf_cache%temperature
+      write(unit, '(a,a)') '# reciprocal_mode = ', trim(this%reciprocal_scf_cache%reciprocal_mode)
+      write(unit, '(a,a)') '# kspace_hamiltonian_order = ', trim(this%reciprocal_scf_cache%kspace_ham_order)
+      write(unit, '(a)') '# occupation_semantics = reciprocal Fermi-Dirac electron-count solver; kT=max(T*kB,1e-10 Ry)'
+      write(unit, '(a)') '# eigenvector_identity = occupation-weighted one-particle density-matrix projector residual'
+      write(unit, '(a)') '# columns: tag k_index band_or_row column eigenvalue_or_occupation real imag'
+
+      do ik = 1, nk
+         write(unit, '(a,1x,i0,1x,4(es24.16,1x))') 'K', ik, this%reciprocal_scf_cache%k_workset%points(:, ik), &
+            this%reciprocal_scf_cache%k_workset%weights(ik)
+         do ib = 1, nbands
+            argument = (this%reciprocal_scf_cache%eigenvalues(ib, ik) - this%reciprocal_scf_cache%fermi_level)/kT
+            if (argument >= 50.0_rp) then
+               occupation = 0.0_rp
+            else if (argument <= -50.0_rp) then
+               occupation = 1.0_rp
+            else
+               occupation = 1.0_rp/(exp(argument) + 1.0_rp)
+            end if
+            occupations(ib) = occupation
+            write(unit, '(a,1x,2(i0,1x),2(es24.16,1x))') 'O', ik, ib, &
+               this%reciprocal_scf_cache%eigenvalues(ib, ik), occupation
+         end do
+         density_matrix = cmplx(0.0_rp, 0.0_rp, rp)
+         do i = 1, nbasis
+            do j = 1, nbasis
+               density_matrix(i, j) = sum(occupations(:) * this%reciprocal_scf_cache%eigenvectors(i, :, ik) * &
+                  conjg(this%reciprocal_scf_cache%eigenvectors(j, :, ik)))
+               write(unit, '(a,1x,3(i0,1x),2(es24.16,1x))') 'D', ik, i, j, real(density_matrix(i, j), rp), &
+                  aimag(density_matrix(i, j))
+            end do
+         end do
+      end do
+      close(unit)
+      deallocate(occupations, density_matrix)
+   end subroutine write_kspace_scf_state_artifact
+
+   !=========================================================================
    !  LR-02N SCALAR-RELATIVISTIC -> PAULI GROUND-STATE PROJECTION
    !=========================================================================
    module subroutine quantify_pauli_projection(this)

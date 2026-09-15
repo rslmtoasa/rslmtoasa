@@ -297,6 +297,8 @@ module self_mod
       real(rp) :: ws_max
       !> Logical variable to check if the calculation is converged.
       logical :: converged
+      !> Last SCF iteration reached by the accepted state.
+      integer :: converged_iteration
 
       !> Logical variable to control if initial
       ! potential parameters are calculated from moments
@@ -316,6 +318,8 @@ module self_mod
       procedure :: run_fixed_potential_constraint_step
       procedure :: reset_constraint_for_fixed_potential
       procedure :: potential_checksum
+      procedure :: finalize_kspace_scf_state
+      procedure :: write_kspace_scf_state_artifact
       procedure :: report
       procedure :: quantify_pauli_projection
       procedure :: lmtst
@@ -378,6 +382,15 @@ module self_mod
          type(reciprocal), intent(in) :: reciprocal_obj
          real(rp), intent(out) :: site_mom(3, this%lattice%nrec)
       end subroutine compute_kspace_spin_moments_spinor
+
+      module subroutine finalize_kspace_scf_state(this)
+         class(self), intent(inout) :: this
+      end subroutine finalize_kspace_scf_state
+
+      module subroutine write_kspace_scf_state_artifact(this, filename)
+         class(self), intent(in) :: this
+         character(len=*), intent(in) :: filename
+      end subroutine write_kspace_scf_state_artifact
 
    end interface
 
@@ -1154,6 +1167,8 @@ contains
       this%ws_max = 9.99d0
 
       this%cold = .false.
+      this%converged = .false.
+      this%converged_iteration = 0
       this%use_kspace = .false.
       this%magnetic_seed_enable = .false.
       this%magnetic_seed_steps = 0
@@ -1505,6 +1520,7 @@ contains
          !=========================================================================
          !                TEST IF THE CALCULATION IS CONVERGED
          !=========================================================================
+         this%converged_iteration = i
          this%converged = this%is_converged(this%mix%delta)
          if (this%converged) then
             if (rank == 0) call g_logger%info('Converged!'//fmt('f12.10', this%mix%delta), __FILE__, __LINE__)
@@ -1625,7 +1641,7 @@ contains
    !> @details The full flattening intentionally excludes the separate
    !>          constraining field, which lives on symbolic_atom%mag_cfield.
    function potential_checksum(this) result(checksum)
-      class(self), intent(inout) :: this
+      class(self), intent(in) :: this
       real(rp) :: checksum
       real(rp), allocatable :: flat(:)
       integer :: ia, pot_size

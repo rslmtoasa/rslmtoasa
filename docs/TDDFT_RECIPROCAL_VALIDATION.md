@@ -1029,3 +1029,136 @@ requirements and returns:
 **TDVK-05 REVIEW-GATE PASS CANDIDATE**
 
 This is the final TDVK-05 gate result. No KXC/GSR or TDVK-06 work was started.
+
+## k-space SCF → TDDFT state-consistency closure
+
+This is the intermediate review-gate bridge between the historical TDVK-05
+fixed-potential diagnostics above and TDVK-06. The historical workflow remains
+diagnostic evidence:
+
+```text
+accepted real-space SCF → fixed accepted EF → post-SCF reciprocal rebuild → TDDFT
+```
+
+The production-validation workflow is now:
+
+```text
+use_kspace=.true. SCF on Nk → accepted reciprocal cache → same EF/occupations/eigenpairs → TDDFT
+```
+
+The live SCF branch constructs the configured Monkhorst-Pack mesh, assembles
+and diagonalizes its reciprocal Hamiltonian on every SCF iteration, evaluates
+Fermi occupations and EF with the reciprocal electron-number solver, maps the
+projected moments into the SCF mixer, updates the atomic potential, and
+repeats. The final handoff refreshes the reciprocal Hamiltonian/eigenpairs once
+on the final accepted mixed potential, then solves EF again from that final
+eigensystem without a further density or mixer update. Thus the accepted
+reciprocal cache is the final potential's state, not the pre-mix spectrum from
+the last ordinary iteration.
+
+### Handoff implementation and EF ownership
+
+Preprocessing retains the old reciprocal constructor only for the diagnostic
+real-space path. For `use_kspace=.true.`, it serializes
+`kspace_scf_state.dat` and passes `self%reciprocal_scf_cache` directly to the
+TDDFT driver. The direct branch validates a complete replicated mesh, cached
+eigenpairs, canonical occupations, Hamiltonian provenance, and EF identity;
+it does not call `generate_mp_mesh`, `build_kspace_hamiltonian`, or
+`diagonalize_hamiltonian`. The TDDFT left-state snapshot is immutable after
+this handoff.
+
+The input `&energy fermi` value is only the initial numerical seed. Production
+EF ownership is the reciprocal `auto_find_fermi=.true.` electron-number solver
+using the actual mesh weights and the stable Fermi-Dirac function at 300 K.
+No old real-space EF was restored and no response susceptibility was used to
+tune EF.
+
+The live fetch requested by this review gate could not authenticate in the
+execution environment (`git@github.com: Permission denied (publickey)`); the
+local `fable_v4` branch started at `55d2f8c`, equal to its local `origin/fable_v4`
+ref. Existing unrelated worktree edits were preserved.
+
+### Fresh k-space-SCF production states
+
+The bridge harness ran only fresh Fe `8×8×8` and `12×12×12` cases from the
+tracked TDVK-05 input template. Each case records an exact generated
+`input_diff.patch`. The two meshes were not forced to share EF or moment.
+
+| state | iterations | EF (Ry) | integrated N | N−target | moment (μB) | SCF residual | physical energy (Ry) | k-point fingerprint |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| 8³ | 17 | -0.08827224260182974 | 8.000000000017071 | 1.7071e-11 | 2.163828769205924 | 2.8333e-7 | -2542.018824874639 | `1cbe24b64cb808294ebdf221e5227e84d97ae147d9c219c1f7ea93071782d9d5` |
+| 12³ | 13 | -0.08756873831087462 | 8.000000000021009 | 2.1009e-11 | 2.159350841118554 | 1.8942e-7 | -2542.017860147606 | `cbf15c1e15c8e657635005a071a17e5ead5db64637b2d1938b3dc5e2326b347f` |
+
+Both states passed the unchanged collinear/no-SOC/bulk/orthogonal/`ham_only`
+second-order-HOH `sp`/`spd` capability contract, with the accepted direct
+LR-01 radial mesh and Barth-Hedin / legacy RS-LMTO XC provenance.
+
+### State-identity tests before susceptibility
+
+The SCF and TDDFT state artifacts contain every actual k vector and weight,
+all eigenvalues, explicit occupations, and the occupation-weighted
+one-particle density matrix. The density matrix is the gauge-invariant
+eigenvector/subspace diagnostic; raw eigenvector columns are not compared by
+phase. The harness compares the complete tagged arrays, not just labels or
+scalar summaries.
+
+| state | SCF/TDDFT fingerprint | max mesh Δ | max EF Δ (Ry) | max eigenvalue Δ (Ry) | max occupation Δ | projector max Δ | projector Frobenius Δ | TDDFT rebuild |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| 8³ | identical, `1cbe24b...782d9d5` | 0 | 0 | 0 | 0 | 0 | 0 | `F` |
+| 12³ | identical, `cbf15c...26b347f` | 0 | 0 | 0 | 0 | 0 | 0 | `F` |
+
+The driver fails closed if the accepted state is fixed-EF, incomplete,
+distributed, noncanonical, on an incompatible mesh, or inconsistent with the
+energy EF. It also records `reciprocal_rebuild_performed_for_tddft = F` for
+the production cases.
+
+### Complete bare-response convergence evidence
+
+Each accepted state produced only the complete 232-dimensional compact
+Lehmann response at Gamma, `omega=0`, physical `eta=0.01 Ry`. The 12³
+`eta=0.005 Ry` corner reused its accepted state and did not rerun SCF.
+
+| state / eta | ‖χ‖F | max element | trace |
+|---|---:|---:|---|
+| 8³ / .010 | 4.0359342768 | 1.9691868525 | -13.8790422644 - 0.5206267725i |
+| 12³ / .010 | 4.0383596359 | 1.9717277263 | -13.8225688390 - 0.5572045507i |
+| 12³ / .005 | 4.0487593319 | 1.9744565290 | -13.8804953090 - 0.2752317081i |
+
+The complete 12³ operator was transported into the 8³ weighted product basis
+with the existing block-overlap alignment. Both bases contain 232 modes and
+27,720 serialized radial-mode records. The maximum overlap unitarity residual
+is `1.7575e-1`, and the independently self-consistent radial basis difference
+is retained as evidence rather than hidden.
+
+| aligned basis dimension | ‖χ8‖F | ‖χ12→8‖F | dF | relative dF | dInf | |Δtrace| |
+|---:|---:|---:|---:|---:|---:|---:|
+| 232 | 4.0359342768 | 4.0383596359 | 0.0516202363 | 0.0127824763 | 0.0127379503 | 0.0672843342 |
+
+No material 8³↔12³ acceptance threshold was invented; this operator-level
+evidence is returned to the orchestrator.
+
+### One same-state reciprocal-GF spot check
+
+The 8³ process performed one Gamma reciprocal-GF check after the Lehmann
+state contract, using 9,601 Simpson points, integration `eta=0.001 Ry`, and
+`h/integration_eta=0.3960`. It was finite with:
+
+| dF | rF | dInf |
+|---:|---:|---:|
+| 0.0306663233 | 0.0075983208 | 0.0160049429 |
+
+The GF and Lehmann services consumed the same accepted EF, occupations,
+temperature, eigenpairs, mesh weights, radial mesh, product basis, channel,
+and physical response eta in the same process.
+
+### Closure decision
+
+The bridge harness passed its fresh-process, actual-mesh, state-array,
+occupation, gauge-invariant projector, direct-handoff, complete-operator,
+eta-reuse, and same-state GF audits. The recommended production state for a
+future TDVK-06 review is the accepted 12³ k-space-SCF cache, subject to
+orchestrator adjudication of the explicitly reported operator difference.
+
+`KSPACE-SCF → TDDFT HANDOFF PASS CANDIDATE`
+
+No TDVK-06 interaction physics was started.

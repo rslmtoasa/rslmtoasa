@@ -930,6 +930,121 @@ interaction-representation interpretation if the live implementation does not
 already certify it.
 
 
+<!-- FILE: 04_REVIEW_GATE_BRIDGE_KSPACE_SCF_TDDFT.md -->
+
+# TDVK review-gate bridge — self-consistent k-space SCF → reciprocal TDDFT
+
+This is the single intermediate review gate between TDVK-05 and TDVK-06. No
+TDVK-06 interaction physics was started.
+
+## Accepted data flow
+
+`use_kspace=.true.` runs the normal self-consistent loop: the configured full
+Monkhorst-Pack mesh is built once, the reciprocal Hamiltonian is assembled and
+diagonalized each iteration, reciprocal Fermi occupations determine the
+electron count and EF, projected moments are mapped into the SCF mixer, and
+the atomic potential is updated. After convergence, the Hamiltonian is
+rebuilt once on the final accepted mixed potential, the cache is rediagonalized
+on the same mesh, and the reciprocal electron-number solver determines the
+final EF. This refresh does not perform another density or mixer update.
+
+Preprocessing passes that live reciprocal cache directly into TDDFT. The
+production handoff does not generate a mesh, build a second Hamiltonian, or
+diagonalize. The prior real-space-SCF → fixed-EF → post-SCF reciprocal rebuild
+remains available only as a diagnostic path.
+
+## Fresh production-state evidence
+
+The bridge harness ran only fresh 8³ and 12³ Fe processes from the tracked
+TDVK-05 input template. The template-to-case `input_diff.patch` is retained in
+each case scratch directory. `fermi` is only the initial input seed; the
+accepted EF below is produced by the reciprocal electron-number occupation
+solver with 300 K Fermi-Dirac occupations.
+
+| state | SCF iterations | EF (Ry) | integrated N | N−target | moment (μB) | residual | physical energy (Ry) | runtime mesh fingerprint |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| 8³ | 17 | -0.08827224260182974 | 8.000000000017071 | 1.7071e-11 | 2.163828769205924 | 2.8333e-7 | -2542.018824874639 | `1cbe24b64cb808294ebdf221e5227e84d97ae147d9c219c1f7ea93071782d9d5` |
+| 12³ | 13 | -0.08756873831087462 | 8.000000000021009 | 2.1009e-11 | 2.159350841118554 | 1.8942e-7 | -2542.017860147606 | `cbf15c1e15c8e657635005a071a17e5ead5db64637b2d1938b3dc5e2326b347f` |
+
+Both states satisfy the accepted collinear, no-SOC, bulk, orthogonal,
+`ham_only`, second-order/HOH, complete-`spd` product-space capability gate.
+The same accepted direct LR-01 radial mesh and Barth-Hedin / legacy RS-LMTO
+XC provenance were retained.
+
+## State-consistency closure
+
+The SCF artifact and TDDFT left-state artifact contain actual k vectors and
+weights, eigenvalues, explicit occupations, and the occupation-weighted
+one-particle density matrix. The latter is the gauge-invariant eigenvector /
+subspace diagnostic. The harness compares the complete serialized arrays.
+
+| state | SCF = TDDFT mesh fingerprint | EF max Δ (Ry) | eigenvalue max Δ (Ry) | occupation max Δ | gauge-invariant projector max Δ | projector Frobenius Δ | rebuild reported |
+|---|---|---:|---:|---:|---:|---:|---|
+| 8³ | yes, `1cbe24b...782d9d5` | 0 | 0 | 0 | 0 | 0 | `F` |
+| 12³ | yes, `cbf15c...26b347f` | 0 | 0 | 0 | 0 | 0 | `F` |
+
+The response output also records zero mesh, weight, EF, eigenvalue,
+occupation, and projector residuals before susceptibility evaluation. No
+second reciprocal state or alternate occupation semantics is consumed.
+
+## Bare response and independent GF evidence
+
+Each state produced only the requested complete 232×232 compact Lehmann
+response at Gamma, ω=0, η=0.01 Ry. The 12³ η=0.005 row reused the already
+accepted 12³ SCF state; it did not rerun SCF.
+
+| state / eta | ‖χ‖F | max element | trace |
+|---|---:|---:|---|
+| 8³ / .010 | 4.0359342768 | 1.9691868525 | -13.8790422644 - 0.5206267725i |
+| 12³ / .010 | 4.0383596359 | 1.9717277263 | -13.8225688390 - 0.5572045507i |
+| 12³ / .005 | 4.0487593319 | 1.9744565290 | -13.8804953090 - 0.2752317081i |
+
+For the 8³↔12³ comparison, the 12³ compact operator was transported into the
+8³ weighted product basis with the established block overlap map. Both
+bases contain 232 modes and 27,720 serialized radial-mode records. The
+maximum overlap unitarity residual is 1.7575e-1; this is reported explicitly
+because the independently self-consistent radial states are not identical.
+The transported full-operator diagnostics are:
+
+| basis dimension | ‖χ8‖F | ‖χ12→8‖F | dF | relative dF | dInf | |Δtrace| |
+|---:|---:|---:|---:|---:|---:|---:|
+| 232 | 4.0359342768 | 4.0383596359 | 0.0516202363 | 0.0127824763 | 0.0127379503 | 0.0672843342 |
+
+No material acceptance threshold was invented; the operator evidence is
+returned to the orchestrator for adjudication.
+
+One same-process Gamma reciprocal-GF spot on the 8³ accepted state used
+9,601 Simpson points, integration η=0.001 Ry, and h/integration-η=0.3960.
+It was finite with `dF=0.0306663233`, `rF=0.0075983208`, and
+`dInf=0.0160049429`.
+
+## Bridge completion checklist
+
+- [x] Traced live `use_kspace=.true.` SCF and identified the accepted reciprocal cache.
+- [x] Let normal reciprocal electron-number machinery own production EF and occupations.
+- [x] Refreshed eigenpairs on the final accepted potential before handoff.
+- [x] Passed the accepted cache directly to TDDFT without a hidden reciprocal rebuild.
+- [x] Checked actual mesh/weight fingerprints for fresh 8³ and 12³ states.
+- [x] Compared EF, eigenvalues, explicit occupations, and a gauge-invariant projector identity.
+- [x] Preserved the existing capability contract and direct LR-01 radial/XC provenance.
+- [x] Produced complete 232×232 Gamma-static η=.01 responses for both states.
+- [x] Reused the accepted 12³ SCF state for the η=.005 response corner.
+- [x] Ran one controlled same-state reciprocal-GF Gamma spot check.
+- [x] Kept historical fixed-potential evidence diagnostic-only and separate.
+- [x] Returned a scoped review-gate result without starting TDVK-06.
+
+## Bridge result
+
+`KSPACE-SCF → TDDFT HANDOFF PASS CANDIDATE`
+
+This result is returned to the orchestrator. TDVK-06 remains unauthorized by
+this task.
+
+## Commit
+
+`td-dft: hand off self-consistent k-space state to response`
+
+
 <!-- FILE: 05_TDVK-06_STATIC_INTERACTIONS.md -->
 
 # TDVK-06 — Fe static ALSDA and independent GSR diagnostics

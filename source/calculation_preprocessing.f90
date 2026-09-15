@@ -296,9 +296,9 @@ contains
       hamiltonian_obj = hamiltonian(charge_obj)
 
       if (this%tddft%enabled) then
-         ! The reciprocal object is only the post-SCF eigenpair service. It
-         ! points at this accepted Hamiltonian and does not create a second
-         ! ground-state or Fermi-level reconstruction.
+         ! The fallback object preserves the historical frozen-potential
+         ! diagnostic path.  A k-space SCF run hands its live accepted cache
+         ! directly to TDDFT below, so no second reciprocal state is made.
          reciprocal_obj = reciprocal(hamiltonian_obj)
          call validate_tddft_production_capability(this%tddft, control_obj, lattice_obj, hamiltonian_obj, reciprocal_obj)
       end if
@@ -322,11 +322,18 @@ contains
       call g_timer%stop('self-consistency')
 
       if (this%tddft%enabled) then
-         ! TDRUN-01 consumes the accepted LR-01 snapshots before report/save
-         ! can release the SCF-owned object graph. The driver does not mutate
-         ! SCF state; only its dedicated reciprocal cache is populated.
-         call run_tddft_production(this%tddft, control_obj, lattice_obj, hamiltonian_obj, energy_obj, reciprocal_obj, &
-                                   self_obj%converged)
+         if (self_obj%use_kspace) then
+            ! Refresh the eigensystem on the final accepted mixed potential,
+            ! then serialize and pass that same reciprocal object by reference.
+            call self_obj%finalize_kspace_scf_state()
+            call self_obj%write_kspace_scf_state_artifact('kspace_scf_state.dat')
+            call run_tddft_production(this%tddft, control_obj, lattice_obj, hamiltonian_obj, energy_obj, &
+                                      self_obj%reciprocal_scf_cache, recursion_obj, green_obj, self_obj%converged, .true.)
+         else
+            ! Preserve the old frozen-potential workflow as a diagnostic only.
+            call run_tddft_production(this%tddft, control_obj, lattice_obj, hamiltonian_obj, energy_obj, reciprocal_obj, &
+                                      recursion_obj, green_obj, self_obj%converged, .false.)
+         end if
       end if
 
       if (trim(this%post_processing) == 'pauli_projection') call self_obj%quantify_pauli_projection()

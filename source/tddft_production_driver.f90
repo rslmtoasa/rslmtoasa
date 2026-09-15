@@ -30,7 +30,10 @@ module tddft_production_driver_mod
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, lr_snapshot_from_reciprocal, lr_q_endpoint_from_reciprocal, &
       evaluate_lr_ks_susceptibility, lr_product_ks_susceptibility_request, &
-      lr_product_ks_susceptibility_result, evaluate_lr_product_ks_susceptibility, lr_channel_plus, lr_channel_minus
+      lr_product_ks_susceptibility_result, evaluate_lr_product_ks_susceptibility, lr_channel_plus, lr_channel_minus, &
+      lr_fermi_dirac_occupation
+      ! `lr_fermi_dirac_occupation` is used only to audit that the immutable
+      ! TDDFT snapshot reproduces the reciprocal SCF occupation semantics.
    use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state, pauli_vertex_capabilities, &
       pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
    use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
@@ -345,17 +348,23 @@ contains
          if (config%gf_energy_margin <= 0.0_rp) error stop 'TDDFT input: product_finite_q requires gf_energy_margin positive'
       end if
       if (trim(config%backend) == tddft_driver_backend_product_convergence) then
-         if (size(config%q_list, 2) < 2) then
-            error stop 'TDDFT input: product_convergence requires Gamma and one finite q'
-         end if
-         if (size(config%frequencies) < 2) then
-            error stop 'TDDFT input: product_convergence requires static and low finite omega'
-         end if
+         if (size(config%q_list, 2) < 1) error stop 'TDDFT input: product_convergence requires at least one q point'
          if (.not. any(sum(abs(config%q_list), dim=1) <= 1.0e-12_rp)) then
             error stop 'TDDFT input: product_convergence requires Gamma for the full-operator artifact'
          end if
          if (.not. any(abs(config%frequencies) <= 1.0e-12_rp)) then
             error stop 'TDDFT input: product_convergence requires omega=0 for the full-operator artifact'
+         end if
+         if (config%gf_closure_audit) then
+            if (config%gf_integration_points < 3 .or. mod(config%gf_integration_points, 2) == 0) then
+               error stop 'TDDFT input: product_convergence GF audit requires an odd gf_integration_points value >= 3'
+            end if
+            if (config%gf_integration_eta <= 0.0_rp .or. config%gf_integration_eta >= config%eta) then
+               error stop 'TDDFT input: product_convergence GF audit requires 0 < gf_integration_eta < eta'
+            end if
+            if (config%gf_energy_margin <= 0.0_rp) then
+               error stop 'TDDFT input: product_convergence GF audit requires gf_energy_margin positive'
+            end if
          end if
       end if
       if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
@@ -469,10 +478,195 @@ contains
       end if
    end subroutine validate_tddft_production_capability
 
+   !> Fail-closed validation for the direct k-space-SCF -> TDDFT handoff.
+   !> No response service is allowed to repair or reinterpret this state.
+   subroutine validate_accepted_kspace_scf_handoff(reciprocal_obj, energy_obj)
+      type(reciprocal), intent(in) :: reciprocal_obj
+      type(energy), intent(in) :: energy_obj
+      integer :: expected_nk
+      real(rp) :: scale, weight_sum
+
+      if (.not. reciprocal_obj%auto_find_fermi) then
+         error stop 'TDDFT k-space-SCF handoff: accepted state has fixed-EF semantics'
+      end if
+      if (.not. reciprocal_obj%canonical_energy_valid) then
+         error stop 'TDDFT k-space-SCF handoff: accepted canonical occupations are unavailable'
+      end if
+      if (.not. allocated(reciprocal_obj%k_workset%points) .or. &
+          .not. allocated(reciprocal_obj%k_workset%weights) .or. &
+          .not. allocated(reciprocal_obj%eigenvalues) .or. &
+          .not. allocated(reciprocal_obj%eigenvectors)) then
+         error stop 'TDDFT k-space-SCF handoff: accepted mesh/eigensystem is incomplete'
+      end if
+      call reciprocal_obj%require_replicated_k_workset('TDDFT k-space-SCF handoff')
+      expected_nk = product(reciprocal_obj%nk_mesh)
+      if (expected_nk < 1 .or. reciprocal_obj%k_workset%nk_global /= expected_nk .or. &
+          reciprocal_obj%k_workset%nk_local /= expected_nk .or. .not. reciprocal_obj%k_workset%complete_bz) then
+         error stop 'TDDFT k-space-SCF handoff: accepted state is not the complete requested Monkhorst-Pack mesh'
+      end if
+      if (size(reciprocal_obj%k_workset%points, 2) /= expected_nk .or. &
+          size(reciprocal_obj%k_workset%weights) /= expected_nk .or. &
+          size(reciprocal_obj%eigenvalues, 2) /= expected_nk .or. &
+          size(reciprocal_obj%eigenvectors, 3) /= expected_nk) then
+         error stop 'TDDFT k-space-SCF handoff: accepted state arrays do not cover the complete mesh'
+      end if
+      if (allocated(reciprocal_obj%k_points)) then
+         if (size(reciprocal_obj%k_points, 2) /= expected_nk) then
+            error stop 'TDDFT k-space-SCF handoff: compatibility k-points differ from the authoritative workset'
+         end if
+         if (maxval(abs(reciprocal_obj%k_points - reciprocal_obj%k_workset%points)) > 2.0e-14_rp) then
+            error stop 'TDDFT k-space-SCF handoff: compatibility k-points differ from the authoritative workset'
+         end if
+      end if
+      weight_sum = sum(reciprocal_obj%k_workset%weights)
+      if (abs(weight_sum - reciprocal_obj%canonical_weight_sum) > 2.0e-12_rp*max(1.0_rp, weight_sum)) then
+         error stop 'TDDFT k-space-SCF handoff: canonical weight sum differs from accepted mesh weights'
+      end if
+      scale = max(1.0_rp, abs(energy_obj%fermi), abs(reciprocal_obj%fermi_level))
+      if (abs(energy_obj%fermi - reciprocal_obj%fermi_level) > 2.0e-12_rp*scale) then
+         error stop 'TDDFT k-space-SCF handoff: TDDFT energy EF differs from accepted SCF EF'
+      end if
+      if (reciprocal_obj%total_electrons > 0.0_rp .and. &
+          abs(reciprocal_obj%canonical_electron_count - reciprocal_obj%total_electrons) > &
+          1.0e-9_rp*max(1.0_rp, reciprocal_obj%total_electrons)) then
+         error stop 'TDDFT k-space-SCF handoff: accepted reciprocal state violates electron conservation'
+      end if
+   end subroutine validate_accepted_kspace_scf_handoff
+
+   !> Write the exact left-state data consumed by the response routines.  The
+   !> occupation-weighted density matrix is a gauge-invariant eigenvector
+   !> identity diagnostic and is intentionally serialized for the harness.
+   subroutine write_tddft_state_artifact(filename, reciprocal_obj, left_state, direct_handoff)
+      character(len=*), intent(in) :: filename
+      type(reciprocal), intent(in) :: reciprocal_obj
+      type(lr_electronic_state), intent(in) :: left_state
+      logical, intent(in) :: direct_handoff
+      integer :: unit, ik, ib, i, j, nbasis, nbands, nk
+      real(rp) :: weight_sum, k_fingerprint(5)
+      real(rp), allocatable :: occupations(:)
+      complex(rp) :: density_element
+      character(len=64) :: state_source
+
+      if (rank /= 0) return
+      nbands = left_state%nbands
+      nbasis = left_state%nbasis
+      nk = left_state%nk
+      if (.not. left_state%occupations_are_explicit .or. .not. allocated(left_state%occupations)) then
+         error stop 'TDDFT state artifact: left-state occupations are not explicit'
+      end if
+      if (direct_handoff) then
+         state_source = 'accepted_kspace_scf_cache'
+      else
+         state_source = 'diagnostic_frozen_post_scf_rebuild'
+      end if
+      weight_sum = sum(left_state%k_weights)
+      k_fingerprint = 0.0_rp
+      do ik = 1, nk
+         k_fingerprint(1) = k_fingerprint(1) + left_state%k_weights(ik)
+         k_fingerprint(2:4) = k_fingerprint(2:4) + left_state%k_weights(ik)*left_state%k_points(:, ik)
+         k_fingerprint(5) = k_fingerprint(5) + real(ik, rp)*left_state%k_weights(ik)
+      end do
+      allocate(occupations(nbands))
+      open(newunit=unit, file=trim(filename), status='replace', action='write')
+      write(unit, '(a)') '# reciprocal state-consistency artifact'
+      write(unit, '(a)') '# state_role = tddft_left_state'
+      write(unit, '(a,a)') '# state_source = ', trim(state_source)
+      write(unit, '(a,l1)') '# direct_accepted_state_handoff = ', direct_handoff
+      write(unit, '(a,3(i0,1x))') '# requested_k_mesh = ', reciprocal_obj%nk_mesh
+      write(unit, '(a,3(i0,1x))') '# actual_k_mesh = ', reciprocal_obj%nk_mesh
+      write(unit, '(a,i0)') '# actual_k_count = ', nk
+      write(unit, '(a,i0)') '# nbasis = ', nbasis
+      write(unit, '(a,i0)') '# nbands = ', nbands
+      write(unit, '(a,es24.16)') '# k_weight_sum = ', weight_sum
+      write(unit, '(a,5(es24.16,1x))') '# k_fingerprint_checksums = ', k_fingerprint
+      write(unit, '(a,es24.16)') '# fermi_level_Ry = ', left_state%fermi_level
+      write(unit, '(a,es24.16)') '# target_electron_count = ', reciprocal_obj%total_electrons
+      write(unit, '(a,es24.16)') '# accepted_electron_count = ', reciprocal_obj%canonical_electron_count
+      write(unit, '(a,es24.16)') '# temperature_K = ', left_state%temperature
+      write(unit, '(a,a)') '# reciprocal_mode = ', trim(left_state%reciprocal_mode)
+      write(unit, '(a,a)') '# kspace_hamiltonian_order = ', trim(left_state%hamiltonian_order)
+      write(unit, '(a)') '# occupation_semantics = immutable lr_snapshot occupations from the accepted reciprocal EF and temperature'
+      write(unit, '(a)') '# eigenvector_identity = occupation-weighted one-particle density-matrix projector residual'
+      write(unit, '(a)') '# columns: tag k_index band_or_row column eigenvalue_or_occupation real imag'
+      do ik = 1, nk
+         write(unit, '(a,1x,i0,1x,4(es24.16,1x))') 'K', ik, left_state%k_points(:, ik), left_state%k_weights(ik)
+         do ib = 1, nbands
+            occupations(ib) = left_state%occupations(ib, ik)
+            write(unit, '(a,1x,2(i0,1x),2(es24.16,1x))') 'O', ik, ib, left_state%eigenvalues(ib, ik), occupations(ib)
+         end do
+         do i = 1, nbasis
+            do j = 1, nbasis
+               density_element = sum(occupations(:)*left_state%eigenvectors(i, :, ik)* &
+                                     conjg(left_state%eigenvectors(j, :, ik)))
+               write(unit, '(a,1x,3(i0,1x),2(es24.16,1x))') 'D', ik, i, j, real(density_element, rp), &
+                  aimag(density_element)
+            end do
+         end do
+      end do
+      close(unit)
+      deallocate(occupations)
+   end subroutine write_tddft_state_artifact
+
+   !> Compare the immutable left snapshot against its reciprocal source before
+   !> any response contraction.  The density-matrix residual is invariant under
+   !> eigenvector phase choices and rotations within equal-occupation subspaces.
+   subroutine state_consistency_metrics(reciprocal_obj, left_state, mesh_max, weight_max, ef_diff, eigen_max, occ_max, &
+                                        projector_max, projector_frobenius)
+      type(reciprocal), intent(in) :: reciprocal_obj
+      type(lr_electronic_state), intent(in) :: left_state
+      real(rp), intent(out) :: mesh_max, weight_max, ef_diff, eigen_max, occ_max, projector_max, projector_frobenius
+      integer :: ik, ib, i, j, nbasis, nbands, nk
+      real(rp) :: expected_occupation
+      real(rp), allocatable :: occupations(:)
+      complex(rp) :: source_density, snapshot_density, difference
+
+      nk = left_state%nk
+      nbands = left_state%nbands
+      nbasis = left_state%nbasis
+      if (size(reciprocal_obj%k_workset%points, 2) /= nk .or. &
+          size(reciprocal_obj%k_workset%weights) /= nk .or. &
+          any(shape(reciprocal_obj%eigenvalues) /= [nbands, nk]) .or. &
+          any(shape(reciprocal_obj%eigenvectors) /= [nbasis, nbands, nk])) then
+         error stop 'TDDFT state consistency: reciprocal and left-state shapes differ'
+      end if
+      mesh_max = maxval(abs(reciprocal_obj%k_workset%points - left_state%k_points))
+      weight_max = maxval(abs(reciprocal_obj%k_workset%weights - left_state%k_weights))
+      ef_diff = abs(reciprocal_obj%fermi_level - left_state%fermi_level)
+      eigen_max = maxval(abs(reciprocal_obj%eigenvalues - left_state%eigenvalues))
+      occ_max = 0.0_rp
+      projector_max = 0.0_rp
+      projector_frobenius = 0.0_rp
+      allocate(occupations(nbands))
+      do ik = 1, nk
+         do ib = 1, nbands
+            expected_occupation = lr_fermi_dirac_occupation(reciprocal_obj%eigenvalues(ib, ik), &
+               reciprocal_obj%fermi_level, reciprocal_obj%temperature)
+            occupations(ib) = expected_occupation
+            occ_max = max(occ_max, abs(expected_occupation - left_state%occupations(ib, ik)))
+         end do
+         do i = 1, nbasis
+            do j = 1, nbasis
+               source_density = sum(occupations(:)*reciprocal_obj%eigenvectors(i, :, ik)* &
+                                    conjg(reciprocal_obj%eigenvectors(j, :, ik)))
+               snapshot_density = sum(left_state%occupations(:, ik)*left_state%eigenvectors(i, :, ik)* &
+                                       conjg(left_state%eigenvectors(j, :, ik)))
+               difference = source_density - snapshot_density
+               projector_max = max(projector_max, abs(difference))
+               projector_frobenius = projector_frobenius + abs(difference)**2
+            end do
+         end do
+      end do
+      projector_frobenius = sqrt(projector_frobenius)
+      deallocate(occupations)
+   end subroutine state_consistency_metrics
+
    !> Run the response after SCF has accepted its state. The input objects are
    !> read-only except for the dedicated reciprocal eigenpair service cache.
+   !> When accepted_kspace_scf is true, reciprocal_obj is the live cache owned
+   !> by self and is consumed without a mesh generation, Hamiltonian build, or
+   !> diagonalization in this driver.
    subroutine run_tddft_production(config, control_obj, lattice_obj, hamiltonian_obj, energy_obj, reciprocal_obj, &
-                                   recursion_obj, green_obj, scf_converged)
+                                   recursion_obj, green_obj, scf_converged, accepted_kspace_scf)
       type(tddft_production_config), intent(in) :: config
       type(control), intent(in) :: control_obj
       type(lattice), target, intent(in) :: lattice_obj
@@ -482,6 +676,7 @@ contains
       type(recursion), target, intent(inout) :: recursion_obj
       type(green), target, intent(inout) :: green_obj
       logical, intent(in) :: scf_converged
+      logical, intent(in), optional :: accepted_kspace_scf
 
       type(radial_ground_state), pointer :: ground_states(:)
       type(lmto_radial_basis), allocatable, target :: radial_bases(:)
@@ -493,6 +688,10 @@ contains
       real(rp), allocatable, target :: native_site_positions(:, :)
       real(rp) :: ignore_real
       integer :: first, last, nsite, response_lmax, isite, iq
+      logical :: use_accepted_kspace_scf
+
+      use_accepted_kspace_scf = .false.
+      if (present(accepted_kspace_scf)) use_accepted_kspace_scf = accepted_kspace_scf
 
       if (.not. config%enabled) return
       call validate_tddft_production_capability(config, control_obj, lattice_obj, hamiltonian_obj, reciprocal_obj)
@@ -535,22 +734,28 @@ contains
       end do
       call response_space%initialize(nsite, response_lmax, ground_states(1)%r, ground_states(1)%a, ground_states(1)%b, 1)
 
-      ! The accepted EF is authoritative. This service rebuilds reciprocal
-      ! eigenpairs from the accepted potential; it never solves a new SCF or
-      ! searches for a different EF.
-      reciprocal_obj%use_symmetry_reduction = .false.
-      reciprocal_obj%use_time_reversal = .false.
-      reciprocal_obj%dos_method = 'tetrahedron'
-      reciprocal_obj%auto_find_fermi = .false.
-      reciprocal_obj%fermi_level = energy_obj%fermi
-      reciprocal_obj%kspace_ham_order = effective_hamiltonian_order(reciprocal_obj, hamiltonian_obj)
-      call reciprocal_obj%generate_mp_mesh()
-      call reciprocal_obj%build_kspace_hamiltonian()
-      call reciprocal_obj%diagonalize_hamiltonian()
-      reciprocal_obj%fermi_level = energy_obj%fermi
-      ignore_real = reciprocal_obj%calculate_canonical_band_energy(.false.)
+      if (use_accepted_kspace_scf) then
+         call validate_accepted_kspace_scf_handoff(reciprocal_obj, energy_obj)
+      else
+         ! Diagnostic-only legacy path: construct a reciprocal response state
+         ! from the accepted real-space potential at the externally accepted
+         ! EF.  This remains available for historical comparisons, but is not
+         ! the production k-space-SCF handoff.
+         reciprocal_obj%use_symmetry_reduction = .false.
+         reciprocal_obj%use_time_reversal = .false.
+         reciprocal_obj%dos_method = 'tetrahedron'
+         reciprocal_obj%auto_find_fermi = .false.
+         reciprocal_obj%fermi_level = energy_obj%fermi
+         reciprocal_obj%kspace_ham_order = effective_hamiltonian_order(reciprocal_obj, hamiltonian_obj)
+         call reciprocal_obj%generate_mp_mesh()
+         call reciprocal_obj%build_kspace_hamiltonian()
+         call reciprocal_obj%diagonalize_hamiltonian()
+         reciprocal_obj%fermi_level = energy_obj%fermi
+         ignore_real = reciprocal_obj%calculate_canonical_band_energy(.false.)
+      end if
       call reciprocal_obj%require_replicated_k_workset('TDDFT production driver')
       call lr_snapshot_from_reciprocal(reciprocal_obj, left_state)
+      call write_tddft_state_artifact(trim(config%output_file)//'.state', reciprocal_obj, left_state, use_accepted_kspace_scf)
 
       allocate(endpoints(size(config%q_list, 2)))
       do iq = 1, size(config%q_list, 2)
@@ -577,7 +782,7 @@ contains
          ! Lehmann service over the prescribed q/omega/physical-eta grid and
          ! stops before GF, KXC, Goldstone, Dyson, loss, or mode fitting.
          call run_tddft_product_convergence(config, response_space, radial_bases, ground_states, left_state, endpoints, &
-            reciprocal_obj)
+            reciprocal_obj, use_accepted_kspace_scf)
          return
       end if
       if (trim(config%backend) == tddft_driver_backend_product_gf) then
@@ -889,7 +1094,7 @@ contains
    !> diagnostics.  It deliberately stops before reciprocal GF, KXC,
    !> Goldstone, Dyson, loss, and mode interpretation.
    subroutine run_tddft_product_convergence(config, response_space, radial_bases, ground_states, left_state, endpoints, &
-                                            reciprocal_obj)
+                                            reciprocal_obj, accepted_kspace_scf)
       type(tddft_production_config), intent(in) :: config
       type(response_space_layout), intent(in) :: response_space
       type(lmto_radial_basis), intent(in) :: radial_bases(:)
@@ -897,24 +1102,34 @@ contains
       type(lr_electronic_state), target, intent(in) :: left_state
       type(lr_electronic_state), target, intent(in) :: endpoints(:)
       type(reciprocal), intent(in) :: reciprocal_obj
+      logical, intent(in), optional :: accepted_kspace_scf
       type(lmto_product_response_basis), target :: product_plus, product_minus
       type(lmto_product_response_basis), pointer :: product
       type(lr_product_ks_susceptibility_request) :: request
       type(lr_product_ks_susceptibility_result) :: result
-      integer :: unit, kpoint_unit, basis_unit, matrix_unit
+      integer :: unit, kpoint_unit, basis_unit, matrix_unit, gf_unit
       integer :: iq, ieta, ifrequency, isite, response_l, ik, imode, ir, matrix_i, matrix_j
       integer :: gamma_index, static_index
       real(rp) :: accepted_moment, runtime_start, runtime_end, fixed_ef_electrons
       real(rp) :: diagnostic_ef, eigen_min, eigen_max, eigen_mean, weight_sum
       real(rp) :: frobenius_norm, maximum_element, trace_real, trace_imag
       real(rp) :: k_fingerprint(5)
+      real(rp) :: state_mesh_max, state_weight_max, state_ef_diff, state_eigen_max, state_occ_max
+      real(rp) :: state_projector_max, state_projector_frobenius
+      real(rp) :: gf_norm_lehmann, gf_norm, gf_d_frobenius, gf_relative_frobenius, gf_d_infinity
       complex(rp) :: trace
-      logical :: finite_response, rank_stable, matrix_written
-      character(len=512) :: kpoint_file, basis_file, matrix_file
+      logical :: finite_response, rank_stable, matrix_written, direct_handoff
+      character(len=512) :: kpoint_file, basis_file, matrix_file, state_file, gf_file
+      type(lr_product_ks_susceptibility_request) :: gf_lehmann_request
+      type(lr_product_ks_susceptibility_result) :: gf_lehmann_result
+      type(lr_product_gf_susceptibility_request) :: gf_request
+      type(lr_product_gf_susceptibility_result) :: gf_result
 
       if (size(endpoints) /= size(config%q_list, 2)) then
          error stop 'TDVK-05 convergence: q endpoint count differs from q_list'
       end if
+      direct_handoff = .false.
+      if (present(accepted_kspace_scf)) direct_handoff = accepted_kspace_scf
       call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
       call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
       if (trim(config%channel) == 'chi_plus') then
@@ -971,6 +1186,10 @@ contains
       kpoint_file = trim(config%output_file)//'.kpoints'
       basis_file = trim(config%output_file)//'.basis'
       matrix_file = trim(config%output_file)//'.matrix'
+      state_file = trim(config%output_file)//'.state'
+      gf_file = trim(config%output_file)//'.gf'
+      call state_consistency_metrics(reciprocal_obj, left_state, state_mesh_max, state_weight_max, state_ef_diff, &
+         state_eigen_max, state_occ_max, state_projector_max, state_projector_frobenius)
 
       open(newunit=unit, file=trim(config%output_file), status='replace', action='write')
       open(newunit=kpoint_unit, file=trim(kpoint_file), status='replace', action='write')
@@ -989,8 +1208,21 @@ contains
       write(unit, '(a,es24.16)') '# accepted_state_radial_residual_control = ', ground_states(1)%accepted_residual_control
       write(unit, '(a,a)') '# accepted_state_reciprocal_mode = ', trim(left_state%reciprocal_mode)
       write(unit, '(a,a)') '# accepted_state_hamiltonian_order = ', trim(left_state%hamiltonian_order)
-      write(unit, '(a,a)') '# accepted_state_provenance = ', &
-         'one accepted real-space Fe SCF state; all q/omega/eta rows reuse its eigenpairs, occupations, EF, temperature, and weights'
+      if (direct_handoff) then
+         write(unit, '(a)') '# accepted_state_source = accepted_kspace_scf_cache'
+         write(unit, '(a)') '# accepted_state_provenance = self-consistent k-space SCF cache handed directly to TDDFT; no reciprocal rebuild'
+      else
+         write(unit, '(a)') '# accepted_state_source = diagnostic_frozen_post_scf_rebuild'
+         write(unit, '(a)') '# accepted_state_provenance = accepted real-space SCF potential rebuilt for diagnostic reciprocal response only'
+      end if
+      write(unit, '(a,l1)') '# reciprocal_rebuild_performed_for_tddft = ', .not. direct_handoff
+      write(unit, '(a,es24.16)') '# state_consistency_mesh_max_abs = ', state_mesh_max
+      write(unit, '(a,es24.16)') '# state_consistency_weight_max_abs = ', state_weight_max
+      write(unit, '(a,es24.16)') '# state_consistency_EF_max_abs_Ry = ', state_ef_diff
+      write(unit, '(a,es24.16)') '# state_consistency_eigenvalue_max_abs_Ry = ', state_eigen_max
+      write(unit, '(a,es24.16)') '# state_consistency_occupation_max_abs = ', state_occ_max
+      write(unit, '(a,es24.16)') '# state_consistency_projector_max_abs = ', state_projector_max
+      write(unit, '(a,es24.16)') '# state_consistency_projector_frobenius = ', state_projector_frobenius
       write(unit, '(a,3(i0,1x))') '# requested_k_mesh = ', reciprocal_obj%nk_mesh
       write(unit, '(a,3(i0,1x))') '# actual_generated_k_mesh = ', reciprocal_obj%nk_mesh
       write(unit, '(a,i0)') '# actual_k_count = ', reciprocal_obj%k_workset%nk_global
@@ -1002,14 +1234,24 @@ contains
       write(unit, '(a,es24.16)') '# eigenvalue_min_Ry = ', eigen_min
       write(unit, '(a,es24.16)') '# eigenvalue_max_Ry = ', eigen_max
       write(unit, '(a,es24.16)') '# eigenvalue_mean_Ry = ', eigen_mean
-      write(unit, '(a,es24.16)') '# fixed_EF_electron_count = ', fixed_ef_electrons
       write(unit, '(a,es24.16)') '# target_electron_count = ', reciprocal_obj%total_electrons
-      write(unit, '(a,es24.16)') '# fixed_EF_electron_count_error = ', fixed_ef_electrons - reciprocal_obj%total_electrons
-      write(unit, '(a,es24.16)') '# diagnostic_mesh_EF_Ry = ', diagnostic_ef
-      write(unit, '(a,es24.16)') '# diagnostic_mesh_EF_shift_Ry = ', diagnostic_ef - left_state%fermi_level
+      if (direct_handoff) then
+         write(unit, '(a,es24.16)') '# accepted_state_integrated_electron_count = ', fixed_ef_electrons
+         write(unit, '(a,es24.16)') '# accepted_state_integrated_electron_count_error = ', &
+            fixed_ef_electrons - reciprocal_obj%total_electrons
+         write(unit, '(a)') '# accepted_state_fermi_owner = reciprocal electron-number occupation solver'
+      else
+         write(unit, '(a,es24.16)') '# fixed_EF_electron_count = ', fixed_ef_electrons
+         write(unit, '(a,es24.16)') '# fixed_EF_electron_count_error = ', fixed_ef_electrons - reciprocal_obj%total_electrons
+         write(unit, '(a,es24.16)') '# diagnostic_mesh_EF_Ry = ', diagnostic_ef
+         write(unit, '(a,es24.16)') '# diagnostic_mesh_EF_shift_Ry = ', diagnostic_ef - left_state%fermi_level
+         write(unit, '(a)') '# accepted_state_fermi_owner = input EF retained for diagnostic frozen-potential response'
+      end if
       write(unit, '(a,a)') '# kpoint_artifact = ', trim(kpoint_file)
       write(unit, '(a,a)') '# basis_artifact = ', trim(basis_file)
       write(unit, '(a,a)') '# matrix_artifact = ', trim(matrix_file)
+      write(unit, '(a,a)') '# state_artifact = ', trim(state_file)
+      if (config%gf_closure_audit) write(unit, '(a,a)') '# gf_spot_artifact = ', trim(gf_file)
       write(unit, '(a,a)') '# channel = ', trim(config%channel)
       write(unit, '(a,es24.16)') '# primary_eta_Ry = ', config%eta
       write(unit, '(a,i0)') '# response_lmax = ', response_space%response_lmax
@@ -1117,6 +1359,54 @@ contains
       close(basis_unit)
       if (.not. matrix_written) error stop 'TDVK-05 convergence: full Gamma/static matrix was not written'
       close(matrix_unit)
+      if (config%gf_closure_audit) then
+         ! One independent Gamma GF spot is evaluated after the Lehmann
+         ! response, in this same process and from the same immutable state.
+         gf_request%q = config%q_list(:, gamma_index)
+         gf_request%frequencies = config%frequencies
+         gf_request%eta = config%eta
+         gf_request%channel = config%channel
+         gf_request%integration_points = config%gf_integration_points
+         gf_request%integration_eta = config%gf_integration_eta
+         gf_request%energy_margin = config%gf_energy_margin
+         gf_request%contraction_backend = 'factorized'
+         gf_request%product_basis => product
+         gf_request%electronic_state => left_state
+         gf_request%q_endpoint_state => endpoints(gamma_index)
+         call evaluate_lr_product_gf_susceptibility(gf_request, gf_result)
+         finite_response = all(ieee_is_finite(real(gf_result%susceptibility, rp))) .and. &
+            all(ieee_is_finite(aimag(gf_result%susceptibility)))
+         if (.not. finite_response) error stop 'TDVK k-space handoff: Gamma GF spot contains NaN or Inf'
+
+         gf_lehmann_request%q = config%q_list(:, gamma_index)
+         gf_lehmann_request%frequencies = config%frequencies
+         gf_lehmann_request%eta = config%eta
+         gf_lehmann_request%channel = config%channel
+         gf_lehmann_request%product_basis => product
+         gf_lehmann_request%electronic_state => left_state
+         gf_lehmann_request%q_endpoint_state => endpoints(gamma_index)
+         call evaluate_lr_product_ks_susceptibility(gf_lehmann_request, gf_lehmann_result)
+         gf_norm_lehmann = sqrt(sum(abs(gf_lehmann_result%susceptibility(:, :, static_index))**2))
+         gf_norm = sqrt(sum(abs(gf_result%susceptibility(:, :, static_index))**2))
+         gf_d_frobenius = sqrt(sum(abs(gf_lehmann_result%susceptibility(:, :, static_index) - &
+            gf_result%susceptibility(:, :, static_index))**2))
+         gf_relative_frobenius = gf_d_frobenius/max(gf_norm_lehmann, gf_norm, tiny(1.0_rp))
+         gf_d_infinity = maxval(abs(gf_lehmann_result%susceptibility(:, :, static_index) - &
+            gf_result%susceptibility(:, :, static_index)))
+         open(newunit=gf_unit, file=trim(gf_file), status='replace', action='write')
+         write(gf_unit, '(a)') '# one reciprocal-GF spot check on the accepted TDDFT state'
+         write(gf_unit, '(a)') '# state_source = same accepted reciprocal state as the compact Lehmann response'
+         write(gf_unit, '(a,3(es24.16,1x))') '# q = ', config%q_list(:, gamma_index)
+         write(gf_unit, '(a,es24.16)') '# omega_Ry = ', config%frequencies(static_index)
+         write(gf_unit, '(a,es24.16)') '# eta_Ry = ', config%eta
+         write(gf_unit, '(a,i0)') '# integration_points = ', gf_result%integration_points
+         write(gf_unit, '(a,es24.16)') '# integration_eta_Ry = ', gf_result%actual_integration_eta
+         write(gf_unit, '(a,es24.16)') '# h_over_integration_eta = ', gf_result%spacing_over_integration_eta
+         write(gf_unit, '(a)') '# columns: norm_lehmann norm_gf dF rF dInf finite'
+         write(gf_unit, '(5(es24.16,1x),l1)') gf_norm_lehmann, gf_norm, gf_d_frobenius, gf_relative_frobenius, &
+            gf_d_infinity, finite_response
+         close(gf_unit)
+      end if
       write(*, '(a,i0,a,i0,a,i0,a,i0)') 'TDVK-05 Fe compact convergence: q_count=', size(config%q_list, 2), &
          ' omega_count=', size(config%frequencies), ' eta_count=', size(config%eta_values), &
          ' product_dimension=', product%product_dimension

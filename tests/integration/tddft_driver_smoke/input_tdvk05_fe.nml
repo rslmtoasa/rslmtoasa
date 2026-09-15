@@ -19,6 +19,7 @@ label(1) = 'Fe'
 &self
 nstep = 50
 conv_thr = 1.0e-6
+use_kspace = .false.
 /
 &energy
 fermi = -0.085121
@@ -77,6 +78,7 @@ backend = 'product_convergence'
 gf_integration_points = 6401
 gf_integration_eta = 0.001
 gf_energy_margin = 0.60
+gf_closure_audit = .false.
 write_full_matrix = .false.
 output_file = 'tddft_tdvk05_fe.dat'
 /
