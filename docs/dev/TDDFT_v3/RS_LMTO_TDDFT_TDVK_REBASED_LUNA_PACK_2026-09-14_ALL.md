@@ -1338,7 +1338,10 @@ Then stop for physics interpretation.
 - [x] Gamma, exact mesh-commensurate `+q`, and exact `-q` raw interacting responses executed;
 - [x] complete compact interacting/loss matrices retained for all 3×4 q/ω samples;
 - [x] interacting q/−q full-matrix covariance, loss comparison, and denominator diagnostics passed;
-- [x] one controlled reciprocal-GF bare spot check executed with the TDVK-03 quadrature;
+- [x] one controlled reciprocal-GF bare spot check executed;
+- [x] `h/integration_eta <= 0.5`;
+- [x] GF result compared with compact Lehmann;
+- [x] exact quadrature provenance recorded;
 - [x] no GSR production kernel, BES/GCR correction, mode assignment, stiffness, damping, or literature comparison used;
 - [x] required documentation, focused tests, and material validation harness updated.
 

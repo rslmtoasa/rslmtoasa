@@ -42,7 +42,7 @@ def validate_output(path: Path) -> dict[str, object]:
     dynamic = [row for row in data if len(row) == 15]
     static = [row for row in data if len(row) == 8]
     covariance = [row for row in data if len(row) == 7]
-    gf = [row for row in data if len(row) == 11]
+    gf = [row for row in data if len(row) == 17]
     raw_matrix = [row for row in data if len(row) == 10]
 
     if meta.get("backend") != "compact_dyson":
@@ -88,7 +88,7 @@ def validate_output(path: Path) -> dict[str, object]:
         values = [number(value) for value in row[1:]]
         if not all(math.isfinite(value) for value in values):
             raise RuntimeError("non-finite GF spot-check diagnostic")
-        if int(values[4]) != 6401 or values[6] >= 1.0:
+        if int(values[4]) < 3 or int(values[4]) % 2 == 0 or abs(values[5] - 0.001) > 1e-12 or values[6] > 0.5:
             raise RuntimeError("GF spot-check quadrature is not TDVK-03 controlled")
     if len(raw_matrix) != 3 * 4 * 232 * 232:
         raise RuntimeError(f"complete raw matrix archive is incomplete: {len(raw_matrix)} rows")

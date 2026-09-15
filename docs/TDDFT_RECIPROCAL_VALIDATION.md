@@ -1477,11 +1477,12 @@ not shifted, rescaled, regularized, or corrected.
 
 ### Raw dynamic Fe response
 
-The complete raw archive is
-`/tmp/tdvk07_fe_dyson_loss_final4/run/tdvk07_fe.dat` (114 MB); it contains
+The complete raw output was written at runtime to
+`/tmp/tdvk07_fe_dyson_loss_controlled_final/run/tdvk07_fe.dat` (114 MB; not
+committed); it contains
 `645888 = 3 x 4 x 232 x 232` raw matrix rows for `chiKS`, interacting `chi`,
-and loss.  The state artifact is
-`/tmp/tdvk07_fe_dyson_loss_final4/run/tdvk07_fe.dat.state`.  The literal q
+and loss.  The state artifact is the runtime output
+`/tmp/tdvk07_fe_dyson_loss_controlled_final/run/tdvk07_fe.dat.state`.  The literal q
 set is `[(0,0,0),(1/12,0,0),(-1/12,0,0)]` in direct reciprocal coordinates;
 the physical eta is `0.010 Ry`; the frequency grid is
 `[0.00, 0.01, 0.02, 0.05] Ry`.
@@ -1528,17 +1529,53 @@ The interacting covariance gate passed without phase patching or correction.
 
 ### Independent GF bare spot
 
-One representative Gamma bare spot was evaluated with the factorized
-reciprocal-GF backend and compared with compact Lehmann.  It used the
-TDVK-03-controlled `N=6401`, `integration_eta=0.001 Ry`, `margin=0.60 Ry`
-quadrature; the measured `h/integration_eta` was `0.5974959562`.
+The historical 6401-point calculation is retained below only as an explicitly
+under-resolved comparison.  It used the same accepted state, Gamma point,
+`omega=0.01 Ry`, `eta=0.010 Ry`, `chi_plus` channel, `integration_eta=0.001 Ry`,
+and `margin=0.60 Ry`, but its `h/integration_eta=0.5974959562` did not satisfy
+the TDVK-03 control criterion.
 
-| q | omega (Ry) | `dF` | relative `dF` | `dInf` |
-|---|---:|---:|---:|---:|
-| `(0,0,0)` | 0.01 | `3.0436682581871682e-2` | `7.1508704478307136e-3` | `1.6112102190921553e-2` |
+| q | omega (Ry) | points | `h/integration_eta` | `dF` | relative `dF` | `dInf` |
+|---|---:|---:|---:|---:|---:|---:|
+| `(0,0,0)` historical under-resolved spot | 0.01 | 6401 | `5.9749595622e-1` | `3.0436682581871682e-2` | `7.1508704478307136e-3` | `1.6112102190921553e-2` |
 
-The GF route was a bare spot check only; it did not replace the compact
-Lehmann input to Dyson and no GF spectrum was generated.
+The controlled rerun computed its Simpson grid from the live accepted-state
+eigenvalue bounds and unchanged energy margin:
+
+| quantity | controlled value |
+|---|---:|
+| lower energy bound (Ry) | `-1.3126209621933802` |
+| upper energy bound (Ry) | `2.5113531575876640` |
+| span (Ry) | `3.8239741197810444` |
+| integration points | `9561` |
+| `h` (Ry) | `3.9999729286412599e-4` |
+| integration eta (Ry) | `1.0000000000000000e-3` |
+| `h/integration_eta` | `3.9999729286412600e-1` |
+| GF-call wall time (s) | `8.0622702711e1` |
+| complete controlled validator wall time (s) | `824.36` |
+
+The point count is `ceil(span/(0.4*integration_eta))` even intervals plus one:
+`ceil(9559.93529945261)=9560`, hence `9561` odd Simpson points.  The
+controlled full-matrix comparison was:
+
+| q | omega (Ry) | `||chi_Lehmann||F` | `||chi_GF||F` | `dF` | relative `dF` | `dInf` |
+|---|---:|---:|---:|---:|---:|---:|
+| `(0,0,0)` | 0.01 | `4.2563605093845531` | `4.2396541117757467` | `3.1424562225741096e-2` | `7.3829653659400482e-3` | `1.6414536506613345e-2` |
+
+Relative to the historical under-resolved result, `rF` changed from
+`7.1508704478e-3` to `7.3829653659e-3` and `dInf` from
+`1.6112102191e-2` to `1.6414536507e-2`: a small, non-substantial change while
+the quadrature criterion is restored.  No other parameter was tuned.
+
+Controlled reciprocal-GF bare spot check — **PASS**.  The GF route was a bare
+spot check only; it did not replace the compact Lehmann input to Dyson and no
+GF spectrum was generated.
+
+Runtime provenance only (not a permanent archive): the controlled raw output
+was 118897832 bytes with SHA-256
+`8487c027bae3b92a30039c3b4fe9a20e9c62a6950ceaff21653c62b2b8f9ca4a`, and the
+state artifact was 36368934 bytes with SHA-256
+`d0ffa7313163f19cf4c93e5ddc143983619fae4874976123f064e35d90ba5679`.
 
 ### Tests and verdict
 
@@ -1554,12 +1591,12 @@ UnitTddftCompactDysonOracle
 UnitTddftProductionDriver
 ```
 
-The material validator
-`tests/validation/tdvk07_fe_dyson_loss.py` passed and wrote
-`/tmp/tdvk07_fe_dyson_loss_final4.json`.  The CTest registration
+The updated output validator
+`tests/validation/tdvk07_fe_dyson_loss.py` passed against the completed
+controlled output, including the 9561-point quadrature schema.  The CTest registration
 `TddftCompactDysonFe` is intentionally `DISABLED` because it is a multi-minute
 12³ material campaign; it was executed directly by the validator and is not
 counted among the 7/7 focused unit tests.  No pre-existing passing test was
 disabled, and no TDVK-08 code was started.
 
-Exact result: **TDVK-07 PASS CANDIDATE**.
+Exact closure result: **TDVK-07 GSR/GF EVIDENCE CLOSURE PASS**.

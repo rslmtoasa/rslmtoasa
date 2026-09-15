@@ -904,8 +904,9 @@ contains
       character(len=256), allocatable :: frequency_status(:, :)
       real(rp), allocatable :: covariance_residual(:), covariance_loss_difference(:), covariance_min_sv_difference(:), &
          covariance_condition_difference(:)
-      real(rp), allocatable :: gf_q(:), gf_frequency(:), gf_d_frobenius(:), gf_relative_frobenius(:), gf_d_infinity(:), &
-         gf_integration_eta(:), gf_spacing_ratio(:)
+      real(rp), allocatable :: gf_q(:), gf_frequency(:), gf_norm_lehmann(:), gf_norm_gf(:), gf_d_frobenius(:), &
+         gf_relative_frobenius(:), gf_d_infinity(:), gf_integration_eta(:), gf_spacing_ratio(:), gf_energy_min(:), &
+         gf_energy_max(:), gf_energy_spacing(:), gf_wall_seconds(:)
       integer, allocatable :: gf_q_index(:), gf_integration_points(:)
       logical :: rank_stable, finite_response, covariance_checked
       real(rp) :: state_mesh_max, state_weight_max, state_ef_diff, state_eigen_max, state_occ_max
@@ -1155,9 +1156,10 @@ contains
          gf_count = 1
       end if
       if (gf_count > 0) then
-         allocate(gf_q_index(gf_count), gf_q(gf_count), gf_frequency(gf_count), gf_d_frobenius(gf_count), &
-            gf_relative_frobenius(gf_count), gf_d_infinity(gf_count), gf_integration_eta(gf_count), &
-            gf_spacing_ratio(gf_count), gf_integration_points(gf_count))
+         allocate(gf_q_index(gf_count), gf_q(gf_count), gf_frequency(gf_count), gf_norm_lehmann(gf_count), &
+            gf_norm_gf(gf_count), gf_d_frobenius(gf_count), gf_relative_frobenius(gf_count), gf_d_infinity(gf_count), &
+            gf_integration_eta(gf_count), gf_spacing_ratio(gf_count), gf_energy_min(gf_count), gf_energy_max(gf_count), &
+            gf_energy_spacing(gf_count), gf_wall_seconds(gf_count), gf_integration_points(gf_count))
          gf_q_indices(1) = gamma_index
          gf_q_indices(2) = positive_q_index
          gf_frequency_index = 1
@@ -1190,6 +1192,8 @@ contains
             gf_lehmann_request%electronic_state => left_state
             gf_lehmann_request%q_endpoint_state => endpoints(gf_q_index(i))
             call evaluate_lr_product_ks_susceptibility(gf_lehmann_request, gf_lehmann_result)
+            gf_norm_lehmann(i) = sqrt(sum(abs(gf_lehmann_result%susceptibility(:, :, 1))**2))
+            gf_norm_gf(i) = sqrt(sum(abs(gf_result%susceptibility(:, :, 1))**2))
             gf_d_frobenius(i) = sqrt(sum(abs(gf_lehmann_result%susceptibility(:, :, 1) - &
                gf_result%susceptibility(:, :, 1))**2))
             gf_relative_frobenius(i) = gf_d_frobenius(i)/max(sqrt(sum(abs(gf_lehmann_result%susceptibility(:, :, 1))**2)), &
@@ -1197,6 +1201,10 @@ contains
             gf_d_infinity(i) = maxval(abs(gf_lehmann_result%susceptibility(:, :, 1) - gf_result%susceptibility(:, :, 1)))
             gf_integration_eta(i) = gf_result%actual_integration_eta
             gf_spacing_ratio(i) = gf_result%spacing_over_integration_eta
+            gf_energy_min(i) = gf_result%energy_min
+            gf_energy_max(i) = gf_result%energy_max
+            gf_energy_spacing(i) = gf_result%energy_spacing
+            gf_wall_seconds(i) = gf_result%wall_time_seconds
             gf_integration_points(i) = gf_result%integration_points
          end do
       end if
@@ -1293,11 +1301,12 @@ contains
                covariance_condition_difference(iw)
          end do
          if (gf_count > 0) then
-            write(unit, '(a)') '# gf_spots columns: q_index qx qy qz omega_Ry integration_points integration_eta spacing_over_eta dF rF dInf'
+            write(unit, '(a)') '# gf_spots columns: q_index qx qy qz omega_Ry integration_points integration_eta spacing_over_eta energy_min_Ry energy_max_Ry h_Ry norm_lehmann norm_gf dF rF dInf wall_seconds'
             do i = 1, gf_count
-               write(unit, '(i0,1x,4(es24.16,1x),i0,1x,5(es24.16,1x))') gf_q_index(i), config%q_list(:, gf_q_index(i)), &
-                  gf_frequency(i), gf_integration_points(i), gf_integration_eta(i), gf_spacing_ratio(i), gf_d_frobenius(i), &
-                  gf_relative_frobenius(i), gf_d_infinity(i)
+               write(unit, '(i0,1x,4(es24.16,1x),i0,1x,11(es24.16,1x))') gf_q_index(i), config%q_list(:, gf_q_index(i)), &
+                  gf_frequency(i), gf_integration_points(i), gf_integration_eta(i), gf_spacing_ratio(i), gf_energy_min(i), &
+                  gf_energy_max(i), gf_energy_spacing(i), gf_norm_lehmann(i), gf_norm_gf(i), gf_d_frobenius(i), &
+                  gf_relative_frobenius(i), gf_d_infinity(i), gf_wall_seconds(i)
             end do
          else
             write(unit, '(a)') '# gf_spots = not requested'
