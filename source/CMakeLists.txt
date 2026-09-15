@@ -86,6 +86,7 @@ add_library(${PROJECT_NAME} STATIC
     lr_response_space.f90
     lr_pauli_transition_vertex.f90
     lr_lmto_product_response_basis.f90
+    lr_compact_static_interaction.f90
     lr_gf_endpoint_augmentation.f90
     lr_ks_susceptibility.f90
     lr_gf_susceptibility.f90

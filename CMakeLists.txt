@@ -650,6 +650,8 @@ if (RUN_UNIT_TESTS)
     WILL_FAIL TRUE)
   add_fortran_unit_test(UnitLrProductKsSusceptibility ${TestDIR}/unit/test_lr_product_ks_susceptibility.f90)
   set_tests_properties(UnitLrProductKsSusceptibility PROPERTIES LABELS "unit;tdvk-02r2;lr-06;product-basis;lehmann")
+  add_fortran_unit_test(UnitLrCompactStaticInteraction ${TestDIR}/unit/test_lr_compact_static_interaction.f90)
+  set_tests_properties(UnitLrCompactStaticInteraction PROPERTIES LABELS "unit;tdvk-06;compact;interaction;representation-oracle")
   add_fortran_unit_test(UnitLrKsSusceptibility ${TestDIR}/unit/test_lr_ks_susceptibility.f90)
   set_tests_properties(UnitLrKsSusceptibility PROPERTIES LABELS "unit;lr-06;ks-susceptibility;lehmann;covariance")
   add_fortran_unit_test(UnitLrGfSusceptibility ${TestDIR}/unit/test_lr_gf_susceptibility.f90)
@@ -723,6 +725,15 @@ if (RUN_UNIT_TESTS)
       "--output" "${CMAKE_BINARY_DIR}/Testing/validation/tdvk05_fe_convergence.json")
   set_tests_properties(TddftProductConvergence PROPERTIES
     LABELS "validation;tddft;tdvk-05;accepted-state;convergence;compact-lehmann"
+    DISABLED TRUE
+    TIMEOUT 7200)
+  add_test(NAME TddftStaticInteractions
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/tdvk06_fe_static_interactions.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/tdvk06_fe_static_interactions"
+      "--output" "${CMAKE_BINARY_DIR}/Testing/validation/tdvk06_fe_static_interactions.json")
+  set_tests_properties(TddftStaticInteractions PROPERTIES
+    LABELS "validation;tddft;tdvk-06;accepted-state;static;alsda;gsr;compact"
     DISABLED TRUE
     TIMEOUT 7200)
   add_test(NAME UnitLrAlsdaKernelRejectProvenance

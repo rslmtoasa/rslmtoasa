@@ -206,3 +206,29 @@ This task adds only the independent static LCMM interaction route.  It does
 not implement a dynamical Dyson solve, loss matrix, Goldstone eigenvalue
 correction, mode extraction, site-only reduction, noncollinear response, or a
 new ground-state/XC functional.
+
+## TDVK-06 independent compact GSR adapter
+
+TDVK-06 adds an independent compact implementation for the accepted Fe
+static state.  It does not call the direct ALSDA kernel.  The accepted Pauli
+magnetization is projected to `m00=sqrt(4*pi)*m_pauli`, while each unknown
+`U_LCMM` is represented in the retained L=0 product span.  Its field basis is
+constructed by explicit point-space reconstruction and projection, then the
+raw compact equation
+
+```text
+Gamma * u = m00,
+Gamma(:,j) = chiKS_compact(0,eta) * [4*pi*U_j*m00]
+```
+
+is solved with LAPACK `ZGELSS` and `RCOND=-1`.  The complete compact response
+residual is evaluated independently as
+`chiKS_compact * K_eff * m00 - m00`.  Rank, singular values, condition,
+equation residual, full residual, and status are all written.  Rank deficiency
+or a residual above `1e-9` is reported as `BLOCKED`; the returned least-squares
+vector is never promoted through regularization or a null-space choice.
+
+The point/product mapping is the certified TDVK-06 contract
+`c=U^H sqrt(W)x`, `x=inv(sqrt(W))Uc`, and `Kc=U^H K U`.  The unit oracle and
+the strict 232-mode Fe runtime inventory certify representation use only; they
+do not certify a compact Dyson denominator or any dynamical/magnon claim.

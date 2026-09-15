@@ -1161,4 +1161,109 @@ orchestrator adjudication of the explicitly reported operator difference.
 
 `KSPACE-SCF → TDDFT HANDOFF PASS CANDIDATE`
 
-No TDVK-06 interaction physics was started.
+At the time of this original TDVK-05 report, no TDVK-06 interaction physics
+had been started.  The later TDVK-06 evidence update follows below.
+
+## TDVK-06 Fe static ALSDA and independent GSR diagnostics
+
+This section is the later TDVK-06 evidence update; the historical TDVK-05
+closure text above remains unchanged.  Preflight was performed on branch
+`fable_v4` at exact HEAD
+`a44d6db63bca9ee3cd0561e47525d29a1485cf75`, equal to the local
+`origin/fable_v4` ref, with the TDVK bridge commit an ancestor.  The worktree
+was already dirty in unrelated SCF/RSGF/documentation files; those edits were
+preserved.
+
+The run used `input_tdvk06_fe.nml` and the validation-only backend
+`static_interactions`:
+
+```text
+use_kspace = .true.
+nk1,nk2,nk3 = 12,12,12
+q = (0,0,0), omega = 0 Ry, channel = chi_plus
+physical eta = 0.010 Ry and 0.005 Ry
+response_lmax = -1, strict complete compact product dimension = 232
+state source = accepted_kspace_scf_cache; TDDFT reciprocal rebuild = F
+```
+
+The accepted state was consumed directly by TDDFT.  The state artifact has
+the complete 1,728-point mesh, weights, eigenvalues, explicit occupations,
+and gauge-invariant occupation-weighted projector.  Its k-point serialization
+fingerprint is
+`cbf15c1e15c8e657635005a071a17e5ead5db64637b2d1938b3dc5e2326b347f`.
+
+| accepted state quantity | value |
+|---|---:|
+| EF (Ry) | -0.087568835307212323 |
+| integrated electron count | 7.999999999986562 |
+| target electron count | 8.000000000000000 |
+| accepted LR-01 radial moment (μB) | 2.159356663477833 |
+| accepted radial residual control | 4.123523366655037e-7 |
+| state mesh/weight/EF/eigen/occupation/projector residuals | 0 |
+
+The accepted XC provenance was Barth-Hedin, legacy RS-LMTO, TXC=1, with
+mapping quality `REFERENCE_EQUIVALENT`.  The Pauli magnetization input was
+constructed from the accepted reciprocal occupations/eigenvectors and the
+accepted POTPAR large-component plus frozen-core projection, and was passed
+to KXC with the exact label `pauli_projected`.
+
+### Compact representation certification
+
+The independently tested mapping is
+
+```text
+c = U^H sqrt(W) x
+x = inv(sqrt(W)) U c
+K_compact = U^H K_point U
+```
+
+`UnitLrCompactStaticInteraction` passed its explicit point/product projection,
+reconstruction, local-operator, action, and normalized `m00` nested-loop
+oracles.  The production run independently required strict rank stability for
+all retained blocks and observed the complete 232-mode inventory.  This
+certifies representation use for the static diagnostic; it does not certify a
+compact Dyson denominator.
+
+### Raw direct ALSDA result
+
+The raw direct diagnostic was evaluated as
+`chiKS_compact(0,eta) Kxc_compact m00_compact - m00_compact`.  No repair,
+rescaling, shifting, sign/factor tuning, BES, or GCR was applied.
+
+| eta (Ry) | residual norm | relative residual | rigid overlap (real, imag) | field norm | response norm |
+|---:|---:|---:|---:|---:|---:|
+| 0.010 | 1.461615672376130e-1 | 1.880237608280108e-1 | -5.824444588445526e-2, -3.084541315396532e-2 | 3.100303726925040e-1 | 7.135531213128369e-1 |
+| 0.005 | 1.412558597224824e-1 | 1.817130076392633e-1 | -5.683339423281615e-2, -1.546530543876862e-2 | 3.100303726925040e-1 | 7.145419332741448e-1 |
+
+The artifact also writes the reconstructed point-space residual norm for every
+positive-measure radial point, grouped by site and response `L` (4,940 rows
+for the two η values), so the compact residual has an explicit site/`L`/radial
+decomposition.
+
+The compact χKS Frobenius norms were 4.038360155976167 at η=0.010 Ry and
+4.048759853834140 at η=0.005 Ry.  The optional η=0.005 value reused the same
+accepted state; it did not rerun SCF.
+
+### Independent raw compact GSR result
+
+The independent compact LCMM solve used `ZGELSS` with `RCOND=-1`, 232
+equations, and 12 retained L=0 unknowns.  Both raw solves were full rank but
+were honestly marked `BLOCKED` because the overdetermined equation residual
+exceeded `1e-9`; no least-squares result was promoted or repaired.
+
+| eta (Ry) | rank | condition | equation relative residual | full relative residual | max component | status |
+|---:|---:|---:|---:|---:|---:|---|
+| 0.010 | 12/12 | 3.180697495543320e14 | 5.298318856896410e-3 | 1.304410713117758e8 | 7.902006525197545e7 | `BLOCKED: compact GSR equation residual exceeds tolerance` |
+| 0.005 | 12/12 | 3.185178913036662e14 | 5.303295328296958e-3 | 1.306937896604510e8 | 7.916904122738202e7 | `BLOCKED: compact GSR equation residual exceeds tolerance` |
+
+The GSR status is a raw diagnostic outcome, not a physical interpretation.
+
+### TDVK-06 scope result
+
+The executable wrote `TDVK-06 direct ALSDA static diagnostic = EXECUTED`,
+`TDVK-06 independent GSR raw solve = EXECUTED`, and the exact terminal marker
+`TDVK-06 PASS CANDIDATE` for completion of this evidence gate.  The GSR
+equation blocker above remains part of the candidate evidence.  Denominator
+diagnostics were explicitly not performed because the compact Dyson
+representation is not certified; they remain for TDVK-07.  No spectrum,
+mode, or magnon claim is made.

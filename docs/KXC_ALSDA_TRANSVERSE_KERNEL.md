@@ -188,3 +188,27 @@ This task adds only the direct local ALSDA kernel and its raw diagnostic.  It
 does not implement the Lounis sum-rule interaction, Goldstone correction,
 Dyson equation, loss matrix, mode extraction, empirical rescaling, exact
 scalar-relativistic response, or an exact Pauli-functional ground state.
+
+## TDVK-06 compact static adapter
+
+TDVK-06 consumes the accepted Pauli magnetization from the reciprocal
+eigenvectors plus the accepted POTPAR large-component and frozen-core
+projection.  The input is labelled exactly `pauli_projected`; the older SR
+`n_up-n_down` shortcut is not used by this path.  The direct raw diagnostic is
+evaluated in the complete retained LMTO product representation:
+
+```text
+c = U^H sqrt(W) x,    x = inv(sqrt(W)) U c,    K_compact = U^H K_point U
+r = chiKS_compact(0,eta) K_compact m00_compact - m00_compact
+```
+
+The radial metric occurs only in vector projection/reconstruction.  It is not
+inserted a second time into the local operator.  `UnitLrCompactStaticInteraction`
+certifies these identities by independent nested-loop oracles, and the Fe
+production run requires a strict rank-stable complete product dimension of
+232.  This representation certification does not certify a compact Dyson
+denominator or a dynamical spectrum; those remain outside TDVK-06.
+
+The raw result is reported without Goldstone repair, BES/GCR, rescaling,
+shifting, sign tuning, or mode interpretation.  A nonzero residual is retained
+as diagnostic evidence.

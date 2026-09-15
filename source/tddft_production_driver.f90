@@ -38,6 +38,10 @@ module tddft_production_driver_mod
       pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
    use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
       lmto_product_channel_minus
+   use lr_compact_static_interaction_mod, only: lr_compact_gsr_result, lr_compact_representation, lr_compact_mapping_contract, &
+      compact_project_magnetization, compact_project_local_operator, compact_apply_local_operator, &
+      compact_reconstruct_point_vector, evaluate_compact_goldstone_sumrule
+   use pauli_ground_state_projection_mod, only: compute_accepted_pauli_magnetization
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
    use lr_product_gf_susceptibility_mod, only: lr_product_gf_susceptibility_request, &
       lr_product_gf_susceptibility_result, evaluate_lr_product_gf_susceptibility
@@ -66,6 +70,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_product_gf = 'product_gf'
    character(len=*), parameter, public :: tddft_driver_backend_product_finite_q = 'product_finite_q'
    character(len=*), parameter, public :: tddft_driver_backend_product_convergence = 'product_convergence'
+   character(len=*), parameter, public :: tddft_driver_backend_static_interactions = 'static_interactions'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -319,11 +324,24 @@ contains
           trim(config%backend) /= tddft_driver_backend_product_lehmann .and. &
           trim(config%backend) /= tddft_driver_backend_product_gf .and. &
           trim(config%backend) /= tddft_driver_backend_product_finite_q .and. &
-          trim(config%backend) /= tddft_driver_backend_product_convergence) then
-         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q or product_convergence'
+          trim(config%backend) /= tddft_driver_backend_product_convergence .and. &
+          trim(config%backend) /= tddft_driver_backend_static_interactions) then
+         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence or static_interactions'
       end if
-      if (trim(config%backend) /= tddft_driver_backend_product_convergence .and. size(config%eta_values) /= 1) then
-         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence'
+      if (trim(config%backend) /= tddft_driver_backend_product_convergence .and. &
+          trim(config%backend) /= tddft_driver_backend_static_interactions .and. size(config%eta_values) /= 1) then
+         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence or static_interactions'
+      end if
+      if (trim(config%backend) == tddft_driver_backend_static_interactions) then
+         if (size(config%q_list, 2) /= 1 .or. sum(abs(config%q_list(:, 1))) > 1.0e-12_rp) then
+            error stop 'TDDFT input: static_interactions requires one Gamma q point'
+         end if
+         if (size(config%frequencies) /= 1 .or. abs(config%frequencies(1)) > 1.0e-12_rp) then
+            error stop 'TDDFT input: static_interactions requires one static omega=0 point'
+         end if
+         if (size(config%eta_values) > 2) then
+            error stop 'TDDFT input: static_interactions supports at most eta and optional eta=.005 Ry'
+         end if
       end if
       if (trim(config%backend) == tddft_driver_backend_reciprocal_gf .or. &
           trim(config%backend) == tddft_driver_backend_native_rsgf .or. config%reciprocal_backend_crosscheck) then
@@ -769,6 +787,14 @@ contains
             reciprocal_obj)
          return
       end if
+      if (trim(config%backend) == tddft_driver_backend_static_interactions) then
+         if (.not. use_accepted_kspace_scf) then
+            error stop 'TDVK-06 static interactions: direct accepted k-space SCF handoff is required'
+         end if
+         call run_tddft_static_interactions(config, response_space, radial_bases, ground_states, left_state, endpoints, &
+            reciprocal_obj, lattice_obj)
+         return
+      end if
       if (trim(config%backend) == tddft_driver_backend_product_finite_q) then
          ! TDVK-04 is a compact bare-response validation seam.  It evaluates
          ! all requested q points, the prescribed covariance pair, and only
@@ -823,6 +849,271 @@ contains
       if (allocated(result%q_list)) deallocate(result%q_list)
       if (allocated(result%frequencies)) deallocate(result%frequencies)
    end subroutine run_tddft_production
+
+   !> TDVK-06 static interaction diagnostics.  This backend consumes the
+   !> accepted k-space SCF snapshot exactly once, evaluates the complete
+   !> compact Gamma/omega=0 response, and stops after raw ALSDA and independent
+   !> GSR diagnostics.  It never enters Dyson, loss, mode extraction, or any
+   !> Goldstone repair/correction path.
+   subroutine run_tddft_static_interactions(config, response_space, radial_bases, ground_states, left_state, endpoints, &
+                                            reciprocal_obj, lattice_obj)
+      type(tddft_production_config), intent(in) :: config
+      type(response_space_layout), intent(in) :: response_space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(radial_ground_state), intent(in) :: ground_states(:)
+      type(lr_electronic_state), target, intent(in) :: left_state
+      type(lr_electronic_state), target, intent(in) :: endpoints(:)
+      type(reciprocal), intent(in) :: reciprocal_obj
+      type(lattice), intent(in) :: lattice_obj
+
+      type(lmto_product_response_basis), target :: product_plus, product_minus
+      type(lmto_product_response_basis), pointer :: product
+      type(lr_product_ks_susceptibility_request) :: request
+      type(lr_product_ks_susceptibility_result) :: response_result
+      type(lr_alsda_kernel_result) :: kernel_result
+      type(lr_compact_gsr_result) :: gsr_result
+      real(rp), allocatable :: magnetization(:, :)
+      complex(rp), allocatable :: magnetization_compact(:), magnetization_point(:)
+      complex(rp), allocatable :: compact_kernel(:, :), field(:), response(:), residual(:)
+      complex(rp), allocatable :: point_residual(:)
+      real(rp) :: direct_norm, direct_relative, target_norm, state_mesh_max, state_weight_max, state_ef_diff
+      real(rp) :: state_eigen_max, state_occ_max, state_projector_max, state_projector_frobenius
+      real(rp) :: k_fingerprint(5), accepted_moment, weight_sum
+      real(rp) :: kernel_min, kernel_max, kernel_max_abs, runtime_start, runtime_end
+      complex(rp) :: rigid_overlap, trace
+      integer :: gamma_index, ieta, ifrequency, unit, site, response_l, response_m, ir, flat, ik
+      type(response_super_index) :: item
+      real(rp) :: radial_residual_norm
+      logical :: rank_stable, finite_response
+      character(len=512) :: state_file
+
+      if (.not. reciprocal_obj%auto_find_fermi .or. .not. reciprocal_obj%canonical_energy_valid) then
+         error stop 'TDVK-06 static interactions: accepted auto-EF k-space SCF state is required'
+      end if
+      if (size(endpoints) /= size(config%q_list, 2)) then
+         error stop 'TDVK-06 static interactions: q endpoint count differs from q_list'
+      end if
+      if (size(endpoints) /= 1 .or. sum(abs(config%q_list(:, 1))) > 1.0e-12_rp) then
+         error stop 'TDVK-06 static interactions: the sole endpoint must be Gamma'
+      end if
+      gamma_index = 1
+      if (size(config%frequencies) /= 1 .or. abs(config%frequencies(1)) > 1.0e-12_rp) then
+         error stop 'TDVK-06 static interactions: exactly omega=0 is required'
+      end if
+
+      call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
+      call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
+      if (trim(config%channel) == 'chi_plus') then
+         product => product_plus
+      else
+         product => product_minus
+      end if
+      rank_stable = .true.
+      do site = 1, product%nsite
+         do response_l = 0, product%response_lmax
+            rank_stable = rank_stable .and. product%blocks(site, response_l)%rank_stable
+         end do
+      end do
+      if (.not. rank_stable .or. product%product_dimension /= 232) then
+         error stop 'TDVK-06 static interactions: complete compact spd product representation is not certified'
+      end if
+
+      call compute_accepted_pauli_magnetization(reciprocal_obj, lattice_obj%symbolic_atoms, lattice_obj%nbulk, &
+         magnetization)
+      allocate(magnetization_compact(product%product_dimension))
+      call compact_project_magnetization(response_space, product, magnetization, magnetization_compact, magnetization_point)
+      target_norm = sqrt(sum(abs(magnetization_compact)**2))
+      if (target_norm <= tiny(1.0_rp)) then
+         error stop 'TDVK-06 static interactions: accepted Pauli magnetization has no retained compact component'
+      end if
+      call evaluate_lr_alsda_kernel(response_space, ground_states, magnetization, kernel_result)
+      allocate(compact_kernel(product%product_dimension, product%product_dimension), field(product%product_dimension), &
+         response(product%product_dimension), residual(product%product_dimension), point_residual(response_space%ndim))
+      call compact_project_local_operator(response_space, product, cmplx(kernel_result%pointwise_kernel, 0.0_rp, rp), &
+         compact_kernel)
+      kernel_min = minval(kernel_result%pointwise_kernel)
+      kernel_max = maxval(kernel_result%pointwise_kernel)
+      kernel_max_abs = maxval(abs(kernel_result%pointwise_kernel))
+      state_file = trim(config%output_file)//'.state'
+      call state_consistency_metrics(reciprocal_obj, left_state, state_mesh_max, state_weight_max, state_ef_diff, &
+         state_eigen_max, state_occ_max, state_projector_max, state_projector_frobenius)
+
+      accepted_moment = 0.0_rp
+      do site = 1, size(ground_states)
+         accepted_moment = accepted_moment + ground_states(site)%integrated_moment_muB
+      end do
+      weight_sum = sum(left_state%k_weights)
+      k_fingerprint = 0.0_rp
+      do ik = 1, left_state%nk
+         k_fingerprint(1) = k_fingerprint(1) + left_state%k_weights(ik)
+         k_fingerprint(2:4) = k_fingerprint(2:4) + left_state%k_weights(ik)*left_state%k_points(:, ik)
+         k_fingerprint(5) = k_fingerprint(5) + real(ik, rp)*left_state%k_weights(ik)
+      end do
+
+      if (rank == 0) then
+         open(newunit=unit, file=trim(config%output_file), status='replace', action='write')
+         write(unit, '(a)') '# TDVK-06 Fe static ALSDA and independent GSR diagnostics'
+         write(unit, '(a,a)') '# build_version = ', trim(tddft_build_version)
+         write(unit, '(a)') '# backend = static_interactions'
+         write(unit, '(a)') '# scope = accepted self-consistent k-space SCF -> same-state TDDFT; static Gamma only'
+         write(unit, '(a)') '# no Dyson, denominator diagnostics, spectrum, mode extraction, Goldstone repair, BES, GCR, rescale, shift, or sign tuning'
+         write(unit, '(a,a)') '# state_source = accepted_kspace_scf_cache'
+         write(unit, '(a)') '# reciprocal_rebuild_performed_for_tddft = F'
+         write(unit, '(a)') '# reciprocal_hamiltonian_rebuild_performed_for_tddft = F'
+         write(unit, '(a)') '# accepted_state_cache_reused = T'
+         write(unit, '(a,3(i0,1x))') '# requested_k_mesh = ', reciprocal_obj%nk_mesh
+         write(unit, '(a,3(i0,1x))') '# actual_k_mesh = ', reciprocal_obj%nk_mesh
+         write(unit, '(a,i0)') '# actual_k_count = ', left_state%nk
+         write(unit, '(a,es24.16)') '# accepted_state_EF_Ry = ', left_state%fermi_level
+         write(unit, '(a,es24.16)') '# accepted_state_temperature_K = ', left_state%temperature
+         write(unit, '(a,es24.16)') '# accepted_state_integrated_electron_count = ', reciprocal_obj%canonical_electron_count
+         write(unit, '(a,es24.16)') '# accepted_state_target_electron_count = ', reciprocal_obj%total_electrons
+         write(unit, '(a,es24.16)') '# accepted_state_integrated_moment_muB = ', accepted_moment
+         write(unit, '(a,es24.16)') '# accepted_state_radial_residual_control = ', ground_states(1)%accepted_residual_control
+         write(unit, '(a,5(es24.16,1x))') '# k_fingerprint_checksums = ', k_fingerprint
+         write(unit, '(a,es24.16)') '# k_weight_sum = ', weight_sum
+         write(unit, '(a,es24.16)') '# state_consistency_mesh_max_abs = ', state_mesh_max
+         write(unit, '(a,es24.16)') '# state_consistency_weight_max_abs = ', state_weight_max
+         write(unit, '(a,es24.16)') '# state_consistency_EF_max_abs_Ry = ', state_ef_diff
+         write(unit, '(a,es24.16)') '# state_consistency_eigenvalue_max_abs_Ry = ', state_eigen_max
+         write(unit, '(a,es24.16)') '# state_consistency_occupation_max_abs = ', state_occ_max
+         write(unit, '(a,es24.16)') '# state_consistency_projector_max_abs = ', state_projector_max
+         write(unit, '(a,es24.16)') '# state_consistency_projector_frobenius = ', state_projector_frobenius
+         write(unit, '(a,a)') '# state_artifact = ', trim(state_file)
+         write(unit, '(a,a)') '# response_backend = complete compact Lehmann on accepted immutable k+q endpoints'
+         write(unit, '(a,a)') '# response_representation = ', trim(lr_compact_representation)
+         write(unit, '(a,a)') '# compact_mapping_contract = ', trim(lr_compact_mapping_contract)
+         write(unit, '(a)') '# compact_representation_certification = PASS: independent point/product projection oracle and strict rank-stable 232-mode runtime inventory'
+         write(unit, '(a,i0)') '# product_unpruned_dimension = ', product%unpruned_dimension
+         write(unit, '(a,i0)') '# product_dimension = ', product%product_dimension
+         write(unit, '(a,i0)') '# response_lmax = ', response_space%response_lmax
+         write(unit, '(a,a)') '# channel = ', trim(config%channel)
+         write(unit, '(a,es24.16)') '# omega_Ry = ', config%frequencies(1)
+         write(unit, '(a,a)') '# accepted_xc_functional = ', trim(kernel_result%xc_provenance%functional_name)
+         write(unit, '(a,a)') '# accepted_xc_backend = ', trim(kernel_result%xc_provenance%backend_name)
+         write(unit, '(a,a)') '# accepted_xc_mapping_quality = ', trim(kernel_result%xc_provenance%mapping_quality)
+         write(unit, '(a,i0)') '# accepted_xc_txc = ', kernel_result%xc_provenance%txc
+         write(unit, '(a,a)') '# pauli_magnetization_label = ', trim(kernel_result%magnetization_label)
+         write(unit, '(a)') '# pauli_magnetization_provenance = accepted reciprocal occupations/eigenvectors + accepted POTPAR large-component and frozen-core projection'
+         write(unit, '(a,es24.16)') '# pauli_magnetization_compact_norm = ', target_norm
+         write(unit, '(a,i0)') '# pauli_magnetization_point_sites = ', size(magnetization, 1)
+         write(unit, '(a,i0)') '# pauli_magnetization_point_radial_points = ', size(magnetization, 2)
+         write(unit, '(a,a)') '# direct_alsda_kernel_formula = Bxc_sigma/m_pauli with Bxc_sigma=(Vxc_up-Vxc_down)/2'
+         write(unit, '(a,es24.16)') '# direct_alsda_kernel_min_Ry_bohr3 = ', kernel_min
+         write(unit, '(a,es24.16)') '# direct_alsda_kernel_max_Ry_bohr3 = ', kernel_max
+         write(unit, '(a,es24.16)') '# direct_alsda_kernel_max_abs_Ry_bohr3 = ', kernel_max_abs
+         write(unit, '(a,a)') '# direct_alsda_operator_mapping = compact K=U^H K_point U; vector metric factors occur only in c=U^H sqrt(W)x'
+         write(unit, '(a)') '# direct_alsda_columns = eta_Ry residual_norm residual_relative rigid_overlap_real rigid_overlap_imag field_norm response_norm finite status'
+         write(unit, '(a)') '# direct_alsda_residual_definition = chiKS_compact(0,eta) * Kxc_compact * m00_compact - m00_compact'
+         write(unit, '(a)') '# direct_alsda_residual_by_block_columns = eta_Ry site response_l residual_block_norm'
+         write(unit, '(a)') '# direct_alsda_residual_by_radial_columns = eta_Ry site response_l radial_index residual_point_norm'
+         write(unit, '(a)') '# gsr_columns = eta_Ry equation_rows unknowns rank rank_deficient condition equation_norm equation_relative full_residual_norm full_relative_residual max_component rigid_overlap_real rigid_overlap_imag blocked'
+      end if
+
+      do ieta = 1, size(config%eta_values)
+         request%q = config%q_list(:, gamma_index)
+         request%frequencies = config%frequencies
+         request%eta = config%eta_values(ieta)
+         request%channel = config%channel
+         request%product_basis => product
+         request%electronic_state => left_state
+         request%q_endpoint_state => endpoints(gamma_index)
+         call cpu_time(runtime_start)
+         call evaluate_lr_product_ks_susceptibility(request, response_result)
+         call cpu_time(runtime_end)
+         finite_response = all(ieee_is_finite(real(response_result%susceptibility, rp))) .and. &
+            all(ieee_is_finite(aimag(response_result%susceptibility)))
+         if (.not. finite_response) error stop 'TDVK-06 static interactions: compact static chiKS contains NaN or Inf'
+         field = matmul(compact_kernel, magnetization_compact)
+         response = matmul(response_result%susceptibility(:, :, 1), field)
+         residual = response - magnetization_compact
+         call compact_reconstruct_point_vector(response_space, product, residual, point_residual)
+         direct_norm = sqrt(sum(abs(residual)**2))
+         direct_relative = direct_norm/target_norm
+         rigid_overlap = sum(conjg(residual)*magnetization_compact)
+         trace = cmplx(0.0_rp, 0.0_rp, rp)
+         do flat = 1, product%product_dimension
+            trace = trace + response_result%susceptibility(flat, flat, 1)
+         end do
+         call evaluate_compact_goldstone_sumrule(response_space, product, response_result%susceptibility(:, :, 1), &
+            magnetization, gsr_result)
+         if (rank == 0) then
+            write(unit, '(7(es24.16,1x),l1,1x,a)') config%eta_values(ieta), direct_norm, &
+               direct_relative, real(rigid_overlap, rp), aimag(rigid_overlap), sqrt(sum(abs(field)**2)), &
+               sqrt(sum(abs(response)**2)), finite_response, 'EXECUTED'
+            do site = 1, product%nsite
+               do response_l = 0, product%response_lmax
+                  residual_norm_by_block: block
+                     complex(rp), allocatable :: block_values(:)
+                     integer :: block_count, response_m, mode
+                     block_count = (2*response_l + 1)*product%blocks(site, response_l)%rank
+                     allocate(block_values(block_count))
+                     block_values = cmplx(0.0_rp, 0.0_rp, rp)
+                     do response_m = -response_l, response_l
+                        do mode = 1, product%blocks(site, response_l)%rank
+                           flat = product%flat_index(site, response_l, response_m, mode)
+                           block_values((response_m + response_l)*product%blocks(site, response_l)%rank + mode) = residual(flat)
+                        end do
+                     end do
+                     write(unit, '(es24.16,1x,2(i0,1x),es24.16)') config%eta_values(ieta), site, response_l, &
+                        sqrt(sum(abs(block_values)**2))
+                     deallocate(block_values)
+                  end block residual_norm_by_block
+               end do
+            end do
+            do site = 1, product%nsite
+               do response_l = 0, product%response_lmax
+                  do ir = 2, response_space%npoint
+                     radial_residual_norm = 0.0_rp
+                     do response_m = -response_l, response_l
+                        item = response_super_index(site, response_l, response_m, ir, 1)
+                        call response_flatten_superindex(item, response_space%nsite, response_space%response_lmax, &
+                           response_space%npoint, response_space%nchannel, flat)
+                        radial_residual_norm = radial_residual_norm + abs(point_residual(flat))**2
+                     end do
+                     write(unit, '(es24.16,1x,3(i0,1x),es24.16)') config%eta_values(ieta), site, response_l, ir, &
+                        sqrt(radial_residual_norm)
+                  end do
+               end do
+            end do
+            write(unit, '(a,es24.16,1x,a,es24.16)') '# compact_chiKS_frobenius_eta_Ry = ', &
+               sqrt(sum(abs(response_result%susceptibility(:, :, 1))**2)), '# runtime_cpu_seconds = ', runtime_end-runtime_start
+            write(unit, '(a,es24.16,1x,es24.16)') '# compact_chiKS_trace_real_imag = ', real(trace, rp), aimag(trace)
+            write(unit, '(es24.16,1x,2(i0,1x),i0,1x,l1,1x,es24.16,1x,4(es24.16,1x),3(es24.16,1x),l1)') &
+               config%eta_values(ieta), gsr_result%equation_rows, gsr_result%unknowns, gsr_result%rank, &
+               gsr_result%rank_deficient, gsr_result%condition_number, gsr_result%equation_residual_norm, &
+               gsr_result%equation_relative_residual, gsr_result%residual_norm, gsr_result%relative_residual, &
+               gsr_result%max_residual_component, real(gsr_result%rigid_overlap, rp), aimag(gsr_result%rigid_overlap), &
+               gsr_result%blocked
+            write(unit, '(a,es24.16,1x,a,es24.16)') '# gsr_singular_values_min_max = ', minval(gsr_result%singular_values), &
+               '#', maxval(gsr_result%singular_values)
+            write(unit, '(a,a)') '# gsr_status = ', trim(gsr_result%status)
+         end if
+         if (allocated(response_result%susceptibility)) deallocate(response_result%susceptibility)
+         if (allocated(response_result%frequencies)) deallocate(response_result%frequencies)
+         if (allocated(gsr_result%singular_values)) deallocate(gsr_result%singular_values)
+      end do
+      if (rank == 0) then
+         write(unit, '(a)') '# denominator_diagnostics = NOT PERFORMED: compact Dyson representation is not certified; leave for TDVK-07'
+         write(unit, '(a)') '# TDVK-06 direct ALSDA static diagnostic = EXECUTED'
+         write(unit, '(a)') '# TDVK-06 independent GSR raw solve = EXECUTED; status is reported without repair or correction'
+         write(unit, '(a)') '# TDVK-06 compact representation certification = PASS'
+         write(unit, '(a)') '# TDVK-06 PASS CANDIDATE'
+         close(unit)
+         write(*, '(a)') 'TDVK-06 compact representation certification = PASS'
+         write(*, '(a)') 'TDVK-06 ALSDA STATIC DIAGNOSTIC EXECUTED'
+         write(*, '(a)') 'TDVK-06 GSR SOLVE EXECUTED status='//trim(gsr_result%status)
+         write(*, '(a)') 'TDVK-06 PASS CANDIDATE'
+      end if
+      if (allocated(magnetization)) deallocate(magnetization)
+      if (allocated(magnetization_compact)) deallocate(magnetization_compact)
+      if (allocated(magnetization_point)) deallocate(magnetization_point)
+      if (allocated(compact_kernel)) deallocate(compact_kernel)
+      if (allocated(field)) deallocate(field)
+      if (allocated(response)) deallocate(response)
+      if (allocated(residual)) deallocate(residual)
+      if (allocated(point_residual)) deallocate(point_residual)
+   end subroutine run_tddft_static_interactions
 
    !> TDVK-02R2 validation-only handoff.  The accepted reciprocal snapshot is
    !> already naturally available here, so the live transition oracle and the

@@ -29,8 +29,109 @@ module pauli_ground_state_projection_mod
    real(rp), parameter :: OCCUPATION_CUTOFF = 1.0e-14_rp
 
    public :: pauli_ground_state_projection
+   public :: compute_accepted_pauli_magnetization
 
 contains
+
+   !> Return the accepted Pauli number-spin magnetization used by LR-03.
+   !>
+   !> This is the same occupied reciprocal eigensystem plus accepted POTPAR
+   !> large-component/core projection used by the LR-02N diagnostic, but it is
+   !> exposed as data for the static TDVK-06 interaction services.  No EF,
+   !> occupation, radial basis, or response-space object is rebuilt here.
+   subroutine compute_accepted_pauli_magnetization(reciprocal_obj, atoms, nbulk, magnetization)
+      type(reciprocal), intent(in) :: reciprocal_obj
+      type(symbolic_atom), intent(in) :: atoms(:)
+      integer, intent(in) :: nbulk
+      real(rp), allocatable, intent(out) :: magnetization(:, :)
+
+      integer :: isite, atom_index, nsite, nmat, norb_site, nr, lmax, ir, ik, ik_global, ib, iorb, ispin, l
+      real(rp), allocatable :: valence_weighted(:, :), pauli_weighted(:, :)
+      real(rp) :: wk, occ, energy, kT, delta_energy, amplitude, radial_amplitude
+      complex(rp) :: coefficient
+
+      if (.not. allocated(reciprocal_obj%eigenvalues) .or. .not. allocated(reciprocal_obj%eigenvectors) .or. &
+          .not. allocated(reciprocal_obj%k_weights)) then
+         error stop 'TDVK-06 Pauli magnetization: accepted reciprocal eigensystem is incomplete'
+      end if
+      if (.not. associated(reciprocal_obj%lattice)) then
+         error stop 'TDVK-06 Pauli magnetization: reciprocal lattice association is missing'
+      end if
+      nsite = reciprocal_obj%lattice%nrec
+      nmat = size(reciprocal_obj%eigenvectors, 1)
+      if (nsite < 1 .or. mod(nmat, nsite) /= 0 .or. mod(nmat/nsite, 2) /= 0) then
+         error stop 'TDVK-06 Pauli magnetization: reciprocal basis is not site-major two-spin'
+      end if
+      norb_site = (nmat/nsite)/2
+      kT = reciprocal_obj%temperature*kB_RY_PER_K
+      nr = 0
+      do isite = 1, nsite
+         atom_index = nbulk + isite
+         if (atom_index < 1 .or. atom_index > size(atoms)) then
+            error stop 'TDVK-06 Pauli magnetization: site-to-atom mapping is outside the accepted state'
+         end if
+         if (.not. atoms(atom_index)%radial_ground_state%valid .or. &
+             .not. atoms(atom_index)%radial_ground_state%accepted .or. &
+             .not. atoms(atom_index)%radial_ground_state%pauli_basis_valid .or. &
+             .not. atoms(atom_index)%radial_ground_state%core_density_valid) then
+            error stop 'TDVK-06 Pauli magnetization: accepted LR-01 Pauli/core projection is incomplete'
+         end if
+         if (nr == 0) nr = size(atoms(atom_index)%radial_ground_state%r)
+         if (size(atoms(atom_index)%radial_ground_state%r) /= nr) then
+            error stop 'TDVK-06 Pauli magnetization: response sites do not share one radial mesh'
+         end if
+      end do
+      allocate(magnetization(nsite, nr))
+      magnetization = 0.0_rp
+
+      do isite = 1, nsite
+         atom_index = nbulk + isite
+         lmax = atoms(atom_index)%radial_ground_state%pauli_lmax
+         allocate(valence_weighted(nr, 2), pauli_weighted(nr, 2))
+         valence_weighted = 0.0_rp
+         do ik = 1, size(reciprocal_obj%eigenvalues, 2)
+            ik_global = ik
+            if (allocated(reciprocal_obj%k_l2g_map)) ik_global = reciprocal_obj%k_l2g_map(ik)
+            wk = reciprocal_obj%k_weights(ik_global)
+            do ib = 1, size(reciprocal_obj%eigenvalues, 1)
+               energy = reciprocal_obj%eigenvalues(ib, ik)
+               occ = fermi_dirac(energy, reciprocal_obj%fermi_level, kT)
+               if (occ <= OCCUPATION_CUTOFF) cycle
+               do ispin = 1, 2
+                  do iorb = 1, norb_site
+                     l = lmto_orbital_l(iorb)
+                     if (l < 0 .or. l > lmax) cycle
+                     coefficient = reciprocal_obj%eigenvectors((isite - 1)*2*norb_site + &
+                        (ispin - 1)*norb_site + iorb, ib, ik)
+                     amplitude = real(coefficient*conjg(coefficient), rp)
+                     delta_energy = energy - atoms(atom_index)%radial_ground_state%pauli_enu(l + 1, ispin)
+                     do ir = 1, nr
+                        radial_amplitude = atoms(atom_index)%radial_ground_state%pauli_large(ir, l + 1, ispin) + &
+                           delta_energy*atoms(atom_index)%radial_ground_state%pauli_large_dot(ir, l + 1, ispin)
+                        valence_weighted(ir, ispin) = valence_weighted(ir, ispin) + &
+                           wk*occ*amplitude*radial_amplitude**2
+                     end do
+                  end do
+               end do
+            end do
+         end do
+         pauli_weighted(:, 1) = valence_weighted(:, 1) + &
+            atoms(atom_index)%radial_ground_state%core_pauli_weighted_up
+         pauli_weighted(:, 2) = valence_weighted(:, 2) + &
+            atoms(atom_index)%radial_ground_state%core_pauli_weighted_down
+         do ir = 1, nr
+            if (ir == 1) then
+               magnetization(isite, ir) = origin_density(pauli_weighted(:, 1), atoms(atom_index)%radial_ground_state%r) - &
+                  origin_density(pauli_weighted(:, 2), atoms(atom_index)%radial_ground_state%r)
+            else
+               magnetization(isite, ir) = pauli_weighted(ir, 1)/(4.0_rp*RADIAL_PI* &
+                  atoms(atom_index)%radial_ground_state%r(ir)**2) - &
+                  pauli_weighted(ir, 2)/(4.0_rp*RADIAL_PI*atoms(atom_index)%radial_ground_state%r(ir)**2)
+            end if
+         end do
+         deallocate(valence_weighted, pauli_weighted)
+      end do
+   end subroutine compute_accepted_pauli_magnetization
 
    !> Evaluate and write the LR-02N diagnostic for every reciprocal site.
    !>
