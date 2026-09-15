@@ -161,10 +161,10 @@ closes R2 exactly at the finite/provider scope claimed by RSGF-01R.
 
 | level | meaning | owner | current status |
 | --- | --- | --- | --- |
-| R0 — representation | native GF has a certified coefficient-space representation contract | LR-GF-01 / LR-REP-00 | **CLOSED** |
-| R1 — endpoint augmentation | coefficient GF can be promoted to the certified Pauli radial/angular one-electron GF | RSGF-00 | **CLOSED** for the certified finite baseline |
-| R2 — bare response | native GF produces the same finite-basis radial/angular `chiKS` as the reciprocal references within controlled provider/integration error | RSGF-01R | **CLOSED** for finite/provider validation |
-| R3 — production lifecycle | a converged material can select native RSGF through the normal post-SCF driver | TDRUN-02 | **PENDING** |
+| R0 — representation | native GF has a certified coefficient-space representation contract | LR-GF-01 / LR-REP-00 | **PASS** |
+| R1 — endpoint augmentation | coefficient GF can be promoted to the certified Pauli radial/angular one-electron GF | RSGF-00 | **PASS** for the certified finite baseline |
+| R2 — bare response | native GF produces the same finite-basis radial/angular `chiKS` as the reciprocal references within controlled provider/integration error | RSGF-01R | **PASS** for finite/provider validation |
+| R3 — production lifecycle | a converged material can select native RSGF through the normal post-SCF driver | TDRUN-02 | **PASS** |
 | R4 — material validation | Fe/Ni production calculations validate the native route | TDVAL-01R | **PENDING** |
 
 R0–R2 must not be relabelled as R3 or R4. The absence of production-driver
@@ -177,11 +177,11 @@ inferring eligibility from stale prose in historical audits:
 
 | capability | owner | status | evidence |
 | --- | --- | --- | --- |
-| native coefficient GF semantics | LR-GF-01 | **CLOSED** | [`LR-GF-01_GF_CONTRACT_EVIDENCE.md`](LR-GF-01_GF_CONTRACT_EVIDENCE.md) and representation bridge |
-| native GF representation conversion | LR-REP-00 | **CLOSED** | [`LR_RS_GF_REPRESENTATION_AUDIT.md`](LR_RS_GF_REPRESENTATION_AUDIT.md), coefficient-space transformations and bridge |
-| Pauli radial endpoint augmentation | RSGF-00 | **CLOSED** for certified finite baseline | [`RSGF_ENDPOINT_AUGMENTATION.md`](RSGF_ENDPOINT_AUGMENTATION.md), `UnitLrGfEndpointAugmentation` |
-| finite native bare response | RSGF-01R | **CLOSED** for finite/provider validation | [`TDDFT_RS_GF_BACKEND.md`](TDDFT_RS_GF_BACKEND.md), `UnitLrRsGfSusceptibility` |
-| production post-SCF registration | TDRUN-02 | **PENDING** | [`TDDFT_PRODUCTION_DRIVER.md`](TDDFT_PRODUCTION_DRIVER.md) is currently reciprocal-only |
+| native coefficient GF semantics | LR-GF-01 | **PASS** | [`LR-GF-01_GF_CONTRACT_EVIDENCE.md`](LR-GF-01_GF_CONTRACT_EVIDENCE.md) and representation bridge |
+| native GF representation conversion | LR-REP-00 | **PASS** | [`LR_RS_GF_REPRESENTATION_AUDIT.md`](LR_RS_GF_REPRESENTATION_AUDIT.md), coefficient-space transformations and bridge |
+| Pauli radial endpoint augmentation | RSGF-00 | **PASS** for certified finite baseline | [`RSGF_ENDPOINT_AUGMENTATION.md`](RSGF_ENDPOINT_AUGMENTATION.md), `UnitLrGfEndpointAugmentation` |
+| finite native bare response | RSGF-01R | **PASS** for finite/provider validation | [`TDDFT_RS_GF_BACKEND.md`](TDDFT_RS_GF_BACKEND.md), `UnitLrRsGfSusceptibility` |
+| production post-SCF registration | TDRUN-02 | **PASS** | [`TDDFT_NATIVE_RSGF_PRODUCTION_INTEGRATION.md`](TDDFT_NATIVE_RSGF_PRODUCTION_INTEGRATION.md), native production smoke and driver/service equivalence |
 | Fe/Ni material validation | TDVAL-01R | **PENDING** | [`TDDFT_COLLINEAR_REVALIDATION.md`](TDDFT_COLLINEAR_REVALIDATION.md); no material rerun in this audit |
 
 Provider-specific block-recursion/Chebyshev convergence remains a separately
@@ -191,17 +191,25 @@ claim.
 
 ## 8. Focused verification
 
-The existing tests were run without source changes:
+The R0–R2 tests and the TDRUN-02 integration checks were rerun after the
+production registration changes:
 
 ```text
-build/bin/UnitLrRsGfRepresentation       -> RESULT: PASS
-build/bin/UnitLrGfEndpointAugmentation   -> PASS (dense, spectral, provider, negative controls)
-build/bin/UnitLrRsGfSusceptibility       -> PASS (native coefficient GF, augmentation, full response, q phase)
+build/bin/UnitLrRsGfRepresentation             -> PASS
+build/bin/UnitLrGfEndpointAugmentation         -> PASS
+build/bin/UnitLrRsGfSusceptibility             -> PASS
+build/bin/UnitTddftProductionDriver            -> PASS (native service/driver equivalence)
+UnitTddftProductionDriverRejectSoc             -> PASS (expected rejection)
+UnitTddftProductionDriverRejectGeneralizedOverlap -> PASS (expected rejection)
+TddftProductionDriverFeatureOff                -> PASS
+TddftProductionDriverSmoke                     -> PASS (reciprocal regression)
+TddftProductionDriverNativeSmoke               -> PASS
 ```
 
 These tests support the ledger’s R0–R2 closure. They do not test production
-backend selection, accepted material state mutation, Fe/Ni physics, or
-literature agreement.
+Fe/Ni physics, provider/material convergence, or literature agreement. The
+native production smoke and the unit service/driver equivalence check support
+R3; they do not promote R4.
 
 ## 9. Historical provenance and cross-references
 
@@ -212,6 +220,17 @@ from production/material work.
 
 No source code or test implementation was changed by RSGF-CLOSE-01.
 
-## 10. Eligibility conclusion
+## 10. TDRUN-02 closure and TDVAL-01R handoff
 
-ELIGIBLE FOR TDRUN-02
+TDRUN-02 completed successfully. The authoritative state after registration is:
+
+```text
+R0 = PASS
+R1 = PASS
+R2 = PASS
+R3 = PASS
+R4 = PENDING
+```
+
+The campaign is now eligible for the requested TDVAL-01R rerun. R4 remains
+pending until Fe/Ni material validation produces its own evidence.

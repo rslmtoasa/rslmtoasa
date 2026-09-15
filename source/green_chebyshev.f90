@@ -18,6 +18,32 @@ submodule (green_mod) green_chebyshev
 
 contains
 
+   module subroutine chebyshev_green_complex_ij(this, istart, z, g_out)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: istart
+      complex(rp), intent(in) :: z
+      complex(rp), intent(out) :: g_out(:, :, :)
+      real(rp) :: a, b, emin_win, emax_win
+      integer :: n, n_mom
+
+      if (size(g_out, 1) /= nb .or. size(g_out, 2) /= nb .or. size(g_out, 3) /= 4) then
+         error stop 'chebyshev_green_complex_ij: output must have shape (nb,nb,4)'
+      end if
+      if (.not. allocated(this%recursion%mu_n) .or. istart < 1 .or. &
+          istart + 3 > size(this%recursion%mu_n, 4)) then
+         error stop 'chebyshev_green_complex_ij: requested pair moments are unavailable'
+      end if
+
+      call this%recursion%resolve_chebyshev_window(emin_win, emax_win)
+      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      b = (emax_win + emin_win)/2.0_rp
+      n_mom = size(this%recursion%mu_n, 3)
+      g_out = cmplx(0.0_rp, 0.0_rp, rp)
+      do n = 1, 4
+         call cheb_green_complex(this%recursion%mu_n(:, :, :, istart + n - 1), nb, n_mom, z, a, b, g_out(:, :, n))
+      end do
+   end subroutine chebyshev_green_complex_ij
+
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief

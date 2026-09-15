@@ -2,8 +2,35 @@
 
 **Campaign date:** 2026-09-11
 **Branch:** `fable_v4`
-**Starting HEAD:** `4381bc1ea6d85e66354a3df3306db4200c765cee`
-**Status:** **BLOCKED** at preflight; no Fe/Ni material validation is claimed.
+**Starting HEAD:** `795b1e4` (`docs: close native RSGF capability gates`)
+**Status:** **PENDING** for R4 material validation; the preflight has been reopened after TDRUN-02.
+
+## TDVAL-01R rerun after TDRUN-02
+
+The authoritative [`RSGF_CAPABILITY_CLOSURE.md`](RSGF_CAPABILITY_CLOSURE.md)
+now records:
+
+```text
+R0 = PASS
+R1 = PASS
+R2 = PASS
+R3 = PASS
+R4 = PENDING
+```
+
+The native-RSGF production material adapter is **AVAILABLE** through the normal
+accepted-ground-state driver lifecycle. The reciprocal production smoke,
+native production smoke, native service/driver equivalence, feature-off path,
+and unsupported SOC/generalized-overlap rejection checks all pass.
+
+This rerun therefore clears the former R0–R3 preflight stop and hands the
+campaign to the Fe/Ni material-validation stages. No TDVAL PASS is claimed:
+the full Fe/Ni convergence, static-invariant, route-separation, and literature
+evidence remains to be generated, so R4 stays **PENDING**.
+
+The pre-TDRUN stopped assessment retained below is historical evidence of the
+earlier gate state; its native-RSGF `BLOCKED` wording is superseded by the
+closure ledger and this rerun handoff.
 
 This section supersedes the historical TDVAL-01 report below. It records the
 production revalidation decision required by TDVAL-01R, including the evidence
@@ -14,10 +41,10 @@ was changed.
 
 The later [`RSGF_CAPABILITY_CLOSURE.md`](RSGF_CAPABILITY_CLOSURE.md) supersedes
 the historical LR-REP-00 native-response blocker for R0–R2: representation,
-endpoint augmentation, and finite/provider bare-response capability are closed
-within their documented scopes. This report remains **BLOCKED** for TDVAL R4
-material validation, and the R3 production-driver registration is a separate
-pending task.
+endpoint augmentation, and finite/provider bare-response capability are pass
+within their documented scopes. TDRUN-02 now also records R3 production-driver
+registration as pass. This report remains **PENDING** for TDVAL R4 material
+validation.
 
 ## TDVAL-01R — production revalidation
 

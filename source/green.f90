@@ -81,6 +81,7 @@ module green_mod
       procedure :: chebyshev_green_gpu
       procedure :: chebyshev_green_eta
       procedure :: chebyshev_green_ij
+      procedure :: chebyshev_green_complex_ij
       procedure :: chebyshev_green_ij_gpu
       procedure :: chebyshev_green_ij_eta
       procedure :: chebyshev_dos_dispatch
@@ -132,6 +133,16 @@ module green_mod
       class(green), intent(inout) :: this
       integer, intent(in) :: istart
    end subroutine chebyshev_green_ij
+
+   !> Evaluate the four native Chebyshev coefficient-GF blocks at one arbitrary
+   !> complex energy, using the same moments and scaling window as the existing
+   !> real-axis Chebyshev reconstruction.
+   module subroutine chebyshev_green_complex_ij(this, istart, z, g_out)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: istart
+      complex(rp), intent(in) :: z
+      complex(rp), intent(out) :: g_out(:, :, :)
+   end subroutine chebyshev_green_complex_ij
 
    module subroutine chebyshev_green_ij_gpu(this, istart)
       class(green), intent(inout) :: this

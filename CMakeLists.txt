@@ -704,6 +704,12 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(TddftProductionDriverFeatureOff PROPERTIES
     LABELS "integration;tddft;tdrun-01;scf;feature-off;regression"
     TIMEOUT 180)
+  add_test(NAME TddftProductionDriverNativeSmoke
+    COMMAND ${TestBinary} input_native.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftProductionDriverNativeSmoke PROPERTIES
+    LABELS "integration;tddft;tdrun-02;native-rsgf;production;smoke"
+    TIMEOUT 240)
   add_test(NAME TddftProductGfClosure
     COMMAND ${TestBinary} input_tdvk03_fe.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)

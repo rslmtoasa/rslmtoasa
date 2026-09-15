@@ -92,6 +92,7 @@ add_library(${PROJECT_NAME} STATIC
     lr_gf_susceptibility.f90
     lr_product_gf_susceptibility.f90
     lr_rs_gf_susceptibility.f90
+    tddft_native_rsgf_provider.f90
     lr_alsda_kernel.f90
     lr_goldstone_sumrule.f90
     lr_goldstone_correction.f90
