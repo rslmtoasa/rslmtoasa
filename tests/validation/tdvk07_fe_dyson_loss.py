@@ -92,8 +92,12 @@ def validate_output(path: Path) -> dict[str, object]:
             raise RuntimeError("GF spot-check quadrature is not TDVK-03 controlled")
     if len(raw_matrix) != 3 * 4 * 232 * 232:
         raise RuntimeError(f"complete raw matrix archive is incomplete: {len(raw_matrix)} rows")
-    if "# TDVK-07 PASS CANDIDATE" not in lines:
-        raise RuntimeError("TDVK-07 PASS CANDIDATE marker is missing")
+    if lines[0] != "# TDDFT compact Dyson response":
+        raise RuntimeError("compact Dyson production provenance header is missing")
+    if any("TDVK-07" in line or "PASS CANDIDATE" in line for line in lines):
+        raise RuntimeError("campaign-specific TDVK-07 marker leaked into production output")
+    if meta.get("dyson_static_audit") != "T" or meta.get("validate_interacting_covariance") != "T":
+        raise RuntimeError("TDVK-07 validation switches were not enabled explicitly")
     return {
         "output": str(path),
         "static_rows": static,

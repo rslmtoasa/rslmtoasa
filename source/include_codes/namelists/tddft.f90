@@ -26,10 +26,12 @@ integer :: gf_integration_points
 real(rp) :: gf_integration_eta
 real(rp) :: gf_energy_margin
 logical :: gf_closure_audit
+logical :: dyson_static_audit
+logical :: validate_interacting_covariance
 logical :: write_full_matrix
 character(len=256) :: output_file
 
 namelist /tddft/ enabled, channel, n_q, q_list, n_omega, use_omega_grid, omega_grid, &
    omega_min, omega_max, eta, n_eta, eta_grid, response_lmax, interaction_route, goldstone_correction, &
    backend, reciprocal_backend_crosscheck, native_rsgf_provider, gf_integration_points, gf_integration_eta, gf_energy_margin, &
-   gf_closure_audit, write_full_matrix, output_file
+   gf_closure_audit, dyson_static_audit, validate_interacting_covariance, write_full_matrix, output_file

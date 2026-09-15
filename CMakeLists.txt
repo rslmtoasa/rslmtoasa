@@ -697,6 +697,16 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitTddftProductionDriverRejectGeneralizedOverlap PROPERTIES
     LABELS "unit;tddft;tdrun-01;negative;capability;generalized-overlap"
     WILL_FAIL TRUE)
+  add_test(NAME UnitTddftProductionDriverRejectStaticAuditWithoutGamma
+    COMMAND UnitTddftProductionDriver static-no-gamma)
+  set_tests_properties(UnitTddftProductionDriverRejectStaticAuditWithoutGamma PROPERTIES
+    LABELS "unit;tddft;tdrun-01;negative;preflight;static-audit"
+    WILL_FAIL TRUE)
+  add_test(NAME UnitTddftProductionDriverRejectCovarianceWithoutPair
+    COMMAND UnitTddftProductionDriver covariance-no-pair)
+  set_tests_properties(UnitTddftProductionDriverRejectCovarianceWithoutPair PROPERTIES
+    LABELS "unit;tddft;tdrun-01;negative;preflight;covariance"
+    WILL_FAIL TRUE)
   add_test(NAME TddftProductionDriverSmoke
     COMMAND ${TestBinary}
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
@@ -755,6 +765,14 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(TddftCompactDysonFe PROPERTIES
     LABELS "validation;tddft;tdvk-07;accepted-state;compact;dyson;loss;alsda;covariance"
     DISABLED TRUE
+    TIMEOUT 7200)
+  add_test(NAME TddftCompactDysonProductionAcceptance
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/tddft_compact_production_acceptance.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/tddft_compact_production_acceptance"
+      "--output" "${CMAKE_BINARY_DIR}/Testing/validation/tddft_compact_production_acceptance.json")
+  set_tests_properties(TddftCompactDysonProductionAcceptance PROPERTIES
+    LABELS "validation;tddft;production;compact;dyson;streaming;black-box"
     TIMEOUT 7200)
   add_test(NAME UnitLrAlsdaKernelRejectProvenance
     COMMAND UnitLrAlsdaKernel provenance)

@@ -80,6 +80,8 @@ gf_integration_points = 9561
 gf_integration_eta = 0.001
 gf_energy_margin = 0.60
 gf_closure_audit = .true.
+dyson_static_audit = .true.
+validate_interacting_covariance = .true.
 write_full_matrix = .true.
 output_file = 'tddft_tdvk07_fe.dat'
 /

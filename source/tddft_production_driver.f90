@@ -98,6 +98,8 @@ module tddft_production_driver_mod
       real(rp) :: gf_integration_eta = 0.0_rp
       real(rp) :: gf_energy_margin = 1.0_rp
       logical :: gf_closure_audit = .false.
+      logical :: dyson_static_audit = .false.
+      logical :: validate_interacting_covariance = .false.
       logical :: write_full_matrix = .true.
       character(len=256) :: output_file = 'tddft_response.dat'
    contains
@@ -176,6 +178,8 @@ contains
       this%gf_integration_eta = 0.0_rp
       this%gf_energy_margin = 1.0_rp
       this%gf_closure_audit = .false.
+      this%dyson_static_audit = .false.
+      this%validate_interacting_covariance = .false.
       this%write_full_matrix = .true.
       this%output_file = 'tddft_response.dat'
       if (allocated(this%q_list)) deallocate(this%q_list)
@@ -223,6 +227,8 @@ contains
       gf_integration_eta = 0.0_rp
       gf_energy_margin = 1.0_rp
       gf_closure_audit = .false.
+      dyson_static_audit = .false.
+      validate_interacting_covariance = .false.
       write_full_matrix = .true.
       output_file = 'tddft_response.dat'
 
@@ -260,6 +266,8 @@ contains
       config%gf_integration_eta = gf_integration_eta
       config%gf_energy_margin = gf_energy_margin
       config%gf_closure_audit = gf_closure_audit
+      config%dyson_static_audit = dyson_static_audit
+      config%validate_interacting_covariance = validate_interacting_covariance
       config%write_full_matrix = write_full_matrix
       config%output_file = trim(output_file)
 
@@ -394,6 +402,33 @@ contains
              trim(config%native_rsgf_provider) /= 'block_recursion' .and. trim(config%native_rsgf_provider) /= 'chebyshev') then
             error stop 'TDDFT input: native_rsgf_provider must be auto, block or chebyshev'
          end if
+      end if
+      if (trim(config%backend) == tddft_driver_backend_compact_dyson) then
+         if (route /= tddft_driver_route_direct_alsda) then
+            error stop 'TDDFT input: compact_dyson requires interaction_route=direct_alsda; rejected before SCF/response work'
+         end if
+         if (config%dyson_static_audit .and. find_gamma_q_index(config%q_list) == 0) then
+            error stop 'TDDFT input: dyson_static_audit requires Gamma in q_list; rejected before SCF/response work'
+         end if
+         if (config%validate_interacting_covariance) then
+            call validate_covariance_q_pair(config%q_list)
+         end if
+         if (config%gf_closure_audit) then
+            if (find_gamma_q_index(config%q_list) == 0) then
+               error stop 'TDDFT input: gf_closure_audit requires Gamma in q_list; rejected before SCF/response work'
+            end if
+            if (config%gf_integration_points < 3 .or. mod(config%gf_integration_points, 2) == 0) then
+               error stop 'TDDFT input: compact GF audit requires an odd gf_integration_points value >= 3'
+            end if
+            if (config%gf_integration_eta <= 0.0_rp .or. config%gf_integration_eta >= config%eta) then
+               error stop 'TDDFT input: compact GF audit requires 0 < gf_integration_eta < eta'
+            end if
+            if (config%gf_energy_margin <= 0.0_rp) then
+               error stop 'TDDFT input: compact GF audit requires gf_energy_margin positive'
+            end if
+         end if
+      else if (config%dyson_static_audit .or. config%validate_interacting_covariance) then
+         error stop 'TDDFT input: compact Dyson validation switches require backend=compact_dyson'
       end if
       if (len_trim(config%output_file) == 0) error stop 'TDDFT input: output_file must not be empty'
       if (route == tddft_driver_route_goldstone_sumrule) then
@@ -862,13 +897,12 @@ contains
       if (allocated(result%frequencies)) deallocate(result%frequencies)
    end subroutine run_tddft_production
 
-   !> TDVK-07 compact Dyson certification and first interacting Fe response.
+   !> Evaluate the compact direct-ALSDA Dyson response.
    !>
-   !> This is a separate production seam from the historical point-space
-   !> `lehmann` backend.  It consumes the accepted compact product Lehmann
-   !> susceptibility, projects the already evaluated direct ALSDA operator
-   !> with the TDVK-06 adapter, and calls the same Dyson service in its
-   !> orthonormal compact mode.  No GSR/BES/GCR correction is reachable here.
+   !> This is the production worker for one accepted state.  The response
+   !> services are evaluated q-by-q and serialized while their q-local result
+   !> objects are live.  Validation audits are explicit opt-ins and add work
+   !> around this worker; they do not define its production input contract.
    subroutine run_tddft_compact_dyson(config, response_space, radial_bases, ground_states, left_state, endpoints, &
                                       reciprocal_obj, lattice_obj, control_obj)
       type(tddft_production_config), intent(in) :: config
@@ -893,63 +927,88 @@ contains
       type(lr_product_gf_susceptibility_result) :: gf_result
       type(lr_product_ks_susceptibility_request) :: gf_lehmann_request
       type(lr_product_ks_susceptibility_result) :: gf_lehmann_result
-      type(tddft_production_result) :: result
-      real(rp), allocatable :: magnetization(:, :), static_frequency(:), static_eta(:)
+      real(rp), allocatable :: magnetization(:, :), static_frequency(:)
       complex(rp), allocatable :: interaction(:, :), opposite_interaction(:, :)
-      real(rp), allocatable :: static_min_sv(:), static_max_sv(:), static_condition(:), static_min_eigen(:)
-      real(rp), allocatable :: static_residual(:), static_residual_relative(:), static_residual_infinity(:)
-      character(len=256), allocatable :: static_status(:)
-      real(rp), allocatable :: norm_ks(:, :), norm_interacting(:, :), loss_real(:, :), loss_imag(:, :)
-      real(rp), allocatable :: min_sv(:, :), max_sv(:, :), condition(:, :), residual(:, :), residual_relative(:, :), residual_infinity(:, :)
-      character(len=256), allocatable :: frequency_status(:, :)
+      real(rp) :: static_eta(2), static_min_sv(2), static_max_sv(2), static_condition(2), static_min_eigen(2)
+      real(rp) :: static_residual(2), static_residual_relative(2), static_residual_infinity(2)
+      character(len=256) :: static_status(2)
       real(rp), allocatable :: covariance_residual(:), covariance_loss_difference(:), covariance_min_sv_difference(:), &
          covariance_condition_difference(:)
-      real(rp), allocatable :: gf_q(:), gf_frequency(:), gf_norm_lehmann(:), gf_norm_gf(:), gf_d_frobenius(:), &
-         gf_relative_frobenius(:), gf_d_infinity(:), gf_integration_eta(:), gf_spacing_ratio(:), gf_energy_min(:), &
-         gf_energy_max(:), gf_energy_spacing(:), gf_wall_seconds(:)
-      integer, allocatable :: gf_q_index(:), gf_integration_points(:)
       logical :: rank_stable, finite_response, covariance_checked
       real(rp) :: state_mesh_max, state_weight_max, state_ef_diff, state_eigen_max, state_occ_max
       real(rp) :: state_projector_max, state_projector_frobenius, k_fingerprint(5), weight_sum, magnetic_moment
-      real(rp) :: trace_loss, trace_ks, trace_interacting
+      real(rp) :: trace_loss, trace_loss_imag
+      real(rp) :: gf_frequency, gf_norm_lehmann, gf_norm_gf, gf_d_frobenius, gf_relative_frobenius, gf_d_infinity
+      real(rp) :: gf_integration_eta, gf_spacing_ratio, gf_energy_min, gf_energy_max, gf_energy_spacing, gf_wall_seconds
       integer :: ndim, nfrequency, nq, iq, iw, i, j, unit, gamma_index, positive_q_index, negative_q_index
-      integer :: gf_count, gf_frequency_index, gf_q_indices(2), static_index
+      integer :: gf_frequency_index, gf_q_index, gf_integration_points
       character(len=256) :: state_file
+      logical :: static_audit_enabled, covariance_enabled, gf_audit_enabled
 
       if (trim(config%interaction_route) /= tddft_driver_route_direct_alsda) then
-         error stop 'TDVK-07 requires direct ALSDA as the primary interaction route'
+         error stop 'compact_dyson requires direct ALSDA as the production interaction route'
       end if
       if (config%goldstone_correction) then
-         error stop 'TDVK-07 forbids BES/GCR/Goldstone correction'
-      end if
-      if (any(reciprocal_obj%nk_mesh /= [12, 12, 12]) .or. left_state%nk /= 1728) then
-         error stop 'BLOCKED — ACCEPTED-STATE CONTINUITY'
+         error stop 'compact_dyson does not apply an implicit BES/GCR/Goldstone correction'
       end if
       call state_consistency_metrics(reciprocal_obj, left_state, state_mesh_max, state_weight_max, state_ef_diff, &
          state_eigen_max, state_occ_max, state_projector_max, state_projector_frobenius)
       if (max(state_mesh_max, state_weight_max, state_ef_diff, state_eigen_max, state_occ_max, state_projector_max, &
           state_projector_frobenius) > 5.0e-11_rp) then
-         error stop 'BLOCKED — ACCEPTED-STATE CONTINUITY'
+         error stop 'compact_dyson: accepted-state continuity contract failed'
       end if
 
-      call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
-      call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
+      static_audit_enabled = config%dyson_static_audit
+      covariance_enabled = config%validate_interacting_covariance
+      gf_audit_enabled = config%gf_closure_audit
+      gamma_index = find_gamma_q_index(config%q_list)
+      if (static_audit_enabled .and. gamma_index == 0) then
+         error stop 'compact_dyson: dyson_static_audit requires Gamma; input should have been rejected during preflight'
+      end if
+      if (gf_audit_enabled .and. gamma_index == 0) then
+         error stop 'compact_dyson: gf_closure_audit requires Gamma; input should have been rejected during preflight'
+      end if
+      positive_q_index = 0
+      negative_q_index = 0
+      if (covariance_enabled) call find_covariance_q_indices(config%q_list, positive_q_index, negative_q_index)
+
+      if (trim(config%channel) == 'chi_plus') then
+         call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
+         product => product_plus
+      else
+         call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
+         product => product_minus
+      end if
       rank_stable = .true.
-      do i = 1, product_plus%nsite
-         do j = 0, product_plus%response_lmax
-            rank_stable = rank_stable .and. product_plus%blocks(i, j)%rank_stable .and. &
-               product_minus%blocks(i, j)%rank_stable
+      do i = 1, product%nsite
+         do j = 0, product%response_lmax
+            rank_stable = rank_stable .and. product%blocks(i, j)%rank_stable
          end do
       end do
-      if (.not. rank_stable .or. product_plus%product_dimension /= 232 .or. product_minus%product_dimension /= 232) then
-         error stop 'BLOCKED — ACCEPTED-STATE CONTINUITY'
+      if (.not. rank_stable .or. product%product_dimension < 1) then
+         error stop 'compact_dyson: retained compact product basis is empty or rank-unstable'
       end if
-      if (trim(config%channel) == 'chi_plus') then
-         product => product_plus
-         opposite_product => product_minus
-      else
-         product => product_minus
-         opposite_product => product_plus
+      if (response_space%response_lmax /= 2*ground_states(1)%pauli_lmax) then
+         error stop 'compact_dyson: production requires the complete retained compact product basis'
+      end if
+      if (covariance_enabled) then
+         if (trim(config%channel) == 'chi_plus') then
+            call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
+            opposite_product => product_minus
+         else
+            call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
+            opposite_product => product_plus
+         end if
+         if (opposite_product%product_dimension /= product%product_dimension) then
+            error stop 'compact_dyson: covariance requested but plus/minus product dimensions differ'
+         end if
+         do i = 1, opposite_product%nsite
+            do j = 0, opposite_product%response_lmax
+               if (.not. opposite_product%blocks(i, j)%rank_stable) then
+                  error stop 'compact_dyson: covariance requested but opposite product basis is rank-unstable'
+               end if
+            end do
+         end do
       end if
       ndim = product%product_dimension
       nfrequency = size(config%frequencies)
@@ -964,252 +1023,23 @@ contains
       allocate(kxc_request%pauli_magnetization(size(ground_states), response_space%npoint))
       kxc_request%pauli_magnetization = magnetization
       call evaluate_lr_alsda_kernel(kxc_request, kxc_result)
-      allocate(interaction(ndim, ndim), opposite_interaction(ndim, ndim))
+      allocate(interaction(ndim, ndim))
       call compact_project_local_operator(response_space, product, cmplx(kxc_result%pointwise_kernel, 0.0_rp, rp), interaction)
-      call compact_project_local_operator(response_space, opposite_product, cmplx(kxc_result%pointwise_kernel, 0.0_rp, rp), &
-         opposite_interaction)
-
-      result%initialized = .true.
-      result%nq = nq
-      result%nfrequency = nfrequency
-      result%ndim = ndim
-      result%response_lmax = response_space%response_lmax
-      result%compact_orthonormal = .true.
-      result%q_list = config%q_list
-      result%frequencies = config%frequencies
-      result%interaction_route = trim(config%interaction_route)
-      result%backend = trim(config%backend)
-      result%interaction_provenance = 'KXC-01 direct ALSDA LR-03; compact projection U^H K_point U'
-      result%goldstone_correction_status = 'OFF; BES/GCR not invoked'
-      allocate(result%ks_susceptibility(ndim, ndim, nfrequency, nq), &
-         result%enhanced_susceptibility(ndim, ndim, nfrequency, nq), result%loss_matrix(ndim, ndim, nfrequency, nq), &
-         norm_ks(nfrequency, nq), norm_interacting(nfrequency, nq), loss_real(nfrequency, nq), loss_imag(nfrequency, nq), &
-         min_sv(nfrequency, nq), max_sv(nfrequency, nq), condition(nfrequency, nq), residual(nfrequency, nq), &
-         residual_relative(nfrequency, nq), residual_infinity(nfrequency, nq), frequency_status(nfrequency, nq))
-      result%ks_susceptibility = cmplx(0.0_rp, 0.0_rp, rp)
-      result%enhanced_susceptibility = cmplx(0.0_rp, 0.0_rp, rp)
-      result%loss_matrix = cmplx(0.0_rp, 0.0_rp, rp)
-
-      ! Static Gamma denominator diagnostics use exactly the prescribed two
-      ! physical broadenings and the same accepted state.  No denominator
-      ! modification or Goldstone correction is possible in this routine.
       static_eta = [0.01_rp, 0.005_rp]
-      allocate(static_min_sv(2), static_max_sv(2), static_condition(2), static_min_eigen(2), static_residual(2), &
-         static_residual_relative(2), static_residual_infinity(2), static_status(2), static_frequency(1))
-      static_frequency(1) = 0.0_rp
-      gamma_index = find_gamma_q(config%q_list)
-      bare_request%q = config%q_list(:, gamma_index)
-      bare_request%frequencies = static_frequency
-      bare_request%channel = config%channel
-      bare_request%product_basis => product
-      bare_request%electronic_state => left_state
-      bare_request%q_endpoint_state => endpoints(gamma_index)
-      do static_index = 1, 2
-         bare_request%eta = static_eta(static_index)
-         call evaluate_lr_product_ks_susceptibility(bare_request, bare_result)
-         dyson_request%response_space => response_space
-         dyson_request%compact_orthonormal = .true.
-         dyson_request%q = config%q_list(:, gamma_index)
-         dyson_request%frequencies = static_frequency
-         dyson_request%eta = static_eta(static_index)
-         dyson_request%channel = config%channel
-         dyson_request%ks_susceptibility = bare_result%susceptibility
-         dyson_request%canonical_interaction = interaction
-         dyson_request%interaction_route = tddft_driver_route_direct_alsda
-         dyson_request%interaction_provenance = 'KXC-01 direct ALSDA LR-03'
-         dyson_request%electronic_state_provenance = 'accepted 12^3 k-space SCF state; SCF occupations and EF fixed'
-         dyson_request%response_space_metadata = 'product_dimension=232; orthonormal compact product space'
-         call evaluate_tddft_dyson(dyson_request, dyson_result)
-         static_min_sv(static_index) = dyson_result%denominator_min_singular_value(1)
-         static_max_sv(static_index) = dyson_result%denominator_max_singular_value(1)
-         static_condition(static_index) = dyson_result%denominator_condition_number(1)
-         static_min_eigen(static_index) = dyson_result%denominator_min_magnitude_eigenvalue(1)
-         static_residual(static_index) = dyson_result%dyson_residual_frobenius(1)
-         static_residual_relative(static_index) = dyson_result%dyson_residual_relative(1)
-         static_residual_infinity(static_index) = dyson_result%dyson_residual_infinity(1)
-         static_status(static_index) = dyson_result%frequency_status(1)
-         if (.not. dyson_result%solve_succeeded(1)) then
-            error stop 'BLOCKED — DYSON DENOMINATOR SINGULARITY'
-         end if
+      if (covariance_enabled) then
+         allocate(opposite_interaction(ndim, ndim))
+         call compact_project_local_operator(response_space, opposite_product, cmplx(kxc_result%pointwise_kernel, 0.0_rp, rp), &
+            opposite_interaction)
+         allocate(covariance_residual(nfrequency), covariance_loss_difference(nfrequency), &
+            covariance_min_sv_difference(nfrequency), covariance_condition_difference(nfrequency))
+         covariance_checked = .false.
+      end if
+
+      if (static_audit_enabled) allocate(static_frequency(1))
+      magnetic_moment = 0.0_rp
+      do i = 1, size(ground_states)
+         magnetic_moment = magnetic_moment + ground_states(i)%integrated_moment_muB
       end do
-
-      do iq = 1, nq
-         bare_request%q = config%q_list(:, iq)
-         bare_request%frequencies = config%frequencies
-         bare_request%eta = config%eta
-         bare_request%q_endpoint_state => endpoints(iq)
-         call evaluate_lr_product_ks_susceptibility(bare_request, bare_result)
-         finite_response = all(ieee_is_finite(real(bare_result%susceptibility, rp))) .and. &
-            all(ieee_is_finite(aimag(bare_result%susceptibility)))
-         if (.not. finite_response) error stop 'BLOCKED — DYSON DENOMINATOR SINGULARITY'
-         dyson_request%response_space => response_space
-         dyson_request%compact_orthonormal = .true.
-         dyson_request%q = config%q_list(:, iq)
-         dyson_request%frequencies = config%frequencies
-         dyson_request%eta = config%eta
-         dyson_request%channel = config%channel
-         dyson_request%ks_susceptibility = bare_result%susceptibility
-         dyson_request%canonical_interaction = interaction
-         dyson_request%interaction_route = tddft_driver_route_direct_alsda
-         dyson_request%interaction_provenance = 'KXC-01 direct ALSDA LR-03'
-         dyson_request%electronic_state_provenance = 'accepted 12^3 k-space SCF state; SCF occupations and EF fixed'
-         dyson_request%response_space_metadata = 'product_dimension=232; orthonormal compact product space'
-         call evaluate_tddft_dyson(dyson_request, dyson_result)
-         if (any(.not. dyson_result%solve_succeeded)) then
-            error stop 'BLOCKED — DYSON DENOMINATOR SINGULARITY'
-         end if
-         result%ks_susceptibility(:, :, :, iq) = bare_result%susceptibility
-         result%enhanced_susceptibility(:, :, :, iq) = dyson_result%enhanced_susceptibility
-         result%loss_matrix(:, :, :, iq) = dyson_result%loss_matrix
-         do iw = 1, nfrequency
-            norm_ks(iw, iq) = sqrt(sum(abs(bare_result%susceptibility(:, :, iw))**2))
-            norm_interacting(iw, iq) = sqrt(sum(abs(dyson_result%enhanced_susceptibility(:, :, iw))**2))
-            trace_loss = 0.0_rp
-            trace_ks = 0.0_rp
-            trace_interacting = 0.0_rp
-            do i = 1, ndim
-               trace_loss = trace_loss + real(dyson_result%loss_matrix(i, i, iw), rp)
-               trace_ks = trace_ks + real(bare_result%susceptibility(i, i, iw), rp)
-               trace_interacting = trace_interacting + real(dyson_result%enhanced_susceptibility(i, i, iw), rp)
-            end do
-            loss_real(iw, iq) = trace_loss
-            loss_imag(iw, iq) = 0.0_rp
-            do i = 1, ndim
-               loss_imag(iw, iq) = loss_imag(iw, iq) + aimag(dyson_result%loss_matrix(i, i, iw))
-            end do
-            min_sv(iw, iq) = dyson_result%denominator_min_singular_value(iw)
-            max_sv(iw, iq) = dyson_result%denominator_max_singular_value(iw)
-            condition(iw, iq) = dyson_result%denominator_condition_number(iw)
-            residual(iw, iq) = dyson_result%dyson_residual_frobenius(iw)
-            residual_relative(iw, iq) = dyson_result%dyson_residual_relative(iw)
-            residual_infinity(iw, iq) = dyson_result%dyson_residual_infinity(iw)
-            frequency_status(iw, iq) = dyson_result%frequency_status(iw)
-         end do
-         result%status = trim(dyson_result%status)
-      end do
-
-      ! Interacting q/-q covariance is evaluated with the already established
-      ! compact transport.  The selected channel is compared with the
-      ! opposite circular channel at (-q,-omega), with no phase patching.
-      positive_q_index = find_first_nonzero_q(config%q_list)
-      negative_q_index = find_matching_q(config%q_list, -config%q_list(:, positive_q_index), 2.0e-11_rp)
-      if (positive_q_index == 0 .or. negative_q_index == 0) then
-         error stop 'BLOCKED — INTERACTING Q/-Q COVARIANCE'
-      end if
-      allocate(covariance_residual(nfrequency), covariance_loss_difference(nfrequency), &
-         covariance_min_sv_difference(nfrequency), covariance_condition_difference(nfrequency))
-      opposite_bare_request%q = -config%q_list(:, positive_q_index)
-      opposite_bare_request%frequencies = -config%frequencies
-      opposite_bare_request%eta = config%eta
-      if (trim(config%channel) == 'chi_plus') then
-         opposite_bare_request%channel = 'chi_minus'
-      else
-         opposite_bare_request%channel = 'chi_plus'
-      end if
-      opposite_bare_request%product_basis => opposite_product
-      opposite_bare_request%electronic_state => left_state
-      opposite_bare_request%q_endpoint_state => endpoints(negative_q_index)
-      call evaluate_lr_product_ks_susceptibility(opposite_bare_request, opposite_bare_result)
-      opposite_dyson_request%response_space => response_space
-      opposite_dyson_request%compact_orthonormal = .true.
-      opposite_dyson_request%q = opposite_bare_request%q
-      opposite_dyson_request%frequencies = opposite_bare_request%frequencies
-      opposite_dyson_request%eta = config%eta
-      opposite_dyson_request%channel = opposite_bare_request%channel
-      opposite_dyson_request%ks_susceptibility = opposite_bare_result%susceptibility
-      opposite_dyson_request%canonical_interaction = opposite_interaction
-      opposite_dyson_request%interaction_route = tddft_driver_route_direct_alsda
-      opposite_dyson_request%interaction_provenance = 'KXC-01 direct ALSDA LR-03'
-      opposite_dyson_request%electronic_state_provenance = 'accepted 12^3 k-space SCF state; SCF occupations and EF fixed'
-      opposite_dyson_request%response_space_metadata = 'product_dimension=232; orthonormal compact product space'
-      call evaluate_tddft_dyson(opposite_dyson_request, opposite_dyson_result)
-      if (any(.not. opposite_dyson_result%solve_succeeded)) then
-         error stop 'BLOCKED — INTERACTING Q/-Q COVARIANCE'
-      end if
-      covariance_checked = .true.
-      do iw = 1, nfrequency
-         if (trim(config%channel) == 'chi_plus') then
-            call compact_covariance_matrix_residual(product_plus, product_minus, result%enhanced_susceptibility(:, :, iw, positive_q_index), &
-               opposite_dyson_result%enhanced_susceptibility(:, :, iw), covariance_residual(iw))
-            call compact_covariance_matrix_residual(product_plus, product_minus, result%loss_matrix(:, :, iw, positive_q_index), &
-               -opposite_dyson_result%loss_matrix(:, :, iw), covariance_loss_difference(iw))
-         else
-            call compact_covariance_matrix_residual(product_plus, product_minus, opposite_dyson_result%enhanced_susceptibility(:, :, iw), &
-               result%enhanced_susceptibility(:, :, iw, positive_q_index), covariance_residual(iw))
-            call compact_covariance_matrix_residual(product_plus, product_minus, opposite_dyson_result%loss_matrix(:, :, iw), &
-               -result%loss_matrix(:, :, iw, positive_q_index), covariance_loss_difference(iw))
-         end if
-         covariance_min_sv_difference(iw) = abs(min_sv(iw, positive_q_index) - &
-            opposite_dyson_result%denominator_min_singular_value(iw))
-         covariance_condition_difference(iw) = abs(condition(iw, positive_q_index) - &
-            opposite_dyson_result%denominator_condition_number(iw))
-      end do
-      if (.not. covariance_checked .or. maxval(covariance_residual) > 5.0e-8_rp .or. &
-          maxval(covariance_loss_difference) > 5.0e-8_rp) then
-         error stop 'BLOCKED — INTERACTING Q/-Q COVARIANCE'
-      end if
-
-      gf_count = 0
-      if (config%gf_closure_audit) then
-         ! One representative Gamma bare spot is sufficient for this
-         ! milestone; the complete q/omega archive remains Lehmann+Dyson.
-         gf_count = 1
-      end if
-      if (gf_count > 0) then
-         allocate(gf_q_index(gf_count), gf_q(gf_count), gf_frequency(gf_count), gf_norm_lehmann(gf_count), &
-            gf_norm_gf(gf_count), gf_d_frobenius(gf_count), gf_relative_frobenius(gf_count), gf_d_infinity(gf_count), &
-            gf_integration_eta(gf_count), gf_spacing_ratio(gf_count), gf_energy_min(gf_count), gf_energy_max(gf_count), &
-            gf_energy_spacing(gf_count), gf_wall_seconds(gf_count), gf_integration_points(gf_count))
-         gf_q_indices(1) = gamma_index
-         gf_q_indices(2) = positive_q_index
-         gf_frequency_index = 1
-         do iw = 1, nfrequency
-            if (abs(config%frequencies(iw)) > 1.0e-12_rp) then
-               gf_frequency_index = iw
-               exit
-            end if
-         end do
-         do i = 1, gf_count
-            gf_q_index(i) = gf_q_indices(i)
-            gf_q(i) = real(gf_q_index(i), rp)
-            gf_frequency(i) = config%frequencies(gf_frequency_index)
-            gf_request%q = config%q_list(:, gf_q_index(i))
-            gf_request%frequencies = [gf_frequency(i)]
-            gf_request%eta = config%eta
-            gf_request%channel = config%channel
-            gf_request%integration_points = config%gf_integration_points
-            gf_request%integration_eta = config%gf_integration_eta
-            gf_request%energy_margin = config%gf_energy_margin
-            gf_request%product_basis => product
-            gf_request%electronic_state => left_state
-            gf_request%q_endpoint_state => endpoints(gf_q_index(i))
-            call evaluate_lr_product_gf_susceptibility(gf_request, gf_result)
-            gf_lehmann_request%q = gf_request%q
-            gf_lehmann_request%frequencies = gf_request%frequencies
-            gf_lehmann_request%eta = config%eta
-            gf_lehmann_request%channel = config%channel
-            gf_lehmann_request%product_basis => product
-            gf_lehmann_request%electronic_state => left_state
-            gf_lehmann_request%q_endpoint_state => endpoints(gf_q_index(i))
-            call evaluate_lr_product_ks_susceptibility(gf_lehmann_request, gf_lehmann_result)
-            gf_norm_lehmann(i) = sqrt(sum(abs(gf_lehmann_result%susceptibility(:, :, 1))**2))
-            gf_norm_gf(i) = sqrt(sum(abs(gf_result%susceptibility(:, :, 1))**2))
-            gf_d_frobenius(i) = sqrt(sum(abs(gf_lehmann_result%susceptibility(:, :, 1) - &
-               gf_result%susceptibility(:, :, 1))**2))
-            gf_relative_frobenius(i) = gf_d_frobenius(i)/max(sqrt(sum(abs(gf_lehmann_result%susceptibility(:, :, 1))**2)), &
-               sqrt(sum(abs(gf_result%susceptibility(:, :, 1))**2)), tiny(1.0_rp))
-            gf_d_infinity(i) = maxval(abs(gf_lehmann_result%susceptibility(:, :, 1) - gf_result%susceptibility(:, :, 1)))
-            gf_integration_eta(i) = gf_result%actual_integration_eta
-            gf_spacing_ratio(i) = gf_result%spacing_over_integration_eta
-            gf_energy_min(i) = gf_result%energy_min
-            gf_energy_max(i) = gf_result%energy_max
-            gf_energy_spacing(i) = gf_result%energy_spacing
-            gf_wall_seconds(i) = gf_result%wall_time_seconds
-            gf_integration_points(i) = gf_result%integration_points
-         end do
-      end if
-
-      magnetic_moment = sum([(ground_states(i)%integrated_moment_muB, i=1,size(ground_states))])
       weight_sum = sum(left_state%k_weights)
       k_fingerprint = 0.0_rp
       do i = 1, left_state%nk
@@ -1220,17 +1050,25 @@ contains
       state_file = trim(config%output_file)//'.state'
       if (rank == 0) then
          open(newunit=unit, file=trim(config%output_file), status='replace', action='write')
-         write(unit, '(a)') '# TDVK-07 compact Dyson certification and first Fe interacting/loss response'
+         write(unit, '(a)') '# TDDFT compact Dyson response'
          write(unit, '(a,a)') '# build_version = ', trim(tddft_build_version)
          write(unit, '(a)') '# backend = compact_dyson'
-         write(unit, '(a)') '# response_representation = orthonormal compact LMTO product representation; dimension=232'
+         write(unit, '(a,i0)') '# response_representation = orthonormal compact LMTO product representation; dimension=', ndim
          write(unit, '(a)') '# compact_dyson_equation = (I-chiKS*Kxc) chi = chiKS; LAPACK zgesv; no explicit inverse'
          write(unit, '(a)') '# loss_convention = L=-(chi-chi^dagger)/(2*i*pi), ordinary dagger in orthonormal compact space'
          write(unit, '(a)') '# state_source = accepted_kspace_scf_cache'
          write(unit, '(a)') '# accepted_state_cache_reused = T'
          write(unit, '(a)') '# reciprocal_rebuild_performed_for_tddft = F'
+         write(unit, '(a,a)') '# structure_calctype = ', control_obj%calctype
+         write(unit, '(a,es24.16)') '# structure_alat = ', lattice_obj%alat
+         write(unit, '(a,i0)') '# structure_ntype = ', lattice_obj%ntype
+         write(unit, '(a,i0)') '# structure_nrec = ', lattice_obj%nrec
+         write(unit, '(a,a)') '# structure_symbols = ', trim(lattice_obj%symbolic_atoms(lattice_obj%nbulk + 1)%element%symbol)
          write(unit, '(a,3(i0,1x))') '# accepted_k_mesh = ', reciprocal_obj%nk_mesh
          write(unit, '(a,i0)') '# accepted_k_count = ', left_state%nk
+         write(unit, '(a,i0)') '# product_dimension = ', ndim
+         write(unit, '(a,i0)') '# response_angular_cutoff = ', response_space%response_lmax
+         write(unit, '(a,a)') '# channel = ', trim(config%channel)
          write(unit, '(a,es24.16)') '# accepted_state_EF_Ry = ', left_state%fermi_level
          write(unit, '(a,es24.16)') '# scf_tdft_EF_difference_Ry = ', state_ef_diff
          write(unit, '(a,es24.16)') '# accepted_state_temperature_K = ', left_state%temperature
@@ -1245,10 +1083,9 @@ contains
          write(unit, '(a,es24.16)') '# state_consistency_projector_frobenius = ', state_projector_frobenius
          write(unit, '(a,a)') '# state_artifact = ', trim(state_file)
          write(unit, '(a,a)') '# interaction_route = ', trim(config%interaction_route)
-         write(unit, '(a,a)') '# interaction_provenance = ', trim(result%interaction_provenance)
-         write(unit, '(a)') '# GSR = diagnostic only — blocked by conditioning; not used'
+         write(unit, '(a)') '# interaction_provenance = KXC-01 direct ALSDA LR-03; compact projection U^H K_point U'
          write(unit, '(a)') '# BES_GCR_goldstone_correction = OFF'
-         write(unit, '(a)') '# mode_assignment_stiffness_damping_literature_comparison = NOT PERFORMED'
+         write(unit, '(a)') '# correction_status = no implicit Goldstone/BES/GCR correction'
          write(unit, '(a,es24.16)') '# physical_eta_Ry = ', config%eta
          write(unit, '(a,i0)') '# frequency_count = ', nfrequency
          do iw = 1, nfrequency
@@ -1259,63 +1096,243 @@ contains
          do iq = 1, nq
             write(unit, '(a,i0,3(1x,es24.16))') '# q_index = ', iq, config%q_list(:, iq)
          end do
-         write(unit, '(a)') '# static_denominator columns: eta_Ry min_singular_value max_singular_value condition_number min_magnitude_eigenvalue residual_F residual_relative residual_dInf'
-         do static_index = 1, 2
-            write(unit, '(8(es24.16,1x))') static_eta(static_index), static_min_sv(static_index), static_max_sv(static_index), &
-               static_condition(static_index), static_min_eigen(static_index), static_residual(static_index), &
-               static_residual_relative(static_index), static_residual_infinity(static_index)
-            write(unit, '(a,es24.16,1x,a)') '# static_solver_status eta=', static_eta(static_index), trim(static_status(static_index))
-         end do
-         write(unit, '(a)') '# static_rigid_vector_overlap = unavailable in the existing Dyson eigensolver API'
+         write(unit, '(a,l1)') '# dyson_static_audit = ', static_audit_enabled
+         write(unit, '(a,l1)') '# validate_interacting_covariance = ', covariance_enabled
+         write(unit, '(a,l1)') '# gf_closure_audit = ', gf_audit_enabled
+         if (static_audit_enabled) then
+            write(unit, '(a)') '# static_denominator = validation diagnostic; fixed eta values are 0.01 and 0.005 Ry'
+            write(unit, '(a)') '# static_denominator columns: eta_Ry min_singular_value max_singular_value condition_number min_magnitude_eigenvalue residual_F residual_relative residual_dInf'
+         end if
          write(unit, '(a)') '# dynamic_metrics columns: q_index qx qy qz omega_Ry norm_chiKS norm_chi loss_trace_real loss_trace_imag min_sv max_sv condition residual_F residual_relative residual_dInf'
-         do iq = 1, nq
-            do iw = 1, nfrequency
-               write(unit, '(i0,1x,4(es24.16,1x),10(es24.16,1x))') iq, config%q_list(:, iq), config%frequencies(iw), &
-                  norm_ks(iw, iq), norm_interacting(iw, iq), loss_real(iw, iq), loss_imag(iw, iq), min_sv(iw, iq), &
-                  max_sv(iw, iq), condition(iw, iq), residual(iw, iq), residual_relative(iw, iq), residual_infinity(iw, iq)
-               write(unit, '(a,i0,1x,es24.16,1x,a)') '# dynamic_solver_status q_index=', iq, config%frequencies(iw), &
-                  trim(frequency_status(iw, iq))
-            end do
-         end do
          if (config%write_full_matrix) then
             write(unit, '(a)') '# raw_matrix columns: q_index omega_Ry row column chiKS_real chiKS_imag chi_real chi_imag loss_real loss_imag'
-            do iq = 1, nq
-               do iw = 1, nfrequency
+         else
+            write(unit, '(a)') '# output_storage_mode = streaming_summary'
+            write(unit, '(a)') '# maximum_retained_q_batches = 1 (q-local bare, Dyson, and loss matrices)'
+         end if
+         if (config%write_full_matrix) then
+            write(unit, '(a)') '# output_storage_mode = streaming_full_matrix'
+            write(unit, '(a)') '# maximum_retained_q_batches = 1 (q-local bare, Dyson, and loss matrices)'
+         end if
+         if (covariance_enabled) then
+            write(unit, '(a)') '# interacting_covariance = validation diagnostic; complete compact matrix transport'
+            write(unit, '(a)') '# interacting_covariance columns: positive_q_index negative_q_index omega_Ry residual loss_difference min_sv_difference condition_difference'
+         end if
+         if (gf_audit_enabled) then
+            write(unit, '(a)') '# gf_spots columns: q_index qx qy qz omega_Ry integration_points integration_eta spacing_over_eta energy_min_Ry energy_max_Ry h_Ry norm_lehmann norm_gf dF rF dInf wall_seconds'
+         end if
+      end if
+
+      if (static_audit_enabled) then
+         static_frequency(1) = 0.0_rp
+         bare_request%q = config%q_list(:, gamma_index)
+         bare_request%frequencies = static_frequency
+         bare_request%channel = config%channel
+         bare_request%product_basis => product
+         bare_request%electronic_state => left_state
+         bare_request%q_endpoint_state => endpoints(gamma_index)
+         do i = 1, 2
+            bare_request%eta = static_eta(i)
+            call evaluate_lr_product_ks_susceptibility(bare_request, bare_result)
+            dyson_request%response_space => response_space
+            dyson_request%compact_orthonormal = .true.
+            dyson_request%q = config%q_list(:, gamma_index)
+            dyson_request%frequencies = static_frequency
+            dyson_request%eta = static_eta(i)
+            dyson_request%channel = config%channel
+            dyson_request%ks_susceptibility = bare_result%susceptibility
+            dyson_request%canonical_interaction = interaction
+            dyson_request%interaction_route = tddft_driver_route_direct_alsda
+            dyson_request%interaction_provenance = 'KXC-01 direct ALSDA LR-03'
+            dyson_request%electronic_state_provenance = 'accepted k-space SCF state; SCF occupations and EF fixed'
+            dyson_request%response_space_metadata = 'product_dimension='//trim(int2str(ndim))//'; orthonormal compact product space'
+            call evaluate_tddft_dyson(dyson_request, dyson_result)
+            static_min_sv(i) = dyson_result%denominator_min_singular_value(1)
+            static_max_sv(i) = dyson_result%denominator_max_singular_value(1)
+            static_condition(i) = dyson_result%denominator_condition_number(1)
+            static_min_eigen(i) = dyson_result%denominator_min_magnitude_eigenvalue(1)
+            static_residual(i) = dyson_result%dyson_residual_frobenius(1)
+            static_residual_relative(i) = dyson_result%dyson_residual_relative(1)
+            static_residual_infinity(i) = dyson_result%dyson_residual_infinity(1)
+            static_status(i) = dyson_result%frequency_status(1)
+            if (.not. dyson_result%solve_succeeded(1)) error stop 'compact_dyson static audit: Dyson solve failed'
+            if (rank == 0) then
+               write(unit, '(8(es24.16,1x))') static_eta(i), static_min_sv(i), static_max_sv(i), static_condition(i), &
+                  static_min_eigen(i), static_residual(i), static_residual_relative(i), static_residual_infinity(i)
+               write(unit, '(a,es24.16,1x,a)') '# static_solver_status eta=', static_eta(i), trim(static_status(i))
+            end if
+         end do
+         if (rank == 0) write(unit, '(a)') '# static_rigid_vector_overlap = unavailable in the existing Dyson eigensolver API'
+      end if
+
+      do iq = 1, nq
+         bare_request%q = config%q_list(:, iq)
+         bare_request%frequencies = config%frequencies
+         bare_request%eta = config%eta
+         bare_request%channel = config%channel
+         bare_request%product_basis => product
+         bare_request%electronic_state => left_state
+         bare_request%q_endpoint_state => endpoints(iq)
+         call evaluate_lr_product_ks_susceptibility(bare_request, bare_result)
+         finite_response = all(ieee_is_finite(real(bare_result%susceptibility, rp))) .and. &
+            all(ieee_is_finite(aimag(bare_result%susceptibility)))
+         if (.not. finite_response) error stop 'compact_dyson: bare compact response contains NaN or Inf'
+         dyson_request%response_space => response_space
+         dyson_request%compact_orthonormal = .true.
+         dyson_request%q = config%q_list(:, iq)
+         dyson_request%frequencies = config%frequencies
+         dyson_request%eta = config%eta
+         dyson_request%channel = config%channel
+         dyson_request%ks_susceptibility = bare_result%susceptibility
+         dyson_request%canonical_interaction = interaction
+         dyson_request%interaction_route = tddft_driver_route_direct_alsda
+         dyson_request%interaction_provenance = 'KXC-01 direct ALSDA LR-03'
+         dyson_request%electronic_state_provenance = 'accepted k-space SCF state; SCF occupations and EF fixed'
+         dyson_request%response_space_metadata = 'product_dimension='//trim(int2str(ndim))//'; orthonormal compact product space'
+         call evaluate_tddft_dyson(dyson_request, dyson_result)
+         if (any(.not. dyson_result%solve_succeeded)) error stop 'compact_dyson: Dyson denominator solve failed'
+         finite_response = all(ieee_is_finite(real(dyson_result%enhanced_susceptibility, rp))) .and. &
+            all(ieee_is_finite(aimag(dyson_result%enhanced_susceptibility))) .and. &
+            all(ieee_is_finite(real(dyson_result%loss_matrix, rp))) .and. &
+            all(ieee_is_finite(aimag(dyson_result%loss_matrix)))
+         if (.not. finite_response) error stop 'compact_dyson: interacting compact response contains NaN or Inf'
+
+         if (rank == 0) then
+            do iw = 1, nfrequency
+               trace_loss = 0.0_rp
+               trace_loss_imag = 0.0_rp
+               do i = 1, ndim
+                  trace_loss = trace_loss + real(dyson_result%loss_matrix(i, i, iw), rp)
+                  trace_loss_imag = trace_loss_imag + aimag(dyson_result%loss_matrix(i, i, iw))
+               end do
+               write(unit, '(i0,1x,4(es24.16,1x),10(es24.16,1x))') iq, config%q_list(:, iq), config%frequencies(iw), &
+                  sqrt(sum(abs(bare_result%susceptibility(:, :, iw))**2)), &
+                  sqrt(sum(abs(dyson_result%enhanced_susceptibility(:, :, iw))**2)), trace_loss, trace_loss_imag, &
+                  dyson_result%denominator_min_singular_value(iw), dyson_result%denominator_max_singular_value(iw), &
+                  dyson_result%denominator_condition_number(iw), dyson_result%dyson_residual_frobenius(iw), &
+                  dyson_result%dyson_residual_relative(iw), dyson_result%dyson_residual_infinity(iw)
+               write(unit, '(a,i0,1x,es24.16,1x,a)') '# dynamic_solver_status q_index=', iq, config%frequencies(iw), &
+                  trim(dyson_result%frequency_status(iw))
+               if (config%write_full_matrix) then
                   do j = 1, ndim
                      do i = 1, ndim
                         write(unit, '(i0,1x,es24.16,1x,2(i0,1x),6(es24.16,1x))') iq, config%frequencies(iw), i, j, &
-                           real(result%ks_susceptibility(i, j, iw, iq), rp), aimag(result%ks_susceptibility(i, j, iw, iq)), &
-                           real(result%enhanced_susceptibility(i, j, iw, iq), rp), aimag(result%enhanced_susceptibility(i, j, iw, iq)), &
-                           real(result%loss_matrix(i, j, iw, iq), rp), aimag(result%loss_matrix(i, j, iw, iq))
+                           real(bare_result%susceptibility(i, j, iw), rp), aimag(bare_result%susceptibility(i, j, iw)), &
+                           real(dyson_result%enhanced_susceptibility(i, j, iw), rp), aimag(dyson_result%enhanced_susceptibility(i, j, iw)), &
+                           real(dyson_result%loss_matrix(i, j, iw), rp), aimag(dyson_result%loss_matrix(i, j, iw))
                      end do
                   end do
-               end do
+               end if
             end do
-         else
-            write(unit, '(a)') '# raw_matrix = omitted from text output; complete matrices were retained in the result object during serialization'
          end if
-         write(unit, '(a)') '# interacting_covariance columns: positive_q_index negative_q_index omega_Ry residual loss_difference min_sv_difference condition_difference'
+
+         if (covariance_enabled .and. iq == positive_q_index) then
+            opposite_bare_request%q = -config%q_list(:, positive_q_index)
+            opposite_bare_request%frequencies = -config%frequencies
+            opposite_bare_request%eta = config%eta
+            if (trim(config%channel) == 'chi_plus') then
+               opposite_bare_request%channel = 'chi_minus'
+            else
+               opposite_bare_request%channel = 'chi_plus'
+            end if
+            opposite_bare_request%product_basis => opposite_product
+            opposite_bare_request%electronic_state => left_state
+            opposite_bare_request%q_endpoint_state => endpoints(negative_q_index)
+            call evaluate_lr_product_ks_susceptibility(opposite_bare_request, opposite_bare_result)
+            opposite_dyson_request%response_space => response_space
+            opposite_dyson_request%compact_orthonormal = .true.
+            opposite_dyson_request%q = opposite_bare_request%q
+            opposite_dyson_request%frequencies = opposite_bare_request%frequencies
+            opposite_dyson_request%eta = config%eta
+            opposite_dyson_request%channel = opposite_bare_request%channel
+            opposite_dyson_request%ks_susceptibility = opposite_bare_result%susceptibility
+            opposite_dyson_request%canonical_interaction = opposite_interaction
+            opposite_dyson_request%interaction_route = tddft_driver_route_direct_alsda
+            opposite_dyson_request%interaction_provenance = 'KXC-01 direct ALSDA LR-03'
+            opposite_dyson_request%electronic_state_provenance = 'accepted k-space SCF state; SCF occupations and EF fixed'
+            opposite_dyson_request%response_space_metadata = 'product_dimension='//trim(int2str(ndim))//'; orthonormal compact product space'
+            call evaluate_tddft_dyson(opposite_dyson_request, opposite_dyson_result)
+            if (any(.not. opposite_dyson_result%solve_succeeded)) then
+               error stop 'compact_dyson covariance audit: opposite Dyson solve failed'
+            end if
+            covariance_checked = .true.
+            do iw = 1, nfrequency
+               if (trim(config%channel) == 'chi_plus') then
+                  call compact_covariance_matrix_residual(product_plus, product_minus, dyson_result%enhanced_susceptibility(:, :, iw), &
+                     opposite_dyson_result%enhanced_susceptibility(:, :, iw), covariance_residual(iw))
+                  call compact_covariance_matrix_residual(product_plus, product_minus, dyson_result%loss_matrix(:, :, iw), &
+                     -opposite_dyson_result%loss_matrix(:, :, iw), covariance_loss_difference(iw))
+               else
+                  call compact_covariance_matrix_residual(product_plus, product_minus, opposite_dyson_result%enhanced_susceptibility(:, :, iw), &
+                     dyson_result%enhanced_susceptibility(:, :, iw), covariance_residual(iw))
+                  call compact_covariance_matrix_residual(product_plus, product_minus, opposite_dyson_result%loss_matrix(:, :, iw), &
+                     -dyson_result%loss_matrix(:, :, iw), covariance_loss_difference(iw))
+               end if
+               covariance_min_sv_difference(iw) = abs(dyson_result%denominator_min_singular_value(iw) - &
+                  opposite_dyson_result%denominator_min_singular_value(iw))
+               covariance_condition_difference(iw) = abs(dyson_result%denominator_condition_number(iw) - &
+                  opposite_dyson_result%denominator_condition_number(iw))
+               if (rank == 0) write(unit, '(2(i0,1x),5(es24.16,1x))') positive_q_index, negative_q_index, config%frequencies(iw), &
+                  covariance_residual(iw), covariance_loss_difference(iw), covariance_min_sv_difference(iw), &
+                  covariance_condition_difference(iw)
+            end do
+            if (.not. covariance_checked .or. maxval(covariance_residual) > 5.0e-8_rp .or. &
+                maxval(covariance_loss_difference) > 5.0e-8_rp) then
+               error stop 'compact_dyson covariance audit: interacting q/-q covariance failed'
+            end if
+         end if
+      end do
+
+      if (gf_audit_enabled) then
+         gf_q_index = gamma_index
+         gf_frequency_index = 1
          do iw = 1, nfrequency
-            write(unit, '(2(i0,1x),5(es24.16,1x))') positive_q_index, negative_q_index, config%frequencies(iw), &
-               covariance_residual(iw), covariance_loss_difference(iw), covariance_min_sv_difference(iw), &
-               covariance_condition_difference(iw)
+            if (abs(config%frequencies(iw)) > 1.0e-12_rp) then
+               gf_frequency_index = iw
+               exit
+            end if
          end do
-         if (gf_count > 0) then
-            write(unit, '(a)') '# gf_spots columns: q_index qx qy qz omega_Ry integration_points integration_eta spacing_over_eta energy_min_Ry energy_max_Ry h_Ry norm_lehmann norm_gf dF rF dInf wall_seconds'
-            do i = 1, gf_count
-               write(unit, '(i0,1x,4(es24.16,1x),i0,1x,11(es24.16,1x))') gf_q_index(i), config%q_list(:, gf_q_index(i)), &
-                  gf_frequency(i), gf_integration_points(i), gf_integration_eta(i), gf_spacing_ratio(i), gf_energy_min(i), &
-                  gf_energy_max(i), gf_energy_spacing(i), gf_norm_lehmann(i), gf_norm_gf(i), gf_d_frobenius(i), &
-                  gf_relative_frobenius(i), gf_d_infinity(i), gf_wall_seconds(i)
-            end do
-         else
-            write(unit, '(a)') '# gf_spots = not requested'
+         gf_frequency = config%frequencies(gf_frequency_index)
+         gf_request%q = config%q_list(:, gf_q_index)
+         gf_request%frequencies = [gf_frequency]
+         gf_request%eta = config%eta
+         gf_request%channel = config%channel
+         gf_request%integration_points = config%gf_integration_points
+         gf_request%integration_eta = config%gf_integration_eta
+         gf_request%energy_margin = config%gf_energy_margin
+         gf_request%product_basis => product
+         gf_request%electronic_state => left_state
+         gf_request%q_endpoint_state => endpoints(gf_q_index)
+         call evaluate_lr_product_gf_susceptibility(gf_request, gf_result)
+         gf_lehmann_request%q = gf_request%q
+         gf_lehmann_request%frequencies = gf_request%frequencies
+         gf_lehmann_request%eta = config%eta
+         gf_lehmann_request%channel = config%channel
+         gf_lehmann_request%product_basis => product
+         gf_lehmann_request%electronic_state => left_state
+         gf_lehmann_request%q_endpoint_state => endpoints(gf_q_index)
+         call evaluate_lr_product_ks_susceptibility(gf_lehmann_request, gf_lehmann_result)
+         gf_norm_lehmann = sqrt(sum(abs(gf_lehmann_result%susceptibility(:, :, 1))**2))
+         gf_norm_gf = sqrt(sum(abs(gf_result%susceptibility(:, :, 1))**2))
+         gf_d_frobenius = sqrt(sum(abs(gf_lehmann_result%susceptibility(:, :, 1) - gf_result%susceptibility(:, :, 1))**2))
+         gf_relative_frobenius = gf_d_frobenius/max(gf_norm_lehmann, gf_norm_gf, tiny(1.0_rp))
+         gf_d_infinity = maxval(abs(gf_lehmann_result%susceptibility(:, :, 1) - gf_result%susceptibility(:, :, 1)))
+         gf_integration_eta = gf_result%actual_integration_eta
+         gf_spacing_ratio = gf_result%spacing_over_integration_eta
+         gf_energy_min = gf_result%energy_min
+         gf_energy_max = gf_result%energy_max
+         gf_energy_spacing = gf_result%energy_spacing
+         gf_wall_seconds = gf_result%wall_time_seconds
+         gf_integration_points = gf_result%integration_points
+         if (rank == 0) then
+            write(unit, '(i0,1x,4(es24.16,1x),i0,1x,11(es24.16,1x))') gf_q_index, config%q_list(:, gf_q_index), &
+               gf_frequency, gf_integration_points, gf_integration_eta, gf_spacing_ratio, gf_energy_min, gf_energy_max, &
+               gf_energy_spacing, gf_norm_lehmann, gf_norm_gf, gf_d_frobenius, gf_relative_frobenius, gf_d_infinity, gf_wall_seconds
          end if
-         write(unit, '(a)') '# raw_spectrum_interpretation = no magnon assignment, stiffness, damping, linewidth, or literature comparison'
-         write(unit, '(a)') '# TDVK-07 PASS CANDIDATE'
-         close(unit)
       end if
-      write(*, '(a,i0,a,i0,a,i0)') 'TDVK-07 compact Dyson Fe response: q_count=', nq, ' omega_count=', nfrequency, &
+
+      if (rank == 0) close(unit)
+      write(*, '(a,i0,a,i0,a,i0)') 'TDDFT compact Dyson response: q_count=', nq, ' omega_count=', nfrequency, &
          ' product_dimension=', ndim
    end subroutine run_tddft_compact_dyson
 
@@ -2252,7 +2269,7 @@ contains
       if (plus_product%product_dimension /= minus_product%product_dimension .or. &
           any(shape(plus_matrix) /= [plus_product%product_dimension, plus_product%product_dimension]) .or. &
           any(shape(minus_matrix) /= [minus_product%product_dimension, minus_product%product_dimension])) then
-         error stop 'TDVK-07 covariance: compact plus/minus dimensions differ'
+         error stop 'compact covariance: compact plus/minus dimensions differ'
       end if
       allocate(transport(plus_product%product_dimension, minus_product%product_dimension))
       transport = cmplx(0.0_rp, 0.0_rp, rp)
@@ -2315,6 +2332,13 @@ contains
 
    integer function find_first_nonzero_q(q_list) result(index_nonzero)
       real(rp), intent(in) :: q_list(:, :)
+      index_nonzero = find_first_nonzero_q_index(q_list)
+      if (index_nonzero /= 0) return
+      error stop 'TDVK-04 finite-q validation: no nonzero q was supplied'
+   end function find_first_nonzero_q
+
+   integer function find_first_nonzero_q_index(q_list) result(index_nonzero)
+      real(rp), intent(in) :: q_list(:, :)
       integer :: iq
 
       index_nonzero = 0
@@ -2324,8 +2348,28 @@ contains
             return
          end if
       end do
-      error stop 'TDVK-04 finite-q validation: no nonzero q was supplied'
-   end function find_first_nonzero_q
+   end function find_first_nonzero_q_index
+
+   subroutine validate_covariance_q_pair(q_list)
+      real(rp), intent(in) :: q_list(:, :)
+      integer :: positive_index, negative_index
+
+      call find_covariance_q_indices(q_list, positive_index, negative_index)
+   end subroutine validate_covariance_q_pair
+
+   subroutine find_covariance_q_indices(q_list, positive_index, negative_index)
+      real(rp), intent(in) :: q_list(:, :)
+      integer, intent(out) :: positive_index, negative_index
+
+      positive_index = find_first_nonzero_q_index(q_list)
+      if (positive_index == 0) then
+         error stop 'TDDFT input: validate_interacting_covariance requires a nonzero q and its exact -q partner'
+      end if
+      negative_index = find_matching_q(q_list, -q_list(:, positive_index), 2.0e-11_rp)
+      if (negative_index == 0) then
+         error stop 'TDDFT input: validate_interacting_covariance requires an exact +q/-q pair; rejected before SCF/response work'
+      end if
+   end subroutine find_covariance_q_indices
 
    integer function find_matching_q(q_list, target, tolerance) result(index_match)
       real(rp), intent(in) :: q_list(:, :), target(3), tolerance
@@ -3124,7 +3168,15 @@ contains
 
    integer function find_gamma_q(q_list) result(index_gamma)
       real(rp), intent(in) :: q_list(:, :)
+      index_gamma = find_gamma_q_index(q_list)
+      if (index_gamma /= 0) return
+      error stop 'TDDFT production driver: gamma q was not supplied for the requested static route'
+   end function find_gamma_q
+
+   integer function find_gamma_q_index(q_list) result(index_gamma)
+      real(rp), intent(in) :: q_list(:, :)
       integer :: iq
+
       index_gamma = 0
       do iq = 1, size(q_list, 2)
          if (sum(abs(q_list(:, iq))) <= 1.0e-12_rp) then
@@ -3132,8 +3184,7 @@ contains
             return
          end if
       end do
-      error stop 'TDDFT production driver: gamma q was not supplied for the requested static route'
-   end function find_gamma_q
+   end function find_gamma_q_index
 
    subroutine write_tddft_production_output(config, result, control_obj, lattice_obj, ground_states, response_space, reciprocal_obj)
       type(tddft_production_config), intent(in) :: config

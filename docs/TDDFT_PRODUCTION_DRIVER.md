@@ -46,7 +46,10 @@ The active calculation contract is:
   gf_integration_points = 2001        ! reciprocal/native GF Simpson mesh
   gf_integration_eta = 0.0            ! native/reciprocal spectral broadening
   gf_energy_margin = 1.0
-  write_full_matrix = .true.
+  gf_closure_audit = .false.          ! optional validation diagnostic
+  dyson_static_audit = .false.        ! optional compact-Dyson Gamma audit
+  validate_interacting_covariance = .false. ! optional compact q/-q audit
+  write_full_matrix = .true.          ! stream q-local matrices when enabled
   output_file = 'tddft_response.dat'
 /
 ```
@@ -85,15 +88,44 @@ diagnostics, then stops before reciprocal GF, KXC, GSR, Dyson, loss, and mode
 interpretation. The `response_lmax=2` path is an explicitly approximate
 diagnostic; `response_lmax=-1` remains the complete `spd` product span.
 
-`backend='compact_dyson'` is the TDVK-07 accepted-state production seam.  It
-requires the direct ALSDA route, the accepted 12³ reciprocal cache, and the
-complete 232-dimensional orthonormal product space.  It evaluates compact
-Lehmann `chiKS`, projects direct ALSDA as `U^H K_point U`, solves
-`(I-chiKS*Kxc) chi=chiKS` with the common Dyson service, and writes complete
-raw interacting/loss matrices plus denominator residuals.  It also records
-the prescribed Gamma eta pair, interacting q/−q covariance, and configured
-representative bare GF spot checks.  GSR/BES/GCR and all mode or stiffness
-interpretation remain outside this backend.
+`backend='compact_dyson'` is the production compact Dyson backend.  It consumes
+an accepted self-consistent `use_kspace=.true.` state with SCF-owned EF and
+occupations, collinear no-SOC bulk `ham_only` second-order Hamiltonian data, a
+supported `sp`/`spd` radial basis, the complete retained compact product basis,
+and direct ALSDA.  It accepts any legal requested q list and omega grid,
+evaluates compact Lehmann `chiKS`, projects direct ALSDA as `U^H K_point U`,
+solves `(I-chiKS*Kxc) chi=chiKS` with the common Dyson service, and evaluates
+loss.  No Gamma point, q/−q pair, fixed mesh, fixed product dimension, GF
+calculation, or campaign label is required by the production path.  GSR/BES/GCR
+and all mode or stiffness interpretation remain outside this backend.
+
+The compact worker processes one q batch at a time.  With
+`write_full_matrix=.false.` it writes scalar diagnostics immediately and keeps
+only the current q-local bare, Dyson, and loss matrices.  With
+`write_full_matrix=.true.` it streams each q-local matrix to the output as
+well; it does not retain an all-q response archive.
+
+The following controls are disabled by default and are validation diagnostics,
+not production semantics:
+
+* `dyson_static_audit=.false.` suppresses the fixed `eta=0.01` and `0.005 Ry`
+  static Gamma denominator calculations.  Enabling it requires Gamma during
+  input preflight and serializes the static diagnostic table.
+* `validate_interacting_covariance=.false.` permits arbitrary q lists,
+  including positive-q-only paths.  Enabling it requires an exact q/−q pair
+  during input preflight and runs the complete interacting compact covariance
+  check with its fail-closed threshold.
+* `gf_closure_audit=.false.` performs no real-axis GF calculation.  Enabling it
+  requires the configured odd integration mesh, positive energy margin, valid
+  integration broadening, and Gamma for the representative compact GF spot.
+* `write_full_matrix=.true.` controls serialization only.  Set it false for a
+  bounded streaming summary; it never changes the response equations.
+
+The production output contains runtime-derived mesh, k-count, product
+dimension, channel, q, omega, eta, interaction-route, state-source, and
+correction-status provenance.  Validation harnesses apply material- or
+campaign-specific assertions externally; production output does not claim a
+TDVK milestone PASS/FAIL.
 
 The old `post_processing='susceptibility'` spelling is rejected with a
 migration error.  `&tddft` is feature-off when absent.  Ordinary calculations
@@ -214,10 +246,12 @@ records.
 
 ## Output provenance
 
-The default output retains the complete canonical matrices.  For a large
-response space, `write_full_matrix=.false.` writes the metric trace per q and
-frequency while the complete matrices remain in the driver result object;
-this is the mode used by the small integration smoke fixture.
+The compact-Dyson output is streamed q-by-q.  With
+`write_full_matrix=.false.`, it writes finite scalar diagnostics per q and
+frequency and releases the q-local matrices before advancing.  With
+`write_full_matrix=.true.`, the q-local matrices are serialized immediately;
+there is no all-q matrix archive.  Other production backends retain their
+existing result-object API semantics.
 
 Every output contains the following metadata before any result row:
 
@@ -238,6 +272,16 @@ Every output contains the following metadata before any result row:
 The q block records the actual reduced q coordinates, and each result row
 records the actual omega.  A result is not emitted without these fields.
 
+## Array-temporary audit
+
+The GNU Fortran runtime reports two one-time component-section temporaries in
+the production call chain: radial arrays passed while constructing the
+response-space layout, and the accepted radial-ground-state section passed to
+the compact worker.  They are small setup adapters and are not inside the
+q/omega response loops.  The compact worker itself uses q-local service
+results and does not create repeated large array temporaries in the
+q/omega-heavy path.
+
 ## Integration evidence
 
 The TDRUN-01 tests are registered in the top-level CTest graph:
@@ -256,7 +300,12 @@ The TDRUN-01 tests are registered in the top-level CTest graph:
   `backend='native_rsgf'`, a registered block provider, a complete on-site
   pair workset, native provenance, and the common KXC/Dyson path; and
 - `TddftProductionDriverFeatureOff`: the same ordinary SCF fixture with no
-  `&tddft` group, confirming the feature-off path does not enter the driver.
+  `&tddft` group, confirming the feature-off path does not enter the driver;
+- `TddftCompactDysonProductionAcceptance`: fresh executable bcc-Fe cases for
+  positive-q-only and no-Gamma production, an exact ±q covariance audit, and
+  static/covariance input-preflight negatives.  These use an accepted 8^3
+  state, three frequencies, and summary streaming; they are usability tests,
+  not material-accuracy claims.
 
 Useful commands from the configured build are:
 
@@ -270,6 +319,26 @@ The direct reproducibility test compares the complete `chiKS`, enhanced, and
 loss matrices against direct calls to the same validated services on the same
 prepared state.  The material-validation ladder is intentionally not part of
 this task.
+
+## Production-readiness checklist
+
+- [x] validation/material hard-codes removed from the compact production path
+- [x] arbitrary positive-q list works
+- [x] no-Gamma production list works
+- [x] covariance is optional and pair requirements are preflighted
+- [x] static audit is optional and Gamma requirements are preflighted
+- [x] GF audit is optional
+- [x] 12^3 and 232 production gates are removed
+- [x] Fe/TDVK campaign labels are absent from compact production output
+- [x] `write_full_matrix=.false.` uses bounded q-local streaming storage
+- [x] TDVK-07 validation configuration remains explicit and passes
+- [x] black-box bcc-Fe production acceptance covers the non-12^3 path
+
+The compact production backend remains intentionally restricted to the
+accepted collinear, no-SOC, bulk, orthogonal `ham_only`, second-order,
+supported `sp`/`spd`, complete-product-basis, direct-ALSDA capability contract
+with an accepted self-consistent k-space state and no implicit Goldstone/BES/GCR
+correction.
 
 ## TDVAL handoff
 

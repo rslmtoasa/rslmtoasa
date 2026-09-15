@@ -1,0 +1,100 @@
+&calculation
+pre_processing = 'bravais'
+post_processing = 'tddft'
+verbose = T
+/
+&lattice
+rc = 080 ! radius cut. We could think about setting a default
+alat = 2.86120 ! lattice parapeter
+crystal_sym = 'bcc' ! options are bcc, fcc and hcp so far.
+pbc = .true.
+b1 = .true.
+b2 = .true.
+b3 = .true.
+n1 = 10
+n2 = 10
+n3 = 10
+wav = 1.40880
+ntype = 1
+ct(1) = 3.0d0
+r2 = 9.00d0
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&self
+nstep = 100
+use_kspace = .true.
+/
+&energy
+fermi = -0.067021
+energy_min = -1.0
+energy_max = 0.5
+channels_ldos = 2500
+/
+&control
+calctype = 'B'
+nsp = 1 ! type of calculation, nsp can be 1, 2, 3 or 4
+lld = 21
+recur = 'block'
+/
+&mix
+beta = 0.01
+mixtype = 'broyden'
+/
+&tddft
+enabled = .true.
+
+! Production usability example only; no Goldstone correction or validation
+! campaign diagnostics are implied by this input.
+
+channel = 'chi_plus'
+
+! Small-q points around Gamma, reduced reciprocal coordinates
+n_q = 4
+q_list = 0.00, 0.0, 0.0,
+0.03, 0.0, 0.0,
+0.06, 0.0, 0.0,
+0.09, 0.0, 0.0
+
+n_omega = 7
+use_omega_grid = .true.
+omega_grid = 0.0, 0.0025, 0.005, 0.0075, 0.010, 0.0125, 0.015
+omega_min = 0.0
+omega_max = 0.015
+
+eta = 0.01
+
+response_lmax = -1
+
+interaction_route = 'direct_alsda'
+goldstone_correction = .false.
+backend = 'compact_dyson'
+
+reciprocal_backend_crosscheck = .false.
+gf_closure_audit = .false.
+dyson_static_audit = .false.
+validate_interacting_covariance = .false.
+
+! For plotting a dispersion, traces are enough and much smaller
+write_full_matrix = .false.
+output_file = 'tddft_Fe_smallq_dispersion.dat'
+/
+&reciprocal
+nk1 = 8
+nk2 = 8
+nk3 = 8
+k_offset_x = 0.0
+k_offset_y = 0.0
+k_offset_z = 0.0
+use_symmetry_reduction = .false.
+use_time_reversal = .false.
+use_shift = .false.
+dos_method = 'tetrahedron'
+temperature = 300.0
+auto_find_fermi = .true.
+reciprocal_mode = 'ham_only'
+reciprocal_backend = 'lapack'
+kspace_ham_order = 'second'
+/

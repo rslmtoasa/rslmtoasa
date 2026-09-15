@@ -60,6 +60,28 @@ program test_tddft_production_driver
       capability%orthogonal = .false.
       capability%reciprocal_mode = 'generalized_overlap_proxy'
       call require_tddft_capability(capability)
+   else if (trim(argument) == 'static-no-gamma') then
+      parser_fixture = 'tdv_static_no_gamma.nml'
+      open(newunit=parser_unit, file=parser_fixture, status='replace', action='write', iostat=parser_ios)
+      if (parser_ios /= 0) error stop 'could not create static-audit negative fixture'
+      write(parser_unit, '(a)') '&tddft'
+      write(parser_unit, '(a)') ' enabled = .true., backend = ''compact_dyson'', dyson_static_audit = .true.'
+      write(parser_unit, '(a)') ' n_q = 1, q_list = 0.03, 0.0, 0.0'
+      write(parser_unit, '(a)') '/'
+      close(parser_unit)
+      call load_tddft_config(parser_fixture, parsed_config)
+      error stop 'static-audit preflight unexpectedly accepted a q list without Gamma'
+   else if (trim(argument) == 'covariance-no-pair') then
+      parser_fixture = 'tdv_covariance_no_pair.nml'
+      open(newunit=parser_unit, file=parser_fixture, status='replace', action='write', iostat=parser_ios)
+      if (parser_ios /= 0) error stop 'could not create covariance negative fixture'
+      write(parser_unit, '(a)') '&tddft'
+      write(parser_unit, '(a)') ' enabled = .true., backend = ''compact_dyson'', validate_interacting_covariance = .true.'
+      write(parser_unit, '(a)') ' n_q = 1, q_list = 0.03, 0.0, 0.0'
+      write(parser_unit, '(a)') '/'
+      close(parser_unit)
+      call load_tddft_config(parser_fixture, parsed_config)
+      error stop 'covariance preflight unexpectedly accepted a q list without -q'
    end if
 
    call load_tddft_config('this-file-is-not-a-production-input', config)
@@ -76,7 +98,9 @@ program test_tddft_production_driver
    open(newunit=parser_unit, file=parser_fixture, status='old', iostat=parser_ios)
    if (parser_ios == 0) close(parser_unit, status='delete')
    if (.not. parsed_config%present .or. .not. parsed_config%enabled .or. parsed_config%reciprocal_backend_crosscheck .or. &
-       parsed_config%gf_closure_audit .or. .not. allocated(parsed_config%eta_values) .or. size(parsed_config%eta_values) /= 1) then
+       parsed_config%gf_closure_audit .or. parsed_config%dyson_static_audit .or. &
+       parsed_config%validate_interacting_covariance .or. .not. allocated(parsed_config%eta_values) .or. &
+       size(parsed_config%eta_values) /= 1) then
       error stop 'optional TDDFT audit flags did not default to false'
    end if
    open(newunit=parser_unit, file=parser_fixture, status='replace', action='write', iostat=parser_ios)
@@ -89,6 +113,20 @@ program test_tddft_production_driver
    open(newunit=parser_unit, file=parser_fixture, status='old', iostat=parser_ios)
    if (parser_ios == 0) close(parser_unit, status='delete')
    if (.not. parsed_config%gf_closure_audit) error stop 'TDVK-03 GF closure audit flag did not parse'
+
+   open(newunit=parser_unit, file=parser_fixture, status='replace', action='write', iostat=parser_ios)
+   if (parser_ios /= 0) error stop 'could not create compact-audit parser fixture'
+   write(parser_unit, '(a)') '&tddft'
+   write(parser_unit, '(a)') ' enabled = .true., backend = ''compact_dyson'', dyson_static_audit = .true., validate_interacting_covariance = .true.'
+   write(parser_unit, '(a)') ' n_q = 3, q_list = 0.0, 0.0, 0.0, 0.03, 0.0, 0.0, -0.03, 0.0, 0.0'
+   write(parser_unit, '(a)') '/'
+   close(parser_unit)
+   call load_tddft_config(parser_fixture, parsed_config)
+   open(newunit=parser_unit, file=parser_fixture, status='old', iostat=parser_ios)
+   if (parser_ios == 0) close(parser_unit, status='delete')
+   if (.not. parsed_config%dyson_static_audit .or. .not. parsed_config%validate_interacting_covariance) then
+      error stop 'compact Dyson validation switches did not parse'
+   end if
 
    open(newunit=parser_unit, file=parser_fixture, status='replace', action='write', iostat=parser_ios)
    if (parser_ios /= 0) error stop 'could not create TDVK-05 eta-ladder parser fixture'

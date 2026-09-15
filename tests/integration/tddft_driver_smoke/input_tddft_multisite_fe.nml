@@ -1,0 +1,90 @@
+! Small multi-site production contract fixture.  Its four Fe sites exercise
+! a runtime compact product dimension different from the historical one-site
+! Fe value; this is a capability test, not a material benchmark.
+&calculation
+pre_processing = 'bravais'
+post_processing = 'tddft'
+verbose = F
+/
+&lattice
+ndim = 60000
+rc = 64.0
+alat = 2.86120
+crystal_sym = 'file'
+wav = 1.40880
+ntype = 4
+ct(1:4) = 4*3.0d0
+r2 = 9.00d0
+/
+&atoms
+database = './'
+label(1) = 'Fe1'
+label(2) = 'Fe2'
+label(3) = 'Fe3'
+label(4) = 'Fe4'
+/
+&self
+ws_all = .true.
+nstep = 25
+conv_thr = 1.0e-7
+use_kspace = .true.
+/
+&energy
+fermi = -0.069933
+energy_min = -1.0
+energy_max = 0.5
+channels_ldos = 401
+/
+&control
+calctype = 'B'
+nsp = 1
+lld = 16
+recur = 'block'
+/
+&mix
+beta = 0.15
+mixtype = 'broyden'
+/
+&hamiltonian
+hoh = .true.
+/
+&reciprocal
+nk1 = 4
+nk2 = 4
+nk3 = 4
+k_offset_x = 0.0
+k_offset_y = 0.0
+k_offset_z = 0.0
+use_symmetry_reduction = .false.
+use_time_reversal = .false.
+use_shift = .false.
+dos_method = 'tetrahedron'
+temperature = 300.0
+auto_find_fermi = .true.
+reciprocal_mode = 'ham_only'
+reciprocal_backend = 'lapack'
+kspace_ham_order = 'second'
+/
+&tddft
+enabled = .true.
+channel = 'chi_plus'
+n_q = 1
+q_list = 0.0, 0.0, 0.0
+n_omega = 1
+use_omega_grid = .true.
+omega_grid = 0.01
+omega_min = 0.01
+omega_max = 0.01
+eta = 0.01
+n_eta = 1
+eta_grid = 0.01
+response_lmax = -1
+interaction_route = 'direct_alsda'
+goldstone_correction = .false.
+backend = 'compact_dyson'
+gf_closure_audit = .false.
+dyson_static_audit = .false.
+validate_interacting_covariance = .false.
+write_full_matrix = .false.
+output_file = 'compact_multisite_fe.dat'
+/
