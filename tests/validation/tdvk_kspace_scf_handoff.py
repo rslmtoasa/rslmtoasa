@@ -396,11 +396,13 @@ def main() -> int:
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--scratch-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--template", type=Path)
+    parser.add_argument("--database", type=Path)
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[2]
-    template = root / "tests/integration/tddft_driver_smoke/input_tdvk05_fe.nml"
-    fe_database = root / "tests/scf/cases/bulk/bccFe"
+    template = args.template or root / "tests/integration/tddft_driver_smoke/input_tdvk05_fe.nml"
+    fe_database = args.database or root / "tests/scf/cases/bulk/bccFe"
     runner = root / "tests/run_binary.sh"
     args.scratch_root.mkdir(parents=True, exist_ok=True)
 

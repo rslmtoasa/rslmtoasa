@@ -1,0 +1,89 @@
+! TDVK-08 fcc Ni direct ALSDA static diagnostic template.
+&calculation
+pre_processing = 'bravais'
+post_processing = 'tddft'
+verbose = F
+/
+&lattice
+rc = 030
+alat = 3.520
+crystal_sym = 'fcc'
+pbc = .true.
+b1 = .true.
+b2 = .true.
+b3 = .true.
+n1 = 16
+n2 = 16
+n3 = 16
+wav = 1.410
+ntype = 1
+ct(1) = 5.0d0
+r2 = 25.0d0
+strux_backend = 'strux_lib'
+/
+&atoms
+database = './'
+label(1) = 'Ni'
+/
+&self
+nstep = 80
+conv_thr = 1.0e-9
+use_kspace = .true.
+soc_scale = 0.0d0
+fix_soc = .true.
+/
+&energy
+fermi = 0.101023
+energy_min = -2.0
+energy_max = 1.5
+channels_ldos = 401
+/
+&control
+calctype = 'B'
+nsp = 1
+lld = 21
+recur = 'block'
+/
+&mix
+beta = 0.10
+mixtype = 'broyden'
+/
+&hamiltonian
+hoh = .false.
+/
+&reciprocal
+nk1 = 12
+nk2 = 12
+nk3 = 12
+k_offset_x = 0.0
+k_offset_y = 0.0
+k_offset_z = 0.0
+use_symmetry_reduction = .false.
+use_time_reversal = .false.
+use_shift = .false.
+dos_method = 'tetrahedron'
+temperature = 300.0
+auto_find_fermi = .true.
+reciprocal_mode = 'ham_only'
+kspace_ham_order = 'second'
+/
+&tddft
+enabled = .true.
+channel = 'chi_plus'
+n_q = 1
+q_list = 0.0, 0.0, 0.0
+n_omega = 1
+use_omega_grid = .false.
+omega_grid = 0.0
+omega_min = 0.0
+omega_max = 0.0
+eta = 0.01
+n_eta = 2
+eta_grid = 0.01, 0.005
+response_lmax = -1
+interaction_route = 'direct_alsda'
+goldstone_correction = .false.
+backend = 'static_interactions'
+write_full_matrix = .false.
+output_file = 'tdvk08_ni_static.dat'
+/

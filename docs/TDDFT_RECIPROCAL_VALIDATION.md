@@ -1600,3 +1600,251 @@ counted among the 7/7 focused unit tests.  No pre-existing passing test was
 disabled, and no TDVK-08 code was started.
 
 Exact closure result: **TDVK-07 GSR/GF EVIDENCE CLOSURE PASS**.
+
+## TDVK-08 — fcc Ni replication
+
+**Status: `TDVK-08 PASS CANDIDATE`.** This parent milestone used fresh
+self-consistent Ni k-space states and the existing Fe-certified reciprocal
+TDDFT seams. No legacy Ni response output was reused.
+
+### Fe prerequisite and starting state
+
+The live starting commit was `e9e3e47a005378884358a902e241c1c413858760`
+(`tests: close TDVK-07 GF quadrature evidence`) on branch `fable_v4`. The
+current TDVK-07 closure validator passed against the controlled runtime
+artifact with `645888` complete raw matrix rows; it records accepted 12^3
+state-cache reuse, direct ALSDA, compact Dyson/loss, interacting q/-q
+covariance, and the controlled reciprocal-GF quadrature (`9561` points and
+`h/integration_eta=0.399997292864126`). The focused post-build prerequisite
+run passed `14/14` tests. The GF material campaigns and all large Ni raw
+matrix archives remain runtime-only under `/tmp`; no large raw artifact is
+staged.
+
+The worktree was already dirty at the start. Existing untracked prompt-pack,
+post-LR-03, and Fe smoke artifacts were preserved and were not used as Ni
+results.
+
+### Live Ni reference-deck audit
+
+The currently tracked TDVAL-cited Ni reference is
+[`results/validation/TDVAL-01_FE_NI/ground_state/fccNi/input.nml`](../results/validation/TDVAL-01_FE_NI/ground_state/fccNi/input.nml).
+The separately tracked VAL-19 Ni reference
+[`results/validation/VAL-19_fccNi/scf/input.nml`](../results/validation/VAL-19_fccNi/scf/input.nml)
+was audited as well; it has the same blocking spin/order contract. These are
+the live values, not substituted production values:
+
+| quantity | TDVAL-cited reference | VAL-19 reference |
+|---|---|---|
+| structure | bulk periodic fcc Ni | bulk periodic fcc Ni |
+| lattice input | `alat=3.520`, `wav=1.410`, `ct=5`, `r2=25`, `strux_lib` | `alat=6.650`, `wav=1.410`, `ct=4`, `r2=16` |
+| atomic basis | one Ni site, `lmax=2` (`spd`), Z=28, core=18, valence=10 | one Ni site, `lmax=2` (`spd`), Z=28, core=18, valence=10 |
+| XC/TXC | TXC omitted; live default `TXC=1`, legacy Barth-Hedin | TXC omitted; live default `TXC=1`, legacy Barth-Hedin |
+| self-consistency | `use_kspace=.true.`, `nstep=80`, `conv_thr=1e-9` | `use_kspace=.true.`, `nstep=80`, `conv_thr=1e-9` |
+| reciprocal setup | 16^3, full mesh, tetrahedron, 300 K, automatic EF, `ham_only` | 12^3, full mesh, tetrahedron, 300 K, automatic EF; `ham_only` is the default |
+| spin / Hamiltonian | `nsp=1`, `soc_scale=0`, `fix_soc=.true.`, `hoh=.false.`, explicit `kspace_ham_order='second'` | `nsp=2`, `soc_scale=0`, `fix_soc=.true.`, `hoh=.false.` |
+| input EF | `0.101023 Ry` (not an authority because automatic EF is enabled) | `-0.045779 Ry` (not an authority because automatic EF is enabled) |
+
+The TDVAL-cited deck was updated only at the user-authorized capability gate:
+`nsp=1` removes SOC classification, while `hoh=.false.` is preserved exactly;
+the explicit reciprocal `kspace_ham_order='second'` selects the accepted
+second-order Hamiltonian. The legacy VAL-19 deck was not used or changed.
+TXC remains omitted, so the live default is TXC=1 Barth-Hedin. Automatic EF,
+300 K tetrahedron occupations, and all Ni lattice/atomic settings remain
+SCF-owned and unchanged.
+
+### TDVK-08 evidence tables
+
+The following table records the completed runtime gates:
+
+| evidence layer | status | result |
+|---|---|---|
+| Ni 8^3 / 12^3 self-consistent k-space SCF | `[x]` | converged fresh states |
+| SCF-owned EF, occupations, moment, residual, fingerprints | `[x]` | recorded for both meshes |
+| SCF -> TDDFT state continuity | `[x]` | exact artifact identity; no rebuild |
+| complete compact product basis and rank/SVD evidence | `[x]` | complete 232-mode `spd`, `L=4` |
+| 8^3/12^3 compact Gamma operator comparison | `[x]` | transported full-matrix diagnostics |
+| 12^3 eta=.005 diagnostic | `[x]` | same 12^3 process/state |
+| controlled reciprocal-GF Ni spot | `[x]` | 9561 points, `h/eta_int=0.36015` |
+| finite-q bare response and q/-q covariance | `[x]` | exact `±(1/12,0,0)` endpoints |
+| direct ALSDA static residual | `[x]` | raw `.01/.005` diagnostics |
+| compact Dyson denominator and Gamma/+-q loss | `[x]` | 12 raw grid points; all solves pass |
+| interacting q/-q covariance | `[x]` | maximum matrix residual `1.16e-13` |
+| GSR production route | `[x]` | not used; auxiliary unregularized static GSR was conditioning-blocked |
+| parameter rescue, Goldstone/BES/GCR, mode/literature interpretation | `[x]` | none performed |
+| TDVK-09 | `[x]` | not started |
+
+The GSR route was not used as a production interaction route. The static seam
+also emitted its required unregularized auxiliary GSR diagnostic, which was
+honestly `BLOCKED: GSR rank/conditioning`; no GSR regularization, correction,
+or value entered the Dyson result. No mode, stiffness, damping, linewidth, or
+literature interpretation is made.
+
+### Ni runtime evidence
+
+The two fresh self-consistent reciprocal states were generated from the
+user-authorized TDVAL deck. EF and occupations were solved independently by
+the reciprocal electron-number service at 300 K; the input EF was not used as
+an authority.
+
+| quantity | 8^3 | 12^3 |
+|---|---:|---:|
+| SCF converged | yes | yes |
+| SCF iterations | 19 | 25 |
+| SCF residual | `7.9827464044e-10` | `4.1363358406e-10` |
+| SCF-owned EF (Ry) | `0.101425838720095` | `0.0993250704330853` |
+| integrated electron count | `9.99999999995219` | `9.99999999997506` |
+| target electron count | `10.0` | `10.0` |
+| moment (muB) | `0.572263088319057` | `0.666608793349899` |
+| actual mesh / k points | `8x8x8 / 512` | `12x12x12 / 1728` |
+| weight sum | `1.0` | `1.0000000000000191` |
+| mesh fingerprint | `1cbe24b64cb808294ebdf221e5227e84d97ae147d9c219c1f7ea93071782d9d5` | `cbf15c1e15c8e657635005a071a17e5ead5db64637b2d1938b3dc5e2326b347f` |
+
+Both TDDFT handoffs report `accepted_kspace_scf_cache`, automatic reciprocal
+EF ownership, `reciprocal_rebuild_performed_for_tddft=F`, and `ham_only` /
+second-order state data. The independent state-artifact comparisons returned
+zero printed differences for mesh, weights, EF, eigenvalues, occupations, and
+the gauge-invariant occupation-weighted projector.
+
+The response basis is the complete one-site `spd` product span with response
+`Lmax=4`: unpruned dimension 232 and retained dimension 232. Strict SVD rank
+stability passed at the existing diagnostic thresholds
+`tau1`, `10*tau1`, and `100*tau1`, where
+`tau1=max(npoint,ncandidate)*epsilon*sigma_max`; no radial or angular modes
+were pruned. The 27,720 serialized radial-mode records have singular values
+from `4.6618867530e-9` to `2.5433963877`. Across 8^3/12^3 the basis-mode key
+set matched, the singular-value maximum difference was `1.9237523324e-3`,
+and the accepted cross-basis overlap unitarity residual was `0.4731821565`.
+The nonzero residual is recorded; the overlap was not assumed unitary.
+
+The complete Gamma static compact Lehmann matrices were retained in the
+runtime artifacts. Their transported 8^3/12^3 comparison at eta=.01 Ry was:
+
+| `||chi_8||F` | `||chi_12||F` | `dF` | relative `dF` | `dInf` | trace-difference abs |
+|---:|---:|---:|---:|---:|---:|
+| `4.2930649368` | `4.2570685426` | `0.2055849067` | `0.0478876769` | `0.0473212476` | `0.2261775913` |
+
+The raw-coordinate comparison was `dF=0.2053850982`, relative `dF=0.0478411348`,
+and `dInf=0.0477281718`. The same accepted 12^3 state supplied the eta=.005
+matrix: compared with eta=.01, `dF=0.2798530411`, relative `dF=0.0650390228`,
+and `dInf=0.1678699890`; its norm was `4.3028481861` versus `4.2570685426`.
+No eta extrapolation was made.
+
+### Reciprocal GF and finite-q evidence
+
+The certified Ni GF spot used the accepted 12^3 state, Gamma, omega=.01 Ry,
+chi-plus, physical eta=.01 Ry, `integration_eta=.001 Ry`, 9,561 integration
+points, and margin=.60 Ry. The live energy bounds were `[-1.3669486983,
+2.0760470235] Ry`, `h=3.6014599601e-4 Ry`, and
+`h/integration_eta=0.3601459960`. The finite, complete-matrix comparison was
+`||chi_Lehmann||F=4.8728710004`, `||chi_GF||F=4.8221046488`,
+`dF=7.9435025101e-2`, `rF=1.6301483272e-2`, and
+`dInf=4.6087047329e-2` (79.463 s). No GF output was used as the Dyson input.
+
+The finite-q bare seam used direct literal coordinates
+`Gamma=(0,0,0)`, `+q=(1/12,0,0)`, `-q=(-1/12,0,0)`, plus the required
+arbitrary control `(0.23,0.07,-0.11)`, all at omega=0 and eta=.01 Ry. The
+endpoint metadata reported zero folding error for every endpoint and 1,728
+unique endpoints. The established chi-plus/chi-minus covariance residual for
+the exact pair was `4.0064286501e-15`; no phase or sign patching was applied.
+
+### Direct ALSDA and compact Dyson/loss
+
+The raw direct ALSDA static diagnostic was evaluated as
+`chiKS_compact(0,eta) Kxc_compact m00_compact - m00_compact`, with no
+rescaling, Goldstone correction, or denominator correction. The Pauli compact
+norm was `0.3003351813`, the point projection residual was `2.3266189128e-4`,
+and the direct kernel range was `[-19.8901153192, 0] Ry bohr^3`.
+
+| eta (Ry) | residual norm | relative residual | rigid overlap (real, imag) | `||Kxc m00||` | `||chiKS Kxc m00||` | max radial residual |
+|---:|---:|---:|---:|---:|---:|---:|
+| `.010` | `8.3266016622e-2` | `2.7724363251e-1` | `−1.9771589577e-2, −1.0226829242e-2` | `8.7479292202e-2` | `2.3998181487e-1` | `0.6355392322` |
+| `.005` | `7.4752889190e-2` | `2.4889821058e-1` | `−1.8569375057e-2, −5.2081143931e-3` | `8.7479292202e-2` | `2.4217858169e-1` | `0.6355392322` |
+
+The compact Dyson denominator used direct ALSDA and LAPACK `zgesv` without an
+explicit inverse, shift, or pseudoinverse:
+
+| eta (Ry) | min singular value | max singular value | condition number | min-magnitude eigenvalue | residual F | status |
+|---:|---:|---:|---:|---:|---:|---|
+| `.010` | `1.6584249792e-1` | `1.2336764435` | `7.4388438369` | `2.0495505996e-1` | `3.9180247270e-15` | `PASS: Dyson solve` |
+| `.005` | `1.3144441763e-1` | `1.2347765994` | `9.3939067300` | `1.6252872688e-1` | `6.7978099999e-15` | `PASS: Dyson solve` |
+
+The 12^3 raw compact diagnostic grid was
+`omega=[0,.01,.02,.05] Ry`, `eta=.01 Ry`, and q set
+`[Gamma,(1/12,0,0),(-1/12,0,0)]`. The archive contains
+`645888 = 3 x 4 x 232 x 232` rows. Each row below records the compact
+Frobenius norms, real loss trace, minimum denominator singular value,
+condition number, and Dyson residuals (`R_F`, relative `R`, `R_inf`).
+
+| q | omega | `||chiKS||F` | `||chi||F` | loss trace | min sv | cond | `R_F` / `R` / `R_inf` |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Gamma | 0 | 4.25706854 | 17.44816739 | 4.19416080 | .16584250 | 7.43884 | `3.918e-15 / 9.204e-16 / 3.025e-15` |
+| Gamma | .01 | 4.87287100 | 23.98163106 | 8.07878991 | .13205376 | 9.89675 | `7.412e-15 / 1.521e-15 / 5.790e-15` |
+| Gamma | .02 | 5.75786693 | 16.82343556 | 4.53859090 | .20848786 | 6.90381 | `5.642e-15 / 9.799e-16 / 3.867e-15` |
+| Gamma | .05 | 13.54947912 | 9.73435286 | 6.49031302 | .51993622 | 3.60282 | `5.416e-15 / 3.997e-16 / 4.374e-15` |
+| +1/12 | 0 | 3.91750016 | 12.13467229 | 2.15660110 | .22328210 | 5.36160 | `2.733e-15 / 6.975e-16 / 1.186e-15` |
+| +1/12 | .01 | 4.43498447 | 18.08620649 | 5.28779698 | .16333474 | 7.65709 | `6.845e-15 / 1.543e-15 / 4.095e-15` |
+| +1/12 | .02 | 5.12972183 | 18.60962691 | 6.42913176 | .17508347 | 7.65511 | `4.043e-15 / 7.881e-16 / 2.169e-15` |
+| +1/12 | .05 | 9.91650272 | 8.00938360 | 5.11402956 | .60561767 | 2.58593 | `2.818e-15 / 2.841e-16 / 9.930e-16` |
+| −1/12 | 0 | 3.91750016 | 12.13467229 | 2.15660110 | .22328210 | 5.36160 | `3.203e-15 / 8.175e-16 / 1.665e-15` |
+| −1/12 | .01 | 4.43498447 | 18.08620649 | 5.28779698 | .16333474 | 7.65709 | `6.359e-15 / 1.434e-15 / 3.794e-15` |
+| −1/12 | .02 | 5.12972183 | 18.60962691 | 6.42913176 | .17508347 | 7.65511 | `5.670e-15 / 1.106e-15 / 3.020e-15` |
+| −1/12 | .05 | 9.91650272 | 8.00938360 | 5.11402956 | .60561767 | 2.58593 | `3.486e-15 / 3.515e-16 / 1.831e-15` |
+
+The interacting covariance residuals for +q versus −q were
+`[4.5236104918e-14, 1.1618853933e-13, 1.8115356374e-14,
+9.9155798449e-15]` over the frequency grid; the corresponding loss
+differences were `[9.7699626167e-15, 3.6859404418e-14,
+5.5511151237e-15, 3.0477242781e-15]`. Minimum-singular-value and condition
+differences were also finite and at or below `3.47e-14` and `6.66e-14`.
+The interacting q/−q covariance gate passed.
+
+The static seam’s auxiliary GSR solve was not used as a production route and
+was not regularized: both raw statuses were `BLOCKED: GSR rank/conditioning`.
+This preserves the accepted Fe policy that GSR is conditioning-blocked while
+the direct ALSDA compact Dyson/loss route remains the production path.
+
+### Runtime artifacts, comparison, and test result
+
+The runtime-only output paths and SHA-256 checksums are:
+
+| evidence | path | bytes | SHA-256 |
+|---|---|---:|---|
+| 8^3 handoff | `/tmp/tdvk08_ni_handoff/kspace_scf_mesh8/tddft_kspace_scf_8.dat.matrix` | 5,870,763 | `77c3b03f6dcba862b17b4719229eb528bb688812368fb8a07af18c0b0f17ee7b` |
+| 12^3 handoff | `/tmp/tdvk08_ni_handoff/kspace_scf_mesh12/tddft_kspace_scf_12.dat.matrix` | 11,741,294 | `4bbd7badc3cf50b79adffe6e14019eead28b7d6525924bca2ef9d251c5e93103` |
+| Ni Dyson/loss | `/tmp/tdvk08_ni_dyson/run/tdvk08_ni.dat` | 118,897,832 | `1ff8070dbd38629fe9b692ba7d795862803f0495e12cb2af6db4b012178740f6` |
+| Ni finite-q | `/tmp/tdvk08_ni_finite_q/run/tdvk08_ni_finite_q.dat` | 4,784 | `e91ecac465e6cfea63d5f92c56be80626ade29f321f1b6badbdcd5705d31c6f7` |
+| Ni static ALSDA | `/tmp/tdvk08_ni_static/run/tdvk08_ni_static.dat` | 293,920 | `464f650d8e2343965b51d7ef9a0beb2d9d1d781bfab2fb8a6a7d8f8072c381d3` |
+
+For methodology-only comparison, accepted Fe used 12^3, moment
+`2.1593566635 muB`, product dimension 232, 8^3→12^3 bare relative `dF`
+`0.0118073323`, eta=.005/.01 relative `dF` `0.0247331485`, controlled GF
+`rF=.0073829654`, ALSDA relative residual `.1880237608`, and denominator
+condition `29.2313994` at eta=.01. Ni generated the corresponding values
+`0.0478876769`, `0.0650390228`, `.0163014833`, `.2772436325`, and `7.4388438`.
+These are reported as framework outputs only; no physical cross-material
+interpretation is made.
+
+The material harnesses
+`tests/validation/tdvk_kspace_scf_handoff.py`,
+`tests/validation/tdvk08_ni_finite_q.py`,
+`tests/validation/tdvk08_ni_static.py`, and
+`tests/validation/tdvk08_ni_dyson_loss.py` all validated their completed
+runtime artifacts. The reliable focused CTest command below passed 14/14;
+heavy material tests remain intentionally disabled in CTest and were executed
+directly where needed.
+
+### Tests and exact verdict
+
+The reliable focused command was:
+
+```text
+cmake --build build -j2
+ctest --test-dir build --output-on-failure -R '^(UnitLrProductKsSusceptibility|UnitLrCompactStaticInteraction|UnitLrCompactGsrActionConsistency|UnitLrKsSusceptibility|UnitLrGfSusceptibility|UnitLrAlsdaKernel|UnitLrGoldstoneSumrule|UnitTddftDyson|UnitTddftCompactDysonOracle|UnitTddftProductionDriver|UnitTddftProductionDriverRejectSoc|UnitTddftProductionDriverRejectGeneralizedOverlap|TddftProductionDriverSmoke|TddftProductionDriverFeatureOff)$'
+```
+
+Result: **14/14 passed**. The disabled heavy material tests were not counted
+as passing; the Ni material validation harnesses and the live TDVK-07
+validator were executed directly and passed their applicable checks. No
+TDVK-09 work was started.
+
+Exact TDVK-08 verdict: **`TDVK-08 PASS CANDIDATE`**.

@@ -51,10 +51,11 @@ dos_method = 'tetrahedron'
 temperature = 300.0
 auto_find_fermi = .true.
 reciprocal_mode = 'ham_only'
+kspace_ham_order = 'second'
 /
 &control
 calctype = 'B'
-nsp = 2
+nsp = 1
 lld = 21
 recur = 'block'
 /
