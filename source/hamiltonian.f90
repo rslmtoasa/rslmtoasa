@@ -258,41 +258,39 @@ contains
       call g_safe_alloc%allocate('hamiltonian.lsham', this%lsham, (/18, 18, this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.tmat', this%tmat, (/18, 18, 3, this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.hhmag', this%hhmag, (/9, 9, 4/))
-      call g_safe_alloc%allocate('hamiltonian.hmag', this%hmag, (/9, 9, this%charge%lattice%kk, 4/))
-      call g_safe_alloc%allocate('hamiltonian.ee', this%ee, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.hall', this%hall, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
-      call g_safe_alloc%allocate('hamiltonian.hall_glob', this%hall_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
-      call g_safe_alloc%allocate('hamiltonian.ee_glob', this%ee_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hmag', this%hmag, (/9, 9, (maxval(this%charge%lattice%nn(:, 1)) + 1), 4/))
+      call g_safe_alloc%allocate('hamiltonian.ee', this%ee, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hall', this%hall, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax/))
+      call g_safe_alloc%allocate('hamiltonian.hall_glob', this%hall_glob, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax/))
+      call g_safe_alloc%allocate('hamiltonian.ee_glob', this%ee_glob, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
       !if (hoh) then
-      call g_safe_alloc%allocate('hamiltonian.eeo', this%eeo, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.eeoee', this%eeoee, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.hallo', this%hallo, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
+      call g_safe_alloc%allocate('hamiltonian.eeo', this%eeo, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.eeoee', this%eeoee, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hallo', this%hallo, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax/))
       call g_safe_alloc%allocate('hamiltonian.obarm', this%obarm, (/18, 18, this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.enim', this%enim, (/18, 18, this%charge%lattice%ntype/))
       !end if
       !if (local_axis)  then
-      call g_safe_alloc%allocate('hamiltonian.hall_glob', this%hall_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
-      call g_safe_alloc%allocate('hamiltonian.ee_glob', this%ee_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
       !if (hoh) then
-      call g_safe_alloc%allocate('hamiltonian.ee0_glob', this%eeo_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.hallo_glob', this%hallo_glob, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%nmax/))
+      call g_safe_alloc%allocate('hamiltonian.ee0_glob', this%eeo_glob, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hallo_glob', this%hallo_glob, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax/))
       call g_safe_alloc%allocate('hamiltonian.enim_glob', this%enim_glob, (/18, 18, this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.v_a', this%v_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.v_b', this%v_b, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.vo_a', this%vo_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.vo_b', this%vo_b, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.js_a', this%js_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.jl_a', this%jl_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.jso_a', this%jso_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.jlo_a', this%jlo_a, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.v_a', this%v_a, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.v_b', this%v_b, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.vo_a', this%vo_a, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.vo_b', this%vo_b, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.js_a', this%js_a, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.jl_a', this%jl_a, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.jso_a', this%jso_a, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.jlo_a', this%jlo_a, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
       call g_safe_alloc%allocate('hamiltonian.velocity_scale', this%velocity_scale, (/this%charge%lattice%ntype/))
-      call g_safe_alloc%allocate('hamiltonian.hxc', this%hxc, (/18, 18, (this%charge%lattice%nn(1, 1) + 1), this%charge%lattice%ntype/))
+      call g_safe_alloc%allocate('hamiltonian.hxc', this%hxc, (/18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype/))
       !end if
       !end if
 #else
       allocate (this%lsham(18, 18, this%charge%lattice%ntype))
       allocate (this%tmat(18, 18, 3, this%charge%lattice%ntype))
-      allocate (this%hhmag(9, 9, 4), this%hmag(9, 9, this%charge%lattice%kk, 4))
+      allocate (this%hhmag(9, 9, 4), this%hmag(9, 9, (maxval(this%charge%lattice%nn(:, 1)) + 1), 4))
       allocate (this%hxc(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%ee(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%ntype))
       allocate (this%hall(18, 18, (maxval(this%charge%lattice%nn(:, 1)) + 1), this%charge%lattice%nmax))
@@ -2775,7 +2773,7 @@ end subroutine rs2pao
       integer, intent(in) :: ntype ! Atom type
       ! Local variables
       real(rp) :: r2
-      real(rp), dimension(3, size(this%charge%lattice%cr(1, :))) :: cralat ! Clust position times the lattice constant
+      real(rp), allocatable :: cralat(:, :) ! Scaled active-cluster coordinates
       real(rp), dimension(3) :: vet
       real(rp), dimension(9, 9) :: hhh
       integer :: i, j, k, l, m, n, it, jt, jj, dummy
@@ -2785,8 +2783,22 @@ end subroutine rs2pao
       this%hmag(:, :, :, :) = 0.0d0
 
       r2 = this%charge%lattice%r2
-      cralat(:, :) = this%charge%lattice%cr(:, :)*this%charge%lattice%alat
       kk = this%charge%lattice%kk
+      if (kk <= 0 .or. kk > size(this%charge%lattice%cr, 2)) then
+         call g_logger%fatal('chbar_nc: invalid active cluster size', __FILE__, __LINE__)
+         return
+      end if
+      if (ia < 1 .or. ia > kk .or. nr < 1 .or. nr > size(this%hmag, 3)) then
+         call g_logger%fatal('chbar_nc: invalid atom or neighbour extent', __FILE__, __LINE__)
+         return
+      end if
+      allocate (cralat(3, kk))
+      do i = 1, kk
+         do j = 1, 3
+            cralat(j, i) = this%charge%lattice%cr(j, i)*this%charge%lattice%alat
+         end do
+      end do
+      dummy = 0
 
       call this%charge%lattice%clusba(r2, cralat, ia, kk, kk, dummy)
 
@@ -2803,7 +2815,7 @@ end subroutine rs2pao
          if (jj /= 0) then
             jt = this%charge%lattice%iz(jj)
             if (this%lattice%pbc) then
-               call this%lattice%f_wrap_coord_diff(this%lattice%kk,this%lattice%cr*this%lattice%alat,ia,jj,vet)
+               call this%lattice%f_wrap_coord_diff(kk,cralat,ia,jj,vet)
             else
                vet(:) = (this%charge%lattice%cr(:, jj) - this%charge%lattice%cr(:, ia))*this%charge%lattice%alat
             end if
