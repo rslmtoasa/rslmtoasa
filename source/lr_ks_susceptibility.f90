@@ -101,6 +101,9 @@ module lr_ks_susceptibility_mod
       type(lmto_product_response_basis), pointer :: product_basis => null()
       type(lr_electronic_state), pointer :: electronic_state => null()
       type(lr_electronic_state), pointer :: q_endpoint_state => null()
+      ! Optional DRESP-01 orbital selector.  An absent mask preserves the
+      ! historical complete product-space oracle exactly.
+      logical, allocatable :: selected_l(:)
    end type lr_product_ks_susceptibility_request
 
    !> Result in the weighted-orthonormal LMTO product representation.
@@ -511,7 +514,11 @@ contains
                   cycle
                end if
                call right_band%initialize(right_state%eigenvalues(jb, ik), right_state%eigenvectors(:, jb, ik))
-               call product_basis%transition_coordinates(left_band, right_band, transition)
+               if (allocated(request%selected_l)) then
+                  call product_basis%transition_coordinates(left_band, right_band, transition, request%selected_l)
+               else
+                  call product_basis%transition_coordinates(left_band, right_band, transition)
+               end if
                result%ntransitions_evaluated = result%ntransitions_evaluated + 1
                do ifrequency = 1, size(request%frequencies)
                   denominator = cmplx(request%frequencies(ifrequency) + left_band%energy - right_band%energy, &

@@ -46,6 +46,9 @@ module tddft_production_driver_mod
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
    use lr_product_gf_susceptibility_mod, only: lr_product_gf_susceptibility_request, &
       lr_product_gf_susceptibility_result, evaluate_lr_product_gf_susceptibility
+   use lr_projected_site_spin_mod, only: projected_site_spin_contract
+   use lr_projected_reciprocal_chi0_mod, only: projected_chi0_request, projected_chi0_result, &
+      evaluate_projected_lehmann_chi0, evaluate_projected_gf_chi0
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
    use tddft_native_rsgf_provider_mod, only: tddft_native_rsgf_provider
@@ -71,6 +74,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_product_gf = 'product_gf'
    character(len=*), parameter, public :: tddft_driver_backend_product_finite_q = 'product_finite_q'
    character(len=*), parameter, public :: tddft_driver_backend_product_convergence = 'product_convergence'
+   character(len=*), parameter, public :: tddft_driver_backend_projected_chi0 = 'projected_chi0'
    character(len=*), parameter, public :: tddft_driver_backend_static_interactions = 'static_interactions'
    character(len=*), parameter, public :: tddft_driver_backend_compact_dyson = 'compact_dyson'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
@@ -336,9 +340,10 @@ contains
           trim(config%backend) /= tddft_driver_backend_product_gf .and. &
           trim(config%backend) /= tddft_driver_backend_product_finite_q .and. &
           trim(config%backend) /= tddft_driver_backend_product_convergence .and. &
+          trim(config%backend) /= tddft_driver_backend_projected_chi0 .and. &
           trim(config%backend) /= tddft_driver_backend_static_interactions .and. &
           trim(config%backend) /= tddft_driver_backend_compact_dyson) then
-         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, static_interactions or compact_dyson'
+         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions or compact_dyson'
       end if
       if (trim(config%backend) /= tddft_driver_backend_product_convergence .and. &
           trim(config%backend) /= tddft_driver_backend_static_interactions .and. size(config%eta_values) /= 1) then
@@ -367,6 +372,20 @@ contains
             error stop 'TDDFT input: product_gf requires an odd gf_integration_points value >= 3'
          end if
          if (config%gf_energy_margin <= 0.0_rp) error stop 'TDDFT input: product_gf requires gf_energy_margin positive'
+      end if
+      if (trim(config%backend) == tddft_driver_backend_projected_chi0) then
+         if (config%response_lmax >= 0 .and. config%response_lmax /= 4) then
+            error stop 'TDDFT input: projected_chi0 requires the complete response_lmax=4 product space'
+         end if
+         if (config%gf_integration_points < 3 .or. mod(config%gf_integration_points, 2) == 0) then
+            error stop 'TDDFT input: projected_chi0 requires an odd gf_integration_points value >= 3'
+         end if
+         if (config%gf_integration_eta < 0.0_rp .or. config%gf_integration_eta >= config%eta) then
+            error stop 'TDDFT input: projected_chi0 requires 0 <= gf_integration_eta < eta'
+         end if
+         if (config%gf_energy_margin <= 0.0_rp) then
+            error stop 'TDDFT input: projected_chi0 requires gf_energy_margin positive'
+         end if
       end if
       if (trim(config%backend) == tddft_driver_backend_product_finite_q) then
          if (size(config%q_list, 2) < 4) then
@@ -818,6 +837,11 @@ contains
       do iq = 1, size(config%q_list, 2)
          call lr_q_endpoint_from_reciprocal(reciprocal_obj, left_state, config%q_list(:, iq), endpoints(iq))
       end do
+      if (trim(config%backend) == tddft_driver_backend_projected_chi0) then
+         call run_tddft_projected_chi0(config, response_space, radial_bases, ground_states, left_state, endpoints, &
+            reciprocal_obj, lattice_obj, hamiltonian_obj)
+         return
+      end if
       if (trim(config%backend) == tddft_driver_backend_product_lehmann) then
          ! TDVK-02R2 is a bare-response validation seam only.  It stops at
          ! the naturally prepared reciprocal handoff and never enters KXC,
@@ -896,6 +920,250 @@ contains
       if (allocated(result%q_list)) deallocate(result%q_list)
       if (allocated(result%frequencies)) deallocate(result%frequencies)
    end subroutine run_tddft_production
+
+   !> DRESP-02 material seam.  Both projections consume the same accepted
+   !> reciprocal state and stop at bare chi0; no interaction or Dyson object
+   !> is constructed here.
+   subroutine run_tddft_projected_chi0(config, response_space, radial_bases, ground_states, left_state, endpoints, &
+                                      reciprocal_obj, lattice_obj, hamiltonian_obj)
+      type(tddft_production_config), intent(in) :: config
+      type(response_space_layout), target, intent(in) :: response_space
+      type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
+      type(radial_ground_state), target, intent(in) :: ground_states(:)
+      type(lr_electronic_state), target, intent(in) :: left_state
+      type(lr_electronic_state), target, intent(in) :: endpoints(:)
+      type(reciprocal), intent(inout) :: reciprocal_obj
+      type(lattice), intent(in) :: lattice_obj
+      type(hamiltonian), intent(in) :: hamiltonian_obj
+
+      type(projected_site_spin_contract), target :: contract_d, contract_spd
+      type(lmto_product_response_basis), target :: product_plus, product_minus
+      type(projected_chi0_request) :: request, minus_request
+      type(projected_chi0_result) :: lehmann_result, gf_result, minus_result, gamma_lehmann
+      type(projected_site_spin_contract), pointer :: contract
+      type(lmto_product_response_basis), pointer :: product
+      real(rp), allocatable :: moment(:), accepted_moment(:)
+      real(rp) :: norm_lehmann, norm_gf, difference, relative, accepted_total, moment_residual
+      real(rp) :: integration_eta, ladder_eta
+      integer :: projection_index, iq, ifrequency, i, j, orbital, unit, gamma_index, positive_index, negative_index
+      integer, dimension(3) :: ladder_points
+      real(rp), dimension(3) :: ladder_eta_multipliers
+      logical :: gamma_saved, covariance_saved
+      character(len=8) :: projection
+
+      ! lattice_obj is part of the material provenance boundary even though
+      ! the site-space result itself needs only the accepted response sites.
+      if (lattice_obj%nrec /= size(ground_states)) then
+         error stop 'DRESP-02 material seam: lattice/site provenance mismatch'
+      end if
+      if (response_space%response_lmax /= 4) then
+         error stop 'DRESP-02 material seam: complete response_lmax=4 is required'
+      end if
+      call contract_d%initialize(response_space, radial_bases, 'd')
+      call contract_spd%initialize(response_space, radial_bases, 'spd')
+      call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
+      call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
+      allocate(moment(size(ground_states)))
+      allocate(accepted_moment(size(ground_states)))
+      if (.not. allocated(reciprocal_obj%band_moments)) then
+         ! finalize_kspace_scf_state intentionally invalidates DOS-derived
+         ! arrays. Recreate only this diagnostic projection on the same
+         ! accepted eigensystem; calculate_density_of_states does not rebuild
+         ! H(k) when those eigenpairs are resident.
+         call reciprocal_obj%calculate_density_of_states(hamiltonian_obj, &
+            n_energy_points=reciprocal_obj%n_energy_points, &
+            energy_range=reciprocal_obj%dos_energy_range, &
+            method=reciprocal_obj%dos_method, gaussian_sigma=reciprocal_obj%gaussian_sigma, &
+            temperature=reciprocal_obj%temperature, fermi_level=left_state%fermi_level, &
+            total_electrons=reciprocal_obj%total_electrons, auto_find_fermi=.false., &
+            output_file=trim(config%output_file)//'.accepted_state_dos')
+      end if
+      if (size(reciprocal_obj%band_moments, 1) < size(ground_states) .or. &
+          size(reciprocal_obj%band_moments, 2) < 3 .or. size(reciprocal_obj%band_moments, 3) < 2 .or. &
+          size(reciprocal_obj%band_moments, 4) < 1) then
+         error stop 'DRESP-02 material seam: accepted band moment dimensions are incomplete'
+      end if
+      accepted_total = 0.0_rp
+      do i = 1, size(ground_states)
+         ! The accepted reciprocal SCF state stores its integrated moment on
+         ! the accepted potential. reported_moment is populated only by the
+         ! later human-readable report, and the radial quadrature integral is
+         ! retained as a separate cross-check rather than the gate source.
+         accepted_total = accepted_total + lattice_obj%symbolic_atoms(lattice_obj%nbulk + i)%potential%mtot
+      end do
+
+      integration_eta = config%gf_integration_eta
+      if (integration_eta <= 0.0_rp) integration_eta = config%eta/40.0_rp
+      gamma_index = find_gamma_q_index(config%q_list)
+      positive_index = 0
+      do iq = 1, size(config%q_list, 2)
+         if (sum(abs(config%q_list(:, iq))) > 2.0e-12_rp) then
+            positive_index = iq
+            exit
+         end if
+      end do
+      negative_index = 0
+      if (positive_index > 0) negative_index = find_matching_q(config%q_list, -config%q_list(:, positive_index), 2.0e-12_rp)
+      covariance_saved = positive_index > 0 .and. negative_index > 0
+
+      open(newunit=unit, file=trim(config%output_file), status='replace', action='write')
+      write(unit, '(a)') '# DRESP-02 projected reciprocal bare susceptibility'
+      write(unit, '(a)') '# verdict = algebraic projected-site backends; material GF closure is reported below'
+      write(unit, '(a)') '# state_source = one accepted k-space SCF reciprocal state; shared by Lehmann and GF'
+      write(unit, '(a,l1)') '# accepted_state_cache_reused = ', .true.
+      write(unit, '(a,3(i0,1x))') '# accepted_k_mesh = ', reciprocal_obj%nk_mesh
+      write(unit, '(a,i0)') '# accepted_k_count = ', left_state%nk
+      write(unit, '(a,es24.16)') '# EF_Ry = ', left_state%fermi_level
+      write(unit, '(a,es24.16)') '# temperature_K = ', left_state%temperature
+      write(unit, '(a,es24.16)') '# accepted_state_integrated_moment_muB = ', accepted_total
+      write(unit, '(a,a)') '# reciprocal_mode = ', trim(left_state%reciprocal_mode)
+      write(unit, '(a,a)') '# hamiltonian_order = ', trim(left_state%hamiltonian_order)
+      write(unit, '(a,es24.16)') '# eta_response_Ry = ', config%eta
+      write(unit, '(a,es24.16)') '# integration_eta_Ry = ', integration_eta
+      write(unit, '(a,i0)') '# gf_energy_points = ', config%gf_integration_points
+      write(unit, '(a,es24.16)') '# gf_energy_margin_Ry = ', config%gf_energy_margin
+      write(unit, '(a)') '# q_convention = exact folded reciprocal k+q endpoint; no extra DRESP site phase'
+      write(unit, '(a)') '# columns = projection q_index omega_Ry row col Lehmann_Re Lehmann_Im GF_Re GF_Im abs_diff rel_diff'
+
+      do projection_index = 1, 2
+         if (projection_index == 1) then
+            projection = 'd'
+            contract => contract_d
+         else
+            projection = 'spd'
+            contract => contract_spd
+         end if
+         if (trim(config%channel) == 'chi_plus') then
+            product => product_plus
+         else
+            product => product_minus
+         end if
+         call contract%moment_from_operator(left_state%eigenvalues, left_state%eigenvectors, left_state%k_weights, &
+            left_state%fermi_level, left_state%temperature, ground_states, moment)
+         accepted_moment = 0.0_rp
+         do i = 1, size(ground_states)
+            if (projection_index == 1) then
+               accepted_moment(i) = reciprocal_obj%band_moments(i, 3, 1, 1) - &
+                  reciprocal_obj%band_moments(i, 3, 2, 1)
+            else
+               do orbital = 1, 3
+                  accepted_moment(i) = accepted_moment(i) + reciprocal_obj%band_moments(i, orbital, 1, 1) - &
+                     reciprocal_obj%band_moments(i, orbital, 2, 1)
+               end do
+            end if
+         end do
+         if (.not. all(ieee_is_finite(accepted_moment))) then
+            error stop 'DRESP-02 material seam: projected band moments are not finite'
+         end if
+         if (projection_index == 2) then
+            moment_residual = abs(sum(accepted_moment) - accepted_total)
+            if (moment_residual > 2.0e-5_rp) then
+               error stop 'DRESP-02 material seam: accepted spd/total moment check failed'
+            end if
+         else
+            moment_residual = 0.0_rp
+         end if
+         write(unit, '(a,a)') '# projection = ', trim(projection)
+         write(unit, '(a,*(es24.16,1x))') '# projected_moment_muB = ', accepted_moment
+         write(unit, '(a,*(es24.16,1x))') '# dresp_operator_moment_muB = ', moment
+         write(unit, '(a,es24.16)') '# accepted_spd_total_residual_muB = ', moment_residual
+         write(unit, '(a)') '# core_policy = valence-only; frozen core excluded'
+         gamma_saved = .false.
+
+         do iq = 1, size(config%q_list, 2)
+            request%q = config%q_list(:, iq)
+            request%frequencies = config%frequencies
+            request%eta = config%eta
+            request%channel = lr_channel_plus
+            request%integration_points = config%gf_integration_points
+            request%integration_eta = integration_eta
+            request%energy_margin = config%gf_energy_margin
+            request%contract => contract
+            request%product_basis => product
+            request%electronic_state => left_state
+            request%q_endpoint_state => endpoints(iq)
+            request%channel = config%channel
+            call evaluate_projected_lehmann_chi0(request, lehmann_result)
+            call evaluate_projected_gf_chi0(request, gf_result)
+            write(unit, '(a,1x,i0,1x,2(es24.16,1x),i0,1x,es24.16,1x,a)') &
+               '# gf_controls q=', iq, gf_result%energy_min, gf_result%energy_max, &
+               gf_result%integration_points, gf_result%integration_eta, 'quadrature=Simpson'
+            norm_lehmann = sqrt(sum(abs(lehmann_result%susceptibility)**2))
+            norm_gf = sqrt(sum(abs(gf_result%susceptibility)**2))
+            difference = sqrt(sum(abs(lehmann_result%susceptibility - gf_result%susceptibility)**2))
+            relative = difference/max(norm_lehmann, tiny(1.0_rp))
+            write (*, '(a,a,a,i0,a,es12.4,a,es12.4,a,es12.4)') 'DRESP-02 Fe ', trim(projection), &
+               ' q=', iq, ' norm_Lehmann=', norm_lehmann, ' norm_GF=', norm_gf, ' dF=', difference
+            do ifrequency = 1, size(config%frequencies)
+               do j = 1, contract%nsite
+                  do i = 1, contract%nsite
+                     write(unit, '(a,1x,i0,1x,es24.16,1x,2(i0,1x),6(es24.16,1x))') trim(projection), iq, &
+                        config%frequencies(ifrequency), i, j, real(lehmann_result%susceptibility(i, j, ifrequency), rp), &
+                        aimag(lehmann_result%susceptibility(i, j, ifrequency)), real(gf_result%susceptibility(i, j, ifrequency), rp), &
+                        aimag(gf_result%susceptibility(i, j, ifrequency)), abs(lehmann_result%susceptibility(i, j, ifrequency) - &
+                        gf_result%susceptibility(i, j, ifrequency)), relative
+                  end do
+               end do
+            end do
+            if (iq == gamma_index) then
+               gamma_lehmann = lehmann_result
+               gamma_saved = .true.
+            end if
+         end do
+
+         if (covariance_saved) then
+            minus_request%q = config%q_list(:, negative_index)
+            minus_request%frequencies = -config%frequencies
+            minus_request%eta = config%eta
+            minus_request%channel = lr_channel_minus
+            minus_request%contract => contract
+            minus_request%product_basis => product_minus
+            minus_request%electronic_state => left_state
+            minus_request%q_endpoint_state => endpoints(negative_index)
+            call evaluate_projected_lehmann_chi0(minus_request, minus_result)
+            request%q = config%q_list(:, positive_index)
+            request%frequencies = config%frequencies
+            request%channel = config%channel
+            request%product_basis => product
+            request%q_endpoint_state => endpoints(positive_index)
+            call evaluate_projected_lehmann_chi0(request, lehmann_result)
+            difference = maxval(abs(lehmann_result%susceptibility - conjg(minus_result%susceptibility)))
+            write(unit, '(a,a,es24.16)') '# q_minus_q_covariance_max_abs = ', trim(projection), difference
+         end if
+
+         if (config%gf_closure_audit .and. gamma_saved) then
+            ladder_eta_multipliers = [4.0_rp, 2.0_rp, 1.0_rp]
+            ladder_points(1) = max(1001, config%gf_integration_points/4)
+            ladder_points(2) = max(ladder_points(1) + 2, config%gf_integration_points/2)
+            ladder_points(3) = max(ladder_points(2) + 2, config%gf_integration_points)
+            do i = 1, size(ladder_points)
+               if (mod(ladder_points(i), 2) == 0) ladder_points(i) = ladder_points(i) + 1
+               ladder_eta = integration_eta*ladder_eta_multipliers(i)
+               if (ladder_eta >= config%eta) cycle
+               request%q = config%q_list(:, gamma_index)
+               request%frequencies = config%frequencies
+               request%eta = config%eta
+               request%channel = config%channel
+               request%integration_points = ladder_points(i)
+               request%integration_eta = ladder_eta
+               request%energy_margin = config%gf_energy_margin
+               request%contract => contract
+               request%product_basis => product
+               request%electronic_state => left_state
+               request%q_endpoint_state => endpoints(gamma_index)
+               call evaluate_projected_gf_chi0(request, gf_result)
+               difference = sqrt(sum(abs(gamma_lehmann%susceptibility - gf_result%susceptibility)**2))
+               relative = difference/max(sqrt(sum(abs(gamma_lehmann%susceptibility)**2)), tiny(1.0_rp))
+               write(unit, '(a,a,1x,i0,1x,5(es24.16,1x))') &
+                  '# gf_ladder projection=', trim(projection), ladder_points(i), ladder_eta, difference, relative, &
+                  real(gf_result%susceptibility(1, 1, 1), rp), aimag(gf_result%susceptibility(1, 1, 1))
+            end do
+         end if
+      end do
+      close(unit)
+      deallocate(moment)
+      deallocate(accepted_moment)
+   end subroutine run_tddft_projected_chi0
 
    !> Evaluate the compact direct-ALSDA Dyson response.
    !>

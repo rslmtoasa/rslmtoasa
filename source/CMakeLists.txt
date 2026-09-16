@@ -92,6 +92,7 @@ add_library(${PROJECT_NAME} STATIC
     lr_ks_susceptibility.f90
     lr_gf_susceptibility.f90
     lr_product_gf_susceptibility.f90
+    lr_projected_reciprocal_chi0.f90
     lr_rs_gf_susceptibility.f90
     tddft_native_rsgf_provider.f90
     lr_alsda_kernel.f90

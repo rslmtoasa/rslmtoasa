@@ -43,6 +43,9 @@ module lr_product_gf_susceptibility_mod
       type(lmto_product_response_basis), pointer :: product_basis => null()
       type(lr_electronic_state), pointer :: electronic_state => null()
       type(lr_electronic_state), pointer :: q_endpoint_state => null()
+      ! Optional DRESP-01 orbital selector; absent means the complete product
+      ! response used by the pre-DRESP oracle.
+      logical, allocatable :: selected_l(:)
    end type lr_product_gf_susceptibility_request
 
    type, public :: lr_product_gf_susceptibility_result
@@ -129,7 +132,11 @@ contains
       end if
       call system_clock(wall_start, clock_rate)
       call cpu_time(cpu_start)
-      call product_basis%component_vertex_tensor(vertices)
+      if (allocated(request%selected_l)) then
+         call product_basis%component_vertex_tensor(vertices, request%selected_l)
+      else
+         call product_basis%component_vertex_tensor(vertices)
+      end if
       if (use_optimized_contraction) call initialize_product_gf_contraction_workspace(contraction_workspace, vertices)
       nbasis = left_state%nbasis
       nfrequency = size(request%frequencies)
@@ -254,7 +261,11 @@ contains
 
       call system_clock(wall_start, clock_rate)
       call cpu_time(cpu_start)
-      call product_basis%component_vertex_tensor(vertices)
+      if (allocated(request%selected_l)) then
+         call product_basis%component_vertex_tensor(vertices, request%selected_l)
+      else
+         call product_basis%component_vertex_tensor(vertices)
+      end if
       nbasis = left_state%nbasis
       nleft_bands = left_state%nbands
       nright_bands = right_state%nbands

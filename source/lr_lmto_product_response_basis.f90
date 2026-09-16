@@ -349,11 +349,13 @@ contains
       end if
    end subroutine validate_product_index_inputs
 
-   subroutine lmto_product_candidate_coefficients(this, site, response_l, response_m, left_state, right_state, coefficients)
+   subroutine lmto_product_candidate_coefficients(this, site, response_l, response_m, left_state, right_state, coefficients, &
+                                                  selected_l)
       class(lmto_product_response_basis), intent(in) :: this
       integer, intent(in) :: site, response_l, response_m
       type(pauli_endpoint_state), intent(in) :: left_state, right_state
       complex(rp), intent(out) :: coefficients(:)
+      logical, intent(in), optional :: selected_l(0:)
       integer :: norb, offset, iorb, jorb, spin_left, spin_right, k, ncandidate
       integer :: orbital_l, orbital_lp, orbital_m, orbital_mp
       real(rp) :: left_power, right_power
@@ -380,6 +382,14 @@ contains
       end if
       coefficients = cmplx(0.0_rp, 0.0_rp, rp)
       do k = 1, ncandidate
+         if (present(selected_l)) then
+            if (this%blocks(site, response_l)%candidates(k)%l < lbound(selected_l, 1) .or. &
+                this%blocks(site, response_l)%candidates(k)%l > ubound(selected_l, 1) .or. &
+                this%blocks(site, response_l)%candidates(k)%lp < lbound(selected_l, 1) .or. &
+                this%blocks(site, response_l)%candidates(k)%lp > ubound(selected_l, 1) .or. &
+                .not. selected_l(this%blocks(site, response_l)%candidates(k)%l) .or. &
+                .not. selected_l(this%blocks(site, response_l)%candidates(k)%lp)) cycle
+         end if
          left_power = 1.0_rp
          right_power = 1.0_rp
          if (this%blocks(site, response_l)%candidates(k)%p == 1) left_power = left_state%energy
@@ -401,10 +411,11 @@ contains
       end do
    end subroutine lmto_product_candidate_coefficients
 
-   subroutine lmto_product_transition_coordinates(this, left_state, right_state, coordinates)
+   subroutine lmto_product_transition_coordinates(this, left_state, right_state, coordinates, selected_l)
       class(lmto_product_response_basis), intent(in) :: this
       type(pauli_endpoint_state), intent(in) :: left_state, right_state
       complex(rp), intent(out) :: coordinates(:)
+      logical, intent(in), optional :: selected_l(0:)
       complex(rp), allocatable :: coefficients(:)
       integer :: site, response_l, response_m
 
@@ -417,7 +428,12 @@ contains
          do response_l = 0, this%response_lmax
             allocate(coefficients(this%blocks(site, response_l)%ncandidate))
             do response_m = -response_l, response_l
-               call this%candidate_coefficients(site, response_l, response_m, left_state, right_state, coefficients)
+               if (present(selected_l)) then
+                  call this%candidate_coefficients(site, response_l, response_m, left_state, right_state, coefficients, &
+                     selected_l)
+               else
+                  call this%candidate_coefficients(site, response_l, response_m, left_state, right_state, coefficients)
+               end if
                coordinates(this%flat_index(site, response_l, response_m, 1): &
                   this%flat_index(site, response_l, response_m, this%blocks(site, response_l)%rank)) = &
                   matmul(this%blocks(site, response_l)%forward_transform, coefficients)
@@ -435,9 +451,10 @@ contains
    !> Component ordering is `1+p+2*q`.  The tensor is indexed as
    !> `(electronic-left, electronic-right, component, product-coordinate)` and
    !> contains no point-space response allocation.
-   subroutine lmto_product_component_vertex_tensor(this, vertices)
+   subroutine lmto_product_component_vertex_tensor(this, vertices, selected_l)
       class(lmto_product_response_basis), intent(in) :: this
       complex(rp), allocatable, intent(out) :: vertices(:, :, :, :)
+      logical, intent(in), optional :: selected_l(0:)
 
       integer :: norb, nbasis, flat, site, response_l, response_m, product_mode
       integer :: p, q, component, k, iorb, jorb, spin_left, spin_right
@@ -473,6 +490,11 @@ contains
                       this%blocks(site, response_l)%candidates(k)%q /= q) cycle
                   orbital_l = this%blocks(site, response_l)%candidates(k)%l
                   orbital_lp = this%blocks(site, response_l)%candidates(k)%lp
+                  if (present(selected_l)) then
+                     if (orbital_l < lbound(selected_l, 1) .or. orbital_l > ubound(selected_l, 1) .or. &
+                         orbital_lp < lbound(selected_l, 1) .or. orbital_lp > ubound(selected_l, 1) .or. &
+                         .not. selected_l(orbital_l) .or. .not. selected_l(orbital_lp)) cycle
+                  end if
                   do iorb = 1, norb
                      if (lmto_orbital_l(iorb) /= orbital_l) cycle
                      orbital_m = iorb - orbital_l*orbital_l - orbital_l - 1

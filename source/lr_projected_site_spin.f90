@@ -65,6 +65,7 @@ module lr_projected_site_spin_mod
       procedure :: transition_amplitudes => projected_transition_amplitudes
       procedure :: direct_operator_matrix => projected_direct_operator_matrix
       procedure :: direct_transition_amplitudes => projected_direct_transition_amplitudes
+      procedure :: site_component_vertex_tensor => projected_site_component_vertex_tensor
       procedure :: moment_from_density => projected_moment_from_density
       procedure :: moment_from_operator => projected_moment_from_operator
       procedure :: core_spin_number => projected_core_spin_number
@@ -303,6 +304,38 @@ contains
          end do
       end do
    end subroutine projected_direct_transition_amplitudes
+
+   !> Build the four affine endpoint components of the selected, site-integrated
+   !> DRESP-01 operator in coefficient space.  This is the GF-facing form of
+   !> the same operator used by transition_amplitudes; it contains no energy
+   !> denominator and no response accumulation.
+   !>
+   !> Component ordering is `1+p+2*q`, where p is the left endpoint power and
+   !> q is the right endpoint power.  The returned tensor is indexed as
+   !> `(coefficient-left, coefficient-right, component, site)`.
+   subroutine projected_site_component_vertex_tensor(this, product, vertices)
+      class(projected_site_spin_contract), intent(in) :: this
+      type(lmto_product_response_basis), intent(in) :: product
+      complex(rp), allocatable, intent(out) :: vertices(:, :, :, :)
+
+      complex(rp), allocatable :: product_vertices(:, :, :, :), functionals(:, :)
+      integer :: nbasis, flat, site
+
+      call validate_product(this, product, 'DRESP-01 site component vertices')
+      call product%component_vertex_tensor(product_vertices, this%selected_l)
+      allocate(functionals(product%product_dimension, this%nsite))
+      call this%site_integration_functional(product, functionals)
+      nbasis = size(product_vertices, 1)
+      allocate(vertices(nbasis, nbasis, 4, this%nsite))
+      vertices = cmplx(0.0_rp, 0.0_rp, rp)
+      do site = 1, this%nsite
+         do flat = 1, product%product_dimension
+            vertices(:, :, :, site) = vertices(:, :, :, site) + &
+               conjg(functionals(flat, site))*product_vertices(:, :, :, flat)
+         end do
+      end do
+      deallocate(product_vertices, functionals)
+   end subroutine projected_site_component_vertex_tensor
 
    subroutine projected_moment_from_density(this, eigenvalues, eigenvectors, k_weights, fermi_level, temperature, &
                                             ground_states, moment)
