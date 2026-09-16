@@ -648,6 +648,16 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrLmtoProductStrictRankGuard PROPERTIES
     LABELS "unit;tdvk-02r1;product-basis;negative;rank-guard"
     WILL_FAIL TRUE)
+  add_fortran_unit_test(UnitLrProjectedSiteSpin ${TestDIR}/unit/test_lr_projected_site_spin.f90)
+  set_tests_properties(UnitLrProjectedSiteSpin PROPERTIES LABELS "unit;dresp-01;projected-site-spin;operator;moment")
+  add_test(NAME UnitLrProjectedSiteSpinRejectSpdf COMMAND $<TARGET_FILE:UnitLrProjectedSiteSpin> spdf)
+  set_tests_properties(UnitLrProjectedSiteSpinRejectSpdf PROPERTIES
+    LABELS "unit;dresp-01;projected-site-spin;negative;selector"
+    WILL_FAIL TRUE)
+  add_test(NAME Dresp01BccFeMaterialGate
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/val_dresp01_projected_site_spin.py)
+  set_tests_properties(Dresp01BccFeMaterialGate PROPERTIES LABELS "validation;dresp-01;projected-site-spin;material-gate"
+    SKIP_RETURN_CODE 77)
   add_fortran_unit_test(UnitLrProductKsSusceptibility ${TestDIR}/unit/test_lr_product_ks_susceptibility.f90)
   set_tests_properties(UnitLrProductKsSusceptibility PROPERTIES LABELS "unit;tdvk-02r2;lr-06;product-basis;lehmann")
   add_fortran_unit_test(UnitLrCompactStaticInteraction ${TestDIR}/unit/test_lr_compact_static_interaction.f90)
