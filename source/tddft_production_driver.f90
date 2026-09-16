@@ -1299,6 +1299,7 @@ contains
 
       write(unit, '(a)') '# DRESP-02R controlled GF closure audit; all samples reuse one frozen accepted state'
       write(unit, '(a)') '# gf_audit_samples columns: projection campaign sample eta_response eta_int margin Emin Emax NE h h_over_eta chiL chiGF delta_Re delta_Im delta_abs relative wall_seconds'
+      write(unit, '(a)') '# gf_profile columns: projection campaign sample implementation allocation_s vertex_s endpoint_transform_s resolvent_s accumulator_s diagnostic_s wall_s resolvent_calls accumulator_calls'
 
       ! Fixed integration eta: this isolates the real-axis mesh error.
       do i = 1, n_campaign
@@ -1405,6 +1406,10 @@ contains
          response_eta, integration_eta, margin, gf_result%energy_min, gf_result%energy_max, gf_result%integration_points, &
          gf_result%energy_spacing, gf_result%spacing_over_integration_eta, norm_lehmann, norm_gf, delta_re, delta_im, &
          delta_abs, relative, gf_result%wall_time_seconds
+      write(unit, '(a,1x,a,1x,a,1x,i0,1x,a,1x,7(es24.16,1x),2(i0,1x))') '# gf_profile', trim(projection), trim(campaign), sample, &
+         trim(gf_result%implementation), gf_result%allocation_seconds, gf_result%vertex_seconds, &
+         gf_result%endpoint_transform_seconds, gf_result%resolvent_seconds, gf_result%accumulator_seconds, &
+         gf_result%diagnostic_seconds, gf_result%wall_time_seconds, gf_result%resolvent_calls, gf_result%accumulator_calls
       deallocate(delta)
    end subroutine write_projected_gf_audit_row
 

@@ -22,7 +22,7 @@ program test_lr_projected_reciprocal_chi0
       lr_product_gf_susceptibility_result, lr_product_gf_contraction_factorized, &
       evaluate_lr_product_gf_susceptibility
    use lr_projected_reciprocal_chi0_mod, only: projected_chi0_request, projected_chi0_result, &
-      evaluate_projected_lehmann_chi0, evaluate_projected_gf_chi0
+      evaluate_projected_lehmann_chi0, evaluate_projected_gf_chi0, evaluate_projected_gf_chi0_reference
    implicit none
 
    call basis_init(2)
@@ -115,13 +115,14 @@ contains
       logical, intent(in) :: do_ladder
 
       type(projected_chi0_request) :: request
-      type(projected_chi0_result) :: direct_lehmann, direct_gf, gf_coarse, gf_fine
+      type(projected_chi0_result) :: direct_lehmann, direct_gf, direct_gf_reference, gf_coarse, gf_fine
       type(lr_product_ks_susceptibility_request) :: product_request
       type(lr_product_ks_susceptibility_result) :: product_lehmann
       type(lr_product_gf_susceptibility_request) :: product_gf_request
       type(lr_product_gf_susceptibility_result) :: product_gf
       complex(rp), allocatable :: oracle_lehmann(:, :, :), oracle_gf(:, :, :)
-      real(rp) :: lehmann_residual, gf_residual, coarse_difference, fine_difference, trend_residual
+      real(rp) :: lehmann_residual, gf_residual, reference_residual, reference_term_one_residual, &
+         reference_term_two_residual, coarse_difference, fine_difference, trend_residual
       real(rp) :: diagnostic_residual
       integer :: i
 
@@ -189,6 +190,19 @@ contains
       request%integration_points = 101
       request%integration_eta = 0.012_rp
       call evaluate_projected_gf_chi0(request, direct_gf)
+      call evaluate_projected_gf_chi0_reference(request, direct_gf_reference)
+      reference_residual = maxval(abs(direct_gf%susceptibility - direct_gf_reference%susceptibility))
+      reference_term_one_residual = maxval(abs(direct_gf%kubo_term_one - direct_gf_reference%kubo_term_one))
+      reference_term_two_residual = maxval(abs(direct_gf%kubo_term_two - direct_gf_reference%kubo_term_two))
+      write (*, '(a,es12.4,a,es12.4,a,es12.4)') '  '//trim(label)// &
+         ' GF ref full/term1/term2 max|dchi| = ', reference_residual, ' ', reference_term_one_residual, ' ', &
+         reference_term_two_residual
+      if (trim(direct_gf%implementation) /= 'eigenbasis' .or. trim(direct_gf_reference%implementation) /= 'dense-reference' .or. &
+          direct_gf%resolvent_calls /= 0 .or. direct_gf_reference%resolvent_calls <= 0 .or. &
+          reference_residual > 2.0e-10_rp .or. reference_term_one_residual > 2.0e-10_rp .or. &
+          reference_term_two_residual > 2.0e-10_rp) then
+         failed = .true.
+      end if
       diagnostic_residual = maxval(abs(direct_gf%kubo_term_one + direct_gf%kubo_term_two - direct_gf%susceptibility))
       if (.not. allocated(direct_gf%kubo_term_one) .or. .not. allocated(direct_gf%kubo_term_two) .or. &
           .not. allocated(direct_gf%k_susceptibility) .or. diagnostic_residual > 2.0e-12_rp .or. &

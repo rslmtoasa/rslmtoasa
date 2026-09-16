@@ -1,7 +1,10 @@
 # DRESP-02R — Material GF/Lehmann Closure Remediation
 
-Status: `BLOCKED — PERFORMANCE`; DRESP-02 algebraic certification remains
-valid, but material GF closure is not certified.
+Status: `BLOCKED — MATERIAL GF CLOSURE UNRESOLVED`; DRESP-02 algebraic
+certification remains valid and DRESP-02P has removed the performance blocker.
+
+The exact controlled material rerun and performance evidence are recorded in
+[`DRESP_02P_PROJECTED_GF_PERFORMANCE.md`](DRESP_02P_PROJECTED_GF_PERFORMANCE.md).
 
 This remediation stays inside DRESP-02. It does not open a new response rung,
 change the DRESP-01 operator, change the product oracle, change a tolerance,
@@ -139,10 +142,11 @@ mesh samples were:
 These values are far outside the unit-oracle residuals and are not a closure
 pass. The fixed-eta d sequence is non-monotone; the spd sequence decreases
 but remains macroscopic. The newly added controlled-eta and window campaigns
-are implemented in the driver, but the full two-selector campaign exceeded
-the available material run budget after the 4001-point d diagnostics. Thus a
-stable eta-to-zero or window-to-infinity conclusion cannot be claimed from
-the partial run.
+are implemented in the driver. The original material run stopped after the
+4001-point d diagnostics because of the performance budget; DRESP-02P
+subsequently completed the full two-selector campaign with the same frozen
+state and controls. Its residual tables and timing profile are reported in
+`DRESP_02P_PROJECTED_GF_PERFORMANCE.md`.
 
 ## Root-cause classification and exact return action
 
@@ -154,20 +158,17 @@ The evidence separates the layers as follows:
   missing second term in the diagnostic accumulator;
 - finite-window spectral moments, especially the Fermi-weighted moment, are
   not yet resolved at the material sample;
-- material GF cost grows with the number of k points, resolvent energy points,
-  projections, and three campaigns, preventing completion at the controlled
-  resolution.
+- the optimized material GF campaign is now executable at the controlled
+  resolution; its remaining GF/Lehmann residual is therefore no longer
+  classified as a performance failure.
 
-Accordingly this is `BLOCKED — PERFORMANCE`, not `PASS` and not yet a
-formulation defect. The next exact action is to make the real-axis material
-campaign complete at the already specified controls (or run it with a
-longer performance allowance), retain the same frozen-state fingerprints,
-and inspect the completed h/eta, eta, window, per-k, term, moment, and
-transition tables. The tolerance must remain unchanged. If those completed
-controlled ladders converge to the Lehmann matrix, return `PASS — numerical
-closure`; if they converge to a nonzero offset after all controls are
-resolved, return `BLOCKED — FORMULATION` with the offending term/transition
-identified.
+Accordingly the performance blocker is cleared, but this gate is not `PASS`.
+Use the completed h/eta, eta, window, per-k, term, moment, and transition
+tables for the next DRESP-02 closure decision. The tolerance remains
+unchanged. If the controlled ladders converge to the Lehmann matrix, return
+`PASS — numerical closure`; if they converge to a nonzero offset after all
+controls are resolved, return `BLOCKED — FORMULATION` with the offending
+term/transition identified.
 
 After either a genuine closure pass or a separately documented formulation
 resolution, return directly to DRESP-02’s next authorized integration step.

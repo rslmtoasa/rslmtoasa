@@ -93,6 +93,19 @@ module lr_projected_reciprocal_chi0_mod
       integer(int64) :: susceptibility_memory_bytes = 0_int64
       real(rp) :: wall_time_seconds = 0.0_rp
       real(rp) :: cpu_time_seconds = 0.0_rp
+      ! Performance observables.  The reference backend reports the dense
+      ! resolvent and scalar bubble counts; the optimized backend reports the
+      ! eigenbasis transform and vectorized denominator work instead.
+      character(len=16) :: implementation = ''
+      real(rp) :: allocation_seconds = 0.0_rp
+      real(rp) :: vertex_seconds = 0.0_rp
+      real(rp) :: endpoint_transform_seconds = 0.0_rp
+      real(rp) :: resolvent_seconds = 0.0_rp
+      real(rp) :: accumulator_seconds = 0.0_rp
+      real(rp) :: diagnostic_seconds = 0.0_rp
+      integer(int64) :: resolvent_calls = 0_int64
+      integer(int64) :: accumulator_calls = 0_int64
+      integer(int64) :: endpoint_transform_calls = 0_int64
       complex(rp), allocatable :: susceptibility(:, :, :) ! (site,site,frequency)
       ! Optional DRESP-02R Kubo and k-resolved observables.
       complex(rp), allocatable :: kubo_term_one(:, :, :) ! (site,site,frequency)
@@ -110,6 +123,8 @@ module lr_projected_reciprocal_chi0_mod
 
    public :: evaluate_projected_lehmann_chi0
    public :: evaluate_projected_gf_chi0
+   public :: evaluate_projected_gf_chi0_optimized
+   public :: evaluate_projected_gf_chi0_reference
 
 contains
 
@@ -206,7 +221,328 @@ contains
       if (allocated(k_response)) deallocate(k_response)
    end subroutine evaluate_projected_lehmann_chi0
 
+   !> Production projected GF backend.  The public seam deliberately keeps the
+   !> old name used by DRESP-02 while routing production work to the optimized
+   !> real-axis implementation.  The dense-resolvent implementation remains
+   !> available as evaluate_projected_gf_chi0_reference for certification.
    subroutine evaluate_projected_gf_chi0(request, result)
+      type(projected_chi0_request), intent(in) :: request
+      type(projected_chi0_result), intent(out) :: result
+
+      call evaluate_projected_gf_chi0_optimized(request, result)
+   end subroutine evaluate_projected_gf_chi0
+
+   !> Evaluate the same explicit real-energy Kubo integral in endpoint
+   !> eigenbases.  The energy integral is retained: only the already
+   !> diagonalized resolvents and affine endpoint vertices are combined before
+   !> the energy loop.  This is algebraically equivalent to the reference
+   !> dense-resolvent route, but produces the site matrix directly.
+   subroutine evaluate_projected_gf_chi0_optimized(request, result)
+      type(projected_chi0_request), intent(in) :: request
+      type(projected_chi0_result), intent(out) :: result
+
+      type(projected_site_spin_contract), pointer :: contract
+      type(lmto_product_response_basis), pointer :: product
+      type(lr_electronic_state), pointer :: left_state, right_state
+      complex(rp), allocatable :: vertices(:, :, :, :), transitions(:, :, :)
+      complex(rp), allocatable :: transition_flat(:, :), weighted_transition(:, :), contribution(:, :)
+      complex(rp), allocatable :: left_spectral(:), right_spectral(:), right_retarded(:), left_advanced(:)
+      complex(rp), allocatable :: kernel(:, :)
+      complex(rp), allocatable :: k_response(:, :, :), k_term_one(:, :, :), k_term_two(:, :, :)
+      complex(rp), allocatable :: left_zero(:, :), right_zero(:, :), left_first(:, :), right_first(:, :), &
+         left_fermi(:, :), right_fermi(:, :), residual_matrix(:, :), scaled_vectors(:, :)
+      real(rp) :: integration_eta, energy_min, energy_max, step, energy, fermi_weight
+      real(rp) :: quadrature_weight, weight_sum, scale
+      real(rp) :: cpu_start, cpu_stop
+      integer(int64) :: wall_start, wall_stop, clock_rate, stage_start, stage_stop
+      integer :: channel_kind, ne, nfrequency, nleft, nright, npairs, ik, ie, ifrequency
+
+      call validate_request(request, channel_kind)
+      if (request%integration_points < 3 .or. mod(request%integration_points, 2) == 0) then
+         error stop 'evaluate_projected_gf_chi0_optimized: integration_points must be odd and at least three'
+      end if
+      if (request%energy_margin <= 0.0_rp) then
+         error stop 'evaluate_projected_gf_chi0_optimized: energy_margin must be positive'
+      end if
+      contract => request%contract
+      product => request%product_basis
+      left_state => request%electronic_state
+      right_state => request%q_endpoint_state
+      call left_state%validate('evaluate_projected_gf_chi0_optimized:left_state')
+      call right_state%validate('evaluate_projected_gf_chi0_optimized:q_endpoint_state')
+
+      integration_eta = request%integration_eta
+      if (integration_eta <= 0.0_rp) integration_eta = request%eta/40.0_rp
+      if (integration_eta >= request%eta) then
+         error stop 'evaluate_projected_gf_chi0_optimized: integration_eta must be smaller than response eta'
+      end if
+
+      call system_clock(wall_start, clock_rate)
+      call cpu_time(cpu_start)
+      call system_clock(stage_start)
+      call contract%site_component_vertex_tensor(product, vertices)
+      call system_clock(stage_stop)
+      result%vertex_seconds = real(max(0_int64, stage_stop - stage_start), rp)/real(max(1_int64, clock_rate), rp)
+
+      ne = request%integration_points
+      nfrequency = size(request%frequencies)
+      nleft = left_state%nbands
+      nright = right_state%nbands
+      npairs = nleft*nright
+      energy_min = min(minval(left_state%eigenvalues), minval(right_state%eigenvalues)) - request%energy_margin
+      energy_max = max(maxval(left_state%eigenvalues), maxval(right_state%eigenvalues)) + request%energy_margin
+      if (energy_max <= energy_min) error stop 'evaluate_projected_gf_chi0_optimized: invalid integration interval'
+      step = (energy_max - energy_min)/real(ne - 1, rp)
+      weight_sum = sum(left_state%k_weights)
+
+      call system_clock(stage_start)
+      allocate(result%susceptibility(contract%nsite, contract%nsite, nfrequency), result%frequencies(nfrequency), &
+         transitions(nleft, nright, contract%nsite), transition_flat(npairs, contract%nsite), &
+         weighted_transition(npairs, contract%nsite), contribution(contract%nsite, contract%nsite), &
+         left_spectral(nleft), right_spectral(nright), right_retarded(nright), left_advanced(nleft), kernel(nleft, nright))
+      if (request%diagnostics) then
+         allocate(result%kubo_term_one(contract%nsite, contract%nsite, nfrequency), &
+            result%kubo_term_two(contract%nsite, contract%nsite, nfrequency), &
+            result%k_susceptibility(contract%nsite, contract%nsite, nfrequency, left_state%nk), &
+            k_response(contract%nsite, contract%nsite, nfrequency), &
+            k_term_one(contract%nsite, contract%nsite, nfrequency), k_term_two(contract%nsite, contract%nsite, nfrequency), &
+            left_zero(nleft, left_state%nk), right_zero(nright, left_state%nk), &
+            left_first(nleft, left_state%nk), right_first(nright, left_state%nk), &
+            left_fermi(nleft, left_state%nk), right_fermi(nright, left_state%nk), &
+            residual_matrix(left_state%nbasis, left_state%nbasis), scaled_vectors(left_state%nbasis, nleft))
+         result%kubo_term_one = cmplx(0.0_rp, 0.0_rp, rp)
+         result%kubo_term_two = cmplx(0.0_rp, 0.0_rp, rp)
+         result%k_susceptibility = cmplx(0.0_rp, 0.0_rp, rp)
+         left_zero = cmplx(0.0_rp, 0.0_rp, rp)
+         right_zero = cmplx(0.0_rp, 0.0_rp, rp)
+         left_first = cmplx(0.0_rp, 0.0_rp, rp)
+         right_first = cmplx(0.0_rp, 0.0_rp, rp)
+         left_fermi = cmplx(0.0_rp, 0.0_rp, rp)
+         right_fermi = cmplx(0.0_rp, 0.0_rp, rp)
+      end if
+      call system_clock(stage_stop)
+      result%allocation_seconds = real(max(0_int64, stage_stop - stage_start), rp)/real(max(1_int64, clock_rate), rp)
+
+      result%susceptibility = cmplx(0.0_rp, 0.0_rp, rp)
+      result%integration_points = ne
+      result%endpoint_transform_calls = int(left_state%nk*contract%nsite*4, int64)
+
+      ! P2/P3: combine the affine endpoint vertex with the eigenvectors once
+      ! per k.  All later work is a site-space outer product over the same
+      ! explicit GF energy mesh.
+      do ik = 1, left_state%nk
+         call system_clock(stage_start)
+         call build_projected_eigenbasis_transitions(vertices, left_state, right_state, ik, transitions)
+         call system_clock(stage_stop)
+         result%endpoint_transform_seconds = result%endpoint_transform_seconds + &
+            real(max(0_int64, stage_stop - stage_start), rp)/real(max(1_int64, clock_rate), rp)
+         transition_flat = reshape(transitions, [npairs, contract%nsite])
+
+         do ie = 1, ne
+            energy = energy_min + real(ie - 1, rp)*step
+            if (ie == 1 .or. ie == ne) then
+               quadrature_weight = 1.0_rp
+            else if (mod(ie, 2) == 0) then
+               quadrature_weight = 4.0_rp
+            else
+               quadrature_weight = 2.0_rp
+            end if
+            quadrature_weight = quadrature_weight*step/3.0_rp
+            fermi_weight = lr_fermi_dirac_occupation(energy, left_state%fermi_level, left_state%temperature)
+
+            call system_clock(stage_start)
+            call build_spectral_factors(left_state%eigenvalues(:, ik), energy, integration_eta, left_spectral)
+            call build_spectral_factors(right_state%eigenvalues(:, ik), energy, integration_eta, right_spectral)
+            call system_clock(stage_stop)
+            result%resolvent_seconds = result%resolvent_seconds + &
+               real(max(0_int64, stage_stop - stage_start), rp)/real(max(1_int64, clock_rate), rp)
+
+            if (request%diagnostics) then
+               left_zero(:, ik) = left_zero(:, ik) + quadrature_weight*left_spectral
+               right_zero(:, ik) = right_zero(:, ik) + quadrature_weight*right_spectral
+               left_first(:, ik) = left_first(:, ik) + quadrature_weight*energy*left_spectral
+               right_first(:, ik) = right_first(:, ik) + quadrature_weight*energy*right_spectral
+               left_fermi(:, ik) = left_fermi(:, ik) + quadrature_weight*fermi_weight*left_spectral
+               right_fermi(:, ik) = right_fermi(:, ik) + quadrature_weight*fermi_weight*right_spectral
+               k_response = cmplx(0.0_rp, 0.0_rp, rp)
+               k_term_one = cmplx(0.0_rp, 0.0_rp, rp)
+               k_term_two = cmplx(0.0_rp, 0.0_rp, rp)
+            end if
+
+            do ifrequency = 1, nfrequency
+               call system_clock(stage_start)
+               right_retarded = 1.0_rp/(cmplx(energy + request%frequencies(ifrequency), request%eta, rp) - &
+                  right_state%eigenvalues(:, ik))
+               left_advanced = 1.0_rp/(cmplx(energy - request%frequencies(ifrequency), -request%eta, rp) - &
+                  left_state%eigenvalues(:, ik))
+               call system_clock(stage_stop)
+               result%resolvent_seconds = result%resolvent_seconds + &
+                  real(max(0_int64, stage_stop - stage_start), rp)/real(max(1_int64, clock_rate), rp)
+
+               call system_clock(stage_start)
+               kernel = spread(left_spectral, 2, nright)*spread(right_retarded, 1, nleft)
+               weighted_transition = transition_flat*spread(reshape(kernel, [npairs]), 2, contract%nsite)
+               contribution = matmul(transpose(weighted_transition), conjg(transition_flat))
+               scale = fermi_weight*quadrature_weight*2.0_rp*left_state%k_weights(ik)/weight_sum
+               if (request%diagnostics) then
+                  k_term_one(:, :, ifrequency) = k_term_one(:, :, ifrequency) + scale*contribution
+                  k_response(:, :, ifrequency) = k_response(:, :, ifrequency) + scale*contribution
+               else
+                  result%susceptibility(:, :, ifrequency) = result%susceptibility(:, :, ifrequency) + scale*contribution
+               end if
+
+               kernel = spread(left_advanced, 2, nright)*spread(right_spectral, 1, nleft)
+               weighted_transition = transition_flat*spread(reshape(kernel, [npairs]), 2, contract%nsite)
+               contribution = matmul(transpose(weighted_transition), conjg(transition_flat))
+               if (request%diagnostics) then
+                  k_term_two(:, :, ifrequency) = k_term_two(:, :, ifrequency) + scale*contribution
+                  k_response(:, :, ifrequency) = k_response(:, :, ifrequency) + scale*contribution
+               else
+                  result%susceptibility(:, :, ifrequency) = result%susceptibility(:, :, ifrequency) + scale*contribution
+               end if
+               call system_clock(stage_stop)
+               result%accumulator_seconds = result%accumulator_seconds + &
+                  real(max(0_int64, stage_stop - stage_start), rp)/real(max(1_int64, clock_rate), rp)
+               result%accumulator_calls = result%accumulator_calls + 1_int64
+            end do
+            if (request%diagnostics) then
+               result%susceptibility = result%susceptibility + k_response
+               result%kubo_term_one = result%kubo_term_one + k_term_one
+               result%kubo_term_two = result%kubo_term_two + k_term_two
+               result%k_susceptibility(:, :, :, ik) = result%k_susceptibility(:, :, :, ik) + k_response
+            end if
+         end do
+      end do
+
+      if (request%diagnostics) then
+         call system_clock(stage_start)
+         do ik = 1, left_state%nk
+            scaled_vectors = left_state%eigenvectors(:, :, ik)
+            do ie = 1, nleft
+               scaled_vectors(:, ie) = left_state%eigenvectors(:, ie, ik)*(left_zero(ie, ik) - 1.0_rp)
+            end do
+            residual_matrix = matmul(scaled_vectors, conjg(transpose(left_state%eigenvectors(:, :, ik))))
+            result%left_spectral_zeroth_residual = max(result%left_spectral_zeroth_residual, maxval(abs(residual_matrix)))
+            do ie = 1, nleft
+               scaled_vectors(:, ie) = left_state%eigenvectors(:, ie, ik)*(left_first(ie, ik) - &
+                  left_state%eigenvalues(ie, ik))
+            end do
+            residual_matrix = matmul(scaled_vectors, conjg(transpose(left_state%eigenvectors(:, :, ik))))
+            result%left_spectral_first_residual = max(result%left_spectral_first_residual, maxval(abs(residual_matrix)))
+            do ie = 1, nleft
+               scaled_vectors(:, ie) = left_state%eigenvectors(:, ie, ik)*(left_fermi(ie, ik) - &
+                  left_state%occupations(ie, ik))
+            end do
+            residual_matrix = matmul(scaled_vectors, conjg(transpose(left_state%eigenvectors(:, :, ik))))
+            result%left_spectral_fermi_residual = max(result%left_spectral_fermi_residual, maxval(abs(residual_matrix)))
+
+            scaled_vectors = right_state%eigenvectors(:, :, ik)
+            do ie = 1, nright
+               scaled_vectors(:, ie) = right_state%eigenvectors(:, ie, ik)*(right_zero(ie, ik) - 1.0_rp)
+            end do
+            residual_matrix = matmul(scaled_vectors, conjg(transpose(right_state%eigenvectors(:, :, ik))))
+            result%right_spectral_zeroth_residual = max(result%right_spectral_zeroth_residual, maxval(abs(residual_matrix)))
+            do ie = 1, nright
+               scaled_vectors(:, ie) = right_state%eigenvectors(:, ie, ik)*(right_first(ie, ik) - &
+                  right_state%eigenvalues(ie, ik))
+            end do
+            residual_matrix = matmul(scaled_vectors, conjg(transpose(right_state%eigenvectors(:, :, ik))))
+            result%right_spectral_first_residual = max(result%right_spectral_first_residual, maxval(abs(residual_matrix)))
+            do ie = 1, nright
+               scaled_vectors(:, ie) = right_state%eigenvectors(:, ie, ik)*(right_fermi(ie, ik) - &
+                  right_state%occupations(ie, ik))
+            end do
+            residual_matrix = matmul(scaled_vectors, conjg(transpose(right_state%eigenvectors(:, :, ik))))
+            result%right_spectral_fermi_residual = max(result%right_spectral_fermi_residual, maxval(abs(residual_matrix)))
+         end do
+         call system_clock(stage_stop)
+         result%diagnostic_seconds = real(max(0_int64, stage_stop - stage_start), rp)/real(max(1_int64, clock_rate), rp)
+      end if
+
+      call system_clock(wall_stop)
+      call cpu_time(cpu_stop)
+      call finalize_result(result, request, contract, product, channel_kind, projected_backend_gf, integration_eta, &
+         energy_min, energy_max, wall_start, wall_stop, clock_rate, cpu_start, cpu_stop, &
+         int(size(vertices), int64)*int(storage_size(vertices)/8, int64))
+      result%energy_spacing = step
+      result%implementation = 'eigenbasis'
+      deallocate(vertices, transitions, transition_flat, weighted_transition, contribution, left_spectral, right_spectral, &
+         right_retarded, left_advanced, kernel)
+      if (request%diagnostics) then
+         deallocate(k_response, k_term_one, k_term_two, left_zero, right_zero, left_first, right_first, left_fermi, &
+            right_fermi, residual_matrix, scaled_vectors)
+      end if
+   end subroutine evaluate_projected_gf_chi0_optimized
+
+   !> Transform the four affine site-vertex components into the endpoint
+   !> eigenbases and sum their exact endpoint-energy factors.  For a pair n,m
+   !> this produces
+   !>   T_i(n,m) = sum_pq eps_L(n)^p eps_R(m)^q <n|V_i^(p,q)|m>.
+   !> It is a precomputation for the GF integral, not a Lehmann response
+   !> substitution: the energy-dependent GF denominators are still integrated
+   !> explicitly by evaluate_projected_gf_chi0_optimized.
+   subroutine build_projected_eigenbasis_transitions(vertices, left_state, right_state, ik, transitions)
+      complex(rp), intent(in) :: vertices(:, :, :, :)
+      type(lr_electronic_state), intent(in) :: left_state, right_state
+      integer, intent(in) :: ik
+      complex(rp), intent(out) :: transitions(:, :, :)
+
+      complex(rp), allocatable :: projected_vertex(:, :), band_vertex(:, :)
+      integer :: component, site, ib_left, ib_right, left_power, right_power
+      integer :: nbasis, nleft, nright, nsite
+
+      nbasis = size(vertices, 1)
+      nleft = left_state%nbands
+      nright = right_state%nbands
+      nsite = size(vertices, 4)
+      if (size(vertices, 2) /= nbasis .or. size(vertices, 3) /= 4 .or. size(transitions, 1) /= nleft .or. &
+          size(transitions, 2) /= nright .or. size(transitions, 3) /= nsite .or. left_state%nbasis /= nbasis .or. &
+          right_state%nbasis /= nbasis) then
+         error stop 'build_projected_eigenbasis_transitions: shape mismatch'
+      end if
+      if (ik < 1 .or. ik > left_state%nk .or. ik > right_state%nk) then
+         error stop 'build_projected_eigenbasis_transitions: k-point index out of range'
+      end if
+
+      allocate(projected_vertex(nbasis, nright), band_vertex(nleft, nright))
+      transitions = cmplx(0.0_rp, 0.0_rp, rp)
+      do site = 1, nsite
+         do component = 1, 4
+            left_power = mod(component - 1, 2)
+            right_power = (component - 1)/2
+            projected_vertex = matmul(vertices(:, :, component, site), right_state%eigenvectors(:, :, ik))
+            band_vertex = matmul(conjg(transpose(left_state%eigenvectors(:, :, ik))), projected_vertex)
+            if (left_power == 1) then
+               do ib_left = 1, nleft
+                  band_vertex(ib_left, :) = band_vertex(ib_left, :)*left_state%eigenvalues(ib_left, ik)
+               end do
+            end if
+            if (right_power == 1) then
+               do ib_right = 1, nright
+                  band_vertex(:, ib_right) = band_vertex(:, ib_right)*right_state%eigenvalues(ib_right, ik)
+               end do
+            end if
+            transitions(:, :, site) = transitions(:, :, site) + band_vertex
+         end do
+      end do
+      deallocate(projected_vertex, band_vertex)
+   end subroutine build_projected_eigenbasis_transitions
+
+   subroutine build_spectral_factors(eigenvalues, energy, integration_eta, factors)
+      real(rp), intent(in) :: eigenvalues(:), energy, integration_eta
+      complex(rp), intent(out) :: factors(:)
+      complex(rp) :: spectral_prefactor
+      integer :: ib
+
+      if (size(factors) /= size(eigenvalues)) error stop 'build_spectral_factors: shape mismatch'
+      spectral_prefactor = cmplx(0.0_rp, 1.0_rp/(2.0_rp*response_angular_pi), rp)
+      do ib = 1, size(eigenvalues)
+         factors(ib) = spectral_prefactor*(1.0_rp/(cmplx(energy, integration_eta, rp) - eigenvalues(ib)) - &
+            1.0_rp/(cmplx(energy, -integration_eta, rp) - eigenvalues(ib)))
+      end do
+   end subroutine build_spectral_factors
+
+   subroutine evaluate_projected_gf_chi0_reference(request, result)
       type(projected_chi0_request), intent(in) :: request
       type(projected_chi0_result), intent(out) :: result
 
@@ -224,40 +560,44 @@ contains
       real(rp) :: integration_eta, energy_min, energy_max, step, energy, fermi_weight
       real(rp) :: quadrature_weight, weight_sum
       real(rp) :: cpu_start, cpu_stop
-      integer(int64) :: wall_start, wall_stop, clock_rate
+      integer(int64) :: wall_start, wall_stop, clock_rate, stage_start, stage_stop
       integer :: channel_kind, nbasis, ne, ie, ik, ifrequency
 
       call validate_request(request, channel_kind)
       if (request%integration_points < 3 .or. mod(request%integration_points, 2) == 0) then
-         error stop 'evaluate_projected_gf_chi0: integration_points must be odd and at least three'
+         error stop 'evaluate_projected_gf_chi0_reference: integration_points must be odd and at least three'
       end if
       if (request%energy_margin <= 0.0_rp) then
-         error stop 'evaluate_projected_gf_chi0: energy_margin must be positive'
+         error stop 'evaluate_projected_gf_chi0_reference: energy_margin must be positive'
       end if
       contract => request%contract
       product => request%product_basis
       left_state => request%electronic_state
       right_state => request%q_endpoint_state
-      call left_state%validate('evaluate_projected_gf_chi0:left_state')
-      call right_state%validate('evaluate_projected_gf_chi0:q_endpoint_state')
+      call left_state%validate('evaluate_projected_gf_chi0_reference:left_state')
+      call right_state%validate('evaluate_projected_gf_chi0_reference:q_endpoint_state')
 
       integration_eta = request%integration_eta
       if (integration_eta <= 0.0_rp) integration_eta = request%eta/40.0_rp
       if (integration_eta >= request%eta) then
-         error stop 'evaluate_projected_gf_chi0: integration_eta must be smaller than response eta'
+         error stop 'evaluate_projected_gf_chi0_reference: integration_eta must be smaller than response eta'
       end if
 
       call system_clock(wall_start, clock_rate)
       call cpu_time(cpu_start)
+      call system_clock(stage_start)
       call contract%site_component_vertex_tensor(product, vertices)
+      call system_clock(stage_stop)
+      result%vertex_seconds = real(max(0_int64, stage_stop - stage_start), rp)/real(max(1_int64, clock_rate), rp)
       nbasis = left_state%nbasis
       ne = request%integration_points
       energy_min = min(minval(left_state%eigenvalues), minval(right_state%eigenvalues)) - request%energy_margin
       energy_max = max(maxval(left_state%eigenvalues), maxval(right_state%eigenvalues)) + request%energy_margin
-      if (energy_max <= energy_min) error stop 'evaluate_projected_gf_chi0: invalid integration interval'
+      if (energy_max <= energy_min) error stop 'evaluate_projected_gf_chi0_reference: invalid integration interval'
       step = (energy_max - energy_min)/real(ne - 1, rp)
       weight_sum = sum(left_state%k_weights)
 
+      call system_clock(stage_start)
       allocate(result%susceptibility(contract%nsite, contract%nsite, size(request%frequencies)), &
          result%frequencies(size(request%frequencies)), &
          left_gr(nbasis, nbasis, 3), left_ga(nbasis, nbasis, 3), left_a(nbasis, nbasis, 3), &
@@ -284,6 +624,8 @@ contains
          left_fermi = cmplx(0.0_rp, 0.0_rp, rp)
          right_fermi = cmplx(0.0_rp, 0.0_rp, rp)
       end if
+      call system_clock(stage_stop)
+      result%allocation_seconds = real(max(0_int64, stage_stop - stage_start), rp)/real(max(1_int64, clock_rate), rp)
       result%susceptibility = cmplx(0.0_rp, 0.0_rp, rp)
 
       ! This is the certified LR-GF real-axis construction.  The two spectral
@@ -302,10 +644,15 @@ contains
          fermi_weight = lr_fermi_dirac_occupation(energy, left_state%fermi_level, left_state%temperature)
 
          do ik = 1, left_state%nk
+            call system_clock(stage_start)
             call build_weighted_resolvent(left_state, ik, cmplx(energy, integration_eta, rp), left_gr)
             call build_weighted_resolvent(left_state, ik, cmplx(energy, -integration_eta, rp), left_ga)
             call build_weighted_resolvent(right_state, ik, cmplx(energy, integration_eta, rp), right_gr)
             call build_weighted_resolvent(right_state, ik, cmplx(energy, -integration_eta, rp), right_ga)
+            call system_clock(stage_stop)
+            result%resolvent_seconds = result%resolvent_seconds + &
+               real(max(0_int64, stage_stop - stage_start), rp)/real(max(1_int64, clock_rate), rp)
+            result%resolvent_calls = result%resolvent_calls + 4_int64
             left_a = cmplx(0.0_rp, 1.0_rp/(2.0_rp*response_angular_pi), rp)*(left_gr - left_ga)
             right_a = cmplx(0.0_rp, 1.0_rp/(2.0_rp*response_angular_pi), rp)*(right_gr - right_ga)
             if (request%diagnostics) then
@@ -320,18 +667,33 @@ contains
                k_term_two = cmplx(0.0_rp, 0.0_rp, rp)
             end if
             do ifrequency = 1, size(request%frequencies)
+               call system_clock(stage_start)
                call build_weighted_resolvent(right_state, ik, &
                   cmplx(energy + request%frequencies(ifrequency), request%eta, rp), right_gr)
                call build_weighted_resolvent(left_state, ik, &
                   cmplx(energy - request%frequencies(ifrequency), -request%eta, rp), left_ga)
+               call system_clock(stage_stop)
+               result%resolvent_seconds = result%resolvent_seconds + &
+                  real(max(0_int64, stage_stop - stage_start), rp)/real(max(1_int64, clock_rate), rp)
+               result%resolvent_calls = result%resolvent_calls + 2_int64
                if (request%diagnostics) then
+                  call system_clock(stage_start)
                   call accumulate_projected_gf_bubble(vertices, left_a, right_a, right_gr, left_ga, &
                      fermi_weight*quadrature_weight*2.0_rp*left_state%k_weights(ik)/weight_sum, &
                      k_response(:, :, ifrequency), k_term_one(:, :, ifrequency), k_term_two(:, :, ifrequency))
+                  call system_clock(stage_stop)
+                  result%accumulator_seconds = result%accumulator_seconds + &
+                     real(max(0_int64, stage_stop - stage_start), rp)/real(max(1_int64, clock_rate), rp)
+                  result%accumulator_calls = result%accumulator_calls + 1_int64
                else
+                  call system_clock(stage_start)
                   call accumulate_projected_gf_bubble(vertices, left_a, right_a, right_gr, left_ga, &
                      fermi_weight*quadrature_weight*2.0_rp*left_state%k_weights(ik)/weight_sum, &
                      result%susceptibility(:, :, ifrequency))
+                  call system_clock(stage_stop)
+                  result%accumulator_seconds = result%accumulator_seconds + &
+                     real(max(0_int64, stage_stop - stage_start), rp)/real(max(1_int64, clock_rate), rp)
+                  result%accumulator_calls = result%accumulator_calls + 1_int64
                end if
             end do
             if (request%diagnostics) then
@@ -344,6 +706,7 @@ contains
       end do
 
       if (request%diagnostics) then
+         call system_clock(stage_start)
          do ik = 1, left_state%nk
             exact_zero = cmplx(0.0_rp, 0.0_rp, rp)
             exact_first = cmplx(0.0_rp, 0.0_rp, rp)
@@ -382,6 +745,8 @@ contains
             result%right_spectral_fermi_residual = max(result%right_spectral_fermi_residual, &
                maxval(abs(right_fermi(:, :, ik) - exact_right_fermi)))
          end do
+         call system_clock(stage_stop)
+         result%diagnostic_seconds = real(max(0_int64, stage_stop - stage_start), rp)/real(max(1_int64, clock_rate), rp)
       end if
 
       call system_clock(wall_stop)
@@ -391,11 +756,12 @@ contains
          energy_min, energy_max, wall_start, wall_stop, clock_rate, cpu_start, cpu_stop, &
          int(size(vertices), int64)*int(storage_size(vertices)/8, int64))
       result%energy_spacing = step
+      result%implementation = 'dense-reference'
       if (allocated(k_response)) deallocate(k_response, k_term_one, k_term_two, left_zero, right_zero, left_first, &
          right_first, left_fermi, right_fermi, exact_zero, exact_first, exact_fermi, exact_right_zero, &
          exact_right_first, exact_right_fermi)
       deallocate(vertices, left_gr, left_ga, left_a, right_gr, right_ga, right_a)
-   end subroutine evaluate_projected_gf_chi0
+   end subroutine evaluate_projected_gf_chi0_reference
 
    subroutine accumulate_projected_gf_bubble(vertices, left_a, right_a, right_gr, left_ga, scale, response, term_one, term_two)
       complex(rp), intent(in) :: vertices(:, :, :, :), left_a(:, :, :), right_a(:, :, :), &

@@ -263,8 +263,11 @@ point-response array.  In the final local unit run, the complete projected
 fixture target took `14.25 s` with a maximum process resident set of about
 `39,988 KB`.  The separate compact product-GF oracle target took `12.04 s`
 and about `16,188 KB`; these are process-level unit observations, not a
-cross-machine production benchmark.  The result metadata exposes vertex and
-site-susceptibility memory counters for downstream measurements.
+cross-machine production benchmark.  These values are the pre-DRESP-02P
+baseline.  The optimized eigenbasis GF backend and its measured Fe ladder are
+reported in [`DRESP_02P_PROJECTED_GF_PERFORMANCE.md`](DRESP_02P_PROJECTED_GF_PERFORMANCE.md);
+the result metadata also exposes the reference/optimized stage timings and
+call counts for downstream measurements.
 
 ## Files changed for DRESP-02
 
