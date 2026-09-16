@@ -672,6 +672,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrProductGfSusceptibility PROPERTIES LABELS "unit;tdvk-02r3;lr-gf-02;product-basis;reciprocal-gf")
   add_fortran_unit_test(UnitLrProjectedReciprocalChi0 ${TestDIR}/unit/test_lr_projected_reciprocal_chi0.f90)
   set_tests_properties(UnitLrProjectedReciprocalChi0 PROPERTIES LABELS "unit;dresp-02;projected-chi0;lehmann;reciprocal-gf;two-site")
+  add_fortran_unit_test(UnitLrKlStaticBridge ${TestDIR}/unit/test_lr_kl_static_bridge.f90)
+  set_tests_properties(UnitLrKlStaticBridge PROPERTIES LABELS "unit;dresp-03;kl;lkag;static-bridge;operator-vertex")
   add_fortran_unit_test(UnitLrProductGfQuadratureAudit ${TestDIR}/unit/test_lr_product_gf_quadrature_audit.f90)
   set_tests_properties(UnitLrProductGfQuadratureAudit PROPERTIES
     LABELS "unit;tdvk-03a;lr-gf-02;quadrature-audit;reciprocal-gf"
