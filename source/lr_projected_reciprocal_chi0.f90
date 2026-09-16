@@ -30,6 +30,7 @@ module lr_projected_reciprocal_chi0_mod
 
    character(len=*), parameter, public :: projected_backend_lehmann = 'lehmann'
    character(len=*), parameter, public :: projected_backend_gf = 'real-axis-gf'
+   character(len=*), parameter, public :: projected_backend_finite_width = 'finite-width'
 
    integer, parameter :: n_dominant_transitions = 8
 
@@ -122,6 +123,7 @@ module lr_projected_reciprocal_chi0_mod
    end type projected_chi0_result
 
    public :: evaluate_projected_lehmann_chi0
+   public :: evaluate_projected_finite_width_chi0
    public :: evaluate_projected_gf_chi0
    public :: evaluate_projected_gf_chi0_optimized
    public :: evaluate_projected_gf_chi0_reference
@@ -220,6 +222,133 @@ contains
       deallocate(transition)
       if (allocated(k_response)) deallocate(k_response)
    end subroutine evaluate_projected_lehmann_chi0
+
+   !> Independent finite-width spectral-function oracle for DRESP-02C.
+   !>
+   !> This path deliberately does not use the production GF eigenbasis
+   !> contraction.  It rebuilds the certified DRESP-01 transition amplitude
+   !> for every endpoint band pair and evaluates the complete two-term Kubo
+   !> spectral integral on the requested real-energy mesh:
+   !>   f(E) [ A_L(E) G_R^R(E+w) + G_L^A(E-w) A_R(E) ].
+   !> Consequently it is the finite-regulator oracle for Track A, including
+   !> finite-temperature Fermi weighting and the same finite energy window.
+   subroutine evaluate_projected_finite_width_chi0(request, result)
+      type(projected_chi0_request), intent(in) :: request
+      type(projected_chi0_result), intent(out) :: result
+
+      type(projected_site_spin_contract), pointer :: contract
+      type(lmto_product_response_basis), pointer :: product
+      type(lr_electronic_state), pointer :: left_state, right_state
+      type(pauli_endpoint_state) :: left_band, right_band
+      complex(rp), allocatable :: transitions(:, :, :), transition(:)
+      complex(rp), allocatable :: left_spectral(:), right_spectral(:)
+      complex(rp), allocatable :: right_retarded(:), left_advanced(:)
+      complex(rp) :: pair_factor
+      real(rp) :: integration_eta, energy_min, energy_max, step, energy, fermi_weight
+      real(rp) :: quadrature_weight, weight_sum, scale
+      real(rp) :: cpu_start, cpu_stop
+      integer(int64) :: wall_start, wall_stop, clock_rate
+      integer :: channel_kind, ne, nfrequency, nleft, nright, ik, ie, ifrequency
+      integer :: ib, jb, site, site_other
+
+      call validate_request(request, channel_kind)
+      if (request%integration_points < 3 .or. mod(request%integration_points, 2) == 0) then
+         error stop 'evaluate_projected_finite_width_chi0: integration_points must be odd and at least three'
+      end if
+      if (request%energy_margin <= 0.0_rp) then
+         error stop 'evaluate_projected_finite_width_chi0: energy_margin must be positive'
+      end if
+
+      contract => request%contract
+      product => request%product_basis
+      left_state => request%electronic_state
+      right_state => request%q_endpoint_state
+      call left_state%validate('evaluate_projected_finite_width_chi0:left_state')
+      call right_state%validate('evaluate_projected_finite_width_chi0:q_endpoint_state')
+
+      integration_eta = request%integration_eta
+      if (integration_eta <= 0.0_rp) integration_eta = request%eta/40.0_rp
+      if (integration_eta >= request%eta) then
+         error stop 'evaluate_projected_finite_width_chi0: integration_eta must be smaller than response eta'
+      end if
+
+      ne = request%integration_points
+      nfrequency = size(request%frequencies)
+      nleft = left_state%nbands
+      nright = right_state%nbands
+      energy_min = min(minval(left_state%eigenvalues), minval(right_state%eigenvalues)) - request%energy_margin
+      energy_max = max(maxval(left_state%eigenvalues), maxval(right_state%eigenvalues)) + request%energy_margin
+      if (energy_max <= energy_min) error stop 'evaluate_projected_finite_width_chi0: invalid integration interval'
+      step = (energy_max - energy_min)/real(ne - 1, rp)
+      weight_sum = sum(left_state%k_weights)
+
+      call system_clock(wall_start, clock_rate)
+      call cpu_time(cpu_start)
+      allocate(result%susceptibility(contract%nsite, contract%nsite, nfrequency), result%frequencies(nfrequency), &
+         transitions(nleft, nright, contract%nsite), transition(contract%nsite), left_spectral(nleft), &
+         right_spectral(nright), right_retarded(nright), left_advanced(nleft))
+      result%susceptibility = cmplx(0.0_rp, 0.0_rp, rp)
+      result%integration_points = ne
+      result%ntransitions_evaluated = left_state%nk*nleft*nright
+
+      do ik = 1, left_state%nk
+         ! Direct DRESP-01 transition amplitudes are the only material
+         ! matrix elements used by this oracle.  No production GF transform
+         ! or resolvent contraction is shared here.
+         do ib = 1, nleft
+            call left_band%initialize(left_state%eigenvalues(ib, ik), left_state%eigenvectors(:, ib, ik))
+            do jb = 1, nright
+               call right_band%initialize(right_state%eigenvalues(jb, ik), right_state%eigenvectors(:, jb, ik))
+               call contract%transition_amplitudes(product, left_band, right_band, transition)
+               transitions(ib, jb, :) = transition
+            end do
+         end do
+
+         do ie = 1, ne
+            energy = energy_min + real(ie - 1, rp)*step
+            if (ie == 1 .or. ie == ne) then
+               quadrature_weight = 1.0_rp
+            else if (mod(ie, 2) == 0) then
+               quadrature_weight = 4.0_rp
+            else
+               quadrature_weight = 2.0_rp
+            end if
+            quadrature_weight = quadrature_weight*step/3.0_rp
+            fermi_weight = lr_fermi_dirac_occupation(energy, left_state%fermi_level, left_state%temperature)
+            call build_spectral_factors(left_state%eigenvalues(:, ik), energy, integration_eta, left_spectral)
+            call build_spectral_factors(right_state%eigenvalues(:, ik), energy, integration_eta, right_spectral)
+
+            do ifrequency = 1, nfrequency
+               right_retarded = 1.0_rp/(cmplx(energy + request%frequencies(ifrequency), request%eta, rp) - &
+                  right_state%eigenvalues(:, ik))
+               left_advanced = 1.0_rp/(cmplx(energy - request%frequencies(ifrequency), -request%eta, rp) - &
+                  left_state%eigenvalues(:, ik))
+               scale = fermi_weight*quadrature_weight*2.0_rp*left_state%k_weights(ik)/weight_sum
+               do ib = 1, nleft
+                  do jb = 1, nright
+                     pair_factor = scale*(left_spectral(ib)*right_retarded(jb) + &
+                        right_spectral(jb)*left_advanced(ib))
+                     do site = 1, contract%nsite
+                        do site_other = 1, contract%nsite
+                           result%susceptibility(site, site_other, ifrequency) = &
+                              result%susceptibility(site, site_other, ifrequency) + pair_factor* &
+                              transitions(ib, jb, site)*conjg(transitions(ib, jb, site_other))
+                        end do
+                     end do
+                  end do
+               end do
+            end do
+         end do
+      end do
+
+      call system_clock(wall_stop)
+      call cpu_time(cpu_stop)
+      call finalize_result(result, request, contract, product, channel_kind, projected_backend_finite_width, integration_eta, &
+         energy_min, energy_max, wall_start, wall_stop, clock_rate, cpu_start, cpu_stop, 0_int64)
+      result%energy_spacing = step
+      result%implementation = 'direct-oracle'
+      deallocate(transitions, transition, left_spectral, right_spectral, right_retarded, left_advanced)
+   end subroutine evaluate_projected_finite_width_chi0
 
    !> Production projected GF backend.  The public seam deliberately keeps the
    !> old name used by DRESP-02 while routing production work to the optimized

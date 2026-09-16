@@ -1,15 +1,14 @@
 # DRESP-02 — Projected Reciprocal Bare Susceptibility
 
-Status: implemented on `fable_v4` at the DRESP-01 baseline revision
-`68cdc10d8f6f8fb8d561887fab401c07f4854bc8`.
+Status: final acceptance complete on `fable_v4`.
 
-The algebraic certification is PASS.  The material real-axis GF closure is
-not certified, so the overall result is:
+`PASS — DRESP-02 MATERIAL CLOSURE COMPLETE`
 
-`ALGEBRAIC PASS — MATERIAL GF CLOSURE BLOCKED`
-
-The remediation campaign and its material exit classification are recorded in
-[`DRESP_02R_MATERIAL_GF_CLOSURE.md`](DRESP_02R_MATERIAL_GF_CLOSURE.md).
+DRESP-02F established the analytic GF/Lehmann equivalence and DRESP-02P
+established the optimized material backend.  DRESP-02C closes the remaining
+material gate with an independent finite-width spectral oracle and a resolved
+`eta_int` ladder; the raw closure table is recorded in
+[`DRESP_02C_MATERIAL_CLOSURE.md`](DRESP_02C_MATERIAL_CLOSURE.md).
 
 No interaction kernel, Goldstone correction, Dyson solve, loss matrix, or mode
 fitting is part of this deliverable.
@@ -140,12 +139,50 @@ request%q_endpoint_state => accepted_kq_state
 
 call evaluate_projected_lehmann_chi0(request, result)
 call evaluate_projected_gf_chi0(request, result)
+call evaluate_projected_finite_width_chi0(request, finite_width_oracle)
 ```
 
 The result records selector, channel, product dimension, q, frequency grid,
 both eta values, energy interval, transition count, point-response flag,
 vertex/susceptibility memory, timing, provenance, and the complex complete
 `site x site x frequency` matrix.
+
+## DRESP-02C finite-width oracle and material closure
+
+The source now exposes `evaluate_projected_finite_width_chi0`.  This is an
+independent finite-width oracle: it rebuilds every DRESP-01 transition
+amplitude directly and integrates the complete two-term Kubo spectral
+function with the same finite energy window, Simpson mesh, finite-temperature
+`f(E)`, `eta_response`, and `integration_eta` as the GF request.  It does not
+reuse the production GF eigenbasis contraction and it does not replace the
+finite-temperature spectral smearing by the heuristic substitution
+`eta_response -> eta_response + integration_eta`.
+
+The material run used one accepted bcc-Fe `4x4x4`, 64-k-point, collinear
+`ham_only`, second-order state at 300 K, with `eta_response=0.01 Ry`, base
+`integration_eta=0.002 Ry`, `gf_energy_margin=0.60 Ry`, and the complete
+`d` and `spd` projections.  The primary sweep covered Γ and finite q points
+`(+/-0.03,0,0)` and `(0.125,0,0)`, at `omega=0, 0.005, 0.015 Ry`.
+
+At the 24 primary complex site-matrix rows, the largest GF-to-finite-width
+oracle discrepancy was `2.6e-11` absolute and `9.1e-13` in the elementwise
+relative field.  The resolved controlled ladder used
+`eta_int=0.008, 0.004, 0.002, 0.001, 0.0005 Ry` with
+`h/eta_int=0.399..0.400`; the final oracle-to-Lehmann relative residuals
+were `3.01e-3` for `d` and `1.52e-2` for `spd`, decreasing toward zero with
+the regulator.  No empirical extrapolation was used.  The corresponding raw
+GF-to-oracle residuals stayed below `4.1e-12` relative.
+
+The projected moments accompanying the accepted state were `d=1.970011188`
+and `spd=1.950787627 mu_B`; the latter matched the accepted total within
+`2.6e-11 mu_B`.  Full complex target/oracle/GF rows and all campaign fields
+are retained in `/tmp/dresp02c_fe/dresp02c_Fe_projected_chi0.dat` from the
+acceptance run.
+
+`eta_response` is the physical/user-facing retarded response broadening.
+`integration_eta` is only the numerical one-electron real-axis regulator and
+is converged away in the physical-target ladder.  DRESP-02 determines no
+intrinsic linewidth and neither eta is Landau damping.
 
 ## Unit certification
 
@@ -191,7 +228,12 @@ chi21 = -5.4628757547e-11 - 3.5744088222e-10 i
 chi22 = -1.5733468156e-12 - 9.3554683085e-14 i
 ```
 
-## Material gate
+## Historical material gate observations (superseded by DRESP-02C)
+
+The pre-DRESP-02C observations below are retained for traceability. Their
+finite-`integration_eta` GF-versus-Lehmann differences are not the final
+acceptance test; the independent finite-width oracle and resolved regulator
+ladder above are the final closure evidence.
 
 The driver accepts `backend = 'projected_chi0'`, reuses the accepted
 reciprocal k-space SCF cache, and exits before any interaction or Dyson
@@ -245,10 +287,10 @@ differences were:
 | 2001 | `3.77e-1` | `1.39e0` |
 | 4001 | `3.18e-1` | `1.16e0` |
 
-The material state and both direct backends are available, but the GF ladder
-does not establish closure at the material tolerance.  This is recorded as
-the material GF closure blocker; it is not converted into an algebraic
-pass by changing the tolerance or omitting the GF backend.
+This historical finite-`integration_eta` comparison is intentionally not used
+as a closure verdict. It is retained to show why DRESP-02C introduced the
+finite-width spectral oracle rather than comparing the finite-regulator GF
+directly with the physical Lehmann target.
 
 The pre-existing DRESP-01 accepted 8x8x8 Fe artifact remains a separate
 ground-state moment reference.  A 101-point spot on that state was also
@@ -272,7 +314,7 @@ call counts for downstream measurements.
 ## Files changed for DRESP-02
 
 - `source/lr_projected_reciprocal_chi0.f90`: direct site Lehmann and
-  independent site GF services;
+  independent site GF and finite-width oracle services;
 - `source/lr_projected_site_spin.f90`: DRESP-01 site-component vertex view;
 - `source/lr_lmto_product_response_basis.f90`: optional selector-aware
   component/transition helpers, with the absent-selector route unchanged;

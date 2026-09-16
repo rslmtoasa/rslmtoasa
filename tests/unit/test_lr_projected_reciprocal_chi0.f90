@@ -22,13 +22,14 @@ program test_lr_projected_reciprocal_chi0
       lr_product_gf_susceptibility_result, lr_product_gf_contraction_factorized, &
       evaluate_lr_product_gf_susceptibility
    use lr_projected_reciprocal_chi0_mod, only: projected_chi0_request, projected_chi0_result, &
-      evaluate_projected_lehmann_chi0, evaluate_projected_gf_chi0, evaluate_projected_gf_chi0_reference
+      evaluate_projected_lehmann_chi0, evaluate_projected_finite_width_chi0, evaluate_projected_gf_chi0, &
+      evaluate_projected_gf_chi0_reference
    implicit none
 
    call basis_init(2)
    call run_fixture(1, 8, 'complex one-site fixture')
    call run_fixture(2, 8, 'mandatory two-site fixture')
-   write (*, '(a)') 'UnitLrProjectedReciprocalChi0: PASS (DRESP-02 Lehmann/GF/site matrix/oracles/q/eta)'
+   write (*, '(a)') 'UnitLrProjectedReciprocalChi0: PASS (DRESP-02 Lehmann/GF/finite-width/site matrix/oracles/q/eta)'
 
 contains
 
@@ -115,7 +116,7 @@ contains
       logical, intent(in) :: do_ladder
 
       type(projected_chi0_request) :: request
-      type(projected_chi0_result) :: direct_lehmann, direct_gf, direct_gf_reference, gf_coarse, gf_fine
+      type(projected_chi0_result) :: direct_lehmann, direct_gf, direct_gf_reference, finite_width_oracle, gf_coarse, gf_fine
       type(lr_product_ks_susceptibility_request) :: product_request
       type(lr_product_ks_susceptibility_result) :: product_lehmann
       type(lr_product_gf_susceptibility_request) :: product_gf_request
@@ -123,6 +124,7 @@ contains
       complex(rp), allocatable :: oracle_lehmann(:, :, :), oracle_gf(:, :, :)
       real(rp) :: lehmann_residual, gf_residual, reference_residual, reference_term_one_residual, &
          reference_term_two_residual, coarse_difference, fine_difference, trend_residual
+      real(rp) :: finite_width_residual
       real(rp) :: diagnostic_residual
       integer :: i
 
@@ -191,6 +193,8 @@ contains
       request%integration_eta = 0.012_rp
       call evaluate_projected_gf_chi0(request, direct_gf)
       call evaluate_projected_gf_chi0_reference(request, direct_gf_reference)
+      request%diagnostics = .false.
+      call evaluate_projected_finite_width_chi0(request, finite_width_oracle)
       reference_residual = maxval(abs(direct_gf%susceptibility - direct_gf_reference%susceptibility))
       reference_term_one_residual = maxval(abs(direct_gf%kubo_term_one - direct_gf_reference%kubo_term_one))
       reference_term_two_residual = maxval(abs(direct_gf%kubo_term_two - direct_gf_reference%kubo_term_two))
@@ -217,6 +221,11 @@ contains
       gf_residual = maxval(abs(direct_gf%susceptibility - oracle_gf))
       write (*, '(a,es12.4)') '  '//trim(label)//' GF product oracle max|dchi| = ', gf_residual
       if (gf_residual > 2.0e-10_rp .or. direct_gf%point_response_allocated) failed = .true.
+      finite_width_residual = maxval(abs(direct_gf%susceptibility - finite_width_oracle%susceptibility))
+      write (*, '(a,es12.4)') '  '//trim(label)//' GF finite-width oracle max|dchi| = ', finite_width_residual
+      if (finite_width_residual > 2.0e-10_rp .or. trim(finite_width_oracle%implementation) /= 'direct-oracle') then
+         failed = .true.
+      end if
 
       if (do_ladder) then
          request%integration_points = 201

@@ -1,7 +1,8 @@
 # DRESP-02R — Material GF/Lehmann Closure Remediation
 
-Status: `BLOCKED — MATERIAL GF CLOSURE UNRESOLVED`; DRESP-02 algebraic
-certification remains valid and DRESP-02P has removed the performance blocker.
+Status: historical pre-DRESP-02C remediation record; superseded by
+`PASS — DRESP-02 MATERIAL CLOSURE COMPLETE` in
+[`DRESP_02C_MATERIAL_CLOSURE.md`](DRESP_02C_MATERIAL_CLOSURE.md).
 
 The exact controlled material rerun and performance evidence are recorded in
 [`DRESP_02P_PROJECTED_GF_PERFORMANCE.md`](DRESP_02P_PROJECTED_GF_PERFORMANCE.md).
@@ -162,13 +163,11 @@ The evidence separates the layers as follows:
   resolution; its remaining GF/Lehmann residual is therefore no longer
   classified as a performance failure.
 
-Accordingly the performance blocker is cleared, but this gate is not `PASS`.
-Use the completed h/eta, eta, window, per-k, term, moment, and transition
-tables for the next DRESP-02 closure decision. The tolerance remains
-unchanged. If the controlled ladders converge to the Lehmann matrix, return
-`PASS — numerical closure`; if they converge to a nonzero offset after all
-controls are resolved, return `BLOCKED — FORMULATION` with the offending
-term/transition identified.
+Accordingly the performance blocker was cleared, but this historical record
+predated the independent finite-width oracle. Its finite-`integration_eta`
+GF-versus-Lehmann residuals are retained as motivation and are superseded by
+the DRESP-02C Track A/Track B tables. No tolerance change or empirical
+extrapolation is used in the final closure.
 
 After either a genuine closure pass or a separately documented formulation
 resolution, return directly to DRESP-02’s next authorized integration step.

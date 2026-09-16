@@ -48,7 +48,7 @@ module tddft_production_driver_mod
       lr_product_gf_susceptibility_result, evaluate_lr_product_gf_susceptibility
    use lr_projected_site_spin_mod, only: projected_site_spin_contract
    use lr_projected_reciprocal_chi0_mod, only: projected_chi0_request, projected_chi0_result, &
-      evaluate_projected_lehmann_chi0, evaluate_projected_gf_chi0
+      evaluate_projected_lehmann_chi0, evaluate_projected_finite_width_chi0, evaluate_projected_gf_chi0
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
    use tddft_native_rsgf_provider_mod, only: tddft_native_rsgf_provider
@@ -1022,11 +1022,11 @@ contains
       type(projected_site_spin_contract), target :: contract_d, contract_spd
       type(lmto_product_response_basis), target :: product_plus, product_minus
       type(projected_chi0_request) :: request, minus_request
-      type(projected_chi0_result) :: lehmann_result, gf_result, minus_result, gamma_lehmann
+      type(projected_chi0_result) :: lehmann_result, gf_result, finite_width_result, minus_result, gamma_lehmann
       type(projected_site_spin_contract), pointer :: contract
       type(lmto_product_response_basis), pointer :: product
       real(rp), allocatable :: moment(:), accepted_moment(:)
-      real(rp) :: norm_lehmann, norm_gf, difference, relative, accepted_total, moment_residual
+      real(rp) :: norm_lehmann, norm_gf, norm_finite, difference, finite_difference, relative, finite_relative, accepted_total, moment_residual
       real(rp) :: integration_eta
       real(rp) :: endpoint_eigenvalue_checksum, endpoint_occupation_checksum, endpoint_unitarity_residual
       complex(rp) :: endpoint_eigenvector_checksum
@@ -1125,6 +1125,10 @@ contains
       write(unit, '(a,a)') '# hamiltonian_order = ', trim(left_state%hamiltonian_order)
       write(unit, '(a,es24.16)') '# eta_response_Ry = ', config%eta
       write(unit, '(a,es24.16)') '# integration_eta_Ry = ', integration_eta
+      write(unit, '(a)') '# eta_response_role = physical retarded response broadening'
+      write(unit, '(a)') '# integration_eta_role = numerical one-electron real-axis regulator; converged away in Track B'
+      write(unit, '(a)') '# intrinsic_linewidth = not determined by DRESP-02; neither eta is Landau damping'
+      write(unit, '(a)') '# finite_width_oracle = direct DRESP-01 transition spectral Kubo integral; no eta_eff substitution'
       write(unit, '(a,i0)') '# gf_energy_points = ', config%gf_integration_points
       write(unit, '(a,es24.16)') '# gf_energy_margin_Ry = ', config%gf_energy_margin
       write(unit, '(a)') '# q_convention = exact folded reciprocal k+q endpoint; no extra DRESP site phase'
@@ -1139,6 +1143,7 @@ contains
             endpoint_occupation_checksum, endpoint_unitarity_residual
       end do
       write(unit, '(a)') '# columns = projection q_index omega_Ry row col Lehmann_Re Lehmann_Im GF_Re GF_Im abs_diff rel_diff'
+      write(unit, '(a)') '# finite_width_columns = projection q_index omega_Ry row col Lehmann_Re Lehmann_Im finite_width_Re finite_width_Im GF_Re GF_Im GF_minus_finite_Re GF_minus_finite_Im GF_minus_finite_abs GF_minus_finite_rel finite_width_minus_Lehmann_Re finite_width_minus_Lehmann_Im finite_width_minus_Lehmann_abs finite_width_minus_Lehmann_rel'
 
       do projection_index = 1, 2
          if (projection_index == 1) then
@@ -1201,13 +1206,18 @@ contains
             request%diagnostics = config%gf_closure_audit .and. iq == gamma_index
             call evaluate_projected_lehmann_chi0(request, lehmann_result)
             call evaluate_projected_gf_chi0(request, gf_result)
+            request%diagnostics = .false.
+            call evaluate_projected_finite_width_chi0(request, finite_width_result)
             write(unit, '(a,1x,i0,1x,2(es24.16,1x),i0,1x,es24.16,1x,a)') &
                '# gf_controls q=', iq, gf_result%energy_min, gf_result%energy_max, &
                gf_result%integration_points, gf_result%integration_eta, 'quadrature=Simpson'
             norm_lehmann = sqrt(sum(abs(lehmann_result%susceptibility)**2))
             norm_gf = sqrt(sum(abs(gf_result%susceptibility)**2))
+            norm_finite = sqrt(sum(abs(finite_width_result%susceptibility)**2))
             difference = sqrt(sum(abs(lehmann_result%susceptibility - gf_result%susceptibility)**2))
             relative = difference/max(norm_lehmann, tiny(1.0_rp))
+            finite_difference = sqrt(sum(abs(finite_width_result%susceptibility - lehmann_result%susceptibility)**2))
+            finite_relative = finite_difference/max(norm_lehmann, tiny(1.0_rp))
             write (*, '(a,a,a,i0,a,es12.4,a,es12.4,a,es12.4)') 'DRESP-02 Fe ', trim(projection), &
                ' q=', iq, ' norm_Lehmann=', norm_lehmann, ' norm_GF=', norm_gf, ' dF=', difference
             do ifrequency = 1, size(config%frequencies)
@@ -1218,6 +1228,20 @@ contains
                         aimag(lehmann_result%susceptibility(i, j, ifrequency)), real(gf_result%susceptibility(i, j, ifrequency), rp), &
                         aimag(gf_result%susceptibility(i, j, ifrequency)), abs(lehmann_result%susceptibility(i, j, ifrequency) - &
                         gf_result%susceptibility(i, j, ifrequency)), relative
+                     write(unit, '(a,1x,a,1x,i0,1x,es24.16,1x,2(i0,1x),16(es24.16,1x))') '# finite_width', trim(projection), iq, &
+                        config%frequencies(ifrequency), i, j, real(lehmann_result%susceptibility(i, j, ifrequency), rp), &
+                        aimag(lehmann_result%susceptibility(i, j, ifrequency)), real(finite_width_result%susceptibility(i, j, ifrequency), rp), &
+                        aimag(finite_width_result%susceptibility(i, j, ifrequency)), real(gf_result%susceptibility(i, j, ifrequency), rp), &
+                        aimag(gf_result%susceptibility(i, j, ifrequency)), real(gf_result%susceptibility(i, j, ifrequency) - &
+                        finite_width_result%susceptibility(i, j, ifrequency), rp), aimag(gf_result%susceptibility(i, j, ifrequency) - &
+                        finite_width_result%susceptibility(i, j, ifrequency)), abs(gf_result%susceptibility(i, j, ifrequency) - &
+                        finite_width_result%susceptibility(i, j, ifrequency)), abs(gf_result%susceptibility(i, j, ifrequency) - &
+                        finite_width_result%susceptibility(i, j, ifrequency))/max(abs(finite_width_result%susceptibility(i, j, ifrequency)), tiny(1.0_rp)), &
+                        real(finite_width_result%susceptibility(i, j, ifrequency) - &
+                        lehmann_result%susceptibility(i, j, ifrequency), rp), aimag(finite_width_result%susceptibility(i, j, ifrequency) - &
+                        lehmann_result%susceptibility(i, j, ifrequency)), abs(finite_width_result%susceptibility(i, j, ifrequency) - &
+                        lehmann_result%susceptibility(i, j, ifrequency)), abs(finite_width_result%susceptibility(i, j, ifrequency) - &
+                        lehmann_result%susceptibility(i, j, ifrequency))/max(abs(lehmann_result%susceptibility(i, j, ifrequency)), tiny(1.0_rp))
                   end do
                end do
             end do
@@ -1272,10 +1296,10 @@ contains
       real(rp), intent(in) :: integration_eta
 
       type(projected_chi0_request) :: request
-      type(projected_chi0_result) :: gf_result
-      integer, parameter :: n_campaign = 3
-      integer :: mesh_points(n_campaign), eta_points(n_campaign), window_points, i, ik
-      real(rp) :: eta_values(n_campaign), margins(n_campaign), width, target_ratio
+      type(projected_chi0_result) :: gf_result, finite_width_result
+      integer, parameter :: n_campaign = 3, n_eta_campaign = 5
+      integer :: mesh_points(n_campaign), eta_points(n_eta_campaign), window_points, i, ik
+      real(rp) :: eta_values(n_eta_campaign), margins(n_campaign), width, target_ratio
       real(rp) :: norm_lehmann, norm_gf, delta_re, delta_im, delta_abs, relative
       real(rp) :: sample_eta, sample_margin
       complex(rp), allocatable :: delta(:, :, :)
@@ -1290,25 +1314,25 @@ contains
       do i = 1, n_campaign
          if (mod(mesh_points(i), 2) == 0) mesh_points(i) = mesh_points(i) + 1
       end do
-      eta_values = integration_eta*[4.0_rp, 2.0_rp, 1.0_rp]
-      do i = 1, n_campaign
+      eta_values = integration_eta*[4.0_rp, 2.0_rp, 1.0_rp, 0.5_rp, 0.25_rp]
+      do i = 1, n_eta_campaign
          eta_points(i) = odd_at_least(ceiling(width/(target_ratio*eta_values(i))) + 1)
       end do
       margins = [0.30_rp, 0.60_rp, 1.00_rp]
       window_points = odd_at_least(max(3, config%gf_integration_points))
 
       write(unit, '(a)') '# DRESP-02R controlled GF closure audit; all samples reuse one frozen accepted state'
-      write(unit, '(a)') '# gf_audit_samples columns: projection campaign sample eta_response eta_int margin Emin Emax NE h h_over_eta chiL chiGF delta_Re delta_Im delta_abs relative wall_seconds'
+      write(unit, '(a)') '# gf_audit_samples columns: projection campaign sample eta_response eta_int margin Emin Emax NE h h_over_eta chiL chiGF delta_Re delta_Im delta_abs relative finite_width_norm GF_minus_finite_Re GF_minus_finite_Im GF_minus_finite_abs GF_minus_finite_relative finite_width_minus_Lehmann_Re finite_width_minus_Lehmann_Im finite_width_minus_Lehmann_abs finite_width_minus_Lehmann_relative wall_seconds'
       write(unit, '(a)') '# gf_profile columns: projection campaign sample implementation allocation_s vertex_s endpoint_transform_s resolvent_s accumulator_s diagnostic_s wall_s resolvent_calls accumulator_calls'
 
       ! Fixed integration eta: this isolates the real-axis mesh error.
       do i = 1, n_campaign
          sample_eta = integration_eta
          sample_margin = config%gf_energy_margin
-         call evaluate_projected_gf_audit_sample(gf_result, contract, product, left_state, endpoint, config, &
+         call evaluate_projected_gf_audit_sample(gf_result, finite_width_result, contract, product, left_state, endpoint, config, &
             sample_eta, sample_margin, mesh_points(i), .true.)
          call write_projected_gf_audit_row(unit, projection, 'fixed_eta_mesh', i, gamma_lehmann, gf_result, &
-            config%eta, sample_eta, sample_margin)
+            finite_width_result, config%eta, sample_eta, sample_margin)
          if (i == n_campaign) then
             write(unit, '(a,1x,a,1x,a,1x,7(es24.16,1x))') '# gf_spectral_moments', trim(projection), 'fine_mesh', &
                gf_result%left_spectral_zeroth_residual, gf_result%right_spectral_zeroth_residual, &
@@ -1338,29 +1362,31 @@ contains
 
       ! Integration eta ladder with h/eta held near target_ratio.  This is
       ! independent of the fixed-eta mesh campaign above.
-      do i = 1, n_campaign
+      do i = 1, n_eta_campaign
          if (eta_values(i) >= config%eta) cycle
-         call evaluate_projected_gf_audit_sample(gf_result, contract, product, left_state, endpoint, config, &
+         call evaluate_projected_gf_audit_sample(gf_result, finite_width_result, contract, product, left_state, endpoint, config, &
             eta_values(i), config%gf_energy_margin, eta_points(i), .false.)
          call write_projected_gf_audit_row(unit, projection, 'controlled_eta', i, gamma_lehmann, gf_result, &
-            config%eta, eta_values(i), config%gf_energy_margin)
+            finite_width_result, config%eta, eta_values(i), config%gf_energy_margin)
       end do
 
       ! Window ladder: broadening and mesh count remain fixed while the
       ! finite spectral interval is changed explicitly.
       do i = 1, n_campaign
-         call evaluate_projected_gf_audit_sample(gf_result, contract, product, left_state, endpoint, config, &
+         call evaluate_projected_gf_audit_sample(gf_result, finite_width_result, contract, product, left_state, endpoint, config, &
             integration_eta, margins(i), window_points, .false.)
          call write_projected_gf_audit_row(unit, projection, 'energy_window', i, gamma_lehmann, gf_result, &
-            config%eta, integration_eta, margins(i))
+            finite_width_result, config%eta, integration_eta, margins(i))
       end do
 
       deallocate(gf_result%susceptibility)
+      deallocate(finite_width_result%susceptibility)
    end subroutine write_projected_gf_closure_audit
 
-   subroutine evaluate_projected_gf_audit_sample(result, contract, product, left_state, endpoint, config, &
+   subroutine evaluate_projected_gf_audit_sample(result, finite_width_result, contract, product, left_state, endpoint, config, &
                                                  integration_eta, margin, integration_points, diagnostics)
       type(projected_chi0_result), intent(out) :: result
+      type(projected_chi0_result), intent(out) :: finite_width_result
       type(projected_site_spin_contract), intent(in), target :: contract
       type(lmto_product_response_basis), intent(in), target :: product
       type(lr_electronic_state), intent(in), target :: left_state, endpoint
@@ -1383,34 +1409,57 @@ contains
       request%electronic_state => left_state
       request%q_endpoint_state => endpoint
       call evaluate_projected_gf_chi0(request, result)
+      request%diagnostics = .false.
+      call evaluate_projected_finite_width_chi0(request, finite_width_result)
    end subroutine evaluate_projected_gf_audit_sample
 
    subroutine write_projected_gf_audit_row(unit, projection, campaign, sample, gamma_lehmann, gf_result, &
-                                           response_eta, integration_eta, margin)
+                                           finite_width_result, response_eta, integration_eta, margin)
       integer, intent(in) :: unit, sample
       character(len=*), intent(in) :: projection, campaign
-      type(projected_chi0_result), intent(in) :: gamma_lehmann, gf_result
+      type(projected_chi0_result), intent(in) :: gamma_lehmann, gf_result, finite_width_result
       real(rp), intent(in) :: response_eta, integration_eta, margin
       complex(rp), allocatable :: delta(:, :, :)
-      real(rp) :: norm_lehmann, norm_gf, delta_re, delta_im, delta_abs, relative
+      complex(rp), allocatable :: finite_delta(:, :, :), oracle_target_delta(:, :, :)
+      real(rp) :: norm_lehmann, norm_gf, norm_finite, delta_re, delta_im, delta_abs, relative
+      real(rp) :: finite_delta_re, finite_delta_im, finite_delta_abs, finite_relative
+      real(rp) :: oracle_target_re, oracle_target_im, oracle_target_abs, oracle_target_relative
 
       allocate(delta, mold=gamma_lehmann%susceptibility)
+      allocate(finite_delta, mold=gamma_lehmann%susceptibility)
+      allocate(oracle_target_delta, mold=gamma_lehmann%susceptibility)
       delta = gamma_lehmann%susceptibility - gf_result%susceptibility
+      finite_delta = gf_result%susceptibility - finite_width_result%susceptibility
+      oracle_target_delta = finite_width_result%susceptibility - gamma_lehmann%susceptibility
       norm_lehmann = sqrt(sum(abs(gamma_lehmann%susceptibility)**2))
       norm_gf = sqrt(sum(abs(gf_result%susceptibility)**2))
+      norm_finite = sqrt(sum(abs(finite_width_result%susceptibility)**2))
       delta_re = sqrt(sum(real(delta, rp)**2))
       delta_im = sqrt(sum(aimag(delta)**2))
       delta_abs = sqrt(sum(abs(delta)**2))
       relative = delta_abs/max(norm_lehmann, tiny(1.0_rp))
-      write(unit, '(a,1x,a,1x,a,1x,i0,1x,5(es24.16,1x),i0,1x,9(es24.16,1x))') '# gf_audit', trim(projection), trim(campaign), sample, &
+      finite_delta_re = sqrt(sum(real(finite_delta, rp)**2))
+      finite_delta_im = sqrt(sum(aimag(finite_delta)**2))
+      finite_delta_abs = sqrt(sum(abs(finite_delta)**2))
+      finite_relative = finite_delta_abs/max(norm_finite, tiny(1.0_rp))
+      oracle_target_re = sqrt(sum(real(oracle_target_delta, rp)**2))
+      oracle_target_im = sqrt(sum(aimag(oracle_target_delta)**2))
+      oracle_target_abs = sqrt(sum(abs(oracle_target_delta)**2))
+      oracle_target_relative = oracle_target_abs/max(norm_lehmann, tiny(1.0_rp))
+      write(unit, '(a,1x,a,1x,a,1x,i0,1x,5(es24.16,1x),i0,1x,18(es24.16,1x))') '# gf_audit', trim(projection), trim(campaign), sample, &
          response_eta, integration_eta, margin, gf_result%energy_min, gf_result%energy_max, gf_result%integration_points, &
          gf_result%energy_spacing, gf_result%spacing_over_integration_eta, norm_lehmann, norm_gf, delta_re, delta_im, &
-         delta_abs, relative, gf_result%wall_time_seconds
+         delta_abs, relative, norm_finite, finite_delta_re, finite_delta_im, finite_delta_abs, finite_relative, &
+         oracle_target_re, oracle_target_im, oracle_target_abs, oracle_target_relative, gf_result%wall_time_seconds
       write(unit, '(a,1x,a,1x,a,1x,i0,1x,a,1x,7(es24.16,1x),2(i0,1x))') '# gf_profile', trim(projection), trim(campaign), sample, &
          trim(gf_result%implementation), gf_result%allocation_seconds, gf_result%vertex_seconds, &
          gf_result%endpoint_transform_seconds, gf_result%resolvent_seconds, gf_result%accumulator_seconds, &
          gf_result%diagnostic_seconds, gf_result%wall_time_seconds, gf_result%resolvent_calls, gf_result%accumulator_calls
+      write(unit, '(a,1x,a,1x,a,1x,i0,1x,a,1x,4(es24.16,1x))') '# finite_width_profile', trim(projection), trim(campaign), sample, &
+         trim(finite_width_result%implementation), finite_width_result%wall_time_seconds, finite_width_result%energy_spacing, &
+         finite_width_result%spacing_over_integration_eta, real(finite_width_result%ntransitions_evaluated, rp)
       deallocate(delta)
+      deallocate(finite_delta, oracle_target_delta)
    end subroutine write_projected_gf_audit_row
 
    subroutine write_projected_gf_k_row(unit, projection, k_index, gamma_lehmann, gf_result)
