@@ -3,6 +3,15 @@
 Status: **audit complete; overall result BLOCKED — FINITE-HAMILTONIAN /
 LMTO-LKAG REPRESENTATION MISMATCH**.
 
+The DRESP-03T follow-on now closes the complete local-torque and mixed-contact
+Hessian algebra for a legitimate orthogonal `ham_only` fixture.  This does not
+change the status of the native comparison gate: `source/exchange.f90` is
+read-only in DRESP-03T, remains the Rung-0 oracle, and its LKAG formulas,
+prefactors, integration, Green-function handling, and output conventions are
+untouched.  Any discrepancy in a future common-state comparison is first
+assigned to the finite-H bridge unless an independent audit proves a native
+defect.
+
 The finite orthogonal `ham_only` bridge is closed as an explicit operator
 vertex.  The scalar compression is conditional and is rejected when the
 supplied operator is orbital dependent.  A common-state numerical Fe
@@ -64,7 +73,7 @@ The live source contains several objects that must not be conflated.
 |---|---|---:|---|
 | `symbolic_atom%d_matrix(E)` | canonical `dGdG_Jnc` vertex | yes | native LKAG reference |
 | `DeltaP(E)=P_up(E)-P_down(E)` | auxiliary/path-operator route | yes | separate auxiliary candidate |
-| `H_up-H_down` | `exchange.f90:1368-1371` `ee` blocks | no | finite bridge |
+| `H_up-H_down` | `exchange.f90:1368-1371` `ee` blocks | no | generic supplied-operator helper |
 | DRESP-01 `V_i^+` | site-integrated Pauli/radial vertex | left/right endpoint energies | projected vertex, not LKAG `Delta` |
 | radial `B_xc(r)` | physical local field primitive | radial/local | no certified coefficient-to-LKAG map exposed |
 
@@ -80,9 +89,10 @@ the symbolic atom.  It is diagonal in the nine `s,p,d` orbital channels, but
 it is not a fixed scalar site parameter.  The auxiliary `P` object is built
 as `(E-(c+vmad))/dele^2` in `source/symbolic_atom.f90:477-506`.
 
-The finite bridge therefore declares its vertex provenance explicitly as
-`finite ham_only local H_up-H_down spin-flip vertex`.  The declaration is not
-an assertion that this matrix equals `d_matrix(E)`.
+The finite static helper therefore declares its vertex provenance explicitly as
+`generic supplied ham_only operator vertex`; it is not a physical local torque
+constructor.  DRESP-03T's physical torque is the full derivative of the live
+orthogonal Hamiltonian, including offsite bond terms and the HOH product rule.
 
 ## 3. Finite-Hamiltonian K/L derivation
 
@@ -350,9 +360,9 @@ own operator, trace, and provenance audit.
 
 ## 13. Final bridge verdict
 
-1. **Finite-Hamiltonian bridge:** PASS, but only with the explicit
-   operator-valued exchange vertex in the certified collinear orthogonal
-   `ham_only` basis.
+1. **Finite-Hamiltonian bridge:** PASS for the explicit operator-valued
+   static helper and for the DRESP-03T complete orthogonal-H torque/Hessian
+   fixture, including its independent band/grand-potential oracle.
 2. **Scalar site compression:** PASS only for an audited scalar operator;
    it is not generally valid and is rejected for the non-scalar fixture.
 3. **Native LMTO/LKAG bridge:** BLOCKED.  Canonical LKAG uses the
@@ -372,13 +382,20 @@ Implementation added for this audit:
 
 - `source/lr_kl_static_bridge.f90` — explicit finite operator bridge and
   scalar-audit helper;
+- `source/lmto_magnetic_tangent.f90` and `source/lr_kl_hessian.f90` — live
+  LMTO bond derivatives, HOH product-rule torque/Hessian, and read-only
+  production-input adapter;
 - `tests/unit/test_lr_kl_static_bridge.f90` — independent finite fixture,
   operator oracle, q/site ordering, and static ladder;
-- CMake registration for `UnitLrKlStaticBridge`.
+- `tests/unit/test_dresp03t_lmto_hessian.f90` — full-matrix torque/mixed-
+  derivative and grand-potential Hessian oracles;
+- CMake registration for the three DRESP-03 bridge regressions.
 
 Verification on the current build:
 
 ```text
 UnitLrProjectedReciprocalChi0: PASS
 UnitLrKlStaticBridge: PASS
+UnitDresp03rLmtoMapping: PASS
+UnitDresp03tLmtoHessian: PASS
 ```

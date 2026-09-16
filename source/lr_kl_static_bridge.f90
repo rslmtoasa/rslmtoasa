@@ -36,7 +36,7 @@ module lr_kl_static_bridge_mod
    real(rp), parameter :: state_tolerance = 2.0e-11_rp
 
    character(len=*), parameter, public :: kl_vertex_ham_only = &
-      'finite ham_only local H_up-H_down spin-flip vertex'
+      'generic supplied ham_only operator vertex (not physical LKAG torque)'
    character(len=*), parameter, public :: kl_vertex_operator = &
       'explicit operator-valued exchange vertex'
 
@@ -76,6 +76,9 @@ module lr_kl_static_bridge_mod
    end type kl_scalar_vertex_diagnostic
 
    public :: evaluate_kl_static_bridge
+   public :: build_supplied_ham_exchange_vertex
+   ! Compatibility name retained for existing DRESP-03 operator fixtures.
+   ! It is deliberately documented as a generic supplied-operator helper.
    public :: build_ham_only_exchange_vertex
    public :: assess_scalar_exchange_vertex
    public :: contract_scalar_site_chi0
@@ -144,13 +147,14 @@ contains
       deallocate(transition, action)
    end subroutine evaluate_kl_static_bridge
 
-   !> Build the finite `ham_only` local exchange vertex from the coefficient
+   !> Build a generic supplied finite `ham_only` operator from coefficient
    !> Hamiltonian blocks.  `up-down` follows the native `rs2pao` source trace;
    !> the returned matrix is the plus-channel block (up row, down column).
    !>
-   !> This routine only embeds a supplied finite Hamiltonian difference.  It
-   !> does not claim that this object equals native LMTO `d_matrix(E)`.
-   subroutine build_ham_only_exchange_vertex(up_blocks, down_blocks, selected_l, vertices)
+   !> This helper only embeds a supplied Hamiltonian difference.  It is not the
+   !> physical local-rotation torque; use the DRESP-03T local-torque builder
+   !> for that object.
+   subroutine build_supplied_ham_exchange_vertex(up_blocks, down_blocks, selected_l, vertices)
       complex(rp), intent(in) :: up_blocks(:, :, :), down_blocks(:, :, :)
       logical, intent(in) :: selected_l(0:)
       complex(rp), allocatable, intent(out) :: vertices(:, :, :)
@@ -158,12 +162,12 @@ contains
       integer :: norb, nsite, site, iorb, jorb, l_left, l_right, offset
 
       if (size(up_blocks, 1) /= size(up_blocks, 2) .or. any(shape(down_blocks) /= shape(up_blocks))) then
-         error stop 'build_ham_only_exchange_vertex: up/down block shape mismatch'
+         error stop 'build_supplied_ham_exchange_vertex: up/down block shape mismatch'
       end if
       norb = size(up_blocks, 1)
       nsite = size(up_blocks, 3)
       if (norb < 1 .or. size(selected_l) < 1) then
-         error stop 'build_ham_only_exchange_vertex: invalid orbital or selector shape'
+         error stop 'build_supplied_ham_exchange_vertex: invalid orbital or selector shape'
       end if
       allocate(vertices(2*norb*nsite, 2*norb*nsite, nsite))
       vertices = cmplx(0.0_rp, 0.0_rp, rp)
@@ -182,6 +186,16 @@ contains
             end do
          end do
       end do
+   end subroutine build_supplied_ham_exchange_vertex
+
+   !> Compatibility wrapper for the pre-DRESP-03T name.  Keep it source
+   !> compatible, but route through the explicitly generic helper so this name
+   !> cannot be mistaken for a physical LKAG torque constructor.
+   subroutine build_ham_only_exchange_vertex(up_blocks, down_blocks, selected_l, vertices)
+      complex(rp), intent(in) :: up_blocks(:, :, :), down_blocks(:, :, :)
+      logical, intent(in) :: selected_l(0:)
+      complex(rp), allocatable, intent(out) :: vertices(:, :, :)
+      call build_supplied_ham_exchange_vertex(up_blocks, down_blocks, selected_l, vertices)
    end subroutine build_ham_only_exchange_vertex
 
    !> Assess a predeclared scalar site splitting without fitting it.

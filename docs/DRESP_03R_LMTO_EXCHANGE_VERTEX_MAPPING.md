@@ -191,13 +191,12 @@ The controlled test measured:
 
 | comparison | result |
 |---|---:|
-| `d_matrix - dele_up*dele_down*DeltaP` | `1.4814e-7` maximum |
+| `d_matrix - dele_up*dele_down*DeltaP` | `1.1102e-16` maximum |
 | `d_matrix - raw DeltaP` | `8.5571e-1` maximum |
 
-The small first residual is from the source’s default-kind `cmplx` calls in
-`d_matrix` (`c`/`dele` are converted without `kind=rp`), while `p_matrix`
-uses explicit `kind=rp`.  No precision behavior was silently corrected in
-this audit.
+The default-kind `cmplx` conversions in `d_matrix` were repaired to explicit
+`rp`, so this endpoint-scaled relation now closes at ordinary working
+precision, like `p_matrix`.
 
 `d_matrix` has no explicit combined-correction, Hubbard, SOC, or screening
 argument.  Any such physics can enter only through the Green function and
@@ -368,12 +367,13 @@ operator-valued finite-H contraction and its independent spectral oracle
 agree, and scalar compression is audited rather than fitted.  Its physical
 LMTO/LKAG interpretation now has a more precise status:
 
-**DRESP-03 finite-H vertex requires revision before it can be called the
-LMTO local-rotation torque.**
+**DRESP-03 finite-H vertex requires the DRESP-03T local-torque repair before
+it can be called the LMTO local-rotation torque.**
 
-No repair is made in this rung because the P-side local-rotation response and
-the full physical-GF map are not yet available.  The mature
-`source/exchange.f90` path is unchanged.
+DRESP-03T now supplies the complete orthogonal-H torque/Hessian fixture and
+its independent energy oracle in `source/lr_kl_hessian.f90`, without changing
+the mature `source/exchange.f90` path.  The P-side physical-GF map remains
+unresolved.
 
 ## 12. Final mapping verdict
 
@@ -405,7 +405,7 @@ non-collinear moments.  Observed results are:
 
 | check | result |
 |---|---:|
-| endpoint-scaled `d_matrix` relation | `1.4814e-7` |
+| endpoint-scaled `d_matrix` relation | `1.1102e-16` |
 | raw `DeltaP` mismatch | `8.5571e-1` |
 | full local-rotation derivative central error | `5.1267e-12` |
 | nonzero offsite derivative | `3.9809e-2` |
@@ -421,5 +421,6 @@ UnitKspaceGFValidation: PASS
 ```
 
 No Mills/Jülich U, GSR, ALSDA, Goldstone, Dyson, or projected-susceptibility
-work is included.  The next rung remains forbidden until the blocked mapping
-and DRESP-03 torque vertex are closed.
+work is included.  The DRESP-03T orthogonal-H torque fixture is now closed;
+the native canonical pair-level gate and the unresolved P-side physical-GF
+mapping remain before DRESP-04.

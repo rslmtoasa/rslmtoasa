@@ -4,7 +4,7 @@
 !
 ! This test is deliberately a boundary test.  It proves the live pieces that
 ! can be proved without inventing a path-operator -> physical-GF adapter:
-!   * d_matrix(E) is P_up(E)-P_down(E), with the source ordering and sign;
+!   * d_matrix(E) is dele_up*dele_down*(P_up(E)-P_down(E)), with source ordering;
 !   * an independent local rotation differentiates the complete live magnetic
 !     bond builder, including spin-dependent hopping and the onsite term.
 !
@@ -28,7 +28,7 @@ program test_dresp03r_lmto_mapping
    integer, parameter :: ne = 5
    real(rp), parameter :: derivative_step = 1.0e-5_rp
    real(rp), parameter :: derivative_tolerance = 3.0e-9_rp
-   real(rp), parameter :: d_formula_tolerance = 5.0e-7_rp
+   real(rp), parameter :: d_formula_tolerance = 5.0e-14_rp
    logical :: failed
 
    failed = .false.
@@ -79,7 +79,7 @@ contains
             end do
          end do
       end do
-      write (*, '(a,es12.4)') 'd_matrix(E) - sqrt(Delta_up Delta_down) DeltaP max_err = ', max_error
+      write (*, '(a,es12.4)') 'd_matrix(E) - dele_up*dele_down DeltaP max_err    = ', max_error
       write (*, '(a,es12.4)') 'd_matrix(E) - DeltaP raw difference max_err        = ', raw_error
       call check_true('native d_matrix is endpoint-scaled DeltaP', max_error <= d_formula_tolerance)
       call check_true('native d_matrix is not raw DeltaP for unequal widths', raw_error > 1.0e-3_rp)

@@ -318,21 +318,21 @@ contains
       integer :: l, m, ml, lmax_eff
       complex(rp):: cu, cd, wu, wd, de, wuwd
 
-      mat = 0.0d0
+      mat = cmplx(0.0_rp, 0.0_rp, rp)
       lmax_eff = this%potential%lmax
       do while ((lmax_eff + 1)*(lmax_eff + 1) > min(size(mat, 1), size(mat, 2)))
          lmax_eff = lmax_eff - 1
       end do
       do l = 0, lmax_eff
          ml = l*l + 1
-         cu = cmplx(this%potential%c(l, 1) + this%potential%vmad, 0.0d0)
-         cd = cmplx(this%potential%c(l, 2) + this%potential%vmad, 0.0d0)
-         wu = cmplx(this%potential%dele(l, 1), 0.0d0)
-         wd = cmplx(this%potential%dele(l, 2), 0.0d0)
+         cu = cmplx(this%potential%c(l, 1) + this%potential%vmad, 0.0_rp, rp)
+         cd = cmplx(this%potential%c(l, 2) + this%potential%vmad, 0.0_rp, rp)
+         wu = cmplx(this%potential%dele(l, 1), 0.0_rp, rp)
+         wd = cmplx(this%potential%dele(l, 2), 0.0_rp, rp)
          wuwd = wu*wd
          wu = wu*wu
          wd = wd*wd
-         de = (cd*wu - cu*wd + 1.0d0*(wd - wu)*e)/(wuwd)
+         de = (cd*wu - cu*wd + cmplx(1.0_rp, 0.0_rp, rp)*(wd - wu)*cmplx(e, 0.0_rp, rp))/(wuwd)
          do m = 1, 2*l + 1
             ml = l*l + m
             if (ml <= min(size(mat, 1), size(mat, 2))) mat(ml, ml) = de
