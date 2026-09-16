@@ -8,6 +8,9 @@ not certified, so the overall result is:
 
 `ALGEBRAIC PASS — MATERIAL GF CLOSURE BLOCKED`
 
+The remediation campaign and its material exit classification are recorded in
+[`DRESP_02R_MATERIAL_GF_CLOSURE.md`](DRESP_02R_MATERIAL_GF_CLOSURE.md).
+
 No interaction kernel, Goldstone correction, Dyson solve, loss matrix, or mode
 fitting is part of this deliverable.
 

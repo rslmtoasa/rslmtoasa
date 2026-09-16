@@ -619,6 +619,8 @@ contains
       logical, intent(in) :: direct_handoff
       integer :: unit, ik, ib, i, j, nbasis, nbands, nk
       real(rp) :: weight_sum, k_fingerprint(5)
+      real(rp) :: eigenvalue_checksum, occupation_checksum, eigenvector_unitarity_residual
+      complex(rp) :: eigenvector_checksum
       real(rp), allocatable :: occupations(:)
       complex(rp) :: density_element
       character(len=64) :: state_source
@@ -636,6 +638,8 @@ contains
          state_source = 'diagnostic_frozen_post_scf_rebuild'
       end if
       weight_sum = sum(left_state%k_weights)
+      call state_identity_checksums(left_state, eigenvalue_checksum, eigenvector_checksum, occupation_checksum, &
+         eigenvector_unitarity_residual)
       k_fingerprint = 0.0_rp
       do ik = 1, nk
          k_fingerprint(1) = k_fingerprint(1) + left_state%k_weights(ik)
@@ -655,6 +659,11 @@ contains
       write(unit, '(a,i0)') '# nbands = ', nbands
       write(unit, '(a,es24.16)') '# k_weight_sum = ', weight_sum
       write(unit, '(a,5(es24.16,1x))') '# k_fingerprint_checksums = ', k_fingerprint
+      write(unit, '(a,es24.16)') '# eigenvalue_checksum_Ry = ', eigenvalue_checksum
+      write(unit, '(a,2(es24.16,1x))') '# eigenvector_checksum_real_imag = ', real(eigenvector_checksum, rp), &
+         aimag(eigenvector_checksum)
+      write(unit, '(a,es24.16)') '# occupation_checksum = ', occupation_checksum
+      write(unit, '(a,es24.16)') '# eigenvector_unitarity_max_abs = ', eigenvector_unitarity_residual
       write(unit, '(a,es24.16)') '# fermi_level_Ry = ', left_state%fermi_level
       write(unit, '(a,es24.16)') '# target_electron_count = ', reciprocal_obj%total_electrons
       write(unit, '(a,es24.16)') '# accepted_electron_count = ', reciprocal_obj%canonical_electron_count
@@ -682,6 +691,80 @@ contains
       close(unit)
       deallocate(occupations)
    end subroutine write_tddft_state_artifact
+
+   !> Deterministic, machine-readable fingerprints for the immutable response
+   !> state.  These are diagnostics rather than cryptographic hashes: the
+   !> indexed weights make accidental state replacement visible while the
+   !> unitary residual checks the eigenvector normalization independently.
+   subroutine state_identity_checksums(state, eigenvalue_checksum, eigenvector_checksum, occupation_checksum, &
+                                       eigenvector_unitarity_residual)
+      type(lr_electronic_state), intent(in) :: state
+      real(rp), intent(out) :: eigenvalue_checksum, occupation_checksum, eigenvector_unitarity_residual
+      complex(rp), intent(out) :: eigenvector_checksum
+      integer :: ik, ib, i, jb
+      complex(rp) :: overlap, expected
+
+      eigenvalue_checksum = 0.0_rp
+      occupation_checksum = 0.0_rp
+      eigenvector_checksum = cmplx(0.0_rp, 0.0_rp, rp)
+      eigenvector_unitarity_residual = 0.0_rp
+      do ik = 1, state%nk
+         do ib = 1, state%nbands
+            eigenvalue_checksum = eigenvalue_checksum + (real(ib, rp) + 0.001_rp*real(ik, rp))* &
+               state%eigenvalues(ib, ik)
+            occupation_checksum = occupation_checksum + (real(ib, rp) + 0.001_rp*real(ik, rp))* &
+               state%occupations(ib, ik)
+            do i = 1, state%nbasis
+               eigenvector_checksum = eigenvector_checksum + &
+                  cmplx(real(i, rp) + 0.01_rp*real(ib, rp) + 0.0001_rp*real(ik, rp), 0.0_rp, rp)* &
+                  state%eigenvectors(i, ib, ik)
+            end do
+         end do
+         do ib = 1, state%nbands
+            do jb = 1, state%nbands
+               overlap = sum(conjg(state%eigenvectors(:, ib, ik))*state%eigenvectors(:, jb, ik))
+               if (ib == jb) then
+                  expected = cmplx(1.0_rp, 0.0_rp, rp)
+               else
+                  expected = cmplx(0.0_rp, 0.0_rp, rp)
+               end if
+               eigenvector_unitarity_residual = max(eigenvector_unitarity_residual, abs(overlap - expected))
+            end do
+         end do
+      end do
+   end subroutine state_identity_checksums
+
+   !> Deterministic checksum/norm for the accepted radial/LMTO snapshot used
+   !> to build the DRESP-01 site projection.  The arrays are included rather
+   !> than just their scalar moments so a radial-state replacement is visible.
+   subroutine radial_identity_checksums(states, radial_checksum, radial_l2_norm)
+      type(radial_ground_state), intent(in) :: states(:)
+      real(rp), intent(out) :: radial_checksum, radial_l2_norm
+      integer :: isite, ir
+      real(rp) :: coefficient
+
+      radial_checksum = 0.0_rp
+      radial_l2_norm = 0.0_rp
+      do isite = 1, size(states)
+         coefficient = real(isite, rp)
+         radial_checksum = radial_checksum + coefficient*(states(isite)%a + states(isite)%b + states(isite)%rmax + &
+            sum(states(isite)%r) + sum(states(isite)%rho_weighted_up) + sum(states(isite)%rho_weighted_down) + &
+            sum(states(isite)%pauli_large) + sum(states(isite)%pauli_large_dot) + sum(states(isite)%pauli_small) + &
+            sum(states(isite)%pauli_sr_correction) + sum(states(isite)%pauli_enu) + &
+            states(isite)%integrated_n_up + states(isite)%integrated_n_down + states(isite)%integrated_spin_number + &
+            states(isite)%integrated_moment_muB)
+         do ir = 1, size(states(isite)%r)
+            radial_checksum = radial_checksum + (coefficient + 0.001_rp*real(ir, rp))* &
+               (states(isite)%r(ir) + states(isite)%rho_weighted_up(ir) + states(isite)%rho_weighted_down(ir))
+         end do
+         radial_l2_norm = radial_l2_norm + sum(states(isite)%r**2) + &
+            sum(states(isite)%rho_weighted_up**2) + sum(states(isite)%rho_weighted_down**2) + &
+            sum(states(isite)%pauli_large**2) + sum(states(isite)%pauli_large_dot**2) + &
+            sum(states(isite)%pauli_small**2) + sum(states(isite)%pauli_sr_correction**2) + &
+            sum(states(isite)%pauli_enu**2)
+      end do
+      radial_l2_norm = sqrt(max(0.0_rp, radial_l2_norm))
+   end subroutine radial_identity_checksums
 
    !> Compare the immutable left snapshot against its reciprocal source before
    !> any response contraction.  The density-matrix residual is invariant under
@@ -944,10 +1027,13 @@ contains
       type(lmto_product_response_basis), pointer :: product
       real(rp), allocatable :: moment(:), accepted_moment(:)
       real(rp) :: norm_lehmann, norm_gf, difference, relative, accepted_total, moment_residual
-      real(rp) :: integration_eta, ladder_eta
+      real(rp) :: integration_eta
+      real(rp) :: endpoint_eigenvalue_checksum, endpoint_occupation_checksum, endpoint_unitarity_residual
+      complex(rp) :: endpoint_eigenvector_checksum
+      real(rp) :: state_eigenvalue_checksum, state_occupation_checksum, state_unitarity_residual
+      complex(rp) :: state_eigenvector_checksum
+      real(rp) :: radial_checksum, radial_l2_norm
       integer :: projection_index, iq, ifrequency, i, j, orbital, unit, gamma_index, positive_index, negative_index
-      integer, dimension(3) :: ladder_points
-      real(rp), dimension(3) :: ladder_eta_multipliers
       logical :: gamma_saved, covariance_saved
       character(len=8) :: projection
 
@@ -1013,9 +1099,28 @@ contains
       write(unit, '(a,l1)') '# accepted_state_cache_reused = ', .true.
       write(unit, '(a,3(i0,1x))') '# accepted_k_mesh = ', reciprocal_obj%nk_mesh
       write(unit, '(a,i0)') '# accepted_k_count = ', left_state%nk
+      write(unit, '(a,es24.16)') '# structure_alat = ', lattice_obj%alat
+      write(unit, '(a,i0)') '# structure_ntype = ', lattice_obj%ntype
+      write(unit, '(a,i0)') '# structure_nrec = ', lattice_obj%nrec
+      write(unit, '(a,i0)') '# accepted_response_lmax = ', response_space%response_lmax
+      write(unit, '(a,i0)') '# accepted_radial_sites = ', size(ground_states)
+      write(unit, '(a)') '# accepted_hamiltonian = reciprocal ham_only eigensystem from the accepted k-space SCF cache'
+      write(unit, '(a)') '# accepted_lmto_radial_state = accepted radial/Pauli snapshots; no radial rebuild in the GF ladders'
+      write(unit, '(a)') '# spin_state = collinear, orthogonal, no SOC, no extra operator'
+      write(unit, '(a)') '# material_state_gate = structure, SCF cache, Hamiltonian/eigenpairs, LMTO/radial, k mesh/weights, EF/occupations, and DRESP projection are frozen and shared'
       write(unit, '(a,es24.16)') '# EF_Ry = ', left_state%fermi_level
       write(unit, '(a,es24.16)') '# temperature_K = ', left_state%temperature
       write(unit, '(a,es24.16)') '# accepted_state_integrated_moment_muB = ', accepted_total
+      call state_identity_checksums(left_state, state_eigenvalue_checksum, state_eigenvector_checksum, &
+         state_occupation_checksum, state_unitarity_residual)
+      call radial_identity_checksums(ground_states, radial_checksum, radial_l2_norm)
+      write(unit, '(a,es24.16)') '# accepted_state_eigenvalue_checksum_Ry = ', state_eigenvalue_checksum
+      write(unit, '(a,2(es24.16,1x))') '# accepted_state_eigenvector_checksum_real_imag = ', &
+         real(state_eigenvector_checksum, rp), aimag(state_eigenvector_checksum)
+      write(unit, '(a,es24.16)') '# accepted_state_occupation_checksum = ', state_occupation_checksum
+      write(unit, '(a,es24.16)') '# accepted_state_eigenvector_unitarity_max_abs = ', state_unitarity_residual
+      write(unit, '(a,es24.16)') '# accepted_radial_checksum = ', radial_checksum
+      write(unit, '(a,es24.16)') '# accepted_radial_l2_norm = ', radial_l2_norm
       write(unit, '(a,a)') '# reciprocal_mode = ', trim(left_state%reciprocal_mode)
       write(unit, '(a,a)') '# hamiltonian_order = ', trim(left_state%hamiltonian_order)
       write(unit, '(a,es24.16)') '# eta_response_Ry = ', config%eta
@@ -1023,6 +1128,16 @@ contains
       write(unit, '(a,i0)') '# gf_energy_points = ', config%gf_integration_points
       write(unit, '(a,es24.16)') '# gf_energy_margin_Ry = ', config%gf_energy_margin
       write(unit, '(a)') '# q_convention = exact folded reciprocal k+q endpoint; no extra DRESP site phase'
+      write(unit, '(a)') '# q_endpoint_gate = exact folded k+q endpoint state; endpoint checksums below are compared before each response sample'
+      write(unit, '(a)') '# scf_during_ladder = F'
+      write(unit, '(a)') '# endpoint_identity columns: q_index qx qy qz eigenvalue_checksum_Ry eigenvector_checksum_real eigenvector_checksum_imag occupation_checksum unitarity_max_abs'
+      do iq = 1, size(config%q_list, 2)
+         call state_identity_checksums(endpoints(iq), endpoint_eigenvalue_checksum, endpoint_eigenvector_checksum, &
+            endpoint_occupation_checksum, endpoint_unitarity_residual)
+         write(unit, '(a,1x,i0,1x,3(es24.16,1x),5(es24.16,1x))') '# endpoint_identity', iq, config%q_list(:, iq), &
+            endpoint_eigenvalue_checksum, real(endpoint_eigenvector_checksum, rp), aimag(endpoint_eigenvector_checksum), &
+            endpoint_occupation_checksum, endpoint_unitarity_residual
+      end do
       write(unit, '(a)') '# columns = projection q_index omega_Ry row col Lehmann_Re Lehmann_Im GF_Re GF_Im abs_diff rel_diff'
 
       do projection_index = 1, 2
@@ -1083,6 +1198,7 @@ contains
             request%electronic_state => left_state
             request%q_endpoint_state => endpoints(iq)
             request%channel = config%channel
+            request%diagnostics = config%gf_closure_audit .and. iq == gamma_index
             call evaluate_projected_lehmann_chi0(request, lehmann_result)
             call evaluate_projected_gf_chi0(request, gf_result)
             write(unit, '(a,1x,i0,1x,2(es24.16,1x),i0,1x,es24.16,1x,a)') &
@@ -1132,38 +1248,192 @@ contains
          end if
 
          if (config%gf_closure_audit .and. gamma_saved) then
-            ladder_eta_multipliers = [4.0_rp, 2.0_rp, 1.0_rp]
-            ladder_points(1) = max(1001, config%gf_integration_points/4)
-            ladder_points(2) = max(ladder_points(1) + 2, config%gf_integration_points/2)
-            ladder_points(3) = max(ladder_points(2) + 2, config%gf_integration_points)
-            do i = 1, size(ladder_points)
-               if (mod(ladder_points(i), 2) == 0) ladder_points(i) = ladder_points(i) + 1
-               ladder_eta = integration_eta*ladder_eta_multipliers(i)
-               if (ladder_eta >= config%eta) cycle
-               request%q = config%q_list(:, gamma_index)
-               request%frequencies = config%frequencies
-               request%eta = config%eta
-               request%channel = config%channel
-               request%integration_points = ladder_points(i)
-               request%integration_eta = ladder_eta
-               request%energy_margin = config%gf_energy_margin
-               request%contract => contract
-               request%product_basis => product
-               request%electronic_state => left_state
-               request%q_endpoint_state => endpoints(gamma_index)
-               call evaluate_projected_gf_chi0(request, gf_result)
-               difference = sqrt(sum(abs(gamma_lehmann%susceptibility - gf_result%susceptibility)**2))
-               relative = difference/max(sqrt(sum(abs(gamma_lehmann%susceptibility)**2)), tiny(1.0_rp))
-               write(unit, '(a,a,1x,i0,1x,5(es24.16,1x))') &
-                  '# gf_ladder projection=', trim(projection), ladder_points(i), ladder_eta, difference, relative, &
-                  real(gf_result%susceptibility(1, 1, 1), rp), aimag(gf_result%susceptibility(1, 1, 1))
-            end do
+            call write_projected_gf_closure_audit(unit, projection, contract, product, left_state, &
+               endpoints(gamma_index), gamma_lehmann, config, integration_eta)
          end if
       end do
       close(unit)
       deallocate(moment)
       deallocate(accepted_moment)
    end subroutine run_tddft_projected_chi0
+
+   !> DRESP-02R material closure campaign.  Every sample uses the same
+   !> accepted left state and exact folded Gamma endpoint; only the real-axis
+   !> quadrature mesh, integration broadening, or finite energy window changes.
+   subroutine write_projected_gf_closure_audit(unit, projection, contract, product, left_state, endpoint, &
+                                               gamma_lehmann, config, integration_eta)
+      integer, intent(in) :: unit
+      character(len=*), intent(in) :: projection
+      type(projected_site_spin_contract), intent(in), target :: contract
+      type(lmto_product_response_basis), intent(in), target :: product
+      type(lr_electronic_state), intent(in), target :: left_state, endpoint
+      type(projected_chi0_result), intent(in) :: gamma_lehmann
+      type(tddft_production_config), intent(in) :: config
+      real(rp), intent(in) :: integration_eta
+
+      type(projected_chi0_request) :: request
+      type(projected_chi0_result) :: gf_result
+      integer, parameter :: n_campaign = 3
+      integer :: mesh_points(n_campaign), eta_points(n_campaign), window_points, i, ik
+      real(rp) :: eta_values(n_campaign), margins(n_campaign), width, target_ratio
+      real(rp) :: norm_lehmann, norm_gf, delta_re, delta_im, delta_abs, relative
+      real(rp) :: sample_eta, sample_margin
+      complex(rp), allocatable :: delta(:, :, :)
+
+      if (size(config%frequencies) < 1) error stop 'DRESP-02R: no frequency available for GF audit'
+      width = maxval(endpoint%eigenvalues) - minval(endpoint%eigenvalues) + 2.0_rp*config%gf_energy_margin
+      width = max(width, maxval(left_state%eigenvalues) - minval(left_state%eigenvalues) + &
+         2.0_rp*config%gf_energy_margin)
+      target_ratio = 0.40_rp
+      mesh_points = [max(101, config%gf_integration_points/4), max(201, config%gf_integration_points/2), &
+         max(401, config%gf_integration_points)]
+      do i = 1, n_campaign
+         if (mod(mesh_points(i), 2) == 0) mesh_points(i) = mesh_points(i) + 1
+      end do
+      eta_values = integration_eta*[4.0_rp, 2.0_rp, 1.0_rp]
+      do i = 1, n_campaign
+         eta_points(i) = odd_at_least(ceiling(width/(target_ratio*eta_values(i))) + 1)
+      end do
+      margins = [0.30_rp, 0.60_rp, 1.00_rp]
+      window_points = odd_at_least(max(3, config%gf_integration_points))
+
+      write(unit, '(a)') '# DRESP-02R controlled GF closure audit; all samples reuse one frozen accepted state'
+      write(unit, '(a)') '# gf_audit_samples columns: projection campaign sample eta_response eta_int margin Emin Emax NE h h_over_eta chiL chiGF delta_Re delta_Im delta_abs relative wall_seconds'
+
+      ! Fixed integration eta: this isolates the real-axis mesh error.
+      do i = 1, n_campaign
+         sample_eta = integration_eta
+         sample_margin = config%gf_energy_margin
+         call evaluate_projected_gf_audit_sample(gf_result, contract, product, left_state, endpoint, config, &
+            sample_eta, sample_margin, mesh_points(i), .true.)
+         call write_projected_gf_audit_row(unit, projection, 'fixed_eta_mesh', i, gamma_lehmann, gf_result, &
+            config%eta, sample_eta, sample_margin)
+         if (i == n_campaign) then
+            write(unit, '(a,1x,a,1x,a,1x,7(es24.16,1x))') '# gf_spectral_moments', trim(projection), 'fine_mesh', &
+               gf_result%left_spectral_zeroth_residual, gf_result%right_spectral_zeroth_residual, &
+               gf_result%left_spectral_first_residual, gf_result%right_spectral_first_residual, &
+               gf_result%left_spectral_fermi_residual, gf_result%right_spectral_fermi_residual, &
+               gf_result%spacing_over_integration_eta
+            write(unit, '(a,1x,a,1x,a,1x,7(es24.16,1x))') '# gf_kubo_terms', trim(projection), 'fine_mesh', &
+               sqrt(sum(abs(gf_result%kubo_term_one)**2)), real(sum(gf_result%kubo_term_one), rp), &
+               aimag(sum(gf_result%kubo_term_one)), sqrt(sum(abs(gf_result%kubo_term_two)**2)), &
+               real(sum(gf_result%kubo_term_two), rp), aimag(sum(gf_result%kubo_term_two)), &
+               sqrt(sum(abs(gf_result%kubo_term_one + gf_result%kubo_term_two - gf_result%susceptibility)**2))
+            write(unit, '(a)') '# gf_k columns: projection k_index chiL_k chiGF_k delta_Re delta_Im delta_abs relative chiGF_Re chiGF_Im'
+            do ik = 1, left_state%nk
+               call write_projected_gf_k_row(unit, projection, ik, gamma_lehmann, gf_result)
+            end do
+            write(unit, '(a)') '# dominant_lehmann columns: projection rank k_index left_band right_band left_E right_E left_f right_f transition_E matrix_element_weight score'
+            do ik = 1, gamma_lehmann%n_dominant_transition_records
+               write(unit, '(a,1x,a,1x,i0,1x,3(i0,1x),7(es24.16,1x))') '# dominant_lehmann', trim(projection), ik, &
+                  gamma_lehmann%dominant_transitions(ik)%k_index, gamma_lehmann%dominant_transitions(ik)%left_band, &
+                  gamma_lehmann%dominant_transitions(ik)%right_band, gamma_lehmann%dominant_transitions(ik)%left_energy, &
+                  gamma_lehmann%dominant_transitions(ik)%right_energy, gamma_lehmann%dominant_transitions(ik)%left_occupation, &
+                  gamma_lehmann%dominant_transitions(ik)%right_occupation, gamma_lehmann%dominant_transitions(ik)%transition_energy, &
+                  gamma_lehmann%dominant_transitions(ik)%matrix_element_weight, gamma_lehmann%dominant_transitions(ik)%score
+            end do
+         end if
+      end do
+
+      ! Integration eta ladder with h/eta held near target_ratio.  This is
+      ! independent of the fixed-eta mesh campaign above.
+      do i = 1, n_campaign
+         if (eta_values(i) >= config%eta) cycle
+         call evaluate_projected_gf_audit_sample(gf_result, contract, product, left_state, endpoint, config, &
+            eta_values(i), config%gf_energy_margin, eta_points(i), .false.)
+         call write_projected_gf_audit_row(unit, projection, 'controlled_eta', i, gamma_lehmann, gf_result, &
+            config%eta, eta_values(i), config%gf_energy_margin)
+      end do
+
+      ! Window ladder: broadening and mesh count remain fixed while the
+      ! finite spectral interval is changed explicitly.
+      do i = 1, n_campaign
+         call evaluate_projected_gf_audit_sample(gf_result, contract, product, left_state, endpoint, config, &
+            integration_eta, margins(i), window_points, .false.)
+         call write_projected_gf_audit_row(unit, projection, 'energy_window', i, gamma_lehmann, gf_result, &
+            config%eta, integration_eta, margins(i))
+      end do
+
+      deallocate(gf_result%susceptibility)
+   end subroutine write_projected_gf_closure_audit
+
+   subroutine evaluate_projected_gf_audit_sample(result, contract, product, left_state, endpoint, config, &
+                                                 integration_eta, margin, integration_points, diagnostics)
+      type(projected_chi0_result), intent(out) :: result
+      type(projected_site_spin_contract), intent(in), target :: contract
+      type(lmto_product_response_basis), intent(in), target :: product
+      type(lr_electronic_state), intent(in), target :: left_state, endpoint
+      type(tddft_production_config), intent(in) :: config
+      real(rp), intent(in) :: integration_eta, margin
+      integer, intent(in) :: integration_points
+      logical, intent(in) :: diagnostics
+      type(projected_chi0_request) :: request
+
+      request%q = [0.0_rp, 0.0_rp, 0.0_rp]
+      request%frequencies = config%frequencies
+      request%eta = config%eta
+      request%channel = config%channel
+      request%integration_points = integration_points
+      request%integration_eta = integration_eta
+      request%energy_margin = margin
+      request%diagnostics = diagnostics
+      request%contract => contract
+      request%product_basis => product
+      request%electronic_state => left_state
+      request%q_endpoint_state => endpoint
+      call evaluate_projected_gf_chi0(request, result)
+   end subroutine evaluate_projected_gf_audit_sample
+
+   subroutine write_projected_gf_audit_row(unit, projection, campaign, sample, gamma_lehmann, gf_result, &
+                                           response_eta, integration_eta, margin)
+      integer, intent(in) :: unit, sample
+      character(len=*), intent(in) :: projection, campaign
+      type(projected_chi0_result), intent(in) :: gamma_lehmann, gf_result
+      real(rp), intent(in) :: response_eta, integration_eta, margin
+      complex(rp), allocatable :: delta(:, :, :)
+      real(rp) :: norm_lehmann, norm_gf, delta_re, delta_im, delta_abs, relative
+
+      allocate(delta, mold=gamma_lehmann%susceptibility)
+      delta = gamma_lehmann%susceptibility - gf_result%susceptibility
+      norm_lehmann = sqrt(sum(abs(gamma_lehmann%susceptibility)**2))
+      norm_gf = sqrt(sum(abs(gf_result%susceptibility)**2))
+      delta_re = sqrt(sum(real(delta, rp)**2))
+      delta_im = sqrt(sum(aimag(delta)**2))
+      delta_abs = sqrt(sum(abs(delta)**2))
+      relative = delta_abs/max(norm_lehmann, tiny(1.0_rp))
+      write(unit, '(a,1x,a,1x,a,1x,i0,1x,5(es24.16,1x),i0,1x,9(es24.16,1x))') '# gf_audit', trim(projection), trim(campaign), sample, &
+         response_eta, integration_eta, margin, gf_result%energy_min, gf_result%energy_max, gf_result%integration_points, &
+         gf_result%energy_spacing, gf_result%spacing_over_integration_eta, norm_lehmann, norm_gf, delta_re, delta_im, &
+         delta_abs, relative, gf_result%wall_time_seconds
+      deallocate(delta)
+   end subroutine write_projected_gf_audit_row
+
+   subroutine write_projected_gf_k_row(unit, projection, k_index, gamma_lehmann, gf_result)
+      integer, intent(in) :: unit, k_index
+      character(len=*), intent(in) :: projection
+      type(projected_chi0_result), intent(in) :: gamma_lehmann, gf_result
+      complex(rp), allocatable :: delta(:, :, :)
+      real(rp) :: norm_lehmann, norm_gf, delta_re, delta_im, delta_abs, relative
+
+      allocate(delta, mold=gamma_lehmann%k_susceptibility(:, :, :, k_index))
+      delta = gamma_lehmann%k_susceptibility(:, :, :, k_index) - gf_result%k_susceptibility(:, :, :, k_index)
+      norm_lehmann = sqrt(sum(abs(gamma_lehmann%k_susceptibility(:, :, :, k_index))**2))
+      norm_gf = sqrt(sum(abs(gf_result%k_susceptibility(:, :, :, k_index))**2))
+      delta_re = sqrt(sum(real(delta, rp)**2))
+      delta_im = sqrt(sum(aimag(delta)**2))
+      delta_abs = sqrt(sum(abs(delta)**2))
+      relative = delta_abs/max(norm_lehmann, tiny(1.0_rp))
+      write(unit, '(a,1x,a,1x,i0,1x,8(es24.16,1x))') '# gf_k', trim(projection), k_index, norm_lehmann, norm_gf, &
+         delta_re, delta_im, delta_abs, relative, real(gf_result%k_susceptibility(1, 1, 1, k_index), rp), &
+         aimag(gf_result%k_susceptibility(1, 1, 1, k_index))
+      deallocate(delta)
+   end subroutine write_projected_gf_k_row
+
+   pure integer function odd_at_least(value) result(odd_value)
+      integer, intent(in) :: value
+      odd_value = max(3, value)
+      if (mod(odd_value, 2) == 0) odd_value = odd_value + 1
+   end function odd_at_least
 
    !> Evaluate the compact direct-ALSDA Dyson response.
    !>

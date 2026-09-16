@@ -122,10 +122,18 @@ contains
       type(lr_product_gf_susceptibility_result) :: product_gf
       complex(rp), allocatable :: oracle_lehmann(:, :, :), oracle_gf(:, :, :)
       real(rp) :: lehmann_residual, gf_residual, coarse_difference, fine_difference, trend_residual
+      real(rp) :: diagnostic_residual
       integer :: i
 
       call prepare_request(request, contract, product, state, endpoint, q, frequencies, eta_in, margin)
+      request%diagnostics = .true.
       call evaluate_projected_lehmann_chi0(request, direct_lehmann)
+      diagnostic_residual = maxval(abs(sum(direct_lehmann%k_susceptibility, dim=4) - direct_lehmann%susceptibility))
+      if (.not. allocated(direct_lehmann%k_susceptibility) .or. direct_lehmann%n_dominant_transition_records < 1 .or. &
+          diagnostic_residual > 2.0e-12_rp) then
+         failed = .true.
+         write (*, '(a,es12.4)') '  '//trim(label)//' Lehmann diagnostic k-sum residual = ', diagnostic_residual
+      end if
 
       product_request%q = request%q
       product_request%frequencies = frequencies
@@ -181,6 +189,17 @@ contains
       request%integration_points = 101
       request%integration_eta = 0.012_rp
       call evaluate_projected_gf_chi0(request, direct_gf)
+      diagnostic_residual = maxval(abs(direct_gf%kubo_term_one + direct_gf%kubo_term_two - direct_gf%susceptibility))
+      if (.not. allocated(direct_gf%kubo_term_one) .or. .not. allocated(direct_gf%kubo_term_two) .or. &
+          .not. allocated(direct_gf%k_susceptibility) .or. diagnostic_residual > 2.0e-12_rp .or. &
+          maxval(abs(sum(direct_gf%k_susceptibility, dim=4) - direct_gf%susceptibility)) > 2.0e-12_rp .or. &
+          .not. ieee_is_finite(direct_gf%left_spectral_zeroth_residual) .or. &
+          .not. ieee_is_finite(direct_gf%left_spectral_first_residual) .or. &
+          .not. ieee_is_finite(direct_gf%left_spectral_fermi_residual) .or. &
+          direct_gf%spacing_over_integration_eta <= 0.0_rp) then
+         failed = .true.
+         write (*, '(a,es12.4)') '  '//trim(label)//' GF diagnostic term residual = ', diagnostic_residual
+      end if
       gf_residual = maxval(abs(direct_gf%susceptibility - oracle_gf))
       write (*, '(a,es12.4)') '  '//trim(label)//' GF product oracle max|dchi| = ', gf_residual
       if (gf_residual > 2.0e-10_rp .or. direct_gf%point_response_allocated) failed = .true.
