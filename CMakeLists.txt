@@ -701,6 +701,14 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitDresp03qNativeLkag PROPERTIES
     LABELS "unit;dresp-03q;finite-q;lmto;lkag;native-reference;bcc-fe;spd"
     WORKING_DIRECTORY "${_dresp03q_native_case}")
+  add_fortran_unit_test(UnitDresp03tgNativeFixedZ ${TestDIR}/unit/test_dresp03tg_native_fixed_z.f90)
+  set(_dresp03tg_fixed_z_case "${CMAKE_BINARY_DIR}/Testing/dresp03tg_native_fixed_z")
+  file(MAKE_DIRECTORY "${_dresp03tg_fixed_z_case}")
+  configure_file("${TestDIR}/regression/bccFe_lanczos/input.nml" "${_dresp03tg_fixed_z_case}/input.nml" COPYONLY)
+  configure_file("${TestDIR}/regression/bccFe_lanczos/Fe.nml" "${_dresp03tg_fixed_z_case}/Fe.nml" COPYONLY)
+  set_tests_properties(UnitDresp03tgNativeFixedZ PROPERTIES
+    LABELS "unit;dresp-03tg;native-turek;fixed-z;representation;hard-gate"
+    WORKING_DIRECTORY "${_dresp03tg_fixed_z_case}")
   add_fortran_unit_test(UnitLrProductGfQuadratureAudit ${TestDIR}/unit/test_lr_product_gf_quadrature_audit.f90)
   set_tests_properties(UnitLrProductGfQuadratureAudit PROPERTIES
     LABELS "unit;tdvk-03a;lr-gf-02;quadrature-audit;reciprocal-gf"

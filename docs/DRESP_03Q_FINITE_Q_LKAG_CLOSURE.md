@@ -1,16 +1,16 @@
 # DRESP-03Q — Finite-q Torque-Hessian and Native LKAG Closure
 
-Status: **BLOCKED — COMMON-STATE LKAG q ORACLE NOT CERTIFIED**.
+Status: **BLOCKED — FIXED-Z REPRESENTATION CONTRACTION**.
 
 The finite-q operator algebra and the live reciprocal-H adapter are implemented
 and independently tested.  The old Fe comparison is retained below as a
 historical two-shell diagnostic only: its `jij.out` source requested
 `njij = 2`, so its Fourier curve is a truncated model and is not a
-representation-equivalence gate.  The new same-state full-range comparison is
-owned by the `exchange_q` workflow, but its q-space native-LKAG oracle still
-requires independent validation and metallic convergence evidence.  No
-rescaling or fitted tolerance is used.  DRESP-04 remains forbidden until this
-status changes.
+representation-equivalence gate.  DRESP-03TG then audited the native call
+graph and now passes the narrower native path-operator representation gate:
+[`DRESP_03TG_NATIVE_TUREK_GF.md`](DRESP_03TG_NATIVE_TUREK_GF.md).  No native
+production evaluator has been added yet, and no rescaling or fitted tolerance
+is used.  DRESP-04 remains forbidden until the numerical closure is complete.
 
 `source/exchange.f90` was not modified.
 
@@ -25,9 +25,10 @@ arbitrary q continues to use exact endpoint diagonalization.  Detailed
 derivation, independent metallic fixtures, bcc-Fe evidence, and timing are in
 [`DRESP_03QM_METALLIC_FINITE_Q.md`](DRESP_03QM_METALLIC_FINITE_Q.md).
 
-This does not close the native LKAG q oracle.  The native status below remains
-`BLOCKED — COMMON-STATE LKAG q ORACLE NOT CERTIFIED`, and DRESP-04 remains
-forbidden.
+This does not close the native LKAG q oracle.  DRESP-03TG now passes the
+representation gate; the first native fixed-complex-energy contraction now
+blocks before integration. Contact correspondence and numerical q closure
+remain unentered. DRESP-04 remains forbidden.
 
 ## DRESP-03G finite-H contour bridge
 
@@ -235,11 +236,9 @@ The production gate is not closed until all of the following are recorded:
 3. energy-mesh and regulator convergence for metallic Fe;
 4. dense same-state curves for finite-H and LKAG-q with no fitted scale.
 
-The allowed final verdicts are `PASS — NATIVE LKAG / FINITE-H q BRIDGE
-CLOSED`, `PASS — CONTACT TERM REQUIRED FOR CLOSURE`, `BLOCKED — COMMON-STATE
-LKAG q ORACLE NOT CERTIFIED`, `BLOCKED — METALLIC INTEGRATION NOT CONVERGED`,
-and `BLOCKED — TRUE NATIVE/FH REPRESENTATION MISMATCH`.  Only the last one
-authorizes reopening the deeper representation mapping.
+The q-space gates remain subordinate to the DRESP-03TG representation gate.
+That representation gate is now open, but the q gates cannot be promoted
+until the native path-operator evaluator and its numerical comparisons exist.
 
 ## User-facing exchange_q workflow
 
@@ -290,7 +289,8 @@ finite-H `J(q)` is manufactured by adding a native Gamma constant.
 
 ## Re-opening condition
 
-Re-open DRESP-03Q only after a common-state native/finite-H comparison has an
-independently controlled metallic integration, identical Hamiltonian order and
-orbital representation, and agreement for the full required q mesh.  Until
-then, DRESP-04 must not be started.
+Re-open DRESP-03Q only after the DRESP-03TG path-operator representation is
+implemented, with an independently controlled metallic integration, identical
+Hamiltonian order and orbital representation, contact-term correspondence,
+and agreement for the full required q mesh.  Until then, DRESP-04 must not be
+started.
