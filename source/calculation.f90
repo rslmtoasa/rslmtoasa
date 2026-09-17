@@ -35,6 +35,7 @@ module calculation_mod
    use density_of_states_mod
    use bands_mod
    use exchange_mod
+   use exchange_q_mod, only: exchange_q_config, load_exchange_q_config
    use spin_dynamics_mod
    use conductivity_mod
    use reciprocal_mod
@@ -140,6 +141,9 @@ module calculation_mod
 
       !> Minimal clean post-SCF TD-DFT production selection and grid.
       type(tddft_production_config) :: tddft
+
+      !> User-facing finite-q static exchange-curvature path.
+      type(exchange_q_config) :: exchange_q
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -296,6 +300,7 @@ contains
       end if
 
       call load_tddft_config(fname, this%tddft)
+      call load_exchange_q_config(fname, this%exchange_q, trim(post_processing) == 'exchange_q')
       if (trim(post_processing) == 'susceptibility') then
          call g_logger%fatal('post_processing=''susceptibility'' is the removed legacy TD-DFT route; use post_processing=''tddft'' with the minimal &tddft input.', &
                              __FILE__, __LINE__)
@@ -386,6 +391,10 @@ contains
          call this%post_processing_kspace_green()
       case ('frozen_magnon')
          call this%post_processing_frozen_magnon()
+      case ('exchange_q')
+         ! exchange_q is owned by the accepted bravais-SCF handoff in
+         ! pre_processing_bravais.  It cannot reconstruct a second state here.
+         continue
       case ('pauli_projection')
          ! LR-02N runs immediately after the accepted bravais SCF state in
          ! pre_processing_bravais, before the ordinary post-processing stage.
@@ -1992,6 +2001,7 @@ contains
       this%do_damping = .false.
       this%do_inertia = .false.
       call this%tddft%restore_to_default()
+      call this%exchange_q%clear()
    end subroutine restore_to_default
 
    !> Check availability for post-processing
@@ -2013,12 +2023,13 @@ contains
           .and. post_processing /= 'fermi_surface' &
           .and. post_processing /= 'kspace_green' &
           .and. post_processing /= 'frozen_magnon' &
+          .and. post_processing /= 'exchange_q' &
           .and. post_processing /= 'pauli_projection' &
           .and. post_processing /= 'tddft') then
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
                              " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'bsf', 'density_of_states'," // &
-                             " 'fermi_surface', 'kspace_green', 'frozen_magnon', 'pauli_projection', 'tddft'", __FILE__, __LINE__)
+                             " 'fermi_surface', 'kspace_green', 'frozen_magnon', 'exchange_q', 'pauli_projection', 'tddft'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 

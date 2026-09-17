@@ -1,5 +1,6 @@
 !------------------------------------------------------------------------------
-! DRESP-03Q -- finite-q full-spd force-theorem versus native LKAG.
+! DRESP-03Q historical diagnostic -- finite-q full-spd force-theorem versus
+! the truncated two-shell native reference.  This is not the closure gate.
 !
 ! The native jij.out is an input reference, not regenerated or modified by
 ! this test.  Its two bcc representatives are expanded over their exact
@@ -98,7 +99,7 @@ program test_dresp03q_native_lkag
    jq0 = bcc_native_jq(native_r, native_j, q_points(:,1))
    failed = .false.
 
-   write (*, '(a)') 'DRESP-03Q native LKAG / finite-H full-spd bridge'
+   write (*, '(a)') 'DRESP-03Q historical two-shell native LKAG / finite-H diagnostic'
    write (*, '(a,es16.8)') 'native J(Gamma) Ry          = ', jq0
    ! At q=0 the endpoint eigensystem is identical to the initial one.  The
    ! metallic bcc spectrum contains exact orbital degeneracies, so a raw
@@ -132,7 +133,7 @@ program test_dresp03q_native_lkag
       ! representations are not demonstrably identical.  Keep the numerical
       ! evidence visible to CTest without converting an allowed BLOCKED result
       ! into a misleading implementation failure.
-      write (*, '(a)') 'RESULT: BLOCKED — native LKAG / finite-H representation mismatch'
+      write (*, '(a)') 'RESULT: BLOCKED — COMMON-STATE LKAG q ORACLE NOT CERTIFIED'
       call fixture%clear()
       return
    end if

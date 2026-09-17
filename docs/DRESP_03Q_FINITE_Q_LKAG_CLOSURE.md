@@ -1,13 +1,16 @@
 # DRESP-03Q — Finite-q Torque-Hessian and Native LKAG Closure
 
-Status: **BLOCKED — finite-H versus native LKAG representation mismatch**.
+Status: **BLOCKED — COMMON-STATE LKAG q ORACLE NOT CERTIFIED**.
 
 The finite-q operator algebra and the live reciprocal-H adapter are implemented
-and independently tested.  The final native LKAG comparison is intentionally
-left blocked: the native `source/exchange.f90` consumer and the finite-H
-force-theorem path do not yet expose a demonstrably identical exchange vertex
-and metallic energy integration.  No rescaling or fitted tolerance is used to
-hide that result.  DRESP-04 remains forbidden until this status changes.
+and independently tested.  The old Fe comparison is retained below as a
+historical two-shell diagnostic only: its `jij.out` source requested
+`njij = 2`, so its Fourier curve is a truncated model and is not a
+representation-equivalence gate.  The new same-state full-range comparison is
+owned by the `exchange_q` workflow, but its q-space native-LKAG oracle still
+requires independent validation and metallic convergence evidence.  No
+rescaling or fitted tolerance is used.  DRESP-04 remains forbidden until this
+status changes.
 
 `source/exchange.f90` was not modified.
 
@@ -144,7 +147,7 @@ The native kernel is read directly from `source/exchange.f90`:
 - `simpson_f` integrates to the native Fermi level; and
 - `calculate_exchange` writes `J_internal*1000/(4*pi)` in mRy.
 
-The checked input contains the two bcc shell representatives
+The checked input contains only the two bcc shell representatives
 
 ```text
 R = (-1/2,-1/2,-1/2)   J = 0.739154 mRy
@@ -162,9 +165,11 @@ q_cart = (q2+q3, q1+q3, q1+q2),
 phase  = exp(i*2*pi*q_cart dot R).
 ```
 
-The required 8^3 full mesh is exercised at q values 1/8, 1/4, 3/8, and 1/2
-along the bcc primitive reciprocal direction.  The current native diagnostic
-reports:
+Expanding those representatives over their cubic orbits gives a complete
+two-shell Fourier transform, not the infinite/full native LKAG interaction.
+The required 8^3 full mesh was exercised at q values 1/8, 1/4, 3/8, and 1/2
+along the bcc primitive reciprocal direction.  The historical diagnostic
+reported:
 
 ```text
 q=1/8   finite-H  4.396331e-03   native J(0)-J(q)  1.413572e-03
@@ -175,14 +180,81 @@ q=1/2   finite-H  7.573012e-03   native J(0)-J(q)  9.652472e-03
 
 An independent reciprocal Lehmann diagnostic with `kspace_ham_order='first'`
 and `green_eta=10^-3` also changes the native two-shell values to approximately
-`0.326186` and `0.451905` mRy.  That route dependence reinforces the boundary:
-the legacy real-space recursion exchange data and finite-H spectral curvature
-are not yet a single certified numerical observable for metallic bcc Fe.
+`0.326186` and `0.451905` mRy.  This is numerical-state evidence about the
+historical truncated diagnostic, not proof of a native/finite-H representation
+mismatch.  It must not be used as the DRESP-03Q closure gate.
 
-The CTest entry is consequently report-only and prints
-`RESULT: BLOCKED — native LKAG / finite-H representation mismatch`; it does not
-convert the mismatch into PASS.  The production adapter and synthetic oracle
-remain gating PASS results.
+## Same-state full-range LKAG-q comparison
+
+`post_processing='exchange_q'` consumes the accepted reciprocal SCF snapshot.
+The finite-H fixture is copied before `predls()` is used for the native vertex;
+the production-H adapter residual is checked before and after that mutation.
+The q-space reference evaluates the exact native `dGdG_Jnc` contraction in
+reciprocal space, with the native spin ordering, `imtrace9` imaginary trace,
+native `simpson_f` energy mesh, and the native `1/(4*pi)` output conversion.
+It is explicitly called an LKAG q-space oracle, not a replacement for
+`source/exchange.f90`.
+
+The production gate is not closed until all of the following are recorded:
+
+1. real-space/Fourier identity on an independently evaluated finite/gapped
+   fixture;
+2. native-pair spot checks against unchanged `exchange.f90`;
+3. energy-mesh and regulator convergence for metallic Fe;
+4. dense same-state curves for finite-H and LKAG-q with no fitted scale.
+
+The allowed final verdicts are `PASS — NATIVE LKAG / FINITE-H q BRIDGE
+CLOSED`, `PASS — CONTACT TERM REQUIRED FOR CLOSURE`, `BLOCKED — COMMON-STATE
+LKAG q ORACLE NOT CERTIFIED`, `BLOCKED — METALLIC INTEGRATION NOT CONVERGED`,
+and `BLOCKED — TRUE NATIVE/FH REPRESENTATION MISMATCH`.  Only the last one
+authorizes reopening the deeper representation mapping.
+
+## User-facing exchange_q workflow
+
+Use an accepted bulk k-space SCF state:
+
+```fortran
+&calculation
+  pre_processing  = 'bravais'
+  post_processing = 'exchange_q'
+/
+&self
+  use_kspace = .true.
+/
+&exchange_q
+  q_coordinates = 'direct'
+  q_file         = 'qpath.dat'
+  n_q_points     = 0
+  output_file    = 'exchange_q.dat'
+  write_components = .true.
+  native_crosscheck = .false.
+  native_green_eta = 1.0e-3
+  native_energy_points = 0
+  rotation_axis = 1.0, 0.0, 0.0
+/
+```
+
+For short paths, replace `q_file` with `n_q_points` and columns
+`q_list(:,1)`, `q_list(:,2)`, etc.  A q file follows the frozen-magnon syntax:
+
+```text
+NQ
+q1 q2 q3
+...
+```
+
+`direct` values are reciprocal-lattice coordinates.  `cartesian` values are
+Cartesian units of `2*pi/alat`, matching the established frozen-magnon
+convention.  The electronic k mesh and magnetic q path are independent; exact
+`k+q` endpoint diagonalization is used, so q values are not silently rounded.
+When the optional native cross-check is enabled, `native_green_eta` controls
+the retarded regulator and positive `native_energy_points` rebuilds the native
+Simpson energy mesh for a reproducible convergence sweep.
+
+The primary output is `DeltaJ(q)=J(Gamma)-J(q)`, with TT, contact, total,
+`mRy`, and nonzero-q `DeltaJ/q^2` columns.  If `native_crosscheck=.true.`,
+the native LKAG-q columns and their residual are appended.  No absolute
+finite-H `J(q)` is manufactured by adding a native Gamma constant.
 
 ## Re-opening condition
 

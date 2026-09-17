@@ -247,6 +247,7 @@ contains
    !> Pre-process for bravais calculation
    !---------------------------------------------------------------------------
    module subroutine pre_processing_bravais(this)
+      use exchange_q_mod, only: run_exchange_q
       class(calculation), intent(in) :: this
 
       type(control), target :: control_obj
@@ -320,6 +321,21 @@ contains
       call g_timer%start('self-consistency')
       call self_obj%run()
       call g_timer%stop('self-consistency')
+
+      if (trim(this%post_processing) == 'exchange_q') then
+         ! TDRUN-01 established the accepted-state ownership rule: finalize
+         ! the live k-space SCF snapshot once, then pass that same reciprocal
+         ! cache and Hamiltonian to the post-SCF consumer.  exchange_q is
+         ! deliberately executed here rather than through the historical
+         ! rebuild-after-SCF drivers.
+         if (.not. self_obj%use_kspace) then
+            call g_logger%fatal("post_processing='exchange_q' requires &self use_kspace=.true. so the accepted SCF state is available.", &
+                                __FILE__, __LINE__)
+         end if
+         call self_obj%finalize_kspace_scf_state()
+         call run_exchange_q(this%exchange_q, control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, &
+                             self_obj%reciprocal_scf_cache)
+      end if
 
       if (this%tddft%enabled) then
          if (self_obj%use_kspace) then
