@@ -73,3 +73,6 @@ pip-wheel-metadata/
 # Logs
 *.log
 *.out
+
+# Generated calculation/benchmark results
+/results/
