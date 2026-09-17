@@ -37,20 +37,34 @@ program test_dresp03tg_native_fixed_z
       eye(:,:), tmp(:,:), r_screen(:,:), r_inverse(:,:), g_gamma(:,:), g_alpha(:,:), h(:,:), gh(:,:)
    complex(rp), allocatable :: d1(:,:), d2(:,:), gup_ij(:,:), gup_ji(:,:), gdown_ij(:,:), gdown_ji(:,:), &
       ghup_ij(:,:), ghup_ji(:,:), ghdown_ij(:,:), ghdown_ji(:,:), gh_spin_ij(:,:), gh_spin_ji(:,:)
+   complex(rp), allocatable :: delta_alpha_i(:,:), delta_alpha_j(:,:), delta_gamma_i(:,:), delta_gamma_j(:,:), &
+      correction_i(:,:), correction_j(:,:), candidate_i(:,:), candidate_j(:,:), &
+      r_up_i(:,:), r_up_j(:,:), r_down_i(:,:), r_down_j(:,:), &
+      vertex_i_ud(:,:), vertex_j_ud(:,:), vertex_i_du(:,:), vertex_j_du(:,:), &
+      expanded_i_ud(:,:), expanded_j_ud(:,:), expanded_i_du(:,:), expanded_j_du(:,:), &
+      d_tilde_i(:,:), d_tilde_j(:,:), delta_d_i(:,:), delta_d_j(:,:)
    complex(rp), allocatable :: path_p(:,:), path_s(:,:), path_g(:,:)
    real(rp), allocatable :: alpha(:)
    complex(rp) :: z_values(3), z
    real(rp) :: p_error, d_error, solve_error, p_transform_error, s_transform_error
    real(rp) :: alpha_error, alpha_du_error, pauli_error, pauli_self_error, gf_cov_error
+   real(rp) :: vertex_transform_error, expanded_vertex_error, alpha_transformed_error, raw_gamma_transformed_error
+   real(rp) :: delta_d_error, common_gamma_error, common_gamma_vertex_error
    real(rp) :: native_alpha_ordered_ud, native_alpha_ordered_du, native_alpha_symmetrized
    real(rp) :: native_gamma_ordered_ud, native_gamma_ordered_du, native_gamma_symmetrized
+   real(rp) :: transformed_gamma_ordered_ud, transformed_gamma_ordered_du
    real(rp) :: finite_h_ordered_ud, finite_h_ordered_du, finite_h_symmetrized
    real(rp) :: historical_pauli_value, explicit_pauli_value
    real(rp) :: alpha_h_error, gamma_h_error, gamma_h_du_error, gf_cov_value, p_transform_value
+   real(rp) :: raw_gamma_vertex_magnitude, screening_correction_magnitude, transformed_vertex_magnitude
+   real(rp) :: common_gamma_alpha_ud, common_gamma_alpha_du, common_gamma_raw_ud, common_gamma_raw_du
+   real(rp) :: vertex_transform_value, expanded_vertex_value, alpha_transformed_value, raw_gamma_transformed_value
+   real(rp) :: delta_d_value, common_gamma_vertex_value, common_gamma_correction_magnitude
+   real(rp) :: common_gamma_correction_error
    real(rp), allocatable :: s0(:,:), s1(:,:)
    real(rp) :: e
    integer :: i, l, m, lm, lmax, norb, nsite_fixture, norb_sites, nspin_orb_sites
-   integer :: n2, n4, ia, ino
+   integer :: n2, n4, ia, ino, isite
    logical :: failed
 
    call init_math_operators()
@@ -88,7 +102,13 @@ program test_dresp03tg_native_fixed_z
       r_screen(n4,n4),r_inverse(n4,n4),g_gamma(n4,n4),g_alpha(n4,n4),h(n4,n4),gh(n4,n4), &
       d1(norb,norb),d2(norb,norb),gup_ij(norb,norb),gup_ji(norb,norb),gdown_ij(norb,norb),gdown_ji(norb,norb), &
       ghup_ij(norb,norb),ghup_ji(norb,norb),ghdown_ij(norb,norb),ghdown_ji(norb,norb), &
-      gh_spin_ij(n2,n2),gh_spin_ji(n2,n2))
+      gh_spin_ij(n2,n2),gh_spin_ji(n2,n2),delta_alpha_i(norb,norb),delta_alpha_j(norb,norb), &
+      delta_gamma_i(norb,norb),delta_gamma_j(norb,norb),correction_i(norb,norb),correction_j(norb,norb), &
+      candidate_i(norb,norb),candidate_j(norb,norb),r_up_i(norb,norb),r_up_j(norb,norb), &
+      r_down_i(norb,norb),r_down_j(norb,norb),vertex_i_ud(norb,norb),vertex_j_ud(norb,norb), &
+      vertex_i_du(norb,norb),vertex_j_du(norb,norb),expanded_i_ud(norb,norb),expanded_j_ud(norb,norb), &
+      expanded_i_du(norb,norb),expanded_j_du(norb,norb),d_tilde_i(norb,norb),d_tilde_j(norb,norb), &
+      delta_d_i(norb,norb),delta_d_j(norb,norb))
    call native_screening_alpha(lat%symbolic_atoms(1),alpha)
 
    ! Complex P(z) must reduce exactly to the live real interface on the real axis.
@@ -183,6 +203,9 @@ program test_dresp03tg_native_fixed_z
 
    failed=.false.; alpha_error=0.0_rp; alpha_du_error=0.0_rp; gamma_h_error=0.0_rp; gamma_h_du_error=0.0_rp; alpha_h_error=0.0_rp
    gf_cov_error=0.0_rp; p_transform_error=0.0_rp; pauli_error=0.0_rp; pauli_self_error=0.0_rp
+   vertex_transform_error=0.0_rp; expanded_vertex_error=0.0_rp; alpha_transformed_error=0.0_rp
+   raw_gamma_transformed_error=0.0_rp; delta_d_error=0.0_rp; common_gamma_error=0.0_rp
+   common_gamma_vertex_error=0.0_rp; common_gamma_correction_error=0.0_rp
    z_values=[cmplx(-0.91_rp,0.83_rp,rp),cmplx(-0.17_rp,0.04_rp,rp),cmplx(0.62_rp,0.31_rp,rp)]
    do i=1,size(z_values)
       z=z_values(i)
@@ -204,6 +227,22 @@ program test_dresp03tg_native_fixed_z
          p_alpha(n2+lm,n2+lm)=p_screen(norb+lm,norb+lm)
          p_alpha(n2+norb+lm,n2+norb+lm)=p_screen(norb+lm,norb+lm)
       end do
+      ! Restore the physical spin-dependent D matrix after the isolated
+      ! common-gamma control from the preceding z, then rebuild S_gamma.
+      d_screen=cmplx(0.0_rp,0.0_rp,rp)
+      do isite=1,nsite_fixture
+         do l=0,lmax
+            do m=1,2*l+1
+               lm=l*l+m
+               d_screen((isite-1)*norb+lm,(isite-1)*norb+lm)= &
+                  alpha(l)-lat%symbolic_atoms(1)%potential%qpar(l,1)
+               d_screen(n2+(isite-1)*norb+lm,n2+(isite-1)*norb+lm)= &
+                  alpha(l)-lat%symbolic_atoms(1)%potential%qpar(l,2)
+            end do
+         end do
+      end do
+      call native_inverse(eye+matmul(s_alpha,d_screen),tmp)
+      s_gamma=matmul(tmp,s_alpha)
       call native_inverse(p_gamma-s_gamma,g_gamma)
       call native_inverse(p_alpha-s_alpha,g_alpha)
       ! P-side screening covariance: P_alpha = P_gamma*(I-D*P_gamma)^(-1).
@@ -224,6 +263,68 @@ program test_dresp03tg_native_fixed_z
       gup_ji=g_gamma(norb+1:n2,1:norb)
       gdown_ij=g_gamma(n2+1:n2+norb,n2+norb+1:n4)
       gdown_ji=g_gamma(n2+norb+1:n4,n2+1:n2+norb)
+
+      ! Construct the local raw vertices and endpoint transformations.  For
+      ! ordered ud, cyclicity of the trace gives
+      !   DeltaP_i^a g^a_up,ij DeltaP_j^a g^a_down,ji
+      ! = (R_i,down DeltaP_i^a R_i,up) g^g_up,ij
+      !   (R_j,up DeltaP_j^a R_j,down) g^g_down,ji.
+      delta_alpha_i=p_alpha(1:norb,1:norb)-p_alpha(n2+1:n2+norb,n2+1:n2+norb)
+      delta_alpha_j=p_alpha(norb+1:n2,norb+1:n2)-p_alpha(n2+norb+1:n4,n2+norb+1:n4)
+      delta_gamma_i=p_gamma(1:norb,1:norb)-p_gamma(n2+1:n2+norb,n2+1:n2+norb)
+      delta_gamma_j=p_gamma(norb+1:n2,norb+1:n2)-p_gamma(n2+norb+1:n4,n2+norb+1:n4)
+      r_up_i=r_screen(1:norb,1:norb)
+      r_up_j=r_screen(norb+1:n2,norb+1:n2)
+      r_down_i=r_screen(n2+1:n2+norb,n2+1:n2+norb)
+      r_down_j=r_screen(n2+norb+1:n4,n2+norb+1:n4)
+      vertex_i_ud=matmul(r_down_i,matmul(delta_alpha_i,r_up_i))
+      vertex_j_ud=matmul(r_up_j,matmul(delta_alpha_j,r_down_j))
+      vertex_i_du=matmul(r_up_i,matmul(delta_alpha_i,r_down_i))
+      vertex_j_du=matmul(r_down_j,matmul(delta_alpha_j,r_up_j))
+
+      ! The independently expanded form keeps the two transformed P terms
+      ! separate before comparing with the raw-gamma-plus-correction form.
+      expanded_i_ud=matmul(r_down_i,matmul(p_alpha(1:norb,1:norb),r_up_i))- &
+         matmul(r_down_i,matmul(p_alpha(n2+1:n2+norb,n2+1:n2+norb),r_up_i))
+      expanded_j_ud=matmul(r_up_j,matmul(p_alpha(norb+1:n2,norb+1:n2),r_down_j))- &
+         matmul(r_up_j,matmul(p_alpha(n2+norb+1:n4,n2+norb+1:n4),r_down_j))
+      expanded_i_du=matmul(r_up_i,matmul(p_alpha(1:norb,1:norb),r_down_i))- &
+         matmul(r_up_i,matmul(p_alpha(n2+1:n2+norb,n2+1:n2+norb),r_down_i))
+      expanded_j_du=matmul(r_down_j,matmul(p_alpha(norb+1:n2,norb+1:n2),r_up_j))- &
+         matmul(r_down_j,matmul(p_alpha(n2+norb+1:n4,n2+norb+1:n4),r_up_j))
+
+      correction_i=cmplx(0.0_rp,0.0_rp,rp)
+      correction_j=cmplx(0.0_rp,0.0_rp,rp)
+      ! D_sigma = alpha-gamma_sigma and R_sigma = I-D_sigma*P_gamma_sigma.
+      ! For commuting diagonal local blocks,
+      ! R_down*DeltaP_alpha*R_up
+      !   = DeltaP_gamma + (D_up-D_down)*P_gamma_up*P_gamma_down
+      !   = DeltaP_gamma + (gamma_down-gamma_up)*P_gamma_up*P_gamma_down.
+      do l=0,lmax
+         do m=1,2*l+1
+            lm=l*l+m
+            correction_i(lm,lm)=(lat%symbolic_atoms(1)%potential%qpar(l,2)- &
+               lat%symbolic_atoms(1)%potential%qpar(l,1))*p_gamma(lm,lm)*p_gamma(n2+lm,n2+lm)
+            correction_j(lm,lm)=(lat%symbolic_atoms(1)%potential%qpar(l,2)- &
+               lat%symbolic_atoms(1)%potential%qpar(l,1))*p_gamma(norb+lm,norb+lm)*p_gamma(n2+norb+lm,n2+norb+lm)
+         end do
+      end do
+      candidate_i=delta_gamma_i+correction_i
+      candidate_j=delta_gamma_j+correction_j
+
+      vertex_transform_value=max(maxval(abs(vertex_i_ud-expanded_i_ud)), &
+         maxval(abs(vertex_j_ud-expanded_j_ud)),maxval(abs(vertex_i_du-expanded_i_du)), &
+         maxval(abs(vertex_j_du-expanded_j_du)))
+      expanded_vertex_value=max(maxval(abs(expanded_i_ud-candidate_i)), &
+         maxval(abs(expanded_j_ud-candidate_j)),maxval(abs(expanded_i_du-candidate_i)), &
+         maxval(abs(expanded_j_du-candidate_j)))
+      vertex_transform_error=max(vertex_transform_error,vertex_transform_value)
+      expanded_vertex_error=max(expanded_vertex_error,expanded_vertex_value)
+      raw_gamma_vertex_magnitude=max(maxval(abs(delta_gamma_i)),maxval(abs(delta_gamma_j)))
+      screening_correction_magnitude=max(maxval(abs(correction_i)),maxval(abs(correction_j)))
+      transformed_vertex_magnitude=max(maxval(abs(vertex_i_ud)),maxval(abs(vertex_j_ud)), &
+         maxval(abs(vertex_i_du)),maxval(abs(vertex_j_du)))
+
       gh=cmplx(0.0_rp,0.0_rp,rp)
       do l=0,lmax
          do m=1,2*l+1
@@ -254,19 +355,34 @@ program test_dresp03tg_native_fixed_z
       finite_h_ordered_du=native_finite_h_integrand(d1,d2,ghdown_ij,ghup_ji)
       finite_h_symmetrized=0.5_rp*(finite_h_ordered_ud+finite_h_ordered_du)
 
-      delta=p_alpha(1:norb,1:norb)-p_alpha(n2+1:n2+norb,n2+1:n2+norb)
-      expected=p_alpha(norb+1:n2,norb+1:n2)-p_alpha(n2+norb+1:n4,n2+norb+1:n4)
-      native_alpha_ordered_ud=native_exchange_integrand(delta,expected,g_alpha(1:norb,norb+1:n2), &
+      native_alpha_ordered_ud=native_exchange_integrand(delta_alpha_i,delta_alpha_j,g_alpha(1:norb,norb+1:n2), &
          g_alpha(n2+norb+1:n4,n2+1:n2+norb))
-      native_alpha_ordered_du=native_exchange_integrand(delta,expected,g_alpha(n2+1:n2+norb,n2+norb+1:n4), &
-         g_alpha(norb+1:n2,1:norb))
+      native_alpha_ordered_du=native_exchange_integrand(delta_alpha_i,delta_alpha_j, &
+         g_alpha(n2+1:n2+norb,n2+norb+1:n4),g_alpha(norb+1:n2,1:norb))
       native_alpha_symmetrized=0.5_rp*(native_alpha_ordered_ud+native_alpha_ordered_du)
 
-      delta=p_gamma(1:norb,1:norb)-p_gamma(n2+1:n2+norb,n2+1:n2+norb)
-      expected=p_gamma(norb+1:n2,norb+1:n2)-p_gamma(n2+norb+1:n4,n2+norb+1:n4)
-      native_gamma_ordered_ud=native_exchange_integrand(delta,expected,gup_ij,gdown_ji)
-      native_gamma_ordered_du=native_exchange_integrand(delta,expected,gdown_ij,gup_ji)
+      native_gamma_ordered_ud=native_exchange_integrand(delta_gamma_i,delta_gamma_j,gup_ij,gdown_ji)
+      native_gamma_ordered_du=native_exchange_integrand(delta_gamma_i,delta_gamma_j,gdown_ij,gup_ji)
       native_gamma_symmetrized=0.5_rp*(native_gamma_ordered_ud+native_gamma_ordered_du)
+
+      transformed_gamma_ordered_ud=native_exchange_integrand(vertex_i_ud,vertex_j_ud,gup_ij,gdown_ji)
+      transformed_gamma_ordered_du=native_exchange_integrand(vertex_i_du,vertex_j_du,gdown_ij,gup_ji)
+      alpha_transformed_value=max(abs(native_alpha_ordered_ud-transformed_gamma_ordered_ud), &
+         abs(native_alpha_ordered_du-transformed_gamma_ordered_du))
+      raw_gamma_transformed_value=max(abs(native_gamma_ordered_ud-transformed_gamma_ordered_ud), &
+         abs(native_gamma_ordered_du-transformed_gamma_ordered_du))
+      alpha_transformed_error=max(alpha_transformed_error,alpha_transformed_value)
+      raw_gamma_transformed_error=max(raw_gamma_transformed_error,raw_gamma_transformed_value)
+
+      ! Map the transformed vertex into the coefficient-space units used by
+      ! the historical finite-H d_matrix, without changing that oracle.
+      d_tilde_i=matmul(d_width(1:norb,1:norb),matmul(vertex_i_ud,d_width(n2+1:n2+norb,n2+1:n2+norb)))
+      d_tilde_j=matmul(d_width(norb+1:n2,norb+1:n2),matmul(vertex_j_ud, &
+         d_width(n2+norb+1:n4,n2+norb+1:n4)))
+      delta_d_i=d_tilde_i-d1
+      delta_d_j=d_tilde_j-d2
+      delta_d_value=max(maxval(abs(delta_d_i)),maxval(abs(delta_d_j)))
+      delta_d_error=max(delta_d_error,delta_d_value)
 
       gh_spin_ij=gamma_spin_block(gh,norb,1,2)
       gh_spin_ji=gamma_spin_block(gh,norb,2,1)
@@ -301,6 +417,90 @@ program test_dresp03tg_native_fixed_z
       write(*,'(a,es14.6)') '  Pauli_minus_symmetrized = ',abs(historical_pauli_value-finite_h_symmetrized)
       write(*,'(a,es14.6)') '  path_operator_covariance = ',gf_cov_value
       write(*,'(a,es14.6)') '  P_transformation = ',p_transform_value
+      write(*,'(a,es14.6)') '  vertex_endpoint_expansion = ',vertex_transform_value
+      write(*,'(a,es14.6)') '  vertex_screening_identity = ',expanded_vertex_value
+      write(*,'(a,es14.6)') '  raw_DeltaP_gamma_magnitude = ',raw_gamma_vertex_magnitude
+      write(*,'(a,es14.6)') '  screening_correction_magnitude = ',screening_correction_magnitude
+      write(*,'(a,es14.6)') '  transformed_vertex_magnitude = ',transformed_vertex_magnitude
+      write(*,'(a,es14.6)') '  alpha_minus_transformed_gamma_ud = ',abs(native_alpha_ordered_ud-transformed_gamma_ordered_ud)
+      write(*,'(a,es14.6)') '  alpha_minus_transformed_gamma_du = ',abs(native_alpha_ordered_du-transformed_gamma_ordered_du)
+      write(*,'(a,es14.6)') '  raw_gamma_minus_transformed_gamma_ud = ',abs(native_gamma_ordered_ud-transformed_gamma_ordered_ud)
+      write(*,'(a,es14.6)') '  raw_gamma_minus_transformed_gamma_du = ',abs(native_gamma_ordered_du-transformed_gamma_ordered_du)
+      write(*,'(a,es14.6)') '  delta_d_screen = d_tilde - d (max abs) = ',delta_d_value
+      write(*,'(a,es14.6)') '  raw_gamma_minus_finite_H_du = ',abs(native_gamma_ordered_du-finite_h_ordered_du)
+
+      ! Isolated common-gamma control: retain the physical, spin-dependent
+      ! P_gamma blocks (including their c/dele dependence), but make the two
+      ! local screening matrices equal.  This changes only local diagnostic
+      ! arrays; no live potential input is modified.
+      d_screen=cmplx(0.0_rp,0.0_rp,rp)
+      do isite=1,nsite_fixture
+         do l=0,lmax
+            do m=1,2*l+1
+               lm=l*l+m
+               d_screen((isite-1)*norb+lm,(isite-1)*norb+lm)=alpha(l)- &
+                  lat%symbolic_atoms(1)%potential%qpar(l,1)
+               d_screen(n2+(isite-1)*norb+lm,n2+(isite-1)*norb+lm)=alpha(l)- &
+                  lat%symbolic_atoms(1)%potential%qpar(l,1)
+            end do
+         end do
+      end do
+      r_screen=eye-matmul(d_screen,p_gamma)
+      call native_inverse(r_screen,r_inverse)
+      p_alpha=matmul(p_gamma,r_inverse)
+      call native_inverse(eye+matmul(s_alpha,d_screen),tmp)
+      s_gamma=matmul(tmp,s_alpha)
+      call native_inverse(p_gamma-s_gamma,g_gamma)
+      call native_inverse(p_alpha-s_alpha,g_alpha)
+      gup_ij=g_gamma(1:norb,norb+1:n2)
+      gup_ji=g_gamma(norb+1:n2,1:norb)
+      gdown_ij=g_gamma(n2+1:n2+norb,n2+norb+1:n4)
+      gdown_ji=g_gamma(n2+norb+1:n4,n2+1:n2+norb)
+      delta_alpha_i=p_alpha(1:norb,1:norb)-p_alpha(n2+1:n2+norb,n2+1:n2+norb)
+      delta_alpha_j=p_alpha(norb+1:n2,norb+1:n2)-p_alpha(n2+norb+1:n4,n2+norb+1:n4)
+      delta_gamma_i=p_gamma(1:norb,1:norb)-p_gamma(n2+1:n2+norb,n2+1:n2+norb)
+      delta_gamma_j=p_gamma(norb+1:n2,norb+1:n2)-p_gamma(n2+norb+1:n4,n2+norb+1:n4)
+      r_up_i=r_screen(1:norb,1:norb)
+      r_up_j=r_screen(norb+1:n2,norb+1:n2)
+      r_down_i=r_screen(n2+1:n2+norb,n2+1:n2+norb)
+      r_down_j=r_screen(n2+norb+1:n4,n2+norb+1:n4)
+      vertex_i_ud=matmul(r_down_i,matmul(delta_alpha_i,r_up_i))
+      vertex_j_ud=matmul(r_up_j,matmul(delta_alpha_j,r_down_j))
+      vertex_i_du=matmul(r_up_i,matmul(delta_alpha_i,r_down_i))
+      vertex_j_du=matmul(r_down_j,matmul(delta_alpha_j,r_up_j))
+      common_gamma_vertex_value=max(maxval(abs(vertex_i_ud-delta_gamma_i)), &
+         maxval(abs(vertex_j_ud-delta_gamma_j)),maxval(abs(vertex_i_du-delta_gamma_i)), &
+         maxval(abs(vertex_j_du-delta_gamma_j)))
+      common_gamma_vertex_error=max(common_gamma_vertex_error,common_gamma_vertex_value)
+      correction_i=cmplx(0.0_rp,0.0_rp,rp)
+      correction_j=cmplx(0.0_rp,0.0_rp,rp)
+      do l=0,lmax
+         do m=1,2*l+1
+            lm=l*l+m
+            correction_i(lm,lm)=(d_screen(lm,lm)-d_screen(n2+lm,n2+lm))* &
+               p_gamma(lm,lm)*p_gamma(n2+lm,n2+lm)
+            correction_j(lm,lm)=(d_screen(norb+lm,norb+lm)-d_screen(n2+norb+lm,n2+norb+lm))* &
+               p_gamma(norb+lm,norb+lm)*p_gamma(n2+norb+lm,n2+norb+lm)
+         end do
+      end do
+      common_gamma_correction_magnitude=max(maxval(abs(correction_i)),maxval(abs(correction_j)))
+      common_gamma_correction_error=max(common_gamma_correction_error,common_gamma_correction_magnitude)
+      common_gamma_alpha_ud=native_exchange_integrand(delta_alpha_i,delta_alpha_j, &
+         g_alpha(1:norb,norb+1:n2),g_alpha(n2+norb+1:n4,n2+1:n2+norb))
+      common_gamma_alpha_du=native_exchange_integrand(delta_alpha_i,delta_alpha_j, &
+         g_alpha(n2+1:n2+norb,n2+norb+1:n4),g_alpha(norb+1:n2,1:norb))
+      common_gamma_raw_ud=native_exchange_integrand(delta_gamma_i,delta_gamma_j,gup_ij,gdown_ji)
+      common_gamma_raw_du=native_exchange_integrand(delta_gamma_i,delta_gamma_j,gdown_ij,gup_ji)
+      common_gamma_error=max(common_gamma_error,abs(common_gamma_alpha_ud-common_gamma_raw_ud), &
+         abs(common_gamma_alpha_du-common_gamma_raw_du))
+      write(*,'(a,es14.6)') '  common_gamma_screening_correction = ',common_gamma_correction_magnitude
+      write(*,'(a,es14.6)') '  common_gamma_vertex_residual = ',common_gamma_vertex_value
+      write(*,'(a,es14.6)') '  common_gamma_alpha_ordered_ud = ',common_gamma_alpha_ud
+      write(*,'(a,es14.6)') '  common_gamma_raw_ordered_ud = ',common_gamma_raw_ud
+      write(*,'(a,es14.6)') '  common_gamma_alpha_minus_raw_ud = ',abs(common_gamma_alpha_ud-common_gamma_raw_ud)
+      write(*,'(a,es14.6)') '  common_gamma_alpha_ordered_du = ',common_gamma_alpha_du
+      write(*,'(a,es14.6)') '  common_gamma_raw_ordered_du = ',common_gamma_raw_du
+      write(*,'(a,es14.6)') '  common_gamma_alpha_minus_raw_du = ',abs(common_gamma_alpha_du-common_gamma_raw_du)
    end do
    solve_error=maxval(abs(matmul(p_alpha-s_alpha,g_alpha)-identity(n4)))
    write(*,'(a,es14.6)') 'DRESP-03TG native inverse residual = ',solve_error
@@ -314,18 +514,26 @@ program test_dresp03tg_native_fixed_z
    write(*,'(a,es14.6)') 'DRESP-03TG gamma finite-H ordered_du residual = ',gamma_h_du_error
    write(*,'(a,es14.6)') 'DRESP-03TG historical Pauli minus finite-H ordered_ud/du/sym max = ',pauli_error
    write(*,'(a,es14.6)') 'DRESP-03TG Pauli-helper self-consistency residual = ',pauli_self_error
-   ! R1 certifies the fixture and the representation transformations.  The
-   ! alpha/gamma vertex contraction and Pauli ordering residuals are reported
-   ! for the later TG-FZ-R2/R3 work; they are not silently converted into a
-   ! fitted factor or made acceptance criteria here.
+   write(*,'(a,es14.6)') 'DRESP-03TG vertex endpoint-expansion residual = ',vertex_transform_error
+   write(*,'(a,es14.6)') 'DRESP-03TG vertex screening-identity residual = ',expanded_vertex_error
+   write(*,'(a,es14.6)') 'DRESP-03TG alpha direct/transformed-gamma residual = ',alpha_transformed_error
+   write(*,'(a,es14.6)') 'DRESP-03TG raw-gamma/transformed-gamma residual = ',raw_gamma_transformed_error
+   write(*,'(a,es14.6)') 'DRESP-03TG coefficient delta_d_screen max = ',delta_d_error
+   write(*,'(a,es14.6)') 'DRESP-03TG common-gamma vertex residual = ',common_gamma_vertex_error
+   write(*,'(a,es14.6)') 'DRESP-03TG common-gamma screening correction max = ',common_gamma_correction_error
+   write(*,'(a,es14.6)') 'DRESP-03TG common-gamma contraction residual = ',common_gamma_error
    failed = p_error > 2.0e-14_rp .or. d_error > 2.0e-13_rp .or. solve_error > 2.0e-12_rp .or. &
       p_transform_error > 2.0e-12_rp .or. s_transform_error > 2.0e-12_rp .or. gf_cov_error > 2.0e-12_rp .or. &
-      gamma_h_error > 2.0e-10_rp .or. gamma_h_du_error > 2.0e-10_rp .or. pauli_self_error > 2.0e-12_rp
+      gamma_h_error > 2.0e-10_rp .or. gamma_h_du_error > 2.0e-10_rp .or. pauli_self_error > 2.0e-12_rp .or. &
+      vertex_transform_error > 2.0e-12_rp .or. expanded_vertex_error > 2.0e-12_rp .or. &
+      alpha_transformed_error > 2.0e-10_rp .or. common_gamma_vertex_error > 2.0e-12_rp .or. &
+      common_gamma_correction_error > 2.0e-12_rp .or. common_gamma_error > 2.0e-10_rp .or. &
+      raw_gamma_transformed_error < 1.0e-12_rp
    if (failed) then
-      write(*,'(a)') 'RESULT: BLOCKED — TG-FZ-R1 STRUCTURAL DIAGNOSTIC CHECK'
+      write(*,'(a)') 'RESULT: BLOCKED — TG-FZ-R2 SPIN-SCREENING VERTEX CHECK'
       return
    end if
-   write(*,'(a)') 'TG-FZ-R1 FIXED-Z DIAGNOSTIC: PASS (unresolved contraction residuals reported)'
+   write(*,'(a)') 'TG-FZ-R2 SPIN-SCREENING VERTEX COVARIANCE: PASS-A'
 
 contains
 
