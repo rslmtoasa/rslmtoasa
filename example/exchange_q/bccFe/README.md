@@ -27,3 +27,13 @@ its independent validation and convergence checks; this enables the controlled
 metallic native-LKAG columns. For convergence studies, set
 `native_green_eta` and a positive `native_energy_points` in `&exchange_q`;
 the latter rebuilds the native Simpson energy mesh for that diagnostic only.
+
+The production finite-H formulation is selected by
+`finite_h_spectral_mode = 'metallic'` and inherits the reciprocal SCF
+temperature and Fermi level.  For exact commensurate paths, use the compact
+validation decks `input_commensurate_12.nml` or `input_commensurate_24.nml`;
+their headers record `endpoint_mode = mesh_reuse`.  The original `input.nml`
+keeps an off-mesh path to exercise the exact
+`endpoint_mode = explicit_diagonalization` route.  The diagnostic
+`input_legacy_24.nml` selects the retired occupied-only spectral expression for
+the same 24³ q points.

@@ -18,19 +18,19 @@ database = './'
 label(1) = 'Fe'
 /
 &self
-nstep = 25
+nstep = 20
 use_kspace = .true.
 /
 &energy
-fermi = -0.067656
+fermi = -0.069063
 energy_min = -1.0
 energy_max = 0.5
 channels_ldos = 2500
 /
 &reciprocal
-nk1 = 12
-nk2 = 12
-nk3 = 12
+nk1 = 24
+nk2 = 24
+nk3 = 24
 k_offset_x = 0.0
 k_offset_y = 0.0
 k_offset_z = 0.0
@@ -55,13 +55,10 @@ mixtype = 'broyden'
 /
 &exchange_q
 q_coordinates = 'direct'
-q_file = 'qpath.dat'
+q_file = 'qpath_commensurate_24.dat'
 n_q_points = 0
-output_file = 'exchange_q.dat'
+output_file = 'exchange_q_baseline_24.dat'
 write_components = .true.
 native_crosscheck = .false.
-finite_h_spectral_mode = 'metallic'
-native_green_eta = 1.0e-3
-native_energy_points = 0
 rotation_axis = 1.0, 0.0, 0.0
 /

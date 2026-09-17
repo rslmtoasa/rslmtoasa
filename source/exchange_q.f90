@@ -18,7 +18,8 @@ module exchange_q_mod
    use logger_mod, only: g_logger
    use lr_kl_hessian_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_from_hamiltonian, &
       assemble_lmto_finite_q_torques, assemble_lmto_finite_q_mixed_derivative, &
-      force_theorem_finite_q_hessian_from_eigenbasis_batch
+      force_theorem_finite_q_hessian_from_eigenbasis_batch, &
+      force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch
    use math_mod, only: ang2au, inverse_3x3, pi, simpson_f
    use precision_mod, only: rp
    use reciprocal_mod, only: reciprocal
@@ -30,6 +31,7 @@ module exchange_q_mod
 
    integer, parameter, public :: exchange_q_max_points = 2000
    real(rp), parameter :: q_zero_tolerance = 1.0e-12_rp
+   real(rp), parameter :: reciprocal_kb_ry_per_k = 6.3336814e-6_rp
 
    type, public :: exchange_q_config
       character(len=sl) :: fname = ''
@@ -40,6 +42,7 @@ module exchange_q_mod
       character(len=sl) :: output_file = 'exchange_q.dat'
       logical :: write_components = .true.
       logical :: native_crosscheck = .false.
+      character(len=24) :: finite_h_spectral_mode = 'metallic'
       real(rp) :: rotation_axis(3) = [1.0_rp, 0.0_rp, 0.0_rp]
       ! These controls are intentionally diagnostic-only.  They make the
       ! metallic LKAG reference reproducible without changing finite-H data.
@@ -51,6 +54,7 @@ module exchange_q_mod
 
    public :: load_exchange_q_config
    public :: exchange_q_convert_points
+   public :: detect_commensurate_endpoint_map
    public :: run_exchange_q
    public :: lkag_pauli_product
 
@@ -66,6 +70,7 @@ contains
       this%output_file = 'exchange_q.dat'
       this%write_components = .true.
       this%native_crosscheck = .false.
+      this%finite_h_spectral_mode = 'metallic'
       this%rotation_axis = [1.0_rp, 0.0_rp, 0.0_rp]
       this%native_green_eta = 1.0e-3_rp
       this%native_energy_points = 0
@@ -80,12 +85,13 @@ contains
       character(len=16) :: q_coordinates
       character(len=sl) :: q_file, output_file
       logical :: write_components, native_crosscheck
+      character(len=24) :: finite_h_spectral_mode
       real(rp) :: rotation_axis(3), native_green_eta
       integer :: native_energy_points
       real(rp) :: q_list(3, exchange_q_max_points)
 
       namelist /exchange_q/ q_coordinates, q_file, n_q_points, q_list, output_file, &
-         write_components, native_crosscheck, rotation_axis, native_green_eta, native_energy_points
+         write_components, native_crosscheck, finite_h_spectral_mode, rotation_axis, native_green_eta, native_energy_points
 
       call this%clear()
       this%fname = filename
@@ -96,6 +102,7 @@ contains
       output_file = this%output_file
       write_components = this%write_components
       native_crosscheck = this%native_crosscheck
+      finite_h_spectral_mode = this%finite_h_spectral_mode
       rotation_axis = this%rotation_axis
       native_green_eta = this%native_green_eta
       native_energy_points = this%native_energy_points
@@ -119,6 +126,7 @@ contains
       this%output_file = trim(output_file)
       this%write_components = write_components
       this%native_crosscheck = native_crosscheck
+      this%finite_h_spectral_mode = lower(trim(finite_h_spectral_mode))
       this%rotation_axis = rotation_axis
       this%native_green_eta = native_green_eta
       this%native_energy_points = native_energy_points
@@ -136,6 +144,10 @@ contains
          end if
          if (maxval(abs(this%rotation_axis)) <= tiny(1.0_rp)) then
             call g_logger%fatal('[exchange_q]: rotation_axis must be nonzero', __FILE__, __LINE__)
+         end if
+         if (this%finite_h_spectral_mode /= 'metallic' .and. this%finite_h_spectral_mode /= 'legacy_occupied') then
+            call g_logger%fatal("[exchange_q]: finite_h_spectral_mode must be 'metallic' or 'legacy_occupied'", &
+               __FILE__, __LINE__)
          end if
       end if
 
@@ -205,6 +217,106 @@ contains
       end if
    end subroutine exchange_q_convert_points
 
+   !> Detect and map an exact q translation on a full uniform reciprocal mesh.
+   !> The map is constructed from the stored mesh coordinates, not from an
+   !> assumed flat ordering.  This makes it valid for both the internal MP
+   !> generator and a full mesh returned by spglib.  No tolerance is used to
+   !> round an incommensurate q: the routine returns commensurate=.false. in
+   !> that case and the caller must use explicit endpoint diagonalization.
+   subroutine detect_commensurate_endpoint_map(k_points, k_weights, nk_mesh, q_point, endpoint_index, commensurate, residual)
+      real(rp), intent(in) :: k_points(:, :), k_weights(:), q_point(3)
+      integer, intent(in) :: nk_mesh(3)
+      integer, intent(out) :: endpoint_index(:)
+      logical, intent(out) :: commensurate
+      real(rp), intent(out) :: residual
+      integer, allocatable :: grid_index(:, :, :)
+      integer :: nk, ix, iy, iz, ik, target, qcell(3), cell(3), flat
+      integer :: n1, n2, n3, nint_coord
+      real(rp) :: origin(3), folded(3), delta, qscaled
+      real(rp), parameter :: mesh_tolerance = 2.0e-10_rp
+
+      nk = size(k_points,2); n1 = nk_mesh(1); n2 = nk_mesh(2); n3 = nk_mesh(3)
+      commensurate = .false.; residual = huge(1.0_rp)
+      if (size(k_points,1) /= 3 .or. size(k_weights) /= nk .or. size(endpoint_index) /= nk .or. &
+          n1 < 1 .or. n2 < 1 .or. n3 < 1 .or. nk /= n1*n2*n3) return
+
+      ! Gamma is always a safe identity map, including a symmetry-reduced
+      ! mesh.  Nonzero reuse below deliberately requires uniform weights and
+      ! a full mesh.
+      if (sqrt(sum(q_point**2)) <= q_zero_tolerance) then
+         do ik = 1, nk
+            endpoint_index(ik) = ik
+         end do
+         commensurate = .true.; residual = 0.0_rp
+         return
+      end if
+      if (nk > 1 .and. maxval(abs(k_weights-k_weights(1))) > mesh_tolerance*max(1.0_rp,abs(k_weights(1)))) return
+
+      origin = fold_direct_point(k_points(:,1))
+      allocate(grid_index(n1,n2,n3)); grid_index = 0
+      do ik = 1, nk
+         folded = fold_direct_point(k_points(:,ik))
+         do ix = 1, 3
+            delta = real(nk_mesh(ix),rp)*(folded(ix)-origin(ix))
+            nint_coord = nint(delta)
+            if (abs(delta-real(nint_coord,rp)) > mesh_tolerance) then
+               deallocate(grid_index)
+               return
+            end if
+            cell(ix) = modulo(nint_coord,nk_mesh(ix)) + 1
+         end do
+         flat = cell(1) + (cell(2)-1)*n1 + (cell(3)-1)*n1*n2
+         ix = 1 + modulo(flat-1,n1)
+         iy = 1 + modulo((flat-1)/n1,n2)
+         iz = 1 + (flat-1)/(n1*n2)
+         if (grid_index(ix,iy,iz) /= 0) then
+            deallocate(grid_index)
+            return
+         end if
+         grid_index(ix,iy,iz) = ik
+      end do
+      if (any(grid_index == 0)) then
+         deallocate(grid_index)
+         return
+      end if
+
+      residual = 0.0_rp
+      do ix = 1, 3
+         qscaled = q_point(ix)*real(nk_mesh(ix),rp)
+         qcell(ix) = nint(qscaled)
+         residual = max(residual,abs(qscaled-real(qcell(ix),rp))/real(nk_mesh(ix),rp))
+      end do
+      if (residual > mesh_tolerance) then
+         deallocate(grid_index)
+         return
+      end if
+
+      do ik = 1, nk
+         folded = fold_direct_point(k_points(:,ik))
+         do ix = 1, 3
+            delta = real(nk_mesh(ix),rp)*(folded(ix)-origin(ix))
+            cell(ix) = modulo(nint(delta)+qcell(ix),nk_mesh(ix)) + 1
+         end do
+         target = grid_index(cell(1),cell(2),cell(3))
+         endpoint_index(ik) = target
+         ! Check the actual folded endpoint, including the boundary crossing.
+         folded = fold_direct_point(k_points(:,ik)+q_point)
+         residual = max(residual,maxval(abs(folded-fold_direct_point(k_points(:,target)))))
+         if (abs(k_weights(ik)-k_weights(target)) > mesh_tolerance*max(1.0_rp,abs(k_weights(ik)))) then
+            deallocate(grid_index)
+            return
+         end if
+      end do
+      commensurate = residual <= mesh_tolerance
+      deallocate(grid_index)
+   end subroutine detect_commensurate_endpoint_map
+
+   pure function fold_direct_point(point) result(folded)
+      real(rp), intent(in) :: point(3)
+      real(rp) :: folded(3)
+      folded = point-floor(point+0.5_rp)
+   end function fold_direct_point
+
    ! Exact scalar kernel copied algebraically from exchange%dGdG_Jnc:
    !   d_i G_inmag d_j G_jnmag
    ! - d_i G_ix    d_j G_jx
@@ -239,16 +351,22 @@ contains
       type(reciprocal), intent(inout) :: reciprocal_obj
       type(lmto_live_hamiltonian_fixture) :: fixture
       real(rp), allocatable :: q_direct(:, :), q_cart(:, :)
-      real(rp), allocatable :: evals(:, :), endpoint_evals(:, :), weights(:)
-      complex(rp), allocatable :: evecs(:, :, :), endpoint_evecs(:, :, :)
+      real(rp), allocatable :: evals(:, :), endpoint_evals(:, :), endpoint_eval_check(:, :), weights(:)
+      complex(rp), allocatable :: evecs(:, :, :), endpoint_evecs(:, :, :), endpoint_evec_check(:, :, :)
       complex(rp), allocatable :: torques_q(:, :, :, :), torques_minus_q(:, :, :, :), mixed(:, :, :, :, :)
+      complex(rp), allocatable :: torque_minus_check(:, :, :)
       complex(rp), allocatable :: hessian(:, :), torque_torque(:, :), contact(:, :), complete(:, :)
       real(rp), allocatable :: axes(:, :), finite_total(:, :, :), finite_tt(:, :, :), finite_contact(:, :, :)
       real(rp), allocatable :: native_total(:)
-      real(rp) :: adapter_before, adapter_after, axis_norm
+      integer, allocatable :: endpoint_index(:)
+      logical, allocatable :: endpoint_reused(:), q_commensurate(:)
+      real(rp), allocatable :: endpoint_residual(:)
+      character(len=24), allocatable :: endpoint_mode(:)
+      real(rp) :: adapter_before, adapter_after, axis_norm, finite_h_kT
       real(rp) :: native_gamma, native_q, native_eta
-      integer :: nsite, nmat, nk, iq, ik, ia, ja
-      logical :: native_ready
+      real(rp) :: endpoint_seconds, assembly_seconds, contraction_seconds, vertex_error, endpoint_identity_error
+      integer :: nsite, nmat, nk, iq, ik, ia, ja, clock_start, clock_end, clock_rate
+      logical :: native_ready, vertex_identity_checked, endpoint_identity_checked
 
       call validate_exchange_q_capability(config, control_obj, hamiltonian_obj, self_obj, reciprocal_obj)
       call exchange_q_convert_points(config, lattice_obj, q_direct, q_cart)
@@ -300,44 +418,94 @@ contains
          finite_contact(nsite,nsite,config%n_q))
       finite_total = 0.0_rp; finite_tt = 0.0_rp; finite_contact = 0.0_rp
       allocate(hessian(nsite,nsite), torque_torque(nsite,nsite), contact(nsite,nsite), complete(nsite,nsite))
+      allocate(endpoint_index(nk), endpoint_reused(config%n_q), q_commensurate(config%n_q), &
+         endpoint_residual(config%n_q), endpoint_mode(config%n_q))
+      endpoint_reused = .false.; q_commensurate = .false.; endpoint_residual = huge(1.0_rp)
+      endpoint_mode = 'explicit_diagonalization'
+      endpoint_seconds = 0.0_rp; assembly_seconds = 0.0_rp; contraction_seconds = 0.0_rp
+      call system_clock(count_rate=clock_rate)
+      finite_h_kT = max(reciprocal_obj%temperature*reciprocal_kb_ry_per_k, 1.0e-10_rp)
+      vertex_identity_checked = .false.
+      endpoint_identity_checked = .false.
       native_ready = config%native_crosscheck
       allocate(native_total(config%n_q)); native_total = 0.0_rp
 
       do iq = 1, config%n_q
-         if (sqrt(sum(q_direct(:,iq)**2)) <= q_zero_tolerance .and. nsite == 1) then
-            ! For the one-site production state the accepted scalar-relativistic
-            ! collinear state has the exact global-rotation Goldstone reduction.
-            ! Avoid a Fermi-edge spectral denominator at Gamma; the independent
-            ! finite-difference and q=0 unit gates cover the API reduction.
-            ! Multi-sublattice Gamma is evaluated below so its full Hessian
-            ! matrix remains available (including optic/acoustic row sums).
-            finite_total(:,:,iq) = 0.0_rp
-            finite_tt(:,:,iq) = 0.0_rp
-            finite_contact(:,:,iq) = 0.0_rp
+         call detect_commensurate_endpoint_map(reciprocal_obj%k_points, reciprocal_obj%k_weights, reciprocal_obj%nk_mesh, &
+            q_direct(:,iq), endpoint_index, q_commensurate(iq), endpoint_residual(iq))
+         call system_clock(clock_start)
+         if (q_commensurate(iq)) then
+            allocate(endpoint_evals(nmat,nk), endpoint_evecs(nmat,nmat,nk))
+            do ik = 1, nk
+               endpoint_evals(:,ik) = evals(:,endpoint_index(ik))
+               endpoint_evecs(:,:,ik) = evecs(:,:,endpoint_index(ik))
+            end do
+            endpoint_reused(iq) = .true.
+            endpoint_mode(iq) = 'mesh_reuse'
+            if (.not. endpoint_identity_checked .and. sqrt(sum(q_direct(:,iq)**2)) > q_zero_tolerance) then
+               ! The integer-cell map is a performance optimization, so verify
+               ! its spectral identity once against the exact endpoint solve.
+               call solve_unfolded_endpoints(reciprocal_obj, reciprocal_obj%k_points + &
+                  spread_q(q_direct(:,iq),nk), endpoint_eval_check, endpoint_evec_check)
+               endpoint_identity_error = maxval(abs(endpoint_evals-endpoint_eval_check))
+               call g_logger%info('[exchange_q]: commensurate endpoint eigenvalue residual='// &
+                  trim(real_to_string(endpoint_identity_error)), __FILE__, __LINE__)
+               if (endpoint_identity_error > 2.0e-10_rp) then
+                  call g_logger%fatal('[exchange_q]: commensurate endpoint spectral identity check failed', __FILE__, __LINE__)
+               end if
+               deallocate(endpoint_eval_check, endpoint_evec_check)
+               endpoint_identity_checked = .true.
+            end if
          else
             call solve_unfolded_endpoints(reciprocal_obj, reciprocal_obj%k_points + spread_q(q_direct(:,iq),nk), &
                                           endpoint_evals, endpoint_evecs)
-            allocate(torques_q(nmat,nmat,nsite,nk), torques_minus_q(nmat,nmat,nsite,nk), &
-                     mixed(nmat,nmat,nsite,nsite,nk))
-            do ik = 1, nk
-               call assemble_lmto_finite_q_torques(fixture, reciprocal_obj%k_points(:,ik), q_direct(:,iq), axes, &
-                  torques_q(:,:,:,ik))
-               call assemble_lmto_finite_q_torques(fixture, reciprocal_obj%k_points(:,ik)+q_direct(:,iq), -q_direct(:,iq), &
-                  axes, torques_minus_q(:,:,:,ik))
-               do ia = 1, nsite
-                  do ja = 1, nsite
-                     call assemble_lmto_finite_q_mixed_derivative(fixture, reciprocal_obj%k_points(:,ik), q_direct(:,iq), &
-                        ia, axes(:,ia), ja, axes(:,ja), mixed(:,:,ia,ja,ik))
-                  end do
+         end if
+         call system_clock(clock_end)
+         endpoint_seconds = endpoint_seconds + elapsed_clock_seconds(clock_start,clock_end,clock_rate)
+         allocate(torques_q(nmat,nmat,nsite,nk), torques_minus_q(nmat,nmat,nsite,nk), &
+                  mixed(nmat,nmat,nsite,nsite,nk))
+         call system_clock(clock_start)
+         do ik = 1, nk
+            call assemble_lmto_finite_q_torques(fixture, reciprocal_obj%k_points(:,ik), q_direct(:,iq), axes, &
+               torques_q(:,:,:,ik))
+            do ia = 1, nsite
+               torques_minus_q(:,:,ia,ik) = transpose(conjg(torques_q(:,:,ia,ik)))
+            end do
+            do ia = 1, nsite
+               do ja = 1, nsite
+                  call assemble_lmto_finite_q_mixed_derivative(fixture, reciprocal_obj%k_points(:,ik), q_direct(:,iq), &
+                     ia, axes(:,ia), ja, axes(:,ja), mixed(:,:,ia,ja,ik))
                end do
             end do
+         end do
+         if (.not. vertex_identity_checked .and. sqrt(sum(q_direct(:,iq)**2)) > q_zero_tolerance) then
+            allocate(torque_minus_check(nmat,nmat,nsite)); vertex_error = 0.0_rp
+            call assemble_lmto_finite_q_torques(fixture, reciprocal_obj%k_points(:,1)+q_direct(:,iq), &
+               -q_direct(:,iq), axes, torque_minus_check)
+            do ia = 1, nsite
+               vertex_error = max(vertex_error, maxval(abs(torque_minus_check(:,:,ia)-torques_minus_q(:,:,ia,1))))
+            end do
+            if (vertex_error > 5.0e-10_rp) call g_logger%fatal('[exchange_q]: finite-q vertex adjoint/gauge check failed', &
+               __FILE__, __LINE__)
+            vertex_identity_checked = .true.
+            deallocate(torque_minus_check)
+         end if
+         call system_clock(clock_end)
+         assembly_seconds = assembly_seconds + elapsed_clock_seconds(clock_start,clock_end,clock_rate)
+         call system_clock(clock_start)
+         if (config%finite_h_spectral_mode == 'legacy_occupied') then
             call force_theorem_finite_q_hessian_from_eigenbasis_batch(evals, evecs, endpoint_evals, endpoint_evecs, &
                reciprocal_obj%fermi_level, weights, torques_q, torques_minus_q, mixed, hessian, torque_torque, contact, complete)
-            finite_tt(:,:,iq) = real(torque_torque,rp)
-            finite_contact(:,:,iq) = real(contact,rp)
-            finite_total(:,:,iq) = real(complete,rp)
-            deallocate(torques_q, torques_minus_q, mixed, endpoint_evals, endpoint_evecs)
+         else
+            call force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch(evals, evecs, endpoint_evals, endpoint_evecs, &
+               reciprocal_obj%fermi_level, finite_h_kT, weights, torques_q, torques_minus_q, mixed, hessian, torque_torque, contact, complete)
          end if
+         call system_clock(clock_end)
+         contraction_seconds = contraction_seconds + elapsed_clock_seconds(clock_start,clock_end,clock_rate)
+         finite_tt(:,:,iq) = real(torque_torque,rp)
+         finite_contact(:,:,iq) = real(contact,rp)
+         finite_total(:,:,iq) = real(complete,rp)
+         deallocate(torques_q, torques_minus_q, mixed, endpoint_evals, endpoint_evecs)
       end do
 
       if (native_ready) then
@@ -346,8 +514,11 @@ contains
          native_eta = config%native_green_eta
          call lkag_native_path(reciprocal_obj, lattice_obj, energy_obj, q_direct, native_eta, native_total)
       end if
+      call g_logger%info('[exchange_q]: timing endpoint/assembly/contraction='//trim(real_to_string(endpoint_seconds))//'/'// &
+         trim(real_to_string(assembly_seconds))//'/'//trim(real_to_string(contraction_seconds))//' s', __FILE__, __LINE__)
       call write_exchange_q_output(config, lattice_obj, reciprocal_obj, q_direct, q_cart, finite_tt, finite_contact, &
-         finite_total, native_total, native_ready)
+         finite_total, native_total, native_ready, endpoint_mode, endpoint_reused, q_commensurate, endpoint_residual, &
+         endpoint_seconds, assembly_seconds, contraction_seconds)
       if (native_ready) then
          call compute_native_gamma_and_report(native_total, q_direct, native_gamma)
          native_q = maxval(abs(native_total))
@@ -356,7 +527,8 @@ contains
       end if
       call fixture%clear()
       deallocate(q_direct, q_cart, evals, evecs, weights, finite_total, finite_tt, finite_contact, &
-         axes, hessian, torque_torque, contact, complete)
+         axes, hessian, torque_torque, contact, complete, endpoint_index, endpoint_reused, q_commensurate, &
+         endpoint_residual, endpoint_mode)
       deallocate(native_total)
    end subroutine run_exchange_q
 
@@ -550,13 +722,17 @@ contains
    end subroutine pauli_site_block
 
    subroutine write_exchange_q_output(config, lattice_obj, recip, q_direct, q_cart, finite_tt, finite_contact, &
-                                      finite_total, native_total, native_ready)
+                                      finite_total, native_total, native_ready, endpoint_mode, endpoint_reused, &
+                                      q_commensurate, endpoint_residual, endpoint_seconds, assembly_seconds, contraction_seconds)
       type(exchange_q_config), intent(in) :: config
       type(lattice), intent(in) :: lattice_obj
       type(reciprocal), intent(in) :: recip
       real(rp), intent(in) :: q_direct(:, :), q_cart(:, :), finite_tt(:, :, :), finite_contact(:, :, :), finite_total(:, :, :)
       real(rp), intent(in), allocatable :: native_total(:)
       logical, intent(in) :: native_ready
+      character(len=*), intent(in) :: endpoint_mode(:)
+      logical, intent(in) :: endpoint_reused(:), q_commensurate(:)
+      real(rp), intent(in) :: endpoint_residual(:), endpoint_seconds, assembly_seconds, contraction_seconds
       integer :: unit, iq, ia, ja, nsite
       real(rp) :: qmag, q2
 
@@ -567,7 +743,18 @@ contains
       write(unit,'(a,3(i0,1x))') '# k_mesh = ', recip%nk_mesh
       write(unit,'(a,a)') '# q_coordinates_input = ', trim(config%q_coordinates)
       write(unit,'(a)') '# q_direct is in reciprocal-lattice coordinates; q_cart is in units of 2*pi/alat.'
-      write(unit,'(a)') '# q values are not rounded to the k mesh; endpoint diagonalization uses the exact k+q Hamiltonian.'
+      write(unit,'(a,a)') '# finite_h_spectral_mode = ', trim(config%finite_h_spectral_mode)
+      write(unit,'(a,es24.16)') '# electronic_temperature_K = ', recip%temperature
+      write(unit,'(a,es24.16)') '# electronic_kT_Ry = ', max(recip%temperature*reciprocal_kb_ry_per_k,1.0e-10_rp)
+      write(unit,'(a,es24.16)') '# fermi_level_Ry = ', recip%fermi_level
+      write(unit,'(a,a)') '# hamiltonian_order = ', trim(recip%kspace_ham_order)
+      write(unit,'(a)') '# endpoint_mode is mesh_reuse for exact full-mesh commensurate q and explicit_diagonalization otherwise.'
+      write(unit,'(a)') '# endpoint_provenance columns: q_index mode reused commensurate coordinate_residual'
+      do iq = 1, size(endpoint_mode)
+         write(unit,'(a,1x,i0,1x,a,1x,l1,1x,l1,1x,es24.16)') '# endpoint_provenance', iq, trim(endpoint_mode(iq)), &
+            endpoint_reused(iq), q_commensurate(iq), endpoint_residual(iq)
+      end do
+      write(unit,'(a,3(es24.16,1x))') '# timing_seconds endpoint assembly contraction = ', endpoint_seconds, assembly_seconds, contraction_seconds
       write(unit,'(a)') '# units: exchange=Ry, q=1/A, stiffness diagnostic=Ry A^2'
       nsite = size(finite_total,1)
       if (nsite == 1) then
@@ -637,6 +824,16 @@ contains
          result_value = value/denominator
       end if
    end function safe_divide
+
+   pure function elapsed_clock_seconds(start_count, end_count, rate) result(seconds)
+      integer, intent(in) :: start_count, end_count, rate
+      real(rp) :: seconds
+      if (rate > 0) then
+         seconds = real(end_count-start_count,rp)/real(rate,rp)
+      else
+         seconds = 0.0_rp
+      end if
+   end function elapsed_clock_seconds
 
    subroutine compute_native_gamma_and_report(native_total, q_direct, gamma)
       real(rp), intent(in) :: native_total(:), q_direct(:, :)

@@ -14,6 +14,21 @@ status changes.
 
 `source/exchange.f90` was not modified.
 
+## DRESP-03QM finite-H metallic status
+
+The finite-H side has since been audited and certified for the declared
+fixed-chemical-potential grand-potential observable.  It now uses the
+finite-temperature occupation-difference kernel, including the coincident
+energy `f'(e)` limit, while retaining the certified contact derivative.  Exact
+commensurate full-mesh q translations reuse accepted endpoint eigenpairs;
+arbitrary q continues to use exact endpoint diagonalization.  Detailed
+derivation, independent metallic fixtures, bcc-Fe evidence, and timing are in
+[`DRESP_03QM_METALLIC_FINITE_Q.md`](DRESP_03QM_METALLIC_FINITE_Q.md).
+
+This does not close the native LKAG q oracle.  The native status below remains
+`BLOCKED — COMMON-STATE LKAG q ORACLE NOT CERTIFIED`, and DRESP-04 remains
+forbidden.
+
 ## Scope and implementation
 
 The new finite-q API is in `source/lr_kl_hessian.f90`:

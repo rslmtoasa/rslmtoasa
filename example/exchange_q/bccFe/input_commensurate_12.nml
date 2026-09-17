@@ -55,13 +55,11 @@ mixtype = 'broyden'
 /
 &exchange_q
 q_coordinates = 'direct'
-q_file = 'qpath.dat'
+q_file = 'qpath_commensurate_12.dat'
 n_q_points = 0
-output_file = 'exchange_q.dat'
+output_file = 'exchange_q_commensurate_12.dat'
 write_components = .true.
 native_crosscheck = .false.
 finite_h_spectral_mode = 'metallic'
-native_green_eta = 1.0e-3
-native_energy_points = 0
 rotation_axis = 1.0, 0.0, 0.0
 /

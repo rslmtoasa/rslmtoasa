@@ -52,6 +52,10 @@ module lr_kl_hessian_mod
    public :: assemble_lmto_finite_q_mixed_derivative
    public :: force_theorem_finite_q_hessian_from_eigenbasis
    public :: force_theorem_finite_q_hessian_from_eigenbasis_batch
+   public :: force_theorem_finite_q_hessian_from_eigenbasis_metallic
+   public :: force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch
+   public :: finite_temperature_occupation
+   public :: fermi_divided_difference
    public :: lmto_fixture_adapter_residual
    public :: force_theorem_integrand
    public :: force_theorem_hessian_from_green
@@ -501,6 +505,147 @@ contains
       end do
       deallocate(h,tt,cc,allh)
    end subroutine force_theorem_finite_q_hessian_from_eigenbasis_batch
+
+   !> Finite-temperature finite-q grand-potential Hessian for one k -> k+q
+   !> endpoint pair.  The TT term is written with the symmetric divided
+   !> difference
+   !>
+   !>   K_nm = (f(e_n)-f(e_m))/(e_n-e_m),
+   !>
+   !> including m=n through f'(e_n).  The factor one half is essential when
+   !> all ordered band pairs are retained.  It makes this form exactly equal
+   !> to the occupied-state expression in a gapped zero-temperature limit,
+   !> while avoiding cancellation between two nearly degenerate equally
+   !> occupied (or equally empty) states in a metal.
+   subroutine force_theorem_finite_q_hessian_from_eigenbasis_metallic(eigenvalues, eigenvectors, endpoint_values, endpoint_vectors, &
+      fermi, kT, torques_q, torques_minus_q, mixed, hessian, torque_torque, mixed_contact, complete)
+      real(rp), intent(in) :: eigenvalues(:), endpoint_values(:), fermi, kT
+      complex(rp), intent(in) :: eigenvectors(:, :), endpoint_vectors(:, :)
+      complex(rp), intent(in) :: torques_q(:, :, :), torques_minus_q(:, :, :), mixed(:, :, :, :)
+      complex(rp), intent(out) :: hessian(:, :), torque_torque(:, :), mixed_contact(:, :), complete(:, :)
+      complex(rp) :: ta_nm, tb_mn, tb_nm, ta_mn
+      complex(rp), allocatable :: torque_q_band(:, :, :), torque_minus_band(:, :, :), mixed_band(:, :, :, :)
+      real(rp) :: fn, kernel
+      integer :: n, m, a, b, nbands, nsite, nmat
+
+      nbands = size(eigenvalues); nmat = size(eigenvectors,1); nsite = size(torques_q,3)
+      if (size(endpoint_values) /= nbands .or. size(eigenvectors,2) /= nbands .or. &
+          any(shape(endpoint_vectors) /= [nmat,nbands]) .or. any(shape(torques_q) /= [nmat,nmat,nsite]) .or. &
+          any(shape(torques_minus_q) /= [nmat,nmat,nsite]) .or. any(shape(mixed) /= [nmat,nmat,nsite,nsite]) .or. &
+          any(shape(hessian) /= [nsite,nsite]) .or. any(shape(torque_torque) /= [nsite,nsite]) .or. &
+          any(shape(mixed_contact) /= [nsite,nsite]) .or. any(shape(complete) /= [nsite,nsite])) then
+         error stop 'force_theorem_finite_q_hessian_from_eigenbasis_metallic: shape mismatch'
+      end if
+      hessian = 0.0_rp; torque_torque = 0.0_rp; mixed_contact = 0.0_rp; complete = 0.0_rp
+      ! Transform each vertex/contact once into the two endpoint eigenbases.
+      ! The band-pair contraction below then contains only scalar products;
+      ! this avoids repeating orbital-space matrix-vector products for every
+      ! (n,m) pair.
+      allocate(torque_q_band(nbands,nbands,nsite), torque_minus_band(nbands,nbands,nsite), &
+         mixed_band(nbands,nbands,nsite,nsite))
+      do a = 1, nsite
+         torque_q_band(:,:,a) = matmul(conjg(transpose(endpoint_vectors)), &
+            matmul(torques_q(:,:,a),eigenvectors))
+         torque_minus_band(:,:,a) = matmul(conjg(transpose(eigenvectors)), &
+            matmul(torques_minus_q(:,:,a),endpoint_vectors))
+         do b = 1, nsite
+            mixed_band(:,:,a,b) = matmul(conjg(transpose(eigenvectors)), &
+               matmul(mixed(:,:,a,b),eigenvectors))
+         end do
+      end do
+      do a = 1, nsite
+         do b = 1, nsite
+            do n = 1, nbands
+               fn = finite_temperature_occupation(eigenvalues(n), fermi, kT)
+               mixed_contact(a,b) = mixed_contact(a,b) + fn*mixed_band(n,n,a,b)
+               do m = 1, nbands
+                  kernel = fermi_divided_difference(eigenvalues(n), endpoint_values(m), fermi, kT)
+                  ! T_q(k) has rows at k+q and columns at k.  Its -q
+                  ! partner at k+q has the reverse endpoint ordering.
+                  ta_nm = torque_q_band(m,n,a)
+                  tb_mn = torque_minus_band(n,m,b)
+                  tb_nm = torque_q_band(m,n,b)
+                  ta_mn = torque_minus_band(n,m,a)
+                  torque_torque(a,b) = torque_torque(a,b) + 0.5_rp*kernel*(ta_nm*tb_mn + tb_nm*ta_mn)
+               end do
+            end do
+         end do
+      end do
+      hessian = torque_torque + mixed_contact
+      complete = hessian
+      deallocate(torque_q_band, torque_minus_band, mixed_band)
+   end subroutine force_theorem_finite_q_hessian_from_eigenbasis_metallic
+
+   !> Brillouin-zone average of the finite-temperature metallic Hessian.
+   subroutine force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch(eigenvalues, eigenvectors, endpoint_values, endpoint_vectors, &
+      fermi, kT, weights, torques_q, torques_minus_q, mixed, hessian, torque_torque, mixed_contact, complete)
+      real(rp), intent(in) :: eigenvalues(:, :), endpoint_values(:, :), fermi, kT, weights(:)
+      complex(rp), intent(in) :: eigenvectors(:, :, :), endpoint_vectors(:, :, :)
+      complex(rp), intent(in) :: torques_q(:, :, :, :), torques_minus_q(:, :, :, :), mixed(:, :, :, :, :)
+      complex(rp), intent(out) :: hessian(:, :), torque_torque(:, :), mixed_contact(:, :), complete(:, :)
+      complex(rp), allocatable :: h(:, :), tt(:, :), cc(:, :), allh(:, :)
+      integer :: ik, nk, nsite
+      real(rp) :: weight_sum
+
+      nk = size(eigenvalues,2); nsite = size(torques_q,3)
+      if (size(weights) /= nk .or. size(endpoint_values,2) /= nk .or. size(eigenvectors,3) /= nk .or. &
+          size(endpoint_vectors,3) /= nk .or. size(torques_q,4) /= nk .or. size(torques_minus_q,4) /= nk .or. &
+          size(mixed,5) /= nk .or. any(shape(hessian) /= [nsite,nsite]) .or. &
+          any(shape(torque_torque) /= [nsite,nsite]) .or. any(shape(mixed_contact) /= [nsite,nsite]) .or. &
+          any(shape(complete) /= [nsite,nsite])) error stop 'force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch: shape mismatch'
+      weight_sum = sum(weights)
+      if (abs(weight_sum) <= tiny(1.0_rp)) error stop 'force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch: zero weight sum'
+      allocate(h(nsite,nsite),tt(nsite,nsite),cc(nsite,nsite),allh(nsite,nsite))
+      hessian = 0.0_rp; torque_torque = 0.0_rp; mixed_contact = 0.0_rp; complete = 0.0_rp
+      do ik = 1, nk
+         call force_theorem_finite_q_hessian_from_eigenbasis_metallic(eigenvalues(:,ik), eigenvectors(:,:,ik), endpoint_values(:,ik), &
+            endpoint_vectors(:,:,ik), fermi, kT, torques_q(:,:,:,ik), torques_minus_q(:,:,:,ik), mixed(:,:,:,:,ik), h, tt, cc, allh)
+         hessian = hessian + weights(ik)*h/weight_sum
+         torque_torque = torque_torque + weights(ik)*tt/weight_sum
+         mixed_contact = mixed_contact + weights(ik)*cc/weight_sum
+         complete = complete + weights(ik)*allh/weight_sum
+      end do
+      deallocate(h,tt,cc,allh)
+   end subroutine force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch
+
+   !> Fermi-Dirac occupation with the same positive kT floor used by the
+   !> reciprocal SCF occupation solver.
+   pure real(rp) function finite_temperature_occupation(eigenvalue, fermi, kT) result(occupation)
+      real(rp), intent(in) :: eigenvalue, fermi, kT
+      real(rp) :: argument, effective_kT
+      effective_kT = max(kT, 1.0e-10_rp)
+      argument = (eigenvalue-fermi)/effective_kT
+      if (argument >= 50.0_rp) then
+         occupation = 0.0_rp
+      else if (argument <= -50.0_rp) then
+         occupation = 1.0_rp
+      else
+         occupation = 1.0_rp/(exp(argument)+1.0_rp)
+      end if
+   end function finite_temperature_occupation
+
+   !> Stable divided difference of the Fermi occupation.  It is a response
+   !> kernel, so the coincident-energy value is f'(e), not zero and not a
+   !> dropped small denominator.  A midpoint Taylor value is used only when
+   !> subtraction would lose floating-point digits; it is the smooth analytic
+   !> continuation of the same kernel.
+   pure real(rp) function fermi_divided_difference(e1, e2, fermi, kT) result(kernel)
+      real(rp), intent(in) :: e1, e2, fermi, kT
+      real(rp) :: effective_kT, delta, midpoint, fm, third_derivative, f1, f2
+      effective_kT = max(kT, 1.0e-10_rp)
+      delta = e1-e2
+      midpoint = 0.5_rp*(e1+e2)
+      fm = finite_temperature_occupation(midpoint, fermi, effective_kT)
+      if (delta == 0.0_rp .or. abs(delta) <= sqrt(epsilon(1.0_rp))*max(1.0_rp,abs(e1),abs(e2),effective_kT)) then
+         ! f'''(e) = -p(1-p)(1-6p+6p^2)/kT^3.
+         third_derivative = -fm*(1.0_rp-fm)*(1.0_rp-6.0_rp*fm+6.0_rp*fm*fm)/(effective_kT**3)
+         kernel = -fm*(1.0_rp-fm)/effective_kT + third_derivative*delta*delta/24.0_rp
+      else
+         f1 = finite_temperature_occupation(e1, fermi, effective_kT)
+         f2 = finite_temperature_occupation(e2, fermi, effective_kT)
+         kernel = (f1-f2)/delta
+      end if
+   end function fermi_divided_difference
 
    pure function mixed_second_difference(omega_pp, omega_pm, omega_mp, omega_mm, delta_i, delta_j) result(hessian)
       real(rp), intent(in) :: omega_pp, omega_pm, omega_mp, omega_mm, delta_i, delta_j
