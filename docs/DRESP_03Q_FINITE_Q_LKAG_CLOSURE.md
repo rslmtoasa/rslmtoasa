@@ -29,6 +29,23 @@ This does not close the native LKAG q oracle.  The native status below remains
 `BLOCKED — COMMON-STATE LKAG q ORACLE NOT CERTIFIED`, and DRESP-04 remains
 forbidden.
 
+## DRESP-03G finite-H contour bridge
+
+The finite-H spectral/resolvent bridge is implemented in
+[`DRESP_03G_FINITE_H_CONTOUR_GF.md`](DRESP_03G_FINITE_H_CONTOUR_GF.md) and
+`source/lr_kl_contour.f90`.  It is deliberately orthogonal-H only and does not
+alter the native LKAG status above.  The finite-temperature contour uses the
+same fixed-`mu` observable, explicitly accounts for meromorphic Fermi poles,
+and solves the live `zI-H` matrices directly.  The default `exchange_q`
+backend remains `spectral`; `contour` and `both` are diagnostic alternatives.
+
+The independent noncommuting finite-matrix A/B/C oracle, degeneracy test,
+zero-temperature occupied-contour reduction, separate TT/contact quadrature
+convergence gates, and bcc-Fe 24³ A/B material comparison are passing; see the
+dedicated DRESP-03G record for the residuals and timing.  This closes the
+finite-H representation bridge only.  The native LMTO/Turek bridge remains
+forbidden, and DRESP-04 remains forbidden.
+
 ## Scope and implementation
 
 The new finite-q API is in `source/lr_kl_hessian.f90`:

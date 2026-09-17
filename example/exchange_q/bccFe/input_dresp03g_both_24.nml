@@ -1,0 +1,71 @@
+&calculation
+pre_processing  = 'bravais'
+post_processing = 'exchange_q'
+verbose = T
+/
+&lattice
+rc = 80
+alat = 2.86120
+crystal_sym = 'bcc'
+strux_backend = 'strux_lib'
+wav = 1.40880
+ntype = 1
+ct(1) = 4.0d0
+r2 = 16.0d0
+/
+&atoms
+database = './'
+label(1) = 'Fe'
+/
+&self
+nstep = 25
+use_kspace = .true.
+/
+&energy
+fermi = -0.069063
+energy_min = -1.0
+energy_max = 0.5
+channels_ldos = 2500
+/
+&reciprocal
+nk1 = 24
+nk2 = 24
+nk3 = 24
+k_offset_x = 0.0
+k_offset_y = 0.0
+k_offset_z = 0.0
+use_symmetry_reduction = .false.
+use_time_reversal = .true.
+use_shift = .false.
+reciprocal_mode = 'ham_only'
+kspace_ham_order = 'first'
+dos_method = 'tetrahedron'
+temperature = 300.0
+auto_find_fermi = .false.
+/
+&control
+calctype = 'B'
+nsp = 1
+lld = 21
+recur = 'block'
+/
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/
+&exchange_q
+q_coordinates = 'direct'
+q_file = 'qpath_dresp03g_24.dat'
+n_q_points = 0
+output_file = 'exchange_q_dresp03g_both_24.dat'
+write_components = .true.
+native_crosscheck = .false.
+finite_h_spectral_mode = 'metallic'
+finite_h_response_backend = 'both'
+contour_points = 32
+contour_shape = 'ellipse'
+contour_margin = 0.25
+contour_height_fraction = 0.35
+contour_account_fermi_poles = .true.
+rotation_axis = 1.0, 0.0, 0.0
+/

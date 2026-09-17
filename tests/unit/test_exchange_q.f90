@@ -34,6 +34,10 @@ program test_exchange_q
        abs(config%q_list(1,3)-0.5_rp) > 1.0e-14_rp) then
       error stop 'UnitExchangeQ: inline q path parsing failed'
    end if
+   if (config%finite_h_response_backend /= 'both' .or. config%contour_points /= 48 .or. &
+       config%contour_shape /= 'ellipse' .or. .not. config%contour_account_fermi_poles) then
+      error stop 'UnitExchangeQ: finite-H contour controls parsing failed'
+   end if
 
    call write_q_file('exchange_q_unit_path.dat')
    call write_file_input('exchange_q_unit.nml')
@@ -97,6 +101,10 @@ contains
       write(local_unit,'(a)') ' q_list = 0.0, 0.0, 0.0, 0.0, 0.0, 0.25, 0.5, 0.0, 0.0'
       write(local_unit,'(a)') " output_file = 'unit_exchange_q.dat'"
       write(local_unit,'(a)') ' native_crosscheck = .false.'
+      write(local_unit,'(a)') " finite_h_response_backend = 'both'"
+      write(local_unit,'(a)') ' contour_points = 48'
+      write(local_unit,'(a)') " contour_shape = 'ellipse'"
+      write(local_unit,'(a)') ' contour_account_fermi_poles = .true.'
       write(local_unit,'(a)') '/'
       close(local_unit)
    end subroutine write_inline_input

@@ -15,8 +15,11 @@ module exchange_q_mod
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
    use lr_kl_hessian_mod, only: lmto_fixture_adapter_residual
+   use lr_kl_contour_mod, only: finite_h_contour_options, finite_h_contour_report, &
+      force_theorem_finite_q_hessian_from_resolvent_batch
    use logger_mod, only: g_logger
    use lr_kl_hessian_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_from_hamiltonian, &
+      assemble_lmto_hamiltonian, &
       assemble_lmto_finite_q_torques, assemble_lmto_finite_q_mixed_derivative, &
       force_theorem_finite_q_hessian_from_eigenbasis_batch, &
       force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch
@@ -43,7 +46,13 @@ module exchange_q_mod
       logical :: write_components = .true.
       logical :: native_crosscheck = .false.
       character(len=24) :: finite_h_spectral_mode = 'metallic'
+      character(len=16) :: finite_h_response_backend = 'spectral'
       real(rp) :: rotation_axis(3) = [1.0_rp, 0.0_rp, 0.0_rp]
+      integer :: contour_points = 32
+      character(len=16) :: contour_shape = 'ellipse'
+      real(rp) :: contour_margin = 0.25_rp
+      real(rp) :: contour_height_fraction = 0.35_rp
+      logical :: contour_account_fermi_poles = .true.
       ! These controls are intentionally diagnostic-only.  They make the
       ! metallic LKAG reference reproducible without changing finite-H data.
       real(rp) :: native_green_eta = 1.0e-3_rp
@@ -71,7 +80,13 @@ contains
       this%write_components = .true.
       this%native_crosscheck = .false.
       this%finite_h_spectral_mode = 'metallic'
+      this%finite_h_response_backend = 'spectral'
       this%rotation_axis = [1.0_rp, 0.0_rp, 0.0_rp]
+      this%contour_points = 32
+      this%contour_shape = 'ellipse'
+      this%contour_margin = 0.25_rp
+      this%contour_height_fraction = 0.35_rp
+      this%contour_account_fermi_poles = .true.
       this%native_green_eta = 1.0e-3_rp
       this%native_energy_points = 0
    end subroutine exchange_q_config_clear
@@ -86,12 +101,17 @@ contains
       character(len=sl) :: q_file, output_file
       logical :: write_components, native_crosscheck
       character(len=24) :: finite_h_spectral_mode
+      character(len=16) :: finite_h_response_backend, contour_shape
       real(rp) :: rotation_axis(3), native_green_eta
-      integer :: native_energy_points
+      real(rp) :: contour_margin, contour_height_fraction
+      integer :: native_energy_points, contour_points
+      logical :: contour_account_fermi_poles
       real(rp) :: q_list(3, exchange_q_max_points)
 
       namelist /exchange_q/ q_coordinates, q_file, n_q_points, q_list, output_file, &
-         write_components, native_crosscheck, finite_h_spectral_mode, rotation_axis, native_green_eta, native_energy_points
+         write_components, native_crosscheck, finite_h_spectral_mode, finite_h_response_backend, rotation_axis, &
+         contour_points, contour_shape, contour_margin, contour_height_fraction, contour_account_fermi_poles, &
+         native_green_eta, native_energy_points
 
       call this%clear()
       this%fname = filename
@@ -103,7 +123,13 @@ contains
       write_components = this%write_components
       native_crosscheck = this%native_crosscheck
       finite_h_spectral_mode = this%finite_h_spectral_mode
+      finite_h_response_backend = this%finite_h_response_backend
       rotation_axis = this%rotation_axis
+      contour_points = this%contour_points
+      contour_shape = this%contour_shape
+      contour_margin = this%contour_margin
+      contour_height_fraction = this%contour_height_fraction
+      contour_account_fermi_poles = this%contour_account_fermi_poles
       native_green_eta = this%native_green_eta
       native_energy_points = this%native_energy_points
 
@@ -127,7 +153,13 @@ contains
       this%write_components = write_components
       this%native_crosscheck = native_crosscheck
       this%finite_h_spectral_mode = lower(trim(finite_h_spectral_mode))
+      this%finite_h_response_backend = lower(trim(finite_h_response_backend))
       this%rotation_axis = rotation_axis
+      this%contour_points = contour_points
+      this%contour_shape = lower(trim(contour_shape))
+      this%contour_margin = contour_margin
+      this%contour_height_fraction = contour_height_fraction
+      this%contour_account_fermi_poles = contour_account_fermi_poles
       this%native_green_eta = native_green_eta
       this%native_energy_points = native_energy_points
       validate = .false.
@@ -148,6 +180,16 @@ contains
          if (this%finite_h_spectral_mode /= 'metallic' .and. this%finite_h_spectral_mode /= 'legacy_occupied') then
             call g_logger%fatal("[exchange_q]: finite_h_spectral_mode must be 'metallic' or 'legacy_occupied'", &
                __FILE__, __LINE__)
+         end if
+         if (this%finite_h_response_backend /= 'spectral' .and. this%finite_h_response_backend /= 'contour' .and. &
+             this%finite_h_response_backend /= 'both') then
+            call g_logger%fatal("[exchange_q]: finite_h_response_backend must be 'spectral', 'contour', or 'both'", &
+               __FILE__, __LINE__)
+         end if
+         if (this%contour_points < 8) call g_logger%fatal('[exchange_q]: contour_points must be at least 8', __FILE__, __LINE__)
+         if (this%contour_shape /= 'ellipse') call g_logger%fatal("[exchange_q]: contour_shape must be 'ellipse'", __FILE__, __LINE__)
+         if (this%contour_margin <= 0.0_rp .or. this%contour_height_fraction <= 0.0_rp) then
+            call g_logger%fatal('[exchange_q]: contour margin and height fraction must be positive', __FILE__, __LINE__)
          end if
       end if
 
@@ -357,6 +399,9 @@ contains
       complex(rp), allocatable :: torque_minus_check(:, :, :)
       complex(rp), allocatable :: hessian(:, :), torque_torque(:, :), contact(:, :), complete(:, :)
       real(rp), allocatable :: axes(:, :), finite_total(:, :, :), finite_tt(:, :, :), finite_contact(:, :, :)
+      real(rp), allocatable :: spectral_total(:, :, :), spectral_tt(:, :, :), spectral_contact(:, :, :)
+      real(rp), allocatable :: contour_total(:, :, :), contour_tt(:, :, :), contour_contact(:, :, :)
+      complex(rp), allocatable :: h_source(:, :, :), h_endpoint(:, :, :)
       real(rp), allocatable :: native_total(:)
       integer, allocatable :: endpoint_index(:)
       logical, allocatable :: endpoint_reused(:), q_commensurate(:)
@@ -365,8 +410,11 @@ contains
       real(rp) :: adapter_before, adapter_after, axis_norm, finite_h_kT
       real(rp) :: native_gamma, native_q, native_eta
       real(rp) :: endpoint_seconds, assembly_seconds, contraction_seconds, vertex_error, endpoint_identity_error
-      integer :: nsite, nmat, nk, iq, ik, ia, ja, clock_start, clock_end, clock_rate
-      logical :: native_ready, vertex_identity_checked, endpoint_identity_checked
+      real(rp) :: hamiltonian_seconds, gf_seconds, solve_seconds, contour_seconds, total_response_seconds
+      type(finite_h_contour_options) :: contour_options
+      type(finite_h_contour_report) :: contour_report
+      integer :: nsite, nmat, nk, iq, ik, ia, ja, clock_start, clock_end, clock_rate, response_start
+      logical :: native_ready, vertex_identity_checked, endpoint_identity_checked, do_spectral, do_contour
 
       call validate_exchange_q_capability(config, control_obj, hamiltonian_obj, self_obj, reciprocal_obj)
       call exchange_q_convert_points(config, lattice_obj, q_direct, q_cart)
@@ -399,17 +447,22 @@ contains
 
       nsite = fixture%nsite
       nmat = 2*fixture%norb*nsite
-      nk = size(reciprocal_obj%eigenvalues,2)
-      if (nsite < 1 .or. nk < 1 .or. .not. allocated(reciprocal_obj%eigenvectors)) then
+      nk = size(reciprocal_obj%k_points,2)
+      do_spectral = config%finite_h_response_backend == 'spectral' .or. config%finite_h_response_backend == 'both'
+      do_contour = config%finite_h_response_backend == 'contour' .or. config%finite_h_response_backend == 'both'
+      if (nsite < 1 .or. nk < 1 .or. (do_spectral .and. .not. allocated(reciprocal_obj%eigenvectors))) then
          call g_logger%fatal('[exchange_q]: accepted reciprocal eigensystem is incomplete', __FILE__, __LINE__)
       end if
-      if (size(reciprocal_obj%eigenvalues,1) /= nmat) then
+      if (do_spectral .and. size(reciprocal_obj%eigenvalues,1) /= nmat) then
          call g_logger%fatal('[exchange_q]: accepted eigensystem/Hamiltonian dimensions disagree', __FILE__, __LINE__)
       end if
-      allocate(evals(nmat,nk), evecs(nmat,nmat,nk), weights(nk))
-      evals = reciprocal_obj%eigenvalues
-      evecs = reciprocal_obj%eigenvectors
+      allocate(weights(nk))
       weights = reciprocal_obj%k_weights
+      if (do_spectral) then
+         allocate(evals(nmat,nk), evecs(nmat,nmat,nk))
+         evals = reciprocal_obj%eigenvalues
+         evecs = reciprocal_obj%eigenvectors
+      end if
       if (size(weights) /= nk .or. sum(weights) <= tiny(1.0_rp)) then
          call g_logger%fatal('[exchange_q]: accepted k-mesh weights are invalid', __FILE__, __LINE__)
       end if
@@ -417,24 +470,36 @@ contains
       allocate(finite_total(nsite,nsite,config%n_q), finite_tt(nsite,nsite,config%n_q), &
          finite_contact(nsite,nsite,config%n_q))
       finite_total = 0.0_rp; finite_tt = 0.0_rp; finite_contact = 0.0_rp
+      allocate(spectral_total(nsite,nsite,config%n_q), spectral_tt(nsite,nsite,config%n_q), spectral_contact(nsite,nsite,config%n_q), &
+         contour_total(nsite,nsite,config%n_q), contour_tt(nsite,nsite,config%n_q), contour_contact(nsite,nsite,config%n_q))
+      spectral_total = 0.0_rp; spectral_tt = 0.0_rp; spectral_contact = 0.0_rp
+      contour_total = 0.0_rp; contour_tt = 0.0_rp; contour_contact = 0.0_rp
       allocate(hessian(nsite,nsite), torque_torque(nsite,nsite), contact(nsite,nsite), complete(nsite,nsite))
       allocate(endpoint_index(nk), endpoint_reused(config%n_q), q_commensurate(config%n_q), &
          endpoint_residual(config%n_q), endpoint_mode(config%n_q))
       endpoint_reused = .false.; q_commensurate = .false.; endpoint_residual = huge(1.0_rp)
       endpoint_mode = 'explicit_diagonalization'
       endpoint_seconds = 0.0_rp; assembly_seconds = 0.0_rp; contraction_seconds = 0.0_rp
+      hamiltonian_seconds = 0.0_rp; gf_seconds = 0.0_rp; solve_seconds = 0.0_rp; contour_seconds = 0.0_rp; total_response_seconds = 0.0_rp
       call system_clock(count_rate=clock_rate)
       finite_h_kT = max(reciprocal_obj%temperature*reciprocal_kb_ry_per_k, 1.0e-10_rp)
       vertex_identity_checked = .false.
       endpoint_identity_checked = .false.
       native_ready = config%native_crosscheck
       allocate(native_total(config%n_q)); native_total = 0.0_rp
+      contour_options%contour_points = config%contour_points
+      contour_options%contour_shape = config%contour_shape
+      contour_options%contour_margin = config%contour_margin
+      contour_options%contour_height_fraction = config%contour_height_fraction
+      contour_options%account_fermi_poles = config%contour_account_fermi_poles
+
+      call system_clock(response_start)
 
       do iq = 1, config%n_q
          call detect_commensurate_endpoint_map(reciprocal_obj%k_points, reciprocal_obj%k_weights, reciprocal_obj%nk_mesh, &
             q_direct(:,iq), endpoint_index, q_commensurate(iq), endpoint_residual(iq))
          call system_clock(clock_start)
-         if (q_commensurate(iq)) then
+         if (do_spectral .and. q_commensurate(iq)) then
             allocate(endpoint_evals(nmat,nk), endpoint_evecs(nmat,nmat,nk))
             do ik = 1, nk
                endpoint_evals(:,ik) = evals(:,endpoint_index(ik))
@@ -456,7 +521,7 @@ contains
                deallocate(endpoint_eval_check, endpoint_evec_check)
                endpoint_identity_checked = .true.
             end if
-         else
+         else if (do_spectral) then
             call solve_unfolded_endpoints(reciprocal_obj, reciprocal_obj%k_points + spread_q(q_direct(:,iq),nk), &
                                           endpoint_evals, endpoint_evecs)
          end if
@@ -464,6 +529,16 @@ contains
          endpoint_seconds = endpoint_seconds + elapsed_clock_seconds(clock_start,clock_end,clock_rate)
          allocate(torques_q(nmat,nmat,nsite,nk), torques_minus_q(nmat,nmat,nsite,nk), &
                   mixed(nmat,nmat,nsite,nsite,nk))
+         if (do_contour) allocate(h_source(nmat,nmat,nk), h_endpoint(nmat,nmat,nk))
+         call system_clock(clock_start)
+         if (do_contour) then
+            do ik = 1, nk
+               call assemble_lmto_hamiltonian(fixture, reciprocal_obj%k_points(:,ik), h_source(:,:,ik))
+               call assemble_lmto_hamiltonian(fixture, reciprocal_obj%k_points(:,ik)+q_direct(:,iq), h_endpoint(:,:,ik))
+            end do
+         end if
+         call system_clock(clock_end)
+         hamiltonian_seconds = hamiltonian_seconds + elapsed_clock_seconds(clock_start,clock_end,clock_rate)
          call system_clock(clock_start)
          do ik = 1, nk
             call assemble_lmto_finite_q_torques(fixture, reciprocal_obj%k_points(:,ik), q_direct(:,iq), axes, &
@@ -492,21 +567,44 @@ contains
          end if
          call system_clock(clock_end)
          assembly_seconds = assembly_seconds + elapsed_clock_seconds(clock_start,clock_end,clock_rate)
-         call system_clock(clock_start)
-         if (config%finite_h_spectral_mode == 'legacy_occupied') then
-            call force_theorem_finite_q_hessian_from_eigenbasis_batch(evals, evecs, endpoint_evals, endpoint_evecs, &
-               reciprocal_obj%fermi_level, weights, torques_q, torques_minus_q, mixed, hessian, torque_torque, contact, complete)
-         else
-            call force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch(evals, evecs, endpoint_evals, endpoint_evecs, &
-               reciprocal_obj%fermi_level, finite_h_kT, weights, torques_q, torques_minus_q, mixed, hessian, torque_torque, contact, complete)
+         if (do_spectral) then
+            call system_clock(clock_start)
+            if (config%finite_h_spectral_mode == 'legacy_occupied') then
+               call force_theorem_finite_q_hessian_from_eigenbasis_batch(evals, evecs, endpoint_evals, endpoint_evecs, &
+                  reciprocal_obj%fermi_level, weights, torques_q, torques_minus_q, mixed, hessian, torque_torque, contact, complete)
+            else
+               call force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch(evals, evecs, endpoint_evals, endpoint_evecs, &
+                  reciprocal_obj%fermi_level, finite_h_kT, weights, torques_q, torques_minus_q, mixed, hessian, torque_torque, contact, complete)
+            end if
+            call system_clock(clock_end)
+            contraction_seconds = contraction_seconds + elapsed_clock_seconds(clock_start,clock_end,clock_rate)
+            spectral_tt(:,:,iq) = real(torque_torque,rp)
+            spectral_contact(:,:,iq) = real(contact,rp)
+            spectral_total(:,:,iq) = real(complete,rp)
          end if
-         call system_clock(clock_end)
-         contraction_seconds = contraction_seconds + elapsed_clock_seconds(clock_start,clock_end,clock_rate)
-         finite_tt(:,:,iq) = real(torque_torque,rp)
-         finite_contact(:,:,iq) = real(contact,rp)
-         finite_total(:,:,iq) = real(complete,rp)
-         deallocate(torques_q, torques_minus_q, mixed, endpoint_evals, endpoint_evecs)
+         if (do_contour) then
+            call system_clock(clock_start)
+            call force_theorem_finite_q_hessian_from_resolvent_batch(h_source, h_endpoint, reciprocal_obj%fermi_level, finite_h_kT, &
+               weights, torques_q, torques_minus_q, mixed, contour_options, hessian, torque_torque, contact, complete, contour_report)
+            call system_clock(clock_end)
+            gf_seconds = gf_seconds + elapsed_clock_seconds(clock_start,clock_end,clock_rate)
+            solve_seconds = solve_seconds + contour_report%solve_seconds
+            contour_seconds = contour_seconds + contour_report%contour_seconds
+            contour_tt(:,:,iq) = real(torque_torque,rp)
+            contour_contact(:,:,iq) = real(contact,rp)
+            contour_total(:,:,iq) = real(complete,rp)
+         end if
+         if (config%finite_h_response_backend == 'contour') then
+            finite_tt(:,:,iq) = contour_tt(:,:,iq); finite_contact(:,:,iq) = contour_contact(:,:,iq); finite_total(:,:,iq) = contour_total(:,:,iq)
+         else
+            finite_tt(:,:,iq) = spectral_tt(:,:,iq); finite_contact(:,:,iq) = spectral_contact(:,:,iq); finite_total(:,:,iq) = spectral_total(:,:,iq)
+         end if
+         if (allocated(h_source)) deallocate(h_source, h_endpoint)
+         deallocate(torques_q, torques_minus_q, mixed)
+         if (allocated(endpoint_evals)) deallocate(endpoint_evals, endpoint_evecs)
       end do
+      call system_clock(clock_end)
+      total_response_seconds = elapsed_clock_seconds(response_start,clock_end,clock_rate)
 
       if (native_ready) then
          if (config%native_energy_points > 0) energy_obj%channels_ldos = config%native_energy_points
@@ -514,11 +612,12 @@ contains
          native_eta = config%native_green_eta
          call lkag_native_path(reciprocal_obj, lattice_obj, energy_obj, q_direct, native_eta, native_total)
       end if
-      call g_logger%info('[exchange_q]: timing endpoint/assembly/contraction='//trim(real_to_string(endpoint_seconds))//'/'// &
-         trim(real_to_string(assembly_seconds))//'/'//trim(real_to_string(contraction_seconds))//' s', __FILE__, __LINE__)
+      call g_logger%info('[exchange_q]: timing endpoint/hamiltonian+T/C/spectral='//trim(real_to_string(endpoint_seconds))//'/'// &
+         trim(real_to_string(hamiltonian_seconds))//'/'//trim(real_to_string(assembly_seconds))//'/'//trim(real_to_string(contraction_seconds))//' s', __FILE__, __LINE__)
       call write_exchange_q_output(config, lattice_obj, reciprocal_obj, q_direct, q_cart, finite_tt, finite_contact, &
          finite_total, native_total, native_ready, endpoint_mode, endpoint_reused, q_commensurate, endpoint_residual, &
-         endpoint_seconds, assembly_seconds, contraction_seconds)
+         endpoint_seconds, assembly_seconds, contraction_seconds, hamiltonian_seconds, spectral_tt, spectral_contact, spectral_total, contour_tt, &
+         contour_contact, contour_total, gf_seconds, solve_seconds, contour_seconds, total_response_seconds)
       if (native_ready) then
          call compute_native_gamma_and_report(native_total, q_direct, native_gamma)
          native_q = maxval(abs(native_total))
@@ -526,7 +625,10 @@ contains
             ' Ry, gamma='//trim(real_to_string(native_gamma))//' Ry', __FILE__, __LINE__)
       end if
       call fixture%clear()
-      deallocate(q_direct, q_cart, evals, evecs, weights, finite_total, finite_tt, finite_contact, &
+      if (allocated(evals)) deallocate(evals)
+      if (allocated(evecs)) deallocate(evecs)
+      deallocate(q_direct, q_cart, weights, finite_total, finite_tt, finite_contact, spectral_total, spectral_tt, spectral_contact, &
+         contour_total, contour_tt, contour_contact, &
          axes, hessian, torque_torque, contact, complete, endpoint_index, endpoint_reused, q_commensurate, &
          endpoint_residual, endpoint_mode)
       deallocate(native_total)
@@ -723,16 +825,21 @@ contains
 
    subroutine write_exchange_q_output(config, lattice_obj, recip, q_direct, q_cart, finite_tt, finite_contact, &
                                       finite_total, native_total, native_ready, endpoint_mode, endpoint_reused, &
-                                      q_commensurate, endpoint_residual, endpoint_seconds, assembly_seconds, contraction_seconds)
+                                      q_commensurate, endpoint_residual, endpoint_seconds, assembly_seconds, contraction_seconds, &
+                                      hamiltonian_seconds, spectral_tt, spectral_contact, spectral_total, contour_tt, contour_contact, contour_total, &
+                                      gf_seconds, solve_seconds, contour_seconds, total_response_seconds)
       type(exchange_q_config), intent(in) :: config
       type(lattice), intent(in) :: lattice_obj
       type(reciprocal), intent(in) :: recip
       real(rp), intent(in) :: q_direct(:, :), q_cart(:, :), finite_tt(:, :, :), finite_contact(:, :, :), finite_total(:, :, :)
+      real(rp), intent(in) :: spectral_tt(:, :, :), spectral_contact(:, :, :), spectral_total(:, :, :)
+      real(rp), intent(in) :: contour_tt(:, :, :), contour_contact(:, :, :), contour_total(:, :, :)
       real(rp), intent(in), allocatable :: native_total(:)
       logical, intent(in) :: native_ready
       character(len=*), intent(in) :: endpoint_mode(:)
       logical, intent(in) :: endpoint_reused(:), q_commensurate(:)
-      real(rp), intent(in) :: endpoint_residual(:), endpoint_seconds, assembly_seconds, contraction_seconds
+      real(rp), intent(in) :: endpoint_residual(:), endpoint_seconds, assembly_seconds, contraction_seconds, hamiltonian_seconds
+      real(rp), intent(in) :: gf_seconds, solve_seconds, contour_seconds, total_response_seconds
       integer :: unit, iq, ia, ja, nsite
       real(rp) :: qmag, q2
 
@@ -744,6 +851,10 @@ contains
       write(unit,'(a,a)') '# q_coordinates_input = ', trim(config%q_coordinates)
       write(unit,'(a)') '# q_direct is in reciprocal-lattice coordinates; q_cart is in units of 2*pi/alat.'
       write(unit,'(a,a)') '# finite_h_spectral_mode = ', trim(config%finite_h_spectral_mode)
+      write(unit,'(a,a)') '# finite_h_response_backend = ', trim(config%finite_h_response_backend)
+      if (config%finite_h_response_backend == 'contour' .or. config%finite_h_response_backend == 'both') then
+         write(unit,'(a)') '# contour_endpoint_provenance = direct live finite-H fixture assembly at every k and k+q; no endpoint eigenpair reuse'
+      end if
       write(unit,'(a,es24.16)') '# electronic_temperature_K = ', recip%temperature
       write(unit,'(a,es24.16)') '# electronic_kT_Ry = ', max(recip%temperature*reciprocal_kb_ry_per_k,1.0e-10_rp)
       write(unit,'(a,es24.16)') '# fermi_level_Ry = ', recip%fermi_level
@@ -754,11 +865,17 @@ contains
          write(unit,'(a,1x,i0,1x,a,1x,l1,1x,l1,1x,es24.16)') '# endpoint_provenance', iq, trim(endpoint_mode(iq)), &
             endpoint_reused(iq), q_commensurate(iq), endpoint_residual(iq)
       end do
-      write(unit,'(a,3(es24.16,1x))') '# timing_seconds endpoint assembly contraction = ', endpoint_seconds, assembly_seconds, contraction_seconds
+      write(unit,'(a,8(es24.16,1x))') '# timing_seconds endpoint T/C hamiltonian spectral GF_total GF_solve contour total_response = ', &
+         endpoint_seconds, assembly_seconds, hamiltonian_seconds, contraction_seconds, gf_seconds, solve_seconds, contour_seconds, total_response_seconds
+      write(unit,'(a,a,1x,i0,1x,a,1x,es16.8,1x,a,1x,es16.8)') '# contour_provenance shape=', trim(config%contour_shape), &
+         config%contour_points, 'margin=', config%contour_margin, 'height_fraction=', config%contour_height_fraction
+      write(unit,'(a,a)') '# fermi_pole_residues_accounted=', merge('true ','false',config%contour_account_fermi_poles)
       write(unit,'(a)') '# units: exchange=Ry, q=1/A, stiffness diagnostic=Ry A^2'
       nsite = size(finite_total,1)
       if (nsite == 1) then
-         if (config%write_components .and. native_ready) then
+         if (config%finite_h_response_backend == 'both') then
+            write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv spectral_TT_Ry spectral_contact_Ry spectral_total_Ry contour_TT_Ry contour_contact_Ry contour_total_Ry abs_total_residual_Ry relative_total_residual'
+         else if (config%write_components .and. native_ready) then
             write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv finiteH_TT_Ry finiteH_contact_Ry finiteH_total_Ry finiteH_total_mRy finiteH_dJ_over_q2_RyA2 native_dJ_Ry native_dJ_mRy native_dJ_over_q2_RyA2 finiteH_minus_native_Ry'
          else if (config%write_components) then
             write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv finiteH_TT_Ry finiteH_contact_Ry finiteH_total_Ry finiteH_total_mRy finiteH_dJ_over_q2_RyA2'
@@ -772,16 +889,27 @@ contains
             if (q2 <= tiny(1.0_rp)) q2 = 0.0_rp
             write(unit,'(i0,1x,3(es24.16,1x),3(es24.16,1x),es24.16,1x)', advance='no') &
                iq, q_direct(:,iq), 2.0_rp*pi/lattice_obj%alat*q_cart(:,iq), qmag
-            if (config%write_components) write(unit,'(3(es24.16,1x))', advance='no') finite_tt(1,1,iq), finite_contact(1,1,iq), finite_total(1,1,iq)
-            if (.not. config%write_components) write(unit,'(es24.16,1x)', advance='no') finite_total(1,1,iq)
-            write(unit,'(2(es24.16,1x))', advance='no') 1000.0_rp*finite_total(1,1,iq), safe_divide(finite_total(1,1,iq),q2)
+            if (config%finite_h_response_backend == 'both') then
+               write(unit,'(8(es24.16,1x))', advance='no') spectral_tt(1,1,iq), spectral_contact(1,1,iq), spectral_total(1,1,iq), &
+                  contour_tt(1,1,iq), contour_contact(1,1,iq), contour_total(1,1,iq), &
+                  abs(spectral_total(1,1,iq)-contour_total(1,1,iq)), &
+                  safe_divide(abs(spectral_total(1,1,iq)-contour_total(1,1,iq)), max(abs(spectral_total(1,1,iq)),tiny(1.0_rp)))
+            else if (config%write_components) then
+               write(unit,'(3(es24.16,1x))', advance='no') finite_tt(1,1,iq), finite_contact(1,1,iq), finite_total(1,1,iq)
+            end if
+            if (config%finite_h_response_backend /= 'both') then
+               if (.not. config%write_components) write(unit,'(es24.16,1x)', advance='no') finite_total(1,1,iq)
+               write(unit,'(2(es24.16,1x))', advance='no') 1000.0_rp*finite_total(1,1,iq), safe_divide(finite_total(1,1,iq),q2)
+            end if
             if (native_ready) write(unit,'(4(es24.16,1x))', advance='no') native_total(iq), 1000.0_rp*native_total(iq), &
                safe_divide(native_total(iq),q2), finite_total(1,1,iq)-native_total(iq)
             write(unit,*)
          end do
       else
          write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv; following columns are row-major finite-H matrices'
-         if (config%write_components) then
+         if (config%finite_h_response_backend == 'both') then
+            write(unit,'(a,i0,a)') '# matrix columns: spectral TT[1,1..', nsite*nsite, '], spectral contact[...], spectral total[...], contour TT[...], contour contact[...], contour total[...]'
+         else if (config%write_components) then
             write(unit,'(a,i0,a)') '# matrix columns: finiteH_TT[1,1..', nsite*nsite, '], finiteH_contact[...], finiteH_total[...]'
          else
             write(unit,'(a,i0,a)') '# matrix columns: finiteH_total[1,1..', nsite*nsite, ']'
@@ -791,7 +919,38 @@ contains
             qmag = 2.0_rp*pi/lattice_obj%alat*sqrt(sum(q_cart(:,iq)**2))
             write(unit,'(i0,1x,3(es24.16,1x),3(es24.16,1x),es24.16,1x)', advance='no') iq, q_direct(:,iq), &
                2.0_rp*pi/lattice_obj%alat*q_cart(:,iq), qmag
-            if (config%write_components) then
+            if (config%finite_h_response_backend == 'both') then
+               do ia = 1, nsite
+                  do ja = 1, nsite
+                     write(unit,'(es24.16,1x)', advance='no') spectral_tt(ia,ja,iq)
+                  end do
+               end do
+               do ia = 1, nsite
+                  do ja = 1, nsite
+                     write(unit,'(es24.16,1x)', advance='no') spectral_contact(ia,ja,iq)
+                  end do
+               end do
+               do ia = 1, nsite
+                  do ja = 1, nsite
+                     write(unit,'(es24.16,1x)', advance='no') spectral_total(ia,ja,iq)
+                  end do
+               end do
+               do ia = 1, nsite
+                  do ja = 1, nsite
+                     write(unit,'(es24.16,1x)', advance='no') contour_tt(ia,ja,iq)
+                  end do
+               end do
+               do ia = 1, nsite
+                  do ja = 1, nsite
+                     write(unit,'(es24.16,1x)', advance='no') contour_contact(ia,ja,iq)
+                  end do
+               end do
+               do ia = 1, nsite
+                  do ja = 1, nsite
+                     write(unit,'(es24.16,1x)', advance='no') contour_total(ia,ja,iq)
+                  end do
+               end do
+            else if (config%write_components) then
                do ia = 1, nsite
                   do ja = 1, nsite
                      write(unit,'(es24.16,1x)', advance='no') finite_tt(ia,ja,iq)
