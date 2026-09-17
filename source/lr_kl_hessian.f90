@@ -46,6 +46,7 @@ module lr_kl_hessian_mod
    public :: lmto_fixture_from_hamiltonian
    public :: assemble_lmto_hamiltonian
    public :: assemble_lmto_torque
+   public :: assemble_lmto_rotation_terms
    public :: assemble_lmto_mixed_derivative
    public :: assemble_lmto_finite_q_torque
    public :: assemble_lmto_finite_q_torques
@@ -241,6 +242,46 @@ contains
       zero_q = 0.0_rp
       call assemble_lmto_finite_q_torque(this, k_point, zero_q, site, axis, torque)
    end subroutine assemble_lmto_torque
+
+   !> Expose the live fixed-q product-rule terms for a rotation audit.
+   !>
+   !> The returned matrices are exactly the objects used by the certified
+   !> finite-H torque path:
+   !>   H = B - Q B + E_nu,
+   !>   T_i = B_i - Q_i B - Q B_i + E_nu,i.
+   !>
+   !> Here Q is the assembled reciprocal `eeo` operator, i.e. the Fourier sum
+   !> of `ee(R)*obarm_target`; it is not potential%qpar.  This routine is a
+   !> read-only diagnostic seam and deliberately does not expose or mutate any
+   !> production Hamiltonian state.
+   subroutine assemble_lmto_rotation_terms(this, k_point, site, axis, b, q, enu, bi, qi, enui, torque)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: this
+      real(rp), intent(in) :: k_point(3), axis(3)
+      integer, intent(in) :: site
+      complex(rp), intent(out) :: b(:, :), q(:, :), enu(:, :), bi(:, :), qi(:, :), enui(:, :), torque(:, :)
+      integer :: nmat
+      real(rp) :: zero_q(3)
+
+      call validate_site_axis(this, site, axis)
+      nmat = 2*this%norb*this%nsite
+      if (any(shape(b) /= [nmat,nmat]) .or. any(shape(q) /= [nmat,nmat]) .or. &
+          any(shape(enu) /= [nmat,nmat]) .or. any(shape(bi) /= [nmat,nmat]) .or. &
+          any(shape(qi) /= [nmat,nmat]) .or. any(shape(enui) /= [nmat,nmat]) .or. &
+          any(shape(torque) /= [nmat,nmat])) then
+         error stop 'assemble_lmto_rotation_terms: output shape mismatch'
+      end if
+
+      call assemble_base_terms(this, k_point, b, q)
+      enu = cmplx(0.0_rp, 0.0_rp, rp)
+      if (this%include_enu) call assemble_onsite_coefficient(this, this%enu0, this%enu1, enu)
+      zero_q = 0.0_rp
+      call assemble_finite_q_directional_terms(this, k_point, zero_q, site, axis, bi, qi)
+      enui = cmplx(0.0_rp, 0.0_rp, rp)
+      if (this%include_enu) call assemble_finite_q_onsite_derivative(this, zero_q, site, axis, enui)
+
+      torque = bi + enui
+      if (this%hoh) torque = torque - matmul(qi, b) - matmul(q, bi)
+   end subroutine assemble_lmto_rotation_terms
 
    !> Complete C_ij=d2H_live/(dtheta_i dtheta_j), i/=j.  This includes the
    !> product rule for the global Q*B HOH term and is independently testable
