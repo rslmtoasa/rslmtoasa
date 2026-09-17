@@ -678,6 +678,25 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitDresp03rLmtoMapping PROPERTIES LABELS "unit;dresp-03r;lmto;lkag;rotation-vertex;representation-audit")
   add_fortran_unit_test(UnitDresp03tLmtoHessian ${TestDIR}/unit/test_dresp03t_lmto_hessian.f90)
   set_tests_properties(UnitDresp03tLmtoHessian PROPERTIES LABELS "unit;dresp-03t;lmto;lkag;torque;hessian;hoh;representation-audit")
+  add_fortran_unit_test(UnitDresp03qFiniteQ ${TestDIR}/unit/test_dresp03q_finite_q.f90)
+  set_tests_properties(UnitDresp03qFiniteQ PROPERTIES LABELS "unit;dresp-03q;finite-q;lmto;lkag;torque;hessian;supercell-oracle")
+  add_fortran_unit_test(UnitDresp03qProductionAdapter ${TestDIR}/unit/test_dresp03q_production_adapter.f90)
+  set(_dresp03q_adapter_case "${CMAKE_BINARY_DIR}/Testing/dresp03q_production_adapter")
+  file(MAKE_DIRECTORY "${_dresp03q_adapter_case}")
+  configure_file("${TestDIR}/regression/bccFe_lanczos/input.nml" "${_dresp03q_adapter_case}/input.nml" COPYONLY)
+  configure_file("${TestDIR}/regression/bccFe_lanczos/Fe.nml" "${_dresp03q_adapter_case}/Fe.nml" COPYONLY)
+  set_tests_properties(UnitDresp03qProductionAdapter PROPERTIES
+    LABELS "unit;dresp-03q;finite-q;lmto;lkag;production-adapter;bcc-fe;spd"
+    WORKING_DIRECTORY "${_dresp03q_adapter_case}")
+  add_fortran_unit_test(UnitDresp03qNativeLkag ${TestDIR}/unit/test_dresp03q_native_lkag.f90)
+  set(_dresp03q_native_case "${CMAKE_BINARY_DIR}/Testing/dresp03q_native_lkag")
+  file(MAKE_DIRECTORY "${_dresp03q_native_case}")
+  configure_file("${CMAKE_SOURCE_DIR}/results/validation/VAL-18_bccFe/jij_fixed/input.nml" "${_dresp03q_native_case}/input.nml" COPYONLY)
+  configure_file("${CMAKE_SOURCE_DIR}/results/validation/VAL-18_bccFe/jij_fixed/Fe.nml" "${_dresp03q_native_case}/Fe.nml" COPYONLY)
+  configure_file("${CMAKE_SOURCE_DIR}/results/validation/VAL-18_bccFe/jij_fixed/jij.out" "${_dresp03q_native_case}/jij.out" COPYONLY)
+  set_tests_properties(UnitDresp03qNativeLkag PROPERTIES
+    LABELS "unit;dresp-03q;finite-q;lmto;lkag;native-reference;bcc-fe;spd"
+    WORKING_DIRECTORY "${_dresp03q_native_case}")
   add_fortran_unit_test(UnitLrProductGfQuadratureAudit ${TestDIR}/unit/test_lr_product_gf_quadrature_audit.f90)
   set_tests_properties(UnitLrProductGfQuadratureAudit PROPERTIES
     LABELS "unit;tdvk-03a;lr-gf-02;quadrature-audit;reciprocal-gf"

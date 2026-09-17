@@ -4,7 +4,7 @@
 module lr_kl_hessian_mod
    use, intrinsic :: ieee_arithmetic
    use precision_mod, only: rp
-   use math_mod, only: i_unit, pi, inverse_3x3
+   use math_mod, only: i_unit, pi, inverse_3x3, hcpx
    use hamiltonian_mod, only: hamiltonian
    use lmto_magnetic_tangent_mod, only: lmto_bond_value, lmto_bond_derivative, &
                                         lmto_bond_mixed_derivative, lmto_hhmag_to_spinor
@@ -22,11 +22,18 @@ module lr_kl_hessian_mod
       integer :: norb = 0
       integer :: nbond = 0
       logical :: hoh = .false.
+      logical :: include_enu = .true.
+      logical :: cartesian_to_spherical = .false.
       complex(rp), allocatable :: hhh(:, :, :)       ! orbital directed bonds
       integer, allocatable :: bond_source(:), bond_target(:)
       real(rp), allocatable :: bond_vector(:, :)     ! Cartesian lattice vector
       logical, allocatable :: onsite(:)
       real(rp), allocatable :: moments(:, :)         ! (3,nsite), unit moments
+      ! Fractional basis positions.  A bond vector is the full target-source
+      ! displacement R+tau_target-tau_source.  The endpoint phases below are
+      ! relative to the source endpoint because the Bloch basis already carries
+      ! the absolute basis position.
+      real(rp), allocatable :: site_position(:, :)   ! (3,nsite), fractional
       complex(rp), allocatable :: wx0(:, :), wx1(:, :) ! (norb,nsite)
       complex(rp), allocatable :: c0(:, :), c1(:, :)   ! live onsite c channels
       complex(rp), allocatable :: obar0(:, :), obar1(:, :) ! live O channels
@@ -40,6 +47,12 @@ module lr_kl_hessian_mod
    public :: assemble_lmto_hamiltonian
    public :: assemble_lmto_torque
    public :: assemble_lmto_mixed_derivative
+   public :: assemble_lmto_finite_q_torque
+   public :: assemble_lmto_finite_q_torques
+   public :: assemble_lmto_finite_q_mixed_derivative
+   public :: force_theorem_finite_q_hessian_from_eigenbasis
+   public :: force_theorem_finite_q_hessian_from_eigenbasis_batch
+   public :: lmto_fixture_adapter_residual
    public :: force_theorem_integrand
    public :: force_theorem_hessian_from_green
    public :: force_theorem_hessian_from_eigenbasis
@@ -59,13 +72,17 @@ contains
       this%nbond = nbond
       this%hoh = .false.
       if (present(hoh)) this%hoh = hoh
+      this%include_enu = .true.
+      this%cartesian_to_spherical = .false.
       allocate(this%hhh(norb, norb, nbond), this%bond_source(nbond), this%bond_target(nbond), &
                this%bond_vector(3, nbond), this%onsite(nbond), this%moments(3, nsite), &
+               this%site_position(3, nsite), &
                this%wx0(norb, nsite), this%wx1(norb, nsite), this%c0(norb, nsite), this%c1(norb, nsite), &
                this%obar0(norb, nsite), this%obar1(norb, nsite), this%enu0(norb, nsite), this%enu1(norb, nsite))
       this%hhh = cmplx(0.0_rp, 0.0_rp, rp)
       this%bond_source = 0; this%bond_target = 0; this%bond_vector = 0.0_rp; this%onsite = .false.
       this%moments = 0.0_rp; this%moments(3, :) = 1.0_rp
+      this%site_position = 0.0_rp
       this%wx0 = cmplx(0.0_rp, 0.0_rp, rp); this%wx1 = cmplx(0.0_rp, 0.0_rp, rp)
       this%c0 = cmplx(0.0_rp, 0.0_rp, rp); this%c1 = cmplx(0.0_rp, 0.0_rp, rp)
       this%obar0 = cmplx(0.0_rp, 0.0_rp, rp); this%obar1 = cmplx(0.0_rp, 0.0_rp, rp)
@@ -103,9 +120,16 @@ contains
          end do
       end do
       call lmto_fixture_init(fixture, source%lattice%nrec, size(source%charge%lattice%sbar,1), count, source%hoh)
+      ! The reciprocal auto mode is first order for an orthogonal Hamiltonian
+      ! and second order only when HOH is active.  Keep the extracted fixture
+      ! on that same ham_only convention; synthetic DRESP fixtures retain the
+      ! historical include_enu=.true. default from lmto_fixture_init.
+      fixture%include_enu = source%hoh
+      fixture%cartesian_to_spherical = .true.
       do site = 1, fixture%nsite
          ntype = source%lattice%ib(site); ia = source%lattice%atlist(ntype); it = source%lattice%iz(ia)
          fixture%moments(:,site) = source%charge%lattice%symbolic_atoms(it)%potential%mom
+         fixture%site_position(:,site) = source%lattice%cr(:,ia)
          fixture%wx0(:,site) = source%charge%lattice%symbolic_atoms(it)%potential%wx0(1:fixture%norb)
          fixture%wx1(:,site) = source%charge%lattice%symbolic_atoms(it)%potential%wx1(1:fixture%norb)
          if (source%hoh) then
@@ -163,6 +187,7 @@ contains
       if (allocated(this%bond_vector)) deallocate(this%bond_vector)
       if (allocated(this%onsite)) deallocate(this%onsite)
       if (allocated(this%moments)) deallocate(this%moments)
+      if (allocated(this%site_position)) deallocate(this%site_position)
       if (allocated(this%wx0)) deallocate(this%wx0)
       if (allocated(this%wx1)) deallocate(this%wx1)
       if (allocated(this%c0)) deallocate(this%c0)
@@ -171,11 +196,15 @@ contains
       if (allocated(this%obar1)) deallocate(this%obar1)
       if (allocated(this%enu0)) deallocate(this%enu0)
       if (allocated(this%enu1)) deallocate(this%enu1)
-      this%nsite = 0; this%norb = 0; this%nbond = 0; this%hoh = .false.
+      this%nsite = 0; this%norb = 0; this%nbond = 0; this%hoh = .false.; this%include_enu = .true.; &
+         this%cartesian_to_spherical = .false.
    end subroutine lmto_fixture_clear
 
    !> Assemble the same first/second-order orthogonal H used by reciprocal
-   !> `ham_only`: H=B-QB+E_nu, with Q=ee*obar in reciprocal space.
+   !> `ham_only`: H=B in first order, and H=B-QB+E_nu in second order,
+   !> with Q=ee*obar in reciprocal space.  The production fixture records
+   !> which convention is active so the first-order path does not acquire an
+   !> E_nu term that reciprocal_fourier deliberately omits.
    subroutine assemble_lmto_hamiltonian(this, k_point, hamiltonian)
       type(lmto_live_hamiltonian_fixture), intent(in) :: this
       real(rp), intent(in) :: k_point(3)
@@ -188,7 +217,8 @@ contains
       if (any(shape(hamiltonian) /= [nmat, nmat])) error stop 'assemble_lmto_hamiltonian: output shape mismatch'
       allocate(b(nmat,nmat), q(nmat,nmat), enu(nmat,nmat))
       call assemble_base_terms(this, k_point, b, q)
-      call assemble_onsite_coefficient(this, this%enu0, this%enu1, enu)
+      enu = cmplx(0.0_rp, 0.0_rp, rp)
+      if (this%include_enu) call assemble_onsite_coefficient(this, this%enu0, this%enu1, enu)
       hamiltonian = b + enu
       if (this%hoh) hamiltonian = hamiltonian - matmul(q, b)
       deallocate(b, q, enu)
@@ -201,19 +231,11 @@ contains
       real(rp), intent(in) :: k_point(3), axis(3)
       integer, intent(in) :: site
       complex(rp), intent(out) :: torque(:, :)
-      complex(rp), allocatable :: b(:, :), q(:, :), db(:, :), dq(:, :), denu(:, :)
+      real(rp) :: zero_q(3)
       integer :: nmat
 
-      call validate_site_axis(this, site, axis)
-      nmat = 2*this%norb*this%nsite
-      if (any(shape(torque) /= [nmat, nmat])) error stop 'assemble_lmto_torque: output shape mismatch'
-      allocate(b(nmat,nmat), q(nmat,nmat), db(nmat,nmat), dq(nmat,nmat), denu(nmat,nmat))
-      call assemble_base_terms(this, k_point, b, q)
-      call assemble_directional_terms(this, k_point, site, axis, db, dq)
-      call assemble_onsite_derivative(this, site, axis, denu)
-      torque = db + denu
-      if (this%hoh) torque = torque - matmul(dq,b) - matmul(q,db)
-      deallocate(b, q, db, dq, denu)
+      zero_q = 0.0_rp
+      call assemble_lmto_finite_q_torque(this, k_point, zero_q, site, axis, torque)
    end subroutine assemble_lmto_torque
 
    !> Complete C_ij=d2H_live/(dtheta_i dtheta_j), i/=j.  This includes the
@@ -224,26 +246,90 @@ contains
       real(rp), intent(in) :: k_point(3), axis_i(3), axis_j(3)
       integer, intent(in) :: site_i, site_j
       complex(rp), intent(out) :: mixed(:, :)
-      complex(rp), allocatable :: b(:, :), q(:, :), dbi(:, :), dbj(:, :), dqi(:, :), dqj(:, :), &
-                                  d2b(:, :), d2q(:, :), d2enu(:, :)
+      real(rp) :: zero_q(3)
+      if (site_i == site_j) error stop 'assemble_lmto_mixed_derivative: sites must be distinct'
+      zero_q = 0.0_rp
+      call assemble_lmto_finite_q_mixed_derivative(this, k_point, zero_q, site_i, axis_i, site_j, axis_j, mixed)
+   end subroutine assemble_lmto_mixed_derivative
+
+   !> First finite-q vertex for the convention
+   !> theta_(aR)=theta_a(q) exp(+i 2*pi*q.(R+tau_a)).  After factoring the
+   !> production Bloch basis, the returned matrix is the k -> k+q block and
+   !> the target endpoint carries the relative phase exp(+i q.D), with
+   !> D=R+tau_target-tau_source.  Its second argument is deliberately not folded:
+   !> reciprocal-vector changes are retained as the corresponding basis gauge.
+   subroutine assemble_lmto_finite_q_torque(this, k_point, q_point, site, axis, torque)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: this
+      real(rp), intent(in) :: k_point(3), q_point(3), axis(3)
+      integer, intent(in) :: site
+      complex(rp), intent(out) :: torque(:, :)
+      complex(rp), allocatable :: b(:, :), b_right(:, :), qmat(:, :), db(:, :), dq(:, :), denu(:, :)
       integer :: nmat
 
-      if (site_i == site_j) error stop 'assemble_lmto_mixed_derivative: sites must be distinct'
+      call validate_site_axis(this, site, axis)
+      nmat = 2*this%norb*this%nsite
+      if (any(shape(torque) /= [nmat,nmat])) error stop 'assemble_lmto_finite_q_torque: output shape mismatch'
+      allocate(b(nmat,nmat), b_right(nmat,nmat), qmat(nmat,nmat), db(nmat,nmat), dq(nmat,nmat), denu(nmat,nmat))
+      call assemble_base_terms(this, k_point, b, qmat)
+      call assemble_base_terms(this, k_point + q_point, b_right, qmat)
+      call assemble_finite_q_directional_terms(this, k_point, q_point, site, axis, db, dq)
+      if (this%include_enu) then
+         call assemble_finite_q_onsite_derivative(this, q_point, site, axis, denu)
+      else
+         denu = cmplx(0.0_rp, 0.0_rp, rp)
+      end if
+      torque = db + denu
+      ! H=B-QB.  The second factor is evaluated at the right endpoint.
+      if (this%hoh) then
+         torque = torque - matmul(dq,b_right) - matmul(qmat,db)
+      end if
+      deallocate(b,b_right,qmat,db,dq,denu)
+   end subroutine assemble_lmto_finite_q_torque
+
+   !> Assemble all site vertices at once.  The site dimension is the final
+   !> dimension and is convenient for the q-Hessian contraction.
+   subroutine assemble_lmto_finite_q_torques(this, k_point, q_point, axes, torques)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: this
+      real(rp), intent(in) :: k_point(3), q_point(3), axes(:, :)
+      complex(rp), intent(out) :: torques(:, :, :)
+      integer :: site, nmat
+      nmat = 2*this%norb*this%nsite
+      if (size(axes,1) /= 3 .or. size(axes,2) /= this%nsite .or. any(shape(torques) /= [nmat,nmat,this%nsite])) then
+         error stop 'assemble_lmto_finite_q_torques: shape mismatch'
+      end if
+      do site = 1, this%nsite
+         call assemble_lmto_finite_q_torque(this, k_point, q_point, site, axes(:,site), torques(:,:,site))
+      end do
+   end subroutine assemble_lmto_finite_q_torques
+
+   !> Complete C_ab(k;q,-q), including same-site rotation curvature and the
+   !> two distinct momentum orderings in the HOH product rule.
+   subroutine assemble_lmto_finite_q_mixed_derivative(this, k_point, q_point, site_i, axis_i, site_j, axis_j, mixed)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: this
+      real(rp), intent(in) :: k_point(3), q_point(3), axis_i(3), axis_j(3)
+      integer, intent(in) :: site_i, site_j
+      complex(rp), intent(out) :: mixed(:, :)
+      complex(rp), allocatable :: b(:, :), qmat(:, :), dbi(:, :), dqi(:, :), dbj_minus(:, :), dqj_minus(:, :), &
+         dbi_left(:, :), dqi_left(:, :), dbj_at_k(:, :), dqj_at_k(:, :), d2b(:, :), d2q(:, :), d2enu(:, :)
+      integer :: nmat
+
       call validate_site_axis(this, site_i, axis_i)
       call validate_site_axis(this, site_j, axis_j)
       nmat = 2*this%norb*this%nsite
-      if (any(shape(mixed) /= [nmat, nmat])) error stop 'assemble_lmto_mixed_derivative: output shape mismatch'
-      allocate(b(nmat,nmat), q(nmat,nmat), dbi(nmat,nmat), dbj(nmat,nmat), dqi(nmat,nmat), dqj(nmat,nmat), &
-               d2b(nmat,nmat), d2q(nmat,nmat), d2enu(nmat,nmat))
-      call assemble_base_terms(this, k_point, b, q)
-      call assemble_directional_terms(this, k_point, site_i, axis_i, dbi, dqi)
-      call assemble_directional_terms(this, k_point, site_j, axis_j, dbj, dqj)
-      call assemble_mixed_terms(this, k_point, site_i, axis_i, site_j, axis_j, d2b, d2q)
-      d2enu = cmplx(0.0_rp, 0.0_rp, rp)
+      if (any(shape(mixed) /= [nmat,nmat])) error stop 'assemble_lmto_finite_q_mixed_derivative: output shape mismatch'
+      allocate(b(nmat,nmat), qmat(nmat,nmat), dbi(nmat,nmat), dqi(nmat,nmat), dbj_minus(nmat,nmat), dqj_minus(nmat,nmat), &
+         dbi_left(nmat,nmat), dqi_left(nmat,nmat), dbj_at_k(nmat,nmat), dqj_at_k(nmat,nmat), &
+         d2b(nmat,nmat), d2q(nmat,nmat), d2enu(nmat,nmat))
+      call assemble_base_terms(this, k_point, b, qmat)
+      call assemble_finite_q_directional_terms(this, k_point, q_point, site_i, axis_i, dbi, dqi)
+      call assemble_finite_q_directional_terms(this, k_point + q_point, -q_point, site_j, axis_j, dbj_minus, dqj_minus)
+      call assemble_finite_q_directional_terms(this, k_point, -q_point, site_j, axis_j, dbj_at_k, dqj_at_k)
+      call assemble_finite_q_directional_terms(this, k_point - q_point, q_point, site_i, axis_i, dbi_left, dqi_left)
+      call assemble_finite_q_mixed_base_terms(this, k_point, q_point, site_i, axis_i, site_j, axis_j, d2b, d2q, d2enu)
       mixed = d2b + d2enu
-      if (this%hoh) mixed = mixed - matmul(d2q,b) - matmul(dqi,dbj) - matmul(dqj,dbi) - matmul(q,d2b)
-      deallocate(b, q, dbi, dbj, dqi, dqj, d2b, d2q, d2enu)
-   end subroutine assemble_lmto_mixed_derivative
+      if (this%hoh) mixed = mixed - matmul(d2q,b) - matmul(dqi,dbj_minus) - matmul(dqj_at_k,dbi_left) - matmul(qmat,d2b)
+      deallocate(b,qmat,dbi,dqi,dbj_minus,dqj_minus,dbi_left,dqi_left,dbj_at_k,dqj_at_k,d2b,d2q,d2enu)
+   end subroutine assemble_lmto_finite_q_mixed_derivative
 
    !> Integrand of the exact zero-temperature grand-potential Hessian in the
    !> resolvent convention G=(E-H)^-1.  The contact term is C_ij G; it is not
@@ -326,6 +412,96 @@ contains
       complete = torque_torque + mixed_contact
    end subroutine force_theorem_hessian_from_eigenbasis
 
+   !> Finite-q spectral Hessian for one k -> k+q endpoint pair.  The first
+   !> vertex stack is evaluated at k for +q and the second at k+q for -q.
+   !> The second ordering is retained explicitly; it is needed for a Hermitian
+   !> sublattice Hessian when a and b are different.
+   subroutine force_theorem_finite_q_hessian_from_eigenbasis(eigenvalues, eigenvectors, endpoint_values, endpoint_vectors, &
+      fermi, torques_q, torques_minus_q, mixed, hessian, torque_torque, mixed_contact, complete)
+      real(rp), intent(in) :: eigenvalues(:), endpoint_values(:), fermi
+      complex(rp), intent(in) :: eigenvectors(:, :), endpoint_vectors(:, :)
+      complex(rp), intent(in) :: torques_q(:, :, :), torques_minus_q(:, :, :), mixed(:, :, :, :)
+      complex(rp), intent(out) :: hessian(:, :), torque_torque(:, :), mixed_contact(:, :), complete(:, :)
+      complex(rp) :: ta_nm, tb_mn, tb_nm, ta_mn, term
+      integer :: n, m, a, b, nbands, nsite, nmat
+
+      nbands = size(eigenvalues); nmat = size(eigenvectors,1); nsite = size(torques_q,3)
+      if (size(endpoint_values) /= nbands .or. size(eigenvectors,2) /= nbands .or. &
+          any(shape(endpoint_vectors) /= [nmat,nbands]) .or. any(shape(torques_q) /= [nmat,nmat,nsite]) .or. &
+          any(shape(torques_minus_q) /= [nmat,nmat,nsite]) .or. any(shape(mixed) /= [nmat,nmat,nsite,nsite]) .or. &
+          any(shape(hessian) /= [nsite,nsite]) .or. any(shape(torque_torque) /= [nsite,nsite]) .or. &
+          any(shape(mixed_contact) /= [nsite,nsite]) .or. any(shape(complete) /= [nsite,nsite])) then
+         error stop 'force_theorem_finite_q_hessian_from_eigenbasis: shape mismatch'
+      end if
+      hessian = 0.0_rp; torque_torque = 0.0_rp; mixed_contact = 0.0_rp; complete = 0.0_rp
+      do a = 1, nsite
+         do b = 1, nsite
+            do n = 1, nbands
+               if (eigenvalues(n) >= fermi) cycle
+               mixed_contact(a,b) = mixed_contact(a,b) + real(dot_product(eigenvectors(:,n), &
+                  matmul(mixed(:,:,a,b),eigenvectors(:,n))),rp)
+               do m = 1, nbands
+                  if (abs(eigenvalues(n)-endpoint_values(m)) <= 100.0_rp*epsilon(1.0_rp)) then
+                     ! A degenerate subspace wholly below or wholly above the
+                     ! Fermi level contributes no resolvent denominator to the
+                     ! trace of the occupied projector; its basis-invariant
+                     ! contribution is obtained by the contact term.  A
+                     ! degeneracy crossing the zero-temperature occupation
+                     ! edge is genuinely non-analytic and remains an error.
+                     if ((eigenvalues(n) < fermi) .eqv. (endpoint_values(m) < fermi)) cycle
+                     error stop 'force_theorem_finite_q_hessian_from_eigenbasis: Fermi-edge degeneracy'
+                  end if
+                  ! T_q(k) is stored in the production direction: rows at
+                  ! k+q and columns at k.  The -q partner at k+q has rows at
+                  ! k and columns at k+q.  Contract those directions directly
+                  ! rather than silently taking their reverse matrix elements.
+                  ta_nm = dot_product(endpoint_vectors(:,m), matmul(torques_q(:,:,a), eigenvectors(:,n)))
+                  tb_mn = dot_product(eigenvectors(:,n), matmul(torques_minus_q(:,:,b), endpoint_vectors(:,m)))
+                  tb_nm = dot_product(endpoint_vectors(:,m), matmul(torques_q(:,:,b), eigenvectors(:,n)))
+                  ta_mn = dot_product(eigenvectors(:,n), matmul(torques_minus_q(:,:,a), endpoint_vectors(:,m)))
+                  term = (ta_nm*tb_mn + tb_nm*ta_mn) / cmplx(eigenvalues(n)-endpoint_values(m),0.0_rp,rp)
+                  torque_torque(a,b) = torque_torque(a,b) + term
+               end do
+            end do
+         end do
+      end do
+      hessian = torque_torque + mixed_contact
+      complete = hessian
+   end subroutine force_theorem_finite_q_hessian_from_eigenbasis
+
+   !> Brillouin-zone average of the finite-q spectral Hessian.  Endpoint
+   !> arrays and every vertex/contact stack use the same k ordering.
+   subroutine force_theorem_finite_q_hessian_from_eigenbasis_batch(eigenvalues, eigenvectors, endpoint_values, endpoint_vectors, &
+      fermi, weights, torques_q, torques_minus_q, mixed, hessian, torque_torque, mixed_contact, complete)
+      real(rp), intent(in) :: eigenvalues(:, :), endpoint_values(:, :), fermi, weights(:)
+      complex(rp), intent(in) :: eigenvectors(:, :, :), endpoint_vectors(:, :, :)
+      complex(rp), intent(in) :: torques_q(:, :, :, :), torques_minus_q(:, :, :, :), mixed(:, :, :, :, :)
+      complex(rp), intent(out) :: hessian(:, :), torque_torque(:, :), mixed_contact(:, :), complete(:, :)
+      complex(rp), allocatable :: h(:, :), tt(:, :), cc(:, :), allh(:, :)
+      integer :: ik, nk, nsite
+      real(rp) :: weight_sum
+
+      nk = size(eigenvalues,2); nsite = size(torques_q,3)
+      if (size(weights) /= nk .or. size(endpoint_values,2) /= nk .or. size(eigenvectors,3) /= nk .or. &
+          size(endpoint_vectors,3) /= nk .or. size(torques_q,4) /= nk .or. size(torques_minus_q,4) /= nk .or. &
+          size(mixed,5) /= nk .or. any(shape(hessian) /= [nsite,nsite]) .or. &
+          any(shape(torque_torque) /= [nsite,nsite]) .or. any(shape(mixed_contact) /= [nsite,nsite]) .or. &
+          any(shape(complete) /= [nsite,nsite])) error stop 'force_theorem_finite_q_hessian_from_eigenbasis_batch: shape mismatch'
+      weight_sum = sum(weights)
+      if (abs(weight_sum) <= tiny(1.0_rp)) error stop 'force_theorem_finite_q_hessian_from_eigenbasis_batch: zero weight sum'
+      allocate(h(nsite,nsite),tt(nsite,nsite),cc(nsite,nsite),allh(nsite,nsite))
+      hessian = 0.0_rp; torque_torque = 0.0_rp; mixed_contact = 0.0_rp; complete = 0.0_rp
+      do ik = 1, nk
+         call force_theorem_finite_q_hessian_from_eigenbasis(eigenvalues(:,ik), eigenvectors(:,:,ik), endpoint_values(:,ik), &
+            endpoint_vectors(:,:,ik), fermi, torques_q(:,:,:,ik), torques_minus_q(:,:,:,ik), mixed(:,:,:,:,ik), h, tt, cc, allh)
+         hessian = hessian + weights(ik)*h/weight_sum
+         torque_torque = torque_torque + weights(ik)*tt/weight_sum
+         mixed_contact = mixed_contact + weights(ik)*cc/weight_sum
+         complete = complete + weights(ik)*allh/weight_sum
+      end do
+      deallocate(h,tt,cc,allh)
+   end subroutine force_theorem_finite_q_hessian_from_eigenbasis_batch
+
    pure function mixed_second_difference(omega_pp, omega_pm, omega_mp, omega_mm, delta_i, delta_j) result(hessian)
       real(rp), intent(in) :: omega_pp, omega_pm, omega_mp, omega_mm, delta_i, delta_j
       real(rp) :: hessian
@@ -343,6 +519,249 @@ contains
       end do
    end function grand_potential_from_eigenvalues
 
+   !> Compare the reconstructed fixture with the production reciprocal
+   !> assembler real-space blocks at caller-selected k points.  This routine
+   !> deliberately reads the production object only; it never writes ee, eeo,
+   !> enim, or any native exchange state.
+   subroutine lmto_fixture_adapter_residual(source, fixture, k_points, max_error)
+      type(hamiltonian), intent(in) :: source
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fixture
+      real(rp), intent(in) :: k_points(:, :)
+      real(rp), intent(out) :: max_error
+      complex(rp), allocatable :: expected(:, :), b(:, :), qmat(:, :), fixture_h(:, :), block(:, :), phase
+      integer :: ik, ibond, site, m, nmat, ntype, ia, i_start, i_end, j_start, j_end
+
+      call validate_fixture(fixture)
+      if (size(k_points,1) /= 3 .or. .not. associated(source%lattice) .or. &
+          .not. allocated(source%ee)) error stop 'lmto_fixture_adapter_residual: incomplete production state'
+      if (source%ccor_2c) error stop 'lmto_fixture_adapter_residual: CCOR is outside the clean adapter gate'
+      nmat = 2*fixture%norb*fixture%nsite
+      if (size(source%ee,1) /= nmat .or. size(source%ee,2) /= nmat) then
+         error stop 'lmto_fixture_adapter_residual: production basis mismatch'
+      end if
+      allocate(expected(nmat,nmat), b(nmat,nmat), qmat(nmat,nmat), fixture_h(nmat,nmat), block(nmat,nmat))
+      max_error = 0.0_rp
+      do ik = 1, size(k_points,2)
+         expected = cmplx(0.0_rp,0.0_rp,rp)
+         b = cmplx(0.0_rp,0.0_rp,rp); qmat = b
+         ibond = 0
+         do site = 1, fixture%nsite
+            ntype = source%lattice%ib(site); ia = source%lattice%atlist(ntype)
+            do m = 1, source%lattice%nn(ia,1)
+               if (m > 1) then
+                  if (source%lattice%nn(ia,m) < 1 .or. source%lattice%nn(ia,m) > source%lattice%kk) cycle
+                  if (source%lattice%iz(source%lattice%nn(ia,m)) < 1 .or. &
+                      source%lattice%iz(source%lattice%nn(ia,m)) > fixture%nsite) cycle
+               end if
+               ibond = ibond + 1
+               block = source%ee(:,:,m,ntype)
+               phase = bond_phase(fixture,k_points(:,ik),ibond)
+               i_start=(site-1)*nmat/fixture%nsite+1; i_end=site*nmat/fixture%nsite
+               j_start=(fixture%bond_target(ibond)-1)*nmat/fixture%nsite+1
+               j_end=fixture%bond_target(ibond)*nmat/fixture%nsite
+               b(i_start:i_end,j_start:j_end) = b(i_start:i_end,j_start:j_end) + phase*block
+               if (fixture%hoh) qmat(i_start:i_end,j_start:j_end) = qmat(i_start:i_end,j_start:j_end) + &
+                  phase*source%eeo(:,:,m,ntype)
+            end do
+         end do
+         expected = b
+         if (fixture%hoh) expected = expected - matmul(qmat,b)
+         if (fixture%hoh .and. allocated(source%enim)) then
+            do site = 1, fixture%nsite
+               ntype = source%lattice%ib(site)
+               i_start=(site-1)*nmat/fixture%nsite+1; i_end=site*nmat/fixture%nsite
+               expected(i_start:i_end,i_start:i_end) = expected(i_start:i_end,i_start:i_end) + source%enim(:,:,ntype)
+               if (allocated(source%lsham)) expected(i_start:i_end,i_start:i_end) = &
+                  expected(i_start:i_end,i_start:i_end) + source%lsham(:,:,ntype)
+            end do
+         end if
+         call assemble_lmto_hamiltonian(fixture,k_points(:,ik),fixture_h)
+         max_error = max(max_error,maxval(abs(fixture_h-expected)))
+      end do
+      deallocate(expected,b,qmat,fixture_h,block)
+   end subroutine lmto_fixture_adapter_residual
+
+   subroutine assemble_finite_q_directional_terms(this, k_point, q_point, site, axis, db, dq)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: this
+      real(rp), intent(in) :: k_point(3), q_point(3), axis(3)
+      integer, intent(in) :: site
+      complex(rp), intent(out) :: db(:, :), dq(:, :)
+      complex(rp) :: bond(2*this%norb,2*this%norb), db_source(2*this%norb,2*this%norb), &
+         db_target(2*this%norb,2*this%norb), obar(2*this%norb,2*this%norb), dobar(2*this%norb,2*this%norb), &
+         hmag(this%norb,this%norb,4), dhmag(this%norb,this%norb,4), phase_k, phase_source, phase_target
+      real(rp) :: dm_source(3), dm_target(3), zero(3)
+      integer :: ibond, source, target
+
+      db = cmplx(0.0_rp,0.0_rp,rp); dq = db; zero = 0.0_rp
+      do ibond = 1, this%nbond
+         source=this%bond_source(ibond); target=this%bond_target(ibond)
+         dm_source=zero; dm_target=zero
+         if (source == site) dm_source=cross3(axis,this%moments(:,source))
+         if (target == site) dm_target=cross3(axis,this%moments(:,target))
+         if (maxval(abs(dm_source))+maxval(abs(dm_target)) == 0.0_rp) cycle
+         call build_bond(this,ibond,hmag); call fixture_hhmag_to_spinor(this,hmag,bond)
+         call build_bond_derivative(this,ibond,dm_source,zero,dhmag); call fixture_hhmag_to_spinor(this,dhmag,db_source)
+         call build_bond_derivative(this,ibond,zero,dm_target,dhmag); call fixture_hhmag_to_spinor(this,dhmag,db_target)
+         phase_k=bond_phase(this,k_point,ibond)
+         phase_source=endpoint_phase(this,q_point,ibond,.false.)
+         phase_target=endpoint_phase(this,q_point,ibond,.true.)
+         call add_site_block(db,phase_source*db_source+phase_target*db_target,source,target,phase_k,this%norb)
+         if (this%hoh) then
+            call build_onsite_coefficient(this,this%obar0(:,target),this%obar1(:,target),this%moments(:,target),obar)
+            call build_onsite_derivative(this,this%obar1(:,target),this%moments(:,target),dm_target, dobar)
+            call add_site_block(dq, phase_source*matmul(db_source,obar) + phase_target*(matmul(db_target,obar)+ &
+               matmul(bond,dobar)), source,target,phase_k,this%norb)
+         end if
+      end do
+   end subroutine assemble_finite_q_directional_terms
+
+   subroutine assemble_finite_q_onsite_derivative(this, q_point, site, axis, matrix)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: this
+      real(rp), intent(in) :: q_point(3), axis(3)
+      integer, intent(in) :: site
+      complex(rp), intent(out) :: matrix(:, :)
+      complex(rp) :: block(2*this%norb,2*this%norb), phase
+      real(rp) :: dm(3)
+      matrix=cmplx(0.0_rp,0.0_rp,rp); dm=cross3(axis,this%moments(:,site))
+      call build_onsite_derivative(this,this%enu1(:,site),this%moments(:,site),dm,block)
+      phase=site_phase(this,q_point,site)
+      call add_site_block(matrix,phase*block,site,site,cmplx(1.0_rp,0.0_rp,rp),this%norb)
+   end subroutine assemble_finite_q_onsite_derivative
+
+   subroutine assemble_finite_q_mixed_base_terms(this, k_point, q_point, site_i, axis_i, site_j, axis_j, d2b, d2q, d2enu)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: this
+      real(rp), intent(in) :: k_point(3), q_point(3), axis_i(3), axis_j(3)
+      integer, intent(in) :: site_i, site_j
+      complex(rp), intent(out) :: d2b(:, :), d2q(:, :), d2enu(:, :)
+      complex(rp) :: bond(2*this%norb,2*this%norb), dsi(2*this%norb,2*this%norb), dti(2*this%norb,2*this%norb), &
+         dsj(2*this%norb,2*this%norb), dtj(2*this%norb,2*this%norb), d2bond(2*this%norb,2*this%norb), &
+         obar(2*this%norb,2*this%norb), dobar_i(2*this%norb,2*this%norb), dobar_j(2*this%norb,2*this%norb), &
+         d2obar(2*this%norb,2*this%norb), hmag(this%norb,this%norb,4), dhmag(this%norb,this%norb,4), &
+         d2hmag(this%norb,this%norb,4), phase_k, pis, pit, pjs, pjt
+      complex(rp) :: dbi(2*this%norb,2*this%norb), dbj(2*this%norb,2*this%norb), &
+         d2phase(2*this%norb,2*this%norb)
+      real(rp) :: dmi_s(3), dmi_t(3), dmj_s(3), dmj_t(3), d2mi(3), d2mj(3), zero(3)
+      integer :: ibond, source, target
+
+      d2b=cmplx(0.0_rp,0.0_rp,rp); d2q=d2b; d2enu=d2b; zero=0.0_rp
+      d2mi=zero; d2mj=zero
+      if (site_i == site_j) then
+         d2mi=second_moment_variation(axis_i,this%moments(:,site_i))
+         d2mj=second_moment_variation(axis_j,this%moments(:,site_j))
+      end if
+      do ibond=1,this%nbond
+         source=this%bond_source(ibond); target=this%bond_target(ibond)
+         dmi_s=zero; dmi_t=zero; dmj_s=zero; dmj_t=zero
+         if (source == site_i) dmi_s=cross3(axis_i,this%moments(:,source))
+         if (target == site_i) dmi_t=cross3(axis_i,this%moments(:,target))
+         if (source == site_j) dmj_s=cross3(axis_j,this%moments(:,source))
+         if (target == site_j) dmj_t=cross3(axis_j,this%moments(:,target))
+         if (maxval(abs(dmi_s))+maxval(abs(dmi_t))+maxval(abs(dmj_s))+maxval(abs(dmj_t)) == 0.0_rp .and. &
+             site_i /= site_j) cycle
+         call build_bond(this,ibond,hmag); call fixture_hhmag_to_spinor(this,hmag,bond)
+         call build_bond_derivative(this,ibond,dmi_s,zero,dhmag); call fixture_hhmag_to_spinor(this,dhmag,dsi)
+         call build_bond_derivative(this,ibond,zero,dmi_t,dhmag); call fixture_hhmag_to_spinor(this,dhmag,dti)
+         call build_bond_derivative(this,ibond,dmj_s,zero,dhmag); call fixture_hhmag_to_spinor(this,dhmag,dsj)
+         call build_bond_derivative(this,ibond,zero,dmj_t,dhmag); call fixture_hhmag_to_spinor(this,dhmag,dtj)
+         d2bond=cmplx(0.0_rp,0.0_rp,rp)
+         call add_mixed_bond_component(this,ibond,dmi_s,zero,dmj_s,zero,d2bond,p_endpoint(this,q_point,ibond,.false.)* &
+            p_endpoint(this,-q_point,ibond,.false.))
+         call add_mixed_bond_component(this,ibond,dmi_s,zero,zero,dmj_t,d2bond,p_endpoint(this,q_point,ibond,.false.)* &
+            p_endpoint(this,-q_point,ibond,.true.))
+         call add_mixed_bond_component(this,ibond,zero,dmi_t,dmj_s,zero,d2bond,p_endpoint(this,q_point,ibond,.true.)* &
+            p_endpoint(this,-q_point,ibond,.false.))
+         call add_mixed_bond_component(this,ibond,zero,dmi_t,zero,dmj_t,d2bond,p_endpoint(this,q_point,ibond,.true.)* &
+            p_endpoint(this,-q_point,ibond,.true.))
+         if (site_i == site_j) then
+            if (source == site_i) then
+               call build_bond_derivative(this,ibond,d2mi,zero,dhmag); call fixture_hhmag_to_spinor(this,dhmag,d2phase)
+               d2bond=d2bond+d2phase
+            end if
+            if (target == site_i) then
+               call build_bond_derivative(this,ibond,zero,d2mi,dhmag); call fixture_hhmag_to_spinor(this,dhmag,d2phase)
+               d2bond=d2bond+d2phase
+            end if
+         end if
+         phase_k=bond_phase(this,k_point,ibond); call add_site_block(d2b,d2bond,source,target,phase_k,this%norb)
+         if (this%hoh) then
+            call build_onsite_coefficient(this,this%obar0(:,target),this%obar1(:,target),this%moments(:,target),obar)
+            dbi=cmplx(0.0_rp,0.0_rp,rp); dbj=dbi
+            pis=endpoint_phase(this,q_point,ibond,.false.); pit=endpoint_phase(this,q_point,ibond,.true.)
+            pjs=endpoint_phase(this,-q_point,ibond,.false.); pjt=endpoint_phase(this,-q_point,ibond,.true.)
+            dbi=pis*dsi+pit*dti; dbj=pjs*dsj+pjt*dtj
+            call build_onsite_derivative(this,this%obar1(:,target),this%moments(:,target),dmj_t,dobar_j)
+            call build_onsite_derivative(this,this%obar1(:,target),this%moments(:,target),dmi_t,dobar_i)
+            d2obar=cmplx(0.0_rp,0.0_rp,rp)
+            if (site_i == site_j .and. target == site_i) then
+               call build_onsite_derivative(this,this%obar1(:,target),this%moments(:,target),d2mi,d2obar)
+            end if
+            ! The first term is d2B*O; the remaining terms are the
+            ! endpoint/product rules.
+            call add_site_block(d2q, matmul(d2bond,obar) + matmul(dsi*pis+dti*pit, dobar_j) + &
+               matmul(dsj*pjs+dtj*pjt,dobar_i) + matmul(bond,d2obar), source,target,phase_k,this%norb)
+         end if
+      end do
+      if (this%include_enu .and. site_i == site_j) then
+         call build_onsite_derivative(this,this%enu1(:,site_i),this%moments(:,site_i),d2mi,d2phase)
+         call add_site_block(d2enu,d2phase,site_i,site_i,cmplx(1.0_rp,0.0_rp,rp),this%norb)
+      end if
+   end subroutine assemble_finite_q_mixed_base_terms
+
+   subroutine add_mixed_bond_component(this, ibond, dm_i_s, dm_i_t, dm_j_s, dm_j_t, accum, factor)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: this
+      integer, intent(in) :: ibond
+      real(rp), intent(in) :: dm_i_s(3), dm_i_t(3), dm_j_s(3), dm_j_t(3)
+      complex(rp), intent(inout) :: accum(:, :)
+      complex(rp), intent(in) :: factor
+      complex(rp) :: hmag(this%norb,this%norb,4), block(2*this%norb,2*this%norb)
+      real(rp) :: zero(3)
+      zero=0.0_rp
+      if (maxval(abs(dm_i_s))+maxval(abs(dm_i_t))+maxval(abs(dm_j_s))+maxval(abs(dm_j_t)) == 0.0_rp) return
+      call lmto_bond_mixed_derivative(this%hhh(:,:,ibond),this%wx0(:,this%bond_source(ibond)),this%wx1(:,this%bond_source(ibond)), &
+         this%wx0(:,this%bond_target(ibond)),this%wx1(:,this%bond_target(ibond)),this%moments(:,this%bond_source(ibond)), &
+         this%moments(:,this%bond_target(ibond)),dm_i_s,dm_i_t,dm_j_s,dm_j_t,hmag)
+      call fixture_hhmag_to_spinor(this,hmag,block); accum=accum+factor*block
+   end subroutine add_mixed_bond_component
+
+   pure function endpoint_phase(this,q_point,ibond,target_endpoint) result(phase)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: this
+      real(rp), intent(in) :: q_point(3)
+      integer, intent(in) :: ibond
+      logical, intent(in) :: target_endpoint
+      complex(rp) :: phase
+      real(rp) :: position(3)
+      position=0.0_rp
+      if (target_endpoint) position=this%bond_vector(:,ibond)
+      phase=cmplx(cos(2.0_rp*pi*dot_product(q_point,position)), &
+         sin(2.0_rp*pi*dot_product(q_point,position)),rp)
+   end function endpoint_phase
+
+   pure function p_endpoint(this,q_point,ibond,target_endpoint) result(phase)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: this
+      real(rp), intent(in) :: q_point(3)
+      integer, intent(in) :: ibond
+      logical, intent(in) :: target_endpoint
+      complex(rp) :: phase
+      phase=endpoint_phase(this,q_point,ibond,target_endpoint)
+   end function p_endpoint
+
+   pure function site_phase(this,q_point,site) result(phase)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: this
+      real(rp), intent(in) :: q_point(3)
+      integer, intent(in) :: site
+      complex(rp) :: phase
+      ! The onsite endpoint phase cancels against the absolute basis phase in
+      ! <a,k+q|delta H|a,k>; retain the site argument for a single convention
+      ! point and to make that cancellation explicit.
+      phase=cmplx(1.0_rp,0.0_rp,rp)
+   end function site_phase
+
+   pure function second_moment_variation(axis,moment) result(dm2)
+      real(rp), intent(in) :: axis(3), moment(3)
+      real(rp) :: dm2(3)
+      dm2=cross3(axis,cross3(axis,moment))
+   end function second_moment_variation
+
    subroutine assemble_base_terms(this, k_point, b, q)
       type(lmto_live_hamiltonian_fixture), intent(in) :: this
       real(rp), intent(in) :: k_point(3)
@@ -355,12 +774,12 @@ contains
       do ibond = 1, this%nbond
          source = this%bond_source(ibond); target = this%bond_target(ibond)
          call build_bond(this, ibond, hmag)
-         call lmto_hhmag_to_spinor(hmag, bond)
+         call fixture_hhmag_to_spinor(this,hmag,bond)
          phase = cmplx(cos(2.0_rp*pi*dot_product(k_point,this%bond_vector(:,ibond))), &
                        sin(2.0_rp*pi*dot_product(k_point,this%bond_vector(:,ibond))), rp)
          call add_site_block(b, bond, source, target, phase, this%norb)
          if (this%hoh) then
-            call build_onsite_coefficient(this%obar0(:,target), this%obar1(:,target), this%moments(:,target), obar)
+            call build_onsite_coefficient(this,this%obar0(:,target), this%obar1(:,target), this%moments(:,target), obar)
             call add_site_block(q, matmul(bond, obar), source, target, phase, this%norb)
          end if
       end do
@@ -383,14 +802,14 @@ contains
          call endpoint_variation(this, source, target, site, axis, dm_source, dm_target)
          if (maxval(abs(dm_source)) == 0.0_rp .and. maxval(abs(dm_target)) == 0.0_rp) cycle
          call build_bond(this, ibond, hmag)
-         call lmto_hhmag_to_spinor(hmag, bond)
+         call fixture_hhmag_to_spinor(this,hmag,bond)
          call build_bond_derivative(this, ibond, dm_source, dm_target, dhmag)
-         call lmto_hhmag_to_spinor(dhmag, dbond)
+         call fixture_hhmag_to_spinor(this,dhmag,dbond)
          phase = bond_phase(this, k_point, ibond)
          call add_site_block(db, dbond, source, target, phase, this%norb)
          if (this%hoh) then
-            call build_onsite_coefficient(this%obar0(:,target), this%obar1(:,target), this%moments(:,target), obar)
-            call build_onsite_derivative(this%obar1(:,target), this%moments(:,target), dm_target, dobar)
+            call build_onsite_coefficient(this,this%obar0(:,target), this%obar1(:,target), this%moments(:,target), obar)
+            call build_onsite_derivative(this,this%obar1(:,target), this%moments(:,target), dm_target, dobar)
             call add_site_block(dq, matmul(dbond,obar) + matmul(bond,dobar), source,target,phase,this%norb)
          end if
       end do
@@ -416,21 +835,21 @@ contains
          call endpoint_variation(this, source, target, site_j, axis_j, dm_sj, dm_tj)
          if (maxval(abs(dm_si))+maxval(abs(dm_ti))+maxval(abs(dm_sj))+maxval(abs(dm_tj)) == 0.0_rp) cycle
          call build_bond(this, ibond, hmag)
-         call lmto_hhmag_to_spinor(hmag, bond)
+         call fixture_hhmag_to_spinor(this,hmag,bond)
          call build_bond_derivative(this, ibond, dm_si, dm_ti, dhmag)
-         call lmto_hhmag_to_spinor(dhmag, dbond_i)
+         call fixture_hhmag_to_spinor(this,dhmag,dbond_i)
          call build_bond_derivative(this, ibond, dm_sj, dm_tj, dhmag)
-         call lmto_hhmag_to_spinor(dhmag, dbond_j)
+         call fixture_hhmag_to_spinor(this,dhmag,dbond_j)
          call lmto_bond_mixed_derivative(this%hhh(:,:,ibond), this%wx0(:,source), this%wx1(:,source), &
             this%wx0(:,target), this%wx1(:,target), this%moments(:,source), this%moments(:,target), &
             dm_si, dm_ti, dm_sj, dm_tj, d2hmag)
-         call lmto_hhmag_to_spinor(d2hmag, d2bond)
+         call fixture_hhmag_to_spinor(this,d2hmag,d2bond)
          phase = bond_phase(this, k_point, ibond)
          call add_site_block(d2b, d2bond, source, target, phase, this%norb)
          if (this%hoh) then
-            call build_onsite_coefficient(this%obar0(:,target), this%obar1(:,target), this%moments(:,target), obar)
-            call build_onsite_derivative(this%obar1(:,target), this%moments(:,target), dm_ti, dobar_i)
-            call build_onsite_derivative(this%obar1(:,target), this%moments(:,target), dm_tj, dobar_j)
+            call build_onsite_coefficient(this,this%obar0(:,target), this%obar1(:,target), this%moments(:,target), obar)
+            call build_onsite_derivative(this,this%obar1(:,target), this%moments(:,target), dm_ti, dobar_i)
+            call build_onsite_derivative(this,this%obar1(:,target), this%moments(:,target), dm_tj, dobar_j)
             call add_site_block(d2q, matmul(d2bond,obar) + matmul(dbond_i,dobar_j) + &
                matmul(dbond_j,dobar_i), source, target, phase, this%norb)
          end if
@@ -450,6 +869,23 @@ contains
          this%moments(:,source), this%moments(:,target), this%onsite(ibond), hmag)
    end subroutine build_bond
 
+   subroutine fixture_hhmag_to_spinor(this, hhmag, spinor)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: this
+      complex(rp), intent(in) :: hhmag(:, :, :)
+      complex(rp), intent(out) :: spinor(:, :)
+      complex(rp), allocatable :: work(:, :, :)
+      integer :: idir
+
+      allocate(work, source=hhmag)
+      if (this%cartesian_to_spherical) then
+         do idir = 1, size(work, 3)
+            call hcpx(work(:, :, idir), 'cart2sph')
+         end do
+      end if
+      call lmto_hhmag_to_spinor(work, spinor)
+      deallocate(work)
+   end subroutine fixture_hhmag_to_spinor
+
    subroutine build_bond_derivative(this, ibond, dm_source, dm_target, dhmag)
       type(lmto_live_hamiltonian_fixture), intent(in) :: this
       integer, intent(in) :: ibond
@@ -462,24 +898,26 @@ contains
          this%moments(:,target), dm_source, dm_target, this%onsite(ibond), dhmag)
    end subroutine build_bond_derivative
 
-   subroutine build_onsite_coefficient(c0, c1, moment, spinor)
+   subroutine build_onsite_coefficient(this, c0, c1, moment, spinor)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: this
       complex(rp), intent(in) :: c0(:), c1(:)
       real(rp), intent(in) :: moment(3)
       complex(rp), intent(out) :: spinor(:, :)
       complex(rp) :: zero_hhh(size(c0),size(c0)), zero(size(c0)), hmag(size(c0),size(c0),4)
       zero_hhh = cmplx(0.0_rp, 0.0_rp, rp); zero = cmplx(0.0_rp, 0.0_rp, rp)
       call lmto_bond_value(zero_hhh, zero, zero, zero, zero, c0, c1, moment, moment, .true., hmag)
-      call lmto_hhmag_to_spinor(hmag, spinor)
+      call fixture_hhmag_to_spinor(this,hmag,spinor)
    end subroutine build_onsite_coefficient
 
-   subroutine build_onsite_derivative(c1, moment, dm, spinor)
+   subroutine build_onsite_derivative(this, c1, moment, dm, spinor)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: this
       complex(rp), intent(in) :: c1(:)
       real(rp), intent(in) :: moment(3), dm(3)
       complex(rp), intent(out) :: spinor(:, :)
       complex(rp) :: zero_hhh(size(c1),size(c1)), zero(size(c1)), dhmag(size(c1),size(c1),4)
       zero_hhh = cmplx(0.0_rp, 0.0_rp, rp); zero = cmplx(0.0_rp, 0.0_rp, rp)
       call lmto_bond_derivative(zero_hhh, zero, zero, zero, zero, c1, moment, moment, dm, dm, .true., dhmag)
-      call lmto_hhmag_to_spinor(dhmag, spinor)
+      call fixture_hhmag_to_spinor(this,dhmag,spinor)
    end subroutine build_onsite_derivative
 
    subroutine assemble_onsite_coefficient(this, c0, c1, matrix)
@@ -490,7 +928,7 @@ contains
       integer :: site
       matrix = cmplx(0.0_rp, 0.0_rp, rp)
       do site = 1, this%nsite
-         call build_onsite_coefficient(c0(:,site), c1(:,site), this%moments(:,site), block)
+         call build_onsite_coefficient(this,c0(:,site), c1(:,site), this%moments(:,site), block)
          call add_site_block(matrix, block, site, site, cmplx(1.0_rp,0.0_rp,rp), this%norb)
       end do
    end subroutine assemble_onsite_coefficient
@@ -504,7 +942,7 @@ contains
       real(rp) :: dm(3)
       matrix = cmplx(0.0_rp, 0.0_rp, rp)
       dm = cross3(axis, this%moments(:,site))
-      call build_onsite_derivative(this%enu1(:,site), this%moments(:,site), dm, block)
+      call build_onsite_derivative(this,this%enu1(:,site), this%moments(:,site), dm, block)
       call add_site_block(matrix, block, site, site, cmplx(1.0_rp,0.0_rp,rp), this%norb)
    end subroutine assemble_onsite_derivative
 
