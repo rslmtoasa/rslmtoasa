@@ -14,7 +14,7 @@
 !------------------------------------------------------------------------------
 program test_dresp03tg_native_fixed_z
    use precision_mod, only: rp
-   use math_mod, only: ang2au, init_math_operators
+   use math_mod, only: ang2au, init_math_operators, i_unit
    use timer_mod, only: g_timer, timer
    use logger_mod, only: g_logger
    use control_mod, only: control
@@ -529,6 +529,7 @@ program test_dresp03tg_native_fixed_z
    write(*,'(a,es14.6)') 'DRESP-03TG common-gamma contraction residual = ',common_gamma_error
    call run_r4_finite_h_bridge(lat, s_alpha, r4_fixture, r4_max_fd_error, r4_max_contact_norm, &
       r4_max_vertex_raw_error, r4_max_vertex_transformed_error)
+   call run_r5_representation_bridge(lat, s_alpha, r4_fixture)
    failed = p_error > 2.0e-14_rp .or. d_error > 2.0e-13_rp .or. solve_error > 2.0e-12_rp .or. &
       p_transform_error > 2.0e-12_rp .or. s_transform_error > 2.0e-12_rp .or. gf_cov_error > 2.0e-12_rp .or. &
       gamma_h_error > 2.0e-10_rp .or. gamma_h_du_error > 2.0e-10_rp .or. pauli_self_error > 2.0e-12_rp .or. &
@@ -786,6 +787,297 @@ contains
          dg_i,dg_j,da_i,da_j,raw_i,raw_j,tilde_i,tilde_j,qcorr_i,qcorr_j,tud_i,tdu_j, &
          gup_ij,gup_ji,gdown_ij,gdown_ji,hplus,hminus,saved_mom)
    end subroutine run_r4_finite_h_bridge
+
+   subroutine run_r5_representation_bridge(atom_lattice, s_alpha_in, fix)
+      type(lattice), intent(in) :: atom_lattice
+      complex(rp), intent(in) :: s_alpha_in(:,:)
+      type(lmto_live_hamiltonian_fixture), intent(inout) :: fix
+      real(rp), parameter :: kpoint(3) = [0.0_rp,0.0_rp,0.0_rp]
+      real(rp), parameter :: axis(3) = [0.0_rp,1.0_rp,0.0_rp]
+      real(rp), parameter :: eps = 2.0e-5_rp
+      integer :: nmatlocal, iz, site
+      complex(rp), allocatable :: b(:,:), q(:,:), enu(:,:), obar(:,:), h2(:,:), hexact(:,:), hlive(:,:), hbar(:,:), &
+         salpha_site(:,:), hgamma(:,:), sgamma(:,:), hgamma_qm(:,:), sgamma_qm(:,:), pgamma(:,:), ggamma(:,:), ggamma_scaled(:,:), &
+         ggamma_from_h(:,:), gexact(:,:), eye_local(:,:), wbar(:,:), &
+         bi(:,:), qi(:,:), enui(:,:), torque(:,:), oi(:,:), ai(:,:), ainv(:,:), texact(:,:), t2explicit(:,:), &
+         hplus(:,:), hminus(:,:), hexplus(:,:), hexminus(:,:), h2plus(:,:), h2minus(:,:)
+      real(rp) :: b_map_error, q_map_error, qb_map_error, live_h2_error, hgamma_error, hgamma_qm_error, endpoint_error, exact_gamma_error
+      real(rp) :: h2_truncation_error, h2_truncation_fro, fd_exact_error, fd_t2_error, live_t2_error, t2_exact_error
+      real(rp) :: max_fd_exact, max_fd_t2, max_live_t2, max_t2_exact
+      complex(rp) :: zloc
+      real(rp) :: saved_mom(3,nsite_fixture)
+
+      nmatlocal = 2*norb*nsite_fixture
+      allocate(b(nmatlocal,nmatlocal),q(nmatlocal,nmatlocal),enu(nmatlocal,nmatlocal),obar(nmatlocal,nmatlocal), &
+         h2(nmatlocal,nmatlocal),hexact(nmatlocal,nmatlocal),hlive(nmatlocal,nmatlocal),hbar(nmatlocal,nmatlocal), &
+         salpha_site(nmatlocal,nmatlocal),hgamma(nmatlocal,nmatlocal),sgamma(nmatlocal,nmatlocal), &
+         hgamma_qm(nmatlocal,nmatlocal),sgamma_qm(nmatlocal,nmatlocal), &
+         pgamma(nmatlocal,nmatlocal),ggamma(nmatlocal,nmatlocal),ggamma_scaled(nmatlocal,nmatlocal), &
+         ggamma_from_h(nmatlocal,nmatlocal),gexact(nmatlocal,nmatlocal),eye_local(nmatlocal,nmatlocal), &
+         wbar(nmatlocal,nmatlocal),bi(nmatlocal,nmatlocal),qi(nmatlocal,nmatlocal),enui(nmatlocal,nmatlocal), &
+         torque(nmatlocal,nmatlocal),oi(nmatlocal,nmatlocal),ai(nmatlocal,nmatlocal),ainv(nmatlocal,nmatlocal), &
+         texact(nmatlocal,nmatlocal),t2explicit(nmatlocal,nmatlocal),hplus(nmatlocal,nmatlocal), &
+         hminus(nmatlocal,nmatlocal),hexplus(nmatlocal,nmatlocal),hexminus(nmatlocal,nmatlocal), &
+         h2plus(nmatlocal,nmatlocal),h2minus(nmatlocal,nmatlocal))
+      eye_local=identity(nmatlocal)
+
+      call r5_build_salpha_site(s_alpha_in,salpha_site)
+      call r5_build_hbar(fix,salpha_site,hbar,wbar)
+      call r5_build_obar(fix,obar)
+      call r5_static_state(fix,kpoint,b,q,enu,h2,hexact,hlive)
+      b_map_error=maxval(abs(b-hbar))
+      q_map_error=maxval(abs(q-matmul(hbar,obar)))
+      qb_map_error=maxval(abs(matmul(q,b)-matmul(hbar,matmul(obar,hbar))))
+      live_h2_error=maxval(abs(hlive-h2))
+      write(*,'(a)') 'TG-FZ-R5 static representation map'
+      write(*,'(a,es14.6)') '  ||B-hbar||_max = ',b_map_error
+      write(*,'(a,es14.6)') '  ||Q-hbar*obar||_max = ',q_map_error
+      write(*,'(a,es14.6)') '  ||QB-hbar*obar*hbar||_max = ',qb_map_error
+      write(*,'(a,es14.6)') '  ||H_live-H2_explicit||_max = ',live_h2_error
+
+      call r5_build_gamma_state(atom_lattice,s_alpha_in,sgamma,hgamma)
+      call r5_build_gamma_state(atom_lattice,s_alpha_in,sgamma_qm,hgamma_qm,use_predls_alpha=.true.)
+      hgamma_error=maxval(abs(hexact-hgamma))
+      hgamma_qm_error=maxval(abs(hexact-hgamma_qm))
+      h2_truncation_error=maxval(abs(h2-hexact))
+      h2_truncation_fro=sqrt(sum(abs(h2-hexact)**2))
+      write(*,'(a,es14.6)') '  ||H_exact-H_gamma||_max = ',hgamma_error
+      write(*,'(a,es14.6)') '  ||H_exact-H_gamma(predls alpha)||_max = ',hgamma_qm_error
+      write(*,'(a,es14.6)') '  ||H2-H_exact||_max = ',h2_truncation_error
+      write(*,'(a,es14.6)') '  ||H2-H_exact||_F = ',h2_truncation_fro
+
+      endpoint_error=0.0_rp; exact_gamma_error=0.0_rp
+      do iz=1,size(z_values)
+         zloc=z_values(iz)
+         call r5_build_gamma_p(atom_lattice,zloc,pgamma)
+         call native_inverse(pgamma-sgamma,ggamma)
+         call native_inverse(zloc*eye_local-hgamma,ggamma_from_h)
+         call native_inverse(zloc*eye_local-hexact,gexact)
+         call r5_build_endpoint_scaled_green(atom_lattice,ggamma,ggamma_scaled)
+         endpoint_error=max(endpoint_error,maxval(abs(ggamma_from_h-ggamma_scaled)))
+         exact_gamma_error=max(exact_gamma_error,maxval(abs(gexact-ggamma_from_h)))
+         write(*,'(a,2es14.6)') '  z = ',real(zloc,rp),aimag(zloc)
+         write(*,'(a,es14.6)') '    ||G_gamma-endpoint_scaled_g_gamma||_max = ', &
+            maxval(abs(ggamma_from_h-ggamma_scaled))
+         write(*,'(a,es14.6)') '    ||G_exact-G_gamma||_max = ',maxval(abs(gexact-ggamma_from_h))
+      end do
+      write(*,'(a,es14.6)') 'TG-FZ-R5 max ||G_gamma-endpoint_scaled_g_gamma|| = ',endpoint_error
+      write(*,'(a,es14.6)') 'TG-FZ-R5 max ||G_exact-G_gamma|| = ',exact_gamma_error
+
+      max_fd_exact=0.0_rp; max_fd_t2=0.0_rp; max_live_t2=0.0_rp; max_t2_exact=0.0_rp
+      saved_mom=fix%moments
+      do site=1,nsite_fixture
+         call assemble_lmto_rotation_terms(fix,kpoint,site,axis,b,q,enu,bi,qi,enui,torque)
+         call r5_build_obar_derivative(fix,site,axis,oi)
+         call native_inverse(eye_local+matmul(obar,b),ainv)
+         ai=matmul(oi,b)+matmul(obar,bi)
+         texact=enui+matmul(bi,ainv)-matmul(b,matmul(ainv,matmul(ai,ainv)))
+         t2explicit=enui+bi-matmul(bi,matmul(obar,b))-matmul(b,matmul(oi,b))-matmul(b,matmul(obar,bi))
+         live_t2_error=maxval(abs(torque-t2explicit))
+         t2_exact_error=maxval(abs(t2explicit-texact))
+         max_live_t2=max(max_live_t2,live_t2_error)
+         max_t2_exact=max(max_t2_exact,t2_exact_error)
+         fix%moments(:,site)=r5_rotate_moment(saved_mom(:,site),axis,eps)
+         call assemble_lmto_hamiltonian(fix,kpoint,hplus)
+         call r5_static_state(fix,kpoint,b,q,enu,h2plus,hexplus,hlive)
+         fix%moments(:,site)=r5_rotate_moment(saved_mom(:,site),axis,-eps)
+         call assemble_lmto_hamiltonian(fix,kpoint,hminus)
+         call r5_static_state(fix,kpoint,b,q,enu,h2minus,hexminus,hlive)
+         fix%moments=saved_mom
+         fd_t2_error=maxval(abs((hplus-hminus)/(2.0_rp*eps)-torque))
+         fd_exact_error=maxval(abs((hexplus-hexminus)/(2.0_rp*eps)-texact))
+         max_fd_t2=max(max_fd_t2,fd_t2_error)
+         max_fd_exact=max(max_fd_exact,fd_exact_error)
+         write(*,'(a,i0,a,es14.6,a,es14.6,a,es14.6)') '  site=',site,' FD_T2=',fd_t2_error, &
+            ' FD_exact=',fd_exact_error,' ||T2-Texact||=',t2_exact_error
+      end do
+      fix%moments=saved_mom
+      write(*,'(a,es14.6)') 'TG-FZ-R5 max FD residual T_exact = ',max_fd_exact
+      write(*,'(a,es14.6)') 'TG-FZ-R5 max FD residual T2 = ',max_fd_t2
+      write(*,'(a,es14.6)') 'TG-FZ-R5 max ||T_live-T2_explicit|| = ',max_live_t2
+      write(*,'(a,es14.6)') 'TG-FZ-R5 max ||T2-T_exact|| = ',max_t2_exact
+      if (hgamma_error <= 2.0e-10_rp .and. max_fd_exact <= 5.0e-8_rp) then
+         write(*,'(a)') 'TG-FZ-R5 static/first-derivative bridge: PASS-A candidate'
+      else
+         write(*,'(a)') 'TG-FZ-R5 verdict: BLOCKED — static gamma/TB map did not close'
+      end if
+      deallocate(b,q,enu,obar,h2,hexact,hlive,hbar,salpha_site,hgamma,sgamma,hgamma_qm,sgamma_qm,pgamma,ggamma,ggamma_scaled, &
+         ggamma_from_h,gexact,eye_local,wbar,bi,qi,enui,torque,oi,ai,ainv,texact,t2explicit,hplus,hminus, &
+         hexplus,hexminus,h2plus,h2minus)
+   end subroutine run_r5_representation_bridge
+
+   subroutine r5_static_state(fix,kpoint,b,q,enu,h2,hexact,hlive)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fix
+      real(rp), intent(in) :: kpoint(3)
+      complex(rp), intent(out) :: b(:,:),q(:,:),enu(:,:),h2(:,:),hexact(:,:),hlive(:,:)
+      complex(rp) :: obar(size(b,1),size(b,2)), ainv(size(b,1),size(b,2))
+      complex(rp) :: bi_local(size(b,1),size(b,2)),qi_local(size(b,1),size(b,2))
+      complex(rp) :: enui_local(size(b,1),size(b,2)),torque_local(size(b,1),size(b,2))
+      complex(rp) :: eye_local(size(b,1),size(b,2))
+      real(rp), parameter :: axis_local(3)=[0.0_rp,1.0_rp,0.0_rp]
+      eye_local=identity(size(b,1))
+      call assemble_lmto_rotation_terms(fix,kpoint,1,axis_local,b,q,enu,bi_local,qi_local,enui_local,torque_local)
+      call r5_build_obar(fix,obar)
+      call native_inverse(eye_local+matmul(obar,b),ainv)
+      h2=enu+b-matmul(q,b)
+      hexact=enu+matmul(b,ainv)
+      call assemble_lmto_hamiltonian(fix,kpoint,hlive)
+   end subroutine r5_static_state
+
+   subroutine r5_build_salpha_site(s_spin,s_site)
+      complex(rp), intent(in) :: s_spin(:,:)
+      complex(rp), intent(out) :: s_site(:,:)
+      integer :: i,j,base_i,base_j
+      s_site=cmplx(0.0_rp,0.0_rp,rp)
+      do i=1,nsite_fixture
+         do j=1,nsite_fixture
+            base_i=(i-1)*2*norb; base_j=(j-1)*2*norb
+            s_site(base_i+1:base_i+norb,base_j+1:base_j+norb)= &
+               s_spin((i-1)*norb+1:i*norb,(j-1)*norb+1:j*norb)
+            s_site(base_i+norb+1:base_i+2*norb,base_j+norb+1:base_j+2*norb)= &
+               s_spin(n2+(i-1)*norb+1:n2+i*norb,n2+(j-1)*norb+1:n2+j*norb)
+         end do
+      end do
+   end subroutine r5_build_salpha_site
+
+   subroutine r5_build_local_spinor(fix,c0,c1,matrix)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fix
+      complex(rp), intent(in) :: c0(:,:),c1(:,:)
+      complex(rp), intent(out) :: matrix(:,:)
+      integer :: site,lm,base
+      matrix=cmplx(0.0_rp,0.0_rp,rp)
+      do site=1,nsite_fixture
+         base=(site-1)*2*norb
+         do lm=1,norb
+            matrix(base+lm,base+lm)=c0(lm,site)+c1(lm,site)*fix%moments(3,site)
+            matrix(base+norb+lm,base+norb+lm)=c0(lm,site)-c1(lm,site)*fix%moments(3,site)
+            matrix(base+lm,base+norb+lm)=c1(lm,site)*cmplx(fix%moments(1,site),0.0_rp,rp)- &
+               i_unit*c1(lm,site)*cmplx(fix%moments(2,site),0.0_rp,rp)
+            matrix(base+norb+lm,base+lm)=c1(lm,site)*cmplx(fix%moments(1,site),0.0_rp,rp)+ &
+               i_unit*c1(lm,site)*cmplx(fix%moments(2,site),0.0_rp,rp)
+         end do
+      end do
+   end subroutine r5_build_local_spinor
+
+   subroutine r5_build_obar(fix,obar)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fix
+      complex(rp), intent(out) :: obar(:,:)
+      call r5_build_local_spinor(fix,fix%obar0,fix%obar1,obar)
+   end subroutine r5_build_obar
+
+   subroutine r5_build_obar_derivative(fix,site,axis,derivative)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fix
+      integer, intent(in) :: site
+      real(rp), intent(in) :: axis(3)
+      complex(rp), intent(out) :: derivative(:,:)
+      real(rp) :: dm(3)
+      integer :: lm,base
+      derivative=cmplx(0.0_rp,0.0_rp,rp); dm=r5_cross(axis,fix%moments(:,site)); base=(site-1)*2*norb
+      do lm=1,norb
+         derivative(base+lm,base+lm)=fix%obar1(lm,site)*dm(3)
+         derivative(base+norb+lm,base+norb+lm)=-fix%obar1(lm,site)*dm(3)
+         derivative(base+lm,base+norb+lm)=fix%obar1(lm,site)*cmplx(dm(1),0.0_rp,rp)- &
+            i_unit*fix%obar1(lm,site)*cmplx(dm(2),0.0_rp,rp)
+         derivative(base+norb+lm,base+lm)=fix%obar1(lm,site)*cmplx(dm(1),0.0_rp,rp)+ &
+            i_unit*fix%obar1(lm,site)*cmplx(dm(2),0.0_rp,rp)
+      end do
+   end subroutine r5_build_obar_derivative
+
+   subroutine r5_build_hbar(fix,salpha,hbar,wbar)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fix
+      complex(rp), intent(in) :: salpha(:,:)
+      complex(rp), intent(out) :: hbar(:,:),wbar(:,:)
+      complex(rp) :: cex(size(hbar,1),size(hbar,2))
+      call r5_build_local_spinor(fix,fix%c0,fix%c1,cex)
+      call r5_build_local_spinor(fix,fix%wx0,fix%wx1,wbar)
+      hbar=cex+matmul(wbar,matmul(salpha,wbar))
+   end subroutine r5_build_hbar
+
+   subroutine r5_build_gamma_state(atom_lattice,s_alpha_in,s_gamma_site,hgamma_site,use_predls_alpha)
+      type(lattice), intent(in) :: atom_lattice
+      complex(rp), intent(in) :: s_alpha_in(:,:)
+      complex(rp), intent(out) :: s_gamma_site(:,:),hgamma_site(:,:)
+      logical, intent(in), optional :: use_predls_alpha
+      complex(rp) :: s_gamma_spin(size(s_alpha_in,1),size(s_alpha_in,2)),dmat(size(s_alpha_in,1),size(s_alpha_in,2))
+      complex(rp) :: eye_global(size(s_alpha_in,1),size(s_alpha_in,2)),inv_global(size(s_alpha_in,1),size(s_alpha_in,2))
+      complex(rp) :: hgamma_spin(size(s_alpha_in,1),size(s_alpha_in,2)),cglobal(size(s_alpha_in,1),size(s_alpha_in,2))
+      complex(rp) :: wglobal(size(s_alpha_in,1),size(s_alpha_in,2))
+      real(rp) :: alpha_loc(0:lmax),gamma_loc
+      logical :: use_qm
+      integer :: site,l,m,lm
+      call native_screening_alpha(atom_lattice%symbolic_atoms(1),alpha_loc)
+      use_qm=.false.; if (present(use_predls_alpha)) use_qm=use_predls_alpha
+      if (use_qm) alpha_loc(0)=0.348485_rp
+      eye_global=identity(size(s_alpha_in,1)); dmat=cmplx(0.0_rp,0.0_rp,rp)
+      cglobal=dmat; wglobal=dmat
+      do site=1,nsite_fixture
+         do l=0,lmax
+            do m=1,2*l+1
+               lm=l*l+m
+               gamma_loc=atom_lattice%symbolic_atoms(1)%potential%qpar(l,1)
+               dmat((site-1)*norb+lm,(site-1)*norb+lm)=alpha_loc(l)-gamma_loc
+               gamma_loc=atom_lattice%symbolic_atoms(1)%potential%qpar(l,2)
+               dmat(n2+(site-1)*norb+lm,n2+(site-1)*norb+lm)=alpha_loc(l)-gamma_loc
+               cglobal((site-1)*norb+lm,(site-1)*norb+lm)=cmplx(atom_lattice%symbolic_atoms(1)%potential%c(l,1)+ &
+                  atom_lattice%symbolic_atoms(1)%potential%vmad,0.0_rp,rp)
+               cglobal(n2+(site-1)*norb+lm,n2+(site-1)*norb+lm)=cmplx(atom_lattice%symbolic_atoms(1)%potential%c(l,2)+ &
+                  atom_lattice%symbolic_atoms(1)%potential%vmad,0.0_rp,rp)
+               wglobal((site-1)*norb+lm,(site-1)*norb+lm)=atom_lattice%symbolic_atoms(1)%potential%dele(l,1)
+               wglobal(n2+(site-1)*norb+lm,n2+(site-1)*norb+lm)=atom_lattice%symbolic_atoms(1)%potential%dele(l,2)
+            end do
+         end do
+      end do
+      call native_inverse(eye_global+matmul(s_alpha_in,dmat),inv_global)
+      s_gamma_spin=matmul(inv_global,s_alpha_in)
+      hgamma_spin=cglobal+matmul(wglobal,matmul(s_gamma_spin,wglobal))
+      call r5_build_salpha_site(s_gamma_spin,s_gamma_site)
+      call r5_build_salpha_site(hgamma_spin,hgamma_site)
+   end subroutine r5_build_gamma_state
+
+   subroutine r5_build_gamma_p(atom_lattice,zloc,pgamma_out)
+      type(lattice), intent(in) :: atom_lattice
+      complex(rp), intent(in) :: zloc
+      complex(rp), intent(out) :: pgamma_out(:,:)
+      complex(rp) :: psite(2*norb,2*norb)
+      integer :: site
+      call native_complex_p_matrix(atom_lattice%symbolic_atoms(1),zloc,psite)
+      pgamma_out=cmplx(0.0_rp,0.0_rp,rp)
+      do site=1,nsite_fixture
+         pgamma_out((site-1)*2*norb+1:site*2*norb,(site-1)*2*norb+1:site*2*norb)=psite
+      end do
+   end subroutine r5_build_gamma_p
+
+   subroutine r5_build_endpoint_scaled_green(atom_lattice,ggamma,scaled)
+      type(lattice), intent(in) :: atom_lattice
+      complex(rp), intent(in) :: ggamma(:,:)
+      complex(rp), intent(out) :: scaled(:,:)
+      complex(rp) :: winv(size(ggamma,1),size(ggamma,2))
+      integer :: site,l,m,lm
+      winv=cmplx(0.0_rp,0.0_rp,rp)
+      do site=1,nsite_fixture
+         do l=0,lmax
+            do m=1,2*l+1
+               lm=l*l+m
+               winv((site-1)*2*norb+lm,(site-1)*2*norb+lm)=1.0_rp/atom_lattice%symbolic_atoms(1)%potential%dele(l,1)
+               winv((site-1)*2*norb+norb+lm,(site-1)*2*norb+norb+lm)= &
+                  1.0_rp/atom_lattice%symbolic_atoms(1)%potential%dele(l,2)
+            end do
+         end do
+      end do
+      scaled=matmul(winv,matmul(ggamma,winv))
+   end subroutine r5_build_endpoint_scaled_green
+
+   pure function r5_cross(a,b) result(c)
+      real(rp), intent(in) :: a(3),b(3)
+      real(rp) :: c(3)
+      c=[a(2)*b(3)-a(3)*b(2),a(3)*b(1)-a(1)*b(3),a(1)*b(2)-a(2)*b(1)]
+   end function r5_cross
+
+   pure function r5_rotate_moment(moment,axis,angle) result(rotated)
+      real(rp), intent(in) :: moment(3),axis(3),angle
+      real(rp) :: rotated(3)
+      rotated=moment*cos(angle)+r5_cross(axis,moment)*sin(angle)+axis*dot_product(axis,moment)*(1.0_rp-cos(angle))
+   end function r5_rotate_moment
 
    subroutine r4_build_native_state(atom_lattice,zloc,s_alpha_loc,p_gamma_loc,p_alpha_loc,s_gamma_loc,r_loc,g_gamma_loc,g_alpha_loc)
       type(lattice), intent(in) :: atom_lattice
