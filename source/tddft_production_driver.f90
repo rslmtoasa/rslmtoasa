@@ -55,7 +55,10 @@ module tddft_production_driver_mod
    use lr_projected_juelich_interaction_mod, only: projected_juelich_request, projected_juelich_result, &
       evaluate_projected_juelich_interaction, evaluate_projected_juelich_holdout, &
       assess_projected_juelich_eta_stability, projected_juelich_eta_limited, projected_juelich_rank_deficient, &
-      projected_juelich_unsupported
+      projected_juelich_unsupported, select_projected_juelich_eta_indices
+   use lr_dresp06a_bridge_mod, only: project_compact_response_to_sites, project_compact_loss_to_sites, &
+      compact_loss_matrix, site_loss_matrix, compact_apply_local_operator_independent, dresp06a_relative_matrix_difference, &
+      dresp06a_projection_tolerance
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
    use tddft_native_rsgf_provider_mod, only: tddft_native_rsgf_provider
@@ -86,6 +89,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_compact_dyson = 'compact_dyson'
    character(len=*), parameter, public :: tddft_driver_backend_projected_mills = 'projected_mills'
    character(len=*), parameter, public :: tddft_driver_backend_projected_juelich = 'projected_juelich'
+   character(len=*), parameter, public :: tddft_driver_backend_alsda_compare = 'alsda_compare'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -327,6 +331,7 @@ contains
    subroutine validate_tddft_config(config)
       type(tddft_production_config), intent(in) :: config
       character(len=128) :: route
+      integer :: eta_selected_index, eta_holdout_index
 
       if (.not. config%enabled) return
       if (trim(config%channel) /= 'chi_plus' .and. trim(config%channel) /= 'chi_minus') then
@@ -357,11 +362,13 @@ contains
           trim(config%backend) /= tddft_driver_backend_static_interactions .and. &
           trim(config%backend) /= tddft_driver_backend_compact_dyson .and. &
           trim(config%backend) /= tddft_driver_backend_projected_mills .and. &
-          trim(config%backend) /= tddft_driver_backend_projected_juelich) then
-         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions, compact_dyson, projected_mills, or projected_juelich'
+          trim(config%backend) /= tddft_driver_backend_projected_juelich .and. &
+          trim(config%backend) /= tddft_driver_backend_alsda_compare) then
+         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions, compact_dyson, projected_mills, projected_juelich, or alsda_compare'
       end if
       if (trim(config%backend) == tddft_driver_backend_projected_mills .or. &
-          trim(config%backend) == tddft_driver_backend_projected_juelich) then
+          trim(config%backend) == tddft_driver_backend_projected_juelich .or. &
+          trim(config%backend) == tddft_driver_backend_alsda_compare) then
          if (trim(config%projected_selector) /= 'd' .and. trim(config%projected_selector) /= 'spd' .and. &
              trim(config%projected_selector) /= 'both') then
             error stop 'TDDFT input: projected_selector must be d, spd, or both'
@@ -373,12 +380,21 @@ contains
              .not. any(sum(abs(config%q_list), dim=1) <= 1.0e-12_rp)) then
             error stop 'TDDFT input: projected_juelich requires Gamma for its static Ward construction'
          end if
+         if (trim(config%backend) == tddft_driver_backend_alsda_compare .and. &
+             .not. any(sum(abs(config%q_list), dim=1) <= 1.0e-12_rp)) then
+            error stop 'TDDFT input: alsda_compare requires Gamma for the Juelich same-state construction'
+         end if
       end if
       if (trim(config%backend) /= tddft_driver_backend_product_convergence .and. &
           trim(config%backend) /= tddft_driver_backend_static_interactions .and. &
           trim(config%backend) /= tddft_driver_backend_projected_mills .and. &
-          trim(config%backend) /= tddft_driver_backend_projected_juelich .and. size(config%eta_values) /= 1) then
-         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence, static_interactions, projected_mills, or projected_juelich'
+          trim(config%backend) /= tddft_driver_backend_projected_juelich .and. &
+          trim(config%backend) /= tddft_driver_backend_alsda_compare .and. size(config%eta_values) /= 1) then
+         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence, static_interactions, projected_mills, projected_juelich, or alsda_compare'
+      end if
+      if (trim(config%backend) == tddft_driver_backend_projected_juelich .or. &
+          trim(config%backend) == tddft_driver_backend_alsda_compare) then
+         call select_projected_juelich_eta_indices(config%eta_values, eta_selected_index, eta_holdout_index)
       end if
       if (trim(config%backend) == tddft_driver_backend_static_interactions) then
          if (size(config%q_list, 2) /= 1 .or. sum(abs(config%q_list(:, 1))) > 1.0e-12_rp) then
@@ -453,9 +469,10 @@ contains
             error stop 'TDDFT input: native_rsgf_provider must be auto, block or chebyshev'
          end if
       end if
-      if (trim(config%backend) == tddft_driver_backend_compact_dyson) then
+      if (trim(config%backend) == tddft_driver_backend_compact_dyson .or. &
+          trim(config%backend) == tddft_driver_backend_alsda_compare) then
          if (route /= tddft_driver_route_direct_alsda) then
-            error stop 'TDDFT input: compact_dyson requires interaction_route=direct_alsda; rejected before SCF/response work'
+            error stop 'TDDFT input: compact_dyson/alsda_compare requires interaction_route=direct_alsda; rejected before SCF/response work'
          end if
          if (config%dyson_static_audit .and. find_gamma_q_index(config%q_list) == 0) then
             error stop 'TDDFT input: dyson_static_audit requires Gamma in q_list; rejected before SCF/response work'
@@ -972,6 +989,14 @@ contains
             reciprocal_obj, lattice_obj)
          return
       end if
+      if (trim(config%backend) == tddft_driver_backend_alsda_compare) then
+         if (.not. use_accepted_kspace_scf) then
+            error stop 'DRESP-06A alsda_compare requires the accepted k-space SCF handoff'
+         end if
+         call run_tddft_alsda_compare(config, response_space, radial_bases, ground_states, left_state, endpoints, &
+            reciprocal_obj, lattice_obj)
+         return
+      end if
       if (trim(config%backend) == tddft_driver_backend_product_lehmann) then
          ! TDVK-02R2 is a bare-response validation seam only.  It stops at
          ! the naturally prepared reciprocal handoff and never enters KXC,
@@ -1322,8 +1347,7 @@ contains
       call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
       call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
       allocate(moment(size(ground_states)), selected_static_chi(size(ground_states), size(ground_states), size(config%eta_values)))
-      selected_eta_index = size(config%eta_values)
-      previous_eta_index = max(1, selected_eta_index - 1)
+      call select_projected_juelich_eta_indices(config%eta_values, selected_eta_index, previous_eta_index)
       positive_index = 0
       do iq = 1, size(config%q_list, 2)
          if (sum(abs(config%q_list(:, iq))) > 2.0e-12_rp) then
@@ -1391,7 +1415,7 @@ contains
             chi_request%q_endpoint_state => endpoints(gamma_index)
             chi_request%diagnostics = .false.
             call evaluate_projected_lehmann_chi0(chi_request, chi_result)
-            selected_static_chi(:, :, ieta) = real(chi_result%susceptibility(:, :, 1), rp)
+            selected_static_chi(:, :, ieta) = chi_result%susceptibility(:, :, 1)
             juelich_request%selector = selector
             juelich_request%projected_moment = moment
             juelich_request%static_chi0 = chi_result%susceptibility(:, :, 1)
@@ -1403,13 +1427,8 @@ contains
             call evaluate_projected_juelich_interaction(juelich_request, static_ladder(ieta))
          end do
          juelich_result = static_ladder(selected_eta_index)
-         if (selected_eta_index > 1) then
+         if (previous_eta_index > 0) then
             call assess_projected_juelich_eta_stability(juelich_result, static_ladder(previous_eta_index), eta_stable)
-            ! The previous result stores Gamma, while the holdout API consumes
-            ! chi0.  Reconstruct that chi0 from Gamma/M without changing U.
-            do j = 1, size(moment)
-               selected_static_chi(:, j, previous_eta_index) = static_ladder(previous_eta_index)%gamma(:, j)/moment(j)
-            end do
             call evaluate_projected_juelich_holdout(selected_static_chi(:, :, previous_eta_index), moment, &
                juelich_result%interaction_U_real, juelich_result%holdout_residual, juelich_result%holdout_relative_residual)
          else
@@ -1569,6 +1588,599 @@ contains
       deallocate(moment, selected_static_chi)
    end subroutine run_tddft_projected_juelich
 
+   !> DRESP-06A same-state comparison seam.  Mills and Juelich remain site
+   !> scalar comparison routes; the ALSDA route is solved in the complete
+   !> weighted-orthonormal product space and is projected only for observables.
+   subroutine run_tddft_alsda_compare(config, response_space, radial_bases, ground_states, left_state, endpoints, &
+                                      reciprocal_obj, lattice_obj)
+      type(tddft_production_config), intent(in) :: config
+      type(response_space_layout), target, intent(in) :: response_space
+      type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
+      type(radial_ground_state), target, intent(in) :: ground_states(:)
+      type(lr_electronic_state), target, intent(in) :: left_state
+      type(lr_electronic_state), target, intent(in) :: endpoints(:)
+      type(reciprocal), intent(in) :: reciprocal_obj
+      type(lattice), intent(in) :: lattice_obj
+
+      type(projected_site_spin_contract), target :: contract
+      type(lmto_product_response_basis), target :: product_plus, product_minus
+      type(projected_chi0_request) :: site_request, opposite_site_request
+      type(projected_chi0_result) :: site_bare, opposite_site_bare
+      type(projected_mills_interaction_result) :: mills_result
+      type(projected_juelich_request) :: juelich_request
+      type(projected_juelich_result), allocatable :: static_ladder(:)
+      type(projected_juelich_result) :: juelich_result
+      type(lr_product_ks_susceptibility_request) :: product_request, opposite_product_request
+      type(lr_product_ks_susceptibility_result) :: product_bare, opposite_product_bare
+      type(lr_alsda_kernel_request) :: kxc_request
+      type(lr_alsda_kernel_result) :: kxc_result
+      type(tddft_dyson_request) :: alsda_request, opposite_alsda_request
+      type(tddft_dyson_result) :: alsda_result, opposite_alsda_result
+      type(projected_dyson_request) :: site_dyson_request
+      type(projected_dyson_result) :: mills_result_dynamic, juelich_result_dynamic
+      type(lr_product_gf_susceptibility_request) :: gf_request
+      type(lr_product_gf_susceptibility_result) :: gf_result
+      type(lr_product_ks_susceptibility_request) :: gf_lehmann_request
+      type(lr_product_ks_susceptibility_result) :: gf_lehmann_result
+      real(rp), allocatable :: moment(:), magnetization(:, :)
+      complex(rp), allocatable :: test_vector(:)
+      complex(rp), allocatable :: selected_static_chi(:, :, :), interaction(:, :), opposite_interaction(:, :)
+      complex(rp), allocatable :: mcompact(:), action_a(:), action_b(:), point_m(:), reconstructed_m(:)
+      complex(rp), allocatable :: covariance_site_plus(:, :, :), covariance_site_minus(:, :, :)
+      complex(rp), allocatable :: covariance_loss_plus(:, :, :), covariance_loss_minus(:, :, :)
+      complex(rp), allocatable :: covariance_site_transport(:, :, :), covariance_loss_transport(:, :, :)
+      complex(rp), allocatable :: site_alsda(:, :, :), site_loss_alsda(:, :, :), site_loss_bare(:, :), site_loss_tmp(:, :)
+      real(rp) :: magnetization_norm, magnetization_projection_residual, magnetization_projection_relative
+      real(rp) :: action_residual, ward_residual, ward_relative, kxc_identity_abs, kxc_identity_rel
+      real(rp) :: eta_run, site_closure, loss_closure, r_alsda_mills, r_alsda_juelich
+      real(rp) :: loss_trace_bare, loss_trace_mills, loss_trace_juelich, loss_trace_alsda
+      real(rp) :: min_kxc, max_kxc, maxabs_kxc, denominator_min
+      complex(rp) :: keff
+      real(rp) :: covariance_site_error, covariance_loss_error
+      real(rp) :: covariance_direct_site_error
+      real(rp) :: covariance_compact_error
+      real(rp) :: covariance_one
+      real(rp) :: gf_norm_lehmann, gf_norm_gf, gf_difference, gf_relative, gf_infinity
+      integer :: gf_q_index, gf_frequency_index
+      integer :: gamma_index, iq, ieta, iw, unit, selected_eta_index, holdout_eta_index, i, j
+      integer :: positive_index, negative_index
+      logical :: rank_stable, eta_stable, covariance_found
+
+      if (lattice_obj%nrec /= size(ground_states)) error stop 'DRESP-06A: lattice/site provenance mismatch'
+      if (response_space%response_lmax /= 4) error stop 'DRESP-06A: complete response_lmax=4 is required'
+      gamma_index = find_gamma_q_index(config%q_list)
+      if (gamma_index == 0) error stop 'DRESP-06A: Gamma is required for the Juelich static construction'
+      call contract%initialize(response_space, radial_bases, 'spd')
+      call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
+      call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
+      rank_stable = .true.
+      do i = 1, product_plus%nsite
+         do j = 0, product_plus%response_lmax
+            rank_stable = rank_stable .and. product_plus%blocks(i, j)%rank_stable .and. &
+               product_minus%blocks(i, j)%rank_stable
+         end do
+      end do
+      if (.not. rank_stable) error stop 'DRESP-06A: complete product basis is rank-unstable'
+      if (product_plus%product_dimension /= product_minus%product_dimension) then
+         error stop 'DRESP-06A: plus/minus product dimensions differ'
+      end if
+      if (size(ground_states) == 1 .and. product_plus%product_dimension /= 232) then
+         error stop 'DRESP-06A: Fe spd product dimension is not 232'
+      end if
+
+      allocate(moment(size(ground_states)), magnetization(size(ground_states), response_space%npoint))
+      do i = 1, size(ground_states)
+         magnetization(i, :) = ground_states(i)%n_up - ground_states(i)%n_down
+      end do
+      call contract%moment_from_operator(left_state%eigenvalues, left_state%eigenvectors, left_state%k_weights, &
+         left_state%fermi_level, left_state%temperature, ground_states, moment)
+
+      kxc_request%response_space => response_space
+      kxc_request%ground_states => ground_states
+      allocate(kxc_request%pauli_magnetization(size(ground_states), response_space%npoint))
+      kxc_request%pauli_magnetization = magnetization
+      call evaluate_lr_alsda_kernel(kxc_request, kxc_result)
+      allocate(interaction(product_plus%product_dimension, product_plus%product_dimension), &
+         opposite_interaction(product_minus%product_dimension, product_minus%product_dimension))
+      call compact_project_local_operator(response_space, product_plus, cmplx(kxc_result%pointwise_kernel, 0.0_rp, rp), interaction)
+      call compact_project_local_operator(response_space, product_minus, cmplx(kxc_result%pointwise_kernel, 0.0_rp, rp), opposite_interaction)
+
+      ! Independent Kxc action tests: deterministic, deterministic pseudo-random,
+      ! and the actual compact ground-state magnetization vector.
+      allocate(test_vector(product_plus%product_dimension), action_a(product_plus%product_dimension), &
+         action_b(product_plus%product_dimension), mcompact(product_plus%product_dimension), &
+         point_m(response_space%ndim), reconstructed_m(response_space%ndim))
+      do i = 1, size(test_vector)
+         test_vector(i) = real(mod(37*i + 11, 101), rp)/101.0_rp
+      end do
+      call compact_apply_local_operator(response_space, product_plus, cmplx(kxc_result%pointwise_kernel, 0.0_rp, rp), &
+         test_vector, action_a)
+      call compact_apply_local_operator_independent(response_space, product_plus, kxc_result%pointwise_kernel, test_vector, action_b)
+      action_residual = maxval(abs(action_a - action_b))
+      do i = 1, size(test_vector)
+         test_vector(i) = sin(real(13*i, rp))*cos(real(7*i + 3, rp))
+      end do
+      call compact_apply_local_operator(response_space, product_plus, cmplx(kxc_result%pointwise_kernel, 0.0_rp, rp), &
+         test_vector, action_a)
+      call compact_apply_local_operator_independent(response_space, product_plus, kxc_result%pointwise_kernel, test_vector, action_b)
+      action_residual = max(action_residual, maxval(abs(action_a - action_b)))
+      call compact_project_magnetization(response_space, product_plus, magnetization, mcompact, point_m)
+      call compact_reconstruct_point_vector(response_space, product_plus, mcompact, reconstructed_m)
+      call compact_weighted_projection_diagnostics(response_space, point_m, reconstructed_m, magnetization_norm, &
+         magnetization_projection_residual, magnetization_projection_relative)
+      call compact_apply_local_operator(response_space, product_plus, cmplx(kxc_result%pointwise_kernel, 0.0_rp, rp), &
+         mcompact, action_a)
+      call compact_apply_local_operator_independent(response_space, product_plus, kxc_result%pointwise_kernel, mcompact, action_b)
+      action_residual = max(action_residual, maxval(abs(action_a - action_b)))
+
+      min_kxc = minval(kxc_result%pointwise_kernel(:, 2:))
+      max_kxc = maxval(kxc_result%pointwise_kernel(:, 2:))
+      maxabs_kxc = maxval(abs(kxc_result%pointwise_kernel(:, 2:)))
+      kxc_identity_abs = 0.0_rp
+      do i = 2, response_space%npoint
+         do j = 1, size(ground_states)
+            kxc_identity_abs = max(kxc_identity_abs, abs(kxc_result%pointwise_kernel(j, i)*magnetization(j, i) - &
+               0.5_rp*(ground_states(j)%vxc_up(i) - ground_states(j)%vxc_down(i))))
+         end do
+      end do
+      kxc_identity_rel = kxc_identity_abs/max(maxabs_kxc*maxval(abs(magnetization(:, 2:))), tiny(1.0_rp))
+
+      call select_projected_juelich_eta_indices(config%eta_values, selected_eta_index, holdout_eta_index)
+      allocate(static_ladder(size(config%eta_values)), selected_static_chi(size(moment), size(moment), size(config%eta_values)))
+      do ieta = 1, size(config%eta_values)
+         site_request%q = config%q_list(:, gamma_index)
+         site_request%frequencies = [0.0_rp]
+         site_request%eta = config%eta_values(ieta)
+         site_request%channel = lr_channel_plus
+         site_request%contract => contract
+         site_request%product_basis => product_plus
+         site_request%electronic_state => left_state
+         site_request%q_endpoint_state => endpoints(gamma_index)
+         call evaluate_projected_lehmann_chi0(site_request, site_bare)
+         selected_static_chi(:, :, ieta) = site_bare%susceptibility(:, :, 1)
+         juelich_request%selector = 'spd'
+         juelich_request%projected_moment = moment
+         juelich_request%static_chi0 = site_bare%susceptibility(:, :, 1)
+         juelich_request%static_eta = config%eta_values(ieta)
+         juelich_request%q = config%q_list(:, gamma_index)
+         juelich_request%channel = lr_channel_plus
+         juelich_request%state_provenance = 'DRESP-06A accepted state; DRESP-01 site moment'
+         juelich_request%chi0_provenance = site_bare%provenance
+         call evaluate_projected_juelich_interaction(juelich_request, static_ladder(ieta))
+      end do
+      juelich_result = static_ladder(selected_eta_index)
+      if (holdout_eta_index > 0) then
+         call assess_projected_juelich_eta_stability(juelich_result, static_ladder(holdout_eta_index), eta_stable)
+         call evaluate_projected_juelich_holdout(selected_static_chi(:, :, holdout_eta_index), moment, &
+            juelich_result%interaction_U_real, juelich_result%holdout_residual, juelich_result%holdout_relative_residual)
+      else
+         eta_stable = .false.
+      end if
+      call evaluate_projected_mills_from_reciprocal(contract, radial_bases, reciprocal_obj, left_state%fermi_level, moment, mills_result)
+      if (trim(mills_result%classification) == 'UNSUPPORTED') error stop 'DRESP-06A: Mills scalar comparison unsupported'
+
+      ! Static raw ALSDA Ward diagnostic in the same compact product space.
+      product_request%q = config%q_list(:, gamma_index)
+      product_request%frequencies = [0.0_rp]
+      product_request%eta = config%eta_values(selected_eta_index)
+      product_request%channel = lr_channel_plus
+      product_request%product_basis => product_plus
+      product_request%electronic_state => left_state
+      product_request%q_endpoint_state => endpoints(gamma_index)
+      call evaluate_lr_product_ks_susceptibility(product_request, product_bare)
+      ward_residual = sqrt(sum(abs(matmul(product_bare%susceptibility(:, :, 1), matmul(interaction, mcompact)) - mcompact)**2))
+      ward_relative = ward_residual/max(sqrt(sum(abs(mcompact)**2)), tiny(1.0_rp))
+      denominator_min = huge(1.0_rp)
+      site_closure = 0.0_rp
+      loss_closure = 0.0_rp
+      r_alsda_mills = 0.0_rp
+      r_alsda_juelich = 0.0_rp
+
+      open(newunit=unit, file=trim(config%output_file), status='replace', action='write')
+      write(unit, '(a)') '# DRESP-06A spatial ALSDA same-state comparison'
+      write(unit, '(a)') '# accepted-state provenance = one accepted reciprocal k-space SCF state; no interaction-specific re-SCF'
+      write(unit, '(a)') '# backend = alsda_compare'
+      write(unit, '(a,3(i0,1x))') '# k_mesh = ', reciprocal_obj%nk_mesh
+      write(unit, '(a,i0)') '# k_count = ', left_state%nk
+      write(unit, '(a,es24.16)') '# temperature_K = ', left_state%temperature
+      write(unit, '(a,es24.16)') '# fermi_level_Ry = ', left_state%fermi_level
+      write(unit, '(a,a)') '# selector = spd'
+      write(unit, '(a,i0)') '# product_dimension = ', product_plus%product_dimension
+      write(unit, '(a,i0)') '# response_lmax = ', response_space%response_lmax
+      write(unit, '(a,a)') '# XC functional/backend/TXC = '//trim(kxc_result%xc_provenance%functional_name)//'/'// &
+         trim(kxc_result%xc_provenance%backend_name)//'/'//trim(kxc_result%xc_provenance%txch)
+      write(unit, '(a)') '# ALSDA kernel contract = Kxc=B_xc_sigma,SR/magnetization_Pauli; mixed P<-SR; not exact relativistic derivative'
+      write(unit, '(a,3(es24.16,1x))') '# Kxc_min_max_maxabs = ', min_kxc, max_kxc, maxabs_kxc
+      write(unit, '(a,2(es24.16,1x))') '# Kxc_m_identity_abs_rel = ', kxc_identity_abs, kxc_identity_rel
+      write(unit, '(a,3(es24.16,1x))') '# magnetization_projection_norm_residual_relative = ', magnetization_norm, &
+         magnetization_projection_residual, magnetization_projection_relative
+      write(unit, '(a,es24.16)') '# Kxc_operator_action_oracle_max = ', action_residual
+      write(unit, '(a,3(es24.16,1x))') '# U_Mills = ', mills_result%interaction_U
+      write(unit, '(a,es24.16)') '# Mills_scalarization_residual = ', mills_result%scalarization_residual
+      write(unit, '(a,a)') '# Mills_classification = ', trim(mills_result%classification)
+      write(unit, '(a,*(es24.16,1x))') '# U_Juelich_real = ', juelich_result%interaction_U_real
+      write(unit, '(a,a)') '# Juelich_classification = ', trim(juelich_result%classification)
+      write(unit, '(a,es24.16)') '# Juelich_static_eta_selected = ', config%eta_values(selected_eta_index)
+      write(unit, '(a,l1)') '# Juelich_eta_stable = ', eta_stable
+      write(unit, '(a,es24.16)') '# Juelich_construction_relative_residual = ', juelich_result%relative_real_constrained_residual
+      write(unit, '(a,es24.16)') '# Juelich_holdout_relative_residual = ', juelich_result%holdout_relative_residual
+      write(unit, '(a,2(es24.16,1x))') '# ALSDA_raw_Gamma_Ward_abs_rel = ', ward_residual, ward_relative
+      write(unit, '(a)') '# ALSDA correction = OFF; no BES/GCR/eigenvalue shifting/kernel rescaling'
+      write(unit, '(a)') '# columns: route eta_Ry q_index omega_Ry row col chi_Re chi_Im loss_Re loss_Im -ImTr/pi min_sv max_sv condition min_abs_eig Dyson_residual'
+      write(unit, '(a)') '# FREQUENCY_REFINEMENT columns: route q_index coarse_peak_Ry refined_peak_Ry min_sv refined_loss_trace'
+      write(unit, '(a)') '# GF_SPOT columns: q_index frequency_index norm_Lehmann norm_GF abs_diff relative_diff infinity_diff'
+      write(unit, '(a)') '# Q_CHANNEL_COVARIANCE columns: positive_q_index negative_q_index canonical_site_residual canonical_loss_residual direct_site_conjugation compact_residual'
+
+      allocate(site_alsda(size(moment), size(moment), size(config%frequencies)), &
+         site_loss_alsda(size(moment), size(moment), size(config%frequencies)), site_loss_bare(size(moment), size(moment)), &
+         site_loss_tmp(size(moment), size(moment)))
+      positive_index = 0
+      do iq = 1, size(config%q_list, 2)
+         if (sum(abs(config%q_list(:, iq))) > 2.0e-12_rp) then
+            positive_index = iq
+            exit
+         end if
+      end do
+      negative_index = 0
+      if (positive_index > 0) negative_index = find_matching_q(config%q_list, -config%q_list(:, positive_index), 2.0e-12_rp)
+      covariance_found = positive_index > 0 .and. negative_index > 0
+
+      if (positive_index > 0) then
+         call run_projected_frequency_refinement(unit, 'spd', config, positive_index, contract, product_plus, &
+            left_state, endpoints(positive_index), mills_result%interaction_U, juelich_result%interaction_U_real)
+         call run_alsda_frequency_refinement(unit, config, positive_index, product_plus, left_state, endpoints(positive_index), &
+            interaction)
+      end if
+      if (config%gf_closure_audit) then
+         call run_alsda_product_gf_spot(unit, config, product_plus, left_state, endpoints)
+      end if
+
+      do ieta = 1, size(config%eta_values)
+         eta_run = config%eta_values(ieta)
+         do iq = 1, size(config%q_list, 2)
+            site_request%q = config%q_list(:, iq)
+            site_request%frequencies = config%frequencies
+            site_request%eta = eta_run
+            site_request%channel = config%channel
+            if (trim(config%channel) == lr_channel_minus) then
+               site_request%product_basis => product_minus
+            else
+               site_request%product_basis => product_plus
+            end if
+            site_request%q_endpoint_state => endpoints(iq)
+            call evaluate_projected_lehmann_chi0(site_request, site_bare)
+            product_request%q = config%q_list(:, iq)
+            product_request%frequencies = config%frequencies
+            product_request%eta = eta_run
+            product_request%channel = config%channel
+            if (trim(config%channel) == lr_channel_minus) then
+               product_request%product_basis => product_minus
+            else
+               product_request%product_basis => product_plus
+            end if
+            product_request%electronic_state => left_state
+            product_request%q_endpoint_state => endpoints(iq)
+            call evaluate_lr_product_ks_susceptibility(product_request, product_bare)
+            call project_compact_response_to_sites(contract, product_request%product_basis, product_bare%susceptibility, site_alsda)
+            site_closure = max(site_closure, maxval(abs(site_bare%susceptibility - site_alsda)))
+            alsda_request%compact_orthonormal = .true.
+            alsda_request%q = config%q_list(:, iq)
+            alsda_request%frequencies = config%frequencies
+            alsda_request%eta = eta_run
+            alsda_request%channel = config%channel
+            alsda_request%ks_susceptibility = product_bare%susceptibility
+            if (trim(config%channel) == lr_channel_minus) then
+               alsda_request%canonical_interaction = opposite_interaction
+            else
+               alsda_request%canonical_interaction = interaction
+            end if
+            alsda_request%interaction_route = lr_dyson_route_direct_alsda
+            alsda_request%interaction_provenance = 'KXC-01 direct ALSDA LR-03; DRESP-06A full product space'
+            alsda_request%electronic_state_provenance = 'accepted reciprocal state; SCF occupations and EF fixed'
+            alsda_request%response_space_metadata = 'complete weighted-orthonormal product response; no point Dyson'
+            call evaluate_tddft_dyson(alsda_request, alsda_result)
+            if (any(.not. alsda_result%solve_succeeded)) error stop 'DRESP-06A: ALSDA Dyson solve failed'
+            call project_compact_response_to_sites(contract, product_request%product_basis, alsda_result%enhanced_susceptibility, site_alsda)
+            call project_compact_loss_to_sites(contract, product_request%product_basis, alsda_result%enhanced_susceptibility, site_loss_alsda)
+
+            allocate(site_dyson_request%frequencies(size(config%frequencies)), site_dyson_request%interaction_U(size(moment)), &
+               site_dyson_request%bare_chi(size(moment), size(moment), size(config%frequencies)))
+            site_dyson_request%selector = 'spd'
+            site_dyson_request%q = config%q_list(:, iq)
+            site_dyson_request%frequencies = config%frequencies
+            site_dyson_request%eta = eta_run
+            site_dyson_request%channel = config%channel
+            site_dyson_request%bare_chi = site_bare%susceptibility
+            site_dyson_request%interaction_U = mills_result%interaction_U
+            site_dyson_request%interaction_provenance = 'same-state DRESP-04 Mills interaction'
+            call evaluate_projected_dyson(site_dyson_request, mills_result_dynamic)
+            site_dyson_request%interaction_U = juelich_result%interaction_U_real
+            site_dyson_request%interaction_provenance = juelich_result%provenance
+            call evaluate_projected_dyson(site_dyson_request, juelich_result_dynamic)
+
+            do iw = 1, size(config%frequencies)
+               call site_loss_matrix(site_bare%susceptibility(:, :, iw), site_loss_bare)
+               call site_loss_matrix(site_alsda(:, :, iw), site_loss_tmp)
+               loss_closure = max(loss_closure, maxval(abs(site_loss_alsda(:, :, iw) - site_loss_tmp)))
+               call site_loss_matrix(mills_result_dynamic%enhanced_chi(:, :, iw), site_loss_tmp)
+               loss_trace_mills = real(sum([(mills_result_dynamic%loss_matrix(i, i, iw), i=1,size(moment))]), rp)
+               loss_trace_juelich = real(sum([(juelich_result_dynamic%loss_matrix(i, i, iw), i=1,size(moment))]), rp)
+               loss_trace_alsda = real(sum([(site_loss_alsda(i, i, iw), i=1,size(moment))]), rp)
+               loss_trace_bare = real(sum([(site_loss_bare(i, i), i=1,size(moment))]), rp)
+               r_alsda_mills = max(r_alsda_mills, relative_site_difference(site_alsda(:, :, iw), mills_result_dynamic%enhanced_chi(:, :, iw)))
+               r_alsda_juelich = max(r_alsda_juelich, relative_site_difference(site_alsda(:, :, iw), juelich_result_dynamic%enhanced_chi(:, :, iw)))
+               if (size(moment) == 1 .and. abs(site_bare%susceptibility(1, 1, iw)) > sqrt(tiny(1.0_rp)) .and. &
+                   abs(site_alsda(1, 1, iw)) > sqrt(tiny(1.0_rp))) then
+                  keff = 1.0_rp/site_bare%susceptibility(1, 1, iw) - 1.0_rp/site_alsda(1, 1, iw)
+                  write(unit, '(a,1x,es24.16,1x,i0,1x,es24.16,1x,3(es24.16,1x))') 'KEFF_ALSDA', eta_run, iq, &
+                     config%frequencies(iw), real(keff, rp), aimag(keff), abs(keff)
+               end if
+               do j = 1, size(moment)
+                  do i = 1, size(moment)
+                     write(unit, '(a,1x,a,1x,es24.16,1x,i0,1x,es24.16,1x,2(i0,1x),12(es24.16,1x))') 'ROW', 'BARE_SITE', eta_run, iq, &
+                        config%frequencies(iw), i, j, real(site_bare%susceptibility(i,j,iw),rp), aimag(site_bare%susceptibility(i,j,iw)), &
+                        real(site_loss_bare(i,j),rp), aimag(site_loss_bare(i,j)), loss_trace_bare
+                     write(unit, '(a,1x,a,1x,es24.16,1x,i0,1x,es24.16,1x,2(i0,1x),12(es24.16,1x))') 'ROW', 'MILLS_SITE', eta_run, iq, &
+                        config%frequencies(iw), i, j, real(mills_result_dynamic%enhanced_chi(i,j,iw),rp), aimag(mills_result_dynamic%enhanced_chi(i,j,iw)), &
+                        real(mills_result_dynamic%loss_matrix(i,j,iw),rp), aimag(mills_result_dynamic%loss_matrix(i,j,iw)), loss_trace_mills, &
+                        mills_result_dynamic%denominator_min_singular_value(iw), mills_result_dynamic%denominator_max_singular_value(iw), &
+                        mills_result_dynamic%condition_number(iw), mills_result_dynamic%minimum_magnitude_eigenvalue(iw), &
+                        mills_result_dynamic%dyson_residual(iw)
+                     write(unit, '(a,1x,a,1x,es24.16,1x,i0,1x,es24.16,1x,2(i0,1x),12(es24.16,1x))') 'ROW', 'JUELICH_SITE', eta_run, iq, &
+                        config%frequencies(iw), i, j, real(juelich_result_dynamic%enhanced_chi(i,j,iw),rp), aimag(juelich_result_dynamic%enhanced_chi(i,j,iw)), &
+                        real(juelich_result_dynamic%loss_matrix(i,j,iw),rp), aimag(juelich_result_dynamic%loss_matrix(i,j,iw)), loss_trace_juelich, &
+                        juelich_result_dynamic%denominator_min_singular_value(iw), juelich_result_dynamic%denominator_max_singular_value(iw), &
+                        juelich_result_dynamic%condition_number(iw), juelich_result_dynamic%minimum_magnitude_eigenvalue(iw), &
+                        juelich_result_dynamic%dyson_residual(iw)
+                     write(unit, '(a,1x,a,1x,es24.16,1x,i0,1x,es24.16,1x,2(i0,1x),12(es24.16,1x))') 'ROW', 'ALSDA_SITE', eta_run, iq, &
+                        config%frequencies(iw), i, j, real(site_alsda(i,j,iw),rp), aimag(site_alsda(i,j,iw)), &
+                        real(site_loss_alsda(i,j,iw),rp), aimag(site_loss_alsda(i,j,iw)), loss_trace_alsda, &
+                        alsda_result%denominator_min_singular_value(iw), alsda_result%denominator_max_singular_value(iw), &
+                        alsda_result%denominator_condition_number(iw), alsda_result%denominator_min_magnitude_eigenvalue(iw), &
+                        alsda_result%dyson_residual_frobenius(iw)
+                  end do
+               end do
+            end do
+            write(unit, '(a,1x,i0,1x,es24.16,1x,3(es24.16,1x))') 'BARE_PRODUCT_SITE_CLOSURE', iq, site_closure, &
+               r_alsda_mills, r_alsda_juelich, maxval(alsda_result%denominator_min_singular_value)
+            deallocate(site_dyson_request%frequencies, site_dyson_request%interaction_U, site_dyson_request%bare_chi)
+         end do
+      end do
+
+      if (covariance_found .and. config%validate_interacting_covariance) then
+         allocate(covariance_site_plus(size(moment), size(moment), size(config%frequencies)), &
+            covariance_site_minus(size(moment), size(moment), size(config%frequencies)), &
+            covariance_loss_plus(size(moment), size(moment), size(config%frequencies)), &
+            covariance_loss_minus(size(moment), size(moment), size(config%frequencies)), &
+            covariance_site_transport(size(moment), size(moment), size(config%frequencies)), &
+            covariance_loss_transport(size(moment), size(moment), size(config%frequencies)))
+
+         product_request%q = config%q_list(:, positive_index)
+         product_request%frequencies = config%frequencies
+         product_request%eta = config%eta
+         product_request%channel = lr_channel_plus
+         product_request%product_basis => product_plus
+         product_request%electronic_state => left_state
+         product_request%q_endpoint_state => endpoints(positive_index)
+         call evaluate_lr_product_ks_susceptibility(product_request, product_bare)
+         alsda_request%compact_orthonormal = .true.
+         alsda_request%q = product_request%q
+         alsda_request%frequencies = product_request%frequencies
+         alsda_request%eta = product_request%eta
+         alsda_request%channel = lr_channel_plus
+         alsda_request%ks_susceptibility = product_bare%susceptibility
+         alsda_request%canonical_interaction = interaction
+         alsda_request%interaction_route = lr_dyson_route_direct_alsda
+         alsda_request%interaction_provenance = 'KXC-01 direct ALSDA LR-03; DRESP-06A covariance'
+         alsda_request%electronic_state_provenance = 'accepted reciprocal state; SCF occupations and EF fixed'
+         alsda_request%response_space_metadata = 'complete weighted-orthonormal product response; no point Dyson'
+         call evaluate_tddft_dyson(alsda_request, alsda_result)
+         if (any(.not. alsda_result%solve_succeeded)) error stop 'DRESP-06A: plus covariance Dyson solve failed'
+         call project_compact_response_to_sites(contract, product_plus, alsda_result%enhanced_susceptibility, covariance_site_plus)
+         call project_compact_loss_to_sites(contract, product_plus, alsda_result%enhanced_susceptibility, covariance_loss_plus)
+
+         opposite_product_request%q = config%q_list(:, negative_index)
+         opposite_product_request%frequencies = -config%frequencies
+         opposite_product_request%eta = config%eta
+         opposite_product_request%channel = lr_channel_minus
+         opposite_product_request%product_basis => product_minus
+         opposite_product_request%electronic_state => left_state
+         opposite_product_request%q_endpoint_state => endpoints(negative_index)
+         call evaluate_lr_product_ks_susceptibility(opposite_product_request, opposite_product_bare)
+         opposite_alsda_request%compact_orthonormal = .true.
+         opposite_alsda_request%q = opposite_product_request%q
+         opposite_alsda_request%frequencies = opposite_product_request%frequencies
+         opposite_alsda_request%eta = opposite_product_request%eta
+         opposite_alsda_request%channel = lr_channel_minus
+         opposite_alsda_request%ks_susceptibility = opposite_product_bare%susceptibility
+         opposite_alsda_request%canonical_interaction = opposite_interaction
+         opposite_alsda_request%interaction_route = lr_dyson_route_direct_alsda
+         opposite_alsda_request%interaction_provenance = 'KXC-01 direct ALSDA LR-03; DRESP-06A covariance'
+         opposite_alsda_request%electronic_state_provenance = 'accepted reciprocal state; SCF occupations and EF fixed'
+         opposite_alsda_request%response_space_metadata = 'complete weighted-orthonormal product response; no point Dyson'
+         call evaluate_tddft_dyson(opposite_alsda_request, opposite_alsda_result)
+         if (any(.not. opposite_alsda_result%solve_succeeded)) error stop 'DRESP-06A: minus covariance Dyson solve failed'
+         call project_compact_response_to_sites(contract, product_minus, opposite_alsda_result%enhanced_susceptibility, covariance_site_minus)
+         call project_compact_loss_to_sites(contract, product_minus, opposite_alsda_result%enhanced_susceptibility, covariance_loss_minus)
+         do iw = 1, size(config%frequencies)
+            call project_compact_covariance_to_sites(contract, product_plus, product_minus, &
+               opposite_alsda_result%enhanced_susceptibility(:, :, iw), covariance_site_transport(:, :, iw))
+            call project_compact_covariance_to_sites(contract, product_plus, product_minus, &
+               -opposite_alsda_result%loss_matrix(:, :, iw), covariance_loss_transport(:, :, iw))
+         end do
+         covariance_direct_site_error = maxval(abs(covariance_site_plus - conjg(covariance_site_minus)))
+         covariance_site_error = maxval(abs(covariance_site_plus - covariance_site_transport))
+         covariance_loss_error = maxval(abs(covariance_loss_plus - covariance_loss_transport))
+         covariance_compact_error = 0.0_rp
+         do iw = 1, size(config%frequencies)
+            call compact_covariance_matrix_residual(product_plus, product_minus, &
+               alsda_result%enhanced_susceptibility(:, :, iw), opposite_alsda_result%enhanced_susceptibility(:, :, iw), &
+               covariance_one)
+            covariance_compact_error = max(covariance_compact_error, covariance_one)
+         end do
+         write(unit, '(a,1x,2(i0,1x),4(es24.16,1x))') 'Q_CHANNEL_COVARIANCE', positive_index, negative_index, &
+            covariance_site_error, covariance_loss_error, covariance_direct_site_error, covariance_compact_error
+         if (covariance_site_error <= 5.0e-8_rp .and. covariance_loss_error <= 5.0e-8_rp .and. &
+             covariance_compact_error <= 5.0e-8_rp) then
+            write(unit, '(a)') '# q/channel covariance status = PASS'
+         else
+            write(unit, '(a)') '# q/channel covariance status = FAIL-B (diagnostic retained; no correction applied)'
+         end if
+      else if (config%validate_interacting_covariance) then
+         error stop 'DRESP-06A: requested q/-q covariance pair is unavailable'
+      end if
+
+      if (action_residual > 5.0e-10_rp) error stop 'DRESP-06A: independent Kxc action oracle failed'
+      if (site_closure > dresp06a_projection_tolerance .or. loss_closure > dresp06a_projection_tolerance) then
+         error stop 'DRESP-06A: compact-to-site or loss projection closure failed'
+      end if
+
+      write(unit, '(a,2(es24.16,1x))') '# ALSDA_vs_Mills_and_Juelich_site_relative = ', r_alsda_mills, r_alsda_juelich
+      write(unit, '(a,es24.16)') '# bare_compact_to_site_closure_max = ', site_closure
+      write(unit, '(a,es24.16)') '# loss_projection_commutation = ', loss_closure
+      if (.not. config%validate_interacting_covariance) write(unit, '(a)') '# q/channel covariance = not requested'
+      close(unit)
+      if (allocated(covariance_site_plus)) then
+         deallocate(covariance_site_plus, covariance_site_minus, covariance_loss_plus, covariance_loss_minus, &
+            covariance_site_transport, covariance_loss_transport)
+      end if
+      deallocate(moment, magnetization, static_ladder, selected_static_chi, interaction, opposite_interaction, &
+         test_vector, action_a, action_b, mcompact, point_m, reconstructed_m, site_alsda, site_loss_alsda, site_loss_bare, site_loss_tmp)
+   end subroutine run_tddft_alsda_compare
+
+   !> Refine the ALSDA loss peak on a window selected from the ALSDA coarse
+   !> response itself.  This is intentionally independent from the Mills and
+   !> Juelich projected-site windows.
+   subroutine run_alsda_frequency_refinement(unit, config, q_index, product, left_state, endpoint, interaction)
+      integer, intent(in) :: unit, q_index
+      type(tddft_production_config), intent(in) :: config
+      type(lmto_product_response_basis), target, intent(in) :: product
+      type(lr_electronic_state), target, intent(in) :: left_state, endpoint
+      complex(rp), intent(in) :: interaction(:, :)
+      type(lr_product_ks_susceptibility_request) :: request
+      type(lr_product_ks_susceptibility_result) :: coarse_bare, refined_bare
+      type(tddft_dyson_request) :: dyson_request
+      type(tddft_dyson_result) :: coarse_result, refined_result
+      real(rp), allocatable :: refined_frequencies(:), coarse_loss(:), refined_loss(:)
+      real(rp) :: eta, step, lower, upper
+      integer :: selected_eta_index, holdout_eta_index, coarse_peak, refined_peak, nref, iw, i
+
+      if (size(config%frequencies) < 2) return
+      call select_projected_juelich_eta_indices(config%eta_values, selected_eta_index, holdout_eta_index)
+      eta = config%eta_values(selected_eta_index)
+      request%q = config%q_list(:, q_index)
+      request%frequencies = config%frequencies
+      request%eta = eta
+      request%channel = config%channel
+      request%product_basis => product
+      request%electronic_state => left_state
+      request%q_endpoint_state => endpoint
+      call evaluate_lr_product_ks_susceptibility(request, coarse_bare)
+      dyson_request%compact_orthonormal = .true.
+      dyson_request%q = request%q
+      dyson_request%frequencies = request%frequencies
+      dyson_request%eta = eta
+      dyson_request%channel = request%channel
+      dyson_request%ks_susceptibility = coarse_bare%susceptibility
+      dyson_request%canonical_interaction = interaction
+      dyson_request%interaction_route = lr_dyson_route_direct_alsda
+      dyson_request%interaction_provenance = 'KXC-01 direct ALSDA; DRESP-06A route-specific refinement'
+      dyson_request%electronic_state_provenance = 'accepted reciprocal state; SCF occupations and EF fixed'
+      dyson_request%response_space_metadata = 'complete weighted-orthonormal product response; no point Dyson'
+      call evaluate_tddft_dyson(dyson_request, coarse_result)
+      allocate(coarse_loss(size(config%frequencies)))
+      do iw = 1, size(config%frequencies)
+         coarse_loss(iw) = 0.0_rp
+         do i = 1, product%product_dimension
+            coarse_loss(iw) = coarse_loss(iw) + real(coarse_result%loss_matrix(i, i, iw), rp)
+         end do
+      end do
+      coarse_peak = maxloc(coarse_loss, dim=1)
+      step = minval(abs(config%frequencies(2:) - config%frequencies(:size(config%frequencies)-1)))
+      lower = max(minval(config%frequencies), config%frequencies(coarse_peak) - step)
+      upper = min(maxval(config%frequencies), config%frequencies(coarse_peak) + step)
+      if (upper <= lower) then
+         deallocate(coarse_loss)
+         return
+      end if
+      nref = 41
+      allocate(refined_frequencies(nref), refined_loss(nref))
+      do iw = 1, nref
+         refined_frequencies(iw) = lower + real(iw - 1, rp)*(upper - lower)/real(nref - 1, rp)
+      end do
+      request%frequencies = refined_frequencies
+      call evaluate_lr_product_ks_susceptibility(request, refined_bare)
+      dyson_request%frequencies = refined_frequencies
+      dyson_request%ks_susceptibility = refined_bare%susceptibility
+      call evaluate_tddft_dyson(dyson_request, refined_result)
+      do iw = 1, nref
+         refined_loss(iw) = 0.0_rp
+         do i = 1, product%product_dimension
+            refined_loss(iw) = refined_loss(iw) + real(refined_result%loss_matrix(i, i, iw), rp)
+         end do
+      end do
+      refined_peak = maxloc(refined_loss, dim=1)
+      write(unit, '(a,1x,i0,1x,4(es24.16,1x))') 'FREQUENCY_REFINEMENT ALSDA', q_index, &
+         config%frequencies(coarse_peak), refined_frequencies(refined_peak), &
+         minval(refined_result%denominator_min_singular_value), refined_loss(refined_peak)
+      deallocate(coarse_loss, refined_frequencies, refined_loss)
+   end subroutine run_alsda_frequency_refinement
+
+   !> One representative finite-q bare product-GF spot for the ALSDA
+   !> comparison.  It is a closure audit of the frozen accepted state, not an
+   !> interaction-specific GF construction.
+   subroutine run_alsda_product_gf_spot(unit, config, product, left_state, endpoints)
+      integer, intent(in) :: unit
+      type(tddft_production_config), intent(in) :: config
+      type(lmto_product_response_basis), target, intent(in) :: product
+      type(lr_electronic_state), target, intent(in) :: left_state
+      type(lr_electronic_state), target, intent(in) :: endpoints(:)
+      type(lr_product_gf_susceptibility_request) :: gf_request
+      type(lr_product_gf_susceptibility_result) :: gf_result
+      type(lr_product_ks_susceptibility_request) :: lehmann_request
+      type(lr_product_ks_susceptibility_result) :: lehmann_result
+      integer :: q_index, frequency_index
+      real(rp) :: norm_lehmann, norm_gf, difference, relative, infinity
+
+      q_index = find_first_nonzero_q(config%q_list)
+      if (q_index == 0) error stop 'DRESP-06A: GF audit requires a finite-q spot'
+      frequency_index = 1
+      do while (frequency_index <= size(config%frequencies))
+         if (abs(config%frequencies(frequency_index)) > 1.0e-12_rp) exit
+         frequency_index = frequency_index + 1
+      end do
+      if (frequency_index > size(config%frequencies)) frequency_index = 1
+
+      gf_request%q = config%q_list(:, q_index)
+      gf_request%frequencies = [config%frequencies(frequency_index)]
+      gf_request%eta = config%eta
+      gf_request%channel = config%channel
+      gf_request%integration_points = config%gf_integration_points
+      gf_request%integration_eta = config%gf_integration_eta
+      gf_request%energy_margin = config%gf_energy_margin
+      gf_request%contraction_backend = 'factorized'
+      gf_request%product_basis => product
+      gf_request%electronic_state => left_state
+      gf_request%q_endpoint_state => endpoints(q_index)
+      call evaluate_lr_product_gf_susceptibility(gf_request, gf_result)
+      lehmann_request%q = gf_request%q
+      lehmann_request%frequencies = gf_request%frequencies
+      lehmann_request%eta = config%eta
+      lehmann_request%channel = config%channel
+      lehmann_request%product_basis => product
+      lehmann_request%electronic_state => left_state
+      lehmann_request%q_endpoint_state => endpoints(q_index)
+      call evaluate_lr_product_ks_susceptibility(lehmann_request, lehmann_result)
+      norm_lehmann = sqrt(sum(abs(lehmann_result%susceptibility(:, :, 1))**2))
+      norm_gf = sqrt(sum(abs(gf_result%susceptibility(:, :, 1))**2))
+      difference = sqrt(sum(abs(lehmann_result%susceptibility(:, :, 1) - gf_result%susceptibility(:, :, 1))**2))
+      relative = difference/max(norm_lehmann, norm_gf, tiny(1.0_rp))
+      infinity = maxval(abs(lehmann_result%susceptibility(:, :, 1) - gf_result%susceptibility(:, :, 1)))
+      if (.not. ieee_is_finite(relative)) error stop 'DRESP-06A: product-GF spot is not finite'
+      write(unit, '(a,1x,2(i0,1x),5(es24.16,1x))') 'GF_SPOT', q_index, frequency_index, norm_lehmann, norm_gf, &
+         difference, relative, infinity
+   end subroutine run_alsda_product_gf_spot
+
    subroutine write_projected_juelich_rows(unit, route, selector, eta, q_index, nsite, chi0, dyson)
       integer, intent(in) :: unit, q_index, nsite
       character(len=*), intent(in) :: route, selector
@@ -1603,15 +2215,17 @@ contains
       type(lr_electronic_state), target, intent(in) :: left_state, endpoint
       real(rp), intent(in) :: mills_U(:), juelich_U(:)
       type(projected_chi0_request) :: request
-      type(projected_chi0_result) :: coarse_chi, refined_chi
+      type(projected_chi0_result) :: coarse_chi, refined_chi_mills, refined_chi_juelich
       type(projected_dyson_request) :: dyson_request
       type(projected_dyson_result) :: mills_coarse, juelich_coarse, mills_refined, juelich_refined
-      real(rp), allocatable :: refined_frequencies(:)
-      real(rp) :: step, lower, upper, eta
+      real(rp), allocatable :: refined_frequencies_mills(:), refined_frequencies_juelich(:)
+      real(rp) :: step, lower_mills, upper_mills, lower_juelich, upper_juelich, eta
       integer :: nref, i, coarse_peak_index, coarse_juelich_peak_index, refined_peak_index
+      integer :: selected_eta_index, holdout_eta_index
 
       if (size(config%frequencies) < 2) return
-      eta = config%eta_values(size(config%eta_values))
+      call select_projected_juelich_eta_indices(config%eta_values, selected_eta_index, holdout_eta_index)
+      eta = config%eta_values(selected_eta_index)
       request%q = config%q_list(:, q_index)
       request%frequencies = config%frequencies
       request%eta = eta
@@ -1635,31 +2249,41 @@ contains
       coarse_peak_index = maxloc(mills_coarse%loss_trace, dim=1)
       coarse_juelich_peak_index = maxloc(juelich_coarse%loss_trace, dim=1)
       step = minval(abs(config%frequencies(2:) - config%frequencies(:size(config%frequencies)-1)))
-      lower = max(minval(config%frequencies), config%frequencies(coarse_peak_index) - step)
-      upper = min(maxval(config%frequencies), config%frequencies(coarse_peak_index) + step)
-      if (upper <= lower) return
+      lower_mills = max(minval(config%frequencies), config%frequencies(coarse_peak_index) - step)
+      upper_mills = min(maxval(config%frequencies), config%frequencies(coarse_peak_index) + step)
+      lower_juelich = max(minval(config%frequencies), config%frequencies(coarse_juelich_peak_index) - step)
+      upper_juelich = min(maxval(config%frequencies), config%frequencies(coarse_juelich_peak_index) + step)
+      if (upper_mills <= lower_mills .or. upper_juelich <= lower_juelich) return
       nref = 41
-      allocate(refined_frequencies(nref))
+      allocate(refined_frequencies_mills(nref), refined_frequencies_juelich(nref))
       do i = 1, nref
-         refined_frequencies(i) = lower + real(i - 1, rp)*(upper - lower)/real(nref - 1, rp)
+         refined_frequencies_mills(i) = lower_mills + real(i - 1, rp)*(upper_mills - lower_mills)/real(nref - 1, rp)
+         refined_frequencies_juelich(i) = lower_juelich + real(i - 1, rp)*(upper_juelich - lower_juelich)/real(nref - 1, rp)
       end do
-      request%frequencies = refined_frequencies
-      call evaluate_projected_lehmann_chi0(request, refined_chi)
-      dyson_request%frequencies = refined_frequencies
-      dyson_request%bare_chi = refined_chi%susceptibility
+      ! Each route receives its own refinement grid.  The two coarse maxima
+      ! need not coincide, so reusing the Mills window for Juelich would be a
+      ! route-dependent frequency-selection error.
+      request%frequencies = refined_frequencies_mills
+      call evaluate_projected_lehmann_chi0(request, refined_chi_mills)
+      dyson_request%frequencies = refined_frequencies_mills
+      dyson_request%bare_chi = refined_chi_mills%susceptibility
       dyson_request%interaction_U = mills_U
       call evaluate_projected_dyson(dyson_request, mills_refined)
+      request%frequencies = refined_frequencies_juelich
+      call evaluate_projected_lehmann_chi0(request, refined_chi_juelich)
+      dyson_request%frequencies = refined_frequencies_juelich
+      dyson_request%bare_chi = refined_chi_juelich%susceptibility
       dyson_request%interaction_U = juelich_U
       call evaluate_projected_dyson(dyson_request, juelich_refined)
       refined_peak_index = maxloc(mills_refined%loss_trace, dim=1)
       write(unit, '(a,1x,a,1x,i0,1x,4(es24.16,1x))') 'FREQUENCY_REFINEMENT', trim(selector)//'_Mills', q_index, &
-         config%frequencies(coarse_peak_index), refined_frequencies(refined_peak_index), &
+         config%frequencies(coarse_peak_index), refined_frequencies_mills(refined_peak_index), &
          minval(mills_refined%denominator_min_singular_value), mills_refined%loss_trace(refined_peak_index)
       refined_peak_index = maxloc(juelich_refined%loss_trace, dim=1)
       write(unit, '(a,1x,a,1x,i0,1x,4(es24.16,1x))') 'FREQUENCY_REFINEMENT', trim(selector)//'_Juelich', q_index, &
-         config%frequencies(coarse_juelich_peak_index), refined_frequencies(refined_peak_index), &
+         config%frequencies(coarse_juelich_peak_index), refined_frequencies_juelich(refined_peak_index), &
          minval(juelich_refined%denominator_min_singular_value), juelich_refined%loss_trace(refined_peak_index)
-      deallocate(refined_frequencies)
+      deallocate(refined_frequencies_mills, refined_frequencies_juelich)
    end subroutine run_projected_frequency_refinement
 
    !> DRESP-02 material seam.  Both projections consume the same accepted
@@ -3550,6 +4174,60 @@ contains
       deallocate(mapped, transport)
    end subroutine compact_covariance_matrix_residual
 
+   !> Project the established compact q/-q covariance transport into the
+   !> plus-channel DRESP site observable. Direct conjugation of independently
+   !> SVD-compressed plus/minus coordinates is not the covariance convention;
+   !> circular angular and radial transport is applied first.
+   subroutine project_compact_covariance_to_sites(contract, plus_product, minus_product, minus_matrix, site_matrix)
+      type(projected_site_spin_contract), intent(in) :: contract
+      type(lmto_product_response_basis), intent(in) :: plus_product, minus_product
+      complex(rp), intent(in) :: minus_matrix(:, :)
+      complex(rp), intent(out) :: site_matrix(:, :)
+      complex(rp), allocatable :: transport(:, :), mapped(:, :), functionals(:, :), image(:), block_transport(:, :)
+      integer :: site_index, response_l, response_m, plus_first, minus_first, rank_plus, rank_minus, i, j
+      real(rp) :: angular_sign
+
+      if (plus_product%product_dimension /= minus_product%product_dimension) then
+         error stop 'DRESP-06A site covariance: compact dimensions differ'
+      end if
+      if (any(shape(minus_matrix) /= [minus_product%product_dimension, minus_product%product_dimension])) then
+         error stop 'DRESP-06A site covariance: compact matrix shape mismatch'
+      end if
+      if (any(shape(site_matrix) /= [contract%nsite, contract%nsite])) then
+         error stop 'DRESP-06A site covariance: site matrix shape mismatch'
+      end if
+      allocate(transport(plus_product%product_dimension, minus_product%product_dimension), &
+         mapped(plus_product%product_dimension, plus_product%product_dimension), &
+         functionals(plus_product%product_dimension, contract%nsite), image(plus_product%product_dimension))
+      transport = cmplx(0.0_rp, 0.0_rp, rp)
+      do site_index = 1, plus_product%nsite
+         do response_l = 0, plus_product%response_lmax
+            rank_plus = plus_product%blocks(site_index, response_l)%rank
+            rank_minus = minus_product%blocks(site_index, response_l)%rank
+            allocate(block_transport(rank_plus, rank_minus))
+            block_transport = matmul(conjg(transpose(plus_product%blocks(site_index, response_l)%weighted_modes)), &
+               conjg(minus_product%blocks(site_index, response_l)%weighted_modes))
+            do response_m = -response_l, response_l
+               plus_first = plus_product%flat_index(site_index, response_l, response_m, 1)
+               minus_first = minus_product%flat_index(site_index, response_l, -response_m, 1)
+               angular_sign = merge(-1.0_rp, 1.0_rp, mod(abs(response_m), 2) == 1)
+               transport(plus_first:plus_first + rank_plus - 1, minus_first:minus_first + rank_minus - 1) = &
+                  angular_sign*block_transport
+            end do
+            deallocate(block_transport)
+         end do
+      end do
+      mapped = matmul(transport, matmul(conjg(minus_matrix), conjg(transpose(transport))))
+      call contract%site_integration_functional(plus_product, functionals)
+      do j = 1, contract%nsite
+         image = matmul(mapped, functionals(:, j))
+         do i = 1, contract%nsite
+            site_matrix(i, j) = dot_product(functionals(:, i), image)
+         end do
+      end do
+      deallocate(transport, mapped, functionals, image)
+   end subroutine project_compact_covariance_to_sites
+
    subroutine finite_q_endpoint_metadata(left_state, endpoint, q, q_folded, endpoint_error, endpoint_first_k, endpoint_first, &
                                          endpoint_last, unique_count)
       type(lr_electronic_state), intent(in) :: left_state, endpoint
@@ -4538,5 +5216,15 @@ contains
       end do
       close(unit)
    end subroutine write_tddft_production_output
+
+   real(rp) function relative_site_difference(left, right) result(value)
+      complex(rp), intent(in) :: left(:, :), right(:, :)
+      real(rp) :: left_norm, right_norm
+
+      if (any(shape(left) /= shape(right))) error stop 'DRESP-06A site difference: shape mismatch'
+      left_norm = sqrt(sum(abs(left)**2))
+      right_norm = sqrt(sum(abs(right)**2))
+      value = sqrt(sum(abs(left - right)**2))/max(left_norm, right_norm, tiny(1.0_rp))
+   end function relative_site_difference
 
 end module tddft_production_driver_mod

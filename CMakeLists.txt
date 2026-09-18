@@ -676,6 +676,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrProjectedInteractingResponse PROPERTIES LABELS "unit;dresp-04;mills;stoner;dyson;goldstone;covariance")
   add_fortran_unit_test(UnitLrProjectedJuelichInteraction ${TestDIR}/unit/test_lr_projected_juelich_interaction.f90)
   set_tests_properties(UnitLrProjectedJuelichInteraction PROPERTIES LABELS "unit;dresp-05;juelich;lcmm;ward;svd;negative-controls")
+  add_fortran_unit_test(UnitDresp06aProjection ${TestDIR}/unit/test_dresp06a_projection.f90)
+  set_tests_properties(UnitDresp06aProjection PROPERTIES LABELS "unit;dresp-06a;alsda;projection;loss;covariance;representation-oracle")
   add_fortran_unit_test(UnitLrKlStaticBridge ${TestDIR}/unit/test_lr_kl_static_bridge.f90)
   set_tests_properties(UnitLrKlStaticBridge PROPERTIES LABELS "unit;dresp-03;kl;lkag;static-bridge;operator-vertex")
   add_fortran_unit_test(UnitDresp03rLmtoMapping ${TestDIR}/unit/test_dresp03r_lmto_mapping.f90)
@@ -780,6 +782,12 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(TddftDresp05ProjectedJuelich PROPERTIES
     LABELS "integration;tddft;dresp-05;juelich;mills;same-state;accepted-state"
     TIMEOUT 720)
+  add_test(NAME TddftDresp06aSpatialAlsda
+    COMMAND ${TestBinary} input_dresp06a_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp06aSpatialAlsda PROPERTIES
+    LABELS "integration;tddft;dresp-06a;alsda;projection;same-state;accepted-state"
+    TIMEOUT 900)
   add_test(NAME TddftProductionDriverFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)

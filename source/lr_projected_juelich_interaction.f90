@@ -72,6 +72,7 @@ module lr_projected_juelich_interaction_mod
    public :: evaluate_projected_juelich_interaction
    public :: evaluate_projected_juelich_holdout
    public :: assess_projected_juelich_eta_stability
+   public :: select_projected_juelich_eta_indices
 
    interface
       subroutine zgelss(m, n, nrhs, a, lda, b, ldb, s, rcond, rank, work, lwork, rwork, info)
@@ -94,6 +95,43 @@ module lr_projected_juelich_interaction_mod
    end interface
 
 contains
+
+   !> Select the finest positive static eta and the distinct second-finest
+   !> positive eta independently of the order supplied by the user.  The
+   !> second value is the holdout/stability partner; an ambiguous duplicate is
+   !> rejected instead of being treated as a stability comparison.
+   subroutine select_projected_juelich_eta_indices(eta_values, selected_index, holdout_index)
+      real(rp), intent(in) :: eta_values(:)
+      integer, intent(out) :: selected_index, holdout_index
+      integer :: i, j
+      real(rp) :: second_eta, scale
+
+      if (size(eta_values) < 1) error stop 'DRESP-05 eta selection: empty eta ladder'
+      if (any(.not. ieee_is_finite(eta_values)) .or. any(eta_values <= 0.0_rp)) then
+         error stop 'DRESP-05 eta selection: every eta must be finite and positive'
+      end if
+      do i = 1, size(eta_values) - 1
+         do j = i + 1, size(eta_values)
+            scale = max(1.0_rp, abs(eta_values(i)), abs(eta_values(j)))
+            if (abs(eta_values(i) - eta_values(j)) <= 100.0_rp*epsilon(1.0_rp)*scale) then
+               error stop 'DRESP-05 eta selection: duplicated eta makes stability comparison ambiguous'
+            end if
+         end do
+      end do
+      selected_index = 1
+      do i = 2, size(eta_values)
+         if (eta_values(i) < eta_values(selected_index)) selected_index = i
+      end do
+      holdout_index = 0
+      second_eta = huge(1.0_rp)
+      do i = 1, size(eta_values)
+         if (i == selected_index) cycle
+         if (eta_values(i) < second_eta) then
+            second_eta = eta_values(i)
+            holdout_index = i
+         end if
+      end do
+   end subroutine select_projected_juelich_eta_indices
 
    subroutine evaluate_projected_juelich_interaction(request, result)
       type(projected_juelich_request), intent(in) :: request
