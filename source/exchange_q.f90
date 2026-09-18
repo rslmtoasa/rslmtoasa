@@ -3,9 +3,8 @@
 !
 ! This module deliberately owns the user-facing exchange_q input boundary and
 ! the production driver only.  The finite-H algebra remains in
-! lr_kl_hessian_mod.  The native reciprocal LKAG evaluator below is a
-! q-space reference derived from the unchanged dGdG_Jnc contract in
-! source/exchange.f90; it is not a replacement for that module.
+! lr_kl_hessian_mod.  The native Turek contour evaluator is a separate
+! path-operator route and does not consume finite-H resolvents or eigenvectors.
 !------------------------------------------------------------------------------
 module exchange_q_mod
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -17,13 +16,15 @@ module exchange_q_mod
    use lr_kl_hessian_mod, only: lmto_fixture_adapter_residual
    use lr_kl_contour_mod, only: finite_h_contour_options, finite_h_contour_report, &
       force_theorem_finite_q_hessian_from_resolvent_batch
+   use lr_lmto_turek_contour_mod, only: native_turek_contour_options, native_turek_contour_report, &
+      native_exchange_q_contour
    use logger_mod, only: g_logger
    use lr_kl_hessian_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_from_hamiltonian, &
       assemble_lmto_hamiltonian, &
       assemble_lmto_finite_q_torques, assemble_lmto_finite_q_mixed_derivative, &
       force_theorem_finite_q_hessian_from_eigenbasis_batch, &
       force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch
-   use math_mod, only: ang2au, inverse_3x3, pi, simpson_f
+   use math_mod, only: ang2au, inverse_3x3, pi
    use precision_mod, only: rp
    use reciprocal_mod, only: reciprocal
    use self_mod, only: self
@@ -45,6 +46,7 @@ module exchange_q_mod
       character(len=sl) :: output_file = 'exchange_q.dat'
       logical :: write_components = .true.
       logical :: native_crosscheck = .false.
+      logical :: native_turek = .false.
       character(len=24) :: finite_h_spectral_mode = 'metallic'
       character(len=16) :: finite_h_response_backend = 'spectral'
       real(rp) :: rotation_axis(3) = [1.0_rp, 0.0_rp, 0.0_rp]
@@ -53,10 +55,14 @@ module exchange_q_mod
       real(rp) :: contour_margin = 0.25_rp
       real(rp) :: contour_height_fraction = 0.35_rp
       logical :: contour_account_fermi_poles = .true.
-      ! These controls are intentionally diagnostic-only.  They make the
-      ! metallic LKAG reference reproducible without changing finite-H data.
+      ! Deprecated aliases retained for old decks.  Native evaluation now
+      ! uses the contour controls below; these no longer select a Simpson path.
       real(rp) :: native_green_eta = 1.0e-3_rp
       integer :: native_energy_points = 0
+      integer :: native_contour_points = 64
+      real(rp) :: native_contour_margin = 0.25_rp
+      real(rp) :: native_contour_height_fraction = 0.35_rp
+      logical :: native_contour_account_fermi_poles = .true.
    contains
       procedure :: clear => exchange_q_config_clear
    end type exchange_q_config
@@ -79,6 +85,7 @@ contains
       this%output_file = 'exchange_q.dat'
       this%write_components = .true.
       this%native_crosscheck = .false.
+      this%native_turek = .false.
       this%finite_h_spectral_mode = 'metallic'
       this%finite_h_response_backend = 'spectral'
       this%rotation_axis = [1.0_rp, 0.0_rp, 0.0_rp]
@@ -89,6 +96,10 @@ contains
       this%contour_account_fermi_poles = .true.
       this%native_green_eta = 1.0e-3_rp
       this%native_energy_points = 0
+      this%native_contour_points = 64
+      this%native_contour_margin = 0.25_rp
+      this%native_contour_height_fraction = 0.35_rp
+      this%native_contour_account_fermi_poles = .true.
    end subroutine exchange_q_config_clear
 
    subroutine load_exchange_q_config(filename, this, validate_request)
@@ -99,19 +110,20 @@ contains
       integer :: iostatus, funit, n_q_points
       character(len=16) :: q_coordinates
       character(len=sl) :: q_file, output_file
-      logical :: write_components, native_crosscheck
+      logical :: write_components, native_crosscheck, native_turek, native_contour_account_fermi_poles
       character(len=24) :: finite_h_spectral_mode
       character(len=16) :: finite_h_response_backend, contour_shape
       real(rp) :: rotation_axis(3), native_green_eta
-      real(rp) :: contour_margin, contour_height_fraction
-      integer :: native_energy_points, contour_points
+      real(rp) :: contour_margin, contour_height_fraction, native_contour_margin, native_contour_height_fraction
+      integer :: native_energy_points, contour_points, native_contour_points
       logical :: contour_account_fermi_poles
       real(rp) :: q_list(3, exchange_q_max_points)
 
       namelist /exchange_q/ q_coordinates, q_file, n_q_points, q_list, output_file, &
-         write_components, native_crosscheck, finite_h_spectral_mode, finite_h_response_backend, rotation_axis, &
+         write_components, native_crosscheck, native_turek, finite_h_spectral_mode, finite_h_response_backend, rotation_axis, &
          contour_points, contour_shape, contour_margin, contour_height_fraction, contour_account_fermi_poles, &
-         native_green_eta, native_energy_points
+         native_green_eta, native_energy_points, native_contour_points, native_contour_margin, &
+         native_contour_height_fraction, native_contour_account_fermi_poles
 
       call this%clear()
       this%fname = filename
@@ -122,6 +134,7 @@ contains
       output_file = this%output_file
       write_components = this%write_components
       native_crosscheck = this%native_crosscheck
+      native_turek = this%native_turek
       finite_h_spectral_mode = this%finite_h_spectral_mode
       finite_h_response_backend = this%finite_h_response_backend
       rotation_axis = this%rotation_axis
@@ -132,6 +145,10 @@ contains
       contour_account_fermi_poles = this%contour_account_fermi_poles
       native_green_eta = this%native_green_eta
       native_energy_points = this%native_energy_points
+      native_contour_points = this%native_contour_points
+      native_contour_margin = this%native_contour_margin
+      native_contour_height_fraction = this%native_contour_height_fraction
+      native_contour_account_fermi_poles = this%native_contour_account_fermi_poles
 
       open(newunit=funit, file=filename, action='read', status='old', iostat=iostatus)
       if (iostatus /= 0) then
@@ -152,6 +169,7 @@ contains
       this%output_file = trim(output_file)
       this%write_components = write_components
       this%native_crosscheck = native_crosscheck
+      this%native_turek = native_turek
       this%finite_h_spectral_mode = lower(trim(finite_h_spectral_mode))
       this%finite_h_response_backend = lower(trim(finite_h_response_backend))
       this%rotation_axis = rotation_axis
@@ -162,6 +180,10 @@ contains
       this%contour_account_fermi_poles = contour_account_fermi_poles
       this%native_green_eta = native_green_eta
       this%native_energy_points = native_energy_points
+      this%native_contour_points = native_contour_points
+      this%native_contour_margin = native_contour_margin
+      this%native_contour_height_fraction = native_contour_height_fraction
+      this%native_contour_account_fermi_poles = native_contour_account_fermi_poles
       validate = .false.
       if (present(validate_request)) validate = validate_request
       if (validate) then
@@ -173,6 +195,12 @@ contains
          end if
          if (this%native_energy_points < 0) then
             call g_logger%fatal('[exchange_q]: native_energy_points must be non-negative', __FILE__, __LINE__)
+         end if
+         if (this%native_contour_points < 8) then
+            call g_logger%fatal('[exchange_q]: native_contour_points must be at least 8', __FILE__, __LINE__)
+         end if
+         if (this%native_contour_margin <= 0.0_rp .or. this%native_contour_height_fraction <= 0.0_rp) then
+            call g_logger%fatal('[exchange_q]: native contour margin and height fraction must be positive', __FILE__, __LINE__)
          end if
          if (maxval(abs(this%rotation_axis)) <= tiny(1.0_rp)) then
             call g_logger%fatal('[exchange_q]: rotation_axis must be nonzero', __FILE__, __LINE__)
@@ -402,17 +430,19 @@ contains
       real(rp), allocatable :: spectral_total(:, :, :), spectral_tt(:, :, :), spectral_contact(:, :, :)
       real(rp), allocatable :: contour_total(:, :, :), contour_tt(:, :, :), contour_contact(:, :, :)
       complex(rp), allocatable :: h_source(:, :, :), h_endpoint(:, :, :)
-      real(rp), allocatable :: native_total(:)
+      real(rp), allocatable :: native_total(:), native_jq_sum(:)
       integer, allocatable :: endpoint_index(:)
       logical, allocatable :: endpoint_reused(:), q_commensurate(:)
       real(rp), allocatable :: endpoint_residual(:)
       character(len=24), allocatable :: endpoint_mode(:)
       real(rp) :: adapter_before, adapter_after, axis_norm, finite_h_kT
-      real(rp) :: native_gamma, native_q, native_eta
+      real(rp) :: native_gamma, native_q
       real(rp) :: endpoint_seconds, assembly_seconds, contraction_seconds, vertex_error, endpoint_identity_error
       real(rp) :: hamiltonian_seconds, gf_seconds, solve_seconds, contour_seconds, total_response_seconds
       type(finite_h_contour_options) :: contour_options
       type(finite_h_contour_report) :: contour_report
+      type(native_turek_contour_options) :: native_contour_options
+      type(native_turek_contour_report) :: native_contour_report
       integer :: nsite, nmat, nk, iq, ik, ia, ja, clock_start, clock_end, clock_rate, response_start
       logical :: native_ready, vertex_identity_checked, endpoint_identity_checked, do_spectral, do_contour
 
@@ -485,13 +515,18 @@ contains
       finite_h_kT = max(reciprocal_obj%temperature*reciprocal_kb_ry_per_k, 1.0e-10_rp)
       vertex_identity_checked = .false.
       endpoint_identity_checked = .false.
-      native_ready = config%native_crosscheck
-      allocate(native_total(config%n_q)); native_total = 0.0_rp
+      native_ready = config%native_crosscheck .or. config%native_turek
+      allocate(native_total(config%n_q), native_jq_sum(config%n_q)); native_total = 0.0_rp; native_jq_sum = 0.0_rp
       contour_options%contour_points = config%contour_points
       contour_options%contour_shape = config%contour_shape
       contour_options%contour_margin = config%contour_margin
       contour_options%contour_height_fraction = config%contour_height_fraction
       contour_options%account_fermi_poles = config%contour_account_fermi_poles
+      native_contour_options%contour_points = config%native_contour_points
+      native_contour_options%contour_shape = 'ellipse'
+      native_contour_options%contour_margin = config%native_contour_margin
+      native_contour_options%contour_height_fraction = config%native_contour_height_fraction
+      native_contour_options%account_fermi_poles = config%native_contour_account_fermi_poles
 
       call system_clock(response_start)
 
@@ -607,21 +642,23 @@ contains
       total_response_seconds = elapsed_clock_seconds(response_start,clock_end,clock_rate)
 
       if (native_ready) then
-         if (config%native_energy_points > 0) energy_obj%channels_ldos = config%native_energy_points
-         call energy_obj%e_mesh()
-         native_eta = config%native_green_eta
-         call lkag_native_path(reciprocal_obj, lattice_obj, energy_obj, q_direct, native_eta, native_total)
+         call native_exchange_q_driver(lattice_obj, reciprocal_obj, q_direct, native_contour_options, native_jq_sum, &
+            native_total, native_contour_report)
+         call g_logger%info('[exchange_q]: native Turek contour points/poles='//trim(int2str(native_contour_report%contour_points))//'/'// &
+            trim(int2str(native_contour_report%fermi_poles))//' solve/contour/pole='// &
+            trim(real_to_string(native_contour_report%solve_seconds))//'/'//trim(real_to_string(native_contour_report%contour_seconds))//'/'// &
+            trim(real_to_string(native_contour_report%pole_seconds))//' s', __FILE__, __LINE__)
       end if
       call g_logger%info('[exchange_q]: timing endpoint/hamiltonian+T/C/spectral='//trim(real_to_string(endpoint_seconds))//'/'// &
          trim(real_to_string(hamiltonian_seconds))//'/'//trim(real_to_string(assembly_seconds))//'/'//trim(real_to_string(contraction_seconds))//' s', __FILE__, __LINE__)
       call write_exchange_q_output(config, lattice_obj, reciprocal_obj, q_direct, q_cart, finite_tt, finite_contact, &
-         finite_total, native_total, native_ready, endpoint_mode, endpoint_reused, q_commensurate, endpoint_residual, &
+         finite_total, native_total, native_jq_sum, native_ready, endpoint_mode, endpoint_reused, q_commensurate, endpoint_residual, &
          endpoint_seconds, assembly_seconds, contraction_seconds, hamiltonian_seconds, spectral_tt, spectral_contact, spectral_total, contour_tt, &
          contour_contact, contour_total, gf_seconds, solve_seconds, contour_seconds, total_response_seconds)
       if (native_ready) then
          call compute_native_gamma_and_report(native_total, q_direct, native_gamma)
          native_q = maxval(abs(native_total))
-         call g_logger%info('[exchange_q]: native LKAG-q completed; |dJ|_max='//trim(real_to_string(native_q))// &
+         call g_logger%info('[exchange_q]: native Turek J(q) completed; |DeltaJ|_max='//trim(real_to_string(native_q))// &
             ' Ry, gamma='//trim(real_to_string(native_gamma))//' Ry', __FILE__, __LINE__)
       end if
       call fixture%clear()
@@ -632,6 +669,7 @@ contains
          axes, hessian, torque_torque, contact, complete, endpoint_index, endpoint_reused, q_commensurate, &
          endpoint_residual, endpoint_mode)
       deallocate(native_total)
+      deallocate(native_jq_sum)
    end subroutine run_exchange_q
 
    subroutine validate_exchange_q_capability(config, control_obj, ham, self_obj, recip)
@@ -707,124 +745,44 @@ contains
       deallocate(h,work,rwork)
    end subroutine solve_unfolded_endpoints
 
-   subroutine lkag_native_path(recip, lattice_obj, energy_obj, q_direct, eta, delta_j)
-      type(reciprocal), intent(inout) :: recip
-      type(lattice), intent(in) :: lattice_obj
-      type(energy), intent(in) :: energy_obj
-      real(rp), intent(in) :: q_direct(:, :), eta
-      real(rp), intent(out) :: delta_j(:)
-      real(rp), allocatable :: path_j(:), q_j(:, :)
-      integer :: iq
+   subroutine native_exchange_q_driver(lat, recip, q_direct, options, jq_sum, delta_j, report)
+      type(lattice), intent(inout) :: lat
+      type(reciprocal), intent(in) :: recip
+      real(rp), intent(in) :: q_direct(:, :)
+      type(native_turek_contour_options), intent(in) :: options
+      real(rp), intent(out) :: jq_sum(:), delta_j(:)
+      type(native_turek_contour_report), intent(out) :: report
+      real(rp), allocatable :: jq(:, :, :)
+      real(rp) :: energy_bounds(2), kT
+      integer :: nsite, nq, iq, gamma_index
 
-      allocate(path_j(size(q_direct,2)), q_j(3,1))
-      do iq = 1, size(q_direct,2)
-         q_j(:,1) = q_direct(:,iq)
-         call lkag_native_q(recip, lattice_obj, energy_obj, q_j, eta, path_j(iq))
-      end do
-      delta_j = (path_j(1)-path_j)
-      deallocate(path_j,q_j)
-   end subroutine lkag_native_path
-
-   subroutine lkag_native_q(recip, lattice_obj, energy_obj, q_direct, eta, value)
-      type(reciprocal), intent(inout) :: recip
-      type(lattice), intent(in) :: lattice_obj
-      type(energy), intent(in) :: energy_obj
-      real(rp), intent(in) :: q_direct(:, :), eta
-      real(rp), intent(out) :: value
-      real(rp), allocatable :: endpoint_evals(:, :), integrand(:, :)
-      complex(rp), allocatable :: endpoint_evecs(:, :, :), green_left(:, :), green_right(:, :)
-      complex(rp), allocatable :: weighted_left(:, :), weighted_right(:, :)
-      complex(rp), allocatable :: di(:, :, :)
-      complex(rp), allocatable :: gni(:, :), gxi(:, :), gyi(:, :), gzi(:, :)
-      complex(rp), allocatable :: gnj(:, :), gxj(:, :), gyj(:, :), gzj(:, :)
-      complex(rp) :: z
-      integer :: nsite, nmat, nk, ne, ie, ik, ia, ja
-      real(rp) :: weighted, qnorm
-
-      nsite = lattice_obj%nrec
-      nmat = size(recip%eigenvalues,1)
-      nk = size(recip%eigenvalues,2)
-      ne = size(energy_obj%ene)
-      qnorm = sqrt(sum(q_direct(:,1)**2))
-      if (qnorm <= q_zero_tolerance) then
-         endpoint_evals = recip%eigenvalues
-         endpoint_evecs = recip%eigenvectors
-      else
-         call solve_unfolded_endpoints(recip, recip%k_points + spread_q(q_direct(:,1),nk), endpoint_evals, endpoint_evecs)
+      nsite = lat%nrec; nq = size(q_direct,2)
+      if (size(q_direct,1) /= 3 .or. size(jq_sum) /= nq .or. size(delta_j) /= nq) then
+         error stop 'native_exchange_q_driver: shape mismatch'
       end if
-      allocate(integrand(ne,nsite*nsite), di(norb,norb,nsite), &
-               green_left(nmat,nmat), green_right(nmat,nmat), weighted_left(nmat,nmat), weighted_right(nmat,nmat), &
-               gni(norb,norb), gxi(norb,norb), &
-               gyi(norb,norb), gzi(norb,norb), gnj(norb,norb), gxj(norb,norb), gyj(norb,norb), gzj(norb,norb))
-      integrand = 0.0_rp
-      do ie = 1, ne
-         z = cmplx(energy_obj%ene(ie), eta, rp)
-         do ia = 1, nsite
-            call lattice_obj%symbolic_atoms(lattice_obj%nbulk+ia)%d_matrix(di(:,:,ia), energy_obj%ene(ie))
-         end do
-         do ik = 1, nk
-            call spectral_green(recip%eigenvalues(:,ik), recip%eigenvectors(:,:,ik), z, green_left, weighted_left)
-            call spectral_green(endpoint_evals(:,ik), endpoint_evecs(:,:,ik), z, green_right, weighted_right)
-            do ia = 1, nsite
-               do ja = 1, nsite
-                  call pauli_site_block(green_left, ia, ja, gni, gxi, gyi, gzi)
-                  call pauli_site_block(green_right, ja, ia, gnj, gxj, gyj, gzj)
-                  weighted = lkag_pauli_product(di(:,:,ia), di(:,:,ja), gni, gxi, gyi, gzi, gnj, gxj, gyj, gzj)
-                  integrand(ie, (ia-1)*nsite+ja) = integrand(ie, (ia-1)*nsite+ja) + &
-                     recip%k_weights(ik)*weighted
-               end do
-            end do
-         end do
+      if (.not. allocated(recip%eigenvalues)) error stop 'native_exchange_q_driver: accepted eigenvalues are unavailable'
+      energy_bounds = [minval(recip%eigenvalues)-0.5_rp, maxval(recip%eigenvalues)+0.5_rp]
+      kT = max(recip%temperature*reciprocal_kb_ry_per_k, 1.0e-10_rp)
+      allocate(jq(nsite,nsite,nq))
+      call native_exchange_q_contour(lat, recip%k_points, recip%k_weights, q_direct, recip%fermi_level, kT, &
+         energy_bounds, options, jq, report)
+      do iq = 1, nq
+         jq_sum(iq) = sum(jq(:,:,iq))
       end do
-      value = 0.0_rp
-      do ia = 1, nsite*nsite
-         call simpson_f(weighted, energy_obj%ene, energy_obj%fermi, energy_obj%nv1, integrand(:,ia), &
-            .true., .false., 0.0_rp)
-         value = value + weighted/real(sum(recip%k_weights),rp)/(4.0_rp*pi)
+      gamma_index = 0
+      do iq = 1, nq
+         if (sqrt(sum(q_direct(:,iq)**2)) <= q_zero_tolerance) then
+            gamma_index = iq
+            exit
+         end if
       end do
-      deallocate(endpoint_evals,endpoint_evecs,integrand,di,green_left,green_right,weighted_left,weighted_right, &
-         gni,gxi,gyi,gzi,gnj,gxj,gyj,gzj)
-   end subroutine lkag_native_q
-
-   subroutine spectral_green(eigenvalues, eigenvectors, z, green, weighted_vectors)
-      real(rp), intent(in) :: eigenvalues(:)
-      complex(rp), intent(in) :: eigenvectors(:, :), z
-      complex(rp), intent(out) :: green(:, :), weighted_vectors(:, :)
-      complex(rp) :: alpha, beta
-      integer :: i, j, n
-      external :: zgemm
-      n = size(eigenvalues)
-      do j = 1, n
-         do i = 1, n
-            weighted_vectors(i,j) = eigenvectors(i,j)/ (z-eigenvalues(j))
-         end do
-      end do
-      alpha = cmplx(1.0_rp,0.0_rp,rp)
-      beta = cmplx(0.0_rp,0.0_rp,rp)
-      call zgemm('N','C',n,n,n,alpha,weighted_vectors,n,eigenvectors,n,beta,green,n)
-   end subroutine spectral_green
-
-   subroutine pauli_site_block(green, site_i, site_j, gn, gx, gy, gz)
-      complex(rp), intent(in) :: green(:, :)
-      integer, intent(in) :: site_i, site_j
-      complex(rp), intent(out) :: gn(:, :), gx(:, :), gy(:, :), gz(:, :)
-      integer :: i, j, n, no
-      integer :: i0, j0, io, jo
-      no = size(gn,1)
-      i0 = (site_i-1)*2*no; j0 = (site_j-1)*2*no
-      do j = 1, no
-         do i = 1, no
-            io = i0+i; jo = j0+j
-            gn(i,j) = 0.5_rp*(green(io,jo)+green(io+no,jo+no))
-            gz(i,j) = 0.5_rp*(green(io,jo)-green(io+no,jo+no))
-            gy(i,j) = 0.5_rp*cmplx(0.0_rp,1.0_rp,rp)*(green(io,jo+no)-green(io+no,jo))
-            gx(i,j) = 0.5_rp*(green(io,jo+no)+green(io+no,jo))
-         end do
-      end do
-   end subroutine pauli_site_block
+      if (gamma_index == 0) error stop 'native_exchange_q_driver: q path must contain Gamma for DeltaJ'
+      delta_j = jq_sum(gamma_index)-jq_sum
+      deallocate(jq)
+   end subroutine native_exchange_q_driver
 
    subroutine write_exchange_q_output(config, lattice_obj, recip, q_direct, q_cart, finite_tt, finite_contact, &
-                                      finite_total, native_total, native_ready, endpoint_mode, endpoint_reused, &
+                                      finite_total, native_total, native_jq_sum, native_ready, endpoint_mode, endpoint_reused, &
                                       q_commensurate, endpoint_residual, endpoint_seconds, assembly_seconds, contraction_seconds, &
                                       hamiltonian_seconds, spectral_tt, spectral_contact, spectral_total, contour_tt, contour_contact, contour_total, &
                                       gf_seconds, solve_seconds, contour_seconds, total_response_seconds)
@@ -834,7 +792,7 @@ contains
       real(rp), intent(in) :: q_direct(:, :), q_cart(:, :), finite_tt(:, :, :), finite_contact(:, :, :), finite_total(:, :, :)
       real(rp), intent(in) :: spectral_tt(:, :, :), spectral_contact(:, :, :), spectral_total(:, :, :)
       real(rp), intent(in) :: contour_tt(:, :, :), contour_contact(:, :, :), contour_total(:, :, :)
-      real(rp), intent(in), allocatable :: native_total(:)
+      real(rp), intent(in), allocatable :: native_total(:), native_jq_sum(:)
       logical, intent(in) :: native_ready
       character(len=*), intent(in) :: endpoint_mode(:)
       logical, intent(in) :: endpoint_reused(:), q_commensurate(:)
@@ -846,6 +804,7 @@ contains
       open(newunit=unit, file=trim(config%output_file), status='replace', action='write')
       write(unit,'(a)') '# exchange_q static force-theorem exchange curvature'
       write(unit,'(a)') '# observable = DeltaJ(q) = J(Gamma) - J(q)'
+      if (native_ready) write(unit,'(a)') '# native_observable = native Turek J(q), with native_DeltaJ(q)=native J(Gamma)-native J(q)'
       write(unit,'(a)') '# k_mesh performs the electronic BZ integration; q_path is the independent magnetic perturbation path.'
       write(unit,'(a,3(i0,1x))') '# k_mesh = ', recip%nk_mesh
       write(unit,'(a,a)') '# q_coordinates_input = ', trim(config%q_coordinates)
@@ -870,13 +829,24 @@ contains
       write(unit,'(a,a,1x,i0,1x,a,1x,es16.8,1x,a,1x,es16.8)') '# contour_provenance shape=', trim(config%contour_shape), &
          config%contour_points, 'margin=', config%contour_margin, 'height_fraction=', config%contour_height_fraction
       write(unit,'(a,a)') '# fermi_pole_residues_accounted=', merge('true ','false',config%contour_account_fermi_poles)
+      if (native_ready) then
+         write(unit,'(a,a,1x,i0,1x,a,1x,es16.8,1x,a,1x,es16.8)') '# native_contour_provenance shape=', 'ellipse', &
+            config%native_contour_points, 'margin=', config%native_contour_margin, &
+            'height_fraction=', config%native_contour_height_fraction
+         write(unit,'(a,a)') '# native_fermi_pole_residues_accounted=', &
+            merge('true ','false',config%native_contour_account_fermi_poles)
+      end if
       write(unit,'(a)') '# units: exchange=Ry, q=1/A, stiffness diagnostic=Ry A^2'
       nsite = size(finite_total,1)
       if (nsite == 1) then
          if (config%finite_h_response_backend == 'both') then
-            write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv spectral_TT_Ry spectral_contact_Ry spectral_total_Ry contour_TT_Ry contour_contact_Ry contour_total_Ry abs_total_residual_Ry relative_total_residual'
+            if (native_ready) then
+               write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv spectral_TT_Ry spectral_contact_Ry spectral_total_Ry contour_TT_Ry contour_contact_Ry contour_total_Ry abs_total_residual_Ry relative_total_residual native_Jq_Ry native_dJ_Ry native_dJ_mRy native_dJ_over_q2_RyA2 finiteH_minus_native_Ry'
+            else
+               write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv spectral_TT_Ry spectral_contact_Ry spectral_total_Ry contour_TT_Ry contour_contact_Ry contour_total_Ry abs_total_residual_Ry relative_total_residual'
+            end if
          else if (config%write_components .and. native_ready) then
-            write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv finiteH_TT_Ry finiteH_contact_Ry finiteH_total_Ry finiteH_total_mRy finiteH_dJ_over_q2_RyA2 native_dJ_Ry native_dJ_mRy native_dJ_over_q2_RyA2 finiteH_minus_native_Ry'
+            write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv finiteH_TT_Ry finiteH_contact_Ry finiteH_total_Ry finiteH_total_mRy finiteH_dJ_over_q2_RyA2 native_Jq_Ry native_dJ_Ry native_dJ_mRy native_dJ_over_q2_RyA2 finiteH_minus_native_Ry'
          else if (config%write_components) then
             write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv finiteH_TT_Ry finiteH_contact_Ry finiteH_total_Ry finiteH_total_mRy finiteH_dJ_over_q2_RyA2'
          else if (native_ready) then
@@ -901,8 +871,8 @@ contains
                if (.not. config%write_components) write(unit,'(es24.16,1x)', advance='no') finite_total(1,1,iq)
                write(unit,'(2(es24.16,1x))', advance='no') 1000.0_rp*finite_total(1,1,iq), safe_divide(finite_total(1,1,iq),q2)
             end if
-            if (native_ready) write(unit,'(4(es24.16,1x))', advance='no') native_total(iq), 1000.0_rp*native_total(iq), &
-               safe_divide(native_total(iq),q2), finite_total(1,1,iq)-native_total(iq)
+            if (native_ready) write(unit,'(5(es24.16,1x))', advance='no') native_jq_sum(iq), native_total(iq), &
+               1000.0_rp*native_total(iq), safe_divide(native_total(iq),q2), finite_total(1,1,iq)-native_total(iq)
             write(unit,*)
          end do
       else
@@ -914,7 +884,7 @@ contains
          else
             write(unit,'(a,i0,a)') '# matrix columns: finiteH_total[1,1..', nsite*nsite, ']'
          end if
-         if (native_ready) write(unit,'(a)') '# optional trailing column: native_qspace_dJ_Ry (ordered site-pair sum)'
+         if (native_ready) write(unit,'(a)') '# optional trailing columns: native_Jq_Ry and native_qspace_dJ_Ry (ordered site-pair sum)'
          do iq = 1, config%n_q
             qmag = 2.0_rp*pi/lattice_obj%alat*sqrt(sum(q_cart(:,iq)**2))
             write(unit,'(i0,1x,3(es24.16,1x),3(es24.16,1x),es24.16,1x)', advance='no') iq, q_direct(:,iq), &
@@ -967,7 +937,7 @@ contains
                   write(unit,'(es24.16,1x)', advance='no') finite_total(ia,ja,iq)
                end do
             end do
-            if (native_ready) write(unit,'(es24.16,1x)', advance='no') native_total(iq)
+            if (native_ready) write(unit,'(2(es24.16,1x))', advance='no') native_jq_sum(iq), native_total(iq)
             write(unit,*)
          end do
       end if

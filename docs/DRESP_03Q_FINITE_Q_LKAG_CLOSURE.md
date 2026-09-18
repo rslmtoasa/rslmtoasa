@@ -1,6 +1,10 @@
 # DRESP-03Q — Finite-q Torque-Hessian and Native LKAG Closure
 
-Status: **BLOCKED — FIXED-Z REPRESENTATION CONTRACTION**.
+Status: **Historical pre-close record.**  The native path-operator contour and
+Fourier closure requested by DRESP-03TG-CLOSE are recorded in
+[`DRESP_03TG_NATIVE_TUREK_CONTOUR_CLOSE.md`](DRESP_03TG_NATIVE_TUREK_CONTOUR_CLOSE.md).
+The older blocked-gate narrative below is retained as provenance for the
+pre-close q-oracle work.
 
 The finite-q operator algebra and the live reciprocal-H adapter are implemented
 and independently tested.  The old Fe comparison is retained below as a

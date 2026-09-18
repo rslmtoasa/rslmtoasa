@@ -1,6 +1,11 @@
 # DRESP-03TG — Native Turek / LMTO Green-Function Representation Audit
 
-Status: **BLOCKED — FIXED-Z REPRESENTATION CONTRACTION**.
+Status: **CLOSED — see `DRESP_03TG_NATIVE_TUREK_CONTOUR_CLOSE.md` for the
+native contour, Fourier, and bcc-Fe production closure.**
+
+The remainder of this file is the historical fixed-complex-energy audit that
+established the representation contract before the production contour route
+was added.
 
 This is a focused representation audit. It treats the native Turek object as
 the auxiliary/path-operator Green function used by Pajda et al.,

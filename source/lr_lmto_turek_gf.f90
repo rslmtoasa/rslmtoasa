@@ -21,7 +21,9 @@ module lr_lmto_turek_gf_mod
    public :: native_delta_p
    public :: native_structure_constants
    public :: native_path_operator
+   public :: native_path_operator_from_structure
    public :: native_inverse
+   public :: native_exchange_trace
    public :: native_exchange_integrand
    public :: native_finite_h_integrand
    public :: native_collinear_pauli_integrand
@@ -209,11 +211,8 @@ contains
       complex(rp), intent(in) :: z
       real(rp), intent(in) :: k(3)
       complex(rp), intent(out) :: pmat(:, :), smat(:, :), gmat(:, :)
-      complex(rp), allocatable :: psite(:,:), s_orb(:,:), work(:,:), rhs(:,:)
-      real(rp), allocatable :: alpha(:)
-      integer :: nsite, norb, nspin, isite, ntype, ia, it, p0, q0, ioff, joff, info
-      integer, allocatable :: ipiv(:)
-      external :: zgesv
+      complex(rp), allocatable :: s_orb(:,:)
+      integer :: nsite, norb, nspin, isite, it, p0, q0, ioff
 
       nsite = lat%nrec
       it = lat%iz(lat%atlist(1))
@@ -222,17 +221,8 @@ contains
       if (size(pmat,1) /= nspin .or. size(smat,1) /= nspin .or. size(gmat,1) /= nspin) then
          error stop 'native_path_operator: invalid matrix shape'
       end if
-      allocate(psite(2*norb,2*norb), s_orb(norb*nsite,norb*nsite), alpha(0:lat%symbolic_atoms(it)%potential%lmax))
+      allocate(s_orb(norb*nsite,norb*nsite))
       call native_structure_constants(lat,k,s_orb)
-      pmat = cmplx(0.0_rp,0.0_rp,rp)
-      do isite = 1, nsite
-         ntype = lat%ib(isite); ia = lat%atlist(ntype); it = lat%iz(ia)
-         if ((lat%symbolic_atoms(it)%potential%lmax+1)**2 /= norb) error stop 'native_path_operator: mixed lmax unsupported'
-         call native_screening_alpha(lat%symbolic_atoms(it),alpha)
-         call native_screened_p_matrix(lat%symbolic_atoms(it),z,alpha,psite)
-         p0 = (isite-1)*2*norb
-         pmat(p0+1:p0+2*norb,p0+1:p0+2*norb) = psite
-      end do
       smat = cmplx(0.0_rp,0.0_rp,rp)
       do isite = 1,nsite
          do q0 = 1,nsite
@@ -243,25 +233,71 @@ contains
                s_orb(p0+1:p0+norb,ioff+1:ioff+norb)
          end do
       end do
-      allocate(work(nspin,nspin),rhs(nspin,nspin),ipiv(nspin))
+      call native_path_operator_from_structure(lat,z,smat,pmat,gmat)
+      deallocate(s_orb)
+   end subroutine native_path_operator
+
+   !> Solve the native P(z)-S path operator with a prebuilt spin structure
+   !> matrix.  Contour integrations call this repeatedly for one fixed k or
+   !> k+q; separating the structure build from the energy solve avoids
+   !> rebuilding the real-space Fourier sum at every contour node.
+   subroutine native_path_operator_from_structure(lat, z, smat, pmat, gmat)
+      type(lattice), intent(inout) :: lat
+      complex(rp), intent(in) :: z, smat(:, :)
+      complex(rp), intent(out) :: pmat(:, :), gmat(:, :)
+      complex(rp), allocatable :: psite(:,:), work(:,:), rhs(:,:)
+      real(rp), allocatable :: alpha(:)
+      integer :: nsite, norb, nspin, isite, ntype, ia, it, p0, info
+      integer, allocatable :: ipiv(:)
+      external :: zgesv
+
+      nsite = lat%nrec
+      it = lat%iz(lat%atlist(1))
+      norb = (lat%symbolic_atoms(it)%potential%lmax + 1)**2
+      nspin = 2*norb*nsite
+      if (any(shape(smat) /= [nspin,nspin]) .or. any(shape(pmat) /= [nspin,nspin]) .or. &
+          any(shape(gmat) /= [nspin,nspin])) then
+         error stop 'native_path_operator_from_structure: invalid matrix shape'
+      end if
+      allocate(psite(2*norb,2*norb), alpha(0:lat%symbolic_atoms(it)%potential%lmax), &
+         work(nspin,nspin),rhs(nspin,nspin),ipiv(nspin))
+      pmat = cmplx(0.0_rp,0.0_rp,rp)
+      do isite = 1,nsite
+         ntype = lat%ib(isite); ia = lat%atlist(ntype); it = lat%iz(ia)
+         if ((lat%symbolic_atoms(it)%potential%lmax+1)**2 /= norb) then
+            error stop 'native_path_operator_from_structure: mixed lmax unsupported'
+         end if
+         call native_screening_alpha(lat%symbolic_atoms(it),alpha)
+         call native_screened_p_matrix(lat%symbolic_atoms(it),z,alpha,psite)
+         p0 = (isite-1)*2*norb
+         pmat(p0+1:p0+2*norb,p0+1:p0+2*norb) = psite
+      end do
       work = pmat-smat
       rhs = cmplx(0.0_rp,0.0_rp,rp)
       do info = 1,nspin
          rhs(info,info) = cmplx(1.0_rp,0.0_rp,rp)
       end do
       call zgesv(nspin,nspin,work,nspin,ipiv,rhs,nspin,info)
-      if (info /= 0) error stop 'native_path_operator: complex solve failed'
+      if (info /= 0) error stop 'native_path_operator_from_structure: complex solve failed'
       gmat = rhs
-      deallocate(psite,s_orb,alpha,work,rhs,ipiv)
-   end subroutine native_path_operator
+      deallocate(psite,alpha,work,rhs,ipiv)
+   end subroutine native_path_operator_from_structure
+
+   pure function native_exchange_trace(delta_i, delta_j, gup_ij, gdown_ji) result(value)
+      complex(rp), intent(in) :: delta_i(:,:), delta_j(:,:), gup_ij(:,:), gdown_ji(:,:)
+      complex(rp) :: product(size(delta_i,1),size(delta_i,2)), value
+      integer :: i
+      product = matmul(delta_i,matmul(gup_ij,matmul(delta_j,gdown_ji)))
+      value = cmplx(0.0_rp,0.0_rp,rp)
+      do i = 1, size(product,1)
+         value = value + product(i,i)
+      end do
+   end function native_exchange_trace
 
    pure function native_exchange_integrand(delta_i, delta_j, gup_ij, gdown_ji) result(value)
       complex(rp), intent(in) :: delta_i(:,:), delta_j(:,:), gup_ij(:,:), gdown_ji(:,:)
-      complex(rp) :: product(size(delta_i,1),size(delta_i,2))
       real(rp) :: value
-      integer :: i
-      product = matmul(delta_i,matmul(gup_ij,matmul(delta_j,gdown_ji)))
-      value = sum([(aimag(product(i,i)),i=1,size(product,1))])
+      value = aimag(native_exchange_trace(delta_i,delta_j,gup_ij,gdown_ji))
    end function native_exchange_integrand
 
    pure function native_finite_h_integrand(d_i,d_j,gup_ij,gdown_ji) result(value)

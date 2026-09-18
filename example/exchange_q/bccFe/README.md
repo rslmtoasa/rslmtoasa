@@ -22,11 +22,13 @@ observable is `DeltaJ(q) = J(Gamma) - J(q)`, with separate torque-torque,
 contact, and total finite-H components.  `DeltaJ/q^2` is reported only for
 nonzero q and is a diagnostic, not an automatic stiffness fit.
 
-Set `native_crosscheck = .true.` only after the LKAG q-space oracle has passed
-its independent validation and convergence checks; this enables the controlled
-metallic native-LKAG columns. For convergence studies, set
-`native_green_eta` and a positive `native_energy_points` in `&exchange_q`;
-the latter rebuilds the native Simpson energy mesh for that diagnostic only.
+Set `native_turek = .true.` to enable the native screened-LMTO/Turek contour
+route. `native_crosscheck = .true.` remains a compatibility alias. The native
+columns report absolute `J(q)` and native `DeltaJ(q)`; no fitted scale is
+applied. The contour is controlled by `native_contour_points`,
+`native_contour_margin`, `native_contour_height_fraction`, and
+`native_contour_account_fermi_poles`. The closure validation deck is
+`input_dresp03tg_close_12.nml`.
 
 The production finite-H formulation is selected by
 `finite_h_spectral_mode = 'metallic'` and inherits the reciprocal SCF
