@@ -113,6 +113,7 @@ module tddft_dyson_mod
 
    public :: evaluate_tddft_dyson
    public :: solve_tddft_dyson_frequency
+   public :: tddft_denominator_minimum_magnitude_eigenvalue
    public :: tddft_loss_matrix
    public :: loss_matrix_hermiticity_residual
 
@@ -584,5 +585,15 @@ contains
       end if
       deallocate(work_matrix, eigenvalues, work, rwork)
    end subroutine minimum_magnitude_eigenvalue
+
+   !> Public diagnostic seam for compact/site-space callers.  The solve path
+   !> remains owned by this module; callers do not duplicate the LAPACK
+   !> eigenvalue diagnostic or alter the denominator before measuring it.
+   subroutine tddft_denominator_minimum_magnitude_eigenvalue(matrix, minimum_magnitude)
+      complex(rp), intent(in) :: matrix(:, :)
+      real(rp), intent(out) :: minimum_magnitude
+
+      call minimum_magnitude_eigenvalue(matrix, minimum_magnitude)
+   end subroutine tddft_denominator_minimum_magnitude_eigenvalue
 
 end module tddft_dyson_mod

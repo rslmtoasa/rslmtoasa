@@ -20,6 +20,7 @@ integer :: response_lmax
 character(len=48) :: interaction_route
 logical :: goldstone_correction
 character(len=32) :: backend
+character(len=8) :: projected_selector
 logical :: reciprocal_backend_crosscheck
 character(len=32) :: native_rsgf_provider
 integer :: gf_integration_points
@@ -33,5 +34,5 @@ character(len=256) :: output_file
 
 namelist /tddft/ enabled, channel, n_q, q_list, n_omega, use_omega_grid, omega_grid, &
    omega_min, omega_max, eta, n_eta, eta_grid, response_lmax, interaction_route, goldstone_correction, &
-   backend, reciprocal_backend_crosscheck, native_rsgf_provider, gf_integration_points, gf_integration_eta, gf_energy_margin, &
+   backend, projected_selector, reciprocal_backend_crosscheck, native_rsgf_provider, gf_integration_points, gf_integration_eta, gf_energy_margin, &
    gf_closure_audit, dyson_static_audit, validate_interacting_covariance, write_full_matrix, output_file

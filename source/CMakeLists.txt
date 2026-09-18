@@ -96,6 +96,7 @@ add_library(${PROJECT_NAME} STATIC
     lr_gf_susceptibility.f90
     lr_product_gf_susceptibility.f90
     lr_projected_reciprocal_chi0.f90
+    lr_projected_interacting_response.f90
     lr_kl_static_bridge.f90
     lr_lmto_turek_gf.f90
     lr_lmto_turek_contour.f90

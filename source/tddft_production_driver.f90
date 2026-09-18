@@ -49,6 +49,9 @@ module tddft_production_driver_mod
    use lr_projected_site_spin_mod, only: projected_site_spin_contract
    use lr_projected_reciprocal_chi0_mod, only: projected_chi0_request, projected_chi0_result, &
       evaluate_projected_lehmann_chi0, evaluate_projected_finite_width_chi0, evaluate_projected_gf_chi0
+   use lr_projected_interacting_response_mod, only: projected_mills_interaction_result, &
+      projected_dyson_request, projected_dyson_result, evaluate_projected_mills_from_reciprocal, &
+      evaluate_projected_dyson
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
    use tddft_native_rsgf_provider_mod, only: tddft_native_rsgf_provider
@@ -77,6 +80,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_projected_chi0 = 'projected_chi0'
    character(len=*), parameter, public :: tddft_driver_backend_static_interactions = 'static_interactions'
    character(len=*), parameter, public :: tddft_driver_backend_compact_dyson = 'compact_dyson'
+   character(len=*), parameter, public :: tddft_driver_backend_projected_mills = 'projected_mills'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -96,6 +100,7 @@ module tddft_production_driver_mod
       character(len=48) :: interaction_route = tddft_driver_route_direct_alsda
       logical :: goldstone_correction = .false.
       character(len=32) :: backend = tddft_driver_backend_lehmann
+      character(len=8) :: projected_selector = 'spd'
       logical :: reciprocal_backend_crosscheck = .false.
       character(len=32) :: native_rsgf_provider = 'auto'
       integer :: gf_integration_points = 2001
@@ -176,6 +181,7 @@ contains
       this%interaction_route = tddft_driver_route_direct_alsda
       this%goldstone_correction = .false.
       this%backend = tddft_driver_backend_lehmann
+      this%projected_selector = 'spd'
       this%reciprocal_backend_crosscheck = .false.
       this%native_rsgf_provider = 'auto'
       this%gf_integration_points = 2001
@@ -210,6 +216,7 @@ contains
 
       enabled = .false.
       channel = 'chi_plus'
+      projected_selector = 'spd'
       n_q = 1
       q_list = 0.0_rp
       n_omega = 1
@@ -264,6 +271,7 @@ contains
       config%interaction_route = trim(lower(interaction_route))
       config%goldstone_correction = goldstone_correction
       config%backend = trim(lower(backend))
+      config%projected_selector = trim(lower(projected_selector))
       config%reciprocal_backend_crosscheck = reciprocal_backend_crosscheck
       config%native_rsgf_provider = trim(lower(native_rsgf_provider))
       config%gf_integration_points = gf_integration_points
@@ -342,12 +350,23 @@ contains
           trim(config%backend) /= tddft_driver_backend_product_convergence .and. &
           trim(config%backend) /= tddft_driver_backend_projected_chi0 .and. &
           trim(config%backend) /= tddft_driver_backend_static_interactions .and. &
-          trim(config%backend) /= tddft_driver_backend_compact_dyson) then
-         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions or compact_dyson'
+          trim(config%backend) /= tddft_driver_backend_compact_dyson .and. &
+          trim(config%backend) /= tddft_driver_backend_projected_mills) then
+         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions, compact_dyson or projected_mills'
+      end if
+      if (trim(config%backend) == tddft_driver_backend_projected_mills) then
+         if (trim(config%projected_selector) /= 'd' .and. trim(config%projected_selector) /= 'spd' .and. &
+             trim(config%projected_selector) /= 'both') then
+            error stop 'TDDFT input: projected_selector must be d, spd, or both'
+         end if
+         if (config%response_lmax >= 0 .and. config%response_lmax /= 4) then
+            error stop 'TDDFT input: projected_mills requires the complete DRESP-01 response_lmax=4 contract'
+         end if
       end if
       if (trim(config%backend) /= tddft_driver_backend_product_convergence .and. &
-          trim(config%backend) /= tddft_driver_backend_static_interactions .and. size(config%eta_values) /= 1) then
-         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence or static_interactions'
+          trim(config%backend) /= tddft_driver_backend_static_interactions .and. &
+          trim(config%backend) /= tddft_driver_backend_projected_mills .and. size(config%eta_values) /= 1) then
+         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence, static_interactions, or projected_mills'
       end if
       if (trim(config%backend) == tddft_driver_backend_static_interactions) then
          if (size(config%q_list, 2) /= 1 .or. sum(abs(config%q_list(:, 1))) > 1.0e-12_rp) then
@@ -925,6 +944,14 @@ contains
             reciprocal_obj, lattice_obj, hamiltonian_obj)
          return
       end if
+      if (trim(config%backend) == tddft_driver_backend_projected_mills) then
+         if (.not. use_accepted_kspace_scf) then
+            error stop 'DRESP-04 projected_mills requires the accepted k-space SCF handoff'
+         end if
+         call run_tddft_projected_mills(config, response_space, radial_bases, ground_states, left_state, endpoints, &
+            reciprocal_obj, lattice_obj)
+         return
+      end if
       if (trim(config%backend) == tddft_driver_backend_product_lehmann) then
          ! TDVK-02R2 is a bare-response validation seam only.  It stops at
          ! the naturally prepared reciprocal handoff and never enters KXC,
@@ -1003,6 +1030,229 @@ contains
       if (allocated(result%q_list)) deallocate(result%q_list)
       if (allocated(result%frequencies)) deallocate(result%frequencies)
    end subroutine run_tddft_production
+
+   !> DRESP-04 material seam.  The accepted projected site chi0 is consumed
+   !> directly by the Mills interaction and site-space Dyson wrapper.
+   subroutine run_tddft_projected_mills(config, response_space, radial_bases, ground_states, left_state, endpoints, &
+                                        reciprocal_obj, lattice_obj)
+      type(tddft_production_config), intent(in) :: config
+      type(response_space_layout), target, intent(in) :: response_space
+      type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
+      type(radial_ground_state), target, intent(in) :: ground_states(:)
+      type(lr_electronic_state), target, intent(in) :: left_state
+      type(lr_electronic_state), target, intent(in) :: endpoints(:)
+      type(reciprocal), intent(in) :: reciprocal_obj
+      type(lattice), intent(in) :: lattice_obj
+
+      type(projected_site_spin_contract), target :: contract_d, contract_spd
+      type(lmto_product_response_basis), target :: product_plus, product_minus
+      type(projected_chi0_request) :: bare_request, opposite_request, raw_request
+      type(projected_chi0_result) :: bare_result, opposite_bare_result, raw_bare_result
+      type(projected_mills_interaction_result) :: mills_result
+      type(projected_dyson_request) :: dyson_request, opposite_dyson_request, raw_dyson_request
+      type(projected_dyson_result) :: dyson_result, opposite_dyson_result, raw_dyson_result
+      type(projected_site_spin_contract), pointer :: contract
+      type(lmto_product_response_basis), pointer :: product
+      real(rp), allocatable :: moment(:)
+      real(rp) :: eta_run, covariance_error, raw_mode_residual
+      integer :: projection_index, nprojection, ieta, iq, ifrequency, i, j, unit
+      integer :: gamma_index, positive_index, negative_index
+      character(len=8) :: selector
+      logical :: gamma_found, covariance_found
+
+      if (lattice_obj%nrec /= size(ground_states)) then
+         error stop 'DRESP-04 material seam: lattice/site provenance mismatch'
+      end if
+      if (response_space%response_lmax /= 4) then
+         error stop 'DRESP-04 material seam: complete response_lmax=4 is required'
+      end if
+      call contract_d%initialize(response_space, radial_bases, 'd')
+      call contract_spd%initialize(response_space, radial_bases, 'spd')
+      call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
+      call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
+      allocate(moment(size(ground_states)))
+      gamma_index = find_gamma_q_index(config%q_list)
+      gamma_found = gamma_index > 0
+      positive_index = 0
+      do iq = 1, size(config%q_list, 2)
+         if (sum(abs(config%q_list(:, iq))) > 2.0e-12_rp) then
+            positive_index = iq
+            exit
+         end if
+      end do
+      negative_index = 0
+      if (positive_index > 0) negative_index = find_matching_q(config%q_list, -config%q_list(:, positive_index), 2.0e-12_rp)
+      covariance_found = positive_index > 0 .and. negative_index > 0
+      if (trim(config%projected_selector) == 'both') then
+         nprojection = 2
+      else
+         nprojection = 1
+      end if
+
+      open(newunit=unit, file=trim(config%output_file), status='replace', action='write')
+      write(unit, '(a)') '# DRESP-04 projected Mills/Stoner site-space RPA'
+      write(unit, '(a)') '# accepted_state = one converged reciprocal k-space SCF state; no ladder re-SCF'
+      write(unit, '(a)') '# backend = projected_mills'
+      write(unit, '(a)') '# chi0_backend = DRESP-02 Lehmann direct site matrix'
+      write(unit, '(a)') '# interaction_route = Mills/Stoner mean-field splitting projection'
+      write(unit, '(a)') '# dyson_equation = (I-chi0*U) chi=chi0; certified LAPACK solve; no explicit inverse in production'
+      write(unit, '(a)') '# splitting_convention = H=H0 I+B_sigma sigma_z; H_up-H_down=2 B_sigma; Vz=sigma_z'
+      write(unit, '(a)') '# loss_convention = L=-(chi-chi^dagger)/(2*i*pi), ordinary site matrix'
+      write(unit, '(a)') '# dresp03tg_comparison = not asserted; no same-q DRESP-03TG artifact is consumed by this bounded run'
+      write(unit, '(a,l1)') '# goldstone_correction = ', .false.
+      write(unit, '(a,l1)') '# juelich_sumrule = ', .false.
+      write(unit, '(a,l1)') '# alsda_kernel = ', .false.
+      write(unit, '(a)') '# columns: selector eta_Ry q_index omega_Ry row col bare_Re bare_Im enhanced_Re enhanced_Im loss_Re loss_Im min_sv max_sv cond min_abs_eig dyson_residual loss_trace -pi_im_trace'
+
+      do projection_index = 1, nprojection
+         if (nprojection == 1 .and. trim(config%projected_selector) == 'd') then
+            selector = 'd'
+            contract => contract_d
+            product => product_plus
+         else if (nprojection == 1 .and. trim(config%projected_selector) == 'spd') then
+            selector = 'spd'
+            contract => contract_spd
+            product => product_plus
+         else if (projection_index == 1) then
+            selector = 'd'
+            contract => contract_d
+            product => product_plus
+         else
+            selector = 'spd'
+            contract => contract_spd
+            product => product_plus
+         end if
+         if (trim(config%channel) == lr_channel_minus) product => product_minus
+         call contract%moment_from_operator(left_state%eigenvalues, left_state%eigenvectors, left_state%k_weights, &
+            left_state%fermi_level, left_state%temperature, ground_states, moment)
+         call evaluate_projected_mills_from_reciprocal(contract, radial_bases, reciprocal_obj, &
+            left_state%fermi_level, moment, mills_result)
+         if (trim(mills_result%classification) == 'UNSUPPORTED') then
+            error stop 'DRESP-04 material seam: projected Mills mapping is unsupported'
+         end if
+         write(unit, '(a,a)') '# selector = ', trim(selector)
+         write(unit, '(a,*(es24.16,1x))') '# projected_moment = ', mills_result%projected_moment
+         write(unit, '(a,*(es24.16,1x))') '# projected_splitting_B_sigma = ', mills_result%projected_splitting
+         write(unit, '(a,*(es24.16,1x))') '# U_Mills = ', mills_result%interaction_U
+         write(unit, '(a,a)') '# scalarization_classification = ', trim(mills_result%classification)
+         write(unit, '(a,es24.16)') '# scalarization_residual = ', mills_result%scalarization_residual
+         write(unit, '(a,es24.16)') '# locality_residual = ', mills_result%locality_residual
+         write(unit, '(a,es24.16)') '# scalar_fit_condition_number = ', mills_result%fit_condition_number
+         write(unit, '(a,a)') '# interaction_provenance = ', trim(mills_result%provenance)
+         write(unit, '(a,l1)') '# raw_gamma_diagnostic = ', gamma_found
+         write(unit, '(a,l1)') '# q_channel_covariance_requested = ', covariance_found
+
+         do ieta = 1, size(config%eta_values)
+            eta_run = config%eta_values(ieta)
+            do iq = 1, size(config%q_list, 2)
+               bare_request%q = config%q_list(:, iq)
+               bare_request%frequencies = config%frequencies
+               bare_request%eta = eta_run
+               bare_request%channel = config%channel
+               bare_request%contract => contract
+               bare_request%product_basis => product
+               bare_request%electronic_state => left_state
+               bare_request%q_endpoint_state => endpoints(iq)
+               bare_request%diagnostics = .false.
+               call evaluate_projected_lehmann_chi0(bare_request, bare_result)
+
+               dyson_request%selector = selector
+               dyson_request%q = config%q_list(:, iq)
+               dyson_request%frequencies = config%frequencies
+               dyson_request%eta = eta_run
+               dyson_request%channel = config%channel
+               dyson_request%interaction_U = mills_result%interaction_U
+               dyson_request%bare_chi = bare_result%susceptibility
+               dyson_request%interaction_provenance = mills_result%provenance
+               dyson_request%bare_provenance = bare_result%provenance
+               call evaluate_projected_dyson(dyson_request, dyson_result)
+               do ifrequency = 1, size(config%frequencies)
+                  do j = 1, contract%nsite
+                     do i = 1, contract%nsite
+                        write(unit, '(a,1x,a,1x,es24.16,1x,i0,1x,es24.16,1x,2(i0,1x),13(es24.16,1x))') &
+                           'ROW', trim(selector), eta_run, iq, config%frequencies(ifrequency), i, j, &
+                           real(bare_result%susceptibility(i,j,ifrequency),rp), aimag(bare_result%susceptibility(i,j,ifrequency)), &
+                           real(dyson_result%enhanced_chi(i,j,ifrequency),rp), aimag(dyson_result%enhanced_chi(i,j,ifrequency)), &
+                           real(dyson_result%loss_matrix(i,j,ifrequency),rp), aimag(dyson_result%loss_matrix(i,j,ifrequency)), &
+                           dyson_result%denominator_min_singular_value(ifrequency), dyson_result%denominator_max_singular_value(ifrequency), &
+                           dyson_result%condition_number(ifrequency), dyson_result%minimum_magnitude_eigenvalue(ifrequency), &
+                           dyson_result%dyson_residual(ifrequency), dyson_result%loss_trace(ifrequency), &
+                           dyson_result%minus_pi_im_trace(ifrequency)
+                     end do
+                  end do
+               end do
+            end do
+
+            if (gamma_found) then
+               raw_request%q = config%q_list(:, gamma_index)
+               raw_request%frequencies = [0.0_rp]
+               raw_request%eta = eta_run
+               raw_request%channel = config%channel
+               raw_request%contract => contract
+               raw_request%product_basis => product
+               raw_request%electronic_state => left_state
+               raw_request%q_endpoint_state => endpoints(gamma_index)
+               raw_request%diagnostics = .false.
+               call evaluate_projected_lehmann_chi0(raw_request, raw_bare_result)
+               raw_dyson_request%selector = selector
+               raw_dyson_request%q = 0.0_rp
+               raw_dyson_request%frequencies = [0.0_rp]
+               raw_dyson_request%eta = eta_run
+               raw_dyson_request%channel = config%channel
+               raw_dyson_request%interaction_U = mills_result%interaction_U
+               raw_dyson_request%bare_chi = raw_bare_result%susceptibility
+               raw_dyson_request%interaction_provenance = mills_result%provenance
+               raw_dyson_request%bare_provenance = raw_bare_result%provenance
+               call evaluate_projected_dyson(raw_dyson_request, raw_dyson_result)
+               raw_mode_residual = maxval(abs(matmul(raw_dyson_result%denominator(:, :, 1), &
+                  cmplx(moment, 0.0_rp, rp))))
+               write(unit, '(a,1x,a,1x,es24.16,1x,4(es24.16,1x))') 'RAW_GAMMA', trim(selector), eta_run, &
+                  raw_dyson_result%denominator_min_singular_value(1), raw_dyson_result%minimum_magnitude_eigenvalue(1), &
+                  raw_mode_residual, raw_dyson_result%dyson_residual(1)
+            end if
+         end do
+
+         if (covariance_found .and. trim(config%channel) == 'chi_plus') then
+            opposite_request%q = config%q_list(:, negative_index)
+            opposite_request%frequencies = -config%frequencies
+            opposite_request%eta = config%eta
+            opposite_request%channel = lr_channel_minus
+            opposite_request%contract => contract
+            opposite_request%product_basis => product_minus
+            opposite_request%electronic_state => left_state
+            opposite_request%q_endpoint_state => endpoints(negative_index)
+            opposite_request%diagnostics = .false.
+            bare_request%q = config%q_list(:, positive_index)
+            bare_request%frequencies = config%frequencies
+            bare_request%eta = config%eta
+            bare_request%channel = lr_channel_plus
+            bare_request%product_basis => product_plus
+            bare_request%q_endpoint_state => endpoints(positive_index)
+            call evaluate_projected_lehmann_chi0(bare_request, bare_result)
+            call evaluate_projected_lehmann_chi0(opposite_request, opposite_bare_result)
+            dyson_request%selector = selector
+            dyson_request%q = config%q_list(:, positive_index)
+            dyson_request%frequencies = config%frequencies
+            dyson_request%eta = config%eta
+            dyson_request%channel = lr_channel_plus
+            dyson_request%interaction_U = mills_result%interaction_U
+            dyson_request%bare_chi = bare_result%susceptibility
+            call evaluate_projected_dyson(dyson_request, dyson_result)
+            opposite_dyson_request%selector = selector
+            opposite_dyson_request%q = config%q_list(:, negative_index)
+            opposite_dyson_request%frequencies = -config%frequencies
+            opposite_dyson_request%eta = config%eta
+            opposite_dyson_request%channel = lr_channel_minus
+            opposite_dyson_request%interaction_U = mills_result%interaction_U
+            opposite_dyson_request%bare_chi = opposite_bare_result%susceptibility
+            call evaluate_projected_dyson(opposite_dyson_request, opposite_dyson_result)
+            covariance_error = maxval(abs(dyson_result%enhanced_chi - conjg(opposite_dyson_result%enhanced_chi)))
+            write(unit, '(a,1x,a,1x,es24.16)') 'Q_CHANNEL_COVARIANCE', trim(selector), covariance_error
+         end if
+      end do
+      close(unit)
+      deallocate(moment)
+   end subroutine run_tddft_projected_mills
 
    !> DRESP-02 material seam.  Both projections consume the same accepted
    !> reciprocal state and stop at bare chi0; no interaction or Dyson object
