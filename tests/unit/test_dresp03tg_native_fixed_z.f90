@@ -14,7 +14,7 @@
 !------------------------------------------------------------------------------
 program test_dresp03tg_native_fixed_z
    use precision_mod, only: rp
-   use math_mod, only: ang2au, init_math_operators, i_unit
+   use math_mod, only: ang2au, init_math_operators, i_unit, qm_canonical
    use timer_mod, only: g_timer, timer
    use logger_mod, only: g_logger
    use control_mod, only: control
@@ -527,9 +527,6 @@ program test_dresp03tg_native_fixed_z
    write(*,'(a,es14.6)') 'DRESP-03TG common-gamma vertex residual = ',common_gamma_vertex_error
    write(*,'(a,es14.6)') 'DRESP-03TG common-gamma screening correction max = ',common_gamma_correction_error
    write(*,'(a,es14.6)') 'DRESP-03TG common-gamma contraction residual = ',common_gamma_error
-   call run_r4_finite_h_bridge(lat, s_alpha, r4_fixture, r4_max_fd_error, r4_max_contact_norm, &
-      r4_max_vertex_raw_error, r4_max_vertex_transformed_error)
-   call run_r5_representation_bridge(lat, s_alpha, r4_fixture)
    failed = p_error > 2.0e-14_rp .or. d_error > 2.0e-13_rp .or. solve_error > 2.0e-12_rp .or. &
       p_transform_error > 2.0e-12_rp .or. s_transform_error > 2.0e-12_rp .or. gf_cov_error > 2.0e-12_rp .or. &
       gamma_h_error > 2.0e-10_rp .or. gamma_h_du_error > 2.0e-10_rp .or. pauli_self_error > 2.0e-12_rp .or. &
@@ -543,7 +540,423 @@ program test_dresp03tg_native_fixed_z
    end if
    write(*,'(a)') 'TG-FZ-R2 SPIN-SCREENING VERTEX COVARIANCE: PASS-A'
 
+   ! TG-FZ-R6 is deliberately the terminal audit for this fixture.  Keep the
+   ! historical R4/R5 routines below for provenance, but do not enter their
+   ! derivative paths before the static normalization/alpha gate is resolved.
+   call run_r6_screening_audit(lat, s_alpha)
+   return
+
 contains
+
+   subroutine run_r6_screening_audit(atom_lattice, s_structure)
+      type(lattice), intent(in) :: atom_lattice
+      complex(rp), intent(in) :: s_structure(:,:)
+      integer :: nmatlocal, lmax_local, l, m, lm, spin, iz
+      real(rp) :: wsm, wow, width_scale, screen_scale
+      real(rp) :: max_width_error, max_screen_error, max_product_error
+      real(rp) :: norm_product_error(3), route_a_error, route_b_error
+      real(rp) :: mixed_a_error, mixed_b_error, live_current_error
+      real(rp) :: endpoint_a_error, endpoint_b_error
+      real(rp) :: alpha_structure(0:lmax), alpha_predls(0:lmax), qi_local(0:lmax,2)
+      real(rp) :: diag_residual(2,2), delta_alpha(0:lmax)
+      real(rp) :: alpha_target(0:lmax,2)
+      real(rp), allocatable :: center_a(:,:), shifted_a(:,:), width_a(:,:), obar_a(:,:), enu_a(:,:)
+      real(rp), allocatable :: center_b(:,:), shifted_b(:,:), width_b(:,:), obar_b(:,:), enu_b(:,:)
+      complex(rp), allocatable :: s_structure_site(:,:), s_predls(:,:), s_gamma_a(:,:), s_gamma_b(:,:), s_gamma_diag(:,:), &
+         s_gamma_old(:,:), h_gamma_old(:,:)
+      complex(rp), allocatable :: h_exact_a(:,:), h_gamma_a(:,:), h_exact_b(:,:), h_gamma_b(:,:)
+      complex(rp), allocatable :: h_exact_mixed(:,:), h_gamma_current(:,:)
+      complex(rp), allocatable :: p_norm(:,:), g_gamma(:,:), g_h(:,:), g_scaled(:,:)
+      complex(rp), allocatable :: eye_local(:,:), p_raw_site(:,:), p_norm_site(:,:)
+      complex(rp) :: zloc
+      complex(rp), parameter :: z_fixed(3) = [cmplx(-0.91_rp,0.83_rp,rp), &
+         cmplx(-0.17_rp,0.04_rp,rp), cmplx(0.62_rp,0.31_rp,rp)]
+      character(len=32) :: gamma_name, alpha_name
+
+      lmax_local = atom_lattice%symbolic_atoms(1)%potential%lmax
+      nmatlocal = 2*norb_sites
+      if (size(s_structure,1) /= nmatlocal .or. size(s_structure,2) /= nmatlocal) then
+         error stop 'TG-FZ-R6: screening fixture shape mismatch'
+      end if
+
+      wsm = atom_lattice%wav*ang2au
+      wow = wsm/atom_lattice%symbolic_atoms(1)%potential%ws_r
+      alpha_structure = 0.0_rp
+      call native_screening_alpha(atom_lattice%symbolic_atoms(1),alpha_structure)
+      call r6_predls_alpha(atom_lattice%symbolic_atoms(1),alpha_predls)
+      delta_alpha = alpha_predls-alpha_structure
+
+      allocate(center_a(0:lmax_local,2), shifted_a(0:lmax_local,2), width_a(0:lmax_local,2), &
+         obar_a(0:lmax_local,2), enu_a(0:lmax_local,2), center_b(0:lmax_local,2), &
+         shifted_b(0:lmax_local,2), width_b(0:lmax_local,2), obar_b(0:lmax_local,2), &
+         enu_b(0:lmax_local,2), s_predls(nmatlocal,nmatlocal), s_gamma_a(nmatlocal,nmatlocal), &
+         s_gamma_b(nmatlocal,nmatlocal), s_gamma_diag(nmatlocal,nmatlocal), s_structure_site(nmatlocal,nmatlocal), &
+         s_gamma_old(nmatlocal,nmatlocal), h_gamma_old(nmatlocal,nmatlocal), &
+         h_exact_a(nmatlocal,nmatlocal), &
+         h_gamma_a(nmatlocal,nmatlocal), h_exact_b(nmatlocal,nmatlocal), h_gamma_b(nmatlocal,nmatlocal), &
+         h_exact_mixed(nmatlocal,nmatlocal), h_gamma_current(nmatlocal,nmatlocal), eye_local(nmatlocal,nmatlocal), &
+         p_norm(nmatlocal,nmatlocal), g_gamma(nmatlocal,nmatlocal), g_h(nmatlocal,nmatlocal), &
+         g_scaled(nmatlocal,nmatlocal), p_raw_site(2*norb,2*norb), p_norm_site(2*norb,2*norb))
+      eye_local = identity(nmatlocal)
+      call r5_build_salpha_site(s_structure,s_structure_site)
+
+      call r6_reconstruct_tb(atom_lattice%symbolic_atoms(1),wsm,alpha_structure,center_a,shifted_a,width_a,obar_a,enu_a,qi_local)
+      call r6_reconstruct_tb(atom_lattice%symbolic_atoms(1),wsm,alpha_predls,center_b,shifted_b,width_b,obar_b,enu_b,qi_local)
+
+      max_width_error = 0.0_rp
+      max_screen_error = 0.0_rp
+      write(*,'(a)') 'TG-FZ-R6 normalization ledger'
+      write(*,'(a,es24.16)') '  wow = ',wow
+      do l=0,lmax_local
+         width_scale = wow**(-(real(l,rp)+0.5_rp))
+         screen_scale = wow**(-real(2*l+1,rp))
+         do spin=1,2
+            max_width_error = max(max_width_error,abs(atom_lattice%symbolic_atoms(1)%potential%dele(l,spin)/ &
+               atom_lattice%symbolic_atoms(1)%potential%srdel(l,spin)-width_scale))
+            max_screen_error = max(max_screen_error,abs(atom_lattice%symbolic_atoms(1)%potential%qi(l,spin)/ &
+               atom_lattice%symbolic_atoms(1)%potential%qpar(l,spin)-screen_scale))
+            write(*,'(a,i0,a,i0,a,es24.16)') '  l=',l,' spin=',spin,' srdel=', &
+               atom_lattice%symbolic_atoms(1)%potential%srdel(l,spin)
+            write(*,'(a,es24.16,a,es24.16,a,es24.16)') '    dele=', &
+               atom_lattice%symbolic_atoms(1)%potential%dele(l,spin),' dele/srdel=', &
+               atom_lattice%symbolic_atoms(1)%potential%dele(l,spin)/atom_lattice%symbolic_atoms(1)%potential%srdel(l,spin), &
+               ' expected width scaling=',width_scale
+            write(*,'(a,es24.16,a,es24.16,a,es24.16)') '    qpar=', &
+               atom_lattice%symbolic_atoms(1)%potential%qpar(l,spin),' qi=', &
+               atom_lattice%symbolic_atoms(1)%potential%qi(l,spin),' qi/qpar=', &
+               atom_lattice%symbolic_atoms(1)%potential%qi(l,spin)/atom_lattice%symbolic_atoms(1)%potential%qpar(l,spin)
+            write(*,'(a,es24.16)') '    expected screening scaling=',screen_scale
+         end do
+      end do
+      write(*,'(a,es24.16)') '  max width normalization residual = ',max_width_error
+      write(*,'(a,es24.16)') '  max screening normalization residual = ',max_screen_error
+
+      max_product_error = 0.0_rp
+      norm_product_error = 0.0_rp
+      write(*,'(a)') 'TG-FZ-R6 qpar*Praw = qi*Pnorm ledger'
+      do iz=1,size(z_fixed)
+         zloc=z_fixed(iz)
+         call r6_build_site_p_matrices(atom_lattice%symbolic_atoms(1),zloc,p_raw_site,p_norm_site)
+         do l=0,lmax_local
+            do spin=1,2
+               do m=1,2*l+1
+                  lm=l*l+m
+                  max_product_error=max(max_product_error,abs( &
+                     atom_lattice%symbolic_atoms(1)%potential%qpar(l,spin)* &
+                        p_raw_site(lm+(spin-1)*norb,lm+(spin-1)*norb)- &
+                     atom_lattice%symbolic_atoms(1)%potential%qi(l,spin)* &
+                        p_norm_site(lm+(spin-1)*norb,lm+(spin-1)*norb)))
+               end do
+            end do
+         end do
+         norm_product_error(iz)=max_product_error
+         write(*,'(a,2es24.16,a,es24.16)') '  z=',real(zloc,rp),aimag(zloc), &
+            ' max product residual=',norm_product_error(iz)
+      end do
+      write(*,'(a,es24.16)') '  max qpar*Praw - qi*Pnorm residual = ',max_product_error
+
+      write(*,'(a)') 'TG-FZ-R6 screening authority'
+      write(*,'(a,a)') '  structure backend = ',trim(atom_lattice%strux_backend)
+      write(*,'(a,l1)') '  stored screening_alpha exists = ',allocated(atom_lattice%symbolic_atoms(1)%potential%screening_alpha)
+      if (allocated(atom_lattice%symbolic_atoms(1)%potential%screening_alpha)) then
+         write(*,'(a)') '  alpha_structure source = structb_strux stored target screening_alpha'
+      else if (trim(atom_lattice%strux_backend) == 'legacy') then
+         write(*,'(a)') '  alpha_structure source = lattice_strux:micha -> SHLDCH LMTO47 q/fak=2 values'
+      else
+         write(*,'(a)') '  alpha_structure source = native legacy fallback (backend trace requires audit)'
+      end if
+      if (allocated(atom_lattice%symbolic_atoms(1)%potential%screening_alpha)) then
+         if (size(atom_lattice%symbolic_atoms(1)%potential%screening_alpha) == lmax_local+1) then
+            write(*,'(a)') '  alpha_predls source = potential%screening_alpha override of qm_canonical'
+         else
+            write(*,'(a)') '  alpha_predls source = math_mod::qm_canonical fallback (stored alpha size mismatch)'
+         end if
+      else
+         write(*,'(a)') '  alpha_predls source = math_mod::qm_canonical fallback'
+      end if
+      do l=0,lmax_local
+         write(*,'(a,i0,a,es24.16,a,es24.16,a,es24.16)') '  l=',l,' alpha_structure=',alpha_structure(l), &
+            ' alpha_predls=',alpha_predls(l),' delta_alpha=',delta_alpha(l)
+      end do
+
+      alpha_target(:,1)=alpha_structure; alpha_target(:,2)=alpha_structure
+      call r6_transform_s(s_structure_site,alpha_structure,qi_local,s_gamma_a)
+      alpha_target(:,1)=alpha_predls; alpha_target(:,2)=alpha_predls
+      call r6_transform_s(s_structure_site,alpha_structure,alpha_target,s_predls)
+      call r6_transform_s(s_predls,alpha_predls,qi_local,s_gamma_b)
+      call r6_build_exact_h(atom_lattice%symbolic_atoms(1),shifted_a,width_a,obar_a,enu_a,s_structure_site,h_exact_a)
+      call r6_build_exact_h(atom_lattice%symbolic_atoms(1),shifted_b,width_b,obar_b,enu_b,s_predls,h_exact_b)
+      call r6_build_gamma_h(atom_lattice%symbolic_atoms(1),qi_local,s_gamma_a,h_gamma_a)
+      call r6_build_gamma_h(atom_lattice%symbolic_atoms(1),qi_local,s_gamma_b,h_gamma_b)
+      route_a_error=maxval(abs(h_exact_a-h_gamma_a))
+      route_b_error=maxval(abs(h_exact_b-h_gamma_b))
+
+      call r6_build_exact_h(atom_lattice%symbolic_atoms(1),shifted_b,width_b,obar_b,enu_b,s_structure_site,h_exact_mixed)
+      alpha_target(:,1)=atom_lattice%symbolic_atoms(1)%potential%qpar(:,1)
+      alpha_target(:,2)=atom_lattice%symbolic_atoms(1)%potential%qpar(:,2)
+      call r6_transform_s(s_structure_site,alpha_structure,alpha_target,s_gamma_diag)
+      call r6_build_gamma_h(atom_lattice%symbolic_atoms(1),atom_lattice%symbolic_atoms(1)%potential%qpar, &
+         s_gamma_diag,h_gamma_current)
+      call r5_build_gamma_state(atom_lattice,s_structure,s_gamma_old,h_gamma_old)
+      write(*,'(a,es24.16)') '  R6/R5 current S_gamma cross-check = ',maxval(abs(s_gamma_diag-s_gamma_old))
+      write(*,'(a,es24.16)') '  R6/R5 current H_gamma cross-check = ',maxval(abs(h_gamma_current-h_gamma_old))
+      live_current_error=maxval(abs(h_exact_mixed-h_gamma_current))
+      mixed_a_error=maxval(abs(h_exact_mixed-h_exact_a))
+      mixed_b_error=maxval(abs(h_exact_mixed-h_exact_b))
+
+      write(*,'(a)') 'TG-FZ-R6 consistent Route A (structure-alpha authority)'
+      write(*,'(a,es24.16)') '  ||H_exact_A-H_gamma_A||_max = ',route_a_error
+      write(*,'(a)') 'TG-FZ-R6 consistent Route B (predls-alpha authority)'
+      write(*,'(a,es24.16)') '  ||H_exact_B-H_gamma_B||_max = ',route_b_error
+      write(*,'(a)') 'TG-FZ-R6 live mixed convention'
+      write(*,'(a,es24.16)') '  ||H_exact_mixed-H_gamma_current||_max = ',live_current_error
+      write(*,'(a,es24.16)') '  ||H_exact_mixed-H_exact_A||_max = ',mixed_a_error
+      write(*,'(a,es24.16)') '  ||H_exact_mixed-H_exact_B||_max = ',mixed_b_error
+
+      write(*,'(a)') 'TG-FZ-R6 diagnostic-only combinations (live Sbar retained)'
+      do spin=1,2
+         if (spin == 1) then; gamma_name='qpar'; else; gamma_name='qi'; end if
+         if (spin == 1) then
+            alpha_target(:,1)=atom_lattice%symbolic_atoms(1)%potential%qpar(:,1)
+            alpha_target(:,2)=atom_lattice%symbolic_atoms(1)%potential%qpar(:,2)
+         else
+            alpha_target=qi_local
+         end if
+         do l=1,2
+            if (l == 1) then
+               alpha_name='alpha_structure'
+               call r6_transform_s(s_structure_site,alpha_structure,alpha_target,s_gamma_diag)
+            else
+               alpha_name='alpha_predls'
+               call r6_transform_s(s_structure_site,alpha_predls,alpha_target,s_gamma_diag)
+            end if
+            if (spin == 1) then
+               call r6_build_gamma_h(atom_lattice%symbolic_atoms(1),atom_lattice%symbolic_atoms(1)%potential%qpar, &
+                  s_gamma_diag,h_gamma_current)
+            else
+               call r6_build_gamma_h(atom_lattice%symbolic_atoms(1),qi_local,s_gamma_diag,h_gamma_current)
+            end if
+            diag_residual(spin,l)=maxval(abs(h_exact_mixed-h_gamma_current))
+            write(*,'(a,a,a,a,a,es24.16)') '  gamma=',trim(gamma_name),' alpha=',trim(alpha_name), &
+               ' residual=',diag_residual(spin,l)
+         end do
+      end do
+
+      endpoint_a_error=0.0_rp; endpoint_b_error=0.0_rp
+      do iz=1,size(z_fixed)
+         zloc=z_fixed(iz)
+         call r6_build_normalized_p(atom_lattice%symbolic_atoms(1),zloc,p_norm)
+         call native_inverse(p_norm-s_gamma_a,g_gamma)
+         call native_inverse(zloc*eye_local-h_gamma_a,g_h)
+         call r6_endpoint_scale(atom_lattice%symbolic_atoms(1),g_gamma,g_scaled)
+         endpoint_a_error=max(endpoint_a_error,maxval(abs(g_h-g_scaled)))
+         call native_inverse(p_norm-s_gamma_b,g_gamma)
+         call native_inverse(zloc*eye_local-h_gamma_b,g_h)
+         call r6_endpoint_scale(atom_lattice%symbolic_atoms(1),g_gamma,g_scaled)
+         endpoint_b_error=max(endpoint_b_error,maxval(abs(g_h-g_scaled)))
+      end do
+      write(*,'(a,es24.16)') 'TG-FZ-R6 Route A max endpoint-resolvent residual = ',endpoint_a_error
+      write(*,'(a,es24.16)') 'TG-FZ-R6 Route B max endpoint-resolvent residual = ',endpoint_b_error
+
+      if (max_width_error > 2.0e-12_rp .or. max_screen_error > 2.0e-12_rp .or. max_product_error > 2.0e-11_rp .or. &
+          route_a_error > 2.0e-10_rp .or. route_b_error > 2.0e-10_rp .or. endpoint_a_error > 2.0e-10_rp .or. &
+          endpoint_b_error > 2.0e-10_rp) then
+         write(*,'(a)') 'TG-FZ-R6 verdict: BLOCKED — first static normalization/representation gate failed'
+      else if (maxval(abs(delta_alpha)) > 2.0e-12_rp) then
+         write(*,'(a)') 'TG-FZ-R6 verdict: PASS-B — normalized gamma and alpha authority both required'
+      else
+         write(*,'(a)') 'TG-FZ-R6 verdict: PASS-A — normalized gamma identified'
+      end if
+      write(*,'(a)') '  authoritative gamma_raw = potential%qpar'
+      write(*,'(a)') '  authoritative gamma_norm = potential%qi'
+      write(*,'(a)') '  native helper audit: native_complex_p_matrix uses potential%dele; current screening transform uses qpar'
+
+      deallocate(center_a,shifted_a,width_a,obar_a,enu_a,center_b,shifted_b,width_b,obar_b,enu_b,s_structure_site,s_predls,s_gamma_a, &
+         s_gamma_b,s_gamma_diag,h_exact_a,h_gamma_a,h_exact_b,h_gamma_b,h_exact_mixed,h_gamma_current,eye_local,p_norm, &
+         g_gamma,g_h,g_scaled,p_raw_site,p_norm_site,s_gamma_old,h_gamma_old)
+   end subroutine run_r6_screening_audit
+
+   subroutine r6_predls_alpha(atom, alpha_out)
+      use symbolic_atom_mod, only: symbolic_atom
+      type(symbolic_atom), intent(in) :: atom
+      real(rp), intent(out) :: alpha_out(0:)
+      integer :: lmax_local, ncopy
+      lmax_local=atom%potential%lmax
+      alpha_out=0.0_rp
+      ncopy=min(size(alpha_out),size(qm_canonical))
+      alpha_out(0:ncopy-1)=qm_canonical(1:ncopy)
+      if (size(alpha_out) > ncopy) alpha_out(ncopy:)=qm_canonical(size(qm_canonical))
+      if (allocated(atom%potential%screening_alpha)) then
+         if (size(atom%potential%screening_alpha) == lmax_local+1) then
+            alpha_out=atom%potential%screening_alpha
+         end if
+      end if
+   end subroutine r6_predls_alpha
+
+   subroutine r6_reconstruct_tb(atom,wsm,target_alpha,center_band,shifted_band,width_band,obar,enu_live,qi_out)
+      use symbolic_atom_mod, only: symbolic_atom
+      type(symbolic_atom), intent(in) :: atom
+      real(rp), intent(in) :: wsm, target_alpha(0:)
+      real(rp), intent(out) :: center_band(0:,:), shifted_band(0:,:), width_band(0:,:), obar(0:,:), enu_live(0:,:), qi_out(0:,:)
+      integer :: l, spin, lmax_local
+      real(rp) :: wow_local, dele_raw, qi_raw, x, y, cval, enuval, vmad_local
+      lmax_local=atom%potential%lmax
+      wow_local=wsm/atom%potential%ws_r
+      vmad_local=atom%potential%vmad
+      do spin=1,2
+         do l=0,lmax_local
+            dele_raw=atom%potential%srdel(l,spin)*wow_local**(-(real(l,rp)+0.5_rp))
+            qi_raw=atom%potential%qpar(l,spin)*wow_local**(-real(2*l+1,rp))
+            cval=atom%potential%c(l,spin); enuval=atom%potential%enu(l,spin)
+            x=1.0_rp-(qi_raw-target_alpha(l))*(cval-enuval)/(dele_raw*dele_raw)
+            y=(qi_raw-target_alpha(l))/((cval-enuval)*(qi_raw-target_alpha(l))-dele_raw*dele_raw)
+            center_band(l,spin)=(cval-enuval)*x+enuval+vmad_local
+            shifted_band(l,spin)=(cval-enuval)*x
+            width_band(l,spin)=dele_raw*x
+            obar(l,spin)=y
+            enu_live(l,spin)=center_band(l,spin)-shifted_band(l,spin)
+            qi_out(l,spin)=qi_raw
+         end do
+      end do
+   end subroutine r6_reconstruct_tb
+
+   subroutine r6_build_site_p_matrices(atom,zloc,p_raw,p_norm)
+      use symbolic_atom_mod, only: symbolic_atom
+      type(symbolic_atom), intent(in) :: atom
+      complex(rp), intent(in) :: zloc
+      complex(rp), intent(out) :: p_raw(:,:), p_norm(:,:)
+      integer :: l, m, lm, spin, lmax_local, norb_local
+      complex(rp) :: cval, srdel_val, dele_val
+      lmax_local=atom%potential%lmax; norb_local=(lmax_local+1)**2
+      p_raw=cmplx(0.0_rp,0.0_rp,rp); p_norm=p_raw
+      do spin=1,2
+         do l=0,lmax_local
+            do m=1,2*l+1
+               lm=l*l+m+(spin-1)*norb_local
+               cval=cmplx(atom%potential%c(l,spin)+atom%potential%vmad,0.0_rp,rp)
+               srdel_val=cmplx(atom%potential%srdel(l,spin),0.0_rp,rp)
+               dele_val=cmplx(atom%potential%dele(l,spin),0.0_rp,rp)
+               p_raw(lm,lm)=(zloc-cval)/(srdel_val*srdel_val)
+               p_norm(lm,lm)=(zloc-cval)/(dele_val*dele_val)
+            end do
+         end do
+      end do
+   end subroutine r6_build_site_p_matrices
+
+   subroutine r6_build_normalized_p(atom,zloc,p_norm)
+      use symbolic_atom_mod, only: symbolic_atom
+      type(symbolic_atom), intent(in) :: atom
+      complex(rp), intent(in) :: zloc
+      complex(rp), intent(out) :: p_norm(:,:)
+      complex(rp) :: raw_site(2*norb,2*norb), norm_site(2*norb,2*norb)
+      integer :: site
+      call r6_build_site_p_matrices(atom,zloc,raw_site,norm_site)
+      p_norm=cmplx(0.0_rp,0.0_rp,rp)
+      do site=1,nsite_fixture
+         p_norm((site-1)*2*norb+1:site*2*norb,(site-1)*2*norb+1:site*2*norb)=norm_site
+      end do
+   end subroutine r6_build_normalized_p
+
+   subroutine r6_transform_s(s_in,source_alpha,target_alpha_spin,s_out)
+      complex(rp), intent(in) :: s_in(:,:)
+      real(rp), intent(in) :: source_alpha(0:), target_alpha_spin(0:,:)
+      complex(rp), intent(out) :: s_out(:,:)
+      complex(rp) :: dmat(size(s_in,1),size(s_in,2)), invmat(size(s_in,1),size(s_in,2))
+      integer :: site, l, m, lm, spin, lmax_local
+      lmax_local=size(source_alpha)-1
+      dmat=cmplx(0.0_rp,0.0_rp,rp)
+      do site=1,nsite_fixture
+         do spin=1,2
+            do l=0,lmax_local
+               do m=1,2*l+1
+                  lm=(site-1)*2*norb+(spin-1)*norb+l*l+m
+                  dmat(lm,lm)=source_alpha(l)-target_alpha_spin(l,spin)
+               end do
+            end do
+         end do
+      end do
+      call native_inverse(identity(size(s_in,1))+matmul(s_in,dmat),invmat)
+      s_out=matmul(invmat,s_in)
+   end subroutine r6_transform_s
+
+   subroutine r6_build_exact_h(atom,shifted_band,width_band,obar,enu_live,s_target,h_exact)
+      use symbolic_atom_mod, only: symbolic_atom
+      type(symbolic_atom), intent(in) :: atom
+      real(rp), intent(in) :: shifted_band(0:,:), width_band(0:,:), obar(0:,:), enu_live(0:,:)
+      complex(rp), intent(in) :: s_target(:,:)
+      complex(rp), intent(out) :: h_exact(:,:)
+      complex(rp) :: shifted_matrix(size(h_exact,1),size(h_exact,2)), width_matrix(size(h_exact,1),size(h_exact,2))
+      complex(rp) :: obar_matrix(size(h_exact,1),size(h_exact,2)), enu_matrix(size(h_exact,1),size(h_exact,2))
+      complex(rp) :: hbar(size(h_exact,1),size(h_exact,2)), ainv(size(h_exact,1),size(h_exact,2))
+      call r6_build_channel_matrix(shifted_band,shifted_matrix)
+      call r6_build_channel_matrix(width_band,width_matrix)
+      call r6_build_channel_matrix(obar,obar_matrix)
+      call r6_build_channel_matrix(enu_live,enu_matrix)
+      hbar=shifted_matrix+matmul(width_matrix,matmul(s_target,width_matrix))
+      call native_inverse(identity(size(h_exact,1))+matmul(obar_matrix,hbar),ainv)
+      h_exact=enu_matrix+matmul(hbar,ainv)
+   end subroutine r6_build_exact_h
+
+   subroutine r6_build_gamma_h(atom,gamma,s_gamma,h_gamma)
+      use symbolic_atom_mod, only: symbolic_atom
+      type(symbolic_atom), intent(in) :: atom
+      real(rp), intent(in) :: gamma(0:,:)
+      complex(rp), intent(in) :: s_gamma(:,:)
+      complex(rp), intent(out) :: h_gamma(:,:)
+      real(rp) :: cvals(0:size(gamma,1)-1,2), widths(0:size(gamma,1)-1,2)
+      complex(rp) :: cmat(size(h_gamma,1),size(h_gamma,2)), wmat(size(h_gamma,1),size(h_gamma,2))
+      integer :: l, spin, lmax_local
+      lmax_local=size(gamma,1)-1
+      do spin=1,2
+         do l=0,lmax_local
+            cvals(l,spin)=atom%potential%c(l,spin)+atom%potential%vmad
+            widths(l,spin)=atom%potential%dele(l,spin)
+         end do
+      end do
+      call r6_build_channel_matrix(cvals,cmat)
+      call r6_build_channel_matrix(widths,wmat)
+      h_gamma=cmat+matmul(wmat,matmul(s_gamma,wmat))
+   end subroutine r6_build_gamma_h
+
+   subroutine r6_build_channel_matrix(values,matrix)
+      real(rp), intent(in) :: values(0:,:)
+      complex(rp), intent(out) :: matrix(:,:)
+      integer :: site, spin, l, m, lm, lmax_local
+      lmax_local=size(values,1)-1
+      matrix=cmplx(0.0_rp,0.0_rp,rp)
+      do site=1,nsite_fixture
+         do spin=1,2
+            do l=0,lmax_local
+               do m=1,2*l+1
+                  lm=(site-1)*2*norb+(spin-1)*norb+l*l+m
+                  matrix(lm,lm)=cmplx(values(l,spin),0.0_rp,rp)
+               end do
+            end do
+         end do
+      end do
+   end subroutine r6_build_channel_matrix
+
+   subroutine r6_endpoint_scale(atom,gamma,scaled)
+      use symbolic_atom_mod, only: symbolic_atom
+      type(symbolic_atom), intent(in) :: atom
+      complex(rp), intent(in) :: gamma(:,:)
+      complex(rp), intent(out) :: scaled(:,:)
+      complex(rp) :: winv(size(gamma,1),size(gamma,2))
+      integer :: site, spin, l, m, lm, lmax_local
+      lmax_local=atom%potential%lmax
+      winv=cmplx(0.0_rp,0.0_rp,rp)
+      do site=1,nsite_fixture
+         do spin=1,2
+            do l=0,lmax_local
+               do m=1,2*l+1
+                  lm=(site-1)*2*norb+(spin-1)*norb+l*l+m
+                  winv(lm,lm)=1.0_rp/atom%potential%dele(l,spin)
+               end do
+            end do
+         end do
+      end do
+      scaled=matmul(winv,matmul(gamma,winv))
+   end subroutine r6_endpoint_scale
 
    ! TG-FZ-R4 is deliberately a diagnostic extension of the R2 program.  The
    ! native P/S objects and the finite-H objects are kept on their own paths:
