@@ -715,7 +715,7 @@ if (RUN_UNIT_TESTS)
   configure_file("${TestDIR}/regression/bccFe_lanczos/input.nml" "${_dresp03tg_contour_case}/input.nml" COPYONLY)
   configure_file("${TestDIR}/regression/bccFe_lanczos/Fe.nml" "${_dresp03tg_contour_case}/Fe.nml" COPYONLY)
   set_tests_properties(UnitDresp03tgNativeContour PROPERTIES
-    LABELS "unit;dresp-03tg;native-turek;contour;fourier;bcc-fe;hard-gate"
+    LABELS "unit;dresp-03tg;native-turek;contour;fourier;independent-pairs;normalization;curvature;bcc-fe;hard-gate"
     WORKING_DIRECTORY "${_dresp03tg_contour_case}")
   add_fortran_unit_test(UnitLrProductGfQuadratureAudit ${TestDIR}/unit/test_lr_product_gf_quadrature_audit.f90)
   set_tests_properties(UnitLrProductGfQuadratureAudit PROPERTIES

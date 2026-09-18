@@ -8,7 +8,8 @@
 !------------------------------------------------------------------------------
 module lr_lmto_turek_contour_mod
    use lattice_mod, only: lattice
-   use lr_lmto_turek_gf_mod, only: native_structure_constants, native_path_operator_from_structure, native_exchange_trace
+   use lr_lmto_turek_gf_mod, only: native_structure_constants, native_path_operator_from_structure, native_exchange_trace, &
+      native_screening_alpha
    use math_mod, only: i_unit, pi
    use precision_mod, only: rp
    implicit none
@@ -20,6 +21,10 @@ module lr_lmto_turek_contour_mod
       real(rp) :: contour_margin = 0.25_rp
       real(rp) :: contour_height_fraction = 0.35_rp
       logical :: account_fermi_poles = .true.
+      ! If positive, choose the ellipse height to enclose this even number
+      ! of Matsubara poles.  Zero retains the historical height-fraction
+      ! prescription.
+      integer :: target_fermi_poles = 0
    end type native_turek_contour_options
 
    type, public :: native_turek_contour_report
@@ -30,14 +35,24 @@ module lr_lmto_turek_contour_mod
       real(rp) :: solve_seconds = 0.0_rp
       real(rp) :: contour_seconds = 0.0_rp
       real(rp) :: pole_seconds = 0.0_rp
+      real(rp) :: native_max_ellipse_value = 0.0_rp
+      logical :: native_bounds_verified = .false.
+      integer :: native_spectral_poles = 0
    end type native_turek_contour_report
 
    public :: native_build_contour
    public :: native_exchange_q_contour
+   public :: native_exchange_q_ordered_contour
    public :: native_exchange_jij_contour
+   public :: native_exchange_pairs_contour
    public :: native_fourier_jq_to_jij
    public :: native_fourier_jij_to_jq
+   public :: native_fourier_complex_jq_to_jij
+   public :: native_fourier_complex_jij_to_jq
    public :: native_spin_site_block
+   public :: native_complex_fermi
+   public :: native_regularized_fermi
+   public :: native_spectral_bounds
 
 contains
 
@@ -61,12 +76,7 @@ contains
          error stop 'native contour: contour margin and height fraction must be positive'
       end if
 
-      lower = energy_bounds(1); upper = energy_bounds(2)
-      center = 0.5_rp*(lower+upper)
-      semimajor = max(0.5_rp*(upper-lower)+options%contour_margin, options%contour_margin)
-      height = max(options%contour_height_fraction*semimajor, 1.0e-8_rp)
-      if (kT > 0.0_rp .and. .not. options%account_fermi_poles) height = min(height, 0.45_rp*pi*kT)
-      semiminor = height
+      call native_contour_axes(energy_bounds, fermi, kT, options, center, semimajor, semiminor)
 
       npoint = options%contour_points
       allocate(nodes(npoint), weights(npoint))
@@ -78,7 +88,7 @@ contains
       end do
 
       if (kT > 0.0_rp .and. options%account_fermi_poles) then
-         max_l = max(2, int(ceiling(semiminor/(pi*kT)))+2)
+         max_l = max(2, int(ceiling(semiminor/(pi*kT)))+4)
          npole = 0
          do l = -max_l, max_l
             pole_y = pi*kT*real(2*l+1,rp)
@@ -100,6 +110,33 @@ contains
       end if
    end subroutine native_build_contour
 
+   subroutine native_contour_axes(energy_bounds, fermi, kT, options, center, semimajor, semiminor)
+      real(rp), intent(in) :: energy_bounds(2), fermi, kT
+      type(native_turek_contour_options), intent(in) :: options
+      real(rp), intent(out) :: center, semimajor, semiminor
+      real(rp) :: horizontal, scale, y_inside, y_outside
+      integer :: npair
+
+      center = 0.5_rp*sum(energy_bounds)
+      semimajor = max(0.5_rp*(energy_bounds(2)-energy_bounds(1))+options%contour_margin, options%contour_margin)
+      if (options%target_fermi_poles > 0) then
+         if (.not. options%account_fermi_poles) error stop 'native contour: target poles requires pole accounting'
+         if (kT <= 0.0_rp .or. mod(options%target_fermi_poles,2) /= 0) then
+            error stop 'native contour: target_fermi_poles must be a positive even number at finite temperature'
+         end if
+         npair = options%target_fermi_poles/2
+         horizontal = (fermi-center)/semimajor
+         scale = sqrt(max(1.0_rp-horizontal*horizontal, 1.0e-14_rp))
+         y_inside = pi*kT*real(2*npair-1,rp)
+         y_outside = pi*kT*real(2*npair+1,rp)
+         ! Place the ellipse midpoint between adjacent Matsubara pairs.
+         semiminor = 0.5_rp*(y_inside+y_outside)/scale
+      else
+         semiminor = max(options%contour_height_fraction*semimajor, 1.0e-8_rp)
+         if (kT > 0.0_rp .and. .not. options%account_fermi_poles) semiminor = min(semiminor, 0.45_rp*pi*kT)
+      end if
+   end subroutine native_contour_axes
+
    !> Evaluate the native Turek exchange matrix at every supplied q point.
    !>
    !> q is in the same direct reciprocal coordinates consumed by the live
@@ -110,9 +147,10 @@ contains
    !>              f(z) Tr[DeltaP_i g^up_ij(k,z) DeltaP_j
    !>                 g^down_ji(k+q,z)].
    !>
-   !> Fermi poles are removed from the contour integrand and added back as
-   !> explicit residues.  This is the same finite-temperature identity used
-   !> by lr_kl_contour, but every resolvent here is a native P-S solve.
+   !> The pole-subtracted Fermi weight is evaluated on the contour and the
+   !> explicit +kT residues are added back.  This is the finite-temperature
+   !> identity certified by the scalar oracle; every resolvent here is still a
+   !> native P-S solve.
    subroutine native_exchange_q_contour(lat, k_points, k_weights, q_points, fermi, kT, energy_bounds, options, jq, report)
       type(lattice), intent(inout) :: lat
       real(rp), intent(in) :: k_points(:, :), k_weights(:), q_points(:, :), fermi, kT, energy_bounds(2)
@@ -213,6 +251,7 @@ contains
       ! the enclosed-pole residues are real.
       jq = -real(integral,rp)/4.0_rp
       if (present(report)) then
+         report = native_turek_contour_report()
          report%contour_points = size(nodes)*nk*nq
          report%fermi_poles = size(poles)*nk*nq
          report%k_points = nk; report%q_points = nq
@@ -223,12 +262,260 @@ contains
       deallocate(nodes,weights,poles,integral,smat_src,smat_end,sorb,pmat,gsrc,gend,delta,trace_value)
    end subroutine native_exchange_q_contour
 
+   !> Evaluate both ordered reciprocal channels without collapsing their
+   !> complex sublattice phases.  The scalar production wrapper above remains
+   !> for compatibility; this is the independent ud/du route used by R1.
+   subroutine native_exchange_q_ordered_contour(lat, k_points, k_weights, q_points, fermi, kT, energy_bounds, options, &
+                                                 jq_ud, jq_du, report)
+      type(lattice), intent(inout) :: lat
+      real(rp), intent(in) :: k_points(:, :), k_weights(:), q_points(:, :), fermi, kT, energy_bounds(2)
+      type(native_turek_contour_options), intent(in) :: options
+      complex(rp), intent(out) :: jq_ud(:, :, :), jq_du(:, :, :)
+      type(native_turek_contour_report), intent(out), optional :: report
+      complex(rp), allocatable :: nodes(:), weights(:), poles(:)
+      complex(rp), allocatable :: integral_ud(:, :, :), integral_du(:, :, :)
+      complex(rp), allocatable :: smat_src(:, :, :), smat_end(:, :, :), sorb(:, :)
+      complex(rp), allocatable :: pmat(:, :), gsrc(:, :), gend(:, :), delta(:, :, :)
+      complex(rp), allocatable :: trace_ud(:, :), trace_du(:, :)
+      complex(rp) :: coefficient
+      real(rp) :: weight_sum
+      integer :: nsite, norb, nk, nq, inode, ipole, ik, iq, nspin
+      integer :: clock_start, clock_stop, clock_rate, contour_start, contour_stop, pole_start, pole_stop
+      real(rp) :: solve_seconds, contour_seconds, pole_seconds
+
+      nsite = lat%nrec; nk = size(k_points,2); nq = size(q_points,2)
+      if (nsite < 1 .or. size(k_points,1) /= 3 .or. size(q_points,1) /= 3) then
+         error stop 'native_exchange_q_ordered_contour: point shape mismatch'
+      end if
+      if (size(k_weights) /= nk .or. nk < 1 .or. nq < 1) error stop 'native_exchange_q_ordered_contour: mesh shape mismatch'
+      weight_sum = sum(k_weights)
+      if (weight_sum <= tiny(1.0_rp)) error stop 'native_exchange_q_ordered_contour: zero k-weight sum'
+      norb = (lat%symbolic_atoms(lat%iz(lat%atlist(1)))%potential%lmax+1)**2
+      nspin = 2*norb*nsite
+      if (any(shape(jq_ud) /= [nsite,nsite,nq]) .or. any(shape(jq_du) /= [nsite,nsite,nq])) then
+         error stop 'native_exchange_q_ordered_contour: output shape mismatch'
+      end if
+
+      call native_build_contour(energy_bounds, fermi, kT, options, nodes, weights, poles)
+      allocate(integral_ud(nsite,nsite,nq), integral_du(nsite,nsite,nq), smat_src(nspin,nspin,nk), &
+         smat_end(nspin,nspin,nk), sorb(norb*nsite,norb*nsite), pmat(nspin,nspin), gsrc(nspin,nspin), &
+         gend(nspin,nspin), delta(norb,norb,nsite), trace_ud(nsite,nsite), trace_du(nsite,nsite))
+      integral_ud = cmplx(0.0_rp,0.0_rp,rp); integral_du = integral_ud
+      solve_seconds = 0.0_rp; contour_seconds = 0.0_rp; pole_seconds = 0.0_rp
+      call system_clock(count_rate=clock_rate)
+
+      do ik = 1, nk
+         call native_structure_constants(lat,k_points(:,ik),sorb)
+         call native_expand_spin_structure(sorb,nsite,norb,smat_src(:,:,ik))
+      end do
+      call system_clock(contour_start)
+      do iq = 1, nq
+         do ik = 1, nk
+            call native_structure_constants(lat,k_points(:,ik)+q_points(:,iq),sorb)
+            call native_expand_spin_structure(sorb,nsite,norb,smat_end(:,:,ik))
+         end do
+         do inode = 1, size(nodes)
+            do ik = 1, nk
+               call system_clock(clock_start)
+               call native_path_operator_from_structure(lat,nodes(inode),smat_src(:,:,ik),pmat,gsrc)
+               call native_path_operator_from_structure(lat,nodes(inode),smat_end(:,:,ik),pmat,gend)
+               call system_clock(clock_stop)
+               solve_seconds = solve_seconds + elapsed_seconds(clock_start,clock_stop,clock_rate)
+               call native_deltas(pmat,nsite,norb,delta)
+               call native_trace_matrix_ordered(gsrc,gend,delta,norb,nsite,trace_ud,trace_du)
+               coefficient = weights(inode)
+               if (kT > 0.0_rp) coefficient = coefficient*native_regularized_fermi(nodes(inode),fermi,kT,poles)
+               integral_ud(:,:,iq) = integral_ud(:,:,iq) + (k_weights(ik)/weight_sum)*coefficient*trace_ud
+               integral_du(:,:,iq) = integral_du(:,:,iq) + (k_weights(ik)/weight_sum)*coefficient*trace_du
+            end do
+         end do
+      end do
+      call system_clock(contour_stop)
+      contour_seconds = elapsed_seconds(contour_start,contour_stop,clock_rate)
+
+      call system_clock(pole_start)
+      do iq = 1, nq
+         do ik = 1, nk
+            call native_structure_constants(lat,k_points(:,ik)+q_points(:,iq),sorb)
+            call native_expand_spin_structure(sorb,nsite,norb,smat_end(:,:,ik))
+         end do
+         do ipole = 1, size(poles)
+            do ik = 1, nk
+               call system_clock(clock_start)
+               call native_path_operator_from_structure(lat,poles(ipole),smat_src(:,:,ik),pmat,gsrc)
+               call native_path_operator_from_structure(lat,poles(ipole),smat_end(:,:,ik),pmat,gend)
+               call system_clock(clock_stop)
+               solve_seconds = solve_seconds + elapsed_seconds(clock_start,clock_stop,clock_rate)
+               call native_deltas(pmat,nsite,norb,delta)
+               call native_trace_matrix_ordered(gsrc,gend,delta,norb,nsite,trace_ud,trace_du)
+               integral_ud(:,:,iq) = integral_ud(:,:,iq) + (k_weights(ik)/weight_sum)*cmplx(kT,0.0_rp,rp)*trace_ud
+               integral_du(:,:,iq) = integral_du(:,:,iq) + (k_weights(ik)/weight_sum)*cmplx(kT,0.0_rp,rp)*trace_du
+            end do
+         end do
+      end do
+      call system_clock(pole_stop)
+      pole_seconds = elapsed_seconds(pole_start,pole_stop,clock_rate)
+
+      jq_ud = -integral_ud/4.0_rp
+      jq_du = -integral_du/4.0_rp
+      if (present(report)) then
+         report = native_turek_contour_report()
+         report%contour_points = size(nodes)*nk*nq
+         report%fermi_poles = size(poles)*nk*nq
+         report%k_points = nk; report%q_points = nq
+         report%solve_seconds = solve_seconds
+         report%contour_seconds = contour_seconds
+         report%pole_seconds = pole_seconds
+      end if
+      deallocate(nodes,weights,poles,integral_ud,integral_du,smat_src,smat_end,sorb,pmat,gsrc,gend,delta,trace_ud,trace_du)
+   end subroutine native_exchange_q_ordered_contour
+
+   !> Evaluate real-space ordered pairs directly from Fourier transformed
+   !> native Green-function blocks.  This routine never forms J(q), so its
+   !> result is independent of the reciprocal convolution route.
+   subroutine native_exchange_pairs_contour(lat, k_points, k_weights, real_space_vectors, fermi, kT, energy_bounds, options, &
+                                             jij_ud, jij_du, report)
+      type(lattice), intent(inout) :: lat
+      real(rp), intent(in) :: k_points(:, :), k_weights(:), real_space_vectors(:, :), fermi, kT, energy_bounds(2)
+      type(native_turek_contour_options), intent(in) :: options
+      complex(rp), intent(out) :: jij_ud(:, :, :), jij_du(:, :, :)
+      type(native_turek_contour_report), intent(out), optional :: report
+      complex(rp), allocatable :: nodes(:), weights(:), poles(:)
+      complex(rp), allocatable :: integral_ud(:, :, :), integral_du(:, :, :)
+      complex(rp), allocatable :: smat_src(:, :, :), sorb(:, :), pmat(:, :), gmat(:, :), delta(:, :, :)
+      complex(rp), allocatable :: gup_k(:, :, :, :, :), gdown_k(:, :, :, :, :)
+      complex(rp), allocatable :: gup_r(:, :, :, :, :), gdown_minus_r(:, :, :, :, :)
+      complex(rp) :: coefficient, phase_minus, phase_plus
+      complex(rp), allocatable :: block(:, :)
+      real(rp) :: weight_sum
+      integer :: nsite, norb, nk, nvec, nspin, inode, ipole, ik, ir, ia, ja
+      integer :: clock_start, clock_stop, clock_rate, contour_start, contour_stop, pole_start, pole_stop
+      real(rp) :: solve_seconds, contour_seconds, pole_seconds
+
+      nsite = lat%nrec; nk = size(k_points,2); nvec = size(real_space_vectors,2)
+      if (size(k_points,1) /= 3 .or. size(real_space_vectors,1) /= 3 .or. nk < 1 .or. nvec < 1) then
+         error stop 'native_exchange_pairs_contour: point shape mismatch'
+      end if
+      if (size(k_weights) /= nk) error stop 'native_exchange_pairs_contour: weight shape mismatch'
+      weight_sum = sum(k_weights)
+      if (weight_sum <= tiny(1.0_rp)) error stop 'native_exchange_pairs_contour: zero k-weight sum'
+      norb = (lat%symbolic_atoms(lat%iz(lat%atlist(1)))%potential%lmax+1)**2
+      nspin = 2*norb*nsite
+      if (any(shape(jij_ud) /= [nsite,nsite,nvec]) .or. any(shape(jij_du) /= [nsite,nsite,nvec])) then
+         error stop 'native_exchange_pairs_contour: output shape mismatch'
+      end if
+      call native_build_contour(energy_bounds, fermi, kT, options, nodes, weights, poles)
+      allocate(integral_ud(nsite,nsite,nvec), integral_du(nsite,nsite,nvec), smat_src(nspin,nspin,nk), &
+         sorb(norb*nsite,norb*nsite), pmat(nspin,nspin), gmat(nspin,nspin), delta(norb,norb,nsite), &
+         gup_k(norb,norb,nsite,nsite,nk), gdown_k(norb,norb,nsite,nsite,nk), &
+         gup_r(norb,norb,nsite,nsite,nvec), gdown_minus_r(norb,norb,nsite,nsite,nvec))
+      allocate(block(norb,norb))
+      integral_ud = cmplx(0.0_rp,0.0_rp,rp); integral_du = integral_ud
+      solve_seconds = 0.0_rp; contour_seconds = 0.0_rp; pole_seconds = 0.0_rp
+      call system_clock(count_rate=clock_rate)
+      do ik = 1, nk
+         call native_structure_constants(lat,k_points(:,ik),sorb)
+         call native_expand_spin_structure(sorb,nsite,norb,smat_src(:,:,ik))
+      end do
+
+      call system_clock(contour_start)
+      do inode = 1, size(nodes)
+         do ik = 1, nk
+            call system_clock(clock_start)
+            call native_path_operator_from_structure(lat,nodes(inode),smat_src(:,:,ik),pmat,gmat)
+            call system_clock(clock_stop)
+            solve_seconds = solve_seconds + elapsed_seconds(clock_start,clock_stop,clock_rate)
+            call native_deltas(pmat,nsite,norb,delta)
+            do ia = 1, nsite
+               do ja = 1, nsite
+                  call native_spin_site_block(gmat,norb,ia,1,ja,1,block)
+                  gup_k(:,:,ia,ja,ik) = block
+                  call native_spin_site_block(gmat,norb,ia,2,ja,2,block)
+                  gdown_k(:,:,ia,ja,ik) = block
+               end do
+            end do
+         end do
+         do ir = 1, nvec
+            gup_r(:,:,:,:,ir) = cmplx(0.0_rp,0.0_rp,rp)
+            gdown_minus_r(:,:,:,:,ir) = cmplx(0.0_rp,0.0_rp,rp)
+            do ik = 1, nk
+               phase_minus = exp(-i_unit*2.0_rp*pi*dot_product(k_points(:,ik),real_space_vectors(:,ir)))
+               phase_plus = conjg(phase_minus)
+               gup_r(:,:,:,:,ir) = gup_r(:,:,:,:,ir) + (k_weights(ik)/weight_sum)*phase_minus*gup_k(:,:,:,:,ik)
+               gdown_minus_r(:,:,:,:,ir) = gdown_minus_r(:,:,:,:,ir) + (k_weights(ik)/weight_sum)*phase_plus*gdown_k(:,:,:,:,ik)
+            end do
+            coefficient = weights(inode)
+            if (kT > 0.0_rp) coefficient = coefficient*native_regularized_fermi(nodes(inode),fermi,kT,poles)
+            do ia = 1, nsite
+               do ja = 1, nsite
+                  integral_ud(ia,ja,ir) = integral_ud(ia,ja,ir) + coefficient*native_exchange_trace(delta(:,:,ia),delta(:,:,ja), &
+                     gup_r(:,:,ia,ja,ir),gdown_minus_r(:,:,ja,ia,ir))
+                  integral_du(ia,ja,ir) = integral_du(ia,ja,ir) + coefficient*native_exchange_trace(delta(:,:,ia),delta(:,:,ja), &
+                     gdown_minus_r(:,:,ia,ja,ir),gup_r(:,:,ja,ia,ir))
+               end do
+            end do
+         end do
+      end do
+      call system_clock(contour_stop)
+      contour_seconds = elapsed_seconds(contour_start,contour_stop,clock_rate)
+
+      call system_clock(pole_start)
+      do ipole = 1, size(poles)
+         do ik = 1, nk
+            call system_clock(clock_start)
+            call native_path_operator_from_structure(lat,poles(ipole),smat_src(:,:,ik),pmat,gmat)
+            call system_clock(clock_stop)
+            solve_seconds = solve_seconds + elapsed_seconds(clock_start,clock_stop,clock_rate)
+            call native_deltas(pmat,nsite,norb,delta)
+            do ia = 1, nsite
+               do ja = 1, nsite
+                  call native_spin_site_block(gmat,norb,ia,1,ja,1,block)
+                  gup_k(:,:,ia,ja,ik) = block
+                  call native_spin_site_block(gmat,norb,ia,2,ja,2,block)
+                  gdown_k(:,:,ia,ja,ik) = block
+               end do
+            end do
+         end do
+         do ir = 1, nvec
+            gup_r(:,:,:,:,ir) = cmplx(0.0_rp,0.0_rp,rp)
+            gdown_minus_r(:,:,:,:,ir) = cmplx(0.0_rp,0.0_rp,rp)
+            do ik = 1, nk
+               phase_minus = exp(-i_unit*2.0_rp*pi*dot_product(k_points(:,ik),real_space_vectors(:,ir)))
+               phase_plus = conjg(phase_minus)
+               gup_r(:,:,:,:,ir) = gup_r(:,:,:,:,ir) + (k_weights(ik)/weight_sum)*phase_minus*gup_k(:,:,:,:,ik)
+               gdown_minus_r(:,:,:,:,ir) = gdown_minus_r(:,:,:,:,ir) + (k_weights(ik)/weight_sum)*phase_plus*gdown_k(:,:,:,:,ik)
+            end do
+            do ia = 1, nsite
+               do ja = 1, nsite
+                  integral_ud(ia,ja,ir) = integral_ud(ia,ja,ir) + kT*native_exchange_trace(delta(:,:,ia),delta(:,:,ja), &
+                     gup_r(:,:,ia,ja,ir),gdown_minus_r(:,:,ja,ia,ir))
+                  integral_du(ia,ja,ir) = integral_du(ia,ja,ir) + kT*native_exchange_trace(delta(:,:,ia),delta(:,:,ja), &
+                     gdown_minus_r(:,:,ia,ja,ir),gup_r(:,:,ja,ia,ir))
+               end do
+            end do
+         end do
+      end do
+      call system_clock(pole_stop)
+      pole_seconds = elapsed_seconds(pole_start,pole_stop,clock_rate)
+      jij_ud = -integral_ud/4.0_rp; jij_du = -integral_du/4.0_rp
+      if (present(report)) then
+         report = native_turek_contour_report()
+         report%contour_points = size(nodes)*nk
+         report%fermi_poles = size(poles)*nk
+         report%k_points = nk; report%q_points = nvec
+         report%solve_seconds = solve_seconds
+         report%contour_seconds = contour_seconds
+         report%pole_seconds = pole_seconds
+      end if
+      deallocate(nodes,weights,poles,integral_ud,integral_du,smat_src,sorb,pmat,gmat,delta,gup_k,gdown_k,gup_r,gdown_minus_r,block)
+   end subroutine native_exchange_pairs_contour
+
    !> Evaluate a common native q mesh and close it to real-space Jij.
    !>
    !> This wrapper intentionally performs no interpolation or fitted scale:
    !> `jq` is the native contour result and `jij` is its explicitly normalized
-   !> discrete inverse Fourier transform.  For a complete commensurate mesh,
-   !> the pair is an exact finite-mesh Fourier closure.
+   !> discrete inverse Fourier transform.  This is retained as an algebraic
+   !> DFT-helper regression; it is not the independent native pair route.
    subroutine native_exchange_jij_contour(lat, k_points, k_weights, q_points, real_space_vectors, fermi, kT, energy_bounds, &
       options, jq, jij, report)
       type(lattice), intent(inout) :: lat
@@ -301,6 +588,157 @@ contains
       end do
    end subroutine native_fourier_jij_to_jq
 
+   subroutine native_fourier_complex_jq_to_jij(q_points, jq, real_space_vectors, jij)
+      real(rp), intent(in) :: q_points(:, :), real_space_vectors(:, :)
+      complex(rp), intent(in) :: jq(:, :, :)
+      complex(rp), intent(out) :: jij(:, :, :)
+      integer :: nq, nsite, nvec, iq, ir, ia, ja
+
+      nq = size(q_points,2); nsite = size(jq,1); nvec = size(real_space_vectors,2)
+      if (size(q_points,1) /= 3 .or. size(jq,2) /= nsite .or. size(jq,3) /= nq .or. &
+          size(real_space_vectors,1) /= 3 .or. any(shape(jij) /= [nsite,nsite,nvec])) then
+         error stop 'native_fourier_complex_jq_to_jij: shape mismatch'
+      end if
+      do ir = 1, nvec
+         do ia = 1, nsite
+            do ja = 1, nsite
+               jij(ia,ja,ir) = cmplx(0.0_rp,0.0_rp,rp)
+               do iq = 1, nq
+                  jij(ia,ja,ir) = jij(ia,ja,ir) + jq(ia,ja,iq)* &
+                     exp(i_unit*2.0_rp*pi*dot_product(q_points(:,iq),real_space_vectors(:,ir)))/real(nq,rp)
+               end do
+            end do
+         end do
+      end do
+   end subroutine native_fourier_complex_jq_to_jij
+
+   subroutine native_fourier_complex_jij_to_jq(q_points, real_space_vectors, jij, jq)
+      real(rp), intent(in) :: q_points(:, :), real_space_vectors(:, :)
+      complex(rp), intent(in) :: jij(:, :, :)
+      complex(rp), intent(out) :: jq(:, :, :)
+      integer :: nq, nsite, nvec, iq, ir, ia, ja
+
+      nq = size(q_points,2); nsite = size(jij,1); nvec = size(real_space_vectors,2)
+      if (size(q_points,1) /= 3 .or. size(jij,2) /= nsite .or. size(jij,3) /= nvec .or. &
+          size(real_space_vectors,1) /= 3 .or. any(shape(jq) /= [nsite,nsite,nq])) then
+         error stop 'native_fourier_complex_jij_to_jq: shape mismatch'
+      end if
+      do iq = 1, nq
+         do ia = 1, nsite
+            do ja = 1, nsite
+               jq(ia,ja,iq) = cmplx(0.0_rp,0.0_rp,rp)
+               do ir = 1, nvec
+                  jq(ia,ja,iq) = jq(ia,ja,iq) + jij(ia,ja,ir)* &
+                     exp(-i_unit*2.0_rp*pi*dot_product(q_points(:,iq),real_space_vectors(:,ir)))
+               end do
+            end do
+         end do
+      end do
+   end subroutine native_fourier_complex_jij_to_jq
+
+   !> Determine bounds from the exact native P-S coefficient problem.
+   !>
+   !> With P0(z)=D(z-C), Q=qi-alpha, and Palpha=P0(I+Q P0)^-1,
+   !> multiplying (Palpha-S) by (I+Q P0) gives the linear coefficient
+   !> problem [(I-SQ)D] z = (I-SQ)DC+S.  Its eigenvalues are used only for
+   !> contour selection/validation; all exchange resolvents remain direct
+   !> P-S solves.
+   subroutine native_spectral_bounds(lat, k_points, fermi, kT, options, energy_bounds, max_ellipse_value, all_inside, pole_count)
+      type(lattice), intent(inout) :: lat
+      real(rp), intent(in) :: k_points(:, :), fermi, kT
+      type(native_turek_contour_options), intent(in) :: options
+      real(rp), intent(out) :: energy_bounds(2), max_ellipse_value
+      logical, intent(out) :: all_inside
+      integer, intent(out) :: pole_count
+      complex(rp), allocatable :: smat_orb(:, :), smat_spin(:, :), roots(:, :)
+      real(rp) :: center, semimajor, semiminor, ellipse_value
+      integer :: nsite, norb, nspin, nk, ik, ip
+
+      if (size(k_points,1) /= 3 .or. size(k_points,2) < 1) error stop 'native_spectral_bounds: point shape mismatch'
+      nsite = lat%nrec; nk = size(k_points,2)
+      norb = (lat%symbolic_atoms(lat%iz(lat%atlist(1)))%potential%lmax+1)**2
+      nspin = 2*norb*nsite
+      allocate(smat_orb(norb*nsite,norb*nsite), smat_spin(nspin,nspin), roots(nspin,nk))
+      do ik = 1, nk
+         call native_structure_constants(lat,k_points(:,ik),smat_orb)
+         call native_expand_spin_structure(smat_orb,nsite,norb,smat_spin)
+         call native_native_poles_from_structure(lat,smat_spin,roots(:,ik))
+      end do
+      energy_bounds = [minval(real(roots,rp)),maxval(real(roots,rp))]
+      if (energy_bounds(2)-energy_bounds(1) < 1.0e-10_rp) then
+         energy_bounds = energy_bounds + [-0.5_rp,0.5_rp]
+      end if
+      call native_contour_axes(energy_bounds,fermi,kT,options,center,semimajor,semiminor)
+      max_ellipse_value = -huge(1.0_rp)
+      do ik = 1, nk
+         do ip = 1, nspin
+            ellipse_value = ((real(roots(ip,ik),rp)-center)/semimajor)**2 + &
+               (aimag(roots(ip,ik))/semiminor)**2
+            max_ellipse_value = max(max_ellipse_value,ellipse_value)
+         end do
+      end do
+      pole_count = nspin*nk
+      all_inside = max_ellipse_value < 1.0_rp-1.0e-10_rp
+      deallocate(smat_orb,smat_spin,roots)
+   end subroutine native_spectral_bounds
+
+   subroutine native_native_poles_from_structure(lat, smat, roots)
+      type(lattice), intent(inout) :: lat
+      complex(rp), intent(in) :: smat(:, :)
+      complex(rp), intent(out) :: roots(:)
+      complex(rp), allocatable :: a(:, :), rhs(:, :), work(:), vl(:, :), vr(:, :), query(:)
+      real(rp), allocatable :: rwork(:), diag_q(:), diag_d(:), diag_c(:), alpha(:)
+      integer, allocatable :: ipiv(:)
+      integer :: nsite, norb, n, lmax, site, spin, l, m, mls, idx, i, j, ntype, ia, it, info, lwork
+      external :: zgesv, zgeev
+
+      n = size(roots); nsite = lat%nrec
+      norb = (lat%symbolic_atoms(lat%iz(lat%atlist(1)))%potential%lmax+1)**2
+      lmax = lat%symbolic_atoms(lat%iz(lat%atlist(1)))%potential%lmax
+      if (size(smat,1) /= n .or. size(smat,2) /= n .or. n /= 2*norb*nsite) then
+         error stop 'native_native_poles_from_structure: shape mismatch'
+      end if
+      allocate(a(n,n),rhs(n,n),work(n),vl(1,1),vr(1,1),query(1),rwork(2*n),ipiv(n), &
+         diag_q(n),diag_d(n),diag_c(n),alpha(0:lmax))
+      diag_q = 0.0_rp; diag_d = 0.0_rp; diag_c = 0.0_rp
+      do site = 1, nsite
+         ntype = lat%ib(site); ia = lat%atlist(ntype); it = lat%iz(ia)
+         call native_screening_alpha(lat%symbolic_atoms(it),alpha)
+         do spin = 1, 2
+            do l = 0, lmax
+               if (abs(lat%symbolic_atoms(it)%potential%dele(l,spin)) <= tiny(1.0_rp)) then
+                  error stop 'native_native_poles_from_structure: zero potential width'
+               end if
+               do m = 1, 2*l+1
+                  mls = l*l+m; idx = (site-1)*2*norb+(spin-1)*norb+mls
+                  diag_q(idx) = lat%symbolic_atoms(it)%potential%qi(l,spin)-alpha(l)
+                  diag_d(idx) = 1.0_rp/(lat%symbolic_atoms(it)%potential%dele(l,spin)**2)
+                  diag_c(idx) = lat%symbolic_atoms(it)%potential%c(l,spin)+lat%symbolic_atoms(it)%potential%vmad
+               end do
+            end do
+         end do
+      end do
+      a = -smat
+      do i = 1, n
+         a(i,i) = a(i,i)+cmplx(1.0_rp,0.0_rp,rp)
+      end do
+      do j = 1, n
+         a(:,j) = a(:,j)*diag_d(j)
+         rhs(:,j) = (-smat(:,j)*diag_q(j))*diag_d(j)*diag_c(j) + smat(:,j)
+         rhs(j,j) = rhs(j,j) + diag_d(j)*diag_c(j)
+      end do
+      call zgesv(n,n,a,n,ipiv,rhs,n,info)
+      if (info /= 0) error stop 'native_native_poles_from_structure: coefficient solve failed'
+      call zgeev('N','N',n,rhs,n,roots,vl,1,vr,1,query,-1,rwork,info)
+      if (info /= 0) error stop 'native_native_poles_from_structure: eigenvalue workspace query failed'
+      lwork = max(1,int(real(query(1),rp)))
+      deallocate(work)
+      allocate(work(lwork))
+      call zgeev('N','N',n,rhs,n,roots,vl,1,vr,1,work,lwork,rwork,info)
+      if (info /= 0) error stop 'native_native_poles_from_structure: eigenvalue solve failed'
+      deallocate(a,rhs,work,vl,vr,query,rwork,ipiv,diag_q,diag_d,diag_c,alpha)
+   end subroutine native_native_poles_from_structure
+
    !> Extract one site/spin block from the native site-major spin layout.
    subroutine native_spin_site_block(gmat, norb, site_i, spin_i, site_j, spin_j, block)
       complex(rp), intent(in) :: gmat(:, :)
@@ -372,12 +810,37 @@ contains
       end do
    end subroutine native_trace_matrix
 
-   pure complex(rp) function native_regularized_fermi(z, fermi, kT, poles) result(value)
-      complex(rp), intent(in) :: z, poles(:)
+   subroutine native_trace_matrix_ordered(gsrc, gend, delta, norb, nsite, trace_ud, trace_du)
+      complex(rp), intent(in) :: gsrc(:, :), gend(:, :), delta(:, :, :)
+      integer, intent(in) :: norb, nsite
+      complex(rp), intent(out) :: trace_ud(:, :), trace_du(:, :)
+      complex(rp) :: gup_ij(norb,norb), gdown_ji(norb,norb), gdown_ij(norb,norb), gup_ji(norb,norb)
+      integer :: ia, ja
+
+      if (any(shape(trace_ud) /= [nsite,nsite]) .or. any(shape(trace_du) /= [nsite,nsite])) then
+         error stop 'native contour: ordered trace shape mismatch'
+      end if
+      do ia = 1, nsite
+         do ja = 1, nsite
+            call native_spin_site_block(gsrc,norb,ia,1,ja,1,gup_ij)
+            call native_spin_site_block(gend,norb,ja,2,ia,2,gdown_ji)
+            call native_spin_site_block(gsrc,norb,ia,2,ja,2,gdown_ij)
+            call native_spin_site_block(gend,norb,ja,1,ia,1,gup_ji)
+            trace_ud(ia,ja) = native_exchange_trace(delta(:,:,ia),delta(:,:,ja),gup_ij,gdown_ji)
+            trace_du(ia,ja) = native_exchange_trace(delta(:,:,ia),delta(:,:,ja),gdown_ij,gup_ji)
+         end do
+      end do
+   end subroutine native_trace_matrix_ordered
+
+   pure complex(rp) function native_complex_fermi(z, fermi, kT) result(value)
+      complex(rp), intent(in) :: z
       real(rp), intent(in) :: fermi, kT
       complex(rp) :: argument, reduced
-      integer :: i
 
+      if (kT <= 0.0_rp) then
+         value = cmplx(merge(1.0_rp,0.0_rp,real(z,rp) < fermi),0.0_rp,rp)
+         return
+      end if
       argument = (z-fermi)/kT
       if (real(argument,rp) > 40.0_rp) then
          reduced = exp(-argument); value = reduced/(1.0_rp+reduced)
@@ -386,6 +849,17 @@ contains
       else
          value = 1.0_rp/(exp(argument)+1.0_rp)
       end if
+   end function native_complex_fermi
+
+   !> Pole-subtracted weight used by the alternative closed-contour identity.
+   !> Its contour integral already contains the explicit Fermi-pole residues;
+   !> callers must not add another pole sum to this weight.
+   pure complex(rp) function native_regularized_fermi(z, fermi, kT, poles) result(value)
+      complex(rp), intent(in) :: z, poles(:)
+      real(rp), intent(in) :: fermi, kT
+      integer :: i
+
+      value = native_complex_fermi(z,fermi,kT)
       do i = 1, size(poles)
          value = value+kT/(z-poles(i))
       end do

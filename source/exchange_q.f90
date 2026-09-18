@@ -17,7 +17,7 @@ module exchange_q_mod
    use lr_kl_contour_mod, only: finite_h_contour_options, finite_h_contour_report, &
       force_theorem_finite_q_hessian_from_resolvent_batch
    use lr_lmto_turek_contour_mod, only: native_turek_contour_options, native_turek_contour_report, &
-      native_exchange_q_contour
+      native_exchange_q_ordered_contour, native_spectral_bounds
    use logger_mod, only: g_logger
    use lr_kl_hessian_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_from_hamiltonian, &
       assemble_lmto_hamiltonian, &
@@ -63,6 +63,7 @@ module exchange_q_mod
       real(rp) :: native_contour_margin = 0.25_rp
       real(rp) :: native_contour_height_fraction = 0.35_rp
       logical :: native_contour_account_fermi_poles = .true.
+      integer :: native_contour_target_fermi_poles = 0
    contains
       procedure :: clear => exchange_q_config_clear
    end type exchange_q_config
@@ -100,6 +101,7 @@ contains
       this%native_contour_margin = 0.25_rp
       this%native_contour_height_fraction = 0.35_rp
       this%native_contour_account_fermi_poles = .true.
+      this%native_contour_target_fermi_poles = 0
    end subroutine exchange_q_config_clear
 
    subroutine load_exchange_q_config(filename, this, validate_request)
@@ -115,7 +117,7 @@ contains
       character(len=16) :: finite_h_response_backend, contour_shape
       real(rp) :: rotation_axis(3), native_green_eta
       real(rp) :: contour_margin, contour_height_fraction, native_contour_margin, native_contour_height_fraction
-      integer :: native_energy_points, contour_points, native_contour_points
+      integer :: native_energy_points, contour_points, native_contour_points, native_contour_target_fermi_poles
       logical :: contour_account_fermi_poles
       real(rp) :: q_list(3, exchange_q_max_points)
 
@@ -123,7 +125,7 @@ contains
          write_components, native_crosscheck, native_turek, finite_h_spectral_mode, finite_h_response_backend, rotation_axis, &
          contour_points, contour_shape, contour_margin, contour_height_fraction, contour_account_fermi_poles, &
          native_green_eta, native_energy_points, native_contour_points, native_contour_margin, &
-         native_contour_height_fraction, native_contour_account_fermi_poles
+         native_contour_height_fraction, native_contour_account_fermi_poles, native_contour_target_fermi_poles
 
       call this%clear()
       this%fname = filename
@@ -149,6 +151,7 @@ contains
       native_contour_margin = this%native_contour_margin
       native_contour_height_fraction = this%native_contour_height_fraction
       native_contour_account_fermi_poles = this%native_contour_account_fermi_poles
+      native_contour_target_fermi_poles = this%native_contour_target_fermi_poles
 
       open(newunit=funit, file=filename, action='read', status='old', iostat=iostatus)
       if (iostatus /= 0) then
@@ -184,6 +187,7 @@ contains
       this%native_contour_margin = native_contour_margin
       this%native_contour_height_fraction = native_contour_height_fraction
       this%native_contour_account_fermi_poles = native_contour_account_fermi_poles
+      this%native_contour_target_fermi_poles = native_contour_target_fermi_poles
       validate = .false.
       if (present(validate_request)) validate = validate_request
       if (validate) then
@@ -201,6 +205,10 @@ contains
          end if
          if (this%native_contour_margin <= 0.0_rp .or. this%native_contour_height_fraction <= 0.0_rp) then
             call g_logger%fatal('[exchange_q]: native contour margin and height fraction must be positive', __FILE__, __LINE__)
+         end if
+         if (this%native_contour_target_fermi_poles < 0 .or. &
+             (this%native_contour_target_fermi_poles > 0 .and. mod(this%native_contour_target_fermi_poles,2) /= 0)) then
+            call g_logger%fatal('[exchange_q]: native_contour_target_fermi_poles must be zero or positive even', __FILE__, __LINE__)
          end if
          if (maxval(abs(this%rotation_axis)) <= tiny(1.0_rp)) then
             call g_logger%fatal('[exchange_q]: rotation_axis must be nonzero', __FILE__, __LINE__)
@@ -430,7 +438,7 @@ contains
       real(rp), allocatable :: spectral_total(:, :, :), spectral_tt(:, :, :), spectral_contact(:, :, :)
       real(rp), allocatable :: contour_total(:, :, :), contour_tt(:, :, :), contour_contact(:, :, :)
       complex(rp), allocatable :: h_source(:, :, :), h_endpoint(:, :, :)
-      real(rp), allocatable :: native_total(:), native_jq_sum(:)
+      real(rp), allocatable :: native_jq_ud(:), native_jq_du(:), native_jq_sym(:), native_delta_j(:), native_curvature(:)
       integer, allocatable :: endpoint_index(:)
       logical, allocatable :: endpoint_reused(:), q_commensurate(:)
       real(rp), allocatable :: endpoint_residual(:)
@@ -516,7 +524,10 @@ contains
       vertex_identity_checked = .false.
       endpoint_identity_checked = .false.
       native_ready = config%native_crosscheck .or. config%native_turek
-      allocate(native_total(config%n_q), native_jq_sum(config%n_q)); native_total = 0.0_rp; native_jq_sum = 0.0_rp
+      allocate(native_jq_ud(config%n_q), native_jq_du(config%n_q), native_jq_sym(config%n_q), &
+         native_delta_j(config%n_q), native_curvature(config%n_q))
+      native_jq_ud = 0.0_rp; native_jq_du = 0.0_rp; native_jq_sym = 0.0_rp
+      native_delta_j = 0.0_rp; native_curvature = 0.0_rp
       contour_options%contour_points = config%contour_points
       contour_options%contour_shape = config%contour_shape
       contour_options%contour_margin = config%contour_margin
@@ -527,6 +538,7 @@ contains
       native_contour_options%contour_margin = config%native_contour_margin
       native_contour_options%contour_height_fraction = config%native_contour_height_fraction
       native_contour_options%account_fermi_poles = config%native_contour_account_fermi_poles
+      native_contour_options%target_fermi_poles = config%native_contour_target_fermi_poles
 
       call system_clock(response_start)
 
@@ -642,22 +654,23 @@ contains
       total_response_seconds = elapsed_clock_seconds(response_start,clock_end,clock_rate)
 
       if (native_ready) then
-         call native_exchange_q_driver(lattice_obj, reciprocal_obj, q_direct, native_contour_options, native_jq_sum, &
-            native_total, native_contour_report)
+         call native_exchange_q_driver(lattice_obj, reciprocal_obj, q_direct, native_contour_options, native_jq_ud, native_jq_du, &
+            native_jq_sym, native_delta_j, native_curvature, native_contour_report)
          call g_logger%info('[exchange_q]: native Turek contour points/poles='//trim(int2str(native_contour_report%contour_points))//'/'// &
             trim(int2str(native_contour_report%fermi_poles))//' solve/contour/pole='// &
             trim(real_to_string(native_contour_report%solve_seconds))//'/'//trim(real_to_string(native_contour_report%contour_seconds))//'/'// &
-            trim(real_to_string(native_contour_report%pole_seconds))//' s', __FILE__, __LINE__)
+            trim(real_to_string(native_contour_report%pole_seconds))//' s; native max ellipse='// &
+            trim(real_to_string(native_contour_report%native_max_ellipse_value)), __FILE__, __LINE__)
       end if
       call g_logger%info('[exchange_q]: timing endpoint/hamiltonian+T/C/spectral='//trim(real_to_string(endpoint_seconds))//'/'// &
          trim(real_to_string(hamiltonian_seconds))//'/'//trim(real_to_string(assembly_seconds))//'/'//trim(real_to_string(contraction_seconds))//' s', __FILE__, __LINE__)
       call write_exchange_q_output(config, lattice_obj, reciprocal_obj, q_direct, q_cart, finite_tt, finite_contact, &
-         finite_total, native_total, native_jq_sum, native_ready, endpoint_mode, endpoint_reused, q_commensurate, endpoint_residual, &
+         finite_total, native_jq_ud, native_jq_du, native_jq_sym, native_delta_j, native_curvature, native_contour_report, native_ready, endpoint_mode, endpoint_reused, q_commensurate, endpoint_residual, &
          endpoint_seconds, assembly_seconds, contraction_seconds, hamiltonian_seconds, spectral_tt, spectral_contact, spectral_total, contour_tt, &
          contour_contact, contour_total, gf_seconds, solve_seconds, contour_seconds, total_response_seconds)
       if (native_ready) then
-         call compute_native_gamma_and_report(native_total, q_direct, native_gamma)
-         native_q = maxval(abs(native_total))
+         call compute_native_gamma_and_report(native_delta_j, q_direct, native_gamma)
+         native_q = maxval(abs(native_delta_j))
          call g_logger%info('[exchange_q]: native Turek J(q) completed; |DeltaJ|_max='//trim(real_to_string(native_q))// &
             ' Ry, gamma='//trim(real_to_string(native_gamma))//' Ry', __FILE__, __LINE__)
       end if
@@ -668,8 +681,7 @@ contains
          contour_total, contour_tt, contour_contact, &
          axes, hessian, torque_torque, contact, complete, endpoint_index, endpoint_reused, q_commensurate, &
          endpoint_residual, endpoint_mode)
-      deallocate(native_total)
-      deallocate(native_jq_sum)
+      deallocate(native_jq_ud, native_jq_du, native_jq_sym, native_delta_j, native_curvature)
    end subroutine run_exchange_q
 
    subroutine validate_exchange_q_capability(config, control_obj, ham, self_obj, recip)
@@ -698,6 +710,9 @@ contains
       end if
       if (fixture_basis_size(ham) /= 9) then
          call g_logger%fatal('[exchange_q]: capability gate requires the full spd production basis', __FILE__, __LINE__)
+      end if
+      if ((config%native_crosscheck .or. config%native_turek) .and. ham%charge%lattice%nrec /= 1) then
+         call g_logger%fatal('[exchange_q]: native contour production is currently capability-gated to one sublattice', __FILE__, __LINE__)
       end if
    end subroutine validate_exchange_q_capability
 
@@ -745,29 +760,51 @@ contains
       deallocate(h,work,rwork)
    end subroutine solve_unfolded_endpoints
 
-   subroutine native_exchange_q_driver(lat, recip, q_direct, options, jq_sum, delta_j, report)
+   subroutine native_exchange_q_driver(lat, recip, q_direct, options, jq_ud_out, jq_du_out, jq_sym_out, delta_j, curvature, report)
       type(lattice), intent(inout) :: lat
       type(reciprocal), intent(in) :: recip
       real(rp), intent(in) :: q_direct(:, :)
       type(native_turek_contour_options), intent(in) :: options
-      real(rp), intent(out) :: jq_sum(:), delta_j(:)
+      real(rp), intent(out) :: jq_ud_out(:), jq_du_out(:), jq_sym_out(:), delta_j(:), curvature(:)
       type(native_turek_contour_report), intent(out) :: report
-      real(rp), allocatable :: jq(:, :, :)
-      real(rp) :: energy_bounds(2), kT
-      integer :: nsite, nq, iq, gamma_index
+      complex(rp), allocatable :: jq_ud(:, :, :), jq_du(:, :, :)
+      real(rp), allocatable :: native_points(:, :)
+      real(rp) :: energy_bounds(2), kT, max_ellipse_value
+      integer :: nsite, nk, nq, iq, ik, gamma_index, native_pole_count
+      logical :: bounds_verified
 
       nsite = lat%nrec; nq = size(q_direct,2)
-      if (size(q_direct,1) /= 3 .or. size(jq_sum) /= nq .or. size(delta_j) /= nq) then
+      nk = size(recip%k_points,2)
+      if (size(q_direct,1) /= 3 .or. size(jq_ud_out) /= nq .or. size(jq_du_out) /= nq .or. &
+          size(jq_sym_out) /= nq .or. size(delta_j) /= nq .or. size(curvature) /= nq) then
          error stop 'native_exchange_q_driver: shape mismatch'
       end if
-      if (.not. allocated(recip%eigenvalues)) error stop 'native_exchange_q_driver: accepted eigenvalues are unavailable'
-      energy_bounds = [minval(recip%eigenvalues)-0.5_rp, maxval(recip%eigenvalues)+0.5_rp]
       kT = max(recip%temperature*reciprocal_kb_ry_per_k, 1.0e-10_rp)
-      allocate(jq(nsite,nsite,nq))
-      call native_exchange_q_contour(lat, recip%k_points, recip%k_weights, q_direct, recip%fermi_level, kT, &
-         energy_bounds, options, jq, report)
+      allocate(native_points(3,nk*nq))
       do iq = 1, nq
-         jq_sum(iq) = sum(jq(:,:,iq))
+         do ik = 1, nk
+            native_points(:,(iq-1)*nk+ik) = recip%k_points(:,ik)+q_direct(:,iq)
+         end do
+      end do
+      call native_spectral_bounds(lat, native_points, recip%fermi_level, kT, options, energy_bounds, max_ellipse_value, &
+         bounds_verified, native_pole_count)
+      if (.not. bounds_verified) then
+         call g_logger%fatal('[exchange_q]: native spectral poles are not strictly inside contour; max ellipse='// &
+            trim(real_to_string(max_ellipse_value))//' energy bounds='//trim(real_to_string(energy_bounds(1)))//'/'// &
+            trim(real_to_string(energy_bounds(2)))//' pole count='//trim(int2str(native_pole_count)), __FILE__, __LINE__)
+      end if
+      allocate(jq_ud(nsite,nsite,nq), jq_du(nsite,nsite,nq))
+      call native_exchange_q_ordered_contour(lat, recip%k_points, recip%k_weights, q_direct, recip%fermi_level, kT, &
+         energy_bounds, options, jq_ud, jq_du, report)
+      report%native_max_ellipse_value = max_ellipse_value
+      report%native_bounds_verified = bounds_verified
+      report%native_spectral_poles = native_pole_count
+      jq_ud_out = 0.0_rp; jq_du_out = 0.0_rp; jq_sym_out = 0.0_rp
+      do iq = 1, nq
+         if (nsite /= 1) error stop 'native_exchange_q_driver: production scalar reduction requires nsite=1'
+         jq_ud_out(iq) = real(jq_ud(1,1,iq),rp)
+         jq_du_out(iq) = real(jq_du(1,1,iq),rp)
+         jq_sym_out(iq) = 0.5_rp*(jq_ud_out(iq)+jq_du_out(iq))
       end do
       gamma_index = 0
       do iq = 1, nq
@@ -777,12 +814,16 @@ contains
          end if
       end do
       if (gamma_index == 0) error stop 'native_exchange_q_driver: q path must contain Gamma for DeltaJ'
-      delta_j = jq_sum(gamma_index)-jq_sum
-      deallocate(jq)
+      delta_j = jq_sym_out(gamma_index)-jq_sym_out
+      ! The finite-q complex-amplitude Hessian is the second derivative of
+      ! the physical Heisenberg energy.  The historical scalar exchange is
+      ! J_hist=(J_ud+J_du)/2, hence K(q)=2*(J_hist(0)-J_hist(q)).
+      curvature = 2.0_rp*delta_j
+      deallocate(native_points,jq_ud,jq_du)
    end subroutine native_exchange_q_driver
 
    subroutine write_exchange_q_output(config, lattice_obj, recip, q_direct, q_cart, finite_tt, finite_contact, &
-                                      finite_total, native_total, native_jq_sum, native_ready, endpoint_mode, endpoint_reused, &
+                                      finite_total, native_jq_ud, native_jq_du, native_jq_sym, native_delta_j, native_curvature, native_report, native_ready, endpoint_mode, endpoint_reused, &
                                       q_commensurate, endpoint_residual, endpoint_seconds, assembly_seconds, contraction_seconds, &
                                       hamiltonian_seconds, spectral_tt, spectral_contact, spectral_total, contour_tt, contour_contact, contour_total, &
                                       gf_seconds, solve_seconds, contour_seconds, total_response_seconds)
@@ -792,7 +833,8 @@ contains
       real(rp), intent(in) :: q_direct(:, :), q_cart(:, :), finite_tt(:, :, :), finite_contact(:, :, :), finite_total(:, :, :)
       real(rp), intent(in) :: spectral_tt(:, :, :), spectral_contact(:, :, :), spectral_total(:, :, :)
       real(rp), intent(in) :: contour_tt(:, :, :), contour_contact(:, :, :), contour_total(:, :, :)
-      real(rp), intent(in), allocatable :: native_total(:), native_jq_sum(:)
+      real(rp), intent(in), allocatable :: native_jq_ud(:), native_jq_du(:), native_jq_sym(:), native_delta_j(:), native_curvature(:)
+      type(native_turek_contour_report), intent(in) :: native_report
       logical, intent(in) :: native_ready
       character(len=*), intent(in) :: endpoint_mode(:)
       logical, intent(in) :: endpoint_reused(:), q_commensurate(:)
@@ -804,7 +846,7 @@ contains
       open(newunit=unit, file=trim(config%output_file), status='replace', action='write')
       write(unit,'(a)') '# exchange_q static force-theorem exchange curvature'
       write(unit,'(a)') '# observable = DeltaJ(q) = J(Gamma) - J(q)'
-      if (native_ready) write(unit,'(a)') '# native_observable = native Turek J(q), with native_DeltaJ(q)=native J(Gamma)-native J(q)'
+      if (native_ready) write(unit,'(a)') '# native_observables = Jud(q), Jdu(q), Jsym(q)=0.5*(Jud+Jdu), DeltaJ_sym=Jsym(Gamma)-Jsym(q), expected_curvature=2*DeltaJ_sym'
       write(unit,'(a)') '# k_mesh performs the electronic BZ integration; q_path is the independent magnetic perturbation path.'
       write(unit,'(a,3(i0,1x))') '# k_mesh = ', recip%nk_mesh
       write(unit,'(a,a)') '# q_coordinates_input = ', trim(config%q_coordinates)
@@ -835,22 +877,26 @@ contains
             'height_fraction=', config%native_contour_height_fraction
          write(unit,'(a,a)') '# native_fermi_pole_residues_accounted=', &
             merge('true ','false',config%native_contour_account_fermi_poles)
+         write(unit,'(a,i0)') '# native_target_fermi_poles = ', config%native_contour_target_fermi_poles
+         write(unit,'(a,l1)') '# native_bounds_verified = ', native_report%native_bounds_verified
+         write(unit,'(a,es24.16)') '# native_max_spectral_ellipse = ', native_report%native_max_ellipse_value
+         write(unit,'(a,i0)') '# native_spectral_poles = ', native_report%native_spectral_poles
       end if
       write(unit,'(a)') '# units: exchange=Ry, q=1/A, stiffness diagnostic=Ry A^2'
       nsite = size(finite_total,1)
       if (nsite == 1) then
          if (config%finite_h_response_backend == 'both') then
             if (native_ready) then
-               write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv spectral_TT_Ry spectral_contact_Ry spectral_total_Ry contour_TT_Ry contour_contact_Ry contour_total_Ry abs_total_residual_Ry relative_total_residual native_Jq_Ry native_dJ_Ry native_dJ_mRy native_dJ_over_q2_RyA2 finiteH_minus_native_Ry'
+               write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv spectral_TT_Ry spectral_contact_Ry spectral_total_Ry contour_TT_Ry contour_contact_Ry contour_total_Ry abs_total_residual_Ry relative_total_residual native_Jud_Ry native_Jdu_Ry native_Jsym_Ry native_DeltaJ_sym_Ry native_DeltaJ_sym_over_q2_RyA2 native_expected_curvature_Ry finiteH_minus_native_curvature_Ry'
             else
                write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv spectral_TT_Ry spectral_contact_Ry spectral_total_Ry contour_TT_Ry contour_contact_Ry contour_total_Ry abs_total_residual_Ry relative_total_residual'
             end if
          else if (config%write_components .and. native_ready) then
-            write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv finiteH_TT_Ry finiteH_contact_Ry finiteH_total_Ry finiteH_total_mRy finiteH_dJ_over_q2_RyA2 native_Jq_Ry native_dJ_Ry native_dJ_mRy native_dJ_over_q2_RyA2 finiteH_minus_native_Ry'
+            write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv finiteH_TT_Ry finiteH_contact_Ry finiteH_total_Ry finiteH_total_mRy finiteH_dJ_over_q2_RyA2 native_Jud_Ry native_Jdu_Ry native_Jsym_Ry native_DeltaJ_sym_Ry native_DeltaJ_sym_over_q2_RyA2 native_expected_curvature_Ry finiteH_minus_native_curvature_Ry'
          else if (config%write_components) then
             write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv finiteH_TT_Ry finiteH_contact_Ry finiteH_total_Ry finiteH_total_mRy finiteH_dJ_over_q2_RyA2'
          else if (native_ready) then
-            write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv finiteH_total_Ry finiteH_total_mRy finiteH_dJ_over_q2_RyA2 native_dJ_Ry native_dJ_mRy native_dJ_over_q2_RyA2 finiteH_minus_native_Ry'
+            write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv finiteH_total_Ry finiteH_total_mRy finiteH_dJ_over_q2_RyA2 native_Jud_Ry native_Jdu_Ry native_Jsym_Ry native_DeltaJ_sym_Ry native_DeltaJ_sym_over_q2_RyA2 native_expected_curvature_Ry finiteH_minus_native_curvature_Ry'
          else
             write(unit,'(a)') '# columns: q_index q1 q2 q3 qx_Ainv qy_Ainv qz_Ainv qmag_Ainv finiteH_total_Ry finiteH_total_mRy finiteH_dJ_over_q2_RyA2'
          end if
@@ -871,8 +917,9 @@ contains
                if (.not. config%write_components) write(unit,'(es24.16,1x)', advance='no') finite_total(1,1,iq)
                write(unit,'(2(es24.16,1x))', advance='no') 1000.0_rp*finite_total(1,1,iq), safe_divide(finite_total(1,1,iq),q2)
             end if
-            if (native_ready) write(unit,'(5(es24.16,1x))', advance='no') native_jq_sum(iq), native_total(iq), &
-               1000.0_rp*native_total(iq), safe_divide(native_total(iq),q2), finite_total(1,1,iq)-native_total(iq)
+            if (native_ready) write(unit,'(7(es24.16,1x))', advance='no') native_jq_ud(iq), native_jq_du(iq), native_jq_sym(iq), &
+               native_delta_j(iq), safe_divide(native_delta_j(iq),q2), native_curvature(iq), &
+               finite_total(1,1,iq)-native_curvature(iq)
             write(unit,*)
          end do
       else
@@ -884,7 +931,7 @@ contains
          else
             write(unit,'(a,i0,a)') '# matrix columns: finiteH_total[1,1..', nsite*nsite, ']'
          end if
-         if (native_ready) write(unit,'(a)') '# optional trailing columns: native_Jq_Ry and native_qspace_dJ_Ry (ordered site-pair sum)'
+         if (native_ready) write(unit,'(a)') '# optional trailing columns: native_Jud_Ry native_Jdu_Ry native_Jsym_Ry native_DeltaJ_sym_Ry native_expected_curvature_Ry'
          do iq = 1, config%n_q
             qmag = 2.0_rp*pi/lattice_obj%alat*sqrt(sum(q_cart(:,iq)**2))
             write(unit,'(i0,1x,3(es24.16,1x),3(es24.16,1x),es24.16,1x)', advance='no') iq, q_direct(:,iq), &
@@ -937,7 +984,8 @@ contains
                   write(unit,'(es24.16,1x)', advance='no') finite_total(ia,ja,iq)
                end do
             end do
-            if (native_ready) write(unit,'(2(es24.16,1x))', advance='no') native_jq_sum(iq), native_total(iq)
+            if (native_ready) write(unit,'(5(es24.16,1x))', advance='no') native_jq_ud(iq), native_jq_du(iq), native_jq_sym(iq), &
+               native_delta_j(iq), native_curvature(iq)
             write(unit,*)
          end do
       end if
@@ -964,13 +1012,13 @@ contains
       end if
    end function elapsed_clock_seconds
 
-   subroutine compute_native_gamma_and_report(native_total, q_direct, gamma)
-      real(rp), intent(in) :: native_total(:), q_direct(:, :)
+   subroutine compute_native_gamma_and_report(native_delta_j, q_direct, gamma)
+      real(rp), intent(in) :: native_delta_j(:), q_direct(:, :)
       real(rp), intent(out) :: gamma
       integer :: i
       gamma = 0.0_rp
-      do i = 1, size(native_total)
-         if (sqrt(sum(q_direct(:,i)**2)) > q_zero_tolerance) gamma = max(gamma,abs(native_total(i)))
+      do i = 1, size(native_delta_j)
+         if (sqrt(sum(q_direct(:,i)**2)) > q_zero_tolerance) gamma = max(gamma,abs(native_delta_j(i)))
       end do
    end subroutine compute_native_gamma_and_report
 

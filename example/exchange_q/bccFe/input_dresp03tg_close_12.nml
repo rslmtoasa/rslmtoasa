@@ -72,5 +72,6 @@ native_contour_points = 64
 native_contour_margin = 0.25
 native_contour_height_fraction = 0.35
 native_contour_account_fermi_poles = .true.
+native_contour_target_fermi_poles = 256
 rotation_axis = 1.0, 0.0, 0.0
 /

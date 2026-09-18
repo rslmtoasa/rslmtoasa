@@ -24,11 +24,16 @@ nonzero q and is a diagnostic, not an automatic stiffness fit.
 
 Set `native_turek = .true.` to enable the native screened-LMTO/Turek contour
 route. `native_crosscheck = .true.` remains a compatibility alias. The native
-columns report absolute `J(q)` and native `DeltaJ(q)`; no fitted scale is
-applied. The contour is controlled by `native_contour_points`,
-`native_contour_margin`, `native_contour_height_fraction`, and
-`native_contour_account_fermi_poles`. The closure validation deck is
-`input_dresp03tg_close_12.nml`.
+columns report ordered `J_ud(q)`, `J_du(q)`, their visible historical average
+`J_sym(q)`, raw `DeltaJ_sym(q)`, and the expected complex-amplitude curvature
+`2*DeltaJ_sym(q)`; no fitted scale is applied. The contour is controlled by
+`native_contour_points`, `native_contour_margin`,
+`native_contour_height_fraction`, `native_contour_account_fermi_poles`, and
+the optional even `native_contour_target_fermi_poles`. The closure validation
+deck uses a fixed 256-pole target: the native coefficient spectrum has a
+larger complex span than the compact legacy unit fixture, so this target is
+the smallest tested even target that leaves all native poles strictly inside
+the production ellipse while retaining explicit residue accounting.
 
 The production finite-H formulation is selected by
 `finite_h_spectral_mode = 'metallic'` and inherits the reciprocal SCF
