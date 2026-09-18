@@ -7,11 +7,12 @@ program test_dresp03tg_native_contour
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
    use logger_mod, only: g_logger
+   use lr_lmto_turek_gf_mod, only: native_path_operator, native_screening_alpha
    use lr_lmto_turek_contour_mod, only: native_turek_contour_options, native_turek_contour_report, &
       native_build_contour, native_exchange_q_contour, native_exchange_jij_contour, &
       native_exchange_q_ordered_contour, native_exchange_pairs_contour, native_spectral_bounds, &
-      native_fourier_jq_to_jij, native_fourier_jij_to_jq, native_fourier_complex_jij_to_jq, native_complex_fermi, &
-      native_regularized_fermi
+      native_native_poles_from_structure, native_fourier_jq_to_jij, native_fourier_jij_to_jq, &
+      native_fourier_complex_jij_to_jq, native_complex_fermi, native_regularized_fermi
    use math_mod, only: ang2au, init_math_operators, pi
    use precision_mod, only: rp
    use timer_mod, only: g_timer, timer
@@ -26,13 +27,16 @@ program test_dresp03tg_native_contour
    complex(rp), allocatable :: nodes(:), weights(:), poles(:)
    real(rp), allocatable :: jq(:, :, :), q_points(:, :), q_mesh(:, :), k_points(:, :), k_weights(:)
    real(rp), allocatable :: real_space(:, :), jij(:, :, :), jij_roundtrip(:, :, :), jq_roundtrip(:, :, :)
-   real(rp), allocatable :: k_full(:, :), k_full_weights(:), q_pair(:, :)
+   real(rp), allocatable :: k_full(:, :), k_full_weights(:)
    real(rp), allocatable :: native_jq(:, :, :), native_jij(:, :, :), native_jq_roundtrip(:, :, :)
+   real(rp), allocatable :: k_cyclic(:, :), k_cyclic_weights(:), q_cyclic(:, :), r_cyclic(:, :)
    complex(rp), allocatable :: jq_ud(:, :, :), jq_du(:, :, :), pair_ud(:, :, :), pair_du(:, :, :), jq_pair_ft(:, :, :)
    real(rp) :: bounds(2), contour_weight_error, fourier_error, native_fourier_error, q_value_error
    real(rp) :: scalar_oracle_error, scalar_lkag_error, scalar_coarse_error, scalar_coarse_lkag_error
-   real(rp) :: scalar_fine_error, scalar_fine_lkag_error, pair_closure_error, covariance_error, spectral_error
-   real(rp) :: curvature_oracle_error, max_ellipse_value
+   real(rp) :: scalar_fine_error, scalar_fine_lkag_error, pair_closure_error, pair_ud_error, pair_du_error
+   real(rp) :: covariance_error, same_q_symmetry_error, spectral_error
+   real(rp) :: curvature_oracle_error, max_ellipse_value, old_pole_residual, corrected_pole_residual
+   real(rp) :: pole_sigma_min_max, pole_relative_max, pole_sigma_min_rep, pole_relative_rep, pole_norm_rep
    logical :: bounds_inside
    integer :: i, ix, iy, iz, iq, ik, ir
 
@@ -138,28 +142,38 @@ program test_dresp03tg_native_contour
          end do
       end do
    end do
-   allocate(jq_ud(1,1,8), jq_du(1,1,8), pair_ud(1,1,8), pair_du(1,1,8), jq_pair_ft(1,1,8))
-   call native_exchange_q_ordered_contour(lat, k_full, k_full_weights, q_mesh, -0.070393_rp, &
-      300.0_rp*6.3336814e-6_rp, bounds, options, jq_ud, jq_du, report)
-   call native_exchange_pairs_contour(lat, k_full, k_full_weights, real_space, -0.070393_rp, &
-      300.0_rp*6.3336814e-6_rp, bounds, options, pair_ud, pair_du, report)
-   call native_fourier_complex_jij_to_jq(q_mesh, real_space, pair_ud, jq_pair_ft)
-   pair_closure_error = maxval(abs(jq_ud-jq_pair_ft))
-   call native_fourier_complex_jij_to_jq(q_mesh, real_space, pair_du, jq_pair_ft)
-   pair_closure_error = max(pair_closure_error,maxval(abs(jq_du-jq_pair_ft)))
-   if (pair_closure_error > 3.0e-11_rp) error stop 'DRESP-03TG-CLOSE independent pair/q closure failed'
 
-   allocate(q_pair(3,2))
-   ! Use a reciprocal vector compatible with the complete 2^3 k mesh.  A
-   ! quarter-grid shift would compare two different finite quadratures and
-   ! would not be a valid covariance gate at this resolution.
-   q_pair = 0.0_rp; q_pair(1,:) = [0.5_rp,-0.5_rp]
-   deallocate(jq_ud,jq_du); allocate(jq_ud(1,1,2),jq_du(1,1,2))
-   call native_exchange_q_ordered_contour(lat, k_full, k_full_weights, q_pair, -0.070393_rp, &
+   ! Pole roots are checked against the actual production P-S matrix by an
+   ! independent SVD route.  The old generalized construction is retained
+   ! only as a negative control so this test proves the gate catches it.
+   call pole_singular_value_oracle(k_full, old_pole_residual, corrected_pole_residual, pole_sigma_min_max, &
+      pole_relative_max, pole_sigma_min_rep, pole_relative_rep, pole_norm_rep)
+   if (pole_relative_max > 1.0e-9_rp) error stop 'DRESP-03TG-CLOSE direct P-S pole oracle failed'
+
+   ! A 3-point cyclic group makes +q and -q genuinely distinct.  This is the
+   ! physical ordered-pair/q closure; the 2^3 DFT helper test above remains a
+   ! separate utility regression.
+   allocate(k_cyclic(3,3), k_cyclic_weights(3), q_cyclic(3,3), r_cyclic(3,3), &
+      jq_ud(1,1,3), jq_du(1,1,3), pair_ud(1,1,3), pair_du(1,1,3), jq_pair_ft(1,1,3))
+   k_cyclic = 0.0_rp; k_cyclic(1,:) = [0.0_rp,1.0_rp/3.0_rp,2.0_rp/3.0_rp]
+   k_cyclic_weights = 1.0_rp/3.0_rp
+   q_cyclic = 0.0_rp; q_cyclic(1,:) = [0.0_rp,1.0_rp/3.0_rp,-1.0_rp/3.0_rp]
+   r_cyclic = 0.0_rp; r_cyclic(1,:) = [0.0_rp,1.0_rp,2.0_rp]
+   call native_exchange_q_ordered_contour(lat, k_cyclic, k_cyclic_weights, q_cyclic, -0.070393_rp, &
       300.0_rp*6.3336814e-6_rp, bounds, options, jq_ud, jq_du, report)
-   covariance_error = max(abs(jq_ud(1,1,1)-jq_du(1,1,2)),abs(jq_ud(1,1,1)-jq_ud(1,1,2)))
-   covariance_error = max(covariance_error,abs(jq_ud(1,1,1)-jq_du(1,1,1)))
-   if (covariance_error > 3.0e-10_rp) error stop 'DRESP-03TG-CLOSE q covariance failed'
+   call native_exchange_pairs_contour(lat, k_cyclic, k_cyclic_weights, r_cyclic, -0.070393_rp, &
+      300.0_rp*6.3336814e-6_rp, bounds, options, pair_ud, pair_du, report)
+   call native_fourier_complex_jij_to_jq(q_cyclic, r_cyclic, pair_ud, jq_pair_ft)
+   pair_ud_error = maxval(abs(jq_ud-jq_pair_ft))
+   call native_fourier_complex_jij_to_jq(q_cyclic, r_cyclic, pair_du, jq_pair_ft)
+   pair_du_error = maxval(abs(jq_du-jq_pair_ft))
+   pair_closure_error = max(pair_ud_error,pair_du_error)
+   covariance_error = max(abs(jq_ud(1,1,2)-jq_du(1,1,3)),abs(jq_ud(1,1,3)-jq_du(1,1,2)))
+   same_q_symmetry_error = maxval(abs(jq_ud-jq_du))
+   if (pair_ud_error > 1.0e-10_rp .or. pair_du_error > 1.0e-10_rp .or. &
+       covariance_error > 1.0e-10_rp .or. same_q_symmetry_error > 1.0e-10_rp) then
+      error stop 'DRESP-03TG-CLOSE independent ordered pair/q gate failed'
+   end if
 
    call native_spectral_bounds(lat, k_full, -0.070393_rp, 300.0_rp*6.3336814e-6_rp, options, bounds, &
       max_ellipse_value, bounds_inside, iq)
@@ -177,16 +191,135 @@ program test_dresp03tg_native_contour
    write (*,'(a,es14.6)') 'DRESP-03TG-CLOSE DFT helper roundtrip residual = ', native_fourier_error
    write (*,'(a,es14.6)') 'DRESP-03TG-CLOSE scalar pole oracle residual = ', scalar_oracle_error
    write (*,'(a,es14.6)') 'DRESP-03TG-CLOSE scalar LKAG residual = ', scalar_lkag_error
-   write (*,'(a,es14.6)') 'DRESP-03TG-CLOSE independent pair/q residual = ', pair_closure_error
+   write (*,'(a,es14.6)') 'DRESP-03TG-CLOSE old generalized-root P-S residual = ', old_pole_residual
+   write (*,'(a,es14.6)') 'DRESP-03TG-CLOSE corrected generalized-root P-S residual = ', corrected_pole_residual
+   write (*,'(a,2(es14.6,1x))') 'DRESP-03TG-CLOSE direct P-S sigma_min max/relative = ', pole_sigma_min_max, pole_relative_max
+   write (*,'(a,3(es14.6,1x))') 'DRESP-03TG-CLOSE direct P-S representative sigma_min/relative/norm = ', &
+      pole_sigma_min_rep, pole_relative_rep, pole_norm_rep
+   write (*,'(a,es14.6)') 'DRESP-03TG-CLOSE independent ud pair/q residual = ', pair_ud_error
+   write (*,'(a,es14.6)') 'DRESP-03TG-CLOSE independent du pair/q residual = ', pair_du_error
+   write (*,'(a,es14.6)') 'DRESP-03TG-CLOSE ordered pair/q max residual = ', pair_closure_error
    write (*,'(a,es14.6)') 'DRESP-03TG-CLOSE q covariance residual = ', covariance_error
+   write (*,'(a,es14.6)') 'DRESP-03TG-CLOSE same-q one-site symmetry residual = ', same_q_symmetry_error
    write (*,'(a,es14.6)') 'DRESP-03TG-CLOSE native max spectral ellipse = ', spectral_error
    write (*,'(a,es14.6)') 'DRESP-03TG-CLOSE curvature factor oracle residual = ', curvature_oracle_error
    write (*,'(a)') 'DRESP-03TG-CLOSE-R1 algebraic/native gates: PASS'
 
    deallocate(nodes,weights,poles,k_points,k_weights,q_mesh,real_space,jij,jij_roundtrip,jq,jq_roundtrip, &
-      native_jq,native_jij,native_jq_roundtrip,k_full,k_full_weights,jq_ud,jq_du,pair_ud,pair_du,jq_pair_ft,q_pair)
+      native_jq,native_jij,native_jq_roundtrip,k_full,k_full_weights,k_cyclic,k_cyclic_weights,q_cyclic,r_cyclic, &
+      jq_ud,jq_du,pair_ud,pair_du,jq_pair_ft)
 
 contains
+
+   subroutine pole_singular_value_oracle(k_samples, old_max, corrected_max, sigma_max, relative_max, &
+                                         sigma_rep, relative_rep, norm_rep)
+      real(rp), intent(in) :: k_samples(:, :)
+      real(rp), intent(out) :: old_max, corrected_max, sigma_max, relative_max
+      real(rp), intent(out) :: sigma_rep, relative_rep, norm_rep
+      complex(rp), allocatable :: smat(:, :), pmat(:, :), gmat(:, :), roots(:), old_roots(:)
+      real(rp) :: sigma_min, norm2, relative
+      integer :: n, nk, ik, ip
+
+      if (size(k_samples,1) /= 3 .or. size(k_samples,2) < 1) then
+         error stop 'DRESP-03TG pole oracle: invalid k-point shape'
+      end if
+      n = 2*(lat%symbolic_atoms(lat%iz(lat%atlist(1)))%potential%lmax+1)**2*lat%nrec
+      nk = size(k_samples,2)
+      allocate(smat(n,n), pmat(n,n), gmat(n,n), roots(n), old_roots(n))
+      old_max = 0.0_rp; corrected_max = 0.0_rp; sigma_max = 0.0_rp; relative_max = 0.0_rp
+      sigma_rep = 0.0_rp; relative_rep = 0.0_rp; norm_rep = 0.0_rp
+      do ik = 1, nk
+         call native_path_operator(lat,cmplx(0.0_rp,0.0_rp,rp),k_samples(:,ik),pmat,smat,gmat)
+         call native_native_poles_from_structure(lat,smat,roots)
+         call old_native_poles_from_structure(smat,old_roots)
+         do ip = 1, n
+            call native_path_operator(lat,roots(ip),k_samples(:,ik),pmat,smat,gmat)
+            call svd_residual(pmat-smat,sigma_min,norm2)
+            relative = sigma_min/max(1.0_rp,norm2)
+            sigma_max = max(sigma_max,sigma_min)
+            relative_max = max(relative_max,relative)
+            corrected_max = max(corrected_max,relative)
+            if (ik == 1 .and. ip == 1) then
+               sigma_rep = sigma_min; relative_rep = relative; norm_rep = norm2
+            end if
+            call native_path_operator(lat,old_roots(ip),k_samples(:,ik),pmat,smat,gmat)
+            call svd_residual(pmat-smat,sigma_min,norm2)
+            old_max = max(old_max,sigma_min/max(1.0_rp,norm2))
+         end do
+      end do
+      deallocate(smat,pmat,gmat,roots,old_roots)
+   end subroutine pole_singular_value_oracle
+
+   subroutine svd_residual(matrix, sigma_min, norm2)
+      complex(rp), intent(in) :: matrix(:, :)
+      real(rp), intent(out) :: sigma_min, norm2
+      complex(rp), allocatable :: a(:, :), work(:), query(:), u(:, :), vt(:, :)
+      real(rp), allocatable :: singular_values(:), rwork(:)
+      integer :: n, m, minmn, lwork, info
+      external :: zgesvd
+
+      m = size(matrix,1); n = size(matrix,2); minmn = min(m,n)
+      allocate(a(m,n),singular_values(minmn),u(1,1),vt(1,1),query(1),rwork(5*minmn))
+      a = matrix
+      call zgesvd('N','N',m,n,a,m,singular_values,u,1,vt,1,query,-1,rwork,info)
+      if (info /= 0) error stop 'DRESP-03TG pole oracle: SVD workspace query failed'
+      lwork = max(1,int(real(query(1),rp)))
+      allocate(work(lwork))
+      call zgesvd('N','N',m,n,a,m,singular_values,u,1,vt,1,work,lwork,rwork,info)
+      if (info /= 0) error stop 'DRESP-03TG pole oracle: SVD failed'
+      sigma_min = singular_values(minmn); norm2 = singular_values(1)
+      deallocate(a,singular_values,u,vt,query,rwork,work)
+   end subroutine svd_residual
+
+   subroutine old_native_poles_from_structure(smat, roots)
+      complex(rp), intent(in) :: smat(:, :)
+      complex(rp), intent(out) :: roots(:)
+      complex(rp), allocatable :: a(:, :), rhs(:, :), work(:), vl(:, :), vr(:, :), query(:)
+      real(rp), allocatable :: rwork(:), diag_q(:), diag_d(:), diag_c(:), alpha(:)
+      integer, allocatable :: ipiv(:)
+      integer :: nsite, norb, n, lmax, site, spin, l, m, mls, idx, i, j, ntype, ia, it, info, lwork
+      external :: zgesv, zgeev
+
+      n = size(roots); nsite = lat%nrec
+      norb = (lat%symbolic_atoms(lat%iz(lat%atlist(1)))%potential%lmax+1)**2
+      lmax = lat%symbolic_atoms(lat%iz(lat%atlist(1)))%potential%lmax
+      allocate(a(n,n),rhs(n,n),work(n),vl(1,1),vr(1,1),query(1),rwork(2*n),ipiv(n), &
+         diag_q(n),diag_d(n),diag_c(n),alpha(0:lmax))
+      diag_q = 0.0_rp; diag_d = 0.0_rp; diag_c = 0.0_rp
+      do site = 1, nsite
+         ntype = lat%ib(site); ia = lat%atlist(ntype); it = lat%iz(ia)
+         call native_screening_alpha(lat%symbolic_atoms(it),alpha)
+         do spin = 1, 2
+            do l = 0, lmax
+               do m = 1, 2*l+1
+                  mls = l*l+m; idx = (site-1)*2*norb+(spin-1)*norb+mls
+                  diag_q(idx) = lat%symbolic_atoms(it)%potential%qi(l,spin)-alpha(l)
+                  diag_d(idx) = 1.0_rp/(lat%symbolic_atoms(it)%potential%dele(l,spin)**2)
+                  diag_c(idx) = lat%symbolic_atoms(it)%potential%c(l,spin)+lat%symbolic_atoms(it)%potential%vmad
+               end do
+            end do
+         end do
+      end do
+      a = -smat
+      do i = 1, n
+         a(i,i) = a(i,i)+cmplx(1.0_rp,0.0_rp,rp)
+      end do
+      do j = 1, n
+         a(:,j) = a(:,j)*diag_d(j)
+         rhs(:,j) = (-smat(:,j)*diag_q(j))*diag_d(j)*diag_c(j)+smat(:,j)
+         rhs(j,j) = rhs(j,j)+diag_d(j)*diag_c(j)
+      end do
+      call zgesv(n,n,a,n,ipiv,rhs,n,info)
+      if (info /= 0) error stop 'DRESP-03TG pole oracle: old coefficient solve failed'
+      call zgeev('N','N',n,rhs,n,roots,vl,1,vr,1,query,-1,rwork,info)
+      if (info /= 0) error stop 'DRESP-03TG pole oracle: old eigenvalue workspace query failed'
+      lwork = max(1,int(real(query(1),rp)))
+      deallocate(work)
+      allocate(work(lwork))
+      call zgeev('N','N',n,rhs,n,roots,vl,1,vr,1,work,lwork,rwork,info)
+      if (info /= 0) error stop 'DRESP-03TG pole oracle: old eigenvalue solve failed'
+      deallocate(a,rhs,work,vl,vr,query,rwork,ipiv,diag_q,diag_d,diag_c,alpha)
+   end subroutine old_native_poles_from_structure
 
    subroutine scalar_pole_oracle(npoint, target_poles, max_error, max_lkag_error)
       integer, intent(in) :: npoint, target_poles

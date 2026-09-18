@@ -53,6 +53,7 @@ module lr_lmto_turek_contour_mod
    public :: native_complex_fermi
    public :: native_regularized_fermi
    public :: native_spectral_bounds
+   public :: native_native_poles_from_structure
 
 contains
 
@@ -384,7 +385,8 @@ contains
       complex(rp), allocatable :: integral_ud(:, :, :), integral_du(:, :, :)
       complex(rp), allocatable :: smat_src(:, :, :), sorb(:, :), pmat(:, :), gmat(:, :), delta(:, :, :)
       complex(rp), allocatable :: gup_k(:, :, :, :, :), gdown_k(:, :, :, :, :)
-      complex(rp), allocatable :: gup_r(:, :, :, :, :), gdown_minus_r(:, :, :, :, :)
+      complex(rp), allocatable :: gup_r(:, :, :, :, :), gup_minus_r(:, :, :, :, :)
+      complex(rp), allocatable :: gdown_r(:, :, :, :, :), gdown_minus_r(:, :, :, :, :)
       complex(rp) :: coefficient, phase_minus, phase_plus
       complex(rp), allocatable :: block(:, :)
       real(rp) :: weight_sum
@@ -408,7 +410,8 @@ contains
       allocate(integral_ud(nsite,nsite,nvec), integral_du(nsite,nsite,nvec), smat_src(nspin,nspin,nk), &
          sorb(norb*nsite,norb*nsite), pmat(nspin,nspin), gmat(nspin,nspin), delta(norb,norb,nsite), &
          gup_k(norb,norb,nsite,nsite,nk), gdown_k(norb,norb,nsite,nsite,nk), &
-         gup_r(norb,norb,nsite,nsite,nvec), gdown_minus_r(norb,norb,nsite,nsite,nvec))
+         gup_r(norb,norb,nsite,nsite,nvec), gup_minus_r(norb,norb,nsite,nsite,nvec), &
+         gdown_r(norb,norb,nsite,nsite,nvec), gdown_minus_r(norb,norb,nsite,nsite,nvec))
       allocate(block(norb,norb))
       integral_ud = cmplx(0.0_rp,0.0_rp,rp); integral_du = integral_ud
       solve_seconds = 0.0_rp; contour_seconds = 0.0_rp; pole_seconds = 0.0_rp
@@ -437,11 +440,15 @@ contains
          end do
          do ir = 1, nvec
             gup_r(:,:,:,:,ir) = cmplx(0.0_rp,0.0_rp,rp)
+            gup_minus_r(:,:,:,:,ir) = cmplx(0.0_rp,0.0_rp,rp)
+            gdown_r(:,:,:,:,ir) = cmplx(0.0_rp,0.0_rp,rp)
             gdown_minus_r(:,:,:,:,ir) = cmplx(0.0_rp,0.0_rp,rp)
             do ik = 1, nk
                phase_minus = exp(-i_unit*2.0_rp*pi*dot_product(k_points(:,ik),real_space_vectors(:,ir)))
                phase_plus = conjg(phase_minus)
                gup_r(:,:,:,:,ir) = gup_r(:,:,:,:,ir) + (k_weights(ik)/weight_sum)*phase_minus*gup_k(:,:,:,:,ik)
+               gup_minus_r(:,:,:,:,ir) = gup_minus_r(:,:,:,:,ir) + (k_weights(ik)/weight_sum)*phase_plus*gup_k(:,:,:,:,ik)
+               gdown_r(:,:,:,:,ir) = gdown_r(:,:,:,:,ir) + (k_weights(ik)/weight_sum)*phase_minus*gdown_k(:,:,:,:,ik)
                gdown_minus_r(:,:,:,:,ir) = gdown_minus_r(:,:,:,:,ir) + (k_weights(ik)/weight_sum)*phase_plus*gdown_k(:,:,:,:,ik)
             end do
             coefficient = weights(inode)
@@ -451,7 +458,7 @@ contains
                   integral_ud(ia,ja,ir) = integral_ud(ia,ja,ir) + coefficient*native_exchange_trace(delta(:,:,ia),delta(:,:,ja), &
                      gup_r(:,:,ia,ja,ir),gdown_minus_r(:,:,ja,ia,ir))
                   integral_du(ia,ja,ir) = integral_du(ia,ja,ir) + coefficient*native_exchange_trace(delta(:,:,ia),delta(:,:,ja), &
-                     gdown_minus_r(:,:,ia,ja,ir),gup_r(:,:,ja,ia,ir))
+                     gdown_r(:,:,ia,ja,ir),gup_minus_r(:,:,ja,ia,ir))
                end do
             end do
          end do
@@ -478,11 +485,15 @@ contains
          end do
          do ir = 1, nvec
             gup_r(:,:,:,:,ir) = cmplx(0.0_rp,0.0_rp,rp)
+            gup_minus_r(:,:,:,:,ir) = cmplx(0.0_rp,0.0_rp,rp)
+            gdown_r(:,:,:,:,ir) = cmplx(0.0_rp,0.0_rp,rp)
             gdown_minus_r(:,:,:,:,ir) = cmplx(0.0_rp,0.0_rp,rp)
             do ik = 1, nk
                phase_minus = exp(-i_unit*2.0_rp*pi*dot_product(k_points(:,ik),real_space_vectors(:,ir)))
                phase_plus = conjg(phase_minus)
                gup_r(:,:,:,:,ir) = gup_r(:,:,:,:,ir) + (k_weights(ik)/weight_sum)*phase_minus*gup_k(:,:,:,:,ik)
+               gup_minus_r(:,:,:,:,ir) = gup_minus_r(:,:,:,:,ir) + (k_weights(ik)/weight_sum)*phase_plus*gup_k(:,:,:,:,ik)
+               gdown_r(:,:,:,:,ir) = gdown_r(:,:,:,:,ir) + (k_weights(ik)/weight_sum)*phase_minus*gdown_k(:,:,:,:,ik)
                gdown_minus_r(:,:,:,:,ir) = gdown_minus_r(:,:,:,:,ir) + (k_weights(ik)/weight_sum)*phase_plus*gdown_k(:,:,:,:,ik)
             end do
             do ia = 1, nsite
@@ -490,7 +501,7 @@ contains
                   integral_ud(ia,ja,ir) = integral_ud(ia,ja,ir) + kT*native_exchange_trace(delta(:,:,ia),delta(:,:,ja), &
                      gup_r(:,:,ia,ja,ir),gdown_minus_r(:,:,ja,ia,ir))
                   integral_du(ia,ja,ir) = integral_du(ia,ja,ir) + kT*native_exchange_trace(delta(:,:,ia),delta(:,:,ja), &
-                     gdown_minus_r(:,:,ia,ja,ir),gup_r(:,:,ja,ia,ir))
+                     gdown_r(:,:,ia,ja,ir),gup_minus_r(:,:,ja,ia,ir))
                end do
             end do
          end do
@@ -507,7 +518,8 @@ contains
          report%contour_seconds = contour_seconds
          report%pole_seconds = pole_seconds
       end if
-      deallocate(nodes,weights,poles,integral_ud,integral_du,smat_src,sorb,pmat,gmat,delta,gup_k,gdown_k,gup_r,gdown_minus_r,block)
+      deallocate(nodes,weights,poles,integral_ud,integral_du,smat_src,sorb,pmat,gmat,delta,gup_k,gdown_k,gup_r, &
+         gup_minus_r,gdown_r,gdown_minus_r,block)
    end subroutine native_exchange_pairs_contour
 
    !> Evaluate a common native q mesh and close it to real-space Jij.
@@ -686,7 +698,7 @@ contains
       type(lattice), intent(inout) :: lat
       complex(rp), intent(in) :: smat(:, :)
       complex(rp), intent(out) :: roots(:)
-      complex(rp), allocatable :: a(:, :), rhs(:, :), work(:), vl(:, :), vr(:, :), query(:)
+      complex(rp), allocatable :: mcoef(:, :), a(:, :), b(:, :), work(:), vl(:, :), vr(:, :), query(:)
       real(rp), allocatable :: rwork(:), diag_q(:), diag_d(:), diag_c(:), alpha(:)
       integer, allocatable :: ipiv(:)
       integer :: nsite, norb, n, lmax, site, spin, l, m, mls, idx, i, j, ntype, ia, it, info, lwork
@@ -698,7 +710,7 @@ contains
       if (size(smat,1) /= n .or. size(smat,2) /= n .or. n /= 2*norb*nsite) then
          error stop 'native_native_poles_from_structure: shape mismatch'
       end if
-      allocate(a(n,n),rhs(n,n),work(n),vl(1,1),vr(1,1),query(1),rwork(2*n),ipiv(n), &
+      allocate(mcoef(n,n),a(n,n),b(n,n),work(n),vl(1,1),vr(1,1),query(1),rwork(2*n),ipiv(n), &
          diag_q(n),diag_d(n),diag_c(n),alpha(0:lmax))
       diag_q = 0.0_rp; diag_d = 0.0_rp; diag_c = 0.0_rp
       do site = 1, nsite
@@ -718,25 +730,31 @@ contains
             end do
          end do
       end do
-      a = -smat
+      ! Keep the generalized coefficient problem explicit.  Q and D are
+      ! diagonal, but their side of the dense structure matrix matters:
+      ! M = I - S Q, A = M D, B = M D C + S.
+      mcoef = cmplx(0.0_rp,0.0_rp,rp)
       do i = 1, n
-         a(i,i) = a(i,i)+cmplx(1.0_rp,0.0_rp,rp)
+         mcoef(i,i) = cmplx(1.0_rp,0.0_rp,rp)
       end do
       do j = 1, n
-         a(:,j) = a(:,j)*diag_d(j)
-         rhs(:,j) = (-smat(:,j)*diag_q(j))*diag_d(j)*diag_c(j) + smat(:,j)
-         rhs(j,j) = rhs(j,j) + diag_d(j)*diag_c(j)
+         mcoef(:,j) = mcoef(:,j)-smat(:,j)*diag_q(j)
       end do
-      call zgesv(n,n,a,n,ipiv,rhs,n,info)
+      a = mcoef
+      do j = 1, n
+         a(:,j) = a(:,j)*diag_d(j)
+         b(:,j) = a(:,j)*diag_c(j)+smat(:,j)
+      end do
+      call zgesv(n,n,a,n,ipiv,b,n,info)
       if (info /= 0) error stop 'native_native_poles_from_structure: coefficient solve failed'
-      call zgeev('N','N',n,rhs,n,roots,vl,1,vr,1,query,-1,rwork,info)
+      call zgeev('N','N',n,b,n,roots,vl,1,vr,1,query,-1,rwork,info)
       if (info /= 0) error stop 'native_native_poles_from_structure: eigenvalue workspace query failed'
       lwork = max(1,int(real(query(1),rp)))
       deallocate(work)
       allocate(work(lwork))
-      call zgeev('N','N',n,rhs,n,roots,vl,1,vr,1,work,lwork,rwork,info)
+      call zgeev('N','N',n,b,n,roots,vl,1,vr,1,work,lwork,rwork,info)
       if (info /= 0) error stop 'native_native_poles_from_structure: eigenvalue solve failed'
-      deallocate(a,rhs,work,vl,vr,query,rwork,ipiv,diag_q,diag_d,diag_c,alpha)
+      deallocate(mcoef,a,b,work,vl,vr,query,rwork,ipiv,diag_q,diag_d,diag_c,alpha)
    end subroutine native_native_poles_from_structure
 
    !> Extract one site/spin block from the native site-major spin layout.

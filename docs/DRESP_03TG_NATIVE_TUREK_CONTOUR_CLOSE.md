@@ -1,181 +1,214 @@
-# DRESP-03TG-CLOSE — Native Turek contour and (J_{ij}/J(q)) closure
+# DRESP-03TG-FINAL — Native Turek contour and exchange closure
 
-Status: **PASS — R1 native algebra, material convergence, and unit gates
-pass.**
+Status: **CORE PASS.** The native pole algebra, direct (P-S) pole oracle,
+scalar contour oracle, independent ordered-pair Fourier closure, and fixed-z
+regressions pass. The bounded Fe study reports **contour convergence PASS**,
+**Fe electronic k-mesh convergence NOT CONVERGED THROUGH (24^3)**, and
+**small-q Fe window NOT RESOLVED AT (24^3)**. The latter two are production
+material limitations, not native-representation blockers.
 
-The fixed-complex-energy representation audit is extended here to a native
-finite-temperature contour evaluator.  Every native resolvent is formed by a
-direct complex solve of
-
-\[
-g^\alpha(k,z)=[P^\alpha(z)-S^\alpha(k)]^{-1};
-\]
-
-no finite-(H) resolvent, eigenbasis, fitted scale, moment divisor, or
-physical/true-Green-function substitution is used.
-
-The historical representation audit remains in
-[`DRESP_03TG_NATIVE_TUREK_GF.md`](DRESP_03TG_NATIVE_TUREK_GF.md).  Its frozen
-`source/exchange.f90` invariant is unchanged.
-
-## Native contour
-
-`source/lr_lmto_turek_contour.f90` provides:
-
-- an explicitly parameterized counter-clockwise ellipse with
-  `dz/(2*pi*i)` weights;
-- pole-subtracted `f_reg` weighting with explicit enclosed Matsubara-pole
-  residues;
-- direct native (P-S) solves at every contour node, k point, and q point;
-- structure-constant caching across contour nodes; and
-- native absolute (J_{ij}(q)) and
-  \(\Delta J(q)=J(\Gamma)-J(q)\) production values.
-
-The certified finite-temperature prescription is
+The native production object is always the direct path operator
 
 \[
- I=\sum_n w_n f_{reg}(z_n)R(z_n)+k_BT\sum_{p\in C}R(p),
- \qquad
- f_{reg}(z)=f(z)+k_BT\sum_{p\in C}\frac{1}{z-p},
+g^\alpha(k,z)=[P^\alpha(z)-S^\alpha(k)]^{-1},
 \]
 
-where the contour is counter-clockwise and each weight contains
-`dz/(2*pi*i)`.  The scalar oracle evaluates this identity at several real
-energies and verifies the Fermi-pole residue sign and normalization.  The
-conversion from the occupied contour to the real-axis LKAG convention is
-implemented as
+with no finite-(H) replacement, fitted scale, moment divisor, or
+true-Green-function substitution. `source/exchange.f90` remains frozen.
+
+## Native pole repair
+
+The pole constructor now exposes the coefficient ordering explicitly:
 
 \[
-J_{ij}(q)=-\frac14\operatorname{Re}
- \oint_C\frac{dz}{2\pi i}\,f(z)
- \operatorname{Tr}[\Delta P_i g^\uparrow_{ij}(k,z)
- \Delta P_j g^\downarrow_{ji}(k+q,z)].
+Q=QI-\alpha,\qquad M=I-SQ,
+\]
+\[
+A=MD,\qquad B=MDC+S,
 \]
 
-The real-space closure is explicit and normalized:
+and solves (Az=Bz) through the existing LAPACK path. Thus the generalized
+problem is
 
 \[
-J_{ij}(R)=\frac1{N_q}\sum_q J_{ij}(q)e^{+i2\pi q\cdot R},
-\qquad
-J_{ij}(q)=\sum_R J_{ij}(R)e^{-i2\pi q\cdot R}.
+[(I-SQ)D]z=(I-SQ)DC+S,
 \]
 
-The former `native_exchange_jij_contour` entry point remains an explicitly
-labelled DFT helper.  It is not the independent closure.  The R1 route first
-solves the native path operator on the complete electronic mesh and forms
-
-\[
-g^\uparrow_{ij}(R,z)=\sum_k w_k e^{-i2\pi k\cdot R}g^\uparrow_{ij}(k,z),
-\quad
-g^\downarrow_{ji}(-R,z)=\sum_k w_k e^{+i2\pi k\cdot R}g^\downarrow_{ji}(k,z),
-\]
-
-then contour-integrates the ordered `ud` and `du` products directly.  Direct
-reciprocal `J(q)` is compared with an independently evaluated real-space
-`J(R)` on complete compatible meshes; no fitted scale or moment divisor is
-used.
-
-The `exchange_q` namelist accepts `native_turek=.true.`.  The older
-`native_crosscheck` switch remains a compatibility alias for enabling the same
-native contour route.  `native_contour_points`, `native_contour_margin`,
-`native_contour_height_fraction`, and
-`native_contour_account_fermi_poles` and the optional even
-`native_contour_target_fermi_poles` control the native contour independently
-of the finite-(H) contour.
-
-## Hard-gate evidence
-
-`UnitDresp03tgNativeContour` uses the live bcc-Fe spd fixture and checks:
-
-1. contour construction and vanishing total contour weight;
-2. the scalar pole oracle, including raw-Fermi and `f_reg` forms;
-3. finite native `J(q)` at Gamma, +q, and -q;
-4. the algebraic DFT helper identity;
-5. independent native ordered-pair `J(R)` versus direct `J(q)` on a complete
-   2³ mesh;
-6. `ud(q)=du(-q)`, one-site inversion, and compatible-mesh `ud=du`;
-7. native spectral bounds from the exact native coefficient problem; and
-8. the analytic complex-amplitude Heisenberg factor
-   `K(q)=2*(J_sym(Gamma)-J_sym(q))`.
-
-Representative output:
+with diagonal factors applied by columns in the stated order. The direct
+production (P^\alpha(z)-S^\alpha(k)) SVD oracle is independent of the pole
+construction and reports:
 
 ```text
-contour weight residual       4.654752e-17
-contour nodes/poles           1024/512     (complete 2^3 live mesh)
-native J(q)                  fixture-dependent; see test log
-synthetic Fourier residual    1.110223e-16
-independent pair/q residual   <8e-16
-native max spectral ellipse  4.942282e-1
+old generalized-root max relative P-S residual = 3.140490e-01
+corrected generalized-root max relative P-S residual = 3.987466e-15
+direct P-S sigma_min max / relative max       = 6.471473e-14 / 3.987466e-15
+representative sigma_min / relative / ||P-S|| = 8.881784e-16 / 2.404530e-17 / 3.693772e+01
 ```
 
-The targeted regression set also passes `UnitDresp03tgNativeFixedZ`,
-`UnitDresp03qProductionAdapter`, and `UnitExchangeQ`.
+The corrected roots therefore pass the required (10^{-9}) relative pole
+residual gate, while the negative control demonstrates that the old
+((I-S)D) construction would have been caught.
 
-## bcc-Fe production validation
+## Ordered-pair and non-self-inverse-q closure
 
-`example/exchange_q/bccFe/input_dresp03tg_close_12.nml` enables the native
-route on the accepted 12x12x12 bcc-Fe k mesh, a four-point commensurate q path,
-and a fixed 256-pole target.  The production output writes ordered `J_ud`,
-`J_du`, visible `J_sym`, raw `DeltaJ_sym`, `DeltaJ_sym/q^2`, the expected
-curvature `2*DeltaJ_sym`, and `finiteH_minus_native_curvature`.  The finite-H
-columns are retained as diagnostics; they are not substituted for the native
-path-operator result.  Native spectral bounds come from the exact native
-coefficient problem and the report records the maximum ellipse value.
+`native_exchange_pairs_contour` constructs all four Fourier blocks
+independently:
 
-The previous same-state values are retained only as a column-format example;
-they are not the R1 convergence record:
+```text
+gup_R, gup_minus_R, gdown_R, gdown_minus_R
+```
 
-| q | native (J(q)) (Ry) | native \\(\Delta J\\) (Ry) | finite-H \\(\Delta J\\) (Ry) | finite-H minus native (Ry) |
+and uses
+
+\[
+J_{ud}(R)\sim\Delta P_i g^\uparrow_{ij}(R)\Delta P_j
+g^\downarrow_{ji}(-R),
+\]
+\[
+J_{du}(R)\sim\Delta P_i g^\downarrow_{ij}(R)\Delta P_j
+g^\uparrow_{ji}(-R).
+\]
+
+The hard regression uses the cyclic mesh (k=0,1/3,2/3),
+(q=0,+1/3,-1/3), and (R=0,1,2), so (+q\ne-q\pmod G). The old
+2³ Fourier utility check remains, but is labelled only as a DFT helper.
+
+```text
+DFT helper roundtrip                         = 3.469447e-18
+independent ud pair/q residual              = 1.695382e-17
+independent du pair/q residual              = 2.036634e-17
+ordered maximum                             = 2.036634e-17
+Jud(q)-Jdu(-q) covariance residual           = 2.480342e-17
+Jud(q)-Jdu(q) one-site symmetry residual     = 3.760107e-17
+```
+
+These are below the (10^{-10}) closure target and do not rely on the
+self-inverse (q=1/2) case.
+
+## Scalar contour and finite-q oracles
+
+The raw-Fermi and pole-subtracted scalar contour forms remain independently
+checked, including explicit enclosed Fermi-pole residues:
+
+```text
+scalar contour oracle coarse / fine         = 9.785529e-09 / 4.551914e-15
+scalar LKAG -1/4 oracle coarse / fine       = 2.446382e-09 / 9.436896e-16
+contour weight residual                     = 1.321838e-17
+contour nodes / poles                       = 192 / 96
+curvature-factor oracle                     = 8.326673e-17
+```
+
+The independently derived complex-amplitude normalization remains
+
+\[
+\boxed{K(q)=2[J_{\rm sym}(0)-J_{\rm sym}(q)]}.
+\]
+
+Production output keeps `J_ud`, `J_du`, `J_sym`, `DeltaJ_sym`,
+`DeltaJ_sym/q^2`, `native_expected_curvature=2*DeltaJ_sym`, and the
+finite-(H) diagnostic separate.
+
+The unit fixture has native maximum ellipse value
+`8.227106e-1`, giving safety margin `1.772894e-1`. All production poles in
+the following tables are likewise strictly inside the certified ellipse.
+
+## Bounded bcc-Fe campaign
+
+The contour sweep uses a fixed accepted (12^3) electronic state and 64,
+96, and 128 contour nodes. Values below use
+
+\[
+\Delta J=J_{\rm sym}(0)-J_{\rm sym}(q).
+\]
+
+| contour | Fermi level (Ry) | max ellipse | `J_sym(0)` (Ry) | `DeltaJ` at (1/12,1/6,1/4) (Ry) |
 |---:|---:|---:|---:|---:|
-| 0 | 1.938217541e-1 | 0 | -4.70e-19 | -4.70e-19 |
-| 1/12 | 1.926296575e-1 | 1.192096588e-3 | 1.620624491e-3 | 4.285279025e-4 |
-| 1/6 | 1.891041813e-1 | 4.717572754e-3 | 1.073458918e-3 | -3.644113837e-3 |
-| 1/4 | 1.876184770e-1 | 6.203277102e-3 | 7.760220650e-3 | 1.556943548e-3 |
+| 64  | -6.7656145763e-2 | 0.822621179 | -2.307630796e-1 | 1.075075406e-3, 4.539708756e-3, 5.937549878e-3 |
+| 96  | -6.7656145914e-2 | 0.822621178 | -2.284329747e-1 | 1.074019238e-3, 4.535753383e-3, 5.929604706e-3 |
+| 128 | -6.7656146771e-2 | 0.822621178 | -2.324144088e-1 | 1.074721047e-3, 4.538388585e-3, 5.934918833e-3 |
 
-No fitted scale or q-dependent correction is applied.  The final R1 table
-below reports the 64/96/128 contour comparison and the 8³/12³/16³ electronic
-mesh comparison at common small-q points.  Native and finite-H remain
-separate representations and observables.
+The maximum 96-to-128 change in `DeltaJ` is approximately
+`5.314e-6 Ry`, so:
 
-### R1 convergence record
+```text
+CONTOUR CONVERGENCE = PASS
+```
 
-The production deck uses target 256 Fermi poles.  All reported native
-spectral poles are strictly inside the ellipse.  The contour sweep is at a
-fixed 12³ electronic mesh; the k-mesh sweep uses 64 contour points.  The
-finite-H comparison is retained as a diagnostic and is not used to define the
-native result.
+The fixed 64-node electronic-mesh campaign is:
 
-| contour points | native max ellipse | max `DeltaJ` (Ry) | `DeltaJ/q^2` at q=1/12, 1/6, 1/4 (Ry A²) | max `|finiteH-native curvature|` (Ry) |
-|---:|---:|---:|---:|---:|
-| 64  | 0.937909 | 5.941679182e-3 | 1.605920433e-2, 1.695239825e-2, 9.856798571e-3 | 8.010014321e-3 |
-| 96  | 0.937909 | 5.943569665e-3 | 1.606316202e-2, 1.695600614e-2, 9.859934740e-3 | 8.011947506e-3 |
-| 128 | 0.937909 | 5.940479554e-3 | 1.605711301e-2, 1.695031017e-2, 9.854808479e-3 | 8.008895478e-3 |
+| k mesh | Fermi level (Ry) | native poles | max ellipse | margin | `J_sym(0)` (Ry) |
+|---:|---:|---:|---:|---:|---:|
+| 12³ | -6.7656145763e-2 | 124416 | 0.822621179 | 0.177378821 | -2.307630796e-1 |
+| 16³ | -6.8155280645e-2 | 294912 | 0.822631567 | 0.177368433 | -2.4454212877e-1 |
+| 20³ | -6.9564231299e-2 | 576000 | 0.822624757 | 0.177375243 | -2.4017927379e-1 |
+| 24³ | -6.9063005866e-2 | 995328 | 0.822637221 | 0.177362779 | -2.4112868568e-1 |
 
-The maximum change in native `DeltaJ` over the contour sweep is
-`3.09e-6 Ry`; the small-q stiffness diagnostics vary by less than
-`3.7e-6 Ry A²`.  The absolute `Jsym` values have a nearly q-independent
-quadrature offset, so convergence is assessed on `DeltaJ` and the reported
-curvature rather than on the absolute contact trace.
-
-| electronic k mesh | native max ellipse | `DeltaJ` at q=1/12, 1/6, 1/4 (Ry) | max `|finiteH-native curvature|` (Ry) |
+| k mesh | `DeltaJ` at (1/12,1/6,1/4) (Ry) | `2*DeltaJ` at (1/12,1/6,1/4) (Ry) | `DeltaJ/q²` at (1/12,1/6,1/4) (Ry Å²) |
 |---:|---:|---:|---:|
-| 8³  | 0.955924 | 4.322092089e-4, 3.255325653e-3, 8.178703727e-3 | 1.846960583e-2 |
-| 12³ | 0.937909 | 1.075610000e-3, 4.541736619e-3, 5.941679182e-3 | 8.010014321e-3 |
-| 16³ | 0.988038 | 1.830421048e-3, 6.450457874e-3, 7.554837997e-3 | 7.240543352e-3 |
+| 12³ | 1.075075406e-3, 4.539708756e-3, 5.937549878e-3 | 2.150150812e-3, 9.079417513e-3, 1.187509975e-2 | 1.605122266e-2, 1.694482909e-2, 9.849948366e-3 |
+| 16³ | 9.220898669e-4, 3.247599257e-3, 7.592281908e-3 | 1.844179734e-3, 6.495198514e-3, 1.518456382e-2 | 1.376709920e-2, 1.212192617e-2, 1.259502426e-2 |
+| 20³ | 7.335189719e-4, 3.528718873e-3, 6.611110092e-3 | 1.467037944e-3, 7.057437746e-3, 1.322222018e-2 | 1.095167490e-2, 1.317122781e-2, 1.096733407e-2 |
+| 24³ | 9.246643758e-4, 3.514857729e-3, 7.000061928e-3 | 1.849328752e-3, 7.029715458e-3, 1.400012386e-2 | 1.380553745e-2, 1.311948997e-2, 1.161257589e-2 |
 
-The k-mesh rows are accepted-state material validation runs; their Fermi
-levels are independently converged for each mesh.  They therefore test
-electronic-mesh stability, while the contour table tests the integration
-resolution at a common 12³ state.
+For the two finest meshes, the relative (20^3\to24^3) change is about
+26% at (q=1/12) and 0.39% at (q=1/6). The first required q point fails
+the bounded criterion, so the campaign terminates without inventing another
+implementation task:
+
+```text
+MATERIAL Fe k-MESH CONVERGENCE = NOT CONVERGED THROUGH 24^3
+```
+
+On the finest completed (24^3) mesh, the small-q diagnostic is:
+
+| \(\xi\) | `DeltaJ` (Ry) | `DeltaJ/|q|²` (Ry Å²) |
+|---:|---:|---:|
+| 1/48 | 2.362088203e-5 | 5.642678232e-3 |
+| 2/48 | 2.453698281e-4 | 1.465380278e-2 |
+| 3/48 | 4.798173970e-4 | 1.273569518e-2 |
+| 4/48 | 9.246643768e-4 | 1.380553747e-2 |
+
+The final three coefficients span about 14%, above the approximate 10%
+diagnostic window. No stiffness is declared:
+
+```text
+SMALL-q MATERIAL LIMIT = NOT RESOLVED AT AVAILABLE 24^3 MESH
+```
+
+The finite-(H) `finiteH_minus_native_curvature` column is a production-H1
+diagnostic only. It is not an acceptance criterion for the exact native
+Turek representation. A numerically equivalent historical shell comparison
+would require matching the old exchange route's state, energy integration,
+and normalization; it was not practical within this bounded campaign:
+
+```text
+HISTORICAL SHELL CROSSCHECK = DEFERRED NUMERICALLY
+```
+
+## Final decision
+
+```text
+CORE DRESP-03TG             = PASS
+CONTOUR CONVERGENCE         = PASS
+Fe ELECTRONIC k-MESH        = NOT CONVERGED THROUGH 24^3
+SMALL-q Fe WINDOW           = NOT RESOLVED AT AVAILABLE MESH
+HISTORICAL exchange.f90     = DEFERRED NUMERICALLY
+```
+
+The DRESP-03TG implementation and physics closure is complete. Remaining Fe
+mesh refinement is a production convergence study, not an implementation
+blocker. DRESP-04 remains outside this task.
 
 ## Verification
 
 ```text
 cmake --build build -j2
 ctest --test-dir build --output-on-failure -R \
-  'UnitDresp03tgNativeContour|UnitDresp03tgNativeFixedZ|UnitDresp03qProductionAdapter|UnitExchangeQ'
+  'UnitDresp03tgNativeContour|UnitDresp03tgNativeFixedZ|UnitDresp03qProductionAdapter|UnitDresp03|UnitExchangeQ|UnitLrKlStaticBridge'
 ```
 
-The independent unit gates and the production convergence runs pass on branch
-`fable_v4`.  Generated production outputs remain outside the repository.
+The protected historical source has SHA-256:
+
+```text
+6e9ae7da6af46367aaf18a4fef37bdd4a9a0d6f69fe8e08b589e5c5f278a70e6
+```

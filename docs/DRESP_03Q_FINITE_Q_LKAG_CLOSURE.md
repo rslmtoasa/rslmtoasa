@@ -1,20 +1,22 @@
 # DRESP-03Q — Finite-q Torque-Hessian and Native LKAG Closure
 
-Status: **Historical pre-close record.**  The native path-operator contour and
-Fourier closure requested by DRESP-03TG-CLOSE are recorded in
+Status: **Historical finite-H/provenance record.** The native path-operator
+contour, direct pole oracle, and independent Fourier closure requested by
+DRESP-03TG-FINAL are recorded in
 [`DRESP_03TG_NATIVE_TUREK_CONTOUR_CLOSE.md`](DRESP_03TG_NATIVE_TUREK_CONTOUR_CLOSE.md).
-The older blocked-gate narrative below is retained as provenance for the
-pre-close q-oracle work.
+The older finite-q and two-shell narratives below are retained as provenance;
+they are not the native acceptance gate.
 
 The finite-q operator algebra and the live reciprocal-H adapter are implemented
 and independently tested.  The old Fe comparison is retained below as a
 historical two-shell diagnostic only: its `jij.out` source requested
 `njij = 2`, so its Fourier curve is a truncated model and is not a
 representation-equivalence gate.  DRESP-03TG then audited the native call
-graph and now passes the narrower native path-operator representation gate:
-[`DRESP_03TG_NATIVE_TUREK_GF.md`](DRESP_03TG_NATIVE_TUREK_GF.md).  No native
-production evaluator has been added yet, and no rescaling or fitted tolerance
-is used.  DRESP-04 remains forbidden until the numerical closure is complete.
+graph and now passes the native path-operator representation and ordered-pair
+closure gates:
+[`DRESP_03TG_NATIVE_TUREK_GF.md`](DRESP_03TG_NATIVE_TUREK_GF.md). No
+production-H rescaling or fitted tolerance is used. DRESP-04 remains outside
+this campaign.
 
 `source/exchange.f90` was not modified.
 
@@ -29,10 +31,10 @@ arbitrary q continues to use exact endpoint diagonalization.  Detailed
 derivation, independent metallic fixtures, bcc-Fe evidence, and timing are in
 [`DRESP_03QM_METALLIC_FINITE_Q.md`](DRESP_03QM_METALLIC_FINITE_Q.md).
 
-This does not close the native LKAG q oracle.  DRESP-03TG now passes the
-representation gate; the first native fixed-complex-energy contraction now
-blocks before integration. Contact correspondence and numerical q closure
-remain unentered. DRESP-04 remains forbidden.
+This finite-H side is not the native Turek acceptance oracle. DRESP-03TG now
+closes the native path-operator and pair/q gates independently; the production
+finite-H result remains a `kspace_ham_order='first'` H1 diagnostic. Contact
+and H1/native differences must not be used to reject the native closure.
 
 ## DRESP-03G finite-H contour bridge
 
@@ -47,9 +49,10 @@ backend remains `spectral`; `contour` and `both` are diagnostic alternatives.
 The independent noncommuting finite-matrix A/B/C oracle, degeneracy test,
 zero-temperature occupied-contour reduction, separate TT/contact quadrature
 convergence gates, and bcc-Fe 24³ A/B material comparison are passing; see the
-dedicated DRESP-03G record for the residuals and timing.  This closes the
-finite-H representation bridge only.  The native LMTO/Turek bridge remains
-forbidden, and DRESP-04 remains forbidden.
+dedicated DRESP-03G record for the residuals and timing. This closes the
+finite-H representation bridge only. The native LMTO/Turek bridge is closed
+independently by the DRESP-03TG final record; this document does not merge the
+two observables. DRESP-04 remains outside the campaign.
 
 ## Scope and implementation
 
@@ -224,15 +227,14 @@ mismatch.  It must not be used as the DRESP-03Q closure gate.
 ## Same-state full-range LKAG-q comparison
 
 `post_processing='exchange_q'` consumes the accepted reciprocal SCF snapshot.
-The finite-H fixture is copied before `predls()` is used for the native vertex;
+The finite-H fixture is copied before `predls()` is used for the H1 vertex;
 the production-H adapter residual is checked before and after that mutation.
-The q-space reference evaluates the exact native `dGdG_Jnc` contraction in
-reciprocal space, with the native spin ordering, `imtrace9` imaginary trace,
-native `simpson_f` energy mesh, and the native `1/(4*pi)` output conversion.
-It is explicitly called an LKAG q-space oracle, not a replacement for
+This section is an H-side diagnostic with the native spin ordering and
+production finite-H conventions. The native acceptance oracle is the direct
+P-S contour route in DRESP-03TG-FINAL, not a replacement for
 `source/exchange.f90`.
 
-The production gate is not closed until all of the following are recorded:
+The historical production gate listed the following diagnostics:
 
 1. real-space/Fourier identity on an independently evaluated finite/gapped
    fixture;
@@ -240,9 +242,11 @@ The production gate is not closed until all of the following are recorded:
 3. energy-mesh and regulator convergence for metallic Fe;
 4. dense same-state curves for finite-H and LKAG-q with no fitted scale.
 
-The q-space gates remain subordinate to the DRESP-03TG representation gate.
-That representation gate is now open, but the q gates cannot be promoted
-until the native path-operator evaluator and its numerical comparisons exist.
+Those diagnostics remain useful for finite-H work, but they are not required
+to promote the already-closed DRESP-03TG native representation gate. In
+particular, the bounded Fe record reports native contour convergence
+separately from the H1 diagnostic and does not use H1/native differences as an
+acceptance criterion.
 
 ## User-facing exchange_q workflow
 
@@ -293,8 +297,9 @@ finite-H `J(q)` is manufactured by adding a native Gamma constant.
 
 ## Re-opening condition
 
-Re-open DRESP-03Q only after the DRESP-03TG path-operator representation is
-implemented, with an independently controlled metallic integration, identical
-Hamiltonian order and orbital representation, contact-term correspondence,
-and agreement for the full required q mesh.  Until then, DRESP-04 must not be
-started.
+No DRESP-03TG re-opening is required: its core native implementation/physics
+closure is complete. Any future finite-H/DRESP-03Q comparison must state
+explicitly whether it targets the H1 production observable or the exact
+native Turek observable, and must keep `K(q)=2*DeltaJ_sym(q)` and the
+production `finiteH_minus_native_curvature` diagnostic separate. DRESP-04
+remains outside this campaign.
