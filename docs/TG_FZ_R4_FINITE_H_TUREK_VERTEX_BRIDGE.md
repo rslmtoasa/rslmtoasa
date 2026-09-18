@@ -167,11 +167,16 @@ The independently assembled distinct-site mixed derivative is nonzero:
 The complete fixed-z curvature split, using the full finite-H T_i, T_j, and
 C_12, is:
 
+The scalar entries below were regenerated in TG-FZ-R8R with the independent
+direct `Tr(H_ij G)` contraction. Any pre-R8R API printout that showed a zero
+contact for these distinct-site matrices is superseded; the R4 vertex and
+matrix identities above are unchanged.
+
 | z | TT contribution (-Im/pi) | contact contribution (-Im/pi) | complete (-Im/pi) |
 |---|---:|---:|---:|
-| -0.91+0.83i | -7.718838e-05 | 1.334766e-04 | 5.628824e-05 |
-| -0.17+0.04i | 3.295879e-01 | 2.860555e-03 | 3.324484e-01 |
-| 0.62+0.31i | -1.638976e-04 | 2.040888e-04 | 4.019120e-05 |
+| -0.91+0.83i | -7.718933e-05 | 1.334771e-04 | 5.628774e-05 |
+| -0.17+0.04i | 3.295878e-01 | 2.860561e-03 | 3.324483e-01 |
+| 0.62+0.31i | -1.639025e-04 | 2.040903e-04 | 4.018783e-05 |
 
 The TT/contact split is internally exact to the reported 0.000000e+00
 residual. The contact term cannot be dropped or inferred to vanish from the

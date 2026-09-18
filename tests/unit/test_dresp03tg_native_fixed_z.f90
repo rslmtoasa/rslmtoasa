@@ -73,6 +73,7 @@ program test_dresp03tg_native_fixed_z
    real(rp) :: r4_max_fd_error, r4_max_contact_norm, r4_max_vertex_raw_error, r4_max_vertex_transformed_error
 
    call init_math_operators()
+   call run_two_factor_contact_trace_regression()
    call g_logger%init()
    g_timer = timer()
    ctl = control('input.nml')
@@ -548,6 +549,34 @@ program test_dresp03tg_native_fixed_z
    return
 
 contains
+
+   ! This is deliberately independent of the material fixture.  The torque
+   ! terms vanish, so the public force-theorem API must return the explicit
+   ! two-factor contact contraction -Im Tr(mixed*green)/pi.  The diagonal
+   ! trace of mixed is intentionally different from that contraction.
+   subroutine run_two_factor_contact_trace_regression()
+      complex(rp) :: torque(2,2), mixed(2,2), green(2,2), product(2,2)
+      real(rp) :: torque_torque, contact, complete, expected, trace_only
+
+      torque = cmplx(0.0_rp,0.0_rp,rp)
+      mixed = reshape([cmplx(1.0_rp,2.0_rp,rp), cmplx(0.5_rp,0.25_rp,rp), &
+                       cmplx(3.0_rp,-1.0_rp,rp), cmplx(-2.0_rp,0.5_rp,rp)], [2,2])
+      green = reshape([cmplx(0.4_rp,0.7_rp,rp), cmplx(-0.8_rp,0.6_rp,rp), &
+                       cmplx(1.2_rp,-0.3_rp,rp), cmplx(-0.2_rp,0.9_rp,rp)], [2,2])
+      product = matmul(mixed,green)
+      expected = -sum([(aimag(product(i,i)),i=1,2)])/force_theorem_pi
+      trace_only = -sum([(aimag(mixed(i,i)),i=1,2)])/force_theorem_pi
+      call force_theorem_integrand(torque,green,torque,mixed,torque_torque,contact,complete)
+      write(*,'(a,3es18.8)') 'TG-FZ-R8R direct two-factor trace regression expected/observed/trace-only = ', &
+         expected,contact,trace_only
+      if (abs(aimag(product(1,1)+product(2,2))-aimag(mixed(1,1)+mixed(2,2))) <= 1.0e-3_rp) then
+         error stop 'TG-FZ-R8R trace regression fixture does not distinguish Tr(AB) from Tr(A)'
+      end if
+      if (abs(torque_torque) > 5.0e-15_rp .or. abs(contact-expected) > 5.0e-15_rp .or. &
+          abs(complete-expected) > 5.0e-15_rp) then
+         error stop 'TG-FZ-R8R two-factor contact trace regression failed'
+      end if
+   end subroutine run_two_factor_contact_trace_regression
 
    subroutine run_r6_screening_audit(atom_lattice, s_structure)
       type(lattice), intent(in) :: atom_lattice
@@ -1759,6 +1788,7 @@ contains
       real(rp), parameter :: kpoint(3) = [0.0_rp,0.0_rp,0.0_rp]
       real(rp), parameter :: axis(3) = [0.0_rp,1.0_rp,0.0_rp]
       real(rp), parameter :: eps_values(5) = [1.0e-2_rp,1.0e-3_rp,1.0e-4_rp,1.0e-5_rp,1.0e-6_rp]
+      real(rp), parameter :: logdet_eps_values(7) = [1.0e-2_rp,3.0e-3_rp,1.0e-3_rp,3.0e-4_rp,1.0e-4_rp,3.0e-5_rp,1.0e-5_rp]
       real(rp), parameter :: eps_states(2) = [1.0e-3_rp,1.0e-4_rp]
       integer, parameter :: nconfig = 6
       integer :: nmat, n2loc, iz, ie, site, ic, l, m, lm
@@ -1770,7 +1800,7 @@ contains
          ti_gamma(:,:), tj_gamma(:,:), hij_gamma(:,:), ti_exact(:,:), tj_exact(:,:), hij_exact(:,:), &
          ti_h2(:,:), tj_h2(:,:), hij_h2(:,:), hplus(:,:), hminus(:,:), hpp(:,:), hpm(:,:), &
          hmp(:,:), hmm(:,:), hgplus(:,:), hgminus(:,:), hgpp(:,:), hgpm(:,:), hgmp(:,:), hgm(:,:), &
-         zeye(:,:), p_alpha(:,:), s_alpha_tmp(:,:), rmat(:,:), g_alpha(:,:), &
+         zeye(:,:), p_alpha(:,:), s_alpha_tmp(:,:), rmat(:,:), g_alpha(:,:), pprime_i(:,:), pprime_j(:,:), &
          raw_i(:,:), raw_j(:,:), tilde_i(:,:), tilde_j(:,:), da_i(:,:), da_j(:,:), dg_i(:,:), dg_j(:,:), &
          tilde_du_i(:,:), tilde_du_j(:,:), tud_i(:,:), tud_j(:,:), h2_work(:,:), h2_work2(:,:)
       complex(rp), allocatable :: c0(:,:), c1(:,:), w0(:,:), w1(:,:), gamma0(:,:), gamma1(:,:)
@@ -1780,12 +1810,17 @@ contains
       real(rp) :: uniform_spectrum_error, uniform_common_mode_error
       real(rp) :: h2_curvature_error, h2_rel_error, h2_matrix_error, t2_matrix_error, c2_matrix_error
       real(rp) :: ttg, ccg, kg, tte, cce, ke, tt2, cc2, k2, jud, jdu, jsym, kturek
-      real(rp) :: logfd, fpp, fpm, fmp, fmm, ed
+      real(rp) :: ttg_direct, ccg_direct, kg_direct, tte_direct, cce_direct, ke_direct
+      real(rp) :: tt2_direct, cc2_direct, k2_direct, direct_trace_error
+      real(rp) :: logfd, fpp, fpm, fmp, fmm, ed, analytic_alpha, alpha_analytic_error
+      real(rp) :: logdet_sweep_error(7), logdet_sweep_value(7), herm_plus, herm_minus
+      real(rp) :: base_hgamma_hermiticity, base_hexact_hermiticity, rotated_hermiticity
+      real(rp) :: logdet_converged(size(z_values)), logdet_converged_error(size(z_values))
       real(rp) :: norm_h2, norm_t2, norm_c2, denom
       real(rp) :: vals0(2*norb*nsite_fixture), vals_g(2*norb*nsite_fixture), vals_e(2*norb*nsite_fixture)
       real(rp) :: vals_gp(2*norb*nsite_fixture), vals_gm(2*norb*nsite_fixture), vals_ep(2*norb*nsite_fixture), vals_em(2*norb*nsite_fixture)
       complex(rp) :: zloc
-      logical :: hard_fail, logdet_sign_ok
+      logical :: hard_fail, logdet_sign_ok, logdet_hermitian_ok
 
       n2loc=norb*nsite_fixture; nmat=2*n2loc
       if (size(s_spin_major,1) /= nmat .or. size(s_spin_major,2) /= nmat) then
@@ -1802,7 +1837,8 @@ contains
          hplus(nmat,nmat),hminus(nmat,nmat),hpp(nmat,nmat),hpm(nmat,nmat),hmp(nmat,nmat),hmm(nmat,nmat), &
          hgplus(nmat,nmat),hgminus(nmat,nmat),hgpp(nmat,nmat),hgpm(nmat,nmat),hgmp(nmat,nmat),hgm(nmat,nmat), &
          zeye(nmat,nmat),p_alpha(nmat,nmat),s_alpha_tmp(nmat,nmat), &
-         rmat(nmat,nmat),g_alpha(nmat,nmat),raw_i(norb,norb),raw_j(norb,norb),tilde_i(norb,norb), &
+         rmat(nmat,nmat),g_alpha(nmat,nmat),pprime_i(nmat,nmat),pprime_j(nmat,nmat), &
+         raw_i(norb,norb),raw_j(norb,norb),tilde_i(norb,norb), &
          tilde_j(norb,norb),tilde_du_i(norb,norb),tilde_du_j(norb,norb),da_i(norb,norb),da_j(norb,norb),dg_i(norb,norb),dg_j(norb,norb), &
          tud_i(norb,norb),tud_j(norb,norb),h2_work(nmat,nmat),h2_work2(nmat,nmat), &
          c0(norb,nsite_fixture),c1(norb,nsite_fixture),w0(norb,nsite_fixture),w1(norb,nsite_fixture), &
@@ -1847,6 +1883,13 @@ contains
 
       call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,sgamma,hgamma,cgam,wgam,gammat)
       call r8_build_exact_state(fix,salpha,hexact)
+      base_hgamma_hermiticity=maxval(abs(hgamma-conjg(transpose(hgamma))))
+      base_hexact_hermiticity=maxval(abs(hexact-conjg(transpose(hexact))))
+      write(*,'(a,2es14.6)') 'TG-FZ-R8 logdet base ||H-H^dagger|| max gamma/exact = ', &
+         base_hgamma_hermiticity,base_hexact_hermiticity
+      if (base_hgamma_hermiticity > 2.0e-10_rp .or. base_hexact_hermiticity > 2.0e-10_rp) then
+         error stop 'TG-FZ-R8 logdet oracle received a non-Hermitian base Hamiltonian'
+      end if
       call assemble_lmto_hamiltonian(fix,kpoint,h2)
       call r8_gamma_local_derivative(fix,c1,site=1,axis=axis,derivative=ci)
       call r8_gamma_local_derivative(fix,w1,site=1,axis=axis,derivative=wi)
@@ -1926,7 +1969,7 @@ contains
 
       vertex_raw_error=0.0_rp; vertex_tilde_error=0.0_rp; turek_control_error=0.0_rp; turek_error=0.0_rp
       h2_curvature_error=0.0_rp; h2_rel_error=0.0_rp; uniform_spectrum_error=0.0_rp; uniform_common_mode_error=0.0_rp
-      logdet_error=0.0_rp; logdet_minus_error=0.0_rp
+      logdet_error=0.0_rp; logdet_minus_error=0.0_rp; alpha_analytic_error=0.0_rp
       norm_h2=maxval(abs(h2-hexact)); norm_t2=0.0_rp; norm_c2=0.0_rp
       call assemble_lmto_rotation_terms(fix,kpoint,1,axis,hplus,hminus,hgplus,hgmp,hgm,hgpp,ti_h2)
       call assemble_lmto_rotation_terms(fix,kpoint,2,axis,hpp,hpm,hgpm,hgpp,hgm,hgmp,tj_h2)
@@ -1942,11 +1985,25 @@ contains
          call force_theorem_integrand(ti_gamma,gh,tj_gamma,hij_gamma,ttg,ccg,kg)
          call force_theorem_integrand(ti_exact,gexact,tj_exact,hij_exact,tte,cce,ke)
          call force_theorem_integrand(ti_h2,g2,tj_h2,hij_h2,tt2,cc2,k2)
+         ttg_direct=-aimag(trace4(ti_gamma,gh,tj_gamma,gh))/force_theorem_pi
+         ccg_direct=-aimag(trace2(hij_gamma,gh))/force_theorem_pi
+         kg_direct=ttg_direct+ccg_direct
+         tte_direct=-aimag(trace4(ti_exact,gexact,tj_exact,gexact))/force_theorem_pi
+         cce_direct=-aimag(trace2(hij_exact,gexact))/force_theorem_pi
+         ke_direct=tte_direct+cce_direct
+         tt2_direct=-aimag(trace4(ti_h2,g2,tj_h2,g2))/force_theorem_pi
+         cc2_direct=-aimag(trace2(hij_h2,g2))/force_theorem_pi
+         k2_direct=tt2_direct+cc2_direct
+         direct_trace_error=max(abs(ttg-ttg_direct),abs(ccg-ccg_direct),abs(kg-kg_direct), &
+            abs(tte-tte_direct),abs(cce-cce_direct),abs(ke-ke_direct), &
+            abs(tt2-tt2_direct),abs(cc2-cc2_direct),abs(k2-k2_direct))
          write(*,'(a,2es14.6)') 'TG-FZ-R8 z = ',real(zloc,rp),aimag(zloc)
          write(*,'(a,3es18.8)') '  gamma TT/contact/complete = ',ttg,ccg,kg
          write(*,'(a,3es18.8)') '  exact TT/contact/complete = ',tte,cce,ke
          write(*,'(a,3es18.8)') '  H2 TT/contact/complete = ',tt2,cc2,k2
+         write(*,'(a,es14.6)') '  direct-trace oracle max residual = ',direct_trace_error
          write(*,'(a,es14.6)') '  gamma-vs-exact complete residual = ',abs(kg-ke)
+         if (direct_trace_error > 5.0e-15_rp) error stop 'TG-FZ-R8 direct trace oracle failed'
          h2_curvature_error=max(h2_curvature_error,abs(k2-ke))
          denom=max(abs(ke),1.0e-30_rp); h2_rel_error=max(h2_rel_error,abs(k2-ke)/denom)
 
@@ -1963,6 +2020,13 @@ contains
          ! vertex, but contracts it with the normalized-gamma path operator.
          jsym=0.5_rp*(jud+jdu)
          kturek=-(jud+jdu)
+         pprime_i=cmplx(0.0_rp,0.0_rp,rp); pprime_j=pprime_i
+         pprime_i(1:norb,n2loc+1:n2loc+norb)=0.5_rp*da_i
+         pprime_i(n2loc+1:n2loc+norb,1:norb)=0.5_rp*da_i
+         pprime_j(norb+1:n2loc,n2loc+norb+1:nmat)=0.5_rp*da_j
+         pprime_j(n2loc+norb+1:nmat,norb+1:n2loc)=0.5_rp*da_j
+         analytic_alpha=aimag(trace4(g_alpha,pprime_j,g_alpha,pprime_i))/force_theorem_pi
+         alpha_analytic_error=max(alpha_analytic_error,abs(analytic_alpha-(jud+jdu)))
          call r8_unscaled_ud(rmat,da_i,da_j,dg_i,dg_j)
          turek_control_error=max(turek_control_error,abs(jud-native_exchange_integrand(dg_i,dg_j, &
             pathg(1:norb,norb+1:n2loc),pathg(n2loc+norb+1:nmat,n2loc+1:n2loc+norb))/(4.0_rp*force_theorem_pi)))
@@ -1973,27 +2037,48 @@ contains
          turek_error=max(turek_error,abs(ke-kturek))
          write(*,'(a,3es18.8)') '  Turek J_ud/J_du/J_sym = ',jud,jdu,jsym
          write(*,'(a,es18.8)') '  Turek-equivalent complete = ',kturek
+         write(*,'(a,2es18.8)') '  common-alpha analytic F / (F-(J_ud+J_du)) = ', &
+            analytic_alpha,abs(analytic_alpha-(jud+jdu))
          write(*,'(a,2es14.6)') '  ||2T_ud-d_raw|| / ||2T_ud-d_tilde_alpha|| = ', &
             maxval(abs(2.0_rp*tud_i-raw_i)),maxval(abs(2.0_rp*tud_i-tilde_i))
 
-         ! The prescribed F=-Im log(det(z-H))/pi has the opposite sign to
-         ! force_theorem_integrand with G=(z-H)^-1.  Record both residuals;
-         ! this is an algebraic convention check, never a fitted sign.
-         ed=1.0e-3_rp
-         call r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,axis,ed,zloc,saved_mom,1,1,fpp)
-         call r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,axis,ed,zloc,saved_mom,1,-1,fpm)
-         call r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,axis,ed,zloc,saved_mom,-1,1,fmp)
-         call r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,axis,ed,zloc,saved_mom,-1,-1,fmm)
-         logfd=(fpp-fpm-fmp+fmm)/(4.0_rp*ed*ed)
-         logdet_error=max(logdet_error,abs(logfd-ke)); logdet_minus_error=max(logdet_minus_error,abs(logfd+ke))
-         write(*,'(a,4es18.8)') '  logdet FD / (logdet-K) / (logdet+K) / exact contact = ', &
-            logfd,abs(logfd-ke),abs(logfd+ke),cce
+         ! The prescribed F=-Im log(det(z-H))/pi has the opposite sign to K
+         ! from force_theorem_integrand with G=(z-H)^-1.  Sweep the angle;
+         ! one finite epsilon is not accepted as the final derivative oracle.
+         rotated_hermiticity=0.0_rp
+         do ie=1,size(logdet_eps_values)
+            ed=logdet_eps_values(ie)
+            call r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,axis,ed,zloc,saved_mom,1,1,fpp,herm_plus,herm_minus)
+            rotated_hermiticity=max(rotated_hermiticity,herm_plus,herm_minus)
+            call r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,axis,ed,zloc,saved_mom,1,-1,fpm,herm_plus,herm_minus)
+            rotated_hermiticity=max(rotated_hermiticity,herm_plus,herm_minus)
+            call r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,axis,ed,zloc,saved_mom,-1,1,fmp,herm_plus,herm_minus)
+            rotated_hermiticity=max(rotated_hermiticity,herm_plus,herm_minus)
+            call r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,axis,ed,zloc,saved_mom,-1,-1,fmm,herm_plus,herm_minus)
+            rotated_hermiticity=max(rotated_hermiticity,herm_plus,herm_minus)
+            logfd=(fpp-fpm-fmp+fmm)/(4.0_rp*ed*ed)
+            logdet_sweep_value(ie)=logfd
+            logdet_sweep_error(ie)=abs(logfd+ke)
+            logdet_error=max(logdet_error,abs(logfd-ke))
+            write(*,'(a,es10.3,a,3es18.8)') '  logdet eps=',ed,' FD / (FD+K) / (FD-K) = ', &
+               logfd,logdet_sweep_error(ie),abs(logfd-ke)
+         end do
+         ie=minloc(logdet_sweep_error,1)
+         logdet_converged(iz)=logdet_sweep_value(ie)
+         logdet_converged_error(iz)=logdet_sweep_error(ie)
+         logdet_minus_error=max(logdet_minus_error,logdet_converged_error(iz))
+         write(*,'(a,3es18.8)') '  logdet converged FD / (FD+K) / Hermiticity max = ', &
+            logdet_converged(iz),logdet_converged_error(iz),rotated_hermiticity
+         write(*,'(a,2es18.8)') '  Hamiltonian-vs-Turek / Hamiltonian-vs-logdet residual = ', &
+            abs(ke-kturek),logdet_converged_error(iz)
+         if (rotated_hermiticity > 2.0e-10_rp) error stop 'TG-FZ-R8 logdet rotated state is non-Hermitian'
       end do
       fix%moments=saved_mom
       write(*,'(a,es14.6)') 'TG-FZ-R8 max ||2*T_ud-d_raw|| = ',vertex_raw_error
       write(*,'(a,es14.6)') 'TG-FZ-R8 max ||2*T_ud-d_tilde_alpha|| = ',vertex_tilde_error
       write(*,'(a,es14.6)') 'TG-FZ-R8 transformed-gamma Turek control residual = ',turek_control_error
       write(*,'(a,es14.6)') 'TG-FZ-R8 Turek-vs-complete residual = ',turek_error
+      write(*,'(a,es14.6)') 'TG-FZ-R8 common-alpha analytic-vs-Turek residual = ',alpha_analytic_error
       write(*,'(a,es14.6)') 'TG-FZ-R8 logdet-vs-K residual = ',logdet_error
       write(*,'(a,es14.6)') 'TG-FZ-R8 logdet-vs-minus-K residual = ',logdet_minus_error
       write(*,'(a,3es18.8)') 'TG-FZ-R8 H2 truncation TT/contact/complete(max only above) = ',tt2,cc2,k2
@@ -2006,11 +2091,13 @@ contains
       write(*,'(a,es14.6)') 'TG-FZ-R8 uniform common-mode second variation = ',uniform_common_mode_error
 
       logdet_sign_ok=logdet_minus_error <= 2.0e-6_rp
+      logdet_hermitian_ok=max(base_hgamma_hermiticity,base_hexact_hermiticity) <= 2.0e-10_rp
       hard_fail=cov_error > 2.0e-10_rp .or. resolvent_error > 2.0e-10_rp .or. &
          dgamma_exact_error > 2.0e-10_rp .or. fd_gamma_error > 2.0e-7_rp .or. fd_exact_error > 2.0e-7_rp .or. &
          mixed_gamma_error > 2.0e-5_rp .or. mixed_exact_error > 2.0e-5_rp .or. mixed_cov_error > 2.0e-9_rp .or. &
-         turek_control_error > 2.0e-8_rp .or. uniform_spectrum_error > 2.0e-9_rp .or. &
-         uniform_common_mode_error > 2.0e-6_rp
+         turek_control_error > 2.0e-8_rp .or. alpha_analytic_error > 2.0e-13_rp .or. &
+         uniform_spectrum_error > 2.0e-9_rp .or. uniform_common_mode_error > 2.0e-6_rp .or. &
+         .not.logdet_hermitian_ok
       write(*,'(a)') 'TG-FZ-R8 derived Turek relation: K_complete = -(J_ud+J_du) = -2 J_sym'
       if (hard_fail) then
          write(*,'(a)') 'TG-FZ-R8 verdict: BLOCKED — a fixed-z hard covariance/derivative gate failed'
@@ -2022,6 +2109,7 @@ contains
       deallocate(salpha,sgamma,hgamma,hexact,h2,cgam,wgam,gammat,pgamma,pathg,gh,gexact,g2,ci,wi,gi,cj,wj,gj,si,sj,sij, &
          ti_gamma,tj_gamma,hij_gamma,ti_exact,tj_exact,hij_exact,ti_h2,tj_h2,hij_h2,hplus,hminus,hpp,hpm,hmp,hmm, &
          hgplus,hgminus,hgpp,hgpm,hgmp,hgm,zeye,p_alpha,s_alpha_tmp,rmat,g_alpha,raw_i,raw_j,tilde_i,tilde_j, &
+         pprime_i,pprime_j, &
          tilde_du_i,tilde_du_j,da_i,da_j,dg_i,dg_j,tud_i,tud_j,h2_work,h2_work2,c0,c1,w0,w1,gamma0,gamma1)
    end subroutine run_r8_curvature_audit
 
@@ -2255,12 +2343,13 @@ contains
          matmul(da_j,rmat(norb+1:n2local,norb+1:n2local)))
    end subroutine r8_unscaled_du
 
-   subroutine r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,g0,g1,axis,ed,zloc,base,si,sj,value)
+   subroutine r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,g0,g1,axis,ed,zloc,base,si,sj,value,herm_plus,herm_minus)
       type(lmto_live_hamiltonian_fixture), intent(inout) :: fix
       complex(rp), intent(in) :: salpha(:,:),c0(:,:),c1(:,:),w0(:,:),w1(:,:),g0(:,:),g1(:,:),zloc
       real(rp), intent(in) :: axis(3),ed,base(:,:)
       integer, intent(in) :: si,sj
       real(rp), intent(out) :: value
+      real(rp), intent(out), optional :: herm_plus,herm_minus
       real(rp) :: th(2)
       complex(rp) :: h(size(salpha,1),size(salpha,2)),hb(size(salpha,1),size(salpha,2)),phase, &
          sg(size(salpha,1),size(salpha,2)),cm(size(salpha,1),size(salpha,2)),wm(size(salpha,1),size(salpha,2)), &
@@ -2271,6 +2360,12 @@ contains
       call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,g0,g1,sg,h,cm,wm,gm)
       th=0.0_rp; call r8_set_moments(fix,base,th,axis)
       call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,g0,g1,sg,hb,cm,wm,gm)
+      if (present(herm_plus)) herm_plus=maxval(abs(h-conjg(transpose(h))))
+      if (present(herm_minus)) herm_minus=maxval(abs(hb-conjg(transpose(hb))))
+      if (maxval(abs(h-conjg(transpose(h)))) > 2.0e-10_rp .or. &
+          maxval(abs(hb-conjg(transpose(hb)))) > 2.0e-10_rp) then
+         error stop 'TG-FZ-R8 logdet oracle received a non-Hermitian rotated Hamiltonian'
+      end if
       ! H is Hermitian for this no-SOC fixture.  Diagonalizing H makes the
       ! scalar oracle independent of a matrix-determinant implementation:
       ! log det(z-H) is accumulated from the real eigenvalues, then its local
@@ -2326,6 +2421,9 @@ contains
       integer :: n,lwork,info
       external :: zheev
       n=size(values); allocate(a(n,n),rwork(max(1,3*n-2))); a=matrix
+      if (maxval(abs(matrix-conjg(transpose(matrix)))) > 2.0e-10_rp) then
+         error stop 'TG-FZ-R8 ZHEEV input is non-Hermitian'
+      end if
       call zheev('N','U',n,a,n,values,query,-1,rwork,info); lwork=max(1,nint(real(query(1),rp))); allocate(work(lwork))
       call zheev('N','U',n,a,n,values,work,lwork,rwork,info); if (info /= 0) error stop 'TG-FZ-R8 diagonalization failed'
       deallocate(a,work,rwork)

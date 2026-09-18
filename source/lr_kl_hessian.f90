@@ -1191,12 +1191,20 @@ contains
       complex(rp) :: product(size(a,1),size(a,2))
       integer :: n, i
       n = size(a,1)
-      if (present(c)) then
-         product = matmul(a,matmul(b,matmul(c,d)))
-         value = sum([(product(i,i), i=1,n)])
-      else
-         value = sum([(a(i,i), i=1,n)])
+      if (size(a,2) /= n .or. size(b,1) /= n .or. size(b,2) /= n) then
+         error stop 'trace_product: invalid two-factor matrix shape'
       end if
+      if (present(c)) then
+         if (.not. present(d)) error stop 'trace_product: d is required when c is present'
+         if (size(c,1) /= n .or. size(c,2) /= n .or. size(d,1) /= n .or. size(d,2) /= n) then
+            error stop 'trace_product: invalid four-factor matrix shape'
+         end if
+         product = matmul(a,matmul(b,matmul(c,d)))
+      else
+         if (present(d)) error stop 'trace_product: c is required when d is present'
+         product = matmul(a,b)
+      end if
+      value = sum([(product(i,i), i=1,n)])
    end function trace_product
 
    pure function cross3(a, b) result(c)
