@@ -58,7 +58,7 @@ The loss convention is the ordinary site matrix
 
 \[
  L(\omega)=-\frac{\chi(\omega)-\chi^\dagger(\omega)}{2i\pi},
- \qquad -\pi\,\operatorname{Im}\operatorname{Tr}\chi
+ \qquad -\frac{1}{\pi}\,\operatorname{Im}\operatorname{Tr}\chi
  \]
 
 with no Hermitian projection or pole repair.  The `chi_plus` production path
@@ -146,6 +146,13 @@ no numerical DRESP-03TG equality is asserted here.  DRESP-03TG source files
 remain frozen.  A future comparison must use the same accepted state, q,
 frequency, channel, and broadening before any cross-backend conclusion is
 drawn.
+
+The reciprocal production adapter carries the complete selected site × site
+Hamiltonian field before fitting.  Therefore `locality_residual` is a real
+multisite diagnostic rather than a silently zeroed quantity.  The output field
+formerly named `minus_pi_im_trace` is now `minus_im_trace_over_pi`, matching
+the numerical formula above.  DRESP-05 adds a separate projected Jülich route;
+it does not reopen or reclassify this DRESP-04 result.
 
 ## Verification and next gate
 

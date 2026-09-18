@@ -674,6 +674,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrProjectedReciprocalChi0 PROPERTIES LABELS "unit;dresp-02;projected-chi0;lehmann;reciprocal-gf;two-site")
   add_fortran_unit_test(UnitLrProjectedInteractingResponse ${TestDIR}/unit/test_lr_projected_interacting_response.f90)
   set_tests_properties(UnitLrProjectedInteractingResponse PROPERTIES LABELS "unit;dresp-04;mills;stoner;dyson;goldstone;covariance")
+  add_fortran_unit_test(UnitLrProjectedJuelichInteraction ${TestDIR}/unit/test_lr_projected_juelich_interaction.f90)
+  set_tests_properties(UnitLrProjectedJuelichInteraction PROPERTIES LABELS "unit;dresp-05;juelich;lcmm;ward;svd;negative-controls")
   add_fortran_unit_test(UnitLrKlStaticBridge ${TestDIR}/unit/test_lr_kl_static_bridge.f90)
   set_tests_properties(UnitLrKlStaticBridge PROPERTIES LABELS "unit;dresp-03;kl;lkag;static-bridge;operator-vertex")
   add_fortran_unit_test(UnitDresp03rLmtoMapping ${TestDIR}/unit/test_dresp03r_lmto_mapping.f90)
@@ -772,6 +774,12 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(TddftProductionDriverSmoke PROPERTIES
     LABELS "integration;tddft;tdrun-01;scf;accepted-state;reciprocal;smoke"
     TIMEOUT 180)
+  add_test(NAME TddftDresp05ProjectedJuelich
+    COMMAND ${TestBinary} input_dresp05_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp05ProjectedJuelich PROPERTIES
+    LABELS "integration;tddft;dresp-05;juelich;mills;same-state;accepted-state"
+    TIMEOUT 720)
   add_test(NAME TddftProductionDriverFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)

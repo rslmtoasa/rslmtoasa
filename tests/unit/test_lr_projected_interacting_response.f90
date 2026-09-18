@@ -192,6 +192,9 @@ contains
       loss_error = maxval(abs(dyson_result%loss_matrix(:, :, 1) - &
          conjg(transpose(dyson_result%loss_matrix(:, :, 1)))))
       call check('loss matrix Hermiticity convention', loss_error < 1.0e-12_rp, failed)
+      call check('minus Im trace over pi naming/formula', &
+         abs(dyson_result%minus_im_trace_over_pi(1) + aimag(dyson_result%enhanced_chi(1,1,1) + &
+            dyson_result%enhanced_chi(2,2,1))/acos(-1.0_rp)) < 1.0e-12_rp, failed)
 
       allocate(covariance_request%frequencies(1), covariance_request%interaction_U(2), covariance_request%bare_chi(2, 2, 1))
       covariance_request%selector = 'spd'

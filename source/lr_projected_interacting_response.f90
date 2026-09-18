@@ -114,7 +114,7 @@ module lr_projected_interacting_response_mod
       real(rp), allocatable :: condition_number(:)
       real(rp), allocatable :: minimum_magnitude_eigenvalue(:)
       real(rp), allocatable :: loss_trace(:)
-      real(rp), allocatable :: minus_pi_im_trace(:)
+      real(rp), allocatable :: minus_im_trace_over_pi(:)
       real(rp), allocatable :: dyson_residual(:)
       real(rp), allocatable :: dyson_residual_relative(:)
       real(rp), allocatable :: dyson_residual_infinity(:)
@@ -278,7 +278,7 @@ contains
       complex(rp), allocatable :: vz_full(:, :), fields(:, :, :), vertices(:, :, :, :)
       integer, allocatable :: selected_orbitals(:)
       integer :: norb, nsite, nk, nselected, nbasis, nmat, site, iorb, jorb, k
-      integer :: a, b, ia, ib, up_i, up_j, down_i, down_j
+      integer :: a, b, ia, ib, up_i, up_j, down_i, down_j, site_i, site_j
       type(projected_mills_interaction_request) :: request
 
       if (.not. allocated(reciprocal_obj%hk_bulk)) error stop 'DRESP-04 Mills: accepted hk_bulk is unavailable'
@@ -308,20 +308,25 @@ contains
       fields = cmplx(0.0_rp, 0.0_rp, rp)
       vertices = cmplx(0.0_rp, 0.0_rp, rp)
       do k = 1, nk
-         do site = 1, nsite
+         ! Carry the complete selected site x site field.  The local vertex
+         ! remains block diagonal, so a nonlocal Hamiltonian field is visible
+         ! through locality_residual instead of being silently discarded.
+         do site_i = 1, nsite
             do a = 1, nselected
                iorb = selected_orbitals(a)
-               ia = (site - 1)*nselected + a
-               up_i = (site - 1)*2*norb + iorb
+               ia = (site_i - 1)*nselected + a
+               up_i = (site_i - 1)*2*norb + iorb
                down_i = up_i + norb
-               do b = 1, nselected
-                  jorb = selected_orbitals(b)
-                  ib = (site - 1)*nselected + b
-                  up_j = (site - 1)*2*norb + jorb
-                  down_j = up_j + norb
-                  fields(ia, ib, k) = 0.5_rp*(reciprocal_obj%hk_bulk(up_i, up_j, k) - &
-                     reciprocal_obj%hk_bulk(down_i, down_j, k))
-                  vertices(ia, ib, site, k) = vz_full(up_i, up_j)
+               do site_j = 1, nsite
+                  do b = 1, nselected
+                     jorb = selected_orbitals(b)
+                     ib = (site_j - 1)*nselected + b
+                     up_j = (site_j - 1)*2*norb + jorb
+                     down_j = up_j + norb
+                     fields(ia, ib, k) = 0.5_rp*(reciprocal_obj%hk_bulk(up_i, up_j, k) - &
+                        reciprocal_obj%hk_bulk(down_i, down_j, k))
+                     if (site_i == site_j) vertices(ia, ib, site_i, k) = vz_full(up_i, up_j)
+                  end do
                end do
             end do
          end do
@@ -356,7 +361,7 @@ contains
          result%enhanced_chi(nsite, nsite, nw), result%loss_matrix(nsite, nsite, nw), &
          result%denominator_min_singular_value(nw), result%denominator_max_singular_value(nw), &
          result%condition_number(nw), result%minimum_magnitude_eigenvalue(nw), result%loss_trace(nw), &
-         result%minus_pi_im_trace(nw), result%dyson_residual(nw), result%dyson_residual_relative(nw), &
+         result%minus_im_trace_over_pi(nw), result%dyson_residual(nw), result%dyson_residual_relative(nw), &
          result%dyson_residual_infinity(nw), result%solve_info(nw))
       result%selector = trim(request%selector)
       result%q = request%q
@@ -394,7 +399,7 @@ contains
          do i = 1, nsite
             trace_value = trace_value + chi(i, i)
          end do
-         result%minus_pi_im_trace(iw) = -aimag(trace_value)/acos(-1.0_rp)
+         result%minus_im_trace_over_pi(iw) = -aimag(trace_value)/acos(-1.0_rp)
          residual = matmul(denominator, chi) - request%bare_chi(:, :, iw)
          dnorm = sqrt(sum(abs(request%bare_chi(:, :, iw))**2))
          rnorm = sqrt(sum(abs(residual)**2))
