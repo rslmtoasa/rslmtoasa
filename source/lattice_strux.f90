@@ -974,6 +974,10 @@ contains
       allocate (wk(nrl))
       allocate (s(nrl, nrl))
       call micha(wav, sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
+      ! The fourth sbar index is ii, while the potential/species that produced
+      ! this block is identified by iz(ia).  Publish the exact legacy target on
+      ! that symbolic atom before predls consumes the structure constants.
+      call this%publish_legacy_screening_alpha(ia)
       !call micha(wav, this%sbarvec, nt, np, nrl, na, sbar, a, wk, bet, s, ia, r2)
 
       ! Saving parameters to be used in the Hamiltonian build
@@ -1014,6 +1018,39 @@ contains
 10001 format(3f8.4)
 10002 format(3f8.4)
    end subroutine dbar1
+
+   !> @brief Publish the target screening used by the legacy MICHA/SHLDCH path.
+   !> @details `ia` is the center atom passed to dbar1 and `iz(ia)` is the
+   !>          symbolic-atom/species index whose potential is paired with the
+   !>          stored sbar(:,:,m,ii) blocks.
+   module subroutine publish_legacy_screening_alpha(this, ia)
+      class(lattice), intent(inout) :: this
+      integer, intent(in) :: ia
+      integer :: itype, lmax_local
+
+      call this%load_symbolic_atoms_if_needed()
+      if (.not. allocated(this%iz) .or. ia < 1 .or. ia > size(this%iz)) then
+         call g_logger%fatal('legacy structure screening cannot map center atom to symbolic species', __FILE__, __LINE__)
+      end if
+      itype = this%iz(ia)
+      if (itype < 1 .or. itype > size(this%symbolic_atoms)) then
+         call g_logger%fatal('legacy structure screening found invalid symbolic species mapping', __FILE__, __LINE__)
+      end if
+      lmax_local = this%symbolic_atoms(itype)%potential%lmax
+      if (lmax_local > ubound(legacy_micha_alpha, 1)) then
+         call g_logger%fatal('legacy MICHA screening table does not cover the active l channels', __FILE__, __LINE__)
+      end if
+      if (allocated(this%symbolic_atoms(itype)%potential%screening_alpha)) then
+         if (lbound(this%symbolic_atoms(itype)%potential%screening_alpha, 1) /= 0 .or. &
+             ubound(this%symbolic_atoms(itype)%potential%screening_alpha, 1) /= lmax_local) then
+            deallocate(this%symbolic_atoms(itype)%potential%screening_alpha)
+            allocate(this%symbolic_atoms(itype)%potential%screening_alpha(0:lmax_local))
+         end if
+      else
+         allocate(this%symbolic_atoms(itype)%potential%screening_alpha(0:lmax_local))
+      end if
+      this%symbolic_atoms(itype)%potential%screening_alpha = legacy_micha_alpha(0:lmax_local)
+   end subroutine publish_legacy_screening_alpha
 
    !> @brief Collect local cluster vectors within a cutoff.
    !> @details Selects neighbors around atom ia from crd, sorted by distance, for
@@ -1119,11 +1156,9 @@ contains
       call STREZE(rws, r, nr, s, nrl, nlm)
       ! -------------------------------------------
       fak = 2.d0
-      !Original faktors
-      q(1) = 0.3485d0*fak
-      q(2) = 0.05303d0*fak
-      q(3) = 0.010714d0*fak
-      q(4) = 0.00337d0*fak   ! f-channel screening parameter
+      ! Original factors, kept in one authoritative table shared with the
+      ! screening_alpha publication performed by dbar1.
+      q = fak * legacy_micha_alpha
       ! Factors from LMTO47
       !q(1) = 0.33727d0 * fak
       !q(2) = 0.05115d0 * fak

@@ -46,6 +46,10 @@ module lattice_mod
    private
 
    real(rp), parameter :: default_screening_alpha_values(4) = [0.3485_rp, 0.0530_rp, 0.0107_rp, 0.00674_rp]
+   ! Exact l-resolved target used by the legacy MICHA/SHLDCH backend.
+   ! Keep this separate from the newer strux default table: the legacy path
+   ! has historically used distinct higher-channel values.
+   real(rp), parameter :: legacy_micha_alpha(0:3) = [0.3485_rp, 0.05303_rp, 0.010714_rp, 0.00337_rp]
 
    !> Module´s main structure
    type, public :: lattice
@@ -415,6 +419,7 @@ module lattice_mod
       procedure :: remd
       procedure :: nncal
       procedure, private :: dbar1
+      procedure, private :: publish_legacy_screening_alpha
       procedure, private :: structb_strux
       procedure, private :: structb_strux_local
       procedure, private :: init_strux_storage
@@ -710,6 +715,12 @@ module lattice_mod
       integer, intent(in) :: sbar_dim, nm
 
    end subroutine init_strux_storage
+
+   !> @brief Publish the exact target alpha used by legacy structure screening.
+   module subroutine publish_legacy_screening_alpha(this, ia)
+      class(lattice), intent(inout) :: this
+      integer, intent(in) :: ia
+   end subroutine publish_legacy_screening_alpha
 
    !> @brief Return default l-resolved screening constants.
    !> @param[in] this Lattice object providing context for the pure helper.

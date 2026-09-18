@@ -123,7 +123,7 @@ program test_dresp03tg_native_fixed_z
    p_error = maxval(abs(p_complex-p_real(:,:,1)))
    write(*,'(a,es14.6)') 'DRESP-03TG complex P(real-axis) residual = ',p_error
 
-   ! d_matrix(E) = dele_up*dele_down*DeltaP(E), checked over several energies.
+   ! d_matrix(E) = dele_up*dele_down*DeltaP_norm(E), checked over several energies.
    d_error = 0.0_rp
    do i=1,4
       select case(i)
@@ -190,8 +190,8 @@ program test_dresp03tg_native_fixed_z
       do l=0,lmax
          do m=1,2*l+1
             lm=l*l+m
-            d_screen((i-1)*norb+lm,(i-1)*norb+lm)=alpha(l)-lat%symbolic_atoms(1)%potential%qpar(l,1)
-            d_screen(n2+(i-1)*norb+lm,n2+(i-1)*norb+lm)=alpha(l)-lat%symbolic_atoms(1)%potential%qpar(l,2)
+            d_screen((i-1)*norb+lm,(i-1)*norb+lm)=alpha(l)-lat%symbolic_atoms(1)%potential%qi(l,1)
+            d_screen(n2+(i-1)*norb+lm,n2+(i-1)*norb+lm)=alpha(l)-lat%symbolic_atoms(1)%potential%qi(l,2)
             d_width((i-1)*norb+lm,(i-1)*norb+lm)=lat%symbolic_atoms(1)%potential%dele(l,1)
             d_width(n2+(i-1)*norb+lm,n2+(i-1)*norb+lm)=lat%symbolic_atoms(1)%potential%dele(l,2)
          end do
@@ -240,9 +240,9 @@ program test_dresp03tg_native_fixed_z
             do m=1,2*l+1
                lm=l*l+m
                d_screen((isite-1)*norb+lm,(isite-1)*norb+lm)= &
-                  alpha(l)-lat%symbolic_atoms(1)%potential%qpar(l,1)
+                  alpha(l)-lat%symbolic_atoms(1)%potential%qi(l,1)
                d_screen(n2+(isite-1)*norb+lm,n2+(isite-1)*norb+lm)= &
-                  alpha(l)-lat%symbolic_atoms(1)%potential%qpar(l,2)
+                  alpha(l)-lat%symbolic_atoms(1)%potential%qi(l,2)
             end do
          end do
       end do
@@ -288,7 +288,7 @@ program test_dresp03tg_native_fixed_z
       vertex_j_du=matmul(r_down_j,matmul(delta_alpha_j,r_up_j))
 
       ! The independently expanded form keeps the two transformed P terms
-      ! separate before comparing with the raw-gamma-plus-correction form.
+      ! separate before comparing with the normalized-gamma-plus-correction form.
       expanded_i_ud=matmul(r_down_i,matmul(p_alpha(1:norb,1:norb),r_up_i))- &
          matmul(r_down_i,matmul(p_alpha(n2+1:n2+norb,n2+1:n2+norb),r_up_i))
       expanded_j_ud=matmul(r_up_j,matmul(p_alpha(norb+1:n2,norb+1:n2),r_down_j))- &
@@ -300,18 +300,18 @@ program test_dresp03tg_native_fixed_z
 
       correction_i=cmplx(0.0_rp,0.0_rp,rp)
       correction_j=cmplx(0.0_rp,0.0_rp,rp)
-      ! D_sigma = alpha-gamma_sigma and R_sigma = I-D_sigma*P_gamma_sigma.
+      ! D_sigma = alpha-gamma_norm_sigma and R_sigma = I-D_sigma*P_gamma_norm_sigma.
       ! For commuting diagonal local blocks,
       ! R_down*DeltaP_alpha*R_up
-      !   = DeltaP_gamma + (D_up-D_down)*P_gamma_up*P_gamma_down
-      !   = DeltaP_gamma + (gamma_down-gamma_up)*P_gamma_up*P_gamma_down.
+      !   = DeltaP_gamma_norm + (D_up-D_down)*P_gamma_norm_up*P_gamma_norm_down
+      !   = DeltaP_gamma_norm + (gamma_norm_down-gamma_norm_up)*P_gamma_norm_up*P_gamma_norm_down.
       do l=0,lmax
          do m=1,2*l+1
             lm=l*l+m
-            correction_i(lm,lm)=(lat%symbolic_atoms(1)%potential%qpar(l,2)- &
-               lat%symbolic_atoms(1)%potential%qpar(l,1))*p_gamma(lm,lm)*p_gamma(n2+lm,n2+lm)
-            correction_j(lm,lm)=(lat%symbolic_atoms(1)%potential%qpar(l,2)- &
-               lat%symbolic_atoms(1)%potential%qpar(l,1))*p_gamma(norb+lm,norb+lm)*p_gamma(n2+norb+lm,n2+norb+lm)
+            correction_i(lm,lm)=(lat%symbolic_atoms(1)%potential%qi(l,2)- &
+               lat%symbolic_atoms(1)%potential%qi(l,1))*p_gamma(lm,lm)*p_gamma(n2+lm,n2+lm)
+            correction_j(lm,lm)=(lat%symbolic_atoms(1)%potential%qi(l,2)- &
+               lat%symbolic_atoms(1)%potential%qi(l,1))*p_gamma(norb+lm,norb+lm)*p_gamma(n2+norb+lm,n2+norb+lm)
          end do
       end do
       candidate_i=delta_gamma_i+correction_i
@@ -405,9 +405,9 @@ program test_dresp03tg_native_fixed_z
          abs(historical_pauli_value-finite_h_ordered_du),abs(historical_pauli_value-finite_h_symmetrized))
 
       write(*,'(a,2es14.6)') 'z = ',real(z,rp),aimag(z)
-      write(*,'(a,es14.6)') '  native_gamma_ordered_ud = ',native_gamma_ordered_ud
-      write(*,'(a,es14.6)') '  native_gamma_ordered_du = ',native_gamma_ordered_du
-      write(*,'(a,es14.6)') '  native_gamma_symmetrized = ',native_gamma_symmetrized
+      write(*,'(a,es14.6)') '  native_gamma_norm_ordered_ud = ',native_gamma_ordered_ud
+      write(*,'(a,es14.6)') '  native_gamma_norm_ordered_du = ',native_gamma_ordered_du
+      write(*,'(a,es14.6)') '  native_gamma_norm_symmetrized = ',native_gamma_symmetrized
       write(*,'(a,es14.6)') '  native_alpha_ordered_ud = ',native_alpha_ordered_ud
       write(*,'(a,es14.6)') '  native_alpha_ordered_du = ',native_alpha_ordered_du
       write(*,'(a,es14.6)') '  native_alpha_symmetrized = ',native_alpha_symmetrized
@@ -415,8 +415,8 @@ program test_dresp03tg_native_fixed_z
       write(*,'(a,es14.6)') '  finite_H_ordered_du = ',finite_h_ordered_du
       write(*,'(a,es14.6)') '  finite_H_symmetrized = ',finite_h_symmetrized
       write(*,'(a,es14.6)') '  historical_Pauli = ',historical_pauli_value
-      write(*,'(a,es14.6)') '  alpha_minus_gamma = ',abs(native_alpha_ordered_ud-native_gamma_ordered_ud)
-      write(*,'(a,es14.6)') '  gamma_minus_H_ud = ',abs(native_gamma_ordered_ud-finite_h_ordered_ud)
+      write(*,'(a,es14.6)') '  alpha_minus_gamma_norm = ',abs(native_alpha_ordered_ud-native_gamma_ordered_ud)
+      write(*,'(a,es14.6)') '  gamma_norm_minus_H_ud = ',abs(native_gamma_ordered_ud-finite_h_ordered_ud)
       write(*,'(a,es14.6)') '  Pauli_minus_ud = ',abs(historical_pauli_value-finite_h_ordered_ud)
       write(*,'(a,es14.6)') '  Pauli_minus_du = ',abs(historical_pauli_value-finite_h_ordered_du)
       write(*,'(a,es14.6)') '  Pauli_minus_symmetrized = ',abs(historical_pauli_value-finite_h_symmetrized)
@@ -429,13 +429,13 @@ program test_dresp03tg_native_fixed_z
       write(*,'(a,es14.6)') '  transformed_vertex_magnitude = ',transformed_vertex_magnitude
       write(*,'(a,es14.6)') '  alpha_minus_transformed_gamma_ud = ',abs(native_alpha_ordered_ud-transformed_gamma_ordered_ud)
       write(*,'(a,es14.6)') '  alpha_minus_transformed_gamma_du = ',abs(native_alpha_ordered_du-transformed_gamma_ordered_du)
-      write(*,'(a,es14.6)') '  raw_gamma_minus_transformed_gamma_ud = ',abs(native_gamma_ordered_ud-transformed_gamma_ordered_ud)
-      write(*,'(a,es14.6)') '  raw_gamma_minus_transformed_gamma_du = ',abs(native_gamma_ordered_du-transformed_gamma_ordered_du)
+      write(*,'(a,es14.6)') '  gamma_norm_minus_transformed_gamma_ud = ',abs(native_gamma_ordered_ud-transformed_gamma_ordered_ud)
+      write(*,'(a,es14.6)') '  gamma_norm_minus_transformed_gamma_du = ',abs(native_gamma_ordered_du-transformed_gamma_ordered_du)
       write(*,'(a,es14.6)') '  delta_d_screen = d_tilde - d (max abs) = ',delta_d_value
-      write(*,'(a,es14.6)') '  raw_gamma_minus_finite_H_du = ',abs(native_gamma_ordered_du-finite_h_ordered_du)
+      write(*,'(a,es14.6)') '  gamma_norm_minus_finite_H_du = ',abs(native_gamma_ordered_du-finite_h_ordered_du)
 
       ! Isolated common-gamma control: retain the physical, spin-dependent
-      ! P_gamma blocks (including their c/dele dependence), but make the two
+      ! P_gamma_norm blocks (including their c/dele dependence), but make the two
       ! local screening matrices equal.  This changes only local diagnostic
       ! arrays; no live potential input is modified.
       d_screen=cmplx(0.0_rp,0.0_rp,rp)
@@ -444,9 +444,9 @@ program test_dresp03tg_native_fixed_z
             do m=1,2*l+1
                lm=l*l+m
                d_screen((isite-1)*norb+lm,(isite-1)*norb+lm)=alpha(l)- &
-                  lat%symbolic_atoms(1)%potential%qpar(l,1)
+                  lat%symbolic_atoms(1)%potential%qi(l,1)
                d_screen(n2+(isite-1)*norb+lm,n2+(isite-1)*norb+lm)=alpha(l)- &
-                  lat%symbolic_atoms(1)%potential%qpar(l,1)
+                  lat%symbolic_atoms(1)%potential%qi(l,1)
             end do
          end do
       end do
@@ -512,17 +512,17 @@ program test_dresp03tg_native_fixed_z
    write(*,'(a,es14.6)') 'DRESP-03TG P transformation residual = ',p_transform_error
    write(*,'(a,es14.6)') 'DRESP-03TG S transformation residual = ',s_transform_error
    write(*,'(a,es14.6)') 'DRESP-03TG path-operator covariance residual = ',gf_cov_error
-   write(*,'(a,es14.6)') 'DRESP-03TG alpha-gamma ordered_ud residual = ',alpha_error
-   write(*,'(a,es14.6)') 'DRESP-03TG alpha-gamma ordered_du residual = ',alpha_du_error
+   write(*,'(a,es14.6)') 'DRESP-03TG alpha-gamma_norm ordered_ud residual = ',alpha_error
+   write(*,'(a,es14.6)') 'DRESP-03TG alpha-gamma_norm ordered_du residual = ',alpha_du_error
    write(*,'(a,es14.6)') 'DRESP-03TG alpha-H residual = ',alpha_h_error
-   write(*,'(a,es14.6)') 'DRESP-03TG gamma finite-H ordered_ud residual = ',gamma_h_error
-   write(*,'(a,es14.6)') 'DRESP-03TG gamma finite-H ordered_du residual = ',gamma_h_du_error
+   write(*,'(a,es14.6)') 'DRESP-03TG gamma_norm finite-H ordered_ud residual = ',gamma_h_error
+   write(*,'(a,es14.6)') 'DRESP-03TG gamma_norm finite-H ordered_du residual = ',gamma_h_du_error
    write(*,'(a,es14.6)') 'DRESP-03TG historical Pauli minus finite-H ordered_ud/du/sym max = ',pauli_error
    write(*,'(a,es14.6)') 'DRESP-03TG Pauli-helper self-consistency residual = ',pauli_self_error
    write(*,'(a,es14.6)') 'DRESP-03TG vertex endpoint-expansion residual = ',vertex_transform_error
    write(*,'(a,es14.6)') 'DRESP-03TG vertex screening-identity residual = ',expanded_vertex_error
    write(*,'(a,es14.6)') 'DRESP-03TG alpha direct/transformed-gamma residual = ',alpha_transformed_error
-   write(*,'(a,es14.6)') 'DRESP-03TG raw-gamma/transformed-gamma residual = ',raw_gamma_transformed_error
+   write(*,'(a,es14.6)') 'DRESP-03TG gamma_norm/transformed-gamma residual = ',raw_gamma_transformed_error
    write(*,'(a,es14.6)') 'DRESP-03TG coefficient delta_d_screen max = ',delta_d_error
    write(*,'(a,es14.6)') 'DRESP-03TG common-gamma vertex residual = ',common_gamma_vertex_error
    write(*,'(a,es14.6)') 'DRESP-03TG common-gamma screening correction max = ',common_gamma_correction_error
@@ -556,12 +556,16 @@ contains
       real(rp) :: max_width_error, max_screen_error, max_product_error
       real(rp) :: norm_product_error(3), route_a_error, route_b_error
       real(rp) :: mixed_a_error, mixed_b_error, live_current_error
-      real(rp) :: endpoint_a_error, endpoint_b_error
-      real(rp) :: alpha_structure(0:lmax), alpha_predls(0:lmax), qi_local(0:lmax,2)
+      real(rp) :: endpoint_a_error, endpoint_b_error, endpoint_live_error
+      real(rp) :: alpha_structure(0:lmax), alpha_predls(0:lmax), alpha_canonical(0:lmax), qi_local(0:lmax,2)
       real(rp) :: diag_residual(2,2), delta_alpha(0:lmax)
       real(rp) :: alpha_target(0:lmax,2)
+      real(rp) :: live_parameter_error, center_change, shifted_change, width_change, obar_change
+      real(rp) :: stored_alpha_error, legacy_alpha_error
       real(rp), allocatable :: center_a(:,:), shifted_a(:,:), width_a(:,:), obar_a(:,:), enu_a(:,:)
       real(rp), allocatable :: center_b(:,:), shifted_b(:,:), width_b(:,:), obar_b(:,:), enu_b(:,:)
+      real(rp), allocatable :: center_live(:,:), shifted_live(:,:), width_live(:,:), obar_live(:,:), enu_live(:,:)
+      real(rp), allocatable :: center_before(:,:), shifted_before(:,:), width_before(:,:), obar_before(:,:), enu_before(:,:)
       complex(rp), allocatable :: s_structure_site(:,:), s_predls(:,:), s_gamma_a(:,:), s_gamma_b(:,:), s_gamma_diag(:,:), &
          s_gamma_old(:,:), h_gamma_old(:,:)
       complex(rp), allocatable :: h_exact_a(:,:), h_gamma_a(:,:), h_exact_b(:,:), h_gamma_b(:,:)
@@ -584,12 +588,19 @@ contains
       alpha_structure = 0.0_rp
       call native_screening_alpha(atom_lattice%symbolic_atoms(1),alpha_structure)
       call r6_predls_alpha(atom_lattice%symbolic_atoms(1),alpha_predls)
+      alpha_canonical = 0.0_rp
+      do l=0,lmax_local
+         alpha_canonical(l)=qm_canonical(min(l+1,size(qm_canonical)))
+      end do
       delta_alpha = alpha_predls-alpha_structure
 
       allocate(center_a(0:lmax_local,2), shifted_a(0:lmax_local,2), width_a(0:lmax_local,2), &
          obar_a(0:lmax_local,2), enu_a(0:lmax_local,2), center_b(0:lmax_local,2), &
          shifted_b(0:lmax_local,2), width_b(0:lmax_local,2), obar_b(0:lmax_local,2), &
-         enu_b(0:lmax_local,2), s_predls(nmatlocal,nmatlocal), s_gamma_a(nmatlocal,nmatlocal), &
+         enu_b(0:lmax_local,2), center_live(0:lmax_local,2), shifted_live(0:lmax_local,2), &
+         width_live(0:lmax_local,2), obar_live(0:lmax_local,2), enu_live(0:lmax_local,2), &
+         center_before(0:lmax_local,2), shifted_before(0:lmax_local,2), width_before(0:lmax_local,2), &
+         obar_before(0:lmax_local,2), enu_before(0:lmax_local,2), s_predls(nmatlocal,nmatlocal), s_gamma_a(nmatlocal,nmatlocal), &
          s_gamma_b(nmatlocal,nmatlocal), s_gamma_diag(nmatlocal,nmatlocal), s_structure_site(nmatlocal,nmatlocal), &
          s_gamma_old(nmatlocal,nmatlocal), h_gamma_old(nmatlocal,nmatlocal), &
          h_exact_a(nmatlocal,nmatlocal), &
@@ -602,10 +613,27 @@ contains
 
       call r6_reconstruct_tb(atom_lattice%symbolic_atoms(1),wsm,alpha_structure,center_a,shifted_a,width_a,obar_a,enu_a,qi_local)
       call r6_reconstruct_tb(atom_lattice%symbolic_atoms(1),wsm,alpha_predls,center_b,shifted_b,width_b,obar_b,enu_b,qi_local)
+      call r6_reconstruct_tb(atom_lattice%symbolic_atoms(1),wsm,alpha_canonical,center_before,shifted_before, &
+         width_before,obar_before,enu_before,qi_local)
+      do spin=1,2
+         do l=0,lmax_local
+            center_live(l,spin)=atom_lattice%symbolic_atoms(1)%potential%center_band(l+1,spin)
+            shifted_live(l,spin)=atom_lattice%symbolic_atoms(1)%potential%shifted_band(l+1,spin)
+            width_live(l,spin)=atom_lattice%symbolic_atoms(1)%potential%width_band(l+1,spin)
+            obar_live(l,spin)=atom_lattice%symbolic_atoms(1)%potential%obar(l+1,spin)
+            enu_live(l,spin)=center_live(l,spin)-shifted_live(l,spin)
+         end do
+      end do
+      live_parameter_error=max(maxval(abs(center_live-center_b)),maxval(abs(shifted_live-shifted_b)), &
+         maxval(abs(width_live-width_b)),maxval(abs(obar_live-obar_b)))
+      center_change=maxval(abs(center_live-center_before))
+      shifted_change=maxval(abs(shifted_live-shifted_before))
+      width_change=maxval(abs(width_live-width_before))
+      obar_change=maxval(abs(obar_live-obar_before))
 
       max_width_error = 0.0_rp
       max_screen_error = 0.0_rp
-      write(*,'(a)') 'TG-FZ-R6 normalization ledger'
+      write(*,'(a)') 'TG-FZ-R7 normalization ledger'
       write(*,'(a,es24.16)') '  wow = ',wow
       do l=0,lmax_local
          width_scale = wow**(-(real(l,rp)+0.5_rp))
@@ -633,7 +661,7 @@ contains
 
       max_product_error = 0.0_rp
       norm_product_error = 0.0_rp
-      write(*,'(a)') 'TG-FZ-R6 qpar*Praw = qi*Pnorm ledger'
+      write(*,'(a)') 'TG-FZ-R7 qpar*Praw = qi*Pnorm ledger'
       do iz=1,size(z_fixed)
          zloc=z_fixed(iz)
          call r6_build_site_p_matrices(atom_lattice%symbolic_atoms(1),zloc,p_raw_site,p_norm_site)
@@ -655,11 +683,34 @@ contains
       end do
       write(*,'(a,es24.16)') '  max qpar*Praw - qi*Pnorm residual = ',max_product_error
 
-      write(*,'(a)') 'TG-FZ-R6 screening authority'
+      if (allocated(atom_lattice%symbolic_atoms(1)%potential%screening_alpha)) then
+         stored_alpha_error=maxval(abs(atom_lattice%symbolic_atoms(1)%potential%screening_alpha-alpha_structure))
+      else
+         stored_alpha_error=huge(1.0_rp)
+      end if
+      legacy_alpha_error=0.0_rp
+      do l=0,lmax_local
+         select case(l)
+         case(0)
+            legacy_alpha_error=max(legacy_alpha_error,abs(alpha_structure(l)-0.3485_rp))
+         case(1)
+            legacy_alpha_error=max(legacy_alpha_error,abs(alpha_structure(l)-0.05303_rp))
+         case(2)
+            legacy_alpha_error=max(legacy_alpha_error,abs(alpha_structure(l)-0.010714_rp))
+         case default
+            legacy_alpha_error=huge(1.0_rp)
+         end select
+      end do
+
+      write(*,'(a)') 'TG-FZ-R7 screening authority'
       write(*,'(a,a)') '  structure backend = ',trim(atom_lattice%strux_backend)
       write(*,'(a,l1)') '  stored screening_alpha exists = ',allocated(atom_lattice%symbolic_atoms(1)%potential%screening_alpha)
       if (allocated(atom_lattice%symbolic_atoms(1)%potential%screening_alpha)) then
-         write(*,'(a)') '  alpha_structure source = structb_strux stored target screening_alpha'
+         if (trim(atom_lattice%strux_backend) == 'legacy') then
+            write(*,'(a)') '  alpha_structure source = lattice_strux:dbar1 -> shared legacy_micha_alpha'
+         else
+            write(*,'(a)') '  alpha_structure source = structb_strux stored target screening_alpha'
+         end if
       else if (trim(atom_lattice%strux_backend) == 'legacy') then
          write(*,'(a)') '  alpha_structure source = lattice_strux:micha -> SHLDCH LMTO47 q/fak=2 values'
       else
@@ -678,6 +729,13 @@ contains
          write(*,'(a,i0,a,es24.16,a,es24.16,a,es24.16)') '  l=',l,' alpha_structure=',alpha_structure(l), &
             ' alpha_predls=',alpha_predls(l),' delta_alpha=',delta_alpha(l)
       end do
+      write(*,'(a,es24.16)') '  published-alpha self residual = ',stored_alpha_error
+      write(*,'(a,es24.16)') '  legacy-alpha contract residual = ',legacy_alpha_error
+      write(*,'(a,es24.16)') '  live-vs-predls center/width/obar residual = ',live_parameter_error
+      write(*,'(a,es24.16)') '  canonical-to-live center_band max change = ',center_change
+      write(*,'(a,es24.16)') '  canonical-to-live shifted_band max change = ',shifted_change
+      write(*,'(a,es24.16)') '  canonical-to-live width_band max change = ',width_change
+      write(*,'(a,es24.16)') '  canonical-to-live obar max change = ',obar_change
 
       alpha_target(:,1)=alpha_structure; alpha_target(:,2)=alpha_structure
       call r6_transform_s(s_structure_site,alpha_structure,qi_local,s_gamma_a)
@@ -691,29 +749,29 @@ contains
       route_a_error=maxval(abs(h_exact_a-h_gamma_a))
       route_b_error=maxval(abs(h_exact_b-h_gamma_b))
 
-      call r6_build_exact_h(atom_lattice%symbolic_atoms(1),shifted_b,width_b,obar_b,enu_b,s_structure_site,h_exact_mixed)
-      alpha_target(:,1)=atom_lattice%symbolic_atoms(1)%potential%qpar(:,1)
-      alpha_target(:,2)=atom_lattice%symbolic_atoms(1)%potential%qpar(:,2)
-      call r6_transform_s(s_structure_site,alpha_structure,alpha_target,s_gamma_diag)
-      call r6_build_gamma_h(atom_lattice%symbolic_atoms(1),atom_lattice%symbolic_atoms(1)%potential%qpar, &
-         s_gamma_diag,h_gamma_current)
+      ! R7 live gate: use the actual post-predls potential arrays and the
+      ! actual published-alpha sbar, with normalized gamma=qi.
+      call r6_build_exact_h(atom_lattice%symbolic_atoms(1),shifted_live,width_live,obar_live,enu_live, &
+         s_structure_site,h_exact_mixed)
+      call r6_transform_s(s_structure_site,alpha_structure,qi_local,s_gamma_diag)
+      call r6_build_gamma_h(atom_lattice%symbolic_atoms(1),qi_local,s_gamma_diag,h_gamma_current)
       call r5_build_gamma_state(atom_lattice,s_structure,s_gamma_old,h_gamma_old)
-      write(*,'(a,es24.16)') '  R6/R5 current S_gamma cross-check = ',maxval(abs(s_gamma_diag-s_gamma_old))
-      write(*,'(a,es24.16)') '  R6/R5 current H_gamma cross-check = ',maxval(abs(h_gamma_current-h_gamma_old))
+      write(*,'(a,es24.16)') '  R7/R6 normalized S_gamma cross-check = ',maxval(abs(s_gamma_diag-s_gamma_old))
+      write(*,'(a,es24.16)') '  R7/R6 normalized H_gamma cross-check = ',maxval(abs(h_gamma_current-h_gamma_old))
       live_current_error=maxval(abs(h_exact_mixed-h_gamma_current))
       mixed_a_error=maxval(abs(h_exact_mixed-h_exact_a))
       mixed_b_error=maxval(abs(h_exact_mixed-h_exact_b))
 
-      write(*,'(a)') 'TG-FZ-R6 consistent Route A (structure-alpha authority)'
+      write(*,'(a)') 'TG-FZ-R7 consistent Route A (structure-alpha authority)'
       write(*,'(a,es24.16)') '  ||H_exact_A-H_gamma_A||_max = ',route_a_error
-      write(*,'(a)') 'TG-FZ-R6 consistent Route B (predls-alpha authority)'
+      write(*,'(a)') 'TG-FZ-R7 consistent Route B (predls-alpha authority)'
       write(*,'(a,es24.16)') '  ||H_exact_B-H_gamma_B||_max = ',route_b_error
-      write(*,'(a)') 'TG-FZ-R6 live mixed convention'
-      write(*,'(a,es24.16)') '  ||H_exact_mixed-H_gamma_current||_max = ',live_current_error
+      write(*,'(a)') 'TG-FZ-R7 repaired live convention'
+      write(*,'(a,es24.16)') '  ||H_exact_live-H_gamma_norm||_max = ',live_current_error
       write(*,'(a,es24.16)') '  ||H_exact_mixed-H_exact_A||_max = ',mixed_a_error
       write(*,'(a,es24.16)') '  ||H_exact_mixed-H_exact_B||_max = ',mixed_b_error
 
-      write(*,'(a)') 'TG-FZ-R6 diagnostic-only combinations (live Sbar retained)'
+      write(*,'(a)') 'TG-FZ-R7 pre-repair diagnostic combinations (live Sbar retained)'
       do spin=1,2
          if (spin == 1) then; gamma_name='qpar'; else; gamma_name='qi'; end if
          if (spin == 1) then
@@ -742,10 +800,14 @@ contains
          end do
       end do
 
-      endpoint_a_error=0.0_rp; endpoint_b_error=0.0_rp
+      endpoint_a_error=0.0_rp; endpoint_b_error=0.0_rp; endpoint_live_error=0.0_rp
       do iz=1,size(z_fixed)
          zloc=z_fixed(iz)
          call r6_build_normalized_p(atom_lattice%symbolic_atoms(1),zloc,p_norm)
+         call native_inverse(p_norm-s_gamma_diag,g_gamma)
+         call native_inverse(zloc*eye_local-h_gamma_current,g_h)
+         call r6_endpoint_scale(atom_lattice%symbolic_atoms(1),g_gamma,g_scaled)
+         endpoint_live_error=max(endpoint_live_error,maxval(abs(g_h-g_scaled)))
          call native_inverse(p_norm-s_gamma_a,g_gamma)
          call native_inverse(zloc*eye_local-h_gamma_a,g_h)
          call r6_endpoint_scale(atom_lattice%symbolic_atoms(1),g_gamma,g_scaled)
@@ -755,23 +817,27 @@ contains
          call r6_endpoint_scale(atom_lattice%symbolic_atoms(1),g_gamma,g_scaled)
          endpoint_b_error=max(endpoint_b_error,maxval(abs(g_h-g_scaled)))
       end do
-      write(*,'(a,es24.16)') 'TG-FZ-R6 Route A max endpoint-resolvent residual = ',endpoint_a_error
-      write(*,'(a,es24.16)') 'TG-FZ-R6 Route B max endpoint-resolvent residual = ',endpoint_b_error
+      write(*,'(a,es24.16)') 'TG-FZ-R7 live max endpoint-resolvent residual = ',endpoint_live_error
+      write(*,'(a,es24.16)') 'TG-FZ-R7 Route A max endpoint-resolvent residual = ',endpoint_a_error
+      write(*,'(a,es24.16)') 'TG-FZ-R7 Route B max endpoint-resolvent residual = ',endpoint_b_error
 
       if (max_width_error > 2.0e-12_rp .or. max_screen_error > 2.0e-12_rp .or. max_product_error > 2.0e-11_rp .or. &
           route_a_error > 2.0e-10_rp .or. route_b_error > 2.0e-10_rp .or. endpoint_a_error > 2.0e-10_rp .or. &
-          endpoint_b_error > 2.0e-10_rp) then
-         write(*,'(a)') 'TG-FZ-R6 verdict: BLOCKED — first static normalization/representation gate failed'
+          endpoint_b_error > 2.0e-10_rp .or. endpoint_live_error > 2.0e-10_rp .or. live_current_error > 2.0e-10_rp .or. &
+          live_parameter_error > 2.0e-10_rp .or. stored_alpha_error > 2.0e-12_rp .or. legacy_alpha_error > 2.0e-12_rp .or. &
+          .not. allocated(atom_lattice%symbolic_atoms(1)%potential%screening_alpha)) then
+         write(*,'(a)') 'TG-FZ-R7 verdict: BLOCKED — repaired live static gate failed'
       else if (maxval(abs(delta_alpha)) > 2.0e-12_rp) then
-         write(*,'(a)') 'TG-FZ-R6 verdict: PASS-B — normalized gamma and alpha authority both required'
+         write(*,'(a)') 'TG-FZ-R7 verdict: PASS-B — published and predls alpha authorities differ'
       else
-         write(*,'(a)') 'TG-FZ-R6 verdict: PASS-A — normalized gamma identified'
+         write(*,'(a)') 'TG-FZ-R7 verdict: PASS-A — production screening representation repaired'
       end if
       write(*,'(a)') '  authoritative gamma_raw = potential%qpar'
       write(*,'(a)') '  authoritative gamma_norm = potential%qi'
-      write(*,'(a)') '  native helper audit: native_complex_p_matrix uses potential%dele; current screening transform uses qpar'
+      write(*,'(a)') '  native helper repair: native_complex_p_matrix uses potential%dele; screening transform uses qi'
 
-      deallocate(center_a,shifted_a,width_a,obar_a,enu_a,center_b,shifted_b,width_b,obar_b,enu_b,s_structure_site,s_predls,s_gamma_a, &
+      deallocate(center_a,shifted_a,width_a,obar_a,enu_a,center_b,shifted_b,width_b,obar_b,enu_b,center_live,shifted_live, &
+         width_live,obar_live,enu_live,center_before,shifted_before,width_before,obar_before,enu_before,s_structure_site,s_predls,s_gamma_a, &
          s_gamma_b,s_gamma_diag,h_exact_a,h_gamma_a,h_exact_b,h_gamma_b,h_exact_mixed,h_gamma_current,eye_local,p_norm, &
          g_gamma,g_h,g_scaled,p_raw_site,p_norm_site,s_gamma_old,h_gamma_old)
    end subroutine run_r6_screening_audit
@@ -1427,9 +1493,9 @@ contains
          do l=0,lmax
             do m=1,2*l+1
                lm=l*l+m
-               gamma_loc=atom_lattice%symbolic_atoms(1)%potential%qpar(l,1)
+               gamma_loc=atom_lattice%symbolic_atoms(1)%potential%qi(l,1)
                dmat((site-1)*norb+lm,(site-1)*norb+lm)=alpha_loc(l)-gamma_loc
-               gamma_loc=atom_lattice%symbolic_atoms(1)%potential%qpar(l,2)
+               gamma_loc=atom_lattice%symbolic_atoms(1)%potential%qi(l,2)
                dmat(n2+(site-1)*norb+lm,n2+(site-1)*norb+lm)=alpha_loc(l)-gamma_loc
                cglobal((site-1)*norb+lm,(site-1)*norb+lm)=cmplx(atom_lattice%symbolic_atoms(1)%potential%c(l,1)+ &
                   atom_lattice%symbolic_atoms(1)%potential%vmad,0.0_rp,rp)
@@ -1515,9 +1581,9 @@ contains
          do l=0,lmax
             do m=1,2*l+1
                lm=l*l+m
-               dloc((site-1)*norb+lm,(site-1)*norb+lm)=alpha_loc(l)-atom_lattice%symbolic_atoms(1)%potential%qpar(l,1)
+               dloc((site-1)*norb+lm,(site-1)*norb+lm)=alpha_loc(l)-atom_lattice%symbolic_atoms(1)%potential%qi(l,1)
                dloc(nsite_fixture*norb+(site-1)*norb+lm,nsite_fixture*norb+(site-1)*norb+lm)= &
-                  alpha_loc(l)-atom_lattice%symbolic_atoms(1)%potential%qpar(l,2)
+                  alpha_loc(l)-atom_lattice%symbolic_atoms(1)%potential%qi(l,2)
             end do
          end do
       end do

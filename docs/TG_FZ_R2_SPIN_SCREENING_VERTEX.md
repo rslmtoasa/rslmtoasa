@@ -2,6 +2,13 @@
 
 Status: **PASS-A — exact fixed-z vertex covariance derived and verified**.
 
+Representation note from TG-FZ-R7: the original R2 ledger below predates the
+screening-normalization audit and uses the historical raw-labelled `gamma`
+quantity `qpar`. In the repaired implementation, every `P` built with
+`dele` uses `gamma_norm=qi`; the covariance algebra is unchanged. The
+corrected normalized-gamma numerical ledger is recorded in
+`docs/TG_FZ_R7_SCREENING_REPRESENTATION_REPAIR.md`.
+
 This audit continues from commit `9a81106` (TG-FZ-R1). It is restricted to
 the existing two-site, spd, fixed-complex-energy diagnostic fixture. It adds
 no energy integration, native `J_ij`/`J(q)`, Fe-shell comparison, TT+C,

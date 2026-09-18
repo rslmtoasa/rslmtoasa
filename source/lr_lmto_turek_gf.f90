@@ -55,7 +55,9 @@ contains
 
    !> Complex continuation of symbolic_atom%p_matrix.
    !> The active state is read without modifying the symbolic atom.  The
-   !> ordering is the live one: all up orbitals followed by all down orbitals.
+   !> post-predls `dele` width makes this the normalized P representation;
+   !> its matching screening gamma is `potential%qi`, not raw `qpar`.
+   !> The ordering is the live one: all up orbitals followed by all down orbitals.
    subroutine native_complex_p_matrix(atom, z, pmat)
       type(symbolic_atom), intent(in) :: atom
       complex(rp), intent(in) :: z
@@ -102,7 +104,10 @@ contains
       end if
    end subroutine native_screening_alpha
 
-   !> Apply the live Turek screening transform to P^gamma.
+   !> Apply the live Turek screening transform to normalized P^gamma.
+   !> `native_complex_p_matrix` uses `potential%dele`, so the input gamma is
+   !> the normalized `potential%qi`.  Raw `potential%qpar` belongs to the
+   !> pre-predls `srdel` representation and is not interchangeable here.
    subroutine native_screened_p_matrix(atom, z, alpha_out, pmat)
       type(symbolic_atom), intent(in) :: atom
       complex(rp), intent(in) :: z
@@ -119,7 +124,7 @@ contains
       pmat = cmplx(0.0_rp, 0.0_rp, rp)
       do spin = 1, 2
          do l = 0, lmax
-            ain = cmplx(atom%potential%qpar(l,spin), 0.0_rp, rp)
+            ain = cmplx(atom%potential%qi(l,spin), 0.0_rp, rp)
             aout = cmplx(alpha_out(l), 0.0_rp, rp)
             do m = 1, 2*l + 1
                mls = l*l + m + (spin-1)*norb

@@ -34,6 +34,7 @@ program test_structure_constants_backends
       integer, allocatable :: nn(:, :)
       real(rp), allocatable :: sbarvec(:, :)
       complex(rp), allocatable :: sbar(:, :, :, :)
+      real(rp), allocatable :: screening_alpha(:)
    end type backend_state
 
    logical :: failed
@@ -104,6 +105,12 @@ contains
       state%ntot = lattice_obj%ntot
       state%nn_max = lattice_obj%nn_max
       state%sbar_dim = size(lattice_obj%sbar, 1)
+      call require(allocated(lattice_obj%symbolic_atoms(1)%potential%screening_alpha), &
+         trim(backend_name)//' publishes screening alpha')
+      allocate(state%screening_alpha(0:lmax))
+      state%screening_alpha = lattice_obj%symbolic_atoms(1)%potential%screening_alpha
+      call require(maxval(abs(state%screening_alpha-alpha_legacy(1:lmax+1))) <= 1.0e-14_rp, &
+         trim(backend_name)//' publishes expected screening alpha')
       allocate (state%nn, source=lattice_obj%nn)
       allocate (state%sbarvec, source=lattice_obj%sbarvec)
       allocate (state%sbar, source=lattice_obj%sbar(1:norb_case, 1:norb_case, 1:lattice_obj%nn_max, &
@@ -137,6 +144,12 @@ contains
       state%ntot = lattice_obj%ntot
       state%nn_max = lattice_obj%nn_max
       state%sbar_dim = size(lattice_obj%sbar, 1)
+      call require(allocated(lattice_obj%symbolic_atoms(1)%potential%screening_alpha), &
+         'custom '//trim(backend_name)//' publishes screening alpha')
+      allocate(state%screening_alpha(0:2))
+      state%screening_alpha = lattice_obj%symbolic_atoms(1)%potential%screening_alpha
+      call require(maxval(abs(state%screening_alpha-alpha_legacy(1:3))) <= 1.0e-14_rp, &
+         'custom '//trim(backend_name)//' publishes expected screening alpha')
       allocate (state%nn, source=lattice_obj%nn)
       allocate (state%sbarvec, source=lattice_obj%sbarvec)
       allocate (state%sbar, source=lattice_obj%sbar(1:9, 1:9, 1:lattice_obj%nn_max, 1:lattice_obj%ntot))

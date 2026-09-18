@@ -2,6 +2,13 @@
 
 Status: **PASS — diagnostic fixture repaired and hardened**.
 
+Representation note from TG-FZ-R7: the original R1 ledger below predates the
+screening-normalization audit and uses `gamma` as the historical raw-labelled
+quantity `qpar`. The repaired fixed-z implementation now uses
+`gamma_norm=qi` wherever `P` is formed with `dele`. The R1 algebra and gate
+definitions are unchanged; corrected normalized-gamma numerical results are
+recorded in `docs/TG_FZ_R7_SCREENING_REPRESENTATION_REPAIR.md`.
+
 This document records the scoped repair of
 `tests/unit/test_dresp03tg_native_fixed_z.f90`. It does not add an energy
 integration, a native pair or q-space evaluator, a Fe shell comparison, or any
