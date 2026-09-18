@@ -540,10 +540,11 @@ program test_dresp03tg_native_fixed_z
    end if
    write(*,'(a)') 'TG-FZ-R2 SPIN-SCREENING VERTEX COVARIANCE: PASS-A'
 
-   ! TG-FZ-R6 is deliberately the terminal audit for this fixture.  Keep the
-   ! historical R4/R5 routines below for provenance, but do not enter their
-   ! derivative paths before the static normalization/alpha gate is resolved.
+   ! TG-FZ-R7 is the static normalization/alpha gate.  Continue into the
+   ! complete fixed-z covariance and curvature audit only after it has run.
    call run_r6_screening_audit(lat, s_alpha)
+   call run_r8_curvature_audit(lat, s_alpha, r4_fixture)
+   call r4_fixture%clear()
    return
 
 contains
@@ -1744,5 +1745,596 @@ contains
          value=value+aimag(product(j,j))
       end do
    end function explicit_collinear_pauli_integrand
+
+   ! TG-FZ-R8 -- complete fixed-z covariance, curvature, and H2 audit.
+   !
+   ! This routine is intentionally kept in the diagnostic executable.  The
+   ! production exchange implementation remains frozen; all objects below are
+   ! assembled from the live post-predls channels and the common-alpha
+   ! structure matrix already certified by R7.
+   subroutine run_r8_curvature_audit(atom_lattice, s_spin_major, fix)
+      type(lattice), intent(in) :: atom_lattice
+      complex(rp), intent(in) :: s_spin_major(:,:)
+      type(lmto_live_hamiltonian_fixture), intent(out) :: fix
+      real(rp), parameter :: kpoint(3) = [0.0_rp,0.0_rp,0.0_rp]
+      real(rp), parameter :: axis(3) = [0.0_rp,1.0_rp,0.0_rp]
+      real(rp), parameter :: eps_values(5) = [1.0e-2_rp,1.0e-3_rp,1.0e-4_rp,1.0e-5_rp,1.0e-6_rp]
+      real(rp), parameter :: eps_states(2) = [1.0e-3_rp,1.0e-4_rp]
+      integer, parameter :: nconfig = 6
+      integer :: nmat, n2loc, iz, ie, site, ic, l, m, lm
+      integer :: config_site(6,2)
+      real(rp) :: config_sign(6,2), theta(2), saved_mom(3,nsite_fixture)
+      complex(rp), allocatable :: salpha(:,:), sgamma(:,:), hgamma(:,:), hexact(:,:), h2(:,:), &
+         cgam(:,:), wgam(:,:), gammat(:,:), pgamma(:,:), pathg(:,:), gh(:,:), gexact(:,:), g2(:,:), &
+         ci(:,:), wi(:,:), gi(:,:), cj(:,:), wj(:,:), gj(:,:), si(:,:), sj(:,:), sij(:,:), &
+         ti_gamma(:,:), tj_gamma(:,:), hij_gamma(:,:), ti_exact(:,:), tj_exact(:,:), hij_exact(:,:), &
+         ti_h2(:,:), tj_h2(:,:), hij_h2(:,:), hplus(:,:), hminus(:,:), hpp(:,:), hpm(:,:), &
+         hmp(:,:), hmm(:,:), hgplus(:,:), hgminus(:,:), hgpp(:,:), hgpm(:,:), hgmp(:,:), hgm(:,:), &
+         zeye(:,:), p_alpha(:,:), s_alpha_tmp(:,:), rmat(:,:), g_alpha(:,:), &
+         raw_i(:,:), raw_j(:,:), tilde_i(:,:), tilde_j(:,:), da_i(:,:), da_j(:,:), dg_i(:,:), dg_j(:,:), &
+         tilde_du_i(:,:), tilde_du_j(:,:), tud_i(:,:), tud_j(:,:), h2_work(:,:), h2_work2(:,:)
+      complex(rp), allocatable :: c0(:,:), c1(:,:), w0(:,:), w1(:,:), gamma0(:,:), gamma1(:,:)
+      real(rp) :: cov_error, resolvent_error, fd_gamma_error, fd_exact_error, dgamma_exact_error
+      real(rp) :: mixed_gamma_error, mixed_exact_error, mixed_cov_error, logdet_error, logdet_minus_error
+      real(rp) :: vertex_raw_error, vertex_tilde_error, turek_control_error, turek_error
+      real(rp) :: uniform_spectrum_error, uniform_common_mode_error
+      real(rp) :: h2_curvature_error, h2_rel_error, h2_matrix_error, t2_matrix_error, c2_matrix_error
+      real(rp) :: ttg, ccg, kg, tte, cce, ke, tt2, cc2, k2, jud, jdu, jsym, kturek
+      real(rp) :: logfd, fpp, fpm, fmp, fmm, ed
+      real(rp) :: norm_h2, norm_t2, norm_c2, denom
+      real(rp) :: vals0(2*norb*nsite_fixture), vals_g(2*norb*nsite_fixture), vals_e(2*norb*nsite_fixture)
+      real(rp) :: vals_gp(2*norb*nsite_fixture), vals_gm(2*norb*nsite_fixture), vals_ep(2*norb*nsite_fixture), vals_em(2*norb*nsite_fixture)
+      complex(rp) :: zloc
+      logical :: hard_fail, logdet_sign_ok
+
+      n2loc=norb*nsite_fixture; nmat=2*n2loc
+      if (size(s_spin_major,1) /= nmat .or. size(s_spin_major,2) /= nmat) then
+         error stop 'TG-FZ-R8: invalid common-alpha structure shape'
+      end if
+      call r8_make_fixture(atom_lattice,s_spin_major,fix)
+      saved_mom=fix%moments
+      allocate(salpha(nmat,nmat),sgamma(nmat,nmat),hgamma(nmat,nmat),hexact(nmat,nmat),h2(nmat,nmat), &
+         cgam(nmat,nmat),wgam(nmat,nmat),gammat(nmat,nmat),pgamma(nmat,nmat),pathg(nmat,nmat), &
+         gh(nmat,nmat),gexact(nmat,nmat),g2(nmat,nmat),ci(nmat,nmat),wi(nmat,nmat),gi(nmat,nmat), &
+         cj(nmat,nmat),wj(nmat,nmat),gj(nmat,nmat),si(nmat,nmat),sj(nmat,nmat),sij(nmat,nmat), &
+         ti_gamma(nmat,nmat),tj_gamma(nmat,nmat),hij_gamma(nmat,nmat),ti_exact(nmat,nmat), &
+         tj_exact(nmat,nmat),hij_exact(nmat,nmat),ti_h2(nmat,nmat),tj_h2(nmat,nmat),hij_h2(nmat,nmat), &
+         hplus(nmat,nmat),hminus(nmat,nmat),hpp(nmat,nmat),hpm(nmat,nmat),hmp(nmat,nmat),hmm(nmat,nmat), &
+         hgplus(nmat,nmat),hgminus(nmat,nmat),hgpp(nmat,nmat),hgpm(nmat,nmat),hgmp(nmat,nmat),hgm(nmat,nmat), &
+         zeye(nmat,nmat),p_alpha(nmat,nmat),s_alpha_tmp(nmat,nmat), &
+         rmat(nmat,nmat),g_alpha(nmat,nmat),raw_i(norb,norb),raw_j(norb,norb),tilde_i(norb,norb), &
+         tilde_j(norb,norb),tilde_du_i(norb,norb),tilde_du_j(norb,norb),da_i(norb,norb),da_j(norb,norb),dg_i(norb,norb),dg_j(norb,norb), &
+         tud_i(norb,norb),tud_j(norb,norb),h2_work(nmat,nmat),h2_work2(nmat,nmat), &
+         c0(norb,nsite_fixture),c1(norb,nsite_fixture),w0(norb,nsite_fixture),w1(norb,nsite_fixture), &
+         gamma0(norb,nsite_fixture),gamma1(norb,nsite_fixture))
+      call r5_build_salpha_site(s_spin_major,salpha)
+      zeye=identity(nmat)
+      call r8_gamma_channels(atom_lattice,c0,c1,w0,w1,gamma0,gamma1)
+
+      ! The six prescribed finite-angle states are evaluated at both small
+      ! angles.  A state table makes the covariance gate independent of the
+      ! derivative and curvature code below.
+      config_site=0; config_sign=0.0_rp
+      config_site(1,1)=1; config_sign(1,1)=1.0_rp
+      config_site(2,1)=1; config_sign(2,1)=-1.0_rp
+      config_site(3,1)=2; config_sign(3,1)=1.0_rp
+      config_site(4,1)=2; config_sign(4,1)=-1.0_rp
+      config_site(5,:)=[1,2]; config_sign(5,:)=[1.0_rp,1.0_rp]
+      config_site(6,:)=[1,2]; config_sign(6,:)=[1.0_rp,-1.0_rp]
+      cov_error=0.0_rp; resolvent_error=0.0_rp
+      do ie=1,size(eps_states)
+         ed=eps_states(ie)
+         do ic=1,nconfig
+            theta=0.0_rp
+            do site=1,2
+               if (config_site(ic,site) > 0) theta(config_site(ic,site))=config_sign(ic,site)*ed
+            end do
+            call r8_set_moments(fix,saved_mom,theta,axis)
+            call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,sgamma,hgamma,cgam,wgam,gammat)
+            call r8_build_exact_state(fix,salpha,hexact)
+            cov_error=max(cov_error,maxval(abs(hgamma-hexact)))
+            do iz=1,size(z_values)
+               zloc=z_values(iz)
+               call r8_build_gamma_path(zloc,cgam,wgam,sgamma,pgamma,pathg,gh)
+               call native_inverse(zloc*zeye-hexact,gexact)
+               resolvent_error=max(resolvent_error,maxval(abs(gh-gexact)))
+            end do
+         end do
+      end do
+      fix%moments=saved_mom
+      write(*,'(a,es14.6)') 'TG-FZ-R8 max rotated H_gamma-H_exact covariance = ',cov_error
+      write(*,'(a,es14.6)') 'TG-FZ-R8 max rotated endpoint-resolvent residual = ',resolvent_error
+
+      call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,sgamma,hgamma,cgam,wgam,gammat)
+      call r8_build_exact_state(fix,salpha,hexact)
+      call assemble_lmto_hamiltonian(fix,kpoint,h2)
+      call r8_gamma_local_derivative(fix,c1,site=1,axis=axis,derivative=ci)
+      call r8_gamma_local_derivative(fix,w1,site=1,axis=axis,derivative=wi)
+      call r8_gamma_local_derivative(fix,gamma1,site=1,axis=axis,derivative=gi)
+      call r8_gamma_local_derivative(fix,c1,site=2,axis=axis,derivative=cj)
+      call r8_gamma_local_derivative(fix,w1,site=2,axis=axis,derivative=wj)
+      call r8_gamma_local_derivative(fix,gamma1,site=2,axis=axis,derivative=gj)
+      si=matmul(sgamma,matmul(gi,sgamma)); sj=matmul(sgamma,matmul(gj,sgamma))
+      sij=matmul(sgamma,matmul(gj,matmul(sgamma,matmul(gi,sgamma)))) + &
+         matmul(sgamma,matmul(gi,matmul(sgamma,matmul(gj,sgamma))))
+      ti_gamma=ci+matmul(wi,matmul(sgamma,wgam))+matmul(wgam,matmul(si,wgam))+matmul(wgam,matmul(sgamma,wi))
+      tj_gamma=cj+matmul(wj,matmul(sgamma,wgam))+matmul(wgam,matmul(sj,wgam))+matmul(wgam,matmul(sgamma,wj))
+      hij_gamma=matmul(wi,matmul(sj,wgam))+matmul(wi,matmul(sgamma,wj))+ &
+         matmul(wj,matmul(si,wgam))+matmul(wgam,matmul(sij,wgam))+ &
+         matmul(wgam,matmul(si,wj))+matmul(wj,matmul(sgamma,wi))+ &
+         matmul(wgam,matmul(sj,wi))
+      call r8_exact_derivative(fix,salpha,1,axis,ti_exact)
+      call r8_exact_derivative(fix,salpha,2,axis,tj_exact)
+      call r8_exact_mixed(fix,salpha,1,axis,2,axis,hij_exact)
+      dgamma_exact_error=max(maxval(abs(ti_gamma-ti_exact)),maxval(abs(tj_gamma-tj_exact)))
+
+      fd_gamma_error=0.0_rp; fd_exact_error=0.0_rp
+      write(*,'(a)') 'TG-FZ-R8 first derivative epsilon sweep'
+      do ie=1,size(eps_values)
+         ed=eps_values(ie)
+         do site=1,2
+            theta=0.0_rp; theta(site)=ed
+            call r8_set_moments(fix,saved_mom,theta,axis)
+            call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,sgamma,hgplus,cgam,wgam,gammat)
+            call r8_build_exact_state(fix,salpha,hplus)
+            theta(site)=-ed
+            call r8_set_moments(fix,saved_mom,theta,axis)
+            call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,sgamma,hgminus,cgam,wgam,gammat)
+            call r8_build_exact_state(fix,salpha,hminus)
+            if (ed <= 1.0e-4_rp) then
+               if (site==1) then
+                  fd_gamma_error=max(fd_gamma_error,maxval(abs((hgplus-hgminus)/(2.0_rp*ed)-ti_gamma)))
+                  fd_exact_error=max(fd_exact_error,maxval(abs((hplus-hminus)/(2.0_rp*ed)-ti_exact)))
+               else
+                  fd_gamma_error=max(fd_gamma_error,maxval(abs((hgplus-hgminus)/(2.0_rp*ed)-tj_gamma)))
+                  fd_exact_error=max(fd_exact_error,maxval(abs((hplus-hminus)/(2.0_rp*ed)-tj_exact)))
+               end if
+            end if
+            write(*,'(a,es10.3,a,i0,a,2es14.6)') '  eps=',ed,' site=',site,' gamma/exact=', &
+               merge(maxval(abs((hgplus-hgminus)/(2.0_rp*ed)-ti_gamma)), &
+                  maxval(abs((hgplus-hgminus)/(2.0_rp*ed)-tj_gamma)),site==1), &
+               merge(maxval(abs((hplus-hminus)/(2.0_rp*ed)-ti_exact)), &
+                  maxval(abs((hplus-hminus)/(2.0_rp*ed)-tj_exact)),site==1)
+         end do
+      end do
+      fix%moments=saved_mom
+      write(*,'(a,es14.6)') 'TG-FZ-R8 FD T_gamma residual = ',fd_gamma_error
+      write(*,'(a,es14.6)') 'TG-FZ-R8 FD T_exact residual = ',fd_exact_error
+      write(*,'(a,es14.6)') 'TG-FZ-R8 ||T_gamma-T_exact|| = ',dgamma_exact_error
+
+      mixed_gamma_error=0.0_rp; mixed_exact_error=0.0_rp
+      write(*,'(a)') 'TG-FZ-R8 mixed derivative epsilon sweep'
+      do ie=1,size(eps_values)
+         ed=eps_values(ie)
+         call r8_set_moments(fix,saved_mom,[ed,ed],axis); call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,sgamma,hgpp,cgam,wgam,gammat); call r8_build_exact_state(fix,salpha,hpp)
+         call r8_set_moments(fix,saved_mom,[ed,-ed],axis); call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,sgamma,hgpm,cgam,wgam,gammat); call r8_build_exact_state(fix,salpha,hpm)
+         call r8_set_moments(fix,saved_mom,[-ed,ed],axis); call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,sgamma,hgmp,cgam,wgam,gammat); call r8_build_exact_state(fix,salpha,hmp)
+         call r8_set_moments(fix,saved_mom,[-ed,-ed],axis); call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,sgamma,hgm,cgam,wgam,gammat); call r8_build_exact_state(fix,salpha,hmm)
+         h2_work=(hgpp-hgpm-hgmp+hgm)/(4.0_rp*ed*ed)
+         h2_work2=(hpp-hpm-hmp+hmm)/(4.0_rp*ed*ed)
+         if (ed >= 1.0e-4_rp .and. ed <= 1.0e-3_rp) then
+            mixed_gamma_error=max(mixed_gamma_error,maxval(abs(h2_work-hij_gamma)))
+            mixed_exact_error=max(mixed_exact_error,maxval(abs(h2_work2-hij_exact)))
+         end if
+         write(*,'(a,es10.3,a,2es14.6)') '  eps=',ed,' gamma/exact=',maxval(abs(h2_work-hij_gamma)),maxval(abs(h2_work2-hij_exact))
+      end do
+      fix%moments=saved_mom
+      mixed_cov_error=maxval(abs(hij_gamma-hij_exact))
+      write(*,'(a,es14.6)') 'TG-FZ-R8 FD Hgamma_12 residual = ',mixed_gamma_error
+      write(*,'(a,es14.6)') 'TG-FZ-R8 FD Hexact_12 residual = ',mixed_exact_error
+      write(*,'(a,es14.6)') 'TG-FZ-R8 ||Hgamma_12-Hexact_12|| = ',mixed_cov_error
+
+      vertex_raw_error=0.0_rp; vertex_tilde_error=0.0_rp; turek_control_error=0.0_rp; turek_error=0.0_rp
+      h2_curvature_error=0.0_rp; h2_rel_error=0.0_rp; uniform_spectrum_error=0.0_rp; uniform_common_mode_error=0.0_rp
+      logdet_error=0.0_rp; logdet_minus_error=0.0_rp
+      norm_h2=maxval(abs(h2-hexact)); norm_t2=0.0_rp; norm_c2=0.0_rp
+      call assemble_lmto_rotation_terms(fix,kpoint,1,axis,hplus,hminus,hgplus,hgmp,hgm,hgpp,ti_h2)
+      call assemble_lmto_rotation_terms(fix,kpoint,2,axis,hpp,hpm,hgpm,hgpp,hgm,hgmp,tj_h2)
+      call assemble_lmto_mixed_derivative(fix,kpoint,1,axis,2,axis,hij_h2)
+      norm_t2=max(maxval(abs(ti_h2-ti_exact)),maxval(abs(tj_h2-tj_exact)))
+      norm_c2=maxval(abs(hij_h2-hij_exact)); c2_matrix_error=norm_c2; t2_matrix_error=norm_t2; h2_matrix_error=norm_h2
+
+      do iz=1,size(z_values)
+         zloc=z_values(iz)
+         call native_inverse(zloc*zeye-hgamma,gh)
+         call native_inverse(zloc*zeye-hexact,gexact)
+         call native_inverse(zloc*zeye-h2,g2)
+         call force_theorem_integrand(ti_gamma,gh,tj_gamma,hij_gamma,ttg,ccg,kg)
+         call force_theorem_integrand(ti_exact,gexact,tj_exact,hij_exact,tte,cce,ke)
+         call force_theorem_integrand(ti_h2,g2,tj_h2,hij_h2,tt2,cc2,k2)
+         write(*,'(a,2es14.6)') 'TG-FZ-R8 z = ',real(zloc,rp),aimag(zloc)
+         write(*,'(a,3es18.8)') '  gamma TT/contact/complete = ',ttg,ccg,kg
+         write(*,'(a,3es18.8)') '  exact TT/contact/complete = ',tte,cce,ke
+         write(*,'(a,3es18.8)') '  H2 TT/contact/complete = ',tt2,cc2,k2
+         write(*,'(a,es14.6)') '  gamma-vs-exact complete residual = ',abs(kg-ke)
+         h2_curvature_error=max(h2_curvature_error,abs(k2-ke))
+         denom=max(abs(ke),1.0e-30_rp); h2_rel_error=max(h2_rel_error,abs(k2-ke)/denom)
+
+         call r4_build_native_state(atom_lattice,zloc,s_spin_major,pgamma,p_alpha,s_alpha_tmp,rmat,pathg,g_alpha)
+         call r4_native_vertices(atom_lattice,zloc,pgamma,p_alpha,rmat,raw_i,raw_j,tilde_i,tilde_j,da_i,da_j,dg_i,dg_j)
+         call extract_local_spin_flip(ti_gamma,1,1,tud_i); call extract_local_spin_flip(ti_gamma,2,1,tud_j)
+         vertex_raw_error=max(vertex_raw_error,maxval(abs(2.0_rp*tud_i-raw_i)),maxval(abs(2.0_rp*tud_j-raw_j)))
+         vertex_tilde_error=max(vertex_tilde_error,maxval(abs(2.0_rp*tud_i-tilde_i)),maxval(abs(2.0_rp*tud_j-tilde_j)))
+         jud=native_exchange_integrand(da_i,da_j,g_alpha(1:norb,norb+1:n2loc), &
+            g_alpha(n2loc+norb+1:nmat,n2loc+1:n2loc+norb))/(4.0_rp*force_theorem_pi)
+         jdu=native_exchange_integrand(da_i,da_j,g_alpha(n2loc+1:n2loc+norb,n2loc+norb+1:nmat), &
+            g_alpha(norb+1:n2loc,1:norb))/(4.0_rp*force_theorem_pi)
+         ! The transformed-gamma control uses exactly the R2 common-alpha
+         ! vertex, but contracts it with the normalized-gamma path operator.
+         jsym=0.5_rp*(jud+jdu)
+         kturek=-(jud+jdu)
+         call r8_unscaled_ud(rmat,da_i,da_j,dg_i,dg_j)
+         turek_control_error=max(turek_control_error,abs(jud-native_exchange_integrand(dg_i,dg_j, &
+            pathg(1:norb,norb+1:n2loc),pathg(n2loc+norb+1:nmat,n2loc+1:n2loc+norb))/(4.0_rp*force_theorem_pi)))
+         call r8_transformed_du(rmat,da_i,da_j,tilde_du_i,tilde_du_j)
+         call r8_unscaled_du(rmat,da_i,da_j,tilde_du_i,tilde_du_j)
+         turek_control_error=max(turek_control_error,abs(jdu-native_exchange_integrand(tilde_du_i,tilde_du_j, &
+            pathg(n2loc+1:n2loc+norb,n2loc+norb+1:nmat),pathg(norb+1:n2loc,1:norb))/(4.0_rp*force_theorem_pi)))
+         turek_error=max(turek_error,abs(ke-kturek))
+         write(*,'(a,3es18.8)') '  Turek J_ud/J_du/J_sym = ',jud,jdu,jsym
+         write(*,'(a,es18.8)') '  Turek-equivalent complete = ',kturek
+         write(*,'(a,2es14.6)') '  ||2T_ud-d_raw|| / ||2T_ud-d_tilde_alpha|| = ', &
+            maxval(abs(2.0_rp*tud_i-raw_i)),maxval(abs(2.0_rp*tud_i-tilde_i))
+
+         ! The prescribed F=-Im log(det(z-H))/pi has the opposite sign to
+         ! force_theorem_integrand with G=(z-H)^-1.  Record both residuals;
+         ! this is an algebraic convention check, never a fitted sign.
+         ed=1.0e-3_rp
+         call r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,axis,ed,zloc,saved_mom,1,1,fpp)
+         call r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,axis,ed,zloc,saved_mom,1,-1,fpm)
+         call r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,axis,ed,zloc,saved_mom,-1,1,fmp)
+         call r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,axis,ed,zloc,saved_mom,-1,-1,fmm)
+         logfd=(fpp-fpm-fmp+fmm)/(4.0_rp*ed*ed)
+         logdet_error=max(logdet_error,abs(logfd-ke)); logdet_minus_error=max(logdet_minus_error,abs(logfd+ke))
+         write(*,'(a,4es18.8)') '  logdet FD / (logdet-K) / (logdet+K) / exact contact = ', &
+            logfd,abs(logfd-ke),abs(logfd+ke),cce
+      end do
+      fix%moments=saved_mom
+      write(*,'(a,es14.6)') 'TG-FZ-R8 max ||2*T_ud-d_raw|| = ',vertex_raw_error
+      write(*,'(a,es14.6)') 'TG-FZ-R8 max ||2*T_ud-d_tilde_alpha|| = ',vertex_tilde_error
+      write(*,'(a,es14.6)') 'TG-FZ-R8 transformed-gamma Turek control residual = ',turek_control_error
+      write(*,'(a,es14.6)') 'TG-FZ-R8 Turek-vs-complete residual = ',turek_error
+      write(*,'(a,es14.6)') 'TG-FZ-R8 logdet-vs-K residual = ',logdet_error
+      write(*,'(a,es14.6)') 'TG-FZ-R8 logdet-vs-minus-K residual = ',logdet_minus_error
+      write(*,'(a,3es18.8)') 'TG-FZ-R8 H2 truncation TT/contact/complete(max only above) = ',tt2,cc2,k2
+      write(*,'(a,2es14.6)') 'TG-FZ-R8 H2 complete abs/relative error = ',h2_curvature_error,h2_rel_error
+      write(*,'(a,3es14.6)') 'TG-FZ-R8 matrix ||H2-Hexact||/||T2-Texact||/||C2-Cexact|| = ', &
+         h2_matrix_error,t2_matrix_error,c2_matrix_error
+
+      call r8_uniform_rotation_check(fix,salpha,c0,c1,w0,w1,gamma0,gamma1,saved_mom,axis,uniform_spectrum_error,uniform_common_mode_error)
+      write(*,'(a,es14.6)') 'TG-FZ-R8 uniform-rotation spectrum residual = ',uniform_spectrum_error
+      write(*,'(a,es14.6)') 'TG-FZ-R8 uniform common-mode second variation = ',uniform_common_mode_error
+
+      logdet_sign_ok=logdet_minus_error <= 2.0e-6_rp
+      hard_fail=cov_error > 2.0e-10_rp .or. resolvent_error > 2.0e-10_rp .or. &
+         dgamma_exact_error > 2.0e-10_rp .or. fd_gamma_error > 2.0e-7_rp .or. fd_exact_error > 2.0e-7_rp .or. &
+         mixed_gamma_error > 2.0e-5_rp .or. mixed_exact_error > 2.0e-5_rp .or. mixed_cov_error > 2.0e-9_rp .or. &
+         turek_control_error > 2.0e-8_rp .or. uniform_spectrum_error > 2.0e-9_rp .or. &
+         uniform_common_mode_error > 2.0e-6_rp
+      write(*,'(a)') 'TG-FZ-R8 derived Turek relation: K_complete = -(J_ud+J_du) = -2 J_sym'
+      if (hard_fail) then
+         write(*,'(a)') 'TG-FZ-R8 verdict: BLOCKED — a fixed-z hard covariance/derivative gate failed'
+      else if (turek_error > 2.0e-7_rp .or. .not.logdet_sign_ok) then
+         write(*,'(a)') 'TG-FZ-R8 verdict: PASS-B — exact covariance passes; Turek/logdet bridge remains unresolved'
+      else
+         write(*,'(a)') 'TG-FZ-R8 verdict: PASS-A'
+      end if
+      deallocate(salpha,sgamma,hgamma,hexact,h2,cgam,wgam,gammat,pgamma,pathg,gh,gexact,g2,ci,wi,gi,cj,wj,gj,si,sj,sij, &
+         ti_gamma,tj_gamma,hij_gamma,ti_exact,tj_exact,hij_exact,ti_h2,tj_h2,hij_h2,hplus,hminus,hpp,hpm,hmp,hmm, &
+         hgplus,hgminus,hgpp,hgpm,hgmp,hgm,zeye,p_alpha,s_alpha_tmp,rmat,g_alpha,raw_i,raw_j,tilde_i,tilde_j, &
+         tilde_du_i,tilde_du_j,da_i,da_j,dg_i,dg_j,tud_i,tud_j,h2_work,h2_work2,c0,c1,w0,w1,gamma0,gamma1)
+   end subroutine run_r8_curvature_audit
+
+   subroutine r8_make_fixture(atom,s_spin_major,fix)
+      type(lattice), intent(in) :: atom
+      complex(rp), intent(in) :: s_spin_major(:,:)
+      type(lmto_live_hamiltonian_fixture), intent(out) :: fix
+      integer :: site,l,m,lm,n2loc
+      n2loc=norb*nsite_fixture
+      call lmto_fixture_init(fix,nsite_fixture,norb,4,.true.)
+      fix%include_enu=.true.; fix%cartesian_to_spherical=.false.
+      fix%moments(:,1)=[0.0_rp,0.0_rp,1.0_rp]; fix%moments(:,2)=fix%moments(:,1)
+      fix%site_position=0.0_rp; fix%bond_source=[1,2,1,2]; fix%bond_target=[1,2,2,1]
+      fix%onsite=[.true.,.true.,.false.,.false.]; fix%bond_vector=0.0_rp
+      fix%hhh(:,:,1)=s_spin_major(1:norb,1:norb)
+      fix%hhh(:,:,2)=s_spin_major(norb+1:n2loc,norb+1:n2loc)
+      fix%hhh(:,:,3)=s_spin_major(1:norb,norb+1:n2loc)
+      fix%hhh(:,:,4)=s_spin_major(norb+1:n2loc,1:norb)
+      do site=1,nsite_fixture
+         do l=0,lmax
+            do m=1,2*l+1
+               lm=l*l+m
+               fix%wx0(lm,site)=0.5_rp*(atom%symbolic_atoms(1)%potential%width_band(l+1,1)+atom%symbolic_atoms(1)%potential%width_band(l+1,2))
+               fix%wx1(lm,site)=0.5_rp*(atom%symbolic_atoms(1)%potential%width_band(l+1,1)-atom%symbolic_atoms(1)%potential%width_band(l+1,2))
+               fix%c0(lm,site)=0.5_rp*(atom%symbolic_atoms(1)%potential%shifted_band(l+1,1)+atom%symbolic_atoms(1)%potential%shifted_band(l+1,2))
+               fix%c1(lm,site)=0.5_rp*(atom%symbolic_atoms(1)%potential%shifted_band(l+1,1)-atom%symbolic_atoms(1)%potential%shifted_band(l+1,2))
+               fix%obar0(lm,site)=0.5_rp*(atom%symbolic_atoms(1)%potential%obar(l+1,1)+atom%symbolic_atoms(1)%potential%obar(l+1,2))
+               fix%obar1(lm,site)=0.5_rp*(atom%symbolic_atoms(1)%potential%obar(l+1,1)-atom%symbolic_atoms(1)%potential%obar(l+1,2))
+               fix%enu0(lm,site)=0.5_rp*((atom%symbolic_atoms(1)%potential%center_band(l+1,1)-atom%symbolic_atoms(1)%potential%shifted_band(l+1,1))+ &
+                  (atom%symbolic_atoms(1)%potential%center_band(l+1,2)-atom%symbolic_atoms(1)%potential%shifted_band(l+1,2)))
+               fix%enu1(lm,site)=0.5_rp*((atom%symbolic_atoms(1)%potential%center_band(l+1,1)-atom%symbolic_atoms(1)%potential%shifted_band(l+1,1))- &
+                  (atom%symbolic_atoms(1)%potential%center_band(l+1,2)-atom%symbolic_atoms(1)%potential%shifted_band(l+1,2)))
+            end do
+         end do
+      end do
+   end subroutine r8_make_fixture
+
+   subroutine r8_gamma_channels(atom,c0,c1,w0,w1,g0,g1)
+      type(lattice), intent(in) :: atom
+      complex(rp), intent(out) :: c0(:,:),c1(:,:),w0(:,:),w1(:,:),g0(:,:),g1(:,:)
+      integer :: site,l,m,lm
+      do site=1,nsite_fixture
+         do l=0,lmax
+            do m=1,2*l+1
+               lm=l*l+m
+               c0(lm,site)=0.5_rp*(atom%symbolic_atoms(1)%potential%c(l,1)+atom%symbolic_atoms(1)%potential%c(l,2))+atom%symbolic_atoms(1)%potential%vmad
+               c1(lm,site)=0.5_rp*(atom%symbolic_atoms(1)%potential%c(l,1)-atom%symbolic_atoms(1)%potential%c(l,2))
+               w0(lm,site)=0.5_rp*(atom%symbolic_atoms(1)%potential%dele(l,1)+atom%symbolic_atoms(1)%potential%dele(l,2))
+               w1(lm,site)=0.5_rp*(atom%symbolic_atoms(1)%potential%dele(l,1)-atom%symbolic_atoms(1)%potential%dele(l,2))
+               g0(lm,site)=0.5_rp*(atom%symbolic_atoms(1)%potential%qi(l,1)+atom%symbolic_atoms(1)%potential%qi(l,2))
+               g1(lm,site)=0.5_rp*(atom%symbolic_atoms(1)%potential%qi(l,1)-atom%symbolic_atoms(1)%potential%qi(l,2))
+            end do
+         end do
+      end do
+   end subroutine r8_gamma_channels
+
+   subroutine r8_set_moments(fix,base,theta,axis)
+      type(lmto_live_hamiltonian_fixture), intent(inout) :: fix
+      real(rp), intent(in) :: base(:,:),theta(:),axis(3)
+      integer :: site
+      do site=1,nsite_fixture
+         fix%moments(:,site)=r8_rotate_moment(base(:,site),axis,theta(site))
+      end do
+   end subroutine r8_set_moments
+
+   subroutine r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,g0,g1,sg,hg,cm,wm,gm)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fix
+      complex(rp), intent(in) :: salpha(:,:),c0(:,:),c1(:,:),w0(:,:),w1(:,:),g0(:,:),g1(:,:)
+      complex(rp), intent(out) :: sg(:,:),hg(:,:),cm(:,:),wm(:,:),gm(:,:)
+      complex(rp) :: dmat(size(salpha,1),size(salpha,2)),invmat(size(salpha,1),size(salpha,2)), &
+         eye_local(size(salpha,1),size(salpha,2))
+      integer :: l
+      eye_local=identity(size(salpha,1))
+      call r5_build_local_spinor(fix,c0,c1,cm); call r5_build_local_spinor(fix,w0,w1,wm); call r5_build_local_spinor(fix,g0,g1,gm)
+      dmat=cmplx(0.0_rp,0.0_rp,rp)
+      do l=0,lmax
+         call r8_add_local_scalar(dmat,fix,l,alpha(l),alpha(l))
+      end do
+      dmat=dmat-gm
+      call native_inverse(eye_local+matmul(salpha,dmat),invmat); sg=matmul(invmat,salpha)
+      hg=cm+matmul(wm,matmul(sg,wm))
+   end subroutine r8_build_gamma_state
+
+   subroutine r8_add_local_scalar(matrix,fix,l,up_value,down_value)
+      complex(rp), intent(inout) :: matrix(:,:)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fix
+      integer, intent(in) :: l
+      real(rp), intent(in) :: up_value,down_value
+      integer :: site,m,lm,base
+      do site=1,nsite_fixture
+         base=(site-1)*2*norb
+         do m=1,2*l+1
+            lm=l*l+m
+            matrix(base+lm,base+lm)=up_value
+            matrix(base+norb+lm,base+norb+lm)=down_value
+         end do
+      end do
+   end subroutine r8_add_local_scalar
+
+   subroutine r8_build_exact_state(fix,salpha,hex)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fix
+      complex(rp), intent(in) :: salpha(:,:)
+      complex(rp), intent(out) :: hex(:,:)
+      complex(rp) :: hbar(size(hex,1),size(hex,2)),wbar(size(hex,1),size(hex,2)),obar(size(hex,1),size(hex,2)), &
+         enu(size(hex,1),size(hex,2)),ainv(size(hex,1),size(hex,2))
+      call r5_build_hbar(fix,salpha,hbar,wbar); call r5_build_obar(fix,obar)
+      call r5_build_local_spinor(fix,fix%enu0,fix%enu1,enu)
+      call native_inverse(identity(size(hex,1))+matmul(obar,hbar),ainv)
+      hex=enu+matmul(hbar,ainv)
+   end subroutine r8_build_exact_state
+
+   subroutine r8_gamma_local_derivative(fix,a1,site,axis,derivative)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fix
+      complex(rp), intent(in) :: a1(:,:)
+      integer, intent(in) :: site
+      real(rp), intent(in) :: axis(3)
+      complex(rp), intent(out) :: derivative(:,:)
+      real(rp) :: dm(3)
+      integer :: lm,base
+      derivative=cmplx(0.0_rp,0.0_rp,rp); dm=r5_cross(axis,fix%moments(:,site)); base=(site-1)*2*norb
+      do lm=1,norb
+         derivative(base+lm,base+lm)=a1(lm,site)*dm(3)
+         derivative(base+norb+lm,base+norb+lm)=-a1(lm,site)*dm(3)
+         derivative(base+lm,base+norb+lm)=a1(lm,site)*cmplx(dm(1),0.0_rp,rp)-i_unit*a1(lm,site)*cmplx(dm(2),0.0_rp,rp)
+         derivative(base+norb+lm,base+lm)=a1(lm,site)*cmplx(dm(1),0.0_rp,rp)+i_unit*a1(lm,site)*cmplx(dm(2),0.0_rp,rp)
+      end do
+   end subroutine r8_gamma_local_derivative
+
+   subroutine r8_exact_derivative(fix,salpha,site,axis,derivative)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fix
+      complex(rp), intent(in) :: salpha(:,:)
+      integer, intent(in) :: site
+      real(rp), intent(in) :: axis(3)
+      complex(rp), intent(out) :: derivative(:,:)
+      complex(rp) :: hbar(size(derivative,1),size(derivative,2)),wbar(size(derivative,1),size(derivative,2)), &
+         obar(size(derivative,1),size(derivative,2)),enu(size(derivative,1),size(derivative,2)),a(size(derivative,1),size(derivative,2)), &
+         hi(size(derivative,1),size(derivative,2)),oi(size(derivative,1),size(derivative,2)),ei(size(derivative,1),size(derivative,2)), &
+         wi(size(derivative,1),size(derivative,2)),ci(size(derivative,1),size(derivative,2)),ainv(size(derivative,1),size(derivative,2))
+      call r5_build_hbar(fix,salpha,hbar,wbar); call r5_build_obar(fix,obar); call r5_build_local_spinor(fix,fix%enu0,fix%enu1,enu)
+      call native_inverse(identity(size(derivative,1))+matmul(obar,hbar),a)
+      call r8_hbar_derivative(fix,salpha,site,axis,hi)
+      call r5_build_obar_derivative(fix,site,axis,oi); call r8_gamma_local_derivative(fix,fix%enu1,site,axis,ei)
+      derivative=ei+matmul(hi,a)-matmul(hbar,matmul(a,matmul(matmul(oi,hbar)+matmul(obar,hi),a)))
+   end subroutine r8_exact_derivative
+
+   subroutine r8_hbar_derivative(fix,salpha,site,axis,derivative)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fix
+      complex(rp), intent(in) :: salpha(:,:)
+      integer, intent(in) :: site
+      real(rp), intent(in) :: axis(3)
+      complex(rp), intent(out) :: derivative(:,:)
+      complex(rp) :: hbar(size(derivative,1),size(derivative,2)),wbar(size(derivative,1),size(derivative,2)), &
+         ci(size(derivative,1),size(derivative,2)),wi(size(derivative,1),size(derivative,2))
+      call r5_build_hbar(fix,salpha,hbar,wbar)
+      call r8_gamma_local_derivative(fix,fix%c1,site,axis,ci)
+      call r8_gamma_local_derivative(fix,fix%wx1,site,axis,wi)
+      derivative=ci+matmul(wi,matmul(salpha,wbar))+matmul(wbar,matmul(salpha,wi))
+   end subroutine r8_hbar_derivative
+
+   subroutine r8_exact_mixed(fix,salpha,site_i,axis_i,site_j,axis_j,mixed)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fix
+      complex(rp), intent(in) :: salpha(:,:)
+      integer, intent(in) :: site_i,site_j
+      real(rp), intent(in) :: axis_i(3),axis_j(3)
+      complex(rp), intent(out) :: mixed(:,:)
+      complex(rp) :: h(size(mixed,1),size(mixed,2)),w(size(mixed,1),size(mixed,2)),o(size(mixed,1),size(mixed,2)),a(size(mixed,1),size(mixed,2)), &
+         hi(size(mixed,1),size(mixed,2)),hj(size(mixed,1),size(mixed,2)),hij(size(mixed,1),size(mixed,2)), &
+         oi(size(mixed,1),size(mixed,2)),oj(size(mixed,1),size(mixed,2)),xi(size(mixed,1),size(mixed,2)),xj(size(mixed,1),size(mixed,2)), &
+         xij(size(mixed,1),size(mixed,2)),ai(size(mixed,1),size(mixed,2)),aj(size(mixed,1),size(mixed,2)),aij(size(mixed,1),size(mixed,2)), &
+         dummy(size(mixed,1),size(mixed,2)),ci(size(mixed,1),size(mixed,2)),cj(size(mixed,1),size(mixed,2)),wi(size(mixed,1),size(mixed,2)),wj(size(mixed,1),size(mixed,2))
+      call r5_build_hbar(fix,salpha,h,w); call r5_build_obar(fix,o); call native_inverse(identity(size(mixed,1))+matmul(o,h),a)
+      call r8_hbar_derivative(fix,salpha,site_i,axis_i,hi); call r8_hbar_derivative(fix,salpha,site_j,axis_j,hj)
+      call r5_build_obar_derivative(fix,site_i,axis_i,oi); call r5_build_obar_derivative(fix,site_j,axis_j,oj)
+      call r8_gamma_local_derivative(fix,fix%wx1,site_i,axis_i,wi); call r8_gamma_local_derivative(fix,fix%wx1,site_j,axis_j,wj)
+      call r8_gamma_local_derivative(fix,fix%c1,site_i,axis_i,ci); call r8_gamma_local_derivative(fix,fix%c1,site_j,axis_j,cj)
+      hij=matmul(wi,matmul(salpha,wj))+matmul(wj,matmul(salpha,wi))
+      xi=matmul(oi,h)+matmul(o,hi); xj=matmul(oj,h)+matmul(o,hj); xij=matmul(oi,hj)+matmul(oj,hi)+matmul(o,hij)
+      ai=-matmul(a,matmul(xi,a)); aj=-matmul(a,matmul(xj,a))
+      aij=matmul(a,matmul(xj,matmul(a,matmul(xi,a))))+matmul(a,matmul(xi,matmul(a,matmul(xj,a))))-matmul(a,matmul(xij,a))
+      mixed=hij; mixed=matmul(hij,a)+matmul(hi,aj)+matmul(hj,ai)+matmul(h,aij)
+      dummy=ci+cj+wi+wj
+   end subroutine r8_exact_mixed
+
+   subroutine r8_build_gamma_path(zloc,cm,wm,sg,pmat,gmat,green)
+      complex(rp), intent(in) :: zloc,cm(:,:),wm(:,:),sg(:,:)
+      complex(rp), intent(out) :: pmat(:,:),gmat(:,:),green(:,:)
+      complex(rp) :: wi(size(wm,1),size(wm,2))
+      call native_inverse(wm,wi); pmat=matmul(wi,matmul(zloc*identity(size(wm,1))-cm,wi))
+      call native_inverse(pmat-sg,gmat); green=matmul(wi,matmul(gmat,wi))
+   end subroutine r8_build_gamma_path
+
+   subroutine r8_transformed_du(rmat,da_i,da_j,du_i,du_j)
+      complex(rp), intent(in) :: rmat(:,:),da_i(:,:),da_j(:,:)
+      complex(rp), intent(out) :: du_i(:,:),du_j(:,:)
+      complex(rp) :: rup_i(norb,norb),rdn_i(norb,norb),rup_j(norb,norb),rdn_j(norb,norb)
+      complex(rp) :: wup(norb,norb),wdn(norb,norb)
+      integer :: l,m,lm,n2local
+      n2local=nsite_fixture*norb; wup=cmplx(0.0_rp,0.0_rp,rp); wdn=wup
+      do l=0,lmax
+         do m=1,2*l+1
+            lm=l*l+m
+            wup(lm,lm)=lat%symbolic_atoms(1)%potential%dele(l,1)
+            wdn(lm,lm)=lat%symbolic_atoms(1)%potential%dele(l,2)
+         end do
+      end do
+      rup_i=rmat(1:norb,1:norb); rup_j=rmat(norb+1:n2local,norb+1:n2local)
+      rdn_i=rmat(n2local+1:n2local+norb,n2local+1:n2local+norb)
+      rdn_j=rmat(n2local+norb+1:2*n2local,n2local+norb+1:2*n2local)
+      du_i=matmul(wdn,matmul(rup_i,matmul(da_i,rdn_i))); du_i=matmul(du_i,wup)
+      du_j=matmul(wup,matmul(rdn_j,matmul(da_j,rup_j))); du_j=matmul(du_j,wdn)
+   end subroutine r8_transformed_du
+
+   subroutine r8_unscaled_ud(rmat,da_i,da_j,ui,uj)
+      complex(rp), intent(in) :: rmat(:,:),da_i(:,:),da_j(:,:)
+      complex(rp), intent(out) :: ui(:,:),uj(:,:)
+      integer :: n2local
+      n2local=nsite_fixture*norb
+      ui=matmul(rmat(n2local+1:n2local+norb,n2local+1:n2local+norb), &
+         matmul(da_i,rmat(1:norb,1:norb)))
+      uj=matmul(rmat(norb+1:n2local,norb+1:n2local), &
+         matmul(da_j,rmat(n2local+norb+1:2*n2local,n2local+norb+1:2*n2local)))
+   end subroutine r8_unscaled_ud
+
+   subroutine r8_unscaled_du(rmat,da_i,da_j,di,dj)
+      complex(rp), intent(in) :: rmat(:,:),da_i(:,:),da_j(:,:)
+      complex(rp), intent(out) :: di(:,:),dj(:,:)
+      integer :: n2local
+      n2local=nsite_fixture*norb
+      di=matmul(rmat(1:norb,1:norb),matmul(da_i,rmat(n2local+1:n2local+norb,n2local+1:n2local+norb)))
+      dj=matmul(rmat(n2local+norb+1:2*n2local,n2local+norb+1:2*n2local), &
+         matmul(da_j,rmat(norb+1:n2local,norb+1:n2local)))
+   end subroutine r8_unscaled_du
+
+   subroutine r8_scalar_logdet_difference(fix,salpha,c0,c1,w0,w1,g0,g1,axis,ed,zloc,base,si,sj,value)
+      type(lmto_live_hamiltonian_fixture), intent(inout) :: fix
+      complex(rp), intent(in) :: salpha(:,:),c0(:,:),c1(:,:),w0(:,:),w1(:,:),g0(:,:),g1(:,:),zloc
+      real(rp), intent(in) :: axis(3),ed,base(:,:)
+      integer, intent(in) :: si,sj
+      real(rp), intent(out) :: value
+      real(rp) :: th(2)
+      complex(rp) :: h(size(salpha,1),size(salpha,2)),hb(size(salpha,1),size(salpha,2)),phase, &
+         sg(size(salpha,1),size(salpha,2)),cm(size(salpha,1),size(salpha,2)),wm(size(salpha,1),size(salpha,2)), &
+         gm(size(salpha,1),size(salpha,2))
+      real(rp), allocatable :: ev(:), eb(:)
+      integer :: n
+      th=[real(si,rp)*ed,real(sj,rp)*ed]; call r8_set_moments(fix,base,th,axis)
+      call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,g0,g1,sg,h,cm,wm,gm)
+      th=0.0_rp; call r8_set_moments(fix,base,th,axis)
+      call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,g0,g1,sg,hb,cm,wm,gm)
+      ! H is Hermitian for this no-SOC fixture.  Diagonalizing H makes the
+      ! scalar oracle independent of a matrix-determinant implementation:
+      ! log det(z-H) is accumulated from the real eigenvalues, then its local
+      ! phase difference is unwrapped into (-pi,pi].
+      n=size(h,1); allocate(ev(n),eb(n)); call r8_eigenvalues(h,ev); call r8_eigenvalues(hb,eb)
+      phase=cmplx(0.0_rp,0.0_rp,rp)
+      do n=1,size(ev)
+         phase=phase+log(zloc-cmplx(ev(n),0.0_rp,rp))-log(zloc-cmplx(eb(n),0.0_rp,rp))
+      end do
+      phase=cmplx(real(phase,rp),modulo(aimag(phase)+force_theorem_pi,2.0_rp*force_theorem_pi)-force_theorem_pi,rp)
+      value=-aimag(phase)/force_theorem_pi
+      deallocate(ev,eb)
+   end subroutine r8_scalar_logdet_difference
+
+   subroutine r8_uniform_rotation_check(fix,salpha,c0,c1,w0,w1,g0,g1,base,axis,spectrum_error,common_error)
+      type(lmto_live_hamiltonian_fixture), intent(inout) :: fix
+      complex(rp), intent(in) :: salpha(:,:),c0(:,:),c1(:,:),w0(:,:),w1(:,:),g0(:,:),g1(:,:)
+      real(rp), intent(in) :: base(:,:)
+      real(rp), intent(in) :: axis(3)
+      real(rp), intent(out) :: spectrum_error,common_error
+      complex(rp) :: h0(size(salpha,1),size(salpha,2)),hg(size(salpha,1),size(salpha,2)),he(size(salpha,1),size(salpha,2)), &
+         hp(size(salpha,1),size(salpha,2)),hm(size(salpha,1),size(salpha,2)),phase, &
+         sg(size(salpha,1),size(salpha,2)),cm(size(salpha,1),size(salpha,2)),wm(size(salpha,1),size(salpha,2)),gm(size(salpha,1),size(salpha,2))
+      real(rp) :: v0(size(salpha,1)),vg(size(salpha,1)),ve(size(salpha,1)),vp(size(salpha,1)),vm(size(salpha,1)),delta,fplus,fminus
+      real(rp) :: th(2)
+      integer :: i
+      call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,g0,g1,sg,hg,cm,wm,gm)
+      call r8_build_exact_state(fix,salpha,he); h0=he; call r8_eigenvalues(h0,v0)
+      delta=1.0e-3_rp; th=[delta,delta]; call r8_set_moments(fix,base,th,axis)
+      call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,g0,g1,sg,hg,cm,wm,gm); call r8_build_exact_state(fix,salpha,he)
+      call r8_eigenvalues(hg,vg); call r8_eigenvalues(he,ve)
+      th=-th; call r8_set_moments(fix,base,th,axis)
+      call r8_build_gamma_state(fix,salpha,c0,c1,w0,w1,g0,g1,sg,hp,cm,wm,gm); call r8_build_exact_state(fix,salpha,hm)
+      call r8_eigenvalues(hp,vp); call r8_eigenvalues(hm,vm)
+      spectrum_error=max(maxval(abs(vg-v0)),maxval(abs(ve-v0)))
+      fplus=0.0_rp; fminus=0.0_rp
+      do i=1,size(v0)
+         phase=log(z_values(2)-cmplx(vp(i),0.0_rp,rp))-log(z_values(2)-cmplx(v0(i),0.0_rp,rp))
+         fplus=fplus-aimag(phase)/force_theorem_pi
+         phase=log(z_values(2)-cmplx(vm(i),0.0_rp,rp))-log(z_values(2)-cmplx(v0(i),0.0_rp,rp))
+         fminus=fminus-aimag(phase)/force_theorem_pi
+      end do
+      common_error=abs((fplus+fminus)/delta**2)
+      fix%moments=base
+   end subroutine r8_uniform_rotation_check
+
+   subroutine r8_eigenvalues(matrix,values)
+      complex(rp), intent(in) :: matrix(:,:)
+      real(rp), intent(out) :: values(:)
+      complex(rp), allocatable :: a(:,:),work(:)
+      real(rp), allocatable :: rwork(:)
+      complex(rp) :: query(1)
+      integer :: n,lwork,info
+      external :: zheev
+      n=size(values); allocate(a(n,n),rwork(max(1,3*n-2))); a=matrix
+      call zheev('N','U',n,a,n,values,query,-1,rwork,info); lwork=max(1,nint(real(query(1),rp))); allocate(work(lwork))
+      call zheev('N','U',n,a,n,values,work,lwork,rwork,info); if (info /= 0) error stop 'TG-FZ-R8 diagonalization failed'
+      deallocate(a,work,rwork)
+   end subroutine r8_eigenvalues
+
+   pure function r8_rotate_moment(moment,axis,angle) result(rotated)
+      real(rp), intent(in) :: moment(3),axis(3),angle
+      real(rp) :: rotated(3)
+      rotated=moment*cos(angle)+r5_cross(axis,moment)*sin(angle)+axis*dot_product(axis,moment)*(1.0_rp-cos(angle))
+   end function r8_rotate_moment
 
 end program test_dresp03tg_native_fixed_z
