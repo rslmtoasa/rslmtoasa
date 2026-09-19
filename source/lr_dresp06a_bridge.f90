@@ -29,6 +29,8 @@ module lr_dresp06a_bridge_mod
    public :: site_loss_matrix
    public :: compact_apply_local_operator_independent
    public :: dresp06a_relative_matrix_difference
+   public :: build_compact_covariance_transport
+   public :: transport_compact_matrix
 
    interface project_compact_response_to_sites
       module procedure project_compact_response_matrix_to_sites
@@ -41,6 +43,72 @@ module lr_dresp06a_bridge_mod
    end interface project_compact_loss_to_sites
 
 contains
+
+   !> Build the circular/angular and independently-compressed radial transport
+   !> used by the accepted q/-q covariance convention.  The returned matrix
+   !> maps minus-channel compact coordinates into plus-channel coordinates.
+   subroutine build_compact_covariance_transport(plus_product, minus_product, transport)
+      type(lmto_product_response_basis), intent(in) :: plus_product, minus_product
+      complex(rp), intent(out) :: transport(:, :)
+      complex(rp), allocatable :: block_transport(:, :)
+      integer :: site, response_l, response_m, plus_first, minus_first
+      integer :: rank_plus, rank_minus
+      real(rp) :: angular_sign
+
+      if (plus_product%product_dimension /= minus_product%product_dimension .or. &
+          any(shape(transport) /= [plus_product%product_dimension, minus_product%product_dimension])) then
+         error stop 'DRESP-06A covariance transport: compact dimensions differ'
+      end if
+      transport = cmplx(0.0_rp, 0.0_rp, rp)
+      do site = 1, plus_product%nsite
+         do response_l = 0, plus_product%response_lmax
+            rank_plus = plus_product%blocks(site, response_l)%rank
+            rank_minus = minus_product%blocks(site, response_l)%rank
+            if (rank_plus /= rank_minus) error stop 'DRESP-06A covariance transport: radial ranks differ'
+            allocate(block_transport(rank_plus, rank_minus))
+            block_transport = matmul(conjg(transpose(plus_product%blocks(site, response_l)%weighted_modes)), &
+               conjg(minus_product%blocks(site, response_l)%weighted_modes))
+            do response_m = -response_l, response_l
+               plus_first = plus_product%flat_index(site, response_l, response_m, 1)
+               minus_first = minus_product%flat_index(site, response_l, -response_m, 1)
+               angular_sign = merge(-1.0_rp, 1.0_rp, mod(abs(response_m), 2) == 1)
+               transport(plus_first:plus_first + rank_plus - 1, minus_first:minus_first + rank_minus - 1) = &
+                  angular_sign*block_transport
+            end do
+            deallocate(block_transport)
+         end do
+      end do
+   end subroutine build_compact_covariance_transport
+
+   !> Transport a compact matrix.  Covariance response matrices use the
+   !> conjugated minus-channel matrix; representation operators such as Kxc
+   !> use the direct matrix.  Keeping the choice explicit prevents accidental
+   !> direct plus/minus SVD comparisons.
+   subroutine transport_compact_matrix(plus_product, minus_product, minus_matrix, mapped, conjugate_input)
+      type(lmto_product_response_basis), intent(in) :: plus_product, minus_product
+      complex(rp), intent(in) :: minus_matrix(:, :)
+      complex(rp), intent(out) :: mapped(:, :)
+      logical, intent(in), optional :: conjugate_input
+      complex(rp), allocatable :: transport(:, :), source(:, :)
+      logical :: use_conjugate
+
+      use_conjugate = .true.
+      if (present(conjugate_input)) use_conjugate = conjugate_input
+      if (any(shape(minus_matrix) /= [minus_product%product_dimension, minus_product%product_dimension]) .or. &
+          any(shape(mapped) /= [plus_product%product_dimension, plus_product%product_dimension])) then
+         error stop 'DRESP-06A covariance transport: matrix shape mismatch'
+      end if
+      allocate(transport(plus_product%product_dimension, minus_product%product_dimension), &
+         source(minus_product%product_dimension, minus_product%product_dimension))
+      call build_compact_covariance_transport(plus_product, minus_product, transport)
+      if (use_conjugate) then
+         source = conjg(minus_matrix)
+      else
+         source = minus_matrix
+      end if
+      mapped = matmul(transport, matmul(source, conjg(transpose(transport))))
+      deallocate(source, transport)
+   end subroutine transport_compact_matrix
 
    !> Project one compact response matrix with the exact DRESP-01 functional.
    subroutine project_compact_response_matrix_to_sites(contract, product, compact_response, site_response)

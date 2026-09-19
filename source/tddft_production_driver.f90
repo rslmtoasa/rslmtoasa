@@ -58,7 +58,8 @@ module tddft_production_driver_mod
       projected_juelich_unsupported, select_projected_juelich_eta_indices
    use lr_dresp06a_bridge_mod, only: project_compact_response_to_sites, project_compact_loss_to_sites, &
       compact_loss_matrix, site_loss_matrix, compact_apply_local_operator_independent, dresp06a_relative_matrix_difference, &
-      dresp06a_projection_tolerance
+      dresp06a_projection_tolerance, build_compact_covariance_transport, transport_compact_matrix
+   use lr_ward_mode_analysis_mod, only: lr_ward_mode_analysis_result, analyze_lr_ward_mode
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
    use tddft_native_rsgf_provider_mod, only: tddft_native_rsgf_provider
@@ -1806,10 +1807,23 @@ contains
       write(unit, '(a,es24.16)') '# Juelich_holdout_relative_residual = ', juelich_result%holdout_relative_residual
       write(unit, '(a,2(es24.16,1x))') '# ALSDA_raw_Gamma_Ward_abs_rel = ', ward_residual, ward_relative
       write(unit, '(a)') '# ALSDA correction = OFF; no BES/GCR/eigenvalue shifting/kernel rescaling'
+      write(unit, '(a)') '# goldstone_correction = false'
+      write(unit, '(a)') '# BES = false'
+      write(unit, '(a)') '# GCR = false'
+      write(unit, '(a)') '# kernel_rescaling = false'
+      write(unit, '(a)') '# eigenvalue_pinning = false'
       write(unit, '(a)') '# columns: route eta_Ry q_index omega_Ry row col chi_Re chi_Im loss_Re loss_Im -ImTr/pi min_sv max_sv condition min_abs_eig Dyson_residual'
       write(unit, '(a)') '# FREQUENCY_REFINEMENT columns: route q_index coarse_peak_Ry refined_peak_Ry min_sv refined_loss_trace'
-      write(unit, '(a)') '# GF_SPOT columns: q_index frequency_index norm_Lehmann norm_GF abs_diff relative_diff infinity_diff'
-      write(unit, '(a)') '# Q_CHANNEL_COVARIANCE columns: positive_q_index negative_q_index canonical_site_residual canonical_loss_residual direct_site_conjugation compact_residual'
+      write(unit, '(a)') '# GF_SPOT columns: quadrature q_index frequency_index N_E energy_min energy_max h h_over_integration_eta norm_Lehmann norm_GF dF relative_dF dInf'
+      write(unit, '(a)') '# GF_BASE_FINE columns: q_index frequency_index dF relative_dF dInf'
+      write(unit, '(a)') '# Q_CHANNEL_COVARIANCE_STAGE columns: stage positive_q_index negative_q_index frequency_index residual min_sv_difference condition_difference'
+      write(unit, '(a)') '# KXC_TRANSPORT columns: positive_q_index negative_q_index relative_frobenius'
+      write(unit, '(a)') '# WARD_ETA columns: eta residual relative min_sv max_sv condition min_abs_eig candidate_index lambda_real lambda_imag lambda_abs right_overlap biorthogonal_weight m_fraction dm_fraction next4_fraction remainder'
+      write(unit, '(a)') '# WARD_MODE columns: eta mode lambda_real lambda_imag lambda_abs right_overlap biorthogonal_weight m_fraction dm_fraction'
+      write(unit, '(a)') '# WARD_SVD columns: eta min_sv max_sv condition smallest_right_overlap'
+      write(unit, '(a)') '# WARD_DM_RECONSTRUCTION columns: eta eigen_reconstruction_relative dm_reconstruction_relative candidate_fraction next4_fraction remainder'
+
+      call run_alsda_ward_eta_ladder(unit, config, product_plus, left_state, endpoints(gamma_index), interaction, mcompact)
 
       allocate(site_alsda(size(moment), size(moment), size(config%frequencies)), &
          site_loss_alsda(size(moment), size(moment), size(config%frequencies)), site_loss_bare(size(moment), size(moment)), &
@@ -1948,84 +1962,8 @@ contains
       end do
 
       if (covariance_found .and. config%validate_interacting_covariance) then
-         allocate(covariance_site_plus(size(moment), size(moment), size(config%frequencies)), &
-            covariance_site_minus(size(moment), size(moment), size(config%frequencies)), &
-            covariance_loss_plus(size(moment), size(moment), size(config%frequencies)), &
-            covariance_loss_minus(size(moment), size(moment), size(config%frequencies)), &
-            covariance_site_transport(size(moment), size(moment), size(config%frequencies)), &
-            covariance_loss_transport(size(moment), size(moment), size(config%frequencies)))
-
-         product_request%q = config%q_list(:, positive_index)
-         product_request%frequencies = config%frequencies
-         product_request%eta = config%eta
-         product_request%channel = lr_channel_plus
-         product_request%product_basis => product_plus
-         product_request%electronic_state => left_state
-         product_request%q_endpoint_state => endpoints(positive_index)
-         call evaluate_lr_product_ks_susceptibility(product_request, product_bare)
-         alsda_request%compact_orthonormal = .true.
-         alsda_request%q = product_request%q
-         alsda_request%frequencies = product_request%frequencies
-         alsda_request%eta = product_request%eta
-         alsda_request%channel = lr_channel_plus
-         alsda_request%ks_susceptibility = product_bare%susceptibility
-         alsda_request%canonical_interaction = interaction
-         alsda_request%interaction_route = lr_dyson_route_direct_alsda
-         alsda_request%interaction_provenance = 'KXC-01 direct ALSDA LR-03; DRESP-06A covariance'
-         alsda_request%electronic_state_provenance = 'accepted reciprocal state; SCF occupations and EF fixed'
-         alsda_request%response_space_metadata = 'complete weighted-orthonormal product response; no point Dyson'
-         call evaluate_tddft_dyson(alsda_request, alsda_result)
-         if (any(.not. alsda_result%solve_succeeded)) error stop 'DRESP-06A: plus covariance Dyson solve failed'
-         call project_compact_response_to_sites(contract, product_plus, alsda_result%enhanced_susceptibility, covariance_site_plus)
-         call project_compact_loss_to_sites(contract, product_plus, alsda_result%enhanced_susceptibility, covariance_loss_plus)
-
-         opposite_product_request%q = config%q_list(:, negative_index)
-         opposite_product_request%frequencies = -config%frequencies
-         opposite_product_request%eta = config%eta
-         opposite_product_request%channel = lr_channel_minus
-         opposite_product_request%product_basis => product_minus
-         opposite_product_request%electronic_state => left_state
-         opposite_product_request%q_endpoint_state => endpoints(negative_index)
-         call evaluate_lr_product_ks_susceptibility(opposite_product_request, opposite_product_bare)
-         opposite_alsda_request%compact_orthonormal = .true.
-         opposite_alsda_request%q = opposite_product_request%q
-         opposite_alsda_request%frequencies = opposite_product_request%frequencies
-         opposite_alsda_request%eta = opposite_product_request%eta
-         opposite_alsda_request%channel = lr_channel_minus
-         opposite_alsda_request%ks_susceptibility = opposite_product_bare%susceptibility
-         opposite_alsda_request%canonical_interaction = opposite_interaction
-         opposite_alsda_request%interaction_route = lr_dyson_route_direct_alsda
-         opposite_alsda_request%interaction_provenance = 'KXC-01 direct ALSDA LR-03; DRESP-06A covariance'
-         opposite_alsda_request%electronic_state_provenance = 'accepted reciprocal state; SCF occupations and EF fixed'
-         opposite_alsda_request%response_space_metadata = 'complete weighted-orthonormal product response; no point Dyson'
-         call evaluate_tddft_dyson(opposite_alsda_request, opposite_alsda_result)
-         if (any(.not. opposite_alsda_result%solve_succeeded)) error stop 'DRESP-06A: minus covariance Dyson solve failed'
-         call project_compact_response_to_sites(contract, product_minus, opposite_alsda_result%enhanced_susceptibility, covariance_site_minus)
-         call project_compact_loss_to_sites(contract, product_minus, opposite_alsda_result%enhanced_susceptibility, covariance_loss_minus)
-         do iw = 1, size(config%frequencies)
-            call project_compact_covariance_to_sites(contract, product_plus, product_minus, &
-               opposite_alsda_result%enhanced_susceptibility(:, :, iw), covariance_site_transport(:, :, iw))
-            call project_compact_covariance_to_sites(contract, product_plus, product_minus, &
-               -opposite_alsda_result%loss_matrix(:, :, iw), covariance_loss_transport(:, :, iw))
-         end do
-         covariance_direct_site_error = maxval(abs(covariance_site_plus - conjg(covariance_site_minus)))
-         covariance_site_error = maxval(abs(covariance_site_plus - covariance_site_transport))
-         covariance_loss_error = maxval(abs(covariance_loss_plus - covariance_loss_transport))
-         covariance_compact_error = 0.0_rp
-         do iw = 1, size(config%frequencies)
-            call compact_covariance_matrix_residual(product_plus, product_minus, &
-               alsda_result%enhanced_susceptibility(:, :, iw), opposite_alsda_result%enhanced_susceptibility(:, :, iw), &
-               covariance_one)
-            covariance_compact_error = max(covariance_compact_error, covariance_one)
-         end do
-         write(unit, '(a,1x,2(i0,1x),4(es24.16,1x))') 'Q_CHANNEL_COVARIANCE', positive_index, negative_index, &
-            covariance_site_error, covariance_loss_error, covariance_direct_site_error, covariance_compact_error
-         if (covariance_site_error <= 5.0e-8_rp .and. covariance_loss_error <= 5.0e-8_rp .and. &
-             covariance_compact_error <= 5.0e-8_rp) then
-            write(unit, '(a)') '# q/channel covariance status = PASS'
-         else
-            write(unit, '(a)') '# q/channel covariance status = FAIL-B (diagnostic retained; no correction applied)'
-         end if
+         call run_alsda_covariance_audit(unit, config, contract, product_plus, product_minus, left_state, endpoints, &
+            interaction, opposite_interaction, positive_index, negative_index)
       else if (config%validate_interacting_covariance) then
          error stop 'DRESP-06A: requested q/-q covariance pair is unavailable'
       end if
@@ -2051,6 +1989,237 @@ contains
    !> Refine the ALSDA loss peak on a window selected from the ALSDA coarse
    !> response itself.  This is intentionally independent from the Mills and
    !> Juelich projected-site windows.
+   subroutine run_alsda_ward_eta_ladder(unit, config, product, left_state, endpoint, interaction, magnetization)
+      integer, intent(in) :: unit
+      type(tddft_production_config), intent(in) :: config
+      type(lmto_product_response_basis), target, intent(in) :: product
+      type(lr_electronic_state), target, intent(in) :: left_state, endpoint
+      complex(rp), intent(in) :: interaction(:, :)
+      complex(rp), intent(in) :: magnetization(:)
+      type(lr_product_ks_susceptibility_request) :: request
+      type(lr_product_ks_susceptibility_result) :: bare
+      type(lr_ward_mode_analysis_result) :: analysis
+      complex(rp), allocatable :: denominator(:, :), previous_vector(:)
+      real(rp) :: overlap, previous_norm, current_norm, next4_fraction, remainder_fraction
+      integer :: ieta, i, mode, candidate, next_count, rank
+      logical :: have_previous
+
+      if (any(shape(interaction) /= [product%product_dimension, product%product_dimension]) .or. &
+          size(magnetization) /= product%product_dimension) then
+         error stop 'DRESP-06A Ward analysis: compact shape mismatch'
+      end if
+      allocate(denominator(product%product_dimension, product%product_dimension), &
+         previous_vector(product%product_dimension))
+      have_previous = .false.
+      do ieta = 1, size(config%eta_values)
+         request%q = 0.0_rp
+         request%frequencies = [0.0_rp]
+         request%eta = config%eta_values(ieta)
+         request%channel = lr_channel_plus
+         request%product_basis => product
+         request%electronic_state => left_state
+         request%q_endpoint_state => endpoint
+         call evaluate_lr_product_ks_susceptibility(request, bare)
+         denominator = -matmul(bare%susceptibility(:, :, 1), interaction)
+         do i = 1, product%product_dimension
+            denominator(i, i) = denominator(i, i) + cmplx(1.0_rp, 0.0_rp, rp)
+         end do
+         call analyze_lr_ward_mode(denominator, magnetization, analysis)
+         if (.not. analysis%succeeded) error stop 'DRESP-06A Ward analysis: non-Hermitian eigensystem failed'
+
+         if (.not. have_previous) then
+            candidate = analysis%nearest_zero_index
+         else
+            candidate = 1
+            current_norm = sqrt(sum(abs(analysis%right_eigenvectors(:, 1))**2))
+            overlap = abs(dot_product(analysis%right_eigenvectors(:, 1), previous_vector))/ &
+               max(current_norm*previous_norm, tiny(1.0_rp))
+            do mode = 2, product%product_dimension
+               current_norm = sqrt(sum(abs(analysis%right_eigenvectors(:, mode))**2))
+               if (abs(dot_product(analysis%right_eigenvectors(:, mode), previous_vector))/ &
+                   max(current_norm*previous_norm, tiny(1.0_rp)) > overlap) then
+                  candidate = mode
+                  overlap = abs(dot_product(analysis%right_eigenvectors(:, mode), previous_vector))/ &
+                     max(current_norm*previous_norm, tiny(1.0_rp))
+               end if
+            end do
+         end if
+         previous_norm = sqrt(sum(abs(analysis%right_eigenvectors(:, candidate))**2))
+         previous_vector = analysis%right_eigenvectors(:, candidate)/max(previous_norm, tiny(1.0_rp))
+         have_previous = .true.
+
+         next4_fraction = 0.0_rp
+         next_count = 0
+         do rank = 1, product%product_dimension
+            mode = analysis%magnitude_order(rank)
+            if (mode == candidate) cycle
+            if (next_count < 4) then
+               next4_fraction = next4_fraction + analysis%ward_mode_fraction(mode)
+               next_count = next_count + 1
+            end if
+         end do
+         remainder_fraction = max(0.0_rp, 1.0_rp - analysis%ward_mode_fraction(candidate) - next4_fraction)
+         write(unit, '(a,1x,7(es24.16,1x),i0,1x,9(es24.16,1x))') 'WARD_ETA', config%eta_values(ieta), &
+            analysis%ward_residual, analysis%ward_relative, analysis%min_singular_value, analysis%max_singular_value, &
+            analysis%condition_number, analysis%minimum_magnitude_eigenvalue, candidate, &
+            real(analysis%eigenvalues(candidate), rp), aimag(analysis%eigenvalues(candidate)), &
+            abs(analysis%eigenvalues(candidate)), analysis%right_overlap(candidate), analysis%biorthogonal_weight(candidate), &
+            analysis%magnetization_mode_fraction(candidate), analysis%ward_mode_fraction(candidate), next4_fraction, remainder_fraction
+         do rank = 1, min(6, product%product_dimension)
+            mode = analysis%magnitude_order(rank)
+            write(unit, '(a,1x,es24.16,1x,i0,1x,8(es24.16,1x))') 'WARD_MODE', config%eta_values(ieta), mode, &
+               real(analysis%eigenvalues(mode), rp), aimag(analysis%eigenvalues(mode)), abs(analysis%eigenvalues(mode)), &
+               analysis%right_overlap(mode), analysis%biorthogonal_weight(mode), analysis%magnetization_mode_fraction(mode), &
+               analysis%ward_mode_fraction(mode)
+         end do
+         mode = minloc(analysis%singular_values, dim=1)
+         write(unit, '(a,1x,5(es24.16,1x))') 'WARD_SVD', config%eta_values(ieta), analysis%min_singular_value, &
+            analysis%max_singular_value, analysis%condition_number, analysis%singular_vector_overlap(mode)
+         write(unit, '(a,1x,6(es24.16,1x))') 'WARD_DM_RECONSTRUCTION', config%eta_values(ieta), &
+            analysis%eigen_reconstruction_residual, analysis%ward_reconstruction_residual, &
+            analysis%ward_mode_fraction(candidate), next4_fraction, remainder_fraction
+      end do
+      deallocate(denominator, previous_vector)
+   end subroutine run_alsda_ward_eta_ladder
+
+   subroutine run_alsda_covariance_audit(unit, config, contract, plus_product, minus_product, left_state, endpoints, &
+                                         interaction, opposite_interaction, positive_index, negative_index)
+      integer, intent(in) :: unit, positive_index, negative_index
+      type(tddft_production_config), intent(in) :: config
+      type(projected_site_spin_contract), target, intent(in) :: contract
+      type(lmto_product_response_basis), target, intent(in) :: plus_product, minus_product
+      type(lr_electronic_state), target, intent(in) :: left_state
+      type(lr_electronic_state), target, intent(in) :: endpoints(:)
+      complex(rp), intent(in) :: interaction(:, :), opposite_interaction(:, :)
+      type(lr_product_ks_susceptibility_request) :: plus_request, minus_request
+      type(lr_product_ks_susceptibility_result) :: plus_bare, minus_bare
+      type(tddft_dyson_request) :: plus_request_dyson, minus_request_dyson
+      type(tddft_dyson_result) :: plus_dyson, minus_dyson
+      complex(rp), allocatable :: transport(:, :), mapped(:, :), mapped_loss(:, :), site_plus(:, :), site_minus(:, :)
+      complex(rp), allocatable :: site_transport(:, :), site_loss_plus(:, :), site_loss_transport(:, :)
+      complex(rp), allocatable :: kxc_transport(:, :), denominator_transport(:, :), identity(:, :)
+      real(rp) :: kxc_residual, residual, loss_residual, site_residual, site_loss_residual
+      real(rp) :: direct_site_residual, denominator_residual, sv_difference, condition_difference
+      integer :: i, iw
+      logical :: pass
+
+      allocate(transport(plus_product%product_dimension, minus_product%product_dimension), &
+         mapped(plus_product%product_dimension, plus_product%product_dimension), &
+         mapped_loss(plus_product%product_dimension, plus_product%product_dimension), &
+         denominator_transport(plus_product%product_dimension, plus_product%product_dimension), &
+         identity(plus_product%product_dimension, plus_product%product_dimension), &
+         site_plus(contract%nsite, contract%nsite), site_minus(contract%nsite, contract%nsite), &
+         site_transport(contract%nsite, contract%nsite), site_loss_plus(contract%nsite, contract%nsite), &
+         site_loss_transport(contract%nsite, contract%nsite), kxc_transport(plus_product%product_dimension, plus_product%product_dimension))
+      call build_compact_covariance_transport(plus_product, minus_product, transport)
+      identity = cmplx(0.0_rp, 0.0_rp, rp)
+      do i = 1, plus_product%product_dimension
+         identity(i, i) = cmplx(1.0_rp, 0.0_rp, rp)
+      end do
+      call transport_compact_matrix(plus_product, minus_product, opposite_interaction, kxc_transport, .false.)
+      kxc_residual = dresp06a_relative_matrix_difference(interaction, kxc_transport)
+      write(unit, '(a,1x,2(i0,1x),es24.16)') 'KXC_TRANSPORT', positive_index, negative_index, kxc_residual
+      pass = kxc_residual <= 5.0e-8_rp
+
+      plus_request%q = config%q_list(:, positive_index)
+      plus_request%frequencies = config%frequencies
+      plus_request%eta = config%eta
+      plus_request%channel = lr_channel_plus
+      plus_request%product_basis => plus_product
+      plus_request%electronic_state => left_state
+      plus_request%q_endpoint_state => endpoints(positive_index)
+      call evaluate_lr_product_ks_susceptibility(plus_request, plus_bare)
+      minus_request%q = config%q_list(:, negative_index)
+      minus_request%frequencies = -config%frequencies
+      minus_request%eta = config%eta
+      minus_request%channel = lr_channel_minus
+      minus_request%product_basis => minus_product
+      minus_request%electronic_state => left_state
+      minus_request%q_endpoint_state => endpoints(negative_index)
+      call evaluate_lr_product_ks_susceptibility(minus_request, minus_bare)
+
+      plus_request_dyson%compact_orthonormal = .true.
+      plus_request_dyson%q = plus_request%q
+      plus_request_dyson%frequencies = plus_request%frequencies
+      plus_request_dyson%eta = config%eta
+      plus_request_dyson%channel = lr_channel_plus
+      plus_request_dyson%ks_susceptibility = plus_bare%susceptibility
+      plus_request_dyson%canonical_interaction = interaction
+      plus_request_dyson%interaction_route = lr_dyson_route_direct_alsda
+      plus_request_dyson%interaction_provenance = 'KXC-01 direct ALSDA LR-03; DRESP-06A covariance'
+      plus_request_dyson%electronic_state_provenance = 'accepted reciprocal state; SCF occupations and EF fixed'
+      plus_request_dyson%response_space_metadata = 'complete weighted-orthonormal product response; covariance audit'
+      call evaluate_tddft_dyson(plus_request_dyson, plus_dyson)
+      if (any(.not. plus_dyson%solve_succeeded)) error stop 'DRESP-06A covariance: plus Dyson solve failed'
+      minus_request_dyson%compact_orthonormal = .true.
+      minus_request_dyson%q = minus_request%q
+      minus_request_dyson%frequencies = minus_request%frequencies
+      minus_request_dyson%eta = config%eta
+      minus_request_dyson%channel = lr_channel_minus
+      minus_request_dyson%ks_susceptibility = minus_bare%susceptibility
+      minus_request_dyson%canonical_interaction = opposite_interaction
+      minus_request_dyson%interaction_route = lr_dyson_route_direct_alsda
+      minus_request_dyson%interaction_provenance = 'KXC-01 direct ALSDA LR-03; DRESP-06A covariance'
+      minus_request_dyson%electronic_state_provenance = 'accepted reciprocal state; SCF occupations and EF fixed'
+      minus_request_dyson%response_space_metadata = 'complete weighted-orthonormal product response; covariance audit'
+      call evaluate_tddft_dyson(minus_request_dyson, minus_dyson)
+      if (any(.not. minus_dyson%solve_succeeded)) error stop 'DRESP-06A covariance: minus Dyson solve failed'
+
+      do iw = 1, size(config%frequencies)
+         call transport_compact_matrix(plus_product, minus_product, minus_bare%susceptibility(:, :, iw), mapped)
+         residual = maxval(abs(plus_bare%susceptibility(:, :, iw) - mapped))
+         write(unit, '(a,1x,a,1x,2(i0,1x),i0,1x,3(es24.16,1x))') 'Q_CHANNEL_COVARIANCE_STAGE', 'BARE', positive_index, &
+            negative_index, iw, residual, 0.0_rp, 0.0_rp
+         pass = pass .and. residual <= 5.0e-8_rp
+
+         denominator_transport = matmul(transport, matmul(conjg(minus_dyson%denominator(:, :, iw)), &
+            conjg(transpose(transport))))
+         denominator_residual = maxval(abs(plus_dyson%denominator(:, :, iw) - denominator_transport))
+         sv_difference = abs(plus_dyson%denominator_min_singular_value(iw) - minus_dyson%denominator_min_singular_value(iw))
+         condition_difference = abs(plus_dyson%denominator_condition_number(iw) - minus_dyson%denominator_condition_number(iw))
+         write(unit, '(a,1x,a,1x,2(i0,1x),i0,1x,3(es24.16,1x))') 'Q_CHANNEL_COVARIANCE_STAGE', 'DENOMINATOR', &
+            positive_index, negative_index, iw, denominator_residual, sv_difference, condition_difference
+         pass = pass .and. denominator_residual <= 5.0e-8_rp .and. sv_difference <= 5.0e-8_rp .and. &
+            condition_difference <= 5.0e-6_rp*max(1.0_rp, plus_dyson%denominator_condition_number(iw))
+
+         call transport_compact_matrix(plus_product, minus_product, minus_dyson%enhanced_susceptibility(:, :, iw), mapped)
+         residual = maxval(abs(plus_dyson%enhanced_susceptibility(:, :, iw) - mapped))
+         write(unit, '(a,1x,a,1x,2(i0,1x),i0,1x,3(es24.16,1x))') 'Q_CHANNEL_COVARIANCE_STAGE', 'INTERACTING_COMPACT', &
+            positive_index, negative_index, iw, residual, 0.0_rp, 0.0_rp
+         pass = pass .and. residual <= 5.0e-8_rp
+
+         call transport_compact_matrix(plus_product, minus_product, -minus_dyson%loss_matrix(:, :, iw), mapped_loss)
+         loss_residual = maxval(abs(plus_dyson%loss_matrix(:, :, iw) - mapped_loss))
+         write(unit, '(a,1x,a,1x,2(i0,1x),i0,1x,3(es24.16,1x))') 'Q_CHANNEL_COVARIANCE_STAGE', 'COMPACT_LOSS', &
+            positive_index, negative_index, iw, loss_residual, 0.0_rp, 0.0_rp
+         pass = pass .and. loss_residual <= 5.0e-8_rp
+
+         call project_compact_response_to_sites(contract, plus_product, plus_dyson%enhanced_susceptibility(:, :, iw), site_plus)
+         call project_compact_response_to_sites(contract, minus_product, minus_dyson%enhanced_susceptibility(:, :, iw), site_minus)
+         call project_compact_response_to_sites(contract, plus_product, mapped, site_transport)
+         site_residual = maxval(abs(site_plus - site_transport))
+         direct_site_residual = maxval(abs(site_plus - conjg(site_minus)))
+         write(unit, '(a,1x,a,1x,2(i0,1x),i0,1x,3(es24.16,1x))') 'Q_CHANNEL_COVARIANCE_STAGE', 'PROJECTED_SITE', &
+            positive_index, negative_index, iw, site_residual, direct_site_residual, 0.0_rp
+         pass = pass .and. site_residual <= 5.0e-8_rp
+
+         call project_compact_loss_to_sites(contract, plus_product, plus_dyson%enhanced_susceptibility(:, :, iw), site_loss_plus)
+         call project_compact_response_to_sites(contract, plus_product, mapped_loss, site_loss_transport)
+         site_loss_residual = maxval(abs(site_loss_plus - site_loss_transport))
+         write(unit, '(a,1x,a,1x,2(i0,1x),i0,1x,3(es24.16,1x))') 'Q_CHANNEL_COVARIANCE_STAGE', 'PROJECTED_LOSS', &
+            positive_index, negative_index, iw, site_loss_residual, direct_site_residual, 0.0_rp
+         pass = pass .and. site_loss_residual <= 5.0e-8_rp
+      end do
+      if (pass) then
+         write(unit, '(a)') '# q/channel covariance status = PASS'
+      else
+         write(unit, '(a)') '# q/channel covariance status = BLOCKED — covariance stage failed'
+         error stop 'BLOCKED — DRESP-06A commensurate covariance stage failed'
+      end if
+      deallocate(transport, mapped, mapped_loss, denominator_transport, identity, site_plus, site_minus, site_transport, &
+         site_loss_plus, site_loss_transport, kxc_transport)
+   end subroutine run_alsda_covariance_audit
+
    subroutine run_alsda_frequency_refinement(unit, config, q_index, product, left_state, endpoint, interaction)
       integer, intent(in) :: unit, q_index
       type(tddft_production_config), intent(in) :: config
@@ -2136,11 +2305,13 @@ contains
       type(lr_electronic_state), target, intent(in) :: left_state
       type(lr_electronic_state), target, intent(in) :: endpoints(:)
       type(lr_product_gf_susceptibility_request) :: gf_request
-      type(lr_product_gf_susceptibility_result) :: gf_result
+      type(lr_product_gf_susceptibility_result) :: gf_result, gf_fine_result
       type(lr_product_ks_susceptibility_request) :: lehmann_request
       type(lr_product_ks_susceptibility_result) :: lehmann_result
-      integer :: q_index, frequency_index
+      integer :: q_index, frequency_index, base_points, fine_points, base_intervals
       real(rp) :: norm_lehmann, norm_gf, difference, relative, infinity
+      real(rp) :: fine_norm_gf, base_fine_difference, base_fine_relative, base_fine_infinity
+      real(rp) :: energy_min, energy_max, span
 
       q_index = find_first_nonzero_q(config%q_list)
       if (q_index == 0) error stop 'DRESP-06A: GF audit requires a finite-q spot'
@@ -2151,11 +2322,20 @@ contains
       end do
       if (frequency_index > size(config%frequencies)) frequency_index = 1
 
+      if (config%gf_integration_eta <= 0.0_rp) error stop 'DRESP-06A: GF audit requires positive integration_eta'
+      energy_min = min(minval(left_state%eigenvalues), minval(endpoints(q_index)%eigenvalues)) - config%gf_energy_margin
+      energy_max = max(maxval(left_state%eigenvalues), maxval(endpoints(q_index)%eigenvalues)) + config%gf_energy_margin
+      span = energy_max - energy_min
+      base_intervals = max(2, ceiling(span/(0.4_rp*config%gf_integration_eta)))
+      if (mod(base_intervals, 2) /= 0) base_intervals = base_intervals + 1
+      base_points = base_intervals + 1
+      fine_points = 2*base_intervals + 1
+
       gf_request%q = config%q_list(:, q_index)
       gf_request%frequencies = [config%frequencies(frequency_index)]
       gf_request%eta = config%eta
       gf_request%channel = config%channel
-      gf_request%integration_points = config%gf_integration_points
+      gf_request%integration_points = base_points
       gf_request%integration_eta = config%gf_integration_eta
       gf_request%energy_margin = config%gf_energy_margin
       gf_request%contraction_backend = 'factorized'
@@ -2163,6 +2343,10 @@ contains
       gf_request%electronic_state => left_state
       gf_request%q_endpoint_state => endpoints(q_index)
       call evaluate_lr_product_gf_susceptibility(gf_request, gf_result)
+
+      gf_request%integration_points = fine_points
+      call evaluate_lr_product_gf_susceptibility(gf_request, gf_fine_result)
+
       lehmann_request%q = gf_request%q
       lehmann_request%frequencies = gf_request%frequencies
       lehmann_request%eta = config%eta
@@ -2177,8 +2361,23 @@ contains
       relative = difference/max(norm_lehmann, norm_gf, tiny(1.0_rp))
       infinity = maxval(abs(lehmann_result%susceptibility(:, :, 1) - gf_result%susceptibility(:, :, 1)))
       if (.not. ieee_is_finite(relative)) error stop 'DRESP-06A: product-GF spot is not finite'
-      write(unit, '(a,1x,2(i0,1x),5(es24.16,1x))') 'GF_SPOT', q_index, frequency_index, norm_lehmann, norm_gf, &
-         difference, relative, infinity
+      write(unit, '(a,1x,a,1x,2(i0,1x),i0,1x,6(es24.16,1x),3(es24.16,1x))') 'GF_SPOT', 'base', q_index, &
+         frequency_index, base_points, gf_result%energy_min, gf_result%energy_max, gf_result%energy_spacing, &
+         gf_result%spacing_over_integration_eta, norm_lehmann, norm_gf, difference, relative, infinity
+
+      fine_norm_gf = sqrt(sum(abs(gf_fine_result%susceptibility(:, :, 1))**2))
+      base_fine_difference = sqrt(sum(abs(gf_result%susceptibility(:, :, 1) - gf_fine_result%susceptibility(:, :, 1))**2))
+      base_fine_relative = base_fine_difference/max(norm_gf, fine_norm_gf, tiny(1.0_rp))
+      base_fine_infinity = maxval(abs(gf_result%susceptibility(:, :, 1) - gf_fine_result%susceptibility(:, :, 1)))
+      write(unit, '(a,1x,a,1x,2(i0,1x),i0,1x,6(es24.16,1x),3(es24.16,1x))') 'GF_SPOT', 'fine', q_index, &
+         frequency_index, fine_points, gf_fine_result%energy_min, gf_fine_result%energy_max, gf_fine_result%energy_spacing, &
+         gf_fine_result%spacing_over_integration_eta, norm_lehmann, fine_norm_gf, &
+         sqrt(sum(abs(lehmann_result%susceptibility(:, :, 1) - gf_fine_result%susceptibility(:, :, 1))**2)), &
+         sqrt(sum(abs(lehmann_result%susceptibility(:, :, 1) - gf_fine_result%susceptibility(:, :, 1))**2))/ &
+            max(norm_lehmann, fine_norm_gf, tiny(1.0_rp)), &
+         maxval(abs(lehmann_result%susceptibility(:, :, 1) - gf_fine_result%susceptibility(:, :, 1)))
+      write(unit, '(a,1x,2(i0,1x),3(es24.16,1x))') 'GF_BASE_FINE', q_index, frequency_index, &
+         base_fine_difference, base_fine_relative, base_fine_infinity
    end subroutine run_alsda_product_gf_spot
 
    subroutine write_projected_juelich_rows(unit, route, selector, eta, q_index, nsite, chi0, dyson)

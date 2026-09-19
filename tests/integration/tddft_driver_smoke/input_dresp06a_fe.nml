@@ -62,20 +62,24 @@ kspace_ham_order = 'second'
 enabled = .true.
 channel = 'chi_plus'
 n_q = 4
-q_list = 0.0, 0.0, 0.0,  0.03, 0.0, 0.0,  -0.03, 0.0, 0.0,  0.125, 0.0, 0.0
+! Gamma plus one exactly commensurate 4x4x4 grid step and its negative.
+! The old q=0.03 point is retained only as a noncommensurate diagnostic.
+q_list = 0.0, 0.0, 0.0,  0.25, 0.0, 0.0,  -0.25, 0.0, 0.0,  0.03, 0.0, 0.0
 n_omega = 9
 use_omega_grid = .false.
 omega_min = 0.0
 omega_max = 0.20
 eta = 0.02
-n_eta = 3
-eta_grid = 0.04, 0.02, 0.01
+n_eta = 4
+eta_grid = 0.04, 0.02, 0.01, 0.005
 response_lmax = -1
 interaction_route = 'direct_alsda'
 goldstone_correction = .false.
 backend = 'alsda_compare'
 projected_selector = 'spd'
-gf_integration_points = 101
+! The ALSDA closure computes the base/fine odd Simpson counts from span and
+! gf_integration_eta; this input value is retained as a provenance hint only.
+gf_integration_points = 9561
 gf_integration_eta = 0.001
 gf_energy_margin = 0.60
 gf_closure_audit = .true.

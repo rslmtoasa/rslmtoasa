@@ -99,6 +99,7 @@ add_library(${PROJECT_NAME} STATIC
     lr_projected_interacting_response.f90
     lr_projected_juelich_interaction.f90
     lr_dresp06a_bridge.f90
+    lr_ward_mode_analysis.f90
     lr_kl_static_bridge.f90
     lr_lmto_turek_gf.f90
     lr_lmto_turek_contour.f90
