@@ -37,7 +37,10 @@ module lr_ward_mode_analysis_mod
       real(rp), allocatable :: right_overlap(:)
       real(rp), allocatable :: biorthogonal_weight(:)
       real(rp), allocatable :: magnetization_mode_fraction(:)
-      real(rp), allocatable :: ward_mode_fraction(:)
+      ! Individual modal Euclidean norm squared divided by the sum of modal
+      ! norm squares.  This is intentionally not a fraction of ||D m||^2,
+      ! because the non-normal modal vectors interfere under the sum.
+      real(rp), allocatable :: ward_modal_norm_diagnostic(:)
       real(rp), allocatable :: singular_values(:)
       real(rp), allocatable :: singular_vector_overlap(:)
       complex(rp), allocatable :: smallest_singular_right_vector(:)
@@ -112,7 +115,7 @@ contains
       allocate(result%eigenvalues(n), result%right_eigenvectors(n, n), result%left_eigenvectors(n, n), &
          result%coefficients(n), result%ward_vector(n), result%magnitude_order(n), &
          result%right_overlap(n), result%biorthogonal_weight(n), result%magnetization_mode_fraction(n), &
-         result%ward_mode_fraction(n), result%singular_values(n), result%singular_vector_overlap(n), &
+         result%ward_modal_norm_diagnostic(n), result%singular_values(n), result%singular_vector_overlap(n), &
          result%smallest_singular_right_vector(n), matrix_work(n, n), left_raw(n, n), right(n, n), &
          inverse_right(n, n), reconstruction(n, n), ward_vector(n), ward_sum(n))
 
@@ -161,7 +164,7 @@ contains
       if (ward_modal_norm_sum > tiny(1.0_rp)) then
          do i = 1, n
             mode_vector = result%right_eigenvectors(:, i)*result%coefficients(i)*result%eigenvalues(i)
-            result%ward_mode_fraction(i) = sum(abs(mode_vector)**2)/ward_modal_norm_sum
+            result%ward_modal_norm_diagnostic(i) = sum(abs(mode_vector)**2)/ward_modal_norm_sum
          end do
       end if
       ward_sum = cmplx(0.0_rp, 0.0_rp, rp)

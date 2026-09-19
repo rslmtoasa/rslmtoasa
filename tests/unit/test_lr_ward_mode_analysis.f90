@@ -33,7 +33,7 @@ program test_lr_ward_mode_analysis
        result%biorthogonal_weight(result%nearest_zero_index) < 0.999999_rp) then
       error stop 'Ward fixture: rigid mode overlap failed'
    end if
-   if (result%ward_mode_fraction(result%nearest_zero_index) < 0.999999_rp .or. &
+   if (result%ward_modal_norm_diagnostic(result%nearest_zero_index) < 0.999999_rp .or. &
        result%eigen_reconstruction_residual > reconstruction_tolerance .or. &
        result%ward_reconstruction_residual > reconstruction_tolerance) then
       error stop 'Ward fixture: single-mode decomposition failed'

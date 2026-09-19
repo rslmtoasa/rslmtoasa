@@ -10,7 +10,8 @@ program test_tddft_production_driver
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, evaluate_lr_ks_susceptibility
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
-   use lr_alsda_kernel_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, evaluate_lr_alsda_kernel
+   use lr_alsda_kernel_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, evaluate_lr_alsda_kernel, &
+      lr_kxc_magnetization_kind_pauli_accepted, lr_kxc_magnetization_source_pauli_accepted
    use lr_rs_gf_susceptibility_mod, only: lr_rs_dense_gf_provider, lr_rs_gf_pair, &
       lr_rs_gf_susceptibility_request, evaluate_lr_rs_gf_susceptibility
    use tddft_dyson_mod, only: tddft_dyson_request, tddft_dyson_result, evaluate_tddft_dyson
@@ -42,7 +43,7 @@ program test_tddft_production_driver
    type(lr_rs_gf_pair) :: native_pairs(1)
    real(rp) :: mesh(5), evals(2, 1), weights(1), kpoints(3, 1), occupations(2, 1)
    complex(rp) :: vectors(8, 2, 1)
-   real(rp), allocatable :: saved_vup(:), saved_vdn(:), saved_nup(:), saved_ndn(:), saved_m(:)
+   real(rp), allocatable :: saved_vup(:), saved_vdn(:), saved_nup(:), saved_ndn(:), saved_m(:), saved_pauli_m(:, :), saved_sr_m(:, :)
    complex(rp), allocatable :: expected_delta(:, :, :)
    real(rp) :: expected_norm_lehmann, expected_norm_gf, expected_difference_frobenius
    real(rp) :: expected_relative_frobenius, expected_difference_infinity
@@ -173,6 +174,18 @@ program test_tddft_production_driver
    saved_nup = ground(1)%n_up
    saved_ndn = ground(1)%n_down
    saved_m = ground(1)%n_up - ground(1)%n_down
+   allocate(saved_pauli_m(1, size(saved_m)), saved_sr_m(1, size(saved_m)))
+   saved_pauli_m(1, :) = 0.75_rp*saved_m
+   saved_sr_m(1, :) = saved_m
+
+   if (trim(argument) == 'sr-magnetization') then
+      ! A raw SR array without the accepted-Pauli handoff is a capability
+      ! error; it must not be relabelled as production PAULI_ACCEPTED data.
+      call evaluate_tddft_production_sweep(config, space, radial, ground, state, [endpoint], driver_result, &
+         accepted_pauli_magnetization=saved_sr_m, &
+         accepted_pauli_magnetization_source=lr_kxc_magnetization_source_pauli_accepted)
+      error stop 'SR magnetization unexpectedly passed the production ALSDA provenance gate'
+   end if
 
    ! Direct validated service calls for the same tiny accepted-state fixture.
    ks_request%q = config%q_list(:, 1)
@@ -201,7 +214,10 @@ program test_tddft_production_driver
    kxc_request%response_space => space
    kxc_request%ground_states => ground
    allocate(kxc_request%pauli_magnetization(1, space%npoint))
-   kxc_request%pauli_magnetization(1, :) = saved_m
+   kxc_request%pauli_magnetization = saved_pauli_m
+   kxc_request%magnetization_kind = lr_kxc_magnetization_kind_pauli_accepted
+   kxc_request%magnetization_source = lr_kxc_magnetization_source_pauli_accepted
+   kxc_request%production_contract = .true.
    call evaluate_lr_alsda_kernel(kxc_request, kxc_direct)
 
    dyson_request%response_space => space
@@ -217,7 +233,8 @@ program test_tddft_production_driver
    dyson_request%response_space_metadata = ks_direct%response_space_metadata
    call evaluate_tddft_dyson(dyson_request, dyson_direct)
 
-   call evaluate_tddft_production_sweep(config, space, radial, ground, state, [endpoint], driver_result)
+   call evaluate_tddft_production_sweep(config, space, radial, ground, state, [endpoint], driver_result, &
+      accepted_pauli_magnetization=saved_pauli_m, accepted_pauli_magnetization_source=lr_kxc_magnetization_source_pauli_accepted)
    if (maxval(abs(driver_result%ks_susceptibility(:, :, :, 1) - dyson_direct%ks_susceptibility)) > 2.0e-12_rp) then
       error stop 'production driver and direct KS response disagree'
    end if
@@ -240,7 +257,8 @@ program test_tddft_production_driver
    ! The opt-in diagnostic evaluates both reciprocal services but must leave
    ! the selected Lehmann production path, including Dyson and loss, alone.
    config%reciprocal_backend_crosscheck = .true.
-   call evaluate_tddft_production_sweep(config, space, radial, ground, state, [endpoint], crosscheck_result)
+   call evaluate_tddft_production_sweep(config, space, radial, ground, state, [endpoint], crosscheck_result, &
+      accepted_pauli_magnetization=saved_pauli_m, accepted_pauli_magnetization_source=lr_kxc_magnetization_source_pauli_accepted)
    if (.not. crosscheck_result%reciprocal_backend_crosscheck .or. &
        .not. all(crosscheck_result%reciprocal_crosscheck_valid)) then
       error stop 'enabled reciprocal backend crosscheck did not produce valid diagnostics'
@@ -326,7 +344,8 @@ program test_tddft_production_driver
    call evaluate_lr_rs_gf_susceptibility(native_request, native_direct)
 
    call evaluate_tddft_production_sweep(config, space, radial, ground, state, [endpoint], native_driver_result, &
-      native_provider, native_pairs)
+      native_provider, native_pairs, accepted_pauli_magnetization=saved_pauli_m, &
+      accepted_pauli_magnetization_source=lr_kxc_magnetization_source_pauli_accepted)
    if (maxval(abs(native_driver_result%ks_susceptibility(:, :, :, 1) - native_direct%susceptibility)) > 2.0e-12_rp) then
       error stop 'native production driver and direct RSGF service disagree'
    end if

@@ -1,6 +1,9 @@
 # DRESP-06A spatial ALSDA comparison
 
-Status: the bounded Fe execution gate passes, but the material campaign remains `CONVERGENCE_PENDING` / `FAIL-B`. The run is useful as an auditable implementation and oracle result; it is not a claim that the finite-q covariance and GF closures are converged.
+Status: the historical pre-repair ledger is retained below for audit. The current
+DRESP-06A-R ledger uses certified accepted Pauli magnetization in every direct
+ALSDA production caller. Its Ward defect is classified as a response/field
+inconsistency; no production BES/Halle correction is enabled.
 
 ## Scope and frozen state
 
@@ -58,7 +61,7 @@ The route refinements were emitted independently for `spd_Mills`, `spd_Juelich`,
 
 The next campaign should isolate the covariance defect at the compact bare-response and Kxc transport levels, then repeat the GF spot with a controlled integration ladder. Only after those are closed should a material comparison be promoted beyond this bounded DRESP-06A gate.
 
-## DRESP-06A-FINAL closure
+## DRESP-06A-FINAL closure (historical pre-repair ledger)
 
 The historical first bounded-run ledger above is retained unchanged.  The final
 closure reran the accepted Fe state on the existing 4 x 4 x 4 mesh with the
@@ -144,20 +147,23 @@ along the same eta ladder.  The eigenmode reconstruction and `Dm` modal
 reconstruction residuals are at 1e-15--1e-14, validating the non-Hermitian
 biorthogonal decomposition.
 
-The decisive `Dm` decomposition is:
+The superseded pre-repair output printed the following modal-norm diagnostic
+under a misleading “fraction” label:
 
-| eta (Ry) | candidate fraction | next four | remainder |
+| eta (Ry) | old non-additive modal diagnostic | next four | remainder |
 |---:|---:|---:|---:|
 | 0.040 | 5.025e-1 | 6.32e-31 | 4.975e-1 |
 | 0.020 | 1.898e-1 | 2.11e-29 | 8.102e-1 |
 | 0.010 | 6.685e-2 | 1.02e-29 | 9.331e-1 |
 | 0.005 | 1.334e-2 | 1.05e-30 | 9.867e-1 |
 
-Thus the magnetization-like eigenmode becomes increasingly rigid, but it does
-not carry the Ward residual as eta decreases.  The residual is distributed
-over the remaining spectrum rather than concentrated in the candidate mode.
-The raw Ward-defect classification is therefore
-**DISTRIBUTED_KERNEL_INCONSISTENCY**, not a one-mode Halle-like defect.
+These values are not additive fractions of `||Dm||^2` for a non-normal
+eigenbasis and are not evidence for a distributed-defect classification. They
+are retained only as historical output; the repaired run uses direct
+one-mode removal from `Dm` below.
+
+The raw Ward-defect classification in this historical section is therefore
+retired and must not be read as the DRESP-06A-R classification.
 
 ### Final disposition
 
@@ -182,3 +188,111 @@ but the measured `Dm` defect is distributed.  DRESP-07 should therefore begin
 with an ALSDA ground-state/response consistency audit, especially the mixed
 `P <- SR` kernel contract, before considering any one-mode BES/Halle
 correction.  No correction is implemented in DRESP-06A-FINAL.
+
+## DRESP-06A-R repaired Pauli-material ledger
+
+The prior material ALSDA result is explicitly superseded. Its direct KXC-01
+production path supplied the scalar-relativistic LR-01 quantity
+`n_up-n_down` as the denominator. That was a provenance/representation defect,
+not an acceptable material result. The historical values above remain useful
+only as audit evidence and are not used for the repaired verdict.
+
+### Repair and production provenance
+
+The direct production callers `run_tddft_alsda_compare`,
+`run_tddft_compact_dyson`, and `evaluate_tddft_production_sweep` now require
+the accepted Pauli array. Missing or semantically SR-equivalent input is a
+hard error; there is no scalar-relativistic fallback. The accepted array is
+constructed from the accepted reciprocal eigensystem, the POTPAR large
+component, and frozen core. The production output records:
+
+```text
+magnetization_kind = PAULI_ACCEPTED
+magnetization_source = accepted reciprocal eigensystem + POTPAR large component + frozen core
+```
+
+The static-interactions route was already using this accepted array and now
+shares the same explicit provenance contract. The GSR route remains separate
+and continues to use its scalar-relativistic LR-01 semantics.
+
+### SR versus accepted Pauli audit
+
+The repeated 4 x 4 x 4 Fe fixture reports the following site-integrated
+moments and weighted radial differences:
+
+| Diagnostic | Repaired run |
+|---|---:|
+| Integrated `m_SR` | 2.0000074695 |
+| Integrated `m_Pauli` | 2.0545493196 |
+| Pauli minus SR integrated difference | 5.4541850e-2 |
+| Maximum weighted radial relative difference, SR normalization | 1.6676774e-2 |
+| Maximum weighted radial relative difference, Pauli normalization | 8.5239822e-3 |
+| Old SR KXC maximum absolute value | 4.02055565 |
+| Corrected Pauli KXC maximum absolute value | 8.47285763 |
+| Old-SR versus corrected-Pauli pointwise KXC relative difference | 1.45656695 |
+| Old-SR versus corrected-Pauli compact KXC relative difference | 2.9402215e-1 |
+| Corrected `Kxc*m` identity, absolute / relative | 1.39e-17 / 2.70e-18 |
+| Independent corrected KXC action oracle | 2.66e-15 |
+
+The old SR KXC is emitted only as a labeled audit diagnostic; it is not used
+in the production response. The Pauli projection residual is
+`8.07936e-4` absolute and `1.15668e-3` relative.
+
+### Ward seam and direct one-mode removal
+
+For `m_c=P m_P`, `B_c=P B_xc,SR`, and `K_c=P Kxc P^H`, the repaired run
+checks both residuals and their seam:
+
+```text
+rK = chi0*K_c*m_c - m_c
+rB = chi0*B_c     - m_c
+rK-rB = chi0*(K_c*m_c-B_c)
+```
+
+The seam relative norm is only `1.19e-5` to `1.50e-5` across the eta ladder,
+and the field closure `||K_c*m_c-B_c||/||B_c||` is `2.518943e-3`. Thus the
+material defect is shared by the response-to-KXC and response-to-field
+residuals rather than being caused by a large KXC product closure error.
+
+| eta (Ry) | `||rK||` | `rK/||m||` | `||rB||` | `rB/||m||` | seam/`||m||` | min sv | condition | min `|eig|` |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.040 | 2.320303e-1 | 3.321866e-1 | 2.320343e-1 | 3.321923e-1 | 1.192286e-5 | 1.894519e-1 | 6.929343 | 2.512036e-1 |
+| 0.020 | 1.814878e-1 | 2.598273e-1 | 1.814909e-1 | 2.598318e-1 | 1.362995e-5 | 9.768403e-2 | 13.505155 | 1.304836e-1 |
+| 0.010 | 1.651148e-1 | 2.363869e-1 | 1.651174e-1 | 2.363907e-1 | 1.466569e-5 | 4.952476e-2 | 26.675071 | 6.636785e-2 |
+| 0.005 | 1.606328e-1 | 2.299702e-1 | 1.606352e-1 | 2.299736e-1 | 1.502170e-5 | 2.500280e-2 | 52.856690 | 3.354130e-2 |
+
+The direct candidate-mode test removes
+`lambda_G v_G (l_G^H m_c)` from `D m_c`, with `l_G^H v_G=1`, and reports
+`R_G0/R_raw = 0.6950, 0.8788, 0.9630, 0.9890` and geometric alignment
+`0.7213, 0.4834, 0.2838, 0.1742` for decreasing eta. The candidate mode
+overlap with `m_c` stays about `0.961`, but subtracting it does not remove the
+Ward defect. This is not a one-mode Halle-like defect.
+
+The former `ward_mode_fraction`/“distributed fraction” wording is retired:
+the reported modal quantity is now explicitly a non-additive modal-norm
+diagnostic. The repaired classification is:
+
+```text
+WARD_FINAL_CLASSIFICATION RESPONSE_FIELD_INCONSISTENCY
+WARD_BES_ELIGIBILITY diagnostic-only; production BES/Halle correction = NO
+```
+
+### Other bounded checks and verdict
+
+The repaired run preserves the Mills and Juelich diagnostics within the
+reported numerical precision (`U_Mills=-2.5597596e-2 Ry`,
+`U_Juelich=-3.1313919e-2 Ry`, selected eta `0.005 Ry`); neither route is
+changed by the direct ALSDA KXC provenance repair. The controlled GF spot is
+also unchanged at relative difference `8.433885e-3` on the base quadrature and
+`8.398628e-3` on the fine quadrature, with base-to-fine relative change
+`6.582578e-5`. The repeated commensurate q/−q covariance audit remains
+closed: KXC transport is `2.10e-10` relative Frobenius, compact interacting
+response residual is below `2.4e-14`, projected response residual is below
+`4.4e-13`, and projected loss residual is below `6.1e-14`. This is an
+independent transport check, not an empirical rescaling.
+
+The DRESP-06A-R verdict is **PASS-A for provenance and representation, with a
+material Ward limitation**: direct production ALSDA now consumes certified
+Pauli magnetization, the SR path cannot masquerade as Pauli, and the Ward
+defect is diagnosed rather than corrected. BES/Halle remains diagnostic-only;
+no production correction, kernel rescaling, or eigenvalue shifting is made.

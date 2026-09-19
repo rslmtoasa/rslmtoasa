@@ -23,7 +23,7 @@ module tddft_production_driver_mod
    use recursion_mod, only: recursion
    use green_mod, only: green
    use symbolic_atom_mod, only: symbolic_atom
-   use radial_ground_state_mod, only: radial_ground_state
+   use radial_ground_state_mod, only: radial_ground_state, RADIAL_PI, radial_simpson_weight
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
    use response_basis_mapping_mod, only: response_super_index, response_flatten_superindex
    use lr_response_space_mod, only: response_space_layout, response_operator_trace
@@ -63,7 +63,8 @@ module tddft_production_driver_mod
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
    use tddft_native_rsgf_provider_mod, only: tddft_native_rsgf_provider
-   use lr_alsda_kernel_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, evaluate_lr_alsda_kernel
+   use lr_alsda_kernel_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, evaluate_lr_alsda_kernel, &
+      lr_kxc_magnetization_kind_pauli_accepted, lr_kxc_magnetization_source_pauli_accepted
    use lr_goldstone_sumrule_mod, only: lr_goldstone_sumrule_request, lr_goldstone_sumrule_result, &
       evaluate_lr_goldstone_sumrule
    use tddft_dyson_mod, only: tddft_dyson_request, tddft_dyson_result, evaluate_tddft_dyson, &
@@ -168,6 +169,8 @@ module tddft_production_driver_mod
       character(len=64) :: goldstone_correction_status = 'not selected'
       character(len=256) :: interaction_provenance = ''
       character(len=256) :: bare_response_provenance = ''
+      character(len=32) :: magnetization_kind = ''
+      character(len=256) :: magnetization_source = ''
    end type tddft_production_result
 
    public :: load_tddft_config
@@ -894,6 +897,7 @@ contains
       type(tddft_production_result) :: result
       type(tddft_native_rsgf_provider), target :: native_provider
       real(rp), allocatable, target :: native_site_positions(:, :)
+      real(rp), allocatable :: accepted_pauli_magnetization(:, :)
       real(rp) :: ignore_real
       integer :: first, last, nsite, response_lmax, isite, iq
       logical :: use_accepted_kspace_scf
@@ -1054,10 +1058,21 @@ contains
             lattice_obj, reciprocal_obj, radial_bases)
          allocate(native_site_positions(3, nsite))
          native_site_positions = 0.0_rp
+         if (trim(config%interaction_route) == tddft_driver_route_direct_alsda) then
+            call compute_accepted_pauli_magnetization(reciprocal_obj, lattice_obj%symbolic_atoms, lattice_obj%nbulk, &
+               accepted_pauli_magnetization)
+         end if
          call evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
-            native_provider, native_provider%pairs, native_site_positions)
+            native_provider, native_provider%pairs, native_site_positions, accepted_pauli_magnetization, &
+            lr_kxc_magnetization_source_pauli_accepted)
       else
-         call evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result)
+         if (trim(config%interaction_route) == tddft_driver_route_direct_alsda) then
+            call compute_accepted_pauli_magnetization(reciprocal_obj, lattice_obj%symbolic_atoms, lattice_obj%nbulk, &
+               accepted_pauli_magnetization)
+         end if
+         call evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
+            accepted_pauli_magnetization=accepted_pauli_magnetization, &
+            accepted_pauli_magnetization_source=lr_kxc_magnetization_source_pauli_accepted)
       end if
       call write_tddft_production_output(config, result, control_obj, lattice_obj, ground_states, response_space, reciprocal_obj)
       ! The production result has already been serialized. Release the dense
@@ -1623,16 +1638,20 @@ contains
       type(lr_product_gf_susceptibility_result) :: gf_result
       type(lr_product_ks_susceptibility_request) :: gf_lehmann_request
       type(lr_product_ks_susceptibility_result) :: gf_lehmann_result
-      real(rp), allocatable :: moment(:), magnetization(:, :)
+      type(lr_alsda_kernel_result) :: old_sr_kxc_result
+      real(rp), allocatable :: moment(:), magnetization(:, :), sr_magnetization(:, :), bxc_pointwise(:, :)
       complex(rp), allocatable :: test_vector(:)
-      complex(rp), allocatable :: selected_static_chi(:, :, :), interaction(:, :), opposite_interaction(:, :)
-      complex(rp), allocatable :: mcompact(:), action_a(:), action_b(:), point_m(:), reconstructed_m(:)
+      complex(rp), allocatable :: selected_static_chi(:, :, :), interaction(:, :), opposite_interaction(:, :), old_interaction(:, :)
+      complex(rp), allocatable :: mcompact(:), bcompact(:), action_a(:), action_b(:), point_m(:), reconstructed_m(:)
       complex(rp), allocatable :: covariance_site_plus(:, :, :), covariance_site_minus(:, :, :)
       complex(rp), allocatable :: covariance_loss_plus(:, :, :), covariance_loss_minus(:, :, :)
       complex(rp), allocatable :: covariance_site_transport(:, :, :), covariance_loss_transport(:, :, :)
       complex(rp), allocatable :: site_alsda(:, :, :), site_loss_alsda(:, :, :), site_loss_bare(:, :), site_loss_tmp(:, :)
       real(rp) :: magnetization_norm, magnetization_projection_residual, magnetization_projection_relative
       real(rp) :: action_residual, ward_residual, ward_relative, kxc_identity_abs, kxc_identity_rel
+      real(rp) :: magnetization_sr_pauli_relative, sr_moment, pauli_moment, radial_difference_max
+      real(rp) :: old_min_kxc, old_max_kxc, old_maxabs_kxc, kxc_pointwise_relative, compact_kxc_relative
+      real(rp) :: field_closure, direct_field_relative, kxc_ward_relative, kxc_field_seam_relative
       real(rp) :: eta_run, site_closure, loss_closure, r_alsda_mills, r_alsda_juelich
       real(rp) :: loss_trace_bare, loss_trace_mills, loss_trace_juelich, loss_trace_alsda
       real(rp) :: min_kxc, max_kxc, maxabs_kxc, denominator_min
@@ -1669,27 +1688,32 @@ contains
          error stop 'DRESP-06A: Fe spd product dimension is not 232'
       end if
 
-      allocate(moment(size(ground_states)), magnetization(size(ground_states), response_space%npoint))
+      allocate(moment(size(ground_states)), magnetization(size(ground_states), response_space%npoint), &
+         sr_magnetization(size(ground_states), response_space%npoint), bxc_pointwise(size(ground_states), response_space%npoint))
       do i = 1, size(ground_states)
-         magnetization(i, :) = ground_states(i)%n_up - ground_states(i)%n_down
+         sr_magnetization(i, :) = ground_states(i)%n_up - ground_states(i)%n_down
       end do
+      call compute_accepted_pauli_magnetization(reciprocal_obj, lattice_obj%symbolic_atoms, lattice_obj%nbulk, magnetization)
       call contract%moment_from_operator(left_state%eigenvalues, left_state%eigenvectors, left_state%k_weights, &
          left_state%fermi_level, left_state%temperature, ground_states, moment)
 
-      kxc_request%response_space => response_space
-      kxc_request%ground_states => ground_states
-      allocate(kxc_request%pauli_magnetization(size(ground_states), response_space%npoint))
-      kxc_request%pauli_magnetization = magnetization
+      call prepare_direct_alsda_request(response_space, ground_states, magnetization, kxc_request)
       call evaluate_lr_alsda_kernel(kxc_request, kxc_result)
+      call evaluate_lr_alsda_kernel(response_space, ground_states, sr_magnetization, old_sr_kxc_result)
+      do i = 1, size(ground_states)
+         bxc_pointwise(i, :) = 0.5_rp*(ground_states(i)%vxc_up - ground_states(i)%vxc_down)
+      end do
       allocate(interaction(product_plus%product_dimension, product_plus%product_dimension), &
-         opposite_interaction(product_minus%product_dimension, product_minus%product_dimension))
+         opposite_interaction(product_minus%product_dimension, product_minus%product_dimension), &
+         old_interaction(product_plus%product_dimension, product_plus%product_dimension))
       call compact_project_local_operator(response_space, product_plus, cmplx(kxc_result%pointwise_kernel, 0.0_rp, rp), interaction)
       call compact_project_local_operator(response_space, product_minus, cmplx(kxc_result%pointwise_kernel, 0.0_rp, rp), opposite_interaction)
+      call compact_project_local_operator(response_space, product_plus, cmplx(old_sr_kxc_result%pointwise_kernel, 0.0_rp, rp), old_interaction)
 
       ! Independent Kxc action tests: deterministic, deterministic pseudo-random,
       ! and the actual compact ground-state magnetization vector.
       allocate(test_vector(product_plus%product_dimension), action_a(product_plus%product_dimension), &
-         action_b(product_plus%product_dimension), mcompact(product_plus%product_dimension), &
+         action_b(product_plus%product_dimension), mcompact(product_plus%product_dimension), bcompact(product_plus%product_dimension), &
          point_m(response_space%ndim), reconstructed_m(response_space%ndim))
       do i = 1, size(test_vector)
          test_vector(i) = real(mod(37*i + 11, 101), rp)/101.0_rp
@@ -1706,6 +1730,7 @@ contains
       call compact_apply_local_operator_independent(response_space, product_plus, kxc_result%pointwise_kernel, test_vector, action_b)
       action_residual = max(action_residual, maxval(abs(action_a - action_b)))
       call compact_project_magnetization(response_space, product_plus, magnetization, mcompact, point_m)
+      call compact_project_magnetization(response_space, product_plus, bxc_pointwise, bcompact)
       call compact_reconstruct_point_vector(response_space, product_plus, mcompact, reconstructed_m)
       call compact_weighted_projection_diagnostics(response_space, point_m, reconstructed_m, magnetization_norm, &
          magnetization_projection_residual, magnetization_projection_relative)
@@ -1725,6 +1750,26 @@ contains
          end do
       end do
       kxc_identity_rel = kxc_identity_abs/max(maxabs_kxc*maxval(abs(magnetization(:, 2:))), tiny(1.0_rp))
+      old_min_kxc = minval(old_sr_kxc_result%pointwise_kernel(:, 2:))
+      old_max_kxc = maxval(old_sr_kxc_result%pointwise_kernel(:, 2:))
+      old_maxabs_kxc = maxval(abs(old_sr_kxc_result%pointwise_kernel(:, 2:)))
+      kxc_pointwise_relative = maxval(abs(kxc_result%pointwise_kernel(:, 2:) - old_sr_kxc_result%pointwise_kernel(:, 2:))) / &
+         max(old_maxabs_kxc, maxabs_kxc, tiny(1.0_rp))
+      compact_kxc_relative = sqrt(sum(abs(interaction - old_interaction)**2))/ &
+         max(sqrt(sum(abs(old_interaction)**2)), tiny(1.0_rp))
+      sr_moment = 0.0_rp
+      pauli_moment = 0.0_rp
+      magnetization_sr_pauli_relative = 0.0_rp
+      radial_difference_max = 0.0_rp
+      do i = 1, size(ground_states)
+         sr_moment = sr_moment + radial_volume_integral(ground_states(i), sr_magnetization(i, :))
+         pauli_moment = pauli_moment + radial_volume_integral(ground_states(i), magnetization(i, :))
+         magnetization_sr_pauli_relative = magnetization_sr_pauli_relative + &
+            radial_volume_norm(ground_states(i), magnetization(i, :) - sr_magnetization(i, :))**2
+         radial_difference_max = max(radial_difference_max, maxval(abs(magnetization(i, :) - sr_magnetization(i, :))))
+      end do
+      magnetization_sr_pauli_relative = sqrt(magnetization_sr_pauli_relative)/ &
+         max(sqrt(sum([(radial_volume_norm(ground_states(i), magnetization(i, :))**2, i=1,size(ground_states))])), tiny(1.0_rp))
 
       call select_projected_juelich_eta_indices(config%eta_values, selected_eta_index, holdout_eta_index)
       allocate(static_ladder(size(config%eta_values)), selected_static_chi(size(moment), size(moment), size(config%eta_values)))
@@ -1781,6 +1826,8 @@ contains
       write(unit, '(a)') '# DRESP-06A spatial ALSDA same-state comparison'
       write(unit, '(a)') '# accepted-state provenance = one accepted reciprocal k-space SCF state; no interaction-specific re-SCF'
       write(unit, '(a)') '# backend = alsda_compare'
+      write(unit, '(a,a)') '# magnetization_kind = ', trim(kxc_result%magnetization_kind)
+      write(unit, '(a,a)') '# magnetization_source = ', trim(kxc_result%magnetization_source)
       write(unit, '(a,3(i0,1x))') '# k_mesh = ', reciprocal_obj%nk_mesh
       write(unit, '(a,i0)') '# k_count = ', left_state%nk
       write(unit, '(a,es24.16)') '# temperature_K = ', left_state%temperature
@@ -1793,6 +1840,27 @@ contains
       write(unit, '(a)') '# ALSDA kernel contract = Kxc=B_xc_sigma,SR/magnetization_Pauli; mixed P<-SR; not exact relativistic derivative'
       write(unit, '(a,3(es24.16,1x))') '# Kxc_min_max_maxabs = ', min_kxc, max_kxc, maxabs_kxc
       write(unit, '(a,2(es24.16,1x))') '# Kxc_m_identity_abs_rel = ', kxc_identity_abs, kxc_identity_rel
+      write(unit, '(a,3(es24.16,1x))') '# SR_vs_Pauli_integrated_moments = ', sr_moment, pauli_moment, sr_moment-pauli_moment
+      write(unit, '(a,2(es24.16,1x))') '# SR_vs_Pauli_weighted_relative_difference_max_radial = ', &
+         magnetization_sr_pauli_relative, radial_difference_max
+      write(unit, '(a,3(es24.16,1x))') '# OldSR_Kxc_min_max_maxabs = ', old_min_kxc, old_max_kxc, old_maxabs_kxc
+      write(unit, '(a,2(es24.16,1x))') '# OldSR_vs_CorrectedPauli_Kxc_pointwise_compact_relative = ', &
+         kxc_pointwise_relative, compact_kxc_relative
+      write(unit, '(a)') '# SUPERSEDED material kernel = LR-01 scalar-relativistic n_up-n_down denominator; retained only as audit diagnostic'
+      write(unit, '(a)') '# SR_PAULI_RADIAL columns: site radial_index m_SR m_Pauli difference'
+      do i = 1, size(ground_states)
+         do j = 2, response_space%npoint
+            write(unit, '(a,1x,2(i0,1x),3(es24.16,1x))') 'SR_PAULI_RADIAL', i, j, sr_magnetization(i, j), &
+               magnetization(i, j), magnetization(i, j)-sr_magnetization(i, j)
+         end do
+      end do
+      write(unit, '(a)') '# SR_PAULI_BLOCK columns: site integrated_m_SR integrated_m_Pauli difference'
+      do i = 1, size(ground_states)
+         write(unit, '(a,1x,i0,1x,3(es24.16,1x))') 'SR_PAULI_BLOCK', i, &
+            radial_volume_integral(ground_states(i), sr_magnetization(i, :)), &
+            radial_volume_integral(ground_states(i), magnetization(i, :)), &
+            radial_volume_integral(ground_states(i), magnetization(i, :) - sr_magnetization(i, :))
+      end do
       write(unit, '(a,3(es24.16,1x))') '# magnetization_projection_norm_residual_relative = ', magnetization_norm, &
          magnetization_projection_residual, magnetization_projection_relative
       write(unit, '(a,es24.16)') '# Kxc_operator_action_oracle_max = ', action_residual
@@ -1818,12 +1886,13 @@ contains
       write(unit, '(a)') '# GF_BASE_FINE columns: q_index frequency_index dF relative_dF dInf'
       write(unit, '(a)') '# Q_CHANNEL_COVARIANCE_STAGE columns: stage positive_q_index negative_q_index frequency_index residual min_sv_difference condition_difference'
       write(unit, '(a)') '# KXC_TRANSPORT columns: positive_q_index negative_q_index relative_frobenius'
-      write(unit, '(a)') '# WARD_ETA columns: eta residual relative min_sv max_sv condition min_abs_eig candidate_index lambda_real lambda_imag lambda_abs right_overlap biorthogonal_weight m_fraction dm_fraction next4_fraction remainder'
-      write(unit, '(a)') '# WARD_MODE columns: eta mode lambda_real lambda_imag lambda_abs right_overlap biorthogonal_weight m_fraction dm_fraction'
+      write(unit, '(a)') '# WARD_ETA columns: eta rK_abs rK_rel rB_abs rB_rel seam_abs seam_rel field_closure R_raw min_sv max_sv condition min_abs_eig R_G0_over_R_raw geometric_alignment subtraction_ratio'
+      write(unit, '(a)') '# WARD_MODE_TRACK columns: candidate lambda_real lambda_imag lambda_abs right_overlap biorthogonal_weight m_overlap svd_overlap R_raw R_G0'
+      write(unit, '(a)') '# WARD_MODE columns: eta mode lambda_real lambda_imag lambda_abs right_overlap biorthogonal_weight m_overlap nonadditive_modal_norm_diagnostic'
       write(unit, '(a)') '# WARD_SVD columns: eta min_sv max_sv condition smallest_right_overlap'
-      write(unit, '(a)') '# WARD_DM_RECONSTRUCTION columns: eta eigen_reconstruction_relative dm_reconstruction_relative candidate_fraction next4_fraction remainder'
+      write(unit, '(a)') '# WARD_DM_RECONSTRUCTION columns: eta eigen_reconstruction_relative dm_reconstruction_relative ward_reconstruction_relative'
 
-      call run_alsda_ward_eta_ladder(unit, config, product_plus, left_state, endpoints(gamma_index), interaction, mcompact)
+      call run_alsda_ward_eta_ladder(unit, config, product_plus, left_state, endpoints(gamma_index), interaction, mcompact, bcompact)
 
       allocate(site_alsda(size(moment), size(moment), size(config%frequencies)), &
          site_loss_alsda(size(moment), size(moment), size(config%frequencies)), site_loss_bare(size(moment), size(moment)), &
@@ -1982,35 +2051,50 @@ contains
          deallocate(covariance_site_plus, covariance_site_minus, covariance_loss_plus, covariance_loss_minus, &
             covariance_site_transport, covariance_loss_transport)
       end if
-      deallocate(moment, magnetization, static_ladder, selected_static_chi, interaction, opposite_interaction, &
-         test_vector, action_a, action_b, mcompact, point_m, reconstructed_m, site_alsda, site_loss_alsda, site_loss_bare, site_loss_tmp)
+      deallocate(moment, magnetization, sr_magnetization, bxc_pointwise, static_ladder, selected_static_chi, interaction, &
+         opposite_interaction, old_interaction, test_vector, action_a, action_b, mcompact, bcompact, point_m, reconstructed_m, &
+         site_alsda, site_loss_alsda, site_loss_bare, site_loss_tmp)
    end subroutine run_tddft_alsda_compare
 
    !> Refine the ALSDA loss peak on a window selected from the ALSDA coarse
    !> response itself.  This is intentionally independent from the Mills and
    !> Juelich projected-site windows.
-   subroutine run_alsda_ward_eta_ladder(unit, config, product, left_state, endpoint, interaction, magnetization)
+   subroutine run_alsda_ward_eta_ladder(unit, config, product, left_state, endpoint, interaction, magnetization, direct_field)
       integer, intent(in) :: unit
       type(tddft_production_config), intent(in) :: config
       type(lmto_product_response_basis), target, intent(in) :: product
       type(lr_electronic_state), target, intent(in) :: left_state, endpoint
       complex(rp), intent(in) :: interaction(:, :)
       complex(rp), intent(in) :: magnetization(:)
+      complex(rp), intent(in) :: direct_field(:)
       type(lr_product_ks_susceptibility_request) :: request
       type(lr_product_ks_susceptibility_result) :: bare
       type(lr_ward_mode_analysis_result) :: analysis
-      complex(rp), allocatable :: denominator(:, :), previous_vector(:)
-      real(rp) :: overlap, previous_norm, current_norm, next4_fraction, remainder_fraction
-      integer :: ieta, i, mode, candidate, next_count, rank
+      complex(rp), allocatable :: denominator(:, :), denominator_zeroed(:, :), previous_vector(:)
+      complex(rp), allocatable :: r_k(:), r_b(:), r_g0(:), ward_mode(:), k_field(:)
+      real(rp) :: overlap, previous_norm, current_norm, r_k_abs, r_b_abs, seam_abs, closure
+      real(rp) :: raw_relative, zeroed_relative, zeroed_ratio, geometric_alignment, subtraction_ratio
+      real(rp) :: magnetization_norm, direct_field_norm, seam_relative
+      complex(rp) :: lambda_g
+      integer :: ieta, i, j, mode, candidate
+      character(len=64) :: ward_classification
       logical :: have_previous
 
       if (any(shape(interaction) /= [product%product_dimension, product%product_dimension]) .or. &
-          size(magnetization) /= product%product_dimension) then
+          size(magnetization) /= product%product_dimension .or. size(direct_field) /= product%product_dimension) then
          error stop 'DRESP-06A Ward analysis: compact shape mismatch'
       end if
       allocate(denominator(product%product_dimension, product%product_dimension), &
-         previous_vector(product%product_dimension))
+         denominator_zeroed(product%product_dimension, product%product_dimension), previous_vector(product%product_dimension), &
+         r_k(product%product_dimension), r_b(product%product_dimension), r_g0(product%product_dimension), &
+         ward_mode(product%product_dimension), k_field(product%product_dimension))
+      magnetization_norm = sqrt(sum(abs(magnetization)**2))
+      direct_field_norm = sqrt(sum(abs(direct_field)**2))
+      if (magnetization_norm <= tiny(1.0_rp) .or. direct_field_norm <= tiny(1.0_rp)) then
+         error stop 'DRESP-06A Ward analysis: magnetization or direct field is zero'
+      end if
       have_previous = .false.
+      ward_classification = 'UNSET'
       do ieta = 1, size(config%eta_values)
          request%q = 0.0_rp
          request%frequencies = [0.0_rp]
@@ -2048,38 +2132,76 @@ contains
          previous_vector = analysis%right_eigenvectors(:, candidate)/max(previous_norm, tiny(1.0_rp))
          have_previous = .true.
 
-         next4_fraction = 0.0_rp
-         next_count = 0
-         do rank = 1, product%product_dimension
-            mode = analysis%magnitude_order(rank)
-            if (mode == candidate) cycle
-            if (next_count < 4) then
-               next4_fraction = next4_fraction + analysis%ward_mode_fraction(mode)
-               next_count = next_count + 1
-            end if
+         ! The current residual is evaluated in its physical sign convention;
+         ! the eigensystem uses D*m = -(chi*K*m-m), so the norms agree.
+         k_field = matmul(interaction, magnetization)
+         r_k = matmul(bare%susceptibility(:, :, 1), k_field) - magnetization
+         r_b = matmul(bare%susceptibility(:, :, 1), direct_field) - magnetization
+         r_k_abs = sqrt(sum(abs(r_k)**2))
+         r_b_abs = sqrt(sum(abs(r_b)**2))
+         seam_abs = sqrt(sum(abs(r_k - r_b)**2))
+         seam_relative = seam_abs/max(magnetization_norm, tiny(1.0_rp))
+         closure = sqrt(sum(abs(k_field - direct_field)**2))/direct_field_norm
+
+         ! Diagnostic-only direct one-mode removal.  Since the left vectors
+         ! are stored as kets, v*l^dagger is v*conjg(l) in this array form.
+         lambda_g = analysis%eigenvalues(candidate)
+         ward_mode = lambda_g*analysis%coefficients(candidate)*analysis%right_eigenvectors(:, candidate)
+         denominator_zeroed = denominator
+         do i = 1, product%product_dimension
+            do j = 1, product%product_dimension
+               denominator_zeroed(i, j) = denominator(i, j) - lambda_g*analysis%right_eigenvectors(i, candidate)* &
+                  conjg(analysis%left_eigenvectors(j, candidate))
+            end do
          end do
-         remainder_fraction = max(0.0_rp, 1.0_rp - analysis%ward_mode_fraction(candidate) - next4_fraction)
-         write(unit, '(a,1x,7(es24.16,1x),i0,1x,9(es24.16,1x))') 'WARD_ETA', config%eta_values(ieta), &
-            analysis%ward_residual, analysis%ward_relative, analysis%min_singular_value, analysis%max_singular_value, &
-            analysis%condition_number, analysis%minimum_magnitude_eigenvalue, candidate, &
-            real(analysis%eigenvalues(candidate), rp), aimag(analysis%eigenvalues(candidate)), &
-            abs(analysis%eigenvalues(candidate)), analysis%right_overlap(candidate), analysis%biorthogonal_weight(candidate), &
-            analysis%magnetization_mode_fraction(candidate), analysis%ward_mode_fraction(candidate), next4_fraction, remainder_fraction
-         do rank = 1, min(6, product%product_dimension)
-            mode = analysis%magnitude_order(rank)
-            write(unit, '(a,1x,es24.16,1x,i0,1x,8(es24.16,1x))') 'WARD_MODE', config%eta_values(ieta), mode, &
-               real(analysis%eigenvalues(mode), rp), aimag(analysis%eigenvalues(mode)), abs(analysis%eigenvalues(mode)), &
-               analysis%right_overlap(mode), analysis%biorthogonal_weight(mode), analysis%magnetization_mode_fraction(mode), &
-               analysis%ward_mode_fraction(mode)
+         r_g0 = matmul(denominator_zeroed, magnetization)
+         if (maxval(abs(r_g0 - (analysis%ward_vector - ward_mode))) > 1.0e-8_rp*max(1.0_rp, analysis%ward_residual)) then
+            error stop 'DRESP-06A Ward analysis: one-mode-zeroed denominator identity failed'
+         end if
+         raw_relative = analysis%ward_residual/max(magnetization_norm, tiny(1.0_rp))
+         zeroed_relative = sqrt(sum(abs(r_g0)**2))/max(magnetization_norm, tiny(1.0_rp))
+         zeroed_ratio = zeroed_relative/max(raw_relative, tiny(1.0_rp))
+         geometric_alignment = abs(dot_product(ward_mode, analysis%ward_vector))/ &
+            max(sqrt(sum(abs(ward_mode)**2))*analysis%ward_residual, tiny(1.0_rp))
+         subtraction_ratio = sqrt(sum(abs(analysis%ward_vector - ward_mode)**2))/ &
+            max(analysis%ward_residual, tiny(1.0_rp))
+
+         write(unit, '(a,1x,*(es24.16,1x))') 'WARD_ETA', config%eta_values(ieta), r_k_abs, &
+            r_k_abs/max(magnetization_norm, tiny(1.0_rp)), r_b_abs, r_b_abs/max(magnetization_norm, tiny(1.0_rp)), &
+            seam_abs, seam_relative, closure, &
+            analysis%ward_residual/max(magnetization_norm, tiny(1.0_rp)), analysis%min_singular_value, analysis%max_singular_value, &
+            analysis%condition_number, analysis%minimum_magnitude_eigenvalue, zeroed_ratio, geometric_alignment, subtraction_ratio
+         write(unit, '(a,1x,i0,1x,*(es24.16,1x))') 'WARD_MODE_TRACK', candidate, real(lambda_g, rp), aimag(lambda_g), &
+            abs(lambda_g), analysis%right_overlap(candidate), analysis%biorthogonal_weight(candidate), &
+            analysis%magnetization_mode_fraction(candidate), analysis%singular_vector_overlap(minloc(analysis%singular_values, dim=1)), &
+            raw_relative, zeroed_relative
+         do mode = 1, min(6, product%product_dimension)
+            i = analysis%magnitude_order(mode)
+            write(unit, '(a,1x,i0,1x,*(es24.16,1x))') 'WARD_MODE', i, real(analysis%eigenvalues(i), rp), &
+               aimag(analysis%eigenvalues(i)), abs(analysis%eigenvalues(i)), analysis%right_overlap(i), &
+               analysis%biorthogonal_weight(i), analysis%magnetization_mode_fraction(i), analysis%ward_modal_norm_diagnostic(i)
          end do
          mode = minloc(analysis%singular_values, dim=1)
-         write(unit, '(a,1x,5(es24.16,1x))') 'WARD_SVD', config%eta_values(ieta), analysis%min_singular_value, &
+         write(unit, '(a,1x,*(es24.16,1x))') 'WARD_SVD', config%eta_values(ieta), analysis%min_singular_value, &
             analysis%max_singular_value, analysis%condition_number, analysis%singular_vector_overlap(mode)
-         write(unit, '(a,1x,6(es24.16,1x))') 'WARD_DM_RECONSTRUCTION', config%eta_values(ieta), &
-            analysis%eigen_reconstruction_residual, analysis%ward_reconstruction_residual, &
-            analysis%ward_mode_fraction(candidate), next4_fraction, remainder_fraction
+         write(unit, '(a,1x,*(es24.16,1x))') 'WARD_DM_RECONSTRUCTION', config%eta_values(ieta), &
+            analysis%eigen_reconstruction_residual, analysis%ward_reconstruction_residual, raw_relative, zeroed_relative
+         if (r_k_abs/max(magnetization_norm, tiny(1.0_rp)) > 1.0e-1_rp .and. &
+             r_b_abs/max(magnetization_norm, tiny(1.0_rp)) > 1.0e-1_rp) then
+            ward_classification = 'RESPONSE_FIELD_INCONSISTENCY'
+         else if (closure > 1.0e-1_rp) then
+            ward_classification = 'PRODUCT_KERNEL_CLOSURE_INCONSISTENCY'
+         else if (zeroed_ratio < 1.0e-1_rp) then
+            ward_classification = 'HALLE_LIKE_SINGLE_MODE'
+         else if (zeroed_ratio < 5.0e-1_rp) then
+            ward_classification = 'SINGLE_MODE_PARTIAL'
+         else
+            ward_classification = 'MIXED'
+         end if
       end do
-      deallocate(denominator, previous_vector)
+      write(unit, '(a,1x,a)') 'WARD_FINAL_CLASSIFICATION', trim(ward_classification)
+      write(unit, '(a)') 'WARD_BES_ELIGIBILITY diagnostic-only; production BES/Halle correction = NO'
+      deallocate(denominator, denominator_zeroed, previous_vector, r_k, r_b, r_g0, ward_mode, k_field)
    end subroutine run_alsda_ward_eta_ladder
 
    subroutine run_alsda_covariance_audit(unit, config, contract, plus_product, minus_product, left_state, endpoints, &
@@ -3088,13 +3210,8 @@ contains
       nq = size(config%q_list, 2)
 
       allocate(magnetization(size(ground_states), response_space%npoint))
-      do i = 1, size(ground_states)
-         magnetization(i, :) = ground_states(i)%n_up - ground_states(i)%n_down
-      end do
-      kxc_request%response_space => response_space
-      kxc_request%ground_states => ground_states
-      allocate(kxc_request%pauli_magnetization(size(ground_states), response_space%npoint))
-      kxc_request%pauli_magnetization = magnetization
+      call compute_accepted_pauli_magnetization(reciprocal_obj, lattice_obj%symbolic_atoms, lattice_obj%nbulk, magnetization)
+      call prepare_direct_alsda_request(response_space, ground_states, magnetization, kxc_request)
       call evaluate_lr_alsda_kernel(kxc_request, kxc_result)
       allocate(interaction(ndim, ndim))
       call compact_project_local_operator(response_space, product, cmplx(kxc_result%pointwise_kernel, 0.0_rp, rp), interaction)
@@ -3157,6 +3274,8 @@ contains
          write(unit, '(a,a)') '# state_artifact = ', trim(state_file)
          write(unit, '(a,a)') '# interaction_route = ', trim(config%interaction_route)
          write(unit, '(a)') '# interaction_provenance = KXC-01 direct ALSDA LR-03; compact projection U^H K_point U'
+         write(unit, '(a,a)') '# magnetization_kind = ', trim(kxc_result%magnetization_kind)
+         write(unit, '(a,a)') '# magnetization_source = ', trim(kxc_result%magnetization_source)
          write(unit, '(a)') '# BES_GCR_goldstone_correction = OFF'
          write(unit, '(a)') '# correction_status = no implicit Goldstone/BES/GCR correction'
          write(unit, '(a,es24.16)') '# physical_eta_Ry = ', config%eta
@@ -3437,6 +3556,7 @@ contains
       complex(rp), allocatable :: core_compact(:), core_point(:), core_projected_point(:)
       complex(rp), allocatable :: compact_kernel(:, :), field(:), response(:), residual(:)
       complex(rp), allocatable :: point_residual(:)
+      type(lr_alsda_kernel_request) :: kxc_request
       real(rp) :: direct_norm, direct_relative, target_norm, state_mesh_max, state_weight_max, state_ef_diff
       real(rp) :: state_eigen_max, state_occ_max, state_projector_max, state_projector_frobenius
       real(rp) :: k_fingerprint(5), accepted_moment, weight_sum
@@ -3504,7 +3624,8 @@ contains
       if (target_norm <= tiny(1.0_rp)) then
          error stop 'TDVK-06 static interactions: accepted Pauli magnetization has no retained compact component'
       end if
-      call evaluate_lr_alsda_kernel(response_space, ground_states, magnetization, kernel_result)
+      call prepare_direct_alsda_request(response_space, ground_states, magnetization, kxc_request)
+      call evaluate_lr_alsda_kernel(kxc_request, kernel_result)
       allocate(compact_kernel(product%product_dimension, product%product_dimension), field(product%product_dimension), &
          response(product%product_dimension), residual(product%product_dimension), point_residual(response_space%ndim))
       call compact_project_local_operator(response_space, product, cmplx(kernel_result%pointwise_kernel, 0.0_rp, rp), &
@@ -4955,11 +5076,47 @@ contains
       end if
    end function product_channel_name
 
+   !> Assemble the single production direct-ALSDA request.  The caller must
+   !> have obtained the array from compute_accepted_pauli_magnetization; the
+   !> provenance fields are deliberately assigned here so an SR density cannot
+   !> be relabelled by an individual driver.
+   subroutine prepare_direct_alsda_request(response_space, ground_states, pauli_magnetization, request)
+      type(response_space_layout), target, intent(in) :: response_space
+      type(radial_ground_state), target, intent(in) :: ground_states(:)
+      real(rp), intent(in) :: pauli_magnetization(:, :)
+      type(lr_alsda_kernel_request), intent(out) :: request
+      real(rp) :: sr_difference, scale
+      integer :: isite
+
+      if (any(shape(pauli_magnetization) /= [response_space%nsite, response_space%npoint])) then
+         error stop 'TDDFT production driver: accepted Pauli magnetization shape mismatch'
+      end if
+      sr_difference = 0.0_rp
+      scale = 0.0_rp
+      do isite = 1, response_space%nsite
+         sr_difference = max(sr_difference, maxval(abs(pauli_magnetization(isite, :) - &
+            (ground_states(isite)%n_up - ground_states(isite)%n_down))))
+         scale = max(scale, maxval(abs(pauli_magnetization(isite, :))))
+      end do
+      if (sr_difference <= 1.0e-12_rp*max(1.0_rp, scale)) then
+         error stop 'TDDFT production driver: LR-01 SR n_up-n_down cannot masquerade as accepted Pauli magnetization'
+      end if
+      request%response_space => response_space
+      request%ground_states => ground_states
+      allocate(request%pauli_magnetization(size(pauli_magnetization, 1), size(pauli_magnetization, 2)))
+      request%pauli_magnetization = pauli_magnetization
+      request%magnetization_label = 'pauli_projected'
+      request%magnetization_kind = lr_kxc_magnetization_kind_pauli_accepted
+      request%magnetization_source = lr_kxc_magnetization_source_pauli_accepted
+      request%production_contract = .true.
+   end subroutine prepare_direct_alsda_request
+
    !> Evaluate an already prepared request batch. This is the reproducibility
    !> seam: tests and validation can compare it directly with service calls,
    !> without reconstructing SCF state.
    subroutine evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
-                                              native_provider, native_pairs, native_site_positions)
+                                              native_provider, native_pairs, native_site_positions, accepted_pauli_magnetization, &
+                                              accepted_pauli_magnetization_source)
       type(tddft_production_config), intent(in) :: config
       type(response_space_layout), target, intent(in) :: response_space
       type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
@@ -4970,6 +5127,8 @@ contains
       class(lr_rs_gf_provider), target, intent(inout), optional :: native_provider
       type(lr_rs_gf_pair), intent(in), optional :: native_pairs(:)
       real(rp), target, intent(in), optional :: native_site_positions(:, :)
+      real(rp), allocatable, intent(in), optional :: accepted_pauli_magnetization(:, :)
+      character(len=*), intent(in), optional :: accepted_pauli_magnetization_source
 
       type(lr_alsda_kernel_request) :: kxc_request
       type(lr_alsda_kernel_result) :: kxc_result
@@ -4979,7 +5138,7 @@ contains
       type(tddft_dyson_request) :: dyson_request
       type(tddft_dyson_result) :: dyson_result
       complex(rp), allocatable :: interaction(:, :)
-      real(rp), allocatable :: magnetization(:, :), static_frequency(:)
+      real(rp), allocatable :: gsr_magnetization(:, :), static_frequency(:)
       integer :: iq, i0, ndim
 
       call validate_prepared_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, &
@@ -5018,24 +5177,28 @@ contains
          result%reciprocal_crosscheck_delta = cmplx(0.0_rp, 0.0_rp, rp)
       end if
 
-      allocate(magnetization(size(ground_states), response_space%npoint))
-      do iq = 1, size(ground_states)
-         magnetization(iq, :) = ground_states(iq)%n_up - ground_states(iq)%n_down
-      end do
-
-      kxc_request%response_space => response_space
-      kxc_request%ground_states => ground_states
-      allocate(kxc_request%pauli_magnetization(size(ground_states), response_space%npoint))
-      kxc_request%pauli_magnetization = magnetization
-
       select case (trim(config%interaction_route))
       case (tddft_driver_route_direct_alsda)
+         if (.not. present(accepted_pauli_magnetization) .or. .not. allocated(accepted_pauli_magnetization)) then
+            error stop 'TDDFT production driver: direct_alsda requires certified accepted Pauli magnetization'
+         end if
+         if (.not. present(accepted_pauli_magnetization_source) .or. &
+             trim(accepted_pauli_magnetization_source) /= lr_kxc_magnetization_source_pauli_accepted) then
+            error stop 'TDDFT production driver: direct_alsda Pauli magnetization provenance is not certified'
+         end if
+         call prepare_direct_alsda_request(response_space, ground_states, accepted_pauli_magnetization, kxc_request)
          call evaluate_lr_alsda_kernel(kxc_request, kxc_result)
          allocate(interaction(ndim, ndim))
          interaction = kxc_result%canonical_operator
          result%interaction_provenance = 'KXC-01 direct ALSDA LR-03'
+         result%magnetization_kind = kxc_result%magnetization_kind
+         result%magnetization_source = kxc_result%magnetization_source
          result%goldstone_correction_status = 'disabled'
       case (tddft_driver_route_goldstone_sumrule)
+         allocate(gsr_magnetization(size(ground_states), response_space%npoint))
+         do iq = 1, size(ground_states)
+            gsr_magnetization(iq, :) = ground_states(iq)%n_up - ground_states(iq)%n_down
+         end do
          i0 = find_gamma_q(config%q_list)
          allocate(static_frequency(1))
          static_frequency(1) = 0.0_rp
@@ -5044,12 +5207,14 @@ contains
                                      native_site_positions)
          gsr_request%response_space => response_space
          gsr_request%static_susceptibility = static_result%susceptibility(:, :, 1)
-         gsr_request%magnetization = magnetization
+         gsr_request%magnetization = gsr_magnetization
          call evaluate_lr_goldstone_sumrule(gsr_request, gsr_result)
          if (gsr_result%blocked) error stop 'TDDFT production driver: Goldstone sum-rule interaction is blocked by its service contract'
          allocate(interaction(ndim, ndim))
          interaction = gsr_result%canonical_interaction
          result%interaction_provenance = 'GSR-01 independent Goldstone sum-rule interaction'
+         result%magnetization_kind = 'SR_LR01'
+         result%magnetization_source = 'accepted scalar-relativistic LR-01 radial density'
          result%goldstone_correction_status = 'not selected'
       case default
          error stop 'TDDFT production driver: interaction route was not validated'
@@ -5353,6 +5518,8 @@ contains
          ground_states(1)%a, ground_states(1)%b, 'rmax=', ground_states(1)%rmax, 'sum_r=', sum(ground_states(1)%r)
       write(unit, '(a,a)') '# interaction_route = ', trim(config%interaction_route)
       write(unit, '(a,a)') '# interaction_provenance = ', trim(result%interaction_provenance)
+      write(unit, '(a,a)') '# magnetization_kind = ', trim(result%magnetization_kind)
+      write(unit, '(a,a)') '# magnetization_source = ', trim(result%magnetization_source)
       write(unit, '(a,a)') '# goldstone_correction = ', trim(result%goldstone_correction_status)
       write(unit, '(a,a)') '# backend = ', trim(config%backend)
       if (config%reciprocal_backend_crosscheck) then
@@ -5415,6 +5582,39 @@ contains
       end do
       close(unit)
    end subroutine write_tddft_production_output
+
+   pure real(rp) function radial_volume_integral(state, values) result(value)
+      type(radial_ground_state), intent(in) :: state
+      real(rp), intent(in) :: values(:)
+      integer :: ir
+
+      if (size(values) /= size(state%r)) then
+         value = 0.0_rp
+         return
+      end if
+      value = 0.0_rp
+      do ir = 1, size(values)
+         value = value + radial_simpson_weight(ir, size(values))*state%a*(state%r(ir) + state%b)* &
+            4.0_rp*RADIAL_PI*state%r(ir)**2*values(ir)
+      end do
+   end function radial_volume_integral
+
+   pure real(rp) function radial_volume_norm(state, values) result(value)
+      type(radial_ground_state), intent(in) :: state
+      real(rp), intent(in) :: values(:)
+      integer :: ir
+
+      if (size(values) /= size(state%r)) then
+         value = 0.0_rp
+         return
+      end if
+      value = 0.0_rp
+      do ir = 1, size(values)
+         value = value + radial_simpson_weight(ir, size(values))*state%a*(state%r(ir) + state%b)* &
+            4.0_rp*RADIAL_PI*state%r(ir)**2*abs(values(ir))**2
+      end do
+      value = sqrt(max(value, 0.0_rp))
+   end function radial_volume_norm
 
    real(rp) function relative_site_difference(left, right) result(value)
       complex(rp), intent(in) :: left(:, :), right(:, :)

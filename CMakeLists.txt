@@ -774,6 +774,11 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitTddftProductionDriverRejectCovarianceWithoutPair PROPERTIES
     LABELS "unit;tddft;tdrun-01;negative;preflight;covariance"
     WILL_FAIL TRUE)
+  add_test(NAME UnitTddftProductionDriverRejectSrMagnetization
+    COMMAND UnitTddftProductionDriver sr-magnetization)
+  set_tests_properties(UnitTddftProductionDriverRejectSrMagnetization PROPERTIES
+    LABELS "unit;tddft;kxc-01;negative;pauli-provenance"
+    WILL_FAIL TRUE)
   add_test(NAME TddftProductionDriverSmoke
     COMMAND ${TestBinary}
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)

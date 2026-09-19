@@ -24,6 +24,9 @@ module lr_alsda_kernel_mod
    private
 
    character(len=*), parameter, public :: lr_kxc_magnetization_pauli = 'pauli_projected'
+   character(len=*), parameter, public :: lr_kxc_magnetization_kind_pauli_accepted = 'PAULI_ACCEPTED'
+   character(len=*), parameter, public :: lr_kxc_magnetization_source_pauli_accepted = &
+      'accepted reciprocal eigensystem + POTPAR large component + frozen core'
    character(len=*), parameter, public :: lr_kxc_units = 'Ry bohr^3'
    character(len=*), parameter, public :: lr_kxc_representation = 'LR-04 canonical local operator'
    real(rp), parameter, public :: lr_kxc_default_low_m_relative = 1.0e-8_rp
@@ -39,6 +42,9 @@ module lr_alsda_kernel_mod
       type(radial_ground_state), pointer :: ground_states(:) => null()
       real(rp), allocatable :: pauli_magnetization(:, :)
       character(len=32) :: magnetization_label = lr_kxc_magnetization_pauli
+      character(len=32) :: magnetization_kind = ''
+      character(len=256) :: magnetization_source = ''
+      logical :: production_contract = .false.
       character(len=512) :: requested_functional = ''
       character(len=32) :: requested_backend = ''
       integer :: requested_txc = -1
@@ -65,6 +71,8 @@ module lr_alsda_kernel_mod
       type(lr_alsda_low_m_diagnostic) :: low_m
       type(radial_xc_provenance) :: xc_provenance
       character(len=32) :: magnetization_label = ''
+      character(len=32) :: magnetization_kind = ''
+      character(len=256) :: magnetization_source = ''
       character(len=64) :: units = lr_kxc_units
       character(len=128) :: response_representation = lr_kxc_representation
       logical :: origin_null_measure_extension = .false.
@@ -95,9 +103,19 @@ contains
       if (.not. allocated(request%pauli_magnetization)) then
          error stop 'evaluate_lr_alsda_kernel: Pauli magnetization is required explicitly'
       end if
+      if (request%production_contract) then
+         if (trim(request%magnetization_kind) /= lr_kxc_magnetization_kind_pauli_accepted .or. &
+             trim(request%magnetization_source) /= lr_kxc_magnetization_source_pauli_accepted) then
+            error stop 'evaluate_lr_alsda_kernel: production direct ALSDA requires certified PAULI_ACCEPTED magnetization provenance'
+         end if
+      end if
       call evaluate_lr_alsda_kernel_explicit(request%response_space, request%ground_states, &
          request%pauli_magnetization, result, request%requested_functional, request%requested_backend, &
          request%requested_txc, request%magnetization_label, request%low_m_diagnostic_relative)
+      if (request%production_contract) then
+         result%magnetization_kind = trim(request%magnetization_kind)
+         result%magnetization_source = trim(request%magnetization_source)
+      end if
    end subroutine evaluate_lr_alsda_kernel_request
 
    !> Explicit form retained for callers that keep the three contracts apart.
@@ -165,6 +183,8 @@ contains
       result%canonical_operator = cmplx(0.0_rp, 0.0_rp, rp)
       result%low_m%diagnostic_relative_threshold = effective_low_m_diagnostic_relative
       result%magnetization_label = trim(effective_magnetization_label)
+      result%magnetization_kind = ''
+      result%magnetization_source = ''
       result%xc_provenance = reference_provenance
 
       scale = maxval(abs(pauli_magnetization))
