@@ -68,6 +68,16 @@ module radial_ground_state_mod
       real(rp), allocatable :: pauli_small(:, :, :)
       real(rp), allocatable :: pauli_sr_correction(:, :, :)
       real(rp), allocatable :: pauli_enu(:, :)
+      ! Complete accepted scalar-relativistic augmentation snapshot.  The
+      ! Pauli arrays above are retained as the historical projection contract;
+      ! these additional endpoint arrays preserve the production NEWRHO
+      ! polynomial, including GFAC and the second energy derivatives.
+      real(rp), allocatable :: sr_large_dot(:, :, :), sr_small_dot(:, :, :)
+      real(rp), allocatable :: sr_large_ddot(:, :, :), sr_small_ddot(:, :, :)
+      real(rp), allocatable :: sr_gfac(:, :, :), sr_tmc(:, :, :)
+      real(rp), allocatable :: sr_potential(:, :)
+      real(rp), allocatable :: sr_enu(:, :)
+      logical :: sr_basis_valid = .false.
       logical :: pauli_basis_valid = .false.
       integer :: pauli_lmax = -1
 
@@ -76,6 +86,7 @@ module radial_ground_state_mod
       ! projection difference rather than a valence/core bookkeeping offset.
       real(rp), allocatable :: core_weighted_up(:), core_weighted_down(:)
       real(rp), allocatable :: core_pauli_weighted_up(:), core_pauli_weighted_down(:)
+      real(rp), allocatable :: core_weighted_l(:, :, :), core_pauli_weighted_l(:, :, :)
       logical :: core_density_valid = .false.
 
       ! Convention-neutral and explicitly named derived fields.
@@ -100,6 +111,7 @@ module radial_ground_state_mod
       procedure :: capture
       procedure :: begin_pauli_basis
       procedure :: set_pauli_basis_channel
+      procedure :: set_scalar_relativistic_basis_channel
       procedure :: capture_core_density
       procedure :: mark_accepted
       procedure :: set_reported_moment
@@ -157,10 +169,20 @@ contains
       if (allocated(this%pauli_small)) deallocate(this%pauli_small)
       if (allocated(this%pauli_sr_correction)) deallocate(this%pauli_sr_correction)
       if (allocated(this%pauli_enu)) deallocate(this%pauli_enu)
+      if (allocated(this%sr_large_dot)) deallocate(this%sr_large_dot)
+      if (allocated(this%sr_small_dot)) deallocate(this%sr_small_dot)
+      if (allocated(this%sr_large_ddot)) deallocate(this%sr_large_ddot)
+      if (allocated(this%sr_small_ddot)) deallocate(this%sr_small_ddot)
+      if (allocated(this%sr_gfac)) deallocate(this%sr_gfac)
+      if (allocated(this%sr_tmc)) deallocate(this%sr_tmc)
+      if (allocated(this%sr_potential)) deallocate(this%sr_potential)
+      if (allocated(this%sr_enu)) deallocate(this%sr_enu)
       if (allocated(this%core_weighted_up)) deallocate(this%core_weighted_up)
       if (allocated(this%core_weighted_down)) deallocate(this%core_weighted_down)
       if (allocated(this%core_pauli_weighted_up)) deallocate(this%core_pauli_weighted_up)
       if (allocated(this%core_pauli_weighted_down)) deallocate(this%core_pauli_weighted_down)
+      if (allocated(this%core_weighted_l)) deallocate(this%core_weighted_l)
+      if (allocated(this%core_pauli_weighted_l)) deallocate(this%core_pauli_weighted_l)
       if (allocated(this%delta_vxc)) deallocate(this%delta_vxc)
       if (allocated(this%vxc_scalar)) deallocate(this%vxc_scalar)
       if (allocated(this%bxc_pauli)) deallocate(this%bxc_pauli)
@@ -175,6 +197,7 @@ contains
       this%rmax = 0.0_rp
       this%constraining_field_ry = 0.0_rp
       this%pauli_basis_valid = .false.
+      this%sr_basis_valid = .false.
       this%pauli_lmax = -1
       this%core_density_valid = .false.
       this%integrated_n_up = 0.0_rp
@@ -256,17 +279,32 @@ contains
 
       if (allocated(this%pauli_large)) deallocate(this%pauli_large, this%pauli_large_dot, &
          this%pauli_small, this%pauli_sr_correction, this%pauli_enu)
+      if (allocated(this%sr_large_dot)) deallocate(this%sr_large_dot, this%sr_small_dot, this%sr_large_ddot, &
+         this%sr_small_ddot, this%sr_gfac, this%sr_tmc, this%sr_potential, this%sr_enu)
       nr = size(this%r)
       allocate(this%pauli_large(nr, lmax + 1, 2), this%pauli_large_dot(nr, lmax + 1, 2), &
                this%pauli_small(nr, lmax + 1, 2), this%pauli_sr_correction(nr, lmax + 1, 2), &
                this%pauli_enu(lmax + 1, 2))
+      allocate(this%sr_large_dot(nr, lmax + 1, 2), this%sr_small_dot(nr, lmax + 1, 2), &
+               this%sr_large_ddot(nr, lmax + 1, 2), this%sr_small_ddot(nr, lmax + 1, 2), &
+               this%sr_gfac(nr, lmax + 1, 2), this%sr_tmc(nr, lmax + 1, 2), &
+               this%sr_potential(nr, 2), this%sr_enu(lmax + 1, 2))
       this%pauli_large = 0.0_rp
       this%pauli_large_dot = 0.0_rp
       this%pauli_small = 0.0_rp
       this%pauli_sr_correction = 0.0_rp
       this%pauli_enu = 0.0_rp
+      this%sr_large_dot = 0.0_rp
+      this%sr_small_dot = 0.0_rp
+      this%sr_large_ddot = 0.0_rp
+      this%sr_small_ddot = 0.0_rp
+      this%sr_gfac = 1.0_rp
+      this%sr_tmc = 274.074_rp
+      this%sr_potential = 0.0_rp
+      this%sr_enu = 0.0_rp
       this%pauli_lmax = lmax
       this%pauli_basis_valid = .false.
+      this%sr_basis_valid = .false.
    end subroutine begin_pauli_basis
 
    subroutine set_pauli_basis_channel(this, l, ispin, enu, large, large_dot, small, sr_correction)
@@ -287,9 +325,34 @@ contains
       this%pauli_basis_valid = .true.
    end subroutine set_pauli_basis_channel
 
-   subroutine capture_core_density(this, core_weighted, core_pauli_weighted)
+   !> Capture the complete RSEQSR/PHDFSR endpoint data used by NEWRHO.
+   subroutine set_scalar_relativistic_basis_channel(this, l, ispin, enu, large_dot, small_dot, large_ddot, &
+                                                    small_ddot, gfac, tmc, potential)
+      class(radial_ground_state), intent(inout) :: this
+      integer, intent(in) :: l, ispin
+      real(rp), intent(in) :: enu
+      real(rp), intent(in) :: large_dot(:), small_dot(:), large_ddot(:), small_ddot(:), gfac(:), tmc(:), potential(:)
+
+      if (.not. allocated(this%sr_large_dot) .or. l < 0 .or. l > this%pauli_lmax .or. ispin < 1 .or. ispin > 2 .or. &
+          any([size(large_dot), size(small_dot), size(large_ddot), size(small_ddot), size(gfac), size(tmc), &
+               size(potential)] /= size(this%r))) then
+         error stop 'radial_ground_state%set_scalar_relativistic_basis_channel: inconsistent basis channel'
+      end if
+      this%sr_large_dot(:, l + 1, ispin) = large_dot
+      this%sr_small_dot(:, l + 1, ispin) = small_dot
+      this%sr_large_ddot(:, l + 1, ispin) = large_ddot
+      this%sr_small_ddot(:, l + 1, ispin) = small_ddot
+      this%sr_gfac(:, l + 1, ispin) = gfac
+      this%sr_tmc(:, l + 1, ispin) = tmc
+      this%sr_potential(:, ispin) = potential
+      this%sr_enu(l + 1, ispin) = enu
+      this%sr_basis_valid = .true.
+   end subroutine set_scalar_relativistic_basis_channel
+
+   subroutine capture_core_density(this, core_weighted, core_pauli_weighted, core_weighted_l, core_pauli_weighted_l)
       class(radial_ground_state), intent(inout) :: this
       real(rp), intent(in) :: core_weighted(:, :), core_pauli_weighted(:, :)
+      real(rp), intent(in), optional :: core_weighted_l(:, :, :), core_pauli_weighted_l(:, :, :)
 
       if (.not. this%valid .or. size(core_weighted, 1) /= size(this%r) .or. &
           size(core_weighted, 2) /= 2 .or. any(shape(core_pauli_weighted) /= shape(core_weighted))) then
@@ -303,6 +366,16 @@ contains
       this%core_weighted_down = core_weighted(:, 2)
       this%core_pauli_weighted_up = core_pauli_weighted(:, 1)
       this%core_pauli_weighted_down = core_pauli_weighted(:, 2)
+      if (present(core_weighted_l) .and. present(core_pauli_weighted_l)) then
+         if (any(shape(core_weighted_l) /= shape(core_pauli_weighted_l)) .or. size(core_weighted_l, 1) /= size(this%r)) then
+            error stop 'radial_ground_state%capture_core_density: inconsistent l-resolved core dimensions'
+         end if
+         if (allocated(this%core_weighted_l)) deallocate(this%core_weighted_l, this%core_pauli_weighted_l)
+         allocate(this%core_weighted_l(size(core_weighted_l, 1), size(core_weighted_l, 2), 2), &
+                  this%core_pauli_weighted_l(size(core_pauli_weighted_l, 1), size(core_pauli_weighted_l, 2), 2))
+         this%core_weighted_l(:, :, :) = core_weighted_l
+         this%core_pauli_weighted_l(:, :, :) = core_pauli_weighted_l
+      end if
       this%core_density_valid = .true.
    end subroutine capture_core_density
 

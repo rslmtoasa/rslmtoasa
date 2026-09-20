@@ -698,6 +698,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrLmtoRepresentationTangent PROPERTIES LABELS "unit;dresp-09u;lmto;predls;representation;tangent;finite-difference;negative-control")
   add_fortran_unit_test(UnitLrLmtoDensityMomentTangent ${TestDIR}/unit/test_lr_lmto_density_moment_tangent.f90)
   set_tests_properties(UnitLrLmtoDensityMomentTangent PROPERTIES LABELS "unit;dresp-09v;density;moments;frechet;endpoint;finite-difference;near-degenerate")
+  add_fortran_unit_test(UnitLrRadialObservableProvenance ${TestDIR}/unit/test_lr_radial_observable_provenance.f90)
+  set_tests_properties(UnitLrRadialObservableProvenance PROPERTIES LABELS "unit;dresp-09w;radial;observable;provenance;pauli;scalar-relativistic;origin")
   add_test(NAME UnitDresp09DirectRouteBlocked COMMAND UnitDresp09FieldInsertion blocked)
   set_tests_properties(UnitDresp09DirectRouteBlocked PROPERTIES
     LABELS "unit;dresp-09;negative;direct-route;scalar-relativistic;capability"
@@ -902,6 +904,18 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(Dresp09VFeArtifact PROPERTIES
     DEPENDS TddftDresp09VDensityMomentTangent
     LABELS "validation;dresp-09v;artifact;density-moments;pass-b"
+    TIMEOUT 30)
+  add_test(NAME TddftDresp09WRadialObservableProvenance
+    COMMAND ${TestBinary} input_dresp09w_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp09WRadialObservableProvenance PROPERTIES
+    LABELS "integration;tddft;dresp-09w;radial;observable;provenance;accepted-state;64-k"
+    TIMEOUT 900)
+  add_test(NAME Dresp09WFeArtifact
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/dresp09w_fe_artifact.py" "/tmp/dresp09w_fe_4k.dat")
+  set_tests_properties(Dresp09WFeArtifact PROPERTIES
+    DEPENDS TddftDresp09WRadialObservableProvenance
+    LABELS "validation;dresp-09w;artifact;radial;observable;provenance"
     TIMEOUT 30)
   add_test(NAME TddftProductionDriverFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml

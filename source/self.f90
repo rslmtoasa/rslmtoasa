@@ -290,6 +290,10 @@ module self_mod
       ! bookkeeping.  The first array retains the accepted scalar-relativistic
       ! core density; the second is its large-component-only diagnostic.
       real(rp), dimension(:, :), allocatable :: core_rho_weighted, core_pauli_weighted
+      ! Optional l-resolved copy of the same frozen-core accumulation for the
+      ! DRESP-09W core provenance audit.  It is diagnostic-only and does not
+      ! feed the production density.
+      real(rp), dimension(:, :, :), allocatable :: core_rho_weighted_l, core_pauli_weighted_l
 
       ! TODO
       real(rp), dimension(:), allocatable :: bxc
@@ -583,12 +587,16 @@ contains
       if (allocated(this%phi_amp)) call g_safe_alloc%deallocate('self.phi_amp', this%phi_amp)
       if (allocated(this%core_rho_weighted)) call g_safe_alloc%deallocate('self.core_rho_weighted', this%core_rho_weighted)
       if (allocated(this%core_pauli_weighted)) call g_safe_alloc%deallocate('self.core_pauli_weighted', this%core_pauli_weighted)
+      if (allocated(this%core_rho_weighted_l)) call g_safe_alloc%deallocate('self.core_rho_weighted_l', this%core_rho_weighted_l)
+      if (allocated(this%core_pauli_weighted_l)) call g_safe_alloc%deallocate('self.core_pauli_weighted_l', this%core_pauli_weighted_l)
 #else
       if (allocated(this%ws)) deallocate (this%ws)
       if (allocated(this%mixmag)) deallocate (this%mixmag)
       if (allocated(this%rb)) deallocate (this%rb)
       if (allocated(this%core_rho_weighted)) deallocate (this%core_rho_weighted)
       if (allocated(this%core_pauli_weighted)) deallocate (this%core_pauli_weighted)
+      if (allocated(this%core_rho_weighted_l)) deallocate (this%core_rho_weighted_l)
+      if (allocated(this%core_pauli_weighted_l)) deallocate (this%core_pauli_weighted_l)
 #endif
       if (allocated(this%constraint_reference)) deallocate(this%constraint_reference)
       if (allocated(this%gbt_scf_in_moment)) deallocate(this%gbt_scf_in_moment)
@@ -1210,17 +1218,22 @@ contains
       call g_safe_alloc%allocate('self.phi_amp', this%phi_amp, (/8001, nfun_l, 2/))
       call g_safe_alloc%allocate('self.core_rho_weighted', this%core_rho_weighted, (/8001, 2/))
       call g_safe_alloc%allocate('self.core_pauli_weighted', this%core_pauli_weighted, (/8001, 2/))
+      call g_safe_alloc%allocate('self.core_rho_weighted_l', this%core_rho_weighted_l, (/8001, nfun_l, 2/))
+      call g_safe_alloc%allocate('self.core_pauli_weighted_l', this%core_pauli_weighted_l, (/8001, nfun_l, 2/))
 #else
       nfun_l = max(3, this%control%lmax + 1)
       allocate (this%bxc(this%lattice%nrec))
       allocate (this%vtn(8001, 2), this%vzt(8001, 2), this%fun2(8001, nfun_l, 2))
       allocate (this%phi_amp(8001, nfun_l, 2))
       allocate (this%core_rho_weighted(8001, 2), this%core_pauli_weighted(8001, 2))
+      allocate (this%core_rho_weighted_l(8001, nfun_l, 2), this%core_pauli_weighted_l(8001, nfun_l, 2))
 #endif
       this%fun2(:, :, :) = 0.0_rp
       this%phi_amp(:, :, :) = 0.0_rp
       this%core_rho_weighted(:, :) = 0.0_rp
       this%core_pauli_weighted(:, :) = 0.0_rp
+      this%core_rho_weighted_l(:, :, :) = 0.0_rp
+      this%core_pauli_weighted_l(:, :, :) = 0.0_rp
 
    end subroutine restore_to_default
 
@@ -2593,7 +2606,9 @@ contains
          call this%NEWRHO(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho, atom%potential%PL, atom%potential%QL, SEC, SEV, EC, EV, TL, n_radial_spin_channels, IPR1)
          if (LAST) then
             call atom%radial_ground_state%capture_core_density(this%core_rho_weighted(1:nr, :), &
-                                                               this%core_pauli_weighted(1:nr, :))
+                                                               this%core_pauli_weighted(1:nr, :), &
+                                                               this%core_rho_weighted_l(1:nr, :, :), &
+                                                               this%core_pauli_weighted_l(1:nr, :, :))
          end if
          DRHO_CONTROL = 0.d0
          DRHO_INTEGRATED = 0.d0
@@ -3023,6 +3038,12 @@ contains
                         DEG*(GFAC*G(IR, 1)**2 + G(IR, 2)**2)
                      this%core_pauli_weighted(IR, ISP) = this%core_pauli_weighted(IR, ISP) + &
                         DEG*G(IR, 1)**2
+                     if (LP1 <= size(this%core_rho_weighted_l, 2)) then
+                        this%core_rho_weighted_l(IR, LP1, ISP) = this%core_rho_weighted_l(IR, LP1, ISP) + &
+                           DEG*(GFAC*G(IR, 1)**2 + G(IR, 2)**2)
+                        this%core_pauli_weighted_l(IR, LP1, ISP) = this%core_pauli_weighted_l(IR, LP1, ISP) + &
+                           DEG*G(IR, 1)**2
+                     end if
                   end if
                end do
                RORIM = 0.d0
@@ -3138,6 +3159,12 @@ contains
                         DEG*(GFAC*G(IR, 1)**2 + G(IR, 2)**2)
                      this%core_pauli_weighted(IR, ISP) = this%core_pauli_weighted(IR, ISP) + &
                         DEG*G(IR, 1)**2
+                     if (LP1 <= size(this%core_rho_weighted_l, 2)) then
+                        this%core_rho_weighted_l(IR, LP1, ISP) = this%core_rho_weighted_l(IR, LP1, ISP) + &
+                           DEG*(GFAC*G(IR, 1)**2 + G(IR, 2)**2)
+                        this%core_pauli_weighted_l(IR, LP1, ISP) = this%core_pauli_weighted_l(IR, LP1, ISP) + &
+                           DEG*G(IR, 1)**2
+                     end if
                   end if
                end do
                RORIM = 0.d0
@@ -4376,7 +4403,7 @@ contains
       intrinsic ATAN, EXP, SQRT, TAN
       !
       real(rp), dimension(:, :), allocatable :: G, GP, GPP
-      real(rp), dimension(:), allocatable :: sr_correction
+      real(rp), dimension(:), allocatable :: sr_correction, sr_gfac, sr_tmc
       integer :: NSP, NR
       ! ... Executable Statements ...
       !
@@ -4392,7 +4419,7 @@ contains
       nr = size(ROFI)
       lmax = atom%potential%lmax
       allocate (G(NR, NSP), GP(NR, NSP), GPP(NR, NSP))
-      allocate (sr_correction(NR))
+      allocate (sr_correction(NR), sr_gfac(NR), sr_tmc(NR))
       if (atom%radial_ground_state%valid) call atom%radial_ground_state%begin_pauli_basis(lmax)
       do I = 1, nsp
          do L = 0, lmax
@@ -4424,14 +4451,20 @@ contains
             SLO = SLO/SQRT(SUMM)
             call PHDFSR(atom%element%atomic_number, L, V(:, I), E, atom%A, B, ROFI, NR, G, VAL, SLO, GP, GPP, PHI, DPHI, PHIP, DPHIP, P, TOL, NN)
             sr_correction = 0.0_rp
+            sr_gfac = 1.0_rp
+            sr_tmc = 274.074_rp
             do IR = 2, NR
                if (abs(ROFI(IR)) > tiny(1.0_rp)) then
                   TMC = 274.074_rp - (V(IR, I) - 2.0_rp*atom%element%atomic_number/ROFI(IR) - E)/274.074_rp
+                  sr_tmc(IR) = TMC
+                  sr_gfac(IR) = 1.0_rp + real(L*(L + 1), rp)/(TMC*ROFI(IR))**2
                   sr_correction(IR) = real(L*(L + 1), rp)/(TMC*ROFI(IR))**2*G(IR, 1)**2 + G(IR, 2)**2
                end if
             end do
             if (atom%radial_ground_state%valid) then
                call atom%radial_ground_state%set_pauli_basis_channel(L, I, E, G(:, 1), GP(:, 1), G(:, 2), sr_correction)
+               call atom%radial_ground_state%set_scalar_relativistic_basis_channel(L, I, E, GP(:, 1), GP(:, 2), &
+                  GPP(:, 1), GPP(:, 2), sr_gfac, sr_tmc, V(:, I))
             end if
         !!write(876, ´(f18.8)´) G(1:NR*2)
             !print ´(a, 6f12.6)´, ´PHI´, PHI, DPHI, PHIP, DPHIP, val
@@ -4464,7 +4497,7 @@ contains
             !      write (660, 10002) L, E, VL(L, I), C(L, I), SRDEL(L, I), QPAR(L, I), PPAR(L, I)
          end do
       end do
-      deallocate (sr_correction)
+      deallocate (sr_correction, sr_gfac, sr_tmc)
       return
       !
       ! ... Format Declarations ...
