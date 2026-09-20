@@ -684,6 +684,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitDresp07ExactKsWard PROPERTIES LABELS "unit;dresp-07;exact-ks;ward;product;factor-two;field")
   add_fortran_unit_test(UnitDresp07RadialOracle ${TestDIR}/unit/test_dresp07_radial_oracle.f90)
   set_tests_properties(UnitDresp07RadialOracle PROPERTIES LABELS "unit;dresp-07r;radial;svd;projector;variational;negative-control")
+  add_fortran_unit_test(UnitDresp08NativeSecondOrder ${TestDIR}/unit/test_dresp08_native_second_order.f90)
+  set_tests_properties(UnitDresp08NativeSecondOrder PROPERTIES LABELS "unit;dresp-08;lmto;second-order;tangent;finite-rotation;angular")
   add_fortran_unit_test(UnitLrWardModeAnalysis ${TestDIR}/unit/test_lr_ward_mode_analysis.f90)
   set_tests_properties(UnitLrWardModeAnalysis PROPERTIES LABELS "unit;dresp-06a;ward;goldstone;eigensystem;nonhermitian;svd")
   add_fortran_unit_test(UnitLrKlStaticBridge ${TestDIR}/unit/test_lr_kl_static_bridge.f90)
@@ -812,6 +814,18 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(Dresp07FeArtifact PROPERTIES
     DEPENDS TddftDresp07ExactKsWard
     LABELS "validation;dresp-07;artifact;independent-regression"
+    TIMEOUT 30)
+  add_test(NAME TddftDresp08NativeSecondOrder
+    COMMAND ${TestBinary} input_dresp08_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp08NativeSecondOrder PROPERTIES
+    LABELS "integration;tddft;dresp-08;native-second-order;lmto;accepted-state;eta-ladder"
+    TIMEOUT 900)
+  add_test(NAME Dresp08FeArtifact
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/dresp08_fe_artifact.py" "/tmp/dresp08_fe_4k.dat")
+  set_tests_properties(Dresp08FeArtifact PROPERTIES
+    DEPENDS TddftDresp08NativeSecondOrder
+    LABELS "validation;dresp-08;artifact;independent-regression"
     TIMEOUT 30)
   add_test(NAME TddftProductionDriverFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml
