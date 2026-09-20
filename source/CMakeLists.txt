@@ -85,6 +85,9 @@ add_library(${PROJECT_NAME} STATIC
     recursion_chebyshev.f90
     recursion_transport.f90
     response_angular_basis.f90
+    lr_sr_angular_vertex.f90
+    lr_sr_spatial_augmentation_tangent.f90
+    lr_dresp09z_bridge.f90
     response_basis_mapping.f90
     lr_response_space.f90
     lr_pauli_transition_vertex.f90
