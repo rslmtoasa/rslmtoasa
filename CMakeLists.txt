@@ -694,6 +694,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitDresp09sScalarRelativistic PROPERTIES LABELS "unit;dresp-09s;scalar-relativistic;radial;angular;duality")
   add_fortran_unit_test(UnitDresp09xSrSpinObservable ${TestDIR}/unit/test_dresp09x_sr_spin_observable.f90)
   set_tests_properties(UnitDresp09xSrSpinObservable PROPERTIES LABELS "unit;dresp-09x;scalar-relativistic;physical-spin;second-order;rigid-rotation")
+  add_fortran_unit_test(UnitDresp09YAugmentationTangent ${TestDIR}/unit/test_dresp09y_augmentation_tangent.f90)
+  set_tests_properties(UnitDresp09YAugmentationTangent PROPERTIES LABELS "unit;dresp-09y;scalar-relativistic;augmentation-frame;observable-tangent;finite-angle")
   add_fortran_unit_test(UnitLrLmtoBasisConnection ${TestDIR}/unit/test_lr_lmto_basis_connection.f90)
   set_tests_properties(UnitLrLmtoBasisConnection PROPERTIES LABELS "unit;dresp-09t;lmto;moving-basis;connection;finite-angle;metric")
   add_fortran_unit_test(UnitLrLmtoRepresentationTangent ${TestDIR}/unit/test_lr_lmto_representation_tangent.f90)
@@ -930,6 +932,18 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(Dresp09XFeArtifact PROPERTIES
     DEPENDS TddftDresp09XSrSpinObservable
     LABELS "validation;dresp-09x;artifact;physical-spin;second-order;pass-b"
+    TIMEOUT 30)
+  add_test(NAME TddftDresp09YAugmentationTangent
+    COMMAND ${TestBinary} input_dresp09y_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp09YAugmentationTangent PROPERTIES
+    LABELS "integration;tddft;dresp-09y;scalar-relativistic;augmentation-frame;observable-tangent;accepted-state;64-k"
+    TIMEOUT 900)
+  add_test(NAME Dresp09YFeArtifact
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/dresp09y_fe_artifact.py" "/tmp/dresp09y_fe_4k.dat")
+  set_tests_properties(Dresp09YFeArtifact PROPERTIES
+    DEPENDS TddftDresp09YAugmentationTangent
+    LABELS "validation;dresp-09y;artifact;augmentation-frame;pass-a"
     TIMEOUT 30)
   add_test(NAME TddftProductionDriverFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml
