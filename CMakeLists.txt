@@ -690,6 +690,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitDresp09FieldInsertion PROPERTIES LABELS "unit;dresp-09;field-insertion;metric-adjoint;compact;angular")
   add_fortran_unit_test(UnitDresp09PauliDirect ${TestDIR}/unit/test_dresp09_pauli_direct.f90)
   set_tests_properties(UnitDresp09PauliDirect PROPERTIES LABELS "unit;dresp-09r;pauli;direct;radial;angular;metric-adjoint")
+  add_fortran_unit_test(UnitDresp09sScalarRelativistic ${TestDIR}/unit/test_dresp09s_scalar_relativistic.f90)
+  set_tests_properties(UnitDresp09sScalarRelativistic PROPERTIES LABELS "unit;dresp-09s;scalar-relativistic;radial;angular;duality")
   add_test(NAME UnitDresp09DirectRouteBlocked COMMAND UnitDresp09FieldInsertion blocked)
   set_tests_properties(UnitDresp09DirectRouteBlocked PROPERTIES
     LABELS "unit;dresp-09;negative;direct-route;scalar-relativistic;capability"
@@ -846,6 +848,18 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(Dresp09RFeArtifact PROPERTIES
     DEPENDS TddftDresp09RPauliProjectedNative
     LABELS "validation;dresp-09r;artifact;native-gate"
+    TIMEOUT 30)
+  add_test(NAME TddftDresp09SScalarRelativistic
+    COMMAND ${TestBinary} input_dresp09s_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp09SScalarRelativistic PROPERTIES
+    LABELS "integration;tddft;dresp-09s;scalar-relativistic;l0;accepted-state"
+    TIMEOUT 900)
+  add_test(NAME Dresp09SFeArtifact
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/dresp09s_fe_artifact.py" "/tmp/dresp09s_fe_4k.dat")
+  set_tests_properties(Dresp09SFeArtifact PROPERTIES
+    DEPENDS TddftDresp09SScalarRelativistic
+    LABELS "validation;dresp-09s;artifact;basis-response;duality"
     TIMEOUT 30)
   add_test(NAME TddftProductionDriverFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml

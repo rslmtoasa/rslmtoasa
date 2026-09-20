@@ -72,6 +72,8 @@ module self_mod
    public :: legacy_radial_fixture
    !> Test-only seam that invokes the unchanged production NEWRHO routine.
    public :: legacy_newrho_fixture
+   !> Public audit seam for the unchanged scalar-relativistic GINTSR metric.
+   public :: legacy_gintsr
    ! The atomic/XC radial representation has two local spin eigenchannels.
    ! This is independent of control%nsp, which selects the global Hamiltonian
    ! mode (and is not a channel-count field).
@@ -3430,6 +3432,17 @@ contains
       SUM = SUM + (R + B)*(G1(NR, 1)*G2(NR, 1)*GFAC + G1(NR, 2)*G2(NR, 2))
       SUM = SUM*A/3.d0
    end subroutine GINTSR
+
+   subroutine legacy_gintsr(G1, G2, A, B, NR, Z, E, L, V, rofi, SUM)
+      !> Test-facing wrapper; the production implementation remains GINTSR.
+      integer, intent(in) :: L, NR
+      real(rp), intent(in) :: A, B, E, Z
+      real(rp), intent(out) :: SUM
+      real(rp), dimension(NR), intent(in) :: rofi, V
+      real(rp), dimension(NR, 2), intent(in) :: G1, G2
+
+      call GINTSR(G1, G2, A, B, NR, Z, E, L, V, rofi, SUM)
+   end subroutine legacy_gintsr
 
    subroutine FCTP0(L, rofi, V, Z, NR, A, B, NCTP0, XRIM, XMIN, NSAVE)
       !  INITIALIZE THINGS FOR FCTP, WHICH FINDS CLASSICAL TURNING POINT

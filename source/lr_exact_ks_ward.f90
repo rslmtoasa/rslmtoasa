@@ -148,7 +148,12 @@ contains
       end do
       density = cmplx(0.0_rp, 0.0_rp, rp)
       do i = 1, n
-         density = density + occupations(i)*spread(eigenvectors(:, i), 2, n)*spread(conjg(eigenvectors(:, i)), 1, n)
+         ! Form the outer product explicitly.  This avoids compiler-dependent
+         ! temporary-shape handling for nested SPREAD expressions when the
+         ! accepted site-major basis has more than one atom.
+         do j = 1, n
+            density(:, j) = density(:, j) + occupations(i)*eigenvectors(:, i)*conjg(eigenvectors(j, i))
+         end do
       end do
       delta_h = cmplx(0.0_rp, -1.0_rp, rp)* (matmul(generator, hamiltonian) - matmul(hamiltonian, generator))
       delta_rho_rot = cmplx(0.0_rp, -1.0_rp, rp)* (matmul(generator, density) - matmul(density, generator))

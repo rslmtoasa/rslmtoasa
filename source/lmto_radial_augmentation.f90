@@ -34,6 +34,10 @@ module lmto_radial_augmentation_mod
       real(rp) :: mesh_a = 0.0_rp
       real(rp) :: mesh_b = 0.0_rp
       real(rp) :: nuclear_z = 0.0_rp
+      !> Immutable accepted-state provenance for the scalar-relativistic
+      !> reduction.  The potential is channel dependent; TMC also carries
+      !> the linearisation-energy dependence and is therefore l dependent.
+      real(rp), allocatable :: potential(:, :), tmc(:, :, :)
       !> Large/small scalar-relativistic radial numerators and their energy
       !> derivatives.  Dimensions are (mesh,l+1,spin), with l=0 in slot 1.
       real(rp), allocatable :: phi_large(:, :, :), phi_small(:, :, :)
@@ -73,7 +77,7 @@ contains
       if (allocated(this%rofi)) then
          deallocate(this%rofi, this%phi_large, this%phi_small, this%phidot_large, this%phidot_small, &
                     this%phiddot_large, this%phiddot_small, this%gfac, this%enu_radial, this%enu_work, &
-                    this%channel_present)
+                    this%channel_present, this%potential, this%tmc)
       end if
 
       this%npoint = npoint
@@ -85,6 +89,7 @@ contains
       allocate(this%phiddot_large(npoint, lmax + 1, nspin), this%phiddot_small(npoint, lmax + 1, nspin))
       allocate(this%gfac(npoint, lmax + 1, nspin))
       allocate(this%enu_radial(lmax + 1, nspin), this%enu_work(lmax + 1, nspin))
+      allocate(this%potential(npoint, nspin), this%tmc(npoint, lmax + 1, nspin))
       allocate(this%channel_present(lmax + 1, nspin))
 
       this%rofi = 0.0_rp
@@ -97,6 +102,8 @@ contains
       this%gfac = 1.0_rp
       this%enu_radial = 0.0_rp
       this%enu_work = 0.0_rp
+      this%potential = 0.0_rp
+      this%tmc = scalar_relativistic_c
       this%channel_present = .false.
    end subroutine lmto_radial_basis_initialize
 
@@ -124,6 +131,7 @@ contains
       this%mesh_a = a
       this%mesh_b = b
       this%nuclear_z = z
+      this%potential(:, ispin) = potential
       fllp1 = real(l*(l + 1), rp)
       do ir = 1, this%npoint
          this%phi_large(ir, l + 1, ispin) = g(ir)
@@ -138,9 +146,11 @@ contains
          ! is set to one rather than evaluating the 0/0 expression.
          if (ir == 1 .or. abs(rofi(ir)) <= tiny(1.0_rp)) then
             this%gfac(ir, l + 1, ispin) = 1.0_rp
+            this%tmc(ir, l + 1, ispin) = scalar_relativistic_c
          else
             r = rofi(ir)
             tmc = scalar_relativistic_c - (potential(ir) - 2.0_rp*z/r - energy) / scalar_relativistic_c
+            this%tmc(ir, l + 1, ispin) = tmc
             this%gfac(ir, l + 1, ispin) = 1.0_rp + fllp1/(tmc*r)**2
          end if
       end do
