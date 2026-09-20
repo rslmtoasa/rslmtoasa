@@ -109,6 +109,8 @@ add_library(${PROJECT_NAME} STATIC
     lr_dresp08_native_mapping.f90
     lr_dresp08_bridge.f90
     lr_dresp09_field_insertion.f90
+    lr_dresp09_pauli_direct.f90
+    lr_dresp09r_bridge.f90
     lr_dresp07_bridge.f90
     tddft_native_rsgf_provider.f90
     lr_alsda_kernel.f90

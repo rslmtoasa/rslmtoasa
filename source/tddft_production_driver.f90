@@ -61,6 +61,7 @@ module tddft_production_driver_mod
       dresp06a_projection_tolerance, build_compact_covariance_transport, transport_compact_matrix
    use lr_dresp07_bridge_mod, only: run_dresp07_exact_ks_ward
    use lr_dresp08_bridge_mod, only: run_dresp08_native_second_order
+   use lr_dresp09r_bridge_mod, only: run_dresp09r_pauli_projected_native
    use lr_ward_mode_analysis_mod, only: lr_ward_mode_analysis_result, analyze_lr_ward_mode
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
@@ -96,6 +97,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_alsda_compare = 'alsda_compare'
    character(len=*), parameter, public :: tddft_driver_backend_exact_ks_ward = 'exact_ks_ward'
    character(len=*), parameter, public :: tddft_driver_backend_native_second_order = 'native_second_order'
+   character(len=*), parameter, public :: tddft_driver_backend_pauli_projected_native = 'pauli_projected_native'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -373,8 +375,9 @@ contains
           trim(config%backend) /= tddft_driver_backend_projected_juelich .and. &
           trim(config%backend) /= tddft_driver_backend_alsda_compare .and. &
           trim(config%backend) /= tddft_driver_backend_exact_ks_ward .and. &
-          trim(config%backend) /= tddft_driver_backend_native_second_order) then
-         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions, compact_dyson, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, or native_second_order'
+          trim(config%backend) /= tddft_driver_backend_native_second_order .and. &
+          trim(config%backend) /= tddft_driver_backend_pauli_projected_native) then
+         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions, compact_dyson, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, or pauli_projected_native'
       end if
       if (trim(config%backend) == tddft_driver_backend_projected_mills .or. &
           trim(config%backend) == tddft_driver_backend_projected_juelich .or. &
@@ -401,8 +404,9 @@ contains
           trim(config%backend) /= tddft_driver_backend_projected_juelich .and. &
           trim(config%backend) /= tddft_driver_backend_alsda_compare .and. &
           trim(config%backend) /= tddft_driver_backend_exact_ks_ward .and. &
-          trim(config%backend) /= tddft_driver_backend_native_second_order .and. size(config%eta_values) /= 1) then
-         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence, static_interactions, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, or native_second_order'
+          trim(config%backend) /= tddft_driver_backend_native_second_order .and. &
+          trim(config%backend) /= tddft_driver_backend_pauli_projected_native .and. size(config%eta_values) /= 1) then
+         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence, static_interactions, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, or pauli_projected_native'
       end if
       if (trim(config%backend) == tddft_driver_backend_exact_ks_ward) then
          if (size(config%q_list, 2) /= 1 .or. sum(abs(config%q_list(:, 1))) > 1.0e-12_rp) then
@@ -424,6 +428,17 @@ contains
          end if
          if (config%response_lmax >= 0 .and. config%response_lmax /= 4) then
             error stop 'TDDFT input: native_second_order requires the complete response_lmax=4 product space'
+         end if
+      end if
+      if (trim(config%backend) == tddft_driver_backend_pauli_projected_native) then
+         if (size(config%q_list, 2) /= 1 .or. sum(abs(config%q_list(:, 1))) > 1.0e-12_rp) then
+            error stop 'TDDFT input: pauli_projected_native requires one Gamma q point'
+         end if
+         if (size(config%frequencies) /= 1 .or. abs(config%frequencies(1)) > 1.0e-12_rp) then
+            error stop 'TDDFT input: pauli_projected_native requires one static omega=0 point'
+         end if
+         if (config%response_lmax >= 0 .and. config%response_lmax /= 4) then
+            error stop 'TDDFT input: pauli_projected_native requires the complete response_lmax=4 product space'
          end if
       end if
       if (trim(config%backend) == tddft_driver_backend_projected_juelich .or. &
@@ -1017,6 +1032,14 @@ contains
          end if
          call run_dresp08_native_second_order(trim(config%output_file), response_space, radial_bases, ground_states, &
             reciprocal_obj, lattice_obj, hamiltonian_obj, config%eta_values)
+         return
+      end if
+      if (trim(config%backend) == tddft_driver_backend_pauli_projected_native) then
+         if (.not. use_accepted_kspace_scf) then
+            error stop 'DRESP-09R pauli_projected_native requires the accepted k-space SCF handoff'
+         end if
+         call run_dresp09r_pauli_projected_native(trim(config%output_file), response_space, radial_bases, ground_states, &
+            reciprocal_obj, lattice_obj, hamiltonian_obj)
          return
       end if
       if (trim(config%backend) == tddft_driver_backend_projected_chi0) then

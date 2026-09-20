@@ -688,6 +688,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitDresp08NativeSecondOrder PROPERTIES LABELS "unit;dresp-08;lmto;second-order;tangent;finite-rotation;angular")
   add_fortran_unit_test(UnitDresp09FieldInsertion ${TestDIR}/unit/test_dresp09_field_insertion.f90)
   set_tests_properties(UnitDresp09FieldInsertion PROPERTIES LABELS "unit;dresp-09;field-insertion;metric-adjoint;compact;angular")
+  add_fortran_unit_test(UnitDresp09PauliDirect ${TestDIR}/unit/test_dresp09_pauli_direct.f90)
+  set_tests_properties(UnitDresp09PauliDirect PROPERTIES LABELS "unit;dresp-09r;pauli;direct;radial;angular;metric-adjoint")
   add_test(NAME UnitDresp09DirectRouteBlocked COMMAND UnitDresp09FieldInsertion blocked)
   set_tests_properties(UnitDresp09DirectRouteBlocked PROPERTIES
     LABELS "unit;dresp-09;negative;direct-route;scalar-relativistic;capability"
@@ -832,6 +834,18 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(Dresp08FeArtifact PROPERTIES
     DEPENDS TddftDresp08NativeSecondOrder
     LABELS "validation;dresp-08;artifact;independent-regression"
+    TIMEOUT 30)
+  add_test(NAME TddftDresp09RPauliProjectedNative
+    COMMAND ${TestBinary} input_dresp09r_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp09RPauliProjectedNative PROPERTIES
+    LABELS "integration;tddft;dresp-09r;pauli;native-tangent;accepted-state"
+    TIMEOUT 900)
+  add_test(NAME Dresp09RFeArtifact
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/dresp09r_fe_artifact.py" "/tmp/dresp09r_fe_4k.dat")
+  set_tests_properties(Dresp09RFeArtifact PROPERTIES
+    DEPENDS TddftDresp09RPauliProjectedNative
+    LABELS "validation;dresp-09r;artifact;native-gate"
     TIMEOUT 30)
   add_test(NAME TddftProductionDriverFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml
