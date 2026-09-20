@@ -411,11 +411,12 @@ contains
       end do
    end subroutine lmto_product_candidate_coefficients
 
-   subroutine lmto_product_transition_coordinates(this, left_state, right_state, coordinates, selected_l)
+   subroutine lmto_product_transition_coordinates(this, left_state, right_state, coordinates, selected_l, response_l_filter)
       class(lmto_product_response_basis), intent(in) :: this
       type(pauli_endpoint_state), intent(in) :: left_state, right_state
       complex(rp), intent(out) :: coordinates(:)
       logical, intent(in), optional :: selected_l(0:)
+      integer, intent(in), optional :: response_l_filter
       complex(rp), allocatable :: coefficients(:)
       integer :: site, response_l, response_m
 
@@ -426,6 +427,9 @@ contains
       coordinates = cmplx(0.0_rp, 0.0_rp, rp)
       do site = 1, this%nsite
          do response_l = 0, this%response_lmax
+            if (present(response_l_filter)) then
+               if (response_l /= response_l_filter) cycle
+            end if
             allocate(coefficients(this%blocks(site, response_l)%ncandidate))
             do response_m = -response_l, response_l
                if (present(selected_l)) then

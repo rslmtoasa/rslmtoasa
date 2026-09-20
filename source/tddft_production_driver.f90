@@ -59,6 +59,7 @@ module tddft_production_driver_mod
    use lr_dresp06a_bridge_mod, only: project_compact_response_to_sites, project_compact_loss_to_sites, &
       compact_loss_matrix, site_loss_matrix, compact_apply_local_operator_independent, dresp06a_relative_matrix_difference, &
       dresp06a_projection_tolerance, build_compact_covariance_transport, transport_compact_matrix
+   use lr_dresp07_bridge_mod, only: run_dresp07_exact_ks_ward
    use lr_ward_mode_analysis_mod, only: lr_ward_mode_analysis_result, analyze_lr_ward_mode
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
@@ -92,6 +93,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_projected_mills = 'projected_mills'
    character(len=*), parameter, public :: tddft_driver_backend_projected_juelich = 'projected_juelich'
    character(len=*), parameter, public :: tddft_driver_backend_alsda_compare = 'alsda_compare'
+   character(len=*), parameter, public :: tddft_driver_backend_exact_ks_ward = 'exact_ks_ward'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -367,8 +369,9 @@ contains
           trim(config%backend) /= tddft_driver_backend_compact_dyson .and. &
           trim(config%backend) /= tddft_driver_backend_projected_mills .and. &
           trim(config%backend) /= tddft_driver_backend_projected_juelich .and. &
-          trim(config%backend) /= tddft_driver_backend_alsda_compare) then
-         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions, compact_dyson, projected_mills, projected_juelich, or alsda_compare'
+          trim(config%backend) /= tddft_driver_backend_alsda_compare .and. &
+          trim(config%backend) /= tddft_driver_backend_exact_ks_ward) then
+         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions, compact_dyson, projected_mills, projected_juelich, alsda_compare, or exact_ks_ward'
       end if
       if (trim(config%backend) == tddft_driver_backend_projected_mills .or. &
           trim(config%backend) == tddft_driver_backend_projected_juelich .or. &
@@ -393,8 +396,20 @@ contains
           trim(config%backend) /= tddft_driver_backend_static_interactions .and. &
           trim(config%backend) /= tddft_driver_backend_projected_mills .and. &
           trim(config%backend) /= tddft_driver_backend_projected_juelich .and. &
-          trim(config%backend) /= tddft_driver_backend_alsda_compare .and. size(config%eta_values) /= 1) then
-         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence, static_interactions, projected_mills, projected_juelich, or alsda_compare'
+          trim(config%backend) /= tddft_driver_backend_alsda_compare .and. &
+          trim(config%backend) /= tddft_driver_backend_exact_ks_ward .and. size(config%eta_values) /= 1) then
+         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence, static_interactions, projected_mills, projected_juelich, alsda_compare, or exact_ks_ward'
+      end if
+      if (trim(config%backend) == tddft_driver_backend_exact_ks_ward) then
+         if (size(config%q_list, 2) /= 1 .or. sum(abs(config%q_list(:, 1))) > 1.0e-12_rp) then
+            error stop 'TDDFT input: exact_ks_ward requires one Gamma q point'
+         end if
+         if (size(config%frequencies) /= 1 .or. abs(config%frequencies(1)) > 1.0e-12_rp) then
+            error stop 'TDDFT input: exact_ks_ward requires one static omega=0 point'
+         end if
+         if (config%response_lmax >= 0 .and. config%response_lmax /= 4) then
+            error stop 'TDDFT input: exact_ks_ward requires the complete response_lmax=4 product space'
+         end if
       end if
       if (trim(config%backend) == tddft_driver_backend_projected_juelich .or. &
           trim(config%backend) == tddft_driver_backend_alsda_compare) then
@@ -973,6 +988,14 @@ contains
       do iq = 1, size(config%q_list, 2)
          call lr_q_endpoint_from_reciprocal(reciprocal_obj, left_state, config%q_list(:, iq), endpoints(iq))
       end do
+      if (trim(config%backend) == tddft_driver_backend_exact_ks_ward) then
+         if (.not. use_accepted_kspace_scf) then
+            error stop 'DRESP-07 exact_ks_ward requires the accepted k-space SCF handoff'
+         end if
+         call run_dresp07_exact_ks_ward(trim(config%output_file), response_space, radial_bases, ground_states, &
+            reciprocal_obj, lattice_obj, config%eta_values)
+         return
+      end if
       if (trim(config%backend) == tddft_driver_backend_projected_chi0) then
          call run_tddft_projected_chi0(config, response_space, radial_bases, ground_states, left_state, endpoints, &
             reciprocal_obj, lattice_obj, hamiltonian_obj)

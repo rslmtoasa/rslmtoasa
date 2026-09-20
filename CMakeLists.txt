@@ -680,6 +680,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitDresp06aProjection PROPERTIES LABELS "unit;dresp-06a;alsda;projection;loss;covariance;representation-oracle")
   add_fortran_unit_test(UnitDresp06aCommensurateCovariance ${TestDIR}/unit/test_dresp06a_commensurate_covariance.f90)
   set_tests_properties(UnitDresp06aCommensurateCovariance PROPERTIES LABELS "unit;dresp-06a;alsda;commensurate-covariance;dyson;loss;projection;hard-gate")
+  add_fortran_unit_test(UnitDresp07ExactKsWard ${TestDIR}/unit/test_dresp07_exact_ks_ward.f90)
+  set_tests_properties(UnitDresp07ExactKsWard PROPERTIES LABELS "unit;dresp-07;exact-ks;ward;product;factor-two;field")
   add_fortran_unit_test(UnitLrWardModeAnalysis ${TestDIR}/unit/test_lr_ward_mode_analysis.f90)
   set_tests_properties(UnitLrWardModeAnalysis PROPERTIES LABELS "unit;dresp-06a;ward;goldstone;eigensystem;nonhermitian;svd")
   add_fortran_unit_test(UnitLrKlStaticBridge ${TestDIR}/unit/test_lr_kl_static_bridge.f90)
@@ -797,6 +799,18 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(TddftDresp06aSpatialAlsda PROPERTIES
     LABELS "integration;tddft;dresp-06a;alsda;projection;same-state;accepted-state"
     TIMEOUT 900)
+  add_test(NAME TddftDresp07ExactKsWard
+    COMMAND ${TestBinary} input_dresp07_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp07ExactKsWard PROPERTIES
+    LABELS "integration;tddft;dresp-07;exact-ks;ward;accepted-state;eta-ladder"
+    TIMEOUT 900)
+  add_test(NAME Dresp07FeArtifact
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/dresp07_fe_artifact.py" "/tmp/dresp07_fe_4k.dat")
+  set_tests_properties(Dresp07FeArtifact PROPERTIES
+    DEPENDS TddftDresp07ExactKsWard
+    LABELS "validation;dresp-07;artifact;independent-regression"
+    TIMEOUT 30)
   add_test(NAME TddftProductionDriverFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
