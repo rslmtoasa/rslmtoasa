@@ -696,6 +696,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrLmtoBasisConnection PROPERTIES LABELS "unit;dresp-09t;lmto;moving-basis;connection;finite-angle;metric")
   add_fortran_unit_test(UnitLrLmtoRepresentationTangent ${TestDIR}/unit/test_lr_lmto_representation_tangent.f90)
   set_tests_properties(UnitLrLmtoRepresentationTangent PROPERTIES LABELS "unit;dresp-09u;lmto;predls;representation;tangent;finite-difference;negative-control")
+  add_fortran_unit_test(UnitLrLmtoDensityMomentTangent ${TestDIR}/unit/test_lr_lmto_density_moment_tangent.f90)
+  set_tests_properties(UnitLrLmtoDensityMomentTangent PROPERTIES LABELS "unit;dresp-09v;density;moments;frechet;endpoint;finite-difference;near-degenerate")
   add_test(NAME UnitDresp09DirectRouteBlocked COMMAND UnitDresp09FieldInsertion blocked)
   set_tests_properties(UnitDresp09DirectRouteBlocked PROPERTIES
     LABELS "unit;dresp-09;negative;direct-route;scalar-relativistic;capability"
@@ -888,6 +890,18 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(Dresp09UFeArtifact PROPERTIES
     DEPENDS TddftDresp09URepresentationTangent
     LABELS "validation;dresp-09u;artifact;representation;tangent;pass-b"
+    TIMEOUT 30)
+  add_test(NAME TddftDresp09VDensityMomentTangent
+    COMMAND ${TestBinary} input_dresp09v_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp09VDensityMomentTangent PROPERTIES
+    LABELS "integration;tddft;dresp-09v;density;moments;endpoint-tangent;accepted-state;64-k"
+    TIMEOUT 900)
+  add_test(NAME Dresp09VFeArtifact
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/dresp09v_fe_artifact.py" "/tmp/dresp09v_fe_4k.dat")
+  set_tests_properties(Dresp09VFeArtifact PROPERTIES
+    DEPENDS TddftDresp09VDensityMomentTangent
+    LABELS "validation;dresp-09v;artifact;density-moments;pass-b"
     TIMEOUT 30)
   add_test(NAME TddftProductionDriverFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml

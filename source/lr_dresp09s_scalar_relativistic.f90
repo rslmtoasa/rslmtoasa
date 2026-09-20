@@ -28,6 +28,8 @@ module lr_dresp09s_scalar_relativistic_mod
    public :: sr_l0_source_with_flags
    public :: sr_l0_density_from_matrix
    public :: sr_l0_density_from_matrix_hamiltonian
+   public :: sr_l0_density_tangent_from_hamiltonian
+   public :: sr_l0_density_from_endpoint_branches
    public :: sr_l0_observable_matrix
 
 contains
@@ -350,6 +352,98 @@ contains
       end do
       deallocate(effective)
    end subroutine sr_l0_density_from_matrix_hamiltonian
+
+   !> Complete density-side tangent of the endpoint object.  Unlike
+   !> sr_l0_density_from_matrix_hamiltonian, this routine differentiates both
+   !> endpoint Hamiltonian powers and the density matrix.  The branch algebra
+   !> is deliberately supplied by the caller so the same service can be used
+   !> with the k-summed production M0/M1/M2 object.
+   subroutine sr_l0_density_tangent_from_hamiltonian(space, radial_bases, density_matrix, circular_channel, hamiltonian, &
+                                                     delta_hamiltonian, delta_density_matrix, density, &
+                                                     include_lower_radial, include_lower_angular)
+      use lr_lmto_density_moment_tangent_mod, only: endpoint_tangent_branches
+      type(response_space_layout), intent(in) :: space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      complex(rp), intent(in) :: density_matrix(:, :), hamiltonian(:, :), delta_hamiltonian(:, :), delta_density_matrix(:, :)
+      integer, intent(in) :: circular_channel
+      complex(rp), intent(out) :: density(:, :)
+      logical, intent(in), optional :: include_lower_radial, include_lower_angular
+      complex(rp) :: branches(size(hamiltonian, 1), size(hamiltonian, 2), 4)
+
+      call endpoint_tangent_branches(hamiltonian, density_matrix, delta_hamiltonian, delta_density_matrix, branches)
+      call sr_l0_density_from_endpoint_branches(space, radial_bases, branches, circular_channel, density, &
+         include_lower_radial, include_lower_angular)
+   end subroutine sr_l0_density_tangent_from_hamiltonian
+
+   !> Contract already-built complete endpoint branches against the certified
+   !> scalar-relativistic radial bilinears.  Branch order is 00,10,01,11.
+   !> Optional l bounds are diagnostic only and do not alter the production
+   !> branch convention.
+   subroutine sr_l0_density_from_endpoint_branches(space, radial_bases, endpoint_branches, circular_channel, density, &
+                                                   include_lower_radial, include_lower_angular, l_first, l_last)
+      type(response_space_layout), intent(in) :: space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      complex(rp), intent(in) :: endpoint_branches(:, :, :)
+      integer, intent(in) :: circular_channel
+      complex(rp), intent(out) :: density(:, :)
+      logical, intent(in), optional :: include_lower_radial, include_lower_angular
+      integer, intent(in), optional :: l_first, l_last
+      integer :: nsite, norb, n, site, ir, iorb, l, m, p, q, branch, row, col, first_l, last_l
+      integer :: spin_left, spin_right
+      real(rp) :: gaunt, pair
+      logical :: use_lower_radial, use_lower_angular
+
+      nsite = space%nsite
+      norb = (radial_bases(1)%lmax + 1)**2
+      n = 2*norb*nsite
+      if (size(radial_bases) /= nsite .or. any(shape(endpoint_branches) /= [n, n, 4]) .or. &
+          any(shape(density) /= [nsite, space%npoint])) then
+         error stop 'DRESP-09V endpoint density: shape mismatch'
+      end if
+      use_lower_radial = .true.
+      use_lower_angular = .true.
+      if (present(include_lower_radial)) use_lower_radial = include_lower_radial
+      if (present(include_lower_angular)) use_lower_angular = include_lower_angular
+      first_l = 0
+      last_l = radial_bases(1)%lmax
+      if (present(l_first)) first_l = max(0, l_first)
+      if (present(l_last)) last_l = min(radial_bases(1)%lmax, l_last)
+      if (first_l > last_l) then
+         density = cmplx(0.0_rp, 0.0_rp, rp)
+         return
+      end if
+      if (circular_channel == 1) then
+         spin_left = 1
+         spin_right = 2
+      else if (circular_channel == 2) then
+         spin_left = 2
+         spin_right = 1
+      else
+         error stop 'DRESP-09V endpoint density: invalid circular channel'
+      end if
+
+      density = cmplx(0.0_rp, 0.0_rp, rp)
+      do site = 1, nsite
+         do ir = 2, space%npoint
+            do iorb = 1, norb
+               l = lmto_orbital_l(iorb)
+               if (l < first_l .or. l > last_l) cycle
+               m = iorb - l*l - l - 1
+               gaunt = response_gaunt(l, m, l, m, 0, 0)
+               row = (site - 1)*2*norb + (spin_left - 1)*norb + iorb
+               col = (site - 1)*2*norb + (spin_right - 1)*norb + iorb
+               do p = 0, 1
+                  do q = 0, 1
+                     branch = 1 + p + 2*q
+                     pair = sr_mixed_transverse_point_with_flags(radial_bases(site), ir, l, spin_left, p, spin_right, q, &
+                        use_lower_radial, use_lower_angular)
+                     density(site, ir) = density(site, ir) + gaunt*endpoint_branches(row, col, branch)*pair
+                  end do
+               end do
+            end do
+         end do
+      end do
+   end subroutine sr_l0_density_from_endpoint_branches
 
    !> Local observable matrix at one radius, without a field or quadrature.
    !> This is used by the radial field/density pairing oracle.

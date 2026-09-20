@@ -115,6 +115,8 @@ add_library(${PROJECT_NAME} STATIC
     lr_dresp09r_bridge.f90
     lr_dresp09s_scalar_relativistic.f90
     lr_dresp09s_bridge.f90
+    lr_lmto_density_moment_tangent.f90
+    lr_dresp09v_bridge.f90
     lr_dresp09t_bridge.f90
     lr_dresp09u_bridge.f90
     lr_dresp07_bridge.f90
