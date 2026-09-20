@@ -694,6 +694,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitDresp09sScalarRelativistic PROPERTIES LABELS "unit;dresp-09s;scalar-relativistic;radial;angular;duality")
   add_fortran_unit_test(UnitLrLmtoBasisConnection ${TestDIR}/unit/test_lr_lmto_basis_connection.f90)
   set_tests_properties(UnitLrLmtoBasisConnection PROPERTIES LABELS "unit;dresp-09t;lmto;moving-basis;connection;finite-angle;metric")
+  add_fortran_unit_test(UnitLrLmtoRepresentationTangent ${TestDIR}/unit/test_lr_lmto_representation_tangent.f90)
+  set_tests_properties(UnitLrLmtoRepresentationTangent PROPERTIES LABELS "unit;dresp-09u;lmto;predls;representation;tangent;finite-difference;negative-control")
   add_test(NAME UnitDresp09DirectRouteBlocked COMMAND UnitDresp09FieldInsertion blocked)
   set_tests_properties(UnitDresp09DirectRouteBlocked PROPERTIES
     LABELS "unit;dresp-09;negative;direct-route;scalar-relativistic;capability"
@@ -874,6 +876,18 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(Dresp09TFeArtifact PROPERTIES
     DEPENDS TddftDresp09TMovingBasis
     LABELS "validation;dresp-09t;artifact;moving-basis;orthogonalization"
+    TIMEOUT 30)
+  add_test(NAME TddftDresp09URepresentationTangent
+    COMMAND ${TestBinary} input_dresp09u_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp09URepresentationTangent PROPERTIES
+    LABELS "integration;tddft;dresp-09u;representation;tangent;accepted-state;64-k"
+    TIMEOUT 900)
+  add_test(NAME Dresp09UFeArtifact
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/dresp09u_fe_artifact.py" "/tmp/dresp09u_fe_4k.dat")
+  set_tests_properties(Dresp09UFeArtifact PROPERTIES
+    DEPENDS TddftDresp09URepresentationTangent
+    LABELS "validation;dresp-09u;artifact;representation;tangent;pass-b"
     TIMEOUT 30)
   add_test(NAME TddftProductionDriverFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml
