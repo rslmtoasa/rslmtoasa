@@ -11,6 +11,8 @@ module lr_radial_observable_provenance_mod
 
    use precision_mod, only: rp
    use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l
+   use lr_dresp09s_scalar_relativistic_mod, only: sr_second_order_branch_point, sr_l0_lower_spin_factor, &
+      sr_l0_density_from_second_order_endpoint_branches
    use radial_ground_state_mod, only: radial_ground_state
    use reciprocal_mod, only: reciprocal
    use response_angular_basis_mod, only: response_gaunt
@@ -24,9 +26,15 @@ module lr_radial_observable_provenance_mod
    public :: channel_moments_from_matrix
    public :: pauli_density_from_moments
    public :: sr_density_from_moments
+   public :: sr_spin_density_from_moments
    public :: pauli_density_from_occupied_states
    public :: sr_density_from_occupied_states
+   public :: sr_spin_density_from_occupied_states
    public :: pauli_l0_density_from_endpoint_branches
+   public :: pauli_density_from_second_order_endpoints
+   public :: sr_density_from_second_order_endpoints
+   public :: sr_spin_density_from_second_order_endpoints
+   public :: pauli_l0_density_from_second_order_endpoint_branches
    public :: weighted_from_density
    public :: physical_from_weighted
    public :: volume_integral
@@ -149,6 +157,63 @@ contains
       deallocate(local_moments, local_density)
    end subroutine sr_density_from_moments
 
+   !> Scalar-relativistic physical Pauli-spin polynomial.  This is not the
+   !> SCF channel polarization: the lower component is weighted by -1/3,
+   !> including its l(l+1)/(TMC*r)^2 angular term.
+   subroutine sr_spin_density_from_moments(radial_bases, channel_moments, density, density_l)
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      real(rp), intent(in) :: channel_moments(:, :, :, :)
+      real(rp), intent(out) :: density(:, :)
+      real(rp), intent(out), optional :: density_l(:, :, :)
+      integer :: site, ir, l, spin
+      real(rp) :: q0, q1, q2, g0, gd, gdd, s0, sd, sdd, r, angular, angular1, angular2, value, sign_spin
+
+      call validate_channel_shapes(radial_bases, channel_moments, density)
+      density = 0.0_rp
+      if (present(density_l)) then
+         if (any(shape(density_l) /= [size(density, 1), size(density, 2), size(channel_moments, 3)])) then
+            error stop 'DRESP-09X SR spin moments: l-resolved output shape mismatch'
+         end if
+         density_l = 0.0_rp
+      end if
+      do site = 1, size(radial_bases)
+         do l = 0, radial_bases(site)%lmax
+            do spin = 1, 2
+               q0 = channel_moments(1, site, l + 1, spin)
+               q1 = channel_moments(2, site, l + 1, spin) - radial_bases(site)%enu_work(l + 1, spin)*q0
+               q2 = channel_moments(3, site, l + 1, spin) - &
+                  2.0_rp*radial_bases(site)%enu_work(l + 1, spin)*channel_moments(2, site, l + 1, spin) + &
+                  radial_bases(site)%enu_work(l + 1, spin)**2*q0
+               sign_spin = merge(1.0_rp, -1.0_rp, spin == 1)
+               do ir = 1, radial_bases(site)%npoint
+                  r = radial_bases(site)%rofi(ir)
+                  g0 = radial_bases(site)%phi_large(ir, l + 1, spin)
+                  gd = radial_bases(site)%phidot_large(ir, l + 1, spin)
+                  gdd = radial_bases(site)%phiddot_large(ir, l + 1, spin)
+                  s0 = radial_bases(site)%phi_small(ir, l + 1, spin)
+                  sd = radial_bases(site)%phidot_small(ir, l + 1, spin)
+                  sdd = radial_bases(site)%phiddot_small(ir, l + 1, spin)
+                  if (r <= tiny(1.0_rp)) then
+                     angular = 0.0_rp; angular1 = 0.0_rp; angular2 = 0.0_rp
+                  else
+                     angular = real(l*(l + 1), rp)*g0*g0/(radial_bases(site)%tmc(ir, l + 1, spin)**2*r**2)
+                     angular1 = real(l*(l + 1), rp)*g0*gd/(radial_bases(site)%tmc(ir, l + 1, spin)**2*r**2)
+                     angular2 = real(l*(l + 1), rp)*(gd*gd + g0*gdd)/ &
+                        (radial_bases(site)%tmc(ir, l + 1, spin)**2*r**2)
+                  end if
+                  value = q0*(g0*g0 + sr_l0_lower_spin_factor*(s0*s0 + angular)) + &
+                     2.0_rp*q1*(g0*gd + sr_l0_lower_spin_factor*(s0*sd + &
+                        angular1)) + &
+                     q2*(gd*gd + g0*gdd + sr_l0_lower_spin_factor*(sd*sd + s0*sdd + &
+                        angular2))
+                  density(site, ir) = density(site, ir) + sign_spin*value
+                  if (present(density_l)) density_l(site, ir, l + 1) = density_l(site, ir, l + 1) + sign_spin*value
+               end do
+            end do
+         end do
+      end do
+   end subroutine sr_spin_density_from_moments
+
    !> Independent Pauli occupied-state oracle: explicit phi+DeltaE*phidot.
    subroutine pauli_density_from_occupied_states(reciprocal_obj, radial_bases, density, density_l)
       type(reciprocal), intent(in) :: reciprocal_obj
@@ -240,6 +305,70 @@ contains
       deallocate(coefficients, local_density)
    end subroutine sr_density_from_occupied_states
 
+   !> Independent state-by-state physical SR-spin oracle.  It deliberately
+   !> does not call either moment-based target routine.
+   subroutine sr_spin_density_from_occupied_states(reciprocal_obj, radial_bases, density, density_l)
+      type(reciprocal), intent(in) :: reciprocal_obj
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      real(rp), intent(out) :: density(:, :)
+      real(rp), intent(out), optional :: density_l(:, :, :)
+      integer :: site, ik, ik_global, ib, spin, iorb, l, norb, nsite, ir
+      real(rp) :: wk, occ, energy, delta, amplitude, value, r, sign_spin, angular_coeff
+      complex(rp) :: coefficient
+
+      call validate_reciprocal_radial(reciprocal_obj, radial_bases, density)
+      nsite = size(radial_bases); norb = (radial_bases(1)%lmax + 1)**2
+      density = 0.0_rp
+      if (present(density_l)) density_l = 0.0_rp
+      do site = 1, nsite
+         do ik = 1, size(reciprocal_obj%eigenvalues, 2)
+            ik_global = ik
+            if (allocated(reciprocal_obj%k_l2g_map)) ik_global = reciprocal_obj%k_l2g_map(ik)
+            wk = reciprocal_obj%k_weights(ik_global)
+            do ib = 1, size(reciprocal_obj%eigenvalues, 1)
+               energy = reciprocal_obj%eigenvalues(ib, ik)
+               occ = fermi_occupation_local(energy, reciprocal_obj%fermi_level, reciprocal_obj%temperature)
+               if (occ <= 1.0e-14_rp) cycle
+               do spin = 1, 2
+                  sign_spin = merge(1.0_rp, -1.0_rp, spin == 1)
+                  do iorb = 1, norb
+                     l = lmto_orbital_l(iorb)
+                     coefficient = reciprocal_obj%eigenvectors((site - 1)*2*norb + (spin - 1)*norb + iorb, ib, ik)
+                     amplitude = real(coefficient*conjg(coefficient), rp)
+                     delta = energy - radial_bases(site)%enu_work(l + 1, spin)
+                     do ir = 1, radial_bases(site)%npoint
+                        r = radial_bases(site)%rofi(ir)
+                        if (r <= tiny(1.0_rp)) then
+                           angular_coeff = 0.0_rp
+                        else
+                           angular_coeff = real(l*(l + 1), rp)/(radial_bases(site)%tmc(ir, l + 1, spin)**2*r**2)
+                        end if
+                        ! Expand the accepted state directly through total
+                        ! second order.  No moment-based target routine is
+                        ! called on this path.
+                        value = amplitude*(radial_bases(site)%phi_large(ir, l + 1, spin)**2 + &
+                           2.0_rp*delta*radial_bases(site)%phi_large(ir, l + 1, spin)*radial_bases(site)%phidot_large(ir, l + 1, spin) + &
+                           delta**2*(radial_bases(site)%phidot_large(ir, l + 1, spin)**2 + &
+                           radial_bases(site)%phi_large(ir, l + 1, spin)*radial_bases(site)%phiddot_large(ir, l + 1, spin)) + &
+                           sr_l0_lower_spin_factor*(radial_bases(site)%phi_small(ir, l + 1, spin)**2 + &
+                           2.0_rp*delta*radial_bases(site)%phi_small(ir, l + 1, spin)*radial_bases(site)%phidot_small(ir, l + 1, spin) + &
+                           delta**2*(radial_bases(site)%phidot_small(ir, l + 1, spin)**2 + &
+                           radial_bases(site)%phi_small(ir, l + 1, spin)*radial_bases(site)%phiddot_small(ir, l + 1, spin)) + &
+                           angular_coeff* &
+                           (radial_bases(site)%phi_large(ir, l + 1, spin)**2 + &
+                           2.0_rp*delta*radial_bases(site)%phi_large(ir, l + 1, spin)*radial_bases(site)%phidot_large(ir, l + 1, spin) + &
+                           delta**2*(radial_bases(site)%phidot_large(ir, l + 1, spin)**2 + &
+                           radial_bases(site)%phi_large(ir, l + 1, spin)*radial_bases(site)%phiddot_large(ir, l + 1, spin)))))
+                        density(site, ir) = density(site, ir) + sign_spin*wk*occ*value
+                        if (present(density_l)) density_l(site, ir, l + 1) = density_l(site, ir, l + 1) + sign_spin*wk*occ*value
+                     end do
+                  end do
+               end do
+            end do
+         end do
+      end do
+   end subroutine sr_spin_density_from_occupied_states
+
    !> Pauli large-component analogue of sr_l0_density_from_endpoint_branches.
    subroutine pauli_l0_density_from_endpoint_branches(space, radial_bases, endpoint_branches, circular_channel, density, &
                                                       l_first, l_last)
@@ -287,6 +416,122 @@ contains
          end do
       end do
    end subroutine pauli_l0_density_from_endpoint_branches
+
+   !> Equilibrium six-branch Pauli target.  The endpoint matrices are the
+   !> absolute-energy D_pq objects, while the radial coefficients contain the
+   !> shifted Taylor algebra including the pure 20/02 phiddot terms.
+   subroutine pauli_density_from_second_order_endpoints(radial_bases, endpoint_branches, density, density_l)
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      complex(rp), intent(in) :: endpoint_branches(:, :, :)
+      real(rp), intent(out) :: density(:, :)
+      real(rp), intent(out), optional :: density_l(:, :, :)
+      call second_order_diagonal_density(radial_bases, endpoint_branches, 0.0_rp, density, density_l)
+   end subroutine pauli_density_from_second_order_endpoints
+
+   !> Equilibrium six-branch scalar-relativistic probability target (SR2).
+   subroutine sr_density_from_second_order_endpoints(radial_bases, endpoint_branches, density, density_l)
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      complex(rp), intent(in) :: endpoint_branches(:, :, :)
+      real(rp), intent(out) :: density(:, :)
+      real(rp), intent(out), optional :: density_l(:, :, :)
+      call second_order_diagonal_density(radial_bases, endpoint_branches, 1.0_rp, density, density_l)
+   end subroutine sr_density_from_second_order_endpoints
+
+   !> Equilibrium six-branch scalar-relativistic physical-spin target
+   !> (SRspin2), with lower Pauli factor -1/3 and channel sign.
+   subroutine sr_spin_density_from_second_order_endpoints(radial_bases, endpoint_branches, density, density_l)
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      complex(rp), intent(in) :: endpoint_branches(:, :, :)
+      real(rp), intent(out) :: density(:, :)
+      real(rp), intent(out), optional :: density_l(:, :, :)
+      call second_order_diagonal_density(radial_bases, endpoint_branches, sr_l0_lower_spin_factor, density, density_l)
+   end subroutine sr_spin_density_from_second_order_endpoints
+
+   !> Pauli large-component response contraction for the six absolute-energy
+   !> branches.  Unlike the legacy routine this uses phiddot in branches 20
+   !> and 02 and is kept as a separate oracle.
+   subroutine pauli_l0_density_from_second_order_endpoint_branches(space, radial_bases, endpoint_branches, circular_channel, &
+                                                                   density, l_first, l_last)
+      type(response_space_layout), intent(in) :: space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      complex(rp), intent(in) :: endpoint_branches(:, :, :)
+      integer, intent(in) :: circular_channel
+      complex(rp), intent(out) :: density(:, :)
+      integer, intent(in), optional :: l_first, l_last
+      integer :: nsite, norb, n, site, ir, iorb, l, m, branch, row, col, first_l, last_l
+      integer :: spin_left, spin_right
+      real(rp) :: gaunt, pair
+
+      nsite = space%nsite; norb = (radial_bases(1)%lmax + 1)**2; n = 2*norb*nsite
+      if (size(radial_bases) /= nsite .or. any(shape(endpoint_branches) /= [n, n, 6]) .or. &
+          any(shape(density) /= [nsite, space%npoint])) error stop 'DRESP-09X Pauli endpoint response: shape mismatch'
+      first_l = 0; last_l = radial_bases(1)%lmax
+      if (present(l_first)) first_l = max(0, l_first)
+      if (present(l_last)) last_l = min(radial_bases(1)%lmax, l_last)
+      if (circular_channel == 1) then
+         spin_left = 1; spin_right = 2
+      else if (circular_channel == 2) then
+         spin_left = 2; spin_right = 1
+      else
+         error stop 'DRESP-09X Pauli endpoint response: invalid circular channel'
+      end if
+      density = cmplx(0.0_rp, 0.0_rp, rp)
+      do site = 1, nsite
+         do ir = 2, space%npoint
+            do iorb = 1, norb
+               l = lmto_orbital_l(iorb)
+               if (l < first_l .or. l > last_l) cycle
+               m = iorb - l*l - l - 1
+               gaunt = response_gaunt(l, m, l, m, 0, 0)
+               row = (site - 1)*2*norb + (spin_left - 1)*norb + iorb
+               col = (site - 1)*2*norb + (spin_right - 1)*norb + iorb
+               do branch = 1, 6
+                  pair = sr_second_order_branch_point(radial_bases(site), ir, l, spin_left, spin_right, branch, 0.0_rp)
+                  density(site, ir) = density(site, ir) + gaunt*endpoint_branches(row, col, branch)*pair
+               end do
+            end do
+         end do
+      end do
+   end subroutine pauli_l0_density_from_second_order_endpoint_branches
+
+   subroutine second_order_diagonal_density(radial_bases, endpoint_branches, lower_factor, density, density_l)
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      complex(rp), intent(in) :: endpoint_branches(:, :, :)
+      real(rp), intent(in) :: lower_factor
+      real(rp), intent(out) :: density(:, :)
+      real(rp), intent(out), optional :: density_l(:, :, :)
+      integer :: nsite, norb, n, site, ir, iorb, l, spin, branch, row
+      real(rp) :: pair, sign_spin, r, raw
+
+      nsite = size(radial_bases); norb = (radial_bases(1)%lmax + 1)**2; n = 2*norb*nsite
+      if (size(endpoint_branches, 1) /= n .or. size(endpoint_branches, 2) /= n .or. size(endpoint_branches, 3) /= 6) &
+         error stop 'DRESP-09X equilibrium endpoint: shape mismatch'
+      if (any(shape(density) /= [nsite, radial_bases(1)%npoint])) error stop 'DRESP-09X equilibrium target: shape mismatch'
+      if (present(density_l)) then
+         if (any(shape(density_l) /= [nsite, radial_bases(1)%npoint, radial_bases(1)%lmax + 1])) &
+            error stop 'DRESP-09X equilibrium l target: shape mismatch'
+         density_l = 0.0_rp
+      end if
+      density = 0.0_rp
+      do site = 1, nsite
+         do spin = 1, 2
+            sign_spin = merge(1.0_rp, -1.0_rp, spin == 1)
+            do iorb = 1, norb
+               l = lmto_orbital_l(iorb); row = (site - 1)*2*norb + (spin - 1)*norb + iorb
+               do ir = 1, radial_bases(site)%npoint
+                  r = radial_bases(site)%rofi(ir)
+                  raw = 0.0_rp
+                  do branch = 1, 6
+                     pair = sr_second_order_branch_point(radial_bases(site), ir, l, spin, spin, branch, lower_factor)
+                     if (r > tiny(1.0_rp)) raw = raw + real(endpoint_branches(row, row, branch), rp)*pair*r*r
+                  end do
+                  density(site, ir) = density(site, ir) + sign_spin*raw
+                  if (present(density_l)) density_l(site, ir, l + 1) = density_l(site, ir, l + 1) + sign_spin*raw
+               end do
+            end do
+         end do
+      end do
+   end subroutine second_order_diagonal_density
 
    subroutine weighted_from_density(r, density, weighted)
       real(rp), intent(in) :: r(:), density(:, :)

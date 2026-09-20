@@ -119,6 +119,7 @@ add_library(${PROJECT_NAME} STATIC
     lr_radial_observable_provenance.f90
     lr_dresp09v_bridge.f90
     lr_dresp09w_bridge.f90
+    lr_dresp09x_bridge.f90
     lr_dresp09t_bridge.f90
     lr_dresp09u_bridge.f90
     lr_dresp07_bridge.f90

@@ -26,8 +26,10 @@ module lr_lmto_density_moment_tangent_mod
    public :: moment_tangent_product_rule
    public :: moment_tangent_frechet
    public :: endpoint_tangent_branches
+   public :: endpoint_tangent_branches_second_order
    public :: endpoint_fixed_h_branches
    public :: endpoint_matrices_from_moments
+   public :: endpoint_matrices_from_moments_second_order
    public :: commutator_tangent
    public :: fill_production_spin_density_from_moments
    public :: relative_matrix_residual
@@ -163,6 +165,38 @@ contains
          matmul(hamiltonian, matmul(density, delta_h))
    end subroutine endpoint_tangent_branches
 
+   !> Complete second-order endpoint tangent in branch order
+   !> 00,10,01,11,20,02.  The final two branches are deliberately written
+   !> as product-rule expressions; they are not obtained by multiplying a
+   !> generic endpoint component of power two.  This preserves the Taylor
+   !> truncation of the radial observable.
+   subroutine endpoint_tangent_branches_second_order(hamiltonian, density, delta_h, delta_density, delta_branches)
+      complex(rp), intent(in) :: hamiltonian(:, :), density(:, :), delta_h(:, :), delta_density(:, :)
+      complex(rp), intent(out) :: delta_branches(:, :, :)
+      integer :: n
+      complex(rp), allocatable :: h2(:, :)
+
+      n = size(hamiltonian, 1)
+      if (any(shape(hamiltonian) /= [n, n]) .or. any(shape(density) /= [n, n]) .or. &
+          any(shape(delta_h) /= [n, n]) .or. any(shape(delta_density) /= [n, n]) .or. &
+          any(shape(delta_branches) /= [n, n, 6])) then
+         error stop 'DRESP-09X endpoint tangent: shape mismatch'
+      end if
+      allocate(h2(n, n))
+      h2 = matmul(hamiltonian, hamiltonian)
+      delta_branches(:, :, 1) = delta_density
+      delta_branches(:, :, 2) = matmul(delta_h, density) + matmul(hamiltonian, delta_density)
+      delta_branches(:, :, 3) = matmul(delta_density, hamiltonian) + matmul(density, delta_h)
+      delta_branches(:, :, 4) = matmul(delta_h, matmul(density, hamiltonian)) + &
+         matmul(hamiltonian, matmul(delta_density, hamiltonian)) + &
+         matmul(hamiltonian, matmul(density, delta_h))
+      delta_branches(:, :, 5) = matmul(delta_h, matmul(hamiltonian, density)) + &
+         matmul(hamiltonian, matmul(delta_h, density)) + matmul(h2, delta_density)
+      delta_branches(:, :, 6) = matmul(delta_density, h2) + &
+         matmul(density, matmul(delta_h, hamiltonian)) + matmul(density, matmul(hamiltonian, delta_h))
+      deallocate(h2)
+   end subroutine endpoint_tangent_branches_second_order
+
    !> DRESP-09S fixed-H density derivative, retained as the comparison oracle.
    subroutine endpoint_fixed_h_branches(hamiltonian, delta_density, delta_branches)
       complex(rp), intent(in) :: hamiltonian(:, :), delta_density(:, :)
@@ -195,6 +229,27 @@ contains
       endpoints(:, :, 3) = moments(:, :, 2)
       endpoints(:, :, 4) = moments(:, :, 3)
    end subroutine endpoint_matrices_from_moments
+
+   !> Equilibrium six-branch endpoint representation from certified M0/M1/M2.
+   !> In the accepted equilibrium state M2=H**2 rho=rho H**2 up to the
+   !> independently audited [H,rho] residual, so both pure second-order
+   !> endpoints are populated from the same production M2 moment.
+   subroutine endpoint_matrices_from_moments_second_order(moments, endpoints)
+      complex(rp), intent(in) :: moments(:, :, :)
+      complex(rp), intent(out) :: endpoints(:, :, :)
+      integer :: n
+
+      n = size(moments, 1)
+      if (any(shape(moments) /= [n, n, sd_orders]) .or. any(shape(endpoints) /= [n, n, 6])) then
+         error stop 'DRESP-09X endpoint moments: shape mismatch'
+      end if
+      endpoints(:, :, 1) = moments(:, :, 1)
+      endpoints(:, :, 2) = moments(:, :, 2)
+      endpoints(:, :, 3) = moments(:, :, 2)
+      endpoints(:, :, 4) = moments(:, :, 3)
+      endpoints(:, :, 5) = moments(:, :, 3)
+      endpoints(:, :, 6) = moments(:, :, 3)
+   end subroutine endpoint_matrices_from_moments_second_order
 
    pure subroutine commutator_tangent(generator, matrix, delta_matrix)
       complex(rp), intent(in) :: generator(:, :), matrix(:, :)

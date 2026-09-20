@@ -19,8 +19,11 @@ module lr_dresp09s_scalar_relativistic_mod
    ! partners.  For a transverse Pauli operator,
    ! <sigma_r sigma_+ sigma_r>_Omega = -sigma_+/3.
    real(rp), parameter, public :: sr_l0_lower_transverse_factor = -1.0_rp/3.0_rp
+   real(rp), parameter, public :: sr_l0_lower_spin_factor = -1.0_rp/3.0_rp
 
    public :: sr_endpoint_component
+   public :: sr_second_order_branch_point
+   public :: sr_physical_spin_point
    public :: sr_same_spin_numerator
    public :: sr_mixed_transverse_point
    public :: sr_l0_source_components
@@ -30,6 +33,7 @@ module lr_dresp09s_scalar_relativistic_mod
    public :: sr_l0_density_from_matrix_hamiltonian
    public :: sr_l0_density_tangent_from_hamiltonian
    public :: sr_l0_density_from_endpoint_branches
+   public :: sr_l0_density_from_second_order_endpoint_branches
    public :: sr_l0_observable_matrix
 
 contains
@@ -59,6 +63,101 @@ contains
          error stop 'DRESP-09S: endpoint component must be 1 or 2'
       end if
    end function sr_endpoint_component
+
+   !> Full second-order radial endpoint coefficient in the absolute-energy
+   !> polynomial.  Branches are ordered 00,10,01,11,20,02.  `lower_factor`
+   !> selects the observable: +1 is the scalar-relativistic probability
+   !> metric and -1/3 is the physical Pauli-spin operator.
+   pure real(rp) function sr_second_order_branch_point(radial, ir, l, spin_left, spin_right, branch, lower_factor) result(value)
+      type(lmto_radial_basis), intent(in) :: radial
+      integer, intent(in) :: ir, l, spin_left, spin_right, branch
+      real(rp), intent(in) :: lower_factor
+      real(rp) :: enu_left, enu_right
+      real(rp) :: raw00, raw10, raw01, raw11, raw20, raw02
+
+      if (branch < 1 .or. branch > 6) error stop 'DRESP-09X: invalid second-order radial branch'
+      if (ir == 1 .or. radial%rofi(ir) <= tiny(1.0_rp)) then
+         value = 0.0_rp
+         return
+      end if
+      enu_left = radial%enu_work(l + 1, spin_left)
+      enu_right = radial%enu_work(l + 1, spin_right)
+      raw00 = sr_raw_bilinear(radial, ir, l, spin_left, spin_right, 0, 0, lower_factor)
+      raw10 = sr_raw_bilinear(radial, ir, l, spin_left, spin_right, 1, 0, lower_factor)
+      raw01 = sr_raw_bilinear(radial, ir, l, spin_left, spin_right, 0, 1, lower_factor)
+      raw11 = sr_raw_bilinear(radial, ir, l, spin_left, spin_right, 1, 1, lower_factor)
+      raw20 = 0.5_rp*sr_raw_bilinear(radial, ir, l, spin_left, spin_right, 2, 0, lower_factor)
+      raw02 = 0.5_rp*sr_raw_bilinear(radial, ir, l, spin_left, spin_right, 0, 2, lower_factor)
+      select case (branch)
+      case (1)
+         value = raw00 - enu_left*raw10 - enu_right*raw01 + enu_left*enu_right*raw11 + &
+            0.5_rp*enu_left**2*sr_raw_bilinear(radial, ir, l, spin_left, spin_right, 2, 0, lower_factor) + &
+            0.5_rp*enu_right**2*sr_raw_bilinear(radial, ir, l, spin_left, spin_right, 0, 2, lower_factor)
+      case (2)
+         value = raw10 - enu_right*raw11 - enu_left*sr_raw_bilinear(radial, ir, l, spin_left, spin_right, 2, 0, lower_factor)
+      case (3)
+         value = raw01 - enu_left*raw11 - enu_right*sr_raw_bilinear(radial, ir, l, spin_left, spin_right, 0, 2, lower_factor)
+      case (4)
+         value = raw11
+      case (5)
+         value = raw20
+      case (6)
+         value = raw02
+      end select
+      value = value/radial%rofi(ir)**2
+   end function sr_second_order_branch_point
+
+   !> Same-spin physical longitudinal Pauli-spin radial observable.  The
+   !> sign is supplied by the caller (up=+1, down=-1), while the lower
+   !> component always carries the angular Pauli factor -1/3.
+   pure real(rp) function sr_physical_spin_point(radial, ir, l, ispin, branch) result(value)
+      type(lmto_radial_basis), intent(in) :: radial
+      integer, intent(in) :: ir, l, ispin, branch
+      value = sr_second_order_branch_point(radial, ir, l, ispin, ispin, branch, sr_l0_lower_spin_factor)
+   end function sr_physical_spin_point
+
+   pure real(rp) function sr_raw_bilinear(radial, ir, l, spin_left, spin_right, left_power, right_power, lower_factor) result(value)
+      type(lmto_radial_basis), intent(in) :: radial
+      integer, intent(in) :: ir, l, spin_left, spin_right, left_power, right_power
+      real(rp), intent(in) :: lower_factor
+      real(rp) :: left_large, right_large, left_small, right_small, r, angular
+
+      left_large = sr_raw_component(radial, ir, l, spin_left, left_power, 1)
+      right_large = sr_raw_component(radial, ir, l, spin_right, right_power, 1)
+      left_small = sr_raw_component(radial, ir, l, spin_left, left_power, 2)
+      right_small = sr_raw_component(radial, ir, l, spin_right, right_power, 2)
+      r = radial%rofi(ir)
+      angular = real(l*(l + 1), rp)*left_large*right_large/ &
+         (radial%tmc(ir, l + 1, spin_left)*radial%tmc(ir, l + 1, spin_right)*r**2)
+      value = left_large*right_large + lower_factor*(left_small*right_small + angular)
+   end function sr_raw_bilinear
+
+   pure real(rp) function sr_raw_component(radial, ir, l, ispin, power, component) result(value)
+      type(lmto_radial_basis), intent(in) :: radial
+      integer, intent(in) :: ir, l, ispin, power, component
+      select case (power)
+      case (0)
+         if (component == 1) then
+            value = radial%phi_large(ir, l + 1, ispin)
+         else
+            value = radial%phi_small(ir, l + 1, ispin)
+         end if
+      case (1)
+         if (component == 1) then
+            value = radial%phidot_large(ir, l + 1, ispin)
+         else
+            value = radial%phidot_small(ir, l + 1, ispin)
+         end if
+      case (2)
+         if (component == 1) then
+            value = radial%phiddot_large(ir, l + 1, ispin)
+         else
+            value = radial%phiddot_small(ir, l + 1, ispin)
+         end if
+      case default
+         error stop 'DRESP-09X: raw radial endpoint power must be 0, 1, or 2'
+      end select
+   end function sr_raw_component
 
    !> Numerator of the same-spin scalar-relativistic metric.  For unlike
    !> endpoints the product TMC_left*TMC_right is used only by the transverse
@@ -444,6 +543,67 @@ contains
          end do
       end do
    end subroutine sr_l0_density_from_endpoint_branches
+
+   !> Density-side contraction for the complete absolute-energy endpoint
+   !> expansion.  This is intentionally separate from the historical
+   !> four-branch DRESP-09S routine: branch 20/02 use phiddot through the
+   !> explicit coefficient algebra in sr_second_order_branch_point.
+   subroutine sr_l0_density_from_second_order_endpoint_branches(space, radial_bases, endpoint_branches, circular_channel, &
+                                                               density, lower_factor, l_first, l_last)
+      type(response_space_layout), intent(in) :: space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      complex(rp), intent(in) :: endpoint_branches(:, :, :)
+      integer, intent(in) :: circular_channel
+      complex(rp), intent(out) :: density(:, :)
+      real(rp), intent(in), optional :: lower_factor
+      integer, intent(in), optional :: l_first, l_last
+      integer :: nsite, norb, n, site, ir, iorb, l, m, branch, row, col, first_l, last_l
+      integer :: spin_left, spin_right
+      real(rp) :: gaunt, pair, factor
+
+      nsite = space%nsite
+      norb = (radial_bases(1)%lmax + 1)**2
+      n = 2*norb*nsite
+      if (size(radial_bases) /= nsite .or. any(shape(endpoint_branches) /= [n, n, 6]) .or. &
+          any(shape(density) /= [nsite, space%npoint])) then
+         error stop 'DRESP-09X endpoint density: shape mismatch'
+      end if
+      factor = sr_l0_lower_spin_factor
+      if (present(lower_factor)) factor = lower_factor
+      first_l = 0
+      last_l = radial_bases(1)%lmax
+      if (present(l_first)) first_l = max(0, l_first)
+      if (present(l_last)) last_l = min(radial_bases(1)%lmax, l_last)
+      if (first_l > last_l) then
+         density = cmplx(0.0_rp, 0.0_rp, rp)
+         return
+      end if
+      if (circular_channel == 1) then
+         spin_left = 1; spin_right = 2
+      else if (circular_channel == 2) then
+         spin_left = 2; spin_right = 1
+      else
+         error stop 'DRESP-09X endpoint density: invalid circular channel'
+      end if
+
+      density = cmplx(0.0_rp, 0.0_rp, rp)
+      do site = 1, nsite
+         do ir = 2, space%npoint
+            do iorb = 1, norb
+               l = lmto_orbital_l(iorb)
+               if (l < first_l .or. l > last_l) cycle
+               m = iorb - l*l - l - 1
+               gaunt = response_gaunt(l, m, l, m, 0, 0)
+               row = (site - 1)*2*norb + (spin_left - 1)*norb + iorb
+               col = (site - 1)*2*norb + (spin_right - 1)*norb + iorb
+               do branch = 1, 6
+                  pair = sr_second_order_branch_point(radial_bases(site), ir, l, spin_left, spin_right, branch, factor)
+                  density(site, ir) = density(site, ir) + gaunt*endpoint_branches(row, col, branch)*pair
+               end do
+            end do
+         end do
+      end do
+   end subroutine sr_l0_density_from_second_order_endpoint_branches
 
    !> Local observable matrix at one radius, without a field or quadrature.
    !> This is used by the radial field/density pairing oracle.

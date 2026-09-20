@@ -692,6 +692,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitDresp09PauliDirect PROPERTIES LABELS "unit;dresp-09r;pauli;direct;radial;angular;metric-adjoint")
   add_fortran_unit_test(UnitDresp09sScalarRelativistic ${TestDIR}/unit/test_dresp09s_scalar_relativistic.f90)
   set_tests_properties(UnitDresp09sScalarRelativistic PROPERTIES LABELS "unit;dresp-09s;scalar-relativistic;radial;angular;duality")
+  add_fortran_unit_test(UnitDresp09xSrSpinObservable ${TestDIR}/unit/test_dresp09x_sr_spin_observable.f90)
+  set_tests_properties(UnitDresp09xSrSpinObservable PROPERTIES LABELS "unit;dresp-09x;scalar-relativistic;physical-spin;second-order;rigid-rotation")
   add_fortran_unit_test(UnitLrLmtoBasisConnection ${TestDIR}/unit/test_lr_lmto_basis_connection.f90)
   set_tests_properties(UnitLrLmtoBasisConnection PROPERTIES LABELS "unit;dresp-09t;lmto;moving-basis;connection;finite-angle;metric")
   add_fortran_unit_test(UnitLrLmtoRepresentationTangent ${TestDIR}/unit/test_lr_lmto_representation_tangent.f90)
@@ -916,6 +918,18 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(Dresp09WFeArtifact PROPERTIES
     DEPENDS TddftDresp09WRadialObservableProvenance
     LABELS "validation;dresp-09w;artifact;radial;observable;provenance"
+    TIMEOUT 30)
+  add_test(NAME TddftDresp09XSrSpinObservable
+    COMMAND ${TestBinary} input_dresp09x_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp09XSrSpinObservable PROPERTIES
+    LABELS "integration;tddft;dresp-09x;scalar-relativistic;physical-spin;second-order;accepted-state;64-k"
+    TIMEOUT 900)
+  add_test(NAME Dresp09XFeArtifact
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/dresp09x_fe_artifact.py" "/tmp/dresp09x_fe_4k.dat")
+  set_tests_properties(Dresp09XFeArtifact PROPERTIES
+    DEPENDS TddftDresp09XSrSpinObservable
+    LABELS "validation;dresp-09x;artifact;physical-spin;second-order;pass-b"
     TIMEOUT 30)
   add_test(NAME TddftProductionDriverFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml

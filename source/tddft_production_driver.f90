@@ -67,6 +67,7 @@ module tddft_production_driver_mod
    use lr_dresp09u_bridge_mod, only: run_dresp09u_representation_tangent
    use lr_dresp09v_bridge_mod, only: run_dresp09v_density_moment_tangent
    use lr_dresp09w_bridge_mod, only: run_dresp09w_radial_observable_provenance
+   use lr_dresp09x_bridge_mod, only: run_dresp09x_sr_spin_observable
    use lr_ward_mode_analysis_mod, only: lr_ward_mode_analysis_result, analyze_lr_ward_mode
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
@@ -108,6 +109,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_representation_tangent = 'representation_tangent'
    character(len=*), parameter, public :: tddft_driver_backend_density_moment_tangent = 'density_moment_tangent'
    character(len=*), parameter, public :: tddft_driver_backend_radial_observable_provenance = 'radial_observable_provenance'
+   character(len=*), parameter, public :: tddft_driver_backend_sr_spin_observable = 'sr_spin_observable'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -391,8 +393,9 @@ contains
           trim(config%backend) /= tddft_driver_backend_moving_basis_tangent .and. &
           trim(config%backend) /= tddft_driver_backend_representation_tangent .and. &
           trim(config%backend) /= tddft_driver_backend_density_moment_tangent .and. &
-          trim(config%backend) /= tddft_driver_backend_radial_observable_provenance) then
-         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions, compact_dyson, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, pauli_projected_native, sr_l0_scalar_relativistic, moving_basis_tangent, representation_tangent, density_moment_tangent, or radial_observable_provenance'
+          trim(config%backend) /= tddft_driver_backend_radial_observable_provenance .and. &
+          trim(config%backend) /= tddft_driver_backend_sr_spin_observable) then
+         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions, compact_dyson, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, pauli_projected_native, sr_l0_scalar_relativistic, moving_basis_tangent, representation_tangent, density_moment_tangent, radial_observable_provenance, or sr_spin_observable'
       end if
       if (trim(config%backend) == tddft_driver_backend_projected_mills .or. &
           trim(config%backend) == tddft_driver_backend_projected_juelich .or. &
@@ -425,7 +428,8 @@ contains
           trim(config%backend) /= tddft_driver_backend_moving_basis_tangent .and. &
           trim(config%backend) /= tddft_driver_backend_representation_tangent .and. &
           trim(config%backend) /= tddft_driver_backend_density_moment_tangent .and. &
-          trim(config%backend) /= tddft_driver_backend_radial_observable_provenance .and. size(config%eta_values) /= 1) then
+          trim(config%backend) /= tddft_driver_backend_radial_observable_provenance .and. &
+          trim(config%backend) /= tddft_driver_backend_sr_spin_observable .and. size(config%eta_values) /= 1) then
          error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence, static_interactions, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, pauli_projected_native, sr_l0_scalar_relativistic, moving_basis_tangent, representation_tangent, density_moment_tangent, or radial_observable_provenance'
       end if
       if (trim(config%backend) == tddft_driver_backend_exact_ks_ward) then
@@ -1024,7 +1028,8 @@ contains
 
       use_accepted_kspace_scf = .false.
       if (present(accepted_kspace_scf)) use_accepted_kspace_scf = accepted_kspace_scf
-      need_complete_sr = trim(config%backend) == tddft_driver_backend_radial_observable_provenance
+      need_complete_sr = trim(config%backend) == tddft_driver_backend_radial_observable_provenance .or. &
+         trim(config%backend) == tddft_driver_backend_sr_spin_observable
 
       if (.not. config%enabled) return
       call validate_tddft_production_capability(config, control_obj, lattice_obj, hamiltonian_obj, reciprocal_obj)
@@ -1107,6 +1112,14 @@ contains
             error stop 'DRESP-09W radial_observable_provenance requires the accepted k-space SCF handoff'
          end if
          call run_dresp09w_radial_observable_provenance(trim(config%output_file), response_space, radial_bases, ground_states, &
+            reciprocal_obj, lattice_obj, hamiltonian_obj)
+         return
+      end if
+      if (trim(config%backend) == tddft_driver_backend_sr_spin_observable) then
+         if (.not. use_accepted_kspace_scf) then
+            error stop 'DRESP-09X sr_spin_observable requires the accepted k-space SCF handoff'
+         end if
+         call run_dresp09x_sr_spin_observable(trim(config%output_file), response_space, radial_bases, ground_states, &
             reciprocal_obj, lattice_obj, hamiltonian_obj)
          return
       end if
