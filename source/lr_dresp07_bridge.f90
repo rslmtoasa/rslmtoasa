@@ -22,6 +22,8 @@ module lr_dresp07_bridge_mod
    use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state
    use lr_compact_static_interaction_mod, only: compact_project_magnetization, compact_project_local_operator
    use pauli_ground_state_projection_mod, only: compute_accepted_pauli_magnetization
+   use lr_dresp07_radial_oracle_mod, only: dresp07_build_radial_map, dresp07_project_local_spherical_operator, &
+      dresp07_solve_real_least_squares
    use lr_exact_ks_ward_mod, only: exact_ks_product_rotation_sweep, exact_ks_product_field_response, &
       exact_ks_extract_collinear_field, exact_ks_build_transverse_field
    implicit none
@@ -44,9 +46,13 @@ contains
       type(lmto_product_response_basis) :: product_plus
       real(rp), allocatable :: magnetization(:, :), valence_magnetization(:, :), core_magnetization(:, :)
       real(rp), allocatable :: bxc_values(:, :), bks_values(:, :), best_values(:, :)
+      real(rp), allocatable :: radial_map(:, :), radial_target(:), radial_solution(:), radial_singular_values(:)
       complex(rp), allocatable :: magnetization_product(:), valence_product(:), core_product(:)
       complex(rp), allocatable :: b_h_orbital(:, :), b_h_spin(:, :), bxc_orbital(:, :), bxc_spin(:, :)
-      complex(rp), allocatable :: bks_orbital(:, :), bks_spin(:, :), best_orbital(:, :), best_spin(:, :)
+      complex(rp), allocatable :: bks_orbital(:, :), bks_spin(:, :), best_spin(:, :)
+      complex(rp), allocatable :: best_local_orbital(:, :), best_local_spin(:, :), b_h_mean(:, :)
+      complex(rp), allocatable :: b_h_k_orbital(:, :, :), best_k_tmp(:, :)
+      complex(rp), allocatable :: best_coefficients(:, :), best_global_coefficients(:, :), best_k_coefficients(:, :)
       complex(rp), allocatable :: response_rot(:), response_spec(:), response_retarded(:)
       complex(rp), allocatable :: response_exact_field(:), response_exact_field_retarded(:)
       complex(rp), allocatable :: response_best(:), response_best_retarded(:)
@@ -59,25 +65,32 @@ contains
       real(rp) :: max_eigenpair_frobenius, max_hermiticity, max_rotation_field, max_spin_offdiagonal
       real(rp) :: product_rotation_relative, exact_field_rotation_relative
       real(rp) :: r_mh_val, r_exact_h_val, r_exact_h_total, r_best_h_val, r_bks_val, r_bxc_val
+      real(rp) :: best_local_relative, best_local_action_relative, radial_relative
+      real(rp) :: radial_matrix_relative, radial_action_relative
       real(rp) :: valence_norm, total_norm, core_norm
       real(rp) :: b_h_onsite, b_h_nonlocal, b_h_spin_offdiag
       real(rp) :: b_h_orbital_offdiag, b_h_l_same, b_h_l_cross, b_h_k_norm, b_h_k_min, b_h_k_max
-      real(rp) :: b_h_site_tmp, b_h_nonlocal_tmp, b_h_spin_tmp
+      real(rp) :: b_h_site_tmp, b_h_nonlocal_tmp, b_h_spin_tmp, b_h_within_l_anisotropy, b_h_intersite
+      real(rp) :: b_h_global_mean_norm, b_h_k_dependence_relative, b_h_global_local_relative
+      real(rp) :: b_h_k_local_mean_relative, b_h_k_local_max_relative, b_h_k_local_residual
       real(rp) :: bxc_matrix_relative, bxc_max_relative, bxc_action_relative
       real(rp) :: bks_matrix_relative, bks_max_relative, bks_action_relative
       real(rp) :: best_matrix_relative, best_max_relative, best_action_relative
-      real(rp) :: best_rank, best_condition, best_captured_norm, best_residual_norm, best_relative_residual
+      real(rp) :: radial_condition, radial_residual_norm, radial_profile_norm, radial_relative_residual
       real(rp) :: compact_bxc_relative, compact_bks_relative, compact_best_relative
-      real(rp) :: exact_h_response_norm
-      integer :: nsite, norb_site, norb, nmat, neta, ik, unit, ios
-      integer :: best_rank_int
+      real(rp) :: weight_sum, k_variance_sum, k_norm_sum, local_residual_sum
+      integer :: nsite, norb_site, norb, nmat, neta, nk, ik, unit, ios
+      integer :: radial_rank_int
       character(len=64) :: classification
-      logical :: exact_gate_pass
+      logical :: exact_gate_pass, best_variational_pass
       character(len=7) :: verdict
 
       nsite = size(ground_states)
       if (nsite < 1 .or. size(radial_bases) /= nsite .or. response_space%nsite /= nsite) then
          error stop 'DRESP-07: radial/response site dimensions are inconsistent'
+      end if
+      if (response_space%npoint /= radial_bases(1)%npoint) then
+         error stop 'DRESP-07R: radial and response meshes are inconsistent'
       end if
       if (.not. allocated(reciprocal_obj%hk_bulk) .or. .not. allocated(reciprocal_obj%eigenvalues) .or. &
           .not. allocated(reciprocal_obj%eigenvectors) .or. .not. allocated(reciprocal_obj%k_weights)) then
@@ -111,18 +124,55 @@ contains
       allocate(b_h_orbital(norb, norb), b_h_spin(nmat, nmat))
       call exact_ks_extract_collinear_field(reciprocal_obj%hk_bulk(:, :, 1), norb_site, nsite, b_h_orbital, b_h_spin, &
          b_h_onsite, b_h_nonlocal, b_h_spin_offdiag)
+      nk = size(reciprocal_obj%hk_bulk, 3)
       call decompose_orbital_field(b_h_orbital, norb_site, nsite, b_h_orbital_offdiag, b_h_l_same, b_h_l_cross)
+      allocate(best_local_orbital(norb, norb), best_local_spin(nmat, nmat), &
+         best_coefficients(nsite, radial_bases(1)%lmax + 1), &
+         b_h_mean(norb, norb), b_h_k_orbital(norb, norb, nk), best_k_tmp(norb, norb), &
+         best_global_coefficients(nsite, radial_bases(1)%lmax + 1), best_k_coefficients(nsite, radial_bases(1)%lmax + 1))
       b_h_k_min = huge(1.0_rp)
       b_h_k_max = 0.0_rp
-      do ik = 1, size(reciprocal_obj%hk_bulk, 3)
-         call exact_ks_extract_collinear_field(reciprocal_obj%hk_bulk(:, :, ik), norb_site, nsite, b_h_orbital, b_h_spin, &
+      weight_sum = sum(reciprocal_obj%k_weights)
+      if (weight_sum <= 0.0_rp) error stop 'DRESP-07R: accepted k weights are not positive'
+      b_h_mean = cmplx(0.0_rp, 0.0_rp, rp)
+      do ik = 1, nk
+         call exact_ks_extract_collinear_field(reciprocal_obj%hk_bulk(:, :, ik), norb_site, nsite, b_h_k_orbital(:, :, ik), &
+            b_h_spin, &
             b_h_site_tmp, b_h_nonlocal_tmp, b_h_spin_tmp)
-         b_h_k_norm = sqrt(sum(abs(b_h_orbital)**2))
+         b_h_mean = b_h_mean + reciprocal_obj%k_weights(ik)/weight_sum*b_h_k_orbital(:, :, ik)
+         b_h_k_norm = sqrt(sum(abs(b_h_k_orbital(:, :, ik))**2))
          b_h_k_min = min(b_h_k_min, b_h_k_norm)
          b_h_k_max = max(b_h_k_max, b_h_k_norm)
       end do
+      b_h_global_mean_norm = sqrt(sum(abs(b_h_mean)**2))
+      k_variance_sum = 0.0_rp
+      k_norm_sum = 0.0_rp
+      do ik = 1, nk
+         k_variance_sum = k_variance_sum + reciprocal_obj%k_weights(ik)* &
+            sum(abs(b_h_k_orbital(:, :, ik) - b_h_mean)**2)/weight_sum
+         k_norm_sum = k_norm_sum + reciprocal_obj%k_weights(ik)* &
+            sum(abs(b_h_k_orbital(:, :, ik))**2)/weight_sum
+      end do
+      b_h_k_dependence_relative = sqrt(k_variance_sum)/max(sqrt(k_norm_sum), tiny(1.0_rp))
+      call dresp07_project_local_spherical_operator(b_h_mean, norb_site, nsite, radial_bases(1)%lmax, best_k_tmp, &
+         best_global_coefficients, radial_residual_norm, b_h_global_local_relative, b_h_site_tmp, b_h_within_l_anisotropy, &
+         b_h_nonlocal_tmp, b_h_spin_tmp)
+      local_residual_sum = 0.0_rp
+      b_h_k_local_max_relative = 0.0_rp
+      do ik = 1, nk
+         call dresp07_project_local_spherical_operator(b_h_k_orbital(:, :, ik), norb_site, nsite, radial_bases(1)%lmax, &
+            best_k_tmp, best_k_coefficients, radial_residual_norm, b_h_k_local_residual, b_h_site_tmp, &
+            b_h_within_l_anisotropy, b_h_nonlocal_tmp, b_h_spin_tmp)
+         local_residual_sum = local_residual_sum + reciprocal_obj%k_weights(ik)/weight_sum*b_h_k_local_residual
+         b_h_k_local_max_relative = max(b_h_k_local_max_relative, b_h_k_local_residual)
+      end do
+      b_h_k_local_mean_relative = local_residual_sum
       call exact_ks_extract_collinear_field(reciprocal_obj%hk_bulk(:, :, 1), norb_site, nsite, b_h_orbital, b_h_spin, &
          b_h_onsite, b_h_nonlocal, b_h_spin_offdiag)
+      call dresp07_project_local_spherical_operator(b_h_orbital, norb_site, nsite, radial_bases(1)%lmax, best_local_orbital, &
+         best_coefficients, radial_residual_norm, best_local_relative, b_h_orbital_offdiag, b_h_within_l_anisotropy, &
+         b_h_l_cross, b_h_intersite)
+      call orbital_to_collinear_spin(best_local_orbital, norb, best_local_spin)
       allocate(bxc_values(nsite, response_space%npoint), bks_values(nsite, response_space%npoint))
       call collect_radial_field(ground_states, response_space%npoint, .true., bxc_values)
       call collect_radial_field(ground_states, response_space%npoint, .false., bks_values)
@@ -132,19 +182,31 @@ contains
       call spin_field_to_orbital(bxc_spin, norb, bxc_orbital)
       call spin_field_to_orbital(bks_spin, norb, bks_orbital)
 
-      allocate(best_values(nsite, response_space%npoint), best_spin(nmat, nmat), best_orbital(norb, norb))
-      call fit_best_radial_field(radial_bases, b_h_orbital, best_values, best_rank_int, best_condition, &
-         best_captured_norm, best_residual_norm, best_relative_residual)
-      best_rank = real(best_rank_int, rp)
+      allocate(best_values(nsite, response_space%npoint), best_spin(nmat, nmat))
+      allocate(radial_map(nsite*(radial_bases(1)%lmax + 1), nsite*response_space%npoint), &
+         radial_target(nsite*(radial_bases(1)%lmax + 1)), radial_solution(nsite*response_space%npoint))
+      allocate(radial_singular_values(min(size(radial_map, 1), size(radial_map, 2))))
+      call dresp07_build_radial_map(radial_bases, radial_map)
+      do ik = 1, nsite
+         radial_target((ik - 1)*(radial_bases(1)%lmax + 1) + 1:(ik)*(radial_bases(1)%lmax + 1)) = &
+            real(best_coefficients(ik, :), rp)
+      end do
+      call dresp07_solve_real_least_squares(radial_map, radial_target, radial_solution, radial_rank_int, radial_singular_values, &
+         radial_condition, radial_residual_norm, radial_relative_residual, radial_profile_norm)
+      do ik = 1, nsite
+         best_values(ik, :) = radial_solution((ik - 1)*response_space%npoint + 1:ik*response_space%npoint)
+      end do
       call map_radial_field_to_spin_matrix(radial_bases, best_values, best_spin)
-      call spin_field_to_orbital(best_spin, norb, best_orbital)
 
       call compare_fields(b_h_spin, bxc_spin, reciprocal_obj%eigenvectors(:, :, 1), bxc_matrix_relative, bxc_max_relative, &
          bxc_action_relative)
       call compare_fields(b_h_spin, bks_spin, reciprocal_obj%eigenvectors(:, :, 1), bks_matrix_relative, bks_max_relative, &
          bks_action_relative)
-      call compare_fields(b_h_spin, best_spin, reciprocal_obj%eigenvectors(:, :, 1), best_matrix_relative, best_max_relative, &
+      call compare_fields(b_h_spin, best_local_spin, reciprocal_obj%eigenvectors(:, :, 1), best_matrix_relative, best_max_relative, &
          best_action_relative)
+      call compare_fields(b_h_spin, best_spin, reciprocal_obj%eigenvectors(:, :, 1), radial_matrix_relative, radial_relative, &
+         radial_action_relative)
+      best_local_action_relative = best_action_relative
       allocate(compact_bxc(product_plus%product_dimension, product_plus%product_dimension), &
          compact_bks(product_plus%product_dimension, product_plus%product_dimension), &
          compact_best(product_plus%product_dimension, product_plus%product_dimension))
@@ -165,11 +227,10 @@ contains
          reciprocal_obj%eigenvectors, reciprocal_obj%k_weights, reciprocal_obj%fermi_level, reciprocal_obj%temperature, &
          eta_values(1), response_rot, response_spec, response_retarded, max_eigenpair_residual, max_density_residual, &
          max_density_relative, .false., 0, max_eigenpair_frobenius, max_hermiticity, max_rotation_field, max_spin_offdiagonal)
-      exact_h_response_norm = vector_norm(response_spec)
       product_rotation_relative = vector_relative(response_rot, response_spec)
       call evaluate_exact_h_sweep(product_plus, reciprocal_obj, eta_values(1), response_exact_field, response_exact_field_retarded)
       exact_field_rotation_relative = vector_relative(response_exact_field, response_spec)
-      call evaluate_field_sweep(product_plus, best_orbital, reciprocal_obj, eta_values(1), response_best, response_best_retarded, .true., 0)
+      call evaluate_field_sweep(product_plus, best_local_orbital, reciprocal_obj, eta_values(1), response_best, response_best_retarded, .true., 0)
       call evaluate_field_sweep(product_plus, bks_orbital, reciprocal_obj, eta_values(1), response_bks, response_bks_retarded, .true., 0)
       call evaluate_field_sweep(product_plus, bxc_orbital, reciprocal_obj, eta_values(1), response_bxc, response_bxc_retarded, .true., 0)
       allocate(static_exact(size(response_spec)), static_best(size(response_best)), static_bks(size(response_bks)), &
@@ -191,7 +252,7 @@ contains
             eta_values(ik), response_rot, response_spec, response_retarded, max_eigenpair_residual, max_density_residual, &
             max_density_relative, .true., 0)
          eta_exact(ik) = vector_relative(response_retarded, static_exact)
-         call evaluate_field_sweep(product_plus, best_orbital, reciprocal_obj, eta_values(ik), response_best, response_best_retarded, .false., 0)
+         call evaluate_field_sweep(product_plus, best_local_orbital, reciprocal_obj, eta_values(ik), response_best, response_best_retarded, .false., 0)
          call evaluate_field_sweep(product_plus, bks_orbital, reciprocal_obj, eta_values(ik), response_bks, response_bks_retarded, .false., 0)
          call evaluate_field_sweep(product_plus, bxc_orbital, reciprocal_obj, eta_values(ik), response_bxc, response_bxc_retarded, .false., 0)
          eta_best(ik) = vector_relative(response_best_retarded, static_best)
@@ -201,10 +262,23 @@ contains
 
       exact_gate_pass = max_eigenpair_residual < 1.0e-9_rp .and. max_density_relative < 1.0e-9_rp .and. &
          product_rotation_relative < 1.0e-9_rp .and. exact_field_rotation_relative < 1.0e-9_rp
+      best_variational_pass = best_matrix_relative <= bxc_matrix_relative + 1.0e-10_rp .and. &
+         best_matrix_relative <= bks_matrix_relative + 1.0e-10_rp
       if (.not. exact_gate_pass) then
          classification = 'EXACT_H_RESPONSE_FAILURE'
-      else if (best_relative_residual > 1.0e-3_rp) then
+      else if (.not. best_variational_pass) then
+         classification = 'BLOCKED - BEST-FIELD VARIATIONAL ORACLE'
+      else if (best_matrix_relative > 1.0e-3_rp .and. &
+               best_matrix_relative >= b_h_k_dependence_relative) then
          classification = 'FIELD_REPRESENTATION_FAILURE'
+      else if (radial_relative_residual > 1.0e-3_rp) then
+         classification = 'RADIAL_REALIZABILITY_FAILURE'
+      else if (b_h_k_dependence_relative > max(1.0e-2_rp, 2.0_rp*best_matrix_relative) .and. &
+               b_h_k_dependence_relative > 2.0_rp*radial_relative_residual) then
+         classification = 'SECOND_ORDER_LMTO_MAPPING_REQUIRED'
+      else if (best_matrix_relative > 1.0e-3_rp .and. &
+               b_h_k_dependence_relative > 0.5_rp*best_matrix_relative) then
+         classification = 'MIXED'
       else if (bxc_matrix_relative > 1.0e-2_rp .or. bks_matrix_relative > 1.0e-2_rp) then
          classification = 'RADIAL_TO_HAMILTONIAN_MAPPING_FAILURE'
       else if (core_norm > 1.0e-2_rp*max(valence_norm, tiny(1.0_rp)) .and. r_mh_val < 1.0e-6_rp) then
@@ -234,13 +308,21 @@ contains
          write(unit, '(a,es24.16)') 'response_rotation_vs_spectral_relative = ', product_rotation_relative
          write(unit, '(a,es24.16)') 'response_exact_field_vs_spectral_relative = ', exact_field_rotation_relative
          write(unit, '(a,es24.16)') 'gamma_spin_offdiagonal_norm = ', b_h_spin_offdiag
+         write(unit, '(a,es24.16)') 'gamma_BH_frobenius = ', b_h_onsite
          write(unit, '(a,es24.16)') 'gamma_BH_onsite_frobenius = ', b_h_onsite
          write(unit, '(a,es24.16)') 'gamma_BH_nonlocal_frobenius = ', b_h_nonlocal
          write(unit, '(a,es24.16)') 'gamma_BH_orbital_offdiagonal_frobenius = ', b_h_orbital_offdiag
+         write(unit, '(a,es24.16)') 'gamma_BH_within_l_diagonal_anisotropy_frobenius = ', b_h_within_l_anisotropy
          write(unit, '(a,es24.16)') 'gamma_BH_same_l_frobenius = ', b_h_l_same
          write(unit, '(a,es24.16)') 'gamma_BH_cross_l_frobenius = ', b_h_l_cross
+         write(unit, '(a,es24.16)') 'gamma_BH_intersite_frobenius = ', b_h_intersite
          write(unit, '(a,es24.16)') 'BH_k_frobenius_min = ', b_h_k_min
          write(unit, '(a,es24.16)') 'BH_k_frobenius_max = ', b_h_k_max
+         write(unit, '(a,es24.16)') 'BH_global_mean_frobenius = ', b_h_global_mean_norm
+         write(unit, '(a,es24.16)') 'BH_k_dependence_relative = ', b_h_k_dependence_relative
+         write(unit, '(a,es24.16)') 'BH_global_local_projection_relative = ', b_h_global_local_relative
+         write(unit, '(a,es24.16)') 'BH_k_local_projection_mean_relative = ', b_h_k_local_mean_relative
+         write(unit, '(a,es24.16)') 'BH_k_local_projection_max_relative = ', b_h_k_local_max_relative
          write(unit, '(a,es24.16)') 'accepted_magnetization_product_norm = ', total_norm
          write(unit, '(a,es24.16)') 'accepted_valence_magnetization_product_norm = ', valence_norm
          write(unit, '(a,es24.16)') 'accepted_core_magnetization_product_norm = ', core_norm
@@ -260,14 +342,24 @@ contains
          write(unit, '(a,es24.16)') 'best_BH_matrix_relative = ', best_matrix_relative
          write(unit, '(a,es24.16)') 'best_BH_max_element_relative = ', best_max_relative
          write(unit, '(a,es24.16)') 'best_BH_action_relative = ', best_action_relative
-         write(unit, '(a,i0)') 'best_radial_fit_rank = ', best_rank_int
-         write(unit, '(a,es24.16)') 'best_radial_fit_condition = ', best_condition
-         write(unit, '(a,es24.16)') 'best_BH_captured_frobenius = ', best_captured_norm
-         write(unit, '(a,es24.16)') 'best_BH_residual_frobenius = ', best_residual_norm
-         write(unit, '(a,es24.16)') 'best_BH_relative_residual = ', best_relative_residual
+         write(unit, '(a,es24.16)') 'best_local_spherical_operator_relative = ', best_local_relative
+         write(unit, '(a,es24.16)') 'best_local_spherical_operator_action_relative = ', best_local_action_relative
+         write(unit, '(a,es24.16)') 'radial_best_BH_matrix_relative = ', radial_matrix_relative
+         write(unit, '(a,es24.16)') 'radial_best_BH_max_element_relative = ', radial_relative
+         write(unit, '(a,es24.16)') 'radial_best_BH_action_relative = ', radial_action_relative
+         write(unit, '(a,i0)') 'radial_map_svd_rank = ', radial_rank_int
+         write(unit, '(a,es24.16)') 'radial_map_svd_condition = ', radial_condition
+         write(unit, '(a,es24.16)') 'radial_map_svd_residual = ', radial_residual_norm
+         write(unit, '(a,es24.16)') 'radial_map_svd_relative_residual = ', radial_relative_residual
+         write(unit, '(a,es24.16)') 'radial_map_minimum_norm_profile = ', radial_profile_norm
+         do ik = 1, size(radial_singular_values)
+            write(unit, '(a,i0,a,es24.16)') 'radial_map_singular_value_', ik, ' = ', radial_singular_values(ik)
+         end do
+         write(unit, '(a,es24.16)') 'best_local_spherical_operator_norm = ', sqrt(sum(abs(best_local_orbital)**2))
+         write(unit, '(a,a)') 'best_field_variational_oracle = ', merge('PASS', 'FAIL', best_variational_pass)
          write(unit, '(a,es24.16)') 'compact_Bxc_vs_BKS_relative = ', matrix_relative(compact_bxc, compact_bks)
-         write(unit, '(a,es24.16)') 'compact_BHbest_vs_Bxc_relative = ', matrix_relative(compact_best, compact_bxc)
-         write(unit, '(a,es24.16)') 'compact_BHbest_vs_BKS_relative = ', matrix_relative(compact_best, compact_bks)
+         write(unit, '(a,es24.16)') 'compact_BHradial_vs_Bxc_relative = ', matrix_relative(compact_best, compact_bxc)
+         write(unit, '(a,es24.16)') 'compact_BHradial_vs_BKS_relative = ', matrix_relative(compact_best, compact_bks)
          write(unit, '(a)') '# eta_ladder columns: eta exact_H_retarded_relative best_H_retarded_relative BKS_retarded_relative Bxc_retarded_relative'
          do ik = 1, neta
             write(unit, '(5(es24.16,1x))') eta_values(ik), eta_exact(ik), eta_best(ik), eta_bks(ik), eta_bxc(ik)
@@ -284,7 +376,9 @@ contains
       end if
       deallocate(magnetization, valence_magnetization, core_magnetization, magnetization_product, valence_product, core_product)
       deallocate(bxc_values, bks_values, best_values, b_h_orbital, b_h_spin, bxc_orbital, bxc_spin, bks_orbital, bks_spin)
-      deallocate(best_orbital, best_spin, compact_bxc, compact_bks, compact_best, response_rot, response_spec, response_retarded)
+      deallocate(best_spin, best_local_orbital, best_local_spin, b_h_mean, b_h_k_orbital, best_k_tmp, &
+         best_coefficients, best_global_coefficients, best_k_coefficients, radial_map, radial_target, radial_solution, &
+         radial_singular_values, compact_bxc, compact_bks, compact_best, response_rot, response_spec, response_retarded)
       deallocate(response_exact_field, response_exact_field_retarded, response_best, response_best_retarded, response_bks, &
          response_bks_retarded, response_bxc, response_bxc_retarded, static_exact, static_best, static_bks, static_bxc, &
          eta_exact, eta_best, eta_bks, eta_bxc)
@@ -382,6 +476,19 @@ contains
       end if
       orbital = field(1:norb, 1:norb)
    end subroutine spin_field_to_orbital
+
+   subroutine orbital_to_collinear_spin(orbital, norb, field)
+      complex(rp), intent(in) :: orbital(:, :)
+      integer, intent(in) :: norb
+      complex(rp), intent(out) :: field(:, :)
+
+      if (any(shape(orbital) /= [norb, norb]) .or. any(shape(field) /= [2*norb, 2*norb])) then
+         error stop 'DRESP-07: orbital/collinear-spin field shape mismatch'
+      end if
+      field = cmplx(0.0_rp, 0.0_rp, rp)
+      field(1:norb, 1:norb) = orbital
+      field(norb+1:2*norb, norb+1:2*norb) = -orbital
+   end subroutine orbital_to_collinear_spin
 
    function exact_ks_field_matrix(orbital, norb_site, nsite) result(field)
       complex(rp), intent(in) :: orbital(:, :)
@@ -484,93 +591,6 @@ contains
       end do
       deallocate(delta, ref_action, delta_action)
    end subroutine compare_fields
-
-   subroutine fit_best_radial_field(radial_bases, target, values, rank_out, condition, captured_norm, residual_norm, relative_residual)
-      type(lmto_radial_basis), intent(in) :: radial_bases(:)
-      complex(rp), intent(in) :: target(:, :)
-      real(rp), intent(out) :: values(:, :)
-      integer, intent(out) :: rank_out
-      real(rp), intent(out) :: condition, captured_norm, residual_norm, relative_residual
-      real(rp), allocatable :: row_metric(:, :), target_l(:, :), row_norm(:)
-      complex(rp), allocatable :: fitted(:, :)
-      integer :: nsite, npoint, lmax, norb_site, norb, site, ir, iorb, l, nmode
-      real(rp) :: metric, mode_norm, max_mode_norm, min_mode_norm, coefficient
-
-      nsite = size(radial_bases)
-      npoint = radial_bases(1)%npoint
-      lmax = radial_bases(1)%lmax
-      norb_site = (lmax + 1)**2
-      norb = nsite*norb_site
-      allocate(row_metric(nsite, 0:lmax), target_l(nsite, 0:lmax), row_norm(nsite*(lmax + 1)))
-      row_metric = 0.0_rp
-      target_l = 0.0_rp
-      row_norm = 0.0_rp
-      do site = 1, nsite
-         do l = 0, lmax
-            nmode = 0
-            do iorb = 1, norb_site
-               if (lmto_orbital_l(iorb) == l) then
-                  nmode = nmode + 1
-                  target_l(site, l) = target_l(site, l) + real(target((site - 1)*norb_site + iorb, &
-                     (site - 1)*norb_site + iorb), rp)
-               end if
-            end do
-            target_l(site, l) = target_l(site, l)/real(max(1, nmode), rp)
-            mode_norm = 0.0_rp
-            do ir = 2, npoint
-               metric = radial_simpson_weight(ir, npoint)*radial_bases(site)%mesh_a* &
-                  (radial_bases(site)%rofi(ir) + radial_bases(site)%mesh_b)* &
-                  radial_bases(site)%phi_large(ir, l + 1, 1)**2
-               row_metric(site, l) = row_metric(site, l) + metric*metric
-               mode_norm = mode_norm + metric*metric
-            end do
-            row_norm((site - 1)*(lmax + 1) + l + 1) = sqrt(mode_norm*real(max(1, nmode), rp))
-         end do
-      end do
-      values = 0.0_rp
-      rank_out = 0
-      max_mode_norm = maxval(row_norm)
-      min_mode_norm = huge(1.0_rp)
-      do site = 1, nsite
-         do l = 0, lmax
-            mode_norm = row_norm((site - 1)*(lmax + 1) + l + 1)
-            if (mode_norm <= tiny(1.0_rp)) cycle
-            rank_out = rank_out + 1
-            min_mode_norm = min(min_mode_norm, mode_norm)
-            coefficient = target_l(site, l)/row_metric(site, l)
-            do ir = 2, npoint
-               metric = radial_simpson_weight(ir, npoint)*radial_bases(site)%mesh_a* &
-                  (radial_bases(site)%rofi(ir) + radial_bases(site)%mesh_b)* &
-                  radial_bases(site)%phi_large(ir, l + 1, 1)**2
-               values(site, ir) = values(site, ir) + coefficient*metric
-            end do
-         end do
-      end do
-      if (rank_out > 0) then
-         condition = max_mode_norm/min_mode_norm
-      else
-         condition = huge(1.0_rp)
-      end if
-      allocate(fitted(norb, norb))
-      call map_radial_field_to_orbital(radial_bases, values, fitted)
-      captured_norm = sqrt(sum(abs(fitted)**2))
-      residual_norm = sqrt(sum(abs(target - fitted)**2))
-      relative_residual = residual_norm/max(sqrt(sum(abs(target)**2)), tiny(1.0_rp))
-      deallocate(row_metric, target_l, row_norm, fitted)
-   end subroutine fit_best_radial_field
-
-   subroutine map_radial_field_to_orbital(radial_bases, values, orbital)
-      type(lmto_radial_basis), intent(in) :: radial_bases(:)
-      real(rp), intent(in) :: values(:, :)
-      complex(rp), intent(out) :: orbital(:, :)
-      complex(rp), allocatable :: spin(:, :)
-      integer :: norb
-      norb = ((radial_bases(1)%lmax + 1)**2)*size(radial_bases)
-      allocate(spin(2*norb, 2*norb))
-      call map_radial_field_to_spin_matrix(radial_bases, values, spin)
-      orbital = spin(1:norb, 1:norb)
-      deallocate(spin)
-   end subroutine map_radial_field_to_orbital
 
    pure real(rp) function vector_norm(vector) result(value)
       complex(rp), intent(in) :: vector(:)

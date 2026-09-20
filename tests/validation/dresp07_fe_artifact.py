@@ -53,7 +53,18 @@ def main() -> int:
         "response_rotation_vs_spectral_relative",
         "response_exact_field_vs_spectral_relative",
         "accepted_core_to_total_ratio",
-        "best_BH_relative_residual",
+        "best_local_spherical_operator_relative",
+        "best_local_spherical_operator_action_relative",
+        "radial_best_BH_matrix_relative",
+        "radial_best_BH_action_relative",
+        "radial_map_svd_rank",
+        "radial_map_svd_condition",
+        "radial_map_svd_residual",
+        "radial_map_svd_relative_residual",
+        "radial_map_minimum_norm_profile",
+        "radial_map_singular_value_1",
+        "radial_map_singular_value_2",
+        "radial_map_singular_value_3",
         "R_exactH_val",
         "R_exactH_total",
         "R_BKS_val",
@@ -65,7 +76,14 @@ def main() -> int:
         "best_BH_matrix_relative",
         "best_BH_action_relative",
         "gamma_BH_onsite_frobenius",
+        "gamma_BH_frobenius",
         "gamma_BH_nonlocal_frobenius",
+        "gamma_BH_orbital_offdiagonal_frobenius",
+        "gamma_BH_within_l_diagonal_anisotropy_frobenius",
+        "gamma_BH_cross_l_frobenius",
+        "gamma_BH_intersite_frobenius",
+        "BH_k_dependence_relative",
+        "BH_global_local_projection_relative",
     }
     missing = sorted(required - values.keys())
     if missing:
@@ -87,16 +105,29 @@ def main() -> int:
     for key in required - {"product_dimension"}:
         if not math.isfinite(values[key]):
             raise SystemExit(f"DRESP-07 non-finite diagnostic: {key}={values[key]}")
-    if not math.isfinite(values["best_BH_relative_residual"]) or values["best_BH_relative_residual"] <= 1.0e-3:
-        raise SystemExit("DRESP-07 best-field representation defect was not retained")
+    if values["best_local_spherical_operator_relative"] > values["Bxc_matrix_relative"] + 1.0e-10:
+        raise SystemExit("DRESP-07R best local operator is worse than mapped Bxc")
+    if values["best_local_spherical_operator_relative"] > values["BKS_matrix_relative"] + 1.0e-10:
+        raise SystemExit("DRESP-07R best local operator is worse than mapped BKS")
+    if values["radial_map_svd_rank"] != 3 or values["radial_map_svd_relative_residual"] >= 1.0e-10:
+        raise SystemExit("DRESP-07R radial inverse did not pass the full-rank SVD oracle")
+    if abs(values["radial_best_BH_matrix_relative"] - values["best_local_spherical_operator_relative"]) >= 1.0e-10:
+        raise SystemExit("DRESP-07R radial realization does not reproduce the best local operator")
+    if values["gamma_BH_orbital_offdiagonal_frobenius"] <= 0.0 or values["gamma_BH_within_l_diagonal_anisotropy_frobenius"] <= 0.0:
+        raise SystemExit("DRESP-07R Fe field decomposition lost the non-spherical onsite defects")
+    if values["gamma_BH_cross_l_frobenius"] >= 1.0e-10 or values["gamma_BH_intersite_frobenius"] >= 1.0e-10:
+        raise SystemExit("DRESP-07R Fe cross-l/intersite decomposition regressed")
+    if values["BH_k_dependence_relative"] <= 1.0e-3:
+        raise SystemExit("DRESP-07R Fe k-dependence diagnostic is unexpectedly empty")
     if len(ladder) != 4 or [row[0] for row in ladder] != [0.04, 0.02, 0.01, 0.005]:
         raise SystemExit("DRESP-07 eta ladder is not the required 0.04/0.02/0.01/0.005 sequence")
     for row in ladder:
         if len(row) != 5 or not all(math.isfinite(value) for value in row):
             raise SystemExit("DRESP-07 eta ladder contains a non-finite value")
-    if ladder[-1][1] >= ladder[0][1]:
-        raise SystemExit("DRESP-07 exact-H retarded response did not approach the static oracle")
-    if classification != "FIELD_REPRESENTATION_FAILURE":
+    for column in range(1, 5):
+        if any(ladder[i][column] >= ladder[i - 1][column] for i in range(1, len(ladder))):
+            raise SystemExit("DRESP-07 eta ladder is not decreasing for every Ward source")
+    if classification != "SECOND_ORDER_LMTO_MAPPING_REQUIRED":
         raise SystemExit(f"unexpected DRESP-07 classification: {classification}")
     print("Dresp07FeArtifact: PASS (independent exact-gate, bookkeeping, field, and eta-ladder checks)")
     return 0

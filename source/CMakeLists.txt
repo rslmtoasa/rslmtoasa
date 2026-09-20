@@ -104,6 +104,7 @@ add_library(${PROJECT_NAME} STATIC
     lr_lmto_turek_gf.f90
     lr_lmto_turek_contour.f90
     lr_rs_gf_susceptibility.f90
+    lr_dresp07_radial_oracle.f90
     lr_exact_ks_ward.f90
     lr_dresp07_bridge.f90
     tddft_native_rsgf_provider.f90

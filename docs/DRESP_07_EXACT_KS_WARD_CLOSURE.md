@@ -1,6 +1,13 @@
 # DRESP-07 exact Kohn–Sham Ward closure
 
-Status: **PASS — FIELD_REPRESENTATION_FAILURE localized**.
+Status: **PASS — SECOND_ORDER_LMTO_MAPPING_REQUIRED localized**.
+
+This DRESP-07R repair supersedes the previous “best local radial field”
+diagnostic. The old value `0.844` was produced by treating nonorthogonal
+radial rows independently; it was not a true least-squares optimum.
+
+> **SUPERSEDED DIAGNOSTIC:** old implementation treated nonorthogonal radial
+> rows independently and was not a true least-squares optimum.
 
 The bounded campaign used accepted bcc Fe on a 4 × 4 × 4 full reciprocal mesh,
 Gamma, static frequency, and the eta ladder 0.04, 0.02, 0.01, 0.005 Ry. The
@@ -13,7 +20,8 @@ The diagnostic follows the required chain:
 ```text
 H -> delta H = -i [G,H] -> delta rho_rot
   -> delta rho_spec -> exact-H product response
-  -> B_H -> best local radial B_H -> B_KS^LMTO -> B_xc^LMTO
+  -> B_H -> best local spherical operator -> radial SVD inverse
+  -> B_KS^LMTO -> B_xc^LMTO
 ```
 
 The complete Fe/spd product representation is initialized and retained at
@@ -54,6 +62,16 @@ the accepted Pauli large-component basis with the radial scalar field using the
 accepted logarithmic mesh and Simpson metric. It is not asserted to be an
 identity with the native second-order reciprocal Hamiltonian.
 
+`source/lr_dresp07_radial_oracle.f90` keeps the two representation questions
+separate:
+
+- `best_local_spherical_operator` is the exact Frobenius projection onto the
+  mutually orthogonal site/l projectors, with one m-degenerate coefficient per
+  site and angular momentum.
+- The accepted radial map is assembled as one coupled site/l-by-site/r matrix
+  and inverted with DGELSS/SVD. The radial profile is therefore minimum-norm;
+  no independent per-l division is used.
+
 ## Quantitative residual ledger
 
 Artifact: `/tmp/dresp07_fe_4k.dat` (deliberately not committed).
@@ -70,7 +88,13 @@ Artifact: `/tmp/dresp07_fe_4k.dat` (deliberately not committed).
 | exact `delta H` product response vs spectral response | 1.9259e-16 | pass |
 | `m_H^prod` vs accepted Pauli valence | 4.0699e-02 | finite projection mismatch |
 | exact-H response vs accepted total Pauli | 5.3718e-02 | core-inclusive comparison |
-| best local radial `B_H` relative residual | 8.4382e-01 | representation defect |
+| old best local radial `B_H` relative residual | 8.4382e-01 | **SUPERSEDED DIAGNOSTIC** |
+| best local spherical operator relative residual | 9.0148e-02 | variational optimum |
+| best local spherical operator action residual | 1.0511e-01 | variational optimum |
+| radial map SVD rank / condition | 3 / 1.1445e+1 | full-rank solve |
+| radial map singular values | 2.9487e-1, 9.8699e-2, 2.5764e-2 | full spectrum |
+| radial map relative residual | 5.1355e-16 | realizable coefficients |
+| radial best `B_H` matrix residual | 9.0148e-02 | agrees with operator optimum |
 | mapped `B_xc` vs `B_H`, matrix relative | 2.0125e-01 | mismatch |
 | mapped `B_xc` vs `B_H`, action relative | 5.5047e-01 | mismatch |
 | mapped total radial `B_KS` vs `B_H`, matrix relative | 2.0125e-01 | mismatch |
@@ -79,16 +103,22 @@ Artifact: `/tmp/dresp07_fe_4k.dat` (deliberately not committed).
 The accepted Gamma field has `||B_H||_F = 2.2879e-1` in the full spin
 embedding. Its onsite norm is 2.2879e-1 and its intersite/site-offdiagonal
 norm is zero for this one-site bcc primitive-cell representation. The full
-orbital field still contains 9.4141e-3 of orbital offdiagonal weight. The
-same-`l` norm is 1.6178e-1 and the cross-`l` norm is approximately 1.0e-16.
-Across the accepted mesh, the orbital `B_H` Frobenius norm spans
-1.6178e-1 to 1.9938e-1.
+orbital field still contains 9.4141e-3 of same-l orbital offdiagonal weight and
+1.1139e-2 of within-l diagonal m-anisotropy. The cross-l norm is approximately
+1.0e-16 and the intersite norm is zero. Across the accepted mesh, the orbital
+`B_H` Frobenius norm spans 1.6178e-1 to 1.9938e-1.
 
-The best local radial fit has blockwise radial-fit rank 3 and condition 1.9311;
-it captures 2.5198e-1 Frobenius norm and leaves 1.3651e-1 residual. It is
-reported only as a representation diagnostic and is never used as a corrected
-field. Its retained product operator differs from the mapped radial XC/KS
-operator by relative 1.1227.
+The true local spherical optimum leaves a 9.0148e-2 Gamma relative residual,
+while its coefficients are reproduced by the radial inverse to 5.1355e-16.
+Thus operator-space representability, not radial realizability, is the
+remaining Gamma defect. The best local operator satisfies the hard variational
+oracle against both mapped `B_xc` and mapped `B_KS` fields.
+
+The weighted field mean has norm 1.7420e-1, with mesh k-dependence
+`R_k = 2.6749e-1`. The global weighted local projection residual is only
+2.7795e-2, while the per-k local residual averages 2.6058e-1 and reaches
+3.3318e-1. This motivates the native second-order mapping milestone; it is
+not evidence that a physical local field itself is invalid.
 
 ## Valence/core bookkeeping
 
@@ -112,12 +142,12 @@ the local radial representation remains the much larger defect.
 The divided-difference result is the eta=0 finite-dimensional reference. The
 retarded rows below are relative to their corresponding static source response.
 
-| eta (Ry) | exact H | best H | total radial KS | radial XC |
+| eta (Ry) | exact H | best local spherical H | total radial KS | radial XC |
 |---:|---:|---:|---:|---:|
-| 0.040 | 2.4738e-1 | 2.7733e-1 | 2.4938e-1 | 2.4938e-1 |
-| 0.020 | 1.2772e-1 | 1.4925e-1 | 1.2882e-1 | 1.2882e-1 |
-| 0.010 | 6.4549e-2 | 7.7299e-2 | 6.5125e-2 | 6.5125e-2 |
-| 0.005 | 3.2375e-2 | 3.9097e-2 | 3.2668e-2 | 3.2668e-2 |
+| 0.040 | 2.4738e-1 | 2.5409e-1 | 2.4938e-1 | 2.4938e-1 |
+| 0.020 | 1.2772e-1 | 1.3237e-1 | 1.2882e-1 | 1.2882e-1 |
+| 0.010 | 6.4549e-2 | 6.7274e-2 | 6.5125e-2 | 6.5125e-2 |
+| 0.005 | 3.2375e-2 | 3.3808e-2 | 3.2668e-2 | 3.2668e-2 |
 
 The exact-H retarded response approaches the exact static oracle as eta falls;
 this is not a static divided-difference failure.
@@ -127,17 +157,20 @@ this is not a static divided-difference failure.
 Primary classification:
 
 ```text
-FIELD_REPRESENTATION_FAILURE
+SECOND_ORDER_LMTO_MAPPING_REQUIRED
 ```
 
 The accepted-H eigensystem, global-spin-rotation identity, circular convention,
-and exact-H product contraction all pass at numerical precision. The remaining
-defect is exposed when the complete accepted Hamiltonian field is compared to
-the scalar local radial/product field space: even the best representable local
-radial field leaves an 84.4% Frobenius residual, and the certified radial XC
-and total-KS maps differ from `B_H` at the 20.1% matrix level and 55.0% action
-level. The 4.07% exact-H versus Pauli-valence projection mismatch is retained
-as a separate finite product/augmentation diagnostic, not hidden by a fit.
+and exact-H product contraction all pass at numerical precision. The old 84.4%
+number is a superseded non-variational fit. The true best local spherical
+operator leaves 9.01% at Gamma, while the radial inverse reproduces its shell
+coefficients at numerical precision and passes the variational inequality
+against both mapped fields. The dominant remaining measured seam is the
+26.75% k-dependence of the accepted exact coefficient-space field, which a
+k-independent direct radial matrix cannot reproduce. The 20.1% mapped radial
+XC/KS matrix mismatch and 55.0% action mismatch are retained as mapping
+diagnostics. The 4.07% exact-H versus Pauli-valence projection mismatch remains
+a separate finite product/augmentation diagnostic, not hidden by a fit.
 
 BES/Halle status: **NOT APPLIED**.
 
@@ -158,9 +191,13 @@ Focused regressions:
 - `UnitDresp07ExactKsWard`: coupled finite-H commutator/divided-difference
   identity, finite-temperature limit, circular sign/factor two, accepted H
   extraction, and exact-H-to-product contraction.
+- `UnitDresp07RadialOracle`: independent nonorthogonal-row SVD solve,
+  nonrepresentable negative fixture, exact projector-space least-squares
+  fixture, and hard best-operator variational inequality.
 - `TddftDresp07ExactKsWard`: bounded accepted-state bcc Fe 4 × 4 × 4 campaign.
 - `Dresp07FeArtifact`: independent artifact checks for exact gates,
-  valence/core bookkeeping, field-representation defect, and eta ladder.
+  valence/core bookkeeping, variational/radial diagnostics, decomposition,
+  k-dependence, and eta ladder.
 
 The DRESP-06A projection and product-response tests remain unchanged. Frozen
 paths were not modified:
@@ -176,5 +213,5 @@ No DRESP-03TG physics was changed.
 Suggested commit:
 
 ```text
-Diagnose exact KS Ward closure in DRESP-07
+Repair DRESP-07 radial field variational oracle
 ```
