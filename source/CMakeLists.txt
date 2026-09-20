@@ -89,6 +89,7 @@ add_library(${PROJECT_NAME} STATIC
     lr_response_space.f90
     lr_pauli_transition_vertex.f90
     lr_lmto_product_response_basis.f90
+    lr_lmto_basis_connection.f90
     lr_projected_site_spin.f90
     lr_compact_static_interaction.f90
     lr_gf_endpoint_augmentation.f90
@@ -113,6 +114,7 @@ add_library(${PROJECT_NAME} STATIC
     lr_dresp09r_bridge.f90
     lr_dresp09s_scalar_relativistic.f90
     lr_dresp09s_bridge.f90
+    lr_dresp09t_bridge.f90
     lr_dresp07_bridge.f90
     tddft_native_rsgf_provider.f90
     lr_alsda_kernel.f90

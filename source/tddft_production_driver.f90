@@ -63,6 +63,7 @@ module tddft_production_driver_mod
    use lr_dresp08_bridge_mod, only: run_dresp08_native_second_order
    use lr_dresp09r_bridge_mod, only: run_dresp09r_pauli_projected_native
    use lr_dresp09s_bridge_mod, only: run_dresp09s_scalar_relativistic
+   use lr_dresp09t_bridge_mod, only: run_dresp09t_moving_basis
    use lr_ward_mode_analysis_mod, only: lr_ward_mode_analysis_result, analyze_lr_ward_mode
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
@@ -100,6 +101,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_native_second_order = 'native_second_order'
    character(len=*), parameter, public :: tddft_driver_backend_pauli_projected_native = 'pauli_projected_native'
    character(len=*), parameter, public :: tddft_driver_backend_sr_l0_scalar_relativistic = 'sr_l0_scalar_relativistic'
+   character(len=*), parameter, public :: tddft_driver_backend_moving_basis_tangent = 'moving_basis_tangent'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -379,8 +381,9 @@ contains
           trim(config%backend) /= tddft_driver_backend_exact_ks_ward .and. &
           trim(config%backend) /= tddft_driver_backend_native_second_order .and. &
           trim(config%backend) /= tddft_driver_backend_pauli_projected_native .and. &
-          trim(config%backend) /= tddft_driver_backend_sr_l0_scalar_relativistic) then
-         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions, compact_dyson, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, pauli_projected_native, or sr_l0_scalar_relativistic'
+          trim(config%backend) /= tddft_driver_backend_sr_l0_scalar_relativistic .and. &
+          trim(config%backend) /= tddft_driver_backend_moving_basis_tangent) then
+         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions, compact_dyson, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, pauli_projected_native, sr_l0_scalar_relativistic, or moving_basis_tangent'
       end if
       if (trim(config%backend) == tddft_driver_backend_projected_mills .or. &
           trim(config%backend) == tddft_driver_backend_projected_juelich .or. &
@@ -409,8 +412,9 @@ contains
           trim(config%backend) /= tddft_driver_backend_exact_ks_ward .and. &
           trim(config%backend) /= tddft_driver_backend_native_second_order .and. &
           trim(config%backend) /= tddft_driver_backend_pauli_projected_native .and. &
-          trim(config%backend) /= tddft_driver_backend_sr_l0_scalar_relativistic .and. size(config%eta_values) /= 1) then
-         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence, static_interactions, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, pauli_projected_native, or sr_l0_scalar_relativistic'
+          trim(config%backend) /= tddft_driver_backend_sr_l0_scalar_relativistic .and. &
+          trim(config%backend) /= tddft_driver_backend_moving_basis_tangent .and. size(config%eta_values) /= 1) then
+         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence, static_interactions, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, pauli_projected_native, sr_l0_scalar_relativistic, or moving_basis_tangent'
       end if
       if (trim(config%backend) == tddft_driver_backend_exact_ks_ward) then
          if (size(config%q_list, 2) /= 1 .or. sum(abs(config%q_list(:, 1))) > 1.0e-12_rp) then
@@ -454,6 +458,17 @@ contains
          end if
          if (config%response_lmax /= 4) then
             error stop 'TDDFT input: sr_l0_scalar_relativistic requires response_lmax=4'
+         end if
+      end if
+      if (trim(config%backend) == tddft_driver_backend_moving_basis_tangent) then
+         if (size(config%q_list, 2) /= 1 .or. sum(abs(config%q_list(:, 1))) > 1.0e-12_rp) then
+            error stop 'TDDFT input: moving_basis_tangent requires one Gamma q point'
+         end if
+         if (size(config%frequencies) /= 1 .or. abs(config%frequencies(1)) > 1.0e-12_rp) then
+            error stop 'TDDFT input: moving_basis_tangent requires one static omega=0 point'
+         end if
+         if (config%response_lmax /= 4) then
+            error stop 'TDDFT input: moving_basis_tangent requires response_lmax=4'
          end if
       end if
       if (trim(config%backend) == tddft_driver_backend_projected_juelich .or. &
@@ -1039,6 +1054,14 @@ contains
          end if
          call run_dresp07_exact_ks_ward(trim(config%output_file), response_space, radial_bases, ground_states, &
             reciprocal_obj, lattice_obj, config%eta_values)
+         return
+      end if
+      if (trim(config%backend) == tddft_driver_backend_moving_basis_tangent) then
+         if (.not. use_accepted_kspace_scf) then
+            error stop 'DRESP-09T moving_basis_tangent requires the accepted k-space SCF handoff'
+         end if
+         call run_dresp09t_moving_basis(trim(config%output_file), response_space, radial_bases, ground_states, &
+            reciprocal_obj, lattice_obj, hamiltonian_obj)
          return
       end if
       if (trim(config%backend) == tddft_driver_backend_native_second_order) then
