@@ -686,6 +686,12 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitDresp07RadialOracle PROPERTIES LABELS "unit;dresp-07r;radial;svd;projector;variational;negative-control")
   add_fortran_unit_test(UnitDresp08NativeSecondOrder ${TestDIR}/unit/test_dresp08_native_second_order.f90)
   set_tests_properties(UnitDresp08NativeSecondOrder PROPERTIES LABELS "unit;dresp-08;lmto;second-order;tangent;finite-rotation;angular")
+  add_fortran_unit_test(UnitDresp09FieldInsertion ${TestDIR}/unit/test_dresp09_field_insertion.f90)
+  set_tests_properties(UnitDresp09FieldInsertion PROPERTIES LABELS "unit;dresp-09;field-insertion;metric-adjoint;compact;angular")
+  add_test(NAME UnitDresp09DirectRouteBlocked COMMAND UnitDresp09FieldInsertion blocked)
+  set_tests_properties(UnitDresp09DirectRouteBlocked PROPERTIES
+    LABELS "unit;dresp-09;negative;direct-route;scalar-relativistic;capability"
+    WILL_FAIL TRUE)
   add_fortran_unit_test(UnitLrWardModeAnalysis ${TestDIR}/unit/test_lr_ward_mode_analysis.f90)
   set_tests_properties(UnitLrWardModeAnalysis PROPERTIES LABELS "unit;dresp-06a;ward;goldstone;eigensystem;nonhermitian;svd")
   add_fortran_unit_test(UnitLrKlStaticBridge ${TestDIR}/unit/test_lr_kl_static_bridge.f90)
