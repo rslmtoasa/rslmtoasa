@@ -44,6 +44,7 @@ module lr_sr_angular_vertex_mod
    public :: sr_angular_circular_conjugate_residual
    public :: sr_angular_product_rank_amplitudes
    public :: sr_angular_l0_scalar_vertex
+   public :: sr_angular_l0_projected_components
    public :: sr_angular_build_vertex
    public :: sr_vertex_branch_name
 
@@ -82,7 +83,33 @@ contains
       integer, intent(in) :: l, m, lp, mp, source_l, source_m
       complex(rp), intent(in) :: weights(3)
       complex(rp), intent(out) :: value(2, 2)
-      complex(rp) :: sigma(2, 2, 3), rank2(2, 2), upper
+      complex(rp) :: rank0(2, 2), rank2(2, 2)
+
+      call sr_angular_lower_rank0_linear_vertex(l, m, lp, mp, source_l, source_m, weights, rank0)
+      call sr_angular_lower_rank2_linear_vertex(l, m, lp, mp, source_l, source_m, weights, rank2)
+      value = rank0 + rank2
+   end subroutine sr_angular_lower_linear_vertex
+
+   pure subroutine sr_angular_lower_rank0_linear_vertex(l, m, lp, mp, source_l, source_m, weights, value)
+      integer, intent(in) :: l, m, lp, mp, source_l, source_m
+      complex(rp), intent(in) :: weights(3)
+      complex(rp), intent(out) :: value(2, 2)
+      complex(rp) :: sigma(2, 2)
+      integer :: i
+
+      value = cmplx(0.0_rp, 0.0_rp, rp)
+      do i = 1, 3
+         call cartesian_sigma(i, sigma)
+         value = value + weights(i)*lower_rank0_matrix(&
+            sr_angular_upper_vertex(l, m, lp, mp, source_l, source_m), sigma)
+      end do
+   end subroutine sr_angular_lower_rank0_linear_vertex
+
+   pure subroutine sr_angular_lower_rank2_linear_vertex(l, m, lp, mp, source_l, source_m, weights, value)
+      integer, intent(in) :: l, m, lp, mp, source_l, source_m
+      complex(rp), intent(in) :: weights(3)
+      complex(rp), intent(out) :: value(2, 2)
+      complex(rp) :: sigma(2, 2, 3)
       integer :: i, j, q
 
       call cartesian_sigma(sr_vertex_component_x, sigma(:, :, 1))
@@ -90,17 +117,14 @@ contains
       call cartesian_sigma(sr_vertex_component_z, sigma(:, :, 3))
       value = cmplx(0.0_rp, 0.0_rp, rp)
       do i = 1, 3
-         upper = sr_angular_upper_vertex(l, m, lp, mp, source_l, source_m)
-         value = value + weights(i)*lower_rank0_matrix(upper, sigma(:, :, i))
          do j = 1, 3
             do q = -2, 2
-               rank2 = cmplx(0.0_rp, 0.0_rp, rp)
-               rank2 = sr_angular_rank2_integral(l, m, lp, mp, source_l, source_m, i, j, q)*sigma(:, :, j)
-               value = value + 2.0_rp*weights(i)*sr_angular_nn_rank2_coefficient(i, j, q)*rank2
+               value = value + 2.0_rp*weights(i)*sr_angular_nn_rank2_coefficient(i, j, q)* &
+                  sr_angular_rank2_integral(l, m, lp, mp, source_l, source_m, i, j, q)*sigma(:, :, j)
             end do
          end do
       end do
-   end subroutine sr_angular_lower_linear_vertex
+   end subroutine sr_angular_lower_rank2_linear_vertex
 
    !> The spatial four-harmonic integral multiplying Q^(2)_ij.
    pure complex(rp) function sr_angular_rank2_integral(l, m, lp, mp, source_l, source_m, i, j, q) result(value)
@@ -263,11 +287,45 @@ contains
       value = lower_rank0_matrix(sr_angular_upper_vertex(l, m, lp, mp, 0, 0), sigma)
    end subroutine sr_angular_l0_scalar_vertex
 
+   !> Apply the orbital scalar projector to the complete L=0 operator in one
+   !> l shell.  The rank-2 result is retained as a separate diagnostic and is
+   !> expected to vanish only after the complete shell trace.
+   subroutine sr_angular_l0_projected_components(l, component, upper, lower_small, lower_rank0, lower_rank2, total)
+      integer, intent(in) :: l, component
+      complex(rp), intent(out) :: upper(2,2), lower_small(2,2), lower_rank0(2,2), lower_rank2(2,2), total(2,2)
+      complex(rp) :: sigma(2,2), rank0(2,2), rank2(2,2)
+      integer :: m
+
+      call cartesian_sigma(component, sigma)
+      upper = cmplx(0.0_rp,0.0_rp,rp); lower_small = upper; lower_rank0 = upper; lower_rank2 = upper
+      do m = -l, l
+         upper = upper + sr_angular_upper_vertex(l,m,l,m,0,0)*sigma
+         call sr_angular_lower_rank0_linear_vertex(l,m,l,m,0,0,unit_cartesian_weights(component),rank0)
+         call sr_angular_lower_rank2_linear_vertex(l,m,l,m,0,0,unit_cartesian_weights(component),rank2)
+         lower_small = lower_small + rank0
+         lower_rank0 = lower_rank0 + real(l*(l+1),rp)*rank0
+         lower_rank2 = lower_rank2 + rank2
+      end do
+      upper = upper/real(2*l+1,rp)
+      lower_small = lower_small/real(2*l+1,rp)
+      lower_rank0 = lower_rank0/real(2*l+1,rp)
+      lower_rank2 = lower_rank2/real(2*l+1,rp)
+      total = upper + lower_small + lower_rank0 + lower_rank2
+   end subroutine sr_angular_l0_projected_components
+
    pure function lower_rank0_matrix(upper, sigma) result(value)
       complex(rp), intent(in) :: upper, sigma(2, 2)
       complex(rp) :: value(2, 2)
       value = sr_vertex_lower_rank0*upper*sigma
    end function lower_rank0_matrix
+
+   pure function unit_cartesian_weights(component) result(weights)
+      integer, intent(in) :: component
+      complex(rp) :: weights(3)
+      weights = cmplx(0.0_rp,0.0_rp,rp)
+      if (component < 1 .or. component > 3) error stop 'DRESP-09Z: invalid Cartesian component'
+      weights(component) = cmplx(1.0_rp,0.0_rp,rp)
+   end function unit_cartesian_weights
 
    pure integer function real_power_minus_one(n) result(value)
       integer, intent(in) :: n

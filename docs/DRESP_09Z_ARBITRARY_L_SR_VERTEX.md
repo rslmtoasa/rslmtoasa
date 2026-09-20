@@ -124,26 +124,41 @@ The nontrivial fixtures include `L=1,M=0`, `L=2,M=1`, `L=3,M=-2`, and
 `L=4,M=4` in the augmentation finite-angle sweep.  The explicit L=4 fixture
 shows nonzero lower rank mixing.
 
-## L=0 hard gate
+## DRESP-09ZR scalar L=0 projection
 
 The direct arbitrary-orbital four-harmonic KH integral is independently
-validated, but it does not reduce to the frozen scalar L=0 observable for all
-individual orbital pairs.  The measured raw-vs-certified L=0 residual is
+validated.  The historical comparison was not a scalar projection: it
+compared a full orbital-resolved matrix element against the frozen scalar
+observable pairwise.  Its measured residual is
 
 ```text
 2.25675833e-01
 ```
 
-The reason is structural: the direct integral contains the orbital rank-2
-matrix element of `Q^(2)` even when the physical source has `L=0`, whereas the
-certified DRESP-09X/Y scalar observable is the spherical, l-resolved
-projection with only the `-1/3` lower factor and its established
-`l(l+1)/(TMC*r)^2` radial term.  The module exposes the certified projection
-as `sr_angular_l0_scalar_vertex`, but the raw arbitrary-orbital evaluator has
-not silently replaced the rank-2 integral by that projection.
+For a physical `L=0,M=0` source, the accepted projector is applied shell by
+shell:
 
-This is the current DRESP-09Z blocker and must be resolved by the physics
-owner before promotion.  It is not a quadrature or live-harmonic phase error.
+```text
+P0[O]_l = I_l/(2*l+1) * sum(m=-l:l) O_(lm,lm)
+```
+
+The full lower operator is retained as `K=0 + K=2`.  The independent
+quadrature trace oracle confirms that the `K=2` diagonal shell trace vanishes
+for `l=0,1,2`; it is zero identically for `l=0` and traceless, rather than
+pairwise zero, for `p` and `d` shells.
+
+The DRESP-09ZR unit oracle reports:
+
+```text
+scalar projector closure                     1.1102e-16
+rank-2 trace closure l=0/1/2                5.5511e-16  5.6066e-15  3.3584e-15
+projected upper/small/rank-0/rank-2/total   5.3291e-15  8.3267e-17  6.9389e-18  0  3.5527e-15
+projected branches 00/10/01/11/20/02        5.3291e-15  4.4409e-16  4.4409e-16  5.5511e-17  5.5511e-17  5.5511e-17
+```
+
+The raw `2.25675833e-01` value is therefore
+`EXPECTED_FULL_ORBITAL_vs_SCALAR_PROJECTED_DIFFERENCE`, not a correctness
+residual.  The full rank-2 tensor remains present in the arbitrary-L path.
 
 ## Compact candidate audit boundary
 
@@ -156,22 +171,24 @@ shadow six-branch candidates                           348
 new 20/02 candidate slots                              116
 ```
 
-The old basis is still four-branch by construction.  A numerical weighted
-projection of accepted Fe radial data into the old 232-dimensional span is
-intentionally not promoted while the L=0 lower-angular gate is open; no
-orthogonal complement is discarded and no `chi0` or Dyson object is changed.
+The old basis is still four-branch by construction.  The accepted-state
+compact-span/SVD audit is the next audit boundary; no orthogonal complement is
+discarded and no `chi0` or Dyson object is changed by DRESP-09ZR.
 
-## DRESP-09Z verdict
+## DRESP-09ZR representation-gate verdict
 
 ```text
-DRESP-09Z verdict: BLOCKED
-Primary classification: LOWER_ANGULAR_RECOUPLING_OPEN
+DRESP-09ZR scalar projection gate: CLOSED
+Raw arbitrary-L SR vertex: CLOSED
+Accepted-state compact-span audit: NOT RUN IN THIS COMMIT
 ```
 
 The arbitrary-L analytic tensor, independent quadrature oracle, selection
-rules, circular covariance, six-branch tangent layer, and raw finite-angle
-fixtures are implemented and close.  The frozen L=0 representation gate is
-not closed, so this is not PASS-A or PASS-B yet.
+rules, circular covariance, six-branch tangent layer, scalar projector, and
+projected six-branch reduction all close.  This commit resolves the invalid
+pairwise L=0 gate; it does not claim the final PASS-A/PASS-B compact-basis
+classification because the accepted Fe six-branch SVD and field/density
+duality audit have not been run here.
 
 ```text
 ALSDA Ward: NOT RUN

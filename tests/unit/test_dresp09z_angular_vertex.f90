@@ -2,10 +2,13 @@ program test_dresp09z_angular_vertex
 
    use precision_mod, only: rp
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
+   use response_angular_basis_mod, only: response_gaunt
    use lr_sr_angular_vertex_mod, only: sr_angular_upper_vertex, sr_angular_lower_vertex, &
       sr_angular_quadrature_upper, sr_angular_quadrature_lower, sr_angular_circular_vertex, &
-      sr_angular_circular_conjugate_residual, sr_angular_product_rank_amplitudes, sr_angular_l0_scalar_vertex
-   use lr_sr_augmentation_tangent_mod, only: sr_aug_sigma_x, sr_aug_sigma_y, sr_aug_sigma_z
+      sr_angular_circular_conjugate_residual, sr_angular_product_rank_amplitudes, sr_angular_l0_scalar_vertex, &
+      sr_angular_l0_projected_components
+   use lr_sr_augmentation_tangent_mod, only: sr_aug_sigma_x, sr_aug_sigma_y, sr_aug_sigma_z, &
+      sr_aug_lower_spin_factor, sr_aug_branch_observable, sr_aug_branch_observable_tangent
    use lr_sr_spatial_augmentation_tangent_mod, only: sr_spatial_branch_observable, &
       sr_spatial_branch_observable_at_angle, sr_spatial_branch_observable_tangent
    use lr_dresp09z_bridge_mod, only: dresp09z_historical_candidate_count, &
@@ -15,12 +18,16 @@ program test_dresp09z_angular_vertex
    integer :: l, m, lp, mp, source_l, source_m, component
    real(rp) :: upper_error, lower_error, hermitian_error, fixture_error, amplitudes(0:4)
    real(rp) :: forbidden_error, l0_reduction_error
+   real(rp) :: projector_error, trace_error, projected_branch_error
+   real(rp) :: trace_error_l(0:2), projected_piece_error(5), projected_branch_error_by_branch(6)
    complex(rp) :: analytic, oracle, lower(2,2), lower_oracle(2,2), plus(2,2), minus(2,2), lower_scalar(2,2), sigma(2,2)
    complex(rp) :: weights(3)
    type(lmto_radial_basis) :: radial
    complex(rp) :: u0(2,2), s0(2,2), r0(2,2), k0(2,2), t0(2,2)
    complex(rp) :: up(2,2), sp(2,2), rp0(2,2), kp(2,2), tplus(2,2), atot(2,2)
    complex(rp) :: um(2,2), sm(2,2), rm(2,2), km(2,2), tm(2,2)
+   complex(rp) :: projected_u(2,2), projected_s(2,2), projected_r0(2,2), projected_r2(2,2), projected_t(2,2)
+   complex(rp) :: quadrature_trace(2,2), expected_matrix(2,2), expected_coefficient, ref_u(2,2), ref_s(2,2), ref_a(2,2), ref_t(2,2)
    real(rp) :: tangent_error, theta, radius
    real(rp) :: branch_error(6), augmentation_l_error(0:4)
    logical :: ranks(0:4)
@@ -28,6 +35,8 @@ program test_dresp09z_angular_vertex
 
    upper_error = 0.0_rp; lower_error = 0.0_rp; hermitian_error = 0.0_rp; fixture_error = 0.0_rp
    forbidden_error = 0.0_rp; l0_reduction_error = 0.0_rp
+   projector_error = 0.0_rp; trace_error = 0.0_rp; projected_branch_error = 0.0_rp
+   trace_error_l = 0.0_rp; projected_piece_error = 0.0_rp; projected_branch_error_by_branch = 0.0_rp
    do l = 0, 2
       do m = -l, l
          do lp = 0, 2
@@ -91,6 +100,35 @@ program test_dresp09z_angular_vertex
       error stop 'DRESP-09Z source/product rank map failed'
    end if
 
+   ! The full L=0 orbital tensor is compared to the scalar shell projector,
+   ! not pairwise to the scalar operator.  The direct quadrature trace is an
+   ! independent rank-2/Wigner-Eckart oracle.
+   do l = 0, 2
+      do component = 1, 3
+         call sr_angular_l0_projected_components(l, component, projected_u, projected_s, projected_r0, &
+            projected_r2, projected_t)
+         select case (component)
+         case (1); call sr_aug_sigma_x(sigma)
+         case (2); call sr_aug_sigma_y(sigma)
+         case (3); call sr_aug_sigma_z(sigma)
+         end select
+         expected_matrix = response_gaunt(l,0,l,0,0,0)*sigma
+         projector_error = max(projector_error,maxval(abs(projected_u-expected_matrix)))
+         projector_error = max(projector_error,maxval(abs(projected_s-sr_aug_lower_spin_factor*expected_matrix)))
+         projector_error = max(projector_error,maxval(abs(projected_r0-&
+            sr_aug_lower_spin_factor*real(l*(l+1),rp)*expected_matrix)))
+         projector_error = max(projector_error,maxval(abs(projected_r2)))
+         quadrature_trace = cmplx(0.0_rp,0.0_rp,rp)
+         do m = -l, l
+            call sr_angular_quadrature_lower(l,m,l,m,0,0,component,lower_oracle)
+            quadrature_trace = quadrature_trace + lower_oracle - &
+               sr_aug_lower_spin_factor*response_gaunt(l,m,l,m,0,0)*sigma
+         end do
+         trace_error_l(l) = max(trace_error_l(l),maxval(abs(quadrature_trace)))
+      end do
+   end do
+   trace_error = maxval(trace_error_l)
+
    ! Six-branch arbitrary-L augmentation tangent and finite-angle oracle.
    call radial%initialize(7,2,2)
    radial%rofi = [0.0_rp,0.08_rp,0.16_rp,0.24_rp,0.32_rp,0.40_rp,0.48_rp]
@@ -135,10 +173,53 @@ program test_dresp09z_angular_vertex
    end do
    tangent_error = maxval(branch_error)
 
+   ! Project every six radial tangent branch back to the frozen DRESP-09Y
+   ! scalar augmentation observable.
+   do ir = 2, radial%npoint
+      do l = 0, 2
+         do branch = 1, 6
+            call sr_aug_branch_observable_tangent(radial,ir,l,branch,sigma_x_for_test(),t0,s0,r0,atot)
+            projected_u = cmplx(0.0_rp,0.0_rp,rp); projected_s = projected_u
+            projected_r0 = projected_u; projected_r2 = projected_u; projected_t = projected_u
+            do m = -l, l
+               call sr_spatial_branch_observable_tangent(radial,ir,l,m,l,m,branch,0,0,1,up,sp,rp0,kp,tplus)
+               projected_u = projected_u + up
+               projected_s = projected_s + sp
+               projected_r0 = projected_r0 + rp0
+               projected_r2 = projected_r2 + kp
+               projected_t = projected_t + tplus
+            end do
+            projected_u = projected_u/real(2*l+1,rp); projected_s = projected_s/real(2*l+1,rp)
+            projected_r0 = projected_r0/real(2*l+1,rp); projected_r2 = projected_r2/real(2*l+1,rp)
+            projected_t = projected_t/real(2*l+1,rp)
+            expected_coefficient = cmplx(response_gaunt(l,0,l,0,0,0),0.0_rp,rp)
+            projected_piece_error(1) = max(projected_piece_error(1),maxval(abs(projected_u-expected_coefficient*t0)))
+            projected_piece_error(2) = max(projected_piece_error(2),maxval(abs(projected_s-&
+               expected_coefficient*sr_aug_lower_spin_factor*s0)))
+            projected_piece_error(3) = max(projected_piece_error(3),maxval(abs(projected_r0-&
+               expected_coefficient*sr_aug_lower_spin_factor*r0)))
+            projected_piece_error(4) = max(projected_piece_error(4),maxval(abs(projected_r2)))
+            projected_piece_error(5) = max(projected_piece_error(5),maxval(abs(projected_t-expected_coefficient*atot)))
+            projected_branch_error_by_branch(branch) = max(projected_branch_error_by_branch(branch), &
+               maxval([maxval(abs(projected_u-expected_coefficient*t0)), &
+                  maxval(abs(projected_s-expected_coefficient*sr_aug_lower_spin_factor*s0)), &
+                  maxval(abs(projected_r0-expected_coefficient*sr_aug_lower_spin_factor*r0)), &
+                  maxval(abs(projected_r2)), maxval(abs(projected_t-expected_coefficient*atot))]))
+         end do
+      end do
+   end do
+   projected_branch_error = max(maxval(projected_piece_error),maxval(projected_branch_error_by_branch))
+
    write (*,'(a,es16.8)') 'DRESP-09Z upper quadrature max error = ', upper_error
    write (*,'(a,es16.8)') 'DRESP-09Z lower KH quadrature max error = ', lower_error
    write (*,'(a,es16.8)') 'DRESP-09Z forbidden upper-channel amplitude = ', forbidden_error
    write (*,'(a,es16.8)') 'DRESP-09Z raw L0-vs-certified reduction residual = ', l0_reduction_error
+   write (*,'(a,es16.8)') 'DRESP-09ZR scalar projector closure = ', projector_error
+   write (*,'(a,es16.8)') 'DRESP-09ZR independent rank-2 trace closure = ', trace_error
+   write (*,'(a,3(es12.4,1x))') 'DRESP-09ZR rank-2 trace l=0/1/2 = ', trace_error_l
+   write (*,'(a,es16.8)') 'DRESP-09ZR projected six-branch closure = ', projected_branch_error
+   write (*,'(a,6(es12.4,1x))') 'DRESP-09ZR projected branches 00/10/01/11/20/02 = ', projected_branch_error_by_branch
+   write (*,'(a,5(es12.4,1x))') 'DRESP-09ZR projected pieces upper/small/rank0/rank2/total = ', projected_piece_error
    write (*,'(a,es16.8)') 'DRESP-09Z circular covariance max error = ', hermitian_error
    write (*,'(a,es16.8)') 'DRESP-09Z L4 rank-mixing fixture norm = ', fixture_error
    write (*,'(a,es16.8)') 'DRESP-09Z arbitrary-L augmentation FD max error = ', tangent_error
@@ -149,9 +230,17 @@ program test_dresp09z_angular_vertex
    if (hermitian_error > 2.0e-11_rp) error stop 'DRESP-09Z circular covariance failed'
    if (fixture_error <= 1.0e-12_rp) error stop 'DRESP-09Z rank-2 fixture did not mix'
    if (tangent_error > 3.0e-7_rp) error stop 'DRESP-09Z arbitrary-L augmentation tangent failed'
+   if (projector_error > 3.0e-12_rp .or. trace_error > 3.0e-11_rp .or. projected_branch_error > 3.0e-8_rp) then
+      error stop 'DRESP-09ZR scalar projection closure failed'
+   end if
    write (*,'(a)') 'UnitDresp09ZAngularVertex: PASS'
 
 contains
+
+   function sigma_x_for_test() result(value)
+      complex(rp) :: value(2,2)
+      call sr_aug_sigma_x(value)
+   end function sigma_x_for_test
 
    pure logical function allowed_upper_pair(l,m,lp,mp,source_l,source_m) result(value)
       integer, intent(in) :: l,m,lp,mp,source_l,source_m
