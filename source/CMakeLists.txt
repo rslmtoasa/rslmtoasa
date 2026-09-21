@@ -92,6 +92,7 @@ add_library(${PROJECT_NAME} STATIC
     response_basis_mapping.f90
     lr_response_space.f90
     lr_pauli_transition_vertex.f90
+    lr_lmto_endpoint_branches.f90
     lr_lmto_product_response_basis.f90
     lr_lmto_basis_connection.f90
     lr_lmto_representation_tangent.f90

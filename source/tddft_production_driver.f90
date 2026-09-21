@@ -1051,7 +1051,11 @@ contains
       need_complete_sr = trim(config%backend) == tddft_driver_backend_radial_observable_provenance .or. &
          trim(config%backend) == tddft_driver_backend_sr_spin_observable .or. &
          trim(config%backend) == tddft_driver_backend_sr_augmentation_tangent .or. &
-         trim(config%backend) == tddft_driver_backend_compact_span_audit
+         trim(config%backend) == tddft_driver_backend_compact_span_audit .or. &
+         trim(config%backend) == tddft_driver_backend_product_lehmann .or. &
+         trim(config%backend) == tddft_driver_backend_product_gf .or. &
+         trim(config%backend) == tddft_driver_backend_product_finite_q .or. &
+         trim(config%backend) == tddft_driver_backend_product_convergence
 
       if (.not. config%enabled) return
       call validate_tddft_production_capability(config, control_obj, lattice_obj, hamiltonian_obj, reciprocal_obj)
@@ -1922,8 +1926,8 @@ contains
       if (product_plus%product_dimension /= product_minus%product_dimension) then
          error stop 'DRESP-06A: plus/minus product dimensions differ'
       end if
-      if (size(ground_states) == 1 .and. product_plus%product_dimension /= 232) then
-         error stop 'DRESP-06A: Fe spd product dimension is not 232'
+      if (size(ground_states) == 1 .and. product_plus%product_dimension /= product_plus%unpruned_dimension) then
+         error stop 'DRESP-06A: accepted Fe product basis is not full rank'
       end if
 
       allocate(moment(size(ground_states)), magnetization(size(ground_states), response_space%npoint), &
@@ -3837,7 +3841,7 @@ contains
             rank_stable = rank_stable .and. product%blocks(site, response_l)%rank_stable
          end do
       end do
-      if (.not. rank_stable .or. product%product_dimension /= 232) then
+      if (.not. rank_stable .or. product%product_dimension /= product%unpruned_dimension) then
          error stop 'TDVK-06 static interactions: complete compact spd product representation is not certified'
       end if
 
@@ -3920,9 +3924,12 @@ contains
          write(unit, '(a,a)') '# response_backend = complete compact Lehmann on accepted immutable k+q endpoints'
          write(unit, '(a,a)') '# response_representation = ', trim(lr_compact_representation)
          write(unit, '(a,a)') '# compact_mapping_contract = ', trim(lr_compact_mapping_contract)
-         write(unit, '(a)') '# compact_representation_certification = PASS: independent point/product projection oracle and strict rank-stable 232-mode runtime inventory'
+         write(unit, '(a)') '# compact_representation_certification = PASS: independent point/product projection oracle and strict rank-stable six-branch runtime inventory'
          write(unit, '(a,i0)') '# product_unpruned_dimension = ', product%unpruned_dimension
          write(unit, '(a,i0)') '# product_dimension = ', product%product_dimension
+         write(unit, '(a)') '# product_radial_order = second'
+         write(unit, '(a)') '# product_endpoint_branches = 6 (00,10,01,11,20,02)'
+         write(unit, '(a)') '# maximum_gf_energy_moment = 4'
          write(unit, '(a,i0)') '# response_lmax = ', response_space%response_lmax
          write(unit, '(a,a)') '# channel = ', trim(config%channel)
          write(unit, '(a,es24.16)') '# omega_Ry = ', config%frequencies(1)
@@ -4111,8 +4118,9 @@ contains
       if (gamma_index > size(endpoints)) error stop 'TDVK-02R2 product smoke: Gamma endpoint is unavailable'
       call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
       call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
-      if (product_plus%product_dimension /= 232 .or. product_minus%product_dimension /= 232) then
-         error stop 'TDVK-02R2 product smoke: accepted Fe product dimension is not 232'
+      if (product_plus%product_dimension /= product_plus%unpruned_dimension .or. &
+          product_minus%product_dimension /= product_minus%unpruned_dimension) then
+         error stop 'TDVK-02R2 product smoke: accepted Fe product basis is not full rank'
       end if
 
       maximum_transition_error = 0.0_rp
@@ -4196,8 +4204,9 @@ contains
 
       call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
       call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
-      if (product_plus%product_dimension /= 232 .or. product_minus%product_dimension /= 232) then
-         error stop 'TDVK-04 finite-q validation: accepted Fe product dimension is not 232'
+      if (product_plus%product_dimension /= product_plus%unpruned_dimension .or. &
+          product_minus%product_dimension /= product_minus%unpruned_dimension) then
+         error stop 'TDVK-04 finite-q validation: accepted Fe product basis is not full rank'
       end if
       if (trim(config%channel) == 'chi_plus') then
          product => product_plus
@@ -4904,8 +4913,11 @@ contains
       type(lmto_product_response_basis), target :: product_plus, product_minus
       type(lr_product_gf_susceptibility_request) :: request
       type(lr_product_gf_susceptibility_result) :: result
+      type(lr_product_ks_susceptibility_request) :: lehmann_request
+      type(lr_product_ks_susceptibility_result) :: lehmann_result
       integer :: gamma_index, channel_kind, i
-      real(rp) :: frobenius, maximum_element
+      real(rp) :: frobenius, maximum_element, lehmann_norm, gf_norm
+      real(rp) :: closure_difference, closure_relative
       complex(rp) :: trace
       logical :: finite_response
 
@@ -4913,8 +4925,9 @@ contains
       if (gamma_index > size(endpoints)) error stop 'TDVK-02R3 product GF smoke: Gamma endpoint is unavailable'
       call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
       call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
-      if (product_plus%product_dimension /= 232 .or. product_minus%product_dimension /= 232) then
-         error stop 'TDVK-02R3 product GF smoke: accepted Fe product dimension is not 232'
+      if (product_plus%product_dimension /= product_plus%unpruned_dimension .or. &
+          product_minus%product_dimension /= product_minus%unpruned_dimension) then
+         error stop 'TDVK-02R3 product GF smoke: accepted Fe product basis is not full rank'
       end if
 
       request%q = config%q_list(:, gamma_index)
@@ -4936,6 +4949,25 @@ contains
          all(ieee_is_finite(aimag(result%susceptibility)))
       if (.not. finite_response) error stop 'TDVK-02R3 product GF smoke: compact response contains NaN or Inf'
 
+      ! Report the same-state Lehmann comparison at the bounded smoke
+      ! quadrature. This is diagnostic evidence, not a convergence claim.
+      lehmann_request%q = request%q
+      lehmann_request%frequencies = request%frequencies
+      lehmann_request%eta = request%eta
+      lehmann_request%channel = request%channel
+      lehmann_request%product_basis => request%product_basis
+      lehmann_request%electronic_state => request%electronic_state
+      lehmann_request%q_endpoint_state => request%q_endpoint_state
+      call evaluate_lr_product_ks_susceptibility(lehmann_request, lehmann_result)
+      lehmann_norm = sqrt(sum(abs(lehmann_result%susceptibility(:, :, 1))**2))
+      gf_norm = sqrt(sum(abs(result%susceptibility(:, :, 1))**2))
+      closure_difference = sqrt(sum(abs(lehmann_result%susceptibility(:, :, 1) - &
+         result%susceptibility(:, :, 1))**2))
+      closure_relative = closure_difference/max(lehmann_norm, gf_norm, tiny(1.0_rp))
+      if (.not. ieee_is_finite(closure_relative)) then
+         error stop 'TDVK-02R3 product GF smoke: Lehmann comparison is not finite'
+      end if
+
       frobenius = sqrt(sum(abs(result%susceptibility(:, :, 1))**2))
       maximum_element = maxval(abs(result%susceptibility(:, :, 1)))
       trace = cmplx(0.0_rp, 0.0_rp, rp)
@@ -4947,6 +4979,8 @@ contains
          ' integration_points=', result%integration_points, ' integration_eta=', result%actual_integration_eta
       write (*, '(a,es12.4,a,es12.4,a,2(es12.4,1x))') '  Frobenius_norm=', frobenius, &
          ' max_element=', maximum_element, ' trace=', real(trace, rp), aimag(trace)
+      write (*, '(a,4(es12.4,1x))') '  Lehmann_norm GF_norm dF rF=', lehmann_norm, gf_norm, &
+         closure_difference, closure_relative
       write (*, '(a,es12.4,a,es12.4,a,es12.4,a,i0,a,i0,a,i0,a,i0)') '  wall_s=', result%wall_time_seconds, &
          ' cpu_s=', result%cpu_time_seconds, ' time_per_energy_kpoint_s=', result%time_per_energy_kpoint, &
          ' energy_points=', result%integration_points, &
@@ -4954,13 +4988,15 @@ contains
          ' component_vertex_bytes=', result%component_vertex_memory_bytes
       write (*, '(a,i0,a,i0,a,i0)') '  gf_matrix_bytes=', result%gf_matrix_memory_bytes, &
          ' susceptibility_bytes=', result%susceptibility_memory_bytes, ' product_dimension=', result%product_dimension
+      write (*, '(a,i0,a,i0,a,a)') '  endpoint_branches=', result%product_endpoint_branches, &
+         ' maximum_gf_energy_moment=', result%maximum_gf_energy_moment, ' radial_order=', trim(result%product_radial_order)
    end subroutine run_tddft_product_gf_smoke
 
    !> TDVK-03 accepted-state closure audit.  The SCF handoff above has already
    !> prepared one immutable reciprocal state and all exact folded endpoints.
    !> This routine deliberately evaluates the compact Lehmann reference once,
    !> then varies only GF integration controls while keeping those snapshots
-   !> and the complete 232-coordinate product basis fixed.
+   !> and the complete six-branch product basis fixed.
    subroutine run_tddft_product_gf_closure(config, response_space, radial_bases, left_state, endpoints)
       type(tddft_production_config), intent(in) :: config
       type(response_space_layout), intent(in) :: response_space
@@ -4980,8 +5016,9 @@ contains
       if (gamma_index > size(endpoints)) error stop 'TDVK-03 closure: Gamma endpoint is unavailable'
       call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
       call product_minus%initialize(response_space, radial_bases, lmto_product_channel_minus, .true.)
-      if (product_plus%product_dimension /= 232 .or. product_minus%product_dimension /= 232) then
-         error stop 'TDVK-03 closure: accepted Fe product dimension is not 232'
+      if (product_plus%product_dimension /= product_plus%unpruned_dimension .or. &
+          product_minus%product_dimension /= product_minus%unpruned_dimension) then
+         error stop 'TDVK-03 closure: accepted Fe product basis is not full rank'
       end if
 
       lehmann_request%q = config%q_list(:, gamma_index)

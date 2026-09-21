@@ -13,6 +13,8 @@ module lr_pauli_transition_vertex_mod
 
    use precision_mod, only: rp
    use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_branch_powers, &
+      lmto_product_second_order_radial_branch, lmto_product_energy_power
    use response_angular_basis_mod, only: response_angular_pi, response_gaunt
    use response_basis_mapping_mod, only: response_super_index, response_flatten_superindex, &
       response_unflatten_superindex
@@ -154,10 +156,9 @@ contains
       complex(rp), intent(out) :: transition_vector(:)
 
       integer :: nsite, norb, npoint, nresponse, nchannel
-      integer :: isite, ir, response_l, response_m, channel, iorb, jorb, ispin, jspin
+      integer :: isite, ir, response_l, response_m, channel, iorb, jorb, ispin, jspin, branch, p, q
       integer :: orbital_l, orbital_lp, left_offset, right_offset, flat
       type(response_super_index) :: item
-      complex(rp), allocatable :: left_radial(:, :, :, :), right_radial(:, :, :, :)
       complex(rp) :: value, coefficient_product
       real(rp) :: radial_product
 
@@ -168,33 +169,6 @@ contains
       npoint = space%npoint
       nresponse = space%response_lmax
       nchannel = space%nchannel
-      allocate(left_radial(nsite, npoint, norb, 2), right_radial(nsite, npoint, norb, 2))
-
-      ! Reuse the production large-component augmentation directly.  The
-      ! scalar-relativistic small component and GFAC are intentionally absent
-      ! from this Pauli/no-SOC primitive.
-      do isite = 1, nsite
-         left_offset = (isite - 1)*2*norb
-         right_offset = left_offset
-         do ispin = 1, 2
-            do iorb = 1, norb
-               orbital_l = lmto_orbital_l(iorb)
-               left_radial(isite, :, iorb, ispin) = cmplx(0.0_rp, 0.0_rp, rp)
-               right_radial(isite, :, iorb, ispin) = cmplx(0.0_rp, 0.0_rp, rp)
-               do ir = 1, npoint
-                  left_radial(isite, ir, iorb, ispin) = cmplx( &
-                     radial_bases(isite)%phi_large(ir, orbital_l + 1, ispin) + &
-                     (left_state%energy - radial_bases(isite)%enu_work(orbital_l + 1, ispin))* &
-                     radial_bases(isite)%phidot_large(ir, orbital_l + 1, ispin), 0.0_rp, rp)
-                  right_radial(isite, ir, iorb, ispin) = cmplx( &
-                     radial_bases(isite)%phi_large(ir, orbital_l + 1, ispin) + &
-                     (right_state%energy - radial_bases(isite)%enu_work(orbital_l + 1, ispin))* &
-                     radial_bases(isite)%phidot_large(ir, orbital_l + 1, ispin), 0.0_rp, rp)
-               end do
-            end do
-         end do
-      end do
-
       transition_vector = cmplx(0.0_rp, 0.0_rp, rp)
       do isite = 1, nsite
          left_offset = (isite - 1)*2*norb
@@ -210,16 +184,19 @@ contains
                            orbital_lp = lmto_orbital_l(jorb)
                            do ispin = 1, 2
                               do jspin = 1, 2
-                                 radial_product = radial_product_at_point(left_radial(isite, :, iorb, ispin), &
-                                    right_radial(isite, :, jorb, jspin), radial_bases(isite)%rofi, orbital_l, orbital_lp, ir)
-                                 if (radial_product /= 0.0_rp) then
-                                    coefficient_product = conjg(left_state%coefficients(left_offset + &
-                                       (ispin - 1)*norb + iorb))*right_state%coefficients(right_offset + &
-                                       (jspin - 1)*norb + jorb)
+                                 coefficient_product = conjg(left_state%coefficients(left_offset + &
+                                    (ispin - 1)*norb + iorb))*right_state%coefficients(right_offset + &
+                                    (jspin - 1)*norb + jorb)
+                                 do branch = 1, lmto_product_nbranch
+                                    call lmto_product_branch_powers(branch, p, q)
+                                    call lmto_product_second_order_radial_branch(radial_bases(isite), ir, orbital_l, &
+                                       orbital_lp, ispin, jspin, branch, radial_product)
                                     value = value + coefficient_product*operator_matrices(ispin, jspin, channel)* &
-                                       radial_product*response_gaunt(orbital_l, orbital_m(iorb, orbital_l), &
-                                       orbital_lp, orbital_m(jorb, orbital_lp), response_l, response_m)
-                                 end if
+                                       lmto_product_energy_power(left_state%energy, p)* &
+                                       lmto_product_energy_power(right_state%energy, q)*radial_product* &
+                                       response_gaunt(orbital_l, orbital_m(iorb, orbital_l), orbital_lp, &
+                                       orbital_m(jorb, orbital_lp), response_l, response_m)
+                                 end do
                               end do
                            end do
                         end do
@@ -234,7 +211,6 @@ contains
          end do
       end do
 
-      deallocate(left_radial, right_radial)
    end subroutine evaluate_pauli_transition_vertex_channels
 
    subroutine validate_vertex_inputs(space, radial_bases, left_state, right_state, operator_matrices, capabilities, transition_vector)
@@ -302,34 +278,5 @@ contains
       integer, intent(in) :: iorb, l
       m = iorb - l*l - l - 1
    end function orbital_m
-
-   function radial_product_at_point(left_values, right_values, radius, l, lp, ir) result(value)
-      complex(rp), intent(in) :: left_values(:), right_values(:)
-      real(rp), intent(in) :: radius(:)
-      integer, intent(in) :: l, lp, ir
-      real(rp) :: value
-      real(rp) :: first, second, rfirst, rsecond
-
-      if (ir /= 1) then
-         if (radius(ir) <= tiny(1.0_rp)) error stop 'evaluate_pauli_transition_vertex: invalid positive radial point'
-         value = real(left_values(ir)*right_values(ir), rp)/(radius(ir)**2)
-         return
-      end if
-
-      ! Regular LMTO radial numerators obey U_l=O(r**(l+1)).  Therefore every
-      ! origin limit with l plus l prime greater than zero is zero.  The only
-      ! nonzero possible limit is s-s; extrapolate its regular U_0 U_0/r^2 value
-      ! from the first two
-      ! positive mesh points, matching the existing origin-density contract.
-      if (l /= 0 .or. lp /= 0) then
-         value = 0.0_rp
-         return
-      end if
-      rfirst = radius(2)
-      rsecond = radius(3)
-      first = real(left_values(2)*right_values(2), rp)/(rfirst**2)
-      second = real(left_values(3)*right_values(3), rp)/(rsecond**2)
-      value = (first*rsecond**2 - second*rfirst**2)/(rsecond**2 - rfirst**2)
-   end function radial_product_at_point
 
 end module lr_pauli_transition_vertex_mod

@@ -20,6 +20,8 @@ program test_lr_product_gf_quadrature_audit
       lr_channel_plus, lr_channel_minus, lr_fermi_dirac_occupation, &
       evaluate_lr_product_ks_susceptibility
    use lr_gf_susceptibility_mod, only: build_weighted_resolvent
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_max_gf_moment, &
+      lmto_product_branch_powers
    use lr_product_gf_susceptibility_mod, only: lr_product_gf_susceptibility_request, &
       lr_product_gf_susceptibility_result, evaluate_lr_product_gf_susceptibility, &
       build_lr_product_gf_transition_amplitudes, lr_product_gf_contraction_scalar, &
@@ -183,6 +185,9 @@ contains
                   bases(isite)%phidot_large(ir, l + 1, ispin) = &
                      (0.11_rp + 0.03_rp*real(l, rp) + 0.02_rp*real(ispin, rp))* &
                      (1.0_rp + 0.19_rp*mesh(ir)**2)
+                  bases(isite)%phiddot_large(ir, l + 1, ispin) = &
+                     (0.025_rp + 0.007_rp*real(l + ispin, rp))* &
+                     (1.0_rp + 0.21_rp*mesh(ir) + 0.09_rp*mesh(ir)**2)
                end do
             end do
          end do
@@ -319,7 +324,7 @@ contains
          'max=', max_h_imag
 
       allocate(moment(nbasis, nbasis), moment_fermi(nbasis, nbasis))
-      do p = 0, 2
+      do p = 0, lmto_product_max_gf_moment
          max_m_offdiag = 0.0_rp
          max_n_offdiag = 0.0_rp
          max_m_imag = 0.0_rp
@@ -443,13 +448,13 @@ contains
       energy_max = maxval(electronic_state%eigenvalues) + margin
       step = (energy_max - energy_min)/real(ne - 1, rp)
       ratio = step/integration_eta
-      allocate(green_r(electronic_state%nbasis, electronic_state%nbasis, 3), &
-         green_a(electronic_state%nbasis, electronic_state%nbasis, 3), &
-         spectral(electronic_state%nbasis, electronic_state%nbasis, 3), &
-         numerical(electronic_state%nbasis, electronic_state%nbasis, 3), &
-         numerical_fermi(electronic_state%nbasis, electronic_state%nbasis, 3), &
-         exact(electronic_state%nbasis, electronic_state%nbasis, 3), &
-         exact_fermi(electronic_state%nbasis, electronic_state%nbasis, 3))
+      allocate(green_r(electronic_state%nbasis, electronic_state%nbasis, lmto_product_max_gf_moment + 1), &
+         green_a(electronic_state%nbasis, electronic_state%nbasis, lmto_product_max_gf_moment + 1), &
+         spectral(electronic_state%nbasis, electronic_state%nbasis, lmto_product_max_gf_moment + 1), &
+         numerical(electronic_state%nbasis, electronic_state%nbasis, lmto_product_max_gf_moment + 1), &
+         numerical_fermi(electronic_state%nbasis, electronic_state%nbasis, lmto_product_max_gf_moment + 1), &
+         exact(electronic_state%nbasis, electronic_state%nbasis, lmto_product_max_gf_moment + 1), &
+         exact_fermi(electronic_state%nbasis, electronic_state%nbasis, lmto_product_max_gf_moment + 1))
 
       do ik = 1, electronic_state%nk
          numerical = cmplx(0.0_rp, 0.0_rp, rp)
@@ -472,7 +477,7 @@ contains
             numerical = numerical + qw*spectral
             numerical_fermi = numerical_fermi + qw*fermi_weight*spectral
          end do
-         do p = 0, 2
+         do p = 0, lmto_product_max_gf_moment
             call exact_moment(electronic_state, ik, p, .false., exact(:, :, p + 1))
             call exact_moment(electronic_state, ik, p, .true., exact_fermi(:, :, p + 1))
             residual_m = matrix_residual(numerical(:, :, p + 1), exact(:, :, p + 1))
@@ -658,7 +663,8 @@ contains
       call require_resolved_mesh(ne, oracle_integration_eta, oracle_margin, state)
       call product_plus%component_vertex_tensor(vertices)
       call build_rotation(rotation, rotation_eigenvalues)
-      allocate(rotated_vectors(nbasis, nbands, nk), rotated_vertices(nbasis, nbasis, 4, product_plus%product_dimension))
+      allocate(rotated_vectors(nbasis, nbands, nk), rotated_vertices(nbasis, nbasis, lmto_product_nbranch, &
+         product_plus%product_dimension))
 
       do ik = 1, nk
          rotated_hamiltonian(:, :, ik) = matmul(conjg(transpose(rotation)), &
@@ -670,7 +676,7 @@ contains
          end do
       end do
       do ifrequency = 1, product_plus%product_dimension
-         do ib = 1, 4
+         do ib = 1, lmto_product_nbranch
             rotated_vertices(:, :, ib, ifrequency) = matmul(conjg(transpose(rotation)), &
                matmul(vertices(:, :, ib, ifrequency), rotation))
          end do
@@ -798,9 +804,8 @@ contains
       integer :: component, product_mode, left_power, right_power
 
       coordinates = cmplx(0.0_rp, 0.0_rp, rp)
-      do component = 1, 4
-         left_power = mod(component - 1, 2)
-         right_power = (component - 1)/2
+      do component = 1, lmto_product_nbranch
+         call lmto_product_branch_powers(component, left_power, right_power)
          do product_mode = 1, size(vertices, 4)
             coordinates(product_mode) = coordinates(product_mode) + left_energy**left_power* &
                right_energy**right_power*sum(conjg(left_vector)* &
@@ -827,8 +832,10 @@ contains
       energy_max = max(maxval(left_state%eigenvalues), maxval(right_state%eigenvalues)) + margin
       step = (energy_max - energy_min)/real(ne - 1, rp)
       weight_sum = sum(left_state%k_weights)
-      allocate(response(pd, pd, size(frequencies)), left_gr(nb, nb, 3), left_ga(nb, nb, 3), &
-         left_a(nb, nb, 3), right_gr(nb, nb, 3), right_ga(nb, nb, 3), right_a(nb, nb, 3))
+      allocate(response(pd, pd, size(frequencies)), left_gr(nb, nb, lmto_product_max_gf_moment + 1), &
+         left_ga(nb, nb, lmto_product_max_gf_moment + 1), left_a(nb, nb, lmto_product_max_gf_moment + 1), &
+         right_gr(nb, nb, lmto_product_max_gf_moment + 1), right_ga(nb, nb, lmto_product_max_gf_moment + 1), &
+         right_a(nb, nb, lmto_product_max_gf_moment + 1))
       response = cmplx(0.0_rp, 0.0_rp, rp)
 
       do ie = 1, ne
@@ -872,12 +879,10 @@ contains
       integer :: combined_left, combined_right, i, j, product_dimension
 
       product_dimension = size(susceptibility, 1)
-      do component_i = 1, 4
-         left_power_i = mod(component_i - 1, 2)
-         right_power_i = (component_i - 1)/2
-         do component_j = 1, 4
-            left_power_j = mod(component_j - 1, 2)
-            right_power_j = (component_j - 1)/2
+      do component_i = 1, lmto_product_nbranch
+         call lmto_product_branch_powers(component_i, left_power_i, right_power_i)
+         do component_j = 1, lmto_product_nbranch
+            call lmto_product_branch_powers(component_j, left_power_j, right_power_j)
             combined_left = left_power_i + left_power_j + 1
             combined_right = right_power_i + right_power_j + 1
             do i = 1, product_dimension

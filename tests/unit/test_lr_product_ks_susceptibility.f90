@@ -66,8 +66,8 @@ program test_lr_product_ks_susceptibility
    call product_plus%initialize(space, radial, lmto_product_channel_plus, .true.)
    call product_minus%initialize(space, radial, lmto_product_channel_minus, .true.)
 
-   if (product_plus%unpruned_dimension /= 52 .or. product_plus%product_dimension < 1 .or. &
-       product_minus%unpruned_dimension /= 52 .or. product_minus%product_dimension /= product_plus%product_dimension) then
+   if (product_plus%unpruned_dimension /= 78 .or. product_plus%product_dimension < 1 .or. &
+       product_minus%unpruned_dimension /= 78 .or. product_minus%product_dimension /= product_plus%product_dimension) then
       error stop 'UnitLrProductKsSusceptibility: product dimensions are inconsistent'
    end if
    write (*, '(a,i0,a,i0)') 'PRODUCT dimensions unpruned=', product_plus%unpruned_dimension, &
@@ -123,7 +123,7 @@ contains
       real(rp) :: potential(size(mesh)), energy
       real(rp), allocatable :: g(:, :), gp(:, :), gpp(:, :)
       real(rp), allocatable :: gpack(:), gdotpack(:), gddotpack(:)
-      integer :: ispin, l
+      integer :: ispin, l, ir
 
       potential = 0.0_rp
       call basis%initialize(size(mesh), lmax, 2)
@@ -135,6 +135,10 @@ contains
             gddotpack = reshape(gpp, [2*size(mesh)])
             call basis%capture_channel(l, ispin, energy, mesh, potential, mesh_a, mesh_b, nuclear_z, &
                gpack, gdotpack, gddotpack, energy)
+            do ir = 1, size(mesh)
+               basis%phiddot_large(ir, l + 1, ispin) = (0.002_rp + 0.0003_rp*real(l + ispin, rp))* &
+                  (1.0_rp + 0.17_rp*mesh(ir) + 0.013_rp*real(ir - 1, rp)**2)
+            end do
          end do
       end do
    end subroutine setup_radial_basis

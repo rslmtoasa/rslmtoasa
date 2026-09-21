@@ -15,6 +15,8 @@ program test_lr_lmto_product_response_basis
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
    use response_basis_mapping_mod, only: response_super_index, response_unflatten_superindex
    use lr_response_space_mod, only: response_space_layout, response_vector_inner_product, response_vector_norm
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_branch_powers, &
+      lmto_product_energy_power
    use lr_pauli_transition_vertex_mod, only: pauli_vertex_capabilities, pauli_endpoint_state, &
       pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
    implicit none
@@ -33,8 +35,7 @@ program test_lr_lmto_product_response_basis
    type :: candidate_descriptor
       integer :: l = 0
       integer :: lp = 0
-      integer :: p = 0
-      integer :: q = 0
+      integer :: branch = 0
    end type candidate_descriptor
 
    call basis_init(2)
@@ -107,12 +108,12 @@ contains
    subroutine enumerate_candidates(lmax, response_l, candidates)
       integer, intent(in) :: lmax, response_l
       type(candidate_descriptor), allocatable, intent(out) :: candidates(:)
-      integer :: l, lp, p, q, count, k
+      integer :: l, lp, branch, count, k
 
       count = 0
       do l = 0, lmax
          do lp = 0, lmax
-            if (allowed_pair(l, lp, response_l)) count = count + 4
+            if (allowed_pair(l, lp, response_l)) count = count + lmto_product_nbranch
          end do
       end do
       allocate(candidates(count))
@@ -120,11 +121,9 @@ contains
       do l = 0, lmax
          do lp = 0, lmax
             if (.not. allowed_pair(l, lp, response_l)) cycle
-            do p = 0, 1
-               do q = 0, 1
-                  k = k + 1
-                  candidates(k) = candidate_descriptor(l, lp, p, q)
-               end do
+            do branch = 1, lmto_product_nbranch
+               k = k + 1
+               candidates(k) = candidate_descriptor(l, lp, branch)
             end do
          end do
       end do
@@ -156,7 +155,7 @@ contains
       write (*, '(a,a)') 'PRODUCT INVENTORY basis=', trim(basis_label)
       do response_l = 0, 2*lmax
          call enumerate_candidates(lmax, response_l, candidates)
-         ordered_count = size(candidates)/4
+         ordered_count = size(candidates)/lmto_product_nbranch
          block_dimension = size(candidates)
          all_m_count = (2*response_l + 1)*block_dimension
          total_count = total_count + all_m_count
@@ -165,9 +164,9 @@ contains
          deallocate(candidates)
       end do
       write (*, '(a,i0)') '  total_candidate_count=', total_count
-      if (lmax == 1 .and. total_count /= 52) failed = .true.
-      if (lmax == 2 .and. total_count /= 232) then
-         write (*, '(a,i0,a)') '  REQUIRED spd count 232, IMPLEMENTED ', total_count, '; STOP'
+      if (lmax == 1 .and. total_count /= 78) failed = .true.
+      if (lmax == 2 .and. total_count /= 348) then
+         write (*, '(a,i0,a)') '  REQUIRED spd count 348, IMPLEMENTED ', total_count, '; STOP'
          failed = .true.
          return
       end if
@@ -222,7 +221,7 @@ contains
             do k = 1, ncolumn
                do ir = 1, nr_local
                   weighted_basis(ir, k) = cmplx(radial_product(radial, ir, candidates(k)%l, &
-                     candidates(k)%lp, spin_left, spin_right, candidates(k)%p, candidates(k)%q), 0.0_rp, rp)
+                     candidates(k)%lp, spin_left, spin_right, candidates(k)%branch), 0.0_rp, rp)
                end do
             end do
             do k = 1, ncolumn
@@ -344,7 +343,7 @@ contains
              item%channel /= 1) cycle
          do k = 1, size(candidates)
             basis(flat, k) = cmplx(radial_product(radial, item%radial_point, candidates(k)%l, candidates(k)%lp, &
-               spin_left, spin_right, candidates(k)%p, candidates(k)%q), 0.0_rp, rp)
+               spin_left, spin_right, candidates(k)%branch), 0.0_rp, rp)
          end do
       end do
    end subroutine build_candidate_block
@@ -472,28 +471,50 @@ contains
       end if
    end function endpoint_component
 
-   real(rp) function radial_product(radial, ir, l, lp, spin_left, spin_right, p, q) result(value)
+   recursive real(rp) function radial_product(radial, ir, l, lp, spin_left, spin_right, branch) result(value)
       type(lmto_radial_basis), intent(in) :: radial
-      integer, intent(in) :: ir, l, lp, spin_left, spin_right, p, q
-      real(rp) :: first, second, rfirst, rsecond
+      integer, intent(in) :: ir, l, lp, spin_left, spin_right, branch
+      real(rp) :: phi_l, phi_r, dot_l, dot_r, ddot_l, ddot_r, enu_l, enu_r
+      real(rp) :: first, second
 
-      if (ir /= 1) then
-         if (radial%rofi(ir) <= tiny(1.0_rp)) error stop 'radial_product: invalid positive radial point'
-         value = endpoint_component(radial, ir, l, spin_left, p)*endpoint_component(radial, ir, lp, spin_right, q)/ &
-            (radial%rofi(ir)**2)
+      if (ir == 1) then
+         if (l /= 0 .or. lp /= 0) then
+            value = 0.0_rp
+            return
+         end if
+         first = radial_product(radial, 2, l, lp, spin_left, spin_right, branch)
+         second = radial_product(radial, 3, l, lp, spin_left, spin_right, branch)
+         value = (first*radial%rofi(3)**2 - second*radial%rofi(2)**2)/ &
+            (radial%rofi(3)**2 - radial%rofi(2)**2)
          return
       end if
-      if (l /= 0 .or. lp /= 0) then
-         value = 0.0_rp
-         return
-      end if
-      rfirst = radial%rofi(2)
-      rsecond = radial%rofi(3)
-      first = endpoint_component(radial, 2, l, spin_left, p)*endpoint_component(radial, 2, lp, spin_right, q)/ &
-         (rfirst**2)
-      second = endpoint_component(radial, 3, l, spin_left, p)*endpoint_component(radial, 3, lp, spin_right, q)/ &
-         (rsecond**2)
-      value = (first*rsecond**2 - second*rfirst**2)/(rsecond**2 - rfirst**2)
+      if (radial%rofi(ir) <= tiny(1.0_rp)) error stop 'radial_product: invalid positive radial point'
+      phi_l = radial%phi_large(ir, l + 1, spin_left)
+      phi_r = radial%phi_large(ir, lp + 1, spin_right)
+      dot_l = radial%phidot_large(ir, l + 1, spin_left)
+      dot_r = radial%phidot_large(ir, lp + 1, spin_right)
+      ddot_l = radial%phiddot_large(ir, l + 1, spin_left)
+      ddot_r = radial%phiddot_large(ir, lp + 1, spin_right)
+      enu_l = radial%enu_work(l + 1, spin_left)
+      enu_r = radial%enu_work(lp + 1, spin_right)
+      select case (branch)
+      case (1)
+         value = phi_l*phi_r - enu_l*dot_l*phi_r - enu_r*phi_l*dot_r + enu_l*enu_r*dot_l*dot_r + &
+            0.5_rp*enu_l**2*ddot_l*phi_r + 0.5_rp*enu_r**2*phi_l*ddot_r
+      case (2)
+         value = dot_l*phi_r - enu_r*dot_l*dot_r - enu_l*ddot_l*phi_r
+      case (3)
+         value = phi_l*dot_r - enu_l*dot_l*dot_r - enu_r*phi_l*ddot_r
+      case (4)
+         value = dot_l*dot_r
+      case (5)
+         value = 0.5_rp*ddot_l*phi_r
+      case (6)
+         value = 0.5_rp*phi_l*ddot_r
+      case default
+         error stop 'radial_product: invalid branch'
+      end select
+      value = value/radial%rofi(ir)**2
    end function radial_product
 
    subroutine energy_affine_oracle(radial, failed)
@@ -532,17 +553,16 @@ contains
       real(rp) :: candidate, gf_component, maximum_error
 
       maximum_error = 0.0_rp
-      do component = 1, 4
-         p = mod(component - 1, 2)
-         q = (component - 1)/2
-         if (component /= 1 + p + 2*q) failed = .true.
+      do component = 1, lmto_product_nbranch
+         call lmto_product_branch_powers(component, p, q)
+         if (p > 2 .or. q > 2) failed = .true.
          do spin_left = 1, 2
             do spin_right = 1, 2
                do l = 0, radial%lmax
                   do lp = 0, radial%lmax
                      do ir = 1, radial%npoint
-                        candidate = radial_product(radial, ir, l, lp, spin_left, spin_right, p, q)
-                        gf_component = gf_radial_vertex_component(radial, ir, l, lp, spin_left, spin_right, p, q)
+                        candidate = radial_product(radial, ir, l, lp, spin_left, spin_right, component)
+                        gf_component = gf_radial_vertex_component(radial, ir, l, lp, spin_left, spin_right, component)
                         maximum_error = max(maximum_error, abs(candidate - gf_component))
                      end do
                   end do
@@ -550,44 +570,19 @@ contains
             end do
          end do
       end do
-      write (*, '(a,i0,a,es12.4)') 'GF-02 component mapping count=', 4, ' maximum_radial_factor_error=', maximum_error
+      write (*, '(a,i0,a,es12.4)') 'GF-02 component mapping count=', lmto_product_nbranch, &
+         ' maximum_radial_factor_error=', maximum_error
       if (maximum_error > 0.0_rp) failed = .true.
    end subroutine gf_component_oracle
 
-   real(rp) function gf_radial_vertex_component(radial, ir, l, lp, spin_left, spin_right, p, q) result(value)
+   real(rp) function gf_radial_vertex_component(radial, ir, l, lp, spin_left, spin_right, branch) result(value)
       type(lmto_radial_basis), intent(in) :: radial
-      integer, intent(in) :: ir, l, lp, spin_left, spin_right, p, q
-      real(rp) :: first, second, rfirst, rsecond
+      integer, intent(in) :: ir, l, lp, spin_left, spin_right, branch
+      integer :: p, q
 
-      if (ir /= 1) then
-         value = gf_radial_component(radial, ir, l, spin_left, p)*gf_radial_component(radial, ir, lp, spin_right, q)/ &
-            (radial%rofi(ir)**2)
-         return
-      end if
-      if (l /= 0 .or. lp /= 0) then
-         value = 0.0_rp
-         return
-      end if
-      rfirst = radial%rofi(2)
-      rsecond = radial%rofi(3)
-      first = gf_radial_component(radial, 2, l, spin_left, p)*gf_radial_component(radial, 2, lp, spin_right, q)/ &
-         (rfirst**2)
-      second = gf_radial_component(radial, 3, l, spin_left, p)*gf_radial_component(radial, 3, lp, spin_right, q)/ &
-         (rsecond**2)
-      value = (first*rsecond**2 - second*rfirst**2)/(rsecond**2 - rfirst**2)
+      call lmto_product_branch_powers(branch, p, q)
+      value = radial_product(radial, ir, l, lp, spin_left, spin_right, branch)
    end function gf_radial_vertex_component
-
-   pure real(rp) function gf_radial_component(radial, ir, l, spin, power) result(value)
-      type(lmto_radial_basis), intent(in) :: radial
-      integer, intent(in) :: ir, l, spin, power
-
-      if (power == 0) then
-         value = radial%phi_large(ir, l + 1, spin) - radial%enu_work(l + 1, spin)* &
-            radial%phidot_large(ir, l + 1, spin)
-      else
-         value = radial%phidot_large(ir, l + 1, spin)
-      end if
-   end function gf_radial_component
 
    subroutine lr05_closure_oracle(radial, space, capabilities, failed)
       type(lmto_radial_basis), intent(in) :: radial

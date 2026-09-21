@@ -19,7 +19,8 @@ module lr_ks_susceptibility_mod
    use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state, pauli_vertex_capabilities, &
       pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
    use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
-      lmto_product_channel_minus
+      lmto_product_channel_minus, lmto_product_nbranch
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_max_gf_moment
    implicit none
    private
 
@@ -114,6 +115,10 @@ module lr_ks_susceptibility_mod
       character(len=32) :: channel = ''
       character(len=128) :: response_representation = ''
       character(len=256) :: response_space_metadata = ''
+      character(len=16) :: product_radial_order = 'second'
+      integer :: product_endpoint_branches = lmto_product_nbranch
+      character(len=32) :: product_branch_labels = '00,10,01,11,20,02'
+      integer :: maximum_gf_energy_moment = lmto_product_max_gf_moment
       integer :: product_dimension = 0
       integer :: transition_dimension = 0
       integer :: ntransitions_evaluated = 0
@@ -490,10 +495,17 @@ contains
       result%noccupation_skips = 0
       result%point_space_transition_allocated = .false.
       result%response_representation = 'weighted-orthonormal LMTO product representation'
+      result%product_radial_order = product_basis%product_radial_order
+      result%product_endpoint_branches = product_basis%product_endpoint_branches
+      result%product_branch_labels = product_basis%product_branch_labels
+      result%maximum_gf_energy_moment = lmto_product_max_gf_moment
       write (result%response_space_metadata, '(a,i0,a,i0,a,i0,a)') &
          'product_dimension=', product_basis%product_dimension, ' unpruned_dimension=', &
          product_basis%unpruned_dimension, ' transition_dimension=', product_basis%product_dimension, &
          '; no point-space transition allocation'
+      result%response_space_metadata = trim(result%response_space_metadata)// &
+         '; product_radial_order=second; product_endpoint_branches=6; '// &
+         'product_branch_labels=00,10,01,11,20,02; maximum_gf_energy_moment=4'
       if (channel_kind == 1) then
          result%channel = lr_channel_plus
       else

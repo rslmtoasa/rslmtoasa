@@ -18,6 +18,8 @@ module lr_product_gf_susceptibility_mod
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_channel_plus, lr_channel_minus, &
       lr_fermi_dirac_occupation
    use lr_gf_susceptibility_mod, only: build_weighted_resolvent
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_max_gf_moment, &
+      lmto_product_branch_powers, lmto_product_energy_power
    implicit none
    private
 
@@ -75,6 +77,10 @@ module lr_product_gf_susceptibility_mod
       real(rp) :: time_per_energy_kpoint = 0.0_rp
       integer(int64) :: band_transition_memory_bytes = 0_int64
       integer(int64) :: band_kernel_memory_bytes = 0_int64
+      character(len=16) :: product_radial_order = 'second'
+      integer :: product_endpoint_branches = lmto_product_nbranch
+      character(len=32) :: product_branch_labels = '00,10,01,11,20,02'
+      integer :: maximum_gf_energy_moment = lmto_product_max_gf_moment
       complex(rp), allocatable :: susceptibility(:, :, :) ! (product,product,frequency)
    end type lr_product_gf_susceptibility_result
 
@@ -149,8 +155,12 @@ contains
 
       allocate(result%susceptibility(product_basis%product_dimension, product_basis%product_dimension, nfrequency), &
          result%frequencies(nfrequency), &
-         left_gr(nbasis, nbasis, 3), left_ga(nbasis, nbasis, 3), left_a(nbasis, nbasis, 3), &
-         right_gr(nbasis, nbasis, 3), right_ga(nbasis, nbasis, 3), right_a(nbasis, nbasis, 3))
+         left_gr(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+         left_ga(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+         left_a(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+         right_gr(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+         right_ga(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+         right_a(nbasis, nbasis, lmto_product_max_gf_moment + 1))
       result%susceptibility = cmplx(0.0_rp, 0.0_rp, rp)
 
       ! This is the unchanged LR-GF-02 real-energy Simpson integration.  The
@@ -206,6 +216,10 @@ contains
       result%energy_spacing = step
       result%spacing_over_integration_eta = step/integration_eta
       result%response_representation = product_representation
+      result%product_radial_order = product_basis%product_radial_order
+      result%product_endpoint_branches = product_basis%product_endpoint_branches
+      result%product_branch_labels = product_basis%product_branch_labels
+      result%maximum_gf_energy_moment = lmto_product_max_gf_moment
       if (use_optimized_contraction) then
          result%contraction_backend = lr_product_gf_contraction_optimized
       else
@@ -235,6 +249,9 @@ contains
          result%point_response_allocated, ' energy_spacing=', result%energy_spacing, &
          ' h_over_integration_eta=', result%spacing_over_integration_eta, ' contraction_backend=', &
          trim(result%contraction_backend), ' accepted_state=', 'shared_request_snapshots'
+      result%response_space_metadata = trim(result%response_space_metadata)// &
+         '; product_radial_order=second; product_endpoint_branches=6; '// &
+         'product_branch_labels=00,10,01,11,20,02; maximum_gf_energy_moment=4'
    end subroutine evaluate_lr_product_gf_susceptibility
 
    !> Evaluate the same real-axis Kubo bubble after commuting the finite
@@ -351,6 +368,10 @@ contains
       result%energy_spacing = step
       result%spacing_over_integration_eta = step/integration_eta
       result%response_representation = product_representation
+      result%product_radial_order = product_basis%product_radial_order
+      result%product_endpoint_branches = product_basis%product_endpoint_branches
+      result%product_branch_labels = product_basis%product_branch_labels
+      result%maximum_gf_energy_moment = lmto_product_max_gf_moment
       result%contraction_backend = lr_product_gf_contraction_factorized
       result%point_response_allocated = .false.
       result%nbasis = nbasis
@@ -380,6 +401,9 @@ contains
          ' h_over_integration_eta=', result%spacing_over_integration_eta, ' contraction_backend=', &
          trim(result%contraction_backend), ' accepted_state=', 'shared_request_snapshots', ' band_pairs=', npairs, &
          ' band_transition_bytes=', result%band_transition_memory_bytes
+      result%response_space_metadata = trim(result%response_space_metadata)// &
+         '; product_radial_order=second; product_endpoint_branches=6; '// &
+         'product_branch_labels=00,10,01,11,20,02; maximum_gf_energy_moment=4'
    end subroutine evaluate_lr_product_gf_factorized
 
    !> Build T(I,n,m)=<L n|sum_pq eps_L^p eps_R^q V_I^pq|R m> from the
@@ -398,7 +422,7 @@ contains
       nbasis = size(vertices, 1)
       nleft_bands = left_state%nbands
       nright_bands = right_state%nbands
-      if (size(vertices, 2) /= nbasis .or. size(vertices, 3) /= 4 .or. &
+      if (size(vertices, 2) /= nbasis .or. size(vertices, 3) /= lmto_product_nbranch .or. &
           size(vertices, 4) /= size(transitions, 3) .or. size(transitions, 1) /= nleft_bands .or. &
           size(transitions, 2) /= nright_bands .or. left_state%nbasis /= nbasis .or. &
           right_state%nbasis /= nbasis) then
@@ -410,22 +434,19 @@ contains
       allocate(right_projection(nbasis, nright_bands), band_vertex(nleft_bands, nright_bands))
       transitions = cmplx(0.0_rp, 0.0_rp, rp)
       do product_index = 1, size(vertices, 4)
-         do component = 1, 4
-            left_power = mod(component - 1, 2)
-            right_power = (component - 1)/2
+         do component = 1, size(vertices, 3)
+            call lmto_product_branch_powers(component, left_power, right_power)
             right_projection = matmul(vertices(:, :, component, product_index), &
                right_state%eigenvectors(:, :, right_ik))
             band_vertex = matmul(conjg(transpose(left_state%eigenvectors(:, :, left_ik))), right_projection)
-            if (left_power == 1) then
-               do ib_left = 1, nleft_bands
-                  band_vertex(ib_left, :) = band_vertex(ib_left, :)*left_state%eigenvalues(ib_left, left_ik)
-               end do
-            end if
-            if (right_power == 1) then
-               do ib_right = 1, nright_bands
-                  band_vertex(:, ib_right) = band_vertex(:, ib_right)*right_state%eigenvalues(ib_right, right_ik)
-               end do
-            end if
+            do ib_left = 1, nleft_bands
+               band_vertex(ib_left, :) = band_vertex(ib_left, :)* &
+                  lmto_product_energy_power(left_state%eigenvalues(ib_left, left_ik), left_power)
+            end do
+            do ib_right = 1, nright_bands
+               band_vertex(:, ib_right) = band_vertex(:, ib_right)* &
+                  lmto_product_energy_power(right_state%eigenvalues(ib_right, right_ik), right_power)
+            end do
             transitions(:, :, product_index) = transitions(:, :, product_index) + band_vertex
          end do
       end do
@@ -449,13 +470,11 @@ contains
       if (size(susceptibility, 2) /= product_dimension .or. size(vertices, 4) /= product_dimension) then
          error stop 'accumulate_product_gf_bubble_scalar: product matrix shape mismatch'
       end if
-      do component_i = 1, 4
-         left_power_i = mod(component_i - 1, 2)
-         right_power_i = (component_i - 1)/2
+      do component_i = 1, size(vertices, 3)
+         call lmto_product_branch_powers(component_i, left_power_i, right_power_i)
          if (maxval(abs(vertices(:, :, component_i, :))) == 0.0_rp) cycle
-         do component_j = 1, 4
-            left_power_j = mod(component_j - 1, 2)
-            right_power_j = (component_j - 1)/2
+         do component_j = 1, size(vertices, 3)
+            call lmto_product_branch_powers(component_j, left_power_j, right_power_j)
             if (maxval(abs(vertices(:, :, component_j, :))) == 0.0_rp) cycle
             combined_left = left_power_i + left_power_j + 1
             combined_right = right_power_i + right_power_j + 1
@@ -496,11 +515,12 @@ contains
       nb = size(vertices, 1)
       nb2 = nb*nb
       product_dimension = size(vertices, 4)
-      allocate(workspace%vertices_flat(nb2, product_dimension, 4), &
-         workspace%vertices_transpose(nb2, product_dimension, 4), workspace%transformed(nb2, product_dimension), &
+      allocate(workspace%vertices_flat(nb2, product_dimension, size(vertices, 3)), &
+         workspace%vertices_transpose(nb2, product_dimension, size(vertices, 3)), &
+         workspace%transformed(nb2, product_dimension), &
          workspace%contribution(product_dimension, product_dimension), workspace%temporary(nb, nb), &
-         workspace%active_component(4))
-      do component = 1, 4
+         workspace%active_component(size(vertices, 3)))
+      do component = 1, size(vertices, 3)
          workspace%vertices_flat(:, :, component) = reshape(vertices(:, :, component, :), [nb2, product_dimension])
          do i = 1, product_dimension
             workspace%vertices_transpose(:, i, component) = reshape(transpose(vertices(:, :, component, i)), [nb2])
@@ -534,22 +554,21 @@ contains
       if (size(left_a, 2) /= nb .or. size(right_a, 1) /= nb .or. size(right_a, 2) /= nb .or. &
           size(right_gr, 1) /= nb .or. size(right_gr, 2) /= nb .or. size(left_ga, 1) /= nb .or. &
           size(left_ga, 2) /= nb .or. size(susceptibility, 2) /= product_dimension .or. &
-          size(vertices, 1) /= nb .or. size(vertices, 2) /= nb .or. size(vertices, 3) /= 4 .or. &
+          size(vertices, 1) /= nb .or. size(vertices, 2) /= nb .or. size(vertices, 3) /= lmto_product_nbranch .or. &
           size(vertices, 4) /= product_dimension) then
          error stop 'accumulate_product_gf_bubble_optimized: product matrix shape mismatch'
       end if
       if (.not. allocated(workspace%vertices_flat) .or. size(workspace%vertices_flat, 1) /= nb2 .or. &
-          size(workspace%vertices_flat, 2) /= product_dimension .or. size(workspace%vertices_flat, 3) /= 4) then
+          size(workspace%vertices_flat, 2) /= product_dimension .or. &
+          size(workspace%vertices_flat, 3) /= lmto_product_nbranch) then
          error stop 'accumulate_product_gf_bubble_optimized: workspace shape mismatch'
       end if
 
-      do component_i = 1, 4
-         left_power_i = mod(component_i - 1, 2)
-         right_power_i = (component_i - 1)/2
+      do component_i = 1, size(vertices, 3)
+         call lmto_product_branch_powers(component_i, left_power_i, right_power_i)
          if (.not. workspace%active_component(component_i)) cycle
-         do component_j = 1, 4
-            left_power_j = mod(component_j - 1, 2)
-            right_power_j = (component_j - 1)/2
+         do component_j = 1, size(vertices, 3)
+            call lmto_product_branch_powers(component_j, left_power_j, right_power_j)
             if (.not. workspace%active_component(component_j)) cycle
             combined_left = left_power_i + left_power_j + 1
             combined_right = right_power_i + right_power_j + 1

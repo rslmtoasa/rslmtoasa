@@ -107,8 +107,8 @@ contains
       end if
 
       call product_plus%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
-      if (product_plus%product_dimension /= 232) then
-         error stop 'DRESP-07: the campaign requires the complete Fe spd product dimension 232'
+      if (product_plus%product_dimension /= product_plus%unpruned_dimension) then
+         error stop 'DRESP-07: the campaign requires the complete unpruned Fe spd product dimension'
       end if
       call compute_accepted_pauli_magnetization(reciprocal_obj, lattice_obj%symbolic_atoms, lattice_obj%nbulk, &
          magnetization, valence_magnetization, core_magnetization)

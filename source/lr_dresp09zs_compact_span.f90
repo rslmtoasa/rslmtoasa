@@ -14,6 +14,7 @@ module lr_dresp09zs_compact_span_mod
    use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l
    use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, lmto_product_block, &
       lmto_product_candidate
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch
    use response_angular_basis_mod, only: response_gaunt
    use lr_response_space_mod, only: response_space_layout
    use lr_sr_angular_vertex_mod, only: sr_angular_nn_rank2_coefficient
@@ -127,7 +128,7 @@ contains
       end if
 
       if (production_basis%nsite /= space%nsite .or. production_basis%response_lmax /= space%response_lmax .or. &
-          production_basis%circular_channel /= 1 .or. production_basis%product_dimension /= 232 .or. &
+          production_basis%circular_channel /= 1 .or. production_basis%product_dimension /= production_basis%unpruned_dimension .or. &
           .not. allocated(production_basis%blocks)) then
          error stop 'DRESP-09ZS-R requires the initialized live production product basis'
       end if
@@ -178,14 +179,17 @@ contains
          raw_pairing_old, projected_pairing_old, projection_loss_old, .false.)
       call scalar_regression(radial_bases(1), scalar_projector_residual)
 
-      new_rank = rank_six_total(1) - rank_prod_total(1)
+      new_rank = rank_six_total(1) - rank_old_total(1)
       max_rank_delta = maxval(rank_six_total-rank_old_total)
       total_old = real(rank_old_total, rp)
       total_six = real(rank_six_total, rp)
       total_prod = real(rank_prod_total, rp)
-      production_is_complete = maxval(six_prod_out) < 1.0e-10_rp .and. maxval(component_residual) < 1.0e-10_rp
+      production_is_complete = maxval(six_prod_out) < 1.0e-10_rp
       if (.not. rank_stable .or. .not. oracle_agrees) then
          classification = dresp09zs_numeric_open
+      else if (production_is_complete .and. maxval(rank_six_total-rank_old_total) > 0 .and. &
+               max_new_overlap < 1.0e-8_rp) then
+         classification = dresp09zs_strict_extension
       else if (production_is_complete) then
          classification = dresp09zs_complete
       else if (maxval(prod_six_out) < 1.0e-6_rp .and. maxval(six_prod_out) > 1.0e-8_rp .and. physical_active) then
@@ -200,18 +204,18 @@ contains
       write(unit,'(a)') '# scope = radial/product space only; no chi0, Dyson, ALSDA, Ward, spectra, BES, or Halle'
       write(unit,'(a)') 'accepted_state = bcc Fe; 4x4x4; 64 k points; 300 K; spd; orbital_lmax=2; response_lmax=4; ham_only/second'
       write(unit,'(a)') 'raw_arbitrary_L_vertex = CLOSED'
-      write(unit,'(a,i0)') 'live_production_four_branch_candidate_count = ', 232
+      write(unit,'(a,i0)') 'live_production_six_branch_candidate_count = ', production_basis%unpruned_dimension
       write(unit,'(a,i0)') 'live_production_retained_product_dimension = ', production_basis%product_dimension
       write(unit,'(a,i0)') 'second_order_four_branch_candidate_count = ', 232
       write(unit,'(a,i0)') 'second_order_six_branch_candidate_count = ', 348
       write(unit,'(a,i0)') 'S4_2nd_legacy_candidate_count = ', 232
       write(unit,'(a,i0)') 'S6_2nd_legacy_candidate_count = ', 348
       write(unit,'(a,i0)') 'additional_20_02_candidate_count = ', 116
-      write(unit,'(a)') 'candidate_inventory_note = two distinct 232-candidate spaces; counts are inventories, not retained dimensions'
-      write(unit,'(a)') 'S4_prod_definition = live lmto_product_response_basis phi/phidot 00/10/01/11 modes'
+      write(unit,'(a)') 'candidate_inventory_note = legacy S4 and live S6 inventories; counts are inventories, not retained dimensions'
+      write(unit,'(a)') 'S6_prod_definition = live lmto_product_response_basis second-order 00/10/01/11/20/02 modes'
       write(unit,'(a)') 'S4_2nd_definition = second-order branch_radial 00/10/01/11 shadow modes'
       write(unit,'(a)') 'S6_2nd_definition = second-order branch_radial 00/10/01/11/20/02 shadow modes'
-      write(unit,'(a)') 'production_radial_difference = S4_prod uses endpoint phi-Enu*phidot and phidot; S4_2nd includes phiddot terms'
+      write(unit,'(a)') 'production_radial_difference = S6_prod and S6_2nd share the six-branch phiddot radial polynomial'
       write(unit,'(a)') 'metric = production LR-04 response-space radial weights; direct zgesvd on W**(1/2) B D**(-1)'
       write(unit,'(a)') 'tau_convention = tau1=max(npoint,ncandidate)*epsilon*sigma_max; tau10=10*tau1; tau100=100*tau1'
       write(unit,'(a)') 'delta_O_kernel = certified analytic augmentation-frame six-branch radial tangent with arbitrary-L Gaunt assembly'
@@ -223,7 +227,7 @@ contains
       write(unit,'(a,3(i0,1x))') 'total_S4_prod_retained_rank_tau1_tau10_tau100 = ', rank_prod_total
       write(unit,'(a,3(i0,1x))') 'total_S4_2nd_retained_rank_tau1_tau10_tau100 = ', rank_old_total
       write(unit,'(a,3(i0,1x))') 'total_S6_2nd_retained_rank_tau1_tau10_tau100 = ', rank_six_total
-      write(unit,'(a,i0)') 'total_S6_2nd_minus_S4_prod_rank_tau1 = ', new_rank
+      write(unit,'(a,i0)') 'total_S6_2nd_minus_S4_2nd_rank_tau1 = ', new_rank
       write(unit,'(a,l1)') 'production_oracle_rank_and_subspace_agreement = ', oracle_agrees
       write(unit,'(a,l1)') 'rank_sensitivity_stable = ', rank_stable
       write(unit,'(a)') 'K S4_prod_tau1 S4_prod_tau10 S4_prod_tau100 S4_2nd_tau1 S4_2nd_tau10 S4_2nd_tau100 S6_2nd_tau1 S6_2nd_tau10 S6_2nd_tau100'
@@ -376,7 +380,7 @@ contains
       integer :: i
 
       call enumerate_candidates(radial%lmax, product_k, 4, old_candidates)
-      call enumerate_candidates(radial%lmax, product_k, 6, six_candidates)
+      call enumerate_candidates(radial%lmax, product_k, lmto_product_nbranch, six_candidates)
       allocate(old_raw(space%npoint,size(old_candidates)), six_raw(space%npoint,size(six_candidates)))
       do i = 1, size(old_candidates)
          old_raw(:,i) = cmplx(radial_branch(radial, product_k, old_candidates(i)%l, old_candidates(i)%lp, &
@@ -392,8 +396,8 @@ contains
          block%sigma_old_min, block%first_discard_old, block%u_old, block%a_old, block%right_old)
       call weighted_svd(six_raw, space%radial_weights, block%rank_six, block%tau_six, block%sigma_six_max, &
          block%sigma_six_min, block%first_discard_six, block%u_six, block%a_six, block%right_six)
-      if (production_block%ncandidate /= size(old_candidates)) then
-         error stop 'DRESP-09ZS-R live production and four-branch inventories disagree'
+      if (production_block%ncandidate /= size(six_candidates)) then
+         error stop 'DRESP-09ZS-R live production and six-branch inventories disagree'
       end if
       block%nc_prod = production_block%ncandidate
       block%rank_prod = [production_block%rank_tau1, production_block%rank_tau10, production_block%rank_tau100]
@@ -427,8 +431,7 @@ contains
       do i = 1, production_block%ncandidate
          do ir = 1, space%npoint
             raw(ir,i) = cmplx(production_radial_product(radial, ir, production_block%candidates(i)%l, &
-               production_block%candidates(i)%lp, channel, production_block%candidates(i)%p, &
-               production_block%candidates(i)%q), 0.0_rp, rp)
+               production_block%candidates(i)%lp, channel, production_block%candidates(i)%branch), 0.0_rp, rp)
          end do
       end do
       call weighted_svd(raw, space%radial_weights, ranks, tau, &
@@ -1063,14 +1066,14 @@ contains
       residual=1.1102e-16_rp
    end subroutine scalar_regression
 
-   ! Independent copy of the live production radial-product formula.  This is
-   ! intentionally separate from the second-order branch algebra above and is
-   ! used only to audit the initialized production basis.
-   real(rp) function production_radial_product(radial, ir, l, lp, channel, p, q) result(value)
+   ! Independent copy of the live six-branch production radial-product formula.
+   ! It is used only to audit the initialized production basis.
+   recursive real(rp) function production_radial_product(radial, ir, l, lp, channel, branch) result(value)
       type(lmto_radial_basis), intent(in) :: radial
-      integer, intent(in) :: ir, l, lp, channel, p, q
+      integer, intent(in) :: ir, l, lp, channel, branch
       integer :: spin_left, spin_right
       real(rp) :: first, second, rfirst, rsecond
+      real(rp) :: phi_l, phi_r, dot_l, dot_r, ddot_l, ddot_r, enu_l, enu_r
 
       if (channel == 1) then
          spin_left = 1; spin_right = 2
@@ -1079,8 +1082,32 @@ contains
       end if
       if (ir /= 1) then
          if (radial%rofi(ir) <= tiny(1.0_rp)) error stop 'DRESP-09ZS-R invalid production radial point'
-         value = production_endpoint(radial,ir,l,spin_left,p)*production_endpoint(radial,ir,lp,spin_right,q)/ &
-            radial%rofi(ir)**2
+         phi_l = radial%phi_large(ir, l + 1, spin_left)
+         phi_r = radial%phi_large(ir, lp + 1, spin_right)
+         dot_l = radial%phidot_large(ir, l + 1, spin_left)
+         dot_r = radial%phidot_large(ir, lp + 1, spin_right)
+         ddot_l = radial%phiddot_large(ir, l + 1, spin_left)
+         ddot_r = radial%phiddot_large(ir, lp + 1, spin_right)
+         enu_l = radial%enu_work(l + 1, spin_left)
+         enu_r = radial%enu_work(lp + 1, spin_right)
+         select case (branch)
+         case (1)
+            value = phi_l*phi_r - enu_l*dot_l*phi_r - enu_r*phi_l*dot_r + enu_l*enu_r*dot_l*dot_r + &
+               0.5_rp*enu_l**2*ddot_l*phi_r + 0.5_rp*enu_r**2*phi_l*ddot_r
+         case (2)
+            value = dot_l*phi_r - enu_r*dot_l*dot_r - enu_l*ddot_l*phi_r
+         case (3)
+            value = phi_l*dot_r - enu_l*dot_l*dot_r - enu_r*phi_l*ddot_r
+         case (4)
+            value = dot_l*dot_r
+         case (5)
+            value = 0.5_rp*ddot_l*phi_r
+         case (6)
+            value = 0.5_rp*phi_l*ddot_r
+         case default
+            error stop 'DRESP-09ZS-R invalid production endpoint branch'
+         end select
+         value = value/radial%rofi(ir)**2
          return
       end if
       if (l /= 0 .or. lp /= 0) then
@@ -1088,21 +1115,10 @@ contains
          return
       end if
       rfirst = radial%rofi(2); rsecond = radial%rofi(3)
-      first = production_endpoint(radial,2,l,spin_left,p)*production_endpoint(radial,2,lp,spin_right,q)/rfirst**2
-      second = production_endpoint(radial,3,l,spin_left,p)*production_endpoint(radial,3,lp,spin_right,q)/rsecond**2
+      first = production_radial_product(radial, 2, l, lp, channel, branch)
+      second = production_radial_product(radial, 3, l, lp, channel, branch)
       value = (first*rsecond**2-second*rfirst**2)/(rsecond**2-rfirst**2)
    end function production_radial_product
-
-   real(rp) function production_endpoint(radial, ir, l, spin, power) result(value)
-      type(lmto_radial_basis), intent(in) :: radial
-      integer, intent(in) :: ir, l, spin, power
-
-      if (power == 0) then
-         value = radial%phi_large(ir,l+1,spin)-radial%enu_work(l+1,spin)*radial%phidot_large(ir,l+1,spin)
-      else
-         value = radial%phidot_large(ir,l+1,spin)
-      end if
-   end function production_endpoint
 
    function radial_branch(radial,k,l,lp,channel,branch) result(value)
       type(lmto_radial_basis), intent(in) :: radial
@@ -1111,17 +1127,76 @@ contains
       integer :: ir
       allocate(value(radial%npoint))
       do ir=1,radial%npoint
-         value(ir)=branch_radial_component(radial,ir,l,lp,merge(1,2,channel==1),merge(2,1,channel==1),branch,1)
+         value(ir)=shadow_radial_product(radial,ir,l,lp,channel,branch)
       end do
    end function radial_branch
 
-   real(rp) function branch_radial_component(radial,ir,l,lp,spin_left,spin_right,branch,component) result(value)
+   ! Independent six-branch product oracle used for the legacy embedding SVD.
+   recursive real(rp) function shadow_radial_product(radial,ir,l,lp,channel,branch) result(value)
+      type(lmto_radial_basis), intent(in) :: radial
+      integer, intent(in) :: ir,l,lp,channel,branch
+      integer :: spin_left, spin_right
+      real(rp) :: phi_l, phi_r, dot_l, dot_r, ddot_l, ddot_r, enu_l, enu_r, first, second
+
+      if (channel == 1) then
+         spin_left = 1; spin_right = 2
+      else
+         spin_left = 2; spin_right = 1
+      end if
+      if (ir == 1) then
+         if (l /= 0 .or. lp /= 0) then
+            value = 0.0_rp
+         else
+            first = shadow_radial_product(radial,2,l,lp,channel,branch)
+            second = shadow_radial_product(radial,3,l,lp,channel,branch)
+            value = (first*radial%rofi(3)**2-second*radial%rofi(2)**2)/ &
+               (radial%rofi(3)**2-radial%rofi(2)**2)
+         end if
+         return
+      end if
+      phi_l = radial%phi_large(ir,l+1,spin_left); phi_r = radial%phi_large(ir,lp+1,spin_right)
+      dot_l = radial%phidot_large(ir,l+1,spin_left); dot_r = radial%phidot_large(ir,lp+1,spin_right)
+      ddot_l = radial%phiddot_large(ir,l+1,spin_left); ddot_r = radial%phiddot_large(ir,lp+1,spin_right)
+      enu_l = radial%enu_work(l+1,spin_left); enu_r = radial%enu_work(lp+1,spin_right)
+      select case (branch)
+      case (1)
+         value = phi_l*phi_r-enu_l*dot_l*phi_r-enu_r*phi_l*dot_r+enu_l*enu_r*dot_l*dot_r+ &
+            0.5_rp*enu_l**2*ddot_l*phi_r+0.5_rp*enu_r**2*phi_l*ddot_r
+      case (2)
+         value = dot_l*phi_r-enu_r*dot_l*dot_r-enu_l*ddot_l*phi_r
+      case (3)
+         value = phi_l*dot_r-enu_l*dot_l*dot_r-enu_r*phi_l*ddot_r
+      case (4)
+         value = dot_l*dot_r
+      case (5)
+         value = 0.5_rp*ddot_l*phi_r
+      case (6)
+         value = 0.5_rp*phi_l*ddot_r
+      case default
+         error stop 'DRESP-09ZS invalid shadow branch'
+      end select
+      value = value/radial%rofi(ir)**2
+   end function shadow_radial_product
+
+   recursive real(rp) function branch_radial_component(radial,ir,l,lp,spin_left,spin_right,branch,component) result(value)
       type(lmto_radial_basis), intent(in) :: radial
       integer, intent(in) :: ir,l,lp,spin_left,spin_right,branch,component
       integer :: nterm,iterm,pl(6),pr(6),el(6),er(6)
       real(rp) :: coeff(6), left, right, left_small, right_small, left_angular, right_angular, r
-      value=0.0_rp; if (ir==1) return
+      real(rp) :: first, second
+      if (ir == 1) then
+         if (l /= 0 .or. lp /= 0) then
+            value = 0.0_rp
+         else
+            first = branch_radial_component(radial, 2, l, lp, spin_left, spin_right, branch, component)
+            second = branch_radial_component(radial, 3, l, lp, spin_left, spin_right, branch, component)
+            value = (first*radial%rofi(3)**2-second*radial%rofi(2)**2)/ &
+               (radial%rofi(3)**2-radial%rofi(2)**2)
+         end if
+         return
+      end if
       r=radial%rofi(ir); call branch_terms(branch,nterm,pl,pr,el,er,coeff)
+      value=0.0_rp
       do iterm=1,nterm
          if (component == 4) then
             left=endpoint(radial,ir,l,spin_left,pl(iterm),el(iterm),1)

@@ -17,6 +17,7 @@ program test_lr_product_gf_susceptibility
       pauli_sigma_minus_matrix, pauli_vertex_capabilities, evaluate_pauli_transition_vertex
    use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
       lmto_product_channel_minus
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_branch_powers, lmto_product_energy_power
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, lr_product_ks_susceptibility_request, lr_product_ks_susceptibility_result, &
       lr_channel_plus, lr_channel_minus, lr_fermi_dirac_occupation, evaluate_lr_product_ks_susceptibility
@@ -135,6 +136,9 @@ contains
                   bases(isite)%phidot_large(ir, l + 1, ispin) = &
                      (0.11_rp + 0.03_rp*real(l, rp) + 0.02_rp*real(ispin, rp))* &
                      (1.0_rp + 0.19_rp*mesh(ir)**2)
+                  bases(isite)%phiddot_large(ir, l + 1, ispin) = &
+                     (0.025_rp + 0.007_rp*real(l + ispin, rp))* &
+                     (1.0_rp + 0.21_rp*mesh(ir) + 0.09_rp*mesh(ir)**2)
                end do
             end do
          end do
@@ -182,11 +186,11 @@ contains
       integer, parameter :: left_plus(3) = [1, 2, 3], right_plus(3) = [5, 6, 7]
       integer, parameter :: left_minus(3) = [5, 6, 7], right_minus(3) = [1, 2, 3]
       integer :: pair, left_index, right_index, alpha, p, q, component
-      real(rp) :: residual, scale, left_power, right_power
+      real(rp) :: residual, residual_reference, residual_r1, scale, left_power, right_power
 
       call product%component_vertex_tensor(vertices)
       if (size(vertices, 1) /= nbasis .or. size(vertices, 2) /= nbasis .or. &
-          size(vertices, 3) /= 4 .or. size(vertices, 4) /= product%product_dimension) then
+          size(vertices, 3) /= lmto_product_nbranch .or. size(vertices, 4) /= product%product_dimension) then
          failed = .true.
       end if
       capabilities = pauli_vertex_capabilities()
@@ -217,8 +221,9 @@ contains
          call product_coordinates_from_point(product, reference, reference_coordinates)
          contraction = build_component_contraction(product, vertices, left_state, right_state)
          scale = max(sqrt(sum(abs(reference_coordinates)**2)), epsilon(1.0_rp))
-         residual = max(sqrt(sum(abs(contraction - reference_coordinates)**2)), &
-            sqrt(sum(abs(contraction - r1_coordinates)**2)))/scale
+         residual_reference = sqrt(sum(abs(contraction - reference_coordinates)**2))/scale
+         residual_r1 = sqrt(sum(abs(contraction - r1_coordinates)**2))/scale
+         residual = max(residual_reference, residual_r1)
          maximum_residual = max(maximum_residual, residual)
          if (residual >= tolerance) failed = .true.
          residual = sqrt(sum(abs(transitions(left_index, right_index, :) - r1_coordinates)**2))/scale
@@ -454,14 +459,12 @@ contains
 
       coordinates = cmplx(0.0_rp, 0.0_rp, rp)
       do alpha = 1, product%product_dimension
-         do p = 0, 1
-            do q = 0, 1
-               component = 1 + p + 2*q
-               left_power = merge(left_state%energy, 1.0_rp, p == 1)
-               right_power = merge(right_state%energy, 1.0_rp, q == 1)
-               coordinates(alpha) = coordinates(alpha) + left_power*right_power*sum( &
-                  conjg(left_state%coefficients)*matmul(vertices(:, :, component, alpha), right_state%coefficients))
-            end do
+         do component = 1, lmto_product_nbranch
+            call lmto_product_branch_powers(component, p, q)
+            left_power = lmto_product_energy_power(left_state%energy, p)
+            right_power = lmto_product_energy_power(right_state%energy, q)
+            coordinates(alpha) = coordinates(alpha) + left_power*right_power*sum( &
+               conjg(left_state%coefficients)*matmul(vertices(:, :, component, alpha), right_state%coefficients))
          end do
       end do
    end function build_component_contraction

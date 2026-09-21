@@ -12,6 +12,7 @@ program test_lr_pauli_transition_vertex
    use math_mod, only: init_math_operators
    use self_mod, only: legacy_radial_fixture
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_branch_powers, lmto_product_energy_power
    use response_angular_basis_mod, only: response_angular_pi, response_lm_index
    use response_basis_mapping_mod, only: response_super_index, response_flatten_superindex, &
       response_unflatten_superindex, response_apply_site_gauge, response_endpoint_phase
@@ -180,11 +181,11 @@ contains
       complex(rp), intent(in) :: operator_matrix(2, 2)
       complex(rp), intent(out) :: result(:)
       integer, parameter :: ntheta = 12, nphi = 24
-      real(rp) :: nodes(ntheta), weights(ntheta), theta, phi, sphere_weight, radius_value
-      complex(rp) :: density, left_u, right_u, yi, yj, ylm
+      real(rp) :: nodes(ntheta), weights(ntheta), theta, phi, sphere_weight
+      complex(rp) :: density, yi, yj, ylm
       type(response_super_index) :: item
       integer :: flat, isite, ir, response_l, response_m, iorb, jorb, ispin, jspin, orbital_l, orbital_lp, iphi, inode
-      integer :: norb_local, offset
+      integer :: norb_local, offset, branch, p, q
 
       if (size(result) /= space%ndim) error stop 'brute_force_vertex: result shape mismatch'
       call gauss_legendre(ntheta, nodes, weights)
@@ -193,7 +194,6 @@ contains
       do isite = 1, space%nsite
          offset = (isite - 1)*2*norb_local
          do ir = 2, space%npoint
-            radius_value = space%radius(ir)
             do inode = 1, ntheta
                theta = acos(nodes(inode))
                do iphi = 1, nphi
@@ -206,16 +206,15 @@ contains
                         orbital_lp = orbital_l_from_index(jorb)
                         yj = independent_harmonic(orbital_lp, orbital_m_from_index(jorb, orbital_lp), theta, phi)
                         do ispin = 1, 2
-                           left_u = cmplx(radial_bases(isite)%phi_large(ir, orbital_l + 1, ispin) + &
-                              (left%energy - radial_bases(isite)%enu_work(orbital_l + 1, ispin))* &
-                              radial_bases(isite)%phidot_large(ir, orbital_l + 1, ispin), 0.0_rp, rp)
                            do jspin = 1, 2
-                              right_u = cmplx(radial_bases(isite)%phi_large(ir, orbital_lp + 1, jspin) + &
-                                 (right%energy - radial_bases(isite)%enu_work(orbital_lp + 1, jspin))* &
-                                 radial_bases(isite)%phidot_large(ir, orbital_lp + 1, jspin), 0.0_rp, rp)
-                              density = density + conjg(left%coefficients(offset + (ispin - 1)*norb_local + iorb))* &
-                                 right%coefficients(offset + (jspin - 1)*norb_local + jorb)* &
-                                 operator_matrix(ispin, jspin)*left_u*right_u*conjg(yi)*yj/(radius_value**2)
+                              do branch = 1, lmto_product_nbranch
+                                 call lmto_product_branch_powers(branch, p, q)
+                                 density = density + conjg(left%coefficients(offset + (ispin - 1)*norb_local + iorb))* &
+                                    right%coefficients(offset + (jspin - 1)*norb_local + jorb)* &
+                                    operator_matrix(ispin, jspin)*lmto_product_energy_power(left%energy, p)* &
+                                    lmto_product_energy_power(right%energy, q)*independent_radial_branch( &
+                                    radial_bases(isite), ir, orbital_l, orbital_lp, ispin, jspin, branch)*conjg(yi)*yj
+                              end do
                            end do
                         end do
                      end do
@@ -235,6 +234,51 @@ contains
          end do
       end do
    end subroutine brute_force_vertex
+
+   recursive real(rp) function independent_radial_branch(radial, ir, l, lp, spin_left, spin_right, branch) result(value)
+      type(lmto_radial_basis), intent(in) :: radial
+      integer, intent(in) :: ir, l, lp, spin_left, spin_right, branch
+      real(rp) :: phi_l, phi_r, dot_l, dot_r, ddot_l, ddot_r, enu_l, enu_r, value_two, value_three
+
+      if (ir == 1) then
+         if (l /= 0 .or. lp /= 0) then
+            value = 0.0_rp
+            return
+         end if
+         value_two = independent_radial_branch(radial, 2, l, lp, spin_left, spin_right, branch)
+         value_three = independent_radial_branch(radial, 3, l, lp, spin_left, spin_right, branch)
+         value = (value_two*radial%rofi(3)**2 - value_three*radial%rofi(2)**2)/ &
+            (radial%rofi(3)**2 - radial%rofi(2)**2)
+         return
+      end if
+
+      phi_l = radial%phi_large(ir, l + 1, spin_left)
+      phi_r = radial%phi_large(ir, lp + 1, spin_right)
+      dot_l = radial%phidot_large(ir, l + 1, spin_left)
+      dot_r = radial%phidot_large(ir, lp + 1, spin_right)
+      ddot_l = radial%phiddot_large(ir, l + 1, spin_left)
+      ddot_r = radial%phiddot_large(ir, lp + 1, spin_right)
+      enu_l = radial%enu_work(l + 1, spin_left)
+      enu_r = radial%enu_work(lp + 1, spin_right)
+      select case (branch)
+      case (1)
+         value = phi_l*phi_r - enu_l*dot_l*phi_r - enu_r*phi_l*dot_r + enu_l*enu_r*dot_l*dot_r + &
+            0.5_rp*enu_l**2*ddot_l*phi_r + 0.5_rp*enu_r**2*phi_l*ddot_r
+      case (2)
+         value = dot_l*phi_r - enu_r*dot_l*dot_r - enu_l*ddot_l*phi_r
+      case (3)
+         value = phi_l*dot_r - enu_l*dot_l*dot_r - enu_r*phi_l*ddot_r
+      case (4)
+         value = dot_l*dot_r
+      case (5)
+         value = 0.5_rp*ddot_l*phi_r
+      case (6)
+         value = 0.5_rp*phi_l*ddot_r
+      case default
+         error stop 'UnitLrPauliTransitionVertex: invalid radial branch'
+      end select
+      value = value/radial%rofi(ir)**2
+   end function independent_radial_branch
 
    subroutine compare_positive_radial(space, actual, expected, tolerance_in, label, failed)
       type(response_space_layout), intent(in) :: space
@@ -339,9 +383,9 @@ contains
       complex(rp), allocatable :: expected_charge_vector(:), expected_sigma_z_vector(:)
       complex(rp) :: charge_matrix(2, 2), sigma_z_matrix(2, 2)
       type(response_super_index) :: item
-      real(rp) :: expected_charge, expected_sigma_z, radial_product, first_product, second_product
+      real(rp) :: expected_charge, expected_sigma_z, radial_product
       real(rp) :: state_energy
-      integer :: nocc, ib, orbital, ispin, ir, flat, l
+      integer :: nocc, ib, orbital, ispin, ir, flat, l, branch, p, q
 
       nocc = 2*norb
       allocate(coefficients(2*norb), charge_sum(space%ndim), sigma_z_sum(space%ndim), &
@@ -370,15 +414,13 @@ contains
                                                space%nchannel, item)
             if (item%response_l /= 0 .or. item%response_m /= 0) cycle
             ir = item%radial_point
-            if (ir == 1) then
-               if (l /= 0) cycle
-               first_product = radial_amplitude(radial_bases(1), state_energy, l, ispin, 2)**2/(space%radius(2)**2)
-               second_product = radial_amplitude(radial_bases(1), state_energy, l, ispin, 3)**2/(space%radius(3)**2)
-               radial_product = (first_product*space%radius(3)**2 - second_product*space%radius(2)**2)/ &
-                                (space%radius(3)**2 - space%radius(2)**2)
-            else
-               radial_product = radial_amplitude(radial_bases(1), state_energy, l, ispin, ir)**2/(space%radius(ir)**2)
-            end if
+            radial_product = 0.0_rp
+            do branch = 1, lmto_product_nbranch
+               call lmto_product_branch_powers(branch, p, q)
+               radial_product = radial_product + lmto_product_energy_power(state_energy, p)* &
+                  lmto_product_energy_power(state_energy, q)*independent_radial_branch( &
+                  radial_bases(1), ir, l, l, ispin, ispin, branch)
+            end do
             expected_charge_vector(flat) = expected_charge_vector(flat) + &
                cmplx(radial_product/sqrt(4.0_rp*response_angular_pi), 0.0_rp, rp)
             expected_sigma_z_vector(flat) = expected_sigma_z_vector(flat) + &
@@ -397,15 +439,6 @@ contains
       end do
       write (*, '(a)') 'Occupied diagonal charge/sigma-z Pauli closure: checked against LMTO large-component arrays'
    end subroutine occupied_diagonal_closure
-
-   real(rp) function radial_amplitude(basis, energy, l, ispin, ir) result(value)
-      type(lmto_radial_basis), intent(in) :: basis
-      real(rp), intent(in) :: energy
-      integer, intent(in) :: l, ispin, ir
-
-      value = basis%phi_large(ir, l + 1, ispin) + (energy - basis%enu_work(l + 1, ispin))* &
-              basis%phidot_large(ir, l + 1, ispin)
-   end function radial_amplitude
 
    subroutine run_capability_rejection(argument, mesh)
       character(len=*), intent(in) :: argument

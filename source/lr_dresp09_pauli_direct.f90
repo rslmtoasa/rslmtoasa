@@ -16,6 +16,7 @@ module lr_dresp09_pauli_direct_mod
       response_unflatten_superindex
    use lr_response_space_mod, only: response_space_layout
    use lr_lmto_product_response_basis_mod, only: lmto_product_channel_plus, lmto_product_channel_minus
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_second_order_radial_branch
    implicit none
    private
 
@@ -24,10 +25,9 @@ module lr_dresp09_pauli_direct_mod
 
 contains
 
-   !> Build the four independent endpoint-power branches of the source
-   !> operator.  Component 1+p+2*q means H_left**p and H_right**q in the
-   !> measurement vertex; the adjoint source therefore contains the reversed
-   !> radial powers q,p and the reversed spin/orbital endpoints.
+   !> Build the six independent endpoint-power branches of the source
+   !> operator.  The source matrix uses the reversed spin/orbital endpoints
+   !> of the measurement tensor while retaining its authoritative branch map.
    subroutine dresp09_pauli_direct_source_components(space, radial_bases, source_field, circular_channel, components)
       type(response_space_layout), intent(in) :: space
       type(lmto_radial_basis), intent(in) :: radial_bases(:)
@@ -38,7 +38,7 @@ contains
       integer :: norb, nbasis, nsite, npoint, lmax
       integer :: flat, ir, site, response_l, response_m, channel
       integer :: iorb, jorb, orbital_l, orbital_lp, orbital_m, orbital_mp
-      integer :: spin_left, spin_right, p, q, component, source_row, source_col
+      integer :: spin_left, spin_right, branch, source_row, source_col
       integer :: left_offset, source_flat
       type(response_super_index) :: item
       real(rp) :: radial_pair, gaunt
@@ -85,22 +85,20 @@ contains
 
                source_row = left_offset + (spin_right - 1)*norb + jorb
                source_col = left_offset + (spin_left - 1)*norb + iorb
-               do p = 0, 1
-                  do q = 0, 1
-                     component = 1 + p + 2*q
-                     ! Output p,q is the adjoint of the measurement branch
-                     ! p,q: row uses the original right endpoint and column
-                     ! uses the original left endpoint; the Hamiltonian powers
-                     ! are placed in the reversed q,p order below.
-                     radial_pair = endpoint_pair(radial_bases(site), ir, orbital_lp, spin_right, q, &
-                        orbital_l, spin_left, p)
-                     if (radial_pair == 0.0_rp) cycle
-                     call response_flatten_superindex(response_super_index(site, response_l, response_m, ir, channel), &
-                        nsite, space%response_lmax, npoint, 1, source_flat)
-                     components(source_row, source_col, component) = &
-                        components(source_row, source_col, component) + coefficient*space%metric_weights(source_flat)* &
-                        cmplx(radial_pair*gaunt, 0.0_rp, rp)
-                  end do
+               do branch = 1, lmto_product_nbranch
+                  ! The matrix indices are transposed below, but the branch
+                  ! remains attached to the original measurement endpoints.
+                  ! Keeping the original (l,spin)_left/right ordering is
+                  ! essential for the asymmetric 20 and 02 second-order
+                  ! branches.
+                  call lmto_product_second_order_radial_branch(radial_bases(site), ir, orbital_l, orbital_lp, &
+                     spin_left, spin_right, branch, radial_pair)
+                  if (radial_pair == 0.0_rp) cycle
+                  call response_flatten_superindex(response_super_index(site, response_l, response_m, ir, channel), &
+                     nsite, space%response_lmax, npoint, 1, source_flat)
+                  components(source_row, source_col, branch) = &
+                     components(source_row, source_col, branch) + coefficient*space%metric_weights(source_flat)* &
+                     cmplx(radial_pair*gaunt, 0.0_rp, rp)
                end do
             end do
          end do
@@ -123,7 +121,7 @@ contains
       if (size(hamiltonian, 2) /= n .or. any(shape(operator) /= [n, n])) then
          error stop 'DRESP-09R Pauli direct source: Hamiltonian/operator shape mismatch'
       end if
-      allocate(components(n, n, 4), term(n, n))
+      allocate(components(n, n, lmto_product_nbranch), term(n, n))
       call dresp09_pauli_direct_source_components(space, radial_bases, source_field, circular_channel, components)
       operator = cmplx(0.0_rp, 0.0_rp, rp)
       do p = 0, 1
@@ -147,7 +145,7 @@ contains
       real(rp), parameter :: mesh_tolerance = 2.0e-13_rp
 
       if (space%nchannel /= 1 .or. size(source_field) /= space%ndim .or. size(radial_bases) /= space%nsite .or. &
-          size(components, 3) /= 4) then
+          size(components, 3) /= lmto_product_nbranch) then
          error stop 'DRESP-09R Pauli direct source: representation shape mismatch'
       end if
       if (circular_channel /= lmto_product_channel_plus .and. circular_channel /= lmto_product_channel_minus) then
@@ -155,7 +153,7 @@ contains
       end if
       lmax = radial_bases(1)%lmax
       n = 2*(lmax + 1)**2*space%nsite
-      if (any(shape(components) /= [n, n, 4])) then
+      if (any(shape(components) /= [n, n, lmto_product_nbranch])) then
          error stop 'DRESP-09R Pauli direct source: component shape mismatch'
       end if
       if (space%response_lmax < 2*lmax .or. space%npoint < 3) then
@@ -176,42 +174,5 @@ contains
          end if
       end do
    end subroutine validate_inputs
-
-   pure real(rp) function endpoint_value(radial, ir, l, spin, power) result(value)
-      type(lmto_radial_basis), intent(in) :: radial
-      integer, intent(in) :: ir, l, spin, power
-
-      if (power == 0) then
-         value = radial%phi_large(ir, l + 1, spin) - radial%enu_work(l + 1, spin)* &
-            radial%phidot_large(ir, l + 1, spin)
-      else
-         value = radial%phidot_large(ir, l + 1, spin)
-      end if
-   end function endpoint_value
-
-   pure real(rp) function endpoint_pair(radial, ir, left_l, left_spin, left_power, right_l, right_spin, right_power) &
-      result(value)
-      type(lmto_radial_basis), intent(in) :: radial
-      integer, intent(in) :: ir, left_l, left_spin, left_power, right_l, right_spin, right_power
-      real(rp) :: first, second, rfirst, rsecond
-
-      if (ir /= 1) then
-         if (radial%rofi(ir) <= tiny(1.0_rp)) error stop 'DRESP-09R Pauli direct source: invalid radial point'
-         value = endpoint_value(radial, ir, left_l, left_spin, left_power)* &
-            endpoint_value(radial, ir, right_l, right_spin, right_power)/radial%rofi(ir)**2
-         return
-      end if
-      if (left_l /= 0 .or. right_l /= 0) then
-         value = 0.0_rp
-         return
-      end if
-      rfirst = radial%rofi(2)
-      rsecond = radial%rofi(3)
-      first = endpoint_value(radial, 2, left_l, left_spin, left_power)* &
-         endpoint_value(radial, 2, right_l, right_spin, right_power)/rfirst**2
-      second = endpoint_value(radial, 3, left_l, left_spin, left_power)* &
-         endpoint_value(radial, 3, right_l, right_spin, right_power)/rsecond**2
-      value = (first*rsecond**2 - second*rfirst**2)/(rsecond**2 - rfirst**2)
-   end function endpoint_pair
 
 end module lr_dresp09_pauli_direct_mod

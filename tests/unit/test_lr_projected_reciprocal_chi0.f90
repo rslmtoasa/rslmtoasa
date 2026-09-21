@@ -378,7 +378,8 @@ contains
                      (mesh(ir)**l)*(1.0_rp + 0.13_rp*mesh(ir))*exp(-0.6_rp*radial_scale*mesh(ir))
                   bases(site)%phi_small(ir, l + 1, spin) = 0.0_rp
                   bases(site)%phidot_small(ir, l + 1, spin) = 0.0_rp
-                  bases(site)%phiddot_large(ir, l + 1, spin) = 0.0_rp
+                  bases(site)%phiddot_large(ir, l + 1, spin) = (0.018_rp + 0.004_rp*real(l + spin, rp))* &
+                     (mesh(ir)**l)*(1.0_rp + 0.09_rp*mesh(ir))*exp(-0.45_rp*radial_scale*mesh(ir))
                   bases(site)%phiddot_small(ir, l + 1, spin) = 0.0_rp
                end do
             end do

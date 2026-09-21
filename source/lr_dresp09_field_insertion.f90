@@ -14,6 +14,8 @@ module lr_dresp09_field_insertion_mod
       response_unflatten_superindex
    use lr_response_space_mod, only: response_space_layout, response_vector_inner_product
    use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_branch_powers, &
+      lmto_product_energy_power
    use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state
    implicit none
    private
@@ -138,17 +140,12 @@ contains
 
       call product%component_vertex_tensor(components)
       transition = cmplx(0.0_rp, 0.0_rp, rp)
-      do p = 0, 1
-         do q = 0, 1
-            component = 1 + p + 2*q
-            left_power = 1.0_rp
-            right_power = 1.0_rp
-            if (p == 1) left_power = left_state%energy
-            if (q == 1) right_power = right_state%energy
-            do mu = 1, product%product_dimension
-               transition(:, :, mu) = transition(:, :, mu) + &
-                  left_power*right_power*components(:, :, component, mu)
-            end do
+      do component = 1, lmto_product_nbranch
+         call lmto_product_branch_powers(component, p, q)
+         left_power = lmto_product_energy_power(left_state%energy, p)
+         right_power = lmto_product_energy_power(right_state%energy, q)
+         do mu = 1, product%product_dimension
+            transition(:, :, mu) = transition(:, :, mu) + left_power*right_power*components(:, :, component, mu)
          end do
       end do
       deallocate(components)
@@ -294,7 +291,8 @@ contains
 
       n = size(hamiltonian, 1)
       if (size(hamiltonian, 2) /= n .or. size(component_vertices, 1) /= n .or. &
-          size(component_vertices, 2) /= n .or. size(component_vertices, 3) /= 4 .or. &
+          size(component_vertices, 2) /= n .or. &
+          (size(component_vertices, 3) /= 4 .and. size(component_vertices, 3) /= lmto_product_nbranch) .or. &
           size(component_vertices, 4) /= size(field) .or. &
           any(shape(operator) /= [n, n])) then
          error stop 'DRESP-09 product adjoint: shape mismatch'
@@ -302,19 +300,17 @@ contains
       allocate(term(n, n))
       operator = cmplx(0.0_rp, 0.0_rp, rp)
       do mu = 1, size(field)
-         do p = 0, 1
-            do q = 0, 1
-               component = 1 + p + 2*q
-               term = transpose(conjg(component_vertices(:, :, component, mu)))
-               if (q == 1) term = matmul(hamiltonian, term)
-               if (p == 1) term = matmul(term, hamiltonian)
-               if (conjugate_field) then
-                  coefficient = conjg(field(mu))
-               else
-                  coefficient = field(mu)
-               end if
-               operator = operator + coefficient*term
-            end do
+         do component = 1, size(component_vertices, 3)
+            call lmto_product_branch_powers(component, p, q)
+            term = transpose(conjg(component_vertices(:, :, component, mu)))
+            if (q > 0) term = matmul(hamiltonian, term)
+            if (p > 0) term = matmul(term, hamiltonian)
+            if (conjugate_field) then
+               coefficient = conjg(field(mu))
+            else
+               coefficient = field(mu)
+            end if
+            operator = operator + coefficient*term
          end do
       end do
       deallocate(term)

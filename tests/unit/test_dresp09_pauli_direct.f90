@@ -2,8 +2,8 @@
 !
 ! The test constructs the accepted large-component radial representation, fills
 ! every L=0..4/M mode with a mixed complex compact field, reconstructs its
-! contravariant raw source field independently, and compares all B00/B01/B10/
-! B11 branches against the compact adjoint.  It never calls the production
+! contravariant raw source field independently, and compares all six endpoint
+! branches against the compact adjoint.  It never calls the production
 ! Pauli transition evaluator.
 program test_dresp09_pauli_direct
    use precision_mod, only: rp
@@ -23,7 +23,7 @@ program test_dresp09_pauli_direct
    integer, parameter :: nr = 51, lmax = 2, response_lmax = 4
    real(rp), parameter :: mesh_a = 0.03_rp, mesh_b = 0.10_rp, nuclear_z = 1.0_rp
    real(rp), parameter :: tolerance = 3.0e-11_rp
-   real(rp) :: radius(nr), branch_error(4), operator_error(2), coverage_error
+   real(rp) :: radius(nr), branch_error(6), operator_error(2), coverage_error
    type(lmto_radial_basis) :: radial
    type(response_space_layout) :: space
    type(lmto_product_response_basis) :: product_plus, product_minus
@@ -53,8 +53,8 @@ program test_dresp09_pauli_direct
    call reconstruct_dual_source(space, product_plus, compact_plus, source_plus)
    call reconstruct_dual_source(space, product_minus, compact_minus, source_minus)
 
-   allocate(direct_components(size(hamiltonian, 1), size(hamiltonian, 2), 4), &
-      expected(size(hamiltonian, 1), size(hamiltonian, 2), 4), &
+   allocate(direct_components(size(hamiltonian, 1), size(hamiltonian, 2), 6), &
+      expected(size(hamiltonian, 1), size(hamiltonian, 2), 6), &
       direct_operator(size(hamiltonian, 1), size(hamiltonian, 2)), &
       compact_operator(size(hamiltonian, 1), size(hamiltonian, 2)))
    branch_error = 0.0_rp
@@ -79,12 +79,12 @@ program test_dresp09_pauli_direct
    failed = maxval(branch_error) > tolerance .or. maxval(operator_error) > tolerance .or. coverage_error > tolerance
    if (failed) then
       write (*, '(a)') 'UnitDresp09PauliDirect: FAIL'
-      write (*, '(a,4(es12.4,1x))') '  B00/B01/B10/B11=', branch_error
+      write (*, '(a,6(es12.4,1x))') '  B00/B10/B01/B11/B20/B02=', branch_error
       write (*, '(a,2(es12.4,1x))') '  plus/minus_operator=', operator_error
       write (*, '(a,es12.4)') '  mixed_LM_coverage=', coverage_error
       error stop 1
    end if
-   write (*, '(a,4(es12.4,1x))') '  B00/B01/B10/B11=', branch_error
+   write (*, '(a,6(es12.4,1x))') '  B00/B10/B01/B11/B20/B02=', branch_error
    write (*, '(a,2(es12.4,1x))') '  plus/minus_operator=', operator_error
    write (*, '(a,es12.4)') '  mixed_LM_coverage=', coverage_error
    write (*, '(a)') 'UnitDresp09PauliDirect: PASS (independent Pauli projection; L=0..4; complex M; duality closure)'
@@ -175,7 +175,7 @@ contains
       do mu = 1, size(compact)
          if (abs(compact(mu)) == 0.0_rp) coverage = max(coverage, 1.0_rp)
       end do
-      do component = 1, 4
+      do component = 1, 6
          expected = cmplx(0.0_rp, 0.0_rp, rp)
          do mu = 1, size(compact)
             expected = expected + conjg(compact(mu))*transpose(conjg(vertices(:, :, component, mu)))

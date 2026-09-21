@@ -21,6 +21,8 @@ module lr_projected_reciprocal_chi0_mod
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_channel_plus, lr_channel_minus, &
       lr_fermi_dirac_occupation
    use lr_gf_susceptibility_mod, only: build_weighted_resolvent
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_max_gf_moment, &
+      lmto_product_branch_powers, lmto_product_energy_power
    implicit none
    private
 
@@ -454,9 +456,9 @@ contains
 
       result%susceptibility = cmplx(0.0_rp, 0.0_rp, rp)
       result%integration_points = ne
-      result%endpoint_transform_calls = int(left_state%nk*contract%nsite*4, int64)
+      result%endpoint_transform_calls = int(left_state%nk*contract%nsite*lmto_product_nbranch, int64)
 
-      ! P2/P3: combine the affine endpoint vertex with the eigenvectors once
+      ! P2/P3: combine the second-order endpoint vertex with the eigenvectors once
       ! per k.  All later work is a site-space outer product over the same
       ! explicit GF energy mesh.
       do ik = 1, left_state%nk
@@ -624,7 +626,7 @@ contains
       nleft = left_state%nbands
       nright = right_state%nbands
       nsite = size(vertices, 4)
-      if (size(vertices, 2) /= nbasis .or. size(vertices, 3) /= 4 .or. size(transitions, 1) /= nleft .or. &
+      if (size(vertices, 2) /= nbasis .or. size(vertices, 3) /= lmto_product_nbranch .or. size(transitions, 1) /= nleft .or. &
           size(transitions, 2) /= nright .or. size(transitions, 3) /= nsite .or. left_state%nbasis /= nbasis .or. &
           right_state%nbasis /= nbasis) then
          error stop 'build_projected_eigenbasis_transitions: shape mismatch'
@@ -636,21 +638,18 @@ contains
       allocate(projected_vertex(nbasis, nright), band_vertex(nleft, nright))
       transitions = cmplx(0.0_rp, 0.0_rp, rp)
       do site = 1, nsite
-         do component = 1, 4
-            left_power = mod(component - 1, 2)
-            right_power = (component - 1)/2
+         do component = 1, lmto_product_nbranch
+            call lmto_product_branch_powers(component, left_power, right_power)
             projected_vertex = matmul(vertices(:, :, component, site), right_state%eigenvectors(:, :, ik))
             band_vertex = matmul(conjg(transpose(left_state%eigenvectors(:, :, ik))), projected_vertex)
-            if (left_power == 1) then
-               do ib_left = 1, nleft
-                  band_vertex(ib_left, :) = band_vertex(ib_left, :)*left_state%eigenvalues(ib_left, ik)
-               end do
-            end if
-            if (right_power == 1) then
-               do ib_right = 1, nright
-                  band_vertex(:, ib_right) = band_vertex(:, ib_right)*right_state%eigenvalues(ib_right, ik)
-               end do
-            end if
+            do ib_left = 1, nleft
+               band_vertex(ib_left, :) = band_vertex(ib_left, :)* &
+                  lmto_product_energy_power(left_state%eigenvalues(ib_left, ik), left_power)
+            end do
+            do ib_right = 1, nright
+               band_vertex(:, ib_right) = band_vertex(:, ib_right)* &
+                  lmto_product_energy_power(right_state%eigenvalues(ib_right, ik), right_power)
+            end do
             transitions(:, :, site) = transitions(:, :, site) + band_vertex
          end do
       end do
@@ -729,8 +728,12 @@ contains
       call system_clock(stage_start)
       allocate(result%susceptibility(contract%nsite, contract%nsite, size(request%frequencies)), &
          result%frequencies(size(request%frequencies)), &
-         left_gr(nbasis, nbasis, 3), left_ga(nbasis, nbasis, 3), left_a(nbasis, nbasis, 3), &
-         right_gr(nbasis, nbasis, 3), right_ga(nbasis, nbasis, 3), right_a(nbasis, nbasis, 3))
+         left_gr(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+         left_ga(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+         left_a(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+         right_gr(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+         right_ga(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+         right_a(nbasis, nbasis, lmto_product_max_gf_moment + 1))
       if (request%diagnostics) then
          allocate(result%kubo_term_one(contract%nsite, contract%nsite, size(request%frequencies)), &
             result%kubo_term_two(contract%nsite, contract%nsite, size(request%frequencies)), &
@@ -907,13 +910,11 @@ contains
       if (size(vertices, 4) /= size(response, 1) .or. size(response, 2) /= size(response, 1)) then
          error stop 'accumulate_projected_gf_bubble: site response shape mismatch'
       end if
-      do component_i = 1, 4
-         left_power_i = mod(component_i - 1, 2)
-         right_power_i = (component_i - 1)/2
+      do component_i = 1, lmto_product_nbranch
+         call lmto_product_branch_powers(component_i, left_power_i, right_power_i)
          if (maxval(abs(vertices(:, :, component_i, :))) == 0.0_rp) cycle
-         do component_j = 1, 4
-            left_power_j = mod(component_j - 1, 2)
-            right_power_j = (component_j - 1)/2
+         do component_j = 1, lmto_product_nbranch
+            call lmto_product_branch_powers(component_j, left_power_j, right_power_j)
             if (maxval(abs(vertices(:, :, component_j, :))) == 0.0_rp) cycle
             combined_left = left_power_i + left_power_j + 1
             combined_right = right_power_i + right_power_j + 1

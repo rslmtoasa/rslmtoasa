@@ -24,6 +24,7 @@ module lr_projected_site_spin_mod
    use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state
    use lr_lmto_product_response_basis_mod, only: lmto_product_channel_plus, &
       lmto_product_channel_minus, lmto_product_response_basis
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch
    implicit none
    private
 
@@ -305,13 +306,13 @@ contains
       end do
    end subroutine projected_direct_transition_amplitudes
 
-   !> Build the four affine endpoint components of the selected, site-integrated
+   !> Build the six second-order endpoint components of the selected, site-integrated
    !> DRESP-01 operator in coefficient space.  This is the GF-facing form of
    !> the same operator used by transition_amplitudes; it contains no energy
    !> denominator and no response accumulation.
    !>
-   !> Component ordering is `1+p+2*q`, where p is the left endpoint power and
-   !> q is the right endpoint power.  The returned tensor is indexed as
+   !> Component ordering is the authoritative `00,10,01,11,20,02` branch map.
+   !> The returned tensor is indexed as
    !> `(coefficient-left, coefficient-right, component, site)`.
    subroutine projected_site_component_vertex_tensor(this, product, vertices)
       class(projected_site_spin_contract), intent(in) :: this
@@ -326,7 +327,7 @@ contains
       allocate(functionals(product%product_dimension, this%nsite))
       call this%site_integration_functional(product, functionals)
       nbasis = size(product_vertices, 1)
-      allocate(vertices(nbasis, nbasis, 4, this%nsite))
+      allocate(vertices(nbasis, nbasis, lmto_product_nbranch, this%nsite))
       vertices = cmplx(0.0_rp, 0.0_rp, rp)
       do site = 1, this%nsite
          do flat = 1, product%product_dimension

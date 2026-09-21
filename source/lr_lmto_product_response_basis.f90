@@ -16,17 +16,31 @@ module lr_lmto_product_response_basis_mod
    use response_angular_basis_mod, only: response_gaunt
    use lr_response_space_mod, only: response_space_layout
    use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state
+   use lr_lmto_endpoint_branches_mod, only: endpoint_branch_00 => lmto_product_branch_00, &
+      endpoint_branch_10 => lmto_product_branch_10, endpoint_branch_01 => lmto_product_branch_01, &
+      endpoint_branch_11 => lmto_product_branch_11, endpoint_branch_20 => lmto_product_branch_20, &
+      endpoint_branch_02 => lmto_product_branch_02, endpoint_nbranch => lmto_product_nbranch, &
+      lmto_product_branch_powers, lmto_product_branch_valid, lmto_product_energy_power, &
+      lmto_product_second_order_radial_branch
    implicit none
    private
 
    integer, parameter, public :: lmto_product_channel_plus = 1
    integer, parameter, public :: lmto_product_channel_minus = 2
+   integer, parameter, public :: lmto_product_branch_00 = endpoint_branch_00
+   integer, parameter, public :: lmto_product_branch_10 = endpoint_branch_10
+   integer, parameter, public :: lmto_product_branch_01 = endpoint_branch_01
+   integer, parameter, public :: lmto_product_branch_11 = endpoint_branch_11
+   integer, parameter, public :: lmto_product_branch_20 = endpoint_branch_20
+   integer, parameter, public :: lmto_product_branch_02 = endpoint_branch_02
+   integer, parameter, public :: lmto_product_nbranch = endpoint_nbranch
 
    type, public :: lmto_product_candidate
       integer :: l = 0
       integer :: lp = 0
       integer :: p = 0
       integer :: q = 0
+      integer :: branch = 0
    end type lmto_product_candidate
 
    type, public :: lmto_product_block
@@ -64,6 +78,10 @@ module lr_lmto_product_response_basis_mod
       integer :: npoint = 0
       integer :: unpruned_dimension = 0
       integer :: product_dimension = 0
+      character(len=16) :: product_radial_order = 'second'
+      integer :: product_endpoint_branches = lmto_product_nbranch
+      character(len=32) :: product_branch_labels = '00,10,01,11,20,02'
+      integer :: maximum_gf_energy_moment = 4
       type(lmto_product_block), allocatable :: blocks(:, :)
    contains
       procedure :: initialize => lmto_product_response_basis_initialize
@@ -76,6 +94,7 @@ module lr_lmto_product_response_basis_mod
 
    public :: lmto_product_candidate_count
    public :: lmto_enumerate_product_candidates
+   public :: lmto_product_branch_powers
 
    interface
       subroutine zgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, rwork, info)
@@ -99,7 +118,7 @@ contains
       count = 0
       do l = 0, lmax
          do lp = 0, lmax
-            if (allowed_pair(l, lp, response_l)) count = count + 4
+            if (allowed_pair(l, lp, response_l)) count = count + lmto_product_nbranch
          end do
       end do
    end function lmto_product_candidate_count
@@ -107,18 +126,17 @@ contains
    subroutine lmto_enumerate_product_candidates(lmax, response_l, candidates)
       integer, intent(in) :: lmax, response_l
       type(lmto_product_candidate), allocatable, intent(out) :: candidates(:)
-      integer :: l, lp, p, q, k
+      integer :: l, lp, p, q, branch, k
 
       allocate(candidates(lmto_product_candidate_count(lmax, response_l)))
       k = 0
       do l = 0, lmax
          do lp = 0, lmax
             if (.not. allowed_pair(l, lp, response_l)) cycle
-            do p = 0, 1
-               do q = 0, 1
-                  k = k + 1
-                  candidates(k) = lmto_product_candidate(l, lp, p, q)
-               end do
+            do branch = lmto_product_branch_00, lmto_product_branch_02
+               call lmto_product_branch_powers(branch, p, q)
+               k = k + 1
+               candidates(k) = lmto_product_candidate(l, lp, p, q, branch)
             end do
          end do
       end do
@@ -232,7 +250,7 @@ contains
       do k = 1, ncandidate
          do ir = 1, nr
             a(ir, k) = cmplx(radial_product(radial, ir, candidates(k)%l, candidates(k)%lp, &
-               circular_channel, candidates(k)%p, candidates(k)%q), 0.0_rp, rp)
+               circular_channel, candidates(k)%branch), 0.0_rp, rp)
          end do
          column_norms(k) = sqrt(sum(space%radial_weights*real(a(:, k)*conjg(a(:, k)), rp)))
          if (.not. ieee_is_finite(column_norms(k)) .or. column_norms(k) <= tiny(1.0_rp)) then
@@ -359,6 +377,7 @@ contains
       integer :: norb, offset, iorb, jorb, spin_left, spin_right, k, ncandidate
       integer :: orbital_l, orbital_lp, orbital_m, orbital_mp
       real(rp) :: left_power, right_power
+      integer :: branch
 
       if (.not. allocated(this%blocks)) error stop 'lmto_product_response_basis: representation is uninitialized'
       if (site < 1 .or. site > this%nsite .or. response_l < 0 .or. response_l > this%response_lmax .or. &
@@ -382,6 +401,10 @@ contains
       end if
       coefficients = cmplx(0.0_rp, 0.0_rp, rp)
       do k = 1, ncandidate
+         branch = this%blocks(site, response_l)%candidates(k)%branch
+         if (.not. lmto_product_branch_valid(branch)) then
+            error stop 'lmto_product_response_basis: candidate has invalid endpoint branch'
+         end if
          if (present(selected_l)) then
             if (this%blocks(site, response_l)%candidates(k)%l < lbound(selected_l, 1) .or. &
                 this%blocks(site, response_l)%candidates(k)%l > ubound(selected_l, 1) .or. &
@@ -390,10 +413,10 @@ contains
                 .not. selected_l(this%blocks(site, response_l)%candidates(k)%l) .or. &
                 .not. selected_l(this%blocks(site, response_l)%candidates(k)%lp)) cycle
          end if
-         left_power = 1.0_rp
-         right_power = 1.0_rp
-         if (this%blocks(site, response_l)%candidates(k)%p == 1) left_power = left_state%energy
-         if (this%blocks(site, response_l)%candidates(k)%q == 1) right_power = right_state%energy
+         left_power = lmto_product_energy_power(left_state%energy, &
+            this%blocks(site, response_l)%candidates(k)%p)
+         right_power = lmto_product_energy_power(right_state%energy, &
+            this%blocks(site, response_l)%candidates(k)%q)
          do iorb = 1, norb
             orbital_l = lmto_orbital_l(iorb)
             if (orbital_l /= this%blocks(site, response_l)%candidates(k)%l) cycle
@@ -447,12 +470,13 @@ contains
       end do
    end subroutine lmto_product_transition_coordinates
 
-   !> Construct the four energy-moment LMTO vertex components directly in the
+   !> Construct the six energy-moment LMTO vertex components directly in the
    !> retained product representation.  The candidate map already contains
    !> the radial product information, so this routine adds only the orbital
    !> Gaunt factor and the selected circular spin block.
    !>
-   !> Component ordering is `1+p+2*q`.  The tensor is indexed as
+   !> Component ordering is the authoritative 00/10/01/11/20/02 branch map.
+   !> The tensor is indexed as
    !> `(electronic-left, electronic-right, component, product-coordinate)` and
    !> contains no point-space response allocation.
    subroutine lmto_product_component_vertex_tensor(this, vertices, selected_l)
@@ -461,7 +485,7 @@ contains
       logical, intent(in), optional :: selected_l(0:)
 
       integer :: norb, nbasis, flat, site, response_l, response_m, product_mode
-      integer :: p, q, component, k, iorb, jorb, spin_left, spin_right
+      integer :: p, q, component, branch, k, iorb, jorb, spin_left, spin_right
       integer :: orbital_l, orbital_lp, orbital_m, orbital_mp, offset
       real(rp) :: gaunt
 
@@ -470,7 +494,7 @@ contains
       end if
       norb = (this%orbital_lmax + 1)**2
       nbasis = 2*norb*this%nsite
-      allocate(vertices(nbasis, nbasis, 4, this%product_dimension))
+      allocate(vertices(nbasis, nbasis, lmto_product_nbranch, this%product_dimension))
       vertices = cmplx(0.0_rp, 0.0_rp, rp)
 
       if (this%circular_channel == lmto_product_channel_plus) then
@@ -486,12 +510,11 @@ contains
       do flat = 1, this%product_dimension
          call this%unflatten_index(flat, site, response_l, response_m, product_mode)
          offset = (site - 1)*2*norb
-         do p = 0, 1
-            do q = 0, 1
-               component = 1 + p + 2*q
+         do branch = lmto_product_branch_00, lmto_product_branch_02
+            call lmto_product_branch_powers(branch, p, q)
+            component = branch
                do k = 1, this%blocks(site, response_l)%ncandidate
-                  if (this%blocks(site, response_l)%candidates(k)%p /= p .or. &
-                      this%blocks(site, response_l)%candidates(k)%q /= q) cycle
+                  if (this%blocks(site, response_l)%candidates(k)%branch /= branch) cycle
                   orbital_l = this%blocks(site, response_l)%candidates(k)%l
                   orbital_lp = this%blocks(site, response_l)%candidates(k)%lp
                   if (present(selected_l)) then
@@ -515,28 +538,14 @@ contains
                      end do
                   end do
                end do
-            end do
          end do
       end do
    end subroutine lmto_product_component_vertex_tensor
 
-   pure real(rp) function endpoint_component(radial, ir, l, spin, power) result(value)
+   real(rp) function radial_product(radial, ir, l, lp, circular_channel, branch) result(value)
       type(lmto_radial_basis), intent(in) :: radial
-      integer, intent(in) :: ir, l, spin, power
-
-      if (power == 0) then
-         value = radial%phi_large(ir, l + 1, spin) - radial%enu_work(l + 1, spin)* &
-            radial%phidot_large(ir, l + 1, spin)
-      else
-         value = radial%phidot_large(ir, l + 1, spin)
-      end if
-   end function endpoint_component
-
-   real(rp) function radial_product(radial, ir, l, lp, circular_channel, p, q) result(value)
-      type(lmto_radial_basis), intent(in) :: radial
-      integer, intent(in) :: ir, l, lp, circular_channel, p, q
+      integer, intent(in) :: ir, l, lp, circular_channel, branch
       integer :: spin_left, spin_right
-      real(rp) :: first, second, rfirst, rsecond
 
       if (circular_channel == lmto_product_channel_plus) then
          spin_left = 1
@@ -545,21 +554,7 @@ contains
          spin_left = 2
          spin_right = 1
       end if
-      if (ir /= 1) then
-         if (radial%rofi(ir) <= tiny(1.0_rp)) error stop 'lmto_product_response_basis: invalid radial point'
-         value = endpoint_component(radial, ir, l, spin_left, p)*endpoint_component(radial, ir, lp, spin_right, q)/ &
-            radial%rofi(ir)**2
-         return
-      end if
-      if (l /= 0 .or. lp /= 0) then
-         value = 0.0_rp
-         return
-      end if
-      rfirst = radial%rofi(2)
-      rsecond = radial%rofi(3)
-      first = endpoint_component(radial, 2, l, spin_left, p)*endpoint_component(radial, 2, lp, spin_right, q)/rfirst**2
-      second = endpoint_component(radial, 3, l, spin_left, p)*endpoint_component(radial, 3, lp, spin_right, q)/rsecond**2
-      value = (first*rsecond**2 - second*rfirst**2)/(rsecond**2 - rfirst**2)
+      call lmto_product_second_order_radial_branch(radial, ir, l, lp, spin_left, spin_right, branch, value)
    end function radial_product
 
 end module lr_lmto_product_response_basis_mod

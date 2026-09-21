@@ -17,6 +17,8 @@ module lr_gf_susceptibility_mod
    use lr_response_space_mod, only: response_space_layout, response_raw_to_canonical
    use lr_pauli_transition_vertex_mod, only: pauli_vertex_capabilities, pauli_sigma_plus_matrix, &
       pauli_sigma_minus_matrix
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_max_gf_moment, &
+      lmto_product_branch_powers, lmto_product_second_order_radial_branch, lmto_product_energy_power
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_result, &
       lr_channel_plus, lr_channel_minus, lr_fermi_dirac_occupation
    implicit none
@@ -47,6 +49,7 @@ module lr_gf_susceptibility_mod
 
    public :: evaluate_lr_gf_susceptibility
    public :: build_weighted_resolvent
+   public :: energy_power
 
 contains
 
@@ -103,8 +106,12 @@ contains
       weight_sum = sum(left_state%k_weights)
 
       allocate(raw(space%ndim, space%ndim, nfrequency), &
-               left_gr(nbasis, nbasis, 3), left_ga(nbasis, nbasis, 3), left_a(nbasis, nbasis, 3), &
-               right_gr(nbasis, nbasis, 3), right_ga(nbasis, nbasis, 3), right_a(nbasis, nbasis, 3))
+               left_gr(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+               left_ga(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+               left_a(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+               right_gr(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+               right_ga(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+               right_a(nbasis, nbasis, lmto_product_max_gf_moment + 1))
       raw = cmplx(0.0_rp, 0.0_rp, rp)
 
       ! Fixed composite Simpson quadrature is intentional.  The GF route is
@@ -160,9 +167,9 @@ contains
          ' integration_points=', ne, ' integration_eta=', integration_eta
    end subroutine evaluate_lr_gf_susceptibility
 
-   !> Build G^(p)(z)=sum_n eps_n^p |n><n|/(z-eps_n), p=0,1,2.
-   !> The p>0 moments are required because the LMTO transition vertex is
-   !> affine in each endpoint energy.  This remains a resolvent evaluation;
+   !> Build G^(p)(z)=sum_n eps_n^p |n><n|/(z-eps_n), through the requested
+   !> output order.  The p>0 moments are required because the LMTO transition
+   !> vertex is polynomial in each endpoint energy.  This remains a resolvent evaluation;
    !> no LR-06 transition or susceptibility accumulator is called.
    subroutine build_weighted_resolvent(state, ik, z, weighted_green)
       type(lr_electronic_state), intent(in) :: state
@@ -174,11 +181,11 @@ contains
       complex(rp) :: factor
 
       if (size(weighted_green, 1) /= state%nbasis .or. size(weighted_green, 2) /= state%nbasis .or. &
-          size(weighted_green, 3) /= 3) then
+          size(weighted_green, 3) < 1 .or. size(weighted_green, 3) > lmto_product_max_gf_moment + 1) then
          error stop 'build_weighted_resolvent: output shape mismatch'
       end if
       weighted_green = cmplx(0.0_rp, 0.0_rp, rp)
-      do power = 0, 2
+      do power = 0, size(weighted_green, 3) - 1
          do ib = 1, state%nbands
             factor = cmplx(energy_power(state%eigenvalues(ib, ik), power), 0.0_rp, rp)/ &
                      (z - state%eigenvalues(ib, ik))
@@ -208,13 +215,11 @@ contains
          error stop 'accumulate_gf_bubble: response matrix shape mismatch'
       end if
 
-      do component_i = 1, 4
-         left_power_i = mod(component_i - 1, 2)
-         right_power_i = (component_i - 1)/2
+      do component_i = 1, size(vertices, 3)
+         call lmto_product_branch_powers(component_i, left_power_i, right_power_i)
          if (maxval(abs(vertices(:, :, component_i, :))) == 0.0_rp) cycle
-         do component_j = 1, 4
-            left_power_j = mod(component_j - 1, 2)
-            right_power_j = (component_j - 1)/2
+         do component_j = 1, size(vertices, 3)
+            call lmto_product_branch_powers(component_j, left_power_j, right_power_j)
             if (maxval(abs(vertices(:, :, component_j, :))) == 0.0_rp) cycle
             combined_left = left_power_i + left_power_j + 1
             combined_right = right_power_i + right_power_j + 1
@@ -245,8 +250,8 @@ contains
       end do
    end subroutine accumulate_gf_bubble
 
-   !> V_I(E_L,E_R)=sum_{p,q=0,1} E_L^p E_R^q V_I^(p,q).
-   !> Components are stored as 1+p+2*q, matching the moment indices above.
+   !> V_I(E_L,E_R)=sum_{branch} E_L^p E_R^q V_I^(p,q), with the
+   !> authoritative six-branch map supplying (p,q).
    subroutine build_gf_vertex_tensor(space, radial_bases, operator_matrix, capabilities, vertices)
       type(response_space_layout), intent(in) :: space
       type(lmto_radial_basis), intent(in) :: radial_bases(:)
@@ -255,7 +260,7 @@ contains
       complex(rp), allocatable, intent(out) :: vertices(:, :, :, :)
 
       type(response_super_index) :: item
-      integer :: nbasis, norb, flat, p, q, component, isite, iorb, jorb, ispin, jspin
+      integer :: nbasis, norb, flat, p, q, component, branch, isite, iorb, jorb, ispin, jspin
       integer :: orbital_l, orbital_lp, left_offset, right_offset
       real(rp) :: radial_product
 
@@ -264,7 +269,7 @@ contains
          capabilities%orthogonal, capabilities%collinear, capabilities%has_soc, capabilities%has_extra_operator)
       norb = (radial_bases(1)%lmax + 1)**2
       nbasis = 2*norb*space%nsite
-      allocate(vertices(nbasis, nbasis, 4, space%ndim))
+      allocate(vertices(nbasis, nbasis, lmto_product_nbranch, space%ndim))
       vertices = cmplx(0.0_rp, 0.0_rp, rp)
 
       do flat = 1, space%ndim
@@ -274,17 +279,17 @@ contains
          isite = item%site
          left_offset = (isite - 1)*2*norb
          right_offset = left_offset
-         do p = 0, 1
-            do q = 0, 1
-               component = 1 + p + 2*q
+         do branch = 1, lmto_product_nbranch
+            call lmto_product_branch_powers(branch, p, q)
+            component = branch
                do iorb = 1, norb
                   orbital_l = lmto_orbital_l(iorb)
                   do jorb = 1, norb
                      orbital_lp = lmto_orbital_l(jorb)
                      do ispin = 1, 2
                         do jspin = 1, 2
-                           radial_product = radial_vertex_component(radial_bases(isite), item%radial_point, &
-                              orbital_l, orbital_lp, ispin, jspin, p, q)
+                           call lmto_product_second_order_radial_branch(radial_bases(isite), item%radial_point, &
+                              orbital_l, orbital_lp, ispin, jspin, branch, radial_product)
                            vertices(left_offset + (ispin - 1)*norb + iorb, right_offset + (jspin - 1)*norb + jorb, &
                               component, flat) = operator_matrix(ispin, jspin)*radial_product* &
                               response_gaunt(orbital_l, orbital_m(iorb, orbital_l), orbital_lp, &
@@ -293,48 +298,9 @@ contains
                      end do
                   end do
                end do
-            end do
          end do
       end do
    end subroutine build_gf_vertex_tensor
-
-   function radial_vertex_component(basis, radial_point, l, lp, ispin, jspin, p, q) result(value)
-      type(lmto_radial_basis), intent(in) :: basis
-      integer, intent(in) :: radial_point, l, lp, ispin, jspin, p, q
-      real(rp) :: value
-      real(rp) :: first, second, rfirst, rsecond
-
-      if (radial_point /= 1) then
-         if (basis%rofi(radial_point) <= tiny(1.0_rp)) then
-            error stop 'radial_vertex_component: invalid positive radial point'
-         end if
-         value = radial_component(basis, radial_point, l, ispin, p)* &
-                 radial_component(basis, radial_point, lp, jspin, q)/(basis%rofi(radial_point)**2)
-         return
-      end if
-      if (l /= 0 .or. lp /= 0) then
-         value = 0.0_rp
-         return
-      end if
-
-      rfirst = basis%rofi(2)
-      rsecond = basis%rofi(3)
-      first = radial_component(basis, 2, l, ispin, p)*radial_component(basis, 2, lp, jspin, q)/(rfirst**2)
-      second = radial_component(basis, 3, l, ispin, p)*radial_component(basis, 3, lp, jspin, q)/(rsecond**2)
-      value = (first*rsecond**2 - second*rfirst**2)/(rsecond**2 - rfirst**2)
-   end function radial_vertex_component
-
-   pure real(rp) function radial_component(basis, ir, l, ispin, power) result(value)
-      type(lmto_radial_basis), intent(in) :: basis
-      integer, intent(in) :: ir, l, ispin, power
-
-      if (power == 0) then
-         value = basis%phi_large(ir, l + 1, ispin) - basis%enu_work(l + 1, ispin)* &
-                 basis%phidot_large(ir, l + 1, ispin)
-      else
-         value = basis%phidot_large(ir, l + 1, ispin)
-      end if
-   end function radial_component
 
    pure integer function orbital_m(iorb, l) result(m)
       integer, intent(in) :: iorb, l
@@ -345,16 +311,7 @@ contains
       real(rp), intent(in) :: energy
       integer, intent(in) :: power
 
-      select case (power)
-      case (0)
-         value = 1.0_rp
-      case (1)
-         value = energy
-      case (2)
-         value = energy*energy
-      case default
-         error stop 'energy_power: unsupported moment order'
-      end select
+      value = lmto_product_energy_power(energy, power)
    end function energy_power
 
    subroutine validate_gf_inputs(space, radial_bases, left_state, right_state, request, channel_kind)

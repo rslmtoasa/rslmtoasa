@@ -978,6 +978,12 @@ if (RUN_UNIT_TESTS)
     LABELS "integration;tddft;tdvk-03;accepted-state;product-gf;closure"
     DISABLED TRUE
     TIMEOUT 7200)
+  add_test(NAME TddftDresp10AGfSpot
+    COMMAND ${TestBinary} input_dresp10a_gf_spot_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp10AGfSpot PROPERTIES
+    LABELS "integration;tddft;dresp-10a;accepted-state;product-gf;bounded-spot"
+    TIMEOUT 900)
   add_test(NAME TddftProductFiniteQ
     COMMAND ${TestBinary} input_tdvk04_fe.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)

@@ -18,7 +18,7 @@ program test_lr_lmto_product_response
    use lr_pauli_transition_vertex_mod, only: pauli_vertex_capabilities, pauli_endpoint_state, &
       pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
    use lr_lmto_product_response_basis_mod, only: lmto_product_channel_plus, lmto_product_channel_minus, &
-      lmto_product_candidate, lmto_product_response_basis
+      lmto_product_candidate, lmto_product_response_basis, lmto_product_nbranch, lmto_product_branch_powers
    implicit none
 
    integer, parameter :: nr = 51, lmax = 2, nsite = 1, norb = (lmax + 1)**2, nstate = 2*norb, ntransition = 4
@@ -70,10 +70,10 @@ program test_lr_lmto_product_response
    call product_plus%initialize(space_spd, [radial_spd], lmto_product_channel_plus, .false.)
    call product_minus%initialize(space_spd, [radial_spd], lmto_product_channel_minus, .false.)
    call product_reduced%initialize(space_spd_reduced, [radial_spd], lmto_product_channel_plus, .false.)
-   call check_inventory(product_sp, 1, [8, 8, 4], 52, failed)
-   call check_inventory(product_plus, 2, [12, 16, 16, 8, 4], 232, failed)
-   call check_inventory(product_minus, 2, [12, 16, 16, 8, 4], 232, failed)
-   call check_inventory(product_reduced, 2, [12, 16, 16], 140, failed)
+   call check_inventory(product_sp, 1, [12, 12, 6], 78, failed)
+   call check_inventory(product_plus, 2, [18, 24, 24, 12, 6], 348, failed)
+   call check_inventory(product_minus, 2, [18, 24, 24, 12, 6], 348, failed)
+   call check_inventory(product_reduced, 2, [18, 24, 24], 210, failed)
    call check_flat_mapping(product_sp, failed)
    call check_flat_mapping(product_plus, failed)
    call check_flat_mapping(product_minus, failed)
@@ -119,7 +119,7 @@ contains
       real(rp) :: potential(size(mesh)), energy
       real(rp), allocatable :: g(:, :), gp(:, :), gpp(:, :)
       real(rp), allocatable :: gpack(:), gdotpack(:), gddotpack(:)
-      integer :: ispin, l
+      integer :: ispin, l, ir
 
       potential = 0.0_rp
       call basis%initialize(size(mesh), basis_lmax, 2)
@@ -132,6 +132,10 @@ contains
             gddotpack = reshape(gpp, [2*size(mesh)])
             call basis%capture_channel(l, ispin, energy, mesh, potential, mesh_a, mesh_b, nuclear_z, &
                gpack, gdotpack, gddotpack, energy)
+            do ir = 1, size(mesh)
+               basis%phiddot_large(ir, l + 1, ispin) = (0.002_rp + 0.0003_rp*real(l + ispin, rp))* &
+                  (1.0_rp + 0.17_rp*mesh(ir) + 0.013_rp*real(ir - 1, rp)**2)
+            end do
          end do
       end do
    end subroutine setup_radial_basis
@@ -167,7 +171,7 @@ contains
       type(lmto_product_response_basis), intent(in) :: product
       integer, intent(in) :: basis_lmax, expected_counts(:), expected_total
       logical, intent(inout) :: failed
-      integer :: response_l, k, pair_index, p, q, npair
+      integer :: response_l, k, pair_index, p, q, branch, npair
       integer :: pair_l(9), pair_lp(9)
 
       if (product%unpruned_dimension /= expected_total .or. product%product_dimension < 1) failed = .true.
@@ -175,15 +179,16 @@ contains
       do response_l = 0, product%response_lmax
          if (product%blocks(1, response_l)%ncandidate /= expected_counts(response_l + 1)) failed = .true.
          call expected_pairs(basis_lmax, response_l, pair_l, pair_lp, npair)
-         if (4*npair /= product%blocks(1, response_l)%ncandidate) failed = .true.
+         if (lmto_product_nbranch*npair /= product%blocks(1, response_l)%ncandidate) failed = .true.
          do k = 1, product%blocks(1, response_l)%ncandidate
-            pair_index = (k - 1)/4 + 1
-            p = (mod(k - 1, 4))/2
-            q = mod(k - 1, 2)
+            pair_index = (k - 1)/lmto_product_nbranch + 1
+            branch = mod(k - 1, lmto_product_nbranch) + 1
+            call lmto_product_branch_powers(branch, p, q)
             if (product%blocks(1, response_l)%candidates(k)%l /= pair_l(pair_index) .or. &
                 product%blocks(1, response_l)%candidates(k)%lp /= pair_lp(pair_index) .or. &
                 product%blocks(1, response_l)%candidates(k)%p /= p .or. &
-                product%blocks(1, response_l)%candidates(k)%q /= q) then
+                product%blocks(1, response_l)%candidates(k)%q /= q .or. &
+                product%blocks(1, response_l)%candidates(k)%branch /= branch) then
                failed = .true.
             end if
          end do
@@ -428,6 +433,7 @@ contains
       type(lmto_product_candidate), intent(in) :: candidate
       integer :: spin_left, spin_right
       real(rp) :: first, second, rfirst, rsecond
+      real(rp) :: phi_l, phi_r, dot_l, dot_r, ddot_l, ddot_r, enu_l, enu_r
 
       if (circular_channel == lmto_product_channel_plus) then
          spin_left = 1
@@ -437,8 +443,32 @@ contains
          spin_right = 1
       end if
       if (ir /= 1) then
-         value = endpoint(radial, ir, candidate%l, spin_left, candidate%p)* &
-            endpoint(radial, ir, candidate%lp, spin_right, candidate%q)/radial%rofi(ir)**2
+         phi_l = radial%phi_large(ir, candidate%l + 1, spin_left)
+         phi_r = radial%phi_large(ir, candidate%lp + 1, spin_right)
+         dot_l = radial%phidot_large(ir, candidate%l + 1, spin_left)
+         dot_r = radial%phidot_large(ir, candidate%lp + 1, spin_right)
+         ddot_l = radial%phiddot_large(ir, candidate%l + 1, spin_left)
+         ddot_r = radial%phiddot_large(ir, candidate%lp + 1, spin_right)
+         enu_l = radial%enu_work(candidate%l + 1, spin_left)
+         enu_r = radial%enu_work(candidate%lp + 1, spin_right)
+         select case (candidate%branch)
+         case (1)
+            value = phi_l*phi_r - enu_l*dot_l*phi_r - enu_r*phi_l*dot_r + enu_l*enu_r*dot_l*dot_r + &
+               0.5_rp*enu_l**2*ddot_l*phi_r + 0.5_rp*enu_r**2*phi_l*ddot_r
+         case (2)
+            value = dot_l*phi_r - enu_r*dot_l*dot_r - enu_l*ddot_l*phi_r
+         case (3)
+            value = phi_l*dot_r - enu_l*dot_l*dot_r - enu_r*phi_l*ddot_r
+         case (4)
+            value = dot_l*dot_r
+         case (5)
+            value = 0.5_rp*ddot_l*phi_r
+         case (6)
+            value = 0.5_rp*phi_l*ddot_r
+         case default
+            error stop 'UnitLrLmtoProduct: invalid branch in independent oracle'
+         end select
+         value = value/radial%rofi(ir)**2
          return
       end if
       if (candidate%l /= 0 .or. candidate%lp /= 0) then
@@ -447,24 +477,10 @@ contains
       end if
       rfirst = radial%rofi(2)
       rsecond = radial%rofi(3)
-      first = endpoint(radial, 2, candidate%l, spin_left, candidate%p)* &
-         endpoint(radial, 2, candidate%lp, spin_right, candidate%q)/rfirst**2
-      second = endpoint(radial, 3, candidate%l, spin_left, candidate%p)* &
-         endpoint(radial, 3, candidate%lp, spin_right, candidate%q)/rsecond**2
+      first = independent_radial_product(radial, 2, candidate, circular_channel)
+      second = independent_radial_product(radial, 3, candidate, circular_channel)
       value = (first*rsecond**2 - second*rfirst**2)/(rsecond**2 - rfirst**2)
    end function independent_radial_product
-
-   pure real(rp) function endpoint(radial, ir, l, spin, power) result(value)
-      type(lmto_radial_basis), intent(in) :: radial
-      integer, intent(in) :: ir, l, spin, power
-
-      if (power == 0) then
-         value = radial%phi_large(ir, l + 1, spin) - radial%enu_work(l + 1, spin)* &
-            radial%phidot_large(ir, l + 1, spin)
-      else
-         value = radial%phidot_large(ir, l + 1, spin)
-      end if
-   end function endpoint
 
    character(len=5) function channel_name(circular_channel) result(value)
       integer, intent(in) :: circular_channel
