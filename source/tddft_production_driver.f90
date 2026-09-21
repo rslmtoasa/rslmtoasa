@@ -1035,6 +1035,7 @@ contains
       type(radial_ground_state), pointer :: ground_states(:)
       type(lmto_radial_basis), allocatable, target :: radial_bases(:)
       type(response_space_layout), target :: response_space
+      type(lmto_product_response_basis) :: compact_audit_product
       type(lr_electronic_state), target :: left_state
       type(lr_electronic_state), allocatable, target :: endpoints(:)
       type(tddft_production_result) :: result
@@ -1117,7 +1118,11 @@ contains
          if (.not. use_accepted_kspace_scf) then
             error stop 'DRESP-09ZS compact_span_audit requires the accepted k-space SCF handoff'
          end if
-         call run_dresp09zs_compact_span_audit(trim(config%output_file), response_space, radial_bases)
+         ! Initialize the exact live production representation before the
+         ! diagnostic so S4_prod is sourced from weighted_modes rather than
+         ! reconstructed as a shadow space.
+         call compact_audit_product%initialize(response_space, radial_bases, lmto_product_channel_plus, .true.)
+         call run_dresp09zs_compact_span_audit(trim(config%output_file), response_space, radial_bases, compact_audit_product)
          return
       end if
       call lr_snapshot_from_reciprocal(reciprocal_obj, left_state)

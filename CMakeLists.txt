@@ -951,13 +951,13 @@ if (RUN_UNIT_TESTS)
     COMMAND ${TestBinary} input_dresp09zs_fe.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
   set_tests_properties(TddftDresp09ZSCompactSpan PROPERTIES
-    LABELS "integration;tddft;dresp-09zs;compact-span;svd;arbitrary-L;accepted-state;64-k"
+    LABELS "integration;tddft;dresp-09zsr;compact-span;svd;arbitrary-L;production-span;accepted-state;64-k"
     TIMEOUT 900)
   add_test(NAME Dresp09ZSFeArtifact
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/dresp09zs_fe_artifact.py" "/tmp/dresp09zs_fe_4k.dat")
   set_tests_properties(Dresp09ZSFeArtifact PROPERTIES
     DEPENDS TddftDresp09ZSCompactSpan
-    LABELS "validation;dresp-09zs;artifact;compact-span;pass-b"
+    LABELS "validation;dresp-09zsr;artifact;compact-span;pass-a"
     TIMEOUT 30)
   add_test(NAME TddftProductionDriverFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml

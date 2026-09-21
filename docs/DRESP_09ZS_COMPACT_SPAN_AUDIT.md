@@ -1,8 +1,15 @@
 # DRESP-09ZS compact-span audit
 
-Status: **PASS-B**. The raw arbitrary-(L,M) scalar-relativistic vertex is
-closed, but the historical four-branch product space is not closed for the
-complete six-branch radial construction. The required next milestone is
+> Terminology correction for DRESP-09ZS-R: the `historical four-branch` space
+> reported below is the independently generated second-order shadow
+> `S4_2nd`, not the live production `S4_prod`. The original numerical results
+> are retained unchanged; the corrected live-production comparison is in
+> [DRESP_09ZSR_PRODUCTION_SPAN_RECONCILIATION.md](DRESP_09ZSR_PRODUCTION_SPAN_RECONCILIATION.md).
+
+Status: **PASS-B** (original DRESP-09ZS classification). The raw
+arbitrary-(L,M) scalar-relativistic vertex is closed, but the `S4_2nd`
+four-branch shadow is not closed for the complete six-branch radial
+construction. The required next milestone is
 therefore a product-basis extension, not a change to the accepted observable
 or to any response solver.
 
@@ -14,8 +21,8 @@ The audit is an accepted-state radial/product-space diagnostic for bcc Fe:
 |---|---|
 | state | bcc Fe, 4x4x4 (64 k points), 300 K, spd |
 | radial state | orbital `lmax=2`, response `Lmax=4`, Hamiltonian-only second order |
-| historical branches | `00/10/01/11` |
-| shadow branches | `00/10/01/11/20/02` |
+| `S4_2nd` branches | `00/10/01/11` using DRESP-09X second-order coefficients |
+| `S6_2nd` branches | `00/10/01/11/20/02` using DRESP-09X second-order coefficients |
 | metric | production LR-04 response-space radial weights |
 | decomposition | direct LAPACK `zgesvd` on `W**(1/2) B D**(-1)` |
 | downstream physics | not entered: no `chi0`, Dyson, ALSDA, Ward, spectra, BES, or Halle |
@@ -26,8 +33,9 @@ Halle paths.
 
 ## Candidate inventory and retained rank
 
-Candidate counts are inventories, not dimensions. The historical four-branch
-inventory has 232 candidates and the six-branch shadow has 348 candidates;
+Candidate counts are inventories, not dimensions. The second-order four-branch
+`S4_2nd` inventory has 232 candidates and the six-branch `S6_2nd` shadow has
+348 candidates;
 the new `20/02` branches contribute 116 candidates. With
 
 `tau1 = max(npoint,ncandidate) * epsilon * sigma_max`,
@@ -35,7 +43,7 @@ the new `20/02` branches contribute 116 candidates. With
 and `tau10=10*tau1`, `tau100=100*tau1`, all candidates remain retained in
 this Fe state at all three thresholds:
 
-| product `K` | old candidates | old rank (`tau1/tau10/tau100`) | six candidates | six rank (`tau1/tau10/tau100`) |
+| product `K` | `S4_2nd` candidates | `S4_2nd` rank (`tau1/tau10/tau100`) | `S6_2nd` candidates | `S6_2nd` rank (`tau1/tau10/tau100`) |
 |---:|---:|---:|---:|---:|
 | 0 | 12 | 12 / 12 / 12 | 18 | 18 / 18 / 18 |
 | 1 | 16 | 16 / 16 / 16 | 24 | 24 / 24 / 24 |
@@ -50,8 +58,8 @@ singular values by `K` are `1.49e-9`, `1.24e-10`, `1.39e-10`, `2.14e-7`, and
 `2.53e-13`, `2.65e-13`, `2.91e-13`, `2.20e-13`, and `2.05e-13`.
 
 The principal-angle minimum singular value is `1.0` for every `K`, confirming
-that the historical space is contained in the six-branch span to numerical
-precision. The maximum measured old-span-outside-six-span residual is
+that `S4_2nd` is contained in the six-branch span to numerical
+precision. The maximum measured `S4_2nd`-outside-`S6_2nd` residual is
 `1.76e-9` (RMS `3.03e-11`). The retained new-mode right-singular-vector
 composition contains both new branches at every `K`; their aggregate weights
 (`20`, `02`) are:
@@ -66,7 +74,7 @@ K=4  0.2188810  0.0518053
 
 ## Direct projection and physical activity
 
-Direct projection of normalized `20` and `02` candidates into the historical
+Direct projection of normalized `20` and `02` candidates into `S4_2nd`
 space gives maximum residuals of `1.41e-3` and `3.91e-3`, respectively. The
 medians are `1.55e-6` and `1.55e-6`; the per-(l,l') maxima are:
 
@@ -82,11 +90,11 @@ medians are `1.55e-6` and `1.55e-6`; the per-(l,l') maxima are:
 | 2,1 | `4.76e-6` | `1.95e-4` |
 | 2,2 | `1.41e-3` | `3.91e-3` |
 
-The full six-candidate residual reaches `1.70e-3` over `K`; the global
+The full six-candidate residual against `S4_2nd` reaches `1.70e-3` over `K`; the global
 Frobenius residual is `4.56e-4`. The artifact also records all 28 new retained
 per-K right-singular-vector modes with site, dominant `(l,l')`, and normalized
 weights for `00/10/01/11/20/02`. The arbitrary-(L,M)
-physical sweep is active: the historical-span residual maxima are
+physical sweep is active: the `S4_2nd`-span residual maxima are
 
 | diagnostic | maximum residual |
 |---|---:|
@@ -114,9 +122,10 @@ verdict = PASS-B
 recommended_next_milestone = DRESP-10A
 ```
 
-This is not a numerical block. It means the radial/SVD audit is reproducible
-and physically active, while production still uses the historical basis until
-a reviewed compact six-branch basis extension is implemented.
+This is not a numerical block. It means the original `S4_2nd` radial/SVD audit
+is reproducible and physically active. It does not establish the relationship
+between the live production `S4_prod` and `S6_2nd`; that question is handled by
+DRESP-09ZS-R.
 
 ## Reproduction and tests
 
