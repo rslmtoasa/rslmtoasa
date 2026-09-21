@@ -87,6 +87,7 @@ add_library(${PROJECT_NAME} STATIC
     response_angular_basis.f90
     lr_sr_angular_vertex.f90
     lr_sr_spatial_augmentation_tangent.f90
+    lr_full_spatial_alsda.f90
     lr_dresp09z_bridge.f90
     lr_dresp09zs_compact_span.f90
     response_basis_mapping.f90
@@ -113,9 +114,11 @@ add_library(${PROJECT_NAME} STATIC
     lr_rs_gf_susceptibility.f90
     lr_dresp07_radial_oracle.f90
     lr_exact_ks_ward.f90
+    lr_static_frechet_product_response.f90
     lr_dresp08_native_mapping.f90
     lr_dresp08_bridge.f90
     lr_dresp09_field_insertion.f90
+    lr_dresp10_ward_bridge.f90
     lr_dresp09_pauli_direct.f90
     lr_dresp09r_bridge.f90
     lr_dresp09s_scalar_relativistic.f90

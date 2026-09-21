@@ -682,6 +682,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitDresp06aCommensurateCovariance PROPERTIES LABELS "unit;dresp-06a;alsda;commensurate-covariance;dyson;loss;projection;hard-gate")
   add_fortran_unit_test(UnitDresp07ExactKsWard ${TestDIR}/unit/test_dresp07_exact_ks_ward.f90)
   set_tests_properties(UnitDresp07ExactKsWard PROPERTIES LABELS "unit;dresp-07;exact-ks;ward;product;factor-two;field")
+  add_fortran_unit_test(UnitLrStaticFrechetProductResponse ${TestDIR}/unit/test_lr_static_frechet_product_response.f90)
+  set_tests_properties(UnitLrStaticFrechetProductResponse PROPERTIES LABELS "unit;dresp-10;static;frechet;divided-difference;near-degenerate")
   add_fortran_unit_test(UnitDresp07RadialOracle ${TestDIR}/unit/test_dresp07_radial_oracle.f90)
   set_tests_properties(UnitDresp07RadialOracle PROPERTIES LABELS "unit;dresp-07r;radial;svd;projector;variational;negative-control")
   add_fortran_unit_test(UnitDresp08NativeSecondOrder ${TestDIR}/unit/test_dresp08_native_second_order.f90)
@@ -946,6 +948,18 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(Dresp09YFeArtifact PROPERTIES
     DEPENDS TddftDresp09YAugmentationTangent
     LABELS "validation;dresp-09y;artifact;augmentation-frame;pass-a"
+    TIMEOUT 30)
+  add_test(NAME TddftDresp10RawFullSpatialAlsdaWard
+    COMMAND ${TestBinary} input_dresp10_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp10RawFullSpatialAlsdaWard PROPERTIES
+    LABELS "integration;tddft;dresp-10;raw;full-spatial;alsda;ward;accepted-state;64-k"
+    TIMEOUT 900)
+  add_test(NAME Dresp10FeArtifact
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/dresp10_fe_artifact.py" "/tmp/dresp10_fe_4k.dat")
+  set_tests_properties(Dresp10FeArtifact PROPERTIES
+    DEPENDS TddftDresp10RawFullSpatialAlsdaWard
+    LABELS "validation;dresp-10;artifact;raw;full-spatial;frechet;blocked-mixed-operator"
     TIMEOUT 30)
   add_test(NAME TddftDresp09ZSCompactSpan
     COMMAND ${TestBinary} input_dresp09zs_fe.nml

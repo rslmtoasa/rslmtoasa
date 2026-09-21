@@ -70,6 +70,7 @@ module tddft_production_driver_mod
    use lr_dresp09x_bridge_mod, only: run_dresp09x_sr_spin_observable
    use lr_dresp09y_bridge_mod, only: run_dresp09y_augmentation_tangent
    use lr_dresp09zs_compact_span_mod, only: run_dresp09zs_compact_span_audit
+   use lr_dresp10_ward_bridge_mod, only: run_dresp10_raw_full_spatial_alsda_ward
    use lr_ward_mode_analysis_mod, only: lr_ward_mode_analysis_result, analyze_lr_ward_mode
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
@@ -114,6 +115,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_sr_spin_observable = 'sr_spin_observable'
    character(len=*), parameter, public :: tddft_driver_backend_sr_augmentation_tangent = 'sr_augmentation_tangent'
    character(len=*), parameter, public :: tddft_driver_backend_compact_span_audit = 'compact_span_audit'
+   character(len=*), parameter, public :: tddft_driver_backend_raw_full_spatial_alsda_ward = 'raw_full_spatial_alsda_ward'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -400,8 +402,9 @@ contains
           trim(config%backend) /= tddft_driver_backend_radial_observable_provenance .and. &
           trim(config%backend) /= tddft_driver_backend_sr_spin_observable .and. &
           trim(config%backend) /= tddft_driver_backend_sr_augmentation_tangent .and. &
-          trim(config%backend) /= tddft_driver_backend_compact_span_audit) then
-         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions, compact_dyson, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, pauli_projected_native, sr_l0_scalar_relativistic, moving_basis_tangent, representation_tangent, density_moment_tangent, radial_observable_provenance, sr_spin_observable, sr_augmentation_tangent, or compact_span_audit'
+          trim(config%backend) /= tddft_driver_backend_compact_span_audit .and. &
+          trim(config%backend) /= tddft_driver_backend_raw_full_spatial_alsda_ward) then
+         error stop 'TDDFT input: unsupported backend; use the documented TDDFT backends including raw_full_spatial_alsda_ward'
       end if
       if (trim(config%backend) == tddft_driver_backend_projected_mills .or. &
           trim(config%backend) == tddft_driver_backend_projected_juelich .or. &
@@ -437,8 +440,9 @@ contains
           trim(config%backend) /= tddft_driver_backend_radial_observable_provenance .and. &
           trim(config%backend) /= tddft_driver_backend_sr_spin_observable .and. &
           trim(config%backend) /= tddft_driver_backend_sr_augmentation_tangent .and. &
-          trim(config%backend) /= tddft_driver_backend_compact_span_audit .and. size(config%eta_values) /= 1) then
-         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence, static_interactions, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, pauli_projected_native, sr_l0_scalar_relativistic, moving_basis_tangent, representation_tangent, density_moment_tangent, radial_observable_provenance, sr_augmentation_tangent, or compact_span_audit'
+          trim(config%backend) /= tddft_driver_backend_compact_span_audit .and. &
+          trim(config%backend) /= tddft_driver_backend_raw_full_spatial_alsda_ward .and. size(config%eta_values) /= 1) then
+         error stop 'TDDFT input: n_eta greater than one is restricted to validation backends'
       end if
       if (trim(config%backend) == tddft_driver_backend_exact_ks_ward) then
          if (size(config%q_list, 2) /= 1 .or. sum(abs(config%q_list(:, 1))) > 1.0e-12_rp) then
@@ -537,6 +541,20 @@ contains
          end if
          if (config%response_lmax /= 4) then
             error stop 'TDDFT input: sr_augmentation_tangent requires response_lmax=4'
+         end if
+      end if
+      if (trim(config%backend) == tddft_driver_backend_raw_full_spatial_alsda_ward) then
+         if (size(config%q_list, 2) /= 1 .or. sum(abs(config%q_list(:, 1))) > 1.0e-12_rp) then
+            error stop 'TDDFT input: raw_full_spatial_alsda_ward requires one Gamma q point'
+         end if
+         if (size(config%frequencies) /= 1 .or. abs(config%frequencies(1)) > 1.0e-12_rp) then
+            error stop 'TDDFT input: raw_full_spatial_alsda_ward requires one static omega=0 point'
+         end if
+         if (config%response_lmax /= 4) then
+            error stop 'TDDFT input: raw_full_spatial_alsda_ward requires response_lmax=4'
+         end if
+         if (trim(config%interaction_route) /= tddft_driver_route_direct_alsda .or. config%goldstone_correction) then
+            error stop 'TDDFT input: DRESP-10 is raw direct ALSDA only; correction routes are forbidden'
          end if
       end if
       if (trim(config%backend) == tddft_driver_backend_projected_juelich .or. &
@@ -1055,7 +1073,8 @@ contains
          trim(config%backend) == tddft_driver_backend_product_lehmann .or. &
          trim(config%backend) == tddft_driver_backend_product_gf .or. &
          trim(config%backend) == tddft_driver_backend_product_finite_q .or. &
-         trim(config%backend) == tddft_driver_backend_product_convergence
+         trim(config%backend) == tddft_driver_backend_product_convergence .or. &
+         trim(config%backend) == tddft_driver_backend_raw_full_spatial_alsda_ward
 
       if (.not. config%enabled) return
       call validate_tddft_production_capability(config, control_obj, lattice_obj, hamiltonian_obj, reciprocal_obj)
@@ -1165,6 +1184,14 @@ contains
             error stop 'DRESP-09Y sr_augmentation_tangent requires the accepted k-space SCF handoff'
          end if
          call run_dresp09y_augmentation_tangent(trim(config%output_file), response_space, radial_bases, ground_states, &
+            reciprocal_obj, lattice_obj, hamiltonian_obj)
+         return
+      end if
+      if (trim(config%backend) == tddft_driver_backend_raw_full_spatial_alsda_ward) then
+         if (.not. use_accepted_kspace_scf) then
+            error stop 'DRESP-10 raw_full_spatial_alsda_ward requires the accepted k-space SCF handoff'
+         end if
+         call run_dresp10_raw_full_spatial_alsda_ward(trim(config%output_file), response_space, radial_bases, ground_states, &
             reciprocal_obj, lattice_obj, hamiltonian_obj)
          return
       end if
