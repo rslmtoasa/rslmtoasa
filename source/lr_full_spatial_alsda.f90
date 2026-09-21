@@ -14,8 +14,10 @@ module lr_full_spatial_alsda_mod
    use response_angular_basis_mod, only: response_angular_pi
    use lr_response_space_mod, only: response_space_layout
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
-   use lr_lmto_product_response_basis_mod, only: lmto_product_nbranch, lmto_product_branch_powers
-   use lr_sr_spatial_augmentation_tangent_mod, only: sr_spatial_branch_observable
+   use lr_lmto_product_response_basis_mod, only: lmto_product_nbranch
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_apply_branch_action, lmto_product_branch_powers
+   use lr_sr_spatial_augmentation_tangent_mod, only: sr_spatial_branch_observable, &
+      sr_spatial_l0_projected_branch_observable
    implicit none
    private
 
@@ -30,6 +32,8 @@ module lr_full_spatial_alsda_mod
    public :: lr_full_spatial_contract_components
    public :: lr_full_spatial_source
    public :: lr_full_spatial_source_pieces
+   public :: lr_full_spatial_circular_to_cartesian
+   public :: lr_full_spatial_cartesian_to_circular
 
 contains
 
@@ -46,7 +50,7 @@ contains
       complex(rp) :: upper_x(2,2), small_x(2,2), rank0_x(2,2), rank2_x(2,2), total_x(2,2)
       complex(rp) :: upper_y(2,2), small_y(2,2), rank0_y(2,2), rank2_y(2,2), total_y(2,2)
       complex(rp) :: source_matrix(2,2)
-      integer :: norb, n, flat, site, ir, iorb, jorb, l, lp, m, mp, branch, piece
+      integer :: norb, n, flat, site, ir, iorb, jorb, l, lp, m, mp, branch, source_branch, piece
       integer :: row_up, row_down, col_up, col_down, row, col
       real(rp) :: radial_weight
 
@@ -77,10 +81,25 @@ contains
                col_down = col_up + norb
 
                do branch = 1, lmto_product_nbranch
-                  call sr_spatial_branch_observable(radial_bases(site), ir, l, m, lp, mp, branch, &
-                     item%response_l, item%response_m, 1, upper_x, small_x, rank0_x, rank2_x, total_x)
-                  call sr_spatial_branch_observable(radial_bases(site), ir, l, m, lp, mp, branch, &
-                     item%response_l, item%response_m, 2, upper_y, small_y, rank0_y, rank2_y, total_y)
+                  ! The stored source has the measurement endpoints reversed:
+                  ! output branch (p,q) therefore consumes the observable
+                  ! branch (q,p).  This is the same dual orientation used by
+                  ! the certified L=0 source and is essential for 10/01 and
+                  ! especially 20/02.
+                  source_branch = lmto_product_branch_swap(branch)
+                  if (item%response_l == 0 .and. l == lp .and. m == mp) then
+                     call sr_spatial_l0_projected_branch_observable(radial_bases(site), ir, l, source_branch, 1, &
+                        upper_x, small_x, rank0_x, rank2_x, total_x)
+                     call sr_spatial_l0_projected_branch_observable(radial_bases(site), ir, l, source_branch, 2, &
+                        upper_y, small_y, rank0_y, rank2_y, total_y)
+                  else if (item%response_l == 0) then
+                     cycle
+                  else
+                     call sr_spatial_branch_observable(radial_bases(site), ir, l, m, lp, mp, source_branch, &
+                        item%response_l, item%response_m, 1, upper_x, small_x, rank0_x, rank2_x, total_x)
+                     call sr_spatial_branch_observable(radial_bases(site), ir, l, m, lp, mp, source_branch, &
+                        item%response_l, item%response_m, 2, upper_y, small_y, rank0_y, rank2_y, total_y)
+                  end if
                   call circular_source(upper_x, upper_y, circular_channel, source_matrix)
                   call add_spin_matrix(components, row_up, row_down, col_up, col_down, branch, &
                      lr_full_spatial_piece_upper, source_field(flat)*radial_weight, source_matrix)
@@ -175,15 +194,15 @@ contains
       integer, intent(in) :: piece
       complex(rp), intent(out) :: operator(:, :)
       complex(rp), allocatable :: term(:, :)
-      integer :: branch, p, q
+      integer :: branch
 
       allocate(term(size(hamiltonian,1), size(hamiltonian,1)))
       operator = cmplx(0.0_rp, 0.0_rp, rp)
       do branch = 1, lmto_product_nbranch
-         call lmto_product_branch_powers(branch, p, q)
-         term = components(:,:,branch,piece)
-         if (q == 1) term = matmul(hamiltonian, term)
-         if (p == 1) term = matmul(term, hamiltonian)
+         ! The spatial source is the stored dual of the observable vertex.
+         ! The common primitive applies H**q V H**p and, importantly, loops
+         ! twice for the 20/02 branches.
+         call lmto_product_apply_branch_action(hamiltonian, components(:,:,branch,piece), branch, term, .true.)
          operator = operator + term
       end do
       deallocate(term)
@@ -211,6 +230,24 @@ contains
       end if
    end subroutine circular_source
 
+   !> The certified transverse convention is
+   !>   plus  = (x - i*y)/2, minus = (x + i*y)/2.
+   !> These inverse maps make the Cartesian/circular factors explicit at the
+   !> production interface instead of relying on an implicit channel sum.
+   pure subroutine lr_full_spatial_circular_to_cartesian(plus_matrix, minus_matrix, x_matrix, y_matrix)
+      complex(rp), intent(in) :: plus_matrix(:, :), minus_matrix(:, :)
+      complex(rp), intent(out) :: x_matrix(:, :), y_matrix(:, :)
+      x_matrix = plus_matrix + minus_matrix
+      y_matrix = cmplx(0.0_rp, 1.0_rp, rp)*(plus_matrix - minus_matrix)
+   end subroutine lr_full_spatial_circular_to_cartesian
+
+   pure subroutine lr_full_spatial_cartesian_to_circular(x_matrix, y_matrix, plus_matrix, minus_matrix)
+      complex(rp), intent(in) :: x_matrix(:, :), y_matrix(:, :)
+      complex(rp), intent(out) :: plus_matrix(:, :), minus_matrix(:, :)
+      plus_matrix = 0.5_rp*(x_matrix - cmplx(0.0_rp, 1.0_rp, rp)*y_matrix)
+      minus_matrix = 0.5_rp*(x_matrix + cmplx(0.0_rp, 1.0_rp, rp)*y_matrix)
+   end subroutine lr_full_spatial_cartesian_to_circular
+
    pure integer function orbital_l_from_index(iorb) result(l)
       integer, intent(in) :: iorb
       integer :: trial
@@ -222,6 +259,21 @@ contains
          end if
       end do
    end function orbital_l_from_index
+
+   pure integer function lmto_product_branch_swap(branch) result(swapped)
+      integer, intent(in) :: branch
+      integer :: p, q, candidate, candidate_p, candidate_q
+
+      call lmto_product_branch_powers(branch, p, q)
+      swapped = branch
+      do candidate = 1, lmto_product_nbranch
+         call lmto_product_branch_powers(candidate, candidate_p, candidate_q)
+         if (candidate_p == q .and. candidate_q == p) then
+            swapped = candidate
+            return
+         end if
+      end do
+   end function lmto_product_branch_swap
 
    subroutine validate_inputs(space, radial_bases, source_field, components, circular_channel)
       type(response_space_layout), intent(in) :: space

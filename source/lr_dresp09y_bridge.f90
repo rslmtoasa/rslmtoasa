@@ -32,6 +32,7 @@ module lr_dresp09y_bridge_mod
    use pauli_ground_state_projection_mod, only: compute_accepted_pauli_magnetization
    use lr_sr_augmentation_tangent_mod, only: sr_aug_sigma_x, sr_aug_sigma_plus, sr_aug_sigma_minus, &
       sr_aug_branch_observable_at_angle, sr_aug_branch_observable_tangent, sr_aug_lower_spin_factor
+   use lr_sr_spatial_augmentation_tangent_mod, only: sr_spatial_l0_projected_branch_observable_tangent
    implicit none
    private
 
@@ -42,8 +43,24 @@ module lr_dresp09y_bridge_mod
    character(len=*), parameter, public :: dresp09y_pauli_open = 'PAULI_AUGMENTATION_OPEN'
 
    public :: run_dresp09y_augmentation_tangent
+   public :: dresp09y_augmentation_density
 
 contains
+
+   !> Public production seam for the certified DRESP-09Y observable tangent.
+   !> DRESP-10 consumes this exact implementation so the augmentation/contact
+   !> term cannot silently regress to the historical upper-only contraction.
+   subroutine dresp09y_augmentation_density(radial, endpoints, sigma, upper, small, angular, total, pauli_aug_c, &
+                                             augmentation_l, l_first, l_last, angular_rank0, angular_rank2)
+      type(lmto_radial_basis), intent(in) :: radial(:)
+      complex(rp), intent(in) :: endpoints(:, :, :), sigma(:, :)
+      complex(rp), intent(out), optional :: upper(:, :), small(:, :), angular(:, :), total(:, :), pauli_aug_c(:, :), &
+         augmentation_l(:, :), angular_rank0(:, :), angular_rank2(:, :)
+      integer, intent(in), optional :: l_first, l_last
+
+      call augmentation_density(radial, endpoints, sigma, upper, small, angular, total, pauli_aug_c, augmentation_l, &
+         l_first, l_last, angular_rank0, angular_rank2)
+   end subroutine dresp09y_augmentation_density
 
    subroutine run_dresp09y_augmentation_tangent(output_file, response_space, radial_bases, ground_states, reciprocal_obj, &
                                                 lattice_obj, hamiltonian_obj)
@@ -346,15 +363,16 @@ contains
    end subroutine run_dresp09y_augmentation_tangent
 
    subroutine augmentation_density(radial, endpoints, sigma, upper, small, angular, total, pauli_aug_c, augmentation_l, &
-                                   l_first, l_last)
+                                   l_first, l_last, angular_rank0, angular_rank2)
       type(lmto_radial_basis), intent(in) :: radial(:)
       complex(rp), intent(in) :: endpoints(:, :, :), sigma(:, :)
-      complex(rp), intent(out), optional :: upper(:, :), small(:, :), angular(:, :), total(:, :), pauli_aug_c(:, :), augmentation_l(:,:)
+      complex(rp), intent(out), optional :: upper(:, :), small(:, :), angular(:, :), total(:, :), pauli_aug_c(:, :), augmentation_l(:,:), &
+         angular_rank0(:, :), angular_rank2(:, :)
       integer, intent(in), optional :: l_first, l_last
       integer :: nsite, norb, n, site, iorb, l, ir, branch, spin_i, spin_j, row, col, first_l, last_l
       real(rp) :: gaunt
-      complex(rp) :: tu(2,2), ts(2,2), ta(2,2), tt(2,2)
-      complex(rp) :: local_upper, local_small, local_angular, local_total, local_pauli
+      complex(rp) :: tu(2,2), ts(2,2), ta(2,2), tt(2,2), tr0(2,2), tr2(2,2), trtotal(2,2)
+      complex(rp) :: local_upper, local_small, local_angular, local_total, local_pauli, local_rank0, local_rank2
 
       nsite = size(radial); norb = (radial(1)%lmax+1)**2; n = 2*norb*nsite
       if (size(endpoints,1) /= n .or. size(endpoints,2) /= n .or. size(endpoints,3) /= 6) then
@@ -369,6 +387,8 @@ contains
       if (present(total)) total = cmplx(0.0_rp,0.0_rp,rp)
       if (present(pauli_aug_c)) pauli_aug_c = cmplx(0.0_rp,0.0_rp,rp)
       if (present(augmentation_l)) augmentation_l = cmplx(0.0_rp,0.0_rp,rp)
+      if (present(angular_rank0)) angular_rank0 = cmplx(0.0_rp,0.0_rp,rp)
+      if (present(angular_rank2)) angular_rank2 = cmplx(0.0_rp,0.0_rp,rp)
 
       do site = 1, nsite
          do ir = 2, radial(site)%npoint
@@ -378,6 +398,7 @@ contains
                gaunt = response_gaunt(l, iorb-l*l-l-1, l, iorb-l*l-l-1, 0, 0)
                local_upper = cmplx(0.0_rp,0.0_rp,rp); local_small = local_upper
                local_angular = local_upper; local_total = local_upper; local_pauli = local_upper
+               local_rank0 = local_upper; local_rank2 = local_upper
                do branch = 1, 6
                   call sr_aug_branch_observable_tangent(radial(site), ir, l, branch, sigma, tu, ts, ta, tt)
                   local_upper = local_upper + sum_spin_pair(endpoints, site, iorb, norb, branch, tu)
@@ -385,6 +406,16 @@ contains
                   local_angular = local_angular + sum_spin_pair(endpoints, site, iorb, norb, branch, ta)
                   local_total = local_total + sum_spin_pair(endpoints, site, iorb, norb, branch, tt)
                   local_pauli = local_pauli + sum_spin_pair(endpoints, site, iorb, norb, branch, tu)
+                  if (present(angular_rank0) .or. present(angular_rank2)) then
+                     call sr_spatial_l0_projected_branch_observable_tangent(radial(site), ir, l, branch, 1, tu, ts, tr0, tr2, trtotal)
+                     ! The DRESP-09Y loop supplies the live L=0 Gaunt
+                     ! coefficient below.  The projected spatial service
+                     ! already carries its shell-projector coefficient, so
+                     ! remove that one factor before the outer dual is used.
+                     if (abs(gaunt) <= tiny(1.0_rp)) error stop 'DRESP-09Y: zero L=0 Gaunt projector'
+                     local_rank0 = local_rank0 + sum_spin_pair(endpoints, site, iorb, norb, branch, tr0/gaunt)
+                     local_rank2 = local_rank2 + sum_spin_pair(endpoints, site, iorb, norb, branch, tr2/gaunt)
+                  end if
                end do
                if (present(upper)) upper(site,ir) = upper(site,ir) + gaunt*local_upper
                if (present(small)) small(site,ir) = small(site,ir) + gaunt*local_small
@@ -392,6 +423,8 @@ contains
                if (present(total)) total(site,ir) = total(site,ir) + gaunt*local_total
                if (present(pauli_aug_c)) pauli_aug_c(site,ir) = pauli_aug_c(site,ir) + gaunt*local_pauli
                if (present(augmentation_l)) augmentation_l(site,ir) = augmentation_l(site,ir) + gaunt*local_total
+               if (present(angular_rank0)) angular_rank0(site,ir) = angular_rank0(site,ir) + gaunt*local_rank0
+               if (present(angular_rank2)) angular_rank2(site,ir) = angular_rank2(site,ir) + gaunt*local_rank2
             end do
          end do
       end do

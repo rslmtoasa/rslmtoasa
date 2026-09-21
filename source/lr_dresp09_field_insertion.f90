@@ -15,7 +15,7 @@ module lr_dresp09_field_insertion_mod
    use lr_response_space_mod, only: response_space_layout, response_vector_inner_product
    use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis
    use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_branch_powers, &
-      lmto_product_energy_power
+      lmto_product_energy_power, lmto_product_apply_branch_action
    use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state
    implicit none
    private
@@ -285,7 +285,7 @@ contains
       complex(rp), intent(in) :: component_vertices(:, :, :, :), hamiltonian(:, :), field(:)
       complex(rp), intent(out) :: operator(:, :)
       logical, intent(in) :: conjugate_field
-      complex(rp), allocatable :: term(:, :)
+      complex(rp), allocatable :: term(:, :), source_term(:, :)
       integer :: n, mu, p, q, component
       complex(rp) :: coefficient
 
@@ -297,14 +297,14 @@ contains
           any(shape(operator) /= [n, n])) then
          error stop 'DRESP-09 product adjoint: shape mismatch'
       end if
-      allocate(term(n, n))
+      allocate(term(n, n), source_term(n, n))
       operator = cmplx(0.0_rp, 0.0_rp, rp)
       do mu = 1, size(field)
          do component = 1, size(component_vertices, 3)
-            call lmto_product_branch_powers(component, p, q)
-            term = transpose(conjg(component_vertices(:, :, component, mu)))
-            if (q > 0) term = matmul(hamiltonian, term)
-            if (p > 0) term = matmul(term, hamiltonian)
+            source_term = transpose(conjg(component_vertices(:, :, component, mu)))
+            ! component_vertices stores the measurement endpoint order;
+            ! transpose/conjugation makes this a stored-dual source.
+            call lmto_product_apply_branch_action(hamiltonian, source_term, component, term, .true.)
             if (conjugate_field) then
                coefficient = conjg(field(mu))
             else
@@ -313,7 +313,7 @@ contains
             operator = operator + coefficient*term
          end do
       end do
-      deallocate(term)
+      deallocate(term, source_term)
    end subroutine product_adjoint_impl
 
 end module lr_dresp09_field_insertion_mod

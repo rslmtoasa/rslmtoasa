@@ -14,7 +14,7 @@ module lr_sr_spatial_augmentation_tangent_mod
    use lr_sr_augmentation_tangent_mod, only: sr_aug_generator_y, sr_aug_rotate_matrix, sr_aug_matrix_tangent, &
       sr_aug_lower_spin_factor
    use lr_sr_angular_vertex_mod, only: sr_angular_upper_vertex, sr_angular_rank2_integral, &
-      sr_angular_nn_rank2_coefficient
+      sr_angular_nn_rank2_coefficient, sr_angular_l0_projected_components
    implicit none
    private
 
@@ -22,8 +22,94 @@ module lr_sr_spatial_augmentation_tangent_mod
    public :: sr_spatial_branch_observable_at_angle
    public :: sr_spatial_branch_observable_tangent
    public :: sr_spatial_six_branch_point
+   public :: sr_spatial_l0_projected_branch_observable
+   public :: sr_spatial_l0_projected_branch_observable_tangent
 
 contains
+
+   !> Scalar L=0 source/observable branch after the certified shell projector.
+   !>
+   !> DRESP-09ZR establishes that the accepted L=0 object is the complete
+   !> shell-trace projector of the arbitrary-L tensor.  The rank-0 and rank-2
+   !> pieces remain explicit in this service.
+   subroutine sr_spatial_l0_projected_branch_observable(radial, ir, l, branch, component, upper, lower_small, &
+                                                        lower_rank0, lower_rank2, total)
+      type(lmto_radial_basis), intent(in) :: radial
+      integer, intent(in) :: ir, l, branch, component
+      complex(rp), intent(out) :: upper(2,2), lower_small(2,2), lower_rank0(2,2), lower_rank2(2,2), total(2,2)
+      integer :: nterm, iterm, left_power(6), right_power(6), left_energy_power(6), right_energy_power(6)
+      real(rp) :: coefficient(6)
+      complex(rp) :: angular_upper(2,2), angular_small(2,2), angular_rank0(2,2), angular_rank2(2,2), angular_total(2,2)
+      complex(rp) :: left(2,2), right(2,2)
+
+      upper = cmplx(0.0_rp,0.0_rp,rp); lower_small = upper; lower_rank0 = upper; lower_rank2 = upper
+      total = upper
+      if (ir == 1 .or. radial%rofi(ir) <= tiny(1.0_rp)) return
+      call branch_terms(branch, nterm, left_power, right_power, left_energy_power, right_energy_power, coefficient)
+      call sr_angular_l0_projected_components(l, component, angular_upper, angular_small, angular_rank0, &
+         angular_rank2, angular_total)
+      do iterm = 1, nterm
+         call radial_matrix(radial,ir,l,1,left_power(iterm),left_energy_power(iterm),left)
+         call radial_matrix(radial,ir,l,1,right_power(iterm),right_energy_power(iterm),right)
+         upper = upper + coefficient(iterm)*matmul(left,matmul(angular_upper,right))/radial%rofi(ir)**2
+         call radial_matrix(radial,ir,l,2,left_power(iterm),left_energy_power(iterm),left)
+         call radial_matrix(radial,ir,l,2,right_power(iterm),right_energy_power(iterm),right)
+         lower_small = lower_small + coefficient(iterm)*matmul(left,matmul(angular_small,right))/radial%rofi(ir)**2
+         call radial_matrix(radial,ir,l,3,left_power(iterm),left_energy_power(iterm),left)
+         call radial_matrix(radial,ir,l,3,right_power(iterm),right_energy_power(iterm),right)
+         lower_rank0 = lower_rank0 + coefficient(iterm)*matmul(left,matmul(angular_rank0,right))/radial%rofi(ir)**2
+         lower_rank2 = lower_rank2 + coefficient(iterm)*matmul(left,matmul(angular_rank2,right))/radial%rofi(ir)**2
+      end do
+      total = upper + lower_small + lower_rank0 + lower_rank2
+   end subroutine sr_spatial_l0_projected_branch_observable
+
+   !> Analytic tangent of the L=0 shell projector, retaining the angular
+   !> rank-0 and rank-2 pieces separately.  The returned total is the raw
+   !> upper+small+rank0+rank2 sum; the physical SR lower factor is applied by
+   !> the observable-side consumer, exactly as in DRESP-09Y.
+   subroutine sr_spatial_l0_projected_branch_observable_tangent(radial, ir, l, branch, component, upper, lower_small, &
+                                                               lower_rank0, lower_rank2, total)
+      type(lmto_radial_basis), intent(in) :: radial
+      integer, intent(in) :: ir, l, branch, component
+      complex(rp), intent(out) :: upper(2,2), lower_small(2,2), lower_rank0(2,2), lower_rank2(2,2), total(2,2)
+      integer :: nterm, iterm, left_power(6), right_power(6), left_energy_power(6), right_energy_power(6)
+      real(rp) :: coefficient(6)
+      complex(rp) :: generator(2,2), angular_upper(2,2), angular_small(2,2), angular_rank0(2,2), angular_rank2(2,2)
+      complex(rp) :: angular_total(2,2), left(2,2), right(2,2), term(2,2)
+
+      upper = cmplx(0.0_rp,0.0_rp,rp); lower_small = upper; lower_rank0 = upper; lower_rank2 = upper; total = upper
+      if (ir == 1 .or. radial%rofi(ir) <= tiny(1.0_rp)) return
+      call sr_aug_generator_y(generator)
+      call branch_terms(branch, nterm, left_power, right_power, left_energy_power, right_energy_power, coefficient)
+      call sr_angular_l0_projected_components(l, component, angular_upper, angular_small, angular_rank0, &
+         angular_rank2, angular_total)
+      do iterm = 1, nterm
+         call radial_matrix(radial,ir,l,1,left_power(iterm),left_energy_power(iterm),left)
+         call radial_matrix(radial,ir,l,1,right_power(iterm),right_energy_power(iterm),right)
+         call tangent_bilinear(generator,left,right,angular_upper,term)
+         upper = upper + coefficient(iterm)*term/radial%rofi(ir)**2
+         call radial_matrix(radial,ir,l,2,left_power(iterm),left_energy_power(iterm),left)
+         call radial_matrix(radial,ir,l,2,right_power(iterm),right_energy_power(iterm),right)
+         call tangent_bilinear(generator,left,right,angular_small,term)
+         lower_small = lower_small + coefficient(iterm)*term/radial%rofi(ir)**2
+         call radial_matrix(radial,ir,l,3,left_power(iterm),left_energy_power(iterm),left)
+         call radial_matrix(radial,ir,l,3,right_power(iterm),right_energy_power(iterm),right)
+         call tangent_bilinear(generator,left,right,angular_rank0,term)
+         lower_rank0 = lower_rank0 + coefficient(iterm)*term/radial%rofi(ir)**2
+         call tangent_bilinear(generator,left,right,angular_rank2,term)
+         lower_rank2 = lower_rank2 + coefficient(iterm)*term/radial%rofi(ir)**2
+      end do
+      total = upper + lower_small + lower_rank0 + lower_rank2
+   contains
+      subroutine tangent_bilinear(gen, left_matrix, right_matrix, vertex, result)
+         complex(rp), intent(in) :: gen(2,2), left_matrix(2,2), right_matrix(2,2), vertex(2,2)
+         complex(rp), intent(out) :: result(2,2)
+         complex(rp) :: dleft_matrix(2,2), dright_matrix(2,2)
+         call sr_aug_matrix_tangent(gen,left_matrix,dleft_matrix)
+         call sr_aug_matrix_tangent(gen,right_matrix,dright_matrix)
+         result = matmul(dleft_matrix,matmul(vertex,right_matrix)) + matmul(left_matrix,matmul(vertex,dright_matrix))
+      end subroutine tangent_bilinear
+   end subroutine sr_spatial_l0_projected_branch_observable_tangent
 
    !> Static arbitrary spatial vertex, split into the four requested pieces.
    subroutine sr_spatial_branch_observable(radial, ir, l, m, lp, mp, branch, source_l, source_m, component, upper, &

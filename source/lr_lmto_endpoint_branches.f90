@@ -34,6 +34,7 @@ module lr_lmto_endpoint_branches_mod
    public :: lmto_product_branch_valid
    public :: lmto_product_energy_power
    public :: lmto_product_second_order_radial_branch
+   public :: lmto_product_apply_branch_action
 
 contains
 
@@ -93,6 +94,56 @@ contains
          value = value*energy
       end do
    end function lmto_product_energy_power
+
+   !> Apply one endpoint branch in coefficient space.
+   !>
+   !> For a matrix V whose band-state matrix element is the authoritative
+   !> quantity
+   !>
+   !>   <n|delta H_pq|m> = E_n**p E_m**q <n|V_pq|m>,
+   !>
+   !> the direct action is H**p V H**q.  A stored-dual source is the
+   !> transpose/adjoint of the measurement vertex; its endpoint labels remain
+   !> attached to the original measurement endpoints, so its coefficient-space
+   !> action is the adjoint-equivalent H**q V H**p.  Keeping both conventions
+   !> here prevents callers from duplicating, and silently truncating, the
+   !> Hamiltonian-power algebra.
+   subroutine lmto_product_apply_branch_action(hamiltonian, matrix, branch, action, stored_dual)
+      complex(rp), intent(in) :: hamiltonian(:, :), matrix(:, :)
+      integer, intent(in) :: branch
+      complex(rp), intent(out) :: action(:, :)
+      logical, intent(in), optional :: stored_dual
+      integer :: p, q, left_power, right_power, power
+      logical :: use_stored_dual
+
+      if (size(hamiltonian, 1) /= size(hamiltonian, 2) .or. &
+          any(shape(matrix) /= [size(hamiltonian, 1), size(hamiltonian, 1)]) .or. &
+          any(shape(action) /= [size(hamiltonian, 1), size(hamiltonian, 1)])) then
+         error stop 'lmto_product_apply_branch_action: matrix shape mismatch'
+      end if
+      if (.not. lmto_product_branch_valid(branch)) then
+         error stop 'lmto_product_apply_branch_action: invalid branch'
+      end if
+
+      call lmto_product_branch_powers(branch, p, q)
+      use_stored_dual = .false.
+      if (present(stored_dual)) use_stored_dual = stored_dual
+      if (use_stored_dual) then
+         left_power = q
+         right_power = p
+      else
+         left_power = p
+         right_power = q
+      end if
+
+      action = matrix
+      do power = 1, left_power
+         action = matmul(hamiltonian, action)
+      end do
+      do power = 1, right_power
+         action = matmul(action, hamiltonian)
+      end do
+   end subroutine lmto_product_apply_branch_action
 
    !> Evaluate one radial coefficient B_pq of the certified second-order
    !> absolute-energy product polynomial.  The expression is

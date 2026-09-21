@@ -72,6 +72,7 @@ module lr_dresp09zs_compact_span_mod
    end type block_audit
 
    public :: run_dresp09zs_compact_span_audit
+   public :: dresp09zs_source_span_residuals
 
    interface
       subroutine zgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, rwork, info)
@@ -87,6 +88,39 @@ module lr_dresp09zs_compact_span_mod
    end interface
 
 contains
+
+   !> Return the live production-space projection audit used by DRESP-10R.
+   !>
+   !> This is deliberately the same physical-vertex construction as the
+   !> accepted DRESP-09ZS audit.  The returned component ordering is
+   !> Pauli, SR-upper, SR-lower-small, SR-lower-rank0, SR-lower-rank2,
+   !> SR-total, and augmentation delta-O.  Each entry is the maximum
+   !> weighted (I-P_prod) residual over M at the requested L.
+   subroutine dresp09zs_source_span_residuals(space, radial_bases, production_basis, physical_by_l, delta_by_l, &
+                                              component_by_l, component_global, delta_global)
+      type(response_space_layout), intent(in) :: space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(lmto_product_response_basis), intent(in) :: production_basis
+      real(rp), intent(out) :: physical_by_l(0:4), delta_by_l(0:4), component_by_l(7,0:4)
+      real(rp), intent(out) :: component_global, delta_global
+      type(block_audit) :: blocks(0:4)
+      real(rp) :: physical_rms(0:4), delta_rms(0:4), components(7)
+      integer :: k
+      logical :: active
+
+      if (space%nsite /= 1 .or. size(radial_bases) /= 1 .or. space%response_lmax /= 4) then
+         error stop 'DRESP-09ZS source span: accepted one-site L=0..4 state required'
+      end if
+      if (production_basis%product_dimension /= production_basis%unpruned_dimension .or. &
+          .not. allocated(production_basis%blocks)) then
+         error stop 'DRESP-09ZS source span: live unpruned production basis required'
+      end if
+      do k = 0, 4
+         call build_block(blocks(k), space, radial_bases(1), k, 1, production_basis%blocks(1,k))
+      end do
+      call physical_vertex_audit(space, radial_bases(1), blocks, physical_by_l, physical_rms, delta_by_l, delta_rms, &
+         components, component_by_l, component_global, delta_global, active, .true.)
+   end subroutine dresp09zs_source_span_residuals
 
    subroutine run_dresp09zs_compact_span_audit(output_file, space, radial_bases, production_basis)
       character(len=*), intent(in) :: output_file
@@ -105,7 +139,8 @@ contains
       real(rp) :: r20_pair_prod(0:2,0:2), r02_pair_prod(0:2,0:2), r20_median_prod, r02_median_prod
       real(rp) :: physical_by_l(0:4), delta_by_l(0:4), physical_rms_by_l(0:4), delta_rms_by_l(0:4)
       real(rp) :: physical_old_by_l(0:4), delta_old_by_l(0:4), physical_old_rms_by_l(0:4), delta_old_rms_by_l(0:4)
-      real(rp) :: component_residual(7), component_old_residual(7), mixed_residual, mixed_old_residual
+      real(rp) :: component_residual(7), component_old_residual(7), component_by_l(7,0:4), component_old_by_l(7,0:4)
+      real(rp) :: mixed_residual, mixed_old_residual
       real(rp) :: duality_residual(4), double_weighting_residual, raw_pairing(4), projected_pairing(4), projection_loss(4)
       real(rp) :: duality_old(4), double_weighting_old, raw_pairing_old(4), projected_pairing_old(4), projection_loss_old(4)
       real(rp) :: scalar_projector_residual, total_old(3), total_six(3), total_prod(3), physical_global, delta_global
@@ -169,9 +204,9 @@ contains
          oracle_independent_frob, oracle_forward_max, oracle_agrees)
       call new_mode_overlap_diagnostics(blocks, max_new_overlap, rms_new_overlap)
       call physical_vertex_audit(space, radial_bases(1), blocks, physical_by_l, physical_rms_by_l, &
-         delta_by_l, delta_rms_by_l, component_residual, physical_global, delta_global, physical_active, .true.)
+         delta_by_l, delta_rms_by_l, component_residual, component_by_l, physical_global, delta_global, physical_active, .true.)
       call physical_vertex_audit(space, radial_bases(1), blocks, physical_old_by_l, physical_old_rms_by_l, &
-         delta_old_by_l, delta_old_rms_by_l, component_old_residual, physical_old_global, delta_old_global, &
+         delta_old_by_l, delta_old_rms_by_l, component_old_residual, component_old_by_l, physical_old_global, delta_old_global, &
          physical_active_old, .false.)
       call mixed_field_audit(space, radial_bases(1), blocks, mixed_residual, duality_residual, double_weighting_residual, &
          raw_pairing, projected_pairing, projection_loss, .true.)
@@ -299,6 +334,10 @@ contains
       end do
       write(unit,'(a,2(es18.10,1x))') 'physical_global_max_RMS = ', physical_global, sqrt(sum(physical_by_l**2)/5.0_rp)
       write(unit,'(a,2(es18.10,1x))') 'delta_O_global_max_RMS = ', delta_global, sqrt(sum(delta_by_l**2)/5.0_rp)
+      write(unit,'(a)') 'L Pauli SR_upper SR_lower_small SR_lower_rank0 SR_lower_rank2 SR_total delta_O'
+      do k = 0, 4
+         write(unit,'(i0,1x,7(es18.10,1x))') k, component_by_l(:,k)
+      end do
       write(unit,'(a)') 'L S4_2nd_physical_SR_residual S4_2nd_physical_SR_RMS S4_2nd_delta_O_residual S4_2nd_delta_O_RMS'
       do k = 0, 4
          write(unit,'(i0,1x,4(es18.10,1x))') k, physical_old_by_l(k), physical_old_rms_by_l(k), delta_old_by_l(k), delta_old_rms_by_l(k)
@@ -787,19 +826,21 @@ contains
       end do
    end subroutine write_new_mode_composition
 
-   subroutine physical_vertex_audit(space, radial, blocks, by_l, rms_l, delta_by_l, delta_rms_l, components, global, delta_global, &
-                                    active, use_production)
+   subroutine physical_vertex_audit(space, radial, blocks, by_l, rms_l, delta_by_l, delta_rms_l, components, component_by_l, &
+                                    global, delta_global, active, use_production)
       type(response_space_layout), intent(in) :: space
       type(lmto_radial_basis), intent(in) :: radial
       type(block_audit), intent(in) :: blocks(0:4)
-      real(rp), intent(out) :: by_l(0:4), rms_l(0:4), delta_by_l(0:4), delta_rms_l(0:4), components(7), global, delta_global
+      real(rp), intent(out) :: by_l(0:4), rms_l(0:4), delta_by_l(0:4), delta_rms_l(0:4), components(7)
+      real(rp), intent(out) :: component_by_l(7,0:4), global, delta_global
       logical, intent(out) :: active
       logical, intent(in) :: use_production
       complex(rp) :: field(5,9,space%npoint), delta(5,9,space%npoint)
       real(rp) :: values(6), dvalues(6), sumsq, dsumsq
       integer :: l, m, kind, k, q
 
-      by_l=0.0_rp; rms_l=0.0_rp; delta_by_l=0.0_rp; delta_rms_l=0.0_rp; components=0.0_rp; active=.false.
+      by_l=0.0_rp; rms_l=0.0_rp; delta_by_l=0.0_rp; delta_rms_l=0.0_rp; components=0.0_rp
+      component_by_l=0.0_rp; active=.false.
       do l=0,4
          sumsq=0.0_rp; dsumsq=0.0_rp
          do m=-l,l
@@ -814,6 +855,7 @@ contains
                call build_physical_field(radial,l,m,kind,field)
                call projected_field_residual(field,blocks,values,use_production)
                components(kind)=max(components(kind),values(6))
+               component_by_l(kind,l)=max(component_by_l(kind,l),values(6))
             end do
          end do
          rms_l(l)=sqrt(sumsq/real(2*l+1,rp)); delta_rms_l(l)=sqrt(dsumsq/real(2*l+1,rp))

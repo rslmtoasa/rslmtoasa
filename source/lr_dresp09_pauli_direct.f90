@@ -16,7 +16,8 @@ module lr_dresp09_pauli_direct_mod
       response_unflatten_superindex
    use lr_response_space_mod, only: response_space_layout
    use lr_lmto_product_response_basis_mod, only: lmto_product_channel_plus, lmto_product_channel_minus
-   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_second_order_radial_branch
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_second_order_radial_branch, &
+      lmto_product_apply_branch_action
    implicit none
    private
 
@@ -115,7 +116,7 @@ contains
       integer, intent(in) :: circular_channel
       complex(rp), intent(out) :: operator(:, :)
       complex(rp), allocatable :: components(:, :, :), term(:, :)
-      integer :: n, p, q, component
+      integer :: n, branch
 
       n = size(hamiltonian, 1)
       if (size(hamiltonian, 2) /= n .or. any(shape(operator) /= [n, n])) then
@@ -124,14 +125,9 @@ contains
       allocate(components(n, n, lmto_product_nbranch), term(n, n))
       call dresp09_pauli_direct_source_components(space, radial_bases, source_field, circular_channel, components)
       operator = cmplx(0.0_rp, 0.0_rp, rp)
-      do p = 0, 1
-         do q = 0, 1
-            component = 1 + p + 2*q
-            term = components(:, :, component)
-            if (q == 1) term = matmul(hamiltonian, term)
-            if (p == 1) term = matmul(term, hamiltonian)
-            operator = operator + term
-         end do
+      do branch = 1, lmto_product_nbranch
+         call lmto_product_apply_branch_action(hamiltonian, components(:, :, branch), branch, term, .true.)
+         operator = operator + term
       end do
       deallocate(components, term)
    end subroutine dresp09_pauli_direct_source
