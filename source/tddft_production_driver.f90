@@ -69,6 +69,7 @@ module tddft_production_driver_mod
    use lr_dresp09w_bridge_mod, only: run_dresp09w_radial_observable_provenance
    use lr_dresp09x_bridge_mod, only: run_dresp09x_sr_spin_observable
    use lr_dresp09y_bridge_mod, only: run_dresp09y_augmentation_tangent
+   use lr_dresp09zs_compact_span_mod, only: run_dresp09zs_compact_span_audit
    use lr_ward_mode_analysis_mod, only: lr_ward_mode_analysis_result, analyze_lr_ward_mode
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
@@ -112,6 +113,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_radial_observable_provenance = 'radial_observable_provenance'
    character(len=*), parameter, public :: tddft_driver_backend_sr_spin_observable = 'sr_spin_observable'
    character(len=*), parameter, public :: tddft_driver_backend_sr_augmentation_tangent = 'sr_augmentation_tangent'
+   character(len=*), parameter, public :: tddft_driver_backend_compact_span_audit = 'compact_span_audit'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -397,8 +399,9 @@ contains
           trim(config%backend) /= tddft_driver_backend_density_moment_tangent .and. &
           trim(config%backend) /= tddft_driver_backend_radial_observable_provenance .and. &
           trim(config%backend) /= tddft_driver_backend_sr_spin_observable .and. &
-          trim(config%backend) /= tddft_driver_backend_sr_augmentation_tangent) then
-         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions, compact_dyson, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, pauli_projected_native, sr_l0_scalar_relativistic, moving_basis_tangent, representation_tangent, density_moment_tangent, radial_observable_provenance, sr_spin_observable, or sr_augmentation_tangent'
+          trim(config%backend) /= tddft_driver_backend_sr_augmentation_tangent .and. &
+          trim(config%backend) /= tddft_driver_backend_compact_span_audit) then
+         error stop 'TDDFT input: unsupported backend; use spectral/lehmann, reciprocal_gf, native_rsgf, product_lehmann, product_gf, product_finite_q, product_convergence, projected_chi0, static_interactions, compact_dyson, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, pauli_projected_native, sr_l0_scalar_relativistic, moving_basis_tangent, representation_tangent, density_moment_tangent, radial_observable_provenance, sr_spin_observable, sr_augmentation_tangent, or compact_span_audit'
       end if
       if (trim(config%backend) == tddft_driver_backend_projected_mills .or. &
           trim(config%backend) == tddft_driver_backend_projected_juelich .or. &
@@ -433,8 +436,9 @@ contains
           trim(config%backend) /= tddft_driver_backend_density_moment_tangent .and. &
           trim(config%backend) /= tddft_driver_backend_radial_observable_provenance .and. &
           trim(config%backend) /= tddft_driver_backend_sr_spin_observable .and. &
-          trim(config%backend) /= tddft_driver_backend_sr_augmentation_tangent .and. size(config%eta_values) /= 1) then
-         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence, static_interactions, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, pauli_projected_native, sr_l0_scalar_relativistic, moving_basis_tangent, representation_tangent, density_moment_tangent, radial_observable_provenance, or sr_augmentation_tangent'
+          trim(config%backend) /= tddft_driver_backend_sr_augmentation_tangent .and. &
+          trim(config%backend) /= tddft_driver_backend_compact_span_audit .and. size(config%eta_values) /= 1) then
+         error stop 'TDDFT input: n_eta greater than one is only supported by product_convergence, static_interactions, projected_mills, projected_juelich, alsda_compare, exact_ks_ward, native_second_order, pauli_projected_native, sr_l0_scalar_relativistic, moving_basis_tangent, representation_tangent, density_moment_tangent, radial_observable_provenance, sr_augmentation_tangent, or compact_span_audit'
       end if
       if (trim(config%backend) == tddft_driver_backend_exact_ks_ward) then
          if (size(config%q_list, 2) /= 1 .or. sum(abs(config%q_list(:, 1))) > 1.0e-12_rp) then
@@ -1045,7 +1049,8 @@ contains
       if (present(accepted_kspace_scf)) use_accepted_kspace_scf = accepted_kspace_scf
       need_complete_sr = trim(config%backend) == tddft_driver_backend_radial_observable_provenance .or. &
          trim(config%backend) == tddft_driver_backend_sr_spin_observable .or. &
-         trim(config%backend) == tddft_driver_backend_sr_augmentation_tangent
+         trim(config%backend) == tddft_driver_backend_sr_augmentation_tangent .or. &
+         trim(config%backend) == tddft_driver_backend_compact_span_audit
 
       if (.not. config%enabled) return
       call validate_tddft_production_capability(config, control_obj, lattice_obj, hamiltonian_obj, reciprocal_obj)
@@ -1108,6 +1113,13 @@ contains
          ignore_real = reciprocal_obj%calculate_canonical_band_energy(.false.)
       end if
       call reciprocal_obj%require_replicated_k_workset('TDDFT production driver')
+      if (trim(config%backend) == tddft_driver_backend_compact_span_audit) then
+         if (.not. use_accepted_kspace_scf) then
+            error stop 'DRESP-09ZS compact_span_audit requires the accepted k-space SCF handoff'
+         end if
+         call run_dresp09zs_compact_span_audit(trim(config%output_file), response_space, radial_bases)
+         return
+      end if
       call lr_snapshot_from_reciprocal(reciprocal_obj, left_state)
       call write_tddft_state_artifact(trim(config%output_file)//'.state', reciprocal_obj, left_state, use_accepted_kspace_scf)
 
