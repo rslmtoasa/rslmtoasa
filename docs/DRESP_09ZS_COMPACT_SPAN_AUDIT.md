@@ -68,7 +68,21 @@ K=4  0.2188810  0.0518053
 
 Direct projection of normalized `20` and `02` candidates into the historical
 space gives maximum residuals of `1.41e-3` and `3.91e-3`, respectively. The
-full six-candidate residual reaches `1.70e-3` over `K`. The arbitrary-(L,M)
+medians are `1.55e-6` and `1.55e-6`; the per-(l,l') maxima are:
+
+| l,l' | max R20 | max R02 |
+|---|---:|---:|
+| 0,0 | `4.58e-5` | `5.06e-5` |
+| 0,1 | `7.27e-7` | `2.01e-6` |
+| 0,2 | `5.25e-7` | `8.06e-8` |
+| 1,0 | `1.99e-6` | `7.45e-7` |
+| 1,1 | `8.44e-5` | `8.57e-5` |
+| 1,2 | `3.43e-4` | `2.67e-6` |
+| 2,0 | `4.20e-8` | `6.85e-7` |
+| 2,1 | `4.76e-6` | `1.95e-4` |
+| 2,2 | `1.41e-3` | `3.91e-3` |
+
+The full six-candidate residual reaches `1.70e-3` over `K`. The arbitrary-(L,M)
 physical sweep is active: the historical-span residual maxima are
 
 | diagnostic | maximum residual |

@@ -78,6 +78,7 @@ contains
       type(lmto_radial_basis), intent(in) :: radial_bases(:)
       type(block_audit) :: blocks(0:4)
       real(rp) :: r20(0:4), r02(0:4), candidate_residual(0:4), principal_min(0:4)
+      real(rp) :: r20_pair(0:2,0:2), r02_pair(0:2,0:2), r20_median, r02_median
       real(rp) :: physical_by_l(0:4), delta_by_l(0:4), physical_rms_by_l(0:4), delta_rms_by_l(0:4)
       real(rp) :: component_residual(7), mixed_residual, duality_residual(4), double_weighting_residual
       real(rp) :: scalar_projector_residual, total_old(3), total_six(3), physical_global, delta_global
@@ -115,7 +116,7 @@ contains
             all(blocks(k)%rank_six == blocks(k)%rank_six(1))
       end do
 
-      call direct_new_branch_projection(blocks, r20, r02)
+      call direct_new_branch_projection(blocks, r20, r02, r20_pair, r02_pair, r20_median, r02_median)
       call whole_candidate_residual(blocks, candidate_residual)
       call principal_angle_diagnostics(blocks, principal_min)
       call new_mode_overlap_diagnostics(blocks, max_new_overlap, rms_new_overlap)
@@ -170,6 +171,16 @@ contains
       end do
       write(unit,'(a,2(es18.10,1x))') 'R20 maximum RMS = ', maxval(r20), sqrt(sum(r20*r20)/5.0_rp)
       write(unit,'(a,2(es18.10,1x))') 'R02 maximum RMS = ', maxval(r02), sqrt(sum(r02*r02)/5.0_rp)
+      write(unit,'(a,es18.10)') 'R20 median = ', r20_median
+      write(unit,'(a,es18.10)') 'R02 median = ', r02_median
+      write(unit,'(a)') 'l lp max_R20 max_R02'
+      do site = 0, 2
+         do ir = 0, 2
+            if (r20_pair(site,ir) > 0.0_rp .or. r02_pair(site,ir) > 0.0_rp) then
+               write(unit,'(2(i0,1x),2(es18.10,1x))') site, ir, r20_pair(site,ir), r02_pair(site,ir)
+            end if
+         end do
+      end do
       write(unit,'(a,2(es18.10,1x))') 'old_span_outside_six_span maximum RMS = ', max_new_overlap, rms_new_overlap
       call write_new_mode_composition(unit, blocks)
       write(unit,'(a)') 'L physical_SR_residual physical_SR_RMS delta_O_residual delta_O_RMS'
@@ -305,13 +316,20 @@ contains
       deallocate(a,u,vt,singular,norms,rwork)
    end subroutine weighted_svd
 
-   subroutine direct_new_branch_projection(blocks, r20, r02)
+   subroutine direct_new_branch_projection(blocks, r20, r02, r20_pair, r02_pair, r20_median, r02_median)
       type(block_audit), intent(in) :: blocks(0:4)
       real(rp), intent(out) :: r20(0:4), r02(0:4)
-      integer :: k, i, branch
+      real(rp), intent(out) :: r20_pair(0:2,0:2), r02_pair(0:2,0:2), r20_median, r02_median
       complex(rp), allocatable :: v(:), residual(:)
+      real(rp), allocatable :: values20(:), values02(:)
+      integer :: k, i, branch, total_candidates, n20, n02, l, lp
       real(rp) :: norm
-      r20 = 0.0_rp; r02 = 0.0_rp
+      total_candidates = 0
+      do k = 0, 4
+         total_candidates = total_candidates + blocks(k)%nc_six
+      end do
+      allocate(values20(total_candidates), values02(total_candidates))
+      r20 = 0.0_rp; r02 = 0.0_rp; r20_pair = 0.0_rp; r02_pair = 0.0_rp; n20 = 0; n02 = 0
       do k = 0, 4
          allocate(v(blocks(k)%npoint),residual(blocks(k)%npoint))
          do i = 1, blocks(k)%nc_six
@@ -320,12 +338,49 @@ contains
             v = blocks(k)%a_six(:,i)
             residual = v - matmul(blocks(k)%u_old, matmul(conjg(transpose(blocks(k)%u_old)),v))
             norm = sqrt(sum(abs(v)**2))
-            if (branch == 5) r20(k) = max(r20(k),sqrt(sum(abs(residual)**2))/norm)
-            if (branch == 6) r02(k) = max(r02(k),sqrt(sum(abs(residual)**2))/norm)
+            if (branch == 5) then
+               n20 = n20 + 1; values20(n20) = sqrt(sum(abs(residual)**2))/norm
+               r20(k) = max(r20(k),values20(n20))
+               l = blocks(k)%six_candidates(i)%l; lp = blocks(k)%six_candidates(i)%lp
+               r20_pair(l,lp) = max(r20_pair(l,lp),values20(n20))
+            end if
+            if (branch == 6) then
+               n02 = n02 + 1; values02(n02) = sqrt(sum(abs(residual)**2))/norm
+               r02(k) = max(r02(k),values02(n02))
+               l = blocks(k)%six_candidates(i)%l; lp = blocks(k)%six_candidates(i)%lp
+               r02_pair(l,lp) = max(r02_pair(l,lp),values02(n02))
+            end if
          end do
          deallocate(v,residual)
       end do
+      r20_median = median_value(values20,n20); r02_median = median_value(values02,n02)
+      deallocate(values20,values02)
    end subroutine direct_new_branch_projection
+
+   real(rp) function median_value(values, n) result(median)
+      real(rp), intent(in) :: values(:)
+      integer, intent(in) :: n
+      real(rp), allocatable :: sorted(:)
+      real(rp) :: swap
+      integer :: i, j
+
+      if (n < 1) error stop 'DRESP-09ZS median requested for an empty projection set'
+      allocate(sorted(n)); sorted = values(1:n)
+      do i = 2, n
+         swap = sorted(i); j = i - 1
+         do while (j >= 1)
+            if (sorted(j) <= swap) exit
+            sorted(j+1) = sorted(j); j = j - 1
+         end do
+         sorted(j+1) = swap
+      end do
+      if (mod(n,2) == 1) then
+         median = sorted((n+1)/2)
+      else
+         median = 0.5_rp*(sorted(n/2)+sorted(n/2+1))
+      end if
+      deallocate(sorted)
+   end function median_value
 
    subroutine whole_candidate_residual(blocks, residual)
       type(block_audit), intent(in) :: blocks(0:4)

@@ -56,6 +56,8 @@ def main() -> None:
     assert max(duality) < 1.0e-12
     assert max(vector(values, "R20 maximum RMS", 2)) > 1.0e-8
     assert max(vector(values, "R02 maximum RMS", 2)) > 1.0e-8
+    assert number(values, "R20 median") > 0.0
+    assert number(values, "R02 median") > 0.0
 
     print("Dresp09ZS Fe artifact: six-branch span audit, physical activity, and duality pass")
 
