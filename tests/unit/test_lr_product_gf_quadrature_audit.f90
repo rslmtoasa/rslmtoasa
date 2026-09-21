@@ -21,7 +21,7 @@ program test_lr_product_gf_quadrature_audit
       evaluate_lr_product_ks_susceptibility
    use lr_gf_susceptibility_mod, only: build_weighted_resolvent
    use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_max_gf_moment, &
-      lmto_product_branch_powers
+      lmto_product_branch_powers, lmto_product_branch_label, lmto_product_energy_power
    use lr_product_gf_susceptibility_mod, only: lr_product_gf_susceptibility_request, &
       lr_product_gf_susceptibility_result, evaluate_lr_product_gf_susceptibility, &
       build_lr_product_gf_transition_amplitudes, lr_product_gf_contraction_scalar, &
@@ -78,8 +78,10 @@ program test_lr_product_gf_quadrature_audit
 
    if (index(trim(mode), 'mixed') == 1) then
       write (*, '(a)') 'TDVK-03B mixed-eigenvector reciprocal-GF closure audit'
+      call report_dresp10a_contract(product_plus)
       call report_transition_factorization_oracle(product_plus, 'chi_plus')
       call report_transition_factorization_oracle(product_minus, 'chi_minus')
+      call report_weighted_resolvent_oracle()
    else
       write (*, '(a)') 'TDVK-03A reciprocal-GF quadrature audit'
    end if
@@ -261,6 +263,29 @@ contains
       end do
    end subroutine build_mixed_electronic_fixture
 
+   subroutine report_dresp10a_contract(product)
+      type(lmto_product_response_basis), intent(in) :: product
+      character(len=32) :: labels
+      integer :: branch, p, q
+
+      labels = ''
+      do branch = 1, lmto_product_nbranch
+         if (branch > 1) labels = trim(labels)//','
+         labels = trim(labels)//trim(lmto_product_branch_label(branch))
+         call lmto_product_branch_powers(branch, p, q)
+         if (p < 0 .or. q < 0 .or. p > 2 .or. q > 2) then
+            error stop 'test_lr_product_gf_quadrature_audit: invalid DRESP-10A branch map'
+         end if
+      end do
+      write (*, '(a,1x,a,i0,1x,a,i0,1x,a,a,1x,a,i0)') 'DRESP10A_CONTRACT', &
+         'product_dimension=', product%product_dimension, 'branch_count=', product%product_endpoint_branches, &
+         'labels=', trim(labels), 'maximum_gf_moment=', product%maximum_gf_energy_moment
+      if (product%product_endpoint_branches /= 6 .or. trim(labels) /= '00,10,01,11,20,02' .or. &
+          product%maximum_gf_energy_moment /= 4) then
+         error stop 'test_lr_product_gf_quadrature_audit: DRESP-10A contract failed'
+      end if
+   end subroutine report_dresp10a_contract
+
    subroutine report_transition_factorization_oracle(product, channel)
       type(lmto_product_response_basis), intent(in) :: product
       character(len=*), intent(in) :: channel
@@ -292,13 +317,118 @@ contains
       end if
       write (*, '(a,1x,a,1x,a,es16.8,1x,a,es16.8)') 'TRANSITION_FACTORIZATION', 'channel='//trim(channel), &
          'max_abs=', maximum_absolute, 'max_rel=', maximum_relative
+      call report_branch_transition_activity(vertices, state, 1)
       deallocate(vertices, transitions, reference)
    end subroutine report_transition_factorization_oracle
 
+   subroutine report_branch_transition_activity(vertices, electronic_state, ik)
+      complex(rp), intent(in) :: vertices(:, :, :, :)
+      type(lr_electronic_state), intent(in) :: electronic_state
+      integer, intent(in) :: ik
+      complex(rp), allocatable :: contribution(:)
+      integer, parameter :: selected_left(3) = [1, 3, 5], selected_right(3) = [2, 8, 7]
+      real(rp) :: maximum_activity
+      integer :: branch, product_index, pair, left_band, right_band
+
+      allocate(contribution(size(vertices, 4)))
+      do branch = 1, lmto_product_nbranch
+         maximum_activity = 0.0_rp
+         do pair = 1, size(selected_left)
+            left_band = selected_left(pair)
+            right_band = selected_right(pair)
+            contribution = cmplx(0.0_rp, 0.0_rp, rp)
+            do product_index = 1, size(vertices, 4)
+               contribution(product_index) = sum(conjg(electronic_state%eigenvectors(:, left_band, ik))* &
+                  matmul(vertices(:, :, branch, product_index), electronic_state%eigenvectors(:, right_band, ik))) * &
+                  lmto_product_energy_power(electronic_state%eigenvalues(left_band, ik), &
+                     lmto_branch_left_power(branch))*lmto_product_energy_power( &
+                     electronic_state%eigenvalues(right_band, ik), lmto_branch_right_power(branch))
+            end do
+            maximum_activity = max(maximum_activity, sqrt(sum(abs(contribution)**2)))
+         end do
+         write (*, '(a,1x,a,a,1x,a,es16.8)') 'BRANCH_TRANSITION', 'branch=', &
+            trim(lmto_product_branch_label(branch)), 'max_norm=', maximum_activity
+         if ((branch == 5 .or. branch == 6) .and. maximum_activity <= 1.0e-13_rp) then
+            error stop 'test_lr_product_gf_quadrature_audit: second-order branch transition vanished'
+         end if
+      end do
+      deallocate(contribution)
+   end subroutine report_branch_transition_activity
+
+   integer function lmto_branch_left_power(branch) result(power)
+      integer, intent(in) :: branch
+      integer :: unused_right
+
+      call lmto_product_branch_powers(branch, power, unused_right)
+   end function lmto_branch_left_power
+
+   integer function lmto_branch_right_power(branch) result(power)
+      integer, intent(in) :: branch
+      integer :: unused_left
+
+      call lmto_product_branch_powers(branch, unused_left, power)
+   end function lmto_branch_right_power
+
+   subroutine report_weighted_resolvent_oracle()
+      complex(rp), parameter :: probe_z(3) = [cmplx(-0.41_rp, 0.07_rp, rp), &
+         cmplx(0.13_rp, 0.11_rp, rp), cmplx(0.79_rp, 0.05_rp, rp)]
+      complex(rp), allocatable :: actual(:, :, :), reference(:, :, :)
+      real(rp) :: absolute_residual, relative_residual, maximum_absolute, maximum_relative
+      integer :: ik, iz, p
+
+      allocate(actual(nbasis, nbasis, lmto_product_max_gf_moment + 1), &
+         reference(nbasis, nbasis, lmto_product_max_gf_moment + 1))
+      do p = 0, lmto_product_max_gf_moment
+         maximum_absolute = 0.0_rp
+         maximum_relative = 0.0_rp
+         do ik = 1, nk
+            do iz = 1, size(probe_z)
+               call build_weighted_resolvent(state, ik, probe_z(iz), actual)
+               call exact_weighted_resolvent(state, ik, probe_z(iz), reference)
+               absolute_residual = sqrt(sum(abs(actual(:, :, p + 1) - reference(:, :, p + 1))**2))
+               relative_residual = absolute_residual/max(sqrt(sum(abs(reference(:, :, p + 1))**2)), &
+                  epsilon(1.0_rp))
+               maximum_absolute = max(maximum_absolute, absolute_residual)
+               maximum_relative = max(maximum_relative, relative_residual)
+            end do
+         end do
+         write (*, '(a,1x,a,i0,1x,a,es16.8,1x,a,es16.8)') 'WEIGHTED_RESOLVENT', 'p=', p, &
+            'max_abs=', maximum_absolute, 'max_rel=', maximum_relative
+         if (maximum_relative >= 1.0e-12_rp) then
+            error stop 'test_lr_product_gf_quadrature_audit: weighted-resolvent oracle failed'
+         end if
+      end do
+      deallocate(actual, reference)
+   end subroutine report_weighted_resolvent_oracle
+
+   subroutine exact_weighted_resolvent(electronic_state, ik, z, weighted_green)
+      type(lr_electronic_state), intent(in) :: electronic_state
+      integer, intent(in) :: ik
+      complex(rp), intent(in) :: z
+      complex(rp), intent(out) :: weighted_green(:, :, :)
+      complex(rp) :: factor
+      integer :: p, ib, i, j
+
+      weighted_green = cmplx(0.0_rp, 0.0_rp, rp)
+      do p = 0, size(weighted_green, 3) - 1
+         do ib = 1, electronic_state%nbands
+            factor = cmplx(lmto_product_energy_power(electronic_state%eigenvalues(ib, ik), p), 0.0_rp, rp)/ &
+               (z - electronic_state%eigenvalues(ib, ik))
+            do j = 1, electronic_state%nbasis
+               do i = 1, electronic_state%nbasis
+                  weighted_green(i, j, p + 1) = weighted_green(i, j, p + 1) + factor* &
+                     electronic_state%eigenvectors(i, ib, ik)*conjg(electronic_state%eigenvectors(j, ib, ik))
+               end do
+            end do
+         end do
+      end do
+   end subroutine exact_weighted_resolvent
+
    subroutine report_mixed_fixture()
-      complex(rp), allocatable :: moment(:, :), moment_fermi(:, :)
+      complex(rp), allocatable :: moment(:, :), moment_fermi(:, :), h_moment(:, :)
       real(rp) :: max_h_offdiag, min_h_offdiag, max_h_imag, min_h_imag
       real(rp) :: max_m_offdiag, max_n_offdiag, max_m_imag, max_n_imag
+      real(rp) :: max_m_residual
       integer :: i, j, ik, p
 
       max_h_offdiag = 0.0_rp
@@ -323,15 +453,18 @@ contains
       write (*, '(a,1x,a,es16.8,1x,a,es16.8)') 'MIXED_H_IMAG_OFFDIAG', 'min=', min_h_imag, &
          'max=', max_h_imag
 
-      allocate(moment(nbasis, nbasis), moment_fermi(nbasis, nbasis))
+      allocate(moment(nbasis, nbasis), moment_fermi(nbasis, nbasis), h_moment(nbasis, nbasis))
       do p = 0, lmto_product_max_gf_moment
          max_m_offdiag = 0.0_rp
          max_n_offdiag = 0.0_rp
          max_m_imag = 0.0_rp
          max_n_imag = 0.0_rp
+         max_m_residual = 0.0_rp
          do ik = 1, nk
             call exact_moment(state, ik, p, .false., moment)
             call exact_moment(state, ik, p, .true., moment_fermi)
+            call matrix_power(hamiltonians(:, :, ik), p, h_moment)
+            max_m_residual = max(max_m_residual, matrix_residual(moment, h_moment))
             do j = 1, nbasis
                do i = 1, nbasis
                   if (i == j) cycle
@@ -342,11 +475,11 @@ contains
                end do
             end do
          end do
-         write (*, '(a,1x,a,i0,1x,a,es16.8,1x,a,es16.8,1x,a,es16.8,1x,a,es16.8)') &
+         write (*, '(a,1x,a,i0,1x,a,es16.8,1x,a,es16.8,1x,a,es16.8,1x,a,es16.8,1x,a,es16.8)') &
             'MIXED_MOMENT_OFFDIAG', 'p=', p, 'maxM=', max_m_offdiag, 'maxN=', max_n_offdiag, &
-            'maxImagM=', max_m_imag, 'maxImagN=', max_n_imag
+            'maxImagM=', max_m_imag, 'maxImagN=', max_n_imag, 'rM_exact=', max_m_residual
       end do
-      deallocate(moment, moment_fermi)
+      deallocate(moment, moment_fermi, h_moment)
    end subroutine report_mixed_fixture
 
    subroutine run_mixed_ladder()
@@ -359,7 +492,7 @@ contains
          write (tag, '(a,i0)') 'mixed_eta_', i
          call report_moments(trim(tag), state, mixed_eta_points(i), mixed_eta_values(i), 1.0_rp)
          call report_response(trim(tag), product_plus, lr_channel_plus, q_gamma, gamma_frequencies, &
-            mixed_eta_points(i), mixed_eta_values(i), 1.0_rp)
+            mixed_eta_points(i), mixed_eta_values(i), 1.0_rp, .true.)
       end do
    end subroutine run_mixed_ladder
 
@@ -367,7 +500,7 @@ contains
       call require_resolved_mesh(mixed_eta_points(nmixed), mixed_eta_values(nmixed), 1.0_rp, state)
       call report_moments('mixed_finite_q', state, mixed_eta_points(nmixed), mixed_eta_values(nmixed), 1.0_rp)
       call report_response('mixed_finite_q', product_minus, lr_channel_minus, q_finite, static_frequency, &
-         mixed_eta_points(nmixed), mixed_eta_values(nmixed), 1.0_rp)
+         mixed_eta_points(nmixed), mixed_eta_values(nmixed), 1.0_rp, .true.)
    end subroutine run_mixed_finite_q
 
    subroutine require_resolved_mesh(ne, integration_eta, margin, electronic_state)
@@ -379,7 +512,7 @@ contains
       step = (maxval(electronic_state%eigenvalues) - minval(electronic_state%eigenvalues) + 2.0_rp*margin)/ &
          real(ne - 1, rp)
       ratio = step/integration_eta
-      if (ratio > 0.5_rp) error stop 'test_lr_product_gf_quadrature_audit: mixed mesh is not resolved'
+      if (ratio > 0.5_rp) error stop 'NUMERICAL_MESH_UNRESOLVED'
       write (*, '(a,1x,a,i0,1x,a,es16.8,1x,a,es16.8)') 'MIXED_RESOLUTION', 'n=', ne, 'h=', step, 'h_over_eta=', ratio
    end subroutine require_resolved_mesh
 
@@ -515,6 +648,25 @@ contains
       end do
    end subroutine exact_moment
 
+   subroutine matrix_power(base, power, result)
+      complex(rp), intent(in) :: base(:, :)
+      integer, intent(in) :: power
+      complex(rp), intent(out) :: result(:, :)
+      complex(rp), allocatable :: work(:, :)
+      integer :: n
+
+      allocate(work(size(base, 1), size(base, 2)))
+      result = cmplx(0.0_rp, 0.0_rp, rp)
+      do n = 1, size(base, 1)
+         result(n, n) = cmplx(1.0_rp, 0.0_rp, rp)
+      end do
+      work = base
+      do n = 1, power
+         result = matmul(result, work)
+      end do
+      deallocate(work)
+   end subroutine matrix_power
+
    subroutine report_response(phase, product, channel, q, frequencies, ne, integration_eta, margin, compare_contractions)
       character(len=*), intent(in) :: phase, channel
       type(lmto_product_response_basis), target, intent(in) :: product
@@ -530,6 +682,10 @@ contains
       type(lr_electronic_state), target :: local_endpoint
       integer :: ifrequency
       real(rp) :: d_f, r_f, d_inf, h, ratio, norm_reference
+      logical :: compare
+
+      compare = .false.
+      if (present(compare_contractions)) compare = compare_contractions
 
       call local_endpoint%initialize(eigenvalues, eigenvectors, spread(q, 2, nk), k_weights, occupations, &
          0.0_rp, temperature)
@@ -546,16 +702,14 @@ contains
       gf_request%q_endpoint_state => local_endpoint
       call evaluate_lr_product_gf_susceptibility(gf_request, gf_result)
 
-      if (present(compare_contractions)) then
-         if (compare_contractions) then
-            gf_request%contraction_backend = lr_product_gf_contraction_optimized
-            call evaluate_lr_product_gf_susceptibility(gf_request, optimized_result)
-            gf_request%contraction_backend = lr_product_gf_contraction_scalar
-            call evaluate_lr_product_gf_susceptibility(gf_request, scalar_result)
-            do ifrequency = 1, size(frequencies)
-               call report_three_way_contraction(phase, frequencies(ifrequency), scalar_result, optimized_result, gf_result)
-            end do
-         end if
+      if (compare) then
+         gf_request%contraction_backend = lr_product_gf_contraction_optimized
+         call evaluate_lr_product_gf_susceptibility(gf_request, optimized_result)
+         gf_request%contraction_backend = lr_product_gf_contraction_scalar
+         call evaluate_lr_product_gf_susceptibility(gf_request, scalar_result)
+         do ifrequency = 1, size(frequencies)
+            call report_three_way_contraction(phase, ifrequency, frequencies(ifrequency), scalar_result, optimized_result, gf_result)
+         end do
       end if
 
       lehmann_request%q = q
@@ -584,13 +738,18 @@ contains
             'frequency=', frequencies(ifrequency), 'eta_int=', integration_eta, 'margin=', margin, &
             'n=', ne, 'emin=', gf_result%energy_min, 'emax=', gf_result%energy_max, 'h=', h, &
             'ratio=', ratio, 'dF=', d_f, 'rF=', r_f, 'dInf=', d_inf, 'wall=', gf_result%wall_time_seconds
+         if (compare) then
+            call report_four_way_contraction(phase, ifrequency, frequencies(ifrequency), lehmann_result, &
+               scalar_result, optimized_result, gf_result)
+         end if
       end do
       deallocate(local_endpoint%k_points, local_endpoint%k_weights, local_endpoint%eigenvalues, &
          local_endpoint%eigenvectors, local_endpoint%occupations)
    end subroutine report_response
 
-   subroutine report_three_way_contraction(phase, frequency, scalar_result, optimized_result, factorized_result)
+   subroutine report_three_way_contraction(phase, ifrequency, frequency, scalar_result, optimized_result, factorized_result)
       character(len=*), intent(in) :: phase
+      integer, intent(in) :: ifrequency
       real(rp), intent(in) :: frequency
       type(lr_product_gf_susceptibility_result), intent(in) :: scalar_result, optimized_result, factorized_result
       real(rp) :: norm_scalar, norm_optimized, norm_factorized
@@ -599,28 +758,28 @@ contains
       real(rp) :: scalar_optimized_dInf, scalar_factorized_dInf, optimized_factorized_dInf
       real(rp) :: scale
 
-      norm_scalar = sqrt(sum(abs(scalar_result%susceptibility(:, :, 1))**2))
-      norm_optimized = sqrt(sum(abs(optimized_result%susceptibility(:, :, 1))**2))
-      norm_factorized = sqrt(sum(abs(factorized_result%susceptibility(:, :, 1))**2))
-      scalar_optimized_dF = matrix_difference(scalar_result%susceptibility(:, :, 1), &
-         optimized_result%susceptibility(:, :, 1))
-      scalar_factorized_dF = matrix_difference(scalar_result%susceptibility(:, :, 1), &
-         factorized_result%susceptibility(:, :, 1))
-      optimized_factorized_dF = matrix_difference(optimized_result%susceptibility(:, :, 1), &
-         factorized_result%susceptibility(:, :, 1))
+      norm_scalar = sqrt(sum(abs(scalar_result%susceptibility(:, :, ifrequency))**2))
+      norm_optimized = sqrt(sum(abs(optimized_result%susceptibility(:, :, ifrequency))**2))
+      norm_factorized = sqrt(sum(abs(factorized_result%susceptibility(:, :, ifrequency))**2))
+      scalar_optimized_dF = matrix_difference(scalar_result%susceptibility(:, :, ifrequency), &
+         optimized_result%susceptibility(:, :, ifrequency))
+      scalar_factorized_dF = matrix_difference(scalar_result%susceptibility(:, :, ifrequency), &
+         factorized_result%susceptibility(:, :, ifrequency))
+      optimized_factorized_dF = matrix_difference(optimized_result%susceptibility(:, :, ifrequency), &
+         factorized_result%susceptibility(:, :, ifrequency))
       scale = max(norm_scalar, norm_optimized, norm_factorized, epsilon(1.0_rp))
       scalar_optimized_rF = scalar_optimized_dF/scale
       scalar_factorized_rF = scalar_factorized_dF/scale
       optimized_factorized_rF = optimized_factorized_dF/scale
-      scalar_optimized_dInf = maxval(abs(scalar_result%susceptibility(:, :, 1) - &
-         optimized_result%susceptibility(:, :, 1)))
-      scalar_factorized_dInf = maxval(abs(scalar_result%susceptibility(:, :, 1) - &
-         factorized_result%susceptibility(:, :, 1)))
-      optimized_factorized_dInf = maxval(abs(optimized_result%susceptibility(:, :, 1) - &
-         factorized_result%susceptibility(:, :, 1)))
+      scalar_optimized_dInf = maxval(abs(scalar_result%susceptibility(:, :, ifrequency) - &
+         optimized_result%susceptibility(:, :, ifrequency)))
+      scalar_factorized_dInf = maxval(abs(scalar_result%susceptibility(:, :, ifrequency) - &
+         factorized_result%susceptibility(:, :, ifrequency)))
+      optimized_factorized_dInf = maxval(abs(optimized_result%susceptibility(:, :, ifrequency) - &
+         factorized_result%susceptibility(:, :, ifrequency)))
       if (max(scalar_optimized_rF, scalar_factorized_rF, optimized_factorized_rF) >= 1.0e-10_rp .or. &
           max(scalar_optimized_dInf, scalar_factorized_dInf, optimized_factorized_dInf) >= 1.0e-10_rp*max(1.0_rp, scale)) then
-         error stop 'test_lr_product_gf_quadrature_audit: three-way GF contraction oracle failed'
+         error stop 'GF_CONTRACTION_BACKEND_MISMATCH'
       end if
       write (*, '(a,1x,a,1x,a,es16.8)') 'THREE_WAY', 'phase='//trim(phase), 'frequency=', frequency
       write (*, '(a,1x,a,3(1x,es16.8))') 'THREE_WAY', 'norms=', norm_scalar, norm_optimized, norm_factorized
@@ -634,6 +793,90 @@ contains
          scalar_result%wall_time_seconds/max(factorized_result%wall_time_seconds, epsilon(1.0_rp)), &
          optimized_result%wall_time_seconds/max(factorized_result%wall_time_seconds, epsilon(1.0_rp))
    end subroutine report_three_way_contraction
+
+   subroutine report_four_way_contraction(phase, ifrequency, frequency, lehmann_result, scalar_result, &
+                                          optimized_result, factorized_result)
+      character(len=*), intent(in) :: phase
+      integer, intent(in) :: ifrequency
+      real(rp), intent(in) :: frequency
+      type(lr_product_ks_susceptibility_result), intent(in) :: lehmann_result
+      type(lr_product_gf_susceptibility_result), intent(in) :: scalar_result, optimized_result, factorized_result
+      real(rp) :: norm_lehmann, norm_scalar, norm_optimized, norm_factorized
+      real(rp) :: scalar_lehmann, optimized_lehmann, factorized_lehmann
+      real(rp) :: scalar_optimized, scalar_factorized, optimized_factorized
+      real(rp) :: scale
+
+      norm_lehmann = sqrt(sum(abs(lehmann_result%susceptibility(:, :, ifrequency))**2))
+      norm_scalar = sqrt(sum(abs(scalar_result%susceptibility(:, :, ifrequency))**2))
+      norm_optimized = sqrt(sum(abs(optimized_result%susceptibility(:, :, ifrequency))**2))
+      norm_factorized = sqrt(sum(abs(factorized_result%susceptibility(:, :, ifrequency))**2))
+      scalar_lehmann = matrix_difference(scalar_result%susceptibility(:, :, ifrequency), &
+         lehmann_result%susceptibility(:, :, ifrequency))/max(norm_lehmann, epsilon(1.0_rp))
+      optimized_lehmann = matrix_difference(optimized_result%susceptibility(:, :, ifrequency), &
+         lehmann_result%susceptibility(:, :, ifrequency))/max(norm_lehmann, epsilon(1.0_rp))
+      factorized_lehmann = matrix_difference(factorized_result%susceptibility(:, :, ifrequency), &
+         lehmann_result%susceptibility(:, :, ifrequency))/max(norm_lehmann, epsilon(1.0_rp))
+      scale = max(norm_scalar, norm_optimized, norm_factorized, epsilon(1.0_rp))
+      scalar_optimized = matrix_difference(scalar_result%susceptibility(:, :, ifrequency), &
+         optimized_result%susceptibility(:, :, ifrequency))/scale
+      scalar_factorized = matrix_difference(scalar_result%susceptibility(:, :, ifrequency), &
+         factorized_result%susceptibility(:, :, ifrequency))/scale
+      optimized_factorized = matrix_difference(optimized_result%susceptibility(:, :, ifrequency), &
+         factorized_result%susceptibility(:, :, ifrequency))/scale
+      write (*, '(a,1x,a,1x,a,es16.8)') 'FOUR_WAY', 'phase='//trim(phase), 'frequency=', frequency
+      write (*, '(a,1x,a,4(1x,es16.8))') 'FOUR_WAY', 'norms_lehmann_scalar_optimized_factorized=', &
+         norm_lehmann, norm_scalar, norm_optimized, norm_factorized
+      write (*, '(a,1x,a,3(1x,es16.8))') 'FOUR_WAY', 'rF_gf_vs_lehmann_scalar_optimized_factorized=', &
+         scalar_lehmann, optimized_lehmann, factorized_lehmann
+      write (*, '(a,1x,a,3(1x,es16.8))') 'FOUR_WAY', 'rF_pairwise_scalar_optimized_scalar_factorized_optimized_factorized=', &
+         scalar_optimized, scalar_factorized, optimized_factorized
+      if (max(scalar_optimized, scalar_factorized, optimized_factorized) >= 1.0e-10_rp) then
+         error stop 'GF_CONTRACTION_BACKEND_MISMATCH'
+      end if
+      call report_matrix_element_diagnostics('scalar', scalar_result%susceptibility(:, :, ifrequency), &
+         lehmann_result%susceptibility(:, :, ifrequency))
+      call report_matrix_element_diagnostics('optimized', optimized_result%susceptibility(:, :, ifrequency), &
+         lehmann_result%susceptibility(:, :, ifrequency))
+      call report_matrix_element_diagnostics('factorized', factorized_result%susceptibility(:, :, ifrequency), &
+         lehmann_result%susceptibility(:, :, ifrequency))
+   end subroutine report_four_way_contraction
+
+   subroutine report_matrix_element_diagnostics(backend, actual, reference)
+      character(len=*), intent(in) :: backend
+      complex(rp), intent(in) :: actual(:, :), reference(:, :)
+      real(rp) :: floor, absolute_error, relative_error, maximum_absolute, maximum_relative
+      integer :: i, j, worst_i, worst_j, relative_i, relative_j
+
+      floor = max(1.0e-12_rp, 1.0e-8_rp*maxval(abs(reference)))
+      maximum_absolute = 0.0_rp
+      maximum_relative = 0.0_rp
+      worst_i = 1
+      worst_j = 1
+      relative_i = 0
+      relative_j = 0
+      do j = 1, size(actual, 2)
+         do i = 1, size(actual, 1)
+            absolute_error = abs(actual(i, j) - reference(i, j))
+            if (absolute_error > maximum_absolute) then
+               maximum_absolute = absolute_error
+               worst_i = i
+               worst_j = j
+            end if
+            if (abs(reference(i, j)) >= floor) then
+               relative_error = absolute_error/abs(reference(i, j))
+               if (relative_error > maximum_relative) then
+                  maximum_relative = relative_error
+                  relative_i = i
+                  relative_j = j
+               end if
+            end if
+         end do
+      end do
+      write (*, '(a,1x,a,a,1x,a,es16.8,1x,a,es16.8,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,es16.8)') &
+         'MATRIX_DIAGNOSTICS', 'backend=', trim(backend), 'max_abs=', maximum_absolute, &
+         'max_rel=', maximum_relative, 'worst_i=', worst_i, 'worst_j=', worst_j, &
+         'relative_i=', relative_i, 'relative_j=', relative_j, 'amplitude_floor=', floor
+   end subroutine report_matrix_element_diagnostics
 
    real(rp) function matrix_difference(lhs, rhs) result(difference)
       complex(rp), intent(in) :: lhs(:, :), rhs(:, :)

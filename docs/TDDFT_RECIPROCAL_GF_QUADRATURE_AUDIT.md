@@ -380,7 +380,7 @@ response equations unchanged.
 ### Fixture and construction
 
 The mixed run retains `nbasis=8`, `nbands=8`, `nk=2`, one site,
-`response_lmax=2`, product dimension 27, and the TDVK-03A radial mesh,
+`response_lmax=2`, product dimension 36, and the TDVK-03A radial mesh,
 nonconstant `phi`, nonconstant `phidot`, and circular product channels. For
 each k point it constructs a deterministic dense complex Hermitian matrix,
 then obtains eigenvalues/eigenvectors with the project LAPACK Hermitian
