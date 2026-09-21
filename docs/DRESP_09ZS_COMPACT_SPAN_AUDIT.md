@@ -82,7 +82,10 @@ medians are `1.55e-6` and `1.55e-6`; the per-(l,l') maxima are:
 | 2,1 | `4.76e-6` | `1.95e-4` |
 | 2,2 | `1.41e-3` | `3.91e-3` |
 
-The full six-candidate residual reaches `1.70e-3` over `K`. The arbitrary-(L,M)
+The full six-candidate residual reaches `1.70e-3` over `K`; the global
+Frobenius residual is `4.56e-4`. The artifact also records all 28 new retained
+per-K right-singular-vector modes with site, dominant `(l,l')`, and normalized
+weights for `00/10/01/11/20/02`. The arbitrary-(L,M)
 physical sweep is active: the historical-span residual maxima are
 
 | diagnostic | maximum residual |

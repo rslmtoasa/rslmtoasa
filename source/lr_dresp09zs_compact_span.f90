@@ -77,7 +77,7 @@ contains
       type(response_space_layout), intent(in) :: space
       type(lmto_radial_basis), intent(in) :: radial_bases(:)
       type(block_audit) :: blocks(0:4)
-      real(rp) :: r20(0:4), r02(0:4), candidate_residual(0:4), principal_min(0:4)
+      real(rp) :: r20(0:4), r02(0:4), candidate_residual(0:4), candidate_global, principal_min(0:4)
       real(rp) :: r20_pair(0:2,0:2), r02_pair(0:2,0:2), r20_median, r02_median
       real(rp) :: physical_by_l(0:4), delta_by_l(0:4), physical_rms_by_l(0:4), delta_rms_by_l(0:4)
       real(rp) :: component_residual(7), mixed_residual, duality_residual(4), double_weighting_residual
@@ -117,7 +117,7 @@ contains
       end do
 
       call direct_new_branch_projection(blocks, r20, r02, r20_pair, r02_pair, r20_median, r02_median)
-      call whole_candidate_residual(blocks, candidate_residual)
+      call whole_candidate_residual(blocks, candidate_residual, candidate_global)
       call principal_angle_diagnostics(blocks, principal_min)
       call new_mode_overlap_diagnostics(blocks, max_new_overlap, rms_new_overlap)
       call physical_vertex_audit(space, radial_bases(1), blocks, physical_by_l, physical_rms_by_l, &
@@ -169,6 +169,7 @@ contains
       do k = 0, 4
          write(unit,'(i0,1x,4(es18.10,1x))') k, r20(k), r02(k), candidate_residual(k), principal_min(k)
       end do
+      write(unit,'(a,es18.10)') 'full_candidate_residual_global = ', candidate_global
       write(unit,'(a,2(es18.10,1x))') 'R20 maximum RMS = ', maxval(r20), sqrt(sum(r20*r20)/5.0_rp)
       write(unit,'(a,2(es18.10,1x))') 'R02 maximum RMS = ', maxval(r02), sqrt(sum(r02*r02)/5.0_rp)
       write(unit,'(a,es18.10)') 'R20 median = ', r20_median
@@ -382,18 +383,22 @@ contains
       deallocate(sorted)
    end function median_value
 
-   subroutine whole_candidate_residual(blocks, residual)
+   subroutine whole_candidate_residual(blocks, residual, global)
       type(block_audit), intent(in) :: blocks(0:4)
-      real(rp), intent(out) :: residual(0:4)
-      integer :: k, nentry
+      real(rp), intent(out) :: residual(0:4), global
+      integer :: k
       complex(rp), allocatable :: orthogonal(:, :)
-      residual = 0.0_rp
+      real(rp) :: orthogonal_norm, candidate_norm
+      residual = 0.0_rp; orthogonal_norm = 0.0_rp; candidate_norm = 0.0_rp
       do k = 0, 4
          allocate(orthogonal(size(blocks(k)%a_six,1),size(blocks(k)%a_six,2)))
          orthogonal = blocks(k)%a_six - matmul(blocks(k)%u_old,matmul(conjg(transpose(blocks(k)%u_old)),blocks(k)%a_six))
+         orthogonal_norm = orthogonal_norm + sum(abs(orthogonal)**2)
+         candidate_norm = candidate_norm + sum(abs(blocks(k)%a_six)**2)
          residual(k) = sqrt(sum(abs(orthogonal)**2)/max(sum(abs(blocks(k)%a_six)**2),tiny(1.0_rp)))
          deallocate(orthogonal)
       end do
+      global = sqrt(orthogonal_norm/max(candidate_norm,tiny(1.0_rp)))
    end subroutine whole_candidate_residual
 
    subroutine principal_angle_diagnostics(blocks, minimum_singular)
@@ -441,8 +446,9 @@ contains
    subroutine write_new_mode_composition(unit, blocks)
       integer, intent(in) :: unit
       type(block_audit), intent(in) :: blocks(0:4)
-      integer :: k, i, j, first, nnew
-      real(rp) :: total, new20, new02, oldpart
+      integer :: k, i, j, mode, first, nnew, top_l, top_lp
+      real(rp) :: total, new20, new02, oldpart, max_pair
+      real(rp) :: branch_weight(6), pair_weight(0:2,0:2)
 
       write(unit,'(a)') 'new_mode_composition = retained six-branch right-singular-vector weight by branch'
       do k = 0, 4
@@ -462,6 +468,27 @@ contains
             write(unit,'(a,i0,1x,i0,1x,3(es18.10,1x))') 'K new_modes branch20 branch02 branches00_10_01_11 = ', &
                k, nnew, new20/total, new02/total, oldpart/total
          end if
+         do mode = first, blocks(k)%rank_six(1)
+            branch_weight = 0.0_rp; pair_weight = 0.0_rp
+            do j = 1, blocks(k)%nc_six
+               branch_weight(blocks(k)%six_candidates(j)%branch) = branch_weight(blocks(k)%six_candidates(j)%branch) + &
+                  abs(blocks(k)%right_six(mode,j))
+               pair_weight(blocks(k)%six_candidates(j)%l,blocks(k)%six_candidates(j)%lp) = &
+                  pair_weight(blocks(k)%six_candidates(j)%l,blocks(k)%six_candidates(j)%lp) + abs(blocks(k)%right_six(mode,j))
+            end do
+            total = sum(branch_weight); max_pair = 0.0_rp; top_l = 0; top_lp = 0
+            do i = 0, 2
+               do j = 0, 2
+                  if (pair_weight(i,j) > max_pair) then
+                     max_pair = pair_weight(i,j); top_l = i; top_lp = j
+                  end if
+               end do
+            end do
+            if (total > tiny(1.0_rp)) then
+               write(unit,'(a,5(i0,1x),6(es14.6,1x))') 'new_mode K mode site top_l top_lp = ', &
+                  k, mode-first+1, 1, top_l, top_lp, branch_weight/total
+            end if
+         end do
       end do
    end subroutine write_new_mode_composition
 

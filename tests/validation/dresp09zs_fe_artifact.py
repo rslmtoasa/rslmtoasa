@@ -51,6 +51,7 @@ def main() -> None:
     assert number(values, "mixed_LM_full_SR_residual") > 1.0e-8
     assert number(values, "double_weighting_negative_residual") > 1.0e-3
     assert number(values, "L0_scalar_projection_regression") < 1.0e-12
+    assert number(values, "full_candidate_residual_global") > 1.0e-8
 
     duality = vector(values, "field_density_duality_single_mixed_circular_real", 4)
     assert max(duality) < 1.0e-12
