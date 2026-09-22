@@ -52,7 +52,13 @@ module lr_dresp10f_mixed_ward_bridge_mod
    character(len=*), parameter, public :: dresp10f_pass_b = 'PASS-B'
    character(len=*), parameter, public :: dresp10f_blocked = 'BLOCKED'
 
+   logical, save :: measurement_cache_ready = .false.
+   integer, save :: measurement_cache_nsite = 0, measurement_cache_npoint = 0, measurement_cache_norb = 0
+   real(rp), allocatable, save :: measurement_radial_cache(:, :, :, :, :), measurement_gaunt_cache(:, :, :)
+
    public :: run_dresp10f_fixed_basis_mixed_ward
+   public :: apply_static_selfconsistent_action
+   public :: apply_static_denominator
 
 contains
 
@@ -335,6 +341,64 @@ contains
          product_vertices,covariant_raw,covariant_contact,covariant_total,contact_c,probe_source,probe_raw,probe_compact)
    end subroutine run_dresp10f_fixed_basis_mixed_ward
 
+   !> Authoritative DRESP-11 matrix-free action in the compact Pauli space.
+   !>
+   !> The input is a compact Pauli density coordinate vector.  It is first
+   !> reconstructed by D_P, converted by the physical local Kxc map to a raw
+   !> SR field, and then passed through the unchanged DRESP-10F source,
+   !> Frechet, and R_P chain.  The radial factor is the coordinate conversion
+   !> between the physical density d(r) and the raw response coordinate x(r):
+   !> d(r)=sqrt(4*pi)*r**2*x(r).
+   subroutine apply_static_selfconsistent_action(space, radial_bases, product, reciprocal_obj, kxc, c, ac)
+      type(response_space_layout), intent(in) :: space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(lmto_product_response_basis), intent(in) :: product
+      type(reciprocal), intent(in) :: reciprocal_obj
+      real(rp), intent(in) :: kxc(:, :)
+      complex(rp), intent(in) :: c(:)
+      complex(rp), intent(out) :: ac(:)
+      complex(rp), allocatable :: density(:), source(:), response(:)
+      real(rp) :: oracle_residual
+      logical :: source_vertex_ok
+      type(response_super_index) :: item
+      integer :: flat
+
+      if (size(c) /= product%product_dimension .or. size(ac) /= product%product_dimension .or. &
+          size(kxc, 1) /= space%nsite .or. size(kxc, 2) /= space%npoint) then
+         error stop 'DRESP-11 static action: compact/Kxc shape mismatch'
+      end if
+      allocate(density(space%ndim), source(space%ndim), response(space%ndim))
+      call dresp09_raw_field_from_compact(space, product, c, density)
+      source = cmplx(0.0_rp, 0.0_rp, rp)
+      do flat = 1, space%ndim
+         call response_unflatten_superindex(flat, space%nsite, space%response_lmax, space%npoint, space%nchannel, item)
+         if (space%radius(item%radial_point) > 0.0_rp) then
+            source(flat) = cmplx(4.0_rp*response_angular_pi*space%radius(item%radial_point)**2* &
+               kxc(item%site, item%radial_point), 0.0_rp, rp)*density(flat)
+         end if
+      end do
+      call mixed_static_action(space, radial_bases, product, reciprocal_obj, source, response, ac, oracle_residual, &
+         source_vertex_ok, .false.)
+      if (.not. source_vertex_ok .or. .not. ieee_is_finite(oracle_residual)) then
+         error stop 'DRESP-11 static action: DRESP-10F source/response oracle failed'
+      end if
+      deallocate(density, source, response)
+   end subroutine apply_static_selfconsistent_action
+
+   !> Authoritative denominator action D=I-A in the compact Pauli space.
+   subroutine apply_static_denominator(space, radial_bases, product, reciprocal_obj, kxc, c, dc)
+      type(response_space_layout), intent(in) :: space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(lmto_product_response_basis), intent(in) :: product
+      type(reciprocal), intent(in) :: reciprocal_obj
+      real(rp), intent(in) :: kxc(:, :)
+      complex(rp), intent(in) :: c(:)
+      complex(rp), intent(out) :: dc(:)
+
+      call apply_static_selfconsistent_action(space, radial_bases, product, reciprocal_obj, kxc, c, dc)
+      dc = c - dc
+   end subroutine apply_static_denominator
+
    subroutine pauli_product_span_oracle(space, radial, product, by_l, maximum)
       type(response_space_layout), intent(in) :: space
       type(lmto_radial_basis), intent(in) :: radial
@@ -396,7 +460,7 @@ contains
    end subroutine build_l0_target
 
    subroutine mixed_static_action(space, radial_bases, product, reciprocal_obj, source_field, response_raw, &
-                                  response_compact, oracle_residual, source_vertex_ok)
+                                  response_compact, oracle_residual, source_vertex_ok, verify_transition)
       type(response_space_layout), intent(in) :: space
       type(lmto_radial_basis), intent(in) :: radial_bases(:)
       type(lmto_product_response_basis), intent(in) :: product
@@ -405,18 +469,23 @@ contains
       complex(rp), intent(out) :: response_raw(:), response_compact(:)
       real(rp), intent(out) :: oracle_residual
       logical, intent(out) :: source_vertex_ok
+      logical, intent(in), optional :: verify_transition
       complex(rp), allocatable :: components(:, :, :, :), operators(:, :, :), h(:, :), delta_h(:, :), delta_rho(:, :)
       complex(rp), allocatable :: point_response(:), compact_direct(:), compact_transition(:)
       integer :: nmat, nk, ik, ik_global
       real(rp) :: wsum
+      logical :: do_transition
 
       nmat = size(reciprocal_obj%hk_bulk,1); nk = size(reciprocal_obj%hk_bulk,3); wsum = sum(reciprocal_obj%k_weights)
+      do_transition = .true.; if (present(verify_transition)) do_transition = verify_transition
       allocate(components(nmat,nmat,lmto_product_nbranch,lr_full_spatial_npiece), operators(nmat,nmat,lr_full_spatial_npiece), &
          h(nmat,nmat),delta_h(nmat,nmat),delta_rho(nmat,nmat),point_response(space%ndim), &
-         compact_direct(product%product_dimension),compact_transition(product%product_dimension))
+         compact_direct(product%product_dimension))
+      if (do_transition) allocate(compact_transition(product%product_dimension))
       call lr_full_spatial_source_components(space,radial_bases,source_field,1,components)
       source_vertex_ok = .true.; oracle_residual = 0.0_rp
-      response_raw = cmplx(0.0_rp,0.0_rp,rp); compact_direct = cmplx(0.0_rp,0.0_rp,rp); compact_transition = cmplx(0.0_rp,0.0_rp,rp)
+      response_raw = cmplx(0.0_rp,0.0_rp,rp); compact_direct = cmplx(0.0_rp,0.0_rp,rp)
+      if (do_transition) compact_transition = cmplx(0.0_rp,0.0_rp,rp)
       do ik = 1, nk
          ik_global = ik; if (allocated(reciprocal_obj%k_l2g_map)) ik_global = reciprocal_obj%k_l2g_map(ik)
          h = reciprocal_obj%hk_bulk(:,:,ik)
@@ -425,18 +494,21 @@ contains
          call lr_static_frechet_density(reciprocal_obj%eigenvalues(:,ik),reciprocal_obj%eigenvectors(:,:,ik), &
             reciprocal_obj%fermi_level,reciprocal_obj%temperature,delta_h,delta_rho)
          call fixed_pauli_measurement(space,radial_bases,h,delta_rho,point_response)
-         call compact_density_measurement(product,reciprocal_obj%eigenvalues(:,ik),reciprocal_obj%eigenvectors(:,:,ik), &
-            delta_rho,reciprocal_obj%fermi_level,reciprocal_obj%temperature,compact_transition)
-         call dresp09_compact_field_from_raw(space,product,point_response,compact_direct)
-         oracle_residual = max(oracle_residual,relative_vector(compact_direct,compact_transition))
+         if (do_transition) then
+            call compact_density_measurement(product,reciprocal_obj%eigenvalues(:,ik),reciprocal_obj%eigenvectors(:,:,ik), &
+               delta_rho,reciprocal_obj%fermi_level,reciprocal_obj%temperature,compact_transition)
+            call dresp09_compact_field_from_raw(space,product,point_response,compact_direct)
+            oracle_residual = max(oracle_residual,relative_vector(compact_direct,compact_transition))
+         end if
          response_raw = response_raw + reciprocal_obj%k_weights(ik_global)*point_response
          compact_direct = cmplx(0.0_rp,0.0_rp,rp)
-         compact_transition = cmplx(0.0_rp,0.0_rp,rp)
+         if (do_transition) compact_transition = cmplx(0.0_rp,0.0_rp,rp)
       end do
       response_raw = response_raw/wsum
       call dresp09_compact_field_from_raw(space,product,response_raw,response_compact)
       source_vertex_ok = ieee_is_finite(oracle_residual)
-      deallocate(components,operators,h,delta_h,delta_rho,point_response,compact_direct,compact_transition)
+      deallocate(components,operators,h,delta_h,delta_rho,point_response,compact_direct)
+      if (do_transition) deallocate(compact_transition)
    end subroutine mixed_static_action
 
    subroutine fixed_pauli_measurement(space, radial_bases, hamiltonian, delta_rho, response)
@@ -447,10 +519,11 @@ contains
       complex(rp), allocatable :: effective(:, :, :)
       type(response_super_index) :: item
       integer :: nsite, norb, n, site, ir, iorb, jorb, l, lp, m, mp, response_l, response_m, branch, p, q, row, col, flat
-      real(rp) :: radial_value, gaunt
+      integer :: lm_index
 
       nsite = size(radial_bases); norb = (radial_bases(1)%lmax+1)**2; n = 2*norb*nsite
       if (size(response) /= space%ndim .or. any(shape(delta_rho) /= [n,n])) error stop 'DRESP-10F measurement: shape mismatch'
+      call ensure_measurement_cache(space, radial_bases)
       allocate(effective(n,n,lmto_product_nbranch)); response = cmplx(0.0_rp,0.0_rp,rp)
       do branch = 1, lmto_product_nbranch
          ! Tr(O_pq delta-rho) = Tr(O H**q delta-rho H**p): the response
@@ -460,8 +533,11 @@ contains
       do site = 1, nsite
          do response_l = 0, space%response_lmax
             do response_m = -response_l, response_l
+               lm_index = response_l*response_l + response_l + response_m + 1
                do ir = 1, space%npoint
                   if (space%radial_weights(ir) <= 0.0_rp) cycle
+                  item = response_super_index(site,response_l,response_m,ir,1)
+                  call response_flatten_superindex(item,space%nsite,space%response_lmax,space%npoint,space%nchannel,flat)
                   do iorb = 1, norb
                      l = lmto_orbital_l(iorb); m = iorb-l*l-l-1
                      row = (site-1)*2*norb+iorb
@@ -469,11 +545,8 @@ contains
                         lp = lmto_orbital_l(jorb); mp = jorb-lp*lp-lp-1
                         col = (site-1)*2*norb+jorb+norb
                         do branch = 1, lmto_product_nbranch
-                           call lmto_product_second_order_radial_branch(radial_bases(site),ir,l,lp,1,2,branch,radial_value)
-                           gaunt = response_gaunt(l,m,lp,mp,response_l,response_m)
-                           item = response_super_index(site,response_l,response_m,ir,1)
-                           call response_flatten_superindex(item,space%nsite,space%response_lmax,space%npoint,space%nchannel,flat)
-                           response(flat) = response(flat) + 2.0_rp*gaunt*effective(col,row,branch)*radial_value
+                           response(flat) = response(flat) + 2.0_rp*measurement_gaunt_cache(iorb,jorb,lm_index)* &
+                              effective(col,row,branch)*measurement_radial_cache(site,ir,iorb,jorb,branch)
                         end do
                      end do
                   end do
@@ -483,6 +556,49 @@ contains
       end do
       deallocate(effective)
    end subroutine fixed_pauli_measurement
+
+   subroutine ensure_measurement_cache(space, radial_bases)
+      type(response_space_layout), intent(in) :: space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      integer :: nsite, norb, site, ir, iorb, jorb, l, lp, m, mp, response_l, response_m, branch, lm_index
+      real(rp) :: radial_value
+
+      nsite = size(radial_bases); norb = (radial_bases(1)%lmax+1)**2
+      if (measurement_cache_ready .and. measurement_cache_nsite == nsite .and. &
+          measurement_cache_npoint == space%npoint .and. measurement_cache_norb == norb) return
+      if (allocated(measurement_radial_cache)) deallocate(measurement_radial_cache)
+      if (allocated(measurement_gaunt_cache)) deallocate(measurement_gaunt_cache)
+      allocate(measurement_radial_cache(nsite,space%npoint,norb,norb,lmto_product_nbranch), &
+         measurement_gaunt_cache(norb,norb,(space%response_lmax+1)**2))
+      do site = 1,nsite
+         do ir = 1,space%npoint
+            do iorb = 1,norb
+               l = lmto_orbital_l(iorb); m = iorb-l*l-l-1
+               do jorb = 1,norb
+                  lp = lmto_orbital_l(jorb); mp = jorb-lp*lp-lp-1
+                  do branch = 1,lmto_product_nbranch
+                     call lmto_product_second_order_radial_branch(radial_bases(site),ir,l,lp,1,2,branch,radial_value)
+                     measurement_radial_cache(site,ir,iorb,jorb,branch) = radial_value
+                  end do
+               end do
+            end do
+         end do
+      end do
+      do response_l = 0,space%response_lmax
+         do response_m = -response_l,response_l
+            lm_index = response_l*response_l + response_l + response_m + 1
+            do iorb = 1,norb
+               l = lmto_orbital_l(iorb); m = iorb-l*l-l-1
+               do jorb = 1,norb
+                  lp = lmto_orbital_l(jorb); mp = jorb-lp*lp-lp-1
+                  measurement_gaunt_cache(iorb,jorb,lm_index) = response_gaunt(l,m,lp,mp,response_l,response_m)
+               end do
+            end do
+         end do
+      end do
+      measurement_cache_nsite = nsite; measurement_cache_npoint = space%npoint; measurement_cache_norb = norb
+      measurement_cache_ready = .true.
+   end subroutine ensure_measurement_cache
 
    subroutine compact_density_measurement(product, eigenvalues, eigenvectors, delta_rho, fermi_level, temperature, response)
       type(lmto_product_response_basis), intent(in) :: product

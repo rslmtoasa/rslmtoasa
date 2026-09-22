@@ -8,8 +8,10 @@ program test_lr_ward_mode_analysis
 
    integer, parameter :: n = 4
    complex(rp) :: denominator(n, n), magnetization(n)
+   complex(rp) :: rigid_delta(n, n), svd_delta(n, n), corrected(n, n), ward(n), svd_vector(n)
    type(lr_ward_mode_analysis_result) :: result, negative_result
-   real(rp) :: reconstruction_tolerance
+   real(rp) :: reconstruction_tolerance, mnorm, sigma0
+   integer :: i, j, sidx
 
    denominator = cmplx(0.0_rp, 0.0_rp, rp)
    denominator(1, 1) = cmplx(1.0e-8_rp, 2.0e-8_rp, rp)
@@ -40,6 +42,35 @@ program test_lr_ward_mode_analysis
    end if
    if (result%singular_vector_overlap(minloc(result%singular_values, dim=1)) < 0.9_rp) then
       error stop 'Ward fixture: SVD overlap diagnostic failed'
+   end if
+
+   ! Exact rank-one rigid correction: Delta D = -|r><m| / <m|m>.
+   mnorm = sqrt(real(dot_product(magnetization, magnetization), rp))
+   ward = matmul(denominator, magnetization)
+   rigid_delta = cmplx(0.0_rp, 0.0_rp, rp)
+   do j = 1, n
+      do i = 1, n
+         rigid_delta(i, j) = -ward(i)*conjg(magnetization(j))/max(mnorm*mnorm, tiny(1.0_rp))
+      end do
+   end do
+   corrected = denominator + rigid_delta
+   if (sqrt(sum(abs(matmul(corrected, magnetization))**2))/mnorm > 2.0e-11_rp) then
+      error stop 'Ward fixture: exact rigid correction failed'
+   end if
+
+   ! Exact SVD correction: Delta D = -sigma_0 |u_0><v_0|.
+   sidx = minloc(result%singular_values, dim=1)
+   sigma0 = result%singular_values(sidx)
+   svd_vector = result%singular_right_vectors(:, sidx)
+   svd_delta = cmplx(0.0_rp, 0.0_rp, rp)
+   do j = 1, n
+      do i = 1, n
+         svd_delta(i, j) = -sigma0*result%singular_left_vectors(i, sidx)*conjg(svd_vector(j))
+      end do
+   end do
+   corrected = denominator + svd_delta
+   if (sqrt(sum(abs(matmul(corrected, svd_vector))**2)) > 2.0e-11_rp) then
+      error stop 'Ward fixture: exact SVD correction failed'
    end if
 
    magnetization = cmplx(0.0_rp, 0.0_rp, rp)

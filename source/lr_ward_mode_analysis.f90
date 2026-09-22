@@ -17,6 +17,7 @@ module lr_ward_mode_analysis_mod
 
    type, public :: lr_ward_mode_analysis_result
       logical :: succeeded = .false.
+      logical :: eigen_succeeded = .false.
       integer :: dimension = 0
       integer :: nearest_zero_index = 0
       real(rp) :: magnetization_norm = 0.0_rp
@@ -25,8 +26,12 @@ module lr_ward_mode_analysis_mod
       real(rp) :: eigen_reconstruction_residual = huge(1.0_rp)
       real(rp) :: ward_reconstruction_residual = huge(1.0_rp)
       real(rp) :: min_singular_value = huge(1.0_rp)
+      real(rp) :: second_singular_value = huge(1.0_rp)
       real(rp) :: max_singular_value = 0.0_rp
       real(rp) :: condition_number = huge(1.0_rp)
+      real(rp) :: matrix_norm_2 = 0.0_rp
+      real(rp) :: matrix_norm_frobenius = 0.0_rp
+      real(rp) :: eigenvector_condition_estimate = huge(1.0_rp)
       real(rp) :: minimum_magnitude_eigenvalue = huge(1.0_rp)
       integer, allocatable :: magnitude_order(:)
       complex(rp), allocatable :: eigenvalues(:)
@@ -43,10 +48,13 @@ module lr_ward_mode_analysis_mod
       real(rp), allocatable :: ward_modal_norm_diagnostic(:)
       real(rp), allocatable :: singular_values(:)
       real(rp), allocatable :: singular_vector_overlap(:)
+      complex(rp), allocatable :: singular_left_vectors(:, :), singular_right_vectors(:, :)
+      complex(rp), allocatable :: smallest_singular_left_vector(:)
       complex(rp), allocatable :: smallest_singular_right_vector(:)
    end type lr_ward_mode_analysis_result
 
    public :: analyze_lr_ward_mode
+   public :: lr_matrix_norms
 
    interface
       subroutine zgeev(jobvl, jobvr, n, a, lda, w, vl, ldvl, vr, ldvr, work, lwork, rwork, info)
@@ -96,13 +104,12 @@ contains
 
       complex(rp), allocatable :: matrix_work(:, :), left_raw(:, :), right(:, :), inverse_right(:, :)
       complex(rp), allocatable :: work(:), reconstruction(:, :), mode_vector(:)
-      complex(rp), allocatable :: svd_work_matrix(:, :), vt(:, :), svd_work(:)
       complex(rp), allocatable :: ward_vector(:), ward_sum(:)
       complex(rp) :: query(1)
-      real(rp), allocatable :: rwork(:), singular_values(:), svd_rwork(:)
-      real(rp) :: mnorm, dnorm, mode_norm, ward_modal_norm_sum, scale
+      real(rp), allocatable :: rwork(:)
+      real(rp) :: mnorm, dnorm, mode_norm, ward_modal_norm_sum
       integer, allocatable :: pivots(:)
-      integer :: n, lwork, info, i, j, mode
+      integer :: n, lwork, info, i
       logical :: inverse_ok
 
       call initialize_result(result)
@@ -116,12 +123,35 @@ contains
          result%coefficients(n), result%ward_vector(n), result%magnitude_order(n), &
          result%right_overlap(n), result%biorthogonal_weight(n), result%magnetization_mode_fraction(n), &
          result%ward_modal_norm_diagnostic(n), result%singular_values(n), result%singular_vector_overlap(n), &
-         result%smallest_singular_right_vector(n), matrix_work(n, n), left_raw(n, n), right(n, n), &
+         result%singular_left_vectors(n, n), result%singular_right_vectors(n, n), &
+         result%smallest_singular_left_vector(n), result%smallest_singular_right_vector(n), &
+         matrix_work(n, n), left_raw(n, n), right(n, n), &
          inverse_right(n, n), reconstruction(n, n), ward_vector(n), ward_sum(n))
+      result%eigenvalues = cmplx(0.0_rp, 0.0_rp, rp)
+      result%right_eigenvectors = cmplx(0.0_rp, 0.0_rp, rp)
+      result%left_eigenvectors = cmplx(0.0_rp, 0.0_rp, rp)
+      result%coefficients = cmplx(0.0_rp, 0.0_rp, rp)
+      result%ward_vector = cmplx(0.0_rp, 0.0_rp, rp)
+      result%magnitude_order = 0
+      result%right_overlap = 0.0_rp
+      result%biorthogonal_weight = 0.0_rp
+      result%magnetization_mode_fraction = 0.0_rp
+      result%ward_modal_norm_diagnostic = 0.0_rp
+      result%singular_values = 0.0_rp
+      result%singular_vector_overlap = 0.0_rp
+      result%singular_left_vectors = cmplx(0.0_rp, 0.0_rp, rp)
+      result%singular_right_vectors = cmplx(0.0_rp, 0.0_rp, rp)
+      result%smallest_singular_left_vector = cmplx(0.0_rp, 0.0_rp, rp)
+      result%smallest_singular_right_vector = cmplx(0.0_rp, 0.0_rp, rp)
 
       mnorm = sqrt(sum(abs(magnetization)**2))
       result%magnetization_norm = mnorm
       if (mnorm <= tiny(1.0_rp)) return
+
+      ! SVD is the primary diagnostic and must remain available even when the
+      ! secondary non-Hermitian eigenvector problem is ill-conditioned.
+      call analyze_svd(denominator, magnetization, result)
+      if (.not. result%succeeded) return
 
       matrix_work = denominator
       allocate(rwork(max(1, 2*n)))
@@ -139,6 +169,7 @@ contains
       ! If R is the right-eigenvector matrix, R^-1 supplies the rows of the
       ! biorthogonal left bras.  Store their corresponding left kets.
       result%left_eigenvectors = conjg(transpose(inverse_right))
+      result%eigenvector_condition_estimate = sqrt(sum(abs(right)**2))*sqrt(sum(abs(inverse_right)**2))
       result%coefficients = cmplx(0.0_rp, 0.0_rp, rp)
       do i = 1, n
          result%coefficients(i) = dot_product(result%left_eigenvectors(:, i), magnetization)
@@ -187,36 +218,52 @@ contains
          result%biorthogonal_weight(i) = abs(result%coefficients(i))*mode_norm/mnorm
          result%magnetization_mode_fraction(i) = sum(abs(result%right_eigenvectors(:, i)*result%coefficients(i))**2)/mnorm**2
       end do
+      result%eigen_succeeded = .true.
+   end subroutine analyze_lr_ward_mode
 
-      allocate(svd_work_matrix(n, n), vt(n, n), singular_values(n), svd_rwork(max(1, 5*n)), svd_work(1))
-      svd_work_matrix = denominator
-      call zgesvd('N', 'A', n, n, svd_work_matrix, n, singular_values, reconstruction, n, vt, n, svd_work, -1, svd_rwork, info)
+   subroutine analyze_svd(denominator, magnetization, result)
+      complex(rp), intent(in) :: denominator(:, :), magnetization(:)
+      type(lr_ward_mode_analysis_result), intent(inout) :: result
+      complex(rp), allocatable :: work_matrix(:, :), u(:, :), vt(:, :), work(:)
+      complex(rp) :: query(1)
+      real(rp), allocatable :: singular_values(:), rwork(:)
+      real(rp) :: scale
+      integer :: n, lwork, info, i, mode
+
+      n = size(denominator, 1)
+      allocate(work_matrix(n,n), u(n,n), vt(n,n), singular_values(n), rwork(max(1,5*n)), work(1))
+      work_matrix = denominator
+      call zgesvd('A','A',n,n,work_matrix,n,singular_values,u,n,vt,n,work,-1,rwork,info)
       if (info /= 0) return
-      lwork = max(1, nint(real(svd_work(1), rp)))
-      deallocate(svd_work)
-      allocate(svd_work(lwork))
-      svd_work_matrix = denominator
-      call zgesvd('N', 'A', n, n, svd_work_matrix, n, singular_values, reconstruction, n, vt, n, svd_work, lwork, svd_rwork, info)
+      lwork = max(1,nint(real(work(1),rp)))
+      deallocate(work); allocate(work(lwork)); work_matrix = denominator
+      call zgesvd('A','A',n,n,work_matrix,n,singular_values,u,n,vt,n,work,lwork,rwork,info)
       if (info /= 0) return
       result%singular_values = singular_values
       result%min_singular_value = minval(singular_values)
       result%max_singular_value = maxval(singular_values)
-      result%condition_number = result%max_singular_value/max(result%min_singular_value, tiny(1.0_rp))
-      mode = minloc(singular_values, dim=1)
-      do i = 1, n
-         result%smallest_singular_right_vector(i) = conjg(vt(mode, i))
+      result%matrix_norm_2 = result%max_singular_value
+      result%matrix_norm_frobenius = sqrt(sum(singular_values**2))
+      result%condition_number = result%max_singular_value/max(result%min_singular_value,tiny(1.0_rp))
+      mode = minloc(singular_values,dim=1)
+      result%second_singular_value = huge(1.0_rp)
+      do i = 1,n
+         if (i /= mode) result%second_singular_value = min(result%second_singular_value,singular_values(i))
+         result%singular_left_vectors(:,i) = u(:,i)
+         result%singular_right_vectors(:,i) = conjg(vt(i,:))
+         scale = sqrt(sum(abs(result%singular_right_vectors(:,i))**2))
+         result%singular_vector_overlap(i) = abs(dot_product(result%singular_right_vectors(:,i),magnetization))/ &
+            max(scale*max(result%magnetization_norm,tiny(1.0_rp)),tiny(1.0_rp))
       end do
-      scale = sqrt(sum(abs(result%smallest_singular_right_vector)**2))
-      result%singular_vector_overlap = 0.0_rp
-      result%singular_vector_overlap(mode) = abs(dot_product(result%smallest_singular_right_vector, magnetization))/ &
-         max(scale*mnorm, tiny(1.0_rp))
-
+      result%smallest_singular_left_vector = result%singular_left_vectors(:,mode)
+      result%smallest_singular_right_vector = result%singular_right_vectors(:,mode)
       result%succeeded = .true.
-   end subroutine analyze_lr_ward_mode
+   end subroutine analyze_svd
 
    subroutine initialize_result(result)
       type(lr_ward_mode_analysis_result), intent(out) :: result
       result%succeeded = .false.
+      result%eigen_succeeded = .false.
       result%dimension = 0
       result%nearest_zero_index = 0
       result%magnetization_norm = 0.0_rp
@@ -226,6 +273,10 @@ contains
       result%ward_reconstruction_residual = huge(1.0_rp)
       result%min_singular_value = huge(1.0_rp)
       result%max_singular_value = 0.0_rp
+      result%second_singular_value = huge(1.0_rp)
+      result%matrix_norm_2 = 0.0_rp
+      result%matrix_norm_frobenius = 0.0_rp
+      result%eigenvector_condition_estimate = huge(1.0_rp)
       result%condition_number = huge(1.0_rp)
       result%minimum_magnitude_eigenvalue = huge(1.0_rp)
    end subroutine initialize_result
@@ -250,6 +301,29 @@ contains
       call zgetri(n, inverse, n, pivots, work, lwork, info)
       success = info == 0
    end subroutine invert_square_matrix
+
+   subroutine lr_matrix_norms(matrix, norm_2, norm_frobenius)
+      complex(rp), intent(in) :: matrix(:, :)
+      real(rp), intent(out) :: norm_2, norm_frobenius
+      complex(rp), allocatable :: work_matrix(:, :), u(:, :), vt(:, :), work(:)
+      real(rp), allocatable :: singular_values(:), rwork(:)
+      complex(rp) :: query(1)
+      integer :: m, n, lwork, info
+
+      m = size(matrix, 1); n = size(matrix, 2)
+      if (m < 1 .or. n < 1) error stop 'lr_matrix_norms: empty matrix'
+      allocate(work_matrix(m, n), u(m, min(m,n)), vt(min(m,n), n), singular_values(min(m,n)), &
+         rwork(max(1, 5*min(m,n))), work(1))
+      work_matrix = matrix
+      call zgesvd('N', 'N', m, n, work_matrix, m, singular_values, u, m, vt, min(m,n), work, -1, rwork, info)
+      if (info /= 0) error stop 'lr_matrix_norms: zgesvd workspace query failed'
+      lwork = max(1, nint(real(work(1), rp)))
+      deallocate(work); allocate(work(lwork)); work_matrix = matrix
+      call zgesvd('N', 'N', m, n, work_matrix, m, singular_values, u, m, vt, min(m,n), work, lwork, rwork, info)
+      if (info /= 0) error stop 'lr_matrix_norms: zgesvd failed'
+      norm_2 = maxval(singular_values)
+      norm_frobenius = sqrt(sum(singular_values**2))
+   end subroutine lr_matrix_norms
 
    subroutine sort_mode_order(order, eigenvalues)
       integer, intent(inout) :: order(:)
