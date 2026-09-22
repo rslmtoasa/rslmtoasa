@@ -994,7 +994,6 @@ if (RUN_UNIT_TESTS)
     COMMAND ${TestBinary} input_dresp12_fe.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
   set_tests_properties(TddftDresp12FiniteLmtoCovariance PROPERTIES
-    DEPENDS Dresp11FeArtifact
     LABELS "integration;tddft;dresp-12;finite-lmto;covariance;ward;accepted-state;64-k"
     TIMEOUT 2400)
   add_test(NAME Dresp12FeArtifact

@@ -1,214 +1,157 @@
-# DRESP-12 — finite-LMTO rigid-response decomposition
+# DRESP-12 — finite-LMTO covariance closure
 
-Starting HEAD for this closure: `e4fe233d47418a004641f91cb03c40456bf37def`.
+Starting HEAD for this closure: `28c8058091bbd86a2db53e071861fa190fa8c49a`.
 
 DRESP-12 is a static, diagnostic-only Gamma-point closure for the accepted
-64-k bcc-Fe `ham_only` state. It does not modify the Hamiltonian-side
-covariance bridge, response kernel, denominator, SVD, or production dynamics.
-Goldstone restoration, BES/Halle paths, fitting, rescaling, and correction
-routes are all off.
+64-k bcc-Fe `ham_only` state. It does not change the response kernel,
+denominator, SVD, production dynamics, Goldstone correction, or XC
+formulation. DRESP-13, LMTO basis-response/Sternheimer work, finite-q, and
+finite-frequency dynamics are outside this milestone.
 
-## Complete finite-LMTO response
+## Covariant endpoint closure
 
-The six production endpoint objects are
-
-```text
-D_pq = H**p rho H**q,   pq = 00, 10, 01, 11, 20, 02.
-```
-
-Their tangent is split exactly as
+The six endpoint branches remain `00, 10, 01, 11, 20, 02`. The complete
+endpoint tangent is split as
 
 ```text
-delta D_pq = delta D_pq^(rho) + delta D_pq^(H)
-delta D_pq^(rho) = H**p delta_rho H**q
-delta D_pq^(H)   = delta D_pq^(complete) - delta D_pq^(rho).
+delta D = delta D^(rho) + delta D^(H)
+delta D^(rho) = H^p delta_rho H^q
+delta D^(H)   = delta D^(complete) - delta D^(rho)
 ```
 
-`endpoint_tangent_branches_second_order` is authoritative for the complete
-product rule. The independent
-`endpoint_fixed_h_branches_second_order` primitive supplies the frozen-H
-term. The endpoint-H subtraction is independently checked by calling the
-complete routine with `delta_rho = 0`; branch `00` is identically zero on the
-endpoint-H side.
-
-The density-side/Kubo response is measured with the same physical Pauli
-six-branch radial and angular dual as the certified DRESP-09X/Y path. Thus
+The stale-density reuse was fixed. Both `endpoint_complete` and
+`endpoint_fixed` now use
 
 ```text
-delta_m_cov_complete_fixedO = delta_m_cov^rho + delta_m_endpoint-H
-delta_m_cov^rho = delta_m_B + delta_m_conn.
+deltaH = dh_cov
+delta_rho = delta_rho_cov
 ```
 
-The observable-frame term remains separate:
+The corrected complete endpoint agrees directly with the authoritative
+covariant endpoint object for all six branches; the measured maximum branch
+residual is zero in the accepted Fe run. The decomposition and the
+`delta_rho=0` endpoint-H isolation also close at approximately `1.3e-16`.
 
-```text
-delta_m_O = Tr[rho delta_O].
-```
+The obsolete endpoint-H Bxc/connection split was removed from the primary
+classification. It was channel-dependent because its one-sided circular
+source was being compared with a Cartesian observable.
 
-## Final circular/Cartesian Pauli seam audit
+## Circular/Cartesian measurement seam
 
-The production input selects `chi_plus`. Its native convention is retained:
-the independent circular paths are `m_plus` (up to down) and `m_minus` (down
-to up), with
+The independent circular paths retain the production convention
 
 ```text
 m_x = m_plus + m_minus
-m_y = i*(m_plus - m_minus).
+m_y = i*(m_plus - m_minus)
 ```
 
-The frozen DRESP-09Y authority is evaluated without rewriting its path:
-`sr_l0_density_from_second_order_endpoint_branches` is called independently
-for channels 1 and 2 with `lower_factor = 0`, followed by the exact
-`convert_response` convention. DRESP-12's current
-`endpoint_pauli_measurement` is evaluated on the identical
-`H(k)`, `rho(k)`, `deltaH_cov(k)`, `delta_rho_cov(k)`, and six-branch endpoint
-tangent. The audit compares both paths after making the DRESP-09Y conversion
-explicit:
+The frozen DRESP-09Y path and DRESP-12 endpoint measurement use the same
+physical Pauli six-branch dual. The accepted Fe values are:
 
 ```text
-weighted = sqrt(4*pi)*r^2*physical_L0_density.
+DRESP12 vs DRESP09Y endpoint       5.8774991076e-15
+trace oracle vs DRESP09Y           2.6729845264e-16
+trace oracle vs DRESP12             5.8433554802e-15
+circular Cartesian reconstruction   5.7985501685e-15
+Pauli seam residual                 5.2997972883e-15
 ```
 
-The factor-of-two single-block expression is not assumed equivalent to the
-two circular paths. The accepted Fe audit establishes the aggregate
-equivalence only after the endpoint Hermitian and radial branch swaps:
+The seam classification is `MEASUREMENT_CONVENTIONS_IDENTICAL`. Circular and
+Cartesian paths are independent equivalence checks; they are not reported as
+duplicate physics metrics.
+
+## Angular resolution and metric
+
+For a response vector `v`, `norm_by_l` accumulates
 
 ```text
-endpoint branch swap: 00<->00, 10<->01, 01<->10, 11<->11, 20<->02, 02<->20
-Hermitian residuals: 7.15e-17, 1.09e-12, 1.09e-12, 6.98e-13, 3.97e-12, 3.97e-12
-radial swap residuals: 1.65e-15, 1.74e-15, 2.81e-15, 0, 0, 0
+||P_L v||^2 = sum_flat(response_l=L) metric_weights(flat)*|v(flat)|^2
 ```
 
-The branch-resolved current DRESP-12 values differ for the swapped 10/01 and
-20/02 labels; the aggregate measurement closes because those endpoint and
-radial product swaps are included. The independent coefficient-space trace
-oracle agrees with both aggregate paths, so this is not a remaining
-measurement ambiguity.
-
-The accepted seam values are:
+The metric is the existing radial quadrature metric, with the normalized
+response harmonics providing the angular orthogonality. Therefore
 
 ```text
-DRESP-09Y endpoint norm                         4.901514498244956e-1
-DRESP-12 endpoint norm                          4.901514498244927e-1
-12-vs-Y residual                                 5.88e-15
-trace oracle vs Y                                2.67e-16
-trace oracle vs DRESP-12                         5.84e-15
-m_plus norm                                      2.450757249122463e-1
-m_minus norm                                     2.450757249122492e-1
-x reconstruction residual                        1.00e-16
-y reconstruction residual                        5.80e-15
-observable plus/minus -> x residual              2.08e-16
-embedded DRESP-09Y Pauli_complete_vs_P3         5.30e-15
-current DRESP-12 Pauli_complete_vs_P3            3.81e-15
+||v||^2 = sum_L ||P_L v||^2
 ```
 
-The measurement seam is therefore `MEASUREMENT_CONVENTIONS_IDENTICAL`.
+The accepted Fe results are:
 
-The complete rigid response accounting is therefore
+| vector | L=0 | L=1 | L=2 | L=3 | L=4 | full |
+|---|---:|---:|---:|---:|---:|---:|
+| `r_fixed = delta m_B - P3` | 6.8365799764e-2 | 2.55e-17 | 8.65e-17 | 2.77e-17 | 1.4521659355e-1 | 1.6050464672e-1 |
+| `master` | 9.8209875599e-15 | 2.81e-17 | 1.05e-16 | 2.81e-17 | 1.5208439341e-1 | 1.5208439341e-1 |
+| live `D*m_G` | 6.8365802023e-2 | 2.53e-17 | 8.66e-17 | 2.73e-17 | 1.4521659430e-1 | 1.6050464837e-1 |
+
+The norm reconstruction residuals are `8.08e-16` for `r_fixed`, zero for
+`master`, and `1.35e-16` for `D*m_G`. The nonspherical master norm is
+`1.5208439341e-1`; its L=4 fraction is `1.0` within the reported precision.
+The total nonspherical remainder relative to `P3` is
 
 ```text
-delta_m_cov = delta_m_B + delta_m_conn + delta_m_endpoint-H + delta_m_O.
+R_>0 = ||(1-P0)master|| / ||P3|| = 2.2390504634e-1.
 ```
 
-The fixed-basis defect and the master accounting residual are different
-quantities:
+The actual spherical accounting residual is
 
 ```text
-r_fixed = delta_m_B - m_P3
-R_account = ||r_fixed + delta_m_conn + delta_m_endpoint-H + delta_m_O|| / ||r_fixed||.
+R_0 = ||P0 master|| / ||P0 P3|| = 1.4458871324e-14.
 ```
 
-`fixed_basis_goldstone_relative = ||r_fixed|| / ||m_P3||` is the actual
-fixed-basis Goldstone consistency residual. It must not be confused with
-`covariance_accounting_relative_to_fixed_defect`, the endpoint-inclusive
-accounting residual. The historical incomplete value is retained as:
+The historical fixed-basis defect remains
+`fixed_basis_goldstone_relative = 2.3630169774e-1`; its L=0 component is
+`6.8365799764e-2` and its dominant L=4 component is `1.4521659355e-1`.
+
+## DRESP-11 action
+
+No dense denominator/SVD campaign is rerun. DRESP-12 applies the existing
+matrix-free denominator action once to the current in-memory `m_G`, maps the
+result back to the physical response space, and resolves that vector by L.
+The reported `D*m_G` values above are therefore current-state values, not
+numbers read from a generated DRESP-11 artifact. The historical orthogonal
+fraction is `0.9065827902`.
+
+## Model boundary
+
+The strict ASA transverse model defines the ground-state XC functional and
+potential from the spherical radial spin density. Its Goldstone consistency
+condition belongs to the same spherical variational space:
 
 ```text
-old covariance accounting residual = 1.4619
-status = SUPERSEDED; endpoint-H contribution omitted
+P0 master = 0
 ```
 
-## Compact D*m_G sign
-
-DRESP-11 stores
+The full-spatial response machinery can still generate finite L>0 band-density
+responses on that spherical ASA ground state. Those are meaningful response
+coordinates, but the ASA ground-state functional has no corresponding
+nonspherical ground-state XC field. The measured L=4 remainder is therefore
 
 ```text
-D*m_G = m_G - A*m_G = -r_fixed.
+NONSPHERICAL_RESPONSE_ON_SPHERICAL_ASA_GROUND_STATE
 ```
 
-After the complete accounting closes, its independent reconstruction is
+It is not automatically basis incompleteness, numerical error, or Goldstone
+failure. A fully self-consistent full-spatial Goldstone theory would require
+a ground-state functional stationary in the nonspherical channels; that is
+not implemented here.
+
+The kernel remains `Kxc = Bxc/P3`. In this closure it is a representation
+diagnostic. The physical conjugate-density question, including direct use of
+the live `VXC0SP` field for `n_up - n_down`, is deferred to the next
+formulation decision.
+
+## Final closure result
 
 ```text
-D*m_G = delta_m_conn + delta_m_endpoint-H + delta_m_O.
+DRESP-12 verdict: PASS-A
+Primary classification: ASA_L0_RIGID_RESPONSE_CLOSED
+Goldstone correction: OFF
+Dynamics: NOT RUN
+Ward-focused campaign: CLOSED
+NEXT: FORMULATION_DECISION
 ```
 
-The report records this sign explicitly and compares the reconstruction with
-the frozen DRESP-11 compact vector.
-
-## Interpretation and scope
-
-The physical decomposition is
-
-```text
-delta_m_LMTO = delta_m_Kubo(delta_rho)
-              + delta_m_endpoint-H       (energy-moment/contact)
-              + delta_m_basis/observable (deltaO).
-```
-
-The static Frechet derivative is an exact fixed-matrix oracle for the first,
-Kubo/bubble term. It is not by itself the complete LMTO physical response.
-The Lehmann/GF susceptibility is the production dynamical counterpart of the
-Kubo term; endpoint, basis, and radial-observable response terms must be
-handled separately in a frequency-dependent theory. DRESP-12 does not
-generalize this endpoint-H term to finite frequency.
-
-## Decision gate
-
-```text
-PASS-A  COMPLETE_LMTO_RIGID_RESPONSE_DECOMPOSITION_CLOSED
-PASS-B  RESIDUAL_BASIS_RESPONSE_REMAINS
-BLOCKED ENDPOINT_RESPONSE_REGRESSION
-```
-
-PASS-A closes the Ward-focused campaign and sets
-`NEXT = LMTO_DYNAMIC_RESPONSE_FORMULATION`. PASS-B sets
-`NEXT = LMTO_BASIS_RESPONSE_AUDIT` and reports the remaining radial/profile
-residual. An endpoint branch or independent isolation failure is blocked and
-does not authorize a further interpretation.
-
-The corrected accepted-Fe result is `PASS-B RESIDUAL_BASIS_RESPONSE_REMAINS`.
-The fixed-basis Goldstone residual remains `2.363016977393652e-1`, while the
-embedded circular static sum rule and Cartesian rigid covariance oracle close
-at approximately `5.3e-15`. The complete DRESP-12 accounting residual remains
-`9.475388813621777e-1`; this is the residual basis-response result, not a
-Pauli measurement seam failure. The circular plus/minus single-channel
-residuals are diagnostic only; their explicit recombination is the Cartesian
-closure target.
-
-## Required static checks
-
-The integration artifact reports the six complete branches, six frozen-H
-branches, endpoint-H subtraction and `delta_rho=0` isolation, branchwise
-closure, Frechet linearity, complete fixed-observable closure, endpoint
-Hermitian swaps, radial spin-direction swaps, independent plus/minus paths,
-Cartesian reconstruction, coefficient-trace oracle, DRESP-09Y observable
-plus/minus reconstruction, embedded DRESP-09Y P3 closure, current-versus-
-authoritative measurement, corrected master accounting, compact `D*m_G`,
-endpoint-H Bxc/connection diagnostics, and the frozen DRESP-10F/DRESP-11
-regressions. Dynamics is not run.
-
-The artifact is `/tmp/dresp12_fe_4k.dat` with the k-resolved table and the
-existing DRESP-09U/Y sidecars.
-
-## Closure result
-
-The accepted Fe run closes the endpoint algebra, frozen-H equivalence,
-Frechet linearity, complete fixed-observable covariance identity, the
-endpoint measurement seam, the independent coefficient trace, and the
-DRESP-09Y observable regression. The endpoint-H term reduces the historical
-incomplete accounting residual from `1.4619` to
-`0.9475388813621777`, but does not close the remaining radial/profile/vector
-defect. The resulting classification is
-`PASS-B RESIDUAL_BASIS_RESPONSE_REMAINS`, with
-`NEXT = LMTO_BASIS_RESPONSE_AUDIT`. Goldstone correction is `OFF` and
-dynamics is `NOT RUN`.
+This closes the Ward-focused campaign in the strict ASA L=0 response space.
+The finite L>0 response remains recorded as a model-space boundary result.
+Generated artifacts, including `/tmp` products, are validation evidence only
+and are not committed.

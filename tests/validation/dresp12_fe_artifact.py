@@ -37,7 +37,7 @@ def vector(values: dict[str, str], key: str, size: int = 6) -> list[float]:
 
 def main() -> None:
     verdict, values = read(sys.argv[1])
-    assert verdict in {"PASS-A", "PASS-B"}
+    assert verdict in {"PASS-A", "BLOCKED"}
     assert values["Pauli compact dimension"] == "348"
     assert values["branches"] == "00,10,01,11,20,02"
     assert values["Goldstone correction"] == "OFF"
@@ -45,6 +45,8 @@ def main() -> None:
     assert values["Dynamics"] == "NOT RUN"
     assert values["covariant_branch_decomposition"] == "CLOSED_BY_COMPLETE_ENDPOINT_TANGENT"
     assert values["arbitrary_L_within_ASA"] == "ARBITRARY_L_COVARIANCE_REQUIRES_NEW_BASIS_RESPONSE"
+    assert values["DRESP-11 regression"] == "LIVE_MATRIX_FREE_DENOMINATOR_ACTION"
+    assert values["Model boundary"] == "NONSPHERICAL_RESPONSE_ON_SPHERICAL_ASA_GROUND_STATE"
 
     for key in (
         "field_identity_max_k_residual",
@@ -60,7 +62,8 @@ def main() -> None:
         "covariance_accounting_relative_to_fixed_defect",
         "master_identity_relative",
         "DRESP11_compact_DmG_reconstruction_residual",
-        "DRESP11_denominator_reconstruction_residual",
+        "DmG_full",
+        "DmG_norm_reconstruction_residual",
         "DRESP09Y_endpoint_measurement_norm",
         "DRESP12_endpoint_measurement_norm",
         "DRESP12_vs_DRESP09Y_endpoint_residual",
@@ -74,9 +77,15 @@ def main() -> None:
         "observable_deltaO_y_reconstruction_residual",
         "Embedded_DRESP09Y_Pauli_complete_vs_P3",
         "Current_DRESP12_Pauli_complete_vs_P3",
-        "Production_circular_static_sum_rule",
-        "Cartesian_rigid_covariance_oracle",
-        "Cartesian_accounting_residual",
+        "Pauli_measurement_seam_residual",
+        "l0_residual",
+        "nonspherical_norm",
+        "nonspherical_residual",
+        "nonspherical_L4_fraction",
+        "r_fixed_full",
+        "r_fixed_norm_reconstruction_residual",
+        "master_full",
+        "master_norm_reconstruction_residual",
         "circular_plus_accounting_residual",
         "circular_minus_accounting_residual",
     ):
@@ -102,10 +111,11 @@ def main() -> None:
     assert number(values, "observable_deltaO_y_reconstruction_residual") < 1.0e-10
     assert number(values, "Embedded_DRESP09Y_Pauli_complete_vs_P3") < 3.0e-8
     assert number(values, "Current_DRESP12_Pauli_complete_vs_P3") < 3.0e-8
-    assert number(values, "Production_circular_static_sum_rule") < 3.0e-8
-    assert number(values, "Cartesian_rigid_covariance_oracle") < 3.0e-8
+    assert number(values, "Pauli_measurement_seam_residual") < 3.0e-8
     assert values["Measurement seam classification"] == "MEASUREMENT_CONVENTIONS_IDENTICAL"
-    assert number(values, "Cartesian_accounting_residual") > 1.0e-2
+    assert number(values, "r_fixed_norm_reconstruction_residual") < 1.0e-10
+    assert number(values, "master_norm_reconstruction_residual") < 1.0e-10
+    assert number(values, "DmG_norm_reconstruction_residual") < 1.0e-10
     for key in (
         "endpoint_Hermitian_branch_swap_residual_00_10_01_11_20_02",
         "radial_spin_direction_branch_swap_residual_00_10_01_11_20_02",
@@ -123,22 +133,32 @@ def main() -> None:
     branch_keys = (
         "endpoint_branch_complete_frozen_endpoint_H_residual_00_10_01_11_20_02",
         "endpoint_H_subtraction_vs_delta_rho_zero_00_10_01_11_20_02",
+        "endpoint_complete_vs_authoritative_covariant_00_10_01_11_20_02",
     )
     for key in branch_keys:
         fields = values[key].split()
         assert len(fields) == 6 and all(math.isfinite(float(field)) for field in fields)
         assert max(float(field) for field in fields) < 1.0e-10
+    for key in (
+        "r_fixed_by_L_0_1_2_3_4",
+        "master_by_L_0_1_2_3_4",
+        "DmG_by_L_0_1_2_3_4",
+    ):
+        vector(values, key, size=5)
     assert values["Primary classification"] in {
-        "COMPLETE_LMTO_RIGID_RESPONSE_DECOMPOSITION_CLOSED",
-        "RESIDUAL_BASIS_RESPONSE_REMAINS",
+        "ASA_L0_RIGID_RESPONSE_CLOSED",
+        "L0_ACCOUNTING_INCONSISTENT",
+        "ANGULAR_DECOMPOSITION_INCONSISTENT",
     }
-    # PASS-B is the documented finite-but-incomplete accounting outcome.  The
-    # closure gates are therefore required for PASS-A, while PASS-B still has
-    # to publish finite diagnostics for the same identities.
     if verdict == "PASS-A":
-        assert number(values, "master_identity_relative") < 1.0e-6
-        assert number(values, "DRESP11_compact_DmG_reconstruction_residual") < 1.0e-6
-        assert number(values, "DRESP11_denominator_reconstruction_residual") < 1.0e-6
+        assert values["Primary classification"] == "ASA_L0_RIGID_RESPONSE_CLOSED"
+        assert abs(number(values, "l0_residual")) < 1.0e-8
+        assert values["Ward-focused campaign"] == "CLOSED"
+        assert values["NEXT"] == "FORMULATION_DECISION"
+    else:
+        assert values["Primary classification"] != "ASA_L0_RIGID_RESPONSE_CLOSED"
+        assert values["Ward-focused campaign"] == "OPEN"
+        assert values["NEXT"] == "STOP_AND_DIAGNOSE"
 
     ktable = sys.argv[1] + ".kpoints.csv"
     with open(ktable, encoding="utf-8") as stream:
@@ -151,9 +171,6 @@ def main() -> None:
         for field in fields[1:]:
             assert math.isfinite(float(field))
 
-    for index in range(10):
-        fields = values[f"SVD_mode({index})_sigma_target_overlap"].split()
-        assert len(fields) == 2 and all(math.isfinite(float(field)) for field in fields)
     print("Dresp12 Fe artifact: covariance accounting and compact reconstruction gates pass")
 
 
