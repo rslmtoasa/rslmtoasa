@@ -14,7 +14,7 @@ module lr_dresp09zs_compact_span_mod
    use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l
    use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, lmto_product_block, &
       lmto_product_candidate
-   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch
+   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_second_order_radial_branch
    use response_angular_basis_mod, only: response_gaunt
    use lr_response_space_mod, only: response_space_layout
    use lr_sr_angular_vertex_mod, only: sr_angular_nn_rank2_coefficient
@@ -73,6 +73,7 @@ module lr_dresp09zs_compact_span_mod
 
    public :: run_dresp09zs_compact_span_audit
    public :: dresp09zs_source_span_residuals
+   public :: dresp09zs_pauli_branch_radial_audit
 
    interface
       subroutine zgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, rwork, info)
@@ -121,6 +122,41 @@ contains
       call physical_vertex_audit(space, radial_bases(1), blocks, physical_by_l, physical_rms, delta_by_l, delta_rms, &
          components, component_by_l, component_global, delta_global, active, .true.)
    end subroutine dresp09zs_source_span_residuals
+
+   !> Independent pointwise audit of the Pauli large-component branch algebra.
+   !>
+   !> The diagnostic evaluator below is intentionally separate from the live
+   !> production evaluator.  This oracle expands the absolute-energy
+   !> polynomial directly from phi, phidot, and phiddot and compares every
+   !> accepted l/lp/spin pair and radial point with the authoritative
+   !> lmto_product_second_order_radial_branch primitive.  In particular,
+   !> power zero is the unshifted phi; the Enu expansion is applied exactly
+   !> once by the branch polynomial.
+   subroutine dresp09zs_pauli_branch_radial_audit(radial, branch_error, maximum_error)
+      type(lmto_radial_basis), intent(in) :: radial
+      real(rp), intent(out) :: branch_error(lmto_product_nbranch), maximum_error
+      integer :: branch, ir, l, lp, spin_left, spin_right
+      real(rp) :: reference, diagnostic
+
+      branch_error = 0.0_rp
+      do branch = 1, lmto_product_nbranch
+         do spin_left = 1, radial%nspin
+            do spin_right = 1, radial%nspin
+               do l = 0, radial%lmax
+                  do lp = 0, radial%lmax
+                     do ir = 1, radial%npoint
+                        call lmto_product_second_order_radial_branch(radial, ir, l, lp, spin_left, spin_right, &
+                           branch, reference)
+                        diagnostic = independent_pauli_branch(radial, ir, l, lp, spin_left, spin_right, branch)
+                        branch_error(branch) = max(branch_error(branch), abs(diagnostic-reference))
+                     end do
+                  end do
+               end do
+            end do
+         end do
+      end do
+      maximum_error = maxval(branch_error)
+   end subroutine dresp09zs_pauli_branch_radial_audit
 
    subroutine run_dresp09zs_compact_span_audit(output_file, space, radial_bases, production_basis)
       character(len=*), intent(in) :: output_file
@@ -1261,12 +1297,57 @@ contains
       type(lmto_radial_basis), intent(in) :: radial
       integer, intent(in) :: ir,l,spin,power,energy_power,component
       select case(power)
-      case(0); if(component==1) value=radial%phi_large(ir,l+1,spin)-radial%enu_work(l+1,spin)*radial%phidot_large(ir,l+1,spin); if(component==2) value=radial%phi_small(ir,l+1,spin)-radial%enu_work(l+1,spin)*radial%phidot_small(ir,l+1,spin); if(component==3) value=(radial%phi_large(ir,l+1,spin)-radial%enu_work(l+1,spin)*radial%phidot_large(ir,l+1,spin))/(radial%tmc(ir,l+1,spin)*radial%rofi(ir))
+      ! Power zero is the unshifted radial function.  The explicit Enu
+      ! powers in branch_terms perform the absolute-energy expansion; using
+      ! phi-Enu*phidot here would apply that shift a second time.
+      case(0); if(component==1) value=radial%phi_large(ir,l+1,spin); if(component==2) value=radial%phi_small(ir,l+1,spin); if(component==3) value=radial%phi_large(ir,l+1,spin)/(radial%tmc(ir,l+1,spin)*radial%rofi(ir))
       case(1); if(component==1) value=radial%phidot_large(ir,l+1,spin); if(component==2) value=radial%phidot_small(ir,l+1,spin); if(component==3) value=radial%phidot_large(ir,l+1,spin)/(radial%tmc(ir,l+1,spin)*radial%rofi(ir))
       case(2); if(component==1) value=radial%phiddot_large(ir,l+1,spin); if(component==2) value=radial%phiddot_small(ir,l+1,spin); if(component==3) value=radial%phiddot_large(ir,l+1,spin)/(radial%tmc(ir,l+1,spin)*radial%rofi(ir))
       end select
       value=value*radial%enu_work(l+1,spin)**energy_power
    end function endpoint
+
+   recursive real(rp) function independent_pauli_branch(radial, ir, l, lp, spin_left, spin_right, branch) result(value)
+      type(lmto_radial_basis), intent(in) :: radial
+      integer, intent(in) :: ir, l, lp, spin_left, spin_right, branch
+      real(rp) :: first, second, r, phi_l, phi_r, dot_l, dot_r, ddot_l, ddot_r, enu_l, enu_r
+
+      if (ir == 1) then
+         if (l /= 0 .or. lp /= 0) then
+            value = 0.0_rp
+         else
+            first = independent_pauli_branch(radial, 2, l, lp, spin_left, spin_right, branch)
+            second = independent_pauli_branch(radial, 3, l, lp, spin_left, spin_right, branch)
+            value = (first*radial%rofi(3)**2-second*radial%rofi(2)**2)/ &
+               (radial%rofi(3)**2-radial%rofi(2)**2)
+         end if
+         return
+      end if
+      r = radial%rofi(ir)
+      if (r <= tiny(1.0_rp)) error stop 'DRESP-09ZS independent Pauli oracle: nonpositive radius'
+      phi_l = radial%phi_large(ir,l+1,spin_left); phi_r = radial%phi_large(ir,lp+1,spin_right)
+      dot_l = radial%phidot_large(ir,l+1,spin_left); dot_r = radial%phidot_large(ir,lp+1,spin_right)
+      ddot_l = radial%phiddot_large(ir,l+1,spin_left); ddot_r = radial%phiddot_large(ir,lp+1,spin_right)
+      enu_l = radial%enu_work(l+1,spin_left); enu_r = radial%enu_work(lp+1,spin_right)
+      select case (branch)
+      case (1)
+         value = phi_l*phi_r-enu_l*dot_l*phi_r-enu_r*phi_l*dot_r+enu_l*enu_r*dot_l*dot_r+ &
+            0.5_rp*enu_l**2*ddot_l*phi_r+0.5_rp*enu_r**2*phi_l*ddot_r
+      case (2)
+         value = dot_l*phi_r-enu_r*dot_l*dot_r-enu_l*ddot_l*phi_r
+      case (3)
+         value = phi_l*dot_r-enu_l*dot_l*dot_r-enu_r*phi_l*ddot_r
+      case (4)
+         value = dot_l*dot_r
+      case (5)
+         value = 0.5_rp*ddot_l*phi_r
+      case (6)
+         value = 0.5_rp*phi_l*ddot_r
+      case default
+         error stop 'DRESP-09ZS independent Pauli oracle: invalid branch'
+      end select
+      value = value/r**2
+   end function independent_pauli_branch
 
    subroutine branch_terms(branch,nterm,pl,pr,el,er,coeff)
       integer,intent(in)::branch

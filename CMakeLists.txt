@@ -965,6 +965,18 @@ if (RUN_UNIT_TESTS)
     DEPENDS TddftDresp10RawFullSpatialAlsdaWard
     LABELS "validation;dresp-10;artifact;raw;full-spatial;frechet;blocked-mixed-operator"
     TIMEOUT 30)
+  add_test(NAME TddftDresp10FFixedBasisMixedWard
+    COMMAND ${TestBinary} input_dresp10f_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp10FFixedBasisMixedWard PROPERTIES
+    LABELS "integration;tddft;dresp-10f;fixed-basis;mixed-response;ward;accepted-state;64-k"
+    TIMEOUT 900)
+  add_test(NAME Dresp10FFeArtifact
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/dresp10f_fe_artifact.py" "/tmp/dresp10f_fe_4k.dat")
+  set_tests_properties(Dresp10FFeArtifact PROPERTIES
+    DEPENDS TddftDresp10FFixedBasisMixedWard
+    LABELS "validation;dresp-10f;artifact;fixed-basis;mixed-response;pass-a-pass-b"
+    TIMEOUT 30)
   add_test(NAME TddftDresp09ZSCompactSpan
     COMMAND ${TestBinary} input_dresp09zs_fe.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
