@@ -59,6 +59,13 @@ module lr_dresp10f_mixed_ward_bridge_mod
    public :: run_dresp10f_fixed_basis_mixed_ward
    public :: apply_static_selfconsistent_action
    public :: apply_static_denominator
+   ! Read-only measurement seams reused by DRESP-12.  These expose the
+   ! already-certified Fréchet and compact-transition measurements without
+   ! changing the fixed-basis action or its six-branch source.
+   public :: build_l0_source
+   public :: build_l0_target
+   public :: fixed_pauli_measurement
+   public :: compact_density_measurement
 
 contains
 

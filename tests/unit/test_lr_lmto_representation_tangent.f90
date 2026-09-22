@@ -28,7 +28,7 @@ program test_lr_lmto_representation_tangent
    complex(rp), allocatable :: up_matrix(:,:), down_matrix(:,:), plus(:,:), minus(:,:)
    complex(rp), allocatable :: hhh(:,:), hcomm(:,:), c0(:), c1(:), wx0i(:), wx1i(:), wx0j(:), wx1j(:)
    complex(rp), allocatable :: zero(:), dbond(:,:), bond_plus(:,:), bond_minus(:,:), hhmag(:,:,:)
-   real(rp) :: moment(3), dmoment(3), error_spin, error_bond, error_nonmag, error_commuting
+   real(rp) :: moment(3), dmoment(3), zero_moment(3), error_spin, error_bond, error_nonmag, error_commuting, sitewise_error
    integer :: i, j, branch
    logical :: failed
 
@@ -103,6 +103,7 @@ program test_lr_lmto_representation_tangent
    end do
    moment = [0.0_rp,0.0_rp,1.0_rp]
    dmoment = [1.0_rp,0.0_rp,0.0_rp]
+   zero_moment = [0.0_rp,0.0_rp,0.0_rp]
    zero = cmplx(0.0_rp,0.0_rp,rp)
    call lmto_spin_parameter_tangent(up, down, dup, ddown, moment, dmoment, matrix, delta_matrix)
    call hcpx(up_matrix, 'cart2sph')
@@ -147,8 +148,19 @@ program test_lr_lmto_representation_tangent
    call build_bond(hcomm, wx0i, wx1i, wx0j, wx1j, c0, c1, rotate_moment(moment, -2.0e-6_rp), minus)
    error_commuting = lmto_representation_relative_residual((plus-minus)/(4.0e-6_rp), dbond)
 
+   ! DRESP-12 sitewise fixture: the production endpoint tangent is linear in
+   ! the two endpoint rotations, so two independent site rotations must add
+   ! without introducing a new radial solution or a fitted connection.
+   call lmto_representation_bond_tangent(hhh, wx0i, wx1i, wx0j, wx1j, c0, c1, zero, zero, zero, zero, zero, zero, &
+      moment, moment, dmoment, zero_moment, .false., bond_plus)
+   call lmto_representation_bond_tangent(hhh, wx0i, wx1i, wx0j, wx1j, c0, c1, zero, zero, zero, zero, zero, zero, &
+      moment, moment, zero_moment, dmoment, .false., bond_minus)
+   call lmto_representation_bond_tangent(hhh, wx0i, wx1i, wx0j, wx1j, c0, c1, zero, zero, zero, zero, zero, zero, &
+      moment, moment, dmoment, dmoment, .false., dbond)
+   sitewise_error = lmto_representation_relative_residual(dbond, bond_plus + bond_minus)
+
    failed = maxval(error_fd) > 2.0e-8_rp .or. minval(ratio(2:4)) < 3.5_rp .or. error_spin > tol .or. &
-      error_bond > 2.0e-9_rp .or. error_nonmag > tol .or. error_commuting > 2.0e-9_rp
+      error_bond > 2.0e-9_rp .or. error_nonmag > tol .or. error_commuting > 2.0e-9_rp .or. sitewise_error > tol
    if (failed) then
       write (*,'(a)') 'UnitLrLmtoRepresentationTangent: FAIL'
       write (*,'(a,4es12.4)') '  predls_fd=', error_fd
@@ -157,6 +169,7 @@ program test_lr_lmto_representation_tangent
       write (*,'(a,es12.4)') '  bond_fd=', error_bond
       write (*,'(a,es12.4)') '  nonmagnetic=', error_nonmag
       write (*,'(a,es12.4)') '  commuting=', error_commuting
+      write (*,'(a,es12.4)') '  sitewise_superposition=', sitewise_error
       error stop 1
    end if
    write (*,'(a,4es12.4)') '  predls_fd_center_shifted_width_obar=', error_fd
@@ -165,7 +178,8 @@ program test_lr_lmto_representation_tangent
    write (*,'(a,es12.4)') '  bond_fd=', error_bond
    write (*,'(a,es12.4)') '  nonmagnetic_zero_tangent=', error_nonmag
    write (*,'(a,es12.4)') '  commuting_structure=', error_commuting
-   write (*,'(a)') 'UnitLrLmtoRepresentationTangent: PASS (analytic predls, spin lift, bond, commuting, nonmagnetic controls)'
+   write (*,'(a,es12.4)') '  sitewise_superposition=', sitewise_error
+   write (*,'(a)') 'UnitLrLmtoRepresentationTangent: PASS (analytic predls, spin lift, bond, commuting, nonmagnetic, sitewise controls)'
 
 contains
 

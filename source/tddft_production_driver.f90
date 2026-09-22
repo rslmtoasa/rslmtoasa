@@ -72,6 +72,7 @@ module tddft_production_driver_mod
    use lr_dresp09zs_compact_span_mod, only: run_dresp09zs_compact_span_audit
    use lr_dresp10f_mixed_ward_bridge_mod, only: run_dresp10f_fixed_basis_mixed_ward
    use lr_dresp11_goldstone_defect_mod, only: run_dresp11_goldstone_defect
+   use lr_dresp12_covariance_bridge_mod, only: run_dresp12_covariance
    use lr_dresp10_ward_bridge_mod, only: run_dresp10_raw_full_spatial_alsda_ward
    use lr_ward_mode_analysis_mod, only: lr_ward_mode_analysis_result, analyze_lr_ward_mode
    use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
@@ -120,6 +121,7 @@ module tddft_production_driver_mod
    character(len=*), parameter, public :: tddft_driver_backend_raw_full_spatial_alsda_ward = 'raw_full_spatial_alsda_ward'
    character(len=*), parameter, public :: tddft_driver_backend_fixed_basis_mixed_ward = 'fixed_basis_mixed_ward'
    character(len=*), parameter, public :: tddft_driver_backend_goldstone_defect_spectrum = 'goldstone_defect_spectrum'
+   character(len=*), parameter, public :: tddft_driver_backend_covariance_decomposition = 'finite_lmto_covariance'
    character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
    character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
 
@@ -409,7 +411,8 @@ contains
           trim(config%backend) /= tddft_driver_backend_compact_span_audit .and. &
           trim(config%backend) /= tddft_driver_backend_raw_full_spatial_alsda_ward .and. &
           trim(config%backend) /= tddft_driver_backend_fixed_basis_mixed_ward .and. &
-          trim(config%backend) /= tddft_driver_backend_goldstone_defect_spectrum) then
+          trim(config%backend) /= tddft_driver_backend_goldstone_defect_spectrum .and. &
+          trim(config%backend) /= tddft_driver_backend_covariance_decomposition) then
          error stop 'TDDFT input: unsupported backend; use the documented TDDFT backends including raw_full_spatial_alsda_ward'
       end if
       if (trim(config%backend) == tddft_driver_backend_projected_mills .or. &
@@ -449,7 +452,8 @@ contains
           trim(config%backend) /= tddft_driver_backend_compact_span_audit .and. &
           trim(config%backend) /= tddft_driver_backend_raw_full_spatial_alsda_ward .and. &
           trim(config%backend) /= tddft_driver_backend_fixed_basis_mixed_ward .and. &
-          trim(config%backend) /= tddft_driver_backend_goldstone_defect_spectrum .and. size(config%eta_values) /= 1) then
+          trim(config%backend) /= tddft_driver_backend_goldstone_defect_spectrum .and. &
+          trim(config%backend) /= tddft_driver_backend_covariance_decomposition .and. size(config%eta_values) /= 1) then
          error stop 'TDDFT input: n_eta greater than one is restricted to validation backends'
       end if
       if (trim(config%backend) == tddft_driver_backend_exact_ks_ward) then
@@ -591,6 +595,20 @@ contains
          end if
          if (trim(config%interaction_route) /= tddft_driver_route_direct_alsda .or. config%goldstone_correction) then
             error stop 'TDDFT input: DRESP-11 is raw direct ALSDA diagnostic only; correction routes are forbidden'
+         end if
+      end if
+      if (trim(config%backend) == tddft_driver_backend_covariance_decomposition) then
+         if (size(config%q_list, 2) /= 1 .or. sum(abs(config%q_list(:, 1))) > 1.0e-12_rp) then
+            error stop 'TDDFT input: finite_lmto_covariance requires one Gamma q point'
+         end if
+         if (size(config%frequencies) /= 1 .or. abs(config%frequencies(1)) > 1.0e-12_rp) then
+            error stop 'TDDFT input: finite_lmto_covariance requires one static omega=0 point'
+         end if
+         if (config%response_lmax /= 4) then
+            error stop 'TDDFT input: finite_lmto_covariance requires response_lmax=4'
+         end if
+         if (trim(config%interaction_route) /= tddft_driver_route_direct_alsda .or. config%goldstone_correction) then
+            error stop 'TDDFT input: DRESP-12 is a raw direct ALSDA covariance diagnostic; correction routes are forbidden'
          end if
       end if
       if (trim(config%backend) == tddft_driver_backend_projected_juelich .or. &
@@ -1108,6 +1126,7 @@ contains
          trim(config%backend) == tddft_driver_backend_compact_span_audit .or. &
          trim(config%backend) == tddft_driver_backend_fixed_basis_mixed_ward .or. &
          trim(config%backend) == tddft_driver_backend_goldstone_defect_spectrum .or. &
+         trim(config%backend) == tddft_driver_backend_covariance_decomposition .or. &
          trim(config%backend) == tddft_driver_backend_product_lehmann .or. &
          trim(config%backend) == tddft_driver_backend_product_gf .or. &
          trim(config%backend) == tddft_driver_backend_product_finite_q .or. &
@@ -1246,6 +1265,14 @@ contains
             error stop 'DRESP-11 goldstone_defect_spectrum requires the accepted k-space SCF handoff'
          end if
          call run_dresp11_goldstone_defect(trim(config%output_file), response_space, radial_bases, ground_states, &
+            reciprocal_obj, lattice_obj, hamiltonian_obj)
+         return
+      end if
+      if (trim(config%backend) == tddft_driver_backend_covariance_decomposition) then
+         if (.not. use_accepted_kspace_scf) then
+            error stop 'DRESP-12 finite_lmto_covariance requires the accepted k-space SCF handoff'
+         end if
+         call run_dresp12_covariance(trim(config%output_file), response_space, radial_bases, ground_states, &
             reciprocal_obj, lattice_obj, hamiltonian_obj)
          return
       end if

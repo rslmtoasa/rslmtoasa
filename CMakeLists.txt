@@ -990,6 +990,19 @@ if (RUN_UNIT_TESTS)
     DEPENDS TddftDresp11GoldstoneDefectSpectrum
     LABELS "validation;dresp-11;artifact;goldstone;spectrum;admissibility"
     TIMEOUT 30)
+  add_test(NAME TddftDresp12FiniteLmtoCovariance
+    COMMAND ${TestBinary} input_dresp12_fe.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(TddftDresp12FiniteLmtoCovariance PROPERTIES
+    DEPENDS Dresp11FeArtifact
+    LABELS "integration;tddft;dresp-12;finite-lmto;covariance;ward;accepted-state;64-k"
+    TIMEOUT 2400)
+  add_test(NAME Dresp12FeArtifact
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/dresp12_fe_artifact.py" "/tmp/dresp12_fe_4k.dat")
+  set_tests_properties(Dresp12FeArtifact PROPERTIES
+    DEPENDS TddftDresp12FiniteLmtoCovariance
+    LABELS "validation;dresp-12;artifact;covariance;master-identity;svd"
+    TIMEOUT 30)
   add_test(NAME TddftDresp09ZSCompactSpan
     COMMAND ${TestBinary} input_dresp09zs_fe.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
