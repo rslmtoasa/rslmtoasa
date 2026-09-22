@@ -28,6 +28,7 @@ module lr_lmto_density_moment_tangent_mod
    public :: endpoint_tangent_branches
    public :: endpoint_tangent_branches_second_order
    public :: endpoint_fixed_h_branches
+   public :: endpoint_fixed_h_branches_second_order
    public :: endpoint_matrices_from_moments
    public :: endpoint_matrices_from_moments_second_order
    public :: commutator_tangent
@@ -213,6 +214,32 @@ contains
       delta_branches(:, :, 3) = matmul(delta_density, hamiltonian)
       delta_branches(:, :, 4) = matmul(hamiltonian, matmul(delta_density, hamiltonian))
    end subroutine endpoint_fixed_h_branches
+
+   !> Frozen-endpoint density tangent for the complete second-order branch
+   !> contract.  This is deliberately separate from the complete tangent:
+   !> only delta_density is varied, while every Hamiltonian endpoint is held
+   !> fixed.  Branch order is 00,10,01,11,20,02.
+   subroutine endpoint_fixed_h_branches_second_order(hamiltonian, delta_density, delta_branches)
+      complex(rp), intent(in) :: hamiltonian(:, :), delta_density(:, :)
+      complex(rp), intent(out) :: delta_branches(:, :, :)
+      integer :: n
+      complex(rp), allocatable :: h2(:, :)
+
+      n = size(hamiltonian, 1)
+      if (any(shape(hamiltonian) /= [n, n]) .or. any(shape(delta_density) /= [n, n]) .or. &
+          any(shape(delta_branches) /= [n, n, 6])) then
+         error stop 'DRESP-12 frozen-H endpoint tangent: shape mismatch'
+      end if
+      allocate(h2(n, n))
+      h2 = matmul(hamiltonian, hamiltonian)
+      delta_branches(:, :, 1) = delta_density
+      delta_branches(:, :, 2) = matmul(hamiltonian, delta_density)
+      delta_branches(:, :, 3) = matmul(delta_density, hamiltonian)
+      delta_branches(:, :, 4) = matmul(hamiltonian, matmul(delta_density, hamiltonian))
+      delta_branches(:, :, 5) = matmul(h2, delta_density)
+      delta_branches(:, :, 6) = matmul(delta_density, h2)
+      deallocate(h2)
+   end subroutine endpoint_fixed_h_branches_second_order
 
    !> Equilibrium endpoint objects from M0/M1/M2.
    subroutine endpoint_matrices_from_moments(moments, endpoints)

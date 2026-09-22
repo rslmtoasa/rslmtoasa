@@ -65,6 +65,7 @@ module lr_dresp10f_mixed_ward_bridge_mod
    public :: build_l0_source
    public :: build_l0_target
    public :: fixed_pauli_measurement
+   public :: endpoint_pauli_measurement
    public :: compact_density_measurement
 
 contains
@@ -563,6 +564,53 @@ contains
       end do
       deallocate(effective)
    end subroutine fixed_pauli_measurement
+
+   !> Measure an already-built complete six-branch endpoint tangent with the
+   !> same physical Pauli radial/angular dual used by fixed_pauli_measurement.
+   !> This is the endpoint-side counterpart of R_P: it does not infer a field
+   !> or a density tangent and therefore keeps contact/endpoint response
+   !> algebraically distinct from the frozen-H Kubo term.
+   subroutine endpoint_pauli_measurement(space, radial_bases, endpoint_branches, response)
+      type(response_space_layout), intent(in) :: space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      complex(rp), intent(in) :: endpoint_branches(:, :, :)
+      complex(rp), intent(out) :: response(:)
+      type(response_super_index) :: item
+      integer :: nsite, norb, n, site, ir, iorb, jorb, l, lp, response_l, response_m, branch, row, col, flat
+      integer :: lm_index
+
+      nsite = size(radial_bases); norb = (radial_bases(1)%lmax+1)**2; n = 2*norb*nsite
+      if (size(response) /= space%ndim .or. any(shape(endpoint_branches) /= [n,n,lmto_product_nbranch])) then
+         error stop 'DRESP-12 endpoint measurement: shape mismatch'
+      end if
+      call ensure_measurement_cache(space, radial_bases)
+      response = cmplx(0.0_rp,0.0_rp,rp)
+      do site = 1, nsite
+         do response_l = 0, space%response_lmax
+            do response_m = -response_l, response_l
+               lm_index = response_l*response_l + response_l + response_m + 1
+               do ir = 1, space%npoint
+                  if (space%radial_weights(ir) <= 0.0_rp) cycle
+                  item = response_super_index(site,response_l,response_m,ir,1)
+                  call response_flatten_superindex(item,space%nsite,space%response_lmax,space%npoint,space%nchannel,flat)
+                  do iorb = 1, norb
+                     row = (site-1)*2*norb+iorb
+                     do jorb = 1, norb
+                        col = (site-1)*2*norb+jorb+norb
+                        do branch = 1, lmto_product_nbranch
+                           ! The fixed path stores the dual density ordering;
+                           ! for an explicit physical D_pq this is the
+                           ! conjugate of the (row,col) coefficient.
+                           response(flat) = response(flat) + 2.0_rp*measurement_gaunt_cache(iorb,jorb,lm_index)* &
+                              conjg(endpoint_branches(row,col,branch))*measurement_radial_cache(site,ir,iorb,jorb,branch)
+                        end do
+                     end do
+                  end do
+               end do
+            end do
+         end do
+      end do
+   end subroutine endpoint_pauli_measurement
 
    subroutine ensure_measurement_cache(space, radial_bases)
       type(response_space_layout), intent(in) :: space

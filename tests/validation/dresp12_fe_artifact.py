@@ -35,7 +35,7 @@ def main() -> None:
     assert values["Goldstone correction"] == "OFF"
     assert values["BES/Halle production"] == "OFF"
     assert values["Dynamics"] == "NOT RUN"
-    assert values["covariant_branch_decomposition"].startswith("NOT_DEFINED")
+    assert values["covariant_branch_decomposition"] == "CLOSED_BY_COMPLETE_ENDPOINT_TANGENT"
     assert values["arbitrary_L_within_ASA"] == "ARBITRARY_L_COVARIANCE_REQUIRES_NEW_BASIS_RESPONSE"
 
     for key in (
@@ -45,6 +45,11 @@ def main() -> None:
         "DRESP08_native_product_tangent_vs_connection_residual",
         "Frechet_oracle_residual",
         "independent_compact_connection_residual",
+        "fixed_basis_goldstone_relative",
+        "dm_cov_rho_vs_dm_B_plus_dm_conn",
+        "dm_cov_frozen_endpoint_vs_direct_fixed_H",
+        "dm_cov_complete_vs_frozen_plus_endpoint_H",
+        "covariance_accounting_relative_to_fixed_defect",
         "master_identity_relative",
         "DRESP11_compact_DmG_reconstruction_residual",
         "DRESP11_denominator_reconstruction_residual",
@@ -54,6 +59,22 @@ def main() -> None:
     assert number(values, "field_identity_max_k_residual") < 1.0e-10
     assert number(values, "Frechet_oracle_residual") < 1.0e-10
     assert number(values, "independent_compact_connection_residual") < 1.0e-10
+    assert number(values, "fixed_basis_goldstone_relative") < 0.25
+    assert number(values, "dm_cov_rho_vs_dm_B_plus_dm_conn") < 1.0e-10
+    assert number(values, "dm_cov_frozen_endpoint_vs_direct_fixed_H") < 1.0e-10
+    assert number(values, "dm_cov_complete_vs_frozen_plus_endpoint_H") < 1.0e-10
+    branch_keys = (
+        "endpoint_branch_complete_frozen_endpoint_H_residual_00_10_01_11_20_02",
+        "endpoint_H_subtraction_vs_delta_rho_zero_00_10_01_11_20_02",
+    )
+    for key in branch_keys:
+        fields = values[key].split()
+        assert len(fields) == 6 and all(math.isfinite(float(field)) for field in fields)
+        assert max(float(field) for field in fields) < 1.0e-10
+    assert values["Primary classification"] in {
+        "COMPLETE_LMTO_RIGID_RESPONSE_DECOMPOSITION_CLOSED",
+        "RESIDUAL_BASIS_RESPONSE_REMAINS",
+    }
     # PASS-B is the documented finite-but-incomplete accounting outcome.  The
     # closure gates are therefore required for PASS-A, while PASS-B still has
     # to publish finite diagnostics for the same identities.

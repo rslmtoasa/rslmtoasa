@@ -12,19 +12,22 @@ program test_lr_lmto_density_moment_tangent
    use lr_exact_ks_ward_mod, only: exact_ks_spin_rotation_generator
    use lr_lmto_density_moment_tangent_mod, only: density_from_eigensystem, moment_matrices_from_eigensystem, &
       moment_tangent_product_rule, moment_tangent_frechet, endpoint_tangent_branches, endpoint_matrices_from_moments, &
-      commutator_tangent, fill_production_spin_density_from_moments, relative_matrix_residual
+      endpoint_tangent_branches_second_order, endpoint_fixed_h_branches_second_order, commutator_tangent, &
+      fill_production_spin_density_from_moments, relative_matrix_residual
    implicit none
 
    integer, parameter :: norb = 3, n = 2*norb, nl = 4
    real(rp), parameter :: fermi = 0.03_rp, temperature = 300.0_rp, tol = 3.0e-10_rp
    complex(rp) :: h(n,n), h0(n,n), eigenvectors(n,n), generator(n,n), dh(n,n), rho(n,n), drho(n,n)
    complex(rp) :: moments(n,n,3), dm_product(n,n,3), dm_frechet(n,n,3), dbranches(n,n,4)
+   complex(rp) :: dbranches6(n,n,6), fixed6(n,n,6), zero6(n,n,6), fixed_expected(n,n,6)
    complex(rp) :: moments_plus(n,n,3), moments_minus(n,n,3), endpoints_plus(n,n,4), endpoints_minus(n,n,4)
    complex(rp) :: rotation(n,n), hrot(n,n), rhot(n,n), endpoints(n,n,4), fd(n,n,4)
    complex(rp) :: near_h(n,n), near_dh(n,n), near_v(n,n), near_plus(n,n), near_minus(n,n)
    complex(rp) :: near_tangent(n,n,3), near_fd(n,n,3)
    real(rp) :: evals(n), near_evals(n), near_plus_evals(n), near_minus_evals(n)
    real(rp) :: product_error(3), commutator_error(3), endpoint_error(4), finite_error(3), finite_ratio(2)
+   real(rp) :: frozen_branch_error(6), six_split_error(6)
    real(rp) :: near_error(3), mapping_error, nonmagnetic_error, theta, tolerance_near
    integer :: i, j, p, branch, info
    logical :: failed
@@ -43,6 +46,19 @@ program test_lr_lmto_density_moment_tangent
    call moment_tangent_product_rule(h, rho, dh, drho, dm_product)
    call moment_tangent_frechet(evals, eigenvectors, dh, fermi, temperature, dm_frechet)
    call endpoint_tangent_branches(h, rho, dh, drho, dbranches)
+   call endpoint_tangent_branches_second_order(h, rho, dh, drho, dbranches6)
+   call endpoint_fixed_h_branches_second_order(h, drho, fixed6)
+   call endpoint_tangent_branches_second_order(h, rho, dh, h*cmplx(0.0_rp,0.0_rp,rp), zero6)
+   fixed_expected(:,:,1) = drho
+   fixed_expected(:,:,2) = matmul(h,drho)
+   fixed_expected(:,:,3) = matmul(drho,h)
+   fixed_expected(:,:,4) = matmul(h,matmul(drho,h))
+   fixed_expected(:,:,5) = matmul(matmul(h,h),drho)
+   fixed_expected(:,:,6) = matmul(drho,matmul(h,h))
+   do branch = 1, 6
+      frozen_branch_error(branch) = relative_matrix_residual(fixed6(:,:,branch),fixed_expected(:,:,branch))
+      six_split_error(branch) = relative_matrix_residual(dbranches6(:,:,branch),fixed6(:,:,branch)+zero6(:,:,branch))
+   end do
 
    do p = 1, 3
       product_error(p) = relative_matrix_residual(dm_product(:,:,p), dm_frechet(:,:,p))
@@ -125,6 +141,7 @@ program test_lr_lmto_density_moment_tangent
    nonmagnetic_error = max(sqrt(sum(abs(dh)**2)), sqrt(sum(abs(drho)**2)))
 
    failed = maxval(product_error) > tol .or. maxval(commutator_error) > tol .or. maxval(endpoint_error) > tol .or. &
+      maxval(frozen_branch_error) > tol .or. maxval(six_split_error) > tol .or. sqrt(sum(abs(zero6(:,:,1))**2)) > tol .or. &
       .not. (finite_error(1) > finite_error(2) .and. finite_error(2) > finite_error(3)) .or. &
       minval(finite_ratio) < 3.0_rp .or. tolerance_near > 2.0e-6_rp .or. mapping_error > tol .or. &
       nonmagnetic_error > tol
@@ -133,6 +150,8 @@ program test_lr_lmto_density_moment_tangent
       write (*, '(a,3es12.4)') '  product_vs_frechet=', product_error
       write (*, '(a,3es12.4)') '  commutator=', commutator_error
       write (*, '(a,4es12.4)') '  endpoint=', endpoint_error
+      write (*, '(a,6es12.4)') '  six_branch_frozen=', frozen_branch_error
+      write (*, '(a,6es12.4)') '  six_branch_split=', six_split_error
       write (*, '(a,3es12.4)') '  finite=', finite_error
       write (*, '(a,2es12.4)') '  finite_theta2_ratio=', finite_ratio
       write (*, '(a,3es12.4)') '  near_degenerate=', near_error
@@ -143,6 +162,8 @@ program test_lr_lmto_density_moment_tangent
    write (*, '(a,3es12.4)') '  product_vs_frechet=', product_error
    write (*, '(a,3es12.4)') '  commutator=', commutator_error
    write (*, '(a,4es12.4)') '  endpoint=', endpoint_error
+   write (*, '(a,6es12.4)') '  six_branch_frozen=', frozen_branch_error
+   write (*, '(a,6es12.4)') '  six_branch_split=', six_split_error
    write (*, '(a,3es12.4)') '  finite=', finite_error
    write (*, '(a,3es12.4)') '  near_degenerate=', near_error
    write (*, '(a)') 'UnitLrLmtoDensityMomentTangent: PASS (M0/M1/M2, endpoints, production blocks, nonmagnetic control)'

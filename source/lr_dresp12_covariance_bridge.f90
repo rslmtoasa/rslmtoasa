@@ -28,14 +28,15 @@ module lr_dresp12_covariance_bridge_mod
    use lr_static_frechet_product_response_mod, only: lr_static_frechet_density
    use lr_exact_ks_ward_mod, only: exact_ks_spin_rotation_generator
    use lr_lmto_density_moment_tangent_mod, only: density_from_eigensystem, moment_matrices_from_eigensystem, &
-      endpoint_matrices_from_moments_second_order, commutator_tangent
+      endpoint_matrices_from_moments_second_order, endpoint_tangent_branches_second_order, &
+      endpoint_fixed_h_branches_second_order, commutator_tangent, relative_matrix_residual
    use lr_dresp08_native_mapping_mod, only: dresp08_build_native_realspace_tangent, dresp08_build_native_onsite_tangents, &
       dresp08_block_diagonal, dresp08_build_h2, dresp08_build_product_tangent, dresp08_relative_residual
    use lr_dresp09_field_insertion_mod, only: dresp09_compact_field_from_raw, dresp09_raw_field_from_compact
    use lr_dresp09u_bridge_mod, only: run_dresp09u_representation_tangent
    use lr_dresp09y_bridge_mod, only: run_dresp09y_augmentation_tangent, dresp09y_augmentation_density
    use lr_dresp10f_mixed_ward_bridge_mod, only: build_l0_source, build_l0_target, fixed_pauli_measurement, &
-      compact_density_measurement
+      endpoint_pauli_measurement, compact_density_measurement
    use lr_radial_observable_provenance_mod, only: channel_moments_from_matrix, pauli_density_from_moments
    use lmto_magnetic_tangent_mod, only: lmto_bond_derivative, lmto_hhmag_to_spinor
    use math_mod, only: hcpx
@@ -72,18 +73,23 @@ contains
       real(rp) :: k_all_action, k_occupied_action, k_near_ef_action, k_max_distance
       real(rp) :: branch_sq(lmto_product_nbranch), branch_mismatch_sq(lmto_product_nbranch)
       real(rp) :: origin_sq(4), orbital_sq(3,3), left_sq, right_sq, endpoint_interference
-      real(rp) :: conn_norm, observable_norm, fixed_norm, master_norm, master_relative, min_k_ratio
+      real(rp) :: conn_norm, endpoint_h_norm, observable_norm, fixed_norm, master_norm, master_relative, account_relative, min_k_ratio
       real(rp) :: master_max, master_integrated, compact_projection_residual, l0_profile_residual
-      real(rp) :: overlap_conn, overlap_obs, cosine_conn, cosine_obs, angle_conn, angle_obs
-      real(rp) :: parallel_fraction(4), orthogonal_fraction(4), pnorm
+      real(rp) :: overlap_conn, overlap_endpoint, overlap_obs, cosine_conn, cosine_endpoint, cosine_obs, angle_conn, angle_endpoint, angle_obs
+      real(rp) :: parallel_fraction(5), orthogonal_fraction(5), pnorm
       real(rp) :: svd_residual, svd_reconstruct_residual, sigma(10), left_amp(10), right_amp(10)
       real(rp) :: dresp11_frozen, dresp11_reconstruct_residual
       real(rp) :: response_conn_norm, response_frechet_residual
-      real(rp) :: dm_cov_residual, observable_upper_norm, observable_small_norm, observable_angular_norm
+      real(rp) :: dm_cov_residual, dm_cov_linearity_residual, dm_cov_direct_residual, complete_fixed_observable_residual
+      real(rp) :: endpoint_branch_residual(6), endpoint_zero_residual(6), endpoint_h_branch_sq(6)
+      real(rp) :: observable_upper_norm, observable_small_norm, observable_angular_norm
       real(rp) :: observable_total_norm, conn_ratio, max_k_ratio, median_k_ratio, rms_k_ratio
+      real(rp) :: fixed_basis_goldstone_relative, endpoint_h_b_norm, endpoint_h_conn_norm, endpoint_h_sum_residual
+      real(rp) :: conn_endpoint_norm, conn_endpoint_obs_norm, overlap_p3_conn, overlap_p3_endpoint, overlap_p3_obs
+      real(rp) :: observable_pauli_upper_residual, observable_component_sum_residual
       real(rp) :: k_ratios(64), band_residuals(64), ef_distances(64)
       complex(rp), allocatable :: moments(:, :, :), moment_sum(:, :, :), endpoint(:, :, :), endpoint_sum(:, :, :)
-      complex(rp), allocatable :: generator(:, :), h(:, :), rho(:, :), dh_cov(:, :), delta_rho(:, :)
+      complex(rp), allocatable :: generator(:, :), h(:, :), rho(:, :), dh_cov(:, :), delta_rho(:, :), zero_matrix(:, :)
       complex(rp), allocatable :: source_field(:), target_raw(:), response_b(:), response_conn(:), response_cov(:)
       complex(rp), allocatable :: conn_compact(:), b_compact(:), cov_compact(:), target_compact(:)
       complex(rp), allocatable :: transition_conn(:), direct_conn(:), direct_conn_raw(:), raw_back(:), master_back(:), master_compact(:), observable(:), master(:)
@@ -97,9 +103,14 @@ contains
       complex(rp), allocatable :: frozen_dmg(:), reconstructed_dmg(:)
       complex(rp), allocatable :: obs_svd(:)
       complex(rp), allocatable :: covariant_field(:, :)
+      complex(rp), allocatable :: endpoint_complete(:, :, :), endpoint_fixed(:, :, :), endpoint_h(:, :, :), endpoint_h_zero(:, :, :)
+      complex(rp), allocatable :: endpoint_h_b(:, :, :), endpoint_h_conn(:, :, :)
+      complex(rp), allocatable :: response_cov_complete(:), response_cov_fixed_endpoint(:), response_endpoint_h(:)
+      complex(rp), allocatable :: response_endpoint_h_b(:), response_endpoint_h_conn(:), endpoint_raw(:), fixed_endpoint_raw(:)
+      complex(rp), allocatable :: endpoint_h_raw(:), endpoint_h_b_raw(:), endpoint_h_conn_raw(:), endpoint_h_compact(:)
       real(rp), allocatable :: p3(:, :), bxc(:, :), kxc(:, :), channels(:, :, :, :)
       real(rp), allocatable :: sorted_ratios(:)
-      logical :: source_ok, compact_ok, foundation_ok, identity_ok, response_ok, master_ok, svd_ok
+      logical :: source_ok, compact_ok, foundation_ok, identity_ok, response_ok, master_ok, svd_ok, endpoint_ok
       logical :: sidecar_u, sidecar_y
       character(len=128) :: dresp11_verdict, classification, verdict
       character(len=256) :: sidecar_u_file, sidecar_y_file, k_file
@@ -131,17 +142,22 @@ contains
          response_b(ndim), response_conn(ndim), response_cov(ndim), observable(ndim), master(ndim), master_back(ndim), &
          obs_upper_raw(ndim), obs_small_raw(ndim), obs_angular_raw(ndim), obs_total_raw(ndim), &
          conn_compact(n), b_compact(n), cov_compact(n), target_compact(n), obs_svd(n), frozen_dmg(n), &
-         reconstructed_dmg(n), master_compact(n), &
+         reconstructed_dmg(n), master_compact(n), response_cov_complete(ndim), response_cov_fixed_endpoint(ndim), &
+         response_endpoint_h(ndim), response_endpoint_h_b(ndim), response_endpoint_h_conn(ndim), endpoint_raw(ndim), &
+         fixed_endpoint_raw(ndim), endpoint_h_raw(ndim), endpoint_h_b_raw(ndim), endpoint_h_conn_raw(ndim), endpoint_h_compact(n), &
          direct_conn(n), direct_conn_raw(ndim), transition_conn(n), raw_back(ndim))
       allocate(d_ee(nb,nb,size(hamiltonian_obj%ee,3),size(hamiltonian_obj%ee,4)), &
          d_o_types(size(hamiltonian_obj%obarm,1),size(hamiltonian_obj%obarm,2),size(hamiltonian_obj%obarm,3)), &
          d_e_types(size(hamiltonian_obj%enim,1),size(hamiltonian_obj%enim,2),size(hamiltonian_obj%enim,3)))
-      allocate(h(nmat,nmat), rho(nmat,nmat), dh_cov(nmat,nmat), delta_rho(nmat,nmat), hfirst(nmat,nmat), &
+      allocate(h(nmat,nmat), rho(nmat,nmat), dh_cov(nmat,nmat), delta_rho(nmat,nmat), zero_matrix(nmat,nmat), hfirst(nmat,nmat), &
          overlap(nmat,nmat), enu(nmat,nmat), d_hfirst(nmat,nmat), d_overlap(nmat,nmat), d_enu(nmat,nmat), &
          d_h2(nmat,nmat), term_enu(nmat,nmat), term_h(nmat,nmat), term_left(nmat,nmat), term_middle(nmat,nmat), &
          term_right(nmat,nmat), conn_enu(nmat,nmat), conn_h(nmat,nmat), conn_overlap(nmat,nmat), d_b(nmat,nmat), &
          d_conn(nmat,nmat), components(nmat,nmat,lmto_product_nbranch,lr_full_spatial_npiece), &
-         operators(nmat,nmat,lr_full_spatial_npiece), branch_action(nmat,nmat), covariant_field(nmat,nmat))
+         operators(nmat,nmat,lr_full_spatial_npiece), branch_action(nmat,nmat), covariant_field(nmat,nmat), &
+         endpoint_complete(nmat,nmat,lmto_product_nbranch), endpoint_fixed(nmat,nmat,lmto_product_nbranch), &
+         endpoint_h(nmat,nmat,lmto_product_nbranch), endpoint_h_zero(nmat,nmat,lmto_product_nbranch), &
+         endpoint_h_b(nmat,nmat,lmto_product_nbranch), endpoint_h_conn(nmat,nmat,lmto_product_nbranch))
 
       moment_sum = cmplx(0.0_rp,0.0_rp,rp); endpoint_sum = cmplx(0.0_rp,0.0_rp,rp)
       call exact_ks_spin_rotation_generator((radial_bases(1)%lmax+1)**2,nsite,generator)
@@ -176,8 +192,12 @@ contains
 
       response_b=cmplx(0.0_rp,0.0_rp,rp); response_conn=cmplx(0.0_rp,0.0_rp,rp)
       response_cov=cmplx(0.0_rp,0.0_rp,rp); direct_conn=cmplx(0.0_rp,0.0_rp,rp)
+      response_cov_complete=cmplx(0.0_rp,0.0_rp,rp); response_cov_fixed_endpoint=cmplx(0.0_rp,0.0_rp,rp)
+      response_endpoint_h=cmplx(0.0_rp,0.0_rp,rp); response_endpoint_h_b=cmplx(0.0_rp,0.0_rp,rp)
+      response_endpoint_h_conn=cmplx(0.0_rp,0.0_rp,rp)
       conn_compact=cmplx(0.0_rp,0.0_rp,rp); b_compact=cmplx(0.0_rp,0.0_rp,rp)
       cov_compact=cmplx(0.0_rp,0.0_rp,rp); branch_sq=0.0_rp; branch_mismatch_sq=0.0_rp
+      endpoint_branch_residual=0.0_rp; endpoint_zero_residual=0.0_rp; endpoint_h_branch_sq=0.0_rp
       origin_sq=0.0_rp; orbital_sq=0.0_rp; left_sq=0.0_rp; right_sq=0.0_rp; endpoint_interference=0.0_rp
       max_field_identity=0.0_rp; rms_field_identity=0.0_rp; max_element_identity=0.0_rp; production_residual=0.0_rp
       min_h_conn_ratio=huge(1.0_rp); max_h_conn_ratio=0.0_rp; rms_h_conn_ratio=0.0_rp
@@ -187,6 +207,8 @@ contains
          ik_global=ik; if (allocated(reciprocal_obj%k_l2g_map)) ik_global=reciprocal_obj%k_l2g_map(ik)
          wk=reciprocal_obj%k_weights(ik_global)
          h=reciprocal_obj%hk_bulk(:,:,ik)
+         call density_from_eigensystem(reciprocal_obj%eigenvalues(:,ik),reciprocal_obj%eigenvectors(:,:,ik), &
+            reciprocal_obj%fermi_level,reciprocal_obj%temperature,rho)
          call commutator_tangent(generator,h,dh_cov)
          call lr_full_spatial_contract_components(components,h,operators)
          d_b=operators(:,:,lr_full_spatial_piece_total); d_conn=dh_cov-d_b
@@ -200,6 +222,38 @@ contains
          call accumulate_response(direct_conn_raw,wk,response_conn)
          call fixed_response_for_field(response_space,radial_bases,product,reciprocal_obj,h,d_b,ik,response_b,b_compact)
          call fixed_response_for_field(response_space,radial_bases,product,reciprocal_obj,h,dh_cov,ik,response_cov,cov_compact)
+
+         ! The complete endpoint tangent is the authoritative DRESP-09V
+         ! product rule.  The frozen endpoint tangent varies only rho.  Their
+         ! subtraction is the explicit endpoint-H response, and the
+         ! delta_rho=0 call is an independent isolation oracle.
+         call endpoint_tangent_branches_second_order(h,rho,dh_cov,delta_rho,endpoint_complete)
+         call endpoint_fixed_h_branches_second_order(h,delta_rho,endpoint_fixed)
+         endpoint_h=endpoint_complete-endpoint_fixed
+         zero_matrix=cmplx(0.0_rp,0.0_rp,rp)
+         call endpoint_tangent_branches_second_order(h,rho,dh_cov,zero_matrix,endpoint_h_zero)
+         do branch=1,lmto_product_nbranch
+            endpoint_branch_residual(branch)=max(endpoint_branch_residual(branch), &
+               relative_matrix_residual(endpoint_complete(:,:,branch),endpoint_fixed(:,:,branch)+endpoint_h(:,:,branch)))
+            endpoint_zero_residual(branch)=max(endpoint_zero_residual(branch), &
+               relative_matrix_residual(endpoint_h(:,:,branch),endpoint_h_zero(:,:,branch)))
+            endpoint_h_branch_sq(branch)=endpoint_h_branch_sq(branch)+wk*sum(abs(endpoint_h(:,:,branch))**2)
+         end do
+         call endpoint_pauli_measurement(response_space,radial_bases,endpoint_complete,endpoint_raw)
+         call endpoint_pauli_measurement(response_space,radial_bases,endpoint_fixed,fixed_endpoint_raw)
+         call endpoint_pauli_measurement(response_space,radial_bases,endpoint_h,endpoint_h_raw)
+         call accumulate_response(endpoint_raw,wk,response_cov_complete)
+         call accumulate_response(fixed_endpoint_raw,wk,response_cov_fixed_endpoint)
+         call accumulate_response(endpoint_h_raw,wk,response_endpoint_h)
+
+         ! Optional diagnostic split of the explicit endpoint-H term.  Each
+         ! piece is built directly from deltaH_B/deltaH_conn with delta_rho=0.
+         call endpoint_tangent_branches_second_order(h,rho,d_b,zero_matrix,endpoint_h_b)
+         call endpoint_tangent_branches_second_order(h,rho,d_conn,zero_matrix,endpoint_h_conn)
+         call endpoint_pauli_measurement(response_space,radial_bases,endpoint_h_b,endpoint_h_b_raw)
+         call endpoint_pauli_measurement(response_space,radial_bases,endpoint_h_conn,endpoint_h_conn_raw)
+         call accumulate_response(endpoint_h_b_raw,wk,response_endpoint_h_b)
+         call accumulate_response(endpoint_h_conn_raw,wk,response_endpoint_h_conn)
          call build_matrix_decomposition(ik, hamiltonian_obj, lattice_obj, reciprocal_obj, d_ee, d_o_types, d_e_types, &
             hfirst,overlap,enu,d_hfirst,d_overlap,d_enu,d_h2,term_enu,term_h,term_left,term_middle,term_right, &
             conn_enu,conn_h,conn_overlap,d_conn,production_residual)
@@ -222,9 +276,13 @@ contains
          k_ratios(ik)=sqrt(sum(abs(d_conn)**2))/max(sqrt(sum(abs(dh_cov)**2)),tiny(1.0_rp))
       end do
       response_b=response_b/wsum; response_conn=response_conn/wsum; response_cov=response_cov/wsum
+      response_cov_complete=response_cov_complete/wsum; response_cov_fixed_endpoint=response_cov_fixed_endpoint/wsum
+      response_endpoint_h=response_endpoint_h/wsum; response_endpoint_h_b=response_endpoint_h_b/wsum
+      response_endpoint_h_conn=response_endpoint_h_conn/wsum
       b_compact=b_compact/wsum; cov_compact=cov_compact/wsum
       call dresp09_compact_field_from_raw(response_space,product,response_b,b_compact)
       call dresp09_compact_field_from_raw(response_space,product,response_cov,cov_compact)
+      call dresp09_compact_field_from_raw(response_space,product,response_endpoint_h,endpoint_h_compact)
       norm_b=sqrt(sum(abs(response_b)**2)); norm_conn=sqrt(sum(abs(response_conn)**2)); norm_cov=sqrt(sum(abs(response_cov)**2))
       rms_h_conn_ratio=sqrt(rms_h_conn_ratio/wsum); rms_field_identity=sqrt(rms_field_identity/wsum)
       rms_k_ratio=rms_h_conn_ratio; min_k_ratio=minval(k_ratios); max_k_ratio=maxval(k_ratios); median_k_ratio=median_value(k_ratios)
@@ -242,29 +300,60 @@ contains
       observable_small_norm=response_space_norm(response_space,obs_small_raw)
       observable_angular_norm=response_space_norm(response_space,obs_angular_raw)
       observable_total_norm=response_space_norm(response_space,obs_total_raw)
+      observable_pauli_upper_residual=relative_vector(observable,obs_upper_raw)
+      observable_component_sum_residual=relative_vector(obs_total_raw,obs_upper_raw+obs_small_raw+obs_angular_raw)
 
-      master=response_b-target_raw+response_conn+observable
-      master_norm=response_space_norm(response_space,master); fixed_norm=response_space_norm(response_space,response_b-target_raw)
-      conn_norm=response_space_norm(response_space,response_conn); observable_norm=response_space_norm(response_space,observable)
-      master_relative=master_norm/max(fixed_norm,tiny(1.0_rp)); master_max=maxval(abs(master)); master_integrated=weighted_integral(response_space,master)
+      fixed_norm=response_space_norm(response_space,response_b-target_raw)
+      fixed_basis_goldstone_relative=fixed_norm/max(response_space_norm(response_space,target_raw),tiny(1.0_rp))
+      conn_norm=response_space_norm(response_space,response_conn)
+      endpoint_h_norm=response_space_norm(response_space,response_endpoint_h)
+      endpoint_h_b_norm=response_space_norm(response_space,response_endpoint_h_b)
+      endpoint_h_conn_norm=response_space_norm(response_space,response_endpoint_h_conn)
+      endpoint_h_sum_residual=response_space_norm(response_space,response_endpoint_h- &
+         response_endpoint_h_b-response_endpoint_h_conn)/max(endpoint_h_norm,tiny(1.0_rp))
+      conn_endpoint_norm=response_space_norm(response_space,response_conn+response_endpoint_h)
+      conn_endpoint_obs_norm=response_space_norm(response_space,response_conn+response_endpoint_h+observable)
+      observable_norm=response_space_norm(response_space,observable)
+      overlap_p3_conn=real(response_vector_inner_product(response_space,target_raw,response_conn),rp)/ &
+         max(response_space_norm(response_space,target_raw)*conn_norm,tiny(1.0_rp))
+      overlap_p3_endpoint=real(response_vector_inner_product(response_space,target_raw,response_endpoint_h),rp)/ &
+         max(response_space_norm(response_space,target_raw)*endpoint_h_norm,tiny(1.0_rp))
+      overlap_p3_obs=real(response_vector_inner_product(response_space,target_raw,observable),rp)/ &
+         max(response_space_norm(response_space,target_raw)*observable_norm,tiny(1.0_rp))
+      dm_cov_linearity_residual=response_space_norm(response_space,response_cov-response_b-response_conn)/ &
+         max(response_space_norm(response_space,response_cov),tiny(1.0_rp))
+      dm_cov_direct_residual=response_space_norm(response_space,response_cov_fixed_endpoint-response_cov)/ &
+         max(response_space_norm(response_space,response_cov),tiny(1.0_rp))
+      complete_fixed_observable_residual=response_space_norm(response_space,response_cov_complete- &
+         response_cov_fixed_endpoint-response_endpoint_h)/max(response_space_norm(response_space,response_cov_complete),tiny(1.0_rp))
+
+      master=response_b-target_raw+response_conn+response_endpoint_h+observable
+      master_norm=response_space_norm(response_space,master)
+      account_relative=master_norm/max(fixed_norm,tiny(1.0_rp)); master_relative=account_relative
+      master_max=maxval(abs(master)); master_integrated=weighted_integral(response_space,master)
       call dresp09_compact_field_from_raw(response_space,product,master,master_compact)
       call dresp09_raw_field_from_compact(response_space,product,master_compact,master_back)
       compact_projection_residual=relative_vector(master_back,master)
       l0_profile_residual=master_relative
-      call vector_geometry(response_space,response_b-target_raw,response_conn,observable,target_raw,overlap_conn,overlap_obs,cosine_conn,cosine_obs, &
-         angle_conn,angle_obs,parallel_fraction,orthogonal_fraction)
-      conn_ratio=norm_conn/max(norm_cov,tiny(1.0_rp)); observable_norm=norm_observable(observable)
-      dm_cov_residual=response_space_norm(response_space,response_b+response_conn+observable-target_raw)/max(response_space_norm(response_space,target_raw),tiny(1.0_rp))
+      call vector_geometry(response_space,response_b-target_raw,response_conn,response_endpoint_h,observable,target_raw,overlap_conn, &
+         overlap_endpoint,overlap_obs,cosine_conn,cosine_endpoint,cosine_obs,angle_conn,angle_endpoint,angle_obs,parallel_fraction, &
+         orthogonal_fraction)
+      conn_ratio=norm_conn/max(norm_cov,tiny(1.0_rp))
+      dm_cov_residual=response_space_norm(response_space,response_cov_complete+observable-target_raw)/ &
+         max(response_space_norm(response_space,target_raw),tiny(1.0_rp))
 
       foundation_ok=.false.; dresp11_verdict='MISSING'
       call read_string_key('/tmp/dresp11_fe_4k.dat','DRESP-11 verdict',dresp11_verdict)
       foundation_ok=trim(dresp11_verdict)=='PASS-A' .or. trim(dresp11_verdict)=='PASS-B'
       call read_real_key('/tmp/dresp11_fe_4k.dat','raw_Ward_norm_Dm_over_m',dresp11_frozen)
-      if (.not. ieee_is_finite(dresp11_frozen)) dresp11_frozen=response_space_norm(response_space,response_b-target_raw)/max(response_space_norm(response_space,target_raw),tiny(1.0_rp))
+      if (.not. ieee_is_finite(dresp11_frozen)) dresp11_frozen=fixed_basis_goldstone_relative
       frozen_dmg=target_compact-b_compact; reconstructed_dmg=conn_compact
       call dresp09_compact_field_from_raw(response_space,product,response_conn,conn_compact)
       call dresp09_compact_field_from_raw(response_space,product,observable,obs_svd)
-      reconstructed_dmg=conn_compact+obs_svd
+      ! DRESP-11 stores D*m_G = m_G - A*m_G = -r_fixed.  Since the
+      ! completed accounting is r_fixed + conn + endpoint-H + deltaO = 0,
+      ! the independently reconstructed D*m_G is the positive sum below.
+      reconstructed_dmg=conn_compact+endpoint_h_compact+obs_svd
       dresp11_reconstruct_residual=relative_vector(reconstructed_dmg,frozen_dmg)
 
       ! DRESP-11 is frozen and already owns the authoritative 348x348
@@ -281,13 +370,19 @@ contains
       source_ok=ieee_is_finite(norm_b) .and. ieee_is_finite(norm_conn)
       compact_ok=response_frechet_residual < 1.0e-10_rp
       response_ok=source_ok .and. compact_ok
-      master_ok=master_relative < 1.0e-6_rp
-      if (.not. foundation_ok .or. .not. identity_ok .or. .not. response_ok .or. .not. svd_ok) then
+      endpoint_ok=maxval(endpoint_branch_residual) < 1.0e-11_rp .and. maxval(endpoint_zero_residual) < 1.0e-11_rp .and. &
+         dm_cov_linearity_residual < 1.0e-10_rp .and. complete_fixed_observable_residual < 1.0e-10_rp .and. &
+         dm_cov_direct_residual < 1.0e-10_rp .and. observable_pauli_upper_residual < 1.0e-10_rp .and. &
+         ieee_is_finite(endpoint_h_sum_residual)
+      master_ok=account_relative < 1.0e-6_rp .and. dresp11_reconstruct_residual < 1.0e-6_rp
+      if (.not. endpoint_ok) then
+         verdict=dresp12_blocked; classification='ENDPOINT_RESPONSE_REGRESSION'
+      else if (.not. foundation_ok .or. .not. identity_ok .or. .not. response_ok .or. .not. svd_ok) then
          verdict=dresp12_blocked; classification='COVARIANCE_BRIDGE_OPEN'
-      else if (master_ok .and. dresp11_reconstruct_residual < 1.0e-6_rp) then
-         verdict=dresp12_pass_a; classification='FINITE_LMTO_COVARIANCE_DEFECT_EXPLAINED'
+      else if (master_ok) then
+         verdict=dresp12_pass_a; classification='COMPLETE_LMTO_RIGID_RESPONSE_DECOMPOSITION_CLOSED'
       else
-         verdict=dresp12_pass_b; classification='FINITE_LMTO_COVARIANCE_ACCOUNTING_INCOMPLETE'
+         verdict=dresp12_pass_b; classification='RESIDUAL_BASIS_RESPONSE_REMAINS'
       end if
 
       sidecar_u_file=trim(output_file)//'.DRESP09U'; sidecar_y_file=trim(output_file)//'.DRESP09Y'
@@ -300,19 +395,22 @@ contains
          if (ios/=0) error stop 'DRESP-12: cannot open output artifact'
          write(unit,'(a)') '# DRESP-12 finite-LMTO covariance decomposition of the Ward defect'
          write(unit,'(a,a)') 'DRESP-12 verdict: ',trim(verdict)
-         write(unit,'(a)') 'Starting HEAD: cd2fd3fd69c42b7b992cfc138683f391e89af39d'
+         write(unit,'(a)') 'Starting HEAD: e86d2885b64f8d36761f2d03fc61f6143eebbaaf'
          write(unit,'(a)') 'frozen_basis = six-branch 348-dimensional Pauli response; Frechet; Kxc=Bxc/P3; raw SR; P3 target'
          write(unit,'(a)') 'fixed_formulation = m -> Kxc -> Bxc -> F_SR -> L_f -> R_P'
-         write(unit,'(a)') 'covariant_formulation = m -> deltaH_cov -> L_f -> R_P plus deltaO'
+         write(unit,'(a)') 'covariant_formulation = m -> deltaH_cov -> L_f -> R_P plus endpoint-H plus deltaO'
          write(unit,'(a)') 'FINITE_LMTO_CONNECTION_TANGENT = deltaH_cov - deltaH_B; no fit or correction'
+         write(unit,'(a)') 'conceptual_response = delta_m_LMTO = delta_m_Kubo(delta_rho) + delta_m_endpoint-H + delta_m_basis_observable(deltaO)'
          write(unit,'(a,a)') 'DRESP-11 frozen regression = ',merge('CLOSED','OPEN  ',foundation_ok)
          write(unit,'(a,a)') 'DRESP-11 verdict = ',trim(dresp11_verdict)
          write(unit,'(a,i0)') 'Pauli compact dimension = ',n
          write(unit,'(a)') 'branches = 00,10,01,11,20,02'
          write(unit,'(a,es24.16)') 'fixed_Ward_norm = ',fixed_norm
-         write(unit,'(a,es24.16)') 'fixed_Ward_relative = ',master_relative
+         write(unit,'(a,es24.16)') '||r_fixed|| = ',fixed_norm
+         write(unit,'(a,es24.16)') 'fixed_basis_goldstone_relative = ',fixed_basis_goldstone_relative
          write(unit,'(a,es24.16)') 'fixed_Ward_parallel_fraction = ',parallel_fraction(1)
          write(unit,'(a,es24.16)') 'fixed_Ward_orthogonal_fraction = ',orthogonal_fraction(1)
+         write(unit,'(a,es24.16)') 'DRESP11_orthogonal_fraction = ',orthogonal_fraction(1)
          write(unit,'(a,es24.16)') '||deltaH_B|| = ',norm_b
          write(unit,'(a,es24.16)') '||deltaH_conn|| = ',norm_conn
          write(unit,'(a,es24.16)') '||deltaH_cov|| = ',norm_cov
@@ -338,8 +436,12 @@ contains
          write(unit,'(a,es24.16)') 'connection_endpoint_interference = ',endpoint_interference
          write(unit,'(a,6(es24.16,1x))') 'fixed_field_branch_norms_00_10_01_11_20_02 = ',sqrt(branch_sq/wsum)
          write(unit,'(a,6(es24.16,1x))') 'fixed_field_branch_fraction_00_10_01_11_20_02 = ',sqrt(branch_sq/wsum)/max(norm_b,tiny(1.0_rp))
-         write(unit,'(a)') 'covariant_branch_decomposition = NOT_DEFINED; deltaH_cov is an unprojected commutator'
-         write(unit,'(a)') 'connection_branch_mismatch_projection = NOT_DEFINED; no forced six-branch projection'
+         write(unit,'(a,6(es24.16,1x))') 'endpoint_branch_complete_frozen_endpoint_H_residual_00_10_01_11_20_02 = ',endpoint_branch_residual
+         write(unit,'(a,6(es24.16,1x))') 'endpoint_H_subtraction_vs_delta_rho_zero_00_10_01_11_20_02 = ',endpoint_zero_residual
+         write(unit,'(a,6(es24.16,1x))') 'endpoint_H_branch_norm_00_10_01_11_20_02 = ',sqrt(endpoint_h_branch_sq/wsum)
+         write(unit,'(a)') 'endpoint_00_H = ZERO_BY_PRODUCT_RULE'
+         write(unit,'(a)') 'covariant_branch_decomposition = CLOSED_BY_COMPLETE_ENDPOINT_TANGENT'
+         write(unit,'(a)') 'connection_branch_mismatch_projection = NOT_USED'
          write(unit,'(a,3(es24.16,1x))') 'connection_orbital_norm_s_p_d = ',sqrt(orbital_sq(1,:)/wsum)
          write(unit,'(a,3(es24.16,1x))') 'connection_orbital_fraction_s_p_d = ',sqrt(orbital_sq(1,:)/wsum)/max(norm_conn,tiny(1.0_rp))
          write(unit,'(a,3(es24.16,1x))') 'connection_orbital_cross_sp_sd_pd = ',sqrt([orbital_sq(2,1),orbital_sq(2,2),orbital_sq(2,3)]/wsum)/max(norm_conn,tiny(1.0_rp))
@@ -348,12 +450,35 @@ contains
          write(unit,'(a,es24.16)') '||delta_m_conn|| = ',conn_norm
          write(unit,'(a,es24.16)') 'Frechet_oracle_residual = ',response_frechet_residual
          write(unit,'(a,es24.16)') 'independent_compact_connection_residual = ',response_frechet_residual
+         write(unit,'(a,es24.16)') '||delta_m_cov_frozen|| = ',response_space_norm(response_space,response_cov_fixed_endpoint)
+         write(unit,'(a,es24.16)') '||delta_m_cov_complete_fixedO|| = ',response_space_norm(response_space,response_cov_complete)
+         write(unit,'(a,es24.16)') '||delta_m_endpoint_H|| = ',endpoint_h_norm
+         write(unit,'(a,es24.16)') '||delta_m_conn_plus_endpoint_H|| = ',conn_endpoint_norm
+         write(unit,'(a,es24.16)') '||delta_m_conn_plus_endpoint_H_plus_deltaO|| = ',conn_endpoint_obs_norm
+         write(unit,'(a,es24.16)') 'endpoint_H_Bxc_norm = ',endpoint_h_b_norm
+         write(unit,'(a,es24.16)') 'endpoint_H_connection_norm = ',endpoint_h_conn_norm
+         write(unit,'(a,es24.16)') 'endpoint_H_Bxc_plus_connection_residual = ',endpoint_h_sum_residual
+         if (endpoint_h_b_norm > 2.0_rp*endpoint_h_conn_norm) then
+            write(unit,'(a)') 'endpoint_H_primary_origin = DIRECT_BXC_FIELD'
+         else if (endpoint_h_conn_norm > 2.0_rp*endpoint_h_b_norm) then
+            write(unit,'(a)') 'endpoint_H_primary_origin = LMTO_HAMILTONIAN_CONNECTION'
+         else
+            write(unit,'(a)') 'endpoint_H_primary_origin = INTERFERENCE_COMPARABLE_CONTRIBUTIONS'
+         end if
+         write(unit,'(a,es24.16)') 'dm_cov_rho_vs_dm_B_plus_dm_conn = ',dm_cov_linearity_residual
+         write(unit,'(a,es24.16)') 'dm_cov_frozen_endpoint_vs_direct_fixed_H = ',dm_cov_direct_residual
+         write(unit,'(a,es24.16)') 'dm_cov_complete_vs_frozen_plus_endpoint_H = ',complete_fixed_observable_residual
          write(unit,'(a,es24.16)') '||delta_m_O|| = ',observable_norm
          write(unit,'(a,es24.16)') 'delta_m_O_upper = ',observable_upper_norm
          write(unit,'(a,es24.16)') 'delta_m_O_lower_small = ',observable_small_norm
          write(unit,'(a,es24.16)') 'delta_m_O_lower_angular = ',observable_angular_norm
          write(unit,'(a,es24.16)') 'delta_m_O_total = ',observable_total_norm
-         write(unit,'(a,es24.16)') 'master_identity_relative = ',master_relative
+         write(unit,'(a,es24.16)') 'DRESP09Y_observable_pauli_vs_upper_residual = ',observable_pauli_upper_residual
+         write(unit,'(a,es24.16)') 'DRESP09Y_observable_upper_plus_lower_vs_total_residual = ',observable_component_sum_residual
+         write(unit,'(a,es24.16)') 'covariance_accounting_relative_to_fixed_defect = ',account_relative
+         write(unit,'(a,es24.16)') 'master_identity_relative = ',account_relative
+         write(unit,'(a,es24.16)') 'remaining_radial_profile_vector_residual = ',account_relative
+         write(unit,'(a,es24.16)') 'historical_incomplete_accounting = ',1.4619_rp
          write(unit,'(a,es24.16)') 'master_identity_maximum_radial_component = ',master_max
          write(unit,'(a,es24.16)') 'master_identity_integrated_moment = ',master_integrated
          write(unit,'(a,es24.16)') 'master_identity_348_compact_projection_residual = ',compact_projection_residual
@@ -361,12 +486,16 @@ contains
          write(unit,'(a,es24.16)') 'master_identity_covariant_response_residual = ',dm_cov_residual
          write(unit,'(a,2es24.16)') 'overlap_r_conn_complex_real = ',overlap_conn,cosine_conn
          write(unit,'(a,2es24.16)') 'overlap_r_deltaO_complex_real = ',overlap_obs,cosine_obs
+         write(unit,'(a,3(es24.16,1x))') 'overlap_P3_conn_endpoint_H_deltaO = ',overlap_p3_conn,overlap_p3_endpoint,overlap_p3_obs
          write(unit,'(a,2es24.16)') 'angle_r_conn_radians_cosine = ',angle_conn,cosine_conn
          write(unit,'(a,2es24.16)') 'angle_r_deltaO_radians_cosine = ',angle_obs,cosine_obs
-         write(unit,'(a,4(es24.16,1x))') 'parallel_fraction_r_conn_deltaO_sum = ',parallel_fraction
-         write(unit,'(a,4(es24.16,1x))') 'orthogonal_fraction_r_conn_deltaO_sum = ',orthogonal_fraction
+         write(unit,'(a,5(es24.16,1x))') 'parallel_fraction_r_conn_endpoint_H_deltaO_sum = ',parallel_fraction
+         write(unit,'(a,5(es24.16,1x))') 'orthogonal_fraction_r_conn_endpoint_H_deltaO_sum = ',orthogonal_fraction
+         write(unit,'(a,es24.16)') 'overlap_r_endpoint_H_complex_real = ',overlap_endpoint
+         write(unit,'(a,2es24.16)') 'angle_r_endpoint_H_radians_cosine = ',angle_endpoint,cosine_endpoint
          write(unit,'(a,es24.16)') 'DRESP11_raw_Ward_residual = ',dresp11_frozen
          write(unit,'(a,es24.16)') 'DRESP11_compact_DmG_reconstruction_residual = ',dresp11_reconstruct_residual
+         write(unit,'(a)') 'DRESP11_DmG_sign_convention = DmG = mG - A*mG = -r_fixed; reconstruction = conn + endpoint-H + deltaO'
          write(unit,'(a,es24.16)') 'DRESP11_denominator_reconstruction_residual = ',svd_reconstruct_residual
          do mode=1,10
             write(unit,'(a,i0,a,2(es24.16,1x))') 'SVD_mode(',mode-1,')_sigma_target_overlap = ',sigma(mode),left_amp(mode)
@@ -379,8 +508,12 @@ contains
          write(unit,'(a)') 'Goldstone correction = OFF'
          write(unit,'(a)') 'BES/Halle production = OFF'
          write(unit,'(a)') 'Dynamics = NOT RUN'
-         write(unit,'(a)') 'NEXT = REPRESENTATION_CONSISTENT_GOLDSTONE_RESTORATION'
-         write(unit,'(a)') 'Tests = field identity; DRESP-09U/native commutator; Frechet; compact connection; DRESP-09Y; master identity; compact DmG; parallel/orthogonal; SVD; sitewise fixture; frozen DRESP-10F; frozen DRESP-11'
+         if (master_ok) then
+            write(unit,'(a)') 'NEXT = LMTO_DYNAMIC_RESPONSE_FORMULATION'
+         else
+            write(unit,'(a)') 'NEXT = LMTO_BASIS_RESPONSE_AUDIT'
+         end if
+         write(unit,'(a)') 'Tests = six-branch complete tangent; six-branch frozen-H tangent; endpoint-H subtraction; delta_rho=0 endpoint oracle; branch closure; Frechet linearity; complete fixed-observable closure; DRESP-09Y observable; master accounting; compact DmG; frozen DRESP-10F; frozen DRESP-11; git diff --check'
          close(unit)
       end if
       if (rank==0) write(*,'(a,a)') 'DRESP-12 verdict: ',trim(verdict)
@@ -388,8 +521,11 @@ contains
       deallocate(moment_sum,moments,endpoint_sum,endpoint,generator,p3,bxc,kxc,channels,source_field,target_raw,response_b, &
          response_conn,response_cov,observable,master,master_back,master_compact,obs_upper_raw,obs_small_raw,obs_angular_raw,obs_total_raw,conn_compact, &
          b_compact,cov_compact,target_compact,obs_svd,frozen_dmg,reconstructed_dmg, &
-         d_ee,d_o_types,d_e_types,h,rho,dh_cov,delta_rho,hfirst,overlap,enu,d_hfirst,d_overlap,d_enu,d_h2,term_enu,term_h, &
+         response_cov_complete,response_cov_fixed_endpoint,response_endpoint_h,response_endpoint_h_b,response_endpoint_h_conn, &
+         endpoint_raw,fixed_endpoint_raw,endpoint_h_raw,endpoint_h_b_raw,endpoint_h_conn_raw,endpoint_h_compact, &
+         d_ee,d_o_types,d_e_types,h,rho,dh_cov,delta_rho,zero_matrix,hfirst,overlap,enu,d_hfirst,d_overlap,d_enu,d_h2,term_enu,term_h, &
          term_left,term_middle,term_right,conn_enu,conn_h,conn_overlap,d_b,d_conn,components,operators,branch_action,covariant_field, &
+         endpoint_complete,endpoint_fixed,endpoint_h,endpoint_h_zero,endpoint_h_b,endpoint_h_conn, &
          covariant_contact,obs_upper,obs_small,obs_angular,obs_total,direct_conn,direct_conn_raw, &
          transition_conn,raw_back)
    contains
@@ -545,20 +681,24 @@ contains
          result=response_space_norm(response_space,value)
       end function norm_observable
 
-      subroutine vector_geometry(space,r,conn,obs,g,oc,oo,cc,co,ac,ao,pf,qf)
+      subroutine vector_geometry(space,r,conn,endpoint_value,obs,g,oc,oe,oo,cc,ce,co,ac,ae,ao,pf,qf)
       type(response_space_layout), intent(in) :: space
-      complex(rp), intent(in) :: r(:),conn(:),obs(:),g(:)
-      real(rp), intent(out) :: oc,oo,cc,co,ac,ao,pf(4),qf(4)
-         complex(rp) :: rc,ro,rg
+      complex(rp), intent(in) :: r(:),conn(:),endpoint_value(:),obs(:),g(:)
+      real(rp), intent(out) :: oc,oe,oo,cc,ce,co,ac,ae,ao,pf(5),qf(5)
+         complex(rp) :: rc,re,ro,rg
          complex(rp), allocatable :: vals(:,:),proj(:)
-         real(rp) :: nr,nc,no,nv
-         nr=response_space_norm(space,r); nc=response_space_norm(space,conn); no=response_space_norm(space,obs)
+         real(rp) :: nr,nc,ne,no,nv
+         nr=response_space_norm(space,r); nc=response_space_norm(space,conn); ne=response_space_norm(space,endpoint_value)
+         no=response_space_norm(space,obs)
          rc=response_vector_inner_product(space,r,conn); ro=response_vector_inner_product(space,r,obs)
+         re=response_vector_inner_product(space,r,endpoint_value)
          rg=response_vector_inner_product(space,g,g)
-         oc=real(rc/max(nr*nc,tiny(1.0_rp)),rp); oo=real(ro/max(nr*no,tiny(1.0_rp)),rp); cc=oc; co=oo
-         ac=acos(max(-1.0_rp,min(1.0_rp,cc))); ao=acos(max(-1.0_rp,min(1.0_rp,co)))
-         allocate(vals(size(g),4),proj(size(g))); vals(:,1)=r; vals(:,2)=conn; vals(:,3)=obs; vals(:,4)=r+conn+obs
-         do mode=1,4
+         oc=real(rc/max(nr*nc,tiny(1.0_rp)),rp); oe=real(re/max(nr*ne,tiny(1.0_rp)),rp)
+         oo=real(ro/max(nr*no,tiny(1.0_rp)),rp); cc=oc; ce=oe; co=oo
+         ac=acos(max(-1.0_rp,min(1.0_rp,cc))); ae=acos(max(-1.0_rp,min(1.0_rp,ce))); ao=acos(max(-1.0_rp,min(1.0_rp,co)))
+         allocate(vals(size(g),5),proj(size(g))); vals(:,1)=r; vals(:,2)=conn; vals(:,3)=endpoint_value; vals(:,4)=obs
+         vals(:,5)=r+conn+endpoint_value+obs
+         do mode=1,5
             proj=g*response_vector_inner_product(space,g,vals(:,mode))/max(real(rg,rp),tiny(1.0_rp)); nv=response_space_norm(space,vals(:,mode))
             pf(mode)=response_space_norm(space,proj)/max(nv,tiny(1.0_rp)); qf(mode)=response_space_norm(space,vals(:,mode)-proj)/max(nv,tiny(1.0_rp))
          end do

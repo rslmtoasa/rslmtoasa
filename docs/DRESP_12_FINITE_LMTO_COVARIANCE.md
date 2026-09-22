@@ -1,133 +1,142 @@
-# DRESP-12 — finite-LMTO covariance decomposition of the Ward defect
+# DRESP-12 — finite-LMTO rigid-response decomposition
 
-Starting HEAD: `cd2fd3fd69c42b7b992cfc138683f391e89af39d`
+Starting HEAD for this closure: `e86d2885b64f8d36761f2d03fc61f6143eebbaaf`.
 
-DRESP-12 is a diagnostic-only continuation of DRESP-11. It tests whether the
-distributed fixed-basis Ward residual is the representation covariance seam
-between direct scalar-relativistic field insertion and the production LMTO
-commutator. It does not alter the six-branch basis, the 348-dimensional
-Pauli space, the Fréchet response, `Kxc = Bxc/P3`, the raw SR source vertex,
-or the P3 target.
+DRESP-12 is a static, diagnostic-only Gamma-point closure for the accepted
+64-k bcc-Fe `ham_only` state. It does not modify the Hamiltonian-side
+covariance bridge, response kernel, denominator, SVD, or production dynamics.
+Goldstone restoration, BES/Halle paths, fitting, rescaling, and correction
+routes are all off.
 
-## Architecture
+## Complete finite-LMTO response
+
+The six production endpoint objects are
 
 ```text
-                   fixed basis
-P3 -> Bxc -> F_SR -------------> deltaH_B
-                                  |
-                                  v
-                              Frechet
-                                  |
-                                  v
-                              delta m_B
-                                  |
-                                  +----------> r_fixed
-                                  |
-                                  |
-              finite-LMTO connection
-                    deltaH_conn
-                                  |
-                                  v
-                              Frechet
-                                  |
-                                  v
-                            delta m_conn
-                                  |
-                                  |
-observable-frame connection      |
-      delta m_O -----------------+
-                                  |
-                                  v
-                              exact P3
+D_pq = H**p rho H**q,   pq = 00, 10, 01, 11, 20, 02.
 ```
 
-The field-level definition is
+Their tangent is split exactly as
 
 ```text
-deltaH_conn(k) = deltaH_cov(k) - deltaH_B(k)
-deltaH_cov(k) = -i [G, H(k)]
-deltaH_B(k)   = F_SR[Bxc](k)
+delta D_pq = delta D_pq^(rho) + delta D_pq^(H)
+delta D_pq^(rho) = H**p delta_rho H**q
+delta D_pq^(H)   = delta D_pq^(complete) - delta D_pq^(rho).
 ```
 
-The identity `deltaH_B + deltaH_conn = deltaH_cov` is checked independently
-at every accepted k point. The connection is never fitted or projected into
-the compact field basis.
+`endpoint_tangent_branches_second_order` is authoritative for the complete
+product rule. The independent
+`endpoint_fixed_h_branches_second_order` primitive supplies the frozen-H
+term. The endpoint-H subtraction is independently checked by calling the
+complete routine with `delta_rho = 0`; branch `00` is identically zero on the
+endpoint-H side.
 
-## Response and accounting
-
-`deltaH_conn` is measured with the exact finite-temperature static Fréchet
-derivative and the frozen DRESP-10F Pauli measurement. The same perturbation
-is independently evaluated with the certified 348-dimensional transition
-machinery. The observable term is the frozen DRESP-09Y augmentation-frame
-tangent, retaining upper, lower-small, lower-angular, total, and the
-production Pauli-observable component separately.
-
-The primary physical-space gate is
+The density-side/Kubo response is measured with the same physical Pauli
+six-branch radial and angular dual as the certified DRESP-09X/Y path. Thus
 
 ```text
-r_fixed + delta_m_conn + delta_m_O = 0
+delta_m_cov_complete_fixedO = delta_m_cov^rho + delta_m_endpoint-H
+delta_m_cov^rho = delta_m_B + delta_m_conn.
+```
+
+The observable-frame term remains separate:
+
+```text
+delta_m_O = Tr[rho delta_O].
+```
+
+The complete rigid response accounting is therefore
+
+```text
+delta_m_cov = delta_m_B + delta_m_conn + delta_m_endpoint-H + delta_m_O.
+```
+
+The fixed-basis defect and the master accounting residual are different
+quantities:
+
+```text
 r_fixed = delta_m_B - m_P3
+R_account = ||r_fixed + delta_m_conn + delta_m_endpoint-H + delta_m_O|| / ||r_fixed||.
 ```
 
-The compact reconstruction uses only the independently derived covariance
-terms:
+`fixed_basis_goldstone_relative = ||r_fixed|| / ||m_P3||` is the actual
+fixed-basis Goldstone consistency residual. It must not be confused with
+`covariance_accounting_relative_to_fixed_defect`, the endpoint-inclusive
+accounting residual. The historical incomplete value is retained as:
 
 ```text
-D m_G = delta_m_conn + delta_m_O
+old covariance accounting residual = 1.4619
+status = SUPERSEDED; endpoint-H contribution omitted
 ```
 
-No BES/Halle correction, SVD zeroing, rank-one repair, kernel rescaling, or
-dynamics is enabled.
+## Compact D*m_G sign
 
-## Representation capability boundary
-
-The production endpoint tangent is linear in independent endpoint rotations;
-the unit regression therefore closes a two-endpoint sitewise superposition
-fixture. This supports sitewise rigid rotations from the existing production
-map. An arbitrary `L>0` transverse field inside an ASA sphere is not treated
-as a rotation of spherical radial functions: it requires nonspherical
-radial/basis response. A general local field is therefore not promoted to a
-348×348 connection operator from the one rigid vector.
+DRESP-11 stores
 
 ```text
-sitewise rigid rotation       DERIVABLE_FROM_EXISTING_PRODUCTION_MAP
-arbitrary L,M within sphere   ARBITRARY_L_COVARIANCE_REQUIRES_NEW_BASIS_RESPONSE
-multi-site nonuniform field   DERIVABLE only for sitewise rigid rotations
+D*m_G = m_G - A*m_G = -r_fixed.
 ```
 
-## Artifacts and tests
-
-The accepted-state backend is
-`tests/integration/tddft_driver_smoke/input_dresp12_fe.nml` and writes:
+After the complete accounting closes, its independent reconstruction is
 
 ```text
-/tmp/dresp12_fe_4k.dat
-/tmp/dresp12_fe_4k.dat.kpoints.csv
+D*m_G = delta_m_conn + delta_m_endpoint-H + delta_m_O.
 ```
 
-The integration artifact checks the field identity, native commutator seam,
-Fréchet/compact closure, DRESP-09Y observable term, physical master identity,
-compact `D m_G` reconstruction, and the explicit no-correction/no-dynamics
-boundary. DRESP-11 remains the authoritative owner of the expensive 348-column
-denominator/SVD assembly; DRESP-12 reads its frozen singular spectrum and
-target overlaps rather than rebuilding that matrix. The DRESP-09U
-representation unit regression includes the two-site endpoint superposition
-fixture. DRESP-10F and DRESP-11 remain frozen prerequisite gates.
+The report records this sign explicitly and compares the reconstruction with
+the frozen DRESP-11 compact vector.
 
-## Result
+## Interpretation and scope
 
-The accepted 64-k Fe run is `PASS-B`:
+The physical decomposition is
 
-- field identity maximum: `1.0431e-17`;
-- independent Fréchet/compact connection residual: `1.8802e-13`;
-- frozen DRESP-11 denominator reconstruction: `4.0238e-16`;
-- master identity relative residual: `1.4619`;
-- compact `D m_G` reconstruction residual: `1.4619`.
+```text
+delta_m_LMTO = delta_m_Kubo(delta_rho)
+              + delta_m_endpoint-H       (energy-moment/contact)
+              + delta_m_basis/observable (deltaO).
+```
 
-Thus the finite-LMTO connection is numerically well-defined, but the currently
-available observable/accounting terms do not close the full Ward defect. The
-next step remains representation-consistent Goldstone restoration; no
-correction or dynamics was run. The machine-readable final report, including
-the k-resolved table and frozen DRESP-11 SVD spectrum/target overlaps, is
-`/tmp/dresp12_fe_4k.dat` with sidecars `.kpoints.csv`, `.DRESP09U`, and
-`.DRESP09Y`.
+The static Frechet derivative is an exact fixed-matrix oracle for the first,
+Kubo/bubble term. It is not by itself the complete LMTO physical response.
+The Lehmann/GF susceptibility is the production dynamical counterpart of the
+Kubo term; endpoint, basis, and radial-observable response terms must be
+handled separately in a frequency-dependent theory. DRESP-12 does not
+generalize this endpoint-H term to finite frequency.
+
+## Decision gate
+
+```text
+PASS-A  COMPLETE_LMTO_RIGID_RESPONSE_DECOMPOSITION_CLOSED
+PASS-B  RESIDUAL_BASIS_RESPONSE_REMAINS
+BLOCKED ENDPOINT_RESPONSE_REGRESSION
+```
+
+PASS-A closes the Ward-focused campaign and sets
+`NEXT = LMTO_DYNAMIC_RESPONSE_FORMULATION`. PASS-B sets
+`NEXT = LMTO_BASIS_RESPONSE_AUDIT` and reports the remaining radial/profile
+residual. An endpoint branch or independent isolation failure is blocked and
+does not authorize a further interpretation.
+
+## Required static checks
+
+The integration artifact reports the six complete branches, six frozen-H
+branches, endpoint-H subtraction and `delta_rho=0` isolation, branchwise
+closure, Frechet linearity, complete fixed-observable closure, DRESP-09Y
+upper/lower-small/lower-angular observable pieces, corrected master
+accounting, compact `D*m_G`, endpoint-H Bxc/connection diagnostics, and the
+frozen DRESP-10F/DRESP-11 regressions. Dynamics is not run.
+
+The artifact is `/tmp/dresp12_fe_4k.dat` with the k-resolved table and the
+existing DRESP-09U/Y sidecars.
+
+## Closure result
+
+The accepted Fe run closes the endpoint algebra, frozen-H equivalence,
+Frechet linearity, complete fixed-observable covariance identity, and the
+DRESP-09Y observable regression. The endpoint-H term reduces the historical
+accounting residual from `1.4619` to approximately `9.4754e-1`, but does not
+close the remaining radial/profile/vector defect. The resulting classification
+is `PASS-B RESIDUAL_BASIS_RESPONSE_REMAINS`, with
+`NEXT = LMTO_BASIS_RESPONSE_AUDIT`. The fixed-basis Goldstone residual remains
+approximately `0.2363`, and the DRESP-11 orthogonal fraction remains
+approximately `0.9066`.
