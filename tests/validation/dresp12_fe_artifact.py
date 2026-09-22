@@ -27,6 +27,14 @@ def number(values: dict[str, str], key: str) -> float:
     return value
 
 
+def vector(values: dict[str, str], key: str, size: int = 6) -> list[float]:
+    fields = values[key].split()
+    assert len(fields) == size
+    result = [float(field) for field in fields]
+    assert all(math.isfinite(field) for field in result)
+    return result
+
+
 def main() -> None:
     verdict, values = read(sys.argv[1])
     assert verdict in {"PASS-A", "PASS-B"}
@@ -53,6 +61,24 @@ def main() -> None:
         "master_identity_relative",
         "DRESP11_compact_DmG_reconstruction_residual",
         "DRESP11_denominator_reconstruction_residual",
+        "DRESP09Y_endpoint_measurement_norm",
+        "DRESP12_endpoint_measurement_norm",
+        "DRESP12_vs_DRESP09Y_endpoint_residual",
+        "independent_cartesian_trace_oracle_vs_DRESP09Y_residual",
+        "independent_cartesian_trace_oracle_vs_DRESP12_residual",
+        "circular_plus_norm",
+        "circular_minus_norm",
+        "cartesian_x_reconstruction_residual",
+        "cartesian_y_reconstruction_residual",
+        "observable_deltaO_plus_minus_to_x_residual",
+        "observable_deltaO_y_reconstruction_residual",
+        "Embedded_DRESP09Y_Pauli_complete_vs_P3",
+        "Current_DRESP12_Pauli_complete_vs_P3",
+        "Production_circular_static_sum_rule",
+        "Cartesian_rigid_covariance_oracle",
+        "Cartesian_accounting_residual",
+        "circular_plus_accounting_residual",
+        "circular_minus_accounting_residual",
     ):
         number(values, key)
 
@@ -63,6 +89,37 @@ def main() -> None:
     assert number(values, "dm_cov_rho_vs_dm_B_plus_dm_conn") < 1.0e-10
     assert number(values, "dm_cov_frozen_endpoint_vs_direct_fixed_H") < 1.0e-10
     assert number(values, "dm_cov_complete_vs_frozen_plus_endpoint_H") < 1.0e-10
+    assert number(values, "DRESP09Y_endpoint_measurement_norm") > 0.0
+    assert number(values, "DRESP12_endpoint_measurement_norm") > 0.0
+    assert number(values, "DRESP12_vs_DRESP09Y_endpoint_residual") < 1.0e-10
+    assert number(values, "independent_cartesian_trace_oracle_vs_DRESP09Y_residual") < 1.0e-10
+    assert number(values, "independent_cartesian_trace_oracle_vs_DRESP12_residual") < 1.0e-10
+    assert number(values, "circular_plus_norm") > 0.0
+    assert number(values, "circular_minus_norm") > 0.0
+    assert number(values, "cartesian_x_reconstruction_residual") < 1.0e-10
+    assert number(values, "cartesian_y_reconstruction_residual") < 1.0e-10
+    assert number(values, "observable_deltaO_plus_minus_to_x_residual") < 1.0e-10
+    assert number(values, "observable_deltaO_y_reconstruction_residual") < 1.0e-10
+    assert number(values, "Embedded_DRESP09Y_Pauli_complete_vs_P3") < 3.0e-8
+    assert number(values, "Current_DRESP12_Pauli_complete_vs_P3") < 3.0e-8
+    assert number(values, "Production_circular_static_sum_rule") < 3.0e-8
+    assert number(values, "Cartesian_rigid_covariance_oracle") < 3.0e-8
+    assert values["Measurement seam classification"] == "MEASUREMENT_CONVENTIONS_IDENTICAL"
+    assert number(values, "Cartesian_accounting_residual") > 1.0e-2
+    for key in (
+        "endpoint_Hermitian_branch_swap_residual_00_10_01_11_20_02",
+        "radial_spin_direction_branch_swap_residual_00_10_01_11_20_02",
+        "DRESP09Y_channel1_branch_norm_00_10_01_11_20_02",
+        "DRESP09Y_channel2_branch_norm_00_10_01_11_20_02",
+        "DRESP12_branch_norm_00_10_01_11_20_02",
+        "correct_circular_reconstruction_branch_norm_00_10_01_11_20_02",
+        "branch_circular_reconstruction_residual_00_10_01_11_20_02",
+        "branch_DRESP12_vs_correct_residual_00_10_01_11_20_02",
+    ):
+        vector(values, key)
+    assert max(vector(values, "endpoint_Hermitian_branch_swap_residual_00_10_01_11_20_02")) < 1.0e-10
+    assert max(vector(values, "radial_spin_direction_branch_swap_residual_00_10_01_11_20_02")) < 1.0e-10
+    assert max(vector(values, "branch_circular_reconstruction_residual_00_10_01_11_20_02")) < 1.0e-10
     branch_keys = (
         "endpoint_branch_complete_frozen_endpoint_H_residual_00_10_01_11_20_02",
         "endpoint_H_subtraction_vs_delta_rho_zero_00_10_01_11_20_02",

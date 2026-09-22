@@ -44,6 +44,7 @@ module lr_dresp09y_bridge_mod
 
    public :: run_dresp09y_augmentation_tangent
    public :: dresp09y_augmentation_density
+   public :: dresp09y_convert_response
 
 contains
 
@@ -61,6 +62,16 @@ contains
       call augmentation_density(radial, endpoints, sigma, upper, small, angular, total, pauli_aug_c, augmentation_l, &
          l_first, l_last, angular_rank0, angular_rank2)
    end subroutine dresp09y_augmentation_density
+
+   !> Preserve the exact radial conversion used by the certified DRESP-09Y
+   !> density-side path for independent seam audits.
+   subroutine dresp09y_convert_response(complex_density, states, weighted)
+      complex(rp), intent(in) :: complex_density(:, :)
+      type(radial_ground_state), intent(in) :: states(:)
+      real(rp), intent(out) :: weighted(:, :)
+
+      call convert_response(complex_density, states, weighted)
+   end subroutine dresp09y_convert_response
 
    subroutine run_dresp09y_augmentation_tangent(output_file, response_space, radial_bases, ground_states, reciprocal_obj, &
                                                 lattice_obj, hamiltonian_obj)
@@ -81,6 +92,7 @@ contains
       real(rp) :: pauli_complete_p1(5), pauli_complete_p3(5)
       real(rp) :: per_l_fixed(3), per_l_aug(3), per_l_complete(3), target_integral, complete_integral
       real(rp) :: coefficient_norm, aug_upper_norm, aug_small_norm, aug_angular_norm, aug_total_norm, complete_norm
+      real(rp) :: delta_sum_frobenius
       real(rp) :: target_norm, interference, complete_fd_metrics(5), branch_fd_components(6,4)
       real(rp) :: endpoint_tangent(6), kh_residual
       real(rp) :: pauli_fixed_p1(5), pauli_fixed_p3(5)
@@ -148,6 +160,7 @@ contains
          end do
       end do
       moment_sum = moment_sum/wsum; endpoint_sum = endpoint_sum/wsum; delta_sum = delta_sum/wsum
+      delta_sum_frobenius = sqrt(sum(abs(delta_sum)**2))
 
       allocate(channels(3,nsite,radial_bases(1)%lmax+1,2), p1(nsite,response_space%npoint), &
          p3(nsite,response_space%npoint), target(nsite,response_space%npoint), fixed(nsite,response_space%npoint), &
@@ -311,6 +324,7 @@ contains
          write(unit,'(a,es24.16)') 'finite_angle_branch_lower_angular_max = ', maxval(branch_error(:,3))
          write(unit,'(a,es24.16)') 'finite_angle_branch_total_max = ', maxval(branch_error(:,4))
          write(unit,'(a,es24.16)') 'endpoint_tangent_max = ', maxval(endpoint_tangent)
+         write(unit,'(a,es24.16)') 'delta_sum_frobenius = ', delta_sum_frobenius
          write(unit,'(a,es24.16)') 'kh_commutator_residual = ', kh_residual
          write(unit,'(a,es24.16)') 'radial_pair_matrix_error = ', radial_pair_error
          write(unit,'(a,6(es24.16,1x))') 'delta_O_branch_00_10_01_11_20_02 = ', maxval(branch_error,dim=2)
@@ -327,10 +341,13 @@ contains
          write(unit,'(a,es24.16)') 'complete_response_integrated = ', complete_integral
          write(unit,'(a,es24.16)') 'complete_minus_SRspin2_integrated = ', complete_integral-target_integral
          write(unit,'(a,es24.16)') 'coefficient_density_term_norm = ', coefficient_norm
+         write(unit,'(a,es24.16)') 'Pauli_fixed_norm = ', volume_l2_total(ground_states,pauli_fixed)
          write(unit,'(a,es24.16)') 'augmentation_upper_norm = ', aug_upper_norm
          write(unit,'(a,es24.16)') 'augmentation_lower_small_norm = ', aug_small_norm
          write(unit,'(a,es24.16)') 'augmentation_lower_angular_norm = ', aug_angular_norm
          write(unit,'(a,es24.16)') 'augmentation_total_norm = ', aug_total_norm
+         write(unit,'(a,es24.16)') 'Pauli_augmentation_norm = ', volume_l2_total(ground_states,pauli_aug)
+         write(unit,'(a,es24.16)') 'Pauli_complete_norm = ', volume_l2_total(ground_states,pauli_complete)
          write(unit,'(a,es24.16)') 'complete_response_norm = ', complete_norm
          write(unit,'(a,es24.16)') 'target_norm = ', target_norm
          write(unit,'(a,es24.16)') 'interference_2Re_coefficient_augmentation = ', interference
