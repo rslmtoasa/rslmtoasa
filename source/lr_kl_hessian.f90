@@ -830,14 +830,17 @@ contains
          d2hmag(this%norb,this%norb,4), phase_k, pis, pit, pjs, pjt
       complex(rp) :: dbi(2*this%norb,2*this%norb), dbj(2*this%norb,2*this%norb), &
          d2phase(2*this%norb,2*this%norb)
-      real(rp) :: dmi_s(3), dmi_t(3), dmj_s(3), dmj_t(3), d2mi(3), d2mj(3), zero(3)
+      real(rp) :: dmi_s(3), dmi_t(3), dmj_s(3), dmj_t(3), d2mi(3), zero(3)
       integer :: ibond, source, target
 
       d2b=cmplx(0.0_rp,0.0_rp,rp); d2q=d2b; d2enu=d2b; zero=0.0_rp
-      d2mi=zero; d2mj=zero
+      d2mi=zero
       if (site_i == site_j) then
-         d2mi=second_moment_variation(axis_i,this%moments(:,site_i))
-         d2mj=second_moment_variation(axis_j,this%moments(:,site_j))
+         ! The same-site contact is a mixed derivative in two independent
+         ! rotation coordinates.  Use the symmetric Hessian of the unit-vector
+         ! rotation map; for equal axes this reduces to the established second
+         ! directional variation.
+         d2mi=mixed_moment_variation(axis_i,axis_j,this%moments(:,site_i))
       end if
       do ibond=1,this%nbond
          source=this%bond_source(ibond); target=this%bond_target(ibond)
@@ -945,6 +948,12 @@ contains
       ! point and to make that cancellation explicit.
       phase=cmplx(1.0_rp,0.0_rp,rp)
    end function site_phase
+
+   pure function mixed_moment_variation(axis_a,axis_b,moment) result(dm2)
+      real(rp), intent(in) :: axis_a(3),axis_b(3),moment(3)
+      real(rp) :: dm2(3)
+      dm2=0.5_rp*(cross3(axis_a,cross3(axis_b,moment))+cross3(axis_b,cross3(axis_a,moment)))
+   end function mixed_moment_variation
 
    pure function second_moment_variation(axis,moment) result(dm2)
       real(rp), intent(in) :: axis(3), moment(3)

@@ -18,9 +18,13 @@ program test_dresp03q_production_adapter
    use lr_kl_hessian_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_init, lmto_fixture_from_hamiltonian, &
       lmto_fixture_adapter_residual, assemble_lmto_hamiltonian, assemble_lmto_finite_q_torque, &
       assemble_lmto_finite_q_mixed_derivative, force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch
+   use lr_rotation_response_mod, only: rotation_state, rotation_request, rotation_result, &
+      prepare_rotation_response, evaluate_rotation_response, evaluate_rotation_response_oracle, &
+      reduce_static_rotation_kernel, rotation_circular_unitary, rotation_axes
+   use lr_kl_hessian_mod, only: finite_temperature_occupation
    use lr_lmto_turek_contour_mod, only: native_turek_contour_options, native_turek_contour_report, &
       native_turek_static_reference
-   use math_mod, only: ang2au, init_math_operators
+   use math_mod, only: ang2au, i_unit, init_math_operators
    use precision_mod, only: rp
    use reciprocal_mod, only: reciprocal
    use timer_mod, only: g_timer, timer
@@ -31,10 +35,10 @@ program test_dresp03q_production_adapter
    type(charge), target :: chg
    type(hamiltonian), target :: ham
    type(energy) :: ene
-   type(reciprocal) :: recip
+   type(reciprocal), target :: recip
    type(native_turek_contour_options) :: native_options
    type(native_turek_contour_report) :: native_report
-   type(lmto_live_hamiltonian_fixture) :: fixture
+   type(lmto_live_hamiltonian_fixture), target :: fixture
    complex(rp), allocatable :: h_production(:, :), h_fixture(:, :)
    real(rp), allocatable :: adapter_points(:, :), eigenvalues(:, :), endpoint_values(:, :), weights(:), shifted_points(:, :)
    complex(rp), allocatable :: eigenvectors(:, :, :), endpoint_vectors(:, :, :), torque_q(:, :, :, :), &
@@ -174,11 +178,233 @@ program test_dresp03q_production_adapter
          if(.not.ieee_is_finite(finite_q_curvature)) error stop 'second-order finite-q Hessian is non-finite'
       end if
    end do
+   call check_rotation_response(fixture,recip)
    call fixture%clear()
    deallocate(h_production,h_fixture,adapter_points,weights,eigenvalues,eigenvectors,endpoint_values,endpoint_vectors, &
       shifted_points,torque_q,torque_minus_q,mixed,jq_ud,jq_du,jq_sym,native_delta,native_curvature)
 
 contains
+
+   subroutine check_rotation_response(base,recip)
+      type(lmto_live_hamiltonian_fixture), target, intent(in) :: base
+      type(reciprocal), target, intent(inout) :: recip
+      type(rotation_state), target :: state0,stateq,statem
+      type(rotation_request) :: request
+      type(rotation_result) :: result0,resultq,resultm,plus,minus
+      real(rp), parameter :: qset(3,2)=reshape([0.0_rp,0.0_rp,0.0_rp,0.125_rp,0.0_rp,0.0_rp],[3,2])
+      real(rp), parameter :: eta_set(2)=[1.0e-4_rp,5.0e-5_rp]
+      complex(rp), allocatable :: reduced(:, :),unitary(:, :),kernel_pm(:, :),bubble_o(:, :),contact_o(:, :),kernel_o(:, :)
+      real(rp), allocatable :: values(:, :),endpoint_values(:, :),points(:, :),weights(:),axes(:, :)
+      complex(rp), allocatable :: vectors(:, :, :),endpoint_vectors(:, :, :),torques_q(:, :, :, :), &
+         torques_minus_q(:, :, :, :),mixed(:, :, :, :, :)
+      complex(rp), allocatable :: rho(:, :),gx(:, :),gy(:, :),commutator(:, :)
+      complex(rp) :: trace_value
+      complex(rp), allocatable :: hessian(:, :),torque_torque(:, :),mixed_contact(:, :),complete(:, :)
+      real(rp) :: q(3),q_cov(3),omega,eta,fermi,kT,weight_sum,weight,fn,m_band,berry_direct,slope_plus,slope_minus
+      real(rp) :: static_residual,q0_residual,oracle_residual,covariance_residual,circular_residual,berry_residual,delta_omega
+      real(rp) :: max_component,grid_residual,grid_best,grid_point(3)
+      integer :: nk,nmat,ncoord,nband,norb,nsite,ik,ia,ib,n,m,site_a,site_b,axis_a,axis_b,up,dn,io,iq,iw,ie,jk
+
+      nsite=base%nsite; norb=base%norb; nmat=2*norb*nsite; ncoord=2*nsite
+      nk=size(recip%k_points,2); nband=nmat; fermi=recip%fermi_level
+      kT=max(recip%temperature*6.3336814e-6_rp,1.0e-10_rp); weight_sum=sum(recip%k_weights)
+      call prepare_rotation_response(base,recip,qset(:,1),state0)
+      call prepare_rotation_response(base,recip,qset(:,2),stateq)
+
+      allocate(reduced(ncoord,ncoord),unitary(ncoord,ncoord),kernel_pm(ncoord,ncoord))
+      request%state=>state0; request%exact_static=.true.; request%omega=0.0_rp; request%eta=0.0_rp; request%want_inverse=.false.
+      call evaluate_rotation_response(request,result0)
+      call reduce_static_rotation_kernel(result0%kernel,reduced)
+      q0_residual=maxval(abs(reduced))
+      write(*,'(a,es12.4)') 'Rotation exact q0 Goldstone max residual = ',q0_residual
+      if(q0_residual>2.0e-7_rp) error stop 'Q0_GOLDSTONE_OPEN'
+      call rotation_circular_unitary(nsite,unitary)
+      kernel_pm=matmul(unitary,matmul(reduced,conjg(transpose(unitary))))
+      circular_residual=max(abs(kernel_pm(1,2)),abs(kernel_pm(2,1)))
+
+      call independent_berry_oracle(base,recip,m_band,berry_direct)
+      berry_residual=abs(berry_direct-result0%berry)/max(abs(berry_direct),1.0e-12_rp)
+      write(*,'(a,4(es14.6,1x))') 'Rotation independent M_band / Berry / residuals = ',m_band,berry_direct, &
+         berry_residual,state0%berry_residual
+      if(berry_residual>2.0e-10_rp) error stop 'BERRY_COMMUTATOR_ORACLE_OPEN'
+      delta_omega=1.0e-5_rp
+      request%exact_static=.false.; request%eta=1.0e-9_rp; request%omega=delta_omega
+      call evaluate_rotation_response(request,plus)
+      request%omega=-delta_omega
+      call evaluate_rotation_response(request,minus)
+      slope_plus=real((plus%kernel_pm(1,1)-minus%kernel_pm(1,1))/(2.0_rp*delta_omega),rp)
+      slope_minus=real((plus%kernel_pm(2,2)-minus%kernel_pm(2,2))/(2.0_rp*delta_omega),rp)
+      berry_residual=max(abs(abs(slope_plus)-abs(berry_direct)),abs(abs(slope_minus)-abs(berry_direct)), &
+         abs(slope_plus+slope_minus))/max(abs(berry_direct),1.0e-12_rp)
+      circular_residual=max(circular_residual,abs(plus%kernel_pm(1,2)),abs(plus%kernel_pm(2,1)))
+      write(*,'(a,3(es14.6,1x))') 'Rotation Berry slopes (+/-) / circular offdiag = ',slope_plus,slope_minus,circular_residual
+      if(berry_residual>5.0e-2_rp) error stop 'BERRY_NORMALIZATION_OPEN'
+      if(circular_residual>1.0e-7_rp) error stop 'CIRCULAR_CONVENTION_OPEN'
+
+      ! Exact static reduction against the independent certified force-theorem
+      ! Hessian at Gamma and one non-self-inverse finite q.
+      do iq=1,2
+         q=qset(:,iq)
+         allocate(values(nband,nk),endpoint_values(nband,nk),vectors(nmat,nband,nk), &
+            endpoint_vectors(nmat,nband,nk),weights(nk),torques_q(nmat,nmat,ncoord,nk), &
+            torques_minus_q(nmat,nmat,ncoord,nk),mixed(nmat,nmat,ncoord,ncoord,nk), &
+            hessian(ncoord,ncoord),torque_torque(ncoord,ncoord),mixed_contact(ncoord,ncoord),complete(ncoord,ncoord))
+         values=recip%eigenvalues; vectors=recip%eigenvectors; weights=recip%k_weights
+         if(maxval(abs(q))<1.0e-12_rp) then
+            endpoint_values=values; endpoint_vectors=vectors
+         else
+            points=recip%k_points+spread(q,2,nk)
+            call recip%calculate_eigenpairs_at_kpoints(points,endpoint_values,endpoint_vectors)
+            deallocate(points)
+         end if
+         call rotation_axes(base%moments,axes)
+         do ik=1,nk
+            do ia=1,ncoord
+               site_a=(ia+1)/2; axis_a=1+mod(ia-1,2)
+               call assemble_lmto_finite_q_torque(base,recip%k_points(:,ik),q,site_a, &
+                  axes(:,2*(site_a-1)+axis_a),torques_q(:,:,ia,ik))
+               call assemble_lmto_finite_q_torque(base,recip%k_points(:,ik)+q,-q,site_a, &
+                  axes(:,2*(site_a-1)+axis_a),torques_minus_q(:,:,ia,ik))
+            end do
+            do ia=1,ncoord
+               site_a=(ia+1)/2; axis_a=1+mod(ia-1,2)
+               do ib=1,ncoord
+                  site_b=(ib+1)/2; axis_b=1+mod(ib-1,2)
+                  call assemble_lmto_finite_q_mixed_derivative(base,recip%k_points(:,ik),q,site_a, &
+                     axes(:,2*(site_a-1)+axis_a),site_b,axes(:,2*(site_b-1)+axis_b),mixed(:,:,ia,ib,ik))
+               end do
+            end do
+         end do
+         call force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch(values,vectors,endpoint_values,endpoint_vectors, &
+            fermi,kT,weights,torques_q,torques_minus_q,mixed,hessian,torque_torque,mixed_contact,complete)
+         if(iq==1) then
+            request%state=>state0; request%exact_static=.true.; request%omega=0.0_rp; request%eta=0.0_rp
+            call evaluate_rotation_response(request,result0)
+            call reduce_static_rotation_kernel(result0%kernel,reduced)
+         else
+            request%state=>stateq; request%exact_static=.true.; request%omega=0.0_rp; request%eta=0.0_rp
+            call evaluate_rotation_response(request,resultq)
+            call prepare_rotation_response(base,recip,-q,statem)
+            request%state=>statem
+            call evaluate_rotation_response(request,resultm)
+            call reduce_static_rotation_kernel(resultq%kernel,reduced)
+         end if
+         static_residual=maxval(abs(reduced-complete))
+         write(*,'(a,i0,a,es12.4)') 'Rotation static Hessian reduction q index ',iq,' max residual = ',static_residual
+         if(iq==1 .and. static_residual>2.0e-7_rp) error stop 'Q0_STATIC_LIMIT_OPEN'
+         if(iq==2 .and. static_residual>2.0e-8_rp) error stop 'FINITE_Q_STATIC_LIMIT_OPEN'
+         if(iq==2) call statem%clear()
+         deallocate(values,endpoint_values,vectors,endpoint_vectors,weights,axes,torques_q,torques_minus_q,mixed, &
+            hessian,torque_torque,mixed_contact,complete)
+      end do
+
+      ! Literal direct band-loop oracle: q=0 and a generic non-self-inverse q,
+      ! both frequency signs, and two causal regulators.
+      allocate(bubble_o(ncoord,ncoord),contact_o(ncoord,ncoord),kernel_o(ncoord,ncoord))
+      oracle_residual=0.0_rp
+      do iq=1,2
+         q=qset(:,iq)
+         if(iq==1) then
+            request%state=>state0
+         else
+            request%state=>stateq
+         end if
+         do ie=1,2
+            eta=eta_set(ie)
+            do iw=1,2
+               omega=merge(-2.0e-4_rp,2.0e-4_rp,iw==1)
+               request%exact_static=.false.; request%omega=omega; request%eta=eta; request%want_inverse=.false.
+               call evaluate_rotation_response(request,plus)
+               call evaluate_rotation_response_oracle(base,recip,q,omega,eta,bubble_o,contact_o,kernel_o)
+               oracle_residual=max(oracle_residual,maxval(abs(plus%bubble-bubble_o)), &
+                  maxval(abs(plus%contact-contact_o)),maxval(abs(plus%kernel-kernel_o)))
+            end do
+         end do
+      end do
+      write(*,'(a,es12.4)') 'Rotation direct band-loop oracle max absolute residual = ',oracle_residual
+      if(oracle_residual>2.0e-10_rp) error stop 'DYNAMIC_BAND_ORACLE_OPEN'
+
+      ! Use a genuine non-self-inverse reciprocal-mesh translation for the
+      ! exact discrete q/-q/-omega covariance gate.  The direct oracle above
+      ! still covers the generic noncommensurate q=1/8.
+      q_cov=[1.0_rp/real(recip%nk_mesh(1),rp),0.0_rp,0.0_rp]
+      call stateq%clear(); call statem%clear()
+      grid_residual=0.0_rp
+      do ik=1,nk
+         grid_point=recip%k_points(:,ik)+q_cov
+         grid_point=grid_point-floor(grid_point+0.5_rp)
+         grid_best=huge(1.0_rp)
+         do jk=1,nk
+            grid_best=min(grid_best,maxval(abs(grid_point-recip%k_points(:,jk))))
+         end do
+         grid_residual=max(grid_residual,grid_best)
+      end do
+      write(*,'(a,es12.4)') 'Rotation covariance mesh-translation residual = ',grid_residual
+      call prepare_rotation_response(base,recip,q_cov,stateq)
+      call prepare_rotation_response(base,recip,-q_cov,statem)
+      request%state=>stateq; request%omega=2.0e-4_rp; request%eta=5.0e-5_rp; request%exact_static=.false.
+      call evaluate_rotation_response(request,plus)
+      request%state=>statem; request%omega=-2.0e-4_rp
+      call evaluate_rotation_response(request,minus)
+      ! For the stored endpoint orientation the live reality relation keeps
+      ! the same Cartesian labels: K_AB(q,w)=K_AB(-q,-w)^*.  The equivalent
+      ! BA form in a transposed coordinate convention is not used here.
+      covariance_residual=maxval(abs(plus%kernel-conjg(minus%kernel)))/ &
+         max(1.0_rp,maxval(abs(plus%kernel)))
+      write(*,'(a,3(es12.4,1x))') 'Rotation q/-q/-omega covariance q/residual = ',q_cov,covariance_residual
+      if(grid_residual>1.0e-12_rp .or. covariance_residual>1.0e-8_rp) error stop 'Q_OMEGA_COVARIANCE_OPEN'
+      call state0%clear(); call stateq%clear(); call statem%clear()
+      deallocate(reduced,unitary,kernel_pm,bubble_o,contact_o,kernel_o)
+   end subroutine check_rotation_response
+
+   subroutine independent_berry_oracle(base,recip,m_band,berry)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: base
+      type(reciprocal), intent(inout) :: recip
+      real(rp), intent(out) :: m_band,berry
+      real(rp), allocatable :: values(:, :)
+      complex(rp), allocatable :: vectors(:, :, :),rho(:, :),gx(:, :),gy(:, :),commutator(:, :)
+      complex(rp) :: trace_value
+      real(rp) :: kT,weight,occ,spin_z,weight_sum
+      integer :: nmat,nband,nk,nsite,norb,ik,n,site,io,up,dn,i,j
+      nmat=2*base%norb*base%nsite; nband=nmat; nk=size(recip%k_points,2); nsite=base%nsite; norb=base%norb
+      allocate(values(nband,nk),vectors(nmat,nband,nk),rho(nmat,nmat),gx(nmat,nmat),gy(nmat,nmat),commutator(nmat,nmat))
+      call recip%calculate_eigenpairs_at_kpoints(recip%k_points,values,vectors)
+      kT=max(recip%temperature*6.3336814e-6_rp,1.0e-10_rp); weight_sum=sum(recip%k_weights)
+      rho=cmplx(0.0_rp,0.0_rp,rp); gx=rho; gy=rho
+      do ik=1,nk
+         weight=recip%k_weights(ik)/weight_sum
+         do n=1,nband
+            occ=finite_temperature_occupation(values(n,ik),recip%fermi_level,kT)
+            do i=1,nmat
+               do j=1,nmat
+                  rho(i,j)=rho(i,j)+weight*occ*vectors(i,n,ik)*conjg(vectors(j,n,ik))
+               end do
+            end do
+         end do
+      end do
+      do site=1,nsite
+         do io=1,norb
+            up=(site-1)*2*norb+io; dn=(site-1)*2*norb+norb+io
+            gx(up,dn)=0.5_rp; gx(dn,up)=0.5_rp
+            gy(up,dn)=-0.5_rp*i_unit; gy(dn,up)=0.5_rp*i_unit
+         end do
+      end do
+      commutator=matmul(gx,gy)-matmul(gy,gx)
+      trace_value=cmplx(0.0_rp,0.0_rp,rp); m_band=0.0_rp
+      do i=1,nmat
+         do j=1,nmat
+            trace_value=trace_value+rho(i,j)*commutator(j,i)
+         end do
+      end do
+      do site=1,nsite
+         do io=1,norb
+            up=(site-1)*2*norb+io; dn=(site-1)*2*norb+norb+io
+            m_band=m_band+real(rho(up,up)-rho(dn,dn),rp)
+         end do
+      end do
+      berry=real(-i_unit*trace_value,rp)
+      deallocate(values,vectors,rho,gx,gy,commutator)
+   end subroutine independent_berry_oracle
 
    subroutine check_material_rotation_adapter(base,qpoints,axis)
       type(lmto_live_hamiltonian_fixture), intent(in) :: base
@@ -187,8 +413,10 @@ contains
       real(rp), parameter :: fd_steps(3)=[0.04_rp,0.01_rp,0.005_rp]
       complex(rp), allocatable :: hs(:, :)
       complex(rp), allocatable :: bplus(:, :), bminus(:, :), b0(:, :), analytic(:, :), fd(:, :)
+      complex(rp), allocatable :: bpp(:, :), bpm(:, :), bmp(:, :), bmm(:, :), analytic_minus(:, :), analytic_pair(:, :)
       real(rp) :: torque_error(size(qpoints,2),size(fd_steps)), contact_error(size(qpoints,2),size(fd_steps))
-      real(rp) :: factor, value
+      real(rp) :: mixed_xy_error(size(qpoints,2),size(fd_steps))
+      real(rp) :: factor, value, axis_y(3)
       real(rp), parameter :: k_test(3)=[0.125_rp,0.0_rp,0.0_rp]
       integer :: ncell,nlocal,nsuper,iq,is
 
@@ -198,8 +426,10 @@ contains
       if (base%nsite/=1) error stop 'accepted Fe oracle currently requires one primitive sublattice'
       ncell=8; nlocal=2*base%norb*base%nsite; nsuper=ncell*nlocal
       call lift_material_fixture(base,ncell,super)
+      axis_y=[0.0_rp,1.0_rp,0.0_rp]
       allocate(hs(nsuper,nsuper),bplus(nlocal,nlocal),bminus(nlocal,nlocal),b0(nlocal,nlocal), &
-         analytic(nlocal,nlocal),fd(nlocal,nlocal))
+         analytic(nlocal,nlocal),fd(nlocal,nlocal),bpp(nlocal,nlocal),bpm(nlocal,nlocal), &
+         bmp(nlocal,nlocal),bmm(nlocal,nlocal),analytic_minus(nlocal,nlocal),analytic_pair(nlocal,nlocal))
       do iq=1,size(qpoints,2)
          call assemble_lmto_finite_q_torque(base,k_test,qpoints(:,iq),1,axis,analytic)
          factor=1.0_rp
@@ -227,6 +457,37 @@ contains
             error stop 'SECOND_ORDER_TORQUE_OPEN on accepted Fe fixture'
          if (contact_error(iq,3)>5.0e-5_rp .or. contact_error(iq,2)>0.45_rp*contact_error(iq,1)) &
             error stop 'SECOND_ORDER_CONTACT_OPEN on accepted Fe fixture'
+
+         ! Independent four-point supercell oracle for the mixed transverse
+         ! contact.  The exponential rotation coordinates generate the
+         ! symmetrized x/y second moment in the accepted Hamiltonian.
+         call assemble_lmto_finite_q_mixed_derivative(base,k_test,qpoints(:,iq), &
+            1,axis,1,axis_y,analytic)
+         if (maxval(abs(qpoints(:,iq)))>1.0e-12_rp) then
+            call assemble_lmto_finite_q_mixed_derivative(base,k_test,-qpoints(:,iq), &
+               1,axis,1,axis_y,analytic_minus)
+            ! A real cosine perturbation contains both q and -q.  Its
+            ! k-diagonal four-point derivative therefore checks the q-even
+            ! combination of the two contact vertices.
+            analytic_pair=0.5_rp*(analytic+analytic_minus)
+         else
+            analytic_pair=analytic
+         end if
+         do is=1,size(fd_steps)
+            value=fd_steps(is)
+            call material_supercell_block_xy(super,base,qpoints(:,iq),axis,value,axis_y,value,k_test,k_test,hs,bpp)
+            call material_supercell_block_xy(super,base,qpoints(:,iq),axis,value,axis_y,-value,k_test,k_test,hs,bpm)
+            call material_supercell_block_xy(super,base,qpoints(:,iq),axis,-value,axis_y,value,k_test,k_test,hs,bmp)
+            call material_supercell_block_xy(super,base,qpoints(:,iq),axis,-value,axis_y,-value,k_test,k_test,hs,bmm)
+            fd=factor*(bpp-bpm-bmp+bmm)/(4.0_rp*value*value)
+            mixed_xy_error(iq,is)=sqrt(sum(abs(fd-analytic_pair)**2))/ &
+               max(1.0_rp,sqrt(sum(abs(analytic_pair)**2)))
+         end do
+         write(*,'(a,i0,a,3(es14.6,1x))') 'accepted-Fe mixed xy q-even contact four-point errors q index ', &
+            iq,' = ',mixed_xy_error(iq,:)
+         if (mixed_xy_error(iq,3)>8.0e-5_rp .or. &
+             (mixed_xy_error(iq,1)>1.0e-10_rp .and. mixed_xy_error(iq,2)>0.5_rp*mixed_xy_error(iq,1))) &
+            error stop 'SECOND_ORDER_MIXED_XY_CONTACT_OPEN on accepted Fe fixture'
       end do
       call super%clear()
    end subroutine check_material_rotation_adapter
@@ -262,6 +523,16 @@ contains
       end do
    end subroutine lift_material_fixture
 
+   subroutine material_supercell_block_xy(super,base,qpattern,axis_x,amplitude_x,axis_y,amplitude_y,krow,kcol,hs,block)
+      type(lmto_live_hamiltonian_fixture), intent(inout) :: super
+      type(lmto_live_hamiltonian_fixture), intent(in) :: base
+      real(rp), intent(in) :: qpattern(3),axis_x(3),amplitude_x,axis_y(3),amplitude_y,krow(3),kcol(3)
+      complex(rp), intent(out) :: hs(:, :),block(:, :)
+      call set_material_rotation_xy(super,base,qpattern,axis_x,amplitude_x,axis_y,amplitude_y)
+      call assemble_lmto_hamiltonian(super,[0.0_rp,0.0_rp,0.0_rp],hs)
+      call supercell_fourier(hs,base%norb,base%nsite,krow,kcol,block)
+   end subroutine material_supercell_block_xy
+
    subroutine material_supercell_block(super,base,qpattern,axis,amplitude,krow,kcol,hs,block)
       type(lmto_live_hamiltonian_fixture), intent(inout) :: super
       type(lmto_live_hamiltonian_fixture), intent(in) :: base
@@ -286,6 +557,40 @@ contains
          end do
       end do
    end subroutine set_material_rotation
+
+   subroutine set_material_rotation_xy(super,base,qpattern,axis_x,amplitude_x,axis_y,amplitude_y)
+      type(lmto_live_hamiltonian_fixture), intent(inout) :: super
+      type(lmto_live_hamiltonian_fixture), intent(in) :: base
+      real(rp), intent(in) :: qpattern(3),axis_x(3),amplitude_x,axis_y(3),amplitude_y
+      integer :: cell,site,super_site
+      real(rp) :: angle,rotation_vector(3)
+      do cell=0,size(super%moments,2)/base%nsite-1
+         angle=2.0_rp*acos(-1.0_rp)*qpattern(1)*real(cell,rp)
+         rotation_vector=cos(angle)*(amplitude_x*axis_x+amplitude_y*axis_y)
+         do site=1,base%nsite
+            super_site=cell*base%nsite+site
+            super%moments(:,super_site)=rotate_real_moment_vector(base%moments(:,site),rotation_vector)
+         end do
+      end do
+   end subroutine set_material_rotation_xy
+
+   function rotate_real_moment_vector(moment,rotation_vector) result(rotated)
+      real(rp), intent(in) :: moment(3),rotation_vector(3)
+      real(rp) :: rotated(3),angle,axis(3),cross1(3),cross2(3)
+      angle=sqrt(dot_product(rotation_vector,rotation_vector))
+      if (angle<=1.0e-12_rp) then
+         cross1=[rotation_vector(2)*moment(3)-rotation_vector(3)*moment(2), &
+            rotation_vector(3)*moment(1)-rotation_vector(1)*moment(3), &
+            rotation_vector(1)*moment(2)-rotation_vector(2)*moment(1)]
+         cross2=[rotation_vector(2)*cross1(3)-rotation_vector(3)*cross1(2), &
+            rotation_vector(3)*cross1(1)-rotation_vector(1)*cross1(3), &
+            rotation_vector(1)*cross1(2)-rotation_vector(2)*cross1(1)]
+         rotated=moment+cross1+0.5_rp*cross2
+      else
+         axis=rotation_vector/angle
+         rotated=rotate_real_moment(moment,axis,angle)
+      end if
+   end function rotate_real_moment_vector
 
    function rotate_real_moment(moment,axis,angle) result(rotated)
       real(rp), intent(in) :: moment(3),axis(3),angle

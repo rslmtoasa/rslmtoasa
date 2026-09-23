@@ -1,36 +1,29 @@
 # TDDFT response formulation and production path
 
-This document is the roadmap after the closed DRESP-12 Ward campaign. The
-target observable is the transverse susceptibility
+This document records the accepted representation and the native local-rotation
+dynamics path. The physical observable is `E(q)`, obtained from a pole of the
+frequency-dependent rotation-coordinate response `K^R(q,omega)^-1`. This is
+not the full spatial spin susceptibility.
+
+## Implementation status at d0a223e
 
 ```text
-chi+-(q,omega)
+DRESP projection semantics       = CLOSED
+second-order H adapter           = CLOSED
+second-order torque/contact      = CLOSED
+q=0 rotation Hessian             = CLOSED
+native Turek static reference    = AVAILABLE
+native rotation dynamics         = READY FOR IMPLEMENTATION
 ```
 
-No dynamical susceptibility, Sternheimer/basis response, nonspherical
-ground-state XC functional, or long frequency/q campaign is implemented by
-this decision.
+Finite-H versus native Turek finite-q curvature is a diagnostic comparison,
+not a normalization identity. Native Turek remains the independent
+adiabatic/MFT reference. The dynamic implementation uses the certified
+second-order local-rotation Hamiltonian derivatives from `lr_kl_hessian`.
 
-## Implementation status after the DRESP-12 handoff
-
-```text
-DRESP-12 handoff cleanup = RAW_L0_REGRESSION_OPEN
-native rotation dynamics = BLOCKED — STATIC_NATIVE_NORMALIZATION_OPEN
-Fe magnon poles          = NOT RUN
-```
-
-The required static gate is the spectral local-rotation torque/contact kernel
-against the certified native Turek curvature on the same accepted state. The
-available `exchange_q` spectral path only accepts first-order `ham_only` and
-is not the required fresh second-order production route. A first-order 12³
-bcc-Fe diagnostic at 300 K found finite-H versus native-Turek differences at
-small off-mesh q; it did not close this gate because it is neither the
-required Hamiltonian order nor a controlled q/mesh comparison. The requested
-raw DRESP-12 reconstruction was measured at `4.2787e-5` on the 4³ smoke
-fixture; the existing `1e-6` gate fails there, while the accepted 64-k raw
-residual has not been rerun. No tolerance relaxation or dynamical rescaling is
-applied. The native-dynamics implementation and pole campaign remain stopped
-at their respective open gates.
+This is the baseline status at d0a223e. The completed implementation and first
+bounded Fe campaign are recorded in
+[`NATIVE_ROTATION_DYNAMICS.md`](NATIVE_ROTATION_DYNAMICS.md).
 
 ## 1. What DRESP-12 established
 
@@ -112,28 +105,29 @@ accepted state uses GGA, the complete transverse kernel is not this pointwise
 ratio: gradient-dependent and noncollinear functional derivatives require a
 separate derivation.
 
-## 3. Native KL/Turek dynamical formulation
+## 3. Native finite-H local-rotation dynamics
 
-Degrees of freedom are sitewise transverse orientations. The certified native
-LMTO rotation supplies the vertex
+The dynamical coordinates are the two local transverse rotations
+`theta_ix, theta_iy` for every magnetic site. Their retarded response uses the
+accepted second-order `H=B-QB+E_nu` Hamiltonian and the certified finite-q
+first and mixed derivatives from `lr_kl_hessian`. The vertex orientation is
+`<m,k+q|T_A(q)|n,k>`; the finite-frequency bubble retains `Pi_AB` and `Pi_BA`
+independently. The occupied mixed derivative is the frequency-independent
+contact term.
 
-```text
-T_i = -i [G_i, H]
-```
+The exact zero-frequency branch uses the finite-temperature Fermi divided
+difference, including coincident energies. Its Cartesian static reduction is
+the same-q index-symmetric part and closes against the force-theorem Hessian.
+Finite-H versus native Turek finite-q curvature is a diagnostic comparison,
+not a normalization identity. Native Turek remains the independent
+adiabatic/MFT reference. No fitted Stoner parameter, scalar exchange
+splitting, or projected spin operator replaces the accepted Hamiltonian
+vertices.
 
-and the bare response is schematically `Pi_ij(q,omega)` from the accepted
-reciprocal eigenstates/Green-function machinery and native site vertices.
-This maps onto the existing native LMTO/Turek path-operator and
-MFT-LKAG infrastructure documented in
-[`DRESP_03TG_NATIVE_TUREK_GF.md`](DRESP_03TG_NATIVE_TUREK_GF.md) and the
-native LKAG code path. The global rotation is exact by construction, so this
-representation needs no Goldstone correction. Its finite-frequency
-electron-hole structure remains, so Landau damping is not excluded.
-
-The route excludes arbitrary intra-atomic radial/angular transverse
-deformation and excludes longitudinal dynamics. It is therefore not claimed
-to be equivalent to full spatial TDDFT.
-
+This rigid local-rotation representation excludes arbitrary intra-atomic
+radial/angular transverse deformation and longitudinal dynamics. It does not
+claim equivalence to full spatial TDDFT. The global q=0 rotation needs no
+Goldstone correction; finite-frequency electron-hole damping remains present.
 ## 4. Strict-ASA `L=0` physical-field TDDFT
 
 Degrees of freedom are spherical but radially resolved transverse
@@ -217,40 +211,28 @@ frequency broadening `eta`, q, and frequency resolution. The historical
 
 ## 8. Critical production path
 
-The critical path is **NATIVE KL/TUREK DYNAMICAL RESPONSE**. It is the
-native LMTO representation with a certified global rotation, reuses the
-existing Turek/LKAG machinery, needs no arbitrary Goldstone patch, and gives
-the direct route to physical magnon dispersion while retaining dynamical
-electron-hole damping in the projected rotation channel.
+The production path is the frequency-dependent native local-rotation
+response built from the accepted second-order Hamiltonian derivatives. The
+native Turek/LKAG calculation is retained as an independent adiabatic/MFT
+reference. No Goldstone patch or kernel rescaling is used. The strict-ASA
+`L=0` radial TDDFT route is outside this implementation.
 
-The strict-ASA `L=0` physical-field route is retained as the second
-production/research track for radial intra-atomic physics. This is a
-formulation choice, not an equivalence claim between the two models.
+## 9. First bounded dynamical demonstration
 
-## 9. First dynamical physics milestone
+The first physical state is a fresh cubic bcc-Fe reciprocal SCF state at 300 K,
+with second-order `ham_only`, auto-found Fermi level, SOC and CCOR off, and no
+constraining field. The 3x5x7 adapter fixture is certification-only. The first
+q set contains Gamma and three small points along one direction. For each
+finite q, the dynamic pole is compared with the second-order finite-H and
+native Turek adiabatic estimates; neither estimate is substituted for the pole.
+The first 12x12x12 campaign did not produce three mutually consistent pole
+diagnostics, and its mesh sensitivity check changed the small-q curvature
+substantially. No `E(q)` or stiffness fit is reported; Fe material convergence
+remains open. The complete kernel, static reduction, Berry, circular-basis,
+covariance, and pole contracts are recorded in
+[`NATIVE_ROTATION_DYNAMICS.md`](NATIVE_ROTATION_DYNAMICS.md).
 
-The first observable is the close-to-Gamma bcc-Fe magnon energy `E(q)`.
-The validation ladder is:
+## 10. Current scope boundary
 
-1. `q=0` native Goldstone;
-2. several small finite-q points;
-3. identify the dominant low-energy transverse pole;
-4. fit `E(q)=D q^2`;
-5. establish k-mesh convergence of `D`;
-6. establish eta/frequency-resolution convergence;
-7. compare `D` with native/original MFT-LKAG/Turek stiffness and established
-   bcc-Fe literature/experiment;
-8. extend along symmetry lines only after those checks.
-
-Equality to Bruno-renormalized finite-q exchange is not a requirement. The
-long-wavelength stiffness should agree in the appropriate adiabatic limit.
-
-## 10. Immediate next implementation milestone
-
-Implement the native KL/Turek bare dynamical rotation response using the
-certified reciprocal eigenstate/GF services and native site vertices. The
-first implementation must expose `q=0`, finite-q, pole, damping, and
-convergence diagnostics. It must not add a Goldstone correction, Sternheimer
-response, or nonspherical ground-state XC.
-
-No dynamics is implemented in the DRESP-12 formulation decision.
+No Goldstone correction, strict-ASA radial `L=0` dynamics, Sternheimer
+response, or nonspherical ground-state XC is part of this implementation.
