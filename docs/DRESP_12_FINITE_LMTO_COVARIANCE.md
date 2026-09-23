@@ -154,7 +154,7 @@ Primary classification: ASA_L0_RIGID_RESPONSE_CLOSED
 Goldstone correction: OFF
 Dynamics: NOT RUN
 Ward-focused campaign: CLOSED
-NEXT: FORMULATION_DECISION
+NEXT: NATIVE_ROTATION_DYNAMICS
 ```
 
 This closes the Ward-focused campaign in the strict ASA L=0 response space.

@@ -62,7 +62,8 @@ def main() -> None:
         "covariance_accounting_relative_to_fixed_defect",
         "master_identity_relative",
         "DRESP11_full_space_DmG_reconstruction_residual",
-        "dmg_l0_residual",
+        "dmg_l0_raw_residual",
+        "dmg_l0_compact_residual",
         "l0_mode_cosine",
         "l0_parallel_coefficient",
         "l0_orthogonal_fraction",
@@ -164,9 +165,11 @@ def main() -> None:
         vector(values, key, size=5)
     assert values["Primary classification"] == "ASA_L0_RIGID_RESPONSE_CLOSED"
     assert abs(number(values, "l0_residual")) < 1.0e-8
-    assert number(values, "dmg_l0_residual") < 1.0e-6
+    assert number(values, "dmg_l0_raw_residual") < 1.0e-6
+    assert number(values, "dmg_l0_compact_residual") >= 0.0
+    assert values["dmg_l0_compact_residual_role"] == "PROJECTION_COMPRESSION_DIAGNOSTIC"
     assert values["Ward-focused campaign"] == "CLOSED"
-    assert values["NEXT"] == "FORMULATION_DECISION"
+    assert values["NEXT"] == "NATIVE_ROTATION_DYNAMICS"
     assert values["m_xc definition"] == "n_up-n_down from the live VXC0SP spherical density"
     assert values["m_xc_vs_P3_sign_convention"] == "PASS_UP_MINUS_DOWN"
     assert values["core_inclusion"] == "m_xc includes captured frozen core plus valence; P3 is accepted reciprocal valence large-component density"

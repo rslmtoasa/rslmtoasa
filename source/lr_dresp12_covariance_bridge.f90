@@ -81,7 +81,8 @@ contains
       real(rp) :: conn_norm, endpoint_h_norm, observable_norm, fixed_norm, master_norm, master_relative, account_relative, min_k_ratio
       real(rp) :: master_max, master_integrated, compact_projection_residual
       real(rp) :: l0_residual, nonspherical_norm, nonspherical_residual, nonspherical_l4_fraction
-      real(rp) :: fixed_reconstruction_residual, master_reconstruction_residual, dmg_reconstruction_residual, dmg_l0_residual
+      real(rp) :: fixed_reconstruction_residual, master_reconstruction_residual, dmg_reconstruction_residual
+      real(rp) :: dmg_l0_raw_residual, dmg_l0_compact_residual
       real(rp) :: l0_mode_cosine, l0_parallel_coefficient, l0_orthogonal_fraction
       real(rp) :: mxc_profile_relative, mxc_profile_l2, mxc_profile_max, mxc_profile_max_relative, mxc_integrated_difference
       real(rp) :: integrated_n_up_minus_down, integrated_mxc, integrated_p3, integrated_physical_sr_spin, integrated_core_mxc
@@ -483,7 +484,9 @@ contains
       call project_l0_vector(response_space,response_conn+response_endpoint_h+observable,recon_l0)
       call project_l0_compact(product,frozen_dmg,dmg_l0_compact)
       call project_l0_compact(product,reconstructed_dmg,recon_l0_compact)
-      dmg_l0_residual=relative_vector(recon_l0_compact,dmg_l0_compact)
+      dmg_l0_raw_residual=response_space_norm(response_space,recon_l0-dmg_l0)/ &
+         max(response_space_norm(response_space,dmg_l0),tiny(1.0_rp))
+      dmg_l0_compact_residual=relative_vector(recon_l0_compact,dmg_l0_compact)
       call l0_mode_geometry(response_space,target_raw,dmg_l0,l0_mode_cosine,l0_parallel_coefficient,l0_orthogonal_fraction)
 
       identity_ok=max_field_identity < 5.0e-11_rp .and. ieee_is_finite(production_residual)
@@ -504,10 +507,10 @@ contains
          maxval(endpoint_covariant_residual) < 1.0e-11_rp .and. &
          dm_cov_linearity_residual < 1.0e-10_rp .and. complete_fixed_observable_residual < 1.0e-10_rp .and. &
          dm_cov_direct_residual < 1.0e-10_rp .and. observable_pauli_upper_residual < 1.0e-10_rp
-      ! The live compact D action has a measured sub-micro residual in the
-      ! accepted L0 product block; the full-space L4 mismatch is excluded.
+      ! Gate the direct raw-space L0 accounting; keep the compact
+      ! projection/compression residual as a separate diagnostic.
       l0_ok=ieee_is_finite(l0_residual) .and. abs(l0_residual) < 1.0e-8_rp .and. &
-         ieee_is_finite(dmg_l0_residual) .and. dmg_l0_residual < 1.0e-6_rp
+         ieee_is_finite(dmg_l0_raw_residual) .and. dmg_l0_raw_residual < 1.0e-6_rp
       if (.not. endpoint_ok) then
          verdict=dresp12_blocked; classification='ENDPOINT_RESPONSE_REGRESSION'
       else if (endpoint_12_y_residual > 1.0e-8_rp .or. pauli_complete_12_residual > 1.0e-8_rp .or. &
@@ -691,7 +694,9 @@ contains
          write(unit,'(a,2es24.16)') 'angle_r_endpoint_H_radians_cosine = ',angle_endpoint,cosine_endpoint
          write(unit,'(a,es24.16)') 'DRESP11_full_space_DmG_reconstruction_residual = ',dresp11_reconstruct_residual
          write(unit,'(a)') 'DRESP11_full_space_reconstruction_status = DIAGNOSTIC_ONLY_L4_MODEL_BOUNDARY; not a regression gate'
-         write(unit,'(a,es24.16)') 'dmg_l0_residual = ',dmg_l0_residual
+         write(unit,'(a,es24.16)') 'dmg_l0_raw_residual = ',dmg_l0_raw_residual
+         write(unit,'(a,es24.16)') 'dmg_l0_compact_residual = ',dmg_l0_compact_residual
+         write(unit,'(a)') 'dmg_l0_compact_residual_role = PROJECTION_COMPRESSION_DIAGNOSTIC'
          write(unit,'(a,es24.16)') 'l0_mode_cosine = ',l0_mode_cosine
          write(unit,'(a,es24.16)') 'l0_parallel_coefficient = ',l0_parallel_coefficient
          write(unit,'(a,es24.16)') 'l0_orthogonal_fraction = ',l0_orthogonal_fraction
@@ -717,7 +722,7 @@ contains
          write(unit,'(a)') 'Strict ASA transverse Goldstone space = L0'
          write(unit,'(a)') 'Ward-focused campaign = '//merge('CLOSED','OPEN  ',trim(verdict)==dresp12_pass_a)
          if (trim(verdict)==dresp12_pass_a) then
-            write(unit,'(a)') 'NEXT = FORMULATION_DECISION'
+            write(unit,'(a)') 'NEXT = NATIVE_ROTATION_DYNAMICS'
          else
             write(unit,'(a)') 'NEXT = STOP_AND_DIAGNOSE'
          end if

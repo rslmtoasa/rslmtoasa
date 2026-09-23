@@ -11,6 +11,27 @@ No dynamical susceptibility, Sternheimer/basis response, nonspherical
 ground-state XC functional, or long frequency/q campaign is implemented by
 this decision.
 
+## Implementation status after the DRESP-12 handoff
+
+```text
+DRESP-12 handoff cleanup = RAW_L0_REGRESSION_OPEN
+native rotation dynamics = BLOCKED — STATIC_NATIVE_NORMALIZATION_OPEN
+Fe magnon poles          = NOT RUN
+```
+
+The required static gate is the spectral local-rotation torque/contact kernel
+against the certified native Turek curvature on the same accepted state. The
+available `exchange_q` spectral path only accepts first-order `ham_only` and
+is not the required fresh second-order production route. A first-order 12³
+bcc-Fe diagnostic at 300 K found finite-H versus native-Turek differences at
+small off-mesh q; it did not close this gate because it is neither the
+required Hamiltonian order nor a controlled q/mesh comparison. The requested
+raw DRESP-12 reconstruction was measured at `4.2787e-5` on the 4³ smoke
+fixture; the existing `1e-6` gate fails there, while the accepted 64-k raw
+residual has not been rerun. No tolerance relaxation or dynamical rescaling is
+applied. The native-dynamics implementation and pole campaign remain stopped
+at their respective open gates.
+
 ## 1. What DRESP-12 established
 
 The accepted bcc-Fe finite-LMTO state closes the strict ASA spherical
@@ -31,7 +52,7 @@ campaign:
 ```text
 Ward-focused campaign = CLOSED
 Goldstone correction  = OFF
-NEXT                  = FORMULATION_DECISION
+NEXT                  = NATIVE_ROTATION_DYNAMICS
 ```
 
 The detailed static evidence remains in
@@ -141,8 +162,10 @@ orthogonal fraction           = 0.13526761491581546
 compact L0 DmG reconstruction = 1.3409439743737631e-7
 ```
 
-The last quantity is the live compact-action sub-micro numerical floor used
-by the DRESP-12 regression gate. The full-space reconstruction residual is
+The direct response-space `dmg_l0_raw_residual` is the DRESP-12 accounting
+gate. The separately reported `dmg_l0_compact_residual` is a
+projection/compression diagnostic; compact truncation is not required to close
+at the raw-space numerical floor. The full-space reconstruction residual is
 reported only as a diagnostic because it contains the established L4 model
 boundary.
 
