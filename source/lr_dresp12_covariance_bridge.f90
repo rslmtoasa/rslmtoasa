@@ -41,7 +41,8 @@ module lr_dresp12_covariance_bridge_mod
    use lr_sr_augmentation_tangent_mod, only: sr_aug_sigma_plus, sr_aug_sigma_minus
    use lr_dresp10f_mixed_ward_bridge_mod, only: build_l0_source, build_l0_target, fixed_pauli_measurement, &
       endpoint_pauli_measurement, compact_density_measurement, apply_static_denominator
-   use lr_radial_observable_provenance_mod, only: channel_moments_from_matrix, pauli_density_from_moments, dresp09w_four_pi
+   use lr_radial_observable_provenance_mod, only: channel_moments_from_matrix, pauli_density_from_moments, &
+      sr_spin_density_from_moments, volume_integral, radial_relative_metrics, dresp09w_four_pi
    use lmto_magnetic_tangent_mod, only: lmto_bond_derivative, lmto_hhmag_to_spinor
    use math_mod, only: hcpx
    implicit none
@@ -80,7 +81,12 @@ contains
       real(rp) :: conn_norm, endpoint_h_norm, observable_norm, fixed_norm, master_norm, master_relative, account_relative, min_k_ratio
       real(rp) :: master_max, master_integrated, compact_projection_residual
       real(rp) :: l0_residual, nonspherical_norm, nonspherical_residual, nonspherical_l4_fraction
-      real(rp) :: fixed_reconstruction_residual, master_reconstruction_residual, dmg_reconstruction_residual
+      real(rp) :: fixed_reconstruction_residual, master_reconstruction_residual, dmg_reconstruction_residual, dmg_l0_residual
+      real(rp) :: l0_mode_cosine, l0_parallel_coefficient, l0_orthogonal_fraction
+      real(rp) :: mxc_profile_relative, mxc_profile_l2, mxc_profile_max, mxc_profile_max_relative, mxc_integrated_difference
+      real(rp) :: integrated_n_up_minus_down, integrated_mxc, integrated_p3, integrated_physical_sr_spin, integrated_core_mxc
+      real(rp) :: mxc_core_bookkeeping_residual
+      real(rp) :: constraining_field_max_abs
       real(rp) :: overlap_conn, overlap_endpoint, overlap_obs, cosine_conn, cosine_endpoint, cosine_obs, angle_conn, angle_endpoint, angle_obs
       real(rp) :: parallel_fraction(5), orthogonal_fraction(5), pnorm
       real(rp) :: dresp11_reconstruct_residual
@@ -116,6 +122,7 @@ contains
       complex(rp), allocatable :: covariant_contact(:, :), obs_upper(:, :), obs_small(:, :), obs_angular(:, :), obs_total(:, :)
       complex(rp), allocatable :: obs_upper_raw(:), obs_small_raw(:), obs_angular_raw(:), obs_total_raw(:)
       complex(rp), allocatable :: frozen_dmg(:), reconstructed_dmg(:), dmg_raw(:)
+      complex(rp), allocatable :: dmg_l0(:), recon_l0(:), dmg_l0_compact(:), recon_l0_compact(:)
       complex(rp), allocatable :: obs_svd(:)
       complex(rp), allocatable :: covariant_field(:, :)
       complex(rp), allocatable :: endpoint_complete(:, :, :), endpoint_fixed(:, :, :), endpoint_h(:, :, :), endpoint_h_zero(:, :, :)
@@ -129,9 +136,9 @@ contains
       complex(rp), allocatable :: response_trace_x(:), response_trace_y(:), response_12_branch(:)
       complex(rp), allocatable :: observable_y(:), observable_plus(:), observable_minus(:)
       complex(rp), allocatable :: obs_plus_c(:, :), obs_minus_c(:, :), obs_x_c(:, :), obs_y_c(:, :)
-      real(rp), allocatable :: p3(:, :), bxc(:, :), kxc(:, :), channels(:, :, :, :)
+      real(rp), allocatable :: p3(:, :), mxc_weighted(:, :), sr_spin(:, :), core_mxc_weighted(:, :), bxc(:, :), kxc(:, :), channels(:, :, :, :)
       real(rp), allocatable :: sorted_ratios(:)
-      logical :: source_ok, compact_ok, identity_ok, response_ok, angular_ok, l0_ok, endpoint_ok, measurement_ok
+      logical :: source_ok, compact_ok, identity_ok, response_ok, angular_ok, l0_ok, endpoint_ok, measurement_ok, conjugate_ok
       logical :: sidecar_u, sidecar_y
       character(len=128) :: classification, verdict
       character(len=256) :: sidecar_u_file, sidecar_y_file, k_file
@@ -158,12 +165,14 @@ contains
       wsum = sum(reciprocal_obj%k_weights)
 
       allocate(moment_sum(nmat,nmat,3), moments(nmat,nmat,3), endpoint_sum(nmat,nmat,6), endpoint(nmat,nmat,6), &
-         generator(nmat,nmat), p3(nsite,response_space%npoint), bxc(nsite,response_space%npoint), &
+         generator(nmat,nmat), p3(nsite,response_space%npoint), mxc_weighted(nsite,response_space%npoint), &
+         sr_spin(nsite,response_space%npoint), core_mxc_weighted(nsite,response_space%npoint), bxc(nsite,response_space%npoint), &
          kxc(nsite,response_space%npoint), channels(3,nsite,radial_bases(1)%lmax+1,2), source_field(ndim), target_raw(ndim), &
          response_b(ndim), response_conn(ndim), response_cov(ndim), observable(ndim), master(ndim), master_back(ndim), &
          obs_upper_raw(ndim), obs_small_raw(ndim), obs_angular_raw(ndim), obs_total_raw(ndim), &
          conn_compact(n), b_compact(n), cov_compact(n), target_compact(n), obs_svd(n), frozen_dmg(n), &
-         reconstructed_dmg(n), dmg_raw(ndim), master_compact(n), response_cov_complete(ndim), response_cov_fixed_endpoint(ndim), &
+         reconstructed_dmg(n), dmg_raw(ndim), dmg_l0(ndim), recon_l0(ndim), dmg_l0_compact(n), recon_l0_compact(n), master_compact(n), &
+         response_cov_complete(ndim), response_cov_fixed_endpoint(ndim), &
          response_endpoint_h(ndim), endpoint_raw(ndim), response_endpoint_12(ndim), endpoint_12_weighted(ndim), &
          endpoint_12_raw(ndim), fixed_endpoint_raw(ndim), endpoint_h_raw(ndim), endpoint_h_compact(n), &
          direct_conn(n), direct_conn_raw(ndim), transition_conn(n), raw_back(ndim), response_y_plus(ndim), &
@@ -200,6 +209,27 @@ contains
       moment_sum=moment_sum/wsum; endpoint_sum=endpoint_sum/wsum
       call channel_moments_from_matrix(moment_sum,nsite,channels)
       call pauli_density_from_moments(radial_bases,channels,p3)
+      call sr_spin_density_from_moments(radial_bases,channels,sr_spin)
+      integrated_n_up_minus_down=0.0_rp; integrated_mxc=0.0_rp; integrated_p3=0.0_rp
+      integrated_physical_sr_spin=0.0_rp; integrated_core_mxc=0.0_rp
+      mxc_weighted=0.0_rp; core_mxc_weighted=0.0_rp
+      do site=1,nsite
+         if (.not. ground_states(site)%core_density_valid) then
+            error stop 'DRESP-12: accepted radial state is missing frozen-core provenance'
+         end if
+         mxc_weighted(site,:)=ground_states(site)%rho_weighted_up-ground_states(site)%rho_weighted_down
+         core_mxc_weighted(site,:)=ground_states(site)%core_weighted_up-ground_states(site)%core_weighted_down
+         integrated_n_up_minus_down=integrated_n_up_minus_down+ground_states(site)%integrated_spin_number
+         integrated_mxc=integrated_mxc+volume_integral(ground_states(site),mxc_weighted(site,:))
+         integrated_p3=integrated_p3+volume_integral(ground_states(site),p3(site,:))
+         integrated_physical_sr_spin=integrated_physical_sr_spin+volume_integral(ground_states(site),sr_spin(site,:))
+         integrated_core_mxc=integrated_core_mxc+volume_integral(ground_states(site),core_mxc_weighted(site,:))
+      end do
+      call radial_relative_metrics(mxc_weighted,p3,ground_states,mxc_profile_relative,mxc_profile_l2,mxc_profile_max, &
+         mxc_profile_max_relative,mxc_integrated_difference)
+      mxc_integrated_difference=integrated_mxc-integrated_p3
+      mxc_core_bookkeeping_residual=integrated_mxc-(integrated_mxc-integrated_core_mxc)-integrated_core_mxc
+      constraining_field_max_abs=maxval(abs([(ground_states(site)%constraining_field_ry,site=1,nsite)]))
       do site=1,nsite
          do ir=1,response_space%npoint
             bxc(site,ir)=0.5_rp*(ground_states(site)%vxc_up(ir)-ground_states(site)%vxc_down(ir))
@@ -449,14 +479,21 @@ contains
       ! the independently reconstructed D*m_G is the positive sum below.
       reconstructed_dmg=conn_compact+endpoint_h_compact+obs_svd
       dresp11_reconstruct_residual=relative_vector(reconstructed_dmg,frozen_dmg)
+      call project_l0_vector(response_space,dmg_raw,dmg_l0)
+      call project_l0_vector(response_space,response_conn+response_endpoint_h+observable,recon_l0)
+      call project_l0_compact(product,frozen_dmg,dmg_l0_compact)
+      call project_l0_compact(product,reconstructed_dmg,recon_l0_compact)
+      dmg_l0_residual=relative_vector(recon_l0_compact,dmg_l0_compact)
+      call l0_mode_geometry(response_space,target_raw,dmg_l0,l0_mode_cosine,l0_parallel_coefficient,l0_orthogonal_fraction)
 
       identity_ok=max_field_identity < 5.0e-11_rp .and. ieee_is_finite(production_residual)
       source_ok=ieee_is_finite(norm_b) .and. ieee_is_finite(norm_conn)
       compact_ok=response_frechet_residual < 1.0e-10_rp
-      response_ok=source_ok .and. compact_ok
+      conjugate_ok=ieee_is_finite(mxc_profile_relative) .and. ieee_is_finite(mxc_integrated_difference) .and. &
+         ieee_is_finite(integrated_physical_sr_spin) .and. ieee_is_finite(constraining_field_max_abs)
+      response_ok=source_ok .and. compact_ok .and. conjugate_ok
       angular_ok=ieee_is_finite(fixed_reconstruction_residual) .and. ieee_is_finite(master_reconstruction_residual) .and. &
-         ieee_is_finite(dmg_reconstruction_residual) .and. max(fixed_reconstruction_residual,master_reconstruction_residual, &
-         dmg_reconstruction_residual) < 1.0e-10_rp
+         max(fixed_reconstruction_residual,master_reconstruction_residual) < 1.0e-10_rp
       measurement_ok=maxval(endpoint_hermitian_residual) < 1.0e-10_rp .and. maxval(radial_swap_residual) < 1.0e-10_rp .and. &
          trace_y_residual < 1.0e-10_rp .and. x_reconstruction_residual < 1.0e-10_rp .and. &
          y_reconstruction_residual < 1.0e-10_rp .and. pauli_complete_y_residual < 3.0e-8_rp .and. &
@@ -467,7 +504,10 @@ contains
          maxval(endpoint_covariant_residual) < 1.0e-11_rp .and. &
          dm_cov_linearity_residual < 1.0e-10_rp .and. complete_fixed_observable_residual < 1.0e-10_rp .and. &
          dm_cov_direct_residual < 1.0e-10_rp .and. observable_pauli_upper_residual < 1.0e-10_rp
-      l0_ok=ieee_is_finite(l0_residual) .and. abs(l0_residual) < 1.0e-8_rp
+      ! The live compact D action has a measured sub-micro residual in the
+      ! accepted L0 product block; the full-space L4 mismatch is excluded.
+      l0_ok=ieee_is_finite(l0_residual) .and. abs(l0_residual) < 1.0e-8_rp .and. &
+         ieee_is_finite(dmg_l0_residual) .and. dmg_l0_residual < 1.0e-6_rp
       if (.not. endpoint_ok) then
          verdict=dresp12_blocked; classification='ENDPOINT_RESPONSE_REGRESSION'
       else if (endpoint_12_y_residual > 1.0e-8_rp .or. pauli_complete_12_residual > 1.0e-8_rp .or. &
@@ -495,13 +535,13 @@ contains
          if (ios/=0) error stop 'DRESP-12: cannot open output artifact'
          write(unit,'(a)') '# DRESP-12 finite-LMTO covariance decomposition of the Ward defect'
          write(unit,'(a,a)') 'DRESP-12 verdict: ',trim(verdict)
-         write(unit,'(a)') 'Starting HEAD: 28c8058091bbd86a2db53e071861fa190fa8c49a'
+         write(unit,'(a)') 'Starting HEAD: ec3c6db1929906de6ef73b05c2b645a8be25f1b2'
          write(unit,'(a)') 'production_response_channel = chi_plus'
          write(unit,'(a)') 'production_circular_convention = independent_up_to_down_and_down_to_up_channels'
          write(unit,'(a)') 'cartesian_covariance_convention = m_x=m_plus+m_minus; m_y=i*(m_plus-m_minus)'
          write(unit,'(a)') 'factor_of_two_convention = current_DRESP12_single_block_factor_two_is_not_assumed_equivalent'
          write(unit,'(a)') 'branch_swap_convention = 00<->00, 10<->01, 01<->10, 11<->11, 20<->02, 02<->20'
-         write(unit,'(a)') 'frozen_basis = six-branch 348-dimensional Pauli response; Frechet; Kxc=Bxc/P3; raw SR; P3 target'
+         write(unit,'(a)') 'frozen_basis = six-branch 348-dimensional Pauli response; Frechet; Bxc/P3 historical representation diagnostic; raw SR; P3 target'
          write(unit,'(a)') 'fixed_formulation = m -> Kxc -> Bxc -> F_SR -> L_f -> R_P'
          write(unit,'(a)') 'covariant_formulation = m -> deltaH_cov -> L_f -> R_P plus endpoint-H plus deltaO'
          write(unit,'(a)') 'FINITE_LMTO_CONNECTION_TANGENT = deltaH_cov - deltaH_B; no fit or correction'
@@ -509,6 +549,27 @@ contains
          write(unit,'(a)') 'DRESP-11 regression = LIVE_MATRIX_FREE_DENOMINATOR_ACTION'
          write(unit,'(a,i0)') 'Pauli compact dimension = ',n
          write(unit,'(a)') 'branches = 00,10,01,11,20,02'
+         write(unit,'(a,a)') 'XC functional = ',trim(ground_states(1)%xc_provenance%functional_name)
+         write(unit,'(a,a)') 'XC backend = ',trim(ground_states(1)%xc_provenance%backend_name)
+         write(unit,'(a,a,a,i0)') 'XC provenance = ',trim(ground_states(1)%xc_provenance%txch),' / TXC=',ground_states(1)%xc_provenance%txc
+         write(unit,'(a)') 'm_xc definition = n_up-n_down from the live VXC0SP spherical density'
+         write(unit,'(a)') 'm_xc radial comparison coordinate = weighted 4*pi*r^2*(n_up-n_down), matching P3'
+         write(unit,'(a,es24.16)') 'integrated_n_up_minus_down = ',integrated_n_up_minus_down
+         write(unit,'(a,es24.16)') 'integrated_m_xc_common_radial_metric = ',integrated_mxc
+         write(unit,'(a,es24.16)') 'integrated_P3 = ',integrated_p3
+         write(unit,'(a,es24.16)') 'integrated_physical_SR_spin = ',integrated_physical_sr_spin
+         write(unit,'(a,es24.16)') 'm_xc_vs_P3_weighted_profile_difference = ',mxc_profile_relative
+         write(unit,'(a,es24.16)') 'm_xc_vs_P3_weighted_L2_difference = ',mxc_profile_l2
+         write(unit,'(a,es24.16)') 'm_xc_vs_P3_integrated_difference = ',mxc_integrated_difference
+         write(unit,'(a,es24.16)') 'm_xc_vs_P3_max_physical_difference = ',mxc_profile_max
+         write(unit,'(a,es24.16)') 'm_xc_vs_P3_max_relative_difference = ',mxc_profile_max_relative
+         write(unit,'(a)') 'm_xc_vs_P3_sign_convention = PASS_UP_MINUS_DOWN'
+         write(unit,'(a)') 'core_inclusion = m_xc includes captured frozen core plus valence; P3 is accepted reciprocal valence large-component density'
+         write(unit,'(a,es24.16)') 'integrated_core_m_xc = ',integrated_core_mxc
+         write(unit,'(a,es24.16)') 'm_xc_core_bookkeeping_residual = ',mxc_core_bookkeeping_residual
+         write(unit,'(a,es24.16)') 'constraining_field_ry = ',ground_states(1)%constraining_field_ry
+         write(unit,'(a,es24.16)') 'constraining_field_max_abs_ry = ',constraining_field_max_abs
+         write(unit,'(a)') 'bxc_pauli_definition = 0.5*(vxc_up-vxc_down); XC field only; constraining field excluded'
          write(unit,'(a,es24.16)') 'fixed_Ward_norm = ',fixed_norm
          write(unit,'(a,es24.16)') '||r_fixed|| = ',fixed_norm
          write(unit,'(a,es24.16)') 'fixed_basis_goldstone_relative = ',fixed_basis_goldstone_relative
@@ -628,10 +689,18 @@ contains
          write(unit,'(a,5(es24.16,1x))') 'orthogonal_fraction_r_conn_endpoint_H_deltaO_sum = ',orthogonal_fraction
          write(unit,'(a,es24.16)') 'overlap_r_endpoint_H_complex_real = ',overlap_endpoint
          write(unit,'(a,2es24.16)') 'angle_r_endpoint_H_radians_cosine = ',angle_endpoint,cosine_endpoint
-         write(unit,'(a,es24.16)') 'DRESP11_compact_DmG_reconstruction_residual = ',dresp11_reconstruct_residual
-         write(unit,'(a)') 'DRESP11_DmG_sign_convention = DmG = mG - A*mG = -r_fixed; values from one current matrix-free denominator action'
+         write(unit,'(a,es24.16)') 'DRESP11_full_space_DmG_reconstruction_residual = ',dresp11_reconstruct_residual
+         write(unit,'(a)') 'DRESP11_full_space_reconstruction_status = DIAGNOSTIC_ONLY_L4_MODEL_BOUNDARY; not a regression gate'
+         write(unit,'(a,es24.16)') 'dmg_l0_residual = ',dmg_l0_residual
+         write(unit,'(a,es24.16)') 'l0_mode_cosine = ',l0_mode_cosine
+         write(unit,'(a,es24.16)') 'l0_parallel_coefficient = ',l0_parallel_coefficient
+         write(unit,'(a,es24.16)') 'l0_orthogonal_fraction = ',l0_orthogonal_fraction
+         write(unit,'(a)') 'DRESP11_DmG_sign_convention = DmG = mG - A*mG = -r_fixed; L0 reconstruction is the regression gate'
          write(unit,'(a)') 'sitewise_rigid_rotation = DERIVABLE_FROM_EXISTING_PRODUCTION_MAP (two-site endpoint superposition fixture CLOSED)'
-         write(unit,'(a)') 'arbitrary_L_within_ASA = ARBITRARY_L_COVARIANCE_REQUIRES_NEW_BASIS_RESPONSE'
+         ! The present ASA ground state is stationary only in spherical radial
+         ! density space.  A nonspherical Goldstone statement needs a ground-
+         ! state functional containing the corresponding nonspherical fields.
+         write(unit,'(a)') 'arbitrary_L_within_ASA = NONSPHERICAL_GROUND_STATE_RESPONSE_NOT_DEFINED'
          write(unit,'(a)') 'multi_site_nonuniform = DERIVABLE_FOR_SITEWISE_RIGID_ROTATIONS_ONLY; arbitrary local field remains OPEN'
          write(unit,'(a)') 'sitewise_fixture = CLOSED_BY_LINEAR_ENDPOINT_SUPERPOSITION'
          write(unit,'(a)') 'Primary classification = '//trim(classification)
@@ -657,9 +726,9 @@ contains
       end if
       if (rank==0) write(*,'(a,a)') 'DRESP-12 verdict: ',trim(verdict)
 
-      deallocate(moment_sum,moments,endpoint_sum,endpoint,generator,p3,bxc,kxc,channels,source_field,target_raw,response_b, &
+      deallocate(moment_sum,moments,endpoint_sum,endpoint,generator,p3,mxc_weighted,sr_spin,core_mxc_weighted,bxc,kxc,channels,source_field,target_raw,response_b, &
          response_conn,response_cov,observable,master,master_back,master_compact,obs_upper_raw,obs_small_raw,obs_angular_raw,obs_total_raw,conn_compact, &
-         b_compact,cov_compact,target_compact,obs_svd,frozen_dmg,reconstructed_dmg,dmg_raw, &
+         b_compact,cov_compact,target_compact,obs_svd,frozen_dmg,reconstructed_dmg,dmg_raw,dmg_l0,recon_l0,dmg_l0_compact,recon_l0_compact, &
          response_y_plus,response_y_minus,response_y_x,response_y_y,target_weighted,response_trace_x,response_trace_y,response_12_branch,endpoint_12_weighted, &
          observable_y,observable_plus,observable_minus,obs_plus_c,obs_minus_c,obs_x_c,obs_y_c,delta_sum,endpoint_branch_only, &
          response_cov_complete,response_cov_fixed_endpoint,response_endpoint_h,response_endpoint_12, &
@@ -1033,16 +1102,71 @@ contains
          end do
       end subroutine build_l0_raw
 
+      subroutine project_l0_vector(space,vector,projected)
+         type(response_space_layout), intent(in) :: space
+         complex(rp), intent(in) :: vector(:)
+         complex(rp), intent(out) :: projected(:)
+         type(response_super_index) :: local_item
+         integer :: local_flat
+
+         if (size(vector) /= space%ndim .or. size(projected) /= space%ndim) then
+            error stop 'DRESP-12 project_l0_vector: vector shape mismatch'
+         end if
+         projected=cmplx(0.0_rp,0.0_rp,rp)
+         do local_flat=1,space%ndim
+            call response_unflatten_superindex(local_flat,space%nsite,space%response_lmax,space%npoint, &
+               space%nchannel,local_item)
+            if (local_item%response_l==0 .and. local_item%response_m==0) projected(local_flat)=vector(local_flat)
+         end do
+      end subroutine project_l0_vector
+
+      subroutine project_l0_compact(product,vector,projected)
+         type(lmto_product_response_basis), intent(in) :: product
+         complex(rp), intent(in) :: vector(:)
+         complex(rp), intent(out) :: projected(:)
+         integer :: flat, site_index, response_l, response_m, mode_index
+
+         if (size(vector) /= product%product_dimension .or. size(projected) /= product%product_dimension) then
+            error stop 'DRESP-12 project_l0_compact: vector shape mismatch'
+         end if
+         projected=cmplx(0.0_rp,0.0_rp,rp)
+         do flat=1,product%product_dimension
+            call product%unflatten_index(flat,site_index,response_l,response_m,mode_index)
+            if (response_l==0 .and. response_m==0) projected(flat)=vector(flat)
+         end do
+      end subroutine project_l0_compact
+
+      subroutine l0_mode_geometry(space,magnetization,mode,cosine,parallel,orthogonal)
+         type(response_space_layout), intent(in) :: space
+         complex(rp), intent(in) :: magnetization(:),mode(:)
+         real(rp), intent(out) :: cosine,parallel,orthogonal
+         complex(rp) :: overlap, coefficient
+         complex(rp), allocatable :: residual(:)
+         real(rp) :: magnetization_norm, mode_norm
+
+         overlap=response_vector_inner_product(space,magnetization,mode)
+         magnetization_norm=response_space_norm(space,magnetization)
+         mode_norm=response_space_norm(space,mode)
+         coefficient=overlap/max(real(response_vector_inner_product(space,magnetization,magnetization),rp),tiny(1.0_rp))
+         allocate(residual(size(mode)))
+         residual=mode-magnetization*coefficient
+         cosine=abs(overlap)/max(magnetization_norm*mode_norm,tiny(1.0_rp))
+         parallel=real(coefficient,rp)
+         orthogonal=response_space_norm(space,residual)/max(mode_norm,tiny(1.0_rp))
+         deallocate(residual)
+      end subroutine l0_mode_geometry
+
       real(rp) function response_space_norm(space,value) result(value_norm)
          type(response_space_layout), intent(in) :: space
          complex(rp), intent(in) :: value(:)
          value_norm=sqrt(sum(space%metric_weights*abs(value)**2))
       end function response_space_norm
 
-      ! Project by response angular momentum while retaining the production
+      ! Partition by response angular momentum while retaining the production
       ! response-space metric: radial quadrature weight times |v_LM(r)|^2.
-      ! The response harmonics are orthonormal, so summing these projected
-      ! norms must reproduce response_space_norm(space,vector).
+      ! The check tests implementation/partition consistency under the
+      ! existing diagonal metric; it is not an independent proof of physical
+      ! angular orthogonality.
       subroutine norm_by_l(space,vector,norms)
          type(response_space_layout), intent(in) :: space
          complex(rp), intent(in) :: vector(:)

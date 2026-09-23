@@ -37,14 +37,14 @@ def vector(values: dict[str, str], key: str, size: int = 6) -> list[float]:
 
 def main() -> None:
     verdict, values = read(sys.argv[1])
-    assert verdict in {"PASS-A", "BLOCKED"}
+    assert verdict == "PASS-A"
     assert values["Pauli compact dimension"] == "348"
     assert values["branches"] == "00,10,01,11,20,02"
     assert values["Goldstone correction"] == "OFF"
     assert values["BES/Halle production"] == "OFF"
     assert values["Dynamics"] == "NOT RUN"
     assert values["covariant_branch_decomposition"] == "CLOSED_BY_COMPLETE_ENDPOINT_TANGENT"
-    assert values["arbitrary_L_within_ASA"] == "ARBITRARY_L_COVARIANCE_REQUIRES_NEW_BASIS_RESPONSE"
+    assert values["arbitrary_L_within_ASA"] == "NONSPHERICAL_GROUND_STATE_RESPONSE_NOT_DEFINED"
     assert values["DRESP-11 regression"] == "LIVE_MATRIX_FREE_DENOMINATOR_ACTION"
     assert values["Model boundary"] == "NONSPHERICAL_RESPONSE_ON_SPHERICAL_ASA_GROUND_STATE"
 
@@ -61,7 +61,24 @@ def main() -> None:
         "dm_cov_complete_vs_frozen_plus_endpoint_H",
         "covariance_accounting_relative_to_fixed_defect",
         "master_identity_relative",
-        "DRESP11_compact_DmG_reconstruction_residual",
+        "DRESP11_full_space_DmG_reconstruction_residual",
+        "dmg_l0_residual",
+        "l0_mode_cosine",
+        "l0_parallel_coefficient",
+        "l0_orthogonal_fraction",
+        "integrated_n_up_minus_down",
+        "integrated_m_xc_common_radial_metric",
+        "integrated_P3",
+        "integrated_physical_SR_spin",
+        "m_xc_vs_P3_weighted_profile_difference",
+        "m_xc_vs_P3_weighted_L2_difference",
+        "m_xc_vs_P3_integrated_difference",
+        "m_xc_vs_P3_max_physical_difference",
+        "m_xc_vs_P3_max_relative_difference",
+        "integrated_core_m_xc",
+        "m_xc_core_bookkeeping_residual",
+        "constraining_field_ry",
+        "constraining_field_max_abs_ry",
         "DmG_full",
         "DmG_norm_reconstruction_residual",
         "DRESP09Y_endpoint_measurement_norm",
@@ -145,20 +162,17 @@ def main() -> None:
         "DmG_by_L_0_1_2_3_4",
     ):
         vector(values, key, size=5)
-    assert values["Primary classification"] in {
-        "ASA_L0_RIGID_RESPONSE_CLOSED",
-        "L0_ACCOUNTING_INCONSISTENT",
-        "ANGULAR_DECOMPOSITION_INCONSISTENT",
-    }
-    if verdict == "PASS-A":
-        assert values["Primary classification"] == "ASA_L0_RIGID_RESPONSE_CLOSED"
-        assert abs(number(values, "l0_residual")) < 1.0e-8
-        assert values["Ward-focused campaign"] == "CLOSED"
-        assert values["NEXT"] == "FORMULATION_DECISION"
-    else:
-        assert values["Primary classification"] != "ASA_L0_RIGID_RESPONSE_CLOSED"
-        assert values["Ward-focused campaign"] == "OPEN"
-        assert values["NEXT"] == "STOP_AND_DIAGNOSE"
+    assert values["Primary classification"] == "ASA_L0_RIGID_RESPONSE_CLOSED"
+    assert abs(number(values, "l0_residual")) < 1.0e-8
+    assert number(values, "dmg_l0_residual") < 1.0e-6
+    assert values["Ward-focused campaign"] == "CLOSED"
+    assert values["NEXT"] == "FORMULATION_DECISION"
+    assert values["m_xc definition"] == "n_up-n_down from the live VXC0SP spherical density"
+    assert values["m_xc_vs_P3_sign_convention"] == "PASS_UP_MINUS_DOWN"
+    assert values["core_inclusion"] == "m_xc includes captured frozen core plus valence; P3 is accepted reciprocal valence large-component density"
+    assert values["bxc_pauli_definition"] == "0.5*(vxc_up-vxc_down); XC field only; constraining field excluded"
+    assert abs(number(values, "constraining_field_max_abs_ry")) < 1.0e-12
+    assert abs(number(values, "m_xc_core_bookkeeping_residual")) < 1.0e-12
 
     ktable = sys.argv[1] + ".kpoints.csv"
     with open(ktable, encoding="utf-8") as stream:

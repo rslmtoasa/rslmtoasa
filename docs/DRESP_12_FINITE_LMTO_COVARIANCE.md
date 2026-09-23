@@ -135,10 +135,16 @@ failure. A fully self-consistent full-spatial Goldstone theory would require
 a ground-state functional stationary in the nonspherical channels; that is
 not implemented here.
 
-The kernel remains `Kxc = Bxc/P3`. In this closure it is a representation
-diagnostic. The physical conjugate-density question, including direct use of
-the live `VXC0SP` field for `n_up - n_down`, is deferred to the next
-formulation decision.
+The historical `Kxc = Bxc/P3` construction is retained only as a
+representation diagnostic. The accepted live `VXC0SP` audit identifies the
+XC-conjugate spherical density as `m_xc = n_up - n_down`, with
+`B_xc = 0.5*(vxc_up-vxc_down)` and the external constraining field excluded.
+For the accepted Barth-Hedin Fe state, `constraining_field_ry = 0`, the
+weighted `m_xc` versus `P3` profile difference is `1.6000607535e-2`, and the
+integrated values are `1.9989134964` and `1.9984971714`, respectively. The
+strict-ASA LDA candidate is therefore `Kxc^ASA = Bxc/m_xc`; GGA requires a
+separate gradient-dependent/noncollinear derivation. See
+[`TDDFT_FORMULATION.md`](TDDFT_FORMULATION.md) for the production decision.
 
 ## Final closure result
 
