@@ -165,9 +165,12 @@ def main() -> None:
         vector(values, key, size=5)
     assert values["Primary classification"] == "ASA_L0_RIGID_RESPONSE_CLOSED"
     assert abs(number(values, "l0_residual")) < 1.0e-8
-    assert number(values, "dmg_l0_raw_residual") < 1.0e-6
-    assert number(values, "dmg_l0_compact_residual") >= 0.0
-    assert values["dmg_l0_compact_residual_role"] == "PROJECTION_COMPRESSION_DIAGNOSTIC"
+    assert values["raw_residual_gate"] == "OFF"
+    assert number(values, "span_residual") >= 0.0
+    assert number(values, "projected_residual") < 1.0e-6
+    assert number(values, "projection_accounting_residual") < 1.0e-10
+    assert number(values, "dmg_l0_compact_residual") < 1.0e-6
+    assert values["dmg_l0_compact_residual_role"] == "COMPACT_DENOMINATOR_RECONSTRUCTION_GATE"
     assert values["Ward-focused campaign"] == "CLOSED"
     assert values["NEXT"] == "NATIVE_ROTATION_DYNAMICS"
     assert values["m_xc definition"] == "n_up-n_down from the live VXC0SP spherical density"

@@ -157,6 +157,14 @@ Ward-focused campaign: CLOSED
 NEXT: NATIVE_ROTATION_DYNAMICS
 ```
 
+The strict ASA identity `P0 master = 0` remains the raw-space L=0 closure gate.
+The compact denominator acts in the compact product space, so its reconstruction
+is checked after compact projection. The raw mismatch is reported as the sum of
+an out-of-span component and a projected mismatch. The full weighted norm
+identity is audited numerically with its cross term, without assuming a
+Pythagorean decomposition. A raw-space mismatch outside the compact span is
+diagnostic and does not relax the projected or compact coefficient `1e-6` gates.
+
 This closes the Ward-focused campaign in the strict ASA L=0 response space.
 The finite L>0 response remains recorded as a model-space boundary result.
 Generated artifacts, including `/tmp` products, are validation evidence only

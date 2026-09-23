@@ -17,7 +17,7 @@ module exchange_q_mod
    use lr_kl_contour_mod, only: finite_h_contour_options, finite_h_contour_report, &
       force_theorem_finite_q_hessian_from_resolvent_batch
    use lr_lmto_turek_contour_mod, only: native_turek_contour_options, native_turek_contour_report, &
-      native_exchange_q_ordered_contour, native_spectral_bounds
+      native_turek_static_reference
    use logger_mod, only: g_logger
    use lr_kl_hessian_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_from_hamiltonian, &
       assemble_lmto_hamiltonian, &
@@ -473,12 +473,12 @@ contains
          call lattice_obj%symbolic_atoms(ik)%predls(lattice_obj%wav*ang2au)
       end do
       call lmto_fixture_adapter_residual(hamiltonian_obj, fixture, reciprocal_obj%k_points(:,1:1), adapter_after)
+      call g_logger%info('[exchange_q]: accepted-H adapter residual before/after='//trim(real_to_string(adapter_before))// &
+         '/'//trim(real_to_string(adapter_after)), __FILE__, __LINE__)
       if (adapter_before > 3.0e-12_rp .or. adapter_after > 3.0e-12_rp .or. &
           abs(adapter_after-adapter_before) > 1.0e-13_rp) then
          call g_logger%fatal('[exchange_q]: predls() changed the accepted production-H adapter state', __FILE__, __LINE__)
       end if
-      call g_logger%info('[exchange_q]: accepted-H adapter residual before/after='//trim(real_to_string(adapter_before))// &
-         '/'//trim(real_to_string(adapter_after)), __FILE__, __LINE__)
       if (abs(self_obj%reciprocal_scf_cache%fermi_level-energy_obj%fermi) > 3.0e-12_rp) then
          call g_logger%fatal('[exchange_q]: accepted Fermi-level provenance mismatch', __FILE__, __LINE__)
       end if
@@ -654,6 +654,8 @@ contains
       total_response_seconds = elapsed_clock_seconds(response_start,clock_end,clock_rate)
 
       if (native_ready) then
+         call g_logger%info('[exchange_q]: native reference uses accepted reciprocal SCF k mesh, weights, EF, temperature, lattice and potential; order='// &
+            trim(reciprocal_obj%kspace_ham_order),__FILE__,__LINE__)
          call native_exchange_q_driver(lattice_obj, reciprocal_obj, q_direct, native_contour_options, native_jq_ud, native_jq_du, &
             native_jq_sym, native_delta_j, native_curvature, native_contour_report)
          call g_logger%info('[exchange_q]: native Turek contour points/poles='//trim(int2str(native_contour_report%contour_points))//'/'// &
@@ -690,31 +692,57 @@ contains
       type(hamiltonian), intent(in) :: ham
       type(self), intent(in) :: self_obj
       type(reciprocal), intent(in) :: recip
+      logical :: native_requested
 
-      if (config%n_q < 2) call g_logger%fatal('[exchange_q]: q path is empty or has no finite-q point', __FILE__, __LINE__)
-      if (trim(control_obj%calctype) /= 'B' .or. control_obj%nsp /= 1 .or. control_obj%has_soc()) then
+      native_requested=config%native_crosscheck .or. config%native_turek
+      if (config%n_q<2) call g_logger%fatal('[exchange_q]: q path is empty or has no finite-q point',__FILE__,__LINE__)
+      if (trim(control_obj%calctype)/='B' .or. control_obj%nsp/=1 .or. control_obj%has_soc()) then
          call g_logger%fatal('[exchange_q]: capability gate requires bulk nsp=1 scalar-relativistic collinear state with SOC off', &
-            __FILE__, __LINE__)
+            __FILE__,__LINE__)
       end if
-      if (.not. self_obj%use_kspace .or. .not. allocated(self_obj%reciprocal_scf_cache)) then
+      if (.not.self_obj%use_kspace .or. .not.allocated(self_obj%reciprocal_scf_cache)) then
          call g_logger%fatal('[exchange_q]: requires self%use_kspace=.true. to consume the accepted reciprocal SCF state', &
-            __FILE__, __LINE__)
+            __FILE__,__LINE__)
       end if
-      if (ham%hoh .or. ham%ccor_2c .or. ham%hubbard_u_general_check .or. ham%hubbard_v_check .or. &
-          control_obj%constraints_enable) then
-         call g_logger%fatal('[exchange_q]: unsupported HOH/CCOR/Hubbard/constraint combination', __FILE__, __LINE__)
+      if (ham%ccor_2c .or. ham%hubbard_u_general_check .or. ham%hubbard_v_check .or. control_obj%constraints_enable) then
+         call g_logger%fatal('[exchange_q]: unsupported CCOR/Hubbard/constraint combination',__FILE__,__LINE__)
       end if
-      if (trim(recip%reciprocal_mode) /= 'ham_only' .or. trim(recip%kspace_ham_order) /= 'first') then
-         call g_logger%fatal('[exchange_q]: capability gate requires reciprocal_mode=ham_only and kspace_ham_order=first', &
-            __FILE__, __LINE__)
+      if (trim(recip%reciprocal_mode)/='ham_only') then
+         call g_logger%fatal('[exchange_q]: capability gate requires reciprocal_mode=ham_only',__FILE__,__LINE__)
       end if
-      if (fixture_basis_size(ham) /= 9) then
-         call g_logger%fatal('[exchange_q]: capability gate requires the full spd production basis', __FILE__, __LINE__)
+      if (trim(recip%kspace_ham_order)/='first' .and. trim(recip%kspace_ham_order)/='second') then
+         call g_logger%fatal('[exchange_q]: reciprocal Hamiltonian order must be first or second',__FILE__,__LINE__)
       end if
-      if ((config%native_crosscheck .or. config%native_turek) .and. ham%charge%lattice%nrec /= 1) then
-         call g_logger%fatal('[exchange_q]: native contour production is currently capability-gated to one sublattice', __FILE__, __LINE__)
+      if (fixture_basis_size(ham)/=9) then
+         call g_logger%fatal('[exchange_q]: capability gate requires the full spd production basis',__FILE__,__LINE__)
       end if
+      if (native_requested) call validate_native_turek_capability(config,ham)
+      call validate_finite_h_capability(ham,recip)
    end subroutine validate_exchange_q_capability
+
+   ! Native P-S contour capability uses only lattice/potential and accepted
+   ! reciprocal integration metadata; its gate is independent of HOH assembly.
+   subroutine validate_native_turek_capability(config,ham)
+      type(exchange_q_config), intent(in) :: config
+      type(hamiltonian), intent(in) :: ham
+      if ((config%native_crosscheck .or. config%native_turek) .and. ham%charge%lattice%nrec/=1) then
+         call g_logger%fatal('[exchange_q]: native contour production is currently capability-gated to one sublattice', &
+            __FILE__,__LINE__)
+      end if
+   end subroutine validate_native_turek_capability
+
+   ! Finite-H torque/contact vertices require a live orthogonal H(k) adapter.
+   ! The second-order branch is accepted only when reciprocal assembly inputs
+   ! exist; the reciprocal assembler otherwise silently falls back to first order.
+   subroutine validate_finite_h_capability(ham,recip)
+      type(hamiltonian), intent(in) :: ham
+      type(reciprocal), intent(in) :: recip
+      if (trim(recip%kspace_ham_order)=='second') then
+         if (.not.ham%hoh .or. .not.allocated(ham%eeo) .or. .not.allocated(ham%enim)) then
+            call g_logger%fatal('[exchange_q]: SECOND_ORDER_STATE_NOT_ACTIVE in reciprocal finite-H path',__FILE__,__LINE__)
+         end if
+      end if
+   end subroutine validate_finite_h_capability
 
    integer function fixture_basis_size(ham) result(size_orb)
       type(hamiltonian), intent(in) :: ham
@@ -767,59 +795,24 @@ contains
       type(native_turek_contour_options), intent(in) :: options
       real(rp), intent(out) :: jq_ud_out(:), jq_du_out(:), jq_sym_out(:), delta_j(:), curvature(:)
       type(native_turek_contour_report), intent(out) :: report
-      complex(rp), allocatable :: jq_ud(:, :, :), jq_du(:, :, :)
-      real(rp), allocatable :: native_points(:, :)
-      real(rp) :: energy_bounds(2), kT, max_ellipse_value
-      integer :: nsite, nk, nq, iq, ik, gamma_index, native_pole_count
-      logical :: bounds_verified
+      complex(rp), allocatable :: jq_ud(:, :, :), jq_du(:, :, :), jq_sym(:, :, :), native_delta(:, :, :), native_curvature(:, :, :)
+      real(rp) :: kT
+      integer :: nsite, nq
 
-      nsite = lat%nrec; nq = size(q_direct,2)
-      nk = size(recip%k_points,2)
-      if (size(q_direct,1) /= 3 .or. size(jq_ud_out) /= nq .or. size(jq_du_out) /= nq .or. &
-          size(jq_sym_out) /= nq .or. size(delta_j) /= nq .or. size(curvature) /= nq) then
+      nsite=lat%nrec; nq=size(q_direct,2)
+      if (nsite/=1) error stop 'native_exchange_q_driver: production scalar reduction requires nsite=1'
+      if (size(q_direct,1)/=3 .or. size(jq_ud_out)/=nq .or. size(jq_du_out)/=nq .or. &
+          size(jq_sym_out)/=nq .or. size(delta_j)/=nq .or. size(curvature)/=nq) then
          error stop 'native_exchange_q_driver: shape mismatch'
       end if
-      kT = max(recip%temperature*reciprocal_kb_ry_per_k, 1.0e-10_rp)
-      allocate(native_points(3,nk*nq))
-      do iq = 1, nq
-         do ik = 1, nk
-            native_points(:,(iq-1)*nk+ik) = recip%k_points(:,ik)+q_direct(:,iq)
-         end do
-      end do
-      call native_spectral_bounds(lat, native_points, recip%fermi_level, kT, options, energy_bounds, max_ellipse_value, &
-         bounds_verified, native_pole_count)
-      if (.not. bounds_verified) then
-         call g_logger%fatal('[exchange_q]: native spectral poles are not strictly inside contour; max ellipse='// &
-            trim(real_to_string(max_ellipse_value))//' energy bounds='//trim(real_to_string(energy_bounds(1)))//'/'// &
-            trim(real_to_string(energy_bounds(2)))//' pole count='//trim(int2str(native_pole_count)), __FILE__, __LINE__)
-      end if
-      allocate(jq_ud(nsite,nsite,nq), jq_du(nsite,nsite,nq))
-      call native_exchange_q_ordered_contour(lat, recip%k_points, recip%k_weights, q_direct, recip%fermi_level, kT, &
-         energy_bounds, options, jq_ud, jq_du, report)
-      report%native_max_ellipse_value = max_ellipse_value
-      report%native_bounds_verified = bounds_verified
-      report%native_spectral_poles = native_pole_count
-      jq_ud_out = 0.0_rp; jq_du_out = 0.0_rp; jq_sym_out = 0.0_rp
-      do iq = 1, nq
-         if (nsite /= 1) error stop 'native_exchange_q_driver: production scalar reduction requires nsite=1'
-         jq_ud_out(iq) = real(jq_ud(1,1,iq),rp)
-         jq_du_out(iq) = real(jq_du(1,1,iq),rp)
-         jq_sym_out(iq) = 0.5_rp*(jq_ud_out(iq)+jq_du_out(iq))
-      end do
-      gamma_index = 0
-      do iq = 1, nq
-         if (sqrt(sum(q_direct(:,iq)**2)) <= q_zero_tolerance) then
-            gamma_index = iq
-            exit
-         end if
-      end do
-      if (gamma_index == 0) error stop 'native_exchange_q_driver: q path must contain Gamma for DeltaJ'
-      delta_j = jq_sym_out(gamma_index)-jq_sym_out
-      ! The finite-q complex-amplitude Hessian is the second derivative of
-      ! the physical Heisenberg energy.  The historical scalar exchange is
-      ! J_hist=(J_ud+J_du)/2, hence K(q)=2*(J_hist(0)-J_hist(q)).
-      curvature = 2.0_rp*delta_j
-      deallocate(native_points,jq_ud,jq_du)
+      kT=max(recip%temperature*reciprocal_kb_ry_per_k,1.0e-10_rp)
+      allocate(jq_ud(nsite,nsite,nq),jq_du(nsite,nsite,nq),jq_sym(nsite,nsite,nq), &
+         native_delta(nsite,nsite,nq),native_curvature(nsite,nsite,nq))
+      call native_turek_static_reference(lat,recip%k_points,recip%k_weights,q_direct,recip%fermi_level,kT,options, &
+         jq_ud,jq_du,jq_sym,native_delta,native_curvature,report)
+      jq_ud_out=real(jq_ud(1,1,:),rp); jq_du_out=real(jq_du(1,1,:),rp)
+      jq_sym_out=real(jq_sym(1,1,:),rp); delta_j=real(native_delta(1,1,:),rp); curvature=real(native_curvature(1,1,:),rp)
+      deallocate(jq_ud,jq_du,jq_sym,native_delta,native_curvature)
    end subroutine native_exchange_q_driver
 
    subroutine write_exchange_q_output(config, lattice_obj, recip, q_direct, q_cart, finite_tt, finite_contact, &
@@ -860,6 +853,11 @@ contains
       write(unit,'(a,es24.16)') '# electronic_kT_Ry = ', max(recip%temperature*reciprocal_kb_ry_per_k,1.0e-10_rp)
       write(unit,'(a,es24.16)') '# fermi_level_Ry = ', recip%fermi_level
       write(unit,'(a,a)') '# hamiltonian_order = ', trim(recip%kspace_ham_order)
+      if (native_ready) then
+         write(unit,'(a)') '# native_state_provenance = accepted reciprocal SCF k points, weights, EF, temperature, lattice, and potential'
+         write(unit,'(a,a)') '# native_state_hamiltonian_order = ',trim(recip%kspace_ham_order)
+         write(unit,'(a)') '# native_capability = native P-S path operator; no finite-H resolvent or torque vertices consumed'
+      end if
       write(unit,'(a)') '# endpoint_mode is mesh_reuse for exact full-mesh commensurate q and explicit_diagonalization otherwise.'
       write(unit,'(a)') '# endpoint_provenance columns: q_index mode reused commensurate coordinate_residual'
       do iq = 1, size(endpoint_mode)

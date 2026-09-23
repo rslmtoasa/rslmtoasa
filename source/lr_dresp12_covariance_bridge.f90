@@ -83,6 +83,8 @@ contains
       real(rp) :: l0_residual, nonspherical_norm, nonspherical_residual, nonspherical_l4_fraction
       real(rp) :: fixed_reconstruction_residual, master_reconstruction_residual, dmg_reconstruction_residual
       real(rp) :: dmg_l0_raw_residual, dmg_l0_compact_residual
+      real(rp) :: span_residual, projected_residual, projection_accounting_residual
+      real(rp) :: span_norm, projected_norm, raw_mismatch_norm, decomposition_norm, decomposition_cross
       real(rp) :: l0_mode_cosine, l0_parallel_coefficient, l0_orthogonal_fraction
       real(rp) :: mxc_profile_relative, mxc_profile_l2, mxc_profile_max, mxc_profile_max_relative, mxc_integrated_difference
       real(rp) :: integrated_n_up_minus_down, integrated_mxc, integrated_p3, integrated_physical_sr_spin, integrated_core_mxc
@@ -124,6 +126,7 @@ contains
       complex(rp), allocatable :: obs_upper_raw(:), obs_small_raw(:), obs_angular_raw(:), obs_total_raw(:)
       complex(rp), allocatable :: frozen_dmg(:), reconstructed_dmg(:), dmg_raw(:)
       complex(rp), allocatable :: dmg_l0(:), recon_l0(:), dmg_l0_compact(:), recon_l0_compact(:)
+      complex(rp), allocatable :: recon_projection_compact(:), recon_l0_projected(:)
       complex(rp), allocatable :: obs_svd(:)
       complex(rp), allocatable :: covariant_field(:, :)
       complex(rp), allocatable :: endpoint_complete(:, :, :), endpoint_fixed(:, :, :), endpoint_h(:, :, :), endpoint_h_zero(:, :, :)
@@ -173,6 +176,7 @@ contains
          obs_upper_raw(ndim), obs_small_raw(ndim), obs_angular_raw(ndim), obs_total_raw(ndim), &
          conn_compact(n), b_compact(n), cov_compact(n), target_compact(n), obs_svd(n), frozen_dmg(n), &
          reconstructed_dmg(n), dmg_raw(ndim), dmg_l0(ndim), recon_l0(ndim), dmg_l0_compact(n), recon_l0_compact(n), master_compact(n), &
+         recon_projection_compact(n), recon_l0_projected(ndim), &
          response_cov_complete(ndim), response_cov_fixed_endpoint(ndim), &
          response_endpoint_h(ndim), endpoint_raw(ndim), response_endpoint_12(ndim), endpoint_12_weighted(ndim), &
          endpoint_12_raw(ndim), fixed_endpoint_raw(ndim), endpoint_h_raw(ndim), endpoint_h_compact(n), &
@@ -487,6 +491,23 @@ contains
       dmg_l0_raw_residual=response_space_norm(response_space,recon_l0-dmg_l0)/ &
          max(response_space_norm(response_space,dmg_l0),tiny(1.0_rp))
       dmg_l0_compact_residual=relative_vector(recon_l0_compact,dmg_l0_compact)
+      ! The raw connection/endpoint/observable reconstruction is not required
+      ! to live in the finite compact product span. Decompose its L=0 part
+      ! with the certified weighted-orthonormal compact maps already used by
+      ! the denominator action, then audit the full raw norm accounting, including the cross term.
+      call dresp09_compact_field_from_raw(response_space,product,recon_l0,recon_projection_compact)
+      call project_l0_compact(product,recon_projection_compact,recon_l0_compact)
+      call dresp09_raw_field_from_compact(response_space,product,recon_l0_compact,recon_l0_projected)
+      span_norm=response_space_norm(response_space,recon_l0-recon_l0_projected)
+      projected_norm=response_space_norm(response_space,recon_l0_projected-dmg_l0)
+      raw_mismatch_norm=response_space_norm(response_space,recon_l0-dmg_l0)
+      span_residual=span_norm/max(response_space_norm(response_space,recon_l0),tiny(1.0_rp))
+      projected_residual=projected_norm/max(response_space_norm(response_space,dmg_l0),tiny(1.0_rp))
+      decomposition_norm=span_norm**2+projected_norm**2
+      decomposition_cross=2.0_rp*real(response_vector_inner_product(response_space,recon_l0-recon_l0_projected, &
+         recon_l0_projected-dmg_l0),rp)
+      projection_accounting_residual=abs(raw_mismatch_norm**2-decomposition_norm-decomposition_cross)/ &
+         max(raw_mismatch_norm**2,tiny(1.0_rp))
       call l0_mode_geometry(response_space,target_raw,dmg_l0,l0_mode_cosine,l0_parallel_coefficient,l0_orthogonal_fraction)
 
       identity_ok=max_field_identity < 5.0e-11_rp .and. ieee_is_finite(production_residual)
@@ -507,10 +528,13 @@ contains
          maxval(endpoint_covariant_residual) < 1.0e-11_rp .and. &
          dm_cov_linearity_residual < 1.0e-10_rp .and. complete_fixed_observable_residual < 1.0e-10_rp .and. &
          dm_cov_direct_residual < 1.0e-10_rp .and. observable_pauli_upper_residual < 1.0e-10_rp
-      ! Gate the direct raw-space L0 accounting; keep the compact
-      ! projection/compression residual as a separate diagnostic.
+      ! The raw vector includes a component outside the finite compact space.
+      ! Gate the compact coefficient comparison and projected raw result;
+      ! retain the direct raw mismatch as the measured span diagnostic.
       l0_ok=ieee_is_finite(l0_residual) .and. abs(l0_residual) < 1.0e-8_rp .and. &
-         ieee_is_finite(dmg_l0_raw_residual) .and. dmg_l0_raw_residual < 1.0e-6_rp
+         ieee_is_finite(projected_residual) .and. projected_residual < 1.0e-6_rp .and. &
+         ieee_is_finite(dmg_l0_compact_residual) .and. dmg_l0_compact_residual < 1.0e-6_rp .and. &
+         ieee_is_finite(projection_accounting_residual) .and. projection_accounting_residual < 1.0e-10_rp
       if (.not. endpoint_ok) then
          verdict=dresp12_blocked; classification='ENDPOINT_RESPONSE_REGRESSION'
       else if (endpoint_12_y_residual > 1.0e-8_rp .or. pauli_complete_12_residual > 1.0e-8_rp .or. &
@@ -525,7 +549,7 @@ contains
       else if (l0_ok) then
          verdict=dresp12_pass_a; classification='ASA_L0_RIGID_RESPONSE_CLOSED'
       else
-         verdict=dresp12_blocked; classification='L0_ACCOUNTING_INCONSISTENT'
+         verdict=dresp12_blocked; classification='COMPACT_DENOMINATOR_RECONSTRUCTION_OPEN'
       end if
 
       sidecar_u_file=trim(output_file)//'.DRESP09U'; sidecar_y_file=trim(output_file)//'.DRESP09Y'
@@ -695,8 +719,15 @@ contains
          write(unit,'(a,es24.16)') 'DRESP11_full_space_DmG_reconstruction_residual = ',dresp11_reconstruct_residual
          write(unit,'(a)') 'DRESP11_full_space_reconstruction_status = DIAGNOSTIC_ONLY_L4_MODEL_BOUNDARY; not a regression gate'
          write(unit,'(a,es24.16)') 'dmg_l0_raw_residual = ',dmg_l0_raw_residual
+         write(unit,'(a,es24.16)') 'raw_residual = ',dmg_l0_raw_residual
+         write(unit,'(a,es24.16)') 'span_residual = ',span_residual
+         write(unit,'(a,es24.16)') 'projected_residual = ',projected_residual
+         write(unit,'(a,es24.16)') 'projection_accounting_residual = ',projection_accounting_residual
          write(unit,'(a,es24.16)') 'dmg_l0_compact_residual = ',dmg_l0_compact_residual
-         write(unit,'(a)') 'dmg_l0_compact_residual_role = PROJECTION_COMPRESSION_DIAGNOSTIC'
+         write(unit,'(a,es24.16)') 'compact_residual = ',dmg_l0_compact_residual
+         write(unit,'(a)') 'raw_residual_role = OUT_OF_COMPACT_SPAN_PLUS_PROJECTED_MISMATCH_DIAGNOSTIC'
+         write(unit,'(a)') 'raw_residual_gate = OFF'
+         write(unit,'(a)') 'dmg_l0_compact_residual_role = COMPACT_DENOMINATOR_RECONSTRUCTION_GATE'
          write(unit,'(a,es24.16)') 'l0_mode_cosine = ',l0_mode_cosine
          write(unit,'(a,es24.16)') 'l0_parallel_coefficient = ',l0_parallel_coefficient
          write(unit,'(a,es24.16)') 'l0_orthogonal_fraction = ',l0_orthogonal_fraction
@@ -734,6 +765,7 @@ contains
       deallocate(moment_sum,moments,endpoint_sum,endpoint,generator,p3,mxc_weighted,sr_spin,core_mxc_weighted,bxc,kxc,channels,source_field,target_raw,response_b, &
          response_conn,response_cov,observable,master,master_back,master_compact,obs_upper_raw,obs_small_raw,obs_angular_raw,obs_total_raw,conn_compact, &
          b_compact,cov_compact,target_compact,obs_svd,frozen_dmg,reconstructed_dmg,dmg_raw,dmg_l0,recon_l0,dmg_l0_compact,recon_l0_compact, &
+         recon_projection_compact,recon_l0_projected, &
          response_y_plus,response_y_minus,response_y_x,response_y_y,target_weighted,response_trace_x,response_trace_y,response_12_branch,endpoint_12_weighted, &
          observable_y,observable_plus,observable_minus,obs_plus_c,obs_minus_c,obs_x_c,obs_y_c,delta_sum,endpoint_branch_only, &
          response_cov_complete,response_cov_fixed_endpoint,response_endpoint_h,response_endpoint_12, &

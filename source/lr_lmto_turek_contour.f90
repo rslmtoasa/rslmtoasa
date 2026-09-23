@@ -53,6 +53,7 @@ module lr_lmto_turek_contour_mod
    public :: native_complex_fermi
    public :: native_regularized_fermi
    public :: native_spectral_bounds
+   public :: native_turek_static_reference
    public :: native_native_poles_from_structure
 
 contains
@@ -693,6 +694,56 @@ contains
       all_inside = max_ellipse_value < 1.0_rp-1.0e-10_rp
       deallocate(smat_orb,smat_spin,roots)
    end subroutine native_spectral_bounds
+
+   !> Shared native static reference from accepted reciprocal-state metadata.
+   !> Bounds/poles select and validate the contour; all exchange resolvents are
+   !> still native P-S path-operator solves. Output arrays retain sublattice
+   !> phases so finite-q consumers can compare representations without a scale.
+   subroutine native_turek_static_reference(lat, k_points, k_weights, q_points, fermi, kT, options, &
+      jq_ud, jq_du, jq_sym, delta_j, curvature, report)
+      type(lattice), intent(inout) :: lat
+      real(rp), intent(in) :: k_points(:, :), k_weights(:), q_points(:, :), fermi, kT
+      type(native_turek_contour_options), intent(in) :: options
+      complex(rp), intent(out) :: jq_ud(:, :, :), jq_du(:, :, :), jq_sym(:, :, :), delta_j(:, :, :), curvature(:, :, :)
+      type(native_turek_contour_report), intent(out) :: report
+      real(rp), allocatable :: native_points(:, :)
+      real(rp) :: energy_bounds(2), max_ellipse_value
+      integer :: nsite, nk, nq, iq, ik, gamma_index, pole_count
+      logical :: bounds_verified
+
+      nsite=lat%nrec; nk=size(k_points,2); nq=size(q_points,2)
+      if (size(k_points,1)/=3 .or. size(q_points,1)/=3 .or. size(k_weights)/=nk .or. nk<1 .or. nq<1) then
+         error stop 'native_turek_static_reference: input shape mismatch'
+      end if
+      if (any(shape(jq_ud)/=[nsite,nsite,nq]) .or. any(shape(jq_du)/=[nsite,nsite,nq]) .or. &
+          any(shape(jq_sym)/=[nsite,nsite,nq]) .or. any(shape(delta_j)/=[nsite,nsite,nq]) .or. &
+          any(shape(curvature)/=[nsite,nsite,nq])) error stop 'native_turek_static_reference: output shape mismatch'
+
+      allocate(native_points(3,nk*nq))
+      do iq=1,nq
+         do ik=1,nk
+            native_points(:,(iq-1)*nk+ik)=k_points(:,ik)+q_points(:,iq)
+         end do
+      end do
+      call native_spectral_bounds(lat,native_points,fermi,kT,options,energy_bounds,max_ellipse_value,bounds_verified,pole_count)
+      if (.not. bounds_verified) error stop 'native_turek_static_reference: native spectral poles are not inside contour'
+      call native_exchange_q_ordered_contour(lat,k_points,k_weights,q_points,fermi,kT,energy_bounds,options,jq_ud,jq_du,report)
+      report%native_max_ellipse_value=max_ellipse_value
+      report%native_bounds_verified=bounds_verified
+      report%native_spectral_poles=pole_count
+      jq_sym=0.5_rp*(jq_ud+jq_du)
+      gamma_index=0
+      do iq=1,nq
+         if (sqrt(sum(q_points(:,iq)**2))<=1.0e-12_rp) then
+            gamma_index=iq
+            exit
+         end if
+      end do
+      if (gamma_index==0) error stop 'native_turek_static_reference: q path must contain Gamma for DeltaJ'
+      delta_j=spread(jq_sym(:,:,gamma_index),3,nq)-jq_sym
+      curvature=2.0_rp*delta_j
+      deallocate(native_points)
+   end subroutine native_turek_static_reference
 
    subroutine native_native_poles_from_structure(lat, smat, roots)
       type(lattice), intent(inout) :: lat

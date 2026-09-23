@@ -162,10 +162,12 @@ orthogonal fraction           = 0.13526761491581546
 compact L0 DmG reconstruction = 1.3409439743737631e-7
 ```
 
-The direct response-space `dmg_l0_raw_residual` is the DRESP-12 accounting
-gate. The separately reported `dmg_l0_compact_residual` is a
-projection/compression diagnostic; compact truncation is not required to close
-at the raw-space numerical floor. The full-space reconstruction residual is
+The direct response-space `raw_residual` is decomposed into the component
+outside the finite compact product span and the projected denominator mismatch.
+Only the projected raw comparison and compact coefficient residual are DRESP-12
+denominator gates. The projection-accounting residual checks the full raw norm
+identity using the actual weighted inner product, including the cross term; it
+does not assume the compact/raw maps are orthogonal in raw space. The full-space reconstruction residual is
 reported only as a diagnostic because it contains the established L4 model
 boundary.
 

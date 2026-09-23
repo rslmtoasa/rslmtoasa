@@ -146,10 +146,12 @@ contains
          end if
          fixture%obar0(:,site) = source%charge%lattice%symbolic_atoms(it)%potential%obx0(1:fixture%norb)
          fixture%obar1(:,site) = source%charge%lattice%symbolic_atoms(it)%potential%obx1(1:fixture%norb)
-         fixture%enu0(:,site) = 0.5_rp*(source%charge%lattice%symbolic_atoms(it)%potential%cx0(1:fixture%norb) - &
-                    source%charge%lattice%symbolic_atoms(it)%potential%cex0(1:fixture%norb))
-         fixture%enu1(:,site) = 0.5_rp*(source%charge%lattice%symbolic_atoms(it)%potential%cx1(1:fixture%norb) - &
-                                        source%charge%lattice%symbolic_atoms(it)%potential%cex1(1:fixture%norb))
+         ! cx0/cx1 and cex0/cex1 already are the spin average/difference;
+         ! their direct difference is E_nu (do not halve it again).
+         fixture%enu0(:,site) = source%charge%lattice%symbolic_atoms(it)%potential%cx0(1:fixture%norb) - &
+                    source%charge%lattice%symbolic_atoms(it)%potential%cex0(1:fixture%norb)
+         fixture%enu1(:,site) = source%charge%lattice%symbolic_atoms(it)%potential%cx1(1:fixture%norb) - &
+                                        source%charge%lattice%symbolic_atoms(it)%potential%cex1(1:fixture%norb)
       end do
       allocate(cralat(3,source%lattice%kk)); cralat = source%lattice%cr(:,1:source%lattice%kk)*source%lattice%alat
       ibond = 0
@@ -324,9 +326,11 @@ contains
          denu = cmplx(0.0_rp, 0.0_rp, rp)
       end if
       torque = db + denu
-      ! H=B-QB.  The second factor is evaluated at the right endpoint.
+      ! For the k -> k+q matrix element of QB, the differentiated Q acts
+      ! before the source-side B(k); the undifferentiated Q is evaluated at
+      ! the row endpoint and multiplies the finite-q derivative of B.
       if (this%hoh) then
-         torque = torque - matmul(dq,b_right) - matmul(qmat,db)
+         torque = torque - matmul(dq,b) - matmul(qmat,db)
       end if
       deallocate(b,b_right,qmat,db,dq,denu)
    end subroutine assemble_lmto_finite_q_torque
@@ -372,7 +376,7 @@ contains
       call assemble_finite_q_directional_terms(this, k_point - q_point, q_point, site_i, axis_i, dbi_left, dqi_left)
       call assemble_finite_q_mixed_base_terms(this, k_point, q_point, site_i, axis_i, site_j, axis_j, d2b, d2q, d2enu)
       mixed = d2b + d2enu
-      if (this%hoh) mixed = mixed - matmul(d2q,b) - matmul(dqi,dbj_minus) - matmul(dqj_at_k,dbi_left) - matmul(qmat,d2b)
+      if (this%hoh) mixed = mixed - matmul(d2q,b) - matmul(dqi_left,dbj_at_k) - matmul(dqj_minus,dbi) - matmul(qmat,d2b)
       deallocate(b,qmat,dbi,dqi,dbj_minus,dqj_minus,dbi_left,dqi_left,dbj_at_k,dqj_at_k,d2b,d2q,d2enu)
    end subroutine assemble_lmto_finite_q_mixed_derivative
 
@@ -883,8 +887,8 @@ contains
             end if
             ! The first term is d2B*O; the remaining terms are the
             ! endpoint/product rules.
-            call add_site_block(d2q, matmul(d2bond,obar) + matmul(dsi*pis+dti*pit, dobar_j) + &
-               matmul(dsj*pjs+dtj*pjt,dobar_i) + matmul(bond,d2obar), source,target,phase_k,this%norb)
+            call add_site_block(d2q, matmul(d2bond,obar) + matmul(dsi*pis+dti*pit, pjt*dobar_j) + &
+               matmul(dsj*pjs+dtj*pjt,pit*dobar_i) + matmul(bond,d2obar), source,target,phase_k,this%norb)
          end if
       end do
       if (this%include_enu .and. site_i == site_j) then
