@@ -3,8 +3,13 @@
 module linear_response_mod
    use precision_mod, only: rp
    use math_mod, only: pi
+   use control_mod, only: control
+   use energy_mod, only: energy
    use hamiltonian_mod, only: hamiltonian
+   use lattice_mod, only: lattice
    use reciprocal_mod, only: reciprocal
+   use self_mod, only: self
+   use lr_lmto_turek_contour_mod, only: native_turek_contour_report
    implicit none
    private
 
@@ -119,6 +124,9 @@ module linear_response_mod
    public :: reduce_static_rotation_kernel
    public :: rotation_axes
    public :: rotation_circular_unitary
+   public :: compute_static_rotation_curvature
+   public :: detect_commensurate_endpoint_map
+   public :: validate_rotation_capability
 
 
    interface
@@ -355,6 +363,58 @@ module linear_response_mod
          integer, intent(in) :: nsite
          complex(rp), intent(out) :: unitary(:, :)
       end subroutine rotation_circular_unitary
+
+      module subroutine validate_rotation_capability(n_q_points, native_crosscheck, native_turek, control_obj, ham, self_obj, recip)
+         integer, intent(in) :: n_q_points
+         logical, intent(in) :: native_crosscheck, native_turek
+         type(control), intent(in) :: control_obj
+         type(hamiltonian), intent(in) :: ham
+         type(self), intent(in) :: self_obj
+         type(reciprocal), intent(in) :: recip
+      end subroutine validate_rotation_capability
+
+      module subroutine detect_commensurate_endpoint_map(k_points, k_weights, nk_mesh, q_point, endpoint_index, commensurate, residual)
+         real(rp), intent(in) :: k_points(:, :), k_weights(:), q_point(3)
+         integer, intent(in) :: nk_mesh(3)
+         integer, intent(out) :: endpoint_index(:)
+         logical, intent(out) :: commensurate
+         real(rp), intent(out) :: residual
+      end subroutine detect_commensurate_endpoint_map
+
+      module subroutine compute_static_rotation_curvature(q_coordinates, q_list, rotation_axis, finite_h_spectral_mode, &
+         finite_h_response_backend, contour_points, contour_shape, contour_margin, contour_height_fraction, &
+         contour_account_fermi_poles, native_crosscheck, native_turek, native_contour_points, native_contour_margin, &
+         native_contour_height_fraction, native_contour_account_fermi_poles, native_contour_target_fermi_poles, &
+         lattice_obj, hamiltonian_obj, energy_obj, self_obj, reciprocal_obj, fixture, q_direct, q_cart, finite_total, &
+         finite_tt, finite_contact, spectral_total, spectral_tt, spectral_contact, contour_total, contour_tt, contour_contact, &
+         native_jq_ud, native_jq_du, native_jq_sym, native_delta_j, native_curvature, native_report, native_ready, &
+         endpoint_mode, endpoint_reused, q_commensurate, endpoint_residual, endpoint_seconds, assembly_seconds, &
+         contraction_seconds, hamiltonian_seconds, gf_seconds, solve_seconds, contour_seconds, total_response_seconds)
+         character(len=*), intent(in) :: q_coordinates, finite_h_spectral_mode, finite_h_response_backend, contour_shape
+         real(rp), intent(in) :: q_list(:, :), rotation_axis(3), contour_margin, contour_height_fraction
+         logical, intent(in) :: contour_account_fermi_poles, native_crosscheck, native_turek
+         integer, intent(in) :: contour_points, native_contour_points, native_contour_target_fermi_poles
+         real(rp), intent(in) :: native_contour_margin, native_contour_height_fraction
+         logical, intent(in) :: native_contour_account_fermi_poles
+         type(lattice), intent(inout) :: lattice_obj
+         type(hamiltonian), intent(inout) :: hamiltonian_obj
+         type(energy), intent(in) :: energy_obj
+         type(self), intent(inout) :: self_obj
+         type(reciprocal), intent(inout) :: reciprocal_obj
+         type(lmto_live_hamiltonian_fixture), intent(out) :: fixture
+         real(rp), allocatable, intent(out) :: q_direct(:, :), q_cart(:, :)
+         real(rp), allocatable, intent(out) :: finite_total(:, :, :), finite_tt(:, :, :), finite_contact(:, :, :)
+         real(rp), allocatable, intent(out) :: spectral_total(:, :, :), spectral_tt(:, :, :), spectral_contact(:, :, :)
+         real(rp), allocatable, intent(out) :: contour_total(:, :, :), contour_tt(:, :, :), contour_contact(:, :, :)
+         real(rp), allocatable, intent(out) :: native_jq_ud(:), native_jq_du(:), native_jq_sym(:), native_delta_j(:), native_curvature(:)
+         type(native_turek_contour_report), intent(out) :: native_report
+         logical, intent(out) :: native_ready
+         character(len=24), allocatable, intent(out) :: endpoint_mode(:)
+         logical, allocatable, intent(out) :: endpoint_reused(:), q_commensurate(:)
+         real(rp), allocatable, intent(out) :: endpoint_residual(:)
+         real(rp), intent(out) :: endpoint_seconds, assembly_seconds, contraction_seconds, hamiltonian_seconds
+         real(rp), intent(out) :: gf_seconds, solve_seconds, contour_seconds, total_response_seconds
+      end subroutine compute_static_rotation_curvature
    end interface
 
 end module linear_response_mod

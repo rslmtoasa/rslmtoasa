@@ -3,9 +3,8 @@
 !------------------------------------------------------------------------------
 program test_exchange_q
    use precision_mod, only: rp
-   use exchange_q_mod, only: exchange_q_config, load_exchange_q_config, lkag_pauli_product, &
-      detect_commensurate_endpoint_map
-   use linear_response_mod, only: force_theorem_hessian_from_eigenbasis, &
+   use exchange_q_mod, only: exchange_q_config, load_exchange_q_config, lkag_pauli_product
+   use linear_response_mod, only: detect_commensurate_endpoint_map, force_theorem_hessian_from_eigenbasis, &
       force_theorem_finite_q_hessian_from_eigenbasis_metallic, fermi_divided_difference, &
       finite_temperature_occupation
    implicit none
