@@ -9,6 +9,7 @@ module linear_response_mod
    use lattice_mod, only: lattice
    use reciprocal_mod, only: reciprocal
    use self_mod, only: self
+   use string_mod, only: sl
    use lr_lmto_turek_contour_mod, only: native_turek_contour_report
    implicit none
    private
@@ -89,6 +90,46 @@ module linear_response_mod
       complex(rp), allocatable :: bubble(:, :), contact(:, :), kernel(:, :), kernel_pm(:, :)
       complex(rp), allocatable :: inverse_kernel(:, :), inverse_kernel_pm(:, :)
    end type rotation_result
+
+   integer, parameter, public :: linear_response_max_points = 2000
+
+   type, public :: linear_response_config
+      character(len=sl) :: fname = ''
+      character(len=16) :: formulation = 'rotation'
+      character(len=16) :: q_coordinates = 'direct'
+      character(len=sl) :: q_file = ''
+      integer :: n_q_points = 0
+      real(rp), allocatable :: q_list(:, :)
+      real(rp) :: rotation_axis(3) = [1.0_rp, 0.0_rp, 0.0_rp]
+      character(len=24) :: finite_h_spectral_mode = 'metallic'
+      character(len=16) :: finite_h_response_backend = 'spectral'
+      integer :: contour_points = 32
+      character(len=16) :: contour_shape = 'ellipse'
+      real(rp) :: contour_margin = 0.25_rp
+      real(rp) :: contour_height_fraction = 0.35_rp
+      logical :: contour_account_fermi_poles = .true.
+      logical :: native_turek = .false.
+      logical :: native_crosscheck = .false.
+      real(rp) :: native_green_eta = 1.0e-3_rp
+      integer :: native_energy_points = 0
+      integer :: native_contour_points = 64
+      real(rp) :: native_contour_margin = 0.25_rp
+      real(rp) :: native_contour_height_fraction = 0.35_rp
+      logical :: native_contour_account_fermi_poles = .true.
+      integer :: native_contour_target_fermi_poles = 0
+      character(len=sl) :: output_file = 'rotation_dynamics.dat'
+   contains
+      procedure :: restore_to_default => lr_config_restore_to_default
+   end type linear_response_config
+
+   type, public :: linear_response
+      type(linear_response_config) :: config
+   contains
+      procedure :: restore_to_default => lr_restore_to_default
+      procedure :: load_config => lr_load_config
+      procedure :: validate_capability => lr_validate_capability
+      procedure :: run => lr_run
+   end type linear_response
 
    public :: lmto_fixture_init
    public :: lmto_fixture_from_hamiltonian
@@ -415,6 +456,38 @@ module linear_response_mod
          real(rp), intent(out) :: endpoint_seconds, assembly_seconds, contraction_seconds, hamiltonian_seconds
          real(rp), intent(out) :: gf_seconds, solve_seconds, contour_seconds, total_response_seconds
       end subroutine compute_static_rotation_curvature
+
+      module subroutine lr_config_restore_to_default(this)
+         class(linear_response_config), intent(out) :: this
+      end subroutine lr_config_restore_to_default
+
+      module subroutine lr_restore_to_default(this)
+         class(linear_response), intent(out) :: this
+      end subroutine lr_restore_to_default
+
+      module subroutine lr_load_config(this, filename, validate_request)
+         class(linear_response), intent(inout) :: this
+         character(len=*), intent(in) :: filename
+         logical, intent(in), optional :: validate_request
+      end subroutine lr_load_config
+
+      module subroutine lr_validate_capability(this, control_obj, hamiltonian_obj, self_obj, reciprocal_obj)
+         class(linear_response), intent(in) :: this
+         type(control), intent(in) :: control_obj
+         type(hamiltonian), intent(in) :: hamiltonian_obj
+         type(self), intent(in) :: self_obj
+         type(reciprocal), intent(in) :: reciprocal_obj
+      end subroutine lr_validate_capability
+
+      module subroutine lr_run(this, control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, reciprocal_obj)
+         class(linear_response), intent(in) :: this
+         type(control), intent(in) :: control_obj
+         type(lattice), intent(inout) :: lattice_obj
+         type(hamiltonian), intent(inout) :: hamiltonian_obj
+         type(energy), intent(in) :: energy_obj
+         type(self), intent(inout) :: self_obj
+         type(reciprocal), intent(inout) :: reciprocal_obj
+      end subroutine lr_run
    end interface
 
 end module linear_response_mod

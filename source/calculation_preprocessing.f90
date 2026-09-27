@@ -337,6 +337,16 @@ contains
                              self_obj%reciprocal_scf_cache)
       end if
 
+      if (trim(this%post_processing) == 'linear_response') then
+         if (.not. self_obj%use_kspace) then
+            call g_logger%fatal("post_processing='linear_response' requires &self use_kspace=.true. so the accepted SCF state is available.", &
+                                __FILE__, __LINE__)
+         end if
+         call self_obj%finalize_kspace_scf_state()
+         call this%linear_response%run(control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, &
+                                       self_obj%reciprocal_scf_cache)
+      end if
+
       if (this%tddft%enabled) then
          if (self_obj%use_kspace) then
             ! Refresh the eigensystem on the final accepted mixed potential,
