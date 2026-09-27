@@ -118,6 +118,24 @@ module linear_response_mod
       logical :: native_contour_account_fermi_poles = .true.
       integer :: native_contour_target_fermi_poles = 0
       character(len=sl) :: output_file = 'rotation_dynamics.dat'
+      ! Rotation campaign controls (energies in Ry; defaults preserve the
+      ! LR-REF-02b certification campaign bit-for-bit):
+      ! rotation_eta_ladder=[1e-4,2.5e-5,6.25e-6] Ry;
+      ! rotation_probe_omega=1e-5 Ry; rotation_probe_eta=1e-9 Ry;
+      ! rotation_slope_step=1e-5 Ry; rotation_pole_window_floor=1e-3 Ry;
+      ! rotation_pole_window_scale=2.5; rotation_pole_window_max=2e-2 Ry;
+      ! rotation_pole_coarse_points=61; rotation_pole_fine_points=41;
+      ! rotation_pole_refinement_half_width=2.0 coarse-grid steps.
+      real(rp) :: rotation_eta_ladder(3) = [1.0e-4_rp, 2.5e-5_rp, 6.25e-6_rp]
+      real(rp) :: rotation_probe_omega = 1.0e-5_rp
+      real(rp) :: rotation_probe_eta = 1.0e-9_rp
+      real(rp) :: rotation_slope_step = 1.0e-5_rp
+      real(rp) :: rotation_pole_window_floor = 1.0e-3_rp
+      real(rp) :: rotation_pole_window_scale = 2.5_rp
+      real(rp) :: rotation_pole_window_max = 2.0e-2_rp
+      integer :: rotation_pole_coarse_points = 61
+      integer :: rotation_pole_fine_points = 41
+      real(rp) :: rotation_pole_refinement_half_width = 2.0_rp
    contains
       procedure :: restore_to_default => lr_config_restore_to_default
    end type linear_response_config

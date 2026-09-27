@@ -2590,6 +2590,16 @@ contains
       this%native_contour_account_fermi_poles = .true.
       this%native_contour_target_fermi_poles = 0
       this%output_file = 'rotation_dynamics.dat'
+      this%rotation_eta_ladder = [1.0e-4_rp, 2.5e-5_rp, 6.25e-6_rp]
+      this%rotation_probe_omega = 1.0e-5_rp
+      this%rotation_probe_eta = 1.0e-9_rp
+      this%rotation_slope_step = 1.0e-5_rp
+      this%rotation_pole_window_floor = 1.0e-3_rp
+      this%rotation_pole_window_scale = 2.5_rp
+      this%rotation_pole_window_max = 2.0e-2_rp
+      this%rotation_pole_coarse_points = 61
+      this%rotation_pole_fine_points = 41
+      this%rotation_pole_refinement_half_width = 2.0_rp
    end subroutine lr_config_restore_to_default
 
    module subroutine lr_restore_to_default(this)
@@ -2611,12 +2621,18 @@ contains
       real(rp) :: rotation_axis(3), native_green_eta
       real(rp) :: contour_margin, contour_height_fraction, native_contour_margin, native_contour_height_fraction
       integer :: native_energy_points, contour_points, native_contour_points, native_contour_target_fermi_poles
+      real(rp) :: rotation_eta_ladder(3), rotation_probe_omega, rotation_probe_eta, rotation_slope_step
+      real(rp) :: rotation_pole_window_floor, rotation_pole_window_scale, rotation_pole_window_max, rotation_pole_refinement_half_width
+      integer :: rotation_pole_coarse_points, rotation_pole_fine_points
       real(rp) :: q_list(3, linear_response_max_points)
       namelist /linear_response/ formulation, q_coordinates, q_file, n_q_points, q_list, rotation_axis, &
          finite_h_spectral_mode, finite_h_response_backend, contour_points, contour_shape, contour_margin, &
          contour_height_fraction, contour_account_fermi_poles, native_turek, native_crosscheck, native_green_eta, &
          native_energy_points, native_contour_points, native_contour_margin, native_contour_height_fraction, &
-         native_contour_account_fermi_poles, native_contour_target_fermi_poles, output_file
+         native_contour_account_fermi_poles, native_contour_target_fermi_poles, output_file, rotation_eta_ladder, &
+         rotation_probe_omega, rotation_probe_eta, rotation_slope_step, rotation_pole_window_floor, &
+         rotation_pole_window_scale, rotation_pole_window_max, rotation_pole_coarse_points, rotation_pole_fine_points, &
+         rotation_pole_refinement_half_width
 
       call this%config%restore_to_default()
       this%config%fname = filename
@@ -2643,6 +2659,16 @@ contains
       native_contour_account_fermi_poles = this%config%native_contour_account_fermi_poles
       native_contour_target_fermi_poles = this%config%native_contour_target_fermi_poles
       output_file = this%config%output_file
+      rotation_eta_ladder = this%config%rotation_eta_ladder
+      rotation_probe_omega = this%config%rotation_probe_omega
+      rotation_probe_eta = this%config%rotation_probe_eta
+      rotation_slope_step = this%config%rotation_slope_step
+      rotation_pole_window_floor = this%config%rotation_pole_window_floor
+      rotation_pole_window_scale = this%config%rotation_pole_window_scale
+      rotation_pole_window_max = this%config%rotation_pole_window_max
+      rotation_pole_coarse_points = this%config%rotation_pole_coarse_points
+      rotation_pole_fine_points = this%config%rotation_pole_fine_points
+      rotation_pole_refinement_half_width = this%config%rotation_pole_refinement_half_width
 
       open(newunit=funit, file=filename, action='read', status='old', iostat=iostatus)
       if (iostatus /= 0) call g_logger%fatal('[linear_response]: input file '//trim(filename)//' not found', __FILE__, __LINE__)
@@ -2673,6 +2699,16 @@ contains
       this%config%native_contour_account_fermi_poles = native_contour_account_fermi_poles
       this%config%native_contour_target_fermi_poles = native_contour_target_fermi_poles
       this%config%output_file = trim(output_file)
+      this%config%rotation_eta_ladder = rotation_eta_ladder
+      this%config%rotation_probe_omega = rotation_probe_omega
+      this%config%rotation_probe_eta = rotation_probe_eta
+      this%config%rotation_slope_step = rotation_slope_step
+      this%config%rotation_pole_window_floor = rotation_pole_window_floor
+      this%config%rotation_pole_window_scale = rotation_pole_window_scale
+      this%config%rotation_pole_window_max = rotation_pole_window_max
+      this%config%rotation_pole_coarse_points = rotation_pole_coarse_points
+      this%config%rotation_pole_fine_points = rotation_pole_fine_points
+      this%config%rotation_pole_refinement_half_width = rotation_pole_refinement_half_width
 
       if (this%config%formulation /= 'rotation') then
          call g_logger%fatal("formulation='"//trim(this%config%formulation)// &
@@ -2699,6 +2735,22 @@ contains
       if (.not. validate) return
 
       if (len_trim(this%config%output_file) == 0) call g_logger%fatal('[linear_response]: output_file must not be blank', __FILE__, __LINE__)
+      if (any(this%config%rotation_eta_ladder <= 0.0_rp)) then
+         call g_logger%fatal('[linear_response]: rotation_eta_ladder values must be positive', __FILE__, __LINE__)
+      end if
+      if (this%config%rotation_probe_omega <= 0.0_rp .or. this%config%rotation_probe_eta <= 0.0_rp .or. &
+          this%config%rotation_slope_step <= 0.0_rp) then
+         call g_logger%fatal('[linear_response]: rotation probe and slope controls must be positive', __FILE__, __LINE__)
+      end if
+      if (this%config%rotation_pole_window_floor <= 0.0_rp .or. this%config%rotation_pole_window_scale <= 0.0_rp .or. &
+          this%config%rotation_pole_window_max <= 0.0_rp .or. &
+          this%config%rotation_pole_window_max < this%config%rotation_pole_window_floor) then
+         call g_logger%fatal('[linear_response]: rotation pole-window controls are invalid', __FILE__, __LINE__)
+      end if
+      if (this%config%rotation_pole_coarse_points < 2 .or. this%config%rotation_pole_fine_points < 2 .or. &
+          this%config%rotation_pole_refinement_half_width <= 0.0_rp) then
+         call g_logger%fatal('[linear_response]: rotation pole-scan grid controls are invalid', __FILE__, __LINE__)
+      end if
       if (this%config%native_green_eta <= 0.0_rp) call g_logger%fatal('[linear_response]: native_green_eta must be positive', __FILE__, __LINE__)
       if (this%config%native_energy_points < 0) call g_logger%fatal('[linear_response]: native_energy_points must be non-negative', __FILE__, __LINE__)
       if (this%config%native_contour_points < 8) call g_logger%fatal('[linear_response]: native_contour_points must be at least 8', __FILE__, __LINE__)
@@ -2794,7 +2846,11 @@ contains
          native_ready, endpoint_mode, endpoint_reused, q_commensurate, endpoint_residual, endpoint_seconds, assembly_seconds, &
          contraction_seconds, hamiltonian_seconds, gf_seconds, solve_seconds, contour_seconds, total_response_seconds)
       call run_native_rotation_dynamics_campaign(trim(this%config%output_file), lattice_obj, reciprocal_obj, self_obj, fixture, &
-         q_direct, q_cart, finite_total, native_delta_j, native_curvature, native_ready)
+         q_direct, q_cart, finite_total, native_delta_j, native_curvature, native_ready, this%config%rotation_eta_ladder, &
+         this%config%rotation_probe_omega, this%config%rotation_probe_eta, this%config%rotation_slope_step, &
+         this%config%rotation_pole_window_floor, this%config%rotation_pole_window_scale, &
+         this%config%rotation_pole_window_max, this%config%rotation_pole_coarse_points, this%config%rotation_pole_fine_points, &
+         this%config%rotation_pole_refinement_half_width)
 
       call fixture%clear()
       deallocate(q_direct, q_cart, finite_total, finite_tt, finite_contact, spectral_total, spectral_tt, spectral_contact, &
@@ -2802,7 +2858,9 @@ contains
          endpoint_reused, q_commensurate, endpoint_residual, endpoint_mode)
    end subroutine lr_run
 
-   subroutine run_native_rotation_dynamics_campaign(rotation_output_file,lat,recip,self_obj,fixture,q_direct,q_cart,finite_h,native_delta,native_curv,native_ready)
+   subroutine run_native_rotation_dynamics_campaign(rotation_output_file,lat,recip,self_obj,fixture,q_direct,q_cart,finite_h,native_delta,native_curv,native_ready, &
+      rotation_eta_ladder,rotation_probe_omega,rotation_probe_eta,rotation_slope_step,rotation_pole_window_floor, &
+      rotation_pole_window_scale,rotation_pole_window_max,rotation_pole_coarse_points,rotation_pole_fine_points,rotation_pole_refinement_half_width)
       character(len=*), intent(in) :: rotation_output_file
       type(lattice), intent(in) :: lat
       type(reciprocal), target, intent(inout) :: recip
@@ -2810,13 +2868,16 @@ contains
       type(lmto_live_hamiltonian_fixture), target, intent(in) :: fixture
       real(rp), intent(in) :: q_direct(:, :),q_cart(:, :),finite_h(:, :, :),native_delta(:),native_curv(:)
       logical, intent(in) :: native_ready
+      real(rp), intent(in) :: rotation_eta_ladder(3), rotation_probe_omega, rotation_probe_eta, rotation_slope_step
+      real(rp), intent(in) :: rotation_pole_window_floor, rotation_pole_window_scale, rotation_pole_window_max
+      integer, intent(in) :: rotation_pole_coarse_points, rotation_pole_fine_points
+      real(rp), intent(in) :: rotation_pole_refinement_half_width
       type(rotation_state), target :: state,minus_state
       type(rotation_request) :: request
       type(rotation_result) :: response,minus_response,plus_probe,minus_probe
       complex(rp), allocatable :: reduced(:, :)
       real(rp), parameter :: ry_to_mev=13605.693122994_rp
-      real(rp), parameter :: eta_ladder(3)=[1.0e-4_rp,2.5e-5_rp,6.25e-6_rp]
-      real(rp) :: bplus,bminus,slope_step,slope_eta,slope_rel,qmag,scf_moment,field_max,cov_q(3)
+      real(rp) :: bplus,bminus,slope_rel,qmag,scf_moment,field_max,cov_q(3)
       real(rp) :: static_residual,q0_residual,circular_offdiag,covariance_residual,omega_cov,eta_cov
       real(rp) :: finite_mev,turek_mev,omega_max,pred_plus,pred_minus,expected,df,fit_d,fit_resid
       real(rp) :: pole_re,pole_min,loss_peak,loss_height,fwhm,fwhm_mev,resolution,re_k,im_k,abs_k,pole_slope
@@ -2855,13 +2916,12 @@ contains
       call evaluate_rotation_response(request,response)
       call reduce_static_rotation_kernel(response%kernel,reduced)
       q0_residual=maxval(abs(reduced))
-      request%exact_static=.false.; request%omega=1.0e-5_rp; request%eta=1.0e-9_rp
+      request%exact_static=.false.; request%omega=rotation_probe_omega; request%eta=rotation_probe_eta
       call evaluate_rotation_response(request,plus_probe)
-      request%omega=-1.0e-5_rp
+      request%omega=-rotation_probe_omega
       call evaluate_rotation_response(request,minus_probe)
-      slope_step=1.0e-5_rp; slope_eta=1.0e-9_rp
-      bplus=real((plus_probe%kernel_pm(1,1)-minus_probe%kernel_pm(1,1))/(2.0_rp*slope_step),rp)
-      bminus=real((plus_probe%kernel_pm(2,2)-minus_probe%kernel_pm(2,2))/(2.0_rp*slope_step),rp)
+      bplus=real((plus_probe%kernel_pm(1,1)-minus_probe%kernel_pm(1,1))/(2.0_rp*rotation_slope_step),rp)
+      bminus=real((plus_probe%kernel_pm(2,2)-minus_probe%kernel_pm(2,2))/(2.0_rp*rotation_slope_step),rp)
       slope_rel=max(abs(abs(bplus)-abs(response%berry)),abs(abs(bminus)-abs(response%berry)),abs(bplus+bminus))/ &
          max(abs(response%berry),1.0e-12_rp)
       circular_offdiag=max(abs(reduced(1,1)-reduced(2,2)),abs(reduced(1,2)),abs(reduced(2,1)))
@@ -2966,8 +3026,8 @@ contains
             channel_name='none'
             expected=0.0_rp
          end if
-         omega_max=max(1.0e-3_rp,2.5_rp*max(abs(finite_mev),abs(turek_mev))/ry_to_mev)
-         omega_max=min(omega_max,2.0e-2_rp)
+         omega_max=max(rotation_pole_window_floor,rotation_pole_window_scale*max(abs(finite_mev),abs(turek_mev))/ry_to_mev)
+         omega_max=min(omega_max,rotation_pole_window_max)
          write(*,'(a,i0,a,3(es12.4,1x),a,es12.4,a,es12.4)') 'Rotation q index ',iq,' finite-H/Turek/meV=', &
             finite_mev,turek_mev,qmag,' A^-1 omega_window_Ry=',omega_max,' predicted_Ry=',expected
          if (channel>0) then
@@ -2976,12 +3036,13 @@ contains
             else
                ipole=2
             end if
-            do ieta=1,size(eta_ladder)
-               call scan_rotation_pole(state,ipole,omega_max,eta_ladder(ieta),pole_re,pole_min,loss_peak,loss_height, &
+            do ieta=1,size(rotation_eta_ladder)
+               call scan_rotation_pole(state,ipole,omega_max,rotation_eta_ladder(ieta),rotation_pole_coarse_points, &
+                  rotation_pole_fine_points,rotation_pole_refinement_half_width,pole_re,pole_min,loss_peak,loss_height, &
                   fwhm,resolution,re_k,im_k,abs_k,pole_slope,resolved)
                pole_ok(nfinite)=resolved .or. pole_ok(nfinite)
                causal_ok=causal_ok .or. (pole_re>0.0_rp .and. pole_min>0.0_rp .and. pole_slope*im_k>0.0_rp)
-               if (ieta==size(eta_ladder)) then
+               if (ieta==size(rotation_eta_ladder)) then
                   energy_eta(nfinite)=pole_re*ry_to_mev
                   resid_eta(nfinite)=resolution*ry_to_mev
                end if
@@ -2993,16 +3054,16 @@ contains
                fwhm_mev=-1.0_rp
                if (fwhm>=0.0_rp) fwhm_mev=fwhm*ry_to_mev
                write(unit,'(3(es14.6,1x),9(es14.6,1x),a,4(es14.6,1x),a)') q_direct(:,iq),qmag,finite_mev,turek_mev, &
-                  pole_re*ry_to_mev,pole_min*ry_to_mev,loss_peak*ry_to_mev,eta_ladder(ieta),fwhm_mev,loss_height, &
+                  pole_re*ry_to_mev,pole_min*ry_to_mev,loss_peak*ry_to_mev,rotation_eta_ladder(ieta),fwhm_mev,loss_height, &
                   trim(channel_name),re_k,im_k,abs_k,resolution,trim(pole_status)
                write(*,'(a,3(es14.6,1x),a,es12.4,a,a,a,l1)') '  pole ReK/minK/loss (meV) = ', &
-                  pole_re*ry_to_mev,pole_min*ry_to_mev,loss_peak*ry_to_mev,' eta=',eta_ladder(ieta), &
+                  pole_re*ry_to_mev,pole_min*ry_to_mev,loss_peak*ry_to_mev,' eta=',rotation_eta_ladder(ieta), &
                   ' channel=',trim(channel_name),' resolved=',resolved
             end do
             if (pole_ok(nfinite)) clean_count=clean_count+1
          else
             write(unit,'(3(es14.6,1x),9(es14.6,1x),a,4(es14.6,1x),a)') q_direct(:,iq),qmag,finite_mev,turek_mev, &
-               -1.0_rp,-1.0_rp,-1.0_rp,eta_ladder(3),-1.0_rp,0.0_rp,'none',0.0_rp,0.0_rp,0.0_rp,0.0_rp,'NO_POSITIVE_CHANNEL'
+               -1.0_rp,-1.0_rp,-1.0_rp,rotation_eta_ladder(3),-1.0_rp,0.0_rp,'none',0.0_rp,0.0_rp,0.0_rp,0.0_rp,'NO_POSITIVE_CHANNEL'
          end if
          call state%clear()
          call minus_state%clear()
@@ -3056,21 +3117,29 @@ contains
       deallocate(reduced)
    end subroutine run_native_rotation_dynamics_campaign
 
-   subroutine scan_rotation_pole(state,channel,omega_max,eta,pole_re,pole_min,loss_peak,loss_height,fwhm,resolution, &
-      re_k,im_k,abs_k,pole_slope,resolved)
+   subroutine scan_rotation_pole(state,channel,omega_max,eta,coarse_points,fine_points,refinement_half_width, &
+      pole_re,pole_min,loss_peak,loss_height,fwhm,resolution,re_k,im_k,abs_k,pole_slope,resolved)
       type(rotation_state), target, intent(inout) :: state
       integer, intent(in) :: channel
       real(rp), intent(in) :: omega_max,eta
+      integer, intent(in) :: coarse_points,fine_points
+      real(rp), intent(in) :: refinement_half_width
       real(rp), intent(out) :: pole_re,pole_min,loss_peak,loss_height,fwhm,resolution,re_k,im_k,abs_k,pole_slope
       logical, intent(out) :: resolved
       type(rotation_request) :: request
       type(rotation_result) :: response
-      integer, parameter :: ncoarse=61,nfine=41
-      real(rp) :: omega_c(ncoarse),kabs_c(ncoarse),kre_c(ncoarse),loss_c(ncoarse)
-      real(rp) :: omega_f(nfine),kabs_f(nfine),kre_f(nfine),loss_f(nfine)
+      integer :: ncoarse,nfine
+      real(rp), allocatable :: omega_c(:),kabs_c(:),kre_c(:),loss_c(:)
+      real(rp), allocatable :: omega_f(:),kabs_f(:),kre_f(:),loss_f(:)
       real(rp) :: center,dw,left,right,half,peak,root_distance,x1,x2,t
       integer :: i,imin,ipeak,iroot
       logical :: have_root,have_left,have_right
+      ncoarse=coarse_points; nfine=fine_points
+      if (ncoarse<2 .or. nfine<2 .or. refinement_half_width<=0.0_rp) then
+         error stop 'scan_rotation_pole: invalid scan controls'
+      end if
+      allocate(omega_c(ncoarse),kabs_c(ncoarse),kre_c(ncoarse),loss_c(ncoarse), &
+         omega_f(nfine),kabs_f(nfine),kre_f(nfine),loss_f(nfine))
       request%state=>state; request%eta=eta; request%exact_static=.false.; request%want_inverse=.true.
       do i=1,ncoarse
          omega_c(i)=omega_max*real(i-1,rp)/real(ncoarse-1,rp)
@@ -3081,7 +3150,7 @@ contains
          loss_c(i)=-aimag(response%inverse_kernel_pm(channel,channel))
       end do
       imin=minloc(kabs_c,dim=1); center=omega_c(imin); dw=omega_max/real(ncoarse-1,rp)
-      left=max(0.0_rp,center-2.0_rp*dw); right=min(omega_max,center+2.0_rp*dw)
+      left=max(0.0_rp,center-refinement_half_width*dw); right=min(omega_max,center+refinement_half_width*dw)
       if (right<=left) right=min(omega_max,left+dw)
       resolution=(right-left)/real(nfine-1,rp)
       do i=1,nfine
@@ -3136,6 +3205,7 @@ contains
       resolved=have_root .and. peak>0.0_rp .and. abs(pole_re-pole_min)<=max(2.0_rp*eta,2.0_rp*resolution)
       if (peak>0.0_rp) resolved=resolved .and. abs(loss_peak-pole_min)<=max(2.0_rp*eta,2.0_rp*resolution)
       if (iroot==0) resolved=.false.
+      deallocate(omega_c,kabs_c,kre_c,loss_c,omega_f,kabs_f,kre_f,loss_f)
    end subroutine scan_rotation_pole
 
    real(rp) function max_constraint_field(self_obj,nsite,nbulk) result(value)
