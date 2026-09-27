@@ -15,7 +15,6 @@ submodule (linear_response_mod) linear_response_bare
    use recursion_mod, only: recursion
    use green_mod, only: green
    use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l
-   use lr_gf_susceptibility_mod, only: build_weighted_resolvent
    implicit none
 
    ! --- private state from lr_ks_susceptibility_mod ---
@@ -43,6 +42,36 @@ submodule (linear_response_mod) linear_response_bare
    end interface
 
 contains
+
+   ! Test-only projected-GF procedures remain in this submodule for the
+   ! projected chi0 oracle.  Keep their eigenpair resolvent local so the
+   ! production target has no dependency on the demoted GF oracle module.
+   subroutine build_weighted_resolvent(state, ik, z, weighted_green)
+      type(lr_electronic_state), intent(in) :: state
+      integer, intent(in) :: ik
+      complex(rp), intent(in) :: z
+      complex(rp), intent(out) :: weighted_green(:, :, :)
+      integer :: power, ib, i, j
+      complex(rp) :: factor
+
+      if (size(weighted_green, 1) /= state%nbasis .or. size(weighted_green, 2) /= state%nbasis .or. &
+          size(weighted_green, 3) < 1 .or. size(weighted_green, 3) > lmto_product_max_gf_moment + 1) then
+         error stop 'build_weighted_resolvent: output shape mismatch'
+      end if
+      weighted_green = cmplx(0.0_rp, 0.0_rp, rp)
+      do power = 0, size(weighted_green, 3) - 1
+         do ib = 1, state%nbands
+            factor = cmplx(lmto_product_energy_power(state%eigenvalues(ib, ik), power), 0.0_rp, rp)/ &
+                     (z - state%eigenvalues(ib, ik))
+            do j = 1, state%nbasis
+               do i = 1, state%nbasis
+                  weighted_green(i, j, power + 1) = weighted_green(i, j, power + 1) + &
+                     factor*state%eigenvectors(i, ib, ik)*conjg(state%eigenvectors(j, ib, ik))
+               end do
+            end do
+         end do
+      end do
+   end subroutine build_weighted_resolvent
 
 ! --- from lr_ks_susceptibility_mod ---
 
@@ -1170,7 +1199,6 @@ contains
          end do
       end do
    end subroutine invert_dense_matrix
-
 
 ! --- from tddft_native_rsgf_provider_mod ---
 
