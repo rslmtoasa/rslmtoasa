@@ -16,7 +16,7 @@ import sys
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-FE_DIR = ROOT / "example" / "susceptibility" / "bccFe"
+FE_DIR = ROOT / "example" / "linear_response" / "bccFe_tddft"
 BAND_MOMENTS = FE_DIR / "band_moments.dat"
 KSPACE_STATE = FE_DIR / "kspace_scf_state.dat"
 RADIAL_STATE = FE_DIR / "radial_ground_state_Fe_1.dat"

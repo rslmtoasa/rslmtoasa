@@ -756,56 +756,55 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitTddftCompactDysonOracle ${TestDIR}/unit/test_tddft_compact_dyson_oracle.f90)
   set_tests_properties(UnitTddftCompactDysonOracle PROPERTIES
     LABELS "unit;tddft;tdvk-07;compact;dyson;loss;representation-oracle;complex;noncommuting")
-  add_fortran_unit_test(UnitTddftProductionDriver ${TestDIR}/unit/test_tddft_production_driver.f90)
-  set_tests_properties(UnitTddftProductionDriver PROPERTIES LABELS "unit;tddft;tdrun-01;orchestration;reproducibility")
-  add_test(NAME UnitTddftProductionDriverRejectSoc
-    COMMAND UnitTddftProductionDriver soc)
-  set_tests_properties(UnitTddftProductionDriverRejectSoc PROPERTIES
-    LABELS "unit;tddft;tdrun-01;negative;capability;soc"
-    WILL_FAIL TRUE)
-  add_test(NAME UnitTddftProductionDriverRejectGeneralizedOverlap
-    COMMAND UnitTddftProductionDriver overlap)
-  set_tests_properties(UnitTddftProductionDriverRejectGeneralizedOverlap PROPERTIES
-    LABELS "unit;tddft;tdrun-01;negative;capability;generalized-overlap"
-    WILL_FAIL TRUE)
-  add_test(NAME UnitTddftProductionDriverRejectStaticAuditWithoutGamma
-    COMMAND UnitTddftProductionDriver static-no-gamma)
-  set_tests_properties(UnitTddftProductionDriverRejectStaticAuditWithoutGamma PROPERTIES
-    LABELS "unit;tddft;tdrun-01;negative;preflight;static-audit"
-    WILL_FAIL TRUE)
-  add_test(NAME UnitTddftProductionDriverRejectCovarianceWithoutPair
-    COMMAND UnitTddftProductionDriver covariance-no-pair)
-  set_tests_properties(UnitTddftProductionDriverRejectCovarianceWithoutPair PROPERTIES
-    LABELS "unit;tddft;tdrun-01;negative;preflight;covariance"
-    WILL_FAIL TRUE)
-  add_test(NAME UnitTddftProductionDriverRejectSrMagnetization
-    COMMAND UnitTddftProductionDriver sr-magnetization)
-  set_tests_properties(UnitTddftProductionDriverRejectSrMagnetization PROPERTIES
-    LABELS "unit;tddft;kxc-01;negative;pauli-provenance"
-    WILL_FAIL TRUE)
-  add_test(NAME TddftProductionDriverSmoke
+  add_fortran_unit_test(UnitLinearResponseConfig ${TestDIR}/unit/test_linear_response_config.f90)
+  set_tests_properties(UnitLinearResponseConfig PROPERTIES LABELS "unit;linear_response;lr-ref-04b;config")
+  foreach(_lr_config_row row_radial_lehmann_alsda row_radial_lehmann_lcmm row_radial_gf_alsda
+          row_radial_gf_lcmm row_product_alsda row_product_none row_projected_none
+          row_projected_stoner row_projected_lcmm)
+    add_test(NAME UnitLinearResponseConfig_${_lr_config_row}
+      COMMAND UnitLinearResponseConfig)
+    set_tests_properties(UnitLinearResponseConfig_${_lr_config_row} PROPERTIES
+      LABELS "unit;linear_response;lr-ref-04b;compatibility")
+  endforeach()
+  foreach(_lr_config_negative bad-row bad-bare bad-solver bad-diagnostics bad-projection bad-channel bad-eta
+          bad-invariants-gamma bad-invariants-pair capability-soc capability-overlap)
+    add_test(NAME UnitLinearResponseConfigReject_${_lr_config_negative}
+      COMMAND UnitLinearResponseConfig ${_lr_config_negative})
+    set_tests_properties(UnitLinearResponseConfigReject_${_lr_config_negative} PROPERTIES
+      LABELS "unit;linear_response;lr-ref-04b;negative"
+      WILL_FAIL TRUE)
+  endforeach()
+  foreach(_lr_legacy_case tddft susceptibility group)
+    add_test(NAME LinearResponseHardFail_${_lr_legacy_case}
+      COMMAND ${TestBinary} linear_response_hardfail_${_lr_legacy_case}.nml)
+    set_tests_properties(LinearResponseHardFail_${_lr_legacy_case} PROPERTIES
+      LABELS "unit;linear_response;lr-ref-04b;hard-fail"
+      WORKING_DIRECTORY ${TestDIR}/unit
+      WILL_FAIL TRUE)
+  endforeach()
+  add_test(NAME LinearResponseTddftSmoke
     COMMAND ${TestBinary}
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
-  set_tests_properties(TddftProductionDriverSmoke PROPERTIES
-    LABELS "integration;tddft;tdrun-01;scf;accepted-state;reciprocal;smoke"
+  set_tests_properties(LinearResponseTddftSmoke PROPERTIES
+    LABELS "integration;linear_response;tddft;lr-ref-04b;scf;accepted-state;reciprocal;smoke"
     TIMEOUT 180)
-  add_test(NAME TddftDresp05ProjectedJuelich
+  add_test(NAME LinearResponseProjectedJuelich
     COMMAND ${TestBinary} input_dresp05_fe.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
-  set_tests_properties(TddftDresp05ProjectedJuelich PROPERTIES
-    LABELS "integration;tddft;dresp-05;juelich;mills;same-state;accepted-state"
+  set_tests_properties(LinearResponseProjectedJuelich PROPERTIES
+    LABELS "integration;linear_response;projected;dresp-05;juelich;mills;same-state;accepted-state"
     TIMEOUT 720)
-  add_test(NAME TddftProductionDriverFeatureOff
+  add_test(NAME LinearResponseFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
-  set_tests_properties(TddftProductionDriverFeatureOff PROPERTIES
-    LABELS "integration;tddft;tdrun-01;scf;feature-off;regression"
+  set_tests_properties(LinearResponseFeatureOff PROPERTIES
+    LABELS "integration;linear_response;scf;feature-off;regression"
     TIMEOUT 180)
-  add_test(NAME TddftProductionDriverNativeSmoke
+  add_test(NAME LinearResponseNativeSmoke
     COMMAND ${TestBinary} input_native.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
-  set_tests_properties(TddftProductionDriverNativeSmoke PROPERTIES
-    LABELS "integration;tddft;tdrun-02;native-rsgf;production;smoke"
+  set_tests_properties(LinearResponseNativeSmoke PROPERTIES
+    LABELS "integration;linear_response;tddft;native-rsgf;production;smoke"
     TIMEOUT 240)
   add_test(NAME UnitLrAlsdaKernelRejectProvenance
     COMMAND UnitLrAlsdaKernel provenance)

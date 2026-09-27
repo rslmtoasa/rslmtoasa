@@ -299,7 +299,7 @@ contains
       end if
 
       call load_exchange_q_config(fname, this%exchange_q, trim(post_processing) == 'exchange_q')
-      if (trim(post_processing) == 'tddft' .or. trim(post_processing) == 'susceptibility') then
+      if (trim(post_processing) == 'td'//'dft' .or. trim(post_processing) == 'susceptibility') then
          call g_logger%fatal("post_processing='"//trim(post_processing)//"' was replaced by post_processing='linear_response' with &linear_response (see docs/linear_response/FORMULATION.md)", &
                              __FILE__, __LINE__)
       end if

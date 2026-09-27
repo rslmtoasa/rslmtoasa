@@ -2,7 +2,7 @@
 ! This bounded campaign keeps both accepted selectors in one artifact.
 &calculation
 pre_processing = 'bravais'
-post_processing = 'tddft'
+post_processing = 'linear_response'
 verbose = F
 /
 &lattice
@@ -59,8 +59,13 @@ reciprocal_mode = 'ham_only'
 reciprocal_backend = 'lapack'
 kspace_ham_order = 'second'
 /
-&tddft
-enabled = .true.
+&linear_response
+formulation = 'projected'
+representation = 'radial_points'
+bare_response = 'lehmann'
+interaction = 'lcmm'
+projection = 'both'
+diagnostics = 'none'
 channel = 'chi_plus'
 n_q = 3
 q_list = 0.0, 0.0, 0.0,  0.03, 0.0, 0.0,  0.125, 0.0, 0.0
@@ -72,10 +77,6 @@ eta = 0.02
 n_eta = 3
 eta_grid = 0.04, 0.02, 0.01
 response_lmax = -1
-interaction_route = 'direct_alsda'
-goldstone_correction = .false.
-backend = 'projected_juelich'
-projected_selector = 'both'
 write_full_matrix = .false.
 output_file = 'dresp05_fe_4k.dat'
 /

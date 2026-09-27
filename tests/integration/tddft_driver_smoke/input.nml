@@ -1,6 +1,6 @@
 &calculation
 pre_processing = 'bravais'
-post_processing = 'tddft'
+post_processing = 'linear_response'
 verbose = F
 /
 &lattice
@@ -55,8 +55,12 @@ reciprocal_backend = 'lapack'
 kspace_ham_order = 'second'
 auto_find_fermi = .false.
 /
-&tddft
-enabled = .true.
+&linear_response
+formulation = 'tddft'
+representation = 'radial_points'
+bare_response = 'lehmann'
+interaction = 'alsda'
+diagnostics = 'none'
 channel = 'chi_plus'
 n_q = 1
 q_list = 0.0, 0.0, 0.0
@@ -65,8 +69,6 @@ omega_min = 1.00
 omega_max = 1.00
 eta = 1.00
 response_lmax = 2
-interaction_route = 'direct_alsda'
-backend = 'lehmann'
 write_full_matrix = .false.
 output_file = 'tddft_smoke.dat'
 /

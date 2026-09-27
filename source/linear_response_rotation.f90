@@ -2554,9 +2554,9 @@ contains
          do
             read(scan_unit, '(A)', iostat=scan_status) scan_line
             if (scan_status /= 0) exit
-            if (index(adjustl(lower(scan_line)), '&tddft') == 1) then
+            if (index(adjustl(lower(scan_line)), '&'//'tddft') == 1) then
                close(scan_unit)
-               call g_logger%fatal('&tddft was replaced by &linear_response (see docs/linear_response/FORMULATION.md)', __FILE__, __LINE__)
+               call g_logger%fatal('&'//'tddft was replaced by &linear_response (see docs/linear_response/FORMULATION.md)', __FILE__, __LINE__)
             end if
          end do
          close(scan_unit)
@@ -2611,6 +2611,9 @@ contains
       this%config%native_contour_account_fermi_poles = native_contour_account_fermi_poles
       this%config%native_contour_target_fermi_poles = native_contour_target_fermi_poles
       this%config%output_file = trim(output_file)
+      if (this%config%formulation /= 'rotation' .and. trim(output_file) == 'rotation_dynamics.dat') then
+         this%config%output_file = 'tddft_response.dat'
+      end if
       this%config%rotation_eta_ladder = rotation_eta_ladder
       this%config%rotation_probe_omega = rotation_probe_omega
       this%config%rotation_probe_eta = rotation_probe_eta
@@ -2741,6 +2744,8 @@ contains
    subroutine validate_linear_response_config(config)
       type(linear_response_config), intent(in) :: config
       character(len=96) :: compatibility_key
+      integer :: iq, jq
+      logical :: gamma_found, covariance_found
 
       if (trim(config%diagnostics) /= 'none' .and. trim(config%diagnostics) /= 'invariants') then
          call g_logger%fatal("[linear_response]: diagnostics must be 'none' or 'invariants'", __FILE__, __LINE__)
@@ -2806,6 +2811,24 @@ contains
       end select
       if (trim(config%bare_response) == 'realspace_gf' .and. config%gf_integration_points < 3) then
          call g_logger%fatal('[linear_response]: realspace_gf requires gf_integration_points >= 3', __FILE__, __LINE__)
+      end if
+      if (trim(config%formulation) == 'tddft' .and. trim(config%representation) == 'product_compact' .and. &
+          trim(config%interaction) == 'alsda' .and. trim(config%diagnostics) == 'invariants') then
+         gamma_found = any(sum(abs(config%q_list), dim=1) <= 1.0e-12_rp)
+         if (.not. gamma_found) call g_logger%fatal('[linear_response]: diagnostics=invariants requires Gamma for compact Dyson', __FILE__, __LINE__)
+         covariance_found = .false.
+         do iq = 1, size(config%q_list, 2)
+            if (sum(abs(config%q_list(:,iq))) <= 1.0e-12_rp) cycle
+            do jq = 1, size(config%q_list, 2)
+               if (maxval(abs(config%q_list(:,jq) + config%q_list(:,iq))) <= 2.0e-11_rp) then
+                  covariance_found = .true.
+                  exit
+               end if
+            end do
+            if (covariance_found) exit
+         end do
+         if (.not. covariance_found) call g_logger%fatal('[linear_response]: diagnostics=invariants requires an exact +q/-q pair', &
+            __FILE__, __LINE__)
       end if
    end subroutine validate_linear_response_config
 

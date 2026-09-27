@@ -1,6 +1,6 @@
 &calculation
 pre_processing = 'bravais'
-post_processing = 'tddft'
+post_processing = 'linear_response'
 verbose = F
 /
 &lattice
@@ -57,8 +57,13 @@ reciprocal_backend = 'lapack'
 kspace_ham_order = 'second'
 auto_find_fermi = .false.
 /
-&tddft
-enabled = .true.
+&linear_response
+formulation = 'tddft'
+representation = 'radial_points'
+bare_response = 'realspace_gf'
+realspace_solver = 'block'
+interaction = 'alsda'
+diagnostics = 'none'
 channel = 'chi_plus'
 n_q = 1
 q_list = 0.0, 0.0, 0.0
@@ -67,8 +72,6 @@ omega_min = 1.00
 omega_max = 1.00
 eta = 1.00
 response_lmax = 0
-interaction_route = 'direct_alsda'
-backend = 'native_rsgf'
 native_rsgf_provider = 'block'
 gf_integration_points = 3
 gf_integration_eta = 0.02

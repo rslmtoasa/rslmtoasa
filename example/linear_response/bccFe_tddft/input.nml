@@ -1,6 +1,6 @@
 &calculation
 pre_processing = 'bravais'
-post_processing = 'tddft'
+post_processing = 'linear_response'
 verbose = T
 /
 &lattice
@@ -43,8 +43,12 @@ recur = 'block'
 beta = 0.01
 mixtype = 'broyden'
 /
-&tddft
-enabled = .true.
+&linear_response
+formulation = 'tddft'
+representation = 'product_compact'
+bare_response = 'lehmann'
+interaction = 'alsda'
+diagnostics = 'none'
 
 ! Production usability example only; no Goldstone correction or validation
 ! campaign diagnostics are implied by this input.
@@ -67,15 +71,6 @@ omega_max = 0.015
 eta = 0.01
 
 response_lmax = -1
-
-interaction_route = 'direct_alsda'
-goldstone_correction = .false.
-backend = 'compact_dyson'
-
-reciprocal_backend_crosscheck = .false.
-gf_closure_audit = .false.
-dyson_static_audit = .false.
-validate_interacting_covariance = .false.
 
 ! For plotting a dispersion, traces are enough and much smaller
 write_full_matrix = .false.

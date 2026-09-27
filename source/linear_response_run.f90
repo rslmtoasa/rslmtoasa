@@ -36,7 +36,7 @@ submodule (linear_response_mod) linear_response_run
 
    ! The orchestration workers retain their validated internal routing shape;
    ! lr_run constructs it from the orthogonal &linear_response axes.  It is
-   ! deliberately private so the retired &tddft configuration is not an API.
+   ! deliberately private so the retired TD-DFT configuration is not an API.
    character(len=*), parameter :: tddft_driver_backend_lehmann = 'lehmann'
    character(len=*), parameter :: tddft_driver_backend_native_rsgf = 'native_rsgf'
    character(len=*), parameter :: tddft_driver_backend_product_lehmann = 'product_lehmann'
