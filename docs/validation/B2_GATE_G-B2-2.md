@@ -2,7 +2,7 @@
 
 **Status:** Signed by Anders 16-07-26. **Task:** B2.6 (J_ij/damping through the
 Lehmann/Dyson-filled arrays + convergence). **Branch:** `fable_v2`.
-**Backing evidence:** `docs/dev/reciprocal_green_convergence.md` (the J vs N_k / η
+**Backing evidence:** `docs/validation/reciprocal_green_convergence.md` (the J vs N_k / η
 study), commit `c83e1ca`.
 
 ## What you are signing (three things)

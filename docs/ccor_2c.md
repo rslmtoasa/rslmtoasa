@@ -134,7 +134,7 @@ Sdot_ij -> Sdot_ij G_ij
 
 The completed `D`, `Ddot`, and `Hcc` objects are not rotated. Onsite CCOR is
 evaluated in the shared collinear rotating frame with zero bond phase. See
-`docs/dev/GBT_WP6B_CCOR_REPORT.md` for the derivation and oracle evidence.
+`docs/DECISIONS.md` for the archived derivation and oracle evidence.
 
 ## Backend Status
 

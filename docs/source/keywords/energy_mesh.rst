@@ -182,7 +182,7 @@ default free E_F from cluster charge neutrality, for an interface
 - Companion to ``fermi_a``/``fermi_b`` below when checking two-sided
   alignment consistency.
 
-**Related code:** ``source/charge.f90``, ``docs/dev/CONTRACT_FROZEN_REGION.md``
+**Related code:** ``source/charge.f90``, ``docs/conventions/CONTRACT_FROZEN_REGION.md``
 
 fermi_a, fermi_b (B7, calctype='L')
 -------------------------------------
@@ -207,7 +207,7 @@ alignment consistency check (``align_regions``, gate G-B7-2).
   independently-converged source E_F values for each region to
   cross-check the alignment solver.
 
-**Related code:** ``source/charge.f90``, ``docs/dev/CONTRACT_FROZEN_REGION.md``
+**Related code:** ``source/charge.f90``, ``docs/conventions/CONTRACT_FROZEN_REGION.md``
 
 compensation_profile, bias (B7, calctype='L')
 ------------------------------------------------

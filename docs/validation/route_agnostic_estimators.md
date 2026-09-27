@@ -34,7 +34,7 @@ Two qualitatively different agreements exist, and the triads test both:
 `post_processing='exchange'` + `gf_route` fills the SAME canonical `green` arrays
 (`gij/gji`, the `gij_eta` ladder, torque families) all three routes fill, so
 `calculate_exchange` runs unchanged. The full k-mesh / broadening convergence
-study is `docs/dev/reciprocal_green_convergence.md` (gate G-B2-2); the triad here
+study is `docs/validation/reciprocal_green_convergence.md` (gate G-B2-2); the triad here
 pins route agreement + reproducibility on a CI-tractable mesh, not the converged
 physical J.
 

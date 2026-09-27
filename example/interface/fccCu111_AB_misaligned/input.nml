@@ -22,7 +22,7 @@
 ! imposes "contact potential == 0" whether or not that is true. The run
 ! converges, looks plausible, and reports a wrong dipole barrier.
 !
-! G-B7-2 (docs/dev/CONTRACT_FROZEN_REGION.md) decided NOT to defend against
+! G-B7-2 (docs/conventions/CONTRACT_FROZEN_REGION.md) decided NOT to defend against
 ! this by refusing to run on old parameter sets -- backwards compatibility
 ! won, permanently, and no version stamp exists anywhere. The defence is
 ! instead the align_regions CONSISTENCY CHECK, which compares the converged

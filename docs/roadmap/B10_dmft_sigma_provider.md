@@ -48,7 +48,7 @@ double counting (reuse audited DFT+U DC expressions)  →  mix  →  iterate
 Agree the Σ/Δ exchange format **with the collaborators** before coding
 `sigma_file`: recommend TRIQS-compatible HDF5, accept their native format
 if that is faster politically. Anders owns this gate; the decision is
-recorded in `docs/dev/dmft_exchange_format.md` with a versioned schema.
+recorded in `docs/ROADMAP.md` with a versioned schema.
 Hubbard-I remains the in-house fallback solver so CI runs a full loop with
 no external dependencies.
 

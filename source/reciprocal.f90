@@ -1532,7 +1532,7 @@ end subroutine print_hamiltonian_structure
    !> @details A spin spiral lowers the crystal symmetry to the subgroup of
    !>          point-group operations that leave q_ss invariant; reducing by
    !>          the full point group is an invalid BZ integral for q_ss != 0
-   !>          (docs/dev/plans/B1_gbt_frozen_magnons_v2.md section 3.1). With
+   !>          (docs/DECISIONS.md). With
    !>          q_list_cart absent, uses the single current hamiltonian%q_ss.
    !>          With q_list_cart present (Cartesian, 2*pi/alat units, one
    !>          column per q), reduces by the subgroup common to every column

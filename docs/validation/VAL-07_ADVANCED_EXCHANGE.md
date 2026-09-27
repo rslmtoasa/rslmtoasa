@@ -71,8 +71,8 @@ an output oracle.
 
 - `tests/validation/val07_exchange_formulations.py`
 - `CMakeLists.txt`
-- `docs/dev/PHASE_II_VALIDATION.md`
-- `docs/dev/VAL-07_ADVANCED_EXCHANGE.md`
+- `docs/DECISIONS.md`
+- `docs/validation/VAL-07_ADVANCED_EXCHANGE.md`
 
 Run with:
 

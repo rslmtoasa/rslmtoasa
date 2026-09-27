@@ -115,8 +115,7 @@ the run emits a warning and continues on the CPU path. A CUDA-enabled build
 still requires a working CUDA device when the GPU route is actually selected.
 
 The current route inventory and evidence level are recorded in
-``docs/dev/ACC-01_RS_CUDA_COVERAGE.md`` and
-``docs/dev/ACC-13_KPM_TRANSPORT_CUDA.md``. In particular, the low-level
+``docs/DECISIONS.md``. In particular, the low-level
 DOS/GF, orbital-moment, and conductivity-moment contracts have hardware
 coverage, and ACC-13 adds a focused production CPU/CUDA comparison for
 charge, spin, and orbital Kubo-Bastin transport. The broader VAL-09 physics

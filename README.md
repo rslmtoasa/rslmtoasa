@@ -21,8 +21,8 @@ echo "txc = 108" > input.nml
 echo "txc = 1101" > input.nml  # native libXC ID 101, exchange-only PBE GGA
 ```
 
-See [the XC semantics and capabilities](docs/XC_SEMANTICS_AND_CAPABILITIES.md)
-and [the production contract](docs/LIBXC_PRODUCTION_CONTRACT.md) for selector
+See [the XC semantics and capabilities](docs/conventions/XC_SEMANTICS_AND_CAPABILITIES.md)
+and [the production contract](docs/conventions/LIBXC_PRODUCTION_CONTRACT.md) for selector
 namespaces, bundles/compositions, spin and unit conventions, radial GGA
 evaluation, and validation evidence.
 

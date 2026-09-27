@@ -1436,7 +1436,7 @@ contains
    !>   * `impmad` builds a real-space 3D cluster sum; the interface geometry
    !>     needs the 2D layer kernel that `surfmat`/`madl2d` provide.
    !>
-   !> See docs/dev/CONVENTIONS_MADELUNG.md (C0, C1, C2).
+   !> See docs/conventions/CONVENTIONS_MADELUNG.md (C0, C1, C2).
    !---------------------------------------------------------------------------
    subroutine impmad(this)
       implicit none

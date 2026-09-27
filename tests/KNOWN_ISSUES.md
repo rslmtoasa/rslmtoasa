@@ -26,7 +26,7 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
   GBT intersite Hubbard-V, noncollinear/SOC onsite U/J, vacuum GF/self-energy,
   and the four-region `A | vacuum-gap | B` layout are not silently promoted;
   they remain documented as Development or unavailable combinations in
-  `docs/dev/PHASE_II_VALIDATION.md`.
+  `docs/DECISIONS.md`.
 - **Audit-only build issue:** the first VAL-04/05 invocation used a stale
   `build-rf-serial` executable and missed diagnostics that are present in the
   current source. Rebuilding current HEAD made both campaigns pass. This was
@@ -149,7 +149,7 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
   gfortran-13 the pre-fix and post-fix recursion values are identical, confirming
   the result no longer depends on the out-of-bounds byte.
 - **Unblocks:** the deferred B5.3 `do_damping` wiring + Gilbert-damping α triad
-  (`docs/dev/B5.3_gilbert_damping_audit.md`) can now re-land — the layout
+  (`docs/validation/B5.3_gilbert_damping_audit.md`) can now re-land — the layout
   perturbation that re-triggered the NaN no longer does.
 
 ## [VAL-17 follow-up, 2026-08-16] Current GBT cone-angle and FeCo Gamma gates pass; small-q mesh convergence remains open
@@ -244,7 +244,7 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
   finite-q stiffness convergence, and the multi-branch spectrum remains the
   validation target for the B11 clean-room response redevelopment for the
   general (non-collinear-reference) case. See
-  `docs/dev/B1_GBT_SPIN_SPIRAL_PLAN.md` (T5) and commit `d86fe42`.
+  `docs/DECISIONS.md` (T5) and commit `d86fe42`.
 
 ## `processing = 'sd'` (spin dynamics) workflow orchestration
 
@@ -271,7 +271,7 @@ rule for this phase — each entry is a candidate for a future bug-fix task.
   did not reproduce the historical crash after the STAB-05 stack repair, and
   MPI launch reproduction was unavailable in the restricted environment.
   Broader impurity and multi-site dynamics remain unvalidated; see
-  `docs/dev/VAL-13_AB_INITIO_SPIN_DYNAMICS.md`.
+  `docs/validation/VAL-13_AB_INITIO_SPIN_DYNAMICS.md`.
 
 ## `calctype = 'L'` (111) site DOS deviated ~2e-3 from the identity control; **RESOLVED in VAL-14**
 
@@ -487,7 +487,7 @@ future reference regeneration will capture genuinely different `vmad` values.
   internal `vmix` control is now exposed in `&charge`; VAL-15 uses `vmix=0.2`
   and records finite potential/profile and buffer evidence. The physical
   vacuum-onset warning remains intentional.
-- **Evidence:** [VAL-15 multilayer vacuum report](../docs/dev/VAL-15_MULTILAYER_VACUUM_ELECTROSTATICS.md)
+- **Evidence:** [VAL-15 multilayer vacuum report](../docs/validation/VAL-15_MULTILAYER_VACUUM_ELECTROSTATICS.md)
   and the registered `Val15MultilayerVacuumElectrostatics` validation.
 - **Scope:** `A | vacuum-gap | B` remains unavailable; the current
   three-region registry does not express a four-region geometry.
@@ -569,7 +569,7 @@ campaign remain outside the established scope.
 - **Two more `tests/scf/cases.json` failures are separate and older still:**
   `Example_bulk_bccFe_nsp2_block`/`_hoh` fail a single `totaldos.out` row by
   ~4-6e-5 (rel ~2e-6) — this matches the pre-existing gfortran-13 DOS
-  tolerance delta already recorded in `docs/dev/GBT_WP0_G0_REPORT.md`, not a
+  tolerance delta already recorded in `docs/DECISIONS.md`, not a
   new issue.
 - **Fix applied:** every fixture now sets
   `lattice.strux_backend='strux_lib'` and `strux_want_sdot=.false.`. The two
@@ -660,7 +660,7 @@ campaign remain outside the established scope.
   residual. The remaining small residual is an operator-level limitation of
   the unmatched finite real-space clusters: primitive-bcc and custom
   commensurate-supercell bases produce different finite pair/structure-
-  constant truncations before diagonalization. See `docs/dev/VAL-16_GBT_SUPERCELL.md`.
+  constant truncations before diagonalization. See `docs/validation/VAL-16_GBT_SUPERCELL.md`.
 - **Time-reversal checked and ruled out as a contributor to this specific
   finding** (WP9 integrator, 2026-08-07, prompted by a question about
   local/global axis handling): `force_full_bz_for_nonzero_q_gbt`
@@ -693,7 +693,7 @@ campaign remain outside the established scope.
     supercell numbers). Band energy differs by only ~7e-4 Ry/atom, i.e. the
     scalar/energy channel is close but the magnetic channel reads as absent.
   - **At `q_ss=0, theta_ss=0`** (a literal collinear FM, which per
-    `docs/dev/plans/B1_gbt_frozen_magnons_v2.md` §2.4 "must remain
+    `docs/DECISIONS.md` "must remain
     bit-identical to today's collinear/noncollinear-FM output"), the same
     frozen-potential, `nstep=1` evaluation gives `ql(1,:,1)`
     **bit-identical** to `ql(1,:,2)` under `gbt_single_q`, versus a real
@@ -775,7 +775,7 @@ campaign remain outside the established scope.
   `-6.417e-3, -1.293e-3, -3.426e-4, -8.270e-6` Ry respectively — a **~776x**
   spread across the window, decreasing monotonically as theta grows, rather
   than the flat line the harmonic-regime self-diagnostic
-  (`docs/dev/plans/B1_gbt_frozen_magnons_v2.md` §2.10) predicts.
+  (`docs/DECISIONS.md`) predicts.
 - **Time-reversal/BZ-reduction checked and ruled out:** confirmed by direct
   log inspection that `force_full_bz_for_nonzero_q_gbt` correctly forces the
   full, unreduced k-mesh (no time-reversal, no spatial symmetry reduction)

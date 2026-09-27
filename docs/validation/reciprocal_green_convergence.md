@@ -6,8 +6,7 @@ awaits Anders' signature. This document is the accuracy record the gate signs of
 
 ## 1. What B2.6 had to establish
 
-Two things, per the plan (`docs/dev/plans/B2_reciprocal_green.md` §2 B2.6) and the
-blueprint (`docs/dev/plans/BLUEPRINTS.md` §B2, validation item 3):
+Two things, per the archived B2 plan and the roadmap's B2 validation item:
 
 1. **Zero-consumer-change exchange.** `post_processing='exchange'` with
    `gf_route='lehmann'` (or `'dyson'`) must run `exchange.f90` **unchanged** on the

@@ -66,7 +66,7 @@ Rules:
    script `tests/run_gpu_matrix.sh` gains the two new kernels for real-
    hardware validation.
 4. Benchmark artifact: k-points/second vs CPU for N = 18, 36, 72;
-   recorded in `docs/dev/gpu_kspace_bench.md`.
+   recorded in `docs/ROADMAP.md`.
 
 ## 3. Tasks
 - **B4.1 [SONNET]** C API header for all three primitives + CPU fallback +

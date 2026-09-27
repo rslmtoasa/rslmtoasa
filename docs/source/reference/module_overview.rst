@@ -170,9 +170,9 @@ Related files:
   (``fill_moments``) feeding the existing KPM conductivity pipeline with
   moments computed exactly from eigenpairs instead of recursion
 
-See ``docs/dev/plans/B2_reciprocal_green.md`` for the convention checklist
+See ``docs/DECISIONS.md`` for the archived B2 convention checklist
 (phase/bond convention, local spin frames, normalization) and
-``docs/dev/plans/B5_route_agnostic_postprocessing.md`` for the moment
+``docs/DECISIONS.md`` for the archived route-agnostic moment
 generator and the Jij/damping/conductivity triad tests.
 
 **self.f90**
@@ -347,7 +347,7 @@ Related files:
        (``post_processing_frozen_magnon[_acoustic|_auto]``).
 
 See :ref:`keywords/frozen_magnon` for the full parameter reference and
-``docs/dev/plans/B1_gbt_frozen_magnons.md`` for the underlying
+``docs/DECISIONS.md`` for the archived underlying
 generalized-Bloch-theorem fix.
 
 **conductivity.f90**
@@ -406,7 +406,7 @@ Utility Modules
 - B7: ``interfacepot``/``align_regions`` — two-sided deviation-variable
   electrostatics for interface (``calctype='L'``) clusters, reusing
   ``surfmat``'s Madelung matrices rather than a separate interface matrix
-  (see ``docs/dev/plans/B7_interfaces_and_vacuum_leads.md``)
+  (see ``docs/DECISIONS.md``)
 
 **region_registry.f90** (B7)
 
@@ -416,7 +416,7 @@ Utility Modules
 - Alignment solver: ``alignment_gauge_anchor``, ``alignment_initial_guess``,
   ``alignment_update``, ``alignment_consistency_check`` — fixed-point
   solve for each frozen region's offset V_r, gauge-anchored to the first
-  frozen non-vacuum region (gate G-B7-2, ``docs/dev/CONTRACT_FROZEN_REGION.md``)
+  frozen non-vacuum region (gate G-B7-2, ``docs/conventions/CONTRACT_FROZEN_REGION.md``)
 
 **vacuum_lead.f90** (B7)
 
@@ -436,7 +436,7 @@ Utility Modules
 - Feeds ``charge.f90``'s Madelung potential shift via the pre-existing
   ``dsz`` dipole-monopole matrix (no new lattice-sum machinery — narrower
   in scope than the original blueprint; see
-  ``docs/dev/plans/B6_surface_electrostatics.md``)
+  ``docs/DECISIONS.md``)
 - Gated by ``&control dipole_electrostatics`` (see :ref:`keywords/control_parameters`)
 
 **mix.f90**

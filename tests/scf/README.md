@@ -160,7 +160,7 @@ Cross-checking the committed references (`etot`, and `*_dos.out` col 2):
   exposed it rather than tolerating it away.
 - **After VAL-14, `L111` and `L001` are byte-identical** over the emitted DOS
   mesh. The generic layered z-ladder fix and its evidence are recorded in
-  `docs/dev/VAL-14_CU111_INTERFACE_MAPPING.md`; the separate direct-bulk
+  `docs/validation/VAL-14_CU111_INTERFACE_MAPPING.md`; the separate direct-bulk
   versus impurity print-level difference remains outside this fix's scope.
 
 This suite compares each case against its own stored reference; it does not

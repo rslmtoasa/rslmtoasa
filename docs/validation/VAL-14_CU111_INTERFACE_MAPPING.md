@@ -64,7 +64,7 @@ remain passing. Interface electrostatics remains active on the unchanged
 - `tests/scf/references/Example_interface_fccCu111_chebyshev/ref.json`
 - `tests/scf/references/Example_interface_fccCu111_chebyshev/ref.macos-arm64.json`
 - `tests/KNOWN_ISSUES.md`
-- `docs/dev/PHASE_II_VALIDATION.md`
+- `docs/DECISIONS.md`
 - this report
 
 Focused tests:

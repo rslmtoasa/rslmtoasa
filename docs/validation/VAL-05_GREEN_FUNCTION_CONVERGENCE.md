@@ -107,8 +107,8 @@ Changed for VAL-05:
 - `source/calculation_reciprocal.f90` — direct-G report records only;
 - `tests/validation/val05_green_convergence.py` — validation campaign;
 - `CMakeLists.txt` — `Val05GreenConvergence` registration;
-- `docs/dev/VAL-05_GREEN_FUNCTION_CONVERGENCE.md` — this evidence record;
-- `docs/dev/PHASE_II_VALIDATION.md` — scoped maturity update.
+- `docs/validation/VAL-05_GREEN_FUNCTION_CONVERGENCE.md` — this evidence record;
+- `docs/DECISIONS.md` — scoped maturity update.
 
 Campaign run:
 

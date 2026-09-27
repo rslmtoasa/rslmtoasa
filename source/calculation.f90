@@ -820,12 +820,12 @@ contains
          ! artifact (shell- and eta-dependent, not a global factor), NOT a
          ! normalization error. The kernel is pinned at machine precision by
          ! UnitGammaSupercell (intersite block == direct resolvent, <1e-12). See
-         ! docs/dev/reciprocal_green_convergence.md for the J vs N_k / eta study
+      ! docs/validation/reciprocal_green_convergence.md for the J vs N_k / eta study
          ! (gate G-B2-2).
          call g_logger%info('[calculation.post_processing_exchange]: gf_route='// &
                             trim(this%gf_route)//' -- filling green%gij from the k-space '// &
                             'engine (reciprocal%fill_green); exchange runs unchanged on the '// &
-                            'k-space-filled arrays. See docs/dev/reciprocal_green_convergence.md.', &
+                            'k-space-filled arrays. See docs/validation/reciprocal_green_convergence.md.', &
                             __FILE__, __LINE__)
          reciprocal_obj = reciprocal(hamiltonian_obj)
          reciprocal_obj%green_backend = trim(this%gf_route)
@@ -890,7 +890,7 @@ contains
       ! path. ’lehmann’/’dyson’ fill the SAME array EXACTLY from the k-space
       ! eigenpairs (reciprocal%fill_moments), so calculate_conductivity_tensor
       ! runs unchanged. exact-vs-recursion on the same crystal is the direct KPM
-      ! error bound (see docs/dev/route_agnostic_estimators.md).
+      ! error bound (see docs/validation/route_agnostic_estimators.md).
       rec_moments = (trim(this%gf_route) == 'recursion')
       call g_kpm_profile%start('P_stack_setup')
       call prepare_post_processing_stack(this, .false., .false., .true., .false., control_obj, lattice_obj, &

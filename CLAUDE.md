@@ -5,11 +5,10 @@ Start here, then read:
 - **[`docs/DEVELOPER_MAP.md`](docs/DEVELOPER_MAP.md)** — entry points, class
   chains, kernel inventory, testing map. The fastest way to find where a
   workflow lives.
-- **[`docs/dev/REFACTORING_PLAN.md`](docs/dev/REFACTORING_PLAN.md)** — Phase 1
-  ground rules and task history (structural refactor, now complete).
-- **[`REFACTORING_PHASE2.md`](REFACTORING_PHASE2.md)** — current phase: test
-  coverage, CI, documentation. Check its progress checklist before starting
-  work.
+- **[`docs/ROADMAP.md`](docs/ROADMAP.md)** — planned feature work and current
+  status.
+- **[`docs/DECISIONS.md`](docs/DECISIONS.md)** — closed campaign conclusions
+  and archive locations.
 - **[`tests/README.md`](tests/README.md)** — suite index, CI trigger/matrix
   strategy, GPU coverage tiers.
 - **[`tests/KNOWN_ISSUES.md`](tests/KNOWN_ISSUES.md)** — bugs found via
@@ -33,6 +32,17 @@ Start here, then read:
 6. **Stay inside the defined task.** See below — this one is about
    token budget, and it is not optional. Do not expand the task.
 7. **Work in sprint to medium distance, no marathons.** Avoid getting stuck in repeating loops chasing incremental gains, unless asked to. If stuck report back.
+
+## Documentation and research-ticket policy
+
+- Agent prompts and prompt packs are never committed.
+- A research or validation campaign ends with one line in
+  `docs/DECISIONS.md`; its reports are deleted at campaign close (they stay
+  at the campaign's tag).
+- Every research ticket states at creation whether its result will be
+  promoted into a named module/submodule or archived at a tag.
+- Campaigns add scripts and data under `tests/validation/` only — never new
+  source modules, namelist values or `backend` strings.
 
 ## Scope discipline — do only the task that was asked for
 

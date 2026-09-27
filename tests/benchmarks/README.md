@@ -30,7 +30,7 @@ The driver records moment and reconstruction precision separately. The
 current CPU fast route is therefore labelled mixed (`fp32` moments with
 `fp64` reconstruction); it is not presented as a full FP32 speedup until a
 validated FP32 reconstruction path is selected. See
-`docs/dev/RS_LMTO_ASA_KPM_G1_2_REPORT.md` for the timer contract and evidence
+`docs/DECISIONS.md` for the archived timer contract and evidence
 policy.
 
 On a CUDA host, add `--gpu` to collect CUDA FP32/FP64 rows. If the CPU matrix
@@ -206,7 +206,7 @@ It asserts the corrected `crystal_sym='file'` selector so the supplied
 `lattice.nml` is consumed; source inputs remain unchanged, while staged
 `FeX.nml` files use one canonical `Fe1.nml` potential with relabelled sites.
 See
-`docs/dev/ACC-P0_SUPERCELL_FE_BENCHMARKS.md` for the input audit and the full
+`docs/DECISIONS.md` for the archived input audit and the full
 campaign command. The scaling campaign requires at least five measured
 repetitions and input `nstep >= 5`.
 

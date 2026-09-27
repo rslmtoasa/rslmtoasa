@@ -580,7 +580,7 @@ contains
    !>        the ordinary little group of that q; with several, it is the
    !>        subgroup common to all of them, which is the correct reduction for
    !>        a multi-q sweep sharing a single mesh (see
-   !>        docs/dev/plans/B1_gbt_frozen_magnons_v2.md section 3.1 and the WP8
+   !>        docs/DECISIONS.md and the archived WP8 campaign record
    !>        multi-q cache-key requirement).
    !> @param[in] mesh_dims K-point mesh dimensions [nk1, nk2, nk3]
    !> @param[in] is_shift Optional shift for k-mesh [0 or 1 for each direction]

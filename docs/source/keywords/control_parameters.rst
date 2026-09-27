@@ -731,7 +731,7 @@ unused) dipole-monopole Madelung matrix ``dsz``.
 - No new lattice-sum machinery: reuses the ``dsz``/``dzz`` Madelung
   matrices that were already computed but previously unfed. Narrower in
   scope than the original B6 blueprint (no 2D/3D Ewald to l≤2) — see
-  ``docs/dev/plans/B6_surface_electrostatics.md`` for what shipped vs.
+  ``docs/DECISIONS.md`` for what shipped vs.
   what was originally planned.
 - No literature (Skriver–Rosengaard) work-function validation has been
   performed yet — gate G-B6-1 is open.

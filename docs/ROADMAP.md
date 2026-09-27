@@ -17,4 +17,3 @@ confirmation was available, so statuses are marked **unconfirmed**.
 | B9 | Real-space CPA / DLM | not started | [plan](roadmap/B9_rs_cpa_dlm.md) |
 | B10 | DMFT self-energy provider API | not started | [plan](roadmap/B10_dmft_sigma_provider.md) |
 | B12 | Electron-phonon / electron-magnon couplings | not started | [plan](roadmap/B12_couplings.md) |
-

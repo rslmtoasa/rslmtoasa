@@ -502,7 +502,7 @@ See Also
 
 - :doc:`surface_fcccu001` — the one-sided surface path
 - :doc:`impurity_b2feco` — embedded-cluster calculation
-- ``docs/dev/plans/B7_interfaces_and_vacuum_leads.md`` — design and rationale
-- ``docs/dev/CONTRACT_FROZEN_REGION.md`` — what a parameter set must persist
+- ``docs/DECISIONS.md`` — archived design and rationale
+- ``docs/conventions/CONTRACT_FROZEN_REGION.md`` — what a parameter set must persist
   to be usable as a frozen region
 - ``tests/KNOWN_ISSUES.md`` — the (111) residual

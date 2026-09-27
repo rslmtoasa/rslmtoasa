@@ -4,7 +4,7 @@
 WHAT IS BEING TESTED
 =====================
 This exercises the production GBT `frozen_magnon`('mft') workflow (see
-docs/dev/plans/B1_gbt_frozen_magnons_v2.md sections 2.10, 3.1, 3.2) on a
+the archived GBT campaign record in docs/DECISIONS.md) on a
 single bcc-Fe deck, sweeping the spiral wavevector q_ss = (0, 0, q) (Cartesian,
 2*pi/alat) along Gamma-H (q in [0, 1.0]) and slightly past H (up to q=1.2).
 `post_processing_frozen_magnon_acoustic` (source/calculation.f90) forces
@@ -29,7 +29,7 @@ Three checks, each reported with raw numbers and a *measured* tolerance
      nk=8/12/16 (identical nk1=nk2=nk3) and the spread (max-min) over those
      three points is reported as the noise floor for this quantity -- the
      same role WP7's own convergence-spread methodology played
-     (docs/dev/GBT_WP7_G7_REPORT.md section 4), now the sole tolerance
+     (the archived GBT campaign record in docs/DECISIONS.md), now the sole tolerance
      source instead of a second, cross-route one. The gate itself checks
      that refinement is well-behaved: the last step (nk=12->16) must not be
      larger than the first step (nk=8->12), i.e. the production resolution

@@ -6,4 +6,4 @@ k mesh; the real-space cases vary block-recursion depth. Every run writes
 `gbt_bonds.out`, which must be byte-identical across routes for the same q.
 
 The convergence table and the exact commands/results accepted at G5 are
-recorded in `docs/dev/GBT_WP5_G5_REPORT.md`.
+recorded in `docs/DECISIONS.md` (full evidence remains at the campaign tag).

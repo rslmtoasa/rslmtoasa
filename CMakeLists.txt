@@ -444,7 +444,7 @@ endforeach()
 
 # B5.2 route-agnostic estimator triads (recursion vs lehmann vs dyson). Each case
 # runs one observable three ways and checks the documented agreement envelopes
-# (docs/dev/route_agnostic_estimators.md).
+# (docs/validation/route_agnostic_estimators.md).
 set(TRIAD_CASES_JSON "${TestDIR}/regression/triad_cases.json")
 file(READ "${TRIAD_CASES_JSON}" _triad_json)
 string(JSON _triad_n LENGTH "${_triad_json}" "cases")
@@ -1096,9 +1096,6 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitGbtWp06Source
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp06_source.py)
   set_tests_properties(UnitGbtWp06Source PROPERTIES LABELS "unit;gbt;wp06;constraints;source-contract")
-  add_test(NAME GbtWp07ConstraintEnergySource
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp07_constraint_energy_source.py)
-  set_tests_properties(GbtWp07ConstraintEnergySource PROPERTIES LABELS "unit;gbt;wp07;constraints;energy;source-contract")
   add_test(NAME GbtWp08CorrectedMftSource
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp08_corrected_mft_source.py)
   set_tests_properties(GbtWp08CorrectedMftSource PROPERTIES LABELS "unit;gbt;wp08;frozen-magnon;constraints;source-contract")

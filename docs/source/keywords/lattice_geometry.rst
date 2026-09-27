@@ -233,7 +233,7 @@ interface cluster, counted from the interface outward.
   *synthetic Madelung rows* for the electrostatics solve. **Raising the
   ``&charge`` pair without raising this one breaks alignment** (observed:
   V(B) off by ~0.45 Ry) — see ``tests/KNOWN_ISSUES.md`` and
-  ``docs/dev/plans/B7_interfaces_and_vacuum_leads.md``.
+  ``docs/DECISIONS.md``.
 - Only the *first frozen non-vacuum* layer in each region is used as the
   gauge anchor for the alignment solver (``align_regions``,
   ``source/region_registry.f90``).

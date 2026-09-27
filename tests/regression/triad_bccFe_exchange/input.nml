@@ -33,7 +33,7 @@ label(1) = 'Fe'
 /
 &reciprocal
 ! Backend E (strict Lehmann) needs the FULL unreduced BZ. 12^3 is a CI-tractable
-! mesh; J_ij is NOT k-converged here (see docs/dev/reciprocal_green_convergence.md
+! mesh; J_ij is NOT k-converged here (see docs/validation/reciprocal_green_convergence.md
 ! Table A) -- the triad pins route agreement (lehmann==dyson) and reproducibility,
 ! not the converged physical J.
 nk1 = 12

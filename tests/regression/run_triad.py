@@ -11,8 +11,8 @@ checks the documented route-agreement envelopes:
   * recursion vs lehmann (envelope): a DOCUMENTED band, not machine precision.
     For sigma it is tight (the exact k-space moments match the recursion moments up
     to k-mesh/Chebyshev truncation); for J_ij it is broad and shell-dependent (the
-    two routes broaden G differently -- see docs/dev/reciprocal_green_convergence.md
-    and docs/dev/route_agnostic_estimators.md).
+    two routes broaden G differently -- see docs/validation/reciprocal_green_convergence.md
+    and docs/validation/route_agnostic_estimators.md).
   * golden reproducibility (informational): each route's value vs a stored golden,
     a loose guard against silent regressions (generous tol for cross-BLAS variance).
 

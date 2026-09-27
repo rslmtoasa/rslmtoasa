@@ -4,8 +4,8 @@
 WHAT IS BEING TESTED
 =====================
 A finite-q GBT spin spiral lowers the symmetry of the electronic problem to
-the little group of q_ss (docs/dev/plans/B1_gbt_frozen_magnons_v2.md section
-3.1). The full chemical-cell BZ (&reciprocal q_symmetry_policy = 'full_bz',
+the little group of q_ss (see the archived GBT campaign record in
+docs/DECISIONS.md). The full chemical-cell BZ (&reciprocal q_symmetry_policy = 'full_bz',
 the default) always remains a valid oracle. 'little_group' and
 'little_group_common' are opt-in reductions
 (source/reciprocal_bands.f90::generate_little_group_kpoint_mesh,

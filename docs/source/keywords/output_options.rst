@@ -188,8 +188,7 @@ inversion :math:`[zS-H(k)-\Sigma]^{-1}`, B2 backend D)
   is unchanged; only the Green's-function producer differs. See
   ``green_backend``/``green_eta`` (:ref:`keywords/hamiltonian_parameters`)
   for the k-space engine's own settings, and
-  ``docs/dev/plans/B2_reciprocal_green.md`` /
-  ``docs/dev/route_agnostic_estimators.md`` for the accepted convergence
+  ``docs/DECISIONS.md`` for the accepted convergence
   envelopes (Lehmann-route J_ij/damping are broadening-defined at the
   documented ``green_eta`` default, not identical to the recursion route).
 
@@ -249,7 +248,7 @@ e.g. a future CPA/DMFT provider)
   to match; see ``source/calculation.f90`` lines ~1217, ~1281).
 - With :math:`\Sigma=0`, ``'dyson'`` reproduces ``'lehmann'`` to solver
   tolerance — a permanent consistency check (gate G-B2-1, see
-  ``docs/dev/plans/B2_reciprocal_green.md``).
+  ``docs/DECISIONS.md``).
 
 **Related code:** ``source/reciprocal_green.f90``, ``source/lehmann_kernel.f90``,
 ``source/dyson_kernel.f90``
@@ -278,8 +277,8 @@ a broadening-defined (not recursion-matching) estimator.
 - ``0.02`` Ry is the accepted working point from gate **G-B2-2**
   (signed 2026-07-16): documented as giving ~1% k-mesh convergence of
   J_ij at a 16³ mesh. Supersedes an earlier ``0.01`` Ry placeholder from
-  gate G-B2-1. See ``docs/dev/B2_GATE_G-B2-2.md`` and
-  ``docs/dev/reciprocal_green_convergence.md`` for the convergence study
+  gate G-B2-1. See ``docs/validation/B2_GATE_G-B2-2.md`` and
+  ``docs/validation/reciprocal_green_convergence.md`` for the convergence study
   behind this number.
 - The :math:`\eta \to 0`, :math:`N_k \to \infty` limit is deliberately not
   the shipped default — it is expensive and currently gated by the

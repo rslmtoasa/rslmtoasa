@@ -101,9 +101,9 @@ oracles for this scope. Full ab-initio spin dynamics therefore remains
 
 - `tests/validation/test_abspinlib_integrators.f90`
 - `CMakeLists.txt`
-- `docs/dev/PHASE_I_STABILIZATION.md`
-- `docs/dev/VAL-11_ABSPINLIB_INTEGRATORS.md`
-- `docs/dev/PHASE_II_VALIDATION.md`
+- `docs/DECISIONS.md`
+- `docs/validation/VAL-11_ABSPINLIB_INTEGRATORS.md`
+- `docs/DECISIONS.md`
 
 The focused command is:
 

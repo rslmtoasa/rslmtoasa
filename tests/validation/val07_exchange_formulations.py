@@ -2,7 +2,7 @@
 """VAL-07: validate the production exchange tensor and two-index routes.
 
 The bcc-Fe fixture has two distinct pair records.  This campaign checks only
-the relationships justified by ``docs/dev/EXCHANGE_VALIDATION_MAP.md``:
+the relationships justified by ``docs/validation/EXCHANGE_VALIDATION_MAP.md``:
 full-tensor assembly and the documented two-index J/D/A recombinations.
 
 The Gauss-Legendre, auxiliary-GF, native-import, and spin-lattice routes are
