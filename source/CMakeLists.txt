@@ -86,18 +86,11 @@ add_library(${PROJECT_NAME} STATIC
     recursion_chebyshev.f90
     recursion_transport.f90
     response_angular_basis.f90
-    lr_sr_angular_vertex.f90
-    lr_sr_spatial_augmentation_tangent.f90
-    lr_full_spatial_alsda.f90
-    lr_dresp09z_bridge.f90
-    lr_dresp09zs_compact_span.f90
     response_basis_mapping.f90
     lr_response_space.f90
     lr_pauli_transition_vertex.f90
     lr_lmto_endpoint_branches.f90
     lr_lmto_product_response_basis.f90
-    lr_lmto_basis_connection.f90
-    lr_lmto_representation_tangent.f90
     lr_projected_site_spin.f90
     lr_compact_static_interaction.f90
     lr_gf_endpoint_augmentation.f90
@@ -107,40 +100,12 @@ add_library(${PROJECT_NAME} STATIC
     lr_projected_reciprocal_chi0.f90
     lr_projected_interacting_response.f90
     lr_projected_juelich_interaction.f90
-    lr_dresp06a_bridge.f90
-    lr_ward_mode_analysis.f90
-    lr_kl_static_bridge.f90
     lr_lmto_turek_gf.f90
     lr_lmto_turek_contour.f90
     lr_rs_gf_susceptibility.f90
-    lr_dresp07_radial_oracle.f90
-    lr_exact_ks_ward.f90
-    lr_static_frechet_product_response.f90
-    lr_dresp08_native_mapping.f90
-    lr_dresp08_bridge.f90
-    lr_dresp09_field_insertion.f90
-    lr_dresp10f_mixed_ward_bridge.f90
-    lr_dresp11_goldstone_defect.f90
-    lr_dresp12_covariance_bridge.f90
-    lr_dresp10_ward_bridge.f90
-    lr_dresp09_pauli_direct.f90
-    lr_dresp09r_bridge.f90
-    lr_dresp09s_scalar_relativistic.f90
-    lr_dresp09s_bridge.f90
-    lr_lmto_density_moment_tangent.f90
-    lr_radial_observable_provenance.f90
-    lr_sr_augmentation_tangent.f90
-    lr_dresp09v_bridge.f90
-    lr_dresp09w_bridge.f90
-    lr_dresp09x_bridge.f90
-    lr_dresp09y_bridge.f90
-    lr_dresp09t_bridge.f90
-    lr_dresp09u_bridge.f90
-    lr_dresp07_bridge.f90
     tddft_native_rsgf_provider.f90
     lr_alsda_kernel.f90
     lr_goldstone_sumrule.f90
-    lr_goldstone_correction.f90
     tddft_production_driver.f90
     tddft_dyson.f90
     sparse.f90
