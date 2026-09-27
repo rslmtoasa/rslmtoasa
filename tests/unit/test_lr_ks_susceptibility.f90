@@ -13,7 +13,7 @@ program test_lr_ks_susceptibility
       response_unflatten_superindex
    use linear_response_mod, only: response_space_layout
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
-   use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
+   use linear_response_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, lr_channel_plus, lr_channel_minus, &
       evaluate_lr_ks_susceptibility, evaluate_lr_static_residual
    implicit none

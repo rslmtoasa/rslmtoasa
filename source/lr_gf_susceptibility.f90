@@ -19,7 +19,7 @@ module lr_gf_susceptibility_mod
       pauli_sigma_minus_matrix
    use linear_response_mod, only: lmto_product_nbranch, lmto_product_max_gf_moment, &
       lmto_product_branch_powers, lmto_product_second_order_radial_branch, lmto_product_energy_power
-   use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_result, &
+   use linear_response_mod, only: lr_electronic_state, lr_ks_susceptibility_result, &
       lr_channel_plus, lr_channel_minus, lr_fermi_dirac_occupation
    implicit none
    private

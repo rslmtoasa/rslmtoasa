@@ -15,7 +15,7 @@ program test_lr_product_gf_quadrature_audit
    use linear_response_mod, only: lmto_product_response_basis, &
       lmto_product_channel_plus, lmto_product_channel_minus
    use linear_response_mod, only: pauli_endpoint_state
-   use lr_ks_susceptibility_mod, only: lr_electronic_state, &
+   use linear_response_mod, only: lr_electronic_state, &
       lr_product_ks_susceptibility_request, lr_product_ks_susceptibility_result, &
       lr_channel_plus, lr_channel_minus, lr_fermi_dirac_occupation, &
       evaluate_lr_product_ks_susceptibility

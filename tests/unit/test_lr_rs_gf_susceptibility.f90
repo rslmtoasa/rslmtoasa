@@ -8,10 +8,10 @@ program test_lr_rs_gf_susceptibility
    use linear_response_mod, only: response_super_index, response_flatten_superindex
    use linear_response_mod, only: response_space_layout
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
-   use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
+   use linear_response_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, lr_channel_plus, evaluate_lr_ks_susceptibility
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
-   use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
+   use linear_response_mod, only: lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       lr_rs_dense_gf_provider, evaluate_lr_rs_gf_susceptibility
    implicit none
 

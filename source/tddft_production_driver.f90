@@ -27,7 +27,7 @@ module tddft_production_driver_mod
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
    use linear_response_mod, only: response_super_index, response_flatten_superindex
    use linear_response_mod, only: response_space_layout, response_operator_trace
-   use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
+   use linear_response_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, lr_snapshot_from_reciprocal, lr_q_endpoint_from_reciprocal, &
       evaluate_lr_ks_susceptibility, lr_product_ks_susceptibility_request, &
       lr_product_ks_susceptibility_result, evaluate_lr_product_ks_susceptibility, lr_channel_plus, lr_channel_minus, &
@@ -47,7 +47,7 @@ module tddft_production_driver_mod
    use lr_product_gf_susceptibility_mod, only: lr_product_gf_susceptibility_request, &
       lr_product_gf_susceptibility_result, evaluate_lr_product_gf_susceptibility
    use linear_response_mod, only: projected_site_spin_contract
-   use lr_projected_reciprocal_chi0_mod, only: projected_chi0_request, projected_chi0_result, &
+   use linear_response_mod, only: projected_chi0_request, projected_chi0_result, &
       evaluate_projected_lehmann_chi0, evaluate_projected_finite_width_chi0, evaluate_projected_gf_chi0
    use lr_projected_interacting_response_mod, only: projected_mills_interaction_result, &
       projected_dyson_request, projected_dyson_result, evaluate_projected_mills_from_reciprocal, &
@@ -56,9 +56,9 @@ module tddft_production_driver_mod
       evaluate_projected_juelich_interaction, evaluate_projected_juelich_holdout, &
       assess_projected_juelich_eta_stability, projected_juelich_eta_limited, projected_juelich_rank_deficient, &
       projected_juelich_unsupported, select_projected_juelich_eta_indices
-   use lr_rs_gf_susceptibility_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
+   use linear_response_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
-   use tddft_native_rsgf_provider_mod, only: tddft_native_rsgf_provider
+   use linear_response_mod, only: tddft_native_rsgf_provider
    use lr_alsda_kernel_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, evaluate_lr_alsda_kernel, &
       lr_kxc_magnetization_kind_pauli_accepted, lr_kxc_magnetization_source_pauli_accepted
    use lr_goldstone_sumrule_mod, only: lr_goldstone_sumrule_request, lr_goldstone_sumrule_result, &

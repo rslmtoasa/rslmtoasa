@@ -18,7 +18,7 @@ program test_lr_product_gf_susceptibility
    use linear_response_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
       lmto_product_channel_minus
    use linear_response_mod, only: lmto_product_nbranch, lmto_product_branch_powers, lmto_product_energy_power
-   use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
+   use linear_response_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, lr_product_ks_susceptibility_request, lr_product_ks_susceptibility_result, &
       lr_channel_plus, lr_channel_minus, lr_fermi_dirac_occupation, evaluate_lr_product_ks_susceptibility
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility

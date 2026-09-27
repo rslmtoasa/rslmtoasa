@@ -12,6 +12,9 @@ module linear_response_mod
    use string_mod, only: sl
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
    use radial_ground_state_mod, only: radial_ground_state
+   use, intrinsic :: iso_fortran_env, only: int64
+   use green_mod, only: green
+   use recursion_mod, only: recursion
    use lr_lmto_turek_contour_mod, only: native_turek_contour_report
    implicit none
    private
@@ -423,6 +426,359 @@ module linear_response_mod
       procedure :: moment_from_operator => projected_moment_from_operator
       procedure :: core_spin_number => projected_core_spin_number
    end type projected_site_spin_contract
+
+   ! --- from lr_ks_susceptibility_mod ---
+
+
+   real(rp), parameter, public :: lr_kb_ry_per_kelvin = 6.3336814e-6_rp
+
+   character(len=*), parameter, public :: lr_channel_plus = 'chi_plus'
+   character(len=*), parameter, public :: lr_channel_minus = 'chi_minus'
+
+   !> Immutable electronic-state snapshot consumed by LR-06.
+   !>
+   !> The initializer copies every array, including occupations and k weights.
+   !> The susceptibility evaluator accepts this type with INTENT(IN), so it
+   !> cannot recompute EF, occupations, or endpoint eigenvectors while summing.
+   type, public :: lr_electronic_state
+      integer :: nbands = 0
+      integer :: nbasis = 0
+      integer :: nk = 0
+      real(rp), allocatable :: eigenvalues(:, :)       ! (band,k)
+      complex(rp), allocatable :: eigenvectors(:, :, :) ! (basis,band,k)
+      real(rp), allocatable :: k_points(:, :)          ! (3,k), folded points
+      real(rp), allocatable :: k_weights(:)
+      real(rp), allocatable :: occupations(:, :)       ! (band,k), explicit
+      real(rp) :: fermi_level = 0.0_rp
+      real(rp) :: temperature = 0.0_rp
+      real(rp) :: energy_zero = 0.0_rp
+      character(len=32) :: reciprocal_mode = 'ham_only'
+      character(len=16) :: hamiltonian_order = 'second'
+      logical :: orthogonal = .true.
+      logical :: collinear = .true.
+      logical :: has_soc = .false.
+      logical :: has_extra_operator = .false.
+      logical :: occupations_are_explicit = .false.
+      logical :: initialized = .false.
+   contains
+      procedure :: initialize => lr_electronic_state_initialize
+      procedure :: restore_to_default => lr_electronic_state_restore
+      procedure :: validate => lr_electronic_state_validate
+   end type lr_electronic_state
+
+   !> Request metadata for one q/frequency/channel sweep.
+   !>
+   !> The pointer fields support the preferred request/result API.  An explicit
+   !> overload is also provided for callers that keep these objects separately.
+   type, public :: lr_ks_susceptibility_request
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      character(len=32) :: channel = lr_channel_plus
+      type(response_space_layout), pointer :: response_space => null()
+      type(lmto_radial_basis), pointer :: radial_bases(:) => null()
+      type(lr_electronic_state), pointer :: electronic_state => null()
+      type(lr_electronic_state), pointer :: q_endpoint_state => null()
+   end type lr_ks_susceptibility_request
+
+   !> Result in the LR-04 canonical right-weighted representation.
+   type, public :: lr_ks_susceptibility_result
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      character(len=32) :: channel = ''
+      character(len=128) :: response_representation = ''
+      character(len=256) :: response_space_metadata = ''
+      complex(rp), allocatable :: susceptibility(:, :, :) ! (I,J,frequency)
+   end type lr_ks_susceptibility_result
+
+   !> Request metadata for the compact weighted-orthonormal product response.
+   !>
+   !> This is deliberately a separate request type from LR-06.  A compact
+   !> result must never be mistaken for an LR-04 point-space matrix whose
+   !> dimension is `response_space%ndim`.
+   type, public :: lr_product_ks_susceptibility_request
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      character(len=32) :: channel = lr_channel_plus
+      type(lmto_product_response_basis), pointer :: product_basis => null()
+      type(lr_electronic_state), pointer :: electronic_state => null()
+      type(lr_electronic_state), pointer :: q_endpoint_state => null()
+      ! Optional DRESP-01 orbital selector.  An absent mask preserves the
+      ! historical complete product-space oracle exactly.
+      logical, allocatable :: selected_l(:)
+   end type lr_product_ks_susceptibility_request
+
+   !> Result in the weighted-orthonormal LMTO product representation.
+   type, public :: lr_product_ks_susceptibility_result
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      character(len=32) :: channel = ''
+      character(len=128) :: response_representation = ''
+      character(len=256) :: response_space_metadata = ''
+      character(len=16) :: product_radial_order = 'second'
+      integer :: product_endpoint_branches = lmto_product_nbranch
+      character(len=32) :: product_branch_labels = '00,10,01,11,20,02'
+      integer :: maximum_gf_energy_moment = lmto_product_max_gf_moment
+      integer :: product_dimension = 0
+      integer :: transition_dimension = 0
+      integer :: ntransitions_evaluated = 0
+      integer :: noccupation_skips = 0
+      logical :: point_space_transition_allocated = .false.
+      complex(rp), allocatable :: susceptibility(:, :, :) ! (product,product,frequency)
+   end type lr_product_ks_susceptibility_result
+   ! --- from lr_rs_gf_susceptibility_mod ---
+
+
+
+   !> One directed real-space pair.  The coefficient-GF provider interprets
+   !> gij as G_(left,right)(z), with the first index as the row/destination
+   !> site and the second index as the column/source site.  gji is the
+   !> separately evaluated reverse block G_(right,left)(z); it is not inferred
+   !> by transposition.
+   type, public :: lr_rs_gf_pair
+      integer :: left_site = 0
+      integer :: right_site = 0
+      real(rp) :: translation(3) = 0.0_rp
+   end type lr_rs_gf_pair
+
+   !> Abstract native coefficient-GF provider contract.
+   type, abstract, public :: lr_rs_gf_provider
+      integer :: nbasis_per_site = 0
+      character(len=32) :: provider_kind = ''
+   contains
+      procedure(lr_rs_get_pair), deferred :: get_pair
+      procedure(lr_rs_describe), deferred :: describe
+   end type lr_rs_gf_provider
+
+   abstract interface
+      subroutine lr_rs_get_pair(this, left_site, right_site, translation, z, gij, gji, hgamma_ij, hgamma_ji)
+         import :: lr_rs_gf_provider, rp
+         class(lr_rs_gf_provider), intent(inout) :: this
+         integer, intent(in) :: left_site, right_site
+         real(rp), intent(in) :: translation(3)
+         complex(rp), intent(in) :: z
+         complex(rp), intent(out) :: gij(:, :), gji(:, :), hgamma_ij(:, :), hgamma_ji(:, :)
+      end subroutine lr_rs_get_pair
+
+      function lr_rs_describe(this) result(description)
+         import :: lr_rs_gf_provider
+         class(lr_rs_gf_provider), intent(in) :: this
+         character(len=256) :: description
+      end function lr_rs_describe
+   end interface
+
+   !> Callback signature for a native block-recursion provider.  The callback
+   !> is the seam to the production two-sweep/native block implementation.
+   abstract interface
+      subroutine lr_rs_native_callback(left_site, right_site, translation, z, gij, gji, hgamma_ij, hgamma_ji)
+         import :: rp
+         integer, intent(in) :: left_site, right_site
+         real(rp), intent(in) :: translation(3)
+         complex(rp), intent(in) :: z
+         complex(rp), intent(out) :: gij(:, :), gji(:, :), hgamma_ij(:, :), hgamma_ji(:, :)
+      end subroutine lr_rs_native_callback
+   end interface
+
+   !> Block-recursion native coefficient-GF provider.  It is kept distinct
+   !> from the Chebyshev provider so recursion depth and terminator controls
+   !> cannot be accidentally reported as polynomial controls.
+   type, extends(lr_rs_gf_provider), public :: lr_rs_block_recursion_provider
+      procedure(lr_rs_native_callback), pointer, nopass :: callback => null()
+      integer :: recursion_depth = 0
+      character(len=64) :: terminator = 'certified native block terminator'
+   contains
+      procedure :: initialize => lr_rs_block_recursion_initialize
+      procedure :: get_pair => lr_rs_block_recursion_get_pair
+      procedure :: describe => lr_rs_block_recursion_describe
+   end type lr_rs_block_recursion_provider
+
+   !> Chebyshev native coefficient-GF provider.  It has an independent
+   !> polynomial-order control and the same directed-block contract.
+   type, extends(lr_rs_gf_provider), public :: lr_rs_chebyshev_provider
+      procedure(lr_rs_native_callback), pointer, nopass :: callback => null()
+      integer :: polynomial_order = 0
+      character(len=64) :: kernel = 'certified native Chebyshev kernel'
+   contains
+      procedure :: initialize => lr_rs_chebyshev_initialize
+      procedure :: get_pair => lr_rs_chebyshev_get_pair
+      procedure :: describe => lr_rs_chebyshev_describe
+   end type lr_rs_chebyshev_provider
+
+   !> Dense inverse provider used by the finite exact oracle.  It is also a
+   !> useful representation-isolation provider: it never calls reciprocal GF
+   !> code and returns both directed blocks from an explicit coefficient-space
+   !> Hamiltonian inverse.
+   type, extends(lr_rs_gf_provider), public :: lr_rs_dense_gf_provider
+      complex(rp), allocatable :: hamiltonian(:, :)
+      complex(rp), allocatable :: hgamma(:, :)
+      integer :: nsite = 0
+      integer :: block_size = 0
+      logical :: translation_independent = .false.
+   contains
+      procedure :: initialize => lr_rs_dense_initialize
+      procedure :: get_pair => lr_rs_dense_get_pair
+      procedure :: describe => lr_rs_dense_describe
+   end type lr_rs_dense_gf_provider
+
+   !> Request for one real-space pair/Fourier/frequency sweep.
+   type, public :: lr_rs_gf_susceptibility_request
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      character(len=32) :: channel = lr_channel_plus
+      integer :: integration_points = 2001
+      real(rp) :: integration_eta = 0.0_rp
+      real(rp) :: energy_margin = 1.0_rp
+      real(rp) :: energy_min = -1.0_rp
+      real(rp) :: energy_max = 1.0_rp
+      real(rp) :: fermi_level = 0.0_rp
+      real(rp) :: temperature = 0.0_rp
+      type(response_space_layout), pointer :: response_space => null()
+      type(lmto_radial_basis), pointer :: radial_bases(:) => null()
+      class(lr_rs_gf_provider), pointer :: provider => null()
+      type(lr_rs_gf_pair), allocatable :: pairs(:)
+      ! Fractional/direct basis-site positions tau(:,site).  A null pointer
+      ! means all endpoint positions are zero (the finite-cluster gauge).
+      real(rp), pointer :: site_positions(:, :) => null()
+   end type lr_rs_gf_susceptibility_request
+
+   ! --- from tddft_native_rsgf_provider_mod ---
+
+
+   type, extends(lr_rs_gf_provider), public :: tddft_native_rsgf_provider
+      type(green), pointer :: green_obj => null()
+      type(recursion), pointer :: recursion_obj => null()
+      type(hamiltonian), pointer :: hamiltonian_obj => null()
+      type(lattice), pointer :: lattice_obj => null()
+      type(reciprocal), pointer :: reciprocal_obj => null()
+      type(lmto_radial_basis), pointer :: radial_bases(:) => null()
+      character(len=32) :: selection = ''
+      integer :: recursion_depth = 0
+      integer :: polynomial_order = 0
+      type(lr_rs_gf_pair), allocatable :: pairs(:)
+      integer, allocatable :: left_atoms(:), right_atoms(:)
+      complex(rp), allocatable :: hgamma_ij(:, :, :), hgamma_ji(:, :, :)
+      real(rp), allocatable :: a_inf(:, :, :, :), b_inf(:, :, :, :)
+      complex(rp), allocatable :: psi(:, :, :), psi_out(:, :, :), identity(:, :)
+   contains
+      procedure :: initialize => tddft_native_rsgf_initialize
+      procedure :: get_pair => tddft_native_rsgf_get_pair
+      procedure :: describe => tddft_native_rsgf_describe
+   end type tddft_native_rsgf_provider
+
+   ! --- from lr_projected_reciprocal_chi0_mod ---
+
+
+
+   character(len=*), parameter, public :: projected_backend_lehmann = 'lehmann'
+   character(len=*), parameter, public :: projected_backend_gf = 'real-axis-gf'
+   character(len=*), parameter, public :: projected_backend_finite_width = 'finite-width'
+
+
+   !> Compact record for the largest direct Lehmann terms retained by the
+   !> optional DRESP-02R audit.  The response equation is unchanged; this is
+   !> an observable of the already certified transition sum.
+   type, public :: projected_chi0_transition_record
+      integer :: k_index = 0
+      integer :: left_band = 0
+      integer :: right_band = 0
+      real(rp) :: left_energy = 0.0_rp
+      real(rp) :: right_energy = 0.0_rp
+      real(rp) :: left_occupation = 0.0_rp
+      real(rp) :: right_occupation = 0.0_rp
+      real(rp) :: transition_energy = 0.0_rp
+      real(rp) :: matrix_element_weight = 0.0_rp
+      real(rp) :: score = 0.0_rp
+   end type projected_chi0_transition_record
+
+   !> One projected reciprocal response request.  The DRESP-01 contract and
+   !> product basis are separate references so the same certified operator can
+   !> be compared with both compact product-space oracles.
+   type, public :: projected_chi0_request
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      character(len=32) :: channel = lr_channel_plus
+      integer :: integration_points = 2001
+      real(rp) :: integration_eta = 0.0_rp
+      real(rp) :: energy_margin = 1.0_rp
+      type(projected_site_spin_contract), pointer :: contract => null()
+      type(lmto_product_response_basis), pointer :: product_basis => null()
+      type(lr_electronic_state), pointer :: electronic_state => null()
+      type(lr_electronic_state), pointer :: q_endpoint_state => null()
+      ! DRESP-02R diagnostics are opt-in and do not alter the production
+      ! response accumulation or its state handoff.
+      logical :: diagnostics = .false.
+   end type projected_chi0_request
+
+   type, public :: projected_chi0_result
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      real(rp) :: integration_eta = 0.0_rp
+      real(rp) :: energy_min = 0.0_rp
+      real(rp) :: energy_max = 0.0_rp
+      real(rp) :: energy_spacing = 0.0_rp
+      real(rp) :: spacing_over_integration_eta = 0.0_rp
+      character(len=32) :: channel = ''
+      character(len=16) :: backend = ''
+      character(len=8) :: selector = ''
+      character(len=128) :: response_representation = ''
+      character(len=512) :: provenance = ''
+      integer :: nsite = 0
+      integer :: product_dimension = 0
+      integer :: integration_points = 0
+      integer :: ntransitions_evaluated = 0
+      integer :: noccupation_skips = 0
+      logical :: point_response_allocated = .false.
+      integer(int64) :: site_vertex_memory_bytes = 0_int64
+      integer(int64) :: susceptibility_memory_bytes = 0_int64
+      real(rp) :: wall_time_seconds = 0.0_rp
+      real(rp) :: cpu_time_seconds = 0.0_rp
+      ! Performance observables.  The reference backend reports the dense
+      ! resolvent and scalar bubble counts; the optimized backend reports the
+      ! eigenbasis transform and vectorized denominator work instead.
+      character(len=16) :: implementation = ''
+      real(rp) :: allocation_seconds = 0.0_rp
+      real(rp) :: vertex_seconds = 0.0_rp
+      real(rp) :: endpoint_transform_seconds = 0.0_rp
+      real(rp) :: resolvent_seconds = 0.0_rp
+      real(rp) :: accumulator_seconds = 0.0_rp
+      real(rp) :: diagnostic_seconds = 0.0_rp
+      integer(int64) :: resolvent_calls = 0_int64
+      integer(int64) :: accumulator_calls = 0_int64
+      integer(int64) :: endpoint_transform_calls = 0_int64
+      complex(rp), allocatable :: susceptibility(:, :, :) ! (site,site,frequency)
+      ! Optional DRESP-02R Kubo and k-resolved observables.
+      complex(rp), allocatable :: kubo_term_one(:, :, :) ! (site,site,frequency)
+      complex(rp), allocatable :: kubo_term_two(:, :, :) ! (site,site,frequency)
+      complex(rp), allocatable :: k_susceptibility(:, :, :, :) ! (site,site,frequency,k)
+      real(rp) :: left_spectral_zeroth_residual = 0.0_rp
+      real(rp) :: right_spectral_zeroth_residual = 0.0_rp
+      real(rp) :: left_spectral_first_residual = 0.0_rp
+      real(rp) :: right_spectral_first_residual = 0.0_rp
+      real(rp) :: left_spectral_fermi_residual = 0.0_rp
+      real(rp) :: right_spectral_fermi_residual = 0.0_rp
+      integer :: n_dominant_transition_records = 0
+      type(projected_chi0_transition_record), allocatable :: dominant_transitions(:)
+   end type projected_chi0_result
+   ! --- bare-response public procedures ---
+   public :: lr_fermi_dirac_occupation
+   public :: lr_snapshot_from_reciprocal
+   public :: lr_q_endpoint_from_reciprocal
+   public :: evaluate_lr_ks_susceptibility
+   public :: evaluate_lr_product_ks_susceptibility
+   public :: evaluate_lr_static_residual
+   public :: evaluate_lr_rs_gf_susceptibility
+   public :: evaluate_projected_lehmann_chi0
+   public :: evaluate_projected_finite_width_chi0
+   public :: evaluate_projected_gf_chi0
+   public :: evaluate_projected_gf_chi0_optimized
+   public :: evaluate_projected_gf_chi0_reference
+
    public :: response_lmax
    public :: response_product_space_complete
    public :: response_lm_index
@@ -527,6 +883,16 @@ module linear_response_mod
       module procedure evaluate_pauli_transition_vertex_one
       module procedure evaluate_pauli_transition_vertex_channels
    end interface evaluate_pauli_transition_vertex
+
+   interface evaluate_lr_ks_susceptibility
+      module procedure evaluate_lr_ks_susceptibility_request
+      module procedure evaluate_lr_ks_susceptibility_explicit
+   end interface evaluate_lr_ks_susceptibility
+
+   interface evaluate_lr_product_ks_susceptibility
+      module procedure evaluate_lr_product_ks_susceptibility_request
+      module procedure evaluate_lr_product_ks_susceptibility_explicit
+   end interface evaluate_lr_product_ks_susceptibility
    interface
       module subroutine lmto_fixture_clear(this)
          class(lmto_live_hamiltonian_fixture), intent(inout) :: this
@@ -582,6 +948,198 @@ module linear_response_mod
       complex(rp), intent(out) :: transition_vector(:)
       end subroutine evaluate_pauli_transition_vertex_channels
 
+
+
+      ! --- from lr_ks_susceptibility_mod ---
+      module pure real(rp) function lr_fermi_dirac_occupation(eigenvalue, fermi_level, temperature) result(value)
+         real(rp), intent(in) :: eigenvalue, fermi_level, temperature
+      end function lr_fermi_dirac_occupation
+
+      module subroutine lr_electronic_state_initialize(this, eigenvalues, eigenvectors, k_points, k_weights, occupations, &
+         fermi_level, temperature, energy_zero, reciprocal_mode, hamiltonian_order, orthogonal, collinear, has_soc, &
+         has_extra_operator)
+         class(lr_electronic_state), intent(out) :: this
+         real(rp), intent(in) :: eigenvalues(:, :), k_points(:, :), k_weights(:), occupations(:, :)
+         complex(rp), intent(in) :: eigenvectors(:, :, :)
+         real(rp), intent(in) :: fermi_level, temperature
+         real(rp), intent(in), optional :: energy_zero
+         character(len=*), intent(in), optional :: reciprocal_mode, hamiltonian_order
+         logical, intent(in), optional :: orthogonal, collinear, has_soc, has_extra_operator
+      end subroutine lr_electronic_state_initialize
+
+      module subroutine lr_electronic_state_restore(this)
+         class(lr_electronic_state), intent(inout) :: this
+      end subroutine lr_electronic_state_restore
+
+      module subroutine lr_electronic_state_validate(this, caller)
+         class(lr_electronic_state), intent(in) :: this
+         character(len=*), intent(in) :: caller
+      end subroutine lr_electronic_state_validate
+
+      module subroutine lr_snapshot_from_reciprocal(recip, state)
+         type(reciprocal), intent(in) :: recip
+         type(lr_electronic_state), intent(out) :: state
+      end subroutine lr_snapshot_from_reciprocal
+
+      module subroutine lr_q_endpoint_from_reciprocal(recip, left_state, q, endpoint_state)
+         type(reciprocal), intent(inout) :: recip
+         type(lr_electronic_state), intent(in) :: left_state
+         real(rp), intent(in) :: q(3)
+         type(lr_electronic_state), intent(out) :: endpoint_state
+      end subroutine lr_q_endpoint_from_reciprocal
+
+      module subroutine evaluate_lr_ks_susceptibility_request(request, result)
+         type(lr_ks_susceptibility_request), intent(in) :: request
+         type(lr_ks_susceptibility_result), intent(out) :: result
+      end subroutine evaluate_lr_ks_susceptibility_request
+
+      module subroutine evaluate_lr_ks_susceptibility_explicit(space, radial_bases, left_state, right_state, request, result)
+         type(response_space_layout), intent(in) :: space
+         type(lmto_radial_basis), intent(in) :: radial_bases(:)
+         type(lr_electronic_state), intent(in) :: left_state, right_state
+         type(lr_ks_susceptibility_request), intent(in) :: request
+         type(lr_ks_susceptibility_result), intent(out) :: result
+      end subroutine evaluate_lr_ks_susceptibility_explicit
+
+      module subroutine evaluate_lr_product_ks_susceptibility_request(request, result)
+         type(lr_product_ks_susceptibility_request), intent(in) :: request
+         type(lr_product_ks_susceptibility_result), intent(out) :: result
+      end subroutine evaluate_lr_product_ks_susceptibility_request
+
+      module subroutine evaluate_lr_product_ks_susceptibility_explicit(product_basis, left_state, right_state, request, result)
+         type(lmto_product_response_basis), intent(in) :: product_basis
+         type(lr_electronic_state), intent(in) :: left_state, right_state
+         type(lr_product_ks_susceptibility_request), intent(in) :: request
+         type(lr_product_ks_susceptibility_result), intent(out) :: result
+      end subroutine evaluate_lr_product_ks_susceptibility_explicit
+
+      module subroutine evaluate_lr_static_residual(space, static_susceptibility, field, magnetization, absolute_residual, &
+         relative_residual)
+         type(response_space_layout), intent(in) :: space
+         complex(rp), intent(in) :: static_susceptibility(:, :), field(:), magnetization(:)
+         real(rp), intent(out) :: absolute_residual, relative_residual
+      end subroutine evaluate_lr_static_residual
+
+      ! --- from lr_rs_gf_susceptibility_mod ---
+      module subroutine lr_rs_block_recursion_initialize(this, callback, nbasis_per_site, recursion_depth, terminator)
+         class(lr_rs_block_recursion_provider), intent(out) :: this
+         procedure(lr_rs_native_callback) :: callback
+         integer, intent(in) :: nbasis_per_site, recursion_depth
+         character(len=*), intent(in), optional :: terminator
+      end subroutine lr_rs_block_recursion_initialize
+
+      module subroutine lr_rs_block_recursion_get_pair(this, left_site, right_site, translation, z, gij, gji, hgamma_ij, &
+         hgamma_ji)
+         class(lr_rs_block_recursion_provider), intent(inout) :: this
+         integer, intent(in) :: left_site, right_site
+         real(rp), intent(in) :: translation(3)
+         complex(rp), intent(in) :: z
+         complex(rp), intent(out) :: gij(:, :), gji(:, :), hgamma_ij(:, :), hgamma_ji(:, :)
+      end subroutine lr_rs_block_recursion_get_pair
+
+      module function lr_rs_block_recursion_describe(this) result(description)
+         class(lr_rs_block_recursion_provider), intent(in) :: this
+         character(len=256) :: description
+      end function lr_rs_block_recursion_describe
+
+      module subroutine lr_rs_chebyshev_initialize(this, callback, nbasis_per_site, polynomial_order, kernel)
+         class(lr_rs_chebyshev_provider), intent(out) :: this
+         procedure(lr_rs_native_callback) :: callback
+         integer, intent(in) :: nbasis_per_site, polynomial_order
+         character(len=*), intent(in), optional :: kernel
+      end subroutine lr_rs_chebyshev_initialize
+
+      module subroutine lr_rs_chebyshev_get_pair(this, left_site, right_site, translation, z, gij, gji, hgamma_ij, &
+         hgamma_ji)
+         class(lr_rs_chebyshev_provider), intent(inout) :: this
+         integer, intent(in) :: left_site, right_site
+         real(rp), intent(in) :: translation(3)
+         complex(rp), intent(in) :: z
+         complex(rp), intent(out) :: gij(:, :), gji(:, :), hgamma_ij(:, :), hgamma_ji(:, :)
+      end subroutine lr_rs_chebyshev_get_pair
+
+      module function lr_rs_chebyshev_describe(this) result(description)
+         class(lr_rs_chebyshev_provider), intent(in) :: this
+         character(len=256) :: description
+      end function lr_rs_chebyshev_describe
+
+      module subroutine lr_rs_dense_initialize(this, hamiltonian, hgamma, block_size, translation_independent)
+         class(lr_rs_dense_gf_provider), intent(out) :: this
+         complex(rp), intent(in) :: hamiltonian(:, :), hgamma(:, :)
+         integer, intent(in) :: block_size
+         logical, intent(in), optional :: translation_independent
+      end subroutine lr_rs_dense_initialize
+
+      module subroutine lr_rs_dense_get_pair(this, left_site, right_site, translation, z, gij, gji, hgamma_ij, hgamma_ji)
+         class(lr_rs_dense_gf_provider), intent(inout) :: this
+         integer, intent(in) :: left_site, right_site
+         real(rp), intent(in) :: translation(3)
+         complex(rp), intent(in) :: z
+         complex(rp), intent(out) :: gij(:, :), gji(:, :), hgamma_ij(:, :), hgamma_ji(:, :)
+      end subroutine lr_rs_dense_get_pair
+
+      module function lr_rs_dense_describe(this) result(description)
+         class(lr_rs_dense_gf_provider), intent(in) :: this
+         character(len=256) :: description
+      end function lr_rs_dense_describe
+
+      module subroutine evaluate_lr_rs_gf_susceptibility(request, result)
+         type(lr_rs_gf_susceptibility_request), intent(in) :: request
+         type(lr_ks_susceptibility_result), intent(out) :: result
+      end subroutine evaluate_lr_rs_gf_susceptibility
+
+      ! --- from tddft_native_rsgf_provider_mod ---
+      module subroutine tddft_native_rsgf_initialize(this, provider_name, green_obj, recursion_obj, hamiltonian_obj, &
+         lattice_obj, reciprocal_obj, radial_bases)
+         class(tddft_native_rsgf_provider), intent(out) :: this
+         character(len=*), intent(in) :: provider_name
+         type(green), target, intent(inout) :: green_obj
+         type(recursion), target, intent(inout) :: recursion_obj
+         type(hamiltonian), target, intent(in) :: hamiltonian_obj
+         type(lattice), target, intent(in) :: lattice_obj
+         type(reciprocal), target, intent(in) :: reciprocal_obj
+         type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
+      end subroutine tddft_native_rsgf_initialize
+
+      module subroutine tddft_native_rsgf_get_pair(this, left_site, right_site, translation, z, gij, gji, hgamma_ij, &
+         hgamma_ji)
+         class(tddft_native_rsgf_provider), intent(inout) :: this
+         integer, intent(in) :: left_site, right_site
+         real(rp), intent(in) :: translation(3)
+         complex(rp), intent(in) :: z
+         complex(rp), intent(out) :: gij(:, :), gji(:, :), hgamma_ij(:, :), hgamma_ji(:, :)
+      end subroutine tddft_native_rsgf_get_pair
+
+      module function tddft_native_rsgf_describe(this) result(description)
+         class(tddft_native_rsgf_provider), intent(in) :: this
+         character(len=256) :: description
+      end function tddft_native_rsgf_describe
+
+      ! --- from lr_projected_reciprocal_chi0_mod ---
+      module subroutine evaluate_projected_lehmann_chi0(request, result)
+         type(projected_chi0_request), intent(in) :: request
+         type(projected_chi0_result), intent(out) :: result
+      end subroutine evaluate_projected_lehmann_chi0
+
+      module subroutine evaluate_projected_finite_width_chi0(request, result)
+         type(projected_chi0_request), intent(in) :: request
+         type(projected_chi0_result), intent(out) :: result
+      end subroutine evaluate_projected_finite_width_chi0
+
+      module subroutine evaluate_projected_gf_chi0(request, result)
+         type(projected_chi0_request), intent(in) :: request
+         type(projected_chi0_result), intent(out) :: result
+      end subroutine evaluate_projected_gf_chi0
+
+      module subroutine evaluate_projected_gf_chi0_optimized(request, result)
+         type(projected_chi0_request), intent(in) :: request
+         type(projected_chi0_result), intent(out) :: result
+      end subroutine evaluate_projected_gf_chi0_optimized
+
+      module subroutine evaluate_projected_gf_chi0_reference(request, result)
+         type(projected_chi0_request), intent(in) :: request
+         type(projected_chi0_result), intent(out) :: result
+      end subroutine evaluate_projected_gf_chi0_reference
 
       ! --- from response_angular_basis_mod ---
       module pure integer function response_lmax(orbital_lmax) result(value)
