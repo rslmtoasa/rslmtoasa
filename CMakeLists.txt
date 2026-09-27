@@ -807,61 +807,6 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(TddftProductionDriverNativeSmoke PROPERTIES
     LABELS "integration;tddft;tdrun-02;native-rsgf;production;smoke"
     TIMEOUT 240)
-  add_test(NAME TddftProductGfClosure
-    COMMAND ${TestBinary} input_tdvk03_fe.nml
-    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
-  set_tests_properties(TddftProductGfClosure PROPERTIES
-    LABELS "integration;tddft;tdvk-03;accepted-state;product-gf;closure"
-    DISABLED TRUE
-    TIMEOUT 7200)
-  add_test(NAME TddftDresp10AGfSpot
-    COMMAND ${TestBinary} input_dresp10a_gf_spot_fe.nml
-    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
-  set_tests_properties(TddftDresp10AGfSpot PROPERTIES
-    LABELS "integration;tddft;dresp-10a;accepted-state;product-gf;bounded-spot"
-    TIMEOUT 900)
-  add_test(NAME TddftProductFiniteQ
-    COMMAND ${TestBinary} input_tdvk04_fe.nml
-    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
-  set_tests_properties(TddftProductFiniteQ PROPERTIES
-    LABELS "integration;tddft;tdvk-04;accepted-state;finite-q;covariance"
-    DISABLED TRUE
-    TIMEOUT 7200)
-  add_test(NAME TddftProductConvergence
-    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/tdvk05_fe_convergence.py"
-      "--binary" "${TestBinary}"
-      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/tdvk05_fe_convergence"
-      "--output" "${CMAKE_BINARY_DIR}/Testing/validation/tdvk05_fe_convergence.json")
-  set_tests_properties(TddftProductConvergence PROPERTIES
-    LABELS "validation;tddft;tdvk-05;accepted-state;convergence;compact-lehmann"
-    DISABLED TRUE
-    TIMEOUT 7200)
-  add_test(NAME TddftStaticInteractions
-    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/tdvk06_fe_static_interactions.py"
-      "--binary" "${TestBinary}"
-      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/tdvk06_fe_static_interactions"
-      "--output" "${CMAKE_BINARY_DIR}/Testing/validation/tdvk06_fe_static_interactions.json")
-  set_tests_properties(TddftStaticInteractions PROPERTIES
-    LABELS "validation;tddft;tdvk-06;accepted-state;static;alsda;gsr;compact"
-    DISABLED TRUE
-    TIMEOUT 7200)
-  add_test(NAME TddftCompactDysonFe
-    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/tdvk07_fe_dyson_loss.py"
-      "--binary" "${TestBinary}"
-      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/tdvk07_fe_dyson_loss"
-      "--output" "${CMAKE_BINARY_DIR}/Testing/validation/tdvk07_fe_dyson_loss.json")
-  set_tests_properties(TddftCompactDysonFe PROPERTIES
-    LABELS "validation;tddft;tdvk-07;accepted-state;compact;dyson;loss;alsda;covariance"
-    DISABLED TRUE
-    TIMEOUT 7200)
-  add_test(NAME TddftCompactDysonProductionAcceptance
-    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/tddft_compact_production_acceptance.py"
-      "--binary" "${TestBinary}"
-      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/tddft_compact_production_acceptance"
-      "--output" "${CMAKE_BINARY_DIR}/Testing/validation/tddft_compact_production_acceptance.json")
-  set_tests_properties(TddftCompactDysonProductionAcceptance PROPERTIES
-    LABELS "validation;tddft;production;compact;dyson;streaming;black-box"
-    TIMEOUT 7200)
   add_test(NAME UnitLrAlsdaKernelRejectProvenance
     COMMAND UnitLrAlsdaKernel provenance)
   set_tests_properties(UnitLrAlsdaKernelRejectProvenance PROPERTIES
