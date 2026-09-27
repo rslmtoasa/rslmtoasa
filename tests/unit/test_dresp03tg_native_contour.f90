@@ -7,8 +7,8 @@ program test_dresp03tg_native_contour
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
    use logger_mod, only: g_logger
-   use lr_lmto_turek_gf_mod, only: native_path_operator, native_screening_alpha
-   use lr_lmto_turek_contour_mod, only: native_turek_contour_options, native_turek_contour_report, &
+   use lmto_path_operator_mod, only: native_path_operator, native_screening_alpha, &
+      native_turek_contour_options, native_turek_contour_report, &
       native_build_contour, native_exchange_q_contour, native_exchange_jij_contour, &
       native_exchange_q_ordered_contour, native_exchange_pairs_contour, native_spectral_bounds, &
       native_native_poles_from_structure, native_fourier_jq_to_jij, native_fourier_jij_to_jq, &

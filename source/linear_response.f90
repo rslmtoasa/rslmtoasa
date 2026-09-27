@@ -15,7 +15,7 @@ module linear_response_mod
    use, intrinsic :: iso_fortran_env, only: int64
    use green_mod, only: green
    use recursion_mod, only: recursion
-   use lr_lmto_turek_contour_mod, only: native_turek_contour_report
+   use lmto_path_operator_mod, only: native_turek_contour_report
    implicit none
    private
 

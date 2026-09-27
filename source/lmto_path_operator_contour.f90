@@ -4,58 +4,12 @@
 ! This module deliberately works on the path operator itself.  It does not
 ! obtain g from a finite-H resolvent and it does not use an eigenbasis.  The
 ! only representation-specific input is the live lattice, whose P and S
-! objects are assembled by lr_lmto_turek_gf_mod.
+! objects are assembled by lmto_path_operator_mod.
 !------------------------------------------------------------------------------
-module lr_lmto_turek_contour_mod
+submodule (lmto_path_operator_mod) lmto_path_operator_contour
    use lattice_mod, only: lattice
-   use lr_lmto_turek_gf_mod, only: native_structure_constants, native_path_operator_from_structure, native_exchange_trace, &
-      native_screening_alpha
    use math_mod, only: i_unit, pi
    use precision_mod, only: rp
-   implicit none
-   private
-
-   type, public :: native_turek_contour_options
-      integer :: contour_points = 64
-      character(len=16) :: contour_shape = 'ellipse'
-      real(rp) :: contour_margin = 0.25_rp
-      real(rp) :: contour_height_fraction = 0.35_rp
-      logical :: account_fermi_poles = .true.
-      ! If positive, choose the ellipse height to enclose this even number
-      ! of Matsubara poles.  Zero retains the historical height-fraction
-      ! prescription.
-      integer :: target_fermi_poles = 0
-   end type native_turek_contour_options
-
-   type, public :: native_turek_contour_report
-      integer :: contour_points = 0
-      integer :: fermi_poles = 0
-      integer :: k_points = 0
-      integer :: q_points = 0
-      real(rp) :: solve_seconds = 0.0_rp
-      real(rp) :: contour_seconds = 0.0_rp
-      real(rp) :: pole_seconds = 0.0_rp
-      real(rp) :: native_max_ellipse_value = 0.0_rp
-      logical :: native_bounds_verified = .false.
-      integer :: native_spectral_poles = 0
-   end type native_turek_contour_report
-
-   public :: native_build_contour
-   public :: native_exchange_q_contour
-   public :: native_exchange_q_ordered_contour
-   public :: native_exchange_jij_contour
-   public :: native_exchange_pairs_contour
-   public :: native_fourier_jq_to_jij
-   public :: native_fourier_jij_to_jq
-   public :: native_fourier_complex_jq_to_jij
-   public :: native_fourier_complex_jij_to_jq
-   public :: native_spin_site_block
-   public :: native_complex_fermi
-   public :: native_regularized_fermi
-   public :: native_spectral_bounds
-   public :: native_turek_static_reference
-   public :: native_native_poles_from_structure
-
 contains
 
    !> Build the counter-clockwise ellipse used by the native contour route.
@@ -63,7 +17,7 @@ contains
    !> The bounds are explicit because the native path operator has no
    !> eigenvalue API.  In production they are taken from the accepted
    !> reciprocal-H state; the native evaluator itself still only solves P-S.
-   subroutine native_build_contour(energy_bounds, fermi, kT, options, nodes, weights, fermi_poles)
+   module subroutine native_build_contour(energy_bounds, fermi, kT, options, nodes, weights, fermi_poles)
       real(rp), intent(in) :: energy_bounds(2), fermi, kT
       type(native_turek_contour_options), intent(in) :: options
       complex(rp), allocatable, intent(out) :: nodes(:), weights(:), fermi_poles(:)
@@ -153,7 +107,7 @@ contains
    !> explicit +kT residues are added back.  This is the finite-temperature
    !> identity certified by the scalar oracle; every resolvent here is still a
    !> native P-S solve.
-   subroutine native_exchange_q_contour(lat, k_points, k_weights, q_points, fermi, kT, energy_bounds, options, jq, report)
+   module subroutine native_exchange_q_contour(lat, k_points, k_weights, q_points, fermi, kT, energy_bounds, options, jq, report)
       type(lattice), intent(inout) :: lat
       real(rp), intent(in) :: k_points(:, :), k_weights(:), q_points(:, :), fermi, kT, energy_bounds(2)
       type(native_turek_contour_options), intent(in) :: options
@@ -267,7 +221,7 @@ contains
    !> Evaluate both ordered reciprocal channels without collapsing their
    !> complex sublattice phases.  The scalar production wrapper above remains
    !> for compatibility; this is the independent ud/du route used by R1.
-   subroutine native_exchange_q_ordered_contour(lat, k_points, k_weights, q_points, fermi, kT, energy_bounds, options, &
+   module subroutine native_exchange_q_ordered_contour(lat, k_points, k_weights, q_points, fermi, kT, energy_bounds, options, &
                                                  jq_ud, jq_du, report)
       type(lattice), intent(inout) :: lat
       real(rp), intent(in) :: k_points(:, :), k_weights(:), q_points(:, :), fermi, kT, energy_bounds(2)
@@ -375,7 +329,7 @@ contains
    !> Evaluate real-space ordered pairs directly from Fourier transformed
    !> native Green-function blocks.  This routine never forms J(q), so its
    !> result is independent of the reciprocal convolution route.
-   subroutine native_exchange_pairs_contour(lat, k_points, k_weights, real_space_vectors, fermi, kT, energy_bounds, options, &
+   module subroutine native_exchange_pairs_contour(lat, k_points, k_weights, real_space_vectors, fermi, kT, energy_bounds, options, &
                                              jij_ud, jij_du, report)
       type(lattice), intent(inout) :: lat
       real(rp), intent(in) :: k_points(:, :), k_weights(:), real_space_vectors(:, :), fermi, kT, energy_bounds(2)
@@ -529,7 +483,7 @@ contains
    !> `jq` is the native contour result and `jij` is its explicitly normalized
    !> discrete inverse Fourier transform.  This is retained as an algebraic
    !> DFT-helper regression; it is not the independent native pair route.
-   subroutine native_exchange_jij_contour(lat, k_points, k_weights, q_points, real_space_vectors, fermi, kT, energy_bounds, &
+   module subroutine native_exchange_jij_contour(lat, k_points, k_weights, q_points, real_space_vectors, fermi, kT, energy_bounds, &
       options, jq, jij, report)
       type(lattice), intent(inout) :: lat
       real(rp), intent(in) :: k_points(:, :), k_weights(:), q_points(:, :), real_space_vectors(:, :), fermi, kT, energy_bounds(2)
@@ -549,7 +503,7 @@ contains
    !> coordinates.  For a complete uniform mesh this is an exact DFT; for a
    !> selected path the routine remains an explicit normalized quadrature and
    !> does not claim a shell-complete interaction.
-   subroutine native_fourier_jq_to_jij(q_points, jq, real_space_vectors, jij)
+   module subroutine native_fourier_jq_to_jij(q_points, jq, real_space_vectors, jij)
       real(rp), intent(in) :: q_points(:, :), jq(:, :, :), real_space_vectors(:, :)
       real(rp), intent(out) :: jij(:, :, :)
       integer :: nq, nsite, nvec, iq, ir, ia, ja
@@ -576,7 +530,7 @@ contains
 
    !> Reconstruct J_ij(q) from real-space coefficients using the inverse
    !> Fourier convention paired with native_fourier_jq_to_jij.
-   subroutine native_fourier_jij_to_jq(q_points, real_space_vectors, jij, jq)
+   module subroutine native_fourier_jij_to_jq(q_points, real_space_vectors, jij, jq)
       real(rp), intent(in) :: q_points(:, :), real_space_vectors(:, :), jij(:, :, :)
       real(rp), intent(out) :: jq(:, :, :)
       integer :: nq, nsite, nvec, iq, ir, ia, ja
@@ -601,7 +555,7 @@ contains
       end do
    end subroutine native_fourier_jij_to_jq
 
-   subroutine native_fourier_complex_jq_to_jij(q_points, jq, real_space_vectors, jij)
+   module subroutine native_fourier_complex_jq_to_jij(q_points, jq, real_space_vectors, jij)
       real(rp), intent(in) :: q_points(:, :), real_space_vectors(:, :)
       complex(rp), intent(in) :: jq(:, :, :)
       complex(rp), intent(out) :: jij(:, :, :)
@@ -625,7 +579,7 @@ contains
       end do
    end subroutine native_fourier_complex_jq_to_jij
 
-   subroutine native_fourier_complex_jij_to_jq(q_points, real_space_vectors, jij, jq)
+   module subroutine native_fourier_complex_jij_to_jq(q_points, real_space_vectors, jij, jq)
       real(rp), intent(in) :: q_points(:, :), real_space_vectors(:, :)
       complex(rp), intent(in) :: jij(:, :, :)
       complex(rp), intent(out) :: jq(:, :, :)
@@ -656,7 +610,7 @@ contains
    !> problem [(I-SQ)D] z = (I-SQ)DC+S.  Its eigenvalues are used only for
    !> contour selection/validation; all exchange resolvents remain direct
    !> P-S solves.
-   subroutine native_spectral_bounds(lat, k_points, fermi, kT, options, energy_bounds, max_ellipse_value, all_inside, pole_count)
+   module subroutine native_spectral_bounds(lat, k_points, fermi, kT, options, energy_bounds, max_ellipse_value, all_inside, pole_count)
       type(lattice), intent(inout) :: lat
       real(rp), intent(in) :: k_points(:, :), fermi, kT
       type(native_turek_contour_options), intent(in) :: options
@@ -699,7 +653,7 @@ contains
    !> Bounds/poles select and validate the contour; all exchange resolvents are
    !> still native P-S path-operator solves. Output arrays retain sublattice
    !> phases so finite-q consumers can compare representations without a scale.
-   subroutine native_turek_static_reference(lat, k_points, k_weights, q_points, fermi, kT, options, &
+   module subroutine native_turek_static_reference(lat, k_points, k_weights, q_points, fermi, kT, options, &
       jq_ud, jq_du, jq_sym, delta_j, curvature, report)
       type(lattice), intent(inout) :: lat
       real(rp), intent(in) :: k_points(:, :), k_weights(:), q_points(:, :), fermi, kT
@@ -745,7 +699,7 @@ contains
       deallocate(native_points)
    end subroutine native_turek_static_reference
 
-   subroutine native_native_poles_from_structure(lat, smat, roots)
+   module subroutine native_native_poles_from_structure(lat, smat, roots)
       type(lattice), intent(inout) :: lat
       complex(rp), intent(in) :: smat(:, :)
       complex(rp), intent(out) :: roots(:)
@@ -809,7 +763,7 @@ contains
    end subroutine native_native_poles_from_structure
 
    !> Extract one site/spin block from the native site-major spin layout.
-   subroutine native_spin_site_block(gmat, norb, site_i, spin_i, site_j, spin_j, block)
+   module subroutine native_spin_site_block(gmat, norb, site_i, spin_i, site_j, spin_j, block)
       complex(rp), intent(in) :: gmat(:, :)
       integer, intent(in) :: norb, site_i, spin_i, site_j, spin_j
       complex(rp), intent(out) :: block(:, :)
@@ -901,7 +855,7 @@ contains
       end do
    end subroutine native_trace_matrix_ordered
 
-   pure complex(rp) function native_complex_fermi(z, fermi, kT) result(value)
+   module pure complex(rp) function native_complex_fermi(z, fermi, kT) result(value)
       complex(rp), intent(in) :: z
       real(rp), intent(in) :: fermi, kT
       complex(rp) :: argument, reduced
@@ -923,7 +877,7 @@ contains
    !> Pole-subtracted weight used by the alternative closed-contour identity.
    !> Its contour integral already contains the explicit Fermi-pole residues;
    !> callers must not add another pole sum to this weight.
-   pure complex(rp) function native_regularized_fermi(z, fermi, kT, poles) result(value)
+   module pure complex(rp) function native_regularized_fermi(z, fermi, kT, poles) result(value)
       complex(rp), intent(in) :: z, poles(:)
       real(rp), intent(in) :: fermi, kT
       integer :: i
@@ -944,4 +898,4 @@ contains
       end if
    end function elapsed_seconds
 
-end module lr_lmto_turek_contour_mod
+end submodule lmto_path_operator_contour

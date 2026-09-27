@@ -14,7 +14,7 @@ module exchange_q_mod
    use lattice_mod, only: lattice
    use linear_response_mod, only: compute_static_rotation_curvature, validate_rotation_capability
    use linear_response_mod, only: lmto_live_hamiltonian_fixture
-   use lr_lmto_turek_contour_mod, only: native_turek_contour_report
+   use lmto_path_operator_mod, only: native_turek_contour_report
    use logger_mod, only: g_logger
    use math_mod, only: pi
    use precision_mod, only: rp

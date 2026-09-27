@@ -87,8 +87,8 @@ add_library(${PROJECT_NAME} STATIC
     recursion_haydock.f90
     recursion_chebyshev.f90
     recursion_transport.f90
-    lr_lmto_turek_gf.f90
-    lr_lmto_turek_contour.f90
+    lmto_path_operator.f90
+    lmto_path_operator_contour.f90
     linear_response_run.f90
     sparse.f90
     report.f90

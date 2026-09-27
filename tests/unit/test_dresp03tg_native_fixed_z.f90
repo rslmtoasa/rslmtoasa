@@ -26,7 +26,7 @@ program test_dresp03tg_native_fixed_z
       assemble_lmto_hamiltonian, force_theorem_pi
    use lr_rotation_oracles_mod, only: assemble_lmto_rotation_terms, assemble_lmto_mixed_derivative, &
       force_theorem_integrand
-   use lr_lmto_turek_gf_mod, only: native_complex_p_matrix, native_screening_alpha, &
+   use lmto_path_operator_mod, only: native_complex_p_matrix, native_screening_alpha, &
       native_screened_p_matrix, native_delta_p, native_inverse, native_path_operator, &
       native_exchange_integrand, native_finite_h_integrand, native_collinear_pauli_integrand
    implicit none

@@ -1,11 +1,23 @@
 !------------------------------------------------------------------------------
-! DRESP-03TG -- native screened LMTO/Turek path-operator backend.
+! LMTO auxiliary path operator and native Turek/LKAG exchange services.
 !
-! This module owns only the representation-specific algebra.  In particular,
-! it never obtains a native path operator by scaling a finite-H resolvent.
-! The latter remains an independent oracle for the DRESP-03TG tests.
+! g^alpha is the auxiliary path operator.  It is not the physical LMTO Green
+! function: no lambda^alpha + mu^alpha g^alpha mu^alpha reconstruction is
+! performed, and it must not be used as a coefficient Green function in a
+! chi_0 bubble.
+!
+! With the linear P^gamma used here, g^gamma is the resolvent of the
+! untruncated orthogonal Hamiltonian H_exact = E_nu + hbar(1 + obar hbar)^-1,
+! whereas the SCF and linear_response paths use H2 = E_nu + hbar - hbar obar.
+! J_Turek - J_H2 therefore measures the H2 truncation (evidence:
+! lr-campaign-archive:docs/TG_FZ_R5_PRODUCTION_H_REPRESENTATION_BRIDGE.md,
+! ...TG_FZ_R7_SCREENING_REPRESENTATION_REPAIR.md,
+! ...TG_FZ_R8R_RESOLVENT_CONTACT_CLOSURE.md).
+!
+! The exchange trace DeltaP g_up DeltaP g_down is representation-invariant,
+! which is why the auxiliary g^alpha suffices for J_ij.
 !------------------------------------------------------------------------------
-module lr_lmto_turek_gf_mod
+module lmto_path_operator_mod
    use lattice_mod, only: lattice
    use symbolic_atom_mod, only: symbolic_atom
    use precision_mod, only: rp
@@ -27,6 +39,143 @@ module lr_lmto_turek_gf_mod
    public :: native_exchange_integrand
    public :: native_finite_h_integrand
    public :: native_collinear_pauli_integrand
+
+   type, public :: native_turek_contour_options
+      integer :: contour_points = 64
+      character(len=16) :: contour_shape = 'ellipse'
+      real(rp) :: contour_margin = 0.25_rp
+      real(rp) :: contour_height_fraction = 0.35_rp
+      logical :: account_fermi_poles = .true.
+      ! If positive, choose the ellipse height to enclose this even number
+      ! of Matsubara poles.  Zero retains the historical height-fraction
+      ! prescription.
+      integer :: target_fermi_poles = 0
+   end type native_turek_contour_options
+
+   type, public :: native_turek_contour_report
+      integer :: contour_points = 0
+      integer :: fermi_poles = 0
+      integer :: k_points = 0
+      integer :: q_points = 0
+      real(rp) :: solve_seconds = 0.0_rp
+      real(rp) :: contour_seconds = 0.0_rp
+      real(rp) :: pole_seconds = 0.0_rp
+      real(rp) :: native_max_ellipse_value = 0.0_rp
+      logical :: native_bounds_verified = .false.
+      integer :: native_spectral_poles = 0
+   end type native_turek_contour_report
+
+   public :: native_build_contour, native_exchange_q_contour, native_exchange_q_ordered_contour
+   public :: native_exchange_jij_contour, native_exchange_pairs_contour
+   public :: native_fourier_jq_to_jij, native_fourier_jij_to_jq
+   public :: native_fourier_complex_jq_to_jij, native_fourier_complex_jij_to_jq
+   public :: native_spin_site_block, native_complex_fermi, native_regularized_fermi
+   public :: native_spectral_bounds, native_turek_static_reference, native_native_poles_from_structure
+
+   interface
+      module subroutine native_build_contour(energy_bounds, fermi, kT, options, nodes, weights, fermi_poles)
+         real(rp), intent(in) :: energy_bounds(2), fermi, kT
+         type(native_turek_contour_options), intent(in) :: options
+         complex(rp), allocatable, intent(out) :: nodes(:), weights(:), fermi_poles(:)
+      end subroutine native_build_contour
+
+      module subroutine native_exchange_q_contour(lat, k_points, k_weights, q_points, fermi, kT, energy_bounds, options, jq, report)
+         type(lattice), intent(inout) :: lat
+         real(rp), intent(in) :: k_points(:, :), k_weights(:), q_points(:, :), fermi, kT, energy_bounds(2)
+         type(native_turek_contour_options), intent(in) :: options
+         real(rp), intent(out) :: jq(:, :, :)
+         type(native_turek_contour_report), intent(out), optional :: report
+      end subroutine native_exchange_q_contour
+
+      module subroutine native_exchange_q_ordered_contour(lat, k_points, k_weights, q_points, fermi, kT, energy_bounds, options, &
+                                                           jq_ud, jq_du, report)
+         type(lattice), intent(inout) :: lat
+         real(rp), intent(in) :: k_points(:, :), k_weights(:), q_points(:, :), fermi, kT, energy_bounds(2)
+         type(native_turek_contour_options), intent(in) :: options
+         complex(rp), intent(out) :: jq_ud(:, :, :), jq_du(:, :, :)
+         type(native_turek_contour_report), intent(out), optional :: report
+      end subroutine native_exchange_q_ordered_contour
+
+      module subroutine native_exchange_pairs_contour(lat, k_points, k_weights, real_space_vectors, fermi, kT, energy_bounds, options, &
+                                                        jij_ud, jij_du, report)
+         type(lattice), intent(inout) :: lat
+         real(rp), intent(in) :: k_points(:, :), k_weights(:), real_space_vectors(:, :), fermi, kT, energy_bounds(2)
+         type(native_turek_contour_options), intent(in) :: options
+         complex(rp), intent(out) :: jij_ud(:, :, :), jij_du(:, :, :)
+         type(native_turek_contour_report), intent(out), optional :: report
+      end subroutine native_exchange_pairs_contour
+
+      module subroutine native_exchange_jij_contour(lat, k_points, k_weights, q_points, real_space_vectors, fermi, kT, energy_bounds, &
+                                                     options, jq, jij, report)
+         type(lattice), intent(inout) :: lat
+         real(rp), intent(in) :: k_points(:, :), k_weights(:), q_points(:, :), real_space_vectors(:, :), fermi, kT, energy_bounds(2)
+         type(native_turek_contour_options), intent(in) :: options
+         real(rp), intent(out) :: jq(:, :, :), jij(:, :, :)
+         type(native_turek_contour_report), intent(out), optional :: report
+      end subroutine native_exchange_jij_contour
+
+      module subroutine native_fourier_jq_to_jij(q_points, jq, real_space_vectors, jij)
+         real(rp), intent(in) :: q_points(:, :), jq(:, :, :), real_space_vectors(:, :)
+         real(rp), intent(out) :: jij(:, :, :)
+      end subroutine native_fourier_jq_to_jij
+
+      module subroutine native_fourier_jij_to_jq(q_points, real_space_vectors, jij, jq)
+         real(rp), intent(in) :: q_points(:, :), real_space_vectors(:, :), jij(:, :, :)
+         real(rp), intent(out) :: jq(:, :, :)
+      end subroutine native_fourier_jij_to_jq
+
+      module subroutine native_fourier_complex_jq_to_jij(q_points, jq, real_space_vectors, jij)
+         real(rp), intent(in) :: q_points(:, :), real_space_vectors(:, :)
+         complex(rp), intent(in) :: jq(:, :, :)
+         complex(rp), intent(out) :: jij(:, :, :)
+      end subroutine native_fourier_complex_jq_to_jij
+
+      module subroutine native_fourier_complex_jij_to_jq(q_points, real_space_vectors, jij, jq)
+         real(rp), intent(in) :: q_points(:, :), real_space_vectors(:, :)
+         complex(rp), intent(in) :: jij(:, :, :)
+         complex(rp), intent(out) :: jq(:, :, :)
+      end subroutine native_fourier_complex_jij_to_jq
+
+      module subroutine native_spectral_bounds(lat, k_points, fermi, kT, options, energy_bounds, max_ellipse_value, all_inside, pole_count)
+         type(lattice), intent(inout) :: lat
+         real(rp), intent(in) :: k_points(:, :), fermi, kT
+         type(native_turek_contour_options), intent(in) :: options
+         real(rp), intent(out) :: energy_bounds(2), max_ellipse_value
+         logical, intent(out) :: all_inside
+         integer, intent(out) :: pole_count
+      end subroutine native_spectral_bounds
+
+      module subroutine native_turek_static_reference(lat, k_points, k_weights, q_points, fermi, kT, options, &
+                                                       jq_ud, jq_du, jq_sym, delta_j, curvature, report)
+         type(lattice), intent(inout) :: lat
+         real(rp), intent(in) :: k_points(:, :), k_weights(:), q_points(:, :), fermi, kT
+         type(native_turek_contour_options), intent(in) :: options
+         complex(rp), intent(out) :: jq_ud(:, :, :), jq_du(:, :, :), jq_sym(:, :, :), delta_j(:, :, :), curvature(:, :, :)
+         type(native_turek_contour_report), intent(out) :: report
+      end subroutine native_turek_static_reference
+
+      module subroutine native_native_poles_from_structure(lat, smat, roots)
+         type(lattice), intent(inout) :: lat
+         complex(rp), intent(in) :: smat(:, :)
+         complex(rp), intent(out) :: roots(:)
+      end subroutine native_native_poles_from_structure
+
+      module subroutine native_spin_site_block(gmat, norb, site_i, spin_i, site_j, spin_j, block)
+         complex(rp), intent(in) :: gmat(:, :)
+         integer, intent(in) :: norb, site_i, spin_i, site_j, spin_j
+         complex(rp), intent(out) :: block(:, :)
+      end subroutine native_spin_site_block
+
+      module pure complex(rp) function native_complex_fermi(z, fermi, kT) result(value)
+         complex(rp), intent(in) :: z
+         real(rp), intent(in) :: fermi, kT
+      end function native_complex_fermi
+
+      module pure complex(rp) function native_regularized_fermi(z, fermi, kT, poles) result(value)
+         complex(rp), intent(in) :: z, poles(:)
+         real(rp), intent(in) :: fermi, kT
+      end function native_regularized_fermi
+   end interface
 
 contains
 
@@ -331,4 +480,4 @@ contains
       end do
    end function native_collinear_pauli_integrand
 
-end module lr_lmto_turek_gf_mod
+end module lmto_path_operator_mod

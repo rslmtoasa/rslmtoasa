@@ -22,7 +22,7 @@ program test_dresp03q_production_adapter
       prepare_rotation_response, evaluate_rotation_response, evaluate_rotation_response_oracle, &
       reduce_static_rotation_kernel, rotation_circular_unitary, rotation_axes
    use linear_response_mod, only: finite_temperature_occupation
-   use lr_lmto_turek_contour_mod, only: native_turek_contour_options, native_turek_contour_report, &
+   use lmto_path_operator_mod, only: native_turek_contour_options, native_turek_contour_report, &
       native_turek_static_reference
    use math_mod, only: ang2au, i_unit, init_math_operators
    use precision_mod, only: rp

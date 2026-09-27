@@ -12,7 +12,7 @@ submodule (linear_response_mod) linear_response_rotation
    use lmto_magnetic_tangent_mod, only: lmto_bond_value, lmto_bond_derivative, &
                                         lmto_bond_mixed_derivative, lmto_hhmag_to_spinor
    use logger_mod, only: g_logger
-   use lr_lmto_turek_contour_mod, only: native_turek_contour_options, native_turek_contour_report, &
+   use lmto_path_operator_mod, only: native_turek_contour_options, native_turek_contour_report, &
       native_turek_static_reference
    use reciprocal_mod, only: reciprocal
    use self_mod, only: self
