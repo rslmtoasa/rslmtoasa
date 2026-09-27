@@ -21,7 +21,7 @@ This is a response-space mapping statement, not a claim that it reproduces the
 full scalar-relativistic `NEWRHO` density. [BASIS MAPPING]
 
 The remaining required numerical closure is recorded in
-docs/LR_SR_PAULI_NUMERICAL_CLOSURE.md. It quantifies the scalar-relativistic
+lr-campaign-archive:docs/LR_SR_PAULI_NUMERICAL_CLOSURE.md. It quantifies the scalar-relativistic
 ground-state density/moment difference from the Pauli projection for the LR-01
 Fe fixture; no arbitrary pass tolerance is assigned. Ni remains deferred
 because no comparable accepted LR-01 Ni fixture is present. [NUMERICAL EVIDENCE]
@@ -40,12 +40,12 @@ The required prerequisite evidence was present before this change:
 
 | prerequisite | evidence | focused tests present |
 | --- | --- | --- |
-| LR-GF-01 | [`docs/LR-GF-01_GF_CONTRACT_EVIDENCE.md`](LR-GF-01_GF_CONTRACT_EVIDENCE.md) | `UnitGreenLifecycle` and LR-GF validation sources |
-| LR-BASIS-00 | [`docs/LR-BASIS-00_RADIAL_AUGMENTATION_EVIDENCE.md`](LR-BASIS-00_RADIAL_AUGMENTATION_EVIDENCE.md) | `UnitLrBasisRadial`, `UnitLrBasisAngular`, `UnitLrBasisAugmentation` |
-| LR-01 | [`docs/LR_RADIAL_GROUND_STATE_AUDIT.md`](LR_RADIAL_GROUND_STATE_AUDIT.md) | `UnitLrRadialGroundState`, `Val22LrRadialGroundState` |
+| LR-GF-01 | [`lr-campaign-archive:docs/LR-GF-01_GF_CONTRACT_EVIDENCE.md`](lr-campaign-archive:docs/LR-GF-01_GF_CONTRACT_EVIDENCE.md) | `UnitGreenLifecycle` and LR-GF validation sources |
+| LR-BASIS-00 | [`lr-campaign-archive:docs/LR-BASIS-00_RADIAL_AUGMENTATION_EVIDENCE.md`](lr-campaign-archive:docs/LR-BASIS-00_RADIAL_AUGMENTATION_EVIDENCE.md) | `UnitLrBasisRadial`, `UnitLrBasisAngular`, `UnitLrBasisAugmentation` |
+| LR-01 | [`lr-campaign-archive:docs/LR_RADIAL_GROUND_STATE_AUDIT.md`](lr-campaign-archive:docs/LR_RADIAL_GROUND_STATE_AUDIT.md) | `UnitLrRadialGroundState`, `Val22LrRadialGroundState` |
 
 The literature target IDs are retained in
-[`docs/dev/RS_LMTO_TDDFT_cleanroom_Luna/00A_LITERATURE_CONTRACTS.md`](dev/RS_LMTO_TDDFT_cleanroom_Luna/00A_LITERATURE_CONTRACTS.md):
+[`lr-campaign-archive:docs/dev/RS_LMTO_TDDFT_cleanroom_Luna/00A_LITERATURE_CONTRACTS.md`](lr-campaign-archive:docs/dev/RS_LMTO_TDDFT_cleanroom_Luna/00A_LITERATURE_CONTRACTS.md):
 BES-05, LCMM-02, and EEB-02/03/04. The older LR-02 feasibility file is treated
 as a blueprint, not as proof of the live implementation.
 

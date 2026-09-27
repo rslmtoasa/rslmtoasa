@@ -65,7 +65,7 @@ The native-RSGF capability audit closes the finite/provider prerequisites R0–R
 and TDRUN-02 registers the native route through the same accepted-state
 lifecycle. The registration is an integration result, not Fe/Ni material
 validation. See
-[`RSGF_CAPABILITY_CLOSURE.md`](RSGF_CAPABILITY_CLOSURE.md).
+[`RSGF_CAPABILITY_CLOSURE.md`](lr-campaign-archive:docs/RSGF_CAPABILITY_CLOSURE.md).
 
 `backend='product_lehmann'` is a TDVK-02R2 validation-only branch. It evaluates
 the bare KS Lehmann response in the weighted-orthonormal LMTO product basis at

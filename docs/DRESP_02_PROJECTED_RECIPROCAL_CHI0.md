@@ -8,7 +8,7 @@ DRESP-02F established the analytic GF/Lehmann equivalence and DRESP-02P
 established the optimized material backend.  DRESP-02C closes the remaining
 material gate with an independent finite-width spectral oracle and a resolved
 `eta_int` ladder; the raw closure table is recorded in
-[`DRESP_02C_MATERIAL_CLOSURE.md`](DRESP_02C_MATERIAL_CLOSURE.md).
+[`DRESP_02C_MATERIAL_CLOSURE.md`](lr-campaign-archive:docs/DRESP_02C_MATERIAL_CLOSURE.md).
 
 No interaction kernel, Goldstone correction, Dyson solve, loss matrix, or mode
 fitting is part of this deliverable.
@@ -307,7 +307,7 @@ fixture target took `14.25 s` with a maximum process resident set of about
 and about `16,188 KB`; these are process-level unit observations, not a
 cross-machine production benchmark.  These values are the pre-DRESP-02P
 baseline.  The optimized eigenbasis GF backend and its measured Fe ladder are
-reported in [`DRESP_02P_PROJECTED_GF_PERFORMANCE.md`](DRESP_02P_PROJECTED_GF_PERFORMANCE.md);
+reported in [`DRESP_02P_PROJECTED_GF_PERFORMANCE.md`](lr-campaign-archive:docs/DRESP_02P_PROJECTED_GF_PERFORMANCE.md);
 the result metadata also exposes the reference/optimized stage timings and
 call counts for downstream measurements.
 

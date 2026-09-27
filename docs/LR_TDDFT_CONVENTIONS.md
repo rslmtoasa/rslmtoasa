@@ -34,11 +34,11 @@ This audit consumes the earlier contracts rather than redoing them.
 
 | contract | authoritative evidence consumed | use here |
 |---|---|---|
-| LR-GF-01 | [`LR-GF-01_GF_CONTRACT_EVIDENCE.md`](LR-GF-01_GF_CONTRACT_EVIDENCE.md) | orthogonal Lehmann ordering, `+iη`, Ry energy, reciprocal `k` convention |
-| LR-BASIS-00 | [`LR-BASIS-00_RADIAL_AUGMENTATION_EVIDENCE.md`](LR-BASIS-00_RADIAL_AUGMENTATION_EVIDENCE.md) | LMTO state reconstruction, spin-block order, radial functions and units |
-| LR-01 | [`LR_RADIAL_GROUND_STATE_AUDIT.md`](LR_RADIAL_GROUND_STATE_AUDIT.md) | `RHO`, physical densities, Vxc arrays, XC provenance, magnetic-moment reporting |
+| LR-GF-01 | [`LR-GF-01_GF_CONTRACT_EVIDENCE.md`](lr-campaign-archive:docs/LR-GF-01_GF_CONTRACT_EVIDENCE.md) | orthogonal Lehmann ordering, `+iη`, Ry energy, reciprocal `k` convention |
+| LR-BASIS-00 | [`LR-BASIS-00_RADIAL_AUGMENTATION_EVIDENCE.md`](lr-campaign-archive:docs/LR-BASIS-00_RADIAL_AUGMENTATION_EVIDENCE.md) | LMTO state reconstruction, spin-block order, radial functions and units |
+| LR-01 | [`LR_RADIAL_GROUND_STATE_AUDIT.md`](lr-campaign-archive:docs/LR_RADIAL_GROUND_STATE_AUDIT.md) | `RHO`, physical densities, Vxc arrays, XC provenance, magnetic-moment reporting |
 | LR-02R | [`LR_RESPONSE_BASIS_MAPPING.md`](LR_RESPONSE_BASIS_MAPPING.md) | complex harmonics, Gaunt normalization, response cutoff, super-index, radial measure, Fourier/site gauge |
-| LR-02N | [`LR_SR_PAULI_NUMERICAL_CLOSURE.md`](LR_SR_PAULI_NUMERICAL_CLOSURE.md) | measured distinction between `m^SR` and `m^P` |
+| LR-02N | [`LR_SR_PAULI_NUMERICAL_CLOSURE.md`](lr-campaign-archive:docs/LR_SR_PAULI_NUMERICAL_CLOSURE.md) | measured distinction between `m^SR` and `m^P` |
 
 The literature contracts are the retained IDs `BES-01…06` and `LCMM-01…05` in
 [`00A_LITERATURE_CONTRACTS.md`](dev/RS_LMTO_TDDFT_cleanroom_Luna/00A_LITERATURE_CONTRACTS.md).

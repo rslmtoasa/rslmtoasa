@@ -49,7 +49,7 @@ NEXT                  = NATIVE_ROTATION_DYNAMICS
 ```
 
 The detailed static evidence remains in
-[`DRESP_12_FINITE_LMTO_COVARIANCE.md`](DRESP_12_FINITE_LMTO_COVARIANCE.md).
+[`DRESP_12_FINITE_LMTO_COVARIANCE.md`](lr-campaign-archive:docs/DRESP_12_FINITE_LMTO_COVARIANCE.md).
 
 ## 2. Ground-state conjugate density and XC field
 

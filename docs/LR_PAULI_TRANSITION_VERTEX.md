@@ -207,7 +207,7 @@ ctest --test-dir build --output-on-failure -R '^UnitLrPauliTransitionVertexRejec
 
 These are algebraic and independent numerical-oracle claims. They do not
 promote the scalar-relativistic-to-Pauli discrepancy documented in
-`docs/LR_SR_PAULI_NUMERICAL_CLOSURE.md` into exact-SR response correctness,
+`lr-campaign-archive:docs/LR_SR_PAULI_NUMERICAL_CLOSURE.md` into exact-SR response correctness,
 and they do not claim Fe/Ni convergence, Goldstone correctness, or literature
 agreement.
 

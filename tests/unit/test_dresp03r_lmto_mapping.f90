@@ -9,7 +9,7 @@
 !     bond builder, including spin-dependent hopping and the onsite term.
 !
 ! The missing native g=(P-S)^(-1), lambda/mu physical-GF construction is
-! documented by DRESP_03R_LMTO_EXCHANGE_VERTEX_MAPPING.md and is intentionally
+! documented by lr-campaign-archive:docs/DRESP_03R_LMTO_EXCHANGE_VERTEX_MAPPING.md and is intentionally
 ! not approximated here.
 !------------------------------------------------------------------------------
 program test_dresp03r_lmto_mapping

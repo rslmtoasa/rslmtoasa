@@ -113,3 +113,71 @@ available at the `lr-campaign-archive` tag, at the path listed below.
 | XC integration corrective closeout | not stated | Radial derivative handoff and magnetic-SCF residual bookkeeping defects were closed. | `lr-campaign-archive:docs/XC_INTEGRATION_CORRECTIVE_CLOSEOUT.md` |
 | XC LDA reconciliation | 2026-08-30 | Barth-Hedin derivative and zero-spin-channel handling defects were repaired. | `lr-campaign-archive:docs/XC_LDA_RECONCILIATION.md` |
 | XC magnetic-SCF closeout | not stated | Bounded magnetic-SCF evidence remained unresolved for promoting a converged high-spin fcc-Fe state. | `lr-campaign-archive:docs/XC_MAGNETIC_SCF_CLOSEOUT.md` |
+
+## Linear response (LR) campaigns, 2026
+
+### DRESP
+
+| Campaign / file | Date | Conclusion (≤ 25 words) | Path at tag |
+|---|---|---|---|
+| DRESP_00_ARCHITECTURAL_REBASE_AUDIT.md | 2026-09-16 | Architectural rebase complete; implementation blocked at the RUNG_1_KL projected site-spin contract. | `lr-campaign-archive:docs/DRESP_00_ARCHITECTURAL_REBASE_AUDIT.md` |
+| DRESP_02C_MATERIAL_CLOSURE.md | 2026 | PASS — DRESP-02 material closure complete. | `lr-campaign-archive:docs/DRESP_02C_MATERIAL_CLOSURE.md` |
+| DRESP_02F_GF_LEHMANN_FORMULATION_AUDIT.md | 2026 | PASS — current GF formulation proven equivalent. | `lr-campaign-archive:docs/DRESP_02F_GF_LEHMANN_FORMULATION_AUDIT.md` |
+| DRESP_02P_PROJECTED_GF_PERFORMANCE.md | 2026 | PASS — performance blocker removed. | `lr-campaign-archive:docs/DRESP_02P_PROJECTED_GF_PERFORMANCE.md` |
+| DRESP_02R_MATERIAL_GF_CLOSURE.md | 2026 | Historical remediation record superseded by PASS — DRESP-02 material closure complete. | `lr-campaign-archive:docs/DRESP_02R_MATERIAL_GF_CLOSURE.md` |
+| DRESP_03QM_METALLIC_FINITE_Q.md | 2026 | PASS — metallic formulation certified; performance open. | `lr-campaign-archive:docs/DRESP_03QM_METALLIC_FINITE_Q.md` |
+| DRESP_03R_LMTO_EXCHANGE_VERTEX_MAPPING.md | 2026 | Partial PASS for offsite canonical/auxiliary contraction; physical path-operator to orthogonal-resolvent map remains BLOCKED. | `lr-campaign-archive:docs/DRESP_03R_LMTO_EXCHANGE_VERTEX_MAPPING.md` |
+| DRESP_03_KL_STATIC_LKAG_BRIDGE.md | 2026 | Audit complete; overall result BLOCKED at the finite-Hamiltonian/native LKAG comparison gate. | `lr-campaign-archive:docs/DRESP_03_KL_STATIC_LKAG_BRIDGE.md` |
+| DRESP_06A_SPATIAL_ALSDA_COMPARISON.md | 2026 | Historical ledger retained; current DRESP-06A-R uses certified accepted Pauli magnetization in direct checks. | `lr-campaign-archive:docs/DRESP_06A_SPATIAL_ALSDA_COMPARISON.md` |
+| DRESP_07_EXACT_KS_WARD_CLOSURE.md | 2026 | PASS — localized second-order LMTO mapping required. | `lr-campaign-archive:docs/DRESP_07_EXACT_KS_WARD_CLOSURE.md` |
+| DRESP_08_NATIVE_SECOND_ORDER_FIELD.md | 2026 | Verdict: PASS for the bounded native second-order LMTO field mapping. | `lr-campaign-archive:docs/DRESP_08_NATIVE_SECOND_ORDER_FIELD.md` |
+| DRESP_09R_PAULI_NATIVE_GATE.md | 2026 | PAULI_PROJECTION_INSUFFICIENT_FOR_NATIVE_TANGENT; mixed-spin radial metric remains not certified. | `lr-campaign-archive:docs/DRESP_09R_PAULI_NATIVE_GATE.md` |
+| DRESP_09S_SCALAR_RELATIVISTIC_AUGMENTATION.md | 2026 | PASS-B. | `lr-campaign-archive:docs/DRESP_09S_SCALAR_RELATIVISTIC_AUGMENTATION.md` |
+| DRESP_09T_MOVING_BASIS_TANGENT.md | 2026 | BLOCKED at the live orthogonalization response. | `lr-campaign-archive:docs/DRESP_09T_MOVING_BASIS_TANGENT.md` |
+| DRESP_09U_ORTHOGONALIZATION_RESPONSE.md | 2026 | PASS-B for the Hamiltonian representation chain; density coefficient response remains open. | `lr-campaign-archive:docs/DRESP_09U_ORTHOGONALIZATION_RESPONSE.md` |
+| DRESP_09V_DENSITY_MOMENT_TANGENT.md | 2026 | Closes the density-side representation response using the live reciprocal LMTO energy-moment contract. | `lr-campaign-archive:docs/DRESP_09V_DENSITY_MOMENT_TANGENT.md` |
+| DRESP_09W_RADIAL_OBSERVABLE_PROVENANCE.md | 2026 | Audits the radial seam after coefficient-space M0/M1/M2 and tangent closures. | `lr-campaign-archive:docs/DRESP_09W_RADIAL_OBSERVABLE_PROVENANCE.md` |
+| DRESP_09X_SR_SPIN_OBSERVABLE.md | 2026 | Bounded scalar-relativistic physical Pauli-spin observable audit; no ALSDA/Ward or dynamics claim. | `lr-campaign-archive:docs/DRESP_09X_SR_SPIN_OBSERVABLE.md` |
+| DRESP_09Y_AUGMENTATION_FRAME_TANGENT.md | 2026 | Closes the missing observable-side term in the bounded rigid-rotation audit. | `lr-campaign-archive:docs/DRESP_09Y_AUGMENTATION_FRAME_TANGENT.md` |
+| DRESP_09ZSR_PRODUCTION_SPAN_RECONCILIATION.md | 2026 | PASS-A; live production four-branch space is a strict numerical subspace of the complete six-branch space. | `lr-campaign-archive:docs/DRESP_09ZSR_PRODUCTION_SPAN_RECONCILIATION.md` |
+| DRESP_09ZS_COMPACT_SPAN_AUDIT.md | 2026 | PASS-B; raw four-branch shadow is not closed for the complete six-branch radial space. | `lr-campaign-archive:docs/DRESP_09ZS_COMPACT_SPAN_AUDIT.md` |
+| DRESP_09Z_ARBITRARY_L_SR_VERTEX.md | 2026 | Records the implementation boundary reached for the arbitrary-L scalar-relativistic response vertex. | `lr-campaign-archive:docs/DRESP_09Z_ARBITRARY_L_SR_VERTEX.md` |
+| DRESP_09_TRANSVERSE_FIELD_INSERTION.md | 2026 | Compact field algebra uses weighted coordinates with hard pairing b^H d = B^H W D. | `lr-campaign-archive:docs/DRESP_09_TRANSVERSE_FIELD_INSERTION.md` |
+| DRESP_10A_SIX_BRANCH_PRODUCT_BASIS.md | 2026 | Promotes the compact LMTO product basis to six certified second-order endpoint branches. | `lr-campaign-archive:docs/DRESP_10A_SIX_BRANCH_PRODUCT_BASIS.md` |
+| DRESP_10R_RESPONSE_ARCHITECTURE.md | 2026 | Raw static full-spatial ALSDA Ward gate stops when upstream representation gates remain open. | `lr-campaign-archive:docs/DRESP_10R_RESPONSE_ARCHITECTURE.md` |
+| DRESP_10_FIXED_BASIS_MIXED_WARD.md | 2026 | Fixed-ground-state mixed-representation static Ward formulation excludes moving-basis and contact terms. | `lr-campaign-archive:docs/DRESP_10_FIXED_BASIS_MIXED_WARD.md` |
+| DRESP_10_RAW_FULL_SPATIAL_ALSDA_WARD.md | 2026 | Diagnostic material gate adds full-spatial ALSDA orchestration; dynamic spectrum, Dyson, correction, and mode fit remain out of scope. | `lr-campaign-archive:docs/DRESP_10_RAW_FULL_SPATIAL_ALSDA_WARD.md` |
+| DRESP_11_GOLDSTONE_DEFECT_SPECTRUM.md | 2026 | Diagnostic-only; no Goldstone correction is enabled in production dynamics. | `lr-campaign-archive:docs/DRESP_11_GOLDSTONE_DEFECT_SPECTRUM.md` |
+| DRESP_12_FINITE_LMTO_COVARIANCE.md | 2026 | Static diagnostic-only Gamma-point covariance closure; response kernel, dynamics, and Goldstone correction remain unchanged. | `lr-campaign-archive:docs/DRESP_12_FINITE_LMTO_COVARIANCE.md` |
+
+### TG_FZ (Turek fixed-z)
+
+| Campaign / file | Date | Conclusion (≤ 25 words) | Path at tag |
+|---|---|---|---|
+| TG_FZ_R1_FIXED_Z_DIAGNOSTIC_REPAIR.md | 2026 | PASS — diagnostic fixture repaired and hardened. | `lr-campaign-archive:docs/TG_FZ_R1_FIXED_Z_DIAGNOSTIC_REPAIR.md` |
+| TG_FZ_R2_SPIN_SCREENING_VERTEX.md | 2026 | PASS-A — exact fixed-z vertex covariance derived and verified. | `lr-campaign-archive:docs/TG_FZ_R2_SPIN_SCREENING_VERTEX.md` |
+| TG_FZ_R4_FINITE_H_TUREK_VERTEX_BRIDGE.md | 2026 | BLOCKED — no unfitted fixed-z identity between live finite-H torque and tested Turek vertex. | `lr-campaign-archive:docs/TG_FZ_R4_FINITE_H_TUREK_VERTEX_BRIDGE.md` |
+| TG_FZ_R6_SCREENING_NORMALIZATION_ALPHA_AUDIT.md | 2026 | PASS-B — normalized gamma and alpha authority are both required. | `lr-campaign-archive:docs/TG_FZ_R6_SCREENING_NORMALIZATION_ALPHA_AUDIT.md` |
+
+### LR-* / RSGF / TDDFT audits
+
+| Campaign / file | Date | Conclusion (≤ 25 words) | Path at tag |
+|---|---|---|---|
+| LR-BASIS-00_RADIAL_AUGMENTATION_EVIDENCE.md | 2026 | Baseline certified for the stated scope. | `lr-campaign-archive:docs/LR-BASIS-00_RADIAL_AUGMENTATION_EVIDENCE.md` |
+| LR-GF-01_GF_CONTRACT_EVIDENCE.md | 2026-09-10 | Certifies the live post-purge one-electron infrastructure; removed TD-DFT response is not restored. | `lr-campaign-archive:docs/LR-GF-01_GF_CONTRACT_EVIDENCE.md` |
+| LR_GF_SUSCEPTIBILITY_CROSSCHECK.md | 2026 | PASS — independent reciprocal-GF bubble agrees with the LR-06 spectral/Lehmann susceptibility on the certified fixture. | `lr-campaign-archive:docs/LR_GF_SUSCEPTIBILITY_CROSSCHECK.md` |
+| LR_RADIAL_GROUND_STATE_AUDIT.md | 2026 | PASS for the supported scalar-relativistic, collinear, two-channel radial ground-state contract. | `lr-campaign-archive:docs/LR_RADIAL_GROUND_STATE_AUDIT.md` |
+| LR_RS_GF_REPRESENTATION_AUDIT.md | 2026-09-11 | Coefficient-space Green-function representation certified; native RS response backend remains BLOCKED. | `lr-campaign-archive:docs/LR_RS_GF_REPRESENTATION_AUDIT.md` |
+| LR_SR_PAULI_NUMERICAL_CLOSURE.md | 2026 | Records scalar-relativistic radial density versus large-component Pauli projection for one bcc-Fe state. | `lr-campaign-archive:docs/LR_SR_PAULI_NUMERICAL_CLOSURE.md` |
+| RSGF_CAPABILITY_CLOSURE.md | 2026-09-11 | Prerequisite capabilities are not globally blocked; R0–R3 are closed at certified scope while Fe/Ni R4 remains pending. | `lr-campaign-archive:docs/RSGF_CAPABILITY_CLOSURE.md` |
+| TDDFT_CLEANROOM_PURGE_MANIFEST.md | 2026 | LR-00 inventory recorded before purge. | `lr-campaign-archive:docs/TDDFT_CLEANROOM_PURGE_MANIFEST.md` |
+| TDDFT_COLLINEAR_REVALIDATION.md | 2026-09-11 | PENDING for R4 material validation; R0–R3 production revalidation passed. | `lr-campaign-archive:docs/TDDFT_COLLINEAR_REVALIDATION.md` |
+| TDDFT_NATIVE_RSGF_PRODUCTION_INTEGRATION.md | 2026-09-11 | PASS for registered production-integration scope; R4 Fe/Ni material validation remains pending. | `lr-campaign-archive:docs/TDDFT_NATIVE_RSGF_PRODUCTION_INTEGRATION.md` |
+| TDDFT_RECIPROCAL_GF_QUADRATURE_AUDIT.md | 2026 | Historical TDVK-03A fixture audit; TDVK-03R factorized backend and Fe closure evidence recorded below. | `lr-campaign-archive:docs/TDDFT_RECIPROCAL_GF_QUADRATURE_AUDIT.md` |
+| TDDFT_RECIPROCAL_VALIDATION.md | 2026-09-12 | TDVAL-K preflight recorded reciprocal validation scope; no explicit verdict appears in the first 40 lines. | `lr-campaign-archive:docs/TDDFT_RECIPROCAL_VALIDATION.md` |
+
+### Goldstone correction
+
+| Campaign / file | Date | Conclusion (≤ 25 words) | Path at tag |
+|---|---|---|---|
+| GOLDSTONE_EIGENVALUE_CORRECTION.md | 2026 | Focused tests establish algebraic consistency and finite-matrix evidence, not converged material or literature-spectrum accuracy. | `lr-campaign-archive:docs/GOLDSTONE_EIGENVALUE_CORRECTION.md` |

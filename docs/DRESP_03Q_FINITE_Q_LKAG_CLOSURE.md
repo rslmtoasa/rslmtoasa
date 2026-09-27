@@ -29,7 +29,7 @@ energy `f'(e)` limit, while retaining the certified contact derivative.  Exact
 commensurate full-mesh q translations reuse accepted endpoint eigenpairs;
 arbitrary q continues to use exact endpoint diagonalization.  Detailed
 derivation, independent metallic fixtures, bcc-Fe evidence, and timing are in
-[`DRESP_03QM_METALLIC_FINITE_Q.md`](DRESP_03QM_METALLIC_FINITE_Q.md).
+[`DRESP_03QM_METALLIC_FINITE_Q.md`](lr-campaign-archive:docs/DRESP_03QM_METALLIC_FINITE_Q.md).
 
 This finite-H side is not the native Turek acceptance oracle. DRESP-03TG now
 closes the native path-operator and pair/q gates independently; the production
