@@ -733,6 +733,10 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitDresp03tgNativeContour PROPERTIES
     LABELS "unit;dresp-03tg;native-turek;contour;fourier;independent-pairs;normalization;curvature;bcc-fe;hard-gate"
     WORKING_DIRECTORY "${_dresp03tg_contour_case}")
+  add_fortran_unit_test(UnitLmtoPathOperatorLegacyAlphaGuard ${TestDIR}/unit/test_lmto_path_operator_legacy_alpha_guard.f90)
+  set_tests_properties(UnitLmtoPathOperatorLegacyAlphaGuard PROPERTIES
+    LABELS "unit;lmto-path-operator;negative;screening-alpha"
+    WILL_FAIL TRUE)
   add_fortran_unit_test(UnitLrProductGfQuadratureAudit ${TestDIR}/unit/test_lr_product_gf_quadrature_audit.f90)
   set_tests_properties(UnitLrProductGfQuadratureAudit PROPERTIES
     LABELS "unit;tdvk-03a;lr-gf-02;quadrature-audit;reciprocal-gf"

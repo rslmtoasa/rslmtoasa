@@ -250,8 +250,10 @@ contains
          alpha(0:ncopy-1) = atom%potential%screening_alpha(lbound(atom%potential%screening_alpha,1): &
             lbound(atom%potential%screening_alpha,1)+ncopy-1)
       else
-         alpha(0:min(lmax,ubound(legacy_alpha,1))) = legacy_alpha(0:min(lmax,ubound(legacy_alpha,1)))
-         if (lmax > ubound(legacy_alpha,1)) alpha(ubound(legacy_alpha,1)+1:lmax) = legacy_alpha(ubound(legacy_alpha,1))
+         if (lmax > ubound(legacy_alpha,1)) then
+            error stop 'native_screening_alpha: legacy screening constants exist only for l <= 3; potential must provide screening_alpha'
+         end if
+         alpha(0:lmax) = legacy_alpha(0:lmax)
       end if
    end subroutine native_screening_alpha
 
