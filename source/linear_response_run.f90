@@ -34,237 +34,44 @@ submodule (linear_response_mod) linear_response_run
    character(len=*), parameter :: tddft_build_version = 'unavailable'
 #endif
 
+   ! The orchestration workers retain their validated internal routing shape;
+   ! lr_run constructs it from the orthogonal &linear_response axes.  It is
+   ! deliberately private so the retired &tddft configuration is not an API.
+   character(len=*), parameter :: tddft_driver_backend_lehmann = 'lehmann'
+   character(len=*), parameter :: tddft_driver_backend_native_rsgf = 'native_rsgf'
+   character(len=*), parameter :: tddft_driver_backend_product_lehmann = 'product_lehmann'
+   character(len=*), parameter :: tddft_driver_backend_projected_chi0 = 'projected_chi0'
+   character(len=*), parameter :: tddft_driver_backend_compact_dyson = 'compact_dyson'
+   character(len=*), parameter :: tddft_driver_backend_projected_mills = 'projected_mills'
+   character(len=*), parameter :: tddft_driver_backend_projected_juelich = 'projected_juelich'
+   character(len=*), parameter :: tddft_driver_route_direct_alsda = 'direct_alsda'
+   character(len=*), parameter :: tddft_driver_route_goldstone_sumrule = 'goldstone_sumrule'
+
+   type :: tddft_runtime_config
+      logical :: enabled = .false.
+      integer :: nq = 1
+      integer :: nfrequency = 1
+      character(len=32) :: channel = 'chi_plus'
+      real(rp), allocatable :: q_list(:, :)
+      real(rp), allocatable :: frequencies(:)
+      real(rp), allocatable :: eta_values(:)
+      real(rp) :: eta = 0.01_rp
+      integer :: response_lmax = -1
+      character(len=48) :: interaction_route = tddft_driver_route_direct_alsda
+      logical :: goldstone_correction = .false.
+      character(len=32) :: backend = tddft_driver_backend_lehmann
+      character(len=8) :: projected_selector = 'spd'
+      character(len=32) :: native_rsgf_provider = 'auto'
+      integer :: gf_integration_points = 2001
+      real(rp) :: gf_integration_eta = 0.0_rp
+      real(rp) :: gf_energy_margin = 1.0_rp
+      logical :: dyson_static_audit = .false.
+      logical :: validate_interacting_covariance = .false.
+      logical :: write_full_matrix = .true.
+      character(len=256) :: output_file = 'tddft_response.dat'
+   end type tddft_runtime_config
+
 contains
-
-   module subroutine tddft_config_restore(this)
-      class(tddft_production_config), intent(out) :: this
-      this%present = .false.
-      this%enabled = .false.
-      this%nq = 1
-      this%nfrequency = 1
-      this%channel = 'chi_plus'
-      this%eta = 0.01_rp
-      this%response_lmax = -1
-      this%interaction_route = tddft_driver_route_direct_alsda
-      this%goldstone_correction = .false.
-      this%backend = tddft_driver_backend_lehmann
-      this%projected_selector = 'spd'
-      this%native_rsgf_provider = 'auto'
-      this%gf_integration_points = 2001
-      this%gf_integration_eta = 0.0_rp
-      this%gf_energy_margin = 1.0_rp
-      this%dyson_static_audit = .false.
-      this%validate_interacting_covariance = .false.
-      this%write_full_matrix = .true.
-      this%output_file = 'tddft_response.dat'
-      if (allocated(this%q_list)) deallocate(this%q_list)
-      if (allocated(this%frequencies)) deallocate(this%frequencies)
-      if (allocated(this%eta_values)) deallocate(this%eta_values)
-      allocate(this%q_list(3, 1), this%frequencies(1), this%eta_values(1))
-      this%q_list = 0.0_rp
-      this%frequencies = 0.0_rp
-      this%eta_values = this%eta
-   end subroutine tddft_config_restore
-
-   !> Read only the new minimal &tddft group. No legacy TD-DFT type is
-   !> constructed and an absent group is the ordinary feature-off default.
-   module subroutine load_tddft_config(filename, config)
-      character(len=*), intent(in) :: filename
-      type(tddft_production_config), intent(out) :: config
-      integer :: unit, ios, n_q_local = 1, n_omega_local = 1, n_eta_local = 1, iq, iw
-      logical :: found
-      character(len=512) :: line
-
-      include 'include_codes/namelists/tddft.f90'
-
-      call config%restore_to_default()
-
-      enabled = .false.
-      channel = 'chi_plus'
-      projected_selector = 'spd'
-      n_q = 1
-      q_list = 0.0_rp
-      n_omega = 1
-      use_omega_grid = .false.
-      omega_grid = 0.0_rp
-      omega_min = 0.0_rp
-      omega_max = 0.0_rp
-      eta = 0.01_rp
-      n_eta = 1
-      eta_grid = 0.0_rp
-      eta_grid(1) = eta
-      response_lmax = -1
-      interaction_route = tddft_driver_route_direct_alsda
-      goldstone_correction = .false.
-      backend = tddft_driver_backend_lehmann
-      native_rsgf_provider = 'auto'
-      gf_integration_points = 2001
-      gf_integration_eta = 0.0_rp
-      gf_energy_margin = 1.0_rp
-      dyson_static_audit = .false.
-      validate_interacting_covariance = .false.
-      write_full_matrix = .true.
-      output_file = 'tddft_response.dat'
-
-      found = .false.
-      open(newunit=unit, file=filename, action='read', status='old', iostat=ios)
-      if (ios /= 0) return
-      do
-         read(unit, '(A)', iostat=ios) line
-         if (ios /= 0) exit
-         if (index(adjustl(lower(line)), '&tddft') == 1) then
-            found = .true.
-            exit
-         end if
-      end do
-      close(unit)
-      if (.not. found) return
-
-      open(newunit=unit, file=filename, action='read', status='old', iostat=ios)
-      if (ios /= 0) error stop 'TDDFT parser: input file cannot be reopened'
-      read(unit, nml=tddft, iostat=ios)
-      close(unit)
-      if (ios /= 0) error stop 'TDDFT parser: invalid &tddft namelist'
-
-      config%present = .true.
-      config%enabled = enabled
-      config%channel = trim(lower(channel))
-      config%eta = eta
-      config%response_lmax = response_lmax
-      config%interaction_route = trim(lower(interaction_route))
-      config%goldstone_correction = goldstone_correction
-      config%backend = trim(lower(backend))
-      config%projected_selector = trim(lower(projected_selector))
-      config%native_rsgf_provider = trim(lower(native_rsgf_provider))
-      config%gf_integration_points = gf_integration_points
-      config%gf_integration_eta = gf_integration_eta
-      config%gf_energy_margin = gf_energy_margin
-      config%dyson_static_audit = dyson_static_audit
-      config%validate_interacting_covariance = validate_interacting_covariance
-      config%write_full_matrix = write_full_matrix
-      config%output_file = trim(output_file)
-
-      n_q_local = n_q
-      n_omega_local = n_omega
-      n_eta_local = n_eta
-      if (n_q_local < 1 .or. n_q_local > tddft_max_q) error stop 'TDDFT parser: n_q is outside [1,tddft_max_q]'
-      if (n_omega_local < 1 .or. n_omega_local > tddft_max_omega) then
-         error stop 'TDDFT parser: n_omega is outside [1,tddft_max_omega]'
-      end if
-      if (n_eta_local < 1 .or. n_eta_local > 16) error stop 'TDDFT parser: n_eta is outside [1,16]'
-      if (allocated(config%q_list)) deallocate(config%q_list)
-      if (allocated(config%frequencies)) deallocate(config%frequencies)
-      if (allocated(config%eta_values)) deallocate(config%eta_values)
-      allocate(config%q_list(3, n_q_local), config%frequencies(n_omega_local), config%eta_values(n_eta_local))
-      config%nq = n_q_local
-      config%nfrequency = n_omega_local
-      config%q_list = q_list(:, 1:n_q_local)
-      if (use_omega_grid) then
-         config%frequencies = omega_grid(1:n_omega_local)
-      else if (n_omega_local == 1) then
-         config%frequencies(1) = omega_min
-      else
-         do iw = 1, n_omega_local
-            config%frequencies(iw) = omega_min + real(iw - 1, rp)*(omega_max - omega_min)/real(n_omega_local - 1, rp)
-         end do
-      end if
-      if (n_eta_local == 1) then
-         config%eta_values(1) = eta
-      else
-         config%eta_values = eta_grid(1:n_eta_local)
-         config%eta = config%eta_values(1)
-      end if
-      do iq = 1, n_q_local
-         if (any(config%q_list(:, iq) /= config%q_list(:, iq))) error stop 'TDDFT parser: q contains NaN'
-      end do
-      call validate_tddft_config(config)
-   end subroutine load_tddft_config
-
-   module subroutine validate_tddft_config(config)
-      type(tddft_production_config), intent(in) :: config
-      character(len=128) :: route
-      integer :: eta_selected_index, eta_holdout_index
-
-      if (.not. config%enabled) return
-      if (trim(config%channel) /= 'chi_plus' .and. trim(config%channel) /= 'chi_minus') then
-         error stop 'TDDFT input: unsupported response channel; use chi_plus or chi_minus'
-      end if
-      if (config%eta <= 0.0_rp) error stop 'TDDFT input: eta must be positive'
-      if (.not. allocated(config%eta_values) .or. size(config%eta_values) < 1 .or. &
-          any(config%eta_values <= 0.0_rp)) then
-         error stop 'TDDFT input: every physical response eta must be positive'
-      end if
-      if (config%response_lmax < -1) error stop 'TDDFT input: response_lmax must be -1 or a nonnegative cutoff'
-      if (config%response_lmax > 4) error stop 'TDDFT input: response_lmax above 4 is outside the validated sp/spd product baseline'
-      route = trim(config%interaction_route)
-      if (route /= tddft_driver_route_direct_alsda .and. route /= tddft_driver_route_goldstone_sumrule) then
-         error stop 'TDDFT input: unsupported interaction_route; use direct_alsda or goldstone_sumrule'
-      end if
-      if (config%goldstone_correction) then
-         error stop 'TDDFT input: Goldstone correction requires separate validated TDVAL evidence; it is not silently applied'
-      end if
-      if (trim(config%backend) /= tddft_driver_backend_lehmann .and. trim(config%backend) /= 'spectral' .and. &
-          trim(config%backend) /= tddft_driver_backend_native_rsgf .and. &
-          trim(config%backend) /= tddft_driver_backend_product_lehmann .and. &
-          trim(config%backend) /= tddft_driver_backend_projected_chi0 .and. &
-          trim(config%backend) /= tddft_driver_backend_compact_dyson .and. &
-          trim(config%backend) /= tddft_driver_backend_projected_mills .and. &
-          trim(config%backend) /= tddft_driver_backend_projected_juelich) then
-         error stop 'TDDFT input: unsupported backend'
-      end if
-      if (trim(config%backend) == tddft_driver_backend_projected_mills .or. &
-          trim(config%backend) == tddft_driver_backend_projected_juelich) then
-         if (trim(config%projected_selector) /= 'd' .and. trim(config%projected_selector) /= 'spd' .and. &
-             trim(config%projected_selector) /= 'both') then
-            error stop 'TDDFT input: projected_selector must be d, spd, or both'
-         end if
-         if (config%response_lmax >= 0 .and. config%response_lmax /= 4) then
-            error stop 'TDDFT input: projected Mills/Juelich requires the complete DRESP-01 response_lmax=4 contract'
-         end if
-         if (trim(config%backend) == tddft_driver_backend_projected_juelich .and. &
-             .not. any(sum(abs(config%q_list), dim=1) <= 1.0e-12_rp)) then
-            error stop 'TDDFT input: projected_juelich requires Gamma for its static Ward construction'
-         end if
-      end if
-      if (trim(config%backend) /= tddft_driver_backend_projected_mills .and. &
-          trim(config%backend) /= tddft_driver_backend_projected_juelich .and. size(config%eta_values) /= 1) then
-         error stop 'TDDFT input: n_eta greater than one is restricted to validation backends'
-      end if
-      if (trim(config%backend) == tddft_driver_backend_projected_juelich) then
-         call select_projected_juelich_eta_indices(config%eta_values, eta_selected_index, eta_holdout_index)
-      end if
-      if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
-         if (config%gf_integration_points < 3 .or. mod(config%gf_integration_points, 2) == 0) then
-            error stop 'TDDFT input: native_rsgf requires an odd gf_integration_points value >= 3'
-         end if
-         if (config%gf_energy_margin <= 0.0_rp) error stop 'TDDFT input: native_rsgf requires gf_energy_margin positive'
-      end if
-      if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
-         if (trim(config%native_rsgf_provider) /= 'auto' .and. trim(config%native_rsgf_provider) /= 'block' .and. &
-             trim(config%native_rsgf_provider) /= 'block_recursion' .and. trim(config%native_rsgf_provider) /= 'chebyshev') then
-            error stop 'TDDFT input: native_rsgf_provider must be auto, block or chebyshev'
-         end if
-      end if
-      if (trim(config%backend) == tddft_driver_backend_compact_dyson) then
-         if (route /= tddft_driver_route_direct_alsda) then
-            error stop 'TDDFT input: compact_dyson/alsda_compare requires interaction_route=direct_alsda; rejected before SCF/response work'
-         end if
-         if (config%dyson_static_audit .and. find_gamma_q_index(config%q_list) == 0) then
-            error stop 'TDDFT input: dyson_static_audit requires Gamma in q_list; rejected before SCF/response work'
-         end if
-         if (config%validate_interacting_covariance) then
-            call validate_covariance_q_pair(config%q_list)
-         end if
-      else if (config%dyson_static_audit .or. config%validate_interacting_covariance) then
-         error stop 'TDDFT input: compact Dyson validation switches require backend=compact_dyson'
-      end if
-      if (len_trim(config%output_file) == 0) error stop 'TDDFT input: output_file must not be empty'
-      if (route == tddft_driver_route_goldstone_sumrule) then
-         if (.not. any(sum(abs(config%q_list), dim=1) <= 1.0e-12_rp)) then
-            error stop 'TDDFT input: goldstone_sumrule requires q=(0,0,0) in q_list for the static reference'
-         end if
-      end if
-   end subroutine validate_tddft_config
 
    module function tddft_capability_is_supported(state, reason) result(ok)
       type(tddft_capability_state), intent(in) :: state
@@ -302,8 +109,159 @@ contains
       end if
    end subroutine require_tddft_capability
 
-   module subroutine validate_tddft_production_capability(config, control_obj, lattice_obj, hamiltonian_obj, reciprocal_obj)
-      type(tddft_production_config), intent(in) :: config
+   subroutine derive_runtime_config(config, runtime)
+      type(linear_response_config), intent(in) :: config
+      type(tddft_runtime_config), intent(out) :: runtime
+      integer :: n_q, n_frequency, n_eta
+
+      runtime%enabled = .true.
+      n_q = size(config%q_list, 2)
+      n_frequency = size(config%omega_grid)
+      n_eta = size(config%eta_grid)
+      runtime%nq = n_q
+      runtime%nfrequency = n_frequency
+      runtime%channel = trim(config%channel)
+      runtime%eta = config%eta
+      runtime%response_lmax = config%response_lmax
+      runtime%projected_selector = trim(config%projection)
+      runtime%native_rsgf_provider = trim(config%native_rsgf_provider)
+      if (trim(config%realspace_solver) == 'block') runtime%native_rsgf_provider = 'block'
+      if (trim(config%realspace_solver) == 'chebyshev') runtime%native_rsgf_provider = 'chebyshev'
+      runtime%gf_integration_points = config%gf_integration_points
+      runtime%gf_integration_eta = config%gf_integration_eta
+      runtime%gf_energy_margin = config%gf_energy_margin
+      runtime%write_full_matrix = config%write_full_matrix
+      runtime%output_file = trim(config%output_file)
+      runtime%dyson_static_audit = trim(config%diagnostics) == 'invariants'
+      runtime%validate_interacting_covariance = trim(config%diagnostics) == 'invariants'
+      runtime%goldstone_correction = .false.
+      allocate(runtime%q_list(3, n_q), runtime%frequencies(n_frequency), runtime%eta_values(n_eta))
+      runtime%q_list = config%q_list
+      runtime%frequencies = config%omega_grid
+      runtime%eta_values = config%eta_grid
+
+      select case (trim(config%formulation))
+      case ('tddft')
+         select case (trim(config%representation)//':'//trim(config%bare_response)//':'//trim(config%interaction))
+         case ('radial_points:lehmann:alsda')
+            runtime%backend = tddft_driver_backend_lehmann
+            runtime%interaction_route = tddft_driver_route_direct_alsda
+         case ('radial_points:lehmann:lcmm')
+            runtime%backend = tddft_driver_backend_lehmann
+            runtime%interaction_route = tddft_driver_route_goldstone_sumrule
+         case ('radial_points:realspace_gf:alsda')
+            runtime%backend = tddft_driver_backend_native_rsgf
+            runtime%interaction_route = tddft_driver_route_direct_alsda
+         case ('radial_points:realspace_gf:lcmm')
+            runtime%backend = tddft_driver_backend_native_rsgf
+            runtime%interaction_route = tddft_driver_route_goldstone_sumrule
+         case ('product_compact:lehmann:alsda')
+            runtime%backend = tddft_driver_backend_compact_dyson
+            runtime%interaction_route = tddft_driver_route_direct_alsda
+         case ('product_compact:lehmann:none')
+            runtime%backend = tddft_driver_backend_product_lehmann
+            runtime%interaction_route = tddft_driver_route_direct_alsda
+         end select
+      case ('projected')
+         runtime%interaction_route = tddft_driver_route_direct_alsda
+         select case (trim(config%interaction))
+         case ('none')
+            runtime%backend = tddft_driver_backend_projected_chi0
+         case ('stoner_fit')
+            runtime%backend = tddft_driver_backend_projected_mills
+         case ('lcmm')
+            runtime%backend = tddft_driver_backend_projected_juelich
+         end select
+      end select
+      call validate_tddft_runtime_config(runtime)
+   end subroutine derive_runtime_config
+
+   subroutine validate_tddft_runtime_config(config)
+      type(tddft_runtime_config), intent(in) :: config
+      integer :: eta_selected_index, eta_holdout_index
+
+      if (.not. config%enabled) return
+      if (trim(config%channel) /= 'chi_plus' .and. trim(config%channel) /= 'chi_minus') then
+         error stop 'TDDFT input: unsupported response channel; use chi_plus or chi_minus'
+      end if
+      if (config%eta <= 0.0_rp .or. .not. allocated(config%eta_values) .or. any(config%eta_values <= 0.0_rp)) then
+         error stop 'TDDFT input: every physical response eta must be positive'
+      end if
+      if (config%response_lmax < -1 .or. config%response_lmax > 4) then
+         error stop 'TDDFT input: response_lmax is outside the validated sp/spd product baseline'
+      end if
+      if (trim(config%backend) == tddft_driver_backend_projected_mills .or. &
+          trim(config%backend) == tddft_driver_backend_projected_juelich) then
+         if (trim(config%projected_selector) /= 'd' .and. trim(config%projected_selector) /= 'spd' .and. &
+             trim(config%projected_selector) /= 'both') error stop 'TDDFT input: projected selector is invalid'
+         if (config%response_lmax >= 0 .and. config%response_lmax /= 4) then
+            error stop 'TDDFT input: projected interaction requires response_lmax=4'
+         end if
+         if (trim(config%backend) == tddft_driver_backend_projected_juelich) then
+            call select_projected_juelich_eta_indices(config%eta_values, eta_selected_index, eta_holdout_index)
+            if (.not. any(sum(abs(config%q_list), dim=1) <= 1.0e-12_rp)) &
+               error stop 'TDDFT input: projected_juelich requires Gamma'
+         end if
+      else if (trim(config%backend) /= tddft_driver_backend_projected_mills .and. &
+               trim(config%backend) /= tddft_driver_backend_projected_juelich .and. size(config%eta_values) /= 1) then
+         error stop 'TDDFT input: n_eta greater than one is restricted to projected validation backends'
+      end if
+      if (trim(config%backend) == tddft_driver_backend_native_rsgf) then
+         if (config%gf_integration_points < 3 .or. mod(config%gf_integration_points,2) == 0) then
+            error stop 'TDDFT input: realspace_gf requires an odd gf_integration_points value >= 3'
+         end if
+         if (config%gf_energy_margin <= 0.0_rp) error stop 'TDDFT input: realspace_gf requires gf_energy_margin positive'
+         if (trim(config%native_rsgf_provider) /= 'auto' .and. trim(config%native_rsgf_provider) /= 'block' .and. &
+             trim(config%native_rsgf_provider) /= 'block_recursion' .and. trim(config%native_rsgf_provider) /= 'chebyshev') then
+            error stop 'TDDFT input: realspace_solver provider is invalid'
+         end if
+      end if
+      if (trim(config%backend) == tddft_driver_backend_compact_dyson) then
+         if (config%dyson_static_audit .and. find_gamma_q_index(config%q_list) == 0) then
+            error stop 'TDDFT input: diagnostics=invariants requires Gamma for compact Dyson'
+         end if
+         if (config%validate_interacting_covariance) call validate_covariance_q_pair(config%q_list)
+      end if
+      if (trim(config%interaction_route) == tddft_driver_route_goldstone_sumrule .and. &
+          .not. any(sum(abs(config%q_list), dim=1) <= 1.0e-12_rp)) then
+         error stop 'TDDFT input: lcmm requires q=(0,0,0) in q_list for the static reference'
+      end if
+   end subroutine validate_tddft_runtime_config
+
+   module subroutine lr_run(this, control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, reciprocal_obj, &
+                            recursion_obj, green_obj, scf_converged)
+      class(linear_response), intent(in) :: this
+      type(control), intent(in) :: control_obj
+      type(lattice), intent(inout) :: lattice_obj
+      type(hamiltonian), intent(inout) :: hamiltonian_obj
+      type(energy), intent(in) :: energy_obj
+      type(self), intent(inout) :: self_obj
+      type(reciprocal), intent(inout) :: reciprocal_obj
+      type(recursion), target, intent(inout), optional :: recursion_obj
+      type(green), target, intent(inout), optional :: green_obj
+      logical, intent(in), optional :: scf_converged
+      type(tddft_runtime_config) :: runtime
+      logical :: converged
+
+      converged = .true.
+      if (present(scf_converged)) converged = scf_converged
+      select case (trim(this%config%formulation))
+      case ('rotation')
+         call lr_run_rotation(this, control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, reciprocal_obj)
+      case ('tddft', 'projected')
+         if (.not. present(recursion_obj) .or. .not. present(green_obj)) then
+            error stop "linear_response: tddft/projected formulations require recursion and green services"
+         end if
+         call derive_runtime_config(this%config, runtime)
+         call run_tddft_production(runtime, control_obj, lattice_obj, hamiltonian_obj, energy_obj, reciprocal_obj, &
+            recursion_obj, green_obj, converged, .true.)
+      case default
+         error stop 'linear_response: unsupported formulation'
+      end select
+   end subroutine lr_run
+
+   subroutine validate_tddft_production_capability(config, control_obj, lattice_obj, hamiltonian_obj, reciprocal_obj)
+      type(tddft_runtime_config), intent(in) :: config
       type(control), intent(in) :: control_obj
       type(lattice), intent(in) :: lattice_obj
       type(hamiltonian), intent(in) :: hamiltonian_obj
@@ -634,9 +592,9 @@ contains
    !> When accepted_kspace_scf is true, reciprocal_obj is the live cache owned
    !> by self and is consumed without a mesh generation, Hamiltonian build, or
    !> diagonalization in this driver.
-   module subroutine run_tddft_production(config, control_obj, lattice_obj, hamiltonian_obj, energy_obj, reciprocal_obj, &
+   subroutine run_tddft_production(config, control_obj, lattice_obj, hamiltonian_obj, energy_obj, reciprocal_obj, &
                                    recursion_obj, green_obj, scf_converged, accepted_kspace_scf)
-      type(tddft_production_config), intent(in) :: config
+      type(tddft_runtime_config), intent(in) :: config
       type(control), intent(in) :: control_obj
       type(lattice), target, intent(in) :: lattice_obj
       type(hamiltonian), intent(in) :: hamiltonian_obj
@@ -778,7 +736,7 @@ contains
             call compute_accepted_pauli_magnetization(reciprocal_obj, lattice_obj%symbolic_atoms, lattice_obj%nbulk, &
                accepted_pauli_magnetization)
          end if
-         call evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
+         call evaluate_tddft_runtime_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
             native_provider, native_provider%pairs, native_site_positions, accepted_pauli_magnetization, &
             lr_kxc_magnetization_source_pauli_accepted)
       else
@@ -786,7 +744,7 @@ contains
             call compute_accepted_pauli_magnetization(reciprocal_obj, lattice_obj%symbolic_atoms, lattice_obj%nbulk, &
                accepted_pauli_magnetization)
          end if
-         call evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
+         call evaluate_tddft_runtime_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
             accepted_pauli_magnetization=accepted_pauli_magnetization, &
             accepted_pauli_magnetization_source=lr_kxc_magnetization_source_pauli_accepted)
       end if
@@ -805,7 +763,7 @@ contains
    !> directly by the Mills interaction and site-space Dyson wrapper.
    subroutine run_tddft_projected_mills(config, response_space, radial_bases, ground_states, left_state, endpoints, &
                                         reciprocal_obj, lattice_obj)
-      type(tddft_production_config), intent(in) :: config
+      type(tddft_runtime_config), intent(in) :: config
       type(response_space_layout), target, intent(in) :: response_space
       type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
       type(radial_ground_state), target, intent(in) :: ground_states(:)
@@ -1029,7 +987,7 @@ contains
    !> bare, Mills, and Juelich routes on exactly the same accepted state.
    subroutine run_tddft_projected_juelich(config, response_space, radial_bases, ground_states, left_state, endpoints, &
                                           reciprocal_obj, lattice_obj)
-      type(tddft_production_config), intent(in) :: config
+      type(tddft_runtime_config), intent(in) :: config
       type(response_space_layout), target, intent(in) :: response_space
       type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
       type(radial_ground_state), target, intent(in) :: ground_states(:)
@@ -1355,7 +1313,7 @@ contains
                                                  left_state, endpoint, mills_U, juelich_U)
       integer, intent(in) :: unit, q_index
       character(len=*), intent(in) :: selector
-      type(tddft_production_config), intent(in) :: config
+      type(tddft_runtime_config), intent(in) :: config
       type(projected_site_spin_contract), target, intent(in) :: contract
       type(lmto_product_response_basis), target, intent(in) :: product_plus
       type(lr_electronic_state), target, intent(in) :: left_state, endpoint
@@ -1437,7 +1395,7 @@ contains
    !> is constructed here.
    subroutine run_tddft_projected_chi0(config, response_space, radial_bases, ground_states, left_state, endpoints, &
                                       reciprocal_obj, lattice_obj, hamiltonian_obj)
-      type(tddft_production_config), intent(in) :: config
+      type(tddft_runtime_config), intent(in) :: config
       type(response_space_layout), target, intent(in) :: response_space
       type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
       type(radial_ground_state), target, intent(in) :: ground_states(:)
@@ -1660,7 +1618,7 @@ contains
    !> around this worker; they do not define its production input contract.
    subroutine run_tddft_compact_dyson(config, response_space, radial_bases, ground_states, left_state, endpoints, &
                                       reciprocal_obj, lattice_obj, control_obj)
-      type(tddft_production_config), intent(in) :: config
+      type(tddft_runtime_config), intent(in) :: config
       type(response_space_layout), target, intent(in) :: response_space
       type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
       type(radial_ground_state), target, intent(in) :: ground_states(:)
@@ -2035,7 +1993,7 @@ contains
    !> compact bare response can be exercised without persisting eigenpairs or
    !> entering the full KXC/Dyson production lifecycle.
    subroutine run_tddft_product_bare_smoke(config, response_space, radial_bases, ground_states, left_state, endpoints, reciprocal_obj)
-      type(tddft_production_config), intent(in) :: config
+      type(tddft_runtime_config), intent(in) :: config
       type(response_space_layout), intent(in) :: response_space
       type(lmto_radial_basis), intent(in) :: radial_bases(:)
       type(radial_ground_state), intent(in) :: ground_states(:)
@@ -2443,7 +2401,7 @@ contains
    end subroutine project_point_transition
 
    subroutine write_tddft_product_bare_smoke(config, result, reciprocal_obj, accepted_moment, maximum_transition_error, runtime)
-      type(tddft_production_config), intent(in) :: config
+      type(tddft_runtime_config), intent(in) :: config
       type(lr_product_ks_susceptibility_result), intent(in) :: result
       type(reciprocal), intent(in) :: reciprocal_obj
       real(rp), intent(in) :: accepted_moment, maximum_transition_error, runtime
@@ -2524,13 +2482,35 @@ contains
       request%production_contract = .true.
    end subroutine prepare_direct_alsda_request
 
+   module subroutine evaluate_linear_response_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
+                                                   native_provider, native_pairs, native_site_positions, accepted_pauli_magnetization, &
+                                                   accepted_pauli_magnetization_source)
+      type(linear_response_config), intent(in) :: config
+      type(response_space_layout), target, intent(in) :: response_space
+      type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
+      type(radial_ground_state), target, intent(in) :: ground_states(:)
+      type(lr_electronic_state), target, intent(in) :: left_state
+      type(lr_electronic_state), target, intent(in) :: endpoints(:)
+      type(tddft_production_result), intent(out) :: result
+      class(lr_rs_gf_provider), target, intent(inout), optional :: native_provider
+      type(lr_rs_gf_pair), intent(in), optional :: native_pairs(:)
+      real(rp), target, intent(in), optional :: native_site_positions(:, :)
+      real(rp), allocatable, intent(in), optional :: accepted_pauli_magnetization(:, :)
+      character(len=*), intent(in), optional :: accepted_pauli_magnetization_source
+      type(tddft_runtime_config) :: runtime
+
+      call derive_runtime_config(config, runtime)
+      call evaluate_tddft_runtime_sweep(runtime, response_space, radial_bases, ground_states, left_state, endpoints, result, &
+         native_provider, native_pairs, native_site_positions, accepted_pauli_magnetization, accepted_pauli_magnetization_source)
+   end subroutine evaluate_linear_response_sweep
+
    !> Evaluate an already prepared request batch. This is the reproducibility
    !> seam: tests and validation can compare it directly with service calls,
    !> without reconstructing SCF state.
-   module subroutine evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
+   subroutine evaluate_tddft_runtime_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
                                               native_provider, native_pairs, native_site_positions, accepted_pauli_magnetization, &
                                               accepted_pauli_magnetization_source)
-      type(tddft_production_config), intent(in) :: config
+      type(tddft_runtime_config), intent(in) :: config
       type(response_space_layout), target, intent(in) :: response_space
       type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
       type(radial_ground_state), target, intent(in) :: ground_states(:)
@@ -2643,11 +2623,11 @@ contains
          result%status = trim(dyson_result%status)
       end do
       result%initialized = .true.
-   end subroutine evaluate_tddft_production_sweep
+   end subroutine evaluate_tddft_runtime_sweep
 
    subroutine validate_prepared_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, &
                                       native_provider, native_pairs)
-      type(tddft_production_config), intent(in) :: config
+      type(tddft_runtime_config), intent(in) :: config
       type(response_space_layout), intent(in) :: response_space
       type(lmto_radial_basis), intent(in) :: radial_bases(:)
       type(radial_ground_state), intent(in) :: ground_states(:)
@@ -2657,7 +2637,7 @@ contains
       type(lr_rs_gf_pair), intent(in), optional :: native_pairs(:)
       integer :: iq
 
-      call validate_tddft_config(config)
+      call validate_tddft_runtime_config(config)
       if (.not. config%enabled) error stop 'TDDFT production driver: disabled configuration cannot run a sweep'
       if (size(ground_states) /= response_space%nsite .or. size(radial_bases) /= response_space%nsite) then
          error stop 'TDDFT production driver: response-site state shape mismatch'
@@ -2680,7 +2660,7 @@ contains
 
    subroutine evaluate_bare_response(config, response_space, radial_bases, left_state, endpoint, q, frequencies, result, &
                                      native_provider, native_pairs, native_site_positions)
-      type(tddft_production_config), intent(in) :: config
+      type(tddft_runtime_config), intent(in) :: config
       type(response_space_layout), target, intent(in) :: response_space
       type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
       type(lr_electronic_state), target, intent(in) :: left_state
@@ -2820,7 +2800,7 @@ contains
    end function find_gamma_q_index
 
    subroutine write_tddft_production_output(config, result, control_obj, lattice_obj, ground_states, response_space, reciprocal_obj)
-      type(tddft_production_config), intent(in) :: config
+      type(tddft_runtime_config), intent(in) :: config
       type(tddft_production_result), intent(in) :: result
       type(control), intent(in) :: control_obj
       type(lattice), intent(in) :: lattice_obj

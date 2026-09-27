@@ -2378,11 +2378,29 @@ contains
    module subroutine lr_config_restore_to_default(this)
       class(linear_response_config), intent(out) :: this
       if (allocated(this%q_list)) deallocate(this%q_list)
+      if (allocated(this%omega_grid)) deallocate(this%omega_grid)
+      if (allocated(this%eta_grid)) deallocate(this%eta_grid)
       this%fname = ''
       this%formulation = 'rotation'
+      this%representation = 'radial_points'
+      this%bare_response = 'lehmann'
+      this%realspace_solver = 'auto'
+      this%interaction = 'alsda'
+      this%projection = 'spd'
+      this%diagnostics = 'none'
+      this%channel = 'chi_plus'
       this%q_coordinates = 'direct'
       this%q_file = ''
+      this%n_q = 1
       this%n_q_points = 0
+      this%n_omega = 1
+      this%use_omega_grid = .false.
+      this%omega_min = 0.0_rp
+      this%omega_max = 0.0_rp
+      this%eta = 0.01_rp
+      this%n_eta = 1
+      this%response_lmax = -1
+      this%write_full_matrix = .true.
       this%rotation_axis = [1.0_rp, 0.0_rp, 0.0_rp]
       this%finite_h_spectral_mode = 'metallic'
       this%finite_h_response_backend = 'spectral'
@@ -2400,6 +2418,10 @@ contains
       this%native_contour_height_fraction = 0.35_rp
       this%native_contour_account_fermi_poles = .true.
       this%native_contour_target_fermi_poles = 0
+      this%native_rsgf_provider = 'auto'
+      this%gf_integration_points = 2001
+      this%gf_integration_eta = 0.0_rp
+      this%gf_energy_margin = 1.0_rp
       this%output_file = 'rotation_dynamics.dat'
       this%rotation_eta_ladder = [1.0e-4_rp, 2.5e-5_rp, 6.25e-6_rp]
       this%rotation_probe_omega = 1.0e-5_rp
@@ -2428,9 +2450,11 @@ contains
       character(len=*), intent(in) :: filename
       logical, intent(in), optional :: validate_request
       logical :: validate
-      integer :: iostatus, funit, n_q_points
-      character(len=16) :: formulation, q_coordinates
-      character(len=256) :: q_file, output_file
+      integer :: iostatus, funit, n_q_points, n_q, n_omega, n_eta, iw, iq, scan_unit, scan_status
+      character(len=16) :: formulation, representation, bare_response, realspace_solver, interaction, diagnostics, q_coordinates
+      character(len=8) :: projection
+      character(len=32) :: channel, native_rsgf_provider
+      character(len=256) :: q_file, output_file, scan_line
       logical :: native_turek, native_crosscheck, native_contour_account_fermi_poles, contour_account_fermi_poles
       character(len=24) :: finite_h_spectral_mode
       character(len=16) :: finite_h_response_backend, contour_shape
@@ -2444,7 +2468,14 @@ contains
       real(rp) :: rotation_omega_min, rotation_omega_max, rotation_eta
       character(len=sl) :: rotation_grid_file
       real(rp) :: q_list(3, linear_response_max_points)
+      real(rp) :: omega_grid(4096), eta_grid(16), omega_min, omega_max, eta
+      logical :: use_omega_grid, write_full_matrix
+      integer :: response_lmax, gf_integration_points
+      real(rp) :: gf_integration_eta, gf_energy_margin
       namelist /linear_response/ formulation, q_coordinates, q_file, n_q_points, q_list, rotation_axis, &
+         representation, bare_response, realspace_solver, interaction, projection, diagnostics, channel, n_q, n_omega, &
+         use_omega_grid, omega_grid, omega_min, omega_max, eta, n_eta, eta_grid, response_lmax, write_full_matrix, &
+         native_rsgf_provider, gf_integration_points, gf_integration_eta, gf_energy_margin, &
          finite_h_spectral_mode, finite_h_response_backend, contour_points, contour_shape, contour_margin, &
          contour_height_fraction, contour_account_fermi_poles, native_turek, native_crosscheck, native_green_eta, &
          native_energy_points, native_contour_points, native_contour_margin, native_contour_height_fraction, &
@@ -2457,10 +2488,33 @@ contains
       call this%config%restore_to_default()
       this%config%fname = filename
       formulation = this%config%formulation
+      representation = this%config%representation
+      bare_response = this%config%bare_response
+      realspace_solver = this%config%realspace_solver
+      interaction = this%config%interaction
+      projection = this%config%projection
+      diagnostics = this%config%diagnostics
+      channel = this%config%channel
       q_coordinates = this%config%q_coordinates
       q_file = this%config%q_file
+      n_q = this%config%n_q
       n_q_points = 0
       q_list = 0.0_rp
+      n_omega = this%config%n_omega
+      use_omega_grid = this%config%use_omega_grid
+      omega_grid = 0.0_rp
+      omega_min = this%config%omega_min
+      omega_max = this%config%omega_max
+      eta = this%config%eta
+      n_eta = this%config%n_eta
+      eta_grid = 0.0_rp
+      eta_grid(1) = eta
+      response_lmax = this%config%response_lmax
+      write_full_matrix = this%config%write_full_matrix
+      native_rsgf_provider = this%config%native_rsgf_provider
+      gf_integration_points = this%config%gf_integration_points
+      gf_integration_eta = this%config%gf_integration_eta
+      gf_energy_margin = this%config%gf_energy_margin
       rotation_axis = this%config%rotation_axis
       finite_h_spectral_mode = this%config%finite_h_spectral_mode
       finite_h_response_backend = this%config%finite_h_response_backend
@@ -2495,6 +2549,19 @@ contains
       rotation_eta = this%config%rotation_eta
       rotation_grid_file = this%config%rotation_grid_file
 
+      open(newunit=scan_unit, file=filename, action='read', status='old', iostat=scan_status)
+      if (scan_status == 0) then
+         do
+            read(scan_unit, '(A)', iostat=scan_status) scan_line
+            if (scan_status /= 0) exit
+            if (index(adjustl(lower(scan_line)), '&tddft') == 1) then
+               close(scan_unit)
+               call g_logger%fatal('&tddft was replaced by &linear_response (see docs/linear_response/FORMULATION.md)', __FILE__, __LINE__)
+            end if
+         end do
+         close(scan_unit)
+      end if
+
       open(newunit=funit, file=filename, action='read', status='old', iostat=iostatus)
       if (iostatus /= 0) call g_logger%fatal('[linear_response]: input file '//trim(filename)//' not found', __FILE__, __LINE__)
       read(funit, nml=linear_response, iostat=iostatus)
@@ -2504,8 +2571,28 @@ contains
       end if
 
       this%config%formulation = lower(trim(formulation))
+      this%config%representation = lower(trim(representation))
+      this%config%bare_response = lower(trim(bare_response))
+      this%config%realspace_solver = lower(trim(realspace_solver))
+      this%config%interaction = lower(trim(interaction))
+      this%config%projection = lower(trim(projection))
+      this%config%diagnostics = lower(trim(diagnostics))
+      this%config%channel = lower(trim(channel))
       this%config%q_coordinates = lower(trim(q_coordinates))
       this%config%q_file = trim(q_file)
+      this%config%n_q = n_q
+      this%config%n_omega = n_omega
+      this%config%use_omega_grid = use_omega_grid
+      this%config%omega_min = omega_min
+      this%config%omega_max = omega_max
+      this%config%eta = eta
+      this%config%n_eta = n_eta
+      this%config%response_lmax = response_lmax
+      this%config%write_full_matrix = write_full_matrix
+      this%config%native_rsgf_provider = lower(trim(native_rsgf_provider))
+      this%config%gf_integration_points = gf_integration_points
+      this%config%gf_integration_eta = gf_integration_eta
+      this%config%gf_energy_margin = gf_energy_margin
       this%config%rotation_axis = rotation_axis
       this%config%finite_h_spectral_mode = lower(trim(finite_h_spectral_mode))
       this%config%finite_h_response_backend = lower(trim(finite_h_response_backend))
@@ -2540,10 +2627,6 @@ contains
       this%config%rotation_eta = rotation_eta
       this%config%rotation_grid_file = trim(rotation_grid_file)
 
-      if (this%config%formulation /= 'rotation') then
-         call g_logger%fatal("formulation='"//trim(this%config%formulation)// &
-            "' is not available yet; only formulation='rotation' is supported", __FILE__, __LINE__)
-      end if
       if (this%config%q_coordinates /= 'direct' .and. this%config%q_coordinates /= 'cartesian') then
          call g_logger%fatal("[linear_response]: q_coordinates must be 'direct' or 'cartesian'", __FILE__, __LINE__)
       end if
@@ -2552,17 +2635,55 @@ contains
       if (present(validate_request)) validate = validate_request
       if (len_trim(this%config%q_file) > 0) then
          call read_linear_response_q_file(this, this%config%q_file)
+         this%config%n_q = this%config%n_q_points
       else
-         if (n_q_points < 1 .or. n_q_points > linear_response_max_points) then
+         if (this%config%formulation == 'rotation') then
+            if (n_q_points < 1 .or. n_q_points > linear_response_max_points) then
+               if (validate) call g_logger%fatal('[linear_response]: n_q_points must be in [1,'// &
+                  int2str(linear_response_max_points)//']', __FILE__, __LINE__)
+            else
+               this%config%n_q_points = n_q_points
+               this%config%n_q = n_q_points
+               allocate(this%config%q_list(3, n_q_points))
+               this%config%q_list = q_list(:, 1:n_q_points)
+            end if
+         else if (n_q < 1 .or. n_q > linear_response_max_points) then
             if (validate) call g_logger%fatal('[linear_response]: n_q_points must be in [1,'// &
                int2str(linear_response_max_points)//']', __FILE__, __LINE__)
          else
-            this%config%n_q_points = n_q_points
-            allocate(this%config%q_list(3, n_q_points))
-            this%config%q_list = q_list(:, 1:n_q_points)
+            this%config%n_q_points = n_q
+            allocate(this%config%q_list(3, n_q))
+            this%config%q_list = q_list(:, 1:n_q)
          end if
       end if
       if (.not. validate) return
+
+      if (this%config%formulation /= 'rotation') then
+         if (n_omega < 1 .or. n_omega > 4096) then
+            call g_logger%fatal('[linear_response]: n_omega must be in [1,4096]', __FILE__, __LINE__)
+         end if
+         if (n_eta < 1 .or. n_eta > 16) then
+            call g_logger%fatal('[linear_response]: n_eta must be in [1,16]', __FILE__, __LINE__)
+         end if
+         allocate(this%config%omega_grid(n_omega), this%config%eta_grid(n_eta))
+         if (use_omega_grid) then
+            this%config%omega_grid = omega_grid(1:n_omega)
+         else if (n_omega == 1) then
+            this%config%omega_grid(1) = omega_min
+         else
+            do iw = 1, n_omega
+               this%config%omega_grid(iw) = omega_min + real(iw-1,rp)*(omega_max-omega_min)/real(n_omega-1,rp)
+            end do
+         end if
+         if (n_eta == 1) then
+            this%config%eta_grid(1) = eta
+         else
+            this%config%eta_grid = eta_grid(1:n_eta)
+            this%config%eta = this%config%eta_grid(1)
+         end if
+         call validate_linear_response_config(this%config)
+         return
+      end if
 
       if (len_trim(this%config%output_file) == 0) call g_logger%fatal('[linear_response]: output_file must not be blank', __FILE__, __LINE__)
       if (any(this%config%rotation_eta_ladder <= 0.0_rp)) then
@@ -2617,6 +2738,77 @@ contains
       if (any(.not. ieee_is_finite(this%config%q_list))) call g_logger%fatal('[linear_response]: q path contains a non-finite coordinate', __FILE__, __LINE__)
    end subroutine lr_load_config
 
+   subroutine validate_linear_response_config(config)
+      type(linear_response_config), intent(in) :: config
+      character(len=96) :: compatibility_key
+
+      if (trim(config%diagnostics) /= 'none' .and. trim(config%diagnostics) /= 'invariants') then
+         call g_logger%fatal("[linear_response]: diagnostics must be 'none' or 'invariants'", __FILE__, __LINE__)
+      end if
+      if (trim(config%channel) /= 'chi_plus' .and. trim(config%channel) /= 'chi_minus') then
+         call g_logger%fatal('[linear_response]: channel must be chi_plus or chi_minus', __FILE__, __LINE__)
+      end if
+      if (trim(config%bare_response) == 'kspace_resolvent') then
+         call g_logger%fatal("[linear_response]: bare_response='kspace_resolvent' is reserved; not implemented", __FILE__, __LINE__)
+      end if
+      if (trim(config%bare_response) /= 'lehmann' .and. trim(config%bare_response) /= 'realspace_gf') then
+         call g_logger%fatal('[linear_response]: unsupported bare_response', __FILE__, __LINE__)
+      end if
+      if (trim(config%realspace_solver) /= 'auto' .and. trim(config%realspace_solver) /= 'block' .and. &
+          trim(config%realspace_solver) /= 'chebyshev') then
+         call g_logger%fatal('[linear_response]: realspace_solver must be auto, block or chebyshev', __FILE__, __LINE__)
+      end if
+      if (trim(config%realspace_solver) /= 'auto' .and. trim(config%bare_response) /= 'realspace_gf') then
+         call g_logger%fatal('[linear_response]: realspace_solver is only valid with bare_response=realspace_gf', __FILE__, __LINE__)
+      end if
+      if (config%eta <= 0.0_rp .or. .not. allocated(config%eta_grid) .or. any(config%eta_grid <= 0.0_rp)) then
+         call g_logger%fatal('[linear_response]: eta and every eta_grid value must be positive', __FILE__, __LINE__)
+      end if
+      if (config%response_lmax < -1 .or. config%response_lmax > 4) then
+         call g_logger%fatal('[linear_response]: response_lmax must be -1 through 4', __FILE__, __LINE__)
+      end if
+      if (.not. allocated(config%q_list) .or. size(config%q_list,2) < 1 .or. any(.not. ieee_is_finite(config%q_list))) then
+         call g_logger%fatal('[linear_response]: q_list must contain finite q points', __FILE__, __LINE__)
+      end if
+      if (.not. allocated(config%omega_grid) .or. size(config%omega_grid) < 1 .or. &
+          any(.not. ieee_is_finite(config%omega_grid))) then
+         call g_logger%fatal('[linear_response]: omega grid must contain finite values', __FILE__, __LINE__)
+      end if
+      if (len_trim(config%output_file) == 0) call g_logger%fatal('[linear_response]: output_file must not be blank', __FILE__, __LINE__)
+
+      select case (trim(config%formulation))
+      case ('tddft')
+         compatibility_key = trim(config%representation)//':'//trim(config%bare_response)//':'//trim(config%interaction)
+         select case (compatibility_key)
+         case ('radial_points:lehmann:alsda', 'radial_points:lehmann:lcmm', &
+               'radial_points:realspace_gf:alsda', 'radial_points:realspace_gf:lcmm', &
+               'product_compact:lehmann:alsda', 'product_compact:lehmann:none')
+            continue
+         case default
+            call g_logger%fatal('[linear_response]: formulation/representation/bare_response/interaction is not an allowed compatibility row', &
+               __FILE__, __LINE__)
+         end select
+      case ('projected')
+         if (trim(config%bare_response) /= 'lehmann' .or. trim(config%representation) /= 'radial_points') then
+            call g_logger%fatal('[linear_response]: projected requires radial_points and lehmann', __FILE__, __LINE__)
+         end if
+         select case (trim(config%interaction))
+         case ('none', 'stoner_fit', 'lcmm')
+            continue
+         case default
+            call g_logger%fatal('[linear_response]: projected interaction is not an allowed compatibility row', __FILE__, __LINE__)
+         end select
+         if (trim(config%projection) /= 'd' .and. trim(config%projection) /= 'spd' .and. trim(config%projection) /= 'both') then
+            call g_logger%fatal('[linear_response]: projection must be d, spd or both', __FILE__, __LINE__)
+         end if
+      case default
+         call g_logger%fatal("[linear_response]: formulation must be 'rotation', 'tddft' or 'projected'", __FILE__, __LINE__)
+      end select
+      if (trim(config%bare_response) == 'realspace_gf' .and. config%gf_integration_points < 3) then
+         call g_logger%fatal('[linear_response]: realspace_gf requires gf_integration_points >= 3', __FILE__, __LINE__)
+      end if
+   end subroutine validate_linear_response_config
+
    subroutine read_linear_response_q_file(this, filename)
       class(linear_response), intent(inout) :: this
       character(len=*), intent(in) :: filename
@@ -2651,7 +2843,7 @@ contains
          control_obj, hamiltonian_obj, self_obj, reciprocal_obj)
    end subroutine lr_validate_capability
 
-   module subroutine lr_run(this, control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, reciprocal_obj)
+   module subroutine lr_run_rotation(this, control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, reciprocal_obj)
       class(linear_response), intent(in) :: this
       type(control), intent(in) :: control_obj
       type(lattice), intent(inout) :: lattice_obj
@@ -2700,7 +2892,7 @@ contains
       deallocate(q_direct, q_cart, finite_total, finite_tt, finite_contact, spectral_total, spectral_tt, spectral_contact, &
          contour_total, contour_tt, contour_contact, native_jq_ud, native_jq_du, native_jq_sym, native_delta_j, native_curvature, &
          endpoint_reused, q_commensurate, endpoint_residual, endpoint_mode)
-   end subroutine lr_run
+   end subroutine lr_run_rotation
 
    subroutine write_rotation_response_grid(filename,n_omega,omega_min,omega_max,eta,fixture,recip,q_direct)
       character(len=*), intent(in) :: filename

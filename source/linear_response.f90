@@ -101,10 +101,28 @@ module linear_response_mod
    type, public :: linear_response_config
       character(len=sl) :: fname = ''
       character(len=16) :: formulation = 'rotation'
+      character(len=16) :: representation = 'radial_points'
+      character(len=16) :: bare_response = 'lehmann'
+      character(len=16) :: realspace_solver = 'auto'
+      character(len=16) :: interaction = 'alsda'
+      character(len=8) :: projection = 'spd'
+      character(len=16) :: diagnostics = 'none'
+      character(len=32) :: channel = 'chi_plus'
       character(len=16) :: q_coordinates = 'direct'
       character(len=sl) :: q_file = ''
+      integer :: n_q = 1
       integer :: n_q_points = 0
       real(rp), allocatable :: q_list(:, :)
+      integer :: n_omega = 1
+      logical :: use_omega_grid = .false.
+      real(rp), allocatable :: omega_grid(:)
+      real(rp) :: omega_min = 0.0_rp
+      real(rp) :: omega_max = 0.0_rp
+      real(rp) :: eta = 0.01_rp
+      integer :: n_eta = 1
+      real(rp), allocatable :: eta_grid(:)
+      integer :: response_lmax = -1
+      logical :: write_full_matrix = .true.
       real(rp) :: rotation_axis(3) = [1.0_rp, 0.0_rp, 0.0_rp]
       character(len=24) :: finite_h_spectral_mode = 'metallic'
       character(len=16) :: finite_h_response_backend = 'spectral'
@@ -122,6 +140,10 @@ module linear_response_mod
       real(rp) :: native_contour_height_fraction = 0.35_rp
       logical :: native_contour_account_fermi_poles = .true.
       integer :: native_contour_target_fermi_poles = 0
+      character(len=32) :: native_rsgf_provider = 'auto'
+      integer :: gf_integration_points = 2001
+      real(rp) :: gf_integration_eta = 0.0_rp
+      real(rp) :: gf_energy_margin = 1.0_rp
       character(len=sl) :: output_file = 'rotation_dynamics.dat'
       ! Rotation campaign controls (energies in Ry; defaults preserve the
       ! LR-REF-02b certification campaign bit-for-bit):
@@ -152,47 +174,6 @@ module linear_response_mod
    contains
       procedure :: restore_to_default => lr_config_restore_to_default
    end type linear_response_config
-
-   ! TD-DFT production compatibility types are kept in the parent during the
-   ! mechanical driver move.  LR-REF-04b replaces this input surface in the
-   ! next commit, but the response services and their focused tests still use
-   ! these result/capability contracts while the move is being verified.
-   character(len=*), parameter, public :: tddft_driver_backend_lehmann = 'lehmann'
-   character(len=*), parameter, public :: tddft_driver_backend_native_rsgf = 'native_rsgf'
-   character(len=*), parameter, public :: tddft_driver_backend_product_lehmann = 'product_lehmann'
-   character(len=*), parameter, public :: tddft_driver_backend_projected_chi0 = 'projected_chi0'
-   character(len=*), parameter, public :: tddft_driver_backend_compact_dyson = 'compact_dyson'
-   character(len=*), parameter, public :: tddft_driver_backend_projected_mills = 'projected_mills'
-   character(len=*), parameter, public :: tddft_driver_backend_projected_juelich = 'projected_juelich'
-   character(len=*), parameter, public :: tddft_driver_route_direct_alsda = 'direct_alsda'
-   character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = 'goldstone_sumrule'
-
-   type, public :: tddft_production_config
-      logical :: present = .false.
-      logical :: enabled = .false.
-      integer :: nq = 1
-      integer :: nfrequency = 1
-      character(len=32) :: channel = 'chi_plus'
-      real(rp), allocatable :: q_list(:, :)
-      real(rp), allocatable :: frequencies(:)
-      real(rp), allocatable :: eta_values(:)
-      real(rp) :: eta = 0.01_rp
-      integer :: response_lmax = -1
-      character(len=48) :: interaction_route = tddft_driver_route_direct_alsda
-      logical :: goldstone_correction = .false.
-      character(len=32) :: backend = tddft_driver_backend_lehmann
-      character(len=8) :: projected_selector = 'spd'
-      character(len=32) :: native_rsgf_provider = 'auto'
-      integer :: gf_integration_points = 2001
-      real(rp) :: gf_integration_eta = 0.0_rp
-      real(rp) :: gf_energy_margin = 1.0_rp
-      logical :: dyson_static_audit = .false.
-      logical :: validate_interacting_covariance = .false.
-      logical :: write_full_matrix = .true.
-      character(len=256) :: output_file = 'tddft_response.dat'
-   contains
-      procedure :: restore_to_default => tddft_config_restore
-   end type tddft_production_config
 
    type, public :: tddft_capability_state
       character(len=32) :: reciprocal_mode = 'ham_only'
@@ -228,10 +209,8 @@ module linear_response_mod
       character(len=256) :: magnetization_source = ''
    end type tddft_production_result
 
-   public :: load_tddft_config, validate_tddft_config
    public :: tddft_capability_is_supported, require_tddft_capability
-   public :: validate_tddft_production_capability, run_tddft_production
-   public :: evaluate_tddft_production_sweep
+   public :: evaluate_linear_response_sweep
 
    type, public :: linear_response
       type(linear_response_config) :: config
@@ -1404,19 +1383,6 @@ module linear_response_mod
       module procedure evaluate_lr_product_ks_susceptibility_explicit
    end interface evaluate_lr_product_ks_susceptibility
    interface
-      module subroutine tddft_config_restore(this)
-         class(tddft_production_config), intent(out) :: this
-      end subroutine tddft_config_restore
-
-      module subroutine load_tddft_config(filename, config)
-         character(len=*), intent(in) :: filename
-         type(tddft_production_config), intent(out) :: config
-      end subroutine load_tddft_config
-
-      module subroutine validate_tddft_config(config)
-         type(tddft_production_config), intent(in) :: config
-      end subroutine validate_tddft_config
-
       module function tddft_capability_is_supported(state, reason) result(ok)
          type(tddft_capability_state), intent(in) :: state
          character(len=*), intent(out) :: reason
@@ -1427,32 +1393,10 @@ module linear_response_mod
          type(tddft_capability_state), intent(in) :: state
       end subroutine require_tddft_capability
 
-      module subroutine validate_tddft_production_capability(config, control_obj, lattice_obj, hamiltonian_obj, reciprocal_obj)
-         type(tddft_production_config), intent(in) :: config
-         type(control), intent(in) :: control_obj
-         type(lattice), intent(in) :: lattice_obj
-         type(hamiltonian), intent(in) :: hamiltonian_obj
-         type(reciprocal), intent(in) :: reciprocal_obj
-      end subroutine validate_tddft_production_capability
-
-      module subroutine run_tddft_production(config, control_obj, lattice_obj, hamiltonian_obj, energy_obj, reciprocal_obj, &
-                                             recursion_obj, green_obj, scf_converged, accepted_kspace_scf)
-         type(tddft_production_config), intent(in) :: config
-         type(control), intent(in) :: control_obj
-         type(lattice), target, intent(in) :: lattice_obj
-         type(hamiltonian), intent(in) :: hamiltonian_obj
-         type(energy_type), intent(in) :: energy_obj
-         type(reciprocal), intent(inout) :: reciprocal_obj
-         type(recursion), target, intent(inout) :: recursion_obj
-         type(green), target, intent(inout) :: green_obj
-         logical, intent(in) :: scf_converged
-         logical, intent(in), optional :: accepted_kspace_scf
-      end subroutine run_tddft_production
-
-      module subroutine evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
+      module subroutine evaluate_linear_response_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
                                                          native_provider, native_pairs, native_site_positions, accepted_pauli_magnetization, &
                                                          accepted_pauli_magnetization_source)
-         type(tddft_production_config), intent(in) :: config
+         type(linear_response_config), intent(in) :: config
          type(response_space_layout), target, intent(in) :: response_space
          type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
          type(radial_ground_state), target, intent(in) :: ground_states(:)
@@ -1464,7 +1408,7 @@ module linear_response_mod
          real(rp), target, intent(in), optional :: native_site_positions(:, :)
          real(rp), allocatable, intent(in), optional :: accepted_pauli_magnetization(:, :)
          character(len=*), intent(in), optional :: accepted_pauli_magnetization_source
-      end subroutine evaluate_tddft_production_sweep
+      end subroutine evaluate_linear_response_sweep
 
       ! --- kernel/Dyson submodule procedures ---
       module subroutine evaluate_lr_alsda_kernel_request(request, result)
@@ -2568,7 +2512,8 @@ module linear_response_mod
          type(reciprocal), intent(in) :: reciprocal_obj
       end subroutine lr_validate_capability
 
-      module subroutine lr_run(this, control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, reciprocal_obj)
+      module subroutine lr_run(this, control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, reciprocal_obj, &
+                               recursion_obj, green_obj, scf_converged)
          class(linear_response), intent(in) :: this
          type(control), intent(in) :: control_obj
          type(lattice), intent(inout) :: lattice_obj
@@ -2576,7 +2521,20 @@ module linear_response_mod
          type(energy_type), intent(in) :: energy_obj
          type(self), intent(inout) :: self_obj
          type(reciprocal), intent(inout) :: reciprocal_obj
+         type(recursion), target, intent(inout), optional :: recursion_obj
+         type(green), target, intent(inout), optional :: green_obj
+         logical, intent(in), optional :: scf_converged
       end subroutine lr_run
+
+      module subroutine lr_run_rotation(this, control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, reciprocal_obj)
+         class(linear_response), intent(in) :: this
+         type(control), intent(in) :: control_obj
+         type(lattice), intent(inout) :: lattice_obj
+         type(hamiltonian), intent(inout) :: hamiltonian_obj
+         type(energy_type), intent(in) :: energy_obj
+         type(self), intent(inout) :: self_obj
+         type(reciprocal), intent(inout) :: reciprocal_obj
+      end subroutine lr_run_rotation
    end interface
 
 end module linear_response_mod

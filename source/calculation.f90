@@ -44,8 +44,6 @@ module calculation_mod
    use mix_mod
    use frozen_magnon_mod
    use vacuum_lead_mod, only: vacuum_lead, refresh_vacuum_region
-   use linear_response_mod, only: tddft_production_config, load_tddft_config, &
-      validate_tddft_production_capability, run_tddft_production
    use math_mod
    use precision_mod, only: rp
    use string_mod, only: sl, fmt, real2str, int2str
@@ -139,9 +137,6 @@ module calculation_mod
 
       !> name list input file
       character(len=sl) :: fname
-
-      !> Minimal clean post-SCF TD-DFT production selection and grid.
-      type(tddft_production_config) :: tddft
 
       !> User-facing finite-q static exchange-curvature path.
       type(exchange_q_config) :: exchange_q
@@ -303,22 +298,16 @@ contains
          call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
 
-      call load_tddft_config(fname, this%tddft)
       call load_exchange_q_config(fname, this%exchange_q, trim(post_processing) == 'exchange_q')
-      if (trim(post_processing) == 'linear_response') call this%linear_response%load_config(fname, .true.)
-      if (trim(post_processing) == 'susceptibility') then
-         call g_logger%fatal('post_processing=''susceptibility'' is the removed legacy TD-DFT route; use post_processing=''tddft'' with the minimal &tddft input.', &
+      if (trim(post_processing) == 'tddft' .or. trim(post_processing) == 'susceptibility') then
+         call g_logger%fatal("post_processing='"//trim(post_processing)//"' was replaced by post_processing='linear_response' with &linear_response (see docs/linear_response/FORMULATION.md)", &
                              __FILE__, __LINE__)
       end if
-      if (this%tddft%enabled .and. trim(post_processing) /= 'tddft') then
-         call g_logger%fatal('&tddft enabled requires post_processing=''tddft''.', __FILE__, __LINE__)
-      end if
-      if (trim(post_processing) == 'tddft' .and. .not. this%tddft%enabled) then
-         call g_logger%fatal('post_processing=''tddft'' requires enabled=.true. in &tddft.', __FILE__, __LINE__)
-      end if
-      if (this%tddft%enabled .and. trim(pre_processing) /= 'bravais') then
-         call g_logger%fatal('TDDFT production requires pre_processing=''bravais'' so it can consume the accepted bulk SCF snapshot.', &
-                             __FILE__, __LINE__)
+      if (trim(post_processing) == 'linear_response') then
+         call this%linear_response%load_config(fname, .true.)
+         if (trim(this%linear_response%config%formulation) /= 'rotation' .and. trim(pre_processing) /= 'bravais') then
+            call g_logger%fatal("linear_response tddft/projected formulations require pre_processing='bravais'", __FILE__, __LINE__)
+         end if
       end if
 
       ! Pre-processing
@@ -408,12 +397,8 @@ contains
          ! LR-02N runs immediately after the accepted bravais SCF state in
          ! pre_processing_bravais, before the ordinary post-processing stage.
          continue
-      case ('tddft')
-         ! TDRUN-01 runs immediately after the accepted bravais SCF state in
-         ! pre_processing_bravais, before the accepted state owner leaves scope.
-         continue
       case ('susceptibility')
-         call g_logger%fatal('post_processing=''susceptibility'' is the removed legacy TD-DFT route; use post_processing=''tddft''.', &
+         call g_logger%fatal("post_processing='susceptibility' was replaced by post_processing='linear_response' with &linear_response (see docs/linear_response/FORMULATION.md)", &
                              __FILE__, __LINE__)
       end select
    end subroutine
@@ -2009,7 +1994,6 @@ contains
       this%gf_route = 'recursion'
       this%do_damping = .false.
       this%do_inertia = .false.
-      call this%tddft%restore_to_default()
       call this%exchange_q%clear()
       call this%linear_response%restore_to_default()
    end subroutine restore_to_default
@@ -2035,12 +2019,11 @@ contains
           .and. post_processing /= 'frozen_magnon' &
           .and. post_processing /= 'exchange_q' &
           .and. post_processing /= 'linear_response' &
-          .and. post_processing /= 'pauli_projection' &
-          .and. post_processing /= 'tddft') then
+          .and. post_processing /= 'pauli_projection') then
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
                              " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'bsf', 'density_of_states'," // &
-                             " 'fermi_surface', 'kspace_green', 'frozen_magnon', 'exchange_q', 'linear_response', 'pauli_projection', 'tddft'", __FILE__, __LINE__)
+                             " 'fermi_surface', 'kspace_green', 'frozen_magnon', 'exchange_q', 'linear_response', 'pauli_projection'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 
