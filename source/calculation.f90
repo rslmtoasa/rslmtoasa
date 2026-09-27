@@ -44,7 +44,7 @@ module calculation_mod
    use mix_mod
    use frozen_magnon_mod
    use vacuum_lead_mod, only: vacuum_lead, refresh_vacuum_region
-   use tddft_production_driver_mod, only: tddft_production_config, load_tddft_config, &
+   use linear_response_mod, only: tddft_production_config, load_tddft_config, &
       validate_tddft_production_capability, run_tddft_production
    use math_mod
    use precision_mod, only: rp

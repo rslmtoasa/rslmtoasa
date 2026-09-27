@@ -153,6 +153,86 @@ module linear_response_mod
       procedure :: restore_to_default => lr_config_restore_to_default
    end type linear_response_config
 
+   ! TD-DFT production compatibility types are kept in the parent during the
+   ! mechanical driver move.  LR-REF-04b replaces this input surface in the
+   ! next commit, but the response services and their focused tests still use
+   ! these result/capability contracts while the move is being verified.
+   character(len=*), parameter, public :: tddft_driver_backend_lehmann = 'lehmann'
+   character(len=*), parameter, public :: tddft_driver_backend_native_rsgf = 'native_rsgf'
+   character(len=*), parameter, public :: tddft_driver_backend_product_lehmann = 'product_lehmann'
+   character(len=*), parameter, public :: tddft_driver_backend_projected_chi0 = 'projected_chi0'
+   character(len=*), parameter, public :: tddft_driver_backend_compact_dyson = 'compact_dyson'
+   character(len=*), parameter, public :: tddft_driver_backend_projected_mills = 'projected_mills'
+   character(len=*), parameter, public :: tddft_driver_backend_projected_juelich = 'projected_juelich'
+   character(len=*), parameter, public :: tddft_driver_route_direct_alsda = 'direct_alsda'
+   character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = 'goldstone_sumrule'
+
+   type, public :: tddft_production_config
+      logical :: present = .false.
+      logical :: enabled = .false.
+      integer :: nq = 1
+      integer :: nfrequency = 1
+      character(len=32) :: channel = 'chi_plus'
+      real(rp), allocatable :: q_list(:, :)
+      real(rp), allocatable :: frequencies(:)
+      real(rp), allocatable :: eta_values(:)
+      real(rp) :: eta = 0.01_rp
+      integer :: response_lmax = -1
+      character(len=48) :: interaction_route = tddft_driver_route_direct_alsda
+      logical :: goldstone_correction = .false.
+      character(len=32) :: backend = tddft_driver_backend_lehmann
+      character(len=8) :: projected_selector = 'spd'
+      character(len=32) :: native_rsgf_provider = 'auto'
+      integer :: gf_integration_points = 2001
+      real(rp) :: gf_integration_eta = 0.0_rp
+      real(rp) :: gf_energy_margin = 1.0_rp
+      logical :: dyson_static_audit = .false.
+      logical :: validate_interacting_covariance = .false.
+      logical :: write_full_matrix = .true.
+      character(len=256) :: output_file = 'tddft_response.dat'
+   contains
+      procedure :: restore_to_default => tddft_config_restore
+   end type tddft_production_config
+
+   type, public :: tddft_capability_state
+      character(len=32) :: reciprocal_mode = 'ham_only'
+      character(len=16) :: hamiltonian_order = 'second'
+      integer :: basis_lmax = 2
+      logical :: collinear = .true.
+      logical :: has_soc = .false.
+      logical :: orthogonal = .true.
+      logical :: generalized_overlap = .false.
+      logical :: has_extra_operator = .false.
+      logical :: bulk_cell = .true.
+   end type tddft_capability_state
+
+   type, public :: tddft_production_result
+      logical :: initialized = .false.
+      integer :: nq = 0
+      integer :: nfrequency = 0
+      integer :: ndim = 0
+      integer :: response_lmax = -1
+      real(rp), allocatable :: q_list(:, :)
+      real(rp), allocatable :: frequencies(:)
+      complex(rp), allocatable :: ks_susceptibility(:, :, :, :)
+      complex(rp), allocatable :: enhanced_susceptibility(:, :, :, :)
+      complex(rp), allocatable :: loss_matrix(:, :, :, :)
+      logical :: compact_orthonormal = .false.
+      character(len=128) :: status = 'not evaluated'
+      character(len=48) :: interaction_route = ''
+      character(len=32) :: backend = ''
+      character(len=64) :: goldstone_correction_status = 'not selected'
+      character(len=256) :: interaction_provenance = ''
+      character(len=256) :: bare_response_provenance = ''
+      character(len=32) :: magnetization_kind = ''
+      character(len=256) :: magnetization_source = ''
+   end type tddft_production_result
+
+   public :: load_tddft_config, validate_tddft_config
+   public :: tddft_capability_is_supported, require_tddft_capability
+   public :: validate_tddft_production_capability, run_tddft_production
+   public :: evaluate_tddft_production_sweep
+
    type, public :: linear_response
       type(linear_response_config) :: config
    contains
@@ -1324,6 +1404,68 @@ module linear_response_mod
       module procedure evaluate_lr_product_ks_susceptibility_explicit
    end interface evaluate_lr_product_ks_susceptibility
    interface
+      module subroutine tddft_config_restore(this)
+         class(tddft_production_config), intent(out) :: this
+      end subroutine tddft_config_restore
+
+      module subroutine load_tddft_config(filename, config)
+         character(len=*), intent(in) :: filename
+         type(tddft_production_config), intent(out) :: config
+      end subroutine load_tddft_config
+
+      module subroutine validate_tddft_config(config)
+         type(tddft_production_config), intent(in) :: config
+      end subroutine validate_tddft_config
+
+      module function tddft_capability_is_supported(state, reason) result(ok)
+         type(tddft_capability_state), intent(in) :: state
+         character(len=*), intent(out) :: reason
+         logical :: ok
+      end function tddft_capability_is_supported
+
+      module subroutine require_tddft_capability(state)
+         type(tddft_capability_state), intent(in) :: state
+      end subroutine require_tddft_capability
+
+      module subroutine validate_tddft_production_capability(config, control_obj, lattice_obj, hamiltonian_obj, reciprocal_obj)
+         type(tddft_production_config), intent(in) :: config
+         type(control), intent(in) :: control_obj
+         type(lattice), intent(in) :: lattice_obj
+         type(hamiltonian), intent(in) :: hamiltonian_obj
+         type(reciprocal), intent(in) :: reciprocal_obj
+      end subroutine validate_tddft_production_capability
+
+      module subroutine run_tddft_production(config, control_obj, lattice_obj, hamiltonian_obj, energy_obj, reciprocal_obj, &
+                                             recursion_obj, green_obj, scf_converged, accepted_kspace_scf)
+         type(tddft_production_config), intent(in) :: config
+         type(control), intent(in) :: control_obj
+         type(lattice), target, intent(in) :: lattice_obj
+         type(hamiltonian), intent(in) :: hamiltonian_obj
+         type(energy_type), intent(in) :: energy_obj
+         type(reciprocal), intent(inout) :: reciprocal_obj
+         type(recursion), target, intent(inout) :: recursion_obj
+         type(green), target, intent(inout) :: green_obj
+         logical, intent(in) :: scf_converged
+         logical, intent(in), optional :: accepted_kspace_scf
+      end subroutine run_tddft_production
+
+      module subroutine evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
+                                                         native_provider, native_pairs, native_site_positions, accepted_pauli_magnetization, &
+                                                         accepted_pauli_magnetization_source)
+         type(tddft_production_config), intent(in) :: config
+         type(response_space_layout), target, intent(in) :: response_space
+         type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
+         type(radial_ground_state), target, intent(in) :: ground_states(:)
+         type(lr_electronic_state), target, intent(in) :: left_state
+         type(lr_electronic_state), target, intent(in) :: endpoints(:)
+         type(tddft_production_result), intent(out) :: result
+         class(lr_rs_gf_provider), target, intent(inout), optional :: native_provider
+         type(lr_rs_gf_pair), intent(in), optional :: native_pairs(:)
+         real(rp), target, intent(in), optional :: native_site_positions(:, :)
+         real(rp), allocatable, intent(in), optional :: accepted_pauli_magnetization(:, :)
+         character(len=*), intent(in), optional :: accepted_pauli_magnetization_source
+      end subroutine evaluate_tddft_production_sweep
+
       ! --- kernel/Dyson submodule procedures ---
       module subroutine evaluate_lr_alsda_kernel_request(request, result)
          type(lr_alsda_kernel_request), intent(in) :: request

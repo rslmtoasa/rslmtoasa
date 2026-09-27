@@ -89,7 +89,7 @@ add_library(${PROJECT_NAME} STATIC
     recursion_transport.f90
     lr_lmto_turek_gf.f90
     lr_lmto_turek_contour.f90
-    tddft_production_driver.f90
+    linear_response_run.f90
     sparse.f90
     report.f90
     rsrec_cuda_plugin.f90

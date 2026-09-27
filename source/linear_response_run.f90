@@ -9,7 +9,7 @@
 !> equation, radial augmentation formula, XC-kernel formula, Goldstone algebra,
 !> or mode-extraction logic.
 !------------------------------------------------------------------------------
-module tddft_production_driver_mod
+submodule (linear_response_mod) linear_response_run
 
    use, intrinsic :: ieee_arithmetic
    use precision_mod, only: rp
@@ -25,141 +25,18 @@ module tddft_production_driver_mod
    use symbolic_atom_mod, only: symbolic_atom
    use radial_ground_state_mod, only: radial_ground_state, RADIAL_PI, radial_simpson_weight
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
-   use linear_response_mod, only: response_super_index, response_flatten_superindex
-   use linear_response_mod, only: response_space_layout, response_operator_trace
-   use linear_response_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
-      lr_ks_susceptibility_result, lr_snapshot_from_reciprocal, lr_q_endpoint_from_reciprocal, &
-      evaluate_lr_ks_susceptibility, lr_product_ks_susceptibility_request, &
-      lr_product_ks_susceptibility_result, evaluate_lr_product_ks_susceptibility, lr_channel_plus, lr_channel_minus, &
-      lr_fermi_dirac_occupation
-      ! `lr_fermi_dirac_occupation` is used only to audit that the immutable
-      ! TDDFT snapshot reproduces the reciprocal SCF occupation semantics.
-   use linear_response_mod, only: pauli_endpoint_state, pauli_vertex_capabilities, &
-      pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
-   use linear_response_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
-      lmto_product_channel_minus
-   use linear_response_mod, only: lr_compact_gsr_result, lr_compact_representation, lr_compact_mapping_contract, &
-      compact_project_magnetization, compact_project_local_operator, compact_apply_local_operator, &
-      compact_reconstruct_point_vector, compact_weighted_projection_diagnostics, evaluate_compact_goldstone_sumrule, &
-      lr_compact_gsr_action_tolerance
    use pauli_ground_state_projection_mod, only: compute_accepted_pauli_magnetization
-   use linear_response_mod, only: projected_site_spin_contract
-   use linear_response_mod, only: projected_chi0_request, projected_chi0_result, &
-      evaluate_projected_lehmann_chi0
-   use linear_response_mod, only: projected_mills_interaction_result, &
-      projected_dyson_request, projected_dyson_result, evaluate_projected_mills_from_reciprocal, &
-      evaluate_projected_dyson
-   use linear_response_mod, only: projected_juelich_request, projected_juelich_result, &
-      evaluate_projected_juelich_interaction, evaluate_projected_juelich_holdout, &
-      assess_projected_juelich_eta_stability, projected_juelich_eta_limited, projected_juelich_rank_deficient, &
-      projected_juelich_unsupported, select_projected_juelich_eta_indices
-   use linear_response_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
-      evaluate_lr_rs_gf_susceptibility
-   use linear_response_mod, only: tddft_native_rsgf_provider
-   use linear_response_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, evaluate_lr_alsda_kernel, &
-      lr_kxc_magnetization_kind_pauli_accepted, lr_kxc_magnetization_source_pauli_accepted
-   use linear_response_mod, only: lr_goldstone_sumrule_request, lr_goldstone_sumrule_result, &
-      evaluate_lr_goldstone_sumrule
-   use linear_response_mod, only: tddft_dyson_request, tddft_dyson_result, evaluate_tddft_dyson, &
-      lr_dyson_route_direct_alsda, lr_dyson_route_goldstone_sumrule
    use logger_mod, only: g_logger
    implicit none
-   private
-
 #ifdef VERSION
    character(len=*), parameter :: tddft_build_version = VERSION
 #else
    character(len=*), parameter :: tddft_build_version = 'unavailable'
 #endif
 
-   character(len=*), parameter, public :: tddft_driver_backend_lehmann = 'lehmann'
-   character(len=*), parameter, public :: tddft_driver_backend_native_rsgf = 'native_rsgf'
-   character(len=*), parameter, public :: tddft_driver_backend_product_lehmann = 'product_lehmann'
-   character(len=*), parameter, public :: tddft_driver_backend_projected_chi0 = 'projected_chi0'
-   character(len=*), parameter, public :: tddft_driver_backend_compact_dyson = 'compact_dyson'
-   character(len=*), parameter, public :: tddft_driver_backend_projected_mills = 'projected_mills'
-   character(len=*), parameter, public :: tddft_driver_backend_projected_juelich = 'projected_juelich'
-   character(len=*), parameter, public :: tddft_driver_route_direct_alsda = lr_dyson_route_direct_alsda
-   character(len=*), parameter, public :: tddft_driver_route_goldstone_sumrule = lr_dyson_route_goldstone_sumrule
-
-   !> Parsed, minimal production input. Frequencies and q points are expanded
-   !> once at the parser boundary so the production path never reparses input.
-   type, public :: tddft_production_config
-      logical :: present = .false.
-      logical :: enabled = .false.
-      integer :: nq = 1
-      integer :: nfrequency = 1
-      character(len=32) :: channel = 'chi_plus'
-      real(rp), allocatable :: q_list(:, :) ! (3,nq)
-      real(rp), allocatable :: frequencies(:)
-      real(rp), allocatable :: eta_values(:) ! physical response eta values for validation campaigns
-      real(rp) :: eta = 0.01_rp
-      integer :: response_lmax = -1
-      character(len=48) :: interaction_route = tddft_driver_route_direct_alsda
-      logical :: goldstone_correction = .false.
-      character(len=32) :: backend = tddft_driver_backend_lehmann
-      character(len=8) :: projected_selector = 'spd'
-      character(len=32) :: native_rsgf_provider = 'auto'
-      integer :: gf_integration_points = 2001
-      real(rp) :: gf_integration_eta = 0.0_rp
-      real(rp) :: gf_energy_margin = 1.0_rp
-      logical :: dyson_static_audit = .false.
-      logical :: validate_interacting_covariance = .false.
-      logical :: write_full_matrix = .true.
-      character(len=256) :: output_file = 'tddft_response.dat'
-   contains
-      procedure :: restore_to_default => tddft_config_restore
-   end type tddft_production_config
-
-   !> Small capability contract used both by the real-object gate and focused
-   !> rejection tests.  It makes the reason for a rejection observable without
-   !> requiring a material fixture.
-   type, public :: tddft_capability_state
-      character(len=32) :: reciprocal_mode = 'ham_only'
-      character(len=16) :: hamiltonian_order = 'second'
-      integer :: basis_lmax = 2
-      logical :: collinear = .true.
-      logical :: has_soc = .false.
-      logical :: orthogonal = .true.
-      logical :: generalized_overlap = .false.
-      logical :: has_extra_operator = .false.
-      logical :: bulk_cell = .true.
-   end type tddft_capability_state
-
-   !> Driver result. The complete matrices are retained; no spectrum or mode
-   !> reduction is invented at this orchestration layer.
-   type, public :: tddft_production_result
-      logical :: initialized = .false.
-      integer :: nq = 0
-      integer :: nfrequency = 0
-      integer :: ndim = 0
-      integer :: response_lmax = -1
-      real(rp), allocatable :: q_list(:, :)
-      real(rp), allocatable :: frequencies(:)
-      complex(rp), allocatable :: ks_susceptibility(:, :, :, :)
-      complex(rp), allocatable :: enhanced_susceptibility(:, :, :, :)
-      complex(rp), allocatable :: loss_matrix(:, :, :, :)
-      logical :: compact_orthonormal = .false.
-      character(len=128) :: status = 'not evaluated'
-      character(len=48) :: interaction_route = ''
-      character(len=32) :: backend = ''
-      character(len=64) :: goldstone_correction_status = 'not selected'
-      character(len=256) :: interaction_provenance = ''
-      character(len=256) :: bare_response_provenance = ''
-      character(len=32) :: magnetization_kind = ''
-      character(len=256) :: magnetization_source = ''
-   end type tddft_production_result
-
-   public :: load_tddft_config
-   public :: tddft_capability_is_supported
-   public :: require_tddft_capability
-   public :: validate_tddft_production_capability
-   public :: run_tddft_production
-   public :: evaluate_tddft_production_sweep
-
 contains
 
-   subroutine tddft_config_restore(this)
+   module subroutine tddft_config_restore(this)
       class(tddft_production_config), intent(out) :: this
       this%present = .false.
       this%enabled = .false.
@@ -191,7 +68,7 @@ contains
 
    !> Read only the new minimal &tddft group. No legacy TD-DFT type is
    !> constructed and an absent group is the ordinary feature-off default.
-   subroutine load_tddft_config(filename, config)
+   module subroutine load_tddft_config(filename, config)
       character(len=*), intent(in) :: filename
       type(tddft_production_config), intent(out) :: config
       integer :: unit, ios, n_q_local = 1, n_omega_local = 1, n_eta_local = 1, iq, iw
@@ -303,7 +180,7 @@ contains
       call validate_tddft_config(config)
    end subroutine load_tddft_config
 
-   subroutine validate_tddft_config(config)
+   module subroutine validate_tddft_config(config)
       type(tddft_production_config), intent(in) :: config
       character(len=128) :: route
       integer :: eta_selected_index, eta_holdout_index
@@ -389,9 +266,10 @@ contains
       end if
    end subroutine validate_tddft_config
 
-   logical function tddft_capability_is_supported(state, reason) result(ok)
+   module function tddft_capability_is_supported(state, reason) result(ok)
       type(tddft_capability_state), intent(in) :: state
       character(len=*), intent(out) :: reason
+      logical :: ok
 
       ok = .false.
       reason = 'unknown unsupported feature'
@@ -416,7 +294,7 @@ contains
       end if
    end function tddft_capability_is_supported
 
-   subroutine require_tddft_capability(state)
+   module subroutine require_tddft_capability(state)
       type(tddft_capability_state), intent(in) :: state
       character(len=256) :: reason
       if (.not. tddft_capability_is_supported(state, reason)) then
@@ -424,7 +302,7 @@ contains
       end if
    end subroutine require_tddft_capability
 
-   subroutine validate_tddft_production_capability(config, control_obj, lattice_obj, hamiltonian_obj, reciprocal_obj)
+   module subroutine validate_tddft_production_capability(config, control_obj, lattice_obj, hamiltonian_obj, reciprocal_obj)
       type(tddft_production_config), intent(in) :: config
       type(control), intent(in) :: control_obj
       type(lattice), intent(in) :: lattice_obj
@@ -756,7 +634,7 @@ contains
    !> When accepted_kspace_scf is true, reciprocal_obj is the live cache owned
    !> by self and is consumed without a mesh generation, Hamiltonian build, or
    !> diagonalization in this driver.
-   subroutine run_tddft_production(config, control_obj, lattice_obj, hamiltonian_obj, energy_obj, reciprocal_obj, &
+   module subroutine run_tddft_production(config, control_obj, lattice_obj, hamiltonian_obj, energy_obj, reciprocal_obj, &
                                    recursion_obj, green_obj, scf_converged, accepted_kspace_scf)
       type(tddft_production_config), intent(in) :: config
       type(control), intent(in) :: control_obj
@@ -2649,7 +2527,7 @@ contains
    !> Evaluate an already prepared request batch. This is the reproducibility
    !> seam: tests and validation can compare it directly with service calls,
    !> without reconstructing SCF state.
-   subroutine evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
+   module subroutine evaluate_tddft_production_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, result, &
                                               native_provider, native_pairs, native_site_positions, accepted_pauli_magnetization, &
                                               accepted_pauli_magnetization_source)
       type(tddft_production_config), intent(in) :: config
@@ -3065,4 +2943,4 @@ contains
       value = sqrt(sum(abs(left - right)**2))/max(left_norm, right_norm, tiny(1.0_rp))
    end function relative_site_difference
 
-end module tddft_production_driver_mod
+end submodule linear_response_run

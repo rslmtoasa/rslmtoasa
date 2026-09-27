@@ -1,7 +1,7 @@
 ! TDRUN-01 production-adapter contract and tiny prepared-state integration test.
 program test_tddft_production_driver
    use precision_mod, only: rp
-   use tddft_production_driver_mod, only: tddft_production_config, tddft_capability_state, &
+   use linear_response_mod, only: tddft_production_config, tddft_capability_state, &
       tddft_capability_is_supported, require_tddft_capability, load_tddft_config, &
       evaluate_tddft_production_sweep, tddft_production_result
    use radial_ground_state_mod, only: radial_ground_state
