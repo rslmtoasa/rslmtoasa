@@ -8,12 +8,12 @@ program test_lr_projected_site_spin
    use math_mod, only: init_math_operators
    use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l
    use radial_ground_state_mod, only: radial_ground_state
-   use response_angular_basis_mod, only: response_angular_pi
-   use lr_response_space_mod, only: response_space_layout
-   use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state
-   use lr_lmto_product_response_basis_mod, only: lmto_product_channel_plus, lmto_product_channel_minus, &
+   use linear_response_mod, only: response_angular_pi
+   use linear_response_mod, only: response_space_layout
+   use linear_response_mod, only: pauli_endpoint_state
+   use linear_response_mod, only: lmto_product_channel_plus, lmto_product_channel_minus, &
       lmto_product_response_basis
-   use lr_projected_site_spin_mod, only: projected_site_spin_contract, projected_selector_d, &
+   use linear_response_mod, only: projected_site_spin_contract, projected_selector_d, &
       projected_selector_spd, projected_operator_plus, projected_operator_minus, projected_operator_z
    implicit none
 

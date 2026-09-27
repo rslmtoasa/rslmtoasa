@@ -8,10 +8,10 @@
 !------------------------------------------------------------------------------
 program test_lr_ks_susceptibility
    use precision_mod, only: rp
-   use response_angular_basis_mod, only: response_angular_pi, response_lm_index
-   use response_basis_mapping_mod, only: response_super_index, response_flatten_superindex, &
+   use linear_response_mod, only: response_angular_pi, response_lm_index
+   use linear_response_mod, only: response_super_index, response_flatten_superindex, &
       response_unflatten_superindex
-   use lr_response_space_mod, only: response_space_layout
+   use linear_response_mod, only: response_space_layout
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, lr_channel_plus, lr_channel_minus, &

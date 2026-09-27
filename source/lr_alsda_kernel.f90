@@ -18,7 +18,7 @@ module lr_alsda_kernel_mod
 
    use precision_mod, only: rp
    use radial_ground_state_mod, only: radial_ground_state, radial_xc_provenance
-   use lr_response_space_mod, only: response_space_layout, response_apply_operator, response_local_operator, &
+   use linear_response_mod, only: response_space_layout, response_apply_operator, response_local_operator, &
       response_vector_norm, response_rigid_vector_overlap
    implicit none
    private

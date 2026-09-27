@@ -37,6 +37,7 @@ add_library(${PROJECT_NAME} STATIC
     lmto_magnetic_tangent.f90
     linear_response.f90
     linear_response_rotation.f90
+    linear_response_basis.f90
     lmto_radial_augmentation.f90
     pauli_ground_state_projection.f90
     spin_density.f90
@@ -84,15 +85,7 @@ add_library(${PROJECT_NAME} STATIC
     recursion_haydock.f90
     recursion_chebyshev.f90
     recursion_transport.f90
-    response_angular_basis.f90
-    response_basis_mapping.f90
-    lr_response_space.f90
-    lr_pauli_transition_vertex.f90
-    lr_lmto_endpoint_branches.f90
-    lr_lmto_product_response_basis.f90
-    lr_projected_site_spin.f90
     lr_compact_static_interaction.f90
-    lr_gf_endpoint_augmentation.f90
     lr_ks_susceptibility.f90
     lr_gf_susceptibility.f90
     lr_product_gf_susceptibility.f90

@@ -8,10 +8,10 @@
 !------------------------------------------------------------------------------
 program test_lr_response_basis
    use precision_mod, only: rp
-   use response_angular_basis_mod, only: response_angular_pi, response_lmax, &
+   use linear_response_mod, only: response_angular_pi, response_lmax, &
       response_product_space_complete, response_lm_index, response_lm_from_index, response_harmonic, &
       response_gaunt, response_product_coefficients
-   use response_basis_mapping_mod, only: response_super_index, response_superindex_size, &
+   use linear_response_mod, only: response_super_index, response_superindex_size, &
       response_flatten_superindex, response_unflatten_superindex, response_simpson_weight, &
       response_log_mesh_jacobian, response_volume_measure, response_weighted_density, &
       response_physical_density, response_log_mesh_integral, response_endpoint_phase, &

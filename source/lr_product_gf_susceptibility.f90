@@ -12,13 +12,13 @@ module lr_product_gf_susceptibility_mod
 
    use, intrinsic :: iso_fortran_env, only: int64
    use precision_mod, only: rp
-   use response_angular_basis_mod, only: response_angular_pi
-   use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, &
+   use linear_response_mod, only: response_angular_pi
+   use linear_response_mod, only: lmto_product_response_basis, &
       lmto_product_channel_plus, lmto_product_channel_minus
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_channel_plus, lr_channel_minus, &
       lr_fermi_dirac_occupation
    use lr_gf_susceptibility_mod, only: build_weighted_resolvent
-   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_max_gf_moment, &
+   use linear_response_mod, only: lmto_product_nbranch, lmto_product_max_gf_moment, &
       lmto_product_branch_powers, lmto_product_energy_power
    implicit none
    private

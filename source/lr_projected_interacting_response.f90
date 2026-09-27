@@ -23,7 +23,7 @@ module lr_projected_interacting_response_mod
    use precision_mod, only: rp
    use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l
    use reciprocal_mod, only: reciprocal
-   use lr_projected_site_spin_mod, only: projected_site_spin_contract, projected_operator_z
+   use linear_response_mod, only: projected_site_spin_contract, projected_operator_z
    use tddft_dyson_mod, only: solve_tddft_dyson_frequency, tddft_loss_matrix, &
       tddft_denominator_minimum_magnitude_eigenvalue
    implicit none

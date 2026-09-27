@@ -11,9 +11,9 @@ program test_lr_gf_endpoint_augmentation
    use precision_mod, only: rp
    use dyson_kernel_mod, only: dyson_kspace_inverse
    use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l
-   use lr_gf_endpoint_augmentation_mod, only: lr_gf_augmented_block, lr_gf_endpoint_capabilities, &
+   use linear_response_mod, only: lr_gf_augmented_block, lr_gf_endpoint_capabilities, &
       lr_gf_dense_hamiltonian_provider, augment_lr_gf_endpoint, augment_lr_gf_endpoint_pair
-   use response_angular_basis_mod, only: response_harmonic
+   use linear_response_mod, only: response_harmonic
    implicit none
 
    integer, parameter :: lmax = 1, norb = (lmax + 1)**2, nlocal = 2*norb

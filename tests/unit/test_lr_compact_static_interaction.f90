@@ -12,11 +12,11 @@ program test_lr_compact_static_interaction
    use math_mod, only: init_math_operators
    use self_mod, only: legacy_radial_fixture
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
-   use response_basis_mapping_mod, only: response_super_index, response_flatten_superindex, &
+   use linear_response_mod, only: response_super_index, response_flatten_superindex, &
       response_unflatten_superindex
-   use response_angular_basis_mod, only: response_angular_pi
-   use lr_response_space_mod, only: response_space_layout
-   use lr_lmto_product_response_basis_mod, only: lmto_product_channel_plus, lmto_product_response_basis
+   use linear_response_mod, only: response_angular_pi
+   use linear_response_mod, only: response_space_layout
+   use linear_response_mod, only: lmto_product_channel_plus, lmto_product_response_basis
    use lr_compact_static_interaction_mod, only: compact_project_point_vector, compact_reconstruct_point_vector, &
       compact_project_local_operator, compact_apply_local_operator, compact_project_magnetization, &
       lr_compact_mapping_contract

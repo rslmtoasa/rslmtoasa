@@ -25,8 +25,8 @@ module tddft_production_driver_mod
    use symbolic_atom_mod, only: symbolic_atom
    use radial_ground_state_mod, only: radial_ground_state, RADIAL_PI, radial_simpson_weight
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
-   use response_basis_mapping_mod, only: response_super_index, response_flatten_superindex
-   use lr_response_space_mod, only: response_space_layout, response_operator_trace
+   use linear_response_mod, only: response_super_index, response_flatten_superindex
+   use linear_response_mod, only: response_space_layout, response_operator_trace
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, lr_snapshot_from_reciprocal, lr_q_endpoint_from_reciprocal, &
       evaluate_lr_ks_susceptibility, lr_product_ks_susceptibility_request, &
@@ -34,9 +34,9 @@ module tddft_production_driver_mod
       lr_fermi_dirac_occupation
       ! `lr_fermi_dirac_occupation` is used only to audit that the immutable
       ! TDDFT snapshot reproduces the reciprocal SCF occupation semantics.
-   use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state, pauli_vertex_capabilities, &
+   use linear_response_mod, only: pauli_endpoint_state, pauli_vertex_capabilities, &
       pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
-   use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
+   use linear_response_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
       lmto_product_channel_minus
    use lr_compact_static_interaction_mod, only: lr_compact_gsr_result, lr_compact_representation, lr_compact_mapping_contract, &
       compact_project_magnetization, compact_project_local_operator, compact_apply_local_operator, &
@@ -46,7 +46,7 @@ module tddft_production_driver_mod
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
    use lr_product_gf_susceptibility_mod, only: lr_product_gf_susceptibility_request, &
       lr_product_gf_susceptibility_result, evaluate_lr_product_gf_susceptibility
-   use lr_projected_site_spin_mod, only: projected_site_spin_contract
+   use linear_response_mod, only: projected_site_spin_contract
    use lr_projected_reciprocal_chi0_mod, only: projected_chi0_request, projected_chi0_result, &
       evaluate_projected_lehmann_chi0, evaluate_projected_finite_width_chi0, evaluate_projected_gf_chi0
    use lr_projected_interacting_response_mod, only: projected_mills_interaction_result, &

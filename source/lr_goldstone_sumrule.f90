@@ -19,9 +19,9 @@
 module lr_goldstone_sumrule_mod
 
    use precision_mod, only: rp
-   use response_angular_basis_mod, only: response_angular_pi
-   use response_basis_mapping_mod, only: response_super_index, response_flatten_superindex
-   use lr_response_space_mod, only: response_space_layout, response_apply_operator, response_local_operator, &
+   use linear_response_mod, only: response_angular_pi
+   use linear_response_mod, only: response_super_index, response_flatten_superindex
+   use linear_response_mod, only: response_space_layout, response_apply_operator, response_local_operator, &
       response_vector_norm, response_rigid_vector_overlap
    implicit none
    private

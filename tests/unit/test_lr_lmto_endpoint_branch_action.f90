@@ -6,7 +6,7 @@
 ! diagonal or commuting fixture.
 program test_lr_lmto_endpoint_branch_action
    use precision_mod, only: rp
-   use lr_lmto_endpoint_branches_mod, only: lmto_product_nbranch, lmto_product_branch_powers, &
+   use linear_response_mod, only: lmto_product_nbranch, lmto_product_branch_powers, &
       lmto_product_apply_branch_action
    implicit none
 

@@ -11,9 +11,9 @@ program test_lr_projected_reciprocal_chi0
    use precision_mod, only: rp
    use basis_mod, only: basis_init
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
-   use lr_response_space_mod, only: response_space_layout
-   use lr_projected_site_spin_mod, only: projected_site_spin_contract
-   use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
+   use linear_response_mod, only: response_space_layout
+   use linear_response_mod, only: projected_site_spin_contract
+   use linear_response_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
       lmto_product_channel_minus
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_product_ks_susceptibility_request, &
       lr_product_ks_susceptibility_result, lr_channel_plus, lr_channel_minus, &

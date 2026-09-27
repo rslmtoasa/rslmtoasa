@@ -14,13 +14,13 @@ module lr_ks_susceptibility_mod
    use precision_mod, only: rp
    use reciprocal_mod, only: reciprocal
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
-   use lr_response_space_mod, only: response_space_layout, response_apply_operator, &
+   use linear_response_mod, only: response_space_layout, response_apply_operator, &
       response_vector_norm, response_raw_to_canonical
-   use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state, pauli_vertex_capabilities, &
+   use linear_response_mod, only: pauli_endpoint_state, pauli_vertex_capabilities, &
       pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
-   use lr_lmto_product_response_basis_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
+   use linear_response_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
       lmto_product_channel_minus, lmto_product_nbranch
-   use lr_lmto_endpoint_branches_mod, only: lmto_product_max_gf_moment
+   use linear_response_mod, only: lmto_product_max_gf_moment
    implicit none
    private
 

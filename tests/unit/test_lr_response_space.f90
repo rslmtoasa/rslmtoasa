@@ -6,8 +6,8 @@
 !------------------------------------------------------------------------------
 program test_lr_response_space
    use precision_mod, only: rp
-   use response_basis_mapping_mod, only: response_super_index, response_unflatten_superindex
-   use lr_response_space_mod, only: response_space_layout, response_build_radial_metric, &
+   use linear_response_mod, only: response_super_index, response_unflatten_superindex
+   use linear_response_mod, only: response_space_layout, response_build_radial_metric, &
       response_vector_inner_product, response_vector_norm, response_apply_operator, &
       response_compose_operators, response_identity_operator, response_local_operator, &
       response_operator_adjoint, response_operator_trace, response_rigid_vector_norm, &

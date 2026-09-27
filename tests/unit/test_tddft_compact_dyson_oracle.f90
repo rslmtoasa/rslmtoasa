@@ -12,7 +12,7 @@
 program test_tddft_compact_dyson_oracle
    use precision_mod, only: rp
    use math_mod, only: pi
-   use lr_response_space_mod, only: response_space_layout
+   use linear_response_mod, only: response_space_layout
    use tddft_dyson_mod, only: tddft_dyson_request, tddft_dyson_result, evaluate_tddft_dyson, &
       tddft_loss_matrix, lr_dyson_route_direct_alsda
    implicit none

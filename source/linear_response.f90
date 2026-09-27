@@ -10,6 +10,8 @@ module linear_response_mod
    use reciprocal_mod, only: reciprocal
    use self_mod, only: self
    use string_mod, only: sl
+   use lmto_radial_augmentation_mod, only: lmto_radial_basis
+   use radial_ground_state_mod, only: radial_ground_state
    use lr_lmto_turek_contour_mod, only: native_turek_contour_report
    implicit none
    private
@@ -157,6 +159,323 @@ module linear_response_mod
       procedure :: run => lr_run
    end type linear_response
 
+
+   ! --- from response_angular_basis_mod ---
+
+   real(rp), parameter, public :: response_angular_pi = &
+      3.1415926535897932384626433832795_rp
+
+   ! --- from response_basis_mapping_mod ---
+
+   !> Sign of the live reciprocal/Fourier convention exp(+i 2*pi*k.R).
+   integer, parameter, public :: response_fourier_phase_sign = 1
+
+   type, public :: response_super_index
+      integer :: site = 0
+      integer :: response_l = 0
+      integer :: response_m = 0
+      integer :: radial_point = 0
+      integer :: channel = 0
+   end type response_super_index
+
+   ! --- from lr_response_space_mod ---
+
+   type, public :: response_space_layout
+      integer :: nsite = 0
+      integer :: response_lmax = -1
+      integer :: npoint = 0
+      integer :: nchannel = 0
+      integer :: ndim = 0
+      integer :: active_dimension = 0
+      real(rp) :: a = 0.0_rp
+      real(rp) :: b = 0.0_rp
+      real(rp), allocatable :: radius(:)
+      real(rp), allocatable :: radial_weights(:)
+      real(rp), allocatable :: metric_weights(:)
+   contains
+      procedure :: initialize => response_space_initialize
+   end type response_space_layout
+
+   ! --- from lr_lmto_endpoint_branches_mod ---
+
+   integer, parameter, public :: lmto_product_branch_00 = 1
+   integer, parameter, public :: lmto_product_branch_10 = 2
+   integer, parameter, public :: lmto_product_branch_01 = 3
+   integer, parameter, public :: lmto_product_branch_11 = 4
+   integer, parameter, public :: lmto_product_branch_20 = 5
+   integer, parameter, public :: lmto_product_branch_02 = 6
+   integer, parameter, public :: lmto_product_nbranch = 6
+   integer, parameter, public :: lmto_product_max_endpoint_power = 2
+   integer, parameter, public :: lmto_product_max_gf_moment = 4
+
+   ! --- from lr_pauli_transition_vertex_mod ---
+
+   !> Capability tuple for the initial LR-05 production vertex.
+   type, public :: pauli_vertex_capabilities
+      character(len=32) :: reciprocal_mode = 'ham_only'
+      character(len=16) :: hamiltonian_order = 'second'
+      logical :: orthogonal = .true.
+      logical :: collinear = .true.
+      logical :: has_soc = .false.
+      logical :: has_extra_operator = .false.
+   end type pauli_vertex_capabilities
+
+   !> One reciprocal endpoint eigenstate in production site-blocked ordering.
+   !>
+   !> The coefficient vector is packed as
+   !> `(site, spin-up orbitals, spin-down orbitals)`, with the orbital order
+   !> `(s),(p,-1:1),(d,-2:2),...` supplied by `basis_mod`/LMTO.
+   type, public :: pauli_endpoint_state
+      real(rp) :: energy = 0.0_rp
+      complex(rp), allocatable :: coefficients(:)
+   contains
+      procedure :: initialize => pauli_endpoint_state_initialize
+   end type pauli_endpoint_state
+
+   ! --- from lr_lmto_product_response_basis_mod ---
+
+   integer, parameter, public :: lmto_product_channel_plus = 1
+   integer, parameter, public :: lmto_product_channel_minus = 2
+
+   type, public :: lmto_product_candidate
+      integer :: l = 0
+      integer :: lp = 0
+      integer :: p = 0
+      integer :: q = 0
+      integer :: branch = 0
+   end type lmto_product_candidate
+
+   type, public :: lmto_product_block
+      integer :: site = 0
+      integer :: response_l = 0
+      integer :: channel = 0
+      integer :: npoint = 0
+      integer :: ncandidate = 0
+      integer :: nsv = 0
+      integer :: rank = 0
+      integer :: rank_tau1 = 0
+      integer :: rank_tau10 = 0
+      integer :: rank_tau100 = 0
+      real(rp) :: tau1 = 0.0_rp
+      real(rp) :: tau10 = 0.0_rp
+      real(rp) :: tau100 = 0.0_rp
+      logical :: rank_stable = .false.
+      type(lmto_product_candidate), allocatable :: candidates(:)
+      real(rp), allocatable :: column_norms(:)
+      real(rp), allocatable :: singular_values(:)
+      !> Weighted orthonormal radial modes U, with columns retained by rank.
+      complex(rp), allocatable :: weighted_modes(:, :)
+      !> Retained rows of V^H from the direct SVD, kept for reconstruction
+      !> audits and future operator projection.
+      complex(rp), allocatable :: right_modes(:, :)
+      !> Forward candidate-to-coordinate map F = Sigma V^H D.
+      complex(rp), allocatable :: forward_transform(:, :)
+   end type lmto_product_block
+
+   type, public :: lmto_product_response_basis
+      integer :: nsite = 0
+      integer :: orbital_lmax = -1
+      integer :: response_lmax = -1
+      integer :: circular_channel = 0
+      integer :: npoint = 0
+      integer :: unpruned_dimension = 0
+      integer :: product_dimension = 0
+      character(len=16) :: product_radial_order = 'second'
+      integer :: product_endpoint_branches = lmto_product_nbranch
+      character(len=32) :: product_branch_labels = '00,10,01,11,20,02'
+      integer :: maximum_gf_energy_moment = 4
+      type(lmto_product_block), allocatable :: blocks(:, :)
+   contains
+      procedure :: initialize => lmto_product_response_basis_initialize
+      procedure :: flat_index => lmto_product_flat_index
+      procedure :: unflatten_index => lmto_product_unflatten_index
+      procedure :: candidate_coefficients => lmto_product_candidate_coefficients
+      procedure :: transition_coordinates => lmto_product_transition_coordinates
+      procedure :: component_vertex_tensor => lmto_product_component_vertex_tensor
+   end type lmto_product_response_basis
+
+   ! --- from lr_gf_endpoint_augmentation_mod ---
+
+   character(len=*), parameter, public :: lr_gf_endpoint_representation = &
+      'Pauli/no-SOC spatial GF, factored LMTO augmentation'
+
+   !> Capability tuple accepted by this endpoint adapter.
+   type, public :: lr_gf_endpoint_capabilities
+      character(len=32) :: reciprocal_mode = 'ham_only'
+      character(len=16) :: hamiltonian_order = 'second'
+      logical :: orthogonal = .true.
+      logical :: collinear = .true.
+      logical :: has_soc = .false.
+      logical :: has_extra_operator = .false.
+      ! These two explicit names make the fail-closed boundary readable to
+      ! callers that distinguish Hubbard from other additive operators.
+      logical :: has_hubbard = .false.
+      logical :: has_additive_operator = .false.
+   contains
+      procedure :: supported => lr_gf_endpoint_capabilities_supported
+      procedure :: require_supported => lr_gf_endpoint_require_supported
+   end type lr_gf_endpoint_capabilities
+
+   !> Callback for a production effective-Hamiltonian action.
+   !>
+   !> `seed` is a localized source-site block.  The implementation applies the
+   !> same H_eff action used by the native solver and returns the destination
+   !> site block.  For destination=source the caller subtracts E_nu_work to
+   !> obtain h^gamma_aa; for an offsite block the returned H block is already
+   !> h^gamma_ab.
+   type, abstract, public :: lr_gf_effective_hamiltonian_provider
+   contains
+      procedure(lr_gf_apply_effective_action), deferred :: apply
+   end type lr_gf_effective_hamiltonian_provider
+
+   abstract interface
+      subroutine lr_gf_apply_effective_action(this, source_site, destination_site, seed, destination_block)
+         import :: lr_gf_effective_hamiltonian_provider, rp
+         class(lr_gf_effective_hamiltonian_provider), intent(inout) :: this
+         integer, intent(in) :: source_site, destination_site
+         complex(rp), intent(in) :: seed(:, :)
+         complex(rp), intent(out) :: destination_block(:, :)
+      end subroutine lr_gf_apply_effective_action
+   end interface
+
+   !> Simple dense provider used by small finite fixtures and by callers that
+   !> already hold the completed H_eff matrix.  Production callers can provide
+   !> a wrapper around their native two-sweep/action routine instead.
+   type, extends(lr_gf_effective_hamiltonian_provider), public :: lr_gf_dense_hamiltonian_provider
+      complex(rp), allocatable :: h_eff(:, :)
+      integer :: block_size = 0
+   contains
+      procedure :: initialize => lr_gf_dense_provider_initialize
+      procedure :: apply => lr_gf_dense_provider_apply
+   end type lr_gf_dense_hamiltonian_provider
+
+   !> Factored endpoint-augmented Green-function block.
+   !>
+   !> The four coefficient-space members are the explicit radial branches in
+   !>   Phi G Phi^dagger,
+   !>   Phidot (hG) Phi^dagger,
+   !>   Phi (Gh) Phidot^dagger,
+   !>   Phidot (hGh) Phidot^dagger.
+   !>
+   !> `phi_left/right` and `phidot_left/right` contain large-component radial
+   !> numerators repeated in orbital/spin ordering.  Angular harmonics are not
+   !> duplicated in storage; `evaluate_point` inserts the certified
+   !> response_angular_basis convention and divides U_l by r at the endpoint.
+   type, public :: lr_gf_augmented_block
+      integer :: left_site = 0
+      integer :: right_site = 0
+      integer :: norb = 0
+      integer :: nspin = 0
+      complex(rp) :: z = (0.0_rp, 0.0_rp)
+      complex(rp), allocatable :: coefficient_gf(:, :)
+      complex(rp), allocatable :: hgamma_ab(:, :)
+      complex(rp), allocatable :: h_g(:, :)
+      complex(rp), allocatable :: g_h(:, :)
+      complex(rp), allocatable :: h_g_h(:, :)
+      ! Shape: (radial point, orbital, spin), large component only.
+      real(rp), allocatable :: phi_left(:, :, :), phidot_left(:, :, :)
+      real(rp), allocatable :: phi_right(:, :, :), phidot_right(:, :, :)
+      real(rp), allocatable :: radius_left(:), radius_right(:)
+   contains
+      procedure :: evaluate_point => lr_gf_augmented_block_evaluate_point
+      procedure :: branch_at_point => lr_gf_augmented_block_branch_at_point
+   end type lr_gf_augmented_block
+
+   ! --- from lr_projected_site_spin_mod ---
+
+
+   integer, parameter, public :: projected_selector_d = 1
+   integer, parameter, public :: projected_selector_spd = 2
+
+   integer, parameter, public :: projected_operator_plus = 1
+   integer, parameter, public :: projected_operator_minus = 2
+   integer, parameter, public :: projected_operator_z = 3
+
+   character(len=1), parameter, public :: projected_selection_d = 'd'
+   character(len=3), parameter, public :: projected_selection_spd = 'spd'
+   character(len=40), parameter, public :: projected_core_policy = &
+      'valence-only; frozen core excluded'
+
+   !> Immutable-after-initialization DRESP-01 contract metadata and operations.
+   type, public :: projected_site_spin_contract
+      integer :: nsite = 0
+      integer :: orbital_lmax = -1
+      integer :: response_lmax = -1
+      integer :: npoint = 0
+      integer :: selector_kind = 0
+      character(len=8) :: selector = ''
+      character(len=40) :: core_policy = projected_core_policy
+      real(rp) :: mesh_a = 0.0_rp
+      real(rp) :: mesh_b = 0.0_rp
+      real(rp) :: angular_scalar_integral = 0.0_rp
+      real(rp), allocatable :: radius(:)
+      real(rp), allocatable :: radial_weights(:)
+      logical :: selected_l(0:2) = .false.
+   contains
+      procedure :: initialize => projected_site_spin_initialize
+      procedure :: site_integration_functional => projected_site_spin_functional
+      procedure :: selected_transition_coordinates => projected_selected_coordinates
+      procedure :: transition_amplitudes => projected_transition_amplitudes
+      procedure :: direct_operator_matrix => projected_direct_operator_matrix
+      procedure :: direct_transition_amplitudes => projected_direct_transition_amplitudes
+      procedure :: site_component_vertex_tensor => projected_site_component_vertex_tensor
+      procedure :: moment_from_density => projected_moment_from_density
+      procedure :: moment_from_operator => projected_moment_from_operator
+      procedure :: core_spin_number => projected_core_spin_number
+   end type projected_site_spin_contract
+   public :: response_lmax
+   public :: response_product_space_complete
+   public :: response_lm_index
+   public :: response_lm_from_index
+   public :: response_harmonic
+   public :: response_gaunt
+   public :: response_product_coefficients
+   public :: response_superindex_size
+   public :: response_flatten_superindex
+   public :: response_unflatten_superindex
+   public :: response_simpson_weight
+   public :: response_log_mesh_jacobian
+   public :: response_volume_measure
+   public :: response_weighted_density
+   public :: response_physical_density
+   public :: response_log_mesh_integral
+   public :: response_endpoint_phase
+   public :: response_real_space_phase
+   public :: response_site_gauge
+   public :: response_apply_site_gauge
+   public :: response_mapping_supported
+   public :: response_build_radial_metric
+   public :: response_metric_weights
+   public :: response_vector_inner_product
+   public :: response_vector_norm
+   public :: response_apply_operator
+   public :: response_compose_operators
+   public :: response_identity_operator
+   public :: response_local_operator
+   public :: response_operator_adjoint
+   public :: response_operator_trace
+   public :: response_rigid_vector_norm
+   public :: response_rigid_vector_overlap
+   public :: response_raw_to_canonical
+   public :: response_canonical_to_raw
+   public :: lmto_product_branch_powers
+   public :: lmto_product_branch_label
+   public :: lmto_product_branch_valid
+   public :: lmto_product_energy_power
+   public :: lmto_product_second_order_radial_branch
+   public :: lmto_product_apply_branch_action
+   public :: pauli_charge_matrix
+   public :: pauli_sigma_x_matrix
+   public :: pauli_sigma_y_matrix
+   public :: pauli_sigma_z_matrix
+   public :: pauli_sigma_plus_matrix
+   public :: pauli_sigma_minus_matrix
+   public :: evaluate_pauli_transition_vertex
+   public :: lmto_product_candidate_count
+   public :: lmto_enumerate_product_candidates
+   public :: augment_lr_gf_endpoint
+   public :: augment_lr_gf_endpoint_pair
+   public :: projected_selector_supported
    public :: lmto_fixture_init
    public :: lmto_fixture_from_hamiltonian
    public :: assemble_lmto_hamiltonian
@@ -196,6 +515,18 @@ module linear_response_mod
    public :: validate_rotation_capability
 
 
+
+   interface response_local_operator
+      module procedure response_local_operator_site_radial
+      module procedure response_local_operator_site_radial_channel
+      module procedure response_local_operator_complex_site_radial
+      module procedure response_local_operator_complex_site_radial_channel
+   end interface response_local_operator
+
+   interface evaluate_pauli_transition_vertex
+      module procedure evaluate_pauli_transition_vertex_one
+      module procedure evaluate_pauli_transition_vertex_channels
+   end interface evaluate_pauli_transition_vertex
    interface
       module subroutine lmto_fixture_clear(this)
          class(lmto_live_hamiltonian_fixture), intent(inout) :: this
@@ -204,6 +535,497 @@ module linear_response_mod
       module subroutine rotation_state_clear(this)
          class(rotation_state), intent(inout) :: this
       end subroutine rotation_state_clear
+
+      ! --- generic specifics from lr_response_space_mod ---
+      module subroutine response_local_operator_site_radial(space, values, operator)
+      type(response_space_layout), intent(in) :: space
+      real(rp), intent(in) :: values(:, :)
+      complex(rp), intent(out) :: operator(:, :)
+      end subroutine response_local_operator_site_radial
+
+      module subroutine response_local_operator_site_radial_channel(space, values, operator)
+      type(response_space_layout), intent(in) :: space
+      real(rp), intent(in) :: values(:, :, :)
+      complex(rp), intent(out) :: operator(:, :)
+      end subroutine response_local_operator_site_radial_channel
+
+      module subroutine response_local_operator_complex_site_radial(space, values, operator)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: values(:, :)
+      complex(rp), intent(out) :: operator(:, :)
+      end subroutine response_local_operator_complex_site_radial
+
+      module subroutine response_local_operator_complex_site_radial_channel(space, values, operator)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: values(:, :, :)
+      complex(rp), intent(out) :: operator(:, :)
+      end subroutine response_local_operator_complex_site_radial_channel
+
+      ! --- generic specifics from lr_pauli_transition_vertex_mod ---
+      module subroutine evaluate_pauli_transition_vertex_one(space, radial_bases, left_state, right_state, operator_matrix, &
+         capabilities, transition_vector)
+      type(response_space_layout), intent(in) :: space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(pauli_endpoint_state), intent(in) :: left_state, right_state
+      complex(rp), intent(in) :: operator_matrix(:, :)
+      type(pauli_vertex_capabilities), intent(in) :: capabilities
+      complex(rp), intent(out) :: transition_vector(:)
+      end subroutine evaluate_pauli_transition_vertex_one
+
+      module subroutine evaluate_pauli_transition_vertex_channels(space, radial_bases, left_state, right_state, operator_matrices, &
+         capabilities, transition_vector)
+      type(response_space_layout), intent(in) :: space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(pauli_endpoint_state), intent(in) :: left_state, right_state
+      complex(rp), intent(in) :: operator_matrices(:, :, :)
+      type(pauli_vertex_capabilities), intent(in) :: capabilities
+      complex(rp), intent(out) :: transition_vector(:)
+      end subroutine evaluate_pauli_transition_vertex_channels
+
+
+      ! --- from response_angular_basis_mod ---
+      module pure integer function response_lmax(orbital_lmax) result(value)
+      integer, intent(in) :: orbital_lmax
+      end function response_lmax
+
+      module pure logical function response_product_space_complete(orbital_lmax, response_lmax_in) result(ok)
+      integer, intent(in) :: orbital_lmax, response_lmax_in
+      end function response_product_space_complete
+
+      module pure integer function response_lm_index(l, m) result(index)
+      integer, intent(in) :: l, m
+      end function response_lm_index
+
+      module pure subroutine response_lm_from_index(index, l, m)
+      integer, intent(in) :: index
+      integer, intent(out) :: l, m
+      end subroutine response_lm_from_index
+
+      module pure function response_harmonic(l, m, theta, phi) result(value)
+      integer, intent(in) :: l, m
+      real(rp), intent(in) :: theta, phi
+      complex(rp) :: value
+      end function response_harmonic
+
+      module pure real(rp) function response_gaunt(l1, m1, l2, m2, lout, mout) result(value)
+      integer, intent(in) :: l1, m1, l2, m2, lout, mout
+      end function response_gaunt
+
+      module subroutine response_product_coefficients(l, m, lp, mp, coefficients)
+      integer, intent(in) :: l, m, lp, mp
+      real(rp), intent(out) :: coefficients(:)
+      end subroutine response_product_coefficients
+
+      ! --- from response_basis_mapping_mod ---
+      module pure integer function response_superindex_size(nsite, response_lmax, npoint, nchannel) result(size_out)
+      integer, intent(in) :: nsite, response_lmax, npoint, nchannel
+      end function response_superindex_size
+
+      module subroutine response_flatten_superindex(item, nsite, response_lmax, npoint, nchannel, flat)
+      type(response_super_index), intent(in) :: item
+      integer, intent(in) :: nsite, response_lmax, npoint, nchannel
+      integer, intent(out) :: flat
+      end subroutine response_flatten_superindex
+
+      module subroutine response_unflatten_superindex(flat, nsite, response_lmax, npoint, nchannel, item)
+      integer, intent(in) :: flat, nsite, response_lmax, npoint, nchannel
+      type(response_super_index), intent(out) :: item
+      end subroutine response_unflatten_superindex
+
+      module pure real(rp) function response_simpson_weight(ir, npoint) result(weight)
+      integer, intent(in) :: ir, npoint
+      end function response_simpson_weight
+
+      module pure real(rp) function response_log_mesh_jacobian(a, b, radius) result(value)
+      real(rp), intent(in) :: a, b, radius
+      end function response_log_mesh_jacobian
+
+      module pure real(rp) function response_volume_measure(a, b, radius) result(value)
+      real(rp), intent(in) :: a, b, radius
+      end function response_volume_measure
+
+      module pure real(rp) function response_weighted_density(radius, physical_density) result(value)
+      real(rp), intent(in) :: radius, physical_density
+      end function response_weighted_density
+
+      module pure real(rp) function response_physical_density(radius, weighted_density) result(value)
+      real(rp), intent(in) :: radius, weighted_density
+      end function response_physical_density
+
+      module function response_log_mesh_integral(values, radius, a, b) result(integral)
+      real(rp), intent(in) :: values(:), radius(:), a, b
+      real(rp) :: integral
+      end function response_log_mesh_integral
+
+      module pure complex(rp) function response_endpoint_phase(site_tau, reciprocal_vector) result(phase)
+      real(rp), intent(in) :: site_tau(3), reciprocal_vector(3)
+      end function response_endpoint_phase
+
+      module pure complex(rp) function response_real_space_phase(reciprocal_vector, translation, tau_left, tau_right) result(phase)
+      real(rp), intent(in) :: reciprocal_vector(3), translation(3), tau_left(3), tau_right(3)
+      end function response_real_space_phase
+
+      module subroutine response_site_gauge(site_tau, reciprocal_vector, gauge)
+      real(rp), intent(in) :: site_tau(:, :), reciprocal_vector(3)
+      complex(rp), intent(out) :: gauge(:)
+      end subroutine response_site_gauge
+
+      module subroutine response_apply_site_gauge(coefficients, site_tau, reciprocal_vector, transformed)
+      complex(rp), intent(in) :: coefficients(:, :)
+      real(rp), intent(in) :: site_tau(:, :), reciprocal_vector(3)
+      complex(rp), intent(out) :: transformed(:, :)
+      end subroutine response_apply_site_gauge
+
+      module pure logical function response_mapping_supported(orbital_lmax, scalar_relativistic, collinear, no_soc, &
+      no_extra_operator, full_scalar_relativistic_spin_angular) result(ok)
+      integer, intent(in) :: orbital_lmax
+      logical, intent(in) :: scalar_relativistic, collinear, no_soc, no_extra_operator
+      logical, intent(in) :: full_scalar_relativistic_spin_angular
+      end function response_mapping_supported
+
+      ! --- from lr_response_space_mod ---
+      module subroutine response_build_radial_metric(a, b, radius, weights)
+      real(rp), intent(in) :: a, b, radius(:)
+      real(rp), intent(out) :: weights(:)
+      end subroutine response_build_radial_metric
+
+      module subroutine response_metric_weights(space, weights)
+      type(response_space_layout), intent(in) :: space
+      real(rp), intent(out) :: weights(:)
+      end subroutine response_metric_weights
+
+      module function response_vector_inner_product(space, left, right) result(value)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: left(:), right(:)
+      complex(rp) :: value
+      end function response_vector_inner_product
+
+      module function response_vector_norm(space, vector) result(value)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: vector(:)
+      real(rp) :: value
+      end function response_vector_norm
+
+      module subroutine response_apply_operator(space, operator, field, result)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: operator(:, :), field(:)
+      complex(rp), intent(out) :: result(:)
+      end subroutine response_apply_operator
+
+      module subroutine response_compose_operators(space, first, second, composed)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: first(:, :), second(:, :)
+      complex(rp), intent(out) :: composed(:, :)
+      end subroutine response_compose_operators
+
+      module subroutine response_identity_operator(space, identity)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(out) :: identity(:, :)
+      end subroutine response_identity_operator
+
+      module subroutine response_operator_adjoint(space, operator, adjoint)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: operator(:, :)
+      complex(rp), intent(out) :: adjoint(:, :)
+      end subroutine response_operator_adjoint
+
+      module function response_operator_trace(space, operator) result(value)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: operator(:, :)
+      complex(rp) :: value
+      end function response_operator_trace
+
+      module function response_rigid_vector_norm(space, rigid_vector) result(value)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: rigid_vector(:)
+      real(rp) :: value
+      end function response_rigid_vector_norm
+
+      module function response_rigid_vector_overlap(space, vector, rigid_vector) result(value)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: vector(:), rigid_vector(:)
+      complex(rp) :: value
+      end function response_rigid_vector_overlap
+
+      module subroutine response_raw_to_canonical(space, raw, canonical)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: raw(:, :)
+      complex(rp), intent(out) :: canonical(:, :)
+      end subroutine response_raw_to_canonical
+
+      module subroutine response_canonical_to_raw(space, canonical, raw)
+      type(response_space_layout), intent(in) :: space
+      complex(rp), intent(in) :: canonical(:, :)
+      complex(rp), intent(out) :: raw(:, :)
+      end subroutine response_canonical_to_raw
+
+      module subroutine response_space_initialize(this, nsite, response_lmax, radius, a, b, nchannel)
+      class(response_space_layout), intent(out) :: this
+      integer, intent(in) :: nsite, response_lmax, nchannel
+      real(rp), intent(in) :: radius(:), a, b
+      end subroutine response_space_initialize
+
+      ! --- from lr_lmto_endpoint_branches_mod ---
+      module pure subroutine lmto_product_branch_powers(branch, p, q)
+      integer, intent(in) :: branch
+      integer, intent(out) :: p, q
+      end subroutine lmto_product_branch_powers
+
+      module pure character(len=2) function lmto_product_branch_label(branch) result(label)
+      integer, intent(in) :: branch
+      end function lmto_product_branch_label
+
+      module pure logical function lmto_product_branch_valid(branch) result(valid)
+      integer, intent(in) :: branch
+      end function lmto_product_branch_valid
+
+      module pure real(rp) function lmto_product_energy_power(energy, power) result(value)
+      real(rp), intent(in) :: energy
+      integer, intent(in) :: power
+      end function lmto_product_energy_power
+
+      module recursive subroutine lmto_product_second_order_radial_branch(radial, ir, l, lp, spin_left, spin_right, branch, value)
+      type(lmto_radial_basis), intent(in) :: radial
+      integer, intent(in) :: ir, l, lp, spin_left, spin_right, branch
+      real(rp), intent(out) :: value
+      end subroutine lmto_product_second_order_radial_branch
+
+      module subroutine lmto_product_apply_branch_action(hamiltonian, matrix, branch, action, stored_dual)
+      complex(rp), intent(in) :: hamiltonian(:, :), matrix(:, :)
+      integer, intent(in) :: branch
+      complex(rp), intent(out) :: action(:, :)
+      logical, intent(in), optional :: stored_dual
+      end subroutine lmto_product_apply_branch_action
+
+      ! --- from lr_pauli_transition_vertex_mod ---
+      module pure function pauli_charge_matrix() result(matrix)
+      complex(rp) :: matrix(2, 2)
+      end function pauli_charge_matrix
+
+      module pure function pauli_sigma_x_matrix() result(matrix)
+      complex(rp) :: matrix(2, 2)
+      end function pauli_sigma_x_matrix
+
+      module pure function pauli_sigma_y_matrix() result(matrix)
+      complex(rp) :: matrix(2, 2)
+      end function pauli_sigma_y_matrix
+
+      module pure function pauli_sigma_z_matrix() result(matrix)
+      complex(rp) :: matrix(2, 2)
+      end function pauli_sigma_z_matrix
+
+      module pure function pauli_sigma_plus_matrix() result(matrix)
+      complex(rp) :: matrix(2, 2)
+      end function pauli_sigma_plus_matrix
+
+      module pure function pauli_sigma_minus_matrix() result(matrix)
+      complex(rp) :: matrix(2, 2)
+      end function pauli_sigma_minus_matrix
+
+      module subroutine pauli_endpoint_state_initialize(this, energy, coefficients)
+      class(pauli_endpoint_state), intent(out) :: this
+      real(rp), intent(in) :: energy
+      complex(rp), intent(in) :: coefficients(:)
+      end subroutine pauli_endpoint_state_initialize
+
+      ! --- from lr_lmto_product_response_basis_mod ---
+      module pure integer function lmto_product_candidate_count(lmax, response_l) result(count)
+      integer, intent(in) :: lmax, response_l
+      end function lmto_product_candidate_count
+
+      module subroutine lmto_enumerate_product_candidates(lmax, response_l, candidates)
+      integer, intent(in) :: lmax, response_l
+      type(lmto_product_candidate), allocatable, intent(out) :: candidates(:)
+      end subroutine lmto_enumerate_product_candidates
+
+      module subroutine lmto_product_response_basis_initialize(this, space, radial_bases, circular_channel, strict_rank)
+      class(lmto_product_response_basis), intent(out) :: this
+      type(response_space_layout), intent(in) :: space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      integer, intent(in) :: circular_channel
+      logical, intent(in), optional :: strict_rank
+      end subroutine lmto_product_response_basis_initialize
+
+      module integer function lmto_product_flat_index(this, site, response_l, response_m, product_mode) result(flat)
+      class(lmto_product_response_basis), intent(in) :: this
+      integer, intent(in) :: site, response_l, response_m, product_mode
+      end function lmto_product_flat_index
+
+      module subroutine lmto_product_unflatten_index(this, flat, site, response_l, response_m, product_mode)
+      class(lmto_product_response_basis), intent(in) :: this
+      integer, intent(in) :: flat
+      integer, intent(out) :: site, response_l, response_m, product_mode
+      end subroutine lmto_product_unflatten_index
+
+      module subroutine lmto_product_candidate_coefficients(this, site, response_l, response_m, left_state, right_state, coefficients, &
+      selected_l)
+      class(lmto_product_response_basis), intent(in) :: this
+      integer, intent(in) :: site, response_l, response_m
+      type(pauli_endpoint_state), intent(in) :: left_state, right_state
+      complex(rp), intent(out) :: coefficients(:)
+      logical, intent(in), optional :: selected_l(0:)
+      end subroutine lmto_product_candidate_coefficients
+
+      module subroutine lmto_product_transition_coordinates(this, left_state, right_state, coordinates, selected_l, response_l_filter)
+      class(lmto_product_response_basis), intent(in) :: this
+      type(pauli_endpoint_state), intent(in) :: left_state, right_state
+      complex(rp), intent(out) :: coordinates(:)
+      logical, intent(in), optional :: selected_l(0:)
+      integer, intent(in), optional :: response_l_filter
+      end subroutine lmto_product_transition_coordinates
+
+      module subroutine lmto_product_component_vertex_tensor(this, vertices, selected_l)
+      class(lmto_product_response_basis), intent(in) :: this
+      complex(rp), allocatable, intent(out) :: vertices(:, :, :, :)
+      logical, intent(in), optional :: selected_l(0:)
+      end subroutine lmto_product_component_vertex_tensor
+
+      ! --- from lr_gf_endpoint_augmentation_mod ---
+      module subroutine augment_lr_gf_endpoint(radial_left, radial_right, left_site, right_site, z, coefficient_gf, &
+      augmented, capabilities, hgamma_block, hamiltonian_provider, &
+      reverse_coefficient_gf, reverse_hgamma_block)
+      type(lmto_radial_basis), intent(in) :: radial_left, radial_right
+      integer, intent(in) :: left_site, right_site
+      complex(rp), intent(in) :: z
+      complex(rp), intent(in) :: coefficient_gf(:, :)
+      type(lr_gf_augmented_block), intent(out) :: augmented
+      type(lr_gf_endpoint_capabilities), intent(in), optional :: capabilities
+      complex(rp), intent(in), optional :: hgamma_block(:, :)
+      class(lr_gf_effective_hamiltonian_provider), intent(inout), optional :: hamiltonian_provider
+      complex(rp), intent(in), optional :: reverse_coefficient_gf(:, :)
+      complex(rp), intent(in), optional :: reverse_hgamma_block(:, :)
+      end subroutine augment_lr_gf_endpoint
+
+      module subroutine augment_lr_gf_endpoint_pair(radial_left, radial_right, left_site, right_site, z, coefficient_gf, &
+      reverse_coefficient_gf, forward, reverse, capabilities, hgamma_block, &
+      reverse_hgamma_block, hamiltonian_provider)
+      type(lmto_radial_basis), intent(in) :: radial_left, radial_right
+      integer, intent(in) :: left_site, right_site
+      complex(rp), intent(in) :: z
+      complex(rp), intent(in) :: coefficient_gf(:, :), reverse_coefficient_gf(:, :)
+      type(lr_gf_augmented_block), intent(out) :: forward, reverse
+      type(lr_gf_endpoint_capabilities), intent(in), optional :: capabilities
+      complex(rp), intent(in), optional :: hgamma_block(:, :), reverse_hgamma_block(:, :)
+      class(lr_gf_effective_hamiltonian_provider), intent(inout), optional :: hamiltonian_provider
+      end subroutine augment_lr_gf_endpoint_pair
+
+      module pure logical function lr_gf_endpoint_capabilities_supported(this) result(ok)
+      class(lr_gf_endpoint_capabilities), intent(in) :: this
+      end function lr_gf_endpoint_capabilities_supported
+
+      module subroutine lr_gf_endpoint_require_supported(this, caller)
+      class(lr_gf_endpoint_capabilities), intent(in) :: this
+      character(len=*), intent(in), optional :: caller
+      end subroutine lr_gf_endpoint_require_supported
+
+      module subroutine lr_gf_dense_provider_initialize(this, h_eff, block_size)
+      class(lr_gf_dense_hamiltonian_provider), intent(out) :: this
+      complex(rp), intent(in) :: h_eff(:, :)
+      integer, intent(in) :: block_size
+      end subroutine lr_gf_dense_provider_initialize
+
+      module subroutine lr_gf_dense_provider_apply(this, source_site, destination_site, seed, destination_block)
+      class(lr_gf_dense_hamiltonian_provider), intent(inout) :: this
+      integer, intent(in) :: source_site, destination_site
+      complex(rp), intent(in) :: seed(:, :)
+      complex(rp), intent(out) :: destination_block(:, :)
+      end subroutine lr_gf_dense_provider_apply
+
+      module subroutine lr_gf_augmented_block_evaluate_point(this, left_radial_index, left_theta, left_phi, &
+      right_radial_index, right_theta, right_phi, point_gf)
+      class(lr_gf_augmented_block), intent(in) :: this
+      integer, intent(in) :: left_radial_index, right_radial_index
+      real(rp), intent(in) :: left_theta, left_phi, right_theta, right_phi
+      complex(rp), intent(out) :: point_gf(:, :)
+      end subroutine lr_gf_augmented_block_evaluate_point
+
+      module subroutine lr_gf_augmented_block_branch_at_point(this, left_radial_index, left_theta, left_phi, &
+      right_radial_index, right_theta, right_phi, branches)
+      class(lr_gf_augmented_block), intent(in) :: this
+      integer, intent(in) :: left_radial_index, right_radial_index
+      real(rp), intent(in) :: left_theta, left_phi, right_theta, right_phi
+      complex(rp), intent(out) :: branches(:, :, :)
+      complex(rp) :: phi_left(2, 2*this%norb), dot_left(2, 2*this%norb)
+      complex(rp) :: phi_right(2, 2*this%norb), dot_right(2, 2*this%norb)
+      end subroutine lr_gf_augmented_block_branch_at_point
+
+      ! --- from lr_projected_site_spin_mod ---
+      module pure logical function projected_selector_supported(selection) result(ok)
+      character(len=*), intent(in) :: selection
+      end function projected_selector_supported
+
+      module subroutine projected_site_spin_initialize(this, space, radial_bases, selection)
+      class(projected_site_spin_contract), intent(out) :: this
+      type(response_space_layout), intent(in) :: space
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      character(len=*), intent(in) :: selection
+      end subroutine projected_site_spin_initialize
+
+      module subroutine projected_site_spin_functional(this, product, functionals)
+      class(projected_site_spin_contract), intent(in) :: this
+      type(lmto_product_response_basis), intent(in) :: product
+      complex(rp), intent(out) :: functionals(:, :)
+      end subroutine projected_site_spin_functional
+
+      module subroutine projected_selected_coordinates(this, product, left_state, right_state, coordinates)
+      class(projected_site_spin_contract), intent(in) :: this
+      type(lmto_product_response_basis), intent(in) :: product
+      type(pauli_endpoint_state), intent(in) :: left_state, right_state
+      complex(rp), intent(out) :: coordinates(:)
+      end subroutine projected_selected_coordinates
+
+      module subroutine projected_transition_amplitudes(this, product, left_state, right_state, amplitudes)
+      class(projected_site_spin_contract), intent(in) :: this
+      type(lmto_product_response_basis), intent(in) :: product
+      type(pauli_endpoint_state), intent(in) :: left_state, right_state
+      complex(rp), intent(out) :: amplitudes(:)
+      end subroutine projected_transition_amplitudes
+
+      module subroutine projected_direct_operator_matrix(this, radial_bases, energy, operator_kind, matrix)
+      class(projected_site_spin_contract), intent(in) :: this
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      real(rp), intent(in) :: energy
+      integer, intent(in) :: operator_kind
+      complex(rp), intent(out) :: matrix(:, :)
+      end subroutine projected_direct_operator_matrix
+
+      module subroutine projected_direct_transition_amplitudes(this, radial_bases, left_state, right_state, operator_kind, amplitudes)
+      class(projected_site_spin_contract), intent(in) :: this
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(pauli_endpoint_state), intent(in) :: left_state, right_state
+      integer, intent(in) :: operator_kind
+      complex(rp), intent(out) :: amplitudes(:)
+      end subroutine projected_direct_transition_amplitudes
+
+      module subroutine projected_site_component_vertex_tensor(this, product, vertices)
+      class(projected_site_spin_contract), intent(in) :: this
+      type(lmto_product_response_basis), intent(in) :: product
+      complex(rp), allocatable, intent(out) :: vertices(:, :, :, :)
+      end subroutine projected_site_component_vertex_tensor
+
+      module subroutine projected_moment_from_density(this, eigenvalues, eigenvectors, k_weights, fermi_level, temperature, &
+      ground_states, moment)
+      class(projected_site_spin_contract), intent(in) :: this
+      real(rp), intent(in) :: eigenvalues(:, :), k_weights(:), fermi_level, temperature
+      complex(rp), intent(in) :: eigenvectors(:, :, :)
+      type(radial_ground_state), intent(in) :: ground_states(:)
+      real(rp), intent(out) :: moment(:)
+      end subroutine projected_moment_from_density
+
+      module subroutine projected_moment_from_operator(this, eigenvalues, eigenvectors, k_weights, fermi_level, temperature, &
+      ground_states, moment)
+      class(projected_site_spin_contract), intent(in) :: this
+      real(rp), intent(in) :: eigenvalues(:, :), k_weights(:), fermi_level, temperature
+      complex(rp), intent(in) :: eigenvectors(:, :, :)
+      type(radial_ground_state), intent(in) :: ground_states(:)
+      real(rp), intent(out) :: moment(:)
+      end subroutine projected_moment_from_operator
+
+      module subroutine projected_core_spin_number(this, ground_states, core_spin)
+      class(projected_site_spin_contract), intent(in) :: this
+      type(radial_ground_state), intent(in) :: ground_states(:)
+      real(rp), intent(out) :: core_spin(:)
+      end subroutine projected_core_spin_number
 
       ! --- from lr_kl_hessian ---
       module subroutine lmto_fixture_init(this, nsite, norb, nbond, hoh)

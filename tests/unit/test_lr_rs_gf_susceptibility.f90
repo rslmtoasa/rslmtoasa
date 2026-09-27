@@ -3,10 +3,10 @@
 !------------------------------------------------------------------------------
 program test_lr_rs_gf_susceptibility
    use precision_mod, only: rp
-   use response_basis_mapping_mod, only: response_fourier_phase_sign, response_real_space_phase
-   use response_angular_basis_mod, only: response_angular_pi
-   use response_basis_mapping_mod, only: response_super_index, response_flatten_superindex
-   use lr_response_space_mod, only: response_space_layout
+   use linear_response_mod, only: response_fourier_phase_sign, response_real_space_phase
+   use linear_response_mod, only: response_angular_pi
+   use linear_response_mod, only: response_super_index, response_flatten_superindex
+   use linear_response_mod, only: response_space_layout
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, lr_channel_plus, evaluate_lr_ks_susceptibility

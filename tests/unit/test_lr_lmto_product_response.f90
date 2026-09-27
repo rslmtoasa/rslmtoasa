@@ -13,11 +13,11 @@ program test_lr_lmto_product_response
    use math_mod, only: init_math_operators
    use self_mod, only: legacy_radial_fixture
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
-   use response_basis_mapping_mod, only: response_super_index, response_flatten_superindex
-   use lr_response_space_mod, only: response_space_layout, response_vector_norm
-   use lr_pauli_transition_vertex_mod, only: pauli_vertex_capabilities, pauli_endpoint_state, &
+   use linear_response_mod, only: response_super_index, response_flatten_superindex
+   use linear_response_mod, only: response_space_layout, response_vector_norm
+   use linear_response_mod, only: pauli_vertex_capabilities, pauli_endpoint_state, &
       pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
-   use lr_lmto_product_response_basis_mod, only: lmto_product_channel_plus, lmto_product_channel_minus, &
+   use linear_response_mod, only: lmto_product_channel_plus, lmto_product_channel_minus, &
       lmto_product_candidate, lmto_product_response_basis, lmto_product_nbranch, lmto_product_branch_powers
    implicit none
 

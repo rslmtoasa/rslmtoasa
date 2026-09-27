@@ -12,13 +12,13 @@ program test_lr_product_ks_susceptibility
    use math_mod, only: init_math_operators
    use self_mod, only: legacy_radial_fixture
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
-   use response_basis_mapping_mod, only: response_super_index, response_flatten_superindex
-   use lr_response_space_mod, only: response_space_layout
-   use lr_pauli_transition_vertex_mod, only: pauli_endpoint_state
+   use linear_response_mod, only: response_super_index, response_flatten_superindex
+   use linear_response_mod, only: response_space_layout
+   use linear_response_mod, only: pauli_endpoint_state
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, lr_product_ks_susceptibility_request, lr_product_ks_susceptibility_result, &
       lr_channel_plus, lr_channel_minus, evaluate_lr_ks_susceptibility, evaluate_lr_product_ks_susceptibility
-   use lr_lmto_product_response_basis_mod, only: lmto_product_channel_plus, lmto_product_channel_minus, &
+   use linear_response_mod, only: lmto_product_channel_plus, lmto_product_channel_minus, &
       lmto_product_response_basis
    implicit none
 

@@ -6,9 +6,9 @@
 !------------------------------------------------------------------------------
 program test_lr_goldstone_sumrule
    use precision_mod, only: rp
-   use response_angular_basis_mod, only: response_angular_pi
-   use response_basis_mapping_mod, only: response_super_index, response_flatten_superindex
-   use lr_response_space_mod, only: response_space_layout, response_apply_operator
+   use linear_response_mod, only: response_angular_pi
+   use linear_response_mod, only: response_super_index, response_flatten_superindex
+   use linear_response_mod, only: response_space_layout, response_apply_operator
    use lr_goldstone_sumrule_mod, only: lr_goldstone_sumrule_result, lr_sumrule_linear_solve_result, &
       lr_gsr_magnetization_pauli, evaluate_lr_goldstone_sumrule, solve_lr_goldstone_equation
    implicit none

@@ -17,15 +17,15 @@ module lr_rs_gf_susceptibility_mod
 
    use precision_mod, only: rp
    use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l
-   use response_angular_basis_mod, only: response_angular_pi, response_gaunt
-   use response_basis_mapping_mod, only: response_super_index, response_unflatten_superindex, &
+   use linear_response_mod, only: response_angular_pi, response_gaunt
+   use linear_response_mod, only: response_super_index, response_unflatten_superindex, &
       response_real_space_phase
-   use lr_response_space_mod, only: response_space_layout, response_raw_to_canonical
-   use lr_pauli_transition_vertex_mod, only: pauli_vertex_capabilities, pauli_sigma_plus_matrix, &
+   use linear_response_mod, only: response_space_layout, response_raw_to_canonical
+   use linear_response_mod, only: pauli_vertex_capabilities, pauli_sigma_plus_matrix, &
       pauli_sigma_minus_matrix
    use lr_ks_susceptibility_mod, only: lr_ks_susceptibility_result, lr_channel_plus, lr_channel_minus, &
       lr_fermi_dirac_occupation
-   use lr_gf_endpoint_augmentation_mod, only: lr_gf_augmented_block, augment_lr_gf_endpoint_pair
+   use linear_response_mod, only: lr_gf_augmented_block, augment_lr_gf_endpoint_pair
    implicit none
    private
 

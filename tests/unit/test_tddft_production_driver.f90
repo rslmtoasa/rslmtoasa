@@ -6,7 +6,7 @@ program test_tddft_production_driver
       evaluate_tddft_production_sweep, tddft_production_result
    use radial_ground_state_mod, only: radial_ground_state
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
-   use lr_response_space_mod, only: response_space_layout
+   use linear_response_mod, only: response_space_layout
    use lr_ks_susceptibility_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, evaluate_lr_ks_susceptibility
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
