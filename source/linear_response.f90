@@ -607,22 +607,6 @@ module linear_response_mod
       procedure :: describe => lr_rs_chebyshev_describe
    end type lr_rs_chebyshev_provider
 
-   !> Dense inverse provider used by the finite exact oracle.  It is also a
-   !> useful representation-isolation provider: it never calls reciprocal GF
-   !> code and returns both directed blocks from an explicit coefficient-space
-   !> Hamiltonian inverse.
-   type, extends(lr_rs_gf_provider), public :: lr_rs_dense_gf_provider
-      complex(rp), allocatable :: hamiltonian(:, :)
-      complex(rp), allocatable :: hgamma(:, :)
-      integer :: nsite = 0
-      integer :: block_size = 0
-      logical :: translation_independent = .false.
-   contains
-      procedure :: initialize => lr_rs_dense_initialize
-      procedure :: get_pair => lr_rs_dense_get_pair
-      procedure :: describe => lr_rs_dense_describe
-   end type lr_rs_dense_gf_provider
-
    !> Request for one real-space pair/Fourier/frequency sweep.
    type, public :: lr_rs_gf_susceptibility_request
       real(rp) :: q(3) = 0.0_rp
@@ -1264,9 +1248,6 @@ module linear_response_mod
    public :: lmto_fixture_init
    public :: lmto_fixture_from_hamiltonian
    public :: assemble_lmto_hamiltonian
-   public :: assemble_lmto_torque
-   public :: assemble_lmto_rotation_terms
-   public :: assemble_lmto_mixed_derivative
    public :: assemble_lmto_finite_q_torque
    public :: assemble_lmto_finite_q_torques
    public :: assemble_lmto_finite_q_mixed_derivative
@@ -1277,11 +1258,6 @@ module linear_response_mod
    public :: finite_temperature_occupation
    public :: fermi_divided_difference
    public :: lmto_fixture_adapter_residual
-   public :: force_theorem_integrand
-   public :: force_theorem_hessian_from_green
-   public :: force_theorem_hessian_from_eigenbasis
-   public :: mixed_second_difference
-   public :: grand_potential_from_eigenvalues
    public :: build_finite_temperature_contour
    public :: build_zero_temperature_occupied_contour
    public :: finite_temperature_complex_fermi
@@ -1699,26 +1675,6 @@ module linear_response_mod
          class(lr_rs_chebyshev_provider), intent(in) :: this
          character(len=256) :: description
       end function lr_rs_chebyshev_describe
-
-      module subroutine lr_rs_dense_initialize(this, hamiltonian, hgamma, block_size, translation_independent)
-         class(lr_rs_dense_gf_provider), intent(out) :: this
-         complex(rp), intent(in) :: hamiltonian(:, :), hgamma(:, :)
-         integer, intent(in) :: block_size
-         logical, intent(in), optional :: translation_independent
-      end subroutine lr_rs_dense_initialize
-
-      module subroutine lr_rs_dense_get_pair(this, left_site, right_site, translation, z, gij, gji, hgamma_ij, hgamma_ji)
-         class(lr_rs_dense_gf_provider), intent(inout) :: this
-         integer, intent(in) :: left_site, right_site
-         real(rp), intent(in) :: translation(3)
-         complex(rp), intent(in) :: z
-         complex(rp), intent(out) :: gij(:, :), gji(:, :), hgamma_ij(:, :), hgamma_ji(:, :)
-      end subroutine lr_rs_dense_get_pair
-
-      module function lr_rs_dense_describe(this) result(description)
-         class(lr_rs_dense_gf_provider), intent(in) :: this
-         character(len=256) :: description
-      end function lr_rs_dense_describe
 
       module subroutine evaluate_lr_rs_gf_susceptibility(request, result)
          type(lr_rs_gf_susceptibility_request), intent(in) :: request
@@ -2240,27 +2196,6 @@ module linear_response_mod
          complex(rp), intent(out) :: hamiltonian(:, :)
       end subroutine assemble_lmto_hamiltonian
 
-      module subroutine assemble_lmto_torque(this, k_point, site, axis, torque)
-         type(lmto_live_hamiltonian_fixture), intent(in) :: this
-         real(rp), intent(in) :: k_point(3), axis(3)
-         integer, intent(in) :: site
-         complex(rp), intent(out) :: torque(:, :)
-      end subroutine assemble_lmto_torque
-
-      module subroutine assemble_lmto_rotation_terms(this, k_point, site, axis, b, q, enu, bi, qi, enui, torque)
-         type(lmto_live_hamiltonian_fixture), intent(in) :: this
-         real(rp), intent(in) :: k_point(3), axis(3)
-         integer, intent(in) :: site
-         complex(rp), intent(out) :: b(:, :), q(:, :), enu(:, :), bi(:, :), qi(:, :), enui(:, :), torque(:, :)
-      end subroutine assemble_lmto_rotation_terms
-
-      module subroutine assemble_lmto_mixed_derivative(this, k_point, site_i, axis_i, site_j, axis_j, mixed)
-         type(lmto_live_hamiltonian_fixture), intent(in) :: this
-         real(rp), intent(in) :: k_point(3), axis_i(3), axis_j(3)
-         integer, intent(in) :: site_i, site_j
-         complex(rp), intent(out) :: mixed(:, :)
-      end subroutine assemble_lmto_mixed_derivative
-
       module subroutine assemble_lmto_finite_q_torque(this, k_point, q_point, site, axis, torque)
          type(lmto_live_hamiltonian_fixture), intent(in) :: this
          real(rp), intent(in) :: k_point(3), q_point(3), axis(3)
@@ -2280,27 +2215,6 @@ module linear_response_mod
          integer, intent(in) :: site_i, site_j
          complex(rp), intent(out) :: mixed(:, :)
       end subroutine assemble_lmto_finite_q_mixed_derivative
-
-      module pure subroutine force_theorem_integrand(torque_i, green, torque_j, mixed, torque_torque, mixed_contact, complete, include_contact)
-         complex(rp), intent(in) :: torque_i(:, :), green(:, :), torque_j(:, :), mixed(:, :)
-         real(rp), intent(out) :: torque_torque, mixed_contact, complete
-         logical, intent(in), optional :: include_contact
-      end subroutine force_theorem_integrand
-
-      module subroutine force_theorem_hessian_from_green(greens, weights, torque_i, torque_j, mixed, &
-                                                           torque_torque, mixed_contact, complete, include_contact)
-         complex(rp), intent(in) :: greens(:, :, :), torque_i(:, :), torque_j(:, :), mixed(:, :)
-         real(rp), intent(in) :: weights(:)
-         real(rp), intent(out) :: torque_torque, mixed_contact, complete
-         logical, intent(in), optional :: include_contact
-      end subroutine force_theorem_hessian_from_green
-
-      module subroutine force_theorem_hessian_from_eigenbasis(eigenvalues, eigenvectors, fermi, torque_i, torque_j, mixed, &
-                                                               torque_torque, mixed_contact, complete)
-         real(rp), intent(in) :: eigenvalues(:), fermi
-         complex(rp), intent(in) :: eigenvectors(:, :), torque_i(:, :), torque_j(:, :), mixed(:, :)
-         real(rp), intent(out) :: torque_torque, mixed_contact, complete
-      end subroutine force_theorem_hessian_from_eigenbasis
 
       module subroutine force_theorem_finite_q_hessian_from_eigenbasis(eigenvalues, eigenvectors, endpoint_values, endpoint_vectors, &
          fermi, torques_q, torques_minus_q, mixed, hessian, torque_torque, mixed_contact, complete)
@@ -2341,16 +2255,6 @@ module linear_response_mod
       module pure real(rp) function fermi_divided_difference(e1, e2, fermi, kT) result(kernel)
          real(rp), intent(in) :: e1, e2, fermi, kT
       end function fermi_divided_difference
-
-      module pure function mixed_second_difference(omega_pp, omega_pm, omega_mp, omega_mm, delta_i, delta_j) result(hessian)
-         real(rp), intent(in) :: omega_pp, omega_pm, omega_mp, omega_mm, delta_i, delta_j
-         real(rp) :: hessian
-      end function mixed_second_difference
-
-      module pure function grand_potential_from_eigenvalues(eigenvalues, fermi) result(omega)
-         real(rp), intent(in) :: eigenvalues(:), fermi
-         real(rp) :: omega
-      end function grand_potential_from_eigenvalues
 
       module subroutine lmto_fixture_adapter_residual(source, fixture, k_points, max_error)
          type(hamiltonian), intent(in) :: source

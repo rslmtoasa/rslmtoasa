@@ -604,6 +604,13 @@ if (RUN_UNIT_TESTS)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
   set(_standalone_unit_targets "")
 
+  add_library(rslmto_test_oracles STATIC
+    ${TestDIR}/unit/oracles/lr_gf_susceptibility.f90
+    ${TestDIR}/unit/oracles/lr_product_gf_susceptibility.f90
+    ${TestDIR}/unit/oracles/lr_dense_rs_gf_provider.f90
+    ${TestDIR}/unit/oracles/lr_rotation_oracles.f90)
+  target_link_libraries(rslmto_test_oracles PUBLIC ${PROJECT_NAME})
+
   # Each test is a small program linked against the project library. Link the
   # same conditional MPI/OpenMP libraries as the main binary.
   function(add_fortran_unit_test _name _source)
@@ -617,6 +624,7 @@ if (RUN_UNIT_TESTS)
     else()
       target_link_libraries(${_name} ${COMMON_LIBRARIES})
     endif()
+    target_link_libraries(${_name} rslmto_test_oracles)
     set_target_properties(${_name} PROPERTIES LINKER_LANGUAGE "Fortran")
     add_test(NAME ${_name} COMMAND ${_name})
     set_tests_properties(${_name} PROPERTIES LABELS "unit")

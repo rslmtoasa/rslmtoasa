@@ -23,8 +23,9 @@ program test_dresp03tg_native_fixed_z
    use hamiltonian_mod, only: hamiltonian
    use basis_mod, only: basis_init
    use linear_response_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_init, &
-      assemble_lmto_hamiltonian, assemble_lmto_rotation_terms, assemble_lmto_mixed_derivative, &
-      force_theorem_integrand, force_theorem_pi
+      assemble_lmto_hamiltonian, force_theorem_pi
+   use lr_rotation_oracles_mod, only: assemble_lmto_rotation_terms, assemble_lmto_mixed_derivative, &
+      force_theorem_integrand
    use lr_lmto_turek_gf_mod, only: native_complex_p_matrix, native_screening_alpha, &
       native_screened_p_matrix, native_delta_p, native_inverse, native_path_operator, &
       native_exchange_integrand, native_finite_h_integrand, native_collinear_pauli_integrand

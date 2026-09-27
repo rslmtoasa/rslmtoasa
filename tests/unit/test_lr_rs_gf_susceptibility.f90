@@ -12,7 +12,8 @@ program test_lr_rs_gf_susceptibility
       lr_ks_susceptibility_result, lr_channel_plus, evaluate_lr_ks_susceptibility
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
    use linear_response_mod, only: lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
-      lr_rs_dense_gf_provider, evaluate_lr_rs_gf_susceptibility
+      evaluate_lr_rs_gf_susceptibility
+   use lr_dense_rs_gf_provider_mod, only: lr_rs_dense_gf_provider
    implicit none
 
    integer, parameter :: nr = 3, nsite = 1, orbital_lmax = 1

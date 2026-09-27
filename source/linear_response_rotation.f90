@@ -217,74 +217,6 @@ contains
       deallocate(b, q, enu)
    end subroutine assemble_lmto_hamiltonian
 
-   !> Complete T_i(k)=dH_live/dtheta_i at theta=0.  The result is global in
-   !> site/orbital/spin space and therefore contains offsite blocks.
-   module subroutine assemble_lmto_torque(this, k_point, site, axis, torque)
-      type(lmto_live_hamiltonian_fixture), intent(in) :: this
-      real(rp), intent(in) :: k_point(3), axis(3)
-      integer, intent(in) :: site
-      complex(rp), intent(out) :: torque(:, :)
-      real(rp) :: zero_q(3)
-      integer :: nmat
-
-      zero_q = 0.0_rp
-      call assemble_lmto_finite_q_torque(this, k_point, zero_q, site, axis, torque)
-   end subroutine assemble_lmto_torque
-
-   !> Expose the live fixed-q product-rule terms for a rotation audit.
-   !>
-   !> The returned matrices are exactly the objects used by the certified
-   !> finite-H torque path:
-   !>   H = B - Q B + E_nu,
-   !>   T_i = B_i - Q_i B - Q B_i + E_nu,i.
-   !>
-   !> Here Q is the assembled reciprocal `eeo` operator, i.e. the Fourier sum
-   !> of `ee(R)*obarm_target`; it is not potential%qpar.  This routine is a
-   !> read-only diagnostic seam and deliberately does not expose or mutate any
-   !> production Hamiltonian state.
-   module subroutine assemble_lmto_rotation_terms(this, k_point, site, axis, b, q, enu, bi, qi, enui, torque)
-      type(lmto_live_hamiltonian_fixture), intent(in) :: this
-      real(rp), intent(in) :: k_point(3), axis(3)
-      integer, intent(in) :: site
-      complex(rp), intent(out) :: b(:, :), q(:, :), enu(:, :), bi(:, :), qi(:, :), enui(:, :), torque(:, :)
-      integer :: nmat
-      real(rp) :: zero_q(3)
-
-      call validate_site_axis(this, site, axis)
-      nmat = 2*this%norb*this%nsite
-      if (any(shape(b) /= [nmat,nmat]) .or. any(shape(q) /= [nmat,nmat]) .or. &
-          any(shape(enu) /= [nmat,nmat]) .or. any(shape(bi) /= [nmat,nmat]) .or. &
-          any(shape(qi) /= [nmat,nmat]) .or. any(shape(enui) /= [nmat,nmat]) .or. &
-          any(shape(torque) /= [nmat,nmat])) then
-         error stop 'assemble_lmto_rotation_terms: output shape mismatch'
-      end if
-
-      call assemble_base_terms(this, k_point, b, q)
-      enu = cmplx(0.0_rp, 0.0_rp, rp)
-      if (this%include_enu) call assemble_onsite_coefficient(this, this%enu0, this%enu1, enu)
-      zero_q = 0.0_rp
-      call assemble_finite_q_directional_terms(this, k_point, zero_q, site, axis, bi, qi)
-      enui = cmplx(0.0_rp, 0.0_rp, rp)
-      if (this%include_enu) call assemble_finite_q_onsite_derivative(this, zero_q, site, axis, enui)
-
-      torque = bi + enui
-      if (this%hoh) torque = torque - matmul(qi, b) - matmul(q, bi)
-   end subroutine assemble_lmto_rotation_terms
-
-   !> Complete C_ij=d2H_live/(dtheta_i dtheta_j), i/=j.  This includes the
-   !> product rule for the global Q*B HOH term and is independently testable
-   !> against four evaluations of assemble_lmto_hamiltonian.
-   module subroutine assemble_lmto_mixed_derivative(this, k_point, site_i, axis_i, site_j, axis_j, mixed)
-      type(lmto_live_hamiltonian_fixture), intent(in) :: this
-      real(rp), intent(in) :: k_point(3), axis_i(3), axis_j(3)
-      integer, intent(in) :: site_i, site_j
-      complex(rp), intent(out) :: mixed(:, :)
-      real(rp) :: zero_q(3)
-      if (site_i == site_j) error stop 'assemble_lmto_mixed_derivative: sites must be distinct'
-      zero_q = 0.0_rp
-      call assemble_lmto_finite_q_mixed_derivative(this, k_point, zero_q, site_i, axis_i, site_j, axis_j, mixed)
-   end subroutine assemble_lmto_mixed_derivative
-
    !> First finite-q vertex for the convention
    !> theta_(aR)=theta_a(q) exp(+i 2*pi*q.(R+tau_a)).  After factoring the
    !> production Bloch basis, the returned matrix is the k -> k+q block and
@@ -365,87 +297,6 @@ contains
       if (this%hoh) mixed = mixed - matmul(d2q,b) - matmul(dqi_left,dbj_at_k) - matmul(dqj_minus,dbi) - matmul(qmat,d2b)
       deallocate(b,qmat,dbi,dqi,dbj_minus,dqj_minus,dbi_left,dqi_left,dbj_at_k,dqj_at_k,d2b,d2q,d2enu)
    end subroutine assemble_lmto_finite_q_mixed_derivative
-
-   !> Integrand of the exact zero-temperature grand-potential Hessian in the
-   !> resolvent convention G=(E-H)^-1.  The contact term is C_ij G; it is not
-   !> optional physics, only an optional diagnostic split.
-   module pure subroutine force_theorem_integrand(torque_i, green, torque_j, mixed, torque_torque, mixed_contact, complete, include_contact)
-      complex(rp), intent(in) :: torque_i(:, :), green(:, :), torque_j(:, :), mixed(:, :)
-      real(rp), intent(out) :: torque_torque, mixed_contact, complete
-      logical, intent(in), optional :: include_contact
-      complex(rp) :: tt_trace, contact_trace
-      logical :: with_contact
-
-      if (any(shape(torque_i) /= shape(green)) .or. any(shape(torque_j) /= shape(green)) .or. &
-          any(shape(mixed) /= shape(green))) error stop 'force_theorem_integrand: shape mismatch'
-      with_contact = .true.
-      if (present(include_contact)) with_contact = include_contact
-      tt_trace = trace_product(torque_i, green, torque_j, green)
-      contact_trace = trace_product(mixed, green)
-      torque_torque = -aimag(tt_trace)/force_theorem_pi
-      mixed_contact = -aimag(contact_trace)/force_theorem_pi
-      complete = torque_torque
-      if (with_contact) complete = complete + mixed_contact
-   end subroutine force_theorem_integrand
-
-   !> Integrate the force-theorem integrand using caller-supplied contour
-   !> weights.  The same routine returns A (TT only), B (C contact), and A+B.
-   module subroutine force_theorem_hessian_from_green(greens, weights, torque_i, torque_j, mixed, &
-                                                torque_torque, mixed_contact, complete, include_contact)
-      complex(rp), intent(in) :: greens(:, :, :), torque_i(:, :), torque_j(:, :), mixed(:, :)
-      real(rp), intent(in) :: weights(:)
-      real(rp), intent(out) :: torque_torque, mixed_contact, complete
-      logical, intent(in), optional :: include_contact
-      integer :: ie
-      real(rp) :: tt, cc, all_terms
-
-      if (size(greens,3) /= size(weights) .or. size(greens,1) /= size(greens,2) .or. &
-          any(shape(torque_i) /= shape(greens(:,:,1))) .or. any(shape(torque_j) /= shape(greens(:,:,1))) .or. &
-          any(shape(mixed) /= shape(greens(:,:,1)))) error stop 'force_theorem_hessian_from_green: shape mismatch'
-      torque_torque = 0.0_rp; mixed_contact = 0.0_rp; complete = 0.0_rp
-      do ie = 1, size(weights)
-         call force_theorem_integrand(torque_i, greens(:,:,ie), torque_j, mixed, tt, cc, all_terms, include_contact)
-         torque_torque = torque_torque + weights(ie)*tt
-         mixed_contact = mixed_contact + weights(ie)*cc
-         complete = complete + weights(ie)*all_terms
-      end do
-   end subroutine force_theorem_hessian_from_green
-
-   !> Spectral form of the same theorem, useful for a finite fixture with a
-   !> Fermi level in a gap.  It avoids any quadrature or finite-difference
-   !> reuse: the TT term is the ordinary first-order eigenvector response and
-   !> the contact term is the diagonal expectation of C_ij.
-   module subroutine force_theorem_hessian_from_eigenbasis(eigenvalues, eigenvectors, fermi, torque_i, torque_j, mixed, &
-                                                    torque_torque, mixed_contact, complete)
-      real(rp), intent(in) :: eigenvalues(:), fermi
-      complex(rp), intent(in) :: eigenvectors(:, :), torque_i(:, :), torque_j(:, :), mixed(:, :)
-      real(rp), intent(out) :: torque_torque, mixed_contact, complete
-      complex(rp) :: tim, tmj, tjm, tmi, term
-      integer :: n, m, nbands
-
-      nbands = size(eigenvalues)
-      if (size(eigenvectors,1) /= size(eigenvectors,2) .or. size(eigenvectors,2) /= nbands .or. &
-          any(shape(torque_i) /= [nbands,nbands]) .or. any(shape(torque_j) /= [nbands,nbands]) .or. &
-          any(shape(mixed) /= [nbands,nbands])) error stop 'force_theorem_hessian_from_eigenbasis: shape mismatch'
-      torque_torque = 0.0_rp; mixed_contact = 0.0_rp
-      do n = 1, nbands
-         if (eigenvalues(n) >= fermi) cycle
-         mixed_contact = mixed_contact + real(dot_product(eigenvectors(:,n), matmul(mixed,eigenvectors(:,n))), rp)
-         do m = 1, nbands
-            if (m == n) cycle
-            if (abs(eigenvalues(n)-eigenvalues(m)) <= 100.0_rp*epsilon(1.0_rp)) then
-               error stop 'force_theorem_hessian_from_eigenbasis: degenerate occupied response'
-            end if
-            tim = dot_product(eigenvectors(:,n), matmul(torque_i,eigenvectors(:,m)))
-            tmj = dot_product(eigenvectors(:,m), matmul(torque_j,eigenvectors(:,n)))
-            tjm = dot_product(eigenvectors(:,n), matmul(torque_j,eigenvectors(:,m)))
-            tmi = dot_product(eigenvectors(:,m), matmul(torque_i,eigenvectors(:,n)))
-            term = (tim*tmj + tjm*tmi)/cmplx(eigenvalues(n)-eigenvalues(m),0.0_rp,rp)
-            torque_torque = torque_torque + real(term, rp)
-         end do
-      end do
-      complete = torque_torque + mixed_contact
-   end subroutine force_theorem_hessian_from_eigenbasis
 
    !> Finite-q spectral Hessian for one k -> k+q endpoint pair.  The first
    !> vertex stack is evaluated at k for +q and the second at k+q for -q.
@@ -677,23 +528,6 @@ contains
          kernel = (f1-f2)/delta
       end if
    end function fermi_divided_difference
-
-   module pure function mixed_second_difference(omega_pp, omega_pm, omega_mp, omega_mm, delta_i, delta_j) result(hessian)
-      real(rp), intent(in) :: omega_pp, omega_pm, omega_mp, omega_mm, delta_i, delta_j
-      real(rp) :: hessian
-      if (delta_i == 0.0_rp .or. delta_j == 0.0_rp) error stop 'mixed_second_difference: zero step'
-      hessian = (omega_pp - omega_pm - omega_mp + omega_mm)/(4.0_rp*delta_i*delta_j)
-   end function mixed_second_difference
-
-   module pure function grand_potential_from_eigenvalues(eigenvalues, fermi) result(omega)
-      real(rp), intent(in) :: eigenvalues(:), fermi
-      real(rp) :: omega
-      integer :: i
-      omega = 0.0_rp
-      do i = 1, size(eigenvalues)
-         if (eigenvalues(i) < fermi) omega = omega + eigenvalues(i) - fermi
-      end do
-   end function grand_potential_from_eigenvalues
 
    !> Compare the reconstructed fixture with the production reciprocal
    !> assembler real-space blocks at caller-selected k points.  This routine
@@ -1182,29 +1016,6 @@ contains
       if (site < 1 .or. site > this%nsite .or. abs(sqrt(dot_product(axis,axis))-1.0_rp) > 1.0e-10_rp) &
          error stop 'DRESP-03T invalid local rotation site or non-unit axis'
    end subroutine validate_site_axis
-
-   pure function trace_product(a, b, c, d) result(value)
-      complex(rp), intent(in) :: a(:, :), b(:, :)
-      complex(rp), intent(in), optional :: c(:, :), d(:, :)
-      complex(rp) :: value
-      complex(rp) :: product(size(a,1),size(a,2))
-      integer :: n, i
-      n = size(a,1)
-      if (size(a,2) /= n .or. size(b,1) /= n .or. size(b,2) /= n) then
-         error stop 'trace_product: invalid two-factor matrix shape'
-      end if
-      if (present(c)) then
-         if (.not. present(d)) error stop 'trace_product: d is required when c is present'
-         if (size(c,1) /= n .or. size(c,2) /= n .or. size(d,1) /= n .or. size(d,2) /= n) then
-            error stop 'trace_product: invalid four-factor matrix shape'
-         end if
-         product = matmul(a,matmul(b,matmul(c,d)))
-      else
-         if (present(d)) error stop 'trace_product: c is required when d is present'
-         product = matmul(a,b)
-      end if
-      value = sum([(product(i,i), i=1,n)])
-   end function trace_product
 
    pure function cross3(a, b) result(c)
       real(rp), intent(in) :: a(3), b(3)

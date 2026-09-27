@@ -3,8 +3,9 @@
 !------------------------------------------------------------------------------
 program test_dresp03g_contour
    use precision_mod, only: rp
-   use linear_response_mod, only: force_theorem_hessian_from_eigenbasis, &
-      force_theorem_finite_q_hessian_from_eigenbasis_metallic, force_theorem_finite_q_hessian_from_eigenbasis
+   use linear_response_mod, only: force_theorem_finite_q_hessian_from_eigenbasis_metallic, &
+      force_theorem_finite_q_hessian_from_eigenbasis
+   use lr_rotation_oracles_mod, only: force_theorem_hessian_from_eigenbasis
    use linear_response_mod, only: finite_h_contour_options, finite_h_contour_report, &
       force_theorem_finite_q_hessian_from_resolvent, force_theorem_finite_q_hessian_from_zero_temperature_contour
    implicit none

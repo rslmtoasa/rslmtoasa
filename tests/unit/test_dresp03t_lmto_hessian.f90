@@ -9,7 +9,8 @@
 program test_dresp03t_lmto_hessian
    use precision_mod, only: rp
    use linear_response_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_init, &
-      assemble_lmto_hamiltonian, assemble_lmto_torque, assemble_lmto_mixed_derivative, &
+      assemble_lmto_hamiltonian
+   use lr_rotation_oracles_mod, only: assemble_lmto_torque, assemble_lmto_mixed_derivative, &
       force_theorem_hessian_from_eigenbasis, mixed_second_difference, grand_potential_from_eigenvalues
    use lmto_magnetic_tangent_mod, only: lmto_transform_potential
    implicit none

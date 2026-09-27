@@ -17,7 +17,6 @@ module lr_product_gf_susceptibility_mod
       lmto_product_channel_plus, lmto_product_channel_minus
    use linear_response_mod, only: lr_electronic_state, lr_channel_plus, lr_channel_minus, &
       lr_fermi_dirac_occupation
-   use lr_gf_susceptibility_mod, only: build_weighted_resolvent
    use linear_response_mod, only: lmto_product_nbranch, lmto_product_max_gf_moment, &
       lmto_product_branch_powers, lmto_product_energy_power
    implicit none
@@ -96,6 +95,33 @@ module lr_product_gf_susceptibility_mod
    public :: evaluate_lr_product_gf_susceptibility, build_lr_product_gf_transition_amplitudes
 
 contains
+
+   subroutine build_weighted_resolvent(state, ik, z, weighted_green)
+      type(lr_electronic_state), intent(in) :: state
+      integer, intent(in) :: ik
+      complex(rp), intent(in) :: z
+      complex(rp), intent(out) :: weighted_green(:, :, :)
+      integer :: power, ib, i, j
+      complex(rp) :: factor
+
+      if (size(weighted_green, 1) /= state%nbasis .or. size(weighted_green, 2) /= state%nbasis .or. &
+          size(weighted_green, 3) < 1 .or. size(weighted_green, 3) > lmto_product_max_gf_moment + 1) then
+         error stop 'build_weighted_resolvent: output shape mismatch'
+      end if
+      weighted_green = cmplx(0.0_rp, 0.0_rp, rp)
+      do power = 0, size(weighted_green, 3) - 1
+         do ib = 1, state%nbands
+            factor = cmplx(lmto_product_energy_power(state%eigenvalues(ib, ik), power), 0.0_rp, rp)/ &
+                     (z - state%eigenvalues(ib, ik))
+            do j = 1, state%nbasis
+               do i = 1, state%nbasis
+                  weighted_green(i, j, power + 1) = weighted_green(i, j, power + 1) + &
+                     factor*state%eigenvectors(i, ib, ik)*conjg(state%eigenvectors(j, ib, ik))
+               end do
+            end do
+         end do
+      end do
+   end subroutine build_weighted_resolvent
 
    subroutine evaluate_lr_product_gf_susceptibility(request, result)
       type(lr_product_gf_susceptibility_request), intent(in) :: request

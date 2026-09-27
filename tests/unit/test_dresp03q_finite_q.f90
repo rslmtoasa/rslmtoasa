@@ -10,8 +10,9 @@ program test_dresp03q_finite_q
    use lmto_magnetic_tangent_mod, only: lmto_bond_value, lmto_hhmag_to_spinor
    use linear_response_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_init, &
       assemble_lmto_hamiltonian, assemble_lmto_finite_q_torques, assemble_lmto_finite_q_mixed_derivative, &
-      assemble_lmto_torque, assemble_lmto_mixed_derivative, force_theorem_finite_q_hessian_from_eigenbasis, &
-      force_theorem_finite_q_hessian_from_eigenbasis_batch, force_theorem_hessian_from_eigenbasis
+      force_theorem_finite_q_hessian_from_eigenbasis, force_theorem_finite_q_hessian_from_eigenbasis_batch
+   use lr_rotation_oracles_mod, only: assemble_lmto_torque, assemble_lmto_mixed_derivative, &
+      force_theorem_hessian_from_eigenbasis
    implicit none
 
    type(lmto_live_hamiltonian_fixture) :: fixture
