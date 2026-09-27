@@ -3,7 +3,7 @@ program test_lr_alsda_kernel
    use precision_mod, only: rp
    use radial_ground_state_mod, only: radial_ground_state, RADIAL_PI
    use linear_response_mod, only: response_space_layout, response_apply_operator, response_identity_operator
-   use lr_alsda_kernel_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, &
+   use linear_response_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, &
       lr_kxc_magnetization_pauli, evaluate_lr_alsda_kernel, evaluate_lr_alsda_static_residual
    implicit none
 

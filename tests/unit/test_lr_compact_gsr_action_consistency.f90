@@ -19,7 +19,7 @@ program test_lr_compact_gsr_action_consistency
    use linear_response_mod, only: response_angular_pi
    use linear_response_mod, only: response_space_layout
    use linear_response_mod, only: lmto_product_channel_plus, lmto_product_response_basis
-   use lr_compact_static_interaction_mod, only: lr_compact_gsr_result, compact_project_magnetization, &
+   use linear_response_mod, only: lr_compact_gsr_result, compact_project_magnetization, &
       compact_project_local_operator, compact_reconstruct_point_vector, compact_weighted_projection_diagnostics, &
       evaluate_compact_goldstone_sumrule
    implicit none

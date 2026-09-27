@@ -3,7 +3,7 @@
 !------------------------------------------------------------------------------
 program test_tddft_dyson
    use precision_mod, only: rp
-   use tddft_dyson_mod, only: tddft_dyson_request, tddft_dyson_result, &
+   use linear_response_mod, only: tddft_dyson_request, tddft_dyson_result, &
       evaluate_tddft_dyson, solve_tddft_dyson_frequency, tddft_loss_matrix, &
       loss_matrix_hermiticity_residual, lr_dyson_route_direct_alsda, &
       lr_dyson_route_goldstone_sumrule, lr_dyson_route_direct_alsda_goldstone_corrected

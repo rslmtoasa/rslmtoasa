@@ -7,7 +7,7 @@
 program test_lr_projected_interacting_response
 
    use precision_mod, only: rp
-   use lr_projected_interacting_response_mod, only: projected_mills_interaction_request, &
+   use linear_response_mod, only: projected_mills_interaction_request, &
       projected_mills_interaction_result, projected_dyson_request, projected_dyson_result, &
       evaluate_projected_mills_interaction, evaluate_projected_dyson, projected_mills_exact_scalar
    implicit none

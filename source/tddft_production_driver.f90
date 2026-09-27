@@ -38,7 +38,7 @@ module tddft_production_driver_mod
       pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
    use linear_response_mod, only: lmto_product_response_basis, lmto_product_channel_plus, &
       lmto_product_channel_minus
-   use lr_compact_static_interaction_mod, only: lr_compact_gsr_result, lr_compact_representation, lr_compact_mapping_contract, &
+   use linear_response_mod, only: lr_compact_gsr_result, lr_compact_representation, lr_compact_mapping_contract, &
       compact_project_magnetization, compact_project_local_operator, compact_apply_local_operator, &
       compact_reconstruct_point_vector, compact_weighted_projection_diagnostics, evaluate_compact_goldstone_sumrule, &
       lr_compact_gsr_action_tolerance
@@ -49,21 +49,21 @@ module tddft_production_driver_mod
    use linear_response_mod, only: projected_site_spin_contract
    use linear_response_mod, only: projected_chi0_request, projected_chi0_result, &
       evaluate_projected_lehmann_chi0, evaluate_projected_finite_width_chi0, evaluate_projected_gf_chi0
-   use lr_projected_interacting_response_mod, only: projected_mills_interaction_result, &
+   use linear_response_mod, only: projected_mills_interaction_result, &
       projected_dyson_request, projected_dyson_result, evaluate_projected_mills_from_reciprocal, &
       evaluate_projected_dyson
-   use lr_projected_juelich_interaction_mod, only: projected_juelich_request, projected_juelich_result, &
+   use linear_response_mod, only: projected_juelich_request, projected_juelich_result, &
       evaluate_projected_juelich_interaction, evaluate_projected_juelich_holdout, &
       assess_projected_juelich_eta_stability, projected_juelich_eta_limited, projected_juelich_rank_deficient, &
       projected_juelich_unsupported, select_projected_juelich_eta_indices
    use linear_response_mod, only: lr_rs_gf_provider, lr_rs_gf_pair, lr_rs_gf_susceptibility_request, &
       evaluate_lr_rs_gf_susceptibility
    use linear_response_mod, only: tddft_native_rsgf_provider
-   use lr_alsda_kernel_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, evaluate_lr_alsda_kernel, &
+   use linear_response_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, evaluate_lr_alsda_kernel, &
       lr_kxc_magnetization_kind_pauli_accepted, lr_kxc_magnetization_source_pauli_accepted
-   use lr_goldstone_sumrule_mod, only: lr_goldstone_sumrule_request, lr_goldstone_sumrule_result, &
+   use linear_response_mod, only: lr_goldstone_sumrule_request, lr_goldstone_sumrule_result, &
       evaluate_lr_goldstone_sumrule
-   use tddft_dyson_mod, only: tddft_dyson_request, tddft_dyson_result, evaluate_tddft_dyson, &
+   use linear_response_mod, only: tddft_dyson_request, tddft_dyson_result, evaluate_tddft_dyson, &
       lr_dyson_route_direct_alsda, lr_dyson_route_goldstone_sumrule
    use logger_mod, only: g_logger
    implicit none

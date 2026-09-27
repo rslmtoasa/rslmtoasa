@@ -4,14 +4,14 @@ module linear_response_mod
    use precision_mod, only: rp
    use math_mod, only: pi
    use control_mod, only: control
-   use energy_mod, only: energy
+   use energy_mod, only: energy_type => energy
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
    use reciprocal_mod, only: reciprocal
    use self_mod, only: self
    use string_mod, only: sl
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
-   use radial_ground_state_mod, only: radial_ground_state
+   use radial_ground_state_mod, only: radial_ground_state, radial_xc_provenance
    use, intrinsic :: iso_fortran_env, only: int64
    use green_mod, only: green
    use recursion_mod, only: recursion
@@ -765,6 +765,435 @@ module linear_response_mod
       integer :: n_dominant_transition_records = 0
       type(projected_chi0_transition_record), allocatable :: dominant_transitions(:)
    end type projected_chi0_result
+
+   ! --- from lr_alsda_kernel_mod (LR-REF-03c) ---
+
+   character(len=*), parameter, public :: lr_kxc_magnetization_pauli = 'pauli_projected'
+   character(len=*), parameter, public :: lr_kxc_magnetization_kind_pauli_accepted = 'PAULI_ACCEPTED'
+   character(len=*), parameter, public :: lr_kxc_magnetization_source_pauli_accepted = &
+      'accepted reciprocal eigensystem + POTPAR large component + frozen core'
+   character(len=*), parameter, public :: lr_kxc_units = 'Ry bohr^3'
+   character(len=*), parameter, public :: lr_kxc_representation = 'LR-04 canonical local operator'
+   real(rp), parameter, public :: lr_kxc_default_low_m_relative = 1.0e-8_rp
+
+   !> Request for one direct ALSDA kernel on a complete response layout.
+   !>
+   !> `pauli_magnetization(site,radial_point)` is the Pauli/no-SOC response
+   !> magnetization selected by LR-03.  It is not reconstructed from a
+   !> compressed potential field and it is not silently replaced by the SR
+   !> density in the accepted radial snapshot.
+   type, public :: lr_alsda_kernel_request
+      type(response_space_layout), pointer :: response_space => null()
+      type(radial_ground_state), pointer :: ground_states(:) => null()
+      real(rp), allocatable :: pauli_magnetization(:, :)
+      character(len=32) :: magnetization_label = lr_kxc_magnetization_pauli
+      character(len=32) :: magnetization_kind = ''
+      character(len=256) :: magnetization_source = ''
+      logical :: production_contract = .false.
+      character(len=512) :: requested_functional = ''
+      character(len=32) :: requested_backend = ''
+      integer :: requested_txc = -1
+      ! This is a diagnostic threshold only.  It never changes the ratio.
+      real(rp) :: low_m_diagnostic_relative = lr_kxc_default_low_m_relative
+   end type lr_alsda_kernel_request
+
+   !> Low-m diagnostic for the active positive-measure radial grid.
+   type, public :: lr_alsda_low_m_diagnostic
+      integer :: active_radial_points = 0
+      integer :: low_m_points = 0
+      integer :: exact_zero_active_points = 0
+      integer :: null_measure_zero_points = 0
+      real(rp) :: max_abs_magnetization = 0.0_rp
+      real(rp) :: min_abs_magnetization = huge(1.0_rp)
+      real(rp) :: min_relative_abs_magnetization = huge(1.0_rp)
+      real(rp) :: diagnostic_relative_threshold = lr_kxc_default_low_m_relative
+   end type lr_alsda_low_m_diagnostic
+
+   !> Direct ALSDA result and provenance carried to later interaction code.
+   type, public :: lr_alsda_kernel_result
+      real(rp), allocatable :: pointwise_kernel(:, :) ! (site,radial point)
+      complex(rp), allocatable :: canonical_operator(:, :) ! LR-04 B=K_raw*W
+      type(lr_alsda_low_m_diagnostic) :: low_m
+      type(radial_xc_provenance) :: xc_provenance
+      character(len=32) :: magnetization_label = ''
+      character(len=32) :: magnetization_kind = ''
+      character(len=256) :: magnetization_source = ''
+      character(len=64) :: units = lr_kxc_units
+      character(len=128) :: response_representation = lr_kxc_representation
+      logical :: origin_null_measure_extension = .false.
+   end type lr_alsda_kernel_result
+
+   ! --- from lr_goldstone_sumrule_mod (LR-REF-03c) ---
+
+   character(len=*), parameter, public :: lr_gsr_magnetization_pauli = 'pauli_projected'
+   character(len=*), parameter, public :: lr_gsr_route = 'goldstone_sumrule'
+   character(len=*), parameter, public :: lr_gsr_units = 'Ry bohr^3'
+   character(len=*), parameter, public :: lr_gsr_representation = &
+      'LR-04 canonical interaction K_eff=4*pi*U_LCMM'
+   real(rp), parameter, public :: lr_gsr_residual_tolerance = 1.0e-9_rp
+
+   !> Request for the independent static sum-rule construction.
+   type, public :: lr_goldstone_sumrule_request
+      type(response_space_layout), pointer :: response_space => null()
+      complex(rp), allocatable :: static_susceptibility(:, :) ! canonical LR-04 chiKS(0)
+      real(rp), allocatable :: magnetization(:, :) ! physical m_z(site,r)
+      character(len=32) :: magnetization_label = lr_gsr_magnetization_pauli
+   end type lr_goldstone_sumrule_request
+
+   !> Diagnostics and products of the sum-rule construction.
+   type, public :: lr_goldstone_sumrule_result
+      ! U_LCMM(site,r)=B_eff(site,r)/(4*pi*m_z(site,r)); origin is zero.
+      complex(rp), allocatable :: u_lcmm(:, :)
+      ! Pointwise LCMM energy splitting B_eff=4*pi*U_LCMM*m_z.
+      complex(rp), allocatable :: effective_field(:, :)
+      ! Canonical LR-04 local operator for B_eff,00=K_eff*m_00.
+      complex(rp), allocatable :: canonical_interaction(:, :)
+      ! Normalized response vector m_00=sqrt(4*pi)*m_z, origin excluded.
+      complex(rp), allocatable :: magnetization_response(:)
+      ! Full response-space B_eff,00 generated by K_eff acting on m_00.
+      complex(rp), allocatable :: generated_field(:)
+      complex(rp), allocatable :: generated_response(:)
+      complex(rp), allocatable :: residual_vector(:)
+      ! Gamma is the active spherical radial equation in the solve order.
+      complex(rp), allocatable :: gamma(:, :)
+      complex(rp), allocatable :: solution_active(:)
+      real(rp), allocatable :: singular_values(:)
+      integer :: rank = 0
+      integer :: unknowns = 0
+      real(rp) :: condition_number = huge(1.0_rp)
+      real(rp) :: equation_residual_norm = huge(1.0_rp)
+      real(rp) :: equation_relative_residual = huge(1.0_rp)
+      real(rp) :: metric_residual_norm = huge(1.0_rp)
+      real(rp) :: metric_relative_residual = huge(1.0_rp)
+      complex(rp) :: rigid_overlap = cmplx(0.0_rp, 0.0_rp, rp)
+      logical :: rank_deficient = .false.
+      logical :: blocked = .true.
+      character(len=32) :: route = lr_gsr_route
+      character(len=32) :: magnetization_label = ''
+      character(len=64) :: units = lr_gsr_units
+      character(len=128) :: response_representation = lr_gsr_representation
+      character(len=256) :: status = 'not evaluated'
+   end type lr_goldstone_sumrule_result
+
+   !> Result of the generic complex SVD solve Gamma*x=rhs.
+   type, public :: lr_sumrule_linear_solve_result
+      complex(rp), allocatable :: solution(:)
+      real(rp), allocatable :: singular_values(:)
+      integer :: rank = 0
+      real(rp) :: condition_number = huge(1.0_rp)
+      real(rp) :: residual_norm = huge(1.0_rp)
+      real(rp) :: relative_residual = huge(1.0_rp)
+      logical :: rank_deficient = .true.
+      logical :: blocked = .true.
+      character(len=256) :: status = 'not evaluated'
+   end type lr_sumrule_linear_solve_result
+
+   ! --- from lr_projected_interacting_response_mod (LR-REF-03c) ---
+
+   character(len=*), parameter, public :: projected_mills_exact_scalar = 'EXACT_SCALAR'
+   character(len=*), parameter, public :: projected_mills_projected_scalar = &
+      'PROJECTED_SCALAR_APPROXIMATION'
+   character(len=*), parameter, public :: projected_mills_unsupported = 'UNSUPPORTED'
+   character(len=*), parameter, public :: projected_mills_convention = &
+      'H=H0 I+B_sigma sigma_z; H_up-H_down=2 B_sigma; DRESP-01 Vz=sigma_z'
+   character(len=*), parameter, public :: projected_mills_loss_convention = &
+      'L=-(chi-chi^dagger)/(2*i*pi); ordinary site-space matrix'
+
+   real(rp), parameter, public :: projected_mills_exact_tolerance = 1.0e-10_rp
+   real(rp), parameter, public :: projected_mills_moment_floor = 1.0e-12_rp
+   real(rp), parameter, public :: projected_mills_condition_limit = 1.0e12_rp
+
+   !> Accepted-state samples for the local scalarization.  The matrices are
+   !> site-major in the supplied coefficient subspace.  A sample is normally
+   !> one accepted reciprocal H(k); sample_weights are relative weights and
+   !> default to a uniform Frobenius metric.
+   type, public :: projected_mills_interaction_request
+      character(len=8) :: selector = ''
+      character(len=80) :: splitting_convention = projected_mills_convention
+      integer :: nsite = 0
+      integer :: site_block_size = 0
+      complex(rp), allocatable :: actual_pauli_field(:, :, :) ! (basis,basis,sample)
+      complex(rp), allocatable :: site_vertices(:, :, :, :) ! (basis,basis,site,sample)
+      real(rp), allocatable :: projected_moment(:)
+      real(rp), allocatable :: sample_weights(:)
+      character(len=512) :: provenance = ''
+   end type projected_mills_interaction_request
+
+   type, public :: projected_mills_interaction_result
+      character(len=8) :: selector = ''
+      character(len=80) :: splitting_convention = projected_mills_convention
+      character(len=32) :: classification = projected_mills_unsupported
+      character(len=512) :: provenance = ''
+      integer :: nsite = 0
+      integer :: nbasis = 0
+      integer :: nsample = 0
+      integer :: rank = 0
+      real(rp) :: fit_condition_number = huge(1.0_rp)
+      real(rp) :: scalarization_residual = huge(1.0_rp)
+      real(rp) :: locality_residual = huge(1.0_rp)
+      real(rp) :: splitting_norm = 0.0_rp
+      real(rp) :: fit_residual_norm = 0.0_rp
+      real(rp) :: coefficient_imaginary_residual = 0.0_rp
+      real(rp), allocatable :: projected_moment(:)
+      real(rp), allocatable :: projected_splitting(:) ! B_sigma coefficient Delta_i
+      real(rp), allocatable :: interaction_U(:)
+   end type projected_mills_interaction_result
+
+   !> Site-space projected Dyson request.  bare_chi is directly the
+   !> DRESP-02 site x site x frequency object; no product-space input exists.
+   type, public :: projected_dyson_request
+      character(len=8) :: selector = ''
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      character(len=32) :: channel = ''
+      real(rp), allocatable :: interaction_U(:)
+      complex(rp), allocatable :: bare_chi(:, :, :) ! (site,site,frequency)
+      character(len=512) :: interaction_provenance = ''
+      character(len=512) :: bare_provenance = ''
+   end type projected_dyson_request
+
+   type, public :: projected_dyson_result
+      character(len=8) :: selector = ''
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      character(len=32) :: channel = ''
+      character(len=512) :: interaction_provenance = ''
+      character(len=512) :: bare_provenance = ''
+      character(len=256) :: dyson_convention = 'D=I-chi0*U; solve D*chi=chi0 with certified LAPACK zgesv'
+      character(len=256) :: loss_convention = projected_mills_loss_convention
+      character(len=128) :: status = 'not evaluated'
+      real(rp), allocatable :: interaction_U(:)
+      complex(rp), allocatable :: bare_chi(:, :, :)
+      complex(rp), allocatable :: interaction(:, :)
+      complex(rp), allocatable :: denominator(:, :, :)
+      complex(rp), allocatable :: enhanced_chi(:, :, :)
+      complex(rp), allocatable :: loss_matrix(:, :, :)
+      real(rp), allocatable :: denominator_min_singular_value(:)
+      real(rp), allocatable :: denominator_max_singular_value(:)
+      real(rp), allocatable :: condition_number(:)
+      real(rp), allocatable :: minimum_magnitude_eigenvalue(:)
+      real(rp), allocatable :: loss_trace(:)
+      real(rp), allocatable :: minus_im_trace_over_pi(:)
+      real(rp), allocatable :: dyson_residual(:)
+      real(rp), allocatable :: dyson_residual_relative(:)
+      real(rp), allocatable :: dyson_residual_infinity(:)
+      integer, allocatable :: solve_info(:)
+   end type projected_dyson_result
+
+   ! --- from lr_projected_juelich_interaction_mod (LR-REF-03c) ---
+
+   character(len=*), parameter, public :: projected_juelich_exact_local = 'EXACT_LOCAL_SUMRULE'
+   character(len=*), parameter, public :: projected_juelich_projected_local = 'PROJECTED_LOCAL_SUMRULE'
+   character(len=*), parameter, public :: projected_juelich_eta_limited = 'ETA_LIMITED_LOCAL_SUMRULE'
+   character(len=*), parameter, public :: projected_juelich_rank_deficient = 'UNSUPPORTED_RANK_DEFICIENT'
+   character(len=*), parameter, public :: projected_juelich_unsupported = 'UNSUPPORTED'
+
+   real(rp), parameter, public :: projected_juelich_residual_tolerance = 2.0e-9_rp
+   real(rp), parameter, public :: projected_juelich_condition_limit = 1.0e12_rp
+   real(rp), parameter, public :: projected_juelich_eta_relative_tolerance = 5.0e-3_rp
+
+   type, public :: projected_juelich_request
+      character(len=8) :: selector = ''
+      real(rp), allocatable :: projected_moment(:)
+      complex(rp), allocatable :: static_chi0(:, :)
+      real(rp) :: static_eta = 0.0_rp
+      real(rp) :: q(3) = 0.0_rp
+      character(len=32) :: channel = ''
+      character(len=512) :: state_provenance = ''
+      character(len=512) :: chi0_provenance = ''
+   end type projected_juelich_request
+
+   type, public :: projected_juelich_result
+      character(len=8) :: selector = ''
+      character(len=32) :: classification = projected_juelich_unsupported
+      character(len=512) :: provenance = ''
+      real(rp) :: static_eta = 0.0_rp
+      real(rp) :: q(3) = 0.0_rp
+      character(len=32) :: channel = ''
+      integer :: nsite = 0
+      integer :: rank = 0
+      integer :: real_rank = 0
+      real(rp) :: condition_number = huge(1.0_rp)
+      real(rp) :: real_condition_number = huge(1.0_rp)
+      real(rp) :: equation_residual = huge(1.0_rp)
+      real(rp) :: relative_residual = huge(1.0_rp)
+      real(rp) :: real_constrained_residual = huge(1.0_rp)
+      real(rp) :: relative_real_constrained_residual = huge(1.0_rp)
+      real(rp) :: imaginary_U_ratio = huge(1.0_rp)
+      real(rp) :: holdout_residual = huge(1.0_rp)
+      real(rp) :: holdout_relative_residual = huge(1.0_rp)
+      logical :: eta_stable = .false.
+      character(len=256) :: eta_stability = 'not evaluated'
+      real(rp), allocatable :: projected_moment(:)
+      real(rp), allocatable :: singular_values(:)
+      real(rp), allocatable :: real_singular_values(:)
+      complex(rp), allocatable :: gamma(:, :)
+      complex(rp), allocatable :: interaction_matrix(:, :)
+      complex(rp), allocatable :: interaction_U_complex(:)
+      real(rp), allocatable :: interaction_U_real(:)
+      real(rp), allocatable :: interaction_U(:)
+   end type projected_juelich_result
+
+   ! --- from lr_compact_static_interaction_mod (LR-REF-03c) ---
+
+   real(rp), parameter, public :: lr_compact_gsr_residual_tolerance = 1.0e-9_rp
+   real(rp), parameter, public :: lr_compact_gsr_action_tolerance = 1.0e-10_rp
+   character(len=*), parameter, public :: lr_compact_representation = &
+      'weighted-orthonormal LMTO product representation; U=sqrt(W)V'
+   character(len=*), parameter, public :: lr_compact_mapping_contract = &
+      'c=U^H sqrt(W) x, x=inv(sqrt(W)) U c, Kc=U^H K U'
+
+   !> Independent compact LCMM/GSR result.  The unknown is a local scalar
+   !> U_LCMM represented in the retained L=0 radial product span.  The solve
+   !> equation is rows-by-unknowns, Gamma*u=target, and is deliberately
+   !> allowed to return BLOCKED when the full compact response cannot satisfy
+   !> the spherical local sum-rule ansatz.
+   type, public :: lr_compact_gsr_result
+      complex(rp), allocatable :: u_lcmm(:, :)       ! site, radial point
+      complex(rp), allocatable :: effective_field(:, :) ! 4*pi*U*m_z
+      complex(rp), allocatable :: canonical_interaction(:, :) ! compact local K_eff
+      complex(rp), allocatable :: magnetization_response(:)
+      complex(rp), allocatable :: generated_field(:)
+      complex(rp), allocatable :: generated_response(:)
+      complex(rp), allocatable :: residual_vector(:)
+      complex(rp), allocatable :: gamma(:, :)
+      complex(rp), allocatable :: solution(:)
+      real(rp), allocatable :: singular_values(:)
+      integer :: equation_rows = 0
+      integer :: unknowns = 0
+      integer :: rank = 0
+      real(rp) :: condition_number = huge(1.0_rp)
+      real(rp) :: svd_rcond = -1.0_rp
+      real(rp) :: svd_cutoff = huge(1.0_rp)
+      real(rp) :: coefficient_norm = huge(1.0_rp)
+      real(rp) :: equation_residual_norm = huge(1.0_rp)
+      real(rp) :: equation_relative_residual = huge(1.0_rp)
+      real(rp) :: residual_norm = huge(1.0_rp)
+      real(rp) :: relative_residual = huge(1.0_rp)
+      real(rp) :: residual_difference_norm = huge(1.0_rp)
+      real(rp) :: residual_difference_relative = huge(1.0_rp)
+      real(rp) :: residual_difference_max_component = huge(1.0_rp)
+      real(rp) :: max_residual_component = huge(1.0_rp)
+      real(rp) :: assembled_action_sum_norm = huge(1.0_rp)
+      real(rp) :: assembled_action_matrix_norm = huge(1.0_rp)
+      real(rp) :: assembled_action_difference_norm = huge(1.0_rp)
+      real(rp) :: assembled_action_difference_relative = huge(1.0_rp)
+      real(rp) :: assembled_action_difference_max_component = huge(1.0_rp)
+      real(rp) :: magnetization_weighted_norm = huge(1.0_rp)
+      real(rp) :: magnetization_projection_residual_norm = huge(1.0_rp)
+      real(rp) :: magnetization_projection_relative_residual = huge(1.0_rp)
+      complex(rp) :: rigid_overlap = cmplx(0.0_rp, 0.0_rp, rp)
+      logical :: rank_deficient = .true.
+      logical :: blocked = .true.
+      character(len=64) :: status = 'not evaluated'
+   end type lr_compact_gsr_result
+
+   ! --- from tddft_dyson_mod (LR-REF-03c) ---
+
+   character(len=*), parameter, public :: lr_dyson_route_direct_alsda = 'direct_alsda'
+   character(len=*), parameter, public :: lr_dyson_route_goldstone_sumrule = 'goldstone_sumrule'
+   character(len=*), parameter, public :: lr_dyson_route_direct_alsda_goldstone_corrected = &
+      'direct_alsda_goldstone_corrected'
+   character(len=*), parameter, public :: lr_dyson_response_representation = &
+      'LR-04 canonical right-weighted B=A*W'
+   character(len=*), parameter, public :: lr_dyson_compact_response_representation = &
+      'orthonormal compact LMTO product representation'
+   character(len=*), parameter, public :: lr_dyson_loss_convention = &
+      'L=-(chi-chi^dagger_W)/(2*i*pi); canonical metric-adjoint form'
+   character(len=*), parameter, public :: lr_dyson_convention = &
+      'solve (I-chi_KS*K) chi=chi_KS with LAPACK zgesv; no explicit inverse'
+
+   real(rp), parameter, public :: lr_dyson_near_singular_condition = 1.0e8_rp
+   real(rp), parameter, public :: lr_dyson_ill_conditioned_condition = 1.0e12_rp
+
+   !> Request for one q/frequency/channel response batch.
+   !>
+   !> `canonical_interaction` must already be in the LR-04 representation.  In
+   !> particular, this request has no raw-kernel escape hatch and no automatic
+   !> route selection.  For the corrected route the supplied matrix must be
+   !> the explicitly selected GCR-01 corrected Kxc.
+   type, public :: tddft_dyson_request
+      type(response_space_layout), pointer :: response_space => null()
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      character(len=32) :: channel = ''
+      ! When true, the matrices are already in the accepted orthonormal
+      ! compact product representation.  The response_space pointer is then
+      ! optional and no point-space metric is inserted into Dyson or loss.
+      logical :: compact_orthonormal = .false.
+      complex(rp), allocatable :: ks_susceptibility(:, :, :)
+      complex(rp), allocatable :: canonical_interaction(:, :)
+      character(len=48) :: interaction_route = lr_dyson_route_direct_alsda
+      character(len=256) :: interaction_provenance = ''
+      character(len=512) :: electronic_state_provenance = ''
+      character(len=256) :: response_space_metadata = ''
+   end type tddft_dyson_request
+
+   !> Enhanced response, loss matrices, and per-frequency diagnostics.
+   type, public :: tddft_dyson_result
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      character(len=32) :: channel = ''
+      logical :: compact_orthonormal = .false.
+      character(len=48) :: interaction_route = ''
+      character(len=256) :: interaction_provenance = ''
+      character(len=512) :: electronic_state_provenance = ''
+      character(len=256) :: response_space_metadata = ''
+      character(len=128) :: response_representation = lr_dyson_response_representation
+      character(len=256) :: dyson_convention = lr_dyson_convention
+      character(len=256) :: loss_convention = lr_dyson_loss_convention
+      character(len=256) :: status = 'not evaluated'
+      complex(rp), allocatable :: ks_susceptibility(:, :, :)
+      complex(rp), allocatable :: canonical_interaction(:, :)
+      complex(rp), allocatable :: denominator(:, :, :)
+      complex(rp), allocatable :: enhanced_susceptibility(:, :, :)
+      complex(rp), allocatable :: loss_matrix(:, :, :)
+      real(rp), allocatable :: denominator_min_singular_value(:)
+      real(rp), allocatable :: denominator_max_singular_value(:)
+      real(rp), allocatable :: denominator_condition_number(:)
+      real(rp), allocatable :: denominator_min_magnitude_eigenvalue(:)
+      integer, allocatable :: solve_info(:)
+      logical, allocatable :: solve_succeeded(:)
+      logical, allocatable :: near_singular_collective_pole(:)
+      logical, allocatable :: numerically_singular(:)
+      logical, allocatable :: ill_conditioned(:)
+      real(rp), allocatable :: loss_metric_hermiticity_residual(:)
+      real(rp), allocatable :: dyson_residual_frobenius(:)
+      real(rp), allocatable :: dyson_residual_relative(:)
+      real(rp), allocatable :: dyson_residual_infinity(:)
+      character(len=256), allocatable :: frequency_status(:)
+   end type tddft_dyson_result
+
+   ! --- kernel/Dyson public procedures moved under linear_response_mod ---
+   public :: evaluate_lr_alsda_kernel
+   public :: evaluate_lr_alsda_static_residual
+   public :: lr_alsda_provenance_matches
+   public :: evaluate_lr_goldstone_sumrule
+   public :: solve_lr_goldstone_equation
+   public :: evaluate_projected_mills_interaction
+   public :: evaluate_projected_mills_from_reciprocal
+   public :: evaluate_projected_dyson
+   public :: evaluate_projected_juelich_interaction
+   public :: evaluate_projected_juelich_holdout
+   public :: assess_projected_juelich_eta_stability
+   public :: select_projected_juelich_eta_indices
+   public :: compact_project_point_vector
+   public :: compact_reconstruct_point_vector
+   public :: compact_project_local_operator
+   public :: compact_apply_local_operator
+   public :: compact_project_magnetization
+   public :: compact_weighted_projection_diagnostics
+   public :: evaluate_compact_goldstone_sumrule
+   public :: evaluate_tddft_dyson
+   public :: solve_tddft_dyson_frequency
+   public :: tddft_denominator_minimum_magnitude_eigenvalue
+   public :: tddft_loss_matrix
+   public :: loss_matrix_hermiticity_residual
+
    ! --- bare-response public procedures ---
    public :: lr_fermi_dirac_occupation
    public :: lr_snapshot_from_reciprocal
@@ -872,6 +1301,31 @@ module linear_response_mod
 
 
 
+
+   interface evaluate_lr_alsda_kernel
+      module procedure evaluate_lr_alsda_kernel_request
+      module procedure evaluate_lr_alsda_kernel_explicit
+   end interface evaluate_lr_alsda_kernel
+
+   interface evaluate_lr_goldstone_sumrule
+      module procedure evaluate_lr_goldstone_sumrule_request
+      module procedure evaluate_lr_goldstone_sumrule_explicit
+   end interface evaluate_lr_goldstone_sumrule
+
+   interface compact_project_local_operator
+      module procedure compact_project_local_operator_complex
+   end interface compact_project_local_operator
+
+   interface tddft_loss_matrix
+      module procedure tddft_loss_matrix_ordinary
+      module procedure tddft_loss_matrix_metric
+   end interface tddft_loss_matrix
+
+   interface loss_matrix_hermiticity_residual
+      module procedure loss_matrix_hermiticity_residual_ordinary
+      module procedure loss_matrix_hermiticity_residual_metric
+   end interface loss_matrix_hermiticity_residual
+
    interface response_local_operator
       module procedure response_local_operator_site_radial
       module procedure response_local_operator_site_radial_channel
@@ -894,6 +1348,189 @@ module linear_response_mod
       module procedure evaluate_lr_product_ks_susceptibility_explicit
    end interface evaluate_lr_product_ks_susceptibility
    interface
+      ! --- kernel/Dyson submodule procedures ---
+      module subroutine evaluate_lr_alsda_kernel_request(request, result)
+         type(lr_alsda_kernel_request), intent(in) :: request
+         type(lr_alsda_kernel_result), intent(out) :: result
+      end subroutine evaluate_lr_alsda_kernel_request
+
+      module subroutine evaluate_lr_alsda_kernel_explicit(space, ground_states, pauli_magnetization, result, &
+         requested_functional, requested_backend, requested_txc, magnetization_label, low_m_diagnostic_relative)
+         type(response_space_layout), intent(in) :: space
+         type(radial_ground_state), intent(in) :: ground_states(:)
+         real(rp), intent(in) :: pauli_magnetization(:, :)
+         type(lr_alsda_kernel_result), intent(out) :: result
+         character(len=*), intent(in), optional :: requested_functional
+         character(len=*), intent(in), optional :: requested_backend
+         integer, intent(in), optional :: requested_txc
+         character(len=*), intent(in), optional :: magnetization_label
+         real(rp), intent(in), optional :: low_m_diagnostic_relative
+      end subroutine evaluate_lr_alsda_kernel_explicit
+
+      module subroutine evaluate_lr_alsda_static_residual(space, static_susceptibility, canonical_kernel, rigid_vector, &
+         absolute_residual, relative_residual, rigid_overlap, residual_vector)
+         type(response_space_layout), intent(in) :: space
+         complex(rp), intent(in) :: static_susceptibility(:, :), canonical_kernel(:, :), rigid_vector(:)
+         real(rp), intent(out) :: absolute_residual, relative_residual
+         complex(rp), intent(out), optional :: rigid_overlap
+         complex(rp), intent(out), optional :: residual_vector(:)
+      end subroutine evaluate_lr_alsda_static_residual
+
+      module logical function lr_alsda_provenance_matches(accepted, requested_functional, requested_backend, requested_txc) &
+         result(matches)
+         type(radial_xc_provenance), intent(in) :: accepted
+         character(len=*), intent(in) :: requested_functional, requested_backend
+         integer, intent(in) :: requested_txc
+      end function lr_alsda_provenance_matches
+
+      module subroutine evaluate_lr_goldstone_sumrule_request(request, result)
+         type(lr_goldstone_sumrule_request), intent(in) :: request
+         type(lr_goldstone_sumrule_result), intent(out) :: result
+      end subroutine evaluate_lr_goldstone_sumrule_request
+
+      module subroutine evaluate_lr_goldstone_sumrule_explicit(space, static_susceptibility, magnetization, result, &
+         magnetization_label)
+         type(response_space_layout), intent(in) :: space
+         complex(rp), intent(in) :: static_susceptibility(:, :)
+         real(rp), intent(in) :: magnetization(:, :)
+         type(lr_goldstone_sumrule_result), intent(out) :: result
+         character(len=*), intent(in), optional :: magnetization_label
+      end subroutine evaluate_lr_goldstone_sumrule_explicit
+
+      module subroutine solve_lr_goldstone_equation(gamma, rhs, result)
+         complex(rp), intent(in) :: gamma(:, :), rhs(:)
+         type(lr_sumrule_linear_solve_result), intent(out) :: result
+      end subroutine solve_lr_goldstone_equation
+
+      module subroutine evaluate_projected_mills_interaction(request, result)
+         type(projected_mills_interaction_request), intent(in) :: request
+         type(projected_mills_interaction_result), intent(out) :: result
+      end subroutine evaluate_projected_mills_interaction
+
+      module subroutine evaluate_projected_mills_from_reciprocal(contract, radial_bases, reciprocal_obj, energy, moment, result)
+         type(projected_site_spin_contract), intent(in) :: contract
+         type(lmto_radial_basis), intent(in) :: radial_bases(:)
+         type(reciprocal), intent(in) :: reciprocal_obj
+         real(rp), intent(in) :: energy, moment(:)
+         type(projected_mills_interaction_result), intent(out) :: result
+      end subroutine evaluate_projected_mills_from_reciprocal
+
+      module subroutine evaluate_projected_dyson(request, result)
+         type(projected_dyson_request), intent(in) :: request
+         type(projected_dyson_result), intent(out) :: result
+      end subroutine evaluate_projected_dyson
+
+      module subroutine select_projected_juelich_eta_indices(eta_values, selected_index, holdout_index)
+         real(rp), intent(in) :: eta_values(:)
+         integer, intent(out) :: selected_index, holdout_index
+      end subroutine select_projected_juelich_eta_indices
+
+      module subroutine evaluate_projected_juelich_interaction(request, result)
+         type(projected_juelich_request), intent(in) :: request
+         type(projected_juelich_result), intent(out) :: result
+      end subroutine evaluate_projected_juelich_interaction
+
+      module subroutine evaluate_projected_juelich_holdout(static_chi0, projected_moment, interaction_U, residual, &
+         relative_residual)
+         complex(rp), intent(in) :: static_chi0(:, :)
+         real(rp), intent(in) :: projected_moment(:), interaction_U(:)
+         real(rp), intent(out) :: residual, relative_residual
+      end subroutine evaluate_projected_juelich_holdout
+
+      module subroutine assess_projected_juelich_eta_stability(result, previous_result, is_stable)
+         type(projected_juelich_result), intent(inout) :: result
+         type(projected_juelich_result), intent(in) :: previous_result
+         logical, intent(out) :: is_stable
+      end subroutine assess_projected_juelich_eta_stability
+
+      module subroutine compact_project_point_vector(space, product, point_vector, compact_vector)
+         type(response_space_layout), intent(in) :: space
+         type(lmto_product_response_basis), intent(in) :: product
+         complex(rp), intent(in) :: point_vector(:)
+         complex(rp), intent(out) :: compact_vector(:)
+      end subroutine compact_project_point_vector
+
+      module subroutine compact_reconstruct_point_vector(space, product, compact_vector, point_vector)
+         type(response_space_layout), intent(in) :: space
+         type(lmto_product_response_basis), intent(in) :: product
+         complex(rp), intent(in) :: compact_vector(:)
+         complex(rp), intent(out) :: point_vector(:)
+      end subroutine compact_reconstruct_point_vector
+
+      module subroutine compact_project_local_operator_complex(space, product, values, compact_operator)
+         type(response_space_layout), intent(in) :: space
+         type(lmto_product_response_basis), intent(in) :: product
+         complex(rp), intent(in) :: values(:, :)
+         complex(rp), intent(out) :: compact_operator(:, :)
+      end subroutine compact_project_local_operator_complex
+
+      module subroutine compact_apply_local_operator(space, product, values, vector, result)
+         type(response_space_layout), intent(in) :: space
+         type(lmto_product_response_basis), intent(in) :: product
+         complex(rp), intent(in) :: values(:, :), vector(:)
+         complex(rp), intent(out) :: result(:)
+      end subroutine compact_apply_local_operator
+
+      module subroutine compact_project_magnetization(space, product, magnetization, compact_vector, point_vector)
+         type(response_space_layout), intent(in) :: space
+         type(lmto_product_response_basis), intent(in) :: product
+         real(rp), intent(in) :: magnetization(:, :)
+         complex(rp), intent(out) :: compact_vector(:)
+         complex(rp), allocatable, intent(out), optional :: point_vector(:)
+      end subroutine compact_project_magnetization
+
+      module subroutine compact_weighted_projection_diagnostics(space, point_vector, projected_point_vector, weighted_norm, &
+         residual_norm, relative_residual)
+         type(response_space_layout), intent(in) :: space
+         complex(rp), intent(in) :: point_vector(:), projected_point_vector(:)
+         real(rp), intent(out) :: weighted_norm, residual_norm, relative_residual
+      end subroutine compact_weighted_projection_diagnostics
+
+      module subroutine evaluate_compact_goldstone_sumrule(space, product, static_susceptibility, magnetization, result)
+         type(response_space_layout), intent(in) :: space
+         type(lmto_product_response_basis), intent(in) :: product
+         complex(rp), intent(in) :: static_susceptibility(:, :)
+         real(rp), intent(in) :: magnetization(:, :)
+         type(lr_compact_gsr_result), intent(out) :: result
+      end subroutine evaluate_compact_goldstone_sumrule
+
+      module subroutine evaluate_tddft_dyson(request, result)
+         type(tddft_dyson_request), intent(in) :: request
+         type(tddft_dyson_result), intent(out) :: result
+      end subroutine evaluate_tddft_dyson
+
+      module subroutine solve_tddft_dyson_frequency(chi_ks, kernel, chi, denominator, info, condition_number, &
+         min_singular_value, max_singular_value)
+         complex(rp), intent(in) :: chi_ks(:, :), kernel(:, :)
+         complex(rp), intent(out) :: chi(:, :), denominator(:, :)
+         integer, intent(out) :: info
+         real(rp), intent(out), optional :: condition_number, min_singular_value, max_singular_value
+      end subroutine solve_tddft_dyson_frequency
+
+      module function tddft_loss_matrix_ordinary(chi) result(loss)
+         complex(rp), intent(in) :: chi(:, :)
+         complex(rp) :: loss(size(chi, 1), size(chi, 2))
+      end function tddft_loss_matrix_ordinary
+
+      module function tddft_loss_matrix_metric(space, chi) result(loss)
+         type(response_space_layout), intent(in) :: space
+         complex(rp), intent(in) :: chi(:, :)
+         complex(rp) :: loss(size(chi, 1), size(chi, 2))
+      end function tddft_loss_matrix_metric
+
+      module pure real(rp) function loss_matrix_hermiticity_residual_ordinary(loss) result(residual)
+         complex(rp), intent(in) :: loss(:, :)
+      end function loss_matrix_hermiticity_residual_ordinary
+
+      module real(rp) function loss_matrix_hermiticity_residual_metric(space, loss) result(residual)
+         type(response_space_layout), intent(in) :: space
+         complex(rp), intent(in) :: loss(:, :)
+      end function loss_matrix_hermiticity_residual_metric
+
+      module subroutine tddft_denominator_minimum_magnitude_eigenvalue(matrix, minimum_magnitude)
+         complex(rp), intent(in) :: matrix(:, :)
+         real(rp), intent(out) :: minimum_magnitude
+      end subroutine tddft_denominator_minimum_magnitude_eigenvalue
       module subroutine lmto_fixture_clear(this)
          class(lmto_live_hamiltonian_fixture), intent(inout) :: this
       end subroutine lmto_fixture_clear
@@ -1845,7 +2482,7 @@ module linear_response_mod
          logical, intent(in) :: native_contour_account_fermi_poles
          type(lattice), intent(inout) :: lattice_obj
          type(hamiltonian), intent(inout) :: hamiltonian_obj
-         type(energy), intent(in) :: energy_obj
+         type(energy_type), intent(in) :: energy_obj
          type(self), intent(inout) :: self_obj
          type(reciprocal), intent(inout) :: reciprocal_obj
          type(lmto_live_hamiltonian_fixture), intent(out) :: fixture
@@ -1890,7 +2527,7 @@ module linear_response_mod
          type(control), intent(in) :: control_obj
          type(lattice), intent(inout) :: lattice_obj
          type(hamiltonian), intent(inout) :: hamiltonian_obj
-         type(energy), intent(in) :: energy_obj
+         type(energy_type), intent(in) :: energy_obj
          type(self), intent(inout) :: self_obj
          type(reciprocal), intent(inout) :: reciprocal_obj
       end subroutine lr_run

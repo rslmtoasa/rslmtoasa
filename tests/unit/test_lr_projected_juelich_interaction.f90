@@ -4,11 +4,11 @@
 program test_lr_projected_juelich_interaction
 
    use precision_mod, only: rp
-   use lr_projected_juelich_interaction_mod, only: projected_juelich_request, projected_juelich_result, &
+   use linear_response_mod, only: projected_juelich_request, projected_juelich_result, &
       evaluate_projected_juelich_interaction, evaluate_projected_juelich_holdout, &
       projected_juelich_exact_local, projected_juelich_projected_local, projected_juelich_rank_deficient, &
       select_projected_juelich_eta_indices
-   use lr_projected_interacting_response_mod, only: projected_mills_interaction_request, &
+   use linear_response_mod, only: projected_mills_interaction_request, &
       projected_mills_interaction_result, projected_dyson_request, projected_dyson_result, &
       evaluate_projected_mills_interaction, evaluate_projected_dyson
    implicit none

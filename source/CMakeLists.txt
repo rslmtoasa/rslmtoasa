@@ -39,6 +39,7 @@ add_library(${PROJECT_NAME} STATIC
     linear_response_rotation.f90
     linear_response_basis.f90
     linear_response_bare.f90
+    linear_response_kernel_dyson.f90
     lmto_radial_augmentation.f90
     pauli_ground_state_projection.f90
     spin_density.f90
@@ -86,17 +87,11 @@ add_library(${PROJECT_NAME} STATIC
     recursion_haydock.f90
     recursion_chebyshev.f90
     recursion_transport.f90
-    lr_compact_static_interaction.f90
     lr_gf_susceptibility.f90
     lr_product_gf_susceptibility.f90
-    lr_projected_interacting_response.f90
-    lr_projected_juelich_interaction.f90
     lr_lmto_turek_gf.f90
     lr_lmto_turek_contour.f90
-    lr_alsda_kernel.f90
-    lr_goldstone_sumrule.f90
     tddft_production_driver.f90
-    tddft_dyson.f90
     sparse.f90
     report.f90
     rsrec_cuda_plugin.f90

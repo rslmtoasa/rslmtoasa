@@ -10,11 +10,11 @@ program test_tddft_production_driver
    use linear_response_mod, only: lr_electronic_state, lr_ks_susceptibility_request, &
       lr_ks_susceptibility_result, evaluate_lr_ks_susceptibility
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
-   use lr_alsda_kernel_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, evaluate_lr_alsda_kernel, &
+   use linear_response_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, evaluate_lr_alsda_kernel, &
       lr_kxc_magnetization_kind_pauli_accepted, lr_kxc_magnetization_source_pauli_accepted
    use linear_response_mod, only: lr_rs_dense_gf_provider, lr_rs_gf_pair, &
       lr_rs_gf_susceptibility_request, evaluate_lr_rs_gf_susceptibility
-   use tddft_dyson_mod, only: tddft_dyson_request, tddft_dyson_result, evaluate_tddft_dyson
+   use linear_response_mod, only: tddft_dyson_request, tddft_dyson_result, evaluate_tddft_dyson
    implicit none
 
    character(len=32) :: argument

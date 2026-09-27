@@ -17,7 +17,7 @@ program test_lr_compact_static_interaction
    use linear_response_mod, only: response_angular_pi
    use linear_response_mod, only: response_space_layout
    use linear_response_mod, only: lmto_product_channel_plus, lmto_product_response_basis
-   use lr_compact_static_interaction_mod, only: compact_project_point_vector, compact_reconstruct_point_vector, &
+   use linear_response_mod, only: compact_project_point_vector, compact_reconstruct_point_vector, &
       compact_project_local_operator, compact_apply_local_operator, compact_project_magnetization, &
       lr_compact_mapping_contract
    implicit none
