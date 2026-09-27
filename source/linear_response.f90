@@ -136,6 +136,14 @@ module linear_response_mod
       integer :: rotation_pole_coarse_points = 61
       integer :: rotation_pole_fine_points = 41
       real(rp) :: rotation_pole_refinement_half_width = 2.0_rp
+      ! Optional frequency grid: rotation_n_omega=0 disables the new file;
+      ! otherwise rotation_omega_min=0 Ry, rotation_omega_max=2e-2 Ry,
+      ! rotation_eta=1e-4 Ry, rotation_grid_file='rotation_response_grid.dat'.
+      integer :: rotation_n_omega = 0
+      real(rp) :: rotation_omega_min = 0.0_rp
+      real(rp) :: rotation_omega_max = 2.0e-2_rp
+      real(rp) :: rotation_eta = 1.0e-4_rp
+      character(len=sl) :: rotation_grid_file = 'rotation_response_grid.dat'
    contains
       procedure :: restore_to_default => lr_config_restore_to_default
    end type linear_response_config

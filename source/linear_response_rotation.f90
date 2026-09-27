@@ -2600,6 +2600,11 @@ contains
       this%rotation_pole_coarse_points = 61
       this%rotation_pole_fine_points = 41
       this%rotation_pole_refinement_half_width = 2.0_rp
+      this%rotation_n_omega = 0
+      this%rotation_omega_min = 0.0_rp
+      this%rotation_omega_max = 2.0e-2_rp
+      this%rotation_eta = 1.0e-4_rp
+      this%rotation_grid_file = 'rotation_response_grid.dat'
    end subroutine lr_config_restore_to_default
 
    module subroutine lr_restore_to_default(this)
@@ -2624,6 +2629,9 @@ contains
       real(rp) :: rotation_eta_ladder(3), rotation_probe_omega, rotation_probe_eta, rotation_slope_step
       real(rp) :: rotation_pole_window_floor, rotation_pole_window_scale, rotation_pole_window_max, rotation_pole_refinement_half_width
       integer :: rotation_pole_coarse_points, rotation_pole_fine_points
+      integer :: rotation_n_omega
+      real(rp) :: rotation_omega_min, rotation_omega_max, rotation_eta
+      character(len=sl) :: rotation_grid_file
       real(rp) :: q_list(3, linear_response_max_points)
       namelist /linear_response/ formulation, q_coordinates, q_file, n_q_points, q_list, rotation_axis, &
          finite_h_spectral_mode, finite_h_response_backend, contour_points, contour_shape, contour_margin, &
@@ -2632,7 +2640,8 @@ contains
          native_contour_account_fermi_poles, native_contour_target_fermi_poles, output_file, rotation_eta_ladder, &
          rotation_probe_omega, rotation_probe_eta, rotation_slope_step, rotation_pole_window_floor, &
          rotation_pole_window_scale, rotation_pole_window_max, rotation_pole_coarse_points, rotation_pole_fine_points, &
-         rotation_pole_refinement_half_width
+         rotation_pole_refinement_half_width, rotation_n_omega, rotation_omega_min, rotation_omega_max, rotation_eta, &
+         rotation_grid_file
 
       call this%config%restore_to_default()
       this%config%fname = filename
@@ -2669,6 +2678,11 @@ contains
       rotation_pole_coarse_points = this%config%rotation_pole_coarse_points
       rotation_pole_fine_points = this%config%rotation_pole_fine_points
       rotation_pole_refinement_half_width = this%config%rotation_pole_refinement_half_width
+      rotation_n_omega = this%config%rotation_n_omega
+      rotation_omega_min = this%config%rotation_omega_min
+      rotation_omega_max = this%config%rotation_omega_max
+      rotation_eta = this%config%rotation_eta
+      rotation_grid_file = this%config%rotation_grid_file
 
       open(newunit=funit, file=filename, action='read', status='old', iostat=iostatus)
       if (iostatus /= 0) call g_logger%fatal('[linear_response]: input file '//trim(filename)//' not found', __FILE__, __LINE__)
@@ -2709,6 +2723,11 @@ contains
       this%config%rotation_pole_coarse_points = rotation_pole_coarse_points
       this%config%rotation_pole_fine_points = rotation_pole_fine_points
       this%config%rotation_pole_refinement_half_width = rotation_pole_refinement_half_width
+      this%config%rotation_n_omega = rotation_n_omega
+      this%config%rotation_omega_min = rotation_omega_min
+      this%config%rotation_omega_max = rotation_omega_max
+      this%config%rotation_eta = rotation_eta
+      this%config%rotation_grid_file = trim(rotation_grid_file)
 
       if (this%config%formulation /= 'rotation') then
          call g_logger%fatal("formulation='"//trim(this%config%formulation)// &
@@ -2750,6 +2769,15 @@ contains
       if (this%config%rotation_pole_coarse_points < 2 .or. this%config%rotation_pole_fine_points < 2 .or. &
           this%config%rotation_pole_refinement_half_width <= 0.0_rp) then
          call g_logger%fatal('[linear_response]: rotation pole-scan grid controls are invalid', __FILE__, __LINE__)
+      end if
+      if (this%config%rotation_n_omega < 0) call g_logger%fatal('[linear_response]: rotation_n_omega must be non-negative', __FILE__, __LINE__)
+      if (this%config%rotation_n_omega > 0) then
+         if (this%config%rotation_omega_max < this%config%rotation_omega_min .or. this%config%rotation_eta <= 0.0_rp) then
+            call g_logger%fatal('[linear_response]: rotation frequency-grid bounds or eta are invalid', __FILE__, __LINE__)
+         end if
+         if (len_trim(this%config%rotation_grid_file) == 0) then
+            call g_logger%fatal('[linear_response]: rotation_grid_file must not be blank when rotation_n_omega is enabled', __FILE__, __LINE__)
+         end if
       end if
       if (this%config%native_green_eta <= 0.0_rp) call g_logger%fatal('[linear_response]: native_green_eta must be positive', __FILE__, __LINE__)
       if (this%config%native_energy_points < 0) call g_logger%fatal('[linear_response]: native_energy_points must be non-negative', __FILE__, __LINE__)
@@ -2851,12 +2879,57 @@ contains
          this%config%rotation_pole_window_floor, this%config%rotation_pole_window_scale, &
          this%config%rotation_pole_window_max, this%config%rotation_pole_coarse_points, this%config%rotation_pole_fine_points, &
          this%config%rotation_pole_refinement_half_width)
+      if (this%config%rotation_n_omega > 0) then
+         call write_rotation_response_grid(trim(this%config%rotation_grid_file), this%config%rotation_n_omega, &
+            this%config%rotation_omega_min, this%config%rotation_omega_max, this%config%rotation_eta, fixture, &
+            reciprocal_obj, q_direct)
+      end if
 
       call fixture%clear()
       deallocate(q_direct, q_cart, finite_total, finite_tt, finite_contact, spectral_total, spectral_tt, spectral_contact, &
          contour_total, contour_tt, contour_contact, native_jq_ud, native_jq_du, native_jq_sym, native_delta_j, native_curvature, &
          endpoint_reused, q_commensurate, endpoint_residual, endpoint_mode)
    end subroutine lr_run
+
+   subroutine write_rotation_response_grid(filename,n_omega,omega_min,omega_max,eta,fixture,recip,q_direct)
+      character(len=*), intent(in) :: filename
+      integer, intent(in) :: n_omega
+      real(rp), intent(in) :: omega_min,omega_max,eta
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fixture
+      type(reciprocal), intent(inout) :: recip
+      real(rp), intent(in) :: q_direct(:, :)
+      type(rotation_state), target :: state
+      type(rotation_request) :: request
+      type(rotation_result) :: response
+      integer :: unit,iq,iomega
+      real(rp) :: omega
+
+      if (n_omega<1 .or. omega_max<omega_min .or. eta<=0.0_rp) then
+         error stop 'write_rotation_response_grid: invalid frequency-grid controls'
+      end if
+      open(newunit=unit,file=trim(filename),status='replace',action='write')
+      write(unit,'(a)') '# local-rotation response frequency grid; energies in Ry; loss in 1/Ry'
+      write(unit,'(a)') '# q_fraction_x q_fraction_y q_fraction_z omega_Ry ReK_plus_Ry ImK_plus_Ry ReK_minus_Ry ImK_minus_Ry loss_plus_invRy loss_minus_invRy'
+      do iq=1,size(q_direct,2)
+         call prepare_rotation_response(fixture,recip,q_direct(:,iq),state)
+         request%state=>state; request%eta=eta; request%exact_static=.false.; request%want_inverse=.true.
+         do iomega=1,n_omega
+            if (n_omega==1) then
+               omega=omega_min
+            else
+               omega=omega_min+(omega_max-omega_min)*real(iomega-1,rp)/real(n_omega-1,rp)
+            end if
+            request%omega=omega
+            call evaluate_rotation_response(request,response)
+            write(unit,'(3(es20.12,1x),7(es20.12,1x))') q_direct(:,iq),omega, &
+               real(response%kernel_pm(1,1),rp),aimag(response%kernel_pm(1,1)), &
+               real(response%kernel_pm(2,2),rp),aimag(response%kernel_pm(2,2)), &
+               -aimag(response%inverse_kernel_pm(1,1)),-aimag(response%inverse_kernel_pm(2,2))
+         end do
+         call state%clear()
+      end do
+      close(unit)
+   end subroutine write_rotation_response_grid
 
    subroutine run_native_rotation_dynamics_campaign(rotation_output_file,lat,recip,self_obj,fixture,q_direct,q_cart,finite_h,native_delta,native_curv,native_ready, &
       rotation_eta_ladder,rotation_probe_omega,rotation_probe_eta,rotation_slope_step,rotation_pole_window_floor, &
