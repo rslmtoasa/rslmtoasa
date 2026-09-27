@@ -14,7 +14,7 @@ program test_dresp03q_native_lkag
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
    use logger_mod, only: g_logger
-   use lr_kl_hessian_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_from_hamiltonian, &
+   use linear_response_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_from_hamiltonian, &
       assemble_lmto_finite_q_torque, assemble_lmto_finite_q_mixed_derivative, &
       force_theorem_finite_q_hessian_from_eigenbasis_batch, lmto_fixture_adapter_residual
    use math_mod, only: ang2au, init_math_operators

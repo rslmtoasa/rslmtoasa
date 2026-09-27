@@ -13,15 +13,15 @@ module exchange_q_mod
    use energy_mod, only: energy
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
-   use lr_kl_hessian_mod, only: lmto_fixture_adapter_residual
-   use lr_kl_contour_mod, only: finite_h_contour_options, finite_h_contour_report, &
+   use linear_response_mod, only: lmto_fixture_adapter_residual
+   use linear_response_mod, only: finite_h_contour_options, finite_h_contour_report, &
       force_theorem_finite_q_hessian_from_resolvent_batch
    use lr_lmto_turek_contour_mod, only: native_turek_contour_options, native_turek_contour_report, &
       native_turek_static_reference
    use logger_mod, only: g_logger
-   use lr_rotation_response_mod, only: rotation_state, rotation_request, rotation_result, &
+   use linear_response_mod, only: rotation_state, rotation_request, rotation_result, &
       prepare_rotation_response, evaluate_rotation_response, reduce_static_rotation_kernel
-   use lr_kl_hessian_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_from_hamiltonian, &
+   use linear_response_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_from_hamiltonian, &
       assemble_lmto_hamiltonian, &
       assemble_lmto_finite_q_torques, assemble_lmto_finite_q_mixed_derivative, &
       force_theorem_finite_q_hessian_from_eigenbasis_batch, &

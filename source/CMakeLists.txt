@@ -35,9 +35,8 @@ add_library(${PROJECT_NAME} STATIC
     magnetic_representation.f90
     gbt_structure.f90
     lmto_magnetic_tangent.f90
-    lr_kl_hessian.f90
-    lr_rotation_response.f90
-    lr_kl_contour.f90
+    linear_response.f90
+    linear_response_rotation.f90
     lmto_radial_augmentation.f90
     pauli_ground_state_projection.f90
     spin_density.f90

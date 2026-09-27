@@ -1,72 +1,50 @@
 !------------------------------------------------------------------------------
-! DRESP-03T -- local-rotation derivatives of the live orthogonal LMTO H.
+! Linear-response rotation, finite-H Hessian, and finite-H contour services.
 !------------------------------------------------------------------------------
-module lr_kl_hessian_mod
-   use, intrinsic :: ieee_arithmetic
+submodule (linear_response_mod) linear_response_rotation
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use precision_mod, only: rp
    use math_mod, only: i_unit, pi, inverse_3x3, hcpx
    use hamiltonian_mod, only: hamiltonian
    use lmto_magnetic_tangent_mod, only: lmto_bond_value, lmto_bond_derivative, &
                                         lmto_bond_mixed_derivative, lmto_hhmag_to_spinor
+   use reciprocal_mod, only: reciprocal
    implicit none
-   private
 
-   real(rp), parameter, public :: force_theorem_pi = pi
+   real(rp), parameter :: kB_ry_per_k = 6.3336814e-6_rp
+   real(rp), parameter :: q_tolerance = 1.0e-12_rp
 
-   ! A small, explicit representation of the live production inputs.  It is
-   ! intentionally bond based: every directed production bond is represented
-   ! once, including its Fourier displacement and target-site obarm factor.
-   ! The fixture is also useful as a read-only audit seam for production code.
-   type, public :: lmto_live_hamiltonian_fixture
-      integer :: nsite = 0
-      integer :: norb = 0
-      integer :: nbond = 0
-      logical :: hoh = .false.
-      logical :: include_enu = .true.
-      logical :: cartesian_to_spherical = .false.
-      complex(rp), allocatable :: hhh(:, :, :)       ! orbital directed bonds
-      integer, allocatable :: bond_source(:), bond_target(:)
-      real(rp), allocatable :: bond_vector(:, :)     ! Cartesian lattice vector
-      logical, allocatable :: onsite(:)
-      real(rp), allocatable :: moments(:, :)         ! (3,nsite), unit moments
-      ! Fractional basis positions.  A bond vector is the full target-source
-      ! displacement R+tau_target-tau_source.  The endpoint phases below are
-      ! relative to the source endpoint because the Bloch basis already carries
-      ! the absolute basis position.
-      real(rp), allocatable :: site_position(:, :)   ! (3,nsite), fractional
-      complex(rp), allocatable :: wx0(:, :), wx1(:, :) ! (norb,nsite)
-      complex(rp), allocatable :: c0(:, :), c1(:, :)   ! live onsite c channels
-      complex(rp), allocatable :: obar0(:, :), obar1(:, :) ! live O channels
-      complex(rp), allocatable :: enu0(:, :), enu1(:, :)   ! live e_nu channels
-   contains
-      procedure :: clear => lmto_fixture_clear
-   end type lmto_live_hamiltonian_fixture
-
-   public :: lmto_fixture_init
-   public :: lmto_fixture_from_hamiltonian
-   public :: assemble_lmto_hamiltonian
-   public :: assemble_lmto_torque
-   public :: assemble_lmto_rotation_terms
-   public :: assemble_lmto_mixed_derivative
-   public :: assemble_lmto_finite_q_torque
-   public :: assemble_lmto_finite_q_torques
-   public :: assemble_lmto_finite_q_mixed_derivative
-   public :: force_theorem_finite_q_hessian_from_eigenbasis
-   public :: force_theorem_finite_q_hessian_from_eigenbasis_batch
-   public :: force_theorem_finite_q_hessian_from_eigenbasis_metallic
-   public :: force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch
-   public :: finite_temperature_occupation
-   public :: fermi_divided_difference
-   public :: lmto_fixture_adapter_residual
-   public :: force_theorem_integrand
-   public :: force_theorem_hessian_from_green
-   public :: force_theorem_hessian_from_eigenbasis
-   public :: mixed_second_difference
-   public :: grand_potential_from_eigenvalues
+   interface
+      subroutine zgetrf(m, n, a, lda, ipiv, info)
+         import :: rp
+         integer, intent(in) :: m, n, lda
+         integer, intent(out) :: ipiv(*)
+         integer, intent(out) :: info
+         complex(rp), intent(inout) :: a(lda, *)
+      end subroutine zgetrf
+      subroutine zgetri(n, a, lda, ipiv, work, lwork, info)
+         import :: rp
+         integer, intent(in) :: n, lda, lwork
+         integer, intent(in) :: ipiv(*)
+         integer, intent(out) :: info
+         complex(rp), intent(inout) :: a(lda, *), work(*)
+      end subroutine zgetri
+      subroutine zgetrs(trans, n, nrhs, a, lda, ipiv, b, ldb, info)
+         import :: rp
+         character(len=1), intent(in) :: trans
+         integer, intent(in) :: n, nrhs, lda, ldb
+         complex(rp), intent(in) :: a(lda, *)
+         integer, intent(in) :: ipiv(*)
+         complex(rp), intent(inout) :: b(ldb, *)
+         integer, intent(out) :: info
+      end subroutine zgetrs
+   end interface
 
 contains
 
-   subroutine lmto_fixture_init(this, nsite, norb, nbond, hoh)
+   ! --- from lr_kl_hessian ---
+
+   module subroutine lmto_fixture_init(this, nsite, norb, nbond, hoh)
       class(lmto_live_hamiltonian_fixture), intent(out) :: this
       integer, intent(in) :: nsite, norb, nbond
       logical, intent(in), optional :: hoh
@@ -99,7 +77,7 @@ contains
    !> and fractional Fourier vector are taken from the same lattice neighbor
    !> tables used by reciprocal_fourier, while c/w/o/e_nu channels are copied
    !> from the transformed symbolic-atom potential.
-   subroutine lmto_fixture_from_hamiltonian(source, fixture)
+   module subroutine lmto_fixture_from_hamiltonian(source, fixture)
       type(hamiltonian), intent(in) :: source
       type(lmto_live_hamiltonian_fixture), intent(out) :: fixture
       integer :: site, ntype, ia, nr, m, ja, target, it, count, ibond
@@ -186,7 +164,7 @@ contains
       if (ibond /= fixture%nbond) error stop 'lmto_fixture_from_hamiltonian: bond count changed during extraction'
    end subroutine lmto_fixture_from_hamiltonian
 
-   subroutine lmto_fixture_clear(this)
+   module subroutine lmto_fixture_clear(this)
       class(lmto_live_hamiltonian_fixture), intent(inout) :: this
       if (allocated(this%hhh)) deallocate(this%hhh)
       if (allocated(this%bond_source)) deallocate(this%bond_source)
@@ -212,7 +190,7 @@ contains
    !> with Q=ee*obar in reciprocal space.  The production fixture records
    !> which convention is active so the first-order path does not acquire an
    !> E_nu term that reciprocal_fourier deliberately omits.
-   subroutine assemble_lmto_hamiltonian(this, k_point, hamiltonian)
+   module subroutine assemble_lmto_hamiltonian(this, k_point, hamiltonian)
       type(lmto_live_hamiltonian_fixture), intent(in) :: this
       real(rp), intent(in) :: k_point(3)
       complex(rp), intent(out) :: hamiltonian(:, :)
@@ -233,7 +211,7 @@ contains
 
    !> Complete T_i(k)=dH_live/dtheta_i at theta=0.  The result is global in
    !> site/orbital/spin space and therefore contains offsite blocks.
-   subroutine assemble_lmto_torque(this, k_point, site, axis, torque)
+   module subroutine assemble_lmto_torque(this, k_point, site, axis, torque)
       type(lmto_live_hamiltonian_fixture), intent(in) :: this
       real(rp), intent(in) :: k_point(3), axis(3)
       integer, intent(in) :: site
@@ -256,7 +234,7 @@ contains
    !> of `ee(R)*obarm_target`; it is not potential%qpar.  This routine is a
    !> read-only diagnostic seam and deliberately does not expose or mutate any
    !> production Hamiltonian state.
-   subroutine assemble_lmto_rotation_terms(this, k_point, site, axis, b, q, enu, bi, qi, enui, torque)
+   module subroutine assemble_lmto_rotation_terms(this, k_point, site, axis, b, q, enu, bi, qi, enui, torque)
       type(lmto_live_hamiltonian_fixture), intent(in) :: this
       real(rp), intent(in) :: k_point(3), axis(3)
       integer, intent(in) :: site
@@ -288,7 +266,7 @@ contains
    !> Complete C_ij=d2H_live/(dtheta_i dtheta_j), i/=j.  This includes the
    !> product rule for the global Q*B HOH term and is independently testable
    !> against four evaluations of assemble_lmto_hamiltonian.
-   subroutine assemble_lmto_mixed_derivative(this, k_point, site_i, axis_i, site_j, axis_j, mixed)
+   module subroutine assemble_lmto_mixed_derivative(this, k_point, site_i, axis_i, site_j, axis_j, mixed)
       type(lmto_live_hamiltonian_fixture), intent(in) :: this
       real(rp), intent(in) :: k_point(3), axis_i(3), axis_j(3)
       integer, intent(in) :: site_i, site_j
@@ -305,7 +283,7 @@ contains
    !> the target endpoint carries the relative phase exp(+i q.D), with
    !> D=R+tau_target-tau_source.  Its second argument is deliberately not folded:
    !> reciprocal-vector changes are retained as the corresponding basis gauge.
-   subroutine assemble_lmto_finite_q_torque(this, k_point, q_point, site, axis, torque)
+   module subroutine assemble_lmto_finite_q_torque(this, k_point, q_point, site, axis, torque)
       type(lmto_live_hamiltonian_fixture), intent(in) :: this
       real(rp), intent(in) :: k_point(3), q_point(3), axis(3)
       integer, intent(in) :: site
@@ -337,7 +315,7 @@ contains
 
    !> Assemble all site vertices at once.  The site dimension is the final
    !> dimension and is convenient for the q-Hessian contraction.
-   subroutine assemble_lmto_finite_q_torques(this, k_point, q_point, axes, torques)
+   module subroutine assemble_lmto_finite_q_torques(this, k_point, q_point, axes, torques)
       type(lmto_live_hamiltonian_fixture), intent(in) :: this
       real(rp), intent(in) :: k_point(3), q_point(3), axes(:, :)
       complex(rp), intent(out) :: torques(:, :, :)
@@ -353,7 +331,7 @@ contains
 
    !> Complete C_ab(k;q,-q), including same-site rotation curvature and the
    !> two distinct momentum orderings in the HOH product rule.
-   subroutine assemble_lmto_finite_q_mixed_derivative(this, k_point, q_point, site_i, axis_i, site_j, axis_j, mixed)
+   module subroutine assemble_lmto_finite_q_mixed_derivative(this, k_point, q_point, site_i, axis_i, site_j, axis_j, mixed)
       type(lmto_live_hamiltonian_fixture), intent(in) :: this
       real(rp), intent(in) :: k_point(3), q_point(3), axis_i(3), axis_j(3)
       integer, intent(in) :: site_i, site_j
@@ -383,7 +361,7 @@ contains
    !> Integrand of the exact zero-temperature grand-potential Hessian in the
    !> resolvent convention G=(E-H)^-1.  The contact term is C_ij G; it is not
    !> optional physics, only an optional diagnostic split.
-   pure subroutine force_theorem_integrand(torque_i, green, torque_j, mixed, torque_torque, mixed_contact, complete, include_contact)
+   module pure subroutine force_theorem_integrand(torque_i, green, torque_j, mixed, torque_torque, mixed_contact, complete, include_contact)
       complex(rp), intent(in) :: torque_i(:, :), green(:, :), torque_j(:, :), mixed(:, :)
       real(rp), intent(out) :: torque_torque, mixed_contact, complete
       logical, intent(in), optional :: include_contact
@@ -404,7 +382,7 @@ contains
 
    !> Integrate the force-theorem integrand using caller-supplied contour
    !> weights.  The same routine returns A (TT only), B (C contact), and A+B.
-   subroutine force_theorem_hessian_from_green(greens, weights, torque_i, torque_j, mixed, &
+   module subroutine force_theorem_hessian_from_green(greens, weights, torque_i, torque_j, mixed, &
                                                 torque_torque, mixed_contact, complete, include_contact)
       complex(rp), intent(in) :: greens(:, :, :), torque_i(:, :), torque_j(:, :), mixed(:, :)
       real(rp), intent(in) :: weights(:)
@@ -429,7 +407,7 @@ contains
    !> Fermi level in a gap.  It avoids any quadrature or finite-difference
    !> reuse: the TT term is the ordinary first-order eigenvector response and
    !> the contact term is the diagonal expectation of C_ij.
-   subroutine force_theorem_hessian_from_eigenbasis(eigenvalues, eigenvectors, fermi, torque_i, torque_j, mixed, &
+   module subroutine force_theorem_hessian_from_eigenbasis(eigenvalues, eigenvectors, fermi, torque_i, torque_j, mixed, &
                                                     torque_torque, mixed_contact, complete)
       real(rp), intent(in) :: eigenvalues(:), fermi
       complex(rp), intent(in) :: eigenvectors(:, :), torque_i(:, :), torque_j(:, :), mixed(:, :)
@@ -465,7 +443,7 @@ contains
    !> vertex stack is evaluated at k for +q and the second at k+q for -q.
    !> The second ordering is retained explicitly; it is needed for a Hermitian
    !> sublattice Hessian when a and b are different.
-   subroutine force_theorem_finite_q_hessian_from_eigenbasis(eigenvalues, eigenvectors, endpoint_values, endpoint_vectors, &
+   module subroutine force_theorem_finite_q_hessian_from_eigenbasis(eigenvalues, eigenvectors, endpoint_values, endpoint_vectors, &
       fermi, torques_q, torques_minus_q, mixed, hessian, torque_torque, mixed_contact, complete)
       real(rp), intent(in) :: eigenvalues(:), endpoint_values(:), fermi
       complex(rp), intent(in) :: eigenvectors(:, :), endpoint_vectors(:, :)
@@ -520,7 +498,7 @@ contains
 
    !> Brillouin-zone average of the finite-q spectral Hessian.  Endpoint
    !> arrays and every vertex/contact stack use the same k ordering.
-   subroutine force_theorem_finite_q_hessian_from_eigenbasis_batch(eigenvalues, eigenvectors, endpoint_values, endpoint_vectors, &
+   module subroutine force_theorem_finite_q_hessian_from_eigenbasis_batch(eigenvalues, eigenvectors, endpoint_values, endpoint_vectors, &
       fermi, weights, torques_q, torques_minus_q, mixed, hessian, torque_torque, mixed_contact, complete)
       real(rp), intent(in) :: eigenvalues(:, :), endpoint_values(:, :), fermi, weights(:)
       complex(rp), intent(in) :: eigenvectors(:, :, :), endpoint_vectors(:, :, :)
@@ -562,7 +540,7 @@ contains
    !> to the occupied-state expression in a gapped zero-temperature limit,
    !> while avoiding cancellation between two nearly degenerate equally
    !> occupied (or equally empty) states in a metal.
-   subroutine force_theorem_finite_q_hessian_from_eigenbasis_metallic(eigenvalues, eigenvectors, endpoint_values, endpoint_vectors, &
+   module subroutine force_theorem_finite_q_hessian_from_eigenbasis_metallic(eigenvalues, eigenvectors, endpoint_values, endpoint_vectors, &
       fermi, kT, torques_q, torques_minus_q, mixed, hessian, torque_torque, mixed_contact, complete)
       real(rp), intent(in) :: eigenvalues(:), endpoint_values(:), fermi, kT
       complex(rp), intent(in) :: eigenvectors(:, :), endpoint_vectors(:, :)
@@ -622,7 +600,7 @@ contains
    end subroutine force_theorem_finite_q_hessian_from_eigenbasis_metallic
 
    !> Brillouin-zone average of the finite-temperature metallic Hessian.
-   subroutine force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch(eigenvalues, eigenvectors, endpoint_values, endpoint_vectors, &
+   module subroutine force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch(eigenvalues, eigenvectors, endpoint_values, endpoint_vectors, &
       fermi, kT, weights, torques_q, torques_minus_q, mixed, hessian, torque_torque, mixed_contact, complete)
       real(rp), intent(in) :: eigenvalues(:, :), endpoint_values(:, :), fermi, kT, weights(:)
       complex(rp), intent(in) :: eigenvectors(:, :, :), endpoint_vectors(:, :, :)
@@ -655,7 +633,7 @@ contains
 
    !> Fermi-Dirac occupation with the same positive kT floor used by the
    !> reciprocal SCF occupation solver.
-   pure real(rp) function finite_temperature_occupation(eigenvalue, fermi, kT) result(occupation)
+   module pure real(rp) function finite_temperature_occupation(eigenvalue, fermi, kT) result(occupation)
       real(rp), intent(in) :: eigenvalue, fermi, kT
       real(rp) :: argument, effective_kT
       effective_kT = max(kT, 1.0e-10_rp)
@@ -674,7 +652,7 @@ contains
    !> dropped small denominator.  A midpoint Taylor value is used only when
    !> subtraction would lose floating-point digits; it is the smooth analytic
    !> continuation of the same kernel.
-   pure real(rp) function fermi_divided_difference(e1, e2, fermi, kT) result(kernel)
+   module pure real(rp) function fermi_divided_difference(e1, e2, fermi, kT) result(kernel)
       real(rp), intent(in) :: e1, e2, fermi, kT
       real(rp) :: effective_kT, delta, midpoint, fm, third_derivative, f1, f2
       effective_kT = max(kT, 1.0e-10_rp)
@@ -692,14 +670,14 @@ contains
       end if
    end function fermi_divided_difference
 
-   pure function mixed_second_difference(omega_pp, omega_pm, omega_mp, omega_mm, delta_i, delta_j) result(hessian)
+   module pure function mixed_second_difference(omega_pp, omega_pm, omega_mp, omega_mm, delta_i, delta_j) result(hessian)
       real(rp), intent(in) :: omega_pp, omega_pm, omega_mp, omega_mm, delta_i, delta_j
       real(rp) :: hessian
       if (delta_i == 0.0_rp .or. delta_j == 0.0_rp) error stop 'mixed_second_difference: zero step'
       hessian = (omega_pp - omega_pm - omega_mp + omega_mm)/(4.0_rp*delta_i*delta_j)
    end function mixed_second_difference
 
-   pure function grand_potential_from_eigenvalues(eigenvalues, fermi) result(omega)
+   module pure function grand_potential_from_eigenvalues(eigenvalues, fermi) result(omega)
       real(rp), intent(in) :: eigenvalues(:), fermi
       real(rp) :: omega
       integer :: i
@@ -713,7 +691,7 @@ contains
    !> assembler real-space blocks at caller-selected k points.  This routine
    !> deliberately reads the production object only; it never writes ee, eeo,
    !> enim, or any native exchange state.
-   subroutine lmto_fixture_adapter_residual(source, fixture, k_points, max_error)
+   module subroutine lmto_fixture_adapter_residual(source, fixture, k_points, max_error)
       type(hamiltonian), intent(in) :: source
       type(lmto_live_hamiltonian_fixture), intent(in) :: fixture
       real(rp), intent(in) :: k_points(:, :)
@@ -1226,4 +1204,837 @@ contains
       c = [a(2)*b(3)-a(3)*b(2), a(3)*b(1)-a(1)*b(3), a(1)*b(2)-a(2)*b(1)]
    end function cross3
 
-end module lr_kl_hessian_mod
+
+   ! --- from lr_kl_contour ---
+
+   !> Construct the counter-clockwise ellipse used by the finite-T bridge.
+   !>
+   !> The ellipse encloses the real-axis spectra of both supplied matrices.
+   !> Its semiminor axis is intentionally allowed to cross Matsubara poles.
+   !> Those poles are returned explicitly so that their residues can be added
+   !> back.  This permits a well-conditioned, broad contour at low temperature
+   !> without silently changing the Fermi operator.
+   module subroutine build_finite_temperature_contour(h_source, h_endpoint, fermi, kT, options, nodes, weights, fermi_poles)
+      complex(rp), intent(in) :: h_source(:, :), h_endpoint(:, :)
+      real(rp), intent(in) :: fermi, kT
+      type(finite_h_contour_options), intent(in) :: options
+      complex(rp), allocatable, intent(out) :: nodes(:), weights(:), fermi_poles(:)
+      real(rp) :: lower, upper, center, semimajor, semiminor, theta, dtheta
+      real(rp) :: desired_height, pole_y, ellipse_value
+      integer :: i, l, max_l, npoint, npole
+
+      if (kT <= 0.0_rp) error stop 'build_finite_temperature_contour: kT must be positive'
+      call validate_options(options)
+      call hermitian_bounds(h_source, h_endpoint, lower, upper)
+      center = 0.5_rp*(lower + upper)
+      semimajor = max(0.5_rp*(upper-lower) + options%contour_margin, options%contour_margin)
+      desired_height = max(options%contour_height_fraction*semimajor, 1.0e-8_rp)
+      if (.not. options%account_fermi_poles) desired_height = min(desired_height, 0.45_rp*pi*kT)
+      semiminor = desired_height
+
+      npoint = options%contour_points
+      allocate(nodes(npoint), weights(npoint))
+      dtheta = 2.0_rp*pi/real(npoint,rp)
+      do i = 1, npoint
+         theta = dtheta*real(i-1,rp)
+         nodes(i) = cmplx(center + semimajor*cos(theta), semiminor*sin(theta), rp)
+         ! z(theta) is counter-clockwise for theta increasing from zero.
+         weights(i) = ((-semimajor*sin(theta) + i_unit*semiminor*cos(theta))*dtheta)/(2.0_rp*pi*i_unit)
+      end do
+
+      if (options%account_fermi_poles) then
+         max_l = max(2, int(ceiling(semiminor/(pi*kT))) + 2)
+         npole = 0
+         do l = -max_l, max_l
+            pole_y = pi*kT*real(2*l+1,rp)
+            ellipse_value = ((fermi-center)/semimajor)**2 + (pole_y/semiminor)**2
+            if (ellipse_value < 1.0_rp-1.0e-12_rp) npole = npole + 1
+         end do
+         allocate(fermi_poles(npole))
+         npole = 0
+         do l = -max_l, max_l
+            pole_y = pi*kT*real(2*l+1,rp)
+            ellipse_value = ((fermi-center)/semimajor)**2 + (pole_y/semiminor)**2
+            if (ellipse_value < 1.0_rp-1.0e-12_rp) then
+               npole = npole + 1
+               fermi_poles(npole) = cmplx(fermi,pole_y,rp)
+            end if
+         end do
+      else
+         allocate(fermi_poles(0))
+      end if
+   end subroutine build_finite_temperature_contour
+
+   !> Construct an occupied-state contour for the T=0 limit.
+   !>
+   !> `occupied_bounds=[emin,emax]` must lie strictly inside the insulating
+   !> gap, with emax below the first unoccupied eigenvalue.  The weight is
+   !> f(z)=1, and no finite-T Fermi poles are present.  The routine does not
+   !> diagonalize either matrix; the bounds are an explicit fixture/driver
+   !> contract for this classical limit.
+   module subroutine build_zero_temperature_occupied_contour(occupied_bounds, options, nodes, weights)
+      real(rp), intent(in) :: occupied_bounds(2)
+      type(finite_h_contour_options), intent(in) :: options
+      complex(rp), allocatable, intent(out) :: nodes(:), weights(:)
+      real(rp) :: center, semimajor, semiminor, theta, dtheta
+      integer :: i, npoint
+
+      call validate_options(options)
+      if (occupied_bounds(2) <= occupied_bounds(1)) then
+         error stop 'build_zero_temperature_occupied_contour: invalid occupied bounds'
+      end if
+      center = 0.5_rp*sum(occupied_bounds)
+      semimajor = 0.5_rp*(occupied_bounds(2)-occupied_bounds(1)) + options%contour_margin
+      semiminor = max(options%contour_height_fraction*semimajor, 1.0e-8_rp)
+      npoint = options%contour_points
+      allocate(nodes(npoint), weights(npoint))
+      dtheta = 2.0_rp*pi/real(npoint,rp)
+      do i = 1, npoint
+         theta = dtheta*real(i-1,rp)
+         nodes(i) = cmplx(center + semimajor*cos(theta), semiminor*sin(theta), rp)
+         weights(i) = ((-semimajor*sin(theta) + i_unit*semiminor*cos(theta))*dtheta)/(2.0_rp*pi*i_unit)
+      end do
+   end subroutine build_zero_temperature_occupied_contour
+
+   !> Stable complex Fermi function on a contour node.
+   module pure complex(rp) function finite_temperature_complex_fermi(z, fermi, kT) result(value)
+      complex(rp), intent(in) :: z
+      real(rp), intent(in) :: fermi, kT
+      complex(rp) :: argument, reduced
+
+      if (kT <= 0.0_rp) error stop 'finite_temperature_complex_fermi: kT must be positive'
+      argument = (z-fermi)/kT
+      if (real(argument,rp) > 40.0_rp) then
+         reduced = exp(-argument)
+         value = reduced/(1.0_rp+reduced)
+      else if (real(argument,rp) < -40.0_rp) then
+         reduced = exp(argument)
+         value = 1.0_rp/(1.0_rp+reduced)
+      else
+         value = 1.0_rp/(exp(argument)+1.0_rp)
+      end if
+   end function finite_temperature_complex_fermi
+
+   !> Fermi function with all poles enclosed by the selected contour removed.
+   !>
+   !> The residue of f at z_l=mu+i*pi*(2l+1)kT is -kT.  Adding kT/(z-z_l)
+   !> cancels that pole.  Cauchy theorem then gives
+   !>
+   !>   integral_C f_reg(z) R(z) dz/(2*pi*i)
+   !>     = integral_C f(z) R(z) dz/(2*pi*i) + kT sum_l R(z_l),
+   !>
+   !> which is precisely the physical-spectrum contour after the Fermi-pole
+   !> residues have been removed.  This regularization is numerically much
+   !> better than integrating a meromorphic weight close to its last enclosed
+   !> pole, while remaining an exact finite-dimensional identity.
+   module pure complex(rp) function finite_temperature_regularized_fermi(z, fermi, kT, fermi_poles) result(value)
+      complex(rp), intent(in) :: z, fermi_poles(:)
+      real(rp), intent(in) :: fermi, kT
+      integer :: i
+      value = finite_temperature_complex_fermi(z,fermi,kT)
+      do i = 1, size(fermi_poles)
+         value = value + kT/(z-fermi_poles(i))
+      end do
+   end function finite_temperature_regularized_fermi
+
+   !> Finite-T direct-resolvent Hessian for one k -> k+q pair.
+   !>
+   !> H_source is H(k), H_endpoint is H(k+q).  T_q has rows at k+q and
+   !> columns at k; T_minus_q has rows at k and columns at k+q.  The returned
+   !> TT term is the explicit ordered-pair average, while contact is
+   !> Tr[f(H_k) C(q,-q;k)].
+   module subroutine force_theorem_finite_q_hessian_from_resolvent(h_source, h_endpoint, fermi, kT, torques_q, torques_minus_q, mixed, &
+      options, hessian, torque_torque, mixed_contact, complete, report)
+      complex(rp), intent(in) :: h_source(:, :), h_endpoint(:, :)
+      real(rp), intent(in) :: fermi, kT
+      complex(rp), intent(in) :: torques_q(:, :, :), torques_minus_q(:, :, :), mixed(:, :, :, :)
+      type(finite_h_contour_options), intent(in) :: options
+      complex(rp), intent(out) :: hessian(:, :), torque_torque(:, :), mixed_contact(:, :), complete(:, :)
+      type(finite_h_contour_report), intent(out), optional :: report
+      complex(rp), allocatable :: nodes(:), weights(:), poles(:)
+
+      call build_finite_temperature_contour(h_source, h_endpoint, fermi, kT, options, nodes, weights, poles)
+      call resolvent_hessian_core(h_source, h_endpoint, fermi, kT, .true., nodes, weights, poles, torques_q, torques_minus_q, mixed, &
+         hessian, torque_torque, mixed_contact, complete, report)
+      deallocate(nodes, weights, poles)
+   end subroutine force_theorem_finite_q_hessian_from_resolvent
+
+   !> Brillouin-zone average of the direct-resolvent Hessian.
+   module subroutine force_theorem_finite_q_hessian_from_resolvent_batch(h_source, h_endpoint, fermi, kT, k_weights, torques_q, &
+      torques_minus_q, mixed, options, hessian, torque_torque, mixed_contact, complete, report)
+      complex(rp), intent(in) :: h_source(:, :, :), h_endpoint(:, :, :)
+      real(rp), intent(in) :: fermi, kT, k_weights(:)
+      complex(rp), intent(in) :: torques_q(:, :, :, :), torques_minus_q(:, :, :, :), mixed(:, :, :, :, :)
+      type(finite_h_contour_options), intent(in) :: options
+      complex(rp), intent(out) :: hessian(:, :), torque_torque(:, :), mixed_contact(:, :), complete(:, :)
+      type(finite_h_contour_report), intent(out), optional :: report
+      complex(rp), allocatable :: h(:, :), tt(:, :), cc(:, :), allh(:, :)
+      type(finite_h_contour_report) :: one_report
+      real(rp) :: weight_sum
+      integer :: ik, nk, nsite
+
+      nk = size(h_source,3); nsite = size(torques_q,3)
+      if (size(h_endpoint,3) /= nk .or. size(k_weights) /= nk .or. size(torques_q,4) /= nk .or. &
+          size(torques_minus_q,4) /= nk .or. size(mixed,5) /= nk) error stop 'resolvent batch: k dimension mismatch'
+      weight_sum = sum(k_weights)
+      if (weight_sum <= tiny(1.0_rp)) error stop 'resolvent batch: zero k-weight sum'
+      allocate(h(nsite,nsite), tt(nsite,nsite), cc(nsite,nsite), allh(nsite,nsite))
+      hessian = 0.0_rp; torque_torque = 0.0_rp; mixed_contact = 0.0_rp; complete = 0.0_rp
+      if (present(report)) report = finite_h_contour_report()
+      do ik = 1, nk
+         call force_theorem_finite_q_hessian_from_resolvent(h_source(:,:,ik), h_endpoint(:,:,ik), fermi, kT, torques_q(:,:,:,ik), &
+            torques_minus_q(:,:,:,ik), mixed(:,:,:,:,ik), options, h, tt, cc, allh, one_report)
+         hessian = hessian + k_weights(ik)*h/weight_sum
+         torque_torque = torque_torque + k_weights(ik)*tt/weight_sum
+         mixed_contact = mixed_contact + k_weights(ik)*cc/weight_sum
+         complete = complete + k_weights(ik)*allh/weight_sum
+         if (present(report)) then
+            report%contour_points = report%contour_points + one_report%contour_points
+            report%fermi_poles = report%fermi_poles + one_report%fermi_poles
+            report%solve_seconds = report%solve_seconds + one_report%solve_seconds
+            report%contour_seconds = report%contour_seconds + one_report%contour_seconds
+            report%pole_seconds = report%pole_seconds + one_report%pole_seconds
+         end if
+      end do
+      deallocate(h, tt, cc, allh)
+   end subroutine force_theorem_finite_q_hessian_from_resolvent_batch
+
+   !> Zero-temperature occupied-contour version for a gapped fixture.
+   module subroutine force_theorem_finite_q_hessian_from_zero_temperature_contour(h_source, h_endpoint, occupied_bounds, torques_q, &
+      torques_minus_q, mixed, options, hessian, torque_torque, mixed_contact, complete, report)
+      complex(rp), intent(in) :: h_source(:, :), h_endpoint(:, :)
+      real(rp), intent(in) :: occupied_bounds(2)
+      complex(rp), intent(in) :: torques_q(:, :, :), torques_minus_q(:, :, :), mixed(:, :, :, :)
+      type(finite_h_contour_options), intent(in) :: options
+      complex(rp), intent(out) :: hessian(:, :), torque_torque(:, :), mixed_contact(:, :), complete(:, :)
+      type(finite_h_contour_report), intent(out), optional :: report
+      complex(rp), allocatable :: nodes(:), weights(:), poles(:)
+
+      call build_zero_temperature_occupied_contour(occupied_bounds, options, nodes, weights)
+      allocate(poles(0))
+      call resolvent_hessian_core(h_source, h_endpoint, 0.0_rp, 0.0_rp, .false., nodes, weights, poles, torques_q, torques_minus_q, mixed, &
+         hessian, torque_torque, mixed_contact, complete, report)
+      deallocate(nodes, weights, poles)
+   end subroutine force_theorem_finite_q_hessian_from_zero_temperature_contour
+
+   ! The common contraction is intentionally expressed in orbital matrix space
+   ! rather than in an eigenbasis.  Each energy node performs direct LU
+   ! factorization of z I-H and solves for the vertex/contact right-hand sides.
+   subroutine resolvent_hessian_core(h_source, h_endpoint, fermi, kT, finite_temperature, nodes, weights, poles, torques_q, &
+      torques_minus_q, mixed, hessian, torque_torque, mixed_contact, complete, report)
+      complex(rp), intent(in) :: h_source(:, :), h_endpoint(:, :), nodes(:), weights(:), poles(:)
+      real(rp), intent(in) :: fermi, kT
+      logical, intent(in) :: finite_temperature
+      complex(rp), intent(in) :: torques_q(:, :, :), torques_minus_q(:, :, :), mixed(:, :, :, :)
+      complex(rp), intent(out) :: hessian(:, :), torque_torque(:, :), mixed_contact(:, :), complete(:, :)
+      type(finite_h_contour_report), intent(out), optional :: report
+      complex(rp), allocatable :: a0(:, :), a1(:, :), rhs0(:, :), rhs1(:, :)
+      complex(rp) :: coefficient, trace_first, trace_second, trace_contact
+      complex(rp), allocatable :: contour_tt(:,:), contour_contact(:,:), pole_tt(:,:), pole_contact(:,:)
+      integer, allocatable :: piv0(:), piv1(:)
+      integer :: nmat, nsite, nnode, npole, a, b, info, clock_start, clock_stop, clock_rate
+      integer :: contour_start, contour_stop, pole_start, pole_stop
+      real(rp) :: solve_seconds, contour_seconds, pole_seconds
+
+      nmat = size(h_source,1); nsite = size(torques_q,3); nnode = size(nodes); npole = size(poles)
+      if (size(h_source,2) /= nmat .or. any(shape(h_endpoint) /= [nmat,nmat]) .or. size(weights) /= nnode .or. &
+          size(torques_q,1) /= nmat .or. size(torques_q,2) /= nmat .or. size(torques_minus_q,1) /= nmat .or. &
+          size(torques_minus_q,2) /= nmat .or. size(torques_q,3) /= nsite .or. size(torques_minus_q,3) /= nsite .or. &
+          size(mixed,1) /= nmat .or. size(mixed,2) /= nmat .or. size(mixed,3) /= nsite .or. size(mixed,4) /= nsite .or. &
+          size(hessian,1) /= nsite .or. size(hessian,2) /= nsite .or. size(torque_torque,1) /= nsite .or. &
+          size(mixed_contact,1) /= nsite .or. size(mixed_contact,2) /= nsite .or. size(complete,1) /= nsite .or. &
+          size(complete,2) /= nsite) error stop 'resolvent Hessian: shape mismatch'
+
+      allocate(a0(nmat,nmat), a1(nmat,nmat), rhs0(nmat,nmat), rhs1(nmat,nmat), piv0(nmat), piv1(nmat), &
+         contour_tt(nsite,nsite), contour_contact(nsite,nsite), pole_tt(nsite,nsite), pole_contact(nsite,nsite))
+      contour_tt = 0.0_rp; contour_contact = 0.0_rp; pole_tt = 0.0_rp; pole_contact = 0.0_rp
+      solve_seconds = 0.0_rp; contour_seconds = 0.0_rp; pole_seconds = 0.0_rp
+      call system_clock(count_rate=clock_rate)
+
+      call system_clock(contour_start)
+      do nnode = 1, size(nodes)
+         a0 = -h_source; a1 = -h_endpoint
+         do a = 1, nmat
+            a0(a,a) = a0(a,a) + nodes(nnode)
+            a1(a,a) = a1(a,a) + nodes(nnode)
+         end do
+         call system_clock(clock_start)
+         call zgetrf(nmat, nmat, a0, nmat, piv0, info)
+         if (info /= 0) error stop 'resolvent Hessian: source LU factorization failed'
+         call zgetrf(nmat, nmat, a1, nmat, piv1, info)
+         if (info /= 0) error stop 'resolvent Hessian: endpoint LU factorization failed'
+         call system_clock(clock_stop)
+         solve_seconds = solve_seconds + elapsed_seconds(clock_start,clock_stop,clock_rate)
+         coefficient = weights(nnode)
+         if (finite_temperature) coefficient = coefficient*finite_temperature_regularized_fermi(nodes(nnode),fermi,kT,poles)
+         call accumulate_at_factorized_node(a0,a1,piv0,piv1,coefficient,contour_tt,contour_contact)
+      end do
+      call system_clock(contour_stop)
+      contour_seconds = elapsed_seconds(contour_start,contour_stop,clock_rate)
+
+      ! The regularized contour integrand has no enclosed Fermi poles, but the
+      ! physical-spectrum contour is recovered by adding their residues.  The
+      ! explicit solve here is part of the exact finite-T identity, not a
+      ! quadrature correction or a spectral reconstruction.
+      call system_clock(pole_start)
+      do nnode = 1, size(poles)
+         a0 = -h_source; a1 = -h_endpoint
+         do a = 1, nmat
+            a0(a,a) = a0(a,a) + poles(nnode)
+            a1(a,a) = a1(a,a) + poles(nnode)
+         end do
+         call system_clock(clock_start)
+         call zgetrf(nmat, nmat, a0, nmat, piv0, info)
+         if (info /= 0) error stop 'resolvent Hessian: source pole LU factorization failed'
+         call zgetrf(nmat, nmat, a1, nmat, piv1, info)
+         if (info /= 0) error stop 'resolvent Hessian: endpoint pole LU factorization failed'
+         call system_clock(clock_stop)
+         solve_seconds = solve_seconds + elapsed_seconds(clock_start,clock_stop,clock_rate)
+         call accumulate_at_factorized_node(a0,a1,piv0,piv1,cmplx(kT,0.0_rp,rp),pole_tt,pole_contact)
+      end do
+      call system_clock(pole_stop)
+      pole_seconds = elapsed_seconds(pole_start,pole_stop,clock_rate)
+
+      torque_torque = contour_tt + pole_tt
+      mixed_contact = contour_contact + pole_contact
+      hessian = torque_torque + mixed_contact
+      complete = hessian
+      if (present(report)) then
+         report%contour_points = size(nodes)
+         report%fermi_poles = size(poles)
+         report%solve_seconds = solve_seconds
+         report%contour_seconds = contour_seconds
+         report%pole_seconds = pole_seconds
+      end if
+      deallocate(a0,a1,rhs0,rhs1,piv0,piv1,contour_tt,contour_contact,pole_tt,pole_contact)
+
+   contains
+
+      subroutine accumulate_at_factorized_node(lu0,lu1,ip0,ip1,weight,tt_sum,contact_sum)
+         complex(rp), intent(in) :: lu0(:, :), lu1(:, :), weight
+         integer, intent(in) :: ip0(:), ip1(:)
+         complex(rp), intent(inout) :: tt_sum(:,:), contact_sum(:,:)
+         integer :: ia, ib, solve_start, solve_stop, local_info
+
+         do ia = 1, nsite
+            do ib = 1, nsite
+               rhs0 = torques_minus_q(:,:,ib)
+               call system_clock(solve_start)
+               call zgetrs('N',nmat,nmat,lu0,nmat,ip0,rhs0,nmat,local_info)
+               if (local_info /= 0) error stop 'resolvent Hessian: source vertex solve failed'
+               rhs1 = matmul(torques_q(:,:,ia),rhs0)
+               call zgetrs('N',nmat,nmat,lu1,nmat,ip1,rhs1,nmat,local_info)
+               if (local_info /= 0) error stop 'resolvent Hessian: endpoint vertex solve failed'
+               trace_first = trace_matrix(rhs1)
+
+               rhs0 = torques_minus_q(:,:,ia)
+               call zgetrs('N',nmat,nmat,lu0,nmat,ip0,rhs0,nmat,local_info)
+               if (local_info /= 0) error stop 'resolvent Hessian: reverse source vertex solve failed'
+               rhs1 = matmul(torques_q(:,:,ib),rhs0)
+               call zgetrs('N',nmat,nmat,lu1,nmat,ip1,rhs1,nmat,local_info)
+               if (local_info /= 0) error stop 'resolvent Hessian: reverse endpoint vertex solve failed'
+               trace_second = trace_matrix(rhs1)
+
+               rhs0 = mixed(:,:,ia,ib)
+               call zgetrs('N',nmat,nmat,lu0,nmat,ip0,rhs0,nmat,local_info)
+               if (local_info /= 0) error stop 'resolvent Hessian: contact solve failed'
+               trace_contact = trace_matrix(rhs0)
+               tt_sum(ia,ib) = tt_sum(ia,ib) + weight*0.5_rp*(trace_first+trace_second)
+               contact_sum(ia,ib) = contact_sum(ia,ib) + weight*trace_contact
+               call system_clock(solve_stop)
+               solve_seconds = solve_seconds + elapsed_seconds(solve_start,solve_stop,clock_rate)
+            end do
+         end do
+      end subroutine accumulate_at_factorized_node
+   end subroutine resolvent_hessian_core
+
+   subroutine validate_options(options)
+      type(finite_h_contour_options), intent(in) :: options
+      if (options%contour_points < 8) error stop 'finite-H contour: contour_points must be at least 8'
+      if (trim(options%contour_shape) /= 'ellipse') error stop 'finite-H contour: only contour_shape=ellipse is implemented'
+      if (options%contour_margin <= 0.0_rp) error stop 'finite-H contour: contour_margin must be positive'
+      if (options%contour_height_fraction <= 0.0_rp) error stop 'finite-H contour: height fraction must be positive'
+   end subroutine validate_options
+
+   subroutine hermitian_bounds(h_source, h_endpoint, lower, upper)
+      complex(rp), intent(in) :: h_source(:, :), h_endpoint(:, :)
+      real(rp), intent(out) :: lower, upper
+      real(rp) :: lo0, hi0, lo1, hi1
+      call matrix_gershgorin_bounds(h_source,lo0,hi0)
+      call matrix_gershgorin_bounds(h_endpoint,lo1,hi1)
+      lower = min(lo0,lo1); upper = max(hi0,hi1)
+   end subroutine hermitian_bounds
+
+   subroutine matrix_gershgorin_bounds(matrix, lower, upper)
+      complex(rp), intent(in) :: matrix(:, :)
+      real(rp), intent(out) :: lower, upper
+      real(rp) :: radius
+      integer :: i
+      lower = huge(1.0_rp); upper = -huge(1.0_rp)
+      do i = 1, size(matrix,1)
+         radius = sum(abs(matrix(i,:))) - abs(matrix(i,i))
+         lower = min(lower,real(matrix(i,i),rp)-radius)
+         upper = max(upper,real(matrix(i,i),rp)+radius)
+      end do
+   end subroutine matrix_gershgorin_bounds
+
+   pure function trace_matrix(matrix) result(value)
+      complex(rp), intent(in) :: matrix(:, :)
+      complex(rp) :: value
+      integer :: i
+      value = 0.0_rp
+      do i = 1, min(size(matrix,1),size(matrix,2))
+         value = value + matrix(i,i)
+      end do
+   end function trace_matrix
+
+   pure function elapsed_seconds(start_count, end_count, rate) result(seconds)
+      integer, intent(in) :: start_count, end_count, rate
+      real(rp) :: seconds
+      if (rate > 0) then
+         seconds = real(end_count-start_count,rp)/real(rate,rp)
+      else
+         seconds = 0.0_rp
+      end if
+   end function elapsed_seconds
+
+
+   ! --- from lr_rotation_response ---
+
+   !> Freeze the accepted second-order state and pretransform both endpoints'
+   !> torque vertices once.  The band-pair response then preserves Pi_AB and
+   !> Pi_BA independently at every requested frequency.
+   module subroutine prepare_rotation_response(fixture, recip, q, state)
+      type(lmto_live_hamiltonian_fixture), target, intent(in) :: fixture
+      type(reciprocal), target, intent(inout) :: recip
+      real(rp), intent(in) :: q(3)
+      type(rotation_state), intent(inout) :: state
+      real(rp), allocatable :: points(:, :), folded(:, :), axes(:, :)
+      complex(rp), allocatable :: vectors(:, :, :), endpoint_vectors(:, :, :), vertex(:, :), mixed(:, :), band(:, :)
+      integer :: ik, ia, ib, n, m, isite_a, isite_b, axis_a, axis_b, norb_site, i0, info
+      real(rp) :: f, spin_z, norm_m, weight
+
+      call state%clear()
+      if (fixture%nsite < 1 .or. fixture%norb < 1 .or. .not. fixture%hoh .or. .not. fixture%include_enu) &
+         error stop 'STATE_PROVENANCE_OPEN: response requires accepted H=B-QB+E_nu fixture'
+      if (trim(recip%reciprocal_mode) /= 'ham_only' .or. trim(recip%kspace_ham_order) /= 'second') &
+         error stop 'STATE_PROVENANCE_OPEN: response requires second-order ham_only reciprocal state'
+      if (recip%include_so) error stop 'STATE_PROVENANCE_OPEN: native rotation response currently requires SOC off'
+      if (.not. allocated(recip%k_points) .or. .not. allocated(recip%k_weights)) &
+         error stop 'STATE_PROVENANCE_OPEN: reciprocal mesh is unavailable'
+      if (fixture%nsite /= recip%lattice%nrec) error stop 'STATE_PROVENANCE_OPEN: fixture/state site counts differ'
+      call recip%require_replicated_k_workset('prepare_rotation_response')
+
+      state%fixture => fixture
+      state%reciprocal_state => recip
+      state%q = q
+      state%nsite = fixture%nsite
+      state%ncoord = 2*fixture%nsite
+      state%nmat = 2*fixture%norb*fixture%nsite
+      state%nk = size(recip%k_points,2)
+      state%nbands = state%nmat
+      state%fermi = recip%fermi_level
+      state%kT = max(recip%temperature*kB_ry_per_k, 1.0e-10_rp)
+      state%weight_sum = sum(recip%k_weights)
+      if (state%nk < 1 .or. size(recip%k_weights) /= state%nk .or. state%weight_sum <= tiny(1.0_rp)) &
+         error stop 'STATE_PROVENANCE_OPEN: invalid reciprocal k weights'
+      if (abs(state%weight_sum-1.0_rp) > 1.0e-8_rp) &
+         error stop 'STATE_PROVENANCE_OPEN: reciprocal k weights are not normalized'
+
+      allocate(state%values(state%nbands,state%nk), state%endpoint_values(state%nbands,state%nk), &
+         state%weights(state%nk), state%occupations(state%nbands,state%nk), &
+         state%endpoint_occupations(state%nbands,state%nk), &
+         state%torque_band(state%nbands,state%nbands,state%ncoord,state%nk), &
+         state%partner_band(state%nbands,state%nbands,state%ncoord,state%nk), &
+         state%contact(state%ncoord,state%ncoord))
+      state%weights = recip%k_weights/state%weight_sum
+
+      ! The normal endpoint comes from the accepted SCF eigensystem whenever
+      ! it is present; the arbitrary-point API supplies every k+q endpoint.
+      if (allocated(recip%eigenvalues) .and. allocated(recip%eigenvectors)) then
+         if (all(shape(recip%eigenvalues) == [state%nbands,state%nk]) .and. &
+             all(shape(recip%eigenvectors) == [state%nmat,state%nbands,state%nk])) then
+            state%values = recip%eigenvalues
+            allocate(vectors(state%nmat,state%nbands,state%nk))
+            vectors = recip%eigenvectors
+         else
+            call recip%calculate_eigenpairs_at_kpoints(recip%k_points,state%values,vectors)
+         end if
+      else
+         call recip%calculate_eigenpairs_at_kpoints(recip%k_points,state%values,vectors)
+      end if
+      if (maxval(abs(q)) <= q_tolerance) then
+         state%endpoint_values = state%values
+         allocate(endpoint_vectors(state%nmat,state%nbands,state%nk))
+         endpoint_vectors = vectors
+      else
+         points = recip%k_points + spread(q,2,state%nk)
+         call recip%calculate_eigenpairs_at_kpoints(points,state%endpoint_values,endpoint_vectors,folded)
+      end if
+
+      do ik = 1, state%nk
+         do n = 1, state%nbands
+            state%occupations(n,ik) = finite_temperature_occupation(state%values(n,ik),state%fermi,state%kT)
+            state%endpoint_occupations(n,ik) = finite_temperature_occupation(state%endpoint_values(n,ik),state%fermi,state%kT)
+         end do
+      end do
+      call rotation_axes(fixture%moments,axes)
+      state%contact = cmplx(0.0_rp,0.0_rp,rp)
+      state%magnetization = 0.0_rp
+      state%electron_count = 0.0_rp
+      norb_site = fixture%norb
+      allocate(vertex(state%nmat,state%nmat),mixed(state%nmat,state%nmat),band(state%nbands,state%nbands))
+
+      do ik = 1, state%nk
+         weight = state%weights(ik)
+         do n = 1, state%nbands
+            f = state%occupations(n,ik)
+            state%electron_count = state%electron_count + weight*f
+            spin_z = 0.0_rp
+            do isite_a = 1, state%nsite
+               i0 = (isite_a-1)*2*norb_site
+               spin_z = spin_z + sum(abs(vectors(i0+1:i0+norb_site,n,ik))**2) - &
+                  sum(abs(vectors(i0+norb_site+1:i0+2*norb_site,n,ik))**2)
+            end do
+            state%magnetization = state%magnetization + weight*f*spin_z
+         end do
+
+         do ia = 1, state%ncoord
+            isite_a = (ia+1)/2
+            axis_a = 1+mod(ia-1,2)
+            call assemble_lmto_finite_q_torque(fixture,recip%k_points(:,ik),q,isite_a,axes(:,2*(isite_a-1)+axis_a),vertex)
+            band = matmul(conjg(transpose(endpoint_vectors(:,:,ik))),matmul(vertex,vectors(:,:,ik)))
+            state%torque_band(:,:,ia,ik) = band
+            call assemble_lmto_finite_q_torque(fixture,recip%k_points(:,ik)+q,-q,isite_a, &
+               axes(:,2*(isite_a-1)+axis_a),vertex)
+            band = matmul(conjg(transpose(vectors(:,:,ik))),matmul(vertex,endpoint_vectors(:,:,ik)))
+            state%partner_band(:,:,ia,ik) = band
+         end do
+
+         do ia = 1, state%ncoord
+            isite_a = (ia+1)/2
+            axis_a = 1+mod(ia-1,2)
+            do ib = 1, state%ncoord
+               isite_b = (ib+1)/2
+               axis_b = 1+mod(ib-1,2)
+               call assemble_lmto_finite_q_mixed_derivative(fixture,recip%k_points(:,ik),q,isite_a, &
+                  axes(:,2*(isite_a-1)+axis_a),isite_b,axes(:,2*(isite_b-1)+axis_b),mixed)
+               band = matmul(conjg(transpose(vectors(:,:,ik))),matmul(mixed,vectors(:,:,ik)))
+               do n = 1, state%nbands
+                  state%contact(ia,ib) = state%contact(ia,ib) + weight*state%occupations(n,ik)*band(n,n)
+               end do
+            end do
+         end do
+      end do
+      call global_spin_berry(vectors,state%occupations,state%weights,state%nsite,norb_site,state%berry)
+      state%berry_residual=abs(state%berry-0.5_rp*state%magnetization)/ &
+         max(abs(state%berry),abs(state%magnetization),1.0e-12_rp)
+      state%electron_residual = state%electron_count-recip%total_electrons
+      state%prepared = .true.
+      deallocate(vectors,endpoint_vectors,axes,vertex,mixed,band)
+      if (allocated(points)) deallocate(points)
+      if (allocated(folded)) deallocate(folded)
+   end subroutine prepare_rotation_response
+
+   !> Evaluate the literal unsymmetrized retarded band sum.  At omega=eta=0,
+   !> exact_static selects the finite-temperature divided-difference branch.
+   module subroutine evaluate_rotation_response(request,result)
+      type(rotation_request), intent(in) :: request
+      type(rotation_result), intent(out) :: result
+      type(rotation_state), pointer :: state
+      complex(rp), allocatable :: unitary(:, :)
+      complex(rp) :: denominator, product
+      real(rp) :: fn, fm, divided, energy_difference, weight
+      integer :: ia, ib, ik, n, m, info, ncoord
+
+      if (.not. associated(request%state)) error stop 'rotation response request has no prepared state'
+      state => request%state
+      if (.not. state%prepared) error stop 'rotation response state is not prepared'
+      if (request%exact_static) then
+         if (abs(request%omega) > q_tolerance .or. abs(request%eta) > q_tolerance) &
+            error stop 'exact static response requires omega=eta=0'
+      else if (request%eta <= 0.0_rp .or. .not.ieee_is_finite(request%eta)) then
+         error stop 'retarded rotation response requires finite positive eta'
+      end if
+      ncoord = state%ncoord
+      result%q = state%q
+      result%omega = request%omega
+      result%eta = request%eta
+      result%berry = state%berry
+      result%magnetization = state%magnetization
+      result%berry_residual = state%berry_residual
+      result%electron_count = state%electron_count
+      result%electron_residual = state%electron_residual
+      allocate(result%bubble(ncoord,ncoord),result%contact(ncoord,ncoord), &
+         result%kernel(ncoord,ncoord),result%kernel_pm(ncoord,ncoord),unitary(ncoord,ncoord))
+      result%bubble = cmplx(0.0_rp,0.0_rp,rp)
+      do ik = 1, state%nk
+         weight = state%weights(ik)
+         do ia = 1, ncoord
+            do ib = 1, ncoord
+               do n = 1, state%nbands
+                  fn = state%occupations(n,ik)
+                  do m = 1, state%nbands
+                     fm = state%endpoint_occupations(m,ik)
+                     product = state%torque_band(m,n,ia,ik)*state%partner_band(n,m,ib,ik)
+                     energy_difference = state%values(n,ik)-state%endpoint_values(m,ik)
+                     if (request%exact_static) then
+                        divided = fermi_divided_difference(state%values(n,ik),state%endpoint_values(m,ik), &
+                           state%fermi,state%kT)
+                        result%bubble(ia,ib) = result%bubble(ia,ib)+weight*divided*product
+                     else
+                        denominator = cmplx(request%omega+energy_difference,request%eta,rp)
+                        result%bubble(ia,ib) = result%bubble(ia,ib)+weight*(fn-fm)*product/denominator
+                     end if
+                  end do
+               end do
+            end do
+         end do
+      end do
+      result%contact = state%contact
+      result%kernel = result%contact+result%bubble
+      call rotation_circular_unitary(state%nsite,unitary)
+      result%kernel_pm = matmul(unitary,matmul(result%kernel,conjg(transpose(unitary))))
+      if (request%want_inverse) then
+         ! The exact q=0 static Goldstone kernel is singular by construction.
+         if (request%exact_static .and. maxval(abs(state%q)) <= q_tolerance) then
+            result%inverse_available = .false.
+         else
+            allocate(result%inverse_kernel(ncoord,ncoord),result%inverse_kernel_pm(ncoord,ncoord))
+            result%inverse_kernel = result%kernel
+            call invert_complex_matrix(result%inverse_kernel,info)
+            if (info == 0) then
+               result%inverse_available = .true.
+               result%inverse_kernel_pm = matmul(unitary, &
+                  matmul(result%inverse_kernel,conjg(transpose(unitary))))
+            else
+               deallocate(result%inverse_kernel,result%inverse_kernel_pm)
+               result%inverse_available = .false.
+            end if
+         end if
+      end if
+      deallocate(unitary)
+   end subroutine evaluate_rotation_response
+
+   !> Independent literal band-loop oracle.  It assembles orbital-space
+   !> vertices and evaluates <m,k+q|T_A|n,k><n,k|T_B|m,k+q> directly; it does
+   !> not call or consume the production accumulator or its transformed bands.
+   module subroutine evaluate_rotation_response_oracle(fixture,recip,q,omega,eta,bubble,contact,kernel)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fixture
+      type(reciprocal), intent(inout) :: recip
+      real(rp), intent(in) :: q(3),omega,eta
+      complex(rp), intent(out) :: bubble(:, :),contact(:, :),kernel(:, :)
+      real(rp), allocatable :: values(:, :),endpoint_values(:, :),points(:, :),axes(:, :)
+      complex(rp), allocatable :: vectors(:, :, :),endpoint_vectors(:, :, :),vq(:, :, :),vm(:, :, :),mixed(:, :)
+      complex(rp) :: amp_a,amp_b,amp_c,denominator
+      real(rp) :: weight_sum,weight,fermi,kT,fn,fm
+      integer :: nk,nband,nmat,ncoord,nsite,ik,ia,ib,n,m,site_a,site_b,axis_a,axis_b
+      integer :: norb_site,i0
+
+      if (eta<=0.0_rp) error stop 'dynamic band oracle requires positive eta'
+      if (.not.fixture%hoh .or. .not.fixture%include_enu .or. trim(recip%kspace_ham_order)/='second' .or. &
+          trim(recip%reciprocal_mode)/='ham_only' .or. recip%include_so) &
+         error stop 'STATE_PROVENANCE_OPEN: direct oracle requires second-order ham_only state with SOC off'
+      call recip%require_replicated_k_workset('evaluate_rotation_response_oracle')
+      nk=size(recip%k_points,2); nsite=fixture%nsite; ncoord=2*nsite; nmat=2*fixture%norb*nsite; nband=nmat
+      if (any(shape(bubble)/=[ncoord,ncoord]) .or. any(shape(contact)/=[ncoord,ncoord]) .or. &
+          any(shape(kernel)/=[ncoord,ncoord])) error stop 'evaluate_rotation_response_oracle: shape mismatch'
+      fermi=recip%fermi_level; kT=max(recip%temperature*kB_ry_per_k,1.0e-10_rp); weight_sum=sum(recip%k_weights)
+      allocate(values(nband,nk),endpoint_values(nband,nk),vectors(nmat,nband,nk), &
+         endpoint_vectors(nmat,nband,nk),axes(3,ncoord),vq(nmat,nmat,ncoord),vm(nmat,nmat,ncoord),mixed(nmat,nmat))
+      if (allocated(recip%eigenvalues) .and. allocated(recip%eigenvectors)) then
+         if (all(shape(recip%eigenvalues)==[nband,nk]) .and. all(shape(recip%eigenvectors)==[nmat,nband,nk])) then
+            values=recip%eigenvalues; vectors=recip%eigenvectors
+         else
+            call recip%calculate_eigenpairs_at_kpoints(recip%k_points,values,vectors)
+         end if
+      else
+         call recip%calculate_eigenpairs_at_kpoints(recip%k_points,values,vectors)
+      end if
+      if (maxval(abs(q))<=q_tolerance) then
+         endpoint_values=values; endpoint_vectors=vectors
+      else
+         points=recip%k_points+spread(q,2,nk)
+         call recip%calculate_eigenpairs_at_kpoints(points,endpoint_values,endpoint_vectors)
+         deallocate(points)
+      end if
+      call rotation_axes(fixture%moments,axes)
+      bubble=cmplx(0.0_rp,0.0_rp,rp); contact=cmplx(0.0_rp,0.0_rp,rp)
+      norb_site=fixture%norb
+      do ik=1,nk
+         weight=recip%k_weights(ik)/weight_sum
+         do ia=1,ncoord
+            site_a=(ia+1)/2; axis_a=1+mod(ia-1,2)
+            call assemble_lmto_finite_q_torque(fixture,recip%k_points(:,ik),q,site_a, &
+               axes(:,2*(site_a-1)+axis_a),vq(:,:,ia))
+            call assemble_lmto_finite_q_torque(fixture,recip%k_points(:,ik)+q,-q,site_a, &
+               axes(:,2*(site_a-1)+axis_a),vm(:,:,ia))
+         end do
+         do ia=1,ncoord
+            site_a=(ia+1)/2; axis_a=1+mod(ia-1,2)
+            do ib=1,ncoord
+               site_b=(ib+1)/2; axis_b=1+mod(ib-1,2)
+               call assemble_lmto_finite_q_mixed_derivative(fixture,recip%k_points(:,ik),q,site_a, &
+                  axes(:,2*(site_a-1)+axis_a),site_b,axes(:,2*(site_b-1)+axis_b),mixed)
+               do n=1,nband
+                  fn=finite_temperature_occupation(values(n,ik),fermi,kT)
+                  amp_c=dot_product(vectors(:,n,ik),matmul(mixed,vectors(:,n,ik)))
+                  contact(ia,ib)=contact(ia,ib)+weight*fn*amp_c
+                  do m=1,nband
+                     fm=finite_temperature_occupation(endpoint_values(m,ik),fermi,kT)
+                     denominator=cmplx(omega+values(n,ik)-endpoint_values(m,ik),eta,rp)
+                     amp_a=dot_product(endpoint_vectors(:,m,ik),matmul(vq(:,:,ia),vectors(:,n,ik)))
+                     amp_b=dot_product(vectors(:,n,ik),matmul(vm(:,:,ib),endpoint_vectors(:,m,ik)))
+                     bubble(ia,ib)=bubble(ia,ib)+weight*(fn-fm)*amp_a*amp_b/denominator
+                  end do
+               end do
+            end do
+         end do
+      end do
+      kernel=contact+bubble
+      deallocate(values,endpoint_values,vectors,endpoint_vectors,axes,vq,vm,mixed)
+   end subroutine evaluate_rotation_response_oracle
+
+   !> The stored torque orientation makes the exact static force-theorem
+   !> Hessian the Cartesian-index symmetric part at the same q:
+   !> H_AB(q)=0.5*(K_AB^R(q,0)+K_BA^R(q,0)).  The q/-q covariance is a
+   !> separate identity; inserting a conjugation here retains a spurious
+   !> antisymmetric-in-frequency component at finite q.
+   module pure subroutine reduce_static_rotation_kernel(kernel_q,reduced)
+      complex(rp), intent(in) :: kernel_q(:, :)
+      complex(rp), intent(out) :: reduced(:, :)
+      integer :: a,b,n
+      n = size(kernel_q,1)
+      if (size(kernel_q,2)/=n .or. any(shape(reduced)/=[n,n])) &
+         error stop 'reduce_static_rotation_kernel: shape mismatch'
+      do a = 1,n
+         do b = 1,n
+            reduced(a,b)=0.5_rp*(kernel_q(a,b)+kernel_q(b,a))
+         end do
+      end do
+   end subroutine reduce_static_rotation_kernel
+
+   !> Evaluate -i Tr rho [Gx,Gy] directly in the accepted band basis.
+   !> The spin generators are global spin-1/2 generators replicated over
+   !> sites/orbitals; the result should independently equal M_band/2.
+   subroutine global_spin_berry(vectors,occupations,weights,nsite,norb,berry)
+      complex(rp), intent(in) :: vectors(:, :, :)
+      real(rp), intent(in) :: occupations(:, :),weights(:)
+      integer, intent(in) :: nsite,norb
+      real(rp), intent(out) :: berry
+      complex(rp), allocatable :: gx(:, :),gy(:, :),commutator(:, :)
+      complex(rp) :: trace_value
+      integer :: nmat,nband,nk,site,io,up,dn,ik,n
+      nmat=2*nsite*norb; nband=size(vectors,2); nk=size(vectors,3)
+      if (any(shape(vectors)/=[nmat,nband,nk]) .or. any(shape(occupations)/=[nband,nk]) .or. size(weights)/=nk) &
+         error stop 'global_spin_berry: shape mismatch'
+      allocate(gx(nmat,nmat),gy(nmat,nmat),commutator(nmat,nmat))
+      gx=cmplx(0.0_rp,0.0_rp,rp); gy=gx
+      do site=1,nsite
+         do io=1,norb
+            up=(site-1)*2*norb+io; dn=(site-1)*2*norb+norb+io
+            gx(up,dn)=0.5_rp; gx(dn,up)=0.5_rp
+            gy(up,dn)=-0.5_rp*i_unit; gy(dn,up)=0.5_rp*i_unit
+         end do
+      end do
+      commutator=matmul(gx,gy)-matmul(gy,gx)
+      berry=0.0_rp
+      do ik=1,nk
+         do n=1,nband
+            trace_value=dot_product(vectors(:,n,ik),matmul(commutator,vectors(:,n,ik)))
+            berry=berry+weights(ik)*occupations(n,ik)*real(-i_unit*trace_value,rp)
+         end do
+      end do
+      deallocate(gx,gy,commutator)
+   end subroutine global_spin_berry
+
+   !> Construct local transverse rotation axes from each accepted unit moment.
+   module pure subroutine rotation_axes(moments,axes)
+      real(rp), intent(in) :: moments(:, :)
+      real(rp), allocatable, intent(out) :: axes(:, :)
+      real(rp) :: m(3), reference(3), e1(3), e2(3), norm_m, dot_m
+      integer :: site
+      if (size(moments,1)/=3) error stop 'rotation_axes: moment array must have three Cartesian rows'
+      allocate(axes(3,2*size(moments,2)))
+      do site = 1,size(moments,2)
+         m = moments(:,site)
+         norm_m = sqrt(dot_product(m,m))
+         if (norm_m<=tiny(1.0_rp)) error stop 'rotation_axes: zero site moment'
+         m = m/norm_m
+         if (abs(m(1))<0.8_rp) then
+            reference=[1.0_rp,0.0_rp,0.0_rp]
+         else
+            reference=[0.0_rp,1.0_rp,0.0_rp]
+         end if
+         dot_m=dot_product(reference,m)
+         e1=reference-dot_m*m
+         e1=e1/sqrt(dot_product(e1,e1))
+         e2=[m(2)*e1(3)-m(3)*e1(2),m(3)*e1(1)-m(1)*e1(3),m(1)*e1(2)-m(2)*e1(1)]
+         axes(:,2*site-1)=e1
+         axes(:,2*site)=e2
+      end do
+   end subroutine rotation_axes
+
+   !> theta_+=(theta_x-i theta_y)/sqrt(2), theta_-=(theta_x+i theta_y)/sqrt(2).
+   module pure subroutine rotation_circular_unitary(nsite,unitary)
+      integer, intent(in) :: nsite
+      complex(rp), intent(out) :: unitary(:, :)
+      complex(rp), parameter :: inv_sqrt2=cmplx(1.0_rp/sqrt(2.0_rp),0.0_rp,rp)
+      integer :: site, i0
+      if (any(shape(unitary)/=[2*nsite,2*nsite])) error stop 'rotation_circular_unitary: shape mismatch'
+      unitary=cmplx(0.0_rp,0.0_rp,rp)
+      do site=1,nsite
+         i0=2*(site-1)
+         unitary(i0+1,i0+1)=inv_sqrt2
+         unitary(i0+1,i0+2)=-i_unit*inv_sqrt2
+         unitary(i0+2,i0+1)=inv_sqrt2
+         unitary(i0+2,i0+2)= i_unit*inv_sqrt2
+      end do
+   end subroutine rotation_circular_unitary
+
+   subroutine invert_complex_matrix(matrix,info)
+      complex(rp), intent(inout) :: matrix(:, :)
+      integer, intent(out) :: info
+      complex(rp), allocatable :: work(:)
+      complex(rp) :: query(1)
+      integer, allocatable :: pivots(:)
+      integer :: n,lwork
+      n=size(matrix,1)
+      if (size(matrix,2)/=n) error stop 'invert_complex_matrix: matrix must be square'
+      allocate(pivots(n))
+      call zgetrf(n,n,matrix,n,pivots,info)
+      if (info/=0) then
+         deallocate(pivots)
+         return
+      end if
+      call zgetri(n,matrix,n,pivots,query,-1,info)
+      if (info/=0) then
+         deallocate(pivots)
+         return
+      end if
+      lwork=max(n,int(real(query(1),rp)))
+      allocate(work(lwork))
+      call zgetri(n,matrix,n,pivots,work,lwork,info)
+      deallocate(pivots,work)
+   end subroutine invert_complex_matrix
+
+   module subroutine rotation_state_clear(this)
+      class(rotation_state), intent(inout) :: this
+      if (allocated(this%values)) deallocate(this%values)
+      if (allocated(this%endpoint_values)) deallocate(this%endpoint_values)
+      if (allocated(this%weights)) deallocate(this%weights)
+      if (allocated(this%occupations)) deallocate(this%occupations)
+      if (allocated(this%endpoint_occupations)) deallocate(this%endpoint_occupations)
+      if (allocated(this%torque_band)) deallocate(this%torque_band)
+      if (allocated(this%partner_band)) deallocate(this%partner_band)
+      if (allocated(this%contact)) deallocate(this%contact)
+      nullify(this%fixture,this%reciprocal_state)
+      this%q=0.0_rp; this%nsite=0; this%ncoord=0; this%nmat=0; this%nbands=0; this%nk=0
+      this%fermi=0.0_rp; this%kT=0.0_rp; this%weight_sum=0.0_rp
+      this%magnetization=0.0_rp; this%berry=0.0_rp
+      this%electron_count=0.0_rp; this%electron_residual=0.0_rp
+      this%prepared=.false.
+   end subroutine rotation_state_clear
+
+
+end submodule linear_response_rotation

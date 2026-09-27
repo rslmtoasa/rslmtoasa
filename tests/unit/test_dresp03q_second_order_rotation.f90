@@ -3,7 +3,7 @@ program test_dresp03q_second_order_rotation
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use precision_mod, only: rp
    use math_mod, only: pi
-   use lr_kl_hessian_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_init, &
+   use linear_response_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_init, &
       assemble_lmto_hamiltonian, assemble_lmto_finite_q_torque, assemble_lmto_finite_q_mixed_derivative
    implicit none
    integer, parameter :: nc=4, ns=2

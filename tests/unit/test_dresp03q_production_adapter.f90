@@ -15,13 +15,13 @@ program test_dresp03q_production_adapter
    use energy_mod, only: energy
    use lattice_mod, only: lattice
    use logger_mod, only: g_logger
-   use lr_kl_hessian_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_init, lmto_fixture_from_hamiltonian, &
+   use linear_response_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_init, lmto_fixture_from_hamiltonian, &
       lmto_fixture_adapter_residual, assemble_lmto_hamiltonian, assemble_lmto_finite_q_torque, &
       assemble_lmto_finite_q_mixed_derivative, force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch
-   use lr_rotation_response_mod, only: rotation_state, rotation_request, rotation_result, &
+   use linear_response_mod, only: rotation_state, rotation_request, rotation_result, &
       prepare_rotation_response, evaluate_rotation_response, evaluate_rotation_response_oracle, &
       reduce_static_rotation_kernel, rotation_circular_unitary, rotation_axes
-   use lr_kl_hessian_mod, only: finite_temperature_occupation
+   use linear_response_mod, only: finite_temperature_occupation
    use lr_lmto_turek_contour_mod, only: native_turek_contour_options, native_turek_contour_report, &
       native_turek_static_reference
    use math_mod, only: ang2au, i_unit, init_math_operators

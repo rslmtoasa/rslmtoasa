@@ -22,7 +22,7 @@ program test_dresp03tg_native_fixed_z
    use charge_mod, only: charge
    use hamiltonian_mod, only: hamiltonian
    use basis_mod, only: basis_init
-   use lr_kl_hessian_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_init, &
+   use linear_response_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_init, &
       assemble_lmto_hamiltonian, assemble_lmto_rotation_terms, assemble_lmto_mixed_derivative, &
       force_theorem_integrand, force_theorem_pi
    use lr_lmto_turek_gf_mod, only: native_complex_p_matrix, native_screening_alpha, &
