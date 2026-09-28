@@ -2639,6 +2639,11 @@ contains
           this%config%rotation_slope_step <= 0.0_rp) then
          call g_logger%fatal('[linear_response]: rotation probe and slope controls must be positive', __FILE__, __LINE__)
       end if
+      if (abs(this%config%rotation_slope_step-this%config%rotation_probe_omega) > &
+          1.0e-12_rp*max(1.0_rp,abs(this%config%rotation_probe_omega))) then
+         call g_logger%info('[linear_response]: rotation_slope_step is deprecated and ignored; '// &
+            'rotation_probe_omega is the canonical finite-difference step', __FILE__, __LINE__)
+      end if
       if (this%config%rotation_pole_window_floor <= 0.0_rp .or. this%config%rotation_pole_window_scale <= 0.0_rp .or. &
           this%config%rotation_pole_window_max <= 0.0_rp .or. &
           this%config%rotation_pole_window_max < this%config%rotation_pole_window_floor) then
@@ -2844,7 +2849,7 @@ contains
          contraction_seconds, hamiltonian_seconds, gf_seconds, solve_seconds, contour_seconds, total_response_seconds)
       call run_native_rotation_dynamics_campaign(trim(this%config%output_file), lattice_obj, reciprocal_obj, self_obj, fixture, &
          q_direct, q_cart, finite_total, native_delta_j, native_curvature, native_ready, this%config%rotation_eta_ladder, &
-         this%config%rotation_probe_omega, this%config%rotation_probe_eta, this%config%rotation_slope_step, &
+         this%config%rotation_probe_omega, this%config%rotation_probe_eta, &
          this%config%rotation_pole_window_floor, this%config%rotation_pole_window_scale, &
          this%config%rotation_pole_window_max, this%config%rotation_pole_coarse_points, this%config%rotation_pole_fine_points, &
          this%config%rotation_pole_refinement_half_width)
@@ -2901,7 +2906,7 @@ contains
    end subroutine write_rotation_response_grid
 
    subroutine run_native_rotation_dynamics_campaign(rotation_output_file,lat,recip,self_obj,fixture,q_direct,q_cart,finite_h,native_delta,native_curv,native_ready, &
-      rotation_eta_ladder,rotation_probe_omega,rotation_probe_eta,rotation_slope_step,rotation_pole_window_floor, &
+      rotation_eta_ladder,rotation_probe_omega,rotation_probe_eta,rotation_pole_window_floor, &
       rotation_pole_window_scale,rotation_pole_window_max,rotation_pole_coarse_points,rotation_pole_fine_points,rotation_pole_refinement_half_width)
       character(len=*), intent(in) :: rotation_output_file
       type(lattice), intent(in) :: lat
@@ -2910,7 +2915,7 @@ contains
       type(lmto_live_hamiltonian_fixture), target, intent(in) :: fixture
       real(rp), intent(in) :: q_direct(:, :),q_cart(:, :),finite_h(:, :, :),native_delta(:),native_curv(:)
       logical, intent(in) :: native_ready
-      real(rp), intent(in) :: rotation_eta_ladder(3), rotation_probe_omega, rotation_probe_eta, rotation_slope_step
+      real(rp), intent(in) :: rotation_eta_ladder(3), rotation_probe_omega, rotation_probe_eta
       real(rp), intent(in) :: rotation_pole_window_floor, rotation_pole_window_scale, rotation_pole_window_max
       integer, intent(in) :: rotation_pole_coarse_points, rotation_pole_fine_points
       real(rp), intent(in) :: rotation_pole_refinement_half_width
@@ -2919,7 +2924,7 @@ contains
       type(rotation_result) :: response,minus_response,plus_probe,minus_probe
       complex(rp), allocatable :: reduced(:, :)
       real(rp), parameter :: ry_to_mev=13605.693122994_rp
-      real(rp) :: bplus,bminus,slope_rel,qmag,scf_moment,field_max,cov_q(3)
+      real(rp) :: bplus,bminus,slope_rel,slope_step,qmag,scf_moment,field_max,cov_q(3)
       real(rp) :: static_residual,q0_residual,circular_offdiag,covariance_residual,omega_cov,eta_cov
       real(rp) :: finite_mev,turek_mev,omega_max,pred_plus,pred_minus,expected,df,fit_d,fit_resid
       real(rp) :: pole_re,pole_min,loss_peak,loss_height,fwhm,fwhm_mev,resolution,re_k,im_k,abs_k,pole_slope
@@ -2957,12 +2962,16 @@ contains
       call evaluate_rotation_response(request,response)
       call reduce_static_rotation_kernel(response%kernel,reduced)
       q0_residual=maxval(abs(reduced))
-      request%exact_static=.false.; request%omega=rotation_probe_omega; request%eta=rotation_probe_eta
+      ! One canonical h controls both the sampled frequencies and the
+      ! symmetric-difference denominator.  rotation_slope_step is retained
+      ! only as a deprecated namelist compatibility field.
+      slope_step=rotation_probe_omega
+      request%exact_static=.false.; request%omega=slope_step; request%eta=rotation_probe_eta
       call evaluate_rotation_response(request,plus_probe)
-      request%omega=-rotation_probe_omega
+      request%omega=-slope_step
       call evaluate_rotation_response(request,minus_probe)
-      bplus=real((plus_probe%kernel_pm(1,1)-minus_probe%kernel_pm(1,1))/(2.0_rp*rotation_slope_step),rp)
-      bminus=real((plus_probe%kernel_pm(2,2)-minus_probe%kernel_pm(2,2))/(2.0_rp*rotation_slope_step),rp)
+      bplus=real((plus_probe%kernel_pm(1,1)-minus_probe%kernel_pm(1,1))/(2.0_rp*slope_step),rp)
+      bminus=real((plus_probe%kernel_pm(2,2)-minus_probe%kernel_pm(2,2))/(2.0_rp*slope_step),rp)
       slope_rel=max(abs(abs(bplus)-abs(response%berry)),abs(abs(bminus)-abs(response%berry)),abs(bplus+bminus))/ &
          max(abs(response%berry),1.0e-12_rp)
       circular_offdiag=max(abs(reduced(1,1)-reduced(2,2)),abs(reduced(1,2)),abs(reduced(2,1)))

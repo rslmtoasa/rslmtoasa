@@ -27,6 +27,10 @@ current executable.
 disabled run must report the Turek field as missing; the enabled run may add
 only its independent diagnostic data.
 
+`LrRotationSlopeControls` checks the default deck, explicit equal probe/slope
+controls, and intentionally unequal legacy controls. The q=0 derivative and
+all rotation rows must remain unchanged; the independent Berry check must pass.
+
 Configure the regression tests and run the closeout set with:
 
 ```sh

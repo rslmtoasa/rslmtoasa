@@ -148,8 +148,9 @@ module linear_response_mod
       ! Rotation campaign controls (energies in Ry; defaults preserve the
       ! LR-REF-02b certification campaign bit-for-bit):
       ! rotation_eta_ladder=[1e-4,2.5e-5,6.25e-6] Ry;
-      ! rotation_probe_omega=1e-5 Ry; rotation_probe_eta=1e-9 Ry;
-      ! rotation_slope_step=1e-5 Ry; rotation_pole_window_floor=1e-3 Ry;
+      ! rotation_probe_omega=1e-5 Ry (the canonical slope step);
+      ! rotation_probe_eta=1e-9 Ry; rotation_slope_step is a deprecated
+      ! input-compatibility field and is ignored; rotation_pole_window_floor=1e-3 Ry;
       ! rotation_pole_window_scale=2.5; rotation_pole_window_max=2e-2 Ry;
       ! rotation_pole_coarse_points=61; rotation_pole_fine_points=41;
       ! rotation_pole_refinement_half_width=2.0 coarse-grid steps.

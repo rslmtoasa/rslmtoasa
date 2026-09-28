@@ -43,7 +43,7 @@ The pole scan uses the configured circular channels. Its default controls are:
 | `rotation_eta_ladder` | `1e-4, 2.5e-5, 6.25e-6` Ry |
 | `rotation_probe_omega` | `1e-5` Ry |
 | `rotation_probe_eta` | `1e-9` Ry |
-| `rotation_slope_step` | `1e-5` Ry |
+| `rotation_slope_step` | deprecated compatibility input; ignored |
 | `rotation_pole_window_floor` | `1e-3` Ry |
 | `rotation_pole_window_scale` | `2.5` |
 | `rotation_pole_window_max` | `2e-2` Ry |
@@ -54,6 +54,12 @@ The pole scan uses the configured circular channels. Its default controls are:
 The scan compares the positive-real-kernel crossing, minimum `|K|`, and loss
 peak. A pole is not promoted when these diagnostics disagree or the eta
 ladder is unresolved.
+
+The q=0 Berry slope uses one canonical finite-difference step,
+`h=rotation_probe_omega`, for both `K(+h)`/`K(-h)` sampling and the
+`2h` denominator. `rotation_slope_step` remains accepted for input
+compatibility but has no independent numerical role; differing values are
+reported as deprecated and ignored.
 
 `native_turek` (and its compatibility alias `native_crosscheck`) is optional.
 When enabled, the Turek path is evaluated as an independent static diagnostic;
@@ -171,7 +177,7 @@ values are paths.
 | `rotation_eta_ladder` | `[1e-4, 2.5e-5, 6.25e-6]` |
 | `rotation_probe_omega` | `1e-5` |
 | `rotation_probe_eta` | `1e-9` |
-| `rotation_slope_step` | `1e-5` |
+| `rotation_slope_step` | deprecated compatibility input; ignored |
 | `rotation_pole_window_floor` | `1e-3` |
 | `rotation_pole_window_scale` | `2.5` |
 | `rotation_pole_window_max` | `2e-2` |
