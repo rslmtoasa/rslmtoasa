@@ -1,0 +1,9 @@
+{
+  "archive_commit": "70eb73b4483d1099960fcfc014e23b8ee8576252",
+  "route": "legacy tddft backend=product_lehmann (TDVK-02R2 compact Lehmann smoke)",
+  "abs_tol": 1.0e-9,
+  "rel_tol": 1.0e-8,
+  "rows": [
+    [1.0, 0.22616583123034084, 0.08306620137529836, -0.35233734440973194, -0.17123623838100158]
+  ]
+}

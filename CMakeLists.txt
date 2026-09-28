@@ -595,6 +595,39 @@ endforeach()
   set_tests_properties(Val23LrPauliProjection PROPERTIES
     LABELS "validation;functional;lr-02n;radial;pauli;magnetic;ground-state"
     TIMEOUT 3600)
+
+  add_test(NAME LrBaselineRotation
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_baseline.py
+      --binary ${TestBinary}
+      --case rotation
+      --cases-root ${TestDIR}/lr_baseline/cases
+      --references-dir ${TestDIR}/lr_baseline/references
+      --scratch-root ${CMAKE_BINARY_DIR}/Testing/lr_baseline)
+  set_tests_properties(LrBaselineRotation PROPERTIES
+    LABELS "lr_baseline;linear_response;rotation;archived"
+    TIMEOUT 300)
+
+  add_test(NAME LrBaselineTddftLehmann
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_baseline.py
+      --binary ${TestBinary}
+      --case tddft_lehmann
+      --cases-root ${TestDIR}/lr_baseline/cases
+      --references-dir ${TestDIR}/lr_baseline/references
+      --scratch-root ${CMAKE_BINARY_DIR}/Testing/lr_baseline)
+  set_tests_properties(LrBaselineTddftLehmann PROPERTIES
+    LABELS "lr_baseline;linear_response;tddft;lehmann;archived"
+    TIMEOUT 180)
+
+  add_test(NAME LrBaselineNativeRsgf
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_baseline.py
+      --binary ${TestBinary}
+      --case native_rsgf
+      --cases-root ${TestDIR}/lr_baseline/cases
+      --references-dir ${TestDIR}/lr_baseline/references
+      --scratch-root ${CMAKE_BINARY_DIR}/Testing/lr_baseline)
+  set_tests_properties(LrBaselineNativeRsgf PROPERTIES
+    LABELS "lr_baseline;linear_response;tddft;native-rsgf;archived"
+    TIMEOUT 300)
 endif (RUN_REG_TESTS)
 
 ##############################################################################################
