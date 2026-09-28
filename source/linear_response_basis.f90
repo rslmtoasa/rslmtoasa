@@ -1326,6 +1326,13 @@ contains
          end do
          column_norms(k) = sqrt(sum(space%radial_weights*real(a(:, k)*conjg(a(:, k)), rp)))
          if (.not. ieee_is_finite(column_norms(k)) .or. column_norms(k) <= tiny(1.0_rp)) then
+            write (*, '(a,i0,a,i0,a,a,a,i0,a,i0,a,i0,a,i0,a,a,a)') &
+               'LMTO product candidate: site=', site, ' response L=', response_l, ' M=all(-L:L) channel=', &
+               merge('plus ', 'minus', circular_channel == lmto_product_channel_plus), ' candidate=', k, ' l=', &
+               candidates(k)%l, ' l''=', candidates(k)%lp, ' branch=', candidates(k)%branch, ' (', &
+               lmto_product_branch_label(candidates(k)%branch), ')'
+            write (*, '(a,es16.8,a,es16.8)') '  candidate norm=', column_norms(k), &
+               ' largest weighted scale=', maxval(abs(sqrt(space%radial_weights)*a(:, k)))
             error stop 'lmto_product_response_basis: zero or non-finite candidate norm'
          end if
          a(:, k) = sqrt(space%radial_weights)*a(:, k)/column_norms(k)
@@ -1333,13 +1340,23 @@ contains
 
       ! Direct SVD of W^(1/2) Btilde.  The candidate Gram matrix is not formed.
       call zgesvd('S', 'S', nr, ncandidate, a, nr, singular_values, u, nr, vt, nsv, work_query, -1, rwork, info)
-      if (info /= 0) error stop 'lmto_product_response_basis: zgesvd workspace query failed'
+      if (info /= 0) then
+         call report_product_svd_diagnostics(site, response_l, circular_channel, nr, ncandidate, column_norms, &
+            singular_values, .false., info)
+         error stop 'lmto_product_response_basis: zgesvd workspace query failed'
+      end if
       lwork = max(1, nint(real(work_query(1), rp)))
       allocate(work(lwork))
       call zgesvd('S', 'S', nr, ncandidate, a, nr, singular_values, u, nr, vt, nsv, work, lwork, rwork, info)
       deallocate(work)
-      if (info /= 0) error stop 'lmto_product_response_basis: zgesvd failed'
+      if (info /= 0) then
+         call report_product_svd_diagnostics(site, response_l, circular_channel, nr, ncandidate, column_norms, &
+            singular_values, .false., info)
+         error stop 'lmto_product_response_basis: zgesvd failed'
+      end if
       if (.not. all(ieee_is_finite(singular_values))) then
+         call report_product_svd_diagnostics(site, response_l, circular_channel, nr, ncandidate, column_norms, &
+            singular_values, .false., info)
          error stop 'lmto_product_response_basis: non-finite singular value'
       end if
 
@@ -1351,6 +1368,8 @@ contains
       rank100 = count(singular_values > tau100)
       if (rank1 < 1) error stop 'lmto_product_response_basis: no retained numerical product mode'
       if (strict .and. (rank1 /= rank10 .or. rank1 /= rank100)) then
+         call report_product_svd_diagnostics(site, response_l, circular_channel, nr, ncandidate, column_norms, &
+            singular_values, .true., info)
          write (*, '(a,i0,a,i0,a,i0,a,i0,a,i0)') 'LMTO product rank sensitivity site=', site, ' L=', response_l, &
             ' tau1/tau10/tau100=', rank1, '/', rank10, '/', rank100
          error stop 'lmto_product_response_basis: rank sensitivity requires review'
@@ -1382,6 +1401,36 @@ contains
       end do
       deallocate(candidates, a, u, vt, column_norms, singular_values, rwork)
    end subroutine build_product_block
+
+   subroutine report_product_svd_diagnostics(site, response_l, circular_channel, nr, ncandidate, column_norms, &
+                                             singular_values, spectrum_available, info)
+      integer, intent(in) :: site, response_l, circular_channel, nr, ncandidate, info
+      real(rp), intent(in) :: column_norms(:), singular_values(:)
+      logical, intent(in) :: spectrum_available
+      real(rp) :: minimum_singular, condition_estimate
+      character(len=5) :: channel_label
+
+      if (circular_channel == lmto_product_channel_plus) then
+         channel_label = 'plus'
+      else
+         channel_label = 'minus'
+      end if
+      write (*, '(a,i0,a,i0,a,i0,a,i0,a,a,a,i0)') 'LMTO product SVD: matrix=', nr, 'x', ncandidate, &
+         ' site=', site, ' L=', response_l, ' channel=', trim(channel_label), ' LAPACK info=', info
+      write (*, '(a,es16.8)') '  max candidate norm=', maxval(column_norms)
+      if (spectrum_available) then
+         minimum_singular = minval(singular_values)
+         if (minimum_singular > tiny(1.0_rp)) then
+            condition_estimate = singular_values(1)/minimum_singular
+         else
+            condition_estimate = huge(1.0_rp)
+         end if
+         write (*, '(a,es16.8,a,es16.8)') '  smallest resolved singular value=', minimum_singular, &
+            ' condition estimate=', condition_estimate
+      else
+         write (*, '(a)') '  smallest resolved singular value=unavailable condition estimate=unavailable'
+      end if
+   end subroutine report_product_svd_diagnostics
 
    module integer function lmto_product_flat_index(this, site, response_l, response_m, product_mode) result(flat)
       class(lmto_product_response_basis), intent(in) :: this
