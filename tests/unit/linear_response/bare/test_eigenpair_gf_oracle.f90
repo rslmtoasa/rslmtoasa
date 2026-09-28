@@ -5,7 +5,7 @@
 ! complete direct radial response space.  The reference is the LR-06 spectral
 ! route; the GF route is evaluated through its independent real-axis bubble.
 !------------------------------------------------------------------------------
-program test_lr_gf_susceptibility
+module test_eigenpair_gf_oracle_mod
    use precision_mod, only: rp
    use linear_response_mod, only: response_angular_pi
    use linear_response_mod, only: response_super_index, response_flatten_superindex
@@ -15,6 +15,8 @@ program test_lr_gf_susceptibility
       lr_ks_susceptibility_result, lr_channel_plus, evaluate_lr_ks_susceptibility
    use lr_gf_susceptibility_mod, only: lr_gf_susceptibility_request, evaluate_lr_gf_susceptibility
    implicit none
+   private
+   public :: run_test_eigenpair_gf_oracle
 
    integer, parameter :: nr = 3, nsite = 1, orbital_lmax = 1
    integer, parameter :: norb = (orbital_lmax + 1)**2, nbasis = 2*nsite*norb, nbands = 4, nk = 1, nfrequency = 2
@@ -47,6 +49,10 @@ program test_lr_gf_susceptibility
    complex(rp) :: analytic_value
    logical :: failed
 
+
+contains
+
+   subroutine run_test_eigenpair_gf_oracle()
    call build_mesh(radius)
    call setup_radial_basis(radial, radius)
    call space%initialize(nsite, 2*orbital_lmax, radius, mesh_a, mesh_b, 1)
@@ -153,7 +159,8 @@ program test_lr_gf_susceptibility
    end if
    write (*, '(a)') 'UnitLrGfSusceptibility: PASS (GF bubble, convergence, full response, static limit)'
 
-contains
+   end subroutine run_test_eigenpair_gf_oracle
+
 
    subroutine build_mesh(mesh)
       real(rp), intent(out) :: mesh(:)
@@ -213,4 +220,4 @@ contains
       end if
    end subroutine report_difference
 
-end program test_lr_gf_susceptibility
+end module test_eigenpair_gf_oracle_mod

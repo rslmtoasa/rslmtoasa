@@ -5,7 +5,7 @@
 ! This test projects its canonical result into the weighted-orthonormal product
 ! basis and compares it with the compact transition-coordinate accumulation.
 !------------------------------------------------------------------------------
-program test_lr_product_ks_susceptibility
+module test_product_ks_susceptibility_mod
    use precision_mod, only: rp
    use basis_mod, only: basis_init
    use logger_mod, only: g_logger
@@ -21,6 +21,8 @@ program test_lr_product_ks_susceptibility
    use linear_response_mod, only: lmto_product_channel_plus, lmto_product_channel_minus, &
       lmto_product_response_basis
    implicit none
+   private
+   public :: run_test_product_ks_susceptibility
 
    integer, parameter :: nr = 51, lmax = 1, nsite = 1, norb = (lmax + 1)**2
    integer, parameter :: nbands = 2*norb, nk = 2, nfrequency = 2
@@ -50,6 +52,10 @@ program test_lr_product_ks_susceptibility
    logical :: failed
    integer :: channel_kind, iq, ieta
 
+
+contains
+
+   subroutine run_test_product_ks_susceptibility()
    call basis_init(lmax)
    call init_math_operators()
    call g_logger%init()
@@ -105,7 +111,8 @@ program test_lr_product_ks_susceptibility
    write (*, '(a,es12.4)') 'maximum_snapshot_mutation=', max_immutable
    write (*, '(a)') 'UnitLrProductKsSusceptibility: PASS (compact Lehmann, LR-06 projection, q/omega/eta/channels)'
 
-contains
+   end subroutine run_test_product_ks_susceptibility
+
 
    subroutine build_mesh(mesh)
       real(rp), intent(out) :: mesh(:)
@@ -337,4 +344,4 @@ contains
       folded = k_point - floor(k_point + 0.5_rp)
    end function fold_fractional_kpoint
 
-end program test_lr_product_ks_susceptibility
+end module test_product_ks_susceptibility_mod

@@ -6,7 +6,7 @@
 ! reciprocal-GF evaluator, and records spectral moments and GF/Lehmann
 ! differences for the requested numerical ladders.
 !------------------------------------------------------------------------------
-program test_lr_product_gf_quadrature_audit
+module test_eigenpair_gf_quadrature_mod
    use, intrinsic :: ieee_arithmetic
    use precision_mod, only: rp
    use linear_response_mod, only: response_angular_pi
@@ -27,6 +27,8 @@ program test_lr_product_gf_quadrature_audit
       build_lr_product_gf_transition_amplitudes, lr_product_gf_contraction_scalar, &
       lr_product_gf_contraction_optimized, lr_product_gf_contraction_factorized
    implicit none
+   private
+   public :: run_test_eigenpair_gf_quadrature
 
    integer, parameter :: nr = 7, orbital_lmax = 1, response_lmax = 2, nsite = 1
    integer, parameter :: norb = (orbital_lmax + 1)**2
@@ -60,7 +62,16 @@ program test_lr_product_gf_quadrature_audit
    character(len=32) :: argument
    integer :: selected_index
 
-   call get_command_argument(1, mode)
+
+contains
+
+   subroutine run_test_eigenpair_gf_quadrature(case_argument)
+      character(len=*), intent(in), optional :: case_argument
+   if (present(case_argument)) then
+      mode = case_argument
+   else
+      call get_command_argument(1, mode)
+   end if
    if (len_trim(mode) == 0) mode = 'full'
 
    call build_mesh(radius)
@@ -153,7 +164,8 @@ program test_lr_product_gf_quadrature_audit
       write (*, '(a)') 'TDVK-03A audit execution complete'
    end if
 
-contains
+   end subroutine run_test_eigenpair_gf_quadrature
+
 
    subroutine build_mesh(mesh)
       real(rp), intent(out) :: mesh(:)
@@ -1179,4 +1191,4 @@ contains
       residual = sqrt(sum(abs(actual - reference)**2))/max(sqrt(sum(abs(reference)**2)), epsilon(1.0_rp))
    end function matrix_residual
 
-end program test_lr_product_gf_quadrature_audit
+end module test_eigenpair_gf_quadrature_mod

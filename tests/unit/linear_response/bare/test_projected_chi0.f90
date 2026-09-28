@@ -6,7 +6,7 @@
 ! (Lehmann) or site-projected affine vertices in the real-axis Kubo bubble
 ! (GF).  Both fixtures use numerically diagonalized complex eigenvectors.
 !------------------------------------------------------------------------------
-program test_lr_projected_reciprocal_chi0
+module test_projected_chi0_mod
    use, intrinsic :: ieee_arithmetic
    use precision_mod, only: rp
    use basis_mod, only: basis_init
@@ -25,13 +25,20 @@ program test_lr_projected_reciprocal_chi0
       evaluate_projected_lehmann_chi0, evaluate_projected_finite_width_chi0, evaluate_projected_gf_chi0, &
       evaluate_projected_gf_chi0_reference
    implicit none
+   private
+   public :: run_test_projected_chi0
 
+
+contains
+
+   subroutine run_test_projected_chi0()
    call basis_init(2)
    call run_fixture(1, 8, 'complex one-site fixture')
    call run_fixture(2, 8, 'mandatory two-site fixture')
    write (*, '(a)') 'UnitLrProjectedReciprocalChi0: PASS (DRESP-02 Lehmann/GF/finite-width/site matrix/oracles/q/eta)'
 
-contains
+   end subroutine run_test_projected_chi0
+
 
    subroutine run_fixture(nsite, nbands, label)
       integer, intent(in) :: nsite, nbands
@@ -476,4 +483,4 @@ contains
       end do
    end subroutine apply_site_phase
 
-end program test_lr_projected_reciprocal_chi0
+end module test_projected_chi0_mod

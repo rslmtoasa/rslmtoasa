@@ -5,7 +5,7 @@
 ! weighted-orthonormal map.  The compact GF result must agree with that
 ! projection; the compact Lehmann comparison below is diagnostic only.
 !------------------------------------------------------------------------------
-program test_lr_product_gf_susceptibility
+module test_product_eigenpair_gf_oracle_mod
    use, intrinsic :: ieee_arithmetic
    use precision_mod, only: rp
    use basis_mod, only: basis_init
@@ -27,6 +27,8 @@ program test_lr_product_gf_susceptibility
       lr_product_gf_contraction_optimized, lr_product_gf_contraction_factorized, &
       evaluate_lr_product_gf_susceptibility, build_lr_product_gf_transition_amplitudes
    implicit none
+   private
+   public :: run_test_product_eigenpair_gf_oracle
 
    integer, parameter :: nr = 7, orbital_lmax = 1, response_lmax = 2, nsite = 1
    integer, parameter :: norb = (orbital_lmax + 1)**2, nbasis = 2*norb*nsite
@@ -49,7 +51,16 @@ program test_lr_product_gf_susceptibility
    real(rp) :: maximum_component_residual, maximum_projection_residual, maximum_transition_residual
    character(len=32) :: mode
 
-   call get_command_argument(1, mode)
+
+contains
+
+   subroutine run_test_product_eigenpair_gf_oracle(case_argument)
+      character(len=*), intent(in), optional :: case_argument
+   if (present(case_argument)) then
+      mode = case_argument
+   else
+      call get_command_argument(1, mode)
+   end if
    call basis_init(orbital_lmax)
    call build_mesh(radius)
    call setup_radial_basis(radial, radius)
@@ -102,7 +113,8 @@ program test_lr_product_gf_susceptibility
    end if
    write (*, '(a)') 'UnitLrProductGfSusceptibility: PASS (component oracle, point-GF projection, channels, q/omega, Simpson controls)'
 
-contains
+   end subroutine run_test_product_eigenpair_gf_oracle
+
 
    subroutine build_mesh(mesh)
       real(rp), intent(out) :: mesh(:)
@@ -480,4 +492,4 @@ contains
       end do
    end subroutine product_coordinates_from_point
 
-end program test_lr_product_gf_susceptibility
+end module test_product_eigenpair_gf_oracle_mod

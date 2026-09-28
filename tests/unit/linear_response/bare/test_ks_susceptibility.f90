@@ -6,7 +6,7 @@
 ! uses a two-site s-only coefficient fixture, for which the Pauli transition
 ! vector is known analytically.
 !------------------------------------------------------------------------------
-program test_lr_ks_susceptibility
+module test_ks_susceptibility_mod
    use precision_mod, only: rp
    use linear_response_mod, only: response_angular_pi, response_lm_index
    use linear_response_mod, only: response_super_index, response_flatten_superindex, &
@@ -17,6 +17,8 @@ program test_lr_ks_susceptibility
       lr_ks_susceptibility_result, lr_channel_plus, lr_channel_minus, &
       evaluate_lr_ks_susceptibility, evaluate_lr_static_residual
    implicit none
+   private
+   public :: run_test_ks_susceptibility
 
    integer, parameter :: nr = 9, nsite = 2, orbital_lmax = 1
    integer, parameter :: norb = (orbital_lmax + 1)**2, nbasis = 2*nsite*norb
@@ -48,6 +50,10 @@ program test_lr_ks_susceptibility
    real(rp) :: absolute_residual, relative_residual
    logical :: failed
 
+
+contains
+
+   subroutine run_test_ks_susceptibility()
    call build_mesh(radius)
    call setup_radial_basis(radial, radius)
    call space%initialize(nsite, 2*orbital_lmax, radius, mesh_a, mesh_b, 1)
@@ -164,7 +170,8 @@ program test_lr_ks_susceptibility
    end if
    write (*, '(a)') 'UnitLrKsSusceptibility: PASS (Lehmann, explicit loop, covariance, degeneracy)'
 
-contains
+   end subroutine run_test_ks_susceptibility
+
 
    subroutine build_mesh(mesh)
       real(rp), intent(out) :: mesh(:)
@@ -373,4 +380,4 @@ contains
       end do
    end subroutine fill_diagnostic_vectors
 
-end program test_lr_ks_susceptibility
+end module test_ks_susceptibility_mod

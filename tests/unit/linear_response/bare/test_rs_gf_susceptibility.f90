@@ -1,7 +1,7 @@
 !------------------------------------------------------------------------------
 ! RSGF-01 finite exact native real-space GF oracle.
 !------------------------------------------------------------------------------
-program test_lr_rs_gf_susceptibility
+module test_rs_gf_susceptibility_mod
    use precision_mod, only: rp
    use linear_response_mod, only: response_fourier_phase_sign, response_real_space_phase
    use linear_response_mod, only: response_angular_pi
@@ -15,6 +15,8 @@ program test_lr_rs_gf_susceptibility
       evaluate_lr_rs_gf_susceptibility
    use lr_dense_rs_gf_provider_mod, only: lr_rs_dense_gf_provider
    implicit none
+   private
+   public :: run_test_rs_gf_susceptibility
 
    integer, parameter :: nr = 3, nsite = 1, orbital_lmax = 1
    integer, parameter :: norb = (orbital_lmax + 1)**2
@@ -52,6 +54,10 @@ program test_lr_rs_gf_susceptibility
    integer :: target_flat, i
    logical :: failed
 
+
+contains
+
+   subroutine run_test_rs_gf_susceptibility()
    call build_mesh(radius)
    call setup_radial_basis(radial, radius)
    call space%initialize(nsite, 2*orbital_lmax, radius, mesh_a, mesh_b, 1)
@@ -179,7 +185,8 @@ program test_lr_rs_gf_susceptibility
    end if
    write (*, '(a)') 'UnitLrRsGfSusceptibility: PASS (native coefficient GF, augmentation, full response, q phase)'
 
-contains
+   end subroutine run_test_rs_gf_susceptibility
+
 
    subroutine build_mesh(mesh)
       real(rp), intent(out) :: mesh(:)
@@ -242,4 +249,4 @@ contains
       end if
    end subroutine report_difference
 
-end program test_lr_rs_gf_susceptibility
+end module test_rs_gf_susceptibility_mod
