@@ -76,3 +76,6 @@ pip-wheel-metadata/
 
 # Generated calculation/benchmark results
 /results/
+
+# Small tracked native LR oracle; the test reads this historical two-row file.
+!tests/lr_baseline/cases/static_lkag/jij.out
