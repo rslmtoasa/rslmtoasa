@@ -254,7 +254,7 @@ contains
          end if
          call derive_runtime_config(this%config, runtime)
          call run_tddft_production(runtime, control_obj, lattice_obj, hamiltonian_obj, energy_obj, reciprocal_obj, &
-            recursion_obj, green_obj, converged, .true.)
+            recursion_obj, green_obj, converged, self_obj%use_kspace)
       case default
          error stop 'linear_response: unsupported formulation'
       end select
@@ -742,7 +742,8 @@ contains
             accepted_pauli_magnetization=accepted_pauli_magnetization, &
             accepted_pauli_magnetization_source=lr_kxc_magnetization_source_pauli_accepted)
       end if
-      call write_tddft_production_output(config, result, control_obj, lattice_obj, ground_states, response_space, reciprocal_obj)
+      call write_tddft_production_output(config, result, control_obj, lattice_obj, ground_states, response_space, reciprocal_obj, &
+         use_accepted_kspace_scf)
       ! The production result has already been serialized. Release the dense
       ! response matrices before the accepted-state owner leaves scope; this
       ! is important for compact smoke runs with a full radial mesh.
@@ -2783,7 +2784,8 @@ contains
       end do
    end function find_gamma_q_index
 
-   subroutine write_tddft_production_output(config, result, control_obj, lattice_obj, ground_states, response_space, reciprocal_obj)
+   subroutine write_tddft_production_output(config, result, control_obj, lattice_obj, ground_states, response_space, reciprocal_obj, &
+                                             direct_handoff)
       type(tddft_runtime_config), intent(in) :: config
       type(tddft_production_result), intent(in) :: result
       type(control), intent(in) :: control_obj
@@ -2791,6 +2793,7 @@ contains
       type(radial_ground_state), intent(in) :: ground_states(:)
       type(response_space_layout), intent(in) :: response_space
       type(reciprocal), intent(in) :: reciprocal_obj
+      logical, intent(in) :: direct_handoff
       integer :: unit, iq, iw, i, j
       real(rp) :: magnetic_moment
       complex(rp) :: loss_trace, ks_trace, enhanced_trace
@@ -2819,6 +2822,14 @@ contains
       write(unit, '(a,a)') '# omega_Ry = ', 'one row per requested frequency'
       write(unit, '(a,es24.16)') '# eta_Ry = ', config%eta
       write(unit, '(a,i0)') '# response_angular_cutoff = ', result%response_lmax
+      if (direct_handoff) then
+         write(unit, '(a)') '# state_source = accepted_kspace_scf_cache'
+         write(unit, '(a,l1)') '# direct_accepted_state_handoff = ', .true.
+      else
+         write(unit, '(a)') '# state_source = diagnostic_frozen_post_scf_rebuild'
+         write(unit, '(a,l1)') '# direct_accepted_state_handoff = ', .false.
+         write(unit, '(a)') '# route = frozen-potential diagnostic rebuild from accepted real-space SCF potential; input EF retained'
+      end if
       write(unit, '(a,i0,2(es24.16,1x),a,es24.16,a,es24.16)') '# radial_mesh_identity = ', size(ground_states(1)%r), &
          ground_states(1)%a, ground_states(1)%b, 'rmax=', ground_states(1)%rmax, 'sum_r=', sum(ground_states(1)%r)
       write(unit, '(a,a)') '# interaction_route = ', trim(config%interaction_route)

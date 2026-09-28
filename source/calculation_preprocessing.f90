@@ -330,13 +330,21 @@ contains
       end if
 
       if (trim(this%post_processing) == 'linear_response') then
-         if (.not. self_obj%use_kspace) then
-            call g_logger%fatal("post_processing='linear_response' requires &self use_kspace=.true. so the accepted SCF state is available.", &
-                                __FILE__, __LINE__)
+         if (self_obj%use_kspace) then
+            ! Direct route: finalize and pass the exact accepted reciprocal
+            ! SCF cache owned by self.  No second reciprocal state is made.
+            call self_obj%finalize_kspace_scf_state()
+            call this%linear_response%run(control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, &
+                                          self_obj%reciprocal_scf_cache, recursion_obj, green_obj, self_obj%converged)
+         else
+            ! Historical RS-SCF route: construct the reciprocal object only
+            ! after SCF, from the converged accepted real-space potential.
+            ! linear_response marks this as a frozen-potential diagnostic
+            ! rebuild and retains recursion_obj/green_obj for native RSGF.
+            reciprocal_obj = reciprocal(hamiltonian_obj)
+            call this%linear_response%run(control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, &
+                                          reciprocal_obj, recursion_obj, green_obj, self_obj%converged)
          end if
-         call self_obj%finalize_kspace_scf_state()
-         call this%linear_response%run(control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, &
-                                       self_obj%reciprocal_scf_cache, recursion_obj, green_obj, self_obj%converged)
       end if
 
       if (trim(this%post_processing) == 'pauli_projection') call self_obj%quantify_pauli_projection()
