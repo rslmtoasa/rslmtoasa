@@ -642,21 +642,48 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrBasisAngular PROPERTIES LABELS "unit;lr-basis;angular;representation;spdf-guard")
   add_fortran_unit_test(UnitLrBasisAugmentation ${TestDIR}/unit/test_lr_basis_augmentation.f90)
   set_tests_properties(UnitLrBasisAugmentation PROPERTIES LABELS "unit;lr-basis;production;hoh;density")
-  add_fortran_unit_test(UnitLrResponseBasis ${TestDIR}/unit/test_lr_response_basis.f90)
-  set_tests_properties(UnitLrResponseBasis PROPERTIES LABELS "unit;lr-02;response-basis;angular;radial;gauge;blocked-guard")
-  add_fortran_unit_test(UnitLrResponseSpace ${TestDIR}/unit/test_lr_response_space.f90)
-  set_tests_properties(UnitLrResponseSpace PROPERTIES LABELS "unit;lr-04;response-space;metric;operator-algebra")
-  add_fortran_unit_test(UnitLrPauliTransitionVertex ${TestDIR}/unit/test_lr_pauli_transition_vertex.f90)
-  set_tests_properties(UnitLrPauliTransitionVertex PROPERTIES LABELS "unit;lr-05;pauli;transition-vertex;angular;gauge")
-  add_fortran_unit_test(UnitLrLmtoProductResponseBasis ${TestDIR}/unit/test_lr_lmto_product_response_basis.f90)
-  set_tests_properties(UnitLrLmtoProductResponseBasis PROPERTIES LABELS "unit;tdvk-02r0;lr-05;lr-gf-02;product-basis;audit")
-  add_fortran_unit_test(UnitLrLmtoProductResponse ${TestDIR}/unit/test_lr_lmto_product_response.f90)
-  set_tests_properties(UnitLrLmtoProductResponse PROPERTIES LABELS "unit;tdvk-02r1;lr-05;product-basis;transition-vertex")
-  add_test(NAME UnitLrLmtoProductStrictRankGuard COMMAND $<TARGET_FILE:UnitLrLmtoProductResponse> strict)
-  set_tests_properties(UnitLrLmtoProductStrictRankGuard PROPERTIES
+  set(_lr_unit_tests
+    # executable-name | source (relative to tests/unit) | component
+    "UnitLrRotationStaticContour|linear_response/rotation/test_rotation_static_contour.f90|rotation"
+    "UnitLrRotationFiniteQTorque|linear_response/rotation/test_rotation_finite_q_torque.f90|rotation"
+    "UnitLrRotationSecondOrder|linear_response/rotation/test_rotation_second_order.f90|rotation"
+    "UnitLrRotationTorqueHessian|linear_response/rotation/test_rotation_torque_hessian.f90|rotation"
+    "UnitLrResponseSpace|linear_response/basis/test_response_space.f90|basis"
+    "UnitLrResponseBasis|linear_response/basis/test_response_basis.f90|basis"
+    "UnitLrEndpointBranchAction|linear_response/basis/test_endpoint_branch_action.f90|basis"
+    "UnitLrProductResponseBasis|linear_response/basis/test_product_response_basis.f90|basis"
+    "UnitLrGfEndpointAugmentation|linear_response/basis/test_gf_endpoint_augmentation.f90|basis"
+    "UnitLrKsSusceptibility|linear_response/bare/test_ks_susceptibility.f90|bare"
+    "UnitLrProductKsSusceptibility|linear_response/bare/test_product_ks_susceptibility.f90|bare"
+    "UnitLrRsGfSusceptibility|linear_response/bare/test_rs_gf_susceptibility.f90|bare"
+    "UnitLrProjectedChi0|linear_response/bare/test_projected_chi0.f90|bare"
+    "UnitLrEigenpairGfOracle|linear_response/bare/test_eigenpair_gf_oracle.f90|bare"
+    "UnitLrLcmmSumrule|linear_response/kernel_dyson/test_lcmm_sumrule.f90|kernel_dyson"
+    "UnitLrProjectedInteracting|linear_response/kernel_dyson/test_projected_interacting.f90|kernel_dyson"
+    "UnitLrProjectedLcmm|linear_response/kernel_dyson/test_projected_lcmm.f90|kernel_dyson"
+    "UnitLrCompactInteraction|linear_response/kernel_dyson/test_compact_interaction.f90|kernel_dyson"
+    "UnitLrCompactGsrAction|linear_response/kernel_dyson/test_compact_gsr_action.f90|kernel_dyson"
+    "UnitLrDyson|linear_response/kernel_dyson/test_dyson.f90|kernel_dyson"
+    "UnitLrCompactDysonOracle|linear_response/kernel_dyson/test_compact_dyson_oracle.f90|kernel_dyson"
+  )
+  foreach(_entry IN LISTS _lr_unit_tests)
+    string(REPLACE "|" ";" _parts "${_entry}")
+    list(GET _parts 0 _name)
+    list(GET _parts 1 _src)
+    list(GET _parts 2 _component)
+    add_fortran_unit_test(${_name} ${TestDIR}/unit/${_src})
+    set_tests_properties(${_name} PROPERTIES LABELS "unit;linear_response;${_component}")
+  endforeach()
+
+  add_fortran_unit_test(UnitLrProductResponse ${TestDIR}/unit/linear_response/basis/test_product_response.f90)
+  set_tests_properties(UnitLrProductResponse PROPERTIES LABELS "unit;tdvk-02r1;lr-05;product-basis;transition-vertex")
+  add_test(NAME UnitLrProductStrictRankGuard COMMAND $<TARGET_FILE:UnitLrProductResponse> strict)
+  set_tests_properties(UnitLrProductStrictRankGuard PROPERTIES
     LABELS "unit;tdvk-02r1;product-basis;negative;rank-guard"
     WILL_FAIL TRUE)
-  add_fortran_unit_test(UnitLrProjectedSiteSpin ${TestDIR}/unit/test_lr_projected_site_spin.f90)
+  add_fortran_unit_test(UnitLrPauliTransitionVertex ${TestDIR}/unit/linear_response/basis/test_pauli_transition_vertex.f90)
+  set_tests_properties(UnitLrPauliTransitionVertex PROPERTIES LABELS "unit;lr-05;pauli;transition-vertex;angular;gauge")
+  add_fortran_unit_test(UnitLrProjectedSiteSpin ${TestDIR}/unit/linear_response/basis/test_projected_site_spin.f90)
   set_tests_properties(UnitLrProjectedSiteSpin PROPERTIES LABELS "unit;dresp-01;projected-site-spin;operator;moment")
   add_test(NAME UnitLrProjectedSiteSpinRejectSpdf COMMAND $<TARGET_FILE:UnitLrProjectedSiteSpin> spdf)
   set_tests_properties(UnitLrProjectedSiteSpinRejectSpdf PROPERTIES
@@ -666,115 +693,83 @@ if (RUN_UNIT_TESTS)
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/val_dresp01_projected_site_spin.py)
   set_tests_properties(Dresp01BccFeMaterialGate PROPERTIES LABELS "validation;dresp-01;projected-site-spin;material-gate"
     SKIP_RETURN_CODE 77)
-  add_fortran_unit_test(UnitLrProductKsSusceptibility ${TestDIR}/unit/test_lr_product_ks_susceptibility.f90)
-  set_tests_properties(UnitLrProductKsSusceptibility PROPERTIES LABELS "unit;tdvk-02r2;lr-06;product-basis;lehmann")
-  add_fortran_unit_test(UnitLrCompactStaticInteraction ${TestDIR}/unit/test_lr_compact_static_interaction.f90)
-  set_tests_properties(UnitLrCompactStaticInteraction PROPERTIES LABELS "unit;tdvk-06;compact;interaction;representation-oracle")
-  add_fortran_unit_test(UnitLrCompactGsrActionConsistency ${TestDIR}/unit/test_lr_compact_gsr_action_consistency.f90)
-  set_tests_properties(UnitLrCompactGsrActionConsistency PROPERTIES LABELS "unit;tdvk-06g;compact;gsr;action-consistency")
-  add_fortran_unit_test(UnitLrKsSusceptibility ${TestDIR}/unit/test_lr_ks_susceptibility.f90)
-  set_tests_properties(UnitLrKsSusceptibility PROPERTIES LABELS "unit;lr-06;ks-susceptibility;lehmann;covariance")
-  add_fortran_unit_test(UnitLrGfSusceptibility ${TestDIR}/unit/test_lr_gf_susceptibility.f90)
-  set_tests_properties(UnitLrGfSusceptibility PROPERTIES LABELS "unit;lr-gf-02;ks-susceptibility;reciprocal-gf;crosscheck")
-  add_fortran_unit_test(UnitLrProductGfSusceptibility ${TestDIR}/unit/test_lr_product_gf_susceptibility.f90)
-  set_tests_properties(UnitLrProductGfSusceptibility PROPERTIES LABELS "unit;tdvk-02r3;lr-gf-02;product-basis;reciprocal-gf")
-  add_fortran_unit_test(UnitLrProjectedReciprocalChi0 ${TestDIR}/unit/test_lr_projected_reciprocal_chi0.f90)
-  set_tests_properties(UnitLrProjectedReciprocalChi0 PROPERTIES LABELS "unit;dresp-02;projected-chi0;lehmann;reciprocal-gf;two-site")
-  add_fortran_unit_test(UnitLrProjectedInteractingResponse ${TestDIR}/unit/test_lr_projected_interacting_response.f90)
-  set_tests_properties(UnitLrProjectedInteractingResponse PROPERTIES LABELS "unit;dresp-04;mills;stoner;dyson;goldstone;covariance")
-  add_fortran_unit_test(UnitLrProjectedJuelichInteraction ${TestDIR}/unit/test_lr_projected_juelich_interaction.f90)
-  set_tests_properties(UnitLrProjectedJuelichInteraction PROPERTIES LABELS "unit;dresp-05;juelich;lcmm;ward;svd;negative-controls")
-  add_fortran_unit_test(UnitLrLmtoEndpointBranchAction ${TestDIR}/unit/test_lr_lmto_endpoint_branch_action.f90)
-  set_tests_properties(UnitLrLmtoEndpointBranchAction PROPERTIES LABELS "unit;dresp-10r;endpoint-branches;matrix-action;h2;stored-dual")
   add_fortran_unit_test(UnitDresp03rLmtoMapping ${TestDIR}/unit/test_dresp03r_lmto_mapping.f90)
   set_tests_properties(UnitDresp03rLmtoMapping PROPERTIES LABELS "unit;dresp-03r;lmto;lkag;rotation-vertex;representation-audit")
-  add_fortran_unit_test(UnitDresp03tLmtoHessian ${TestDIR}/unit/test_dresp03t_lmto_hessian.f90)
-  set_tests_properties(UnitDresp03tLmtoHessian PROPERTIES LABELS "unit;dresp-03t;lmto;lkag;torque;hessian;hoh;representation-audit")
-  add_fortran_unit_test(UnitDresp03qFiniteQ ${TestDIR}/unit/test_dresp03q_finite_q.f90)
-  set_tests_properties(UnitDresp03qFiniteQ PROPERTIES LABELS "unit;dresp-03q;finite-q;lmto;lkag;torque;hessian;supercell-oracle")
-  add_fortran_unit_test(UnitDresp03qSecondOrderRotation ${TestDIR}/unit/test_dresp03q_second_order_rotation.f90)
-  set_tests_properties(UnitDresp03qSecondOrderRotation PROPERTIES LABELS "unit;dresp-03q;second-order;finite-q;torque;contact;independent-fd")
-  add_fortran_unit_test(UnitDresp03gContour ${TestDIR}/unit/test_dresp03g_contour.f90)
-  set_tests_properties(UnitDresp03gContour PROPERTIES LABELS "unit;dresp-03g;finite-h;contour;resolvent;spectral-crosscheck")
   add_fortran_unit_test(UnitExchangeQ ${TestDIR}/unit/test_exchange_q.f90)
   set_tests_properties(UnitExchangeQ PROPERTIES LABELS "unit;exchange-q;finite-q;lkag;input;oracle")
   add_fortran_unit_test(UnitExchangeQRotationMoved ${TestDIR}/unit/test_exchange_q_rotation_moved.f90)
   set_tests_properties(UnitExchangeQRotationMoved PROPERTIES LABELS "unit;exchange-q;linear-response;input;negative" WILL_FAIL TRUE)
-  add_fortran_unit_test(UnitDresp03qProductionAdapter ${TestDIR}/unit/test_dresp03q_production_adapter.f90)
+  add_fortran_unit_test(UnitLrRotationProductionAdapter ${TestDIR}/unit/linear_response/rotation/test_rotation_production_adapter.f90)
   set(_dresp03q_adapter_case "${CMAKE_BINARY_DIR}/Testing/dresp03q_production_adapter")
   file(MAKE_DIRECTORY "${_dresp03q_adapter_case}")
   configure_file("${TestDIR}/regression/bccFe_lanczos/input_second_order.nml" "${_dresp03q_adapter_case}/input.nml" COPYONLY)
   configure_file("${TestDIR}/regression/bccFe_lanczos/Fe.nml" "${_dresp03q_adapter_case}/Fe.nml" COPYONLY)
-  set_tests_properties(UnitDresp03qProductionAdapter PROPERTIES
+  set_tests_properties(UnitLrRotationProductionAdapter PROPERTIES
     LABELS "unit;dresp-03q;finite-q;lmto;lkag;production-adapter;bcc-fe;spd"
     WORKING_DIRECTORY "${_dresp03q_adapter_case}")
-  add_fortran_unit_test(UnitDresp03qNativeLkag ${TestDIR}/unit/test_dresp03q_native_lkag.f90)
+  add_fortran_unit_test(UnitLrRotationStaticLkag ${TestDIR}/unit/linear_response/rotation/test_rotation_static_lkag.f90)
   set(_dresp03q_native_case "${CMAKE_BINARY_DIR}/Testing/dresp03q_native_lkag")
   file(MAKE_DIRECTORY "${_dresp03q_native_case}")
   configure_file("${CMAKE_SOURCE_DIR}/results/validation/VAL-18_bccFe/jij_fixed/input.nml" "${_dresp03q_native_case}/input.nml" COPYONLY)
   configure_file("${CMAKE_SOURCE_DIR}/results/validation/VAL-18_bccFe/jij_fixed/Fe.nml" "${_dresp03q_native_case}/Fe.nml" COPYONLY)
   configure_file("${CMAKE_SOURCE_DIR}/results/validation/VAL-18_bccFe/jij_fixed/jij.out" "${_dresp03q_native_case}/jij.out" COPYONLY)
-  set_tests_properties(UnitDresp03qNativeLkag PROPERTIES
+  set_tests_properties(UnitLrRotationStaticLkag PROPERTIES
     LABELS "unit;dresp-03q;finite-q;lmto;lkag;native-reference;bcc-fe;spd"
     WORKING_DIRECTORY "${_dresp03q_native_case}")
-  add_fortran_unit_test(UnitDresp03tgNativeFixedZ ${TestDIR}/unit/test_dresp03tg_native_fixed_z.f90)
+  add_fortran_unit_test(UnitPathOperatorFixedZ ${TestDIR}/unit/lmto_path_operator/test_path_operator_fixed_z.f90)
   set(_dresp03tg_fixed_z_case "${CMAKE_BINARY_DIR}/Testing/dresp03tg_native_fixed_z")
   file(MAKE_DIRECTORY "${_dresp03tg_fixed_z_case}")
   configure_file("${TestDIR}/regression/bccFe_lanczos/input.nml" "${_dresp03tg_fixed_z_case}/input.nml" COPYONLY)
   configure_file("${TestDIR}/regression/bccFe_lanczos/Fe.nml" "${_dresp03tg_fixed_z_case}/Fe.nml" COPYONLY)
-  set_tests_properties(UnitDresp03tgNativeFixedZ PROPERTIES
+  set_tests_properties(UnitPathOperatorFixedZ PROPERTIES
     LABELS "unit;dresp-03tg;native-turek;fixed-z;representation;hard-gate"
     WORKING_DIRECTORY "${_dresp03tg_fixed_z_case}")
-  add_fortran_unit_test(UnitDresp03tgNativeContour ${TestDIR}/unit/test_dresp03tg_native_contour.f90)
+  add_fortran_unit_test(UnitPathOperatorContour ${TestDIR}/unit/lmto_path_operator/test_path_operator_contour.f90)
   set(_dresp03tg_contour_case "${CMAKE_BINARY_DIR}/Testing/dresp03tg_native_contour")
   file(MAKE_DIRECTORY "${_dresp03tg_contour_case}")
   configure_file("${TestDIR}/regression/bccFe_lanczos/input.nml" "${_dresp03tg_contour_case}/input.nml" COPYONLY)
   configure_file("${TestDIR}/regression/bccFe_lanczos/Fe.nml" "${_dresp03tg_contour_case}/Fe.nml" COPYONLY)
-  set_tests_properties(UnitDresp03tgNativeContour PROPERTIES
+  set_tests_properties(UnitPathOperatorContour PROPERTIES
     LABELS "unit;dresp-03tg;native-turek;contour;fourier;independent-pairs;normalization;curvature;bcc-fe;hard-gate"
     WORKING_DIRECTORY "${_dresp03tg_contour_case}")
   add_fortran_unit_test(UnitLmtoPathOperatorLegacyAlphaGuard ${TestDIR}/unit/test_lmto_path_operator_legacy_alpha_guard.f90)
   set_tests_properties(UnitLmtoPathOperatorLegacyAlphaGuard PROPERTIES
     LABELS "unit;lmto-path-operator;negative;screening-alpha"
     WILL_FAIL TRUE)
-  add_fortran_unit_test(UnitLrProductGfQuadratureAudit ${TestDIR}/unit/test_lr_product_gf_quadrature_audit.f90)
-  set_tests_properties(UnitLrProductGfQuadratureAudit PROPERTIES
+  add_fortran_unit_test(UnitLrEigenpairGfQuadrature ${TestDIR}/unit/linear_response/bare/test_eigenpair_gf_quadrature.f90)
+  set_tests_properties(UnitLrEigenpairGfQuadrature PROPERTIES
     LABELS "unit;tdvk-03a;lr-gf-02;quadrature-audit;reciprocal-gf"
     DISABLED TRUE)
-  add_test(NAME UnitLrProductGfMixedEigenvectors
-    COMMAND UnitLrProductGfQuadratureAudit mixed)
-  set_tests_properties(UnitLrProductGfMixedEigenvectors PROPERTIES
+  add_test(NAME UnitLrEigenpairGfMixedEigenvectors
+    COMMAND UnitLrEigenpairGfQuadrature mixed)
+  set_tests_properties(UnitLrEigenpairGfMixedEigenvectors PROPERTIES
     LABELS "unit;tdvk-03b;lr-gf-02;quadrature-audit;reciprocal-gf;mixed-eigenvectors"
     DISABLED TRUE)
-  add_test(NAME UnitLrProductGfSusceptibilityRejectIntegrationEta
-    COMMAND UnitLrProductGfSusceptibility reject_integration_eta)
-  set_tests_properties(UnitLrProductGfSusceptibilityRejectIntegrationEta PROPERTIES
+  add_fortran_unit_test(UnitLrProductEigenpairGfOracle ${TestDIR}/unit/linear_response/bare/test_product_eigenpair_gf_oracle.f90)
+  set_tests_properties(UnitLrProductEigenpairGfOracle PROPERTIES
+    LABELS "unit;tdvk-02r3;lr-gf-02;product-basis;reciprocal-gf")
+  add_test(NAME UnitLrProductEigenpairGfOracleRejectIntegrationEta
+    COMMAND UnitLrProductEigenpairGfOracle reject_integration_eta)
+  set_tests_properties(UnitLrProductEigenpairGfOracleRejectIntegrationEta PROPERTIES
     LABELS "unit;tdvk-02r3;negative;integration-controls"
     WILL_FAIL TRUE)
-  add_fortran_unit_test(UnitLrAlsdaKernel ${TestDIR}/unit/test_lr_alsda_kernel.f90)
+  add_fortran_unit_test(UnitLrAlsdaKernel ${TestDIR}/unit/linear_response/kernel_dyson/test_alsda_kernel.f90)
   set_tests_properties(UnitLrAlsdaKernel PROPERTIES LABELS "unit;kxc-01;alsda;transverse;response-kernel")
-  add_fortran_unit_test(UnitLrGoldstoneSumrule ${TestDIR}/unit/test_lr_goldstone_sumrule.f90)
-  set_tests_properties(UnitLrGoldstoneSumrule PROPERTIES LABELS "unit;gsr-01;goldstone;sum-rule;response-kernel")
-  add_fortran_unit_test(UnitTddftDyson ${TestDIR}/unit/test_tddft_dyson.f90)
-  set_tests_properties(UnitTddftDyson PROPERTIES LABELS "unit;tddft;tddy-01;dyson;loss;metric;covariance")
-  add_fortran_unit_test(UnitTddftCompactDysonOracle ${TestDIR}/unit/test_tddft_compact_dyson_oracle.f90)
-  set_tests_properties(UnitTddftCompactDysonOracle PROPERTIES
-    LABELS "unit;tddft;tdvk-07;compact;dyson;loss;representation-oracle;complex;noncommuting")
-  add_fortran_unit_test(UnitLinearResponseConfig ${TestDIR}/unit/test_linear_response_config.f90)
-  set_tests_properties(UnitLinearResponseConfig PROPERTIES LABELS "unit;linear_response;lr-ref-04b;config")
+  add_fortran_unit_test(UnitLrLinearResponseConfig ${TestDIR}/unit/linear_response/class/test_linear_response_config.f90)
+  set_tests_properties(UnitLrLinearResponseConfig PROPERTIES LABELS "unit;linear_response;lr-ref-04b;config")
   foreach(_lr_config_row row_radial_lehmann_alsda row_radial_lehmann_lcmm row_radial_gf_alsda
           row_radial_gf_lcmm row_product_alsda row_product_none row_projected_none
           row_projected_stoner row_projected_lcmm)
-    add_test(NAME UnitLinearResponseConfig_${_lr_config_row}
-      COMMAND UnitLinearResponseConfig)
-    set_tests_properties(UnitLinearResponseConfig_${_lr_config_row} PROPERTIES
+    add_test(NAME UnitLrLinearResponseConfig_${_lr_config_row}
+      COMMAND UnitLrLinearResponseConfig)
+    set_tests_properties(UnitLrLinearResponseConfig_${_lr_config_row} PROPERTIES
       LABELS "unit;linear_response;lr-ref-04b;compatibility")
   endforeach()
   foreach(_lr_config_negative bad-row bad-bare bad-solver bad-diagnostics bad-projection bad-channel bad-eta
           bad-invariants-gamma bad-invariants-pair capability-soc capability-overlap)
-    add_test(NAME UnitLinearResponseConfigReject_${_lr_config_negative}
-      COMMAND UnitLinearResponseConfig ${_lr_config_negative})
-    set_tests_properties(UnitLinearResponseConfigReject_${_lr_config_negative} PROPERTIES
+    add_test(NAME UnitLrLinearResponseConfigReject_${_lr_config_negative}
+      COMMAND UnitLrLinearResponseConfig ${_lr_config_negative})
+    set_tests_properties(UnitLrLinearResponseConfigReject_${_lr_config_negative} PROPERTIES
       LABELS "unit;linear_response;lr-ref-04b;negative"
       WILL_FAIL TRUE)
   endforeach()
@@ -830,10 +825,6 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitGreenLifecycle ${TestDIR}/unit/test_green_lifecycle.f90)
   add_fortran_unit_test(UnitLrRsGfRepresentation ${TestDIR}/unit/test_lr_rs_gf_representation.f90)
   set_tests_properties(UnitLrRsGfRepresentation PROPERTIES LABELS "unit;lr-rep;green;representation;screening;bridge")
-  add_fortran_unit_test(UnitLrGfEndpointAugmentation ${TestDIR}/unit/test_lr_gf_endpoint_augmentation.f90)
-  set_tests_properties(UnitLrGfEndpointAugmentation PROPERTIES LABELS "unit;lr-gf;endpoint;augmentation;pauli;oracle;negative")
-  add_fortran_unit_test(UnitLrRsGfSusceptibility ${TestDIR}/unit/test_lr_rs_gf_susceptibility.f90)
-  set_tests_properties(UnitLrRsGfSusceptibility PROPERTIES LABELS "unit;rsgf-01;native-real-space;gf;full-response;q-phase")
   set_tests_properties(UnitGreenLifecycle PROPERTIES LABELS "unit;green;lifecycle")
   add_fortran_unit_test(UnitXcSelectorSemantics ${TestDIR}/unit/test_xc_selector_semantics.f90)
   set_tests_properties(UnitXcSelectorSemantics PROPERTIES LABELS "unit;xc;selector;libxc")
