@@ -1,5 +1,5 @@
 ! DRESP-03TG-CLOSE -- native Turek contour and Fourier closure gates.
-program test_dresp03tg_native_contour
+module test_path_operator_contour_mod
    use basis_mod, only: basis_init
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use charge_mod, only: charge
@@ -17,6 +17,8 @@ program test_dresp03tg_native_contour
    use precision_mod, only: rp
    use timer_mod, only: g_timer, timer
    implicit none
+   private
+   public :: run_test_path_operator_contour
 
    type(control) :: ctl
    type(lattice), target :: lat
@@ -40,6 +42,10 @@ program test_dresp03tg_native_contour
    logical :: bounds_inside
    integer :: i, ix, iy, iz, iq, ik, ir
 
+
+contains
+
+   subroutine run_test_path_operator_contour()
    call init_math_operators()
    call g_logger%init()
    g_timer = timer()
@@ -209,7 +215,8 @@ program test_dresp03tg_native_contour
       native_jq,native_jij,native_jq_roundtrip,k_full,k_full_weights,k_cyclic,k_cyclic_weights,q_cyclic,r_cyclic, &
       jq_ud,jq_du,pair_ud,pair_du,jq_pair_ft)
 
-contains
+   end subroutine run_test_path_operator_contour
+
 
    subroutine pole_singular_value_oracle(k_samples, old_max, corrected_max, sigma_max, relative_max, &
                                          sigma_rep, relative_rep, norm_rep)
@@ -388,4 +395,4 @@ contains
       expected = 2.0_rp*(j0-jq)
       error = abs(coefficient-expected)
    end function heisenberg_curvature_oracle
-end program test_dresp03tg_native_contour
+end module test_path_operator_contour_mod

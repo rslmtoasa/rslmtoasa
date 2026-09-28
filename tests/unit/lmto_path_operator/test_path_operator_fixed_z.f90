@@ -12,7 +12,7 @@
 !   global spin-major space:             up(site1,site2), down(site1,site2)
 !                                       (4*norb)
 !------------------------------------------------------------------------------
-program test_dresp03tg_native_fixed_z
+module test_path_operator_fixed_z_mod
    use precision_mod, only: rp
    use math_mod, only: ang2au, init_math_operators, i_unit, qm_canonical
    use timer_mod, only: g_timer, timer
@@ -30,6 +30,8 @@ program test_dresp03tg_native_fixed_z
       native_screened_p_matrix, native_delta_p, native_inverse, native_path_operator, &
       native_exchange_integrand, native_finite_h_integrand, native_collinear_pauli_integrand
    implicit none
+   private
+   public :: run_test_path_operator_fixed_z
 
    type(control) :: ctl
    type(lattice), target :: lat
@@ -73,6 +75,10 @@ program test_dresp03tg_native_fixed_z
    logical :: failed
    real(rp) :: r4_max_fd_error, r4_max_contact_norm, r4_max_vertex_raw_error, r4_max_vertex_transformed_error
 
+
+contains
+
+   subroutine run_test_path_operator_fixed_z()
    call init_math_operators()
    call run_two_factor_contact_trace_regression()
    call g_logger%init()
@@ -549,7 +555,8 @@ program test_dresp03tg_native_fixed_z
    call r4_fixture%clear()
    return
 
-contains
+   end subroutine run_test_path_operator_fixed_z
+
 
    ! This is deliberately independent of the material fixture.  The torque
    ! terms vanish, so the public force-theorem API must return the explicit
@@ -2436,4 +2443,4 @@ contains
       rotated=moment*cos(angle)+r5_cross(axis,moment)*sin(angle)+axis*dot_product(axis,moment)*(1.0_rp-cos(angle))
    end function r8_rotate_moment
 
-end program test_dresp03tg_native_fixed_z
+end module test_path_operator_fixed_z_mod
