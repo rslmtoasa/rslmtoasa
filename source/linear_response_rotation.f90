@@ -2930,7 +2930,6 @@ contains
       character(len=24) :: gate_status
       character(len=10) :: pole_status
 
-      if (.not.native_ready) error stop 'rotation dynamics requires native_turek=true for the independent adiabatic reference'
       if (fixture%nsite/=1) error stop 'first Fe rotation pole driver currently reports the one-site primitive bcc state'
       if (recip%hamiltonian%ccor_2c) error stop 'first Fe rotation pole state requires CCOR off'
       if (abs(recip%temperature-300.0_rp)>1.0e-8_rp) error stop 'first Fe rotation pole state requires T=300 K'
@@ -2938,7 +2937,10 @@ contains
       open(newunit=unit,file=trim(rotation_output_file),status='replace',action='write')
       write(unit,'(a)') '# native second-order local-rotation dynamics; K^R = contact + unsymmetrized retarded bubble'
       write(unit,'(a)') '# energies are Ry internally; reported q_Ainv uses 2*pi/alat times the actual Cartesian reciprocal vector'
-      write(unit,'(a)') '# q_fraction q_Ainv adiabatic_finiteH_meV adiabatic_Turek_meV pole_ReK_meV pole_minK_meV loss_peak_meV eta_Ry FWHM_meV max_minus_ImG_invRy circular_channel ReK_Ry ImK_Ry absK_Ry frequency_resolution_Ry status'
+      write(unit,'(a,l1)') '# native_turek_diagnostic_enabled = ',native_ready
+      write(unit,'(a)') '# pole_window_basis = H2 static rotation curvature from finite-H; Turek is diagnostic only'
+      write(unit,'(a)') '# missing diagnostic fields are written as -'
+      write(unit,'(a)') '# q_fraction q_Ainv adiabatic_finiteH_meV adiabatic_Turek_meV_or_missing pole_ReK_meV pole_minK_meV loss_peak_meV eta_Ry FWHM_meV max_minus_ImG_invRy circular_channel ReK_Ry ImK_Ry absK_Ry frequency_resolution_Ry status'
       write(*,'(a,3(i0,1x))') 'Rotation dynamics accepted k mesh = ',recip%nk_mesh
       write(*,'(a,es16.8)') 'Rotation dynamics EF (Ry) = ',recip%fermi_level
       write(*,'(a,es16.8)') 'Rotation dynamics temperature (K) = ',recip%temperature
@@ -3005,7 +3007,13 @@ contains
          request%state=>state; request%omega=0.0_rp; request%eta=0.0_rp; request%exact_static=.true.; request%want_inverse=.false.
          call evaluate_rotation_response(request,response)
          finite_mev=2.0_rp*real(finite_h(1,1,iq),rp)/max(abs(state%magnetization),1.0e-12_rp)*ry_to_mev
-         turek_mev=4.0_rp*native_delta(iq)/max(abs(state%magnetization),1.0e-12_rp)*ry_to_mev
+         if (native_ready) then
+            turek_mev=4.0_rp*native_delta(iq)/max(abs(state%magnetization),1.0e-12_rp)*ry_to_mev
+         else
+            ! Keep the internal value harmless, but never serialize it as a
+            ! physical zero.  The row writer emits an explicit missing marker.
+            turek_mev=0.0_rp
+         end if
          qmag=2.0_rp*pi/lat%alat*sqrt(sum(q_cart(:,iq)**2))
          if (iq==2) then
             call prepare_rotation_response(fixture,recip,-q_direct(:,iq),minus_state)
@@ -3065,10 +3073,18 @@ contains
             channel_name='none'
             expected=0.0_rp
          end if
-         omega_max=max(rotation_pole_window_floor,rotation_pole_window_scale*max(abs(finite_mev),abs(turek_mev))/ry_to_mev)
+         ! The H2 finite-H curvature is the production static scale.  Turek
+         ! is an independent diagnostic and must not influence branch,
+         ! window, or pole acceptance decisions.
+         omega_max=max(rotation_pole_window_floor,rotation_pole_window_scale*abs(finite_mev)/ry_to_mev)
          omega_max=min(omega_max,rotation_pole_window_max)
-         write(*,'(a,i0,a,3(es12.4,1x),a,es12.4,a,es12.4)') 'Rotation q index ',iq,' finite-H/Turek/meV=', &
-            finite_mev,turek_mev,qmag,' A^-1 omega_window_Ry=',omega_max,' predicted_Ry=',expected
+         if (native_ready) then
+            write(*,'(a,i0,a,3(es12.4,1x),a,es12.4,a,es12.4)') 'Rotation q index ',iq,' finite-H/Turek/meV=', &
+               finite_mev,turek_mev,qmag,' A^-1 omega_window_Ry=',omega_max,' predicted_Ry=',expected
+         else
+            write(*,'(a,i0,a,es12.4,a,es12.4,a,es12.4)') 'Rotation q index ',iq,' finite-H/meV=',finite_mev, &
+               ' q_A^-1=',qmag,' omega_window_Ry=',omega_max
+         end if
          if (channel>0) then
             if (channel==1) then
                ipole=1
@@ -3092,17 +3108,18 @@ contains
                end if
                fwhm_mev=-1.0_rp
                if (fwhm>=0.0_rp) fwhm_mev=fwhm*ry_to_mev
-               write(unit,'(3(es14.6,1x),9(es14.6,1x),a,4(es14.6,1x),a)') q_direct(:,iq),qmag,finite_mev,turek_mev, &
+               call write_rotation_dynamics_row(unit,q_direct(:,iq),qmag,finite_mev,native_ready,turek_mev, &
                   pole_re*ry_to_mev,pole_min*ry_to_mev,loss_peak*ry_to_mev,rotation_eta_ladder(ieta),fwhm_mev,loss_height, &
-                  trim(channel_name),re_k,im_k,abs_k,resolution,trim(pole_status)
+                  trim(channel_name),re_k,im_k,abs_k,resolution,trim(pole_status))
                write(*,'(a,3(es14.6,1x),a,es12.4,a,a,a,l1)') '  pole ReK/minK/loss (meV) = ', &
                   pole_re*ry_to_mev,pole_min*ry_to_mev,loss_peak*ry_to_mev,' eta=',rotation_eta_ladder(ieta), &
                   ' channel=',trim(channel_name),' resolved=',resolved
             end do
             if (pole_ok(nfinite)) clean_count=clean_count+1
          else
-            write(unit,'(3(es14.6,1x),9(es14.6,1x),a,4(es14.6,1x),a)') q_direct(:,iq),qmag,finite_mev,turek_mev, &
-               -1.0_rp,-1.0_rp,-1.0_rp,rotation_eta_ladder(3),-1.0_rp,0.0_rp,'none',0.0_rp,0.0_rp,0.0_rp,0.0_rp,'NO_POSITIVE_CHANNEL'
+            call write_rotation_dynamics_row(unit,q_direct(:,iq),qmag,finite_mev,native_ready,turek_mev, &
+               -1.0_rp,-1.0_rp,-1.0_rp,rotation_eta_ladder(3),-1.0_rp,0.0_rp,'none', &
+               0.0_rp,0.0_rp,0.0_rp,0.0_rp,'NO_POSITIVE_CHANNEL')
          end if
          call state%clear()
          call minus_state%clear()
@@ -3155,6 +3172,23 @@ contains
       call state%clear(); call minus_state%clear()
       deallocate(reduced)
    end subroutine run_native_rotation_dynamics_campaign
+
+   subroutine write_rotation_dynamics_row(unit,q,qmag,finite_mev,turek_available,turek_mev,pole_re,pole_min,loss_peak,eta, &
+      fwhm,loss_height,channel_name,re_k,im_k,abs_k,resolution,status)
+      integer, intent(in) :: unit
+      real(rp), intent(in) :: q(3),qmag,finite_mev,turek_mev,pole_re,pole_min,loss_peak,eta,fwhm,loss_height
+      logical, intent(in) :: turek_available
+      character(len=*), intent(in) :: channel_name,status
+      real(rp), intent(in) :: re_k,im_k,abs_k,resolution
+
+      if (turek_available) then
+         write(unit,'(3(es14.6,1x),9(es14.6,1x),a,1x,4(es14.6,1x),a)') q,qmag,finite_mev,turek_mev, &
+            pole_re,pole_min,loss_peak,eta,fwhm,loss_height,trim(channel_name),re_k,im_k,abs_k,resolution,trim(status)
+      else
+         write(unit,'(3(es14.6,1x),2(es14.6,1x),a,1x,6(es14.6,1x),a,1x,4(es14.6,1x),a)') q,qmag,finite_mev,'-', &
+            pole_re,pole_min,loss_peak,eta,fwhm,loss_height,trim(channel_name),re_k,im_k,abs_k,resolution,trim(status)
+      end if
+   end subroutine write_rotation_dynamics_row
 
    subroutine scan_rotation_pole(state,channel,omega_max,eta,coarse_points,fine_points,refinement_half_width, &
       pole_re,pole_min,loss_peak,loss_height,fwhm,resolution,re_k,im_k,abs_k,pole_slope,resolved)

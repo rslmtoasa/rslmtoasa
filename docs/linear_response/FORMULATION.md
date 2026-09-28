@@ -55,6 +55,14 @@ The scan compares the positive-real-kernel crossing, minimum `|K|`, and loss
 peak. A pole is not promoted when these diagnostics disagree or the eta
 ladder is unresolved.
 
+`native_turek` (and its compatibility alias `native_crosscheck`) is optional.
+When enabled, the Turek path is evaluated as an independent static diagnostic;
+it does not select the circular branch, pole window, pole acceptance, static
+normalization, or any Goldstone treatment. The pole-window estimate uses only
+the production finite-H/H2 static curvature and the explicit window controls.
+With the diagnostic disabled, the rotation output marks the Turek field as
+missing rather than writing a fabricated zero.
+
 Sources: `lr-campaign-archive:docs/NATIVE_ROTATION_DYNAMICS.md`, `lr-campaign-archive:docs/TDDFT_FORMULATION.md`
 
 ## Spatial TD-DFT

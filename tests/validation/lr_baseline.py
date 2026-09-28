@@ -29,7 +29,8 @@ def parse_rows(path: Path) -> list[list[float]]:
         values: list[float] = []
         for token in stripped.split():
             if token == "-":
-                # Rotation output uses '-' for the circular-channel field.
+                # Rotation output uses '-' for the circular-channel field and
+                # for optional diagnostics that were not requested.
                 continue
             try:
                 value = float(token.replace("D", "E").replace("d", "e"))

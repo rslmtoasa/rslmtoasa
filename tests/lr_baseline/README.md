@@ -22,6 +22,11 @@ Comments, build identity, timing, paths, log order, rotation channel text,
 and status words are ignored.  The references are never regenerated from the
 current executable.
 
+`LrRotationTurekIndependence` runs the same rotation deck with
+`native_turek=.false.` and `.true.` and compares the H2-derived rows. The
+disabled run must report the Turek field as missing; the enabled run may add
+only its independent diagnostic data.
+
 Configure the regression tests and run the closeout set with:
 
 ```sh

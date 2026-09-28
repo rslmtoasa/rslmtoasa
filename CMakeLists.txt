@@ -607,6 +607,15 @@ endforeach()
     LABELS "lr_baseline;linear_response;rotation;archived"
     TIMEOUT 300)
 
+  add_test(NAME LrRotationTurekIndependence
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_rotation_turek_independence.py
+      --binary ${TestBinary}
+      --case ${TestDIR}/lr_baseline/cases/rotation
+      --scratch-root ${CMAKE_BINARY_DIR}/Testing/lr_rotation_turek_independence)
+  set_tests_properties(LrRotationTurekIndependence PROPERTIES
+    LABELS "lr_baseline;linear_response;rotation;native-turek;independence"
+    TIMEOUT 600)
+
   add_test(NAME LrBaselineTddftLehmann
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_baseline.py
       --binary ${TestBinary}
