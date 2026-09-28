@@ -6,7 +6,7 @@
 ! this test.  Its two bcc representatives are expanded over their exact
 ! cubic orbits before the native Fourier convention is applied.
 !------------------------------------------------------------------------------
-program test_dresp03q_native_lkag
+module test_rotation_static_lkag_mod
    use basis_mod, only: basis_init
    use control_mod, only: control
    use charge_mod, only: charge
@@ -22,6 +22,8 @@ program test_dresp03q_native_lkag
    use reciprocal_mod, only: reciprocal
    use timer_mod, only: g_timer, timer
    implicit none
+   private
+   public :: run_test_rotation_static_lkag
 
    type(control) :: ctl
    type(lattice), target :: lat
@@ -46,6 +48,10 @@ program test_dresp03q_native_lkag
    integer :: i, ik, iq, nk, nmat, nsite
    logical :: failed
 
+
+contains
+
+   subroutine run_test_rotation_static_lkag()
    call init_math_operators()
    call g_logger%init()
    g_timer = timer()
@@ -139,7 +145,8 @@ program test_dresp03q_native_lkag
    end if
    write (*, '(a)') 'RESULT: PASS'
 
-contains
+   end subroutine run_test_rotation_static_lkag
+
 
    function spread_q(q, count) result(points)
       real(rp), intent(in) :: q(3)
@@ -203,4 +210,4 @@ contains
       value = 4.0_rp*atan(1.0_rp)
    end function pi_value
 
-end program test_dresp03q_native_lkag
+end module test_rotation_static_lkag_mod

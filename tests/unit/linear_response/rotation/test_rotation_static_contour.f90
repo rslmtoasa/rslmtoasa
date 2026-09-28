@@ -1,7 +1,7 @@
 !------------------------------------------------------------------------------
 ! DRESP-03G -- independent finite-H spectral/contour oracle.
 !------------------------------------------------------------------------------
-program test_dresp03g_contour
+module test_rotation_static_contour_mod
    use precision_mod, only: rp
    use linear_response_mod, only: force_theorem_finite_q_hessian_from_eigenbasis_metallic, &
       force_theorem_finite_q_hessian_from_eigenbasis
@@ -9,6 +9,8 @@ program test_dresp03g_contour
    use linear_response_mod, only: finite_h_contour_options, finite_h_contour_report, &
       force_theorem_finite_q_hessian_from_resolvent, force_theorem_finite_q_hessian_from_zero_temperature_contour
    implicit none
+   private
+   public :: run_test_rotation_static_contour
 
    complex(rp) :: h(4,4), ti(4,4), tj(4,4), cij(4,4), tq(4,4,1), tm(4,4,1), cstack(4,4,1,1), vectors(4,4)
    complex(rp) :: hs(4,4), he(4,4), tqs(4,4,1), tms(4,4,1), cs(4,4,1,1)
@@ -20,6 +22,10 @@ program test_dresp03g_contour
    type(finite_h_contour_options) :: options
    type(finite_h_contour_report) :: finite_report, zero_report
    integer :: i
+
+contains
+
+   subroutine run_test_rotation_static_contour()
    contour_sequence = [8,16,32,64]
 
    call make_noncommuting_fixture(h,ti,tj,cij)
@@ -92,7 +98,8 @@ program test_dresp03g_contour
    write(*,'(a,i0)') 'DRESP-03G zero-T contour nodes = ', zero_report%contour_points
    write(*,'(a)') 'DRESP-03G: PASS'
 
-contains
+   end subroutine run_test_rotation_static_contour
+
 
    subroutine make_noncommuting_fixture(h,ti,tj,c)
       complex(rp), intent(out) :: h(4,4),ti(4,4),tj(4,4),c(4,4)
@@ -194,4 +201,4 @@ contains
       error=maxval(abs([real(e-ee,rp),real(b-bb,rp),real(d-dd,rp)]))
    end subroutine compare_similarity
 
-end program test_dresp03g_contour
+end module test_rotation_static_contour_mod

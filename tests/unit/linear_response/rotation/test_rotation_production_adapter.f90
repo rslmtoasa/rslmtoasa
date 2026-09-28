@@ -6,7 +6,7 @@
 ! Hamiltonian and compared with the production reciprocal assembler at several
 ! k points.  The source Hamiltonian is intent(in) at the adapter boundary.
 !------------------------------------------------------------------------------
-program test_dresp03q_production_adapter
+module test_rotation_production_adapter_mod
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use basis_mod, only: basis_init
    use control_mod, only: control
@@ -29,6 +29,8 @@ program test_dresp03q_production_adapter
    use reciprocal_mod, only: reciprocal
    use timer_mod, only: g_timer, timer
    implicit none
+   private
+   public :: run_test_rotation_production_adapter
 
    type(control) :: ctl
    type(lattice), target :: lat
@@ -51,6 +53,10 @@ program test_dresp03q_production_adapter
    real(rp) :: max_error, max_relative, adapter_error, point_error, relative_error
    integer :: ik, i, iq, nk, nmat, gamma_index, generic_index
 
+
+contains
+
+   subroutine run_test_rotation_production_adapter()
    call init_math_operators()
    call g_logger%init()
    g_timer = timer()
@@ -183,7 +189,8 @@ program test_dresp03q_production_adapter
    deallocate(h_production,h_fixture,adapter_points,weights,eigenvalues,eigenvectors,endpoint_values,endpoint_vectors, &
       shifted_points,torque_q,torque_minus_q,mixed,jq_ud,jq_du,jq_sym,native_delta,native_curvature)
 
-contains
+   end subroutine run_test_rotation_production_adapter
+
 
    subroutine check_rotation_response(base,recip)
       type(lmto_live_hamiltonian_fixture), target, intent(in) :: base
@@ -631,4 +638,4 @@ contains
       value=sqrt(sum(abs(a-b)**2))/max(sqrt(sum(abs(b)**2)),tiny(1.0_rp))
    end function matrix_relative
 
-end program test_dresp03q_production_adapter
+end module test_rotation_production_adapter_mod

@@ -5,7 +5,7 @@
 ! builds a period-two Hamiltonian directly from the LMTO bond value and never
 ! calls a torque or Hessian routine while evaluating the finite differences.
 !------------------------------------------------------------------------------
-program test_dresp03q_finite_q
+module test_rotation_finite_q_torque_mod
    use precision_mod, only: rp
    use lmto_magnetic_tangent_mod, only: lmto_bond_value, lmto_hhmag_to_spinor
    use linear_response_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_init, &
@@ -14,6 +14,8 @@ program test_dresp03q_finite_q
    use lr_rotation_oracles_mod, only: assemble_lmto_torque, assemble_lmto_mixed_derivative, &
       force_theorem_hessian_from_eigenbasis
    implicit none
+   private
+   public :: run_test_rotation_finite_q_torque
 
    type(lmto_live_hamiltonian_fixture) :: fixture
    integer, parameter :: ncell = 2, nmat = 2, nk = 2
@@ -31,6 +33,10 @@ program test_dresp03q_finite_q
    real(rp) :: multisite_hermitian_error
    integer :: ik
 
+
+contains
+
+   subroutine run_test_rotation_finite_q_torque()
    call make_fixture(fixture)
    call prepare_primitive_data(fixture, evals, vecs, endpoint_evals, endpoint_vecs, torques_q, torques_minus_q, contacts)
    call force_theorem_finite_q_hessian_from_eigenbasis_batch(evals, vecs, endpoint_evals, endpoint_vecs, fermi, weights, &
@@ -66,7 +72,8 @@ program test_dresp03q_finite_q
    write (*, '(a)') 'RESULT: PASS'
    call fixture%clear()
 
-contains
+   end subroutine run_test_rotation_finite_q_torque
+
 
    subroutine make_fixture(fix)
       type(lmto_live_hamiltonian_fixture), intent(out) :: fix
@@ -361,4 +368,4 @@ contains
       c=[a(2)*b(3)-a(3)*b(2),a(3)*b(1)-a(1)*b(3),a(1)*b(2)-a(2)*b(1)]
    end function cross3
 
-end program test_dresp03q_finite_q
+end module test_rotation_finite_q_torque_mod

@@ -1,11 +1,13 @@
 ! Independent finite-q oracle for the second-order local-rotation adapter.
-program test_dresp03q_second_order_rotation
+module test_rotation_second_order_mod
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use precision_mod, only: rp
    use math_mod, only: pi
    use linear_response_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_init, &
       assemble_lmto_hamiltonian, assemble_lmto_finite_q_torque, assemble_lmto_finite_q_mixed_derivative
    implicit none
+   private
+   public :: run_test_rotation_second_order
    integer, parameter :: nc=4, ns=2
    real(rp), parameter :: q0(3)=[0.0_rp,0.0_rp,0.0_rp], qf(3)=[0.25_rp,0.0_rp,0.0_rp]
    real(rp), parameter :: k(3)=[0.0_rp,0.0_rp,0.0_rp], axis(3)=[1.0_rp,0.0_rp,0.0_rp]
@@ -15,6 +17,10 @@ program test_dresp03q_second_order_rotation
    real(rp) :: base_error, torque_err(2,3), contact_err(2,3), conv_t, conv_c
    integer :: iq, is, fail
 
+
+contains
+
+   subroutine run_test_rotation_second_order()
    call make_fixture(fix)
    call assemble_lmto_hamiltonian(fix,k,h)
    call direct_projection(fix,k,k,cmplx(0.0_rp,0.0_rp,rp),cmplx(0.0_rp,0.0_rp,rp),h_direct)
@@ -59,7 +65,8 @@ program test_dresp03q_second_order_rotation
    if (fail/=0) error stop 'second-order local-rotation adapter oracle failed'
    write(*,'(a)') 'second-order local-rotation adapter oracle: PASS'
 
-contains
+   end subroutine run_test_rotation_second_order
+
 
    subroutine make_fixture(f)
       type(lmto_live_hamiltonian_fixture), intent(out) :: f
@@ -216,4 +223,4 @@ contains
       value=sqrt(sum(abs(a-b)**2))/max(sqrt(sum(abs(b)**2)),tiny(1.0_rp))
    end function relative_matrix
 
-end program test_dresp03q_second_order_rotation
+end module test_rotation_second_order_mod

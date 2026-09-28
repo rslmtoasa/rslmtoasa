@@ -6,7 +6,7 @@
 ! T, and C paths then consume those channels through the same bond and HOH
 ! product algebra used by the reciprocal ham_only representation.
 !------------------------------------------------------------------------------
-program test_dresp03t_lmto_hessian
+module test_rotation_torque_hessian_mod
    use precision_mod, only: rp
    use linear_response_mod, only: lmto_live_hamiltonian_fixture, lmto_fixture_init, &
       assemble_lmto_hamiltonian
@@ -14,11 +14,17 @@ program test_dresp03t_lmto_hessian
       force_theorem_hessian_from_eigenbasis, mixed_second_difference, grand_potential_from_eigenvalues
    use lmto_magnetic_tangent_mod, only: lmto_transform_potential
    implicit none
+   private
+   public :: run_test_rotation_torque_hessian
 
    type(lmto_live_hamiltonian_fixture) :: fixture
    real(rp) :: max_first_error, mixed_error, theorem_error, contact_gap
    logical :: failed
 
+
+contains
+
+   subroutine run_test_rotation_torque_hessian()
    failed = .false.
    call make_legitimate_fixture(fixture)
    call test_first_derivative_oracle(fixture, max_first_error)
@@ -39,7 +45,8 @@ program test_dresp03t_lmto_hessian
    end if
    write (*, '(a)') 'RESULT: PASS'
 
-contains
+   end subroutine run_test_rotation_torque_hessian
+
 
    subroutine make_legitimate_fixture(fix)
       type(lmto_live_hamiltonian_fixture), intent(out) :: fix
@@ -226,4 +233,4 @@ contains
       c = [a(2)*b(3)-a(3)*b(2), a(3)*b(1)-a(1)*b(3), a(1)*b(2)-a(2)*b(1)]
    end function cross3
 
-end program test_dresp03t_lmto_hessian
+end module test_rotation_torque_hessian_mod
