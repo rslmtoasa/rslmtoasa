@@ -116,6 +116,37 @@ available at the `lr-campaign-archive` tag, at the path listed below.
 
 ## Linear response (LR) campaigns, 2026
 
+### Condensed into docs/linear_response/
+
+| Campaign / file | Date | Conclusion (≤ 25 words) | Path at tag |
+|---|---|---|---|
+| TDDFT_FORMULATION.md | 2026-09-28 | Consolidated formulation scope, production status, route boundaries, and the live `&linear_response` compatibility contract. | `lr-campaign-archive:docs/TDDFT_FORMULATION.md` |
+| NATIVE_ROTATION_DYNAMICS.md | 2026-09-28 | Consolidated the production rotation kernel, exact Gamma identity, static Hessian reduction, and pole-control policy. | `lr-campaign-archive:docs/NATIVE_ROTATION_DYNAMICS.md` |
+| LR_TDDFT_CONVENTIONS.md | 2026-09-28 | Consolidated certified units, signs, Fourier phase, circular channels, radial measures, and Pauli-response conventions. | `lr-campaign-archive:docs/LR_TDDFT_CONVENTIONS.md` |
+| KXC_ALSDA_TRANSVERSE_KERNEL.md | 2026-09-28 | Consolidated the local ALSDA interaction and raw static diagnostics without promoting Goldstone or material claims. | `lr-campaign-archive:docs/KXC_ALSDA_TRANSVERSE_KERNEL.md` |
+| GOLDSTONE_SUMRULE_INTERACTION.md | 2026-09-28 | Consolidated the independent LCMM sum-rule interaction and its finite-response diagnostic boundary. | `lr-campaign-archive:docs/GOLDSTONE_SUMRULE_INTERACTION.md` |
+| TDDFT_DYSON_AND_LOSS.md | 2026-09-28 | Consolidated canonical Dyson algebra, metric placement, retarded loss, conditioning, and route provenance. | `lr-campaign-archive:docs/TDDFT_DYSON_AND_LOSS.md` |
+| TDDFT_PRODUCTION_DRIVER.md | 2026-09-28 | Consolidated post-SCF orchestration and the boundary between registered reciprocal routes and provider-baseline evidence. | `lr-campaign-archive:docs/TDDFT_PRODUCTION_DRIVER.md` |
+| TDDFT_RS_GF_BACKEND.md | 2026-09-28 | Consolidated the directed GF-provider contract, real-axis bubble, q phase, controls, and convergence reporting. | `lr-campaign-archive:docs/TDDFT_RS_GF_BACKEND.md` |
+| RSGF_ENDPOINT_AUGMENTATION.md | 2026-09-28 | Consolidated four-branch endpoint augmentation, contact terms, effective-Hamiltonian provenance, and capability scope. | `lr-campaign-archive:docs/RSGF_ENDPOINT_AUGMENTATION.md` |
+| LR_KS_SUSCEPTIBILITY.md | 2026-09-28 | Consolidated the Pauli transverse Kohn-Sham susceptibility and its reciprocal endpoint ordering. | `lr-campaign-archive:docs/LR_KS_SUSCEPTIBILITY.md` |
+| LR_LMTO_PRODUCT_RESPONSE_BASIS.md | 2026-09-28 | Consolidated the weighted compact product basis, endpoint branches, rank diagnostics, and response-space mapping. | `lr-campaign-archive:docs/LR_LMTO_PRODUCT_RESPONSE_BASIS.md` |
+| LR_PAULI_TRANSITION_VERTEX.md | 2026-09-28 | Consolidated the Pauli transition vertex, radial measure, angular normalization, and deferred exact-SR boundary. | `lr-campaign-archive:docs/LR_PAULI_TRANSITION_VERTEX.md` |
+| LR_RESPONSE_BASIS_MAPPING.md | 2026-09-28 | Consolidated direct-coordinate q/k mapping, endpoint gauges, radial/angular indices, and canonical response ordering. | `lr-campaign-archive:docs/LR_RESPONSE_BASIS_MAPPING.md` |
+| LR_RESPONSE_SPACE_ALGEBRA.md | 2026-09-28 | Consolidated raw/canonical metric algebra, compact coordinates, and operator composition rules. | `lr-campaign-archive:docs/LR_RESPONSE_SPACE_ALGEBRA.md` |
+| DRESP_01_PROJECTED_SITE_SPIN_CONTRACT.md | 2026-09-28 | Consolidated projected site spin operators, moments, and the bounded site-space contract. | `lr-campaign-archive:docs/DRESP_01_PROJECTED_SITE_SPIN_CONTRACT.md` |
+| DRESP_02_PROJECTED_RECIPROCAL_CHI0.md | 2026-09-28 | Consolidated projected reciprocal site `chi0`, circular normalization, q covariance, and broadening diagnostics. | `lr-campaign-archive:docs/DRESP_02_PROJECTED_RECIPROCAL_CHI0.md` |
+| DRESP_03G_FINITE_H_CONTOUR_GF.md | 2026-09-28 | Consolidated finite-H contour GF oracles and their role as validation infrastructure. | `lr-campaign-archive:docs/DRESP_03G_FINITE_H_CONTOUR_GF.md` |
+| DRESP_03Q_FINITE_Q_LKAG_CLOSURE.md | 2026-09-28 | Consolidated finite-q ordered-pair LKAG closure and q-reversal checks. | `lr-campaign-archive:docs/DRESP_03Q_FINITE_Q_LKAG_CLOSURE.md` |
+| DRESP_03T_LOCAL_TORQUE_HESSIAN_REPAIR.md | 2026-09-28 | Consolidated local torque/Hessian repair diagnostics and their non-production claim boundary. | `lr-campaign-archive:docs/DRESP_03T_LOCAL_TORQUE_HESSIAN_REPAIR.md` |
+| DRESP_03TG_NATIVE_TUREK_GF.md | 2026-09-28 | Consolidated native Turek GF exchange construction, ordered pairs, and finite-H diagnostics. | `lr-campaign-archive:docs/DRESP_03TG_NATIVE_TUREK_GF.md` |
+| DRESP_03TG_NATIVE_TUREK_CONTOUR_CLOSE.md | 2026-09-28 | Consolidated native Turek contour closure and bounded convergence evidence without a stiffness claim. | `lr-campaign-archive:docs/DRESP_03TG_NATIVE_TUREK_CONTOUR_CLOSE.md` |
+| DRESP_04_PROJECTED_MILLS_RPA.md | 2026-09-28 | Consolidated projected Mills/Stoner interaction, site Dyson solve, loss, and scalarization boundary. | `lr-campaign-archive:docs/DRESP_04_PROJECTED_MILLS_RPA.md` |
+| DRESP_05_PROJECTED_JUELICH_LCMM.md | 2026-09-28 | Consolidated projected Jülich/LCMM interaction, eta stability, and same-state route ledger. | `lr-campaign-archive:docs/DRESP_05_PROJECTED_JUELICH_LCMM.md` |
+| TG_FZ_R5_PRODUCTION_H_REPRESENTATION_BRIDGE.md | 2026-09-28 | Consolidated the blocked exact-H to production-H bridge and preserved H2/H_exact as distinct contracts. | `lr-campaign-archive:docs/TG_FZ_R5_PRODUCTION_H_REPRESENTATION_BRIDGE.md` |
+| TG_FZ_R7_SCREENING_REPRESENTATION_REPAIR.md | 2026-09-28 | Consolidated repaired screening representation and exact-H/native-gamma diagnostics. | `lr-campaign-archive:docs/TG_FZ_R7_SCREENING_REPRESENTATION_REPAIR.md` |
+| TG_FZ_R8R_RESOLVENT_CONTACT_CLOSURE.md | 2026-09-28 | Consolidated fixed-z resolvent contact closure and retained H2 truncation diagnostics. | `lr-campaign-archive:docs/TG_FZ_R8R_RESOLVENT_CONTACT_CLOSURE.md` |
+
 ### DRESP
 
 | Campaign / file | Date | Conclusion (≤ 25 words) | Path at tag |

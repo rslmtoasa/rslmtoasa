@@ -51,6 +51,7 @@ shared Fortran state.
 | `pre_processing` | `'buildinterface'` | `pre_processing_buildinterface` | Two-sided layered/interface SCF (`calctype='L'`, B7.5). `build_interface_full()` (region A \| active \| region B), then `surfmat()` (kernel reused unchanged) with its one-sided registry overwritten by `charge%build_interface_registry()`. Per-iteration Madelung update is `charge%interfacepot`, not `surfpot` (`self.f90` dispatch). `buildsurf` itself is untouched and remains the permanent one-sided regression oracle. |
 | `processing` | `'sd'` | `processing_sd` | Spin dynamics. Rebuilds its consumer stack from the selected pre-processing route; the Depondt predictor/corrector now performs a predictor electronic refresh, corrected update, and post-correction electronic refresh. `Val13AbInitioSpinDynamics` validates the deterministic one-site bcc-Fe zero-torque loop; `Example_impurity_B2FeCo_sd_smoke` covers the production impurity output path. Broader dynamics remain out of scope. |
 | `post_processing` | `'exchange'` | `post_processing_exchange` | Real-space intersite J_ij/D_ij; optional `do_damping=T` evaluates the route-agnostic Gilbert tensor and optional `do_inertia=T` emits the experimental raw magnetic-inertia diagnostic. Both consume the canonical Green functions filled by `gf_route`. |
+| `post_processing` | `'exchange_q'` | `run_exchange_q` | Reciprocal q-resolved exchange consumer. Rotation dynamics moved to the separate `linear_response` route; this row remains the exchange-only path. |
 | `post_processing` | `'exchange_p2rs'` | `post_processing_exchange_p2rs` | Same, Hamiltonian sourced from a PAOFLOW-format import instead of `build_bulkham()`. |
 | `post_processing` | `'conductivity'` | `post_processing_conductivity` | Real-space conductivity tensor. |
 | `post_processing` | `'conductivity_p2rs'` | `post_processing_conductivity_p2rs` | Same, PAOFLOW-imported Hamiltonian. |
@@ -60,6 +61,7 @@ shared Fortran state.
 | `post_processing` | `'bsf'` | `post_processing_bsf` → `reciprocal%calculate_bsf` (`reciprocal_bsf.f90`) | Bloch spectral function A(k,E) = −1/π Im Tr G(k,E+iη) along the canonical spglib k-path (milestone B3). Consumes the B2 engine's `dyson_kspace_inverse` per (k,E) (Σ=0 ⇒ backend E; Σ-ready for CPA/DMFT). η = `&reciprocal` green_eta, E grid = n_energy_points/dos_energy_min,max, path = `&kpath` nk_per_segment. Writes `bsf.dat` (total/up/down) + `bsf_bands.dat` overlay. Partial-trace convention in `bsf_kernel.f90` (`bsf_spectral_trace`). |
 | `post_processing` | `'kspace_green'` | `post_processing_kspace_green` | B2 validation driver: fills `green%gij` via recursion then via the k-space engine (`reciprocal%fill_green`, backend E + D≡E check) and cross-checks on-site DOS / m_z. Report-only. |
 | `post_processing` | `'frozen_magnon'` | `post_processing_frozen_magnon` | Sweeps `hamiltonian%q_ss` over a `&frozen_magnon` q-list, preferably from `q_file` (`q_coordinates='cartesian'` for `2*pi/alat` Cartesian components or `'direct'` for reciprocal-lattice coordinates), writing total energy, band energy, per-sublattice moment magnitude, and `omega(q)` to `frozen_magnon.dat`. `mode='mft'` (default) converges SCF once at the reference point, reuses that potential for a single-iteration band-energy pass at every other q, and computes `omega` from band-energy differences; `mode='scf'` re-converges at every q and computes `omega` from total-energy differences. `branch_mode='auto'` builds multi-sublattice magnon branches in `frozen_magnon_branches.dat`/`frozen_magnon_modes.dat` via the direct GBT frozen-magnon method (second derivatives of the force-theorem band-energy surface w.r.t. sublattice cone angles; Essenberger PRB 84, 174425 Eq. 26). **Single-sublattice is validated; the multi-sublattice acoustic branch is not yet gapless at Γ — see `tests/KNOWN_ISSUES.md`, deferred to B11.** See `docs/DECISIONS.md` for the archived campaign record. |
+| `post_processing` | `'linear_response'` | `linear_response%run` | Selects `&linear_response` and dispatches `rotation`, `tddft`, or `projected`; requires the accepted reciprocal bravais handoff for the latter two. See [`linear_response/FORMULATION.md`](linear_response/FORMULATION.md). |
 
 `exchange_p2rs`/`conductivity_p2rs`/`paoflow2rs` all funnel through the
 shared helper `prepare_post_processing_stack(this, use_paoflow, ...)` in
@@ -227,8 +229,29 @@ pattern for a GPU port: a C API + `iso_c_binding` wrapper module + CPU
 fallback, exactly as `rsrec_cuda_plugin.f90` does for the recursion kernels
 — do not invent a second GPU convention.
 
-### Linear-response TDDFT
-The legacy TD-DFT response implementation has been removed for clean-room redevelopment. The governing contracts and task order are in [the Luna clean-room package](dev/RS_LMTO_TDDFT_cleanroom_Luna/README.md).
+### Linear response
+
+`post_processing='linear_response'` is owned by `linear_response_mod` and is
+configured through `&linear_response`. The three formulations and their
+compatibility rows are documented in [`linear_response/FORMULATION.md`](linear_response/FORMULATION.md);
+the convention and provider contracts are in the companion documents there.
+
+The live module ownership is:
+
+| file | ownership |
+|---|---|
+| `source/linear_response.f90` | `linear_response_mod` parent types, response-space contracts, and public interfaces |
+| `source/linear_response_rotation.f90` | configuration loading/validation, rotation kernel, finite-H diagnostics, and pole scan |
+| `source/linear_response_run.f90` | formulation dispatch and production orchestration |
+| `source/linear_response_bare.f90` | bare-response services |
+| `source/linear_response_basis.f90` | response basis and product-space services |
+| `source/linear_response_kernel_dyson.f90` | ALSDA/GSR interactions and Dyson/loss services |
+| `source/lmto_path_operator.f90` | auxiliary Turek/path-operator contract; never a `chi0` provider |
+| `source/lmto_path_operator_contour.f90` | contour and ordered-pair path-operator implementation |
+
+The real-space GF provider is a separate response seam with explicit endpoint
+augmentation. The finite/provider baseline does not by itself claim a native
+production driver registration.
 
 ### Lehmann-representation Green's functions
 Entry point belongs in the **reciprocal family**, not `green.f90` — the
