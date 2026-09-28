@@ -4,11 +4,13 @@
 ! every retained branch against the band-state definition.  The 20/02 checks
 ! are explicit so a regression to one H multiplication cannot pass through a
 ! diagonal or commuting fixture.
-program test_lr_lmto_endpoint_branch_action
+module test_endpoint_branch_action_mod
    use precision_mod, only: rp
    use linear_response_mod, only: lmto_product_nbranch, lmto_product_branch_powers, &
       lmto_product_apply_branch_action
    implicit none
+   private
+   public :: run_test_endpoint_branch_action
 
    integer, parameter :: n = 5
    real(rp), parameter :: tolerance = 2.0e-12_rp
@@ -17,6 +19,10 @@ program test_lr_lmto_endpoint_branch_action
    complex(rp) :: expected(n,n), stored_expected(n,n), stored_action(n,n)
    integer :: i, j, branch, p, q
 
+
+contains
+
+   subroutine run_test_endpoint_branch_action()
    pi = acos(-1.0_rp)
    eigenvalues = [-0.83_rp, -0.21_rp, 0.17_rp, 0.64_rp, 1.13_rp]
    do j = 1, n
@@ -71,11 +77,12 @@ program test_lr_lmto_endpoint_branch_action
    end if
    write (*, '(a)') 'UnitLrLmtoEndpointBranchAction: PASS (all six powers; explicit H2 20/02; stored-dual orientation)'
 
-contains
+   end subroutine run_test_endpoint_branch_action
+
 
    pure real(rp) function frobenius_relative(left, right) result(value)
       complex(rp), intent(in) :: left(:, :), right(:, :)
       value = sqrt(sum(abs(left-right)**2))/max(sqrt(sum(abs(right)**2)), tiny(1.0_rp))
    end function frobenius_relative
 
-end program test_lr_lmto_endpoint_branch_action
+end module test_endpoint_branch_action_mod

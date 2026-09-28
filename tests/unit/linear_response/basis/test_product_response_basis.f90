@@ -5,7 +5,7 @@
 ! candidate basis independently from the live LR-05 point-vector evaluator;
 ! no production response path is changed.
 !------------------------------------------------------------------------------
-program test_lr_lmto_product_response_basis
+module test_product_response_basis_mod
    use precision_mod, only: rp
    use, intrinsic :: ieee_arithmetic
    use basis_mod, only: basis_init
@@ -20,6 +20,8 @@ program test_lr_lmto_product_response_basis
    use linear_response_mod, only: pauli_vertex_capabilities, pauli_endpoint_state, &
       pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
    implicit none
+   private
+   public :: run_test_product_response_basis
 
    integer, parameter :: nr = 51
    integer, parameter :: norb_spd = 9
@@ -38,6 +40,11 @@ program test_lr_lmto_product_response_basis
       integer :: branch = 0
    end type candidate_descriptor
 
+
+contains
+
+   subroutine run_test_product_response_basis(case_argument)
+      character(len=*), intent(in), optional :: case_argument
    call basis_init(2)
    call init_math_operators()
    call g_logger%init()
@@ -53,8 +60,12 @@ program test_lr_lmto_product_response_basis
    call inventory_and_spectra(radial_sp, space_sp, 1, failed)
    call inventory_and_spectra(radial_spd, space_spd, 2, failed)
    call scaled_svd_audit(radial_spd, space_spd, failed)
-   if (command_argument_count() > 0) then
-      call get_command_argument(1, fe_file)
+   if (present(case_argument) .and. len_trim(case_argument) > 0) then
+      if (present(case_argument)) then
+         fe_file = case_argument
+      else
+         call get_command_argument(1, fe_file)
+      end if
       call load_radial_basis_dump(trim(fe_file), radial_fe)
       call space_fe%initialize(1, 4, radial_fe%rofi, radial_fe%mesh_a, radial_fe%mesh_b, 1)
       call scaled_svd_audit(radial_fe, space_fe, failed, 'accepted Fe')
@@ -69,7 +80,8 @@ program test_lr_lmto_product_response_basis
    end if
    write (*, '(a)') 'UnitLrLmtoProductResponseBasis: PASS (inventory, Gram/SVD spectra, LR-05 closure, affine, LR-GF-02)'
 
-contains
+   end subroutine run_test_product_response_basis
+
 
    subroutine build_mesh(mesh)
       real(rp), intent(out) :: mesh(:)
@@ -703,4 +715,4 @@ contains
       deallocate(reconstructed)
    end subroutine project_and_report
 
-end program test_lr_lmto_product_response_basis
+end module test_product_response_basis_mod

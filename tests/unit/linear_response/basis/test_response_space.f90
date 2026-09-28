@@ -4,7 +4,7 @@
 ! The composition oracle below is deliberately written as nested quadrature
 ! loops.  It does not call the production matrix-composition helper.
 !------------------------------------------------------------------------------
-program test_lr_response_space
+module test_response_space_mod
    use precision_mod, only: rp
    use linear_response_mod, only: response_super_index, response_unflatten_superindex
    use linear_response_mod, only: response_space_layout, response_build_radial_metric, &
@@ -14,6 +14,8 @@ program test_lr_response_space
       response_rigid_vector_overlap, response_raw_to_canonical, response_canonical_to_raw, &
       response_metric_weights
    implicit none
+   private
+   public :: run_test_response_space
 
    integer, parameter :: nsite = 2, lmax = 1, nr = 7, nchannel = 2
    real(rp), parameter :: a = 0.035_rp, b = 0.08_rp
@@ -31,6 +33,10 @@ program test_lr_response_space
    type(response_super_index) :: item_i, item_j
    logical :: failed
 
+
+contains
+
+   subroutine run_test_response_space()
    failed = .false.
    radius(1) = 0.0_rp
    do ir = 2, nr
@@ -189,7 +195,8 @@ program test_lr_response_space
    end if
    write (*, '(a)') 'UnitLrResponseSpace: PASS (metric, origin, local, composition, adjoint, multisite, rigid-vector oracles)'
 
-contains
+   end subroutine run_test_response_space
+
 
    subroutine check_complex(actual, expected, tolerance, label, test_failed)
       complex(rp), intent(in) :: actual, expected
@@ -236,4 +243,4 @@ contains
       if (error > tolerance) test_failed = .true.
    end subroutine check_matrix
 
-end program test_lr_response_space
+end module test_response_space_mod

@@ -1,7 +1,7 @@
 !------------------------------------------------------------------------------
 ! DRESP-01 projected site-spin operator and matching moment contract.
 !------------------------------------------------------------------------------
-program test_lr_projected_site_spin
+module test_projected_site_spin_mod
    use precision_mod, only: rp
    use basis_mod, only: basis_init
    use logger_mod, only: g_logger
@@ -16,6 +16,8 @@ program test_lr_projected_site_spin
    use linear_response_mod, only: projected_site_spin_contract, projected_selector_d, &
       projected_selector_spd, projected_operator_plus, projected_operator_minus, projected_operator_z
    implicit none
+   private
+   public :: run_test_projected_site_spin
 
    integer, parameter :: nr = 51, lmax = 2, nsite = 2
    integer, parameter :: norb = (lmax + 1)**2, nbasis = 2*norb*nsite
@@ -39,6 +41,11 @@ program test_lr_projected_site_spin
    logical :: failed
    character(len=32) :: mode
 
+
+contains
+
+   subroutine run_test_projected_site_spin(case_argument)
+      character(len=*), intent(in), optional :: case_argument
    call basis_init(lmax)
    call init_math_operators()
    call g_logger%init()
@@ -46,7 +53,11 @@ program test_lr_projected_site_spin
    call setup_radial_bases(radial, radius)
 
    mode = ''
-   call get_command_argument(1, mode)
+   if (present(case_argument)) then
+      mode = case_argument
+   else
+      call get_command_argument(1, mode)
+   end if
    if (trim(mode) == 'spdf') then
       call space%initialize(nsite, 4, radius, mesh_a, mesh_b, 1)
       call contract_d%initialize(space, radial, 'spdf')
@@ -108,7 +119,8 @@ program test_lr_projected_site_spin
    end if
    write (*, '(a)') 'UnitLrProjectedSiteSpin: PASS (selectors, L=0 site functional, q endpoints, operator oracle, moments)'
 
-contains
+   end subroutine run_test_projected_site_spin
+
 
    subroutine build_mesh(mesh)
       real(rp), intent(out) :: mesh(:)
@@ -305,4 +317,4 @@ contains
       end do
    end subroutine build_moment_eigensystem
 
-end program test_lr_projected_site_spin
+end module test_projected_site_spin_mod

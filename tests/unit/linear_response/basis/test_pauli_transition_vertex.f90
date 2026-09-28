@@ -5,7 +5,7 @@
 ! harmonics and direct sphere quadrature.  The production evaluator is only
 ! used to provide the quantity under test.
 !------------------------------------------------------------------------------
-program test_lr_pauli_transition_vertex
+module test_pauli_transition_vertex_mod
    use precision_mod, only: rp
    use basis_mod, only: basis_init
    use logger_mod, only: g_logger
@@ -21,6 +21,8 @@ program test_lr_pauli_transition_vertex
       pauli_charge_matrix, pauli_sigma_x_matrix, pauli_sigma_z_matrix, pauli_sigma_plus_matrix, &
       evaluate_pauli_transition_vertex
    implicit none
+   private
+   public :: run_test_pauli_transition_vertex
 
    integer, parameter :: nr = 51, nsite = 2, lmax = 2, norb = (lmax + 1)**2
    real(rp), parameter :: mesh_a = 0.03_rp, mesh_b = 0.10_rp
@@ -40,13 +42,23 @@ program test_lr_pauli_transition_vertex
    logical :: failed
    integer :: argument_length
 
+
+contains
+
+   subroutine run_test_pauli_transition_vertex(case_argument)
+      character(len=*), intent(in), optional :: case_argument
    call basis_init(lmax)
    call init_math_operators()
    call g_logger%init()
    call build_mesh(radius)
    call setup_radial_bases(radial, radius, lmax)
 
-   call get_command_argument(1, mode, length=argument_length)
+   if (present(case_argument)) then
+      mode = case_argument
+      argument_length = len_trim(case_argument)
+   else
+      call get_command_argument(1, mode, length=argument_length)
+   end if
    if (argument_length > 0 .and. len_trim(mode) > 0) then
       call run_capability_rejection(mode, radius)
       error stop 'LR-05 capability rejection test unexpectedly returned'
@@ -96,7 +108,8 @@ program test_lr_pauli_transition_vertex
    end if
    write (*, '(a)') 'UnitLrPauliTransitionVertex: PASS (angular, Hermitian, folded endpoint, occupied Pauli closure)'
 
-contains
+   end subroutine run_test_pauli_transition_vertex
+
 
    subroutine build_mesh(mesh)
       real(rp), intent(out) :: mesh(:)
@@ -587,4 +600,4 @@ contains
       end do
    end subroutine gauss_legendre
 
-end program test_lr_pauli_transition_vertex
+end module test_pauli_transition_vertex_mod

@@ -7,7 +7,7 @@
 ! dense A (zI-H)^(-1) A^dagger and a Lehmann sum built from H eigenvectors.
 ! It also keeps three deliberately incomplete adapters as negative controls.
 !------------------------------------------------------------------------------
-program test_lr_gf_endpoint_augmentation
+module test_gf_endpoint_augmentation_mod
    use precision_mod, only: rp
    use dyson_kernel_mod, only: dyson_kspace_inverse
    use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l
@@ -15,6 +15,8 @@ program test_lr_gf_endpoint_augmentation
       lr_gf_dense_hamiltonian_provider, augment_lr_gf_endpoint, augment_lr_gf_endpoint_pair
    use linear_response_mod, only: response_harmonic
    implicit none
+   private
+   public :: run_test_gf_endpoint_augmentation
 
    integer, parameter :: lmax = 1, norb = (lmax + 1)**2, nlocal = 2*norb
    integer, parameter :: nsite = 2, nmat = nsite*nlocal, npoint = 7, nz = 4
@@ -36,6 +38,10 @@ program test_lr_gf_endpoint_augmentation
    integer :: iz, info
    logical :: failed
 
+
+contains
+
+   subroutine run_test_gf_endpoint_augmentation()
    failed = .false.
    call setup_radial_bases(radial)
    call setup_hamiltonian(radial, hgamma, h_eff)
@@ -101,7 +107,8 @@ program test_lr_gf_endpoint_augmentation
    end if
    write (*, '(a)') 'UnitLrGfEndpointAugmentation: PASS (dense, spectral, provider, negative controls)'
 
-contains
+   end subroutine run_test_gf_endpoint_augmentation
+
 
    subroutine setup_radial_bases(bases)
       type(lmto_radial_basis), intent(out) :: bases(:)
@@ -340,4 +347,4 @@ contains
       if ((.not. greater .and. value > limit) .or. (greater .and. value <= limit)) failed = .true.
    end subroutine report
 
-end program test_lr_gf_endpoint_augmentation
+end module test_gf_endpoint_augmentation_mod

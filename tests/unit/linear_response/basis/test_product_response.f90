@@ -5,7 +5,7 @@
 ! candidate-space reconstruction and the retained weighted-SVD coordinate map
 ! without constructing or accumulating a susceptibility.
 !------------------------------------------------------------------------------
-program test_lr_lmto_product_response
+module test_product_response_mod
    use, intrinsic :: ieee_arithmetic
    use precision_mod, only: rp
    use basis_mod, only: basis_init
@@ -20,6 +20,8 @@ program test_lr_lmto_product_response
    use linear_response_mod, only: lmto_product_channel_plus, lmto_product_channel_minus, &
       lmto_product_candidate, lmto_product_response_basis, lmto_product_nbranch, lmto_product_branch_powers
    implicit none
+   private
+   public :: run_test_product_response
 
    integer, parameter :: nr = 51, lmax = 2, nsite = 1, norb = (lmax + 1)**2, nstate = 2*norb, ntransition = 4
    integer, parameter :: left_index(ntransition) = [1, 3, 5, 9]
@@ -38,6 +40,11 @@ program test_lr_lmto_product_response
    real(rp) :: maximum_reconstruction, maximum_orthogonality, maximum_candidate_error
    real(rp) :: maximum_coordinate_error, maximum_norm_error
 
+
+contains
+
+   subroutine run_test_product_response(case_argument)
+      character(len=*), intent(in), optional :: case_argument
    call basis_init(lmax)
    call init_math_operators()
    call g_logger%init()
@@ -50,7 +57,11 @@ program test_lr_lmto_product_response
    call space_spd_reduced%initialize(nsite, 2, radius, mesh_a, mesh_b, 1)
 
    mode = ''
-   call get_command_argument(1, mode)
+   if (present(case_argument)) then
+      mode = case_argument
+   else
+      call get_command_argument(1, mode)
+   end if
    strict_guard = trim(mode) == 'strict'
    if (len_trim(mode) > 0 .and. .not. strict_guard) error stop 'unknown UnitLrLmtoProductResponse argument'
    if (strict_guard) then
@@ -100,7 +111,8 @@ program test_lr_lmto_product_response
    write (*, '(a,es12.4)') '  maximum_U_orthogonality_error=', maximum_orthogonality
    write (*, '(a)') 'UnitLrLmtoProductResponse: PASS (inventory, mapping, SVD, LR-05 candidate/z/norm oracles)'
 
-contains
+   end subroutine run_test_product_response
+
 
    subroutine build_mesh(mesh)
       real(rp), intent(out) :: mesh(:)
@@ -492,4 +504,4 @@ contains
       end if
    end function channel_name
 
-end program test_lr_lmto_product_response
+end module test_product_response_mod

@@ -6,7 +6,7 @@
 ! lower-component spin-angular contract required for that mapping; the guard
 ! at the end verifies that the capability is not silently promoted.
 !------------------------------------------------------------------------------
-program test_lr_response_basis
+module test_response_basis_mod
    use precision_mod, only: rp
    use linear_response_mod, only: response_angular_pi, response_lmax, &
       response_product_space_complete, response_lm_index, response_lm_from_index, response_harmonic, &
@@ -17,9 +17,15 @@ program test_lr_response_basis
       response_physical_density, response_log_mesh_integral, response_endpoint_phase, &
       response_apply_site_gauge, response_mapping_supported
    implicit none
+   private
+   public :: run_test_response_basis
 
    logical :: failed
 
+
+contains
+
+   subroutine run_test_response_basis()
    failed = .false.
    call angular_product_oracle(failed)
    call cutoff_oracle(failed)
@@ -35,7 +41,8 @@ program test_lr_response_basis
    end if
    write (*, '(a)') 'UnitLrResponseBasis: PASS (independent angular/radial/gauge oracles; physical mapping guarded)'
 
-contains
+   end subroutine run_test_response_basis
+
 
    subroutine angular_product_oracle(test_failed)
       logical, intent(inout) :: test_failed
@@ -329,4 +336,4 @@ contains
       end do
    end subroutine gauss_legendre
 
-end program test_lr_response_basis
+end module test_response_basis_mod
