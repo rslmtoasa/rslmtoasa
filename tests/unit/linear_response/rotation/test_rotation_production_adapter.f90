@@ -195,10 +195,11 @@ contains
    subroutine check_rotation_response(base,recip)
       type(lmto_live_hamiltonian_fixture), target, intent(in) :: base
       type(reciprocal), target, intent(inout) :: recip
-      type(rotation_state), target :: state0,stateq,statem
+      type(rotation_state), target :: state0,stateq,statem,state_audit
       type(rotation_request) :: request
       type(rotation_result) :: result0,resultq,resultm,plus,minus
       real(rp), parameter :: qset(3,2)=reshape([0.0_rp,0.0_rp,0.0_rp,0.125_rp,0.0_rp,0.0_rp],[3,2])
+      real(rp), parameter :: q_audit(3)=[0.05_rp,0.0_rp,0.0_rp]
       real(rp), parameter :: eta_set(2)=[1.0e-4_rp,5.0e-5_rp]
       complex(rp), allocatable :: reduced(:, :),unitary(:, :),kernel_pm(:, :),bubble_o(:, :),contact_o(:, :),kernel_o(:, :)
       real(rp), allocatable :: values(:, :),endpoint_values(:, :),points(:, :),weights(:),axes(:, :)
@@ -210,6 +211,7 @@ contains
       real(rp) :: q(3),q_cov(3),omega,eta,fermi,kT,weight_sum,weight,fn,m_band,berry_direct,slope_plus,slope_minus
       real(rp) :: static_residual,q0_residual,oracle_residual,covariance_residual,circular_residual,berry_residual,delta_omega
       real(rp) :: max_component,grid_residual,grid_best,grid_point(3)
+      real(rp) :: signed_static(2),signed_slope(2),signed_predicted(2),signed_root(2),signed_loss(2),signed_causality(2)
       integer :: nk,nmat,ncoord,nband,norb,nsite,ik,ia,ib,n,m,site_a,site_b,axis_a,axis_b,up,dn,io,iq,iw,ie,jk
 
       nsite=base%nsite; norb=base%norb; nmat=2*norb*nsite; ncoord=2*nsite
@@ -247,6 +249,23 @@ contains
       write(*,'(a,3(es14.6,1x))') 'Rotation Berry slopes (+/-) / circular offdiag = ',slope_plus,slope_minus,circular_residual
       if(berry_residual>5.0e-2_rp) error stop 'BERRY_NORMALIZATION_OPEN'
       if(circular_residual>1.0e-7_rp) error stop 'CIRCULAR_CONVENTION_OPEN'
+
+      call prepare_rotation_response(base,recip,q_audit,state_audit)
+      call audit_signed_circular_channels(state_audit,1.0e-5_rp,1.0e-5_rp,signed_static,signed_slope, &
+         signed_predicted,signed_root,signed_loss,signed_causality)
+      write(*,'(a,6(es14.6,1x))') 'Rotation signed q audit (+) K0/slope/predicted/actual/loss/causal = ', &
+         signed_static(1),signed_slope(1),signed_predicted(1),signed_root(1),signed_loss(1),signed_causality(1)
+      write(*,'(a,6(es14.6,1x))') 'Rotation signed q audit (-) K0/slope/predicted/actual/loss/causal = ', &
+         signed_static(2),signed_slope(2),signed_predicted(2),signed_root(2),signed_loss(2),signed_causality(2)
+      if (minval(abs(signed_static))<=tiny(1.0_rp) .or. minval(abs(signed_slope))<=tiny(1.0_rp)) then
+         error stop 'SIGNED_CIRCULAR_STATIC_SLOPE_OPEN'
+      end if
+      if (maxval(abs(signed_root-signed_predicted)/max(abs(signed_predicted),1.0e-6_rp))>0.5_rp) then
+         error stop 'SIGNED_CIRCULAR_ROOT_LINEARIZATION_OPEN'
+      end if
+      if (minval(abs(signed_loss))<=1.0e-12_rp .or. minval(signed_causality)<=0.0_rp) then
+         error stop 'SIGNED_CIRCULAR_LOSS_DIAGNOSTIC_OPEN'
+      end if
 
       ! Exact static reduction against the independent certified force-theorem
       ! Hessian at Gamma and one non-self-inverse finite q.
@@ -360,9 +379,73 @@ contains
          max(1.0_rp,maxval(abs(plus%kernel)))
       write(*,'(a,3(es12.4,1x))') 'Rotation q/-q/-omega covariance q/residual = ',q_cov,covariance_residual
       if(grid_residual>1.0e-12_rp .or. covariance_residual>1.0e-8_rp) error stop 'Q_OMEGA_COVARIANCE_OPEN'
-      call state0%clear(); call stateq%clear(); call statem%clear()
+      call state0%clear(); call stateq%clear(); call statem%clear(); call state_audit%clear()
       deallocate(reduced,unitary,kernel_pm,bubble_o,contact_o,kernel_o)
    end subroutine check_rotation_response
+
+   subroutine audit_signed_circular_channels(state,delta_omega,eta,static_kernel,slope,predicted,actual,loss,causality)
+      type(rotation_state), target, intent(inout) :: state
+      real(rp), intent(in) :: delta_omega,eta
+      real(rp), intent(out) :: static_kernel(2),slope(2),predicted(2),actual(2),loss(2),causality(2)
+      type(rotation_request) :: request
+      type(rotation_result) :: response
+      integer, parameter :: nscan=81
+      integer :: channel,ipoint
+      real(rp) :: omega_limit,omega_previous,omega_current,value_previous,value_current,root_candidate,im_kernel
+      real(rp) :: fraction,distance,best_distance
+      logical :: found
+
+      request%state=>state
+      request%exact_static=.true.; request%omega=0.0_rp; request%eta=0.0_rp; request%want_inverse=.false.
+      call evaluate_rotation_response(request,response)
+      do channel=1,2
+         static_kernel(channel)=real(response%kernel_pm(channel,channel),rp)
+      end do
+
+      request%exact_static=.false.; request%eta=eta; request%want_inverse=.false.
+      request%omega=delta_omega
+      call evaluate_rotation_response(request,response)
+      do channel=1,2
+         slope(channel)=real((response%kernel_pm(channel,channel)),rp)
+      end do
+      request%omega=-delta_omega
+      call evaluate_rotation_response(request,response)
+      do channel=1,2
+         slope(channel)=(slope(channel)-real(response%kernel_pm(channel,channel),rp))/(2.0_rp*delta_omega)
+         predicted(channel)=-static_kernel(channel)/slope(channel)
+      end do
+
+      omega_limit=max(5.0e-3_rp,4.0_rp*maxval(abs(predicted)))
+      do channel=1,2
+         found=.false.; best_distance=huge(1.0_rp); actual(channel)=0.0_rp; loss(channel)=0.0_rp; causality(channel)=0.0_rp
+         omega_previous=-omega_limit
+         request%omega=omega_previous
+         call evaluate_rotation_response(request,response)
+         value_previous=real(response%kernel_pm(channel,channel),rp)
+         do ipoint=2,nscan
+            omega_current=-omega_limit+2.0_rp*omega_limit*real(ipoint-1,rp)/real(nscan-1,rp)
+            request%omega=omega_current
+            call evaluate_rotation_response(request,response)
+            value_current=real(response%kernel_pm(channel,channel),rp)
+            if (value_previous*value_current<=0.0_rp .and. abs(value_previous-value_current)>tiny(1.0_rp)) then
+               fraction=-value_previous/(value_current-value_previous)
+               root_candidate=omega_previous+fraction*(omega_current-omega_previous)
+               distance=abs(root_candidate-predicted(channel))
+               if (distance<best_distance) then
+                  best_distance=distance; actual(channel)=root_candidate; found=.true.
+               end if
+            end if
+            omega_previous=omega_current; value_previous=value_current
+         end do
+         if (.not.found) error stop 'SIGNED_CIRCULAR_ROOT_AUDIT_OPEN'
+         request%omega=actual(channel); request%want_inverse=.true.
+         call evaluate_rotation_response(request,response)
+         if (.not.response%inverse_available) error stop 'SIGNED_CIRCULAR_INVERSE_AUDIT_OPEN'
+         loss(channel)=-aimag(response%inverse_kernel_pm(channel,channel))
+         im_kernel=aimag(response%kernel_pm(channel,channel))
+         causality(channel)=slope(channel)*im_kernel
+      end do
+   end subroutine audit_signed_circular_channels
 
    subroutine independent_berry_oracle(base,recip,m_band,berry)
       type(lmto_live_hamiltonian_fixture), intent(in) :: base

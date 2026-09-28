@@ -61,6 +61,50 @@ The q=0 Berry slope uses one canonical finite-difference step,
 compatibility but has no independent numerical role; differing values are
 reported as deprecated and ignored.
 
+### Signed circular-channel semantics
+
+The implemented transverse convention is
+
+`theta_plus = (theta_x - i theta_y)/sqrt(2)` and
+`theta_minus = (theta_x + i theta_y)/sqrt(2)`.
+
+For the accepted q=0 state, the independently checked Berry slopes obey
+`b_plus = d K_plus/d omega = -B` and
+`b_minus = d K_minus/d omega = +B`, where `B` is the signed Berry
+commutator. Therefore the linearized roots are
+
+`omega_plus = K_plus(q,0)/B` and
+`omega_minus = -K_minus(q,0)/B`.
+
+If the static transverse curvature is a common signed value `kappa`, changing
+the sign of `kappa` exchanges which circular channel has the positive-
+frequency root; the other root is its negative-frequency partner. A negative
+static curvature is consequently not, by itself, a proof of an instability.
+The signed loss and the retarded pole diagnostic must also be checked. With
+`L = -Im(K**(-1))`, the current causality indicator is
+`(d Re K/d omega) * Im K > 0` at the resolved real-axis crossing. Loss signs
+may be opposite in the two channels because the slopes are opposite; taking
+an absolute value would erase this convention information.
+
+The focused `UnitLrRotationProductionAdapter` audit evaluates both channels,
+their signed linear roots, a signed real-axis crossing, and the loss/causality
+indicator. It also checks the Cartesian covariance
+`K_AB(q,omega) = conj(K_AB(-q,-omega))`. The coarse 1x1x1 q=0.05 fixture
+provides the following signed example from the existing response-frequency
+grid (Ry units, `eta=1e-5`; actual roots are linear interpolations of the
+signed `Re K` crossings):
+
+| channel | near-static `Re K(q,0)` | slope | predicted root | actual root | loss sign | slope*`Im K` |
+|---|---:|---:|---:|---:|---:|---:|
+| `+` | `-2.4011e-3` | `-2.0057` | `-1.1972e-3` | `-1.2052e-3` | negative | positive |
+| `-` | `-4.4150e-4` | `+2.0084` | `+2.1982e-4` | `+2.2010e-4` | positive | positive |
+
+The production positive pole is the `-` channel (`+2.9945 meV` at the
+smallest configured eta), while the `+` channel has the negative-frequency
+partner. This is a chirality/negative-frequency-partner interpretation, not
+an absolute-value repair and not a branch-selection rewrite. The simultaneous
+coarse-mesh Cartesian q/-q/-omega covariance residual was `6.25e-17`.
+
 `native_turek` (and its compatibility alias `native_crosscheck`) is optional.
 When enabled, the Turek path is evaluated as an independent static diagnostic;
 it does not select the circular branch, pole window, pole acceptance, static
