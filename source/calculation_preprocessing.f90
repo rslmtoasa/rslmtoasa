@@ -334,6 +334,7 @@ contains
             ! Direct route: finalize and pass the exact accepted reciprocal
             ! SCF cache owned by self.  No second reciprocal state is made.
             call self_obj%finalize_kspace_scf_state()
+            call self_obj%write_kspace_scf_state_artifact('kspace_scf_state.dat')
             call this%linear_response%run(control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, &
                                           self_obj%reciprocal_scf_cache, recursion_obj, green_obj, self_obj%converged)
          else
