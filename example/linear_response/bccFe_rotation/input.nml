@@ -20,6 +20,7 @@ label(1) = 'Fe'
 &self
 nstep = 25
 use_kspace = .true.
+conv_thr = 1.0d-6
 /
 &energy
 fermi = -0.067656
@@ -29,7 +30,7 @@ channels_ldos = 2500
 /
 &control
 calctype = 'B'
-nsp = 1
+nsp = 1 ! supported collinear scalar-relativistic state; SOC is off
 lld = 21
 recur = 'block'
 /
@@ -37,10 +38,13 @@ recur = 'block'
 beta = 0.1
 mixtype = 'broyden'
 /
+&hamiltonian
+hoh = .true.
+/
 &reciprocal
-nk1 = 12
-nk2 = 12
-nk3 = 12
+nk1 = 4
+nk2 = 4
+nk3 = 4
 k_offset_x = 0.0
 k_offset_y = 0.0
 k_offset_z = 0.0
@@ -48,7 +52,7 @@ use_symmetry_reduction = .false.
 use_time_reversal = .true.
 use_shift = .false.
 reciprocal_mode = 'ham_only'
-kspace_ham_order = 'first'
+kspace_ham_order = 'second'
 dos_method = 'tetrahedron'
 temperature = 300.0
 auto_find_fermi = .false.

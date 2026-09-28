@@ -634,6 +634,15 @@ endforeach()
     LABELS "lr_baseline;linear_response;rotation;generic-workflow"
     TIMEOUT 900)
 
+  add_test(NAME LrExampleBccFeRotation
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_example_rotation.py
+      --binary ${TestBinary}
+      --case ${CMAKE_SOURCE_DIR}/example/linear_response/bccFe_rotation
+      --scratch-root ${CMAKE_BINARY_DIR}/Testing/lr_example_bccFe_rotation)
+  set_tests_properties(LrExampleBccFeRotation PROPERTIES
+    LABELS "linear_response;rotation;example;closeout"
+    TIMEOUT 180)
+
   add_test(NAME LrBaselineTddftLehmann
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_baseline.py
       --binary ${TestBinary}
