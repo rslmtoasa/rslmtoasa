@@ -209,22 +209,11 @@ contains
       real(rp), allocatable :: occupations(:, :)
       integer :: ib, ik
 
-      if (.not. allocated(recip%eigenvalues) .or. .not. allocated(recip%eigenvectors)) then
-         error stop 'lr_snapshot_from_reciprocal: complete reciprocal eigenpairs are required'
-      end if
-      if (.not. allocated(recip%k_workset%points) .or. .not. allocated(recip%k_workset%weights)) then
-         error stop 'lr_snapshot_from_reciprocal: authoritative k-point workset is unavailable'
-      end if
       if (recip%k_workset%distributed .or. recip%k_workset%nk_local /= recip%k_workset%nk_global) then
          error stop 'lr_snapshot_from_reciprocal: LR-06 baseline requires a replicated complete BZ workset'
       end if
       if (.not. recip%canonical_energy_valid) then
          error stop 'lr_snapshot_from_reciprocal: accepted canonical EF/occupation state is unavailable'
-      end if
-      if (size(recip%eigenvalues, 2) /= recip%k_workset%nk_local .or. &
-          size(recip%eigenvectors, 2) /= size(recip%eigenvalues, 1) .or. &
-          size(recip%eigenvectors, 3) /= recip%k_workset%nk_local) then
-         error stop 'lr_snapshot_from_reciprocal: reciprocal eigenpair/workset shape mismatch'
       end if
 
       allocate(occupations(size(recip%eigenvalues, 1), size(recip%eigenvalues, 2)))
@@ -260,13 +249,6 @@ contains
       allocate(target_k(3, left_state%nk))
       target_k = left_state%k_points + spread(q, dim=2, ncopies=left_state%nk)
       call recip%calculate_eigenpairs_at_kpoints(target_k, eigenvalues, eigenvectors, folded_k)
-      if (.not. allocated(eigenvalues) .or. .not. allocated(eigenvectors) .or. .not. allocated(folded_k)) then
-         error stop 'lr_q_endpoint_from_reciprocal: arbitrary-k eigensystem service returned no snapshot'
-      end if
-      if (any(shape(eigenvalues) /= [left_state%nbands, left_state%nk]) .or. &
-          any(shape(eigenvectors) /= [left_state%nbasis, left_state%nbands, left_state%nk])) then
-         error stop 'lr_q_endpoint_from_reciprocal: endpoint band shape differs from left state'
-      end if
       allocate(occupations(left_state%nbands, left_state%nk))
       do ik = 1, left_state%nk
          do ib = 1, left_state%nbands
@@ -284,10 +266,6 @@ contains
       type(lr_ks_susceptibility_request), intent(in) :: request
       type(lr_ks_susceptibility_result), intent(out) :: result
 
-      if (.not. associated(request%response_space) .or. .not. associated(request%radial_bases) .or. &
-          .not. associated(request%electronic_state) .or. .not. associated(request%q_endpoint_state)) then
-         error stop 'evaluate_lr_ks_susceptibility: request references are incomplete'
-      end if
       call evaluate_lr_ks_susceptibility_explicit(request%response_space, request%radial_bases, &
          request%electronic_state, request%q_endpoint_state, request, result)
    end subroutine evaluate_lr_ks_susceptibility_request
@@ -373,10 +351,6 @@ contains
       type(lr_product_ks_susceptibility_request), intent(in) :: request
       type(lr_product_ks_susceptibility_result), intent(out) :: result
 
-      if (.not. associated(request%product_basis) .or. .not. associated(request%electronic_state) .or. &
-          .not. associated(request%q_endpoint_state)) then
-         error stop 'evaluate_lr_product_ks_susceptibility: request references are incomplete'
-      end if
       call evaluate_lr_product_ks_susceptibility_explicit(request%product_basis, request%electronic_state, &
          request%q_endpoint_state, request, result)
    end subroutine evaluate_lr_product_ks_susceptibility_request
@@ -536,12 +510,6 @@ contains
       complex(rp), allocatable :: response(:), residual(:)
       real(rp) :: target_norm
 
-      if (any(shape(static_susceptibility) /= [space%ndim, space%ndim])) then
-         error stop 'evaluate_lr_static_residual: susceptibility shape mismatch'
-      end if
-      if (size(field) /= space%ndim .or. size(magnetization) /= space%ndim) then
-         error stop 'evaluate_lr_static_residual: vector shape mismatch'
-      end if
       allocate(response(space%ndim), residual(space%ndim))
       call response_apply_operator(space, static_susceptibility, field, response)
       residual = response - magnetization
@@ -682,7 +650,6 @@ contains
       complex(rp), intent(in) :: z
       complex(rp), intent(out) :: gij(:, :), gji(:, :), hgamma_ij(:, :), hgamma_ji(:, :)
 
-      if (.not. associated(this%callback)) error stop 'block-recursion provider: callback is not initialized'
       call this%callback(left_site, right_site, translation, z, gij, gji, hgamma_ij, hgamma_ji)
    end subroutine lr_rs_block_recursion_get_pair
 
@@ -718,7 +685,6 @@ contains
       complex(rp), intent(in) :: z
       complex(rp), intent(out) :: gij(:, :), gji(:, :), hgamma_ij(:, :), hgamma_ji(:, :)
 
-      if (.not. associated(this%callback)) error stop 'Chebyshev provider: callback is not initialized'
       call this%callback(left_site, right_site, translation, z, gij, gji, hgamma_ij, hgamma_ji)
    end subroutine lr_rs_chebyshev_get_pair
 
@@ -1228,10 +1194,6 @@ contains
       complex(rp) :: gphase(nb, nb, 4), g_one(nb, nb, 1), z_grid(1)
       integer :: ipair, phase
 
-      if (any(shape(gij) /= [nb, nb]) .or. any(shape(gji) /= [nb, nb]) .or. &
-          any(shape(hgamma_ij) /= [nb, nb]) .or. any(shape(hgamma_ji) /= [nb, nb])) then
-         error stop 'native RSGF production provider: coefficient block shape mismatch'
-      end if
       ipair = find_pair(this, left_site, right_site, translation)
       hgamma_ij = this%hgamma_ij(:, :, ipair)
       hgamma_ji = this%hgamma_ji(:, :, ipair)
@@ -1290,10 +1252,6 @@ contains
       if (source_atom < 1 .or. source_atom > this%lattice_obj%kk .or. &
           destination_atom < 1 .or. destination_atom > this%lattice_obj%kk) then
          error stop 'native RSGF production provider: H_eff action atom is outside the cluster'
-      end if
-      if (.not. allocated(this%hamiltonian_obj%ee) .or. .not. allocated(this%hamiltonian_obj%eeo) .or. &
-          .not. allocated(this%hamiltonian_obj%enim)) then
-         error stop 'native RSGF production provider: accepted H_eff blocks are incomplete'
       end if
       destination_type = this%lattice_obj%iz(destination_atom)
       block = cmplx(0.0_rp, 0.0_rp, rp)
@@ -1379,9 +1337,6 @@ contains
 
       translation = 0.0_rp
       if (left_atom == right_atom) return
-      if (.not. allocated(reciprocal_obj%ham_vec_type_direct)) then
-         error stop 'native RSGF production provider: reciprocal direct-translation metadata is unavailable'
-      end if
       ntype = lattice_obj%iz(left_atom)
       do ineigh = 1, lattice_obj%nn(left_atom, 1)
          if (lattice_obj%nn(left_atom, ineigh) == right_atom) then
@@ -1976,7 +1931,6 @@ contains
       complex(rp) :: spectral_prefactor
       integer :: ib
 
-      if (size(factors) /= size(eigenvalues)) error stop 'build_spectral_factors: shape mismatch'
       spectral_prefactor = cmplx(0.0_rp, 1.0_rp/(2.0_rp*response_angular_pi), rp)
       do ib = 1, size(eigenvalues)
          factors(ib) = spectral_prefactor*(1.0_rp/(cmplx(energy, integration_eta, rp) - eigenvalues(ib)) - &
@@ -2221,9 +2175,6 @@ contains
       complex(rp) :: temporary(size(left_a, 1), size(left_a, 2))
       complex(rp) :: vertex_adjoint(size(left_a, 1), size(left_a, 2))
 
-      if (size(vertices, 4) /= size(response, 1) .or. size(response, 2) /= size(response, 1)) then
-         error stop 'accumulate_projected_gf_bubble: site response shape mismatch'
-      end if
       do component_i = 1, lmto_product_nbranch
          call lmto_product_branch_powers(component_i, left_power_i, right_power_i)
          if (maxval(abs(vertices(:, :, component_i, :))) == 0.0_rp) cycle

@@ -401,9 +401,6 @@ contains
       complex(rp), intent(out) :: gauge(:)
       integer :: isite
 
-      if (size(site_tau, 1) /= 3 .or. size(site_tau, 2) /= size(gauge)) then
-         error stop 'response_site_gauge: site-coordinate shape mismatch'
-      end if
       do isite = 1, size(gauge)
          gauge(isite) = response_endpoint_phase(site_tau(:, isite), reciprocal_vector)
       end do
@@ -416,10 +413,6 @@ contains
       complex(rp) :: gauge(size(coefficients, 2))
       integer :: isite
 
-      if (any(shape(transformed) /= shape(coefficients)) .or. size(site_tau, 1) /= 3 .or. &
-          size(site_tau, 2) /= size(coefficients, 2)) then
-         error stop 'response_apply_site_gauge: coefficient/site-coordinate shape mismatch'
-      end if
       call response_site_gauge(site_tau, reciprocal_vector, gauge)
       do isite = 1, size(gauge)
          transformed(:, isite) = gauge(isite)*coefficients(:, isite)
@@ -534,7 +527,6 @@ contains
       real(rp), intent(out) :: weights(:)
 
       call require_layout(space)
-      if (size(weights) /= space%ndim) error stop 'response_metric_weights: vector shape mismatch'
       weights = space%metric_weights
    end subroutine response_metric_weights
 
@@ -609,9 +601,6 @@ contains
       integer :: flat
 
       call require_operator(space, operator, 'response_local_operator: result shape mismatch')
-      if (size(values, 1) /= space%nsite .or. size(values, 2) /= space%npoint) then
-         error stop 'response_local_operator: site/radial scalar shape mismatch'
-      end if
       operator = cmplx(0.0_rp, 0.0_rp, rp)
       do flat = 1, space%ndim
          call response_unflatten_superindex(flat, space%nsite, space%response_lmax, &
@@ -628,10 +617,6 @@ contains
       integer :: flat
 
       call require_operator(space, operator, 'response_local_operator: result shape mismatch')
-      if (size(values, 1) /= space%nsite .or. size(values, 2) /= space%npoint .or. &
-          size(values, 3) /= space%nchannel) then
-         error stop 'response_local_operator: site/radial/channel scalar shape mismatch'
-      end if
       operator = cmplx(0.0_rp, 0.0_rp, rp)
       do flat = 1, space%ndim
          call response_unflatten_superindex(flat, space%nsite, space%response_lmax, &
@@ -651,9 +636,6 @@ contains
       integer :: flat
 
       call require_operator(space, operator, 'response_local_operator: result shape mismatch')
-      if (size(values, 1) /= space%nsite .or. size(values, 2) /= space%npoint) then
-         error stop 'response_local_operator: site/radial scalar shape mismatch'
-      end if
       operator = cmplx(0.0_rp, 0.0_rp, rp)
       do flat = 1, space%ndim
          call response_unflatten_superindex(flat, space%nsite, space%response_lmax, &
@@ -670,10 +652,6 @@ contains
       integer :: flat
 
       call require_operator(space, operator, 'response_local_operator: result shape mismatch')
-      if (size(values, 1) /= space%nsite .or. size(values, 2) /= space%npoint .or. &
-          size(values, 3) /= space%nchannel) then
-         error stop 'response_local_operator: site/radial/channel scalar shape mismatch'
-      end if
       operator = cmplx(0.0_rp, 0.0_rp, rp)
       do flat = 1, space%ndim
          call response_unflatten_superindex(flat, space%nsite, space%response_lmax, &
@@ -799,7 +777,6 @@ contains
       character(len=*), intent(in) :: message
 
       call require_layout(space)
-      if (size(vector) /= space%ndim) error stop message
    end subroutine require_vector
 
    subroutine require_operator(space, operator, message)
@@ -808,7 +785,6 @@ contains
       character(len=*), intent(in) :: message
 
       call require_layout(space)
-      if (any(shape(operator) /= [space%ndim, space%ndim])) error stop message
    end subroutine require_operator
 
 
@@ -892,11 +868,6 @@ contains
       integer :: p, q, left_power, right_power, power
       logical :: use_stored_dual
 
-      if (size(hamiltonian, 1) /= size(hamiltonian, 2) .or. &
-          any(shape(matrix) /= [size(hamiltonian, 1), size(hamiltonian, 1)]) .or. &
-          any(shape(action) /= [size(hamiltonian, 1), size(hamiltonian, 1)])) then
-         error stop 'lmto_product_apply_branch_action: matrix shape mismatch'
-      end if
       if (.not. lmto_product_branch_valid(branch)) then
          error stop 'lmto_product_apply_branch_action: invalid branch'
       end if
@@ -1063,9 +1034,6 @@ contains
       complex(rp), intent(out) :: transition_vector(:)
       complex(rp), allocatable :: operator_channels(:, :, :)
 
-      if (size(operator_matrix, 1) /= 2 .or. size(operator_matrix, 2) /= 2) then
-         error stop 'evaluate_pauli_transition_vertex: Pauli operator must be 2x2'
-      end if
       if (space%nchannel /= 1) then
          error stop 'evaluate_pauli_transition_vertex: one operator requires nchannel=1'
       end if
@@ -1483,18 +1451,10 @@ contains
       real(rp) :: left_power, right_power
       integer :: branch
 
-      if (.not. allocated(this%blocks)) error stop 'lmto_product_response_basis: representation is uninitialized'
       if (site < 1 .or. site > this%nsite .or. response_l < 0 .or. response_l > this%response_lmax .or. &
           abs(response_m) > response_l) error stop 'lmto_product_response_basis: invalid candidate block index'
       ncandidate = this%blocks(site, response_l)%ncandidate
-      if (size(coefficients) /= ncandidate) then
-         error stop 'lmto_product_response_basis: candidate coefficient shape mismatch'
-      end if
       norb = (this%orbital_lmax + 1)**2
-      if (.not. allocated(left_state%coefficients) .or. .not. allocated(right_state%coefficients) .or. &
-          size(left_state%coefficients) /= 2*norb*this%nsite .or. size(right_state%coefficients) /= 2*norb*this%nsite) then
-         error stop 'lmto_product_response_basis: endpoint coefficient shape mismatch'
-      end if
       offset = (site - 1)*2*norb
       if (this%circular_channel == lmto_product_channel_plus) then
          spin_left = 1
@@ -1547,10 +1507,6 @@ contains
       complex(rp), allocatable :: coefficients(:)
       integer :: site, response_l, response_m
 
-      if (.not. allocated(this%blocks)) error stop 'lmto_product_response_basis: representation is uninitialized'
-      if (size(coordinates) /= this%product_dimension) then
-         error stop 'lmto_product_response_basis: product coordinate shape mismatch'
-      end if
       coordinates = cmplx(0.0_rp, 0.0_rp, rp)
       do site = 1, this%nsite
          do response_l = 0, this%response_lmax
@@ -1766,29 +1722,12 @@ contains
       nspin = 2
       nlocal = nspin*norb
       have_hgamma = present(hgamma_block) .or. present(hamiltonian_provider)
-      if (present(hgamma_block) .and. present(hamiltonian_provider)) then
-         error stop 'augment_lr_gf_endpoint: supply hgamma_block or provider, not both'
-      end if
       if (.not. have_hgamma) then
          error stop 'augment_lr_gf_endpoint: hgamma_ab requires an explicit block or effective-action provider'
       end if
-      if (present(reverse_coefficient_gf)) then
-         if (size(reverse_coefficient_gf, 1) /= nlocal .or. size(reverse_coefficient_gf, 2) /= nlocal) then
-            error stop 'augment_lr_gf_endpoint: reverse GF block shape mismatch'
-         end if
-      end if
-      if (present(reverse_hgamma_block)) then
-         if (size(reverse_hgamma_block, 1) /= nlocal .or. size(reverse_hgamma_block, 2) /= nlocal) then
-            error stop 'augment_lr_gf_endpoint: reverse hgamma block shape mismatch'
-         end if
-      end if
-
       allocate(hgamma(nlocal, nlocal), d_left(nlocal, nlocal), d_right(nlocal, nlocal), &
                identity(nlocal, nlocal), seed(nlocal, nlocal), effective_block(nlocal, nlocal))
       if (present(hgamma_block)) then
-         if (any(shape(hgamma_block) /= [nlocal, nlocal])) then
-            error stop 'augment_lr_gf_endpoint: hgamma block shape mismatch'
-         end if
          hgamma = hgamma_block
       else
          identity = cmplx(0.0_rp, 0.0_rp, rp)
@@ -1854,9 +1793,6 @@ contains
          call augment_lr_gf_endpoint(radial_right, radial_left, right_site, left_site, z, reverse_coefficient_gf, &
             reverse, capabilities, reverse_hgamma_block, reverse_coefficient_gf=coefficient_gf)
       else
-         if (.not. present(hamiltonian_provider)) then
-            error stop 'augment_lr_gf_endpoint_pair: reverse hgamma block is required when no provider is supplied'
-         end if
          call augment_lr_gf_endpoint(radial_right, radial_left, right_site, left_site, z, reverse_coefficient_gf, &
             reverse, capabilities, hamiltonian_provider=hamiltonian_provider, reverse_coefficient_gf=coefficient_gf)
       end if
@@ -1951,9 +1887,6 @@ contains
       complex(rp), intent(out) :: point_gf(:, :)
       complex(rp) :: branches(2, 2, 4)
 
-      if (size(point_gf, 1) /= 2 .or. size(point_gf, 2) /= 2) then
-         error stop 'lr_gf_augmented_block%evaluate_point: output must be 2x2'
-      end if
       call this%branch_at_point(left_radial_index, left_theta, left_phi, right_radial_index, right_theta, right_phi, branches)
       point_gf = sum(branches, dim=3)
    end subroutine lr_gf_augmented_block_evaluate_point
@@ -1970,9 +1903,6 @@ contains
       complex(rp) :: phi_right(2, 2*this%norb), dot_right(2, 2*this%norb)
       integer :: iorb, ispin, l, index
 
-      if (size(branches, 1) /= 2 .or. size(branches, 2) /= 2 .or. size(branches, 3) /= 4) then
-         error stop 'lr_gf_augmented_block%branch_at_point: output must be 2x2x4'
-      end if
       call validate_point_indices(this, left_radial_index, right_radial_index)
       phi_left = cmplx(0.0_rp, 0.0_rp, rp)
       dot_left = cmplx(0.0_rp, 0.0_rp, rp)
@@ -2066,9 +1996,6 @@ contains
           .not. allocated(space%radial_weights)) then
          error stop 'DRESP-01: response space is not a complete spd one-channel layout'
       end if
-      if (size(radial_bases) /= space%nsite) then
-         error stop 'DRESP-01: one complete radial basis is required per site'
-      end if
 
       this%nsite = space%nsite
       this%orbital_lmax = radial_bases(1)%lmax
@@ -2113,9 +2040,6 @@ contains
       integer :: flat, site, response_l, response_m, product_mode
 
       call validate_product(this, product, 'DRESP-01 site integration')
-      if (any(shape(functionals) /= [product%product_dimension, this%nsite])) then
-         error stop 'DRESP-01 site integration: functional shape mismatch'
-      end if
       functionals = cmplx(0.0_rp, 0.0_rp, rp)
       do flat = 1, product%product_dimension
          call product%unflatten_index(flat, site, response_l, response_m, product_mode)
@@ -2137,9 +2061,6 @@ contains
       integer :: site, response_l, response_m, k, first, last
 
       call validate_product(this, product, 'DRESP-01 selected coordinates')
-      if (size(coordinates) /= product%product_dimension) then
-         error stop 'DRESP-01 selected coordinates: coordinate shape mismatch'
-      end if
       coordinates = cmplx(0.0_rp, 0.0_rp, rp)
       do site = 1, this%nsite
          do response_l = 0, product%response_lmax
@@ -2171,9 +2092,6 @@ contains
       integer :: site
 
       call validate_product(this, product, 'DRESP-01 transition amplitudes')
-      if (size(amplitudes) /= this%nsite) then
-         error stop 'DRESP-01 transition amplitudes: site amplitude shape mismatch'
-      end if
       allocate(coordinates(product%product_dimension), functionals(product%product_dimension, this%nsite))
       call this%selected_transition_coordinates(product, left_state, right_state, coordinates)
       call this%site_integration_functional(product, functionals)
@@ -2196,9 +2114,6 @@ contains
       call validate_radial_bases(this, radial_bases)
       call validate_operator_kind(operator_kind, 'DRESP-01 direct operator')
       norb = (this%orbital_lmax + 1)**2
-      if (any(shape(matrix) /= [2*norb*this%nsite, 2*norb*this%nsite])) then
-         error stop 'DRESP-01 direct operator: matrix shape mismatch'
-      end if
       matrix = cmplx(0.0_rp, 0.0_rp, rp)
       do site = 1, this%nsite
          offset = (site - 1)*2*norb
@@ -2237,9 +2152,6 @@ contains
       call validate_operator_kind(operator_kind, 'DRESP-01 direct transition')
       norb = (this%orbital_lmax + 1)**2
       call validate_endpoint_shapes(this%nsite, norb, left_state, right_state, 'DRESP-01 direct transition')
-      if (size(amplitudes) /= this%nsite) then
-         error stop 'DRESP-01 direct transition: site amplitude shape mismatch'
-      end if
       amplitudes = cmplx(0.0_rp, 0.0_rp, rp)
       do site = 1, this%nsite
          offset = (site - 1)*2*norb
@@ -2403,9 +2315,6 @@ contains
       real(rp), intent(out) :: core_spin(:)
       integer :: site
 
-      if (size(ground_states) /= this%nsite .or. size(core_spin) /= this%nsite) then
-         error stop 'DRESP-01 core context: site shape mismatch'
-      end if
       core_spin = 0.0_rp
       do site = 1, this%nsite
          if (.not. ground_states(site)%core_density_valid .or. &

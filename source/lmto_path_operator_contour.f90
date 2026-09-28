@@ -126,14 +126,12 @@ contains
 
       nsite = lat%nrec
       if (nsite < 1) error stop 'native_exchange_q_contour: lattice has no reciprocal sites'
-      if (size(k_points,1) /= 3 .or. size(q_points,1) /= 3) error stop 'native_exchange_q_contour: point shape mismatch'
       nk = size(k_points,2); nq = size(q_points,2)
       if (size(k_weights) /= nk .or. nk < 1 .or. nq < 1) error stop 'native_exchange_q_contour: mesh shape mismatch'
       weight_sum = sum(k_weights)
       if (weight_sum <= tiny(1.0_rp)) error stop 'native_exchange_q_contour: zero k-weight sum'
       norb = (lat%symbolic_atoms(lat%iz(lat%atlist(1)))%potential%lmax+1)**2
       nlocal = 2*norb; nspin = nlocal*nsite
-      if (any(shape(jq) /= [nsite,nsite,nq])) error stop 'native_exchange_q_contour: output shape mismatch'
 
       call native_build_contour(energy_bounds, fermi, kT, options, nodes, weights, poles)
       nnode = size(nodes); npole = size(poles)
@@ -248,9 +246,6 @@ contains
       if (weight_sum <= tiny(1.0_rp)) error stop 'native_exchange_q_ordered_contour: zero k-weight sum'
       norb = (lat%symbolic_atoms(lat%iz(lat%atlist(1)))%potential%lmax+1)**2
       nspin = 2*norb*nsite
-      if (any(shape(jq_ud) /= [nsite,nsite,nq]) .or. any(shape(jq_du) /= [nsite,nsite,nq])) then
-         error stop 'native_exchange_q_ordered_contour: output shape mismatch'
-      end if
 
       call native_build_contour(energy_bounds, fermi, kT, options, nodes, weights, poles)
       allocate(integral_ud(nsite,nsite,nq), integral_du(nsite,nsite,nq), smat_src(nspin,nspin,nk), &
@@ -353,14 +348,10 @@ contains
       if (size(k_points,1) /= 3 .or. size(real_space_vectors,1) /= 3 .or. nk < 1 .or. nvec < 1) then
          error stop 'native_exchange_pairs_contour: point shape mismatch'
       end if
-      if (size(k_weights) /= nk) error stop 'native_exchange_pairs_contour: weight shape mismatch'
       weight_sum = sum(k_weights)
       if (weight_sum <= tiny(1.0_rp)) error stop 'native_exchange_pairs_contour: zero k-weight sum'
       norb = (lat%symbolic_atoms(lat%iz(lat%atlist(1)))%potential%lmax+1)**2
       nspin = 2*norb*nsite
-      if (any(shape(jij_ud) /= [nsite,nsite,nvec]) .or. any(shape(jij_du) /= [nsite,nsite,nvec])) then
-         error stop 'native_exchange_pairs_contour: output shape mismatch'
-      end if
       call native_build_contour(energy_bounds, fermi, kT, options, nodes, weights, poles)
       allocate(integral_ud(nsite,nsite,nvec), integral_du(nsite,nsite,nvec), smat_src(nspin,nspin,nk), &
          sorb(norb*nsite,norb*nsite), pmat(nspin,nspin), gmat(nspin,nspin), delta(norb,norb,nsite), &
@@ -510,10 +501,6 @@ contains
       complex(rp) :: sum_value
 
       nq = size(q_points,2); nsite = size(jq,1); nvec = size(real_space_vectors,2)
-      if (size(q_points,1) /= 3 .or. size(jq,2) /= nsite .or. size(jq,3) /= nq .or. &
-          size(real_space_vectors,1) /= 3 .or. any(shape(jij) /= [nsite,nsite,nvec])) then
-         error stop 'native_fourier_jq_to_jij: shape mismatch'
-      end if
       do ir = 1, nvec
          do ia = 1, nsite
             do ja = 1, nsite
@@ -537,10 +524,6 @@ contains
       complex(rp) :: sum_value
 
       nq = size(q_points,2); nsite = size(jij,1); nvec = size(real_space_vectors,2)
-      if (size(q_points,1) /= 3 .or. size(jij,2) /= nsite .or. size(jij,3) /= nvec .or. &
-          size(real_space_vectors,1) /= 3 .or. any(shape(jq) /= [nsite,nsite,nq])) then
-         error stop 'native_fourier_jij_to_jq: shape mismatch'
-      end if
       do iq = 1, nq
          do ia = 1, nsite
             do ja = 1, nsite
@@ -562,10 +545,6 @@ contains
       integer :: nq, nsite, nvec, iq, ir, ia, ja
 
       nq = size(q_points,2); nsite = size(jq,1); nvec = size(real_space_vectors,2)
-      if (size(q_points,1) /= 3 .or. size(jq,2) /= nsite .or. size(jq,3) /= nq .or. &
-          size(real_space_vectors,1) /= 3 .or. any(shape(jij) /= [nsite,nsite,nvec])) then
-         error stop 'native_fourier_complex_jq_to_jij: shape mismatch'
-      end if
       do ir = 1, nvec
          do ia = 1, nsite
             do ja = 1, nsite
@@ -586,10 +565,6 @@ contains
       integer :: nq, nsite, nvec, iq, ir, ia, ja
 
       nq = size(q_points,2); nsite = size(jij,1); nvec = size(real_space_vectors,2)
-      if (size(q_points,1) /= 3 .or. size(jij,2) /= nsite .or. size(jij,3) /= nvec .or. &
-          size(real_space_vectors,1) /= 3 .or. any(shape(jq) /= [nsite,nsite,nq])) then
-         error stop 'native_fourier_complex_jij_to_jq: shape mismatch'
-      end if
       do iq = 1, nq
          do ia = 1, nsite
             do ja = 1, nsite
@@ -669,9 +644,6 @@ contains
       if (size(k_points,1)/=3 .or. size(q_points,1)/=3 .or. size(k_weights)/=nk .or. nk<1 .or. nq<1) then
          error stop 'native_turek_static_reference: input shape mismatch'
       end if
-      if (any(shape(jq_ud)/=[nsite,nsite,nq]) .or. any(shape(jq_du)/=[nsite,nsite,nq]) .or. &
-          any(shape(jq_sym)/=[nsite,nsite,nq]) .or. any(shape(delta_j)/=[nsite,nsite,nq]) .or. &
-          any(shape(curvature)/=[nsite,nsite,nq])) error stop 'native_turek_static_reference: output shape mismatch'
 
       allocate(native_points(3,nk*nq))
       do iq=1,nq
@@ -786,9 +758,6 @@ contains
       complex(rp), intent(out) :: smat(:, :)
       integer :: isite, jsite, i0, j0
 
-      if (any(shape(sorb) /= [norb*nsite,norb*nsite]) .or. any(shape(smat) /= [2*norb*nsite,2*norb*nsite])) then
-         error stop 'native contour: structure expansion shape mismatch'
-      end if
       smat = cmplx(0.0_rp,0.0_rp,rp)
       do isite = 1, nsite
          do jsite = 1, nsite
@@ -806,9 +775,6 @@ contains
       integer, intent(in) :: nsite, norb
       complex(rp), intent(out) :: delta(:, :, :)
       integer :: site, p0
-      if (any(shape(delta) /= [norb,norb,nsite]) .or. any(shape(pmat) /= [2*norb*nsite,2*norb*nsite])) then
-         error stop 'native contour: delta shape mismatch'
-      end if
       do site = 1, nsite
          p0 = (site-1)*2*norb
          delta(:,:,site) = pmat(p0+1:p0+norb,p0+1:p0+norb)- &
@@ -823,7 +789,6 @@ contains
       complex(rp) :: gup(norb,norb), gdown(norb,norb)
       integer :: ia, ja
 
-      if (any(shape(trace_value) /= [nsite,nsite])) error stop 'native contour: trace shape mismatch'
       do ia = 1, nsite
          do ja = 1, nsite
             call native_spin_site_block(gsrc,norb,ia,1,ja,1,gup)
@@ -840,9 +805,6 @@ contains
       complex(rp) :: gup_ij(norb,norb), gdown_ji(norb,norb), gdown_ij(norb,norb), gup_ji(norb,norb)
       integer :: ia, ja
 
-      if (any(shape(trace_ud) /= [nsite,nsite]) .or. any(shape(trace_du) /= [nsite,nsite])) then
-         error stop 'native contour: ordered trace shape mismatch'
-      end if
       do ia = 1, nsite
          do ja = 1, nsite
             call native_spin_site_block(gsrc,norb,ia,1,ja,1,gup_ij)

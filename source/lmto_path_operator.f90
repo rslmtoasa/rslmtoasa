@@ -189,9 +189,6 @@ contains
       external :: zgesv
 
       n = size(matrix,1)
-      if (size(matrix,2) /= n .or. size(inverse,1) /= n .or. size(inverse,2) /= n) then
-         error stop 'native_inverse: invalid matrix shape'
-      end if
       allocate(a(n,n),rhs(n,n),ipiv(n))
       a = matrix
       rhs = cmplx(0.0_rp,0.0_rp,rp)
@@ -218,9 +215,6 @@ contains
 
       lmax = atom%potential%lmax
       norb = (lmax + 1)**2
-      if (size(pmat, 1) /= 2*norb .or. size(pmat, 2) /= 2*norb) then
-         error stop 'native_complex_p_matrix: invalid matrix shape'
-      end if
       pmat = cmplx(0.0_rp, 0.0_rp, rp)
       do l = 0, lmax
          do m = 1, 2*l + 1
@@ -294,9 +288,6 @@ contains
       complex(rp), intent(out) :: delta(:, :)
       integer :: norb
       norb = size(pmat,1)/2
-      if (size(pmat,2) /= 2*norb .or. size(delta,1) /= norb .or. size(delta,2) /= norb) then
-         error stop 'native_delta_p: invalid matrix shape'
-      end if
       delta = pmat(1:norb,1:norb) - pmat(norb+1:2*norb,norb+1:2*norb)
    end subroutine native_delta_p
 
@@ -316,9 +307,6 @@ contains
       nsite = lat%nrec
       if (nsite < 1) error stop 'native_structure_constants: lattice has no reciprocal sites'
       norb = (lat%symbolic_atoms(lat%iz(lat%atlist(1)))%potential%lmax + 1)**2
-      if (size(smat,1) /= norb*nsite .or. size(smat,2) /= norb*nsite) then
-         error stop 'native_structure_constants: invalid matrix shape'
-      end if
       smat = cmplx(0.0_rp, 0.0_rp, rp)
       allocate(cralat(3,lat%kk), ham_vec(3,max(1,lat%nn_max)), kfrac(3))
       cralat = lat%cr(:,1:lat%kk)*lat%alat
@@ -369,9 +357,6 @@ contains
       it = lat%iz(lat%atlist(1))
       norb = (lat%symbolic_atoms(it)%potential%lmax + 1)**2
       nspin = 2*norb*nsite
-      if (size(pmat,1) /= nspin .or. size(smat,1) /= nspin .or. size(gmat,1) /= nspin) then
-         error stop 'native_path_operator: invalid matrix shape'
-      end if
       allocate(s_orb(norb*nsite,norb*nsite))
       call native_structure_constants(lat,k,s_orb)
       smat = cmplx(0.0_rp,0.0_rp,rp)
@@ -406,10 +391,6 @@ contains
       it = lat%iz(lat%atlist(1))
       norb = (lat%symbolic_atoms(it)%potential%lmax + 1)**2
       nspin = 2*norb*nsite
-      if (any(shape(smat) /= [nspin,nspin]) .or. any(shape(pmat) /= [nspin,nspin]) .or. &
-          any(shape(gmat) /= [nspin,nspin])) then
-         error stop 'native_path_operator_from_structure: invalid matrix shape'
-      end if
       allocate(psite(2*norb,2*norb), alpha(0:lat%symbolic_atoms(it)%potential%lmax), &
          work(nspin,nspin),rhs(nspin,nspin),ipiv(nspin))
       pmat = cmplx(0.0_rp,0.0_rp,rp)

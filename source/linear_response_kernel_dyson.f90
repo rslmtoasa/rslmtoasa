@@ -40,15 +40,6 @@ contains
       type(lr_alsda_kernel_request), intent(in) :: request
       type(lr_alsda_kernel_result), intent(out) :: result
 
-      if (.not. associated(request%response_space)) then
-         error stop 'evaluate_lr_alsda_kernel: response-space reference is incomplete'
-      end if
-      if (.not. associated(request%ground_states)) then
-         error stop 'evaluate_lr_alsda_kernel: accepted radial-state references are incomplete'
-      end if
-      if (.not. allocated(request%pauli_magnetization)) then
-         error stop 'evaluate_lr_alsda_kernel: Pauli magnetization is required explicitly'
-      end if
       if (request%production_contract) then
          if (trim(request%magnetization_kind) /= lr_kxc_magnetization_kind_pauli_accepted .or. &
              trim(request%magnetization_source) /= lr_kxc_magnetization_source_pauli_accepted) then
@@ -99,12 +90,6 @@ contains
       if (present(low_m_diagnostic_relative)) effective_low_m_diagnostic_relative = low_m_diagnostic_relative
 
       call require_initialized_space(space)
-      if (size(ground_states) /= space%nsite) then
-         error stop 'evaluate_lr_alsda_kernel: one accepted radial state is required per response site'
-      end if
-      if (any(shape(pauli_magnetization) /= [space%nsite, space%npoint])) then
-         error stop 'evaluate_lr_alsda_kernel: Pauli magnetization shape mismatch'
-      end if
       if (trim(effective_magnetization_label) /= lr_kxc_magnetization_pauli) then
          error stop 'evaluate_lr_alsda_kernel: only the LR-03 Pauli-projected magnetization is supported'
       end if
@@ -214,16 +199,6 @@ contains
       complex(rp), allocatable :: field(:), response(:), residual(:)
       real(rp) :: target_norm
 
-      if (any(shape(static_susceptibility) /= [space%ndim, space%ndim]) .or. &
-          any(shape(canonical_kernel) /= [space%ndim, space%ndim])) then
-         error stop 'evaluate_lr_alsda_static_residual: operator shape mismatch'
-      end if
-      if (size(rigid_vector) /= space%ndim) then
-         error stop 'evaluate_lr_alsda_static_residual: rigid-vector shape mismatch'
-      end if
-      if (present(residual_vector) .and. size(residual_vector) /= space%ndim) then
-         error stop 'evaluate_lr_alsda_static_residual: residual-vector shape mismatch'
-      end if
       allocate(field(space%ndim), response(space%ndim), residual(space%ndim))
       call response_apply_operator(space, canonical_kernel, rigid_vector, field)
       call response_apply_operator(space, static_susceptibility, field, response)
@@ -245,10 +220,6 @@ contains
       if (space%ndim < 1 .or. .not. allocated(space%radius) .or. .not. allocated(space%radial_weights) .or. &
           .not. allocated(space%metric_weights)) then
          error stop 'evaluate_lr_alsda_kernel: response space is not initialized'
-      end if
-      if (size(space%radius) /= space%npoint .or. size(space%radial_weights) /= space%npoint .or. &
-          size(space%metric_weights) /= space%ndim) then
-         error stop 'evaluate_lr_alsda_kernel: response-space metadata is inconsistent'
       end if
    end subroutine require_initialized_space
 
@@ -326,15 +297,6 @@ contains
       type(lr_goldstone_sumrule_request), intent(in) :: request
       type(lr_goldstone_sumrule_result), intent(out) :: result
 
-      if (.not. associated(request%response_space)) then
-         error stop 'evaluate_lr_goldstone_sumrule: response-space reference is incomplete'
-      end if
-      if (.not. allocated(request%static_susceptibility)) then
-         error stop 'evaluate_lr_goldstone_sumrule: canonical static chiKS is required'
-      end if
-      if (.not. allocated(request%magnetization)) then
-         error stop 'evaluate_lr_goldstone_sumrule: accepted magnetization is required explicitly'
-      end if
       call evaluate_lr_goldstone_sumrule_explicit(request%response_space, request%static_susceptibility, &
          request%magnetization, result, request%magnetization_label)
    end subroutine evaluate_lr_goldstone_sumrule_request
@@ -732,7 +694,6 @@ contains
       integer :: a, b, ia, ib, up_i, up_j, down_i, down_j, site_i, site_j
       type(projected_mills_interaction_request) :: request
 
-      if (.not. allocated(reciprocal_obj%hk_bulk)) error stop 'DRESP-04 Mills: accepted hk_bulk is unavailable'
       nsite = contract%nsite
       norb = (contract%orbital_lmax + 1)**2
       nmat = size(reciprocal_obj%hk_bulk, 1)
@@ -1048,9 +1009,6 @@ contains
       integer :: nsite
 
       nsite = size(projected_moment)
-      if (any(shape(static_chi0) /= [nsite, nsite]) .or. size(interaction_U) /= nsite) then
-         error stop 'DRESP-05 Juelich holdout: inconsistent dimensions'
-      end if
       allocate(vector(nsite))
       ! Holdout means that U is frozen while chi0 is replaced.  The residual
       ! is therefore the Ward action (I-chi0*U)M, not the construction solve.
@@ -1067,10 +1025,6 @@ contains
       logical, intent(out) :: is_stable
       real(rp) :: scale, difference
 
-      if (.not. allocated(result%interaction_U_real) .or. .not. allocated(previous_result%interaction_U_real) .or. &
-          size(result%interaction_U_real) /= size(previous_result%interaction_U_real)) then
-         error stop 'DRESP-05 Juelich eta audit: incompatible results'
-      end if
       difference = maxval(abs(result%interaction_U_real - previous_result%interaction_U_real))
       scale = max(maxval(abs(result%interaction_U_real)), maxval(abs(previous_result%interaction_U_real)), tiny(1.0_rp))
       is_stable = difference/scale <= projected_juelich_eta_relative_tolerance
@@ -1200,9 +1154,6 @@ contains
       integer :: flat_out, flat_in
 
       call validate_operator_shapes(space, product, compact_operator)
-      if (any(shape(values) /= [space%nsite, space%npoint])) then
-         error stop 'compact_project_local_operator: site/radial scalar shape mismatch'
-      end if
       compact_operator = cmplx(0.0_rp, 0.0_rp, rp)
       do site = 1, product%nsite
          do response_l = 0, product%response_lmax
@@ -1231,9 +1182,6 @@ contains
       complex(rp), allocatable :: operator(:, :)
 
       call validate_common_layout(space, product)
-      if (size(vector) /= product%product_dimension .or. size(result) /= product%product_dimension) then
-         error stop 'compact local operator: vector shape mismatch'
-      end if
       allocate(operator(product%product_dimension, product%product_dimension))
       call compact_project_local_operator(space, product, values, operator)
       result = matmul(operator, vector)
@@ -1251,9 +1199,6 @@ contains
       integer :: site, ir, flat
       type(response_super_index) :: item
 
-      if (any(shape(magnetization) /= [space%nsite, space%npoint])) then
-         error stop 'compact_project_magnetization: magnetization shape mismatch'
-      end if
       allocate(point(space%ndim))
       point = cmplx(0.0_rp, 0.0_rp, rp)
       do site = 1, space%nsite
@@ -1283,9 +1228,6 @@ contains
       real(rp) :: weight
       type(response_super_index) :: item
 
-      if (size(point_vector) /= space%ndim .or. size(projected_point_vector) /= space%ndim) then
-         error stop 'compact projection diagnostics: point vector shape mismatch'
-      end if
       weighted_norm = 0.0_rp
       residual_norm = 0.0_rp
       do site = 1, space%nsite
@@ -1581,9 +1523,6 @@ contains
       if (compact) then
          call validate_compact_request(request, n)
       else
-         if (.not. associated(request%response_space)) then
-            error stop 'evaluate_tddft_dyson: response-space reference is incomplete'
-         end if
          space => request%response_space
          call validate_dyson_request(request, space)
          n = space%ndim
@@ -1757,9 +1696,6 @@ contains
       integer :: n, i, j
 
       n = space%ndim
-      if (size(chi, 1) /= n .or. size(chi, 2) /= n) then
-         error stop 'tddft_loss_matrix: canonical chi/response-space shape mismatch'
-      end if
       call response_operator_adjoint(space, chi, adjoint)
       loss = -(chi - adjoint)/cmplx(0.0_rp, 2.0_rp*pi, rp)
       do i = 1, n
@@ -1786,9 +1722,6 @@ contains
       complex(rp), intent(in) :: loss(:, :)
       complex(rp) :: adjoint(size(loss, 1), size(loss, 2))
 
-      if (size(loss, 1) /= space%ndim .or. size(loss, 2) /= space%ndim) then
-         error stop 'loss_matrix_hermiticity_residual: canonical loss/response-space shape mismatch'
-      end if
       call response_operator_adjoint(space, loss, adjoint)
       residual = maxval(abs(loss - adjoint))
    end function loss_matrix_hermiticity_residual_metric

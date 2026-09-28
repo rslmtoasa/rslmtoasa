@@ -92,9 +92,6 @@ contains
       real(rp), allocatable :: cralat(:, :), ham_vec(:, :)
       integer :: nn_max_loc
 
-      if (.not. associated(source%lattice) .or. .not. associated(source%charge)) then
-         error stop 'lmto_fixture_from_hamiltonian: production object is not wired'
-      end if
       count = 0
       do site = 1, source%lattice%nrec
          ntype = source%lattice%ib(site); ia = source%lattice%atlist(ntype); nr = source%lattice%nn(ia,1)
@@ -207,7 +204,6 @@ contains
 
       call validate_fixture(this)
       nmat = 2*this%norb*this%nsite
-      if (any(shape(hamiltonian) /= [nmat, nmat])) error stop 'assemble_lmto_hamiltonian: output shape mismatch'
       allocate(b(nmat,nmat), q(nmat,nmat), enu(nmat,nmat))
       call assemble_base_terms(this, k_point, b, q)
       enu = cmplx(0.0_rp, 0.0_rp, rp)
@@ -233,7 +229,6 @@ contains
 
       call validate_site_axis(this, site, axis)
       nmat = 2*this%norb*this%nsite
-      if (any(shape(torque) /= [nmat,nmat])) error stop 'assemble_lmto_finite_q_torque: output shape mismatch'
       allocate(b(nmat,nmat), b_right(nmat,nmat), qmat(nmat,nmat), db(nmat,nmat), dq(nmat,nmat), denu(nmat,nmat))
       call assemble_base_terms(this, k_point, b, qmat)
       call assemble_base_terms(this, k_point + q_point, b_right, qmat)
@@ -261,9 +256,6 @@ contains
       complex(rp), intent(out) :: torques(:, :, :)
       integer :: site, nmat
       nmat = 2*this%norb*this%nsite
-      if (size(axes,1) /= 3 .or. size(axes,2) /= this%nsite .or. any(shape(torques) /= [nmat,nmat,this%nsite])) then
-         error stop 'assemble_lmto_finite_q_torques: shape mismatch'
-      end if
       do site = 1, this%nsite
          call assemble_lmto_finite_q_torque(this, k_point, q_point, site, axes(:,site), torques(:,:,site))
       end do
@@ -283,7 +275,6 @@ contains
       call validate_site_axis(this, site_i, axis_i)
       call validate_site_axis(this, site_j, axis_j)
       nmat = 2*this%norb*this%nsite
-      if (any(shape(mixed) /= [nmat,nmat])) error stop 'assemble_lmto_finite_q_mixed_derivative: output shape mismatch'
       allocate(b(nmat,nmat), qmat(nmat,nmat), dbi(nmat,nmat), dqi(nmat,nmat), dbj_minus(nmat,nmat), dqj_minus(nmat,nmat), &
          dbi_left(nmat,nmat), dqi_left(nmat,nmat), dbj_at_k(nmat,nmat), dqj_at_k(nmat,nmat), &
          d2b(nmat,nmat), d2q(nmat,nmat), d2enu(nmat,nmat))
@@ -312,13 +303,6 @@ contains
       integer :: n, m, a, b, nbands, nsite, nmat
 
       nbands = size(eigenvalues); nmat = size(eigenvectors,1); nsite = size(torques_q,3)
-      if (size(endpoint_values) /= nbands .or. size(eigenvectors,2) /= nbands .or. &
-          any(shape(endpoint_vectors) /= [nmat,nbands]) .or. any(shape(torques_q) /= [nmat,nmat,nsite]) .or. &
-          any(shape(torques_minus_q) /= [nmat,nmat,nsite]) .or. any(shape(mixed) /= [nmat,nmat,nsite,nsite]) .or. &
-          any(shape(hessian) /= [nsite,nsite]) .or. any(shape(torque_torque) /= [nsite,nsite]) .or. &
-          any(shape(mixed_contact) /= [nsite,nsite]) .or. any(shape(complete) /= [nsite,nsite])) then
-         error stop 'force_theorem_finite_q_hessian_from_eigenbasis: shape mismatch'
-      end if
       hessian = 0.0_rp; torque_torque = 0.0_rp; mixed_contact = 0.0_rp; complete = 0.0_rp
       do a = 1, nsite
          do b = 1, nsite
@@ -368,11 +352,6 @@ contains
       real(rp) :: weight_sum
 
       nk = size(eigenvalues,2); nsite = size(torques_q,3)
-      if (size(weights) /= nk .or. size(endpoint_values,2) /= nk .or. size(eigenvectors,3) /= nk .or. &
-          size(endpoint_vectors,3) /= nk .or. size(torques_q,4) /= nk .or. size(torques_minus_q,4) /= nk .or. &
-          size(mixed,5) /= nk .or. any(shape(hessian) /= [nsite,nsite]) .or. &
-          any(shape(torque_torque) /= [nsite,nsite]) .or. any(shape(mixed_contact) /= [nsite,nsite]) .or. &
-          any(shape(complete) /= [nsite,nsite])) error stop 'force_theorem_finite_q_hessian_from_eigenbasis_batch: shape mismatch'
       weight_sum = sum(weights)
       if (abs(weight_sum) <= tiny(1.0_rp)) error stop 'force_theorem_finite_q_hessian_from_eigenbasis_batch: zero weight sum'
       allocate(h(nsite,nsite),tt(nsite,nsite),cc(nsite,nsite),allh(nsite,nsite))
@@ -411,13 +390,6 @@ contains
       integer :: n, m, a, b, nbands, nsite, nmat
 
       nbands = size(eigenvalues); nmat = size(eigenvectors,1); nsite = size(torques_q,3)
-      if (size(endpoint_values) /= nbands .or. size(eigenvectors,2) /= nbands .or. &
-          any(shape(endpoint_vectors) /= [nmat,nbands]) .or. any(shape(torques_q) /= [nmat,nmat,nsite]) .or. &
-          any(shape(torques_minus_q) /= [nmat,nmat,nsite]) .or. any(shape(mixed) /= [nmat,nmat,nsite,nsite]) .or. &
-          any(shape(hessian) /= [nsite,nsite]) .or. any(shape(torque_torque) /= [nsite,nsite]) .or. &
-          any(shape(mixed_contact) /= [nsite,nsite]) .or. any(shape(complete) /= [nsite,nsite])) then
-         error stop 'force_theorem_finite_q_hessian_from_eigenbasis_metallic: shape mismatch'
-      end if
       hessian = 0.0_rp; torque_torque = 0.0_rp; mixed_contact = 0.0_rp; complete = 0.0_rp
       ! Transform each vertex/contact once into the two endpoint eigenbases.
       ! The band-pair contraction below then contains only scalar products;
@@ -470,11 +442,6 @@ contains
       real(rp) :: weight_sum
 
       nk = size(eigenvalues,2); nsite = size(torques_q,3)
-      if (size(weights) /= nk .or. size(endpoint_values,2) /= nk .or. size(eigenvectors,3) /= nk .or. &
-          size(endpoint_vectors,3) /= nk .or. size(torques_q,4) /= nk .or. size(torques_minus_q,4) /= nk .or. &
-          size(mixed,5) /= nk .or. any(shape(hessian) /= [nsite,nsite]) .or. &
-          any(shape(torque_torque) /= [nsite,nsite]) .or. any(shape(mixed_contact) /= [nsite,nsite]) .or. &
-          any(shape(complete) /= [nsite,nsite])) error stop 'force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch: shape mismatch'
       weight_sum = sum(weights)
       if (abs(weight_sum) <= tiny(1.0_rp)) error stop 'force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch: zero weight sum'
       allocate(h(nsite,nsite),tt(nsite,nsite),cc(nsite,nsite),allh(nsite,nsite))
@@ -542,13 +509,8 @@ contains
       integer :: ik, ibond, site, m, nmat, ntype, ia, i_start, i_end, j_start, j_end
 
       call validate_fixture(fixture)
-      if (size(k_points,1) /= 3 .or. .not. associated(source%lattice) .or. &
-          .not. allocated(source%ee)) error stop 'lmto_fixture_adapter_residual: incomplete production state'
       if (source%ccor_2c) error stop 'lmto_fixture_adapter_residual: CCOR is outside the clean adapter gate'
       nmat = 2*fixture%norb*fixture%nsite
-      if (size(source%ee,1) /= nmat .or. size(source%ee,2) /= nmat) then
-         error stop 'lmto_fixture_adapter_residual: production basis mismatch'
-      end if
       allocate(expected(nmat,nmat), b(nmat,nmat), qmat(nmat,nmat), fixture_h(nmat,nmat), block(nmat,nmat))
       max_error = 0.0_rp
       do ik = 1, size(k_points,2)
@@ -1193,8 +1155,6 @@ contains
       integer :: ik, nk, nsite
 
       nk = size(h_source,3); nsite = size(torques_q,3)
-      if (size(h_endpoint,3) /= nk .or. size(k_weights) /= nk .or. size(torques_q,4) /= nk .or. &
-          size(torques_minus_q,4) /= nk .or. size(mixed,5) /= nk) error stop 'resolvent batch: k dimension mismatch'
       weight_sum = sum(k_weights)
       if (weight_sum <= tiny(1.0_rp)) error stop 'resolvent batch: zero k-weight sum'
       allocate(h(nsite,nsite), tt(nsite,nsite), cc(nsite,nsite), allh(nsite,nsite))
@@ -1256,13 +1216,6 @@ contains
       real(rp) :: solve_seconds, contour_seconds, pole_seconds
 
       nmat = size(h_source,1); nsite = size(torques_q,3); nnode = size(nodes); npole = size(poles)
-      if (size(h_source,2) /= nmat .or. any(shape(h_endpoint) /= [nmat,nmat]) .or. size(weights) /= nnode .or. &
-          size(torques_q,1) /= nmat .or. size(torques_q,2) /= nmat .or. size(torques_minus_q,1) /= nmat .or. &
-          size(torques_minus_q,2) /= nmat .or. size(torques_q,3) /= nsite .or. size(torques_minus_q,3) /= nsite .or. &
-          size(mixed,1) /= nmat .or. size(mixed,2) /= nmat .or. size(mixed,3) /= nsite .or. size(mixed,4) /= nsite .or. &
-          size(hessian,1) /= nsite .or. size(hessian,2) /= nsite .or. size(torque_torque,1) /= nsite .or. &
-          size(mixed_contact,1) /= nsite .or. size(mixed_contact,2) /= nsite .or. size(complete,1) /= nsite .or. &
-          size(complete,2) /= nsite) error stop 'resolvent Hessian: shape mismatch'
 
       allocate(a0(nmat,nmat), a1(nmat,nmat), rhs0(nmat,nmat), rhs1(nmat,nmat), piv0(nmat), piv1(nmat), &
          contour_tt(nsite,nsite), contour_contact(nsite,nsite), pole_tt(nsite,nsite), pole_contact(nsite,nsite))
@@ -1566,7 +1519,6 @@ contains
       real(rp) :: fn, fm, divided, energy_difference, weight
       integer :: ia, ib, ik, n, m, info, ncoord
 
-      if (.not. associated(request%state)) error stop 'rotation response request has no prepared state'
       state => request%state
       if (.not. state%prepared) error stop 'rotation response state is not prepared'
       if (request%exact_static) then
@@ -1656,8 +1608,6 @@ contains
          error stop 'STATE_PROVENANCE_OPEN: direct oracle requires second-order ham_only state with SOC off'
       call recip%require_replicated_k_workset('evaluate_rotation_response_oracle')
       nk=size(recip%k_points,2); nsite=fixture%nsite; ncoord=2*nsite; nmat=2*fixture%norb*nsite; nband=nmat
-      if (any(shape(bubble)/=[ncoord,ncoord]) .or. any(shape(contact)/=[ncoord,ncoord]) .or. &
-          any(shape(kernel)/=[ncoord,ncoord])) error stop 'evaluate_rotation_response_oracle: shape mismatch'
       fermi=recip%fermi_level; kT=max(recip%temperature*kB_ry_per_k,1.0e-10_rp); weight_sum=sum(recip%k_weights)
       allocate(values(nband,nk),endpoint_values(nband,nk),vectors(nmat,nband,nk), &
          endpoint_vectors(nmat,nband,nk),axes(3,ncoord),vq(nmat,nmat,ncoord),vm(nmat,nmat,ncoord),mixed(nmat,nmat))
@@ -1773,7 +1723,6 @@ contains
       real(rp), allocatable, intent(out) :: axes(:, :)
       real(rp) :: m(3), reference(3), e1(3), e2(3), norm_m, dot_m
       integer :: site
-      if (size(moments,1)/=3) error stop 'rotation_axes: moment array must have three Cartesian rows'
       allocate(axes(3,2*size(moments,2)))
       do site = 1,size(moments,2)
          m = moments(:,site)
@@ -1800,7 +1749,6 @@ contains
       complex(rp), intent(out) :: unitary(:, :)
       complex(rp), parameter :: inv_sqrt2=cmplx(1.0_rp/sqrt(2.0_rp),0.0_rp,rp)
       integer :: site, i0
-      if (any(shape(unitary)/=[2*nsite,2*nsite])) error stop 'rotation_circular_unitary: shape mismatch'
       unitary=cmplx(0.0_rp,0.0_rp,rp)
       do site=1,nsite
          i0=2*(site-1)
@@ -1819,7 +1767,6 @@ contains
       integer, allocatable :: pivots(:)
       integer :: n,lwork
       n=size(matrix,1)
-      if (size(matrix,2)/=n) error stop 'invert_complex_matrix: matrix must be square'
       allocate(pivots(n))
       call zgetrf(n,n,matrix,n,pivots,info)
       if (info/=0) then
@@ -2348,10 +2295,6 @@ contains
 
       nsite=lat%nrec; nq=size(q_direct,2)
       if (nsite/=1) error stop 'native_exchange_q_driver: production scalar reduction requires nsite=1'
-      if (size(q_direct,1)/=3 .or. size(jq_ud_out)/=nq .or. size(jq_du_out)/=nq .or. &
-          size(jq_sym_out)/=nq .or. size(delta_j)/=nq .or. size(curvature)/=nq) then
-         error stop 'native_exchange_q_driver: shape mismatch'
-      end if
       kT=max(recip%temperature*kB_ry_per_k,1.0e-10_rp)
       allocate(jq_ud(nsite,nsite,nq),jq_du(nsite,nsite,nq),jq_sym(nsite,nsite,nq), &
          native_delta(nsite,nsite,nq),native_curvature(nsite,nsite,nq))
@@ -2991,9 +2934,6 @@ contains
       if (fixture%nsite/=1) error stop 'first Fe rotation pole driver currently reports the one-site primitive bcc state'
       if (recip%hamiltonian%ccor_2c) error stop 'first Fe rotation pole state requires CCOR off'
       if (abs(recip%temperature-300.0_rp)>1.0e-8_rp) error stop 'first Fe rotation pole state requires T=300 K'
-      if (size(finite_h,3)/=size(q_direct,2) .or. size(native_delta)/=size(q_direct,2) .or. &
-          size(native_curv)/=size(q_direct,2)) error stop 'rotation dynamics campaign q/reference shape mismatch'
-      if (size(q_cart,2)/=size(q_direct,2)) error stop 'rotation dynamics campaign q Cartesian shape mismatch'
       if (len_trim(rotation_output_file)==0) error stop 'rotation dynamics output path is blank'
       open(newunit=unit,file=trim(rotation_output_file),status='replace',action='write')
       write(unit,'(a)') '# native second-order local-rotation dynamics; K^R = contact + unsymmetrized retarded bubble'

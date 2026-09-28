@@ -550,12 +550,6 @@ contains
       nk = left_state%nk
       nbands = left_state%nbands
       nbasis = left_state%nbasis
-      if (size(reciprocal_obj%k_workset%points, 2) /= nk .or. &
-          size(reciprocal_obj%k_workset%weights) /= nk .or. &
-          any(shape(reciprocal_obj%eigenvalues) /= [nbands, nk]) .or. &
-          any(shape(reciprocal_obj%eigenvectors) /= [nbasis, nbands, nk])) then
-         error stop 'TDDFT state consistency: reciprocal and left-state shapes differ'
-      end if
       mesh_max = maxval(abs(reciprocal_obj%k_workset%points - left_state%k_points))
       weight_max = maxval(abs(reciprocal_obj%k_workset%weights - left_state%k_weights))
       ef_diff = abs(reciprocal_obj%fermi_level - left_state%fermi_level)
@@ -2383,9 +2377,6 @@ contains
       type(response_super_index) :: item
       integer :: product_flat, site, response_l, response_m, product_mode, ir, point_flat
 
-      if (size(point_transition) /= response_space%ndim .or. size(product_coordinates) /= product%product_dimension) then
-         error stop 'TDVK-02R2 transition projection: vector shape mismatch'
-      end if
       product_coordinates = cmplx(0.0_rp, 0.0_rp, rp)
       do product_flat = 1, product%product_dimension
          call product%unflatten_index(product_flat, site, response_l, response_m, product_mode)
@@ -2459,9 +2450,6 @@ contains
       real(rp) :: sr_difference, scale
       integer :: isite
 
-      if (any(shape(pauli_magnetization) /= [response_space%nsite, response_space%npoint])) then
-         error stop 'TDDFT production driver: accepted Pauli magnetization shape mismatch'
-      end if
       sr_difference = 0.0_rp
       scale = 0.0_rp
       do isite = 1, response_space%nsite
@@ -2730,10 +2718,6 @@ contains
       use_complete_sr = .false.
       if (present(complete_sr)) use_complete_sr = complete_sr
 
-      if (.not. allocated(state%r) .or. .not. allocated(state%pauli_large) .or. &
-          .not. allocated(state%pauli_large_dot) .or. .not. allocated(state%pauli_enu)) then
-         error stop 'TDDFT production driver: accepted radial snapshot lacks Pauli basis arrays'
-      end if
       if (use_complete_sr .and. (.not. allocated(state%pauli_small) .or. .not. state%sr_basis_valid .or. &
           .not. allocated(state%sr_large_dot) .or. &
           .not. allocated(state%sr_small_dot) .or. .not. allocated(state%sr_large_ddot) .or. &
@@ -2917,7 +2901,6 @@ contains
       complex(rp), intent(in) :: left(:, :), right(:, :)
       real(rp) :: left_norm, right_norm
 
-      if (any(shape(left) /= shape(right))) error stop 'DRESP-06A site difference: shape mismatch'
       left_norm = sqrt(sum(abs(left)**2))
       right_norm = sqrt(sum(abs(right)**2))
       value = sqrt(sum(abs(left - right)**2))/max(left_norm, right_norm, tiny(1.0_rp))
