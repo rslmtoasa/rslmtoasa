@@ -814,12 +814,20 @@ if (RUN_UNIT_TESTS)
     WORKING_DIRECTORY "${_dresp03q_adapter_case}")
   set(_dresp03q_native_case "${CMAKE_BINARY_DIR}/Testing/dresp03q_native_lkag")
   file(MAKE_DIRECTORY "${_dresp03q_native_case}")
-  configure_file("${CMAKE_SOURCE_DIR}/results/validation/VAL-18_bccFe/jij_fixed/input.nml" "${_dresp03q_native_case}/input.nml" COPYONLY)
-  configure_file("${CMAKE_SOURCE_DIR}/results/validation/VAL-18_bccFe/jij_fixed/Fe.nml" "${_dresp03q_native_case}/Fe.nml" COPYONLY)
-  configure_file("${CMAKE_SOURCE_DIR}/results/validation/VAL-18_bccFe/jij_fixed/jij.out" "${_dresp03q_native_case}/jij.out" COPYONLY)
-  set_tests_properties(UnitLrRotationStaticLkag PROPERTIES
-    LABELS "unit;dresp-03q;finite-q;lmto;lkag;native-reference;bcc-fe;spd"
-    WORKING_DIRECTORY "${_dresp03q_native_case}")
+  set(_dresp03q_native_reference_dir "${CMAKE_SOURCE_DIR}/results/validation/VAL-18_bccFe/jij_fixed")
+  if (EXISTS "${_dresp03q_native_reference_dir}/input.nml"
+      AND EXISTS "${_dresp03q_native_reference_dir}/Fe.nml"
+      AND EXISTS "${_dresp03q_native_reference_dir}/jij.out")
+    configure_file("${_dresp03q_native_reference_dir}/input.nml" "${_dresp03q_native_case}/input.nml" COPYONLY)
+    configure_file("${_dresp03q_native_reference_dir}/Fe.nml" "${_dresp03q_native_case}/Fe.nml" COPYONLY)
+    configure_file("${_dresp03q_native_reference_dir}/jij.out" "${_dresp03q_native_case}/jij.out" COPYONLY)
+    set_tests_properties(UnitLrRotationStaticLkag PROPERTIES
+      LABELS "unit;dresp-03q;finite-q;lmto;lkag;native-reference;bcc-fe;spd"
+      WORKING_DIRECTORY "${_dresp03q_native_case}")
+  else()
+    message(STATUS "Skipping UnitLrRotationStaticLkag: VAL-18 native reference fixtures are unavailable")
+    set_tests_properties(UnitLrRotationStaticLkag PROPERTIES DISABLED TRUE)
+  endif()
   add_fortran_component_unit_test(UnitPathOperator
     ${TestDIR}/unit/lmto_path_operator/test_path_operator_main.f90
     ${TestDIR}/unit/lmto_path_operator/test_path_operator_contour.f90
