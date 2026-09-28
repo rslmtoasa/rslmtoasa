@@ -69,6 +69,15 @@ the production finite-H/H2 static curvature and the explicit window controls.
 With the diagnostic disabled, the rotation output marks the Turek field as
 missing rather than writing a fabricated zero.
 
+The rotation workflow is generic when `diagnostics='none'`: it validates the
+accepted state, evaluates the q path and dynamic kernel, performs static
+reduction and pole/loss analysis, and writes the response output without Fe
+campaign assumptions. `diagnostics='invariants'` enables the optional
+historical Fe validation layer. The existing native-Turek acceptance deck
+also retains that layer for compatibility; its one-site, CCOR-off, 300 K,
+PASS-A/PASS-B, and small-q fit checks are not requirements of the generic
+workflow.
+
 Sources: `lr-campaign-archive:docs/NATIVE_ROTATION_DYNAMICS.md`, `lr-campaign-archive:docs/TDDFT_FORMULATION.md`
 
 ## Spatial TD-DFT

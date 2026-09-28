@@ -625,6 +625,15 @@ endforeach()
     LABELS "lr_baseline;linear_response;rotation;slope-control"
     TIMEOUT 900)
 
+  add_test(NAME LrRotationGenericWorkflow
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_rotation_generic.py
+      --binary ${TestBinary}
+      --case ${TestDIR}/lr_baseline/cases/rotation
+      --scratch-root ${CMAKE_BINARY_DIR}/Testing/lr_rotation_generic)
+  set_tests_properties(LrRotationGenericWorkflow PROPERTIES
+    LABELS "lr_baseline;linear_response;rotation;generic-workflow"
+    TIMEOUT 900)
+
   add_test(NAME LrBaselineTddftLehmann
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_baseline.py
       --binary ${TestBinary}

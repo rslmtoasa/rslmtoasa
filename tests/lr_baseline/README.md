@@ -31,6 +31,11 @@ only its independent diagnostic data.
 controls, and intentionally unequal legacy controls. The q=0 derivative and
 all rotation rows must remain unchanged; the independent Berry check must pass.
 
+`LrRotationGenericWorkflow` runs the rotation response with the Fe campaign
+disabled and the reciprocal temperature changed to 350 K. It checks that the
+generic q/response/pole workflow does not require the historical one-site,
+CCOR-off, 300 K campaign gates.
+
 Configure the regression tests and run the closeout set with:
 
 ```sh

@@ -2632,6 +2632,9 @@ contains
       end if
 
       if (len_trim(this%config%output_file) == 0) call g_logger%fatal('[linear_response]: output_file must not be blank', __FILE__, __LINE__)
+      if (this%config%diagnostics /= 'none' .and. this%config%diagnostics /= 'invariants') then
+         call g_logger%fatal("[linear_response]: diagnostics must be 'none' or 'invariants'", __FILE__, __LINE__)
+      end if
       if (any(this%config%rotation_eta_ladder <= 0.0_rp)) then
          call g_logger%fatal('[linear_response]: rotation_eta_ladder values must be positive', __FILE__, __LINE__)
       end if
@@ -2847,7 +2850,7 @@ contains
          contour_tt, contour_contact, native_jq_ud, native_jq_du, native_jq_sym, native_delta_j, native_curvature, native_report, &
          native_ready, endpoint_mode, endpoint_reused, q_commensurate, endpoint_residual, endpoint_seconds, assembly_seconds, &
          contraction_seconds, hamiltonian_seconds, gf_seconds, solve_seconds, contour_seconds, total_response_seconds)
-      call run_native_rotation_dynamics_campaign(trim(this%config%output_file), lattice_obj, reciprocal_obj, self_obj, fixture, &
+      call run_rotation_response_workflow(trim(this%config%output_file), this%config%diagnostics, lattice_obj, reciprocal_obj, self_obj, fixture, &
          q_direct, q_cart, finite_total, native_delta_j, native_curvature, native_ready, this%config%rotation_eta_ladder, &
          this%config%rotation_probe_omega, this%config%rotation_probe_eta, &
          this%config%rotation_pole_window_floor, this%config%rotation_pole_window_scale, &
@@ -2905,10 +2908,11 @@ contains
       close(unit)
    end subroutine write_rotation_response_grid
 
-   subroutine run_native_rotation_dynamics_campaign(rotation_output_file,lat,recip,self_obj,fixture,q_direct,q_cart,finite_h,native_delta,native_curv,native_ready, &
+   subroutine run_rotation_response_workflow(rotation_output_file,diagnostics,lat,recip,self_obj,fixture,q_direct,q_cart,finite_h,native_delta,native_curv,native_ready, &
       rotation_eta_ladder,rotation_probe_omega,rotation_probe_eta,rotation_pole_window_floor, &
       rotation_pole_window_scale,rotation_pole_window_max,rotation_pole_coarse_points,rotation_pole_fine_points,rotation_pole_refinement_half_width)
       character(len=*), intent(in) :: rotation_output_file
+      character(len=*), intent(in) :: diagnostics
       type(lattice), intent(in) :: lat
       type(reciprocal), target, intent(inout) :: recip
       type(self), intent(in) :: self_obj
@@ -2928,16 +2932,13 @@ contains
       real(rp) :: static_residual,q0_residual,circular_offdiag,covariance_residual,omega_cov,eta_cov
       real(rp) :: finite_mev,turek_mev,omega_max,pred_plus,pred_minus,expected,df,fit_d,fit_resid
       real(rp) :: pole_re,pole_min,loss_peak,loss_height,fwhm,fwhm_mev,resolution,re_k,im_k,abs_k,pole_slope
-      real(rp) :: energy_eta(3),resid_eta(3),eta_move,window_min,window_max
+      real(rp), allocatable :: energy_eta(:),resid_eta(:),q_magnitude(:)
       integer :: unit,iq,igamma,ik,site,channel,ieta,ipole,nfinite,clean_count
-      logical :: static_ok,berry_ok,circular_ok,covariance_ok,causal_ok,pole_ok(3),resolved,fit_ok
+      logical :: static_ok,berry_ok,circular_ok,covariance_ok,causal_ok,resolved
+      logical, allocatable :: pole_ok(:)
       character(len=8) :: channel_name
-      character(len=24) :: gate_status
       character(len=10) :: pole_status
 
-      if (fixture%nsite/=1) error stop 'first Fe rotation pole driver currently reports the one-site primitive bcc state'
-      if (recip%hamiltonian%ccor_2c) error stop 'first Fe rotation pole state requires CCOR off'
-      if (abs(recip%temperature-300.0_rp)>1.0e-8_rp) error stop 'first Fe rotation pole state requires T=300 K'
       if (len_trim(rotation_output_file)==0) error stop 'rotation dynamics output path is blank'
       open(newunit=unit,file=trim(rotation_output_file),status='replace',action='write')
       write(unit,'(a)') '# native second-order local-rotation dynamics; K^R = contact + unsymmetrized retarded bubble'
@@ -3007,7 +3008,9 @@ contains
       write(unit,'(a,es20.12)') '# q0_Goldstone_residual = ',q0_residual
       write(unit,'(a,es20.12)') '# circular_offdiagonal_residual = ',max(abs(reduced(1,2)),abs(reduced(2,1)))
 
+      allocate(pole_ok(size(q_direct,2)), energy_eta(size(q_direct,2)), resid_eta(size(q_direct,2)), q_magnitude(size(q_direct,2)))
       pole_ok=.false.; energy_eta=-1.0_rp; resid_eta=huge(1.0_rp); nfinite=0; clean_count=0
+      q_magnitude=0.0_rp
       covariance_ok=.false.; covariance_residual=huge(1.0_rp); causal_ok=.false.
       do iq=1,size(q_direct,2)
          if (iq==igamma) cycle
@@ -3024,7 +3027,8 @@ contains
             turek_mev=0.0_rp
          end if
          qmag=2.0_rp*pi/lat%alat*sqrt(sum(q_cart(:,iq)**2))
-         if (iq==2) then
+         q_magnitude(nfinite)=qmag
+         if (nfinite==1) then
             call prepare_rotation_response(fixture,recip,-q_direct(:,iq),minus_state)
             request%state=>minus_state; request%exact_static=.true.; request%omega=0.0_rp; request%eta=0.0_rp
             call evaluate_rotation_response(request,minus_response)
@@ -3055,7 +3059,7 @@ contains
             static_residual=abs(real(response%kernel(1,1),rp)-finite_h(1,1,iq))
             if (nfinite==1) static_ok=static_ok .and. static_residual<=max(1.0e-8_rp,1.0e-7_rp*abs(finite_h(1,1,iq)))
          end if
-         if (iq==2) then
+         if (nfinite==1) then
             pred_plus=-real(response%kernel_pm(1,1),rp)/bplus
             pred_minus=-real(response%kernel_pm(2,2),rp)/bminus
          else
@@ -3137,23 +3141,51 @@ contains
       ! covariance_ok is set only by the explicit q/-q/-omega comparison above.
       berry_ok=berry_ok .and. slope_rel<=5.0e-2_rp
       static_ok=static_ok .and. q0_residual<=2.0e-7_rp
+      if (native_ready .or. trim(diagnostics)=='invariants') then
+         call run_fe_rotation_campaign_diagnostics(recip,fixture,nfinite,clean_count,q_magnitude,energy_eta, &
+            static_ok,berry_ok,circular_ok,covariance_ok,causal_ok)
+      else
+         write(*,'(a)') 'Rotation dynamics implementation = GENERIC'
+         write(*,'(a)') 'Fe validation campaign = NOT RUN'
+      end if
+      close(unit)
+      call state%clear(); call minus_state%clear()
+      deallocate(reduced,pole_ok,energy_eta,resid_eta,q_magnitude)
+   end subroutine run_rotation_response_workflow
+
+   subroutine run_fe_rotation_campaign_diagnostics(recip,fixture,nfinite,clean_count,q_magnitude,energy_eta, &
+      static_ok,berry_ok,circular_ok,covariance_ok,causal_ok)
+      type(reciprocal), intent(in) :: recip
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fixture
+      real(rp), intent(in) :: q_magnitude(:),energy_eta(:)
+      integer, intent(in) :: nfinite,clean_count
+      logical, intent(in) :: static_ok,berry_ok,circular_ok,covariance_ok,causal_ok
+      real(rp) :: fit_d,fit_resid,expected,qmag,window_min,window_max
+      integer :: ipole
+      logical :: fit_ok
+
+      if (fixture%nsite/=1) error stop 'Fe rotation validation campaign requires the one-site primitive state'
+      if (recip%hamiltonian%ccor_2c) error stop 'Fe rotation validation campaign requires CCOR off'
+      if (abs(recip%temperature-300.0_rp)>1.0e-8_rp) error stop 'Fe rotation validation campaign requires T=300 K'
+
       fit_ok=.false.; fit_d=0.0_rp; fit_resid=-1.0_rp; window_min=0.0_rp; window_max=0.0_rp
-      if (nfinite>=3 .and. clean_count>=3) then
+      if (nfinite>=3 .and. clean_count>=3 .and. size(q_magnitude)>=3 .and. size(energy_eta)>=3) then
          fit_ok=.true.; expected=0.0_rp; window_min=huge(1.0_rp); window_max=0.0_rp
          do ipole=1,3
             if (energy_eta(ipole)<=0.0_rp) fit_ok=.false.
             if (ipole>1 .and. energy_eta(ipole)<=energy_eta(ipole-1)) fit_ok=.false.
-            expected=expected+energy_eta(ipole)*(2.0_rp*pi/lat%alat*sqrt(sum(q_cart(:,ipole+1)**2)))**2
-            fit_d=fit_d+(2.0_rp*pi/lat%alat*sqrt(sum(q_cart(:,ipole+1)**2)))**4
-            window_min=min(window_min,2.0_rp*pi/lat%alat*sqrt(sum(q_cart(:,ipole+1)**2)))
-            window_max=max(window_max,2.0_rp*pi/lat%alat*sqrt(sum(q_cart(:,ipole+1)**2)))
+            qmag=q_magnitude(ipole)
+            expected=expected+energy_eta(ipole)*qmag**2
+            fit_d=fit_d+qmag**4
+            window_min=min(window_min,qmag)
+            window_max=max(window_max,qmag)
          end do
          if (fit_ok .and. fit_d>tiny(1.0_rp)) then
             fit_d=expected/fit_d
             fit_resid=0.0_rp
             do ipole=1,3
-               qmag=2.0_rp*pi/lat%alat*sqrt(sum(q_cart(:,ipole+1)**2))
-               fit_resid=fit_resid+(energy_eta(ipole)-fit_d*qmag*qmag)**2
+               qmag=q_magnitude(ipole)
+               fit_resid=fit_resid+(energy_eta(ipole)-fit_d*qmag**2)**2
             end do
             fit_resid=sqrt(fit_resid/3.0_rp)
          else
@@ -3161,14 +3193,13 @@ contains
          end if
       end if
       if (fit_ok .and. clean_count>=3 .and. static_ok .and. berry_ok .and. circular_ok .and. covariance_ok .and. causal_ok) then
-         gate_status='PASS-A'
+         write(*,'(a)') 'Rotation dynamics implementation = PASS-A'
       else if (static_ok .and. berry_ok .and. circular_ok .and. covariance_ok .and. causal_ok) then
-         gate_status='PASS-B'
+         write(*,'(a)') 'Rotation dynamics implementation = PASS-B'
       else
-         gate_status='BLOCKED'
+         write(*,'(a)') 'Rotation dynamics implementation = BLOCKED'
       end if
       write(*,'(a,l1)') 'Rotation dynamics causal positive-frequency pole = ',causal_ok
-      write(*,'(a,a)') 'Rotation dynamics implementation = ',trim(gate_status)
       if (fit_ok) then
          write(*,'(a)') 'Fe material convergence = PRELIMINARY — MATERIAL CONVERGENCE OPEN'
       else
@@ -3177,10 +3208,7 @@ contains
       if (fit_ok) write(*,'(a,es16.8,a,es16.8,a,2(es12.4,1x))') 'Preliminary D (meV A2) = ',fit_d, &
          ' fit residual (meV) = ',fit_resid,' q window (A^-1) = ',window_min,window_max
       write(*,'(a)') 'Goldstone correction = OFF; strict-ASA L0 dynamics = NOT RUN'
-      close(unit)
-      call state%clear(); call minus_state%clear()
-      deallocate(reduced)
-   end subroutine run_native_rotation_dynamics_campaign
+   end subroutine run_fe_rotation_campaign_diagnostics
 
    subroutine write_rotation_dynamics_row(unit,q,qmag,finite_mev,turek_available,turek_mev,pole_re,pole_min,loss_peak,eta, &
       fwhm,loss_height,channel_name,re_k,im_k,abs_k,resolution,status)
