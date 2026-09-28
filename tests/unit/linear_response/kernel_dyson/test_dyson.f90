@@ -1,7 +1,7 @@
 !------------------------------------------------------------------------------
 ! TDDY-01 -- enhanced susceptibility and LR-04 loss matrix
 !------------------------------------------------------------------------------
-program test_tddft_dyson
+module test_dyson_mod
    use precision_mod, only: rp
    use linear_response_mod, only: tddft_dyson_request, tddft_dyson_result, &
       evaluate_tddft_dyson, solve_tddft_dyson_frequency, tddft_loss_matrix, &
@@ -9,6 +9,8 @@ program test_tddft_dyson
       lr_dyson_route_goldstone_sumrule, lr_dyson_route_direct_alsda_goldstone_corrected
    use linear_response_mod, only: response_space_layout
    implicit none
+   private
+   public :: run_test_dyson
 
    integer, parameter :: nr = 5
    real(rp), parameter :: mesh_a = 0.04_rp, mesh_b = 0.08_rp
@@ -18,6 +20,10 @@ program test_tddft_dyson
    logical :: failed
    integer :: ir
 
+
+contains
+
+   subroutine run_test_dyson()
    failed = .false.
    radius(1) = 0.0_rp
    do ir = 2, nr
@@ -39,7 +45,8 @@ program test_tddft_dyson
    end if
    write (*, '(a)') 'UnitTddftDyson: PASS (Dyson, metric, loss, pole, covariance, route separation)'
 
-contains
+   end subroutine run_test_dyson
+
 
    subroutine test_loss_convention(test_failed)
       logical, intent(inout) :: test_failed
@@ -404,4 +411,4 @@ contains
       call check(label, maxval(abs(actual - expected)) <= tolerance, test_failed)
    end subroutine check_matrix
 
-end program test_tddft_dyson
+end module test_dyson_mod

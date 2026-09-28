@@ -4,7 +4,7 @@
 ! The fixtures construct canonical LR-04 chiKS matrices directly.  They do
 ! not call the direct ALSDA implementation to obtain the sum-rule solution.
 !------------------------------------------------------------------------------
-program test_lr_goldstone_sumrule
+module test_lcmm_sumrule_mod
    use precision_mod, only: rp
    use linear_response_mod, only: response_angular_pi
    use linear_response_mod, only: response_super_index, response_flatten_superindex
@@ -12,6 +12,8 @@ program test_lr_goldstone_sumrule
    use linear_response_mod, only: lr_goldstone_sumrule_result, lr_sumrule_linear_solve_result, &
       lr_gsr_magnetization_pauli, evaluate_lr_goldstone_sumrule, solve_lr_goldstone_equation
    implicit none
+   private
+   public :: run_test_lcmm_sumrule
 
    integer, parameter :: nr = 5, nsite = 2
    real(rp), parameter :: mesh_a = 0.04_rp, mesh_b = 0.09_rp
@@ -31,6 +33,10 @@ program test_lr_goldstone_sumrule
    complex(rp) :: off_diagonal
    logical :: failed
 
+
+contains
+
+   subroutine run_test_lcmm_sumrule()
    failed = .false.
    allocate(radius(nr))
    call build_mesh(radius)
@@ -203,7 +209,8 @@ program test_lr_goldstone_sumrule
    end if
    write (*, '(a)') 'UnitLrGoldstoneSumrule: PASS (analytic, radial, multisite, rigid, metric, independence)'
 
-contains
+   end subroutine run_test_lcmm_sumrule
+
 
    subroutine build_mesh(mesh)
       real(rp), intent(out) :: mesh(:)
@@ -294,4 +301,4 @@ contains
       call check_vector(action, gsr%generated_field, tolerance_value, label, test_failed)
    end subroutine check_canonical_interaction
 
-end program test_lr_goldstone_sumrule
+end module test_lcmm_sumrule_mod

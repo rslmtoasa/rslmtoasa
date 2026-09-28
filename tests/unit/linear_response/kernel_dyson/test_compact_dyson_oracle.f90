@@ -9,13 +9,15 @@
 ! site, four active radial sectors, complex off-diagonal chiKS, and a local
 ! point interaction which becomes non-diagonal after compact projection.
 !------------------------------------------------------------------------------
-program test_tddft_compact_dyson_oracle
+module test_compact_dyson_oracle_mod
    use precision_mod, only: rp
    use math_mod, only: pi
    use linear_response_mod, only: response_space_layout
    use linear_response_mod, only: tddft_dyson_request, tddft_dyson_result, evaluate_tddft_dyson, &
       tddft_loss_matrix, lr_dyson_route_direct_alsda
    implicit none
+   private
+   public :: run_test_compact_dyson_oracle
 
    integer, parameter :: nsite = 2, response_lmax = 1, npoint = 5
    integer, parameter :: nactive = nsite*(response_lmax + 1)**2*(npoint - 1)
@@ -33,6 +35,10 @@ program test_tddft_compact_dyson_oracle
    integer :: ir, i, j, a, b, ia, ib
    logical :: failed
 
+
+contains
+
+   subroutine run_test_compact_dyson_oracle()
    failed = .false.
    radius(1) = 0.0_rp
    do ir = 2, npoint
@@ -210,7 +216,8 @@ program test_tddft_compact_dyson_oracle
    end if
    write (*, '(a)') 'UnitTddftCompactDysonOracle: PASS (independent point Dyson, compact projection, residual, loss, complex ordering guards)'
 
-contains
+   end subroutine run_test_compact_dyson_oracle
+
 
    integer function active_index(layout, active) result(index_value)
       type(response_space_layout), intent(in) :: layout
@@ -323,4 +330,4 @@ contains
       end if
    end subroutine check
 
-end program test_tddft_compact_dyson_oracle
+end module test_compact_dyson_oracle_mod

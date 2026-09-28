@@ -1,11 +1,13 @@
 ! KXC-01 direct local radial ALSDA kernel oracles.
-program test_lr_alsda_kernel
+module test_alsda_kernel_mod
    use precision_mod, only: rp
    use radial_ground_state_mod, only: radial_ground_state, RADIAL_PI
    use linear_response_mod, only: response_space_layout, response_apply_operator, response_identity_operator
    use linear_response_mod, only: lr_alsda_kernel_request, lr_alsda_kernel_result, &
       lr_kxc_magnetization_pauli, evaluate_lr_alsda_kernel, evaluate_lr_alsda_static_residual
    implicit none
+   private
+   public :: run_test_alsda_kernel
 
    integer, parameter :: nr = 9, nsite = 2, lmax = 0, nchannel = 2
    real(rp), parameter :: mesh_a = 0.03_rp, mesh_b = 0.10_rp
@@ -23,7 +25,16 @@ program test_lr_alsda_kernel
    character(len=32) :: argument
    logical :: failed
 
-   call get_command_argument(1, argument)
+
+contains
+
+   subroutine run_test_alsda_kernel(case_argument)
+      character(len=*), intent(in), optional :: case_argument
+   if (present(case_argument)) then
+      argument = case_argument
+   else
+      call get_command_argument(1, argument)
+   end if
    if (trim(argument) == 'provenance') then
       call build_fixture(radius, rho, origin, vup, vdn, total_v, pauli_m)
       call initialize_states(states, radius, rho, origin, vup, vdn, total_v)
@@ -158,7 +169,8 @@ program test_lr_alsda_kernel
    end if
    write (*, '(a)') 'UnitLrAlsdaKernel: PASS (pointwise, metric action, angular diagonal, reversal, provenance, low-m)'
 
-contains
+   end subroutine run_test_alsda_kernel
+
 
    subroutine build_fixture(mesh, density, density_origin, up, down, total, magnetization)
       real(rp), intent(out) :: mesh(:), density(:, :), density_origin(:), up(:), down(:), total(:, :)
@@ -266,4 +278,4 @@ contains
       if (error > tolerance_in) test_failed = .true.
    end subroutine check_complex_vector
 
-end program test_lr_alsda_kernel
+end module test_alsda_kernel_mod

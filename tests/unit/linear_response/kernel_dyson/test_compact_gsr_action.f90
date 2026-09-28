@@ -7,7 +7,7 @@
 ! with an identity susceptibility so its constructed Gamma columns are tested
 ! directly against the independent point-space actions.
 !------------------------------------------------------------------------------
-program test_lr_compact_gsr_action_consistency
+module test_compact_gsr_action_mod
    use precision_mod, only: rp
    use basis_mod, only: basis_init
    use logger_mod, only: g_logger
@@ -23,6 +23,8 @@ program test_lr_compact_gsr_action_consistency
       compact_project_local_operator, compact_reconstruct_point_vector, compact_weighted_projection_diagnostics, &
       evaluate_compact_goldstone_sumrule
    implicit none
+   private
+   public :: run_test_compact_gsr_action
 
    integer, parameter :: nr = 51, orbital_lmax = 2, response_lmax = 2, nsite = 1, nchannel = 1
    real(rp), parameter :: mesh_a = 0.03_rp, mesh_b = 0.10_rp, nuclear_z = 1.0_rp
@@ -47,6 +49,10 @@ program test_lr_compact_gsr_action_consistency
    logical :: failed
    type(response_super_index) :: item
 
+
+contains
+
+   subroutine run_test_compact_gsr_action()
    call basis_init(orbital_lmax)
    call init_math_operators()
    call g_logger%init()
@@ -161,7 +167,8 @@ program test_lr_compact_gsr_action_consistency
    end if
    write (*, '(a)') 'UnitLrCompactGsrActionConsistency: PASS (single-action, assembled-action, live-GSR residual consistency)'
 
-contains
+   end subroutine run_test_compact_gsr_action
+
 
    subroutine build_mesh(mesh)
       real(rp), intent(out) :: mesh(:)
@@ -245,4 +252,4 @@ contains
       end do
    end subroutine independent_operator_action
 
-end program test_lr_compact_gsr_action_consistency
+end module test_compact_gsr_action_mod

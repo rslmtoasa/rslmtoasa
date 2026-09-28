@@ -4,16 +4,22 @@
 !   projected Mills recovery, raw Goldstone identity, independent Dyson
 !   inverse, loss convention, and q/channel covariance.
 !------------------------------------------------------------------------------
-program test_lr_projected_interacting_response
+module test_projected_interacting_mod
 
    use precision_mod, only: rp
    use linear_response_mod, only: projected_mills_interaction_request, &
       projected_mills_interaction_result, projected_dyson_request, projected_dyson_result, &
       evaluate_projected_mills_interaction, evaluate_projected_dyson, projected_mills_exact_scalar
    implicit none
+   private
+   public :: run_test_projected_interacting
 
    logical :: failed
 
+
+contains
+
+   subroutine run_test_projected_interacting()
    failed = .false.
    call one_site_fixture(failed)
    call two_site_fixture(failed)
@@ -23,7 +29,8 @@ program test_lr_projected_interacting_response
    end if
    write (*, '(a)') 'UnitLrProjectedInteractingResponse: PASS (Mills, self-consistency, Goldstone, Dyson, loss, covariance)'
 
-contains
+   end subroutine run_test_projected_interacting
+
 
    subroutine one_site_fixture(failed)
       logical, intent(inout) :: failed
@@ -239,4 +246,4 @@ contains
       end if
    end subroutine check
 
-end program test_lr_projected_interacting_response
+end module test_projected_interacting_mod

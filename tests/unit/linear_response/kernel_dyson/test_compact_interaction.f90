@@ -5,7 +5,7 @@
 ! explicit nested loops over the stored weighted SVD modes.  It does not call
 ! the adapter under test to construct the oracle.
 !------------------------------------------------------------------------------
-program test_lr_compact_static_interaction
+module test_compact_interaction_mod
    use precision_mod, only: rp
    use basis_mod, only: basis_init
    use logger_mod, only: g_logger
@@ -21,6 +21,8 @@ program test_lr_compact_static_interaction
       compact_project_local_operator, compact_apply_local_operator, compact_project_magnetization, &
       lr_compact_mapping_contract
    implicit none
+   private
+   public :: run_test_compact_interaction
 
    integer, parameter :: nr = 51, orbital_lmax = 2, response_lmax = 2, nsite = 1, nchannel = 1
    real(rp), parameter :: mesh_a = 0.03_rp, mesh_b = 0.10_rp, nuclear_z = 1.0_rp
@@ -38,6 +40,10 @@ program test_lr_compact_static_interaction
    type(response_super_index) :: item
    logical :: failed
 
+
+contains
+
+   subroutine run_test_compact_interaction()
    call basis_init(orbital_lmax)
    call init_math_operators()
    call g_logger%init()
@@ -132,7 +138,8 @@ program test_lr_compact_static_interaction
    end if
    write (*, '(a)') 'UnitLrCompactStaticInteraction: PASS (projection, reconstruction, local operator, action, m_00 oracle)'
 
-contains
+   end subroutine run_test_compact_interaction
+
 
    subroutine build_mesh(mesh)
       real(rp), intent(out) :: mesh(:)
@@ -190,4 +197,4 @@ contains
       if (error > tolerance) test_failed = .true.
    end subroutine check_matrix
 
-end program test_lr_compact_static_interaction
+end module test_compact_interaction_mod

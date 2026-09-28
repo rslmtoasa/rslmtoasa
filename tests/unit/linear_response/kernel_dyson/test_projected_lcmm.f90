@@ -1,7 +1,7 @@
 !------------------------------------------------------------------------------
 ! DRESP-05 projected Juelich/LCMM algebra and negative controls.
 !------------------------------------------------------------------------------
-program test_lr_projected_juelich_interaction
+module test_projected_lcmm_mod
 
    use precision_mod, only: rp
    use linear_response_mod, only: projected_juelich_request, projected_juelich_result, &
@@ -12,9 +12,15 @@ program test_lr_projected_juelich_interaction
       projected_mills_interaction_result, projected_dyson_request, projected_dyson_result, &
       evaluate_projected_mills_interaction, evaluate_projected_dyson
    implicit none
+   private
+   public :: run_test_projected_lcmm
 
    logical :: failed
 
+
+contains
+
+   subroutine run_test_projected_lcmm()
    failed = .false.
    call one_site_oracle(failed)
    call two_site_oracles(failed)
@@ -27,7 +33,8 @@ program test_lr_projected_juelich_interaction
    end if
    write (*, '(a)') 'UnitLrProjectedJuelichInteraction: PASS (Ward, SVD, real constraint, eta, rank, holdout, LU)'
 
-contains
+   end subroutine run_test_projected_lcmm
+
 
    subroutine one_site_oracle(failed)
       logical, intent(inout) :: failed
@@ -379,4 +386,4 @@ contains
       end if
    end subroutine check
 
-end program test_lr_projected_juelich_interaction
+end module test_projected_lcmm_mod
