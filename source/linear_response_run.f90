@@ -68,6 +68,11 @@ submodule (linear_response_mod) linear_response_run
       logical :: dyson_static_audit = .false.
       logical :: validate_interacting_covariance = .false.
       logical :: write_full_matrix = .true.
+      ! Product-space response routes consume the complete accepted
+      ! scalar-relativistic radial snapshot, including second derivatives.
+      ! This is a capability of the requested representation, not a
+      ! property inferred from an individual worker/backend label.
+      logical :: requires_second_order_product_basis = .false.
       character(len=256) :: output_file = 'tddft_response.dat'
    end type tddft_runtime_config
 
@@ -135,6 +140,8 @@ contains
       runtime%dyson_static_audit = trim(config%diagnostics) == 'invariants'
       runtime%validate_interacting_covariance = trim(config%diagnostics) == 'invariants'
       runtime%goldstone_correction = .false.
+      runtime%requires_second_order_product_basis = trim(config%formulation) == 'projected' .or. &
+         trim(config%representation) == 'product_compact'
       allocate(runtime%q_list(3, n_q), runtime%frequencies(n_frequency), runtime%eta_values(n_eta))
       runtime%q_list = config%q_list
       runtime%frequencies = config%omega_grid
@@ -610,11 +617,11 @@ contains
       real(rp), allocatable :: accepted_pauli_magnetization(:, :)
       real(rp) :: ignore_real
       integer :: first, last, nsite, response_lmax, isite, iq
-      logical :: use_accepted_kspace_scf, need_complete_sr
+      logical :: use_accepted_kspace_scf, requires_second_order_product_basis
 
       use_accepted_kspace_scf = .false.
       if (present(accepted_kspace_scf)) use_accepted_kspace_scf = accepted_kspace_scf
-      need_complete_sr = trim(config%backend) == tddft_driver_backend_product_lehmann
+      requires_second_order_product_basis = config%requires_second_order_product_basis
 
       if (.not. config%enabled) return
       call validate_tddft_production_capability(config, control_obj, lattice_obj, hamiltonian_obj, reciprocal_obj)
@@ -650,7 +657,8 @@ contains
          if (ground_states(isite)%pauli_lmax /= ground_states(1)%pauli_lmax) then
             error stop 'TDDFT production driver: response sites do not share the accepted Pauli cutoff'
          end if
-         call radial_basis_from_snapshot(ground_states(isite), radial_bases(isite), need_complete_sr)
+         call radial_basis_from_snapshot(ground_states(isite), radial_bases(isite), &
+            requires_second_order_product_basis, trim(config%backend))
          call radial_bases(isite)%require_supported(trim(reciprocal_obj%reciprocal_mode), &
             effective_hamiltonian_order(reciprocal_obj, hamiltonian_obj), .true., .true., &
             control_obj%has_soc(), .false.)
@@ -2710,22 +2718,25 @@ contains
       call evaluate_lr_ks_susceptibility(request, result)
    end subroutine evaluate_lehmann_backend
 
-   subroutine radial_basis_from_snapshot(state, basis, complete_sr)
+   subroutine radial_basis_from_snapshot(state, basis, complete_sr, requester)
       type(radial_ground_state), intent(in) :: state
       type(lmto_radial_basis), intent(out) :: basis
-      logical, intent(in), optional :: complete_sr
+      logical, intent(in) :: complete_sr
+      character(len=*), intent(in) :: requester
       logical :: use_complete_sr
 
-      use_complete_sr = .false.
-      if (present(complete_sr)) use_complete_sr = complete_sr
+      use_complete_sr = complete_sr
 
-      if (use_complete_sr .and. (.not. allocated(state%pauli_small) .or. .not. state%sr_basis_valid .or. &
+      if (use_complete_sr .and. (.not. state%pauli_basis_valid .or. .not. allocated(state%pauli_large) .or. &
+          .not. allocated(state%pauli_large_dot) .or. .not. allocated(state%pauli_small) .or. &
+          .not. allocated(state%pauli_enu) .or. .not. state%sr_basis_valid .or. &
           .not. allocated(state%sr_large_dot) .or. &
           .not. allocated(state%sr_small_dot) .or. .not. allocated(state%sr_large_ddot) .or. &
           .not. allocated(state%sr_small_ddot) .or. .not. allocated(state%sr_gfac) .or. &
           .not. allocated(state%sr_tmc) .or. .not. allocated(state%sr_potential) .or. &
           .not. allocated(state%sr_enu))) then
-         error stop 'TDDFT production driver: accepted radial snapshot lacks complete SR basis arrays'
+         error stop 'TDDFT production driver: '//trim(requester)// &
+            ' requires the complete accepted SR radial basis, including phiddot'
       end if
       call basis%initialize(size(state%r), state%pauli_lmax, 2)
       basis%rofi = state%r
@@ -2736,6 +2747,7 @@ contains
       basis%enu_radial = state%pauli_enu
       basis%enu_work = state%pauli_enu
       if (use_complete_sr) then
+         basis%phidot_large = state%sr_large_dot
          basis%phidot_small = state%sr_small_dot
          basis%phiddot_large = state%sr_large_ddot
          basis%phiddot_small = state%sr_small_ddot
