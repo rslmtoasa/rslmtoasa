@@ -20,6 +20,102 @@ CASES = {
 }
 
 
+def parse_named_rows(path: Path, schema: dict[str, object]) -> list[dict[str, object]]:
+    """Parse a schema-described output whose rows include text fields."""
+    columns = schema.get("columns")
+    header = schema.get("header")
+    text_columns = set(schema.get("text_columns", []))
+    if not isinstance(columns, list) or not all(isinstance(name, str) for name in columns):
+        raise ValueError(f"invalid named-column schema in {path}")
+    if not isinstance(header, list) or not all(isinstance(name, str) for name in header):
+        raise ValueError(f"invalid output-header schema in {path}")
+
+    header_columns: list[str] | None = None
+    rows: list[dict[str, object]] = []
+    for line in path.read_text().splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            candidate = stripped[1:].strip().split()
+            if candidate and candidate[0] == header[0]:
+                header_columns = candidate
+            continue
+        tokens = stripped.split()
+        if len(tokens) != len(columns):
+            raise ValueError(
+                f"column count mismatch in {path}: actual={len(tokens)} expected={len(columns)}"
+            )
+        row: dict[str, object] = {}
+        for name, token in zip(columns, tokens):
+            if name in text_columns:
+                row[name] = token
+            elif token == "-":
+                row[name] = None
+            else:
+                try:
+                    value = float(token.replace("D", "E").replace("d", "e"))
+                except ValueError as exc:
+                    raise ValueError(f"non-numeric value for {name} in {path}: {token}") from exc
+                if not math.isfinite(value):
+                    raise ValueError(f"non-finite value for {name} in {path}: {token}")
+                row[name] = value
+        rows.append(row)
+    if header_columns != header:
+        raise ValueError(f"output schema header mismatch in {path}: {header_columns!r} != {header!r}")
+    if not rows:
+        raise ValueError(f"no named physics rows found in {path}")
+    return rows
+
+
+def compare_named_rows(
+    actual: list[dict[str, object]],
+    expected: list[dict[str, object]],
+    schema: dict[str, object],
+    abs_tol: float,
+    rel_tol: float,
+) -> None:
+    strict_columns = schema.get("strict_columns", [])
+    tolerant_columns = schema.get("tolerant_columns", {})
+    diagnostic_columns = schema.get("diagnostic_columns", [])
+    columns = schema["columns"]
+    if len(actual) != len(expected):
+        raise AssertionError(f"row count mismatch: actual={len(actual)} expected={len(expected)}")
+    if not isinstance(strict_columns, list) or not isinstance(tolerant_columns, dict) or not isinstance(diagnostic_columns, list):
+        raise AssertionError("invalid rotation comparison policy")
+    covered = set(strict_columns) | set(tolerant_columns) | set(diagnostic_columns)
+    if covered != set(columns) or len(covered) != len(strict_columns) + len(tolerant_columns) + len(diagnostic_columns):
+        raise AssertionError("rotation comparison policy does not partition the named output schema")
+
+    for i, (actual_row, expected_row) in enumerate(zip(actual, expected)):
+        for name in [*strict_columns, *tolerant_columns]:
+            actual_value = actual_row.get(name)
+            expected_value = expected_row.get(name)
+            if isinstance(expected_value, str) or expected_value is None:
+                if actual_value != expected_value:
+                    raise AssertionError(
+                        f"strict rotation mismatch at row {i}, column {name}: "
+                        f"actual={actual_value!r} expected={expected_value!r}"
+                    )
+                continue
+            if not isinstance(actual_value, (int, float)):
+                raise AssertionError(
+                    f"missing numeric rotation value at row {i}, column {name}: {actual_value!r}"
+                )
+            if name in strict_columns:
+                column_abs_tol, column_rel_tol = abs_tol, rel_tol
+            else:
+                policy = tolerant_columns[name]
+                column_abs_tol = float(policy.get("abs_tol", abs_tol))
+                column_rel_tol = float(policy.get("rel_tol", rel_tol))
+            scale = max(abs(actual_value), abs(float(expected_value)), 1.0)
+            if abs(actual_value - float(expected_value)) > column_abs_tol + column_rel_tol * scale:
+                raise AssertionError(
+                    f"rotation mismatch at row {i}, column {name}: "
+                    f"actual={actual_value:.17g} expected={float(expected_value):.17g}"
+                )
+
+
 def parse_rows(path: Path) -> list[list[float]]:
     rows: list[list[float]] = []
     for line in path.read_text().splitlines():
@@ -102,11 +198,24 @@ def run_case(args: argparse.Namespace) -> None:
     output_path = scratch_dir / spec["output"]
     if not output_path.is_file():
         raise RuntimeError(f"{args.case} did not produce {spec['output']}")
-    actual = parse_rows(output_path)
     reference = json.loads(reference_path.read_text())
-    expected = reference["rows"]
-    compare_rows(actual, expected, reference.get("abs_tol", 1.0e-9), reference.get("rel_tol", 1.0e-8))
-    print(f"{args.case}: {len(actual)} physics row(s) matched archived reference")
+    abs_tol = reference.get("abs_tol", 1.0e-9)
+    rel_tol = reference.get("rel_tol", 1.0e-8)
+    if args.case == "rotation":
+        schema = reference.get("schema")
+        if not isinstance(schema, dict):
+            raise ValueError("rotation reference is missing its named comparison schema")
+        actual_named = parse_named_rows(output_path, schema)
+        expected_named = reference["rows"]
+        if not isinstance(expected_named, list) or not all(isinstance(row, dict) for row in expected_named):
+            raise ValueError("rotation reference rows must be named objects")
+        compare_named_rows(actual_named, expected_named, schema, abs_tol, rel_tol)
+        print(f"{args.case}: {len(actual_named)} schema-aware physics row(s) matched archived reference")
+    else:
+        actual = parse_rows(output_path)
+        expected = reference["rows"]
+        compare_rows(actual, expected, abs_tol, rel_tol)
+        print(f"{args.case}: {len(actual)} physics row(s) matched archived reference")
 
 
 def main() -> int:
