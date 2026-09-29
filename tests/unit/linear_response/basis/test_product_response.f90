@@ -11,8 +11,8 @@ module test_product_response_mod
    use basis_mod, only: basis_init
    use logger_mod, only: g_logger
    use math_mod, only: init_math_operators
-   use self_mod, only: legacy_radial_fixture
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
+   use lr_test_radial_fixture_mod, only: build_lr_test_radial_basis, assert_lr_test_product_branch_norms
    use linear_response_mod, only: response_super_index, response_flatten_superindex
    use linear_response_mod, only: response_space_layout, response_vector_norm
    use linear_response_mod, only: pauli_vertex_capabilities, pauli_endpoint_state, &
@@ -55,6 +55,7 @@ contains
    call space_sp%initialize(nsite, 2, radius, mesh_a, mesh_b, 1)
    call space_spd%initialize(nsite, 4, radius, mesh_a, mesh_b, 1)
    call space_spd_reduced%initialize(nsite, 2, radius, mesh_a, mesh_b, 1)
+   call assert_lr_test_product_branch_norms(radial_spd, space_spd, 'product response')
 
    mode = ''
    if (present(case_argument)) then
@@ -128,28 +129,7 @@ contains
       type(lmto_radial_basis), intent(out) :: basis
       real(rp), intent(in) :: mesh(:)
       integer, intent(in) :: basis_lmax
-      real(rp) :: potential(size(mesh)), energy
-      real(rp), allocatable :: g(:, :), gp(:, :), gpp(:, :)
-      real(rp), allocatable :: gpack(:), gdotpack(:), gddotpack(:)
-      integer :: ispin, l, ir
-
-      potential = 0.0_rp
-      call basis%initialize(size(mesh), basis_lmax, 2)
-      do ispin = 1, 2
-         do l = 0, basis_lmax
-            call legacy_radial_fixture(nuclear_z, l, mesh_a, mesh_b, mesh, potential, energy, g, gp, gpp, &
-               2.0_rp)
-            gpack = reshape(g, [2*size(mesh)])
-            gdotpack = reshape(gp, [2*size(mesh)])
-            gddotpack = reshape(gpp, [2*size(mesh)])
-            call basis%capture_channel(l, ispin, energy, mesh, potential, mesh_a, mesh_b, nuclear_z, &
-               gpack, gdotpack, gddotpack, energy)
-            do ir = 1, size(mesh)
-               basis%phiddot_large(ir, l + 1, ispin) = (0.002_rp + 0.0003_rp*real(l + ispin, rp))* &
-                  (1.0_rp + 0.17_rp*mesh(ir) + 0.013_rp*real(ir - 1, rp)**2)
-            end do
-         end do
-      end do
+      call build_lr_test_radial_basis(basis, mesh, basis_lmax, mesh_a, mesh_b, nuclear_z)
    end subroutine setup_radial_basis
 
    subroutine build_fixture_eigensystem(eigenvalues, eigenvectors)

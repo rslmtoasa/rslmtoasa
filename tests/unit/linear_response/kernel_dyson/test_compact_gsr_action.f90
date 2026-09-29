@@ -12,8 +12,8 @@ module test_compact_gsr_action_mod
    use basis_mod, only: basis_init
    use logger_mod, only: g_logger
    use math_mod, only: init_math_operators
-   use self_mod, only: legacy_radial_fixture
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
+   use lr_test_radial_fixture_mod, only: build_lr_test_radial_basis, assert_lr_test_product_branch_norms
    use linear_response_mod, only: response_super_index, response_flatten_superindex, &
       response_unflatten_superindex
    use linear_response_mod, only: response_angular_pi
@@ -59,6 +59,7 @@ contains
    call build_mesh(radius)
    call setup_radial_basis(radial, radius)
    call space%initialize(nsite, response_lmax, radius, mesh_a, mesh_b, nchannel)
+   call assert_lr_test_product_branch_norms(radial, space, 'compact GSR action')
    call product%initialize(space, [radial], lmto_product_channel_plus, .false.)
 
    nunknown = 0
@@ -183,23 +184,7 @@ contains
    subroutine setup_radial_basis(basis, mesh)
       type(lmto_radial_basis), intent(out) :: basis
       real(rp), intent(in) :: mesh(:)
-      real(rp) :: potential(size(mesh)), energy
-      real(rp), allocatable :: g(:, :), gp(:, :), gpp(:, :)
-      real(rp), allocatable :: gpack(:), gdotpack(:), gddotpack(:)
-      integer :: ispin, l
-
-      potential = 0.0_rp
-      call basis%initialize(size(mesh), orbital_lmax, 2)
-      do ispin = 1, 2
-         do l = 0, orbital_lmax
-            call legacy_radial_fixture(nuclear_z, l, mesh_a, mesh_b, mesh, potential, energy, g, gp, gpp, 2.0_rp)
-            gpack = reshape(g, [2*size(mesh)])
-            gdotpack = reshape(gp, [2*size(mesh)])
-            gddotpack = reshape(gpp, [2*size(mesh)])
-            call basis%capture_channel(l, ispin, energy, mesh, potential, mesh_a, mesh_b, nuclear_z, &
-               gpack, gdotpack, gddotpack, energy)
-         end do
-      end do
+      call build_lr_test_radial_basis(basis, mesh, orbital_lmax, mesh_a, mesh_b, nuclear_z)
    end subroutine setup_radial_basis
 
    subroutine independent_reconstruct(layout, product_basis, compact_vector, point_vector)

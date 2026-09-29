@@ -689,6 +689,10 @@ if (RUN_UNIT_TESTS)
     ${TestDIR}/unit/oracles/lr_rotation_oracles.f90)
   target_link_libraries(rslmto_test_oracles PUBLIC ${PROJECT_NAME})
 
+  add_library(rslmto_lr_test_fixture STATIC
+    ${TestDIR}/unit/linear_response/lr_test_radial_fixture.f90)
+  target_link_libraries(rslmto_lr_test_fixture PUBLIC ${PROJECT_NAME})
+
   # Each test is a small program linked against the project library. Link the
   # same conditional MPI/OpenMP libraries as the main binary.
   function(add_fortran_unit_test _name _source)
@@ -781,6 +785,7 @@ if (RUN_UNIT_TESTS)
   add_fortran_component_unit_test(UnitLrBasis
     ${TestDIR}/unit/linear_response/basis/test_basis_main.f90
     ${_lr_basis_sources})
+  target_link_libraries(UnitLrBasis rslmto_lr_test_fixture)
   add_test(NAME UnitLrResponseSpace COMMAND $<TARGET_FILE:UnitLrBasis> response_space)
   set_tests_properties(UnitLrResponseSpace PROPERTIES LABELS "unit;linear_response;basis")
   add_test(NAME UnitLrResponseBasis COMMAND $<TARGET_FILE:UnitLrBasis> response_basis)
@@ -857,6 +862,7 @@ if (RUN_UNIT_TESTS)
   add_fortran_component_unit_test(UnitLrKernelDyson
     ${TestDIR}/unit/linear_response/kernel_dyson/test_kernel_dyson_main.f90
     ${_lr_kernel_sources})
+  target_link_libraries(UnitLrKernelDyson rslmto_lr_test_fixture)
   add_test(NAME UnitLrAlsdaKernel COMMAND $<TARGET_FILE:UnitLrKernelDyson> alsda_kernel)
   set_tests_properties(UnitLrAlsdaKernel PROPERTIES LABELS "unit;kxc-01;alsda;transverse;response-kernel")
   add_test(NAME UnitLrAlsdaKernelRejectProvenance COMMAND $<TARGET_FILE:UnitLrKernelDyson> alsda_provenance)
