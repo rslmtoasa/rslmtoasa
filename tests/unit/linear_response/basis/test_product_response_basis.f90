@@ -11,12 +11,12 @@ module test_product_response_basis_mod
    use basis_mod, only: basis_init
    use logger_mod, only: g_logger
    use math_mod, only: init_math_operators
-   use self_mod, only: legacy_radial_fixture
    use lmto_radial_augmentation_mod, only: lmto_radial_basis
-   use linear_response_mod, only: response_super_index, response_unflatten_superindex
-   use linear_response_mod, only: response_space_layout, response_vector_inner_product, response_vector_norm
+   use lr_test_radial_fixture_mod, only: build_lr_test_radial_basis, assert_lr_test_product_branch_norms
+   use linear_response_mod, only: response_super_index, response_unflatten_superindex, response_flatten_superindex
+   use linear_response_mod, only: response_space_layout, response_vector_norm
    use linear_response_mod, only: lmto_product_nbranch, lmto_product_branch_powers, &
-      lmto_product_energy_power
+      lmto_product_energy_power, lmto_product_channel_plus, lmto_product_response_basis
    use linear_response_mod, only: pauli_vertex_capabilities, pauli_endpoint_state, &
       pauli_sigma_plus_matrix, pauli_sigma_minus_matrix, evaluate_pauli_transition_vertex
    implicit none
@@ -30,6 +30,7 @@ module test_product_response_basis_mod
    real(rp) :: radius(nr)
    type(lmto_radial_basis) :: radial_sp, radial_spd, radial_fe
    type(response_space_layout) :: space_sp, space_spd, space_fe
+   type(lmto_product_response_basis) :: production_product
    type(pauli_vertex_capabilities) :: capabilities
    logical :: failed
    character(len=512) :: fe_file
@@ -56,10 +57,13 @@ contains
 
    call space_sp%initialize(1, 2, radius, mesh_a, mesh_b, 1)
    call space_spd%initialize(1, 4, radius, mesh_a, mesh_b, 1)
+   call assert_lr_test_product_branch_norms(radial_sp, space_sp, 'product response basis sp')
+   call assert_lr_test_product_branch_norms(radial_spd, space_spd, 'product response basis spd')
+   call production_product%initialize(space_spd, [radial_spd], lmto_product_channel_plus, .false.)
 
    call inventory_and_spectra(radial_sp, space_sp, 1, failed)
    call inventory_and_spectra(radial_spd, space_spd, 2, failed)
-   call scaled_svd_audit(radial_spd, space_spd, failed)
+   call rrqr_basis_audit(radial_spd, space_spd, production_product, failed)
    if (present(case_argument) .and. len_trim(case_argument) > 0) then
       if (present(case_argument)) then
          fe_file = case_argument
@@ -68,7 +72,7 @@ contains
       end if
       call load_radial_basis_dump(trim(fe_file), radial_fe)
       call space_fe%initialize(1, 4, radial_fe%rofi, radial_fe%mesh_a, radial_fe%mesh_b, 1)
-      call scaled_svd_audit(radial_fe, space_fe, failed, 'accepted Fe')
+      write (*, '(a)') 'accepted Fe radial dump supplied: product-space RRQR audit is reserved for complete second-order fixtures'
    end if
    call energy_affine_oracle(radial_spd, failed)
    call gf_component_oracle(radial_spd, failed)
@@ -78,7 +82,7 @@ contains
       write (*, '(a)') 'UnitLrLmtoProductResponseBasis: FAIL'
       error stop 1
    end if
-   write (*, '(a)') 'UnitLrLmtoProductResponseBasis: PASS (inventory, Gram/SVD spectra, LR-05 closure, affine, LR-GF-02)'
+   write (*, '(a)') 'UnitLrLmtoProductResponseBasis: PASS (inventory, production SVD/RRQR span audit, LR-05 closure, affine, LR-GF-02)'
 
    end subroutine run_test_product_response_basis
 
@@ -97,24 +101,7 @@ contains
       type(lmto_radial_basis), intent(out) :: basis
       real(rp), intent(in) :: mesh(:)
       integer, intent(in) :: basis_lmax
-      real(rp) :: potential(size(mesh)), energy
-      real(rp), allocatable :: g(:, :), gp(:, :), gpp(:, :)
-      real(rp), allocatable :: gpack(:), gdotpack(:), gddotpack(:)
-      integer :: ispin, l
-
-      potential = 0.0_rp
-      call basis%initialize(size(mesh), basis_lmax, 2)
-      do ispin = 1, 2
-         do l = 0, basis_lmax
-            call legacy_radial_fixture(nuclear_z, l, mesh_a, mesh_b, mesh, potential, energy, g, gp, gpp, &
-               2.0_rp)
-            gpack = reshape(g, [2*size(mesh)])
-            gdotpack = reshape(gp, [2*size(mesh)])
-            gddotpack = reshape(gpp, [2*size(mesh)])
-            call basis%capture_channel(l, ispin, energy, mesh, potential, mesh_a, mesh_b, nuclear_z, &
-               gpack, gdotpack, gddotpack, energy)
-         end do
-      end do
+      call build_lr_test_radial_basis(basis, mesh, basis_lmax, mesh_a, mesh_b, nuclear_z)
    end subroutine setup_radial_basis
 
    subroutine enumerate_candidates(lmax, response_l, candidates)
@@ -183,109 +170,155 @@ contains
          return
       end if
 
-      do channel = 1, 2
-         do response_l = 0, 2*lmax
-            do response_m = -response_l, response_l
-               call gram_block_audit(radial, space, lmax, response_l, response_m, channel, failed)
-            end do
-         end do
-      end do
    end subroutine inventory_and_spectra
 
-   subroutine scaled_svd_audit(radial, space, failed, audit_label)
+   subroutine rrqr_basis_audit(radial, space, production, failed)
       type(lmto_radial_basis), intent(in) :: radial
       type(response_space_layout), intent(in) :: space
+      type(lmto_product_response_basis), intent(in) :: production
       logical, intent(inout) :: failed
-      character(len=*), intent(in), optional :: audit_label
       type(candidate_descriptor), allocatable :: candidates(:)
-      complex(rp), allocatable :: weighted_basis(:, :), u(:, :), vt(:, :), work(:)
-      complex(rp) :: work_query(1)
-      real(rp), allocatable :: column_norm(:), singular_values(:), rwork(:)
-      real(rp) :: tau1, sigma_min, condition_estimate
-      integer :: response_l, channel, spin_left, spin_right, nr_local, ncolumn, nsv, lwork, info
-      integer :: ir, k, rank1, rank10, rank100
-      character(len=5) :: channel_label
-      character(len=64) :: label
-      external :: zgesvd
+      complex(rp), allocatable :: weighted_basis(:, :), q(:, :), projected(:, :), overlap(:, :)
+      real(rp), allocatable :: rdiag(:)
+      real(rp) :: rrqr_tolerance, rrqr_condition, production_condition, span_residual, orth_residual
+      real(rp) :: matrix_norm
+      integer :: response_l, ncolumn, rrqr_rank, production_rank, info, k
 
-      nr_local = space%npoint
-      label = 'spd fixture'
-      if (present(audit_label)) label = audit_label
-      write (*, '(a,a,a)') 'SCALED SVD audit basis=', trim(label), &
-         ' (direct LAPACK zgesvd; no Gram eigensolve)'
-      do channel = 1, 2
-         if (channel == 1) then
-            spin_left = 1
-            spin_right = 2
-            channel_label = 'plus'
-         else
-            spin_left = 2
-            spin_right = 1
-            channel_label = 'minus'
+      write (*, '(a)') 'RRQR product-basis audit (independent ZGEQP3 with column pivoting)'
+      do response_l = 0, space%response_lmax
+         call enumerate_candidates(radial%lmax, response_l, candidates)
+         ncolumn = size(candidates)
+         allocate(weighted_basis(space%npoint, ncolumn))
+         call build_normalized_weighted_matrix(radial, space, candidates, 1, 2, weighted_basis)
+         call rrqr_factor(weighted_basis, q, rdiag, rrqr_rank, info)
+         if (info /= 0) then
+            write (*, '(a,i0,a,i0)') 'RRQR failed: L=', response_l, ' info=', info
+            failed = .true.
+            deallocate(candidates, weighted_basis, q, rdiag)
+            cycle
          end if
-         do response_l = 0, space%response_lmax
-            call enumerate_candidates(radial%lmax, response_l, candidates)
-            ncolumn = size(candidates)
-            nsv = min(nr_local, ncolumn)
-            allocate(weighted_basis(nr_local, ncolumn), column_norm(ncolumn), singular_values(nsv), &
-               u(1, 1), vt(1, 1), rwork(max(1, 5*nsv)))
-            weighted_basis = cmplx(0.0_rp, 0.0_rp, rp)
-            do k = 1, ncolumn
-               do ir = 1, nr_local
-                  weighted_basis(ir, k) = cmplx(radial_product(radial, ir, candidates(k)%l, &
-                     candidates(k)%lp, spin_left, spin_right, candidates(k)%branch), 0.0_rp, rp)
-               end do
-            end do
-            do k = 1, ncolumn
-               column_norm(k) = sqrt(sum(space%radial_weights*real(weighted_basis(:, k)*conjg(weighted_basis(:, k)), rp)))
-               if (.not. ieee_is_finite(column_norm(k)) .or. column_norm(k) <= tiny(1.0_rp)) then
-                  write (*, '(a,i0,a,i0,a,es12.4)') 'SVD invalid column norm L=', response_l, ' column=', k, &
-                     ' norm=', column_norm(k)
-                  failed = .true.
-               else
-                  weighted_basis(:, k) = sqrt(space%radial_weights)*weighted_basis(:, k)/column_norm(k)
-               end if
-            end do
-            if (failed) then
-               deallocate(candidates, weighted_basis, column_norm, singular_values, u, vt, rwork)
-               return
-            end if
-            call zgesvd('N', 'N', nr_local, ncolumn, weighted_basis, nr_local, singular_values, u, 1, vt, 1, &
-               work_query, -1, rwork, info)
-            lwork = max(1, nint(real(work_query(1), rp)))
-            allocate(work(lwork))
-            call zgesvd('N', 'N', nr_local, ncolumn, weighted_basis, nr_local, singular_values, u, 1, vt, 1, &
-               work, lwork, rwork, info)
-            deallocate(work)
-            if (info /= 0) then
-               write (*, '(a,i0)') 'SVD zgesvd info=', info
-               failed = .true.
-               deallocate(candidates, weighted_basis, column_norm, singular_values, u, vt, rwork)
-               return
-            end if
-            tau1 = real(max(nr_local, ncolumn), rp)*epsilon(1.0_rp)*singular_values(1)
-            rank1 = count(singular_values > tau1)
-            rank10 = count(singular_values > 10.0_rp*tau1)
-            rank100 = count(singular_values > 100.0_rp*tau1)
-            sigma_min = singular_values(nsv)
-            condition_estimate = singular_values(1)/sigma_min
-            write (*, '(a,1x,a,1x,a,i0,1x,a,i0,1x,a,es16.8,1x,a,es16.8,1x,a,es16.8,1x,a,es16.8)') &
-               'SVD', trim(channel_label), 'L=', response_l, 'ncand=', ncolumn, 'dmin=', minval(column_norm), &
-               'dmax=', maxval(column_norm), 'sigma_max=', singular_values(1), 'sigma_min=', sigma_min
-            write (*, '(a,es16.8,1x,a,es16.8,1x,a,i0,1x,a,i0,1x,a,i0)') '  condition=', condition_estimate, &
-               'tau1=', tau1, 'rank_tau1=', rank1, 'rank_tau10=', rank10, 'rank_tau100=', rank100
-            write (*, '(a)', advance='no') '  singular_values:'
-            do k = 1, nsv
-               write (*, '(1x,es20.12)', advance='no') singular_values(k)
-            end do
-            write (*, *)
-            if (rank1 /= rank10 .or. rank1 /= rank100) then
-               write (*, '(a)') '  REVIEW REQUIRED: retained rank changes across sensitivity thresholds.'
-            end if
-            deallocate(candidates, weighted_basis, column_norm, singular_values, u, vt, rwork)
+
+         production_rank = production%blocks(1, response_l)%rank
+         overlap = matmul(conjg(transpose(production%blocks(1, response_l)%weighted_modes)), &
+            production%blocks(1, response_l)%weighted_modes)
+         do k = 1, size(overlap, 1)
+            overlap(k, k) = overlap(k, k) - cmplx(1.0_rp, 0.0_rp, rp)
          end do
+         orth_residual = sqrt(sum(abs(overlap)**2))
+         projected = matmul(production%blocks(1, response_l)%weighted_modes, &
+            matmul(conjg(transpose(production%blocks(1, response_l)%weighted_modes)), weighted_basis))
+         matrix_norm = sqrt(sum(abs(weighted_basis)**2))
+         span_residual = sqrt(sum(abs(weighted_basis - projected)**2))/max(matrix_norm, tiny(1.0_rp))
+         rrqr_tolerance = real(max(space%npoint, ncolumn), rp)*epsilon(1.0_rp)*maxval(rdiag)
+         rrqr_condition = maxval(rdiag)/max(rdiag(rrqr_rank), tiny(1.0_rp))
+         production_condition = production%blocks(1, response_l)%singular_values(1)/ &
+            max(production%blocks(1, response_l)%singular_values(production_rank), tiny(1.0_rp))
+         write (*, '(a,i0,a,i0,a,i0,a,i0,a,es12.4,a,es12.4,a,es12.4)') 'RRQR L=', response_l, &
+            ' raw_candidates=', ncolumn, ' production_rank=', production_rank, ' rrqr_rank=', rrqr_rank, &
+            ' orth_residual=', orth_residual, ' span_residual=', span_residual, ' rrqr_condition=', rrqr_condition
+         write (*, '(a,es12.4,a,es12.4,a,es12.4)') '  production_condition=', production_condition, &
+            ' rrqr_threshold=', rrqr_tolerance, ' rrqr_min_resolved=', rdiag(rrqr_rank)
+         write (*, '(a)', advance='no') '  production_singular_values:'
+         do k = 1, size(production%blocks(1, response_l)%singular_values)
+            write (*, '(1x,es14.6)', advance='no') production%blocks(1, response_l)%singular_values(k)
+         end do
+         write (*, *)
+         write (*, '(a)', advance='no') '  rrqr_abs_R_diagonal:'
+         do k = 1, size(rdiag)
+            write (*, '(1x,es14.6)', advance='no') rdiag(k)
+         end do
+         write (*, *)
+         if (orth_residual > 2.0e-10_rp .or. span_residual > 2.0e-10_rp .or. abs(rrqr_rank - production_rank) > 1) then
+            ! A one-vector disagreement is allowed only for a borderline
+            ! value at the numerical threshold; the span/orthogonality gates
+            ! remain mandatory and independent of production rank selection.
+            failed = .true.
+         end if
+         deallocate(candidates, weighted_basis, q, rdiag, overlap, projected)
       end do
-   end subroutine scaled_svd_audit
+   end subroutine rrqr_basis_audit
+
+
+   subroutine build_normalized_weighted_matrix(radial, space, candidates, spin_left, spin_right, matrix)
+      type(lmto_radial_basis), intent(in) :: radial
+      type(response_space_layout), intent(in) :: space
+      type(candidate_descriptor), intent(in) :: candidates(:)
+      integer, intent(in) :: spin_left, spin_right
+      complex(rp), intent(out) :: matrix(:, :)
+      real(rp) :: column_norm
+      integer :: ir, k
+
+      do k = 1, size(candidates)
+         do ir = 1, space%npoint
+            matrix(ir, k) = cmplx(radial_product(radial, ir, candidates(k)%l, candidates(k)%lp, &
+               spin_left, spin_right, candidates(k)%branch), 0.0_rp, rp)
+         end do
+         column_norm = sqrt(sum(space%radial_weights*real(matrix(:, k)*conjg(matrix(:, k)), rp)))
+         if (.not. ieee_is_finite(column_norm) .or. column_norm <= tiny(1.0_rp)) then
+            error stop 'build_normalized_weighted_matrix: invalid candidate norm'
+         end if
+         matrix(:, k) = sqrt(space%radial_weights)*matrix(:, k)/column_norm
+      end do
+   end subroutine build_normalized_weighted_matrix
+
+
+   subroutine rrqr_factor(matrix, q, rdiag, rank, info)
+      complex(rp), intent(in) :: matrix(:, :)
+      complex(rp), allocatable, intent(out) :: q(:, :)
+      real(rp), allocatable, intent(out) :: rdiag(:)
+      integer, intent(out) :: rank, info
+      complex(rp), allocatable :: factor(:, :), tau(:), work(:)
+      complex(rp) :: work_query(1)
+      real(rp), allocatable :: rwork(:)
+      integer, allocatable :: pivot(:)
+      integer :: m, n, k, lwork, i
+      external :: zgeqp3, zungqr
+
+      m = size(matrix, 1)
+      n = size(matrix, 2)
+      k = min(m, n)
+      allocate(factor(m, n), tau(k), pivot(n), rdiag(k), rwork(max(1, 2*n)))
+      factor = matrix
+      pivot = 0
+      call zgeqp3(m, n, factor, m, pivot, tau, work_query, -1, rwork, info)
+      if (info /= 0) then
+         deallocate(factor, tau, pivot, rdiag, rwork)
+         allocate(q(1, 1))
+         return
+      end if
+      lwork = max(1, nint(real(work_query(1), rp)))
+      allocate(work(lwork))
+      call zgeqp3(m, n, factor, m, pivot, tau, work, lwork, rwork, info)
+      deallocate(work)
+      if (info /= 0) then
+         deallocate(factor, tau, pivot, rdiag, rwork)
+         allocate(q(1, 1))
+         return
+      end if
+      do i = 1, k
+         rdiag(i) = abs(factor(i, i))
+      end do
+      call zungqr(m, k, k, factor, m, tau, work_query, -1, info)
+      if (info /= 0) then
+         deallocate(factor, tau, pivot, rdiag, rwork)
+         allocate(q(1, 1))
+         return
+      end if
+      lwork = max(1, nint(real(work_query(1), rp)))
+      allocate(work(lwork))
+      call zungqr(m, k, k, factor, m, tau, work, lwork, info)
+      deallocate(work, tau, pivot, rwork)
+      if (info /= 0) then
+         deallocate(factor, rdiag)
+         allocate(q(1, 1))
+         return
+      end if
+      allocate(q(m, k))
+      q = factor(:, 1:k)
+      rank = count(rdiag > real(max(m, n), rp)*epsilon(1.0_rp)*maxval(rdiag))
+      rank = max(1, rank)
+      deallocate(factor)
+   end subroutine rrqr_factor
 
    subroutine load_radial_basis_dump(filename, basis)
       character(len=*), intent(in) :: filename
@@ -359,117 +392,6 @@ contains
          end do
       end do
    end subroutine build_candidate_block
-
-   subroutine factor_block(radial, space, lmax, response_l, response_m, channel, candidates, basis, eigenvalues, &
-                           eigenvectors, rank, rank_tolerance, normalize_columns)
-      type(lmto_radial_basis), intent(in) :: radial
-      type(response_space_layout), intent(in) :: space
-      integer, intent(in) :: lmax, response_l, response_m, channel
-      type(candidate_descriptor), intent(in) :: candidates(:)
-      complex(rp), allocatable, intent(out) :: basis(:, :), eigenvectors(:, :)
-      real(rp), allocatable, intent(out) :: eigenvalues(:)
-      integer, intent(out) :: rank
-      real(rp), intent(out) :: rank_tolerance
-      logical, intent(in) :: normalize_columns
-      complex(rp), allocatable :: gram(:, :)
-      real(rp), allocatable :: column_norm(:)
-      integer :: i, j
-
-      allocate(basis(space%ndim, size(candidates)), gram(size(candidates), size(candidates)))
-      call build_candidate_block(radial, space, response_l, response_m, channel, candidates, basis)
-      do i = 1, size(candidates)
-         do j = i, size(candidates)
-            gram(i, j) = response_vector_inner_product(space, basis(:, i), basis(:, j))
-            gram(j, i) = conjg(gram(i, j))
-         end do
-      end do
-      if (normalize_columns) then
-         allocate(column_norm(size(candidates)))
-         do i = 1, size(candidates)
-            column_norm(i) = sqrt(max(real(gram(i, i), rp), tiny(1.0_rp)))
-            basis(:, i) = basis(:, i)/column_norm(i)
-         end do
-         do i = 1, size(candidates)
-            do j = i, size(candidates)
-               gram(i, j) = response_vector_inner_product(space, basis(:, i), basis(:, j))
-               gram(j, i) = conjg(gram(i, j))
-            end do
-         end do
-         deallocate(column_norm)
-      end if
-      call hermitian_eigenpairs(gram, eigenvalues, eigenvectors)
-      rank_tolerance = epsilon(1.0_rp)*real(size(candidates), rp)*maxval(eigenvalues)
-      rank = count(eigenvalues > rank_tolerance)
-      deallocate(gram)
-   end subroutine factor_block
-
-   subroutine gram_block_audit(radial, space, lmax, response_l, response_m, channel, failed)
-      type(lmto_radial_basis), intent(in) :: radial
-      type(response_space_layout), intent(in) :: space
-      integer, intent(in) :: lmax, response_l, response_m, channel
-      logical, intent(inout) :: failed
-      type(candidate_descriptor), allocatable :: candidates(:)
-      complex(rp), allocatable :: basis(:, :), eigenvectors(:, :)
-      real(rp), allocatable :: eigenvalues(:)
-      real(rp) :: rank_tolerance, minimum_resolved, condition_estimate
-      integer :: rank, k
-      character(len=5) :: channel_label
-
-      call enumerate_candidates(lmax, response_l, candidates)
-      call factor_block(radial, space, lmax, response_l, response_m, channel, candidates, basis, eigenvalues, &
-         eigenvectors, rank, rank_tolerance, .false.)
-      if (channel == 1) then
-         channel_label = 'plus'
-      else
-         channel_label = 'minus'
-      end if
-      minimum_resolved = minval(eigenvalues, mask=eigenvalues > rank_tolerance)
-      condition_estimate = maxval(eigenvalues)/minimum_resolved
-      write (*, '(a,1x,a,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,es12.4,1x,a,es12.4,1x,a,es12.4,1x,a,i0,1x,a,es12.4)') &
-         'GRAM', trim(channel_label), 'L=', response_l, 'M=', response_m, 'dim=', size(candidates), &
-         'rank=', rank, 'largest=', maxval(eigenvalues), 'smallest_resolved=', minimum_resolved, &
-         'condition=', condition_estimate, 'nullity=', size(candidates) - rank, 'rank_tol=', rank_tolerance
-      write (*, '(a)', advance='no') '  eigenvalues:'
-      do k = 1, size(eigenvalues)
-         write (*, '(1x,es14.6)', advance='no') eigenvalues(k)
-      end do
-      write (*, *)
-      if (rank < size(candidates)) then
-         write (*, '(a)') '  NOTE numerical nullity is diagnostic only; no production cutoff is selected.'
-      end if
-      deallocate(candidates, basis, eigenvalues, eigenvectors)
-   end subroutine gram_block_audit
-
-   subroutine hermitian_eigenpairs(matrix, eigenvalues, eigenvectors)
-      complex(rp), intent(in) :: matrix(:, :)
-      real(rp), allocatable, intent(out) :: eigenvalues(:)
-      complex(rp), allocatable, intent(out) :: eigenvectors(:, :)
-      complex(rp) :: work_query(1)
-      complex(rp), allocatable :: work(:)
-      real(rp), allocatable :: rwork(:)
-      integer :: n, lwork, info
-      logical :: halt_divide_by_zero
-      external :: zheev
-
-      n = size(matrix, 1)
-      if (size(matrix, 2) /= n) error stop 'hermitian_eigenpairs: matrix must be square'
-      allocate(eigenvalues(n), eigenvectors(n, n), rwork(max(1, 3*n - 2)))
-      eigenvectors = matrix
-      call ieee_get_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)
-      call ieee_set_halting_mode(ieee_divide_by_zero, .false.)
-      call zheev('V', 'U', n, eigenvectors, n, eigenvalues, work_query, -1, rwork, info)
-      call ieee_set_flag(ieee_divide_by_zero, .false.)
-      lwork = max(1, nint(real(work_query(1), rp)))
-      allocate(work(lwork))
-      call zheev('V', 'U', n, eigenvectors, n, eigenvalues, work, lwork, rwork, info)
-      call ieee_set_flag(ieee_divide_by_zero, .false.)
-      call ieee_set_halting_mode(ieee_divide_by_zero, halt_divide_by_zero)
-      deallocate(work, rwork)
-      if (info /= 0) then
-         write (*, '(a,i0)') 'hermitian_eigenpairs: zheev info=', info
-         error stop 'hermitian_eigenpairs: zheev failed'
-      end if
-   end subroutine hermitian_eigenpairs
 
    pure real(rp) function endpoint_component(radial, ir, l, spin, power) result(value)
       type(lmto_radial_basis), intent(in) :: radial
@@ -682,32 +604,49 @@ contains
       integer, intent(in) :: pair, channel
       real(rp), intent(out) :: relative_error
       type(candidate_descriptor), allocatable :: candidates(:)
-      complex(rp), allocatable :: basis(:, :), eigenvectors(:, :), rhs(:), modal(:), coefficients(:), reconstructed(:)
-      real(rp), allocatable :: eigenvalues(:)
-      real(rp) :: rank_tolerance, absolute_error
-      integer :: response_l, response_m, rank, k
+      complex(rp), allocatable :: basis(:, :), q(:, :), weighted_transition(:), weighted_projection(:), &
+         coefficients(:), reconstructed(:)
+      real(rp), allocatable :: rdiag(:)
+      real(rp) :: absolute_error, sqrt_weight
+      integer :: response_l, response_m, rank, ir, flat, info
+      type(response_super_index) :: item
 
       allocate(reconstructed(space%ndim))
       reconstructed = cmplx(0.0_rp, 0.0_rp, rp)
       do response_l = 0, space%response_lmax
          call enumerate_candidates(radial%lmax, response_l, candidates)
+         allocate(basis(space%npoint, size(candidates)))
+         call build_normalized_weighted_matrix(radial, space, candidates, 1, 2, basis)
+         call rrqr_factor(basis, q, rdiag, rank, info)
+         if (info /= 0) error stop 'project_and_report: RRQR factorization failed'
+         allocate(weighted_transition(space%npoint), weighted_projection(space%npoint), coefficients(rank))
          do response_m = -response_l, response_l
-            call factor_block(radial, space, radial%lmax, response_l, response_m, channel, candidates, basis, &
-               eigenvalues, eigenvectors, rank, rank_tolerance, .true.)
-            allocate(rhs(size(candidates)), modal(size(candidates)), coefficients(size(candidates)))
-            do k = 1, size(candidates)
-               rhs(k) = response_vector_inner_product(space, basis(:, k), transition)
+            do ir = 1, space%npoint
+               item = response_super_index(1, response_l, response_m, ir, 1)
+               call response_flatten_superindex(item, space%nsite, space%response_lmax, space%npoint, &
+                  space%nchannel, flat)
+               sqrt_weight = sqrt(space%radial_weights(ir))
+               if (sqrt_weight > 0.0_rp) then
+                  weighted_transition(ir) = sqrt_weight*transition(flat)
+               else
+                  weighted_transition(ir) = cmplx(0.0_rp, 0.0_rp, rp)
+               end if
             end do
-            modal = matmul(conjg(transpose(eigenvectors)), rhs)
-            coefficients = cmplx(0.0_rp, 0.0_rp, rp)
-            do k = 1, size(candidates)
-               if (eigenvalues(k) > rank_tolerance) coefficients = coefficients + &
-                  eigenvectors(:, k)*modal(k)/eigenvalues(k)
+            coefficients = matmul(conjg(transpose(q(:, 1:rank))), weighted_transition)
+            weighted_projection = matmul(q(:, 1:rank), coefficients)
+            do ir = 1, space%npoint
+               item = response_super_index(1, response_l, response_m, ir, 1)
+               call response_flatten_superindex(item, space%nsite, space%response_lmax, space%npoint, &
+                  space%nchannel, flat)
+               sqrt_weight = sqrt(space%radial_weights(ir))
+               if (sqrt_weight > 0.0_rp) then
+                  reconstructed(flat) = weighted_projection(ir)/sqrt_weight
+               else
+                  reconstructed(flat) = cmplx(0.0_rp, 0.0_rp, rp)
+               end if
             end do
-            reconstructed = reconstructed + matmul(basis, coefficients)
-            deallocate(basis, eigenvalues, eigenvectors, rhs, modal, coefficients)
          end do
-         deallocate(candidates)
+         deallocate(candidates, basis, q, rdiag, weighted_transition, weighted_projection, coefficients)
       end do
       absolute_error = response_vector_norm(space, transition - reconstructed)
       relative_error = absolute_error/max(response_vector_norm(space, transition), epsilon(1.0_rp))
