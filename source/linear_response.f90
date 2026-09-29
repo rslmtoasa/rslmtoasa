@@ -94,6 +94,8 @@ module linear_response_mod
       logical :: inverse_available = .false.
       complex(rp), allocatable :: bubble(:, :), contact(:, :), kernel(:, :), kernel_pm(:, :)
       complex(rp), allocatable :: inverse_kernel(:, :), inverse_kernel_pm(:, :)
+   contains
+      procedure :: clear => rotation_result_clear
    end type rotation_result
 
    integer, parameter, public :: linear_response_max_points = 2000
@@ -1602,6 +1604,10 @@ module linear_response_mod
          class(rotation_state), intent(inout) :: this
       end subroutine rotation_state_clear
 
+      module subroutine rotation_result_clear(this)
+         class(rotation_result), intent(inout) :: this
+      end subroutine rotation_result_clear
+
       ! --- generic specifics from lr_response_space_mod ---
       module subroutine response_local_operator_site_radial(space, values, operator)
       type(response_space_layout), intent(in) :: space
@@ -2414,7 +2420,7 @@ module linear_response_mod
 
       module subroutine evaluate_rotation_response(request,result)
          type(rotation_request), intent(in) :: request
-         type(rotation_result), intent(out) :: result
+         type(rotation_result), intent(inout) :: result
       end subroutine evaluate_rotation_response
 
       module subroutine evaluate_rotation_response_oracle(fixture,recip,q,omega,eta,bubble,contact,kernel)

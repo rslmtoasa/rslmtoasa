@@ -275,7 +275,13 @@ contains
             endpoint_vectors(nmat,nband,nk),weights(nk),torques_q(nmat,nmat,ncoord,nk), &
             torques_minus_q(nmat,nmat,ncoord,nk),mixed(nmat,nmat,ncoord,ncoord,nk), &
             hessian(ncoord,ncoord),torque_torque(ncoord,ncoord),mixed_contact(ncoord,ncoord),complete(ncoord,ncoord))
-         values=recip%eigenvalues; vectors=recip%eigenvectors; weights=recip%k_weights
+         if (allocated(recip%eigenvalues) .and. allocated(recip%eigenvectors) .and. &
+             all(shape(recip%eigenvalues)==[nband,nk]) .and. all(shape(recip%eigenvectors)==[nmat,nband,nk])) then
+            values=recip%eigenvalues; vectors=recip%eigenvectors
+         else
+            call recip%calculate_eigenpairs_at_kpoints(recip%k_points,values,vectors)
+         end if
+         weights=recip%k_weights
          if(maxval(abs(q))<1.0e-12_rp) then
             endpoint_values=values; endpoint_vectors=vectors
          else

@@ -1512,13 +1512,14 @@ contains
    !> exact_static selects the finite-temperature divided-difference branch.
    module subroutine evaluate_rotation_response(request,result)
       type(rotation_request), intent(in) :: request
-      type(rotation_result), intent(out) :: result
+      type(rotation_result), intent(inout) :: result
       type(rotation_state), pointer :: state
       complex(rp), allocatable :: unitary(:, :)
       complex(rp) :: denominator, product
       real(rp) :: fn, fm, divided, energy_difference, weight
       integer :: ia, ib, ik, n, m, info, ncoord
 
+      call result%clear()
       state => request%state
       if (.not. state%prepared) error stop 'rotation response state is not prepared'
       if (request%exact_static) then
@@ -1801,6 +1802,25 @@ contains
       this%electron_count=0.0_rp; this%electron_residual=0.0_rp
       this%prepared=.false.
    end subroutine rotation_state_clear
+
+   module subroutine rotation_result_clear(this)
+      class(rotation_result), intent(inout) :: this
+      if (allocated(this%bubble)) deallocate(this%bubble)
+      if (allocated(this%contact)) deallocate(this%contact)
+      if (allocated(this%kernel)) deallocate(this%kernel)
+      if (allocated(this%kernel_pm)) deallocate(this%kernel_pm)
+      if (allocated(this%inverse_kernel)) deallocate(this%inverse_kernel)
+      if (allocated(this%inverse_kernel_pm)) deallocate(this%inverse_kernel_pm)
+      this%q = 0.0_rp
+      this%omega = 0.0_rp
+      this%eta = 0.0_rp
+      this%berry = 0.0_rp
+      this%magnetization = 0.0_rp
+      this%berry_residual = 0.0_rp
+      this%electron_count = 0.0_rp
+      this%electron_residual = 0.0_rp
+      this%inverse_available = .false.
+   end subroutine rotation_result_clear
 
 
    module subroutine compute_static_rotation_curvature(q_coordinates, q_list, rotation_axis, finite_h_spectral_mode, &
