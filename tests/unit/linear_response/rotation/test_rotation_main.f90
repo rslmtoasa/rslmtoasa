@@ -1,6 +1,7 @@
 program test_rotation_main
    use test_rotation_finite_q_torque_mod, only: run_test_rotation_finite_q_torque
    use test_rotation_production_adapter_mod, only: run_test_rotation_production_adapter
+   use test_rotation_pole_capability_mod, only: run_test_rotation_pole_capability, run_test_rotation_pole_multisite
    use test_rotation_second_order_mod, only: run_test_rotation_second_order
    use test_rotation_static_contour_mod, only: run_test_rotation_static_contour
    use test_rotation_static_lkag_mod, only: run_test_rotation_static_lkag
@@ -15,6 +16,10 @@ program test_rotation_main
       call run_test_rotation_finite_q_torque()
    case ('rotation_production_adapter')
       call run_test_rotation_production_adapter()
+   case ('rotation_pole_capability')
+      call run_test_rotation_pole_capability()
+   case ('rotation_pole_multisite')
+      call run_test_rotation_pole_multisite()
    case ('rotation_second_order')
       call run_test_rotation_second_order()
    case ('rotation_static_contour')

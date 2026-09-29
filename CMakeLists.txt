@@ -634,6 +634,15 @@ endforeach()
     LABELS "lr_baseline;linear_response;rotation;generic-workflow"
     TIMEOUT 900)
 
+  add_test(NAME LrRotationCapabilitySeparation
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_rotation_capability.py
+      --binary ${TestBinary}
+      --case ${TestDIR}/lr_baseline/cases/rotation
+      --scratch-root ${CMAKE_BINARY_DIR}/Testing/lr_rotation_capability)
+  set_tests_properties(LrRotationCapabilitySeparation PROPERTIES
+    LABELS "lr_baseline;linear_response;rotation;capability;diagnostics"
+    TIMEOUT 900)
+
   add_test(NAME LrExampleBccFeRotation
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_example_rotation.py
       --binary ${TestBinary}
@@ -731,6 +740,7 @@ if (RUN_UNIT_TESTS)
   set(_lr_rotation_sources
     ${TestDIR}/unit/linear_response/rotation/test_rotation_finite_q_torque.f90
     ${TestDIR}/unit/linear_response/rotation/test_rotation_production_adapter.f90
+    ${TestDIR}/unit/linear_response/rotation/test_rotation_pole_capability.f90
     ${TestDIR}/unit/linear_response/rotation/test_rotation_second_order.f90
     ${TestDIR}/unit/linear_response/rotation/test_rotation_static_contour.f90
     ${TestDIR}/unit/linear_response/rotation/test_rotation_static_lkag.f90
@@ -749,6 +759,12 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitLrRotationProductionAdapter COMMAND $<TARGET_FILE:UnitLrRotation> rotation_production_adapter)
   set_tests_properties(UnitLrRotationProductionAdapter PROPERTIES
     LABELS "unit;dresp-03q;finite-q;lmto;lkag;production-adapter;bcc-fe;spd")
+  add_test(NAME UnitLrRotationPoleCapability COMMAND $<TARGET_FILE:UnitLrRotation> rotation_pole_capability)
+  set_tests_properties(UnitLrRotationPoleCapability PROPERTIES LABELS "unit;linear_response;rotation;capability")
+  add_test(NAME UnitLrRotationPoleMultisiteRejected COMMAND $<TARGET_FILE:UnitLrRotation> rotation_pole_multisite)
+  set_tests_properties(UnitLrRotationPoleMultisiteRejected PROPERTIES
+    LABELS "unit;linear_response;rotation;capability;multisite"
+    WILL_FAIL TRUE)
   add_test(NAME UnitLrRotationStaticLkag COMMAND $<TARGET_FILE:UnitLrRotation> rotation_static_lkag)
   set_tests_properties(UnitLrRotationStaticLkag PROPERTIES
     LABELS "unit;dresp-03q;finite-q;lmto;lkag;native-reference;bcc-fe;spd")

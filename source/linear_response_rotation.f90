@@ -2256,8 +2256,11 @@ contains
       if (trim(recip%reciprocal_mode)/='ham_only') then
          call g_logger%fatal('[linear_response]: capability gate requires reciprocal_mode=ham_only',__FILE__,__LINE__)
       end if
-      if (trim(recip%kspace_ham_order)/='first' .and. trim(recip%kspace_ham_order)/='second') then
-         call g_logger%fatal('[linear_response]: reciprocal Hamiltonian order must be first or second',__FILE__,__LINE__)
+      if (trim(recip%kspace_ham_order)/='second') then
+         call g_logger%fatal('[linear_response]: rotation capability gate requires kspace_ham_order=second',__FILE__,__LINE__)
+      end if
+      if (.not.ham%hoh) then
+         call g_logger%fatal('[linear_response]: rotation capability gate requires hamiltonian hoh=.true.',__FILE__,__LINE__)
       end if
       if (fixture_basis_size(ham)/=9) then
          call g_logger%fatal('[linear_response]: capability gate requires the full spd production basis',__FILE__,__LINE__)
@@ -2265,6 +2268,19 @@ contains
       if (native_requested) call validate_native_turek_capability(native_crosscheck, native_turek, ham)
       call validate_finite_h_capability(ham,recip)
    end subroutine validate_rotation_capability
+
+   module subroutine validate_rotation_pole_workflow_capability(fixture)
+      type(lmto_live_hamiltonian_fixture), intent(in) :: fixture
+
+      ! The response evaluator below is deliberately 2*Nsite capable.  The
+      ! automatic production pole wrapper, however, reduces that response to
+      ! two scalar circular channels and therefore has a one-site contract.
+      ! Keep this boundary explicit so multisite callers receive a capability
+      ! error instead of a later 2x2 shape or indexing failure.
+      if (fixture%nsite /= 1) then
+         error stop 'rotation pole workflow capability: automatic scalar circular pole extraction supports one magnetic site only; use the lower-level multisite K(q,omega) response API'
+      end if
+   end subroutine validate_rotation_pole_workflow_capability
 
    function spread_q(q, count) result(points)
       real(rp), intent(in) :: q(3)
@@ -2901,6 +2917,7 @@ contains
       integer :: unit,iq,iomega
       real(rp) :: omega
 
+      call validate_rotation_pole_workflow_capability(fixture)
       if (n_omega<1 .or. omega_max<omega_min .or. eta<=0.0_rp) then
          error stop 'write_rotation_response_grid: invalid frequency-grid controls'
       end if
@@ -2959,6 +2976,7 @@ contains
       character(len=8) :: channel_name
       character(len=10) :: pole_status
 
+      call validate_rotation_pole_workflow_capability(fixture)
       if (len_trim(rotation_output_file)==0) error stop 'rotation dynamics output path is blank'
       open(newunit=unit,file=trim(rotation_output_file),status='replace',action='write')
       write(unit,'(a)') '# native second-order local-rotation dynamics; K^R = contact + unsymmetrized retarded bubble'
@@ -3161,7 +3179,7 @@ contains
       ! covariance_ok is set only by the explicit q/-q/-omega comparison above.
       berry_ok=berry_ok .and. slope_rel<=5.0e-2_rp
       static_ok=static_ok .and. q0_residual<=2.0e-7_rp
-      if (native_ready .or. trim(diagnostics)=='invariants') then
+      if (trim(diagnostics)=='invariants') then
          call run_fe_rotation_campaign_diagnostics(recip,fixture,nfinite,clean_count,q_magnitude,energy_eta, &
             static_ok,berry_ok,circular_ok,covariance_ok,causal_ok)
       else

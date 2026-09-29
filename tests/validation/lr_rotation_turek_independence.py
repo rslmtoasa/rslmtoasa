@@ -44,7 +44,7 @@ def parse_rotation_output(path: Path) -> tuple[list[list[float]], list[float | N
     return h2_rows, turek_values, enabled_line
 
 
-def run_variant(binary: Path, case_dir: Path, scratch_root: Path, enabled: bool) -> Path:
+def run_variant(binary: Path, case_dir: Path, scratch_root: Path, enabled: bool) -> tuple[Path, str]:
     name = "native_on" if enabled else "native_off"
     scratch_dir = scratch_root / name
     if scratch_dir.exists():
@@ -80,7 +80,7 @@ def run_variant(binary: Path, case_dir: Path, scratch_root: Path, enabled: bool)
     output = scratch_dir / "rotation_dynamics.dat"
     if not output.is_file():
         raise RuntimeError(f"native_turek={enabled} did not produce {output}")
-    return output
+    return output, completed.stdout
 
 
 def compare_rows(off_rows: list[list[float]], on_rows: list[list[float]]) -> None:
@@ -110,8 +110,8 @@ def main() -> int:
     args = parser.parse_args()
     try:
         args.scratch_root.mkdir(parents=True, exist_ok=True)
-        off_path = run_variant(args.binary.resolve(), args.case.resolve(), args.scratch_root, False)
-        on_path = run_variant(args.binary.resolve(), args.case.resolve(), args.scratch_root, True)
+        off_path, off_stdout = run_variant(args.binary.resolve(), args.case.resolve(), args.scratch_root, False)
+        on_path, on_stdout = run_variant(args.binary.resolve(), args.case.resolve(), args.scratch_root, True)
         off_rows, off_turek, off_header = parse_rotation_output(off_path)
         on_rows, on_turek, on_header = parse_rotation_output(on_path)
         if not off_header.endswith("= F"):
@@ -122,6 +122,11 @@ def main() -> int:
             raise AssertionError("disabled run serialized Turek data instead of an explicit missing marker")
         if any(value is None for value in on_turek):
             raise AssertionError("enabled run did not serialize Turek diagnostic data")
+        if "Fe validation campaign = NOT RUN" not in on_stdout:
+            raise AssertionError("native_turek-only run did not report the Fe campaign as disabled")
+        for campaign_marker in ("PASS-A", "PASS-B", "Fe material convergence", "Goldstone correction"):
+            if campaign_marker in on_stdout:
+                raise AssertionError(f"native_turek-only run emitted Fe campaign marker: {campaign_marker}")
         compare_rows(off_rows, on_rows)
         print("rotation Turek-independence regression: PASS")
     except (AssertionError, OSError, RuntimeError, ValueError) as exc:

@@ -36,6 +36,18 @@ uniform-rotation/Berry identity of this formulation; it does not subtract a
 mode or apply a Goldstone correction. Finite-frequency damping is still
 retained.
 
+The lower-level response evaluator and `K(q,omega)` kernel are dimensioned
+for two transverse coordinates per magnetic site (`2*Nsite`). The automatic
+production pole workflow is intentionally narrower: its scalar circular
+channel reduction, `finite_h(1,1)` static scale, and single-magnetization
+reporting are one-site only. A multisite request fails at this workflow
+boundary with an explicit capability error; multisite callers must consume
+the lower-level `K(q,omega)` response API rather than infer a scalar pole.
+
+The production capability gate requires `reciprocal_mode='ham_only'`,
+`kspace_ham_order='second'`, and `hamiltonian%hoh=.true.` so that the pole
+workflow cannot enter with a first-order or inactive-HOH state.
+
 The pole scan uses the configured circular channels. Its default controls are:
 
 | control | default |
@@ -117,10 +129,10 @@ The rotation workflow is generic when `diagnostics='none'`: it validates the
 accepted state, evaluates the q path and dynamic kernel, performs static
 reduction and pole/loss analysis, and writes the response output without Fe
 campaign assumptions. `diagnostics='invariants'` enables the optional
-historical Fe validation layer. The existing native-Turek acceptance deck
-also retains that layer for compatibility; its one-site, CCOR-off, 300 K,
-PASS-A/PASS-B, and small-q fit checks are not requirements of the generic
-workflow.
+historical Fe validation layer. `native_turek` is orthogonal to that choice:
+it enables the independent Turek diagnostic but does not enable the Fe
+campaign. The one-site, CCOR-off, 300 K, PASS-A/PASS-B, and small-q fit
+checks are not requirements of the generic workflow.
 
 Sources: `lr-campaign-archive:docs/NATIVE_ROTATION_DYNAMICS.md`, `lr-campaign-archive:docs/TDDFT_FORMULATION.md`
 

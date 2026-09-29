@@ -1336,6 +1336,7 @@ module linear_response_mod
    public :: compute_static_rotation_curvature
    public :: detect_commensurate_endpoint_map
    public :: validate_rotation_capability
+   public :: validate_rotation_pole_workflow_capability
 
 
 
@@ -2453,6 +2454,10 @@ module linear_response_mod
          type(self), intent(in) :: self_obj
          type(reciprocal), intent(in) :: recip
       end subroutine validate_rotation_capability
+
+      module subroutine validate_rotation_pole_workflow_capability(fixture)
+         type(lmto_live_hamiltonian_fixture), intent(in) :: fixture
+      end subroutine validate_rotation_pole_workflow_capability
 
       module subroutine detect_commensurate_endpoint_map(k_points, k_weights, nk_mesh, q_point, endpoint_index, commensurate, residual)
          real(rp), intent(in) :: k_points(:, :), k_weights(:), q_point(3)
