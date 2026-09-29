@@ -2,17 +2,19 @@
 ! DRESP-01 projected site-spin operator and matching moment contract.
 !------------------------------------------------------------------------------
 module test_projected_site_spin_mod
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use precision_mod, only: rp
    use basis_mod, only: basis_init
    use logger_mod, only: g_logger
    use math_mod, only: init_math_operators
    use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l
    use radial_ground_state_mod, only: radial_ground_state
-   use linear_response_mod, only: response_angular_pi
+   use linear_response_mod, only: response_angular_pi, response_gaunt
    use linear_response_mod, only: response_space_layout
    use linear_response_mod, only: pauli_endpoint_state
    use linear_response_mod, only: lmto_product_channel_plus, lmto_product_channel_minus, &
-      lmto_product_response_basis
+      lmto_product_response_basis, lmto_product_branch_20, lmto_product_branch_02, &
+      lmto_product_second_order_radial_branch
    use linear_response_mod, only: projected_site_spin_contract, projected_selector_d, &
       projected_selector_spd, projected_operator_plus, projected_operator_minus, projected_operator_z
    implicit none
@@ -66,6 +68,7 @@ contains
    if (len_trim(mode) > 0) error stop 'UnitLrProjectedSiteSpin: unknown argument'
 
    call space%initialize(nsite, 4, radius, mesh_a, mesh_b, 1)
+   call assert_second_order_candidates(radial, space)
    call product_plus%initialize(space, radial, lmto_product_channel_plus, .false.)
    call product_minus%initialize(space, radial, lmto_product_channel_minus, .false.)
    call contract_d%initialize(space, radial, 'd')
@@ -136,35 +139,58 @@ contains
       type(lmto_radial_basis), intent(out) :: bases(:)
       real(rp), intent(in) :: mesh(:)
       integer :: isite, ispin, l, ir
-      real(rp) :: scale, base
+      real(rp) :: radial_scale
 
+      ! Reuse the accepted DRESP-02 second-order fixture shape used by
+      ! test_projected_chi0: every channel carries phi, phidot, and phiddot.
+      ! The point-space oracle below then checks the retained product projection
+      ! independently of candidate-coefficient construction.
       do isite = 1, size(bases)
          call bases(isite)%initialize(size(mesh), lmax, 2)
          bases(isite)%rofi = mesh
          bases(isite)%mesh_a = mesh_a
          bases(isite)%mesh_b = mesh_b
          bases(isite)%nuclear_z = nuclear_z
+         bases(isite)%channel_present = .true.
+         bases(isite)%gfac = 1.0_rp
          do ispin = 1, 2
             do l = 0, lmax
-               bases(isite)%enu_radial(l + 1, ispin) = -0.35_rp + 0.04_rp*real(l + ispin, rp)
-               bases(isite)%enu_work(l + 1, ispin) = bases(isite)%enu_radial(l + 1, ispin)
-               scale = 0.8_rp + 0.05_rp*real(isite + ispin, rp) + 0.03_rp*real(l, rp)
+               bases(isite)%enu_work(l + 1, ispin) = -0.28_rp + 0.035_rp*real(l, rp)
+               radial_scale = 0.75_rp + 0.025_rp*real(l, rp)
                do ir = 1, size(mesh)
-                  base = mesh(ir)**real(l + 1, rp)*exp(-scale*mesh(ir))
-                  bases(isite)%phi_large(ir, l + 1, ispin) = base
-                  bases(isite)%phidot_large(ir, l + 1, ispin) = (0.12_rp + 0.01_rp*real(l, rp))*base + &
-                     0.02_rp*mesh(ir)**real(l + 2, rp)*exp(-0.5_rp*scale*mesh(ir))
-                  bases(isite)%phi_small(ir, l + 1, ispin) = 0.0_rp
-                  bases(isite)%phidot_small(ir, l + 1, ispin) = 0.0_rp
-                  bases(isite)%phiddot_large(ir, l + 1, ispin) = 0.0_rp
-                  bases(isite)%phiddot_small(ir, l + 1, ispin) = 0.0_rp
-                  bases(isite)%gfac(ir, l + 1, ispin) = 1.0_rp
+                  bases(isite)%phi_large(ir, l + 1, ispin) = (0.65_rp + 0.04_rp*real(l, rp))* &
+                     (mesh(ir)**l)*exp(-radial_scale*mesh(ir))
+                  bases(isite)%phidot_large(ir, l + 1, ispin) = (0.10_rp + 0.02_rp*real(l, rp))* &
+                     (mesh(ir)**l)*(1.0_rp + 0.13_rp*mesh(ir))*exp(-0.6_rp*radial_scale*mesh(ir))
+                  bases(isite)%phiddot_large(ir, l + 1, ispin) = (0.018_rp + 0.004_rp*real(l + ispin, rp))* &
+                     (mesh(ir)**l)*(1.0_rp + 0.09_rp*mesh(ir))*exp(-0.45_rp*radial_scale*mesh(ir))
                end do
-               bases(isite)%channel_present(l + 1, ispin) = .true.
             end do
          end do
       end do
    end subroutine setup_radial_bases
+
+   subroutine assert_second_order_candidates(bases, space)
+      type(lmto_radial_basis), intent(in) :: bases(:)
+      type(response_space_layout), intent(in) :: space
+      real(rp) :: candidate_20(size(space%radius)), candidate_02(size(space%radius))
+      real(rp) :: norm_20, norm_02, value
+      integer :: ir
+
+      do ir = 1, size(space%radius)
+         call lmto_product_second_order_radial_branch(bases(1), ir, 0, 0, 1, 2, lmto_product_branch_20, value)
+         candidate_20(ir) = value
+         call lmto_product_second_order_radial_branch(bases(1), ir, 0, 0, 1, 2, lmto_product_branch_02, value)
+         candidate_02(ir) = value
+      end do
+      norm_20 = sqrt(sum(space%radial_weights*candidate_20**2))
+      norm_02 = sqrt(sum(space%radial_weights*candidate_02**2))
+      write (*, '(a,2(es12.4,1x))') '  weighted ss 20/02 candidate norms = ', norm_20, norm_02
+      if (.not. ieee_is_finite(norm_20) .or. .not. ieee_is_finite(norm_02) .or. &
+          norm_20 <= tiny(1.0_rp) .or. norm_02 <= tiny(1.0_rp)) then
+         error stop 'UnitLrProjectedSiteSpin: second-order 20/02 fixture candidates are invalid'
+      end if
+   end subroutine assert_second_order_candidates
 
    subroutine build_endpoints(left_coefficients, right_coefficients, left, right)
       complex(rp), allocatable, intent(out) :: left_coefficients(:), right_coefficients(:)
@@ -216,11 +242,122 @@ contains
       real(rp) :: error
 
       call contract%transition_amplitudes(product, left, right, actual)
-      call contract%direct_transition_amplitudes(bases, left, right, operator_kind, expected)
+      call direct_compact_second_order_transition_amplitudes(contract, product, bases, left, right, operator_kind, expected)
       error = maxval(abs(actual - expected))
       write (*, '(a,es12.4)') trim(label)//' error = ', error
       if (error > tol) failed = .true.
    end subroutine compare_transition
+
+   subroutine direct_compact_second_order_transition_amplitudes(contract, product, bases, left, right, operator_kind, amplitudes)
+      type(projected_site_spin_contract), intent(in) :: contract
+      type(lmto_product_response_basis), intent(in) :: product
+      type(lmto_radial_basis), intent(in) :: bases(:)
+      type(pauli_endpoint_state), intent(in) :: left, right
+      integer, intent(in) :: operator_kind
+      complex(rp), intent(out) :: amplitudes(:)
+      complex(rp), allocatable :: point_values(:), coordinates(:), functionals(:, :)
+      integer :: norb, site, ir, mode
+
+      norb = (contract%orbital_lmax + 1)**2
+      allocate(point_values(product%npoint), coordinates(product%product_dimension), &
+         functionals(product%product_dimension, contract%nsite))
+      coordinates = cmplx(0.0_rp, 0.0_rp, rp)
+      do site = 1, contract%nsite
+         call direct_second_order_point_values(contract, bases(site), left, right, operator_kind, point_values, site, norb)
+         do mode = 1, product%blocks(site, 0)%rank
+            do ir = 1, product%npoint
+               coordinates(product%flat_index(site, 0, 0, mode)) = &
+                  coordinates(product%flat_index(site, 0, 0, mode)) + &
+                  conjg(product%blocks(site, 0)%weighted_modes(ir, mode))*sqrt(contract%radial_weights(ir))*point_values(ir)
+            end do
+         end do
+      end do
+      call contract%site_integration_functional(product, functionals)
+      do site = 1, contract%nsite
+         amplitudes(site) = dot_product(functionals(:, site), coordinates)
+      end do
+      deallocate(point_values, coordinates, functionals)
+   end subroutine direct_compact_second_order_transition_amplitudes
+
+   subroutine direct_second_order_point_values(contract, radial, left, right, operator_kind, values, site, norb)
+      type(projected_site_spin_contract), intent(in) :: contract
+      type(lmto_radial_basis), intent(in) :: radial
+      type(pauli_endpoint_state), intent(in) :: left, right
+      integer, intent(in) :: operator_kind, site, norb
+      complex(rp), intent(out) :: values(:)
+      integer :: ir, iorb, l, m, offset
+      complex(rp) :: left_coefficient, right_coefficient
+
+      values = cmplx(0.0_rp, 0.0_rp, rp)
+      offset = (site - 1)*2*norb
+      do ir = 1, size(values)
+         do iorb = 1, norb
+            l = lmto_orbital_l(iorb)
+            if (.not. contract%selected_l(l)) cycle
+            m = iorb - l*l - l - 1
+            select case (operator_kind)
+            case (projected_operator_plus)
+               left_coefficient = left%coefficients(offset + iorb)
+               right_coefficient = right%coefficients(offset + norb + iorb)
+               values(ir) = values(ir) + conjg(left_coefficient)*right_coefficient* &
+                  response_gaunt(l, m, l, m, 0, 0)* &
+                  second_order_radial_product_point(radial, ir, l, 1, left%energy, l, 2, right%energy)
+            case (projected_operator_minus)
+               left_coefficient = left%coefficients(offset + norb + iorb)
+               right_coefficient = right%coefficients(offset + iorb)
+               values(ir) = values(ir) + conjg(left_coefficient)*right_coefficient* &
+                  response_gaunt(l, m, l, m, 0, 0)* &
+                  second_order_radial_product_point(radial, ir, l, 2, left%energy, l, 1, right%energy)
+            case (projected_operator_z)
+               left_coefficient = left%coefficients(offset + iorb)
+               right_coefficient = right%coefficients(offset + iorb)
+               values(ir) = values(ir) + conjg(left_coefficient)*right_coefficient* &
+                  response_gaunt(l, m, l, m, 0, 0)* &
+                  second_order_radial_product_point(radial, ir, l, 1, left%energy, l, 1, right%energy)
+               left_coefficient = left%coefficients(offset + norb + iorb)
+               right_coefficient = right%coefficients(offset + norb + iorb)
+               values(ir) = values(ir) - conjg(left_coefficient)*right_coefficient* &
+                  response_gaunt(l, m, l, m, 0, 0)* &
+                  second_order_radial_product_point(radial, ir, l, 2, left%energy, l, 2, right%energy)
+            end select
+         end do
+      end do
+   end subroutine direct_second_order_point_values
+
+   recursive real(rp) function second_order_radial_product_point(radial, ir, l_left, spin_left, energy_left, l_right, &
+                                                                 spin_right, energy_right) result(value)
+      type(lmto_radial_basis), intent(in) :: radial
+      integer, intent(in) :: ir, l_left, spin_left, l_right, spin_right
+      real(rp), intent(in) :: energy_left, energy_right
+      real(rp) :: delta_left, delta_right, phi_left, phi_right, dot_left, dot_right, ddot_left, ddot_right
+      real(rp) :: value_two, value_three
+
+      if (ir == 1) then
+         if (l_left /= 0 .or. l_right /= 0) then
+            value = 0.0_rp
+         else
+            value_two = second_order_radial_product_point(radial, 2, l_left, spin_left, energy_left, l_right, &
+               spin_right, energy_right)
+            value_three = second_order_radial_product_point(radial, 3, l_left, spin_left, energy_left, l_right, &
+               spin_right, energy_right)
+            value = (value_two*radial%rofi(3)**2 - value_three*radial%rofi(2)**2)/ &
+               (radial%rofi(3)**2 - radial%rofi(2)**2)
+         end if
+         return
+      end if
+      if (radial%rofi(ir) <= tiny(1.0_rp)) error stop 'UnitLrProjectedSiteSpin: invalid positive radial mesh point'
+      delta_left = energy_left - radial%enu_work(l_left + 1, spin_left)
+      delta_right = energy_right - radial%enu_work(l_right + 1, spin_right)
+      phi_left = radial%phi_large(ir, l_left + 1, spin_left)
+      phi_right = radial%phi_large(ir, l_right + 1, spin_right)
+      dot_left = radial%phidot_large(ir, l_left + 1, spin_left)
+      dot_right = radial%phidot_large(ir, l_right + 1, spin_right)
+      ddot_left = radial%phiddot_large(ir, l_left + 1, spin_left)
+      ddot_right = radial%phiddot_large(ir, l_right + 1, spin_right)
+      value = (phi_left*phi_right + delta_left*dot_left*phi_right + delta_right*phi_left*dot_right + &
+         delta_left*delta_right*dot_left*dot_right + 0.5_rp*delta_left**2*ddot_left*phi_right + &
+         0.5_rp*delta_right**2*phi_left*ddot_right)/radial%rofi(ir)**2
+   end function second_order_radial_product_point
 
    subroutine check_functional(contract, product, failed)
       type(projected_site_spin_contract), intent(in) :: contract
