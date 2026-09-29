@@ -11,9 +11,9 @@ The archived decks are the predecessor forms of the checked-in current cases:
   native Turek reference, second-order `ham_only`, physical bcc Fe.
 * `tddft_lehmann`: old `&tddft backend='product_lehmann'`, the bounded
   TDVK-02R2 compact Lehmann smoke seam.  The full radial-point Lehmann deck
-  remains the existing `LinearResponseTddftSmoke` integration test; its
-  complete Fe response space is 4,455 dense unknowns and is not a practical
-  closeout smoke test.
+  is retained as the separately labelled
+  `LinearResponseFullRadialValidation` research test; its complete Fe response
+  space is 4,455 dense unknowns and is not a practical closeout smoke test.
 * `native_rsgf`: old `&tddft backend='native_rsgf'`, block provider, three
   Green-function integration points.
 

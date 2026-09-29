@@ -962,6 +962,12 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(LinearResponseTddftSmoke PROPERTIES
     LABELS "integration;linear_response;tddft;lr-ref-04b;scf;accepted-state;reciprocal;smoke"
     TIMEOUT 180)
+  add_test(NAME LinearResponseFullRadialValidation
+    COMMAND ${TestBinary} input_full_radial.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+  set_tests_properties(LinearResponseFullRadialValidation PROPERTIES
+    LABELS "integration;linear_response;tddft;lr-ref-04b;scf;accepted-state;reciprocal;full-response;research;slow"
+    TIMEOUT 900)
   add_test(NAME LinearResponseProjectedJuelich
     COMMAND ${TestBinary} input_dresp05_fe.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)

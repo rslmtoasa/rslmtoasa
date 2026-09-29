@@ -1146,7 +1146,11 @@ contains
 
       lmax = radial_bases(1)%lmax
       norb = (lmax + 1)**2
-      if (space%response_lmax < 2*lmax) then
+      ! Strict-ASA keeps only the scalar response channel even when the
+      ! endpoint basis contains p or d orbitals.  The transition vertex is
+      ! evaluated channel by channel, so L=0 is a valid retained projection;
+      ! non-spherical truncations still require the complete product space.
+      if (space%response_lmax > 0 .and. space%response_lmax < 2*lmax) then
          error stop 'evaluate_pauli_transition_vertex: response angular product space is incomplete'
       end if
       if (.not. allocated(space%radius) .or. size(space%radius) /= radial_bases(1)%npoint .or. &
