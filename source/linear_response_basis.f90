@@ -4,7 +4,7 @@
 !------------------------------------------------------------------------------
 submodule (linear_response_mod) linear_response_basis
    use precision_mod, only: rp
-   use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l
+   use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l, scalar_relativistic_c
    use, intrinsic :: ieee_arithmetic
    use radial_ground_state_mod, only: radial_ground_state, radial_simpson_weight
    implicit none
@@ -2084,6 +2084,149 @@ contains
       end if
       call validate_radial_bases(this, radial_bases)
    end subroutine projected_site_spin_initialize
+
+   ! --- from lr_juelich_d_projector_mod ---
+
+   module subroutine juelich_d_projector_initialize(this, radial_bases, fermi_level)
+      class(juelich_d_projector), intent(out) :: this
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      real(rp), intent(in) :: fermi_level
+      integer :: ir, site, spin
+      real(rp) :: r, tmc, delta, norm
+
+      if (size(radial_bases) < 1 .or. .not. ieee_is_finite(fermi_level)) then
+         error stop 'Juelich-d projector: invalid radial bases or Fermi energy'
+      end if
+      this%nsite = size(radial_bases)
+      this%npoint = radial_bases(1)%npoint
+      this%orbital_lmax = radial_bases(1)%lmax
+      this%fermi_level = fermi_level
+      if (this%npoint < 3 .or. mod(this%npoint, 2) /= 1 .or. this%orbital_lmax /= 2) then
+         error stop 'Juelich-d projector: requires an odd radial mesh and an spd LMTO basis'
+      end if
+      allocate(this%radial_measure(this%npoint), this%metric_large(this%npoint, this%nsite, 2), &
+         this%radial_large(this%npoint, this%nsite, 2), this%radial_small(this%npoint, this%nsite, 2), &
+         this%normalization(this%nsite, 2))
+      do ir = 1, this%npoint
+         r = radial_bases(1)%rofi(ir)
+         this%radial_measure(ir) = radial_simpson_weight(ir, this%npoint)*radial_bases(1)%mesh_a* &
+            (r + radial_bases(1)%mesh_b)
+      end do
+      if (any(.not. ieee_is_finite(this%radial_measure)) .or. any(this%radial_measure < 0.0_rp)) then
+         error stop 'Juelich-d projector: invalid logarithmic-mesh measure'
+      end if
+
+      do site = 1, this%nsite
+         call radial_bases(site)%require_supported('ham_only', 'second', .true., .true., .false., .false.)
+         if (radial_bases(site)%npoint /= this%npoint .or. radial_bases(site)%lmax /= 2 .or. &
+             radial_bases(site)%nspin /= 2 .or. .not. all(radial_bases(site)%channel_present(3, :)) .or. &
+             abs(radial_bases(site)%mesh_a - radial_bases(1)%mesh_a) > mesh_tolerance .or. &
+             abs(radial_bases(site)%mesh_b - radial_bases(1)%mesh_b) > mesh_tolerance .or. &
+             maxval(abs(radial_bases(site)%rofi - radial_bases(1)%rofi)) > mesh_tolerance) then
+            error stop 'Juelich-d projector: site radial channels or logarithmic meshes are inconsistent'
+         end if
+         do spin = 1, 2
+            norm = 0.0_rp
+            delta = fermi_level - radial_bases(site)%enu_work(3, spin)
+            do ir = 1, this%npoint
+               r = radial_bases(site)%rofi(ir)
+               if (ir == 1 .or. abs(r) <= tiny(1.0_rp)) then
+                  tmc = scalar_relativistic_c
+                  this%metric_large(ir, site, spin) = 1.0_rp
+               else
+                  tmc = scalar_relativistic_c - (radial_bases(site)%potential(ir, spin) - &
+                     2.0_rp*radial_bases(site)%nuclear_z/r - fermi_level)/scalar_relativistic_c
+                  this%metric_large(ir, site, spin) = 1.0_rp + 6.0_rp/(tmc*r)**2
+               end if
+               this%radial_large(ir, site, spin) = radial_bases(site)%phi_large(ir, 3, spin) + &
+                  delta*radial_bases(site)%phidot_large(ir, 3, spin)
+               this%radial_small(ir, site, spin) = radial_bases(site)%phi_small(ir, 3, spin) + &
+                  delta*radial_bases(site)%phidot_small(ir, 3, spin)
+               norm = norm + this%radial_measure(ir)*(this%metric_large(ir, site, spin)* &
+                  this%radial_large(ir, site, spin)**2 + this%radial_small(ir, site, spin)**2)
+            end do
+            if (.not. ieee_is_finite(norm) .or. norm <= tiny(1.0_rp) .or. &
+                any(.not. ieee_is_finite(this%radial_large(:, site, spin))) .or. &
+                any(.not. ieee_is_finite(this%radial_small(:, site, spin)))) then
+               error stop 'Juelich-d projector: non-finite or null EF radial projector'
+            end if
+            this%normalization(site, spin) = norm
+            this%radial_large(:, site, spin) = this%radial_large(:, site, spin)/sqrt(norm)
+            this%radial_small(:, site, spin) = this%radial_small(:, site, spin)/sqrt(norm)
+         end do
+      end do
+   end subroutine juelich_d_projector_initialize
+
+   module subroutine juelich_d_projector_project_state(this, radial_bases, state, projection)
+      class(juelich_d_projector), intent(in) :: this
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(lr_electronic_state), intent(in) :: state
+      type(juelich_d_state_projection), intent(out) :: projection
+      integer :: norb, first_d, site, spin, ib, ik, im, ir, iorb, offset
+      real(rp) :: delta, radial_overlap, scale
+
+      call state%validate('Juelich-d projection state')
+      if (this%nsite < 1 .or. this%npoint < 3 .or. .not. allocated(this%normalization) .or. &
+          size(radial_bases) /= this%nsite) error stop 'Juelich-d projection: uninitialized projector'
+      scale = max(1.0_rp, abs(state%fermi_level), abs(this%fermi_level))
+      if (abs(state%fermi_level - this%fermi_level) > 2.0e-11_rp*scale) then
+         error stop 'Juelich-d projection: projector and state Fermi energies differ'
+      end if
+      norb = (this%orbital_lmax + 1)**2
+      if (state%nbasis /= 2*this%nsite*norb .or. size(state%eigenvectors, 1) /= 2*this%nsite*norb .or. &
+          size(state%k_weights) < 1) error stop 'Juelich-d projection: reciprocal basis shape mismatch'
+      first_d = 2**2 + 1
+      allocate(projection%amplitudes(5, this%nsite, 2, state%nbands, state%nk))
+      projection%amplitudes = cmplx(0.0_rp, 0.0_rp, rp)
+      do ik = 1, state%nk
+         do ib = 1, state%nbands
+            do site = 1, this%nsite
+               offset = (site - 1)*2*norb
+               do spin = 1, 2
+                  delta = state%eigenvalues(ib, ik) - radial_bases(site)%enu_work(3, spin)
+                  radial_overlap = 0.0_rp
+                  do ir = 1, this%npoint
+                     radial_overlap = radial_overlap + this%radial_measure(ir)*( &
+                        this%metric_large(ir, site, spin)*this%radial_large(ir, site, spin)* &
+                        (radial_bases(site)%phi_large(ir, 3, spin) + delta*radial_bases(site)%phidot_large(ir, 3, spin)) + &
+                        this%radial_small(ir, site, spin)* &
+                        (radial_bases(site)%phi_small(ir, 3, spin) + delta*radial_bases(site)%phidot_small(ir, 3, spin)))
+                  end do
+                  do im = 1, 5
+                     iorb = first_d + im - 1
+                     projection%amplitudes(im, site, spin, ib, ik) = &
+                        state%eigenvectors(offset + (spin - 1)*norb + iorb, ib, ik)*radial_overlap
+                  end do
+               end do
+            end do
+         end do
+      end do
+   end subroutine juelich_d_projector_project_state
+
+   module subroutine juelich_d_projector_moment_from_state(this, radial_bases, state, moment)
+      class(juelich_d_projector), intent(in) :: this
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(lr_electronic_state), intent(in) :: state
+      real(rp), intent(out) :: moment(:)
+      type(juelich_d_state_projection) :: projection
+      real(rp) :: weight, projected_up, projected_down
+      integer :: site, ib, ik
+
+      if (size(moment) /= this%nsite) error stop 'Juelich-d moment: site extent mismatch'
+      call this%project_state(radial_bases, state, projection)
+      moment = 0.0_rp
+      do ik = 1, state%nk
+         weight = state%k_weights(ik)/sum(state%k_weights)
+         do ib = 1, state%nbands
+            do site = 1, this%nsite
+               projected_up = sum(abs(projection%amplitudes(:, site, 1, ib, ik))**2)
+               projected_down = sum(abs(projection%amplitudes(:, site, 2, ib, ik))**2)
+               moment(site) = moment(site) + weight*state%occupations(ib, ik)*(projected_up - projected_down)
+            end do
+         end do
+      end do
+      deallocate(projection%amplitudes)
+   end subroutine juelich_d_projector_moment_from_state
 
    module subroutine projected_site_spin_functional(this, product, functionals)
       class(projected_site_spin_contract), intent(in) :: this

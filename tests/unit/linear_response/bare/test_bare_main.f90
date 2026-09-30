@@ -5,6 +5,7 @@ program test_bare_main
    use test_product_eigenpair_gf_oracle_mod, only: run_test_product_eigenpair_gf_oracle
    use test_product_ks_susceptibility_mod, only: run_test_product_ks_susceptibility
    use test_projected_chi0_mod, only: run_test_projected_chi0
+   use test_juelich_d_reference_mod, only: run_test_juelich_d_reference
    use test_rs_gf_susceptibility_mod, only: run_test_rs_gf_susceptibility
    implicit none
 
@@ -28,6 +29,8 @@ program test_bare_main
       call run_test_product_ks_susceptibility()
    case ('projected_chi0')
       call run_test_projected_chi0()
+   case ('juelich_d_reference')
+      call run_test_juelich_d_reference()
    case ('rs_gf_susceptibility')
       call run_test_rs_gf_susceptibility()
    case default

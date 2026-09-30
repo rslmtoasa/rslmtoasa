@@ -897,6 +897,83 @@ contains
       end do
    end subroutine select_projected_juelich_eta_indices
 
+   !> Extrapolate the retarded static response.  For a finite accepted
+   !> eigenpair spectrum with equal occupations at exact degeneracy,
+   !> Re chi(eta)=chi(0)+O(eta^2) and Im chi(eta)=O(eta).  The physical
+   !> matrix is therefore the zero intercept of a linear fit in eta^2 to the
+   !> last four real-axis samples; the last-three intercept is the a-posteriori
+   !> convergence estimate.  No U(eta) fit enters this operation.
+   module subroutine extrapolate_juelich_static_chi0(eta_values, chi_eta, chi_static, relative_estimate, &
+                                                    relative_fit_residual, imaginary_ratio)
+      real(rp), intent(in) :: eta_values(:)
+      complex(rp), intent(in) :: chi_eta(:, :, :)
+      complex(rp), intent(out) :: chi_static(:, :)
+      real(rp), intent(out) :: relative_estimate, relative_fit_residual, imaginary_ratio
+      real(rp) :: x4(4), y4(4), x3(3), y3(3), intercept4, intercept3, slope4, slope3
+      real(rp) :: fit_error, fit_scale, static_scale, estimate_error
+      integer :: n, i, j, k
+
+      n = size(eta_values)
+      if (n < 4 .or. any(shape(chi_eta) /= [size(chi_eta, 1), size(chi_eta, 2), n]) .or. &
+          any(shape(chi_static) /= shape(chi_eta(:, :, 1))) .or. &
+          any(.not. ieee_is_finite(eta_values)) .or. any(eta_values <= 0.0_rp) .or. &
+          any(.not. ieee_is_finite(real(chi_eta, rp))) .or. any(.not. ieee_is_finite(aimag(chi_eta)))) then
+         error stop 'Juelich static eta limit: expected at least four finite positive-eta matrices'
+      end if
+      do i = 1, n - 1
+         if (eta_values(i) <= eta_values(i + 1)) then
+            error stop 'Juelich static eta limit: eta values must be strictly decreasing'
+         end if
+      end do
+
+      x4 = eta_values(n-3:n)**2
+      x3 = eta_values(n-2:n)**2
+      fit_error = 0.0_rp
+      fit_scale = max(maxval(abs(real(chi_eta(:, :, n-3:n), rp))), tiny(1.0_rp))
+      estimate_error = 0.0_rp
+      chi_static = cmplx(0.0_rp, 0.0_rp, rp)
+      do j = 1, size(chi_static, 2)
+         do i = 1, size(chi_static, 1)
+            y4 = real(chi_eta(i, j, n-3:n), rp)
+            y3 = real(chi_eta(i, j, n-2:n), rp)
+            call fit_static_eta_line(x4, y4, intercept4, slope4)
+            call fit_static_eta_line(x3, y3, intercept3, slope3)
+            chi_static(i, j) = cmplx(intercept4, 0.0_rp, rp)
+            estimate_error = max(estimate_error, abs(intercept4 - intercept3))
+            do k = 1, 4
+               fit_error = max(fit_error, abs(y4(k) - (intercept4 + slope4*x4(k))))
+            end do
+         end do
+      end do
+      static_scale = max(maxval(abs(real(chi_static, rp))), tiny(1.0_rp))
+      relative_estimate = estimate_error/static_scale
+      relative_fit_residual = fit_error/fit_scale
+      imaginary_ratio = maxval(abs(aimag(chi_eta(:, :, n))))/ &
+         max(maxval(abs(real(chi_eta(:, :, n), rp))), tiny(1.0_rp))
+      if (any(.not. ieee_is_finite(real(chi_static, rp))) .or. .not. ieee_is_finite(relative_estimate) .or. &
+          .not. ieee_is_finite(relative_fit_residual) .or. .not. ieee_is_finite(imaginary_ratio)) then
+         error stop 'Juelich static eta limit: non-finite extrapolation result'
+      end if
+   end subroutine extrapolate_juelich_static_chi0
+
+   pure subroutine fit_static_eta_line(x, y, intercept, slope)
+      real(rp), intent(in) :: x(:), y(:)
+      real(rp), intent(out) :: intercept, slope
+      real(rp) :: xbar, ybar, denominator
+      integer :: k
+
+      xbar = sum(x)/real(size(x), rp)
+      ybar = sum(y)/real(size(y), rp)
+      denominator = sum((x - xbar)**2)
+      if (denominator <= tiny(1.0_rp)) error stop 'Juelich eta fit: singular eta^2 abscissae'
+      slope = 0.0_rp
+      do k = 1, size(x)
+         slope = slope + (x(k) - xbar)*(y(k) - ybar)
+      end do
+      slope = slope/denominator
+      intercept = ybar - slope*xbar
+   end subroutine fit_static_eta_line
+
    module subroutine evaluate_projected_juelich_interaction(request, result)
       type(projected_juelich_request), intent(in) :: request
       type(projected_juelich_result), intent(out) :: result
@@ -1042,7 +1119,7 @@ contains
       integer, intent(out) :: nsite
 
       nsite = size(request%projected_moment)
-      if (nsite < 1 .or. any(shape(request%static_chi0) /= [nsite, nsite]) .or. request%static_eta <= 0.0_rp .or. &
+      if (nsite < 1 .or. any(shape(request%static_chi0) /= [nsite, nsite]) .or. request%static_eta < 0.0_rp .or. &
           len_trim(request%selector) == 0 .or. len_trim(request%channel) == 0) then
          error stop 'DRESP-05 Juelich: invalid projected request'
       end if

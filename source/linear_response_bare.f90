@@ -3,6 +3,7 @@
 !------------------------------------------------------------------------------
 submodule (linear_response_mod) linear_response_bare
    use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use precision_mod, only: rp
    use basis_mod, only: nb, spin_off
    use math_mod, only: i_unit
@@ -1493,6 +1494,80 @@ contains
       deallocate(transition)
       if (allocated(k_response)) deallocate(k_response)
    end subroutine evaluate_projected_lehmann_chi0
+
+   ! --- from lr_juelich_d_projected_chi0_mod ---
+
+   module subroutine evaluate_juelich_d_lehmann_chi0(projector, radial_bases, left_state, right_state, q, &
+                                                      frequencies, eta, susceptibility)
+      type(juelich_d_projector), intent(in) :: projector
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(lr_electronic_state), intent(in) :: left_state, right_state
+      real(rp), intent(in) :: q(3), frequencies(:), eta
+      complex(rp), intent(out) :: susceptibility(:, :, :)
+
+      type(juelich_d_state_projection) :: left_projection, right_projection
+      complex(rp), allocatable :: transition(:)
+      complex(rp) :: denominator, pair_factor
+      real(rp) :: occupation_difference, weight_sum, k_weight, expected_k(3), scale
+      integer :: ik, ib, jb, ifrequency, site
+
+      call left_state%validate('Juelich-d chi0:left state')
+      call right_state%validate('Juelich-d chi0:q endpoint')
+      if (eta <= 0.0_rp .or. .not. ieee_is_finite(eta) .or. size(frequencies) < 1 .or. &
+          any(.not. ieee_is_finite(frequencies)) .or. any(shape(susceptibility) /= &
+          [projector%nsite, projector%nsite, size(frequencies)])) then
+         error stop 'Juelich-d chi0: invalid eta, frequency grid, or site matrix shape'
+      end if
+      if (left_state%nbands /= right_state%nbands .or. left_state%nk /= right_state%nk .or. &
+          left_state%nbasis /= right_state%nbasis .or. size(left_state%k_weights) /= size(right_state%k_weights)) then
+         error stop 'Juelich-d chi0: accepted state and endpoint dimensions differ'
+      end if
+      scale = max(1.0_rp, abs(left_state%fermi_level), abs(right_state%fermi_level), &
+         abs(left_state%temperature), abs(right_state%temperature))
+      if (abs(left_state%fermi_level - right_state%fermi_level) > 2.0e-11_rp*scale .or. &
+          abs(left_state%temperature - right_state%temperature) > 2.0e-11_rp*scale) then
+         error stop 'Juelich-d chi0: endpoint Fermi state provenance differs'
+      end if
+      do ik = 1, left_state%nk
+         expected_k = fold_fractional_kpoint(left_state%k_points(:, ik) + q)
+         if (maxval(abs(expected_k - right_state%k_points(:, ik))) > endpoint_match_tolerance) then
+            error stop 'Juelich-d chi0: endpoint is not the requested folded k+q state'
+         end if
+      end do
+
+      call projector%project_state(radial_bases, left_state, left_projection)
+      call projector%project_state(radial_bases, right_state, right_projection)
+      allocate(transition(projector%nsite))
+      susceptibility = cmplx(0.0_rp, 0.0_rp, rp)
+      weight_sum = sum(left_state%k_weights)
+      if (weight_sum <= 0.0_rp) error stop 'Juelich-d chi0: k weights have nonpositive sum'
+      do ik = 1, left_state%nk
+         k_weight = left_state%k_weights(ik)/weight_sum
+         do ib = 1, left_state%nbands
+            do jb = 1, right_state%nbands
+               occupation_difference = left_state%occupations(ib, ik) - right_state%occupations(jb, ik)
+               if (occupation_difference == 0.0_rp) cycle
+               do site = 1, projector%nsite
+                  transition(site) = sum(conjg(left_projection%amplitudes(:, site, 1, ib, ik))* &
+                     right_projection%amplitudes(:, site, 2, jb, ik))
+               end do
+               do ifrequency = 1, size(frequencies)
+                  denominator = cmplx(frequencies(ifrequency) + left_state%eigenvalues(ib, ik) - &
+                     right_state%eigenvalues(jb, ik), eta, rp)
+                  ! Eq. 2 is one spin-flip Green-function bubble (unit matrix
+                  ! element). Eq. 22 supplies the angular 4*pi contraction.
+                  pair_factor = cmplx(4.0_rp*response_angular_pi*k_weight, 0.0_rp, rp)* &
+                     occupation_difference/denominator
+                  do site = 1, projector%nsite
+                     susceptibility(:, site, ifrequency) = susceptibility(:, site, ifrequency) + &
+                        pair_factor*transition*conjg(transition(site))
+                  end do
+               end do
+            end do
+         end do
+      end do
+      deallocate(transition, left_projection%amplitudes, right_projection%amplitudes)
+   end subroutine evaluate_juelich_d_lehmann_chi0
 
    !> Independent finite-width spectral-function oracle for DRESP-02C.
    !>

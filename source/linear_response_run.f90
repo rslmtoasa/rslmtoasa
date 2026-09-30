@@ -986,9 +986,177 @@ contains
    end subroutine run_tddft_projected_mills
 
    !> DRESP-05 material seam.  The static Gamma response constructs a frozen
-   !> real site-diagonal Juelich interaction; the dynamic loop then evaluates
-   !> bare, Mills, and Juelich routes on exactly the same accepted state.
+   !> Literature-traceable Juelich-d route. The projector is frozen at EF,
+   !> the interaction comes from the eta->0+ static response, and that one U
+   !> is then used for the requested site-space Dyson response.
    subroutine run_tddft_projected_juelich(config, response_space, radial_bases, ground_states, left_state, endpoints, &
+                                          reciprocal_obj, lattice_obj)
+      type(tddft_runtime_config), intent(in) :: config
+      type(response_space_layout), target, intent(in) :: response_space
+      type(lmto_radial_basis), target, intent(in) :: radial_bases(:)
+      type(radial_ground_state), target, intent(in) :: ground_states(:)
+      type(lr_electronic_state), target, intent(in) :: left_state
+      type(lr_electronic_state), target, intent(in) :: endpoints(:)
+      type(reciprocal), intent(in) :: reciprocal_obj
+      type(lattice), intent(in) :: lattice_obj
+
+      type(juelich_d_projector) :: projector
+      type(projected_juelich_request) :: interaction_request
+      type(projected_juelich_result), allocatable :: eta_results(:)
+      type(projected_juelich_result) :: static_result
+      type(projected_dyson_request) :: dyson_request
+      type(projected_dyson_result) :: dyson_result
+      real(rp), allocatable :: moment(:)
+      complex(rp), allocatable :: chi_eta(:, :, :), chi_static(:, :), chi_dynamic(:, :, :), denominator(:, :), action(:)
+      real(rp) :: relative_estimate, fit_residual, imaginary_ratio, u_eta_relative, u_eta_imaginary
+      real(rp) :: moment_norm, eta, value
+      integer :: gamma_index, nsite, neta, ieta, iq, unit, i, j, iw
+
+      nsite = size(radial_bases)
+      neta = size(config%eta_values)
+      if (trim(config%projected_selector) /= 'd' .or. trim(config%channel) /= lr_channel_plus) then
+         error stop 'Juelich-d requires projection=d and channel=chi_plus'
+      end if
+      if (nsite < 1 .or. lattice_obj%nrec /= nsite .or. response_space%nsite /= nsite .or. &
+          size(endpoints) /= size(config%q_list, 2) .or. neta < 4 .or. size(ground_states) /= nsite) then
+         error stop 'Juelich-d material seam: inconsistent accepted-state/site dimensions or eta ladder'
+      end if
+      if (any(.not. ieee_is_finite(config%eta_values)) .or. any(config%eta_values <= 0.0_rp)) then
+         error stop 'Juelich-d static interaction requires finite positive eta values'
+      end if
+      do ieta = 1, neta - 1
+         if (config%eta_values(ieta) <= config%eta_values(ieta + 1)) then
+            error stop 'Juelich-d static interaction requires a strictly decreasing eta ladder'
+         end if
+      end do
+      gamma_index = find_gamma_q_index(config%q_list)
+      if (gamma_index == 0) error stop 'Juelich-d static interaction requires Gamma'
+      if (size(config%frequencies) < 1) error stop 'Juelich-d requires a nonempty frequency grid'
+
+      call projector%initialize(radial_bases, left_state%fermi_level)
+      allocate(moment(nsite), chi_eta(nsite, nsite, neta), chi_static(nsite, nsite), eta_results(neta))
+      call projector%moment_from_state(radial_bases, left_state, moment)
+      do ieta = 1, neta
+         eta = config%eta_values(ieta)
+         call evaluate_juelich_d_lehmann_chi0(projector, radial_bases, left_state, endpoints(gamma_index), &
+            config%q_list(:, gamma_index), [0.0_rp], eta, chi_eta(:, :, ieta:ieta))
+         interaction_request%selector = 'd'
+         interaction_request%projected_moment = moment
+         interaction_request%static_chi0 = chi_eta(:, :, ieta)
+         interaction_request%static_eta = eta
+         interaction_request%q = config%q_list(:, gamma_index)
+         interaction_request%channel = lr_channel_plus
+         interaction_request%state_provenance = 'accepted reciprocal state; frozen normalized R_d(EF) projection'
+         interaction_request%chi0_provenance = 'Lounis Eq. 2/22 Lehmann bubble at positive eta; diagnostic U(eta) only'
+         call evaluate_projected_juelich_interaction(interaction_request, eta_results(ieta))
+      end do
+
+      call extrapolate_juelich_static_chi0(config%eta_values, chi_eta, chi_static, relative_estimate, &
+         fit_residual, imaginary_ratio)
+      interaction_request%static_chi0 = chi_static
+      interaction_request%static_eta = 0.0_rp
+      interaction_request%state_provenance = 'accepted reciprocal state; eta->0+ extrapolated frozen d projection'
+      interaction_request%chi0_provenance = 'Re chi0 fitted linearly in eta^2 from final four retarded eta samples'
+      call evaluate_projected_juelich_interaction(interaction_request, static_result)
+      if (static_result%rank /= nsite .or. static_result%real_rank /= nsite .or. &
+          static_result%condition_number > projected_juelich_condition_limit .or. &
+          static_result%real_condition_number > projected_juelich_condition_limit .or. &
+          static_result%relative_real_constrained_residual > projected_juelich_residual_tolerance) then
+         error stop 'BLOCKED - JUELICH STATIC LIMIT NOT CLOSED: static Gamma U=M solve is unsupported'
+      end if
+      u_eta_relative = maxval(abs(real(eta_results(neta)%interaction_U_complex, rp) - static_result%interaction_U_real))/ &
+         max(maxval(abs(static_result%interaction_U_real)), tiny(1.0_rp))
+      u_eta_imaginary = maxval(abs(aimag(eta_results(neta)%interaction_U_complex)))/ &
+         max(maxval(abs(real(eta_results(neta)%interaction_U_complex, rp))), tiny(1.0_rp))
+      if (relative_estimate > 5.0e-3_rp .or. fit_residual > 1.0e-2_rp .or. imaginary_ratio > 5.0e-3_rp .or. &
+          u_eta_relative > 5.0e-3_rp .or. u_eta_imaginary > 5.0e-3_rp) then
+         error stop 'BLOCKED - JUELICH STATIC LIMIT NOT CLOSED: eta extrapolation or U(eta) has not converged'
+      end if
+
+      allocate(denominator(nsite, nsite), action(nsite))
+      denominator = -chi_static*spread(static_result%interaction_U_real, 1, nsite)
+      do i = 1, nsite
+         denominator(i, i) = denominator(i, i) + cmplx(1.0_rp, 0.0_rp, rp)
+      end do
+      action = matmul(denominator, cmplx(moment, 0.0_rp, rp))
+      moment_norm = sqrt(sum(moment**2))
+      value = sqrt(sum(abs(action)**2))/max(moment_norm, tiny(1.0_rp))
+
+      open(newunit=unit, file=trim(config%output_file), status='replace', action='write')
+      write(unit, '(a)') '# method = Juelich-d (Lounis et al. PRB 83, 035109 (2011), Eqs. 2, 22, 40-47)'
+      write(unit, '(a)') '# state_source = accepted_kspace_scf_cache; accepted state is reused without re-SCF'
+      write(unit, '(a)') '# accepted_state_cache_reused = T'
+      write(unit, '(a,i0)') '# nk = ', left_state%nk
+      write(unit, '(a,3(i0,1x))') '# k_mesh = ', reciprocal_obj%nk_mesh
+      write(unit, '(a,es24.16)') '# fermi_level_Ry = ', left_state%fermi_level
+      write(unit, '(a,es24.16)') '# temperature_K = ', left_state%temperature
+      write(unit, '(a)') '# spin convention = M_d = mu_B*(n_up_d - n_down_d); code moment unit is mu_B'
+      write(unit, '(a)') '# frozen radial projector = phi_d + (EF-enu_work)*phidot_d, separately for up/down'
+      write(unit, '(a)') '# projector measure = log-mesh Simpson dr with scalar-relativistic large/small metric at EF'
+      write(unit, '(a)') '# angular convention = unit-normalized complex Y_lm; 4*pi from Eq. 22; Eq. 2 spin-flip factor = 1'
+      write(unit, '(a,*(es24.16,1x))') '# projector_norm_up = ', projector%normalization(:, 1)
+      write(unit, '(a,*(es24.16,1x))') '# projector_norm_down = ', projector%normalization(:, 2)
+      write(unit, '(a,*(es24.16,1x))') '# projected_d_moment_muB = ', moment
+      write(unit, '(a,es24.16)') '# static_eta_fit_relative_estimate = ', relative_estimate
+      write(unit, '(a,es24.16)') '# static_eta_fit_relative_residual = ', fit_residual
+      write(unit, '(a,es24.16)') '# smallest_eta_imaginary_chi_ratio = ', imaginary_ratio
+      write(unit, '(a,es24.16)') '# smallest_eta_U_relative_to_static = ', u_eta_relative
+      write(unit, '(a,es24.16)') '# smallest_eta_U_imaginary_ratio = ', u_eta_imaginary
+      write(unit, '(a,i0)') '# static_sumrule_rank = ', static_result%rank
+      write(unit, '(a,es24.16)') '# static_sumrule_condition = ', static_result%condition_number
+      write(unit, '(a,*(es24.16,1x))') '# U_Juelich_d_static_energy_per_muB = ', static_result%interaction_U_real
+      write(unit, '(a,es24.16)') '# static_sumrule_relative_residual = ', static_result%relative_real_constrained_residual
+      write(unit, '(a,es24.16)') '# Dyson_denominator_magnetic_mode_relative_action = ', value
+      write(unit, '(a)') '# CHI0_STATIC columns: row col Re Im'
+      do i = 1, nsite
+         do j = 1, nsite
+            write(unit, '(a,1x,i0,1x,i0,1x,2(es24.16,1x))') 'CHI0_STATIC', i, j, &
+               real(chi_static(i, j), rp), aimag(chi_static(i, j))
+         end do
+      end do
+      write(unit, '(a)') '# JUELICH_ETA columns: eta U_Re U_Im rank condition complex_residual real_constraint_residual'
+      do ieta = 1, neta
+         write(unit, '(a,1x,3(es24.16,1x),i0,1x,3(es24.16,1x))') 'JUELICH_ETA', config%eta_values(ieta), &
+            real(eta_results(ieta)%interaction_U_complex(1), rp), aimag(eta_results(ieta)%interaction_U_complex(1)), &
+            eta_results(ieta)%rank, eta_results(ieta)%condition_number, eta_results(ieta)%relative_residual, &
+            eta_results(ieta)%relative_real_constrained_residual
+      end do
+      write(unit, '(a)') '# DYNAMICS columns: eta q_index omega row col chi0_Re chi0_Im chi_Re chi_Im min_sv condition dyson_residual'
+      allocate(chi_dynamic(nsite, nsite, size(config%frequencies)), dyson_request%interaction_U(nsite))
+      dyson_request%selector = 'd'
+      dyson_request%channel = lr_channel_plus
+      dyson_request%interaction_U = static_result%interaction_U_real
+      dyson_request%interaction_provenance = 'Eq. 47 interaction from extrapolated Juelich-d static chi0'
+      do ieta = 1, neta
+         do iq = 1, size(config%q_list, 2)
+            call evaluate_juelich_d_lehmann_chi0(projector, radial_bases, left_state, endpoints(iq), &
+               config%q_list(:, iq), config%frequencies, config%eta_values(ieta), chi_dynamic)
+            dyson_request%q = config%q_list(:, iq)
+            dyson_request%frequencies = config%frequencies
+            dyson_request%eta = config%eta_values(ieta)
+            dyson_request%bare_chi = chi_dynamic
+            dyson_request%bare_provenance = 'Eq. 2 spin-flip Lehmann bubble with frozen normalized d projector'
+            call evaluate_projected_dyson(dyson_request, dyson_result)
+            do iw = 1, size(config%frequencies)
+               do i = 1, nsite
+                  do j = 1, nsite
+                     write(unit, '(a,1x,5(i0,1x),7(es24.16,1x),i0)') 'JUELICH_DYNAMICS', ieta, iq, iw, i, j, &
+                        real(chi_dynamic(i, j, iw), rp), aimag(chi_dynamic(i, j, iw)), &
+                        real(dyson_result%enhanced_chi(i, j, iw), rp), aimag(dyson_result%enhanced_chi(i, j, iw)), &
+                        dyson_result%denominator_min_singular_value(iw), dyson_result%condition_number(iw), &
+                        dyson_result%dyson_residual_relative(iw), dyson_result%solve_info(iw)
+                  end do
+               end do
+            end do
+         end do
+      end do
+      close(unit)
+      deallocate(moment, chi_eta, chi_static, chi_dynamic, denominator, action, eta_results, dyson_request%interaction_U)
+   end subroutine run_tddft_projected_juelich
+
+   !> Previous finite-eta energy-dependent diagnostic retained for provenance;
+   !> it is not called by the certified Juelich-d route.
+   subroutine run_tddft_projected_juelich_legacy_diagnostic(config, response_space, radial_bases, ground_states, left_state, endpoints, &
                                           reciprocal_obj, lattice_obj)
       type(tddft_runtime_config), intent(in) :: config
       type(response_space_layout), target, intent(in) :: response_space
@@ -1272,7 +1440,7 @@ contains
       end do
       close(unit)
       deallocate(moment, selected_static_chi)
-   end subroutine run_tddft_projected_juelich
+   end subroutine run_tddft_projected_juelich_legacy_diagnostic
 
    !> DRESP-06A same-state comparison seam.  Mills and Juelich remain site
    !> scalar comparison routes; the ALSDA route is solved in the complete

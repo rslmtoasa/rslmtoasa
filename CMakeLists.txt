@@ -818,6 +818,7 @@ if (RUN_UNIT_TESTS)
   set(_lr_bare_sources
     ${TestDIR}/unit/linear_response/bare/test_eigenpair_gf_oracle.f90
     ${TestDIR}/unit/linear_response/bare/test_eigenpair_gf_quadrature.f90
+    ${TestDIR}/unit/linear_response/bare/test_juelich_d_reference.f90
     ${TestDIR}/unit/linear_response/bare/test_ks_susceptibility.f90
     ${TestDIR}/unit/linear_response/bare/test_product_eigenpair_gf_oracle.f90
     ${TestDIR}/unit/linear_response/bare/test_product_ks_susceptibility.f90
@@ -834,6 +835,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrRsGfSusceptibility PROPERTIES LABELS "unit;linear_response;bare")
   add_test(NAME UnitLrProjectedChi0 COMMAND $<TARGET_FILE:UnitLrBare> projected_chi0)
   set_tests_properties(UnitLrProjectedChi0 PROPERTIES LABELS "unit;linear_response;bare")
+  add_test(NAME UnitLrJuelichDReference COMMAND $<TARGET_FILE:UnitLrBare> juelich_d_reference)
+  set_tests_properties(UnitLrJuelichDReference PROPERTIES LABELS "unit;linear_response;juelich;d-projector;independent-oracle")
   add_test(NAME UnitLrEigenpairGfOracle COMMAND $<TARGET_FILE:UnitLrBare> eigenpair_gf_oracle)
   set_tests_properties(UnitLrEigenpairGfOracle PROPERTIES LABELS "unit;linear_response;bare")
   add_test(NAME UnitLrEigenpairGfQuadrature COMMAND $<TARGET_FILE:UnitLrBare> eigenpair_gf_quadrature)
@@ -975,10 +978,10 @@ if (RUN_UNIT_TESTS)
     LABELS "integration;linear_response;tddft;lr-ref-04b;scf;accepted-state;reciprocal;full-response;research;slow"
     TIMEOUT 900)
   add_test(NAME LinearResponseProjectedJuelich
-    COMMAND ${TestBinary} input_dresp05_fe.nml
+    COMMAND ${TestBinary} input_juelich_d_reference.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
-  set_tests_properties(LinearResponseProjectedJuelich PROPERTIES
-    LABELS "integration;linear_response;projected;dresp-05;juelich;mills;same-state;accepted-state"
+set_tests_properties(LinearResponseProjectedJuelich PROPERTIES
+    LABELS "integration;linear_response;projected;juelich-d;static-limit;accepted-state"
     TIMEOUT 720)
   add_test(NAME LinearResponseFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml

@@ -489,6 +489,31 @@ module linear_response_mod
       procedure :: core_spin_number => projected_core_spin_number
    end type projected_site_spin_contract
 
+   !> Literature-specific local d projector used by the Lounis et al. site
+   !> construction.  The radial large/small components are frozen at EF and
+   !> normalized in the scalar-relativistic logarithmic-mesh metric.
+   type, public :: juelich_d_projector
+      integer :: nsite = 0
+      integer :: npoint = 0
+      integer :: orbital_lmax = -1
+      real(rp) :: fermi_level = 0.0_rp
+      real(rp), allocatable :: radial_measure(:)
+      real(rp), allocatable :: metric_large(:, :, :)
+      real(rp), allocatable :: radial_large(:, :, :)
+      real(rp), allocatable :: radial_small(:, :, :)
+      real(rp), allocatable :: normalization(:, :)
+   contains
+      procedure :: initialize => juelich_d_projector_initialize
+      procedure :: project_state => juelich_d_projector_project_state
+      procedure :: moment_from_state => juelich_d_projector_moment_from_state
+   end type juelich_d_projector
+
+   !> Band-resolved projection amplitudes P_{i,m,sigma}(n,k) built from the
+   !> frozen Juelich-d projector.  m is the five-fold d magnetic channel.
+   type, public :: juelich_d_state_projection
+      complex(rp), allocatable :: amplitudes(:, :, :, :, :) ! (m,site,spin,band,k)
+   end type juelich_d_state_projection
+
    ! --- from lr_ks_susceptibility_mod ---
 
 
@@ -1227,6 +1252,8 @@ module linear_response_mod
    public :: evaluate_projected_juelich_holdout
    public :: assess_projected_juelich_eta_stability
    public :: select_projected_juelich_eta_indices
+   public :: evaluate_juelich_d_lehmann_chi0
+   public :: extrapolate_juelich_static_chi0
    public :: compact_project_point_vector
    public :: compact_reconstruct_point_vector
    public :: compact_project_local_operator
@@ -1495,6 +1522,23 @@ module linear_response_mod
          type(projected_juelich_request), intent(in) :: request
          type(projected_juelich_result), intent(out) :: result
       end subroutine evaluate_projected_juelich_interaction
+
+      module subroutine evaluate_juelich_d_lehmann_chi0(projector, radial_bases, left_state, right_state, q, &
+                                                         frequencies, eta, susceptibility)
+         type(juelich_d_projector), intent(in) :: projector
+         type(lmto_radial_basis), intent(in) :: radial_bases(:)
+         type(lr_electronic_state), intent(in) :: left_state, right_state
+         real(rp), intent(in) :: q(3), frequencies(:), eta
+         complex(rp), intent(out) :: susceptibility(:, :, :)
+      end subroutine evaluate_juelich_d_lehmann_chi0
+
+      module subroutine extrapolate_juelich_static_chi0(eta_values, chi_eta, chi_static, relative_estimate, &
+                                                        relative_fit_residual, imaginary_ratio)
+         real(rp), intent(in) :: eta_values(:)
+         complex(rp), intent(in) :: chi_eta(:, :, :)
+         complex(rp), intent(out) :: chi_static(:, :)
+         real(rp), intent(out) :: relative_estimate, relative_fit_residual, imaginary_ratio
+      end subroutine extrapolate_juelich_static_chi0
 
       module subroutine evaluate_projected_juelich_holdout(static_chi0, projected_moment, interaction_U, residual, &
          relative_residual)
@@ -2271,6 +2315,26 @@ module linear_response_mod
       type(radial_ground_state), intent(in) :: ground_states(:)
       real(rp), intent(out) :: core_spin(:)
       end subroutine projected_core_spin_number
+
+      module subroutine juelich_d_projector_initialize(this, radial_bases, fermi_level)
+      class(juelich_d_projector), intent(out) :: this
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      real(rp), intent(in) :: fermi_level
+      end subroutine juelich_d_projector_initialize
+
+      module subroutine juelich_d_projector_project_state(this, radial_bases, state, projection)
+      class(juelich_d_projector), intent(in) :: this
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(lr_electronic_state), intent(in) :: state
+      type(juelich_d_state_projection), intent(out) :: projection
+      end subroutine juelich_d_projector_project_state
+
+      module subroutine juelich_d_projector_moment_from_state(this, radial_bases, state, moment)
+      class(juelich_d_projector), intent(in) :: this
+      type(lmto_radial_basis), intent(in) :: radial_bases(:)
+      type(lr_electronic_state), intent(in) :: state
+      real(rp), intent(out) :: moment(:)
+      end subroutine juelich_d_projector_moment_from_state
 
       ! --- from lr_kl_hessian ---
       module subroutine lmto_fixture_init(this, nsite, norb, nbond, hoh)
