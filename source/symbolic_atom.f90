@@ -59,6 +59,8 @@ module symbolic_atom_mod
       !>
       !> Specify the number of rigid band calculation used
       integer :: rb
+      !> Set from &self, indexed by nbulk + self-consistent atom index.
+      logical :: force_nonmagnetic = .false.
       ! TODO
       ! From common_cnstr
       real(rp), dimension(3) :: mag_cfield, mag_cfield_diff
@@ -81,6 +83,7 @@ module symbolic_atom_mod
       procedure :: B
       procedure :: rho0
       procedure :: predls
+      procedure :: enforce_nonmagnetic
       procedure :: build_pot
       procedure :: d_matrix
       procedure :: disp_matrix
@@ -160,9 +163,21 @@ contains
       call this%potential%restore_to_default()
    end subroutine restore_to_default
 
+   subroutine enforce_nonmagnetic(this)
+      class(symbolic_atom), intent(inout) :: this
+      if (.not. this%force_nonmagnetic) return
+      call this%potential%symmetrize_band_moments()
+      call this%potential%symmetrize_parameters()
+      call this%potential%clear_spin_moment()
+      this%mag_cfield = 0.0_rp
+      this%mag_cfield_diff = 0.0_rp
+   end subroutine enforce_nonmagnetic
+
    subroutine build_pot(this)
       class(symbolic_atom), intent(inout) :: this
       integer :: i
+
+      call this%enforce_nonmagnetic()
 
       ! Setting the potential parameters
       ! Imaginary part is set to 0
@@ -236,6 +251,7 @@ contains
             this%potential%dele(i - 1, j) = dele(i, j)
          end do
       end do
+      if (this%force_nonmagnetic) call this%potential%symmetrize_parameters()
    end subroutine predls
 
    subroutine d_matrix(this, mat, e)

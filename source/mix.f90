@@ -275,6 +275,10 @@ contains
       character(len=*), intent(in) :: whereto
       integer :: i, it
 
+      do it = 1, this%lattice%nrec
+         if (this%symbolic_atom(this%lattice%nbulk + it)%force_nonmagnetic) &
+            call this%symbolic_atom(this%lattice%nbulk + it)%potential%symmetrize_band_moments()
+      end do
       select case (whereto)
 
       case ('old')
@@ -355,7 +359,11 @@ contains
       integer :: ia ! Self-consistent atom index
 
       ! Calculate the mixed magnetic moments
-      do ia = 1, this%lattice%nrec 
+      do ia = 1, this%lattice%nrec
+         if (this%symbolic_atom(this%lattice%nbulk + ia)%force_nonmagnetic) then
+            mag_mix(ia, :) = [0.0_rp, 0.0_rp, 1.0_rp]
+            cycle
+         end if
          if (mtot(ia + this%lattice%nbulk) < 0.5d0) then
             this%is_induced(ia) = .true.
             !this%magbeta(ia) = 0.0d0
@@ -381,7 +389,7 @@ contains
       real(rp), dimension(this%lattice%nrec, 18), intent(in) :: qia_old, qia_new
       real(rp), dimension(this%lattice%nrec, 18) :: qi_to, qi_tn ! Local variables for broyden mixing
       real(rp) :: delta_atom
-      integer :: ia ! Atom index
+      integer :: ia, offset ! Atom index and packed spin-pair offset
       logical :: reset
       real(rp) :: Bnorm
 
@@ -397,6 +405,15 @@ contains
          this%qia(:, :) = qi_to(:, :)
          bnorm = bnorm**0.5d0
       end select
+      ! Also project mixer output, protecting against accumulated roundoff.
+      do ia = 1, this%lattice%nrec
+         if (.not. this%symbolic_atom(this%lattice%nbulk + ia)%force_nonmagnetic) cycle
+         do offset = 0, 12, 6
+            this%qia(ia, offset+1:offset+3) = &
+               0.5_rp*(this%qia(ia, offset+1:offset+3) + this%qia(ia, offset+4:offset+6))
+            this%qia(ia, offset+4:offset+6) = this%qia(ia, offset+1:offset+3)
+         end do
+      end do
       this%charge%dq(:) = 0.0d0
       do ia = 1, this%lattice%nrec
          this%charge%trq = 0.0d0

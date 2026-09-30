@@ -330,3 +330,26 @@ if(WIN32)
    set(CPACK_WIX_VERSION "4")
    endif()
 include(CPack)
+option(RUN_NONMAGNETIC_TESTS "Test per-atom nonmagnetic SCF constraints" OFF)
+if(RUN_NONMAGNETIC_TESTS)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_executable(nonmagnetic_projection tests/nonmagnetic/projection.f90)
+  get_target_property(_nonmag_links ${PROJECT_BINARY} LINK_LIBRARIES)
+  target_link_libraries(nonmagnetic_projection ${_nonmag_links})
+  add_test(NAME Nonmagnetic_projection COMMAND nonmagnetic_projection)
+  foreach(_nsp 1 4)
+    add_test(NAME Nonmagnetic_SCF_nsp${_nsp}
+      COMMAND ${Python3_EXECUTABLE} ${TestDIR}/nonmagnetic/run_scf.py
+        --binary $<TARGET_FILE:${PROJECT_BINARY}>
+        --workdir ${CMAKE_BINARY_DIR}/nonmagnetic/nsp${_nsp} --nsp ${_nsp})
+    set_tests_properties(Nonmagnetic_SCF_nsp${_nsp} PROPERTIES TIMEOUT 720)
+  endforeach()
+  if(ENABLE_MPI)
+    add_test(NAME Nonmagnetic_SCF_MPI
+      COMMAND ${Python3_EXECUTABLE} ${TestDIR}/nonmagnetic/run_scf.py
+        --binary $<TARGET_FILE:${PROJECT_BINARY}>
+        --workdir ${CMAKE_BINARY_DIR}/nonmagnetic/mpi --nsp 4
+        --mpi-exec ${MPIEXEC_EXECUTABLE} --ranks 2)
+    set_tests_properties(Nonmagnetic_SCF_MPI PROPERTIES TIMEOUT 720)
+  endif()
+endif()
