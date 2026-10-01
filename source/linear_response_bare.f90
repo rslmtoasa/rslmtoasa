@@ -1554,10 +1554,10 @@ contains
                do ifrequency = 1, size(frequencies)
                   denominator = cmplx(frequencies(ifrequency) + left_state%eigenvalues(ib, ik) - &
                      right_state%eigenvalues(jb, ik), eta, rp)
-                  ! Eq. 2 is one spin-flip Green-function bubble (unit matrix
-                  ! element). Eq. 22 supplies the angular 4*pi contraction.
-                  pair_factor = cmplx(4.0_rp*response_angular_pi*k_weight, 0.0_rp, rp)* &
-                     occupation_difference/denominator
+                  ! The normalized d(EF) projection already defines the site
+                  ! coefficient used by Eq. 47: one spin-flip channel and no
+                  ! additional spatial angular-contraction factor.
+                  pair_factor = cmplx(k_weight, 0.0_rp, rp)*occupation_difference/denominator
                   do site = 1, projector%nsite
                      susceptibility(:, site, ifrequency) = susceptibility(:, site, ifrequency) + &
                         pair_factor*transition*conjg(transition(site))

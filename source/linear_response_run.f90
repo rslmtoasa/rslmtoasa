@@ -1010,7 +1010,7 @@ contains
       complex(rp), allocatable :: chi_eta(:, :, :), chi_static(:, :), chi_dynamic(:, :, :), denominator(:, :), action(:)
       real(rp) :: relative_estimate, fit_residual, imaginary_ratio, u_eta_relative, u_eta_imaginary
       real(rp) :: moment_norm, eta, value
-      integer :: gamma_index, nsite, neta, ieta, iq, unit, i, j, iw
+      integer :: gamma_index, nsite, neta, ieta, iq, unit, i, j, iw, isite
 
       nsite = size(radial_bases)
       neta = size(config%eta_values)
@@ -1093,7 +1093,7 @@ contains
       write(unit, '(a)') '# spin convention = M_d = mu_B*(n_up_d - n_down_d); code moment unit is mu_B'
       write(unit, '(a)') '# frozen radial projector = phi_d + (EF-enu_work)*phidot_d, separately for up/down'
       write(unit, '(a)') '# projector measure = log-mesh Simpson dr with scalar-relativistic large/small metric at EF'
-      write(unit, '(a)') '# angular convention = unit-normalized complex Y_lm; 4*pi from Eq. 22; Eq. 2 spin-flip factor = 1'
+      write(unit, '(a)') '# angular convention = unit-normalized Y_lm; Eq. 47 site chi0: no extra 4*pi; spin-flip factor = 1'
       write(unit, '(a,*(es24.16,1x))') '# projector_norm_up = ', projector%normalization(:, 1)
       write(unit, '(a,*(es24.16,1x))') '# projector_norm_down = ', projector%normalization(:, 2)
       write(unit, '(a,*(es24.16,1x))') '# projected_d_moment_muB = ', moment
@@ -1114,12 +1114,15 @@ contains
                real(chi_static(i, j), rp), aimag(chi_static(i, j))
          end do
       end do
-      write(unit, '(a)') '# JUELICH_ETA columns: eta U_Re U_Im rank condition complex_residual real_constraint_residual'
+      write(unit, '(a)') '# JUELICH_ETA columns: eta site U_Re U_Im rank condition complex_residual real_constraint_residual'
       do ieta = 1, neta
-         write(unit, '(a,1x,3(es24.16,1x),i0,1x,3(es24.16,1x))') 'JUELICH_ETA', config%eta_values(ieta), &
-            real(eta_results(ieta)%interaction_U_complex(1), rp), aimag(eta_results(ieta)%interaction_U_complex(1)), &
-            eta_results(ieta)%rank, eta_results(ieta)%condition_number, eta_results(ieta)%relative_residual, &
-            eta_results(ieta)%relative_real_constrained_residual
+         do isite = 1, nsite
+            write(unit, '(a,1x,es24.16,1x,i0,1x,2(es24.16,1x),i0,1x,3(es24.16,1x))') 'JUELICH_ETA', &
+               config%eta_values(ieta), isite, real(eta_results(ieta)%interaction_U_complex(isite), rp), &
+               aimag(eta_results(ieta)%interaction_U_complex(isite)), eta_results(ieta)%rank, &
+               eta_results(ieta)%condition_number, eta_results(ieta)%relative_residual, &
+               eta_results(ieta)%relative_real_constrained_residual
+         end do
       end do
       write(unit, '(a)') '# DYNAMICS columns: eta q_index omega row col chi0_Re chi0_Im chi_Re chi_Im min_sv condition dyson_residual'
       allocate(chi_dynamic(nsite, nsite, size(config%frequencies)), dyson_request%interaction_U(nsite))

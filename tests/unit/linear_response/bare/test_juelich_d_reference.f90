@@ -1,6 +1,6 @@
 !------------------------------------------------------------------------------
 ! Independent direct-integration check for the literature-faithful Juelich-d
-! projector, moment, spin-flip transition, angular factor, and eta bubble.
+! projector, moment, spin-flip transition, and eta bubble normalization.
 ! Expected values below do not call any production projector routine.
 !------------------------------------------------------------------------------
 module test_juelich_d_reference_mod
@@ -9,7 +9,7 @@ module test_juelich_d_reference_mod
    use basis_mod, only: basis_init
    use lmto_radial_augmentation_mod, only: lmto_radial_basis, scalar_relativistic_c
    use linear_response_mod, only: lr_electronic_state, juelich_d_projector, juelich_d_state_projection, &
-      evaluate_juelich_d_lehmann_chi0, extrapolate_juelich_static_chi0, lr_fermi_dirac_occupation, response_angular_pi
+      evaluate_juelich_d_lehmann_chi0, extrapolate_juelich_static_chi0, lr_fermi_dirac_occupation
    implicit none
    private
    public :: run_test_juelich_d_reference
@@ -31,7 +31,7 @@ contains
       complex(rp) :: expected_projected(5, 2, nbands), endpoint_up, endpoint_down, transition
       real(rp) :: eta_fit(4), estimate, fit_error, eta_imaginary
       complex(rp) :: chi_fit(1, 1, 4), chi_static_fit(1, 1)
-      real(rp) :: projector_energy_delta, frozen_transition, energy_dependent_transition, no_angular, double_spin
+      real(rp) :: projector_energy_delta, frozen_transition, energy_dependent_transition, extra_four_pi, double_spin
       integer :: ir, l, spin, ib, jb, im, iorb, ispin
       logical :: failed
 
@@ -64,6 +64,8 @@ contains
       call projector%project_state(radial, state, projection)
       call projector%moment_from_state(radial, state, moment)
       call independent_band_projection(radial(1), eigenvalues(:, 1), eigenvectors(:, :, 1), ef, expected_projected)
+      if (maxval(abs(projection%amplitudes(:, 1, :, :, 1) - expected_projected)) > &
+          tol*max(1.0_rp, maxval(abs(expected_projected)))) failed = .true.
       expected_moment = 0.0_rp
       wrong_norm_moment = 0.0_rp
       do ib = 1, nbands
@@ -103,9 +105,9 @@ contains
          frequencies, eta, chi)
       call independent_juelich_chi(radial(1), state, ef, frequencies, eta, expected_chi)
       if (maxval(abs(chi - expected_chi)) > tol*max(1.0_rp, maxval(abs(expected_chi)))) failed = .true.
-      no_angular = maxval(abs(chi - expected_chi/(4.0_rp*response_angular_pi)))
+      extra_four_pi = maxval(abs(4.0_rp*acos(-1.0_rp)*chi - expected_chi))
       double_spin = maxval(abs(chi - 2.0_rp*expected_chi))
-      if (no_angular <= 1.0e-6_rp .or. double_spin <= 1.0e-6_rp) failed = .true.
+      if (extra_four_pi <= 1.0e-6_rp .or. double_spin <= 1.0e-6_rp) failed = .true.
 
       eta_fit = [0.08_rp, 0.04_rp, 0.02_rp, 0.01_rp]
       chi_fit(1, 1, :) = cmplx(-2.3_rp + 0.7_rp*eta_fit**2, 1.4_rp*eta_fit, rp)
@@ -119,7 +121,7 @@ contains
       write(*, '(a,2(es14.6,1x))') '  chi0(0,0; omega=0) Re/Im = ', real(chi(1, 1, 1), rp), aimag(chi(1, 1, 1))
       if (.not. all(ieee_is_finite(real(chi, rp))) .or. .not. all(ieee_is_finite(aimag(chi)))) failed = .true.
       if (failed) error stop 'UnitLrJuelichDReference: FAIL'
-      write(*, '(a)') 'UnitLrJuelichDReference: PASS (independent EF norm, moment, transition, 4pi and unit spin factor)'
+      write(*, '(a)') 'UnitLrJuelichDReference: PASS (independent EF norm, moment, frozen projector, unit spin, no extra 4pi)'
    end subroutine run_test_juelich_d_reference
 
    pure integer function nbasis_value() result(n)
@@ -263,10 +265,11 @@ contains
       complex(rp), intent(out) :: chi(1, 1, size(frequencies))
       complex(rp) :: projected(5, 2, state%nbands), transition
       complex(rp) :: denominator
-      real(rp) :: difference, factor
+      real(rp) :: difference, factor, weight_sum
       integer :: ib, jb, iw, im
       call independent_band_projection(radial, state%eigenvalues(:, 1), state%eigenvectors(:, :, 1), energy, projected)
       chi = cmplx(0.0_rp, 0.0_rp, rp)
+      weight_sum = sum(state%k_weights)
       do ib = 1, state%nbands
          do jb = 1, state%nbands
             difference = state%occupations(ib, 1) - state%occupations(jb, 1)
@@ -277,7 +280,7 @@ contains
             end do
             do iw = 1, size(frequencies)
                denominator = cmplx(frequencies(iw) + state%eigenvalues(ib, 1) - state%eigenvalues(jb, 1), eta, rp)
-               factor = 4.0_rp*response_angular_pi*difference
+               factor = state%k_weights(1)/weight_sum*difference
                chi(1, 1, iw) = chi(1, 1, iw) + factor*transition*conjg(transition)/denominator
             end do
          end do
