@@ -5,7 +5,7 @@ program test_kernel_dyson_main
    use test_compact_interaction_mod, only: run_test_compact_interaction
    use test_dyson_mod, only: run_test_dyson
    use test_lcmm_sumrule_mod, only: run_test_lcmm_sumrule
-   use test_projected_interacting_mod, only: run_test_projected_interacting
+   use test_mills_1u_mod, only: run_test_mills_1u
    use test_projected_lcmm_mod, only: run_test_projected_lcmm
    implicit none
 
@@ -29,8 +29,8 @@ program test_kernel_dyson_main
       call run_test_dyson()
    case ('lcmm_sumrule')
       call run_test_lcmm_sumrule()
-   case ('projected_interacting')
-      call run_test_projected_interacting()
+   case ('mills_1u')
+      call run_test_mills_1u()
    case ('projected_lcmm')
       call run_test_projected_lcmm()
    case default

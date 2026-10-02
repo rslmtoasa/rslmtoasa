@@ -959,56 +959,47 @@ module linear_response_mod
       character(len=256) :: status = 'not evaluated'
    end type lr_sumrule_linear_solve_result
 
-   ! --- from lr_projected_interacting_response_mod (LR-REF-03c) ---
+   ! --- Mills-1U and shared projected site response types ---
 
-   character(len=*), parameter, public :: projected_mills_exact_scalar = 'EXACT_SCALAR'
-   character(len=*), parameter, public :: projected_mills_projected_scalar = &
-      'PROJECTED_SCALAR_APPROXIMATION'
-   character(len=*), parameter, public :: projected_mills_unsupported = 'UNSUPPORTED'
-   character(len=*), parameter, public :: projected_mills_convention = &
-      'H=H0 I+B_sigma sigma_z; H_up-H_down=2 B_sigma; DRESP-01 Vz=sigma_z'
-   character(len=*), parameter, public :: projected_mills_loss_convention = &
+   character(len=*), parameter, public :: projected_site_loss_convention = &
       'L=-(chi-chi^dagger)/(2*i*pi); ordinary site-space matrix'
 
-   real(rp), parameter, public :: projected_mills_exact_tolerance = 1.0e-10_rp
-   real(rp), parameter, public :: projected_mills_moment_floor = 1.0e-12_rp
-   real(rp), parameter, public :: projected_mills_condition_limit = 1.0e12_rp
-
-   !> Accepted-state samples for the local scalarization.  The matrices are
-   !> site-major in the supplied coefficient subspace.  A sample is normally
-   !> one accepted reciprocal H(k); sample_weights are relative weights and
-   !> default to a uniform Frobenius metric.
-   type, public :: projected_mills_interaction_request
-      character(len=8) :: selector = ''
-      character(len=80) :: splitting_convention = projected_mills_convention
+   !> Coefficient-space local d spin-flip bare response for the controlled
+   !> RS-LMTO -> Mills-1U projection. The complete spd eigenstates propagate;
+   !> only the local interaction vertex is restricted to l=2.
+   type, public :: mills_1u_bare_request
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      character(len=32) :: channel = lr_channel_plus
       integer :: nsite = 0
-      integer :: site_block_size = 0
-      complex(rp), allocatable :: actual_pauli_field(:, :, :) ! (basis,basis,sample)
-      complex(rp), allocatable :: site_vertices(:, :, :, :) ! (basis,basis,site,sample)
-      real(rp), allocatable :: projected_moment(:)
-      real(rp), allocatable :: sample_weights(:)
-      character(len=512) :: provenance = ''
-   end type projected_mills_interaction_request
+      integer :: orbital_lmax = -1
+      type(lr_electronic_state), pointer :: electronic_state => null()
+      type(lr_electronic_state), pointer :: q_endpoint_state => null()
+   end type mills_1u_bare_request
 
-   type, public :: projected_mills_interaction_result
-      character(len=8) :: selector = ''
-      character(len=80) :: splitting_convention = projected_mills_convention
-      character(len=32) :: classification = projected_mills_unsupported
+   type, public :: mills_1u_bare_result
+      real(rp) :: q(3) = 0.0_rp
+      real(rp), allocatable :: frequencies(:)
+      real(rp) :: eta = 0.0_rp
+      character(len=32) :: channel = ''
+      complex(rp), allocatable :: susceptibility(:, :, :) ! site,site,frequency
       character(len=512) :: provenance = ''
-      integer :: nsite = 0
-      integer :: nbasis = 0
-      integer :: nsample = 0
-      integer :: rank = 0
-      real(rp) :: fit_condition_number = huge(1.0_rp)
-      real(rp) :: scalarization_residual = huge(1.0_rp)
-      real(rp) :: locality_residual = huge(1.0_rp)
-      real(rp) :: splitting_norm = 0.0_rp
-      real(rp) :: fit_residual_norm = 0.0_rp
-      real(rp) :: coefficient_imaginary_residual = 0.0_rp
-      real(rp), allocatable :: projected_moment(:)
-      real(rp), allocatable :: projected_splitting(:) ! B_sigma coefficient Delta_i
-      real(rp), allocatable :: interaction_U(:)
-   end type projected_mills_interaction_result
+   end type mills_1u_bare_result
+
+   !> Direct decomposition of D(k)-sum_i Delta_i P_i^d. Component norms are
+   !> Frobenius norms for one matrix, with no fitted or tunable parameters.
+   type, public :: mills_1u_model_reduction_result
+      complex(rp), allocatable :: residual(:, :)
+      real(rp) :: spin_difference_norm = 0.0_rp
+      real(rp) :: mills_local_d_norm = 0.0_rp
+      real(rp) :: residual_norm = 0.0_rp
+      real(rp) :: residual_relative_norm = 0.0_rp
+      real(rp) :: local_d_shell_residual_norm = 0.0_rp
+      real(rp) :: remaining_d_sector_norm = 0.0_rp
+      real(rp) :: non_d_sector_norm = 0.0_rp
+      real(rp) :: site_offdiagonal_norm = 0.0_rp
+   end type mills_1u_model_reduction_result
 
    !> Site-space projected Dyson request.  bare_chi is directly the
    !> DRESP-02 site x site x frequency object; no product-space input exists.
@@ -1033,7 +1024,7 @@ module linear_response_mod
       character(len=512) :: interaction_provenance = ''
       character(len=512) :: bare_provenance = ''
       character(len=256) :: dyson_convention = 'D=I-chi0*U; solve D*chi=chi0 with certified LAPACK zgesv'
-      character(len=256) :: loss_convention = projected_mills_loss_convention
+      character(len=256) :: loss_convention = projected_site_loss_convention
       character(len=128) :: status = 'not evaluated'
       real(rp), allocatable :: interaction_U(:)
       complex(rp), allocatable :: bare_chi(:, :, :)
@@ -1245,8 +1236,12 @@ module linear_response_mod
    public :: lr_alsda_provenance_matches
    public :: evaluate_lr_goldstone_sumrule
    public :: solve_lr_goldstone_equation
-   public :: evaluate_projected_mills_interaction
-   public :: evaluate_projected_mills_from_reciprocal
+   public :: mills_1u_splitting_from_centers
+   public :: mills_1u_coefficient_moment
+   public :: mills_1u_transition_vertex
+   public :: evaluate_mills_1u_bare
+   public :: evaluate_mills_1u_model_reduction
+   public :: evaluate_mills_1u_dyson
    public :: evaluate_projected_dyson
    public :: evaluate_projected_juelich_interaction
    public :: evaluate_projected_juelich_holdout
@@ -1495,18 +1490,44 @@ module linear_response_mod
          type(lr_sumrule_linear_solve_result), intent(out) :: result
       end subroutine solve_lr_goldstone_equation
 
-      module subroutine evaluate_projected_mills_interaction(request, result)
-         type(projected_mills_interaction_request), intent(in) :: request
-         type(projected_mills_interaction_result), intent(out) :: result
-      end subroutine evaluate_projected_mills_interaction
+      module subroutine mills_1u_splitting_from_centers(center_band, cx, delta_d, scalarity_residual)
+         real(rp), intent(in) :: center_band(:, :, :) ! (l+1, spin, site)
+         complex(rp), intent(in) :: cx(:, :, :)       ! (orbital, spin, site)
+         real(rp), intent(out) :: delta_d(:)
+         real(rp), intent(out) :: scalarity_residual(:)
+      end subroutine mills_1u_splitting_from_centers
 
-      module subroutine evaluate_projected_mills_from_reciprocal(contract, radial_bases, reciprocal_obj, energy, moment, result)
-         type(projected_site_spin_contract), intent(in) :: contract
-         type(lmto_radial_basis), intent(in) :: radial_bases(:)
-         type(reciprocal), intent(in) :: reciprocal_obj
-         real(rp), intent(in) :: energy, moment(:)
-         type(projected_mills_interaction_result), intent(out) :: result
-      end subroutine evaluate_projected_mills_from_reciprocal
+      module subroutine mills_1u_coefficient_moment(state, nsite, orbital_lmax, moment_d)
+         type(lr_electronic_state), intent(in) :: state
+         integer, intent(in) :: nsite, orbital_lmax
+         real(rp), intent(out) :: moment_d(:)
+      end subroutine mills_1u_coefficient_moment
+
+      module function mills_1u_transition_vertex(left_coefficients, right_coefficients, nsite, orbital_lmax, &
+         site, channel) result(vertex)
+         complex(rp), intent(in) :: left_coefficients(:), right_coefficients(:)
+         integer, intent(in) :: nsite, orbital_lmax, site
+         character(len=*), intent(in) :: channel
+         complex(rp) :: vertex
+      end function mills_1u_transition_vertex
+
+      module subroutine evaluate_mills_1u_bare(request, result)
+         type(mills_1u_bare_request), intent(in) :: request
+         type(mills_1u_bare_result), intent(out) :: result
+      end subroutine evaluate_mills_1u_bare
+
+      module subroutine evaluate_mills_1u_model_reduction(spin_difference, delta_d, nsite, norb, result)
+         complex(rp), intent(in) :: spin_difference(:, :)
+         real(rp), intent(in) :: delta_d(:)
+         integer, intent(in) :: nsite, norb
+         type(mills_1u_model_reduction_result), intent(out) :: result
+      end subroutine evaluate_mills_1u_model_reduction
+
+      module subroutine evaluate_mills_1u_dyson(bare, physical_u, result)
+         type(mills_1u_bare_result), intent(in) :: bare
+         real(rp), intent(in) :: physical_u(:)
+         type(projected_dyson_result), intent(out) :: result
+      end subroutine evaluate_mills_1u_dyson
 
       module subroutine evaluate_projected_dyson(request, result)
          type(projected_dyson_request), intent(in) :: request

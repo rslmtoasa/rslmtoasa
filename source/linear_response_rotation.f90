@@ -2767,6 +2767,10 @@ contains
          call g_logger%fatal('[linear_response]: omega grid must contain finite values', __FILE__, __LINE__)
       end if
       if (len_trim(config%output_file) == 0) call g_logger%fatal('[linear_response]: output_file must not be blank', __FILE__, __LINE__)
+      if (trim(config%interaction) == 'stoner_fit') then
+         call g_logger%fatal('[linear_response]: interaction=stoner_fit was removed and is unsupported; select mills_1u', &
+            __FILE__, __LINE__)
+      end if
 
       select case (trim(config%formulation))
       case ('tddft')
@@ -2785,13 +2789,17 @@ contains
             call g_logger%fatal('[linear_response]: projected requires radial_points and lehmann', __FILE__, __LINE__)
          end if
          select case (trim(config%interaction))
-         case ('none', 'stoner_fit', 'lcmm')
+         case ('none', 'mills_1u', 'lcmm')
             continue
          case default
             call g_logger%fatal('[linear_response]: projected interaction is not an allowed compatibility row', __FILE__, __LINE__)
          end select
          if (trim(config%projection) /= 'd' .and. trim(config%projection) /= 'spd' .and. trim(config%projection) /= 'both') then
             call g_logger%fatal('[linear_response]: projection must be d, spd or both', __FILE__, __LINE__)
+         end if
+         if (trim(config%interaction) == 'mills_1u' .and. trim(config%projection) /= 'd') then
+            call g_logger%fatal('[linear_response]: mills_1u acts only in the local d shell; projection must be d', &
+               __FILE__, __LINE__)
          end if
       case default
          call g_logger%fatal("[linear_response]: formulation must be 'rotation', 'tddft' or 'projected'", __FILE__, __LINE__)

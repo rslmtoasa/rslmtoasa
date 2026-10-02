@@ -1,5 +1,5 @@
-! DRESP-04 bcc-Fe projected Mills/Stoner production fixture.
-! This bounded campaign keeps both accepted selectors in one artifact.
+! bcc-Fe controlled RS-LMTO -> Mills-1U production fixture.
+! The interaction and coefficient-space response are restricted to local d.
 &calculation
 pre_processing = 'bravais'
 post_processing = 'linear_response'
@@ -24,7 +24,7 @@ conv_thr = 1.0e-6
 use_kspace = .true.
 /
 &energy
-fermi = -0.088155
+fermi = -0.062245
 energy_min = -2.0
 energy_max = 0.8
 channels_ldos = 401
@@ -63,20 +63,21 @@ kspace_ham_order = 'second'
 formulation = 'projected'
 representation = 'radial_points'
 bare_response = 'lehmann'
-interaction = 'stoner_fit'
-projection = 'both'
+interaction = 'mills_1u'
+projection = 'd'
 diagnostics = 'none'
 channel = 'chi_plus'
-n_q = 3
-q_list = 0.0, 0.0, 0.0,  0.03, 0.0, 0.0,  0.125, 0.0, 0.0
+n_q = 7
+q_list = 0.0, 0.0, 0.0,  0.03, 0.0, 0.0, -0.03, 0.0, 0.0,  0.125, 0.0, 0.0, -0.125, 0.0, 0.0,
+0.25, 0.0, 0.0, -0.25, 0.0, 0.0
 n_omega = 9
 use_omega_grid = .false.
 omega_min = 0.0
 omega_max = 0.20
 eta = 0.02
-n_eta = 3
-eta_grid = 0.04, 0.02, 0.01
+n_eta = 5
+eta_grid = 0.04, 0.02, 0.01, 0.005, 0.0025
 response_lmax = -1
 write_full_matrix = .false.
-output_file = 'dresp04_fe_4k.dat'
+output_file = 'mills_1u_fe_4k.dat'
 /

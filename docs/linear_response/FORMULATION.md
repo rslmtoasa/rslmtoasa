@@ -165,12 +165,18 @@ Sources: `lr-campaign-archive:docs/LR_KS_SUSCEPTIBILITY.md`, `lr-campaign-archiv
 
 ## Projected response
 
-The projected route forms a site susceptibility `chi0` from the reciprocal
-spin-transition contract and fits a local site interaction. `stoner_fit`
-uses the projected Mills/Stoner scalarization; `lcmm` solves the projected
-site Goldstone equation while keeping the site response fully coupled. The
-route reports rank, conditioning, residuals, and eta stability. It is a
-controlled site model and cross-check, not a replacement for the spatial
+The projected route offers `none`, `mills_1u`, and `lcmm`. `mills_1u` uses
+the accepted transformed d-shell center splitting and coefficient-space d
+moment to define one physical site interaction, then evaluates the local d
+spin-flip bubble over the full accepted spd bands. It is classified as
+`MILLS-1U — CONTROLLED RS-LMTO MODEL PROJECTION`; see
+[`MILLS_IDENTITY.md`](MILLS_IDENTITY.md) for its equations, normalization,
+and model-reduction residual. It requires `projection='d'`, an accepted
+converged reciprocal state, scalar-relativistic collinear `ham_only` data,
+and the full spd basis. It does not alter the Jülich `lcmm` route.
+
+The former `stoner_fit` keyword fails fast as removed. The projected site
+response remains a controlled model and is not a replacement for spatial
 `chi_KS` or the rotation kernel.
 
 Sources: `lr-campaign-archive:docs/DRESP_01_PROJECTED_SITE_SPIN_CONTRACT.md`, `lr-campaign-archive:docs/DRESP_02_PROJECTED_RECIPROCAL_CHI0.md`, `lr-campaign-archive:docs/DRESP_04_PROJECTED_MILLS_RPA.md`, `lr-campaign-archive:docs/DRESP_05_PROJECTED_JUELICH_LCMM.md`
@@ -276,8 +282,9 @@ The code accepts only these `tddft` rows:
 | `product_compact` | `lehmann` | `none` |
 
 For `projected`, the required pair is `radial_points` plus `lehmann`, the
-interaction is `none`, `stoner_fit`, or `lcmm`, and `projection` is `d`,
-`spd`, or `both`. `rotation` uses its own q-path and pole validation. In all
+interaction is `none`, `mills_1u`, or `lcmm`, and `projection` is `d`,
+`spd`, or `both`. `mills_1u` requires `projection='d'`. `rotation` uses its
+own q-path and pole validation. In all
 formulations, `channel` is `chi_plus` or `chi_minus`, `diagnostics` is
 `none` or `invariants`, `realspace_solver` is `auto`, `block`, or
 `chebyshev`, and `response_lmax` is `-1` through `4`.

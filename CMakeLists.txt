@@ -860,7 +860,7 @@ if (RUN_UNIT_TESTS)
     ${TestDIR}/unit/linear_response/kernel_dyson/test_compact_interaction.f90
     ${TestDIR}/unit/linear_response/kernel_dyson/test_dyson.f90
     ${TestDIR}/unit/linear_response/kernel_dyson/test_lcmm_sumrule.f90
-    ${TestDIR}/unit/linear_response/kernel_dyson/test_projected_interacting.f90
+    ${TestDIR}/unit/linear_response/kernel_dyson/test_mills_1u.f90
     ${TestDIR}/unit/linear_response/kernel_dyson/test_projected_lcmm.f90)
   add_fortran_component_unit_test(UnitLrKernelDyson
     ${TestDIR}/unit/linear_response/kernel_dyson/test_kernel_dyson_main.f90
@@ -876,8 +876,8 @@ if (RUN_UNIT_TESTS)
     LABELS "unit;kxc-01;alsda;negative;low-m" WILL_FAIL TRUE)
   add_test(NAME UnitLrLcmmSumrule COMMAND $<TARGET_FILE:UnitLrKernelDyson> lcmm_sumrule)
   set_tests_properties(UnitLrLcmmSumrule PROPERTIES LABELS "unit;linear_response;kernel_dyson")
-  add_test(NAME UnitLrProjectedInteracting COMMAND $<TARGET_FILE:UnitLrKernelDyson> projected_interacting)
-  set_tests_properties(UnitLrProjectedInteracting PROPERTIES LABELS "unit;linear_response;kernel_dyson")
+  add_test(NAME UnitLrMills1U COMMAND $<TARGET_FILE:UnitLrKernelDyson> mills_1u)
+  set_tests_properties(UnitLrMills1U PROPERTIES LABELS "unit;linear_response;mills_1u;kernel_dyson")
   add_test(NAME UnitLrProjectedLcmm COMMAND $<TARGET_FILE:UnitLrKernelDyson> projected_lcmm)
   set_tests_properties(UnitLrProjectedLcmm PROPERTIES LABELS "unit;linear_response;kernel_dyson")
   add_test(NAME UnitLrCompactInteraction COMMAND $<TARGET_FILE:UnitLrKernelDyson> compact_interaction)
@@ -943,7 +943,7 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLrLinearResponseConfig PROPERTIES LABELS "unit;linear_response;lr-ref-04b;config")
   foreach(_lr_config_row row_radial_lehmann_alsda row_radial_lehmann_lcmm row_radial_gf_alsda
           row_radial_gf_lcmm row_product_alsda row_product_none row_projected_none
-          row_projected_stoner row_projected_lcmm)
+          row_projected_mills_1u row_projected_lcmm)
     add_test(NAME UnitLrLinearResponseConfig_${_lr_config_row}
       COMMAND UnitLrLinearResponseConfig)
     set_tests_properties(UnitLrLinearResponseConfig_${_lr_config_row} PROPERTIES
@@ -980,8 +980,14 @@ if (RUN_UNIT_TESTS)
   add_test(NAME LinearResponseProjectedJuelich
     COMMAND ${TestBinary} input_juelich_d_reference.nml
     WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
-set_tests_properties(LinearResponseProjectedJuelich PROPERTIES
+  set_tests_properties(LinearResponseProjectedJuelich PROPERTIES
     LABELS "integration;linear_response;projected;juelich-d;static-limit;accepted-state"
+    TIMEOUT 720)
+  add_test(NAME LinearResponseMills1U
+    COMMAND ${TestBinary} input.nml
+    WORKING_DIRECTORY ${TestDIR}/integration/mills_1u_bccfe)
+  set_tests_properties(LinearResponseMills1U PROPERTIES
+    LABELS "integration;linear_response;projected;mills-1u;accepted-state;bcc-fe"
     TIMEOUT 720)
   add_test(NAME LinearResponseFeatureOff
     COMMAND ${TestBinary} input_feature_off.nml

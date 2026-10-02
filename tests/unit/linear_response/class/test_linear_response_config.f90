@@ -46,7 +46,7 @@ program test_linear_response_config
       call check_case('row_product_alsda', 'tddft', 'product_compact', 'lehmann', 'auto', 'alsda', 'spd', 'invariants', 1)
       call check_case('row_product_none', 'tddft', 'product_compact', 'lehmann', 'auto', 'none', 'spd', 'none', 1)
       call check_case('row_projected_none', 'projected', 'radial_points', 'lehmann', 'auto', 'none', 'd', 'none', 1)
-      call check_case('row_projected_stoner', 'projected', 'radial_points', 'lehmann', 'auto', 'stoner_fit', 'both', 'none', 3)
+      call check_case('row_projected_mills_1u', 'projected', 'radial_points', 'lehmann', 'auto', 'mills_1u', 'd', 'none', 1)
       call check_case('row_projected_lcmm', 'projected', 'radial_points', 'lehmann', 'auto', 'lcmm', 'spd', 'invariants', 3)
    end select
 

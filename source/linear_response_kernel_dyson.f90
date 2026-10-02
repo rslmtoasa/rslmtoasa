@@ -7,21 +7,9 @@ submodule (linear_response_mod) linear_response_kernel_dyson
    use precision_mod, only: rp
    use math_mod, only: pi
    use radial_ground_state_mod, only: radial_ground_state, radial_xc_provenance
-   use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l
-   use reciprocal_mod, only: reciprocal
    implicit none
 
    interface
-      subroutine zgelss(m, n, nrhs, a, lda, b, ldb, s, rcond, rank, work, lwork, rwork, info)
-         import :: rp
-         integer, intent(in) :: m, n, nrhs, lda, ldb, lwork
-         complex(rp), intent(inout) :: a(lda, *), b(ldb, *), work(*)
-         real(rp), intent(out) :: s(*)
-         real(rp), intent(in) :: rcond
-         integer, intent(out) :: rank, info
-         real(rp), intent(inout) :: rwork(*)
-      end subroutine zgelss
-
       subroutine dgelss(m, n, nrhs, a, lda, b, ldb, s, rcond, rank, work, lwork, info)
          import :: rp
          integer, intent(in) :: m, n, nrhs, lda, ldb, lwork
@@ -539,224 +527,290 @@ contains
       call response_flatten_superindex(item, space%nsite, space%response_lmax, space%npoint, space%nchannel, flat)
    end subroutine l0_flat_index
 
-   ! --- from lr_projected_interacting_response_mod ---
-   module subroutine evaluate_projected_mills_interaction(request, result)
-      type(projected_mills_interaction_request), intent(in) :: request
-      type(projected_mills_interaction_result), intent(out) :: result
+   ! --- Mills-1U coefficient-space model projection ---
+   ! The model field is read from the accepted, transformed shell center. It
+   ! is never inferred from the complete spin difference of H(k).
+   module subroutine mills_1u_splitting_from_centers(center_band, cx, delta_d, scalarity_residual)
+      real(rp), intent(in) :: center_band(:, :, :) ! (l+1, spin, site)
+      complex(rp), intent(in) :: cx(:, :, :)       ! (orbital, spin, site)
+      real(rp), intent(out) :: delta_d(:)
+      real(rp), intent(out) :: scalarity_residual(:)
+      integer :: site, m
 
-      complex(rp), allocatable :: design(:, :), rhs(:, :), solution(:), work(:)
-      complex(rp) :: work_query(1)
-      real(rp), allocatable :: singular_values(:), rwork(:), sample_weights(:)
-      real(rp) :: weight, norm2, residual2, local2, largest_sv, smallest_sv, rcond, scale
-      integer :: n, nsite, nsample, nrow, row, i, j, isample, isite, lwork, info
-      integer :: rank, block_i, block_j
-      external :: zgelss
-
-      call validate_mills_request(request, n, nsite, nsample)
-      allocate(result%projected_moment(nsite), result%projected_splitting(nsite), result%interaction_U(nsite))
-      result%selector = trim(request%selector)
-      result%splitting_convention = trim(request%splitting_convention)
-      result%provenance = trim(request%provenance)
-      result%nsite = nsite
-      result%nbasis = n
-      result%nsample = nsample
-      result%projected_moment = request%projected_moment
-      result%projected_splitting = 0.0_rp
-      result%interaction_U = 0.0_rp
-
-      allocate(sample_weights(nsample))
-      if (allocated(request%sample_weights)) then
-         sample_weights = request%sample_weights
-      else
-         sample_weights = 1.0_rp
+      if (size(center_band, 1) < 3 .or. size(center_band, 2) /= 2 .or. &
+          size(center_band, 3) /= size(delta_d) .or. &
+          size(cx, 1) < 9 .or. size(cx, 2) /= 2 .or. size(cx, 3) /= size(delta_d) .or. &
+          size(scalarity_residual) /= size(delta_d)) then
+         error stop 'MILLS-1U: accepted spherical-ASA d-center dimensions are inconsistent'
       end if
-      if (any(sample_weights <= 0.0_rp) .or. any(.not. ieee_is_finite(sample_weights))) then
-         error stop 'DRESP-04 Mills: sample weights must be finite and positive'
+      if (any(.not. ieee_is_finite(center_band(3, :, :))) .or. &
+          any(.not. ieee_is_finite(real(cx(5:9, :, :), rp))) .or. &
+          any(.not. ieee_is_finite(aimag(cx(5:9, :, :))))) then
+         error stop 'MILLS-1U: accepted d-center contains a non-finite value'
       end if
+      do site = 1, size(delta_d)
+         delta_d(site) = center_band(3, 2, site) - center_band(3, 1, site)
+         scalarity_residual(site) = 0.0_rp
+         do m = 5, 9
+            scalarity_residual(site) = max(scalarity_residual(site), &
+               abs((cx(m, 2, site) - cx(m, 1, site)) - cmplx(delta_d(site), 0.0_rp, rp)))
+         end do
+      end do
+   end subroutine mills_1u_splitting_from_centers
 
-      nrow = n*n*nsample
-      allocate(design(nrow, nsite), rhs(nrow, 1), solution(nsite), singular_values(min(nrow, nsite)), &
-         rwork(max(1, 5*min(nrow, nsite))))
-      design = cmplx(0.0_rp, 0.0_rp, rp)
-      rhs = cmplx(0.0_rp, 0.0_rp, rp)
-      row = 0
-      norm2 = 0.0_rp
-      local2 = 0.0_rp
-      do isample = 1, nsample
-         weight = sqrt(sample_weights(isample))
-         do j = 1, n
-            do i = 1, n
-               row = row + 1
-               design(row, :) = weight*request%site_vertices(i, j, :, isample)
-               rhs(row, 1) = weight*request%actual_pauli_field(i, j, isample)
-               norm2 = norm2 + sample_weights(isample)*abs(request%actual_pauli_field(i, j, isample))**2
-               block_i = (i - 1)/request%site_block_size + 1
-               block_j = (j - 1)/request%site_block_size + 1
-               if (block_i /= block_j) local2 = local2 + sample_weights(isample)* &
-                  abs(request%actual_pauli_field(i, j, isample))**2
+   module subroutine mills_1u_coefficient_moment(state, nsite, orbital_lmax, moment_d)
+      type(lr_electronic_state), intent(in) :: state
+      integer, intent(in) :: nsite, orbital_lmax
+      real(rp), intent(out) :: moment_d(:)
+      integer :: norb, ik, ib, site, orbital, up_index, down_index
+      real(rp) :: weight
+
+      call state%validate('mills_1u_coefficient_moment')
+      if (orbital_lmax /= 2) error stop 'MILLS-1U: only a full spd coefficient state is supported'
+      if (state%has_soc .or. .not. state%collinear .or. .not. state%orthogonal .or. &
+          trim(state%reciprocal_mode) /= 'ham_only' .or. trim(state%hamiltonian_order) /= 'second') then
+         error stop 'MILLS-1U: accepted collinear orthogonal second-order ham_only state is required'
+      end if
+      norb = (orbital_lmax + 1)**2
+      if (nsite < 1 .or. size(moment_d) /= nsite .or. state%nbasis /= 2*nsite*norb) then
+         error stop 'MILLS-1U: accepted spd coefficient dimensions are inconsistent'
+      end if
+      if (.not. allocated(state%k_weights)) then
+         error stop 'MILLS-1U: accepted k weights are unavailable'
+      end if
+      if (any(.not. ieee_is_finite(state%k_weights))) then
+         error stop 'MILLS-1U: accepted k weights are unavailable or non-finite'
+      end if
+      moment_d = 0.0_rp
+      do ik = 1, state%nk
+         weight = state%k_weights(ik)
+         do ib = 1, state%nbands
+            do site = 1, nsite
+               do orbital = 5, 9
+                  up_index = (site - 1)*2*norb + orbital
+                  down_index = up_index + norb
+                  moment_d(site) = moment_d(site) + weight*state%occupations(ib, ik)* &
+                     (abs(state%eigenvectors(up_index, ib, ik))**2 - &
+                      abs(state%eigenvectors(down_index, ib, ik))**2)
+               end do
             end do
          end do
       end do
-      result%splitting_norm = sqrt(norm2)
-      if (norm2 > 0.0_rp) then
-         result%locality_residual = sqrt(local2/norm2)
-      else
-         result%locality_residual = 0.0_rp
+      if (any(.not. ieee_is_finite(moment_d)) .or. any(abs(moment_d) <= tiny(1.0_rp))) then
+         error stop 'MILLS-1U: coefficient-space d moment is vanishing or non-finite'
       end if
+   end subroutine mills_1u_coefficient_moment
 
-      call zgelss(nrow, nsite, 1, design, nrow, rhs, nrow, singular_values, -1.0_rp, rank, &
-         work_query, -1, rwork, info)
-      if (info /= 0) error stop 'DRESP-04 Mills: zgelss workspace query failed'
-      lwork = max(1, nint(real(work_query(1), rp)))
-      allocate(work(lwork))
-      rcond = -1.0_rp
-      call zgelss(nrow, nsite, 1, design, nrow, rhs, nrow, singular_values, rcond, rank, work, lwork, rwork, info)
-      if (info /= 0) then
-         result%rank = 0
-         result%classification = projected_mills_unsupported
-         deallocate(design, rhs, solution, singular_values, work, rwork, sample_weights)
-         return
+   module function mills_1u_transition_vertex(left_coefficients, right_coefficients, nsite, orbital_lmax, &
+      site, channel) result(vertex)
+      complex(rp), intent(in) :: left_coefficients(:), right_coefficients(:)
+      integer, intent(in) :: nsite, orbital_lmax, site
+      character(len=*), intent(in) :: channel
+      complex(rp) :: vertex
+      integer :: norb, orbital, left_up, right_down, left_down, right_up
+
+      if (orbital_lmax /= 2) error stop 'MILLS-1U vertex: only the local d-shell spin flip is supported'
+      norb = (orbital_lmax + 1)**2
+      if (nsite < 1 .or. site < 1 .or. site > nsite .or. &
+          size(left_coefficients) /= 2*nsite*norb .or. size(right_coefficients) /= 2*nsite*norb) then
+         error stop 'MILLS-1U vertex: coefficient dimensions or site index are invalid'
       end if
-      result%rank = rank
-      solution = rhs(1:nsite, 1)
-      largest_sv = maxval(singular_values)
-      smallest_sv = huge(1.0_rp)
-      do i = 1, size(singular_values)
-         if (singular_values(i) > 0.0_rp) smallest_sv = min(smallest_sv, singular_values(i))
+      vertex = cmplx(0.0_rp, 0.0_rp, rp)
+      do orbital = 5, 9
+         left_up = (site - 1)*2*norb + orbital
+         left_down = left_up + norb
+         right_up = left_up
+         right_down = left_down
+         select case (trim(channel))
+         case ('chi_plus', 'plus')
+            vertex = vertex + conjg(left_coefficients(left_up))*right_coefficients(right_down)
+         case ('chi_minus', 'minus')
+            vertex = vertex + conjg(left_coefficients(left_down))*right_coefficients(right_up)
+         case default
+            error stop 'MILLS-1U vertex: channel must be chi_plus or chi_minus'
+         end select
       end do
-      if (largest_sv > 0.0_rp .and. smallest_sv < huge(1.0_rp)) then
-         result%fit_condition_number = largest_sv/smallest_sv
-      else
-         result%fit_condition_number = huge(1.0_rp)
+   end function mills_1u_transition_vertex
+
+   module subroutine evaluate_mills_1u_bare(request, result)
+      type(mills_1u_bare_request), intent(in) :: request
+      type(mills_1u_bare_result), intent(out) :: result
+      type(lr_electronic_state), pointer :: left_state, right_state
+      complex(rp), allocatable :: transition(:)
+      complex(rp) :: denominator, pair_factor
+      real(rp) :: occupation_difference
+      integer :: ik, ib, jb, iw, i, j
+
+      if (.not. associated(request%electronic_state) .or. .not. associated(request%q_endpoint_state)) then
+         error stop 'MILLS-1U bare response: accepted reciprocal endpoints are required'
       end if
-      result%coefficient_imaginary_residual = maxval(abs(aimag(solution)))/max(maxval(abs(solution)), tiny(1.0_rp))
-      do isite = 1, nsite
-         result%projected_splitting(isite) = real(solution(isite), rp)
-      end do
-
-      residual2 = 0.0_rp
-      row = 0
-      do isample = 1, nsample
-         weight = sqrt(sample_weights(isample))
-         do j = 1, n
-            do i = 1, n
-               row = row + 1
-               residual2 = residual2 + abs(weight*(request%actual_pauli_field(i, j, isample) - &
-                  sum(request%site_vertices(i, j, :, isample)*solution)))**2
-            end do
-         end do
-      end do
-      result%fit_residual_norm = sqrt(residual2)
-      result%scalarization_residual = result%fit_residual_norm/max(result%splitting_norm, tiny(1.0_rp))
-
-      do isite = 1, nsite
-         if (.not. ieee_is_finite(result%projected_moment(isite)) .or. &
-             abs(result%projected_moment(isite)) <= projected_mills_moment_floor) then
-            result%classification = projected_mills_unsupported
-            deallocate(design, rhs, solution, singular_values, work, rwork, sample_weights)
-            return
-         end if
-         result%interaction_U(isite) = result%projected_splitting(isite)/result%projected_moment(isite)
-         if (.not. ieee_is_finite(result%interaction_U(isite))) then
-            result%classification = projected_mills_unsupported
-            deallocate(design, rhs, solution, singular_values, work, rwork, sample_weights)
-            return
-         end if
-      end do
-      scale = max(result%splitting_norm, tiny(1.0_rp))
-      if (rank < nsite .or. result%fit_condition_number > projected_mills_condition_limit .or. &
-          result%coefficient_imaginary_residual > 1.0e-8_rp) then
-         result%classification = projected_mills_unsupported
-      else if (result%scalarization_residual <= projected_mills_exact_tolerance .and. &
-               result%locality_residual <= projected_mills_exact_tolerance) then
-         result%classification = projected_mills_exact_scalar
-      else
-         result%classification = projected_mills_projected_scalar
+      left_state => request%electronic_state
+      right_state => request%q_endpoint_state
+      call left_state%validate('evaluate_mills_1u_bare:left')
+      call right_state%validate('evaluate_mills_1u_bare:q_endpoint')
+      if (.not. allocated(request%frequencies)) error stop 'MILLS-1U bare response: frequency grid is required'
+      if (request%orbital_lmax /= 2 .or. request%nsite < 1 .or. &
+          left_state%nbasis /= 2*request%nsite*9 .or. right_state%nbasis /= left_state%nbasis .or. &
+          right_state%nk /= left_state%nk .or. size(left_state%k_weights) /= left_state%nk .or. &
+          size(request%frequencies) < 1 .or. request%eta <= 0.0_rp .or. &
+          .not. ieee_is_finite(request%eta) .or. any(.not. ieee_is_finite(request%q)) .or. &
+          any(.not. ieee_is_finite(request%frequencies))) then
+         error stop 'MILLS-1U bare response: unsupported basis or inconsistent accepted-state dimensions'
       end if
-      if (.not. ieee_is_finite(scale)) result%classification = projected_mills_unsupported
-      deallocate(design, rhs, solution, singular_values, work, rwork, sample_weights)
-   end subroutine evaluate_projected_mills_interaction
-
-   !> Build DRESP-04 samples from the accepted orthogonal, collinear,
-   !> no-SOC reciprocal Hamiltonian.  The fit uses B_sigma=(H_up-H_down)/2
-   !> on the selected orbital coefficient subspace and Vz from DRESP-01's
-   !> direct operator contract at the accepted Fermi energy.
-   module subroutine evaluate_projected_mills_from_reciprocal(contract, radial_bases, reciprocal_obj, energy, moment, result)
-      type(projected_site_spin_contract), intent(in) :: contract
-      type(lmto_radial_basis), intent(in) :: radial_bases(:)
-      type(reciprocal), intent(in) :: reciprocal_obj
-      real(rp), intent(in) :: energy, moment(:)
-      type(projected_mills_interaction_result), intent(out) :: result
-
-      complex(rp), allocatable :: vz_full(:, :), fields(:, :, :), vertices(:, :, :, :)
-      integer, allocatable :: selected_orbitals(:)
-      integer :: norb, nsite, nk, nselected, nbasis, nmat, site, iorb, jorb, k
-      integer :: a, b, ia, ib, up_i, up_j, down_i, down_j, site_i, site_j
-      type(projected_mills_interaction_request) :: request
-
-      nsite = contract%nsite
-      norb = (contract%orbital_lmax + 1)**2
-      nmat = size(reciprocal_obj%hk_bulk, 1)
-      nk = size(reciprocal_obj%hk_bulk, 3)
-      if (size(radial_bases) /= nsite .or. nmat /= 2*nsite*norb .or. size(moment) /= nsite) then
-         error stop 'DRESP-04 Mills: reciprocal/site/radial dimensions are inconsistent'
+      if (left_state%has_soc .or. right_state%has_soc .or. .not. left_state%collinear .or. &
+          .not. right_state%collinear .or. .not. left_state%orthogonal .or. .not. right_state%orthogonal .or. &
+          left_state%has_extra_operator .or. right_state%has_extra_operator .or. &
+          trim(left_state%reciprocal_mode) /= 'ham_only' .or. trim(right_state%reciprocal_mode) /= 'ham_only' .or. &
+          trim(left_state%hamiltonian_order) /= 'second' .or. trim(right_state%hamiltonian_order) /= 'second') then
+         error stop 'MILLS-1U bare response: no-SOC collinear orthogonal ham_only state required'
       end if
-      if (allocated(reciprocal_obj%hk_so)) then
-         if (maxval(abs(reciprocal_obj%hk_so)) > 1.0e-12_rp) then
-            error stop 'DRESP-04 Mills: SOC Hamiltonian is outside the no-SOC contract'
-         end if
+      select case (trim(request%channel))
+      case ('chi_plus', 'chi_minus')
+      case default
+         error stop 'MILLS-1U bare response: channel must be chi_plus or chi_minus'
+      end select
+      if (any(.not. ieee_is_finite(left_state%k_weights)) .or. &
+          any(.not. ieee_is_finite(left_state%occupations)) .or. &
+          any(.not. ieee_is_finite(right_state%occupations))) then
+         error stop 'MILLS-1U bare response: accepted weights or occupations are non-finite'
       end if
-      allocate(selected_orbitals(norb))
-      nselected = 0
-      do iorb = 1, norb
-         if (contract%selected_l(lmto_orbital_l(iorb))) then
-            nselected = nselected + 1
-            selected_orbitals(nselected) = iorb
-         end if
-      end do
-      nbasis = nsite*nselected
-      allocate(vz_full(nmat, nmat), fields(nbasis, nbasis, nk), vertices(nbasis, nbasis, nsite, nk))
-      call contract%direct_operator_matrix(radial_bases, energy, projected_operator_z, vz_full)
-      fields = cmplx(0.0_rp, 0.0_rp, rp)
-      vertices = cmplx(0.0_rp, 0.0_rp, rp)
-      do k = 1, nk
-         ! Carry the complete selected site x site field.  The local vertex
-         ! remains block diagonal, so a nonlocal Hamiltonian field is visible
-         ! through locality_residual instead of being silently discarded.
-         do site_i = 1, nsite
-            do a = 1, nselected
-               iorb = selected_orbitals(a)
-               ia = (site_i - 1)*nselected + a
-               up_i = (site_i - 1)*2*norb + iorb
-               down_i = up_i + norb
-               do site_j = 1, nsite
-                  do b = 1, nselected
-                     jorb = selected_orbitals(b)
-                     ib = (site_j - 1)*nselected + b
-                     up_j = (site_j - 1)*2*norb + jorb
-                     down_j = up_j + norb
-                     fields(ia, ib, k) = 0.5_rp*(reciprocal_obj%hk_bulk(up_i, up_j, k) - &
-                        reciprocal_obj%hk_bulk(down_i, down_j, k))
-                     if (site_i == site_j) vertices(ia, ib, site_i, k) = vz_full(up_i, up_j)
+      allocate(result%susceptibility(request%nsite, request%nsite, size(request%frequencies)), &
+         result%frequencies(size(request%frequencies)), transition(request%nsite))
+      result%susceptibility = cmplx(0.0_rp, 0.0_rp, rp)
+      do ik = 1, left_state%nk
+         do ib = 1, left_state%nbands
+            do jb = 1, right_state%nbands
+               occupation_difference = left_state%occupations(ib, ik) - right_state%occupations(jb, ik)
+               if (occupation_difference == 0.0_rp) cycle
+               do i = 1, request%nsite
+                  transition(i) = mills_1u_transition_vertex(left_state%eigenvectors(:, ib, ik), &
+                     right_state%eigenvectors(:, jb, ik), request%nsite, request%orbital_lmax, i, request%channel)
+               end do
+               do iw = 1, size(request%frequencies)
+                  denominator = cmplx(request%frequencies(iw) + left_state%eigenvalues(ib, ik) - &
+                     right_state%eigenvalues(jb, ik), request%eta, rp)
+                  ! The established circular channel stores chi_code=2*chi_(S+S-).
+                  ! sigma^+=(sigma_x+i*sigma_y)/2 has the same coefficient vertex
+                  ! as S^+=c^+_up c_down; the factor two is in this channel's
+                  ! response normalization, not in T or in the Mills definition.
+                  pair_factor = cmplx(2.0_rp*left_state%k_weights(ik)*occupation_difference, 0.0_rp, rp) / denominator
+                  do j = 1, request%nsite
+                     do i = 1, request%nsite
+                        result%susceptibility(i, j, iw) = result%susceptibility(i, j, iw) + &
+                           pair_factor*transition(i)*conjg(transition(j))
+                     end do
                   end do
                end do
             end do
          end do
       end do
-      request%selector = contract%selector
-      request%splitting_convention = projected_mills_convention
-      request%nsite = nsite
-      request%site_block_size = nselected
-      request%actual_pauli_field = fields
-      request%site_vertices = vertices
-      request%projected_moment = moment
-      if (allocated(reciprocal_obj%k_weights) .and. size(reciprocal_obj%k_weights) == nk) then
-         request%sample_weights = reciprocal_obj%k_weights
+      result%q = request%q
+      result%frequencies = request%frequencies
+      result%eta = request%eta
+      result%channel = trim(request%channel)
+      result%provenance = 'MILLS-1U coefficient Lehmann; T=sum_mu(d) c_left_up^* c_right_down; no radial overlap; chi_code=2 chi_S'
+      deallocate(transition)
+   end subroutine evaluate_mills_1u_bare
+
+   module subroutine evaluate_mills_1u_model_reduction(spin_difference, delta_d, nsite, norb, result)
+      complex(rp), intent(in) :: spin_difference(:, :)
+      real(rp), intent(in) :: delta_d(:)
+      integer, intent(in) :: nsite, norb
+      type(mills_1u_model_reduction_result), intent(out) :: result
+      integer :: n, i, j, site_i, site_j, orbital_i, orbital_j
+      real(rp) :: residual2, local2, d2, nond2, offdiag2, mills2, scale
+
+      n = nsite*norb
+      if (nsite < 1 .or. norb /= 9 .or. size(delta_d) /= nsite .or. &
+          any(shape(spin_difference) /= [n, n])) then
+         error stop 'MILLS-1U model reduction: a full spd spin-difference matrix is required'
       end if
-      request%provenance = 'accepted reciprocal hk_bulk; B_sigma=(H_up-H_down)/2; DRESP-01 direct Vz at EF'
-      call evaluate_projected_mills_interaction(request, result)
-      deallocate(vz_full, fields, vertices, selected_orbitals)
-   end subroutine evaluate_projected_mills_from_reciprocal
+      if (any(.not. ieee_is_finite(delta_d)) .or. &
+          any(.not. ieee_is_finite(real(spin_difference, rp))) .or. &
+          any(.not. ieee_is_finite(aimag(spin_difference)))) then
+         error stop 'MILLS-1U model reduction: non-finite spin difference or native d splitting'
+      end if
+      allocate(result%residual(n, n))
+      result%residual = spin_difference
+      mills2 = 0.0_rp
+      do site_i = 1, nsite
+         do orbital_i = 5, 9
+            i = (site_i - 1)*norb + orbital_i
+            result%residual(i, i) = result%residual(i, i) - cmplx(delta_d(site_i), 0.0_rp, rp)
+            mills2 = mills2 + delta_d(site_i)**2
+         end do
+      end do
+      residual2 = 0.0_rp
+      local2 = 0.0_rp
+      d2 = 0.0_rp
+      nond2 = 0.0_rp
+      offdiag2 = 0.0_rp
+      do j = 1, n
+         site_j = (j - 1)/norb + 1
+         orbital_j = mod(j - 1, norb) + 1
+         do i = 1, n
+            site_i = (i - 1)/norb + 1
+            orbital_i = mod(i - 1, norb) + 1
+            residual2 = residual2 + abs(result%residual(i, j))**2
+            if (site_i == site_j .and. orbital_i >= 5 .and. orbital_i <= 9 .and. &
+                orbital_j >= 5 .and. orbital_j <= 9) then
+               local2 = local2 + abs(result%residual(i, j))**2
+            end if
+            if (orbital_i >= 5 .and. orbital_i <= 9 .and. orbital_j >= 5 .and. orbital_j <= 9) then
+               d2 = d2 + abs(result%residual(i, j))**2
+            else
+               nond2 = nond2 + abs(spin_difference(i, j))**2
+            end if
+            if (site_i /= site_j) offdiag2 = offdiag2 + abs(spin_difference(i, j))**2
+         end do
+      end do
+      result%spin_difference_norm = sqrt(sum(abs(spin_difference)**2))
+      result%mills_local_d_norm = sqrt(mills2)
+      result%residual_norm = sqrt(residual2)
+      result%residual_relative_norm = result%residual_norm/max(result%spin_difference_norm, tiny(1.0_rp))
+      result%local_d_shell_residual_norm = sqrt(local2)
+      result%remaining_d_sector_norm = sqrt(d2)
+      result%non_d_sector_norm = sqrt(nond2)
+      result%site_offdiagonal_norm = sqrt(offdiag2)
+      scale = max(result%spin_difference_norm, result%mills_local_d_norm, tiny(1.0_rp))
+      if (.not. ieee_is_finite(scale)) error stop 'MILLS-1U model reduction: non-finite residual norm'
+   end subroutine evaluate_mills_1u_model_reduction
+
+   module subroutine evaluate_mills_1u_dyson(bare, physical_u, result)
+      type(mills_1u_bare_result), intent(in) :: bare
+      real(rp), intent(in) :: physical_u(:)
+      type(projected_dyson_result), intent(out) :: result
+      type(projected_dyson_request) :: request
+      integer :: nsite
+
+      nsite = size(physical_u)
+      if (.not. allocated(bare%susceptibility) .or. .not. allocated(bare%frequencies)) then
+         error stop 'MILLS-1U Dyson: complete bare response is required'
+      end if
+      if (nsite < 1 .or. size(bare%susceptibility, 1) /= nsite .or. &
+          size(bare%susceptibility, 2) /= nsite .or. any(.not. ieee_is_finite(physical_u))) then
+         error stop 'MILLS-1U Dyson: physical U and site susceptibility dimensions are inconsistent'
+      end if
+      ! With H'_MF=-U delta<S^+> S^-+h.c., the physical Kubo bubble obeys
+      ! chi=chi0/(1+U chi0). The repository stores chi_code=2 chi_Kubo, and
+      ! solve_tddft_dyson_frequency forms I-chi_code*K. Thus its required input
+      ! is K=-U/2. This sign/factor follows from the definitions above; it is
+      ! not chosen from a Goldstone fit or from another interaction route.
+      allocate(request%frequencies(size(bare%frequencies)), request%interaction_U(nsite), &
+         request%bare_chi(nsite, nsite, size(bare%frequencies)))
+      request%selector = 'd'
+      request%q = bare%q
+      request%frequencies = bare%frequencies
+      request%eta = bare%eta
+      request%channel = bare%channel
+      request%interaction_U = -0.5_rp*physical_u
+      request%bare_chi = bare%susceptibility
+      request%interaction_provenance = 'MILLS-1U physical U=Delta_d/m_d; circular solver kernel K=-U/2 by normalization derivation'
+      request%bare_provenance = trim(bare%provenance)
+      call evaluate_projected_dyson(request, result)
+      result%interaction_U = physical_u
+      result%dyson_convention = 'D=I-chi_code*K; chi_code=2*chi_Kubo; Mills solver kernel K=-U/2'
+   end subroutine evaluate_mills_1u_dyson
 
    module subroutine evaluate_projected_dyson(request, result)
       type(projected_dyson_request), intent(in) :: request
@@ -827,23 +881,6 @@ contains
       deallocate(residual, chi, denominator, loss)
    end subroutine evaluate_projected_dyson
 
-   subroutine validate_mills_request(request, n, nsite, nsample)
-      type(projected_mills_interaction_request), intent(in) :: request
-      integer, intent(out) :: n, nsite, nsample
-      n = size(request%actual_pauli_field, 1)
-      nsite = request%nsite
-      nsample = size(request%actual_pauli_field, 3)
-      if (n < 1 .or. nsite < 1 .or. nsample < 1 .or. request%site_block_size < 1 .or. &
-          n /= nsite*request%site_block_size .or. any(shape(request%actual_pauli_field) /= [n, n, nsample]) .or. &
-          any(shape(request%site_vertices) /= [n, n, nsite, nsample]) .or. size(request%projected_moment) /= nsite) then
-         error stop 'DRESP-04 Mills: invalid scalarization dimensions'
-      end if
-      if (len_trim(request%selector) == 0) error stop 'DRESP-04 Mills: selector provenance is required'
-      if (any(.not. ieee_is_finite(real(request%actual_pauli_field, rp))) .or. &
-          any(.not. ieee_is_finite(aimag(request%actual_pauli_field)))) then
-         error stop 'DRESP-04 Mills: actual splitting contains non-finite values'
-      end if
-   end subroutine validate_mills_request
 
    subroutine validate_projected_dyson_request(request, nsite, nw)
       type(projected_dyson_request), intent(in) :: request

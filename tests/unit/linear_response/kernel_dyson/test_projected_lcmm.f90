@@ -8,9 +8,7 @@ module test_projected_lcmm_mod
       evaluate_projected_juelich_interaction, evaluate_projected_juelich_holdout, &
       projected_juelich_exact_local, projected_juelich_projected_local, projected_juelich_rank_deficient, &
       select_projected_juelich_eta_indices
-   use linear_response_mod, only: projected_mills_interaction_request, &
-      projected_mills_interaction_result, projected_dyson_request, projected_dyson_result, &
-      evaluate_projected_mills_interaction, evaluate_projected_dyson
+   use linear_response_mod, only: projected_dyson_request, projected_dyson_result, evaluate_projected_dyson
    implicit none
    private
    public :: run_test_projected_lcmm
@@ -40,8 +38,6 @@ contains
       logical, intent(inout) :: failed
       type(projected_juelich_request) :: request
       type(projected_juelich_result) :: result
-      type(projected_mills_interaction_request) :: mills_request
-      type(projected_mills_interaction_result) :: mills_result
       type(projected_dyson_request) :: dyson_request, covariance_request
       type(projected_dyson_result) :: dyson_result, covariance_result
       real(rp), parameter :: u_true = -0.8_rp, moment = 0.7_rp
@@ -60,16 +56,6 @@ contains
       call check('one-site complex U', abs(result%interaction_U_complex(1) - cmplx(u_true, 0.0_rp, rp)) < 1.0e-12_rp, failed)
       call check('one-site Ward residual', result%relative_residual < 1.0e-12_rp, failed)
       call check('one-site real residual', result%relative_real_constrained_residual < 1.0e-12_rp, failed)
-      allocate(mills_request%actual_pauli_field(1, 1, 1), mills_request%site_vertices(1, 1, 1, 1), &
-         mills_request%projected_moment(1))
-      mills_request%selector = 'd'
-      mills_request%nsite = 1
-      mills_request%site_block_size = 1
-      mills_request%actual_pauli_field = cmplx(u_true*moment, 0.0_rp, rp)
-      mills_request%site_vertices = cmplx(1.0_rp, 0.0_rp, rp)
-      mills_request%projected_moment = moment
-      call evaluate_projected_mills_interaction(mills_request, mills_result)
-      call check('one-site Mills equality', abs(result%interaction_U(1) - mills_result%interaction_U(1)) < 1.0e-12_rp, failed)
       allocate(dyson_request%frequencies(1), dyson_request%interaction_U(1), dyson_request%bare_chi(1, 1, 1))
       dyson_request%selector = 'd'
       dyson_request%q = [0.137_rp, 0.0_rp, 0.0_rp]
