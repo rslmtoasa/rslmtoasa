@@ -93,6 +93,7 @@ module linear_response_mod
       real(rp) :: electron_count = 0.0_rp, electron_residual = 0.0_rp
       logical :: inverse_available = .false.
       complex(rp), allocatable :: bubble(:, :), contact(:, :), kernel(:, :), kernel_pm(:, :)
+      ! Rotation-coordinate propagators; no physical spin-susceptibility amplitude identity is assumed.
       complex(rp), allocatable :: inverse_kernel(:, :), inverse_kernel_pm(:, :)
    contains
       procedure :: clear => rotation_result_clear

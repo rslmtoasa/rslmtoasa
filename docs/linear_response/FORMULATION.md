@@ -9,7 +9,7 @@ contains three deliberately different formulations:
 
 | formulation | role | status |
 |---|---|---|
-| `rotation` | local transverse rotation dynamics | production route |
+| `rotation` | local transverse rotation / electronic effective-action dynamics | production route |
 | `tddft` | spatial transverse TD-DFT | strict-ASA `L=0` target; `L>0` remains research scope |
 | `projected` | site-space projected response | model and cross-check, not the spatial response |
 
@@ -23,7 +23,7 @@ Sources: `lr-campaign-archive:docs/TDDFT_FORMULATION.md`, `lr-campaign-archive:d
 ## Rotation dynamics
 
 For a transverse rotation at `q`, the production object is the retarded
-kernel
+local-rotation effective-action kernel
 
 `K^R(q,omega) = C(q) + Pi^R(q,omega)`,
 
@@ -35,6 +35,14 @@ is compared with the force-theorem Hessian. The `q=0` mode uses the exact
 uniform-rotation/Berry identity of this formulation; it does not subtract a
 mode or apply a Goldstone correction. Finite-frequency damping is still
 retained.
+
+The dynamic rotation kernel is not identified with the full KL transverse
+susceptibility. Its inverse is a rotation-coordinate propagator; physical
+spin-susceptibility amplitudes require a separate source-coupling derivation.
+Its adiabatic limit maps to KL MFT: `H_theta_theta = 2[J(0)-J(q)]`,
+`B_Berry = M_band/2`, and `omega = H_theta_theta/B_Berry = 4[J(0)-J(q)]/M_band`
+in the positive-moment convention. See [KL_IDENTITY.md](KL_IDENTITY.md) for
+the equation mapping and signed-channel/reporting conventions.
 
 The lower-level response evaluator and `K(q,omega)` kernel are dimensioned
 for two transverse coordinates per magnetic site (`2*Nsite`). The automatic
@@ -63,9 +71,9 @@ The pole scan uses the configured circular channels. Its default controls are:
 | `rotation_pole_fine_points` | `41` |
 | `rotation_pole_refinement_half_width` | `2.0` |
 
-The scan compares the positive-real-kernel crossing, minimum `|K|`, and loss
-peak. A pole is not promoted when these diagnostics disagree or the eta
-ladder is unresolved.
+The scan compares the positive-real-kernel crossing, minimum `|K|`, and the peak
+in `-Im K^{-1}`. A collective local-rotation pole is not promoted when these
+diagnostics disagree or the eta ladder is unresolved.
 
 The q=0 Berry slope uses one canonical finite-difference step,
 `h=rotation_probe_omega`, for both `K(+h)`/`K(-h)` sampling and the
@@ -83,7 +91,7 @@ The implemented transverse convention is
 For the accepted q=0 state, the independently checked Berry slopes obey
 `b_plus = d K_plus/d omega = -B` and
 `b_minus = d K_minus/d omega = +B`, where `B` is the signed Berry
-commutator. Therefore the linearized roots are
+commutator, with `B = M_band/2`. Therefore the linearized roots are
 
 `omega_plus = K_plus(q,0)/B` and
 `omega_minus = -K_minus(q,0)/B`.
@@ -92,21 +100,22 @@ If the static transverse curvature is a common signed value `kappa`, changing
 the sign of `kappa` exchanges which circular channel has the positive-
 frequency root; the other root is its negative-frequency partner. A negative
 static curvature is consequently not, by itself, a proof of an instability.
-The signed loss and the retarded pole diagnostic must also be checked. With
-`L = -Im(K**(-1))`, the current causality indicator is
-`(d Re K/d omega) * Im K > 0` at the resolved real-axis crossing. Loss signs
-may be opposite in the two channels because the slopes are opposite; taking
+The signed inverse rotation kernel spectral weight and the retarded pole
+diagnostic must also be checked. With
+`rotation_spectral_weight = -Im(K**(-1))`, the current causality indicator is
+`(d Re K/d omega) * Im K > 0` at the resolved real-axis crossing. Rotation spectral-weight
+signs may be opposite in the two channels because the slopes are opposite; taking
 an absolute value would erase this convention information.
 
 The focused `UnitLrRotationProductionAdapter` audit evaluates both channels,
-their signed linear roots, a signed real-axis crossing, and the loss/causality
-indicator. It also checks the Cartesian covariance
+their signed linear roots, a signed real-axis crossing, and the rotation
+spectral-weight/causality indicator. It also checks the Cartesian covariance
 `K_AB(q,omega) = conj(K_AB(-q,-omega))`. The coarse 1x1x1 q=0.05 fixture
 provides the following signed example from the existing response-frequency
 grid (Ry units, `eta=1e-5`; actual roots are linear interpolations of the
 signed `Re K` crossings):
 
-| channel | near-static `Re K(q,0)` | slope | predicted root | actual root | loss sign | slope*`Im K` |
+| channel | near-static `Re K(q,0)` | slope | predicted root | actual root | `-Im K^{-1}` sign | slope*`Im K` |
 |---|---:|---:|---:|---:|---:|---:|
 | `+` | `-2.4011e-3` | `-2.0057` | `-1.1972e-3` | `-1.2052e-3` | negative | positive |
 | `-` | `-4.4150e-4` | `+2.0084` | `+2.1982e-4` | `+2.2010e-4` | positive | positive |
@@ -127,8 +136,8 @@ missing rather than writing a fabricated zero.
 
 The rotation workflow is generic when `diagnostics='none'`: it validates the
 accepted state, evaluates the q path and dynamic kernel, performs static
-reduction and pole/loss analysis, and writes the response output without Fe
-campaign assumptions. `diagnostics='invariants'` enables the optional
+reduction and rotation-mode pole/spectral-weight analysis, and writes the
+response output without Fe campaign assumptions. `diagnostics='invariants'` enables the optional
 historical Fe validation layer. `native_turek` is orthogonal to that choice:
 it enables the independent Turek diagnostic but does not enable the Fe
 campaign. The one-site, CCOR-off, 300 K, PASS-A/PASS-B, and small-q fit

@@ -2930,8 +2930,9 @@ contains
          error stop 'write_rotation_response_grid: invalid frequency-grid controls'
       end if
       open(newunit=unit,file=trim(filename),status='replace',action='write')
-      write(unit,'(a)') '# local-rotation response frequency grid; energies in Ry; loss in 1/Ry'
-      write(unit,'(a)') '# q_fraction_x q_fraction_y q_fraction_z omega_Ry ReK_plus_Ry ImK_plus_Ry ReK_minus_Ry ImK_minus_Ry loss_plus_invRy loss_minus_invRy'
+      ! K inverse is a rotation-coordinate propagator, not a certified spin susceptibility.
+      write(unit,'(a)') '# local-rotation effective-action kernel frequency grid; energies in Ry; minus_Im_Kinv in 1/Ry'
+      write(unit,'(a)') '# q_fraction_x q_fraction_y q_fraction_z omega_Ry ReK_plus_Ry ImK_plus_Ry ReK_minus_Ry ImK_minus_Ry minus_Im_Kinv_plus_invRy minus_Im_Kinv_minus_invRy'
       do iq=1,size(q_direct,2)
          call prepare_rotation_response(fixture,recip,q_direct(:,iq),state)
          request%state=>state; request%eta=eta; request%exact_static=.false.; request%want_inverse=.true.
@@ -2976,7 +2977,7 @@ contains
       real(rp) :: bplus,bminus,slope_rel,slope_step,qmag,scf_moment,field_max,cov_q(3)
       real(rp) :: static_residual,q0_residual,circular_offdiag,covariance_residual,omega_cov,eta_cov
       real(rp) :: finite_mev,turek_mev,omega_max,pred_plus,pred_minus,expected,df,fit_d,fit_resid
-      real(rp) :: pole_re,pole_min,loss_peak,loss_height,fwhm,fwhm_mev,resolution,re_k,im_k,abs_k,pole_slope
+      real(rp) :: pole_re,pole_min,rotation_spectral_peak,rotation_spectral_height,fwhm,fwhm_mev,resolution,re_k,im_k,abs_k,pole_slope
       real(rp), allocatable :: energy_eta(:),resid_eta(:),q_magnitude(:)
       integer :: unit,iq,igamma,ik,site,channel,ieta,ipole,nfinite,clean_count
       logical :: static_ok,berry_ok,circular_ok,covariance_ok,causal_ok,resolved
@@ -2992,7 +2993,8 @@ contains
       write(unit,'(a,l1)') '# native_turek_diagnostic_enabled = ',native_ready
       write(unit,'(a)') '# pole_window_basis = H2 static rotation curvature from finite-H; Turek is diagnostic only'
       write(unit,'(a)') '# missing diagnostic fields are written as -'
-      write(unit,'(a)') '# q_fraction q_Ainv adiabatic_finiteH_meV adiabatic_Turek_meV_or_missing pole_ReK_meV pole_minK_meV loss_peak_meV eta_Ry FWHM_meV max_minus_ImG_invRy circular_channel ReK_Ry ImK_Ry absK_Ry frequency_resolution_Ry status'
+      write(unit,'(a)') '# K inverse is a rotation-coordinate propagator; spectral amplitudes are not certified spin susceptibility weights'
+      write(unit,'(a)') '# q_fraction q_Ainv adiabatic_finiteH_meV adiabatic_Turek_meV_or_missing pole_ReK_meV pole_minK_meV rotation_spectral_peak_meV eta_Ry FWHM_meV max_minus_Im_Kinv_invRy circular_channel ReK_Ry ImK_Ry absK_Ry frequency_resolution_Ry status'
       write(*,'(a,3(i0,1x))') 'Rotation dynamics accepted k mesh = ',recip%nk_mesh
       write(*,'(a,es16.8)') 'Rotation dynamics EF (Ry) = ',recip%fermi_level
       write(*,'(a,es16.8)') 'Rotation dynamics temperature (K) = ',recip%temperature
@@ -3064,6 +3066,8 @@ contains
          call prepare_rotation_response(fixture,recip,q_direct(:,iq),state)
          request%state=>state; request%omega=0.0_rp; request%eta=0.0_rp; request%exact_static=.true.; request%want_inverse=.false.
          call evaluate_rotation_response(request,response)
+         ! KL adiabatic MFT: H_theta_theta=2*DeltaJ; B=M_band/2 (see KL_IDENTITY.md).
+         ! Reporting uses |M_band|; signed circular roots retain the Berry/channel convention.
          finite_mev=2.0_rp*real(finite_h(1,1,iq),rp)/max(abs(state%magnetization),1.0e-12_rp)*ry_to_mev
          if (native_ready) then
             turek_mev=4.0_rp*native_delta(iq)/max(abs(state%magnetization),1.0e-12_rp)*ry_to_mev
@@ -3152,7 +3156,7 @@ contains
             end if
             do ieta=1,size(rotation_eta_ladder)
                call scan_rotation_pole(state,ipole,omega_max,rotation_eta_ladder(ieta),rotation_pole_coarse_points, &
-                  rotation_pole_fine_points,rotation_pole_refinement_half_width,pole_re,pole_min,loss_peak,loss_height, &
+                  rotation_pole_fine_points,rotation_pole_refinement_half_width,pole_re,pole_min,rotation_spectral_peak,rotation_spectral_height, &
                   fwhm,resolution,re_k,im_k,abs_k,pole_slope,resolved)
                pole_ok(nfinite)=resolved .or. pole_ok(nfinite)
                causal_ok=causal_ok .or. (pole_re>0.0_rp .and. pole_min>0.0_rp .and. pole_slope*im_k>0.0_rp)
@@ -3168,10 +3172,10 @@ contains
                fwhm_mev=-1.0_rp
                if (fwhm>=0.0_rp) fwhm_mev=fwhm*ry_to_mev
                call write_rotation_dynamics_row(unit,q_direct(:,iq),qmag,finite_mev,native_ready,turek_mev, &
-                  pole_re*ry_to_mev,pole_min*ry_to_mev,loss_peak*ry_to_mev,rotation_eta_ladder(ieta),fwhm_mev,loss_height, &
+                  pole_re*ry_to_mev,pole_min*ry_to_mev,rotation_spectral_peak*ry_to_mev,rotation_eta_ladder(ieta),fwhm_mev,rotation_spectral_height, &
                   trim(channel_name),re_k,im_k,abs_k,resolution,trim(pole_status))
-               write(*,'(a,3(es14.6,1x),a,es12.4,a,a,a,l1)') '  pole ReK/minK/loss (meV) = ', &
-                  pole_re*ry_to_mev,pole_min*ry_to_mev,loss_peak*ry_to_mev,' eta=',rotation_eta_ladder(ieta), &
+               write(*,'(a,3(es14.6,1x),a,es12.4,a,a,a,l1)') '  rotation pole ReK/minK/spectral_peak (meV) = ', &
+                  pole_re*ry_to_mev,pole_min*ry_to_mev,rotation_spectral_peak*ry_to_mev,' eta=',rotation_eta_ladder(ieta), &
                   ' channel=',trim(channel_name),' resolved=',resolved
             end do
             if (pole_ok(nfinite)) clean_count=clean_count+1
@@ -3256,37 +3260,37 @@ contains
       write(*,'(a)') 'Goldstone correction = OFF; strict-ASA L0 dynamics = NOT RUN'
    end subroutine run_fe_rotation_campaign_diagnostics
 
-   subroutine write_rotation_dynamics_row(unit,q,qmag,finite_mev,turek_available,turek_mev,pole_re,pole_min,loss_peak,eta, &
-      fwhm,loss_height,channel_name,re_k,im_k,abs_k,resolution,status)
+   subroutine write_rotation_dynamics_row(unit,q,qmag,finite_mev,turek_available,turek_mev,pole_re,pole_min,rotation_spectral_peak,eta, &
+      fwhm,rotation_spectral_height,channel_name,re_k,im_k,abs_k,resolution,status)
       integer, intent(in) :: unit
-      real(rp), intent(in) :: q(3),qmag,finite_mev,turek_mev,pole_re,pole_min,loss_peak,eta,fwhm,loss_height
+      real(rp), intent(in) :: q(3),qmag,finite_mev,turek_mev,pole_re,pole_min,rotation_spectral_peak,eta,fwhm,rotation_spectral_height
       logical, intent(in) :: turek_available
       character(len=*), intent(in) :: channel_name,status
       real(rp), intent(in) :: re_k,im_k,abs_k,resolution
 
       if (turek_available) then
          write(unit,'(3(es14.6,1x),9(es14.6,1x),a,1x,4(es14.6,1x),a)') q,qmag,finite_mev,turek_mev, &
-            pole_re,pole_min,loss_peak,eta,fwhm,loss_height,trim(channel_name),re_k,im_k,abs_k,resolution,trim(status)
+            pole_re,pole_min,rotation_spectral_peak,eta,fwhm,rotation_spectral_height,trim(channel_name),re_k,im_k,abs_k,resolution,trim(status)
       else
          write(unit,'(3(es14.6,1x),2(es14.6,1x),a,1x,6(es14.6,1x),a,1x,4(es14.6,1x),a)') q,qmag,finite_mev,'-', &
-            pole_re,pole_min,loss_peak,eta,fwhm,loss_height,trim(channel_name),re_k,im_k,abs_k,resolution,trim(status)
+            pole_re,pole_min,rotation_spectral_peak,eta,fwhm,rotation_spectral_height,trim(channel_name),re_k,im_k,abs_k,resolution,trim(status)
       end if
    end subroutine write_rotation_dynamics_row
 
    subroutine scan_rotation_pole(state,channel,omega_max,eta,coarse_points,fine_points,refinement_half_width, &
-      pole_re,pole_min,loss_peak,loss_height,fwhm,resolution,re_k,im_k,abs_k,pole_slope,resolved)
+      pole_re,pole_min,rotation_spectral_peak,rotation_spectral_height,fwhm,resolution,re_k,im_k,abs_k,pole_slope,resolved)
       type(rotation_state), target, intent(inout) :: state
       integer, intent(in) :: channel
       real(rp), intent(in) :: omega_max,eta
       integer, intent(in) :: coarse_points,fine_points
       real(rp), intent(in) :: refinement_half_width
-      real(rp), intent(out) :: pole_re,pole_min,loss_peak,loss_height,fwhm,resolution,re_k,im_k,abs_k,pole_slope
+      real(rp), intent(out) :: pole_re,pole_min,rotation_spectral_peak,rotation_spectral_height,fwhm,resolution,re_k,im_k,abs_k,pole_slope
       logical, intent(out) :: resolved
       type(rotation_request) :: request
       type(rotation_result) :: response
       integer :: ncoarse,nfine
-      real(rp), allocatable :: omega_c(:),kabs_c(:),kre_c(:),loss_c(:)
-      real(rp), allocatable :: omega_f(:),kabs_f(:),kre_f(:),loss_f(:)
+      real(rp), allocatable :: omega_c(:),kabs_c(:),kre_c(:),spectral_c(:)
+      real(rp), allocatable :: omega_f(:),kabs_f(:),kre_f(:),spectral_f(:)
       real(rp) :: center,dw,left,right,half,peak,root_distance,x1,x2,t
       integer :: i,imin,ipeak,iroot
       logical :: have_root,have_left,have_right
@@ -3294,8 +3298,8 @@ contains
       if (ncoarse<2 .or. nfine<2 .or. refinement_half_width<=0.0_rp) then
          error stop 'scan_rotation_pole: invalid scan controls'
       end if
-      allocate(omega_c(ncoarse),kabs_c(ncoarse),kre_c(ncoarse),loss_c(ncoarse), &
-         omega_f(nfine),kabs_f(nfine),kre_f(nfine),loss_f(nfine))
+      allocate(omega_c(ncoarse),kabs_c(ncoarse),kre_c(ncoarse),spectral_c(ncoarse), &
+         omega_f(nfine),kabs_f(nfine),kre_f(nfine),spectral_f(nfine))
       request%state=>state; request%eta=eta; request%exact_static=.false.; request%want_inverse=.true.
       do i=1,ncoarse
          omega_c(i)=omega_max*real(i-1,rp)/real(ncoarse-1,rp)
@@ -3303,7 +3307,7 @@ contains
          call evaluate_rotation_response(request,response)
          kabs_c(i)=abs(response%kernel_pm(channel,channel))
          kre_c(i)=real(response%kernel_pm(channel,channel),rp)
-         loss_c(i)=-aimag(response%inverse_kernel_pm(channel,channel))
+         spectral_c(i)=-aimag(response%inverse_kernel_pm(channel,channel))
       end do
       imin=minloc(kabs_c,dim=1); center=omega_c(imin); dw=omega_max/real(ncoarse-1,rp)
       left=max(0.0_rp,center-refinement_half_width*dw); right=min(omega_max,center+refinement_half_width*dw)
@@ -3315,7 +3319,7 @@ contains
          call evaluate_rotation_response(request,response)
          kabs_f(i)=abs(response%kernel_pm(channel,channel))
          kre_f(i)=real(response%kernel_pm(channel,channel),rp)
-         loss_f(i)=-aimag(response%inverse_kernel_pm(channel,channel))
+         spectral_f(i)=-aimag(response%inverse_kernel_pm(channel,channel))
       end do
       imin=minloc(kabs_f,dim=1); pole_min=omega_f(imin); pole_re=-1.0_rp; have_root=.false.; iroot=0
       root_distance=huge(1.0_rp)
@@ -3332,18 +3336,18 @@ contains
             root_distance=abs(x1-center); pole_re=x1; iroot=i; have_root=.true.
          end if
       end do
-      ipeak=maxloc(loss_f,dim=1); loss_peak=omega_f(ipeak); peak=loss_f(ipeak); loss_height=peak; fwhm=-1.0_rp
+      ipeak=maxloc(spectral_f,dim=1); rotation_spectral_peak=omega_f(ipeak); peak=spectral_f(ipeak); rotation_spectral_height=peak; fwhm=-1.0_rp
       half=0.5_rp*peak; have_left=.false.; have_right=.false.; x1=left; x2=right
       if (peak>0.0_rp) then
          do i=ipeak-1,1,-1
-            if (loss_f(i)<=half .and. loss_f(i+1)>half) then
-               t=(half-loss_f(i))/(loss_f(i+1)-loss_f(i))
+            if (spectral_f(i)<=half .and. spectral_f(i+1)>half) then
+               t=(half-spectral_f(i))/(spectral_f(i+1)-spectral_f(i))
                x1=omega_f(i)+t*(omega_f(i+1)-omega_f(i)); have_left=.true.; exit
             end if
          end do
          do i=ipeak,nfine-1
-            if (loss_f(i)>half .and. loss_f(i+1)<=half) then
-               t=(half-loss_f(i))/(loss_f(i+1)-loss_f(i))
+            if (spectral_f(i)>half .and. spectral_f(i+1)<=half) then
+               t=(half-spectral_f(i))/(spectral_f(i+1)-spectral_f(i))
                x2=omega_f(i)+t*(omega_f(i+1)-omega_f(i)); have_right=.true.; exit
             end if
          end do
@@ -3359,9 +3363,9 @@ contains
       im_k=aimag(response%kernel_pm(channel,channel))
       abs_k=abs(response%kernel_pm(channel,channel))
       resolved=have_root .and. peak>0.0_rp .and. abs(pole_re-pole_min)<=max(2.0_rp*eta,2.0_rp*resolution)
-      if (peak>0.0_rp) resolved=resolved .and. abs(loss_peak-pole_min)<=max(2.0_rp*eta,2.0_rp*resolution)
+      if (peak>0.0_rp) resolved=resolved .and. abs(rotation_spectral_peak-pole_min)<=max(2.0_rp*eta,2.0_rp*resolution)
       if (iroot==0) resolved=.false.
-      deallocate(omega_c,kabs_c,kre_c,loss_c,omega_f,kabs_f,kre_f,loss_f)
+      deallocate(omega_c,kabs_c,kre_c,spectral_c,omega_f,kabs_f,kre_f,spectral_f)
    end subroutine scan_rotation_pole
 
    real(rp) function max_constraint_field(self_obj,nsite,nbulk) result(value)

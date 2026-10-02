@@ -20,7 +20,8 @@ The archived decks are the predecessor forms of the checked-in current cases:
 Only numeric data rows in the requested output artifacts are compared.
 Comments, build identity, timing, paths, log order, rotation channel text,
 and status words are ignored.  The references are never regenerated from the
-current executable.
+current executable. Rotation spectral columns use the current explicit
+`Kinv`/rotation names; the archived numeric values and tolerances are unchanged.
 
 `LrRotationTurekIndependence` runs the same rotation deck with
 `native_turek=.false.` and `.true.` and compares the H2-derived rows. The

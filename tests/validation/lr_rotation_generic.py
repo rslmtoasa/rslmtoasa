@@ -43,6 +43,7 @@ def main() -> int:
         input_text = set_namelist_value(input_text, "native_crosscheck", ".false.")
         input_text = set_namelist_value(input_text, "diagnostics", "'none'")
         input_text = set_namelist_value(input_text, "temperature", "350.0")
+        input_text = set_namelist_value(input_text, "rotation_n_omega", "3")
         input_path.write_text(input_text)
         completed = subprocess.run(
             [str(args.binary.resolve()), "input.nml"],
@@ -64,6 +65,13 @@ def main() -> int:
             raise AssertionError("generic workflow unexpectedly ran the Fe validation campaign")
         if "temperature = 350.0" not in input_path.read_text():
             raise AssertionError("generic fixture temperature was not set")
+        grid = (scratch / "rotation_response_grid.dat").read_text()
+        expected_grid_header = (
+            "# q_fraction_x q_fraction_y q_fraction_z omega_Ry ReK_plus_Ry ImK_plus_Ry "
+            "ReK_minus_Ry ImK_minus_Ry minus_Im_Kinv_plus_invRy minus_Im_Kinv_minus_invRy"
+        )
+        if expected_grid_header not in grid.splitlines():
+            raise AssertionError("rotation grid spectral-weight header differs from the public schema")
         rows = 0
         for line in output.read_text().splitlines():
             fields = line.split()

@@ -211,7 +211,7 @@ contains
       real(rp) :: q(3),q_cov(3),omega,eta,fermi,kT,weight_sum,weight,fn,m_band,berry_direct,slope_plus,slope_minus
       real(rp) :: static_residual,q0_residual,oracle_residual,covariance_residual,circular_residual,berry_residual,delta_omega
       real(rp) :: max_component,grid_residual,grid_best,grid_point(3)
-      real(rp) :: signed_static(2),signed_slope(2),signed_predicted(2),signed_root(2),signed_loss(2),signed_causality(2)
+      real(rp) :: signed_static(2),signed_slope(2),signed_predicted(2),signed_root(2),signed_spectral_weight(2),signed_causality(2)
       integer :: nk,nmat,ncoord,nband,norb,nsite,ik,ia,ib,n,m,site_a,site_b,axis_a,axis_b,up,dn,io,iq,iw,ie,jk
 
       nsite=base%nsite; norb=base%norb; nmat=2*norb*nsite; ncoord=2*nsite
@@ -252,18 +252,18 @@ contains
 
       call prepare_rotation_response(base,recip,q_audit,state_audit)
       call audit_signed_circular_channels(state_audit,1.0e-5_rp,1.0e-5_rp,signed_static,signed_slope, &
-         signed_predicted,signed_root,signed_loss,signed_causality)
-      write(*,'(a,6(es14.6,1x))') 'Rotation signed q audit (+) K0/slope/predicted/actual/loss/causal = ', &
-         signed_static(1),signed_slope(1),signed_predicted(1),signed_root(1),signed_loss(1),signed_causality(1)
-      write(*,'(a,6(es14.6,1x))') 'Rotation signed q audit (-) K0/slope/predicted/actual/loss/causal = ', &
-         signed_static(2),signed_slope(2),signed_predicted(2),signed_root(2),signed_loss(2),signed_causality(2)
+         signed_predicted,signed_root,signed_spectral_weight,signed_causality)
+      write(*,'(a,6(es14.6,1x))') 'Rotation signed q audit (+) K0/slope/predicted/actual/minus_Im_Kinv/causal = ', &
+         signed_static(1),signed_slope(1),signed_predicted(1),signed_root(1),signed_spectral_weight(1),signed_causality(1)
+      write(*,'(a,6(es14.6,1x))') 'Rotation signed q audit (-) K0/slope/predicted/actual/minus_Im_Kinv/causal = ', &
+         signed_static(2),signed_slope(2),signed_predicted(2),signed_root(2),signed_spectral_weight(2),signed_causality(2)
       if (minval(abs(signed_static))<=tiny(1.0_rp) .or. minval(abs(signed_slope))<=tiny(1.0_rp)) then
          error stop 'SIGNED_CIRCULAR_STATIC_SLOPE_OPEN'
       end if
       if (maxval(abs(signed_root-signed_predicted)/max(abs(signed_predicted),1.0e-6_rp))>0.5_rp) then
          error stop 'SIGNED_CIRCULAR_ROOT_LINEARIZATION_OPEN'
       end if
-      if (minval(abs(signed_loss))<=1.0e-12_rp .or. minval(signed_causality)<=0.0_rp) then
+      if (minval(abs(signed_spectral_weight))<=1.0e-12_rp .or. minval(signed_causality)<=0.0_rp) then
          error stop 'SIGNED_CIRCULAR_LOSS_DIAGNOSTIC_OPEN'
       end if
 
@@ -389,10 +389,10 @@ contains
       deallocate(reduced,unitary,kernel_pm,bubble_o,contact_o,kernel_o)
    end subroutine check_rotation_response
 
-   subroutine audit_signed_circular_channels(state,delta_omega,eta,static_kernel,slope,predicted,actual,loss,causality)
+   subroutine audit_signed_circular_channels(state,delta_omega,eta,static_kernel,slope,predicted,actual,spectral_weight,causality)
       type(rotation_state), target, intent(inout) :: state
       real(rp), intent(in) :: delta_omega,eta
-      real(rp), intent(out) :: static_kernel(2),slope(2),predicted(2),actual(2),loss(2),causality(2)
+      real(rp), intent(out) :: static_kernel(2),slope(2),predicted(2),actual(2),spectral_weight(2),causality(2)
       type(rotation_request) :: request
       type(rotation_result) :: response
       integer, parameter :: nscan=81
@@ -423,7 +423,7 @@ contains
 
       omega_limit=max(5.0e-3_rp,4.0_rp*maxval(abs(predicted)))
       do channel=1,2
-         found=.false.; best_distance=huge(1.0_rp); actual(channel)=0.0_rp; loss(channel)=0.0_rp; causality(channel)=0.0_rp
+         found=.false.; best_distance=huge(1.0_rp); actual(channel)=0.0_rp; spectral_weight(channel)=0.0_rp; causality(channel)=0.0_rp
          omega_previous=-omega_limit
          request%omega=omega_previous
          call evaluate_rotation_response(request,response)
@@ -447,7 +447,7 @@ contains
          request%omega=actual(channel); request%want_inverse=.true.
          call evaluate_rotation_response(request,response)
          if (.not.response%inverse_available) error stop 'SIGNED_CIRCULAR_INVERSE_AUDIT_OPEN'
-         loss(channel)=-aimag(response%inverse_kernel_pm(channel,channel))
+         spectral_weight(channel)=-aimag(response%inverse_kernel_pm(channel,channel))
          im_kernel=aimag(response%kernel_pm(channel,channel))
          causality(channel)=slope(channel)*im_kernel
       end do
