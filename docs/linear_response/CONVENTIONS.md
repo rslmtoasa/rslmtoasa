@@ -121,9 +121,13 @@ local interaction has the response-space measure required by the operator
 composition. The projected LCMM interaction is solved from its own site Ward
 equation and does not inherit a radial `4*pi` by analogy.
 
-The Dyson metadata must identify the selected route and its provenance:
-direct ALSDA, Goldstone sum rule, or an explicitly corrected route. A raw
-Goldstone residual is reported as a diagnostic; no route silently repairs the
-denominator.
+Production Dyson metadata identify direct ALSDA, Juelich-d, or Mills-1U
+and their distinct provenance. No production route applies a fitted interaction
+or Goldstone repair. Static radial and compact GSR services independently test
+Ward algebra and product-space action; their Pauli magnetization must belong
+to the same response representation. They are validation infrastructure, not
+alternate production interactions. Dynamic radial LCMM is rejected; its former
+SR density input did not meet that Pauli contract. General spin-charge,
+longitudinal, SOC/noncollinear and full-Halle response remain unsupported.
 
 Sources: `lr-campaign-archive:docs/KXC_ALSDA_TRANSVERSE_KERNEL.md`, `lr-campaign-archive:docs/GOLDSTONE_SUMRULE_INTERACTION.md`, `lr-campaign-archive:docs/DRESP_05_PROJECTED_JUELICH_LCMM.md`

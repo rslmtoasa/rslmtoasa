@@ -42,3 +42,8 @@ Here are some ideas to get you started:
 - 😄 Pronouns: ...
 - ⚡ Fun fact: ...
 -->
+
+Linear response offers local-rotation effective-action dynamics, projected
+Juelich-d, projected Mills-1U, and transverse direct ALSDA within the documented
+radial/compact scope. See the [public LR API](docs/linear_response/PUBLIC_API.md)
+for canonical selectors and unsupported extensions.

@@ -10,8 +10,8 @@ contains three deliberately different formulations:
 | formulation | role | status |
 |---|---|---|
 | `rotation` | local transverse rotation / electronic effective-action dynamics | production route |
-| `tddft` | spatial transverse TD-DFT | strict-ASA `L=0` target; `L>0` remains research scope |
-| `projected` | site-space projected response | model and cross-check, not the spatial response |
+| `tddft` | transverse direct ALSDA | strict spherical radial points or complete compact product response |
+| `projected` | Juelich-d or Mills-1U site-space response | certified within their distinct projection contracts |
 
 The three routes share input parsing and conventions but do not share a
 claim of physical equivalence. Longitudinal response, SOC, noncollinearity,
@@ -126,7 +126,8 @@ partner. This is a chirality/negative-frequency-partner interpretation, not
 an absolute-value repair and not a branch-selection rewrite. The simultaneous
 coarse-mesh Cartesian q/-q/-omega covariance residual was `6.25e-17`.
 
-`native_turek` (and its compatibility alias `native_crosscheck`) is optional.
+`native_turek` is the optional independent static reference. The removed
+`native_crosscheck` alias fails explicitly when enabled.
 When enabled, the Turek path is evaluated as an independent static diagnostic;
 it does not select the circular branch, pole window, pole acceptance, static
 normalization, or any Goldstone treatment. The pole-window estimate uses only
@@ -145,7 +146,7 @@ checks are not requirements of the generic workflow.
 
 Sources: `lr-campaign-archive:docs/NATIVE_ROTATION_DYNAMICS.md`, `lr-campaign-archive:docs/TDDFT_FORMULATION.md`
 
-## Spatial TD-DFT
+## Transverse direct-ALSDA TDDFT
 
 The bare transverse response is the retarded Kohn-Sham susceptibility
 `chi_KS` in the canonical response space. The accepted response representations
@@ -162,13 +163,21 @@ space. The enhanced response solves the canonical Dyson equation
 The loss matrix is the retarded anti-Hermitian part
 `L = -(chi - chi^dagger)/(2 i pi)`; point-space callers use the response
 metric adjoint and compact orthonormal callers use the ordinary dagger. The
-explicit `lcmm` interaction is an independent Goldstone-sum-rule route; it
-is not silently substituted for ALSDA.
+spatial production interaction is `alsda` only. The static radial GSR service
+is independent Ward/sum-rule validation infrastructure; it is not a production
+interaction selector. Dynamic radial LCMM is rejected before dispatch: its
+former driver supplied scalar-relativistic radial density where the response
+contract requires accepted Pauli magnetization. A repair and certification
+would require a separate physics campaign. Static-sum-rule U followed by
+dynamic Dyson is legitimate theory; this removal concerns the implementation
+contract, not that theory.
 
-`tddft` accepts `L=0` strict-ASA work as the current target. `L>0` requires
-the complete non-spherical response space and remains research scope. The
-real-space GF route is a provider-backed alternative bare response, not an
-implicit change of the response conventions.
+The radial-point production route requires explicit `response_lmax=0`.
+Its non-spherical `L>0` extension is rejected. Compact ALSDA requires the
+complete retained six-branch product space of the accepted sp/spd basis.
+Neither route claims general full-Halle spin-charge TDDFT. The existing
+real-space GF provider supplies the strict spherical radial ALSDA bare
+response; `realspace_solver` is its sole public provider selector.
 
 Sources: `lr-campaign-archive:docs/LR_KS_SUSCEPTIBILITY.md`, `lr-campaign-archive:docs/KXC_ALSDA_TRANSVERSE_KERNEL.md`, `lr-campaign-archive:docs/GOLDSTONE_SUMRULE_INTERACTION.md`, `lr-campaign-archive:docs/TDDFT_DYSON_AND_LOSS.md`, `lr-campaign-archive:docs/LR_LMTO_PRODUCT_RESPONSE_BASIS.md`
 
@@ -187,6 +196,18 @@ and the full spd basis. It does not alter the Jülich `lcmm` route.
 The former `stoner_fit` keyword fails fast as removed. The projected site
 response remains a controlled model and is not a replacement for spatial
 `chi_KS` or the rotation kernel.
+
+`projected + lcmm + projection='d' + channel='chi_plus'` is the certified
+**JUELICH-d — LITERATURE REFERENCE**. It uses the frozen-EF normalized d
+projector and a decreasing ladder of at least four positive eta values to
+construct the static eta→0 interaction, followed by site-space Dyson.
+Gamma is required in the q list. `spd`, `spdf`, and `both` are rejected at
+configuration validation because their dynamic generalization is not certified.
+See [JUELICH_IDENTITY.md](JUELICH_IDENTITY.md).
+
+`interaction='none'` is a bare-response validation seam: projected d/spd/both
+checks validate site operators and bubbles, and compact bare checks validate
+transition vertices. Neither executes an interacting production method.
 
 Sources: `lr-campaign-archive:docs/DRESP_01_PROJECTED_SITE_SPIN_CONTRACT.md`, `lr-campaign-archive:docs/DRESP_02_PROJECTED_RECIPROCAL_CHI0.md`, `lr-campaign-archive:docs/DRESP_04_PROJECTED_MILLS_RPA.md`, `lr-campaign-archive:docs/DRESP_05_PROJECTED_JUELICH_LCMM.md`
 
@@ -241,7 +262,7 @@ values are paths.
 | `contour_height_fraction` | `0.35` |
 | `contour_account_fermi_poles` | `.true.` |
 | `native_turek` | `.false.` |
-| `native_crosscheck` | `.false.` |
+| `native_crosscheck` | removed; `.true.` rejected; `.false.` is inert input transition |
 | `native_green_eta` | `1e-3` |
 | `native_energy_points` | `0` |
 | `native_contour_points` | `64` |
@@ -249,7 +270,7 @@ values are paths.
 | `native_contour_height_fraction` | `0.35` |
 | `native_contour_account_fermi_poles` | `.true.` |
 | `native_contour_target_fermi_poles` | `0` |
-| `native_rsgf_provider` | `'auto'` |
+| `native_rsgf_provider` | removed selector; only inert default `'auto'` accepted; use `realspace_solver` |
 | `gf_integration_points` | `2001` |
 | `gf_integration_eta` | `0.0` |
 | `gf_energy_margin` | `1.0` |
@@ -284,17 +305,17 @@ The code accepts only these `tddft` rows:
 | representation | bare response | interaction |
 |---|---|---|
 | `radial_points` | `lehmann` | `alsda` |
-| `radial_points` | `lehmann` | `lcmm` |
 | `radial_points` | `realspace_gf` | `alsda` |
-| `radial_points` | `realspace_gf` | `lcmm` |
 | `product_compact` | `lehmann` | `alsda` |
 | `product_compact` | `lehmann` | `none` |
 
 For `projected`, the required pair is `radial_points` plus `lehmann`, the
 interaction is `none`, `mills_1u`, or `lcmm`, and `projection` is `d`,
-`spd`, or `both`. `mills_1u` requires `projection='d'`. `rotation` uses its
+`spd`, or `both` only for the bare `none` seam. Both interacting projected
+routes require `projection='d'`; Juelich-d also requires `chi_plus` and its
+static eta ladder. `rotation` uses its
 own q-path and pole validation. In all
-formulations, `channel` is `chi_plus` or `chi_minus`, `diagnostics` is
+transverse formulations, `channel` is `chi_plus` or `chi_minus` (Juelich-d is plus-only), `diagnostics` is
 `none` or `invariants`, `realspace_solver` is `auto`, `block`, or
 `chebyshev`, and `response_lmax` is `-1` through `4`.
 
@@ -303,3 +324,14 @@ values `tddft` and `susceptibility`; use `post_processing='linear_response'`
 with this namelist.
 
 Sources: `lr-campaign-archive:docs/LR_RESPONSE_BASIS_MAPPING.md`, `lr-campaign-archive:docs/LR_RESPONSE_SPACE_ALGEBRA.md`, `lr-campaign-archive:docs/TDDFT_PRODUCTION_DRIVER.md`
+
+## Deferred capabilities
+
+Full KL finite-frequency chi^{+-} is not implemented; rotation is not its
+alias. Juelich spd/spdf have a static aggregate sum-rule identity but no
+certified dynamic closure. The Mills full Coulomb tensor is the literature
+parent and is not implemented. Longitudinal, charge, SOC/noncollinear response,
+general full-Halle spatial response, and radial LCMM dynamics await separate
+certification. These are roadmap statements, not runnable selectors.
+
+The complete selector and validation inventory is in [PUBLIC_API.md](PUBLIC_API.md).

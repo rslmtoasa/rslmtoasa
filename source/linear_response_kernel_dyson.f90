@@ -622,9 +622,11 @@ contains
          right_up = left_up
          right_down = left_down
          select case (trim(channel))
-         case ('chi_plus', 'plus')
+         case ('plus', 'minus')
+            error stop 'plus/minus channel aliases were removed; use chi_plus/chi_minus'
+         case ('chi_plus')
             vertex = vertex + conjg(left_coefficients(left_up))*right_coefficients(right_down)
-         case ('chi_minus', 'minus')
+         case ('chi_minus')
             vertex = vertex + conjg(left_coefficients(left_down))*right_coefficients(right_up)
          case default
             error stop 'MILLS-1U vertex: channel must be chi_plus or chi_minus'
@@ -1856,23 +1858,19 @@ contains
       if (request%eta <= 0.0_rp) error stop 'evaluate_tddft_dyson: retarded eta must be positive'
       if (len_trim(request%channel) == 0) error stop 'evaluate_tddft_dyson: circular channel provenance is required'
       select case (trim(request%channel))
-      case ('plus', 'minus', 'chi_plus', 'chi_minus')
+      case ('plus', 'minus')
+         error stop 'plus/minus channel aliases were removed; use chi_plus/chi_minus'
+      case ('chi_plus', 'chi_minus')
       case default
-         error stop 'evaluate_tddft_dyson: channel must be plus/minus or chi_plus/chi_minus'
+         error stop 'evaluate_tddft_dyson: channel must be chi_plus or chi_minus'
       end select
       select case (trim(request%interaction_route))
       case (lr_dyson_route_direct_alsda)
          if (index(trim(request%interaction_provenance), 'KXC-01') /= 1) then
             error stop 'evaluate_tddft_dyson: direct_alsda requires KXC-01 interaction provenance'
          end if
-      case (lr_dyson_route_goldstone_sumrule)
-         if (index(trim(request%interaction_provenance), 'GSR-01') /= 1) then
-            error stop 'evaluate_tddft_dyson: goldstone_sumrule requires GSR-01 interaction provenance'
-         end if
-      case (lr_dyson_route_direct_alsda_goldstone_corrected)
-         if (index(trim(request%interaction_provenance), 'GCR-01') /= 1) then
-            error stop 'evaluate_tddft_dyson: corrected route requires GCR-01 interaction provenance'
-         end if
+      case ('goldstone_sumrule', 'direct_alsda_goldstone_corrected')
+         error stop 'dynamic radial GSR/corrected ALSDA routes were removed; static GSR is validation-only'
       case default
          error stop 'evaluate_tddft_dyson: interaction route is not an explicit supported choice'
       end select
@@ -1905,23 +1903,19 @@ contains
       if (request%eta <= 0.0_rp) error stop 'evaluate_tddft_dyson: retarded eta must be positive'
       if (len_trim(request%channel) == 0) error stop 'evaluate_tddft_dyson: circular channel provenance is required'
       select case (trim(request%channel))
-      case ('plus', 'minus', 'chi_plus', 'chi_minus')
+      case ('plus', 'minus')
+         error stop 'plus/minus channel aliases were removed; use chi_plus/chi_minus'
+      case ('chi_plus', 'chi_minus')
       case default
-         error stop 'evaluate_tddft_dyson: channel must be plus/minus or chi_plus/chi_minus'
+         error stop 'evaluate_tddft_dyson: channel must be chi_plus or chi_minus'
       end select
       select case (trim(request%interaction_route))
       case (lr_dyson_route_direct_alsda)
          if (index(trim(request%interaction_provenance), 'KXC-01') /= 1) then
             error stop 'evaluate_tddft_dyson: direct_alsda requires KXC-01 interaction provenance'
          end if
-      case (lr_dyson_route_goldstone_sumrule)
-         if (index(trim(request%interaction_provenance), 'GSR-01') /= 1) then
-            error stop 'evaluate_tddft_dyson: goldstone_sumrule requires GSR-01 interaction provenance'
-         end if
-      case (lr_dyson_route_direct_alsda_goldstone_corrected)
-         if (index(trim(request%interaction_provenance), 'GCR-01') /= 1) then
-            error stop 'evaluate_tddft_dyson: corrected route requires GCR-01 interaction provenance'
-         end if
+      case ('goldstone_sumrule', 'direct_alsda_goldstone_corrected')
+         error stop 'dynamic radial GSR/corrected ALSDA routes were removed; static GSR is validation-only'
       case default
          error stop 'evaluate_tddft_dyson: interaction route is not an explicit supported choice'
       end select

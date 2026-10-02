@@ -25,6 +25,8 @@ program test_kernel_dyson_main
       call run_test_compact_gsr_action()
    case ('compact_interaction')
       call run_test_compact_interaction()
+   case ('dyson_removed_gsr', 'dyson_removed_corrected', 'dyson_plus_alias', 'dyson_minus_alias')
+      call run_test_dyson(trim(case_name))
    case ('dyson')
       call run_test_dyson()
    case ('lcmm_sumrule')

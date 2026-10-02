@@ -233,7 +233,7 @@ fallback, exactly as `rsrec_cuda_plugin.f90` does for the recursion kernels
 
 `post_processing='linear_response'` is owned by `linear_response_mod` and is
 configured through `&linear_response`. The three formulations and their
-compatibility rows are documented in [`linear_response/FORMULATION.md`](linear_response/FORMULATION.md);
+canonical production matrix is documented in [`linear_response/PUBLIC_API.md`](linear_response/PUBLIC_API.md);
 the convention and provider contracts are in the companion documents there.
 
 The live module ownership is:
@@ -245,7 +245,7 @@ The live module ownership is:
 | `source/linear_response_run.f90` | formulation dispatch and production orchestration |
 | `source/linear_response_bare.f90` | bare-response services |
 | `source/linear_response_basis.f90` | response basis and product-space services |
-| `source/linear_response_kernel_dyson.f90` | ALSDA/GSR interactions and Dyson/loss services |
+| `source/linear_response_kernel_dyson.f90` | direct ALSDA, static GSR validation, projected interactions, and Dyson/loss services |
 | `source/lmto_path_operator.f90` | auxiliary Turek/path-operator contract; never a `chi0` provider |
 | `source/lmto_path_operator_contour.f90` | contour and ordered-pair path-operator implementation |
 

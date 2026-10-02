@@ -1156,9 +1156,6 @@ module linear_response_mod
    ! --- from tddft_dyson_mod (LR-REF-03c) ---
 
    character(len=*), parameter, public :: lr_dyson_route_direct_alsda = 'direct_alsda'
-   character(len=*), parameter, public :: lr_dyson_route_goldstone_sumrule = 'goldstone_sumrule'
-   character(len=*), parameter, public :: lr_dyson_route_direct_alsda_goldstone_corrected = &
-      'direct_alsda_goldstone_corrected'
    character(len=*), parameter, public :: lr_dyson_response_representation = &
       'LR-04 canonical right-weighted B=A*W'
    character(len=*), parameter, public :: lr_dyson_compact_response_representation = &
@@ -1175,8 +1172,8 @@ module linear_response_mod
    !>
    !> `canonical_interaction` must already be in the LR-04 representation.  In
    !> particular, this request has no raw-kernel escape hatch and no automatic
-   !> route selection.  For the corrected route the supplied matrix must be
-   !> the explicitly selected GCR-01 corrected Kxc.
+   !> route selection. The supplied matrix must be the certified direct ALSDA
+   !> Kxc; static GSR services remain independent validation infrastructure.
    type, public :: tddft_dyson_request
       type(response_space_layout), pointer :: response_space => null()
       real(rp) :: q(3) = 0.0_rp
@@ -2595,6 +2592,10 @@ module linear_response_mod
       module subroutine lr_restore_to_default(this)
          class(linear_response), intent(out) :: this
       end subroutine lr_restore_to_default
+
+      module subroutine validate_linear_response_route(config)
+         type(linear_response_config), intent(in) :: config
+      end subroutine validate_linear_response_route
 
       module subroutine lr_load_config(this, filename, validate_request)
          class(linear_response), intent(inout) :: this

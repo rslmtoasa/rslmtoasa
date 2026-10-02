@@ -38,7 +38,7 @@ use_symmetry_reduction = .false.
 use_time_reversal = .true.
 use_shift = .false.
 reciprocal_mode = 'ham_only'
-kspace_ham_order = 'first'
+kspace_ham_order = 'second'
 dos_method = 'tetrahedron'
 temperature = 300.0
 auto_find_fermi = .false.
@@ -59,9 +59,12 @@ q_file = 'qpath.dat'
 n_q_points = 0
 output_file = 'exchange_q.dat'
 write_components = .true.
-native_crosscheck = .false.
 finite_h_spectral_mode = 'metallic'
 native_green_eta = 1.0e-3
 native_energy_points = 0
 rotation_axis = 1.0, 0.0, 0.0
+/
+
+&hamiltonian
+hoh = .true.
 /

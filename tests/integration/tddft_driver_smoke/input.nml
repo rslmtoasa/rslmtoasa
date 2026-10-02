@@ -68,8 +68,7 @@ n_omega = 1
 omega_min = 1.00
 omega_max = 1.00
 eta = 1.00
-! Production smoke boundary: strict-ASA L=0.  The retained L>0 route is
-! exercised separately by LinearResponseFullRadialValidation.
+! Certified radial-point ALSDA boundary: strict spherical L=0.
 response_lmax = 0
 write_full_matrix = .false.
 output_file = 'tddft_smoke.dat'

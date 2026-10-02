@@ -219,13 +219,14 @@ contains
          if (maxval(abs(this%rotation_axis)) <= tiny(1.0_rp)) then
             call g_logger%fatal('[exchange_q]: rotation_axis must be nonzero', __FILE__, __LINE__)
          end if
-         if (this%finite_h_spectral_mode /= 'metallic' .and. this%finite_h_spectral_mode /= 'legacy_occupied') then
-            call g_logger%fatal("[exchange_q]: finite_h_spectral_mode must be 'metallic' or 'legacy_occupied'", &
+         if (this%native_crosscheck) error stop 'native_crosscheck was removed; use native_turek for static validation'
+         if (this%finite_h_spectral_mode /= 'metallic') then
+            call g_logger%fatal("[exchange_q]: legacy_occupied was removed; use metallic", &
                __FILE__, __LINE__)
          end if
-         if (this%finite_h_response_backend /= 'spectral' .and. this%finite_h_response_backend /= 'contour' .and. &
+         if (this%finite_h_response_backend /= 'spectral' .and. &
              this%finite_h_response_backend /= 'both') then
-            call g_logger%fatal("[exchange_q]: finite_h_response_backend must be 'spectral', 'contour', or 'both'", &
+            call g_logger%fatal("[exchange_q]: contour is validation-only; use spectral or both", &
                __FILE__, __LINE__)
          end if
          if (this%contour_points < 8) call g_logger%fatal('[exchange_q]: contour_points must be at least 8', __FILE__, __LINE__)
@@ -334,6 +335,7 @@ contains
          call g_logger%fatal("rotation_dynamics moved: use post_processing='linear_response' with &linear_response formulation='rotation'", &
             __FILE__, __LINE__)
       end if
+      if (config%native_crosscheck) error stop 'native_crosscheck was removed; use native_turek for static validation'
       call validate_rotation_capability(config%n_q, config%native_crosscheck, config%native_turek, control_obj, hamiltonian_obj, &
          self_obj, reciprocal_obj)
       call compute_static_rotation_curvature(config%q_coordinates, config%q_list, config%rotation_axis, &

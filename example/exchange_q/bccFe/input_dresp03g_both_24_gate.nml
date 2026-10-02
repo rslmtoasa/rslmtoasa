@@ -38,7 +38,7 @@ use_symmetry_reduction = .true.
 use_time_reversal = .true.
 use_shift = .false.
 reciprocal_mode = 'ham_only'
-kspace_ham_order = 'first'
+kspace_ham_order = 'second'
 dos_method = 'tetrahedron'
 temperature = 300.0
 auto_find_fermi = .false.
@@ -59,7 +59,6 @@ q_file = 'qpath_dresp03g_material_q14_24.dat'
 n_q_points = 0
 output_file = 'exchange_q_dresp03g_both_24_gate.dat'
 write_components = .true.
-native_crosscheck = .false.
 finite_h_spectral_mode = 'metallic'
 finite_h_response_backend = 'both'
 contour_points = 256
@@ -68,4 +67,8 @@ contour_margin = 0.25
 contour_height_fraction = 0.35
 contour_account_fermi_poles = .true.
 rotation_axis = 1.0, 0.0, 0.0
+/
+
+&hamiltonian
+hoh = .true.
 /

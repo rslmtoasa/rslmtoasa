@@ -45,7 +45,6 @@ submodule (linear_response_mod) linear_response_run
    character(len=*), parameter :: tddft_driver_backend_mills_1u = 'mills_1u'
    character(len=*), parameter :: tddft_driver_backend_projected_juelich = 'projected_juelich'
    character(len=*), parameter :: tddft_driver_route_direct_alsda = 'direct_alsda'
-   character(len=*), parameter :: tddft_driver_route_goldstone_sumrule = 'goldstone_sumrule'
 
    type :: tddft_runtime_config
       logical :: enabled = .false.
@@ -58,7 +57,6 @@ submodule (linear_response_mod) linear_response_run
       real(rp) :: eta = 0.01_rp
       integer :: response_lmax = -1
       character(len=48) :: interaction_route = tddft_driver_route_direct_alsda
-      logical :: goldstone_correction = .false.
       character(len=32) :: backend = tddft_driver_backend_lehmann
       character(len=8) :: projected_selector = 'spd'
       character(len=32) :: native_rsgf_provider = 'auto'
@@ -119,6 +117,7 @@ contains
       type(tddft_runtime_config), intent(out) :: runtime
       integer :: n_q, n_frequency, n_eta
 
+      call validate_linear_response_route(config)
       runtime%enabled = .true.
       n_q = size(config%q_list, 2)
       n_frequency = size(config%omega_grid)
@@ -139,7 +138,6 @@ contains
       runtime%output_file = trim(config%output_file)
       runtime%dyson_static_audit = trim(config%diagnostics) == 'invariants'
       runtime%validate_interacting_covariance = trim(config%diagnostics) == 'invariants'
-      runtime%goldstone_correction = .false.
       runtime%requires_second_order_product_basis = trim(config%formulation) == 'projected' .or. &
          trim(config%representation) == 'product_compact'
       allocate(runtime%q_list(3, n_q), runtime%frequencies(n_frequency), runtime%eta_values(n_eta))
@@ -153,15 +151,9 @@ contains
          case ('radial_points:lehmann:alsda')
             runtime%backend = tddft_driver_backend_lehmann
             runtime%interaction_route = tddft_driver_route_direct_alsda
-         case ('radial_points:lehmann:lcmm')
-            runtime%backend = tddft_driver_backend_lehmann
-            runtime%interaction_route = tddft_driver_route_goldstone_sumrule
          case ('radial_points:realspace_gf:alsda')
             runtime%backend = tddft_driver_backend_native_rsgf
             runtime%interaction_route = tddft_driver_route_direct_alsda
-         case ('radial_points:realspace_gf:lcmm')
-            runtime%backend = tddft_driver_backend_native_rsgf
-            runtime%interaction_route = tddft_driver_route_goldstone_sumrule
          case ('product_compact:lehmann:alsda')
             runtime%backend = tddft_driver_backend_compact_dyson
             runtime%interaction_route = tddft_driver_route_direct_alsda
@@ -203,8 +195,8 @@ contains
          if (find_gamma_q_index(config%q_list) == 0) &
             error stop 'TDDFT input: mills_1u requires Gamma for the raw static denominator report'
       else if (trim(config%backend) == tddft_driver_backend_projected_juelich) then
-         if (trim(config%projected_selector) /= 'd' .and. trim(config%projected_selector) /= 'spd' .and. &
-             trim(config%projected_selector) /= 'both') error stop 'TDDFT input: projected selector is invalid'
+         if (trim(config%projected_selector) /= 'd' .or. trim(config%channel) /= 'chi_plus') &
+            error stop 'Juelich production requires projection=d and channel=chi_plus'
          if (config%response_lmax >= 0 .and. config%response_lmax /= 4) then
             error stop 'TDDFT input: projected interaction requires response_lmax=4'
          end if
@@ -220,7 +212,7 @@ contains
          end if
          if (config%gf_energy_margin <= 0.0_rp) error stop 'TDDFT input: realspace_gf requires gf_energy_margin positive'
          if (trim(config%native_rsgf_provider) /= 'auto' .and. trim(config%native_rsgf_provider) /= 'block' .and. &
-             trim(config%native_rsgf_provider) /= 'block_recursion' .and. trim(config%native_rsgf_provider) /= 'chebyshev') then
+             trim(config%native_rsgf_provider) /= 'chebyshev') then
             error stop 'TDDFT input: realspace_solver provider is invalid'
          end if
       end if
@@ -229,10 +221,6 @@ contains
             error stop 'TDDFT input: diagnostics=invariants requires Gamma for compact Dyson'
          end if
          if (config%validate_interacting_covariance) call validate_covariance_q_pair(config%q_list)
-      end if
-      if (trim(config%interaction_route) == tddft_driver_route_goldstone_sumrule .and. &
-          .not. any(sum(abs(config%q_list), dim=1) <= 1.0e-12_rp)) then
-         error stop 'TDDFT input: lcmm requires q=(0,0,0) in q_list for the static reference'
       end if
    end subroutine validate_tddft_runtime_config
 
@@ -253,6 +241,7 @@ contains
 
       converged = .true.
       if (present(scf_converged)) converged = scf_converged
+      call validate_linear_response_route(this%config)
       select case (trim(this%config%formulation))
       case ('rotation')
          call lr_run_rotation(this, control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, reciprocal_obj)
@@ -306,6 +295,9 @@ contains
       if (.not. tddft_capability_is_supported(state, reason)) then
          error stop 'TDDFT capability gate: unsupported feature: '//trim(reason)
       end if
+      if ((trim(config%backend) == tddft_driver_backend_mills_1u .or. &
+           trim(config%backend) == tddft_driver_backend_projected_juelich) .and. state%basis_lmax /= 2) &
+         error stop 'projected Juelich-d/Mills-1U require the accepted full spd electronic basis'
       if (config%response_lmax > 2*state%basis_lmax) then
          error stop 'TDDFT capability gate: response_lmax exceeds the accepted angular-product cutoff'
       end if
@@ -316,7 +308,7 @@ contains
          if (numprocs /= 1) then
             error stop 'TDDFT capability gate: native_rsgf registered baseline requires a serial replicated pair workset'
          end if
-         if (trim(config%native_rsgf_provider) == 'block' .or. trim(config%native_rsgf_provider) == 'block_recursion') then
+         if (trim(config%native_rsgf_provider) == 'block') then
             if (trim(lower(control_obj%recur)) /= 'block') then
                error stop 'TDDFT capability gate: native block provider requires control%recur=block'
             end if
@@ -411,7 +403,7 @@ contains
       if (direct_handoff) then
          state_source = 'accepted_kspace_scf_cache'
       else
-         state_source = 'diagnostic_frozen_post_scf_rebuild'
+         state_source = 'accepted_realspace_potential_adapter'
       end if
       weight_sum = sum(left_state%k_weights)
       call state_identity_checksums(left_state, eigenvalue_checksum, eigenvector_checksum, occupation_checksum, &
@@ -685,10 +677,10 @@ contains
       if (use_accepted_kspace_scf) then
          call validate_accepted_kspace_scf_handoff(reciprocal_obj, energy_obj)
       else
-         ! Diagnostic-only legacy path: construct a reciprocal response state
-         ! from the accepted real-space potential at the externally accepted
-         ! EF.  This remains available for historical comparisons, but is not
-         ! the production k-space-SCF handoff.
+         ! Accepted-real-space-potential adapter used by the existing spherical
+         ! direct-ALSDA and bare-response fixtures. Preserve the accepted EF.
+         ! This is shared state preparation, not another interaction method;
+         ! compact ALSDA and Juelich-d require reciprocal SCF below.
          reciprocal_obj%use_symmetry_reduction = .false.
          reciprocal_obj%use_time_reversal = .false.
          reciprocal_obj%dos_method = 'tetrahedron'
@@ -1229,125 +1221,6 @@ contains
    end subroutine run_tddft_projected_juelich
 
 
-   !> DRESP-06A same-state comparison seam.  Mills and Juelich remain site
-   !> scalar comparison routes; the ALSDA route is solved in the complete
-   !> weighted-orthonormal product space and is projected only for observables.
-
-   !> Refine the ALSDA loss peak on a window selected from the ALSDA coarse
-   !> response itself.  This is intentionally independent from the Mills and
-   !> Juelich projected-site windows.
-
-
-
-   !> One representative finite-q bare product-GF spot for the ALSDA
-   !> comparison.  It is a closure audit of the frozen accepted state, not an
-   !> interaction-specific GF construction.
-
-   subroutine write_projected_juelich_rows(unit, route, selector, eta, q_index, nsite, chi0, dyson)
-      integer, intent(in) :: unit, q_index, nsite
-      character(len=*), intent(in) :: route, selector
-      real(rp), intent(in) :: eta
-      type(projected_chi0_result), intent(in) :: chi0
-      type(projected_dyson_result), intent(in) :: dyson
-      integer :: ifrequency, i, j
-
-      do ifrequency = 1, size(chi0%frequencies)
-         do j = 1, nsite
-            do i = 1, nsite
-               write(unit, '(a,1x,a,1x,a,1x,es24.16,1x,i0,1x,es24.16,1x,2(i0,1x),13(es24.16,1x))') &
-                  'ROW', trim(route), trim(selector), eta, q_index, chi0%frequencies(ifrequency), i, j, &
-                  real(chi0%susceptibility(i,j,ifrequency),rp), aimag(chi0%susceptibility(i,j,ifrequency)), &
-                  real(dyson%enhanced_chi(i,j,ifrequency),rp), aimag(dyson%enhanced_chi(i,j,ifrequency)), &
-                  real(dyson%loss_matrix(i,j,ifrequency),rp), aimag(dyson%loss_matrix(i,j,ifrequency)), &
-                  dyson%denominator_min_singular_value(ifrequency), dyson%denominator_max_singular_value(ifrequency), &
-                  dyson%condition_number(ifrequency), dyson%minimum_magnitude_eigenvalue(ifrequency), &
-                  dyson%dyson_residual(ifrequency), dyson%loss_trace(ifrequency), dyson%minus_im_trace_over_pi(ifrequency)
-            end do
-         end do
-      end do
-   end subroutine write_projected_juelich_rows
-
-   subroutine run_projected_frequency_refinement(unit, selector, config, q_index, contract, product_plus, &
-                                                 left_state, endpoint, mills_U, juelich_U)
-      integer, intent(in) :: unit, q_index
-      character(len=*), intent(in) :: selector
-      type(tddft_runtime_config), intent(in) :: config
-      type(projected_site_spin_contract), target, intent(in) :: contract
-      type(lmto_product_response_basis), target, intent(in) :: product_plus
-      type(lr_electronic_state), target, intent(in) :: left_state, endpoint
-      real(rp), intent(in) :: mills_U(:), juelich_U(:)
-      type(projected_chi0_request) :: request
-      type(projected_chi0_result) :: coarse_chi, refined_chi_mills, refined_chi_juelich
-      type(projected_dyson_request) :: dyson_request
-      type(projected_dyson_result) :: mills_coarse, juelich_coarse, mills_refined, juelich_refined
-      real(rp), allocatable :: refined_frequencies_mills(:), refined_frequencies_juelich(:)
-      real(rp) :: step, lower_mills, upper_mills, lower_juelich, upper_juelich, eta
-      integer :: nref, i, coarse_peak_index, coarse_juelich_peak_index, refined_peak_index
-      integer :: selected_eta_index, holdout_eta_index
-
-      if (size(config%frequencies) < 2) return
-      call select_projected_juelich_eta_indices(config%eta_values, selected_eta_index, holdout_eta_index)
-      eta = config%eta_values(selected_eta_index)
-      request%q = config%q_list(:, q_index)
-      request%frequencies = config%frequencies
-      request%eta = eta
-      request%channel = lr_channel_plus
-      request%contract => contract
-      request%product_basis => product_plus
-      request%electronic_state => left_state
-      request%q_endpoint_state => endpoint
-      request%diagnostics = .false.
-      call evaluate_projected_lehmann_chi0(request, coarse_chi)
-      dyson_request%selector = selector
-      dyson_request%q = config%q_list(:, q_index)
-      dyson_request%frequencies = config%frequencies
-      dyson_request%eta = eta
-      dyson_request%channel = lr_channel_plus
-      dyson_request%bare_chi = coarse_chi%susceptibility
-      dyson_request%interaction_U = mills_U
-      call evaluate_projected_dyson(dyson_request, mills_coarse)
-      dyson_request%interaction_U = juelich_U
-      call evaluate_projected_dyson(dyson_request, juelich_coarse)
-      coarse_peak_index = maxloc(mills_coarse%loss_trace, dim=1)
-      coarse_juelich_peak_index = maxloc(juelich_coarse%loss_trace, dim=1)
-      step = minval(abs(config%frequencies(2:) - config%frequencies(:size(config%frequencies)-1)))
-      lower_mills = max(minval(config%frequencies), config%frequencies(coarse_peak_index) - step)
-      upper_mills = min(maxval(config%frequencies), config%frequencies(coarse_peak_index) + step)
-      lower_juelich = max(minval(config%frequencies), config%frequencies(coarse_juelich_peak_index) - step)
-      upper_juelich = min(maxval(config%frequencies), config%frequencies(coarse_juelich_peak_index) + step)
-      if (upper_mills <= lower_mills .or. upper_juelich <= lower_juelich) return
-      nref = 41
-      allocate(refined_frequencies_mills(nref), refined_frequencies_juelich(nref))
-      do i = 1, nref
-         refined_frequencies_mills(i) = lower_mills + real(i - 1, rp)*(upper_mills - lower_mills)/real(nref - 1, rp)
-         refined_frequencies_juelich(i) = lower_juelich + real(i - 1, rp)*(upper_juelich - lower_juelich)/real(nref - 1, rp)
-      end do
-      ! Each route receives its own refinement grid.  The two coarse maxima
-      ! need not coincide, so reusing the Mills window for Juelich would be a
-      ! route-dependent frequency-selection error.
-      request%frequencies = refined_frequencies_mills
-      call evaluate_projected_lehmann_chi0(request, refined_chi_mills)
-      dyson_request%frequencies = refined_frequencies_mills
-      dyson_request%bare_chi = refined_chi_mills%susceptibility
-      dyson_request%interaction_U = mills_U
-      call evaluate_projected_dyson(dyson_request, mills_refined)
-      request%frequencies = refined_frequencies_juelich
-      call evaluate_projected_lehmann_chi0(request, refined_chi_juelich)
-      dyson_request%frequencies = refined_frequencies_juelich
-      dyson_request%bare_chi = refined_chi_juelich%susceptibility
-      dyson_request%interaction_U = juelich_U
-      call evaluate_projected_dyson(dyson_request, juelich_refined)
-      refined_peak_index = maxloc(mills_refined%loss_trace, dim=1)
-      write(unit, '(a,1x,a,1x,i0,1x,4(es24.16,1x))') 'FREQUENCY_REFINEMENT', trim(selector)//'_Mills', q_index, &
-         config%frequencies(coarse_peak_index), refined_frequencies_mills(refined_peak_index), &
-         minval(mills_refined%denominator_min_singular_value), mills_refined%loss_trace(refined_peak_index)
-      refined_peak_index = maxloc(juelich_refined%loss_trace, dim=1)
-      write(unit, '(a,1x,a,1x,i0,1x,4(es24.16,1x))') 'FREQUENCY_REFINEMENT', trim(selector)//'_Juelich', q_index, &
-         config%frequencies(coarse_juelich_peak_index), refined_frequencies_juelich(refined_peak_index), &
-         minval(juelich_refined%denominator_min_singular_value), juelich_refined%loss_trace(refined_peak_index)
-      deallocate(refined_frequencies_mills, refined_frequencies_juelich)
-   end subroutine run_projected_frequency_refinement
-
    !> DRESP-02 material seam.  Both projections consume the same accepted
    !> reciprocal state and stop at bare chi0; no interaction or Dyson object
    !> is constructed here.
@@ -1611,9 +1484,6 @@ contains
 
       if (trim(config%interaction_route) /= tddft_driver_route_direct_alsda) then
          error stop 'compact_dyson requires direct ALSDA as the production interaction route'
-      end if
-      if (config%goldstone_correction) then
-         error stop 'compact_dyson does not apply an implicit BES/GCR/Goldstone correction'
       end if
       call state_consistency_metrics(reciprocal_obj, left_state, state_mesh_max, state_weight_max, state_ef_diff, &
          state_eigen_max, state_occ_max, state_projector_max, state_projector_frobenius)
@@ -1941,11 +1811,6 @@ contains
          ' product_dimension=', ndim
    end subroutine run_tddft_compact_dyson
 
-   !> TDVK-06 static interaction diagnostics.  This backend consumes the
-   !> accepted k-space SCF snapshot exactly once, evaluates the complete
-   !> compact Gamma/omega=0 response, and stops after raw ALSDA and independent
-   !> GSR diagnostics.  It never enters Dyson, loss, mode extraction, or any
-   !> Goldstone repair/correction path.
    !> TDVK-02R2 validation-only handoff.  The accepted reciprocal snapshot is
    !> already naturally available here, so the live transition oracle and the
    !> compact bare response can be exercised without persisting eigenpairs or
@@ -2025,17 +1890,6 @@ contains
    !> the physical response eta values and records complete compact-matrix
    !> diagnostics.  It deliberately stops before reciprocal GF, KXC,
    !> Goldstone, Dyson, loss, and mode interpretation.
-   subroutine compact_covariance_residual(plus_product, minus_product, plus_result, minus_result, residual)
-      type(lmto_product_response_basis), intent(in) :: plus_product, minus_product
-      type(lr_product_ks_susceptibility_result), intent(in) :: plus_result, minus_result
-      real(rp), intent(out) :: residual
-      if (plus_product%product_dimension /= minus_product%product_dimension .or. &
-          any(shape(plus_result%susceptibility) /= shape(minus_result%susceptibility))) then
-         error stop 'TDVK-04 covariance: compact plus/minus dimensions differ'
-      end if
-      call compact_covariance_matrix_residual(plus_product, minus_product, plus_result%susceptibility(:, :, 1), &
-         minus_result%susceptibility(:, :, 1), residual)
-   end subroutine compact_covariance_residual
 
    !> Compare complete compact matrices under the established circular
    !> endpoint transport.  The first matrix is chi_plus(q,w), the second is
@@ -2088,42 +1942,7 @@ contains
    !> SVD-compressed plus/minus coordinates is not the covariance convention;
    !> circular angular and radial transport is applied first.
 
-   subroutine finite_q_endpoint_metadata(left_state, endpoint, q, q_folded, endpoint_error, endpoint_first_k, endpoint_first, &
-                                         endpoint_last, unique_count)
-      type(lr_electronic_state), intent(in) :: left_state, endpoint
-      real(rp), intent(in) :: q(3)
-      real(rp), intent(out) :: q_folded(3), endpoint_error, endpoint_first_k(3), endpoint_first(3), endpoint_last(3)
-      integer, intent(out) :: unique_count
-      real(rp) :: expected(3)
-      integer :: ik, iu
 
-      if (left_state%nk /= endpoint%nk) error stop 'TDVK-04 metadata: endpoint k-point count differs'
-      q_folded = fold_fractional_kpoint(q)
-      endpoint_error = 0.0_rp
-      endpoint_first_k = left_state%k_points(:, 1)
-      endpoint_first = endpoint%k_points(:, 1)
-      endpoint_last = endpoint%k_points(:, endpoint%nk)
-      unique_count = 0
-      do ik = 1, endpoint%nk
-         expected = fold_fractional_kpoint(left_state%k_points(:, ik) + q)
-         endpoint_error = max(endpoint_error, maxval(abs(expected - endpoint%k_points(:, ik))))
-         if (ik == 1) endpoint_first = endpoint%k_points(:, ik)
-         endpoint_last = endpoint%k_points(:, ik)
-         iu = 1
-         do while (iu < ik)
-            if (all(endpoint%k_points(:, ik) == endpoint%k_points(:, iu))) exit
-            iu = iu + 1
-         end do
-         if (iu == ik) unique_count = unique_count + 1
-      end do
-   end subroutine finite_q_endpoint_metadata
-
-   integer function find_first_nonzero_q(q_list) result(index_nonzero)
-      real(rp), intent(in) :: q_list(:, :)
-      index_nonzero = find_first_nonzero_q_index(q_list)
-      if (index_nonzero /= 0) return
-      error stop 'TDVK-04 finite-q validation: no nonzero q was supplied'
-   end function find_first_nonzero_q
 
    integer function find_first_nonzero_q_index(q_list) result(index_nonzero)
       real(rp), intent(in) :: q_list(:, :)
@@ -2172,20 +1991,6 @@ contains
       end do
    end function find_matching_q
 
-   integer function find_arbitrary_q(q_list, gamma_index, covariance_index, negative_index) result(index_arbitrary)
-      real(rp), intent(in) :: q_list(:, :)
-      integer, intent(in) :: gamma_index, covariance_index, negative_index
-      integer :: iq
-
-      index_arbitrary = 0
-      do iq = 1, size(q_list, 2)
-         if (iq /= gamma_index .and. iq /= covariance_index .and. iq /= negative_index .and. &
-             sum(abs(q_list(:, iq))) > 1.0e-12_rp) then
-            index_arbitrary = iq
-            return
-         end if
-      end do
-   end function find_arbitrary_q
 
    pure function fold_fractional_kpoint(k_point) result(folded)
       real(rp), intent(in) :: k_point(3)
@@ -2195,7 +2000,7 @@ contains
    end function fold_fractional_kpoint
 
    !> TDVK-02R3 accepted-Fe compact reciprocal-GF smoke.  This is deliberately
-   !> separate from the legacy point-grid reciprocal-GF backend and is not a
+   !> separate from the point-grid reciprocal-GF service and is not a
    !> production interaction/Dyson route.
    !> TDVK-03 accepted-state closure audit.  The SCF handoff above has already
    !> prepared one immutable reciprocal state and all exact folded endpoints.
@@ -2477,14 +2282,11 @@ contains
 
       type(lr_alsda_kernel_request) :: kxc_request
       type(lr_alsda_kernel_result) :: kxc_result
-      type(lr_goldstone_sumrule_request) :: gsr_request
-      type(lr_goldstone_sumrule_result) :: gsr_result
-      type(lr_ks_susceptibility_result) :: bare_result, static_result
+      type(lr_ks_susceptibility_result) :: bare_result
       type(tddft_dyson_request) :: dyson_request
       type(tddft_dyson_result) :: dyson_result
       complex(rp), allocatable :: interaction(:, :)
-      real(rp), allocatable :: gsr_magnetization(:, :), static_frequency(:)
-      integer :: iq, i0, ndim
+      integer :: iq, ndim
 
       call validate_prepared_sweep(config, response_space, radial_bases, ground_states, left_state, endpoints, &
          native_provider, native_pairs)
@@ -2522,28 +2324,6 @@ contains
          result%magnetization_kind = kxc_result%magnetization_kind
          result%magnetization_source = kxc_result%magnetization_source
          result%goldstone_correction_status = 'disabled'
-      case (tddft_driver_route_goldstone_sumrule)
-         allocate(gsr_magnetization(size(ground_states), response_space%npoint))
-         do iq = 1, size(ground_states)
-            gsr_magnetization(iq, :) = ground_states(iq)%n_up - ground_states(iq)%n_down
-         end do
-         i0 = find_gamma_q(config%q_list)
-         allocate(static_frequency(1))
-         static_frequency(1) = 0.0_rp
-         call evaluate_bare_response(config, response_space, radial_bases, left_state, endpoints(i0), &
-                                     config%q_list(:, i0), static_frequency, static_result, native_provider, native_pairs, &
-                                     native_site_positions)
-         gsr_request%response_space => response_space
-         gsr_request%static_susceptibility = static_result%susceptibility(:, :, 1)
-         gsr_request%magnetization = gsr_magnetization
-         call evaluate_lr_goldstone_sumrule(gsr_request, gsr_result)
-         if (gsr_result%blocked) error stop 'TDDFT production driver: Goldstone sum-rule interaction is blocked by its service contract'
-         allocate(interaction(ndim, ndim))
-         interaction = gsr_result%canonical_interaction
-         result%interaction_provenance = 'GSR-01 independent Goldstone sum-rule interaction'
-         result%magnetization_kind = 'SR_LR01'
-         result%magnetization_source = 'accepted scalar-relativistic LR-01 radial density'
-         result%goldstone_correction_status = 'not selected'
       case default
          error stop 'TDDFT production driver: interaction route was not validated'
       end select
@@ -2795,7 +2575,7 @@ contains
       else
          write(unit, '(a)') '# state_source = diagnostic_frozen_post_scf_rebuild'
          write(unit, '(a,l1)') '# direct_accepted_state_handoff = ', .false.
-         write(unit, '(a)') '# route = frozen-potential diagnostic rebuild from accepted real-space SCF potential; input EF retained'
+         write(unit, '(a)') '# route = accepted real-space SCF potential adapter; accepted EF retained'
       end if
       write(unit, '(a,i0,2(es24.16,1x),a,es24.16,a,es24.16)') '# radial_mesh_identity = ', size(ground_states(1)%r), &
          ground_states(1)%a, ground_states(1)%b, 'rmax=', ground_states(1)%rmax, 'sum_r=', sum(ground_states(1)%r)

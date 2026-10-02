@@ -119,3 +119,12 @@ These are provider requirements, not a claim that a native production
 real-space route is already registered in `calculation.f90`.
 
 Sources: `lr-campaign-archive:docs/TDDFT_RS_GF_BACKEND.md`, `lr-campaign-archive:docs/RSGF_ENDPOINT_AUGMENTATION.md`, `lr-campaign-archive:docs/TG_FZ_R5_PRODUCTION_H_REPRESENTATION_BRIDGE.md`
+
+## Public scope
+
+`realspace_solver='auto'`, `'block'` or `'chebyshev'` selects the registered
+bare-response provider for strict spherical radial-point direct ALSDA.
+`native_rsgf_provider` non-default selections are rejected as removed aliases.
+The dense inverse and eigenpair GF constructions remain independent validation
+oracles, not alternate production physics. Radial LCMM dynamics are rejected;
+the static GSR service is not a dynamic consumer of these providers.

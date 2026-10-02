@@ -5,8 +5,7 @@ module test_dyson_mod
    use precision_mod, only: rp
    use linear_response_mod, only: tddft_dyson_request, tddft_dyson_result, &
       evaluate_tddft_dyson, solve_tddft_dyson_frequency, tddft_loss_matrix, &
-      loss_matrix_hermiticity_residual, lr_dyson_route_direct_alsda, &
-      lr_dyson_route_goldstone_sumrule, lr_dyson_route_direct_alsda_goldstone_corrected
+      loss_matrix_hermiticity_residual, lr_dyson_route_direct_alsda
    use linear_response_mod, only: response_space_layout
    implicit none
    private
@@ -23,7 +22,30 @@ module test_dyson_mod
 
 contains
 
-   subroutine run_test_dyson()
+   subroutine run_test_dyson(mode)
+   character(len=*), intent(in), optional :: mode
+   type(tddft_dyson_request) :: rejected_request
+   type(tddft_dyson_result) :: rejected_result
+   if (present(mode)) then
+      rejected_request%compact_orthonormal = .true.
+      rejected_request%frequencies = [0.05_rp]
+      rejected_request%eta = 0.01_rp
+      rejected_request%channel = 'chi_plus'
+      rejected_request%interaction_route = lr_dyson_route_direct_alsda
+      rejected_request%interaction_provenance = 'KXC-01 independent algebra fixture'
+      select case (mode)
+      case ('dyson_removed_gsr')
+         rejected_request%interaction_route = 'goldstone_sumrule'
+      case ('dyson_removed_corrected')
+         rejected_request%interaction_route = 'direct_alsda_goldstone_corrected'
+      case ('dyson_plus_alias')
+         rejected_request%channel = 'plus'
+      case ('dyson_minus_alias')
+         rejected_request%channel = 'minus'
+      end select
+      call evaluate_tddft_dyson(rejected_request, rejected_result)
+      error stop 'removed Dyson selector executed'
+   end if
    failed = .false.
    radius(1) = 0.0_rp
    do ir = 2, nr
@@ -37,13 +59,13 @@ contains
    call test_metric_sensitive_dyson(failed)
    call test_goldstone_near_pole(failed)
    call test_covariance(failed)
-   call test_interaction_separation(failed)
+
 
    if (failed) then
       write (*, '(a)') 'UnitTddftDyson: FAIL'
       error stop 1
    end if
-   write (*, '(a)') 'UnitTddftDyson: PASS (Dyson, metric, loss, pole, covariance, route separation)'
+   write (*, '(a)') 'UnitTddftDyson: PASS (Dyson, metric, loss, pole, covariance)'
 
    end subroutine run_test_dyson
 
@@ -220,8 +242,8 @@ contains
       request%channel = 'chi_plus'
       request%ks_susceptibility = chi
       request%canonical_interaction = kernel
-      request%interaction_route = lr_dyson_route_goldstone_sumrule
-      request%interaction_provenance = 'GSR-01 exact static Goldstone fixture'
+      request%interaction_route = lr_dyson_route_direct_alsda
+      request%interaction_provenance = 'KXC-01 exact static Goldstone fixture'
       request%electronic_state_provenance = 'LR-06 q=0 static complete eigenpair fixture'
       call evaluate_tddft_dyson(request, result)
       call check('Goldstone near-pole solve succeeds', result%solve_succeeded(1), test_failed)
@@ -293,54 +315,6 @@ contains
       deallocate(chi, kernel)
    end subroutine test_covariance
 
-   subroutine test_interaction_separation(test_failed)
-      logical, intent(inout) :: test_failed
-      type(tddft_dyson_request) :: request
-      type(tddft_dyson_result) :: direct_result, sumrule_result, corrected_result
-      complex(rp), allocatable :: chi(:, :, :), direct_kernel(:, :), sumrule_kernel(:, :), corrected_kernel(:, :)
-
-      allocate(chi(space%ndim, space%ndim, 1), direct_kernel(space%ndim, space%ndim), &
-         sumrule_kernel(space%ndim, space%ndim), corrected_kernel(space%ndim, space%ndim))
-      chi = cmplx(0.0_rp, 0.0_rp, rp)
-      direct_kernel = cmplx(0.0_rp, 0.0_rp, rp)
-      sumrule_kernel = cmplx(0.0_rp, 0.0_rp, rp)
-      corrected_kernel = cmplx(0.0_rp, 0.0_rp, rp)
-      chi(2, 2, 1) = cmplx(0.6_rp, -0.02_rp, rp)
-      direct_kernel(2, 2) = cmplx(0.2_rp, 0.0_rp, rp)
-      sumrule_kernel(2, 2) = cmplx(0.3_rp, 0.0_rp, rp)
-      corrected_kernel(2, 2) = cmplx(0.4_rp, 0.0_rp, rp)
-
-      request%response_space => space
-      request%frequencies = [0.05_rp]
-      request%eta = 0.002_rp
-      request%channel = 'chi_plus'
-      request%ks_susceptibility = chi
-      request%electronic_state_provenance = 'LR-06 route-separation fixture'
-
-      request%canonical_interaction = direct_kernel
-      request%interaction_route = lr_dyson_route_direct_alsda
-      request%interaction_provenance = 'KXC-01 direct ALSDA fixture'
-      call evaluate_tddft_dyson(request, direct_result)
-      request%canonical_interaction = sumrule_kernel
-      request%interaction_route = lr_dyson_route_goldstone_sumrule
-      request%interaction_provenance = 'GSR-01 sum-rule fixture'
-      call evaluate_tddft_dyson(request, sumrule_result)
-      request%canonical_interaction = corrected_kernel
-      request%interaction_route = lr_dyson_route_direct_alsda_goldstone_corrected
-      request%interaction_provenance = 'GCR-01 corrected ALSDA fixture'
-      call evaluate_tddft_dyson(request, corrected_result)
-
-      call check('direct interaction route is retained', direct_result%interaction_route == lr_dyson_route_direct_alsda, &
-         test_failed)
-      call check('sum-rule interaction route is retained', sumrule_result%interaction_route == &
-         lr_dyson_route_goldstone_sumrule, test_failed)
-      call check('corrected interaction route is retained', corrected_result%interaction_route == &
-         lr_dyson_route_direct_alsda_goldstone_corrected, test_failed)
-      call check('different interaction objects remain separate', &
-         maxval(abs(direct_result%canonical_interaction-sumrule_result%canonical_interaction)) > 0.0_rp .and. &
-         maxval(abs(sumrule_result%canonical_interaction-corrected_result%canonical_interaction)) > 0.0_rp, test_failed)
-      deallocate(chi, direct_kernel, sumrule_kernel, corrected_kernel)
-   end subroutine test_interaction_separation
 
    subroutine independent_solve(matrix, rhs)
       complex(rp), intent(in) :: matrix(:, :)

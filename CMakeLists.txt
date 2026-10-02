@@ -941,13 +941,67 @@ if (RUN_UNIT_TESTS)
     WILL_FAIL TRUE)
   add_fortran_unit_test(UnitLrLinearResponseConfig ${TestDIR}/unit/linear_response/class/test_linear_response_config.f90)
   set_tests_properties(UnitLrLinearResponseConfig PROPERTIES LABELS "unit;linear_response;lr-ref-04b;config")
-  foreach(_lr_config_row row_radial_lehmann_alsda row_radial_lehmann_lcmm row_radial_gf_alsda
-          row_radial_gf_lcmm row_product_alsda row_product_none row_projected_none
-          row_projected_mills_1u row_projected_lcmm)
+  foreach(_lr_config_row row_rotation row_radial_lehmann_alsda row_radial_gf_alsda
+          row_product_alsda row_product_none row_projected_none row_projected_mills_1u row_projected_lcmm)
     add_test(NAME UnitLrLinearResponseConfig_${_lr_config_row}
-      COMMAND UnitLrLinearResponseConfig)
+      COMMAND UnitLrLinearResponseConfig ${_lr_config_row})
     set_tests_properties(UnitLrLinearResponseConfig_${_lr_config_row} PROPERTIES
-      LABELS "unit;linear_response;lr-ref-04b;compatibility")
+      LABELS "unit;linear_response;config")
+  endforeach()
+  foreach(_lr_api_rejection
+          "radial-lcmm-prepared|radial_points + lcmm dynamical TDDFT is not certified"
+          "radial-lcmm-lehmann|radial_points + lcmm dynamical TDDFT is not certified"
+          "radial-lcmm-gf|radial_points + lcmm dynamical TDDFT is not certified"
+          "juelich-spd|Juelich production is certified only for frozen-EF d projection"
+          "juelich-spdf|Juelich production is certified only for frozen-EF d projection"
+          "juelich-both|Juelich production is certified only for frozen-EF d projection"
+          "juelich-minus|Juelich-d requires channel=chi_plus"
+          "juelich-eta|Juelich-d requires at least four decreasing eta values"
+          "juelich-no-gamma|projected interacting response requires Gamma"
+          "mills-spd|mills_1u acts only in the local d shell"
+          "kl|FULL KL FINITE-FREQUENCY SUSCEPTIBILITY"
+          "kl_dynamic|FULL KL FINITE-FREQUENCY SUSCEPTIBILITY"
+          "halle|full KL/Halle are not implemented"
+          "longitudinal|longitudinal/charge are deferred"
+          "charge|longitudinal/charge are deferred"
+          "native-alias|native_crosscheck was removed"
+          "provider-alias|native_rsgf_provider selector was removed"
+          "occupied|legacy_occupied was removed"
+          "contour-only|contour is validation-only"
+          "radial-full|full spatial L>0 is not certified"
+          "capability-noncollinear|noncollinear spin mode"
+          "bad-row|fitted/projected Mills aliases were removed"
+          "mills_fit|fitted/projected Mills aliases were removed"
+          "projected_mills|fitted/projected Mills aliases were removed"
+          "projected_stoner|fitted/projected Mills aliases were removed"
+          "scalarized_mills|fitted/projected Mills aliases were removed")
+    string(REPLACE "|" ";" _lr_api_parts "${_lr_api_rejection}")
+    list(GET _lr_api_parts 0 _lr_api_case)
+    list(GET _lr_api_parts 1 _lr_api_message)
+    add_test(NAME UnitLrApiReject_${_lr_api_case}
+      COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_config_reject.py
+        $<TARGET_FILE:UnitLrLinearResponseConfig> ${_lr_api_case} "${_lr_api_message}")
+    set_tests_properties(UnitLrApiReject_${_lr_api_case} PROPERTIES LABELS "unit;linear_response;config;negative")
+  endforeach()
+  foreach(_lr_dyson_rejection dyson_removed_gsr dyson_removed_corrected dyson_plus_alias dyson_minus_alias)
+    if(_lr_dyson_rejection MATCHES "alias")
+      set(_lr_dyson_message "plus/minus channel aliases were removed")
+    else()
+      set(_lr_dyson_message "dynamic radial GSR/corrected ALSDA routes were removed")
+    endif()
+    add_test(NAME UnitLrApiReject_${_lr_dyson_rejection}
+      COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_config_reject.py
+        $<TARGET_FILE:UnitLrKernelDyson> ${_lr_dyson_rejection} "${_lr_dyson_message}")
+    set_tests_properties(UnitLrApiReject_${_lr_dyson_rejection} PROPERTIES LABELS "unit;linear_response;config;negative")
+  endforeach()
+  foreach(_lr_spin_route rotation tddft projected)
+    foreach(_lr_spin_mode soc noncollinear)
+      add_test(NAME UnitLrSpinReject_${_lr_spin_route}_${_lr_spin_mode}
+        COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_spin_reject.py
+          ${TestBinary} ${_lr_spin_route} ${_lr_spin_mode})
+      set_tests_properties(UnitLrSpinReject_${_lr_spin_route}_${_lr_spin_mode} PROPERTIES
+        LABELS "unit;linear_response;config;negative")
+    endforeach()
   endforeach()
   foreach(_lr_config_negative bad-row bad-bare bad-solver bad-diagnostics bad-projection bad-channel bad-eta
           bad-invariants-gamma bad-invariants-pair capability-soc capability-overlap)
@@ -966,38 +1020,44 @@ if (RUN_UNIT_TESTS)
       WILL_FAIL TRUE)
   endforeach()
   add_test(NAME LinearResponseTddftSmoke
-    COMMAND ${TestBinary}
-    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_integration.py
+      --binary ${TestBinary} --case ${TestDIR}/integration/tddft_driver_smoke
+      --input input.nml --scratch ${CMAKE_BINARY_DIR}/Testing/lr_integration/LinearResponseTddftSmoke)
   set_tests_properties(LinearResponseTddftSmoke PROPERTIES
     LABELS "integration;linear_response;tddft;lr-ref-04b;scf;accepted-state;reciprocal;smoke"
     TIMEOUT 180)
-  add_test(NAME LinearResponseFullRadialValidation
-    COMMAND ${TestBinary} input_full_radial.nml
-    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
-  set_tests_properties(LinearResponseFullRadialValidation PROPERTIES
-    LABELS "integration;linear_response;tddft;lr-ref-04b;scf;accepted-state;reciprocal;full-response;research;slow"
-    TIMEOUT 900)
+  add_test(NAME LinearResponseCompactAlsda
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_integration.py
+      --binary ${TestBinary} --case ${TestDIR}/integration/tddft_driver_smoke
+      --input input_compact_alsda.nml --scratch ${CMAKE_BINARY_DIR}/Testing/lr_integration/LinearResponseCompactAlsda)
+  set_tests_properties(LinearResponseCompactAlsda PROPERTIES
+    LABELS "integration;linear_response;tddft;compact;alsda;accepted-state"
+    TIMEOUT 720)
   add_test(NAME LinearResponseProjectedJuelich
-    COMMAND ${TestBinary} input_juelich_d_reference.nml
-    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_integration.py
+      --binary ${TestBinary} --case ${TestDIR}/integration/tddft_driver_smoke
+      --input input_juelich_d_reference.nml --scratch ${CMAKE_BINARY_DIR}/Testing/lr_integration/LinearResponseProjectedJuelich)
   set_tests_properties(LinearResponseProjectedJuelich PROPERTIES
     LABELS "integration;linear_response;projected;juelich-d;static-limit;accepted-state"
     TIMEOUT 720)
   add_test(NAME LinearResponseMills1U
-    COMMAND ${TestBinary} input.nml
-    WORKING_DIRECTORY ${TestDIR}/integration/mills_1u_bccfe)
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_integration.py
+      --binary ${TestBinary} --case ${TestDIR}/integration/mills_1u_bccfe
+      --input input.nml --scratch ${CMAKE_BINARY_DIR}/Testing/lr_integration/LinearResponseMills1U)
   set_tests_properties(LinearResponseMills1U PROPERTIES
     LABELS "integration;linear_response;projected;mills-1u;accepted-state;bcc-fe"
     TIMEOUT 720)
   add_test(NAME LinearResponseFeatureOff
-    COMMAND ${TestBinary} input_feature_off.nml
-    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_integration.py
+      --binary ${TestBinary} --case ${TestDIR}/integration/tddft_driver_smoke
+      --input input_feature_off.nml --scratch ${CMAKE_BINARY_DIR}/Testing/lr_integration/LinearResponseFeatureOff)
   set_tests_properties(LinearResponseFeatureOff PROPERTIES
     LABELS "integration;linear_response;scf;feature-off;regression"
     TIMEOUT 180)
   add_test(NAME LinearResponseNativeSmoke
-    COMMAND ${TestBinary} input_native.nml
-    WORKING_DIRECTORY ${TestDIR}/integration/tddft_driver_smoke)
+    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/validation/lr_integration.py
+      --binary ${TestBinary} --case ${TestDIR}/integration/tddft_driver_smoke
+      --input input_native.nml --scratch ${CMAKE_BINARY_DIR}/Testing/lr_integration/LinearResponseNativeSmoke)
   set_tests_properties(LinearResponseNativeSmoke PROPERTIES
     LABELS "integration;linear_response;tddft;native-rsgf;production;smoke"
     TIMEOUT 240)

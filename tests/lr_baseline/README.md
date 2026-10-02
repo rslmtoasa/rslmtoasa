@@ -10,10 +10,9 @@ The archived decks are the predecessor forms of the checked-in current cases:
 * `rotation`: old `post_processing='exchange_q'`, `rotation_dynamics=.true.`,
   native Turek reference, second-order `ham_only`, physical bcc Fe.
 * `tddft_lehmann`: old `&tddft backend='product_lehmann'`, the bounded
-  TDVK-02R2 compact Lehmann smoke seam.  The full radial-point Lehmann deck
-  is retained as the separately labelled
-  `LinearResponseFullRadialValidation` research test; its complete Fe response
-  space is 4,455 dense unknowns and is not a practical closeout smoke test.
+  TDVK-02R2 compact bare Lehmann validation seam. It does not execute an
+  interacting TDDFT method. The uncertified non-spherical radial production
+  deck and its runtime test were removed by LR-METHOD-04.
 * `native_rsgf`: old `&tddft backend='native_rsgf'`, block provider, three
   Green-function integration points.
 

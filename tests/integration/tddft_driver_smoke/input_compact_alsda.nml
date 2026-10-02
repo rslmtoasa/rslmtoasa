@@ -1,5 +1,4 @@
-! DRESP-05 bcc-Fe projected Juelich/Mills same-state production fixture.
-! This bounded campaign keeps both accepted selectors in one artifact.
+! Same accepted bcc-Fe state; complete compact transverse direct ALSDA smoke.
 &calculation
 pre_processing = 'bravais'
 post_processing = 'linear_response'
@@ -60,23 +59,21 @@ reciprocal_backend = 'lapack'
 kspace_ham_order = 'second'
 /
 &linear_response
-formulation = 'projected'
-representation = 'radial_points'
+formulation = 'tddft'
+representation = 'product_compact'
 bare_response = 'lehmann'
-interaction = 'lcmm'
-projection = 'both'
+interaction = 'alsda'
 diagnostics = 'none'
 channel = 'chi_plus'
-n_q = 3
-q_list = 0.0, 0.0, 0.0,  0.03, 0.0, 0.0,  0.125, 0.0, 0.0
-n_omega = 9
+n_q = 1
+q_list = 0.0, 0.0, 0.0
+n_omega = 2
 use_omega_grid = .false.
 omega_min = 0.0
 omega_max = 0.20
 eta = 0.02
-n_eta = 3
-eta_grid = 0.04, 0.02, 0.01
+n_eta = 1
 response_lmax = -1
 write_full_matrix = .false.
-output_file = 'dresp05_fe_4k.dat'
+output_file = 'compact_alsda.dat'
 /

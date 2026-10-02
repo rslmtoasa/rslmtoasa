@@ -1872,6 +1872,9 @@ contains
       integer :: nq, nsite, nmat, nk, iq, ik, ia, ja, clock_start, clock_end, clock_rate, response_start
       logical :: vertex_identity_checked, endpoint_identity_checked, do_spectral, do_contour
 
+      if (finite_h_spectral_mode /= 'metallic') error stop 'rotation: legacy_occupied was removed; use metallic'
+      if (finite_h_response_backend /= 'spectral' .and. finite_h_response_backend /= 'both') &
+         error stop 'rotation: contour is validation-only; use both for a spectral/contour cross-check'
       if (size(q_list, 1) /= 3 .or. size(q_list, 2) < 1) error stop 'compute_static_rotation_curvature: q path shape is invalid'
       nq = size(q_list, 2)
       call exchange_q_convert_points(q_coordinates, q_list, lattice_obj, q_direct, q_cart)
@@ -2035,13 +2038,8 @@ contains
          assembly_seconds = assembly_seconds + elapsed_clock_seconds(clock_start,clock_end,clock_rate)
          if (do_spectral) then
             call system_clock(clock_start)
-            if (finite_h_spectral_mode == 'legacy_occupied') then
-               call force_theorem_finite_q_hessian_from_eigenbasis_batch(evals, evecs, endpoint_evals, endpoint_evecs, &
-                  reciprocal_obj%fermi_level, weights, torques_q, torques_minus_q, mixed, hessian, torque_torque, contact, complete)
-            else
-               call force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch(evals, evecs, endpoint_evals, endpoint_evecs, &
-                  reciprocal_obj%fermi_level, finite_h_kT, weights, torques_q, torques_minus_q, mixed, hessian, torque_torque, contact, complete)
-            end if
+            call force_theorem_finite_q_hessian_from_eigenbasis_metallic_batch(evals, evecs, endpoint_evals, endpoint_evecs, &
+               reciprocal_obj%fermi_level, finite_h_kT, weights, torques_q, torques_minus_q, mixed, hessian, torque_torque, contact, complete)
             call system_clock(clock_end)
             contraction_seconds = contraction_seconds + elapsed_clock_seconds(clock_start,clock_end,clock_rate)
             spectral_tt(:,:,iq) = real(torque_torque,rp)
@@ -2060,11 +2058,8 @@ contains
             contour_contact(:,:,iq) = real(contact,rp)
             contour_total(:,:,iq) = real(complete,rp)
          end if
-         if (finite_h_response_backend == 'contour') then
-            finite_tt(:,:,iq) = contour_tt(:,:,iq); finite_contact(:,:,iq) = contour_contact(:,:,iq); finite_total(:,:,iq) = contour_total(:,:,iq)
-         else
-            finite_tt(:,:,iq) = spectral_tt(:,:,iq); finite_contact(:,:,iq) = spectral_contact(:,:,iq); finite_total(:,:,iq) = spectral_total(:,:,iq)
-         end if
+         ! Contour data validate the spectral curvature; they never replace it.
+         finite_tt(:,:,iq) = spectral_tt(:,:,iq); finite_contact(:,:,iq) = spectral_contact(:,:,iq); finite_total(:,:,iq) = spectral_total(:,:,iq)
          if (allocated(h_source)) deallocate(h_source, h_endpoint)
          deallocate(torques_q, torques_minus_q, mixed)
          if (allocated(endpoint_evals)) deallocate(endpoint_evals, endpoint_evecs)
@@ -2639,6 +2634,7 @@ contains
          end if
       end if
       if (.not. validate) return
+      call validate_linear_response_route(this%config)
 
       if (this%config%formulation /= 'rotation') then
          if (n_omega < 1 .or. n_omega > 4096) then
@@ -2712,13 +2708,6 @@ contains
          call g_logger%fatal('[linear_response]: native_contour_target_fermi_poles must be zero or positive even', __FILE__, __LINE__)
       end if
       if (maxval(abs(this%config%rotation_axis)) <= tiny(1.0_rp)) call g_logger%fatal('[linear_response]: rotation_axis must be nonzero', __FILE__, __LINE__)
-      if (this%config%finite_h_spectral_mode /= 'metallic' .and. this%config%finite_h_spectral_mode /= 'legacy_occupied') then
-         call g_logger%fatal("[linear_response]: finite_h_spectral_mode must be 'metallic' or 'legacy_occupied'", __FILE__, __LINE__)
-      end if
-      if (this%config%finite_h_response_backend /= 'spectral' .and. this%config%finite_h_response_backend /= 'contour' .and. &
-          this%config%finite_h_response_backend /= 'both') then
-         call g_logger%fatal("[linear_response]: finite_h_response_backend must be 'spectral', 'contour', or 'both'", __FILE__, __LINE__)
-      end if
       if (this%config%contour_points < 8) call g_logger%fatal('[linear_response]: contour_points must be at least 8', __FILE__, __LINE__)
       if (this%config%contour_shape /= 'ellipse') call g_logger%fatal("[linear_response]: contour_shape must be 'ellipse'", __FILE__, __LINE__)
       if (this%config%contour_margin <= 0.0_rp .or. this%config%contour_height_fraction <= 0.0_rp) then
@@ -2728,9 +2717,82 @@ contains
       if (any(.not. ieee_is_finite(this%config%q_list))) call g_logger%fatal('[linear_response]: q path contains a non-finite coordinate', __FILE__, __LINE__)
    end subroutine lr_load_config
 
+   !> Public physics selectors, shared by input and prepared-sweep boundaries.
+   module subroutine validate_linear_response_route(config)
+      type(linear_response_config), intent(in) :: config
+      character(len=96) :: route_key
+
+      if (trim(config%interaction) == 'stoner_fit' .or. trim(config%interaction) == 'mills_fit' .or. &
+          trim(config%interaction) == 'projected_mills' .or. trim(config%interaction) == 'projected_stoner' .or. &
+          trim(config%interaction) == 'scalarized_mills') then
+         error stop 'linear_response: fitted/projected Mills aliases were removed; mills_1u uses a different unfitted U'
+      end if
+      if (trim(config%formulation) == 'kl' .or. trim(config%formulation) == 'kl_dynamic' .or. &
+          trim(config%formulation) == 'katsnelson' .or. trim(config%formulation) == 'lichtenstein') &
+         error stop 'FULL KL FINITE-FREQUENCY SUSCEPTIBILITY — NOT IMPLEMENTED; rotation is a distinct effective action'
+      if (trim(config%channel) /= 'chi_plus' .and. trim(config%channel) /= 'chi_minus') &
+         error stop 'linear_response: only transverse chi_plus/chi_minus are supported; longitudinal/charge are deferred'
+      if (config%native_crosscheck) error stop 'native_crosscheck was removed; use native_turek for static validation'
+      if (trim(config%native_rsgf_provider) /= 'auto') &
+         error stop 'native_rsgf_provider selector was removed; use realspace_solver=block or chebyshev'
+      select case (trim(config%formulation))
+      case ('rotation')
+         if (trim(config%finite_h_spectral_mode) /= 'metallic') &
+            error stop 'rotation: legacy_occupied was removed; use metallic'
+         if (trim(config%finite_h_response_backend) /= 'spectral' .and. &
+             trim(config%finite_h_response_backend) /= 'both') &
+            error stop 'rotation: contour is validation-only; use both for a spectral/contour cross-check'
+         if (trim(config%bare_response) /= 'lehmann' .or. trim(config%interaction) /= 'alsda' .or. &
+             trim(config%representation) /= 'radial_points' .or. trim(config%realspace_solver) /= 'auto') &
+            error stop 'rotation: response interaction/representation/backend selectors do not apply; use their defaults'
+      case ('tddft')
+         if (trim(config%representation) == 'radial_points' .and. trim(config%interaction) == 'lcmm') &
+            error stop 'radial_points + lcmm dynamical TDDFT is not certified; projected Juelich-d is the certified LCMM method; spatial TDDFT uses alsda'
+         route_key = trim(config%representation)//':'//trim(config%bare_response)//':'//trim(config%interaction)
+         select case (route_key)
+         case ('radial_points:lehmann:alsda', 'radial_points:realspace_gf:alsda', &
+               'product_compact:lehmann:alsda', 'product_compact:lehmann:none')
+            continue
+         case default
+            error stop 'linear_response: unsupported TDDFT route; direct ALSDA transverse radial/compact scope only; full Halle is not certified'
+         end select
+         if (trim(config%representation) == 'radial_points' .and. config%response_lmax /= 0) &
+            error stop 'radial_points ALSDA production requires strict spherical response_lmax=0; full spatial L>0 is not certified'
+      case ('projected')
+         if (trim(config%bare_response) /= 'lehmann' .or. trim(config%representation) /= 'radial_points') &
+            error stop 'linear_response: projected requires radial_points and lehmann'
+         select case (trim(config%interaction))
+         case ('none')
+            if (trim(config%projection) /= 'd' .and. trim(config%projection) /= 'spd' .and. trim(config%projection) /= 'both') &
+               error stop 'bare projected validation supports projection=d, spd or both'
+         case ('mills_1u')
+            if (trim(config%projection) /= 'd') error stop 'mills_1u acts only in the local d shell; projection must be d'
+         case ('lcmm')
+            if (trim(config%projection) /= 'd') &
+               error stop 'Juelich production is certified only for frozen-EF d projection; spd/spdf/both dynamics are not certified'
+            if (trim(config%channel) /= 'chi_plus') error stop 'Juelich-d requires channel=chi_plus'
+         case default
+            error stop 'linear_response: projected interaction must be mills_1u, lcmm (Juelich-d), or none (bare validation)'
+         end select
+         if (config%response_lmax >= 0 .and. config%response_lmax /= 4) &
+            error stop 'projected response requires the complete response_lmax=4 product space'
+      case default
+         error stop 'linear_response: formulation must be rotation, tddft or projected; full KL/Halle are not implemented'
+      end select
+      if (trim(config%formulation) /= 'projected' .and. trim(config%projection) /= 'spd') &
+         error stop 'projection selector applies only to projected response; use the default for rotation/TDDFT'
+      if (trim(config%formulation) /= 'rotation' .and. trim(config%diagnostics) == 'invariants' .and. &
+          .not. (trim(config%formulation) == 'tddft' .and. trim(config%representation) == 'product_compact' .and. &
+                 trim(config%interaction) == 'alsda')) &
+         error stop 'diagnostics=invariants applies only to rotation or compact ALSDA'
+      if (trim(config%formulation) /= 'rotation' .and. config%native_turek) &
+         error stop 'native_turek validates rotation static curvature only'
+      if (trim(config%realspace_solver) /= 'auto' .and. trim(config%bare_response) /= 'realspace_gf') &
+         error stop 'realspace_solver requires bare_response=realspace_gf'
+   end subroutine validate_linear_response_route
+
    subroutine validate_linear_response_config(config)
       type(linear_response_config), intent(in) :: config
-      character(len=96) :: compatibility_key
       integer :: iq, jq
       logical :: gamma_found, covariance_found
 
@@ -2767,45 +2829,25 @@ contains
          call g_logger%fatal('[linear_response]: omega grid must contain finite values', __FILE__, __LINE__)
       end if
       if (len_trim(config%output_file) == 0) call g_logger%fatal('[linear_response]: output_file must not be blank', __FILE__, __LINE__)
-      if (trim(config%interaction) == 'stoner_fit') then
-         call g_logger%fatal('[linear_response]: interaction=stoner_fit was removed and is unsupported; select mills_1u', &
-            __FILE__, __LINE__)
+      call validate_linear_response_route(config)
+      if (trim(config%formulation) == 'projected' .and. trim(config%interaction) /= 'none') then
+         if (.not. any(sum(abs(config%q_list), dim=1) <= 1.0e-12_rp)) &
+            call g_logger%fatal('[linear_response]: projected interacting response requires Gamma', __FILE__, __LINE__)
+         if (trim(config%interaction) == 'lcmm') then
+            if (size(config%eta_grid) < 4) &
+               call g_logger%fatal('[linear_response]: Juelich-d requires at least four decreasing eta values', __FILE__, __LINE__)
+            do iq = 1, size(config%eta_grid)-1
+               if (config%eta_grid(iq) <= config%eta_grid(iq+1)) &
+                  call g_logger%fatal('[linear_response]: Juelich-d requires strictly decreasing eta_grid', __FILE__, __LINE__)
+            end do
+         end if
       end if
-
-      select case (trim(config%formulation))
-      case ('tddft')
-         compatibility_key = trim(config%representation)//':'//trim(config%bare_response)//':'//trim(config%interaction)
-         select case (compatibility_key)
-         case ('radial_points:lehmann:alsda', 'radial_points:lehmann:lcmm', &
-               'radial_points:realspace_gf:alsda', 'radial_points:realspace_gf:lcmm', &
-               'product_compact:lehmann:alsda', 'product_compact:lehmann:none')
-            continue
-         case default
-            call g_logger%fatal('[linear_response]: formulation/representation/bare_response/interaction is not an allowed compatibility row', &
-               __FILE__, __LINE__)
-         end select
-      case ('projected')
-         if (trim(config%bare_response) /= 'lehmann' .or. trim(config%representation) /= 'radial_points') then
-            call g_logger%fatal('[linear_response]: projected requires radial_points and lehmann', __FILE__, __LINE__)
-         end if
-         select case (trim(config%interaction))
-         case ('none', 'mills_1u', 'lcmm')
-            continue
-         case default
-            call g_logger%fatal('[linear_response]: projected interaction is not an allowed compatibility row', __FILE__, __LINE__)
-         end select
-         if (trim(config%projection) /= 'd' .and. trim(config%projection) /= 'spd' .and. trim(config%projection) /= 'both') then
-            call g_logger%fatal('[linear_response]: projection must be d, spd or both', __FILE__, __LINE__)
-         end if
-         if (trim(config%interaction) == 'mills_1u' .and. trim(config%projection) /= 'd') then
-            call g_logger%fatal('[linear_response]: mills_1u acts only in the local d shell; projection must be d', &
-               __FILE__, __LINE__)
-         end if
-      case default
-         call g_logger%fatal("[linear_response]: formulation must be 'rotation', 'tddft' or 'projected'", __FILE__, __LINE__)
-      end select
-      if (trim(config%bare_response) == 'realspace_gf' .and. config%gf_integration_points < 3) then
-         call g_logger%fatal('[linear_response]: realspace_gf requires gf_integration_points >= 3', __FILE__, __LINE__)
+      if (.not. (trim(config%formulation) == 'projected' .and. (trim(config%interaction) == 'lcmm' .or. trim(config%interaction) == 'mills_1u'))) then
+         if (size(config%eta_grid) /= 1) &
+            call g_logger%fatal('[linear_response]: multiple eta values require Juelich-d or Mills-1U', __FILE__, __LINE__)
+      end if
+      if (trim(config%bare_response) == 'realspace_gf' .and. (config%gf_integration_points < 3 .or. mod(config%gf_integration_points,2) == 0)) then
+         call g_logger%fatal('[linear_response]: realspace_gf requires odd gf_integration_points >= 3', __FILE__, __LINE__)
       end if
       if (trim(config%formulation) == 'tddft' .and. trim(config%representation) == 'product_compact' .and. &
           trim(config%interaction) == 'alsda' .and. trim(config%diagnostics) == 'invariants') then

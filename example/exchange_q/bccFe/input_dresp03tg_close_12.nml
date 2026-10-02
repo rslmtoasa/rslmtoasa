@@ -38,7 +38,7 @@ use_symmetry_reduction = .false.
 use_time_reversal = .true.
 use_shift = .false.
 reciprocal_mode = 'ham_only'
-kspace_ham_order = 'first'
+kspace_ham_order = 'second'
 dos_method = 'tetrahedron'
 temperature = 300.0
 auto_find_fermi = .false.
@@ -59,7 +59,6 @@ q_file = 'qpath_commensurate_12.dat'
 n_q_points = 0
 output_file = 'exchange_q_dresp03tg_close_12.dat'
 write_components = .true.
-native_crosscheck = .false.
 native_turek = .true.
 finite_h_spectral_mode = 'metallic'
 finite_h_response_backend = 'both'
@@ -74,4 +73,8 @@ native_contour_height_fraction = 0.35
 native_contour_account_fermi_poles = .true.
 native_contour_target_fermi_poles = 256
 rotation_axis = 1.0, 0.0, 0.0
+/
+
+&hamiltonian
+hoh = .true.
 /

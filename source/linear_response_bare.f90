@@ -358,7 +358,7 @@ contains
 
    !> Accumulate the LR-06 Lehmann response directly in the weighted
    !> orthonormal LMTO product representation.  The point-grid LR-06 routine
-   !> above remains the canonical legacy implementation and is intentionally
+   !> above remains the independent radial-point implementation and is intentionally
    !> not routed through this evaluator.
    module subroutine evaluate_lr_product_ks_susceptibility_explicit(product_basis, left_state, right_state, request, result)
       type(lmto_product_response_basis), intent(in) :: product_basis
@@ -452,9 +452,11 @@ contains
       end if
       if (request%eta <= 0.0_rp) error stop 'evaluate_lr_product_ks_susceptibility: retarded eta must be positive'
       select case (trim(request%channel))
-      case ('plus', 'chi_plus')
+      case ('plus', 'minus')
+         error stop 'plus/minus channel aliases were removed; use chi_plus/chi_minus'
+      case ('chi_plus')
          channel_kind = 1
-      case ('minus', 'chi_minus')
+      case ('chi_minus')
          channel_kind = 2
       case default
          error stop 'evaluate_lr_product_ks_susceptibility: channel must be chi_plus or chi_minus'
@@ -537,9 +539,11 @@ contains
       end if
       if (request%eta <= 0.0_rp) error stop 'evaluate_lr_ks_susceptibility: retarded eta must be positive'
       select case (trim(request%channel))
-      case ('plus', 'chi_plus')
+      case ('plus', 'minus')
+         error stop 'plus/minus channel aliases were removed; use chi_plus/chi_minus'
+      case ('chi_plus')
          channel_kind = 1
-      case ('minus', 'chi_minus')
+      case ('chi_minus')
          channel_kind = 2
       case default
          error stop 'evaluate_lr_ks_susceptibility: channel must be chi_plus or chi_minus'
@@ -1004,9 +1008,11 @@ contains
          error stop 'evaluate_lr_rs_gf_susceptibility: invalid energy integration window'
       end if
       select case (trim(request%channel))
-      case ('plus', 'chi_plus')
+      case ('plus', 'minus')
+         error stop 'plus/minus channel aliases were removed; use chi_plus/chi_minus'
+      case ('chi_plus')
          channel_kind = 1
-      case ('minus', 'chi_minus')
+      case ('chi_minus')
          channel_kind = 2
       case default
          error stop 'evaluate_lr_rs_gf_susceptibility: channel must be chi_plus or chi_minus'
@@ -1085,7 +1091,9 @@ contains
       selected = trim(lower(provider_name))
       if (selected == 'auto') selected = trim(lower(recursion_obj%control%recur))
       select case (selected)
-      case ('block', 'block_recursion')
+      case ('block_recursion')
+         error stop 'block_recursion selector was removed; use block'
+      case ('block')
          if (trim(lower(recursion_obj%control%recur)) /= 'block') then
             error stop 'native RSGF production provider: block provider requires control%recur=block'
          end if
@@ -2358,9 +2366,11 @@ contains
       end if
       if (request%eta <= 0.0_rp) error stop 'DRESP-02: response eta must be positive'
       select case (trim(request%channel))
-      case ('plus', 'chi_plus')
+      case ('plus', 'minus')
+         error stop 'plus/minus channel aliases were removed; use chi_plus/chi_minus'
+      case ('chi_plus')
          channel_kind = 1
-      case ('minus', 'chi_minus')
+      case ('chi_minus')
          channel_kind = 2
       case default
          error stop 'DRESP-02: channel must be chi_plus or chi_minus'

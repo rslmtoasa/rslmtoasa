@@ -260,9 +260,9 @@ production solve is implemented here.
 
 ## Production boundary
 
-Only projection d enters the certified Juelich-d driver. The implementation
-rejects other projection selections for this route. The energy-dependent
-projected diagnostic remains a separate legacy path and is not used for
-Juelich-d. The generic projected configuration retains legacy selectors for
-other paths; any generic API cleanup is deferred to LR-METHOD-04. No spd or
-spdf production route is defined by this task.
+Only projection d and channel chi_plus enter the certified Juelich-d driver.
+Configuration and prepared-request boundaries reject spd, spdf and both before
+numerical work. The energy-dependent projected bare response is retained solely
+for independent site-operator/bubble validation; it supplies neither Juelich U
+nor an alternative production interaction. The frozen-EF d projector is the
+only production Juelich specialization.

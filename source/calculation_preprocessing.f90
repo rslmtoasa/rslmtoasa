@@ -266,6 +266,11 @@ contains
 
       ! Constructing control object
       control_obj = control(this%fname)
+      if (trim(this%post_processing) == 'linear_response') then
+         if (control_obj%has_soc()) error stop 'linear_response: SOC transverse response is not supported'
+         if (.not. control_obj%is_collinear()) error stop 'linear_response: noncollinear reference response is not supported'
+      end if
+
 
       ! Constructing lattice object
       lattice_obj = lattice(control_obj)
@@ -338,10 +343,9 @@ contains
             call this%linear_response%run(control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, &
                                           self_obj%reciprocal_scf_cache, recursion_obj, green_obj, self_obj%converged)
          else
-            ! Historical RS-SCF route: construct the reciprocal object only
-            ! after SCF, from the converged accepted real-space potential.
-            ! linear_response marks this as a frozen-potential diagnostic
-            ! rebuild and retains recursion_obj/green_obj for native RSGF.
+            ! Existing spherical ALSDA / bare-reference state adapter:
+            ! build the reciprocal object from the accepted real-space potential
+            ! after SCF, retaining recursion_obj/green_obj for native RSGF.
             reciprocal_obj = reciprocal(hamiltonian_obj)
             call this%linear_response%run(control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, &
                                           reciprocal_obj, recursion_obj, green_obj, self_obj%converged)

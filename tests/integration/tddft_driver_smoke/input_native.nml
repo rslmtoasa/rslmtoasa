@@ -72,7 +72,6 @@ omega_min = 1.00
 omega_max = 1.00
 eta = 1.00
 response_lmax = 0
-native_rsgf_provider = 'block'
 gf_integration_points = 3
 gf_integration_eta = 0.02
 gf_energy_margin = 1.0

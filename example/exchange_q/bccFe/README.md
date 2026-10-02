@@ -23,7 +23,7 @@ contact, and total finite-H components.  `DeltaJ/q^2` is reported only for
 nonzero q and is a diagnostic, not an automatic stiffness fit.
 
 Set `native_turek = .true.` to enable the native screened-LMTO/Turek contour
-route. `native_crosscheck = .true.` remains a compatibility alias. The native
+route. `native_crosscheck = .true.` is rejected; use the canonical `native_turek` flag. The native
 columns report ordered `J_ud(q)`, `J_du(q)`, their visible historical average
 `J_sym(q)`, raw `DeltaJ_sym(q)`, and the expected complex-amplitude curvature
 `2*DeltaJ_sym(q)`; no fitted scale is applied. The contour is controlled by
@@ -33,7 +33,7 @@ the optional even `native_contour_target_fermi_poles`. The closure validation
 deck uses a fixed 256-pole target: the native coefficient spectrum has a
 larger complex span than the compact legacy unit fixture, so this target is
 the smallest tested even target that leaves all native poles strictly inside
-the production ellipse while retaining explicit residue accounting.
+the reference ellipse while retaining explicit residue accounting.
 
 The production finite-H formulation is selected by
 `finite_h_spectral_mode = 'metallic'` and inherits the reciprocal SCF
@@ -41,6 +41,7 @@ temperature and Fermi level.  For exact commensurate paths, use the compact
 validation decks `input_commensurate_12.nml` or `input_commensurate_24.nml`;
 their headers record `endpoint_mode = mesh_reuse`.  The original `input.nml`
 keeps an off-mesh path to exercise the exact
-`endpoint_mode = explicit_diagonalization` route.  The diagnostic
-`input_legacy_24.nml` selects the retired occupied-only spectral expression for
-the same 24³ q points.
+`endpoint_mode = explicit_diagonalization` route. The occupied-only example
+was deleted; `legacy_occupied` is rejected. These decks require accepted
+second-order `ham_only` data with `hoh=.true.`. `both` adds an independent
+contour check while keeping spectral curvature authoritative.
