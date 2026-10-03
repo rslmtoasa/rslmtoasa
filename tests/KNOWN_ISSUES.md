@@ -15,7 +15,9 @@ are not tracked here; see the closing entry in `docs/DECISIONS.md`.
   `tests/regression/bccFe_{block,chebyshev,lanczos}/input.nml` (the `fermi`
   value is rewritten in the source tree). Later runs then start from the
   rewritten input; `git checkout tests/regression` restores it. Not diagnosed
-  further. Proposal: run the cases in the scratch directory (small).
+  further. Fixed for `Lanczos`, `Block` and `Chebyshev` in `cf9049d` (they now
+  run on copies under `<build>/Testing/legacy/`). Stale untracked outputs from
+  earlier runs remain in `tests/regression/bccFe_*/`.
 - **Verified:** on a local Release, serial (`ENABLE_MPI=OFF`,
   `ENABLE_MARCH_NATIVE=OFF`), gfortran/macOS arm64 build with
   `RUN_REG/EXAMPLE/UNIT_TESTS=ON`, nine tests fail from a clean tree:
@@ -29,6 +31,32 @@ are not tracked here; see the closing entry in `docs/DECISIONS.md`.
   serial), `Example_exchange_bccFe_hoh` and
   `Example_exchange_conductivity_fccPt_hoh` timed out at the 600-900 s
   limits; all three pass serially.
+
+## Stage 0c measurements — 2026-10-03
+
+Local Release, serial, gfortran/macOS arm64 build at `dbb6380`. The full
+regression and example suites were **not** re-run in Stage 0c, so the nine
+baseline failures above were not compared as a set. Measured individually:
+
+- **Verified:** `Lanczos`, `Regression_bccFe_block_fast_sp` and
+  `Regression_bccFe_chebyshev_fast_hoh` still fail. The other six baseline
+  failures were not re-run.
+- **Verified:** `Regression_bccFe_block_fast_sp` etot run -2541.981441241,
+  ref -2541.981435146 (abs 6.1e-6, rel 2.4e-9); `Regression_bccFe_chebyshev_fast_hoh`
+  etot run -2542.086053815, ref -2542.086039063 (abs 1.5e-5, rel 5.8e-9).
+  Default tolerance 1e-6. The runner stops at the first failing key; other
+  keys were not seen. Not diagnosed; platform/BLAS summation order is a guess.
+  Left out of the `quick` tier. Whether to loosen the tolerance is the
+  developer's decision.
+- **Verified:** the legacy `Block` and `Chebyshev` scripts
+  (`tests/regression/bccFe_{block,chebyshev}/oneliner.sh`) test `$?` after an
+  `rm -f`, so they exit 0 whatever pytest reports. Run with pytest's status:
+  `Block` etot -2541.981441241 vs ref -2541.9814353441, `Chebyshev` etot
+  -2541.996178141 vs ref -2541.996169262 (tolerance 1e-6): both would fail.
+  `cf9049d` kept the old exit behaviour, so they still report Passed.
+  Proposal: test pytest's status (about 2 lines per script), which turns both
+  red until the references or tolerances are decided.
+- **Verified:** `ctest -L '^quick$'` passes 21/21 in 255.8 s.
 
 ## Phase-II closure audit — 2026-08-17
 
