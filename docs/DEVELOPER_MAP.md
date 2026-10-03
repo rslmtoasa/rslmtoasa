@@ -286,7 +286,7 @@ side belong in the reciprocal family, not in `green.f90`.
 | Bulk/surface/impurity SCF, all recursion modes | `example;scf` | `tests/scf/cases.json` |
 | Exchange, conductivity, bands, DOS, orbital moments, PAOFLOW import | `example;postproc` | `tests/postproc/cases.json` |
 | Serial-vs-MPI consistency (representative subset) | `launch_serial` / `launch_mpi` | `"launch_modes": ["serial","mpi"]` field, either `cases.json` |
-| PR-fast subset | `quick` | `"quick": true` field, either `cases.json` |
+| Quick tier (PR-fast subset; `ctest -L '^quick$'` before each commit) | `quick` | `"quick": true` field in either example `cases.json`; `quick` in the `labels` of a `tests/regression/cases.json` case; `LABELS` in `CMakeLists.txt` for unit and tooling tests |
 | MKL kernels (`mkl_batch`/`mkl_sparse`) | gated by `requires_cmake_option: ENABLE_MKL_KERNELS` | regression + `Example_bulk_bccFe_nsp2_chebyshev_mkl_batch` in `scf/cases.json` |
 | CUDA plugin | compile-only in CI (`cuda_compile` job); real-GPU consistency via `tests/run_gpu_matrix.sh` | n/a (manual, off-CI) |
 | Standalone Fortran unit tests | `unit` (+ topic labels), built with `-DRUN_UNIT_TESTS=ON` | `tests/unit/test_*.f90`, registered with `add_fortran_unit_test` in `CMakeLists.txt` |

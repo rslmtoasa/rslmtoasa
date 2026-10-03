@@ -24,10 +24,12 @@ new work: their numbers, conventions and tests are not references.
 
 ## The rules that matter most
 
-1. **Bit-level behavior is the contract.** `tests/regression` and the
-   `tests/{scf,postproc}` example suites must pass at the same tolerances
-   before and after every change. Run them before starting and after every
-   task.
+1. **Bit-level behavior is the contract.** During development and before
+   each commit, run the quick tier (`ctest -L '^quick$'`); it must pass.
+   At the end of each stage, run the full regression and example suites
+   in a fresh build; results must match the previous full run, including
+   known failures and their values. CI runs the full suites on every
+   push.
 2. **One task, one commit.** Don't batch unrelated changes into one commit. Only allow single line commit messages and do not add "Co-authored by".  If too complicated, ask.
 3. **KISS.** Write the smallest code that does the task. See "Simplicity".
 4. **Class-based architecture stays.** Derived types, constructors,

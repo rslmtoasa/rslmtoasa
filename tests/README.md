@@ -66,7 +66,17 @@ ctest -L performance
 ctest -L validation
 ```
 
-`quick` is the intentionally small workflow subset used for pull requests.
+`quick` is the intentionally small workflow subset used for pull requests
+and the development tier: `ctest -L '^quick$'` must pass before each commit.
+It holds 21 tests (measured 240 s for the 14 example cases plus about 14 s
+for the 7 added in Stage 0c, serial Release): the example cases with
+`"quick": true`, the regression case `diamondSi_sp_chebyshev_fast`, the unit
+tests `UnitArbitraryKEigenpairs`, `UnitKpointWorkset`,
+`UnitKspaceOccupations` and `UnitLehmannChain`, and `SpinResponseIsolation`.
+The unit tests exist only in a `-DRUN_UNIT_TESTS=ON` build. The two fast
+regression cases `bccFe_block_fast_sp` and `bccFe_chebyshev_fast_hoh` are
+kept out while they fail (`KNOWN_ISSUES.md`). The full suites run at the end
+of each stage in a fresh build.
 The historical WP8/WP9 decks and runners remain under
 `tests/regression/wp8_littlegroup/` and `tests/regression/wp9_validation/` for
 scientific reference, but are not registered in the active CTest harness.
