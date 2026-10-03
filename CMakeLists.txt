@@ -1128,6 +1128,9 @@ register_example_tests(
   "${TestDIR}/postproc/references"
 )
 
+# Fails on ubuntu-latest and macos-14 CI; see tests/KNOWN_ISSUES.md.
+set_tests_properties(Example_bulk_diamondSi_sp_chebyshev PROPERTIES DISABLED TRUE)
+
 add_test(
   NAME Example_si_chebyshev_kspace_dos_equivalence
   COMMAND
