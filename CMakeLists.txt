@@ -741,6 +741,7 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitLdaUHamiltonian ${TestDIR}/unit/test_lda_u_hamiltonian.f90)
   set_tests_properties(UnitLdaUHamiltonian PROPERTIES LABELS "unit;lda_u;hamiltonian")
   add_fortran_unit_test(UnitLehmannChain ${TestDIR}/unit/test_lehmann_chain.f90)
+  set_tests_properties(UnitLehmannChain PROPERTIES LABELS "unit;quick")
   add_fortran_unit_test(UnitKspaceGFValidation ${TestDIR}/unit/test_kspace_gf_validation.f90)
   set_tests_properties(UnitKspaceGFValidation PROPERTIES LABELS "unit;green;lehmann;kspace;resolvent;validation")
   add_fortran_unit_test(UnitChebyshevGFOracle ${TestDIR}/unit/test_chebyshev_gf_oracle.f90)
@@ -762,6 +763,7 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitKspaceOccupations ${TestDIR}/unit/test_kspace_occupations.f90)
   add_fortran_unit_test(UnitParallelContext ${TestDIR}/unit/test_parallel_context.f90)
   add_fortran_unit_test(UnitKpointWorkset ${TestDIR}/unit/test_kpoint_workset.f90)
+  set_tests_properties(UnitKpointWorkset PROPERTIES LABELS "unit;quick")
   add_fortran_unit_test(UnitKpointWorksetReducedReject ${TestDIR}/unit/test_kpoint_workset_reduced_rejection.f90)
   set_tests_properties(UnitKpointWorksetReducedReject PROPERTIES
     LABELS "unit;reciprocal;finite-q;workset;contract"
@@ -771,6 +773,7 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitParallelContext_cuda_override PROPERTIES
     LABELS "unit;mpi;parallel_context;device-mapping" ENVIRONMENT "RSLMTO_CUDA_DEVICE=1")
   add_fortran_unit_test(UnitArbitraryKEigenpairs ${TestDIR}/unit/test_arbitrary_k_eigenpairs.f90)
+  set_tests_properties(UnitArbitraryKEigenpairs PROPERTIES LABELS "unit;quick")
   add_test(NAME Acc04ArbitraryKSource
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_acc04_arbitrary_k_source.py)
   set_tests_properties(Acc04ArbitraryKSource PROPERTIES LABELS "unit;cuda;reciprocal;arbitrary-k;source-contract")
@@ -925,7 +928,7 @@ if (RUN_UNIT_TESTS)
     target_link_libraries(ReciprocalAccP1bPhysicalSCF ${COMMON_LIBRARIES})
   endif()
   set_target_properties(ReciprocalAccP1bPhysicalSCF PROPERTIES LINKER_LANGUAGE "Fortran")
-  set_tests_properties(UnitKspaceOccupations PROPERTIES LABELS "unit;gbt;wp2;wp5")
+  set_tests_properties(UnitKspaceOccupations PROPERTIES LABELS "unit;gbt;wp2;wp5;quick")
   if(ENABLE_MPI AND MPI_Fortran_FOUND)
     # Homebrew Open MPI on macOS runners may report only one available slot,
     # while the parallel-context unit intentionally exercises four ranks.
@@ -989,7 +992,7 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(BenchmarkHarnessSchema PROPERTIES LABELS "tooling;performance;benchmark")
   add_test(NAME SpinResponseIsolation
     COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_SOURCE_DIR} -P ${TestDIR}/spin_response_isolation.cmake)
-  set_tests_properties(SpinResponseIsolation PROPERTIES LABELS "tooling;spin-response")
+  set_tests_properties(SpinResponseIsolation PROPERTIES LABELS "tooling;spin-response;quick")
   # This test also inspects the madl2d source directly, so that the corrected
   # overflow guard cannot silently regress (see the test's header).
   target_compile_definitions(UnitMadl2dExhGuard PRIVATE

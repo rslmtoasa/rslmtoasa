@@ -122,6 +122,7 @@
     },
     {
       "name": "Example_density_of_states_bccFe",
+      "quick": true,
       "labels": ["functional", "kspace", "dos", "basis_spd", "scalar_relativistic"],
       "case": "density_of_states/bccFe",
       "timeout": 300,
