@@ -439,7 +439,7 @@ foreach(_i RANGE ${_regression_last})
       "--references" "${TestDIR}/regression/references"
   )
   set_tests_properties("Regression_${_regression_name}" PROPERTIES
-    LABELS "${_regression_labels}" TIMEOUT "${_regression_timeout}")
+    LABELS "${_regression_labels}" TIMEOUT "${_regression_timeout}" SKIP_RETURN_CODE 77)
 endforeach()
 
 # B5.2 route-agnostic estimator triads (recursion vs lehmann vs dyson). Each case

@@ -88,7 +88,7 @@ def main() -> int:
     required = case.get("requires_cmake_option")
     if required and not cmake_option_enabled(binary, required):
         print(f"SKIP [{case['name']}]: {required}=OFF")
-        return 0
+        return 77
 
     workdir = Path(args.scratch_root).resolve() / case["name"]
     setup_workdir(tests_dir / case["base"], workdir)
