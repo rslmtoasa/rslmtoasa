@@ -12,8 +12,9 @@ contains
    !> Numerically stable Fermi-Dirac occupation.  A tiny positive kT floor
    !> keeps the electron-number equation continuous for nominal T=0 inputs;
    !> the exact same effective kT is used for EF, electron count, and EBAND.
-   pure real(rp) function fermi_dirac_occupation(eigenvalue, fermi_level, kT) result(occupation)
+   pure module function fermi_dirac_occupation(eigenvalue, fermi_level, kT) result(occupation)
       real(rp), intent(in) :: eigenvalue, fermi_level, kT
+      real(rp) :: occupation
       real(rp) :: argument
 
       argument = (eigenvalue - fermi_level)/max(kT, occupation_kT_floor)

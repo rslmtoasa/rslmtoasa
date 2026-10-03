@@ -630,6 +630,17 @@ module reciprocal_mod
       procedure :: constructor
    end interface
 
+   public :: fermi_dirac_occupation
+
+   interface
+      !> Numerically stable Fermi-Dirac occupation at the effective kT used for
+      !> EF, electron count, and EBAND.
+      pure module function fermi_dirac_occupation(eigenvalue, fermi_level, kT) result(occupation)
+         real(rp), intent(in) :: eigenvalue, fermi_level, kT
+         real(rp) :: occupation
+      end function fermi_dirac_occupation
+   end interface
+
 #ifdef USE_CUDA_RECIPROCAL
    interface
       function rslmto_reciprocal_cuda_device_count(count) bind(C, name='rslmto_reciprocal_cuda_device_count')
