@@ -1404,6 +1404,9 @@ if (RUN_UNIT_TESTS)
   add_test(NAME BenchmarkHarnessSchema
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/benchmarks/test_benchmark_harness.py)
   set_tests_properties(BenchmarkHarnessSchema PROPERTIES LABELS "tooling;performance;benchmark")
+  add_test(NAME SpinResponseIsolation
+    COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_SOURCE_DIR} -P ${TestDIR}/spin_response_isolation.cmake)
+  set_tests_properties(SpinResponseIsolation PROPERTIES LABELS "tooling;spin-response")
   # This test also inspects the madl2d source directly, so that the corrected
   # overflow guard cannot silently regress (see the test's header).
   target_compile_definitions(UnitMadl2dExhGuard PRIVATE
