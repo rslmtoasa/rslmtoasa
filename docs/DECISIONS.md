@@ -3,6 +3,16 @@
 This file records one line per closed campaign. Full evidence remains
 available at the `lr-campaign-archive` tag, at the path listed below.
 
+Two archive tags are in use:
+
+- `lr-campaign-archive` — the campaign reports, at `592ebc4^` (the parent of
+  the commit that deleted them). Every `lr-campaign-archive:<path>` below
+  resolves there. If a path does not resolve, fetch tags
+  (`git fetch --tags`); if the tag is missing on the remote, recreate it with
+  `git tag lr-campaign-archive 592ebc4^` and push it.
+- `lr-campaign-archive-2026-10` — the archived linear-response source, tests
+  and `docs/linear_response/`, at `e95a17c`, the last `fable_v4` commit.
+
 | Campaign / file | Date | Conclusion (≤ 25 words) | Path at tag |
 |---|---|---|---|
 
@@ -116,7 +126,13 @@ available at the `lr-campaign-archive` tag, at the path listed below.
 
 ## Linear response (LR) campaigns, 2026
 
-### Condensed into docs/linear_response/
+These rows record what each LR campaign concluded at the time. Many PASS or
+"certified" verdicts rest on checks that held by construction (one-site cells,
+q = 0 identities, residuals that alias each other). The 2026-10-03 closing
+entry at the end of this file supersedes them: do not read any row below as
+validated physics, and do not use these records as references for new work.
+
+### Condensed into docs/linear_response/ (archived at `lr-campaign-archive-2026-10`)
 
 | Campaign / file | Date | Conclusion (≤ 25 words) | Path at tag |
 |---|---|---|---|
@@ -214,3 +230,4 @@ available at the `lr-campaign-archive` tag, at the path listed below.
 | GOLDSTONE_EIGENVALUE_CORRECTION.md | 2026 | Focused tests establish algebraic consistency and finite-matrix evidence, not converged material or literature-spectrum accuracy. | `lr-campaign-archive:docs/GOLDSTONE_EIGENVALUE_CORRECTION.md` |
 
 - 2026-10-03 — LR-METHOD-05R: accepted SR ALSDA kernel repaired; BLOCKED — response-representation closure not established (Fe raw Ward relative residual ≈0.243; no correction).
+- 2026-10-03 — LR campaign closed (`fable_v4`, 2026-08-09 to 2026-10-03, ~175 source commits): no validated magnon dispersion. External audits of the earlier `tddft_*` implementation found self-referential gates, a moment-sign normalization error and Fermi-level contract violations; the `linear_response` rewrite ended at LR-METHOD-05R BLOCKED. Code archived at `lr-campaign-archive-2026-10`; B11 restarted on `fable_v4b`.

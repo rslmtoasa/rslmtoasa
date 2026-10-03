@@ -1,8 +1,13 @@
-# Known issues found via Phase 2 test coverage
+# Known issues
 
-Bugs surfaced while closing test-matrix coverage gaps (Phase 2, P1). Recorded
-here rather than fixed in place, per the "no further structural refactoring"
-rule for this phase — each entry is a candidate for a future bug-fix task.
+Bugs found during other work and recorded here rather than fixed in place.
+The file started as the Phase 2 coverage log; it is now where any session
+records a real finding it was not asked to fix (see "Scope discipline" in
+`CLAUDE.md`). Each entry is a candidate for a future bug-fix task and should
+separate what was verified from what is suspected.
+
+Issues in the archived linear-response code (`lr-campaign-archive-2026-10`)
+are not tracked here; see the closing entry in `docs/DECISIONS.md`.
 
 ## Phase-II closure audit — 2026-08-17
 

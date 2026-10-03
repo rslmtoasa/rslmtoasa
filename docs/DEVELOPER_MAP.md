@@ -42,7 +42,7 @@ another (e.g. `post_processing_orbital_modern` reading a converged
 `Fe_out.nml`), that happens through the filesystem (`atoms%database`), not
 shared Fortran state.
 
-| `&calculation` key | Value | Routine (`calculation.f90`) | Notes |
+| `&calculation` key | Value | Routine | Notes |
 |---|---|---|---|
 | `pre_processing` | `'bravais'` | `pre_processing_bravais` | Bulk SCF (`calctype='B'`). Runs `self%run()`. |
 | `pre_processing` | `'buildsurf'` | `pre_processing_buildsurf` | Surface SCF (`calctype='S'`). `build_surf_full()`, no `newclu()`. |
@@ -51,17 +51,25 @@ shared Fortran state.
 | `pre_processing` | `'buildinterface'` | `pre_processing_buildinterface` | Two-sided layered/interface SCF (`calctype='L'`, B7.5). `build_interface_full()` (region A \| active \| region B), then `surfmat()` (kernel reused unchanged) with its one-sided registry overwritten by `charge%build_interface_registry()`. Per-iteration Madelung update is `charge%interfacepot`, not `surfpot` (`self.f90` dispatch). `buildsurf` itself is untouched and remains the permanent one-sided regression oracle. |
 | `processing` | `'sd'` | `processing_sd` | Spin dynamics. Rebuilds its consumer stack from the selected pre-processing route; the Depondt predictor/corrector now performs a predictor electronic refresh, corrected update, and post-correction electronic refresh. `Val13AbInitioSpinDynamics` validates the deterministic one-site bcc-Fe zero-torque loop; `Example_impurity_B2FeCo_sd_smoke` covers the production impurity output path. Broader dynamics remain out of scope. |
 | `post_processing` | `'exchange'` | `post_processing_exchange` | Real-space intersite J_ij/D_ij; optional `do_damping=T` evaluates the route-agnostic Gilbert tensor and optional `do_inertia=T` emits the experimental raw magnetic-inertia diagnostic. Both consume the canonical Green functions filled by `gf_route`. |
-| `post_processing` | `'exchange_q'` | `run_exchange_q` | Reciprocal q-resolved exchange consumer. Rotation dynamics moved to the separate `linear_response` route; this row remains the exchange-only path. |
+| `post_processing` | `'exchange_q'` | — | **Disabled on `fable_v4b`.** Campaign-era reciprocal q-resolved exchange; it `use`s `linear_response_mod`, so it is archived with it (`lr-campaign-archive-2026-10`). Not an LKAG oracle: use `'exchange'`. |
 | `post_processing` | `'exchange_p2rs'` | `post_processing_exchange_p2rs` | Same, Hamiltonian sourced from a PAOFLOW-format import instead of `build_bulkham()`. |
 | `post_processing` | `'conductivity'` | `post_processing_conductivity` | Real-space conductivity tensor. |
 | `post_processing` | `'conductivity_p2rs'` | `post_processing_conductivity_p2rs` | Same, PAOFLOW-imported Hamiltonian. |
 | `post_processing` | `'paoflow2rs'` | `post_processing_paoflow2rs` | Base PAOFLOW import path: builds the lattice normally but replaces `hamiltonian%build_bulkham()` with `hamiltonian%build_from_paoflow_opt()` (reads `paoham.dat`). |
 | `post_processing` | `'orbital_modern'` | `post_processing_orbital_modern` | Orbital moments via `recursion%chebyshev_orbital_mod()` — always Chebyshev, regardless of `control%recur`. Loops over *every* atom in the cluster (`this%lattice%kk`), so runtime scales with cluster size, not recursion depth. |
-| `post_processing` | `'band_structure'` / `'density_of_states'` | (see `prepare_post_processing_stack` callers) | k-space route via `reciprocal_mod`, not the real-space recursion machinery at all. |
+| `post_processing` | `'band_structure'` / `'density_of_states'` | `post_processing_band_structure` / `_density_of_states` | k-space route via `reciprocal_mod`, not the real-space recursion machinery at all. |
+| `post_processing` | `'fermi_surface'` | `post_processing_fermi_surface` | Writes the dense k-space eigensystem for Fermi-surface analysis (`reciprocal_export.f90`) on the `&reciprocal` `fs_nk1..3` mesh, always the full BZ. Its frozen-state setup (database potential → `hamiltonian` → `reciprocal`, `fermi_level` from `&energy`) is the template for new k-space post-processing routes. |
 | `post_processing` | `'bsf'` | `post_processing_bsf` → `reciprocal%calculate_bsf` (`reciprocal_bsf.f90`) | Bloch spectral function A(k,E) = −1/π Im Tr G(k,E+iη) along the canonical spglib k-path (milestone B3). Consumes the B2 engine's `dyson_kspace_inverse` per (k,E) (Σ=0 ⇒ backend E; Σ-ready for CPA/DMFT). η = `&reciprocal` green_eta, E grid = n_energy_points/dos_energy_min,max, path = `&kpath` nk_per_segment. Writes `bsf.dat` (total/up/down) + `bsf_bands.dat` overlay. Partial-trace convention in `bsf_kernel.f90` (`bsf_spectral_trace`). |
 | `post_processing` | `'kspace_green'` | `post_processing_kspace_green` | B2 validation driver: fills `green%gij` via recursion then via the k-space engine (`reciprocal%fill_green`, backend E + D≡E check) and cross-checks on-site DOS / m_z. Report-only. |
-| `post_processing` | `'frozen_magnon'` | `post_processing_frozen_magnon` | Sweeps `hamiltonian%q_ss` over a `&frozen_magnon` q-list, preferably from `q_file` (`q_coordinates='cartesian'` for `2*pi/alat` Cartesian components or `'direct'` for reciprocal-lattice coordinates), writing total energy, band energy, per-sublattice moment magnitude, and `omega(q)` to `frozen_magnon.dat`. `mode='mft'` (default) converges SCF once at the reference point, reuses that potential for a single-iteration band-energy pass at every other q, and computes `omega` from band-energy differences; `mode='scf'` re-converges at every q and computes `omega` from total-energy differences. `branch_mode='auto'` builds multi-sublattice magnon branches in `frozen_magnon_branches.dat`/`frozen_magnon_modes.dat` via the direct GBT frozen-magnon method (second derivatives of the force-theorem band-energy surface w.r.t. sublattice cone angles; Essenberger PRB 84, 174425 Eq. 26). **Single-sublattice is validated; the multi-sublattice acoustic branch is not yet gapless at Γ — see `tests/KNOWN_ISSUES.md`, deferred to B11.** See `docs/DECISIONS.md` for the archived campaign record. |
-| `post_processing` | `'linear_response'` | `linear_response%run` | Selects `&linear_response` and dispatches `rotation`, `tddft`, or `projected`; requires the accepted reciprocal bravais handoff for the latter two. See [`linear_response/FORMULATION.md`](linear_response/FORMULATION.md). |
+| `post_processing` | `'frozen_magnon'` | `post_processing_frozen_magnon` | Sweeps `hamiltonian%q_ss` over a `&frozen_magnon` q-list, preferably from `q_file` (`q_coordinates='cartesian'` for `2*pi/alat` Cartesian components or `'direct'` for reciprocal-lattice coordinates), writing total energy, band energy, per-sublattice moment magnitude, and `omega(q)` to `frozen_magnon.dat`. `mode='mft'` (default) converges SCF once at the reference point, reuses that potential for a single-iteration band-energy pass at every other q, and computes `omega` from band-energy differences; `mode='scf'` re-converges at every q and computes `omega` from total-energy differences. `branch_mode='auto'` builds multi-sublattice magnon branches in `frozen_magnon_branches.dat`/`frozen_magnon_modes.dat` via the direct GBT frozen-magnon method (second derivatives of the force-theorem band-energy surface w.r.t. sublattice cone angles; Essenberger PRB 84, 174425 Eq. 26). **Single-sublattice is validated; for the multi-sublattice acoustic branch see VAL-17 above, `tests/KNOWN_ISSUES.md`, and B1 in `docs/ROADMAP.md`.** See `docs/DECISIONS.md` for the archived campaign record. |
+| `post_processing` | `'linear_response'` | — | **Disabled on `fable_v4b`.** Archived campaign (`lr-campaign-archive-2026-10`; see `docs/DECISIONS.md`). Transverse spin response is being rebuilt as B11 (`docs/ROADMAP.md`). |
+| `post_processing` | `'pauli_projection'` | — | Campaign-era (LR-02N); ran inside the bravais SCF handoff. **Disabled on `fable_v4b`** unless the developer decides otherwise. |
+
+Routines live in `calculation.f90` except the `bravais`, `buildsurf`,
+`newclubulk` and `newclusurf` pre-processing routines
+(`calculation_preprocessing.f90`) and the k-space post-processing routines
+`band_structure`, `density_of_states`, `bsf`, `fermi_surface` and
+`kspace_green` (`calculation_reciprocal.f90`).
 
 `exchange_p2rs`/`conductivity_p2rs`/`paoflow2rs` all funnel through the
 shared helper `prepare_post_processing_stack(this, use_paoflow, ...)` in
@@ -112,16 +120,25 @@ and does not alter the equations.
 
 ### k-space (reciprocal)
 ```text
-post_processing_band_structure / _density_of_states
-  -> reciprocal_mod (reciprocal.f90 + reciprocal_{lifecycle,fourier,bands,dos,projection}.f90)
+post_processing_{band_structure,density_of_states,bsf,fermi_surface,kspace_green}
+  (calculation_reciprocal.f90)
+  -> reciprocal_mod (reciprocal.f90 + submodules reciprocal_*.f90)
        -> reciprocal_fourier.f90: k-space H(k) built via Fourier transform of
           real-space hoppings; branches on hamiltonian%ccor_2c and
-          hamiltonian%hoh (both bypass the "plain" Fourier sum — the recent
-          tetrahedron-integration work reads these same two flags)
+          hamiltonian%hoh (both bypass the "plain" Fourier sum).
+          calculate_eigenpairs_at_kpoints diagonalizes at arbitrary k.
        -> reciprocal_bands.f90 / reciprocal_dos.f90: diagonalization,
-          tetrahedron or gaussian DOS integration (control via &reciprocal
-          dos_method)
+          tetrahedron or gaussian DOS integration (&reciprocal dos_method)
        -> reciprocal_projection.f90: orbital-projected DOS, band moments
+       -> reciprocal_occupations.f90: Fermi level, Fermi-Dirac occupations,
+          electron count, band energy
+       -> reciprocal_green.f90: B2 Green-function engine (fill_green,
+          backends 'lehmann' (E) and 'dyson' (D))
+       -> reciprocal_bsf.f90, reciprocal_moments.f90 (KPM conductivity
+          moments), reciprocal_spin_density.f90, reciprocal_backend.f90
+          (execution backends), reciprocal_export.f90 (eigensystem export)
+  -> kpoint_workset.f90: owned fractional k-points and weights; shifted(q)
+     builds the k+q set (weights valid for full-BZ meshes only)
 ```
 Note the k-space route does not go through `recursion`/`green`/`chebyshev_*`
 at all — it is a parallel diagonalization-based path, not a recursion-based
@@ -154,9 +171,9 @@ calculation%processing_sd()
 ```
 `Example_bulk_bccFe_sd_smoke` checks that a one-step production trajectory is
 emitted. The deterministic one-site zero-torque loop is validated by
-[`VAL-13`](dev/VAL-13_AB_INITIO_SPIN_DYNAMICS.md), using the LMTO field/torque
-seam from [`VAL-12`](dev/VAL-12_LMTO_MAGNETIC_FIELDS_TORQUES.md) and the
-Depondt evidence from [`VAL-11`](dev/VAL-11_ABSPINLIB_INTEGRATORS.md). The
+[`VAL-13`](validation/VAL-13_AB_INITIO_SPIN_DYNAMICS.md), using the LMTO field/torque
+seam from [`VAL-12`](validation/VAL-12_LMTO_MAGNETIC_FIELDS_TORQUES.md) and the
+Depondt evidence from [`VAL-11`](validation/VAL-11_ABSPINLIB_INTEGRATORS.md). The
 impurity output path has a production smoke, but broader impurity physics and
 general trajectories remain outside the scoped claim.
 
@@ -200,6 +217,10 @@ select-case near line 641) writes files in the same format
 - **Block-Lanczos fast kernels** (`haydock_fast.f90`): `block_lanczos_fast`
   dispatching to `block_lanczos_sp`/`_dp` — the `recur_b`/`crecal_b` hot path
   for `control%recur='block'`.
+- **k-space pure kernels** (`lehmann_kernel.f90`, `dyson_kernel.f90`,
+  `bsf_kernel.f90`, `moment_kernel.f90`): plain-array procedures with no
+  object state, called by the reciprocal submodules. New k-space numerics
+  should follow this shape so analytic tests can call them directly.
 - **CUDA plugin surface**: `source/rsrec_cuda_plugin.f90` (Fortran
   `iso_c_binding` wrapper, type `rsrec_cuda_backend`) ↔
   `source/cuda/rsrec_gpu.cu` (device kernels) ↔ `source/cuda/rsrec_cuda.h`
@@ -229,43 +250,32 @@ pattern for a GPU port: a C API + `iso_c_binding` wrapper module + CPU
 fallback, exactly as `rsrec_cuda_plugin.f90` does for the recursion kernels
 — do not invent a second GPU convention.
 
-### Linear response
+### Transverse spin response (B11)
 
-`post_processing='linear_response'` is owned by `linear_response_mod` and is
-configured through `&linear_response`. The three formulations and their
-canonical production matrix is documented in [`linear_response/PUBLIC_API.md`](linear_response/PUBLIC_API.md);
-the convention and provider contracts are in the companion documents there.
+The archived `linear_response` code (`lr-campaign-archive-2026-10`) stays
+compiled on `fable_v4b` only because `calculation.f90` and `exchange_q.f90`
+`use` it. Its dispatch is disabled; nothing new may `use` it, and its docs,
+numbers and tests are not references.
 
-The live module ownership is:
-
-| file | ownership |
-|---|---|
-| `source/linear_response.f90` | `linear_response_mod` parent types, response-space contracts, and public interfaces |
-| `source/linear_response_rotation.f90` | configuration loading/validation, rotation kernel, finite-H diagnostics, and pole scan |
-| `source/linear_response_run.f90` | formulation dispatch and production orchestration |
-| `source/linear_response_bare.f90` | bare-response services |
-| `source/linear_response_basis.f90` | response basis and product-space services |
-| `source/linear_response_kernel_dyson.f90` | direct ALSDA, static GSR validation, projected interactions, and Dyson/loss services |
-| `source/lmto_path_operator.f90` | auxiliary Turek/path-operator contract; never a `chi0` provider |
-| `source/lmto_path_operator_contour.f90` | contour and ordered-pair path-operator implementation |
-
-The real-space GF provider is a separate response seam with explicit endpoint
-augmentation. The finite/provider baseline does not by itself claim a native
-production driver registration.
+The B11 restart (planned, not yet in the tree) adds one module,
+`source/spin_response.f90`, as a k-space post-processing route in
+`calculation_reciprocal.f90` following `post_processing_fermi_surface`. It
+reuses `calculate_eigenpairs_at_kpoints` for both k and k+q,
+`kpoint_workset%shifted`, the reciprocal occupation routine (to be made
+public; never copied), the potential parameters `enu`, `c`, `ppar`, and
+`band_moments`. Its numerical kernels are pure procedures on plain arrays,
+like `lehmann_kernel.f90`. The magnon-energy oracle is the real-space LKAG
+J_ij from `exchange.f90` (see VAL-07 and
+[`EXCHANGE_VALIDATION_MAP.md`](validation/EXCHANGE_VALIDATION_MAP.md)), not
+`exchange_q`.
 
 ### Lehmann-representation Green's functions
-Entry point belongs in the **reciprocal family**, not `green.f90` — the
-required eigenpairs only exist on the k-space diagonalization route
-(`reciprocal_bands.f90`). Plan: a new `reciprocal_green.f90` submodule of
-`reciprocal_mod` (does not exist yet, following the post-T9 submodule
-pattern — see `reciprocal_{lifecycle,fourier,bands,dos,projection}.f90` for
-the shape), consuming eigenvalues/eigenvectors already computed by
-`reciprocal_bands.f90`. Design constraint: return the Green's function in
-the same container/layout the real-space routes use (the `green` type's
-per-site/intersite arrays), so downstream consumers (exchange, conductivity,
-damping, future linear-response) can use either spectral route
-interchangeably. Implementation details beyond this interface contract are
-deliberately out of scope here.
+Implemented (B2): `reciprocal_green.f90` provides `reciprocal%fill_green`
+with backend `'lehmann'` (E, Σ = 0) or `'dyson'` (D), using the pure kernels
+in `lehmann_kernel.f90` and `dyson_kernel.f90`. Results land in the same
+`green` containers the real-space routes fill, so exchange, conductivity and
+damping consume either route. New Green-function consumers on the k-space
+side belong in the reciprocal family, not in `green.f90`.
 
 ---
 
@@ -280,6 +290,9 @@ deliberately out of scope here.
 | PR-fast subset | `quick` | `"quick": true` field, either `cases.json` |
 | MKL kernels (`mkl_batch`/`mkl_sparse`) | gated by `requires_cmake_option: ENABLE_MKL_KERNELS` | regression + `Example_bulk_bccFe_nsp2_chebyshev_mkl_batch` in `scf/cases.json` |
 | CUDA plugin | compile-only in CI (`cuda_compile` job); real-GPU consistency via `tests/run_gpu_matrix.sh` | n/a (manual, off-CI) |
+| Standalone Fortran unit tests | `unit` (+ topic labels), built with `-DRUN_UNIT_TESTS=ON` | `tests/unit/test_*.f90`, registered with `add_fortran_unit_test` in `CMakeLists.txt` |
+| Validation scripts | `validation` | `tests/validation/*.py`, records in `docs/validation/` |
+| Archived LR campaign tests | `lr-archive`, excluded from the default selectors | see `tests/README.md` |
 
 **Adding a case:** see `tests/scf/README.md` / `tests/postproc/README.md` for
 the full case-file format. Short version: add an `input.nml` (+ any
@@ -309,6 +322,8 @@ an unexplained failure.
   are not refactoring targets at this stage.
 - **One task, one commit.** Commit messages reference the task/phase ID
   (e.g. `test(P1.3): ...`, `ci(P5.1): ...`).
+- **Expected values never come from the code under test.** See
+  "Verification integrity" in `CLAUDE.md`.
 - **Bit-level behavior is the contract.** The regression + example suites
   must pass at the same tolerances after every task — run them before
   starting (baseline) and after every change.
