@@ -43,6 +43,12 @@ reference or tolerance was changed and none of the causes was diagnosed.
   references and the `tests/benchmarks/manifest.json` entry are unchanged;
   delete the `set_tests_properties` line to re-enable it.
 
+- **Removed:** `Example_frozen_magnon_bccFe` (case entry in
+  `tests/scf/cases.json` and `tests/scf/references/Example_frozen_magnon_bccFe/`;
+  failed on ubuntu-latest and macos-14). The deck `tests/scf/cases/frozen_magnon/bccFe`
+  stays: the `gbt_wp6*` fixtures use it. `_auto` and `_auto_scf` are unchanged.
+  The reference is at an earlier commit.
+
 ## Stage 0c measurements — 2026-10-03
 
 Local Release, serial, gfortran/macOS arm64 build at `dbb6380`. The full
