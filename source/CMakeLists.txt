@@ -22,7 +22,6 @@ add_library(${PROJECT_NAME} STATIC
     element.f90
     energy.f90
     exchange.f90
-    exchange_q.f90
     exchange_dynamics.f90
     face.F90
     frozen_magnon.f90
@@ -35,12 +34,6 @@ add_library(${PROJECT_NAME} STATIC
     magnetic_representation.f90
     gbt_structure.f90
     lmto_magnetic_tangent.f90
-    linear_response.f90
-    lr_ward_diagnostics.f90
-    linear_response_rotation.f90
-    linear_response_basis.f90
-    linear_response_bare.f90
-    linear_response_kernel_dyson.f90
     lmto_radial_augmentation.f90
     pauli_ground_state_projection.f90
     spin_density.f90
@@ -88,9 +81,6 @@ add_library(${PROJECT_NAME} STATIC
     recursion_haydock.f90
     recursion_chebyshev.f90
     recursion_transport.f90
-    lmto_path_operator.f90
-    lmto_path_operator_contour.f90
-    linear_response_run.f90
     sparse.f90
     report.f90
     rsrec_cuda_plugin.f90

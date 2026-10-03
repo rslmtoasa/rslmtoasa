@@ -247,7 +247,6 @@ contains
    !> Pre-process for bravais calculation
    !---------------------------------------------------------------------------
    module subroutine pre_processing_bravais(this)
-      use exchange_q_mod, only: run_exchange_q
       class(calculation), intent(in) :: this
 
       type(control), target :: control_obj
@@ -266,11 +265,6 @@ contains
 
       ! Constructing control object
       control_obj = control(this%fname)
-      if (trim(this%post_processing) == 'linear_response') then
-         if (control_obj%has_soc()) error stop 'linear_response: SOC transverse response is not supported'
-         if (.not. control_obj%is_collinear()) error stop 'linear_response: noncollinear reference response is not supported'
-      end if
-
 
       ! Constructing lattice object
       lattice_obj = lattice(control_obj)
@@ -319,40 +313,6 @@ contains
       call self_obj%run()
       call g_timer%stop('self-consistency')
 
-      if (trim(this%post_processing) == 'exchange_q') then
-         ! TDRUN-01 established the accepted-state ownership rule: finalize
-         ! the live k-space SCF snapshot once, then pass that same reciprocal
-         ! cache and Hamiltonian to the post-SCF consumer.  exchange_q is
-         ! deliberately executed here rather than through the historical
-         ! rebuild-after-SCF drivers.
-         if (.not. self_obj%use_kspace) then
-            call g_logger%fatal("post_processing='exchange_q' requires &self use_kspace=.true. so the accepted SCF state is available.", &
-                                __FILE__, __LINE__)
-         end if
-         call self_obj%finalize_kspace_scf_state()
-         call run_exchange_q(this%exchange_q, control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, &
-                             self_obj%reciprocal_scf_cache)
-      end if
-
-      if (trim(this%post_processing) == 'linear_response') then
-         if (self_obj%use_kspace) then
-            ! Direct route: finalize and pass the exact accepted reciprocal
-            ! SCF cache owned by self.  No second reciprocal state is made.
-            call self_obj%finalize_kspace_scf_state()
-            call self_obj%write_kspace_scf_state_artifact('kspace_scf_state.dat')
-            call this%linear_response%run(control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, &
-                                          self_obj%reciprocal_scf_cache, recursion_obj, green_obj, self_obj%converged)
-         else
-            ! Existing spherical ALSDA / bare-reference state adapter:
-            ! build the reciprocal object from the accepted real-space potential
-            ! after SCF, retaining recursion_obj/green_obj for native RSGF.
-            reciprocal_obj = reciprocal(hamiltonian_obj)
-            call this%linear_response%run(control_obj, lattice_obj, hamiltonian_obj, energy_obj, self_obj, &
-                                          reciprocal_obj, recursion_obj, green_obj, self_obj%converged)
-         end if
-      end if
-
-      if (trim(this%post_processing) == 'pauli_projection') call self_obj%quantify_pauli_projection()
       call self_obj%report()
 
       call save_state(lattice_obj%symbolic_atoms)

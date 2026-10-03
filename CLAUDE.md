@@ -17,14 +17,10 @@ Start here, then read:
 When a task names a spec file, that spec governs the task's technical
 content; this file governs how you work.
 
-**Archived code.** `source/linear_response*.f90`, `source/lr_*.f90`,
-`source/lmto_path_operator*.f90`, `source/exchange_q.f90`,
-`docs/linear_response/` and every test labelled `lr-archive` (listed in
-`tests/README.md`, including `tests/unit/oracles/`) belong to a closed
-campaign (tag
-`lr-campaign-archive-2026-10`). Do not modify them, do not `use` them from
-new code, and do not treat their numbers, conventions or tests as references.
-They are not an oracle.
+**Removed campaign code.** The linear-response campaign's source, tests
+and docs were removed from `fable_v4b`; they remain at tag
+`lr-campaign-archive-2026-10`. Do not restore, copy or consult them for
+new work: their numbers, conventions and tests are not references.
 
 ## The rules that matter most
 
@@ -32,8 +28,7 @@ They are not an oracle.
    `tests/{scf,postproc}` example suites must pass at the same tolerances
    before and after every change. Run them before starting and after every
    task.
-2. **One task, one commit.** Don't batch unrelated changes into one commit.
-   If too complicated, ask.
+2. **One task, one commit.** Don't batch unrelated changes into one commit. Only allow single line commit messages and do not add "Co-authored by".  If too complicated, ask.
 3. **KISS.** Write the smallest code that does the task. See "Simplicity".
 4. **Class-based architecture stays.** Derived types, constructors,
    `restore_to_default`, type-bound procedures. New code follows the same
@@ -55,8 +50,7 @@ on exactly this point: its checks confirmed their own arithmetic in cases
 where the answer was fixed by construction.
 
 1. **Expected values come from outside the code under test:** the
-   developer-owned oracle directories (currently `tests/spin_response/oracles/`;
-   the archived `tests/unit/oracles/` does not count), committed regression
+   developer-owned oracle directories (currently `tests/spin_response/oracles/`), committed regression
    references, a closed-form expression written independently in the test, or
    a cited publication. Never from running the code under test, calling the
    routine being tested, or re-deriving its formula inside the test.

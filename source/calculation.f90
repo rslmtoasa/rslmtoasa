@@ -35,8 +35,6 @@ module calculation_mod
    use density_of_states_mod
    use bands_mod
    use exchange_mod
-   use exchange_q_mod, only: exchange_q_config, load_exchange_q_config
-   use linear_response_mod, only: linear_response
    use spin_dynamics_mod
    use conductivity_mod
    use reciprocal_mod
@@ -139,10 +137,8 @@ module calculation_mod
       character(len=sl) :: fname
 
       !> User-facing finite-q static exchange-curvature path.
-      type(exchange_q_config) :: exchange_q
 
       !> User-facing rotation linear-response post-processing path.
-      type(linear_response) :: linear_response
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -303,16 +299,9 @@ contains
          call g_logger%fatal("post_processing='"//trim(post_processing)//"' is archived; use tag lr-campaign-archive-2026-10", &
                              __FILE__, __LINE__)
       end if
-      call load_exchange_q_config(fname, this%exchange_q, trim(post_processing) == 'exchange_q')
       if (trim(post_processing) == 'td'//'dft' .or. trim(post_processing) == 'susceptibility') then
-         call g_logger%fatal("post_processing='"//trim(post_processing)//"' was replaced by post_processing='linear_response' with &linear_response (see docs/linear_response/FORMULATION.md)", &
+         call g_logger%fatal("post_processing='"//trim(post_processing)//"' was removed; use tag lr-campaign-archive-2026-10", &
                              __FILE__, __LINE__)
-      end if
-      if (trim(post_processing) == 'linear_response') then
-         call this%linear_response%load_config(fname, .true.)
-         if (trim(this%linear_response%config%formulation) /= 'rotation' .and. trim(pre_processing) /= 'bravais') then
-            call g_logger%fatal("linear_response tddft/projected formulations require pre_processing='bravais'", __FILE__, __LINE__)
-         end if
       end if
 
       ! Pre-processing
@@ -403,7 +392,7 @@ contains
          ! pre_processing_bravais, before the ordinary post-processing stage.
          continue
       case ('susceptibility')
-         call g_logger%fatal("post_processing='susceptibility' was replaced by post_processing='linear_response' with &linear_response (see docs/linear_response/FORMULATION.md)", &
+         call g_logger%fatal("post_processing='susceptibility' was removed; use tag lr-campaign-archive-2026-10", &
                              __FILE__, __LINE__)
       end select
    end subroutine
@@ -1999,8 +1988,6 @@ contains
       this%gf_route = 'recursion'
       this%do_damping = .false.
       this%do_inertia = .false.
-      call this%exchange_q%clear()
-      call this%linear_response%restore_to_default()
    end subroutine restore_to_default
 
    !> Check availability for post-processing

@@ -51,7 +51,7 @@ shared Fortran state.
 | `pre_processing` | `'buildinterface'` | `pre_processing_buildinterface` | Two-sided layered/interface SCF (`calctype='L'`, B7.5). `build_interface_full()` (region A \| active \| region B), then `surfmat()` (kernel reused unchanged) with its one-sided registry overwritten by `charge%build_interface_registry()`. Per-iteration Madelung update is `charge%interfacepot`, not `surfpot` (`self.f90` dispatch). `buildsurf` itself is untouched and remains the permanent one-sided regression oracle. |
 | `processing` | `'sd'` | `processing_sd` | Spin dynamics. Rebuilds its consumer stack from the selected pre-processing route; the Depondt predictor/corrector now performs a predictor electronic refresh, corrected update, and post-correction electronic refresh. `Val13AbInitioSpinDynamics` validates the deterministic one-site bcc-Fe zero-torque loop; `Example_impurity_B2FeCo_sd_smoke` covers the production impurity output path. Broader dynamics remain out of scope. |
 | `post_processing` | `'exchange'` | `post_processing_exchange` | Real-space intersite J_ij/D_ij; optional `do_damping=T` evaluates the route-agnostic Gilbert tensor and optional `do_inertia=T` emits the experimental raw magnetic-inertia diagnostic. Both consume the canonical Green functions filled by `gf_route`. |
-| `post_processing` | `'exchange_q'` | — | **Disabled on `fable_v4b`.** Campaign-era reciprocal q-resolved exchange; it `use`s `linear_response_mod`, so it is archived with it (`lr-campaign-archive-2026-10`). Not an LKAG oracle: use `'exchange'`. |
+| `post_processing` | `'exchange_q'` | — | **Disabled on `fable_v4b`.** Campaign-era reciprocal q-resolved exchange; it `use`d `linear_response_mod`, so it was removed with it (tag `lr-campaign-archive-2026-10`). Not an LKAG oracle: use `'exchange'`. |
 | `post_processing` | `'exchange_p2rs'` | `post_processing_exchange_p2rs` | Same, Hamiltonian sourced from a PAOFLOW-format import instead of `build_bulkham()`. |
 | `post_processing` | `'conductivity'` | `post_processing_conductivity` | Real-space conductivity tensor. |
 | `post_processing` | `'conductivity_p2rs'` | `post_processing_conductivity_p2rs` | Same, PAOFLOW-imported Hamiltonian. |
@@ -62,7 +62,7 @@ shared Fortran state.
 | `post_processing` | `'bsf'` | `post_processing_bsf` → `reciprocal%calculate_bsf` (`reciprocal_bsf.f90`) | Bloch spectral function A(k,E) = −1/π Im Tr G(k,E+iη) along the canonical spglib k-path (milestone B3). Consumes the B2 engine's `dyson_kspace_inverse` per (k,E) (Σ=0 ⇒ backend E; Σ-ready for CPA/DMFT). η = `&reciprocal` green_eta, E grid = n_energy_points/dos_energy_min,max, path = `&kpath` nk_per_segment. Writes `bsf.dat` (total/up/down) + `bsf_bands.dat` overlay. Partial-trace convention in `bsf_kernel.f90` (`bsf_spectral_trace`). |
 | `post_processing` | `'kspace_green'` | `post_processing_kspace_green` | B2 validation driver: fills `green%gij` via recursion then via the k-space engine (`reciprocal%fill_green`, backend E + D≡E check) and cross-checks on-site DOS / m_z. Report-only. |
 | `post_processing` | `'frozen_magnon'` | `post_processing_frozen_magnon` | Sweeps `hamiltonian%q_ss` over a `&frozen_magnon` q-list, preferably from `q_file` (`q_coordinates='cartesian'` for `2*pi/alat` Cartesian components or `'direct'` for reciprocal-lattice coordinates), writing total energy, band energy, per-sublattice moment magnitude, and `omega(q)` to `frozen_magnon.dat`. `mode='mft'` (default) converges SCF once at the reference point, reuses that potential for a single-iteration band-energy pass at every other q, and computes `omega` from band-energy differences; `mode='scf'` re-converges at every q and computes `omega` from total-energy differences. `branch_mode='auto'` builds multi-sublattice magnon branches in `frozen_magnon_branches.dat`/`frozen_magnon_modes.dat` via the direct GBT frozen-magnon method (second derivatives of the force-theorem band-energy surface w.r.t. sublattice cone angles; Essenberger PRB 84, 174425 Eq. 26). **Single-sublattice is validated; for the multi-sublattice acoustic branch see VAL-17 above, `tests/KNOWN_ISSUES.md`, and B1 in `docs/ROADMAP.md`.** See `docs/DECISIONS.md` for the archived campaign record. |
-| `post_processing` | `'linear_response'` | — | **Disabled on `fable_v4b`.** Archived campaign (`lr-campaign-archive-2026-10`; see `docs/DECISIONS.md`). Transverse spin response is being rebuilt as B11 (`docs/ROADMAP.md`). |
+| `post_processing` | `'linear_response'` | — | **Disabled on `fable_v4b`.** Removed campaign (tag `lr-campaign-archive-2026-10`; see `docs/DECISIONS.md`). Transverse spin response is being rebuilt as B11 (`docs/ROADMAP.md`). |
 | `post_processing` | `'pauli_projection'` | — | Campaign-era (LR-02N); ran inside the bravais SCF handoff. **Disabled on `fable_v4b`** unless the developer decides otherwise. |
 
 Routines live in `calculation.f90` except the `bravais`, `buildsurf`,
@@ -252,9 +252,8 @@ fallback, exactly as `rsrec_cuda_plugin.f90` does for the recursion kernels
 
 ### Transverse spin response (B11)
 
-The archived `linear_response` code (`lr-campaign-archive-2026-10`) stays
-compiled on `fable_v4b` only because `calculation.f90` and `exchange_q.f90`
-`use` it. Its dispatch is disabled; nothing new may `use` it, and its docs,
+The `linear_response` code was removed from `fable_v4b` (tag
+`lr-campaign-archive-2026-10`). Its dispatch stops at startup, and its docs,
 numbers and tests are not references.
 
 The B11 restart (planned, not yet in the tree) adds one module,
@@ -292,7 +291,6 @@ side belong in the reciprocal family, not in `green.f90`.
 | CUDA plugin | compile-only in CI (`cuda_compile` job); real-GPU consistency via `tests/run_gpu_matrix.sh` | n/a (manual, off-CI) |
 | Standalone Fortran unit tests | `unit` (+ topic labels), built with `-DRUN_UNIT_TESTS=ON` | `tests/unit/test_*.f90`, registered with `add_fortran_unit_test` in `CMakeLists.txt` |
 | Validation scripts | `validation` | `tests/validation/*.py`, records in `docs/validation/` |
-| Archived LR campaign tests | `lr-archive`, excluded from the default selectors | see `tests/README.md` |
 
 **Adding a case:** see `tests/scf/README.md` / `tests/postproc/README.md` for
 the full case-file format. Short version: add an `input.nml` (+ any

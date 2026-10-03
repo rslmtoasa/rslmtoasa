@@ -31,20 +31,6 @@ README:
 - `magnetic_scf` — XCR-04 historical `nsp=2`, q = 0 magnetic SCF campaign.
 - `xc_reconciliation` — XCR-01 fixed-density XC reconciliation.
 
-**Archived linear-response campaign (`lr-archive` label).** On `fable_v4b`
-these test the archived code at `lr-campaign-archive-2026-10` and are
-excluded from the default selectors. They are not references for new work,
-and the "oracles" among them are not developer-owned oracles:
-
-- `unit/linear_response/`, `unit/lmto_path_operator/`, `unit/oracles/`
-- `unit/test_lr_*.f90`, `unit/test_dresp03r_lmto_mapping.f90`,
-  `unit/test_exchange_q*.f90`, `unit/test_lmto_path_operator_legacy_alpha_guard.f90`,
-  `unit/linear_response_hardfail_*.nml`
-- `integration/` (`mills_1u_bccfe`, `tddft_driver_smoke`), `lr_baseline/`
-- `validation/lr_*.py`, `validation/val22_lr_*`, `validation/val23_lr_*`,
-  `validation/val24_lr03_*`, `validation/val_dresp01_*`, and the
-  `validation/LR_METHOD_*_REPORT.md` campaign reports
-
 ## Developer-owned oracles
 
 Reference values that judge new physics code live in developer-owned oracle
@@ -66,21 +52,18 @@ CTest labels describe the evidence a test provides:
   these are not scientific regression evidence.
 - `validation` — longer validation/convergence evidence, kept separate from
   ordinary pull-request correctness runs.
-- `lr-archive` — tests of the archived linear-response campaign (listed
-  above). Excluded from the default selectors; run them only when working on
-  the archive itself.
 
 Useful local selectors (from the build directory) are:
 
 ```bash
-ctest -L unit -LE lr-archive
+ctest -L unit
 ctest -L quick
 ctest -L kspace
 ctest -L rs
 ctest -L conductivity
 ctest -L structure_constants
 ctest -L performance
-ctest -L validation -LE lr-archive
+ctest -L validation
 ```
 
 `quick` is the intentionally small workflow subset used for pull requests.
