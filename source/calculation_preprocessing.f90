@@ -260,7 +260,6 @@ contains
       type(dos), target :: dos_obj
       type(bands), target :: bands_obj
       type(mix), target :: mix_obj
-      type(reciprocal), target :: reciprocal_obj
       integer :: i
 
       ! Constructing control object

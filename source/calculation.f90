@@ -379,21 +379,6 @@ contains
          call this%post_processing_kspace_green()
       case ('frozen_magnon')
          call this%post_processing_frozen_magnon()
-      case ('exchange_q')
-         ! exchange_q is owned by the accepted bravais-SCF handoff in
-         ! pre_processing_bravais.  It cannot reconstruct a second state here.
-         continue
-      case ('linear_response')
-         ! linear_response is owned by the accepted bravais-SCF handoff in
-         ! pre_processing_bravais, alongside exchange_q.
-         continue
-      case ('pauli_projection')
-         ! LR-02N runs immediately after the accepted bravais SCF state in
-         ! pre_processing_bravais, before the ordinary post-processing stage.
-         continue
-      case ('susceptibility')
-         call g_logger%fatal("post_processing='susceptibility' was removed; use tag lr-campaign-archive-2026-10", &
-                             __FILE__, __LINE__)
       end select
    end subroutine
 
