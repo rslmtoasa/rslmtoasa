@@ -5,13 +5,13 @@ available at the `lr-campaign-archive` tag, at the path listed below.
 
 Two archive tags are in use:
 
-- `lr-campaign-archive` — the campaign reports, at `592ebc4^` (the parent of
-  the commit that deleted them). Every `lr-campaign-archive:<path>` below
-  resolves there. If a path does not resolve, fetch tags
-  (`git fetch --tags`); if the tag is missing on the remote, recreate it with
-  `git tag lr-campaign-archive 592ebc4^` and push it.
-- `lr-campaign-archive-2026-10` — the archived linear-response source, tests
-  and `docs/linear_response/`, at `e95a17c`, the last `fable_v4` commit.
+- `lr-campaign-archive` — the campaign reports, at `70eb73b`. Every
+  `lr-campaign-archive:<path>` below resolves there, as it does at any
+  commit up to `592ebc4^`. If a path does not resolve, fetch tags
+  (`git fetch --tags`).
+- `lr-campaign-archive-2026-10` — the linear-response source, tests and
+  `docs/linear_response/` removed from `fable_v4b`, at `e95a17c`, the
+  last `fable_v4` commit.
 
 | Campaign / file | Date | Conclusion (≤ 25 words) | Path at tag |
 |---|---|---|---|
@@ -132,7 +132,7 @@ q = 0 identities, residuals that alias each other). The 2026-10-03 closing
 entry at the end of this file supersedes them: do not read any row below as
 validated physics, and do not use these records as references for new work.
 
-### Condensed into docs/linear_response/ (archived at `lr-campaign-archive-2026-10`)
+### Condensed into docs/linear_response/ (removed from `fable_v4b`; at `lr-campaign-archive-2026-10`)
 
 | Campaign / file | Date | Conclusion (≤ 25 words) | Path at tag |
 |---|---|---|---|

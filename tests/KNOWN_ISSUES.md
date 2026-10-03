@@ -6,7 +6,7 @@ records a real finding it was not asked to fix (see "Scope discipline" in
 `CLAUDE.md`). Each entry is a candidate for a future bug-fix task and should
 separate what was verified from what is suspected.
 
-Issues in the archived linear-response code (`lr-campaign-archive-2026-10`)
+Issues in the linear-response code removed in Stage 0b (`lr-campaign-archive-2026-10`)
 are not tracked here; see the closing entry in `docs/DECISIONS.md`.
 
 ## Stage 0 baseline findings — 2026-10-03
