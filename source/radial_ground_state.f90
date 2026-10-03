@@ -57,6 +57,8 @@ module radial_ground_state_mod
       ! The exact arrays needed by a future response consumer.
       real(rp), allocatable :: r(:)
       real(rp), allocatable :: rho_weighted_up(:), rho_weighted_down(:)
+      ! Accepted SR number densities: n_up-n_down defines the ALSDA derivative.
+      ! Pauli response density is a distinct projection, not this denominator.
       real(rp), allocatable :: n_up(:), n_down(:)
       real(rp), allocatable :: vxc_up(:), vxc_down(:)
 

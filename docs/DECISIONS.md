@@ -212,3 +212,5 @@ available at the `lr-campaign-archive` tag, at the path listed below.
 | Campaign / file | Date | Conclusion (≤ 25 words) | Path at tag |
 |---|---|---|---|
 | GOLDSTONE_EIGENVALUE_CORRECTION.md | 2026 | Focused tests establish algebraic consistency and finite-matrix evidence, not converged material or literature-spectrum accuracy. | `lr-campaign-archive:docs/GOLDSTONE_EIGENVALUE_CORRECTION.md` |
+
+- 2026-10-03 — LR-METHOD-05R: accepted SR ALSDA kernel repaired; BLOCKED — response-representation closure not established (Fe raw Ward relative residual ≈0.243; no correction).

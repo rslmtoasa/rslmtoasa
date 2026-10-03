@@ -55,7 +55,7 @@ contains
       request%ground_states => states
       allocate(request%pauli_magnetization(nsite, nr))
       request%pauli_magnetization = pauli_m
-      request%pauli_magnetization(1, nr - 1) = 0.0_rp
+      states(1)%n_up(nr - 1) = states(1)%n_down(nr - 1)
       call evaluate_lr_alsda_kernel(request, result)
       error stop 'active-grid zero magnetization was accepted'
    end if
@@ -78,8 +78,8 @@ contains
    failed = .false.
    do isite = 1, nsite
       do ir = 1, nr
-         if (pauli_m(isite, ir) /= 0.0_rp) then
-            expected(isite, ir) = 0.5_rp*(vup(ir) - vdn(ir))/pauli_m(isite, ir)
+         if (states(isite)%n_up(ir) /= states(isite)%n_down(ir)) then
+            expected(isite, ir) = 0.5_rp*(vup(ir) - vdn(ir))/(states(isite)%n_up(ir)-states(isite)%n_down(ir))
          else
             expected(isite, ir) = 0.0_rp
          end if
@@ -88,8 +88,18 @@ contains
    call check_real_matrix(result%pointwise_kernel, expected, tolerance, 'pointwise LR-01 reconstruction', failed)
    if (trim(result%units) /= 'Ry bohr^3') failed = .true.
    if (trim(result%response_representation) /= 'LR-04 canonical local operator') failed = .true.
-   if (trim(result%magnetization_label) /= lr_kxc_magnetization_pauli) failed = .true.
-   if (.not. result%origin_null_measure_extension) failed = .true.
+   if (trim(result%magnetization_label) /= 'ground_state_sr') failed = .true.
+   ! Deliberately different response density cannot change the functional.
+   request%pauli_magnetization = 3.0_rp*pauli_m
+   call evaluate_lr_alsda_kernel(request, reversed_result)
+   call check_real_matrix(reversed_result%pointwise_kernel, expected, tolerance, 'Pauli negative control', failed)
+   if (maxval(abs(expected(:, 2:) - 0.5_rp*spread(vup(2:)-vdn(2:),1,nsite)/ &
+       request%pauli_magnetization(:, 2:))) < 0.01_rp) failed = .true.
+   deallocate(request%pauli_magnetization)
+   call evaluate_lr_alsda_kernel(request, reversed_result)
+   call check_real_matrix(reversed_result%pointwise_kernel, expected, tolerance, 'no Pauli input required', failed)
+   allocate(request%pauli_magnetization(nsite,nr))
+   request%pauli_magnetization = pauli_m
    if (result%low_m%active_radial_points /= nsite*(nr - 1)) failed = .true.
    if (result%low_m%low_m_points /= 0) failed = .true.
    if (result%low_m%exact_zero_active_points /= 0) failed = .true.
@@ -141,12 +151,13 @@ contains
 
    ! A small but nonzero active magnetization is evaluated exactly, without a
    ! floor or clipping.  It is reported by the diagnostic and remains finite.
-   request%pauli_magnetization(nsite, nr - 1) = 1.0e-12_rp
+   states(nsite)%n_down(nr - 1) = 0.0_rp
+   states(nsite)%n_up(nr - 1) = 1.0e-12_rp
    call evaluate_lr_alsda_kernel(request, low_m_result)
    if (low_m_result%low_m%low_m_points /= 1) failed = .true.
    if (abs(low_m_result%pointwise_kernel(nsite, nr - 1) - &
        0.5_rp*(vup(nr - 1) - vdn(nr - 1))/1.0e-12_rp) > 1.0e-3_rp) failed = .true.
-   request%pauli_magnetization = pauli_m
+   call initialize_states(states, radius, rho, origin, vup, vdn, total_v)
 
    ! Static Ward/Goldstone diagnostic: the supplied chi and direct kernel are
    ! applied unchanged; the result is compared with an independently supplied

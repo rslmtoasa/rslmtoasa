@@ -36,6 +36,7 @@ add_library(${PROJECT_NAME} STATIC
     gbt_structure.f90
     lmto_magnetic_tangent.f90
     linear_response.f90
+    lr_ward_diagnostics.f90
     linear_response_rotation.f90
     linear_response_basis.f90
     linear_response_bare.f90

@@ -850,17 +850,17 @@ module linear_response_mod
 
    !> Request for one direct ALSDA kernel on a complete response layout.
    !>
-   !> `pauli_magnetization(site,radial_point)` is the Pauli/no-SOC response
-   !> magnetization selected by LR-03.  It is not reconstructed from a
-   !> compressed potential field and it is not silently replaced by the SR
-   !> density in the accepted radial snapshot.
+   !> The accepted SR density and XC arrays define the functional derivative.
+   !> Optional Pauli magnetization and its provenance describe only the response.
    type, public :: lr_alsda_kernel_request
       type(response_space_layout), pointer :: response_space => null()
       type(radial_ground_state), pointer :: ground_states(:) => null()
       real(rp), allocatable :: pauli_magnetization(:, :)
+      ! Legacy request fields below carry response-density provenance only.
       character(len=32) :: magnetization_label = lr_kxc_magnetization_pauli
       character(len=32) :: magnetization_kind = ''
       character(len=256) :: magnetization_source = ''
+      ! Kept for request compatibility; accepted SR/XC validation is unconditional.
       logical :: production_contract = .false.
       character(len=512) :: requested_functional = ''
       character(len=32) :: requested_backend = ''
@@ -890,6 +890,8 @@ module linear_response_mod
       character(len=32) :: magnetization_label = ''
       character(len=32) :: magnetization_kind = ''
       character(len=256) :: magnetization_source = ''
+      character(len=32) :: pauli_response_magnetization_kind = ''
+      character(len=256) :: pauli_response_magnetization_source = ''
       character(len=64) :: units = lr_kxc_units
       character(len=128) :: response_representation = lr_kxc_representation
       logical :: origin_null_measure_extension = .false.
@@ -1444,7 +1446,7 @@ module linear_response_mod
          requested_functional, requested_backend, requested_txc, magnetization_label, low_m_diagnostic_relative)
          type(response_space_layout), intent(in) :: space
          type(radial_ground_state), intent(in) :: ground_states(:)
-         real(rp), intent(in) :: pauli_magnetization(:, :)
+         real(rp), intent(in), optional :: pauli_magnetization(:, :)
          type(lr_alsda_kernel_result), intent(out) :: result
          character(len=*), intent(in), optional :: requested_functional
          character(len=*), intent(in), optional :: requested_backend

@@ -114,6 +114,27 @@ Sources: `lr-campaign-archive:docs/LR_PAULI_TRANSITION_VERTEX.md`, `lr-campaign-
 
 ## Kernel sign and interaction routes
 
+The physical local ALSDA derivative uses the accepted scalar-relativistic
+SCF number-spin density `m_SR=n_up^SR-n_down^SR` and the same functional's
+Pauli XC coefficient `bxc_SR=(Vxc_up^SR-Vxc_down^SR)/2`:
+`Kxc_SR=bxc_SR/m_SR`. The electron magnetic moment carries the usual electron
+sign; response variables here are number-spin/Pauli coefficients. The factor
+2 associated with halved sigma-plus/minus response vertices remains separate
+from Kxc. Small finite densities are divided directly, with diagnostics and
+no floor; an active zero density fails closed. A null-measure origin extension
+cannot change a contraction.
+
+`m_P` is the separately reconstructed Pauli response magnetization.
+**m_P does not redefine Kxc.** Radial canonical metric operators and compact
+product operators represent this one physical kernel. Compact projection is
+`U^H K_point U` in weighted orthonormal coordinates. The raw diagnostic uses
+an independently projected accepted SCF XC field: `R_Ward=chiKS*bxc_SR-m_P`,
+with metric L2, relative L2, maximum residual and normalized response overlap.
+An eta ladder at Gamma and zero frequency tests the limiting behavior;
+finite eta is a conditioning diagnostic, not the exact static identity.
+Goldstone correction = OFF; these residuals never alter any production input.
+
+
 The ALSDA transverse kernel is derived from the stored up/down XC arrays. Its
 spin coefficient is the energy-valued Pauli splitting
 `B_xc^sigma=(V_xc,up-V_xc,down)/2`; it is not a field in tesla. The canonical

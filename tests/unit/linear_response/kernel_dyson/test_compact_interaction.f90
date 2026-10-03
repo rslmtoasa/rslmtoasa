@@ -7,6 +7,8 @@
 !------------------------------------------------------------------------------
 module test_compact_interaction_mod
    use precision_mod, only: rp
+   use radial_ground_state_mod, only: radial_ground_state, RADIAL_PI
+   use linear_response_mod, only: lr_alsda_kernel_result, evaluate_lr_alsda_kernel
    use basis_mod, only: basis_init
    use logger_mod, only: g_logger
    use math_mod, only: init_math_operators
@@ -28,6 +30,9 @@ module test_compact_interaction_mod
    real(rp), parameter :: mesh_a = 0.03_rp, mesh_b = 0.10_rp, nuclear_z = 1.0_rp
    real(rp), parameter :: tolerance = 2.0e-11_rp
    real(rp) :: radius(nr), local_values(nsite, nr), magnetization(nsite, nr)
+   type(radial_ground_state) :: states(nsite)
+   type(lr_alsda_kernel_result) :: kernel
+   real(rp) :: rho(nr,2), origin(2), up(nr), down(nr), total(nr,2)
    type(lmto_radial_basis) :: radial
    type(response_space_layout) :: space
    type(lmto_product_response_basis) :: product
@@ -68,11 +73,23 @@ contains
          -0.021_rp*real(item%response_m, rp) + 0.003_rp*real(item%radial_point, rp), rp)
       magnetization(1, item%radial_point) = 0.25_rp + 0.01_rp*real(item%radial_point, rp)
    end do
-   do site = 1, nsite
-      do ir = 1, nr
-         local_values(site, ir) = 0.09_rp + 0.017_rp*real(ir, rp) + 0.03_rp*real(site, rp)
-      end do
+   do ir = 1, nr
+      rho(ir,1) = 4.0_rp*RADIAL_PI*radius(ir)**2*0.9_rp*exp(-radius(ir))
+      rho(ir,2) = 4.0_rp*RADIAL_PI*radius(ir)**2*0.5_rp*exp(-radius(ir))
+      up(ir) = -0.2_rp*exp(-0.5_rp*radius(ir))
+      down(ir) = -0.1_rp*exp(-0.8_rp*radius(ir))
    end do
+   origin = [0.9_rp, 0.5_rp]
+   total(:,1) = up
+   total(:,2) = down
+   call states(1)%capture(mesh_a, mesh_b, radius, rho, origin, up, down, total, 0.0_rp)
+   call states(1)%mark_accepted(4,1.0e-9_rp)
+   states(1)%xc_provenance%backend_name = 'legacy RS-LMTO'
+   states(1)%xc_provenance%functional_name = 'Barth-Hedin'
+   states(1)%xc_provenance%txc = 1
+   states(1)%xc_provenance%spin_polarized = .true.
+   call evaluate_lr_alsda_kernel(space, states, result=kernel)
+   local_values = kernel%pointwise_kernel
 
    call compact_project_point_vector(space, product, point, compact)
    compact_magnetization = cmplx(0.0_rp, 0.0_rp, rp)

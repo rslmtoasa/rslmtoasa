@@ -28,19 +28,11 @@ contains
       type(lr_alsda_kernel_request), intent(in) :: request
       type(lr_alsda_kernel_result), intent(out) :: result
 
-      if (request%production_contract) then
-         if (trim(request%magnetization_kind) /= lr_kxc_magnetization_kind_pauli_accepted .or. &
-             trim(request%magnetization_source) /= lr_kxc_magnetization_source_pauli_accepted) then
-            error stop 'evaluate_lr_alsda_kernel: production direct ALSDA requires certified PAULI_ACCEPTED magnetization provenance'
-         end if
-      end if
       call evaluate_lr_alsda_kernel_explicit(request%response_space, request%ground_states, &
-         request%pauli_magnetization, result, request%requested_functional, request%requested_backend, &
-         request%requested_txc, request%magnetization_label, request%low_m_diagnostic_relative)
-      if (request%production_contract) then
-         result%magnetization_kind = trim(request%magnetization_kind)
-         result%magnetization_source = trim(request%magnetization_source)
-      end if
+         result=result, requested_functional=request%requested_functional, requested_backend=request%requested_backend, &
+         requested_txc=request%requested_txc, low_m_diagnostic_relative=request%low_m_diagnostic_relative)
+      result%pauli_response_magnetization_kind = request%magnetization_kind
+      result%pauli_response_magnetization_source = request%magnetization_source
    end subroutine evaluate_lr_alsda_kernel_request
 
    !> Explicit form retained for callers that keep the three contracts apart.
@@ -49,7 +41,7 @@ contains
                                                 magnetization_label, low_m_diagnostic_relative)
       type(response_space_layout), intent(in) :: space
       type(radial_ground_state), intent(in) :: ground_states(:)
-      real(rp), intent(in) :: pauli_magnetization(:, :)
+      real(rp), intent(in), optional :: pauli_magnetization(:, :)
       type(lr_alsda_kernel_result), intent(out) :: result
       character(len=*), intent(in), optional :: requested_functional
       character(len=*), intent(in), optional :: requested_backend
@@ -58,29 +50,24 @@ contains
       real(rp), intent(in), optional :: low_m_diagnostic_relative
 
       integer :: isite, ir
-      real(rp) :: bxc_sigma, magnetization, scale
+      real(rp) :: bxc_sigma, ground_state_magnetization, scale
       type(radial_xc_provenance) :: reference_provenance
       logical :: have_reference_provenance
       character(len=512) :: effective_functional
-      character(len=32) :: effective_backend, effective_magnetization_label
+      character(len=32) :: effective_backend
       integer :: effective_txc
       real(rp) :: effective_low_m_diagnostic_relative
 
       effective_functional = ''
       effective_backend = ''
       effective_txc = -1
-      effective_magnetization_label = lr_kxc_magnetization_pauli
       effective_low_m_diagnostic_relative = lr_kxc_default_low_m_relative
       if (present(requested_functional)) effective_functional = requested_functional
       if (present(requested_backend)) effective_backend = requested_backend
       if (present(requested_txc)) effective_txc = requested_txc
-      if (present(magnetization_label)) effective_magnetization_label = magnetization_label
       if (present(low_m_diagnostic_relative)) effective_low_m_diagnostic_relative = low_m_diagnostic_relative
 
       call require_initialized_space(space)
-      if (trim(effective_magnetization_label) /= lr_kxc_magnetization_pauli) then
-         error stop 'evaluate_lr_alsda_kernel: only the LR-03 Pauli-projected magnetization is supported'
-      end if
       if (effective_low_m_diagnostic_relative < 0.0_rp) then
          error stop 'evaluate_lr_alsda_kernel: low-m diagnostic threshold must be nonnegative'
       end if
@@ -101,42 +88,43 @@ contains
       result%pointwise_kernel = 0.0_rp
       result%canonical_operator = cmplx(0.0_rp, 0.0_rp, rp)
       result%low_m%diagnostic_relative_threshold = effective_low_m_diagnostic_relative
-      result%magnetization_label = trim(effective_magnetization_label)
-      result%magnetization_kind = ''
-      result%magnetization_source = ''
+      result%magnetization_label = 'ground_state_sr'
+      result%magnetization_kind = 'SR_ACCEPTED'
+      result%magnetization_source = 'accepted radial SCF n_up-n_down; same XC functional'
       result%xc_provenance = reference_provenance
 
-      scale = maxval(abs(pauli_magnetization))
-      if (scale <= 0.0_rp) then
-         error stop 'evaluate_lr_alsda_kernel: Pauli magnetization is identically zero'
-      end if
+      scale = 0.0_rp
+      do isite = 1, space%nsite
+         scale = max(scale, maxval(abs(ground_states(isite)%n_up - ground_states(isite)%n_down)))
+      end do
+      if (scale <= 0.0_rp) error stop 'evaluate_lr_alsda_kernel: SR ground_state_magnetization is identically zero'
       result%low_m%max_abs_magnetization = scale
 
       do isite = 1, space%nsite
          do ir = 1, space%npoint
-            magnetization = pauli_magnetization(isite, ir)
+            ground_state_magnetization = ground_states(isite)%n_up(ir) - ground_states(isite)%n_down(ir)
             if (space%radial_weights(ir) > 0.0_rp) then
                result%low_m%active_radial_points = result%low_m%active_radial_points + 1
-               result%low_m%min_abs_magnetization = min(result%low_m%min_abs_magnetization, abs(magnetization))
+               result%low_m%min_abs_magnetization = min(result%low_m%min_abs_magnetization, abs(ground_state_magnetization))
                result%low_m%min_relative_abs_magnetization = min(result%low_m%min_relative_abs_magnetization, &
-                  abs(magnetization)/scale)
-               if (abs(magnetization) <= effective_low_m_diagnostic_relative*scale) then
+                  abs(ground_state_magnetization)/scale)
+               if (abs(ground_state_magnetization) <= effective_low_m_diagnostic_relative*scale) then
                   result%low_m%low_m_points = result%low_m%low_m_points + 1
                end if
-               if (magnetization == 0.0_rp) then
+               if (ground_state_magnetization == 0.0_rp) then
                   result%low_m%exact_zero_active_points = result%low_m%exact_zero_active_points + 1
-                  error stop 'evaluate_lr_alsda_kernel: zero Pauli magnetization on a positive-measure radial point; capability BLOCKED'
+                  error stop 'evaluate_lr_alsda_kernel: zero SR magnetization on a positive-measure radial point; capability BLOCKED'
                end if
-            else if (magnetization == 0.0_rp) then
+            else if (ground_state_magnetization == 0.0_rp) then
                ! The origin is an exact null-measure extension in LR-04.  Its
                ! point value cannot affect any physical response contraction.
                result%low_m%null_measure_zero_points = result%low_m%null_measure_zero_points + 1
                result%origin_null_measure_extension = .true.
             end if
 
-            if (magnetization /= 0.0_rp) then
+            if (ground_state_magnetization /= 0.0_rp) then
                bxc_sigma = 0.5_rp*(ground_states(isite)%vxc_up(ir) - ground_states(isite)%vxc_down(ir))
-               result%pointwise_kernel(isite, ir) = bxc_sigma/magnetization
+               result%pointwise_kernel(isite, ir) = bxc_sigma/ground_state_magnetization
             else
                result%pointwise_kernel(isite, ir) = 0.0_rp
             end if
@@ -171,12 +159,13 @@ contains
       if (requested_txc >= 0) matches = matches .and. accepted%txc == requested_txc
    end function lr_alsda_provenance_matches
 
-   !> Raw static Goldstone/Ward diagnostic for the direct ALSDA route.
+   !> Raw kernel/rigid-vector action diagnostic for the direct ALSDA route.
    !>
    !> The supplied susceptibility is applied unchanged to the field generated
    !> by the supplied direct kernel and rigid vector.  No matrix, eigenvalue,
-   !> or kernel is modified.  The overlap is the metric overlap of the raw
-   !> response with the target rigid vector.
+   !> or kernel is modified. This is distinct from the independent material
+   !> Ward action, whose source is the accepted SCF XC field, not K*m_P.
+   !> The overlap here is the residual overlap with the target rigid vector.
    module subroutine evaluate_lr_alsda_static_residual(space, static_susceptibility, canonical_kernel, rigid_vector, &
                                                 absolute_residual, relative_residual, rigid_overlap, residual_vector)
       type(response_space_layout), intent(in) :: space
@@ -220,11 +209,13 @@ contains
       if (.not. state%valid .or. .not. state%accepted) then
          error stop 'evaluate_lr_alsda_kernel: every LR-01 radial state must be valid and accepted'
       end if
-      if (.not. allocated(state%r) .or. .not. allocated(state%vxc_up) .or. .not. allocated(state%vxc_down)) then
+      if (.not. allocated(state%r) .or. .not. allocated(state%vxc_up) .or. .not. allocated(state%vxc_down) .or. &
+          .not. allocated(state%n_up) .or. .not. allocated(state%n_down)) then
          error stop 'evaluate_lr_alsda_kernel: accepted LR-01 state is missing exact radial XC arrays'
       end if
       if (size(state%r) /= space%npoint .or. size(state%vxc_up) /= space%npoint .or. &
-          size(state%vxc_down) /= space%npoint) then
+          size(state%vxc_down) /= space%npoint .or. size(state%n_up) /= space%npoint .or. &
+          size(state%n_down) /= space%npoint) then
          error stop 'evaluate_lr_alsda_kernel: LR-01 radial state/response mesh size mismatch'
       end if
       if (abs(state%a - space%a) > mesh_tolerance*max(1.0_rp, abs(space%a)) .or. &
