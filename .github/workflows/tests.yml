@@ -147,6 +147,7 @@ jobs:
         run: |
           ctest --test-dir build \
             -L unit \
+            -LE lr-archive \
             --output-on-failure \
             --output-junit "${{ github.workspace }}/unit_results.xml" \
             --parallel 1 \
@@ -198,6 +199,7 @@ jobs:
           fi
           ctest --test-dir build \
             --label-regex "$LABEL_REGEX" \
+            -LE lr-archive \
             --output-on-failure \
             --output-junit "${{ github.workspace }}/results.xml" \
             --parallel 1 \

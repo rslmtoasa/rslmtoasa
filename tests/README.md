@@ -80,7 +80,7 @@ ctest -L rs
 ctest -L conductivity
 ctest -L structure_constants
 ctest -L performance
-ctest -L validation
+ctest -L validation -LE lr-archive
 ```
 
 `quick` is the intentionally small workflow subset used for pull requests.

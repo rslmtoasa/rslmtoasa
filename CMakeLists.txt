@@ -1570,7 +1570,17 @@ if (ENABLE_LIBXC)
 endif()
 
 endif (RUN_EXAMPLE_TESTS)
- 
+
+# Tests of the archived linear-response campaign (tag lr-campaign-archive-2026-10)
+# carry the lr-archive label so default selectors can exclude them.
+get_directory_property(_registered_tests TESTS)
+foreach(_test IN LISTS _registered_tests)
+  if(_test MATCHES "^(UnitLr|UnitDresp03r|UnitExchangeQ|UnitPathOperator|UnitLmtoPathOperator|Lr[A-Z]|Val22Lr|Val23Lr|Dresp01|LinearResponse)")
+    get_test_property(${_test} LABELS _labels)
+    set_tests_properties(${_test} PROPERTIES LABELS "${_labels};lr-archive")
+  endif()
+endforeach()
+
 ##############################################################################################
 ## ADD Cpack
 ##############################################################################################
