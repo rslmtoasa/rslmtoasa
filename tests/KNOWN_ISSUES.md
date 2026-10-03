@@ -9,6 +9,27 @@ separate what was verified from what is suspected.
 Issues in the archived linear-response code (`lr-campaign-archive-2026-10`)
 are not tracked here; see the closing entry in `docs/DECISIONS.md`.
 
+## Stage 0 baseline findings — 2026-10-03
+
+- **Verified:** running `ctest -L regression` modifies tracked files
+  `tests/regression/bccFe_{block,chebyshev,lanczos}/input.nml` (the `fermi`
+  value is rewritten in the source tree). Later runs then start from the
+  rewritten input; `git checkout tests/regression` restores it. Not diagnosed
+  further. Proposal: run the cases in the scratch directory (small).
+- **Verified:** on a local Release, serial (`ENABLE_MPI=OFF`,
+  `ENABLE_MARCH_NATIVE=OFF`), gfortran/macOS arm64 build with
+  `RUN_REG/EXAMPLE/UNIT_TESTS=ON`, nine tests fail from a clean tree:
+  `Lanczos`, `Regression_bccFe_chebyshev_{fast_hoh,legacy_hoh,fast_ccor_2c}`,
+  `Regression_bccFe_block_fast_{sp,dp}`, `Triad_triad_bccFe_jij`,
+  `Example_bulk_diamondSi_sp_chebyshev`, `Example_frozen_magnon_bccFe`.
+  Reported values are identical before and after the Stage 0 commits (e.g.
+  Lanczos etot -2541.981428001375 vs reference -2541.9814164004365, tolerance
+  1e-6). Cause not triaged; this local build configuration is a suspect.
+- **Observed:** under `ctest -j4` `Example_orbital_modern_bccFe` (about 480 s
+  serial), `Example_exchange_bccFe_hoh` and
+  `Example_exchange_conductivity_fccPt_hoh` timed out at the 600-900 s
+  limits; all three pass serially.
+
 ## Phase-II closure audit — 2026-08-17
 
 - **Resolved evidence retained:** the Phase-II compact campaigns pass for the
