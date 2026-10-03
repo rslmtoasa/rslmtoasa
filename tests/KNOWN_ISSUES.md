@@ -58,6 +58,17 @@ reference or tolerance was changed and none of the causes was diagnosed.
   decision on tolerances or references is the developer's. Delete the
   `set_tests_properties` block in `CMakeLists.txt` to re-enable them.
 
+- **Disabled:** the legacy `Lanczos`, `Block` and `Chebyshev` tests
+  (`tests/regression/bccFe_*/oneliner.sh`). `Block` and `Chebyshev` tested
+  `$?` after an `rm -f` and reported Passed whatever pytest returned; the exit
+  status is now pytest's. Measured on the local Release build at `ff6a0f4`
+  (tolerance 1e-6, first failing key `etot`): `Lanczos` -2541.981428001375 vs
+  ref -2541.9814164004365; `Block` -2541.981441241257 vs ref
+  -2541.9814353440934; `Chebyshev` -2541.9961781405345 vs ref
+  -2541.9961692623647. `Lanczos` already failed with its unchanged script.
+  Cause not diagnosed. Delete the `set_tests_properties(Lanczos Block Chebyshev`
+  line in `CMakeLists.txt` to re-enable them.
+
 ## Stage 0c measurements — 2026-10-03
 
 Local Release, serial, gfortran/macOS arm64 build at `dbb6380`. The full
