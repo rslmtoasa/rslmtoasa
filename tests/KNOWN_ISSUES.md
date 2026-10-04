@@ -554,6 +554,38 @@ etot agreed to 1.6e-9). `Si1_dos.out` is written on the same grid.
   the reported Fermi levels of both routes. The five `Regression_diamondSi_*`
   cases compare only `etot`, `ws_r`, `vmad` of `Si1_out.nml`.
 
+## Example-suite etot tolerance is 5.8e-4 to 0.37 Ry — 2026-10-04
+
+`_check_value` in `tests/run_test.py` fails a value only when both limits are
+exceeded: `abs_diff > abs_tol` and `abs_diff / max(abs(ref), 1) > rel_tol`. For
+etot of order 1e3 Ry the relative limit decides, so the effective tolerance is
+`max(abs_tol, rel_tol * max(abs(etot ref), 1))`. CMake passes `abs_tol` 1e-4 and
+`rel_tol` 1e-5 (`EXAMPLE_REF_ABS_TOL`, `EXAMPLE_REF_REL_TOL`); a case may set
+its own, and several set 1e-6 for both.
+
+- **Measured** from `tests/scf/cases.json` and `tests/postproc/cases.json` with
+  the committed references: 50 example cases, 34 compare etot, 16 do not
+  (`sd_smoke` x2, `frozen_magnon_bccFe_auto` and `_auto_scf`, the two exports,
+  the four exchange and conductivity cases, `density_of_states_bccFe_ccor_2c`
+  and `_reciprocal_hoh`, the three paoflow cases, `orbital_modern_bccFe`). All
+  34 are looser than 1e-5 Ry:
+  - cases with 1e-6 / 1e-6 (seven): diamond Si 5.8e-4, `bccFe_nsp2_block` and
+    `_hoh` 2.5e-3, the four fcc Cu Chebyshev cases 3.3e-3;
+  - CMake defaults: three diamond Si cases 5.8e-3, nineteen Fe cases 2.5e-2,
+    `B2FeCo` 2.8e-2, `surface_fccCu001` 3.3e-2, three `Pt2MnGa` cases 0.37.
+- **Consequence, measured on one case.** For `Example_bulk_diamondSi_sp_chebyshev`
+  a reference with etot shifted by +2e-6 passes and +1e-3 fails (rel 1.729e-6).
+  The etot shifts of 5.8e-6 to 1.9e-5 Ry of the `80390cc` XC change, which the
+  `Regression_bccFe_*` tests detect (absolute 1e-6), are below the effective
+  tolerance of every example case that compares etot.
+- **Not covered by this finding:** the `Regression_*` matrix (`run_matrix.py`)
+  and the Triad tests use their own rules (absolute 1e-6, 5e-6 for one case, and
+  `golden_rtol` 1e-2).
+- **Proposal, not done, a separate task:** per-quantity absolute tolerances for
+  etot in the example manifests, with the values chosen from the measured
+  run-to-run and platform spread of each case rather than from the current
+  relative limit.
+
 ## Stage 0c measurements — 2026-10-03
 
 Local Release, serial, gfortran/macOS arm64 build at `dbb6380`. The full
