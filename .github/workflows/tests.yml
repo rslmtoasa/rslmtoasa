@@ -173,7 +173,7 @@ jobs:
           RSLMTO_OMP_THREADS_SERIAL: "2"
         run: |
           ctest --test-dir build \
-            --label-regex backend \
+            --label-regex "backend|triad" \
             --output-on-failure \
             --output-junit "${{ github.workspace }}/backend_results.xml" \
             --parallel 1 \
