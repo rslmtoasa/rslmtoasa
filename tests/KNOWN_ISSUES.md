@@ -285,9 +285,64 @@ parameters and `run.log` has no `etot` line.
   are 1e-17 (one to seven spacings of doubles near 0.069), not 1e-16. The
   smaller difference is nevertheless enough to give the measured J change.
 
+**Fix applied — `2cb6f55`**
+
+- `source/exchange.f90`: the 24 `simpson_f` calls that passed `this%en%fermi`
+  now pass `this%en%ene(this%en%enpt + 1)`, the grid point `e_mesh` places on
+  E_F (as `bands.f90` and `recursion_transport.f90` already do with
+  `en%ene(ie)`). The call at line 984 (`en%ene(nv)`) and the commented-out one
+  at line 1394 are unchanged; the file has 26 lines with `simpson_f`, not 26
+  calls with fermi. `simpson_f` and `e_mesh` are untouched; 24 lines changed.
+  `en%fermi` is assigned only in `bands.f90:1321` (followed by `e_mesh`),
+  `self.f90:1905` and `self_reciprocal.f90:61` (SCF), so on the exchange
+  post-processing path `ene(enpt + 1)` is the grid point on the current fermi.
+- Triad deck after the fix, `-O0` / default build, J[1_335] and J[1_336]:
+  lehmann 0.25569596271709405 / 0.25569596271709499 and
+  0.31324515821581550 / 0.31324515821581528; dyson 0.25569596271796491 /
+  0.25569596271796469 and 0.31324515821586379 / 0.31324515821586429; recursion
+  0.50922953903584689 / 0.50922951351970158 and 0.38622076917617809 /
+  0.38622076011797762. Relative `-O0` vs default difference: lehmann 3.7e-15 and
+  7.1e-16, dyson 8.7e-16 and 1.6e-15, **recursion 5.0e-8 and 2.3e-8**. The
+  recursion difference is above the 1e-12 that was asked for and is of the size
+  of the recursion response measured above (about 5e-8); it was not diagnosed.
+  Lehmann J[1_335] is 0.25570 to 5 digits, as predicted from the line at f = 0.5.
+- `-O0` build, input fermi shifted by +1e-15, +2e-15, +5e-15, -1e-15: the largest
+  relative change from the unshifted run is 5.2e-13 (lehmann J[1_335]); recursion
+  3.5e-13, dyson 5.0e-13. No jump.
+- Against the committed Triad reference the fixed lehmann J[1_335] is +0.38%
+  (0.255696 vs 0.254738) and recursion J[1_335] +0.27% (0.509230 vs 0.507876).
+  `Triad_triad_bccFe_jij` (`golden_rtol` 1e-2, `golden_atol` 1e-4) passed in the
+  full run below. No reference, tolerance or disabled test was changed.
+- Quick tier (`ctest -L '^quick$'`, serial Release, `ENABLE_MARCH_NATIVE=OFF`,
+  `RUN_REG/EXAMPLE/UNIT_TESTS=ON`): 21 of 21 passed.
+- Full run, same configuration, serial `ctest -j1`, clean builds of the parent
+  (`5d92b0e`) and of the fix, 179 tests of which 9 disabled and 2 skipped in
+  both: the parent fails 6 (`Triad_triad_bccFe_jij`, `UnitStructureConstantsBackends`,
+  `Val04LdaUPhysics`, `Val12LmtoFieldsTorques`, `Val16GbtCommensurateSupercells`,
+  `Val17GbtHarmonicGoldstone`); the fix fails 5, the same without
+  `Triad_triad_bccFe_jij`. No other test changed status. For the five common
+  failures the ctest output is line-for-line identical apart from times and
+  backtrace addresses.
+
+**Open accuracy question (not measured)**
+
+- `enpt` is 141, so the grid point on E_F is index 142. `simpson_f` sums panels
+  (I-1, I, I+1) for I = 2, 4, ..., so index 142 is the centre of a panel
+  (weight 4h/3) and the integral ends at the centre of a panel, with f = 0.5
+  exactly at that point. With an even `enpt` the point would instead be the
+  boundary of two panels. Whether the value, with E_F placed this way and
+  `T = 0`, is an accurate estimate of the integral up to E_F, and how it
+  depends on the parity of `enpt` or on `channels_ldos`, was not measured.
+- The fixed J moved from the earlier default value by +0.4% (lehmann J[1_335]
+  0.257612 before, 0.255696 after); the residual-dependent value is no longer
+  possible, but neither value is known to be the correct J.
+- Passing tests other than the Triad were compared by status only, not by their
+  printed values.
+
 **Not measured / suspected**
 
-- Which file produces the different residual. Suspected, not tested: the
+- Which file produces the different residual (no longer needed for J after
+  `2cb6f55`). Suspected, not tested: the
   expression `energy_min + edel*i` (`energy.f90:214`, together with the rescale
   of `edel` on line 211) contracted to FMA at `-O2`. The bisect is consistent
   with it: b13 reproduces `-O0`, b14 (`hamiltonian*`) and b15 (`exchange.f90`)
@@ -299,10 +354,9 @@ parameters and `run.log` has no `etot` line.
 - Whether the shared cause is the `T = 0` Fermi factor in `simpson_f` or the
   placement of `fermi` on a grid point (`e_mesh` rescales `edel` so that it
   does) was not separated; both are present in every run.
-- Which build is right was not judged; neither the reference nor the default
-  is known to be the correct J.
 - The 4.8e-8 distance of `-O0` from the committed reference is not explained
-  (the Triad golden was last regenerated in `2a6ec10`).
+  (the Triad golden was last regenerated in `2a6ec10`); it was measured before
+  `2cb6f55`.
 - The eight regression tests of the Triage entry were not rebuilt with
   `-ffp-contract=off`, and not checked for the same grid-point dependence.
 
