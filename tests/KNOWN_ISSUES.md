@@ -360,6 +360,61 @@ parameters and `run.log` has no `etot` line.
 - The eight regression tests of the Triage entry were not rebuilt with
   `-ffp-contract=off`, and not checked for the same grid-point dependence.
 
+## Recursion reproducibility floor and five open failures — 2026-10-04
+
+**Recursion floor.** The recursion route's J_ij (Triad, bcc Fe) reproduces only
+to about 5e-8 relative. Recorded in the entry above: the `lattice%alat` probe
+gives |dJ/J| = 5.1e-8 at a 1e-12 perturbation and 1.9e-8 at 1e-9 (J[1_335];
+J[1_336] 1.2e-7 and 1.9e-7, ratio times perturbation), and `-O0` vs default
+differ by 5.0e-8 (J[1_335]) and 2.3e-8 (J[1_336]). Lehmann and dyson stay at
+1e-15 in the same comparisons. The size does not scale with the perturbation,
+so it is a noise floor (rounding) and not a discontinuity in J. Its source in
+the recursion was not diagnosed. A check on recursion J tighter than about 1e-6
+relative would be below this floor.
+
+Builds for the five entries: clean builds of `a9531bb` in a short scratch path,
+Release, gfortran 16.2, Accelerate, OpenMP on, MPI off,
+`ENABLE_MARCH_NATIVE=OFF`, `RUN_REG/EXAMPLE/UNIT_TESTS=ON`, no
+`OMP_NUM_THREADS`. Each test was run alone with `ctest -R`. CI: `tests.yml`
+runs `-L unit`, `-L tooling`, `-L backend`, `-L example` (`-L quick` on pull
+requests); `binaries.yml` (ubuntu-latest, macos-14, `RUN_REG_TESTS=ON`,
+MPI on, job `continue-on-error`) runs an unfiltered `ctest`.
+
+- **`UnitStructureConstantsBackends`** (labels `unit;structure_constants;strux;legacy_strux`).
+  CI: selected by `tests.yml -L unit`. **Not reproduced.** It passes standalone
+  in four builds: default, `-O0`, `-O2 -ffp-contract=off` (source in
+  `/tmp/rs/h`) and default with the repo as source; `ctest -L unit -j1` passes
+  91 of 91. sp Sbar max 1.4024e-08 (tolerance 2e-8), relative 7.0387e-09 (1e-8)
+  in all four. The failure listed in the entry above was not captured. One
+  failure was observed, in a build whose source path was 150 characters: the
+  deck database path is truncated (`lst_path_to_file` is `character(len=sl)`
+  with `sl = 132`, `string.f90:44`, `element.f90:73`; the logged path ends at
+  `.../tests/scf/cases`), then `element.f90:157` "Error while reading
+  namelist", `iostatus = 21`, `ERROR STOP`. Suspected, not verified, that the
+  earlier full-run failures came from a long scratch path.
+- **`Val04LdaUPhysics`** (`validation;lda_u;magnetic;kspace`; 103 s). CI:
+  `binaries.yml` only. First failing check: "stored occupation matrix is
+  Hermitian", required `ldm_hermiticity_residual < 1.0e-7`. The script prints no
+  value; computed from `Fe_out.nml` with the script's expression: u2 6.09e-08,
+  u4 1.083e-07, u2_convergence 3.57e-08. The u4 deck fails.
+- **`Val12LmtoFieldsTorques`** (`validation;functional;magnetic;spin_dynamics;lmto;torque;constraints;soc`;
+  18 s). CI: `binaries.yml` only. First failing check: "SOC-free global rotation
+  changed the torque invariant by 8.281e-03 T", required `< 5.0e-3`.
+- **`Val16GbtCommensurateSupercells`** (`validation;functional;magnetic;supercell;commensurate;convergence`;
+  340 s of a 14400 s timeout). CI: `binaries.yml` only. First failing check, in
+  the first case (`q050`): "current-kernel reference did not converge", i.e.
+  `Converged!` is absent from the log of the `nstep = 100` reference supercell
+  run. No numeric value is printed. ROADMAP B1 lists "G9 failed; converged
+  small-q curvature not established".
+- **`Val17GbtHarmonicGoldstone`** (`validation;functional;magnetic;gbt;kspace;goldstone;convergence`;
+  219 s of a 14400 s timeout). CI: `binaries.yml` only. Five gates fail. First:
+  "theta=5 canonical occupation: N=8.00686367, max|dN|=6.906e-03", required
+  `|N-8| < 1e-8` and `max|dN| < 1e-7`; the same at theta 10, 15 and 20 (N
+  8.00673299, 8.00650223, 8.00614767); and "DeltaE(theta) ~ sin^2(theta) after
+  physical gauge subtraction: relative spread=10.39%", required `< 5%`. The
+  entry "VAL-17 follow-up, 2026-08-16" below reports the cone-angle gates
+  passing; the two were not reconciled. ROADMAP B1 as for Val16.
+
 ## Stage 0c measurements — 2026-10-03
 
 Local Release, serial, gfortran/macOS arm64 build at `dbb6380`. The full
