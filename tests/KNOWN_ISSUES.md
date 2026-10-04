@@ -38,7 +38,8 @@ Failures reported by GitHub CI (ubuntu-latest, macos-14 and the CUDA-plugin
 job) on `fable_v4b`. Tests are disabled or removed to get a green branch; no
 reference or tolerance was changed and none of the causes was diagnosed.
 
-- **Disabled:** `Example_bulk_diamondSi_sp_chebyshev` failed on ubuntu-latest
+- **Resolved on arm64 macOS only, 2026-10-04 (see "Reference regeneration"
+  below); still disabled elsewhere.** `Example_bulk_diamondSi_sp_chebyshev` failed on ubuntu-latest
   and macos-14 (`DISABLED TRUE` in `CMakeLists.txt`). The case, its
   references and the `tests/benchmarks/manifest.json` entry are unchanged;
   delete the `set_tests_properties` line to re-enable it.
@@ -49,7 +50,7 @@ reference or tolerance was changed and none of the causes was diagnosed.
   stays: the `gbt_wp6*` fixtures use it. `_auto` and `_auto_scf` are unchanged.
   The reference is at an earlier commit.
 
-- **Disabled:** the five `Regression_bccFe_*` tests
+- **Resolved 2026-10-04 (see "Reference regeneration" below):** the five `Regression_bccFe_*` tests
   (`chebyshev_{fast_hoh,legacy_hoh,fast_ccor_2c}`, `block_fast_{sp,dp}`)
   failed in the CUDA-plugin job (`ctest --label-regex backend`, CPU
   regression subset). They are the same five that fail in the local Release
@@ -58,7 +59,7 @@ reference or tolerance was changed and none of the causes was diagnosed.
   decision on tolerances or references is the developer's. Delete the
   `set_tests_properties` block in `CMakeLists.txt` to re-enable them.
 
-- **Disabled:** the legacy `Lanczos`, `Block` and `Chebyshev` tests
+- **Disabled, still (not regenerated 2026-10-04):** the legacy `Lanczos`, `Block` and `Chebyshev` tests
   (`tests/regression/bccFe_*/oneliner.sh`). `Block` and `Chebyshev` tested
   `$?` after an `rm -f` and reported Passed whatever pytest returned; the exit
   status is now pytest's. Measured on the local Release build at `ff6a0f4`
@@ -414,6 +415,88 @@ MPI on, job `continue-on-error`) runs an unfiltered `ctest`.
   physical gauge subtraction: relative spread=10.39%", required `< 5%`. The
   entry "VAL-17 follow-up, 2026-08-16" below reports the cone-angle gates
   passing; the two were not reconciled. ROADMAP B1 as for Val16.
+
+## Reference regeneration — 2026-10-04
+
+Regenerated on the developer's instruction after the Triage and Triad entries
+above. No tolerance was changed. Lanczos, Block and Chebyshev (the legacy
+decks, `Fe.nml.ref`) were not regenerated and stay disabled: no tool writes
+those references, and their `80390cc` step is 95.2%, 95.3% and 155% of the
+`8d7c1f0` to HEAD change.
+
+**Provenance (all references below).** Source tree `d44cde7` (code identical to
+`a9531bb`, only `KNOWN_ISSUES.md` differs), with the edits of this commit.
+macOS-26.7.1 arm64 (Apple M1), GNU Fortran (Homebrew GCC) 16.2.0, Open MPI
+5.0.11, Accelerate, cmake with the `tests.yml` configure line (Release,
+`-O3 -fbacktrace -g -g`, `ENABLE_MPI=ON`, `ENABLE_MARCH_NATIVE=OFF`, OpenMP on).
+Threads: diamond Si `serial_omp_threads` 2, `mpi_omp_threads` 1 (as recorded
+by the tool in `meta.macos-arm64.json`); regression decks and the Triad golden
+with `OMP_NUM_THREADS` unset (8 cores), because `run_matrix.py` and
+`run_triad.py` call the binary directly and record nothing.
+
+**XC attribution before regeneration.** Clean builds of `80390cc^` and
+`80390cc`, MPI off, fixed decks from `b7641c9`. All eight decks pass their old
+references at `80390cc^` and fail at `80390cc`. etot step `80390cc^` to
+`80390cc` as a fraction of the `8d7c1f0` to HEAD change: chebyshev_fast_hoh
+1.0000 (-1.421e-5), chebyshev_legacy_hoh 1.0000 (-8.968e-6),
+chebyshev_fast_ccor_2c 0.9995 (-1.354e-5), block_fast_dp 1.0001 (-5.874e-6),
+block_fast_sp 0.952 (-5.779e-6 of -6.071e-6), Block 0.952, Chebyshev 0.953
+(-8.903e-6 of -9.340e-6), Lanczos 1.554 (-1.877e-5 of -1.207e-5).
+
+- **`Regression_bccFe_*` (5 tests), re-enabled.** `run_matrix.py --gen-ref`
+  (no `generate_ci_references.py` path exists for `tests/regression/cases.json`).
+  etot change against the old reference: chebyshev_fast_hoh -1.475e-5,
+  chebyshev_legacy_hoh -8.968e-6, chebyshev_fast_ccor_2c -1.346e-5,
+  block_fast_dp -5.873e-6, block_fast_sp -6.095e-6; `ws_r` unchanged, `vmad`
+  within 4.3e-15. **Unexplained:** for `block_fast_sp`, `80390cc` accounts for
+  5.78e-6 of the 6.07e-6 change from `8d7c1f0`; the remaining 2.9e-7 (the same
+  remainder appears for Block, 2.9e-7, and Chebyshev, 4.4e-7) comes from
+  commits after `80390cc` and was not attributed.
+- **`Example_bulk_diamondSi_sp_chebyshev`, re-enabled on arm64 macOS only.**
+  The comparison now omits the `fermi_level` log check and `Si1_dos.out`
+  column 1 (energy minus the computed E_F, written after the Fermi update,
+  `bands.f90:570-577`). `totaldos.out` column 1 is kept: it is the energy minus
+  the input `fermi`, written before the update (`bands.f90:522-526`), so it is
+  fixed by the deck. With the new checks, 19 values remain. Against both
+  `ref.json` and `ref.macos-arm64.json` exactly one is outside tolerance:
+  `totaldos.out` row 500 column 2, run 7.87982, both references 7.87978,
+  difference 4.0e-5 (tolerance 1.1e-5); etot differs by 9.7e-10 (`ref.json`)
+  and 4.8e-9 (macOS), `vmad` by 1e-14. So the output of this Mac was written to
+  `ref.macos-arm64.json` and `meta.macos-arm64.json` with
+  `generate_ci_references.py --profile runner-native` (the Linux profile needs
+  `env/openmpi.sh` paths), through a scratch references directory; `ref.json`
+  and `meta.json` were not touched. `ref.json` still holds `fermi_level` and
+  `Si1_dos.out` column 1, which the run no longer produces, so on Linux (and
+  Intel macOS) the test would report them missing: `CMakeLists.txt` keeps it
+  disabled except on arm64 macOS. The previous macOS variant was generated on
+  a macos-14 runner (macOS 14.8.7, gfortran 16.1.0, commit `4c58bef`); that
+  the macos-14 CI job reproduces the values written here (macOS 26.7.1,
+  gfortran 16.2.0) was not measured.
+- **`Triad_triad_bccFe_jij` golden.** `run_triad.py --gen-ref`, which writes
+  values only. Relative change against the old golden: recursion J[1_335]
+  +2.664e-3, J[1_336] +7.075e-5; lehmann and dyson J[1_335] +3.760e-3,
+  J[1_336] +4.092e-5. The values equal the post-fix values of the entry above
+  to the printed digits. The recursion values carry the reproducibility floor
+  of about 5e-8 recorded above. The other two Triad goldens were not touched.
+- **Check after regeneration.** The five regression tests, the diamond Si test
+  and the Triad test pass in the generating build (`ctest -R`, 7 of 7). That
+  is by construction for the build that wrote the references; the independent
+  evidence is that the old references failed against the same output (etot
+  differences 5.9e-6 to 1.5e-5 against tolerance 1e-6, diamond Si
+  `totaldos.out[500,2]` above) and the full run below, in a separate MPI-off
+  build.
+- **Full run** (`ctest -j1`, clean MPI-off Release build of the working tree,
+  `ENABLE_MARCH_NATIVE=OFF`, `RUN_REG/EXAMPLE/UNIT_TESTS=ON`, `OMP_NUM_THREADS`
+  unset, 3337 s): 179 tests, 5 not run (`Lanczos`, `Block`, `Chebyshev`
+  disabled; the two `mkl` Si regressions skipped), 4 fail: `Val04LdaUPhysics`,
+  `Val12LmtoFieldsTorques`, `Val16GbtCommensurateSupercells`,
+  `Val17GbtHarmonicGoldstone`, with the same first failing messages as in the
+  entry above. Against the previous full run (5 failures, 9 disabled, 2
+  skipped): the five `Regression_bccFe_*` and the diamond Si test, disabled
+  before, pass; the Triad tests pass; `UnitStructureConstantsBackends`, which
+  failed in the previous run, passes (no source change; this build is in a
+  short path, see the entry above). The five regression tests pass in this
+  MPI-off build against references written by the MPI-on build.
 
 ## Stage 0c measurements — 2026-10-03
 
