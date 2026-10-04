@@ -69,6 +69,90 @@ reference or tolerance was changed and none of the causes was diagnosed.
   Cause not diagnosed. Delete the `set_tests_properties(Lanczos Block Chebyshev`
   line in `CMakeLists.txt` to re-enable them.
 
+## Triage of the disabled and failing tests — 2026-10-04
+
+Decks fixed from `b7641c9` (tracked files only), same decks and extraction
+script for both binaries. Binaries: `8d7c1f0` and `b7641c9` (source of `HEAD`),
+both Release, gfortran 16, Accelerate, `ENABLE_OPENMP=ON`, `ENABLE_MPI=OFF`,
+clean builds, same cmake options. Each runner's own environment: no
+`OMP_NUM_THREADS` set for the regression, legacy and Triad decks (8 cores),
+`OMP_NUM_THREADS=1` for the diamond-Si deck. `Example_frozen_magnon_bccFe` was
+not triaged (functionality not present).
+
+**Measured**
+
+- Repeat spread (two runs, same binary, HEAD and 8d7c1f0): 0 in every
+  compared quantity of every test, all printed digits.
+- HEAD differs from 8d7c1f0 in every test, by more than the spread. `etot` is
+  from the output namelist; `ws_r` is equal in every test; `vmad` (~-2.9e-11)
+  differs by at most 4e-15.
+
+| test | quantity | reference | 8d7c1f0 | HEAD | abs(HEAD-ref) | abs(HEAD-8d7c1f0) |
+|---|---|---|---|---|---|---|
+| Lanczos | etot | -2541.9814164004365 | -2541.981415926556 | -2541.981428001375 | 1.16e-05 | 1.21e-05 |
+| Block | etot | -2541.9814353440934 | -2541.9814351702867 | -2541.981441241257 | 5.9e-06 | 6.07e-06 |
+| Chebyshev | etot | -2541.9961692623647 | -2541.9961688004687 | -2541.9961781405345 | 8.88e-06 | 9.34e-06 |
+| bccFe_block_fast_sp | etot | -2541.9814351458645 | -2541.9814351702867 | -2541.981441241257 | 6.1e-06 | 6.07e-06 |
+| bccFe_block_fast_dp | etot | -2541.981505927682 | -2541.981505927699 | -2541.981511800883 | 5.87e-06 | 5.87e-06 |
+| bccFe_chebyshev_fast_hoh | etot | -2542.0860390634602 | -2542.086039602591 | -2542.086053814766 | 1.48e-05 | 1.42e-05 |
+| bccFe_chebyshev_legacy_hoh | etot | -2542.025386518904 | -2542.0253865185596 | -2542.0253954864515 | 8.97e-06 | 8.97e-06 |
+| bccFe_chebyshev_fast_ccor_2c | etot | -2542.069511937913 | -2542.0695118492704 | -2542.069525395814 | 1.35e-05 | 1.35e-05 |
+| diamondSi_sp_chebyshev | etot | -578.41075489445 | -578.4107548928741 | -578.4107548896744 | 4.78e-09 | 3.2e-09 |
+| diamondSi_sp_chebyshev | fermi_level | 0.018694 | 0.018764 | 0.018879 | 1.85e-04 | 1.15e-04 |
+| Triad jij, recursion | J[1_335] | 0.5078764970774016 | 0.5078764970774016 | 0.51193556388878 | 4.06e-03 | 4.06e-03 |
+| Triad jij, recursion | J[1_336] | 0.38619343738405454 | 0.38619343738405437 | 0.3862753386481105 | 8.19e-05 | 8.19e-05 |
+| Triad jij, lehmann | J[1_335] | 0.25473806601203197 | 0.25473806601203197 | 0.2576117354971107 | 2.87e-03 | 2.87e-03 |
+| Triad jij, lehmann | J[1_336] | 0.3132323415067655 | 0.3132323415067656 | 0.3132707226769755 | 3.84e-05 | 3.84e-05 |
+| Triad jij, dyson | J[1_335] | 0.25473806601290155 | 0.25473806601290155 | 0.25761173549797944 | 2.87e-03 | 2.87e-03 |
+| Triad jij, dyson | J[1_336] | 0.3132323415068143 | 0.3132323415068142 | 0.3132707226770232 | 3.84e-05 | 3.84e-05 |
+
+- Diamond Si, other compared quantities: `ws_r`, `lmax` equal; the largest
+  differences are `Si1_dos.out` column 1 (energy, rows 100-1900) at 1.2e-4
+  (HEAD - 8d7c1f0) and 1.9e-4 (HEAD - ref), and `totaldos.out[500,2]` at 4e-5.
+  The 8d7c1f0 binary exits with status 2 on this deck after "Calculation
+  finished"; HEAD exits 0. The fixture did not exist at 8d7c1f0 (added
+  2026-08-13); the deck was not edited.
+- 8d7c1f0 reproduces the references closely but not to all digits: `etot` within
+  5.4e-7 for the bccFe etot tests, and the Triad golden to 1e-16. The Triad golden was last regenerated in
+  `2a6ec10` (2026-07-23), before 8d7c1f0 (2026-08-09).
+- `block_fast_sp` - `block_fast_dp` at HEAD: `etot` 7.05596e-05, `ws_r` 0,
+  `vmad` 4.2e-15. At 8d7c1f0: `etot` 7.0757e-05 (-2541.9814351702867 vs
+  -2541.981505927699).
+- Diamond reference provenance (`meta.macos-arm64.json`): git `4c58bef`,
+  macOS-14.8.7 arm64, gfortran 16.1.0, `ENABLE_MPI=ON`, `serial_omp_threads` 2,
+  profile runner-native. The local runs here are serial OMP 1, MPI off.
+
+**Class (all ten tests): HEAD differs from 8d7c1f0 by more than the spread.**
+First changing commit, `git bisect run` with a clean build at every step,
+threshold 1e-9 on the extracted value against the 8d7c1f0 binary:
+
+- Triad (all three routes, J[1_335] and J[1_336]): `5967fbb` "Prepare final SCF
+  performance closure", 2026-08-24. It changes `cmake/SetFortranFlags.cmake`
+  (removes the trailing `-O0` that GNU Release builds had) plus
+  `tests/benchmarks/` files; 6 files, +1391 -211, no `source/` change. J[1_335]
+  (recursion) at `5967fbb` 0.5119356124258077, at HEAD 0.51193556388878.
+- `bccFe_block_fast_sp` etot: `80390cc` "Reconcile legacy LDA XC kernels against
+  fixed-density references", 2026-08-30; 14 files, +1294 -857, including
+  `source/xc.f90` (+43). `etot` just before it (`2285360`, with the `5967fbb`
+  flag change already in) differs from 8d7c1f0 by 1.21e-10; at `80390cc` by
+  5.78e-06.
+- Not judged whether either change was correct.
+
+**Not measured / suspected**
+
+- The other seven etot tests and diamond Si were not bisected. That they follow
+  the `80390cc` shift (etot differences 5.9e-6 to 1.5e-5, same size as
+  `block_fast_sp`) is a guess.
+- That the `-O0` removal itself, and not something else in `5967fbb`, moves the
+  Triad J_ij was not tested (no HEAD build with `-O0`). That a 3e-3 shift in
+  J_ij with an `etot` shift below 1.2e-10 points at an optimization-sensitive
+  step (floating-point order or an undefined behaviour) is a guess.
+- Proposal, about 1 build and 3 runs: build HEAD with `-O0` appended to the
+  Release flags and rerun the Triad deck.
+- A first Triad bisect with an incremental build directory gave wrong values at
+  8d7c1f0 itself (a clean build of the same commit reproduced 8d7c1f0 exactly)
+  and was discarded; incremental builds across commits are not reliable here.
+
 ## Stage 0c measurements — 2026-10-03
 
 Local Release, serial, gfortran/macOS arm64 build at `dbb6380`. The full
