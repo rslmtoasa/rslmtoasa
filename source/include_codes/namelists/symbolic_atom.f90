@@ -1,4 +1,4 @@
 character(len=sl), dimension(:), allocatable :: label
-character(len=sl) :: database = './'
+character(len=pl) :: database = './'
 
 namelist /atoms/ database, label

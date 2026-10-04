@@ -393,6 +393,22 @@ MPI on, job `continue-on-error`) runs an unfiltered `ctest`.
   `.../tests/scf/cases`), then `element.f90:157` "Error while reading
   namelist", `iostatus = 21`, `ERROR STOP`. Suspected, not verified, that the
   earlier full-run failures came from a long scratch path.
+  **Resolved 2026-10-04 (path length).** Paths now use `pl = 1024`
+  (`string.f90`) in `path_join` (it calls `join`, whose output dummy is now
+  `len=*`), `lst_path_to_file` in `element.f90` and `potential.f90`, the
+  `database` namelist variable, and `path`, `directory`, `filename`,
+  `path_parts`, `source_path` and the `GLOBAL_DATABASE_FOLDER` constructor
+  type-spec in `symbolic_atom.f90`; `sl` stays 132. From a source tree whose
+  database path is 210 characters the unit test stops with `ERROR STOP` before
+  the change and passes after (sp Sbar max 1.4024e-08, relative 7.0387e-09). A
+  first try with `sl = 1024` was discarded: it widened the `&element` and `&par`
+  header lines of written namelists from 133 to 1025 characters. With `pl`, 462 of
+  506 non-log output files of 18 decks are byte-identical to the pre-change
+  binary, including the namelist headers; the other 44 (33 with values, 11 only
+  in `cpu_s` timing lines of `str.out`) also differ between two runs of the
+  pre-change binary, e.g. `Fe_out.nml` of `nsp2_block_hoh` by 2.4e-10 between
+  the two old runs and 1.1e-9 between old and new, and `linfo.out` of the Si
+  legacy deck by 0.30 and 0.46.
 - **`Val04LdaUPhysics`** (`validation;lda_u;magnetic;kspace`; 103 s). CI:
   `binaries.yml` only. First failing check: "stored occupation matrix is
   Hermitian", required `ldm_hermiticity_residual < 1.0e-7`. The script prints no

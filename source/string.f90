@@ -42,6 +42,8 @@ module string_mod
    !> Working length of character string variables (arbitrary)
    !> 132 is the maximum length of a line free-form Fortran source line
    integer, parameter :: sl = 132
+   !> Length of file system path variables, long enough for realistic build trees
+   integer, parameter :: pl = 1024
 
    interface fmt
       procedure :: fmt_txt
@@ -364,7 +366,7 @@ contains
    subroutine join(lst_string, sep, string)
       character(len=*), dimension(:), intent(in) :: lst_string
       character(len=*), intent(in), optional :: sep
-      character(len=sl), intent(out) :: string
+      character(len=*), intent(out) :: string
       character(len=sl) :: sep_used
       integer :: i
       sep_used = ''
@@ -468,8 +470,8 @@ contains
 
    function path_join(paths)
       character(len=*), dimension(:), intent(in) :: paths
-      character(len=sl) :: path_join
-      path_join = fjoin(paths, '/')
+      character(len=pl) :: path_join
+      call join(paths, '/', path_join)
       do while (str_contains(path_join, '//'))
          call replace(path_join, '//', '/')
       end do

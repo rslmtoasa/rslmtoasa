@@ -23,7 +23,7 @@ module symbolic_atom_mod
 
    use element_mod, only: element
    use potential_mod, only: potential
-   use string_mod, only: sl, replace, endswith, fmt
+   use string_mod, only: sl, pl, replace, endswith, fmt
    use string_mod, only: path_join
    use os_mod, only: exists
    use globals_mod, only: GLOBAL_DATABASE_FOLDER
@@ -125,9 +125,9 @@ contains
       character(len=*), intent(in), optional :: database
       logical, intent(in) :: reload
       logical, intent(out) :: is_restart
-      character(len=sl) :: path
-      character(len=sl) :: directory, filename
-      character(len=sl), dimension(2) :: path_parts
+      character(len=pl) :: path
+      character(len=pl) :: directory, filename
+      character(len=pl), dimension(2) :: path_parts
 
       path = ''
       is_restart = .false.
@@ -152,7 +152,7 @@ contains
       path = path_join(path_parts)
       if (exists(path)) return
 
-      path_parts = [character(len=sl) :: GLOBAL_DATABASE_FOLDER, filename]
+      path_parts = [character(len=pl) :: GLOBAL_DATABASE_FOLDER, filename]
       path = path_join(path_parts)
    end function selected_symbolic_atom_source
 
@@ -172,7 +172,7 @@ contains
       logical, optional, intent(in) :: reload
       logical :: reload_
       logical :: source_is_restart
-      character(len=sl) :: source_path
+      character(len=pl) :: source_path
 
       !reload_ = merge(reload, .True., present(reload))
       if (present(reload)) then

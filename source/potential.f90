@@ -25,7 +25,7 @@ module potential_mod
    use precision_mod, only: rp
    use mpi_mod
    use globals_mod, only: GLOBAL_DATABASE_FOLDER, GLOBAL_CHAR_SIZE
-   use string_mod, only: path_join, sl, fmt, real2str, int2str
+   use string_mod, only: path_join, sl, pl, fmt, real2str, int2str
    use logger_mod, only: g_logger
    use namelist_generator_mod, only: namelist_generator
    use basis_mod, only: lmax_basis
@@ -162,7 +162,7 @@ contains
       logical, optional, intent(in) :: reload
       logical :: reload_, built
       character(len=:), allocatable :: path_to_file
-      character(len=sl), dimension(2) :: lst_path_to_file
+      character(len=pl), dimension(2) :: lst_path_to_file
 
       !reload_ = merge(reload, .True., present(reload))
       if (present(reload)) then
