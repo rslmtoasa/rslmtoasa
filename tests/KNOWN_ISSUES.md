@@ -232,17 +232,46 @@ parameters and `run.log` has no `etot` line.
   together with one of them. In the subset builds that reproduce `-O0` the
   recursion J[1_335] is 0.50787642319, 2.6e-8 from the `-O0` value, which is
   inside the recursion response above.
+- `sbar` is excluded as the cause. In bisect builds b11, b13, b14 and b15
+  `lattice_strux.f90` is compiled at `-O3`, and their `sbar` is bit-identical
+  to the default build's (1042 of 1215 values differ from `-O0`, max 1.1e-15).
+  Builds b11 and b13 still give the `-O0` J for lehmann and dyson to 1e-15
+  (recursion within the 2.6e-8 above). With all 56 files at `-O0` (b10) `sbar`
+  equals the `-O0` one.
+- Energy mesh (`energy.f90:209-211`, `nint((fermi - energy_min)/edel)`):
+  scratch builds (not committed, a `write` after line 211) at `-O0` and at
+  the default level, recursion and lehmann runs, J equal to the rows above.
+  Printed with 17 digits, identical in both builds in every `e_mesh` call
+  (1 call in the recursion run, 2 in the lehmann run): fermi
+  -6.92910000000000054e-2, energy_min -1.19999999999999996, ratio
+  `(fermi - energy_min)/edel` before the rescale 141.338624999999979, `enpt`
+  141, rescaled `edel` 8.01921276595744630e-3. The ratio is 0.16 from the
+  nearest `nint` boundary, so a one-ulp change cannot flip `nint` here. That
+  hypothesis is rejected for this deck.
+- Not on this deck's path: `globals.f90` has no executable code (a constant and
+  a `data` table); `exchange_dynamics.f90` holds only
+  `calculate_gilbert_damping` and `calculate_moment_of_inertia`, called under
+  `do_damping` / `do_inertia`, which the deck does not set.
+- A Linux x86-64 build was not available (the Docker daemon is not running, no
+  push was allowed), so the deck was not run on that platform.
 
 **Not measured / suspected**
 
-- Which file and which expression. The bisect assumed one file or a pair; it was
-  stopped at the build budget. Proposal, about 2 builds: `energy.f90` alone, then
-  `exchange_dynamics.f90` alone.
+- Which file and which expression. The bisect assumed one file, so it did not
+  test two files together. b13 (reproduces) contains both `exchange.f90` and
+  `hamiltonian*`; b14 and b15 each had one of them alone and did not
+  reproduce. A pair such as `exchange.f90` with `hamiltonian_build.f90` (the
+  consumer and the file that fills its arrays) is therefore consistent with
+  all six builds and untested; that it is the cause is a guess. `energy.f90`
+  alone and `exchange_dynamics.f90` alone were not tested, but the mesh code
+  is excluded above and the second is not executed. Proposal, about 1 build:
+  `exchange.f90` and `hamiltonian_build.f90` at `-O0`, rest default.
 - Why a 1e-14 change gives 1%. The smooth response above says it is not
-  `sbar` rounding through a well-conditioned path; a discrete decision (a
-  threshold, a `nint`/`floor` of a grid index, an iteration count) flipped by
-  contraction is a guess and was not tested. Which build is right was not
-  judged; neither the reference nor the default is known to be the correct J.
+  `sbar` rounding through a well-conditioned path, and the energy-mesh `nint`
+  is excluded. Another discrete decision (a threshold, a grid index, an
+  iteration count) flipped by contraction is a guess and was not tested. Which
+  build is right was not judged; neither the reference nor the default is known
+  to be the correct J.
 - The 4.8e-8 distance of `-O0` from the committed reference is not explained
   (the Triad golden was last regenerated in `2a6ec10`).
 - The eight regression tests of the Triage entry were not rebuilt with
