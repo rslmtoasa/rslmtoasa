@@ -586,6 +586,47 @@ its own, and several set 1e-6 for both.
   run-to-run and platform spread of each case rather than from the current
   relative limit.
 
+## Chebyshev ported to `run_matrix`, Lanczos shift not understood — 2026-10-04
+
+**`Regression_bccFe_chebyshev_fast_sp` added** (`tests/regression/cases.json`):
+the former legacy Chebyshev deck test as a matrix case: legacy structure
+constants, `cheb_backend` `fast`, `lld` 50, no HOH, deck energy window. It
+reproduced the deck's etot to the last printed digit at `80390cc^`, `80390cc`
+and HEAD in a scratch manifest. Reference `references/bccFe_chebyshev_fast_sp.nml`
+from `run_matrix.py --gen-ref`, which records no provenance: source tree
+`45ebc81` plus the case entry, clean CI-equivalent build in a new directory
+(`tests.yml` configure line: Release `-O3 -fbacktrace -g -g`, `ENABLE_MPI=ON`,
+`ENABLE_MARCH_NATIVE=OFF`), macOS-26.7.1 arm64 (Apple M1), GNU Fortran (Homebrew
+GCC) 16.2.0, Open MPI 5.0.11, Accelerate, `OMP_NUM_THREADS=2` (the value
+`generate_ci_references.py` uses for serial runs). etot -2541.9961781405345,
+`ws_r` 2.6622, `vmad` -2.91479588148913e-11; the same etot with 8 threads. The
+test passes in that build and in the MPI-off build. The old deck reference
+(`Fe.nml.ref`, -2541.9961692623647) fails against this output by 8.9e-6.
+
+**Remainders attributed.** Between `80390cc` and HEAD the Chebyshev etot moves
+by a further -4.4e-7 and the Block etot by -2.9e-7 (Reference regeneration
+entry above, "not attributed"). Both occur at `2cae269` (clean builds of it and
+its parent `68e15f2`, scratch): Chebyshev -4.371e-7, Block -2.923e-7.
+
+**Lanczos not ported; no covering test.** Bisect of `80390cc..HEAD` (239 commits,
+clean builds, good = etot within 3.3e-6 of -2541.9814346948), nine probes
+(the five good probes up to `68e15f2` give -2541.9814346945, `2cae269` and the
+three later probes give -2541.9814280014):
+the first commit past the threshold is `2cae269`, "Repair DRESP-03TG screening
+representation consistency" (2026-09-18; `lattice.f90` +11, `lattice_strux.f90`
++40 -5, `lr_lmto_turek_gf.f90` +8 -3, three docs, two unit tests). From its diff
+(not tested further): `dbar1` now publishes the legacy MICHA alpha table on the
+symbolic atom's potential as `screening_alpha`, and the hard-coded `q` factors
+in the legacy structure routine are replaced by the same table. That is a
+linear-response change, not a change of the Lanczos recursion, and why Lanczos
+moves by +6.693e-6 while Block and Chebyshev move by 3e-7 and 4e-7 was not
+diagnosed. The bisect assumes a single transition between its two endpoints.
+The legacy `Lanczos` test was already disabled and is retired in a following
+commit, so Lanczos has no coverage until the shift is understood. A matrix case
+for it (`bccFe_lanczos`, `base` `bccFe_lanczos`, legacy structure constants,
+`lld` 16, no HOH) reproduced the deck to the last printed digit in a scratch
+manifest; it is not committed and no reference was written.
+
 ## Stage 0c measurements — 2026-10-03
 
 Local Release, serial, gfortran/macOS arm64 build at `dbb6380`. The full

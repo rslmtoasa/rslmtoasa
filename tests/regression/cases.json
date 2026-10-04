@@ -118,6 +118,18 @@
         "control": { "recur": "block", "cheb_backend": "fast_dp", "lld": 16 },
         "hamiltonian": { "hoh": false, "ccor_2c": false }
       }
+    },
+    {
+      "name": "bccFe_chebyshev_fast_sp",
+      "base": "bccFe_chebyshev",
+      "labels": ["chebyshev", "legacy_strux"],
+      "_note": "Settings of the former legacy Chebyshev deck test (legacy structure constants, no HOH, lld 50, deck energy window).",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "legacy" },
+        "control": { "recur": "chebyshev", "cheb_backend": "fast", "lld": 50 },
+        "hamiltonian": { "hoh": false, "ccor_2c": false }
+      }
     }
   ]
 }
