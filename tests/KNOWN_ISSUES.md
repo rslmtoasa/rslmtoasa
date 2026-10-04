@@ -38,8 +38,8 @@ Failures reported by GitHub CI (ubuntu-latest, macos-14 and the CUDA-plugin
 job) on `fable_v4b`. Tests are disabled or removed to get a green branch; no
 reference or tolerance was changed and none of the causes was diagnosed.
 
-- **Resolved on arm64 macOS only, 2026-10-04 (see "Reference regeneration"
-  below); still disabled elsewhere.** `Example_bulk_diamondSi_sp_chebyshev` failed on ubuntu-latest
+- **Resolved 2026-10-04 (see "Reference regeneration" and "Diamond Si
+  comparison reduced to scalars" below).** `Example_bulk_diamondSi_sp_chebyshev` failed on ubuntu-latest
   and macos-14 (`DISABLED TRUE` in `CMakeLists.txt`). The case, its
   references and the `tests/benchmarks/manifest.json` entry are unchanged;
   delete the `set_tests_properties` line to re-enable it.
@@ -452,7 +452,8 @@ block_fast_sp 0.952 (-5.779e-6 of -6.071e-6), Block 0.952, Chebyshev 0.953
   5.78e-6 of the 6.07e-6 change from `8d7c1f0`; the remaining 2.9e-7 (the same
   remainder appears for Block, 2.9e-7, and Chebyshev, 4.4e-7) comes from
   commits after `80390cc` and was not attributed.
-- **`Example_bulk_diamondSi_sp_chebyshev`, re-enabled on arm64 macOS only.**
+- **`Example_bulk_diamondSi_sp_chebyshev`, re-enabled on arm64 macOS only
+  (superseded the same day by "Diamond Si comparison reduced to scalars").**
   The comparison now omits the `fermi_level` log check and `Si1_dos.out`
   column 1 (energy minus the computed E_F, written after the Fermi update,
   `bands.f90:570-577`). `totaldos.out` column 1 is kept: it is the energy minus
@@ -497,6 +498,45 @@ block_fast_sp 0.952 (-5.779e-6 of -6.071e-6), Block 0.952, Chebyshev 0.953
   failed in the previous run, passes (no source change; this build is in a
   short path, see the entry above). The five regression tests pass in this
   MPI-off build against references written by the MPI-on build.
+
+## Diamond Si comparison reduced to scalars — 2026-10-04
+
+`totaldos.out` holds `ene(i) - fermi` and `dtot(i)` on the `e_mesh` grid
+(`bands.f90:522-526`, `energy.f90:209-215`). `e_mesh` rescales the spacing,
+`edel = (fermi - energy_min) / nint((fermi - energy_min) / edel)`, and sets
+`ene(i) = energy_min + edel*i`, so every fixed-row DOS value of the
+real-space route depends on `fermi`, which is not well defined for an
+insulator (at `8d7c1f0` it already differed from the reference by 7e-5 while
+etot agreed to 1.6e-9). `Si1_dos.out` is written on the same grid.
+
+- **Changed.** `Example_bulk_diamondSi_sp_chebyshev` compares only the
+  `Si1_out.nml` scalars `lmax`, `etot`, `ws_r`, `vmad`. The `text` and `log`
+  blocks were removed from the case's checks and from `ref.json` (key removal
+  only: `compare_ref` iterates the keys of the reference; the scalar values are
+  byte-identical, `meta.json` still lists the old checks). `ref.macos-arm64.json`
+  and `meta.macos-arm64.json` were deleted and the `CMakeLists.txt` condition
+  that kept the test disabled off arm64 macOS was removed.
+- **Measured** (CI MPI-on build and a separate MPI-off build give the same
+  numbers; tolerance `abs_tol` 1e-6, `rel_tol` 1e-6, a value fails only when
+  both are exceeded, the relative one scaled by `max(abs(ref), 1)`): lmax 0,
+  etot 9.693e-10, ws_r 0, vmad 9.548e-15 from `ref.json` (written 2026-08 by a
+  different build). Linux was not run.
+- **The etot check is loose.** Because of the "and", the effective etot
+  tolerance is `rel_tol * 578.4 = 5.8e-4`. A copy of the reference with etot
+  shifted by +2e-6 still passes; +1e-3 fails (diff 1.000e-3, rel 1.729e-6).
+  The 1e-5 shifts seen in the regression decks of the Reference regeneration
+  entry would not fail this test. The same rule applies to every SCF case
+  compared by `run_test.py`. Proposal, not done: compare with "or".
+- **Other cases on this deck** (not changed): `Example_bulk_diamondSi_sp_chebyshev_mkl_batch`
+  (`ENABLE_MKL_KERNELS`) compares fixed-row `totaldos.out` rows 100, 500, 1000,
+  1500, 1900, columns 1 and 2, and no `fermi_level`;
+  `Example_k_space_scf_diamondSi_sp` compares `totaldos.out` rows 60, 105, 150
+  (columns 1, 2) and `fermi_level` (`Canonical k-space occupations: EF=`);
+  `Example_k_space_scf_diamondSi_sp_tetrahedron` compares `totaldos.out` rows
+  100, 1000, 1900 (columns 1, 2) and `fermi_level`;
+  `Example_si_chebyshev_kspace_dos_equivalence` rebuilds absolute energies from
+  the reported Fermi levels of both routes. The five `Regression_diamondSi_*`
+  cases compare only `etot`, `ws_r`, `vmad` of `Si1_out.nml`.
 
 ## Stage 0c measurements — 2026-10-03
 

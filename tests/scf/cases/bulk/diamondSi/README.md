@@ -21,10 +21,10 @@ and is intentionally not marked `quick`.
 The canonical functional reference is generated with the CI-equivalent runner.
 The MKL-batch reference is generated and checked with an
 `ENABLE_MKL_KERNELS=ON` build; both are clean production runs with the explicit
-`strux_lib` path. The stored checks are deterministic
-functional outputs (energy-related scalars, Wigner-Seitz radius, Madelung
-potential, total DOS, Si-projected DOS, and Fermi level), not a converged Si
-benchmark.
+`strux_lib` path. The stored checks of the functional case are
+`lmax`, `etot`, the Wigner-Seitz radius and the Madelung potential, not a
+converged Si benchmark. Fixed-row DOS values and the Fermi level are not
+compared (see `tests/KNOWN_ISSUES.md`).
 
 ## Chebyshev/k-space DOS equivalence
 

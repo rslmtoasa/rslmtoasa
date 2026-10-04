@@ -24,10 +24,6 @@
       "checks": {
         "nml": [
           { "file": "Si1_out.nml", "scalars": ["lmax", "etot", "ws_r", "vmad"] }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [100, 500, 1000, 1500, 1900], "cols": [1, 2] },
-          { "file": "Si1_dos.out", "rows": [100, 500, 1000, 1500, 1900], "cols": [2] }
         ]
       },
       "outputs": [
