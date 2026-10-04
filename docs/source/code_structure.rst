@@ -111,7 +111,6 @@ Directory Layout
    │   ├── regression/                # Bit-level regression suite (backend matrix)
    │   ├── scf/                       # Bulk/surface/impurity SCF examples
    │   ├── postproc/                  # Exchange, conductivity, bands, DOS, PAOFLOW import
-   │   ├── run_regression_tests.sh
    │   └── generate_references.py
    │
    ├── docs/                          # Sphinx documentation (this)

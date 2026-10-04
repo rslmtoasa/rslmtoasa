@@ -42,14 +42,11 @@ The DOS samples in these tests are coarse finite-depth recursion diagnostics,
 not sharply resolved Kohn–Sham DOS benchmarks.
 
 The Fe nsp=2/3/4 Block cases retain both HOH and non-HOH coverage. The direct
-`Lanczos`, `Block`, and `Chebyshev` CTest baselines are intentionally retained:
-they use separate Fe nsp=1 decks and therefore are not duplicates of the
-manifest's nsp=2/3/4 cases. They check the legacy nsp=1 scalar contract
-(`etot`, `ws_r`, `vmad`) and took 45.44 s real time together with two CTest
-workers before TEST-08 (Block 7.68 s, Chebyshev 23.67 s, Lanczos 45.44 s).
-The comparable 12-case manifest slice took 73.21 s before TEST-08; after
-removing only the redundant Pt2MnGa Block+HOH point, the retained 11-case
-slice took 54.98 s.
+`Lanczos`, `Block`, and `Chebyshev` CTest baselines (Fe nsp=1 decks, scalar
+contract `etot`, `ws_r`, `vmad`) were retired: `bccFe_block_fast_sp` and
+`bccFe_chebyshev_fast_sp` run the same decks with the same settings, and Lanczos
+has no matrix case until its etot shift is understood (`tests/KNOWN_ISSUES.md`).
+The deck directories `bccFe_block`, `bccFe_chebyshev` and `bccFe_lanczos` stay.
 
 The nsp=2 Lanczos functional cases are labeled `known_issue` and are not
 `quick`. They remain runnable scalar/moment reproducers only: the production

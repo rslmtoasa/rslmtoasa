@@ -398,18 +398,6 @@ if (RUN_REG_TESTS)
 set(Python3_FIND_VIRTUALENV FIRST)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-set(ThisTestDIR ${TestDIR}/regression/bccFe_lanczos)
-add_test(NAME Lanczos COMMAND ${ThisTestDIR}/oneliner.sh ${TestBinary} ${CMAKE_BINARY_DIR}/Testing/legacy/lanczos)
-set_tests_properties(Lanczos PROPERTIES LABELS "functional;regression;baseline;metallic;rs;lanczos")
-set(ThisTestDIR ${TestDIR}/regression/bccFe_block)
-add_test(NAME Block COMMAND ${ThisTestDIR}/oneliner.sh ${TestBinary} ${CMAKE_BINARY_DIR}/Testing/legacy/block)
-set_tests_properties(Block PROPERTIES LABELS "functional;regression;baseline;metallic;rs;block")
-set(ThisTestDIR ${TestDIR}/regression/bccFe_chebyshev)
-add_test(NAME Chebyshev COMMAND ${ThisTestDIR}/oneliner.sh ${TestBinary} ${CMAKE_BINARY_DIR}/Testing/legacy/chebyshev)
-set_tests_properties(Chebyshev PROPERTIES LABELS "functional;regression;baseline;metallic;rs;chebyshev")
-# Fail with the exit status fixed; see tests/KNOWN_ISSUES.md.
-set_tests_properties(Lanczos Block Chebyshev PROPERTIES DISABLED TRUE)
-
 # The WP8/WP9 decks and runners remain under tests/regression as historical
 # scientific evidence, but their active CTest registrations were deliberately
 # removed. Re-enable them only through a separate validation decision.

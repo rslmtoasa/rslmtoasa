@@ -59,7 +59,9 @@ reference or tolerance was changed and none of the causes was diagnosed.
   decision on tolerances or references is the developer's. Delete the
   `set_tests_properties` block in `CMakeLists.txt` to re-enable them.
 
-- **Disabled, still (not regenerated 2026-10-04):** the legacy `Lanczos`, `Block` and `Chebyshev` tests
+- **Retired 2026-10-04 (Block and Chebyshev now `Regression_bccFe_block_fast_sp` and
+  `_chebyshev_fast_sp`; Lanczos has no tight etot test, see "Chebyshev ported to
+  `run_matrix`"):** the legacy `Lanczos`, `Block` and `Chebyshev` tests
   (`tests/regression/bccFe_*/oneliner.sh`). `Block` and `Chebyshev` tested
   `$?` after an `rm -f` and reported Passed whatever pytest returned; the exit
   status is now pytest's. Measured on the local Release build at `ff6a0f4`
@@ -622,7 +624,9 @@ linear-response change, not a change of the Lanczos recursion, and why Lanczos
 moves by +6.693e-6 while Block and Chebyshev move by 3e-7 and 4e-7 was not
 diagnosed. The bisect assumes a single transition between its two endpoints.
 The legacy `Lanczos` test was already disabled and is retired in a following
-commit, so Lanczos has no coverage until the shift is understood. A matrix case
+commit, so there is no tight etot test of Lanczos until the shift is understood;
+the only Lanczos tests left are `Example_bulk_bccFe_nsp2_lanczos` and `_hoh`,
+whose effective etot tolerance is 2.5e-2 Ry. A matrix case
 for it (`bccFe_lanczos`, `base` `bccFe_lanczos`, legacy structure constants,
 `lld` 16, no HOH) reproduced the deck to the last printed digit in a scratch
 manifest; it is not committed and no reference was written.
