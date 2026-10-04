@@ -254,28 +254,57 @@ parameters and `run.log` has no `etot` line.
   `do_damping` / `do_inertia`, which the deck does not set.
 - A Linux x86-64 build was not available (the Docker daemon is not running, no
   push was allowed), so the deck was not run on that platform.
+- Input fermi shifted (`-O0` build, recursion J[1_335]; lehmann and dyson move
+  together): every `simpson_f` call in `exchange.f90` passes `T = 0`, so
+  `kBT = 1.0e-15`. `e_mesh` takes the input fermi directly (printed `fermi` in
+  `e_mesh` equals the input to the last digit for +-1e-15). J[1_335] at fermi
+  -0.069291 + shift: 0 (base) 0.507876449; +1e-15 0.518693882; +2e-15
+  0.507876449 (base value again, to 5e-14); +5e-15 0.518693882; +1e-14
+  0.509229539; -1e-15 0.518693882. Lehmann J[1_335] 0.254738030 (base),
+  0.262396329 (+1e-15, +5e-15, -1e-15), 0.255695963 (+1e-14); all three routes
+  and J[1_336] shift likewise (+3.0% for lehmann J[1_335] at +-1e-15).
+- Grid point nearest fermi, printed from `simpson_f` in scratch builds (not
+  committed; a `write` in `math.f90`), 134 calls per run with `EF = fermi`,
+  always `j = 142 = enpt + 1`: residual `ene(j) - fermi` and
+  `fermifun(ene(j), fermi, 1e-15)` are +1.38777878078144568e-17 and
+  0.49653060872957211 at `-O0`; -2.77555756156289135e-17 and 0.50693844847743652
+  at the default level. Those builds give the same J as the rows above. For the
+  shifted-fermi runs the residual is -9.714e-17 (f 0.524267) at +-1e-15 and
+  +5e-15, +1.388e-17 (f 0.496531) at +2e-15, and exactly 0 (f 0.5) at +1e-14.
+  Each residual is a multiple of 1.388e-17, the spacing of doubles near 0.069.
+- J is an affine function of that one Fermi factor. Seven runs (the five
+  shifts, base `-O0`, base default), J against f(ene(142)): recursion J[1_335]
+  slope 0.39001, max deviation from the line 2.2e-8; recursion J[1_336] slope
+  0.00787, 7.8e-9; lehmann J[1_335] slope 0.27611, 1.9e-13; lehmann J[1_336]
+  slope 0.00368, 1.2e-15. The default build's and the `-O0` build's J both lie
+  on the line. So the whole `-O0` to default change in J[1_335] and J[1_336],
+  on all three routes, is accounted for by the change in f(ene(142)) from
+  0.49653 to 0.50694 (a difference of 0.0104).
+- The previous prediction that the two Fermi factors differ by about 0.05 or
+  more did not hold: the measured difference is 0.0104, because the residuals
+  are 1e-17 (one to seven spacings of doubles near 0.069), not 1e-16. The
+  smaller difference is nevertheless enough to give the measured J change.
 
 **Not measured / suspected**
 
-- Which file and which expression. The bisect assumed one file, so it did not
-  test two files together. b13 (reproduces) contains both `exchange.f90` and
-  `hamiltonian*`; b14 and b15 each had one of them alone and did not
-  reproduce. A pair such as `exchange.f90` with `hamiltonian_build.f90` (the
-  consumer and the file that fills its arrays) is therefore consistent with
-  all six builds and untested; that it is the cause is a guess. `energy.f90`
-  alone and `exchange_dynamics.f90` alone were not tested, but the mesh code
-  is excluded above and the second is not executed. Proposal, about 1 build:
-  `exchange.f90` and `hamiltonian_build.f90` at `-O0`, rest default.
-- Why a 1e-14 change gives 1%. The smooth response above says it is not
-  `sbar` rounding through a well-conditioned path, and the energy-mesh `nint`
-  is excluded. Another discrete decision (a threshold, a grid index, an
-  iteration count) flipped by contraction is a guess and was not tested. Which
-  build is right was not judged; neither the reference nor the default is known
-  to be the correct J.
+- Which file produces the different residual. Suspected, not tested: the
+  expression `energy_min + edel*i` (`energy.f90:214`, together with the rescale
+  of `edel` on line 211) contracted to FMA at `-O2`. The bisect is consistent
+  with it: b13 reproduces `-O0`, b14 (`hamiltonian*`) and b15 (`exchange.f90`)
+  do not, and what b13 has that those two lack is `energy.f90`,
+  `exchange_dynamics.f90` and `globals.f90`, of which the last two are not
+  executed or hold no code. `energy.f90` at `-O0` alone with the rest at
+  default was not built, and the residual was not printed for those subset
+  builds. The residual, not the line, is what was measured.
+- Whether the shared cause is the `T = 0` Fermi factor in `simpson_f` or the
+  placement of `fermi` on a grid point (`e_mesh` rescales `edel` so that it
+  does) was not separated; both are present in every run.
+- Which build is right was not judged; neither the reference nor the default
+  is known to be the correct J.
 - The 4.8e-8 distance of `-O0` from the committed reference is not explained
   (the Triad golden was last regenerated in `2a6ec10`).
 - The eight regression tests of the Triage entry were not rebuilt with
-  `-ffp-contract=off`.
+  `-ffp-contract=off`, and not checked for the same grid-point dependence.
 
 ## Stage 0c measurements — 2026-10-03
 
