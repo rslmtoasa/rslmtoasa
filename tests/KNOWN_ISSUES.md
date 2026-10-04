@@ -153,6 +153,101 @@ threshold 1e-9 on the extracted value against the 8d7c1f0 binary:
   8d7c1f0 itself (a clean build of the same commit reproduced 8d7c1f0 exactly)
   and was discarded; incremental builds across commits are not reliable here.
 
+## Triad J_ij change when the trailing `-O0` is removed — 2026-10-04
+
+Runs the open proposal of the Triage entry above. All builds are clean builds
+of `8424ac7` in a scratch directory, gfortran 16.2, Accelerate, OpenMP on, MPI
+off, Release (`-O3 -fbacktrace -g -g`). The extra flags are appended last on
+every compile line through a compiler wrapper; no repo file was changed. One
+copy of `tests/regression/triad_bccFe_exchange` for every run, no
+`OMP_NUM_THREADS`. The deck runs no SCF: `Fe.nml` supplies the potential
+parameters and `run.log` has no `etot` line.
+
+**Measured**
+
+- History: the trailing `-O0` was added for GNU Release in `1355a50`
+  (2026-06-10, "Belem25 strux ldau kspace nc (#6)", 169 files) with the
+  comment "force conservative optimization in RELEASE to match stable runtime
+  behavior observed in DEBUG for strux/SPDF workflows". The same commit added
+  the "unroll/inline are disabled for GNU release builds due numerical-instability
+  regressions in LMTO47 screening" comment. No text in `docs/` or this file
+  explains either beyond those comments. `5967fbb` (2026-08-24) removed it.
+- Flag ladder (J[1_335] / J[1_336]; all three routes shift together):
+
+| build | recursion | lehmann | dyson |
+|---|---|---|---|
+| committed reference | 0.5078764970774016 / 0.38619343738405454 | 0.25473806601203197 / 0.3132323415067655 | 0.25473806601290155 / 0.3132323415068143 |
+| default (`-O3`) | 0.51193556388878003 / 0.38627533864811048 | 0.25761173549711069 / 0.31327072267697548 | 0.25761173549797944 / 0.31327072267702322 |
+| + final `-O0` | 0.50787644866406478 / 0.38619347852930186 | 0.25473803020801450 / 0.31323237536981313 | 0.25473803020888586 / 0.31323237536986204 |
+| + final `-O1` | 0.50787644866406478 / 0.38619347852930180 | 0.25473803020801461 / 0.31323237536981313 | 0.25473803020888625 / 0.31323237536986226 |
+| + final `-O2` | 0.51193556388878003 / 0.38627533864811026 | 0.25761173549711042 / 0.31327072267697620 | 0.25761173549797906 / 0.31327072267702311 |
+| `-O2 -ffp-contract=off` | 0.50787644866406478 / 0.38619347852930180 | 0.25473803020801461 / 0.31323237536981313 | 0.25473803020888625 / 0.31323237536986226 |
+
+  `-O3` is the default level, so no separate `-O3` build was made. `-O0` is
+  4.8e-8 / 4.1e-8 (recursion), 3.6e-8 / 3.4e-8 (lehmann, dyson) from the
+  reference; the default is 4.1e-3 / 8.2e-5 and 2.9e-3 / 3.8e-5. Default
+  minus `-O0` is +1.1% (lehmann J[1_335]) and +0.80% (recursion J[1_335]).
+- It is one step, not gradual: `-O0` and `-O1` give identical `sbar` and
+  `jij.out` as printed and run-log J within 3.9e-16, `-O2` and `-O3` likewise
+  (J within 7.2e-16), and the whole change is between `-O1` and `-O2`. `-O2 -ffp-contract=off` reproduces the
+  `-O0` J values to 3.9e-16 and its `sbar` bit for bit. So the difference is
+  floating-point contraction (fused multiply-add), not an undefined behaviour.
+- First differing intermediate, default vs `-O0`: `str.out`, `mad.mat`,
+  `ves.out`, `clust`, `map`, `fort.99/800/805` are bit-identical. `sbar`
+  (unformatted, 135 records of 9 doubles) differs in 1042 of 1215 values, max
+  abs 1.1e-15, max relative to the largest value of its record 2.6e-14. The
+  next differences are in `jij*.out`, `aij*.out`, `dij*.out`. The potential
+  parameters and the Fermi level are inputs here, not outputs, so they were not
+  compared. Nothing else the run writes lies between `sbar` and J.
+- Conditioning probe, `-O0` build, `lattice%alat` 2.86120 (used directly: it
+  changes `sbar` by max 2.0e-11 and 2.0e-8 relative to the largest value of
+  its record for 1e-12 and 1e-9) perturbed by 1e-12 and 1e-9 relative,
+  |dJ/J|/|dx/x| for J[1_335] / J[1_336]:
+  lehmann 22.7 / 10.9 and 22.8 / 10.9; dyson 22.7 / 10.9 and 22.8 / 10.9
+  (linear, the two sizes agree); recursion 5.1e4 / 1.2e5 at 1e-12 and 18.8 /
+  189 at 1e-9 (not linear: recursion has a response of about 5e-8 relative that
+  does not scale with the perturbation). A `sbar` change of 2.6e-14 therefore
+  moves lehmann and dyson J by about 1e-13 relative through the smooth
+  response, not by 1%.
+- Undefined-behaviour checks (`-g -fbacktrace -fcheck=all -finit-real=snan
+  -finit-integer=-2147483647 -ffpe-trap=invalid,zero,overflow`, forced here
+  although cmake skips `-fcheck=all` for GNU 16 on macOS), at `-O2` and `-O0`:
+  recursion and dyson run to the end with no trap and no check failure, and J
+  equals the `-O2` and `-O0` rows above. The lehmann route stops with an FP
+  trap (SIGILL) at both levels, in Accelerate `ZLADIV` called from `ZLARFG`,
+  `ZHETD2`, `ZHETRD`, `ZHEEV`, from `reciprocal_backend.f90:805`,
+  `reciprocal_bands.f90:112`, `reciprocal_green.f90:212` (`fill_green_lehmann`),
+  with the divisor +Inf. It is inside the library and may be intentional
+  scaling; lehmann code after that point was not checked for traps. Default
+  build with `-fsanitize=address,undefined`: no report on any route, J equals
+  the default row to 1e-15. valgrind does not run on macOS arm64; the sanitizer
+  does not instrument Accelerate.
+- Source bisect (`-O0` for a file subset, all other files at `-O3`, J of all
+  three routes compared with the two rows above, 6 builds): the 56 files that
+  every route uses before its own part (`array` ... `xc_radial`) reproduce
+  `-O0`; the 41 others were not needed. Of the 56: first 28 reproduce `-O0`;
+  first 14 do not; files 15-21 reproduce; `hamiltonian`, `hamiltonian_build`,
+  `hamiltonian_ccor` do not; `exchange.f90` alone does not. Left:
+  `energy.f90`, `exchange_dynamics.f90`, `globals.f90`, or `exchange.f90`
+  together with one of them. In the subset builds that reproduce `-O0` the
+  recursion J[1_335] is 0.50787642319, 2.6e-8 from the `-O0` value, which is
+  inside the recursion response above.
+
+**Not measured / suspected**
+
+- Which file and which expression. The bisect assumed one file or a pair; it was
+  stopped at the build budget. Proposal, about 2 builds: `energy.f90` alone, then
+  `exchange_dynamics.f90` alone.
+- Why a 1e-14 change gives 1%. The smooth response above says it is not
+  `sbar` rounding through a well-conditioned path; a discrete decision (a
+  threshold, a `nint`/`floor` of a grid index, an iteration count) flipped by
+  contraction is a guess and was not tested. Which build is right was not
+  judged; neither the reference nor the default is known to be the correct J.
+- The 4.8e-8 distance of `-O0` from the committed reference is not explained
+  (the Triad golden was last regenerated in `2a6ec10`).
+- The eight regression tests of the Triage entry were not rebuilt with
+  `-ffp-contract=off`.
+
 ## Stage 0c measurements — 2026-10-03
 
 Local Release, serial, gfortran/macOS arm64 build at `dbb6380`. The full
