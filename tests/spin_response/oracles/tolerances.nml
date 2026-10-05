@@ -1,0 +1,14 @@
+! Tolerances for the spin_response tests. Developer-owned; tests read them
+! from here and must not hard-code their own. All are relative unless noted.
+! Measured value on the reference data in brackets.
+&spin_response_tolerances
+  a1_rel            = 1.0e-12   ! A1 arrays and scalars vs closed form [2e-16]
+  a2_chi_rel        = 1.0e-10   ! A2 chi0 and chi arrays [5e-15]
+  a2_identity_rel   = 1.0e-12   ! A2 Goldstone and full-line zeroth moment [7e-16]
+  static_eta0_rel   = 1.0e-12   ! chi0(q,0) at eta = 0, divided differences, A1 and A2
+  a3_rel            = 1.0e-10   ! A3 trace and determinant vs primitive [1e-14]
+  window_moment_rel = 1.0e-6    ! E1: trapezoid over the omega grid vs exact window [2e-8]
+  dyson_u0_rel      = 1.0e-14   ! E3: U = 0 gives chi = chi0
+  pole_peak_rel     = 1.0e-2    ! C6: A1 pole from the parabolic peak of tr L [2.1e-3]
+  pole_crossing_rel = 5.0e-3    ! C6: A1 pole from the Re(1 + chi0 U) zero crossing [7.3e-4]
+/
