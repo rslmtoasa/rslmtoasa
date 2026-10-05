@@ -14,4 +14,7 @@
   electron_count_abs = 1.0e-6    ! C1: electron count on the response mesh vs target (electrons)
   eigen_contract_abs = 1.0e-10   ! C1 tests 1-2: arbitrary-k vs mesh eigenvalues (Ry)
   moment_rel         = 1.0e-10   ! C2 tests 2-3: response moments vs band_moments, same mesh and occupations
+  s1_rel      = 1.0e-10
+  e1_fe_rel   = 1.0e-2
+  q0_pole_abs = 1.0e-5
 /
