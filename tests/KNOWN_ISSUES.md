@@ -631,6 +631,105 @@ for it (`bccFe_lanczos`, `base` `bccFe_lanczos`, legacy structure constants,
 `lld` 16, no HOH) reproduced the deck to the last printed digit in a scratch
 manifest; it is not committed and no reference was written.
 
+## `2cae269` screening constants and k-space SCF attribution — 2026-10-05
+
+Report-only task; no source or reference changed. Six clean builds (scratch
+worktrees, Release `-O3`, `ENABLE_MPI=OFF`, `ENABLE_OPENMP=ON`,
+`ENABLE_MARCH_NATIVE=OFF`, `ENABLE_LIBXC=OFF`, GNU Fortran 16.2.0, macOS arm64),
+serial, `OMP_NUM_THREADS=2`. Decks frozen once from HEAD (Lanczos deck
+`tests/regression/bccFe_lanczos` plus `strux_backend`; k-space deck
+`tests/scf/cases/k_space_scf/bccFe` patched with the `Example_k_space_scf_bccFe`
+`cases.json` namelists, `cheb_backend='legacy'` included) and run unchanged at
+every commit.
+
+**Measured, 2cae269 and the constants (code reading plus four runs).**
+- The old `q(1:4)` in `micha` were `0.3485d0, 0.05303d0, 0.010714d0, 0.00337d0`
+  times `fak = 2.d0` (`lattice_strux.f90` at `68e15f2`, lines 1121-1126). They
+  are now `q = fak * legacy_micha_alpha` (`lattice_strux.f90:1161`) with
+  `legacy_micha_alpha(0:3) = [0.3485, 0.05303, 0.010714, 0.00337]`
+  (`lattice.f90:52`). Same values, same double precision. Legacy `sbar`,
+  `str.out` and `mad.mat` of the Lanczos run are byte-identical at both commits.
+- What changed is the new call at `lattice_strux.f90:980`
+  (`publish_legacy_screening_alpha`, defined at `:1026`), which allocates and
+  fills `potential%screening_alpha(0:lmax)` on the legacy path. Before `2cae269`
+  that array was unallocated on the legacy path (only the strux path wrote it,
+  `lattice_strux.f90:496-512`). Readers of `potential%screening_alpha`:
+  `symbolic_atom.f90:289-292` (`predls`: replaces `qm`, otherwise
+  `qm_canonical = [.348485, .053030, .010714]`, `math.f90:110`) and
+  `hamiltonian_ccor.f90:496-499` (`ccor_2c`: `a`, otherwise `lattice%alpha`).
+  The `predls` read is the one that consumes it in the Lanczos deck: `qm(1)` goes
+  from 0.348485 to 0.3485.
+- strux_lib does not use `legacy_micha_alpha` or the `micha` constants. For
+  `screening='default'` `build_strux_inputs` takes `default_screening_alpha`
+  (`lattice_strux.f90:147-157, 276-278`), i.e. `default_screening_alpha_values`
+  (`lattice.f90:48`), passes it as `alpha_in`, and `lattice_strux.f90:496-512`
+  stores the returned alpha on `potential%screening_alpha`, which `predls` reads.
+- Lanczos deck, etot / ws_r / vmad (Ry, Bohr, Ry):
+
+| commit | backend | etot | ws_r | vmad |
+|---|---|---|---|---|
+| 68e15f2 | legacy | -2541.9814346944827 | 2.6621999999999999 | -2.9149015551243944E-011 |
+| 68e15f2 | strux_lib | -2541.9814871509634 | 2.6621999999999999 | -2.9147958814891301E-011 |
+| 2cae269 | legacy | -2541.9814280013752 | 2.6621999999999999 | -2.9146902078538659E-011 |
+| 2cae269 | strux_lib | -2541.9814871509634 | 2.6621999999999999 | -2.9147958814891301E-011 |
+
+  legacy minus strux_lib: at `68e15f2` etot +5.24564807e-5, ws_r 0, vmad
+  -1.0567e-15; at `2cae269` etot +5.91495882e-5, ws_r 0, vmad +1.0567e-15.
+  `2cae269` minus `68e15f2`: legacy etot +6.6931075e-6, vmad +2.1135e-15;
+  strux_lib bitwise unchanged. The legacy `Fe_out.nml` differences are in
+  `center_band`, `width_band`, `obar`, `sumev`, `etot` and related, as from a
+  changed `predls` input. This reproduces the +6.693e-6 of the bisect entry
+  above and locates it in the `qm` read, not in `micha`.
+
+**Measured, `default_screening_alpha_values` history (`git log -S`).**
+`0.3485/0.0530/0.0107` first appear in this repository in `1355a50` (2026-06-10,
+"Belem25 strux ldau kspace nc (#6)") as `default_values` in
+`default_screening_alpha`, together with a vendored `strux_tb.f90` whose
+`alpha_default(0:3) = [0.3485, 0.0530, 0.0107, 0.00535]`. `0.00674` first appears
+in the same commit, with no earlier source in this repository. In
+`~/Jobb/strux_lib` (git) `0.00535` appears from `68d8cb1` (2026-04-01) and
+`0.00674` appears in no commit. The function moved into a submodule in
+`cbb5345` and the array to module scope in `28960f1`, values unchanged. `0.00674 = 2 x 0.00337`, the legacy
+f value; the s, p and d entries equal the legacy values (0.3485, 0.05303,
+0.010714) to the digits written, not 2 x them. Not judged.
+
+**Measured, k-space SCF (`Example_k_space_scf_bccFe` deck).** HEAD run twice:
+every output file and every non-timer log line is bitwise identical (spread 0).
+Total moment and total spin/orbital sums are not printed (one site); `mom` is the
+spin-direction vector in `Fe_out.nml`, `lmom` the orbital vector, and the log
+prints the spin moment magnitude to six digits.
+
+| commit | etot (Ry) | sumev (Ry) | EF (Ry) | EBAND canonical / total-DOS (Ry) | mom | lmom | site spin moment (log) |
+|---|---|---|---|---|---|---|---|
+| 8d7c1f0 | -2541.9851076104051 | -2.1548754918547557 | -4.63779468E-02 | -1.89229630 / -1.88789559 | 0, 0, 1 | 5.4116592892976252E-011, 1.1849457112928430E-010, 4.1701665769999438E-002 | 2.002214 |
+| 2285360 (80390cc^) | -2541.9851076099048 | -2.1548754920117972 | same | same | same | same | same |
+| 80390cc | -2541.9851146569986 | -2.1557726554065626 | same | same | same | same | same |
+| 06407da (HEAD) | -2541.9851146574883 | -2.1557726552882808 | same | same | same | same | same |
+
+  etot steps: `8d7c1f0` to `2285360` +5.0e-10; `2285360` to `80390cc` -7.0470938e-6
+  (one commit, "Reconcile legacy LDA XC kernels against fixed-density
+  references"); `80390cc` to HEAD -4.9e-10. Both HEAD-minus-`80390cc` differences
+  (etot 4.9e-10 Ry, moments 0) are below the 1e-8 trigger, so no bisect was run.
+  HEAD etot is 7.047e-6 below `Example_k_space_scf_bccFe/ref.json`
+  (-2541.985107610496); `8d7c1f0` is within 9.1e-11 of it. `vmad` is
+  -6.1290708e-13 at `8d7c1f0` and -6.1185035e-13 from `2285360` on. `mom`, `lmom`,
+  EF and EBAND print identically at all four commits.
+- `8d7c1f0` ends with SIGBUS in both of two runs, after
+  `From orthogonal to TB basis for atom Fe` (`self.f90:1295` there); the other three
+  commits run to completion. `Fe_out.nml` of the two runs is byte-identical and
+  matches the reference to 9.1e-11; whether it was written before the fault was
+  not checked.
+
+**Suspected, not diagnosed.**
+- The -7.047e-6 step is localized to one commit (measured) but its mechanism is
+  inferred from the commit title only. The reference was probably generated
+  before it; not checked.
+- The SIGBUS at `8d7c1f0` may be specific to this Release build; not
+  investigated. This local build configuration is a suspect.
+- `ccor_2c` reads `potential%screening_alpha` too, so a legacy-backend deck with
+  `ccor_2c` would see `a` change at `2cae269` (from 0 or `lattice%alpha` to the
+  table). From code reading only; no such run was made.
+
 ## Stage 0c measurements — 2026-10-03
 
 Local Release, serial, gfortran/macOS arm64 build at `dbb6380`. The full
