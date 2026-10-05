@@ -33,11 +33,27 @@ contains
 
       g_parallel_context = parallel_context()
       g_timer = timer()
+      a1_rel = -1.0_rp; a2_chi_rel = -1.0_rp; a2_identity_rel = -1.0_rp; static_eta0_rel = -1.0_rp
+      a3_rel = -1.0_rp; window_moment_rel = -1.0_rp; dyson_u0_rel = -1.0_rp; pole_peak_rel = -1.0_rp
+      pole_crossing_rel = -1.0_rp; electron_count_abs = -1.0_rp; eigen_contract_abs = -1.0_rp; moment_rel = -1.0_rp
       open (newunit=u, file=trim(oracle_dir)//'/tolerances.nml', status='old', action='read')
       read (u, nml=spin_response_tolerances)
       close (u)
+      call require('electron_count_abs', electron_count_abs)
+      call require('eigen_contract_abs', eigen_contract_abs)
+      call require('moment_rel', moment_rel)
       write (*, '(a)') 'test | measured | tolerance'
    end subroutine read_tolerances
+
+   subroutine require(key, tol)
+      character(*), intent(in) :: key
+      real(rp), intent(in) :: tol
+
+      if (.not. tol > 0.0_rp) then
+         write (*, '(a)') 'tolerances.nml: key '//key//' missing or <= 0'
+         error stop 1
+      end if
+   end subroutine require
 
    subroutine build_fe_state(reversed, control_obj, lattice_obj, charge_obj, energy_obj, hamiltonian_obj)
       logical, intent(in) :: reversed

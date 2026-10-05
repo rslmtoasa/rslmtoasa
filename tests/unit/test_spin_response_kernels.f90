@@ -37,9 +37,21 @@ program test_spin_response_kernels
    failed = .false.
    call get_command_argument(1, dir)
    if (len_trim(dir) == 0) error stop 'usage: test_spin_response_kernels <oracle directory>'
+   a1_rel = -1.0_rp; a2_chi_rel = -1.0_rp; a2_identity_rel = -1.0_rp; static_eta0_rel = -1.0_rp
+   a3_rel = -1.0_rp; window_moment_rel = -1.0_rp; dyson_u0_rel = -1.0_rp; pole_peak_rel = -1.0_rp
+   pole_crossing_rel = -1.0_rp; electron_count_abs = -1.0_rp; eigen_contract_abs = -1.0_rp; moment_rel = -1.0_rp
    open (newunit=unit_tol, file=trim(dir)//'/tolerances.nml', status='old', action='read')
    read (unit_tol, nml=spin_response_tolerances)
    close (unit_tol)
+   call require('a1_rel', a1_rel)
+   call require('a2_chi_rel', a2_chi_rel)
+   call require('a2_identity_rel', a2_identity_rel)
+   call require('static_eta0_rel', static_eta0_rel)
+   call require('a3_rel', a3_rel)
+   call require('window_moment_rel', window_moment_rel)
+   call require('dyson_u0_rel', dyson_u0_rel)
+   call require('pole_peak_rel', pole_peak_rel)
+   call require('pole_crossing_rel', pole_crossing_rel)
 
    write (*, '(a)') 'test | measured | tolerance'
    call test_a1()
@@ -54,6 +66,16 @@ program test_spin_response_kernels
    end if
 
 contains
+
+   subroutine require(key, tol)
+      character(*), intent(in) :: key
+      real(rp), intent(in) :: tol
+
+      if (.not. tol > 0.0_rp) then
+         write (*, '(a)') 'tolerances.nml: key '//key//' missing or <= 0'
+         error stop 1
+      end if
+   end subroutine require
 
    subroutine report(label, measured, tol)
       character(*), intent(in) :: label
