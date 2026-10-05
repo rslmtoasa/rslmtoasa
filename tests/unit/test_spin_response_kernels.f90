@@ -19,16 +19,16 @@
 program test_spin_response_kernels
    use precision_mod, only: rp
    use spin_response_mod, only: accumulate_chi0, u_juelich, solve_dyson, &
-                                spectral_trace, pole_estimates
+                                spectral_trace, pole_estimates, interaction_values
    use spin_response_mod, only: u_mills_kernel => u_mills
    implicit none
 
    real(rp) :: a1_rel, a2_chi_rel, a2_identity_rel, static_eta0_rel, a3_rel, &
                window_moment_rel, dyson_u0_rel, pole_peak_rel, pole_crossing_rel
-   real(rp) :: electron_count_abs, eigen_contract_abs, moment_rel   ! read, used by the C1/C2 tests
+   real(rp) :: electron_count_abs, eigen_contract_abs, moment_rel, s1_rel, e1_fe_rel, q0_pole_abs   ! read, used by the Fe tests
    namelist /spin_response_tolerances/ a1_rel, a2_chi_rel, a2_identity_rel, static_eta0_rel, &
       a3_rel, window_moment_rel, dyson_u0_rel, pole_peak_rel, pole_crossing_rel, &
-      electron_count_abs, eigen_contract_abs, moment_rel
+      electron_count_abs, eigen_contract_abs, moment_rel, s1_rel, e1_fe_rel, q0_pole_abs
 
    character(len=512) :: dir
    logical :: failed
@@ -217,7 +217,7 @@ contains
       real(rp), allocatable :: e(:, :), f(:, :), trl(:)
       complex(rp), allocatable :: a(:, :, :, :, :), chi0(:, :, :), chi(:, :, :)
       complex(rp) :: s1, s2
-      real(rp) :: chi0s(1, 1), um(1), uj(1), res, peak, crossing, h, d, u_s
+      real(rp) :: chi0s(1, 1), um(1), uj(1), resv(1), res, peak, crossing, h, d, u_s
       real(rp), allocatable :: omega_s(:)
       complex(rp), allocatable :: chi0_s(:, :, :), chi_s(:, :, :)
       logical :: has_peak, has_crossing
@@ -260,10 +260,10 @@ contains
       call u_juelich(chi0s, [moment], uj)
       call report('A1 u_goldstone', rel_scal(cmplx(uj(1), 0.0_rp, rp), cmplx(u_goldstone, 0.0_rp, rp)), a1_rel)
 
-      ! catches: wrong sign or normalisation in u_mills, residual not 1 + chi0(0,0) U
-      um = u_mills_kernel([e_up], [e_up + mills_factor*delta], [moment])
+      ! catches: wrong sign or normalisation in u_mills, residual not 1 + chi0(0,0) U or built with the Juelich U
+      call interaction_values(chi0s, chi0s, [moment], [moment], [e_up], [e_up + mills_factor*delta], uj, um, resv)
+      res = resv(1)
       call report('A1 u_mills variant', rel_scal(cmplx(um(1), 0.0_rp, rp), cmplx(u_mills_variant, 0.0_rp, rp)), a1_rel)
-      res = 1.0_rp + chi0s(1, 1)*um(1)
       call report('A1 Mills variant residual', rel_scal(cmplx(res, 0.0_rp, rp), cmplx(residual_mills_variant, 0.0_rp, rp)), a1_rel)
       call report('A1 Mills variant gap', rel_scal(cmplx(res*delta, 0.0_rp, rp), cmplx(gap_mills_variant, 0.0_rp, rp)), a1_rel)
 

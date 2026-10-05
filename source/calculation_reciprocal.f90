@@ -355,9 +355,10 @@ contains
       call reciprocal_obj%write_kspace_eigenpairs()
    end subroutine post_processing_fermi_surface
 
-   !> @brief Spin-response post-processing: frozen ground state handoff and d moments.
+   !> @brief Spin-response post-processing: frozen ground state, d moments, U, and chi(q, omega) for the q list.
    !> @details Builds the same bulk stack as post_processing_fermi_surface, takes E_F from &energy
-   !>          (solved on the response mesh when auto_find_fermi), and writes <prefix>_state.dat.
+   !>          (solved on the response mesh when auto_find_fermi), and writes <prefix>_state.dat,
+   !>          <prefix>_q<NNN>.dat and <prefix>_dispersion.dat.
    !> @param[in] this Calculation object. fname selects the namelist input.
    module subroutine post_processing_spin_response(this)
       class(calculation), intent(in) :: this
@@ -390,6 +391,8 @@ contains
       reciprocal_obj%fermi_level = energy_obj%fermi
       response = spin_response(reciprocal_obj)
       call response%prepare()
+      call response%interaction()
+      call response%run()
       call response%write_state()
    end subroutine post_processing_spin_response
 

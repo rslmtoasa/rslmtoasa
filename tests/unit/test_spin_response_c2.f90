@@ -27,7 +27,7 @@ program test_spin_response_c2
    character(len=512) :: dir
    real(rp), allocatable :: e(:, :), bm(:, :, :, :)
    complex(rp), allocatable :: v(:, :, :), a(:, :, :, :, :)
-   real(rp) :: axis(3, 1), enu(2), p(2), x, q0, cen, w, n_juelich(2), dmax
+   real(rp) :: enu(2), p(2), x, q0, cen, w, n_juelich(2), dmax
    integer :: nk, first, last, s
 
    call get_command_argument(1, dir)
@@ -54,16 +54,8 @@ program test_spin_response_c2
    call report('C2.1 completeness, max |sum_n |v|^2 - 1|', dmax, eigen_contract_abs)
 
    ! Reference band moments from the pre-campaign path, on E_F from reciprocal's own Fermi solve on this mesh.
-   rec_ref = reciprocal(ham)
-   call rec_ref%generate_mp_mesh()
-   call rec_ref%build_kspace_hamiltonian()
-   call rec_ref%diagonalize_hamiltonian()
-   rec_ref%fermi_level = rec_ref%find_fermi_level_from_eigenvalues(rec_ref%total_electrons)
+   call reference_band_moments(ham, rec_ref, bm)
    call report('C2.2 E_F used vs reciprocal Fermi solve (Ry)', abs(sr%fermi_used - rec_ref%fermi_level), eigen_contract_abs)
-   call rec_ref%accumulate_spin_density_kspace()
-   call rec_ref%fill_band_moments_from_spin_density(trim(rec_ref%lattice%control%density_policy), &
-                                                    reshape([0.0_rp, 0.0_rp, 1.0_rp], [3, 1]), axis)
-   bm = rec_ref%band_moments
 
    ! C2.2: Mills d occupation per spin vs band_moments(site, d, spin, 1).
    ! Catches a shifted d range, wrong E_F or temperature, wrong k-weight normalization.
@@ -132,7 +124,7 @@ contains
             read (line(len('electron_count') + 1:), *) n_el
             seen_n = .true.
          case default
-            if (key(1:1) >= '0' .and. key(1:1) <= '9') then
+            if (.not. seen_m .and. key(1:1) >= '0' .and. key(1:1) <= '9') then
                read (line, *) s, m_mills, m_juelich, row
                seen_m = .true.
             end if

@@ -36,6 +36,8 @@ module spin_response_mod
    public :: d_amplitudes_juelich
    public :: accumulate_d_occupation
    public :: accumulate_chi0
+   public :: mills_residual
+   public :: interaction_values
    public :: u_juelich
    public :: u_mills
    public :: solve_dyson
@@ -51,6 +53,8 @@ module spin_response_mod
    integer, parameter :: k_chunk = 64
    !> Largest accepted |N - target| (electrons) on the response mesh; the electron_count_abs of tests/spin_response/oracles/tolerances.nml.
    real(rp), parameter :: electron_count_tol = 1.0e-6_rp
+   !> Largest q list the namelist can carry.
+   integer, parameter :: max_q = 64
 
    type :: spin_response
       class(reciprocal), pointer :: reciprocal => null()
@@ -58,6 +62,10 @@ module spin_response_mod
       !> 'juelich' | 'mills'
       character(len=16) :: method
       character(len=256) :: output_prefix
+      integer :: n_omega
+      real(rp) :: omega_min, omega_max, eta
+      !> q points (direct coordinates, shape (3, nq)) and the omega grid (Ry).
+      real(rp), allocatable :: q_direct(:, :), omega(:)
       real(rp) :: fermi_input, fermi_used, kt, electron_count
       !> Symmetry reduction or time reversal was requested in &reciprocal and overridden by prepare.
       logical :: reduction_overridden
@@ -69,12 +77,18 @@ module spin_response_mod
       real(rp), allocatable :: d_occ_mills(:, :), d_occ_juelich(:, :)
       !> Juelich d moment per site (mu_B), the one that enters the Goldstone condition.
       real(rp), allocatable :: moment(:)
+      !> Juelich and Mills U (Ry), Mills Goldstone residual, and the d exchange splitting C_dn - C_up (Ry), per site.
+      real(rp), allocatable :: uj(:), um(:), delta_mills(:), gap_d(:)
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
       procedure :: prepare
       procedure :: eigenpairs_chunk
+      procedure :: bare_response
+      procedure :: interaction
+      procedure :: run
       procedure :: write_state
+      procedure, private :: d_channel
       final :: destructor
    end type spin_response
 
@@ -101,6 +115,7 @@ contains
       if (allocated(this%d_occ_mills)) deallocate (this%d_occ_mills)
       if (allocated(this%d_occ_juelich)) deallocate (this%d_occ_juelich)
       if (allocated(this%moment)) deallocate (this%moment)
+      if (allocated(this%uj)) deallocate (this%uj, this%um, this%delta_mills, this%gap_d)
    end subroutine destructor
 
    subroutine restore_to_default(this)
@@ -108,6 +123,10 @@ contains
 
       this%method = 'juelich'
       this%output_prefix = 'spin_response'
+      this%n_omega = 201
+      this%omega_min = 0.0_rp
+      this%omega_max = 0.05_rp
+      this%eta = 0.002_rp
       this%fermi_input = 0.0_rp
       this%fermi_used = 0.0_rp
       this%kt = 0.0_rp
@@ -120,12 +139,20 @@ contains
    subroutine build_from_file(this)
       class(spin_response), intent(inout) :: this
 
-      integer :: iostatus, funit
+      integer :: iostatus, funit, i, nlines
+      real(rp) :: qtmp(3)
 
       include 'include_codes/namelists/spin_response.f90'
 
       method = this%method
       output_prefix = this%output_prefix
+      n_q = 1
+      q_list = 0.0_rp
+      q_file = ''
+      omega_min = this%omega_min
+      omega_max = this%omega_max
+      n_omega = this%n_omega
+      eta = this%eta
 
       open (newunit=funit, file=this%lattice%control%fname, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -140,8 +167,36 @@ contains
       if (trim(method) /= 'juelich' .and. trim(method) /= 'mills') then
          call g_logger%fatal('spin_response method must be juelich or mills, got '//trim(method), __FILE__, __LINE__)
       end if
+      if (n_omega < 2 .or. omega_max <= omega_min .or. eta < 0.0_rp) then
+         call g_logger%fatal('spin_response needs n_omega >= 2, omega_max > omega_min and eta >= 0', __FILE__, __LINE__)
+      end if
       this%method = method
       this%output_prefix = output_prefix
+      this%n_omega = n_omega
+      this%omega_min = omega_min
+      this%omega_max = omega_max
+      this%eta = eta
+      this%omega = [(omega_min + (i - 1)*(omega_max - omega_min)/real(n_omega - 1, rp), i=1, n_omega)]
+
+      if (len_trim(q_file) > 0) then
+         open (newunit=funit, file=trim(q_file), action='read', iostat=iostatus, status='old')
+         if (iostatus /= 0) call g_logger%fatal('q_file '//trim(q_file)//' not found', __FILE__, __LINE__)
+         nlines = 0
+         do
+            read (funit, *, iostat=iostatus) qtmp
+            if (iostatus /= 0) exit
+            nlines = nlines + 1
+         end do
+         rewind (funit)
+         allocate (this%q_direct(3, nlines))
+         do i = 1, nlines
+            read (funit, *) this%q_direct(:, i)
+         end do
+         close (funit)
+      else
+         if (n_q < 1 .or. n_q > max_q) call g_logger%fatal('spin_response n_q must be in 1..'//int2str(max_q), __FILE__, __LINE__)
+         this%q_direct = q_list(:, 1:n_q)
+      end if
    end subroutine build_from_file
 
    !> @brief Eigenpairs at k+q for mesh points first:last, from the reciprocal arbitrary-k service.
@@ -170,7 +225,7 @@ contains
       class(spin_response), intent(inout) :: this
 
       class(reciprocal), pointer :: rec
-      integer :: nk, nmat, nsite, first, last, ik, n, i, s
+      integer :: nk, nmat, nsite, first, last, ik, n, s
       real(rp), allocatable :: f(:, :), e(:, :), e_kn(:, :), enu(:, :), p(:, :), n_mills(:, :), n_juelich(:, :)
       complex(rp), allocatable :: v(:, :, :), a(:, :, :, :, :), aj(:, :, :, :, :)
 
@@ -216,11 +271,7 @@ contains
                              __FILE__, __LINE__)
       end if
 
-      allocate (enu(nsite, 2), p(nsite, 2))
-      do i = 1, nsite
-         enu(i, :) = rec%lattice%symbolic_atoms(rec%lattice%nbulk + i)%potential%enu(l_d, :)
-         p(i, :) = 1.0_rp/rec%lattice%symbolic_atoms(rec%lattice%nbulk + i)%potential%ppar(l_d, :)**2
-      end do
+      call this%d_channel(enu, p)
 
       allocate (n_mills(nsite, 2), n_juelich(nsite, 2))
       n_mills = 0.0_rp
@@ -247,6 +298,141 @@ contains
       this%moment = this%d_occ_juelich(:, 1) - this%d_occ_juelich(:, 2)
    end subroutine prepare
 
+   !> @brief Linearization energy and p = 1/ppar^2 of the d channel per (site, physical spin).
+   subroutine d_channel(this, enu, p)
+      class(spin_response), intent(in) :: this
+      real(rp), allocatable, intent(out) :: enu(:, :), p(:, :)
+
+      integer :: i
+
+      allocate (enu(this%lattice%nrec, 2), p(this%lattice%nrec, 2))
+      do i = 1, this%lattice%nrec
+         enu(i, :) = this%lattice%symbolic_atoms(this%lattice%nbulk + i)%potential%enu(l_d, :)
+         p(i, :) = 1.0_rp/this%lattice%symbolic_atoms(this%lattice%nbulk + i)%potential%ppar(l_d, :)**2
+      end do
+   end subroutine d_channel
+
+   !> @brief Amplitudes (spin-relabelled, Mills or Juelich) and occupations at one endpoint of a chunk.
+   !> @param[out] et  Eigenvalues, shape (nk, nband); f the occupations; a the amplitudes.
+   subroutine endpoint(this, e, v, juelich, enu, p, et, f, a)
+      class(spin_response), intent(in) :: this
+      real(rp), intent(in) :: e(:, :), enu(:, :), p(:, :)
+      complex(rp), intent(in) :: v(:, :, :)
+      logical, intent(in) :: juelich
+      real(rp), allocatable, intent(out) :: et(:, :), f(:, :)
+      complex(rp), allocatable, intent(out) :: a(:, :, :, :, :)
+
+      integer :: ik, n
+
+      et = transpose(e)
+      call d_amplitudes_coefficient(v, this%lattice%nrec, a)
+      if (juelich) call d_amplitudes_juelich(a, et, this%fermi_used, enu, p)
+      a = a(:, :, :, :, this%spin_map)
+      allocate (f(size(et, 1), size(et, 2)))
+      do n = 1, size(et, 2)
+         do ik = 1, size(et, 1)
+            f(ik, n) = fermi_dirac_occupation(et(ik, n), this%fermi_used, this%kt)
+         end do
+      end do
+   end subroutine endpoint
+
+   !> @brief Bare response chi0(q, omega) over the full-BZ mesh, k chunk by chunk, both endpoints from eigenpairs_chunk.
+   !> @param[in]  q_direct  q in fractional coordinates of b1, b2, b3.
+   !> @param[in]  omega     Energies (Ry); eta (Ry) the broadening, 0 allowed at omega = 0 (static value).
+   !> @param[in]  juelich   Juelich amplitudes if .true., coefficient (Mills) amplitudes otherwise.
+   !> @param[out] chi0      shape (nsite, nsite, size(omega)).
+   subroutine bare_response(this, q_direct, omega, eta, juelich, chi0)
+      class(spin_response), intent(inout) :: this
+      real(rp), intent(in) :: q_direct(3), omega(:), eta
+      logical, intent(in) :: juelich
+      complex(rp), intent(out) :: chi0(:, :, :)
+
+      integer :: first, last, nk
+      real(rp), allocatable :: enu(:, :), p(:, :), e_k(:, :), e_kq(:, :), et_k(:, :), et_kq(:, :), f_k(:, :), f_kq(:, :)
+      complex(rp), allocatable :: v_k(:, :, :), v_kq(:, :, :), a_k(:, :, :, :, :), a_kq(:, :, :, :, :)
+
+      call this%d_channel(enu, p)
+      nk = this%reciprocal%k_workset%nk_local
+      chi0 = (0.0_rp, 0.0_rp)
+      do first = 1, nk, k_chunk
+         last = min(nk, first + k_chunk - 1)
+         call this%eigenpairs_chunk([0.0_rp, 0.0_rp, 0.0_rp], first, last, e_k, v_k)
+         call this%eigenpairs_chunk(q_direct, first, last, e_kq, v_kq)
+         call endpoint(this, e_k, v_k, juelich, enu, p, et_k, f_k, a_k)
+         call endpoint(this, e_kq, v_kq, juelich, enu, p, et_kq, f_kq, a_kq)
+         call accumulate_chi0(this%kt, this%reciprocal%k_workset%weights(first:last), et_k, f_k, a_k, &
+                              et_kq, f_kq, a_kq, omega, eta, chi0)
+      end do
+   end subroutine bare_response
+
+   !> @brief Juelich and Mills U per site from the static chi0(0, 0) (omega = 0, eta = 0) of each amplitude kind.
+   !> @details Mills C_up, C_dn are the d entries of center_band, the on-site energy of H(k), in label order.
+   subroutine interaction(this)
+      class(spin_response), intent(inout) :: this
+
+      integer :: i, ns
+      real(rp), allocatable :: c_up(:)
+      complex(rp), allocatable :: chi0_mills(:, :, :), chi0_juelich(:, :, :)
+
+      ns = this%lattice%nrec
+      allocate (chi0_mills(ns, ns, 1), chi0_juelich(ns, ns, 1), c_up(ns))
+      allocate (this%uj(ns), this%um(ns), this%delta_mills(ns), this%gap_d(ns))
+      call this%bare_response([0.0_rp, 0.0_rp, 0.0_rp], [0.0_rp], 0.0_rp, .false., chi0_mills)
+      call this%bare_response([0.0_rp, 0.0_rp, 0.0_rp], [0.0_rp], 0.0_rp, .true., chi0_juelich)
+      do i = 1, ns
+         c_up(i) = this%lattice%symbolic_atoms(this%lattice%nbulk + i)%potential%center_band(l_d + 1, this%spin_map(1))
+         this%gap_d(i) = this%lattice%symbolic_atoms(this%lattice%nbulk + i)%potential%center_band(l_d + 1, this%spin_map(2)) &
+                         - c_up(i)
+      end do
+      call interaction_values(real(chi0_mills(:, :, 1), rp), real(chi0_juelich(:, :, 1), rp), &
+                              this%d_occ_mills(:, 1) - this%d_occ_mills(:, 2), this%moment, c_up, c_up + this%gap_d, &
+                              this%uj, this%um, this%delta_mills)
+   end subroutine interaction
+
+   !> @brief Loop over the q list: chi0, Dyson, tr L and pole estimates; writes <prefix>_q<NNN>.dat and <prefix>_dispersion.dat.
+   subroutine run(this)
+      class(spin_response), intent(inout) :: this
+
+      integer :: iq, iw, nq, nw, funit, fdisp
+      real(rp) :: u(1), peak, crossing, qcart(3)
+      real(rp), allocatable :: trl(:)
+      complex(rp), allocatable :: chi0(:, :, :), chi(:, :, :)
+      logical :: has_peak, has_crossing
+      character(len=256) :: fname
+      character(len=24) :: peak_text, crossing_text
+
+      if (this%lattice%nrec /= 1) call g_logger%fatal('spin_response%run supports one site per cell', __FILE__, __LINE__)
+      u = merge(this%um, this%uj, trim(this%method) == 'mills')
+      nq = size(this%q_direct, 2)
+      nw = size(this%omega)
+      allocate (chi0(1, 1, nw), chi(1, 1, nw))
+      open (newunit=fdisp, file=trim(this%output_prefix)//'_dispersion.dat', action='write', status='replace')
+      write (fdisp, '(a)') '# q_direct(3) q_cartesian(3, units 2pi/a) |q|(1/Angstrom) peak_omega(Ry) crossing_omega(Ry)'
+      do iq = 1, nq
+         call this%bare_response(this%q_direct(:, iq), this%omega, this%eta, trim(this%method) == 'juelich', chi0)
+         call solve_dyson(chi0, u, chi)
+         trl = spectral_trace(chi)
+         call pole_estimates(this%omega, trl, chi0(1, 1, :), u(1), peak, crossing, has_peak, has_crossing)
+
+         write (fname, '(a,a,i3.3,a)') trim(this%output_prefix), '_q', iq, '.dat'
+         open (newunit=funit, file=trim(fname), action='write', status='replace')
+         write (funit, '(a)') '# omega(Ry) re_tr_chi0(1/Ry) im_tr_chi0(1/Ry) re_tr_chi(1/Ry) im_tr_chi(1/Ry) tr_L(1/Ry) min_abs_eig(I+chi0*U)'
+         do iw = 1, nw
+            write (funit, '(7es22.14)') this%omega(iw), chi0(1, 1, iw), chi(1, 1, iw), trl(iw), abs(1.0_rp + chi0(1, 1, iw)*u(1))
+         end do
+         close (funit)
+
+         qcart = matmul(this%reciprocal%reciprocal_vectors, this%q_direct(:, iq))/(2.0_rp*pi)
+         peak_text = 'n/a'
+         crossing_text = 'n/a'
+         if (has_peak) write (peak_text, '(es22.14)') peak
+         if (has_crossing) write (crossing_text, '(es22.14)') crossing
+         write (fdisp, '(7es16.8,2a24)') this%q_direct(:, iq), qcart, 2.0_rp*pi*sqrt(sum(qcart**2))/this%lattice%alat, &
+            peak_text, crossing_text
+      end do
+      close (fdisp)
+   end subroutine run
+
    !> @brief Write <output_prefix>_state.dat: the frozen-state values the response used.
    subroutine write_state(this)
       class(spin_response), intent(in) :: this
@@ -263,13 +449,20 @@ contains
       write (funit, '(a,3i6)') 'mesh_nk ', this%reciprocal%nk_mesh
       write (funit, '(a,l2)') 'mesh_full_bz T ; reduction_overridden ', this%reduction_overridden
       write (funit, '(a,l2)') 'spin_swapped ', this%spin_swapped
-      write (funit, '(a)') 'u_juelich n/a'
-      write (funit, '(a)') 'u_mills n/a'
       write (funit, '(a)') '# site m_mills m_juelich d_up_mills d_dn_mills d_up_juelich d_dn_juelich'
       do i = 1, size(this%moment)
          write (funit, '(i6,6es24.16)') i, this%d_occ_mills(i, 1) - this%d_occ_mills(i, 2), this%moment(i), &
             this%d_occ_mills(i, :), this%d_occ_juelich(i, :)
       end do
+      if (allocated(this%uj)) then
+         write (funit, '(a)') '# site u_juelich(Ry) u_mills(Ry) juelich_goldstone_residual mills_residual_delta implied_gap_delta*Delta_d(Ry)'
+         do i = 1, size(this%uj)
+            write (funit, '(i6,2es24.16,a,es24.16,es24.16)') i, this%uj(i), this%um(i), '  0 (by construction)', &
+               this%delta_mills(i), this%delta_mills(i)*this%gap_d(i)
+         end do
+      else
+         write (funit, '(a)') 'u n/a'
+      end if
       close (funit)
    end subroutine write_state
 
@@ -410,6 +603,31 @@ contains
 
       u = (c_dn - c_up)/m
    end function u_mills
+
+   !> @brief Mills Goldstone residual per site, delta_i = 1 + sum_j chi0s_ij u_j m_j / m_i (1 + chi0(0,0) U for one site).
+   !> @param[in] chi0s  Static bare response chi0(0,0), real, shape (nsite, nsite).
+   !> @param[in] u      Interaction (Ry), shape (nsite).
+   !> @param[in] m      Site moments, shape (nsite).
+   pure function mills_residual(chi0s, u, m) result(delta)
+      real(rp), intent(in) :: chi0s(:, :), u(:), m(:)
+      real(rp) :: delta(size(m))
+
+      delta = 1.0_rp + matmul(chi0s, u*m)/m
+   end function mills_residual
+
+   !> @brief Juelich U (Goldstone solve with the Juelich chi0 and M), Mills U (centre difference over the Mills M),
+   !>        and the Mills residual (Mills chi0 and M with the Mills U).
+   !> @param[in]  chi0s_mills, chi0s_juelich  Static chi0(0,0) with each amplitude kind, shape (nsite, nsite).
+   !> @param[in]  m_mills, m_juelich          Site moments of each kind, shape (nsite).
+   !> @param[in]  c_up, c_dn                  d band centres of the majority and minority label (Ry), shape (nsite).
+   subroutine interaction_values(chi0s_mills, chi0s_juelich, m_mills, m_juelich, c_up, c_dn, uj, um, delta_mills)
+      real(rp), intent(in) :: chi0s_mills(:, :), chi0s_juelich(:, :), m_mills(:), m_juelich(:), c_up(:), c_dn(:)
+      real(rp), intent(out) :: uj(:), um(:), delta_mills(:)
+
+      call u_juelich(chi0s_juelich, m_juelich, uj)
+      um = u_mills(c_up, c_dn, m_mills)
+      delta_mills = mills_residual(chi0s_mills, um, m_mills)
+   end subroutine interaction_values
 
    !> @brief Solve (I + chi0 U) chi = chi0 at each omega by LU, with U diagonal in sites.
    !> @details Never call at eta = 0 for q = 0: the Goldstone condition makes I + chi0 U singular there.

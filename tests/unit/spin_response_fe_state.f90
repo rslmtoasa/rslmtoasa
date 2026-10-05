@@ -14,14 +14,16 @@ module spin_response_fe_state
    use charge_mod, only: charge
    use energy_mod, only: energy
    use hamiltonian_mod, only: hamiltonian
+   use reciprocal_mod, only: reciprocal
    implicit none
 
    real(rp) :: electron_count_abs, eigen_contract_abs, moment_rel
+   real(rp) :: s1_rel, e1_fe_rel, q0_pole_abs
    real(rp) :: a1_rel, a2_chi_rel, a2_identity_rel, static_eta0_rel, a3_rel, window_moment_rel, &
                dyson_u0_rel, pole_peak_rel, pole_crossing_rel
    namelist /spin_response_tolerances/ a1_rel, a2_chi_rel, a2_identity_rel, static_eta0_rel, a3_rel, &
       window_moment_rel, dyson_u0_rel, pole_peak_rel, pole_crossing_rel, &
-      electron_count_abs, eigen_contract_abs, moment_rel
+      electron_count_abs, eigen_contract_abs, moment_rel, s1_rel, e1_fe_rel, q0_pole_abs
    logical :: failed = .false.
 
 contains
@@ -36,6 +38,7 @@ contains
       a1_rel = -1.0_rp; a2_chi_rel = -1.0_rp; a2_identity_rel = -1.0_rp; static_eta0_rel = -1.0_rp
       a3_rel = -1.0_rp; window_moment_rel = -1.0_rp; dyson_u0_rel = -1.0_rp; pole_peak_rel = -1.0_rp
       pole_crossing_rel = -1.0_rp; electron_count_abs = -1.0_rp; eigen_contract_abs = -1.0_rp; moment_rel = -1.0_rp
+      s1_rel = -1.0_rp; e1_fe_rel = -1.0_rp; q0_pole_abs = -1.0_rp
       open (newunit=u, file=trim(oracle_dir)//'/tolerances.nml', status='old', action='read')
       read (u, nml=spin_response_tolerances)
       close (u)
@@ -55,8 +58,9 @@ contains
       end if
    end subroutine require
 
-   subroutine build_fe_state(reversed, control_obj, lattice_obj, charge_obj, energy_obj, hamiltonian_obj)
+   subroutine build_fe_state(reversed, control_obj, lattice_obj, charge_obj, energy_obj, hamiltonian_obj, fname)
       logical, intent(in) :: reversed
+      character(*), intent(in), optional :: fname
       type(control), target, intent(inout) :: control_obj
       type(lattice), target, intent(inout) :: lattice_obj
       type(charge), target, intent(inout) :: charge_obj
@@ -65,7 +69,11 @@ contains
 
       integer :: i
 
-      control_obj = control('input.nml')
+      if (present(fname)) then
+         control_obj = control(fname)
+      else
+         control_obj = control('input.nml')
+      end if
       lattice_obj = lattice(control_obj)
       call lattice_obj%build_data()
       call lattice_obj%bravais()
@@ -82,6 +90,26 @@ contains
       if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham()
       call hamiltonian_obj%build_bulkham()
    end subroutine build_fe_state
+
+   !> Pre-campaign mesh diagonalization on rec_ref, E_F from reciprocal's own solve, and the band moments of
+   !> accumulate_spin_density_kspace (spin 1 along +z). band_moments(site, l+1, spin, 1:3) = q0, <E>, rms width.
+   subroutine reference_band_moments(ham, rec_ref, bm)
+      type(hamiltonian), target, intent(inout) :: ham
+      type(reciprocal), intent(inout) :: rec_ref
+      real(rp), allocatable, intent(out) :: bm(:, :, :, :)
+
+      real(rp) :: axis(3, 1)
+
+      rec_ref = reciprocal(ham)
+      call rec_ref%generate_mp_mesh()
+      call rec_ref%build_kspace_hamiltonian()
+      call rec_ref%diagonalize_hamiltonian()
+      rec_ref%fermi_level = rec_ref%find_fermi_level_from_eigenvalues(rec_ref%total_electrons)
+      call rec_ref%accumulate_spin_density_kspace()
+      call rec_ref%fill_band_moments_from_spin_density(trim(rec_ref%lattice%control%density_policy), &
+                                                       reshape([0.0_rp, 0.0_rp, 1.0_rp], [3, 1]), axis)
+      bm = rec_ref%band_moments
+   end subroutine reference_band_moments
 
    subroutine reverse_spin(lattice_obj)
       type(lattice), intent(inout) :: lattice_obj
