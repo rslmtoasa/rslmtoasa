@@ -53,12 +53,13 @@ program test_spin_response_c2
    end do
    call report('C2.1 completeness, max |sum_n |v|^2 - 1|', dmax, eigen_contract_abs)
 
-   ! Reference band moments from the pre-campaign path, on the E_F the response printed.
+   ! Reference band moments from the pre-campaign path, on E_F from reciprocal's own Fermi solve on this mesh.
    rec_ref = reciprocal(ham)
    call rec_ref%generate_mp_mesh()
    call rec_ref%build_kspace_hamiltonian()
    call rec_ref%diagonalize_hamiltonian()
-   rec_ref%fermi_level = sr%fermi_used
+   rec_ref%fermi_level = rec_ref%find_fermi_level_from_eigenvalues(rec_ref%total_electrons)
+   call report('C2.2 E_F used vs reciprocal Fermi solve (Ry)', abs(sr%fermi_used - rec_ref%fermi_level), eigen_contract_abs)
    call rec_ref%accumulate_spin_density_kspace()
    call rec_ref%fill_band_moments_from_spin_density(trim(rec_ref%lattice%control%density_policy), &
                                                     reshape([0.0_rp, 0.0_rp, 1.0_rp], [3, 1]), axis)
@@ -79,7 +80,7 @@ program test_spin_response_c2
       q0 = bm(1, 3, s, 1)
       cen = bm(1, 3, s, 2) - enu(s)
       w = bm(1, 3, s, 3)
-      x = sr%fermi_used - enu(s)
+      x = rec_ref%fermi_level - enu(s)
       n_juelich(s) = (q0 + 2.0_rp*x*p(s)*q0*cen + x*x*p(s)**2*q0*(w*w + cen*cen))/(1.0_rp + x*x*p(s))
       call report('C2.3 Juelich d occupation, spin '//achar(48 + s)//', |n - ref|/ref', &
                   abs(sr%d_occ_juelich(1, s) - n_juelich(s))/n_juelich(s), moment_rel)
