@@ -44,8 +44,9 @@ not sharply resolved Kohn–Sham DOS benchmarks.
 The Fe nsp=2/3/4 Block cases retain both HOH and non-HOH coverage. The direct
 `Lanczos`, `Block`, and `Chebyshev` CTest baselines (Fe nsp=1 decks, scalar
 contract `etot`, `ws_r`, `vmad`) were retired: `bccFe_block_fast_sp` and
-`bccFe_chebyshev_fast_sp` run the same decks with the same settings, and Lanczos
-has no matrix case until its etot shift is understood (`tests/KNOWN_ISSUES.md`).
+`bccFe_chebyshev_fast_sp` and `bccFe_lanczos` run the same decks with the same
+settings (`ctest -L lanczos` selects the Lanczos case; its etot shift is
+attributed in `tests/KNOWN_ISSUES.md`).
 The deck directories `bccFe_block`, `bccFe_chebyshev` and `bccFe_lanczos` stay.
 
 The nsp=2 Lanczos functional cases are labeled `known_issue` and are not

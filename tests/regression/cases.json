@@ -130,6 +130,18 @@
         "control": { "recur": "chebyshev", "cheb_backend": "fast", "lld": 50 },
         "hamiltonian": { "hoh": false, "ccor_2c": false }
       }
+    },
+    {
+      "name": "bccFe_lanczos",
+      "base": "bccFe_lanczos",
+      "labels": ["lanczos", "legacy_strux"],
+      "_note": "Settings of the former legacy Lanczos deck test (legacy structure constants, no HOH, lld 16, deck energy window).",
+      "timeout": 300,
+      "namelists": {
+        "lattice": { "strux_backend": "legacy" },
+        "control": { "recur": "lanczos", "lld": 16 },
+        "hamiltonian": { "hoh": false, "ccor_2c": false }
+      }
     }
   ]
 }

@@ -631,6 +631,69 @@ for it (`bccFe_lanczos`, `base` `bccFe_lanczos`, legacy structure constants,
 `lld` 16, no HOH) reproduced the deck to the last printed digit in a scratch
 manifest; it is not committed and no reference was written.
 
+## `Regression_bccFe_lanczos` added; alpha tables open decision — 2026-10-05
+
+**Case.** `bccFe_lanczos` in `tests/regression/cases.json` (labels `lanczos`,
+`legacy_strux`; base `bccFe_lanczos`; legacy structure constants, `recur`
+`lanczos`, `lld` 16, no HOH, deck energy window). Default tolerance 1e-6 Ry on
+`etot`, `ws_r`, `vmad`. Reference `references/bccFe_lanczos.nml` from
+`run_matrix.py --gen-ref`, which records no provenance.
+
+**Provenance.** Source tree `56d4b18` (`source/`, `CMakeLists.txt`, `cmake/` and
+`tests/regression/` identical to `b879d70`, which adds only
+`tests/spin_response/oracles/`) plus the case entry. Fresh build directory,
+`tests.yml` configure line (`ENABLE_MPI=ON`, `ENABLE_MARCH_NATIVE=OFF`,
+`RUN_REG/EXAMPLE/UNIT_TESTS=ON`; build type defaults to Release,
+`-O3 -fbacktrace -g -g`, `-ffree-line-length-0 -cpp -mtune=native`, OpenMP on).
+macOS-26.7.1 arm64 (Apple M1), GNU Fortran (Homebrew GCC 16.2.0) 16.2.0, Open MPI
+5.0.11, `OMP_NUM_THREADS=2`, binary run directly (no `mpirun`).
+etot -2541.9814280013752, `ws_r` 2.6621999999999999, `vmad`
+-2.9146902078538659E-011. The same etot results from the `ENABLE_MPI=OFF` build
+(same flags otherwise) and from the scratch builds of `2cae269` and HEAD.
+Linux/CI was not run; the earlier Lanczos deck differed from its old reference by
+1.16e-5 on this platform, so cross-platform agreement at 1e-6 is not known.
+
+**Attribution (this case, scratch builds of each commit, MPI off, Release,
+`OMP_NUM_THREADS=2`).**
+
+| step | etot (Ry) | change (Ry) |
+|---|---|---|
+| `8d7c1f0` | -2541.981415926556 | n/a |
+| `2285360` (`80390cc^`) | -2541.981415926646 | -9.0e-11 |
+| `80390cc` (XC potential fix) | -2541.981434694839 | -1.8768193e-5 |
+| `68e15f2` (`2cae269^`) | -2541.9814346944827 | +3.6e-10 |
+| `2cae269` (legacy screening alpha consistent between `micha` and `predls`) | -2541.981428001375 | +6.6931077e-6 |
+| HEAD | -2541.981428001375 | 0 |
+
+`8d7c1f0` to HEAD: -1.2074819e-5 Ry. `ws_r` is 2.6622 throughout; `vmad` is
+-2.9149015551243944e-11 until `2cae269` and -2.914690207853866e-11 after. The
+other commits between `8d7c1f0` and HEAD were not run, so the changes between
+the sampled commits are attributed to the sampled steps by difference only.
+
+**Checks.** `Regression_bccFe_lanczos` passes in the ENABLE_MPI=ON and
+ENABLE_MPI=OFF builds. With the reference etot replaced by the `2285360` value
+(-2541.981415926646) it fails in both (`etot: run=-2.541981428001e+03
+ref=-2.541981415927e+03`). `ctest -L '^quick$'`, MPI-on build: 21 of 21 passed.
+`ctest -L lanczos` also selects `Example_bulk_bccFe_nsp2_lanczos` and `_hoh`.
+
+**Open decision for the developer: three alpha tables.** Nothing was changed.
+- `legacy_micha_alpha(0:3) = [0.3485, 0.05303, 0.010714, 0.00337]`
+  (`lattice.f90:52`), read by `micha` (times 2) and by `predls` through
+  `potential%screening_alpha` on the legacy path since `2cae269`.
+- `default_screening_alpha_values(4) = [0.3485, 0.0530, 0.0107, 0.00674]`
+  (`lattice.f90:48`), read by the `strux_lib` path. The s, p and d entries are the
+  legacy values rounded to four digits. `0.00674` has no source in this
+  repository's history before `1355a50` and none in `~/Jobb/strux_lib`; it is
+  2 x 0.00337, the legacy f value, while the other three are not scaled by 2. The
+  vendored `strux_tb.f90` default has `0.00535` for l=3.
+- `qm_canonical = [.348485, .053030, .010714]` (`math.f90:110`), what `predls`
+  used on the legacy path before `2cae269`, and still uses when
+  `potential%screening_alpha` is not allocated or has the wrong size. A fourth
+  table, `qm_lmto47` (`math.f90:112`), has no reader in `source/`.
+
+Which table each backend should use, and what the l=3 value should be, is not
+decided here.
+
 ## `2cae269` screening constants and k-space SCF attribution — 2026-10-05
 
 Report-only task; no source or reference changed. Six clean builds (scratch
