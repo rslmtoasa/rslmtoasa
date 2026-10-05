@@ -631,6 +631,7 @@ module reciprocal_mod
    end interface
 
    public :: fermi_dirac_occupation
+   real(rp), parameter, public :: kB_Ry_per_K = 6.3336814e-6_rp
 
    interface
       !> Numerically stable Fermi-Dirac occupation at the effective kT used for

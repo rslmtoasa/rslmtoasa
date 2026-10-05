@@ -1,4 +1,5 @@
 submodule(calculation_mod) calculation_reciprocal
+   use spin_response_mod, only: spin_response
 
 contains
 
@@ -353,6 +354,44 @@ contains
       call reciprocal_obj%generate_mp_mesh()
       call reciprocal_obj%write_kspace_eigenpairs()
    end subroutine post_processing_fermi_surface
+
+   !> @brief Spin-response post-processing: frozen ground state handoff and d moments.
+   !> @details Builds the same bulk stack as post_processing_fermi_surface, takes E_F from &energy
+   !>          (solved on the response mesh when auto_find_fermi), and writes <prefix>_state.dat.
+   !> @param[in] this Calculation object. fname selects the namelist input.
+   module subroutine post_processing_spin_response(this)
+      class(calculation), intent(in) :: this
+      type(control), target :: control_obj
+      type(lattice), target :: lattice_obj
+      type(charge), target :: charge_obj
+      type(energy), target :: energy_obj
+      type(hamiltonian), target :: hamiltonian_obj
+      type(reciprocal), target :: reciprocal_obj
+      type(spin_response) :: response
+      integer :: i
+
+      control_obj = control(this%fname)
+      lattice_obj = lattice(control_obj)
+      call lattice_obj%build_data()
+      call lattice_obj%bravais()
+      call lattice_obj%structb(.true.)
+      call lattice_obj%atomlist()
+      charge_obj = charge(lattice_obj)
+      call charge_obj%bulkmat()
+      energy_obj = energy(lattice_obj)
+      hamiltonian_obj = hamiltonian(charge_obj)
+      do i = 1, lattice_obj%nrec
+         call lattice_obj%symbolic_atoms(i)%build_pot()
+      end do
+      if (control_obj%nsp == 2 .or. control_obj%nsp == 4) call hamiltonian_obj%build_lsham()
+      call hamiltonian_obj%build_bulkham()
+
+      reciprocal_obj = reciprocal(hamiltonian_obj)
+      reciprocal_obj%fermi_level = energy_obj%fermi
+      response = spin_response(reciprocal_obj)
+      call response%prepare()
+      call response%write_state()
+   end subroutine post_processing_spin_response
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

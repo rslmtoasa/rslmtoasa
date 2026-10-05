@@ -743,6 +743,25 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitSpinResponseKernels ${TestDIR}/unit/test_spin_response_kernels.f90
     ${TestDIR}/spin_response/oracles)
   set_tests_properties(UnitSpinResponseKernels PROPERTIES LABELS "unit;spin-response;quick")
+  # C1/C2 on bcc Fe: a scratch copy of tests/spin_response/fe_bcc, where the executable runs
+  # post_processing='spin_response' first; the unit programs then run in that directory.
+  set(_sr_scratch "${CMAKE_BINARY_DIR}/Testing/spin_response/fe_bcc")
+  add_test(NAME SpinResponseFeDriver
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/fe_scratch.py"
+      "${TestBinary}" "${TestDIR}/spin_response/fe_bcc" "${_sr_scratch}")
+  set_tests_properties(SpinResponseFeDriver PROPERTIES
+    LABELS "spin-response;quick" FIXTURES_SETUP SpinResponseFeScratch RESOURCE_LOCK SpinResponseFeScratch)
+  add_library(SpinResponseFeState STATIC ${TestDIR}/unit/spin_response_fe_state.f90)
+  target_link_libraries(SpinResponseFeState ${COMMON_LIBRARIES})
+  add_fortran_component_unit_test(UnitSpinResponseC1 ${TestDIR}/unit/test_spin_response_c1.f90)
+  add_fortran_component_unit_test(UnitSpinResponseC2 ${TestDIR}/unit/test_spin_response_c2.f90)
+  target_link_libraries(UnitSpinResponseC1 SpinResponseFeState)
+  target_link_libraries(UnitSpinResponseC2 SpinResponseFeState)
+  foreach(_t UnitSpinResponseC1 UnitSpinResponseC2)
+    add_test(NAME ${_t} COMMAND ${_t} "${TestDIR}/spin_response/oracles" WORKING_DIRECTORY "${_sr_scratch}")
+    set_tests_properties(${_t} PROPERTIES LABELS "unit;spin-response;quick"
+      FIXTURES_REQUIRED SpinResponseFeScratch RESOURCE_LOCK SpinResponseFeScratch)
+  endforeach()
   add_fortran_unit_test(UnitKpmTransport ${TestDIR}/unit/test_kpm_transport.f90)
   set_tests_properties(UnitKpmTransport PROPERTIES
     LABELS "unit;conductivity;transport;kpm;spin_transport;orbital_transport")

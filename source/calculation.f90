@@ -158,6 +158,7 @@ module calculation_mod
       procedure, private :: post_processing_bsf
       procedure, private :: post_processing_density_of_states
       procedure, private :: post_processing_fermi_surface
+      procedure, private :: post_processing_spin_response
       procedure, private :: post_processing_kspace_green
       procedure, private :: post_processing_frozen_magnon
       procedure :: process
@@ -202,6 +203,10 @@ module calculation_mod
       module subroutine post_processing_fermi_surface(this)
          class(calculation), intent(in) :: this
       end subroutine post_processing_fermi_surface
+
+      module subroutine post_processing_spin_response(this)
+         class(calculation), intent(in) :: this
+      end subroutine post_processing_spin_response
 
       module subroutine post_processing_kspace_green(this)
          class(calculation), intent(in) :: this
@@ -375,6 +380,8 @@ contains
          call this%post_processing_density_of_states()
       case ('fermi_surface')
          call this%post_processing_fermi_surface()
+      case ('spin_response')
+         call this%post_processing_spin_response()
       case ('kspace_green')
          call this%post_processing_kspace_green()
       case ('frozen_magnon')
@@ -1992,6 +1999,7 @@ contains
           .and. post_processing /= 'bsf' &
           .and. post_processing /= 'density_of_states' &
           .and. post_processing /= 'fermi_surface' &
+          .and. post_processing /= 'spin_response' &
           .and. post_processing /= 'kspace_green' &
           .and. post_processing /= 'frozen_magnon' &
           .and. post_processing /= 'exchange_q' &
@@ -2000,7 +2008,7 @@ contains
          call g_logger%fatal('[calculation.check_post_processing]: '// &
                              "calculation%post_processing must be one of: ''none'', ''paoflow2rs'', ''exchange'', ''exchange_p2rs''," // &
                              " 'conductivity', 'conductivity_p2rs', 'orbital_modern', 'band_structure', 'bsf', 'density_of_states'," // &
-                             " 'fermi_surface', 'kspace_green', 'frozen_magnon', 'exchange_q', 'linear_response', 'pauli_projection'", __FILE__, __LINE__)
+                             " 'fermi_surface', 'spin_response', 'kspace_green', 'frozen_magnon', 'exchange_q', 'linear_response', 'pauli_projection'", __FILE__, __LINE__)
       end if
    end subroutine check_post_processing
 

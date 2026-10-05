@@ -1658,3 +1658,12 @@ campaign remain outside the established scope.
   primitive-cell path is unchanged. The q050 functional reproducer now
   completes with four moments `2.395895-2.395896` mu_B and zero excess charge;
   the direct structure-constant contract covers the producer path.
+
+## spin_response Stage 1b — 2026-10-05
+
+- **Verified:** the Boltzmann constant `kB_Ry_per_K = 6.3336814e-6_rp` is declared
+  locally nine times: `reciprocal.f90` (2), `reciprocal_dos.f90` (4),
+  `reciprocal_occupations.f90`, `reciprocal_spin_density.f90`, `self_reciprocal.f90`.
+  `reciprocal_mod` now also exports one public copy (used by `spin_response`); the
+  local ones were left in place and shadow it. Proposal: one definition, remove the
+  nine copies (about 10 lines, no value change).
