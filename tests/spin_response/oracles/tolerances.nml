@@ -11,4 +11,7 @@
   dyson_u0_rel      = 1.0e-14   ! E3: U = 0 gives chi = chi0
   pole_peak_rel     = 1.0e-2    ! C6: A1 pole from the parabolic peak of tr L [2.1e-3]
   pole_crossing_rel = 5.0e-3    ! C6: A1 pole from the Re(1 + chi0 U) zero crossing [7.3e-4]
+  electron_count_abs = 1.0e-6    ! C1: electron count on the response mesh vs target (electrons)
+  eigen_contract_abs = 1.0e-10   ! C1 tests 1-2: arbitrary-k vs mesh eigenvalues (Ry)
+  moment_rel         = 1.0e-10   ! C2 tests 2-3: response moments vs band_moments, same mesh and occupations
 /
