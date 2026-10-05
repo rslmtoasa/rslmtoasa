@@ -25,8 +25,10 @@ program test_spin_response_kernels
 
    real(rp) :: a1_rel, a2_chi_rel, a2_identity_rel, static_eta0_rel, a3_rel, &
                window_moment_rel, dyson_u0_rel, pole_peak_rel, pole_crossing_rel
+   real(rp) :: electron_count_abs, eigen_contract_abs, moment_rel   ! read, used by the C1/C2 tests
    namelist /spin_response_tolerances/ a1_rel, a2_chi_rel, a2_identity_rel, static_eta0_rel, &
-      a3_rel, window_moment_rel, dyson_u0_rel, pole_peak_rel, pole_crossing_rel
+      a3_rel, window_moment_rel, dyson_u0_rel, pole_peak_rel, pole_crossing_rel, &
+      electron_count_abs, eigen_contract_abs, moment_rel
 
    character(len=512) :: dir
    logical :: failed
