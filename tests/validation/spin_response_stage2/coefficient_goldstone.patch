@@ -1,0 +1,20 @@
+--- a/source/spin_response.f90	2026-10-06 14:02:55
++++ b/source/spin_response.f90	2026-10-06 14:02:55
+@@ -373,6 +373,8 @@
+       integer :: i, ns
+       real(rp), allocatable :: c_up(:)
+       complex(rp), allocatable :: chi0_mills(:, :, :), chi0_juelich(:, :, :)
++      character(len=8) :: coef_text
++      integer :: coef_status
+ 
+       ns = this%lattice%nrec
+       allocate (chi0_mills(ns, ns, 1), chi0_juelich(ns, ns, 1), c_up(ns))
+@@ -387,6 +389,8 @@
+       call interaction_values(real(chi0_mills(:, :, 1), rp), real(chi0_juelich(:, :, 1), rp), &
+                               this%d_occ_mills(:, 1) - this%d_occ_mills(:, 2), this%moment, c_up, c_up + this%gap_d, &
+                               this%uj, this%um, this%delta_mills)
++      call get_environment_variable('SR_COEF_GOLDSTONE', coef_text, status=coef_status)
++      if (coef_status == 0) call u_juelich(real(chi0_mills(:, :, 1), rp), this%d_occ_mills(:, 1) - this%d_occ_mills(:, 2), this%um)
+    end subroutine interaction
+ 
+    !> @brief Loop over the q list: chi0, Dyson, tr L and pole estimates; writes <prefix>_q<NNN>.dat and <prefix>_dispersion.dat.
