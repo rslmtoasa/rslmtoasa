@@ -59,10 +59,11 @@ shared Fortran state.
 | `post_processing` | `'orbital_modern'` | `post_processing_orbital_modern` | Orbital moments via `recursion%chebyshev_orbital_mod()` — always Chebyshev, regardless of `control%recur`. Loops over *every* atom in the cluster (`this%lattice%kk`), so runtime scales with cluster size, not recursion depth. |
 | `post_processing` | `'band_structure'` / `'density_of_states'` | `post_processing_band_structure` / `_density_of_states` | k-space route via `reciprocal_mod`, not the real-space recursion machinery at all. |
 | `post_processing` | `'fermi_surface'` | `post_processing_fermi_surface` | Writes the dense k-space eigensystem for Fermi-surface analysis (`reciprocal_export.f90`) on the `&reciprocal` `fs_nk1..3` mesh, always the full BZ. Its frozen-state setup (database potential → `hamiltonian` → `reciprocal`, `fermi_level` from `&energy`) is the template for new k-space post-processing routes. |
+| `post_processing` | `'spin_response'` | `post_processing_spin_response` → `spin_response%prepare/interaction/run/write_state` (`spin_response.f90`) | Transverse spin response chi0(q, omega), U and Dyson for Juelich-d amplitudes on the frozen k-space state, q list from `&spin_response` (`q_list` or `q_file`), several sites per cell. See "Transverse spin response (B11)" below. |
 | `post_processing` | `'bsf'` | `post_processing_bsf` → `reciprocal%calculate_bsf` (`reciprocal_bsf.f90`) | Bloch spectral function A(k,E) = −1/π Im Tr G(k,E+iη) along the canonical spglib k-path (milestone B3). Consumes the B2 engine's `dyson_kspace_inverse` per (k,E) (Σ=0 ⇒ backend E; Σ-ready for CPA/DMFT). η = `&reciprocal` green_eta, E grid = n_energy_points/dos_energy_min,max, path = `&kpath` nk_per_segment. Writes `bsf.dat` (total/up/down) + `bsf_bands.dat` overlay. Partial-trace convention in `bsf_kernel.f90` (`bsf_spectral_trace`). |
 | `post_processing` | `'kspace_green'` | `post_processing_kspace_green` | B2 validation driver: fills `green%gij` via recursion then via the k-space engine (`reciprocal%fill_green`, backend E + D≡E check) and cross-checks on-site DOS / m_z. Report-only. |
 | `post_processing` | `'frozen_magnon'` | `post_processing_frozen_magnon` | Sweeps `hamiltonian%q_ss` over a `&frozen_magnon` q-list, preferably from `q_file` (`q_coordinates='cartesian'` for `2*pi/alat` Cartesian components or `'direct'` for reciprocal-lattice coordinates), writing total energy, band energy, per-sublattice moment magnitude, and `omega(q)` to `frozen_magnon.dat`. `mode='mft'` (default) converges SCF once at the reference point, reuses that potential for a single-iteration band-energy pass at every other q, and computes `omega` from band-energy differences; `mode='scf'` re-converges at every q and computes `omega` from total-energy differences. `branch_mode='auto'` builds multi-sublattice magnon branches in `frozen_magnon_branches.dat`/`frozen_magnon_modes.dat` via the direct GBT frozen-magnon method (second derivatives of the force-theorem band-energy surface w.r.t. sublattice cone angles; Essenberger PRB 84, 174425 Eq. 26). **Single-sublattice is validated; for the multi-sublattice acoustic branch see VAL-17 above, `tests/KNOWN_ISSUES.md`, and B1 in `docs/ROADMAP.md`.** See `docs/DECISIONS.md` for the archived campaign record. |
-| `post_processing` | `'linear_response'` | — | **Removed in Stage 0b; the value stops at startup.** Removed campaign (tag `lr-campaign-archive-2026-10`; see `docs/DECISIONS.md`). Transverse spin response is being rebuilt as B11 (`docs/ROADMAP.md`). |
+| `post_processing` | `'linear_response'` | — | **Removed in Stage 0b; the value stops at startup.** Removed campaign (tag `lr-campaign-archive-2026-10`; see `docs/DECISIONS.md`). Transverse spin response is rebuilt as B11 (`'spin_response'`, `docs/ROADMAP.md`). |
 | `post_processing` | `'pauli_projection'` | — | Campaign-era (LR-02N); ran inside the bravais SCF handoff. **Removed in Stage 0b; the value stops at startup.** |
 
 Routines live in `calculation.f90` except the `bravais`, `buildsurf`,
@@ -256,17 +257,38 @@ The `linear_response` code was removed from `fable_v4b` (tag
 `lr-campaign-archive-2026-10`). Its dispatch stops at startup, and its docs,
 numbers and tests are not references.
 
-The B11 restart (planned, not yet in the tree) adds one module,
-`source/spin_response.f90`, as a k-space post-processing route in
-`calculation_reciprocal.f90` following `post_processing_fermi_surface`. It
-reuses `calculate_eigenpairs_at_kpoints` for both k and k+q,
-`kpoint_workset%shifted`, the reciprocal occupation routine (to be made
-public; never copied), the potential parameters `enu`, `c`, `ppar`, and
-`band_moments`. Its numerical kernels are pure procedures on plain arrays,
-like `lehmann_kernel.f90`. The magnon-energy oracle is the real-space LKAG
-J_ij from `exchange.f90` (see VAL-07 and
+The B11 baseline is in the tree: `source/spin_response.f90` (`spin_response_mod`, about 780
+lines) with its `&spin_response` namelist in
+`source/include_codes/namelists/spin_response.f90`, run by `post_processing =
+'spin_response'` (`post_processing_spin_response` in `calculation_reciprocal.f90`,
+one `case` line in `calculation.f90`). It works on the frozen database state, never an SCF:
+
+- `prepare`: full-BZ mesh (symmetry reduction and time reversal switched off), E_F policy
+  and electron-count check, d amplitudes (coefficient "Mills" and Juelich), moments, spin
+  relabelling when the total moment is negative.
+- `interaction`: U_Juelich from the Goldstone condition on the static chi0 (eta = 0),
+  U_Mills from the d band centres, both printed.
+- `run`: per q, chi0, Dyson solve, tr chi0, tr chi, tr L and the smallest
+  |eig(I + chi0 U)|; peak and crossing for one site (`n/a` for several). `write_state`
+  writes `<prefix>_state.dat`; the q files are `<prefix>_q<NNN>.dat` and
+  `<prefix>_dispersion.dat`.
+- Both endpoints come from `calculate_eigenpairs_at_kpoints` through `eigenpairs_chunk`,
+  which also applies the site-dependent Bloch phase exp(-2 pi i G.tau_i) for a k+q folded
+  by G, needed for cells with several sites (`tests/KNOWN_ISSUES.md`, resolved entry).
+  Occupations and constants come from `reciprocal_mod` (`fermi_dirac_occupation`,
+  `kB_Ry_per_K`, `find_fermi_level_from_eigenvalues`); `enu`, `ppar` and `center_band` from the potential.
+- Kernels are public procedures on plain arrays: `d_amplitudes_coefficient`,
+  `d_amplitudes_juelich`, `accumulate_chi0`, `u_juelich`, `u_mills`, `mills_residual`,
+  `interaction_values`, `solve_dyson`, `spectral_trace`, `pole_estimates`.
+
+The magnon-energy oracle is the real-space LKAG J_ij from `exchange.f90` (see VAL-07 and
 [`EXCHANGE_VALIDATION_MAP.md`](validation/EXCHANGE_VALIDATION_MAP.md)), not
-`exchange_q`.
+`exchange_q`; it is the developer-owned `tests/spin_response/oracles/fe_lswt.dat`, next to
+the analytic references and `tolerances.nml`. The decks are `tests/spin_response/fe_bcc`;
+the frozen 24^3 outputs are `tests/spin_response/baseline/`; the 60^3 scans, scripts and
+results are `tests/validation/spin_response_stage2/` and
+[`VAL-18`](validation/VAL-18_SPIN_RESPONSE_BASELINE.md). Test-side tolerance keys are declared
+once in `tests/unit/spin_response_tolerances.f90`.
 
 ### Lehmann-representation Green's functions
 Implemented (B2): `reciprocal_green.f90` provides `reciprocal%fill_green`
@@ -290,6 +312,9 @@ side belong in the reciprocal family, not in `green.f90`.
 | MKL kernels (`mkl_batch`/`mkl_sparse`) | gated by `requires_cmake_option: ENABLE_MKL_KERNELS` | regression + `Example_bulk_bccFe_nsp2_chebyshev_mkl_batch` in `scf/cases.json` |
 | CUDA plugin | compile-only in CI (`cuda_compile` job); real-GPU consistency via `tests/run_gpu_matrix.sh` | n/a (manual, off-CI) |
 | Standalone Fortran unit tests | `unit` (+ topic labels), built with `-DRUN_UNIT_TESTS=ON` | `tests/unit/test_*.f90`, registered with `add_fortran_unit_test` in `CMakeLists.txt` |
+| Spin response: analytic kernels (A1-A3, E1, E3, E4), bcc-Fe components C1-C4 (incl. C4.3) and S2 | `unit;spin-response;quick` | `tests/unit/test_spin_response_*.f90`; the Fe programs run in the scratch deck made by `SpinResponseFeDriver` (`tests/spin_response/fe_scratch.py`); tolerances from `tests/spin_response/oracles/tolerances.nml` via `tests/unit/spin_response_tolerances.f90` |
+| Spin response: 24^3 Fe reproduction against frozen outputs (`SpinResponseBaselineRepro`) | `regression;spin-response` | `tests/spin_response/baseline_repro.py`, frozen files `tests/spin_response/baseline/` (`--freeze` rewrites them) |
+| Spin response: S3, three-atom bcc Fe cell against the one-atom cell (`SpinResponseS3`) | `unit;spin-response;quick` | `tests/spin_response/s3_supercell.py` |
 | Validation scripts | `validation` | `tests/validation/*.py`, records in `docs/validation/` |
 
 **Adding a case:** see `tests/scf/README.md` / `tests/postproc/README.md` for

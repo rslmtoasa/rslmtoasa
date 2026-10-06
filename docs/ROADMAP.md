@@ -17,5 +17,5 @@ not been re-checked.
 | B8 | k-space CPA + DLM | Not started | [plan](roadmap/B8_cpa_dlm_kspace.md) |
 | B9 | Real-space CPA / DLM | Not started | [plan](roadmap/B9_rs_cpa_dlm.md) |
 | B10 | DMFT self-energy provider API | Not started | [plan](roadmap/B10_dmft_sigma_provider.md) |
-| B11 | Transverse spin response (RPA/ALDA χ, magnons) | Restarted 2026-10 on `fable_v4b`: Juelich-d k-space baseline for bcc Fe, Stage 0. The first campaign (2026-08-09 to 2026-10-03) closed without a validated dispersion | `docs/DECISIONS.md` closing entry; implementation spec held by the developer (not committed) |
+| B11 | Transverse spin response (RPA/ALDA χ, magnons) | Baseline complete on `fable_v4b` (Stage 2): Juelich-d k-space response for bcc Fe, one or several sites per cell; results in [VAL-18](validation/VAL-18_SPIN_RESPONSE_BASELINE.md). The first campaign (2026-08-09 to 2026-10-03) closed without a validated dispersion. Next: Stage 3 extensions | `docs/validation/VAL-18_SPIN_RESPONSE_BASELINE.md`; `docs/DECISIONS.md` closing entry of the first campaign; implementation spec held by the developer (not committed) |
 | B12 | Electron-phonon / electron-magnon couplings | Not started; the e–magnon part depends on B11 | [plan](roadmap/B12_couplings.md) |
