@@ -19,11 +19,13 @@ module spin_response_fe_state
 
    real(rp) :: electron_count_abs, eigen_contract_abs, moment_rel
    real(rp) :: s1_rel, s2_rel, e1_fe_rel, q0_pole_abs
+   real(rp) :: region1_rel, region2_rel, baseline_repro_rel   ! read, used by the Stage 2 comparisons
    real(rp) :: a1_rel, a2_chi_rel, a2_identity_rel, static_eta0_rel, a3_rel, window_moment_rel, &
                dyson_u0_rel, pole_peak_rel, pole_crossing_rel
    namelist /spin_response_tolerances/ a1_rel, a2_chi_rel, a2_identity_rel, static_eta0_rel, a3_rel, &
       window_moment_rel, dyson_u0_rel, pole_peak_rel, pole_crossing_rel, &
-      electron_count_abs, eigen_contract_abs, moment_rel, s1_rel, s2_rel, e1_fe_rel, q0_pole_abs
+      electron_count_abs, eigen_contract_abs, moment_rel, s1_rel, s2_rel, e1_fe_rel, q0_pole_abs, &
+      region1_rel, region2_rel, baseline_repro_rel
    logical :: failed = .false.
 
 contains
