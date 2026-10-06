@@ -18,12 +18,12 @@ module spin_response_fe_state
    implicit none
 
    real(rp) :: electron_count_abs, eigen_contract_abs, moment_rel
-   real(rp) :: s1_rel, e1_fe_rel, q0_pole_abs
+   real(rp) :: s1_rel, s2_rel, e1_fe_rel, q0_pole_abs
    real(rp) :: a1_rel, a2_chi_rel, a2_identity_rel, static_eta0_rel, a3_rel, window_moment_rel, &
                dyson_u0_rel, pole_peak_rel, pole_crossing_rel
    namelist /spin_response_tolerances/ a1_rel, a2_chi_rel, a2_identity_rel, static_eta0_rel, a3_rel, &
       window_moment_rel, dyson_u0_rel, pole_peak_rel, pole_crossing_rel, &
-      electron_count_abs, eigen_contract_abs, moment_rel, s1_rel, e1_fe_rel, q0_pole_abs
+      electron_count_abs, eigen_contract_abs, moment_rel, s1_rel, s2_rel, e1_fe_rel, q0_pole_abs
    logical :: failed = .false.
 
 contains
@@ -38,7 +38,7 @@ contains
       a1_rel = -1.0_rp; a2_chi_rel = -1.0_rp; a2_identity_rel = -1.0_rp; static_eta0_rel = -1.0_rp
       a3_rel = -1.0_rp; window_moment_rel = -1.0_rp; dyson_u0_rel = -1.0_rp; pole_peak_rel = -1.0_rp
       pole_crossing_rel = -1.0_rp; electron_count_abs = -1.0_rp; eigen_contract_abs = -1.0_rp; moment_rel = -1.0_rp
-      s1_rel = -1.0_rp; e1_fe_rel = -1.0_rp; q0_pole_abs = -1.0_rp
+      s1_rel = -1.0_rp; s2_rel = -1.0_rp; e1_fe_rel = -1.0_rp; q0_pole_abs = -1.0_rp
       open (newunit=u, file=trim(oracle_dir)//'/tolerances.nml', status='old', action='read')
       read (u, nml=spin_response_tolerances)
       close (u)

@@ -17,4 +17,8 @@
   s1_rel      = 1.0e-10
   e1_fe_rel   = 1.0e-2
   q0_pole_abs = 1.0e-5
+  s2_rel             = 1.0e-10  ! S2: normal vs spin-reversed Fe [2.0e-13]
+  region1_rel        = 0.35     ! Stage 2, xi <= 0.25: J(r) cutoff spread of the reference
+  region2_rel        = 0.25     ! Stage 2, 0.25 < xi < 0.45: projector spread + reference cutoff spread
+  baseline_repro_rel = 1.0e-8   ! reproduction test vs frozen 24^3 outputs [Debug vs Release 8.4e-12]
 /
