@@ -10,6 +10,9 @@ Read-only to AI sessions (CLAUDE.md, "Verification integrity").
 | `a2_single_band.nml` | A2: self-consistent single band, partially polarized |
 | `a3_doubled_cell.nml` | A3: A2 on a doubled cell, random band phases |
 | `tolerances.nml` | Every tolerance the spin_response tests use |
+| `fe_lswt.dat` | Fe adiabatic magnon spectrum (LKAG J(r) + LSWT), meV; header gives provenance, convention and cutoff sensitivity |
+| `make_fe_lswt.py` | Converts the UppASD AMS output in `lswt_inputs/` into `fe_lswt.dat` |
+| `lswt_inputs/` | Raw inputs: q path, AMS output, J(r) shells (mRy) |
 
 Regenerate with `python3 make_references.py tests/spin_response/oracles`
 from the repository root. All self-checks must report `ok`. Commit the
