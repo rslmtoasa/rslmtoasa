@@ -766,6 +766,12 @@ if (RUN_UNIT_TESTS)
     set_tests_properties(${_t} PROPERTIES LABELS "unit;spin-response;quick"
       FIXTURES_REQUIRED SpinResponseFeScratch RESOURCE_LOCK SpinResponseFeScratch)
   endforeach()
+  # Frozen 24^3 Fe response (tests/spin_response/baseline) rerun in its own scratch directory.
+  add_test(NAME SpinResponseBaselineRepro
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/baseline_repro.py" "${TestBinary}"
+      "${TestDIR}/spin_response/fe_bcc" "${CMAKE_BINARY_DIR}/Testing/spin_response/baseline"
+      "${TestDIR}/spin_response/baseline" "${TestDIR}/spin_response/oracles/tolerances.nml")
+  set_tests_properties(SpinResponseBaselineRepro PROPERTIES LABELS "regression;spin-response")
   add_fortran_unit_test(UnitKpmTransport ${TestDIR}/unit/test_kpm_transport.f90)
   set_tests_properties(UnitKpmTransport PROPERTIES
     LABELS "unit;conductivity;transport;kpm;spin_transport;orbital_transport")
