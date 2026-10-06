@@ -14,7 +14,7 @@ program test_spin_response_c3
    use energy_mod, only: energy
    use hamiltonian_mod, only: hamiltonian
    use reciprocal_mod, only: reciprocal, fermi_dirac_occupation, kB_Ry_per_K
-   use spin_response_mod, only: spin_response, d_amplitudes_coefficient, accumulate_chi0
+   use spin_response_mod, only: spin_response, d_amplitudes_coefficient, d_amplitudes_juelich, accumulate_chi0, u_juelich
    use spin_response_fe_state
    implicit none
 
@@ -37,6 +37,7 @@ program test_spin_response_c3
    call require('s1_rel', s1_rel)
    call require('e1_fe_rel', e1_fe_rel)
    call require('q0_pole_abs', q0_pole_abs)
+   call require('static_u_rel', static_u_rel)
    call build_fe_state(.false., control_obj, lattice_obj, charge_obj, energy_obj, ham, 'input_driver.nml')
    rec = reciprocal(ham)
    rec%fermi_level = energy_obj%fermi
@@ -83,6 +84,11 @@ program test_spin_response_c3
    call check('C3.5 non-vacuity: chi0(q) differs from chi0(0) by more than 1e-3 relative', &
               maxval(abs(c_a(1, 1, :) - c_b(1, 1, :)))/maxval(abs(c_b(1, 1, :))) > 1.0e-3_rp)
 
+   ! C4.3: U_Juelich of interaction() vs u_juelich on the eta = 0 static chi0(q = 0) assembled with accumulate_chi0 from the
+   ! mesh eigenpairs (rec_ref), Juelich amplitudes, moment from prepare. Catches a static value taken at a finite eta.
+   call report('C4.3 U_Juelich vs static mesh-eigenpair reference, relative', abs(sr%uj(1) - static_u_reference())/abs(sr%uj(1)), &
+               static_u_rel)
+
    ! C4: U values and the Mills residual on Fe, printed, not graded.
    write (*, '(a,f10.7,a,f10.7,a)') 'C4 U_Juelich ', sr%uj(1), ' Ry, U_Mills ', sr%um(1), ' Ry'
    write (*, '(a,f10.7,a,f10.7,a)') 'C4 Mills residual delta ', sr%delta_mills(1), ', implied gap delta*Delta_d ', &
@@ -92,6 +98,38 @@ program test_spin_response_c3
    call finish()
 
 contains
+
+   !> u_juelich from chi0(0, 0) at eta = 0 (divided-difference static branch) on the pre-campaign mesh eigenpairs.
+   function static_u_reference() result(u_ref)
+      real(rp) :: u_ref
+
+      integer :: nk, ik, n, s
+      real(rp) :: kt, enu(1, 2), p(1, 2), um(1)
+      real(rp), allocatable :: e(:, :), f(:, :)
+      complex(rp), allocatable :: a(:, :, :, :, :)
+      complex(rp) :: chi0(1, 1, 1)
+
+      call check('C4.3 reference assumes no spin relabelling', .not. sr%spin_swapped)
+      kt = rec_ref%temperature*kB_Ry_per_K
+      nk = rec_ref%k_workset%nk_local
+      do s = 1, 2
+         enu(1, s) = lattice_obj%symbolic_atoms(lattice_obj%nbulk + 1)%potential%enu(2, s)
+         p(1, s) = 1.0_rp/lattice_obj%symbolic_atoms(lattice_obj%nbulk + 1)%potential%ppar(2, s)**2
+      end do
+      e = transpose(rec_ref%eigenvalues)
+      allocate (f(nk, size(e, 2)))
+      do ik = 1, nk
+         do n = 1, size(e, 2)
+            f(ik, n) = fermi_dirac_occupation(e(ik, n), rec_ref%fermi_level, kt)
+         end do
+      end do
+      call d_amplitudes_coefficient(rec_ref%eigenvectors, 1, a)
+      call d_amplitudes_juelich(a, e, rec_ref%fermi_level, enu, p)
+      chi0 = (0.0_rp, 0.0_rp)
+      call accumulate_chi0(kt, rec_ref%k_workset%weights, e, f, a, e, f, a, [0.0_rp], 0.0_rp, chi0)
+      call u_juelich(real(chi0(:, :, 1), rp), sr%moment, um)
+      u_ref = um(1)
+   end function static_u_reference
 
    !> chi0(q, omega) at eta = 0.02 from the pre-campaign mesh eigenpairs (rec_ref), Mills amplitudes, no spin swap.
    subroutine mesh_reference(qq, chi0)

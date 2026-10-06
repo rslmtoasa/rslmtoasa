@@ -13,11 +13,11 @@ module spin_response_tolerances_mod
    real(rp) :: pole_peak_rel = -1.0_rp, pole_crossing_rel = -1.0_rp
    real(rp) :: electron_count_abs = -1.0_rp, eigen_contract_abs = -1.0_rp, moment_rel = -1.0_rp
    real(rp) :: s1_rel = -1.0_rp, s2_rel = -1.0_rp, e1_fe_rel = -1.0_rp, q0_pole_abs = -1.0_rp
-   real(rp) :: region1_rel = -1.0_rp, region2_rel = -1.0_rp, baseline_repro_rel = -1.0_rp
+   real(rp) :: region1_rel = -1.0_rp, region2_rel = -1.0_rp, baseline_repro_rel = -1.0_rp, static_u_rel = -1.0_rp
    namelist /spin_response_tolerances/ a1_rel, a2_chi_rel, a2_identity_rel, static_eta0_rel, a3_rel, &
       window_moment_rel, dyson_u0_rel, pole_peak_rel, pole_crossing_rel, &
       electron_count_abs, eigen_contract_abs, moment_rel, s1_rel, s2_rel, e1_fe_rel, q0_pole_abs, &
-      region1_rel, region2_rel, baseline_repro_rel
+      region1_rel, region2_rel, baseline_repro_rel, static_u_rel
 
 contains
 
