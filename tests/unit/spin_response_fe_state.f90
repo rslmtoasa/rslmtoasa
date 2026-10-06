@@ -15,17 +15,9 @@ module spin_response_fe_state
    use energy_mod, only: energy
    use hamiltonian_mod, only: hamiltonian
    use reciprocal_mod, only: reciprocal
+   use spin_response_tolerances_mod
    implicit none
 
-   real(rp) :: electron_count_abs, eigen_contract_abs, moment_rel
-   real(rp) :: s1_rel, s2_rel, e1_fe_rel, q0_pole_abs
-   real(rp) :: region1_rel, region2_rel, baseline_repro_rel   ! read, used by the Stage 2 comparisons
-   real(rp) :: a1_rel, a2_chi_rel, a2_identity_rel, static_eta0_rel, a3_rel, window_moment_rel, &
-               dyson_u0_rel, pole_peak_rel, pole_crossing_rel
-   namelist /spin_response_tolerances/ a1_rel, a2_chi_rel, a2_identity_rel, static_eta0_rel, a3_rel, &
-      window_moment_rel, dyson_u0_rel, pole_peak_rel, pole_crossing_rel, &
-      electron_count_abs, eigen_contract_abs, moment_rel, s1_rel, s2_rel, e1_fe_rel, q0_pole_abs, &
-      region1_rel, region2_rel, baseline_repro_rel
    logical :: failed = .false.
 
 contains
@@ -33,32 +25,14 @@ contains
    subroutine read_tolerances(oracle_dir)
       character(*), intent(in) :: oracle_dir
 
-      integer :: u
-
       g_parallel_context = parallel_context()
       g_timer = timer()
-      a1_rel = -1.0_rp; a2_chi_rel = -1.0_rp; a2_identity_rel = -1.0_rp; static_eta0_rel = -1.0_rp
-      a3_rel = -1.0_rp; window_moment_rel = -1.0_rp; dyson_u0_rel = -1.0_rp; pole_peak_rel = -1.0_rp
-      pole_crossing_rel = -1.0_rp; electron_count_abs = -1.0_rp; eigen_contract_abs = -1.0_rp; moment_rel = -1.0_rp
-      s1_rel = -1.0_rp; s2_rel = -1.0_rp; e1_fe_rel = -1.0_rp; q0_pole_abs = -1.0_rp
-      open (newunit=u, file=trim(oracle_dir)//'/tolerances.nml', status='old', action='read')
-      read (u, nml=spin_response_tolerances)
-      close (u)
+      call read_tolerance_file(oracle_dir)
       call require('electron_count_abs', electron_count_abs)
       call require('eigen_contract_abs', eigen_contract_abs)
       call require('moment_rel', moment_rel)
       write (*, '(a)') 'test | measured | tolerance'
    end subroutine read_tolerances
-
-   subroutine require(key, tol)
-      character(*), intent(in) :: key
-      real(rp), intent(in) :: tol
-
-      if (.not. tol > 0.0_rp) then
-         write (*, '(a)') 'tolerances.nml: key '//key//' missing or <= 0'
-         error stop 1
-      end if
-   end subroutine require
 
    subroutine build_fe_state(reversed, control_obj, lattice_obj, charge_obj, energy_obj, hamiltonian_obj, fname)
       logical, intent(in) :: reversed

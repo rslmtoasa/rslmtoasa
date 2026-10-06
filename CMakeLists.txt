@@ -740,8 +740,11 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitGammaSupercell ${TestDIR}/unit/test_gamma_supercell.f90)
   add_fortran_unit_test(UnitBsfSumRule ${TestDIR}/unit/test_bsf_sumrule.f90)
   add_fortran_unit_test(UnitMomentKernel ${TestDIR}/unit/test_moment_kernel.f90)
+  add_library(SpinResponseTolerances STATIC ${TestDIR}/unit/spin_response_tolerances.f90)
+  target_link_libraries(SpinResponseTolerances ${COMMON_LIBRARIES})
   add_fortran_unit_test(UnitSpinResponseKernels ${TestDIR}/unit/test_spin_response_kernels.f90
     ${TestDIR}/spin_response/oracles)
+  target_link_libraries(UnitSpinResponseKernels SpinResponseTolerances)
   set_tests_properties(UnitSpinResponseKernels PROPERTIES LABELS "unit;spin-response;quick")
   # C1/C2 on bcc Fe: a scratch copy of tests/spin_response/fe_bcc, where the executable runs
   # post_processing='spin_response' first; the unit programs then run in that directory.
@@ -752,7 +755,7 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(SpinResponseFeDriver PROPERTIES
     LABELS "spin-response;quick" FIXTURES_SETUP SpinResponseFeScratch RESOURCE_LOCK SpinResponseFeScratch)
   add_library(SpinResponseFeState STATIC ${TestDIR}/unit/spin_response_fe_state.f90)
-  target_link_libraries(SpinResponseFeState ${COMMON_LIBRARIES})
+  target_link_libraries(SpinResponseFeState ${COMMON_LIBRARIES} SpinResponseTolerances)
   add_fortran_component_unit_test(UnitSpinResponseC1 ${TestDIR}/unit/test_spin_response_c1.f90)
   add_fortran_component_unit_test(UnitSpinResponseC2 ${TestDIR}/unit/test_spin_response_c2.f90)
   add_fortran_component_unit_test(UnitSpinResponseC3 ${TestDIR}/unit/test_spin_response_c3.f90)
