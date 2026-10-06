@@ -769,6 +769,12 @@ if (RUN_UNIT_TESTS)
     set_tests_properties(${_t} PROPERTIES LABELS "unit;spin-response;quick"
       FIXTURES_REQUIRED SpinResponseFeScratch RESOURCE_LOCK SpinResponseFeScratch)
   endforeach()
+  # S3: the three-atom bcc Fe cell against the one-atom cell, two scratch decks run by the script.
+  add_test(NAME SpinResponseS3
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/s3_supercell.py" "${TestBinary}"
+      "${TestDIR}/spin_response/fe_bcc" "${CMAKE_BINARY_DIR}/Testing/spin_response/s3"
+      "${TestDIR}/spin_response/oracles/tolerances.nml")
+  set_tests_properties(SpinResponseS3 PROPERTIES LABELS "unit;spin-response;quick")
   # Frozen 24^3 Fe response (tests/spin_response/baseline) rerun in its own scratch directory.
   add_test(NAME SpinResponseBaselineRepro
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/baseline_repro.py" "${TestBinary}"
