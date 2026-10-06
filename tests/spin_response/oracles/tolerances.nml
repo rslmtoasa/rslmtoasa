@@ -22,4 +22,5 @@
   region2_rel        = 0.25     ! Stage 2, 0.25 < xi < 0.45: projector spread + reference cutoff spread
   baseline_repro_rel = 1.0e-8   ! reproduction test vs frozen 24^3 outputs [Debug vs Release 8.4e-12]
   static_u_rel = 1.0e-10   ! C4.3: interaction() U_Juelich vs eta = 0 static reference [0.0]
+  s3_rel = 1.0e-9   ! S3: three-atom supercell vs folded one-site pair [5.7e-13]
 /
