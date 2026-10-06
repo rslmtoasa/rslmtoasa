@@ -1667,3 +1667,21 @@ campaign remain outside the established scope.
   `reciprocal_mod` now also exports one public copy (used by `spin_response`); the
   local ones were left in place and shadow it. Proposal: one definition, remove the
   nine copies (about 10 lines, no value change).
+
+## RESOLVED — spin_response, multi-site cells: k+q folded by a reciprocal vector needs a site-dependent Bloch phase — 2026-10-06
+
+- **Verified (before the fix):** with `run` generalised to nsite > 1, a two-atom sc cell of bcc Fe
+  (6x6x6 mesh) and the one-atom cell in the basis (1,0,0), (0,1,0), (1/2,1/2,1/2) (6x6x12 mesh) gave the
+  same E_F (7e-12 apart), the same U_Juelich on both sites (1.3e-12 relative) and
+  tr chi0^sc(q) = chi0(q) + chi0(q+Q), Q = (1,0,0), to 2e-11 at q = (0, 1/3, 0) and (0, 1/6, 0), but tr chi and
+  min |eig(I + chi0 U)| differed by 2.1 and 0.17 (xi = 1/3), 0.65 and 0.10 (xi = 1/6). At q = 0 (no wrap) all three
+  agreed (tr chi 4e-10). One site is unaffected.
+- **Cause (read in the code):** `kpoint_workset%shifted` and the assembly (`kfold` in `reciprocal_fourier.f90`) wrap k+q by
+  an integer vector G, while H(k) takes the phases exp(i 2 pi k.(r_j - r_i)) from the neighbour minus centre vectors
+  (`clusba`, `angle`/`phase` lines, block h(i, j) += ee*phase). For several sites H(k_folded) = D H(k+q) D^+,
+  D = diag(exp(2 pi i G.tau_i)), so the eigenvectors at k+q lacked the factor exp(-2 pi i G.tau_i).
+- **Fix:** `spin_response%eigenpairs_chunk` multiplies site i by exp(-2 pi i G.(tau_i - tau_1)), G = k + q - k_folded
+  (site 1 is the reference, so one site is bit-identical). Measured after the fix: two-atom cell tr chi 2.6e-9 and
+  min |eig| 5.6e-10 at xi = 1/3; three-atom cell (S3) at most 5.7e-13 over tr chi0, tr chi, min |eig| and U per site.
+- **Note:** with two atoms every site offset is half a lattice vector, so the phase is +-1 and its sign cannot be
+  tested; S3 uses three atoms for that reason.

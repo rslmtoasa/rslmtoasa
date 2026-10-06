@@ -21,7 +21,7 @@
 !------------------------------------------------------------------------------
 module spin_response_mod
    use precision_mod, only: rp
-   use math_mod, only: pi, i_unit
+   use math_mod, only: pi, i_unit, inverse_3x3
    use basis_mod, only: nb, spin_off
    use lattice_mod, only: lattice
    use reciprocal_mod, only: reciprocal, fermi_dirac_occupation, kB_Ry_per_K
@@ -79,11 +79,14 @@ module spin_response_mod
       real(rp), allocatable :: moment(:)
       !> Juelich and Mills U (Ry), Mills Goldstone residual, and the d exchange splitting C_dn - C_up (Ry), per site.
       real(rp), allocatable :: uj(:), um(:), delta_mills(:), gap_d(:)
+      !> Position of each site relative to site 1, in direct (lattice) coordinates, shape (3, nsite).
+      real(rp), allocatable :: site_offset(:, :)
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
       procedure :: prepare
       procedure :: eigenpairs_chunk
+      procedure, private :: set_site_offsets
       procedure :: bare_response
       procedure :: interaction
       procedure :: run
@@ -199,7 +202,12 @@ contains
       end if
    end subroutine build_from_file
 
-   !> @brief Eigenpairs at k+q for mesh points first:last, from the reciprocal arbitrary-k service.
+   !> @brief Eigenpairs at k+q for mesh points first:last, from the reciprocal arbitrary-k service, in the gauge of H(k+q).
+   !> @details H(k) is assembled at the folded k with phases exp(i 2 pi k.(r_j - r_i)), r_j - r_i the neighbour minus centre
+   !>          vector in direct coordinates (reciprocal_fourier.f90, the `angle` and `phase` lines and the block placement
+   !>          h(site i, site j) += ee*phase; neighbour vectors from clusba). Folding k+q by an integer vector G therefore
+   !>          gives H(k_folded) = D H(k+q) D^+ with D = diag(exp(2 pi i G.tau_i)), and the eigenvector at k+q is
+   !>          exp(-2 pi i G.tau_i) times the one returned. Site 1 is the reference, so one site is left untouched.
    !> @param[in]  q_direct  q in fractional coordinates of b1, b2, b3.
    !> @param[out] e         Eigenvalues (Ry), shape (nmat, last-first+1).
    !> @param[out] v         Eigenvectors, shape (nmat, nmat, last-first+1).
@@ -211,10 +219,36 @@ contains
       complex(rp), allocatable, intent(out) :: v(:, :, :)
 
       type(kpoint_workset) :: kq
+      real(rp), allocatable :: k_folded(:, :)
+      real(rp) :: g(3)
+      integer :: ik, i
 
       kq = this%reciprocal%k_workset%shifted(q_direct)
-      call this%reciprocal%calculate_eigenpairs_at_kpoints(kq%points(:, first:last), e, v)
+      call this%reciprocal%calculate_eigenpairs_at_kpoints(kq%points(:, first:last), e, v, k_folded)
+      do ik = 1, last - first + 1
+         g = real(nint(this%reciprocal%k_workset%points(:, first + ik - 1) + q_direct - k_folded(:, ik)), rp)
+         do i = 2, this%lattice%nrec
+            v((i - 1)*nb + 1:i*nb, :, ik) = v((i - 1)*nb + 1:i*nb, :, ik)* &
+                                            exp(-2.0_rp*pi*i_unit*dot_product(g, this%site_offset(:, i)))
+         end do
+      end do
    end subroutine eigenpairs_chunk
+
+   !> @brief Site positions relative to site 1 in direct coordinates, from the cluster positions the Hamiltonian uses.
+   subroutine set_site_offsets(this)
+      class(spin_response), intent(inout) :: this
+
+      integer :: i
+      real(rp) :: cell_inverse(3, 3)
+
+      if (allocated(this%site_offset)) deallocate (this%site_offset)
+      allocate (this%site_offset(3, this%lattice%nrec))
+      cell_inverse = merge(this%lattice%a_cart_inv, inverse_3x3(this%lattice%a), this%lattice%a_cart_inv_ready)
+      do i = 1, this%lattice%nrec
+         this%site_offset(:, i) = matmul(cell_inverse, this%lattice%cr(:, this%lattice%atlist(this%lattice%ib(i))) &
+                                         - this%lattice%cr(:, this%lattice%atlist(this%lattice%ib(1))))
+      end do
+   end subroutine set_site_offsets
 
    !> @brief Frozen-state handoff (C1) and d occupations and moments (C2).
    !> @details Pass 1 diagonalizes the full-BZ mesh in chunks, keeps the eigenvalues and fixes E_F
@@ -238,6 +272,7 @@ contains
       rec%use_time_reversal = .false.
       call rec%generate_mp_mesh()
       nk = rec%k_workset%nk_local
+      call this%set_site_offsets()
       call g_logger%info('spin_response%prepare: full-BZ mesh '//int2str(rec%nk_mesh(1))//'x'//int2str(rec%nk_mesh(2))// &
                          'x'//int2str(rec%nk_mesh(3))//', symmetry reduction and time reversal off'// &
                          merge(' (overriding &reciprocal)', '                         ', this%reduction_overridden), &
@@ -393,32 +428,35 @@ contains
    subroutine run(this)
       class(spin_response), intent(inout) :: this
 
-      integer :: iq, iw, nq, nw, funit, fdisp
-      real(rp) :: u(1), peak, crossing, qcart(3)
-      real(rp), allocatable :: trl(:)
+      integer :: iq, iw, nq, nw, ns, funit, fdisp
+      real(rp) :: peak, crossing, qcart(3)
+      real(rp), allocatable :: u(:), trl(:)
       complex(rp), allocatable :: chi0(:, :, :), chi(:, :, :)
       logical :: has_peak, has_crossing
       character(len=256) :: fname
       character(len=24) :: peak_text, crossing_text
 
-      if (this%lattice%nrec /= 1) call g_logger%fatal('spin_response%run supports one site per cell', __FILE__, __LINE__)
+      ns = this%lattice%nrec
       u = merge(this%um, this%uj, trim(this%method) == 'mills')
       nq = size(this%q_direct, 2)
       nw = size(this%omega)
-      allocate (chi0(1, 1, nw), chi(1, 1, nw))
+      allocate (chi0(ns, ns, nw), chi(ns, ns, nw))
       open (newunit=fdisp, file=trim(this%output_prefix)//'_dispersion.dat', action='write', status='replace')
       write (fdisp, '(a)') '# q_direct(3) q_cartesian(3, units 2pi/a) |q|(1/Angstrom) peak_omega(Ry) crossing_omega(Ry)'
       do iq = 1, nq
          call this%bare_response(this%q_direct(:, iq), this%omega, this%eta, trim(this%method) == 'juelich', chi0)
          call solve_dyson(chi0, u, chi)
          trl = spectral_trace(chi)
-         call pole_estimates(this%omega, trl, chi0(1, 1, :), u(1), peak, crossing, has_peak, has_crossing)
+         has_peak = .false.
+         has_crossing = .false.
+         if (ns == 1) call pole_estimates(this%omega, trl, chi0(1, 1, :), u(1), peak, crossing, has_peak, has_crossing)
 
          write (fname, '(a,a,i3.3,a)') trim(this%output_prefix), '_q', iq, '.dat'
          open (newunit=funit, file=trim(fname), action='write', status='replace')
          write (funit, '(a)') '# omega(Ry) re_tr_chi0(1/Ry) im_tr_chi0(1/Ry) re_tr_chi(1/Ry) im_tr_chi(1/Ry) tr_L(1/Ry) min_abs_eig(I+chi0*U)'
          do iw = 1, nw
-            write (funit, '(7es22.14)') this%omega(iw), chi0(1, 1, iw), chi(1, 1, iw), trl(iw), abs(1.0_rp + chi0(1, 1, iw)*u(1))
+            write (funit, '(7es22.14)') this%omega(iw), sum_diagonal(chi0(:, :, iw)), sum_diagonal(chi(:, :, iw)), trl(iw), &
+               min_abs_eig(chi0(:, :, iw), u)
          end do
          close (funit)
 
@@ -628,6 +666,38 @@ contains
       um = u_mills(c_up, c_dn, m_mills)
       delta_mills = mills_residual(chi0s_mills, um, m_mills)
    end subroutine interaction_values
+
+   !> @brief Trace of a square matrix.
+   pure function sum_diagonal(a) result(t)
+      complex(rp), intent(in) :: a(:, :)
+      complex(rp) :: t
+      integer :: i
+
+      t = (0.0_rp, 0.0_rp)
+      do i = 1, size(a, 1)
+         t = t + a(i, i)
+      end do
+   end function sum_diagonal
+
+   !> @brief Smallest |eigenvalue| of I + chi0 U at one omega (gauge invariant for several sites).
+   function min_abs_eig(chi0, u) result(m)
+      complex(rp), intent(in) :: chi0(:, :)
+      real(rp), intent(in) :: u(:)
+      real(rp) :: m
+
+      integer :: n, j, info
+      complex(rp) :: a(size(u), size(u)), w(size(u)), vl(1, 1), vr(1, 1), work(4*size(u))
+      real(rp) :: rwork(2*size(u))
+
+      n = size(u)
+      do j = 1, n
+         a(:, j) = chi0(:, j)*u(j)
+         a(j, j) = a(j, j) + 1.0_rp
+      end do
+      call zgeev('N', 'N', n, a, n, w, vl, 1, vr, 1, work, size(work), rwork, info)
+      if (info /= 0) error stop 'min_abs_eig: zgeev failed'
+      m = minval(abs(w))
+   end function min_abs_eig
 
    !> @brief Solve (I + chi0 U) chi = chi0 at each omega by LU, with U diagonal in sites.
    !> @details Never call at eta = 0 for q = 0: the Goldstone condition makes I + chi0 U singular there.
