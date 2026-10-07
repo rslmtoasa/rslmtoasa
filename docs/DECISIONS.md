@@ -231,3 +231,7 @@ validated physics, and do not use these records as references for new work.
 
 - 2026-10-03 — LR-METHOD-05R: accepted SR ALSDA kernel repaired; BLOCKED — response-representation closure not established (Fe raw Ward relative residual ≈0.243; no correction).
 - 2026-10-03 — LR campaign closed (`fable_v4`, 2026-08-09 to 2026-10-03, ~175 source commits): no validated magnon dispersion. External audits of the earlier `tddft_*` implementation found self-referential gates, a moment-sign normalization error and Fermi-level contract violations; the `linear_response` rewrite ended at LR-METHOD-05R BLOCKED. Code archived at `lr-campaign-archive-2026-10`; B11 restarted on `fable_v4b`.
+
+## Spin response restart (B11), 2026
+
+- 2026-10-06 — B11 restart closed at the end of Stage 2 (`fable_v4b`, tag `spin-response-baseline-v1`): bcc-Fe Juelich-d k-space transverse spin response, verified by the analytic suite (A1–A3), contract tests (C1–C4), S2, S3 (three-atom cell, max difference 5.7e-13) and a 24³ reproduction snapshot; mutations 1–19 each fail at least one test. 60³ scans against LKAG + LSWT in `docs/validation/VAL-18_SPIN_RESPONSE_BASELINE.md`: peak deviations −0.284 to +0.134 for ξ ≤ 0.4333, LSWT inside the half-maximum span at ξ = 0.4667 and 0.5, projector sensitivity −16.4 %; spin-wave stiffness not yet established. A folded k+q needs a site-dependent Bloch phase for several sites (`tests/KNOWN_ISSUES.md`, resolved). Scripts in `tests/validation/spin_response_stage2/`.
