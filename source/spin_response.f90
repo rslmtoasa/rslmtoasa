@@ -25,7 +25,6 @@ module spin_response_mod
    use basis_mod, only: nb, spin_off
    use lattice_mod, only: lattice
    use reciprocal_mod, only: reciprocal, fermi_dirac_occupation, kB_Ry_per_K
-   use kpoint_workset_mod, only: kpoint_workset
    use logger_mod, only: g_logger
    use string_mod, only: int2str, real2str
    implicit none
@@ -219,13 +218,14 @@ contains
       real(rp), allocatable, intent(out) :: e(:, :)
       complex(rp), allocatable, intent(out) :: v(:, :, :)
 
-      type(kpoint_workset) :: kq
-      real(rp), allocatable :: k_folded(:, :)
+      real(rp), allocatable :: k_folded(:, :), kq(:, :)
       real(rp) :: g(3)
       integer :: ik, i
 
-      kq = this%reciprocal%k_workset%shifted(q_direct)
-      call this%reciprocal%calculate_eigenpairs_at_kpoints(kq%points(:, first:last), e, v, k_folded)
+      ! k+q is folded for this chunk only: kpoint_workset%shifted copies the whole workset on every call (quadratic in nk).
+      kq = this%reciprocal%k_workset%points(:, first:last) + spread(q_direct, dim=2, ncopies=last - first + 1)
+      kq = kq - floor(kq + 0.5_rp)
+      call this%reciprocal%calculate_eigenpairs_at_kpoints(kq, e, v, k_folded)
       do ik = 1, last - first + 1
          g = real(nint(this%reciprocal%k_workset%points(:, first + ik - 1) + q_direct - k_folded(:, ik)), rp)
          do i = 2, this%lattice%nrec
