@@ -22,6 +22,19 @@ eta = 5.0e-4
 /
 """
 
+# The same two q (q = 0 and xi = 1/6) as the static value: one omega = 0, eta = 0, files static_q001.dat, static_q002.dat.
+STATIC = """
+&spin_response
+output_prefix = 'static'
+n_q = 2
+q_list(:, 1) = 0.0, 0.0, 0.0
+q_list(:, 2) = -0.083333333333333333, 0.083333333333333333, 0.083333333333333333
+omega_min = 0.0
+n_omega = 1
+eta = 0.0
+/
+"""
+
 binary, deck, scratch = sys.argv[1:4]
 shutil.rmtree(scratch, ignore_errors=True)
 shutil.copytree(deck, scratch)
@@ -32,4 +45,8 @@ if old not in text:
 nml = pathlib.Path(scratch, "input_driver.nml")
 nml.write_text(text.replace(old, "pre_processing = 'none'\npost_processing = 'spin_response'") + SPIN_RESPONSE)
 subprocess.run([binary, nml.name], cwd=scratch, check=True, stdout=open(pathlib.Path(scratch, "driver.log"), "w"),
+               stderr=subprocess.STDOUT)
+static = pathlib.Path(scratch, "input_static.nml")
+static.write_text(text.replace(old, "pre_processing = 'none'\npost_processing = 'spin_response'") + STATIC)
+subprocess.run([binary, static.name], cwd=scratch, check=True, stdout=open(pathlib.Path(scratch, "static.log"), "w"),
                stderr=subprocess.STDOUT)

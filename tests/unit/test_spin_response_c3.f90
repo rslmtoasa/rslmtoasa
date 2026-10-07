@@ -95,6 +95,7 @@ program test_spin_response_c3
       sr%delta_mills(1)*sr%gap_d(1), ' Ry'
 
    call driver_files()
+   call static_files()
    call finish()
 
 contains
@@ -103,11 +104,22 @@ contains
    function static_u_reference() result(u_ref)
       real(rp) :: u_ref
 
-      integer :: nk, ik, n, s
-      real(rp) :: kt, enu(1, 2), p(1, 2), um(1)
-      real(rp), allocatable :: e(:, :), f(:, :)
-      complex(rp), allocatable :: a(:, :, :, :, :)
-      complex(rp) :: chi0(1, 1, 1)
+      real(rp) :: um(1)
+
+      call u_juelich(real(static_chi0([0.0_rp, 0.0_rp, 0.0_rp]), rp), sr%moment, um)
+      u_ref = um(1)
+   end function static_u_reference
+
+   !> chi0(q, 0) at eta = 0 from the pre-campaign mesh eigenpairs (rec_ref), Juelich amplitudes, k+q at the mesh index.
+   function static_chi0(qq) result(chi0)
+      real(rp), intent(in) :: qq(3)
+      complex(rp) :: chi0(1, 1)
+
+      integer :: nk, ik, n, s, m
+      real(rp) :: kt, enu(1, 2), p(1, 2)
+      real(rp), allocatable :: e(:, :), f(:, :), e_kq(:, :), f_kq(:, :)
+      complex(rp), allocatable :: a(:, :, :, :, :), a_kq(:, :, :, :, :)
+      complex(rp) :: c(1, 1, 1)
 
       call check('C4.3 reference assumes no spin relabelling', .not. sr%spin_swapped)
       kt = rec_ref%temperature*kB_Ry_per_K
@@ -117,7 +129,7 @@ contains
          p(1, s) = 1.0_rp/lattice_obj%symbolic_atoms(lattice_obj%nbulk + 1)%potential%ppar(2, s)**2
       end do
       e = transpose(rec_ref%eigenvalues)
-      allocate (f(nk, size(e, 2)))
+      allocate (f(nk, size(e, 2)), e_kq(nk, size(e, 2)), f_kq(nk, size(e, 2)))
       do ik = 1, nk
          do n = 1, size(e, 2)
             f(ik, n) = fermi_dirac_occupation(e(ik, n), rec_ref%fermi_level, kt)
@@ -125,11 +137,39 @@ contains
       end do
       call d_amplitudes_coefficient(rec_ref%eigenvectors, 1, a)
       call d_amplitudes_juelich(a, e, rec_ref%fermi_level, enu, p)
-      chi0 = (0.0_rp, 0.0_rp)
-      call accumulate_chi0(kt, rec_ref%k_workset%weights, e, f, a, e, f, a, [0.0_rp], 0.0_rp, chi0)
-      call u_juelich(real(chi0(:, :, 1), rp), sr%moment, um)
-      u_ref = um(1)
-   end function static_u_reference
+      allocate (a_kq, mold=a)
+      do ik = 1, nk
+         m = mesh_index(rec_ref%k_workset%points, rec_ref%k_workset%points(:, ik) + qq)
+         e_kq(ik, :) = e(m, :)
+         f_kq(ik, :) = f(m, :)
+         a_kq(ik, :, :, :, :) = a(m, :, :, :, :)
+      end do
+      c = (0.0_rp, 0.0_rp)
+      call accumulate_chi0(kt, rec_ref%k_workset%weights, e, f, a, e_kq, f_kq, a_kq, [0.0_rp], 0.0_rp, c)
+      chi0 = c(:, :, 1)
+   end function static_chi0
+
+   !> Run-level static value: the driver's n_omega = 1, omega = 0, eta = 0 files for q #1 (q = 0) and q #2 against static_chi0.
+   subroutine static_files()
+      integer :: u, iq
+      real(rp) :: row(3)
+      complex(rp) :: ref(1, 1), from_file(2)
+      character(len=256) :: fname
+
+      do iq = 1, 2
+         write (fname, '(a,i3.3,a)') 'static_q', iq, '.dat'
+         open (newunit=u, file=trim(fname), status='old', action='read')
+         read (u, *)
+         read (u, *) row
+         close (u)
+         from_file(iq) = cmplx(row(2), row(3), rp)
+         ref = static_chi0(sr%q_direct(:, iq))
+         call report('C4.3 run-level static tr chi0 (eta = 0) vs mesh reference, q #'//achar(48 + iq), &
+                     abs(from_file(iq) - ref(1, 1))/abs(ref(1, 1)), static_u_rel)
+      end do
+      call check('C4.3 non-vacuity: static chi0(q #2) differs from chi0(0) by more than 1e-3 relative', &
+                 abs(from_file(2) - from_file(1))/abs(from_file(1)) > 1.0e-3_rp)
+   end subroutine static_files
 
    !> chi0(q, omega) at eta = 0.02 from the pre-campaign mesh eigenpairs (rec_ref), Mills amplitudes, no spin swap.
    subroutine mesh_reference(qq, chi0)

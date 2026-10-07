@@ -170,8 +170,9 @@ contains
       if (trim(method) /= 'juelich' .and. trim(method) /= 'mills') then
          call g_logger%fatal('spin_response method must be juelich or mills, got '//trim(method), __FILE__, __LINE__)
       end if
-      if (n_omega < 2 .or. omega_max <= omega_min .or. eta < 0.0_rp) then
-         call g_logger%fatal('spin_response needs n_omega >= 2, omega_max > omega_min and eta >= 0', __FILE__, __LINE__)
+      if (n_omega < 1 .or. (n_omega > 1 .and. omega_max <= omega_min) .or. eta < 0.0_rp) then
+         call g_logger%fatal('spin_response needs n_omega >= 1, omega_max > omega_min for n_omega > 1, and eta >= 0', &
+                             __FILE__, __LINE__)
       end if
       this%method = method
       this%output_prefix = output_prefix
@@ -179,7 +180,7 @@ contains
       this%omega_min = omega_min
       this%omega_max = omega_max
       this%eta = eta
-      this%omega = [(omega_min + (i - 1)*(omega_max - omega_min)/real(n_omega - 1, rp), i=1, n_omega)]
+      this%omega = [(omega_min + (i - 1)*(omega_max - omega_min)/real(max(n_omega - 1, 1), rp), i=1, n_omega)]
 
       if (len_trim(q_file) > 0) then
          open (newunit=funit, file=trim(q_file), action='read', iostat=iostatus, status='old')
