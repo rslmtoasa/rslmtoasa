@@ -1685,3 +1685,11 @@ campaign remain outside the established scope.
   min |eig| 5.6e-10 at xi = 1/3; three-atom cell (S3) at most 5.7e-13 over tr chi0, tr chi, min |eig| and U per site.
 - **Note:** with two atoms every site offset is half a lattice vector, so the phase is +-1 and its sign cannot be
   tested; S3 uses three atoms for that reason.
+
+## spin_response dispersion file, found in Stage 3a — 2026-10-07
+
+- **Verified:** when a q has no peak or crossing, `<prefix>_dispersion.dat` rows run `n/a` into the previous number
+  (`2.19599654E-01n/a`), so a plain whitespace split gives six columns. Seen with `n_omega = 1` (every row). The format is
+  `(7es16.8,2a24)` with left-justified `character(len=24)` texts; the file is not among the frozen baseline files.
+- **Proposal:** a leading `1x` in front of the two `a24` items, one line in `run`; not applied. The Stage 3a scripts
+  parse the file by replacing `n/a` with ` n/a`.
