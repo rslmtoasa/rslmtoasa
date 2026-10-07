@@ -26,3 +26,15 @@ def read_q(d, iq, prefix="spin_response"):
 def read_dispersion(d, prefix="spin_response"):
     """q direct (3), q cartesian (3, 2pi/a), |q| (1/Angstrom) per q, as an (nq, 7) array."""
     return np.array([[float(x) for x in l.replace("n/a", " n/a").split()[:7]] for l in open(f"{d}/{prefix}_dispersion.dat") if not l.startswith("#")])
+
+
+def omega_s_table(runs, n=60, weight=None):
+    """{xi rounded to 4 digits: omega_s (Ry)} = U W delta_q from every <runs>/st_N<n>_* directory; W = the Juelich moment unless given."""
+    import glob
+    out = {}
+    for d in glob.glob(f"{runs}/st_N{n}_*"):
+        st, disp = read_state(d), read_dispersion(d)
+        for iq in range(1, len(disp) + 1):
+            xi = round(float(np.linalg.norm(disp[iq - 1, 3:6])), 4)
+            out[xi] = st["u_juelich"] * (weight or st["m_juelich"]) * (1.0 + st["u_juelich"] * read_q(d, iq)[1])
+    return out

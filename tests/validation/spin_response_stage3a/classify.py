@@ -5,16 +5,12 @@ A maximum counts if its height is >= 10% of the dominant one (parabolic refineme
 omega_s = U M delta_q, otherwise 'other' (not diagnosed). The nearest maximum and its deviation are printed for every xi."""
 import glob, sys
 import numpy as np
-from state import RY_MEV, read_state, read_q, read_dispersion
+from state import RY_MEV, read_q, read_dispersion, omega_s_table
 
 eta = sys.argv[sys.argv.index("--eta") + 1] if "--eta" in sys.argv else "1e-3"
 HEIGHT, BAND = 0.10, 0.10
 weight = float(sys.argv[sys.argv.index("--weight") + 1]) if "--weight" in sys.argv else None
-ws = {}
-for d in glob.glob(sys.argv[1] + "/st_N60_*"):
-    st, disp = read_state(d), read_dispersion(d)
-    for iq in range(1, len(disp) + 1):
-        ws[round(float(np.linalg.norm(disp[iq - 1, 3:6])), 4)] = st["u_juelich"] * (weight or st["m_juelich"]) * (1.0 + st["u_juelich"] * read_q(d, iq)[1]) * RY_MEV
+ws = {xi: w * RY_MEV for xi, w in omega_s_table(sys.argv[1], 60, weight).items()}
 res = []
 for d in glob.glob(f"{sys.argv[1]}/sc60_e{eta}_*"):
     disp = read_dispersion(d)
