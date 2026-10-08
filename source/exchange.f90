@@ -171,7 +171,7 @@ contains
             jmat = dGdG_Jnc(this, dmat1, dmat2, njij, nv)
             jtot(nv) = imtrace9(jmat)
          end do
-         call simpson_f(this%jij, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, jtot, .true., .false., 0.0d0)
+         call simpson_f(this%jij, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, jtot, .true., .false., this%en%temperature)
          write (*, *) 'Jij between pair', i, 'and ', j, 'is ', this%jij*1.0d3/4.0d0/pi
       end do
    end subroutine calculate_jij
@@ -319,10 +319,10 @@ contains
          ! Integrate jtot components with respect to energy
          if (i .ne. j) then
             do k = 1, 9
-               call simpson_f(this%jij_aux(k), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, jtot_aux(:, k), .true., .false., 0.0d0)
+               call simpson_f(this%jij_aux(k), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, jtot_aux(:, k), .true., .false., this%en%temperature)
             end do
          else ! i = j
-            call simpson_f(this%jij00_aux, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, jtot_00, .true., .false., 0.0d0)
+            call simpson_f(this%jij00_aux, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, jtot_00, .true., .false., this%en%temperature)
          end if
          ! Write the result
          if (i .ne. j) then
@@ -569,7 +569,7 @@ contains
          end do
          ! Integrate jijk_tot with respect to energy
          do p = 1, 9
-            call simpson_f(this%jijk(p), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, jijk_tot(:, p), .true., .false., 0.0d0)
+            call simpson_f(this%jijk(p), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, jijk_tot(:, p), .true., .false., this%en%temperature)
          end do
          ! Write the result
          write (*, *) 'Jijk tensor between trio ', i, ',', j, ' and ', k, 'is (in meV/a.u.)'
@@ -977,23 +977,23 @@ contains
          end do
          ! Jij integration
          this%jij = 0.0d0
-         call simpson_f(this%jij, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jtotso), .true., .false., 0.0d0)
+         call simpson_f(this%jij, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jtotso), .true., .false., this%en%temperature)
          T_comm_xcso(1, njij_glob) = this%jij*1.0d3/4.0d0/pi
          do nv = 1, this%en%channels_ldos + 10
             this%jij = 0.0d0
-            call simpson_f(this%jij, this%en%ene, this%en%ene(nv), this%en%nv1, real(jtotso), .true., .false., 0.0d0)
+            call simpson_f(this%jij, this%en%ene, this%en%ene(nv), this%en%nv1, real(jtotso), .true., .false., this%en%temperature)
          end do
          this%jij = 0.0d0
-         call simpson_f(this%jij, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jtotfo), .true., .false., 0.0d0)
+         call simpson_f(this%jij, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jtotfo), .true., .false., this%en%temperature)
          T_comm_xcfo(1, njij_glob) = this%jij*1.0d3/4.0d0/pi
          this%jijcd = 0.0d0 ; this%jijsd = 0.0d0 ; this%jijcc = 0.0d0 ; this%jijsc = 0.0d0 
-         call simpson_f(this%jijcd, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jcd), .true., .false., 0.0d0)
+         call simpson_f(this%jijcd, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jcd), .true., .false., this%en%temperature)
          T_comm_xcparts(1, njij_glob) = this%jijcd*1.0d3/4.0d0/pi
-         call simpson_f(this%jijsd, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jsd), .true., .false., 0.0d0)
+         call simpson_f(this%jijsd, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jsd), .true., .false., this%en%temperature)
          T_comm_xcparts(2, njij_glob) = this%jijsd*1.0d3/4.0d0/pi
-         call simpson_f(this%jijcc, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jcc), .true., .false., 0.0d0)
+         call simpson_f(this%jijcc, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jcc), .true., .false., this%en%temperature)
          T_comm_xcparts(3, njij_glob) = this%jijcc*1.0d3/4.0d0/pi
-         call simpson_f(this%jijsc, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jsc), .true., .false., 0.0d0)
+         call simpson_f(this%jijsc, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jsc), .true., .false., this%en%temperature)
          T_comm_xcparts(4, njij_glob) = this%jijsc*1.0d3/4.0d0/pi
 
          ! Dij integration
@@ -1001,24 +1001,24 @@ contains
          do k = 1, 3
             y(:) = 0.0d0
             y(:) = real(jjtotso(:, k))
-            call simpson_f(this%dmi(k), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., 0.0d0)
+            call simpson_f(this%dmi(k), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., this%en%temperature)
          end do
          T_comm_xcso(2:4, njij_glob) = this%dmi*1.0d3/4.0d0/pi
          this%dmi = 0.0d0
          do k = 1, 3
             y(:) = 0.0d0
             y(:) = real(jjtotfo(:, k))
-            call simpson_f(this%dmi(k), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., 0.0d0)
+            call simpson_f(this%dmi(k), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., this%en%temperature)
          end do
          T_comm_xcfo(2:4, njij_glob) = this%dmi*1.0d3/4.0d0/pi
          this%dmicc = 0.0d0 ; this%dmisc = 0.0d0
          do k = 1, 3
             y(:) = 0.0d0
             y(:) = real(dsc(:, k))
-            call simpson_f(this%dmisc(k), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., 0.0d0)
+            call simpson_f(this%dmisc(k), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., this%en%temperature)
             y(:) = 0.0d0
             y(:) = real(dcc(:, k))
-            call simpson_f(this%dmicc(k), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., 0.0d0)
+            call simpson_f(this%dmicc(k), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., this%en%temperature)
          end do
          T_comm_xcparts(5:7, njij_glob) = this%dmicc*2.0d3/4.0d0/pi
          T_comm_xcparts(8:10, njij_glob) = this%dmisc*2.0d3/4.0d0/pi
@@ -1029,7 +1029,7 @@ contains
             do l = 1, 3
                y(:) = 0.0d0
                y(:) = real(itotso(:, k, l))
-               call simpson_f(this%aij(k, l), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., 0.0d0)
+               call simpson_f(this%aij(k, l), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., this%en%temperature)
             end do
          end do
          T_comm_xcso(5:13, njij_glob) = reshape(this%aij*1.0d3/4.0d0/pi, [9])
@@ -1038,7 +1038,7 @@ contains
             do l = 1, 3
                y(:) = 0.0d0
                y(:) = real(itotfo(:, k, l))
-               call simpson_f(this%aij(k, l), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., 0.0d0)
+               call simpson_f(this%aij(k, l), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., this%en%temperature)
             end do
          end do
          T_comm_xcfo(5:13, njij_glob) = reshape(this%aij*1.0d3/4.0d0/pi, [9])
@@ -1047,10 +1047,10 @@ contains
             do l = 1, 3
                y(:) = 0.0d0
                y(:) = real(isd(:, k, l))
-               call simpson_f(this%aijsd(k, l), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., 0.0d0)
+               call simpson_f(this%aijsd(k, l), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., this%en%temperature)
                y(:) = 0.0d0
                y(:) = real(isc(:, k, l))
-               call simpson_f(this%aijsc(k, l), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., 0.0d0)
+               call simpson_f(this%aijsc(k, l), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., this%en%temperature)
             end do
          end do
          T_comm_xcparts(11:19, njij_glob) = reshape(this%aijsd*1.0d3/4.0d0/pi, [9])
@@ -1225,7 +1225,7 @@ contains
          end do
          ! Jij integration
          this%jij = 0.0d0
-         call simpson_f(this%jij, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jtot), .true., .false., 0.0d0)
+         call simpson_f(this%jij, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jtot), .true., .false., this%en%temperature)
          T_comm_xc(1, njij_glob) = this%jij*1.0d3/4.0d0/pi
 
          ! Dij integration
@@ -1233,7 +1233,7 @@ contains
          do k = 1, 3
             y(:) = 0.0d0
             y(:) = real(jjtot(:, k))
-            call simpson_f(this%dmi(k), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., 0.0d0)
+            call simpson_f(this%dmi(k), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., this%en%temperature)
          end do
          T_comm_xc(2:4, njij_glob) = this%dmi*1.0d3/4.0d0/pi
 
@@ -1243,7 +1243,7 @@ contains
             do l = 1, 3
                y(:) = 0.0d0
                y(:) = real(itot(:, k, l))
-               call simpson_f(this%aij(k, l), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., 0.0d0)
+               call simpson_f(this%aij(k, l), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., this%en%temperature)
             end do
          end do
          T_comm_xc(5:13, njij_glob) = reshape(this%aij*1.0d3/4.0d0/pi, [9])
@@ -1394,14 +1394,14 @@ contains
       !!!   call simpson_f(this%jij,this%en%ene,this%en%ene(nv),this%en%nv1,real(jtot),.true.,.false.,0.0d0)
       !!!   write(902,*) this%en%ene(nv)-this%en%fermi, this%jij*1.0d3/4.0d0/pi
       !!! end do
-         call simpson_f(this%jij, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jtot), .true., .false., 0.0d0)
+         call simpson_f(this%jij, this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, real(jtot), .true., .false., this%en%temperature)
          T_comm_xc(1, njij_glob) = this%jij*1.0d3/4.0d0/pi
 
          this%dmi = 0.0d0
          do k = 1, 3
             y(:) = 0.0d0
             y(:) = real(jjtot(:, k))
-            call simpson_f(this%dmi(k), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., 0.0d0)
+            call simpson_f(this%dmi(k), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., this%en%temperature)
          end do
          T_comm_xc(2:4, njij_glob) = this%dmi*1.0d3/4.0d0/pi
 
@@ -1411,7 +1411,7 @@ contains
             do l = 1, 3
                y(:) = 0.0d0
                y(:) = real(itot(:, k, l))
-               call simpson_f(this%aij(k, l), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., 0.0d0)
+               call simpson_f(this%aij(k, l), this%en%ene, this%en%ene(this%en%enpt + 1), this%en%nv1, y(:), .true., .false., this%en%temperature)
             end do
          end do
          T_comm_xc(5:13, njij_glob) = reshape(this%aij*1.0d3/4.0d0/pi, [9])

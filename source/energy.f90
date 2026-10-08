@@ -43,6 +43,8 @@ module energy_mod
       integer ::  channels_ldos
       !> Fermi energy (Ry).
       real(rp) :: fermi, chebfermi
+      !> Electronic temperature (K) of the exchange energy integration (0 = step function at E_F)
+      real(rp) :: temperature
       !> Lower energy limit
       real(rp) :: energy_min
       !> Upper energy limit
@@ -120,6 +122,7 @@ contains
       fermi = this%fermi
       energy_min = this%energy_min
       energy_max = this%energy_max
+      temperature = this%temperature
 
       ! Reading
       open (newunit=funit, file=this%lattice%control%fname, action='read', iostat=iostatus, status='old')
@@ -139,6 +142,7 @@ contains
       this%fermi = fermi
       this%energy_min = energy_min
       this%energy_max = energy_max
+      this%temperature = temperature
    end subroutine build_from_file
 
    !---------------------------------------------------------------------------
@@ -148,6 +152,8 @@ contains
    !---------------------------------------------------------------------------
    subroutine restore_to_default(this)
       class(energy), intent(inout) :: this
+
+      this%temperature = 0.0_rp
 
       select case (this%lattice%control%calctype)
       case ('B')
@@ -213,5 +219,12 @@ contains
       do i = 0, this%channels_ldos + 9
          this%ene(i + 1) = this%energy_min + this%edel*i
       end do
+
+      if (this%temperature > 0.0_rp) then
+         if (this%energy_max - this%fermi < 10.0_rp*kB_simpson_f*this%temperature) &
+            call g_logger%warning('energy_max - E_F < 10 kT: Fermi tail truncated', __FILE__, __LINE__)
+         if (this%edel > 0.5_rp*kB_simpson_f*this%temperature) &
+            call g_logger%warning('energy mesh spacing > kT/2: finite-T integration unconverged', __FILE__, __LINE__)
+      end if
    end subroutine e_mesh
 end module energy_mod

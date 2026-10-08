@@ -54,6 +54,9 @@ module math_mod
    ! To do: precise the quantity (charge, energy, etc)
    real(rp), parameter :: epsilon = 1.0E-10_rp
 
+   !> Boltzmann constant (Ry/K) used by simpson_f
+   real(rp), parameter :: kB_simpson_f = 0.633362019d-5
+
    ! Irrational
    !> \f$ \sqrt{2} \f$
    real(rp), parameter :: sqrt_two = sqrt(2.0_rp)
@@ -1142,12 +1145,11 @@ contains
       ! Local variables
       integer :: I
       real(rp) :: H
-      real(rp), parameter :: kB = 0.633362019d-5
       real(rp) :: kBT
 
       AINT = 0.d0
       H = Ene(2) - Ene(1)
-      kBT = kB*T + 1.0d-15
+      kBT = kB_simpson_f*T + 1.0d-15
       !
       if (fermi) then
          do I = 2, NPTS + 8, 2

@@ -1667,6 +1667,10 @@ campaign remain outside the established scope.
   `reciprocal_mod` now also exports one public copy (used by `spin_response`); the
   local ones were left in place and shadow it. Proposal: one definition, remove the
   nine copies (about 10 lines, no value change).
+- **Verified (Stage 3b):** `math.f90` holds a tenth value, `0.633362019d-5` (now the module constant
+  `kB_simpson_f`, used by `simpson_f`), which differs from `6.3336814e-6` by a relative 9.7e-6. The two
+  values were not unified, because `simpson_f` is on the bit-identical exchange path. Proposal: one value
+  for all, a 1e-5 relative change in kT at finite T and none at T = 0.
 
 ## RESOLVED — spin_response, multi-site cells: k+q folded by a reciprocal vector needs a site-dependent Bloch phase — 2026-10-06
 
