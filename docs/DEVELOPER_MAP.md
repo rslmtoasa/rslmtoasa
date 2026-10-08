@@ -285,9 +285,8 @@ The magnon-energy oracle is the real-space LKAG J_ij from `exchange.f90` (see VA
 [`EXCHANGE_VALIDATION_MAP.md`](validation/EXCHANGE_VALIDATION_MAP.md)), not
 `exchange_q`; it is the developer-owned `tests/spin_response/oracles/fe_lswt.dat`, next to
 the analytic references and `tolerances.nml`. The decks are `tests/spin_response/fe_bcc`;
-the frozen 24^3 outputs are `tests/spin_response/baseline/`; the 60^3 scans, scripts and
-results are `tests/validation/spin_response_stage2/` and
-[`VAL-18`](validation/VAL-18_SPIN_RESPONSE_BASELINE.md). Test-side tolerance keys are declared
+the Stage 2 and Stage 3a scans, scripts and records are at tag `spin-response-stage3a`.
+ Test-side tolerance keys are declared
 once in `tests/unit/spin_response_tolerances.f90`.
 
 ### Lehmann-representation Green's functions
