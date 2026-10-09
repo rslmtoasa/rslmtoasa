@@ -87,6 +87,7 @@ module spin_response_mod
       procedure :: eigenpairs_chunk
       procedure, private :: set_site_offsets
       procedure :: bare_response
+      procedure :: bare_response_list
       procedure :: interaction
       procedure :: run
       procedure :: write_state
@@ -372,18 +373,19 @@ contains
       end do
    end subroutine endpoint
 
-   !> @brief Bare response chi0(q, omega) over the full-BZ mesh, k chunk by chunk, both endpoints from eigenpairs_chunk.
-   !> @param[in]  q_direct  q in fractional coordinates of b1, b2, b3.
+   !> @brief Bare response chi0(q, omega) for each q of a list over the full-BZ mesh, k chunk by chunk.
+   !> @details The k endpoint of a chunk is computed once and shared by all q; each q still sums the chunks in order.
+   !> @param[in]  q_direct  q in fractional coordinates of b1, b2, b3, shape (3, nq).
    !> @param[in]  omega     Energies (Ry); eta (Ry) the broadening, 0 allowed at omega = 0 (static value).
    !> @param[in]  juelich   Juelich amplitudes if .true., coefficient (Mills) amplitudes otherwise.
-   !> @param[out] chi0      shape (nsite, nsite, size(omega)).
-   subroutine bare_response(this, q_direct, omega, eta, juelich, chi0)
+   !> @param[out] chi0      shape (nsite, nsite, size(omega), nq).
+   subroutine bare_response_list(this, q_direct, omega, eta, juelich, chi0)
       class(spin_response), intent(inout) :: this
-      real(rp), intent(in) :: q_direct(3), omega(:), eta
+      real(rp), intent(in) :: q_direct(:, :), omega(:), eta
       logical, intent(in) :: juelich
-      complex(rp), intent(out) :: chi0(:, :, :)
+      complex(rp), intent(out) :: chi0(:, :, :, :)
 
-      integer :: first, last, nk
+      integer :: first, last, nk, iq
       real(rp), allocatable :: enu(:, :), p(:, :), e_k(:, :), e_kq(:, :), et_k(:, :), et_kq(:, :), f_k(:, :), f_kq(:, :)
       complex(rp), allocatable :: v_k(:, :, :), v_kq(:, :, :), a_k(:, :, :, :, :), a_kq(:, :, :, :, :)
 
@@ -393,12 +395,29 @@ contains
       do first = 1, nk, k_chunk
          last = min(nk, first + k_chunk - 1)
          call this%eigenpairs_chunk([0.0_rp, 0.0_rp, 0.0_rp], first, last, e_k, v_k)
-         call this%eigenpairs_chunk(q_direct, first, last, e_kq, v_kq)
          call endpoint(this, e_k, v_k, juelich, enu, p, et_k, f_k, a_k)
-         call endpoint(this, e_kq, v_kq, juelich, enu, p, et_kq, f_kq, a_kq)
-         call accumulate_chi0(this%kt, this%reciprocal%k_workset%weights(first:last), et_k, f_k, a_k, &
-                              et_kq, f_kq, a_kq, omega, eta, chi0)
+         do iq = 1, size(q_direct, 2)
+            call this%eigenpairs_chunk(q_direct(:, iq), first, last, e_kq, v_kq)
+            call endpoint(this, e_kq, v_kq, juelich, enu, p, et_kq, f_kq, a_kq)
+            call accumulate_chi0(this%kt, this%reciprocal%k_workset%weights(first:last), et_k, f_k, a_k, &
+                                 et_kq, f_kq, a_kq, omega, eta, chi0(:, :, :, iq))
+         end do
       end do
+   end subroutine bare_response_list
+
+   !> @brief Bare response chi0(q, omega) for one q; see bare_response_list.
+   !> @param[out] chi0  shape (nsite, nsite, size(omega)).
+   subroutine bare_response(this, q_direct, omega, eta, juelich, chi0)
+      class(spin_response), intent(inout) :: this
+      real(rp), intent(in) :: q_direct(3), omega(:), eta
+      logical, intent(in) :: juelich
+      complex(rp), intent(out) :: chi0(:, :, :)
+
+      complex(rp), allocatable :: c4(:, :, :, :)
+
+      allocate (c4(size(chi0, 1), size(chi0, 2), size(chi0, 3), 1))
+      call this%bare_response_list(reshape(q_direct, [3, 1]), omega, eta, juelich, c4)
+      chi0 = c4(:, :, :, 1)
    end subroutine bare_response
 
    !> @brief Juelich and Mills U per site from the static chi0(0, 0) (omega = 0, eta = 0) of each amplitude kind.
@@ -432,7 +451,7 @@ contains
       integer :: iq, iw, nq, nw, ns, funit, fdisp
       real(rp) :: peak, crossing, qcart(3)
       real(rp), allocatable :: u(:), trl(:)
-      complex(rp), allocatable :: chi0(:, :, :), chi(:, :, :)
+      complex(rp), allocatable :: chi0(:, :, :, :), chi(:, :, :)
       logical :: has_peak, has_crossing
       character(len=256) :: fname
       character(len=24) :: peak_text, crossing_text
@@ -441,23 +460,23 @@ contains
       u = merge(this%um, this%uj, trim(this%method) == 'mills')
       nq = size(this%q_direct, 2)
       nw = size(this%omega)
-      allocate (chi0(ns, ns, nw), chi(ns, ns, nw))
+      allocate (chi0(ns, ns, nw, nq), chi(ns, ns, nw))
+      call this%bare_response_list(this%q_direct, this%omega, this%eta, trim(this%method) == 'juelich', chi0)
       open (newunit=fdisp, file=trim(this%output_prefix)//'_dispersion.dat', action='write', status='replace')
       write (fdisp, '(a)') '# q_direct(3) q_cartesian(3, units 2pi/a) |q|(1/Angstrom) peak_omega(Ry) crossing_omega(Ry)'
       do iq = 1, nq
-         call this%bare_response(this%q_direct(:, iq), this%omega, this%eta, trim(this%method) == 'juelich', chi0)
-         call solve_dyson(chi0, u, chi)
+         call solve_dyson(chi0(:, :, :, iq), u, chi)
          trl = spectral_trace(chi)
          has_peak = .false.
          has_crossing = .false.
-         if (ns == 1) call pole_estimates(this%omega, trl, chi0(1, 1, :), u(1), peak, crossing, has_peak, has_crossing)
+         if (ns == 1) call pole_estimates(this%omega, trl, chi0(1, 1, :, iq), u(1), peak, crossing, has_peak, has_crossing)
 
          write (fname, '(a,a,i3.3,a)') trim(this%output_prefix), '_q', iq, '.dat'
          open (newunit=funit, file=trim(fname), action='write', status='replace')
          write (funit, '(a)') '# omega(Ry) re_tr_chi0(1/Ry) im_tr_chi0(1/Ry) re_tr_chi(1/Ry) im_tr_chi(1/Ry) tr_L(1/Ry) min_abs_eig(I+chi0*U)'
          do iw = 1, nw
-            write (funit, '(7es22.14)') this%omega(iw), sum_diagonal(chi0(:, :, iw)), sum_diagonal(chi(:, :, iw)), trl(iw), &
-               min_abs_eig(chi0(:, :, iw), u)
+            write (funit, '(7es22.14)') this%omega(iw), sum_diagonal(chi0(:, :, iw, iq)), sum_diagonal(chi(:, :, iw)), trl(iw), &
+               min_abs_eig(chi0(:, :, iw, iq), u)
          end do
          close (funit)
 
