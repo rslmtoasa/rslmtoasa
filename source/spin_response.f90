@@ -580,24 +580,33 @@ contains
    !> @param[in]    omega  Energies, shape (nw) (Ry).
    !> @param[in]    eta    Broadening (Ry).
    !> @param[inout] chi0   Bare response, shape (nsite, nsite, nw).
-   pure subroutine accumulate_chi0(kt, w, e_k, f_k, a_k, e_kq, f_kq, a_kq, omega, eta, chi0)
+   subroutine accumulate_chi0(kt, w, e_k, f_k, a_k, e_kq, f_kq, a_kq, omega, eta, chi0)
       real(rp), intent(in) :: kt, w(:), e_k(:, :), f_k(:, :), e_kq(:, :), f_kq(:, :), omega(:), eta
       complex(rp), intent(in) :: a_k(:, :, :, :, :), a_kq(:, :, :, :, :)
       complex(rp), intent(inout) :: chi0(:, :, :)
 
       integer :: ik, n, m, i, j, iw
       real(rp) :: df, de
-      complex(rp) :: t(size(a_k, 4)), c
+      complex(rp) :: c
+      complex(rp) :: t(size(a_k, 4), size(e_kq, 2), size(e_k, 2), size(w))
 
+      ! vertex products do not depend on omega; each omega point then runs the whole k, n, m sum in the serial order
       do ik = 1, size(w)
          do n = 1, size(e_k, 2)
             do m = 1, size(e_kq, 2)
-               df = f_k(ik, n) - f_kq(ik, m)
-               de = e_k(ik, n) - e_kq(ik, m)
-               do i = 1, size(t)
-                  t(i) = sum(conjg(a_k(ik, n, :, i, 1))*a_kq(ik, m, :, i, 2))
+               do i = 1, size(t, 1)
+                  t(i, m, n, ik) = sum(conjg(a_k(ik, n, :, i, 1))*a_kq(ik, m, :, i, 2))
                end do
-               do iw = 1, size(omega)
+            end do
+         end do
+      end do
+      !$omp parallel do default(shared) private(iw, ik, n, m, i, j, df, de, c) schedule(static) if (size(omega) > 1)
+      do iw = 1, size(omega)
+         do ik = 1, size(w)
+            do n = 1, size(e_k, 2)
+               do m = 1, size(e_kq, 2)
+                  df = f_k(ik, n) - f_kq(ik, m)
+                  de = e_k(ik, n) - e_kq(ik, m)
                   if (eta == 0.0_rp .and. omega(iw) == 0.0_rp .and. abs(de) < degenerate_tol) then
                      c = cmplx(-f_k(ik, n)*(1.0_rp - f_k(ik, n))/kt, 0.0_rp, rp)
                   else if (df == 0.0_rp) then
@@ -605,15 +614,16 @@ contains
                   else
                      c = df/(omega(iw) + de + i_unit*eta)
                   end if
-                  do j = 1, size(t)
-                     do i = 1, size(t)
-                        chi0(i, j, iw) = chi0(i, j, iw) + w(ik)*c*t(i)*conjg(t(j))
+                  do j = 1, size(t, 1)
+                     do i = 1, size(t, 1)
+                        chi0(i, j, iw) = chi0(i, j, iw) + w(ik)*c*t(i, m, n, ik)*conjg(t(j, m, n, ik))
                      end do
                   end do
                end do
             end do
          end do
       end do
+      !$omp end parallel do
    end subroutine accumulate_chi0
 
    !> @brief Juelich U from the Goldstone condition sum_j chi0_ij(0,0) M_j U_j = -M_i.

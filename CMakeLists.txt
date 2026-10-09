@@ -777,6 +777,11 @@ if (RUN_UNIT_TESTS)
       "${TestDIR}/spin_response/fe_bcc" "${CMAKE_BINARY_DIR}/Testing/spin_response/s3"
       "${TestDIR}/spin_response/oracles/tolerances.nml")
   set_tests_properties(SpinResponseS3 PROPERTIES LABELS "unit;spin-response;quick")
+  # Byte-identical q and state files for OMP_NUM_THREADS = 1 and 4.
+  add_test(NAME SpinResponseOmpIdentity
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/omp_identity.py" "${TestBinary}"
+      "${TestDIR}/spin_response/fe_bcc" "${CMAKE_BINARY_DIR}/Testing/spin_response/omp")
+  set_tests_properties(SpinResponseOmpIdentity PROPERTIES LABELS "unit;spin-response;quick")
   # Frozen 24^3 Fe response (tests/spin_response/baseline) rerun in its own scratch directory.
   add_test(NAME SpinResponseBaselineRepro
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/baseline_repro.py" "${TestBinary}"
