@@ -1,7 +1,7 @@
 """Rerun the frozen 24^3 Fe response and compare it with tests/spin_response/baseline/.
 
-Usage: baseline_repro.py [--freeze] <rslmto.x> <deck directory> <scratch directory> <baseline directory> <tolerances.nml>
-The deck directory is only read. --freeze writes the run's q files and state file into the baseline directory.
+Usage: baseline_repro.py [--freeze] [--dir a,b,c] <rslmto.x> <deck directory> <scratch directory> <baseline directory> <tolerances.nml>
+The deck directory is only read. q = t (a, b, c) in direct coordinates, default --dir 1,-1,1 (Gamma-H of bcc Fe). --freeze writes the run's q files and state file into the baseline directory.
 Every column of every q file is compared normwise, every numeric scalar of the state file relatively.
 """
 import math
@@ -11,12 +11,12 @@ import shutil
 import subprocess
 import sys
 
-# xi = 0.25, 1/3, 0.5 as direct (t, -t, t) with t = 3/24, 4/24, 6/24: mesh points of the 24^3 mesh. eta = 2e-3 Ry, 101 points.
+# t = 3/24, 4/24, 6/24: mesh points of the 24^3 mesh. eta = 2e-3 Ry, 101 points.
 Q_T = [3 / 24, 4 / 24, 6 / 24]
 FILES = ["spin_response_q001.dat", "spin_response_q002.dat", "spin_response_q003.dat", "spin_response_state.dat"]
 
 
-def run(binary, deck, scratch):
+def run(binary, deck, scratch, direction):
     shutil.rmtree(scratch, ignore_errors=True)
     shutil.copytree(deck, scratch)
     text = pathlib.Path(deck, "input.nml").read_text()
@@ -24,10 +24,10 @@ def run(binary, deck, scratch):
     if old not in text:
         sys.exit("baseline_repro.py: " + old + " not found in " + deck + "/input.nml")
     for key in ("nk1", "nk2", "nk3"):
-        text, n = re.subn(rf"^{key} = 12$", f"{key} = 24", text, flags=re.M)
+        text, n = re.subn(rf"^{key} = \d+$", f"{key} = 24", text, flags=re.M)
         if n != 1:
-            sys.exit("baseline_repro.py: " + key + " = 12 not found in " + deck + "/input.nml")
-    q = "".join(f"q_list(:, {i + 1}) = {t!r}, {-t!r}, {t!r}\n" for i, t in enumerate(Q_T))
+            sys.exit("baseline_repro.py: " + key + " not found in " + deck + "/input.nml")
+    q = "".join(f"q_list(:, {i + 1}) = {t * direction[0]!r}, {t * direction[1]!r}, {t * direction[2]!r}\n" for i, t in enumerate(Q_T))
     block = f"\n&spin_response\nmethod = 'juelich'\nn_q = 3\n{q}omega_min = 0.0\nomega_max = 0.05\nn_omega = 101\neta = 2.0e-3\n/\n"
     nml = pathlib.Path(scratch, "input_driver.nml")
     nml.write_text(text.replace(old, "pre_processing = 'none'\npost_processing = 'spin_response'") + block)
@@ -80,8 +80,12 @@ def compare_state(new, ref):
 def main():
     args = sys.argv[1:]
     freeze = "--freeze" in args
+    direction = [1.0, -1.0, 1.0]
+    if "--dir" in args:
+        direction = [float(x) for x in args[args.index("--dir") + 1].split(",")]
+        del args[args.index("--dir"):args.index("--dir") + 2]
     binary, deck, scratch, baseline, tolfile = [a for a in args if a != "--freeze"]
-    run(binary, deck, scratch)
+    run(binary, deck, scratch, direction)
     if freeze:
         pathlib.Path(baseline).mkdir(exist_ok=True)
         for f in FILES:

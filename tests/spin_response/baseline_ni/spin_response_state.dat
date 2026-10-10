@@ -1,0 +1,13 @@
+# quantity value ; energies in Ry, moments in mu_B, occupations in electrons
+method juelich
+fermi_input  -6.0342000000000000E-02
+fermi_used  -6.2034861692075643E-02
+electron_count   1.0000000000025153E+01
+kT   1.9001044200000002E-03
+mesh_nk     24    24    24
+mesh_full_bz T ; reduction_overridden  F
+spin_swapped  F
+# site m_mills m_juelich d_up_mills d_dn_mills d_up_juelich d_dn_juelich
+     1  7.3537243255600204E-01  6.3012641625959498E-01  4.6361215271615173E+00  3.9007490946055152E+00  4.3640042897045381E+00  3.7338778734449432E+00
+# site u_juelich(Ry) u_mills(Ry) juelich_goldstone_residual mills_residual_delta implied_gap_delta*Delta_d(Ry)
+     1  8.2367018575440071E-02  6.8989741141395070E-02  0 (by construction)  2.3377552841774729E-01  1.1860169829608042E-02
