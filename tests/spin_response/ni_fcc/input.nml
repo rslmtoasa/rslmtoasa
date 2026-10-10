@@ -1,0 +1,84 @@
+&calculation
+pre_processing = 'bravais'
+verbose = T
+/
+&lattice
+!ndim = 50000 ! cluster dimension to begin with. We could think about guess it from the atom density in the primitive cell and the radius cut
+rc = 080 ! radius cut. We could think about setting a default
+alat = 3.52340 ! lattice parapeter
+crystal_sym = 'file' ! options are bcc, fcc and hcp so far.
+pbc = .true.
+b1 = .true.
+b2 = .true.
+b3 = .true.
+n1 = 20
+n2 = 20
+n3 = 20
+strux_backend = 'strux_lib'
+wav = 1.37692
+ntype = 1
+ct(:) = 4.0d0
+r2 = 16.0d0
+/
+&atoms
+database = './'
+label(1) = 'Ni'
+/
+&self
+!ws_all = .true. ! ''
+use_kspace = .true.
+nstep = 25
+/
+&energy
+fermi = -0.060342
+energy_min = -1.0
+energy_max = 0.5
+channels_ldos = 2500
+/
+&reciprocal
+! K-point mesh for SCF (12x12x12 = 1728 k-points before symmetry)
+nk1 = 16
+nk2 = 16
+nk3 = 16
+
+! K-point mesh offset (0,0,0 = Gamma-centered mesh)
+k_offset_x = 0.0
+k_offset_y = 0.0
+k_offset_z = 0.0
+
+! Symmetry reduction (highly recommended)
+use_symmetry_reduction = .false.   ! Use crystal symmetry
+use_time_reversal = .false.        ! Use time-reversal symmetry
+use_shift = .false.               ! Don't apply additional Monkhorst-Pack shift
+
+! DOS calculation settings
+!dos_method = 'gaussian'
+!dos_method = 'blochl'
+dos_method = 'tetrahedron'        ! Use tetrahedron method (more accurate)
+! Alternative: 'gaussian' for smoother DOS
+
+gaussian_sigma = 0.005              ! Gaussian broadening (Ry) - only for gaussian method
+temperature = 300.0               ! Temperature for Fermi-Dirac smearing (K)
+
+! Energy grid for DOS
+n_energy_points = 2000            ! Number of points in DOS energy grid
+dos_energy_min = -1.5            ! Minimum energy relative to Fermi (Ry)
+dos_energy_max = 1.0             ! Maximum energy relative to Fermi (Ry)
+
+! Fermi level determination
+auto_find_fermi = .true.
+/
+&symmetry
+use_symmetry_reduction = .false.
+/
+&control
+calctype = 'B'
+nsp = 1 ! type of calculation, nsp can be 1, 2, 3 or 4
+lld = 21
+recur = 'block'
+/
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/
+
