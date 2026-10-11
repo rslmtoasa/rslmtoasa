@@ -10,8 +10,9 @@ sp fixture from `bulk/diamondSi`: `lmax=1`, `nsp=1`, one SCF step, a full
 nonmagnetic case, while `nsp=1` remains the scalar-relativistic collinear
 spin-polarized route.
 
-`Example_k_space_scf_bccFe_spd_magnetic` uses the bcc-Fe spd fixture with
-`lmax=2`, `nsp=2`, one SCF step, the same 2x2x2 mesh, Gaussian broadening
+`Example_k_space_scf_bccFe_spd_magnetic` uses the bcc-Fe spd fixture (deck
+`k_space_scf/bccFe`, which has `nsp=1`; the case file overrides it with
+`"control": {"nsp": 2, "lmax": 2}`) with `lmax=2`, `nsp=2`, one SCF step, the same 2x2x2 mesh, Gaussian broadening
 `sigma=0.01 Ry`, and a 200-point DOS grid. The canonical checks include the
 nonzero site spin moment in addition to occupations, energies, site charge,
 and selected DOS values.
