@@ -38,6 +38,7 @@ add_library(${PROJECT_NAME} STATIC
     pauli_ground_state_projection.f90
     spin_density.f90
     spin_response.f90
+    alsda_radial.f90
     hamiltonian.f90
     hamiltonian_build.f90
     hamiltonian_ccor.f90

@@ -27,4 +27,6 @@
   a4_rel = 1.0e-10   ! A4 chi0, chi and static arrays vs numpy [9.9e-16, 5.4e-15, 4.3e-16]
   a4_identity_rel = 1.0e-12   ! A4 Goldstone identity, (1 + chi0 I) m, lambda controls, zeroth moment [1.4e-14]
   r1_rel = 1.0e-6   ! R1 kernel matrix vs analytic integral, both cases [9.2e-8, 9.1e-8; Simpson alone 9.2e-8]
+  radial_moment_rel = 3.0e-5   ! 3d: sphere integral of n_up - n_dn vs sum_l (Q0_up - Q0_dn) of Fe.nml [2.8e-6]
+  radial_enu_abs = 1.0e-10   ! 3d: E_nu of the lmtst re-run vs Fe.nml, Ry [5.3e-12]
 /

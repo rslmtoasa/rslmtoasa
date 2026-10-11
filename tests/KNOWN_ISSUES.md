@@ -1697,3 +1697,13 @@ campaign remain outside the established scope.
   `(7es16.8,2a24)` with left-justified `character(len=24)` texts; the file is not among the frozen baseline files.
 - **Proposal:** a leading `1x` in front of the two `a24` items, one line in `run`; not applied. The Stage 3a scripts
   parse the file by replacing `n/a` with ` n/a`.
+
+## spin_response 3d, radial data at r = 0 — 2026-10-11
+
+- **Verified (bcc Fe deck, `lmtst` re-run on a copy of the site):** `radial_ground_state` holds `vxc_up(1) = vxc_down(1) = 0`
+  at the first mesh point (r = 0) while `n_up(1) - n_down(1) = -0.8069` bohr^-3 (`density_origin`,
+  `radial_ground_state.f90:257`); at the second point r = 2.75e-6 bohr, dV = 1.544e-3 Ry and m = -0.7875 bohr^-3. dV/m is
+  therefore 0 at r = 0, not its limit. `radial_kernel_matrix` starts every sum at the second mesh point.
+- **Verified:** the Fe core integrates to 9.000 electrons per spin (`core_weighted_up`, `core_weighted_down`), so the sphere
+  integral of n_up - n_dn is the same with and without the core density.
+
