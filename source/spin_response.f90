@@ -254,8 +254,8 @@ contains
 
    !> @brief Frozen-state handoff (C1) and d occupations and moments (C2).
    !> @details Pass 1 diagonalizes the full-BZ mesh in chunks, keeps the eigenvalues and fixes E_F
-   !>          (the &energy value in reciprocal%fermi_level, or the solve on this mesh when
-   !>          auto_find_fermi). The electron count is summed from the occupation array that pass 2
+   !>          from the Fermi solve on this mesh (auto_find_fermi must be on; the &energy value is only
+   !>          reported). The electron count is summed from the occupation array that pass 2
    !>          feeds to the d occupations. M_mills < 0 sets spin_swapped and relabels spins.
    subroutine prepare(this)
       class(spin_response), intent(inout) :: this
@@ -290,7 +290,9 @@ contains
 
       this%kt = rec%temperature*kB_Ry_per_K
       this%fermi_input = rec%fermi_level
-      if (rec%auto_find_fermi) rec%fermi_level = rec%find_fermi_level_from_eigenvalues(rec%total_electrons)
+      if (.not. rec%auto_find_fermi) call g_logger%fatal('spin_response%prepare: E_F is always solved on the response mesh; auto_find_fermi must be .true.', &
+                                                         __FILE__, __LINE__)
+      rec%fermi_level = rec%find_fermi_level_from_eigenvalues(rec%total_electrons)
       this%fermi_used = rec%fermi_level
 
       allocate (f(nk, nmat))

@@ -21,8 +21,8 @@ program test_spin_response_c1
    type(charge), target :: charge_obj
    type(energy), target :: energy_obj
    type(hamiltonian), target :: ham
-   type(reciprocal), target :: rec, rec_ref, rec_fixed
-   type(spin_response) :: sr, sr_fixed
+   type(reciprocal), target :: rec, rec_ref
+   type(spin_response) :: sr
    character(len=512) :: dir
    real(rp), allocatable :: e(:, :)
    complex(rp), allocatable :: v(:, :, :)
@@ -73,17 +73,6 @@ program test_spin_response_c1
    end do
    call report('C1.2 e(k+q) vs mesh eigenvalue at k+q, max |de| (Ry)', dmax, eigen_contract_abs)
    call check('C1.2 shifted point differs from k (q not ignored), max |de| > 1e-3 Ry', dshift > 1.0e-3_rp)
-
-   ! C1.3: auto_find_fermi off, the deck E_F: used E_F equals the input bit for bit.
-   ! Catches the Fermi search running anyway. N at the deck value is reported.
-   rec_fixed = reciprocal(ham)
-   rec_fixed%auto_find_fermi = .false.
-   rec_fixed%fermi_level = energy_obj%fermi
-   sr_fixed = spin_response(rec_fixed)
-   call sr_fixed%prepare()
-   call check('C1.3 used E_F == input E_F', sr_fixed%fermi_used == energy_obj%fermi)
-   write (*, '(a,f10.7,a,es10.3)') 'C1.3 at deck E_F ', energy_obj%fermi, ' Ry: N - target = ', &
-      sr_fixed%electron_count - rec_fixed%total_electrons
 
    ! C1.4: eps(-k) = eps(k) on the mesh (bcc Fe is centrosymmetric).
    ! Catches a mesh or folding error that breaks inversion.
