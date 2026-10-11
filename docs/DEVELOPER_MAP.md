@@ -11,12 +11,10 @@ atomic LMTO region, test taxonomy, fixture vocabulary, and the Phase-I gate
 record, start with [the decision log](DECISIONS.md).
 This map then provides the detailed workflow-level entry points and kernels.
 
-VAL-17 ([GBT harmonic and Goldstone report](validation/VAL-17_GBT_HARMONIC_GOLDSTONE.md))
-supersedes the older frozen-magnon note below: the current reciprocal FeCo
-route has a gapless, in-phase Gamma candidate on the current deck. The same
-report records the reciprocal same-q collinear gauge reference used for
-finite-q probes and keeps the small-q stiffness mesh convergence limitation
-open.
+For B1 frozen magnons, VAL-17 ([GBT harmonic and Goldstone report](validation/VAL-17_GBT_HARMONIC_GOLDSTONE.md))
+records the current reciprocal FeCo route: a gapless, in-phase Gamma candidate
+on the current deck, the reciprocal same-q collinear gauge reference used for
+finite-q probes, and the open small-q stiffness mesh-convergence limitation.
 
 ---
 
@@ -69,8 +67,8 @@ shared Fortran state.
 Routines live in `calculation.f90` except the `bravais`, `buildsurf`,
 `newclubulk` and `newclusurf` pre-processing routines
 (`calculation_preprocessing.f90`) and the k-space post-processing routines
-`band_structure`, `density_of_states`, `bsf`, `fermi_surface` and
-`kspace_green` (`calculation_reciprocal.f90`).
+`band_structure`, `density_of_states`, `bsf`, `fermi_surface`,
+`kspace_green` and `spin_response` (`calculation_reciprocal.f90`).
 
 `exchange_p2rs`/`conductivity_p2rs`/`paoflow2rs` all funnel through the
 shared helper `prepare_post_processing_stack(this, use_paoflow, ...)` in
@@ -121,7 +119,7 @@ and does not alter the equations.
 
 ### k-space (reciprocal)
 ```text
-post_processing_{band_structure,density_of_states,bsf,fermi_surface,kspace_green}
+post_processing_{band_structure,density_of_states,bsf,fermi_surface,kspace_green,spin_response}
   (calculation_reciprocal.f90)
   -> reciprocal_mod (reciprocal.f90 + submodules reciprocal_*.f90)
        -> reciprocal_fourier.f90: k-space H(k) built via Fourier transform of
@@ -158,6 +156,13 @@ calculation.f90: run_intersite_moments(control_obj, recursion_obj)
   -> exchange.f90 (calculate_exchange / _twoindex / _gauss_legendre)
      or conductivity.f90 (calculate_gamma_nm / calculate_conductivity_tensor)
 ```
+The energy integrals in `exchange.f90` (`simpson_f`) use the electronic
+temperature `&energy temperature` (default 0 K, where the behaviour is
+bit-identical to before the key existed). At finite T, `e_mesh` in `energy.f90`
+warns unless the grid reaches 10 kT above E_F with a spacing of at most kT/2.
+Real-space LKAG J_ij are robust for near shells; beyond about 3a they are not
+converged in cluster size, recursion depth or cutoff (`docs/DECISIONS.md`, B11
+Stage 3b), which limits any small-q stiffness taken from them.
 
 ### Spin dynamics
 ```text
@@ -234,6 +239,15 @@ select-case near line 641) writes files in the same format
   kernels are (see that module's header). Cache/fingerprint lifecycle
   mirrors `cheb_cache_t`: `ensure_context`/`upload_bsr` are only re-run when
   the uploaded Hamiltonian's fingerprint changes.
+- **CUDA reciprocal backend** (`source/cuda/reciprocal_cuda.cpp`,
+  `reciprocal_lehmann.cu`, built with `ENABLE_CUDA_RECIPROCAL`, off by default):
+  a batched Hermitian eigensolver and a strict-Lehmann contraction behind the
+  reciprocal execution-backend interface, with the GPU tests
+  `ReciprocalCuda{ArbitraryK,Lifecycle,Eigensolver,Lehmann}`. Not yet audited on
+  `fable_v4b`, and not used by the spin response (B4).
+- **Spin-response kernels** (`spin_response.f90`): plain-array procedures
+  (amplitudes, `accumulate_chi0`, `u_juelich`, `solve_dyson`, ...) that the
+  analytic tests call directly; see the B11 recipe below.
 
 ---
 
@@ -254,40 +268,64 @@ fallback, exactly as `rsrec_cuda_plugin.f90` does for the recursion kernels
 ### Transverse spin response (B11)
 
 The `linear_response` code was removed from `fable_v4b` (tag
-`lr-campaign-archive-2026-10`). Its dispatch stops at startup, and its docs,
+`lr-campaign-archive-2026-10`); its dispatch stops at startup, and its docs,
 numbers and tests are not references.
 
-The B11 baseline is in the tree: `source/spin_response.f90` (`spin_response_mod`, about 780
+**In the tree:** `source/spin_response.f90` (`spin_response_mod`, about 810
 lines) with its `&spin_response` namelist in
 `source/include_codes/namelists/spin_response.f90`, run by `post_processing =
-'spin_response'` (`post_processing_spin_response` in `calculation_reciprocal.f90`,
-one `case` line in `calculation.f90`). It works on the frozen database state, never an SCF:
+'spin_response'` (`post_processing_spin_response` in `calculation_reciprocal.f90`).
+It works on the frozen database state, never an SCF. The model is collinear and
+d-only, with one static U per site.
 
-- `prepare`: full-BZ mesh (symmetry reduction and time reversal switched off), E_F policy
-  and electron-count check, d amplitudes (coefficient "Mills" and Juelich), moments, spin
-  relabelling when the total moment is negative.
-- `interaction`: U_Juelich from the Goldstone condition on the static chi0 (eta = 0),
-  U_Mills from the d band centres, both printed.
-- `run`: per q, chi0, Dyson solve, tr chi0, tr chi, tr L and the smallest
-  |eig(I + chi0 U)|; peak and crossing for one site (`n/a` for several). `write_state`
-  writes `<prefix>_state.dat`; the q files are `<prefix>_q<NNN>.dat` and
-  `<prefix>_dispersion.dat`.
-- Both endpoints come from `calculate_eigenpairs_at_kpoints` through `eigenpairs_chunk`,
-  which also applies the site-dependent Bloch phase exp(-2 pi i G.tau_i) for a k+q folded
-  by G, needed for cells with several sites (`tests/KNOWN_ISSUES.md`, resolved entry).
-  Occupations and constants come from `reciprocal_mod` (`fermi_dirac_occupation`,
-  `kB_Ry_per_K`, `find_fermi_level_from_eigenvalues`); `enu`, `ppar` and `center_band` from the potential.
+- `prepare`: full-BZ mesh (symmetry reduction and time reversal switched off,
+  and logged), E_F policy and electron-count check, d amplitudes (coefficient
+  "Mills" and Juelich), moments, spin relabelling when the total moment is
+  negative.
+- `interaction`: U_Juelich from the Goldstone condition on the static chi0 at
+  eta = 0; U_Mills from the d band centres (`center_band`), with the Mills
+  residual and implied gap; both printed.
+- `run`: chi0 for all q in one pass over the k-chunks (`bare_response_list`: the
+  k endpoint once per chunk, then each q's k+q endpoint), then per q the Dyson
+  solve, tr chi0, tr chi, tr L and the smallest |eig(I + chi0 U)|; peak and
+  crossing for one site (`n/a` for several). Output: `<prefix>_q<NNN>.dat`,
+  `<prefix>_dispersion.dat` and `<prefix>_state.dat`. With `n_omega = 1`,
+  `omega = 0` and `eta = 0` it gives the static chi0(q, 0).
+- `accumulate_chi0` runs in parallel over omega (OpenMP), each omega summed in
+  serial order, so the output is byte-identical for any thread count when
+  `MKL_NUM_THREADS = 1`. Static runs are serial; for many q, split the q-list
+  over single-thread processes.
+- Both endpoints come from `calculate_eigenpairs_at_kpoints` through
+  `eigenpairs_chunk`, which applies the site-dependent Bloch phase
+  exp(-2 pi i G.tau_i) for a k+q folded by G, needed for cells with several
+  sites (`tests/KNOWN_ISSUES.md`, resolved entry). Occupations and constants come
+  from `reciprocal_mod` (`fermi_dirac_occupation`, `kB_Ry_per_K`,
+  `find_fermi_level_from_eigenvalues`); `enu`, `ppar` and `center_band` from the
+  potential.
 - Kernels are public procedures on plain arrays: `d_amplitudes_coefficient`,
-  `d_amplitudes_juelich`, `accumulate_chi0`, `u_juelich`, `u_mills`, `mills_residual`,
-  `interaction_values`, `solve_dyson`, `spectral_trace`, `pole_estimates`.
+  `d_amplitudes_juelich`, `accumulate_chi0`, `u_juelich`, `u_mills`,
+  `mills_residual`, `interaction_values`, `solve_dyson`, `spectral_trace`,
+  `pole_estimates`.
+- q is given in direct coordinates of the code's primitive basis for
+  `crystal_sym`; check the Cartesian columns of `_dispersion.dat` when reusing a
+  q-path from another code.
 
-The magnon-energy oracle is the real-space LKAG J_ij from `exchange.f90` (see VAL-07 and
-[`EXCHANGE_VALIDATION_MAP.md`](validation/EXCHANGE_VALIDATION_MAP.md)), not
-`exchange_q`; it is the developer-owned `tests/spin_response/oracles/fe_lswt.dat`, next to
-the analytic references and `tolerances.nml`. The decks are `tests/spin_response/fe_bcc`;
-the Stage 2 and Stage 3a scans, scripts and records are at tag `spin-response-stage3a`.
- Test-side tolerance keys are declared
-once in `tests/unit/spin_response_tolerances.f90`.
+**References and decks:** developer-owned, under `tests/spin_response/oracles/`:
+the analytic models A1-A3, `tolerances.nml` (whose keys are declared once in
+`tests/unit/spin_response_tolerances.f90`), and the LKAG + LSWT magnon curves
+`fe_lswt.dat` and `ni_lswt.dat` from the real-space `exchange.f90` (see
+[`EXCHANGE_VALIDATION_MAP.md`](validation/EXCHANGE_VALIDATION_MAP.md)); their
+small-q end is not converged in the J(r) cutoff. The decks are
+`tests/spin_response/fe_bcc` and `tests/spin_response/ni_fcc`; the Stage 2 and
+3a records are at tag `spin-response-stage3a`.
+
+**Where to add:** the next steps (`docs/DECISIONS.md`, B11) generalize the
+d-only model to the channels s, p, d and f (amplitudes, chi0 and Dyson in
+channel space, with structures ready for a 2 x 2 spin matrix per channel), then
+add the ALSDA kernel matrix and the KL adiabatic output. New kernels follow the
+plain-array pattern above, so analytic tests can call them. The radial modules
+`radial_ground_state` and `lmto_radial_augmentation` date from the removed
+campaign and need an audit before a kernel relies on them.
 
 ### Lehmann-representation Green's functions
 Implemented (B2): `reciprocal_green.f90` provides `reciprocal%fill_green`
@@ -311,10 +349,12 @@ side belong in the reciprocal family, not in `green.f90`.
 | MKL kernels (`mkl_batch`/`mkl_sparse`) | gated by `requires_cmake_option: ENABLE_MKL_KERNELS` | regression + `Example_bulk_bccFe_nsp2_chebyshev_mkl_batch` in `scf/cases.json` |
 | CUDA plugin | compile-only in CI (`cuda_compile` job); real-GPU consistency via `tests/run_gpu_matrix.sh` | n/a (manual, off-CI) |
 | Standalone Fortran unit tests | `unit` (+ topic labels), built with `-DRUN_UNIT_TESTS=ON` | `tests/unit/test_*.f90`, registered with `add_fortran_unit_test` in `CMakeLists.txt` |
-| Spin response: analytic kernels (A1-A3, E1, E3, E4), bcc-Fe components C1-C4 (incl. C4.3) and S2 | `unit;spin-response;quick` | `tests/unit/test_spin_response_*.f90`; the Fe programs run in the scratch deck made by `SpinResponseFeDriver` (`tests/spin_response/fe_scratch.py`); tolerances from `tests/spin_response/oracles/tolerances.nml` via `tests/unit/spin_response_tolerances.f90` |
-| Spin response: 24^3 Fe reproduction against frozen outputs (`SpinResponseBaselineRepro`) | `regression;spin-response` | `tests/spin_response/baseline_repro.py`, frozen files `tests/spin_response/baseline/` (`--freeze` rewrites them) |
+| Spin response: analytic kernels (A1-A3, E1, E3, E4), bcc-Fe components C1-C4 (incl. C4.3) and S2 | `unit;spin-response;quick` | `tests/unit/test_spin_response_*.f90`; the Fe programs run in the scratch deck made by `SpinResponseFeDriver` (`tests/spin_response/fe_scratch.py`) |
 | Spin response: S3, three-atom bcc Fe cell against the one-atom cell (`SpinResponseS3`) | `unit;spin-response;quick` | `tests/spin_response/s3_supercell.py` |
-| Validation scripts | `validation` | `tests/validation/*.py`, records in `docs/validation/` |
+| Spin response: 1 against 4 OpenMP threads, byte-identical (`SpinResponseOmpIdentity`) | `unit;spin-response;quick` | `tests/spin_response/omp_identity.py` |
+| Spin response: 24^3 reproduction against frozen outputs, Fe and Ni (`SpinResponseBaselineRepro`, `SpinResponseNiBaselineRepro`) | `regression;spin-response` | `tests/spin_response/baseline_repro.py`; frozen files in `tests/spin_response/baseline/` and `baseline_ni/` (`--freeze` rewrites them) |
+| Exchange energy integration at finite temperature (`UnitSimpsonFTemperature`) | `unit;quick` | `tests/unit/test_simpson_f_temperature.f90` |
+| Validation scripts | `validation` | `tests/validation/*.py` (spin response: `tests/validation/spin_response_ni/`), records in `docs/validation/` |
 
 **Adding a case:** see `tests/scf/README.md` / `tests/postproc/README.md` for
 the full case-file format. Short version: add an `input.nml` (+ any
@@ -342,13 +382,14 @@ an unexplained failure.
   physics-dense legacy code scheduled for a separate audit — files may be
   edited around the edges (a `use` statement, a comment), but their bodies
   are not refactoring targets at this stage.
-- **One task, one commit.** Commit messages reference the task/phase ID
-  (e.g. `test(P1.3): ...`, `ci(P5.1): ...`).
+- **One task, one commit.** Single-line commit messages, no co-author
+  trailer (`CLAUDE.md`, rule 2).
 - **Expected values never come from the code under test.** See
   "Verification integrity" in `CLAUDE.md`.
-- **Bit-level behavior is the contract.** The regression + example suites
-  must pass at the same tolerances after every task — run them before
-  starting (baseline) and after every change.
+- **Bit-level behavior is the contract.** Run the quick tier
+  (`ctest -L '^quick$'`) before each commit, and
+  `ctest -LE 'validation|performance'` in a fresh build at the end of each stage
+  (`CLAUDE.md`, rule 1).
 
 ---
 
