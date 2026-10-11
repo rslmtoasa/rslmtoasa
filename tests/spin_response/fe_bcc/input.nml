@@ -30,16 +30,16 @@ use_kspace = .true.
 nstep = 25
 /
 &energy
-fermi = -0.067656
+fermi = -0.069077
 energy_min = -1.0
 energy_max = 0.5
 channels_ldos = 2500
 /
 &reciprocal
 ! K-point mesh for SCF (12x12x12 = 1728 k-points before symmetry)
-nk1 = 12
-nk2 = 12
-nk3 = 12
+nk1 = 32
+nk2 = 32
+nk3 = 32
 
 ! K-point mesh offset (0,0,0 = Gamma-centered mesh)
 k_offset_x = 0.0
