@@ -122,8 +122,14 @@ documents at `lr-campaign-archive-2026-10:docs/linear_response/`.
   Fe, W/M = 1.38 (Fe 1.23); the ridge follows ω_s near Γ and dissolves from
   about a quarter of Γ–X (|q| ≈ 0.45 Å⁻¹). Against an LKAG reference at the
   response's Fermi level (32³), ω_s/LSWT = 1.06–1.15 away from small q, rising
-  towards Γ where the reference is unreliable. Open: whether that reference and
-  the response share one potential.
+  towards Γ where the reference is unreliable. The two do not share one
+  potential: these response runs used the 16³-SCF state (total spin moment
+  0.6586 μ_B), the J(r) of the reference comes from the 32³-SCF state (0.6831
+  μ_B), and its AMS moment is M = 0.658589 from `momfile` (the 16³ value;
+  recomputing ω from `jfile` reproduces the file to 0.9 % or better with 0.658589
+  and to 2.7–4.5 % with 0.6831 at 8 of 11 q tried, the three smallest |q| being
+  off by 16–40 % with either). The `ni_fcc` deck was moved to the 32³ state
+  afterwards (`2ce62be`); the 128³ maps have not been rerun on it.
 - 2026-10-11 — Next steps, in order: 3c–3e (s, p, d, f channels; ALSDA kernel
   matrix; KL adiabatic output), then non-collinear and SOC (NC-0a/0b feasibility
   and cross-route comparison with real-space recursion; NC-1 to NC-3), then
