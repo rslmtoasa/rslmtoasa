@@ -6,6 +6,7 @@ Catches a race or a thread-dependent summation order in accumulate_chi0.
 import filecmp
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -21,6 +22,10 @@ def run(binary, deck, scratch, threads):
     old = "pre_processing = 'bravais'"
     if old not in text:
         sys.exit("omp_identity.py: " + old + " not found in " + deck + "/input.nml")
+    for key in ("nk1", "nk2", "nk3"):
+        text, n = re.subn(rf"^{key} = \d+$", f"{key} = 12", text, flags=re.M)
+        if n != 1:
+            sys.exit("omp_identity.py: " + key + " not found in " + deck + "/input.nml")
     q = "".join(f"q_list(:, {i + 1}) = {t!r}, {-t!r}, {t!r}\n" for i, t in enumerate(Q_T))
     block = f"\n&spin_response\nmethod = 'juelich'\nn_q = 2\n{q}omega_min = 0.0\nomega_max = 0.05\nn_omega = 41\neta = 2.0e-3\n/\n"
     nml = pathlib.Path(scratch, "input_driver.nml")

@@ -40,9 +40,9 @@ def deck(binary, source, scratch, name, nk, extra, qs):
         sys.exit("s3_supercell.py: " + old + " not found in " + source + "/input.nml")
     text = text.replace(old, "pre_processing = 'none'\npost_processing = 'spin_response'")
     for key, n in zip(("nk1", "nk2", "nk3"), nk):
-        text, c = re.subn(rf"^{key} = 12$", f"{key} = {n}", text, flags=re.M)
+        text, c = re.subn(rf"^{key} = \d+$", f"{key} = {n}", text, flags=re.M)
         if c != 1:
-            sys.exit("s3_supercell.py: " + key + " = 12 not found in " + source + "/input.nml")
+            sys.exit("s3_supercell.py: " + key + " not found in " + source + "/input.nml")
     if extra:
         for old, new in (("crystal_sym = 'bcc'", "crystal_sym = 'file'"), ("ntype = 1", "ntype = 3"), ("ct(:) = 4.0d0", "ct(:) = 3*4.0d0"),
                          ("label(1) = 'Fe'", "label(1) = 'Fe'\nlabel(2) = 'Fe'\nlabel(3) = 'Fe'")):

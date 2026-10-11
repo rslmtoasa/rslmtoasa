@@ -1,9 +1,10 @@
 """Copy the bcc-Fe deck to a scratch directory and run post_processing='spin_response' there.
 
 Usage: fe_scratch.py <rslmto.x> <deck directory> <scratch directory>
-The deck directory is only read.
+The deck directory is only read. The response mesh is set to 12^3 (the deck's nk is its SCF mesh).
 """
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -42,6 +43,10 @@ old = "pre_processing = 'bravais'"
 text = pathlib.Path(deck, "input.nml").read_text()
 if old not in text:
     sys.exit("fe_scratch.py: " + old + " not found in " + deck + "/input.nml")
+for key in ("nk1", "nk2", "nk3"):
+    text, n = re.subn(rf"^{key} = \d+$", f"{key} = 12", text, flags=re.M)
+    if n != 1:
+        sys.exit("fe_scratch.py: " + key + " not found in " + deck + "/input.nml")
 nml = pathlib.Path(scratch, "input_driver.nml")
 nml.write_text(text.replace(old, "pre_processing = 'none'\npost_processing = 'spin_response'") + SPIN_RESPONSE)
 subprocess.run([binary, nml.name], cwd=scratch, check=True, stdout=open(pathlib.Path(scratch, "driver.log"), "w"),
