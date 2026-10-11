@@ -752,6 +752,12 @@ if (RUN_UNIT_TESTS)
     ${TestDIR}/spin_response/oracles)
   target_link_libraries(UnitSpinResponseChannelsKernel SpinResponseTolerances)
   set_tests_properties(UnitSpinResponseChannelsKernel PROPERTIES LABELS "unit;spin-response;quick")
+  foreach(_t A4 R1)
+    string(TOLOWER ${_t} _l)
+    add_fortran_unit_test(UnitSpinResponse${_t} ${TestDIR}/unit/test_spin_response_${_l}.f90 ${TestDIR}/spin_response/oracles)
+    target_link_libraries(UnitSpinResponse${_t} SpinResponseTolerances)
+    set_tests_properties(UnitSpinResponse${_t} PROPERTIES LABELS "unit;spin-response;quick")
+  endforeach()
   # C1/C2 on bcc Fe: a scratch copy of tests/spin_response/fe_bcc, where the executable runs
   # post_processing='spin_response' first; the unit programs then run in that directory.
   set(_sr_scratch "${CMAKE_BINARY_DIR}/Testing/spin_response/fe_bcc")

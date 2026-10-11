@@ -24,4 +24,7 @@
   static_u_rel = 1.0e-10   ! C4.3: interaction() U_Juelich vs eta = 0 static reference [0.0]
   s3_rel = 1.0e-9   ! S3: three-atom supercell vs folded one-site pair [5.7e-13]
   channel_d_rel = 1.0e-10   ! 3c: spd with U on d vs d-only [1.3e-13]
+  a4_rel = 1.0e-10   ! A4 chi0, chi and static arrays vs numpy [9.9e-16, 5.4e-15, 4.3e-16]
+  a4_identity_rel = 1.0e-12   ! A4 Goldstone identity, (1 + chi0 I) m, lambda controls, zeroth moment [1.4e-14]
+  r1_rel = 1.0e-6   ! R1 kernel matrix vs analytic integral, both cases [9.2e-8, 9.1e-8; Simpson alone 9.2e-8]
 /

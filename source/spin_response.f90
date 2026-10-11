@@ -42,6 +42,7 @@ module spin_response_mod
    public :: interaction_values
    public :: u_juelich
    public :: u_mills
+   public :: radial_kernel_matrix
    public :: solve_dyson
    public :: peak_estimate
    public :: spectral_trace
@@ -60,6 +61,8 @@ module spin_response_mod
    integer, parameter :: max_q = 64
    !> Omega points per matrix-multiplication block of accumulate_chi0; fixed so results do not depend on the thread count.
    integer, parameter :: omega_block = 32
+   !> Points with |m| below this fraction of max|m| take K = dV/m from their neighbours in radial_kernel_matrix.
+   real(rp), parameter :: m_floor = 1.0e-12_rp
 
    type :: spin_response
       class(reciprocal), pointer :: reciprocal => null()
@@ -792,6 +795,44 @@ contains
 
       u = (c_dn - c_up)/m
    end function u_mills
+
+   !> @brief ALSDA transverse kernel matrix of one site, K_ab = (1/4 pi) int dr P_a P_b K(r)/r^2 over channels a, b, spherical vertex (L = 0).
+   !> @details K(r) = dV/m with m = n_up - n_dn (core included), P_a = sqrt(gfac_up gfac_dn) G_up G_dn + S_up S_dn. The sum
+   !>          starts at the second mesh point (dV = 0 at r = 0 while m is not), with the Simpson weights of the full mesh.
+   !>          Where |m| <= m_floor max|m| (m = 0 on a mesh point), K is the cubic interpolation from the four nearest
+   !>          points in mesh index. The Dyson equation takes U = -K.
+   !> @param[in]  r, wq              Mesh (bohr) and quadrature weights including dr/di, shape (nr).
+   !> @param[in]  m, dv              n_up - n_dn (bohr^-3) and V_xc,up - V_xc,dn (Ry), shape (nr).
+   !> @param[in]  g_up, g_dn         Large components times r of each channel, shape (nr, nch); s_* the small components.
+   !> @param[in]  gfac_up, gfac_dn   Scalar-relativistic metric factors, shape (nr, nch).
+   !> @param[out] kmat               K_ab (Ry), shape (nch, nch).
+   subroutine radial_kernel_matrix(r, wq, m, dv, g_up, g_dn, s_up, s_dn, gfac_up, gfac_dn, kmat)
+      real(rp), intent(in) :: r(:), wq(:), m(:), dv(:), g_up(:, :), g_dn(:, :), s_up(:, :), s_dn(:, :), gfac_up(:, :), gfac_dn(:, :)
+      real(rp), intent(out) :: kmat(:, :)
+
+      integer :: i, j, nr
+      logical :: guarded(size(r))
+      real(rp) :: k(size(r)), p(size(r), size(g_up, 2))
+
+      nr = size(r)
+      p = sqrt(gfac_up*gfac_dn)*g_up*g_dn + s_up*s_dn
+      guarded = abs(m) <= m_floor*maxval(abs(m))
+      k = 0.0_rp
+      do i = 2, nr
+         if (.not. guarded(i)) k(i) = dv(i)/m(i)
+      end do
+      do i = 2, nr
+         if (.not. guarded(i)) cycle
+         if (i < 4 .or. i > nr - 2) error stop 'radial_kernel_matrix: m = 0 within two mesh points of an end'
+         if (count(guarded(i - 2:i + 2)) > 1) error stop 'radial_kernel_matrix: m = 0 on neighbouring mesh points'
+         k(i) = (-k(i - 2) + 4.0_rp*k(i - 1) + 4.0_rp*k(i + 1) - k(i + 2))/6.0_rp
+      end do
+      do i = 1, size(kmat, 1)
+         do j = 1, size(kmat, 2)
+            kmat(i, j) = sum(wq(2:)*p(2:, i)*p(2:, j)*k(2:)/r(2:)**2)/(4.0_rp*pi)
+         end do
+      end do
+   end subroutine radial_kernel_matrix
 
    !> @brief Mills Goldstone residual per site, delta_i = 1 + sum_j chi0s_ij u_j m_j / m_i (1 + chi0(0,0) U for one site).
    !> @param[in] chi0s  Static bare response chi0(0,0), real, shape (nsite, nsite).
