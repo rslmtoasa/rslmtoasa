@@ -178,6 +178,13 @@ contains
                workspace%h(i_start:i_end,i_start:i_end,ik) = workspace%h(i_start:i_end,i_start:i_end,ik) + &
                   this%hamiltonian%enim(:,:,ntype_i) + this%hamiltonian%lsham(:,:,ntype_i)
             end do
+         else if (this%control%has_soc()) then
+            ! First order: the on-site L.S is the only addition, as in the real-space routes (ee on-site + lsham).
+            do isite = 1, this%lattice%nrec
+               ntype_i = this%lattice%ib(isite); i_start=(isite-1)*nb+1; i_end=isite*nb
+               workspace%h(i_start:i_end,i_start:i_end,ik) = workspace%h(i_start:i_end,i_start:i_end,ik) + &
+                  this%hamiltonian%lsham(:,:,ntype_i)
+            end do
          end if
          if (add_ccor) workspace%h(:,:,ik) = workspace%h(:,:,ik) + workspace%hcc(:,:,ik)
       end do
@@ -267,7 +274,7 @@ contains
 
    !> @brief Fourier transform first-order real-space Hamiltonian blocks.
    !> @details Forms H(k)=sum_R h(R) exp(i k.R), preserving the historical
-   !>          first-order path without onsite e_nu or spin-orbit terms.
+   !>          first-order path without onsite e_nu, with the on-site L.S for nsp = 2 and 4.
    !> @param[in] this Reciprocal object containing real-space Hamiltonian data.
    !> @param[in] k_vec k-point vector.
    !> @param[out] hk_result Packed k-space Hamiltonian matrix.
@@ -278,10 +285,9 @@ contains
       type(reciprocal_assembler) :: assembler
 
       ! First-order k-space Hamiltonian: H(k) = h(k) = Sum_R ee(R) exp(i*k·R).
-      ! NOTE: This deliberately reproduces the historical first-order behaviour.
-      !       The on-site E_nu (enim) and spin-orbit (lsham) terms are NOT added
-      !       here; they are only included in the second-order path
-      !       (fourier_transform_hamiltonian_second_order). See kspace_ham_order.
+      ! NOTE: The on-site E_nu (enim) is NOT added here; it belongs to the second-order
+      !       path (fourier_transform_hamiltonian_second_order). The on-site spin-orbit
+      !       term (lsham) is added for nsp = 2 and 4 in both orders. See kspace_ham_order.
 
       call this%make_reciprocal_assembler(assembler)
       assembler%use_second_order = .false.

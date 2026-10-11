@@ -8,6 +8,7 @@ program test_arbitrary_k_eigenpairs
                              reciprocal_execution_result, reciprocal_residency_host, lapack_reciprocal_backend
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
+   use control_mod, only: control
    use logger_mod, only: g_logger
    implicit none
 
@@ -20,6 +21,9 @@ program test_arbitrary_k_eigenpairs
    type(lattice), target :: lat
    type(lattice), target :: lat_two_site
    type(lattice), target :: lat_empty
+   type(control), target :: ctl
+   complex(rp), allocatable :: h_plain(:, :)
+   integer :: i_orb
    real(rp) :: k0(3), k_off(3)
    real(rp), allocatable :: evals(:, :), evals_qg(:, :), folded(:, :), evals_second(:, :), direct_evals(:)
    real(rp), allocatable :: evals_tile1(:, :), evals_tile2(:, :)
@@ -37,6 +41,7 @@ program test_arbitrary_k_eigenpairs
 
    call g_logger%init()
    failed = .false.
+   ctl%nsp = 1
    call setup_one_site_model(recip, ham, lat)
    allocate(h_direct(nb, nb), direct_evals(nb), direct_vecs(nb, nb))
 
@@ -332,6 +337,22 @@ program test_arbitrary_k_eigenpairs
    call check_close('second-order/SOC direct spectrum', maxval(abs(evals_second(:, 1) - direct_evals)), 1.0e-12_rp, failed)
    call check_gauge('second-order/SOC eigenvectors', evecs_second(:, :, 1), direct_vecs, failed)
 
+   ! First order: nsp = 4 adds the on-site lsham to H(k) and nothing else; nsp = 3 adds nothing.
+   ham%hoh = .false.
+   recip%kspace_ham_order = 'first'
+   allocate(h_plain(nb, nb))
+   ctl%nsp = 1
+   call recip%fourier_transform_hamiltonian(k_off, h_plain)
+   ctl%nsp = 3
+   call recip%fourier_transform_hamiltonian(k_off, h_direct)
+   call check_close('first-order H(k), nsp = 3 equals nsp = 1', maxval(abs(h_direct - h_plain)), 0.0_rp, failed)
+   ctl%nsp = 4
+   call recip%fourier_transform_hamiltonian(k_off, h_direct)
+   do i_orb = 1, nb
+      h_plain(i_orb, i_orb) = h_plain(i_orb, i_orb) + ham%lsham(i_orb, i_orb, 1)
+   end do
+   call check_close('first-order H(k), nsp = 4 adds the on-site lsham', maxval(abs(h_direct - h_plain)), 1.0e-14_rp, failed)
+
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
       error stop 1
@@ -347,6 +368,7 @@ contains
       integer :: i
 
       call obj%restore_to_default()
+      obj%control => ctl
       lat_obj%nrec = 1
       lat_obj%ntype = 1
       lat_obj%nn_max = 3
@@ -414,6 +436,7 @@ contains
       integer :: i
 
       call obj%restore_to_default()
+      obj%control => ctl
       lat_obj%nrec = 2; lat_obj%ntype = 2; lat_obj%nn_max = 2; lat_obj%kk = 2
       allocate(lat_obj%ib(2), lat_obj%atlist(2), lat_obj%iz(2), lat_obj%nn(2,2))
       lat_obj%ib = [1,2]; lat_obj%atlist = [1,2]; lat_obj%iz = [1,2]

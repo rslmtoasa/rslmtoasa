@@ -53,7 +53,7 @@ logical :: auto_find_fermi                 ! Find Fermi from charge conservation
 logical :: suppress_internal_logs          ! Reduce verbosity (.true. recommended)
 character(len=32) :: reciprocal_mode       ! 'ham_only', 'generalized_overlap_proxy', or 'generalized_overlap_kanpur'
 character(len=16) :: reciprocal_backend    ! 'lapack' (default) or 'cuda'
-character(len=16) :: kspace_ham_order      ! 'auto' (second if hoh on, else first), 'first' (h(k)), or 'second' (E_nu + h - hoh + L.S)
+character(len=16) :: kspace_ham_order      ! 'auto' (second if hoh on, else first), 'first' (h(k) + L.S for nsp = 2, 4), or 'second' (E_nu + h - hoh + L.S)
 logical :: kanpur_diagnostics              ! Print Kanpur-mapping diagnostics
 logical :: gamma_bounds_diagnostics        ! Compute H(Gamma) bounds diagnostics
 logical :: hall_diag_experimental          ! Experimental finite real-space HALL diagonalization
