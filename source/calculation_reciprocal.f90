@@ -1,5 +1,6 @@
 submodule(calculation_mod) calculation_reciprocal
    use spin_response_mod, only: spin_response
+   use alsda_radial_mod, only: alsda_kernel
 
 contains
 
@@ -391,6 +392,7 @@ contains
       reciprocal_obj%fermi_level = energy_obj%fermi
       response = spin_response(reciprocal_obj)
       call response%prepare()
+      if (trim(response%kernel) /= 'goldstone') call alsda_kernel(response, lattice_obj)
       call response%interaction()
       call response%run()
       call response%write_state()

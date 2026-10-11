@@ -271,7 +271,7 @@ The `linear_response` code was removed from `fable_v4b` (tag
 `lr-campaign-archive-2026-10`); its dispatch stops at startup, and its docs,
 numbers and tests are not references.
 
-**In the tree:** `source/spin_response.f90` (`spin_response_mod`, about 960
+**In the tree:** `source/spin_response.f90` (`spin_response_mod`, about 1,100
 lines) with its `&spin_response` namelist in
 `source/include_codes/namelists/spin_response.f90`, run by `post_processing =
 'spin_response'` (`post_processing_spin_response` in `calculation_reciprocal.f90`).
@@ -286,13 +286,22 @@ beyond the basis lmax are fatal), with one static U per site acting on the d cha
   moment is negative.
 - `interaction`: U_Juelich from the Goldstone condition on the static chi0 at
   eta = 0; U_Mills from the d band centres (`center_band`), with the Mills
-  residual and implied gap; both printed.
+  residual and implied gap; both printed. It also builds `kmat`, the matrix over
+  kappa that `run` uses: U on the d rows (`kernel = 'goldstone'`, default), or
+  U = -K from the ALSDA matrix (`'alsda'`; `'alsda_scaled'` times the factor
+  lambda, least squares along M of chi0(0,0) lambda U M = -M). With an ALSDA
+  kernel `_state.dat` prints lambda, the q = 0 Rayleigh eigenvalue of
+  1 + chi0 U along M for the unscaled kernel, and K. LDA only (`txc = 1`).
+  The default `kernel = 'goldstone'` is the production kernel; `'alsda'` and
+  `'alsda_scaled'` are experimental (known gaps in `tests/KNOWN_ISSUES.md`).
 - `run`: chi0 for all q in one pass over the k-chunks (`bare_response_list`: the
   k endpoint once per chunk, then each q's k+q endpoint), then per q the Dyson
   solve with K over kappa (U on the d rows, zero elsewhere), tr chi0, tr chi, tr L
   and the smallest |eig(I + chi0 K)|; peak for one site, crossing for one site
   and one channel (`n/a` otherwise). Output: `<prefix>_q<NNN>.dat`,
-  `<prefix>_dispersion.dat` and `<prefix>_state.dat`. With `n_omega = 1`,
+  `<prefix>_dispersion.dat` (last column: smallest real part of the eigenvalues of
+  I + chi0 U at the first omega, the signed delta_q for `n_omega = 1`, `omega = 0`,
+  `eta = 0`) and `<prefix>_state.dat`. With `n_omega = 1`,
   `omega = 0` and `eta = 0` it gives the static chi0(q, 0).
 - `accumulate_chi0` lists the band pairs with a nonzero vertex (exact zeros of the
   spin-block amplitudes) and f_n - f_m /= 0, then does one ZGEMM per block of 32
@@ -308,14 +317,22 @@ beyond the basis lmax are fatal), with one static U per site acting on the d cha
   potential.
 - Kernels are public procedures on plain arrays: `d_amplitudes_coefficient`,
   `d_amplitudes_juelich`, `accumulate_chi0`, `u_juelich`, `u_mills`,
-  `mills_residual`, `interaction_values`, `solve_dyson`, `spectral_trace`,
-  `pole_estimates`.
+  `mills_residual`, `interaction_values`, `radial_kernel_matrix`, `solve_dyson`,
+  `spectral_trace`, `pole_estimates`.
+- ALSDA kernel, K_ab = (1/4 pi) int dr P_a P_b K(r)/r^2 per site (spherical
+  vertex, L = 0), K = [V_xc,up - V_xc,dn]/m with the core in m, P = SR overlap of
+  the up and down radial functions. A response run has no radial data, so
+  `source/alsda_radial.f90` (`alsda_radial_mod`, outside `spin_response*`)
+  re-runs `self%lmtst` on a copy of each site (the lattice potential parameters
+  are untouched), builds phi at E_nu (coefficient amplitudes) or the frozen
+  projector (Juelich amplitudes), and `alsda_kernel` hands the blocks to
+  `spin_response%set_alsda_kernel`; the driver calls it after `prepare`.
 - q is given in direct coordinates of the code's primitive basis for
   `crystal_sym`; check the Cartesian columns of `_dispersion.dat` when reusing a
   q-path from another code.
 
 **References and decks:** developer-owned, under `tests/spin_response/oracles/`:
-the analytic models A1-A3, `tolerances.nml` (whose keys are declared once in
+the analytic models A1-A4 and the radial kernel integrals R1, `tolerances.nml` (whose keys are declared once in
 `tests/unit/spin_response_tolerances.f90`), and the LKAG + LSWT magnon curves
 `fe_lswt.dat` and `ni_lswt.dat` from the real-space `exchange.f90` (see
 [`EXCHANGE_VALIDATION_MAP.md`](validation/EXCHANGE_VALIDATION_MAP.md)); their
@@ -323,13 +340,12 @@ small-q end is not converged in the J(r) cutoff. The decks are
 `tests/spin_response/fe_bcc` and `tests/spin_response/ni_fcc`; the Stage 2 and
 3a records are at tag `spin-response-stage3a`.
 
-**Where to add:** the next steps (`docs/DECISIONS.md`, B11) add the ALSDA kernel
-matrix over kappa (`solve_dyson` already takes a matrix) and the KL adiabatic
+**Where to add:** the next steps (`docs/DECISIONS.md`, B11) add the KL adiabatic
 output; a 2 x 2 spin structure per channel enlarges kappa and the vertex builder
 in `accumulate_chi0`. New kernels follow the
-plain-array pattern above, so analytic tests can call them. The radial modules
-`radial_ground_state` and `lmto_radial_augmentation` date from the removed
-campaign and need an audit before a kernel relies on them.
+plain-array pattern above, so analytic tests can call them. The radial module
+`radial_ground_state` is read only through `alsda_radial.f90`;
+`lmto_radial_augmentation` is not used.
 
 ### Lehmann-representation Green's functions
 Implemented (B2): `reciprocal_green.f90` provides `reciprocal%fill_green`

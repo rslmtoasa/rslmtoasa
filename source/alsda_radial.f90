@@ -10,7 +10,7 @@
 ! DESCRIPTION:
 !> Radial data of the ALSDA transverse kernel for spin_response. A response run reads only the potential file, so the
 !> atomic sphere of each site is solved again with the production lmtst on a copy of the site (the potential parameters
-!> of the lattice are not touched), and the radial arrays are returned as plain arrays.
+!> of the lattice are not touched) and the radial arrays are handed on as plain arrays to radial_kernel_matrix.
 !------------------------------------------------------------------------------
 module alsda_radial_mod
    use precision_mod, only: rp
@@ -18,10 +18,12 @@ module alsda_radial_mod
    use symbolic_atom_mod, only: symbolic_atom
    use self_mod, only: self
    use radial_ground_state_mod, only: radial_simpson_weight
+   use spin_response_mod, only: spin_response, radial_kernel_matrix
    implicit none
    private
 
    public :: site_radial_data
+   public :: alsda_kernel
 
 contains
 
@@ -78,5 +80,23 @@ contains
       s_up = s(:, :, 1)
       s_dn = s(:, :, 2)
    end subroutine site_radial_data
+
+   !> @brief Hand the ALSDA kernel block of every site to the response; needs response%prepare (E_F) first.
+   subroutine alsda_kernel(response, lattice_obj)
+      type(spin_response), intent(inout) :: response
+      type(lattice), target, intent(inout) :: lattice_obj
+
+      integer :: i
+      real(rp), allocatable :: r(:), wq(:), m(:), dv(:), enu(:, :), g_up(:, :), g_dn(:, :), s_up(:, :), s_dn(:, :), &
+                               gfac_up(:, :), gfac_dn(:, :), kblock(:, :)
+
+      allocate (kblock(size(response%channel_l), size(response%channel_l)))
+      do i = 1, lattice_obj%nrec
+         call site_radial_data(lattice_obj, i, response%channel_l, response%fermi_used, trim(response%method) == 'juelich', &
+                               r, wq, m, dv, enu, g_up, g_dn, s_up, s_dn, gfac_up, gfac_dn)
+         call radial_kernel_matrix(r, wq, m, dv, g_up, g_dn, s_up, s_dn, gfac_up, gfac_dn, kblock)
+         call response%set_alsda_kernel(i, kblock)
+      end do
+   end subroutine alsda_kernel
 
 end module alsda_radial_mod

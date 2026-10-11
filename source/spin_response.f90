@@ -69,6 +69,8 @@ module spin_response_mod
       class(lattice), pointer :: lattice => null()
       !> 'juelich' | 'mills'
       character(len=16) :: method
+      !> 'goldstone' (scalar U on d) | 'alsda' | 'alsda_scaled' (ALSDA matrix times the Goldstone factor lambda).
+      character(len=16) :: kernel
       character(len=256) :: output_prefix
       !> l of each response channel, ascending (0 = s .. 3 = f); always contains d.
       integer, allocatable :: channel_l(:)
@@ -93,6 +95,12 @@ module spin_response_mod
       real(rp), allocatable :: uj(:), um(:), delta_mills(:), gap_d(:)
       !> Position of each site relative to site 1, in direct (lattice) coordinates, shape (3, nsite).
       real(rp), allocatable :: site_offset(:, :)
+      !> ALSDA kernel K over kappa (Ry), unscaled, block diagonal in sites; U = -K enters the Dyson equation.
+      real(rp), allocatable :: k_alsda(:, :)
+      !> Interaction matrix over kappa (Ry) that run puts into the Dyson equation.
+      real(rp), allocatable :: kmat(:, :)
+      !> Goldstone factor of the ALSDA kernel, and the q = 0 Rayleigh eigenvalue of 1 + chi0 U along M for the unscaled kernel.
+      real(rp) :: kernel_lambda, kernel_goldstone_eig
    contains
       procedure :: build_from_file
       procedure :: restore_to_default
@@ -101,6 +109,7 @@ module spin_response_mod
       procedure, private :: set_site_offsets
       procedure :: bare_response
       procedure :: bare_response_list
+      procedure :: set_alsda_kernel
       procedure :: interaction
       procedure :: run
       procedure :: write_state
@@ -138,12 +147,17 @@ contains
       if (allocated(this%occ_mills)) deallocate (this%occ_mills, this%occ_juelich)
       if (allocated(this%moment)) deallocate (this%moment)
       if (allocated(this%uj)) deallocate (this%uj, this%um, this%delta_mills, this%gap_d)
+      if (allocated(this%k_alsda)) deallocate (this%k_alsda)
+      if (allocated(this%kmat)) deallocate (this%kmat)
    end subroutine destructor
 
    subroutine restore_to_default(this)
       class(spin_response), intent(inout) :: this
 
       this%method = 'juelich'
+      this%kernel = 'goldstone'
+      this%kernel_lambda = 0.0_rp
+      this%kernel_goldstone_eig = 0.0_rp
       this%channel_l = [l_d]
       this%output_prefix = 'spin_response'
       this%n_omega = 201
@@ -168,6 +182,7 @@ contains
       include 'include_codes/namelists/spin_response.f90'
 
       method = this%method
+      kernel = this%kernel
       channels = 'd'
       output_prefix = this%output_prefix
       n_q = 1
@@ -191,6 +206,13 @@ contains
       if (trim(method) /= 'juelich' .and. trim(method) /= 'mills') then
          call g_logger%fatal('spin_response method must be juelich or mills, got '//trim(method), __FILE__, __LINE__)
       end if
+      if (trim(kernel) /= 'goldstone' .and. trim(kernel) /= 'alsda' .and. trim(kernel) /= 'alsda_scaled') then
+         call g_logger%fatal('spin_response kernel must be goldstone, alsda or alsda_scaled, got '//trim(kernel), __FILE__, __LINE__)
+      end if
+      if (trim(kernel) /= 'goldstone' .and. this%lattice%control%txc /= 1) then
+         call g_logger%fatal('spin_response kernel '//trim(kernel)//' needs txc = 1 (LDA): for GGA and libXC B_xc/m is not the transverse kernel', &
+                             __FILE__, __LINE__)
+      end if
       if (n_omega < 1 .or. (n_omega > 1 .and. omega_max <= omega_min) .or. eta < 0.0_rp) then
          call g_logger%fatal('spin_response needs n_omega >= 1, omega_max > omega_min for n_omega > 1, and eta >= 0', &
                              __FILE__, __LINE__)
@@ -204,6 +226,7 @@ contains
                              __FILE__, __LINE__)
       end if
       this%method = method
+      this%kernel = kernel
       this%output_prefix = output_prefix
       this%n_omega = n_omega
       this%omega_min = omega_min
@@ -471,6 +494,23 @@ contains
       chi0 = c4(:, :, :, 1)
    end subroutine bare_response
 
+   !> @brief Store the ALSDA kernel block K_ab (Ry) of one site in the (site, channel) matrix.
+   subroutine set_alsda_kernel(this, isite, kblock)
+      class(spin_response), intent(inout) :: this
+      integer, intent(in) :: isite
+      real(rp), intent(in) :: kblock(:, :)
+
+      integer :: nch, nsc
+
+      nch = size(this%channel_l)
+      nsc = this%lattice%nrec*nch
+      if (.not. allocated(this%k_alsda)) then
+         allocate (this%k_alsda(nsc, nsc))
+         this%k_alsda = 0.0_rp
+      end if
+      this%k_alsda((isite - 1)*nch + 1:isite*nch, (isite - 1)*nch + 1:isite*nch) = kblock
+   end subroutine set_alsda_kernel
+
    !> @brief Juelich and Mills U per site from the static chi0(0, 0) (omega = 0, eta = 0) of each amplitude kind, d rows only.
    !> @details Mills C_up, C_dn are the d entries of center_band, the on-site energy of H(k), in label order.
    subroutine interaction(this)
@@ -478,8 +518,9 @@ contains
 
       integer :: i, ns, nsc
       integer, allocatable :: id(:)
-      real(rp), allocatable :: c_up(:)
+      real(rp), allocatable :: c_up(:), mom(:), w(:), chi0s(:, :)
       complex(rp), allocatable :: chi0_mills(:, :, :), chi0_juelich(:, :, :)
+      logical :: mills
 
       ns = this%lattice%nrec
       nsc = ns*size(this%channel_l)
@@ -496,16 +537,31 @@ contains
       call interaction_values(real(chi0_mills(id, id, 1), rp), real(chi0_juelich(id, id, 1), rp), &
                               this%d_occ_mills(:, 1) - this%d_occ_mills(:, 2), this%moment, c_up, c_up + this%gap_d, &
                               this%uj, this%um, this%delta_mills)
+
+      mills = trim(this%method) == 'mills'
+      if (allocated(this%kmat)) deallocate (this%kmat)
+      allocate (this%kmat(nsc, nsc))
+      this%kmat = 0.0_rp
+      do i = 1, ns
+         this%kmat(id(i), id(i)) = merge(this%um(i), this%uj(i), mills)
+      end do
+      if (trim(this%kernel) == 'goldstone') return
+      ! ALSDA: U = -K. lambda is the least-squares factor along M for chi0(0,0) lambda U M = -M (equals U_Juelich for one d channel).
+      mom = merge(this%occ_mills(:, 1) - this%occ_mills(:, 2), this%occ_juelich(:, 1) - this%occ_juelich(:, 2), mills)
+      chi0s = real(merge(chi0_mills(:, :, 1), chi0_juelich(:, :, 1), mills), rp)
+      w = matmul(chi0s, matmul(-this%k_alsda, mom))
+      this%kernel_lambda = -dot_product(w, mom)/dot_product(w, w)
+      this%kernel_goldstone_eig = dot_product(mom, mom + w)/dot_product(mom, mom)
+      this%kmat = -this%k_alsda*merge(this%kernel_lambda, 1.0_rp, trim(this%kernel) == 'alsda_scaled')
    end subroutine interaction
 
    !> @brief Loop over the q list: chi0, Dyson, tr L and pole estimates; writes <prefix>_q<NNN>.dat and <prefix>_dispersion.dat.
    subroutine run(this)
       class(spin_response), intent(inout) :: this
 
-      integer :: iq, iw, nq, nw, ns, nsc, i, funit, fdisp
+      integer :: iq, iw, nq, nw, ns, nsc, funit, fdisp
       real(rp) :: peak, crossing, qcart(3)
-      real(rp), allocatable :: u(:), trl(:), kmat(:, :)
-      integer, allocatable :: id(:)
+      real(rp), allocatable :: trl(:)
       complex(rp), allocatable :: chi0(:, :, :, :), chi(:, :, :)
       logical :: has_peak, has_crossing
       character(len=256) :: fname
@@ -513,26 +569,19 @@ contains
 
       ns = this%lattice%nrec
       nsc = ns*size(this%channel_l)
-      u = merge(this%um, this%uj, trim(this%method) == 'mills')
-      id = this%d_rows()
-      allocate (kmat(nsc, nsc))
-      kmat = 0.0_rp
-      do i = 1, ns
-         kmat(id(i), id(i)) = u(i)
-      end do
       nq = size(this%q_direct, 2)
       nw = size(this%omega)
       allocate (chi0(nsc, nsc, nw, nq), chi(nsc, nsc, nw))
       call this%bare_response_list(this%q_direct, this%omega, this%eta, trim(this%method) == 'juelich', chi0)
       open (newunit=fdisp, file=trim(this%output_prefix)//'_dispersion.dat', action='write', status='replace')
-      write (fdisp, '(a)') '# q_direct(3) q_cartesian(3, units 2pi/a) |q|(1/Angstrom) peak_omega(Ry) crossing_omega(Ry)'
+      write (fdisp, '(a)') '# q_direct(3) q_cartesian(3, units 2pi/a) |q|(1/Angstrom) peak_omega(Ry) crossing_omega(Ry) min_re_eig(I+chi0*U)_at_omega_1'
       do iq = 1, nq
-         call solve_dyson(chi0(:, :, :, iq), kmat, chi)
+         call solve_dyson(chi0(:, :, :, iq), this%kmat, chi)
          trl = spectral_trace(chi)
          has_peak = .false.
          has_crossing = .false.
          if (nsc == 1) then
-            call pole_estimates(this%omega, trl, chi0(1, 1, :, iq), u(1), peak, crossing, has_peak, has_crossing)
+            call pole_estimates(this%omega, trl, chi0(1, 1, :, iq), this%kmat(1, 1), peak, crossing, has_peak, has_crossing)
          else if (ns == 1) then
             call peak_estimate(this%omega, trl, peak, has_peak)
          end if
@@ -542,7 +591,7 @@ contains
          write (funit, '(a)') '# omega(Ry) re_tr_chi0(1/Ry) im_tr_chi0(1/Ry) re_tr_chi(1/Ry) im_tr_chi(1/Ry) tr_L(1/Ry) min_abs_eig(I+chi0*U)'
          do iw = 1, nw
             write (funit, '(7es22.14)') this%omega(iw), sum_diagonal(chi0(:, :, iw, iq)), sum_diagonal(chi(:, :, iw)), trl(iw), &
-               min_abs_eig(chi0(:, :, iw, iq), kmat)
+               min_abs_eig(chi0(:, :, iw, iq), this%kmat)
          end do
          close (funit)
 
@@ -551,8 +600,8 @@ contains
          crossing_text = 'n/a'
          if (has_peak) write (peak_text, '(es22.14)') peak
          if (has_crossing) write (crossing_text, '(es22.14)') crossing
-         write (fdisp, '(7es16.8,2a24)') this%q_direct(:, iq), qcart, 2.0_rp*pi*sqrt(sum(qcart**2))/this%lattice%alat, &
-            peak_text, crossing_text
+         write (fdisp, '(7es16.8,2a24,es16.8)') this%q_direct(:, iq), qcart, 2.0_rp*pi*sqrt(sum(qcart**2))/this%lattice%alat, &
+            peak_text, crossing_text, min_real_eig(chi0(:, :, 1, iq), this%kmat)
       end do
       close (fdisp)
    end subroutine run
@@ -587,6 +636,15 @@ contains
          end do
       else
          write (funit, '(a)') 'u n/a'
+      end if
+      if (trim(this%kernel) /= 'goldstone') then
+         write (funit, '(a,a)') 'kernel ', trim(this%kernel)
+         write (funit, '(a,es24.16)') 'kernel_lambda ', this%kernel_lambda
+         write (funit, '(a,es24.16)') 'kernel_goldstone_eig ', this%kernel_goldstone_eig
+         write (funit, '(a)') '# unscaled ALSDA kernel K, rows and columns (site, channel) (Ry)'
+         do i = 1, size(this%k_alsda, 1)
+            write (funit, '(*(es24.16))') this%k_alsda(i, :)
+         end do
       end if
       close (funit)
    end subroutine write_state
@@ -871,14 +929,14 @@ contains
       end do
    end function sum_diagonal
 
-   !> @brief Smallest |eigenvalue| of I + chi0 K at one omega (gauge invariant for several sites).
-   function min_abs_eig(chi0, kmat) result(m)
+   !> @brief Eigenvalues of I + chi0 K at one omega (gauge invariant for several sites).
+   function eig_one_plus(chi0, kmat) result(w)
       complex(rp), intent(in) :: chi0(:, :)
       real(rp), intent(in) :: kmat(:, :)
-      real(rp) :: m
+      complex(rp) :: w(size(kmat, 1))
 
       integer :: n, j, info
-      complex(rp) :: a(size(kmat, 1), size(kmat, 1)), w(size(kmat, 1)), vl(1, 1), vr(1, 1), work(4*size(kmat, 1))
+      complex(rp) :: a(size(kmat, 1), size(kmat, 1)), vl(1, 1), vr(1, 1), work(4*size(kmat, 1))
       real(rp) :: rwork(2*size(kmat, 1))
 
       n = size(kmat, 1)
@@ -887,9 +945,26 @@ contains
          a(j, j) = a(j, j) + 1.0_rp
       end do
       call zgeev('N', 'N', n, a, n, w, vl, 1, vr, 1, work, size(work), rwork, info)
-      if (info /= 0) error stop 'min_abs_eig: zgeev failed'
-      m = minval(abs(w))
+      if (info /= 0) error stop 'eig_one_plus: zgeev failed'
+   end function eig_one_plus
+
+   !> @brief Smallest |eigenvalue| of I + chi0 K at one omega.
+   function min_abs_eig(chi0, kmat) result(m)
+      complex(rp), intent(in) :: chi0(:, :)
+      real(rp), intent(in) :: kmat(:, :)
+      real(rp) :: m
+
+      m = minval(abs(eig_one_plus(chi0, kmat)))
    end function min_abs_eig
+
+   !> @brief Smallest real part of the eigenvalues of I + chi0 K at one omega (signed; the static delta_q at omega = 0, eta = 0).
+   function min_real_eig(chi0, kmat) result(m)
+      complex(rp), intent(in) :: chi0(:, :)
+      real(rp), intent(in) :: kmat(:, :)
+      real(rp) :: m
+
+      m = minval(real(eig_one_plus(chi0, kmat), rp))
+   end function min_real_eig
 
    !> @brief Solve (I + chi0 K) chi = chi0 at each omega by LU, with K a matrix over kappa.
    !> @details Never call at eta = 0 for q = 0: the Goldstone condition makes I + chi0 K singular there.

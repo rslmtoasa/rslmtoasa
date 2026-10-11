@@ -1707,3 +1707,17 @@ campaign remain outside the established scope.
 - **Verified:** the Fe core integrates to 9.000 electrons per spin (`core_weighted_up`, `core_weighted_down`), so the sphere
   integral of n_up - n_dn is the same with and without the core density.
 
+## spin_response 3d, experimental ALSDA kernel: known gaps and measured outcome — 2026-10-11
+
+- **Verified (bcc Fe, 12^3 deck, kernel 'alsda', method juelich; lambda is 1.195 unmutated):** the projector arithmetic of
+  `site_radial_data` has no check with an independent expected value. Taking x from the opposite spin's E_nu moves lambda to 1.362
+  (+14 %); flipping the sign of x moves it to 1.675 (+40 %); both pass every test. Core left out of m moves lambda to 1.1897
+  (-0.45 %) and passes every test (the core integrates to 9.000 electrons per spin, so the sphere integral of m cannot see it).
+- **Verified:** a transposed or conjugated vertex in `accumulate_chi0` passes A4 (its T_a T_b* is real, so chi0 is symmetric); no
+  gauge-invariant test can see a transposition.
+- **Measured outcome (24^3 and 60^3, bcc Fe and fcc Ni, scripts not committed):** with channels spd, one lambda along M leaves the
+  q = 0 mode gapped (smallest eigenvalue of 1 + chi0 U: -3.3e-3 Juelich, -2.1e-2 Mills at 24^3; 0 for d only). Fe at 60^3 has
+  delta_q < 0 for 'alsda_scaled' spd at xi = 0.10, 0.75, 0.80 (Juelich) and at all five q tried (Mills; -0.022 to -0.112), against
+  delta_q > 0 at all five for the default kernel (0.0048 to 0.0448). Ni along Gamma-L has delta_q > 0 everywhere.
+- **Not pursued:** per-channel scaling or any other kernel change.
+
