@@ -47,6 +47,7 @@ for key in ("nk1", "nk2", "nk3"):
     text, n = re.subn(rf"^{key} = \d+$", f"{key} = 12", text, flags=re.M)
     if n != 1:
         sys.exit("fe_scratch.py: " + key + " not found in " + deck + "/input.nml")
+pathlib.Path(scratch, "input.nml").write_text(text)  # the Fortran test programs read ./input.nml
 nml = pathlib.Path(scratch, "input_driver.nml")
 nml.write_text(text.replace(old, "pre_processing = 'none'\npost_processing = 'spin_response'") + SPIN_RESPONSE)
 subprocess.run([binary, nml.name], cwd=scratch, check=True, stdout=open(pathlib.Path(scratch, "driver.log"), "w"),
