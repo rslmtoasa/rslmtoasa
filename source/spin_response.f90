@@ -18,11 +18,13 @@
 !>
 !> Spin index of the amplitudes: 1 = up (majority), 2 = down. The kernels take plain
 !> arrays; only the spin_response type uses the reciprocal and lattice objects.
+!> The response space is indexed by kappa = (site - 1)*nch + channel, channel = s, p, d, f as chosen in
+!> &spin_response channels; the kernels treat kappa as the site index and never see the channel.
 !------------------------------------------------------------------------------
 module spin_response_mod
    use precision_mod, only: rp
    use math_mod, only: pi, i_unit, inverse_3x3
-   use basis_mod, only: nb, spin_off
+   use basis_mod, only: nb, spin_off, lmax_basis
    use lattice_mod, only: lattice
    use reciprocal_mod, only: reciprocal, fermi_dirac_occupation, kB_Ry_per_K
    use logger_mod, only: g_logger
@@ -31,6 +33,7 @@ module spin_response_mod
    private
 
    public :: spin_response
+   public :: channel_amplitudes_coefficient
    public :: d_amplitudes_coefficient
    public :: d_amplitudes_juelich
    public :: accumulate_d_occupation
@@ -40,6 +43,7 @@ module spin_response_mod
    public :: u_juelich
    public :: u_mills
    public :: solve_dyson
+   public :: peak_estimate
    public :: spectral_trace
    public :: pole_estimates
 
@@ -54,6 +58,8 @@ module spin_response_mod
    real(rp), parameter :: electron_count_tol = 1.0e-6_rp
    !> Largest q list the namelist can carry.
    integer, parameter :: max_q = 64
+   !> Omega points per matrix-multiplication block of accumulate_chi0; fixed so results do not depend on the thread count.
+   integer, parameter :: omega_block = 32
 
    type :: spin_response
       class(reciprocal), pointer :: reciprocal => null()
@@ -61,6 +67,8 @@ module spin_response_mod
       !> 'juelich' | 'mills'
       character(len=16) :: method
       character(len=256) :: output_prefix
+      !> l of each response channel, ascending (0 = s .. 3 = f); always contains d.
+      integer, allocatable :: channel_l(:)
       integer :: n_omega
       real(rp) :: omega_min, omega_max, eta
       !> q points (direct coordinates, shape (3, nq)) and the omega grid (Ry).
@@ -74,6 +82,8 @@ module spin_response_mod
       integer :: spin_map(2)
       !> d occupation per (site, spin label) with coefficient and Juelich amplitudes.
       real(rp), allocatable :: d_occ_mills(:, :), d_occ_juelich(:, :)
+      !> The same occupations for every (site, channel) row kappa and spin label.
+      real(rp), allocatable :: occ_mills(:, :), occ_juelich(:, :)
       !> Juelich d moment per site (mu_B), the one that enters the Goldstone condition.
       real(rp), allocatable :: moment(:)
       !> Juelich and Mills U (Ry), Mills Goldstone residual, and the d exchange splitting C_dn - C_up (Ry), per site.
@@ -91,13 +101,18 @@ module spin_response_mod
       procedure :: interaction
       procedure :: run
       procedure :: write_state
-      procedure, private :: d_channel
+      procedure, private :: channel_parameters, d_rows
       final :: destructor
    end type spin_response
 
    interface spin_response
       procedure :: constructor
    end interface spin_response
+
+   !> Dyson solve with the kernel as a vector (diagonal kernel) or as a matrix over kappa.
+   interface solve_dyson
+      procedure :: solve_dyson_diagonal, solve_dyson_matrix
+   end interface solve_dyson
 
 contains
 
@@ -117,6 +132,7 @@ contains
 
       if (allocated(this%d_occ_mills)) deallocate (this%d_occ_mills)
       if (allocated(this%d_occ_juelich)) deallocate (this%d_occ_juelich)
+      if (allocated(this%occ_mills)) deallocate (this%occ_mills, this%occ_juelich)
       if (allocated(this%moment)) deallocate (this%moment)
       if (allocated(this%uj)) deallocate (this%uj, this%um, this%delta_mills, this%gap_d)
    end subroutine destructor
@@ -125,6 +141,7 @@ contains
       class(spin_response), intent(inout) :: this
 
       this%method = 'juelich'
+      this%channel_l = [l_d]
       this%output_prefix = 'spin_response'
       this%n_omega = 201
       this%omega_min = 0.0_rp
@@ -142,12 +159,13 @@ contains
    subroutine build_from_file(this)
       class(spin_response), intent(inout) :: this
 
-      integer :: iostatus, funit, i, nlines
+      integer :: iostatus, funit, i, nlines, l
       real(rp) :: qtmp(3)
 
       include 'include_codes/namelists/spin_response.f90'
 
       method = this%method
+      channels = 'd'
       output_prefix = this%output_prefix
       n_q = 1
       q_list = 0.0_rp
@@ -172,6 +190,14 @@ contains
       end if
       if (n_omega < 1 .or. (n_omega > 1 .and. omega_max <= omega_min) .or. eta < 0.0_rp) then
          call g_logger%fatal('spin_response needs n_omega >= 1, omega_max > omega_min for n_omega > 1, and eta >= 0', &
+                             __FILE__, __LINE__)
+      end if
+      if (verify(trim(channels), 'spdf') /= 0 .or. index(channels, 'd') == 0) then
+         call g_logger%fatal('spin_response channels must be letters of spdf and contain d, got '//trim(channels), __FILE__, __LINE__)
+      end if
+      this%channel_l = pack([0, 1, 2, 3], [(index(channels, 'spdf'(l + 1:l + 1)) > 0, l=0, 3)])
+      if (maxval(this%channel_l) > lmax_basis) then
+         call g_logger%fatal('spin_response channels '//trim(channels)//' need lmax >= '//int2str(maxval(this%channel_l)), &
                              __FILE__, __LINE__)
       end if
       this%method = method
@@ -261,12 +287,15 @@ contains
       class(spin_response), intent(inout) :: this
 
       class(reciprocal), pointer :: rec
-      integer :: nk, nmat, nsite, first, last, ik, n, s
+      integer :: nk, nmat, nsite, nsc, first, last, ik, n, s
+      integer, allocatable :: id(:)
       real(rp), allocatable :: f(:, :), e(:, :), e_kn(:, :), enu(:, :), p(:, :), n_mills(:, :), n_juelich(:, :)
       complex(rp), allocatable :: v(:, :, :), a(:, :, :, :, :), aj(:, :, :, :, :)
 
       rec => this%reciprocal
       nsite = rec%lattice%nrec
+      nsc = nsite*size(this%channel_l)
+      id = this%d_rows()
       nmat = nb*nsite
 
       this%reduction_overridden = rec%use_symmetry_reduction .or. rec%use_time_reversal
@@ -279,6 +308,7 @@ contains
                          'x'//int2str(rec%nk_mesh(3))//', symmetry reduction and time reversal off'// &
                          merge(' (overriding &reciprocal)', '                         ', this%reduction_overridden), &
                          __FILE__, __LINE__)
+      call g_logger%info('spin_response%prepare: channels '//channel_letters(this%channel_l), __FILE__, __LINE__)
 
       if (allocated(rec%eigenvalues)) deallocate (rec%eigenvalues)
       allocate (rec%eigenvalues(nmat, nk))
@@ -310,46 +340,62 @@ contains
                              __FILE__, __LINE__)
       end if
 
-      call this%d_channel(enu, p)
+      call this%channel_parameters(enu, p)
 
-      allocate (n_mills(nsite, 2), n_juelich(nsite, 2))
+      allocate (n_mills(nsc, 2), n_juelich(nsc, 2))
       n_mills = 0.0_rp
       n_juelich = 0.0_rp
       do first = 1, nk, k_chunk
          last = min(nk, first + k_chunk - 1)
          call this%eigenpairs_chunk([0.0_rp, 0.0_rp, 0.0_rp], first, last, e, v)
          e_kn = transpose(e)
-         call d_amplitudes_coefficient(v, nsite, a)
+         call channel_amplitudes_coefficient(v, nsite, this%channel_l, a)
          call accumulate_d_occupation(rec%k_workset%weights(first:last), f(first:last, :), a, n_mills)
          aj = a
          call d_amplitudes_juelich(aj, e_kn, this%fermi_used, enu, p)
          call accumulate_d_occupation(rec%k_workset%weights(first:last), f(first:last, :), aj, n_juelich)
       end do
 
-      this%spin_swapped = sum(n_mills(:, 1) - n_mills(:, 2)) < 0.0_rp
+      this%spin_swapped = sum(n_mills(id, 1) - n_mills(id, 2)) < 0.0_rp
       this%spin_map = merge([2, 1], [1, 2], this%spin_swapped)
-      if (allocated(this%d_occ_mills)) deallocate (this%d_occ_mills, this%d_occ_juelich, this%moment)
-      allocate (this%d_occ_mills(nsite, 2), this%d_occ_juelich(nsite, 2), this%moment(nsite))
+      if (allocated(this%d_occ_mills)) deallocate (this%d_occ_mills, this%d_occ_juelich, this%moment, this%occ_mills, this%occ_juelich)
+      allocate (this%d_occ_mills(nsite, 2), this%d_occ_juelich(nsite, 2), this%moment(nsite), &
+                this%occ_mills(nsc, 2), this%occ_juelich(nsc, 2))
       do s = 1, 2
-         this%d_occ_mills(:, s) = n_mills(:, this%spin_map(s))
-         this%d_occ_juelich(:, s) = n_juelich(:, this%spin_map(s))
+         this%occ_mills(:, s) = n_mills(:, this%spin_map(s))
+         this%occ_juelich(:, s) = n_juelich(:, this%spin_map(s))
       end do
+      this%d_occ_mills = this%occ_mills(id, :)
+      this%d_occ_juelich = this%occ_juelich(id, :)
       this%moment = this%d_occ_juelich(:, 1) - this%d_occ_juelich(:, 2)
    end subroutine prepare
 
-   !> @brief Linearization energy and p = 1/ppar^2 of the d channel per (site, physical spin).
-   subroutine d_channel(this, enu, p)
+   !> @brief Linearization energy and p = 1/ppar^2 of each (site, channel) row kappa and physical spin.
+   subroutine channel_parameters(this, enu, p)
       class(spin_response), intent(in) :: this
       real(rp), allocatable, intent(out) :: enu(:, :), p(:, :)
 
+      integer :: i, ic, nch
+
+      nch = size(this%channel_l)
+      allocate (enu(this%lattice%nrec*nch, 2), p(this%lattice%nrec*nch, 2))
+      do i = 1, this%lattice%nrec
+         do ic = 1, nch
+            enu((i - 1)*nch + ic, :) = this%lattice%symbolic_atoms(this%lattice%nbulk + i)%potential%enu(this%channel_l(ic), :)
+            p((i - 1)*nch + ic, :) = 1.0_rp/this%lattice%symbolic_atoms(this%lattice%nbulk + i)%potential%ppar(this%channel_l(ic), :)**2
+         end do
+      end do
+   end subroutine channel_parameters
+
+   !> @brief Row kappa of the d channel of each site.
+   function d_rows(this) result(id)
+      class(spin_response), intent(in) :: this
+      integer, allocatable :: id(:)
+
       integer :: i
 
-      allocate (enu(this%lattice%nrec, 2), p(this%lattice%nrec, 2))
-      do i = 1, this%lattice%nrec
-         enu(i, :) = this%lattice%symbolic_atoms(this%lattice%nbulk + i)%potential%enu(l_d, :)
-         p(i, :) = 1.0_rp/this%lattice%symbolic_atoms(this%lattice%nbulk + i)%potential%ppar(l_d, :)**2
-      end do
-   end subroutine d_channel
+      id = [((i - 1)*size(this%channel_l) + findloc(this%channel_l, l_d, 1), i=1, this%lattice%nrec)]
+   end function d_rows
 
    !> @brief Amplitudes (spin-relabelled, Mills or Juelich) and occupations at one endpoint of a chunk.
    !> @param[out] et  Eigenvalues, shape (nk, nband); f the occupations; a the amplitudes.
@@ -364,7 +410,7 @@ contains
       integer :: ik, n
 
       et = transpose(e)
-      call d_amplitudes_coefficient(v, this%lattice%nrec, a)
+      call channel_amplitudes_coefficient(v, this%lattice%nrec, this%channel_l, a)
       if (juelich) call d_amplitudes_juelich(a, et, this%fermi_used, enu, p)
       a = a(:, :, :, :, this%spin_map)
       allocate (f(size(et, 1), size(et, 2)))
@@ -380,7 +426,7 @@ contains
    !> @param[in]  q_direct  q in fractional coordinates of b1, b2, b3, shape (3, nq).
    !> @param[in]  omega     Energies (Ry); eta (Ry) the broadening, 0 allowed at omega = 0 (static value).
    !> @param[in]  juelich   Juelich amplitudes if .true., coefficient (Mills) amplitudes otherwise.
-   !> @param[out] chi0      shape (nsite, nsite, size(omega), nq).
+   !> @param[out] chi0      shape (nsc, nsc, size(omega), nq), nsc = nsite*nchannel.
    subroutine bare_response_list(this, q_direct, omega, eta, juelich, chi0)
       class(spin_response), intent(inout) :: this
       real(rp), intent(in) :: q_direct(:, :), omega(:), eta
@@ -391,7 +437,7 @@ contains
       real(rp), allocatable :: enu(:, :), p(:, :), e_k(:, :), e_kq(:, :), et_k(:, :), et_kq(:, :), f_k(:, :), f_kq(:, :)
       complex(rp), allocatable :: v_k(:, :, :), v_kq(:, :, :), a_k(:, :, :, :, :), a_kq(:, :, :, :, :)
 
-      call this%d_channel(enu, p)
+      call this%channel_parameters(enu, p)
       nk = this%reciprocal%k_workset%nk_local
       chi0 = (0.0_rp, 0.0_rp)
       do first = 1, nk, k_chunk
@@ -408,7 +454,7 @@ contains
    end subroutine bare_response_list
 
    !> @brief Bare response chi0(q, omega) for one q; see bare_response_list.
-   !> @param[out] chi0  shape (nsite, nsite, size(omega)).
+   !> @param[out] chi0  shape (nsc, nsc, size(omega)).
    subroutine bare_response(this, q_direct, omega, eta, juelich, chi0)
       class(spin_response), intent(inout) :: this
       real(rp), intent(in) :: q_direct(3), omega(:), eta
@@ -422,17 +468,20 @@ contains
       chi0 = c4(:, :, :, 1)
    end subroutine bare_response
 
-   !> @brief Juelich and Mills U per site from the static chi0(0, 0) (omega = 0, eta = 0) of each amplitude kind.
+   !> @brief Juelich and Mills U per site from the static chi0(0, 0) (omega = 0, eta = 0) of each amplitude kind, d rows only.
    !> @details Mills C_up, C_dn are the d entries of center_band, the on-site energy of H(k), in label order.
    subroutine interaction(this)
       class(spin_response), intent(inout) :: this
 
-      integer :: i, ns
+      integer :: i, ns, nsc
+      integer, allocatable :: id(:)
       real(rp), allocatable :: c_up(:)
       complex(rp), allocatable :: chi0_mills(:, :, :), chi0_juelich(:, :, :)
 
       ns = this%lattice%nrec
-      allocate (chi0_mills(ns, ns, 1), chi0_juelich(ns, ns, 1), c_up(ns))
+      nsc = ns*size(this%channel_l)
+      id = this%d_rows()
+      allocate (chi0_mills(nsc, nsc, 1), chi0_juelich(nsc, nsc, 1), c_up(ns))
       allocate (this%uj(ns), this%um(ns), this%delta_mills(ns), this%gap_d(ns))
       call this%bare_response([0.0_rp, 0.0_rp, 0.0_rp], [0.0_rp], 0.0_rp, .false., chi0_mills)
       call this%bare_response([0.0_rp, 0.0_rp, 0.0_rp], [0.0_rp], 0.0_rp, .true., chi0_juelich)
@@ -441,7 +490,7 @@ contains
          this%gap_d(i) = this%lattice%symbolic_atoms(this%lattice%nbulk + i)%potential%center_band(l_d + 1, this%spin_map(2)) &
                          - c_up(i)
       end do
-      call interaction_values(real(chi0_mills(:, :, 1), rp), real(chi0_juelich(:, :, 1), rp), &
+      call interaction_values(real(chi0_mills(id, id, 1), rp), real(chi0_juelich(id, id, 1), rp), &
                               this%d_occ_mills(:, 1) - this%d_occ_mills(:, 2), this%moment, c_up, c_up + this%gap_d, &
                               this%uj, this%um, this%delta_mills)
    end subroutine interaction
@@ -450,35 +499,47 @@ contains
    subroutine run(this)
       class(spin_response), intent(inout) :: this
 
-      integer :: iq, iw, nq, nw, ns, funit, fdisp
+      integer :: iq, iw, nq, nw, ns, nsc, i, funit, fdisp
       real(rp) :: peak, crossing, qcart(3)
-      real(rp), allocatable :: u(:), trl(:)
+      real(rp), allocatable :: u(:), trl(:), kmat(:, :)
+      integer, allocatable :: id(:)
       complex(rp), allocatable :: chi0(:, :, :, :), chi(:, :, :)
       logical :: has_peak, has_crossing
       character(len=256) :: fname
       character(len=24) :: peak_text, crossing_text
 
       ns = this%lattice%nrec
+      nsc = ns*size(this%channel_l)
       u = merge(this%um, this%uj, trim(this%method) == 'mills')
+      id = this%d_rows()
+      allocate (kmat(nsc, nsc))
+      kmat = 0.0_rp
+      do i = 1, ns
+         kmat(id(i), id(i)) = u(i)
+      end do
       nq = size(this%q_direct, 2)
       nw = size(this%omega)
-      allocate (chi0(ns, ns, nw, nq), chi(ns, ns, nw))
+      allocate (chi0(nsc, nsc, nw, nq), chi(nsc, nsc, nw))
       call this%bare_response_list(this%q_direct, this%omega, this%eta, trim(this%method) == 'juelich', chi0)
       open (newunit=fdisp, file=trim(this%output_prefix)//'_dispersion.dat', action='write', status='replace')
       write (fdisp, '(a)') '# q_direct(3) q_cartesian(3, units 2pi/a) |q|(1/Angstrom) peak_omega(Ry) crossing_omega(Ry)'
       do iq = 1, nq
-         call solve_dyson(chi0(:, :, :, iq), u, chi)
+         call solve_dyson(chi0(:, :, :, iq), kmat, chi)
          trl = spectral_trace(chi)
          has_peak = .false.
          has_crossing = .false.
-         if (ns == 1) call pole_estimates(this%omega, trl, chi0(1, 1, :, iq), u(1), peak, crossing, has_peak, has_crossing)
+         if (nsc == 1) then
+            call pole_estimates(this%omega, trl, chi0(1, 1, :, iq), u(1), peak, crossing, has_peak, has_crossing)
+         else if (ns == 1) then
+            call peak_estimate(this%omega, trl, peak, has_peak)
+         end if
 
          write (fname, '(a,a,i3.3,a)') trim(this%output_prefix), '_q', iq, '.dat'
          open (newunit=funit, file=trim(fname), action='write', status='replace')
          write (funit, '(a)') '# omega(Ry) re_tr_chi0(1/Ry) im_tr_chi0(1/Ry) re_tr_chi(1/Ry) im_tr_chi(1/Ry) tr_L(1/Ry) min_abs_eig(I+chi0*U)'
          do iw = 1, nw
             write (funit, '(7es22.14)') this%omega(iw), sum_diagonal(chi0(:, :, iw, iq)), sum_diagonal(chi(:, :, iw)), trl(iw), &
-               min_abs_eig(chi0(:, :, iw, iq), u)
+               min_abs_eig(chi0(:, :, iw, iq), kmat)
          end do
          close (funit)
 
@@ -502,6 +563,7 @@ contains
       open (newunit=funit, file=trim(this%output_prefix)//'_state.dat', action='write', status='replace')
       write (funit, '(a)') '# quantity value ; energies in Ry, moments in mu_B, occupations in electrons'
       write (funit, '(a,a)') 'method ', trim(this%method)
+      if (size(this%channel_l) > 1) write (funit, '(a,a)') 'channels ', channel_letters(this%channel_l)
       write (funit, '(a,es24.16)') 'fermi_input ', this%fermi_input
       write (funit, '(a,es24.16)') 'fermi_used ', this%fermi_used
       write (funit, '(a,es24.16)') 'electron_count ', this%electron_count
@@ -526,25 +588,53 @@ contains
       close (funit)
    end subroutine write_state
 
-   !> @brief d block of the eigenvectors as amplitudes v_{i mu sigma}, with spin 1 = the up block.
-   !> @param[in]  v      Eigenvectors, shape (nmat, nband, nk), site-major with up block then down block per site.
-   !> @param[in]  nsite  Number of sites in the cell.
-   !> @param[out] a      Amplitudes, shape (nk, nband, 2*l_d+1, nsite, 2).
+   !> @brief Channel letters of an l list, for example 'spd'.
+   pure function channel_letters(l_list) result(text)
+      integer, intent(in) :: l_list(:)
+      character(len=size(l_list)) :: text
+
+      integer :: ic
+
+      do ic = 1, size(l_list)
+         text(ic:ic) = 'spdf'(l_list(ic) + 1:l_list(ic) + 1)
+      end do
+   end function channel_letters
+
+   !> @brief Channel blocks of the eigenvectors as amplitudes v_{kappa mu sigma}, with spin 1 = the up block.
+   !> @details Row kappa = (site - 1)*nch + channel; channel l uses orbitals l**2 + 1 .. (l + 1)**2 of the spin block,
+   !>          and orbital slots beyond 2l + 1 are exact zeros.
+   !> @param[in]  v       Eigenvectors, shape (nmat, nband, nk), site-major with up block then down block per site.
+   !> @param[in]  nsite   Number of sites in the cell.
+   !> @param[in]  l_list  Angular momenta of the channels, shape (nch).
+   !> @param[out] a       Amplitudes, shape (nk, nband, 2*maxval(l_list)+1, nsite*nch, 2).
+   pure subroutine channel_amplitudes_coefficient(v, nsite, l_list, a)
+      complex(rp), intent(in) :: v(:, :, :)
+      integer, intent(in) :: nsite, l_list(:)
+      complex(rp), allocatable, intent(out) :: a(:, :, :, :, :)
+
+      integer :: i, ic, s, mu, nch
+
+      nch = size(l_list)
+      allocate (a(size(v, 3), size(v, 2), 2*maxval(l_list) + 1, nsite*nch, 2))
+      a = (0.0_rp, 0.0_rp)
+      do s = 1, 2
+         do i = 1, nsite
+            do ic = 1, nch
+               do mu = 1, 2*l_list(ic) + 1
+                  a(:, :, mu, (i - 1)*nch + ic, s) = transpose(v((i - 1)*nb + (s - 1)*spin_off + l_list(ic)**2 + mu, :, :))
+               end do
+            end do
+         end do
+      end do
+   end subroutine channel_amplitudes_coefficient
+
+   !> @brief d amplitudes: channel_amplitudes_coefficient for the d channel alone, shape (nk, nband, 2*l_d+1, nsite, 2).
    pure subroutine d_amplitudes_coefficient(v, nsite, a)
       complex(rp), intent(in) :: v(:, :, :)
       integer, intent(in) :: nsite
       complex(rp), allocatable, intent(out) :: a(:, :, :, :, :)
 
-      integer :: i, s, mu
-
-      allocate (a(size(v, 3), size(v, 2), 2*l_d + 1, nsite, 2))
-      do s = 1, 2
-         do i = 1, nsite
-            do mu = 1, 2*l_d + 1
-               a(:, :, mu, i, s) = transpose(v((i - 1)*nb + (s - 1)*spin_off + l_d**2 + mu, :, :))
-            end do
-         end do
-      end do
+      call channel_amplitudes_coefficient(v, nsite, [l_d], a)
    end subroutine d_amplitudes_coefficient
 
    !> @brief Multiply coefficient amplitudes by the Juelich factor
@@ -552,8 +642,8 @@ contains
    !> @param[inout] a    Amplitudes from d_amplitudes_coefficient, in physical spin blocks.
    !> @param[in]    e    Eigenvalues (Ry), shape (nk, nband).
    !> @param[in]    ef   Fermi level (Ry).
-   !> @param[in]    enu  Linearization energies of the d channel (Ry), shape (nsite, 2).
-   !> @param[in]    p    <phidot^2> of the d channel (Ry^-2), shape (nsite, 2).
+   !> @param[in]    enu  Linearization energies of each row kappa (Ry), shape (nsc, 2).
+   !> @param[in]    p    <phidot^2> of each row kappa (Ry^-2), shape (nsc, 2).
    pure subroutine d_amplitudes_juelich(a, e, ef, enu, p)
       complex(rp), intent(inout) :: a(:, :, :, :, :)
       real(rp), intent(in) :: e(:, :), ef, enu(:, :), p(:, :)
@@ -590,59 +680,88 @@ contains
    end subroutine accumulate_d_occupation
 
    !> @brief Add the Lehmann sum of one k set to chi0 (the caller zeroes chi0 and may chunk k).
-   !> @details eta = 0 is valid only at omega = 0, where a pair with |e_n - e_m| < 1e-10 Ry
-   !>          takes the Fermi divided difference -f(1-f)/kt. Every other pair is pruned only
-   !>          when f_n - f_m is exactly zero.
+   !> @details Pairs (n, m) are listed once per call: band n needs a nonzero spin-1 amplitude at k and band m a nonzero
+   !>          spin-2 amplitude at k+q (otherwise the vertex is exactly zero), and f_n - f_m must be nonzero.
+   !>          eta = 0 is valid only at omega = 0, where a pair with |e_n - e_m| < 1e-10 Ry takes the Fermi divided
+   !>          difference -f(1-f)/kt and stays in the list even when f_n = f_m. Nothing is pruned by a threshold.
+   !>          Omega is cut into blocks of omega_block; each block is one matrix product over the pair list, so the
+   !>          result does not depend on the number of threads.
    !> @param[in]    kt     Temperature (Ry).
    !> @param[in]    w      k weights, shape (nk).
    !> @param[in]    e_k    Energies at k, shape (nk, nb); f_k occupations, same shape.
-   !> @param[in]    a_k    d amplitudes at k, shape (nk, nb, norb, nsite, 2).
+   !> @param[in]    a_k    Amplitudes at k, shape (nk, nb, norb, nsc, 2), row kappa of the response space.
    !> @param[in]    e_kq   Energies at k+q, shape (nk, nb); f_kq, a_kq likewise.
    !> @param[in]    omega  Energies, shape (nw) (Ry).
    !> @param[in]    eta    Broadening (Ry).
-   !> @param[inout] chi0   Bare response, shape (nsite, nsite, nw).
+   !> @param[inout] chi0   Bare response, shape (nsc, nsc, nw).
    subroutine accumulate_chi0(kt, w, e_k, f_k, a_k, e_kq, f_kq, a_kq, omega, eta, chi0)
       real(rp), intent(in) :: kt, w(:), e_k(:, :), f_k(:, :), e_kq(:, :), f_kq(:, :), omega(:), eta
       complex(rp), intent(in) :: a_k(:, :, :, :, :), a_kq(:, :, :, :, :)
       complex(rp), intent(inout) :: chi0(:, :, :)
 
-      integer :: ik, n, m, i, j, iw
-      real(rp) :: df, de
-      complex(rp) :: c
-      complex(rp) :: t(size(a_k, 4), size(e_kq, 2), size(e_k, 2), size(w))
+      integer :: ik, n, m, i, j, p, np, nsc, ib, iw0, nbl, iw
+      real(rp) :: de, x
+      logical :: up(size(w), size(e_k, 2)), down(size(w), size(e_kq, 2))
+      real(rp), allocatable :: dfp(:), dep(:), fdp(:)
+      complex(rp), allocatable :: pm(:, :), cm(:, :), blk(:, :)
+      complex(rp) :: t(size(a_k, 4))
 
-      ! vertex products do not depend on omega; each omega point then runs the whole k, n, m sum in the serial order
+      nsc = size(a_k, 4)
+      do n = 1, size(e_k, 2)
+         up(:, n) = [(any(a_k(ik, n, :, :, 1) /= (0.0_rp, 0.0_rp)), ik=1, size(w))]
+      end do
+      do m = 1, size(e_kq, 2)
+         down(:, m) = [(any(a_kq(ik, m, :, :, 2) /= (0.0_rp, 0.0_rp)), ik=1, size(w))]
+      end do
+      np = sum(count(up, 2)*count(down, 2))
+      allocate (pm(np, nsc*nsc), dfp(np), dep(np), fdp(np))
+      np = 0
       do ik = 1, size(w)
          do n = 1, size(e_k, 2)
+            if (.not. up(ik, n)) cycle
             do m = 1, size(e_kq, 2)
-               do i = 1, size(t, 1)
-                  t(i, m, n, ik) = sum(conjg(a_k(ik, n, :, i, 1))*a_kq(ik, m, :, i, 2))
+               if (.not. down(ik, m)) cycle
+               de = e_k(ik, n) - e_kq(ik, m)
+               if (f_k(ik, n) == f_kq(ik, m) .and. .not. (eta == 0.0_rp .and. abs(de) < degenerate_tol)) cycle
+               np = np + 1
+               dfp(np) = f_k(ik, n) - f_kq(ik, m)
+               dep(np) = de
+               fdp(np) = merge(-f_k(ik, n)*(1.0_rp - f_k(ik, n))/kt, 0.0_rp, abs(de) < degenerate_tol)
+               do i = 1, nsc
+                  t(i) = sum(conjg(a_k(ik, n, :, i, 1))*a_kq(ik, m, :, i, 2))
                end do
-            end do
-         end do
-      end do
-      !$omp parallel do default(shared) private(iw, ik, n, m, i, j, df, de, c) schedule(static) if (size(omega) > 1)
-      do iw = 1, size(omega)
-         do ik = 1, size(w)
-            do n = 1, size(e_k, 2)
-               do m = 1, size(e_kq, 2)
-                  df = f_k(ik, n) - f_kq(ik, m)
-                  de = e_k(ik, n) - e_kq(ik, m)
-                  if (eta == 0.0_rp .and. omega(iw) == 0.0_rp .and. abs(de) < degenerate_tol) then
-                     c = cmplx(-f_k(ik, n)*(1.0_rp - f_k(ik, n))/kt, 0.0_rp, rp)
-                  else if (df == 0.0_rp) then
-                     cycle
-                  else
-                     c = df/(omega(iw) + de + i_unit*eta)
-                  end if
-                  do j = 1, size(t, 1)
-                     do i = 1, size(t, 1)
-                        chi0(i, j, iw) = chi0(i, j, iw) + w(ik)*c*t(i, m, n, ik)*conjg(t(j, m, n, ik))
-                     end do
+               do j = 1, nsc
+                  do i = 1, nsc
+                     pm(np, (j - 1)*nsc + i) = w(ik)*t(i)*conjg(t(j))
                   end do
                end do
             end do
          end do
+      end do
+      if (np == 0) return
+
+      !$omp parallel do default(shared) private(ib, iw0, nbl, iw, p, x, cm, blk) schedule(static) if (size(omega) > omega_block)
+      do ib = 1, (size(omega) + omega_block - 1)/omega_block
+         iw0 = (ib - 1)*omega_block + 1
+         nbl = min(omega_block, size(omega) - iw0 + 1)
+         allocate (cm(np, nbl), blk(nbl, nsc*nsc))
+         do iw = 1, nbl
+            do p = 1, np
+               x = omega(iw0 + iw - 1) + dep(p)
+               if (eta == 0.0_rp .and. omega(iw0 + iw - 1) == 0.0_rp .and. abs(dep(p)) < degenerate_tol) then
+                  cm(p, iw) = cmplx(fdp(p), 0.0_rp, rp)
+               else if (dfp(p) == 0.0_rp) then
+                  cm(p, iw) = (0.0_rp, 0.0_rp)
+               else
+                  cm(p, iw) = cmplx(dfp(p)*x, -dfp(p)*eta, rp)/(x*x + eta*eta)
+               end if
+            end do
+         end do
+         call zgemm('T', 'N', nbl, nsc*nsc, np, (1.0_rp, 0.0_rp), cm, np, pm, size(pm, 1), (0.0_rp, 0.0_rp), blk, nbl)
+         do iw = 1, nbl
+            chi0(:, :, iw0 + iw - 1) = chi0(:, :, iw0 + iw - 1) + reshape(blk(iw, :), [nsc, nsc])
+         end do
+         deallocate (cm, blk)
       end do
       !$omp end parallel do
    end subroutine accumulate_chi0
@@ -711,19 +830,19 @@ contains
       end do
    end function sum_diagonal
 
-   !> @brief Smallest |eigenvalue| of I + chi0 U at one omega (gauge invariant for several sites).
-   function min_abs_eig(chi0, u) result(m)
+   !> @brief Smallest |eigenvalue| of I + chi0 K at one omega (gauge invariant for several sites).
+   function min_abs_eig(chi0, kmat) result(m)
       complex(rp), intent(in) :: chi0(:, :)
-      real(rp), intent(in) :: u(:)
+      real(rp), intent(in) :: kmat(:, :)
       real(rp) :: m
 
       integer :: n, j, info
-      complex(rp) :: a(size(u), size(u)), w(size(u)), vl(1, 1), vr(1, 1), work(4*size(u))
-      real(rp) :: rwork(2*size(u))
+      complex(rp) :: a(size(kmat, 1), size(kmat, 1)), w(size(kmat, 1)), vl(1, 1), vr(1, 1), work(4*size(kmat, 1))
+      real(rp) :: rwork(2*size(kmat, 1))
 
-      n = size(u)
+      n = size(kmat, 1)
+      a = matmul(chi0, kmat)
       do j = 1, n
-         a(:, j) = chi0(:, j)*u(j)
          a(j, j) = a(j, j) + 1.0_rp
       end do
       call zgeev('N', 'N', n, a, n, w, vl, 1, vr, 1, work, size(work), rwork, info)
@@ -731,30 +850,46 @@ contains
       m = minval(abs(w))
    end function min_abs_eig
 
-   !> @brief Solve (I + chi0 U) chi = chi0 at each omega by LU, with U diagonal in sites.
-   !> @details Never call at eta = 0 for q = 0: the Goldstone condition makes I + chi0 U singular there.
-   !> @param[in]  chi0  Bare response, shape (nsite, nsite, nw).
-   !> @param[in]  u     Interaction (Ry), shape (nsite).
-   !> @param[out] chi   Enhanced response, shape (nsite, nsite, nw).
-   subroutine solve_dyson(chi0, u, chi)
+   !> @brief Solve (I + chi0 K) chi = chi0 at each omega by LU, with K a matrix over kappa.
+   !> @details Never call at eta = 0 for q = 0: the Goldstone condition makes I + chi0 K singular there.
+   !> @param[in]  chi0  Bare response, shape (nsc, nsc, nw).
+   !> @param[in]  kmat  Interaction kernel (Ry), shape (nsc, nsc).
+   !> @param[out] chi   Enhanced response, shape (nsc, nsc, nw).
+   subroutine solve_dyson_matrix(chi0, kmat, chi)
       complex(rp), intent(in) :: chi0(:, :, :)
-      real(rp), intent(in) :: u(:)
+      real(rp), intent(in) :: kmat(:, :)
       complex(rp), intent(out) :: chi(:, :, :)
 
-      integer :: ns, iw, i, j, info, ipiv(size(u))
-      complex(rp) :: amat(size(u), size(u))
+      integer :: ns, iw, j, info, ipiv(size(kmat, 1))
+      complex(rp) :: amat(size(kmat, 1), size(kmat, 1))
 
-      ns = size(u)
+      ns = size(kmat, 1)
       do iw = 1, size(chi0, 3)
+         amat = matmul(chi0(:, :, iw), kmat)
          do j = 1, ns
-            amat(:, j) = chi0(:, j, iw)*u(j)
             amat(j, j) = amat(j, j) + 1.0_rp
          end do
          chi(:, :, iw) = chi0(:, :, iw)
          call zgesv(ns, ns, amat, ns, ipiv, chi(:, :, iw), ns, info)
-         if (info /= 0) error stop 'solve_dyson: singular I + chi0 U'
+         if (info /= 0) error stop 'solve_dyson: singular I + chi0 K'
       end do
-   end subroutine solve_dyson
+   end subroutine solve_dyson_matrix
+
+   !> @brief solve_dyson_matrix with the diagonal kernel K = diag(u).
+   subroutine solve_dyson_diagonal(chi0, u, chi)
+      complex(rp), intent(in) :: chi0(:, :, :)
+      real(rp), intent(in) :: u(:)
+      complex(rp), intent(out) :: chi(:, :, :)
+
+      real(rp) :: kmat(size(u), size(u))
+      integer :: i
+
+      kmat = 0.0_rp
+      do i = 1, size(u)
+         kmat(i, i) = u(i)
+      end do
+      call solve_dyson_matrix(chi0, kmat, chi)
+   end subroutine solve_dyson_diagonal
 
    !> @brief tr L(omega) with L = -(chi - chi^H)/(2 pi i), i.e. -Im tr chi / pi.
    pure function spectral_trace(chi) result(trl)
@@ -784,18 +919,11 @@ contains
       real(rp), intent(out) :: peak, crossing
       logical, intent(out) :: has_peak, has_crossing
 
-      integer :: imax, iw
-      real(rp) :: h, g0, g1, root
+      integer :: iw
+      real(rp) :: g0, g1, root
 
-      peak = 0.0_rp
       crossing = 0.0_rp
-      imax = maxloc(trl, 1)
-      has_peak = imax > 1 .and. imax < size(trl)
-      if (has_peak) then
-         h = 0.5_rp*(omega(imax + 1) - omega(imax - 1))
-         peak = omega(imax) + h*(trl(imax - 1) - trl(imax + 1)) &
-                /(2.0_rp*(trl(imax - 1) - 2.0_rp*trl(imax) + trl(imax + 1)))
-      end if
+      call peak_estimate(omega, trl, peak, has_peak)
 
       has_crossing = .false.
       do iw = 1, size(omega) - 1
@@ -811,5 +939,24 @@ contains
          end if
       end do
    end subroutine pole_estimates
+
+   !> @brief Parabolic peak of tr L; a maximum on either grid end gives has_peak = .false. and peak undefined (0).
+   pure subroutine peak_estimate(omega, trl, peak, has_peak)
+      real(rp), intent(in) :: omega(:), trl(:)
+      real(rp), intent(out) :: peak
+      logical, intent(out) :: has_peak
+
+      integer :: imax
+      real(rp) :: h
+
+      peak = 0.0_rp
+      imax = maxloc(trl, 1)
+      has_peak = imax > 1 .and. imax < size(trl)
+      if (has_peak) then
+         h = 0.5_rp*(omega(imax + 1) - omega(imax - 1))
+         peak = omega(imax) + h*(trl(imax - 1) - trl(imax + 1)) &
+                /(2.0_rp*(trl(imax - 1) - 2.0_rp*trl(imax) + trl(imax + 1)))
+      end if
+   end subroutine peak_estimate
 
 end module spin_response_mod

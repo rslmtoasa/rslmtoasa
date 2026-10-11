@@ -271,30 +271,34 @@ The `linear_response` code was removed from `fable_v4b` (tag
 `lr-campaign-archive-2026-10`); its dispatch stops at startup, and its docs,
 numbers and tests are not references.
 
-**In the tree:** `source/spin_response.f90` (`spin_response_mod`, about 810
+**In the tree:** `source/spin_response.f90` (`spin_response_mod`, about 960
 lines) with its `&spin_response` namelist in
 `source/include_codes/namelists/spin_response.f90`, run by `post_processing =
 'spin_response'` (`post_processing_spin_response` in `calculation_reciprocal.f90`).
-It works on the frozen database state, never an SCF. The model is collinear and
-d-only, with one static U per site.
+It works on the frozen database state, never an SCF. The model is collinear. The response space is indexed by kappa = (site, channel),
+channel = s, p, d, f from `&spin_response channels` (default `'d'`; must contain d, letters
+beyond the basis lmax are fatal), with one static U per site acting on the d channel only.
 
 - `prepare`: full-BZ mesh (symmetry reduction and time reversal switched off,
-  and logged), E_F policy and electron-count check, d amplitudes (coefficient
-  "Mills" and Juelich), moments, spin relabelling when the total moment is
-  negative.
+  and logged), E_F policy and electron-count check, channel amplitudes (coefficient
+  "Mills" and Juelich, `enu` and `ppar` of each l), moments per (site, channel) in
+  `occ_mills`/`occ_juelich` and for d in `d_occ_*`, spin relabelling when the d
+  moment is negative.
 - `interaction`: U_Juelich from the Goldstone condition on the static chi0 at
   eta = 0; U_Mills from the d band centres (`center_band`), with the Mills
   residual and implied gap; both printed.
 - `run`: chi0 for all q in one pass over the k-chunks (`bare_response_list`: the
   k endpoint once per chunk, then each q's k+q endpoint), then per q the Dyson
-  solve, tr chi0, tr chi, tr L and the smallest |eig(I + chi0 U)|; peak and
-  crossing for one site (`n/a` for several). Output: `<prefix>_q<NNN>.dat`,
+  solve with K over kappa (U on the d rows, zero elsewhere), tr chi0, tr chi, tr L
+  and the smallest |eig(I + chi0 K)|; peak for one site, crossing for one site
+  and one channel (`n/a` otherwise). Output: `<prefix>_q<NNN>.dat`,
   `<prefix>_dispersion.dat` and `<prefix>_state.dat`. With `n_omega = 1`,
   `omega = 0` and `eta = 0` it gives the static chi0(q, 0).
-- `accumulate_chi0` runs in parallel over omega (OpenMP), each omega summed in
-  serial order, so the output is byte-identical for any thread count when
-  `MKL_NUM_THREADS = 1`. Static runs are serial; for many q, split the q-list
-  over single-thread processes.
+- `accumulate_chi0` lists the band pairs with a nonzero vertex (exact zeros of the
+  spin-block amplitudes) and f_n - f_m /= 0, then does one ZGEMM per block of 32
+  omega points, blocks in parallel (OpenMP), so the output is byte-identical for
+  any thread count when `MKL_NUM_THREADS = 1`. Static runs are serial; for many
+  q, split the q-list over single-thread processes.
 - Both endpoints come from `calculate_eigenpairs_at_kpoints` through
   `eigenpairs_chunk`, which applies the site-dependent Bloch phase
   exp(-2 pi i G.tau_i) for a k+q folded by G, needed for cells with several
@@ -319,10 +323,10 @@ small-q end is not converged in the J(r) cutoff. The decks are
 `tests/spin_response/fe_bcc` and `tests/spin_response/ni_fcc`; the Stage 2 and
 3a records are at tag `spin-response-stage3a`.
 
-**Where to add:** the next steps (`docs/DECISIONS.md`, B11) generalize the
-d-only model to the channels s, p, d and f (amplitudes, chi0 and Dyson in
-channel space, with structures ready for a 2 x 2 spin matrix per channel), then
-add the ALSDA kernel matrix and the KL adiabatic output. New kernels follow the
+**Where to add:** the next steps (`docs/DECISIONS.md`, B11) add the ALSDA kernel
+matrix over kappa (`solve_dyson` already takes a matrix) and the KL adiabatic
+output; a 2 x 2 spin structure per channel enlarges kappa and the vertex builder
+in `accumulate_chi0`. New kernels follow the
 plain-array pattern above, so analytic tests can call them. The radial modules
 `radial_ground_state` and `lmto_radial_augmentation` date from the removed
 campaign and need an audit before a kernel relies on them.
@@ -350,6 +354,7 @@ side belong in the reciprocal family, not in `green.f90`.
 | CUDA plugin | compile-only in CI (`cuda_compile` job); real-GPU consistency via `tests/run_gpu_matrix.sh` | n/a (manual, off-CI) |
 | Standalone Fortran unit tests | `unit` (+ topic labels), built with `-DRUN_UNIT_TESTS=ON` | `tests/unit/test_*.f90`, registered with `add_fortran_unit_test` in `CMakeLists.txt` |
 | Spin response: analytic kernels (A1-A3, E1, E3, E4), bcc-Fe components C1-C4 (incl. C4.3) and S2 | `unit;spin-response;quick` | `tests/unit/test_spin_response_*.f90`; the Fe programs run in the scratch deck made by `SpinResponseFeDriver` (`tests/spin_response/fe_scratch.py`) |
+| Spin response: channels s, p, d (`UnitSpinResponseChannelsKernel` synthetic; `UnitSpinResponseChannels` on the Fe scratch deck, needs `channel_d_rel` in `tolerances.nml`) | `unit;spin-response;quick` | `tests/unit/test_spin_response_channels*.f90`; the spd driver runs are made by `fe_scratch.py` |
 | Spin response: S3, three-atom bcc Fe cell against the one-atom cell (`SpinResponseS3`) | `unit;spin-response;quick` | `tests/spin_response/s3_supercell.py` |
 | Spin response: 1 against 4 OpenMP threads, byte-identical (`SpinResponseOmpIdentity`) | `unit;spin-response;quick` | `tests/spin_response/omp_identity.py` |
 | Spin response: 24^3 reproduction against frozen outputs, Fe and Ni (`SpinResponseBaselineRepro`, `SpinResponseNiBaselineRepro`) | `regression;spin-response` | `tests/spin_response/baseline_repro.py`; frozen files in `tests/spin_response/baseline/` and `baseline_ni/` (`--freeze` rewrites them) |

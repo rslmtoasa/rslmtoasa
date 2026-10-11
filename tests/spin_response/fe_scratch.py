@@ -48,11 +48,11 @@ for key in ("nk1", "nk2", "nk3"):
     if n != 1:
         sys.exit("fe_scratch.py: " + key + " not found in " + deck + "/input.nml")
 pathlib.Path(scratch, "input.nml").write_text(text)  # the Fortran test programs read ./input.nml
-nml = pathlib.Path(scratch, "input_driver.nml")
-nml.write_text(text.replace(old, "pre_processing = 'none'\npost_processing = 'spin_response'") + SPIN_RESPONSE)
-subprocess.run([binary, nml.name], cwd=scratch, check=True, stdout=open(pathlib.Path(scratch, "driver.log"), "w"),
-               stderr=subprocess.STDOUT)
-static = pathlib.Path(scratch, "input_static.nml")
-static.write_text(text.replace(old, "pre_processing = 'none'\npost_processing = 'spin_response'") + STATIC)
-subprocess.run([binary, static.name], cwd=scratch, check=True, stdout=open(pathlib.Path(scratch, "static.log"), "w"),
-               stderr=subprocess.STDOUT)
+# the same two runs with channels = 'spd' (output prefixes spd and spd_static)
+SPD = SPIN_RESPONSE.replace("&spin_response\n", "&spin_response\nchannels = 'spd'\noutput_prefix = 'spd'\n")
+SPD_STATIC = STATIC.replace("output_prefix = 'static'", "channels = 'spd'\noutput_prefix = 'spd_static'")
+for name, block in (("driver", SPIN_RESPONSE), ("static", STATIC), ("spd", SPD), ("spd_static", SPD_STATIC)):
+    nml = pathlib.Path(scratch, f"input_{name}.nml")
+    nml.write_text(text.replace(old, "pre_processing = 'none'\npost_processing = 'spin_response'") + block)
+    subprocess.run([binary, nml.name], cwd=scratch, check=True, stdout=open(pathlib.Path(scratch, f"{name}.log"), "w"),
+                   stderr=subprocess.STDOUT)

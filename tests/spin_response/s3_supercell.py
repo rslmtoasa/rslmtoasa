@@ -30,7 +30,7 @@ Q_SC = [(-0.25, 0.25, 0.75), (0.25, 0.0, 0.25)]   # supercell direct coordinates
 TAU_CART = [(0, 0, 0), (0.5, 0.5, -0.5), (1.0, 1.0, -1.0)]   # cartesian, units of alat
 
 
-def deck(binary, source, scratch, name, nk, extra, qs):
+def deck(binary, source, scratch, name, nk, extra, qs, channels):
     d = pathlib.Path(scratch, name)
     shutil.rmtree(d, ignore_errors=True)
     shutil.copytree(source, d)
@@ -54,7 +54,7 @@ def deck(binary, source, scratch, name, nk, extra, qs):
         lat += "".join(f" {k}({i}) = {i}\n" for k in ("izp", "no", "iu", "ib", "irec") for i in (1, 2, 3)) + "/\n"
         pathlib.Path(d, "lattice.nml").write_text(lat)
     q = "".join(f"q_list(:, {i + 1}) = {t[0]!r}, {t[1]!r}, {t[2]!r}\n" for i, t in enumerate(qs))
-    block = f"\n&spin_response\nmethod = 'juelich'\nn_q = {len(qs)}\n{q}omega_min = 0.0\nomega_max = 0.03\nn_omega = 41\neta = 3.0e-3\n/\n"
+    block = f"\n&spin_response\nmethod = 'juelich'\nchannels = '{channels}'\nn_q = {len(qs)}\n{q}omega_min = 0.0\nomega_max = 0.03\nn_omega = 41\neta = 3.0e-3\n/\n"
     nml = pathlib.Path(d, "input_driver.nml")
     nml.write_text(text + block)
     subprocess.run([binary, nml.name], cwd=d, check=True, stdout=open(pathlib.Path(d, "driver.log"), "w"), stderr=subprocess.STDOUT)
@@ -82,21 +82,25 @@ def main():
     tol = float(m.group(1).replace("d", "e").replace("D", "e")) if m else -1.0
     if not tol > 0:
         sys.exit(f"{tolfile}: key s3_rel missing or <= 0")
-    qs_prim = [(d1, d2, (d3 + n) / 3) for d1, d2, d3 in Q_SC for n in (0, 1, 2)]
-    prim = deck(binary, source, scratch, "prim", (M, M, 3 * M), False, qs_prim)
-    sc3 = deck(binary, source, scratch, "sc3", (M, M, M), True, Q_SC)
-    u_prim, u_sc = uj(prim)[0], uj(sc3)
-    results = [("U_Juelich per site", max(abs(u - u_prim) for u in u_sc) / u_prim)]
-    vacuous = []
-    for i in range(len(Q_SC)):
-        c0, c, me = qfile(sc3, i + 1)
-        parts = [qfile(prim, 3 * i + n + 1) for n in range(3)]
-        sum0 = [sum(p[0][w] for p in parts) for w in range(len(c0))]
-        sum1 = [sum(p[1][w] for p in parts) for w in range(len(c0))]
-        eig = [min(abs(1 + u_prim * p[0][w]) for p in parts) for w in range(len(c0))]
-        results += [(f"q{i + 1} tr chi0", rel(c0, sum0)), (f"q{i + 1} tr chi", rel(c, sum1)), (f"q{i + 1} min |eig(I + chi0 U)|", rel(me, eig))]
-        diag = [abs(1 + u_prim * z / 3) for z in c0]      # what dropping the off-diagonal elements would give
-        vacuous.append((f"q{i + 1} non-vacuity: min |eig| differs from the diagonal-only value by more than 1e-3", rel(me, diag) > 1e-3))
+    results, vacuous = [], []
+    for channels in ("d", "spd"):
+        qs_prim = [(d1, d2, (d3 + n) / 3) for d1, d2, d3 in Q_SC for n in (0, 1, 2)]
+        prim = deck(binary, source, scratch, "prim_" + channels, (M, M, 3 * M), False, qs_prim, channels)
+        sc3 = deck(binary, source, scratch, "sc3_" + channels, (M, M, M), True, Q_SC, channels)
+        u_prim, u_sc = uj(prim)[0], uj(sc3)
+        results.append((channels + " U_Juelich per site", max(abs(u - u_prim) for u in u_sc) / u_prim))
+        for i in range(len(Q_SC)):
+            c0, c, me = qfile(sc3, i + 1)
+            parts = [qfile(prim, 3 * i + n + 1) for n in range(3)]
+            sum0 = [sum(p[0][w] for p in parts) for w in range(len(c0))]
+            sum1 = [sum(p[1][w] for p in parts) for w in range(len(c0))]
+            # d: eigenvalues 1 + U chi0_prim(q + G_n); spd: the s and p eigenvalues are 1, so the one-atom column is the reference
+            eig = [min(abs(1 + u_prim * p[0][w]) if channels == "d" else p[2][w] for p in parts) for w in range(len(c0))]
+            results += [(f"{channels} q{i + 1} tr chi0", rel(c0, sum0)), (f"{channels} q{i + 1} tr chi", rel(c, sum1)),
+                        (f"{channels} q{i + 1} min |eig(I + chi0 U)|", rel(me, eig))]
+            if channels == "d":
+                diag = [abs(1 + u_prim * z / 3) for z in c0]      # what dropping the off-diagonal elements would give
+                vacuous.append((f"q{i + 1} non-vacuity: min |eig| differs from the diagonal-only value by more than 1e-3", rel(me, diag) > 1e-3))
     print("S3 check | measured | tolerance")
     failed = False
     for label, value in results:
