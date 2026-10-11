@@ -11,9 +11,9 @@ pbc = .true.
 b1 = .true.
 b2 = .true.
 b3 = .true.
-n1 = 10
-n2 = 10
-n3 = 10
+n1 = 20
+n2 = 20
+n3 = 20
 strux_backend = 'strux_lib'
 wav = 1.40880
 ntype = 1
@@ -74,7 +74,7 @@ use_symmetry_reduction = .false.
 &control
 calctype = 'B'
 nsp = 1 ! type of calculation, nsp can be 1, 2, 3 or 4
-lld = 21
+lld = 26
 recur = 'block'
 /
 &mix
