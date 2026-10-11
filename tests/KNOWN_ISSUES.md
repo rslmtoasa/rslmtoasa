@@ -1721,3 +1721,23 @@ campaign remain outside the established scope.
   delta_q > 0 at all five for the default kernel (0.0048 to 0.0448). Ni along Gamma-L has delta_q > 0 everywhere.
 - **Not pursued:** per-channel scaling or any other kernel change.
 
+## NC-0a probes: local_axis with SOC, global-frame recursion, deep recursion at nsp = 4 — 2026-10-11
+
+- **Verified (bcc Fe, `tests/scf/cases/bulk/bccFe` deck, nsp = 4, `hoh = F`, `recur = 'block'`, `nstep = 1`, the same input
+  potential in every run, values from `report.out`):** the concern that `local_axis` leaves `lsham` unrotated
+  (`rotate_to_local_axis`, `hamiltonian_build.f90:2047`, does not list it) is refuted by the numbers. With `xi_p`, `xi_d` x 50
+  (|L| about 1.2 mu_B) at lld 21, E(moment direction) - E(z): [110] +6.98e-4 Ry with `local_axis = F` and +6.92e-4 Ry with T;
+  [111] +2.27e-3 Ry (F) and +2.30e-3 Ry (T). T against F: band energy 6e-6 and 3.4e-5 Ry, |L| 1.5e-4 and 1.4e-4 mu_B, |m| 4e-4
+  and 1.5e-4 mu_B ([110] and [111]). Unrotated SOC would make the T results independent of the direction. The mechanism was
+  not investigated. At the real strengths (x 1) the anisotropy of cubic Fe (about 1e-7 Ry) is below the noise below and
+  could not be resolved.
+- **Verified:** global-frame recursion (`local_axis = F`) is not rotation invariant even without SOC (`xi` = 0). Moment along x or
+  [110] against z at lld 13, 17, 21, 25: band energy difference +2.3e-4, +1.6e-4, -4.8e-5, -1.9e-5 Ry (sign changes with lld), |m| up to
+  3.3e-3 mu_B. With `local_axis = T` the same runs reproduce z to at most 6e-6 Ry (below 1e-6 for lld >= 21). Anisotropy
+  energies therefore need `local_axis = T`; the global-frame error exceeds the physical anisotropy by two or more orders.
+- **Verified:** block recursion at nsp = 4 breaks down at large lld. No SOC, moment along z: band energy -1.99755 Ry and |m|
+  2.104 mu_B at lld 21, -1.99197 Ry and 2.087 mu_B at lld 31, -2.09432 Ry and 1.776 mu_B at lld 41. Consistent with the lld <= 28
+  bound recorded for GBT (`docs/DECISIONS.md`, GBT entry); the cause was not diagnosed.
+- **Verified:** `example/exchange/bccFe_kspace_green/Fe.nml` has no `xi_p`, `xi_d`, so nsp = 2, 3 and 4 give byte-identical
+  `kspace_green_c1.dat` there: that deck has no SOC in either route.
+
