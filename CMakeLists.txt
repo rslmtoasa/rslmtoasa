@@ -785,6 +785,18 @@ if (RUN_UNIT_TESTS)
     set_tests_properties(${_t} PROPERTIES LABELS "unit;spin-response;quick"
       FIXTURES_REQUIRED SpinResponseFeScratch RESOURCE_LOCK SpinResponseFeScratch)
   endforeach()
+  # S2': two-atom bcc Fe cell with antiparallel moments, (up, down) against (down, up).
+  set(_af_scratch "${CMAKE_BINARY_DIR}/Testing/spin_response/af")
+  add_test(NAME SpinResponseAfDriver
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/af_scratch.py"
+      "${TestBinary}" "${TestDIR}/spin_response/fe_bcc" "${_af_scratch}")
+  set_tests_properties(SpinResponseAfDriver PROPERTIES
+    LABELS "spin-response;quick" FIXTURES_SETUP SpinResponseAfScratch RESOURCE_LOCK SpinResponseAfScratch)
+  add_fortran_component_unit_test(UnitSpinResponseS2Af ${TestDIR}/unit/test_spin_response_s2af.f90)
+  target_link_libraries(UnitSpinResponseS2Af SpinResponseFeState)
+  add_test(NAME UnitSpinResponseS2Af COMMAND UnitSpinResponseS2Af "${TestDIR}/spin_response/oracles" WORKING_DIRECTORY "${_af_scratch}")
+  set_tests_properties(UnitSpinResponseS2Af PROPERTIES LABELS "unit;spin-response;quick"
+    FIXTURES_REQUIRED SpinResponseAfScratch RESOURCE_LOCK SpinResponseAfScratch)
   # S3: the three-atom bcc Fe cell against the one-atom cell, two scratch decks run by the script.
   add_test(NAME SpinResponseS3
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/s3_supercell.py" "${TestBinary}"

@@ -303,6 +303,14 @@ beyond the basis lmax are fatal), with one static U per site acting on the d cha
   I + chi0 U at the first omega, the signed delta_q for `n_omega = 1`, `omega = 0`,
   `eta = 0`) and `<prefix>_state.dat`. With `n_omega = 1`,
   `omega = 0` and `eta = 0` it gives the static chi0(q, 0).
+- Adiabatic frequencies, `<prefix>_adiabatic.dat`: eigenvalues of
+  Omega = -N (chi0(q, 0)^-1 + K), N = diag of the signed moment of each row kappa
+  (`adiabatic_frequencies`; static chi0 from the same eigenpairs through the
+  optional `chi0_static` of `bare_response_list`). Global spin frame: an
+  antiparallel site has m < 0 and a negative eigenvalue; no per-site frame is
+  used (a local-frame vertex on a down site makes chi0_ij zero between up and
+  down sites). Rows without interaction (K = 0, the s and p channels) enter with
+  their own moment and have no physical meaning as frequencies.
 - `accumulate_chi0` lists the band pairs with a nonzero vertex (exact zeros of the
   spin-block amplitudes) and f_n - f_m /= 0, then does one ZGEMM per block of 32
   omega points, blocks in parallel (OpenMP), so the output is byte-identical for
@@ -340,8 +348,7 @@ small-q end is not converged in the J(r) cutoff. The decks are
 `tests/spin_response/fe_bcc` and `tests/spin_response/ni_fcc`; the Stage 2 and
 3a records are at tag `spin-response-stage3a`.
 
-**Where to add:** the next steps (`docs/DECISIONS.md`, B11) add the KL adiabatic
-output; a 2 x 2 spin structure per channel enlarges kappa and the vertex builder
+**Where to add:** a 2 x 2 spin structure per channel enlarges kappa and the vertex builder
 in `accumulate_chi0`. New kernels follow the
 plain-array pattern above, so analytic tests can call them. The radial module
 `radial_ground_state` is read only through `alsda_radial.f90`;

@@ -44,6 +44,7 @@ module spin_response_mod
    public :: u_mills
    public :: radial_kernel_matrix
    public :: solve_dyson
+   public :: adiabatic_frequencies
    public :: peak_estimate
    public :: spectral_trace
    public :: pole_estimates
@@ -453,11 +454,13 @@ contains
    !> @param[in]  omega     Energies (Ry); eta (Ry) the broadening, 0 allowed at omega = 0 (static value).
    !> @param[in]  juelich   Juelich amplitudes if .true., coefficient (Mills) amplitudes otherwise.
    !> @param[out] chi0      shape (nsc, nsc, size(omega), nq), nsc = nsite*nchannel.
-   subroutine bare_response_list(this, q_direct, omega, eta, juelich, chi0)
+   !> @param[out] chi0_static  Optional chi0(q, omega = 0, eta = 0) from the same eigenpairs, shape (nsc, nsc, nq).
+   subroutine bare_response_list(this, q_direct, omega, eta, juelich, chi0, chi0_static)
       class(spin_response), intent(inout) :: this
       real(rp), intent(in) :: q_direct(:, :), omega(:), eta
       logical, intent(in) :: juelich
       complex(rp), intent(out) :: chi0(:, :, :, :)
+      complex(rp), intent(out), optional :: chi0_static(:, :, :)
 
       integer :: first, last, nk, iq
       real(rp), allocatable :: enu(:, :), p(:, :), e_k(:, :), e_kq(:, :), et_k(:, :), et_kq(:, :), f_k(:, :), f_kq(:, :)
@@ -466,6 +469,7 @@ contains
       call this%channel_parameters(enu, p)
       nk = this%reciprocal%k_workset%nk_local
       chi0 = (0.0_rp, 0.0_rp)
+      if (present(chi0_static)) chi0_static = (0.0_rp, 0.0_rp)
       do first = 1, nk, k_chunk
          last = min(nk, first + k_chunk - 1)
          call this%eigenpairs_chunk([0.0_rp, 0.0_rp, 0.0_rp], first, last, e_k, v_k)
@@ -475,6 +479,10 @@ contains
             call endpoint(this, e_kq, v_kq, juelich, enu, p, et_kq, f_kq, a_kq)
             call accumulate_chi0(this%kt, this%reciprocal%k_workset%weights(first:last), et_k, f_k, a_k, &
                                  et_kq, f_kq, a_kq, omega, eta, chi0(:, :, :, iq))
+            if (present(chi0_static)) then
+               call accumulate_chi0(this%kt, this%reciprocal%k_workset%weights(first:last), et_k, f_k, a_k, &
+                                    et_kq, f_kq, a_kq, [0.0_rp], 0.0_rp, chi0_static(:, :, iq:iq))
+            end if
          end do
       end do
    end subroutine bare_response_list
@@ -555,14 +563,14 @@ contains
       this%kmat = -this%k_alsda*merge(this%kernel_lambda, 1.0_rp, trim(this%kernel) == 'alsda_scaled')
    end subroutine interaction
 
-   !> @brief Loop over the q list: chi0, Dyson, tr L and pole estimates; writes <prefix>_q<NNN>.dat and <prefix>_dispersion.dat.
+   !> @brief Loop over the q list: chi0, Dyson, tr L and pole estimates; writes <prefix>_q<NNN>.dat, <prefix>_dispersion.dat and <prefix>_adiabatic.dat.
    subroutine run(this)
       class(spin_response), intent(inout) :: this
 
-      integer :: iq, iw, nq, nw, ns, nsc, funit, fdisp
-      real(rp) :: peak, crossing, qcart(3)
-      real(rp), allocatable :: trl(:)
-      complex(rp), allocatable :: chi0(:, :, :, :), chi(:, :, :)
+      integer :: iq, iw, nq, nw, ns, nsc, funit, fdisp, fadia
+      real(rp) :: peak, crossing, qcart(3), imag_max
+      real(rp), allocatable :: trl(:), moment_row(:), omega_ad(:)
+      complex(rp), allocatable :: chi0(:, :, :, :), chi(:, :, :), chi0_static(:, :, :)
       logical :: has_peak, has_crossing
       character(len=256) :: fname
       character(len=24) :: peak_text, crossing_text
@@ -571,8 +579,13 @@ contains
       nsc = ns*size(this%channel_l)
       nq = size(this%q_direct, 2)
       nw = size(this%omega)
-      allocate (chi0(nsc, nsc, nw, nq), chi(nsc, nsc, nw))
-      call this%bare_response_list(this%q_direct, this%omega, this%eta, trim(this%method) == 'juelich', chi0)
+      allocate (chi0(nsc, nsc, nw, nq), chi(nsc, nsc, nw), chi0_static(nsc, nsc, nq), omega_ad(nsc))
+      call this%bare_response_list(this%q_direct, this%omega, this%eta, trim(this%method) == 'juelich', chi0, chi0_static)
+      ! signed moment of each row kappa, as in interaction
+      moment_row = merge(this%occ_mills(:, 1) - this%occ_mills(:, 2), this%occ_juelich(:, 1) - this%occ_juelich(:, 2), &
+                         trim(this%method) == 'mills')
+      open (newunit=fadia, file=trim(this%output_prefix)//'_adiabatic.dat', action='write', status='replace')
+      write (fadia, '(a)') '# q_direct(3) q_cartesian(3, units 2pi/a) |q|(1/Angstrom) omega_adiabatic(Ry, ascending, one per row of the response space) max_abs_imag(Ry)'
       open (newunit=fdisp, file=trim(this%output_prefix)//'_dispersion.dat', action='write', status='replace')
       write (fdisp, '(a)') '# q_direct(3) q_cartesian(3, units 2pi/a) |q|(1/Angstrom) peak_omega(Ry) crossing_omega(Ry) min_re_eig(I+chi0*U)_at_omega_1'
       do iq = 1, nq
@@ -602,8 +615,12 @@ contains
          if (has_crossing) write (crossing_text, '(es22.14)') crossing
          write (fdisp, '(7es16.8,2a24,es16.8)') this%q_direct(:, iq), qcart, 2.0_rp*pi*sqrt(sum(qcart**2))/this%lattice%alat, &
             peak_text, crossing_text, min_real_eig(chi0(:, :, 1, iq), this%kmat)
+         call adiabatic_frequencies(chi0_static(:, :, iq), this%kmat, moment_row, omega_ad, imag_max)
+         write (fadia, '(7es16.8,*(es22.14))') this%q_direct(:, iq), qcart, 2.0_rp*pi*sqrt(sum(qcart**2))/this%lattice%alat, &
+            omega_ad, imag_max
       end do
       close (fdisp)
+      close (fadia)
    end subroutine run
 
    !> @brief Write <output_prefix>_state.dat: the frozen-state values the response used.
@@ -1006,6 +1023,57 @@ contains
       end do
       call solve_dyson_matrix(chi0, kmat, chi)
    end subroutine solve_dyson_diagonal
+
+   !> @brief Adiabatic frequencies Omega = -N (chi0^-1 + K) from the static chi0(q, 0), N = diag(m) the signed moments.
+   !> @details For chi(w) = (w - Omega)^-1 N the static value is -Omega^-1 N, and (I + chi0 K) chi = chi0 gives
+   !>          chi^-1 = chi0^-1 + K. Omega is similar to a Hermitian matrix, so its eigenvalues are real: positive
+   !>          where m > 0 and negative where m < 0. At q = 0 the Goldstone condition makes Omega m = 0.
+   !> @param[in]  chi0s       Static chi0(q, 0), shape (nsc, nsc).
+   !> @param[in]  kmat        Interaction kernel (Ry), shape (nsc, nsc).
+   !> @param[in]  m           Signed moment of each row kappa, shape (nsc).
+   !> @param[out] omega       Real parts of the eigenvalues of Omega (Ry), ascending, shape (nsc).
+   !> @param[out] imag_max    Largest |imaginary part| of those eigenvalues (Ry).
+   subroutine adiabatic_frequencies(chi0s, kmat, m, omega, imag_max)
+      complex(rp), intent(in) :: chi0s(:, :)
+      real(rp), intent(in) :: kmat(:, :), m(:)
+      real(rp), intent(out) :: omega(:), imag_max
+
+      integer :: n, i, info, ipiv(size(m))
+      complex(rp) :: a(size(m), size(m)), b(size(m), size(m)), w(size(m)), vl(1, 1), vr(1, 1), work(4*size(m))
+      real(rp) :: rwork(2*size(m))
+
+      n = size(m)
+      a = chi0s
+      b = (0.0_rp, 0.0_rp)
+      do i = 1, n
+         b(i, i) = (1.0_rp, 0.0_rp)
+      end do
+      call zgesv(n, n, a, n, ipiv, b, n, info)
+      if (info /= 0) error stop 'adiabatic_frequencies: singular static chi0'
+      do i = 1, n
+         a(i, :) = -m(i)*(b(i, :) + kmat(i, :))
+      end do
+      call zgeev('N', 'N', n, a, n, w, vl, 1, vr, 1, work, size(work), rwork, info)
+      if (info /= 0) error stop 'adiabatic_frequencies: zgeev failed'
+      omega = real(w, rp)
+      call sort_ascending(omega)
+      imag_max = maxval(abs(aimag(w)))
+   end subroutine adiabatic_frequencies
+
+   !> @brief In-place ascending selection sort of a short list.
+   pure subroutine sort_ascending(x)
+      real(rp), intent(inout) :: x(:)
+
+      integer :: i, j
+      real(rp) :: t
+
+      do i = 1, size(x) - 1
+         j = i - 1 + minloc(x(i:), 1)
+         t = x(i)
+         x(i) = x(j)
+         x(j) = t
+      end do
+   end subroutine sort_ascending
 
    !> @brief tr L(omega) with L = -(chi - chi^H)/(2 pi i), i.e. -Im tr chi / pi.
    pure function spectral_trace(chi) result(trl)

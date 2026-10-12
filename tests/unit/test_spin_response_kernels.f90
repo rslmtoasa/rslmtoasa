@@ -19,7 +19,7 @@
 program test_spin_response_kernels
    use precision_mod, only: rp
    use spin_response_mod, only: accumulate_chi0, u_juelich, solve_dyson, &
-                                spectral_trace, pole_estimates, interaction_values
+                                spectral_trace, pole_estimates, interaction_values, adiabatic_frequencies
    use spin_response_mod, only: u_mills_kernel => u_mills
    use spin_response_tolerances_mod
    implicit none
@@ -195,7 +195,9 @@ contains
       real(rp), allocatable :: e(:, :), f(:, :), trl(:)
       complex(rp), allocatable :: a(:, :, :, :, :), chi0(:, :, :), chi(:, :, :)
       complex(rp) :: s1, s2
-      real(rp) :: chi0s(1, 1), um(1), uj(1), resv(1), res, peak, crossing, h, d, u_s
+      real(rp) :: chi0s(1, 1), um(1), uj(1), resv(1), res, peak, crossing, h, d, u_s, wad(1), wimag
+      complex(rp) :: s_dn(1, 1)
+      real(rp), allocatable :: e_dn_site(:, :), f_dn_site(:, :)
       real(rp), allocatable :: omega_s(:)
       complex(rp), allocatable :: chi0_s(:, :, :), chi_s(:, :, :)
       logical :: has_peak, has_crossing
@@ -237,6 +239,17 @@ contains
       chi0s(1, 1) = static_real('A1 static', s1)
       call u_juelich(chi0s, [moment], uj)
       call report('A1 u_goldstone', rel_scal(cmplx(uj(1), 0.0_rp, rp), cmplx(u_goldstone, 0.0_rp, rp)), a1_rel)
+
+      ! catches: wrong sign or moment factor in Omega = -N (chi0^-1 + K); one two-level pole carries the whole weight, so the
+      ! adiabatic frequency is the oracle pole
+      call adiabatic_frequencies(reshape([s1], [1, 1]), reshape([u_test], [1, 1]), [moment], wad, wimag)
+      call report('A1 adiabatic frequency vs pole', abs(wad(1) - pole)/abs(pole), a1_rel)
+      ! catches: unsigned N. The exchanged two-level (empty up level above the occupied down level) has moment -M and,
+      ! in closed form, chi = -M/(w + pole): static chi0 is again -M/Delta and the frequency is -pole.
+      call two_spin_bands(norb, [e_dn], [e_up], [f_dn], [f_up], e_dn_site, f_dn_site)
+      s_dn(1, 1) = static_chi0(1.0_rp, [1.0_rp], e_dn_site, f_dn_site, a, e_dn_site, f_dn_site)
+      call adiabatic_frequencies(s_dn, reshape([u_test], [1, 1]), [-moment], wad, wimag)
+      call report('A1 exchanged two-level: adiabatic frequency vs -pole', abs(wad(1) + pole)/abs(pole), a1_rel)
 
       ! catches: wrong sign or normalisation in u_mills, residual not 1 + chi0(0,0) U or built with the Juelich U
       call interaction_values(chi0s, chi0s, [moment], [moment], [e_up], [e_up + mills_factor*delta], uj, um, resv)

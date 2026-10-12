@@ -1741,3 +1741,9 @@ campaign remain outside the established scope.
 - **Verified:** `example/exchange/bccFe_kspace_green/Fe.nml` has no `xi_p`, `xi_d`, so nsp = 2, 3 and 4 give byte-identical
   `kspace_green_c1.dat` there: that deck has no SOC in either route.
 
+## spin_response.f90 is past the spec's 1,000-line guideline — 2026-10-12
+
+- **Verified:** `source/spin_response.f90` has 1146 lines (`wc -l`); the restart spec says to split into a submodule only if it passes about 1,000
+  lines. It was already 1078 before NC-1. The developer decided not to split it now. **Proposal, not applied:** move the pure kernels
+  (`accumulate_chi0`, `u_juelich`, `solve_dyson`, `adiabatic_frequencies`, ...) into a submodule or sibling module; about 600 lines move, no
+  logic changes.

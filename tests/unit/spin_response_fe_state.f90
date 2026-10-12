@@ -34,9 +34,11 @@ contains
       write (*, '(a)') 'test | measured | tolerance'
    end subroutine read_tolerances
 
-   subroutine build_fe_state(reversed, control_obj, lattice_obj, charge_obj, energy_obj, hamiltonian_obj, fname)
+   subroutine build_fe_state(reversed, control_obj, lattice_obj, charge_obj, energy_obj, hamiltonian_obj, fname, site)
       logical, intent(in) :: reversed
       character(*), intent(in), optional :: fname
+      !> With reversed, the only site whose spins are exchanged (default: all sites).
+      integer, intent(in), optional :: site
       type(control), target, intent(inout) :: control_obj
       type(lattice), target, intent(inout) :: lattice_obj
       type(charge), target, intent(inout) :: charge_obj
@@ -55,7 +57,7 @@ contains
       call lattice_obj%bravais()
       call lattice_obj%structb(.true.)
       call lattice_obj%atomlist()
-      if (reversed) call reverse_spin(lattice_obj)
+      if (reversed) call reverse_spin(lattice_obj, site)
       charge_obj = charge(lattice_obj)
       call charge_obj%bulkmat()
       energy_obj = energy(lattice_obj)
@@ -87,12 +89,16 @@ contains
       bm = rec_ref%band_moments
    end subroutine reference_band_moments
 
-   subroutine reverse_spin(lattice_obj)
+   subroutine reverse_spin(lattice_obj, site)
       type(lattice), intent(inout) :: lattice_obj
+      integer, intent(in), optional :: site
 
       integer :: i
 
       do i = 1, lattice_obj%nrec
+         if (present(site)) then
+            if (i /= site) cycle
+         end if
          associate (pot => lattice_obj%symbolic_atoms(i)%potential)
             call swap_spin(pot%center_band)
             call swap_spin(pot%width_band)
