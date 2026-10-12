@@ -30,8 +30,10 @@ def run(binary, deck, scratch, threads):
     block = f"\n&spin_response\nmethod = 'juelich'\nn_q = 2\n{q}omega_min = 0.0\nomega_max = 0.05\nn_omega = 41\neta = 2.0e-3\n/\n"
     nml = pathlib.Path(scratch, "input_driver.nml")
     nml.write_text(text.replace(old, "pre_processing = 'none'\npost_processing = 'spin_response'") + block)
-    # the threaded MKL eigensolver is not bit-reproducible across thread counts and is not under test
-    env = dict(os.environ, OMP_NUM_THREADS=str(threads), MKL_NUM_THREADS="1")
+    # the threaded BLAS/LAPACK eigensolver (MKL, OpenBLAS, Accelerate) is not bit-reproducible across thread counts
+    env = dict(os.environ, OMP_NUM_THREADS=str(threads), MKL_NUM_THREADS="1",
+           OPENBLAS_NUM_THREADS="1", VECLIB_MAXIMUM_THREADS="1", BLIS_NUM_THREADS="1")
+    #env = dict(os.environ, OMP_NUM_THREADS=str(threads), MKL_NUM_THREADS="1")
     subprocess.run([binary, nml.name], cwd=scratch, check=True, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 
