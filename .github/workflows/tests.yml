@@ -96,6 +96,7 @@ jobs:
             generator="Ninja"
           fi
           cmake -S . -B build -G "$generator" \
+            -DPython3_EXECUTABLE="$(which python3)" \
             -DENABLE_MPI=ON \
             -DENABLE_MARCH_NATIVE=OFF \
             -DRUN_REG_TESTS=ON \

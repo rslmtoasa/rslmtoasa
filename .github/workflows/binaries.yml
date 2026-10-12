@@ -89,6 +89,18 @@ jobs:
       #     restore-keys: |
       #       ${{ runner.os }}-pip-
 
+      - uses: actions/setup-python@v6
+        if: runner.os != 'Windows'
+        with:
+          python-version: '3.10'
+          cache: pip
+
+      - name: Install python packages for testing
+        if: runner.os != 'Windows'
+        run: |
+            python -m ensurepip
+            python -m pip install -r requirements.txt
+
       - name: Build binaries ${{ matrix.icon}}
         run: |
              if [ "$RUNNER_OS" = "Windows" ]; then
@@ -96,9 +108,9 @@ jobs:
                # while avoiding MPI toolchain/runtime coupling issues on MSYS2.
                cmake -S . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=OFF -DENABLE_MPI=OFF -DENABLE_MARCH_NATIVE=OFF
              elif [ "$RUNNER_OS" = "macOS" ]; then
-               cmake -S . -G "Unix Makefiles" -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=ON -DENABLE_MPI=ON -DENABLE_MARCH_NATIVE=OFF
+               cmake -S . -G "Unix Makefiles" -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=ON -DENABLE_MPI=ON -DENABLE_MARCH_NATIVE=OFF -DPython3_EXECUTABLE="$(which python)"
              else
-               cmake -S . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=ON -DENABLE_MPI=ON -DENABLE_MARCH_NATIVE=OFF
+               cmake -S . -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=ON -DENABLE_MPI=ON -DENABLE_MARCH_NATIVE=OFF -DPython3_EXECUTABLE="$(which python)"
              fi
              cmake --build build --parallel
              mkdir ./dist
@@ -119,23 +131,11 @@ jobs:
           echo "Resolved CMAKE_Fortran_FLAGS lines from CMakeCache:"
           grep -E '^CMAKE_Fortran_FLAGS(:|_)' build/CMakeCache.txt || true
 
-      - uses: actions/setup-python@v6
-        if: runner.os != 'Windows'
-        with:
-          python-version: '3.10'
-          cache: pip
-
-      - name: Install python packages for testing
-        if: runner.os != 'Windows'
-        run: |
-            python -m ensurepip 
-            python -m pip install -r requirements.txt
-
       - name: Test binaries ${{ matrix.icon}}
         if: runner.os != 'Windows'
         run: |
              cd build
-             ctest --verbose --output-on-failure
+             ctest -L quick --output-on-failure
              cd ..
 
       - name: Build self-extracting package ${{ matrix.icon}}
