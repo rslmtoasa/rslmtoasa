@@ -16,6 +16,9 @@ Read-only to AI sessions (CLAUDE.md, "Verification integrity").
 | `make_references_3d.py` | Generator for A4 and R1 (numpy only), with built-in self-checks; does not touch A1-A3 |
 | `a4_two_channel.nml` | A4: self-consistent two-channel Stoner ferromagnet (s-like and d-like, hybridized) with an exchange matrix |
 | `r1_radial_kernel.nml` | R1: radial kernel matrix K_ll' with a closed form, on the code's exponential mesh; case 2 has m = 0 on a mesh point |
+| `make_references_nc.py` | Generator for A5 (numpy only), with built-in self-checks; does not touch A1-A4 or R1 |
+| `a5_af.nml` | A5: self-consistent two-sublattice antiferromagnet (1-D chain, half filling, insulating); degenerate up/down band pairs randomly mixed |
+| `a5_ferri.nml` | A5: self-consistent metallic ferrimagnet (1.8 electrons per cell, net moment +0.2) |
 
 Regenerate with `python3 make_references.py tests/spin_response/oracles`
 from the repository root. All self-checks must report `ok`. Commit the
@@ -40,6 +43,24 @@ What each model anchors (details in the generator's docstring):
   P_l = sqrt(gfac_up gfac_dn) G_up G_dn + S_up S_dn and K = dV/m, in closed form;
   the Simpson value on the mesh is also given. Both anchor the spherical-vertex
   (L = 0) approximation, with the core included in m.
+- **Frame**: global; spin 1 = up along the global axis; site B moment negative;
+  nothing relabelled.
+- **Exact**, for any mesh and temperature: chi0(0,0) Delta = -m per site (signed);
+  (1 + chi0(0,0) U) m = 0 along the signed moments; the U solved from the
+  Goldstone condition equals the model's U; the full-line zeroth moment of
+  -Im chi0_ii / pi equals the signed m_i. In the af set, the exported amplitudes
+  mix each degenerate up/down pair by a random unitary, while the references
+  come from the unmixed bands: the response must not depend on the mixing.
+- **Adiabatic dispersion** Omega(q) = -N (chi0(q,0)^-1 + U), N = diag(m) signed.
+  Antiferromagnet: pairs +w, -w, linear in q (exponents 0.9995, 0.9980 along
+  q, 2q, 4q with q = 2 pi / 160); at q = 0 Omega is a Jordan block (both
+  eigenvalues 0), so its q = 0 group carries no omega_adiabatic. Ferrimagnet:
+  a gapless acoustic branch, quadratic in q (exponents 2.0047, 2.0181), and an
+  optical mode at -0.0318 Ry: negative, because the minority (down) sublattice
+  dominates it and the +- channel sees it at negative omega.
+- **Why the ferrimagnet is a metal**: with one orbital per site at half filling,
+  an insulator holds exactly one band per spin, so the moments compensate
+  exactly even for inequivalent sites; a net moment needs a partly filled band.
 
 Fortran tests read inputs, expected values and tolerances from these files
 and contain no physics of their own. Changing any file here is a developer
