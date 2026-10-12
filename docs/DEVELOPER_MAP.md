@@ -340,7 +340,7 @@ beyond the basis lmax are fatal), with one static U per site acting on the d cha
   q-path from another code.
 
 **References and decks:** developer-owned, under `tests/spin_response/oracles/`:
-the analytic models A1-A4 and the radial kernel integrals R1, `tolerances.nml` (whose keys are declared once in
+the analytic models A1-A5 (A5: antiferromagnet and ferrimagnet, global frame) and the radial kernel integrals R1, `tolerances.nml` (whose keys are declared once in
 `tests/unit/spin_response_tolerances.f90`), and the LKAG + LSWT magnon curves
 `fe_lswt.dat` and `ni_lswt.dat` from the real-space `exchange.f90` (see
 [`EXCHANGE_VALIDATION_MAP.md`](validation/EXCHANGE_VALIDATION_MAP.md)); their

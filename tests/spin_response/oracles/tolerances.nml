@@ -29,4 +29,8 @@
   r1_rel = 1.0e-6   ! R1 kernel matrix vs analytic integral, both cases [9.2e-8, 9.1e-8; Simpson alone 9.2e-8]
   radial_moment_rel = 3.0e-5   ! 3d: sphere integral of n_up - n_dn vs sum_l (Q0_up - Q0_dn) of Fe.nml [2.8e-6]
   radial_enu_abs = 1.0e-10   ! 3d: E_nu of the lmtst re-run vs Fe.nml, Ry [5.3e-12]
+  a5_rel = 1.0e-10   ! A5 chi0, chi, static chi0 and eigenvalues of 1 + chi0 U vs the files [worst 2.5e-12, chi of af at q #2]
+  a5_identity_rel = 1.0e-12   ! A5 Goldstone identities, U from u_juelich, zeroth moments [worst 2.7e-15]
+  a5_adiabatic_rel = 1.0e-10   ! A5 Omega eigenvalues, max abs Im / max abs Re, exponents vs the oracle [worst 2.9e-12; af Omega pair 2.1e-12]
+  a5_exponent_abs = 0.05   ! A5 exponent minus 1 (af), minus 2 (ferri acoustic): physics bound, separates 1 from 2 by 20 [2.0e-3, 1.8e-2]
 /
