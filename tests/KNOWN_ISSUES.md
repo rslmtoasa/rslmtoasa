@@ -411,21 +411,21 @@ MPI on, job `continue-on-error`) runs an unfiltered `ctest`.
   pre-change binary, e.g. `Fe_out.nml` of `nsp2_block_hoh` by 2.4e-10 between
   the two old runs and 1.1e-9 between old and new, and `linfo.out` of the Si
   legacy deck by 0.30 and 0.46.
-- **`Val04LdaUPhysics`** (`validation;lda_u;magnetic;kspace`; 103 s). CI:
+- **`Val04LdaUPhysics`** (`validation;lda_u;magnetic;kspace;known-failure`; 103 s). CI:
   `binaries.yml` only. First failing check: "stored occupation matrix is
   Hermitian", required `ldm_hermiticity_residual < 1.0e-7`. The script prints no
   value; computed from `Fe_out.nml` with the script's expression: u2 6.09e-08,
   u4 1.083e-07, u2_convergence 3.57e-08. The u4 deck fails.
-- **`Val12LmtoFieldsTorques`** (`validation;functional;magnetic;spin_dynamics;lmto;torque;constraints;soc`;
+- **`Val12LmtoFieldsTorques`** (`validation;functional;magnetic;spin_dynamics;lmto;torque;constraints;soc;known-failure`;
   18 s). CI: `binaries.yml` only. First failing check: "SOC-free global rotation
   changed the torque invariant by 8.281e-03 T", required `< 5.0e-3`.
-- **`Val16GbtCommensurateSupercells`** (`validation;functional;magnetic;supercell;commensurate;convergence`;
+- **`Val16GbtCommensurateSupercells`** (`validation;functional;magnetic;supercell;commensurate;convergence;known-failure`;
   340 s of a 14400 s timeout). CI: `binaries.yml` only. First failing check, in
   the first case (`q050`): "current-kernel reference did not converge", i.e.
   `Converged!` is absent from the log of the `nstep = 100` reference supercell
   run. No numeric value is printed. ROADMAP B1 lists "G9 failed; converged
   small-q curvature not established".
-- **`Val17GbtHarmonicGoldstone`** (`validation;functional;magnetic;gbt;kspace;goldstone;convergence`;
+- **`Val17GbtHarmonicGoldstone`** (`validation;functional;magnetic;gbt;kspace;goldstone;convergence;known-failure`;
   219 s of a 14400 s timeout). CI: `binaries.yml` only. Five gates fail. First:
   "theta=5 canonical occupation: N=8.00686367, max|dN|=6.906e-03", required
   `|N-8| < 1e-8` and `max|dN| < 1e-7`; the same at theta 10, 15 and 20 (N

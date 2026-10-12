@@ -459,7 +459,7 @@ endforeach()
       "--binary" "${TestBinary}"
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val04_lda_u")
   set_tests_properties(Val04LdaUPhysics PROPERTIES
-    LABELS "validation;lda_u;magnetic;kspace" TIMEOUT 300)
+    LABELS "validation;lda_u;magnetic;kspace;known-failure" TIMEOUT 300)
 
   add_test(NAME Val05GreenConvergence
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val05_green_convergence.py"
@@ -494,7 +494,7 @@ endforeach()
       "--binary" "${TestBinary}"
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val12_lmto_fields_torques")
   set_tests_properties(Val12LmtoFieldsTorques PROPERTIES
-    LABELS "validation;functional;magnetic;spin_dynamics;lmto;torque;constraints;soc" TIMEOUT 900)
+    LABELS "validation;functional;magnetic;spin_dynamics;lmto;torque;constraints;soc;known-failure" TIMEOUT 900)
 
   add_test(NAME Val13AbInitioSpinDynamics
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val13_abinitio_spin_dynamics.py"
@@ -515,7 +515,7 @@ endforeach()
       "--binary" "${TestBinary}"
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val16_gbt_supercell")
   set_tests_properties(Val16GbtCommensurateSupercells PROPERTIES
-    LABELS "validation;functional;magnetic;supercell;commensurate;convergence"
+    LABELS "validation;functional;magnetic;supercell;commensurate;convergence;known-failure"
     TIMEOUT 14400)
 
   add_test(NAME Val17GbtHarmonicGoldstone
@@ -523,7 +523,7 @@ endforeach()
       "--binary" "${TestBinary}"
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val17_gbt_harmonic_goldstone")
   set_tests_properties(Val17GbtHarmonicGoldstone PROPERTIES
-    LABELS "validation;functional;magnetic;gbt;kspace;goldstone;convergence"
+    LABELS "validation;functional;magnetic;gbt;kspace;goldstone;convergence;known-failure"
     TIMEOUT 14400)
 
   add_test(NAME Val18GbtWp01Q0BccFe
