@@ -813,6 +813,12 @@ if (RUN_UNIT_TESTS)
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/soc_zero_identity.py" "${TestBinary}"
       "${TestDIR}/spin_response/fe_bcc" "${CMAKE_BINARY_DIR}/Testing/spin_response/soc0")
   set_tests_properties(SpinResponseSocZeroIdentity PROPERTIES LABELS "unit;spin-response;quick")
+  # Odd part of omega(q) in centrosymmetric Fe with SOC (nsp = 2, 16^3), +-q pairs along [100] and [110].
+  add_test(NAME SpinResponseInversionOdd
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/inversion_odd.py" "${TestBinary}"
+      "${TestDIR}/spin_response/fe_bcc" "${CMAKE_BINARY_DIR}/Testing/spin_response/inversion_odd"
+      "${TestDIR}/spin_response/oracles/tolerances.nml")
+  set_tests_properties(SpinResponseInversionOdd PROPERTIES LABELS "unit;spin-response;quick")
   # Frozen 24^3 Fe response (tests/spin_response/baseline) rerun in its own scratch directory.
   add_test(NAME SpinResponseBaselineRepro
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/baseline_repro.py" "${TestBinary}"

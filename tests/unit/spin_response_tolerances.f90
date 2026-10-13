@@ -18,12 +18,13 @@ module spin_response_tolerances_mod
    real(rp) :: a4_rel = -1.0_rp, a4_identity_rel = -1.0_rp, r1_rel = -1.0_rp
    real(rp) :: radial_moment_rel = -1.0_rp, radial_enu_abs = -1.0_rp
    real(rp) :: a5_rel = -1.0_rp, a5_identity_rel = -1.0_rp, a5_adiabatic_rel = -1.0_rp, a5_exponent_abs = -1.0_rp
+   real(rp) :: inversion_odd_abs = -1.0_rp
    namelist /spin_response_tolerances/ a1_rel, a2_chi_rel, a2_identity_rel, static_eta0_rel, a3_rel, &
       window_moment_rel, dyson_u0_rel, pole_peak_rel, pole_crossing_rel, &
       electron_count_abs, eigen_contract_abs, moment_rel, s1_rel, s2_rel, e1_fe_rel, q0_pole_abs, &
       region1_rel, region2_rel, baseline_repro_rel, static_u_rel, s3_rel, channel_d_rel, &
       a4_rel, a4_identity_rel, r1_rel, radial_moment_rel, radial_enu_abs, &
-      a5_rel, a5_identity_rel, a5_adiabatic_rel, a5_exponent_abs
+      a5_rel, a5_identity_rel, a5_adiabatic_rel, a5_exponent_abs, inversion_odd_abs
 
 contains
 

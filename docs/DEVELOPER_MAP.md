@@ -392,6 +392,7 @@ side belong in the reciprocal family, not in `green.f90`.
 | Spin response: S3, three-atom bcc Fe cell against the one-atom cell (`SpinResponseS3`) | `unit;spin-response;quick` | `tests/spin_response/s3_supercell.py` |
 | Spin response: 1 against 4 OpenMP threads, byte-identical (`SpinResponseOmpIdentity`) | `unit;spin-response;quick` | `tests/spin_response/omp_identity.py` |
 | Spin response: nsp = 2 with xi = 0 byte-identical to nsp = 1; with the deck's xi different (`SpinResponseSocZeroIdentity`) | `unit;spin-response;quick` | `tests/spin_response/soc_zero_identity.py` |
+| Spin response: omega(q) = omega(-q) in Fe with SOC, 16^3, odd part of omega_RPA and omega_force below `inversion_odd_abs` (`SpinResponseInversionOdd`) | `unit;spin-response;quick` | `tests/spin_response/inversion_odd.py` |
 | Spin response: 24^3 reproduction against frozen outputs, Fe, Ni and Cr (`SpinResponseBaselineRepro`, `SpinResponseNiBaselineRepro`, `SpinResponseCrBaselineRepro`) | `regression;spin-response` | `tests/spin_response/baseline_repro.py`; frozen files in `tests/spin_response/baseline/`, `baseline_ni/` and `baseline_cr/` (`--freeze` rewrites them) |
 | Exchange energy integration at finite temperature (`UnitSimpsonFTemperature`) | `unit;quick` | `tests/unit/test_simpson_f_temperature.f90` |
 | Validation scripts | `validation` | `tests/validation/*.py` (spin response: `tests/validation/spin_response_ni/`, `tests/validation/spin_response_cr/`: `run_path.py`, `report_path.py`, `report_dynamic.py`, `weight_q.py`, `report_force.py`), records in `docs/validation/` |
