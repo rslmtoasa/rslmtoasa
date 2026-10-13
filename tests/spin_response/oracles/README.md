@@ -13,6 +13,9 @@ Read-only to AI sessions (CLAUDE.md, "Verification integrity").
 | `fe_lswt.dat` | Fe adiabatic magnon spectrum (LKAG J(r) + LSWT), meV; header gives provenance, convention and cutoff sensitivity |
 | `make_fe_lswt.py` | Converts the UppASD AMS output in `lswt_inputs/` into `fe_lswt.dat` |
 | `lswt_inputs/` | Raw inputs: q path, AMS output, J(r) shells (mRy) |
+| `cr_lswt.dat` | Cr bcc (CsCl cell) antiferromagnet adiabatic magnon spectrum (LKAG J(r) + two-sublattice LSWT), meV and Ry; header gives provenance and convention |
+| `make_cr_lswt.py` | Computes `cr_lswt.dat` from the J(r) shells in `lswt_inputs_cr/` (subcommands `qpath`, `lswt`, `selftest`) |
+| `lswt_inputs_cr/` | Raw inputs for Cr: J(r) shells (mRy, ferromagnetic-reference convention), UppASD q path, moment file, AMS output (`ams.bccCr_AF.dat`, the UppASD `.out` renamed because `*.out` is git-ignored) |
 | `make_references_3d.py` | Generator for A4 and R1 (numpy only), with built-in self-checks; does not touch A1-A3 |
 | `a4_two_channel.nml` | A4: self-consistent two-channel Stoner ferromagnet (s-like and d-like, hybridized) with an exchange matrix |
 | `r1_radial_kernel.nml` | R1: radial kernel matrix K_ll' with a closed form, on the code's exponential mesh; case 2 has m = 0 on a mesh point |

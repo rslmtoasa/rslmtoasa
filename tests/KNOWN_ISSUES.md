@@ -1761,7 +1761,7 @@ campaign remain outside the established scope.
   `T` in all, and byte-identical q files for Debug and Release). A flip on another compiler would change the signs in `_state.dat` and
   fail `SpinResponseCrBaselineRepro`. Not tried on another compiler or CPU.
 - **Proposal, not applied:** a dynamic run with a wider window and several `eta`, about 20 lines in `tests/validation/spin_response_cr/`.
-- **Resolved (`tests/spin_response/cr_bcc/ASD/make_cr_lswt.py`):** the UppASD `jfile` holds J of a ferromagnetic reference state, so for
+- **Resolved (`tests/spin_response/oracles/make_cr_lswt.py`):** the UppASD `jfile` holds J of a ferromagnetic reference state, so for
   the antiferromagnet J_12 and J_21 have the opposite sign to the script's global-frame convention. The script now converts J_ab to
   s_a s_b J_ab; on the 113-point UppASD qfile it reproduces `ams.bccCr_AF.out` to 2.2e-7 meV (70.2 meV before the conversion).
   `oracles/cr_lswt.dat` (98 q, steps of 1/32) was written by it.
