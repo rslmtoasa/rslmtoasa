@@ -1791,3 +1791,16 @@ campaign remain outside the established scope.
   LSWT for q >= 1/8. The dynamic tr L peak (1.62 to 1.83 times Omega_RPA at q = 1/16 to 1/8) was not examined further.
 - **Deferred, open:** site-resolved spectral output (L per row, not only tr L) is not written; the q files carry traces. If it is ever added it
   goes in a new file, not in the frozen q files.
+
+## spin_response NC-2, cubic bcc Fe null test (Gate 1) — 2026-10-14
+
+- **Measured** (`tests/validation/spin_response_fe_soc/gate1_cubic_fe.py`, `fe_bcc` deck with nsp = 2, DB `xi_p` and `xi_d` scaled, K = U m0/m, Gamma-centred N^3 mesh,
+  q = 0, omega = 0, eta = 0, one run each): omega_adiabatic = -8.02e-6 Ry (12^3), -2.414e-5 (24^3), -2.117e-5 (36^3), -2.321e-5 (48^3) at the deck's xi.
+  xi scaled by 1, 1/2, 1/4 (24^3): -2.414e-5, -6.055e-6, -1.516e-6 Ry, log-slopes 1.995 and 1.998; at 12^3 with 1/8 also: 1.998, 1.993, 1.997. omega_force
+  (N K (I + chi0 K)) differs from omega_adiabatic by 1e-6 to 1.5e-4 relative (relative to omega_adiabatic) in every run.
+- **Expected from symmetry (not from the code):** cubic anisotropy is fourth order in xi, with K_1 of bcc Fe about 1e-10 Ry per atom, so the gap should fall as xi^4 and be
+  far below 1e-8 Ry. The measured gap is negative, falls as xi^2 and is about 2e-5 Ry.
+- **Not diagnosed, suspects only:** (1) the Juelich factor multiplies the up and down components of a band with different (enu, p), so the d-projected vertex is not
+  covariant under a global spin rotation; (2) the K = U m0/m prescription (derived and checked only on a one-site numpy model with a complete vertex, where it gives
+  4e-17 on a spherical atom); (3) the on-site L.S of the first-order k-space H in this basis; (4) my deck handling (xi edited in the DB copy). Only the
+  xi = 0 identity (`SpinResponseSocZeroIdentity`) checks the setup.
