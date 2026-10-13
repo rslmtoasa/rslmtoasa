@@ -12,7 +12,7 @@ static = {}
 for d in (pathlib.Path(s) for s in sys.argv[2].split(",")):
     q = [tuple(float(x) for x in l.split()) for l in (d / "qpath.dat").read_text().splitlines()]
     a = [l.split() for l in (d / "spin_response_adiabatic.dat").read_text().splitlines() if not l.startswith("#")]
-    static.update({qi: max(float(x) for x in r[7:-1]) for qi, r in zip(q, a)})
+    static.update({qi: max(float(x) for x in r[7:7 + (len(r) - 8) // 2]) for qi, r in zip(q, a)})
 print("# q_direct(3) | w(max tr L) (Ry) | at grid edge | static w+ (Ry) | ratio | max|L(w)+L(-w)|/max|L|")
 for k, l in enumerate((dyn / "qpath.dat").read_text().splitlines(), 1):
     q = tuple(float(x) for x in l.split())

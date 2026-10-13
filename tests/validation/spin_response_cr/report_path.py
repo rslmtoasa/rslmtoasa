@@ -24,7 +24,7 @@ def load(dirs):
         adia, disp = rows(d / "spin_response_adiabatic.dat"), rows(d / "spin_response_dispersion.dat")
         assert len(q) == len(adia) == len(disp), f"{d}: row counts differ"
         for qi, a, s in zip(q, adia, disp):
-            out[qi] = (a[7:-1], s[-1])
+            out[qi] = (a[7:7 + (len(a) - 8) // 2], s[-1])
     return out
 
 

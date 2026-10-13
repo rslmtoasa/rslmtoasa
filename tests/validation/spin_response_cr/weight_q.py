@@ -32,7 +32,7 @@ for d in map(pathlib.Path, sys.argv[2:]):
         near = [i for i in range(len(w)) if abs(w[i] - w[ip]) <= 10 * eta]
         area = sum((w[i + 1] - w[i]) * (L[i] + L[i + 1]) / 2 for i in near[:-1])
         wb, wc = math.pi * eta * L[ip], area / (2 / math.pi * math.atan(10))
-        ad_w = max(float(x) for x in a[7:-1])
+        ad_w = max(float(x) for x in a[7:7 + (len(a) - 8) // 2])
         print(f"{q[0]:8.5f} {q[1]:8.5f} {q[2]:8.5f} | {eta:7.1e} | {w[ip]:.5f} | {w[ip] / ad_w:6.3f} | {wb:7.4f} | {wc:7.4f} | "
               f"{wb / m_j:6.3f} | {wc / m_j:6.3f} | {m_lswt * lswt[canon(q)] / ad_w:6.3f}   (M_J = {m_j:.5f}, edge: "
               f"{'yes' if ip in (0, len(w) - 1) else 'no'})")
