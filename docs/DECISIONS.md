@@ -144,3 +144,15 @@ documents at `lr-campaign-archive-2026-10:docs/linear_response/`.
   against 1/√(1−λ_u) = 1.9657 (λ_u = 0.741); A5 antiferromagnet 1.4092
   against 1.4091. The broad dynamic tr L peak (1.62–1.83 ω_RPA) is not
   examined; site-resolved output deferred.
+- 2026-10-14 — NC-2 (SOC, anisotropy gap) stopped as a negative result.
+  In the tree: the consistent kernel K = U m0/m(ξ) (fixed exchange field; a
+  frozen U would itself create a spurious gap), its ξ = 0 identity test, and
+  a warning on every SOC run. Gate 1, cubic bcc Fe null test: the q = 0 gap
+  is −2.3e-5 Ry and scales as ξ² (slopes 1.99–2.00, 12³ to 48³), where
+  symmetry requires fourth order and far below 1e-8 Ry. Cause confirmed in
+  a one-site toy: the projected vertex breaks the Goldstone sum rule through
+  its spin asymmetry; the Goldstone-fitted U absorbs that at ξ = 0, but its
+  O(ξ²) change appears as a gap (complete vertex −2.6e-17 Ry; gap
+  proportional to the asymmetry; with the Fe projector factors −7.1e-5 Ry,
+  same sign as Gate 1). Consequence: SOC gaps below about 1e-5 Ry cannot be
+  measured with the projected vertex; FePt (1–3e-4 Ry) was not attempted.
