@@ -1,8 +1,8 @@
 """bcc Cr antiferromagnet spin response along Gamma-X-M-Gamma-R-X | M-R (simple cubic cell, direct = Cartesian in 2 pi / a).
 
-Usage: run_path.py <rslmto.x> <deck directory> <scratch directory> --mesh N [--part i/n] [--dynamic OMEGA_MAX N_OMEGA ETA]
+Usage: run_path.py <rslmto.x> <deck directory> <scratch directory> --mesh N [--part i/n] [--dynamic OMEGA_MIN OMEGA_MAX N_OMEGA ETA] [--gx J[,J...]]
 The deck directory (tests/spin_response/cr_bcc) is only read. Static mode (default): n_omega = 1, omega = 0, eta = 0.
---dynamic: omega from -OMEGA_MAX to OMEGA_MAX (Ry), N_OMEGA points, eta in Ry. The q points are steps of 1/32 along the path,
+--dynamic: omega from OMEGA_MIN to OMEGA_MAX (Ry), N_OMEGA points, eta in Ry. --gx: only the points (J/32, 0, 0). The q points are steps of 1/32 along the path,
 plus 1/64 steps on Gamma-X up to 1/8 when N is a multiple of 64. --part i/n runs the i-th of n contiguous slices of the q list
 (single-thread processes for the static mode). Writes <scratch>/qpath_labels.dat (index, direct q, segment label) for the whole list.
 """
@@ -20,7 +20,8 @@ ap.add_argument("deck")
 ap.add_argument("scratch")
 ap.add_argument("--mesh", type=int, required=True)
 ap.add_argument("--part", default="1/1")
-ap.add_argument("--dynamic", nargs=3, type=float, metavar=("OMEGA_MAX", "N_OMEGA", "ETA"))
+ap.add_argument("--dynamic", nargs=4, type=float, metavar=("OMEGA_MIN", "OMEGA_MAX", "N_OMEGA", "ETA"))
+ap.add_argument("--gx")
 a = ap.parse_args()
 
 G, X, M, R = (F(0),) * 3, (F(1, 2), F(0), F(0)), (F(1, 2), F(1, 2), F(0)), (F(1, 2),) * 3
@@ -38,6 +39,8 @@ if a.mesh % 64 == 0:
             points.append((q, "ladder"))
 assert all((x * a.mesh).denominator == 1 for q, _ in points for x in q), "q not commensurate with the mesh"
 
+if a.gx:
+    points = [(q, lab) for q, lab in points if lab == "G-X" and q[0] * 32 in [int(j) for j in a.gx.split(",")]]
 i, n = (int(s) for s in a.part.split("/"))
 mine = points[(i - 1) * len(points) // n: i * len(points) // n]
 
@@ -58,8 +61,8 @@ scratch.joinpath("qpath.dat").write_text("".join(f"{float(x)!r} {float(y)!r} {fl
 scratch.joinpath("qpath_labels.dat").write_text("# index qx qy qz (direct) segment\n" + "".join(
     f"{k + 1} {float(x)!r} {float(y)!r} {float(z)!r} {lab}\n" for k, ((x, y, z), lab) in enumerate(points)))
 if a.dynamic:
-    w, nw, eta = a.dynamic
-    window = f"omega_min = {-w!r}\nomega_max = {w!r}\nn_omega = {int(nw)}\neta = {eta!r}\n"
+    w0, w1, nw, eta = a.dynamic
+    window = f"omega_min = {w0!r}\nomega_max = {w1!r}\nn_omega = {int(nw)}\neta = {eta!r}\n"
 else:
     window = "n_omega = 1\neta = 0.0\n"
 nml = scratch / "input_driver.nml"
