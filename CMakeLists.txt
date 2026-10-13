@@ -820,6 +820,12 @@ if (RUN_UNIT_TESTS)
       "${TestDIR}/spin_response/ni_fcc" "${CMAKE_BINARY_DIR}/Testing/spin_response/baseline_ni"
       "${TestDIR}/spin_response/baseline_ni" "${TestDIR}/spin_response/oracles/tolerances.nml")
   set_tests_properties(SpinResponseNiBaselineRepro PROPERTIES LABELS "regression;spin-response")
+  # Frozen 24^3 bcc Cr antiferromagnet response along Gamma-X (tests/spin_response/baseline_cr).
+  add_test(NAME SpinResponseCrBaselineRepro
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/baseline_repro.py" --dir 1,0,0 "${TestBinary}"
+      "${TestDIR}/spin_response/cr_bcc" "${CMAKE_BINARY_DIR}/Testing/spin_response/baseline_cr"
+      "${TestDIR}/spin_response/baseline_cr" "${TestDIR}/spin_response/oracles/tolerances.nml")
+  set_tests_properties(SpinResponseCrBaselineRepro PROPERTIES LABELS "regression;spin-response")
   add_fortran_unit_test(UnitKpmTransport ${TestDIR}/unit/test_kpm_transport.f90)
   set_tests_properties(UnitKpmTransport PROPERTIES
     LABELS "unit;conductivity;transport;kpm;spin_transport;orbital_transport")
