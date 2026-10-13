@@ -94,6 +94,8 @@ module spin_response_mod
       real(rp), allocatable :: moment(:)
       !> Juelich and Mills U (Ry), Mills Goldstone residual, and the d exchange splitting C_dn - C_up (Ry), per site.
       real(rp), allocatable :: uj(:), um(:), delta_mills(:), gap_d(:)
+      !> With SOC: Juelich U and d moment per site of the pass without the L.S term (see keep_nosoc_kernel).
+      real(rp), allocatable :: u_nosoc(:), moment_nosoc(:)
       !> Position of each site relative to site 1, in direct (lattice) coordinates, shape (3, nsite).
       real(rp), allocatable :: site_offset(:, :)
       !> ALSDA kernel K over kappa (Ry), unscaled, block diagonal in sites; U = -K enters the Dyson equation.
@@ -112,6 +114,7 @@ module spin_response_mod
       procedure :: bare_response_list
       procedure :: set_alsda_kernel
       procedure :: interaction
+      procedure :: keep_nosoc_kernel
       procedure :: run
       procedure :: write_state
       procedure, private :: channel_parameters, d_rows
@@ -150,6 +153,7 @@ contains
       if (allocated(this%uj)) deallocate (this%uj, this%um, this%delta_mills, this%gap_d)
       if (allocated(this%k_alsda)) deallocate (this%k_alsda)
       if (allocated(this%kmat)) deallocate (this%kmat)
+      if (allocated(this%u_nosoc)) deallocate (this%u_nosoc, this%moment_nosoc)
    end subroutine destructor
 
    subroutine restore_to_default(this)
@@ -213,6 +217,9 @@ contains
       if (trim(kernel) /= 'goldstone' .and. this%lattice%control%txc /= 1) then
          call g_logger%fatal('spin_response kernel '//trim(kernel)//' needs txc = 1 (LDA): for GGA and libXC B_xc/m is not the transverse kernel', &
                              __FILE__, __LINE__)
+      end if
+      if (this%lattice%control%has_soc() .and. (trim(method) /= 'juelich' .or. trim(kernel) /= 'goldstone')) then
+         call g_logger%fatal('spin_response with SOC (nsp = 2 or 4) needs method juelich and kernel goldstone', __FILE__, __LINE__)
       end if
       if (n_omega < 1 .or. (n_omega > 1 .and. omega_max <= omega_min) .or. eta < 0.0_rp) then
          call g_logger%fatal('spin_response needs n_omega >= 1, omega_max > omega_min for n_omega > 1, and eta >= 0', &
@@ -384,6 +391,9 @@ contains
       end do
 
       this%spin_swapped = sum(n_mills(id, 1) - n_mills(id, 2)) < 0.0_rp
+      if (this%spin_swapped .and. this%lattice%control%has_soc()) then
+         call g_logger%fatal('spin_response%prepare: with SOC the d moment must point along +z (spin_swapped is .true.)', __FILE__, __LINE__)
+      end if
       this%spin_map = merge([2, 1], [1, 2], this%spin_swapped)
       if (allocated(this%d_occ_mills)) deallocate (this%d_occ_mills, this%d_occ_juelich, this%moment, this%occ_mills, this%occ_juelich)
       allocate (this%d_occ_mills(nsite, 2), this%d_occ_juelich(nsite, 2), this%moment(nsite), &
@@ -534,6 +544,7 @@ contains
       nsc = ns*size(this%channel_l)
       id = this%d_rows()
       allocate (chi0_mills(nsc, nsc, 1), chi0_juelich(nsc, nsc, 1), c_up(ns))
+      if (allocated(this%uj)) deallocate (this%uj, this%um, this%delta_mills, this%gap_d)
       allocate (this%uj(ns), this%um(ns), this%delta_mills(ns), this%gap_d(ns))
       call this%bare_response([0.0_rp, 0.0_rp, 0.0_rp], [0.0_rp], 0.0_rp, .false., chi0_mills)
       call this%bare_response([0.0_rp, 0.0_rp, 0.0_rp], [0.0_rp], 0.0_rp, .true., chi0_juelich)
@@ -552,6 +563,8 @@ contains
       this%kmat = 0.0_rp
       do i = 1, ns
          this%kmat(id(i), id(i)) = merge(this%um(i), this%uj(i), mills)
+         ! SOC: K = Delta/m with Delta = U m of the pass without L.S, written as U (m0/m) so that m0 = m gives U exactly.
+         if (allocated(this%u_nosoc)) this%kmat(id(i), id(i)) = this%u_nosoc(i)*(this%moment_nosoc(i)/this%moment(i))
       end do
       if (trim(this%kernel) == 'goldstone') return
       ! ALSDA: U = -K. lambda is the least-squares factor along M for chi0(0,0) lambda U M = -M (equals U_Juelich for one d channel).
@@ -562,6 +575,14 @@ contains
       this%kernel_goldstone_eig = dot_product(mom, mom + w)/dot_product(mom, mom)
       this%kmat = -this%k_alsda*merge(this%kernel_lambda, 1.0_rp, trim(this%kernel) == 'alsda_scaled')
    end subroutine interaction
+
+   !> @brief Keep the Juelich U and d moment of the pass just run (no L.S term); the next interaction call scales U by m0/m.
+   subroutine keep_nosoc_kernel(this)
+      class(spin_response), intent(inout) :: this
+
+      this%u_nosoc = this%uj
+      this%moment_nosoc = this%moment
+   end subroutine keep_nosoc_kernel
 
    !> @brief Loop over the q list: chi0, Dyson, tr L and pole estimates; writes <prefix>_q<NNN>.dat, <prefix>_dispersion.dat and <prefix>_adiabatic.dat.
    subroutine run(this)
@@ -653,6 +674,12 @@ contains
          end do
       else
          write (funit, '(a)') 'u n/a'
+      end if
+      if (allocated(this%u_nosoc)) then
+         write (funit, '(a)') '# SOC: K = U m0/m with U (Ry) and m0 (mu_B) from the pass without L.S, m the d moment above'
+         do i = 1, size(this%u_nosoc)
+            write (funit, '(a,i6,2es24.16)') 'u_m0_nosoc ', i, this%u_nosoc(i), this%moment_nosoc(i)
+         end do
       end if
       if (trim(this%kernel) /= 'goldstone') then
          write (funit, '(a,a)') 'kernel ', trim(this%kernel)

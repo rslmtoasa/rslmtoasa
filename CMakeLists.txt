@@ -808,6 +808,11 @@ if (RUN_UNIT_TESTS)
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/omp_identity.py" "${TestBinary}"
       "${TestDIR}/spin_response/fe_bcc" "${CMAKE_BINARY_DIR}/Testing/spin_response/omp")
   set_tests_properties(SpinResponseOmpIdentity PROPERTIES LABELS "unit;spin-response;quick")
+  # nsp = 2 with xi = 0 byte-identical to nsp = 1; with the deck's xi different.
+  add_test(NAME SpinResponseSocZeroIdentity
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/soc_zero_identity.py" "${TestBinary}"
+      "${TestDIR}/spin_response/fe_bcc" "${CMAKE_BINARY_DIR}/Testing/spin_response/soc0")
+  set_tests_properties(SpinResponseSocZeroIdentity PROPERTIES LABELS "unit;spin-response;quick")
   # Frozen 24^3 Fe response (tests/spin_response/baseline) rerun in its own scratch directory.
   add_test(NAME SpinResponseBaselineRepro
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/spin_response/baseline_repro.py" "${TestBinary}"

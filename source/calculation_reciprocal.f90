@@ -370,6 +370,7 @@ contains
       type(hamiltonian), target :: hamiltonian_obj
       type(reciprocal), target :: reciprocal_obj
       type(spin_response) :: response
+      complex(rp), allocatable :: lsham_soc(:, :, :)
       integer :: i
 
       control_obj = control(this%fname)
@@ -391,6 +392,16 @@ contains
       reciprocal_obj = reciprocal(hamiltonian_obj)
       reciprocal_obj%fermi_level = energy_obj%fermi
       response = spin_response(reciprocal_obj)
+      if (control_obj%has_soc()) then
+         ! SOC: U and the d moment come from a pass with the L.S term switched off, as the Goldstone condition holds only there.
+         lsham_soc = hamiltonian_obj%lsham
+         hamiltonian_obj%lsham = (0.0_rp, 0.0_rp)
+         call response%prepare()
+         call response%interaction()
+         call response%keep_nosoc_kernel()
+         hamiltonian_obj%lsham = lsham_soc
+         reciprocal_obj%fermi_level = energy_obj%fermi
+      end if
       call response%prepare()
       if (trim(response%kernel) /= 'goldstone') call alsda_kernel(response, lattice_obj)
       call response%interaction()

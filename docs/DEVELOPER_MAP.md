@@ -316,6 +316,11 @@ beyond the basis lmax are fatal), with one static U per site acting on the d cha
   `adiabatic_frequencies`); at the smallest q the ratio Omega / Omega_force was
   within 0.1 % of 1/sqrt(1 - lambda_u) for the A5 antiferromagnet and for Cr,
   lambda_u the non-Goldstone eigenvalue of I + chi0(0,0) U.
+- SOC (`nsp = 2` or `4`, collinear moment along +z, method juelich, kernel goldstone; fatal otherwise): the driver
+  first runs `prepare` and `interaction` with `hamiltonian%lsham` zeroed and keeps U and the d moment m0
+  (`keep_nosoc_kernel`), then restores `lsham` and runs again; the kernel is K = U m0/m, i.e. Delta/m(xi) with Delta = U m0.
+  The Goldstone fit with SOC on would force a zero gap, and U fixed at its xi = 0 value leaves a spurious O(xi^2) gap.
+  `_state.dat` gains `u_m0_nosoc`. With xi = 0, nsp = 2 is byte-identical to nsp = 1 (`SpinResponseSocZeroIdentity`).
 - `accumulate_chi0` lists the band pairs with a nonzero vertex (exact zeros of the
   spin-block amplitudes) and f_n - f_m /= 0, then does one ZGEMM per block of 32
   omega points, blocks in parallel (OpenMP), so the output is byte-identical for
@@ -386,6 +391,7 @@ side belong in the reciprocal family, not in `green.f90`.
 | Spin response: channels s, p, d (`UnitSpinResponseChannelsKernel` synthetic; `UnitSpinResponseChannels` on the Fe scratch deck, needs `channel_d_rel` in `tolerances.nml`) | `unit;spin-response;quick` | `tests/unit/test_spin_response_channels*.f90`; the spd driver runs are made by `fe_scratch.py` |
 | Spin response: S3, three-atom bcc Fe cell against the one-atom cell (`SpinResponseS3`) | `unit;spin-response;quick` | `tests/spin_response/s3_supercell.py` |
 | Spin response: 1 against 4 OpenMP threads, byte-identical (`SpinResponseOmpIdentity`) | `unit;spin-response;quick` | `tests/spin_response/omp_identity.py` |
+| Spin response: nsp = 2 with xi = 0 byte-identical to nsp = 1; with the deck's xi different (`SpinResponseSocZeroIdentity`) | `unit;spin-response;quick` | `tests/spin_response/soc_zero_identity.py` |
 | Spin response: 24^3 reproduction against frozen outputs, Fe, Ni and Cr (`SpinResponseBaselineRepro`, `SpinResponseNiBaselineRepro`, `SpinResponseCrBaselineRepro`) | `regression;spin-response` | `tests/spin_response/baseline_repro.py`; frozen files in `tests/spin_response/baseline/`, `baseline_ni/` and `baseline_cr/` (`--freeze` rewrites them) |
 | Exchange energy integration at finite temperature (`UnitSimpsonFTemperature`) | `unit;quick` | `tests/unit/test_simpson_f_temperature.f90` |
 | Validation scripts | `validation` | `tests/validation/*.py` (spin response: `tests/validation/spin_response_ni/`, `tests/validation/spin_response_cr/`: `run_path.py`, `report_path.py`, `report_dynamic.py`, `weight_q.py`, `report_force.py`), records in `docs/validation/` |
