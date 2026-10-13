@@ -134,3 +134,13 @@ documents at `lr-campaign-archive-2026-10:docs/linear_response/`.
   matrix; KL adiabatic output), then non-collinear and SOC (NC-0a/0b feasibility
   and cross-route comparison with real-space recursion; NC-1 to NC-3), then
   GPU (B4), with LDA+U on its own branch.
+- 2026-10-13 — NC-1 closed on bcc Cr (cr_bcc; 32³ and 64³ static, 32³
+  dynamic). Structural: p = 0.992 (64³); smallest eig(1+χ0U) at q ≠ 0
+  +1.75e-3 (64³), none negative; |ω₊+ω₋|/ω₊ ≤ 4.0e-12; U₁, U₂ equal to
+  5.1e-12; spin_swapped T. The adiabatic ω_RPA is 1.65–1.94 × the LKAG + LSWT
+  magnons: this is the force-theorem error, not a normalization.
+  ω_force = N U (1 + χ0 U) from the same χ0 matches LSWT to 0.968–1.087
+  (84 q, max component ≥ 1/8), and ω_RPA/ω_force = 1.9637 at q = 1/32
+  against 1/√(1−λ_u) = 1.9657 (λ_u = 0.741); A5 antiferromagnet 1.4092
+  against 1.4091. The broad dynamic tr L peak (1.62–1.83 ω_RPA) is not
+  examined; site-resolved output deferred.
