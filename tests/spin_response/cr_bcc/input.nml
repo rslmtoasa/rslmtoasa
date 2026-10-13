@@ -1,0 +1,87 @@
+&calculation
+!pre_processing = 'bravais'
+post_processing = 'spin_response'
+verbose = T
+/
+&lattice
+rc = 80
+alat =     2.95
+crystal_sym = 'file'
+wav = 1.4377277319
+pbc = T
+b1 = T
+b2 = T
+b3 = T
+n1 = 20
+n2 = 20
+n3 = 20
+ndim = 16000
+ntype = 2
+ct(:) =     4.0000
+r2 =    16.000000
+strux_backend = 'strux_lib'
+/
+&atoms
+database = './'
+label(1) = 'Cr1'
+label(2) = 'Cr2'
+/
+&self
+!ws_all = .true. ! ''
+use_kspace = .true.
+nstep = 25
+cold = .true.
+/
+&energy
+fermi = -0.017404
+energy_min = -1.0
+energy_max = 2.5
+channels_ldos = 2500
+/
+&reciprocal
+! K-point mesh for SCF (12x12x12 = 1728 k-points before symmetry)
+nk1 = 32
+nk2 = 32
+nk3 = 32
+
+! K-point mesh offset (0,0,0 = Gamma-centered mesh)
+k_offset_x = 0.0
+k_offset_y = 0.0
+k_offset_z = 0.0
+
+! Symmetry reduction (highly recommended)
+use_symmetry_reduction = .false.  ! Use crystal symmetry
+use_time_reversal = .false.        ! Use time-reversal symmetry
+use_shift = .false.               ! Don't apply additional Monkhorst-Pack shift
+
+! DOS calculation settings
+!dos_method = 'gaussian'
+!dos_method = 'blochl'
+dos_method = 'tetrahedron'        ! Use tetrahedron method (more accurate)
+! Alternative: 'gaussian' for smoother DOS
+
+gaussian_sigma = 0.005              ! Gaussian broadening (Ry) - only for gaussian method
+temperature = 300.0               ! Temperature for Fermi-Dirac smearing (K)
+
+! Energy grid for DOS
+n_energy_points = 2000            ! Number of points in DOS energy grid
+dos_energy_min = -1.5            ! Minimum energy relative to Fermi (Ry)
+dos_energy_max = 2.0             ! Maximum energy relative to Fermi (Ry)
+
+! Fermi level determination
+auto_find_fermi = .true.
+/
+&symmetry
+use_symmetry_reduction = .false.
+/
+&control
+txc = 106
+calctype = 'B'
+nsp = 3 ! type of calculation, nsp can be 1, 2, 3 or 4
+lld = 26
+recur = 'block'
+/
+&mix
+beta = 0.15
+mixtype = 'broyden'
+/
