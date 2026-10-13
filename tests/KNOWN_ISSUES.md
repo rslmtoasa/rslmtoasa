@@ -1770,3 +1770,16 @@ campaign remain outside the established scope.
   (1/32,0,0) 44.0 / 104.6; (1/4,0,0) 268.7 / 486.0; X 326.1 / 554.9; (1/2,1/2,0) 295.1 / 486.4; R 318.6 / 576.4. The small-q end of
   LSWT is not converged in the J(r) cutoff (as for Fe). Cause not diagnosed; the response moment is 0.857 mu_B (Juelich) against 0.8945
   in the LSWT, which does not account for the ratio.
+- **Measured for the normalization question (32^3, `tests/validation/spin_response_cr/weight_q.py`, `report_path.py`):** omega_ad / omega_LSWT
+  is 1.626 to 1.810, median 1.700 (spread 10.8 %) over the 72 q with largest component >= 1/4; 1.717 to 2.000 (median 1.775) for
+  1/8 < q < 1/4; 1.812 to 2.374 (median 2.112) for q <= 1/8, where the LSWT is unconverged. Equivalent moment M_LSWT omega_LSWT / omega_ad:
+  0.384, 0.401, 0.425 mu_B at q = 1/16, 3/32, 1/8 (median 0.526 for the 72 q), against 0.857 (Juelich) and 0.8945 (LSWT).
+- **Measured:** the Fe-style pole weight W = pi eta tr L(omega_p) is not defined here. At q = 0 tr L is zero by antisymmetry in omega
+  (2e-10), and at q = 1/16 (3/32, 1/8) it falls from 2.66 to 1.25 (2.00 to 0.92, 1.26 to 0.45) for eta = 2e-3, 1e-3, 5e-4 Ry, the peak
+  FWHM being 3.5 to 9.5 mRy, much wider than eta. The integral of tr L over 0.008 to 0.07 Ry is stable to 5 % in eta: 5.8 to 6.1, 4.1 to 4.3,
+  3.2 to 3.3 at q = 1/16, 3/32, 1/8 (5.97, 4.23, 3.25 at eta = 1e-3, i.e. 6.96, 4.93, 3.79 M_J), roughly 0.4 / q. LSWT from the
+  oracle gives one sublattice weight M u^2 = 2.22, 1.70, 1.44 M and a net M (u^2 - v^2) = M. The integral includes any continuum weight
+  in the window, and tr L does not resolve the two rows. The tr L peak is at 1.62 to 1.83 times omega_ad and 3.80, 3.95, 3.83 times
+  omega_LSWT at these three q.
+- **Not diagnosed:** whether a moment or other global normalization explains the near-constant ratio of about 1.7; the measurements above do not isolate one.
+
