@@ -310,7 +310,12 @@ beyond the basis lmax are fatal), with one static U per site acting on the d cha
   antiparallel site has m < 0 and a negative eigenvalue; no per-site frame is
   used (a local-frame vertex on a down site makes chi0_ij zero between up and
   down sites). Rows without interaction (K = 0, the s and p channels) enter with
-  their own moment and have no physical meaning as frequencies.
+  their own moment and have no physical meaning as frequencies. After `max_abs_imag`
+  the file has `omega_force`, the eigenvalues of N K (I + chi0 K) from the same
+  static chi0 (the force-theorem route, optional `omega_force` of
+  `adiabatic_frequencies`); at the smallest q the ratio Omega / Omega_force was
+  within 0.1 % of 1/sqrt(1 - lambda_u) for the A5 antiferromagnet and for Cr,
+  lambda_u the non-Goldstone eigenvalue of I + chi0(0,0) U.
 - `accumulate_chi0` lists the band pairs with a nonzero vertex (exact zeros of the
   spin-block amplitudes) and f_n - f_m /= 0, then does one ZGEMM per block of 32
   omega points, blocks in parallel (OpenMP), so the output is byte-identical for
@@ -383,7 +388,7 @@ side belong in the reciprocal family, not in `green.f90`.
 | Spin response: 1 against 4 OpenMP threads, byte-identical (`SpinResponseOmpIdentity`) | `unit;spin-response;quick` | `tests/spin_response/omp_identity.py` |
 | Spin response: 24^3 reproduction against frozen outputs, Fe, Ni and Cr (`SpinResponseBaselineRepro`, `SpinResponseNiBaselineRepro`, `SpinResponseCrBaselineRepro`) | `regression;spin-response` | `tests/spin_response/baseline_repro.py`; frozen files in `tests/spin_response/baseline/`, `baseline_ni/` and `baseline_cr/` (`--freeze` rewrites them) |
 | Exchange energy integration at finite temperature (`UnitSimpsonFTemperature`) | `unit;quick` | `tests/unit/test_simpson_f_temperature.f90` |
-| Validation scripts | `validation` | `tests/validation/*.py` (spin response: `tests/validation/spin_response_ni/`, `tests/validation/spin_response_cr/`: `run_path.py`, `report_path.py`, `report_dynamic.py`), records in `docs/validation/` |
+| Validation scripts | `validation` | `tests/validation/*.py` (spin response: `tests/validation/spin_response_ni/`, `tests/validation/spin_response_cr/`: `run_path.py`, `report_path.py`, `report_dynamic.py`, `weight_q.py`, `report_force.py`), records in `docs/validation/` |
 
 **Adding a case:** see `tests/scf/README.md` / `tests/postproc/README.md` for
 the full case-file format. Short version: add an `input.nml` (+ any

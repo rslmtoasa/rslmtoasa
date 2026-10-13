@@ -1769,7 +1769,7 @@ campaign remain outside the established scope.
   LSWT > 1 meV: 1.626 to 2.374, median 1.727 at 32^3; 1.625 to 2.370, median 1.728 at 64^3. Examples (LSWT / response 32^3, meV):
   (1/32,0,0) 44.0 / 104.6; (1/4,0,0) 268.7 / 486.0; X 326.1 / 554.9; (1/2,1/2,0) 295.1 / 486.4; R 318.6 / 576.4. The small-q end of
   LSWT is not converged in the J(r) cutoff (as for Fe). Cause not diagnosed; the response moment is 0.857 mu_B (Juelich) against 0.8945
-  in the LSWT, which does not account for the ratio.
+  in the LSWT, which does not account for the ratio. See the force-theorem measurement at the end of this entry.
 - **Measured for the normalization question (32^3, `tests/validation/spin_response_cr/weight_q.py`, `report_path.py`):** omega_ad / omega_LSWT
   is 1.626 to 1.810, median 1.700 (spread 10.8 %) over the 72 q with largest component >= 1/4; 1.717 to 2.000 (median 1.775) for
   1/8 < q < 1/4; 1.812 to 2.374 (median 2.112) for q <= 1/8, where the LSWT is unconverged. Equivalent moment M_LSWT omega_LSWT / omega_ad:
@@ -1781,5 +1781,13 @@ campaign remain outside the established scope.
   oracle gives one sublattice weight M u^2 = 2.22, 1.70, 1.44 M and a net M (u^2 - v^2) = M. The integral includes any continuum weight
   in the window, and tr L does not resolve the two rows. The tr L peak is at 1.62 to 1.83 times omega_ad and 3.80, 3.95, 3.83 times
   omega_LSWT at these three q.
-- **Not diagnosed:** whether a moment or other global normalization explains the near-constant ratio of about 1.7; the measurements above do not isolate one.
-
+- **Measured, force-theorem route (2026-10-13, 32^3, `report_force.py`; `_adiabatic.dat` column `omega_force` = N U (I + chi0 U), same static chi0
+  as Omega_RPA):** for the 84 q with largest cubic-equivalent component >= 1/8, Omega_force / LSWT is 0.968 to 1.087 (median 0.987), 84 of 84 inside
+  0.75 to 1.3; Omega_RPA / LSWT is 1.626 to 2.104 (median 1.716); Omega_RPA / Omega_force is 1.651 to 1.935 (median 1.744). For the 9 q below 1/8:
+  Omega_force / LSWT 0.993 to 1.209, Omega_RPA / Omega_force 1.889 to 1.964. On Gamma-X, Omega_RPA / Omega_force is 1.9637, 1.9594, 1.9503, 1.9352 at
+  q = 1/32 ... 4/32, against 1/sqrt(1 - lambda_u) = 1.9657 with lambda_u = 0.74121 (= 2 + U tr chi0(0,0), U_1 = U_2 to 5e-12). The same ratio
+  for the A5 antiferromagnet is 1.40922, 1.40952, 1.41073 at q, 2q, 4q against 1.40911 (lambda_u = 0.49637). The factor of about 1.7 between
+  Omega_RPA and the LSWT is therefore the ratio of two routes built from one chi0; the force-theorem route is within 0.968 to 1.087 of the
+  LSWT for q >= 1/8. The dynamic tr L peak (1.62 to 1.83 times Omega_RPA at q = 1/16 to 1/8) was not examined further.
+- **Deferred, open:** site-resolved spectral output (L per row, not only tr L) is not written; the q files carry traces. If it is ever added it
+  goes in a new file, not in the frozen q files.
