@@ -34,7 +34,7 @@ program test_spin_response_a5
 
    real(rp), allocatable :: e_k(:, :), f_k(:, :), e_q(:, :), f_q(:, :), kmat(:, :)
    complex(rp), allocatable :: a_k(:, :, :, :, :), a_q(:, :, :, :, :), chi0(:, :, :), chi(:, :, :), ref(:, :, :), s(:, :, :), hf(:, :, :)
-   real(rp) :: chi0s(2, 2), mom(2), uj(2), wad(2), imag_max, p(2), p_expected, br(3)
+   real(rp) :: chi0s(2, 2), mom(2), uj(2), wad(2), imag_max, p(2), p_expected, br(3), wf(2), brf(3), lam(2)
    character(len=3) :: tag
    logical :: failed
 
@@ -93,6 +93,16 @@ program test_spin_response_a5
             call report('A5 '//tag//' Goldstone identity chi0 Delta + m', maxval(abs(matmul(chi0s, delta) + moment))/maxval(abs(moment)), a5_identity_rel)
             ! catches: the zero eigenvalue lost along the signed moments
             call report('A5 '//tag//' (1 + chi0 U) m', maxval(abs(moment + matmul(chi0s, matmul(kmat, moment))))/maxval(abs(moment)), a5_identity_rel)
+            call adiabatic_frequencies(s(:, :, 1), kmat, moment, wad, imag_max, wf)
+            ! catches: K dropped from the right of chi0 in N K (I + chi0 K) (the zero along m is lost); an error in the left factors N K is not seen,
+            ! since the zero follows from (1 + chi0 K) m = 0 checked above.
+            ! The af matrix is a Jordan block at q = 0 (both eigenvalues 0, as for Omega), so its value is printed, not compared.
+            if (iset == 2) then
+               call report('A5 '//tag//' min|omega_force| at q = 0 (zero along m; by construction)', minval(abs(wf))/maxval(abs(wf)), a5_identity_rel)
+            else
+               write (*, '(a,es10.3,a)') 'A5 af  max|omega_force| at q = 0 (Ry, Jordan block, zero up to round-off):', maxval(abs(wf)), ' (not compared)'
+            end if
+            lam = sorted_eigenvalues(s(:, :, 1), u_model)
             call u_juelich(chi0s, moment, uj)
             ! catches: |M| instead of the signed M in the Goldstone solve, cross-site terms dropped
             call report('A5 '//tag//' U from u_juelich vs u_model', maxval(abs(uj - u_model))/maxval(u_model), a5_identity_rel)
@@ -103,10 +113,14 @@ program test_spin_response_a5
             call report('A5 '//tag//' omega_adiabatic, q #'//char(48 + iq), maxval(abs(wad - omega_adiabatic))/maxval(abs(omega_adiabatic)), a5_adiabatic_rel)
             call report('A5 '//tag//' max|Im Omega|/max|Re Omega|, q #'//char(48 + iq), imag_max/maxval(abs(wad)), a5_adiabatic_rel)
             if (iq > 1) br(iq - 1) = merge(wad(2), wad(minloc(abs(wad), 1)), iset == 1)
+            call adiabatic_frequencies(s(:, :, 1), kmat, moment, wad, imag_max, wf)
+            if (iq > 1) brf(iq - 1) = merge(wf(2), wf(minloc(abs(wf), 1)), iset == 1)
          end if
       end do
       read (iu, nml=a5_exponent)
       close (iu)
+      if (iset == 1) write (*, '(a,3f9.5,a,f9.5,a,f9.5)') 'A5 af omega_RPA / omega_force at q, 2q, 4q:', br/brf, ' ; 1/sqrt(1 - lambda_u) =', &
+         1.0_rp/sqrt(1.0_rp - lam(2)), ' with lambda_u =', lam(2)
       p = log(abs(br(2:3)/br(1:2)))/log(2.0_rp)
       p_expected = merge(1.0_rp, 2.0_rp, iset == 1)
       write (*, '(a,3es13.5,a,2f9.5)') 'A5 '//tag//' branch at q, 2q, 4q (Ry):', br, ' ; exponents', p

@@ -569,7 +569,7 @@ contains
 
       integer :: iq, iw, nq, nw, ns, nsc, funit, fdisp, fadia
       real(rp) :: peak, crossing, qcart(3), imag_max
-      real(rp), allocatable :: trl(:), moment_row(:), omega_ad(:)
+      real(rp), allocatable :: trl(:), moment_row(:), omega_ad(:), omega_force(:)
       complex(rp), allocatable :: chi0(:, :, :, :), chi(:, :, :), chi0_static(:, :, :)
       logical :: has_peak, has_crossing
       character(len=256) :: fname
@@ -579,13 +579,13 @@ contains
       nsc = ns*size(this%channel_l)
       nq = size(this%q_direct, 2)
       nw = size(this%omega)
-      allocate (chi0(nsc, nsc, nw, nq), chi(nsc, nsc, nw), chi0_static(nsc, nsc, nq), omega_ad(nsc))
+      allocate (chi0(nsc, nsc, nw, nq), chi(nsc, nsc, nw), chi0_static(nsc, nsc, nq), omega_ad(nsc), omega_force(nsc))
       call this%bare_response_list(this%q_direct, this%omega, this%eta, trim(this%method) == 'juelich', chi0, chi0_static)
       ! signed moment of each row kappa, as in interaction
       moment_row = merge(this%occ_mills(:, 1) - this%occ_mills(:, 2), this%occ_juelich(:, 1) - this%occ_juelich(:, 2), &
                          trim(this%method) == 'mills')
       open (newunit=fadia, file=trim(this%output_prefix)//'_adiabatic.dat', action='write', status='replace')
-      write (fadia, '(a)') '# q_direct(3) q_cartesian(3, units 2pi/a) |q|(1/Angstrom) omega_adiabatic(Ry, ascending, one per row of the response space) max_abs_imag(Ry)'
+      write (fadia, '(a)') '# q_direct(3) q_cartesian(3, units 2pi/a) |q|(1/Angstrom) omega_adiabatic(Ry, ascending, one per row of the response space) max_abs_imag(Ry) omega_force(Ry, ascending, N U (I + chi0 U) from the same static chi0)'
       open (newunit=fdisp, file=trim(this%output_prefix)//'_dispersion.dat', action='write', status='replace')
       write (fdisp, '(a)') '# q_direct(3) q_cartesian(3, units 2pi/a) |q|(1/Angstrom) peak_omega(Ry) crossing_omega(Ry) min_re_eig(I+chi0*U)_at_omega_1'
       do iq = 1, nq
@@ -615,9 +615,9 @@ contains
          if (has_crossing) write (crossing_text, '(es22.14)') crossing
          write (fdisp, '(7es16.8,2a24,es16.8)') this%q_direct(:, iq), qcart, 2.0_rp*pi*sqrt(sum(qcart**2))/this%lattice%alat, &
             peak_text, crossing_text, min_real_eig(chi0(:, :, 1, iq), this%kmat)
-         call adiabatic_frequencies(chi0_static(:, :, iq), this%kmat, moment_row, omega_ad, imag_max)
+         call adiabatic_frequencies(chi0_static(:, :, iq), this%kmat, moment_row, omega_ad, imag_max, omega_force)
          write (fadia, '(7es16.8,*(es22.14))') this%q_direct(:, iq), qcart, 2.0_rp*pi*sqrt(sum(qcart**2))/this%lattice%alat, &
-            omega_ad, imag_max
+            omega_ad, imag_max, omega_force
       end do
       close (fdisp)
       close (fadia)
@@ -1033,10 +1033,13 @@ contains
    !> @param[in]  m           Signed moment of each row kappa, shape (nsc).
    !> @param[out] omega       Real parts of the eigenvalues of Omega (Ry), ascending, shape (nsc).
    !> @param[out] imag_max    Largest |imaginary part| of those eigenvalues (Ry).
-   subroutine adiabatic_frequencies(chi0s, kmat, m, omega, imag_max)
+   !> @param[out] omega_force Optional: real parts of the eigenvalues of the force-theorem matrix N K (I + chi0 K) (Ry), ascending,
+   !>                         from the same chi0s; -chi0^-1 of Omega is replaced by K.
+   subroutine adiabatic_frequencies(chi0s, kmat, m, omega, imag_max, omega_force)
       complex(rp), intent(in) :: chi0s(:, :)
       real(rp), intent(in) :: kmat(:, :), m(:)
       real(rp), intent(out) :: omega(:), imag_max
+      real(rp), intent(out), optional :: omega_force(:)
 
       integer :: n, i, info, ipiv(size(m))
       complex(rp) :: a(size(m), size(m)), b(size(m), size(m)), w(size(m)), vl(1, 1), vr(1, 1), work(4*size(m))
@@ -1058,6 +1061,17 @@ contains
       omega = real(w, rp)
       call sort_ascending(omega)
       imag_max = maxval(abs(aimag(w)))
+      if (present(omega_force)) then
+         a = cmplx(kmat, 0.0_rp, rp)
+         a = a + matmul(a, matmul(chi0s, a))
+         do i = 1, n
+            a(i, :) = m(i)*a(i, :)
+         end do
+         call zgeev('N', 'N', n, a, n, w, vl, 1, vr, 1, work, size(work), rwork, info)
+         if (info /= 0) error stop 'adiabatic_frequencies: zgeev failed (force theorem)'
+         omega_force = real(w, rp)
+         call sort_ascending(omega_force)
+      end if
    end subroutine adiabatic_frequencies
 
    !> @brief In-place ascending selection sort of a short list.
