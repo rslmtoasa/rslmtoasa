@@ -9,7 +9,7 @@
 # J(r) pair (2, 1): 1472 neighbours (shells expanded by the cubic group).
 # J(r) pair (2, 2): 1418 neighbours (shells expanded by the cubic group).
 # ground state: tests/spin_response/cr_bcc; J(r): UppASD jfile of that deck (206 shells), |M| = 0.894542 mu_B from its momfile.
-# run on the UppASD qfile (113 points) the same script reproduces the UppASD AMS (ams.bccCr_AF.out) to 2.2e-7 meV.
+# run on the UppASD qfile (113 points) the same script reproduces the UppASD AMS (ams.bccCr_AF.dat) to 2.2e-7 meV.
 # q path: Gamma-X-M-Gamma-R-X | M-R in steps of 1/32 (98 points, X = (0,1/2,0)); small q is NOT converged in the J(r) cutoff, as for Fe.
 # columns: q_direct(1:3) = q_cart [2pi/a] | |q| [1/A] | omega_minus omega_plus [meV] | same [Ry] | label
   0.00000000   0.00000000   0.00000000    0.00000000    -0.001460129    0.000000000  -1.073174876e-07  9.436142652e-19  GAMMA

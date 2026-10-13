@@ -393,6 +393,8 @@ contains
       reciprocal_obj%fermi_level = energy_obj%fermi
       response = spin_response(reciprocal_obj)
       if (control_obj%has_soc()) then
+         call g_logger%warning('SOC response is experimental: the q = 0 gap carries an O(xi^2) bias from the projected vertex; see KNOWN_ISSUES', &
+                               __FILE__, __LINE__)
          ! SOC: U and the d moment come from a pass with the L.S term switched off, as the Goldstone condition holds only there.
          lsham_soc = hamiltonian_obj%lsham
          hamiltonian_obj%lsham = (0.0_rp, 0.0_rp)

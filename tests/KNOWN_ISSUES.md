@@ -1800,7 +1800,16 @@ campaign remain outside the established scope.
   (N K (I + chi0 K)) differs from omega_adiabatic by 1e-6 to 1.5e-4 relative (relative to omega_adiabatic) in every run.
 - **Expected from symmetry (not from the code):** cubic anisotropy is fourth order in xi, with K_1 of bcc Fe about 1e-10 Ry per atom, so the gap should fall as xi^4 and be
   far below 1e-8 Ry. The measured gap is negative, falls as xi^2 and is about 2e-5 Ry.
-- **Not diagnosed, suspects only:** (1) the Juelich factor multiplies the up and down components of a band with different (enu, p), so the d-projected vertex is not
+- **Toy confirmation (numpy, scratch, not committed; one-site spherical d shell, true gap 0, Delta = 0.157 Ry, N = 6.25, kT = 1.9 mRy, xi = 4.5e-3 Ry):** vertex and
+  moment built from amplitudes scaled per spin, U fitted by Goldstone at xi = 0, K = U m0/m(xi). Complete vertex (c = 1): gap -2.6e-17 Ry. Constant c_up/c_dn = 1 + a:
+  gap +2.0e-6, +7.7e-6, +1.84e-5, +3.43e-5, +6.71e-5 Ry for a = 0.005, 0.02, 0.05, 0.1, 0.23; gap is zero at a = 0; slopes in xi (a = 0.1, xi = 0.00225 to 0.009) 1.96, 1.98;
+  gap / (Delta dm / M) = -1.5 a to leading order (dm = -5.7e-3 to -7.1e-3). Energy-dependent factors (1 + (e - enu)(ef - enu)p)/sqrt(1 + (ef - enu)^2 p) with the Fe `enu`, `ppar` of
+  `fe_bcc/Fe.nml` (toy m_Juelich / m_plain = 0.939, Fe baseline m_Juelich / m_Mills = 0.938): gap -7.1e-5 Ry at xi = 4.5e-3 (dm = -2.0e-3; Delta dm / M = -8.3e-5), negative as in Gate 1;
+  slope 1.97 and 1.90 at xi = 5e-4 to 2e-3, 1.68 and 1.44 at 2.25e-3 to 9e-3. The toy atom has no bandwidth, so its dm is larger than a solid's. Same mechanism as Gate 1
+  (a nonzero, xi^2, spin-asymmetry-driven gap in a system whose gap is zero); the amplitude is about 3 times the Gate 1 value (-2.3e-5 Ry), and this is not a fit to it.
+  The W/M = 1.23 asymmetry has no defined mapping onto c_up/c_dn; the Fe `enu`, `ppar` and the Fe moment ratio were used instead.
+- **Outcome:** SOC runs print a warning (driver): the q = 0 gap carries an O(xi^2) bias from the projected vertex. NC-2 stops here as a negative result; the S1 code stays.
+- **Suspects before the toy (suspect 1 is the one the toy supports; 2 to 4 were not examined):** (1) the Juelich factor multiplies the up and down components of a band with different (enu, p), so the d-projected vertex is not
   covariant under a global spin rotation; (2) the K = U m0/m prescription (derived and checked only on a one-site numpy model with a complete vertex, where it gives
   4e-17 on a spherical atom); (3) the on-site L.S of the first-order k-space H in this basis; (4) my deck handling (xi edited in the DB copy). Only the
   xi = 0 identity (`SpinResponseSocZeroIdentity`) checks the setup.
