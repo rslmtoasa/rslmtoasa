@@ -7,7 +7,7 @@ verbose = T
 rc = 80
 alat =     2.95
 crystal_sym = 'file'
-wav = 1.4377277319
+wav = 1.4524989072
 pbc = T
 b1 = T
 b2 = T
@@ -33,7 +33,7 @@ nstep = 25
 cold = .true.
 /
 &energy
-fermi = -0.017404
+fermi = -0.016453
 energy_min = -1.0
 energy_max = 2.5
 channels_ldos = 2500
@@ -75,9 +75,9 @@ auto_find_fermi = .true.
 use_symmetry_reduction = .false.
 /
 &control
-txc = 106
+txc = 4
 calctype = 'B'
-nsp = 3 ! type of calculation, nsp can be 1, 2, 3 or 4
+nsp = 1 ! type of calculation, nsp can be 1, 2, 3 or 4
 lld = 26
 recur = 'block'
 /
