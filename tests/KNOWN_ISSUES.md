@@ -1813,3 +1813,13 @@ campaign remain outside the established scope.
   covariant under a global spin rotation; (2) the K = U m0/m prescription (derived and checked only on a one-site numpy model with a complete vertex, where it gives
   4e-17 on a spherical atom); (3) the on-site L.S of the first-order k-space H in this basis; (4) my deck handling (xi edited in the DB copy). Only the
   xi = 0 identity (`SpinResponseSocZeroIdentity`) checks the setup.
+
+## Symmetry log cannot be used to check physical inversion — 2026-10-14
+
+- **Measured:** a two-atom simple-cubic cell with both atoms Fe (type labels 1 and 2 in `lattice.nml`) and the second atom at (1/2 + 0.05, 1/2, 1/2) a: the log line
+  `initialize_symmetry: Detected space group` printed P4mm (#99) (no inversion); at displacement 0 it printed Pm-3m (#221). spglib 2.7.0 (python, symprec 1e-5) with the element
+  labels Fe, Fe gives P4/nmm (#129) with inversion (-I) among the 16 operations at 0.05 a, and Im-3m (#229) at 0. The measured response at 0.05 a has omega(q) = omega(-q) to 1e-16 Ry,
+  as inversion requires.
+- **Likely cause (read, not tested):** `source/symmetry.f90` passes `lattice%iz(i)` to spglib as the species, and the two sites carry different type labels, so spglib sees two species.
+- **Consequence:** the log reports the symmetry of the labelled structure, so differently labelled types of one element count as different species. Check physical inversion
+  with spglib and element labels.
