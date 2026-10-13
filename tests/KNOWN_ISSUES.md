@@ -1761,14 +1761,12 @@ campaign remain outside the established scope.
   `T` in all, and byte-identical q files for Debug and Release). A flip on another compiler would change the signs in `_state.dat` and
   fail `SpinResponseCrBaselineRepro`. Not tried on another compiler or CPU.
 - **Proposal, not applied:** a dynamic run with a wider window and several `eta`, about 20 lines in `tests/validation/spin_response_cr/`.
-- **Verified (`tests/spin_response/cr_bcc/ASD`, `make_cr_lswt.py`):** `selftest` passes (Fe oracle reproduced to 2.6e-7 meV). On the
-  113-point UppASD qfile with `--moment 0.894542` (from `momfile`) the script does NOT reproduce `ams.bccCr_AF.out` with `jfile` as given
-  (max |delta omega| 70.2 meV). With the sign of the 1-2 and 2-1 shells reversed (a copy of `jfile`, script unmodified) it does, to
-  2.2e-7 meV at all 113 q. So `jfile` carries the inter-sublattice J in a local-frame sign, which the script's global-frame
-  convention (`H = -sum J_ij e_i.e_j`, sublattice 2 down) does not expect. Not applied: no change to the script or `jfile`, no `cr_lswt.dat` in `oracles/`.
-- **Verified (ungraded, against a candidate `cr_lswt.dat` made from the sign-reversed copy on the script's 98-point path, not committed):**
-  the response's positive adiabatic frequency over the LSWT omega_plus, 93 q with LSWT > 1 meV: 1.626 to 2.374, median 1.727 at 32^3;
-  1.625 to 2.370, median 1.728 at 64^3. Examples (LSWT / response 32^3, meV): (1/32,0,0) 44.0 / 104.6; (1/4,0,0) 268.7 / 486.0; X 326.1 / 554.9;
-  (1/2,1/2,0) 295.1 / 486.4; R 318.6 / 576.4. The small-q end of LSWT is not converged in the J(r) cutoff (as for Fe). Cause not diagnosed;
-  the response moment is 0.857 mu_B (Juelich) against 0.8945 in the LSWT, which does not account for the ratio.
-
+- **Resolved (`tests/spin_response/cr_bcc/ASD/make_cr_lswt.py`):** the UppASD `jfile` holds J of a ferromagnetic reference state, so for
+  the antiferromagnet J_12 and J_21 have the opposite sign to the script's global-frame convention. The script now converts J_ab to
+  s_a s_b J_ab; on the 113-point UppASD qfile it reproduces `ams.bccCr_AF.out` to 2.2e-7 meV (70.2 meV before the conversion).
+  `oracles/cr_lswt.dat` (98 q, steps of 1/32) was written by it.
+- **Verified (ungraded, `oracles/cr_lswt.dat`):** the response's positive adiabatic frequency over the LSWT omega_plus, 93 q with
+  LSWT > 1 meV: 1.626 to 2.374, median 1.727 at 32^3; 1.625 to 2.370, median 1.728 at 64^3. Examples (LSWT / response 32^3, meV):
+  (1/32,0,0) 44.0 / 104.6; (1/4,0,0) 268.7 / 486.0; X 326.1 / 554.9; (1/2,1/2,0) 295.1 / 486.4; R 318.6 / 576.4. The small-q end of
+  LSWT is not converged in the J(r) cutoff (as for Fe). Cause not diagnosed; the response moment is 0.857 mu_B (Juelich) against 0.8945
+  in the LSWT, which does not account for the ratio.
