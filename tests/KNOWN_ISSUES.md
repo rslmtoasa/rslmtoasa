@@ -1747,3 +1747,17 @@ campaign remain outside the established scope.
   lines. It was already 1078 before NC-1. The developer decided not to split it now. **Proposal, not applied:** move the pure kernels
   (`accumulate_chi0`, `u_juelich`, `solve_dyson`, `adiabatic_frequencies`, ...) into a submodule or sibling module; about 600 lines move, no
   logic changes.
+
+## spin_response, bcc Cr antiferromagnet (`cr_bcc`) — 2026-10-13
+
+- **Verified (32^3, `eta` = 2e-3 Ry, omega -0.06 to 0.06 Ry in 241 points, 94 q along Gamma-X-M-Gamma-R-X|M-R,
+  `tests/validation/spin_response_cr/report_dynamic.py`):** the omega > 0 maximum of tr L is the last grid point (0.06 Ry) for 68 of
+  the 94 q. On Gamma-X at q = 1/32 ... 5/32 it is interior, at 0.0105, 0.0250, 0.0365, 0.0460, 0.0550 Ry, i.e. 1.37 to 1.92 times the
+  static adiabatic w+ of the same q (0.0077 to 0.0286 Ry); at q = 1/4 tr L rises to the edge with no feature at w+ = 0.0357 Ry. Only tr L
+  was examined, not the rows of chi.
+- **Not diagnosed, suspects only:** the window and `eta` (eta is comparable to w+ at small q); what a trace over rows of opposite moment
+  means in the global frame; Stoner damping of the Cr modes; w+ not being a pole of the dynamic chi. One run, one eta.
+- **Verified:** `spin_swapped` is decided by the sign of the total d moment, which is +5e-14 to +2.5e-13 mu_B here (24^3, 32^3, 64^3;
+  `T` in all, and byte-identical q files for Debug and Release). A flip on another compiler would change the signs in `_state.dat` and
+  fail `SpinResponseCrBaselineRepro`. Not tried on another compiler or CPU.
+- **Proposal, not applied:** a dynamic run with a wider window and several `eta`, about 20 lines in `tests/validation/spin_response_cr/`.
