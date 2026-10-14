@@ -47,6 +47,12 @@ not an integration-noise floor or an energy-functional validation.
   changes on one rank, checks globally reduced maxima on every rank, and rejects
   a nonphysical occupation present on only one rank.
 
+The occupation and potential APIs are keyed by symbolic-atom type, not site.
+The evaluator therefore constructs one `V(P)` per type and broadcasts that type
+potential to sites using it; independent inequivalent occupations on sites that
+share a type are not represented. The two-site probe assigns its inequivalent
+sites distinct types and does not cover that unsupported representation.
+
 The two-site source SHA256 is
 `7425e2308145723052e204d4316968a7ced5bd0eaed9b4ff458458c84abfc98e`; it
 checks actual per-site RS/KS outputs against the opposite-site oracle as a

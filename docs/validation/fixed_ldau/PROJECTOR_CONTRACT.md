@@ -16,7 +16,7 @@ The source SHA256 is `7425e2308145723052e204d4316968a7ced5bd0eaed9b4ff458458c84a
 
 For the two-site case, KS matches the exact site-resolved projectors to zero at printed precision. RS max elementwise errors against the finite-window Lorentz oracle are `2.259199e-5` (site 1) and `2.300895e-5` (site 2); production RS differs from the independent 6000-channel Simpson reconstruction by `1.24e-16`. Lorentz-oracle quadrature errors decrease monotonically from `5.704945e-2`, `6.516675e-3`, `4.317598e-4` to `2.300895e-5` for 750, 1500, 3000 and 6000 channels. The RS-to-sharp-KS broadening/window difference is `3.050803e-3`. Conjugated-KS and transposed-RS negative controls mismatch by `0.364816` and `0.363804`; the swapped-site oracle comparison mismatches by `0.184084`. Maximum imaginary d coherence is `0.182408`, and the maximum imaginary Hubbard-potential entry is `0.00263048`.
 
-This is finite class-B evidence for production site-resolved occupation extraction and distinct-site mapping in an orthogonal 36×36 model. It is not a real-space crystal/periodic-operator comparison, an overlap-metric test (the metric is identity), or a material result.
+This is finite class-B evidence for production site-resolved occupation extraction and distinct-site mapping in an orthogonal 36×36 model. It is not a real-space crystal/periodic-operator comparison, an overlap-metric test (the metric is identity), or a material result. The production LDM/potential API is keyed by symbolic-atom type: it stores one occupation and constructs one potential per type. Independent inequivalent occupations on multiple sites sharing the same type are not represented; this probe uses separate types.
 
 ## Matrix and basis convention
 
