@@ -23,7 +23,7 @@ contains
       logical :: use_acbn0
       real(rp), dimension(this%lattice%ntype, 4) :: hub_u, hub_j
       real(rp), dimension(this%lattice%ntype, 4, 4) :: f
-      real(rp), dimension(this%lattice%ntype, 4, 2, 7, 7) :: ldm, hub_pot
+      complex(rp), dimension(this%lattice%ntype, 4, 2, 7, 7) :: ldm, hub_pot
       real(rp), dimension(this%lattice%ntype, 4, 2) :: n_spin
       real(rp), dimension(this%lattice%ntype, 4) :: n_tot
       type :: int_array
@@ -34,6 +34,7 @@ contains
       integer :: cntr
       real(rp) :: ldm_trace_up, ldm_trace_dn, ldm_max_abs, hup_max_abs
       real(rp) :: ql_occ_up, ql_occ_dn
+      real(rp) :: imag_ldm_max
 
       ms(1)%val = [0]
       ms(2)%val = [-1, 0, 1]
@@ -102,8 +103,8 @@ contains
             ldm_trace_dn = 0.0_rp
             ldm_max_abs = 0.0_rp
             do i = 1, 2*l - 1
-               ldm_trace_up = ldm_trace_up + ldm(na, l, 1, i, i)
-               ldm_trace_dn = ldm_trace_dn + ldm(na, l, 2, i, i)
+               ldm_trace_up = ldm_trace_up + real(ldm(na, l, 1, i, i), rp)
+               ldm_trace_dn = ldm_trace_dn + real(ldm(na, l, 2, i, i), rp)
                do j = 1, 2*l - 1
                   ldm_max_abs = max(ldm_max_abs, abs(ldm(na, l, 1, i, j)))
                   ldm_max_abs = max(ldm_max_abs, abs(ldm(na, l, 2, i, j)))
@@ -138,7 +139,7 @@ contains
          do l = 1, 4
             do ispin = 1, 2
                do i = 1, 2*l - 1
-                  n_spin(na, l, ispin) = n_spin(na, l, ispin) + ldm(na, l, ispin, i, i)
+                  n_spin(na, l, ispin) = n_spin(na, l, ispin) + real(ldm(na, l, ispin, i, i), rp)
                end do
             end do
             ! Total occupancy for this channel is n_up + n_dn.
@@ -148,6 +149,20 @@ contains
 
       use_acbn0 = (trim(lower(this%hubbard_u_potential_form)) == 'acbn0')
       eps_den = 1.0e-12_rp
+
+      if (use_acbn0) then
+         do na = 1, this%lattice%ntype
+            do l = 1, size(l_arr(na)%val)
+               l_index = l_arr(na)%val(l)
+               m_max = 2*l_index - 1
+               imag_ldm_max = maxval(abs(aimag(ldm(na, l_index, :, 1:m_max, 1:m_max))))
+               if (imag_ldm_max > 1.0e-10_rp) then
+                  call g_logger%fatal('ACBN0 LDA+U does not support complex orbital occupations; use fixed Liechtenstein form.', &
+                     __FILE__, __LINE__)
+               end if
+            end do
+         end do
+      end if
 
       do na = 1, this%lattice%ntype
          do l = 1, size(l_arr(na)%val)
@@ -159,13 +174,13 @@ contains
                pbar(:, :, :) = 0.0_rp
                do ispin = 1, 2
                   do m1 = 1, m_max
-                     occ_m(ispin, m1) = ldm(na, l_index, ispin, m1, m1)
+                  occ_m(ispin, m1) = real(ldm(na, l_index, ispin, m1, m1), rp)
                   end do
                end do
                do ispin = 1, 2
                   do m1 = 1, m_max
                      do m2 = 1, m_max
-                        pbar(ispin, m1, m2) = (occ_m(ispin, m1) + occ_m(ispin, m2))*ldm(na, l_index, ispin, m1, m2)
+                        pbar(ispin, m1, m2) = (occ_m(ispin, m1) + occ_m(ispin, m2))*real(ldm(na, l_index, ispin, m1, m2), rp)
                      end do
                   end do
                end do
@@ -249,19 +264,19 @@ contains
                               ! Preserve the legacy real-harmonic ACBN0 proxy; it is
                               ! outside the fixed Liechtenstein implementation scope.
                               hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
-                                   + Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6)*ldm(na, l_index, 3 - ispin, m3, m4) &
+                                   + Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6)*real(ldm(na, l_index, 3 - ispin, m3, m4), rp) &
                                    + (Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6) &
-                                   -  Coulomb_mat(l_index - 1, m1_val, m3_val, m4_val, m2_val, f0, f2, f4, f6))*ldm(na, l_index, ispin, m3, m4)
+                                   -  Coulomb_mat(l_index - 1, m1_val, m3_val, m4_val, m2_val, f0, f2, f4, f6))*real(ldm(na, l_index, ispin, m3, m4), rp)
                            else
-                              ! ldm stores n_ab = psi*_a psi_b. This pair-density
-                              ! tensor is T_abcd=<a c|b d>; retain the matching
-                              ! direct/exchange index order for the current real LDM.
+                              ! ldm stores the operator projector P_ab=psi_a psi*_b.
+                              ! The fixed-U potential gradient contracts P_dc for
+                              ! T_abcd=<a c|b d>, consistent with Tr(V delta P).
                               hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
-                                   + real(Coulomb_mat_spherical(l_index - 1, m1_val, m2_val, m3_val, m4_val, f0, f2, f4, f6), rp) &
-                                     *ldm(na, l_index, 3 - ispin, m3, m4) &
-                                   + real(Coulomb_mat_spherical(l_index - 1, m1_val, m2_val, m3_val, m4_val, f0, f2, f4, f6) &
-                                   -       Coulomb_mat_spherical(l_index - 1, m1_val, m4_val, m3_val, m2_val, f0, f2, f4, f6), rp) &
-                                     *ldm(na, l_index, ispin, m3, m4)
+                                   + Coulomb_mat_spherical(l_index - 1, m1_val, m2_val, m3_val, m4_val, f0, f2, f4, f6) &
+                                     *ldm(na, l_index, 3 - ispin, m4, m3) &
+                                   + (Coulomb_mat_spherical(l_index - 1, m1_val, m2_val, m3_val, m4_val, f0, f2, f4, f6) &
+                                   -  Coulomb_mat_spherical(l_index - 1, m1_val, m4_val, m3_val, m2_val, f0, f2, f4, f6)) &
+                                     *ldm(na, l_index, ispin, m4, m3)
                            end if
                         end do
                      end do
@@ -308,7 +323,7 @@ contains
                            hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) + &
                               ueff*(0.5_rp - ldm(na, l_index, ispin, m1, m2)) + 0.5_rp*dUeff_dn*tr_n1mn
                         else
-                           hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+                        hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
                               - hub_u(na, l_index)*(n_tot(na, l_index) - 0.5_rp) &
                               + hub_j(na, l_index)*(n_spin(na, l_index, ispin) - 0.5_rp)
                         end if
@@ -323,8 +338,8 @@ contains
             vdiag_up_avg = 0.0_rp
             vdiag_dn_avg = 0.0_rp
             do m1 = 1, m_max
-               vdiag_up_avg = vdiag_up_avg + hub_pot(na, l_index, 1, m1, m1)
-               vdiag_dn_avg = vdiag_dn_avg + hub_pot(na, l_index, 2, m1, m1)
+               vdiag_up_avg = vdiag_up_avg + real(hub_pot(na, l_index, 1, m1, m1), rp)
+               vdiag_dn_avg = vdiag_dn_avg + real(hub_pot(na, l_index, 2, m1, m1), rp)
             end do
             vdiag_up_avg = vdiag_up_avg/real(max(1, m_max), rp)
             vdiag_dn_avg = vdiag_dn_avg/real(max(1, m_max), rp)
@@ -393,7 +408,7 @@ contains
             do ispin = 1, 2
                do ii = 1, jdim
                   n_spin(itype, li, ispin) = n_spin(itype, li, ispin) + &
-                     this%lattice%symbolic_atoms(itype)%potential%ldm(li, ispin, ii, ii)
+                     real(this%lattice%symbolic_atoms(itype)%potential%ldm(li, ispin, ii, ii), rp)
                end do
             end do
          end do

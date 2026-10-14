@@ -238,12 +238,15 @@ end subroutine project_dos_orbitals_gaussian
       use lattice_mod
       type(lattice), intent(inout) :: lattice_obj
       real(rp), allocatable :: ldm_comm(:, :, :, :)
+      real(rp), allocatable :: ldm_comm_imag(:, :, :, :)
       integer :: max_flat_ldm, local_flat
       integer :: na_glob, plusbulk, lcount_ldm, l, ispin
 
       max_flat_ldm = (2*lmax_basis + 1)*(2*lmax_basis + 1)
       allocate(ldm_comm(lattice_obj%nrec, lmax_basis + 1, 2, max_flat_ldm))
+      allocate(ldm_comm_imag(lattice_obj%nrec, lmax_basis + 1, 2, max_flat_ldm))
       ldm_comm(:, :, :, :) = 0.0_rp
+      ldm_comm_imag(:, :, :, :) = 0.0_rp
       do na_glob = 1, lattice_obj%nrec
          plusbulk = lattice_obj%nbulk + na_glob
          call lattice_obj%symbolic_atoms(plusbulk)%potential%flatten_ldm()
@@ -253,24 +256,31 @@ end subroutine project_dos_orbitals_gaussian
             do ispin = 1, 2
                ldm_comm(na_glob, l, ispin, 1:local_flat) = &
                   lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten(l, ispin, 1:local_flat)
+               ldm_comm_imag(na_glob, l, ispin, 1:local_flat) = &
+                  lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten_imag(l, ispin, 1:local_flat)
             end do
          end do
       end do
       call MPI_ALLREDUCE(MPI_IN_PLACE, ldm_comm, product(shape(ldm_comm)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, ldm_comm_imag, product(shape(ldm_comm_imag)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       do na_glob = 1, lattice_obj%nrec
          plusbulk = lattice_obj%nbulk + na_glob
          lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten(:, :, :) = 0.0_rp
+         lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten_imag(:, :, :) = 0.0_rp
          lcount_ldm = min(lattice_obj%symbolic_atoms(plusbulk)%potential%lmax, lmax_basis) + 1
          do l = 1, lcount_ldm
             local_flat = (2*l - 1)*(2*l - 1)
             do ispin = 1, 2
                lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten(l, ispin, 1:local_flat) = &
                   ldm_comm(na_glob, l, ispin, 1:local_flat)
+               lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_flatten_imag(l, ispin, 1:local_flat) = &
+                  ldm_comm_imag(na_glob, l, ispin, 1:local_flat)
             end do
          end do
          call lattice_obj%symbolic_atoms(plusbulk)%potential%expand_ldm()
       end do
       deallocate(ldm_comm)
+      deallocate(ldm_comm_imag)
    end subroutine sync_lattice_ldm
 #endif
 
@@ -783,10 +793,11 @@ end subroutine calculate_band_moments
    !> @brief Reconstruct lattice local density matrices from projected DOS moments.
    !> @param[inout] this Reciprocal object containing projected DOS/moments.
    !> @param[inout] lattice_obj Lattice object receiving local density matrices.
-   module subroutine calculate_ldm_from_projected_dos(this, lattice_obj)
+   module subroutine calculate_ldm_from_projected_dos(this, lattice_obj, fixed_liechtenstein)
       use lattice_mod
       class(reciprocal), intent(inout) :: this
       type(lattice), intent(inout) :: lattice_obj
+      logical, intent(in), optional :: fixed_liechtenstein
       
       ! Local variables
       integer :: isite
@@ -818,7 +829,7 @@ end subroutine calculate_band_moments
       
       ! Method 2: Full LDM (including off-diagonal) from eigenvector projections
       ! This properly captures orbital hybridization and is more accurate than diagonal-only
-      call calculate_ldm_from_eigenvectors(this, lattice_obj)
+      call calculate_ldm_from_eigenvectors(this, lattice_obj, fixed_liechtenstein)
       
       ! Save flattened copy for each site
       do isite = 1, lattice_obj%nrec
@@ -835,10 +846,11 @@ end subroutine calculate_band_moments
    !>          bands, then synchronizes the lattice result across MPI ranks.
    !> @param[inout] this Reciprocal object containing eigenvectors and occupations.
    !> @param[inout] lattice_obj Lattice object receiving local density matrices.
-   module subroutine calculate_ldm_from_eigenvectors(this, lattice_obj)
+   module subroutine calculate_ldm_from_eigenvectors(this, lattice_obj, fixed_liechtenstein)
       use lattice_mod
       class(reciprocal), intent(inout) :: this
       type(lattice), intent(inout) :: lattice_obj
+      logical, intent(in), optional :: fixed_liechtenstein
       
       ! Local variables
       integer :: ik, ik_global, ib, isite, alpha, beta, iorb, norb_l
@@ -849,10 +861,22 @@ end subroutine calculate_band_moments
       integer :: nbands, nsites, i
       real(rp) :: trace_tot, trace_up, trace_dn, max_imag, max_herm
       integer :: idx_a, idx_b
+      logical :: use_complex_projector
+      real(rp) :: kT
+      real(rp) :: ldm_trace, ldm_min_eig, ldm_max_eig, ldm_antiherm
+      integer :: ldm_diag_info
+      ! The RS runtime observes anti-Hermitian residuals near 1e-8 or below;
+      ! these looser thresholds allow integration/k-sum roundoff while still
+      ! flagging a materially invalid occupation. No value is projected.
+      real(rp), parameter :: ldm_hermiticity_tol = 1.0e-6_rp
+      real(rp), parameter :: ldm_occupation_tol = 1.0e-3_rp
 
       call root_info('calculate_ldm_from_eigenvectors: Computing site density matrices from eigenvectors', __FILE__, __LINE__)
 
       call this%ensure_full_mesh_for_spinor_integrations('calculate_ldm_from_eigenvectors')
+      use_complex_projector = .false.
+      if (present(fixed_liechtenstein)) use_complex_projector = fixed_liechtenstein
+      kT = max(this%temperature*kB_Ry_per_K, 1.0e-10_rp)
 
       nbands = size(this%eigenvalues, 1)
       nsites = lattice_obj%nrec
@@ -889,15 +913,25 @@ end subroutine calculate_band_moments
             
             ! Accumulate contributions from all occupied bands at this k-point
             do ib = 1, nbands
-               if (this%eigenvalues(ib, ik) > this%fermi_level) cycle
-               fermi_occ = 1.0_rp
+               if (use_complex_projector) then
+                  fermi_occ = fermi_dirac_occupation(this%eigenvalues(ib, ik), this%fermi_level, kT)
+               else
+                  if (this%eigenvalues(ib, ik) > this%fermi_level) cycle
+                  fermi_occ = 1.0_rp
+               end if
                
-               ! Build density matrix: DM_{ab} += f * w_k * ψ*_a ψ_b
+               ! Fixed Liechtenstein stores the conventional projector P_ab=ψ_a ψ*_b.
+               ! Legacy SC-U/V retains its historical transposed real projector.
                do alpha = 1, n_orb_site
                   psi_a = this%eigenvectors(site_offset + alpha, ib, ik)
                   do beta = 1, n_orb_site
                      psi_b = this%eigenvectors(site_offset + beta, ib, ik)
-                     DM(alpha, beta) = DM(alpha, beta) + conjg(psi_a) * psi_b * fermi_occ * kweight
+                     if (use_complex_projector) then
+                        DM(alpha, beta) = DM(alpha, beta) + &
+                           hubbard_projector_element(psi_a, psi_b) * fermi_occ * kweight
+                     else
+                        DM(alpha, beta) = DM(alpha, beta) + conjg(psi_a) * psi_b * fermi_occ * kweight
+                     end if
                   end do
                end do
             end do ! bands
@@ -948,10 +982,10 @@ end subroutine calculate_band_moments
                         idx_b = (ispin - 1) * n_orb_per_spin + basis_offset + beta
                         if (idx_a > n_orb_site .or. idx_b > n_orb_site) cycle
                         
-                        ! Accumulate real part (imaginary should be ~0 for proper DM)
+                        ! The fixed Liechtenstein path keeps the full coherent projector.
                         lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%ldm(iorb+1, ispin, alpha, beta) = &
                            lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%ldm(iorb+1, ispin, alpha, beta) + &
-                           real(DM(idx_a, idx_b), rp)
+                           merge(DM(idx_a, idx_b), cmplx(real(DM(idx_a, idx_b),rp), 0.0_rp,rp), use_complex_projector)
                      end do
                   end do
                end do
@@ -965,6 +999,40 @@ end subroutine calculate_band_moments
          call sync_lattice_ldm(lattice_obj)
       end if
 #endif
+
+      if (use_complex_projector) then
+         do isite = 1, nsites
+            do iorb = 0, min(3, lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%lmax)
+               norb_l = 2*iorb + 1
+               basis_offset = iorb**2
+               if (basis_offset + norb_l > n_orb_per_spin) cycle
+               do ispin = 1, min(2, this%n_spin_components)
+                  call hubbard_density_diagnostics( &
+                     lattice_obj%symbolic_atoms(lattice_obj%nbulk + isite)%potential%ldm(iorb+1, ispin, 1:norb_l, 1:norb_l), &
+                     ldm_trace, ldm_min_eig, ldm_max_eig, ldm_antiherm, ldm_diag_info)
+                  if (ldm_diag_info /= 0) then
+                     call g_logger%warning('HUBBARD_LDM_KS_DIAGNOSTIC_FAILED site='//trim(int2str(isite))// &
+                        ' l='//trim(int2str(iorb))//' spin='//trim(int2str(ispin))// &
+                        ' info='//trim(int2str(ldm_diag_info)), __FILE__, __LINE__)
+                  else
+                     call root_info('HUBBARD_LDM_KS_PHYSICALITY site='//trim(int2str(isite))// &
+                        ' l='//trim(int2str(iorb))//' spin='//trim(int2str(ispin))// &
+                        ' trace='//trim(real2str(ldm_trace,'(F10.6)'))// &
+                        ' eig_min='//trim(real2str(ldm_min_eig,'(F10.6)'))// &
+                        ' eig_max='//trim(real2str(ldm_max_eig,'(F10.6)'))// &
+                        ' max_antiherm='//trim(real2str(ldm_antiherm,'(E10.2)')), __FILE__, __LINE__)
+                     if (ldm_antiherm > ldm_hermiticity_tol .or. ldm_min_eig < -ldm_occupation_tol .or. &
+                         ldm_max_eig > 1.0_rp + ldm_occupation_tol .or. ldm_trace < -ldm_occupation_tol .or. &
+                         ldm_trace > real(norb_l, rp) + ldm_occupation_tol) then
+                        call g_logger%warning('HUBBARD_LDM_KS_OUT_OF_RANGE site='//trim(int2str(isite))// &
+                           ' l='//trim(int2str(iorb))//' spin='//trim(int2str(ispin))// &
+                           ' tolerances(herm,occ)=(1e-6,1e-3); values retained', __FILE__, __LINE__)
+                     end if
+                  end if
+               end do
+            end do
+         end do
+      end if
 
       deallocate(DM)
       call root_info('calculate_ldm_from_eigenvectors: Eigenvector-based site density matrix -> ldm complete', __FILE__, __LINE__)

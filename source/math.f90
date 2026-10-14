@@ -146,8 +146,63 @@ module math_mod
    complex(rp), allocatable, public, protected :: S_z(:, :)
 
    public :: init_math_operators
+   public :: hubbard_projector_element, hubbard_spectral_density_element
+   public :: hubbard_density_diagnostics
 
 contains
+
+   !> Standard fixed-Liechtenstein occupation projector element P_ab=psi_a psi_b*.
+   pure function hubbard_projector_element(psi_a, psi_b) result(p_ab)
+      complex(rp), intent(in) :: psi_a, psi_b
+      complex(rp) :: p_ab
+      p_ab = psi_a*conjg(psi_b)
+   end function hubbard_projector_element
+
+   !> Hermitian spectral matrix from a retarded Green matrix element pair.
+   pure function hubbard_spectral_density_element(g_ab, g_ba) result(a_ab)
+      complex(rp), intent(in) :: g_ab, g_ba
+      complex(rp) :: a_ab
+      a_ab = i_unit*(g_ab-conjg(g_ba))/(2.0_rp*pi)
+   end function hubbard_spectral_density_element
+
+   !> Report trace, anti-Hermitian residual, and eigenvalue bounds for an LDM.
+   !> Eigenvalues are evaluated on the Hermitian part solely for diagnostics;
+   !> the input matrix is never modified or projected.
+   subroutine hubbard_density_diagnostics(matrix, trace_value, min_eigenvalue, max_eigenvalue, &
+                                          max_antihermitian, info)
+      complex(rp), intent(in) :: matrix(:, :)
+      real(rp), intent(out) :: trace_value, min_eigenvalue, max_eigenvalue, max_antihermitian
+      integer, intent(out) :: info
+      complex(rp), allocatable :: work(:), hermitian_part(:, :)
+      real(rp), allocatable :: rwork(:), eigenvalues(:)
+      complex(rp) :: work_query(1)
+      integer :: n, lwork, i
+
+      n = size(matrix, 1)
+      trace_value = 0.0_rp
+      min_eigenvalue = 0.0_rp
+      max_eigenvalue = 0.0_rp
+      max_antihermitian = 0.0_rp
+      info = 0
+      if (n == 0 .or. size(matrix, 2) /= n) then
+         info = -1
+         return
+      end if
+      do i = 1, n
+         trace_value = trace_value + real(matrix(i, i), rp)
+      end do
+      max_antihermitian = maxval(abs(matrix - transpose(conjg(matrix))))
+      allocate(hermitian_part(n, n), eigenvalues(n), rwork(max(1, 3*n - 2)))
+      hermitian_part = 0.5_rp*(matrix + transpose(conjg(matrix)))
+      call zheev('N', 'U', n, hermitian_part, n, eigenvalues, work_query, -1, rwork, info)
+      if (info /= 0) return
+      lwork = max(1, int(real(work_query(1), rp)))
+      allocate(work(lwork))
+      call zheev('N', 'U', n, hermitian_part, n, eigenvalues, work, lwork, rwork, info)
+      if (info /= 0) return
+      min_eigenvalue = minval(eigenvalues)
+      max_eigenvalue = maxval(eigenvalues)
+   end subroutine hubbard_density_diagnostics
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

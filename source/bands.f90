@@ -870,6 +870,7 @@ contains
       integer :: isp, soff, jo, nsp, plusbulk
       real(rp) :: sgef, pmef, smef, isgn, sums, sump, sumd, mnorm
       real(rp), dimension(this%en%channels_ldos + 10) :: y
+      real(rp), dimension(this%en%channels_ldos + 10) :: y_imag
       real(rp), dimension(nb) :: chebmom(nb), chebmom1(nb), chebmom2(nb)
       real(rp), dimension(this%lattice%nrec, 2*(lmax_basis + 1)) :: occ
       integer :: nchan, nchan_spin
@@ -881,12 +882,24 @@ contains
       logical :: hubbard_active
       integer :: li, iorb, jorb, jdim, ispin
       integer :: ncap_orb, ncap_trace
+      integer :: nphys_warn
       real(rp) :: occ_raw, ch_sum, scale_ch, ldm_val, max_herm
+      real(rp) :: ldm_imag_val
+      real(rp) :: ldm_trace, ldm_min_eig, ldm_max_eig, ldm_antiherm
+      integer :: ldm_diag_info
+      complex(rp), dimension(this%en%channels_ldos + 10) :: spectral_value
+      logical :: fixed_liechtenstein_active
       real(rp), dimension(7) :: occ_ch
       real(rp) :: occ_orb
       real(rp), allocatable :: ldm_comm(:, :, :, :)
+      real(rp), allocatable :: ldm_comm_imag(:, :, :, :)
       real(rp), allocatable :: pl_comm(:, :, :)
       integer :: lcount_ldm, max_flat_ldm, local_flat
+      ! These diagnostic tolerances exceed observed finite-grid residuals
+      ! (about 1e-8 anti-Hermitian and <1e-4 eigen/trace drift) without hiding
+      ! material violations. Diagnostics never modify or project the LDM.
+      real(rp), parameter :: ldm_hermiticity_tol = 1.0e-6_rp
+      real(rp), parameter :: ldm_occupation_tol = 1.0e-3_rp
 
       ! Store previous moments if needed for reverse rotation later
       do na_glob = start_atom, end_atom
@@ -902,6 +915,8 @@ contains
       hubbard_active = this%recursion%hamiltonian%hubbard_u_general_check .or. &
                        this%recursion%hamiltonian%hubbard_u_sc_check .or. &
                        this%recursion%hamiltonian%hubbard_v_check
+      fixed_liechtenstein_active = this%recursion%hamiltonian%hubbard_u_general_check .and. &
+         trim(lower(this%recursion%hamiltonian%hubbard_u_potential_form)) == 'liechtenstein'
 
       nchan_spin = lmax_basis + 1
       nchan = 2*nchan_spin
@@ -989,6 +1004,7 @@ contains
             this%symbolic_atom(plusbulk)%potential%ldm(:, :, :, :) = 0.0_rp
             ncap_orb = 0
             ncap_trace = 0
+            nphys_warn = 0
             do ispin = 1, 2
                soff = (ispin - 1)*spin_off
                do li = 0, min(3, lmax_basis)
@@ -996,22 +1012,47 @@ contains
                   occ_ch(:) = 0.0_rp
                   do iorb = li*li + 1, (li + 1)*(li + 1)
                      do jorb = li*li + 1, (li + 1)*(li + 1)
-                        y(:) = -aimag(this%green%g0(iorb + soff, jorb + soff, :, na))/pi
-                        ldm_val = 0.0_rp
-                        call simpson_m(ldm_val, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 0, this%en%ene)
-                        this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb - li*li, jorb - li*li) = ldm_val
+                        if (fixed_liechtenstein_active) then
+                           ! Matrix spectral function A_ab = i(G_ab-G_ba*)/(2 pi).
+                           ! For a diagonal element this reduces to -Im(G_aa)/pi.
+                           do ie = 1, size(spectral_value)
+                              spectral_value(ie) = hubbard_spectral_density_element( &
+                                 this%green%g0(iorb + soff, jorb + soff, ie, na), &
+                                 this%green%g0(jorb + soff, iorb + soff, ie, na))
+                           end do
+                           y(:) = real(spectral_value, rp)
+                           y_imag(:) = aimag(spectral_value)
+                           ldm_val = 0.0_rp
+                           ldm_imag_val = 0.0_rp
+                           call simpson_m(ldm_val, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 0, this%en%ene)
+                           call simpson_m(ldm_imag_val, this%en%edel, this%en%fermi, this%nv1, y_imag, this%e1, 0, this%en%ene)
+                           this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb - li*li, jorb - li*li) = &
+                              cmplx(ldm_val, ldm_imag_val, rp)
+                        else
+                           ! Preserve legacy real-matrix extraction for SC-U/V modes.
+                           y(:) = -aimag(this%green%g0(iorb + soff, jorb + soff, :, na))/pi
+                           ldm_val = 0.0_rp
+                           call simpson_m(ldm_val, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 0, this%en%ene)
+                           this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb - li*li, jorb - li*li) = cmplx(ldm_val, 0.0_rp, rp)
+                        end if
                      end do
-                     occ_orb = this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb - li*li, iorb - li*li)
+                     occ_orb = real(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb - li*li, iorb - li*li), rp)
                      occ_raw = occ_orb
-                     ! Keep diagonal safety cap; off-diagonal elements are not capped.
-                     occ_orb = max(0.0_rp, min(1.0_rp, occ_orb))
-                     if (abs(occ_orb - occ_raw) > 1.0e-12_rp) ncap_orb = ncap_orb + 1
-                     this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb - li*li, iorb - li*li) = occ_orb
+                     if (.not. fixed_liechtenstein_active) then
+                        ! Legacy modes retain their historical diagonal cap.
+                        occ_orb = max(0.0_rp, min(1.0_rp, occ_orb))
+                        if (abs(occ_orb - occ_raw) > 1.0e-12_rp) ncap_orb = ncap_orb + 1
+                        this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb - li*li, iorb - li*li) = cmplx(occ_orb, 0.0_rp, rp)
+                     else if (occ_raw < -1.0e-3_rp .or. occ_raw > 1.0_rp + 1.0e-3_rp) then
+                        ! Diagnose appreciable integration drift without projecting
+                        ! the matrix back into a different density.
+                        nphys_warn = nphys_warn + 1
+                     end if
                      occ_ch(iorb - li*li) = occ_orb
                   end do
                   ! Physical per-channel trace cap: sum_m n_m^sigma <= 2l+1.
                   ch_sum = sum(occ_ch(1:jdim))
-                  if (ch_sum > real(jdim, rp) + 1.0e-10_rp) then
+                  if (.not. fixed_liechtenstein_active .and. ch_sum > real(jdim, rp) + 1.0e-10_rp) then
                      scale_ch = real(jdim, rp)/ch_sum
                      do iorb = 1, jdim
                         this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb, iorb) = &
@@ -1026,13 +1067,18 @@ contains
                                      ' orb_caps='//fmt('i0', ncap_orb)// &
                                      ' trace_caps='//fmt('i0', ncap_trace), __FILE__, __LINE__)
             end if
+            if (rank == 0 .and. fixed_liechtenstein_active .and. nphys_warn > 0) then
+               call g_logger%warning('HUBBARD_LDM_PHYSICALITY atom='//fmt('i4', na_glob)// &
+                                     ' diagonal_out_of_range='//fmt('i0', nphys_warn)// &
+                                     ' tolerance=1e-3 (values retained)', __FILE__, __LINE__)
+            end if
             if (rank == 0) then
                max_herm = 0.0_rp
                do li = 0, min(3, lmax_basis)
                   jdim = 2*li + 1
                   do ispin = 1, 2
                      max_herm = max(max_herm, maxval(abs(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, 1:jdim, 1:jdim) - &
-                        transpose(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, 1:jdim, 1:jdim)))))
+                        transpose(conjg(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, 1:jdim, 1:jdim))))))
                   end do
                end do
                call g_logger%info('HUBBARD_LDM_CHECK atom='//fmt('i4', na_glob)// &
@@ -1041,8 +1087,34 @@ contains
                   call g_logger%info('HUBBARD_BANDCMP atom='//fmt('i4', na_glob)//' l='//fmt('i2', li)// &
                                      ' ql_up='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%ql(1, li, 1))// &
                                      ' ql_dn='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%ql(1, li, 2))// &
-                                     ' ldm_up='//fmt('f10.6', sum([(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, 1, iorb, iorb), iorb=1,2*li+1)]))// &
-                                     ' ldm_dn='//fmt('f10.6', sum([(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, 2, iorb, iorb), iorb=1,2*li+1)])), __FILE__, __LINE__)
+                                     ' ldm_up='//fmt('f10.6', real(sum([(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, 1, iorb, iorb), iorb=1,2*li+1)]), rp))// &
+                                     ' ldm_dn='//fmt('f10.6', real(sum([(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, 2, iorb, iorb), iorb=1,2*li+1)]), rp)), __FILE__, __LINE__)
+                  if (fixed_liechtenstein_active) then
+                     jdim = 2*li + 1
+                     do ispin = 1, 2
+                        call hubbard_density_diagnostics( &
+                           this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, 1:jdim, 1:jdim), &
+                           ldm_trace, ldm_min_eig, ldm_max_eig, ldm_antiherm, ldm_diag_info)
+                        if (ldm_diag_info /= 0) then
+                           call g_logger%warning('HUBBARD_LDM_DIAGNOSTIC_FAILED atom='//fmt('i4', na_glob)// &
+                              ' l='//fmt('i2', li)//' spin='//fmt('i2', ispin)//' info='//fmt('i4', ldm_diag_info), &
+                              __FILE__, __LINE__)
+                        else
+                           call g_logger%info('HUBBARD_LDM_PHYSICALITY atom='//fmt('i4', na_glob)// &
+                              ' l='//fmt('i2', li)//' spin='//fmt('i2', ispin)// &
+                              ' trace='//fmt('f10.6', ldm_trace)//' eig_min='//fmt('f10.6', ldm_min_eig)// &
+                              ' eig_max='//fmt('f10.6', ldm_max_eig)//' max_antiherm='//fmt('e12.4', ldm_antiherm), &
+                              __FILE__, __LINE__)
+                           if (ldm_antiherm > ldm_hermiticity_tol .or. ldm_min_eig < -ldm_occupation_tol .or. &
+                               ldm_max_eig > 1.0_rp + ldm_occupation_tol .or. ldm_trace < -ldm_occupation_tol .or. &
+                               ldm_trace > real(jdim, rp) + ldm_occupation_tol) then
+                              call g_logger%warning('HUBBARD_LDM_OUT_OF_RANGE atom='//fmt('i4', na_glob)// &
+                                 ' l='//fmt('i2', li)//' spin='//fmt('i2', ispin)// &
+                                 ' tolerances(herm,occ)=(1e-6,1e-3); values retained', __FILE__, __LINE__)
+                           end if
+                        end if
+                     end do
+                  end if
                end do
             end if
             call this%symbolic_atom(plusbulk)%potential%flatten_ldm()
@@ -1057,7 +1129,9 @@ contains
       ! NOTE: flatten_potential_lite does not contain ldm/ldm_flatten.
       max_flat_ldm = (2*lmax_basis + 1)*(2*lmax_basis + 1)
       allocate(ldm_comm(this%lattice%nrec, lmax_basis + 1, 2, max_flat_ldm))
+      allocate(ldm_comm_imag(this%lattice%nrec, lmax_basis + 1, 2, max_flat_ldm))
       ldm_comm(:, :, :, :) = 0.0_rp
+      ldm_comm_imag(:, :, :, :) = 0.0_rp
       do na_glob = start_atom, end_atom
          plusbulk = this%lattice%nbulk + na_glob
          lcount_ldm = min(this%symbolic_atom(plusbulk)%potential%lmax, lmax_basis) + 1
@@ -1066,24 +1140,31 @@ contains
             do ispin = 1, 2
                ldm_comm(na_glob, l, ispin, 1:local_flat) = &
                   this%symbolic_atom(plusbulk)%potential%ldm_flatten(l, ispin, 1:local_flat)
+               ldm_comm_imag(na_glob, l, ispin, 1:local_flat) = &
+                  this%symbolic_atom(plusbulk)%potential%ldm_flatten_imag(l, ispin, 1:local_flat)
             end do
          end do
       end do
       call MPI_ALLREDUCE(MPI_IN_PLACE, ldm_comm, product(shape(ldm_comm)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, ldm_comm_imag, product(shape(ldm_comm_imag)), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
       do na_glob = 1, this%lattice%nrec
          plusbulk = this%lattice%nbulk + na_glob
          this%symbolic_atom(plusbulk)%potential%ldm_flatten(:, :, :) = 0.0_rp
+         this%symbolic_atom(plusbulk)%potential%ldm_flatten_imag(:, :, :) = 0.0_rp
          lcount_ldm = min(this%symbolic_atom(plusbulk)%potential%lmax, lmax_basis) + 1
          do l = 1, lcount_ldm
             local_flat = (2*l - 1)*(2*l - 1)
             do ispin = 1, 2
                this%symbolic_atom(plusbulk)%potential%ldm_flatten(l, ispin, 1:local_flat) = &
                   ldm_comm(na_glob, l, ispin, 1:local_flat)
+               this%symbolic_atom(plusbulk)%potential%ldm_flatten_imag(l, ispin, 1:local_flat) = &
+                  ldm_comm_imag(na_glob, l, ispin, 1:local_flat)
             end do
          end do
          call this%symbolic_atom(plusbulk)%potential%expand_ldm()
       end do
       deallocate(ldm_comm)
+      deallocate(ldm_comm_imag)
 
       ! Synchronize PL explicitly: flatten_potential_lite does not include it.
       allocate(pl_comm(this%lattice%nrec, lmax_basis + 1, 2))

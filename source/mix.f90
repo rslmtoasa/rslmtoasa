@@ -54,7 +54,7 @@ module mix_mod
       real(rp), dimension(:, :), allocatable :: mag_old, mag_new, mag_mix
       !> Variables to save LDA+U density matrices for optional linear mixing
       !> Dimensions: (atom, l-channel, spin, flattened m,m’)
-      real(rp), dimension(:, :, :, :), allocatable :: ldm_old, ldm_new, ldm_mix
+      complex(rp), dimension(:, :, :, :), allocatable :: ldm_old, ldm_new, ldm_mix
       !> Mixing parameter
       real(rp) :: beta
       !> Linear mixing factor for LDA+U density matrix (ldm).
@@ -580,11 +580,13 @@ contains
                local_flat = (2*l - 1)*(2*l - 1)
                do ispin = 1, 2
                   if (trim(whereto) == 'old') then
-                     this%ldm_old(it, l, ispin, 1:min(local_flat, max_flat)) = &
-                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(l, ispin, 1:min(local_flat, max_flat))
+                     this%ldm_old(it, l, ispin, 1:min(local_flat, max_flat)) = cmplx( &
+                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(l, ispin, 1:min(local_flat, max_flat)), &
+                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten_imag(l, ispin, 1:min(local_flat, max_flat)), rp)
                   else
-                     this%ldm_new(it, l, ispin, 1:min(local_flat, max_flat)) = &
-                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(l, ispin, 1:min(local_flat, max_flat))
+                     this%ldm_new(it, l, ispin, 1:min(local_flat, max_flat)) = cmplx( &
+                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(l, ispin, 1:min(local_flat, max_flat)), &
+                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten_imag(l, ispin, 1:min(local_flat, max_flat)), rp)
                   end if
                end do
             end do
@@ -594,11 +596,14 @@ contains
          do it = 1, this%lattice%nrec
             lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
             this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(:, :, :) = 0.0_rp
+            this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten_imag(:, :, :) = 0.0_rp
             do l = 1, lcount
                local_flat = (2*l - 1)*(2*l - 1)
                do ispin = 1, 2
                   this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten(l, ispin, 1:min(local_flat, max_flat)) = &
-                     this%ldm_mix(it, l, ispin, 1:min(local_flat, max_flat))
+                     real(this%ldm_mix(it, l, ispin, 1:min(local_flat, max_flat)), rp)
+                  this%symbolic_atom(this%lattice%nbulk + it)%potential%ldm_flatten_imag(l, ispin, 1:min(local_flat, max_flat)) = &
+                     aimag(this%ldm_mix(it, l, ispin, 1:min(local_flat, max_flat)))
                end do
             end do
             call this%symbolic_atom(this%lattice%nbulk + it)%potential%expand_ldm()

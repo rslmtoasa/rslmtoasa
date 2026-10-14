@@ -109,9 +109,10 @@ contains
       class(hamiltonian), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i, j, l, li, lj, n_l_in
+      integer :: iostatus, funit, i, j, l, li, lj
       integer :: nimp_in
       integer :: na
+      real(rp) :: u_ev, j_ev
       integer :: ntype_nml, nrec_nml
       logical :: legacy_uj_present
       logical :: has_hubbard_general, has_legacy_uj, has_impurity_uj, has_hubbard_v, has_hubbard_u_sc
@@ -175,8 +176,8 @@ contains
 
       read (funit, nml=hamiltonian, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error('iostatus = '//int2str(iostatus), __FILE__, __LINE__)
+         call g_logger%fatal('Invalid &hamiltonian namelist or out-of-range input index (iostat='//int2str(iostatus)//').', &
+                             __FILE__, __LINE__)
       end if
       close (funit)
 
@@ -240,12 +241,42 @@ contains
       ! - hubbard_u_impurity / hubbard_j_impurity
       ! - hubbard_v (intersite)
       if (has_hubbard_general) then
-         n_l_in = min(size(hubbard_u_general, 2), size(hubbard_j_general, 2))
-         do i = 1, min(this%lattice%ntype, size(hubbard_u_general, 1), size(hubbard_j_general, 1))
-            do l = 1, min(n_l_in, size(this%lattice%symbolic_atoms(i)%potential%hubbard_u))
-               if (hubbard_u_general(i, l) == hubbard_sentinel .or. hubbard_j_general(i, l) == hubbard_sentinel) cycle
-               this%lattice%symbolic_atoms(i)%potential%hubbard_u(l) = hubbard_u_general(i, l)/ry2ev
-               this%lattice%symbolic_atoms(i)%potential%hubbard_j(l) = hubbard_j_general(i, l)/ry2ev
+         if (size(hubbard_u_general, 1) /= size(hubbard_j_general, 1) .or. &
+             size(hubbard_u_general, 2) /= size(hubbard_j_general, 2)) then
+            call g_logger%fatal('hubbard_u_general and hubbard_j_general must have matching shapes.', __FILE__, __LINE__)
+         end if
+         do i = 1, size(hubbard_u_general, 1)
+            do l = 1, size(hubbard_u_general, 2)
+               if (hubbard_u_general(i, l) == hubbard_sentinel .and. hubbard_j_general(i, l) == hubbard_sentinel) cycle
+               if (i > this%lattice%ntype) then
+                  call g_logger%fatal('hubbard_u_general index exceeds the number of atom types.', __FILE__, __LINE__)
+               end if
+               if (l == 3 .and. (abs(hubbard_u_general(i, l)) > 1.0e-10_rp .or. &
+                                 abs(hubbard_j_general(i, l)) > 1.0e-10_rp) .and. &
+                   (this%control%lmax < 2 .or. this%lattice%symbolic_atoms(i)%potential%lmax < 2)) then
+                  call g_logger%fatal('Fixed d-shell LDA+U requires an spd or larger basis on every correlated atom type.', &
+                                      __FILE__, __LINE__)
+               end if
+               if (l > size(this%lattice%symbolic_atoms(i)%potential%hubbard_u)) then
+                  call g_logger%fatal('Hubbard channel index exceeds the available potential channels.', __FILE__, __LINE__)
+               end if
+               if (hubbard_u_general(i, l) == hubbard_sentinel) then
+                  call g_logger%fatal('hubbard_j_general requires a corresponding hubbard_u_general value.', __FILE__, __LINE__)
+               end if
+               u_ev = hubbard_u_general(i, l)
+               j_ev = 0.0_rp
+               if (hubbard_j_general(i, l) /= hubbard_sentinel) j_ev = hubbard_j_general(i, l)
+               if (u_ev < 0.0_rp .or. j_ev < 0.0_rp) then
+                  call g_logger%fatal('Fixed Hubbard inputs require U >= 0 and J >= 0, in eV.', __FILE__, __LINE__)
+               end if
+               if (abs(u_ev) > 1.0e-10_rp .or. abs(j_ev) > 1.0e-10_rp) then
+                  if (l /= 3) then
+                     call g_logger%fatal('Fixed-U LDA+U is validated only for the d channel (hubbard_*_general(type,3)).', &
+                                          __FILE__, __LINE__)
+                  end if
+               end if
+               this%lattice%symbolic_atoms(i)%potential%hubbard_u(l) = u_ev/ry2ev
+               this%lattice%symbolic_atoms(i)%potential%hubbard_j(l) = j_ev/ry2ev
             end do
          end do
       end if
@@ -270,13 +301,25 @@ contains
                case ('f', 'F')
                   l = 4
                case default
-                  cycle
+                  call g_logger%fatal('Invalid orbital in uj_orb. Use s, p, d, or f.', __FILE__, __LINE__)
                end select
                if (l <= size(this%lattice%symbolic_atoms(na)%potential%hubbard_u)) then
-                  if (hubbard_u(i, j) == hubbard_sentinel .or. hubbard_j(i, j) == hubbard_sentinel) cycle
-                  this%lattice%symbolic_atoms(na)%potential%hubbard_u(l) = hubbard_u(i, j)/ry2ev
-                  this%lattice%symbolic_atoms(na)%potential%hubbard_j(l) = hubbard_j(i, j)/ry2ev
-                  if (abs(hubbard_u(i, j)) > 1.0e-10_rp .or. abs(hubbard_j(i, j)) > 1.0e-10_rp) legacy_uj_present = .true.
+                  if (hubbard_u(i, j) == hubbard_sentinel .and. hubbard_j(i, j) == hubbard_sentinel) cycle
+                  if (hubbard_u(i, j) == hubbard_sentinel) then
+                     call g_logger%fatal('hubbard_j requires a corresponding hubbard_u value.', __FILE__, __LINE__)
+                  end if
+                  u_ev = hubbard_u(i, j)
+                  j_ev = 0.0_rp
+                  if (hubbard_j(i, j) /= hubbard_sentinel) j_ev = hubbard_j(i, j)
+                  if (u_ev < 0.0_rp .or. j_ev < 0.0_rp) then
+                     call g_logger%fatal('Fixed Hubbard inputs require U >= 0 and J >= 0, in eV.', __FILE__, __LINE__)
+                  end if
+                  if ((abs(u_ev) > 1.0e-10_rp .or. abs(j_ev) > 1.0e-10_rp) .and. l /= 3) then
+                     call g_logger%fatal('Fixed-U LDA+U is validated only for the d shell.', __FILE__, __LINE__)
+                  end if
+                  this%lattice%symbolic_atoms(na)%potential%hubbard_u(l) = u_ev/ry2ev
+                  this%lattice%symbolic_atoms(na)%potential%hubbard_j(l) = j_ev/ry2ev
+                  if (abs(u_ev) > 1.0e-10_rp .or. abs(j_ev) > 1.0e-10_rp) legacy_uj_present = .true.
                end if
             end do
          end do
@@ -293,9 +336,21 @@ contains
             this%hubbard_j_impurity(:, :) = 0.0_rp
             do i = 1, min(this%lattice%nrec, nimp_in)
                do l = 1, min(4, size(hubbard_u_impurity, 2), size(hubbard_j_impurity, 2))
-                  if (hubbard_u_impurity(i, l) == hubbard_sentinel .or. hubbard_j_impurity(i, l) == hubbard_sentinel) cycle
-                  this%hubbard_u_impurity(i, l) = hubbard_u_impurity(i, l)/ry2ev
-                  this%hubbard_j_impurity(i, l) = hubbard_j_impurity(i, l)/ry2ev
+                  if (hubbard_u_impurity(i, l) == hubbard_sentinel .and. hubbard_j_impurity(i, l) == hubbard_sentinel) cycle
+                  if (hubbard_u_impurity(i, l) == hubbard_sentinel) then
+                     call g_logger%fatal('hubbard_j_impurity requires a corresponding hubbard_u_impurity value.', __FILE__, __LINE__)
+                  end if
+                  u_ev = hubbard_u_impurity(i, l)
+                  j_ev = 0.0_rp
+                  if (hubbard_j_impurity(i, l) /= hubbard_sentinel) j_ev = hubbard_j_impurity(i, l)
+                  if (u_ev < 0.0_rp .or. j_ev < 0.0_rp) then
+                     call g_logger%fatal('Fixed Hubbard inputs require U >= 0 and J >= 0, in eV.', __FILE__, __LINE__)
+                  end if
+                  if ((abs(u_ev) > 1.0e-10_rp .or. abs(j_ev) > 1.0e-10_rp) .and. l /= 3) then
+                     call g_logger%fatal('Fixed-U LDA+U is validated only for the d shell.', __FILE__, __LINE__)
+                  end if
+                  this%hubbard_u_impurity(i, l) = u_ev/ry2ev
+                  this%hubbard_j_impurity(i, l) = j_ev/ry2ev
                end do
             end do
          end if
@@ -378,6 +433,33 @@ contains
       ! Self-consistent U and fixed U/J are mutually exclusive in this implementation.
       if (this%hubbard_u_sc_check .and. this%hubbard_u_general_check) then
          call g_logger%fatal('Both hubbard_u_sc and explicit hubbard_u/hubbard_j are set. Use only one mode.', __FILE__, __LINE__)
+      end if
+
+      ! The validated fixed-U implementation is collinear and orthogonal. The
+      ! occupation/potential contract does not cover spinor/SOC blocks or the
+      ! generalized-overlap (HOH) Hamiltonian, so reject those combinations
+      ! before any Hamiltonian can be assembled with an incomplete correction.
+      if (this%hubbard_u_general_check .and. trim(this%hubbard_u_potential_form) == 'liechtenstein') then
+         do i = 1, this%lattice%ntype
+            do l = 1, size(this%lattice%symbolic_atoms(i)%potential%hubbard_u)
+               if (abs(this%lattice%symbolic_atoms(i)%potential%hubbard_u(l)) <= 1.0e-10_rp .and. &
+                   abs(this%lattice%symbolic_atoms(i)%potential%hubbard_j(l)) <= 1.0e-10_rp) cycle
+               if (l /= 3) then
+                  call g_logger%fatal('Fixed-U LDA+U is validated only for the d shell.', __FILE__, __LINE__)
+               end if
+               if (this%control%lmax < 2 .or. this%lattice%symbolic_atoms(i)%potential%lmax < 2) then
+                  call g_logger%fatal('Fixed d-shell LDA+U requires an spd or larger basis.', __FILE__, __LINE__)
+               end if
+            end do
+         end do
+         if (this%control%has_soc() .or. this%control%is_noncollinear()) then
+            call g_logger%fatal('Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.', &
+                                __FILE__, __LINE__)
+         end if
+         if (this%hoh) then
+            call g_logger%fatal('Fixed-U LDA+U is unsupported with hoh=.true. (generalized-overlap Hamiltonian).', &
+                                __FILE__, __LINE__)
+         end if
       end if
 
       if (rank == 0) then
@@ -1273,7 +1355,7 @@ contains
          if (this%hubbard_u_general_check) then
             do i = 1, nb
                do j = 1, nb
-                  this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + cmplx(this%hubbard_u_pot(i, j, ntype), 0.0_rp, kind=rp)
+                  this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_u_pot(i, j, ntype)
                end do
             end do
          end if
@@ -1499,8 +1581,7 @@ contains
             ! is equivalent to adding it before contraction.
             do i = 1, nb
                do j = 1, nb
-                  this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + &
-                     cmplx(this%hubbard_u_pot(i, j, ntype), 0.0_rp, kind=rp)
+                  this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_u_pot(i, j, ntype)
                end do
             end do
          end if
@@ -1706,7 +1787,7 @@ contains
          if (this%hubbard_u_general_check) then
             do i = 1, nb
                do j = 1, nb
-                  this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + cmplx(this%hubbard_u_pot(i, j, ino), 0.0_rp, kind=rp)
+                  this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + this%hubbard_u_pot(i, j, ino)
                end do
             end do
          end if

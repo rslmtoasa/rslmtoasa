@@ -1906,7 +1906,9 @@ contains
          call g_scf_benchmark_profile%stop_stage('P_density_build')
 
          if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
-            call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos(this%lattice)
+            call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos(this%lattice, &
+               fixed_liechtenstein=this%hamiltonian%hubbard_u_general_check .and. &
+                  trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein')
             if (rank == 0) then
                do ia = 1, this%lattice%nrec
                   plusbulk = this%lattice%nbulk + ia
@@ -1914,8 +1916,8 @@ contains
                      call g_logger%info('HUBBARD_BANDCMP atom='//fmt('i4', ia)//' l='//fmt('i2', li)// &
                                         ' ql_up='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%ql(1, li, 1))// &
                                         ' ql_dn='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%ql(1, li, 2))// &
-                                        ' ldm_up='//fmt('f10.6', sum([(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, 1, iorb, iorb), iorb=1,2*li+1)]))// &
-                                        ' ldm_dn='//fmt('f10.6', sum([(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, 2, iorb, iorb), iorb=1,2*li+1)])), __FILE__, __LINE__)
+                                        ' ldm_up='//fmt('f10.6', sum([(real(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, 1, iorb, iorb), rp), iorb=1,2*li+1)]))// &
+                                        ' ldm_dn='//fmt('f10.6', sum([(real(this%symbolic_atom(plusbulk)%potential%ldm(li + 1, 2, iorb, iorb), rp), iorb=1,2*li+1)])), __FILE__, __LINE__)
                   end do
                end do
             end if

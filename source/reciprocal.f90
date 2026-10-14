@@ -2258,10 +2258,11 @@ end function integrate_dos_up_to_energy
    !> @brief Reconstruct lattice local density matrices from projected DOS moments.
    !> @param[inout] this Reciprocal object containing projected DOS/moments.
    !> @param[inout] lattice_obj Lattice object receiving local density matrices.
-   module subroutine calculate_ldm_from_projected_dos(this, lattice_obj)
+   module subroutine calculate_ldm_from_projected_dos(this, lattice_obj, fixed_liechtenstein)
       use lattice_mod
       class(reciprocal), intent(inout) :: this
       type(lattice), intent(inout) :: lattice_obj
+      logical, intent(in), optional :: fixed_liechtenstein
       
       ! Local variables
       integer :: isite
@@ -2276,10 +2277,11 @@ end function integrate_dos_up_to_energy
    !>          bands, then synchronizes the lattice result across MPI ranks.
    !> @param[inout] this Reciprocal object containing eigenvectors and occupations.
    !> @param[inout] lattice_obj Lattice object receiving local density matrices.
-   module subroutine calculate_ldm_from_eigenvectors(this, lattice_obj)
+   module subroutine calculate_ldm_from_eigenvectors(this, lattice_obj, fixed_liechtenstein)
       use lattice_mod
       class(reciprocal), intent(inout) :: this
       type(lattice), intent(inout) :: lattice_obj
+      logical, intent(in), optional :: fixed_liechtenstein
       
       ! Local variables
       integer :: ik, ik_global, ib, isite, alpha, beta, iorb, norb_l

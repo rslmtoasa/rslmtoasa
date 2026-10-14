@@ -115,7 +115,7 @@ module hamiltonian_mod
       !> Sparse Real Space Hamiltonian (dense legacy format)
       complex(rp), dimension(:, :), allocatable :: h_sparse
       !> On-site potential correction for LDA+U (+J) in spin-orbital basis
-      real(rp), dimension(:, :, :), allocatable :: hubbard_u_pot
+      complex(rp), dimension(:, :, :), allocatable :: hubbard_u_pot
       !> Enable +U correction when any U/J is provided on symbolic atoms
       logical :: hubbard_u_general_check = .false.
       !> Optional impurity-only Hubbard inputs (eV in input.nml, stored as Ry here)

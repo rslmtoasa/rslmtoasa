@@ -111,9 +111,11 @@ module potential_mod
       !> 1st index: 1 = s-orbital, 2 = p-orbital, 3 = d-orbital 
       !> 2nd index: 1 = spin-up, 2= spin-dw
       !> 3rd and 4th index: m-quantum numbers (projected angular momentum)
-      real(rp), dimension(:,:,:,:), allocatable :: ldm
-      !> Temporary variable to read and write ldm in a 3D format. 
+      complex(rp), dimension(:,:,:,:), allocatable :: ldm
+      !> Real part of the legacy flattened restart representation.
       real(rp), dimension(:,:,:), allocatable :: ldm_flatten
+      !> Imaginary part paired with ldm_flatten; absent in legacy restart files.
+      real(rp), dimension(:,:,:), allocatable :: ldm_flatten_imag
       !> Optional screening constants used by the strux backend (indexed by l=0..lmax).
       real(rp), dimension(:), allocatable :: screening_alpha
       !> Optional screening sigma values used by the strux backend (indexed by l=0..lmax).
@@ -285,6 +287,9 @@ contains
       if (allocated(this%hubbard_j)) call move_alloc(this%hubbard_j, hubbard_j)
       ! call move_alloc(this%ldm, ldm)
       if (allocated(this%ldm_flatten)) call move_alloc(this%ldm_flatten, ldm_flatten)
+      if (allocated(this%ldm_flatten_imag)) call move_alloc(this%ldm_flatten_imag, ldm_flatten_imag)
+      ! The new imaginary field is optional so old restart namelists remain valid.
+      if (allocated(ldm_flatten_imag)) ldm_flatten_imag = 0.0_rp
 
       if (.not. allocated(ql)) then
          allocate(ql(3, 0:this%lmax, 2))
@@ -357,6 +362,10 @@ contains
       if (.not. allocated(ldm_flatten)) then
          allocate(ldm_flatten(this%lmax + 1, 2, (2*this%lmax + 1)**2))
          ldm_flatten = 0.0_rp
+      end if
+      if (.not. allocated(ldm_flatten_imag)) then
+         allocate(ldm_flatten_imag(this%lmax + 1, 2, (2*this%lmax + 1)**2))
+         ldm_flatten_imag = 0.0_rp
       end if
 
       open (newunit=funit, file=fname, action='read', iostat=iostatus, status='old')
@@ -458,6 +467,7 @@ contains
       call move_alloc(hubbard_j, this%hubbard_j)
       ! call move_alloc(ldm, this%ldm)
       call move_alloc(ldm_flatten, this%ldm_flatten)
+      call move_alloc(ldm_flatten_imag, this%ldm_flatten_imag)
 
       ! Ensure all potential containers are dimensionally consistent with lmax.
       call ensure_lmax_consistency(this)
@@ -557,6 +567,7 @@ contains
       call resize_1d(this%hubbard_j, lmax_new + 1)
       call resize_4d_ldm(this%ldm, lmax_new + 1, 2, 2*lmax_new + 1, 2*lmax_new + 1)
       call resize_3d_lm_flat(this%ldm_flatten, lmax_new + 1, 2, (2*lmax_new + 1)**2)
+      call resize_3d_lm_flat(this%ldm_flatten_imag, lmax_new + 1, 2, (2*lmax_new + 1)**2)
    end subroutine ensure_lmax_consistency
 
    subroutine resize_1d(arr, n1)
@@ -693,9 +704,9 @@ contains
    end subroutine resize_3d_lm_flat
 
    subroutine resize_4d_ldm(arr, n1, n2, n3, n4)
-      real(rp), allocatable, intent(inout) :: arr(:, :, :, :)
+      complex(rp), allocatable, intent(inout) :: arr(:, :, :, :)
       integer, intent(in) :: n1, n2, n3, n4
-      real(rp), allocatable :: tmp(:, :, :, :)
+      complex(rp), allocatable :: tmp(:, :, :, :)
       integer :: c1, c2, c3, c4
       if (.not. allocated(arr)) then
          allocate(arr(n1, n2, n3, n4))
@@ -779,9 +790,11 @@ contains
       allocate (this%shifted_band(this%lmax + 1, 2), this%obar(this%lmax + 1, 2))
       allocate (this%hubbard_u(this%lmax + 1))
       allocate (this%hubbard_j(this%lmax + 1))
-      allocate (this%ldm(this%lmax + 1, 2, 2*this%lmax + 1, 2*this%lmax + 1))
-      allocate (this%ldm_flatten(this%lmax + 1, 2, (2*this%lmax + 1)**2)) ! Same as ldm but flatten
 #endif
+
+      if (.not. allocated(this%ldm)) allocate (this%ldm(this%lmax + 1, 2, 2*this%lmax + 1, 2*this%lmax + 1))
+      if (.not. allocated(this%ldm_flatten)) allocate (this%ldm_flatten(this%lmax + 1, 2, (2*this%lmax + 1)**2))
+      if (.not. allocated(this%ldm_flatten_imag)) allocate (this%ldm_flatten_imag(this%lmax + 1, 2, (2*this%lmax + 1)**2))
 
       this%xi_p(:) = 0.0d0
       this%xi_d(:) = 0.0d0
@@ -829,6 +842,7 @@ contains
       this%hubbard_j(:) = 0.0d0
       this%ldm(:,:,:,:) = 0.0d0
       this%ldm_flatten(:,:,:) = 0.0d0
+      this%ldm_flatten_imag(:,:,:) = 0.0d0
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -1010,6 +1024,9 @@ contains
       call nml%add('hubbard_j', this%hubbard_j)
       ! call nml%add('ldm', this%ldm)
       call nml%add('ldm_flatten', this%ldm_flatten)
+      ! Preserve legacy no-U/real-density outputs byte-for-byte. Persist the
+      ! optional imaginary companion only when it contains meaningful data.
+      if (any(this%ldm_flatten_imag /= 0.0_rp)) call nml%add('ldm_flatten_imag', this%ldm_flatten_imag)
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -1541,13 +1558,15 @@ contains
       integer :: l, i, j, ispin, k
 
       this%ldm_flatten(:,:,:) = 0.0d0
+      this%ldm_flatten_imag(:,:,:) = 0.0d0
       do l = 1, this%lmax + 1
          do ispin = 1, 2
             k = 0
             do i = 1, 2*l - 1
                do j = 1, 2*l - 1
                   k = k + 1
-                  this%ldm_flatten(l, ispin, k) = this%ldm(l, ispin, i, j)
+                  this%ldm_flatten(l, ispin, k) = real(this%ldm(l, ispin, i, j), rp)
+                  this%ldm_flatten_imag(l, ispin, k) = aimag(this%ldm(l, ispin, i, j))
                end do
             end do
          end do
@@ -1566,7 +1585,7 @@ contains
             do i = 1, 2*l - 1
                do j = 1, 2*l - 1
                   k = k + 1
-                  this%ldm(l, ispin, i, j) = this%ldm_flatten(l, ispin, k)
+                  this%ldm(l, ispin, i, j) = cmplx(this%ldm_flatten(l, ispin, k), this%ldm_flatten_imag(l, ispin, k), rp)
                end do
             end do
          end do
