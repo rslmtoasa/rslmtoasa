@@ -35,15 +35,23 @@ not an integration-noise floor or an energy-functional validation.
   failures (`UnitKspaceOccupations_mpi`, the fixed-U residual two-rank test,
   and `UnitParallelContext_mpi_{1,2,4}`) plus a real communicator teardown
   defect in `UnitLdaUProjectorCommonFrozenH`. After importing the MPI context
-  assignment, targeted MPI CTest of the common-H, multisite, K-space, residual,
-  and parallel-context tests passed 7/7 with local socket access; log:
-  `/tmp/rslmto-remediate-mpi-targeted-final.log`. The earlier failure log is
-  retained as provenance. The C residual test injects imaginary P and V
+  assignment, the final-source targeted MPI CTest of the common-H and multisite tests
+  (direct and two-rank), K-space, residual, and parallel-context tests passed
+  9/9 with local socket access; log:
+  `/tmp/rslmto-remediate-mpi-targeted-current.log` (SHA256
+  `530db567e459e3398416ff4ebaa8ffe05458693d45c77aba0d3b364df760226b`). The
+  final-source serial projector tests passed 2/2; log
+  `/tmp/rslmto-remediate-projector-debug-test-final.log` (SHA256
+  `114e0248ff2afcbb3a8c2e6a569df064ee3630525ac1cdce7371e3d4f1637f96`). The
+  earlier failure log is retained as provenance. The C residual test injects imaginary P and V
   changes on one rank, checks globally reduced maxima on every rank, and rejects
   a nonphysical occupation present on only one rank.
 
-The finite-operator projector tests cover one and two inequivalent sites for
-identity metric only. They do not establish a general nonorthogonal metric
+The two-site source SHA256 is
+`7425e2308145723052e204d4316968a7ced5bd0eaed9b4ff458458c84abfc98e`; it
+checks actual per-site RS/KS outputs against the opposite-site oracle as a
+negative control. The finite-operator projector tests cover one and two
+inequivalent sites for identity metric only. They do not establish a general nonorthogonal metric
 contract or material convergence.
 
 This gate verifies the stopping implementation and its scalar-collinear MPI

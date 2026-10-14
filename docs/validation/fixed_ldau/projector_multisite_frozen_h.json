@@ -1,0 +1,54 @@
+{
+  "evidence_class": "B",
+  "status": "finite_operator_pass_material_gate_open",
+  "source": {
+    "path": "tests/validation/fixed_ldau/projector_multisite_frozen_h.f90",
+    "sha256": "7425e2308145723052e204d4316968a7ced5bd0eaed9b4ff458458c84abfc98e",
+    "integrated_commit": "94d7409"
+  },
+  "operator": {
+    "matrix_dimension": 36,
+    "inequivalent_sites": 2,
+    "orbitals_per_site": 18,
+    "spin_representation": "two collinear spin blocks",
+    "onsite_u_j": [[0.25, 0.04], [0.31, 0.025]],
+    "metric": "identity",
+    "construction_residual_max_abs": 2.7755575615628914e-17,
+    "hermiticity_residual_max_abs": 4.163336342344337e-17
+  },
+  "projector_results": {
+    "ks_max_abs_error_vs_exact": 0.0,
+    "rs_site_max_abs_error_vs_lorentz": [2.259199e-5, 2.300895e-5],
+    "rs_production_vs_6000_channel_simpson_max_abs": 1.241267e-16,
+    "rs_lorentz_quadrature_errors": {
+      "750": 5.704945e-2,
+      "1500": 6.516675e-3,
+      "3000": 4.317598e-4,
+      "6000": 2.300895e-5
+    },
+    "rs_broadening_window_vs_sharp_ks_max_abs": 3.050803e-3,
+    "max_imaginary_d_projector": 1.824082e-1,
+    "max_imaginary_hubbard_potential": 2.630476e-3
+  },
+  "negative_controls": {
+    "ks_eigenvector_conjugation_mismatch": 3.648164e-1,
+    "rs_spectral_transpose_mismatch": 3.638043e-1,
+    "actual_site_output_vs_opposite_site_oracle_mismatch": 1.840838e-1,
+    "minimum_required_mismatch": 1.0e-1,
+    "site_swap_minimum_required_mismatch": 1.0e-2
+  },
+  "validation": {
+    "serial_debug_projector_tests": "2/2 passed",
+    "serial_debug_log": "/private/tmp/rslmto-remediate-projector-debug-test-final.log",
+    "serial_debug_log_sha256": "114e0248ff2afcbb3a8c2e6a569df064ee3630525ac1cdce7371e3d4f1637f96",
+    "mpi_debug_targeted_tests": "9/9 passed, including four projector cases",
+    "mpi_debug_log": "/private/tmp/rslmto-remediate-mpi-targeted-current.log",
+    "mpi_debug_log_sha256": "530db567e459e3398416ff4ebaa8ffe05458693d45c77aba0d3b364df760226b"
+  },
+  "limitations": [
+    "synthetic finite operator, not a periodic material calculation",
+    "identity metric only; generalized-overlap projector is untested",
+    "does not establish same-state radial QL normalization or total-energy closure",
+    "does not establish converged material occupations or restart agreement"
+  ]
+}

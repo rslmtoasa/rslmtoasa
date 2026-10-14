@@ -1,0 +1,35 @@
+{
+  "claim_limit": "Checks NEWRHO source equations against captured production arrays; does not prove Hubbard ETOT variational accounting.",
+  "max_sumev_abs_error_ry": 0.0,
+  "max_valence_density_abs_error": 5.828670879282072e-15,
+  "per_spin": {
+    "0": {
+      "nre_by_l": {
+        "0": 495,
+        "1": 495,
+        "2": 495
+      },
+      "sum_ev_actual_ry": -1.755880174516494,
+      "sum_ev_reconstructed_ry": -1.755880174516494
+    },
+    "1": {
+      "nre_by_l": {
+        "0": 495,
+        "1": 495,
+        "2": 495
+      },
+      "sum_ev_actual_ry": -0.7500963896609143,
+      "sum_ev_reconstructed_ry": -0.7500963896609143
+    }
+  },
+  "same_process_ne_wrho_replay_residuals": {
+    "ec_max_abs_ry": 0.0,
+    "ev_max_abs_ry": 0.0,
+    "rho_max_abs": 0.0,
+    "sumec_max_abs_ry": 0.0,
+    "sumev_max_abs_ry": 0.0
+  },
+  "site": 0,
+  "source_connected_capture": true,
+  "tolerance": 2e-10
+}
