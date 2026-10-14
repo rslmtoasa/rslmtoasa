@@ -37,6 +37,8 @@ program test_lda_u_hamiltonian
    call test_collinear_hermiticity()
       call test_complex_hermitian_occupation()
       call test_complex_energy_derivative()
+      call test_energy_evaluator_dudarev()
+      call test_d_shell_complex_derivative()
    call test_correlated_trace_and_common_state_fourier()
 
    if (failed) then
@@ -250,9 +252,10 @@ contains
 
    subroutine test_complex_energy_derivative()
       complex(rp) :: nup(3, 3), ndn(3, 3), dup(3, 3), ddn(3, 3)
-      complex(rp) :: vup(3, 3), vdn(3, 3), tval
-      real(rp), parameter :: u = 1.7_rp, j = 0.3_rp, h = 1.0e-5_rp
-      real(rp) :: analytic, numeric, eplus, eminus
+      complex(rp) :: vup(3, 3), vdn(3, 3), density(1,4,2,7,7), potential(1,4,2,7,7)
+      real(rp), parameter :: u = 1.7_rp, j = 0.3_rp
+      real(rp), parameter :: steps(3) = [1.0e-3_rp, 1.0e-4_rp, 1.0e-5_rp]
+      real(rp) :: analytic, numeric, eplus, eminus, eint(1,4), edc(1,4), ehub(1,4), trvp(1,4), trv_expected
       integer :: a, b
 
       call reset_fixture(0.0_rp, 0.0_rp, u, j)
@@ -282,18 +285,300 @@ contains
       call ham%calculate_hubbard_u_potential_general()
       vup = ham%hubbard_u_pot(2:4,2:4,1)
       vdn = ham%hubbard_u_pot(2+spin_off:4+spin_off,2+spin_off:4+spin_off,1)
+      density = (0.0_rp, 0.0_rp)
+      potential = (0.0_rp, 0.0_rp)
+      density(1,2,1,1:3,1:3) = nup
+      density(1,2,2,1:3,1:3) = ndn
+      potential(1,2,1,1:3,1:3) = vup
+      potential(1,2,2,1:3,1:3) = vdn
+      call ham%evaluate_hubbard_energy(density, potential, eint, edc, ehub, trvp)
       analytic = 0.0_rp
       do a = 1, 3
          do b = 1, 3
             analytic = analytic + real(vup(a,b)*dup(b,a) + vdn(a,b)*ddn(b,a), rp)
          end do
       end do
-      eplus = complex_p_energy(nup + h*dup, ndn + h*ddn, u, j)
-      eminus = complex_p_energy(nup - h*dup, ndn - h*ddn, u, j)
-      numeric = (eplus - eminus)/(2.0_rp*h)
-      call require(abs(numeric - analytic) < 2.0e-8_rp, &
-         'production complex-P potential equals Tr(V delta P) for nonzero J')
+      trv_expected = 0.0_rp
+      do a = 1, 3
+         do b = 1, 3
+            trv_expected = trv_expected + real(vup(a,b)*nup(b,a) + vdn(a,b)*ndn(b,a), rp)
+         end do
+      end do
+      call require(abs(ehub(1,2) - complex_p_energy(nup, ndn, u, j)) < 2.0e-12_rp, &
+         'production fixed-U energy evaluator agrees with independent p-shell energy oracle')
+      call require(abs(trvp(1,2) - trv_expected) < 2.0e-12_rp, &
+         'production energy evaluator returns real Tr(VP) from explicit snapshots')
+      do a = 1, size(steps)
+         eplus = complex_p_energy(nup + steps(a)*dup, ndn + steps(a)*ddn, u, j)
+         eminus = complex_p_energy(nup - steps(a)*dup, ndn - steps(a)*ddn, u, j)
+         numeric = (eplus - eminus)/(2.0_rp*steps(a))
+         call require(abs(numeric - analytic) < 2.0e-7_rp, &
+            'complex-P potential equals Tr(V delta P) at multiple finite-difference steps')
+      end do
    end subroutine test_complex_energy_derivative
+
+   subroutine test_energy_evaluator_dudarev()
+      complex(rp) :: density(1,4,2,7,7), potential(1,4,2,7,7), p(5,5), p2(5,5), v(5,5), vd(5,5), vec(5)
+      complex(rp) :: dup(5,5), ddn(5,5)
+      real(rp), parameter :: steps(3) = [1.0e-3_rp,1.0e-4_rp,1.0e-5_rp]
+      real(rp) :: eint(1,4), edc(1,4), ehub(1,4), trvp(1,4), expected, nup, ndn, trp2, trdp2, trv_expected
+      real(rp) :: analytic, numeric, eplus, eminus
+      integer :: a, b
+
+      call basis_init(2)
+      ctl%lmax = 2
+      deallocate(ham%hubbard_u_pot)
+      allocate(ham%hubbard_u_pot(nb, nb, 1))
+      call lat%symbolic_atoms(1)%potential%restore_to_default()
+      lat%symbolic_atoms(1)%potential%hubbard_u(3) = 2.1_rp
+      lat%symbolic_atoms(1)%potential%hubbard_j = 0.0_rp
+      lat%symbolic_atoms(1)%potential%ldm = (0.0_rp, 0.0_rp)
+      ham%hubbard_u_pot = (0.0_rp, 0.0_rp)
+      density = (0.0_rp, 0.0_rp)
+      potential = (0.0_rp, 0.0_rp)
+      p = (0.0_rp, 0.0_rp)
+      do a = 1, 5
+         p(a,a) = 0.11_rp*real(a, rp)
+      end do
+      do a = 1, 4
+         do b = a + 1, 5
+            p(a,b) = cmplx(0.006_rp*real(a+b,rp), 0.004_rp*real(a-b,rp),rp)
+            p(b,a) = conjg(p(a,b))
+         end do
+      end do
+      ! The small Hermitian coherence keeps this matrix positive and below I.
+      density(1,3,1,1:5,1:5) = p
+      density(1,3,2,1:5,1:5) = 0.35_rp*p
+      lat%symbolic_atoms(1)%potential%ldm(3,1,1:5,1:5) = p
+      lat%symbolic_atoms(1)%potential%ldm(3,2,1:5,1:5) = 0.35_rp*p
+      call ham%calculate_hubbard_u_potential_general()
+      v = ham%hubbard_u_pot(5:9,5:9,1)
+      potential(1,3,1,1:5,1:5) = v
+      vd = ham%hubbard_u_pot(5+spin_off:9+spin_off,5+spin_off:9+spin_off,1)
+      potential(1,3,2,1:5,1:5) = vd
+      call ham%evaluate_hubbard_energy(density, potential, eint, edc, ehub, trvp)
+      p2 = matmul(p,p)
+      nup = sum([(real(p(a,a),rp),a=1,5)])
+      ndn = 0.35_rp*nup
+      trp2 = sum([(real(p2(a,a),rp),a=1,5)])
+      trdp2 = 0.35_rp**2*trp2
+      expected = 0.5_rp*2.1_rp*((nup-trp2)+(ndn-trdp2))
+      trv_expected = 0.0_rp
+      do a = 1, 5
+         do b = 1, 5
+            trv_expected = trv_expected + real(potential(1,3,1,a,b)*density(1,3,1,b,a) + &
+               potential(1,3,2,a,b)*density(1,3,2,b,a),rp)
+         end do
+      end do
+      call require(abs(ehub(1,3) - expected) < 2.0e-11_rp, &
+         'd-shell J=0 production energy equals independent Dudarev trace formula')
+      if (abs(ehub(1,3) - expected) >= 2.0e-11_rp) write(*,'(a,4es24.15)') 'Dudarev Eint/Edc/Ehub/expected: ', eint(1,3), edc(1,3), ehub(1,3), expected
+      call require(abs(edc(1,3) - 0.5_rp*2.1_rp*(nup+ndn)*(nup+ndn-1.0_rp)) < 2.0e-11_rp, &
+         'd-shell FLL double-counting value')
+      call require(abs(trvp(1,3) - trv_expected) < 2.0e-11_rp, &
+         'd-shell evaluator reports explicit Tr(VP)')
+      dup = (0.0_rp,0.0_rp)
+      ddn = (0.0_rp,0.0_rp)
+      do a = 1, 5
+         dup(a,a) = 0.006_rp*real(a-3,rp)
+         ddn(a,a) = -0.003_rp*real(a-2,rp)
+         do b = a+1, 5
+            dup(a,b) = cmplx(0.001_rp*real(a+b,rp),0.0015_rp*real(a-b,rp),rp)
+            dup(b,a) = conjg(dup(a,b))
+            ddn(a,b) = cmplx(-0.0007_rp*real(a+b,rp),0.0005_rp*real(a-b,rp),rp)
+            ddn(b,a) = conjg(ddn(a,b))
+         end do
+      end do
+      analytic = 0.0_rp
+      do a = 1, 5
+         do b = 1, 5
+            analytic = analytic + real(v(a,b)*dup(b,a)+vd(b,a)*ddn(a,b),rp)
+         end do
+      end do
+      do a = 1, size(steps)
+         eplus = complex_d_energy(p+steps(a)*dup,0.35_rp*p+steps(a)*ddn,2.1_rp,0.0_rp)
+         eminus = complex_d_energy(p-steps(a)*dup,0.35_rp*p-steps(a)*ddn,2.1_rp,0.0_rp)
+         numeric = (eplus-eminus)/(2.0_rp*steps(a))
+         call require(abs(numeric-analytic) < 3.0e-7_rp, &
+            'd-shell J=0 potential equals complex Tr(V delta P) at three steps')
+      end do
+
+      ! A normalized complex rank-one projector with occupancy one has no
+      ! residual FLL correction for a single occupied spin orbital at J=0.
+      do a = 1, 5
+         vec(a) = cmplx(1.0_rp,real(a,rp),rp)/sqrt(60.0_rp)
+      end do
+      do a = 1, 5
+         do b = 1, 5
+            p(a,b) = vec(a)*conjg(vec(b))
+         end do
+      end do
+      density = (0.0_rp,0.0_rp)
+      density(1,3,1,1:5,1:5) = p
+      lat%symbolic_atoms(1)%potential%ldm = (0.0_rp,0.0_rp)
+      lat%symbolic_atoms(1)%potential%ldm(3,1,1:5,1:5) = p
+      call ham%calculate_hubbard_u_potential_general()
+      potential = (0.0_rp,0.0_rp)
+      potential(1,3,1,1:5,1:5) = ham%hubbard_u_pot(5:9,5:9,1)
+      call ham%evaluate_hubbard_energy(density,potential,eint,edc,ehub,trvp)
+      call require(abs(eint(1,3)) < 2.0e-11_rp .and. abs(edc(1,3)) < 2.0e-11_rp .and. &
+         abs(ehub(1,3)) < 2.0e-11_rp, 'integer rank-one projector has zero fixed-U self interaction at J=0')
+      call basis_init(1)
+      ctl%lmax = 1
+      deallocate(ham%hubbard_u_pot)
+      allocate(ham%hubbard_u_pot(nb, nb, 1))
+   end subroutine test_energy_evaluator_dudarev
+
+   subroutine test_d_shell_complex_derivative()
+      complex(rp) :: pup(5,5), pdn(5,5), dup(5,5), ddn(5,5)
+      complex(rp) :: density(1,4,2,7,7), potential(1,4,2,7,7), vup(5,5), vdn(5,5)
+      complex(rp) :: ly(5,5), rotation(5,5), power(5,5), generator(5,5)
+      complex(rp) :: pup_rot(5,5), pdn_rot(5,5), vup_rot(5,5), vdn_rot(5,5)
+      complex(rp) :: vup_expected(5,5), vdn_expected(5,5)
+      real(rp), parameter :: u = 1.4_rp, jbar = 0.22_rp
+      real(rp), parameter :: steps(3) = [1.0e-3_rp, 1.0e-4_rp, 1.0e-5_rp]
+      real(rp) :: e_int(1,4), e_dc(1,4), e_hub(1,4), tr_vp(1,4), analytic, numeric
+      real(rp) :: e_plus, e_minus, e_hub_ref, tr_vp_ref
+      integer :: a, b, n, k
+
+      call basis_init(2)
+      ctl%lmax = 2
+      deallocate(ham%hubbard_u_pot)
+      allocate(ham%hubbard_u_pot(nb, nb, 1))
+      call lat%symbolic_atoms(1)%potential%restore_to_default()
+      lat%symbolic_atoms(1)%potential%hubbard_u(3) = u
+      lat%symbolic_atoms(1)%potential%hubbard_j(3) = jbar
+      pup = (0.0_rp, 0.0_rp)
+      pdn = (0.0_rp, 0.0_rp)
+      dup = (0.0_rp, 0.0_rp)
+      ddn = (0.0_rp, 0.0_rp)
+      do a = 1, 5
+         pup(a,a) = 0.13_rp + 0.09_rp*real(a,rp)
+         pdn(a,a) = 0.08_rp + 0.065_rp*real(a,rp)
+         dup(a,a) = 0.004_rp*real(a-3,rp)
+         ddn(a,a) = -0.003_rp*real(a-2,rp)
+         do b = a + 1, 5
+            pup(a,b) = cmplx(0.004_rp*real(a+b,rp),0.003_rp*real(a-b,rp),rp)
+            pup(b,a) = conjg(pup(a,b))
+            pdn(a,b) = cmplx(0.003_rp*real(a+b,rp),-0.002_rp*real(a-b,rp),rp)
+            pdn(b,a) = conjg(pdn(a,b))
+            dup(a,b) = cmplx(0.002_rp*real(a+b,rp),0.0015_rp*real(a-b,rp),rp)
+            dup(b,a) = conjg(dup(a,b))
+            ddn(a,b) = cmplx(-0.001_rp*real(a+b,rp),0.001_rp*real(a-b,rp),rp)
+            ddn(b,a) = conjg(ddn(a,b))
+         end do
+      end do
+      lat%symbolic_atoms(1)%potential%ldm(3,1,1:5,1:5) = pup
+      lat%symbolic_atoms(1)%potential%ldm(3,2,1:5,1:5) = pdn
+      call ham%calculate_hubbard_u_potential_general()
+      vup = ham%hubbard_u_pot(5:9,5:9,1)
+      vdn = ham%hubbard_u_pot(5+spin_off:9+spin_off,5+spin_off:9+spin_off,1)
+      density = (0.0_rp,0.0_rp)
+      potential = (0.0_rp,0.0_rp)
+      density(1,3,1,1:5,1:5) = pup
+      density(1,3,2,1:5,1:5) = pdn
+      potential(1,3,1,1:5,1:5) = vup
+      potential(1,3,2,1:5,1:5) = vdn
+      call ham%evaluate_hubbard_energy(density,potential,e_int,e_dc,e_hub,tr_vp)
+      analytic = 0.0_rp
+      do a = 1, 5
+         do b = 1, 5
+            analytic = analytic + real(vup(a,b)*dup(b,a)+vdn(a,b)*ddn(b,a),rp)
+         end do
+      end do
+      call require(maxval(abs(vup-conjg(transpose(vup)))) < tolerance .and. &
+         maxval(abs(vdn-conjg(transpose(vdn)))) < tolerance, 'd-shell complex J potential remains Hermitian')
+      call require(abs(e_hub(1,3)-complex_d_energy(pup,pdn,u,jbar)) < 2.0e-11_rp, &
+         'd-shell production energy agrees with separate direct/exchange energy oracle')
+      call require(abs(e_hub(1,3)-1.196748712948_rp) < 2.0e-10_rp .and. &
+         abs(tr_vp(1,3)-0.402247425896_rp) < 2.0e-10_rp, &
+         'd-shell production energy and trace match independent SymPy Wigner reference')
+      call require(abs(vup(1,2)-cmplx(-0.028236422844_rp,0.004210279647_rp,rp)) < 2.0e-10_rp, &
+         'd-shell complex potential entry matches independent SymPy Wigner reference')
+      do n = 1, size(steps)
+         e_plus = complex_d_energy(pup+steps(n)*dup,pdn+steps(n)*ddn,u,jbar)
+         e_minus = complex_d_energy(pup-steps(n)*dup,pdn-steps(n)*ddn,u,jbar)
+         numeric = (e_plus-e_minus)/(2.0_rp*steps(n))
+         call require(abs(numeric-analytic) < 3.0e-7_rp, &
+            'd-shell complex potential equals Tr(V delta P) at three finite-difference steps')
+      end do
+
+      ! A physical y-axis rotation transforms the density and potential as
+      ! operators while the spherical Coulomb tensor remains invariant.
+      ly = (0.0_rp,0.0_rp)
+      do a = 1, 4
+         ly(a+1,a) = cmplx(0.0_rp,-0.5_rp*sqrt(6.0_rp-real((a-3)*(a-2),rp)),rp)
+         ly(a,a+1) = conjg(ly(a+1,a))
+      end do
+      generator = cmplx(0.0_rp,-0.37_rp,rp)*ly
+      rotation = (0.0_rp,0.0_rp)
+      power = (0.0_rp,0.0_rp)
+      do a = 1, 5
+         rotation(a,a) = (1.0_rp,0.0_rp)
+         power(a,a) = (1.0_rp,0.0_rp)
+      end do
+      do k = 1, 30
+         power = matmul(power,generator)/real(k,rp)
+         rotation = rotation + power
+      end do
+      pup_rot = matmul(conjg(transpose(rotation)),matmul(pup,rotation))
+      pdn_rot = matmul(conjg(transpose(rotation)),matmul(pdn,rotation))
+      e_hub_ref = e_hub(1,3)
+      tr_vp_ref = tr_vp(1,3)
+      lat%symbolic_atoms(1)%potential%ldm(3,1,1:5,1:5) = pup_rot
+      lat%symbolic_atoms(1)%potential%ldm(3,2,1:5,1:5) = pdn_rot
+      call ham%calculate_hubbard_u_potential_general()
+      vup_rot = ham%hubbard_u_pot(5:9,5:9,1)
+      vdn_rot = ham%hubbard_u_pot(5+spin_off:9+spin_off,5+spin_off:9+spin_off,1)
+      density(1,3,1,1:5,1:5) = pup_rot
+      density(1,3,2,1:5,1:5) = pdn_rot
+      potential(1,3,1,1:5,1:5) = vup_rot
+      potential(1,3,2,1:5,1:5) = vdn_rot
+      call ham%evaluate_hubbard_energy(density,potential,e_int,e_dc,e_hub,tr_vp)
+      vup_expected = matmul(conjg(transpose(rotation)),matmul(vup,rotation))
+      vdn_expected = matmul(conjg(transpose(rotation)),matmul(vdn,rotation))
+      call require(maxval(abs(vup_rot-vup_expected)) < 2.0e-10_rp .and. &
+         maxval(abs(vdn_rot-vdn_expected)) < 2.0e-10_rp, &
+         'production d-shell potential is covariant under physical orbital rotation')
+      call require(abs(e_hub(1,3)-e_hub_ref) < 2.0e-10_rp .and. abs(tr_vp(1,3)-tr_vp_ref) < 2.0e-10_rp, &
+         'production d-shell EHub and TrVP are invariant under simultaneous rotation')
+      call basis_init(1)
+      ctl%lmax = 1
+      deallocate(ham%hubbard_u_pot)
+      allocate(ham%hubbard_u_pot(nb,nb,1))
+   end subroutine test_d_shell_complex_derivative
+
+   function complex_d_energy(pup,pdn,u,jbar) result(energy)
+      complex(rp), intent(in) :: pup(5,5), pdn(5,5)
+      real(rp), intent(in) :: u,jbar
+      complex(rp) :: density(5,5,2), tensor
+      real(rp) :: energy, direct, exchange, nspin(2), f2, f4
+      integer :: a,b,c,d,s,t
+      density(:,:,1)=pup
+      density(:,:,2)=pdn
+      f2=14.0_rp*jbar/1.625_rp
+      f4=0.625_rp*f2
+      direct=0.0_rp
+      exchange=0.0_rp
+      do s=1,2
+         do t=1,2
+            do a=1,5
+               do b=1,5
+                  do c=1,5
+                     do d=1,5
+                        tensor=Coulomb_mat_spherical(2,a-3,b-3,c-3,d-3,u,f2,f4,0.0_rp)
+                        direct=direct+real(tensor*density(b,a,s)*density(d,c,t),rp)
+                        if(s==t) exchange=exchange+real(tensor*density(d,a,s)*density(b,c,s),rp)
+                     end do
+                  end do
+               end do
+            end do
+         end do
+      end do
+      nspin=[sum([(real(pup(a,a),rp),a=1,5)]),sum([(real(pdn(a,a),rp),a=1,5)])]
+      energy=0.5_rp*(direct-exchange)-0.5_rp*u*sum(nspin)*(sum(nspin)-1.0_rp) &
+         +0.5_rp*jbar*sum(nspin*(nspin-1.0_rp))
+   end function complex_d_energy
 
    function complex_p_energy(pup, pdn, u, jbar) result(energy)
       complex(rp), intent(in) :: pup(3,3), pdn(3,3)

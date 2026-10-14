@@ -162,6 +162,7 @@ module hamiltonian_mod
       procedure :: rotate_to_local_axis
       procedure :: rotate_from_local_axis
       procedure :: calculate_hubbard_u_potential_general
+      procedure :: evaluate_hubbard_energy
       procedure :: calculate_hubbard_v_potential
       procedure :: compute_hamiltonian_bounds
       final     :: destructor
@@ -943,6 +944,15 @@ module hamiltonian_mod
          integer, allocatable :: val(:)
       end type int_array
    end subroutine calculate_hubbard_u_potential_general
+
+   !> Evaluate the fixed Liechtenstein functional and its one-body trace from
+   !> explicit density and potential snapshots. Density and potential use the
+   !> standard spherical projector convention P_ab=psi_a psi_b^*.
+   module subroutine evaluate_hubbard_energy(this, density, potential, e_int, e_dc, e_hub, tr_vp)
+      class(hamiltonian), intent(in) :: this
+      complex(rp), intent(in) :: density(:, :, :, :, :), potential(:, :, :, :, :)
+      real(rp), intent(out) :: e_int(:, :), e_dc(:, :), e_hub(:, :), tr_vp(:, :)
+   end subroutine evaluate_hubbard_energy
 
    !> @brief Compute intersite Hubbard-V potential corrections.
    !> @details Builds pair-dependent correction blocks from hubbard_v inputs and

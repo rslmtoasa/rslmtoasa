@@ -445,10 +445,14 @@ contains
    !> Invoke the unchanged production NEWRHO routine for a deterministic
    !> valence-only fixture.  This is an audit/test seam; it does not duplicate
    !> or alter the legacy NEWRHO numerical machinery.
-   subroutine legacy_newrho_fixture(lmax, z, a, b, rofi, potential, energies, ql, rho)
+   subroutine legacy_newrho_fixture(lmax, z, a, b, rofi, potential, energies, ql, rho, &
+                                    sumev_out, sumec_out, hubbard_u_value, hubbard_j_value, pl_override)
       integer, intent(in) :: lmax
       real(rp), intent(in) :: z, a, b, rofi(:), potential(:, :), energies(:, :), ql(:, :, :)
       real(rp), intent(out) :: rho(:, :)
+      real(rp), intent(out), optional :: sumev_out(:), sumec_out(:)
+      real(rp), intent(in), optional :: hubbard_u_value, hubbard_j_value
+      real(rp), intent(in), optional :: pl_override(:, :)
       type(self) :: audit_state
       type(control), target :: audit_control
       type(symbolic_atom) :: audit_atom
@@ -475,12 +479,30 @@ contains
       audit_atom%element%atomic_number = z
       audit_atom%element%f_core = 0
       audit_atom%potential%lmax = lmax
+      ! Optional U/J metadata supports a frozen-radial test of metadata
+      ! independence. NEWRHO itself is unchanged and receives the same V/QL/PL;
+      ! this fixture does not inject a Hubbard Hamiltonian or potential.
+      if (present(hubbard_u_value) .or. present(hubbard_j_value)) then
+         if (allocated(audit_atom%potential%hubbard_u)) deallocate(audit_atom%potential%hubbard_u)
+         if (allocated(audit_atom%potential%hubbard_j)) deallocate(audit_atom%potential%hubbard_j)
+         allocate(audit_atom%potential%hubbard_u(lmax + 1), audit_atom%potential%hubbard_j(lmax + 1))
+         audit_atom%potential%hubbard_u = 0.0_rp
+         audit_atom%potential%hubbard_j = 0.0_rp
+         if (present(hubbard_u_value)) audit_atom%potential%hubbard_u(lmax + 1) = hubbard_u_value
+         if (present(hubbard_j_value)) audit_atom%potential%hubbard_j(lmax + 1) = hubbard_j_value
+      end if
       allocate(pl(lmax + 1, 2), sumec(2), sumev(2), ec(10), ev(2*(lmax + 1)))
       do ispin = 1, 2
          do l = 0, lmax
             pl(l + 1, ispin) = real(l + 1, rp) + 0.25_rp
          end do
       end do
+      if (present(pl_override)) then
+         if (any(shape(pl_override) /= [lmax + 1, 2])) then
+            error stop 'legacy_newrho_fixture: PL override has inconsistent dimensions'
+         end if
+         pl = pl_override
+      end if
       ev = 0.0_rp
       ival = 0
       do ispin = 1, 2
@@ -493,6 +515,14 @@ contains
                               ec, ev, 1.0e-12_rp, 2, 0)
       nval = 2*(lmax + 1)
       if (size(ev) /= nval) error stop 'legacy_newrho_fixture: invalid valence fixture'
+      if (present(sumev_out)) then
+         if (size(sumev_out) /= 2) error stop 'legacy_newrho_fixture: SUMEV output must have size 2'
+         sumev_out = sumev
+      end if
+      if (present(sumec_out)) then
+         if (size(sumec_out) /= 2) error stop 'legacy_newrho_fixture: SUMEC output must have size 2'
+         sumec_out = sumec
+      end if
    end subroutine legacy_newrho_fixture
    pure function atomsc_solver_tolerance(iteration, drho_control, tolrsq) result(tolerance)
       integer, intent(in) :: iteration

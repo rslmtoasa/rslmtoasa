@@ -3,16 +3,19 @@
 !------------------------------------------------------------------------------
 program test_lr_basis_augmentation
    use precision_mod, only: rp
-   use basis_mod, only: basis_init, nb, norb
+   use basis_mod, only: basis_init, nb, norb, spin_off
    use logger_mod, only: g_logger
    use math_mod, only: init_math_operators, pi
-   use self_mod, only: legacy_radial_fixture, legacy_newrho_fixture
+   use self_mod, only: self, legacy_radial_fixture, legacy_newrho_fixture
    use lmto_radial_augmentation_mod, only: lmto_radial_basis, lmto_orbital_l
    use reciprocal_mod, only: reciprocal
    use hamiltonian_mod, only: hamiltonian
    use lattice_mod, only: lattice
    use charge_mod, only: charge
    use control_mod, only: control
+   use bands_mod, only: bands
+   use symbolic_atom_mod, only: symbolic_atom
+   use mpi_mod, only: start_atom, end_atom
    implicit none
 
    integer, parameter :: nr = 101
@@ -25,7 +28,8 @@ program test_lr_basis_augmentation
    real(rp), allocatable :: gpack(:), gdotpack(:), gddotpack(:)
    real(rp), allocatable :: evals(:, :), moments(:, :, :)
    real(rp), allocatable :: density_state(:, :, :), density_sum(:, :, :), density_api_sum(:, :, :), density_poly(:, :, :)
-   real(rp), allocatable :: density_newrho(:, :), ql_newrho(:, :, :)
+   real(rp), allocatable :: density_newrho(:, :), ql_newrho(:, :, :), ql_fixed_u(:, :, :)
+   real(rp), allocatable :: density_u0(:, :), density_u2(:, :)
    complex(rp), allocatable :: hk(:, :), h(:, :), eeok(:, :), hgamma(:, :), expected(:, :)
    complex(rp), allocatable :: coeff(:, :)
    complex(rp), allocatable :: evecs(:, :, :)
@@ -36,8 +40,21 @@ program test_lr_basis_augmentation
    type(lattice), target :: lat
    type(charge), target :: chg
    type(control), target :: ctl
+   type(bands) :: pl_bands
+   type(self) :: potpar_state
+   type(symbolic_atom), target :: pl_atoms(1)
    real(rp) :: kpoint(3), matrix_error, residual, density_error, density_api_error, weight
    real(rp) :: delta, amplitude, cross0, cross1, cross2
+   real(rp) :: sumev_u0(2), sumev_u2(2), sumec_u0(2), sumec_u2(2)
+   real(rp) :: pl0(3, 2), pl1(3, 2), sumev_pl0(2), sumev_pl1(2), sumec_pl0(2), sumec_pl1(2)
+   real(rp) :: u_test, nup_test, ndn_test, trp2_up, trp2_dn, trvp_up, trvp_dn, dcenter_up, dcenter_dn
+   real(rp) :: prop_a, prop_b, prop_ws, pnu_target(3), pl_targets(3, 2), ql_chain(3, 3, 2)
+   real(rp) :: tphase, rphase, xcenter, rqparam, delta2
+   real(rp) :: gravity_center0(3, 2)
+   real(rp) :: sumev_steps(2, 3), sumec_steps(2, 3), dcenter_steps(2, 3), shift_scales(3)
+   complex(rp) :: p_up(5, 5), p_dn(5, 5), v_up(5, 5), v_dn(5, 5)
+   real(rp) :: trvp_steps(2), eval_steps(2, 3), dpl_steps(2, 3)
+   real(rp), allocatable :: rofi_prop(:)
    integer :: ir, l, ispin, i, j, ib
 
    call basis_init(2)
@@ -159,6 +176,150 @@ program test_lr_basis_augmentation
    density_error = maxval(abs(density_newrho(2:nr, :) - sum(density_poly(2:nr, :, :), dim=2)))
    write (*, '(a,es16.8)') 'state-wise radial density - live NEWRHO = ', density_error
    if (density_error > density_tol) error stop 'LR-BASIS live NEWRHO density comparison failed'
+
+   ! Frozen radial replay for fixed Liechtenstein U/J: the live occupation
+   ! producer sets QL(2) to zero, and the radial energy path must not acquire
+   ! Tr(V_U P) merely because the nonlocal Hamiltonian carries a U potential.
+   ! Keep V, QL, PL, and radial eigenvalues identical while changing only the
+   ! Hubbard metadata consumed by neither NEWRHO nor its SUMEV/SUMEC outputs.
+   allocate(ql_fixed_u(3, 3, 2), density_u0(nr, 2), density_u2(nr, 2))
+   ql_fixed_u = ql_newrho
+   ql_fixed_u(2, :, :) = 0.0_rp
+   call legacy_newrho_fixture(2, z, a, b, rofi, potential_spin, radial_energies, ql_fixed_u, density_u0, &
+      sumev_u0, sumec_u0, hubbard_u_value=0.0_rp, hubbard_j_value=0.0_rp)
+   call legacy_newrho_fixture(2, z, a, b, rofi, potential_spin, radial_energies, ql_fixed_u, density_u2, &
+      sumev_u2, sumec_u2, hubbard_u_value=2.0_rp, hubbard_j_value=0.0_rp)
+   write (*, '(a,es16.8)') 'frozen-QL NEWRHO SUMEV(U=2)-SUMEV(U=0) = ', maxval(abs(sumev_u2-sumev_u0))
+   write (*, '(a,es16.8)') 'frozen-QL NEWRHO density(U=2)-density(U=0) = ', maxval(abs(density_u2-density_u0))
+   write (*, '(a,es16.8)') 'frozen-QL NEWRHO SUMEC(U=2)-SUMEC(U=0) = ', maxval(abs(sumec_u2-sumec_u0))
+   if (maxval(abs(sumev_u2-sumev_u0)) > density_tol .or. &
+       maxval(abs(sumec_u2-sumec_u0)) > density_tol .or. &
+       maxval(abs(density_u2-density_u0)) > density_tol) then
+      error stop 'frozen-radial NEWRHO energy components changed with U/J metadata'
+   end if
+
+   ! The band first moment also moves gravity_center, which calculate_pl maps
+   ! into phase shifts consumed by NEWRHO. Generate the radial parameters with
+   ! production POTPAR on a consistent log mesh, then inject the fixed-P first
+   ! moment Tr(VP)/N at three amplitudes while holding Q0/Q2 and radial V fixed.
+   ham%hoh = .false.
+   lat%nbulk = 0
+   call pl_atoms(1)%restore_to_default()
+   pl_bands%lattice => lat
+   pl_bands%symbolic_atom => pl_atoms
+   pl_bands%control => ctl
+   prop_ws = 2.0_rp
+   prop_a = log(1.0_rp + prop_ws*(2.0_rp*z + 1.0_rp))/real((nr - 1)/2, rp)
+   prop_b = prop_ws/(exp(prop_a*real(nr - 1, rp)) - 1.0_rp)
+   allocate(rofi_prop(nr))
+   rofi_prop(1) = 0.0_rp
+   do ir = 2, nr
+      rofi_prop(ir) = prop_b*(exp(prop_a*real(ir - 1, rp)) - 1.0_rp)
+   end do
+   potential_spin = 0.0_rp
+   pl_atoms(1)%a = prop_a
+   pl_atoms(1)%element%atomic_number = z
+   pl_atoms(1)%potential%ws_r = prop_ws
+   pnu_target = [1.25_rp, 2.25_rp, 3.25_rp]
+   do ispin = 1, 2
+      pl_atoms(1)%potential%pnu(:, ispin) = pnu_target
+   end do
+   call potpar_state%potpar(pl_atoms(1), potential_spin, rofi_prop)
+   do ispin = 1, 2
+      do l = 0, 2
+         ! Invert calculate_pl's phase-shift map so the controlled baseline
+         ! is exactly the POTPAR PNU for the generated C/QPAR/SRDEL.
+         tphase = tan(pi*(0.5_rp - (pnu_target(l + 1) - real(int(pnu_target(l + 1)), rp))))
+         rphase = (tphase + real(l + 1, rp))/(tphase - real(l, rp))
+         rqparam = 1.0_rp/pl_atoms(1)%potential%qpar(l, ispin)
+         delta2 = pl_atoms(1)%potential%srdel(l, ispin)**2
+         xcenter = 2.0_rp*real(2*l + 1, rp)*rphase*delta2*rqparam / &
+            (2.0_rp*real(2*l + 1, rp)*rphase - rqparam)
+         pl_atoms(1)%potential%gravity_center(l + 1, ispin) = &
+            pl_atoms(1)%potential%c(l, ispin) - xcenter
+      end do
+      pl_atoms(1)%potential%pl(:, ispin) = pnu_target
+   end do
+   start_atom = 1
+   end_atom = 1
+   call pl_bands%calculate_pl()
+   do ispin = 1, 2
+      pl0(:, ispin) = pl_atoms(1)%potential%pl(0:2, ispin)
+   end do
+   gravity_center0 = pl_atoms(1)%potential%gravity_center
+
+   u_test = 0.1469971714457357_rp ! 2 eV in Ry, the fixed-U parser's converted value.
+   p_up = (0.0_rp, 0.0_rp)
+   p_dn = (0.0_rp, 0.0_rp)
+   do i = 1, 5
+      p_up(i, i) = 0.11_rp*real(i, rp)
+      p_dn(i, i) = 0.35_rp*p_up(i, i)
+   end do
+   nup_test = sum([(real(p_up(i, i), rp), i=1,5)])
+   ndn_test = sum([(real(p_dn(i, i), rp), i=1,5)])
+   ql_chain = 0.0_rp
+   ql_chain(1, 3, 1) = nup_test
+   ql_chain(1, 3, 2) = ndn_test
+   lat%symbolic_atoms(1)%potential%hubbard_u = 0.0_rp
+   lat%symbolic_atoms(1)%potential%hubbard_j = 0.0_rp
+   lat%symbolic_atoms(1)%potential%hubbard_u(3) = u_test
+   lat%symbolic_atoms(1)%potential%ldm = (0.0_rp, 0.0_rp)
+   lat%symbolic_atoms(1)%potential%ldm(3, 1, 1:5, 1:5) = p_up
+   lat%symbolic_atoms(1)%potential%ldm(3, 2, 1:5, 1:5) = p_dn
+   ham%hubbard_u_potential_form = 'liechtenstein'
+   if (allocated(ham%hubbard_u_pot)) deallocate(ham%hubbard_u_pot)
+   allocate(ham%hubbard_u_pot(nb, nb, 1))
+   call ham%calculate_hubbard_u_potential_general()
+   v_up = ham%hubbard_u_pot(5:9, 5:9, 1)
+   v_dn = ham%hubbard_u_pot(5+spin_off:9+spin_off, 5+spin_off:9+spin_off, 1)
+   trvp_up = 0.0_rp
+   trvp_dn = 0.0_rp
+   do i = 1, 5
+      do j = 1, 5
+         trvp_up = trvp_up + real(v_up(i, j)*p_up(j, i), rp)
+         trvp_dn = trvp_dn + real(v_dn(i, j)*p_dn(j, i), rp)
+      end do
+   end do
+   dcenter_up = trvp_up/nup_test
+   dcenter_dn = trvp_dn/ndn_test
+   trp2_up = 0.0_rp
+   trp2_dn = 0.0_rp
+   do i = 1, 5
+      do j = 1, 5
+         trp2_up = trp2_up + real(p_up(i, j)*p_up(j, i), rp)
+         trp2_dn = trp2_dn + real(p_dn(i, j)*p_dn(j, i), rp)
+      end do
+   end do
+   pl_targets(:, :) = spread(pnu_target, 2, 2)
+   pl_atoms(1)%potential%pl(0:2, :) = pl0
+   call legacy_newrho_fixture(2, z, prop_a, prop_b, rofi_prop, potential_spin, &
+      pl_atoms(1)%potential%enu, ql_chain, density_u0, sumev_pl0, sumec_pl0, pl_override=pl0)
+   shift_scales = [0.025_rp, 0.0125_rp, 0.00625_rp]
+   do ir = 1, 3
+      pl_atoms(1)%potential%gravity_center(:, 1) = gravity_center0(:, 1)
+      pl_atoms(1)%potential%gravity_center(:, 2) = gravity_center0(:, 2)
+      pl_atoms(1)%potential%gravity_center(3, 1) = gravity_center0(3, 1) + shift_scales(ir)*dcenter_up
+      pl_atoms(1)%potential%gravity_center(3, 2) = gravity_center0(3, 2) + shift_scales(ir)*dcenter_dn
+      pl_atoms(1)%potential%pl(0:2, :) = pl0
+      call pl_bands%calculate_pl()
+      do ispin = 1, 2
+         pl1(:, ispin) = pl_atoms(1)%potential%pl(0:2, ispin)
+         dpl_steps(ispin, ir) = pl1(3, ispin) - pl0(3, ispin)
+      end do
+      call legacy_newrho_fixture(2, z, prop_a, prop_b, rofi_prop, potential_spin, &
+         pl_atoms(1)%potential%enu, ql_chain, density_u2, sumev_steps(:, ir), sumec_steps(:, ir), pl_override=pl1)
+      eval_steps(:, ir) = (sumev_steps(:, ir) - sumev_pl0)/[nup_test, ndn_test]
+   end do
+   trvp_steps = [trvp_up, trvp_dn]
+   write (*, '(a,2es16.8)') 'POTPAR baseline PL error = ', maxval(abs(pl0-pl_targets))
+   if (maxval(abs(pl0-pl_targets)) > 1.0e-8_rp) error stop 'POTPAR baseline phase-shift calibration failed'
+   write (*, '(a,2es16.8)') 'production fixed-P Tr(VP) spin shifts = ', trvp_up, trvp_dn
+   do ir = 1, 3
+      write (*, '(a,f6.2,a,2es16.8,a,2es16.8,a,2es16.8)') 'center scale ', shift_scales(ir), &
+         ' dPL=', dpl_steps(:, ir), ' dEVAL=', eval_steps(:, ir), ' dSUMEV=', sumev_steps(:, ir)-sumev_pl0
+      write (*, '(a,2es16.8)') 'dSUMEV / injected Tr(VP) = ', &
+         (sumev_steps(:, ir)-sumev_pl0)/(shift_scales(ir)*trvp_steps)
+   end do
 
    write (*, '(a)') 'UnitLrBasisAugmentation: PASS (production H, eigenstates, and radial density)'
 

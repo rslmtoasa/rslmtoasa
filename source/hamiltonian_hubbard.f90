@@ -2,6 +2,117 @@ submodule(hamiltonian_mod) hamiltonian_hubbard
 
 contains
 
+   module subroutine evaluate_hubbard_energy(this, density, potential, e_int, e_dc, e_hub, tr_vp)
+      class(hamiltonian), intent(in) :: this
+      complex(rp), intent(in) :: density(:, :, :, :, :), potential(:, :, :, :, :)
+      real(rp), intent(out) :: e_int(:, :), e_dc(:, :), e_hub(:, :), tr_vp(:, :)
+
+      integer :: na, li, lval, n_orb, ispin, jspin, a, b, c, d
+      integer :: ma, mb, mc, md
+      integer, dimension(7) :: u_m
+      real(rp) :: u, jbar, f0, f2, f4, f6, nspin(2), ntot
+      real(rp) :: direct, exchange, trace_value
+      complex(rp) :: tensor
+
+      if (trim(lower(this%hubbard_u_potential_form)) /= 'liechtenstein') then
+         call g_logger%fatal('Hubbard energy evaluator is defined only for fixed Liechtenstein U/J.', __FILE__, __LINE__)
+      end if
+      if (size(density, 1) /= this%lattice%ntype .or. size(density, 2) /= 4 .or. &
+          size(density, 3) /= 2 .or. size(density, 4) < 7 .or. size(density, 5) < 7 .or. &
+          any(shape(density) /= shape(potential))) then
+         call g_logger%fatal('Invalid density/potential shape passed to Hubbard energy evaluator.', __FILE__, __LINE__)
+      end if
+      if (size(e_int, 1) /= this%lattice%ntype .or. size(e_int, 2) /= 4 .or. &
+          any(shape(e_int) /= shape(e_dc)) .or. any(shape(e_int) /= shape(e_hub)) .or. &
+          any(shape(e_int) /= shape(tr_vp))) then
+         call g_logger%fatal('Invalid output shape passed to Hubbard energy evaluator.', __FILE__, __LINE__)
+      end if
+
+      e_int = 0.0_rp
+      e_dc = 0.0_rp
+      e_hub = 0.0_rp
+      tr_vp = 0.0_rp
+      u_m = 0
+      do na = 1, this%lattice%ntype
+         do li = 1, min(4, size(this%lattice%symbolic_atoms(na)%potential%hubbard_u))
+            u = this%lattice%symbolic_atoms(na)%potential%hubbard_u(li)
+            jbar = this%lattice%symbolic_atoms(na)%potential%hubbard_j(li)
+            if (abs(u) <= 1.0e-10_rp .and. abs(jbar) <= 1.0e-10_rp) cycle
+            lval = li - 1
+            n_orb = 2*lval + 1
+            select case (li)
+            case (1)
+               u_m(1) = 0
+            case (2)
+               u_m(1:n_orb) = [-1, 0, 1]
+            case (3)
+               u_m(1:n_orb) = [-2, -1, 0, 1, 2]
+            case (4)
+               u_m(1:n_orb) = [-3, -2, -1, 0, 1, 2, 3]
+            end select
+            f0 = u
+            f2 = 0.0_rp
+            f4 = 0.0_rp
+            f6 = 0.0_rp
+            select case (li)
+            case (2)
+               f2 = 5.0_rp*jbar
+            case (3)
+               f2 = 14.0_rp*jbar/1.625_rp
+               f4 = 0.625_rp*f2
+            case (4)
+               f2 = 6435.0_rp*jbar/(286.0_rp + 195.0_rp*0.67_rp + 250.0_rp*0.49_rp)
+               f4 = 0.67_rp*f2
+               f6 = 0.49_rp*f2
+            end select
+
+            nspin = 0.0_rp
+            trace_value = 0.0_rp
+            do ispin = 1, 2
+               do a = 1, n_orb
+                  nspin(ispin) = nspin(ispin) + real(density(na, li, ispin, a, a), rp)
+                  do b = 1, n_orb
+                     trace_value = trace_value + real(potential(na, li, ispin, a, b) * &
+                        density(na, li, ispin, b, a), rp)
+                  end do
+               end do
+            end do
+            ntot = sum(nspin)
+
+            direct = 0.0_rp
+            exchange = 0.0_rp
+            do ispin = 1, 2
+               do jspin = 1, 2
+                  do a = 1, n_orb
+                     ma = u_m(a)
+                     do b = 1, n_orb
+                        mb = u_m(b)
+                        do c = 1, n_orb
+                           mc = u_m(c)
+                           do d = 1, n_orb
+                              md = u_m(d)
+                              tensor = Coulomb_mat_spherical(lval, ma, mb, mc, md, f0, f2, f4, f6)
+                              direct = direct + real(tensor*density(na, li, ispin, b, a) * &
+                                 density(na, li, jspin, d, c), rp)
+                              if (ispin == jspin) then
+                                 exchange = exchange + real(tensor*density(na, li, ispin, d, a) * &
+                                    density(na, li, ispin, b, c), rp)
+                              end if
+                           end do
+                        end do
+                     end do
+                  end do
+               end do
+            end do
+            e_int(na, li) = 0.5_rp*(direct - exchange)
+            e_dc(na, li) = 0.5_rp*u*ntot*(ntot - 1.0_rp) - 0.5_rp*jbar* &
+               sum(nspin*(nspin - 1.0_rp))
+            e_hub(na, li) = e_int(na, li) - e_dc(na, li)
+            tr_vp(na, li) = trace_value
+         end do
+      end do
+   end subroutine evaluate_hubbard_energy
+
    !> @brief Compute onsite Hubbard-U/J potential corrections.
    !> @details Builds the spin-orbital onsite correction from symbolic-atom
    !>          Hubbard inputs, including Liechtenstein and ACBN0-style forms and
