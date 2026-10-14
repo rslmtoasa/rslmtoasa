@@ -1805,4 +1805,107 @@ contains
                 + a_k(6, l, m1, m2, m3, m4)*f6
    end function Coulomb_mat
 
+   !> Coulomb tensor in the normalized complex spherical-harmonic basis.
+   !> The pair-pair convention is
+   !>   T(a,b,c,d) = integral Y_a^*(1)Y_b(1) r12^-1 Y_c^*(2)Y_d(2).
+   !> Equivalently this is the two-electron matrix element <a c|b d>.
+   !> Its selection rule is m_a + m_c = m_b + m_d. The conjugated second
+   !> Gaunt factor therefore uses the reversed pair (d,c).
+   !> It is deliberately separate from Coulomb_mat: that legacy routine uses
+   !> real Gaunt coefficients and remains available to unrelated callers.
+   function Coulomb_mat_spherical(l, m1, m2, m3, m4, f0, f2, f4, f6) result(res)
+      integer, intent(in) :: l, m1, m2, m3, m4
+      real(rp), intent(in) :: f0, f2, f4, f6
+      complex(rp) :: res
+      integer :: k, q
+      real(rp) :: fk, prefactor
+
+      res = (0.0_rp, 0.0_rp)
+      do k = 0, min(2*l, 6)
+         if (mod(k, 2) /= 0) cycle
+         select case (k)
+         case (0)
+            fk = f0
+         case (2)
+            fk = f2
+         case (4)
+            fk = f4
+         case (6)
+            fk = f6
+         end select
+         if (fk == 0.0_rp) cycle
+         prefactor = four_pi*fk/real(2*k + 1, rp)
+         do q = -k, k
+            res = res + prefactor*complex_gaunt(l, m1, k, q, l, m2)* &
+                  conjg(complex_gaunt(l, m4, k, q, l, m3))
+         end do
+      end do
+   end function Coulomb_mat_spherical
+
+   !> Normalized complex Gaunt coefficient integral Y_l1,m1^* Y_k,q Y_l2,m2.
+   function complex_gaunt(l1, m1, k, q, l2, m2) result(res)
+      integer, intent(in) :: l1, m1, k, q, l2, m2
+      complex(rp) :: res
+      real(rp) :: factor
+
+      res = (0.0_rp, 0.0_rp)
+      if (abs(m1) > l1 .or. abs(q) > k .or. abs(m2) > l2) return
+      factor = angular_parity(m1)*sqrt(real((2*l1 + 1)*(2*k + 1)*(2*l2 + 1), rp)/(four_pi))
+      factor = factor*wigner_3j_integer(l1, k, l2, 0, 0, 0)* &
+               wigner_3j_integer(l1, k, l2, -m1, q, m2)
+      res = cmplx(factor, 0.0_rp, kind=rp)
+   end function complex_gaunt
+
+   !> Integer-angular-momentum Wigner 3j symbol (Racah finite-sum formula).
+   function wigner_3j_integer(j1, j2, j3, m1, m2, m3) result(res)
+      integer, intent(in) :: j1, j2, j3, m1, m2, m3
+      real(rp) :: res, prefactor, summation, denominator
+      integer :: z, zmin, zmax
+
+      res = 0.0_rp
+      if (j1 < 0 .or. j2 < 0 .or. j3 < 0) return
+      if (abs(m1) > j1 .or. abs(m2) > j2 .or. abs(m3) > j3) return
+      if (m1 + m2 + m3 /= 0) return
+      if (j3 > j1 + j2 .or. j3 < abs(j1 - j2)) return
+
+      prefactor = sqrt(real(factorial_integer(j1 + j2 - j3)*factorial_integer(j1 - j2 + j3)* &
+                            factorial_integer(-j1 + j2 + j3), rp)/ &
+                       real(factorial_integer(j1 + j2 + j3 + 1), rp))
+      prefactor = prefactor*sqrt(real(factorial_integer(j1 + m1)*factorial_integer(j1 - m1)* &
+                                       factorial_integer(j2 + m2)*factorial_integer(j2 - m2)* &
+                                       factorial_integer(j3 + m3)*factorial_integer(j3 - m3), rp))
+      zmin = max(0, j2 - j3 - m1, j1 - j3 + m2)
+      zmax = min(j1 + j2 - j3, j1 - m1, j2 + m2)
+      summation = 0.0_rp
+      do z = zmin, zmax
+         denominator = real(factorial_integer(z)*factorial_integer(j1 + j2 - j3 - z)* &
+                            factorial_integer(j1 - m1 - z)*factorial_integer(j2 + m2 - z)* &
+                            factorial_integer(j3 - j2 + m1 + z)*factorial_integer(j3 - j1 - m2 + z), rp)
+         summation = summation + real((-1)**z, rp)/denominator
+      end do
+      res = angular_parity(j1 - j2 - m3)*prefactor*summation
+   end function wigner_3j_integer
+
+   function factorial_integer(n) result(res)
+      integer, intent(in) :: n
+      integer :: i
+      real(rp) :: res
+
+      res = 1.0_rp
+      do i = 2, n
+         res = res*real(i, rp)
+      end do
+   end function factorial_integer
+
+   pure function angular_parity(n) result(res)
+      integer, intent(in) :: n
+      real(rp) :: res
+
+      if (mod(abs(n), 2) == 0) then
+         res = 1.0_rp
+      else
+         res = -1.0_rp
+      end if
+   end function angular_parity
+
 end module math_mod

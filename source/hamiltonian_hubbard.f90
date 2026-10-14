@@ -245,10 +245,24 @@ contains
                            f2 = f(na, l_index, 2)
                            f4 = f(na, l_index, 3)
                            f6 = f(na, l_index, 4)
-                           hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
-                                + Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6)*ldm(na, l_index, 3 - ispin, m3, m4) &
-                                + (Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6) &
-                                -  Coulomb_mat(l_index - 1, m1_val, m3_val, m4_val, m2_val, f0, f2, f4, f6))*ldm(na, l_index, ispin, m3, m4)
+                           if (use_acbn0) then
+                              ! Preserve the legacy real-harmonic ACBN0 proxy; it is
+                              ! outside the fixed Liechtenstein implementation scope.
+                              hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+                                   + Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6)*ldm(na, l_index, 3 - ispin, m3, m4) &
+                                   + (Coulomb_mat(l_index - 1, m1_val, m3_val, m2_val, m4_val, f0, f2, f4, f6) &
+                                   -  Coulomb_mat(l_index - 1, m1_val, m3_val, m4_val, m2_val, f0, f2, f4, f6))*ldm(na, l_index, ispin, m3, m4)
+                           else
+                              ! ldm stores n_ab = psi*_a psi_b. This pair-density
+                              ! tensor is T_abcd=<a c|b d>; retain the matching
+                              ! direct/exchange index order for the current real LDM.
+                              hub_pot(na, l_index, ispin, m1, m2) = hub_pot(na, l_index, ispin, m1, m2) &
+                                   + real(Coulomb_mat_spherical(l_index - 1, m1_val, m2_val, m3_val, m4_val, f0, f2, f4, f6), rp) &
+                                     *ldm(na, l_index, 3 - ispin, m3, m4) &
+                                   + real(Coulomb_mat_spherical(l_index - 1, m1_val, m2_val, m3_val, m4_val, f0, f2, f4, f6) &
+                                   -       Coulomb_mat_spherical(l_index - 1, m1_val, m4_val, m3_val, m2_val, f0, f2, f4, f6), rp) &
+                                     *ldm(na, l_index, ispin, m3, m4)
+                           end if
                         end do
                      end do
                      if (use_acbn0) then
