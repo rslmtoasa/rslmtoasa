@@ -13,7 +13,7 @@ program test_lda_u_hamiltonian
    use reciprocal_mod, only: reciprocal
    use logger_mod, only: g_logger
    use math_mod, only: Coulomb_mat_spherical
-   use mix_mod, only: mix
+   use mix_mod, only: mix, fixed_u_residual_metrics, fixed_u_required_stable_updates
    implicit none
 
    real(rp), parameter :: tolerance = 1.0e-11_rp
@@ -32,10 +32,12 @@ program test_lda_u_hamiltonian
       call test_complex_ldm_flatten_roundtrip()
       call test_legacy_restart_without_imaginary_field()
       call test_complex_ldm_mixing_roundtrip()
+      call test_fixed_u_full_complex_convergence()
    call test_zero_u_j_limit()
    call test_simple_diagonal_occupation()
    call test_collinear_hermiticity()
       call test_complex_hermitian_occupation()
+      call test_nonmutating_hubbard_potential_snapshot()
       call test_complex_energy_derivative()
       call test_energy_evaluator_dudarev()
       call test_d_shell_complex_derivative()
@@ -49,6 +51,105 @@ program test_lda_u_hamiltonian
    end if
 
 contains
+
+   subroutine test_nonmutating_hubbard_potential_snapshot()
+      complex(rp) :: density(1,4,2,7,7), live_ldm(2,7,7)
+      complex(rp), allocatable :: v_in(:, :, :), v_out(:, :, :)
+      integer :: spin
+
+      call basis_init(2)
+      ctl%lmax = 2
+      call lat%symbolic_atoms(1)%potential%restore_to_default()
+      deallocate(ham%hubbard_u_pot)
+      allocate(ham%hubbard_u_pot(nb,nb,1), v_in(nb,nb,1), v_out(nb,nb,1))
+      call reset_fixture(0.0_rp,0.0_rp,0.0_rp,0.0_rp)
+      lat%symbolic_atoms(1)%potential%hubbard_u(3) = 2.0_rp
+      lat%symbolic_atoms(1)%potential%hubbard_j(3) = 0.4_rp
+      lat%symbolic_atoms(1)%potential%ldm = (0.0_rp,0.0_rp)
+      do spin = 1, 2
+         lat%symbolic_atoms(1)%potential%ldm(3,spin,1,1) = 0.35_rp
+         lat%symbolic_atoms(1)%potential%ldm(3,spin,2,2) = 0.20_rp
+         lat%symbolic_atoms(1)%potential%ldm(3,spin,1,2) = cmplx(0.0_rp,0.05_rp*real(spin,rp),rp)
+         lat%symbolic_atoms(1)%potential%ldm(3,spin,2,1) = conjg(lat%symbolic_atoms(1)%potential%ldm(3,spin,1,2))
+      end do
+      live_ldm = lat%symbolic_atoms(1)%potential%ldm(3,:,:,:)
+      call ham%calculate_hubbard_u_potential_general()
+      v_in = ham%hubbard_u_pot
+      density = (0.0_rp,0.0_rp)
+      density(1,3,:,:, :) = live_ldm
+      density(1,3,1,1,1) = 0.5_rp
+      density(1,3,1,1,2) = cmplx(0.0_rp,0.1_rp,rp)
+      density(1,3,1,2,1) = conjg(density(1,3,1,1,2))
+
+      call ham%calculate_hubbard_u_potential_general(density_override=density,potential_out=v_out)
+      call require(maxval(abs(ham%hubbard_u_pot-v_in)) < tolerance, &
+         'explicit potential evaluation leaves the live V(Pin) snapshot untouched')
+      call require(maxval(abs(lat%symbolic_atoms(1)%potential%ldm(3,:,:,:)-live_ldm)) < tolerance, &
+         'explicit potential evaluation leaves live density untouched')
+      call require(maxval(abs(v_out-v_in)) > 1.0e-4_rp, 'explicit density produces its own V(Pout)')
+      call require(maxval(abs(v_out(:,:,1)-transpose(conjg(v_out(:,:,1))))) < tolerance, &
+         'nonmutating explicit V(Pout) remains Hermitian')
+      lat%symbolic_atoms(1)%potential%ldm(3,:,:,:) = density(1,3,:,:,:)
+      call ham%calculate_hubbard_u_potential_general()
+      call require(maxval(abs(ham%hubbard_u_pot-v_out)) < tolerance, &
+         'nonmutating explicit V(Pout) equals the ordinary production evaluation')
+      lat%symbolic_atoms(1)%potential%ldm(3,:,:,:) = live_ldm
+      ham%hubbard_u_pot = v_in
+      deallocate(v_in,v_out)
+      call basis_init(1)
+      ctl%lmax = 1
+      deallocate(ham%hubbard_u_pot)
+      allocate(ham%hubbard_u_pot(nb,nb,1))
+   end subroutine test_nonmutating_hubbard_potential_snapshot
+
+   subroutine test_fixed_u_full_complex_convergence()
+      complex(rp) :: pin(1,2,2,2), pout(1,2,2,2), vin(1,2,2,2), vout(1,2,2,2)
+      real(rp) :: rp_abs, rp_rel, rv_abs, rv_rel, ahp, ahv
+      logical :: physical, converged
+      integer :: worst_site, step
+
+      pin = (0.0_rp,0.0_rp); pout = pin; vin = pin; vout = pin
+      pin(1,1,1,1) = 0.4_rp; pin(1,1,2,2) = 0.3_rp
+      pin(1,1,1,2) = cmplx(0.0_rp,0.1_rp,rp); pin(1,1,2,1) = conjg(pin(1,1,1,2))
+      pin(1,2,1,1) = 0.2_rp; pin(1,2,2,2) = 0.1_rp
+      pout = pin
+      pout(1,1,1,2) = cmplx(0.0_rp,0.12_rp,rp); pout(1,1,2,1) = conjg(pout(1,1,1,2))
+      pout(1,2,1,2) = cmplx(0.0_rp,0.02_rp,rp); pout(1,2,2,1) = conjg(pout(1,2,1,2))
+      vin(1,1,1,1) = -0.2_rp; vin(1,1,2,2) = 0.2_rp
+      vin(1,1,1,2) = cmplx(0.0_rp,0.03_rp,rp); vin(1,1,2,1) = conjg(vin(1,1,1,2))
+      vin(1,2,1,1) = 0.1_rp; vin(1,2,2,2) = -0.1_rp
+      vout = vin
+      vout(1,1,1,2) = cmplx(0.0_rp,0.53_rp,rp); vout(1,1,2,1) = conjg(vout(1,1,1,2))
+      vout(1,2,1,2) = cmplx(0.0_rp,0.4_rp,rp); vout(1,2,2,1) = conjg(vout(1,2,1,2))
+
+      call fixed_u_residual_metrics(pin,pout,vin,vout,rp_abs,rp_rel,rv_abs,rv_rel,physical,ahp,ahv,worst_site)
+      call require(physical, 'Hermitian positive occupations and potentials pass fixed-U physicality gate')
+      call require(abs(rp_abs-2.0_rp*0.02_rp) < tolerance, 'density residual combines both spins and imaginary off-diagonal change')
+      call require(abs(rv_abs-sqrt(0.82_rp)) < tolerance, 'potential residual combines both spin blocks in Ry')
+      call require(abs(rp_rel-rp_abs) < tolerance .and. abs(rv_rel-rv_abs) < tolerance, &
+         'normalized residual denominator is max(1, endpoint Frobenius norms)')
+      call require(worst_site == 1, 'worst correlated site is reported')
+
+      ! A charge-like scalar residual could be zero here, but the complex P
+      ! residual above is nonzero and therefore must prevent convergence.
+      mixer%fixed_u_stable_updates = 0
+      call mixer%advance_fixed_u_convergence(rp_abs,rv_abs,physical,converged)
+      call require(.not. converged .and. mixer%fixed_u_stable_updates == 0, &
+         'imaginary matrix change prevents false scalar-charge convergence')
+      do step = 1, fixed_u_required_stable_updates
+         call mixer%advance_fixed_u_convergence(0.0_rp,0.0_rp,.true.,converged)
+         call require(converged .eqv. (step == fixed_u_required_stable_updates), &
+            'fixed point requires exactly three consecutive good updates')
+      end do
+      call mixer%advance_fixed_u_convergence(0.0_rp,0.0_rp,.false.,converged)
+      call require(.not. converged .and. mixer%fixed_u_stable_updates == 0, &
+         'invalid occupation physicality resets convergence streak')
+
+      pout(1,1,1,1) = 1.01_rp
+      pout(1,1,2,2) = -0.01_rp
+      call fixed_u_residual_metrics(pin,pout,vin,vout,rp_abs,rp_rel,rv_abs,rv_rel,physical,ahp,ahv,worst_site)
+      call require(.not. physical, 'out-of-range occupation eigenvalues block convergence without projection')
+   end subroutine test_fixed_u_full_complex_convergence
 
    subroutine test_complex_ldm_flatten_roundtrip()
       complex(rp) :: expected

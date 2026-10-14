@@ -119,8 +119,10 @@ contains
    !>          optional self-consistent U channels.
    !> @param[inout] this Hamiltonian object; fills hubbard_u_pot and related masks.
    !> @note Results are added by the Hamiltonian builders, not by this routine directly.
-   module subroutine calculate_hubbard_u_potential_general(this)
+   module subroutine calculate_hubbard_u_potential_general(this, density_override, potential_out)
       class(hamiltonian), intent(inout) :: this
+      complex(rp), intent(in), optional :: density_override(:, :, :, :, :)
+      complex(rp), intent(out), optional :: potential_out(:, :, :)
 
       integer :: na, l, ispin, i, j, m1, m2, m3, m4, l_index, m_max
       integer :: m1_val, m2_val, m3_val, m4_val
@@ -131,7 +133,7 @@ contains
       real(rp) :: vdiag_up_avg, vdiag_dn_avg, vdiag_split
       real(rp), dimension(2, 7) :: occ_m
       real(rp), dimension(2, 7, 7) :: pbar
-      logical :: use_acbn0
+      logical :: use_acbn0, emit_logs
       real(rp), dimension(this%lattice%ntype, 4) :: hub_u, hub_j
       real(rp), dimension(this%lattice%ntype, 4, 4) :: f
       complex(rp), dimension(this%lattice%ntype, 4, 2, 7, 7) :: ldm, hub_pot
@@ -152,7 +154,28 @@ contains
       ms(3)%val = [-2, -1, 0, 1, 2]
       ms(4)%val = [-3, -2, -1, 0, 1, 2, 3]
 
-      this%hubbard_u_pot(:, :, :) = 0.0_rp
+      if (present(density_override) .neqv. present(potential_out)) then
+         call g_logger%fatal('Explicit Hubbard potential evaluation requires both density_override and potential_out.', &
+            __FILE__, __LINE__)
+      end if
+      emit_logs = .not. present(potential_out)
+      if (present(density_override) .and. trim(lower(this%hubbard_u_potential_form)) /= 'liechtenstein') then
+         call g_logger%fatal('Explicit density/potential snapshots are supported only for fixed Liechtenstein U/J.', &
+            __FILE__, __LINE__)
+      end if
+      if (present(density_override)) then
+         if (any(shape(density_override) /= shape(ldm))) then
+            call g_logger%fatal('Invalid explicit density shape for Hubbard potential evaluation.', __FILE__, __LINE__)
+         end if
+      end if
+      if (present(potential_out)) then
+         if (any(shape(potential_out) /= shape(this%hubbard_u_pot))) then
+            call g_logger%fatal('Invalid explicit potential output shape for Hubbard evaluation.', __FILE__, __LINE__)
+         end if
+         potential_out = 0.0_rp
+      else
+         this%hubbard_u_pot(:, :, :) = 0.0_rp
+      end if
       hub_u(:, :) = 0.0_rp
       hub_j(:, :) = 0.0_rp
       f(:, :, :) = 0.0_rp
@@ -200,7 +223,11 @@ contains
             do ispin = 1, 2
                do i = 1, 2*l + 1
                   do j = 1, 2*l + 1
-                     ldm(na, l + 1, ispin, i, j) = this%lattice%symbolic_atoms(na)%potential%ldm(l + 1, ispin, i, j)
+                     if (present(density_override)) then
+                        ldm(na, l + 1, ispin, i, j) = density_override(na, l + 1, ispin, i, j)
+                     else
+                        ldm(na, l + 1, ispin, i, j) = this%lattice%symbolic_atoms(na)%potential%ldm(l + 1, ispin, i, j)
+                     end if
                   end do
                end do
             end do
@@ -221,7 +248,7 @@ contains
                   ldm_max_abs = max(ldm_max_abs, abs(ldm(na, l, 2, i, j)))
                end do
             end do
-            if (rank == 0) then
+            if (rank == 0 .and. emit_logs) then
                call g_logger%info('HUBBARD_LDM type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
                   ' tr_up='//fmt('f10.6', ldm_trace_up)//' tr_dn='//fmt('f10.6', ldm_trace_dn)// &
                   ' maxabs='//fmt('es12.4', ldm_max_abs), __FILE__, __LINE__)
@@ -236,7 +263,7 @@ contains
                ql_occ_up = this%lattice%symbolic_atoms(na)%potential%ql(1, l - 1, 1)
                ql_occ_dn = this%lattice%symbolic_atoms(na)%potential%ql(1, l - 1, 2)
             end if
-            if (rank == 0) then
+            if (rank == 0 .and. emit_logs) then
                call g_logger%info('HUBBARD_QLCMP type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
                   ' ql_up='//fmt('f10.6', ql_occ_up)//' ql_dn='//fmt('f10.6', ql_occ_dn)// &
                   ' ldm_up='//fmt('f10.6', ldm_trace_up)//' ldm_dn='//fmt('f10.6', ldm_trace_dn)// &
@@ -455,7 +482,7 @@ contains
             vdiag_up_avg = vdiag_up_avg/real(max(1, m_max), rp)
             vdiag_dn_avg = vdiag_dn_avg/real(max(1, m_max), rp)
             vdiag_split = vdiag_up_avg - vdiag_dn_avg
-            if (rank == 0) then
+            if (rank == 0 .and. emit_logs) then
                call g_logger%info('HUBBARD_VDIAG type='//fmt('i4', na)//' l='//fmt('i2', l_index - 1)// &
                   ' avg_up='//fmt('f11.6', vdiag_up_avg)//' avg_dn='//fmt('f11.6', vdiag_dn_avg)// &
                   ' split(up-dn)='//fmt('f11.6', vdiag_split), __FILE__, __LINE__)
@@ -467,8 +494,13 @@ contains
          do l = 0, min(3, this%control%lmax)
             do i = 1, 2*l + 1
                do j = 1, 2*l + 1
-                  this%hubbard_u_pot(l**2 + i, l**2 + j, na) = hub_pot(na, l + 1, 1, i, j)
-                  this%hubbard_u_pot(l**2 + i + spin_off, l**2 + j + spin_off, na) = hub_pot(na, l + 1, 2, i, j)
+                  if (present(potential_out)) then
+                     potential_out(l**2 + i, l**2 + j, na) = hub_pot(na, l + 1, 1, i, j)
+                     potential_out(l**2 + i + spin_off, l**2 + j + spin_off, na) = hub_pot(na, l + 1, 2, i, j)
+                  else
+                     this%hubbard_u_pot(l**2 + i, l**2 + j, na) = hub_pot(na, l + 1, 1, i, j)
+                     this%hubbard_u_pot(l**2 + i + spin_off, l**2 + j + spin_off, na) = hub_pot(na, l + 1, 2, i, j)
+                  end if
                end do
             end do
          end do
@@ -478,10 +510,14 @@ contains
          hup_max_abs = 0.0_rp
          do i = 1, nb
             do j = 1, nb
-               hup_max_abs = max(hup_max_abs, abs(this%hubbard_u_pot(i, j, na)))
+               if (present(potential_out)) then
+                  hup_max_abs = max(hup_max_abs, abs(potential_out(i, j, na)))
+               else
+                  hup_max_abs = max(hup_max_abs, abs(this%hubbard_u_pot(i, j, na)))
+               end if
             end do
          end do
-         if (rank == 0) call g_logger%info('HUBBARD_POT type='//fmt('i4', na)//' maxabs='//fmt('es12.4', hup_max_abs), __FILE__, __LINE__)
+         if (rank == 0 .and. emit_logs) call g_logger%info('HUBBARD_POT type='//fmt('i4', na)//' maxabs='//fmt('es12.4', hup_max_abs), __FILE__, __LINE__)
       end do
 
       do na = 1, this%lattice%ntype

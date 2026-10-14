@@ -736,6 +736,12 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitLdaUOccupationProducers PROPERTIES LABELS "unit;lda_u;occupation;hermiticity")
   add_fortran_unit_test(UnitLdaUProjectorCommonFrozenH ${TestDIR}/validation/fixed_ldau/projector_common_frozen_h.f90)
   set_tests_properties(UnitLdaUProjectorCommonFrozenH PROPERTIES LABELS "unit;validation;lda_u;projector;frozen_h")
+  add_fortran_unit_test(UnitLdaUProjectorMultisiteFrozenH ${TestDIR}/validation/fixed_ldau/projector_multisite_frozen_h.f90)
+  set_tests_properties(UnitLdaUProjectorMultisiteFrozenH PROPERTIES LABELS "unit;validation;lda_u;projector;multisite;frozen_h")
+  if(ENABLE_MPI AND MPI_Fortran_FOUND)
+    add_fortran_unit_test(UnitLdaUFixedUResidualMPI ${TestDIR}/unit/test_ldau_fixed_u_residual_mpi.f90)
+    set_tests_properties(UnitLdaUFixedUResidualMPI PROPERTIES LABELS "unit;lda_u;convergence;mpi")
+  endif()
   add_fortran_unit_test(UnitLehmannChain ${TestDIR}/unit/test_lehmann_chain.f90)
   set_tests_properties(UnitLehmannChain PROPERTIES LABELS "unit;quick")
   add_fortran_unit_test(UnitSimpsonFTemperature ${TestDIR}/unit/test_simpson_f_temperature.f90)
@@ -1036,6 +1042,18 @@ if (RUN_UNIT_TESTS)
               $<TARGET_FILE:UnitKspaceOccupations> ${MPIEXEC_POSTFLAGS})
     set_tests_properties(UnitKspaceOccupations_mpi PROPERTIES
       LABELS "unit;gbt;wp2;mpi" PROCESSORS 2)
+    add_test(NAME UnitLdaUFixedUResidualMPI_mpi_2
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${_rslmto_mpi_unit_preflags}
+              $<TARGET_FILE:UnitLdaUFixedUResidualMPI> ${MPIEXEC_POSTFLAGS})
+    set_tests_properties(UnitLdaUFixedUResidualMPI_mpi_2 PROPERTIES
+      LABELS "unit;lda_u;convergence;mpi" PROCESSORS 2)
+    foreach(_projector_test IN ITEMS UnitLdaUProjectorCommonFrozenH UnitLdaUProjectorMultisiteFrozenH)
+      add_test(NAME "${_projector_test}_mpi_2"
+        COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${_rslmto_mpi_unit_preflags}
+                $<TARGET_FILE:${_projector_test}> ${MPIEXEC_POSTFLAGS})
+      set_tests_properties("${_projector_test}_mpi_2" PROPERTIES
+        LABELS "unit;lda_u;projector;mpi" PROCESSORS 2)
+    endforeach()
     foreach(_parallel_context_ranks IN ITEMS 1 2 4)
       add_test(NAME "UnitParallelContext_mpi_${_parallel_context_ranks}"
         COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${_parallel_context_ranks} ${_rslmto_mpi_unit_preflags}

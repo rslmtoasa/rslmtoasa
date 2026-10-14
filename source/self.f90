@@ -28,7 +28,7 @@ module self_mod
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
-   use string_mod, only: real2str, int2str, fmt, sl
+   use string_mod, only: real2str, int2str, fmt, sl, log2str
    use control_mod
    use lattice_mod
    use charge_mod
@@ -313,6 +313,29 @@ module self_mod
       logical :: use_kspace
       !> Cached reciprocal helper for k-space SCF branch (reused across iterations).
       type(reciprocal), allocatable :: reciprocal_scf_cache
+      !> Opt-in source-connected fixed-Liechtenstein trace. Empty unless the
+      !> RSLMTO_FIXED_U_TRACE environment variable names an output CSV file.
+      character(len=1024), private :: fixed_u_trace_filename = ''
+      character(len=128), private :: fixed_u_trace_run_id = 'run'
+      real(rp), private :: fixed_u_trace_lambda = 1.0_rp
+      logical, private :: fixed_u_trace_enabled = .false.
+      integer, private :: fixed_u_trace_iteration = 0
+      integer, private :: fixed_u_trace_selected_iteration = 0
+      integer, private :: fixed_u_trace_current_site = -1
+      logical, private :: fixed_u_trace_capture_radial_state = .false.
+      ! Full complex fixed-U convergence state.  These gates are inactive for
+      ! no-U, SC-U, +V, and non-Liechtenstein workflows.
+      logical, private :: fixed_u_residual_active = .false.
+      logical, private :: fixed_u_residual_converged = .false.
+      logical, private :: fixed_u_residual_physical = .false.
+      real(rp), private :: fixed_u_rp_abs = huge(1.0_rp)
+      real(rp), private :: fixed_u_rp_rel = huge(1.0_rp)
+      real(rp), private :: fixed_u_rv_abs = huge(1.0_rp)
+      real(rp), private :: fixed_u_rv_rel = huge(1.0_rp)
+      real(rp), private :: fixed_u_antiherm_p = huge(1.0_rp)
+      real(rp), private :: fixed_u_antiherm_v = huge(1.0_rp)
+      integer, private :: fixed_u_worst_site = 0
+      integer, private :: fixed_u_worst_l = -1
 
    contains
       procedure :: build_from_file
@@ -337,6 +360,19 @@ module self_mod
       procedure, private :: mix_magnetic_state
       procedure, private :: write_gbt_scf_diagnostics
       procedure, private :: run_scf
+      procedure, private :: initialize_fixed_u_trace
+      procedure, private :: reset_fixed_u_trace
+      procedure, private :: write_fixed_u_trace
+      procedure, private :: write_fixed_u_radial_trace
+      procedure, private :: write_fixed_u_kspace_trace
+      procedure, private :: write_fixed_u_rs_bonds
+      procedure, private :: write_fixed_u_csv_row
+      procedure, private :: write_fixed_u_total_energy
+      procedure, private :: write_fixed_u_radial_replay_input
+      procedure, private :: write_fixed_u_radial_replay_output
+      procedure, private :: verify_fixed_u_radial_replay
+      procedure, private :: update_fixed_u_residuals
+      procedure, private :: write_fixed_u_rs_green
       procedure, private :: atomsc
       procedure, private :: ftype
       procedure, private :: newrho
@@ -406,6 +442,815 @@ module self_mod
 
 contains
 
+   subroutine initialize_fixed_u_trace(this)
+      class(self), intent(inout) :: this
+      character(len=1024) :: trace_path
+      character(len=128) :: trace_value
+      integer :: ios, unit
+
+      this%fixed_u_trace_enabled = .false.
+      this%fixed_u_trace_filename = ''
+      if (.not. this%hamiltonian%hubbard_u_general_check .or. &
+          trim(this%hamiltonian%hubbard_u_potential_form) /= 'liechtenstein') return
+      call get_environment_variable('RSLMTO_FIXED_U_TRACE', trace_path, status=ios)
+      if (ios /= 0 .or. len_trim(trace_path) == 0) return
+      call get_environment_variable('RSLMTO_FIXED_U_RUN_ID', trace_value, status=ios)
+      if (ios == 0 .and. len_trim(trace_value) > 0) this%fixed_u_trace_run_id = trim(trace_value)
+      call get_environment_variable('RSLMTO_FIXED_U_LAMBDA', trace_value, status=ios)
+      if (ios == 0 .and. len_trim(trace_value) > 0) read(trace_value, *, iostat=ios) this%fixed_u_trace_lambda
+      ! Zero selects rolling-last mode: the trace file is replaced at each
+      ! iteration start, leaving the last completed iteration on disk.
+      this%fixed_u_trace_selected_iteration = 0
+      call get_environment_variable('RSLMTO_FIXED_U_TRACE_ITERATION', trace_value, status=ios)
+      if (ios == 0 .and. len_trim(trace_value) > 0) &
+         read(trace_value, *, iostat=ios) this%fixed_u_trace_selected_iteration
+      this%fixed_u_trace_filename = trim(trace_path)
+      this%fixed_u_trace_enabled = .true.
+      if (rank /= 0) return
+      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='replace', action='write', iostat=ios)
+      if (ios /= 0) then
+         this%fixed_u_trace_enabled = .false.
+         call g_logger%warning('Could not create RSLMTO_FIXED_U_TRACE output; trace disabled.', __FILE__, __LINE__)
+         return
+      end if
+      write(unit, '(a)') 'kind,run_id,lambda,iteration,stage,site,type,l,spin,k,band,row,col,order,weight,energy,scalar,re,im'
+      close(unit)
+   end subroutine initialize_fixed_u_trace
+
+   subroutine reset_fixed_u_trace(this)
+      class(self), intent(in) :: this
+      integer :: unit, ios
+      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
+      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='replace', action='write', iostat=ios)
+      if (ios /= 0) return
+      write(unit, '(a)') 'kind,run_id,lambda,iteration,stage,site,type,l,spin,k,band,row,col,order,weight,energy,scalar,re,im'
+      close(unit)
+   end subroutine reset_fixed_u_trace
+
+   subroutine write_fixed_u_csv_row(this, unit, kind, iteration, stage, site, type_id, ell, spin, k, band, &
+                                    row, col, order, weight, energy_value, scalar, re, im)
+      class(self), intent(in) :: this
+      integer, intent(in) :: unit, iteration, site, type_id, ell, spin, k, band, row, col, order
+      character(len=*), intent(in) :: kind, stage
+      real(rp), intent(in) :: weight, energy_value, scalar, re, im
+      write(unit, '(a,",",a,",",es24.16,",",i0,",",a,",",9(i0,","),es24.16,",",es24.16,",",es24.16,",",es24.16,",",es24.16)') &
+         trim(kind), trim(this%fixed_u_trace_run_id), this%fixed_u_trace_lambda, iteration, trim(stage), &
+         site, type_id, ell, spin, k, band, row, col, order, weight, energy_value, scalar, re, im
+   end subroutine write_fixed_u_csv_row
+
+   subroutine write_fixed_u_trace(this, stage)
+      class(self), intent(inout) :: this
+      character(len=*), intent(in) :: stage
+      integer :: unit, ios, ia, l, spin, i, j, site_type, plusbulk
+      complex(rp) :: z
+      real(rp) :: center, q0, q2
+
+      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
+      if (this%fixed_u_trace_selected_iteration > 0 .and. &
+          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) return
+      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
+           action='write', iostat=ios)
+      if (ios /= 0) return
+
+      do ia = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + ia
+         do l = 0, this%symbolic_atom(plusbulk)%potential%lmax
+            do spin = 1, 2
+               do i = 1, 2*l + 1
+                  do j = 1, 2*l + 1
+                     z = this%symbolic_atom(plusbulk)%potential%ldm(l + 1, spin, i, j)
+                     call this%write_fixed_u_csv_row(unit, 'ldm', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
+                        this%lattice%iz(ia), l, spin, -1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
+                        real(z, rp), aimag(z))
+                  end do
+               end do
+            end do
+            do spin = 1, 2
+               center = this%symbolic_atom(plusbulk)%potential%gravity_center(l + 1, spin) + &
+                        this%symbolic_atom(plusbulk)%potential%vmad
+               q0 = this%symbolic_atom(plusbulk)%potential%ql(1, l, spin)
+               q2 = this%symbolic_atom(plusbulk)%potential%ql(3, l, spin)
+               call this%write_fixed_u_csv_row(unit, 'ql', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
+                  this%lattice%iz(ia), l, spin, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, q0, 0.0_rp, 0.0_rp)
+               call this%write_fixed_u_csv_row(unit, 'radial_moment', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
+                  this%lattice%iz(ia), l, spin, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, q0, 0.0_rp, 0.0_rp)
+               call this%write_fixed_u_csv_row(unit, 'radial_moment', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
+                  this%lattice%iz(ia), l, spin, -1, -1, -1, -1, 1, 0.0_rp, center, q0*center, 0.0_rp, 0.0_rp)
+               call this%write_fixed_u_csv_row(unit, 'radial_moment', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
+                  this%lattice%iz(ia), l, spin, -1, -1, -1, -1, 2, 0.0_rp, center**2 + q2, &
+                  q0*(center**2 + q2), 0.0_rp, 0.0_rp)
+               call this%write_fixed_u_csv_row(unit, 'radial_parameter', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
+                  this%lattice%iz(ia), l, spin, -1, -1, -1, -1, -1, 0.0_rp, &
+                  this%symbolic_atom(plusbulk)%potential%gravity_center(l + 1, spin), 0.0_rp, 0.0_rp, 0.0_rp)
+               call this%write_fixed_u_csv_row(unit, 'radial_parameter', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
+                  this%lattice%iz(ia), l, spin, -1, -1, -1, -1, 3, 0.0_rp, 0.0_rp, q2, 0.0_rp, 0.0_rp)
+            end do
+         end do
+      end do
+
+      if (allocated(this%hamiltonian%hubbard_u_pot)) then
+         do site_type = 1, size(this%hamiltonian%hubbard_u_pot, 3)
+            do i = 1, size(this%hamiltonian%hubbard_u_pot, 1)
+               do j = 1, size(this%hamiltonian%hubbard_u_pot, 2)
+                  z = this%hamiltonian%hubbard_u_pot(i, j, site_type)
+                  call this%write_fixed_u_csv_row(unit, 'v_hub', this%fixed_u_trace_iteration, trim(stage), &
+                     -1, site_type, -1, 0, -1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
+                     real(z, rp), aimag(z))
+               end do
+            end do
+         end do
+      end if
+      if (allocated(this%hamiltonian%ee)) then
+         do site_type = 1, size(this%hamiltonian%ee, 4)
+            do i = 1, size(this%hamiltonian%ee, 1)
+               do j = 1, size(this%hamiltonian%ee, 2)
+                  z = this%hamiltonian%ee(i, j, 1, site_type)
+                  call this%write_fixed_u_csv_row(unit, 'h_total', this%fixed_u_trace_iteration, trim(stage), &
+                     -1, site_type, -1, 0, -1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
+                     real(z, rp), aimag(z))
+               end do
+            end do
+         end do
+      end if
+      if (stage == 'Pin_H' .and. allocated(this%hamiltonian%ee)) call this%write_fixed_u_rs_bonds(unit)
+      if (stage == 'P_OUT' .and. .not. this%use_kspace) call this%write_fixed_u_rs_green(unit)
+      close(unit)
+   end subroutine write_fixed_u_trace
+
+   subroutine write_fixed_u_rs_bonds(this, unit)
+      class(self), intent(in) :: this
+      integer, intent(in) :: unit
+      integer :: ntype, isite, ia, ja, jsite, ineigh, nr, i, j, coord
+      complex(rp) :: z
+      real(rp) :: r_direct(3)
+
+      ! Export fractional direct vectors without invoking clusba: clusba
+      ! updates lattice%sbarvec, so even a diagnostic trace must not call it.
+
+      do ntype = 1, this%lattice%ntype
+         ia = this%lattice%atlist(ntype)
+         nr = this%lattice%nn(ia, 1)
+         do ineigh = 1, nr
+            do i = 1, size(this%hamiltonian%ee, 1)
+               do j = 1, size(this%hamiltonian%ee, 2)
+                  z = this%hamiltonian%ee(i, j, ineigh, ntype)
+                  call this%write_fixed_u_csv_row(unit, 'rs_hopping', this%fixed_u_trace_iteration, 'RS_OPERATOR', &
+                     -1, ntype - 1, -1, -1, -1, ineigh - 1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
+                     real(z, rp), aimag(z))
+               end do
+            end do
+         end do
+      end do
+
+      do isite = 1, this%lattice%nrec
+         ntype = this%lattice%ib(isite)
+         ia = this%lattice%atlist(ntype)
+         nr = this%lattice%nn(ia, 1)
+         do ineigh = 1, nr
+            if (ineigh == 1) then
+               jsite = isite
+               r_direct = 0.0_rp
+            else
+               ja = this%lattice%nn(ia, ineigh)
+               if (ja < 1 .or. ja > this%lattice%kk) cycle
+               jsite = this%lattice%iz(ja)
+               if (jsite < 1 .or. jsite > this%lattice%nrec) cycle
+               if (this%lattice%a_cart_inv_ready) then
+                  r_direct = matmul(this%lattice%a_cart_inv, &
+                                    this%lattice%cr(:, ja) - this%lattice%cr(:, ia))
+               else
+                  r_direct = matmul(inverse_3x3(this%lattice%a), &
+                                    this%lattice%cr(:, ja) - this%lattice%cr(:, ia))
+               end if
+            end if
+            do coord = 1, 3
+               call this%write_fixed_u_csv_row(unit, 'rs_bond_map', this%fixed_u_trace_iteration, 'RS_OPERATOR', &
+                  isite - 1, ntype - 1, -1, -1, -1, ineigh - 1, -1, jsite - 1, coord - 1, 0.0_rp, &
+                  r_direct(coord), 0.0_rp, 0.0_rp, 0.0_rp)
+            end do
+         end do
+      end do
+   end subroutine write_fixed_u_rs_bonds
+
+   subroutine write_fixed_u_radial_trace(this, atom, isite, v, rofi, rho_in, rho_out)
+      class(self), intent(in) :: this
+      class(symbolic_atom), intent(in) :: atom
+      integer, intent(in) :: isite
+      real(rp), intent(in) :: v(:, :), rofi(:)
+      real(rp), intent(in) :: rho_in(:, :), rho_out(:, :)
+      integer :: unit, ios, ir, spin
+
+      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
+      if (this%fixed_u_trace_selected_iteration > 0 .and. &
+          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) return
+      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
+           action='write', iostat=ios)
+      if (ios /= 0) return
+      do ir = 1, size(rofi)
+         do spin = 1, size(v, 2)
+            call this%write_fixed_u_csv_row(unit, 'radial_v', this%fixed_u_trace_iteration, 'POST_ATOMSC', &
+               isite, this%lattice%iz(isite), -1, spin - 1, -1, -1, ir - 1, spin - 1, 0, 0.0_rp, &
+               rofi(ir), v(ir, spin), 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'radial_density_in', this%fixed_u_trace_iteration, 'POST_ATOMSC', &
+               isite, this%lattice%iz(isite), -1, spin - 1, -1, -1, ir - 1, spin - 1, 0, 0.0_rp, &
+               rofi(ir), rho_in(ir, spin), 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'radial_density_out', this%fixed_u_trace_iteration, 'POST_ATOMSC', &
+               isite, this%lattice%iz(isite), -1, spin - 1, -1, -1, ir - 1, spin - 1, 0, 0.0_rp, &
+               rofi(ir), rho_out(ir, spin), 0.0_rp, 0.0_rp)
+         end do
+      end do
+      call energy_row('sum_ev', atom%potential%SUMEV)
+      call energy_row('sum_ec', atom%potential%SUMEC)
+      call energy_row('ekin', atom%potential%EKIN)
+      call energy_row('utot', atom%potential%UTOT)
+      call energy_row('rhoeps', atom%potential%RHOEPS)
+      call energy_row('etot_site', atom%potential%ETOT)
+      close(unit)
+   contains
+      subroutine energy_row(label, energy_value)
+         character(len=*), intent(in) :: label
+         real(rp), intent(in) :: energy_value
+         call this%write_fixed_u_csv_row(unit, label, this%fixed_u_trace_iteration, 'POST_ATOMSC', &
+            isite, this%lattice%iz(isite), -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, energy_value, 0.0_rp, 0.0_rp)
+      end subroutine energy_row
+   end subroutine write_fixed_u_radial_trace
+
+   subroutine write_fixed_u_radial_replay_input(this, atom, rofi, v, rho_in, pl, ql, tol)
+      class(self), intent(in) :: this
+      class(symbolic_atom), intent(in) :: atom
+      real(rp), intent(in) :: rofi(:), v(:, :), rho_in(:, :), pl(:, :), ql(:, :, :), tol
+      integer :: unit, ios, ir, spin, ell
+
+      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
+      if (this%fixed_u_trace_selected_iteration > 0 .and. &
+          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) return
+      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
+           action='write', iostat=ios)
+      if (ios /= 0) return
+      call meta('radial_A', atom%A)
+      call meta('radial_B', atom%B())
+      call meta('radial_Z', atom%element%atomic_number)
+      call meta('radial_tolerance', tol)
+      call meta('radial_NR', real(size(rofi), rp))
+      call meta('radial_lmax', real(atom%potential%lmax, rp))
+      call meta('radial_nsp', real(size(v, 2), rp))
+      call meta('radial_f_core', real(atom%element%f_core, rp))
+      call meta('radial_replay_vmad', atom%potential%vmad)
+      do ir = 1, size(rofi)
+         do spin = 1, size(v, 2)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_mesh', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
+               this%fixed_u_trace_current_site - 1, -1, -1, spin - 1, -1, -1, ir - 1, spin - 1, 0, &
+               0.0_rp, rofi(ir), 0.0_rp, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_v', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
+               this%fixed_u_trace_current_site - 1, -1, -1, spin - 1, -1, -1, ir - 1, spin - 1, 0, &
+               0.0_rp, rofi(ir), v(ir, spin), 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_rho_in', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
+               this%fixed_u_trace_current_site - 1, -1, -1, spin - 1, -1, -1, ir - 1, spin - 1, 0, &
+               0.0_rp, rofi(ir), rho_in(ir, spin), 0.0_rp, 0.0_rp)
+         end do
+      end do
+      do ell = 0, atom%potential%lmax
+         do spin = 1, size(pl, 2)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_pl', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
+               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
+               0.0_rp, 0.0_rp, pl(ell + 1, spin), 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_pnu', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
+               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
+               0.0_rp, 0.0_rp, atom%potential%pnu(ell, spin), 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_enu', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
+               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
+               0.0_rp, 0.0_rp, atom%potential%enu(ell, spin), 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_gravity_center', this%fixed_u_trace_iteration, &
+               'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
+               0.0_rp, 0.0_rp, atom%potential%gravity_center(ell + 1, spin), 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_band_center', this%fixed_u_trace_iteration, &
+               'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
+               0.0_rp, 0.0_rp, atom%potential%gravity_center(ell + 1, spin) + atom%potential%vmad, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_c', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
+               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
+               0.0_rp, 0.0_rp, atom%potential%c(ell, spin), 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_qpar', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
+               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
+               0.0_rp, 0.0_rp, atom%potential%qpar(ell, spin), 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_srdel', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
+               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
+               0.0_rp, 0.0_rp, atom%potential%srdel(ell, spin), 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_ql', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
+               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
+               0.0_rp, 0.0_rp, ql(1, ell + 1, spin), 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_ql', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
+               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 1, &
+               0.0_rp, 0.0_rp, ql(2, ell + 1, spin), 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_ql', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
+               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 2, &
+               0.0_rp, 0.0_rp, ql(3, ell + 1, spin), 0.0_rp, 0.0_rp)
+         end do
+      end do
+      close(unit)
+   contains
+      subroutine meta(kind, value)
+         character(len=*), intent(in) :: kind
+         real(rp), intent(in) :: value
+         call this%write_fixed_u_csv_row(unit, kind, this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
+            this%fixed_u_trace_current_site - 1, -1, -1, -1, -1, -1, -1, -1, 0, &
+            0.0_rp, 0.0_rp, value, 0.0_rp, 0.0_rp)
+      end subroutine meta
+   end subroutine write_fixed_u_radial_replay_input
+
+   subroutine write_fixed_u_radial_replay_output(this, rho, sumec, sumev)
+      class(self), intent(in) :: this
+      real(rp), intent(in) :: rho(:, :), sumec(:), sumev(:)
+      integer :: unit, ios, ir, spin
+
+      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
+      if (this%fixed_u_trace_selected_iteration > 0 .and. &
+          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) return
+      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
+           action='write', iostat=ios)
+      if (ios /= 0) return
+      do ir = 1, size(rho, 1)
+         do spin = 1, size(rho, 2)
+            call this%write_fixed_u_csv_row(unit, 'radial_replay_rho_out', this%fixed_u_trace_iteration, &
+               'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, -1, -1, spin - 1, -1, -1, &
+               ir - 1, spin - 1, 0, 0.0_rp, 0.0_rp, rho(ir, spin), 0.0_rp, 0.0_rp)
+         end do
+      end do
+      do spin = 1, size(rho, 2)
+         call this%write_fixed_u_csv_row(unit, 'radial_replay_sumec', this%fixed_u_trace_iteration, &
+            'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, -1, -1, spin - 1, -1, -1, &
+            -1, -1, 0, 0.0_rp, 0.0_rp, sumec(spin), 0.0_rp, 0.0_rp)
+         call this%write_fixed_u_csv_row(unit, 'radial_replay_sumev', this%fixed_u_trace_iteration, &
+            'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, -1, -1, spin - 1, -1, -1, &
+            -1, -1, 0, 0.0_rp, 0.0_rp, sumev(spin), 0.0_rp, 0.0_rp)
+      end do
+      close(unit)
+   end subroutine write_fixed_u_radial_replay_output
+
+   subroutine verify_fixed_u_radial_replay(this, atom, z, lmax, a, b, nr, rofi, v, rho_in, rho_actual, pl, ql, &
+                                           sumec_actual, sumev_actual, ec_seed, ev_seed, ec_actual, ev_actual, &
+                                           ncore, nval, tol)
+      class(self), intent(in) :: this
+      class(symbolic_atom), intent(in) :: atom
+      integer, intent(in) :: lmax, nr, ncore, nval
+      real(rp), intent(in) :: z, a, b, rofi(nr), v(nr, 2), rho_in(nr, 2), rho_actual(nr, 2)
+      real(rp), intent(in) :: pl(lmax + 1, 2), ql(3, lmax + 1, 2), sumec_actual(2), sumev_actual(2)
+      real(rp), intent(in) :: ec_seed(:), ev_seed(:), ec_actual(:), ev_actual(:), tol
+      type(self) :: replay_state
+      type(symbolic_atom) :: replay_atom
+      real(rp), allocatable :: rho_replay(:, :), sumec_replay(:), sumev_replay(:), ec_replay(:), ev_replay(:)
+      integer :: unit, ios
+      real(rp) :: rho_error, sumec_error, sumev_error, ev_error, ec_error
+
+      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
+      if (this%fixed_u_trace_selected_iteration > 0 .and. &
+          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) return
+      if (size(ec_seed) < ncore .or. size(ev_seed) < nval .or. size(ec_actual) < ncore .or. size(ev_actual) < nval) &
+         error stop 'verify_fixed_u_radial_replay: inconsistent seed/output sizes'
+
+      ! Repeat the unchanged production NEWRHO call against the exact accepted
+      ! atom and input arrays.  The independent scratch object and atom copy
+      ! keep this diagnostic replay from changing the live SCF state.
+      replay_atom = atom
+      replay_state%control => this%control
+      allocate(replay_state%vtn(nr, 2), replay_state%vzt(nr, 2), &
+               replay_state%fun2(nr, lmax + 1, 2), replay_state%phi_amp(nr, lmax + 1, 2))
+      replay_state%vtn = 0.0_rp
+      replay_state%vzt = 0.0_rp
+      replay_state%fun2 = 0.0_rp
+      replay_state%phi_amp = 0.0_rp
+      allocate(rho_replay(nr, 2), sumec_replay(2), sumev_replay(2), &
+               ec_replay(max(ncore, 1)), ev_replay(max(nval, 1)))
+      rho_replay = 0.0_rp
+      sumec_replay = 0.0_rp
+      sumev_replay = 0.0_rp
+      if (ncore > 0) ec_replay(1:ncore) = ec_seed(1:ncore)
+      if (nval > 0) ev_replay(1:nval) = ev_seed(1:nval)
+      call replay_state%newrho(replay_atom, z, lmax, a, b, nr, rofi, v, rho_replay, pl, ql, &
+                               sumec_replay, sumev_replay, ec_replay, ev_replay, tol, 2, 0)
+      rho_error = maxval(abs(rho_replay - rho_actual))
+      sumec_error = maxval(abs(sumec_replay - sumec_actual))
+      sumev_error = maxval(abs(sumev_replay - sumev_actual))
+      ev_error = 0.0_rp
+      ec_error = 0.0_rp
+      if (nval > 0) ev_error = maxval(abs(ev_replay(1:nval) - ev_actual(1:nval)))
+      if (ncore > 0) ec_error = maxval(abs(ec_replay(1:ncore) - ec_actual(1:ncore)))
+
+      deallocate(replay_state%vtn, replay_state%vzt, replay_state%fun2, replay_state%phi_amp)
+
+      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
+           action='write', iostat=ios)
+      if (ios == 0) then
+         call result('rho_max_abs', rho_error, 0)
+         call result('sumec_max_abs_ry', sumec_error, 1)
+         call result('sumev_max_abs_ry', sumev_error, 2)
+         call result('ec_max_abs_ry', ec_error, 3)
+         call result('ev_max_abs_ry', ev_error, 4)
+         close(unit)
+      end if
+   contains
+      subroutine result(label, value, result_index)
+         character(len=*), intent(in) :: label
+         real(rp), intent(in) :: value
+         integer, intent(in) :: result_index
+         call this%write_fixed_u_csv_row(unit, 'radial_replay_'//trim(label), this%fixed_u_trace_iteration, &
+            'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, -1, -1, -1, -1, -1, -1, -1, &
+            result_index, 0.0_rp, 0.0_rp, value, 0.0_rp, 0.0_rp)
+      end subroutine result
+   end subroutine verify_fixed_u_radial_replay
+
+   subroutine update_fixed_u_residuals(this)
+      class(self), intent(inout) :: this
+      complex(rp), allocatable :: density_override(:, :, :, :, :), vout(:, :, :)
+      complex(rp), allocatable :: p_in(:, :, :, :), p_out(:, :, :, :), v_in(:, :, :, :), v_out(:, :, :, :)
+      integer, allocatable :: site_for_type(:)
+      integer :: nsite, ntype, block, isite, itype, il, ispin, mmax, i, j, flat, orbital_i, orbital_j, worst_block
+      integer :: worst_l, worst_site, unit, ios
+      real(rp) :: rp_abs, rp_rel, rv_abs, rv_rel, antiherm_p, antiherm_v, u_value, j_value
+      logical :: active, physical
+
+      this%fixed_u_residual_active = .false.
+      this%fixed_u_residual_converged = .false.
+      this%fixed_u_residual_physical = .false.
+      if (.not. this%hamiltonian%hubbard_u_general_check .or. &
+          trim(this%hamiltonian%hubbard_u_potential_form) /= 'liechtenstein' .or. &
+          this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
+         this%mix%fixed_u_stable_updates = 0
+         return
+      end if
+
+      nsite = this%lattice%nrec
+      ntype = this%lattice%ntype
+      if (nsite < 1 .or. ntype < 1) return
+      allocate(site_for_type(ntype))
+      site_for_type = 0
+      do isite = 1, nsite
+         itype = this%lattice%ib(isite)
+         if (itype >= 1 .and. itype <= ntype .and. site_for_type(itype) == 0) site_for_type(itype) = isite
+      end do
+
+      active = .false.
+      do itype = 1, ntype
+         do il = 1, 4
+            u_value = 0.0_rp
+            j_value = 0.0_rp
+            if (allocated(this%lattice%symbolic_atoms(itype)%potential%hubbard_u)) then
+               if (il <= size(this%lattice%symbolic_atoms(itype)%potential%hubbard_u)) &
+                  u_value = this%lattice%symbolic_atoms(itype)%potential%hubbard_u(il)
+            end if
+            if (allocated(this%lattice%symbolic_atoms(itype)%potential%hubbard_j)) then
+               if (il <= size(this%lattice%symbolic_atoms(itype)%potential%hubbard_j)) &
+                  j_value = this%lattice%symbolic_atoms(itype)%potential%hubbard_j(il)
+            end if
+            if (abs(u_value) > 1.0e-10_rp .or. abs(j_value) > 1.0e-10_rp) active = .true.
+         end do
+      end do
+      if (.not. active) then
+         this%mix%fixed_u_stable_updates = 0
+         return
+      end if
+      this%fixed_u_residual_active = .true.
+      if (.not. allocated(this%hamiltonian%hubbard_u_pot)) &
+         error stop 'active fixed-U residual: Hubbard potential is not allocated'
+
+      allocate(density_override(ntype, 4, 2, 7, 7), vout(nb, nb, ntype))
+      allocate(p_in(nsite*4, 2, 7, 7), p_out(nsite*4, 2, 7, 7), &
+               v_in(nsite*4, 2, 7, 7), v_out(nsite*4, 2, 7, 7))
+      density_override = 0.0_rp
+      vout = 0.0_rp
+      p_in = 0.0_rp
+      p_out = 0.0_rp
+      v_in = 0.0_rp
+      v_out = 0.0_rp
+
+      ! The production Hubbard operator is type-local. Use the same first
+      ! site-of-type density convention for its read-only Pout evaluation;
+      ! residuals below remain site-resolved using each site's own P matrices.
+      do itype = 1, ntype
+         isite = site_for_type(itype)
+         if (isite == 0) cycle
+         do il = 1, 4
+            mmax = 2*il - 1
+            do ispin = 1, 2
+               do i = 1, mmax
+                  do j = 1, mmax
+                     flat = (i - 1)*mmax + j
+                     density_override(itype, il, ispin, i, j) = this%mix%ldm_new(isite, il, ispin, flat)
+                  end do
+               end do
+            end do
+         end do
+      end do
+      call this%hamiltonian%calculate_hubbard_u_potential_general( &
+         density_override=density_override, potential_out=vout)
+
+      do isite = 1, nsite
+         itype = this%lattice%ib(isite)
+         do il = 1, 4
+            u_value = 0.0_rp
+            j_value = 0.0_rp
+            if (allocated(this%lattice%symbolic_atoms(itype)%potential%hubbard_u)) then
+               if (il <= size(this%lattice%symbolic_atoms(itype)%potential%hubbard_u)) &
+                  u_value = this%lattice%symbolic_atoms(itype)%potential%hubbard_u(il)
+            end if
+            if (allocated(this%lattice%symbolic_atoms(itype)%potential%hubbard_j)) then
+               if (il <= size(this%lattice%symbolic_atoms(itype)%potential%hubbard_j)) &
+                  j_value = this%lattice%symbolic_atoms(itype)%potential%hubbard_j(il)
+            end if
+            if (abs(u_value) <= 1.0e-10_rp .and. abs(j_value) <= 1.0e-10_rp) cycle
+            block = (il - 1)*nsite + isite
+            mmax = 2*il - 1
+            do ispin = 1, 2
+               do i = 1, mmax
+                  do j = 1, mmax
+                     flat = (i - 1)*mmax + j
+                     p_in(block, ispin, i, j) = this%mix%ldm_old(isite, il, ispin, flat)
+                     p_out(block, ispin, i, j) = this%mix%ldm_new(isite, il, ispin, flat)
+                     orbital_i = (il - 1)**2 + i + (ispin - 1)*spin_off
+                     orbital_j = (il - 1)**2 + j + (ispin - 1)*spin_off
+                     v_in(block, ispin, i, j) = this%hamiltonian%hubbard_u_pot(orbital_i, orbital_j, itype)
+                     v_out(block, ispin, i, j) = vout(orbital_i, orbital_j, itype)
+                  end do
+               end do
+            end do
+         end do
+      end do
+
+      call fixed_u_residual_metrics(p_in, p_out, v_in, v_out, rp_abs, rp_rel, rv_abs, rv_rel, &
+                                    physical, antiherm_p, antiherm_v, worst_block)
+      if (worst_block > 0) then
+         worst_site = mod(worst_block - 1, nsite) + 1
+         worst_l = (worst_block - 1)/nsite
+      else
+         worst_site = 0
+         worst_l = -1
+      end if
+      this%fixed_u_rp_abs = rp_abs
+      this%fixed_u_rp_rel = rp_rel
+      this%fixed_u_rv_abs = rv_abs
+      this%fixed_u_rv_rel = rv_rel
+      this%fixed_u_antiherm_p = antiherm_p
+      this%fixed_u_antiherm_v = antiherm_v
+      this%fixed_u_worst_site = worst_site
+      this%fixed_u_worst_l = worst_l
+      this%fixed_u_residual_physical = physical
+      call this%mix%advance_fixed_u_convergence(rp_abs, rv_abs, physical, this%fixed_u_residual_converged)
+      if (rank == 0) then
+         call g_logger%info('FIXED_U_RESIDUAL rp_abs='//fmt('es12.4',rp_abs)//' rp_rel='//fmt('es12.4',rp_rel)// &
+            ' rv_abs_Ry='//fmt('es12.4',rv_abs)//' rv_rel='//fmt('es12.4',rv_rel)// &
+            ' antiherm_P='//fmt('es12.4',antiherm_p)//' antiherm_V='//fmt('es12.4',antiherm_v)// &
+            ' physical='//trim(log2str(physical))//' streak='//int2str(this%mix%fixed_u_stable_updates)// &
+            ' worst_site='//int2str(worst_site)//' l='//int2str(worst_l), __FILE__, __LINE__)
+      end if
+      if (this%fixed_u_trace_enabled .and. rank == 0) then
+         open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
+              action='write', iostat=ios)
+         if (ios == 0) then
+            call this%write_fixed_u_csv_row(unit, 'fixed_u_rp_abs', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
+               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, rp_abs, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'fixed_u_rp_rel', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
+               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, rp_rel, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'fixed_u_rv_abs_ry', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
+               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, rv_abs, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'fixed_u_rv_rel', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
+               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, rv_rel, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'fixed_u_antiherm_p', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
+               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, antiherm_p, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'fixed_u_antiherm_v', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
+               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, antiherm_v, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'fixed_u_physical', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
+               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, merge(1.0_rp,0.0_rp,physical), &
+               0.0_rp, 0.0_rp)
+            close(unit)
+         end if
+      end if
+      deallocate(site_for_type, density_override, vout, p_in, p_out, v_in, v_out)
+   end subroutine update_fixed_u_residuals
+
+   subroutine write_fixed_u_total_energy(this)
+      class(self), intent(in) :: this
+      integer :: unit, ios
+      real(rp) :: value
+
+      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
+      if (this%fixed_u_trace_selected_iteration > 0 .and. &
+          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) return
+      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
+           action='write', iostat=ios)
+      if (ios /= 0) return
+      value = sum(this%symbolic_atom(:)%potential%sumev)
+      call total_row('sum_ev', value)
+      value = sum(this%symbolic_atom(:)%potential%sumec)
+      call total_row('sum_ec', value)
+      value = sum(this%symbolic_atom(:)%potential%ekin)
+      call total_row('ekin', value)
+      value = sum(this%symbolic_atom(:)%potential%utot)
+      call total_row('utot', value)
+      value = sum(this%symbolic_atom(:)%potential%rhoeps)
+      call total_row('rhoeps', value)
+      value = sum(this%symbolic_atom(:)%potential%etot)
+      call total_row('etot_total', value)
+      close(unit)
+   contains
+      subroutine total_row(label, energy_value)
+         character(len=*), intent(in) :: label
+         real(rp), intent(in) :: energy_value
+         call this%write_fixed_u_csv_row(unit, label, this%fixed_u_trace_iteration, 'POST_SCF_RADIAL', &
+            -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, energy_value, 0.0_rp, 0.0_rp)
+      end subroutine total_row
+   end subroutine write_fixed_u_total_energy
+
+   subroutine write_fixed_u_kspace_trace(this, capture_spectrum)
+      class(self), intent(inout) :: this
+      logical, intent(in) :: capture_spectrum
+      integer :: unit, ios, ik, ig, ib, i, j, n, nsite, nper_spin, base, m, spin, ell
+      real(rp) :: kt, occ
+      complex(rp) :: z
+
+      if (.not. this%fixed_u_trace_enabled) return
+      if (rank /= 0) return
+      if (this%fixed_u_trace_selected_iteration > 0 .and. &
+          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) then
+         call g_logger%warning('Fixed-U k-space trace skipped: selected iteration mismatch.', __FILE__, __LINE__)
+         return
+      end if
+      if (.not. allocated(this%reciprocal_scf_cache)) then
+         call g_logger%warning('Fixed-U k-space trace skipped: reciprocal cache is not allocated.', __FILE__, __LINE__)
+         return
+      end if
+      if (capture_spectrum .and. (.not. allocated(this%reciprocal_scf_cache%eigenvalues) .or. &
+          .not. allocated(this%reciprocal_scf_cache%eigenvectors))) then
+         call g_logger%warning('Fixed-U k-space spectrum trace skipped: eigenpairs are not allocated.', __FILE__, __LINE__)
+         return
+      end if
+      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
+           action='write', iostat=ios)
+      if (ios /= 0) return
+      kt = max(this%reciprocal_scf_cache%temperature*kB_Ry_per_K, 1.0e-10_rp)
+      if (allocated(this%reciprocal_scf_cache%hk_bulk)) then
+         n = size(this%reciprocal_scf_cache%hk_bulk, 1)
+      else if (allocated(this%reciprocal_scf_cache%eigenvectors)) then
+         n = size(this%reciprocal_scf_cache%eigenvectors, 1)
+      else
+         call g_logger%warning('Fixed-U k-space trace skipped: neither Hamiltonian nor eigenvectors are allocated.', &
+                               __FILE__, __LINE__)
+         close(unit)
+         return
+      end if
+      nsite = this%lattice%nrec
+      nper_spin = n/(2*nsite)
+      if (capture_spectrum) then
+         call this%write_fixed_u_csv_row(unit, 'fermi_level', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
+            -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
+            this%reciprocal_scf_cache%fermi_level, 0.0_rp, 0.0_rp)
+         call this%write_fixed_u_csv_row(unit, 'temperature_k', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
+            -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
+            this%reciprocal_scf_cache%temperature, 0.0_rp, 0.0_rp)
+         call this%write_fixed_u_csv_row(unit, 'temperature_ry', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
+            -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, kt, 0.0_rp, 0.0_rp)
+         do ik = 1, size(this%reciprocal_scf_cache%eigenvalues, 2)
+            ig = k_global_index(ik)
+            do ib = 1, size(this%reciprocal_scf_cache%eigenvalues, 1)
+               occ = fermi_dirac_occupation(this%reciprocal_scf_cache%eigenvalues(ib, ik), &
+                                            this%reciprocal_scf_cache%fermi_level, kt)
+               call this%write_fixed_u_csv_row(unit, 'eigenvalue', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
+                  -1, -1, -1, -1, ig - 1, ib - 1, -1, -1, 0, 0.0_rp, &
+                  this%reciprocal_scf_cache%eigenvalues(ib, ik), 0.0_rp, 0.0_rp, 0.0_rp)
+               call this%write_fixed_u_csv_row(unit, 'occupation', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
+                  -1, -1, -1, -1, ig - 1, ib - 1, -1, -1, 0, 0.0_rp, 0.0_rp, occ, 0.0_rp, 0.0_rp)
+               do i = 1, size(this%reciprocal_scf_cache%eigenvectors, 1)
+                  z = this%reciprocal_scf_cache%eigenvectors(i, ib, ik)
+                  call this%write_fixed_u_csv_row(unit, 'eigenvector', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
+                     -1, -1, -1, -1, ig - 1, ib - 1, i - 1, -1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
+                     real(z, rp), aimag(z))
+               end do
+            end do
+         end do
+      else
+      do ik = 1, size(this%reciprocal_scf_cache%hk_bulk, 3)
+         ig = ik
+         if (allocated(this%reciprocal_scf_cache%k_l2g_map)) then
+            if (ik <= size(this%reciprocal_scf_cache%k_l2g_map)) ig = this%reciprocal_scf_cache%k_l2g_map(ik)
+         end if
+         call write_k_header(ik)
+         do i = 1, n
+            do j = 1, n
+               z = this%reciprocal_scf_cache%hk_bulk(i, j, ik)
+               call this%write_fixed_u_csv_row(unit, 'h_total', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
+                  -1, -1, -1, -1, ig - 1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, real(z, rp), aimag(z))
+               if (allocated(this%reciprocal_scf_cache%sk_overlap)) then
+                  z = this%reciprocal_scf_cache%sk_overlap(i, j, ik)
+                  call this%write_fixed_u_csv_row(unit, 's_overlap', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
+                     -1, -1, -1, -1, ig - 1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
+                     real(z, rp), aimag(z))
+               end if
+            end do
+         end do
+      end do
+      end if
+      ! Basis ordering is site-major, then spin-major, then l,m; for the
+      ! supported scalar-collinear spd layout, d orbitals are local indices 5:9.
+      if (capture_spectrum) then
+         do i = 1, nsite
+            do spin = 1, 2
+               base = (i - 1)*(2*nper_spin) + (spin - 1)*nper_spin
+               do ell = 0, int(sqrt(real(nper_spin, rp))) - 1
+                  do m = 0, 2*ell
+                     call this%write_fixed_u_csv_row(unit, 'basis_map', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
+                        i - 1, this%lattice%iz(i), ell, spin - 1, -1, -1, base + ell*ell + m, m - ell, 0, &
+                        0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp)
+                  end do
+               end do
+            end do
+         end do
+      end if
+      close(unit)
+   contains
+      subroutine write_k_header(k_local)
+         integer, intent(in) :: k_local
+         integer :: kg
+         kg = k_global_index(k_local)
+         if (allocated(this%reciprocal_scf_cache%k_points) .and. allocated(this%reciprocal_scf_cache%k_weights)) then
+            do i = 1, 3
+               call krow('k_coordinate', kg, i - 1, -1, 0.0_rp, 0.0_rp, &
+                         this%reciprocal_scf_cache%k_points(i, kg), 'fractional')
+            end do
+            call this%write_fixed_u_csv_row(unit, 'k_weight', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
+               -1, -1, -1, -1, kg - 1, -1, -1, -1, 0, &
+               this%reciprocal_scf_cache%k_weights(kg), 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp)
+         end if
+      end subroutine write_k_header
+      integer function k_global_index(k_local)
+         integer, intent(in) :: k_local
+         k_global_index = k_local
+         if (allocated(this%reciprocal_scf_cache%k_l2g_map)) then
+            if (k_local <= size(this%reciprocal_scf_cache%k_l2g_map)) &
+               k_global_index = this%reciprocal_scf_cache%k_l2g_map(k_local)
+         end if
+      end function k_global_index
+      subroutine krow(kind, k_index, row, col, re, im, value, name)
+         integer, intent(in) :: k_index, row, col
+         character(len=*), intent(in) :: kind, name
+         real(rp), intent(in) :: re, im, value
+         call this%write_fixed_u_csv_row(unit, trim(kind), this%fixed_u_trace_iteration, 'EIGENPAIRS', &
+            -1, -1, -1, -1, k_index - 1, -1, row, col, 0, 0.0_rp, 0.0_rp, value, re, im)
+      end subroutine krow
+   end subroutine write_fixed_u_kspace_trace
+
+   subroutine write_fixed_u_rs_green(this, unit)
+      class(self), intent(in) :: this
+      integer, intent(in) :: unit
+      integer :: ia, iloc, ie, i, j, npts, nmat, orbital, ell, m, spin
+      real(rp), allocatable :: quadrature_weight(:)
+      real(rp) :: h, tail
+      complex(rp) :: z
+
+      if (.not. allocated(this%green%g0) .or. .not. allocated(this%en%ene)) return
+      npts = this%bands%nv1
+      if (npts < 3 .or. size(this%en%ene) < npts + 2) return
+      nmat = size(this%green%g0, 1)
+      allocate(quadrature_weight(size(this%en%ene)))
+      quadrature_weight = 0.0_rp
+      h = this%en%edel
+      do i = 2, npts - 1, 2
+         quadrature_weight(i - 1) = quadrature_weight(i - 1) + h/3.0_rp
+         quadrature_weight(i) = quadrature_weight(i) + 4.0_rp*h/3.0_rp
+         quadrature_weight(i + 1) = quadrature_weight(i + 1) + h/3.0_rp
+      end do
+      if (this%bands%e1 /= this%en%fermi) then
+         tail = (this%en%fermi - this%bands%e1)/6.0_rp
+         quadrature_weight(npts) = quadrature_weight(npts) + tail
+         quadrature_weight(npts + 1) = quadrature_weight(npts + 1) + 4.0_rp*tail
+         quadrature_weight(npts + 2) = quadrature_weight(npts + 2) + tail
+      end if
+
+      do ia = start_atom, end_atom
+         iloc = g2l_map(ia)
+         if (iloc < 1 .or. iloc > size(this%green%g0, 4)) cycle
+         do i = 0, nmat - 1
+            orbital = mod(i, spin_off)
+            spin = i/spin_off
+            ell = int(sqrt(real(orbital, rp)))
+            m = orbital - ell*ell - ell
+            call this%write_fixed_u_csv_row(unit, 'basis_map', this%fixed_u_trace_iteration, 'RS_GREEN', ia - 1, &
+               this%lattice%iz(ia), ell, spin, -1, -1, i, m, 0, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp)
+         end do
+         do ie = 1, npts + 2
+            do i = 1, nmat
+               do j = 1, nmat
+                  z = this%green%g0(i, j, ie, iloc)
+                  call this%write_fixed_u_csv_row(unit, 'green_function', this%fixed_u_trace_iteration, 'RS_GREEN', &
+                     ia - 1, this%lattice%iz(ia), -1, -1, ie - 1, -1, i - 1, j - 1, 0, &
+                     quadrature_weight(ie), this%en%ene(ie), 0.0_rp, real(z, rp), aimag(z))
+               end do
+            end do
+            call this%write_fixed_u_csv_row(unit, 'fermi_step', this%fixed_u_trace_iteration, 'RS_GREEN', &
+               ia - 1, this%lattice%iz(ia), -1, -1, ie - 1, -1, -1, -1, 0, quadrature_weight(ie), &
+               this%en%ene(ie), merge(1.0_rp, 0.0_rp, this%en%ene(ie) <= this%en%fermi), 0.0_rp, 0.0_rp)
+         end do
+      end do
+      deallocate(quadrature_weight)
+   end subroutine write_fixed_u_rs_green
+
    !> @brief Generate one deterministic scalar-relativistic radial channel
    !>        through the unchanged production RSEQSR/PHDFSR routines.
    !>
@@ -446,13 +1291,14 @@ contains
    !> valence-only fixture.  This is an audit/test seam; it does not duplicate
    !> or alter the legacy NEWRHO numerical machinery.
    subroutine legacy_newrho_fixture(lmax, z, a, b, rofi, potential, energies, ql, rho, &
-                                    sumev_out, sumec_out, hubbard_u_value, hubbard_j_value, pl_override)
+                                    sumev_out, sumec_out, hubbard_u_value, hubbard_j_value, pl_override, tol_value)
       integer, intent(in) :: lmax
       real(rp), intent(in) :: z, a, b, rofi(:), potential(:, :), energies(:, :), ql(:, :, :)
       real(rp), intent(out) :: rho(:, :)
       real(rp), intent(out), optional :: sumev_out(:), sumec_out(:)
       real(rp), intent(in), optional :: hubbard_u_value, hubbard_j_value
       real(rp), intent(in), optional :: pl_override(:, :)
+      real(rp), intent(in), optional :: tol_value
       type(self) :: audit_state
       type(control), target :: audit_control
       type(symbolic_atom) :: audit_atom
@@ -511,8 +1357,13 @@ contains
             ev(ival) = energies(l + 1, ispin)
          end do
       end do
-      call audit_state%newrho(audit_atom, z, lmax, a, b, nr, rofi, potential, rho, pl, ql, sumec, sumev, &
-                              ec, ev, 1.0e-12_rp, 2, 0)
+      if (present(tol_value)) then
+         call audit_state%newrho(audit_atom, z, lmax, a, b, nr, rofi, potential, rho, pl, ql, sumec, sumev, &
+                                 ec, ev, tol_value, 2, 0)
+      else
+         call audit_state%newrho(audit_atom, z, lmax, a, b, nr, rofi, potential, rho, pl, ql, sumec, sumev, &
+                                 ec, ev, 1.0e-12_rp, 2, 0)
+      end if
       nval = 2*(lmax + 1)
       if (size(ev) /= nval) error stop 'legacy_newrho_fixture: invalid valence fixture'
       if (present(sumev_out)) then
@@ -1434,6 +2285,8 @@ contains
       integer :: na_glob, pot_size
       real(rp), dimension(:, :), allocatable :: T_comm
       real(rp) :: total_energy, magnetic_moment
+
+      call this%initialize_fixed_u_trace()
    
       !===========================================================================
       !                              BEGIN SCF LOOP
@@ -1460,6 +2313,9 @@ contains
          !                        PERFORM THE RECURSION
          !=========================================================================
          call run_recursion(this, i)
+         this%fixed_u_trace_iteration = i
+         if (this%fixed_u_trace_selected_iteration == 0) call this%reset_fixed_u_trace()
+         call this%write_fixed_u_trace('Pin_H')
    
          !=========================================================================
          !               SAVE THE TOTAL ENERGY FROM PREVIOUS ITERATION
@@ -1506,6 +2362,7 @@ contains
          !                  CALCULATE THE DENSITY OF STATES
          !=========================================================================
          call run_dos(this)
+         call this%write_fixed_u_trace('P_OUT')
    
          !=========================================================================
          !                   MIX OLD AND NEW CALCULATED PL AND QL
@@ -1515,6 +2372,7 @@ contains
          call this%mix%mixpq(this%mix%qia_old, this%mix%qia_new) ! Mix qia_new with qia_old
          if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
             call this%mix%save_ldm_to('new') ! Save freshly computed LDA+U density matrices.
+            call this%update_fixed_u_residuals()
             call this%mix%mix_ldm_linear() ! Optional linear mixing controlled by mix%ldm_beta.
          end if
          call g_scf_benchmark_profile%stop_stage('P_mixing')
@@ -1541,6 +2399,7 @@ contains
          if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
             call this%mix%save_ldm_to('current') ! Save mixed density matrices into potential%ldm.
          end if
+         call this%write_fixed_u_trace('P_MIX')
    
          !=========================================================================
          !                       MAKE SFC ATOMIC SPHERE
@@ -1557,6 +2416,7 @@ contains
          call g_scf_benchmark_profile%stop_stage('P_scf_io')
 
          this%physical_total_energy = sum(this%symbolic_atom(:)%potential%etot)
+         call this%write_fixed_u_total_energy()
          call this%write_gbt_scf_diagnostics(i)
          total_energy = this%physical_total_energy
          magnetic_moment = sum(this%symbolic_atom(this%lattice%nbulk + 1:this%lattice%nbulk + this%lattice%nrec)%potential%mtot)
@@ -1815,6 +2675,7 @@ contains
          end if
          call g_scf_benchmark_profile%start_stage('P_hk_assembly')
          call this%reciprocal_scf_cache%build_kspace_hamiltonian()
+         call this%write_fixed_u_kspace_trace(.false.)
          call g_scf_benchmark_profile%stop_stage('P_hk_assembly')
          call g_timer%stop('calculation-of-DOS')
          call g_timer%start('diagonalization')
@@ -1847,6 +2708,9 @@ contains
             energy_range=[this%en%energy_min, this%en%energy_max], &
             fermi_level=this%en%fermi, &
             auto_find_fermi=.true.)
+         ! Capture the same eigenpairs after the canonical Fermi level has
+         ! been updated for this spectrum; Hamiltonian capture remains above.
+         call this%write_fixed_u_kspace_trace(.true.)
          if (this%control%uses_spinor_representation()) then
             allocate(kspace_spin_mom(3, this%lattice%nrec))
             call g_scf_benchmark_profile%start_stage('P_charge_spin_accumulate')
@@ -2042,6 +2906,7 @@ contains
       !                       MAKE SFC ATOMIC SPHERE
       !=========================================================================
       do ia = start_atom, end_atom
+         this%fixed_u_trace_current_site = ia
          qsl = this%lmtst(this%symbolic_atom(this%lattice%nbulk + ia), ia) ! Makes the atomic sphere self-consistent and caltulate the orthogonal pottential parameters
       end do
       if (rank == 0) call g_logger%info('Atomic SFC done for all atoms', __FILE__, __LINE__)
@@ -2259,6 +3124,7 @@ contains
       logical :: l
 
       l = delta_en < this%conv_thr
+      if (this%fixed_u_residual_active) l = l .and. this%fixed_u_residual_converged
       if (this%control%constraints_enable) then
          l = l .and. this%constraint_converged
          if (rank == 0 .and. .not. this%constraint_converged) then
@@ -2430,10 +3296,13 @@ contains
       real(rp), dimension(2) :: RVH, RHO0, REPS, RMU, SEV, SEC
       real(rp) :: B_fsm, B, deg, DFCORE, AMGM, EA, RPB, DL, DRHO_CONTROL, DRHO_INTEGRATED, TOL, TOLRSQ, BETA, VHRMAX, VSUM, TL, BETA1, VNUCL, SUM, RHO0T, WGT, DRDI, RHOMU, RHOVH, ZVNUCL, OB4PI
       integer :: ISP, ncore, nval, l, n_radial_spin_channels, lmax, konf, qn_default, IFCORE, LCORE, KONFIG, IPR, NR, IR, ITER, NITER, IPR1, II
+      integer :: energy_trace_unit, energy_trace_ios
       logical :: LAST
 
       real(rp), dimension(NCMX) :: EC
+      real(rp), dimension(NCMX) :: EC_SEED
       real(rp), dimension(NVMX) :: EV
+      real(rp), dimension(NVMX) :: EV_SEED
       real(rp), dimension(2) :: VRMAX
       real(rp), dimension(:, :), allocatable :: rho_in, rho
       real(rp), dimension(2) :: qval
@@ -2635,7 +3504,23 @@ contains
             call this%VXC0SP(xc_obj, atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, V, RHO0, REPS, RMU, &
                              n_radial_spin_channels, B_fsm)
          end if
+         this%fixed_u_trace_capture_radial_state = LAST .and. this%fixed_u_trace_enabled .and. &
+            rank == 0 .and. (this%fixed_u_trace_selected_iteration <= 0 .or. &
+                             this%fixed_u_trace_iteration == this%fixed_u_trace_selected_iteration)
+         if (this%fixed_u_trace_capture_radial_state) then
+            call this%write_fixed_u_radial_replay_input(atom, rofi, v, rho_in, atom%potential%pl, &
+                                                        atom%potential%ql, TL)
+            if (ncore > 0) EC_SEED(1:ncore) = EC(1:ncore)
+            if (nval > 0) EV_SEED(1:nval) = EV(1:nval)
+         end if
          call this%NEWRHO(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho, atom%potential%PL, atom%potential%QL, SEC, SEV, EC, EV, TL, n_radial_spin_channels, IPR1)
+         if (this%fixed_u_trace_capture_radial_state) then
+            call this%write_fixed_u_radial_replay_output(rho, SEC, SEV)
+            call this%verify_fixed_u_radial_replay(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, &
+               v, rho_in, rho, atom%potential%pl, atom%potential%ql, SEC, SEV, EC_SEED, EV_SEED, EC, EV, &
+               ncore, nval, TL)
+            this%fixed_u_trace_capture_radial_state = .false.
+         end if
          if (LAST) then
             call atom%radial_ground_state%capture_core_density(this%core_rho_weighted(1:nr, :), &
                                                                this%core_pauli_weighted(1:nr, :), &
@@ -2693,6 +3578,59 @@ contains
       atom%potential%UTOT = .5d0*(RHOVH + ZVNUCL)
       atom%potential%EKIN = atom%potential%SUMEV + atom%potential%SUMEC - RHOVH - RHOMU
       atom%potential%ETOT = atom%potential%EKIN + atom%potential%UTOT + atom%potential%RHOEPS
+      if (this%fixed_u_trace_enabled .and. rank == 0 .and. this%fixed_u_trace_current_site >= 1 .and. &
+          this%fixed_u_trace_iteration > 0 .and. &
+          (this%fixed_u_trace_selected_iteration <= 0 .or. &
+           this%fixed_u_trace_iteration == this%fixed_u_trace_selected_iteration)) then
+         open(newunit=energy_trace_unit, file=trim(this%fixed_u_trace_filename), status='old', &
+              position='append', action='write', iostat=energy_trace_ios)
+         if (energy_trace_ios == 0) then
+            call this%write_fixed_u_csv_row(energy_trace_unit, 'energy_component_sumev', &
+               this%fixed_u_trace_iteration, 'ATOMSC_ETOT', this%fixed_u_trace_current_site - 1, &
+               this%lattice%ib(this%fixed_u_trace_current_site) - 1, -1, -1, -1, -1, -1, -1, &
+               0, 0.0_rp, 0.0_rp, atom%potential%SUMEV, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(energy_trace_unit, 'energy_component_sumec', &
+               this%fixed_u_trace_iteration, 'ATOMSC_ETOT', this%fixed_u_trace_current_site - 1, &
+               this%lattice%ib(this%fixed_u_trace_current_site) - 1, -1, -1, -1, -1, -1, -1, &
+               1, 0.0_rp, 0.0_rp, atom%potential%SUMEC, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(energy_trace_unit, 'energy_component_rhovh', &
+               this%fixed_u_trace_iteration, 'ATOMSC_ETOT', this%fixed_u_trace_current_site - 1, &
+               this%lattice%ib(this%fixed_u_trace_current_site) - 1, -1, -1, -1, -1, -1, -1, &
+               2, 0.0_rp, 0.0_rp, RHOVH, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(energy_trace_unit, 'energy_component_rhomu', &
+               this%fixed_u_trace_iteration, 'ATOMSC_ETOT', this%fixed_u_trace_current_site - 1, &
+               this%lattice%ib(this%fixed_u_trace_current_site) - 1, -1, -1, -1, -1, -1, -1, &
+               3, 0.0_rp, 0.0_rp, RHOMU, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(energy_trace_unit, 'energy_component_vnucl', &
+               this%fixed_u_trace_iteration, 'ATOMSC_ETOT', this%fixed_u_trace_current_site - 1, &
+               this%lattice%ib(this%fixed_u_trace_current_site) - 1, -1, -1, -1, -1, -1, -1, &
+               4, 0.0_rp, 0.0_rp, VNUCL, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(energy_trace_unit, 'energy_component_zvnucl', &
+               this%fixed_u_trace_iteration, 'ATOMSC_ETOT', this%fixed_u_trace_current_site - 1, &
+               this%lattice%ib(this%fixed_u_trace_current_site) - 1, -1, -1, -1, -1, -1, -1, &
+               5, 0.0_rp, 0.0_rp, ZVNUCL, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(energy_trace_unit, 'energy_component_ekin', &
+               this%fixed_u_trace_iteration, 'ATOMSC_ETOT', this%fixed_u_trace_current_site - 1, &
+               this%lattice%ib(this%fixed_u_trace_current_site) - 1, -1, -1, -1, -1, -1, -1, &
+               6, 0.0_rp, 0.0_rp, atom%potential%EKIN, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(energy_trace_unit, 'energy_component_utot', &
+               this%fixed_u_trace_iteration, 'ATOMSC_ETOT', this%fixed_u_trace_current_site - 1, &
+               this%lattice%ib(this%fixed_u_trace_current_site) - 1, -1, -1, -1, -1, -1, -1, &
+               7, 0.0_rp, 0.0_rp, atom%potential%UTOT, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(energy_trace_unit, 'energy_component_rhoeps', &
+               this%fixed_u_trace_iteration, 'ATOMSC_ETOT', this%fixed_u_trace_current_site - 1, &
+               this%lattice%ib(this%fixed_u_trace_current_site) - 1, -1, -1, -1, -1, -1, -1, &
+               8, 0.0_rp, 0.0_rp, atom%potential%RHOEPS, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(energy_trace_unit, 'energy_component_etot', &
+               this%fixed_u_trace_iteration, 'ATOMSC_ETOT', this%fixed_u_trace_current_site - 1, &
+               this%lattice%ib(this%fixed_u_trace_current_site) - 1, -1, -1, -1, -1, -1, -1, &
+               9, 0.0_rp, 0.0_rp, atom%potential%ETOT, 0.0_rp, 0.0_rp)
+            close(energy_trace_unit)
+         end if
+      end if
+      if (this%fixed_u_trace_current_site >= 1) then
+         call this%write_fixed_u_radial_trace(atom, this%fixed_u_trace_current_site, v, rofi, rho_in, rho)
+      end if
 
       if (IPR >= 1) then
          write (6, 10007) &
@@ -2794,9 +3732,12 @@ contains
                   SUM, TMC, TOLVAL, VAL
       ! HF additions
       real(rp) :: SHUP, SHDW, SUT, ALFAM1, AL2, HYP, OBPI, RT, WGTA, DRDI
+      real(rp) :: wave_value
       real(rp), dimension(2) :: SH
       real(rp), dimension(NR) :: HG, DETH
       integer :: IJ
+      integer :: trace_unit, trace_ios, radial_index, component
+      logical :: trace_radial
       !
       !.. Local Arrays ..
       integer, dimension(10) :: KONF
@@ -2810,6 +3751,13 @@ contains
       !
       ! ... Executable Statements ...
       !
+      trace_radial = this%fixed_u_trace_capture_radial_state .and. this%fixed_u_trace_enabled .and. rank == 0
+      trace_unit = -1
+      if (trace_radial) then
+         open(newunit=trace_unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
+              action='write', iostat=trace_ios)
+         if (trace_ios /= 0) trace_radial = .false.
+      end if
       !--------DEFINES POTENTIAL and TRANSFERS it via COMMON---------
       do ISI = 1, NSP
          do IIR = 2, NR
@@ -2843,6 +3791,15 @@ contains
          end do
       end do
       call this%RHOCOR(atom, Z, LMAX, KONF, A, B, NR, rofi, V, RHO, G, SUMEC, EC, TOL, NSP, IPR)
+      if (trace_radial) then
+         do ISP = 1, NSP
+            do IR = 1, NR
+               call this%write_fixed_u_csv_row(trace_unit, 'radial_replay_rho_core', &
+                  this%fixed_u_trace_iteration, 'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, &
+                  -1, -1, ISP - 1, -1, -1, IR - 1, ISP - 1, 0, 0.0_rp, rofi(IR), RHO(IR, ISP), 0.0_rp, 0.0_rp)
+            end do
+         end do
+      end if
       ! ------ LOOP OVER VALENCE STATES -------
       IVAL = 0
       do ISP = 1, NSP
@@ -2877,6 +3834,11 @@ contains
                if (FREE) then
                   SLO = -VAL
                end if
+               if (trace_radial) then
+                  call this%write_fixed_u_csv_row(trace_unit, 'radial_replay_eigen_seed', &
+                     this%fixed_u_trace_iteration, 'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, &
+                     -1, L, ISP - 1, -1, IVAL - 1, -1, -1, 0, 0.0_rp, 0.0_rp, EVAL, 0.0_rp, 0.0_rp)
+               end if
                ! Debug output for orbital radial equation
                ! if (L >= 2) then
                !    write (6, ’(A, I1, A, I1, A, F8.4, A, I2, A, F10.6, A, F10.6)’) &
@@ -2887,6 +3849,11 @@ contains
                            rofi, NR, NRE, 0)
                EV(IVAL) = EVAL
                SUMEV(ISP) = SUMEV(ISP) + EVAL*Q0 + Q1
+               if (trace_radial) then
+                  call this%write_fixed_u_csv_row(trace_unit, 'radial_replay_nre', &
+                     this%fixed_u_trace_iteration, 'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, &
+                     -1, L, ISP - 1, -1, IVAL - 1, -1, -1, 0, 0.0_rp, 0.0_rp, real(NRE, rp), 0.0_rp, 0.0_rp)
+               end if
                !write(*, *) ´atorb: EVAL, Q0, Q1´, EVAL, Q0, Q1
                RO = G(NR)**2
                if (.not. FREE .and. RO < ROCRIT) then
@@ -2903,6 +3870,33 @@ contains
                   SLO = SLO/SQRT(SUM)
                   call PHDFSR(Z, L, V(1, ISP), EVAL, A, B, rofi, NR, G, VAL, SLO, GP, GPP, PHI, DPHI, &
                               PHIP, DPHIP, P, TOLVAL, NN)
+               end if
+               if (trace_radial) then
+                  call this%write_fixed_u_csv_row(trace_unit, 'radial_replay_eigenvalue', &
+                     this%fixed_u_trace_iteration, 'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, &
+                     -1, L, ISP - 1, -1, IVAL - 1, -1, -1, 0, 0.0_rp, 0.0_rp, EVAL, 0.0_rp, 0.0_rp)
+                  do radial_index = 1, NR
+                     do component = 0, 5
+                        select case (component)
+                        case (0)
+                           wave_value = G(radial_index)
+                        case (1)
+                           wave_value = GP(radial_index)
+                        case (2)
+                           wave_value = GPP(radial_index)
+                        case (3)
+                           wave_value = G(radial_index + NR)
+                        case (4)
+                           wave_value = GP(radial_index + NR)
+                        case (5)
+                           wave_value = GPP(radial_index + NR)
+                        end select
+                        call this%write_fixed_u_csv_row(trace_unit, 'radial_replay_wave', &
+                           this%fixed_u_trace_iteration, 'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, &
+                           -1, L, ISP - 1, -1, IVAL - 1, radial_index - 1, component, 0, &
+                           0.0_rp, rofi(radial_index), wave_value, 0.0_rp, 0.0_rp)
+                     end do
+                  end do
                end if
                FLLP1 = L*(L + 1)
                do IR = 2, NRE
@@ -2964,6 +3958,7 @@ contains
             !--------------END-ORBITAL CONT. TO HYPERFINE FIELD------------
          end do
       end do
+      if (trace_radial) close(trace_unit)
       return
       !
       ! ... Format Declarations ...

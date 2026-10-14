@@ -32,9 +32,22 @@ module mix_mod
    use safe_alloc_mod, only: g_safe_alloc
 #endif
    use basis_mod, only: lmax_basis
+   use math_mod, only: hubbard_density_diagnostics
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+#ifdef USE_MPI
+   use mpi, only: MPI_COMM_WORLD, MPI_DOUBLE_PRECISION, MPI_INTEGER, MPI_MAX, MPI_MIN, MPI_IN_PLACE, MPI_ALLREDUCE
+#endif
    implicit none
 
    private
+
+   ! Frozen pre-campaign convergence targets: dimensionless full-block density
+   ! norm and Ry potential norm. These are goals, not claimed integration-noise
+   ! floors; production discretization refinement must verify attainability.
+   real(rp), parameter, public :: fixed_u_density_tolerance = 1.0e-7_rp
+   real(rp), parameter, public :: fixed_u_potential_tolerance = 1.0e-7_rp
+   integer, parameter, public :: fixed_u_required_stable_updates = 3
+   public :: fixed_u_residual_metrics
 
    !> Module´s main structure
    type, public :: mix
@@ -70,6 +83,9 @@ module mix_mod
       real(rp), dimension(:), allocatable :: v_broy, u_broy, fo_broy, muo_broy
       real(rp) :: fsqo
       integer :: itr, nmix
+      ! Number of consecutive fixed-U iterations meeting the full complex P/V
+      ! residual targets. Invalid matrices reset this count.
+      integer :: fixed_u_stable_updates = 0
       !> Variable to managed induced magnetic moments
       logical, dimension(:), allocatable :: is_induced
    contains
@@ -80,6 +96,7 @@ module mix_mod
       procedure :: mixpq
       procedure :: save_ldm_to
       procedure :: mix_ldm_linear
+      procedure :: advance_fixed_u_convergence
       procedure :: mix_magnetic_moments
       final :: destructor
    end type mix
@@ -89,6 +106,112 @@ module mix_mod
    end interface mix
 
 contains
+
+   !> Compute full-complex fixed-U residuals from explicit, active-shell
+   !> snapshots. Inputs are packed as (site,spin,row,column); the Frobenius
+   !> norm combines both collinear spin blocks for each physical site.
+   subroutine fixed_u_residual_metrics(p_in, p_out, v_in, v_out, rp_abs, rp_rel, rv_abs, rv_rel, &
+                                       physical, antiherm_p, antiherm_v, worst_site)
+      complex(rp), intent(in) :: p_in(:, :, :, :), p_out(:, :, :, :)
+      complex(rp), intent(in) :: v_in(:, :, :, :), v_out(:, :, :, :)
+      real(rp), intent(out) :: rp_abs, rp_rel, rv_abs, rv_rel
+      logical, intent(out) :: physical
+      real(rp), intent(out) :: antiherm_p, antiherm_v
+      integer, intent(out) :: worst_site
+      real(rp), allocatable :: rp_site(:), rp_rel_site(:), rv_site(:), rv_rel_site(:)
+      real(rp) :: tr, emin, emax, ah, pin_norm, pout_norm, vin_norm, vout_norm
+      integer :: nsite, nspin, norb, site, spin, info, local_physical
+#ifdef USE_MPI
+      integer :: mpierr
+#endif
+
+      nsite = size(p_in, 1)
+      nspin = size(p_in, 2)
+      norb = size(p_in, 3)
+      rp_abs = huge(1.0_rp); rp_rel = huge(1.0_rp)
+      rv_abs = huge(1.0_rp); rv_rel = huge(1.0_rp)
+      antiherm_p = huge(1.0_rp); antiherm_v = huge(1.0_rp)
+      physical = .false.; worst_site = 0
+      if (nsite < 1 .or. nspin /= 2 .or. norb < 1) return
+      if (size(p_out,1) /= nsite .or. size(v_in,1) /= nsite .or. size(v_out,1) /= nsite .or. &
+          size(p_out,2) /= nspin .or. size(v_in,2) /= nspin .or. size(v_out,2) /= nspin .or. &
+          size(p_out,3) /= norb .or. size(p_out,4) /= norb .or. &
+          size(p_in,4) /= norb .or. size(v_in,3) /= norb .or. size(v_in,4) /= norb .or. &
+          size(v_out,3) /= norb .or. size(v_out,4) /= norb) return
+      if (.not. all(ieee_is_finite(real(p_in,rp))) .or. .not. all(ieee_is_finite(aimag(p_in))) .or. &
+          .not. all(ieee_is_finite(real(p_out,rp))) .or. .not. all(ieee_is_finite(aimag(p_out))) .or. &
+          .not. all(ieee_is_finite(real(v_in,rp))) .or. .not. all(ieee_is_finite(aimag(v_in))) .or. &
+          .not. all(ieee_is_finite(real(v_out,rp))) .or. .not. all(ieee_is_finite(aimag(v_out)))) return
+
+      allocate(rp_site(nsite), rp_rel_site(nsite), rv_site(nsite), rv_rel_site(nsite))
+      local_physical = 1
+      antiherm_p = 0.0_rp; antiherm_v = 0.0_rp
+      do site = 1, nsite
+         pin_norm = 0.0_rp; pout_norm = 0.0_rp; vin_norm = 0.0_rp; vout_norm = 0.0_rp
+         rp_site(site) = 0.0_rp; rv_site(site) = 0.0_rp
+         do spin = 1, nspin
+            pin_norm = pin_norm + sum(abs(p_in(site,spin,:,:))**2)
+            pout_norm = pout_norm + sum(abs(p_out(site,spin,:,:))**2)
+            vin_norm = vin_norm + sum(abs(v_in(site,spin,:,:))**2)
+            vout_norm = vout_norm + sum(abs(v_out(site,spin,:,:))**2)
+            rp_site(site) = rp_site(site) + sum(abs(p_out(site,spin,:,:)-p_in(site,spin,:,:))**2)
+            rv_site(site) = rv_site(site) + sum(abs(v_out(site,spin,:,:)-v_in(site,spin,:,:))**2)
+            call hubbard_density_diagnostics(p_in(site,spin,:,:), tr, emin, emax, ah, info)
+            antiherm_p = max(antiherm_p, ah)
+            ! The 1e-6 anti-Hermitian and 1e-3 occupation-bound allowances are
+            ! diagnostic tolerances inherited from the fixed-U occupation
+            ! checks; no clipping/projection is performed.
+            if (info /= 0 .or. ah > 1.0e-6_rp .or. emin < -1.0e-3_rp .or. emax > 1.0_rp + 1.0e-3_rp .or. &
+                tr < -1.0e-3_rp .or. tr > real(norb,rp) + 1.0e-3_rp) local_physical = 0
+            call hubbard_density_diagnostics(p_out(site,spin,:,:), tr, emin, emax, ah, info)
+            antiherm_p = max(antiherm_p, ah)
+            if (info /= 0 .or. ah > 1.0e-6_rp .or. emin < -1.0e-3_rp .or. emax > 1.0_rp + 1.0e-3_rp .or. &
+                tr < -1.0e-3_rp .or. tr > real(norb,rp) + 1.0e-3_rp) local_physical = 0
+            ah = maxval(abs(v_in(site,spin,:,:)-transpose(conjg(v_in(site,spin,:,:)))))
+            antiherm_v = max(antiherm_v, ah)
+            if (ah > 1.0e-6_rp) local_physical = 0
+            ah = maxval(abs(v_out(site,spin,:,:)-transpose(conjg(v_out(site,spin,:,:)))))
+            antiherm_v = max(antiherm_v, ah)
+            if (ah > 1.0e-6_rp) local_physical = 0
+         end do
+         rp_site(site) = sqrt(rp_site(site))
+         rv_site(site) = sqrt(rv_site(site))
+         rp_rel_site(site) = rp_site(site)/max(1.0_rp,sqrt(pin_norm),sqrt(pout_norm))
+         rv_rel_site(site) = rv_site(site)/max(1.0_rp,sqrt(vin_norm),sqrt(vout_norm))
+      end do
+#ifdef USE_MPI
+      if (numprocs > 1) then
+         call MPI_ALLREDUCE(MPI_IN_PLACE, rp_site, nsite, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, rp_rel_site, nsite, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, rv_site, nsite, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, rv_rel_site, nsite, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, antiherm_p, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, antiherm_v, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, local_physical, 1, MPI_INTEGER, MPI_MIN, MPI_COMM_WORLD, mpierr)
+      end if
+#endif
+      rp_abs = maxval(rp_site); rp_rel = maxval(rp_rel_site)
+      rv_abs = maxval(rv_site); rv_rel = maxval(rv_rel_site)
+      worst_site = maxloc(max(rp_rel_site,rv_rel_site), dim=1)
+      physical = local_physical == 1
+   end subroutine fixed_u_residual_metrics
+
+   !> Advance a three-success stability gate. A bad physicality check or a
+   !> residual above target clears the streak; callers skip this for inactive U.
+   subroutine advance_fixed_u_convergence(this, rp_residual, rv_residual, physical, converged)
+      class(mix), intent(inout) :: this
+      real(rp), intent(in) :: rp_residual, rv_residual
+      logical, intent(in) :: physical
+      logical, intent(out) :: converged
+      if (.not. physical .or. .not. ieee_is_finite(rp_residual) .or. .not. ieee_is_finite(rv_residual)) then
+         this%fixed_u_stable_updates = 0
+      else if (rp_residual <= fixed_u_density_tolerance .and. rv_residual <= fixed_u_potential_tolerance) then
+         this%fixed_u_stable_updates = this%fixed_u_stable_updates + 1
+      else
+         this%fixed_u_stable_updates = 0
+      end if
+      converged = this%fixed_u_stable_updates >= fixed_u_required_stable_updates
+   end subroutine advance_fixed_u_convergence
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -259,6 +382,7 @@ contains
       this%muo_broy(:) = 0.0d0
       this%fsqo = 1.0d0
       this%itr = 0
+      this%fixed_u_stable_updates = 0
       this%var = 0
       this%beta = 0.1d0
       this%ldm_beta = 1.0d0

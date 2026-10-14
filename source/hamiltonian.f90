@@ -920,10 +920,15 @@ module hamiltonian_mod
    !> @details Builds the spin-orbital onsite correction from symbolic-atom
    !>          Hubbard inputs, including Liechtenstein and ACBN0-style forms and
    !>          optional self-consistent U channels.
-   !> @param[inout] this Hamiltonian object; fills hubbard_u_pot and related masks.
-   !> @note Results are added by the Hamiltonian builders, not by this routine directly.
-   module subroutine calculate_hubbard_u_potential_general(this)
+   !> @param[inout] this Hamiltonian object; fills hubbard_u_pot on the legacy path.
+   !> @param[in] density_override Optional explicit `(type,l,spin,m,m')` density.
+   !> @param[out] potential_out Optional explicit `(basis,basis,type)` potential.
+   !> @note Supplying both optional snapshots evaluates V(P) without changing live
+   !>       density/potential state or adding Hamiltonian terms.
+   module subroutine calculate_hubbard_u_potential_general(this, density_override, potential_out)
       class(hamiltonian), intent(inout) :: this
+      complex(rp), intent(in), optional :: density_override(:, :, :, :, :)
+      complex(rp), intent(out), optional :: potential_out(:, :, :)
 
       integer :: na, l, ispin, i, j, m1, m2, m3, m4, l_index, m_max
       integer :: m1_val, m2_val, m3_val, m4_val

@@ -13,7 +13,7 @@ program projector_common_frozen_h
    use math_mod, only: init_math_operators, pi, simpson_m, hubbard_spectral_density_element
    use logger_mod, only: g_logger
    use mpi_mod, only: rank, numprocs, ierr, atoms_per_process, start_atom, end_atom, g2l_map, &
-                      get_mpi_variables, parallel_context
+                      get_mpi_variables, parallel_context, assignment(=)
    use control_mod, only: control
    use lattice_mod, only: lattice
    use charge_mod, only: charge
