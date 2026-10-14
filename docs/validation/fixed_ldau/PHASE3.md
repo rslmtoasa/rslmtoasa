@@ -61,10 +61,11 @@ python3.11 tests/validation/fixed_ldau/phase3_d_energy_reference.py
 ```
 
 At the current Phase 3 checkpoint the focused `UnitLdaUHamiltonian` and
-`UnitLrBasisAugmentation` CTests pass. A prior `ctest --test-dir
-/tmp/rslmto-ldau-phase0-build -L unit --output-on-failure` run reported 112
-passed and zero failed; CTest's `LastTest.log` was subsequently overwritten by
-the focused run, so that full-run log is not preserved. The radial replay
+`UnitLrBasisAugmentation` CTests pass. The final full unit command
+`ctest --test-dir /tmp/rslmto-ldau-phase0-build -L unit --output-on-failure`
+reported 112/112 tests passed (110 tests carry the `unit` label); its captured
+stdout and exit marker are in `/tmp/phase3-final-full-unit.log` (SHA256
+`648150307f560e4e4df7497a851acea4f66eba0f27a015379a84fe7004eb8d78`). The radial replay
 reports zero change in `SUMEV`, `SUMEC`, and density when only U/J metadata
 changes with radial potential, QL, and PL held fixed. This test changes
 metadata only; it does not inject a Hubbard Hamiltonian or potential into
