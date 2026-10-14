@@ -2,7 +2,7 @@
 
 ## Scope and status
 
-The supported fixed-parameter Hubbard scope currently remains scalar-relativistic, orthogonal, collinear `nsp=1`. Active fixed-U input in `nsp=2/3/4` remains rejected; no-U `nsp=2` remains available. The protocol's Phase-P material gate is **BLOCKED** until an identified periodic material calculation compares the same frozen physical operator through both production backends and demonstrates the projector/charge relationship with controlled quadrature and broadening refinement.
+The supported fixed-parameter Hubbard scope currently remains scalar-relativistic, orthogonal, collinear `nsp=1`. Active fixed-U input in `nsp=2/3/4` remains rejected; no-U `nsp=2` remains available. The protocol's Phase-P material gate is **PARTIALLY EVIDENCED / BLOCKED**: a one-site bcc-Fe production run now compares the same frozen periodic operator through RS and KS, but multiple-site mapping, radial-projector relation, integration refinement, MPI/restart and convergence requirements remain open.
 
 `tests/validation/fixed_ldau/projector_common_frozen_h.f90` is a finite frozen-operator, source-connected contract probe. It constructs one 18×18 Hermitian matrix (9 orbitals × two collinear spin blocks) and its exact eigenpairs. It supplies the eigenpairs to the public `reciprocal%calculate_ldm_from_projected_dos` wrapper (which calls the internal eigenvector extractor) and supplies the corresponding retarded Lehmann resolvent to `bands%calculate_moments`. It then checks against an independently constructed unitary projector and a finite-window Lorentzian integral. It contains deliberate conjugation and transpose negative controls. This is evidence class **B** for these production occupation-extraction routines on the supplied finite operator, paired with class **A** analytic projector/integration oracles. It bypasses the RS recursion and reciprocal Hamiltonian assembly; it is not class **C** material evidence and does not certify self-consistency, radial QL normalization, or an energy identity. The fixture has one site, so it does not test global site/type mapping or detect multi-site aliasing.
 
@@ -36,6 +36,64 @@ For fixed Liechtenstein mode, this routine uses Fermi-Dirac occupations with `kT
 The RS producer `source/bands.f90::calculate_moments` extracts fixed-U occupations from the retarded Green matrix. Its fixed-Liechtenstein branch forms the matrix spectral density `A_ab(E)=i(G_ab-G^*_{ba})/(2π)` and integrates it to the Fermi level by the production Simpson integrator. For the finite-H probe, the independent analytic comparison is the corresponding Lorentzian integral over the same lower energy bound, broadening `η`, and Fermi endpoint. RS and KS differ by finite energy-window/broadening integration; those errors must be measured and refined rather than folded into a loose tolerance.
 
 The test's deliberately wrong variants must fail: conjugating all KS eigenvectors changes the sign of imaginary orbital coherences, while transposing the spectral matrix by constructing the Green function of `H^T` does the same for RS. These variants test orientation-sensitive complex handling; they do not substitute for real production Hamiltonian or material validation.
+
+## Production periodic operator comparison
+
+[`projector_periodic_operator.py`](../../../tests/validation/fixed_ldau/projector_periodic_operator.py)
+reconstructs every captured production KS `H(k)` from the full real-space
+neighbor EE blocks captured during an RS run, using the captured fractional
+bond vectors and the production `exp(+i 2π k·R)` convention. It also requires
+the RS and KS captures to agree elementwise on every real-space block and bond
+map, and compares their local orbital/site basis maps. The one-site bcc-Fe
+captures at `/tmp/rslmto-energy-trace/common_rs_09` and `common_ks_09` pass:
+15 complete 18×18 blocks (4860 matrix elements), 15 unique bonds (45 rows,
+three fractional-vector components per bond), 1728 KS k points, exact RS/KS
+real-space agreement, and maximum reconstructed-H(k) error `3.330669e-16`
+against the `2e-11` threshold. The result record is
+[`periodic_operator_bccfe_common_09.json`](periodic_operator_bccfe_common_09.json).
+
+The paired pre-run decks have the same Fe starting-state SHA256
+`fd5d907628cc4ee41ac3b1147aeb1f9e8ec1fe8bb2f38069afe1cf63384ae233`; their
+input files differ only in `use_kspace=.false.` versus `.true.` (RS SHA256
+`7b14254bfa60ed4e4d42a9fbc5c2f01ae9dcf6ba3081f2e43c707dbb2b8c2f41`, KS
+`78ccdc39a93c1b3b45a1a50cc5fc6ca188fe5f0af62196b4dbe184308a50056d`). Both
+use `nsp=1`, `hoh=.false.`, input U=1.8 eV and J=0 (0.9× a 2.0 eV reference
+value). The CSV `lambda=1` is a trace-run annotation; it is not that 0.9
+physical U scale or a finite-difference slope. The executable SHA256 is
+`ffa895abc32af3cce2123c06efc703ad01297bfb22c3ea474da99201cd9c6764`.
+
+As a separate output-density check, the captured KS eigenvectors, occupations,
+and actual k weights reproduce the captured KS d-shell `P_OUT` to
+`5.56e-15`; the 1728 weights sum to one and the weighted occupation is 8.
+The RS and KS d-shell `P_OUT` matrices are not equal: their maximum
+elementwise difference is `3.419410e-3` and RMS difference is `8.137314e-4`.
+Their d traces are RS `(4.506326, 2.049989)` and KS `(4.501409, 2.053512)`.
+The captures use different integration occupations (RS trace manifest reports
+zero temperature; KS uses `kT=0.00190010442 Ry`), and no broadening/energy-grid
+refinement envelope was run for this pair. Therefore the P comparison is an
+observed finite-run difference, not a proven error bound or a claim of
+backend-equivalent occupations.
+
+The checker passes a negative Fourier-phase control (changing `+R` to `−R`
+produces a `1.942e-1` H(k) mismatch) and rejects a corrupted RS basis-map site
+label. This is a real periodic-operator comparison, class B evidence; the
+one-site cell cannot detect permutations or aliasing between inequivalent
+sites. The raw CSVs are retained under `/tmp` and are deliberately not copied
+into the repository (112 MB RS and 240 MB KS); the JSON record preserves their
+hashes and the runnable command. Re-run with:
+
+```text
+python3 tests/validation/fixed_ldau/projector_periodic_operator.py \
+  /tmp/rslmto-energy-trace/common_ks_09/records.csv \
+  --run-id run --iteration 1 --lambda 1.0 \
+  --rs-trace /tmp/rslmto-energy-trace/common_rs_09/records.csv \
+  --rs-run-id run --rs-iteration 1 --rs-lambda 1.0
+```
+
+This closes only the same-frozen-periodic-operator RS/KS comparison subset of
+Gate P. It is not a multi-site test, a controlled RS/KS occupation-envelope
+test, an RS/KS restart/MPI test, a radial QL normalization proof, a converged
+material result, or class C physical validation.
 
 ## Evidence needed to close Gate P
 

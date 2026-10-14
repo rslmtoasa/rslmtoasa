@@ -1,0 +1,91 @@
+{
+  "record_type": "fixed_ldau_periodic_operator_validation",
+  "result": "PASS",
+  "evidence_class": "B: production periodic operator, one-site bcc-Fe; not material validation",
+  "backend_pair": ["RS", "KS"],
+  "run_selection": {
+    "run_id": "run",
+    "iteration": 1,
+    "trace_lambda_annotation": 1.0,
+    "trace_lambda_is_physical_slope": false
+  },
+  "physics_input": {
+    "nsp": 1,
+    "hoh": false,
+    "hubbard_u_eV": 1.8,
+    "hubbard_j_eV": 0.0,
+    "note": "U=1.8 eV is the physical input (0.9x a 2.0 eV reference); CSV lambda=1 is only a trace annotation. No lambda slope was measured."
+  },
+  "artifacts": {
+    "executable": "/tmp/rslmto-ldau-remediation-debug/bin/rslmto.x",
+    "executable_sha256": "ffa895abc32af3cce2123c06efc703ad01297bfb22c3ea474da99201cd9c6764",
+    "source_revision": "9fefec6b3da2923f41f3f01023a4205132979eca",
+    "trace_writer_source_sha256": "d24a46fc41daf76533943c329add4001e77005c7a0dd41d261372d420d2be443",
+    "checker": "tests/validation/fixed_ldau/projector_periodic_operator.py",
+    "checker_sha256": "032152d6e66dee36de2c10e4dd1cb08d463d1e29dcdafa6ba1da63d051348e46",
+    "rs_capture": "/tmp/rslmto-energy-trace/common_rs_09/records.csv",
+    "rs_capture_sha256": "73177b67cceb0155830d59f657e3c004329a7cbab8e6648a966641369c6482d9",
+    "ks_capture": "/tmp/rslmto-energy-trace/common_ks_09/records.csv",
+    "ks_capture_sha256": "b8a2940d0b4213c42bcf95ed862efb22e80fd9a2cae26a8800a7b676a634dce0",
+    "rs_input_before_sha256": "7b14254bfa60ed4e4d42a9fbc5c2f01ae9dcf6ba3081f2e43c707dbb2b8c2f41",
+    "ks_input_before_sha256": "78ccdc39a93c1b3b45a1a50cc5fc6ca188fe5f0af62196b4dbe184308a50056d",
+    "rs_and_ks_Fe_before_sha256": "fd5d907628cc4ee41ac3b1147aeb1f9e8ec1fe8bb2f38069afe1cf63384ae233",
+    "input_diff": "Only self.use_kspace differs: false in RS and true in KS."
+  },
+  "periodic_operator": {
+    "unit_cell_sites": 1,
+    "local_spin_orbital_block_dimension": 18,
+    "neighbor_blocks": 15,
+    "neighbor_block_elements": 4860,
+    "mapped_bonds": 15,
+    "bond_map_rows": 45,
+    "bond_vector_components_per_bond": 3,
+    "ks_kpoints": 1728,
+    "realspace_block_max_abs_difference": 0.0,
+    "fractional_bond_map_max_abs_difference": 0.0,
+    "fourier_reconstruction_max_abs_Hk_difference": 3.330669e-16,
+    "checker_tolerance": 2e-11,
+    "fourier_phase": "exp(+i 2 pi k dot R)",
+    "checker_output": "periodic RS-to-KS operator cross-backend PASS: sites=1, kpoints=1728, max_RS_realspace_difference=0.000000e+00, max_RS_fourier_vs_KS_Hk=3.330669e-16, tolerance=2.0e-11"
+  },
+  "ks_output_density_crosscheck": {
+    "actual_kweight_count": 1728,
+    "kweight_sum": 1.0,
+    "weighted_electron_count": 8.000000000001851,
+    "fermi_ry": -0.10542046007390998,
+    "temperature_ry": 0.0019001044200000002,
+    "captured_Pout_reconstructed_from_captured_eigenpairs_max_abs_difference": 5.55111512535106e-15,
+    "d_trace_up": 4.501408730355425,
+    "d_trace_down": 2.053511612696281
+  },
+  "rs_ks_output_density_observation": {
+    "comparison": "same site/type/l/spin/orbital elements of captured P_OUT",
+    "max_abs_element_difference": 0.0034194100343073464,
+    "rms_element_difference": 0.0008137312148047539,
+    "rs_d_trace_up_down": [4.506325735273225, 2.049988799515891],
+    "ks_d_trace_up_down": [4.50140873035543, 2.053511612696284],
+    "interpretation": "Finite-run matrices differ. RS uses zero-temperature occupation in its manifest; KS uses kT=0.00190010442 Ry. No RS/KS energy-grid or broadening refinement envelope was established, so this is not an error bound or backend-equivalence claim."
+  },
+  "negative_controls": {
+    "reverse_fourier_phase": {
+      "result": "FAILS_AS_EXPECTED",
+      "mutation": "exp(+i 2 pi k dot R) -> exp(-i 2 pi k dot R)",
+      "max_abs_Hk_difference": 0.1942
+    },
+    "corrupt_rs_basis_site_label": {
+      "result": "FAILS_AS_EXPECTED",
+      "mutation": "change one RS_GREEN basis_map site from 0 to 1",
+      "diagnostic": "RS and KS local basis maps cover different site/orbital indices"
+    },
+    "multi_site_aliasing": "Not tested: this primitive cell has one site."
+  },
+  "reproduction_command": "python3 tests/validation/fixed_ldau/projector_periodic_operator.py /tmp/rslmto-energy-trace/common_ks_09/records.csv --run-id run --iteration 1 --lambda 1.0 --rs-trace /tmp/rslmto-energy-trace/common_rs_09/records.csv --rs-run-id run --rs-iteration 1 --rs-lambda 1.0",
+  "limitations": [
+    "one-site cell does not test inequivalent-site mapping or multi-site aliasing",
+    "no controlled RS/KS occupation broadening and energy-grid refinement envelope",
+    "no radial QL projector normalization proof",
+    "no MPI or restart comparison",
+    "no SCF convergence or total-energy validation",
+    "not class C material evidence"
+  ]
+}
