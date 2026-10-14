@@ -254,7 +254,7 @@ contains
                if (l == 3 .and. (abs(hubbard_u_general(i, l)) > 1.0e-10_rp .or. &
                                  abs(hubbard_j_general(i, l)) > 1.0e-10_rp) .and. &
                    (this%control%lmax < 2 .or. this%lattice%symbolic_atoms(i)%potential%lmax < 2)) then
-                  call g_logger%fatal('Fixed d-shell LDA+U requires an spd or larger basis on every correlated atom type.', &
+                  call g_logger%fatal('Fixed d-shell LDA+U requires at least an spd basis on every correlated atom type.', &
                                       __FILE__, __LINE__)
                end if
                if (l > size(this%lattice%symbolic_atoms(i)%potential%hubbard_u)) then
@@ -447,8 +447,12 @@ contains
                if (l /= 3) then
                   call g_logger%fatal('Fixed-U LDA+U is validated only for the d shell.', __FILE__, __LINE__)
                end if
-               if (this%control%lmax < 2 .or. this%lattice%symbolic_atoms(i)%potential%lmax < 2) then
-                  call g_logger%fatal('Fixed d-shell LDA+U requires an spd or larger basis.', __FILE__, __LINE__)
+               if (this%control%lmax /= 2) then
+                  call g_logger%fatal('Fixed d-shell LDA+U currently requires control lmax=2 (spd basis); '// &
+                                      'the spdf d-shell basis transform is unsupported.', __FILE__, __LINE__)
+               end if
+               if (this%lattice%symbolic_atoms(i)%potential%lmax < 2) then
+                  call g_logger%fatal('Fixed d-shell LDA+U requires d-channel potential data.', __FILE__, __LINE__)
                end if
             end do
          end do
