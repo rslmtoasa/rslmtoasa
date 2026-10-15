@@ -1,0 +1,85 @@
+{
+  "stage": "M0.1",
+  "evidence_class": "B finite-operator only",
+  "result": "pass",
+  "base_commit": "3d7571ad4ac82d1c8c48e82c44299290507a787b",
+  "source_sha256": {
+    "source/bands.f90": "937bfe6c17481c37a378f743960a21faf90660824f69f85a77a3b10a652c7a39",
+    "source/reciprocal.f90": "ee7fdd5e1777157d4f5d588c805cf1108f6b3de1db1bf8131a6a13cd36217ea3",
+    "source/reciprocal_projection.f90": "cd64942f9b2a7c1cf1dd47c7357e09bb6d8c009c06f9e3976a49cd8d2e9d970f",
+    "source/self.f90": "6d4b3447b56ab4e269b3c38cd4a85b0b12f1f8397e95f371700b237d44bb1335"
+  },
+  "test_sha256": {
+    "tests/validation/fixed_ldau/projector_common_frozen_h.f90": "992687ebcaa822c34ded5e34d93d8bc0a502c4a4af1ee01ebeeffaed724df346",
+    "tests/validation/fixed_ldau/projector_multisite_frozen_h.f90": "5d5d24c40e8505494ee57b116003a22bb9ce397e0140574d566a1fcb91b1891b"
+  },
+  "build": {
+    "command": "cmake --build /private/tmp/rslmto-localmom-debug -j2",
+    "build_type": "Debug",
+    "compiler": "GNU Fortran 16.2.0",
+    "mpi": false,
+    "openmp": false,
+    "executable": "/private/tmp/rslmto-localmom-debug/bin/rslmto.x",
+    "executable_sha256": "2062d9e8c511606769151c0ce988d9942c56ad9c6dc497d5e40c2dfb232e47ad"
+  },
+  "test": {
+    "command": "ctest --test-dir /private/tmp/rslmto-localmom-debug -R '^UnitLdaUProjector(Common|Multisite)FrozenH$' -V",
+    "exit_code": 0,
+    "passed": 2,
+    "failed": 0,
+    "stdout": "/private/tmp/rslmto-localmom-m0-projector-debug-final.log",
+    "stdout_sha256": "c51262b29656a06c7cc7ca774479942965e4fbcb457135e4dbe98fb8ba93bee6"
+  },
+  "predeclared_criteria": {
+    "ks_exact_m1_max_error_ry": 5e-12,
+    "rs_analytic_lorentz_m1_max_error_ry": 3e-4,
+    "trace_m1_minus_q0c_max_error_ry": 1e-10,
+    "wrong_operator_min_mismatch_ry": 3e-3,
+    "rs_integral_refinement": "strictly decreasing error for 750, 1500, 3000, 6000 channels"
+  },
+  "measurements": {
+    "one_site": {
+      "ks_exact_m1_max_error_ry": 7.757919e-18,
+      "rs_analytic_lorentz_m1_max_error_ry": 2.894374e-7,
+      "rs_production_vs_6000_simpson_max_error_ry": 1.962616e-17,
+      "ks_trace_m1_minus_q0c_max_error_ry": 1.110223e-16,
+      "rs_trace_m1_minus_q0c_max_error_ry": 8.881784e-16,
+      "rs_m1_simpson_error_by_channels_ry": [8.875231e-3, 2.352376e-3, 1.258196e-4, 2.894374e-7],
+      "ks_conjugation_negative_control_mismatch_ry": 7.228030e-2,
+      "rs_transpose_negative_control_mismatch_ry": 7.283558e-2
+    },
+    "two_inequivalent_sites": {
+      "ks_exact_m1_max_error_ry": 2.797158e-17,
+      "rs_analytic_lorentz_m1_max_error_ry": 2.845306e-7,
+      "rs_production_vs_6000_simpson_max_error_ry": 3.273070e-17,
+      "ks_trace_m1_minus_q0c_max_error_ry": 5.551115e-17,
+      "rs_trace_m1_minus_q0c_max_error_ry": 1.054712e-15,
+      "rs_m1_simpson_error_by_channels_ry": [1.142377e-2, 2.147020e-3, 1.123802e-4, 2.845306e-7],
+      "ks_conjugation_negative_control_mismatch_ry": 6.986429e-2,
+      "rs_transpose_negative_control_mismatch_ry": 7.042847e-2,
+      "ks_site_swap_negative_control_mismatch_ry": 4.769028e-2,
+      "rs_site_swap_negative_control_mismatch_ry": 4.763075e-2
+    }
+  },
+  "limitations": [
+    "Finite common-H probes only; no real material SCF state, U=0 calibration, or frozen-state calculate_pl/newrho carrier result is included.",
+    "M0 as a whole is not passed; M0.2 and M0.3 remain unmeasured."
+  ],
+  "mpi_validation": {
+    "build": "Debug, GNU Fortran 16.2.0/mpifort, MPI 3.1, OpenMP off",
+    "source_snapshot": "M0.1 hashes above; immutable copy at /private/tmp/rslmto-localmom-mpi-src",
+    "build_directory": "/private/tmp/rslmto-localmom-mpi",
+    "test_command": "ctest --test-dir /private/tmp/rslmto-localmom-mpi -R '^UnitLdaU(Projector(Common|Multisite)FrozenH|FixedUResidualMPI)(_mpi_2)?$' --output-on-failure",
+    "exit_code": 0,
+    "passed": 6,
+    "failed": 0,
+    "stdout": "/private/tmp/rslmto-localmom-m0-mpi-final-all.log",
+    "stdout_sha256": "192c182a09ace393e0a85f19a27b8af1264e9243edd9312e1088f5f6373e8780",
+    "test_executable_sha256": {
+      "UnitLdaUProjectorCommonFrozenH": "16bcc4c2ad329e5ca09af8730dc40ec9963a1c974b198b69dadbae72bc889e0a",
+      "UnitLdaUProjectorMultisiteFrozenH": "18e51f0675264f3648b0911a65b09b1d56b325120a8256124ab25cb02f411f0c",
+      "UnitLdaUFixedUResidualMPI": "d9267ffc5f20d1d3846bcebac68462b78bbd917450b7b6bb9338c35f2c08254e"
+    },
+    "scope": "Serial and two-rank M1 projector probes and the fixed-U residual/physicality regression pass; this does not cover full production RS/KS MPI campaigns."
+  }
+}

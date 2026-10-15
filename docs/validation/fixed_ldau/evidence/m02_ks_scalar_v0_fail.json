@@ -1,0 +1,94 @@
+{
+  "schema": "rslmto-ldau-m02-scalar-control-v1",
+  "verdict": "FAIL",
+  "scope": "KS no-U scalar-V local-moment calibration only; does not establish U-active energy closure or RS behavior",
+  "definition": {
+    "D_ry": "sum over captured shells/sites of Re Tr(M1) minus production ATOMSC SUMEV",
+    "floor_ry": "abs(D_baseline)",
+    "uncertainty_ry": "max absolute deviation from baseline D across deterministic repeat and mesh refinement",
+    "allowance_ry": "floor + uncertainty",
+    "scalar_control": "raw SUMEV minus local replay SUMEV; expected +v*sum(q0), with c_local=c_raw-v and q0/q2 fixed"
+  },
+  "result": {
+    "floor_ry": 5.028166848219939e-6,
+    "uncertainty_ry": 2.5285631810589848e-8,
+    "allowance_ry": 5.053452480030529e-6,
+    "scalar_expected_ry": 0.06498480421874168,
+    "scalar_measured_ry": 0.06497426910958881,
+    "absolute_residual_ry": 1.0535109152873257e-5,
+    "residual_over_allowance": 2.08473498,
+    "per_spin_expected_ry": [0.04341494011919398, 0.021569864099547705],
+    "per_spin_measured_ry": [0.04340725947317070, 0.02156700963641811],
+    "scalar_intervention_v_ry": 0.01,
+    "center_change_up_down_ry": [-0.01, -0.01],
+    "q0_up_down": [4.3414940119193979, 2.1569864099547704],
+    "q2_up_down": [0.044608621425505916, 0.012064942929394567],
+    "max_abs_change_in_frozen_inputs": 0.0
+  },
+  "runs": [
+    {
+      "run_id": "m02_ks_u0",
+      "D_ry": -5.028166848219939e-6,
+      "iteration": 23,
+      "resolution_kpoints": 1728,
+      "charge_residual": 6e-10,
+      "converged_at": 1e-9,
+      "csv_sha256": "4dc77e488175e342254409d8327df70334a0cd688855641491f670aac8a704b4",
+      "log_sha256": "0788e69fe0a71f7a8ed83d74cbfd5da02c1dae1a8f0683341ba39c3bc953c774",
+      "input_deck_sha256": "ab09e896ea9cebcae601547142c4d2474090901b3f988bd198f2798e8ee2d72e",
+      "input_seed_sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+      "accepted_output_seed_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "manifest_sha256": "d86fe94595f831a6ab382e6a32ebb531f45f22bcade1a8a693c15b67d0f404ac",
+      "validation_json_sha256": "c8f7c3bbacd615d9e871d5aca616106d4165adb7a20ca909d0dc643af23b3be5"
+    },
+    {
+      "run_id": "m02_ks_u0_repeat",
+      "D_ry": -5.023148958116508e-6,
+      "iteration": 1,
+      "resolution_kpoints": 1728,
+      "charge_residual": 4e-10,
+      "converged_at": 1e-9,
+      "csv_sha256": "812966b86551894628528f781ae3316582e3210457705cfa5d7ade1a6915c681",
+      "log_sha256": "60e6d43a0d8f87ae9deaefc1216ad412dae01310adeef4be26a3cf1edddf747b",
+      "input_deck_sha256": "ab09e896ea9cebcae601547142c4d2474090901b3f988bd198f2798e8ee2d72e",
+      "input_seed_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "accepted_output_seed_sha256": "037994a4ddbff22b7b422de58d2b0186eaab6efa9705d3b870341273d68385f5",
+      "manifest_sha256": "41346b3391a2ff367f4184a258d636e977cb056538966a71c91bea6ef1f18d76",
+      "validation_json_sha256": "f71d454b7d188ba77ed09c4603c46851214e3f1da260657a27a9ea99ec4ff886"
+    },
+    {
+      "run_id": "m02_ks_u0_refine16",
+      "D_ry": -5.053452480030529e-6,
+      "iteration": 21,
+      "resolution_kpoints": 4096,
+      "charge_residual": 4e-10,
+      "converged_at": 1e-9,
+      "csv_sha256": "6a3322e87cb87ac092dc3c73d45042c42b23d3091aa5090e8840ef714b4be7a2",
+      "log_sha256": "e8aacaf8b42cf4954eb6d63f0917d8c996cc9712e0adec224189b6036107777b",
+      "input_deck_sha256": "267a60beb2a17d83697c9fc9c0d7853b7d9b04f0260dbbdd376b954ede062b2e",
+      "input_seed_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "accepted_output_seed_sha256": "b9934314d3407a43a1e333cafce1697e038f39dc771e77bc5999ec3ad9a13060",
+      "manifest_sha256": "66c860b52ba291b54c5274e2cd568d883176c9d9f1f9f28cdcc135de0bb7432a",
+      "validation_json_sha256": "05d197f4600ae181fa799bb10d8f79895fb792d7195ed96a3b102096a041f47c"
+    }
+  ],
+  "shared_provenance": {
+    "executable_sha256": "f39e5a392d6fc2a0e8e90fb49caabf503fab88c0c6c0111462820fca54eef31e",
+    "source_sha": "909823608595b7c491116cdaf4ee20d4453dd05a8121a8b02f425e2988243c34",
+    "m02_floor_json_sha256": "dd33dd828131d1a81df9f2ceb729aaae7116c0af7ef8c78ac2cc17a56b090bef",
+    "floor_oracle_sha256": "65c59d32fd6baea5c8c85e5de56776dc677b76d50f9b8ec4137ea3f223257752",
+    "capture_oracle_sha256": "98d14387be47c3cea4a4803ce331a1c92cb8c0d9d5d3ca412b5491634b68645d",
+    "backend": "KS",
+    "nsp": 1,
+    "U_J": "zero",
+    "temperature_ry": 0.00190010442,
+    "electron_count": 8.0,
+    "seed_rule": "repeat and refinement use the same accepted baseline Fe_out seed; repeat deck is identical; refinement changes only k mesh 12^3 to 16^3"
+  },
+  "interpretation": [
+    "The signed algebraic scalar-V expectation is positive and the replay uses c_local=c_raw-0.01 Ry with identical q0, q2, radial arrays and seeds.",
+    "The measured radial SUMEV response falls outside the backend-matched no-U floor plus refinement/repeat uncertainty.",
+    "Do not apply the finite-H operator oracle allowance to this radial carrier result.",
+    "RS has no accepted M0.2 floor because its corresponding run did not converge; this KS result does not yield an overall M0 pass."
+  ]
+}
