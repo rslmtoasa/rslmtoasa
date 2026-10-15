@@ -32,17 +32,35 @@ program projector_common_frozen_h
 
    integer, parameter :: nk = 2, nch = 6000
    real(rp), parameter :: ef = 0.0_rp, eta = 0.004_rp, emin = -3.0_rp
+   ! M1 budgets are fixed before the M1-enabled run: KS is exact to the
+   ! eigenpair sum (5e-12 Ry); the RS finite-window budget is the existing
+   ! 1e-4 occupation budget multiplied by max(|E|)=3 Ry.
    real(rp), parameter :: tol_ks = 5.0e-12_rp, tol_rs_quad = 1.0e-4_rp
+   real(rp), parameter :: tol_ks_m1 = 5.0e-12_rp, tol_rs_m1 = 3.0e-4_rp
+   ! This same-call identity uses identical production grids on both sides;
+   ! the looser oracle budget above is not applied to this check.
+   real(rp), parameter :: tol_trace_m1 = 1.0e-10_rp
+   ! Wrong-orientation controls must exceed 10x the accepted RS M1 oracle budget.
+   real(rp), parameter :: tol_wrong_m1 = 3.0e-3_rp
    real(rp) :: weights(nk), qlerr, rs_quad_error, broadening_error
    real(rp) :: rs_vs_simpson, refinement_errors(4)
+   real(rp) :: m1_refinement_errors(4)
    integer :: refinement_meshes(4) = [750, 1500, 3000, 6000]
    real(rp) :: imag_coherence, v_imag, h_identity_error, h_hermiticity_error
    real(rp) :: ks_conjugate_mismatch, rs_transpose_mismatch
-   integer :: local_nk, ik, spin, a, b, band, ie
+   real(rp) :: ks_m1_error, rs_m1_error, rs_m1_vs_simpson
+   real(rp) :: ks_m1_trace_error, rs_m1_trace_error
+   real(rp) :: ks_m1_conjugate_mismatch, rs_m1_transpose_mismatch
+   integer :: local_nk, ik, spin, a, b, band, ie, lapack_info
    complex(rp), allocatable :: q(:, :), htarget(:, :), hbare(:, :), hcheck(:, :)
    complex(rp) :: projector_exact(5, 5, 2), projector_lorentz(5, 5, 2)
    complex(rp) :: projector_simpson(5, 5, 2)
    complex(rp) :: projector_ks(5, 5, 2), projector_rs(5, 5, 2), projector_wrong(5, 5, 2)
+   complex(rp) :: m1_exact_ks(2,5,5), m1_exact_rs(2,5,5), m1_ks(1,4,2,7,7), m1_rs(1,4,2,7,7)
+   complex(rp) :: m1_simpson(2,5,5), m1_wrong(1,4,2,7,7)
+   complex(rp) :: m1_minimal(1,3,2,5,5), m1_minimal_exact(2,5,5)
+   complex(rp), allocatable :: saved_ldm(:,:,:,:), saved_eigenvectors(:,:,:), h0_work(:,:), lapack_work(:)
+   real(rp), allocatable :: saved_eigenvalues(:,:), eig_work(:), lapack_rwork(:)
    complex(rp), allocatable :: gmat(:, :)
    real(rp), allocatable :: eig(:)
    real(rp) :: e, angle
@@ -57,7 +75,8 @@ program projector_common_frozen_h
    type(green), target :: gr
    type(bands) :: rs
    type(reciprocal) :: ks
-   logical :: failed
+   logical :: failed, saved_hubbard_u_general_check
+   external :: zheev
 
    failed = .false.
 #ifdef USE_MPI
@@ -74,34 +93,98 @@ program projector_common_frozen_h
    call setup_common_operator()
    call setup_ks()
 
-   call ks%calculate_ldm_from_projected_dos(lat, fixed_liechtenstein=.true.)
+   m1_ks = cmplx(0.0_rp,0.0_rp,rp)
+   call ks%calculate_ldm_from_projected_dos(lat, fixed_liechtenstein=.true., m1_out=m1_ks)
    call copy_d_density(lat, projector_ks)
+   ks_m1_error = maxval(abs(m1_ks(1,3,:,1:5,1:5)-m1_exact_ks))
+   call ks%calculate_band_moments()
+   ks_m1_trace_error = 0.0_rp
+   do spin = 1, 2
+      ks_m1_trace_error = max(ks_m1_trace_error, abs(real(sum([(m1_ks(1,3,spin,a,a),a=1,5)]),rp) - &
+         ks%band_moments(1,3,spin,1)*ks%band_moments(1,3,spin,2)))
+   end do
+   if (ks_m1_error > tol_ks_m1 .or. ks_m1_trace_error > tol_trace_m1) failed = .true.
    do spin = 1, 2
       qlerr = maxval(abs(projector_ks(:, :, spin) - projector_exact(:, :, spin)))
       if (qlerr > tol_ks) failed = .true.
    end do
 
+   ! No-U diagnostic path: diagonalize H0=H−V_U, feed those no-U eigenpairs
+   ! through the public KS projector wrapper, and use the minimal valid spd
+   ! M1 shape (three channels and five m values).  The diagnostic-only call
+   ! must leave the live fixed-U LDM byte-for-byte unchanged.
+   allocate(saved_ldm, source=lat%symbolic_atoms(1)%potential%ldm)
+   allocate(saved_eigenvalues, source=ks%eigenvalues)
+   allocate(saved_eigenvectors, source=ks%eigenvectors)
+   allocate(h0_work(nb,nb), eig_work(nb), lapack_work(2*nb), lapack_rwork(3*nb-2))
+   h0_work = hbare
+   call zheev('V','U',nb,h0_work,nb,eig_work,lapack_work,2*nb,lapack_rwork,lapack_info)
+   if (lapack_info /= 0) failed = .true.
+   if (minval(abs(eig_work-ef)) < 1.0e-8_rp) failed = .true.
+   m1_minimal_exact = cmplx(0.0_rp,0.0_rp,rp)
+   do spin = 1, 2
+      do a = 1, 5
+         do b = 1, 5
+            do band = 1, nb
+               if (eig_work(band) < ef) m1_minimal_exact(spin,a,b) = m1_minimal_exact(spin,a,b) + &
+                  eig_work(band)*h0_work((spin-1)*norb+4+a,band)*conjg(h0_work((spin-1)*norb+4+b,band))
+            end do
+         end do
+      end do
+   end do
+   do ik = 1, local_nk
+      ks%eigenvalues(:,ik) = eig_work
+      ks%eigenvectors(:,:,ik) = h0_work
+   end do
+   m1_minimal = cmplx(0.0_rp,0.0_rp,rp)
+   saved_hubbard_u_general_check = ham%hubbard_u_general_check
+   ham%hubbard_u_general_check = .false.
+   call ks%calculate_ldm_from_projected_dos(lat, fixed_liechtenstein=.true., &
+      m1_out=m1_minimal, m1_only=.true.)
+   ham%hubbard_u_general_check = saved_hubbard_u_general_check
+   if (maxval(abs(m1_minimal(1,3,:,1:5,1:5)-m1_minimal_exact)) > tol_ks_m1) failed = .true.
+   if (maxval(abs(lat%symbolic_atoms(1)%potential%ldm-saved_ldm)) > 0.0_rp) failed = .true.
+   ks%eigenvalues = saved_eigenvalues
+   ks%eigenvectors = saved_eigenvectors
+   deallocate(saved_ldm,saved_eigenvalues,saved_eigenvectors,h0_work,eig_work,lapack_work,lapack_rwork)
+
    ! Negative control: conjugating every KS spinor reverses the imaginary
    ! projector coherences.  The production output must then disagree with the
    ! independent common-H projector by a large, measured margin.
    ks%eigenvectors = conjg(ks%eigenvectors)
-   call ks%calculate_ldm_from_projected_dos(lat, fixed_liechtenstein=.true.)
+   m1_wrong = cmplx(0.0_rp,0.0_rp,rp)
+   call ks%calculate_ldm_from_projected_dos(lat, fixed_liechtenstein=.true., m1_out=m1_wrong)
    call copy_d_density(lat, projector_wrong)
    ks_conjugate_mismatch = maxval(abs(projector_wrong - projector_exact))
    if (ks_conjugate_mismatch < 0.1_rp) failed = .true.
+   ks_m1_conjugate_mismatch = maxval(abs(m1_wrong(1,3,:,1:5,1:5)-m1_exact_ks))
+   if (ks_m1_conjugate_mismatch < tol_wrong_m1) failed = .true.
    ks%eigenvectors = conjg(ks%eigenvectors)
 
    call setup_rs_green(.true.)
-   call rs%calculate_moments()
+   m1_rs = cmplx(0.0_rp,0.0_rp,rp)
+   call rs%calculate_moments(m1_out=m1_rs)
    call copy_d_density(lat, projector_rs)
-   call run_simpson_mesh_refinement(refinement_errors, projector_simpson)
+   call run_simpson_mesh_refinement(refinement_errors, m1_refinement_errors, projector_simpson, m1_simpson)
    rs_quad_error = maxval(abs(projector_rs - projector_lorentz))
    rs_vs_simpson = maxval(abs(projector_rs - projector_simpson))
    broadening_error = maxval(abs(projector_lorentz - projector_exact))
+   rs_m1_error = maxval(abs(m1_rs(1,3,:,1:5,1:5)-m1_exact_rs))
+   rs_m1_vs_simpson = maxval(abs(m1_rs(1,3,:,1:5,1:5)-m1_simpson))
+   rs_m1_trace_error = 0.0_rp
+   do spin = 1, 2
+      rs_m1_trace_error = max(rs_m1_trace_error, abs(real(sum([(m1_rs(1,3,spin,a,a),a=1,5)]),rp) - &
+         lat%symbolic_atoms(1)%potential%ql(1,2,spin) * &
+         (lat%symbolic_atoms(1)%potential%gravity_center(3,spin) + lat%symbolic_atoms(1)%potential%vmad)))
+   end do
+   if (rs_m1_error > tol_rs_m1 .or. rs_m1_vs_simpson > 5.0e-12_rp .or. &
+       rs_m1_trace_error > tol_trace_m1) failed = .true.
    if (rs_quad_error > tol_rs_quad) failed = .true.
    if (rs_vs_simpson > 5.0e-12_rp) failed = .true.
    if (any(refinement_errors(2:4) >= refinement_errors(1:3))) failed = .true.
    if (refinement_errors(4) > tol_rs_quad) failed = .true.
+   if (any(m1_refinement_errors(2:4) >= m1_refinement_errors(1:3))) failed = .true.
+   if (m1_refinement_errors(4) > tol_rs_m1) failed = .true.
    if (broadening_error <= rs_quad_error) failed = .true.
 
    imag_coherence = max(maxval(abs(aimag(projector_exact(:, :, 1)))), &
@@ -112,10 +195,13 @@ program projector_common_frozen_h
    ! Negative control on the RS spectral matrix: H^T has P^T and flips the
    ! complex orbital coherences while leaving the spectrum unchanged.
    call setup_rs_green(.false.)
-   call rs%calculate_moments()
+   m1_wrong = cmplx(0.0_rp,0.0_rp,rp)
+   call rs%calculate_moments(m1_out=m1_wrong)
    call copy_d_density(lat, projector_wrong)
    rs_transpose_mismatch = maxval(abs(projector_wrong - projector_exact))
    if (rs_transpose_mismatch < 0.1_rp) failed = .true.
+   rs_m1_transpose_mismatch = maxval(abs(m1_wrong(1,3,:,1:5,1:5)-m1_exact_rs))
+   if (rs_m1_transpose_mismatch < tol_wrong_m1) failed = .true.
 
 #ifdef USE_MPI
    call reduce_failure(failed)
@@ -127,14 +213,25 @@ program projector_common_frozen_h
       write(*,'(a,es14.6)') 'RS production vs 6000-point Simpson reference = ', rs_vs_simpson
       do ik = 1, size(refinement_meshes)
          write(*,'(a,i0,a,es14.6)') 'Lorentz-oracle Simpson error nchannels=', refinement_meshes(ik), ' = ', refinement_errors(ik)
+         write(*,'(a,i0,a,es14.6)') 'Lorentz M1 Simpson error nchannels=', refinement_meshes(ik), ' = ', &
+            m1_refinement_errors(ik)
       end do
       write(*,'(a,es14.6)') 'RS broadening/window difference vs sharp KS projector = ', broadening_error
+      write(*,'(a,es14.6)') 'KS M1 max error vs exact eigenpair sum [Ry] = ', ks_m1_error
+      write(*,'(a,es14.6)') 'No-U minimal-extent M1-only max error [Ry] = ', &
+         maxval(abs(m1_minimal(1,3,:,1:5,1:5)-m1_minimal_exact))
+      write(*,'(a,es14.6)') 'RS M1 max error vs analytic finite-window Lorentz oracle [Ry] = ', rs_m1_error
+      write(*,'(a,es14.6)') 'RS M1 production vs 6000-point Simpson reference [Ry] = ', rs_m1_vs_simpson
+      write(*,'(a,es14.6)') 'KS max |Tr(M1)-q0*c| [Ry] = ', ks_m1_trace_error
+      write(*,'(a,es14.6)') 'RS max |Tr(M1)-q0*c| [Ry] = ', rs_m1_trace_error
       write(*,'(a,es14.6)') 'max exact imaginary d coherence = ', imag_coherence
       write(*,'(a,es14.6)') 'max imaginary production V_U entry = ', v_imag
       write(*,'(a,es14.6)') 'max |(H0+V_U)-H| = ', h_identity_error
       write(*,'(a,es14.6)') 'max |H-H^dagger| = ', h_hermiticity_error
       write(*,'(a,es14.6)') 'KS conjugation negative-control mismatch = ', ks_conjugate_mismatch
       write(*,'(a,es14.6)') 'RS transpose negative-control mismatch = ', rs_transpose_mismatch
+      write(*,'(a,es14.6)') 'KS M1 conjugation negative-control mismatch [Ry] = ', ks_m1_conjugate_mismatch
+      write(*,'(a,es14.6)') 'RS M1 transpose negative-control mismatch [Ry] = ', rs_m1_transpose_mismatch
       if (failed) then
          write(*,'(a)') 'projector_common_frozen_h: FAIL'
       else
@@ -149,16 +246,19 @@ program projector_common_frozen_h
 
 contains
 
-   subroutine run_simpson_mesh_refinement(errors, finest_projector)
+   subroutine run_simpson_mesh_refinement(errors, m1_errors, finest_projector, finest_m1)
       real(rp), intent(out) :: errors(4)
+      real(rp), intent(out) :: m1_errors(4)
       complex(rp), intent(out) :: finest_projector(5,5,2)
+      complex(rp), intent(out) :: finest_m1(2,5,5)
       real(rp), allocatable :: energy_mesh(:), y_real(:), y_imag(:)
       complex(rp) :: spectral, g_ab, g_ba
-      complex(rp) :: integrated(5,5,2)
-      real(rp) :: step, endpoint, egrid, value_real, value_imag
+      complex(rp) :: integrated(5,5,2), integrated_m1(2,5,5)
+      real(rp) :: step, endpoint, egrid, value_real, value_imag, m1_value_real, m1_value_imag
       integer :: level, nchan, npts, iorb_a, iorb_b, spin_id, spin_offset, row, col, band_id, ie
 
       finest_projector = cmplx(0.0_rp,0.0_rp,rp)
+      finest_m1 = cmplx(0.0_rp,0.0_rp,rp)
       do level = 1, size(refinement_meshes)
          nchan = refinement_meshes(level)
          step = (ef-emin)/real(nchan/2,rp)
@@ -169,6 +269,7 @@ contains
             energy_mesh(ie) = emin + real(ie-1,rp)*step
          end do
          integrated = cmplx(0.0_rp,0.0_rp,rp)
+         integrated_m1 = cmplx(0.0_rp,0.0_rp,rp)
          do spin_id = 1, 2
             spin_offset = (spin_id-1)*norb
             do iorb_a = 1, 5
@@ -191,11 +292,29 @@ contains
                   call simpson_m(value_real,step,ef,npts,y_real,endpoint,0,energy_mesh)
                   call simpson_m(value_imag,step,ef,npts,y_imag,endpoint,0,energy_mesh)
                   integrated(iorb_a,iorb_b,spin_id) = cmplx(value_real,value_imag,rp)
+                  do ie = 1, nchan+10
+                     egrid = energy_mesh(ie)
+                     spectral = cmplx(0.0_rp,0.0_rp,rp)
+                     do band_id = 1, nb
+                        g_ab = q(row,band_id)*conjg(q(col,band_id))/ &
+                               cmplx(egrid-eig(band_id),eta,rp)
+                        g_ba = q(col,band_id)*conjg(q(row,band_id))/ &
+                               cmplx(egrid-eig(band_id),eta,rp)
+                        spectral = spectral + hubbard_spectral_density_element(g_ab,g_ba)
+                     end do
+                     y_real(ie) = egrid*real(spectral,rp)
+                     y_imag(ie) = egrid*aimag(spectral)
+                  end do
+                  call simpson_m(m1_value_real,step,ef,npts,y_real,endpoint,0,energy_mesh)
+                  call simpson_m(m1_value_imag,step,ef,npts,y_imag,endpoint,0,energy_mesh)
+                  integrated_m1(spin_id,iorb_a,iorb_b) = cmplx(m1_value_real,m1_value_imag,rp)
                end do
             end do
          end do
          errors(level) = maxval(abs(integrated-projector_lorentz))
+         m1_errors(level) = maxval(abs(integrated_m1-m1_exact_rs))
          if (level == size(refinement_meshes)) finest_projector = integrated
+         if (level == size(refinement_meshes)) finest_m1 = integrated_m1
          deallocate(energy_mesh,y_real,y_imag)
       end do
    end subroutine run_simpson_mesh_refinement
@@ -269,7 +388,7 @@ contains
       integer :: i, j, k, spin_offset, row, col
       complex(rp) :: phase
       complex(rp) :: base_q(9,9), dmat(18,18)
-      real(rp) :: occ
+      real(rp) :: occ, occ_m1
 
       ! Physical Hermitian seed P, with nonzero complex orbital coherences.
       do spin = 1, 2
@@ -318,6 +437,8 @@ contains
 
       projector_exact = cmplx(0.0_rp,0.0_rp,rp)
       projector_lorentz = cmplx(0.0_rp,0.0_rp,rp)
+      m1_exact_ks = cmplx(0.0_rp,0.0_rp,rp)
+      m1_exact_rs = cmplx(0.0_rp,0.0_rp,rp)
       do spin = 1, 2
          spin_offset = (spin-1)*norb
          do a = 1, 5
@@ -327,10 +448,16 @@ contains
                do k = 1, nb
                   if (eig(k) < ef) then
                      projector_exact(a,b,spin) = projector_exact(a,b,spin) + q(row,k)*conjg(q(col,k))
+                     m1_exact_ks(spin,a,b) = m1_exact_ks(spin,a,b) + &
+                        eig(k)*q(row,k)*conjg(q(col,k))
                   end if
                   occ = (atan((ef-eig(k))/eta)-atan((emin-eig(k))/eta))/pi
+                  occ_m1 = eig(k)*occ + eta/(2.0_rp*pi)*log(((ef-eig(k))**2+eta**2)/ &
+                                                              ((emin-eig(k))**2+eta**2))
                   projector_lorentz(a,b,spin) = projector_lorentz(a,b,spin) + &
                      occ*q(row,k)*conjg(q(col,k))
+                  m1_exact_rs(spin,a,b) = m1_exact_rs(spin,a,b) + &
+                     occ_m1*q(row,k)*conjg(q(col,k))
                end do
             end do
          end do
@@ -347,6 +474,7 @@ contains
       local_nk = workset%nk_local
       ks%hamiltonian => ham; ks%lattice => lat; ks%control => ctl
       ks%n_spin_components = 2
+      ks%n_sites = 1; ks%n_orb_types = 3
       ks%nk_mesh = [nk, 1, 1]
       ks%nk_total = nk; ks%nk_local = local_nk
       ks%k_mesh_distributed_active = numprocs > 1

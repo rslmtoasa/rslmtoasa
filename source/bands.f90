@@ -860,9 +860,13 @@ contains
    !> @brief
    !> Calculates the moments m^(q), q = 0, 1 and 2
    !---------------------------------------------------------------------------
-   subroutine calculate_moments(this)
+   subroutine calculate_moments(this, m1_out, pl_diag_out)
       use mpi_mod
       class(bands) :: this
+      ! Optional diagnostic-only raw first spectral moment, shape
+      ! (nrec,l+1,spin,m_a,m_b). It never feeds the radial moment path.
+      complex(rp), intent(out), optional :: m1_out(:, :, :, :, :)
+      real(rp), intent(out), optional :: pl_diag_out(:, :, :, :)
       ! Local variables
       integer :: i, j, l, m, o ! Orbital index
       integer :: na ! Atom index
@@ -893,6 +897,9 @@ contains
       real(rp) :: occ_orb
       real(rp), allocatable :: ldm_comm(:, :, :, :)
       real(rp), allocatable :: ldm_comm_imag(:, :, :, :)
+      real(rp), allocatable :: m1_comm_real(:, :, :, :, :)
+      real(rp), allocatable :: m1_comm_imag(:, :, :, :, :)
+      real(rp) :: m1_real, m1_imag
       real(rp), allocatable :: pl_comm(:, :, :)
       integer :: lcount_ldm, max_flat_ldm, local_flat
       ! These diagnostic tolerances exceed observed finite-grid residuals
@@ -900,6 +907,22 @@ contains
       ! material violations. Diagnostics never modify or project the LDM.
       real(rp), parameter :: ldm_hermiticity_tol = 1.0e-6_rp
       real(rp), parameter :: ldm_occupation_tol = 1.0e-3_rp
+
+      if (present(m1_out)) then
+         if (size(m1_out, 1) /= this%lattice%nrec .or. size(m1_out, 2) < lmax_basis + 1 .or. &
+             size(m1_out, 3) < 2 .or. size(m1_out, 4) < 2*lmax_basis + 1 .or. &
+             size(m1_out, 5) < 2*lmax_basis + 1) then
+            call g_logger%fatal('bands%calculate_moments: m1_out has incompatible extents', __FILE__, __LINE__)
+         end if
+         m1_out = cmplx(0.0_rp, 0.0_rp, rp)
+      end if
+      if (present(pl_diag_out)) then
+         if (size(pl_diag_out, 1) /= this%lattice%nrec .or. size(pl_diag_out, 2) < lmax_basis + 1 .or. &
+             size(pl_diag_out, 3) < 2 .or. size(pl_diag_out, 4) < 6) then
+            call g_logger%fatal('bands%calculate_moments: pl_diag_out has incompatible extents', __FILE__, __LINE__)
+         end if
+         pl_diag_out = 0.0_rp
+      end if
 
       ! Store previous moments if needed for reverse rotation later
       do na_glob = start_atom, end_atom
@@ -1121,7 +1144,58 @@ contains
          end do
       end if
 
-      call this%calculate_pl()
+      ! Read-only M1 output for the local-moments protocol.  This repeats the
+      ! exact occupied spectral-function integral used for P, with one raw
+      ! energy factor.  It is independent of ql/gravity_center and does not
+      ! alter any density, PL, or energy state; present(m1_out) also enables
+      ! the same measurement for a no-U reference calculation.
+      if (present(m1_out)) then
+         do na_glob = start_atom, end_atom
+            na = g2l_map(na_glob)
+            do li = 0, min(lmax_basis, size(m1_out, 2) - 1)
+               jdim = 2*li + 1
+               do ispin = 1, min(2, size(m1_out, 3))
+                  soff = spin_off*(ispin - 1)
+                  do i = 1, min(jdim, size(m1_out, 4))
+                     iorb = li*li + i
+                     do j = 1, min(jdim, size(m1_out, 5))
+                        jorb = li*li + j
+                        do ie = 1, size(spectral_value)
+                           spectral_value(ie) = hubbard_spectral_density_element( &
+                              this%green%g0(iorb + soff, jorb + soff, ie, na), &
+                              this%green%g0(jorb + soff, iorb + soff, ie, na))
+                        end do
+                        y(:) = real(spectral_value, rp)
+                        y_imag(:) = aimag(spectral_value)
+                        m1_real = 0.0_rp
+                        m1_imag = 0.0_rp
+                        call simpson_m(m1_real, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 1, this%en%ene)
+                        call simpson_m(m1_imag, this%en%edel, this%en%fermi, this%nv1, y_imag, this%e1, 1, this%en%ene)
+                        m1_out(na_glob, li + 1, ispin, i, j) = cmplx(m1_real, m1_imag, rp)
+                     end do
+                  end do
+               end do
+            end do
+         end do
+#ifdef USE_MPI
+         allocate(m1_comm_real(size(m1_out, 1), size(m1_out, 2), size(m1_out, 3), size(m1_out, 4), size(m1_out, 5)))
+         allocate(m1_comm_imag(size(m1_out, 1), size(m1_out, 2), size(m1_out, 3), size(m1_out, 4), size(m1_out, 5)))
+         m1_comm_real = real(m1_out, rp)
+         m1_comm_imag = aimag(m1_out)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, m1_comm_real, product(shape(m1_comm_real)), &
+                            MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, m1_comm_imag, product(shape(m1_comm_imag)), &
+                            MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         m1_out = cmplx(m1_comm_real, m1_comm_imag, rp)
+         deallocate(m1_comm_real, m1_comm_imag)
+#endif
+      end if
+
+      if (present(pl_diag_out)) then
+         call this%calculate_pl(pl_diag_out)
+      else
+         call this%calculate_pl()
+      end if
 
       ! Transfer calculated moments across MPI ranks
 #ifdef USE_MPI
@@ -2029,15 +2103,26 @@ contains
       end do
    end subroutine calculate_projected_green
 
-   subroutine calculate_pl(this)
+   subroutine calculate_pl(this, diag_out)
       use mpi_mod
       class(bands) :: this
+      real(rp), intent(out), optional :: diag_out(:, :, :, :)
       ! Local variables
       integer :: i ! orbital index
       integer :: is ! spin channel index
       integer :: ia ! atom index
       integer :: plusbulk
       real(rp) :: rq, dnu, pli, delta2 ! Local variables
+      real(rp) :: old_pl
+      real(rp), allocatable :: diag_comm(:, :, :, :)
+
+      if (present(diag_out)) then
+         if (size(diag_out, 1) /= this%lattice%nrec .or. size(diag_out, 2) < lmax_basis + 1 .or. &
+             size(diag_out, 3) < 2 .or. size(diag_out, 4) < 6) then
+            call g_logger%fatal('bands%calculate_pl: diag_out has incompatible extents', __FILE__, __LINE__)
+         end if
+         diag_out = 0.0_rp
+      end if
 
       !integer :: ia_glob
 
@@ -2054,10 +2139,29 @@ contains
                      (rq*(this%symbolic_atom(plusbulk)%potential%c(i - 1, is) - this%symbolic_atom(plusbulk)%potential%gravity_center(i, is))/2./(2*(i - 1) + 1.)/ &
                       (this%symbolic_atom(plusbulk)%potential%c(i - 1, is) - this%symbolic_atom(plusbulk)%potential%gravity_center(i, is) - delta2*rq) - 1.)
                pli = -atan(dnu)/pi + 0.5d0 + INT(this%symbolic_atom(plusbulk)%potential%pl(i - 1, is))
+               if (present(diag_out)) then
+                  old_pl = this%symbolic_atom(plusbulk)%potential%pl(i - 1, is)
+                  diag_out(ia, i, is, 1) = this%symbolic_atom(plusbulk)%potential%gravity_center(i, is)
+                  diag_out(ia, i, is, 2) = this%symbolic_atom(plusbulk)%potential%c(i - 1, is)
+                  diag_out(ia, i, is, 3) = this%symbolic_atom(plusbulk)%potential%qpar(i - 1, is)
+                  diag_out(ia, i, is, 4) = this%symbolic_atom(plusbulk)%potential%srdel(i - 1, is)
+                  diag_out(ia, i, is, 5) = old_pl
+                  diag_out(ia, i, is, 6) = pli
+               end if
                this%symbolic_atom(plusbulk)%potential%pl(i - 1, is) = pli
             end do
          end do
       end do
+#ifdef USE_MPI
+      if (present(diag_out)) then
+         allocate(diag_comm(size(diag_out, 1), size(diag_out, 2), size(diag_out, 3), size(diag_out, 4)))
+         diag_comm = diag_out
+         call MPI_ALLREDUCE(MPI_IN_PLACE, diag_comm, product(shape(diag_comm)), &
+                            MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         diag_out = diag_comm
+         deallocate(diag_comm)
+      end if
+#endif
    end subroutine calculate_pl
 
    !---------------------------------------------------------------------------

@@ -78,6 +78,7 @@ module self_mod
    ! This is independent of control%nsp, which selects the global Hamiltonian
    ! mode (and is not a channel-count field).
    integer, parameter, public :: RADIAL_XC_SPIN_CHANNELS = 2
+   real(rp), parameter :: fixed_u_m0_scalar_control_v = 1.0e-2_rp
 
    !> Module´s main structure
    type, public :: self
@@ -323,6 +324,19 @@ module self_mod
       integer, private :: fixed_u_trace_selected_iteration = 0
       integer, private :: fixed_u_trace_current_site = -1
       logical, private :: fixed_u_trace_capture_radial_state = .false.
+      ! M0-only immutable snapshots from one selected outer iteration. These
+      ! are diagnostic inputs for the later frozen radial replay and are never
+      ! copied back into the live SCF atom or Hamiltonian.
+      logical, private :: fixed_u_m0_snapshot_valid = .false.
+      logical, private :: fixed_u_m0_p_available = .false.
+      integer, private :: fixed_u_m0_snapshot_iteration = -1
+      real(rp), allocatable, private :: fixed_u_m0_q0(:, :), fixed_u_m0_center(:, :), fixed_u_m0_q2(:, :)
+      real(rp), allocatable, private :: fixed_u_m0_local_center(:, :), fixed_u_m0_local_q2(:, :), fixed_u_m0_trvp(:, :)
+      real(rp), allocatable, private :: fixed_u_m0_vout_center(:, :), fixed_u_m0_vout_q2(:, :)
+      real(rp), allocatable, private :: fixed_u_m0_pt_center(:, :), fixed_u_m0_pt_q2(:, :)
+      real(rp), allocatable, private :: fixed_u_m0_t_vout(:, :), fixed_u_m0_t_pt(:, :)
+      real(rp), allocatable, private :: fixed_u_m0_ql(:, :, :, :), fixed_u_m0_pl_diag(:, :, :, :)
+      complex(rp), allocatable, private :: fixed_u_m0_vin(:, :, :)
       ! Full complex fixed-U convergence state.  These gates are inactive for
       ! no-U, SC-U, +V, and non-Liechtenstein workflows.
       logical, private :: fixed_u_residual_active = .false.
@@ -371,6 +385,8 @@ module self_mod
       procedure, private :: write_fixed_u_radial_replay_input
       procedure, private :: write_fixed_u_radial_replay_output
       procedure, private :: verify_fixed_u_radial_replay
+      procedure, private :: snapshot_fixed_u_m0_moments
+      procedure, private :: replay_fixed_u_m0_moments
       procedure, private :: update_fixed_u_residuals
       procedure, private :: write_fixed_u_rs_green
       procedure, private :: atomsc
@@ -446,35 +462,83 @@ contains
       class(self), intent(inout) :: this
       character(len=1024) :: trace_path
       character(len=128) :: trace_value
-      integer :: ios, unit
+      character(len=128) :: root_run_id
+      integer :: ios, unit, root_trace_enabled, root_selected_iteration
+      real(rp) :: root_trace_lambda
 
       this%fixed_u_trace_enabled = .false.
       this%fixed_u_trace_filename = ''
-      if (.not. this%hamiltonian%hubbard_u_general_check .or. &
-          trim(this%hamiltonian%hubbard_u_potential_form) /= 'liechtenstein') return
-      call get_environment_variable('RSLMTO_FIXED_U_TRACE', trace_path, status=ios)
-      if (ios /= 0 .or. len_trim(trace_path) == 0) return
-      call get_environment_variable('RSLMTO_FIXED_U_RUN_ID', trace_value, status=ios)
-      if (ios == 0 .and. len_trim(trace_value) > 0) this%fixed_u_trace_run_id = trim(trace_value)
-      call get_environment_variable('RSLMTO_FIXED_U_LAMBDA', trace_value, status=ios)
-      if (ios == 0 .and. len_trim(trace_value) > 0) read(trace_value, *, iostat=ios) this%fixed_u_trace_lambda
-      ! Zero selects rolling-last mode: the trace file is replaced at each
-      ! iteration start, leaving the last completed iteration on disk.
+      this%fixed_u_trace_run_id = 'run'
+      this%fixed_u_trace_lambda = 1.0_rp
       this%fixed_u_trace_selected_iteration = 0
-      call get_environment_variable('RSLMTO_FIXED_U_TRACE_ITERATION', trace_value, status=ios)
-      if (ios == 0 .and. len_trim(trace_value) > 0) &
-         read(trace_value, *, iostat=ios) this%fixed_u_trace_selected_iteration
-      this%fixed_u_trace_filename = trim(trace_path)
-      this%fixed_u_trace_enabled = .true.
-      if (rank /= 0) return
-      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='replace', action='write', iostat=ios)
-      if (ios /= 0) then
-         this%fixed_u_trace_enabled = .false.
-         call g_logger%warning('Could not create RSLMTO_FIXED_U_TRACE output; trace disabled.', __FILE__, __LINE__)
-         return
+
+      ! Rank zero owns environment parsing and file creation.  Every rank
+      ! reaches the broadcasts below, including the no-trace and file-open
+      ! failure cases, so optional M1 paths cannot disagree across ranks.
+      root_trace_enabled = 0
+      root_selected_iteration = 0
+      root_trace_lambda = 1.0_rp
+      root_run_id = 'run'
+      if (rank == 0) then
+         trace_path = ''
+         trace_value = ''
+         call get_environment_variable('RSLMTO_FIXED_U_TRACE', trace_path, status=ios)
+         if (ios == 0 .and. len_trim(trace_path) > 0 .and. &
+             this%control%nsp == 1 .and. this%control%lmax == 2 .and. .not. this%hamiltonian%hoh) then
+            ! Explicit trace opt-in also enables the M0 no-U reference.
+            ! Ordinary no-U runs still take the untouched path when the
+            ! environment variable is absent. Other Hubbard modes remain out.
+            if (this%hamiltonian%hubbard_u_general_check) then
+               if (trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein') root_trace_enabled = 1
+            else if (.not. (this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check .or. &
+                            this%hamiltonian%hubbard_u_impurity_check)) then
+               root_trace_enabled = 1
+            end if
+         end if
+
+         if (root_trace_enabled == 1) then
+            call get_environment_variable('RSLMTO_FIXED_U_RUN_ID', trace_value, status=ios)
+            if (ios == 0 .and. len_trim(trace_value) > 0) root_run_id = trim(trace_value)
+            call get_environment_variable('RSLMTO_FIXED_U_LAMBDA', trace_value, status=ios)
+            if (ios == 0 .and. len_trim(trace_value) > 0) then
+               read(trace_value, *, iostat=ios) root_trace_lambda
+               if (ios /= 0) root_trace_enabled = 0
+            end if
+            ! Zero selects rolling-last mode: replace the trace file at each
+            ! iteration start, leaving the last completed iteration on disk.
+            call get_environment_variable('RSLMTO_FIXED_U_TRACE_ITERATION', trace_value, status=ios)
+            if (ios == 0 .and. len_trim(trace_value) > 0) then
+               read(trace_value, *, iostat=ios) root_selected_iteration
+               if (ios /= 0 .or. root_selected_iteration < 0) root_trace_enabled = 0
+            end if
+         end if
+
+         if (root_trace_enabled == 1) then
+            open(newunit=unit, file=trim(trace_path), status='replace', action='write', iostat=ios)
+            if (ios == 0) then
+               write(unit, '(a)', iostat=ios) &
+                  'kind,run_id,lambda,iteration,stage,site,type,l,spin,k,band,row,col,order,weight,energy,scalar,re,im'
+               close(unit, iostat=ios)
+            end if
+            if (ios == 0) then
+               this%fixed_u_trace_filename = trim(trace_path)
+            else
+               root_trace_enabled = 0
+               call g_logger%warning('Could not create RSLMTO_FIXED_U_TRACE output; trace disabled.', __FILE__, __LINE__)
+            end if
+         end if
       end if
-      write(unit, '(a)') 'kind,run_id,lambda,iteration,stage,site,type,l,spin,k,band,row,col,order,weight,energy,scalar,re,im'
-      close(unit)
+
+#ifdef USE_MPI
+      call MPI_BCAST(root_trace_enabled, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+      call MPI_BCAST(root_selected_iteration, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+      call MPI_BCAST(root_trace_lambda, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+      call MPI_BCAST(root_run_id, len(root_run_id), MPI_CHARACTER, 0, MPI_COMM_WORLD, ierr)
+#endif
+      this%fixed_u_trace_enabled = root_trace_enabled == 1
+      this%fixed_u_trace_selected_iteration = root_selected_iteration
+      this%fixed_u_trace_lambda = root_trace_lambda
+      this%fixed_u_trace_run_id = root_run_id
    end subroutine initialize_fixed_u_trace
 
    subroutine reset_fixed_u_trace(this)
@@ -498,11 +562,13 @@ contains
          site, type_id, ell, spin, k, band, row, col, order, weight, energy_value, scalar, re, im
    end subroutine write_fixed_u_csv_row
 
-   subroutine write_fixed_u_trace(this, stage)
+   subroutine write_fixed_u_trace(this, stage, m1_out, pl_diag_out)
       class(self), intent(inout) :: this
       character(len=*), intent(in) :: stage
+      complex(rp), intent(in), optional :: m1_out(:, :, :, :, :)
+      real(rp), intent(in), optional :: pl_diag_out(:, :, :, :)
       integer :: unit, ios, ia, l, spin, i, j, site_type, plusbulk
-      complex(rp) :: z
+      complex(rp) :: z, m1_trace
       real(rp) :: center, q0, q2
 
       if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
@@ -512,18 +578,57 @@ contains
            action='write', iostat=ios)
       if (ios /= 0) return
 
+      call this%write_fixed_u_csv_row(unit, 'ldm_availability', this%fixed_u_trace_iteration, trim(stage), &
+         -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
+         merge(1.0_rp, 0.0_rp, this%hamiltonian%hubbard_u_general_check), 0.0_rp, 0.0_rp)
+      call this%write_fixed_u_csv_row(unit, 'vin_availability', this%fixed_u_trace_iteration, trim(stage), &
+         -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
+         merge(1.0_rp, 0.0_rp, allocated(this%hamiltonian%hubbard_u_pot)), 0.0_rp, 0.0_rp)
+
       do ia = 1, this%lattice%nrec
          plusbulk = this%lattice%nbulk + ia
          do l = 0, this%symbolic_atom(plusbulk)%potential%lmax
             do spin = 1, 2
-               do i = 1, 2*l + 1
-                  do j = 1, 2*l + 1
-                     z = this%symbolic_atom(plusbulk)%potential%ldm(l + 1, spin, i, j)
-                     call this%write_fixed_u_csv_row(unit, 'ldm', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
-                        this%lattice%iz(ia), l, spin, -1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
-                        real(z, rp), aimag(z))
+               center = this%symbolic_atom(plusbulk)%potential%gravity_center(l + 1, spin) + &
+                        this%symbolic_atom(plusbulk)%potential%vmad
+               if (present(pl_diag_out)) then
+                  if (l + 1 <= size(pl_diag_out, 2) .and. spin <= size(pl_diag_out, 3)) then
+                     do i = 1, min(6, size(pl_diag_out, 4))
+                        call this%write_fixed_u_csv_row(unit, 'pl_map_input', this%fixed_u_trace_iteration, &
+                           'CALCULATE_PL', ia - 1, this%lattice%iz(ia), l, spin, -1, -1, -1, -1, i - 1, &
+                           0.0_rp, 0.0_rp, pl_diag_out(ia, l + 1, spin, i), 0.0_rp, 0.0_rp)
+                     end do
+                  end if
+               end if
+               if (this%hamiltonian%hubbard_u_general_check) then
+                  do i = 1, 2*l + 1
+                     do j = 1, 2*l + 1
+                        z = this%symbolic_atom(plusbulk)%potential%ldm(l + 1, spin, i, j)
+                        call this%write_fixed_u_csv_row(unit, 'ldm', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
+                           this%lattice%iz(ia), l, spin, -1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
+                           real(z, rp), aimag(z))
+                     end do
                   end do
-               end do
+               end if
+               if (present(m1_out)) then
+                  if (l < size(m1_out, 2)) then
+                     m1_trace = (0.0_rp, 0.0_rp)
+                     do i = 1, min(2*l + 1, size(m1_out, 4))
+                        do j = 1, min(2*l + 1, size(m1_out, 5))
+                           z = m1_out(ia, l + 1, spin, i, j)
+                           if (i == j) m1_trace = m1_trace + z
+                           call this%write_fixed_u_csv_row(unit, 'ldm_m1', this%fixed_u_trace_iteration, 'M1_OUT', ia - 1, &
+                              this%lattice%iz(ia), l, spin, -1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
+                              real(z, rp), aimag(z))
+                        end do
+                     end do
+                     call this%write_fixed_u_csv_row(unit, 'm1_trace_consistency', &
+                        this%fixed_u_trace_iteration, 'M1_OUT', ia - 1, this%lattice%iz(ia), l, spin, &
+                        -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
+                        real(m1_trace, rp) - this%symbolic_atom(plusbulk)%potential%ql(1, l, spin)*center, &
+                        aimag(m1_trace), 0.0_rp)
+                  end if
+               end if
             end do
             do spin = 1, 2
                center = this%symbolic_atom(plusbulk)%potential%gravity_center(l + 1, spin) + &
@@ -786,13 +891,16 @@ contains
       close(unit)
    end subroutine write_fixed_u_radial_replay_output
 
-   subroutine verify_fixed_u_radial_replay(this, atom, z, lmax, a, b, nr, rofi, v, rho_in, rho_actual, pl, ql, &
-                                           sumec_actual, sumev_actual, ec_seed, ev_seed, ec_actual, ev_actual, &
-                                           ncore, nval, tol)
-      class(self), intent(in) :: this
+      subroutine verify_fixed_u_radial_replay(this, atom, z, lmax, a, b, nr, rofi_base, v_base, rofi, v, rho_in, &
+                                           rho_actual, vhrmax, b_fsm, rvh_actual, reps_actual, rmu_actual, &
+                                           vnucl_actual, pl, ql, sumec_actual, sumev_actual, &
+                                           ec_seed, ev_seed, ec_actual, ev_actual, ncore, nval, tol)
+      class(self), intent(inout) :: this
       class(symbolic_atom), intent(in) :: atom
       integer, intent(in) :: lmax, nr, ncore, nval
-      real(rp), intent(in) :: z, a, b, rofi(nr), v(nr, 2), rho_in(nr, 2), rho_actual(nr, 2)
+      real(rp), intent(in) :: z, a, b, rofi_base(nr), v_base(nr, 2), rofi(nr), v(nr, 2)
+      real(rp), intent(in) :: rho_in(nr, 2), rho_actual(nr, 2), vhrmax, b_fsm
+      real(rp), intent(in) :: rvh_actual(2), reps_actual(2), rmu_actual(2), vnucl_actual
       real(rp), intent(in) :: pl(lmax + 1, 2), ql(3, lmax + 1, 2), sumec_actual(2), sumev_actual(2)
       real(rp), intent(in) :: ec_seed(:), ev_seed(:), ec_actual(:), ev_actual(:), tol
       type(self) :: replay_state
@@ -847,6 +955,9 @@ contains
          call result('ev_max_abs_ry', ev_error, 4)
          close(unit)
       end if
+      call this%replay_fixed_u_m0_moments(atom, z, lmax, a, b, nr, rofi, v, rho_in, rho_actual, &
+         pl, ql, ec_seed, ev_seed, ncore, nval, tol, rofi_base, v_base, vhrmax, b_fsm, &
+         rvh_actual, reps_actual, rmu_actual, vnucl_actual, sumec_actual, sumev_actual)
    contains
       subroutine result(label, value, result_index)
          character(len=*), intent(in) :: label
@@ -857,6 +968,680 @@ contains
             result_index, 0.0_rp, 0.0_rp, value, 0.0_rp, 0.0_rp)
       end subroutine result
    end subroutine verify_fixed_u_radial_replay
+
+   ! Capture M0 replay operands from one immutable outer-SCF iteration.  This
+   ! routine is diagnostic-only: it reads P, M1, the Hamiltonian V_in, ql and
+   ! the exact calculate_pl call inputs, then stores only replay scalars and
+   ! snapshots.  It never writes to a live potential or Hamiltonian field.
+   subroutine snapshot_fixed_u_m0_moments(this, m1, pl_diag, vin)
+      class(self), intent(inout) :: this
+      complex(rp), intent(in) :: m1(:, :, :, :, :), vin(:, :, :)
+      real(rp), intent(in) :: pl_diag(:, :, :, :)
+      complex(rp), allocatable :: density_override(:, :, :, :, :), vout(:, :, :)
+      integer :: ia, plusbulk, itype, spin, i, j, k, rowoff, norb_l, unit, ios
+      complex(rp) :: p_ij, t_complex, vm1_complex, v2p_complex, v2_ij, p_trace, m1_trace
+      real(rp), allocatable :: im_resid(:, :), p_trace_error(:, :), m1_trace_error(:, :)
+      real(rp) :: q0, center, q2, t, local_q2, t_vout, vm1_vout, v2_vout
+      real(rp) :: t_pt, vm1_pt, v2_pt
+      logical :: p_available
+
+      this%fixed_u_m0_snapshot_valid = .false.
+      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
+      if (this%fixed_u_trace_selected_iteration > 0 .and. &
+          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) return
+      if (size(m1, 1) /= this%lattice%nrec .or. size(pl_diag, 1) /= this%lattice%nrec .or. &
+          size(vin, 1) < nb .or. size(vin, 2) < nb) return
+      if (lmax_basis < 2) return
+
+      if (allocated(this%fixed_u_m0_q0)) deallocate(this%fixed_u_m0_q0)
+      if (allocated(this%fixed_u_m0_center)) deallocate(this%fixed_u_m0_center)
+      if (allocated(this%fixed_u_m0_q2)) deallocate(this%fixed_u_m0_q2)
+      if (allocated(this%fixed_u_m0_local_center)) deallocate(this%fixed_u_m0_local_center)
+      if (allocated(this%fixed_u_m0_local_q2)) deallocate(this%fixed_u_m0_local_q2)
+      if (allocated(this%fixed_u_m0_trvp)) deallocate(this%fixed_u_m0_trvp)
+      if (allocated(this%fixed_u_m0_vout_center)) deallocate(this%fixed_u_m0_vout_center)
+      if (allocated(this%fixed_u_m0_vout_q2)) deallocate(this%fixed_u_m0_vout_q2)
+      if (allocated(this%fixed_u_m0_pt_center)) deallocate(this%fixed_u_m0_pt_center)
+      if (allocated(this%fixed_u_m0_pt_q2)) deallocate(this%fixed_u_m0_pt_q2)
+      if (allocated(this%fixed_u_m0_t_vout)) deallocate(this%fixed_u_m0_t_vout)
+      if (allocated(this%fixed_u_m0_t_pt)) deallocate(this%fixed_u_m0_t_pt)
+      if (allocated(this%fixed_u_m0_ql)) deallocate(this%fixed_u_m0_ql)
+      if (allocated(this%fixed_u_m0_pl_diag)) deallocate(this%fixed_u_m0_pl_diag)
+      if (allocated(this%fixed_u_m0_vin)) deallocate(this%fixed_u_m0_vin)
+      allocate(this%fixed_u_m0_q0(this%lattice%nrec, 2), this%fixed_u_m0_center(this%lattice%nrec, 2), &
+               this%fixed_u_m0_q2(this%lattice%nrec, 2), this%fixed_u_m0_local_center(this%lattice%nrec, 2), &
+               this%fixed_u_m0_local_q2(this%lattice%nrec, 2), this%fixed_u_m0_trvp(this%lattice%nrec, 2), &
+               this%fixed_u_m0_vout_center(this%lattice%nrec, 2), this%fixed_u_m0_vout_q2(this%lattice%nrec, 2), &
+               this%fixed_u_m0_pt_center(this%lattice%nrec, 2), this%fixed_u_m0_pt_q2(this%lattice%nrec, 2), &
+               this%fixed_u_m0_t_vout(this%lattice%nrec, 2), this%fixed_u_m0_t_pt(this%lattice%nrec, 2), &
+               this%fixed_u_m0_ql(this%lattice%nrec, 3, lmax_basis + 1, 2), &
+               this%fixed_u_m0_pl_diag(this%lattice%nrec, lmax_basis + 1, 2, 6), &
+               this%fixed_u_m0_vin(size(vin, 1), size(vin, 2), size(vin, 3)))
+      this%fixed_u_m0_ql = 0.0_rp
+      this%fixed_u_m0_pl_diag = pl_diag
+      this%fixed_u_m0_vin = vin
+      this%fixed_u_m0_vout_center = 0.0_rp
+      this%fixed_u_m0_vout_q2 = 0.0_rp
+      this%fixed_u_m0_pt_center = 0.0_rp
+      this%fixed_u_m0_pt_q2 = 0.0_rp
+      this%fixed_u_m0_t_vout = 0.0_rp
+      this%fixed_u_m0_t_pt = 0.0_rp
+      allocate(im_resid(this%lattice%nrec, 2))
+      allocate(p_trace_error(this%lattice%nrec, 2), m1_trace_error(this%lattice%nrec, 2))
+      im_resid = 0.0_rp
+      p_trace_error = 0.0_rp
+      m1_trace_error = 0.0_rp
+      p_available = this%hamiltonian%hubbard_u_general_check .and. &
+                     allocated(this%symbolic_atom(this%lattice%nbulk + 1)%potential%ldm)
+      this%fixed_u_m0_p_available = p_available
+
+      ! Evaluate V(Pout) without changing the live Hamiltonian.  This is a
+      ! deliberately wrong-pairing control for the frozen radial replay.
+      allocate(density_override(this%lattice%ntype, 4, 2, 7, 7), vout(nb, nb, this%lattice%ntype))
+      density_override = (0.0_rp, 0.0_rp)
+      vout = (0.0_rp, 0.0_rp)
+      if (p_available) then
+         do ia = 1, this%lattice%nrec
+            plusbulk = this%lattice%nbulk + ia
+            itype = this%lattice%ib(ia)
+            do spin = 1, 2
+               do i = 1, 7
+                  do j = 1, 7
+                     density_override(itype, 3, spin, i, j) = &
+                        this%symbolic_atom(plusbulk)%potential%ldm(3, spin, i, j)
+                  end do
+               end do
+            end do
+         end do
+         call this%hamiltonian%calculate_hubbard_u_potential_general( &
+            density_override=density_override, potential_out=vout)
+      end if
+
+      do ia = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + ia
+         itype = this%lattice%ib(ia)
+         if (itype < 1 .or. itype > size(vin, 3)) return
+         do spin = 1, 2
+            do i = 1, 3
+               this%fixed_u_m0_ql(ia, i, 1:lmax_basis + 1, spin) = &
+                  this%symbolic_atom(plusbulk)%potential%ql(i, 0:lmax_basis, spin)
+            end do
+            q0 = this%symbolic_atom(plusbulk)%potential%ql(1, 2, spin)
+            center = this%symbolic_atom(plusbulk)%potential%gravity_center(3, spin) + &
+                     this%symbolic_atom(plusbulk)%potential%vmad
+            q2 = this%symbolic_atom(plusbulk)%potential%ql(3, 2, spin)
+            if (q0 <= tiny(1.0_rp)) then
+               this%fixed_u_m0_snapshot_valid = .false.
+               return
+            end if
+            this%fixed_u_m0_q0(ia, spin) = q0
+            this%fixed_u_m0_center(ia, spin) = center
+            this%fixed_u_m0_q2(ia, spin) = q2
+            t_complex = (0.0_rp, 0.0_rp)
+            vm1_complex = (0.0_rp, 0.0_rp)
+            v2p_complex = (0.0_rp, 0.0_rp)
+            p_trace = (0.0_rp, 0.0_rp)
+            m1_trace = (0.0_rp, 0.0_rp)
+            rowoff = 4 + spin_off*(spin - 1)
+            norb_l = 5
+            do i = 1, norb_l
+               m1_trace = m1_trace + m1(ia, 3, spin, i, i)
+            end do
+            if (p_available) then
+            do i = 1, norb_l
+               do j = 1, norb_l
+                  p_ij = this%symbolic_atom(plusbulk)%potential%ldm(3, spin, i, j)
+                  if (i == j) p_trace = p_trace + p_ij
+                  t_complex = t_complex + vin(rowoff + i, rowoff + j, itype)* &
+                     this%symbolic_atom(plusbulk)%potential%ldm(3, spin, j, i)
+                  vm1_complex = vm1_complex + vin(rowoff + i, rowoff + j, itype)* &
+                     (m1(ia, 3, spin, j, i) - center*this%symbolic_atom(plusbulk)%potential%ldm(3, spin, j, i))
+                  v2_ij = (0.0_rp, 0.0_rp)
+                  do k = 1, norb_l
+                     v2_ij = v2_ij + vin(rowoff + i, rowoff + k, itype)*vin(rowoff + k, rowoff + j, itype)
+                  end do
+                  v2p_complex = v2p_complex + v2_ij*this%symbolic_atom(plusbulk)%potential%ldm(3, spin, j, i)
+               end do
+            end do
+            end if
+            t = real(t_complex, rp)
+            local_q2 = q2 - 2.0_rp*real(vm1_complex, rp) + real(v2p_complex, rp) - t*t/q0
+            im_resid(ia, spin) = max(abs(aimag(t_complex)), abs(aimag(vm1_complex)), abs(aimag(v2p_complex)))
+            p_trace_error(ia, spin) = real(p_trace, rp) - q0
+            m1_trace_error(ia, spin) = real(m1_trace, rp) - q0*center
+            this%fixed_u_m0_trvp(ia, spin) = t
+            this%fixed_u_m0_local_center(ia, spin) = center - t/q0
+            this%fixed_u_m0_local_q2(ia, spin) = local_q2
+
+            t_vout = 0.0_rp
+            vm1_vout = 0.0_rp
+            v2_vout = 0.0_rp
+            t_pt = 0.0_rp
+            vm1_pt = 0.0_rp
+            v2_pt = 0.0_rp
+            if (p_available) then
+            do i = 1, norb_l
+               do j = 1, norb_l
+                  t_vout = t_vout + real(vout(rowoff+i, rowoff+j, itype)* &
+                     this%symbolic_atom(plusbulk)%potential%ldm(3, spin, j, i), rp)
+                  vm1_vout = vm1_vout + real(vout(rowoff+i, rowoff+j, itype)* &
+                     (m1(ia, 3, spin, j, i) - center*this%symbolic_atom(plusbulk)%potential%ldm(3, spin, j, i)), rp)
+                  t_pt = t_pt + real(vin(rowoff+i, rowoff+j, itype)* &
+                     this%symbolic_atom(plusbulk)%potential%ldm(3, spin, i, j), rp)
+                  vm1_pt = vm1_pt + real(vin(rowoff+i, rowoff+j, itype)* &
+                     (m1(ia, 3, spin, j, i) - center*this%symbolic_atom(plusbulk)%potential%ldm(3, spin, i, j)), rp)
+                  v2_ij = (0.0_rp, 0.0_rp)
+                  do k = 1, norb_l
+                     v2_ij = v2_ij + vout(rowoff+i, rowoff+k, itype)*vout(rowoff+k, rowoff+j, itype)
+                  end do
+                  v2_vout = v2_vout + real(v2_ij*this%symbolic_atom(plusbulk)%potential%ldm(3, spin, j, i), rp)
+                  v2_ij = (0.0_rp, 0.0_rp)
+                  do k = 1, norb_l
+                     v2_ij = v2_ij + vin(rowoff+i, rowoff+k, itype)*vin(rowoff+k, rowoff+j, itype)
+                  end do
+                  v2_pt = v2_pt + real(v2_ij*this%symbolic_atom(plusbulk)%potential%ldm(3, spin, i, j), rp)
+               end do
+            end do
+            end if
+            this%fixed_u_m0_vout_center(ia, spin) = center - t_vout/q0
+            this%fixed_u_m0_vout_q2(ia, spin) = q2 - 2.0_rp*vm1_vout + v2_vout - t_vout*t_vout/q0
+            this%fixed_u_m0_pt_center(ia, spin) = center - t_pt/q0
+            this%fixed_u_m0_pt_q2(ia, spin) = q2 - 2.0_rp*vm1_pt + v2_pt - t_pt*t_pt/q0
+            this%fixed_u_m0_t_vout(ia, spin) = t_vout
+            this%fixed_u_m0_t_pt(ia, spin) = t_pt
+         end do
+      end do
+      this%fixed_u_m0_snapshot_iteration = this%fixed_u_trace_iteration
+      this%fixed_u_m0_snapshot_valid = .true.
+
+      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
+           action='write', iostat=ios)
+      if (ios /= 0) return
+      do ia = 1, this%lattice%nrec
+         do spin = 1, 2
+            itype = this%lattice%ib(ia)
+            call this%write_fixed_u_csv_row(unit, 'm0_carrier_input', this%fixed_u_m0_snapshot_iteration, &
+               'FROZEN_REPLAY', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 0, 0.0_rp, &
+               this%fixed_u_m0_center(ia, spin), this%fixed_u_m0_q0(ia, spin), &
+               this%fixed_u_m0_q2(ia, spin), 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'm0_p_availability', this%fixed_u_m0_snapshot_iteration, &
+               'FROZEN_REPLAY', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 0, 0.0_rp, &
+               merge(1.0_rp, 0.0_rp, p_available), 0.0_rp, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'm0_carrier_local', this%fixed_u_m0_snapshot_iteration, &
+               'FROZEN_REPLAY', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 1, &
+               this%fixed_u_m0_trvp(ia, spin), this%fixed_u_m0_local_center(ia, spin), &
+               this%fixed_u_m0_q0(ia, spin), this%fixed_u_m0_local_q2(ia, spin), 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'm0_carrier_control', this%fixed_u_m0_snapshot_iteration, &
+               'VOUT_CONTROL', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 0, 0.0_rp, &
+               this%fixed_u_m0_t_vout(ia, spin), this%fixed_u_m0_vout_center(ia, spin), &
+               this%fixed_u_m0_q0(ia, spin), this%fixed_u_m0_vout_q2(ia, spin))
+            call this%write_fixed_u_csv_row(unit, 'm0_carrier_control', this%fixed_u_m0_snapshot_iteration, &
+               'P_TRANSPOSE_CONTROL', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 0, 0.0_rp, &
+               this%fixed_u_m0_t_pt(ia, spin), this%fixed_u_m0_pt_center(ia, spin), &
+               this%fixed_u_m0_q0(ia, spin), this%fixed_u_m0_pt_q2(ia, spin))
+            call this%write_fixed_u_csv_row(unit, 'm0_carrier_identity', this%fixed_u_m0_snapshot_iteration, &
+               'FROZEN_REPLAY', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 2, &
+               0.0_rp, 0.0_rp, im_resid(ia, spin), 0.0_rp, 0.0_rp)
+            if (p_available) then
+               call this%write_fixed_u_csv_row(unit, 'm0_trace_consistency', this%fixed_u_m0_snapshot_iteration, &
+                  'FROZEN_REPLAY', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 0, &
+                  0.0_rp, 0.0_rp, p_trace_error(ia, spin), 0.0_rp, 0.0_rp)
+            else
+               call this%write_fixed_u_csv_row(unit, 'm0_p_trace_unavailable', &
+                  this%fixed_u_m0_snapshot_iteration, 'FROZEN_REPLAY', ia - 1, itype - 1, 2, spin, &
+                  -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp)
+            end if
+            call this%write_fixed_u_csv_row(unit, 'm0_trace_consistency', this%fixed_u_m0_snapshot_iteration, &
+               'FROZEN_REPLAY', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 1, &
+               0.0_rp, 0.0_rp, m1_trace_error(ia, spin), 0.0_rp, 0.0_rp)
+         end do
+      end do
+      close(unit)
+      deallocate(im_resid, p_trace_error, m1_trace_error)
+      deallocate(density_override, vout)
+   end subroutine snapshot_fixed_u_m0_moments
+
+   ! Replay the same accepted radial state twice with production PL inversion
+   ! and NEWRHO: legacy spectral moments and the proposed local-potential
+   ! moments.  All edits are made on independent atom/bands copies.  This is
+   ! an opt-in M0 diagnostic and cannot feed any live SCF quantity.
+   subroutine replay_fixed_u_m0_moments(this, atom, z, lmax, a, b, nr, rofi, v, rho_in, rho_actual, &
+                                        pl_actual, ql_actual, ec_seed, ev_seed, ncore, nval, tol, &
+                                        rofi_base, v_base, vhrmax, b_fsm, rvh_actual, reps_actual, rmu_actual, &
+                                        vnucl_actual, sumec_actual, sumev_actual)
+      class(self), intent(inout) :: this
+      class(symbolic_atom), intent(in) :: atom
+      integer, intent(in) :: lmax, nr, ncore, nval
+      real(rp), intent(in) :: z, a, b, rofi(nr), v(nr, 2), rho_in(nr, 2), rho_actual(nr, 2)
+      real(rp), intent(in) :: rofi_base(nr), v_base(nr, 2), vhrmax, b_fsm
+      real(rp), intent(in) :: rvh_actual(2), reps_actual(2), rmu_actual(2), vnucl_actual
+      real(rp), intent(in) :: sumec_actual(2), sumev_actual(2)
+      real(rp), intent(in) :: pl_actual(lmax + 1, 2), ql_actual(3, lmax + 1, 2)
+      real(rp), intent(in) :: ec_seed(:), ev_seed(:), tol
+      type(bands) :: pl_bands
+      type(symbolic_atom), allocatable, target :: pl_atoms(:)
+      real(rp), allocatable :: ql_raw(:, :, :), ql_local(:, :, :), ql_vout(:, :, :), ql_pt(:, :, :)
+      real(rp), allocatable :: rho_case(:, :), sumec_case(:), sumev_case(:)
+      real(rp), allocatable :: ec_case(:), ev_case(:)
+      real(rp), allocatable :: pl_raw(:, :), pl_local(:, :), pl_scalar(:, :)
+      integer :: ia, plusbulk, l, spin, unit, ios, row
+      real(rp) :: pl_reproduction_error, ql_vs_live_error, q2_min
+      real(rp) :: baseline_sumev(2), baseline_sumec(2)
+      real(rp) :: component_snapshot(10), actual_component(10), output_component(10)
+      real(rp) :: actual_rhovh, actual_rhomu
+      real(rp) :: actual_rhoeps, actual_zvnucl, actual_ekin, actual_utot, actual_etot
+      logical :: have_raw_energy
+
+      if (.not. this%fixed_u_m0_snapshot_valid) return
+      if (this%fixed_u_m0_snapshot_iteration /= this%fixed_u_trace_iteration) return
+      if (this%fixed_u_trace_current_site < 1 .or. this%fixed_u_trace_current_site > this%lattice%nrec) return
+      if (.not. allocated(this%fixed_u_m0_pl_diag) .or. .not. allocated(this%fixed_u_m0_ql)) return
+      if (size(ec_seed) < ncore .or. size(ev_seed) < nval) return
+
+      allocate(pl_atoms(size(this%symbolic_atom)))
+      pl_atoms = this%symbolic_atom
+      pl_bands%symbolic_atom => pl_atoms
+      pl_bands%lattice => this%lattice
+      call load_captured_pl_inputs(pl_atoms)
+      call pl_bands%calculate_pl()
+      allocate(pl_raw(lmax + 1, 2), pl_local(lmax + 1, 2))
+      ia = this%fixed_u_trace_current_site
+      plusbulk = this%lattice%nbulk + ia
+      do spin = 1, 2
+         do l = 0, lmax
+            pl_raw(l + 1, spin) = pl_atoms(plusbulk)%potential%pl(l, spin)
+         end do
+      end do
+
+      allocate(pl_scalar(lmax + 1, 2))
+      pl_atoms = this%symbolic_atom
+      call load_captured_pl_inputs(pl_atoms)
+      do spin = 1, 2
+         pl_atoms(plusbulk)%potential%gravity_center(3, spin) = &
+            this%fixed_u_m0_pl_diag(ia, 3, spin, 1) - fixed_u_m0_scalar_control_v
+      end do
+      call pl_bands%calculate_pl()
+      do spin = 1, 2
+         do l = 0, lmax
+            pl_scalar(l + 1, spin) = pl_atoms(plusbulk)%potential%pl(l, spin)
+         end do
+      end do
+      pl_reproduction_error = maxval(abs(pl_raw - this%fixed_u_m0_pl_diag(ia, 1:lmax + 1, 1:2, 6)))
+
+      ! Reset the scratch atom to its independent copy of the accepted live
+      ! state, then restore the original calculate_pl inputs.  Only d-shell
+      ! gravity_center differs in this second call.
+      pl_atoms = this%symbolic_atom
+      call load_captured_pl_inputs(pl_atoms)
+      do spin = 1, 2
+         pl_atoms(plusbulk)%potential%gravity_center(3, spin) = &
+            this%fixed_u_m0_local_center(ia, spin) - pl_atoms(plusbulk)%potential%vmad
+      end do
+      call pl_bands%calculate_pl()
+      do spin = 1, 2
+         do l = 0, lmax
+            pl_local(l + 1, spin) = pl_atoms(plusbulk)%potential%pl(l, spin)
+         end do
+      end do
+
+      allocate(ql_raw(3, lmax + 1, 2), ql_local(3, lmax + 1, 2), &
+               ql_vout(3, lmax + 1, 2), ql_pt(3, lmax + 1, 2))
+      have_raw_energy = .false.
+      baseline_sumev = 0.0_rp
+      baseline_sumec = 0.0_rp
+      ql_raw = this%fixed_u_m0_ql(ia, :, 1:lmax + 1, :)
+      ql_local = ql_raw
+      ql_vout = ql_raw
+      ql_pt = ql_raw
+      do spin = 1, 2
+         ql_local(3, 3, spin) = this%fixed_u_m0_local_q2(ia, spin)
+         ql_vout(3, 3, spin) = this%fixed_u_m0_vout_q2(ia, spin)
+         ql_pt(3, 3, spin) = this%fixed_u_m0_pt_q2(ia, spin)
+      end do
+      ql_vs_live_error = maxval(abs(ql_raw - ql_actual))
+
+      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
+           action='write', iostat=ios)
+      if (ios == 0) then
+         call this%write_fixed_u_csv_row(unit, 'm0_replay_match', this%fixed_u_trace_iteration, 'FROZEN_INPUT', &
+            ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 0, 0.0_rp, &
+            pl_reproduction_error, ql_vs_live_error, 0.0_rp, 0.0_rp)
+         q2_min = minval(this%fixed_u_m0_local_q2(ia, :))
+         call this%write_fixed_u_csv_row(unit, 'm0_replay_q2_min', this%fixed_u_trace_iteration, 'LOCAL_PL', &
+            ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 0, 0.0_rp, q2_min, 0.0_rp, 0.0_rp, 0.0_rp)
+         close(unit)
+      end if
+
+      ! Replay the exact PL/QL supplied to this live NEWRHO call before using
+      ! the unmixed spectral q0/q2 values below.  This is the same-state
+      ! control for the copied radial solver; RAW_PL remains a separate
+      ! diagnostic because its moments are from the current spectral output.
+      call run_replay_case('LIVE_STATE', pl_actual, ql_actual)
+      call run_replay_case('RAW_PL', pl_raw, ql_raw)
+      call run_replay_case('SCALAR_V', pl_scalar, ql_raw)
+      if (minval(this%fixed_u_m0_local_q2(ia, :)) >= 0.0_rp) then
+         call run_replay_case('LOCAL_PL', pl_local, ql_local)
+      else
+         open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
+              action='write', iostat=ios)
+         if (ios == 0) then
+            call this%write_fixed_u_csv_row(unit, 'm0_replay_skipped', this%fixed_u_trace_iteration, 'LOCAL_PL', &
+               ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 0, 0.0_rp, &
+               minval(this%fixed_u_m0_local_q2(ia, :)), 0.0_rp, 0.0_rp, 0.0_rp)
+            close(unit)
+         end if
+      end if
+      if (this%fixed_u_m0_p_available .and. minval(this%fixed_u_m0_vout_q2(ia, :)) >= 0.0_rp) &
+         call run_replay_case('VOUT_CONTROL', pl_raw, ql_vout)
+      if (this%fixed_u_m0_p_available .and. minval(this%fixed_u_m0_pt_q2(ia, :)) >= 0.0_rp) &
+         call run_replay_case('P_TRANSPOSE_CONTROL', pl_raw, ql_pt)
+      nullify(pl_bands%symbolic_atom, pl_bands%lattice)
+      deallocate(pl_atoms, pl_raw, pl_local, pl_scalar, ql_raw, ql_local, ql_vout, ql_pt)
+   contains
+      subroutine load_captured_pl_inputs(atoms)
+         type(symbolic_atom), intent(inout) :: atoms(:)
+         integer :: site, pb, shell, channel
+         do site = 1, this%lattice%nrec
+            pb = this%lattice%nbulk + site
+            do channel = 1, 2
+               do shell = 0, lmax
+                  atoms(pb)%potential%gravity_center(shell + 1, channel) = &
+                     this%fixed_u_m0_pl_diag(site, shell + 1, channel, 1)
+                  atoms(pb)%potential%c(shell, channel) = this%fixed_u_m0_pl_diag(site, shell + 1, channel, 2)
+                  atoms(pb)%potential%qpar(shell, channel) = this%fixed_u_m0_pl_diag(site, shell + 1, channel, 3)
+                  atoms(pb)%potential%srdel(shell, channel) = this%fixed_u_m0_pl_diag(site, shell + 1, channel, 4)
+                  atoms(pb)%potential%pl(shell, channel) = this%fixed_u_m0_pl_diag(site, shell + 1, channel, 5)
+               end do
+            end do
+         end do
+      end subroutine load_captured_pl_inputs
+
+      subroutine run_replay_case(case_name, pl_case, ql_case)
+         character(len=*), intent(in) :: case_name
+         real(rp), intent(in) :: pl_case(lmax + 1, 2), ql_case(3, lmax + 1, 2)
+         type(self) :: replay_state
+         type(symbolic_atom) :: replay_atom
+      type(xc) :: replay_xc
+      integer :: out_unit, out_ios, ir, channel, shell, moment
+      real(rp) :: center_input
+      real(rp) :: charge(2), drdi, wgt
+         allocate(rho_case(nr, 2), sumec_case(2), sumev_case(2), &
+                  ec_case(max(ncore, 1)), ev_case(max(nval, 1)))
+         allocate(replay_state%vtn(nr, 2), replay_state%vzt(nr, 2), &
+                  replay_state%fun2(nr, lmax + 1, 2), replay_state%phi_amp(nr, lmax + 1, 2))
+         replay_state%control => this%control
+         replay_state%magnetic_seed_active = this%magnetic_seed_active
+         replay_state%magnetic_seed_field = this%magnetic_seed_field
+         replay_state%vtn = 0.0_rp
+         replay_state%vzt = 0.0_rp
+         replay_state%fun2 = 0.0_rp
+         replay_state%phi_amp = 0.0_rp
+         rho_case = 0.0_rp
+         sumec_case = 0.0_rp
+         sumev_case = 0.0_rp
+         if (ncore > 0) ec_case(1:ncore) = ec_seed(1:ncore)
+         if (nval > 0) ev_case(1:nval) = ev_seed(1:nval)
+         replay_atom = atom
+         call replay_state%newrho(replay_atom, z, lmax, a, b, nr, rofi, v, rho_case, pl_case, ql_case, &
+                                  sumec_case, sumev_case, ec_case, ev_case, tol, 2, 0)
+         if (trim(case_name) == 'RAW_PL') then
+            baseline_sumev = sumev_case
+            baseline_sumec = sumec_case
+            have_raw_energy = .true.
+         end if
+         replay_xc = xc(this%lattice%control)
+         charge = 0.0_rp
+         do channel = 1, 2
+            do ir = 1, nr
+               wgt = 2.0_rp*(mod(ir + 1, 2) + 1)/3.0_rp
+               if (ir == 1 .or. ir == nr) wgt = 1.0_rp/3.0_rp
+               drdi = a*(rofi_base(ir) + b)
+               charge(channel) = charge(channel) + wgt*drdi*rho_case(ir, channel)
+            end do
+         end do
+         open(newunit=out_unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
+              action='write', iostat=out_ios)
+         if (out_ios == 0) then
+            ! Recompute both component sets on copied arrays and write them
+            ! only after the trace stream is open. ATOMSC evaluates the
+            ! actual electrostatic/XC terms on rho_in before NEWRHO; the
+            ! output-rho set is a separately labelled diagnostic functional.
+            call evaluate_frozen_components(this, replay_state, replay_xc, atom, z, a, b, nr, rofi_base, &
+               v_base, vhrmax, b_fsm, rho_in, sumec_case, sumev_case, out_unit, ia, &
+               'ATOMSC_INPUT', component_snapshot)
+            ! Use the VNUCL saved by the actual ATOMSC call-site, not an
+            ! inferred boundary value, for the direct production comparison.
+            actual_rhovh = sum(rvh_actual)
+            actual_rhomu = sum(rmu_actual)
+            actual_rhoeps = sum(reps_actual)
+            actual_zvnucl = -z*vnucl_actual
+            actual_ekin = sum(sumev_actual)+sum(sumec_actual)-actual_rhovh-actual_rhomu
+            actual_utot = 0.5_rp*(actual_rhovh+actual_zvnucl)
+            actual_etot = actual_ekin+actual_utot+actual_rhoeps
+            actual_component = [sum(sumev_actual), sum(sumec_actual), actual_rhovh, actual_rhomu, &
+                                vnucl_actual, actual_zvnucl, actual_ekin, actual_utot, actual_rhoeps, actual_etot]
+            call evaluate_frozen_components(this, replay_state, replay_xc, atom, z, a, b, nr, rofi_base, &
+               v_base, vhrmax, b_fsm, rho_case, sumec_case, sumev_case, out_unit, ia, &
+               'OUTPUT_RHO', output_component)
+            ! Emit the exact ATOMSC site-energy reconstruction residual. This
+            ! is a same-state replay check, not an energy correction.
+            do shell = 0, 9
+               call this%write_fixed_u_csv_row(out_unit, 'm0_replay_component_delta', &
+                  this%fixed_u_trace_iteration, trim(case_name), ia-1, this%lattice%ib(ia)-1, 2, -1, &
+                  -1, -1, -1, -1, shell, 0.0_rp, 0.0_rp, component_snapshot(shell+1)-actual_component(shell+1), &
+                  component_snapshot(shell+1), actual_component(shell+1))
+            end do
+            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_control', this%fixed_u_trace_iteration, &
+               trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 0, &
+               0.0_rp, a, z, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_control', this%fixed_u_trace_iteration, &
+               trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 1, &
+               0.0_rp, b, tol, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_control', this%fixed_u_trace_iteration, &
+               trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 2, &
+               0.0_rp, real(nr, rp), real(ncore, rp), real(nval, rp), 0.0_rp)
+            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_control', this%fixed_u_trace_iteration, &
+               trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 3, &
+               0.0_rp, fixed_u_m0_scalar_control_v, this%fixed_u_m0_trvp(ia, 1), &
+               this%fixed_u_m0_trvp(ia, 2), 0.0_rp)
+            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_control', this%fixed_u_trace_iteration, &
+               trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 4, &
+               0.0_rp, vhrmax, 0.0_rp, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_control', this%fixed_u_trace_iteration, &
+               trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 5, &
+               0.0_rp, b_fsm, 0.0_rp, 0.0_rp, 0.0_rp)
+            ! Serialize the exact PL tuple passed to the production scratch
+            ! calculate_pl call and its returned PL for every shell/spin.
+            do channel = 1, 2
+               do shell = 0, lmax
+                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_radial_parameter', &
+                     this%fixed_u_trace_iteration, trim(case_name), ia - 1, this%lattice%ib(ia) - 1, &
+                     shell, channel, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
+                     atom%potential%c(shell, channel), 0.0_rp, 0.0_rp)
+                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_radial_parameter', &
+                     this%fixed_u_trace_iteration, trim(case_name), ia - 1, this%lattice%ib(ia) - 1, &
+                     shell, channel, -1, -1, -1, -1, 1, 0.0_rp, 0.0_rp, &
+                     atom%potential%qpar(shell, channel), 0.0_rp, 0.0_rp)
+                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_radial_parameter', &
+                     this%fixed_u_trace_iteration, trim(case_name), ia - 1, this%lattice%ib(ia) - 1, &
+                     shell, channel, -1, -1, -1, -1, 2, 0.0_rp, 0.0_rp, &
+                     atom%potential%srdel(shell, channel), 0.0_rp, 0.0_rp)
+                  center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 1)
+                  if (shell == 2) then
+                     select case (trim(case_name))
+                     case ('LOCAL_PL')
+                        center_input = this%fixed_u_m0_local_center(ia, channel) - atom%potential%vmad
+                     case ('SCALAR_V')
+                        center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 1) - &
+                                       fixed_u_m0_scalar_control_v
+                     case ('VOUT_CONTROL')
+                        center_input = this%fixed_u_m0_vout_center(ia, channel) - atom%potential%vmad
+                     case ('P_TRANSPOSE_CONTROL')
+                        center_input = this%fixed_u_m0_pt_center(ia, channel) - atom%potential%vmad
+                     end select
+                  end if
+                  do moment = 0, 4
+                     select case (moment)
+                     case (0)
+                        center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 1)
+                        if (shell == 2) then
+                           select case (trim(case_name))
+                           case ('LOCAL_PL')
+                              center_input = this%fixed_u_m0_local_center(ia, channel) - atom%potential%vmad
+                           case ('SCALAR_V')
+                              center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 1) - &
+                                             fixed_u_m0_scalar_control_v
+                           case ('VOUT_CONTROL')
+                              center_input = this%fixed_u_m0_vout_center(ia, channel) - atom%potential%vmad
+                           case ('P_TRANSPOSE_CONTROL')
+                              center_input = this%fixed_u_m0_pt_center(ia, channel) - atom%potential%vmad
+                           end select
+                        end if
+                     case (1)
+                        center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 2)
+                     case (2)
+                        center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 3)
+                     case (3)
+                        center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 4)
+                     case (4)
+                        center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 5)
+                     end select
+                     call this%write_fixed_u_csv_row(out_unit, 'm0_replay_pl_input', this%fixed_u_trace_iteration, &
+                        trim(case_name), ia - 1, this%lattice%ib(ia) - 1, shell, channel, -1, -1, -1, -1, moment, &
+                        0.0_rp, 0.0_rp, center_input, 0.0_rp, 0.0_rp)
+                  end do
+                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_pl_return', this%fixed_u_trace_iteration, &
+                     trim(case_name), ia - 1, this%lattice%ib(ia) - 1, shell, channel, -1, -1, -1, -1, 0, &
+                     0.0_rp, 0.0_rp, pl_case(shell + 1, channel), 0.0_rp, 0.0_rp)
+                  do moment = 1, 3
+                     call this%write_fixed_u_csv_row(out_unit, 'm0_replay_ql_input', this%fixed_u_trace_iteration, &
+                        trim(case_name), ia - 1, this%lattice%ib(ia) - 1, shell, channel, -1, -1, -1, -1, moment - 1, &
+                        0.0_rp, 0.0_rp, ql_case(moment, shell + 1, channel), 0.0_rp, 0.0_rp)
+                  end do
+               end do
+            end do
+            ! Each case records the same immutable radial solver inputs. The
+            ! independent checker compares these rows exactly across cases.
+            do ir = 1, nr
+               call this%write_fixed_u_csv_row(out_unit, 'm0_replay_rofi', this%fixed_u_trace_iteration, &
+                  trim(case_name), ia - 1, this%lattice%ib(ia) - 1, -1, -1, -1, -1, ir - 1, -1, 0, &
+                  0.0_rp, 0.0_rp, rofi(ir), 0.0_rp, 0.0_rp)
+               do channel = 1, 2
+                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_v_input', this%fixed_u_trace_iteration, &
+                     trim(case_name), ia - 1, this%lattice%ib(ia) - 1, -1, channel, -1, -1, ir - 1, -1, 0, &
+                     0.0_rp, 0.0_rp, v(ir, channel), 0.0_rp, 0.0_rp)
+                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_rho_input', this%fixed_u_trace_iteration, &
+                     trim(case_name), ia - 1, this%lattice%ib(ia) - 1, -1, channel, -1, -1, ir - 1, -1, 0, &
+                     0.0_rp, 0.0_rp, rho_in(ir, channel), 0.0_rp, 0.0_rp)
+               end do
+            end do
+            do row = 1, ncore
+               call this%write_fixed_u_csv_row(out_unit, 'm0_replay_ec_seed', this%fixed_u_trace_iteration, &
+                  trim(case_name), ia - 1, this%lattice%ib(ia) - 1, -1, -1, -1, -1, row - 1, -1, 0, &
+                  0.0_rp, 0.0_rp, ec_seed(row), 0.0_rp, 0.0_rp)
+            end do
+            do row = 1, nval
+               call this%write_fixed_u_csv_row(out_unit, 'm0_replay_ev_seed', this%fixed_u_trace_iteration, &
+                  trim(case_name), ia - 1, this%lattice%ib(ia) - 1, -1, -1, -1, -1, row - 1, -1, 0, &
+                  0.0_rp, 0.0_rp, ev_seed(row), 0.0_rp, 0.0_rp)
+            end do
+            do channel = 1, 2
+               call this%write_fixed_u_csv_row(out_unit, 'm0_replay_energy', this%fixed_u_trace_iteration, &
+                  trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, channel, -1, -1, -1, -1, 0, &
+                  0.0_rp, sumec_case(channel), sumev_case(channel), 0.0_rp, 0.0_rp)
+               if (have_raw_energy) then
+                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_delta', this%fixed_u_trace_iteration, &
+                     trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, channel, -1, -1, -1, -1, 0, &
+                     0.0_rp, sumec_case(channel)-baseline_sumec(channel), &
+                     sumev_case(channel)-baseline_sumev(channel), 0.0_rp, 0.0_rp)
+                  if (trim(case_name) == 'SCALAR_V') then
+                     call this%write_fixed_u_csv_row(out_unit, 'm0_scalar_v_identity', &
+                        this%fixed_u_trace_iteration, trim(case_name), ia - 1, this%lattice%ib(ia)-1, &
+                        2, channel, -1, -1, -1, -1, 0, 0.0_rp, &
+                        fixed_u_m0_scalar_control_v*this%fixed_u_m0_q0(ia, channel), &
+                        baseline_sumev(channel)-sumev_case(channel), &
+                        fixed_u_m0_scalar_control_v, this%fixed_u_m0_q0(ia, channel))
+                  end if
+               end if
+            end do
+            ! NEWRHO returns rho/SUMEC/SUMEV, but the full ATOMSC ETOT
+            ! components are recomputed independently below from copied arrays.
+            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_radial_charge', &
+               this%fixed_u_trace_iteration, trim(case_name), ia - 1, this%lattice%ib(ia)-1, &
+               -1, 1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, charge(1), 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_radial_charge', &
+               this%fixed_u_trace_iteration, trim(case_name), ia - 1, this%lattice%ib(ia)-1, &
+               -1, 2, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, charge(2), 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_radial_charge', &
+               this%fixed_u_trace_iteration, trim(case_name), ia - 1, this%lattice%ib(ia)-1, &
+               -1, 0, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, charge(1)+charge(2), &
+               charge(1)-charge(2), 0.0_rp)
+            do ir = 1, nr
+               do channel = 1, 2
+                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_rho', this%fixed_u_trace_iteration, &
+                     trim(case_name), ia - 1, this%lattice%ib(ia) - 1, -1, channel, -1, -1, ir - 1, -1, 0, &
+                     0.0_rp, 0.0_rp, rho_case(ir, channel), 0.0_rp, 0.0_rp)
+               end do
+            end do
+            close(out_unit)
+         end if
+         deallocate(replay_state%vtn, replay_state%vzt, replay_state%fun2, replay_state%phi_amp)
+         deallocate(rho_case, sumec_case, sumev_case, ec_case, ev_case)
+      end subroutine run_replay_case
+
+      subroutine evaluate_frozen_components(this, replay_state, replay_xc, atom, z, a, b, nr, rofi_base, &
+                                            v_base, vhrmax, b_fsm, rho_sample, sumec_case, sumev_case, &
+                                            out_unit, site, component_stage, components)
+         class(self), intent(inout) :: this, replay_state
+         type(xc), intent(in) :: replay_xc
+         class(symbolic_atom), intent(in) :: atom
+         real(rp), intent(in) :: z, a, b, rofi_base(nr), v_base(nr,2), vhrmax, b_fsm
+         integer, intent(in) :: nr, out_unit, site
+         character(len=*), intent(in) :: component_stage
+         real(rp), intent(in) :: rho_sample(nr,2), sumec_case(2), sumev_case(2)
+         real(rp), intent(out) :: components(10)
+         integer :: isp, comp
+         real(rp) :: rhoeps_local, rhomu_local, rhovh_local, utot_local, ekin_local, etot_local
+         real(rp) :: vnucl_local, zvnucl_local, vsum_local, value_local
+         real(rp), allocatable :: rho_work(:,:), v_work(:,:), rofi_work(:)
+         real(rp) :: rvh_local(2), rho0_local(2), reps_local(2), rmu_local(2)
+
+         allocate(rho_work(nr,2), v_work(nr,2), rofi_work(nr))
+         rho_work = rho_sample
+         v_work = v_base
+         rofi_work = rofi_base
+         rvh_local = 0.0_rp
+         rho0_local = 0.0_rp
+         reps_local = 0.0_rp
+         rmu_local = 0.0_rp
+         vsum_local = 0.0_rp
+         call POISS0(z, a, b, rofi_work, rho_work, nr, vhrmax, v_work, rvh_local, vsum_local, 2)
+         vnucl_local = v_work(1,1)
+         zvnucl_local = -z*vnucl_local
+         call replay_state%VXC0SP(replay_xc, z, a, b, rofi_work, rho_sample, nr, v_work, &
+                                  rho0_local, reps_local, rmu_local, 2, b_fsm)
+         rhovh_local = sum(rvh_local)
+         rhoeps_local = sum(reps_local)
+         rhomu_local = sum(rmu_local)
+         utot_local = 0.5_rp*(rhovh_local + zvnucl_local)
+         ekin_local = sum(sumev_case) + sum(sumec_case) - rhovh_local - rhomu_local
+         etot_local = ekin_local + utot_local + rhoeps_local
+         components = [sum(sumev_case), sum(sumec_case), rhovh_local, rhomu_local, vnucl_local, &
+                       zvnucl_local, ekin_local, utot_local, rhoeps_local, etot_local]
+         do comp = 0, 9
+            value_local = components(comp+1)
+            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_energy_component', &
+               this%fixed_u_trace_iteration, trim(component_stage), site-1, this%lattice%ib(site)-1, &
+               2, -1, -1, -1, -1, -1, comp, 0.0_rp, 0.0_rp, value_local, 0.0_rp, 0.0_rp)
+         end do
+         do isp = 1, 2
+            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_energy_component', &
+               this%fixed_u_trace_iteration, trim(component_stage), site-1, this%lattice%ib(site)-1, &
+               2, isp, -1, -1, -1, -1, 10, 0.0_rp, 0.0_rp, rvh_local(isp), 0.0_rp, 0.0_rp)
+         end do
+         deallocate(rho_work, v_work, rofi_work)
+      end subroutine evaluate_frozen_components
+   end subroutine replay_fixed_u_m0_moments
 
    subroutine update_fixed_u_residuals(this)
       class(self), intent(inout) :: this
@@ -2282,8 +3067,11 @@ contains
       integer :: i, ia, plusbulk, niter
       real(rp), dimension(6) :: QSL
       real(rp), dimension(:), allocatable :: pot_arr
+         complex(rp), allocatable :: fixed_u_m1(:, :, :, :, :)
+         real(rp), allocatable :: fixed_u_pl_diag(:, :, :, :)
       integer :: na_glob, pot_size
       real(rp), dimension(:, :), allocatable :: T_comm
+      complex(rp), allocatable :: fixed_u_vin(:, :, :)
       real(rp) :: total_energy, magnetic_moment
 
       call this%initialize_fixed_u_trace()
@@ -2314,6 +3102,7 @@ contains
          !=========================================================================
          call run_recursion(this, i)
          this%fixed_u_trace_iteration = i
+         this%fixed_u_m0_snapshot_valid = .false.
          if (this%fixed_u_trace_selected_iteration == 0) call this%reset_fixed_u_trace()
          call this%write_fixed_u_trace('Pin_H')
    
@@ -2361,8 +3150,26 @@ contains
          !=========================================================================
          !                  CALCULATE THE DENSITY OF STATES
          !=========================================================================
-         call run_dos(this)
-         call this%write_fixed_u_trace('P_OUT')
+         if (this%fixed_u_trace_enabled .and. &
+             (this%fixed_u_trace_selected_iteration == 0 .or. this%fixed_u_trace_selected_iteration == i)) then
+            allocate(fixed_u_m1(this%lattice%nrec, lmax_basis + 1, 2, 2*lmax_basis + 1, 2*lmax_basis + 1))
+            allocate(fixed_u_pl_diag(this%lattice%nrec, lmax_basis + 1, 2, 6))
+            if (allocated(this%hamiltonian%hubbard_u_pot)) then
+               allocate(fixed_u_vin, mold=this%hamiltonian%hubbard_u_pot)
+               fixed_u_vin = this%hamiltonian%hubbard_u_pot
+            else
+               allocate(fixed_u_vin(nb, nb, this%lattice%ntype))
+               fixed_u_vin = (0.0_rp, 0.0_rp)
+            end if
+            call run_dos(this, fixed_u_m1, fixed_u_pl_diag)
+            call this%write_fixed_u_trace('P_OUT', fixed_u_m1, fixed_u_pl_diag)
+            call this%snapshot_fixed_u_m0_moments(fixed_u_m1, fixed_u_pl_diag, fixed_u_vin)
+            deallocate(fixed_u_vin)
+            deallocate(fixed_u_m1, fixed_u_pl_diag)
+         else
+            call run_dos(this)
+            call this%write_fixed_u_trace('P_OUT')
+         end if
    
          !=========================================================================
          !                   MIX OLD AND NEW CALCULATED PL AND QL
@@ -2639,8 +3446,10 @@ contains
    !=========================================================================
    !                   RUN DENSITY OF STATES CALCULATION
    !=========================================================================
-   subroutine run_dos(this)
+   subroutine run_dos(this, m1_out, pl_diag_out)
       class(self), intent(inout) :: this
+      complex(rp), intent(out), optional :: m1_out(:, :, :, :, :)
+      real(rp), intent(out), optional :: pl_diag_out(:, :, :, :)
       integer :: ia, l, lmax_site, li, iorb, plusbulk
       real(rp) :: q_up, q_dn, mz, mtot
       real(rp) :: reciprocal_h2d, reciprocal_solver, reciprocal_d2h, reciprocal_total
@@ -2795,14 +3604,18 @@ contains
                         end do
 
          call this%apply_constraints()
-         call this%bands%calculate_pl()
+         if (present(pl_diag_out)) then
+            call this%bands%calculate_pl(pl_diag_out)
+         else
+            call this%bands%calculate_pl()
+         end if
          this%en%fermi = this%reciprocal_scf_cache%fermi_level
          call g_scf_benchmark_profile%stop_stage('P_density_build')
 
          if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
             call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos(this%lattice, &
                fixed_liechtenstein=this%hamiltonian%hubbard_u_general_check .and. &
-                  trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein')
+                  trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein', m1_out=m1_out)
             if (rank == 0) then
                do ia = 1, this%lattice%nrec
                   plusbulk = this%lattice%nbulk + ia
@@ -2815,6 +3628,11 @@ contains
                   end do
                end do
             end if
+         else if (present(m1_out)) then
+            ! The no-U M0 reference still needs M1 from the canonical current
+            ! eigenpairs, but must not populate/serialize stale LDM state.
+            call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos( &
+               this%lattice, m1_out=m1_out, m1_only=.true.)
          end if
          call this%write_kspace_scf_dos_outputs(this%reciprocal_scf_cache)
 
@@ -2873,7 +3691,11 @@ contains
       !                  CALCULATE THE NEW BAND MOMENTS QL
       !=========================================================================
       call g_scf_benchmark_profile%start_stage('P_rs_density_build')
-      call this%bands%calculate_moments()
+      if (present(m1_out) .or. present(pl_diag_out)) then
+         call this%bands%calculate_moments(m1_out=m1_out, pl_diag_out=pl_diag_out)
+      else
+         call this%bands%calculate_moments()
+      end if
       call g_scf_benchmark_profile%stop_stage('P_rs_density_build')
       call this%mix%save_to('new')
 
@@ -3305,6 +4127,8 @@ contains
       real(rp), dimension(NVMX) :: EV_SEED
       real(rp), dimension(2) :: VRMAX
       real(rp), dimension(:, :), allocatable :: rho_in, rho
+      real(rp), dimension(:, :), allocatable :: v_trace_base
+      real(rp), dimension(:), allocatable :: rofi_trace_base
       real(rp), dimension(2) :: qval
 
       ipr = 0
@@ -3491,6 +4315,16 @@ contains
          if (LAST) then
             IPR1 = IPR
          end if
+         if (LAST .and. this%fixed_u_trace_enabled .and. rank == 0 .and. &
+             (this%fixed_u_trace_selected_iteration <= 0 .or. &
+              this%fixed_u_trace_iteration == this%fixed_u_trace_selected_iteration)) then
+            if (allocated(v_trace_base)) deallocate(v_trace_base)
+            if (allocated(rofi_trace_base)) deallocate(rofi_trace_base)
+            allocate(v_trace_base, mold=v)
+            allocate(rofi_trace_base, mold=rofi)
+            v_trace_base = v
+            rofi_trace_base = rofi
+         end if
          call POISS0(atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, VHRMAX, V, RVH, VSUM, n_radial_spin_channels)
          VNUCL = V(1, 1)
          !call VXC0SP_old(atom%element%atomic_number, atom%a, B, rofi, rho_in, NR, V, RHO0, REPS, RMU, NSP)
@@ -3516,10 +4350,12 @@ contains
          call this%NEWRHO(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho, atom%potential%PL, atom%potential%QL, SEC, SEV, EC, EV, TL, n_radial_spin_channels, IPR1)
          if (this%fixed_u_trace_capture_radial_state) then
             call this%write_fixed_u_radial_replay_output(rho, SEC, SEV)
-            call this%verify_fixed_u_radial_replay(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, &
-               v, rho_in, rho, atom%potential%pl, atom%potential%ql, SEC, SEV, EC_SEED, EV_SEED, EC, EV, &
-               ncore, nval, TL)
+            call this%verify_fixed_u_radial_replay(atom, atom%element%atomic_number, lmax, atom%a, b, nr, &
+               rofi_trace_base, v_trace_base, rofi, v, rho_in, rho, VHRMAX, B_fsm, RVH, REPS, RMU, VNUCL, &
+               atom%potential%pl, atom%potential%ql, SEC, SEV, EC_SEED, EV_SEED, EC, EV, ncore, nval, TL)
             this%fixed_u_trace_capture_radial_state = .false.
+            if (allocated(v_trace_base)) deallocate(v_trace_base)
+            if (allocated(rofi_trace_base)) deallocate(rofi_trace_base)
          end if
          if (LAST) then
             call atom%radial_ground_state%capture_core_density(this%core_rho_weighted(1:nr, :), &
