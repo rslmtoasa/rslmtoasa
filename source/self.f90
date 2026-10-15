@@ -72,6 +72,12 @@ module self_mod
    public :: legacy_radial_fixture
    !> Test-only seam that invokes the unchanged production NEWRHO routine.
    public :: legacy_newrho_fixture
+   !> Private accepted-state replay seam: run the real bands%calculate_pl and
+   !> unchanged NEWRHO on fresh scratch objects supplied from a hash-bound
+   !> capture.  This is an audit/test hook, not a production calculation path.
+   public :: legacy_accepted_pl_newrho_fixture
+   public :: legacy_accepted_m03_newrho_fixture
+   public :: legacy_accepted_m03_components_fixture
    !> Public audit seam for the unchanged scalar-relativistic GINTSR metric.
    public :: legacy_gintsr
    ! The atomic/XC radial representation has two local spin eigenchannels.
@@ -79,9 +85,12 @@ module self_mod
    ! mode (and is not a channel-count field).
    integer, parameter, public :: RADIAL_XC_SPIN_CHANNELS = 2
    integer, parameter :: fixed_u_m0_a11_nshift = 8
-   real(rp), parameter :: fixed_u_m0_a11_v(fixed_u_m0_a11_nshift) = &
+   integer, parameter :: fixed_u_m0_a2_nshift = 14
+   real(rp), parameter :: fixed_u_m0_a2_v(fixed_u_m0_a2_nshift) = &
       [-2.0e-2_rp, -1.0e-2_rp, -5.0e-3_rp, -2.5e-3_rp, &
-        2.5e-3_rp,  5.0e-3_rp,  1.0e-2_rp,  2.0e-2_rp]
+        2.5e-3_rp,  5.0e-3_rp,  1.0e-2_rp,  2.0e-2_rp, &
+       -4.0e-2_rp, -8.0e-2_rp, -1.2e-1_rp, &
+        4.0e-2_rp,  8.0e-2_rp,  1.2e-1_rp]
 
    !> Module´s main structure
    type, public :: self
@@ -323,6 +332,8 @@ module self_mod
       character(len=128), private :: fixed_u_trace_run_id = 'run'
       real(rp), private :: fixed_u_trace_lambda = 1.0_rp
       logical, private :: fixed_u_trace_enabled = .false.
+      logical, private :: fixed_u_trace_capture_only = .false.
+      logical, private :: fixed_u_trace_a2_scan_enabled = .false.
       integer, private :: fixed_u_trace_iteration = 0
       integer, private :: fixed_u_trace_selected_iteration = 0
       integer, private :: fixed_u_trace_current_site = -1
@@ -466,7 +477,7 @@ contains
       character(len=1024) :: trace_path
       character(len=128) :: trace_value
       character(len=128) :: root_run_id
-      integer :: ios, unit, root_trace_enabled, root_selected_iteration
+      integer :: ios, unit, root_trace_enabled, root_selected_iteration, root_capture_only, root_a2_scan
       real(rp) :: root_trace_lambda
 
       this%fixed_u_trace_enabled = .false.
@@ -480,6 +491,8 @@ contains
       ! failure cases, so optional M1 paths cannot disagree across ranks.
       root_trace_enabled = 0
       root_selected_iteration = 0
+      root_capture_only = 0
+      root_a2_scan = 0
       root_trace_lambda = 1.0_rp
       root_run_id = 'run'
       if (rank == 0) then
@@ -514,6 +527,12 @@ contains
                read(trace_value, *, iostat=ios) root_selected_iteration
                if (ios /= 0 .or. root_selected_iteration < 0) root_trace_enabled = 0
             end if
+            trace_value = ''
+            call get_environment_variable('RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY', trace_value, status=ios)
+            if (ios == 0 .and. (trim(trace_value) == '1' .or. trim(trace_value) == 'true')) root_capture_only = 1
+            trace_value = ''
+            call get_environment_variable('RSLMTO_FIXED_U_A2_SCAN', trace_value, status=ios)
+            if (ios == 0 .and. (trim(trace_value) == '1' .or. trim(trace_value) == 'true')) root_a2_scan = 1
          end if
 
          if (root_trace_enabled == 1) then
@@ -535,10 +554,14 @@ contains
 #ifdef USE_MPI
       call MPI_BCAST(root_trace_enabled, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
       call MPI_BCAST(root_selected_iteration, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+      call MPI_BCAST(root_capture_only, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+      call MPI_BCAST(root_a2_scan, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
       call MPI_BCAST(root_trace_lambda, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
       call MPI_BCAST(root_run_id, len(root_run_id), MPI_CHARACTER, 0, MPI_COMM_WORLD, ierr)
 #endif
       this%fixed_u_trace_enabled = root_trace_enabled == 1
+      this%fixed_u_trace_capture_only = root_capture_only == 1
+      this%fixed_u_trace_a2_scan_enabled = root_a2_scan == 1
       this%fixed_u_trace_selected_iteration = root_selected_iteration
       this%fixed_u_trace_lambda = root_trace_lambda
       this%fixed_u_trace_run_id = root_run_id
@@ -783,11 +806,16 @@ contains
       end subroutine energy_row
    end subroutine write_fixed_u_radial_trace
 
-   subroutine write_fixed_u_radial_replay_input(this, atom, rofi, v, rho_in, pl, ql, tol)
+   subroutine write_fixed_u_radial_replay_input(this, atom, rofi, v, rho_in, pl, ql, ec_seed, ncore, &
+                                               tol, vhrmax, b_fsm, txc, hyperfine)
       class(self), intent(in) :: this
       class(symbolic_atom), intent(in) :: atom
-      real(rp), intent(in) :: rofi(:), v(:, :), rho_in(:, :), pl(:, :), ql(:, :, :), tol
-      integer :: unit, ios, ir, spin, ell
+      real(rp), intent(in) :: rofi(:), v(:, :), rho_in(:, :), pl(:, :), ql(:, :, :), ec_seed(:), tol
+      integer, intent(in) :: ncore
+      real(rp), intent(in) :: vhrmax, b_fsm
+      integer, intent(in) :: txc
+      logical, intent(in) :: hyperfine
+      integer :: unit, ios, ir, spin, ell, core_index
 
       if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
       if (this%fixed_u_trace_selected_iteration > 0 .and. &
@@ -799,6 +827,10 @@ contains
       call meta('radial_B', atom%B())
       call meta('radial_Z', atom%element%atomic_number)
       call meta('radial_tolerance', tol)
+      call meta('radial_VHRMAX', vhrmax)
+      call meta('radial_B_fsm', b_fsm)
+      call meta('radial_txc', real(txc, rp))
+      call meta('radial_hyperfine', merge(1.0_rp, 0.0_rp, hyperfine))
       call meta('radial_NR', real(size(rofi), rp))
       call meta('radial_lmax', real(atom%potential%lmax, rp))
       call meta('radial_nsp', real(size(v, 2), rp))
@@ -853,6 +885,12 @@ contains
                this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 2, &
                0.0_rp, 0.0_rp, ql(3, ell + 1, spin), 0.0_rp, 0.0_rp)
          end do
+      end do
+      if (size(ec_seed) < ncore) error stop 'fixed-U replay capture has incomplete core-energy seeds'
+      do core_index = 1, ncore
+         call this%write_fixed_u_csv_row(unit, 'radial_replay_ec_seed', this%fixed_u_trace_iteration, &
+            'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, -1, -1, -1, -1, core_index - 1, &
+            core_index - 1, -1, 0, 0.0_rp, 0.0_rp, ec_seed(core_index), 0.0_rp, 0.0_rp)
       end do
       close(unit)
    contains
@@ -1228,7 +1266,7 @@ contains
       real(rp), allocatable :: ec_case(:), ev_case(:)
       real(rp), allocatable :: pl_raw(:, :), pl_local(:, :), pl_a11(:, :, :)
       real(rp), allocatable :: baseline_ev(:)
-      integer :: ia, plusbulk, l, spin, unit, ios, row, iv
+      integer :: ia, plusbulk, l, spin, unit, ios, row, iv, nshift
       real(rp) :: pl_reproduction_error, ql_vs_live_error, q2_min
       real(rp) :: baseline_sumev(2), baseline_sumec(2)
       real(rp) :: component_snapshot(10), actual_component(10), output_component(10)
@@ -1257,13 +1295,15 @@ contains
          end do
       end do
 
-      allocate(pl_a11(lmax + 1, 2, fixed_u_m0_a11_nshift))
-      do iv = 1, fixed_u_m0_a11_nshift
+      nshift = fixed_u_m0_a11_nshift
+      if (this%fixed_u_trace_a2_scan_enabled) nshift = fixed_u_m0_a2_nshift
+      allocate(pl_a11(lmax + 1, 2, nshift))
+      do iv = 1, nshift
          pl_atoms = this%symbolic_atom
          call load_captured_pl_inputs(pl_atoms)
          do spin = 1, 2
             pl_atoms(plusbulk)%potential%gravity_center(3, spin) = &
-               this%fixed_u_m0_pl_diag(ia, 3, spin, 1) - fixed_u_m0_a11_v(iv)
+               this%fixed_u_m0_pl_diag(ia, 3, spin, 1) - fixed_u_m0_a2_v(iv)
          end do
          call pl_bands%calculate_pl()
          do spin = 1, 2
@@ -1326,8 +1366,8 @@ contains
       ! diagnostic because its moments are from the current spectral output.
       call run_replay_case('LIVE_STATE', pl_actual, ql_actual)
       call run_replay_case('RAW_PL', pl_raw, ql_raw)
-      do iv = 1, fixed_u_m0_a11_nshift
-         call run_replay_case(a11_case_name(iv), pl_a11(:, :, iv), ql_raw, fixed_u_m0_a11_v(iv), iv)
+      do iv = 1, nshift
+         call run_replay_case(a11_case_name(iv), pl_a11(:, :, iv), ql_raw, fixed_u_m0_a2_v(iv), iv)
       end do
       if (minval(this%fixed_u_m0_local_q2(ia, :)) >= 0.0_rp) then
          call run_replay_case('LOCAL_PL', pl_local, ql_local)
@@ -1351,7 +1391,11 @@ contains
       function a11_case_name(shift_index) result(name)
          integer, intent(in) :: shift_index
          character(len=24) :: name
-         write(name, '("A1_SHIFT_",i2.2)') shift_index
+         if (shift_index <= fixed_u_m0_a11_nshift) then
+            write(name, '("A1_SHIFT_",i2.2)') shift_index
+         else
+            write(name, '("A2_SHIFT_",i2.2)') shift_index
+         end if
       end function a11_case_name
 
       function a11_stage_name(case_name) result(name)
@@ -1359,6 +1403,12 @@ contains
          character(len=24) :: name
          name = case_name
       end function a11_stage_name
+
+      logical function is_a11_shift_case(case_name)
+         character(len=*), intent(in) :: case_name
+         is_a11_shift_case = index(trim(case_name), 'A1_SHIFT_') == 1 .or. &
+                             index(trim(case_name), 'A2_SHIFT_') == 1
+      end function is_a11_shift_case
 
       subroutine load_captured_pl_inputs(atoms)
          type(symbolic_atom), intent(inout) :: atoms(:)
@@ -1395,7 +1445,7 @@ contains
          shift_index = 0
          if (present(a11_v)) shift_value = a11_v
          if (present(a11_index)) shift_index = a11_index
-         a11_case = trim(case_name) == 'RAW_PL' .or. index(trim(case_name), 'A1_SHIFT_') == 1
+         a11_case = trim(case_name) == 'RAW_PL' .or. is_a11_shift_case(case_name)
          allocate(rho_case(nr, 2), sumec_case(2), sumev_case(2), &
                   ec_case(max(ncore, 1)), ev_case(max(nval, 1)))
          allocate(replay_state%vtn(nr, 2), replay_state%vzt(nr, 2), &
@@ -1508,7 +1558,7 @@ contains
                      case ('P_TRANSPOSE_CONTROL')
                         center_input = this%fixed_u_m0_pt_center(ia, channel) - atom%potential%vmad
                      end select
-                     if (index(trim(case_name), 'A1_SHIFT_') == 1) &
+                     if (is_a11_shift_case(case_name)) &
                         center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 1) - shift_value
                   end if
                   do moment = 0, 4
@@ -1524,7 +1574,7 @@ contains
                            case ('P_TRANSPOSE_CONTROL')
                               center_input = this%fixed_u_m0_pt_center(ia, channel) - atom%potential%vmad
                            end select
-                           if (index(trim(case_name), 'A1_SHIFT_') == 1) &
+                           if (is_a11_shift_case(case_name)) &
                               center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 1) - shift_value
                         end if
                      case (1)
@@ -2229,6 +2279,277 @@ contains
          sumec_out = sumec
       end if
    end subroutine legacy_newrho_fixture
+
+   !> Rehydrate a captured single-site radial state and replay signed d-center
+   !> shifts using the actual bands%calculate_pl method and unchanged NEWRHO.
+   !> Every shift starts from fresh copies of the exact captured operands.
+   subroutine legacy_accepted_pl_newrho_fixture(lmax, z, a, b, tol, f_core, rofi, potential, ec_seed, ev_seed, &
+                                                gravity_center, c_in, qpar_in, srdel_in, pl_seed, ql_in, shifts, &
+                                                pl_out, rho_out, sumec_out, sumev_out, ec_out, ev_out)
+      integer, intent(in) :: lmax, f_core
+      real(rp), intent(in) :: z, a, b, tol
+      real(rp), intent(in) :: rofi(:), potential(:, :), ec_seed(:), ev_seed(:)
+      real(rp), intent(in) :: gravity_center(:, :), c_in(:, :), qpar_in(:, :), srdel_in(:, :), pl_seed(:, :)
+      real(rp), intent(in) :: ql_in(:, :, :), shifts(:)
+      real(rp), intent(out) :: pl_out(:, :, :), rho_out(:, :, :), sumec_out(:, :), sumev_out(:, :)
+      real(rp), intent(out) :: ec_out(:, :), ev_out(:, :)
+      type(self) :: replay_state
+      type(control), target :: replay_control
+      type(symbolic_atom), allocatable, target :: replay_atoms(:)
+      type(symbolic_atom) :: atom_template
+      type(lattice), target :: replay_lattice
+      type(bands) :: pl_bands
+      integer :: nr, ncore, nval, nshifts, iv, prior_start, prior_end
+
+      nr = size(rofi)
+      ncore = size(ec_seed)
+      nval = size(ev_seed)
+      nshifts = size(shifts)
+      if (lmax < 0 .or. lmax > 2 .or. nr < 3 .or. size(potential, 1) /= nr .or. &
+          size(potential, 2) /= 2 .or. size(gravity_center, 1) /= lmax + 1 .or. &
+          size(gravity_center, 2) /= 2 .or. size(c_in, 1) /= lmax + 1 .or. size(c_in, 2) /= 2 .or. &
+          size(qpar_in, 1) /= lmax + 1 .or. size(qpar_in, 2) /= 2 .or. &
+          size(srdel_in, 1) /= lmax + 1 .or. size(srdel_in, 2) /= 2 .or. &
+          size(pl_seed, 1) /= lmax + 1 .or. size(pl_seed, 2) /= 2 .or. &
+          size(ql_in, 1) /= 3 .or. size(ql_in, 2) /= lmax + 1 .or. size(ql_in, 3) /= 2 .or. &
+          ncore < 0 .or. nval < 1 .or. &
+          any(shape(pl_out) /= [lmax + 1, 2, nshifts]) .or. &
+          any(shape(rho_out) /= [nr, 2, nshifts]) .or. &
+          any(shape(sumec_out) /= [2, nshifts]) .or. any(shape(sumev_out) /= [2, nshifts]) .or. &
+          any(shape(ec_out) /= [ncore, nshifts]) .or. any(shape(ev_out) /= [nval, nshifts])) then
+         error stop 'legacy_accepted_pl_newrho_fixture: inconsistent captured operand dimensions'
+      end if
+      if (lmax_basis /= lmax) error stop 'legacy_accepted_pl_newrho_fixture: build basis does not match capture'
+
+      call atom_template%restore_to_default()
+      atom_template%element%atomic_number = z
+      atom_template%element%f_core = f_core
+      atom_template%potential%lmax = lmax
+      if (lbound(atom_template%potential%pl, 1) /= 0 .or. ubound(atom_template%potential%pl, 1) /= lmax .or. &
+          lbound(atom_template%potential%c, 1) /= 0 .or. ubound(atom_template%potential%c, 1) /= lmax .or. &
+          lbound(atom_template%potential%ql, 2) /= 0 .or. ubound(atom_template%potential%ql, 2) /= lmax) then
+         error stop 'legacy_accepted_pl_newrho_fixture: scratch atom potential bounds mismatch'
+      end if
+      atom_template%potential%gravity_center = gravity_center
+      atom_template%potential%c = c_in
+      atom_template%potential%qpar = qpar_in
+      atom_template%potential%srdel = srdel_in
+      atom_template%potential%pl = pl_seed
+      atom_template%potential%ql = ql_in
+
+      allocate(replay_atoms(1))
+      replay_atoms(1) = atom_template
+      replay_lattice%nbulk = 0
+      replay_lattice%nrec = 1
+      pl_bands%symbolic_atom => replay_atoms
+      pl_bands%lattice => replay_lattice
+      replay_control%hyperfine = .false.
+      replay_state%control => replay_control
+      allocate(replay_state%vtn(nr, 2), replay_state%vzt(nr, 2), &
+               replay_state%fun2(nr, lmax + 1, 2), replay_state%phi_amp(nr, lmax + 1, 2))
+      replay_state%vtn = 0.0_rp
+      replay_state%vzt = 0.0_rp
+      replay_state%fun2 = 0.0_rp
+      replay_state%phi_amp = 0.0_rp
+
+      prior_start = start_atom
+      prior_end = end_atom
+      start_atom = 1
+      end_atom = 1
+      do iv = 1, nshifts
+         ! Intrinsic assignment deep-copies allocatable potential arrays.
+         replay_atoms(1) = atom_template
+         replay_state%vtn = 0.0_rp
+         replay_state%vzt = 0.0_rp
+         replay_state%fun2 = 0.0_rp
+         replay_state%phi_amp = 0.0_rp
+         replay_atoms(1)%potential%gravity_center(lmax + 1, :) = &
+            gravity_center(lmax + 1, :) - shifts(iv)
+         call pl_bands%calculate_pl()
+         pl_out(:, :, iv) = replay_atoms(1)%potential%pl
+         rho_out(:, :, iv) = 0.0_rp
+         sumec_out(:, iv) = 0.0_rp
+         sumev_out(:, iv) = 0.0_rp
+         ec_out(:, iv) = ec_seed
+         ev_out(:, iv) = ev_seed
+         call replay_state%newrho(replay_atoms(1), z, lmax, a, b, nr, rofi, potential, rho_out(:, :, iv), &
+                                  pl_out(:, :, iv), ql_in, sumec_out(:, iv), sumev_out(:, iv), &
+                                  ec_out(:, iv), ev_out(:, iv), tol, 2, 0)
+      end do
+      start_atom = prior_start
+      end_atom = prior_end
+      nullify(pl_bands%symbolic_atom, pl_bands%lattice)
+      deallocate(replay_atoms, replay_state%vtn, replay_state%vzt, replay_state%fun2, replay_state%phi_amp)
+   end subroutine legacy_accepted_pl_newrho_fixture
+
+   !> Private frozen-state M0.3 replay. Each case supplies its own per-spin
+   !> center shift and complete QL moments; production calculate_pl and NEWRHO
+   !> operate on a fresh deep copy for every case. The optional d-density
+   !> output is the l=2 valence summand observed inside NEWRHO itself.
+   subroutine legacy_accepted_m03_newrho_fixture(lmax, z, a, b, tol, f_core, rofi, potential, ec_seed, ev_seed, &
+                                                 gravity_center, c_in, qpar_in, srdel_in, pl_seed, pl_live, &
+                                                 ql_cases, center_shift, pl_from_calc, pl_out, rho_out, d_rho_out, &
+                                                 sumec_out, sumev_out, ec_out, ev_out)
+      integer, intent(in) :: lmax, f_core
+      real(rp), intent(in) :: z, a, b, tol
+      real(rp), intent(in) :: rofi(:), potential(:, :), ec_seed(:), ev_seed(:)
+      real(rp), intent(in) :: gravity_center(:, :), c_in(:, :), qpar_in(:, :), srdel_in(:, :), pl_seed(:, :)
+      real(rp), intent(in) :: pl_live(:, :)
+      real(rp), intent(in) :: ql_cases(:, :, :, :), center_shift(:, :)
+      logical, intent(in) :: pl_from_calc(:)
+      real(rp), intent(out) :: pl_out(:, :, :), rho_out(:, :, :), d_rho_out(:, :, :)
+      real(rp), intent(out) :: sumec_out(:, :), sumev_out(:, :), ec_out(:, :), ev_out(:, :)
+      type(self) :: replay_state
+      type(control), target :: replay_control
+      type(symbolic_atom), allocatable, target :: replay_atoms(:)
+      type(symbolic_atom) :: atom_template
+      type(lattice), target :: replay_lattice
+      type(bands) :: pl_bands
+      integer :: nr, ncore, nval, ncase, iv, prior_start, prior_end, spin
+
+      nr = size(rofi)
+      ncore = size(ec_seed)
+      nval = size(ev_seed)
+      ncase = size(center_shift, 2)
+      if (lmax /= 2 .or. nr < 3 .or. size(potential, 1) /= nr .or. size(potential, 2) /= 2 .or. &
+          any(shape(gravity_center) /= [lmax + 1, 2]) .or. any(shape(c_in) /= [lmax + 1, 2]) .or. &
+          any(shape(qpar_in) /= [lmax + 1, 2]) .or. any(shape(srdel_in) /= [lmax + 1, 2]) .or. &
+          any(shape(pl_seed) /= [lmax + 1, 2]) .or. any(shape(pl_live) /= [lmax + 1, 2]) .or. &
+          any(shape(ql_cases) /= [3, lmax + 1, 2, ncase]) .or. any(shape(center_shift) /= [2, ncase]) .or. &
+          size(pl_from_calc) /= ncase .or. &
+          ncore < 0 .or. nval < 1 .or. any(shape(pl_out) /= [lmax + 1, 2, ncase]) .or. &
+          any(shape(rho_out) /= [nr, 2, ncase]) .or. any(shape(d_rho_out) /= [nr, 2, ncase]) .or. &
+          any(shape(sumec_out) /= [2, ncase]) .or. any(shape(sumev_out) /= [2, ncase]) .or. &
+          any(shape(ec_out) /= [ncore, ncase]) .or. any(shape(ev_out) /= [nval, ncase])) then
+         error stop 'legacy_accepted_m03_newrho_fixture: inconsistent frozen-state dimensions'
+      end if
+      if (lmax_basis /= lmax) error stop 'legacy_accepted_m03_newrho_fixture: build basis differs from capture'
+
+      call atom_template%restore_to_default()
+      atom_template%element%atomic_number = z
+      atom_template%element%f_core = f_core
+      atom_template%potential%lmax = lmax
+      atom_template%potential%gravity_center = gravity_center
+      atom_template%potential%c = c_in
+      atom_template%potential%qpar = qpar_in
+      atom_template%potential%srdel = srdel_in
+      atom_template%potential%pl = pl_seed
+      atom_template%potential%ql = ql_cases(:, :, :, 1)
+      allocate(replay_atoms(1))
+      replay_atoms(1) = atom_template
+      replay_lattice%nbulk = 0
+      replay_lattice%nrec = 1
+      pl_bands%symbolic_atom => replay_atoms
+      pl_bands%lattice => replay_lattice
+      replay_control%hyperfine = .false.
+      replay_state%control => replay_control
+      allocate(replay_state%vtn(nr, 2), replay_state%vzt(nr, 2), &
+               replay_state%fun2(nr, lmax + 1, 2), replay_state%phi_amp(nr, lmax + 1, 2))
+      replay_state%vtn = 0.0_rp
+      replay_state%vzt = 0.0_rp
+      replay_state%fun2 = 0.0_rp
+      replay_state%phi_amp = 0.0_rp
+
+      prior_start = start_atom
+      prior_end = end_atom
+      start_atom = 1
+      end_atom = 1
+      do iv = 1, ncase
+         replay_atoms(1) = atom_template
+         replay_atoms(1)%potential%ql = ql_cases(:, :, :, iv)
+         do spin = 1, 2
+            replay_atoms(1)%potential%gravity_center(lmax + 1, spin) = &
+               gravity_center(lmax + 1, spin) - center_shift(spin, iv)
+         end do
+         replay_state%vtn = 0.0_rp
+         replay_state%vzt = 0.0_rp
+         replay_state%fun2 = 0.0_rp
+         replay_state%phi_amp = 0.0_rp
+         if (pl_from_calc(iv)) then
+            call pl_bands%calculate_pl()
+            pl_out(:, :, iv) = replay_atoms(1)%potential%pl
+         else
+            pl_out(:, :, iv) = pl_live
+         end if
+         rho_out(:, :, iv) = 0.0_rp
+         d_rho_out(:, :, iv) = 0.0_rp
+         sumec_out(:, iv) = 0.0_rp
+         sumev_out(:, iv) = 0.0_rp
+         ec_out(:, iv) = ec_seed
+         ev_out(:, iv) = ev_seed
+         call replay_state%newrho(replay_atoms(1), z, lmax, a, b, nr, rofi, potential, rho_out(:, :, iv), &
+                                  pl_out(:, :, iv), ql_cases(:, :, :, iv), sumec_out(:, iv), sumev_out(:, iv), &
+                                  ec_out(:, iv), ev_out(:, iv), tol, 2, 0, d_rho_out(:, :, iv))
+      end do
+      start_atom = prior_start
+      end_atom = prior_end
+      nullify(pl_bands%symbolic_atom, pl_bands%lattice)
+      deallocate(replay_atoms, replay_state%vtn, replay_state%vzt, replay_state%fun2, replay_state%phi_amp)
+   end subroutine legacy_accepted_m03_newrho_fixture
+
+   !> Re-evaluate the real POISS0/VXC0SP component set on frozen accepted
+   !> input and replay output densities. The two density stages stay separate.
+   subroutine legacy_accepted_m03_components_fixture(z, a, b, nr, rofi_base, v_base, vhrmax, b_fsm, txc, &
+                                                      rho_in, rho_out, sumec, sumev, components_in, &
+                                                      components_out, rvh_in, rvh_out)
+      real(rp), intent(in) :: z, a, b, vhrmax, b_fsm
+      integer, intent(in) :: nr, txc
+      real(rp), intent(in) :: rofi_base(nr), v_base(nr, 2), rho_in(nr, 2)
+      real(rp), intent(in) :: rho_out(:, :, :), sumec(:, :), sumev(:, :)
+      real(rp), intent(out) :: components_in(:, :), components_out(:, :), rvh_in(:, :), rvh_out(:, :)
+      type(self) :: replay_state
+      type(control), target :: replay_control
+      type(xc) :: replay_xc
+      integer :: ncase, icase
+
+      ncase = size(rho_out, 3)
+      if (size(rho_out, 1) /= nr .or. size(rho_out, 2) /= 2 .or. &
+          any(shape(sumec) /= [2, ncase]) .or. any(shape(sumev) /= [2, ncase]) .or. &
+          any(shape(components_in) /= [10, ncase]) .or. any(shape(components_out) /= [10, ncase]) .or. &
+          any(shape(rvh_in) /= [2, ncase]) .or. any(shape(rvh_out) /= [2, ncase])) then
+         error stop 'legacy_accepted_m03_components_fixture: inconsistent frozen component dimensions'
+      end if
+      replay_control%txc = txc
+      replay_control%hyperfine = .false.
+      replay_xc = xc(replay_control)
+      do icase = 1, ncase
+         call component_set(rho_in, sumec(:, icase), sumev(:, icase), &
+                            components_in(:, icase), rvh_in(:, icase))
+         call component_set(rho_out(:, :, icase), sumec(:, icase), sumev(:, icase), &
+                            components_out(:, icase), rvh_out(:, icase))
+      end do
+   contains
+      subroutine component_set(rho_sample, sumec_sample, sumev_sample, components, rvh_spin)
+         real(rp), intent(in) :: rho_sample(nr, 2), sumec_sample(2), sumev_sample(2)
+         real(rp), intent(out) :: components(10), rvh_spin(2)
+         real(rp) :: rho_work(nr, 2), v_work(nr, 2), rofi_work(nr), rvh_local(2), vsum_local
+         real(rp) :: rho0_local(2), reps_local(2), rmu_local(2), vnucl_local, rhovh_local
+         real(rp) :: zvnucl_local, rhoeps_local, rhomu_local, ekin_local, utot_local, etot_local
+
+         rho_work = rho_sample
+         v_work = v_base
+         rofi_work = rofi_base
+         rvh_local = 0.0_rp
+         vsum_local = 0.0_rp
+         rho0_local = 0.0_rp
+         reps_local = 0.0_rp
+         rmu_local = 0.0_rp
+         call POISS0(z, a, b, rofi_work, rho_work, nr, vhrmax, v_work, rvh_local, vsum_local, 2)
+         vnucl_local = v_work(1, 1)
+         call replay_state%VXC0SP(replay_xc, z, a, b, rofi_work, rho_sample, nr, v_work, &
+                                  rho0_local, reps_local, rmu_local, 2, b_fsm)
+         rhovh_local = sum(rvh_local)
+         rhoeps_local = sum(reps_local)
+         rhomu_local = sum(rmu_local)
+         zvnucl_local = -z*vnucl_local
+         utot_local = 0.5_rp*(rhovh_local + zvnucl_local)
+         ekin_local = sum(sumev_sample) + sum(sumec_sample) - rhovh_local - rhomu_local
+         etot_local = ekin_local + utot_local + rhoeps_local
+         components = [sum(sumev_sample), sum(sumec_sample), rhovh_local, rhomu_local, vnucl_local, &
+                       zvnucl_local, ekin_local, utot_local, rhoeps_local, etot_local]
+         rvh_spin = rvh_local
+      end subroutine component_set
+   end subroutine legacy_accepted_m03_components_fixture
    pure function atomsc_solver_tolerance(iteration, drho_control, tolrsq) result(tolerance)
       integer, intent(in) :: iteration
       real(rp), intent(in) :: drho_control, tolrsq
@@ -4411,17 +4732,20 @@ contains
             rank == 0 .and. (this%fixed_u_trace_selected_iteration <= 0 .or. &
                              this%fixed_u_trace_iteration == this%fixed_u_trace_selected_iteration)
          if (this%fixed_u_trace_capture_radial_state) then
-            call this%write_fixed_u_radial_replay_input(atom, rofi, v, rho_in, atom%potential%pl, &
-                                                        atom%potential%ql, TL)
             if (ncore > 0) EC_SEED(1:ncore) = EC(1:ncore)
             if (nval > 0) EV_SEED(1:nval) = EV(1:nval)
+            call this%write_fixed_u_radial_replay_input(atom, rofi, v, rho_in, atom%potential%pl, &
+                                                        atom%potential%ql, EC_SEED, ncore, TL, VHRMAX, B_fsm, &
+                                                        xc_obj%txc, this%lattice%control%hyperfine)
          end if
          call this%NEWRHO(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho, atom%potential%PL, atom%potential%QL, SEC, SEV, EC, EV, TL, n_radial_spin_channels, IPR1)
          if (this%fixed_u_trace_capture_radial_state) then
             call this%write_fixed_u_radial_replay_output(rho, SEC, SEV)
-            call this%verify_fixed_u_radial_replay(atom, atom%element%atomic_number, lmax, atom%a, b, nr, &
-               rofi_trace_base, v_trace_base, rofi, v, rho_in, rho, VHRMAX, B_fsm, RVH, REPS, RMU, VNUCL, &
-               atom%potential%pl, atom%potential%ql, SEC, SEV, EC_SEED, EV_SEED, EC, EV, ncore, nval, TL)
+            if (.not. this%fixed_u_trace_capture_only) then
+               call this%verify_fixed_u_radial_replay(atom, atom%element%atomic_number, lmax, atom%a, b, nr, &
+                  rofi_trace_base, v_trace_base, rofi, v, rho_in, rho, VHRMAX, B_fsm, RVH, REPS, RMU, VNUCL, &
+                  atom%potential%pl, atom%potential%ql, SEC, SEV, EC_SEED, EV_SEED, EC, EV, ncore, nval, TL)
+            end if
             this%fixed_u_trace_capture_radial_state = .false.
             if (allocated(v_trace_base)) deallocate(v_trace_base)
             if (allocated(rofi_trace_base)) deallocate(rofi_trace_base)
@@ -4597,7 +4921,8 @@ contains
       end if
    end function FTYPE
 
-   subroutine NEWRHO(this, atom, Z, LMAX, A, B, NR, rofi, V, RHO, PL, QL, SUMEC, SUMEV, EC, EV, TOL, NSP, IPR)
+   subroutine NEWRHO(this, atom, Z, LMAX, A, B, NR, rofi, V, RHO, PL, QL, SUMEC, SUMEV, EC, EV, TOL, NSP, IPR, &
+                    RHO_D_SHELL)
       !  MAKES SPHERICAL CHARGE DENSITY FOR A GIVEN POTENTIAL.
       !  RHO IS DETERMINED BY BOUNDARY CONDITIONS PL AND MOMENTS QL.
       !  FOR RMAX GE 10 SETS PHIDOT PHIDOTDOT TO ZERO
@@ -4628,13 +4953,14 @@ contains
       real(rp), dimension(NR, NSP), intent(in) :: V
       real(rp), dimension(NR, NSP), intent(inout) :: RHO
       real(rp), dimension(3, LMAX + 1, NSP), intent(in) :: QL
+      real(rp), dimension(:, :), intent(out), optional :: RHO_D_SHELL
       !
       !.. Local Scalars ..
       logical :: FREE
       integer :: IFCORE, IIR, IR, ISI, ISP, IVAL, JR, KONFIG, L, LP1, NN, NRE
       real(rp) :: C, DL, DPHI, DPHIP, E, EB1, EB2, EVAL, FLLP1, GFAC, P, &
                   PHI, PHIP, PI, Q0, Q1, Q2, R, RMAX, RO, ROCRIT, SLO, &
-                  SUM, TMC, TOLVAL, VAL
+                  SUM, TMC, TOLVAL, VAL, RHO_BEFORE_D
       ! HF additions
       real(rp) :: SHUP, SHDW, SUT, ALFAM1, AL2, HYP, OBPI, RT, WGTA, DRDI
       real(rp) :: wave_value
@@ -4656,6 +4982,11 @@ contains
       !
       ! ... Executable Statements ...
       !
+      if (present(RHO_D_SHELL)) then
+         if (size(RHO_D_SHELL, 1) /= NR .or. size(RHO_D_SHELL, 2) /= NSP) &
+            error stop 'NEWRHO: d-shell observation shape mismatch'
+         RHO_D_SHELL = 0.0_rp
+      end if
       trace_radial = this%fixed_u_trace_capture_radial_state .and. this%fixed_u_trace_enabled .and. rank == 0
       trace_unit = -1
       if (trace_radial) then
@@ -4809,10 +5140,13 @@ contains
                   R = rofi(IR)
                   TMC = C - (V(IR, ISP) - 2.d0*Z/R - EVAL)/C
                   GFAC = 1.d0 + FLLP1/(TMC*R)**2
+                  if (present(RHO_D_SHELL) .and. L == 2) RHO_BEFORE_D = RHO(IR, ISP)
                   RHO(IR, ISP) = &
                      RHO(IR, ISP) + Q0*(GFAC*G(IR)**2 + G(JR)**2) + &
                      2.d0*Q1*(GFAC*G(IR)*GP(IR) + G(JR)*GP(JR)) + &
                      Q2*(GFAC*(GP(IR)**2 + G(IR)*GPP(IR)) + GP(JR)**2 + G(JR)*GPP(JR))
+                  if (present(RHO_D_SHELL) .and. L == 2) &
+                     RHO_D_SHELL(IR, ISP) = RHO(IR, ISP) - RHO_BEFORE_D
                   !-------- FUN2 GIVES the probability density and NOT the charge density---
                   !----of valence orbital LP1(s, p or d) with spin ISP at point r=IR----
                   this%FUN2(IR, LP1, ISP) = (GFAC*G(IR)**2 + G(JR)**2)

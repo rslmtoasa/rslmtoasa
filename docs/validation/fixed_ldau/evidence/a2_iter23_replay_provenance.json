@@ -1,0 +1,73 @@
+{
+  "artifacts": {
+    "a1_gate_report": {
+      "path": "/private/tmp/a2-accepted-iter23-baseline-a1.json",
+      "sha256": "549edf2183ce13fbec7556f2bcde3d23b4f1c78eb908c04e616641a4d694d179"
+    },
+    "a2_six_case_output": {
+      "path": "/private/tmp/a2-accepted-iter23-extra-six.json",
+      "sha256": "93236aeaa5c85afcbf8c0075104f78462888c45cdbcdb2a70b51fa066c86fc79"
+    },
+    "accepted_fixture": {
+      "path": "/private/tmp/rslmto-accepted-iter23-radial-replay-fixture.json",
+      "sha256": "e88fcff8f1a83831b13834324a6730fa6f8433d7ca3f3b389119d6736b1adbb3"
+    },
+    "accepted_source_csv": {
+      "path": "/private/tmp/rslmto-localmom-a11-accepted-recapture/records.csv",
+      "sha256": "55ef74516393256f262de6f02ecf0f061536ff9bff62641d1e6e828149586ac4"
+    },
+    "accepted_source_manifest": {
+      "path": "/private/tmp/rslmto-localmom-a11-accepted-recapture/manifest.json",
+      "sha256": "919b0c6ae55eba1e9d402fec4f43b071e6ccc192f377647a541027e132e70025"
+    },
+    "private_replay_driver_source": {
+      "path": "/private/tmp/rslmto-ldau-local-moments-worktree/tests/validation/fixed_ldau/accepted_pl_newrho_replay_driver.f90",
+      "sha256": "c744a6bee71918e490a67f41dbbd084414c7cabe15f9cd5301df3e880629ac0a"
+    },
+    "private_replay_runner": {
+      "path": "/private/tmp/rslmto-ldau-local-moments-worktree/tests/validation/fixed_ldau/accepted_pl_newrho_replay.py",
+      "sha256": "6e96eca6d426f18c41bfb9185e6043f92733a142b79090e94843b22cc7379e62"
+    },
+    "release_main_executable": {
+      "path": "/private/tmp/rslmto-localmom-a2-accepted-replay-bin/rslmto.x",
+      "sha256": "fef6821e13e8fb0f616a251443532daae7bdd285bb8b6228fb8525339b8ce797"
+    },
+    "release_private_driver": {
+      "path": "/private/tmp/rslmto-localmom-a2-accepted-replay-bin/accepted_pl_newrho_replay_driver",
+      "sha256": "496b550a30f372dc6e623627fb46c2ef5e1e8854228df58b91a4f2255b72a008"
+    },
+    "release_static_library": {
+      "path": "/private/tmp/rslmto-localmom-a2-accepted-replay-bin/librslmto.a",
+      "sha256": "7bfdb3fc2cc64b5cea75dacb84ab4ab9c8256aa1de115b3a7c48fdfe6f2324a2"
+    },
+    "source_self_f90": {
+      "path": "/private/tmp/rslmto-ldau-local-moments-worktree/source/self.f90",
+      "sha256": "577749f1dc11b0f1ccbce559e83d91925b56abf375823ab1cb4bd95705d383a9"
+    }
+  },
+  "build": {
+    "build_type": "Release",
+    "cmake_build": "/private/tmp/rslmto-localmom-a2-accepted-replay-build",
+    "cmake_source": "/private/tmp/rslmto-ldau-local-moments-worktree",
+    "command": "cmake --build /private/tmp/rslmto-localmom-a2-accepted-replay-build --target rslmto -j2; cmake --build /private/tmp/rslmto-localmom-a2-accepted-replay-build --target rslmto.x -j2",
+    "fortran_compiler": "GNU Fortran 16.2",
+    "mpi": false,
+    "openmp": false
+  },
+  "runs": [
+    {
+      "command": "python3 tests/validation/fixed_ldau/accepted_pl_newrho_replay.py --fixture /private/tmp/rslmto-accepted-iter23-radial-replay-fixture.json --driver /private/tmp/rslmto-localmom-a2-accepted-replay-bin/accepted_pl_newrho_replay_driver --output /private/tmp/a2-accepted-iter23-baseline-a1.json --through-a1",
+      "output_sha256": "549edf2183ce13fbec7556f2bcde3d23b4f1c78eb908c04e616641a4d694d179",
+      "phase": "baseline_and_A1_gate",
+      "status": "PASS_A1_GATE_STOP_BEFORE_A2"
+    },
+    {
+      "command": "python3 tests/validation/fixed_ldau/accepted_pl_newrho_replay.py --fixture /private/tmp/rslmto-accepted-iter23-radial-replay-fixture.json --driver /private/tmp/rslmto-localmom-a2-accepted-replay-bin/accepted_pl_newrho_replay_driver --gate-report /private/tmp/a2-accepted-iter23-baseline-a1.json --output /private/tmp/a2-accepted-iter23-extra-six.json --a2-only",
+      "output_sha256": "93236aeaa5c85afcbf8c0075104f78462888c45cdbcdb2a70b51fa066c86fc79",
+      "phase": "six_A2_cases",
+      "status": "A2_EXTRA_CASES_CAPTURED_AFTER_HASH_BOUND_A1_GATE"
+    }
+  ],
+  "schema": "a2-accepted-iter23-private-replay-provenance-v1",
+  "source_snapshot_sha256": "577749f1dc11b0f1ccbce559e83d91925b56abf375823ab1cb4bd95705d383a9"
+}

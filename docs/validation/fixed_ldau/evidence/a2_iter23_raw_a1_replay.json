@@ -1,0 +1,290 @@
+{
+  "a1_validation": {
+    "checks": {
+      "cases": {
+        "A1_SHIFT_01": {
+          "actual_sumev_by_spin_ry": {
+            "spin_1": -1.1946260413620622,
+            "spin_2": -0.6760813186750653
+          },
+          "calculate_pl_tol_dimensionless": 1e-10,
+          "max_abs_calculate_pl_error": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "max_abs_calculate_pl_error_dimensionless": 0.0,
+          "max_abs_sumev_error_ry": 0.0,
+          "pass": true,
+          "spin_max_abs_sumev_error_ry": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "sumev_tol_ry": 1e-08,
+          "v": -0.02
+        },
+        "A1_SHIFT_02": {
+          "actual_sumev_by_spin_ry": {
+            "spin_1": -1.2379885553220085,
+            "spin_2": -0.6976319897933538
+          },
+          "calculate_pl_tol_dimensionless": 1e-10,
+          "max_abs_calculate_pl_error": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "max_abs_calculate_pl_error_dimensionless": 0.0,
+          "max_abs_sumev_error_ry": 0.0,
+          "pass": true,
+          "spin_max_abs_sumev_error_ry": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "sumev_tol_ry": 1e-08,
+          "v": -0.01
+        },
+        "A1_SHIFT_03": {
+          "actual_sumev_by_spin_ry": {
+            "spin_1": -1.2596893658452142,
+            "spin_2": -0.7084144674424028
+          },
+          "calculate_pl_tol_dimensionless": 1e-10,
+          "max_abs_calculate_pl_error": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "max_abs_calculate_pl_error_dimensionless": 0.0,
+          "max_abs_sumev_error_ry": 0.0,
+          "pass": true,
+          "spin_max_abs_sumev_error_ry": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "sumev_tol_ry": 1e-08,
+          "v": -0.005
+        },
+        "A1_SHIFT_04": {
+          "actual_sumev_by_spin_ry": {
+            "spin_1": -1.2705422067868548,
+            "spin_2": -0.713806593376781
+          },
+          "calculate_pl_tol_dimensionless": 1e-10,
+          "max_abs_calculate_pl_error": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "max_abs_calculate_pl_error_dimensionless": 0.0,
+          "max_abs_sumev_error_ry": 0.0,
+          "pass": true,
+          "spin_max_abs_sumev_error_ry": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "sumev_tol_ry": 1e-08,
+          "v": -0.0025
+        },
+        "A1_SHIFT_05": {
+          "actual_sumev_by_spin_ry": {
+            "spin_1": -1.2922492768750236,
+            "spin_2": -0.7245913504950001
+          },
+          "calculate_pl_tol_dimensionless": 1e-10,
+          "max_abs_calculate_pl_error": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "max_abs_calculate_pl_error_dimensionless": 0.0,
+          "max_abs_sumev_error_ry": 0.0,
+          "pass": true,
+          "spin_max_abs_sumev_error_ry": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "sumev_tol_ry": 1e-08,
+          "v": 0.0025
+        },
+        "A1_SHIFT_06": {
+          "actual_sumev_by_spin_ry": {
+            "spin_1": -1.3031021426284979,
+            "spin_2": -0.729983477923531
+          },
+          "calculate_pl_tol_dimensionless": 1e-10,
+          "max_abs_calculate_pl_error": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "max_abs_calculate_pl_error_dimensionless": 0.0,
+          "max_abs_sumev_error_ry": 0.0,
+          "pass": true,
+          "spin_max_abs_sumev_error_ry": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "sumev_tol_ry": 1e-08,
+          "v": 0.005
+        },
+        "A1_SHIFT_07": {
+          "actual_sumev_by_spin_ry": {
+            "spin_1": -1.3248030013826062,
+            "spin_2": -0.7407659815461752
+          },
+          "calculate_pl_tol_dimensionless": 1e-10,
+          "max_abs_calculate_pl_error": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "max_abs_calculate_pl_error_dimensionless": 0.0,
+          "max_abs_sumev_error_ry": 0.0,
+          "pass": true,
+          "spin_max_abs_sumev_error_ry": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "sumev_tol_ry": 1e-08,
+          "v": 0.01
+        },
+        "A1_SHIFT_08": {
+          "actual_sumev_by_spin_ry": {
+            "spin_1": -1.3681663408010032,
+            "spin_2": -0.7623170854904006
+          },
+          "calculate_pl_tol_dimensionless": 1e-10,
+          "max_abs_calculate_pl_error": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "max_abs_calculate_pl_error_dimensionless": 0.0,
+          "max_abs_sumev_error_ry": 0.0,
+          "pass": true,
+          "spin_max_abs_sumev_error_ry": {
+            "spin_1": 0.0,
+            "spin_2": 0.0
+          },
+          "sumev_tol_ry": 1e-08,
+          "v": 0.02
+        }
+      },
+      "pass": true
+    },
+    "input_sha256": "072ead751feb9908b02a339e9fd8ee6a139707c98b52e970740f9108178d7e93",
+    "output_sha256": "34212ff2caa6df651a780b61a894cab39b1d80694c3b3d486fc6566870da1617",
+    "repeated_zero_baseline": {
+      "EV_vector": {
+        "max_abs": 0.0,
+        "tol": 1e-08
+      },
+      "SUMEC": {
+        "max_abs": 0.0,
+        "tol": 1e-08
+      },
+      "SUMEV": {
+        "max_abs": 0.0,
+        "tol": 1e-08
+      },
+      "calculate_pl_dimensionless": {
+        "max_abs": 0.0,
+        "tol": 1e-10
+      },
+      "pass": true,
+      "rho": {
+        "max_abs": 0.0,
+        "tol": 1e-10
+      }
+    },
+    "stage_shift_mapping": {
+      "A1_SHIFT_01": -0.02,
+      "A1_SHIFT_02": -0.01,
+      "A1_SHIFT_03": -0.005,
+      "A1_SHIFT_04": -0.0025,
+      "A1_SHIFT_05": 0.0025,
+      "A1_SHIFT_06": 0.005,
+      "A1_SHIFT_07": 0.01,
+      "A1_SHIFT_08": 0.02
+    }
+  },
+  "baseline": {
+    "checks": {
+      "EV_vector": {
+        "max_abs": 0.0,
+        "tol": 1e-08
+      },
+      "SUMEC": {
+        "max_abs": 0.0,
+        "tol": 1e-08
+      },
+      "SUMEV": {
+        "max_abs": 0.0,
+        "tol": 1e-08
+      },
+      "calculate_pl_dimensionless": {
+        "max_abs": 0.0,
+        "tol": 1e-10
+      },
+      "pass": true,
+      "rho": {
+        "max_abs": 0.0,
+        "tol": 1e-10
+      }
+    },
+    "ec_output_vector": [
+      -512.6744543058754,
+      -59.67436091305502,
+      -6.49416448742037,
+      -50.84643085328632,
+      -4.027066558132831,
+      -512.6741931982156,
+      -59.58646378811572,
+      -6.318891094696573,
+      -50.77863559501056,
+      -3.8580045991594605
+    ],
+    "ec_vector_output_uncompared": true,
+    "ev_output_vector": [
+      -0.4611262776963901,
+      -0.30613612179619243,
+      -0.23372952325715213,
+      -0.4374524806964228,
+      -0.24720498984499412,
+      -0.21042932585970972
+    ],
+    "input_sha256": "4f87c5c79050018f7ac1b350c2790a81b856a557b25bebeadbb86a18f6e0016d",
+    "output_sha256": "276f6a17bb0c840a312565a8e738c17b8692751fd73509b520d4a5fe6a53cafc",
+    "v": 0.0
+  },
+  "cases": {},
+  "diagnostic": "A2.2 accepted-state replay; no SCF run",
+  "frozen_radial_operand_sha256": "564cc27f0f58c5a03d6185cb0a92d87edbcb1da11f66f93960e085f09732b9ae",
+  "historical_reference_limitations": {
+    "individual_returned_EC_vector": "not serialized; exact EC seeds and per-spin SUMEC are available",
+    "same_call_neWRHO_errors": {
+      "ec_max_abs_ry": "  0.0000000000000000E+00",
+      "ev_max_abs_ry": "  0.0000000000000000E+00",
+      "rho_max_abs": "  3.5527136788005009E-15",
+      "sumec_max_abs_ry": "  0.0000000000000000E+00",
+      "sumev_max_abs_ry": "  0.0000000000000000E+00"
+    }
+  },
+  "predeclared_tolerances": {
+    "SUMEC_SUMEV_EV_vector_ry": 1e-08,
+    "basis": {
+      "calculate_pl_dimensionless": "existing m0_a11_scaling_oracle.py STATE_VALUE_TOL",
+      "radial_energies_and_density": "existing local_moment_capture_oracle.py production replay limits"
+    },
+    "calculate_pl_dimensionless": 1e-10,
+    "rho_max_abs": 1e-10
+  },
+  "provenance": {
+    "accepted_iteration": 23,
+    "backend": "KS",
+    "capture_binary_sha256": "7a98a68a11f6a4a062e1f8256ffb80a64b4dc8967c0165dab1ffb8910425a3fa",
+    "capture_csv_sha256": "55ef74516393256f262de6f02ecf0f061536ff9bff62641d1e6e828149586ac4",
+    "capture_manifest_sha256": "919b0c6ae55eba1e9d402fec4f43b071e6ccc192f377647a541027e132e70025",
+    "capture_path": "/private/tmp/rslmto-localmom-a11-accepted-recapture",
+    "capture_source_sha256": "5f9cf847738803a49fc8d35c51be7b5dd3e7083c851a5c07d1785e07bc1dab89",
+    "fixture_path": "/private/tmp/rslmto-accepted-iter23-radial-replay-fixture.json",
+    "fixture_sha256": "e88fcff8f1a83831b13834324a6730fa6f8433d7ca3f3b389119d6736b1adbb3",
+    "replay_driver_sha256": "496b550a30f372dc6e623627fb46c2ef5e1e8854228df58b91a4f2255b72a008",
+    "replay_source_sha256": "577749f1dc11b0f1ccbce559e83d91925b56abf375823ab1cb4bd95705d383a9"
+  },
+  "schema": "rslmto-accepted-iter23-private-clone-replay-v1",
+  "status": "PASS_A1_GATE_STOP_BEFORE_A2"
+}

@@ -1,0 +1,43 @@
+{
+  "candidate": {
+    "executable_sha256": "0bcc190230d97096caa016c8060c3c5fb273416fc40e68a75cd10e6b909710e3",
+    "input_pre_sha256": "ab09e896ea9cebcae601547142c4d2474090901b3f988bd198f2798e8ee2d72e",
+    "iteration": 25,
+    "manifest_sha256": "127576e531fe8482280efd8ddbed58afd59be372a38eae2a3904e7aff5633c6e",
+    "records_csv_sha256": "c0ac4a0fdcaaf37433d3e44d122d298b6ed47dfd31bf60238d78f5e8b57e8768",
+    "run_id": "a2_2_ks_u0_extended14_scan",
+    "seed_pre_sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+    "source_self_sha256": "f183f6f289aa26ff40560147cd7477d104bc9f91de58196c48f46c30a831bcd4"
+  },
+  "parity_diagnosis": {
+    "capture_only_a2_scan_enabled": false,
+    "capture_only_and_extended_scan_fe_out_sha256": "357efdfa53f07ffc0b5998a9daac856058a729278ff5e14ef1afa9d50ac9f444",
+    "capture_only_csv_sha256": "9d01dc8be0631228f916134f58aa970a8f1003226ede91f3de7ab10af30402ad",
+    "capture_only_manifest_sha256": "0f7e006ae6815b5800dd807476bbe61925beee9e1e114ef53cb52d9b38182d57",
+    "capture_only_same_seed_input": true,
+    "interpretation": "the six additional private replays did not change the converged SCF output; the mismatch to reference remains unexplained by this check"
+  },
+  "reference": {
+    "input_pre_sha256": "ab09e896ea9cebcae601547142c4d2474090901b3f988bd198f2798e8ee2d72e",
+    "iteration": 23,
+    "records_csv_sha256": "4dc77e488175e342254409d8327df70334a0cd688855641491f670aac8a704b4",
+    "run_id": "m02_ks_u0",
+    "seed_pre_sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1"
+  },
+  "required_next_step": "rehydrate the exact original accepted iteration-23 capture into isolated private clones, then run the production calculate_pl/NEWRHO scan; fail closed on any missing operand. Do not relax state equality or repeatedly rerun SCF to force a match.",
+  "reviewer_comparison": {
+    "key_count": 124,
+    "max_abs_M1_difference_ry": 0.0,
+    "max_abs_energy_seed_difference_ry": 2.694586886953232e-09,
+    "max_abs_frozen_potential_difference_ry": 3.667857129130425e-10,
+    "max_abs_pl_input_difference": 1.717692654779057e-09,
+    "max_abs_ql_difference": 1.4968836725692825e-09,
+    "max_abs_radial_moment_difference_ry": 4.007151277463095e-09,
+    "max_abs_rho_input_difference": 3.609992305086962e-09,
+    "mesh_and_index_sets_match": true,
+    "spectral_P_M1_comparison": "M1 difference exactly zero; P_OUT radial-moment fields differ by 4.007151277463095e-9 Ry; full P matrix max-norm was not separately reported"
+  },
+  "schema": "rslmto-a2-2-recapture-equivalence-stop-v1",
+  "state_gate": "FAIL_TO_MATCH_ACCEPTED_NO_U_FROZEN_STATE; shifted values and fits were not inspected",
+  "status": "A2_2_RECATURE_REJECTED_BEFORE_SHIFT_ANALYSIS"
+}
