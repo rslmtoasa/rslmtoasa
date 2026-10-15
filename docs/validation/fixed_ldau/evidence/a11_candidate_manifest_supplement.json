@@ -1,0 +1,61 @@
+{
+  "accepted_reference": {
+    "csv_sha256": "4dc77e488175e342254409d8327df70334a0cd688855641491f670aac8a704b4",
+    "directory": "/private/tmp/rslmto-localmom-m02-release/ks",
+    "fe_out_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+    "iteration": 23,
+    "m02_validation_sha256": "c8f7c3bbacd615d9e871d5aca616106d4165adb7a20ca909d0dc643af23b3be5",
+    "manifest_sha256": "d86fe94595f831a6ab382e6a32ebb531f45f22bcade1a8a693c15b67d0f404ac",
+    "run_manifest_sha256": "8be28890f4926cf8cab889b7995bd28ba3b10a85523db2a978ea1ca23ce7502a"
+  },
+  "actual_command": "RSLMTO_FIXED_U_TRACE=records.csv RSLMTO_FIXED_U_TRACE_ITERATION=0 RSLMTO_FIXED_U_RUN_ID=a11_ks_u0_replay_v1 OMP_NUM_THREADS=1 /private/tmp/rslmto-localmom-a11-run-bin-5f9/rslmto.x",
+  "backend": "KS",
+  "basis_size": 18,
+  "binary_sha256": "7a98a68a11f6a4a062e1f8256ffb80a64b4dc8967c0165dab1ffb8910425a3fa",
+  "build": {
+    "flags": "-O3 -ffree-line-length-0 -cpp -mtune=native",
+    "fortran": "GNU 16.2.0",
+    "mpi": false,
+    "openmp": false,
+    "spglib": true,
+    "type": "Release"
+  },
+  "command": "RSLMTO_FIXED_U_TRACE=records.csv RSLMTO_FIXED_U_TRACE_ITERATION=0 RSLMTO_FIXED_U_RUN_ID=a11_ks_u0_replay_v1 OMP_NUM_THREADS=1 /private/tmp/rslmto-localmom-a11-run-bin-5f9/rslmto.x",
+  "csv_sha256": "55ef74516393256f262de6f02ecf0f061536ff9bff62641d1e6e828149586ac4",
+  "electron_count": 8.0,
+  "equivalence_gate": "pending independent phase2 check; shift outcomes not analyzed",
+  "executable_sha256": "7a98a68a11f6a4a062e1f8256ffb80a64b4dc8967c0165dab1ffb8910425a3fa",
+  "exit_code": 0,
+  "expected_accepted_iteration": 23,
+  "expected_convergence": "Diff=6e-10; input conv_thr=1e-9",
+  "input_sha256": {
+    "Fe.nml.pre": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+    "input.nml.pre": "ab09e896ea9cebcae601547142c4d2474090901b3f988bd198f2798e8ee2d72e"
+  },
+  "iteration": 23,
+  "iteration_count": 23,
+  "kpoint_count": 1728,
+  "lmax": 2,
+  "metric": "identity",
+  "norb_per_spin": 9,
+  "nsp": 1,
+  "oracle_sha256": "02b04d0a1919c8231f68ab0fbecc9b9bea15956584442fea4610526aab5b35a3",
+  "post_run_sha256": {
+    "Fe_out.nml": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+    "input.nml": "d078a1c2ff929fde4278ebe3ac70bc23718c48bf6c36a5f61b1462bc9adf1fe6",
+    "records.csv": "55ef74516393256f262de6f02ecf0f061536ff9bff62641d1e6e828149586ac4",
+    "testrun.log": "fe0e98d9f01af3b604b1fe0a87052c9833e0c2b185e38cfc8b233885d4f94fac"
+  },
+  "run_id": "a11_ks_u0_replay_v1",
+  "run_status": "complete",
+  "scf_timer_seconds": 142.4452,
+  "schema": "rslmto-fixed-u-trace-v1",
+  "selected_trace_iteration": "rolling final (TRACE_ITERATION=0)",
+  "self_f90_sha256": "5f9cf847738803a49fc8d35c51be7b5dd3e7083c851a5c07d1785e07bc1dab89",
+  "source_base_commit": "799c24d29642e9832892af0e8a6cedb64ee139cf",
+  "source_sha": "5f9cf847738803a49fc8d35c51be7b5dd3e7083c851a5c07d1785e07bc1dab89",
+  "source_snapshot_tree_sha256": "9fdb7bf2e2c656a05844c07ac4d07744228f1704db499a38b0689b4afd981624",
+  "stage": "A1.1 accepted-state deterministic recapture; shift results remain gated until independent equivalence check",
+  "temperature_K": 300.0,
+  "temperature_ry": 0.00190010442
+}

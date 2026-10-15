@@ -1,0 +1,57 @@
+{
+  "candidate": {
+    "backend": "KS",
+    "binary_sha256": "7a98a68a11f6a4a062e1f8256ffb80a64b4dc8967c0165dab1ffb8910425a3fa",
+    "directory": "/private/tmp/rslmto-localmom-a11-accepted-recapture",
+    "fe_out_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+    "fe_seed_sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+    "input_pre_sha256": "ab09e896ea9cebcae601547142c4d2474090901b3f988bd198f2798e8ee2d72e",
+    "iteration": 23,
+    "manifest_pre_sha256": "64b6db8753131a5282e9d5bb2bf9e42daa706e8fc06d8fa5b2cd91d120e8fcf3",
+    "manifest_sha256": "919b0c6ae55eba1e9d402fec4f43b071e6ccc192f377647a541027e132e70025",
+    "records_csv_sha256": "55ef74516393256f262de6f02ecf0f061536ff9bff62641d1e6e828149586ac4",
+    "run_id": "a11_ks_u0_replay_v1",
+    "source_self_f90_sha256": "5f9cf847738803a49fc8d35c51be7b5dd3e7083c851a5c07d1785e07bc1dab89",
+    "testrun_log_sha256": "fe0e98d9f01af3b604b1fe0a87052c9833e0c2b185e38cfc8b233885d4f94fac"
+  },
+  "comparison": {
+    "max_abs_M1_difference_ry": 0.0,
+    "max_abs_P_difference": 0.0,
+    "max_abs_calculate_pl_input_output_difference": 0.0,
+    "max_abs_frozen_replay_input_difference": 0.0,
+    "max_abs_radial_moment_difference": 0.0,
+    "tolerances": {
+      "P_and_M1": 5e-12,
+      "calculate_pl": 1e-10,
+      "frozen_arrays_seeds_and_replay_inputs": "bitwise serialized equality",
+      "q0_c_q2": 1e-10
+    }
+  },
+  "derived_metadata": {
+    "basis_size": 18,
+    "basis_size_source": "count of unique EIGENPAIRS basis_map row indices in candidate CSV",
+    "electron_count": 8.0,
+    "kpoint_count": 1728,
+    "temperature_and_electron_count_source": "reference manifest; candidate input.nml.pre and Fe.nml.pre hashes exactly match reference",
+    "temperature_ry": 0.00190010442
+  },
+  "method": {
+    "accepted_state_function": "_check_reference_state",
+    "candidate_manifest_supplement": "in-memory schema/csv_sha/iteration/basis_size derived from candidate artifacts; temperature_ry and electron_count taken from hash-matched accepted reference manifest; original manifests unchanged",
+    "oracle_path": "tests/validation/fixed_ldau/m0_a11_scaling_oracle.py",
+    "oracle_sha256": "02b04d0a1919c8231f68ab0fbecc9b9bea15956584442fea4610526aab5b35a3"
+  },
+  "reference": {
+    "directory": "/private/tmp/rslmto-localmom-m02-release/ks",
+    "fe_seed_sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+    "input_pre_sha256": "ab09e896ea9cebcae601547142c4d2474090901b3f988bd198f2798e8ee2d72e",
+    "iteration": 23,
+    "manifest_sha256": "d86fe94595f831a6ab382e6a32ebb531f45f22bcade1a8a693c15b67d0f404ac",
+    "records_csv_sha256": "4dc77e488175e342254409d8327df70334a0cd688855641491f670aac8a704b4",
+    "run_id": "m02_ks_u0"
+  },
+  "schema": "rslmto-a11-accepted-state-equivalence-v1",
+  "scope": "Accepted no-U KS state equivalence only; no signed-shift results analyzed in this gate",
+  "shift_results_status": "NOT_ANALYZED",
+  "verdict": "PASS"
+}

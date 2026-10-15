@@ -196,15 +196,75 @@ the source, executable, input/seed, raw CSV, manifest, checker, and floor
 hashes, are recorded in
 [`evidence/m02_ks_scalar_v0_fail.json`](evidence/m02_ks_scalar_v0_fail.json).
 
-The original evidence file is preserved unchanged as historical evidence; the
-new A1 scaling result must be recorded in a separate artifact. The corresponding
-RS no-U run reached its iteration limit without satisfying
-the `1e-9` charge criterion, so no accepted RS floor or carrier verdict is
-available. The stopped continuation is explicitly cancelled and excluded.
+The original evidence file is preserved unchanged as historical evidence. The
+new A1.1 signed-shift scaling run used the same Release build/source, PRE deck,
+and seed as the accepted M0.2 no-U KS state, and reached its same iteration 23.
+Before inspecting shifts, the independent state check passed with maximum
+differences of zero for P, M1, q0/c/q2, calculate_pl inputs/returns, and frozen
+radial/replay inputs. Candidate CSV SHA256 is
+`55ef74516393256f262de6f02ecf0f061536ff9bff62641d1e6e828149586ac4`; executable
+SHA256 `7a98a68a11f6a4a062e1f8256ffb80a64b4dc8967c0165dab1ffb8910425a3fa`;
+source self.f90 SHA256 `5f9cf847738803a49fc8d35c51be7b5dd3e7083c851a5c07d1785e07bc1dab89`.
+The hash-bound equivalence record is
+[`evidence/a11_accepted_state_equivalence.json`](evidence/a11_accepted_state_equivalence.json)
+(SHA256 `1a7238ed4f98649feb8e654c04209b987d80cd715d03eea103b64b8a0a7ef005`).
+
+The A1.1 fit reports total q0 `6.498480421874168`. Its symmetric-slope
+relative errors at |v|=`0.0025, 0.005, 0.01, 0.02` Ry are respectively
+`-1.76935e-5, -4.64255e-5, -1.62889e-4, -6.27649e-4`; the fitted v→0
+intercept is `-7.86514e-6`, outside the required `1e-6`. The spin-up and
+spin-down intercepts also fail, at `-7.58154e-6` and `-8.43595e-6`.
+The total all-eight-point log-log order for |r| versus |v| is `2.72568`; the
+signed residual branches are monotone and the fitted cubic constant is
+`-5.11131e-8 Ry`, below `10 D0 = 5.02817e-5 Ry`. The total residual at
+`v=+0.01 Ry` is `-1.0535109153e-5 Ry`. The verdict is **FAIL_A1_1** solely
+because the extrapolated symmetric-slope error misses the declared limit;
+the flat/nonmonotonic-residual stop condition did not occur. This does not
+show that A1's error model is wrong, so A1.3 has not been invoked and no new
+criterion is proposed here.
+
+The complete signed r(v), slopes, spin-resolved fits, diagnostics, and run
+provenance are in
+[`evidence/a11_scaling_result_reviewed.json`](evidence/a11_scaling_result_reviewed.json)
+(SHA256 `48b0cb79291b12fd5e3c027b92379f0f70b45e8418882348616a1ea1abed27ae`)
+and the concise table is in
+[`evidence/a11_scaling_summary.md`](evidence/a11_scaling_summary.md)
+(SHA256 `91c4c9c89e4e206ea07cb0e9a9654ad5e6d51d128f650c94f9854ac10c1c2792`).
+The earlier `a11_scaling_result.json` remains unchanged as the initial result
+record; the reviewed artifact includes the explicit binary/source hashes and
+aggregate-spin diagnostics.
+
+Because A1.1 fails, **M0.3 was not run**. No U-state carrier result, M1, M2,
+physical energy correction, or SOC+U conclusion follows. The corresponding
+RS no-U run reached its 120-step limit without satisfying the `1e-9` charge
+criterion, so no accepted RS floor or carrier verdict is available. Its full
+residual history is retained in
+[`evidence/rs_u0_residual_history_v0.json`](evidence/rs_u0_residual_history_v0.json)
+(source run log SHA256 `088f83094298f66fd900cc6452ba64102e317e9ac19908868dd39eaf0373d9e1`,
+artifact SHA256 `24ddd3c743d7c6780167e366876fbc47d764cffca10c48e05df75f115f54f4a5`).
+The final residual was `1.57e-8`; the last-ten range was `2.9e-9` to
+`1.81e-8`. No RS floor or stagnation threshold is inferred from this finite
+history. The A1.2 restart continuation with more iterations and Broyden mixing
+is a separate, not-yet-run work item; it is not part of the KS A1.1 gate.
 The exact-source diagnostic plumbing smoke reproduced same-call LIVE_STATE
-components, but its RAW/LOCAL comparison is not a converged M0 result. The
-A1.1 scaling test is now the gate before KS M0.3; no M1/M2 implementation or
-physical energy correction is authorized in this continuation.
+components, but its RAW/LOCAL comparison is not a converged M0 result. M0 is
+therefore **FAIL** for this KS A1.1 gate, with M0.3 **NOT_RUN**; the result
+does not validate a physical total-energy correction.
+
+### Final-source verification
+
+The A1 implementation source was frozen at self.f90 SHA256
+`5f9cf847738803a49fc8d35c51be7b5dd3e7083c851a5c07d1785e07bc1dab89`.
+The Debug binary SHA256 was
+`87a939337a8773d0b9c8363c11fe123a94d4401ebae47f3648db4e6bb30925cb`; on that
+source, `ctest --test-dir /private/tmp/rslmto-localmom-debug -L unit
+--output-on-failure` passed 114/114 (log SHA256
+`9e6a8be399fc7eda7c608a187e77d0c2bfabbf2dc6d77f99195fe35b763c5f41`), and the
+required stage-end `ctest --test-dir /private/tmp/rslmto-localmom-debug -LE
+'validation|performance' --output-on-failure` passed 119/119 (log SHA256
+`6b7dda0ee81d4919b5f8acbfdd019750df25f52bdbb993cfb620e914117e6e00`). Both
+logs are retained under `/private/tmp`; no production source changed after
+these runs.
 
 ## Protocol amendment A1 (verbatim)
 

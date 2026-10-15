@@ -1,0 +1,325 @@
+{
+  "accepted_floor_ry": 5.028166848219939e-06,
+  "accepted_state_comparison": {
+    "sidecar": "docs/validation/fixed_ldau/evidence/a11_accepted_state_equivalence.json",
+    "sidecar_sha256": "1a7238ed4f98649feb8e654c04209b987d80cd715d03eea103b64b8a0a7ef005",
+    "status": "PASS"
+  },
+  "candidate_manifest_sha256": "919b0c6ae55eba1e9d402fec4f43b071e6ccc192f377647a541027e132e70025",
+  "capture_csv_sha256": "55ef74516393256f262de6f02ecf0f061536ff9bff62641d1e6e828149586ac4",
+  "capture_executable_sha256": null,
+  "capture_run_id": "a11_ks_u0_replay_v1",
+  "capture_source_sha": null,
+  "fit_registration": {
+    "delta_definition": "SUMEV_RAW - SUMEV_case",
+    "fit_residuals_and_sensitivity": "reported, not additional gates",
+    "per_sign_and_pairwise_log_orders": "diagnostics only",
+    "plateau": "report cubic constant and observed r values against 10*D0; gate constant magnitude <=10*D0",
+    "primary_log_fit": "OLS log(abs(r)) versus log(abs(v)) across all eight signed points, order >=2",
+    "r_definition": "delta - v*q0",
+    "r_fit": "unweighted cubic in signed v over all eight points; unweighted signed quadratic sensitivity",
+    "signed_v_ry": [
+      -0.02,
+      -0.01,
+      -0.005,
+      -0.0025,
+      0.0025,
+      0.005,
+      0.01,
+      0.02
+    ],
+    "slope_definition": "[delta(+v)-delta(-v)]/(2v)",
+    "symmetric_slope_fit": "unweighted a0+a2*v^2+a4*v^4 over four positive magnitudes; gate abs(a0)<1e-6"
+  },
+  "floor_definition": {
+    "D_ry": "sum of same-state Re Tr(M1) over all recorded shells/sites minus production ATOMSC SUMEV",
+    "allowance_ry": "floor+uncertainty; max(abs(D_i)) is reported separately and is not added again",
+    "floor_ry": "abs(D_baseline), the central systematic inversion/relaxation offset",
+    "refinement_deviation_ry": "max abs(D_refined-D_baseline); same seed, source, executable and physical setup, finer spectral resolution",
+    "repeat_deviation_ry": "max abs(D_repeat-D_baseline); input deck, resolution, seed, source, executable must match",
+    "uncertainty_ry": "max abs(D_i-D_baseline) over deterministic repeats and numerical refinements"
+  },
+  "frozen_replay_input_checks": {
+    "max_calculate_pl_input_difference_after_expected_shift": 0.0,
+    "max_differences": {
+      "m0_replay_ec_seed": 0.0,
+      "m0_replay_ev_seed": 0.0,
+      "m0_replay_ql_input": 0.0,
+      "m0_replay_rho_input": 0.0,
+      "m0_replay_rofi": 0.0,
+      "m0_replay_v_input": 0.0
+    },
+    "verdict": "PASS"
+  },
+  "input_sha256": {
+    "Fe.nml.pre": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+    "input.nml.pre": "ab09e896ea9cebcae601547142c4d2474090901b3f988bd198f2798e8ee2d72e",
+    "input.nml_postrun": "d078a1c2ff929fde4278ebe3ac70bc23718c48bf6c36a5f61b1462bc9adf1fe6"
+  },
+  "iteration": 23,
+  "oracle_sha256": "7b16baba4ded88bcd4332bb68146b3659d7b7913585fe2318bf0581397f1a2a8",
+  "per_site_spin": {
+    "site=0,type=0,spin=1": {
+      "delta_sumev_ry_by_signed_v": {
+        "-0.0025": -0.010853535122580693,
+        "-0.005": -0.021706376064221322,
+        "-0.01": -0.04340718658742704,
+        "-0.02": -0.08676970054737332,
+        "0.0025": 0.010853534965588052,
+        "0.005": 0.02170640071906238,
+        "0.01": 0.0434072594731707,
+        "0.02": 0.08677059889156769
+      },
+      "e_error_strictly_decreases_as_v_halves": true,
+      "e_even_fit_coefficients_ascending": [
+        -7.581540987621142e-06,
+        -1.7010723853286323,
+        0.6522770707118128
+      ],
+      "e_fit_residuals": [
+        -2.123022914578336e-07,
+        2.78646757538543e-07,
+        -6.966168938454765e-08,
+        3.3172233040957774e-09
+      ],
+      "e_intercept_sensitivity_report_only": 4.273320776327873e-07,
+      "e_leave_one_magnitude_out_intercepts": [
+        -7.1542089099883545e-06,
+        -7.80538159971419e-06,
+        -7.968174772145431e-06,
+        -8.008873065149258e-06
+      ],
+      "e_linear_sensitivity_intercept": -7.5903592016577125e-06,
+      "e_slope_error_by_abs_v": {
+        "0.0025": -1.8425520207809853e-05,
+        "0.005": -4.982929619012921e-05,
+        "0.01": -0.00017775191843916183,
+        "0.02": -0.000687902813564456
+      },
+      "observed_smallest_shift_r_ry": {
+        "negative": 1.999072178019562e-07,
+        "positive": -2.0006421044306555e-07
+      },
+      "plateau_intercept_pass": true,
+      "plateau_intercept_ry": -3.141896553208884e-08,
+      "plateau_limit_ry": 5.028166848219939e-05,
+      "q0": 4.341494011919398,
+      "r_abs_strictly_decreases_as_v_halves_by_sign": {
+        "negative": true,
+        "positive": true
+      },
+      "r_cubic_coefficients_ascending": [
+        -3.141896553208884e-08,
+        -3.299842662650168e-05,
+        0.0011737218924259521,
+        -7.383857730539796
+      ],
+      "r_fit_residuals": [
+        1.0790846355127038e-08,
+        -4.626345357310776e-08,
+        8.096944439384688e-09,
+        2.6121577900444305e-08,
+        2.1887836867299618e-08,
+        2.0709733061120537e-08,
+        -5.275725018519558e-08,
+        1.1413765134924163e-08
+      ],
+      "r_fit_sensitivity_diagnostic_by_signed_v": {
+        "-0.0025": 5.814787962800099e-06,
+        "-0.005": 1.0937339263362089e-05,
+        "-0.01": 1.6336785228819325e-05,
+        "-0.02": 1.1629575925600145e-05,
+        "0.0025": 5.814787962800092e-06,
+        "0.005": 1.093733926336208e-05,
+        "0.01": 1.6336785228819318e-05,
+        "0.02": 1.1629575925600125e-05
+      },
+      "r_fitted_at_measured_points_ry": {
+        "-0.0025": 1.737856399015119e-07,
+        "-0.005": 1.085898431228543e-06,
+        "-0.01": 7.79979522051532e-06,
+        "-0.02": 6.0168900168286696e-05,
+        "0.0025": -2.2195204731036517e-07,
+        "0.005": -1.090050267671423e-06,
+        "0.01": -7.627888773094307e-06,
+        "0.02": -5.929276058541012e-05
+      },
+      "r_log_fit_defined": true,
+      "r_loglog_intercept_all_eight": 0.9533362325324236,
+      "r_loglog_ols_order_all_eight": 2.750203709206119,
+      "r_loglog_orders_by_sign_diagnostic": {
+        "negative": 2.75266539535144,
+        "positive": 2.747742023060805
+      },
+      "r_pairwise_log_orders_by_sign_diagnostic": {
+        "negative": [
+          2.4522041721175123,
+          2.825246974019852,
+          2.9563511803608025
+        ],
+        "positive": [
+          2.418186345453635,
+          2.844506305239394,
+          2.948278657763172
+        ]
+      },
+      "r_quadratic_coefficients_ascending": [
+        -3.141896553208514e-08,
+        -0.0024050627225624135,
+        0.0011737218924259194
+      ],
+      "r_ry_by_signed_v": {
+        "-0.0025": 1.999072178019562e-07,
+        "-0.005": 1.0939953756679277e-06,
+        "-0.01": 7.753531766942212e-06,
+        "-0.02": 6.017969101464182e-05,
+        "0.0025": -2.0006421044306555e-07,
+        "0.005": -1.0693405346103024e-06,
+        "0.01": -7.680646023279503e-06,
+        "0.02": -5.9281346820275194e-05
+      },
+      "slope_extrapolation_pass": false,
+      "status": "STOP_A1_3_REVIEW",
+      "symmetric_slope_ry_by_abs_v": {
+        "0.0025": 4.341414017633749,
+        "0.005": 4.34127767832837,
+        "0.01": 4.340722303029887,
+        "0.02": 4.338507485973525
+      },
+      "wrong_delta_sign_negative_control_max_abs_residual_ry": 0.17360047912995563
+    },
+    "site=0,type=0,spin=2": {
+      "delta_sumev_ry_by_signed_v": {
+        "-0.0025": -0.005392378532976139,
+        "-0.005": -0.01078450446735435,
+        "-0.01": -0.021566982116403288,
+        "-0.02": -0.043117653234691855,
+        "0.0025": 0.005392378585242996,
+        "0.005": 0.010784506013773898,
+        "0.01": 0.02156700963641811,
+        "0.02": 0.043118113580643436
+      },
+      "e_error_strictly_decreases_as_v_halves": true,
+      "e_even_fit_coefficients_ascending": [
+        -8.435949493162413e-06,
+        -1.2455576274160396,
+        1.7878761819398414
+      ],
+      "e_fit_residuals": [
+        6.188247224387787e-10,
+        -8.122074480261966e-10,
+        2.0305186208108804e-10,
+        -9.669136259889133e-12
+      ],
+      "e_intercept_sensitivity_report_only": 2.4170518252531554e-08,
+      "e_leave_one_magnitude_out_intercepts": [
+        -8.437195092785506e-06,
+        -8.435297036216627e-06,
+        -8.43482252207437e-06,
+        -8.434703893539751e-06
+      ],
+      "e_linear_sensitivity_intercept": -8.460120011414945e-06,
+      "e_slope_error_by_abs_v": {
+        "0.0025": -1.621999600087687e-05,
+        "0.005": -3.957458496339772e-05,
+        "0.01": -0.0001329736304210849,
+        "0.02": -0.0005063729499396041
+      },
+      "observed_smallest_shift_r_ry": {
+        "negative": 8.749191078745444e-08,
+        "positive": -8.743964392994574e-08
+      },
+      "plateau_intercept_pass": true,
+      "plateau_intercept_ry": -1.969409589140082e-08,
+      "plateau_limit_ry": 5.028166848219939e-05,
+      "q0": 2.1569864099547704,
+      "r_abs_strictly_decreases_as_v_halves_by_sign": {
+        "negative": true,
+        "positive": true
+      },
+      "r_cubic_coefficients_ascending": [
+        -1.969409589140082e-08,
+        -1.8309546330273305e-05,
+        0.0006089575717080861,
+        -2.6848289980756985
+      ],
+      "r_fit_residuals": [
+        6.252559551051483e-09,
+        -2.7142978241550893e-08,
+        4.901219690145689e-09,
+        1.565570293506366e-08,
+        1.6172786058895604e-08,
+        5.5855130552224865e-09,
+        -2.7740329494729747e-08,
+        6.31552644590275e-09
+      ],
+      "r_fit_sensitivity_diagnostic_by_signed_v": {
+        "-0.0025": 2.114302835984616e-06,
+        "-0.005": 3.976902953399634e-06,
+        "-0.01": 5.940184158242493e-06,
+        "-0.02": 4.228605671969214e-06,
+        "0.0025": 2.114302835984614e-06,
+        "0.005": 3.976902953399633e-06,
+        "0.01": 5.940184158242493e-06,
+        "0.02": 4.2286056719692035e-06
+      },
+      "r_fitted_at_measured_points_ry": {
+        "-0.0025": 7.183620785239078e-08,
+        "-0.005": 4.2268119981213025e-07,
+        "-0.01": 2.90912612265784e-06,
+        "-0.02": 2.206871184400289e-05,
+        "0.0025": -1.0361242998884135e-07,
+        "0.005": -4.3162151300952756e-07,
+        "0.01": -2.826722800099024e-06,
+        "0.02": -2.1620933978419225e-05
+      },
+      "r_log_fit_defined": true,
+      "r_loglog_intercept_all_eight": -0.41100394147392305,
+      "r_loglog_ols_order_all_eight": 2.6641304649777804,
+      "r_loglog_orders_by_sign_diagnostic": {
+        "negative": 2.6689924735865866,
+        "positive": 2.6592684563689795
+      },
+      "r_pairwise_log_orders_by_sign_diagnostic": {
+        "negative": [
+          2.2889809949504207,
+          2.7527874563053825,
+          2.9372773085976758
+        ],
+        "positive": [
+          2.284615911816863,
+          2.7441721793637344,
+          2.9207160369280745
+        ]
+      },
+      "r_quadratic_coefficients_ascending": [
+        -1.969409589139949e-08,
+        -0.0008808108619620924,
+        0.000608957571708074
+      ],
+      "r_ry_by_signed_v": {
+        "-0.0025": 8.749191078745444e-08,
+        "-0.005": 4.2758241950227593e-07,
+        "-0.01": 2.881983144416289e-06,
+        "-0.02": 2.2074964403553943e-05,
+        "0.0025": -8.743964392994574e-08,
+        "0.005": -4.260359999543051e-07,
+        "0.01": -2.854463129593754e-06,
+        "0.02": -2.1614618451973322e-05
+      },
+      "slope_extrapolation_pass": false,
+      "status": "STOP_A1_3_REVIEW",
+      "symmetric_slope_ry_by_abs_v": {
+        "0.0025": 2.156951423643827,
+        "0.005": 2.156901048112825,
+        "0.01": 2.1566995876410697,
+        "0.02": 2.155894170383382
+      },
+      "wrong_delta_sign_negative_control_max_abs_residual_ry": 0.08625784177973884
+    }
+  },
+  "reference_floor_sha256": "dd33dd828131d1a81df9f2ceb729aaae7116c0af7ef8c78ac2cc17a56b090bef",
+  "schema": "rslmto-ldau-a1-1-scaling-v1",
+  "scope": "A1.1 no-U KS scalar-shift scaling only; no M0.3/U-state or energy-closure claim",
+  "verdict": "STOP_A1_3_REVIEW"
+}
