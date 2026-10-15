@@ -61,26 +61,29 @@ site/spin/type mapping explicit and reject missing or duplicate cases.
 
 For each site/spin, calculate `e(v)=s(v)/q0-1` and fit the four positive
 magnitudes to the unweighted even model `a0+a2*v^2+a4*v^4`. The extrapolation
-uncertainty `U_e(0)` is the maximum absolute prediction change at zero between
-that fit and the linear-in-`v^2` fit, and between it and each leave-one-
-magnitude-out quartic fit. The A1.1 extrapolation criterion is
-`abs(a0)+U_e(0) < 1e-6`, and measured
+criterion is the user-specified `abs(a0) < 1e-6`; report prediction changes
+from a linear-in-`v^2` fit and leave-one-magnitude-out quartic fits as
+sensitivity diagnostics, not as additional pass criteria. Measured
 `abs(e)` must strictly decrease as `|v|` decreases through 0.02, 0.01, 0.005,
 0.0025 Ry. For signed `r`, report the all-point unweighted cubic fit
 `r3(v)=a0+a1*v+a2*v^2+a3*v^3` and the unweighted signed quadratic fit
-`r2(v)=b0+b1*v+b2*v^2`. Define `U_r(x)` as the maximum absolute prediction
-change at `x` between these fits and each leave-one-`|v|`-pair-out cubic
-refit (omit both signs at one magnitude). The plateau criterion is
-`abs(a0)+U_r(0) <= 10*D0`, where `D0` is the already measured KS no-U floor
-`5.028166848219939e-6 Ry`. Require `|r|` to strictly decrease as `|v|` halves
-on each sign branch, and report separate positive/negative log-log OLS orders
-and adjacent pairwise orders (no pseudocount; exact zero makes the log fit
-undefined and therefore not a pass). Report all fit residuals; they are
-diagnostics, not an additional tuned tolerance. If M0.3 is reached, the
-per-spin modeled allowance is `abs(r3(t_s/q0_s))+U_r(t_s/q0_s)+D0`; a shift
-outside the measured `[-0.02,0.02] Ry` range is unassessed, not extrapolated.
-These are fixed analysis choices for A1.1 and may not be changed after
-viewing the shift measurements.
+`r2(v)=b0+b1*v+b2*v^2`. The primary log-log OLS fit is `log|r|` versus
+`log|v|` over all eight signed samples; separate positive/negative fits and
+adjacent pairwise orders are diagnostics. An exact zero makes the log fit
+undefined and must be reported for A1.3 review, without a pseudocount. Require
+`|r|` to strictly decrease as `|v|` halves on both sign branches, and report
+all fit residuals and alternative-fit sensitivity. Assess a v-independent
+plateau from the fitted constant together with the measured `r(v)` values;
+the user criterion is no plateau above `10*D0`, where `D0` is the already
+measured KS no-U floor `5.028166848219939e-6 Ry`. If M0.3 is reached, the
+preregistered allowance is the fitted residual magnitude evaluated at each
+actual per-spin shift `t_s/q0_s`, summed once over spins, plus the existing
+total `D0` floor. Evaluate and label model extrapolation if a shift is outside
+the measured `[-0.02,0.02] Ry` range; do not silently treat it as
+interpolation. Report fit sensitivity separately, not as an added allowance
+or gate. If measurements expose a wrong error model, stop under A1.3 and
+propose a corrected criterion for user approval. These analysis choices may
+not be changed after viewing the shift measurements.
 
 | Work item | Frozen acceptance criterion | Negative/control case | Status |
 |---|---|---|---|
