@@ -2,19 +2,21 @@
 
 The controlling next-stage plan is [LOCAL_MOMENTS.md](LOCAL_MOMENTS.md),
 which records the M0 scope, operator orientation, predeclared signed carrier
-statistic, controls, and evidence requirements. M0 is **not passed** on branch
-`fix/ldau-local-moments` at base `3d7571a`: the KS no-U scalar control exceeds
-its independently measured floor-plus-refinement allowance by `2.0847x`, and
-the RS no-U reference did not converge. No local-moment correction or
-physical-energy change is applied.
+statistic, controls, and evidence requirements. User-approved amendment A1
+supersedes the scalar-v0 criterion. Its scaling test is not yet run, so M0 is
+not passed; the historical v0 result is reclassified as “criterion ill-posed,
+superseded by A1.” The RS no-U reference did not converge and remains a
+separate backend task. No local-moment correction or physical-energy change is
+applied.
 
 M0.1 finite-H RS/KS M1 extraction oracles and two-site mapping controls pass
 as class-B probes, both serially and in the targeted two-rank MPI tests; see
 [the machine-readable measurements](evidence/m0_1_finite_operator.json).
-The M0.2 KS floor/repeat/refinement measurement is recorded in
-[the scalar-control failure artifact](evidence/m02_ks_scalar_v0_fail.json);
-its scalar intervention fails the frozen bound. RS floor is unavailable due
-to nonconvergence. M0.3 was not started, so R04 remains blocked.
+The M0.2 KS floor/repeat/refinement and historical scalar-v0 measurement are
+recorded in [the preserved v0 artifact](evidence/m02_ks_scalar_v0_fail.json).
+That scalar criterion is superseded, not an active FAIL. A1.1 is pending; RS
+floor is unavailable due to nonconvergence. M0.3 has not started, so R04
+remains blocked.
 
 | Phase | Claim | Test/evidence | Result | Commit | Blocker |
 |---|---|---|---|---|---|

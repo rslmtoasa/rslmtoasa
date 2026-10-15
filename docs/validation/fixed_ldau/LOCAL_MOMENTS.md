@@ -1,9 +1,10 @@
 # Fixed-U local-moment accounting
 
 This record follows `cleanup/RS_LMTO_ASA_LDAU_Local_Moments_Protocol.md`,
-which is user-owned and intentionally remains outside this worktree. Work is
-limited to its Stage M0 until the M0 gate is measured. No M1 moment correction
-or energy change is permitted during this stage.
+which is user-owned and intentionally remains outside this worktree. The
+user-approved Protocol amendment A1 below supersedes the original M0
+scalar-control criterion. Work remains limited to Stage M0; no M1 moment
+correction or energy change is permitted during this stage.
 
 ## Scope and conventions
 
@@ -47,17 +48,43 @@ not a reason to alter tolerances or promote M1.
 
 ## M0 execution plan and gates
 
+### A1.1 measurement pre-registration
+
+Before any new shift result is inspected, define the frozen-state difference
+as `DeltaSUMEV(v) = SUMEV_RAW - SUMEV(c_raw-v)` for positive `v`, with the
+same definition applied to signed `v`; therefore the expected first-order
+response is `v*q0`. Compute `r(v)` from the measured difference and captured
+`q0`, never from a producer-reported residual. All eight signed cases must
+start from identical copied radial arrays, EC/EV seeds, `q0`, `q2`, and other
+`calculate_pl` inputs; only the center may change, by exactly `-v`. Keep each
+site/spin/type mapping explicit and reject missing or duplicate cases.
+
+For each site/spin, calculate `e(v)=s(v)/q0-1` and fit the four positive
+magnitudes to the unweighted even model `a0+a2*v^2+a4*v^4`. The extrapolation
+uncertainty is the larger of the intercept change when fitting only the
+quadratic term and the range of leave-one-magnitude-out intercepts. The A1.1
+extrapolation criterion is `abs(a0)+uncertainty < 1e-6`, and measured
+`abs(e)` must strictly decrease as `|v|` decreases through 0.02, 0.01, 0.005,
+0.0025 Ry. For signed `r`, report the all-point cubic fit coefficients
+`b0+b1*v+b2*v^2+b3*v^3`, residuals, and separate positive/negative
+log-log-fit orders (no pseudocount; exact zero makes that branch unassessed
+and therefore not a pass). Also report adjacent pairwise log-log orders. A
+constant floor is assessed by `abs(b0)+uncertainty_r <= 10*D0`, where `D0` is
+the already measured KS no-U floor `5.028166848219939e-6 Ry`; report both
+the fitted intercept and fit residuals so the “smooth” requirement remains
+auditable. These are fixed analysis choices for A1.1 and may not be changed
+after viewing the shift measurements.
+
 | Work item | Frozen acceptance criterion | Negative/control case | Status |
 |---|---|---|---|
 | M0.1 RS/KS M1 extraction | Complex matrix agrees with independent finite-H KS eigenpair sum at `5e-12 Ry` and refined analytic finite-window Lorentz RS integral at `3e-4 Ry`; same-call `Tr(M1)=q0*c` per atom/shell/spin at `1e-10 Ry` because both use identical quadrature | Conjugated/transposed and wrong-site M1 controls must mismatch by `>3e-3 Ry` (10x the accepted RS M1 oracle budget); coarse-to-fine mesh error must decrease | PASS, finite-H probes only |
-| M0.2 no-U calibration | Converged nsp=1 bcc Fe in RS and true KS; record spectral `sum(q0*c)`, converged `SUMEV`, and one frozen-input-potential `newrho` replay; report charge threshold and measured floor | Verify both restart U/J arrays are zero; deterministic restart and 16³ refinement; no-U must not activate R05 P/V stopping | FAIL: KS scalar intervention exceeds the calibrated allowance; RS has no admissible floor because its run did not converge |
-| M0.3 U=2 eV, J=0 carrier | Reuse only converged accepted RS/KS states that meet the existing R05 P/V criteria; independent correction arithmetic; production `calculate_pl` and one frozen-sphere `newrho` pass for legacy and local moments; report signed ratio, `q2_local>=0`, radial d charge, sphere spin moment and ASA energy components | `V=vI` gives exactly invariant q2 and `delta SUMEV=v*q0`; substituting `V_out` or `P^T` must violate the predeclared carrier criterion | NOT_RUN; stopped by the M0.2 failure |
+| M0.2 no-U calibration | Converged nsp=1 bcc Fe in RS and true KS; record spectral `sum(q0*c)`, converged `SUMEV`, and one frozen-input-potential `newrho` replay; report charge threshold and measured floor | Verify both restart U/J arrays are zero; deterministic restart and 16³ refinement; no-U must not activate R05 P/V stopping | Initial scalar-v0 verdict superseded by A1 as an ill-posed criterion. A1.1 scaling test NOT_RUN; RS has no admissible floor because its run did not converge |
+| M0.3 U=2 eV, J=0 carrier | Reuse only converged accepted RS/KS states that meet the existing R05 P/V criteria; independent correction arithmetic; production `calculate_pl` and one frozen-sphere `newrho` pass for legacy and local moments; report signed ratio, `q2_local>=0`, radial d charge, sphere spin moment and ASA energy components | `V=vI` gives exactly invariant q2 and `delta SUMEV=v*q0`; substituting `V_out` or `P^T` must violate the predeclared carrier criterion | NOT_RUN; gated on A1.1 passing and its fitted error model/allowance being locked before U-state outcomes |
 
 M0 passes only when all three rows have admissible production evidence. The
 previous one-step `-0.153 Ry` comparison and synthetic/calibrated radial tests
-are ineligible. A missing converged state is NOT_RUN; a measured carrier
-failure is reported and explained before any M1 implementation. Since M0.2
-failed its scalar control, no U-active M0.3 campaign was started.
+are ineligible. A missing converged state is NOT_RUN. The original scalar-v0
+criterion is superseded by A1; no U-active M0.3 campaign has been started.
 
 The RS independent-oracle allowance `3e-4 Ry` is preregistered from the
 existing projector integral budget `1e-4` times the largest absolute energy
@@ -144,24 +171,82 @@ Ry, repeat `D=-5.023148958116508e-6` Ry, refinement
 Ry, the separately measured uncertainty is `2.528563181058985e-8` Ry, and
 the acceptance allowance is `5.053452480030529e-6` Ry.
 
-For the frozen scalar intervention, `c_local=c_raw-0.01` Ry with `q0`,
+For the historical frozen scalar intervention, `c_local=c_raw-0.01` Ry with `q0`,
 `q2`, radial arrays, and seed held fixed. The expected raw-minus-local
 `SUMEV` change is `+0.06498480421874168` Ry; production gives
 `+0.06497426910958881` Ry. The absolute residual is `1.0535109152873257e-5`
-Ry, or `2.08473498` times the frozen allowance. This is a measured KS
-scalar-control **FAIL**, not an M1 quadrature error; the finite-H M1 tolerance
-does not apply to this radial carrier test. Hash-bound details, including
+Ry, or `2.08473498` times the then-frozen allowance. Under user-approved A1,
+this former verdict is reclassified as **criterion ill-posed, superseded by
+A1**: the zero-shift floor does not bound smooth, shift-dependent
+`calculate_pl`/potential-parameter inversion error. The finite-H M1 tolerance
+does not apply to this radial carrier test. Keep the original hash-bound details, including
 the source, executable, input/seed, raw CSV, manifest, checker, and floor
 hashes, are recorded in
 [`evidence/m02_ks_scalar_v0_fail.json`](evidence/m02_ks_scalar_v0_fail.json).
 
-The corresponding RS no-U run reached its iteration limit without satisfying
+The original evidence file is preserved unchanged as historical evidence; the
+new A1 scaling result must be recorded in a separate artifact. The corresponding
+RS no-U run reached its iteration limit without satisfying
 the `1e-9` charge criterion, so no accepted RS floor or carrier verdict is
 available. The stopped continuation is explicitly cancelled and excluded.
 The exact-source diagnostic plumbing smoke reproduced same-call LIVE_STATE
 components, but its RAW/LOCAL comparison is not a converged M0 result. The
-M0.2 failure blocks M0.3; no U-active carrier, M1 correction, or physical
-energy correction was attempted.
+A1.1 scaling test is now the gate before KS M0.3; no M1/M2 implementation or
+physical energy correction is authorized in this continuation.
+
+## Protocol amendment A1 (verbatim)
+
+The following user-approved amendment is reproduced verbatim. It supersedes
+the original scalar-control criterion, but does not edit or replace the
+user-owned protocol file or the historical scalar-v0 evidence artifact.
+
+```text
+Protocol amendment A1 (user-approved, supersedes the M0 scalar-control criterion
+in cleanup/RS_LMTO_ASA_LDAU_Local_Moments_Protocol.md; record this amendment
+verbatim in LOCAL_MOMENTS.md and do not edit the user-owned protocol file).
+
+Rationale: the zero-shift floor D measures the radial inversion offset at v=0.
+A finite centre shift adds a smooth, shift-dependent calculate_pl/potential-
+parameter inversion error that this floor cannot bound. The measured KS result
+(ΔSUMEV ratio 0.99984 at v=0.01 Ry) is therefore not a refutation, and the
+previous verdict is reclassified from FAIL to "criterion ill-posed, superseded
+by A1". Keep the original evidence file unchanged and add the new result
+alongside it.
+
+A1.1 Scalar-shift scaling test (KS, frozen converged no-U state, same seed and
+frozen-potential single newrho pass as before):
+  - v in {±0.0025, ±0.005, ±0.01, ±0.02} Ry, applied to c with q0, q2 held fixed.
+  - Report r(v) = ΔSUMEV(v) − v·q0 for each v.
+  - Report the symmetric slope s(v) = [ΔSUMEV(+v) − ΔSUMEV(−v)]/(2v).
+  - PASS if both hold:
+      (i) |s(v)/q0 − 1| decreases with v and its v→0 extrapolation is below
+          1e-6 relative;
+      (ii) r(v) is smooth, and a log-log fit gives order ≥ 2 with no
+          v-independent plateau above 10× the U=0 floor.
+  - If r(v) is flat or non-monotonic, stop and investigate the radial solver
+    tolerance (TOLRSQ/RSEQSR) before continuing. Report what you find; do not
+    tune the tolerance to pass.
+  - The fitted r(v) model, evaluated at the actual per-spin shifts t_s/q0_s of
+    the U state plus the U=0 floor, is the preregistered allowance for M0.3.
+
+A1.2 Backend decoupling:
+  - KS proceeds through M0.3, M1 and M2 independently.
+  - RS becomes a separate work item:
+      * record the full residual history of the no-U run;
+      * continue from restart with more iterations and Broyden mixing;
+      * report the stagnation level.
+  - If 1e-9 is unattainable, use the measured stagnation level as RS's
+    convergence threshold for its own floor and Hellmann–Feynman noise budget.
+  - RS gates are reported separately and must not be marked PASS by
+    inference from KS.
+
+A1.3 Governance: if any later criterion is found to rest on a wrong error
+model, stop, write a short justification with the measurement that exposes
+it, and propose a corrected criterion for user approval. Never self-amend.
+
+Continue with A1.1 and then M0.3 (KS) on fix/ldau-local-moments. Stop at the
+KS M0 gate and report.
+```
 
 ### Frozen 3d7571a baseline
 
