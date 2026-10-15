@@ -78,7 +78,10 @@ module self_mod
    ! This is independent of control%nsp, which selects the global Hamiltonian
    ! mode (and is not a channel-count field).
    integer, parameter, public :: RADIAL_XC_SPIN_CHANNELS = 2
-   real(rp), parameter :: fixed_u_m0_scalar_control_v = 1.0e-2_rp
+   integer, parameter :: fixed_u_m0_a11_nshift = 8
+   real(rp), parameter :: fixed_u_m0_a11_v(fixed_u_m0_a11_nshift) = &
+      [-2.0e-2_rp, -1.0e-2_rp, -5.0e-3_rp, -2.5e-3_rp, &
+        2.5e-3_rp,  5.0e-3_rp,  1.0e-2_rp,  2.0e-2_rp]
 
    !> Module´s main structure
    type, public :: self
@@ -1223,8 +1226,9 @@ contains
       real(rp), allocatable :: ql_raw(:, :, :), ql_local(:, :, :), ql_vout(:, :, :), ql_pt(:, :, :)
       real(rp), allocatable :: rho_case(:, :), sumec_case(:), sumev_case(:)
       real(rp), allocatable :: ec_case(:), ev_case(:)
-      real(rp), allocatable :: pl_raw(:, :), pl_local(:, :), pl_scalar(:, :)
-      integer :: ia, plusbulk, l, spin, unit, ios, row
+      real(rp), allocatable :: pl_raw(:, :), pl_local(:, :), pl_a11(:, :, :)
+      real(rp), allocatable :: baseline_ev(:)
+      integer :: ia, plusbulk, l, spin, unit, ios, row, iv
       real(rp) :: pl_reproduction_error, ql_vs_live_error, q2_min
       real(rp) :: baseline_sumev(2), baseline_sumec(2)
       real(rp) :: component_snapshot(10), actual_component(10), output_component(10)
@@ -1253,17 +1257,19 @@ contains
          end do
       end do
 
-      allocate(pl_scalar(lmax + 1, 2))
-      pl_atoms = this%symbolic_atom
-      call load_captured_pl_inputs(pl_atoms)
-      do spin = 1, 2
-         pl_atoms(plusbulk)%potential%gravity_center(3, spin) = &
-            this%fixed_u_m0_pl_diag(ia, 3, spin, 1) - fixed_u_m0_scalar_control_v
-      end do
-      call pl_bands%calculate_pl()
-      do spin = 1, 2
-         do l = 0, lmax
-            pl_scalar(l + 1, spin) = pl_atoms(plusbulk)%potential%pl(l, spin)
+      allocate(pl_a11(lmax + 1, 2, fixed_u_m0_a11_nshift))
+      do iv = 1, fixed_u_m0_a11_nshift
+         pl_atoms = this%symbolic_atom
+         call load_captured_pl_inputs(pl_atoms)
+         do spin = 1, 2
+            pl_atoms(plusbulk)%potential%gravity_center(3, spin) = &
+               this%fixed_u_m0_pl_diag(ia, 3, spin, 1) - fixed_u_m0_a11_v(iv)
+         end do
+         call pl_bands%calculate_pl()
+         do spin = 1, 2
+            do l = 0, lmax
+               pl_a11(l + 1, spin, iv) = pl_atoms(plusbulk)%potential%pl(l, spin)
+            end do
          end do
       end do
       pl_reproduction_error = maxval(abs(pl_raw - this%fixed_u_m0_pl_diag(ia, 1:lmax + 1, 1:2, 6)))
@@ -1286,6 +1292,8 @@ contains
 
       allocate(ql_raw(3, lmax + 1, 2), ql_local(3, lmax + 1, 2), &
                ql_vout(3, lmax + 1, 2), ql_pt(3, lmax + 1, 2))
+      allocate(baseline_ev(max(nval, 1)))
+      baseline_ev = 0.0_rp
       have_raw_energy = .false.
       baseline_sumev = 0.0_rp
       baseline_sumec = 0.0_rp
@@ -1318,7 +1326,9 @@ contains
       ! diagnostic because its moments are from the current spectral output.
       call run_replay_case('LIVE_STATE', pl_actual, ql_actual)
       call run_replay_case('RAW_PL', pl_raw, ql_raw)
-      call run_replay_case('SCALAR_V', pl_scalar, ql_raw)
+      do iv = 1, fixed_u_m0_a11_nshift
+         call run_replay_case(a11_case_name(iv), pl_a11(:, :, iv), ql_raw, fixed_u_m0_a11_v(iv), iv)
+      end do
       if (minval(this%fixed_u_m0_local_q2(ia, :)) >= 0.0_rp) then
          call run_replay_case('LOCAL_PL', pl_local, ql_local)
       else
@@ -1336,8 +1346,20 @@ contains
       if (this%fixed_u_m0_p_available .and. minval(this%fixed_u_m0_pt_q2(ia, :)) >= 0.0_rp) &
          call run_replay_case('P_TRANSPOSE_CONTROL', pl_raw, ql_pt)
       nullify(pl_bands%symbolic_atom, pl_bands%lattice)
-      deallocate(pl_atoms, pl_raw, pl_local, pl_scalar, ql_raw, ql_local, ql_vout, ql_pt)
+      deallocate(pl_atoms, pl_raw, pl_local, pl_a11, ql_raw, ql_local, ql_vout, ql_pt, baseline_ev)
    contains
+      function a11_case_name(shift_index) result(name)
+         integer, intent(in) :: shift_index
+         character(len=24) :: name
+         write(name, '("A1_SHIFT_",i2.2)') shift_index
+      end function a11_case_name
+
+      function a11_stage_name(case_name) result(name)
+         character(len=*), intent(in) :: case_name
+         character(len=24) :: name
+         name = case_name
+      end function a11_stage_name
+
       subroutine load_captured_pl_inputs(atoms)
          type(symbolic_atom), intent(inout) :: atoms(:)
          integer :: site, pb, shell, channel
@@ -1356,15 +1378,24 @@ contains
          end do
       end subroutine load_captured_pl_inputs
 
-      subroutine run_replay_case(case_name, pl_case, ql_case)
+      subroutine run_replay_case(case_name, pl_case, ql_case, a11_v, a11_index)
          character(len=*), intent(in) :: case_name
          real(rp), intent(in) :: pl_case(lmax + 1, 2), ql_case(3, lmax + 1, 2)
+         real(rp), intent(in), optional :: a11_v
+         integer, intent(in), optional :: a11_index
          type(self) :: replay_state
          type(symbolic_atom) :: replay_atom
       type(xc) :: replay_xc
-      integer :: out_unit, out_ios, ir, channel, shell, moment
-      real(rp) :: center_input
+      integer :: out_unit, out_ios, ir, channel, shell, moment, state_index, shift_index
+      real(rp) :: center_input, shift_value, ev_raw_spin(2), ev_case_spin(2)
+      real(rp) :: ev_raw_total, ev_case_total
       real(rp) :: charge(2), drdi, wgt
+      logical :: a11_case
+         shift_value = 0.0_rp
+         shift_index = 0
+         if (present(a11_v)) shift_value = a11_v
+         if (present(a11_index)) shift_index = a11_index
+         a11_case = trim(case_name) == 'RAW_PL' .or. index(trim(case_name), 'A1_SHIFT_') == 1
          allocate(rho_case(nr, 2), sumec_case(2), sumev_case(2), &
                   ec_case(max(ncore, 1)), ev_case(max(nval, 1)))
          allocate(replay_state%vtn(nr, 2), replay_state%vzt(nr, 2), &
@@ -1387,6 +1418,7 @@ contains
          if (trim(case_name) == 'RAW_PL') then
             baseline_sumev = sumev_case
             baseline_sumec = sumec_case
+            if (nval > 0) baseline_ev(1:nval) = ev_case(1:nval)
             have_raw_energy = .true.
          end if
          replay_xc = xc(this%lattice%control)
@@ -1442,7 +1474,7 @@ contains
                0.0_rp, real(nr, rp), real(ncore, rp), real(nval, rp), 0.0_rp)
             call this%write_fixed_u_csv_row(out_unit, 'm0_replay_control', this%fixed_u_trace_iteration, &
                trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 3, &
-               0.0_rp, fixed_u_m0_scalar_control_v, this%fixed_u_m0_trvp(ia, 1), &
+               0.0_rp, shift_value, this%fixed_u_m0_trvp(ia, 1), &
                this%fixed_u_m0_trvp(ia, 2), 0.0_rp)
             call this%write_fixed_u_csv_row(out_unit, 'm0_replay_control', this%fixed_u_trace_iteration, &
                trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 4, &
@@ -1471,14 +1503,13 @@ contains
                      select case (trim(case_name))
                      case ('LOCAL_PL')
                         center_input = this%fixed_u_m0_local_center(ia, channel) - atom%potential%vmad
-                     case ('SCALAR_V')
-                        center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 1) - &
-                                       fixed_u_m0_scalar_control_v
                      case ('VOUT_CONTROL')
                         center_input = this%fixed_u_m0_vout_center(ia, channel) - atom%potential%vmad
                      case ('P_TRANSPOSE_CONTROL')
                         center_input = this%fixed_u_m0_pt_center(ia, channel) - atom%potential%vmad
                      end select
+                     if (index(trim(case_name), 'A1_SHIFT_') == 1) &
+                        center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 1) - shift_value
                   end if
                   do moment = 0, 4
                      select case (moment)
@@ -1488,14 +1519,13 @@ contains
                            select case (trim(case_name))
                            case ('LOCAL_PL')
                               center_input = this%fixed_u_m0_local_center(ia, channel) - atom%potential%vmad
-                           case ('SCALAR_V')
-                              center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 1) - &
-                                             fixed_u_m0_scalar_control_v
                            case ('VOUT_CONTROL')
                               center_input = this%fixed_u_m0_vout_center(ia, channel) - atom%potential%vmad
                            case ('P_TRANSPOSE_CONTROL')
                               center_input = this%fixed_u_m0_pt_center(ia, channel) - atom%potential%vmad
                            end select
+                           if (index(trim(case_name), 'A1_SHIFT_') == 1) &
+                              center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 1) - shift_value
                         end if
                      case (1)
                         center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 2)
@@ -1554,16 +1584,55 @@ contains
                      trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, channel, -1, -1, -1, -1, 0, &
                      0.0_rp, sumec_case(channel)-baseline_sumec(channel), &
                      sumev_case(channel)-baseline_sumev(channel), 0.0_rp, 0.0_rp)
-                  if (trim(case_name) == 'SCALAR_V') then
-                     call this%write_fixed_u_csv_row(out_unit, 'm0_scalar_v_identity', &
-                        this%fixed_u_trace_iteration, trim(case_name), ia - 1, this%lattice%ib(ia)-1, &
-                        2, channel, -1, -1, -1, -1, 0, 0.0_rp, &
-                        fixed_u_m0_scalar_control_v*this%fixed_u_m0_q0(ia, channel), &
-                        baseline_sumev(channel)-sumev_case(channel), &
-                        fixed_u_m0_scalar_control_v, this%fixed_u_m0_q0(ia, channel))
-                  end if
                end if
             end do
+            if (a11_case) then
+               ev_raw_spin = 0.0_rp
+               ev_case_spin = 0.0_rp
+               ev_raw_total = 0.0_rp
+               ev_case_total = 0.0_rp
+               state_index = 0
+               do channel = 1, 2
+                  do shell = 0, lmax
+                     if (ql_case(1, shell + 1, channel) < 1.0e-5_rp) cycle
+                     state_index = state_index + 1
+                     if (state_index > nval) error stop 'A1 trace: NEWRHO EV ordering exceeds nval'
+                     ev_raw_spin(channel) = ev_raw_spin(channel) + baseline_ev(state_index)
+                     ev_case_spin(channel) = ev_case_spin(channel) + ev_case(state_index)
+                     call this%write_fixed_u_csv_row(out_unit, 'm0_a11_ev', this%fixed_u_trace_iteration, &
+                        a11_stage_name(case_name), ia-1, this%lattice%ib(ia)-1, shell, channel, -1, &
+                        state_index-1, -1, -1, shift_index, shift_value, baseline_ev(state_index), &
+                        ev_case(state_index), ev_case(state_index)-baseline_ev(state_index), 0.0_rp)
+                  end do
+                  call this%write_fixed_u_csv_row(out_unit, 'm0_a11_ev_sum', this%fixed_u_trace_iteration, &
+                     a11_stage_name(case_name), ia-1, this%lattice%ib(ia)-1, 2, channel, -1, -1, -1, -1, &
+                     shift_index, shift_value, ev_raw_spin(channel), ev_case_spin(channel), &
+                     ev_case_spin(channel)-ev_raw_spin(channel), 0.0_rp)
+                  ev_raw_total = ev_raw_total + ev_raw_spin(channel)
+                  ev_case_total = ev_case_total + ev_case_spin(channel)
+               end do
+               call this%write_fixed_u_csv_row(out_unit, 'm0_a11_ev_sum', this%fixed_u_trace_iteration, &
+                  a11_stage_name(case_name), ia-1, this%lattice%ib(ia)-1, 2, -1, -1, -1, -1, -1, &
+                  shift_index, shift_value, ev_raw_total, ev_case_total, ev_case_total-ev_raw_total, 0.0_rp)
+               do channel = 1, 2
+                  call this%write_fixed_u_csv_row(out_unit, 'm0_a11_case', this%fixed_u_trace_iteration, &
+                     a11_stage_name(case_name), ia-1, this%lattice%ib(ia)-1, 2, channel, -1, -1, -1, -1, &
+                     shift_index, shift_value, baseline_sumev(channel), sumev_case(channel), &
+                     this%fixed_u_m0_q0(ia, channel), this%fixed_u_m0_ql(ia, 3, 3, channel))
+                  call this%write_fixed_u_csv_row(out_unit, 'm0_a11_center', this%fixed_u_trace_iteration, &
+                     a11_stage_name(case_name), ia-1, this%lattice%ib(ia)-1, 2, channel, -1, -1, -1, -1, &
+                     shift_index, shift_value, this%fixed_u_m0_pl_diag(ia, 3, channel, 1), &
+                     this%fixed_u_m0_pl_diag(ia, 3, channel, 1)-shift_value, &
+                     pl_raw(3, channel), pl_case(3, channel))
+               end do
+               call this%write_fixed_u_csv_row(out_unit, 'm0_a11_case', this%fixed_u_trace_iteration, &
+                  a11_stage_name(case_name), ia-1, this%lattice%ib(ia)-1, 2, -1, -1, -1, -1, -1, &
+                  shift_index, shift_value, sum(baseline_sumev), sum(sumev_case), &
+                  sum(this%fixed_u_m0_q0(ia, :)), sum(this%fixed_u_m0_ql(ia, 3, 3, :)))
+               call this%write_fixed_u_csv_row(out_unit, 'm0_a11_complete', this%fixed_u_trace_iteration, &
+                  a11_stage_name(case_name), ia-1, this%lattice%ib(ia)-1, 2, -1, -1, -1, -1, -1, &
+                  shift_index, shift_value, real(nval, rp), 1.0_rp, 0.0_rp, 0.0_rp)
+            end if
             ! NEWRHO returns rho/SUMEC/SUMEV, but the full ATOMSC ETOT
             ! components are recomputed independently below from copied arrays.
             call this%write_fixed_u_csv_row(out_unit, 'm0_replay_radial_charge', &
