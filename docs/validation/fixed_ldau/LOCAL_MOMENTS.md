@@ -73,9 +73,11 @@ adjacent pairwise orders are diagnostics. An exact zero makes the log fit
 undefined and must be reported for A1.3 review, without a pseudocount. Require
 `|r|` to strictly decrease as `|v|` halves on both sign branches, and report
 all fit residuals and alternative-fit sensitivity. Assess a v-independent
-plateau from the fitted constant together with the measured `r(v)` values;
-the user criterion is no plateau above `10*D0`, where `D0` is the already
-measured KS no-U floor `5.028166848219939e-6 Ry`. If M0.3 is reached, the
+plateau using the fitted constant together with the full measured `r(v)`
+sequence and its shape; the criterion is no fitted plateau above `10*D0`,
+where `D0` is the already measured KS no-U floor
+`5.028166848219939e-6 Ry`. There is no additional cap on the smallest-shift
+`|r|`. If M0.3 is reached, the
 preregistered allowance is the fitted residual magnitude evaluated at each
 actual per-spin shift `t_s/q0_s`, summed once over spins, plus the existing
 total `D0` floor. Evaluate and label model extrapolation if a shift is outside
