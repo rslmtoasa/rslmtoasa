@@ -61,19 +61,26 @@ site/spin/type mapping explicit and reject missing or duplicate cases.
 
 For each site/spin, calculate `e(v)=s(v)/q0-1` and fit the four positive
 magnitudes to the unweighted even model `a0+a2*v^2+a4*v^4`. The extrapolation
-uncertainty is the larger of the intercept change when fitting only the
-quadratic term and the range of leave-one-magnitude-out intercepts. The A1.1
-extrapolation criterion is `abs(a0)+uncertainty < 1e-6`, and measured
+uncertainty `U_e(0)` is the maximum absolute prediction change at zero between
+that fit and the linear-in-`v^2` fit, and between it and each leave-one-
+magnitude-out quartic fit. The A1.1 extrapolation criterion is
+`abs(a0)+U_e(0) < 1e-6`, and measured
 `abs(e)` must strictly decrease as `|v|` decreases through 0.02, 0.01, 0.005,
-0.0025 Ry. For signed `r`, report the all-point cubic fit coefficients
-`b0+b1*v+b2*v^2+b3*v^3`, residuals, and separate positive/negative
-log-log-fit orders (no pseudocount; exact zero makes that branch unassessed
-and therefore not a pass). Also report adjacent pairwise log-log orders. A
-constant floor is assessed by `abs(b0)+uncertainty_r <= 10*D0`, where `D0` is
-the already measured KS no-U floor `5.028166848219939e-6 Ry`; report both
-the fitted intercept and fit residuals so the “smooth” requirement remains
-auditable. These are fixed analysis choices for A1.1 and may not be changed
-after viewing the shift measurements.
+0.0025 Ry. For signed `r`, report the all-point unweighted cubic fit
+`r3(v)=a0+a1*v+a2*v^2+a3*v^3` and the unweighted signed quadratic fit
+`r2(v)=b0+b1*v+b2*v^2`. Define `U_r(x)` as the maximum absolute prediction
+change at `x` between these fits and each leave-one-`|v|`-pair-out cubic
+refit (omit both signs at one magnitude). The plateau criterion is
+`abs(a0)+U_r(0) <= 10*D0`, where `D0` is the already measured KS no-U floor
+`5.028166848219939e-6 Ry`. Require `|r|` to strictly decrease as `|v|` halves
+on each sign branch, and report separate positive/negative log-log OLS orders
+and adjacent pairwise orders (no pseudocount; exact zero makes the log fit
+undefined and therefore not a pass). Report all fit residuals; they are
+diagnostics, not an additional tuned tolerance. If M0.3 is reached, the
+per-spin modeled allowance is `abs(r3(t_s/q0_s))+U_r(t_s/q0_s)+D0`; a shift
+outside the measured `[-0.02,0.02] Ry` range is unassessed, not extrapolated.
+These are fixed analysis choices for A1.1 and may not be changed after
+viewing the shift measurements.
 
 | Work item | Frozen acceptance criterion | Negative/control case | Status |
 |---|---|---|---|
