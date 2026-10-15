@@ -657,14 +657,19 @@ radial response error therefore masks the energy effect of these
 converged-state controls; they are nondiscriminating by measurement, not
 passing controls.
 
-Proposed future-only criterion for user review: require an energy control to
-be discriminating only when its preregistered operator separation `|δ_k|`
-exceeds `A_true + A_k + E_num`, where `E_num` is the measured numerical replay
-guard. If it does not, require the independent operator/convention oracle and
-provenance check, and label the energy control nondiscriminating. This protects
-whether the wrong pairing can be resolved above combined response and replay
-error; its error model sums the locked true/control response allowances and
-the measured replay guard. This proposal has not been applied to the current
+Proposed future-only criterion for user review: before future control outcomes
+are inspected, compute each wrong-control separation `δ_k=Σ_s(t_{k,s}−t_s)`
+from the frozen matrices. Let `A_true` be the locked allowance at the correct
+shifts, `A_k` the same locked fit's allowance at the wrong-control shifts, and
+`E_num` the predeclared replay roundoff guard. Require an energy-discrimination
+verdict only when `|δ_k| > A_true + A_k + E_num`; an eligible control must then
+violate `A_true` in production replay. If neither control is eligible, require
+independent operator-convention and provenance oracles, and keep the gate
+incomplete if those oracles fail. This protects whether the wrong pairing can
+be resolved above combined model and numerical error; its error model sums the
+locked true/control fit-plus-floor allowances and measured replay guard. Any
+energy control must use an accepted physical state and production
+`calculate_pl`/`newrho`. This proposal has not been applied to the current
 outcome. The user must approve any future criterion change before new
 measurements are inspected.
 
