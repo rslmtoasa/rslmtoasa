@@ -333,6 +333,7 @@ module self_mod
       real(rp), private :: fixed_u_trace_lambda = 1.0_rp
       logical, private :: fixed_u_trace_enabled = .false.
       logical, private :: fixed_u_trace_capture_only = .false.
+      logical, private :: fixed_u_trace_moments_only = .false.
       logical, private :: fixed_u_trace_a2_scan_enabled = .false.
       integer, private :: fixed_u_trace_iteration = 0
       integer, private :: fixed_u_trace_selected_iteration = 0
@@ -479,6 +480,7 @@ contains
       character(len=128) :: trace_value
       character(len=128) :: root_run_id
       integer :: ios, unit, root_trace_enabled, root_selected_iteration, root_capture_only, root_a2_scan
+      integer :: root_moments_only
       real(rp) :: root_trace_lambda
 
       this%fixed_u_trace_enabled = .false.
@@ -486,6 +488,7 @@ contains
       this%fixed_u_trace_run_id = 'run'
       this%fixed_u_trace_lambda = 1.0_rp
       this%fixed_u_trace_selected_iteration = 0
+      this%fixed_u_trace_moments_only = .false.
 
       ! Rank zero owns environment parsing and file creation.  Every rank
       ! reaches the broadcasts below, including the no-trace and file-open
@@ -494,6 +497,7 @@ contains
       root_selected_iteration = 0
       root_capture_only = 0
       root_a2_scan = 0
+      root_moments_only = 0
       root_trace_lambda = 1.0_rp
       root_run_id = 'run'
       if (rank == 0) then
@@ -501,7 +505,8 @@ contains
          trace_value = ''
          call get_environment_variable('RSLMTO_FIXED_U_TRACE', trace_path, status=ios)
          if (ios == 0 .and. len_trim(trace_path) > 0 .and. &
-             this%control%nsp == 1 .and. this%control%lmax == 2 .and. .not. this%hamiltonian%hoh) then
+             this%control%nsp == 1 .and. this%control%lmax == 2 .and. &
+             (.not. this%hamiltonian%hoh .or. this%hamiltonian%fixed_u_test_allow_hoh_w1_u0)) then
             ! Explicit trace opt-in also enables the M0 no-U reference.
             ! Ordinary no-U runs still take the untouched path when the
             ! environment variable is absent. Other Hubbard modes remain out.
@@ -534,6 +539,11 @@ contains
             trace_value = ''
             call get_environment_variable('RSLMTO_FIXED_U_A2_SCAN', trace_value, status=ios)
             if (ios == 0 .and. (trim(trace_value) == '1' .or. trim(trace_value) == 'true')) root_a2_scan = 1
+            trace_value = ''
+            call get_environment_variable('RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY', trace_value, status=ios)
+            if (ios == 0 .and. (trim(trace_value) == '1' .or. trim(trace_value) == 'true')) then
+               root_moments_only = 1
+            end if
          end if
 
          if (root_trace_enabled == 1) then
@@ -557,11 +567,13 @@ contains
       call MPI_BCAST(root_selected_iteration, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
       call MPI_BCAST(root_capture_only, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
       call MPI_BCAST(root_a2_scan, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+      call MPI_BCAST(root_moments_only, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
       call MPI_BCAST(root_trace_lambda, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
       call MPI_BCAST(root_run_id, len(root_run_id), MPI_CHARACTER, 0, MPI_COMM_WORLD, ierr)
 #endif
       this%fixed_u_trace_enabled = root_trace_enabled == 1
       this%fixed_u_trace_capture_only = root_capture_only == 1
+      this%fixed_u_trace_moments_only = root_moments_only == 1
       this%fixed_u_trace_a2_scan_enabled = root_a2_scan == 1
       this%fixed_u_trace_selected_iteration = root_selected_iteration
       this%fixed_u_trace_lambda = root_trace_lambda
@@ -595,8 +607,8 @@ contains
       complex(rp), intent(in), optional :: m1_out(:, :, :, :, :)
       real(rp), intent(in), optional :: pl_diag_out(:, :, :, :)
       integer :: unit, ios, ia, l, spin, i, j, site_type, plusbulk
-      complex(rp) :: z, m1_trace
-      real(rp) :: center, q0, q2
+      complex(rp) :: z, m1_trace, test_operator(5, 5)
+      real(rp) :: center, q0, q2, test_q0_trace, test_trace_wp
 
       if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
       if (this%fixed_u_trace_selected_iteration > 0 .and. &
@@ -604,6 +616,10 @@ contains
       open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
            action='write', iostat=ios)
       if (ios /= 0) return
+
+      test_operator = cmplx(0.0_rp, 0.0_rp, rp)
+      if (this%fixed_u_trace_moments_only .and. this%hamiltonian%hubbard_test_operator_check) &
+         call this%hamiltonian%get_hubbard_test_operator(test_operator)
 
       call this%write_fixed_u_csv_row(unit, 'ldm_availability', this%fixed_u_trace_iteration, trim(stage), &
          -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
@@ -636,6 +652,31 @@ contains
                            real(z, rp), aimag(z))
                      end do
                   end do
+               end if
+               if (this%fixed_u_trace_moments_only .and. this%hamiltonian%hubbard_test_operator_check .and. &
+                   trim(stage) == 'P_OUT' .and. l == 2) then
+                  test_q0_trace = 0.0_rp
+                  test_trace_wp = 0.0_rp
+                  do i = 1, 5
+                     do j = 1, 5
+                        z = this%symbolic_atom(plusbulk)%potential%ldm(l + 1, spin, i, j)
+                        call this%write_fixed_u_csv_row(unit, 'test_density_matrix', &
+                           this%fixed_u_trace_iteration, 'P_OUT', ia - 1, this%lattice%iz(ia), l, spin - 1, &
+                           -1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, real(z, rp), aimag(z))
+                        if (i == j) test_q0_trace = test_q0_trace + real(z, rp)
+                        if (this%hamiltonian%hubbard_test_spin == 0 .or. &
+                            this%hamiltonian%hubbard_test_spin == spin) then
+                           test_trace_wp = test_trace_wp + real(test_operator(i, j) * &
+                              this%symbolic_atom(plusbulk)%potential%ldm(l + 1, spin, j, i), rp)
+                        end if
+                     end do
+                  end do
+                  call this%write_fixed_u_csv_row(unit, 'test_q0_trace', this%fixed_u_trace_iteration, &
+                     'P_OUT', ia - 1, this%lattice%iz(ia), l, spin - 1, -1, -1, -1, -1, 0, &
+                     0.0_rp, 0.0_rp, test_q0_trace, 0.0_rp, 0.0_rp)
+                  call this%write_fixed_u_csv_row(unit, 'test_trace_wp', this%fixed_u_trace_iteration, &
+                     'P_OUT', ia - 1, this%lattice%iz(ia), l, spin - 1, -1, -1, -1, -1, 0, &
+                     0.0_rp, 0.0_rp, test_trace_wp, 0.0_rp, 0.0_rp)
                end if
                if (present(m1_out)) then
                   if (l < size(m1_out, 2)) then
@@ -692,7 +733,7 @@ contains
             end do
          end do
       end if
-      if (allocated(this%hamiltonian%ee)) then
+      if (allocated(this%hamiltonian%ee) .and. .not. this%fixed_u_trace_moments_only) then
          do site_type = 1, size(this%hamiltonian%ee, 4)
             do i = 1, size(this%hamiltonian%ee, 1)
                do j = 1, size(this%hamiltonian%ee, 2)
@@ -704,7 +745,8 @@ contains
             end do
          end do
       end if
-      if (stage == 'Pin_H' .and. allocated(this%hamiltonian%ee)) call this%write_fixed_u_rs_bonds(unit)
+      if (stage == 'Pin_H' .and. allocated(this%hamiltonian%ee) .and. .not. this%fixed_u_trace_moments_only) &
+         call this%write_fixed_u_rs_bonds(unit)
       if (stage == 'P_OUT' .and. .not. this%use_kspace) call this%write_fixed_u_rs_green(unit)
       close(unit)
    end subroutine write_fixed_u_trace
@@ -2063,7 +2105,8 @@ contains
                   v_d(i, j) = this%hamiltonian%hubbard_u_pot(orbital_i, orbital_j, itype)
                   density(itype, 3, spin, i, j) = p_d(i, j)
                   potential(itype, 3, spin, i, j) = v_d(i, j)
-                  if (this%hamiltonian%hubbard_test_operator_check) &
+                  if (this%hamiltonian%hubbard_test_operator_check .and. &
+                      (this%hamiltonian%hubbard_test_spin == 0 .or. this%hamiltonian%hubbard_test_spin == spin)) &
                      potential(itype, 3, spin, i, j) = v_d(i, j) - &
                         this%hamiltonian%hubbard_test_lambda*test_operator(i, j)
                end do
@@ -2071,7 +2114,8 @@ contains
             do i = 1, 5
                do j = 1, 5
                   direct_t = direct_t + real(v_d(i, j)*p_d(j, i), rp)
-                  if (this%hamiltonian%hubbard_test_operator_check) then
+                  if (this%hamiltonian%hubbard_test_operator_check .and. &
+                      (this%hamiltonian%hubbard_test_spin == 0 .or. this%hamiltonian%hubbard_test_spin == spin)) then
                      site_external = site_external + this%hamiltonian%hubbard_test_lambda * &
                         real(test_operator(i, j)*p_d(j, i), rp)
                   end if
@@ -2187,6 +2231,7 @@ contains
 
       if (.not. this%fixed_u_trace_enabled) return
       if (rank /= 0) return
+      if (this%fixed_u_trace_moments_only) return
       if (this%fixed_u_trace_selected_iteration > 0 .and. &
           this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) then
          call g_logger%warning('Fixed-U k-space trace skipped: selected iteration mismatch.', __FILE__, __LINE__)
@@ -2323,6 +2368,7 @@ contains
       real(rp) :: h, tail
       complex(rp) :: z
 
+      if (this%fixed_u_trace_moments_only) return
       if (.not. allocated(this%green%g0) .or. .not. allocated(this%en%ene)) return
       npts = this%bands%nv1
       if (npts < 3 .or. size(this%en%ene) < npts + 2) return
@@ -4989,7 +5035,8 @@ contains
                              n_radial_spin_channels, B_fsm)
          end if
          this%fixed_u_trace_capture_radial_state = LAST .and. this%fixed_u_trace_enabled .and. &
-            rank == 0 .and. (this%fixed_u_trace_selected_iteration <= 0 .or. &
+            rank == 0 .and. .not. this%fixed_u_trace_moments_only .and. &
+            (this%fixed_u_trace_selected_iteration <= 0 .or. &
                              this%fixed_u_trace_iteration == this%fixed_u_trace_selected_iteration)
          if (this%fixed_u_trace_capture_radial_state) then
             if (ncore > 0) EC_SEED(1:ncore) = EC(1:ncore)

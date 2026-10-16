@@ -31,12 +31,16 @@ character(len=16) :: hubbard_radial_moments
 !> Explicit A4 test-only onsite d-shell operator selector and scale in Ry.
 character(len=16) :: hubbard_test_operator
 real(rp) :: hubbard_test_lambda
+!> Test-only W probe spin: 0 both, 1 up, 2 down.
+integer :: hubbard_test_spin
 logical :: fixed_u_test_tighten_r05
+!> A5 test-only HOH control; valid only for explicit U=J=0, local W1 runs.
+logical :: fixed_u_test_allow_hoh_w1_u0
 real(rp) :: bounds_scaling
 character(len=16) :: export
 
 namelist /hamiltonian/ hoh, local_axis, orb_pol, v_alpha, v_beta, js_alpha, jl_alpha, velocity_scale, q_ss, theta_ss, magnetic_representation, ccor_2c, ccor_elin, &
         ccor_vmt_mode, ccor_debug, ccor_strict, uj_orb, hubbard_u, hubbard_j, hubbard_v, &
         hubbard_u_sc, hubbard_u_impurity, hubbard_j_impurity, hubbard_u_general, hubbard_j_general, bounds_algorithm, bounds_scaling, &
-        hubbard_u_potential_form, hubbard_radial_moments, hubbard_test_operator, hubbard_test_lambda, &
-        fixed_u_test_tighten_r05, export
+        hubbard_u_potential_form, hubbard_radial_moments, hubbard_test_operator, hubbard_test_lambda, hubbard_test_spin, &
+        fixed_u_test_tighten_r05, fixed_u_test_allow_hoh_w1_u0, export

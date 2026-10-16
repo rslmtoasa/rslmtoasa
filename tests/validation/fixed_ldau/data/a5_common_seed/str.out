@@ -1,0 +1,43 @@
+ irec           1           1
+ irec type           1
+ ndi=        5984
+ 5984
+ LATTICE COORDINATES
+    1  0.0000  0.0000  0.0000
+ ndi=        5984
+ remd
+ outmap           0           1
+ NEAREST NEIGHBOUR MAP
+      ATOM   TYPE  CONNECTIVITY     NEIGHBOURS
+    1   1  15   2634 2635 2654 2655 2973 2974 2993 2994 3013 3014 3332 3333 3352 3353
+ 5984   15
+STRUX solve nbas=     1 kk=  5984 pair_cutoff=    4.0000 solve_cutoff=   12.0000
+DEBUG_STRUX_DIAG: begin
+DEBUG_STRUX_DIAG: effective_screening=default
+DEBUG_STRUX_DIAG: opts%screening_mode=2
+DEBUG_STRUX_DIAG: opts%auto_alpha=F
+DEBUG_STRUX_DIAG: hcr[min,max]=    1.863540,    1.863540
+DEBUG_STRUX_DIAG: alpha_in[min,max]=    0.010700,    0.348500
+DEBUG_STRUX_DIAG: rmt[min,max]=    2.662200,    2.662200
+DEBUG_STRUX_DIAG: avw_bohr, solve_cutoff_bohr=    2.662246,   22.676712
+DEBUG_STRUX_DIAG: end
+STRUX screening=default species=   1 label=     1 alpha=    0.348500    0.053000    0.010700    0.000000
+STRUX result nttab=      15 cpu_s=     1.274
+STRUX map   center     1 atom     1 basis=    1 nt=    15
+   15
+  0.0000  0.0000  0.0000
+ -1.4306 -1.4306 -1.4306
+  0.0000  0.0000 -2.8612
+  0.0000 -2.8612  0.0000
+  1.4306 -1.4306 -1.4306
+ -2.8612  0.0000  0.0000
+ -1.4306  1.4306 -1.4306
+ -1.4306 -1.4306  1.4306
+  1.4306  1.4306 -1.4306
+  1.4306 -1.4306  1.4306
+  2.8612  0.0000  0.0000
+ -1.4306  1.4306  1.4306
+  0.0000  2.8612  0.0000
+  0.0000  0.0000  2.8612
+  1.4306  1.4306  1.4306
+STRUX done  center     1 cpu_s=     0.001 stored_nn=    15

@@ -38,6 +38,7 @@ contains
       call this%get_hubbard_test_operator(operator)
       do itype = 1, size(this%hubbard_u_pot, 3)
          do spin = 1, 2
+            if (this%hubbard_test_spin /= 0 .and. this%hubbard_test_spin /= spin) cycle
             do i = 1, 5
                orbital_i = 4 + i + spin_off*(spin - 1)
                do j = 1, 5

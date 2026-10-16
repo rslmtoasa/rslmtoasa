@@ -115,6 +115,7 @@ contains
       integer :: na
       real(rp) :: u_ev, j_ev
       integer :: ntype_nml, nrec_nml
+      integer :: hubbard_test_spin
       logical :: legacy_uj_present
       logical :: has_hubbard_general, has_legacy_uj, has_impurity_uj, has_hubbard_v, has_hubbard_u_sc
       character(len=1) :: orbch
@@ -143,7 +144,9 @@ contains
       hubbard_radial_moments = this%hubbard_radial_moments
       hubbard_test_operator = this%hubbard_test_operator
       hubbard_test_lambda = this%hubbard_test_lambda
+      hubbard_test_spin = this%hubbard_test_spin
       fixed_u_test_tighten_r05 = this%fixed_u_test_tighten_r05
+      fixed_u_test_allow_hoh_w1_u0 = .false.
       bounds_algorithm = this%bounds%algorithm
       bounds_scaling = this%bounds%scaling
       export = this%export
@@ -237,13 +240,23 @@ contains
          call g_logger%fatal('hubbard_test_lambda must be finite and is given in Ry.', __FILE__, __LINE__)
       end if
       this%hubbard_test_lambda = hubbard_test_lambda
+      if (hubbard_test_spin < 0 .or. hubbard_test_spin > 2) then
+         call g_logger%fatal('hubbard_test_spin must be 0 (both), 1 (up), or 2 (down).', __FILE__, __LINE__)
+      end if
+      this%hubbard_test_spin = hubbard_test_spin
+      if (this%hubbard_test_spin /= 0 .and. this%hubbard_test_operator /= 'w1') then
+         call g_logger%fatal('hubbard_test_spin selection is available only for the W1 diagnostic operator.', &
+                             __FILE__, __LINE__)
+      end if
       this%fixed_u_test_tighten_r05 = fixed_u_test_tighten_r05
+      this%fixed_u_test_allow_hoh_w1_u0 = fixed_u_test_allow_hoh_w1_u0
       this%hubbard_test_operator_check = this%hubbard_test_operator /= 'none'
       if (.not. this%hubbard_test_operator_check .and. this%hubbard_test_lambda /= 0.0_rp) then
          call g_logger%fatal("hubbard_test_lambda requires hubbard_test_operator='w1' or 'w2'.", __FILE__, __LINE__)
       end if
       if (this%hubbard_test_operator_check) then
-         if (this%control%nsp /= 1 .or. this%control%lmax /= 2 .or. this%hoh .or. &
+         if (this%control%nsp /= 1 .or. this%control%lmax /= 2 .or. &
+             (this%hoh .and. .not. fixed_u_test_allow_hoh_w1_u0) .or. &
              this%control%has_soc() .or. this%control%is_noncollinear()) then
             call g_logger%fatal('A4 test operator requires scalar-collinear nsp=1, lmax=2, and hoh=.false..', &
                                 __FILE__, __LINE__)
@@ -489,7 +502,7 @@ contains
          if (this%control%has_soc() .or. this%control%is_noncollinear()) then
             call g_logger%fatal("hubbard_radial_moments='local' does not support SOC or noncollinear spin.", __FILE__, __LINE__)
          end if
-         if (this%hoh) then
+         if (this%hoh .and. .not. fixed_u_test_allow_hoh_w1_u0) then
             call g_logger%fatal("hubbard_radial_moments='local' does not support hoh=.true..", __FILE__, __LINE__)
          end if
          if (this%control%lmax /= 2) then
@@ -504,6 +517,26 @@ contains
          if (this%hubbard_v_check) then
             call g_logger%fatal("hubbard_radial_moments='local' does not support intersite Hubbard V.", __FILE__, __LINE__)
          end if
+      end if
+
+      if (fixed_u_test_allow_hoh_w1_u0) then
+         if (.not. this%hoh .or. .not. this%hubbard_test_operator_check .or. &
+             trim(this%hubbard_test_operator) /= 'w1' .or. trim(this%hubbard_radial_moments) /= 'local' .or. &
+             .not. has_hubbard_general .or. has_legacy_uj .or. has_impurity_uj .or. &
+             this%hubbard_u_sc_check .or. this%hubbard_v_check .or. &
+             (abs(this%hubbard_test_lambda) > 1.0e-15_rp .and. &
+              abs(abs(this%hubbard_test_lambda) - 0.005_rp) > 1.0e-15_rp)) then
+            call g_logger%fatal('A5 HOH bypass is only valid for explicit general U=J=0 local W1 test runs.', &
+                                __FILE__, __LINE__)
+         end if
+         do i = 1, this%lattice%ntype
+            if (maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_u)) > 0.0_rp .or. &
+                maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_j)) > 0.0_rp) then
+               call g_logger%fatal('A5 HOH bypass requires exactly U=J=0 on every atom and shell.', __FILE__, __LINE__)
+            end if
+         end do
+         if (rank == 0) call g_logger%info('A5 test-only HOH guard bypass active for U=J=0 local W1 path.', &
+                                           __FILE__, __LINE__)
       end if
 
       ! The validated fixed-U implementation is collinear and orthogonal. The
@@ -531,7 +564,7 @@ contains
             call g_logger%fatal('Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.', &
                                 __FILE__, __LINE__)
          end if
-         if (this%hoh) then
+         if (this%hoh .and. .not. fixed_u_test_allow_hoh_w1_u0) then
             call g_logger%fatal('Fixed-U LDA+U is unsupported with hoh=.true. (generalized-overlap Hamiltonian).', &
                                 __FILE__, __LINE__)
          end if
@@ -742,8 +775,10 @@ contains
       this%hubbard_radial_moments = 'spectral'
       this%hubbard_test_operator = 'none'
       this%hubbard_test_lambda = 0.0_rp
+      this%hubbard_test_spin = 0
       this%hubbard_test_operator_check = .false.
       this%fixed_u_test_tighten_r05 = .false.
+      this%fixed_u_test_allow_hoh_w1_u0 = .false.
       this%hubbard_u_general_check = .false.
       this%hubbard_u_impurity_check = .false.
       this%hubbard_u_sc_check = .false.
