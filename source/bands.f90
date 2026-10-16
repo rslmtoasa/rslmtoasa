@@ -942,8 +942,10 @@ contains
       !print *,’AB debug: Finished orbital moments, starting Hubbard U check’
       hubbard_active = this%recursion%hamiltonian%hubbard_u_general_check .or. &
                        this%recursion%hamiltonian%hubbard_u_sc_check .or. &
-                       this%recursion%hamiltonian%hubbard_v_check
-      fixed_liechtenstein_active = this%recursion%hamiltonian%hubbard_u_general_check .and. &
+                       this%recursion%hamiltonian%hubbard_v_check .or. &
+                       this%recursion%hamiltonian%hubbard_test_operator_check
+      fixed_liechtenstein_active = (this%recursion%hamiltonian%hubbard_u_general_check .or. &
+         this%recursion%hamiltonian%hubbard_test_operator_check) .and. &
          trim(lower(this%recursion%hamiltonian%hubbard_u_potential_form)) == 'liechtenstein'
       local_moments_active = trim(this%recursion%hamiltonian%hubbard_radial_moments) == 'local'
       nullify(m1_target)

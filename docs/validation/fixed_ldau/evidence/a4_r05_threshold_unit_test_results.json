@@ -1,0 +1,31 @@
+{
+  "schema": "fixed-ldau-a4-r05-threshold-unit-test-results-v1",
+  "preregistration": {
+    "path": "docs/validation/fixed_ldau/evidence/a4_r05_threshold_unit_preregistration.json",
+    "sha256": "789286f375c1e3f642d740ea0533e1213c54939a5288a92dc7ce41b677424078"
+  },
+  "build": {
+    "source_revision": "f0ed469d29d8feb6e8569b103f10b9bc1bc748e4",
+    "worktree": "/private/tmp/rslmto-ldau-m2-energy-worktree",
+    "build_directory": "/private/tmp/a4-m2-unit-debug",
+    "configuration": "Debug; ENABLE_MPI=OFF; ENABLE_OPENMP=OFF; RUN_UNIT_TESTS=ON; GNU Fortran 16.2.0",
+    "build_command": "cmake --build /private/tmp/a4-m2-unit-debug --target UnitLdaUHamiltonian -j 8",
+    "test_command": "ctest --test-dir /private/tmp/a4-m2-unit-debug -R '^UnitLdaUHamiltonian$' --output-on-failure -V",
+    "cmake_cache_sha256": "5f17d6046dc414c1dfc35864405073876cda1c09dec9846d2a9401996f0a94fc"
+  },
+  "result": {
+    "test": "UnitLdaUHamiltonian",
+    "status": "PASS",
+    "checks": [
+      "Default fixed-U residual targets remain 1e-7 and the convergence streak remains three updates.",
+      "With 1e-8 test targets, the same 5e-8 density/potential residual pair fails and resets the streak.",
+      "W2 exact complex matrix and lambda=0.25 same-spin d-block insertion remain exact; untouched and cross-spin blocks remain zero."
+    ],
+    "binary_sha256": "ba859da7991693e5eb61be85acb5381c75872725ee5d19970102e3d0d9088010",
+    "output_log": {
+      "path": "docs/validation/fixed_ldau/evidence/a4_r05_threshold_unit_test_output.txt",
+      "sha256": "f8d56ab1c5bea8af99933a5deb50f130b08dd74f6a2b299925322d1355d75e18"
+    }
+  },
+  "summary": "One preregistered deterministic test passed. This does not run an SCF or lambda-response and does not establish any A4.1 physical identity result."
+}

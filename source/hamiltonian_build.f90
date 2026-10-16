@@ -1,4 +1,5 @@
 submodule(hamiltonian_mod) hamiltonian_build
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use magnetic_representation_mod, only: periodic_nc, gbt_single_q, explicit_texture, &
       normalize_magnetic_representation, select_endpoint_moments, texture_bulk_reuse_is_valid
    use gbt_structure_mod, only: gbt_endpoint_link, gbt_lift_orbital_block, gbt_contract_collinear, &
@@ -140,6 +141,9 @@ contains
       call move_alloc(this%velocity_scale, velocity_scale)
       hubbard_u_potential_form = this%hubbard_u_potential_form
       hubbard_radial_moments = this%hubbard_radial_moments
+      hubbard_test_operator = this%hubbard_test_operator
+      hubbard_test_lambda = this%hubbard_test_lambda
+      fixed_u_test_tighten_r05 = this%fixed_u_test_tighten_r05
       bounds_algorithm = this%bounds%algorithm
       bounds_scaling = this%bounds%scaling
       export = this%export
@@ -223,6 +227,31 @@ contains
       if (this%hubbard_radial_moments /= 'spectral' .and. this%hubbard_radial_moments /= 'local') then
          call g_logger%fatal("Invalid hubbard_radial_moments. Use 'spectral' or 'local'.", __FILE__, __LINE__)
       end if
+      this%hubbard_test_operator = lower(trim(hubbard_test_operator))
+      if (len_trim(this%hubbard_test_operator) == 0) this%hubbard_test_operator = 'none'
+      if (this%hubbard_test_operator /= 'none' .and. this%hubbard_test_operator /= 'w1' .and. &
+          this%hubbard_test_operator /= 'w2') then
+         call g_logger%fatal("Invalid hubbard_test_operator. Use 'none', 'w1', or 'w2'.", __FILE__, __LINE__)
+      end if
+      if (.not. ieee_is_finite(hubbard_test_lambda)) then
+         call g_logger%fatal('hubbard_test_lambda must be finite and is given in Ry.', __FILE__, __LINE__)
+      end if
+      this%hubbard_test_lambda = hubbard_test_lambda
+      this%fixed_u_test_tighten_r05 = fixed_u_test_tighten_r05
+      this%hubbard_test_operator_check = this%hubbard_test_operator /= 'none'
+      if (.not. this%hubbard_test_operator_check .and. this%hubbard_test_lambda /= 0.0_rp) then
+         call g_logger%fatal("hubbard_test_lambda requires hubbard_test_operator='w1' or 'w2'.", __FILE__, __LINE__)
+      end if
+      if (this%hubbard_test_operator_check) then
+         if (this%control%nsp /= 1 .or. this%control%lmax /= 2 .or. this%hoh .or. &
+             this%control%has_soc() .or. this%control%is_noncollinear()) then
+            call g_logger%fatal('A4 test operator requires scalar-collinear nsp=1, lmax=2, and hoh=.false..', &
+                                __FILE__, __LINE__)
+         end if
+         if (trim(this%hubbard_u_potential_form) /= 'liechtenstein') then
+            call g_logger%fatal('A4 test operator requires the fixed Liechtenstein basis convention.', __FILE__, __LINE__)
+         end if
+      end if
       this%bounds%algorithm = lower(trim(bounds_algorithm))
       if (len_trim(this%bounds%algorithm) == 0) this%bounds%algorithm = 'none'
       this%export = lower(trim(export))
@@ -239,6 +268,13 @@ contains
       has_impurity_uj = any(hubbard_u_impurity /= hubbard_sentinel) .or. any(hubbard_j_impurity /= hubbard_sentinel)
       has_hubbard_v = any(hubbard_v /= hubbard_sentinel)
       has_hubbard_u_sc = any(hubbard_u_sc /= hubbard_sc_sentinel)
+
+      if (this%hubbard_test_operator_check) then
+         if (has_legacy_uj .or. has_impurity_uj .or. has_hubbard_v .or. has_hubbard_u_sc) then
+            call g_logger%fatal('A4 test operators cannot be combined with legacy/impurity U, intersite V, or self-consistent U.', &
+                                __FILE__, __LINE__)
+         end if
+      end if
 
       ! Optional Hubbard inputs from &hamiltonian are provided in eV.
       ! Converted below to internal Ry units:
@@ -442,7 +478,8 @@ contains
       end if
 
       if (this%hubbard_radial_moments == 'local') then
-         if (.not. has_hubbard_general .and. .not. has_legacy_uj .and. .not. has_impurity_uj) then
+         if (.not. has_hubbard_general .and. .not. has_legacy_uj .and. .not. has_impurity_uj .and. &
+             .not. this%hubbard_test_operator_check) then
             call g_logger%fatal("hubbard_radial_moments='local' requires an explicit fixed Liechtenstein U/J input; "// &
                'numeric U=J=0 is allowed and remains a no-op.', __FILE__, __LINE__)
          end if
@@ -506,6 +543,19 @@ contains
                             ' fixed_UJ='//merge('T', 'F', this%hubbard_u_general_check)// &
                             ' sc_U='//merge('T', 'F', this%hubbard_u_sc_check)// &
                             ' V='//merge('T', 'F', this%hubbard_v_check), __FILE__, __LINE__)
+         end if
+         if (this%hubbard_test_operator_check) then
+            call g_logger%info('HUBBARD test-only onsite operator='//trim(this%hubbard_test_operator)// &
+               ' lambda_Ry='//fmt('e24.16', this%hubbard_test_lambda), __FILE__, __LINE__)
+         end if
+         if (this%fixed_u_test_tighten_r05) then
+            if (this%hubbard_u_general_check) then
+               call g_logger%info('FIXED_U test-only R05 tightening active: density and potential targets are each 1.0e-8; '// &
+                  'three consecutive updates remain required.', __FILE__, __LINE__)
+            else
+               call g_logger%info('FIXED_U test-only R05 tightening requested but NOT APPLICABLE: fixed-U R05 is inactive.', &
+                  __FILE__, __LINE__)
+            end if
          end if
       end if
       if (this%hubbard_u_general_check) then
@@ -690,6 +740,10 @@ contains
       this%jl_alpha = 'z'
       this%hubbard_u_potential_form = 'liechtenstein'
       this%hubbard_radial_moments = 'spectral'
+      this%hubbard_test_operator = 'none'
+      this%hubbard_test_lambda = 0.0_rp
+      this%hubbard_test_operator_check = .false.
+      this%fixed_u_test_tighten_r05 = .false.
       this%hubbard_u_general_check = .false.
       this%hubbard_u_impurity_check = .false.
       this%hubbard_u_sc_check = .false.
@@ -1359,6 +1413,7 @@ contains
          if (rank == 0) call g_logger%info('HUBBARD applying on-site +U correction to bulk Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_u_potential_general()
       end if
+      call this%add_hubbard_test_operator()
       if (this%hubbard_v_check) then
          if (rank == 0) call g_logger%info('HUBBARD applying inter-site +V correction to bulk Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_v_potential()
@@ -1391,7 +1446,7 @@ contains
             ! write(132,*) ’m=’, m
             ! write(132,’(18f10.6)’) aimag(this%ee(:,:,m,ntype))
          end do ! end of neighbour number
-         if (this%hubbard_u_general_check) then
+         if (this%hubbard_u_general_check .or. this%hubbard_test_operator_check) then
             do i = 1, nb
                do j = 1, nb
                   this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_u_pot(i, j, ntype)
@@ -1499,6 +1554,7 @@ contains
       call validate_gbt_reference_moments(this)
 
       if (this%hubbard_u_general_check) call this%calculate_hubbard_u_potential_general()
+      call this%add_hubbard_test_operator()
       this%ee = cmplx(0.0_rp, 0.0_rp, rp)
       this%hxc = cmplx(0.0_rp, 0.0_rp, rp)
       if (this%ccor_2c) this%eecc = cmplx(0.0_rp, 0.0_rp, rp)
@@ -1611,7 +1667,7 @@ contains
          end do
          deallocate(ham_vec)
 
-         if (this%hubbard_u_general_check) then
+         if (this%hubbard_u_general_check .or. this%hubbard_test_operator_check) then
             ! Hubbard-U is onsite (spin-diagonal in the collinear rotating
             ! frame, from potential%ldm) and is added at bond slot m=1, where
             ! d=0 and the endpoint link G_ii=I by construction. It therefore
@@ -1795,6 +1851,7 @@ contains
          if (rank == 0) call g_logger%info('HUBBARD applying on-site +U correction to local Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_u_potential_general()
       end if
+      call this%add_hubbard_test_operator()
       if (this%hubbard_v_check) then
          if (rank == 0) call g_logger%info('HUBBARD applying inter-site +V correction to local Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_v_potential()
@@ -1823,7 +1880,7 @@ contains
                end do
             end do
          end do
-         if (this%hubbard_u_general_check) then
+         if (this%hubbard_u_general_check .or. this%hubbard_test_operator_check) then
             do i = 1, nb
                do j = 1, nb
                   this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + this%hubbard_u_pot(i, j, ino)

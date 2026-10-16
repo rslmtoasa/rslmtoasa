@@ -631,6 +631,7 @@ module reciprocal_mod
    end interface
 
    public :: fermi_dirac_occupation
+   public :: fermi_dirac_entropy_term, fermi_dirac_entropy
    real(rp), parameter, public :: kB_Ry_per_K = 6.3336814e-6_rp
 
    interface
@@ -640,6 +641,16 @@ module reciprocal_mod
          real(rp), intent(in) :: eigenvalue, fermi_level, kT
          real(rp) :: occupation
       end function fermi_dirac_occupation
+      !> Entropy of one Fermi-Dirac state; exact empty/full states contribute zero.
+      pure module function fermi_dirac_entropy_term(occupation) result(entropy)
+         real(rp), intent(in) :: occupation
+         real(rp) :: entropy
+      end function fermi_dirac_entropy_term
+      !> K-weighted, spin-inclusive entropy from a band eigenvalue table.
+      pure module function fermi_dirac_entropy(eigenvalues, weights, fermi_level, kT) result(entropy)
+         real(rp), intent(in) :: eigenvalues(:, :), weights(:), fermi_level, kT
+         real(rp) :: entropy
+      end function fermi_dirac_entropy
    end interface
 
 #ifdef USE_CUDA_RECIPROCAL

@@ -1,0 +1,150 @@
+{
+  "capture_manifest_sha256": "4e11bd828f4068bdba487242cefde983fd27094cdd373dd9cb1fd51757c859ca",
+  "checks": {
+    "EV": {
+      "max_abs": 0.0,
+      "pass": true,
+      "tolerance": 1e-08
+    },
+    "LIVE_STATE_integrals": {
+      "actual_l2_rho_contribution_charge_by_spin": {
+        "1": 4.615722932474196,
+        "2": 1.8953419627164598
+      },
+      "actual_l2_rho_contribution_total": 6.511064895190656,
+      "method": "integrate NEWRHO-observed rho-after-minus-before l=2 with ATOMSC logarithmic Simpson metric",
+      "sphere_charge_by_spin": {
+        "1": 14.27949626711889,
+        "2": 11.720511843541273
+      },
+      "sphere_spin_moment": 2.558984423577618
+    },
+    "PL": {
+      "max_abs": 0.0,
+      "pass": true,
+      "tolerance": 1e-10
+    },
+    "RAW_PL_vs_LIVE_STATE_operands_diagnostic_only": {
+      "d_shell_pl": [
+        {
+          "difference": -3.255638425514462e-09,
+          "live_pl": 3.887962132773488,
+          "p_out_calculate_pl": 3.8879621295178497,
+          "spin": 1
+        },
+        {
+          "difference": -1.5339240988510028e-10,
+          "live_pl": 3.65140586528754,
+          "p_out_calculate_pl": 3.6514058651341474,
+          "spin": 2
+        }
+      ],
+      "d_shell_ql_q0_q2": [
+        {
+          "difference": -1.687917539072714e-08,
+          "live_ql": 4.61571543909451,
+          "moment": 0,
+          "p_out_spectral": 4.6157154222153345,
+          "spin": 1
+        },
+        {
+          "difference": -4.5090057382290993e-10,
+          "live_ql": 0.04840180730731713,
+          "moment": 2,
+          "p_out_spectral": 0.048401806856416554,
+          "spin": 1
+        },
+        {
+          "difference": -3.87648912969496e-09,
+          "live_ql": 1.8953413466194318,
+          "moment": 0,
+          "p_out_spectral": 1.8953413427429426,
+          "spin": 2
+        },
+        {
+          "difference": 3.160268418483936e-10,
+          "live_ql": 0.010757254286577098,
+          "moment": 2,
+          "p_out_spectral": 0.01075725460260394,
+          "spin": 2
+        }
+      ],
+      "use": "Report mixing/operand gap; RAW_PL replay uses P_OUT moments while LIVE_STATE baseline uses captured actual PL/QL."
+    },
+    "SUMEC": {
+      "max_abs": 0.0,
+      "pass": true,
+      "tolerance": 1e-08
+    },
+    "SUMEV": {
+      "max_abs": 0.0,
+      "pass": true,
+      "tolerance": 1e-08
+    },
+    "captured_ATOMSC_input_density_components": {
+      "ekin": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "etot": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "pass": true,
+      "rhoeps": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "rhomu": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "rhovh": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "sumec": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "sumev": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "utot": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "vnucl": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "zvnucl": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      }
+    },
+    "pass": true,
+    "rho": {
+      "max_abs": 7.105427357601002e-15,
+      "pass": true,
+      "tolerance": 1e-10
+    }
+  },
+  "driver_input_sha256": "072da3c9c61bfcd92d9d0290d2b43bf80972a8470795247d343da9299a180f4b",
+  "driver_output_sha256": "bbc3c7872b40a192aeef81d4972385bef0926fe1498a4fe846a30bd947c2e9d4",
+  "driver_sha256": "0c1c3c12e8501f4642af87168c611d261fb5a34cc4747aaef9c8420c2c6449c4",
+  "pre_registration_sha256": "87cc23819d6f9e465593e6a4708ea062c503db69506097d6643dee549d4d54a4",
+  "schema": "a4-rs-m1-live-anchor-results-v1",
+  "status": "PASS"
+}

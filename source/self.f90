@@ -1771,6 +1771,7 @@ contains
       integer :: nsite, ntype, block, isite, itype, il, ispin, mmax, i, j, flat, orbital_i, orbital_j, worst_block
       integer :: worst_l, worst_site, unit, ios
       real(rp) :: rp_abs, rp_rel, rv_abs, rv_rel, antiherm_p, antiherm_v, u_value, j_value
+      real(rp) :: rp_target, rv_target
       logical :: active, physical
 
       this%fixed_u_residual_active = .false.
@@ -1898,10 +1899,19 @@ contains
       this%fixed_u_worst_site = worst_site
       this%fixed_u_worst_l = worst_l
       this%fixed_u_residual_physical = physical
-      call this%mix%advance_fixed_u_convergence(rp_abs, rv_abs, physical, this%fixed_u_residual_converged)
+      rp_target = fixed_u_density_tolerance
+      rv_target = fixed_u_potential_tolerance
+      if (this%hamiltonian%fixed_u_test_tighten_r05) then
+         rp_target = fixed_u_test_tight_density_tolerance
+         rv_target = fixed_u_test_tight_potential_tolerance
+      end if
+      call this%mix%advance_fixed_u_convergence(rp_abs, rv_abs, physical, this%fixed_u_residual_converged, &
+                                                rp_target, rv_target)
       if (rank == 0) then
          call g_logger%info('FIXED_U_RESIDUAL rp_abs='//fmt('es12.4',rp_abs)//' rp_rel='//fmt('es12.4',rp_rel)// &
             ' rv_abs_Ry='//fmt('es12.4',rv_abs)//' rv_rel='//fmt('es12.4',rv_rel)// &
+            ' target_rp='//fmt('es12.4',rp_target)//' target_rv_Ry='//fmt('es12.4',rv_target)// &
+            ' required_streak='//int2str(fixed_u_required_stable_updates)// &
             ' antiherm_P='//fmt('es12.4',antiherm_p)//' antiherm_V='//fmt('es12.4',antiherm_v)// &
             ' physical='//trim(log2str(physical))//' streak='//int2str(this%mix%fixed_u_stable_updates)// &
             ' worst_site='//int2str(worst_site)//' l='//int2str(worst_l), __FILE__, __LINE__)
@@ -1918,6 +1928,10 @@ contains
                worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, rv_abs, 0.0_rp, 0.0_rp)
             call this%write_fixed_u_csv_row(unit, 'fixed_u_rv_rel', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
                worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, rv_rel, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'fixed_u_rp_target', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
+               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, rp_target, 0.0_rp, 0.0_rp)
+            call this%write_fixed_u_csv_row(unit, 'fixed_u_rv_target_ry', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
+               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, rv_target, 0.0_rp, 0.0_rp)
             call this%write_fixed_u_csv_row(unit, 'fixed_u_antiherm_p', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
                worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, antiherm_p, 0.0_rp, 0.0_rp)
             call this%write_fixed_u_csv_row(unit, 'fixed_u_antiherm_v', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
@@ -1972,12 +1986,55 @@ contains
       complex(rp), allocatable :: density(:, :, :, :, :), potential(:, :, :, :, :)
       complex(rp) :: p_d(5, 5), v_d(5, 5)
       real(rp), allocatable :: e_int(:, :), e_dc(:, :), e_hub(:, :), tr_vp(:, :)
-      real(rp) :: site_int, site_dc, site_hub, site_t, direct_t, etot_site
-      real(rp) :: total_int, total_dc, total_hub, total_t, value_a, value_b, value_c
+      real(rp) :: site_int, site_dc, site_hub, site_t, site_external, direct_t, etot_site
+      real(rp) :: total_int, total_dc, total_hub, total_t, total_external, total_t_actual, value_a, value_b, value_c
+      real(rp) :: entropy, ts, value_a_f, value_b_f, value_c_f
+      real(rp) :: test_energy, test_f_local, test_f_spectral
+      real(rp), allocatable :: local_weights(:)
+      complex(rp) :: test_operator(5, 5)
+      integer :: ik_global
+      logical :: entropy_available
       integer :: isite, itype, spin, i, j, flat, status, orbital_i, orbital_j
       character(len=64) :: candidate_a, candidate_b, candidate_c
+      character(len=64) :: entropy_text, ts_text, candidate_a_f_text, candidate_b_f_text, candidate_c_f_text
+      character(len=64) :: test_energy_text, test_f_local_text, test_f_spectral_text
 
-      if (.not. this%hamiltonian%hubbard_u_general_check .or. rank /= 0) return
+      if (.not. (this%hamiltonian%hubbard_u_general_check .or. &
+                 this%hamiltonian%hubbard_test_operator_check)) return
+      entropy = 0.0_rp
+      ts = 0.0_rp
+      test_energy = 0.0_rp
+      entropy_available = .false.
+      if (this%use_kspace .and. allocated(this%reciprocal_scf_cache)) then
+         if (allocated(this%reciprocal_scf_cache%eigenvalues) .and. &
+             allocated(this%reciprocal_scf_cache%k_weights)) then
+            allocate(local_weights(size(this%reciprocal_scf_cache%eigenvalues, 2)))
+            do i = 1, size(local_weights)
+               ik_global = i
+               if (allocated(this%reciprocal_scf_cache%k_l2g_map)) then
+                  if (i <= size(this%reciprocal_scf_cache%k_l2g_map)) &
+                     ik_global = this%reciprocal_scf_cache%k_l2g_map(i)
+               end if
+               if (ik_global < 1 .or. ik_global > size(this%reciprocal_scf_cache%k_weights)) &
+                  call g_logger%fatal('Mermin entropy: invalid local/global k-point map.', __FILE__, __LINE__)
+               local_weights(i) = this%reciprocal_scf_cache%k_weights(ik_global)
+            end do
+            entropy = fermi_dirac_entropy(this%reciprocal_scf_cache%eigenvalues, local_weights, &
+               this%reciprocal_scf_cache%fermi_level, &
+               max(this%reciprocal_scf_cache%temperature*kB_Ry_per_K, 1.0e-10_rp))
+#ifdef USE_MPI
+            if (this%reciprocal_scf_cache%k_mesh_distributed_active) &
+               call MPI_ALLREDUCE(MPI_IN_PLACE, entropy, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+#endif
+            ts = this%reciprocal_scf_cache%temperature*kB_Ry_per_K*entropy
+            entropy_available = .true.
+            deallocate(local_weights)
+         end if
+      end if
+      if (rank /= 0) return
+      test_operator = cmplx(0.0_rp, 0.0_rp, rp)
+      if (this%hamiltonian%hubbard_test_operator_check) &
+         call this%hamiltonian%get_hubbard_test_operator(test_operator)
       allocate(density(this%lattice%ntype, 4, 2, 7, 7), potential(this%lattice%ntype, 4, 2, 7, 7))
       allocate(e_int(this%lattice%ntype, 4), e_dc(this%lattice%ntype, 4), &
                e_hub(this%lattice%ntype, 4), tr_vp(this%lattice%ntype, 4))
@@ -1987,12 +2044,15 @@ contains
       total_dc = 0.0_rp
       total_hub = 0.0_rp
       total_t = 0.0_rp
+      total_external = 0.0_rp
+      total_t_actual = 0.0_rp
 
       do isite = 1, this%lattice%nrec
          itype = this%lattice%ib(isite)
          density = cmplx(0.0_rp, 0.0_rp, rp)
          potential = cmplx(0.0_rp, 0.0_rp, rp)
          direct_t = 0.0_rp
+         site_external = 0.0_rp
          do spin = 1, 2
             do i = 1, 5
                orbital_i = 4 + i + spin_off*(spin - 1)
@@ -2003,11 +2063,18 @@ contains
                   v_d(i, j) = this%hamiltonian%hubbard_u_pot(orbital_i, orbital_j, itype)
                   density(itype, 3, spin, i, j) = p_d(i, j)
                   potential(itype, 3, spin, i, j) = v_d(i, j)
+                  if (this%hamiltonian%hubbard_test_operator_check) &
+                     potential(itype, 3, spin, i, j) = v_d(i, j) - &
+                        this%hamiltonian%hubbard_test_lambda*test_operator(i, j)
                end do
             end do
             do i = 1, 5
                do j = 1, 5
                   direct_t = direct_t + real(v_d(i, j)*p_d(j, i), rp)
+                  if (this%hamiltonian%hubbard_test_operator_check) then
+                     site_external = site_external + this%hamiltonian%hubbard_test_lambda * &
+                        real(test_operator(i, j)*p_d(j, i), rp)
+                  end if
                end do
             end do
          end do
@@ -2029,39 +2096,83 @@ contains
             candidate_a = trim(fmt('e24.16', value_a))
             candidate_c = trim(fmt('e24.16', value_c))
          else
-            value_b = etot_site + site_hub
+            value_b = etot_site + site_hub + site_external
             candidate_b = trim(fmt('e24.16', value_b))
          end if
          call g_logger%info('HUBBARD_MOMENT_ENERGY_SITE site='//fmt('i0', isite)//' type='//fmt('i0', itype)// &
             ' E_int='//fmt('e24.16', site_int)//' E_DC='//fmt('e24.16', site_dc)// &
             ' E_Hub='//fmt('e24.16', site_hub)//' t_in_out='//fmt('e24.16', site_t)// &
-            ' direct_trace_check='//fmt('e24.16', direct_t-site_t)// &
+            ' t_U='//fmt('e24.16', site_t)//' e_external='//fmt('e24.16', site_external)// &
+            ' t_total_actual_Vin='//fmt('e24.16', direct_t)// &
+            ' direct_trace_check='//fmt('e24.16', direct_t-site_t-site_external)// &
             ' ETOT_selected='//fmt('e24.16', etot_site)//' candidate_a='//trim(candidate_a)// &
             ' candidate_b='//trim(candidate_b)//' candidate_c='//trim(candidate_c)// &
+            ' candidate_F=UNAVAILABLE_GLOBAL_TS_NOT_SITE_DECOMPOSABLE'// &
             ' candidate_status=PROVISIONAL_ONLY', __FILE__, __LINE__)
          total_int = total_int + site_int
          total_dc = total_dc + site_dc
          total_hub = total_hub + site_hub
          total_t = total_t + site_t
+         total_external = total_external + site_external
+         total_t_actual = total_t_actual + direct_t
+         test_energy = test_energy + site_external
       end do
 
       candidate_a = 'UNAVAILABLE'
       candidate_b = 'UNAVAILABLE'
       candidate_c = 'UNAVAILABLE'
+      value_a_f = 0.0_rp
+      value_b_f = 0.0_rp
+      value_c_f = 0.0_rp
       if (trim(this%hamiltonian%hubbard_radial_moments) == 'spectral') then
          value_a = this%physical_total_energy - total_t + total_hub
          value_c = this%physical_total_energy + total_hub
          candidate_a = trim(fmt('e24.16', value_a))
          candidate_c = trim(fmt('e24.16', value_c))
+         value_a_f = value_a - ts
+         value_c_f = value_c - ts
       else
-         value_b = this%physical_total_energy + total_hub
+         value_b = this%physical_total_energy + total_hub + total_external
          candidate_b = trim(fmt('e24.16', value_b))
+         value_b_f = value_b - ts
+      end if
+      entropy_text = 'UNAVAILABLE_KS_ONLY'
+      ts_text = 'UNAVAILABLE_KS_ONLY'
+      candidate_a_f_text = 'UNAVAILABLE'
+      candidate_b_f_text = 'UNAVAILABLE'
+      candidate_c_f_text = 'UNAVAILABLE'
+      test_energy_text = 'UNAVAILABLE'
+      test_f_local_text = 'UNAVAILABLE'
+      test_f_spectral_text = 'UNAVAILABLE'
+      if (entropy_available) then
+         entropy_text = trim(fmt('e24.16', entropy))
+         ts_text = trim(fmt('e24.16', ts))
+         if (candidate_a /= 'UNAVAILABLE') candidate_a_f_text = trim(fmt('e24.16', value_a_f))
+         if (candidate_b /= 'UNAVAILABLE') candidate_b_f_text = trim(fmt('e24.16', value_b_f))
+         if (candidate_c /= 'UNAVAILABLE') candidate_c_f_text = trim(fmt('e24.16', value_c_f))
+         if (this%hamiltonian%hubbard_test_operator_check) then
+            test_energy_text = trim(fmt('e24.16', test_energy))
+            test_f_local = this%physical_total_energy + test_energy - ts
+            test_f_spectral = this%physical_total_energy - ts
+            if (trim(this%hamiltonian%hubbard_radial_moments) == 'local') then
+               test_f_local_text = trim(fmt('e24.16', test_f_local))
+            else
+               test_f_spectral_text = trim(fmt('e24.16', test_f_spectral))
+            end if
+         end if
       end if
       call g_logger%info('HUBBARD_MOMENT_ENERGY_TOTAL E_int='//fmt('e24.16', total_int)// &
          ' E_DC='//fmt('e24.16', total_dc)//' E_Hub='//fmt('e24.16', total_hub)// &
-         ' t_in_out='//fmt('e24.16', total_t)//' physical_total_energy='// &
+         ' t_in_out='//fmt('e24.16', total_t)//' t_U='//fmt('e24.16', total_t)// &
+         ' e_external='//fmt('e24.16', total_external)//' t_total_actual_Vin='//fmt('e24.16', total_t_actual)// &
+         ' physical_total_energy='// &
          fmt('e24.16', this%physical_total_energy)//' candidate_a='//trim(candidate_a)// &
          ' candidate_b='//trim(candidate_b)//' candidate_c='//trim(candidate_c)// &
+         ' entropy='//trim(entropy_text)//' TS='//trim(ts_text)// &
+         ' candidate_a_F='//trim(candidate_a_f_text)//' candidate_b_F='//trim(candidate_b_f_text)// &
+         ' candidate_c_F='//trim(candidate_c_f_text)// &
+         ' test_lambda_trace_wp='//trim(test_energy_text)//' test_F_local='//trim(test_f_local_text)// &
+         ' test_F_spectral='//trim(test_f_spectral_text)// &
          ' candidate_status=PROVISIONAL_ONLY; unavailable candidates require the other radial representation', &
          __FILE__, __LINE__)
       deallocate(density, potential, e_int, e_dc, e_hub, tr_vp)
@@ -4030,7 +4141,7 @@ contains
          ! before the band center/second moment are mapped to radial state.
          ! Keep the historical spectral ordering exactly as before.
          if (trim(this%hamiltonian%hubbard_radial_moments) == 'local' .and. &
-             this%hamiltonian%hubbard_u_general_check) then
+             (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_test_operator_check)) then
             allocate(local_m1(this%lattice%nrec, lmax_basis + 1, 2, 2*lmax_basis + 1, 2*lmax_basis + 1))
             call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos(this%lattice, &
                fixed_liechtenstein=.true., m1_out=local_m1)
@@ -4148,10 +4259,12 @@ contains
          this%en%fermi = this%reciprocal_scf_cache%fermi_level
          call g_scf_benchmark_profile%stop_stage('P_density_build')
 
-         if ((this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) &
+         if ((this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. &
+              this%hamiltonian%hubbard_v_check .or. this%hamiltonian%hubbard_test_operator_check) &
              .and. .not. allocated(local_m1)) then
             call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos(this%lattice, &
-               fixed_liechtenstein=this%hamiltonian%hubbard_u_general_check .and. &
+               fixed_liechtenstein=(this%hamiltonian%hubbard_u_general_check .or. &
+                  this%hamiltonian%hubbard_test_operator_check) .and. &
                   trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein', m1_out=m1_out)
             if (rank == 0) then
                do ia = 1, this%lattice%nrec

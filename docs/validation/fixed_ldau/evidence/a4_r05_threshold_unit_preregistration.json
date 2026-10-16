@@ -1,0 +1,35 @@
+{
+  "schema": "fixed-ldau-a4-r05-threshold-unit-preregistration-v1",
+  "status": "PRE-RESPONSE",
+  "scope": "Deterministic unit verification of the A4 R05 10x-tight repeat control, plus regression of exact W2 insertion through hubbard_u_pot.",
+  "protocol": {
+    "user_protocol_sha256": "812bcafae105eabaea4ae0614f0b419e0d96638df37888342a8708a973f83980",
+    "local_moments_sha256": "fcf63911ce8463d543ecc8a9718a12f4487fcdd9a785c6453fba0566fe17a6f4",
+    "approved_threshold_rule": "When fixed-U R05 is active, the explicit test-only flag fixed_u_test_tighten_r05 selects both density and potential residual targets at 1e-8 Ry-compatible units, each 10x below the default 1e-7; the three-update streak remains exactly 3. When fixed-U R05 is inactive (including U=0 external-W), code must log NOT APPLICABLE and must not silently apply tightened thresholds.",
+    "default_production_behavior": "Flag defaults false; ordinary thresholds remain 1e-7 for both residuals and streak 3.",
+    "no_lambda_or_scf_outcomes": true
+  },
+  "unit_criteria": {
+    "default_targets": [1e-7, 1e-7],
+    "tight_targets": [1e-8, 1e-8],
+    "test_residual_pair": [5e-8, 5e-8],
+    "expected_default": "three successive residual pairs meet default thresholds and the third update converges",
+    "expected_tight": "the same residual pair exceeds both tight thresholds, so the streak remains zero and convergence is false",
+    "w2_regression": "W2 exact matrix and lambda=0.25 insertion are binary-exact; verify exact Hermiticity, both same-spin d blocks, and exact zero untouched/cross-spin carrier entries"
+  },
+  "test_command": "ctest --test-dir <build> -R '^UnitLdaUHamiltonian$' --output-on-failure",
+  "sha256": {
+    "CMakeLists.txt": "9fe1bb0c871d447f732e007ebf9c9015dda642799f0402035f13062383acebd8",
+    "source/mix.f90": "b1b91e583220c92a611a5b4762cba943d13f6ccb4e8127828184b3bc32b57b00",
+    "source/self.f90": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010",
+    "source/hamiltonian_build.f90": "ebcdfec08a05c300dd6ea531b24c835ffb1feb41213bd9c58037b7fa9be33fc1",
+    "source/hamiltonian.f90": "b87ffc6a0dc873903f852a61b3405e54547f4069d1c232a83d0d9edfc385fefa",
+    "source/include_codes/namelists/hamiltonian.f90": "91ea68a007b59f768aee2712edd785d3ec6ed6d051ceb2cfdc2e181b4b97b684",
+    "source/hamiltonian_hubbard.f90": "ad1ebfe6cfe45dcea5d3c6e27f2240d16c06b17916b9025f602649b4819b3635",
+    "source/bands.f90": "0084d3f1c2b86bec60954265ca99a5185df8baf096ffd0ec7783396b9041c130",
+    "source/math.f90": "e4bbcaecb2d8978fd3cc0d5e8b376285bd6b60aaa336a49a60911eaa7851b7ec",
+    "source/reciprocal.f90": "7e0bc468e294b13a8bf12257f99c79d80f2613e8009804901fa1d6e78d248a23",
+    "source/reciprocal_occupations.f90": "8a2f569bc3eca77691491276b936c0eea3ab01e32a6c65747f4b9dab5824821b",
+    "tests/unit/test_lda_u_hamiltonian.f90": "e86d3e17e4f2ae9677dc4fefc61b9b613b26200880d5f8edb8fa66ee76fe8597"
+  }
+}

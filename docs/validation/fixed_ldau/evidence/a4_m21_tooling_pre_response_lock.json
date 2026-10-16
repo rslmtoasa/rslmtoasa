@@ -1,0 +1,37 @@
+{
+  "artifacts": {
+    "dry_run_manifest": {
+      "path": "/private/tmp/a4-m21-ks-lambda0-execution-dryrun/execution_manifest.json",
+      "sha256": "939e2c01a18cda6e3d88a06709fcc4ee998d56bbdbe6f11bec5830ce22bc0e47"
+    },
+    "lambda0_executor": {
+      "path": "/private/tmp/rslmto-ldau-m2-energy-worktree/tests/validation/fixed_ldau/a4_m21_execute_lambda0.py",
+      "sha256": "8f49cb1b5dec3cd0bb784f0e300a48ea51f286febc2e481a76c998991883db42"
+    },
+    "lambda0_preparer_lock": {
+      "path": "/private/tmp/rslmto-ldau-m2-energy-worktree/docs/validation/fixed_ldau/evidence/a4_m21_ks_lambda0_preparer_lock.json",
+      "sha256": "ab454c7b431a2e4ef31206bd42783613f1507d78e30ae030c347f5f97b0408b9"
+    },
+    "lambda0_preregistration": {
+      "path": "/private/tmp/rslmto-ldau-m2-energy-worktree/docs/validation/fixed_ldau/evidence/a4_m21_ks_lambda0_calibration_preregistration.json",
+      "sha256": "50f24c646af2e7c1eedc050d6b0b3c14b7cb55b5d6134e02cfa081913e1ba80f"
+    },
+    "w1_response_template": {
+      "path": "/private/tmp/rslmto-ldau-m2-energy-worktree/docs/validation/fixed_ldau/evidence/a4_m21_w1_response_preregistration.template.json",
+      "sha256": "bd3ae628e2c98c52cdc0dff42977a114e7909f6d227cdad31f67c806f7becc1e"
+    },
+    "w1_richardson_analyzer": {
+      "path": "/private/tmp/rslmto-ldau-m2-energy-worktree/tests/validation/fixed_ldau/a4_m21_w1_richardson.py",
+      "sha256": "8be7d8c602ac3dc970d4921945cd18dba4d6b447df897060f68e5f608126a53b"
+    }
+  },
+  "binary_path": "/private/tmp/a4-m2-serial/bin/rslmto.x",
+  "binary_sha256": "536fa80a34c510782013a5608fc1220dca26b52a10189a2334e40ed43e12a0b4",
+  "execution": "dry-run only; all eight case manifests are PREPARED_NOT_STARTED; no SCF process launched",
+  "hold": "Do not invoke executor with --execute until RS M1 paired replay review and root releases lambda-zero calibration.",
+  "preparer_lock_sha256": "ab454c7b431a2e4ef31206bd42783613f1507d78e30ae030c347f5f97b0408b9",
+  "preregistration_sha256": "50f24c646af2e7c1eedc050d6b0b3c14b7cb55b5d6134e02cfa081913e1ba80f",
+  "schema": "rslmto-a4-m21-tooling-pre-response-lock-v1",
+  "source_self_sha256": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010",
+  "status": "PRE-RESPONSE_TOOLING_LOCK_NO_SCFS_EXECUTED"
+}

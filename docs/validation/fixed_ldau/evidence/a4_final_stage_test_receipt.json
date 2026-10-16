@@ -1,0 +1,46 @@
+{
+  "build": {
+    "cmake_cache_sha256": "f2db772266425d8fc7b7db2f4f4db55e7115588aca57cee3a6e28992d2e762da",
+    "configuration": {
+      "build_type": "Release",
+      "fortran_compiler": "GNU Fortran 16.2.0",
+      "libxc": "OFF",
+      "mpi": "OFF",
+      "openmp": "OFF",
+      "run_unit_tests": "ON"
+    },
+    "ctest_registry_sha256": "70ba6a580dba7b515eb4e87292d1773cfbd9a0de3a93fa62cabee51a33073a33",
+    "ctest_registry_total": 127,
+    "path": "/private/tmp/a4-final-stage-build"
+  },
+  "ctest": {
+    "command": "ctest --test-dir /private/tmp/a4-final-stage-build -LE 'validation|performance' --output-on-failure",
+    "exit_code": 0,
+    "last_test_log_sha256": "e783347661eaecc4896c15b5170eaa0c123a83c1ee48bae35d8cf444a5bbdc64",
+    "last_test_log_snapshot": "/private/tmp/a4-final-stage-ctest-LastTest.log",
+    "manifest_path": "/private/tmp/a4-final-stage-ctest-manifest.json",
+    "manifest_sha256": "2af5cea48896734e59c5e92cd08b94b3e1a0fa626118814af249cadc122c3eb6",
+    "result": "122/122 passed"
+  },
+  "production_source_changed_for_this_receipt": false,
+  "schema": "a4-final-stage-verification-receipt-v1",
+  "scope_note": "This receipt records test evidence only. It does not certify any M2 scientific gate or authorize a default/physical-energy change.",
+  "status": "SUITE_AND_SYNTHETIC_TESTS_COMPLETED",
+  "synthetic_python_tests": [
+    {
+      "path": "tests/validation/fixed_ldau/a4_m21_analysis_bounds_test.py",
+      "result": "PASS",
+      "sha256": "347dc55b1c1b231383aa4332e1f6354ac3a70505a8b85b3af79194b05224284f"
+    },
+    {
+      "path": "tests/validation/fixed_ldau/a4_m21_assembler_test.py",
+      "result": "PASS",
+      "sha256": "b66f58575e5fdf4388059adc8dbcc14a7dc2245a7011c905e4aaca58e2147692"
+    },
+    {
+      "path": "tests/validation/fixed_ldau/a4_m21_response_cache_test.py",
+      "result": "PASS",
+      "sha256": "c883f61537e252d0b2e528bdeb0d08916e135b6e4bf706b85598c4da5812f2b4"
+    }
+  ]
+}

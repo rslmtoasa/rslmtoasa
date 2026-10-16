@@ -1,0 +1,101 @@
+{
+  "analysis_report": {
+    "independent_central_recomputation": "D, Rfine, Rcoarse, g0, L, and H agree with pre-report calculation from the hash-bound adapter; uncertainty propagation and exact comparisons were checked against the report and approved model.",
+    "path": "/private/tmp/a4-m21-ks-w1-analysis-v2.json",
+    "sha256": "27953d884d466f91ca0dbba5e75dc9ec1fd4ce42c0321b0a792103212babc5c3"
+  },
+  "governing_criterion_chain": {
+    "approved_rule": "leading term resolved when abs(L)>uL; h2 dominance when abs(L)-uL > 16*(abs(H)+uH); unchanged identity allowance |Rfine-g0|<=N_unc",
+    "criterion_analysis_lock_path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_analyzer_report_fix_lock_v1.json",
+    "criterion_analysis_lock_sha256": "39e837a1587a0ceb3fad16d0de4de9acb10878a2d89b4dccbae379ac9fedc8e8",
+    "report_criteria_source_field": "null in analyzer output; resolved by the immutable user-approval and report-fix-lock hashes above, which bind the approved criterion and analyzer/input. The report itself is unchanged.",
+    "user_approval_path": "docs/validation/fixed_ldau/evidence/a4_m21_h2_dominance_user_approval.json",
+    "user_approval_sha256": "aa9bbe28ed0ed10483f79ca052562f66d65d3d2ee266a1a46c0bea9f06a17799"
+  },
+  "mode_reviews": {
+    "local": {
+      "D_dimensionless": {
+        "0.0025": 6.489257980501861,
+        "0.005": 6.489235297703999,
+        "0.01": 6.48910525771953
+      },
+      "N_unc_decomposition": {
+        "B_trunc": 1.5389622123738635e-06,
+        "sum": 8.14876663533745e-06,
+        "uR_fine": 6.608946807956161e-06,
+        "ug0_total": 8.576150074207983e-10
+      },
+      "R_coarse_dimensionless": 6.489278644365489,
+      "R_fine_dimensionless": 6.489265541434482,
+      "formal_classification": "INCONCLUSIVE_STOP",
+      "g0_dimensionless": 6.4984804203277395,
+      "identity": {
+        "N_unc": 8.14876663533745e-06,
+        "bias_within_N_unc": false,
+        "interpretation": "Unconditional identity predicate is false by a wide margin.",
+        "signed_bias_Rfine_minus_g0": -0.009214878893257783
+      },
+      "scaling": {
+        "H_h4": -2.1838218344782945e-07,
+        "L_h2": -6.469021703499796e-06,
+        "dominance_margin_exact": "-6453233294738063/2361183241434822606848",
+        "h2_dominance_pass": false,
+        "leading_term_resolved": true,
+        "uH_h4": 1.663583692934162e-07,
+        "uL_h2": 3.0462234681206456e-06
+      }
+    },
+    "spectral": {
+      "D_dimensionless": {
+        "0.0025": 6.517108265688876,
+        "0.005": 6.517309205901256,
+        "0.01": 6.5187414793626886
+      },
+      "N_unc_decomposition": {
+        "B_trunc": 1.4599685433791648e-05,
+        "sum": 1.9028039105954563e-05,
+        "uR_fine": 4.427496057155484e-06,
+        "ug0_total": 8.576150074207983e-10
+      },
+      "R_coarse_dimensionless": 6.516831781414112,
+      "R_fine_dimensionless": 6.517041285618082,
+      "formal_classification": "INCONCLUSIVE_STOP",
+      "g0_dimensionless": 6.4984804203277395,
+      "identity": {
+        "N_unc": 1.9028039105954563e-05,
+        "bias_within_N_unc": false,
+        "interpretation": "Unconditional identity predicate is false by a wide margin.",
+        "signed_bias_Rfine_minus_g0": 0.0185608652903424
+      },
+      "scaling": {
+        "H_h4": 3.4917367328388436e-06,
+        "L_h2": 4.9521387129263734e-05,
+        "dominance_margin_exact": "-13826514316985949/1180591620717411303424",
+        "h2_dominance_pass": false,
+        "leading_term_resolved": true,
+        "uH_h4": 1.581846252602765e-07,
+        "uL_h2": 2.8341585718482e-06
+      }
+    }
+  },
+  "provenance": {
+    "analysis_adapter_path": "/private/tmp/a4-m21-ks-w1-responses-analysis-input-v2.json",
+    "analysis_adapter_sha256": "d04b5925c6d1eef2919b148df7c0163c8dae149b33f49772462c74d633a1b9d2",
+    "analyzer_sha256": "f5495730a94edf22bb8c17bba058b5cbdcda60e1648f043fba53921021da4ff4",
+    "production_binary_sha256": "536fa80a34c510782013a5608fc1220dca26b52a10189a2334e40ed43e12a0b4",
+    "raw_response_payload_path": "/private/tmp/a4-m21-ks-w1-responses-assembled.json",
+    "raw_response_payload_sha256": "76e92c87751ef5170a24e5be964a2d201e55ab944d17cc4d9e1cfd0cf706695b",
+    "response_collection_lock_v2_sha256": "7686105ad298eaae786dc79936a530919b59bacb568d6b60b3bce6328a82d3cd",
+    "response_hash_inventory_path": "/private/tmp/a4-m21-ks-w1-response-hash-inventory-v2.json",
+    "response_hash_inventory_sha256": "13a68315e16234aa447a8142ead316887dd2e85299f02e8638f207fbb92f13c3",
+    "response_preregistration_sha256": "4c3e66d9f6bcc56b82b2c4b548e35b909bfb22e9a436baa0b7e4fd8278b46064",
+    "source_manifest_sha256": "db487ea375fb20dd025ed4d62b4ae880940b865f5fa16c3cefa95220985137ed",
+    "source_results_path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_response_results.json",
+    "source_results_sha256": "693080271ecb9896dc7e315f2b36cca2613e4ab98221dc68a1b9a6baf07b301d",
+    "source_self_sha256": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010"
+  },
+  "review_conclusion": "Both W1 mode analyses meet the registered formal outcome INCONCLUSIVE_STOP: each has a resolved leading h2 coefficient but fails the approved h2-dominance comparison; separately, each unconditional identity comparison |Rfine-g0|<=N_unc is false. This is a stop result, not a physical-failure claim, not an energy-method adoption, and not authorization for W2/U/J follow-on measurements. No thresholds or source report were changed.",
+  "schema": "rslmto-a4-m21-w1-independent-review-v1",
+  "scope": "W1 identity response analysis only; this receipt does not establish a physical fail or authorize further M2 response measurements.",
+  "status": "INDEPENDENTLY_AUDITED_INCONCLUSIVE_STOP_BOTH_MODES"
+}

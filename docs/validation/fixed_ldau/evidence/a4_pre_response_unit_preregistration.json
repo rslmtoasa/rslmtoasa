@@ -1,0 +1,75 @@
+{
+  "schema": "fixed-ldau-a4-pre-response-unit-preregistration-v1",
+  "status": "PRE-RESPONSE",
+  "scope": [
+    "A4.0(b) basis-comment source review",
+    "A4.0(c) finite-H Mermin entropy unit oracle",
+    "A4.1 test-hook W2 matrix and hubbard_u_pot insertion unit coverage"
+  ],
+  "governance": {
+    "a4_protocol_sha256": "812bcafae105eabaea4ae0614f0b419e0d96638df37888342a8708a973f83980",
+    "a4_record_sha256": "495796ded576f42a4706de70c75f8524c6d94845a5fff5ddaade4a8dc920f43b",
+    "historical_evidence_snapshot_sha256": "78ee4618026dd7885da272443aeb08dda1aa856a76259e5fffeae7235b74ef91",
+    "projector_contract_sha256": "32fe716242370d8b414d5036019938d47a814e32276e50f936de9f09dfe34a90",
+    "phase1_basis_evidence_sha256": "f056b0e0051f5772e8b6bc3df473dea49fcb519099f127aeeb79cb1a6949d064",
+    "no_lambda_response_or_scf_outcome_is_authorized_by_this_lock": true
+  },
+  "entropy_oracle": {
+    "states": "eight explicit states: four bands over two k points; rows 1-2 spin up, rows 3-4 spin down",
+    "eigenvalues_ry_by_k_column": [
+      [-0.003, 0.001, -0.0015, 0.0025],
+      [-0.002, 0.003, -0.004, 0.001]
+    ],
+    "weights": [0.3333333333333333, 0.6666666666666666],
+    "temperature_K": 300.0,
+    "chemical_potential_ry": 0.0,
+    "kB_ry_per_K": 0.0000063336814,
+    "kT_ry": 0.00190010442,
+    "formula": "S=-sum_k w_k sum_n[f_nk ln(f_nk)+(1-f_nk)ln(1-f_nk)]; TS=kB*T*S; f=1/(1+exp((epsilon-mu)/kT))",
+    "spin_convention": "sum all explicit spin-band rows once; no extra spin degeneracy",
+    "expected_S_dimensionless_per_cell": 2.106254006907724,
+    "expected_TS_ry_per_cell": 0.004002102548168077,
+    "bound_S": 1.198e-13,
+    "bound_TS_ry": 2.277e-16,
+    "bound_model": "256*epsilon_machine*sum(abs(w_k*h(f_nk))) for S and kB*T times that bound for TS; diagonal finite-H fixture has exact analytic eigenvalues and no diagonalizer residual",
+    "endpoint_rule": "f=0 and f=1 entropy terms are exactly zero; production Fermi cutoff convention is exercised at arguments +/-100",
+    "production_reporting_rule": "TS and F=E-TS appear beside each available total KS candidate; global TS is not decomposed by site; RS/N/A entropy is explicitly unavailable, not zero"
+  },
+  "w2_operator_oracle": {
+    "basis": "spherical onsite d basis m=-2,-1,0,+1,+2, extracted indices 5:9",
+    "matrix_rows": [
+      [[0, 0], [0, 1], [0, 0], [0, 0], [0, 0]],
+      [[0, -1], [0, 0], [0, 0], [0, 0], [0, 0]],
+      [[0, 0], [0, 0], [0.5, 0], [0, 0], [0, 0]],
+      [[0, 0], [0, 0], [0, 0], [-0.25, 0], [0, 0]],
+      [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]
+    ],
+    "matrix_entry_encoding": "[real,imag]",
+    "eigenvalues": [1.0, -1.0, 0.5, -0.25, 0.0],
+    "expected_insertion": "lambda*W2 in each spin's onsite 5x5 d block of hubbard_u_pot; all non-d and cross-spin blocks zero; when fixed U is inactive the insertion replaces stale carrier content",
+    "test_lambda_ry": 0.25,
+    "comparison": "exact binary64 equality: W2 entries and lambda=0.25 are exactly representable; the test verifies exact Hermiticity, exact same-spin d-block insertion, and exact zero in all untouched/cross-spin blocks"
+  },
+  "a40b_basis_finding": "The stored onsite d block is spherical m=-2..2 after hcpx(cart2sph); real-harmonic labels describe rows before that transform. The source comment is corrected to describe the stored spherical block and cites Phase-1/projector-contract evidence.",
+  "test_execution": {
+    "commands": [
+      "ctest --test-dir <build> -R '^UnitFermiDiracEntropy$' --output-on-failure",
+      "ctest --test-dir <build> -R '^UnitLdaUHamiltonian$' --output-on-failure"
+    ],
+    "outcomes_allowed": "Only deterministic unit checks above; no SCF, lambda response, production M2 response, or candidate energy decision."
+  },
+  "sha256": {
+    "CMakeLists.txt": "9fe1bb0c871d447f732e007ebf9c9015dda642799f0402035f13062383acebd8",
+    "source/math.f90": "e4bbcaecb2d8978fd3cc0d5e8b376285bd6b60aaa336a49a60911eaa7851b7ec",
+    "source/hamiltonian.f90": "f32a09fbf5b6148da671e456b3ec220944bf7b7f354d064bf660326891fee59b",
+    "source/hamiltonian_hubbard.f90": "ad1ebfe6cfe45dcea5d3c6e27f2240d16c06b17916b9025f602649b4819b3635",
+    "source/hamiltonian_build.f90": "b6b22fefad5a012d3b1bfecad3856a9f7a61a7cbca944f72b3c51008c78363b6",
+    "source/include_codes/namelists/hamiltonian.f90": "04ea70d1b01709f9e463af162a1234c4e698ff8d8fed84d7424f9c265c98d7a0",
+    "source/bands.f90": "0084d3f1c2b86bec60954265ca99a5185df8baf096ffd0ec7783396b9041c130",
+    "source/self.f90": "f69fd3f733ca250a1814f5c05fc22a7351734ebc5450f60ddf7e0c74de3e6c06",
+    "source/reciprocal.f90": "7e0bc468e294b13a8bf12257f99c79d80f2613e8009804901fa1d6e78d248a23",
+    "source/reciprocal_occupations.f90": "8a2f569bc3eca77691491276b936c0eea3ab01e32a6c65747f4b9dab5824821b",
+    "tests/unit/test_fermi_dirac_entropy.f90": "ac9f2168312334b02767fd751e7ba9cb495fa7ea89f2dc734b3cb9882514ed60",
+    "tests/unit/test_lda_u_hamiltonian.f90": "95b927ab2db84186999f1824518043d722275ed99bf6bfe00a0f6bf0cb1c7899"
+  }
+}

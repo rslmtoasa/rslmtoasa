@@ -27,6 +27,32 @@ contains
       end if
    end function fermi_dirac_occupation
 
+   pure module function fermi_dirac_entropy_term(occupation) result(entropy)
+      real(rp), intent(in) :: occupation
+      real(rp) :: entropy
+
+      if (occupation == 0.0_rp .or. occupation == 1.0_rp) then
+         entropy = 0.0_rp
+      else
+         entropy = -occupation*log(occupation) - (1.0_rp - occupation)*log(1.0_rp - occupation)
+      end if
+   end function fermi_dirac_entropy_term
+
+   pure module function fermi_dirac_entropy(eigenvalues, weights, fermi_level, kT) result(entropy)
+      real(rp), intent(in) :: eigenvalues(:, :), weights(:), fermi_level, kT
+      real(rp) :: entropy
+      integer :: ik, ib
+      real(rp) :: occupation
+
+      entropy = 0.0_rp
+      do ik = 1, size(eigenvalues, 2)
+         do ib = 1, size(eigenvalues, 1)
+            occupation = fermi_dirac_occupation(eigenvalues(ib, ik), fermi_level, kT)
+            entropy = entropy + weights(ik)*fermi_dirac_entropy_term(occupation)
+         end do
+      end do
+   end function fermi_dirac_entropy
+
    !> @brief Projection-free occupation and energy accumulation.
    !> @details k_weights may be normalized probabilities or raw multiplicities.
    !>          Both observables are divided by the global raw weight sum.  A

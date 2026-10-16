@@ -1010,3 +1010,290 @@ copies differ from the governing worktree versions and were left untouched.
 Automatic approval review rejected their removal as destructive because they
 are frozen runner/preregistration evidence; the active worktree versions and
 hashes above govern this record.
+
+## Protocol amendment A4 (verbatim)
+
+Protocol amendment A4 (user-approved; launches Stage M2 with the refinements
+below; record verbatim in LOCAL_MOMENTS.md; do not edit the user-owned
+protocol file or historical evidence; A2.6 and A3.1 governance apply throughout).
+
+A4.0 Housekeeping before any M2 measurement:
+  (a) RS local mode is live in bands.f90 without an RS Gate M1. Run the RS M1
+      items on the RS backend at its 3e-8 threshold:
+        - bitwise no-U / U=J=0 / spectral-U>0 identity against 3d7571a;
+        - local U=2 eV J=0 SCF convergence with the R05 streak;
+        - the paired frozen P_OUT dual replay.
+      Until RS Gate M1 passes, any M2 RS measurement is labelled
+      "RS-local unvalidated" and cannot pass an M2 gate.
+  (b) Correct the extract_hubbard_d_shell_potential comment ("real-harmonic")
+      to match PROJECTOR_CONTRACT.md, or document why it is correct. Cite the
+      Phase-1 basis evidence.
+  (c) Add a KS Mermin entropy diagnostic:
+        S = -Σ_k w_k Σ_n [f ln f + (1-f)ln(1-f)],
+      with the same spin/weight conventions as P. Report F = E - T·S alongside
+      every KS energy candidate. Validate it on a finite-H toy against an
+      analytic Fermi-Dirac entropy. Production code may only add the
+      diagnostic field.
+
+A4.1 M2.1 external-potential control (KS first):
+  - Add a test-only input that inserts λW into the d block through the same
+    insertion path as hubbard_u_pot. The energy term is λ·Tr(WP). In local
+    mode, the moment correction uses V = λW (plus V_U, if present).
+  - W1 = identity.
+  - W2 = Hermitian, anisotropic, with nonzero imaginary off-diagonal entries,
+    normalized to max|eig| = 1.
+  - At U=0, converge λ ∈ {0, ±0.0025, ±0.005, ±0.01} Ry in both modes.
+  - Expected: dF/dλ|0 = Tr(W P(0)), where
+        F_local    = ETOT_local + λ·Tr(WP) - T·S
+        F_spectral = ETOT_spectral - T·S
+  - Use central differences; show the δ² scaling of the finite-difference
+    error and extract the noise floor N_W.
+  - For W2, also record max|Im P| and max|P - P^T| at λ = ±0.01. Then rerun
+    the M0.3-style frozen dual replay on that state, together with the
+    transposed-P and conjugated-P controls. Predeclare their separations under
+    A3.1 before running. This is the state-level complex-convention test that
+    bcc Fe could not provide.
+  - If the identity control fails in either mode, stop and report.
+
+A4.2 M2.2 main test (KS; RS only after A4.0(a) passes):
+  - U0 = 2 eV, J = 0. Converge U0 ± δ and U0 ± 2δ, δ ∈ {0.2, 0.1, 0.05} eV,
+    from the same starting state, in both modes.
+  - Target: ∂E_Hub/∂U at fixed converged P(U0), evaluated with
+    evaluate_hubbard_energy at U0 ± small ε. Do not assume linearity.
+  - J test: at U0 = 2 eV, J ∈ {0.5, 0.9} eV, finite differences in J against
+    ∂E_Hub/∂J at fixed P.
+  - Candidates:
+        a = F_spectral - t + E_Hub
+        b = F_local + E_Hub
+        c = F_spectral + E_Hub
+  - Error model, each component measured:
+        (1) finite-difference truncation, from Richardson across the δ series;
+        (2) SCF scatter, from one repeat at each δ with a tightened threshold;
+        (3) smooth systematic, from N_W at the matching perturbation scale.
+    Total floor N = sum of (1)–(3). This protects the decision of which
+    formula becomes physical_total_energy.
+  - Predeclared predictions:
+        c misses by ≈ dt/dU (≈ 0.13 Ry/eV from the accepted state; recompute
+          from the captured data and predeclare);
+        b passes within N;
+        a is measured and reported, with no predicted separation.
+  - Decision rule:
+        b passes and c fails as predicted → adopt local + b;
+        b fails → stop and report, whatever a does;
+        c passes → stop: this contradicts the derivation.
+
+A4.3 M2.3 like-for-like observables. For spectral versus local SCF at
+  U ∈ {0, 2, 4} eV with J = 0, and U = 2 eV with J = 0.9 eV, tabulate using
+  identical definitions in both modes:
+    - sphere spin moment, d q0 per spin, eigenvalue bounds of P;
+    - d-centre exchange splitting, E_F;
+    - E_int, E_DC, E_Hub, t;
+    - all candidates, F and T·S;
+    - converged residuals.
+  Explicitly resolve whether the apparent 2.356 → 2.511 μB change between
+  the spectral and local U=2 states is real.
+
+A4.4 If and only if the M2 gate passes for KS:
+  - make 'local' the default for fixed Liechtenstein nsp=1 (KS; RS only if
+    RS has its own M1 and M2 PASS, otherwise RS+local stays guarded);
+  - route candidate b into physical_total_energy;
+  - show restart and MPI reproducibility;
+  - update ENERGY_ACCOUNTING.md, REMEDIATION_GATES R04, PROGRESS.md and the
+    theory documentation, including the derivation;
+  - open a PR against fable_v4b_u. Do not merge.
+
+## A4.1 identity-gate user approval (verbatim)
+
+Question: “Approve this A4.1 identity gate? At every λ, repeat from the same start with SCF and applicable R05 tolerances tightened 10×. Using only the prescribed λ grid, compare the Richardson-extrapolated derivative with Tr(WP(0)); its allowance is propagated repeat scatter, truncation, trace uncertainty and roundoff. The identity mismatch is excluded from that allowance. A mismatch above it—or unresolved δ² scaling—stops M2. Report any smooth bias separately. The detailed proposal is in `/private/tmp/rslmto-ldau-m2-energy-worktree/docs/validation/fixed_ldau/evidence/a4_m21_noise_model_proposal.md`. A4.2's transfer of N_W to U/J derivative units will be preregistered separately before those measurements.”
+
+Answer: “Approve this non-circular gate”. This approval covers A4.1 only; A4.2's transfer of N_W remains unapproved and must be preregistered before those measurements.
+
+## A4 RS M1 stop record
+
+The A4.0(a) RS identity comparison and local-U=2 eV/J=0 SCF subitems passed.
+The SCF capture used the registered local input, converged at iteration 103,
+had a final charge difference of `4.8e-9 Ry` under the `3e-8 Ry` threshold,
+and ended with a three-update physical R05 streak. These two subitems do not
+complete RS Gate M1.
+
+The separate LIVE-state replay anchor passed: PL, SUMEC, SUMEV, EV, and all ten
+ATOMSC input-density components reproduced exactly; the maximum density
+difference was `7.11e-15` against `1e-10`. The paired frozen P_OUT response was
+run under its lock and is **FAIL under the locked criteria**. Its measured
+`SUMEV_spectral - SUMEV_local` is `-0.2590196642435809 Ry`; the registered
+carrier is `sum(t) = -0.26088126108452275 Ry`. Thus
+`abs(delta - sum(t)) = 0.001861596840941837 Ry`, within the registered
+`A_RS + E_num = 0.0019179625667351765 Ry`, and both reconstructed local and
+spectral `q2` values are nonnegative. However, the lock also required the
+residual-inclusive point prediction `sum(t) + sum(r_fit)` to agree within only
+`2.0002e-8 Ry`. The measured deviation is `1.0234967739219947e-5 Ry`, so that
+locked criterion fails. The exact preregistration and output are preserved;
+this report does not waive or retrospectively reinterpret that failure. No RS
+M2 measurement or KS lambda response was started.
+
+The lock, adapter, anchor and paired raw outputs are available at
+[`evidence/a4_rs_m1_pair_preregistration.json`](evidence/a4_rs_m1_pair_preregistration.json)
+(SHA256 `87cc23819d6f9e465593e6a4708ea062c503db69506097d6643dee549d4d54a4`),
+[`evidence/a4_rs_m1_live_anchor_results.json`](evidence/a4_rs_m1_live_anchor_results.json)
+(SHA256 `89356919b61ee20da794e5463a03b006608c8c40dfa175d43a01f4783cc92322`),
+and [`evidence/a4_rs_m1_pout_pair_results.json`](evidence/a4_rs_m1_pout_pair_results.json)
+(SHA256 `b4023c1f0e3b11c46ccb2c8a0e31b007cbf6325d9ba4349a7faf25d8536a9587`).
+The two driver input/output CSV pairs are preserved beside those reports. The
+capture itself remains at `/private/tmp/a4-rs-m1-local-u2`; its trace CSV SHA256
+is `1b6a2798ef0094e0c4388011557a1c342e8716d9a3c4c9233fa41b07d41ed93a`, its
+trace-manifest SHA256 is
+`4e11bd828f4068bdba487242cefde983fd27094cdd373dd9cb1fd51757c859ca`, and the
+SCF result SHA256 is
+`557fb2361b96697ac18e9d565bf38e60f7d86394b18f29316549390ee222e3f1`.
+
+## Proposed RS M1 criterion clarification — PROPOSED_NOT_APPROVED
+
+The extra point-prediction tolerance in the frozen lock treated the fitted
+`sum(r_fit)` value as exact up to only the two replay energy guards. The
+observed difference from that point prediction is larger than those guards,
+while the registered A2.2 allowance for the carrier residual is satisfied.
+This is a preregistration error; the frozen run remains a failure under its
+written lock.
+
+For a future, separately preregistered RS M1 replay, propose using the
+measurement criterion `abs(delta_SUMEV - sum(t)) <= A_RS + E_num`, with
+`A_RS = sum(abs(r_fit_s(t_s/q0_s))) + D0_RS` and `D0_RS` counted once, together
+with the nonnegative-`q2` requirement. Record `sum(t) + sum(r_fit)` as a point
+prediction and report its residual separately; if that point prediction is to
+become a gate, derive and preregister its uncertainty from the A2.2 fit
+validation before any response. Bind every imported adapter dependency and
+payload hash in that future lock. This proposal does not pass the existing
+response or authorize a rerun. It requires user approval before adoption under
+A1.3/A2.6; until then RS M1 remains stopped and no RS M2 measurement is
+authorized.
+
+## RS M1 supplemental-gate user approval (verbatim)
+
+Question: “Approve this RS M1 governance correction? Preserve the failed v1 lock/report unchanged, but treat its extra exact-fit check as diagnostic in a separate supplemental verdict. Apply the original carrier rule |ΔSUMEV−Σt|≤A_RS and q2≥0: the measured error is 0.00186160 Ry versus A_RS=0.00191794 Ry, and both q2 values are positive. No threshold tuning or rerun is proposed. The unjustified 2e-8 exact-fit requirement would be superseded with your approval; then the reviewer could certify RS M1 and release the held KS M2 measurements. Justification: /private/tmp/rslmto-ldau-m2-energy-worktree/docs/validation/fixed_ldau/evidence/a4_rs_m1_prereg_governance_proposal.md.”
+
+Answer: “Approve the supplemental gate”. This approval authorizes a separate
+supplemental verdict under the existing carrier and q2 criteria. The v1 lock,
+raw response, and v1 failure are unchanged; there is no rerun or threshold
+tuning. The prior PROPOSED_NOT_APPROVED heading records the pre-approval state
+of the proposal and is superseded only by this approval record.
+
+## RS Gate M1 supplemental verdict — PASS, independently certified
+
+This supplemental verdict is separate from, and does not replace, the frozen
+v1 FAIL. Under the user-approved correction, the governing pair checks are the
+literal carrier criterion `abs(delta_SUMEV - sum(t)) <= A_RS` and
+`q2_local >= 0`, `q2_spectral >= 0`, together with the already-passed RS
+identity comparisons, local SCF/R05 capture, and LIVE-state anchor. They pass:
+the literal carrier error is `0.001861596840941837 Ry` against
+`A_RS = 0.0019179425667351765 Ry`; local and spectral minimum q2 are
+`0.01075725460260394 Ry^2` and `0.009745244577861018 Ry^2`. The extra v1
+fit-point test remains failed and visible in the immutable v1 report. The
+independent reviewer certified this separate supplemental PASS under the
+user-approved criterion. RS M2 remains held. Root released KS lambda=0
+calibration only; all nonzero lambda responses remain held.
+The separate machine-readable supplemental record is
+[`evidence/a4_rs_m1_supplemental_verdict.json`](evidence/a4_rs_m1_supplemental_verdict.json)
+(SHA256 `d1403013e1a1ee59b4e839590f5281bb77cf6267855f7b7957bb40b0215d5095`).
+The exact pre-certification pending draft is preserved separately at
+[`evidence/a4_rs_m1_supplemental_verdict_pre_cert.json`](evidence/a4_rs_m1_supplemental_verdict_pre_cert.json)
+(SHA256 `eb1ae757321b4d193efd03f18e2659316812886ce0db20e3ab1cafd5dd090c68`);
+the certified record supersedes that pending status while leaving the v1
+preregistration and failure report unchanged.
+
+## A4.0 housekeeping evidence
+
+For A4.0(b), the stored onsite d block uses spherical channels m=-2..+2 at
+indices 5:9 after the Cartesian-to-spherical transform. The corrected source
+comment points to the Phase-1 basis analysis and projector contract:
+[`PHASE1.md`](PHASE1.md) (SHA256
+`f056b0e0051f5772e8b6bc3df473dea49fcb519099f127aeeb79cb1a6949d064`) and
+[`PROJECTOR_CONTRACT.md`](PROJECTOR_CONTRACT.md) (SHA256
+`32fe716242370d8b414d5036019938d47a814e32276e50f936de9f09dfe34a90`). The
+source comment is bound in the source-ready manifest
+[`evidence/a4_source_ready_manifest_v3.json`](evidence/a4_source_ready_manifest_v3.json)
+(SHA256 `db487ea375fb20dd025ed4d62b4ae880940b865f5fa16c3cefa95220985137ed`);
+`source/math.f90` SHA256 is
+`e4bbcaecb2d8978fd3cc0d5e8b376285bd6b60aaa336a49a60911eaa7851b7ec`.
+
+For A4.0(c), the finite-H Fermi-Dirac entropy oracle passed. It reports
+dimensionless `S = 2.1062540069077236` per cell and `T*S =
+0.0040021025481680765 Ry/cell`; the production diagnostic reports `T*S` and
+`F = E - T*S` beside each available total KS candidate in Ry/cell, without a
+site decomposition. The entropy test and its paired Hamiltonian test passed
+2/2 under the preregistration and result record
+[`evidence/a4_pre_response_unit_preregistration.json`](evidence/a4_pre_response_unit_preregistration.json)
+(SHA256 `bfad475e1fe633499638fe6cda387a4a3cd9d090b061b121ec099f2f64756836`)
+and [`evidence/a4_pre_response_unit_test_results.json`](evidence/a4_pre_response_unit_test_results.json)
+(SHA256 `608b6ceb4bb5d22c9e2ba97221ccbd4ee7e04733d160616ae5da36f577facc51`).
+RS entropy remains unavailable rather than being reported as zero.
+
+## A4.1 lambda-zero operational status
+
+The eight registered KS lambda-zero standard/tight captures all exited with
+return code zero, contain traces and final restarts, and have a terminal SCF
+convergence marker. The logs report fixed-U R05 as not applicable because
+`U=0`; no fixed-U threshold was applied. The operational audit itself did not
+inspect or compare energy, density-matrix, or derivative values. Its batch
+manifest is in `/private/tmp/a4-m21-ks-lambda0-execution/execution_manifest.json`
+(SHA256 `cfea7226f0e2bcbfae778d7a45a92205e6ff6dc70a01d66c2935a8f5f5bbb461`).
+The pending-comparison wording in the original dated checkpoint is historical;
+the calibration analysis is now recorded in the later A4.1 W1 gate outcome
+below. No nonzero-lambda response beyond the registered W1 set is released.
+The integrator's operational-only audit is
+[`evidence/a4_m21_ks_lambda0_operational_audit.json`](evidence/a4_m21_ks_lambda0_operational_audit.json)
+(SHA256 `70ceafefc1202809ad62a69203ebb9775319406e2d3aa869c80793ba36d12887`);
+it records only process status, convergence-marker presence, R05 applicability,
+and artifact hashes, with no energy or density comparison.
+The current integrator checkpoint, including the governing strict h² rule,
+the unapproved dominance proposal, and remaining A4 stages, is
+[`evidence/a4_checkpoint_2026-10-16.md`](evidence/a4_checkpoint_2026-10-16.md)
+(SHA256 `aa39d7da60bee7f8d27b6ebfc8d9a5f49a4f63ec2c7c50c9c49a0bd5e49f84f2`).
+
+## A4.1 h²-dominance criterion approval (verbatim)
+
+Question: Which δ² rule should govern the next measurements? The proposed rule accepts a resolved h² term that dominates the Richardson-estimated h⁴ correction across the grid (|L|−uL > 16(|H|+uH)); the existing strict ratio rule can stop even on the smooth analytic example D(h)=g+10h²+32h⁴. The identity-error bound remains unchanged under either choice. A1.3 requires your explicit approval to adopt the proposed rule; no production derivative has been inspected.
+
+Answer: Approve h²-dominance rule
+
+Question: Approve the proposed δ² criterion correction before nonzero-λ measurements? The current strict 4:1 rule rejects the smooth analytic case D(h)=g+10h²+32h⁴. The proposal instead requires the resolved h² term to dominate the estimated h⁴ correction across the grid: |L|−uL > 16(|H|+uH). The independent identity-error allowance stays unchanged. A1.3 requires explicit approval because this changes a scientific criterion; details are in docs/validation/fixed_ldau/evidence/a4_m21_h2_resolution_criterion_proposal_NOT_APPROVED.md.
+
+Answer: Approve the h²-dominance rule
+
+These two user approvals adopt the proposed h²-dominance rule under A1.3,
+without changing the A4.1 identity-error allowance. The proposal file remains
+unchanged. Implementation, independent review, and a hash-bound analysis lock
+were completed before the lambda-zero comparison under
+[`evidence/a4_m21_w1_analyzer_report_fix_lock_v1.json`](evidence/a4_m21_w1_analyzer_report_fix_lock_v1.json)
+(SHA256 `39e837a1587a0ceb3fad16d0de4de9acb10878a2d89b4dccbae379ac9fedc8e8`);
+the result is recorded in the later W1 gate outcome below. No response beyond
+the registered W1 set or physical-energy change is authorized. The later
+approval supersedes the earlier checkpoint's pending-choice statement; that
+checkpoint remains unchanged as a dated historical record. The separate
+machine-readable approval receipt is
+[`evidence/a4_m21_h2_dominance_user_approval.json`](evidence/a4_m21_h2_dominance_user_approval.json)
+(SHA256 `aa9bbe28ed0ed10483f79ca052562f66d65d3d2ee266a1a46c0bea9f06a17799`).
+
+## Latest A4.1 W1 gate outcome — 2026-10-16
+
+The registered W1 analysis is now independently reviewed. Both spectral and
+local modes are `INCONCLUSIVE_STOP`: each identity predicate is false because
+the measured `R_fine-g0` bias lies outside `N_unc`, and each approved
+`h^2`-dominance test remains unresolved despite a resolved leading coefficient.
+This is an inconclusive stop, not a claim that a physical energy formula
+failed. No W2, U/J, M2.2, or M2.3 response was run. The `spectral` default and
+`physical_total_energy` routing remain unchanged.
+
+The additive numerical report is
+[`evidence/a4_m21_w1_gate_stop_2026-10-16.md`](evidence/a4_m21_w1_gate_stop_2026-10-16.md).
+Its frozen analyzer result is
+[`evidence/a4_m21_w1_response_results.json`](evidence/a4_m21_w1_response_results.json)
+(SHA256 `693080271ecb9896dc7e315f2b36cca2613e4ab98221dc68a1b9a6baf07b301d`),
+and the independent review receipt is
+[`evidence/a4_m21_w1_independent_review_receipt.json`](evidence/a4_m21_w1_independent_review_receipt.json)
+(SHA256 `38d3d1ce4edbe2f5164f9cb8965db289c83e620103f0b4a8a50e17d020a2a074`).
+The execution provenance receipt
+[`evidence/a4_m21_w1_execution_provenance_receipt.json`](evidence/a4_m21_w1_execution_provenance_receipt.json)
+(SHA256 `816745919a81c804e20081b82f425d8ccb02026830258672262967d40c65b5f6`)
+records the 24 converged runs, inventory, and raw-response lineage. The prior
+dated checkpoint remains unchanged as a historical record; this section
+supersedes its pending W1 state only.

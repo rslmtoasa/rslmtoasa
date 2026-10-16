@@ -1,0 +1,159 @@
+{
+  "adapter_sha256": "2bf99c42e00d83b29d939840ed57229bcaceb321bf6c8543f5ff805a13e582e8",
+  "driver_sha256": "0c1c3c12e8501f4642af87168c611d261fb5a34cc4747aaef9c8420c2c6449c4",
+  "fit_model": "RS own locked A2.2 six-shift/cubic residual model plus D0_RS once; A_true=sum(abs(r_fit(x_s)))+D0_RS.",
+  "guards": {
+    "arithmetic_guard": 2e-12,
+    "energy": 1e-08,
+    "pl": 1e-10,
+    "rho": 1e-10,
+    "two_case_energy_numerical_guard": 2e-08
+  },
+  "method": {
+    "V_in": "Captured Pin_H 5\u00d75 d block; P and M1 are captured P_OUT and M1_OUT from the same iteration.",
+    "center_convention": "c_local=c_spectral\u2212t/q0; inverse c_spectral=c_local+t/q0. The driver applies c_input\u2212center_shift, so spectral center_shift=\u2212t/q0 and local center_shift=0.",
+    "pair_changes": "Only d-shell center and q2 differ. All P_OUT q0 and QL middle components, all other shells, and common RADIAL_REPLAY mesh/V/rho/EC/EV/PL operands are byte-identical in the generated pair payload.",
+    "q2_inverse": "q2_spectral=q2_local+2 ReTr[V_in(M1\u2212c_spectral P)]\u2212ReTr[V_in\u00b2P]+t\u00b2/q0.",
+    "time_levels": "LIVE anchor uses only RADIAL_REPLAY arrays. P_OUT pair is a distinct frozen P_OUT reconstruction; P_OUT\u2212LIVE moment gaps are diagnostic and are not compared to LIVE anchor tolerances."
+  },
+  "p_out_inverse_reconstruction": {
+    "D0_RS_once_ry": 5.056500278044496e-06,
+    "arithmetic_crosscheck_guard_ry": 2e-12,
+    "criteria": {
+      "literal_carrier_abs_delta_minus_sum_t_le_A_RS_plus_E_num": true,
+      "model_prediction_abs_delta_minus_sum_t_plus_r_le_E_num_plus_arithmetic": true,
+      "q2_spectral_and_local_nonnegative": true
+    },
+    "literal_carrier_error_allowance_A_RS_ry": 0.0019179425667351765,
+    "numerical_guard_two_case_energy_tol_ry": 2e-08,
+    "per_spin": {
+      "1": {
+        "c_local_ry": -0.21600916543535217,
+        "c_spectral_ry": -0.27840447834849263,
+        "driver_applied_center_change_ry": -0.06239531291314047,
+        "driver_center_shift_ry": 0.06239531291314047,
+        "predicted_delta_spectral_minus_local_ry": -0.28610664914956496,
+        "q0": 4.6157154222153345,
+        "q2_local_ry2": 0.04840180685641655,
+        "q2_spectral_ry2": 0.04799606679133074,
+        "r_fit_ry": 0.0018923589375691048,
+        "t_ry": -0.2879990080871341,
+        "tr_M1_over_q0_ry": -0.2784044783484926,
+        "trace_vin_p_ry": -0.2879990080871341,
+        "x_t_over_q0_ry": -0.06239531291314047
+      },
+      "2": {
+        "c_local_ry": -0.19399409121125918,
+        "c_spectral_ry": -0.17968651167871627,
+        "driver_applied_center_change_ry": 0.014307579532542912,
+        "driver_center_shift_ry": -0.014307579532542912,
+        "predicted_delta_spectral_minus_local_ry": 0.027097219873723297,
+        "q0": 1.8953413427429426,
+        "q2_local_ry2": 0.01075725460260394,
+        "q2_spectral_ry2": 0.009745244577861018,
+        "r_fit_ry": -2.0527128888027243e-05,
+        "t_ry": 0.027117747002611325,
+        "tr_M1_over_q0_ry": -0.17968651167871602,
+        "trace_vin_p_ry": 0.027117747002611325,
+        "x_t_over_q0_ry": 0.014307579532542912
+      }
+    },
+    "predicted_delta_sumev_spectral_minus_local_ry": -0.2590094292758417,
+    "sum_r_fit_ry": 0.0018718318086810776,
+    "sum_t_ry": -0.26088126108452275
+  },
+  "payloads": {
+    "live_anchor_sha256": "072da3c9c61bfcd92d9d0290d2b43bf80972a8470795247d343da9299a180f4b",
+    "p_out_pair_sha256": "07a8a2d7652773db9df92c40b6d05e608ca940ff9471349afede4f4e6b6f6d76"
+  },
+  "provenance": {
+    "capture_csv_sha256": "1b6a2798ef0094e0c4388011557a1c342e8716d9a3c4c9233fa41b07d41ed93a",
+    "capture_executable_sha256": "71ad3c0861996ca714da5d4d2e03af2611995eb3cf627f856ed8c649e8136184",
+    "capture_input_sha256": {
+      "/private/tmp/a4-rs-m1-local-u2/Fe.nml.pre": "f4482119ecb33e1bd443ef9d9481f87c0b99c18a3fea4ee7acde61d49d572e3a",
+      "/private/tmp/a4-rs-m1-local-u2/input.nml.pre": "651263443ff8e121b2831f7d5a4d13a8f8f1c5a2f70e18191ff679f2df8b4862"
+    },
+    "capture_manifest_sha256": "4e11bd828f4068bdba487242cefde983fd27094cdd373dd9cb1fd51757c859ca",
+    "capture_pre_manifest_sha256": "d829545c71822c65e40751af9b3156ee66d42ad512485fc772672e4c08826261",
+    "capture_source_revision": "f122a001abd30d8213867b199b702d2d73ba915d",
+    "driver_sha256": "0c1c3c12e8501f4642af87168c611d261fb5a34cc4747aaef9c8420c2c6449c4",
+    "fit_report_sha256": "0f0b543f81f53bc1c7fdfc46d3b404adef1ca455b8366a90e87154afd2b0987c",
+    "fit_response_csv_sha256": "293db40ac192edb5f4428e7a87fff85ad99061c6c51d602c1291a67aac46cdb0",
+    "input_pre_sha256": "651263443ff8e121b2831f7d5a4d13a8f8f1c5a2f70e18191ff679f2df8b4862",
+    "scf_result_sha256": "557fb2361b96697ac18e9d565bf38e60f7d86394b18f29316549390ee222e3f1",
+    "seed_pre_sha256": "f4482119ecb33e1bd443ef9d9481f87c0b99c18a3fea4ee7acde61d49d572e3a"
+  },
+  "response_status": "NO_RESPONSES_RUN",
+  "schema": "a4-rs-m1-pout-pair-prereg-v1",
+  "scope": "RS Gate M1 paired frozen P_OUT replay; separate actual LIVE_STATE anchor first",
+  "shell_q0_q2_timing_diagnostics": [
+    {
+      "l": 0,
+      "live_q0": 0.32350167798039936,
+      "live_q2": 0.007022023234978044,
+      "pout_q0": 0.3235016670088072,
+      "pout_q2": 0.007022020639942778,
+      "pout_ql_middle": 0.0,
+      "q0_pout_minus_live": -1.0971592134811914e-08,
+      "q2_pout_minus_live": -2.5950352656664566e-09,
+      "spin": 1
+    },
+    {
+      "l": 1,
+      "live_q0": 0.34027165605687365,
+      "live_q2": 0.005235030802720923,
+      "pout_q0": 0.3402716576027412,
+      "pout_q2": 0.005235030980174929,
+      "pout_ql_middle": 0.0,
+      "q0_pout_minus_live": 1.5458675450830128e-09,
+      "q2_pout_minus_live": 1.77454006350386e-10,
+      "spin": 1
+    },
+    {
+      "l": 2,
+      "live_q0": 4.61571543909451,
+      "live_q2": 0.04840180730731713,
+      "pout_q0": 4.6157154222153345,
+      "pout_q2": 0.04840180685641655,
+      "pout_ql_middle": 0.0,
+      "q0_pout_minus_live": -1.687917539072714e-08,
+      "q2_pout_minus_live": -4.5090058076180384e-10,
+      "spin": 1
+    },
+    {
+      "l": 0,
+      "live_q0": 0.36671460944803325,
+      "live_q2": 0.006664801517585418,
+      "pout_q0": 0.3667146074295987,
+      "pout_q2": 0.0066648017427221986,
+      "pout_ql_middle": 0.0,
+      "q0_pout_minus_live": -2.018434530626223e-09,
+      "q2_pout_minus_live": 2.2513678074598253e-10,
+      "spin": 2
+    },
+    {
+      "l": 1,
+      "live_q0": 0.45845527080074827,
+      "live_q2": 0.0071678560925043065,
+      "pout_q0": 0.4584553030005634,
+      "pout_q2": 0.007167857626979616,
+      "pout_ql_middle": 0.0,
+      "q0_pout_minus_live": 3.219981514757109e-08,
+      "q2_pout_minus_live": 1.5344753098375796e-09,
+      "spin": 2
+    },
+    {
+      "l": 2,
+      "live_q0": 1.8953413466194318,
+      "live_q2": 0.010757254286577098,
+      "pout_q0": 1.8953413427429426,
+      "pout_q2": 0.01075725460260394,
+      "pout_ql_middle": 0.0,
+      "q0_pout_minus_live": -3.87648912969496e-09,
+      "q2_pout_minus_live": 3.160268418483936e-10,
+      "spin": 2
+    }
+  ],
+  "source_revision": "f122a001abd30d8213867b199b702d2d73ba915d",
+  "status": "LOCKED_BEFORE_RESPONSE"
+}

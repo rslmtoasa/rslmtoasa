@@ -1,0 +1,61 @@
+{
+  "analysis_model": {
+    "B_F": "Q(ETOT)+B_TS+gamma_3*(|ETOT|+|TS|+|lambda*Tr(WP)|)+B_lambda_trace; analyzer reconstructs F from ETOT and TS tokens plus the protocol-specified external term, so Q(F_logged) is not added.",
+    "B_TS": "Q(TS_logged)+abs(TS_logged-HP_center)+outward interval radius over occupation, weight and temperature K tokens+checked Decimal precision enclosure. Recompute h(f) with endpoint-safe formulas; h(0)=h(1)=0 and h(f)<=ln(2). Source kB_Ry_per_K is exact binary64 6.3336814e-6. Compare 100- and 160-digit Decimal results and retain the explicit high-precision enclosure; production source log/summation discrepancy is covered by TS token minus HP center, without an assumed libm gamma.",
+    "B_lambda_trace": "|lambda|*(gamma_256*sum|W_ij P_ji|+sum|W_ij|*P_component_bound_ji)+Q_lambda*|Tr(WP)|.",
+    "decision_rule": "Existing preregistered corrected-Richardson, h^2-resolution, and N_unc rule unchanged; measured B_W excluded from N_unc.",
+    "entropy_reference": "Use the raw occupation and k-weight token rows; capture writer and fermi_dirac_entropy call identical fermi_dirac_occupation on the same eigenvalue/EF/effective-kT state table. Bind those raw eigenvalue, EF, effective-kT rows and temperature K for same-state provenance.",
+    "serialized_quantum": "For each original e24.16/ES24.16 token, exact Q is half the printed decimal quantum based on token mantissa digits and emitted exponent, including printed zero tokens; retain raw tokens.",
+    "uF": "abs(F_tight-F_standard)+B_F_tight+B_F_standard+gamma_1*(|F_tight|+|F_standard|), no fixed absolute floor.",
+    "ug0": "abs(Tr(W1*(P_tight-P_standard))) + gamma_256*sum_ij abs(W1_ij)*(|P_standard_ji|+|P_tight_ji|) + sum_ij abs(W1_ij)*(P_bound_standard_ji+P_bound_tight_ji), both standard and tight P scales."
+  },
+  "fixed_lambda_zero_execution": {
+    "all_returncode_zero": true,
+    "convergence_marker_and_r05_n_audited": true,
+    "g0_ug0_or_F_comparison_done": false,
+    "numerical_outputs_opened": false,
+    "process_count": 8
+  },
+  "forbidden_until_reviewed_lock_and_release": [
+    "Inspect g0/ug0 or compute W1 identity residual",
+    "Run any nonzero lambda case",
+    "A4.2 transfer"
+  ],
+  "governance": {
+    "binary_path": "/private/tmp/a4-m2-serial/bin/rslmto.x",
+    "binary_sha256": "536fa80a34c510782013a5608fc1220dca26b52a10189a2334e40ed43e12a0b4",
+    "lambda0_execution_manifest_path": "/private/tmp/a4-m21-ks-lambda0-execution/execution_manifest.json",
+    "lambda0_execution_manifest_sha256": "cfea7226f0e2bcbfae778d7a45a92205e6ff6dc70a01d66c2935a8f5f5bbb461",
+    "lambda0_operational_audit_sha256": "70ceafefc1202809ad62a69203ebb9775319406e2d3aa869c80793ba36d12887",
+    "lambda0_preparer_lock_sha256": "ab454c7b431a2e4ef31206bd42783613f1507d78e30ae030c347f5f97b0408b9",
+    "lambda0_prereg_sha256": "50f24c646af2e7c1eedc050d6b0b3c14b7cb55b5d6134e02cfa081913e1ba80f",
+    "protocol_sha256": "812bcafae105eabaea4ae0614f0b419e0d96638df37888342a8708a973f83980",
+    "source_ready_manifest_sha256": "db487ea375fb20dd025ed4d62b4ae880940b865f5fa16c3cefa95220985137ed",
+    "source_self_sha256": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010"
+  },
+  "review": {
+    "independent_review_status": "PENDING",
+    "reviewer_may_correct_or_supersede_before_any_g0_comparison": true
+  },
+  "schema": "rslmto-a4-m21-tooling-lock-v5",
+  "scope": "Hash lock for the lambda-zero capture runner and W1 error-analysis model. It does not release any nonzero-lambda response.",
+  "status": "ANALYSIS_MODEL_FROZEN_PENDING_INDEPENDENT_REVIEW; NO_G0_UG0_OR_NONZERO_LAMBDA_INSPECTION",
+  "tooling": {
+    "lambda0_executor": {
+      "path": "tests/validation/fixed_ldau/a4_m21_execute_lambda0.py",
+      "sha256": "8f49cb1b5dec3cd0bb784f0e300a48ea51f286febc2e481a76c998991883db42"
+    },
+    "w1_analyzer": {
+      "path": "tests/validation/fixed_ldau/a4_m21_w1_richardson.py",
+      "sha256": "8d8d19bbe78cb9e71a5642708e2f0a62d7a1c45a2fc0c884376dcc3271f06468"
+    },
+    "w1_registration_builder": {
+      "path": "tests/validation/fixed_ldau/a4_m21_register_w1.py",
+      "sha256": "72464be86d52dd0fe1e4b5d22aa9408d03c5352a9c00801dd4de7e890ced2132"
+    },
+    "w1_template": {
+      "path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_response_preregistration.template.json",
+      "sha256": "5d0c6c5d1d5972d2e6733133e8d3c87830e3e7060c3224d4753899c59d9e9112"
+    }
+  }
+}

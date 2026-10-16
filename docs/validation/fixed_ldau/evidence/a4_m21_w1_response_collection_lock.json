@@ -1,0 +1,53 @@
+{
+  "schema": "rslmto-a4-m21-w1-response-collection-lock-v1",
+  "status": "LOCKED_FOR_HASH_INVENTORY_AND_RAW_ASSEMBLY_ONLY",
+  "response_measurements_may_be_collected": true,
+  "numeric_outcomes_have_not_been_unblinded": true,
+  "criterion": {
+    "identity_bias": "unchanged: |R_fine-g0| <= N_unc",
+    "h2_resolution": "user-approved: |L|-uL > 16*(|H|+uH), with |L|>uL; L=(16A-B)/36, H=(B-4A)/180",
+    "h2_scalings": "A=D(.005)-D(.0025), B=D(.01)-D(.005)",
+    "richardson_and_uncertainty": "unchanged approved analyzer expressions; no fixed absolute noise floor"
+  },
+  "protocol_sha256": "812bcafae105eabaea4ae0614f0b419e0d96638df37888342a8708a973f83980",
+  "response_registration": {
+    "path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_response_preregistration.json",
+    "sha256": "4c3e66d9f6bcc56b82b2c4b548e35b909bfb22e9a436baa0b7e4fd8278b46064",
+    "case_count": 24,
+    "status": "PRE_RESPONSE_LOCKED_NO_NONZERO_RUNS"
+  },
+  "reviewed_zero_anchor": {
+    "assembled_payload_path": "/private/tmp/a4-m21-ks-lambda0-w1-assembled.json",
+    "assembled_payload_sha256": "ce78b15e3984f007b76d61fff5d032c48d64ae13bc60efcd9149b1607de7bb7e",
+    "reviewer_audit_path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_lambda0_reviewer_audit.json",
+    "reviewer_audit_sha256": "8dfae2119f553927f46571b63a83beeaa8e4bec8c703d21f9770e6cfba5e6e2a",
+    "builder_anchor_adapter_path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_lambda0_reviewed_anchor_report.json",
+    "builder_anchor_adapter_sha256": "84c2cc1c8ccfae99315a2cd9b42073f5ca4385b7678d5fc6f8277bb5682ae768"
+  },
+  "production_bindings": {
+    "source_self_sha256": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010",
+    "binary_path": "/private/tmp/a4-m2-serial/bin/rslmto.x",
+    "binary_sha256": "536fa80a34c510782013a5608fc1220dca26b52a10189a2334e40ed43e12a0b4",
+    "source_manifest_path": "docs/validation/fixed_ldau/evidence/a4_source_ready_manifest_v3.json",
+    "source_manifest_sha256": "db487ea375fb20dd025ed4d62b4ae880940b865f5fa16c3cefa95220985137ed"
+  },
+  "tool_hashes": {
+    "response_executor": {"path": "tests/validation/fixed_ldau/a4_m21_execute_w1.py", "sha256": "3bd2f165b593602f5202674a06cf7aaf8bb2be088994126edd24734856c53e8c"},
+    "response_collector": {"path": "tests/validation/fixed_ldau/a4_m21_assemble_w1_responses.py", "sha256": "37a7c733689d4fc7fe86fd316424ed8ce0b9d68dbd20c2ff9786a83a11e1f0a6"},
+    "collector_test": {"path": "tests/validation/fixed_ldau/a4_m21_response_cache_test.py", "sha256": "ddd1c8e5e0314d97aa7828e60ba2523310cc9237e039f3da57427024793d748a"},
+    "collector_test_output": {"path": "docs/validation/fixed_ldau/evidence/a4_m21_response_cache_test_output.txt", "sha256": "3cc561d9fcc09a28b73f51a523dd2fb9256542d49ebfcf0753c469428bc346b8"},
+    "certified_raw_assembler": {"path": "tests/validation/fixed_ldau/a4_m21_assemble_lambda0.py", "sha256": "d63d10b2c64b93a4f05830f08dd2be905f24c6783c44cb53b8446cc144de6cc0"},
+    "analysis_tool": {"path": "tests/validation/fixed_ldau/a4_m21_w1_richardson.py", "sha256": "be1f30cabc0d8fe36362282c697b8f477d6bb2b46b658350a9629d04c3650330"},
+    "analysis_test": {"path": "tests/validation/fixed_ldau/a4_m21_analysis_bounds_test.py", "sha256": "347dc55b1c1b231383aa4332e1f6354ac3a70505a8b85b3af79194b05224284f"},
+    "response_builder": {"path": "tests/validation/fixed_ldau/a4_m21_register_w1.py", "sha256": "ffb12123045987b1854b69098b78eb6c4732d4dbab0a6068626ae6ca8227fc4a"},
+    "response_template": {"path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_response_preregistration.template.json", "sha256": "82ad7759f2840d6288d5f71b7a1f1149844c03f065bade1981e762b996f74434"},
+    "response_preregistration_generator": {"path": "tests/validation/fixed_ldau/a4_m21_register_w1.py", "sha256": "ffb12123045987b1854b69098b78eb6c4732d4dbab0a6068626ae6ca8227fc4a"}
+  },
+  "collector_contract": {
+    "inventory_schema": "rslmto-a4-m21-w1-response-hash-inventory-v1",
+    "inventory_status": "HASH_INVENTORY_ONLY_NO_NUMERIC_CONTENT_READ",
+    "required_case_fields": ["case_manifest_path", "case_manifest_sha256", "input_nml_pre_sha256", "seed_sha256", "outputs.stdout.path+sha256", "outputs.stderr.path+sha256", "outputs.trace.path+sha256", "outputs.final_state.path+sha256"],
+    "cache_policy": "float(token) and certified token_radius(token) caches are scoped to a single case and cleared/restored before the next case",
+    "output_scope": "Assemble 24 signed W1 response captures plus four reviewed lambda-zero captures into the 28-case analyzer input. The collector performs no gate or derivative evaluation."
+  }
+}

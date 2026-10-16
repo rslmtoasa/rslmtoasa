@@ -1,0 +1,10 @@
+{
+  "command": "python3 tests/validation/fixed_ldau/a4_m21_assemble_lambda0.py assemble /private/tmp/a4-m21-ks-lambda0-w1-inventory.json --inventory-sha256 9eb74ebb1c3c44516b38cc4aa8f7b383e662ed7a6f08d143d813c630cb3aaa51 --output /private/tmp/a4-m21-ks-lambda0-w1-assembled.json",
+  "consequence": "No assembled report was written. No P reconstruction, g0/ug0, F comparison, or derivative analysis completed. W2 and nonzero-lambda captures remain unopened.",
+  "failure": "Source logger emits whitespace after numeric field equals signs; initial parser accepted only adjacent equals/value and raised required-field error.",
+  "inventory_sha256": "9eb74ebb1c3c44516b38cc4aa8f7b383e662ed7a6f08d143d813c630cb3aaa51",
+  "lock_sha256": "beebddfac4dc4cfe3c0b1be67842cced3599f8841c69f3f4ba32c853a1b66e95",
+  "preservation": "Original raw files unchanged; failed report path did not exist after failure.",
+  "schema": "a4-m21-w1-assembler-failed-attempt-receipt-v1",
+  "status": "FAILED_BEFORE_ASSEMBLED_REPORT_NO_DERIVATIVE_RESULT"
+}

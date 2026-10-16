@@ -1,0 +1,14 @@
+{
+  "analyzer_sha256_before_report_only_fix": "6d439322b4ffe23b1360646445bc2851265c05cc731cbcb8ea149bae4132a7de",
+  "failure": "KeyError: X in evaluate result serialization; h2_resolution returned approved L/H result but serializer also expected adjacent-scale diagnostic fields X/Y.",
+  "input_adapter_path": "/private/tmp/a4-m21-ks-w1-responses-analysis-input-v2.json",
+  "input_adapter_sha256": "d04b5925c6d1eef2919b148df7c0163c8dae149b33f49772462c74d633a1b9d2",
+  "no_scientific_gate_result_claimed": true,
+  "raw_assembly_path": "/private/tmp/a4-m21-ks-w1-responses-assembled.json",
+  "raw_assembly_sha256": "76e92c87751ef5170a24e5be964a2d201e55ab944d17cc4d9e1cfd0cf706695b",
+  "repair": "Added X/Y and propagated arithmetic/data bounds for reporting only; approved L/H dominance, N_unc and bias decision logic unchanged.",
+  "result_created": false,
+  "result_path": "/private/tmp/a4-m21-ks-w1-analysis.json",
+  "schema": "rslmto-a4-m21-w1-analyzer-failure-receipt-v1",
+  "status": "PRESERVED_REPORT_SERIALIZATION_FAILURE_NO_FINAL_ANALYSIS_JSON"
+}

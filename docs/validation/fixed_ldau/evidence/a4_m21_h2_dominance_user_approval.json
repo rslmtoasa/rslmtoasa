@@ -1,0 +1,38 @@
+{
+  "schema": "a4-m21-h2-dominance-user-approval-v1",
+  "status": "USER_APPROVED_PENDING_IMPLEMENTATION_AND_INDEPENDENT_REVIEW",
+  "scope": "A4.1 delta-squared resolution criterion only",
+  "authority": {
+    "user_approved": true,
+    "A1_3_explicit_approval": true,
+    "identity_error_allowance_unchanged": true,
+    "production_derivative_uninspected_at_approval": true,
+    "lambda_zero_numerical_contents_unopened_at_approval": true,
+    "nonzero_lambda_responses_run": false
+  },
+  "approved_rule": {
+    "leading_term_resolved": "abs(L) > u_L",
+    "h2_dominance": "abs(L) - u_L > 16 * (abs(H) + u_H)",
+    "identity_error_allowance": "unchanged from the approved A4.1 gate",
+    "proposal_path": "docs/validation/fixed_ldau/evidence/a4_m21_h2_resolution_criterion_proposal_NOT_APPROVED.md",
+    "proposal_sha256": "2613d8a48ff765dd6965ac5a494c6349b893d7bf89a1aa1416f3f48df1524b11",
+    "proposal_file_must_remain_unchanged": true
+  },
+  "verbatim_user_decisions": [
+    {
+      "question": "Which δ² rule should govern the next measurements? The proposed rule accepts a resolved h² term that dominates the Richardson-estimated h⁴ correction across the grid (|L|−uL > 16(|H|+uH)); the existing strict ratio rule can stop even on the smooth analytic example D(h)=g+10h²+32h⁴. The identity-error bound remains unchanged under either choice. A1.3 requires your explicit approval to adopt the proposed rule; no production derivative has been inspected.",
+      "answer": "Approve h²-dominance rule"
+    },
+    {
+      "question": "Approve the proposed δ² criterion correction before nonzero-λ measurements? The current strict 4:1 rule rejects the smooth analytic case D(h)=g+10h²+32h⁴. The proposal instead requires the resolved h² term to dominate the estimated h⁴ correction across the grid: |L|−uL > 16(|H|+uH). The independent identity-error allowance stays unchanged. A1.3 requires explicit approval because this changes a scientific criterion; details are in docs/validation/fixed_ldau/evidence/a4_m21_h2_resolution_criterion_proposal_NOT_APPROVED.md.",
+      "answer": "Approve the h²-dominance rule"
+    }
+  ],
+  "next_steps_required_before_comparison": [
+    "Implement the approved criterion only in the preregistered A4.1 analysis path; do not alter production energy or derivative code.",
+    "Bind the revised analyzer, raw-token extractor, test fixtures, exact A4.1 allowance, and lock hashes.",
+    "Obtain independent review and freeze the revised analysis lock before opening any lambda-zero numerical comparisons.",
+    "Keep all nonzero-lambda responses held until the authorized lambda-zero identity decision passes."
+  ],
+  "historical_status": "The prior strict-rule proposal and tooling locks remain byte-preserved historical records. This approval supersedes the proposal's NOT_APPROVED status only after implementation and independent review; it does not retroactively inspect or classify response outcomes."
+}

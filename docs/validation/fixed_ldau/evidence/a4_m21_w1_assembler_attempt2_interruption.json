@@ -1,0 +1,13 @@
+{
+  "command": "python3 tests/validation/fixed_ldau/a4_m21_assemble_lambda0.py assemble /private/tmp/a4-m21-ks-lambda0-w1-inventory.json --inventory-sha256 9eb74ebb1c3c44516b38cc4aa8f7b383e662ed7a6f08d143d813c630cb3aaa51 --output /private/tmp/a4-m21-ks-lambda0-w1-assembled.json",
+  "data_handling": "Parser had begun traversing the first W1 raw CSV, but no assembled capture was returned or written; no P matrix, g0/ug0, energy candidate comparison, or derivative was computed or inspected. W2 and nonzero-lambda content remain unopened.",
+  "exit_code": 130,
+  "inventory_sha256": "9eb74ebb1c3c44516b38cc4aa8f7b383e662ed7a6f08d143d813c630cb3aaa51",
+  "lock_sha256": "9577e9b6cb21351587d65fa6d57bafd8248af6e14a4f75dba0f86c5faed6a5aa",
+  "output_created": false,
+  "output_path": "/private/tmp/a4-m21-ks-lambda0-w1-assembled.json",
+  "raw_inputs_unchanged": true,
+  "reason": "Interrupted immediately after independent reviewer identified that magnitude upper-minus-lower bounds do not bound phase-only complex eigenvector perturbations.",
+  "schema": "a4-m21-w1-assembler-attempt2-interruption-receipt-v1",
+  "status": "INTERRUPTED_BEFORE_ASSEMBLED_REPORT_NO_DERIVATIVE_RESULT"
+}

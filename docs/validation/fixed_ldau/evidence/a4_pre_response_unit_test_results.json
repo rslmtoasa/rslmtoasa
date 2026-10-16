@@ -1,0 +1,45 @@
+{
+  "schema": "fixed-ldau-a4-pre-response-unit-test-results-v1",
+  "preregistration": {
+    "path": "docs/validation/fixed_ldau/evidence/a4_pre_response_unit_preregistration.json",
+    "sha256": "bfad475e1fe633499638fe6cda387a4a3cd9d090b061b121ec099f2f64756836"
+  },
+  "build": {
+    "source_revision": "f0ed469d29d8feb6e8569b103f10b9bc1bc748e4",
+    "worktree": "/private/tmp/rslmto-ldau-m2-energy-worktree",
+    "build_directory": "/private/tmp/a4-m2-unit-debug",
+    "configuration": "CMAKE_BUILD_TYPE=Debug; ENABLE_MPI=OFF; ENABLE_OPENMP=OFF; RUN_UNIT_TESTS=ON",
+    "configure_command": "cmake -S /private/tmp/rslmto-ldau-m2-energy-worktree -B /private/tmp/a4-m2-unit-debug -DCMAKE_BUILD_TYPE=Debug -DENABLE_MPI=OFF -DENABLE_OPENMP=OFF -DRUN_UNIT_TESTS=ON",
+    "build_command": "cmake --build /private/tmp/a4-m2-unit-debug --target UnitFermiDiracEntropy UnitLdaUHamiltonian -j 8",
+    "compiler": "GNU Fortran 16.2.0",
+    "cmake": "4.4.4",
+    "cmake_cache_sha256": "5f17d6046dc414c1dfc35864405073876cda1c09dec9846d2a9401996f0a94fc"
+  },
+  "test_command": "ctest --test-dir /private/tmp/a4-m2-unit-debug -R '^(UnitFermiDiracEntropy|UnitLdaUHamiltonian)$' --output-on-failure -V",
+  "results": [
+    {
+      "name": "UnitLdaUHamiltonian",
+      "status": "PASS",
+      "includes": "A4 W2 exact complex Hermitian matrix and exact same-path hubbard_u_pot insertion, including both spin blocks and zero untouched/cross-spin blocks",
+      "binary_sha256": "f0a727bdbccbeaeeee49591da6d115807ab2403cf39e8fb003431e9a47422326"
+    },
+    {
+      "name": "UnitFermiDiracEntropy",
+      "status": "PASS",
+      "S_dimensionless_per_cell": 2.1062540069077236,
+      "TS_ry_per_cell": 0.0040021025481680765,
+      "binary_sha256": "bf158cf8a264d7f1126528e884d2b85317ab43cf1a13ec59c5374516f05fd81b"
+    }
+  ],
+  "summary": "2/2 preregistered unit tests passed. This result contains no SCF or lambda-response measurement and authorizes no A4.1 production response.",
+  "source_review_note": "The test suite was rerun after a diagnostic-only correction made the external lambda*Tr(WP) term separate from the fixed-U/J direct-trace check. Unit target source hashes were rebound before the rerun; the prior exact output remains preserved as output.initial.log.",
+  "ctest_output": {
+    "path": "docs/validation/fixed_ldau/evidence/a4_pre_response_unit_test_output.txt",
+    "sha256": "d9a7540c096852ea311a2fbc3258b79720a49c10ad30949883e4c5ccb3d2a273"
+  },
+  "superseded_output": {
+    "path": "docs/validation/fixed_ldau/evidence/a4_pre_response_unit_test_output_initial.txt",
+    "sha256": "b6a7a3d15a74b28c1c38a91355fe0da71a521a711399aad9ef863beb7c13c0ce",
+    "status": "PASS before diagnostic-only source correction; retained as historical output, final result is the later rerun"
+  }
+}

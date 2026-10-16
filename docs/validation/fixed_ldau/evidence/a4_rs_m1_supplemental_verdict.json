@@ -1,0 +1,47 @@
+{
+  "schema": "a4-rs-m1-supplemental-verdict-v1",
+  "status": "SUPPLEMENTAL_PASS_INDEPENDENTLY_CERTIFIED",
+  "scope": "RS Gate M1 only; preserves the v1 preregistration and result as a failure under its written criteria",
+  "authority": {
+    "user_approved": true,
+    "question_recorded_verbatim_in": "docs/validation/fixed_ldau/LOCAL_MOMENTS.md#rs-m1-supplemental-gate-user-approval-verbatim",
+    "answer": "Approve the supplemental gate",
+    "approved_criterion": "abs(delta_SUMEV - sum(t)) <= A_RS and q2_local >= 0 and q2_spectral >= 0",
+    "no_rerun_or_threshold_tuning": true
+  },
+  "preserved_v1": {
+    "preregistration_path": "docs/validation/fixed_ldau/evidence/a4_rs_m1_pair_preregistration.json",
+    "preregistration_sha256": "87cc23819d6f9e465593e6a4708ea062c503db69506097d6643dee549d4d54a4",
+    "response_report_path": "docs/validation/fixed_ldau/evidence/a4_rs_m1_pout_pair_results.json",
+    "response_report_sha256": "b4023c1f0e3b11c46ccb2c8a0e31b007cbf6325d9ba4349a7faf25d8536a9587",
+    "v1_status": "FAIL under locked residual-inclusive point-prediction criterion",
+    "extra_fit_prediction_error_ry": 1.0234967739219947e-05,
+    "v1_extra_fit_prediction_limit_ry": 2.0002e-08,
+    "v1_failure_is_not_reclassified": true
+  },
+  "registered_pair": {
+    "delta_sumev_spectral_minus_local_ry": -0.2590196642435809,
+    "sum_t_ry": -0.26088126108452275,
+    "literal_carrier_error_ry": 0.001861596840941837,
+    "A_RS_ry": 0.0019179425667351765,
+    "literal_carrier_pass": true,
+    "q2_local_min_ry2": 0.01075725460260394,
+    "q2_spectral_min_ry2": 0.009745244577861018,
+    "q2_nonnegative_pass": true,
+    "no_numerical_guard_added_to_A_RS": true
+  },
+  "other_m1_items": {
+    "rs_bitwise_identity": "PASS; three registered no-U/U=J=0/spectral-U comparisons",
+    "rs_local_u2_scf_and_r05": "PASS; iteration 103, charge difference 4.8e-9 Ry under 3e-8 Ry, final physical R05 streak 3",
+    "live_state_anchor": "PASS; PL, SUMEC, SUMEV, EV and all ten ATOMSC input-density components exact; rho max difference 7.11e-15 under 1e-10"
+  },
+  "frozen_evidence": {
+    "anchor_report_sha256": "89356919b61ee20da794e5463a03b006608c8c40dfa175d43a01f4783cc92322",
+    "pair_report_sha256": "b4023c1f0e3b11c46ccb2c8a0e31b007cbf6325d9ba4349a7faf25d8536a9587",
+    "pair_raw_driver_csv_sha256": "d9440eff08e0de778ad8f4fb41870e59e5c008a1ae6a20f81c23ca7c2dc923f5",
+    "capture_records_csv_sha256": "1b6a2798ef0094e0c4388011557a1c342e8716d9a3c4c9233fa41b07d41ed93a",
+    "capture_manifest_sha256": "4e11bd828f4068bdba487242cefde983fd27094cdd373dd9cb1fd51757c859ca"
+  },
+  "independent_certification": "PASS; independent reviewer certified the supplemental RS Gate M1 verdict under the user-approved literal carrier and q2 criteria",
+  "downstream_measurements": "RS M2 remains held; root released KS lambda=0 calibration only, with all nonzero lambda responses still held"
+}

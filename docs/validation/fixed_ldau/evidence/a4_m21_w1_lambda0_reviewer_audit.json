@@ -1,0 +1,86 @@
+{
+  "schema": "rslmto-a4-m21-w1-lambda0-independent-review-v1",
+  "status": "PASS_W1_LAMBDA0_CALIBRATION_ONLY",
+  "scope": "Independent provenance/domain, q0/ug0, entropy, ETOT/TS, and repeat audit of the four assembled W1 lambda-zero captures. No nonzero-lambda response or W2 values are included.",
+  "assembled_payload": {
+    "path": "/private/tmp/a4-m21-ks-lambda0-w1-assembled.json",
+    "sha256": "ce78b15e3984f007b76d61fff5d032c48d64ae13bc60efcd9149b1607de7bb7e",
+    "status": "RAW_TOKENS_ASSEMBLED; NO_DERIVATIVE_RESPONSE_ANALYSIS"
+  },
+  "reviewed_tool_hashes": {
+    "assembler": "d63d10b2c64b93a4f05830f08dd2be905f24c6783c44cb53b8446cc144de6cc0",
+    "assembler_synthetic_test": "b66f58575e5fdf4388059adc8dbcc14a7dc2245a7011c905e4aaca58e2147692",
+    "analysis_lock_v11": "beebddfac4dc4cfe3c0b1be67842cced3599f8841c69f3f4ba32c853a1b66e95",
+    "approved_h2_analyzer": "be1f30cabc0d8fe36362282c697b8f477d6bb2b46b658350a9629d04c3650330",
+    "approved_h2_analysis_test": "347dc55b1c1b231383aa4332e1f6354ac3a70505a8b85b3af79194b05224284f",
+    "response_registration_builder": "ffb12123045987b1854b69098b78eb6c4732d4dbab0a6068626ae6ca8227fc4a",
+    "response_template": "82ad7759f2840d6288d5f71b7a1f1149844c03f065bade1981e762b996f74434",
+    "response_executor": "3bd2f165b593602f5202674a06cf7aaf8bb2be088994126edd24734856c53e8c"
+  },
+  "source_convention_and_domain": {
+    "source_sha256": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010",
+    "binary_sha256": "536fa80a34c510782013a5608fc1220dca26b52a10189a2334e40ed43e12a0b4",
+    "writer_mapping": "source/self.f90 basis loop m_loop=0..2*ell passes row=base+ell^2+m_loop and col=m_loop-ell; CSV writer serializes col unchanged. Raw col is therefore physical m in [-ell,+ell]. Site-major/spin-major row is site*18+spin*9+ell^2+(m+ell), spin is zero-based, and bands are zero-based global spin-inclusive rows.",
+    "capture_domain": {
+      "captures": 4,
+      "modes": ["spectral", "local"],
+      "thresholds": ["standard", "tight"],
+      "k_indices": "0..1727 inclusive, derived from each hash-bound unreduced PRE mesh",
+      "bands": "0..17 inclusive, global spin-inclusive domain",
+      "entropy_states_per_capture": 31104,
+      "final_iterations": {
+        "standard": 1,
+        "tight": 7
+      },
+      "logger_selection": "The selected total-energy diagnostic is the last HUBBARD_MOMENT_ENERGY_TOTAL line before the unique Converged marker; its count matches the final CSV iteration. stdout.log is the captured g_logger stream."
+    },
+    "runtime_checks": "Each stdout contains one Converged marker and one literal R05 NOT APPLICABLE message; all CSV/stdout/run-manifest hashes, execution source/binary, PRE input, seed, and static assets match the frozen capture inventory."
+  },
+  "calibration": {
+    "operator": "W1=I_5 on the onsite spherical d block; g0=Tr(W1 P_standard).",
+    "g0_by_mode": {
+      "spectral": {
+        "standard": 6.4984804203277395,
+        "tight": 6.49848042100503,
+        "ug_state_sensitivity": 6.772902239049472e-10,
+        "ug_trace_and_input_fp": 1.803247835158506e-10,
+        "ug0_total": 8.576150074207984e-10
+      },
+      "local": {
+        "standard": 6.4984804203277395,
+        "tight": 6.49848042100503,
+        "ug_state_sensitivity": 6.772902239049472e-10,
+        "ug_trace_and_input_fp": 1.803247835158506e-10,
+        "ug0_total": 8.576150074207984e-10
+      }
+    },
+    "standard_tight_delta_g0": 6.772902239049472e-10,
+    "energy_formula": {
+      "spectral": "F=ETOT_spectral-TS",
+      "local": "F=ETOT_local+lambda*Tr(W1*P)-TS; lambda=0 at this calibration, so external term is exactly zero.",
+      "provenance": "ETOT and TS are preserved tokens from the selected final HUBBARD_MOMENT_ENERGY_TOTAL stdout line; no additional candidate_b term is added."
+    },
+    "standard": {
+      "ETOT_token": "-0.2541981914821798E+04",
+      "TS_token_Ry": "0.8742128612893793E-04",
+      "F_Ry": -2541.982002243084,
+      "B_TS_Ry": 5.635261241116756395064224484e-17,
+      "B_F_Ry": 2.193356520856232e-12
+    },
+    "tight": {
+      "ETOT_token": "-0.2541981914799712E+04",
+      "TS_token_Ry": "0.8742128500565517E-04",
+      "F_Ry": -2541.982002220997,
+      "B_TS_Ry": 5.663482804809807129684336890e-17,
+      "B_F_Ry": 2.193356803057156e-12
+    },
+    "standard_tight_delta_F_Ry": 2.2087e-8,
+    "cross_mode_check": "At lambda=0, local and spectral P, ETOT, TS, and F anchors agree in the assembled data. Entropy is evaluated over the full global spin-inclusive band domain with captured k weights and no extra spin multiplier."
+  },
+  "independent_checks": {
+    "P_reconstruction_uncertainty": "The reviewed assembler propagates ES token half-quantum plus exact Decimal-to-binary parse displacement, outward complex component radii, telescoping disk error for w*f*psi_a*conjg(psi_b), operation-count gamma bounds for products/sums/site/spin accumulation, and componentwise W*P trace bounds. A phase-only synthetic perturbation test passes.",
+    "entropy": "Uses the same source occupation kernel with hash-bound occupation, k-weight, temperature, eigenvalue, Fermi-level, and final-state tokens. Independent high-precision entropy center and interval/error bounds are carried in B_TS.",
+    "h2_rule": "The separately approved h2-dominance synthetic suite passes; this lambda-zero calibration does not inspect response derivatives or classify the W1 identity result."
+  },
+  "unopened": ["W2 captures", "all nonzero lambda captures", "A4.2 transfer"]
+}

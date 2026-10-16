@@ -1,0 +1,105 @@
+{
+  "schema": "a4-m22-m23-campaign-template-v1",
+  "status": "TEMPLATE_NOT_PREREGISTERED_NO_RESPONSES",
+  "scope": ["A4.2 M2.2 KS", "A4.3 M2.3 KS"],
+  "governance": {
+    "A4_verbatim_protocol_is_authoritative": true,
+    "A2_6_and_A3_1_apply": true,
+    "A4_2_NW_transfer_requires_separate_user_approval_and_preregistration": true,
+    "no_physical_responses_authorized_by_this_template": true,
+    "must_bind_all_source_binary_input_seed_runtime_and_raw_output_hashes_before_responses": true,
+    "must_freeze_prediction_and_applicability_tables_before_responses": true,
+    "fixed_u_test_tighten_r05": "Set true for the specified tightened repeat; bind the actual active R05 targets and streak in the lock."
+  },
+  "common_state": {
+    "backend": "KS",
+    "functional": "fixed Liechtenstein",
+    "base_parameters": {"U0_eV": 2.0, "J0_eV": 0.0},
+    "same_starting_state_for_all_branches": "REQUIRED_HASH_AND_PATH_BEFORE_LOCK",
+    "standard_convergence_and_R05": "RECORD_EXACT_TARGETS_STREAK_AND_HISTORY_HASH",
+    "tightened_repeat_convergence_and_R05": "RECORD_EXACT_TARGETS_STREAK_AND_HISTORY_HASH",
+    "frozen_state_for_evaluate_hubbard_energy": "RECORD_CAPTURED_P_HASH_AND_EXACT_FUNCTIONAL_INPUTS"
+  },
+  "A4_2_M2_2": {
+    "status": "NOT_RUN_NOT_LOCKED",
+    "U_scan": {
+      "eV_values": [1.6, 1.8, 1.9, 2.1, 2.2, 2.4],
+      "delta_eV_series": [0.2, 0.1, 0.05],
+      "same_start": true,
+      "standard_and_tightened_repeat_each_delta": "REQUIRED"
+    },
+    "target": "dE_Hub/dU at fixed converged P(U0), from evaluate_hubbard_energy at U0 plus/minus small epsilon; bind epsilon sequence, units, and exact captured P before response.",
+    "J_scan": {
+      "U_eV": 2.0,
+      "J_eV_values": [0.5, 0.9],
+      "target": "dE_Hub/dJ at fixed captured P; bind finite-difference stencil and units before response."
+    },
+    "candidate_definitions": {
+      "a": "F_spectral - t + E_Hub",
+      "b": "F_local + E_Hub",
+      "c": "F_spectral + E_Hub",
+      "F_spectral": "E_spectral - T*S",
+      "F_local": "E_local - T*S"
+    },
+    "per_component_error_budget": {
+      "finite_difference_truncation": "Richardson estimate from the preregistered delta series; lock stencil and estimator before outcomes.",
+      "SCF_scatter": "One repeat at each delta with preregistered tightened threshold; lock aggregation before outcomes.",
+      "smooth_systematic": "N_W at the matching perturbation scale; this transfer is not authorized until its separate preregistration and required user approval."
+    },
+    "predictions": {
+      "c": "Expected miss approximately dt/dU; recompute from accepted captured arrays, then preregister numeric value and allowance before response.",
+      "b": "Expected pass within the preregistered total error floor N; preregister numeric interval before response.",
+      "a": "Measure and report; no directional prediction."
+    },
+    "decision": {
+      "b_pass_and_c_fail_as_predicted": "Adopt the A4.2 result for the KS gate evaluation; physical routing remains forbidden until the M2 gate decision.",
+      "b_fail": "STOP and report, regardless of a.",
+      "c_pass": "STOP; this contradicts the derivation."
+    },
+    "required_case_table_fields": [
+      "case_id", "parameter_U_eV", "parameter_J_eV", "delta_eV", "repeat_kind",
+      "input_sha256", "seed_sha256", "source_manifest_sha256", "binary_sha256",
+      "runtime_config_sha256", "convergence_history_sha256", "endpoint_sha256",
+      "P_state_sha256", "E_Hub_Ry", "finite_difference_Ry_per_eV",
+      "truncation_bound_Ry_per_eV", "SCF_scatter_Ry_per_eV",
+      "N_W_transfer_Ry_per_eV", "total_N_Ry_per_eV", "raw_output_sha256"
+    ]
+  },
+  "A4_3_M2_3": {
+    "status": "NOT_RUN_NOT_LOCKED",
+    "required_states": [
+      {"U_eV": 0.0, "J_eV": 0.0},
+      {"U_eV": 2.0, "J_eV": 0.0},
+      {"U_eV": 4.0, "J_eV": 0.0},
+      {"U_eV": 2.0, "J_eV": 0.9}
+    ],
+    "comparison": "For every state, compare spectral and local modes using identical definitions, same physical recipe, converged histories, and bound mode-specific inputs.",
+    "observable_definitions_to_freeze": {
+      "sphere_spin_moment": "Use one documented sphere-integrated definition for both modes; record units and source output.",
+      "d_q0_per_spin": "Record integrated d charge per spin from the accepted endpoint.",
+      "P_eigenvalue_bounds": "Hermitian P eigenvalue min/max per spin, with matrix source/hash.",
+      "d_center_exchange_splitting": "Record spin-resolved d-center definition, energy units, and subtraction order.",
+      "E_F": "Record Fermi level in Ry and its source output.",
+      "E_int_E_DC_E_Hub_t": "Record per-site and total quantities, with the same convention in both modes.",
+      "candidates_F_TS": "Record all a/b/c energy candidates, T*S, and F=E-T*S in Ry/cell; retain candidate formula lineage.",
+      "converged_residuals": "Record charge, R05 density/potential residual histories, streak, and stopping thresholds."
+    },
+    "moment_change_resolution": {
+      "question": "Determine whether the apparent 2.356 to 2.511 μB change between spectral and local U=2 states is reproducible under identical definitions.",
+      "required_evidence": ["paired endpoint manifests", "sphere integration definition", "spin-resolved moments", "convergence histories", "mode and seed provenance"],
+      "no_inference_from_mixed_timing_snapshots": true
+    },
+    "required_pair_table_fields": [
+      "backend", "U_eV", "J_eV", "mode", "input_sha256", "seed_sha256",
+      "source_manifest_sha256", "binary_sha256", "runtime_config_sha256",
+      "endpoint_sha256", "history_sha256", "sphere_spin_moment_muB",
+      "d_q0_up", "d_q0_down", "P_eigen_min_up", "P_eigen_max_up",
+      "P_eigen_min_down", "P_eigen_max_down", "d_center_up_Ry",
+      "d_center_down_Ry", "d_center_exchange_splitting_Ry", "E_F_Ry",
+      "E_int_Ry", "E_DC_Ry", "E_Hub_Ry", "t_Ry", "candidate_a_Ry",
+      "candidate_b_Ry", "candidate_c_Ry", "TS_Ry", "F_a_Ry", "F_b_Ry",
+      "F_c_Ry", "charge_residual", "R05_density_residual",
+      "R05_potential_residual", "R05_streak", "raw_output_sha256"
+    ]
+  }
+}

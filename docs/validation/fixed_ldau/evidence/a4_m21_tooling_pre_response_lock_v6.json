@@ -1,0 +1,62 @@
+{
+  "analysis_model": {
+    "B_F": "Q(ETOT)+B_TS+gamma_3*(|ETOT|+|TS|+|lambda*Tr(WP)|)+B_lambda_trace; reconstruct F from ETOT/TS and protocol external term, so no Q(F token).",
+    "B_TS": "Join eigenvalue, occupation and k-weight raw rows exactly once by global k and full band index; reject gaps, duplicates, missing rows or inconsistent per-k weights. Spin is encoded in the complete band table. Capture writer and fermi_dirac_entropy call same fermi_dirac_occupation on the same eigenvalue/EF/effective-kT table. HP entropy uses raw occupation and weight token intervals through h(f), with h(0)=h(1)=0 and h<=ln(2). Multiply by source temperature K and exact binary64 source kB=6.3336814e-6. B_TS=Q(TS)+abs(TS_logged-HP_center)+interval radius+100/160-digit Decimal enclosure. The TS center discrepancy captures production entropy/log/summation without assumed libm gamma.",
+    "B_lambda_trace": "B_trace=gamma_256*sum|W_ij P_ji|+sum|W_ij|*P_component_bound_ji; B_lambda_trace=|lambda|*B_trace+Q_lambda*(|Tr(WP)|+B_trace).",
+    "analysis_arithmetic": "Outward round positive bounds; include gamma guards through uF, centered D subtraction/division, exact decimal-to-binary h discrepancy, Richardson combinations, h2 X/Y and residual, truncation estimate and N_unc addition. Compare bias using exact Decimal subtraction of binary64 R_fine and g0. Add q_lambda*B_trace cross term.",
+    "decision_criterion": "No changes to reviewed Richardson formulas or strict h2-resolution inequality; known h4 toy is expected to be INCONCLUSIVE under the presently frozen strict criterion pending any governance amendment.",
+    "serialized_Q": "For every raw e24.16/ES24.16 token, Q is half the decimal quantum from mantissa digits and emitted exponent, including printed zero. Retain exact tokens.",
+    "ug0": "abs(Tr(W1*(P_tight-P_standard))) + gamma_256*sum abs(W1_ij)*(|P_standard_ji|+|P_tight_ji|) + sum abs(W1_ij)*(P_bound_standard_ji+P_bound_tight_ji), using both matrix scales."
+  },
+  "forbidden_until_reviewed_release": [
+    "g0/ug0 inspection or W1 residual calculation",
+    "nonzero lambda execution",
+    "changing strict h2 criterion without governance approval",
+    "A4.2 transfer"
+  ],
+  "governance": {
+    "binary_path": "/private/tmp/a4-m2-serial/bin/rslmto.x",
+    "binary_sha256": "536fa80a34c510782013a5608fc1220dca26b52a10189a2334e40ed43e12a0b4",
+    "lambda0_execution_manifest_path": "/private/tmp/a4-m21-ks-lambda0-execution/execution_manifest.json",
+    "lambda0_execution_manifest_sha256": "cfea7226f0e2bcbfae778d7a45a92205e6ff6dc70a01d66c2935a8f5f5bbb461",
+    "lambda0_operational_audit_sha256": "70ceafefc1202809ad62a69203ebb9775319406e2d3aa869c80793ba36d12887",
+    "lambda0_preparer_lock_sha256": "ab454c7b431a2e4ef31206bd42783613f1507d78e30ae030c347f5f97b0408b9",
+    "lambda0_prereg_sha256": "50f24c646af2e7c1eedc050d6b0b3c14b7cb55b5d6134e02cfa081913e1ba80f",
+    "protocol_sha256": "812bcafae105eabaea4ae0614f0b419e0d96638df37888342a8708a973f83980",
+    "source_ready_manifest_sha256": "db487ea375fb20dd025ed4d62b4ae880940b865f5fa16c3cefa95220985137ed",
+    "source_self_sha256": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010"
+  },
+  "lambda0_operational_status": {
+    "all_returncode_zero": true,
+    "converged_and_R05_n_audited": true,
+    "g0_ug0_or_F_comparison_done": false,
+    "numerical_outputs_opened": false,
+    "process_count": 8
+  },
+  "review": {
+    "independent_review_status": "PENDING",
+    "may_not_unblind_g0_before_review": true,
+    "synthetic_lower_noise_h2_check": "REQUIRED_BEFORE_FINAL_RESPONSE_REGISTRATION"
+  },
+  "schema": "rslmto-a4-m21-tooling-lock-v6",
+  "scope": "Supersedes tooling lock v5 for analysis only. Preserves the approved lambda grid, energy definitions and strict h2 decision criterion; no production responses released.",
+  "status": "ANALYSIS_MODEL_FROZEN_PENDING_INDEPENDENT_REVIEW; NO_G0_UG0_OR_NONZERO_LAMBDA_INSPECTION",
+  "tooling": {
+    "analyzer": {
+      "path": "tests/validation/fixed_ldau/a4_m21_w1_richardson.py",
+      "sha256": "48a98928ee19c829088d05e85f71e0ebde0edd3e2a9ecf0f5dbfb6c7def7d7b6"
+    },
+    "executor": {
+      "path": "tests/validation/fixed_ldau/a4_m21_execute_lambda0.py",
+      "sha256": "8f49cb1b5dec3cd0bb784f0e300a48ea51f286febc2e481a76c998991883db42"
+    },
+    "registration_builder": {
+      "path": "tests/validation/fixed_ldau/a4_m21_register_w1.py",
+      "sha256": "3c90134190c21c14cdde7eba8638e845388b9b238303980f677b8937e0458b8d"
+    },
+    "response_template": {
+      "path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_response_preregistration.template.json",
+      "sha256": "f06c1721741580fef6c8b2a2b4b680f994e16cbe7214b62aa46375c673d36c4e"
+    }
+  }
+}

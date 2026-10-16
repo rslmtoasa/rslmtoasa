@@ -1,0 +1,102 @@
+{
+  "anchor_bindings_to_fill_before_response": {
+    "band_index_semantics": "zero-based global spin-inclusive row of eigenvalues(:,ik)",
+    "expected_global_band_indices_from_bound_capture_metadata": null,
+    "expected_global_k_indices_from_bound_capture_metadata": "0..expected_n_kpoints-1",
+    "expected_n_kpoints_from_bound_capture_metadata": null,
+    "local_g0": null,
+    "local_standard_lambda0_run_manifest_sha256": null,
+    "local_tight_lambda0_run_manifest_sha256": null,
+    "local_ug0": null,
+    "review_status": "PENDING",
+    "spectral_g0": null,
+    "spectral_standard_lambda0_run_manifest_sha256": null,
+    "spectral_tight_lambda0_run_manifest_sha256": null,
+    "spectral_ug0": null
+  },
+  "capture_requirements": [
+    "Persist PRE manifests/decks, seed, static assets, executable/source hashes, full stdout.log/stderr.log, full SCF trace CSV and final Fe_out; write run manifest before launch and finalize it even on failure. The direct executable invocation does not emit a separate testrun.log; stdout.log is the authoritative full convergence/diagnostic log.",
+    "Require convergence and log confirmation of the operator/lambda, mode and applicable threshold policy.",
+    "Retain eigenpair/occupation/k-weight and matrix rows needed to independently reconstruct P and Tr(WP).",
+    "Retain ETOT_spectral, ETOT_local, TS, F candidates and physical_total_energy as separate fields.",
+    "Persist raw outputs outside TemporaryDirectory and never overwrite prior attempts."
+  ],
+  "criteria_status": "h2-dominance rule approved by user; calibration values and h2 truncation diagnostics remain to be reviewed before any signed run.",
+  "design": {
+    "criteria_status": "Frozen formulas below; numeric g0/ug0 are deliberately unresolved until anchor captures are reviewed. No nonzero response is released by this template.",
+    "lambda_ry": [
+      0.0,
+      -0.0025,
+      0.0025,
+      -0.005,
+      0.005,
+      -0.01,
+      0.01
+    ],
+    "modes": [
+      "spectral",
+      "local"
+    ],
+    "nonzero_cases": "20 SCFs: two modes x six signed nonzero lambdas x standard/tight; lambda-zero standard/tight anchors are reused from the reviewed calibration only after their exact outputs are bound here.",
+    "operator": "W1 = exact 5x5 identity on onsite spherical d m=-2..+2 block",
+    "per_nonzero_lambda_mode_runs": [
+      "standard",
+      "otherwise_identical_tight_repeat_from_same_start"
+    ],
+    "r05": "At U=J=0 external-only W1, production general-U R05 monitoring is inapplicable; each run must preserve the literal NOT APPLICABLE record and no fabricated tightened R05 targets. Only conv_thr is divided by ten.",
+    "thresholds": {
+      "standard_conv_thr": "1e-9",
+      "tight_conv_thr": "1e-10",
+      "tight_is_standard_divided_by": 10
+    }
+  },
+  "energy_candidates": {
+    "entropy": "TS is total-cell Mermin entropy from the captured same-state occupations, k weights, temperature and chemical potential. Never add an extra spin factor; site-resolved F is unavailable.",
+    "local": "F_l(lambda) = ETOT_local(lambda) + lambda*Tr(W1*P(lambda)) - TS(lambda)",
+    "physical_total_energy": "Report unchanged and separately; it is not relabeled as either candidate.",
+    "spectral": "F_s(lambda) = ETOT_spectral(lambda) - TS(lambda)"
+  },
+  "frozen_decision_rule": {
+    "B_F": "Per run, Q(ETOT)+B_TS+gamma_3*(|ETOT|+|TS|+|lambda*Tr(WP)|)+B_lambda_trace; spectral external term is zero. Let B_trace=gamma_256*sum|W_ij P_ji|+sum|W_ij|*P_component_bound_ji; B_lambda_trace=|lambda|*B_trace+Q_lambda*(|Tr(WP)|+B_trace). Qcomplex(P) is the captured P reconstruction input bound.",
+    "B_TS": "Independently reconstruct S directly from captured occupation and k-weight tokens. Require a one-to-one (global k, global band) join with no duplicates/gaps/missing rows, and require exact equality to expected_n_kpoints and expected_band_indices bound from the run metadata and source capture loop. source/self.f90 writes every eigenvalues(ib,ik) row; k indices are exactly 0..N_k-1 because the writer stores ig-1, and band_index=ib-1 is the zero-based global spin-inclusive eigenvalue row, as verified by that loop and the complete scalar-collinear eigensystem; no additional spin factor is applied. Require same per-k weights across bands. The capture writer and fermi_dirac_entropy call the same fermi_dirac_occupation kernel on the same eigenvalue/EF/effective-kT table; bind those raw eigenvalue/EF/kT rows as a consistency check. Use source kB_Ry_per_K=6.3336814e-6 (exact binary64 source constant) and TS=T_K*kB*S. Treat every printed occupation, weight and temperature K token as a closed interval with its token-derived Q; propagate through h(f) with outward interval arithmetic, using h(0)=h(1)=0 and h(f)<=ln(2). Use Decimal ln at 100 and 160 digits with a checked precision enclosure. B_TS is Q(TS token)+abs(TS token-HP center)+the propagated interval radius plus the checked Decimal enclosure. The center discrepancy captures production entropy/log/summation behavior; no unsupported libm gamma bound is assumed.",
+    "D_h": "(F_standard(+h)-F_standard(-h))/(2h), dimensionless.",
+    "forbidden": [
+      "No extra 0.00125 Ry point",
+      "No allowance enlarged by measured bias",
+      "No fixed absolute energy comparator",
+      "No response-derived g0",
+      "No A4.2 transfer"
+    ],
+    "g0": "Tr(W1*P_standard(0)) per mode, independently reconstructed from captured eigenvectors, occupations and k weights before nonzero runs.",
+    "h2_approved_rule_provenance": "User explicitly approved the h2-dominance rule on 2026-10-16; independent synthetic oracle /private/tmp/a4_h2_dominance_independent_test.py SHA 660d4d9372bd1b8f06682f7478e63d583f407c99283c564b1373990565d02110.",
+    "h2_resolution": "Approved h2-dominance rule: A=D(.005)-D(.0025), B=D(.01)-D(.005), L=(16A-B)/36, H=(B-4A)/180. Propagate uA/uB from frozen uD and arithmetic bounds, then uL/uH through these linear combinations. Require |L|>uL and |L|-uL>16*(|H|+uH), evaluated with outward uncertainty and exact Decimal comparison. This replaces only the former strict 4:1 scaling check. Keep Richardson, g0/ug0, N_unc and |R_fine-g0|<=N_unc unchanged.",
+    "identity_bias": "B_W=R_fine-g0; report independently and pass only if scaling is resolved and abs(B_W)<=N_unc.",
+    "noncircular_allowance": "N_unc=uR_fine+B_trunc+ug0, rounded upward with a gamma bound for its addition. The measured identity residual is excluded from N_unc.",
+    "repeat_uncertainty": "uR_fine=(4uD_0.0025+uD_0.005)/3; uR_coarse=(4uD_0.005+uD_0.01)/3, each rounded upward and augmented by gamma bounds for Richardson arithmetic.",
+    "richardson": "R_fine=(4D_0.0025-D_0.005)/3; R_coarse=(4D_0.005-D_0.01)/3.",
+    "serialized_Q": "For each captured E/e24.16 or ES24.16 token, preserve the raw token and derive Q as half its decimal quantum from the token's actual mantissa digits and emitted exponent, including printed zero tokens. The lambda-input uncertainty is half-ULP of its exact deck/runtime binary value.",
+    "truncation_bound": "B_trunc=abs(R_fine-R_coarse)/15 + (uR_fine+uR_coarse)/15, rounded upward with a gamma bound for its arithmetic.",
+    "uD_h": "(uF(+h)+uF(-h))/(2h), dimensionless.",
+    "uF_ry": "abs(F_tight(lambda)-F_standard(lambda)) + B_F_tight + B_F_standard + gamma_1*(|F_tight|+|F_standard|), rounded upward with propagated analysis arithmetic bounds. No fixed absolute energy comparator is added.",
+    "ug0": "abs(Tr(W1*(P_tight(0)-P_standard(0)))) + gamma_256*sum_ij abs(W1_ij)*(|P_standard(0)_ji|+|P_tight(0)_ji|) + sum_ij abs(W1_ij)*(P_component_bound_standard_ji+P_component_bound_tight_ji); dynamic scales and input bounds use both matrices, separately per mode."
+  },
+  "governance": {
+    "binary": "/private/tmp/a4-m2-serial/bin/rslmto.x",
+    "binary_sha256": "536fa80a34c510782013a5608fc1220dca26b52a10189a2334e40ed43e12a0b4",
+    "lambda0_analysis_report": null,
+    "lambda0_calibration_preregistration": "docs/validation/fixed_ldau/evidence/a4_m21_ks_lambda0_calibration_preregistration.json",
+    "lambda0_calibration_preregistration_sha256": "50f24c646af2e7c1eedc050d6b0b3c14b7cb55b5d6134e02cfa081913e1ba80f",
+    "lambda0_execution_manifest": null,
+    "protocol_sha256": "812bcafae105eabaea4ae0614f0b419e0d96638df37888342a8708a973f83980",
+    "source_ready_manifest": "docs/validation/fixed_ldau/evidence/a4_source_ready_manifest_v3.json",
+    "source_self_sha256": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010"
+  },
+  "schema": "rslmto-a4-m21-w1-response-prereg-template-v1",
+  "scope": "KS A4.1 W1 identity in spectral and local modes only. This template is not a released run registration until the lambda-zero anchor manifests and extracted g0/ug0 values are inserted and hash-locked.",
+  "shared_start": {
+    "accepted_no_u_endpoint": "/private/tmp/rslmto-localmom-m02-release/ks/Fe_out.nml",
+    "same_bytes_for_every_lambda_mode_and_repeat": true,
+    "sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df"
+  },
+  "status": "WAITING_FOR_REVIEWED_LAMBDA0_CALIBRATION; NO_NONZERO_RESPONSE_RUNS"
+}

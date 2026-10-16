@@ -1,0 +1,133 @@
+{
+  "analysis_model": {
+    "B_F": "Q(ETOT)+B_TS+gamma_3*(|ETOT|+|TS|+|lambda*Tr(WP)|)+B_lambda_trace; reconstruct F from ETOT/TS and protocol external term, so no Q(F token).",
+    "B_TS": "Join eigenvalue, occupation and k-weight raw rows exactly once by global k and full band index; reject gaps, duplicates, missing rows or inconsistent per-k weights. Spin is encoded in the complete band table. Capture writer and fermi_dirac_entropy call same fermi_dirac_occupation on the same eigenvalue/EF/effective-kT table. HP entropy uses raw occupation and weight token intervals through h(f), with h(0)=h(1)=0 and h<=ln(2). Multiply by source temperature K and exact binary64 source kB=6.3336814e-6. B_TS=Q(TS)+abs(TS_logged-HP_center)+interval radius+100/160-digit Decimal enclosure. The TS center discrepancy captures production entropy/log/summation without assumed libm gamma. Bind expected_n_kpoints and exact expected_band_indices from run metadata; source/self.f90 emits the full eigenvalues(ib,ik) loop, where ib is the global spin-inclusive band row.",
+    "B_lambda_trace": "B_trace=gamma_256*sum|W_ij P_ji|+sum|W_ij|*P_component_bound_ji; B_lambda_trace=|lambda|*B_trace+Q_lambda*(|Tr(WP)|+B_trace).",
+    "analysis_arithmetic": "Outward round positive bounds; include gamma guards through uF, centered D subtraction/division, exact decimal-to-binary h discrepancy, Richardson combinations, h2 X/Y and residual, truncation estimate and N_unc addition. Compare bias using exact Decimal subtraction of binary64 R_fine and g0. Add q_lambda*B_trace cross term.",
+    "decision_criterion": "No changes to reviewed Richardson formulas or strict h2-resolution inequality; known h4 toy is expected to be INCONCLUSIVE under the presently frozen strict criterion pending any governance amendment.",
+    "domain_guard": "Require captured global k indices == list(range(expected_n_kpoints)); source writes ig-1. Require expected band indices == list(range(nbands)); reject shifted, missing, duplicate, or extra indices.",
+    "gamma_verification": "Before analysis, verify gamma_n >= n*eps/(1-n*eps) in Decimal arithmetic for n={1,2,3,4,64,128,256}; abort if any bound fails.",
+    "raw_assembler": "Inventory phase verifies the frozen execution manifest and run-manifest-bound raw records.csv/stdout.log SHA-256 values without reading numeric contents. Assemble phase requires the inventory hash and rechecks every raw hash before token parsing. It preserves original ES24.16 strings for entropy/ETOT inputs, reconstructs P_ab=sum_kb weight*f*psi_a*conjg(psi_b) per spin from exact source basis_map/eigenvector rows, then sums spin blocks once. Every output carries source CSV/stdout/run-manifest hashes.",
+    "serialized_Q": "For every raw e24.16/ES24.16 token, Q is half the decimal quantum from mantissa digits and emitted exponent, including printed zero. Retain exact tokens.",
+    "synthetic_h2_check": "Pure h2 polynomial must resolve within operation-derived bounds. D=g+10h^2+32h^4 with roundoff-scale bounds is INCONCLUSIVE_STOP under unchanged strict 4:1 criterion; this is a premeasurement synthetic check only.",
+    "table_binding": "Expected k count, exact zero-based global k-index vector 0..N_k-1, and exact zero-based global band-index vector are explicit per-run input fields bound to source capture dimensions. Trace keys must equal these exact ranges; source band_index is the global spin-inclusive eigenvalue row.",
+    "ug0": "abs(Tr(W1*(P_tight-P_standard))) + gamma_256*sum abs(W1_ij)*(|P_standard_ji|+|P_tight_ji|) + sum abs(W1_ij)*(P_bound_standard_ji+P_bound_tight_ji), using both matrix scales."
+  },
+  "forbidden_until_reviewed_release": [
+    "g0/ug0 inspection or W1 residual calculation",
+    "nonzero lambda execution",
+    "changing strict h2 criterion without governance approval",
+    "A4.2 transfer"
+  ],
+  "governance": {
+    "base_run_manifest_path": "/private/tmp/rslmto-localmom-m02-release/ks/run_manifest.json",
+    "base_run_manifest_sha256": "8be28890f4926cf8cab889b7995bd28ba3b10a85523db2a978ea1ca23ce7502a",
+    "base_structure_path": "/private/tmp/rslmto-localmom-m02-release/ks/str.out",
+    "base_structure_sha256": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3",
+    "basis_map_convention": "Source self.f90 loops m_loop=0..2ell, writes row=base+ell^2+m_loop and col=m_loop-ell; CSV writer preserves col. Thus raw col is physical m directly.",
+    "binary_path": "/private/tmp/a4-m2-serial/bin/rslmto.x",
+    "binary_sha256": "536fa80a34c510782013a5608fc1220dca26b52a10189a2334e40ed43e12a0b4",
+    "calibration_preregistration_path": "docs/validation/fixed_ldau/evidence/a4_m21_ks_lambda0_calibration_preregistration.json",
+    "calibration_preregistration_sha256": "50f24c646af2e7c1eedc050d6b0b3c14b7cb55b5d6134e02cfa081913e1ba80f",
+    "expected_k_domain": "Derived from each hash-bound PRE reciprocal group: nk1*nk2*nk3, use_symmetry_reduction=false; require exact global indices 0..N_k-1. The current decks yield 1728.",
+    "expected_site_and_band_domain": "Site count is parsed from the hash-bound accepted M0.2 base structure LATTICE COORDINATES block, not the lambda-zero trace; bands=18*site_count with source-confirmed global spin-inclusive order.",
+    "lambda0_execution_manifest_path": "/private/tmp/a4-m21-ks-lambda0-execution/execution_manifest.json",
+    "lambda0_execution_manifest_sha256": "cfea7226f0e2bcbfae778d7a45a92205e6ff6dc70a01d66c2935a8f5f5bbb461",
+    "lambda0_operational_audit_sha256": "70ceafefc1202809ad62a69203ebb9775319406e2d3aa869c80793ba36d12887",
+    "lambda0_preparer_lock_sha256": "ab454c7b431a2e4ef31206bd42783613f1507d78e30ae030c347f5f97b0408b9",
+    "lambda0_prereg_sha256": "50f24c646af2e7c1eedc050d6b0b3c14b7cb55b5d6134e02cfa081913e1ba80f",
+    "protocol_sha256": "812bcafae105eabaea4ae0614f0b419e0d96638df37888342a8708a973f83980",
+    "source_ready_manifest_sha256": "db487ea375fb20dd025ed4d62b4ae880940b865f5fa16c3cefa95220985137ed",
+    "source_self_sha256": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010"
+  },
+  "lambda0_operational_status": {
+    "all_returncode_zero": true,
+    "converged_and_R05_n_audited": true,
+    "g0_ug0_or_F_comparison_done": false,
+    "numerical_outputs_opened": false,
+    "process_count": 8
+  },
+  "review": {
+    "attempt1_failure_receipt": {
+      "path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_assembler_attempt1_failure.json",
+      "sha256": "1ed67ca8f302dd527a136ae68fbe8b38eddc169bcb65887b9e97da352eda16d4"
+    },
+    "capture_values_opened": "Logger token formatting was observed during a failed parse; no assembled density or calibration comparisons were produced.",
+    "independent_review_status": "PENDING_FOCUSED_REVIEW_OF_WHITESPACE_FIX; NO_ASSEMBLED_REPORT",
+    "may_not_unblind_g0_before_review": false,
+    "raw_assembler": "Reviewer certified exact parser/test hashes; W1-only extraction is released. W2 and nonzero lambda remain sealed.",
+    "raw_inventory_sha256": "9eb74ebb1c3c44516b38cc4aa8f7b383e662ed7a6f08d143d813c630cb3aaa51",
+    "scope_limits": "W1 lambda-zero calibration only. W2 numerical content and all nonzero lambda response data remain unopened.",
+    "synthetic_lower_noise_h2_check": "LOCKED PRE-MEASUREMENT CHECK: pure h2 resolves; h4 contamination is INCONCLUSIVE_STOP. No lambda-zero numerical data consumed."
+  },
+  "schema": "rslmto-a4-m21-tooling-lock-v12",
+  "scope": "Additive supersession of v9 for the hash-certified W1 lambda-zero raw assembler. No production source or physics changes. The four W1 cases only are in scope; W2 and nonzero lambda stay unopened. This additive lock also binds the hash-only W1 input inventory; assembly may read only the four W1 CSV/stdout pairs listed in that inventory. Supersedes v11 only for logger whitespace parsing. The first W1 attempt failed before report creation; receipt is bound below. No numerical P/g0/F analysis completed.",
+  "status": "WHITESPACE_PARSER_FIX_SYNTHETIC_PASS_PENDING_REVIEW; FIRST_W1_ASSEMBLY_FAILED_WITHOUT_REPORT",
+  "tooling": {
+    "analysis_bounds_test": {
+      "path": "tests/validation/fixed_ldau/a4_m21_analysis_bounds_test.py",
+      "sha256": "154cdaf601178b5c0671ea701685407ae41155d228a0bc2f1c24ef3285c1b348"
+    },
+    "analyzer": {
+      "path": "tests/validation/fixed_ldau/a4_m21_w1_richardson.py",
+      "sha256": "6d439322b4ffe23b1360646445bc2851265c05cc731cbcb8ea149bae4132a7de"
+    },
+    "assembler_synthetic_test": {
+      "path": "tests/validation/fixed_ldau/a4_m21_assembler_test.py",
+      "result": "PASS; synthetic logger includes source-style whitespace after equals",
+      "sha256": "c3aadf891a78e71e30b7e1ba9f8ccf3fa4a875764f021eff1db1e53972d0cc68"
+    },
+    "executor": {
+      "path": "tests/validation/fixed_ldau/a4_m21_execute_lambda0.py",
+      "sha256": "8f49cb1b5dec3cd0bb784f0e300a48ea51f286febc2e481a76c998991883db42"
+    },
+    "raw_assembler": {
+      "path": "tests/validation/fixed_ldau/a4_m21_assemble_lambda0.py",
+      "sha256": "9ab37e727442ed5713c46ab75513136b02261ec0c5f5e38f6b1b19c997fc232e",
+      "sha256_binding_review": "a2_gate_review PASS"
+    },
+    "raw_inventory": {
+      "path": "/private/tmp/a4-m21-ks-lambda0-w1-inventory.json",
+      "sha256": "9eb74ebb1c3c44516b38cc4aa8f7b383e662ed7a6f08d143d813c630cb3aaa51",
+      "status": "HASH_INVENTORY_ONLY_NO_NUMERIC_CONTENT_READ"
+    },
+    "raw_inventory_case_csv_stdout_sha256": {
+      "w1_local_standard": {
+        "input_nml_pre_sha256": "ab2ef5707255fdd40baf729559be46326dbd0e9bfa0d72646e377091e1c7732a",
+        "records_csv_sha256": "2fad68356dd7de6e9abd1321b4de67074de0b5231386318d5d9e4a67ec955167",
+        "run_manifest_sha256": "f592f41cc66d73f289aef19fd6d6436b0c90759189d6a8cc77613ed30702234a",
+        "seed_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+        "stdout_sha256": "36812320d62baf3008530b8323eaa2a51e7efe132ac7b7889f668bb8939a26ca"
+      },
+      "w1_local_tight": {
+        "input_nml_pre_sha256": "b29a8584c8e2010be13d08b9a7f75f222e1cdc2a7c10fb59b5d7bfe9716b1ab5",
+        "records_csv_sha256": "214208b535c2c907d79f001bbde70d20c3350be51450b9d23b07c7f1cdd265ce",
+        "run_manifest_sha256": "86276e577500d9e264b6716bf5db5bcf77390fb50e5eb8c654adfbdcd98660b8",
+        "seed_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+        "stdout_sha256": "c2a3059a9fec7dd78d4efca0a81f361c36674a03fdb52b5424594b833efcc67a"
+      },
+      "w1_spectral_standard": {
+        "input_nml_pre_sha256": "ada14a49f08719ef63508cb1dbeec73ad7c819fe193987fbc3dac39ced921591",
+        "records_csv_sha256": "7df4bd51f1c2a7b0eb456829206a33538d88064f6ee981a4e376138fb9886d49",
+        "run_manifest_sha256": "e3bef17f56d483dc5704bf1fb18b6ba1e8a90766122cc5e9c876d1ff685e24a6",
+        "seed_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+        "stdout_sha256": "ddf8b86f513cde7dabf26c5ca60a8126663d789f615d05c79b9c719f2fa7a1d6"
+      },
+      "w1_spectral_tight": {
+        "input_nml_pre_sha256": "ef39cae1b066e10978b330998bf9d6f157db2c2ab6096b7c0b43bda1a7cbc55f",
+        "records_csv_sha256": "9accd28dfa99b91d751950675b1cb9aa3d33396424039baa767d5378592dcc83",
+        "run_manifest_sha256": "7f583f8a48852d6e205af259cf215cddd0a50ec6658264c5458877a93a3b1a09",
+        "seed_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+        "stdout_sha256": "86f179311b1d0f5ca7f8cfb9eed7b2f616f81640622c8f5a52271078023794f1"
+      }
+    },
+    "registration_builder": {
+      "path": "tests/validation/fixed_ldau/a4_m21_register_w1.py",
+      "sha256": "3c90134190c21c14cdde7eba8638e845388b9b238303980f677b8937e0458b8d"
+    },
+    "response_template": {
+      "path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_response_preregistration.template.json",
+      "sha256": "ba75a9df214f743ccad4e1384646e6b6db83440a503cdf041f613f392581edb2"
+    }
+  }
+}

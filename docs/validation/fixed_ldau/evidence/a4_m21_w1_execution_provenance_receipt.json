@@ -1,0 +1,43 @@
+{
+  "assembled_raw_payload": {
+    "path": "/private/tmp/a4-m21-ks-w1-responses-assembled.json",
+    "sha256": "76e92c87751ef5170a24e5be964a2d201e55ab944d17cc4d9e1cfd0cf706695b"
+  },
+  "collection_lock_v2": {
+    "path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_response_collection_lock_v2.json",
+    "sha256": "7686105ad298eaae786dc79936a530919b59bacb568d6b60b3bce6328a82d3cd"
+  },
+  "execution_manifest": {
+    "case_count": 24,
+    "elapsed_seconds": 3027.819551229477,
+    "failed_run_ids": [],
+    "path": "/private/tmp/a4-m21-ks-w1-execution/execution_manifest.json",
+    "sha256": "be81dcba141a458b4e055859a9c9a7d596f97293fa858f250a482e5c997352ce",
+    "status": "ALL_PROCESSES_EXITED"
+  },
+  "hash_inventory": {
+    "path": "/private/tmp/a4-m21-ks-w1-response-hash-inventory-v2.json",
+    "sha256": "13a68315e16234aa447a8142ead316887dd2e85299f02e8638f207fbb92f13c3",
+    "status": "HASH_INVENTORY_ONLY_NO_NUMERIC_CONTENT_READ"
+  },
+  "operational_audit": {
+    "details": "24/24 return code zero; one literal Converged marker per stdout; no fatal or iteration-limit markers; declared artifacts hash/size matched receipts; receipt static assets matched registration; only str.out was runtime-mutated, with registered preimage preserved and recorded; other six static assets unchanged.",
+    "result": "PASS"
+  },
+  "registration": {
+    "path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_response_preregistration.json",
+    "sha256": "4c3e66d9f6bcc56b82b2c4b548e35b909bfb22e9a436baa0b7e4fd8278b46064"
+  },
+  "representation_adapter": {
+    "path": "/private/tmp/a4-m21-ks-w1-responses-analysis-input-v2.json",
+    "sha256": "d04b5925c6d1eef2919b148df7c0163c8dae149b33f49772462c74d633a1b9d2"
+  },
+  "schema": "a4-m21-w1-execution-provenance-receipt-v1",
+  "scope": "Execution provenance only. No identity/scaling result or M2 gate verdict is stated here; the numerical analyzer/reviewer verdict is pending.",
+  "stage_end_tests": {
+    "path": "docs/validation/fixed_ldau/evidence/a4_final_stage_test_receipt.json",
+    "result": "fresh Release serial suite 122/122 plus three synthetic Python tests passed",
+    "sha256": "72e6d0cc1a580c19e9f127789d82acc328d9d7ada8fd915767689ec740c3f8c5"
+  },
+  "status": "EXECUTION_AND_PROVENANCE_BOUND_SCIENTIFIC_VERDICT_PENDING"
+}

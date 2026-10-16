@@ -13,7 +13,9 @@ program test_lda_u_hamiltonian
    use reciprocal_mod, only: reciprocal
    use logger_mod, only: g_logger
    use math_mod, only: Coulomb_mat_spherical
-   use mix_mod, only: mix, fixed_u_residual_metrics, fixed_u_required_stable_updates
+   use mix_mod, only: mix, fixed_u_residual_metrics, fixed_u_required_stable_updates, &
+      fixed_u_density_tolerance, fixed_u_potential_tolerance, &
+      fixed_u_test_tight_density_tolerance, fixed_u_test_tight_potential_tolerance
    implicit none
 
    real(rp), parameter :: tolerance = 1.0e-11_rp
@@ -42,6 +44,7 @@ program test_lda_u_hamiltonian
       call test_energy_evaluator_dudarev()
       call test_d_shell_complex_derivative()
    call test_correlated_trace_and_common_state_fourier()
+   call test_a4_w2_operator_insertion()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -51,6 +54,52 @@ program test_lda_u_hamiltonian
    end if
 
 contains
+
+   subroutine test_a4_w2_operator_insertion()
+      complex(rp) :: w(5,5), expected(5,5)
+      complex(rp), allocatable :: expected_carrier(:, :)
+      integer :: i, j, oi, oj, spin
+
+      call basis_init(2)
+      if (allocated(ham%hubbard_u_pot)) deallocate(ham%hubbard_u_pot)
+      allocate(ham%hubbard_u_pot(nb, nb, 1))
+      allocate(expected_carrier(nb, nb))
+      ham%hubbard_u_pot = cmplx(9.0_rp, -3.0_rp, rp)
+      ham%hubbard_u_general_check = .false.
+      ham%hubbard_test_operator = 'w2'
+      ham%hubbard_test_operator_check = .true.
+      ham%hubbard_test_lambda = 0.25_rp
+      call ham%get_hubbard_test_operator(w)
+      expected = cmplx(0.0_rp, 0.0_rp, rp)
+      expected(1,2) = cmplx(0.0_rp, 1.0_rp, rp)
+      expected(2,1) = cmplx(0.0_rp, -1.0_rp, rp)
+      expected(3,3) = cmplx(0.5_rp, 0.0_rp, rp)
+      expected(4,4) = cmplx(-0.25_rp, 0.0_rp, rp)
+      call require(maxval(abs(w - expected)) == 0.0_rp, 'A4 W2 exact matrix entries')
+      call require(maxval(abs(w - transpose(conjg(w)))) == 0.0_rp, 'A4 W2 exact Hermiticity')
+      call require(abs(w(1,2) - cmplx(0.0_rp,1.0_rp,rp)) == 0.0_rp .and. &
+                   abs(w(2,1) - cmplx(0.0_rp,-1.0_rp,rp)) == 0.0_rp, &
+                   'A4 W2 normalized complex block')
+      call ham%add_hubbard_test_operator()
+      expected_carrier = cmplx(0.0_rp, 0.0_rp, rp)
+      do spin = 1, 2
+         do i = 1, 5
+            oi = 4 + i + spin_off*(spin - 1)
+            do j = 1, 5
+               oj = 4 + j + spin_off*(spin - 1)
+               call require(abs(ham%hubbard_u_pot(oi,oj,1) - 0.25_rp*w(i,j)) == 0.0_rp, &
+                  'A4 W2 enters the production hubbard_u_pot d block for each spin')
+               expected_carrier(oi, oj) = 0.25_rp*w(i,j)
+            end do
+         end do
+      end do
+      call require(maxval(abs(ham%hubbard_u_pot(:,:,1) - expected_carrier)) == 0.0_rp, &
+                   'A4 W2 replaces stale U=0 carrier and leaves non-d/cross-spin blocks zero')
+      ham%hubbard_test_operator = 'none'
+      ham%hubbard_test_operator_check = .false.
+      ham%hubbard_test_lambda = 0.0_rp
+      deallocate(expected_carrier)
+   end subroutine test_a4_w2_operator_insertion
 
    subroutine test_nonmutating_hubbard_potential_snapshot()
       complex(rp) :: density(1,4,2,7,7), live_ldm(2,7,7)
@@ -144,6 +193,24 @@ contains
       call mixer%advance_fixed_u_convergence(0.0_rp,0.0_rp,.false.,converged)
       call require(.not. converged .and. mixer%fixed_u_stable_updates == 0, &
          'invalid occupation physicality resets convergence streak')
+
+      ! The ordinary targets stay exactly 1e-7. The opt-in A4 repeat passes
+      ! 1e-8 to both observables without changing the three-update streak.
+      call require(fixed_u_density_tolerance == 1.0e-7_rp .and. &
+                   fixed_u_potential_tolerance == 1.0e-7_rp, 'default R05 targets remain 1e-7')
+      call require(fixed_u_test_tight_density_tolerance == 1.0e-8_rp .and. &
+                   fixed_u_test_tight_potential_tolerance == 1.0e-8_rp, 'tight R05 targets are 10x lower')
+      mixer%fixed_u_stable_updates = 0
+      do step = 1, fixed_u_required_stable_updates
+         call mixer%advance_fixed_u_convergence(5.0e-8_rp,5.0e-8_rp,.true.,converged)
+         call require(converged .eqv. (step == fixed_u_required_stable_updates), &
+            'default R05 targets accept residuals below 1e-7')
+      end do
+      mixer%fixed_u_stable_updates = 0
+      call mixer%advance_fixed_u_convergence(5.0e-8_rp,5.0e-8_rp,.true.,converged, &
+         fixed_u_test_tight_density_tolerance, fixed_u_test_tight_potential_tolerance)
+      call require(.not. converged .and. mixer%fixed_u_stable_updates == 0, &
+         'tight R05 rejects residuals above 1e-8')
 
       pout(1,1,1,1) = 1.01_rp
       pout(1,1,2,2) = -0.01_rp

@@ -270,8 +270,9 @@ contains
    end subroutine correct_d_shell_moments
 
    !> Extract the on-site, spin-diagonal d-shell block from the operator that
-   !> is actually stored in the Hamiltonian.  `spin_off` is the per-spin basis
-   !> stride; the real-harmonic d orbitals occupy indices 5:9 in each block.
+   !> is actually stored in the Hamiltonian.  In the spherical onsite basis,
+   !> the d channels are m=-2..2 at indices 5:9 (see PHASE1.md and
+   !> PROJECTOR_CONTRACT.md). `spin_off` is the per-spin basis stride.
    subroutine extract_hubbard_d_shell_potential(hubbard_u_pot, site_type, spin, spin_off, v_d, status)
       complex(rp), intent(in) :: hubbard_u_pot(:, :, :)
       integer, intent(in) :: site_type, spin, spin_off

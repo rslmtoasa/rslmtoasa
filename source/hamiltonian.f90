@@ -114,6 +114,13 @@ module hamiltonian_mod
       character(len=16) :: hubbard_u_potential_form
       !> Radial band-moment convention: legacy spectral or local Hubbard-adjusted.
       character(len=16) :: hubbard_radial_moments = 'spectral'
+      !> Explicit A4 test-only d-shell operator selector: none, w1, or w2.
+      character(len=16) :: hubbard_test_operator = 'none'
+      !> A4 external test-potential scale in Ry; ignored when selector is none.
+      real(rp) :: hubbard_test_lambda = 0.0_rp
+      logical :: hubbard_test_operator_check = .false.
+      !> Opt-in A4 repeat control: tighten both active fixed-U R05 tolerances 10x.
+      logical :: fixed_u_test_tighten_r05 = .false.
       !> Sparse Real Space Hamiltonian (dense legacy format)
       complex(rp), dimension(:, :), allocatable :: h_sparse
       !> On-site potential correction for LDA+U (+J) in spin-orbital basis
@@ -164,6 +171,8 @@ module hamiltonian_mod
       procedure :: rotate_to_local_axis
       procedure :: rotate_from_local_axis
       procedure :: calculate_hubbard_u_potential_general
+      procedure :: add_hubbard_test_operator
+      procedure :: get_hubbard_test_operator
       procedure :: evaluate_hubbard_energy
       procedure :: calculate_hubbard_v_potential
       procedure :: compute_hamiltonian_bounds
@@ -951,6 +960,18 @@ module hamiltonian_mod
          integer, allocatable :: val(:)
       end type int_array
    end subroutine calculate_hubbard_u_potential_general
+
+   !> Add the explicit A4 test-only d-shell operator to the existing onsite
+   !> Hubbard potential carrier; the disabled default is a strict no-op.
+   module subroutine add_hubbard_test_operator(this)
+      class(hamiltonian), intent(inout) :: this
+   end subroutine add_hubbard_test_operator
+
+   !> Return the unscaled A4 test operator in the spherical onsite d basis.
+   module subroutine get_hubbard_test_operator(this, operator)
+      class(hamiltonian), intent(in) :: this
+      complex(rp), intent(out) :: operator(5, 5)
+   end subroutine get_hubbard_test_operator
 
    !> Evaluate the fixed Liechtenstein functional and its one-body trace from
    !> explicit density and potential snapshots. Density and potential use the

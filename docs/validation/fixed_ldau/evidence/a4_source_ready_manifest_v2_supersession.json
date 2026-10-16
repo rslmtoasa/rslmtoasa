@@ -1,0 +1,13 @@
+{
+  "decision": "The proposed explicit addition of lambda*Tr(WP) to spectral ETOT/F was rejected before outcomes because the prescribed spectral energy is ETOT_spectral and the operator enters through the Hamiltonian/eigenvalues and band/radial energy path; an extra explicit term could double count. Preserve physical_total_energy and the original spectral diagnostic formula. The transient source edit was reverted exactly to the v1 self.f90 hash.",
+  "matched_serial_binary": "/private/tmp/a4-m2-serial/bin/rslmto.x",
+  "matched_serial_binary_sha256": "536fa80a34c510782013a5608fc1220dca26b52a10189a2334e40ed43e12a0b4",
+  "measurement_status": "No A4.1 lambda SCF or response outcome was run with the transient source or binary.",
+  "restored_ready_manifest": "docs/validation/fixed_ldau/evidence/a4_source_ready_manifest.json",
+  "restored_ready_manifest_sha256": "3dd0017227f0824b5285f762b9b123d388260b7b623fee51a1cbfa24d2eb3feb",
+  "restored_self_source_sha256": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010",
+  "schema": "fixed-ldau-a4-source-manifest-supersession-v1",
+  "status": "INTERMEDIATE_PROPOSAL_REJECTED_BEFORE_BUILD_OR_MEASUREMENT",
+  "superseded_manifest": "docs/validation/fixed_ldau/evidence/a4_source_ready_manifest_v2.json",
+  "superseded_manifest_sha256": "1af586e42f5535a9830c6b63437e2224bc9ea0601ec908ab98850c1d61313984"
+}

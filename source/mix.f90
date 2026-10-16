@@ -46,6 +46,8 @@ module mix_mod
    ! floors; production discretization refinement must verify attainability.
    real(rp), parameter, public :: fixed_u_density_tolerance = 1.0e-7_rp
    real(rp), parameter, public :: fixed_u_potential_tolerance = 1.0e-7_rp
+   real(rp), parameter, public :: fixed_u_test_tight_density_tolerance = 1.0e-8_rp
+   real(rp), parameter, public :: fixed_u_test_tight_potential_tolerance = 1.0e-8_rp
    integer, parameter, public :: fixed_u_required_stable_updates = 3
    public :: fixed_u_residual_metrics
 
@@ -198,14 +200,25 @@ contains
 
    !> Advance a three-success stability gate. A bad physicality check or a
    !> residual above target clears the streak; callers skip this for inactive U.
-   subroutine advance_fixed_u_convergence(this, rp_residual, rv_residual, physical, converged)
+   subroutine advance_fixed_u_convergence(this, rp_residual, rv_residual, physical, converged, &
+                                          density_tolerance, potential_tolerance)
       class(mix), intent(inout) :: this
       real(rp), intent(in) :: rp_residual, rv_residual
       logical, intent(in) :: physical
       logical, intent(out) :: converged
+      real(rp), intent(in), optional :: density_tolerance, potential_tolerance
+      real(rp) :: rp_target, rv_target
+      rp_target = fixed_u_density_tolerance
+      rv_target = fixed_u_potential_tolerance
+      if (present(density_tolerance)) rp_target = density_tolerance
+      if (present(potential_tolerance)) rv_target = potential_tolerance
+      if (.not. ieee_is_finite(rp_target) .or. .not. ieee_is_finite(rv_target) .or. &
+          rp_target <= 0.0_rp .or. rv_target <= 0.0_rp) then
+         call g_logger%fatal('Fixed-U convergence thresholds must be positive and finite.', __FILE__, __LINE__)
+      end if
       if (.not. physical .or. .not. ieee_is_finite(rp_residual) .or. .not. ieee_is_finite(rv_residual)) then
          this%fixed_u_stable_updates = 0
-      else if (rp_residual <= fixed_u_density_tolerance .and. rv_residual <= fixed_u_potential_tolerance) then
+      else if (rp_residual <= rp_target .and. rv_residual <= rv_target) then
          this%fixed_u_stable_updates = this%fixed_u_stable_updates + 1
       else
          this%fixed_u_stable_updates = 0

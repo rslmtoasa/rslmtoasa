@@ -1,0 +1,62 @@
+{
+  "branch": "fix/ldau-m2-energy",
+  "build_constraint": "Production source is frozen to these hashes. The serial Release binary is bound above; any production source change requires new matched build provenance.",
+  "decision_record": "Preserve user A4.1 formulas exactly: F_local=ETOT_local+lambda*Tr(WP)-TS; F_spectral=ETOT_spectral-TS. Do not add a second explicit lambda*Tr(WP) to spectral ETOT/F; the test operator is in the Hamiltonian and follows the KS band/radial energy path. physical_total_energy remains unchanged.",
+  "frozen_a4_record_sha256": "fcf63911ce8463d543ecc8a9718a12f4487fcdd9a785c6453fba0566fe17a6f4",
+  "historical_pre_a4_snapshot_sha256": "78ee4618026dd7885da272443aeb08dda1aa856a76259e5fffeae7235b74ef91",
+  "matched_debug_build": {
+    "cmake": "4.4.4",
+    "cmake_cache_sha256": "5f17d6046dc414c1dfc35864405073876cda1c09dec9846d2a9401996f0a94fc",
+    "compiler": "GNU Fortran 16.2.0",
+    "latest_unit_binary_sha256": "ba859da7991693e5eb61be85acb5381c75872725ee5d19970102e3d0d9088010",
+    "options": "Debug, MPI OFF, OpenMP OFF, unit tests ON",
+    "path": "/private/tmp/a4-m2-unit-debug"
+  },
+  "matched_serial_build": {
+    "binary_sha256": "536fa80a34c510782013a5608fc1220dca26b52a10189a2334e40ed43e12a0b4",
+    "note": "Integrator reports this Release executable and the in-progress serial test suite were built from the exact restored v1 source. No lambda runs have started.",
+    "path": "/private/tmp/a4-m2-serial/bin/rslmto.x",
+    "source_manifest_sha256": "3dd0017227f0824b5285f762b9b123d388260b7b623fee51a1cbfa24d2eb3feb",
+    "source_self_sha256": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010"
+  },
+  "pre_response_unit_checks": {
+    "entropy_ctest_output": "d9a7540c096852ea311a2fbc3258b79720a49c10ad30949883e4c5ccb3d2a273",
+    "entropy_lock": "bfad475e1fe633499638fe6cda387a4a3cd9d090b061b121ec099f2f64756836",
+    "entropy_result": "608b6ceb4bb5d22c9e2ba97221ccbd4ee7e04733d160616ae5da36f577facc51",
+    "r05_w2_ctest_output": "f8d56ab1c5bea8af99933a5deb50f130b08dd74f6a2b299925322d1355d75e18",
+    "r05_w2_lock": "789286f375c1e3f642d740ea0533e1213c54939a5288a92dc7ce41b677424078",
+    "r05_w2_result": "1ea3af101a9cf6507fcf2aed2557cbf0c685c57672e2dc9f78edb4831c67eb6d",
+    "status": "Entropy analytic test passed; W2 insertion/default-vs-tight R05 unit test passed. No SCF or lambda-response has run."
+  },
+  "production_changes": [
+    "A4.0(b): source comment identifies stored indices 5:9 as spherical onsite d m=-2..+2 and points to phase/projector basis evidence.",
+    "A4.0(c): Fermi-Dirac entropy diagnostic uses the same spin rows and k weights as P; total candidates report F=E-TS, while site F and non-KS entropy are explicitly unavailable.",
+    "A4.1: default-off test-only W1/W2 input inserts lambda W into hubbard_u_pot; local moments consume total Vin. W2 is the registered complex Hermitian anisotropic matrix.",
+    "A4.1: fixed_u_test_tighten_r05 defaults off; when fixed-U R05 is active it passes 1e-8 density and potential thresholds, preserving the 3-update streak. Inactive R05 is logged NOT APPLICABLE.",
+    "A4.1: provisional diagnostics separate t_U, external lambda Tr(WP), and the actual total Vin trace; local candidate b includes the external energy term. physical_total_energy remains unchanged."
+  ],
+  "protocol_sha256": "812bcafae105eabaea4ae0614f0b419e0d96638df37888342a8708a973f83980",
+  "schema": "fixed-ldau-a4-source-ready-manifest-v3",
+  "source_revision": "f0ed469d29d8feb6e8569b103f10b9bc1bc748e4",
+  "source_sha256": {
+    "CMakeLists.txt": "9fe1bb0c871d447f732e007ebf9c9015dda642799f0402035f13062383acebd8",
+    "docs/validation/fixed_ldau/evidence/a4_source_ready_manifest.json": "3dd0017227f0824b5285f762b9b123d388260b7b623fee51a1cbfa24d2eb3feb",
+    "docs/validation/fixed_ldau/evidence/a4_source_ready_manifest_v2.json": "1af586e42f5535a9830c6b63437e2224bc9ea0601ec908ab98850c1d61313984",
+    "source/bands.f90": "0084d3f1c2b86bec60954265ca99a5185df8baf096ffd0ec7783396b9041c130",
+    "source/hamiltonian.f90": "b87ffc6a0dc873903f852a61b3405e54547f4069d1c232a83d0d9edfc385fefa",
+    "source/hamiltonian_build.f90": "ebcdfec08a05c300dd6ea531b24c835ffb1feb41213bd9c58037b7fa9be33fc1",
+    "source/hamiltonian_hubbard.f90": "ad1ebfe6cfe45dcea5d3c6e27f2240d16c06b17916b9025f602649b4819b3635",
+    "source/include_codes/namelists/hamiltonian.f90": "91ea68a007b59f768aee2712edd785d3ec6ed6d051ceb2cfdc2e181b4b97b684",
+    "source/math.f90": "e4bbcaecb2d8978fd3cc0d5e8b376285bd6b60aaa336a49a60911eaa7851b7ec",
+    "source/mix.f90": "b1b91e583220c92a611a5b4762cba943d13f6ccb4e8127828184b3bc32b57b00",
+    "source/reciprocal.f90": "7e0bc468e294b13a8bf12257f99c79d80f2613e8009804901fa1d6e78d248a23",
+    "source/reciprocal_occupations.f90": "8a2f569bc3eca77691491276b936c0eea3ab01e32a6c65747f4b9dab5824821b",
+    "source/self.f90": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010",
+    "tests/unit/test_fermi_dirac_entropy.f90": "ac9f2168312334b02767fd751e7ba9cb495fa7ea89f2dc734b3cb9882514ed60",
+    "tests/unit/test_lda_u_hamiltonian.f90": "e86d3e17e4f2ae9677dc4fefc61b9b613b26200880d5f8edb8fa66ee76fe8597"
+  },
+  "status": "READY_FROZEN_RESTORED_V1_SOURCE_FOR_MATCHED_BUILD",
+  "superseded_proposal_status": "The v2 external-term diagnostic edit was rejected before measurement and fully reverted; current source/self.f90 exactly matches original v1.",
+  "supersedes_manifest_sha256": "1af586e42f5535a9830c6b63437e2224bc9ea0601ec908ab98850c1d61313984",
+  "worktree": "/private/tmp/rslmto-ldau-m2-energy-worktree"
+}

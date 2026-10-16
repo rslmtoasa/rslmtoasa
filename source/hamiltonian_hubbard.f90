@@ -2,6 +2,57 @@ submodule(hamiltonian_mod) hamiltonian_hubbard
 
 contains
 
+   module subroutine get_hubbard_test_operator(this, operator)
+      class(hamiltonian), intent(in) :: this
+      complex(rp), intent(out) :: operator(5, 5)
+      integer :: i
+
+      operator = cmplx(0.0_rp, 0.0_rp, rp)
+      select case (trim(this%hubbard_test_operator))
+      case ('w1')
+         do i = 1, 5
+            operator(i, i) = cmplx(1.0_rp, 0.0_rp, rp)
+         end do
+      case ('w2')
+         operator(1, 2) = cmplx(0.0_rp, 1.0_rp, rp)
+         operator(2, 1) = cmplx(0.0_rp, -1.0_rp, rp)
+         operator(3, 3) = cmplx(0.5_rp, 0.0_rp, rp)
+         operator(4, 4) = cmplx(-0.25_rp, 0.0_rp, rp)
+      case ('none')
+         continue
+      case default
+         call g_logger%fatal('Unknown A4 Hubbard test operator.', __FILE__, __LINE__)
+      end select
+   end subroutine get_hubbard_test_operator
+
+   module subroutine add_hubbard_test_operator(this)
+      use basis_mod, only: spin_off
+      class(hamiltonian), intent(inout) :: this
+      complex(rp) :: operator(5, 5)
+      integer :: itype, spin, i, j, orbital_i, orbital_j
+
+      if (.not. this%hubbard_test_operator_check) return
+      if (.not. allocated(this%hubbard_u_pot)) &
+         call g_logger%fatal('A4 Hubbard test operator requires allocated hubbard_u_pot.', __FILE__, __LINE__)
+      if (.not. this%hubbard_u_general_check) this%hubbard_u_pot = cmplx(0.0_rp, 0.0_rp, rp)
+      call this%get_hubbard_test_operator(operator)
+      do itype = 1, size(this%hubbard_u_pot, 3)
+         do spin = 1, 2
+            do i = 1, 5
+               orbital_i = 4 + i + spin_off*(spin - 1)
+               do j = 1, 5
+                  orbital_j = 4 + j + spin_off*(spin - 1)
+                  if (orbital_i > size(this%hubbard_u_pot, 1) .or. &
+                      orbital_j > size(this%hubbard_u_pot, 2)) &
+                     call g_logger%fatal('A4 Hubbard test operator d block exceeds the Hamiltonian basis.', __FILE__, __LINE__)
+                  this%hubbard_u_pot(orbital_i, orbital_j, itype) = this%hubbard_u_pot(orbital_i, orbital_j, itype) + &
+                     this%hubbard_test_lambda*operator(i, j)
+               end do
+            end do
+         end do
+      end do
+   end subroutine add_hubbard_test_operator
+
    module subroutine evaluate_hubbard_energy(this, density, potential, e_int, e_dc, e_hub, tr_vp)
       class(hamiltonian), intent(in) :: this
       complex(rp), intent(in) :: density(:, :, :, :, :), potential(:, :, :, :, :)

@@ -1,0 +1,113 @@
+{
+  "collector_contract": {
+    "cache_policy": "float(token) and certified token_radius(token) caches are scoped to a single case and cleared/restored before the next case",
+    "inventory_schema": "rslmto-a4-m21-w1-response-hash-inventory-v1",
+    "inventory_status": "HASH_INVENTORY_ONLY_NO_NUMERIC_CONTENT_READ",
+    "output_scope": "Assemble 24 signed W1 response captures plus four reviewed lambda-zero captures into the 28-case analyzer input. The collector performs no gate or derivative evaluation.",
+    "required_case_fields": [
+      "case_manifest_path",
+      "case_manifest_sha256",
+      "input_nml_pre_sha256",
+      "seed_sha256",
+      "outputs.stdout.path+sha256",
+      "outputs.stderr.path+sha256",
+      "outputs.trace.path+sha256",
+      "outputs.final_state.path+sha256",
+      "runtime_mutated_assets.str.out={path,post_run_sha256,post_run_size_bytes,registered_pre_sha256,preserved_preimage_path,preserved_preimage_sha256,changed_after_launch}",
+      "static_assets receipt equals registration; six non-str.out assets unchanged"
+    ]
+  },
+  "criterion": {
+    "h2_resolution": "user-approved: |L|-uL > 16*(|H|+uH), with |L|>uL; L=(16A-B)/36, H=(B-4A)/180",
+    "h2_scalings": "A=D(.005)-D(.0025), B=D(.01)-D(.005)",
+    "identity_bias": "unchanged: |R_fine-g0| <= N_unc",
+    "richardson_and_uncertainty": "unchanged approved analyzer expressions; no fixed absolute noise floor"
+  },
+  "numeric_outcomes_have_not_been_unblinded": true,
+  "production_bindings": {
+    "binary_path": "/private/tmp/a4-m2-serial/bin/rslmto.x",
+    "binary_sha256": "536fa80a34c510782013a5608fc1220dca26b52a10189a2334e40ed43e12a0b4",
+    "source_manifest_path": "docs/validation/fixed_ldau/evidence/a4_source_ready_manifest_v3.json",
+    "source_manifest_sha256": "db487ea375fb20dd025ed4d62b4ae880940b865f5fa16c3cefa95220985137ed",
+    "source_self_sha256": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010"
+  },
+  "protocol_sha256": "812bcafae105eabaea4ae0614f0b419e0d96638df37888342a8708a973f83980",
+  "response_measurements_may_be_collected": true,
+  "response_registration": {
+    "case_count": 24,
+    "path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_response_preregistration.json",
+    "sha256": "4c3e66d9f6bcc56b82b2c4b548e35b909bfb22e9a436baa0b7e4fd8278b46064",
+    "status": "PRE_RESPONSE_LOCKED_NO_NONZERO_RUNS"
+  },
+  "reviewed_zero_anchor": {
+    "assembled_payload_path": "/private/tmp/a4-m21-ks-lambda0-w1-assembled.json",
+    "assembled_payload_sha256": "ce78b15e3984f007b76d61fff5d032c48d64ae13bc60efcd9149b1607de7bb7e",
+    "builder_anchor_adapter_path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_lambda0_reviewed_anchor_report.json",
+    "builder_anchor_adapter_sha256": "84c2cc1c8ccfae99315a2cd9b42073f5ca4385b7678d5fc6f8277bb5682ae768",
+    "reviewer_audit_path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_lambda0_reviewer_audit.json",
+    "reviewer_audit_sha256": "8dfae2119f553927f46571b63a83beeaa8e4bec8c703d21f9770e6cfba5e6e2a"
+  },
+  "schema": "rslmto-a4-m21-w1-response-collection-lock-v2",
+  "source_provenance": {
+    "replace_open": {
+      "evidence": "opens str.out with status=replace",
+      "path": "source/include_codes/strux_lib/strux_structb_compare.f90",
+      "sha256": "dd80cb8f9ad2448af4fe9403121d74281672b2da2f5d1982bd9abdf6d121b450"
+    },
+    "rule": "Receipt static_assets must exactly match registered PRE hashes. Only source-proven str.out may change after launch; its preserved original preimage and post-run path/hash/size are recorded. All other six assets must remain unchanged.",
+    "runtime_writer": {
+      "evidence": "structb writes the output through unit 17",
+      "path": "source/lattice_strux.f90",
+      "sha256": "50a3c1270ad6b54025e503b99d89f5906a62f1e72b02b830ea83a971b390345d"
+    },
+    "str_out_original_preimage_sha256": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3"
+  },
+  "status": "SUPERSEDING_LOCKED_FOR_HASH_INVENTORY_AND_RAW_ASSEMBLY_ONLY",
+  "supersedes": {
+    "path": "/private/tmp/rslmto-ldau-m2-energy-worktree/docs/validation/fixed_ldau/evidence/a4_m21_w1_response_collection_lock.json",
+    "reason": "Bind source-proven runtime str.out replacement and its original preimage/post-run hash provenance; scientific criteria and response registration are unchanged.",
+    "sha256": "e2a0312ec5ad7704b1a0a2ec4f2662014fa999bddba4ec1efda7d619707b8b4c"
+  },
+  "tool_hashes": {
+    "analysis_test": {
+      "path": "tests/validation/fixed_ldau/a4_m21_analysis_bounds_test.py",
+      "sha256": "347dc55b1c1b231383aa4332e1f6354ac3a70505a8b85b3af79194b05224284f"
+    },
+    "analysis_tool": {
+      "path": "tests/validation/fixed_ldau/a4_m21_w1_richardson.py",
+      "sha256": "be1f30cabc0d8fe36362282c697b8f477d6bb2b46b658350a9629d04c3650330"
+    },
+    "certified_raw_assembler": {
+      "path": "tests/validation/fixed_ldau/a4_m21_assemble_lambda0.py",
+      "sha256": "d63d10b2c64b93a4f05830f08dd2be905f24c6783c44cb53b8446cc144de6cc0"
+    },
+    "collector_test": {
+      "path": "tests/validation/fixed_ldau/a4_m21_response_cache_test.py",
+      "sha256": "c883f61537e252d0b2e528bdeb0d08916e135b6e4bf706b85598c4da5812f2b4"
+    },
+    "collector_test_output": {
+      "path": "docs/validation/fixed_ldau/evidence/a4_m21_response_cache_test_output_v2.txt",
+      "sha256": "6fe25fb3d737e1d9ea2b875148fb620e7947cd624ced27d9b4d3441978bd978a"
+    },
+    "response_builder": {
+      "path": "tests/validation/fixed_ldau/a4_m21_register_w1.py",
+      "sha256": "ffb12123045987b1854b69098b78eb6c4732d4dbab0a6068626ae6ca8227fc4a"
+    },
+    "response_collector": {
+      "path": "tests/validation/fixed_ldau/a4_m21_assemble_w1_responses.py",
+      "sha256": "b103fab629f18a79e4f18fa80bec9e510b213b9a2804c25107829eb7e29b2fd0"
+    },
+    "response_executor": {
+      "path": "tests/validation/fixed_ldau/a4_m21_execute_w1.py",
+      "sha256": "3bd2f165b593602f5202674a06cf7aaf8bb2be088994126edd24734856c53e8c"
+    },
+    "response_preregistration_generator": {
+      "path": "tests/validation/fixed_ldau/a4_m21_register_w1.py",
+      "sha256": "ffb12123045987b1854b69098b78eb6c4732d4dbab0a6068626ae6ca8227fc4a"
+    },
+    "response_template": {
+      "path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_response_preregistration.template.json",
+      "sha256": "82ad7759f2840d6288d5f71b7a1f1149844c03f065bade1981e762b996f74434"
+    }
+  }
+}

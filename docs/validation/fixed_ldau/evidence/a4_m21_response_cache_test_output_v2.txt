@@ -1,0 +1,1 @@
+PASS response inventory receipts; source-proven str.out overwrite only; cached assembly equals certified scalar path and clears per case

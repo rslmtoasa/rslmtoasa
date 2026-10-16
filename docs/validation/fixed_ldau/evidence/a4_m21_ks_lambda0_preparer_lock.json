@@ -1,0 +1,132 @@
+{
+  "execution_status": "No process was launched; no response or calibration outcome exists.",
+  "governance": {
+    "binary_path": "/private/tmp/a4-m2-serial/bin/rslmto.x",
+    "binary_sha256": "536fa80a34c510782013a5608fc1220dca26b52a10189a2334e40ed43e12a0b4",
+    "protocol_sha256": "812bcafae105eabaea4ae0614f0b419e0d96638df37888342a8708a973f83980",
+    "source_ready_manifest_path": "/private/tmp/rslmto-ldau-m2-energy-worktree/docs/validation/fixed_ldau/evidence/a4_source_ready_manifest_v3.json",
+    "source_ready_manifest_sha256": "db487ea375fb20dd025ed4d62b4ae880940b865f5fa16c3cefa95220985137ed",
+    "source_self_sha256": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010"
+  },
+  "lambda0_preregistration_path": "/private/tmp/rslmto-ldau-m2-energy-worktree/docs/validation/fixed_ldau/evidence/a4_m21_ks_lambda0_calibration_preregistration.json",
+  "lambda0_preregistration_sha256": "50f24c646af2e7c1eedc050d6b0b3c14b7cb55b5d6134e02cfa081913e1ba80f",
+  "preparation_script_path": "/private/tmp/rslmto-ldau-m2-energy-worktree/tests/validation/fixed_ldau/a4_m21_prepare_lambda0.py",
+  "preparation_script_sha256": "700257fa239fb0a4019f31bcf8d891682a2481815d47f76840fd63a1fd759668",
+  "prepared_case_count": 8,
+  "prepared_cases": [
+    {
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "input_nml_pre_sha256": "ada14a49f08719ef63508cb1dbeec73ad7c819fe193987fbc3dac39ced921591",
+      "run_id": "w1_spectral_standard",
+      "static_assets": {
+        "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+        "sbar": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c",
+        "str.out": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3",
+        "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+      }
+    },
+    {
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "input_nml_pre_sha256": "ef39cae1b066e10978b330998bf9d6f157db2c2ab6096b7c0b43bda1a7cbc55f",
+      "run_id": "w1_spectral_tight",
+      "static_assets": {
+        "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+        "sbar": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c",
+        "str.out": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3",
+        "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+      }
+    },
+    {
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "input_nml_pre_sha256": "ab2ef5707255fdd40baf729559be46326dbd0e9bfa0d72646e377091e1c7732a",
+      "run_id": "w1_local_standard",
+      "static_assets": {
+        "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+        "sbar": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c",
+        "str.out": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3",
+        "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+      }
+    },
+    {
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "input_nml_pre_sha256": "b29a8584c8e2010be13d08b9a7f75f222e1cdc2a7c10fb59b5d7bfe9716b1ab5",
+      "run_id": "w1_local_tight",
+      "static_assets": {
+        "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+        "sbar": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c",
+        "str.out": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3",
+        "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+      }
+    },
+    {
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "input_nml_pre_sha256": "fef2e078b91b790430727f6d7087ec843ba9d91128b0e5aa8edf8698e9ea8a0d",
+      "run_id": "w2_spectral_standard",
+      "static_assets": {
+        "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+        "sbar": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c",
+        "str.out": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3",
+        "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+      }
+    },
+    {
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "input_nml_pre_sha256": "b8caa5bf8484d5bd5d117f218ee4b24ac1a82a2c952fb3a0148bc2089a029e6e",
+      "run_id": "w2_spectral_tight",
+      "static_assets": {
+        "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+        "sbar": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c",
+        "str.out": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3",
+        "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+      }
+    },
+    {
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "input_nml_pre_sha256": "e67ae95b618fd5e8973caab79efeb1f26fcc96aaa5ce1ea53ca7ad1d381d9aa0",
+      "run_id": "w2_local_standard",
+      "static_assets": {
+        "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+        "sbar": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c",
+        "str.out": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3",
+        "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+      }
+    },
+    {
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "input_nml_pre_sha256": "8c8f95c94570dccb273755092041e2d329495196077568f0d6fe012a09b3b971",
+      "run_id": "w2_local_tight",
+      "static_assets": {
+        "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+        "sbar": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c",
+        "str.out": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3",
+        "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+      }
+    }
+  ],
+  "schema": "rslmto-a4-m21-ks-lambda0-preparer-lock-v1",
+  "status": "PRE_RESPONSE_PREPARATION_ONLY_NOT_EXECUTED"
+}

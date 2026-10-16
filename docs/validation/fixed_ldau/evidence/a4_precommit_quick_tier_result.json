@@ -1,0 +1,14 @@
+{
+  "build": {
+    "cmake_cache_sha256": "f2db772266425d8fc7b7db2f4f4db55e7115588aca57cee3a6e28992d2e762da",
+    "configuration": "Release GNU Fortran 16.2.0; MPI/OpenMP/libXC OFF; unit tests ON",
+    "path": "/private/tmp/a4-final-stage-build",
+    "registry_sha256": "70ba6a580dba7b515eb4e87292d1773cfbd9a0de3a93fa62cabee51a33073a33"
+  },
+  "command": "ctest --test-dir /private/tmp/a4-final-stage-build -L '^quick$' --output-on-failure",
+  "last_test_log_sha256": "ef06e0adc57e05fa6a208cd283a3cdcec5ed09d7925f4639cf52388eb5fab06d",
+  "last_test_log_snapshot": "/private/tmp/a4-precommit-quick-LastTest.log",
+  "schema": "a4-precommit-quick-tier-result-v1",
+  "stage_end_suite_receipt": "a4_final_stage_test_receipt.json",
+  "status": "24/24_PASSED"
+}

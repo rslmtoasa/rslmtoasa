@@ -1,0 +1,32 @@
+{
+  "analysis_input_adapter_path": "/private/tmp/a4-m21-ks-w1-responses-analysis-input-v2.json",
+  "analysis_input_adapter_sha256": "d04b5925c6d1eef2919b148df7c0163c8dae149b33f49772462c74d633a1b9d2",
+  "analyzer_path": "tests/validation/fixed_ldau/a4_m21_w1_richardson.py",
+  "analyzer_sha256": "f5495730a94edf22bb8c17bba058b5cbdcda60e1648f043fba53921021da4ff4",
+  "approved_criterion": "h2 dominance |L|-uL > 16*(|H|+uH), with the existing leading-term resolution, N_unc, and bias gates unchanged.",
+  "bounds_test_path": "tests/validation/fixed_ldau/a4_m21_analysis_bounds_test.py",
+  "bounds_test_sha256": "347dc55b1c1b231383aa4332e1f6354ac3a70505a8b85b3af79194b05224284f",
+  "change": "The analyzer emits adjacent-scale X/Y and their propagated uncertainties/arithmetic bounds as diagnostics; these values do not enter identity_pass or classification.",
+  "end_to_end_test_output_path": "/private/tmp/a4-m21-w1-analyzer-e2e-test.txt",
+  "end_to_end_test_output_sha256": "ddf490a6c3b66de540e8f15fce4830c7fdabfe5ddf22bb2e29ff7659d277b634",
+  "end_to_end_test_path": "tests/validation/fixed_ldau/a4_m21_analyzer_end_to_end_test.py",
+  "end_to_end_test_sha256": "1725a2998db8bb53af2e3ecb2bf4fce071811fb060cbbd4e6e648bee329e5158",
+  "failed_attempt_receipt_path": "docs/validation/fixed_ldau/evidence/a4_m21_w1_analyzer_failure_receipt.json",
+  "failed_attempt_receipt_sha256": "065b5e27786c753ad422c1618fbba22c69797eb21b05f0a3e0f2d8f2f0114c6d",
+  "next_action": "Run the corrected frozen analyzer exactly once on the same adapter and write an additive report. W2 and all later stages remain outside this lock.",
+  "raw_assembled_payload_path": "/private/tmp/a4-m21-ks-w1-responses-assembled.json",
+  "raw_assembled_payload_sha256": "76e92c87751ef5170a24e5be964a2d201e55ab944d17cc4d9e1cfd0cf706695b",
+  "registration_sha256": "4c3e66d9f6bcc56b82b2c4b548e35b909bfb22e9a436baa0b7e4fd8278b46064",
+  "response_inventory_sha256": "13a68315e16234aa447a8142ead316887dd2e85299f02e8638f207fbb92f13c3",
+  "schema": "rslmto-a4-m21-w1-analyzer-report-fix-lock-v1",
+  "scope": "Additive report-serialization fix only. No SCFs, raw assembly, source, scientific predictions, error model, or gate criteria changed.",
+  "status": "LOCKED_REPORT_ONLY_FIX_E2E_PASS_READY_FOR_SAME_INPUT_ANALYSIS",
+  "supersedes_lock_path": "docs/validation/fixed_ldau/evidence/a4_m21_tooling_pre_response_lock_v13.json",
+  "supersedes_lock_sha256": "ac1e96eca8222e241761af6b02f402a440961a9cb0357ae71396c49597bc9df0",
+  "validation": {
+    "analysis_bounds_test": "PASS",
+    "end_to_end": "PASS dominant identity; resolved identity FAIL; noisy/h4 inconclusive stop",
+    "py_compile": true,
+    "reviewer": "PASS"
+  }
+}

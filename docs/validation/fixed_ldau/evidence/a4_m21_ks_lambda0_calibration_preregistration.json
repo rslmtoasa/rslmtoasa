@@ -1,0 +1,614 @@
+{
+  "cases": [
+    {
+      "Fe_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_standard/Fe.nml.pre",
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "command": [
+        "/private/tmp/a4-m2-serial/bin/rslmto.x"
+      ],
+      "conv_thr": "1e-9",
+      "environment": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_FIXED_U_A2_SCAN": "0",
+        "RSLMTO_FIXED_U_LAMBDA": "0.0",
+        "RSLMTO_FIXED_U_RUN_ID": "w1_spectral_standard",
+        "RSLMTO_FIXED_U_TRACE": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_standard/records.csv",
+        "RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY": "1",
+        "RSLMTO_FIXED_U_TRACE_ITERATION": "0",
+        "VECLIB_MAXIMUM_THREADS": "1"
+      },
+      "input_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_standard/input.nml.pre",
+      "input_nml_pre_sha256": "ada14a49f08719ef63508cb1dbeec73ad7c819fe193987fbc3dac39ced921591",
+      "lambda_ry": 0.0,
+      "operator": "w1",
+      "outputs": {
+        "final_state": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_standard/Fe_out.nml",
+        "full_scf_log": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_standard/testrun.log",
+        "rolling_last_iteration_trace": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_standard/records.csv"
+      },
+      "r05_applicability": "NOT_APPLICABLE at numeric U=J=0 external-only test hook; confirm literal runtime log and no 1e-8 R05 targets",
+      "r05_tightening_flag": true,
+      "radial_moments": "spectral",
+      "run_id": "w1_spectral_standard",
+      "seed_source_path": "/private/tmp/rslmto-localmom-m02-release/ks/Fe_out.nml",
+      "seed_source_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "static_assets": {
+        "clust": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_standard/clust",
+          "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+        },
+        "mad.mat": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_standard/mad.mat",
+          "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+        },
+        "map": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_standard/map",
+          "sha256": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5"
+        },
+        "sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_standard/sbar",
+          "sha256": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c"
+        },
+        "str.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_standard/str.out",
+          "sha256": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3"
+        },
+        "ves.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_standard/ves.out",
+          "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+        },
+        "view.sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_standard/view.sbar",
+          "sha256": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+        }
+      },
+      "threshold": "standard",
+      "working_directory": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_standard"
+    },
+    {
+      "Fe_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_tight/Fe.nml.pre",
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "command": [
+        "/private/tmp/a4-m2-serial/bin/rslmto.x"
+      ],
+      "conv_thr": "1e-10",
+      "environment": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_FIXED_U_A2_SCAN": "0",
+        "RSLMTO_FIXED_U_LAMBDA": "0.0",
+        "RSLMTO_FIXED_U_RUN_ID": "w1_spectral_tight",
+        "RSLMTO_FIXED_U_TRACE": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_tight/records.csv",
+        "RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY": "1",
+        "RSLMTO_FIXED_U_TRACE_ITERATION": "0",
+        "VECLIB_MAXIMUM_THREADS": "1"
+      },
+      "input_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_tight/input.nml.pre",
+      "input_nml_pre_sha256": "ef39cae1b066e10978b330998bf9d6f157db2c2ab6096b7c0b43bda1a7cbc55f",
+      "lambda_ry": 0.0,
+      "operator": "w1",
+      "outputs": {
+        "final_state": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_tight/Fe_out.nml",
+        "full_scf_log": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_tight/testrun.log",
+        "rolling_last_iteration_trace": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_tight/records.csv"
+      },
+      "r05_applicability": "NOT_APPLICABLE at numeric U=J=0 external-only test hook; confirm literal runtime log and no 1e-8 R05 targets",
+      "r05_tightening_flag": true,
+      "radial_moments": "spectral",
+      "run_id": "w1_spectral_tight",
+      "seed_source_path": "/private/tmp/rslmto-localmom-m02-release/ks/Fe_out.nml",
+      "seed_source_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "static_assets": {
+        "clust": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_tight/clust",
+          "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+        },
+        "mad.mat": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_tight/mad.mat",
+          "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+        },
+        "map": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_tight/map",
+          "sha256": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5"
+        },
+        "sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_tight/sbar",
+          "sha256": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c"
+        },
+        "str.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_tight/str.out",
+          "sha256": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3"
+        },
+        "ves.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_tight/ves.out",
+          "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+        },
+        "view.sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_tight/view.sbar",
+          "sha256": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+        }
+      },
+      "threshold": "tight",
+      "working_directory": "/private/tmp/a4-m21-ks-lambda0-prep/w1_spectral_tight"
+    },
+    {
+      "Fe_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_standard/Fe.nml.pre",
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "command": [
+        "/private/tmp/a4-m2-serial/bin/rslmto.x"
+      ],
+      "conv_thr": "1e-9",
+      "environment": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_FIXED_U_A2_SCAN": "0",
+        "RSLMTO_FIXED_U_LAMBDA": "0.0",
+        "RSLMTO_FIXED_U_RUN_ID": "w1_local_standard",
+        "RSLMTO_FIXED_U_TRACE": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_standard/records.csv",
+        "RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY": "1",
+        "RSLMTO_FIXED_U_TRACE_ITERATION": "0",
+        "VECLIB_MAXIMUM_THREADS": "1"
+      },
+      "input_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_standard/input.nml.pre",
+      "input_nml_pre_sha256": "ab2ef5707255fdd40baf729559be46326dbd0e9bfa0d72646e377091e1c7732a",
+      "lambda_ry": 0.0,
+      "operator": "w1",
+      "outputs": {
+        "final_state": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_standard/Fe_out.nml",
+        "full_scf_log": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_standard/testrun.log",
+        "rolling_last_iteration_trace": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_standard/records.csv"
+      },
+      "r05_applicability": "NOT_APPLICABLE at numeric U=J=0 external-only test hook; confirm literal runtime log and no 1e-8 R05 targets",
+      "r05_tightening_flag": true,
+      "radial_moments": "local",
+      "run_id": "w1_local_standard",
+      "seed_source_path": "/private/tmp/rslmto-localmom-m02-release/ks/Fe_out.nml",
+      "seed_source_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "static_assets": {
+        "clust": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_standard/clust",
+          "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+        },
+        "mad.mat": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_standard/mad.mat",
+          "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+        },
+        "map": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_standard/map",
+          "sha256": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5"
+        },
+        "sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_standard/sbar",
+          "sha256": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c"
+        },
+        "str.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_standard/str.out",
+          "sha256": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3"
+        },
+        "ves.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_standard/ves.out",
+          "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+        },
+        "view.sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_standard/view.sbar",
+          "sha256": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+        }
+      },
+      "threshold": "standard",
+      "working_directory": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_standard"
+    },
+    {
+      "Fe_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_tight/Fe.nml.pre",
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "command": [
+        "/private/tmp/a4-m2-serial/bin/rslmto.x"
+      ],
+      "conv_thr": "1e-10",
+      "environment": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_FIXED_U_A2_SCAN": "0",
+        "RSLMTO_FIXED_U_LAMBDA": "0.0",
+        "RSLMTO_FIXED_U_RUN_ID": "w1_local_tight",
+        "RSLMTO_FIXED_U_TRACE": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_tight/records.csv",
+        "RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY": "1",
+        "RSLMTO_FIXED_U_TRACE_ITERATION": "0",
+        "VECLIB_MAXIMUM_THREADS": "1"
+      },
+      "input_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_tight/input.nml.pre",
+      "input_nml_pre_sha256": "b29a8584c8e2010be13d08b9a7f75f222e1cdc2a7c10fb59b5d7bfe9716b1ab5",
+      "lambda_ry": 0.0,
+      "operator": "w1",
+      "outputs": {
+        "final_state": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_tight/Fe_out.nml",
+        "full_scf_log": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_tight/testrun.log",
+        "rolling_last_iteration_trace": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_tight/records.csv"
+      },
+      "r05_applicability": "NOT_APPLICABLE at numeric U=J=0 external-only test hook; confirm literal runtime log and no 1e-8 R05 targets",
+      "r05_tightening_flag": true,
+      "radial_moments": "local",
+      "run_id": "w1_local_tight",
+      "seed_source_path": "/private/tmp/rslmto-localmom-m02-release/ks/Fe_out.nml",
+      "seed_source_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "static_assets": {
+        "clust": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_tight/clust",
+          "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+        },
+        "mad.mat": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_tight/mad.mat",
+          "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+        },
+        "map": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_tight/map",
+          "sha256": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5"
+        },
+        "sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_tight/sbar",
+          "sha256": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c"
+        },
+        "str.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_tight/str.out",
+          "sha256": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3"
+        },
+        "ves.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_tight/ves.out",
+          "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+        },
+        "view.sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_tight/view.sbar",
+          "sha256": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+        }
+      },
+      "threshold": "tight",
+      "working_directory": "/private/tmp/a4-m21-ks-lambda0-prep/w1_local_tight"
+    },
+    {
+      "Fe_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_standard/Fe.nml.pre",
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "command": [
+        "/private/tmp/a4-m2-serial/bin/rslmto.x"
+      ],
+      "conv_thr": "1e-9",
+      "environment": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_FIXED_U_A2_SCAN": "0",
+        "RSLMTO_FIXED_U_LAMBDA": "0.0",
+        "RSLMTO_FIXED_U_RUN_ID": "w2_spectral_standard",
+        "RSLMTO_FIXED_U_TRACE": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_standard/records.csv",
+        "RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY": "1",
+        "RSLMTO_FIXED_U_TRACE_ITERATION": "0",
+        "VECLIB_MAXIMUM_THREADS": "1"
+      },
+      "input_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_standard/input.nml.pre",
+      "input_nml_pre_sha256": "fef2e078b91b790430727f6d7087ec843ba9d91128b0e5aa8edf8698e9ea8a0d",
+      "lambda_ry": 0.0,
+      "operator": "w2",
+      "outputs": {
+        "final_state": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_standard/Fe_out.nml",
+        "full_scf_log": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_standard/testrun.log",
+        "rolling_last_iteration_trace": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_standard/records.csv"
+      },
+      "r05_applicability": "NOT_APPLICABLE at numeric U=J=0 external-only test hook; confirm literal runtime log and no 1e-8 R05 targets",
+      "r05_tightening_flag": true,
+      "radial_moments": "spectral",
+      "run_id": "w2_spectral_standard",
+      "seed_source_path": "/private/tmp/rslmto-localmom-m02-release/ks/Fe_out.nml",
+      "seed_source_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "static_assets": {
+        "clust": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_standard/clust",
+          "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+        },
+        "mad.mat": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_standard/mad.mat",
+          "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+        },
+        "map": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_standard/map",
+          "sha256": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5"
+        },
+        "sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_standard/sbar",
+          "sha256": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c"
+        },
+        "str.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_standard/str.out",
+          "sha256": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3"
+        },
+        "ves.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_standard/ves.out",
+          "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+        },
+        "view.sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_standard/view.sbar",
+          "sha256": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+        }
+      },
+      "threshold": "standard",
+      "working_directory": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_standard"
+    },
+    {
+      "Fe_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_tight/Fe.nml.pre",
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "command": [
+        "/private/tmp/a4-m2-serial/bin/rslmto.x"
+      ],
+      "conv_thr": "1e-10",
+      "environment": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_FIXED_U_A2_SCAN": "0",
+        "RSLMTO_FIXED_U_LAMBDA": "0.0",
+        "RSLMTO_FIXED_U_RUN_ID": "w2_spectral_tight",
+        "RSLMTO_FIXED_U_TRACE": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_tight/records.csv",
+        "RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY": "1",
+        "RSLMTO_FIXED_U_TRACE_ITERATION": "0",
+        "VECLIB_MAXIMUM_THREADS": "1"
+      },
+      "input_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_tight/input.nml.pre",
+      "input_nml_pre_sha256": "b8caa5bf8484d5bd5d117f218ee4b24ac1a82a2c952fb3a0148bc2089a029e6e",
+      "lambda_ry": 0.0,
+      "operator": "w2",
+      "outputs": {
+        "final_state": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_tight/Fe_out.nml",
+        "full_scf_log": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_tight/testrun.log",
+        "rolling_last_iteration_trace": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_tight/records.csv"
+      },
+      "r05_applicability": "NOT_APPLICABLE at numeric U=J=0 external-only test hook; confirm literal runtime log and no 1e-8 R05 targets",
+      "r05_tightening_flag": true,
+      "radial_moments": "spectral",
+      "run_id": "w2_spectral_tight",
+      "seed_source_path": "/private/tmp/rslmto-localmom-m02-release/ks/Fe_out.nml",
+      "seed_source_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "static_assets": {
+        "clust": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_tight/clust",
+          "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+        },
+        "mad.mat": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_tight/mad.mat",
+          "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+        },
+        "map": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_tight/map",
+          "sha256": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5"
+        },
+        "sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_tight/sbar",
+          "sha256": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c"
+        },
+        "str.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_tight/str.out",
+          "sha256": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3"
+        },
+        "ves.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_tight/ves.out",
+          "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+        },
+        "view.sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_tight/view.sbar",
+          "sha256": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+        }
+      },
+      "threshold": "tight",
+      "working_directory": "/private/tmp/a4-m21-ks-lambda0-prep/w2_spectral_tight"
+    },
+    {
+      "Fe_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_standard/Fe.nml.pre",
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "command": [
+        "/private/tmp/a4-m2-serial/bin/rslmto.x"
+      ],
+      "conv_thr": "1e-9",
+      "environment": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_FIXED_U_A2_SCAN": "0",
+        "RSLMTO_FIXED_U_LAMBDA": "0.0",
+        "RSLMTO_FIXED_U_RUN_ID": "w2_local_standard",
+        "RSLMTO_FIXED_U_TRACE": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_standard/records.csv",
+        "RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY": "1",
+        "RSLMTO_FIXED_U_TRACE_ITERATION": "0",
+        "VECLIB_MAXIMUM_THREADS": "1"
+      },
+      "input_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_standard/input.nml.pre",
+      "input_nml_pre_sha256": "e67ae95b618fd5e8973caab79efeb1f26fcc96aaa5ce1ea53ca7ad1d381d9aa0",
+      "lambda_ry": 0.0,
+      "operator": "w2",
+      "outputs": {
+        "final_state": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_standard/Fe_out.nml",
+        "full_scf_log": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_standard/testrun.log",
+        "rolling_last_iteration_trace": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_standard/records.csv"
+      },
+      "r05_applicability": "NOT_APPLICABLE at numeric U=J=0 external-only test hook; confirm literal runtime log and no 1e-8 R05 targets",
+      "r05_tightening_flag": true,
+      "radial_moments": "local",
+      "run_id": "w2_local_standard",
+      "seed_source_path": "/private/tmp/rslmto-localmom-m02-release/ks/Fe_out.nml",
+      "seed_source_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "static_assets": {
+        "clust": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_standard/clust",
+          "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+        },
+        "mad.mat": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_standard/mad.mat",
+          "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+        },
+        "map": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_standard/map",
+          "sha256": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5"
+        },
+        "sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_standard/sbar",
+          "sha256": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c"
+        },
+        "str.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_standard/str.out",
+          "sha256": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3"
+        },
+        "ves.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_standard/ves.out",
+          "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+        },
+        "view.sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_standard/view.sbar",
+          "sha256": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+        }
+      },
+      "threshold": "standard",
+      "working_directory": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_standard"
+    },
+    {
+      "Fe_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_tight/Fe.nml.pre",
+      "Fe_nml_pre_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "command": [
+        "/private/tmp/a4-m2-serial/bin/rslmto.x"
+      ],
+      "conv_thr": "1e-10",
+      "environment": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_FIXED_U_A2_SCAN": "0",
+        "RSLMTO_FIXED_U_LAMBDA": "0.0",
+        "RSLMTO_FIXED_U_RUN_ID": "w2_local_tight",
+        "RSLMTO_FIXED_U_TRACE": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_tight/records.csv",
+        "RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY": "1",
+        "RSLMTO_FIXED_U_TRACE_ITERATION": "0",
+        "VECLIB_MAXIMUM_THREADS": "1"
+      },
+      "input_nml_pre_path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_tight/input.nml.pre",
+      "input_nml_pre_sha256": "8c8f95c94570dccb273755092041e2d329495196077568f0d6fe012a09b3b971",
+      "lambda_ry": 0.0,
+      "operator": "w2",
+      "outputs": {
+        "final_state": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_tight/Fe_out.nml",
+        "full_scf_log": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_tight/testrun.log",
+        "rolling_last_iteration_trace": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_tight/records.csv"
+      },
+      "r05_applicability": "NOT_APPLICABLE at numeric U=J=0 external-only test hook; confirm literal runtime log and no 1e-8 R05 targets",
+      "r05_tightening_flag": true,
+      "radial_moments": "local",
+      "run_id": "w2_local_tight",
+      "seed_source_path": "/private/tmp/rslmto-localmom-m02-release/ks/Fe_out.nml",
+      "seed_source_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+      "static_assets": {
+        "clust": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_tight/clust",
+          "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+        },
+        "mad.mat": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_tight/mad.mat",
+          "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+        },
+        "map": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_tight/map",
+          "sha256": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5"
+        },
+        "sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_tight/sbar",
+          "sha256": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c"
+        },
+        "str.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_tight/str.out",
+          "sha256": "36cdc02b7182a27f94568858df248c21a5ef076045edb81d0967262b97030fc3"
+        },
+        "ves.out": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_tight/ves.out",
+          "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+        },
+        "view.sbar": {
+          "path": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_tight/view.sbar",
+          "sha256": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+        }
+      },
+      "threshold": "tight",
+      "working_directory": "/private/tmp/a4-m21-ks-lambda0-prep/w2_local_tight"
+    }
+  ],
+  "common_state": {
+    "accepted_iterations": 23,
+    "backend": "KS",
+    "base_deck_path": "/private/tmp/rslmto-localmom-m02-release/ks/input.nml.pre",
+    "base_deck_sha256": "ab09e896ea9cebcae601547142c4d2474090901b3f988bd198f2798e8ee2d72e",
+    "base_run_manifest_path": "/private/tmp/rslmto-localmom-m02-release/ks/run_manifest.json",
+    "base_run_manifest_sha256": "8be28890f4926cf8cab889b7995bd28ba3b10a85523db2a978ea1ca23ce7502a",
+    "base_seed_path": "/private/tmp/rslmto-localmom-m02-release/ks/Fe_out.nml",
+    "base_seed_sha256": "aab3f56d5f74048d00d92c458abe65fbe099a4a705ba932134d89cfea1b234df",
+    "base_status": "COMPLETE_CONVERGED",
+    "physics": {
+      "J_eV": 0.0,
+      "U_eV": 0.0,
+      "channels_ldos": 2500,
+      "ct": 4.0,
+      "energy_window_ry": [
+        -1.0,
+        0.5
+      ],
+      "lambda_ry": 0.0,
+      "lmax": 2,
+      "nk": [
+        12,
+        12,
+        12
+      ],
+      "nsp": 1,
+      "r2": 16.0,
+      "temperature_K": 300.0
+    },
+    "shared_warm_start": "Every case receives the exact same accepted Fe_out bytes as Fe.nml. No case restarts from another case output."
+  },
+  "design": {
+    "modes": [
+      "spectral",
+      "local"
+    ],
+    "only_threshold_difference_within_pair": "self%conv_thr is divided by ten; the test-only R05 flag is true in both, but numeric U=J=0 makes fixed-U R05 inapplicable.",
+    "operators": [
+      "w1",
+      "w2"
+    ],
+    "other_changes_from_base": [
+      "explicit U=J=0",
+      "operator selection at lambda=0",
+      "radial moment selector",
+      "fixed_u_test_tighten_r05=.true."
+    ],
+    "threshold_pair": {
+      "standard": "1e-9",
+      "tight": "1e-10"
+    },
+    "trace": "capture-only full SCF; TRACE_ITERATION=0 retains the last completed iteration CSV; full iteration history remains in testrun.log."
+  },
+  "governance": {
+    "binary_path": "/private/tmp/a4-m2-serial/bin/rslmto.x",
+    "binary_sha256": "536fa80a34c510782013a5608fc1220dca26b52a10189a2334e40ed43e12a0b4",
+    "protocol_sha256": "812bcafae105eabaea4ae0614f0b419e0d96638df37888342a8708a973f83980",
+    "source_ready_manifest_path": "/private/tmp/rslmto-ldau-m2-energy-worktree/docs/validation/fixed_ldau/evidence/a4_source_ready_manifest_v3.json",
+    "source_ready_manifest_sha256": "db487ea375fb20dd025ed4d62b4ae880940b865f5fa16c3cefa95220985137ed",
+    "source_self_sha256": "2184df95a5560d65d730e6074618ec74210e20fb2eee309c8ac8be7bffb3e010"
+  },
+  "pre_response_checks": [
+    "Verify every run reaches ordinary SCF convergence from its PRE seed and CSV final iteration matches final endpoint.",
+    "Require literal log text for test operator and lambda=0; require literal R05 NOT APPLICABLE and absence of tight R05 targets for all U=0 cases.",
+    "Require complete eigenpair, occupation, k-weight, basis-map, Hamiltonian, M1, PL, and radial/energy capture rows.",
+    "Reconstruct per-spin d P from captured eigenvectors, occupations and k weights; compute g0=Re sum_s Tr(W P_s) independently for each operator/mode/threshold.",
+    "Compute ug0=abs(Tr(W(P_t-P_s))) + gamma_256*sum_ij abs(W_ij P_s,ji), separately per operator/mode; gamma_256=256 eps/(1-256 eps).",
+    "At lambda=0 verify the inserted v_hub d-block is exactly zero and compare P/eigenvalue/occupation outputs across operator and mode selectors at fixed threshold for exact identity; report entropy and energy candidates as calibration only.",
+    "Do not begin any nonzero-lambda run until these anchors, g0/ug0, and source/input/output provenance are locked in a separate response registration."
+  ],
+  "purpose": "Eight zero-coupling calibration captures only. This is not an A4.1 identity response or PASS.",
+  "schema": "rslmto-a4-m21-ks-lambda0-calibration-prereg-v1",
+  "status": "PREPARED_PRE_RESPONSE_NOT_EXECUTED"
+}

@@ -1,0 +1,110 @@
+UpdateCTestConfiguration  from :/private/tmp/a4-m2-unit-debug/DartConfiguration.tcl
+Parse Config file:/private/tmp/a4-m2-unit-debug/DartConfiguration.tcl
+Test project /private/tmp/a4-m2-unit-debug
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 40
+    Start 40: UnitLdaUHamiltonian
+
+40: Test command: /private/tmp/a4-m2-unit-debug/bin/UnitLdaUHamiltonian
+40: Working Directory: /private/tmp/a4-m2-unit-debug
+40: Test timeout computed to be: 1500
+40: [Oct 16 2026 09:05:23.446] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=1 (sp  )  norb=4  nb=8  spin_off=4  bdg=F
+40: [Oct 16 2026 09:05:23.448] [/private/tmp/rslmto-ldau-m2-energy-worktree/source/potential.f90:412]  [1m[33m<warning> [0m[0mRestart file UnitLdaUComplexRestart.nml uses legacy one-based orbital indices; shifted channels to l=0-based storage.
+40: [Oct 16 2026 09:05:23.448] [/private/tmp/rslmto-ldau-m2-energy-worktree/source/potential.f90:421]  [1m[33m<warning> [0m[0mPotential file UnitLdaUComplexRestart.nml has lmax=2 while active basis lmax=1. Truncating to active basis.
+40: [Oct 16 2026 09:05:23.449] [/private/tmp/rslmto-ldau-m2-energy-worktree/source/potential.f90:412]  [1m[33m<warning> [0m[0mRestart file UnitLdaULegacyRestart.nml uses legacy one-based orbital indices; shifted channels to l=0-based storage.
+40: [Oct 16 2026 09:05:23.449] [/private/tmp/rslmto-ldau-m2-energy-worktree/source/potential.f90:421]  [1m[33m<warning> [0m[0mPotential file UnitLdaULegacyRestart.nml has lmax=2 while active basis lmax=1. Truncating to active basis.
+40: [Oct 16 2026 09:05:23.449] [hamiltonian_hubbard.f90:571]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  0.0000E+00
+40: [Oct 16 2026 09:05:23.450] [hamiltonian_hubbard.f90:305]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   1 l= 0 tr_up=  0.250000 tr_dn=  0.750000 maxabs=  7.5000E-01
+40: [Oct 16 2026 09:05:23.450] [hamiltonian_hubbard.f90:309]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   1 l= 0 U=  2.000000 J=  0.000000 nup=  0.250000 ndn=  0.750000 ntot=  1.000000
+40: [Oct 16 2026 09:05:23.450] [hamiltonian_hubbard.f90:322]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   1 l= 0 ql_up=  0.000000 ql_dn=  0.000000 ldm_up=  0.250000 ldm_dn=  0.750000 d_up(ql-ldm)= -0.250000 d_dn(ql-ldm)= -0.750000
+40: [Oct 16 2026 09:05:23.450] [hamiltonian_hubbard.f90:539]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   1 l= 0 avg_up=   0.500000 avg_dn=  -0.500000 split(up-dn)=   1.000000
+40: [Oct 16 2026 09:05:23.450] [hamiltonian_hubbard.f90:571]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  5.0000E-01
+40: [Oct 16 2026 09:05:23.451] [hamiltonian_hubbard.f90:305]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   1 l= 1 tr_up=  0.700000 tr_dn=  0.700000 maxabs=  4.0000E-01
+40: [Oct 16 2026 09:05:23.451] [hamiltonian_hubbard.f90:309]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   1 l= 1 U=  1.700000 J=  0.300000 nup=  0.700000 ndn=  0.700000 ntot=  1.400000
+40: [Oct 16 2026 09:05:23.451] [hamiltonian_hubbard.f90:322]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   1 l= 1 ql_up=  0.000000 ql_dn=  0.000000 ldm_up=  0.700000 ldm_dn=  0.700000 d_up(ql-ldm)= -0.700000 d_dn(ql-ldm)= -0.700000
+40: [Oct 16 2026 09:05:23.452] [hamiltonian_hubbard.f90:539]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   1 l= 1 avg_up=   0.373333 avg_dn=   0.373333 split(up-dn)=   0.000000
+40: [Oct 16 2026 09:05:23.452] [hamiltonian_hubbard.f90:571]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  5.7500E-01
+40: [Oct 16 2026 09:05:23.452] [hamiltonian_hubbard.f90:305]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   1 l= 1 tr_up=  0.700000 tr_dn=  0.700000 maxabs=  4.0000E-01
+40: [Oct 16 2026 09:05:23.452] [hamiltonian_hubbard.f90:309]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   1 l= 1 U=  1.700000 J=  0.300000 nup=  0.700000 ndn=  0.700000 ntot=  1.400000
+40: [Oct 16 2026 09:05:23.453] [hamiltonian_hubbard.f90:322]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   1 l= 1 ql_up=  0.000000 ql_dn=  0.000000 ldm_up=  0.700000 ldm_dn=  0.700000 d_up(ql-ldm)= -0.700000 d_dn(ql-ldm)= -0.700000
+40: [Oct 16 2026 09:05:23.454] [hamiltonian_hubbard.f90:539]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   1 l= 1 avg_up=   0.373333 avg_dn=   0.373333 split(up-dn)=   0.000000
+40: [Oct 16 2026 09:05:23.454] [hamiltonian_hubbard.f90:571]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  5.7500E-01
+40: [Oct 16 2026 09:05:23.454] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+40: [Oct 16 2026 09:05:23.454] [hamiltonian_hubbard.f90:305]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   1 l= 2 tr_up=  0.550000 tr_dn=  0.550000 maxabs=  3.5000E-01
+40: [Oct 16 2026 09:05:23.454] [hamiltonian_hubbard.f90:309]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   1 l= 2 U=  2.000000 J=  0.400000 nup=  0.550000 ndn=  0.550000 ntot=  1.100000
+40: [Oct 16 2026 09:05:23.454] [hamiltonian_hubbard.f90:322]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   1 l= 2 ql_up=  0.000000 ql_dn=  0.000000 ldm_up=  0.550000 ldm_dn=  0.550000 d_up(ql-ldm)= -0.550000 d_dn(ql-ldm)= -0.550000
+40: [Oct 16 2026 09:05:23.477] [hamiltonian_hubbard.f90:539]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   1 l= 2 avg_up=   0.624000 avg_dn=   0.624000 split(up-dn)=   0.000000
+40: [Oct 16 2026 09:05:23.477] [hamiltonian_hubbard.f90:571]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  1.0024E+00
+40: [Oct 16 2026 09:05:23.500] [hamiltonian_hubbard.f90:305]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   1 l= 2 tr_up=  0.700000 tr_dn=  0.550000 maxabs=  5.0000E-01
+40: [Oct 16 2026 09:05:23.500] [hamiltonian_hubbard.f90:309]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   1 l= 2 U=  2.000000 J=  0.400000 nup=  0.700000 ndn=  0.550000 ntot=  1.250000
+40: [Oct 16 2026 09:05:23.500] [hamiltonian_hubbard.f90:322]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   1 l= 2 ql_up=  0.000000 ql_dn=  0.000000 ldm_up=  0.700000 ldm_dn=  0.550000 d_up(ql-ldm)= -0.700000 d_dn(ql-ldm)= -0.550000
+40: [Oct 16 2026 09:05:23.523] [hamiltonian_hubbard.f90:539]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   1 l= 2 avg_up=   0.576000 avg_dn=   0.624000 split(up-dn)=  -0.048000
+40: [Oct 16 2026 09:05:23.523] [hamiltonian_hubbard.f90:571]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  1.0541E+00
+40: [Oct 16 2026 09:05:23.523] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=1 (sp  )  norb=4  nb=8  spin_off=4  bdg=F
+40: [Oct 16 2026 09:05:23.523] [hamiltonian_hubbard.f90:305]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   1 l= 1 tr_up=  0.900000 tr_dn=  0.630000 maxabs=  3.3500E-01
+40: [Oct 16 2026 09:05:23.524] [hamiltonian_hubbard.f90:309]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   1 l= 1 U=  1.700000 J=  0.300000 nup=  0.900000 ndn=  0.630000 ntot=  1.530000
+40: [Oct 16 2026 09:05:23.524] [hamiltonian_hubbard.f90:322]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   1 l= 1 ql_up=  0.000000 ql_dn=  0.000000 ldm_up=  0.900000 ldm_dn=  0.630000 d_up(ql-ldm)= -0.900000 d_dn(ql-ldm)= -0.630000
+40: [Oct 16 2026 09:05:23.525] [hamiltonian_hubbard.f90:539]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   1 l= 1 avg_up=   0.280000 avg_dn=   0.406000 split(up-dn)=  -0.126000
+40: [Oct 16 2026 09:05:23.525] [hamiltonian_hubbard.f90:571]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  4.4100E-01
+40: [Oct 16 2026 09:05:23.530] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+40: [Oct 16 2026 09:05:23.530] [hamiltonian_hubbard.f90:305]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   1 l= 2 tr_up=  1.650000 tr_dn=  0.577500 maxabs=  5.5000E-01
+40: [Oct 16 2026 09:05:23.531] [hamiltonian_hubbard.f90:309]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   1 l= 2 U=  2.100000 J=  0.000000 nup=  1.650000 ndn=  0.577500 ntot=  2.227500
+40: [Oct 16 2026 09:05:23.531] [hamiltonian_hubbard.f90:322]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   1 l= 2 ql_up=  0.000000 ql_dn=  0.000000 ldm_up=  1.650000 ldm_dn=  0.577500 d_up(ql-ldm)= -1.650000 d_dn(ql-ldm)= -0.577500
+40: [Oct 16 2026 09:05:23.532] [hamiltonian_hubbard.f90:539]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   1 l= 2 avg_up=   0.357000 avg_dn=   0.807450 split(up-dn)=  -0.450450
+40: [Oct 16 2026 09:05:23.533] [hamiltonian_hubbard.f90:571]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  9.6915E-01
+40: [Oct 16 2026 09:05:23.539] [hamiltonian_hubbard.f90:305]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   1 l= 2 tr_up=  1.000000 tr_dn=  0.000000 maxabs=  4.3333E-01
+40: [Oct 16 2026 09:05:23.539] [hamiltonian_hubbard.f90:309]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   1 l= 2 U=  2.100000 J=  0.000000 nup=  1.000000 ndn=  0.000000 ntot=  1.000000
+40: [Oct 16 2026 09:05:23.540] [hamiltonian_hubbard.f90:322]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   1 l= 2 ql_up=  0.000000 ql_dn=  0.000000 ldm_up=  1.000000 ldm_dn=  0.000000 d_up(ql-ldm)= -1.000000 d_dn(ql-ldm)=  0.000000
+40: [Oct 16 2026 09:05:23.541] [hamiltonian_hubbard.f90:539]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   1 l= 2 avg_up=   0.630000 avg_dn=   1.050000 split(up-dn)=  -0.420000
+40: [Oct 16 2026 09:05:23.541] [hamiltonian_hubbard.f90:571]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  1.0500E+00
+40: [Oct 16 2026 09:05:23.542] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=1 (sp  )  norb=4  nb=8  spin_off=4  bdg=F
+40: [Oct 16 2026 09:05:23.542] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+40: [Oct 16 2026 09:05:23.543] [hamiltonian_hubbard.f90:305]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   1 l= 2 tr_up=  2.000000 tr_dn=  1.375000 maxabs=  5.8000E-01
+40: [Oct 16 2026 09:05:23.543] [hamiltonian_hubbard.f90:309]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   1 l= 2 U=  1.400000 J=  0.220000 nup=  2.000000 ndn=  1.375000 ntot=  3.375000
+40: [Oct 16 2026 09:05:23.543] [hamiltonian_hubbard.f90:322]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   1 l= 2 ql_up=  0.000000 ql_dn=  0.000000 ldm_up=  2.000000 ldm_dn=  1.375000 d_up(ql-ldm)= -2.000000 d_dn(ql-ldm)= -1.375000
+40: [Oct 16 2026 09:05:23.566] [hamiltonian_hubbard.f90:539]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   1 l= 2 avg_up=   0.118000 avg_dn=   0.265500 split(up-dn)=  -0.147500
+40: [Oct 16 2026 09:05:23.566] [hamiltonian_hubbard.f90:571]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  4.5337E-01
+40: [Oct 16 2026 09:05:23.718] [hamiltonian_hubbard.f90:305]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   1 l= 2 tr_up=  2.000000 tr_dn=  1.375000 maxabs=  5.9861E-01
+40: [Oct 16 2026 09:05:23.718] [hamiltonian_hubbard.f90:309]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   1 l= 2 U=  1.400000 J=  0.220000 nup=  2.000000 ndn=  1.375000 ntot=  3.375000
+40: [Oct 16 2026 09:05:23.719] [hamiltonian_hubbard.f90:322]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   1 l= 2 ql_up=  0.000000 ql_dn=  0.000000 ldm_up=  2.000000 ldm_dn=  1.375000 d_up(ql-ldm)= -2.000000 d_dn(ql-ldm)= -1.375000
+40: [Oct 16 2026 09:05:23.741] [hamiltonian_hubbard.f90:539]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   1 l= 2 avg_up=   0.118000 avg_dn=   0.265500 split(up-dn)=  -0.147500
+40: [Oct 16 2026 09:05:23.741] [hamiltonian_hubbard.f90:571]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  4.5861E-01
+40: [Oct 16 2026 09:05:23.757] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=1 (sp  )  norb=4  nb=8  spin_off=4  bdg=F
+40: [Oct 16 2026 09:05:23.757] [hamiltonian_hubbard.f90:305]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   1 l= 1 tr_up=  0.700000 tr_dn=  0.700000 maxabs=  4.0000E-01
+40: [Oct 16 2026 09:05:23.758] [hamiltonian_hubbard.f90:309]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   1 l= 1 U=  1.700000 J=  0.300000 nup=  0.700000 ndn=  0.700000 ntot=  1.400000
+40: [Oct 16 2026 09:05:23.758] [hamiltonian_hubbard.f90:322]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   1 l= 1 ql_up=  0.000000 ql_dn=  0.000000 ldm_up=  0.700000 ldm_dn=  0.700000 d_up(ql-ldm)= -0.700000 d_dn(ql-ldm)= -0.700000
+40: [Oct 16 2026 09:05:23.759] [hamiltonian_hubbard.f90:539]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   1 l= 1 avg_up=   0.373333 avg_dn=   0.373333 split(up-dn)=   0.000000
+40: [Oct 16 2026 09:05:23.759] [hamiltonian_hubbard.f90:571]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  5.7500E-01
+40: [Oct 16 2026 09:05:23.759] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+40: RESULT: PASS
+1/2 Test #40: UnitLdaUHamiltonian ..............   Passed    0.62 sec
+test 48
+    Start 48: UnitFermiDiracEntropy
+
+48: Test command: /private/tmp/a4-m2-unit-debug/bin/UnitFermiDiracEntropy
+48: Working Directory: /private/tmp/a4-m2-unit-debug
+48: Test timeout computed to be: 1500
+48: S=  2.1062540069077236E+00
+48: TS_Ry=  4.0021025481680765E-03
+2/2 Test #48: UnitFermiDiracEntropy ............   Passed    0.19 sec
+
+The following tests passed:
+	UnitLdaUHamiltonian
+	UnitFermiDiracEntropy
+
+100% tests passed out of 2
+
+Label Time Summary:
+entropy           =   0.19 sec*proc (1 test)
+hamiltonian       =   0.62 sec*proc (1 test)
+lda_u             =   0.62 sec*proc (1 test)
+oracle            =   0.19 sec*proc (1 test)
+thermodynamics    =   0.19 sec*proc (1 test)
+unit              =   0.81 sec*proc (2 tests)
+
+Total Test time (real) =   0.82 sec
