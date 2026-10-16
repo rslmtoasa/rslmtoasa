@@ -138,6 +138,10 @@ def run_case(binary: Path, base_input: Path, base_seed: Path, assets: Path,
     entropy = parse_last(log, "entropy")
     ts = parse_last(log, "TS")
     logger_external = parse_last(log, "test_lambda_trace_wp")
+    convergence_residuals = re.findall(r"Converged!\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][+-]?\d+)?)", log)
+    if not convergence_residuals:
+        raise RuntimeError(f"{run_id}: converged marker did not carry a final residual")
+    convergence_residual = float(convergence_residuals[-1].replace("D", "E").replace("d", "e"))
     trace_iterations = {int(row["iteration"]) for row in rows
                         if row["kind"] == "test_trace_wp" and row["stage"] == "P_OUT"}
     if len(trace_iterations) != 1:
@@ -152,8 +156,10 @@ def run_case(binary: Path, base_input: Path, base_seed: Path, assets: Path,
             "returncode": result.returncode, "converged": True, "F_local_ry": f_local,
             "final_P_OUT_Tr_WP": endpoint_trace,
             "physical_total_energy_ry": physical_total_energy, "entropy": entropy, "TS_ry": ts,
+            "final_scf_residual": convergence_residual,
             "logger_external_test_energy_ry": logger_external,
             "logger_external_minus_P_OUT_lambda_Tr_WP_ry": logger_external - external_test_energy,
+            "logger_F_local_minus_ETOT_external_TS_ry": f_local - (physical_total_energy + logger_external - ts),
             "reconstructed_external_test_energy_ry": external_test_energy,
             "F_total_with_external_ry": f_total_with_external,
             "P_OUT_test_trace_wp_by_spin": {

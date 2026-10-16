@@ -88,8 +88,10 @@ U=J=0; it must not weaken any production guard. The established spherical
 d-shell basis ordering remains `m=-2..+2`.
 
 At each control endpoint, compare the centered free-energy derivative
-`[F(+h)-F(-h)]/(2h)` (`h=0.005 Ry`, `F=test_F_local`) with the direct
-`Tr(WP)` captured from the actual `P_OUT` density at λ=0. The trace output
+`[F(+h)-F(-h)]/(2h)` (`h=0.005 Ry`) with the direct `Tr(WP)` captured from
+the actual `P_OUT` density at λ=0. Reconstruct each endpoint's thermodynamic
+potential as `F(λ)=ETOT(λ)+λ Σ_s Tr(W P_OUT,s(λ))−TS(λ)` so the explicit field
+term uses the same final-state density. The trace output
 contains each physical spin block in the established `m=-2..+2` ordering, its
 charge trace, and its applied per-spin `W:P` contraction (zero for an unperturbed
 spin). The finite-difference derivative is evaluated with W applied to both spins;
@@ -124,7 +126,30 @@ mesh signal are interpreted only when they exceed the combined uncertainty.
 These are diagnostic outcomes: they identify a likely source of the base
 functional non-stationarity and do not change production defaults or physics.
 
-Convergence contingency preregistration: if the first base `lambda=-0.005 Ry`
+Corrected native-KS measurements are in
+[`a5_2_corrected_w1_results.json`](a5_2_corrected_w1_results.json). All 15
+endpoints converged at the unchanged `1e-9` criterion with finite entropy and
+`TS`; their largest reported final residual was `1e-9`. This direct-state
+reconstruction is necessary because the runtime local-energy row reports
+`ETOT + logged_external − TS`, while its `logged_external` accumulator is zero
+in these `U=J=0` runs. The result file retains logger and reconstructed values
+and their difference; maximum `|logged_external−λTr(WP_OUT)|` was `0.03264 Ry`.
+The raw local-only derivative is retained separately and is not compared
+directly with `Tr(WP)`.
+
+For the base 300 K/12³ case, corrected `dF/dλ=6.4892373`, while direct
+`Tr(WP)(0)=6.4984804`, giving residual `−0.0092431` (`−0.1422%`). This agrees
+with the historical A4 residual scale and is over 180 times the prior
+`5e-5` finite-difference uncertainty. The HOH residual is `−0.0501201`
+(`−0.7683%`), so the preregistered expectation that HOH would reduce the
+residual is not supported; it increases its magnitude by about 5.4×. The 150 K
+and 600 K residuals (`−0.0090240`, `−0.0096928`) remain close to base rather
+than following pure `T²` scaling. The 20³ residual (`−0.0098236`) changes only
+modestly from 12³. These results do not support smearing or k integration as
+the dominant source under these controls; no production setting is changed.
+
+Convergence contingency preregistration (not activated on the corrected KS
+campaign): if the first base `lambda=-0.005 Ry`
 case reaches its 240-step cap without a `Converged!` marker, preserve its full
 stdout, trace, all runtime restart files, and hashes, then perform one bounded
 input-only continuation from its latest `Fe_scf.nml`. Change only the mixing
@@ -137,3 +162,7 @@ unassessed controls, and do not repeat the 240-step continuation on every
 case. If it converges, use the same mixing setting and convergence criterion
 for the remaining A5.2 cases, each from an independent copy of the original
 common initial seed.
+
+The contingency was attempted only on the earlier recursion-backed setup,
+which has been invalidated and preserved as setup failure. The corrected
+native-KS campaign converged without a continuation.

@@ -195,6 +195,15 @@ def run_case(spec: dict, binary: Path, base_input: Path, base_seed: Path,
     with stdout_path.open("wb") as stdout_file:
         result = subprocess.run([str(binary)], cwd=case_dir, env=env, stdin=subprocess.DEVNULL,
                                 stdout=stdout_file, stderr=subprocess.STDOUT, check=False)
+    return collect_case(spec, binary, case_dir, input_sha, seed_input_sha, result.returncode)
+
+
+def collect_case(spec: dict, binary: Path, case_dir: Path,
+                 input_sha: str, seed_input_sha: str, returncode: int) -> dict:
+    """Validate and reduce a completed raw case, including additive reprocessing."""
+    stdout_path = case_dir / "stdout.log"
+    trace_path = case_dir / "moments.csv"
+    seed_path = case_dir / "Fe_out.nml"
     stdout = stdout_path.read_text(errors="replace")
     log = stdout
     testrun = case_dir / "testrun.log"
@@ -206,7 +215,7 @@ def run_case(spec: dict, binary: Path, base_input: Path, base_seed: Path,
     finite_thermo = bool(thermo_pairs) and all(
         re.fullmatch(number_pattern, value) for value in thermo_pairs[-1])
     if not ks_branch or not finite_thermo:
-        failure = {"case": spec, "returncode": result.returncode,
+        failure = {"case": spec, "returncode": returncode,
                    "ks_branch": ks_branch, "finite_entropy_TS": finite_thermo,
                    "input_sha256": input_sha, "seed_input_sha256": seed_input_sha,
                    "stdout_sha256": sha(stdout_path),
@@ -216,8 +225,8 @@ def run_case(spec: dict, binary: Path, base_input: Path, base_seed: Path,
     local_f_logged, external_logged, converged = parse_logs(
         case_dir, stdout, require_test_energy=False)
     trace = parse_trace(trace_path)
-    if result.returncode != 0 or not converged:
-        raise RuntimeError(f"{spec['name']} did not converge cleanly (rc={result.returncode})")
+    if returncode != 0 or not converged:
+        raise RuntimeError(f"{spec['name']} did not converge cleanly (rc={returncode})")
     lam = spec["lambda"]
     active_spin = spec["spin"] - 1
     expected_external = lam * trace["w"][active_spin] if spec["spin"] else lam * sum(trace["w"])
@@ -225,7 +234,7 @@ def run_case(spec: dict, binary: Path, base_input: Path, base_seed: Path,
     local_f = reconstruct_local_free_energy(etot, lam,
                                             trace["w"][active_spin] if spec["spin"] else sum(trace["w"]), ts)
     row = {
-        **spec, "returncode": result.returncode, "converged_marker": converged,
+        **spec, "returncode": returncode, "converged_marker": converged,
         "ks_branch": ks_branch, "finite_entropy_TS": finite_thermo,
         "input_sha256": input_sha, "seed_input_sha256": seed_input_sha,
         "stdout_sha256": sha(stdout_path), "trace_sha256": sha(trace_path),
@@ -235,7 +244,7 @@ def run_case(spec: dict, binary: Path, base_input: Path, base_seed: Path,
         "F_local_logger_minus_reconstructed_Ry": (local_f_logged - local_f) if local_f_logged is not None else None,
         "external_lambda_trace_logged_Ry": external_logged,
         "external_lambda_trace_from_P_Ry": expected_external,
-        "external_trace_residual_Ry": external - expected_external if external is not None else None,
+        "external_trace_residual_Ry": external_logged - expected_external if external_logged is not None else None,
         **trace,
     }
     (case_dir / "result.json").write_text(json.dumps(row, indent=2, sort_keys=True) + "\n")
@@ -349,14 +358,31 @@ def main() -> None:
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--u-response", type=Path)
+    parser.add_argument("--reuse-completed-base", type=Path,
+                        help="reprocess a completed raw base_h0 case without rerunning its SCF")
     args = parser.parse_args()
     for path in (args.binary, args.input, args.seed, *(args.assets / f for f in ASSETS),
                  *(args.source_root / f for f in SOURCES)):
         if not path.is_file():
             raise FileNotFoundError(path)
     args.output.mkdir(parents=True, exist_ok=False)
-    rows = [run_case(spec, args.binary, args.input, args.seed, args.assets, args.output, args.source_root)
-            for spec in case_specs()]
+    rows = []
+    for spec in case_specs():
+        if spec["name"] == "base_h0" and args.reuse_completed_base is not None:
+            source_case = args.reuse_completed_base
+            if not (source_case / "stdout.log").is_file() or not (source_case / "moments.csv").is_file():
+                raise FileNotFoundError(f"completed raw base case lacks stdout/trace: {source_case}")
+            case_dir = args.output / spec["name"]
+            shutil.copytree(source_case, case_dir)
+            deck = configure_case_deck(args.input.read_text(), spec)
+            row = collect_case(spec, args.binary, case_dir,
+                               hashlib.sha256(deck.encode()).hexdigest(), sha(args.seed), 0)
+            row["raw_case_reused_from"] = str(source_case)
+            (case_dir / "result.json").write_text(json.dumps(row, indent=2, sort_keys=True) + "\n")
+        else:
+            row = run_case(spec, args.binary, args.input, args.seed, args.assets,
+                           args.output, args.source_root)
+        rows.append(row)
     summary = {
         "status": "CAPTURED",
         "binary_sha256": sha(args.binary),
