@@ -1,8 +1,9 @@
 # A5.3 spin-selective W1 response preregistration
 
 Measure the local-mode U=J=0 base-functional gradient needed by the approved
-A5.3 charge-only chain rule. Start every case from the same immutable best
-available common U=J=0 KS restart snapshot. Its mixer residual was
+A5.3 charge-only chain rule. Start every case from the same immutable common
+U=J=0 restart snapshot, copied from a recursion (RS) run. It is not a KS
+endpoint. The snapshot's mixer residual was
 `5.9e-9`, so the starting state is near-converged, not convergence-accepted;
 it is only an initial guess. Each final probe SCF must independently meet its
 registered `conv_thr`. If the first `lambda=0` standard probe reaches its
@@ -57,8 +58,8 @@ uncertainty and the observed h=0.05 versus h=0.10 response difference; state
 any absence of tightened J-state repeats explicitly. These local allowances
 apply at J=0.5 and J=0.9 only and do not extrapolate to J=0.
 
-The probe uses the common 12³, 300 K KS state, fixed Liechtenstein U=J=0,
-local radial moments, and W1. Record hashes for each source file, executable,
+The probe uses a common 12³, 300 K state with native KS explicitly selected,
+fixed Liechtenstein U=J=0, local radial moments, and W1. Record hashes for each source file, executable,
 input, seed, and output; do not create tooling locks or post-run criteria.
 
 Pre-run source hashes: `hamiltonian.f90`
@@ -77,3 +78,13 @@ common 12³/300 K input hash is
 `ca65d9695b049f10beb3ee9461c05572b48f3973885de99ea7f8fee3dfc5699c`; the
 immutable shared near-converged `Fe_out.nml` restart hash is
 `25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5`.
+
+Setup correction: the archived common input omits `use_kspace`, whose source
+default is false. The 14-case runner now adds `use_kspace=.true.` to every
+generated deck and requires the runtime reciprocal KS branch plus finite
+entropy/TS before accepting a case. The common restart is RS-origin and remains
+an initial guess only. Outputs from the earlier recursion-backed attempts are
+setup diagnostics, not response data. A redundant A5.2 aggregate-spin control
+batch was also mistakenly started through `a5_local_w1_controls.py` and then
+stopped; its `hubbard_test_spin=0` cases are not part of this A5.3 response
+matrix and will not enter its reduction.

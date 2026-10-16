@@ -7,6 +7,7 @@ import csv
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -62,7 +63,7 @@ def main() -> None:
         if not path.is_file():
             raise FileNotFoundError(path)
     args.output.mkdir(parents=True, exist_ok=False)
-    deck = edit_group(args.input.read_text(), "self", {"nstep": "1"})
+    deck = edit_group(args.input.read_text(), "self", {"nstep": "1", "use_kspace": ".true."})
     deck = edit_group(deck, "hamiltonian", {
         "hubbard_u_general(1,3)": "0.0", "hubbard_j_general(1,3)": "0.0",
         "hubbard_u_potential_form": "'liechtenstein'", "hubbard_radial_moments": "'local'",
@@ -93,6 +94,13 @@ def main() -> None:
     stdout.write_bytes(result.stdout)
     if result.returncode != 0 or not trace_path.is_file():
         raise RuntimeError(f"native KS smoke failed, returncode={result.returncode}; see {stdout}")
+    log = result.stdout.decode(errors="replace")
+    if "run_recursion: use_kspace=.true., skipping recursion solver stage" not in log:
+        raise RuntimeError("native KS routing marker absent; this smoke cannot certify the KS path")
+    thermo_pairs = re.findall(r"entropy=\s*([^\s]+).*?TS=\s*([^\s]+)", log)
+    number = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][+-]?\d+)?"
+    if not thermo_pairs or not all(re.fullmatch(number, value) for value in thermo_pairs[-1]):
+        raise RuntimeError("finite entropy/TS marker absent; this smoke cannot certify the KS path")
     with trace_path.open(newline="") as stream:
         rows = list(csv.DictReader(stream))
     kinds = {row["kind"] for row in rows}
@@ -120,6 +128,7 @@ def main() -> None:
                            f"P_OUT_spin_capture={p_out_ok}; P/q0/WP_rows={len(p_rows)}/{len(q_rows)}/{len(wp_rows)}")
     receipt = {
         "status": "PASS", "returncode": result.returncode,
+        "ks_branch": True, "finite_entropy_TS": True,
         "binary_sha256": sha(args.binary), "input_sha256": input_hash,
         "seed_input_sha256": seed_hash, "stdout_sha256": sha(stdout),
         "trace_output_sha256": sha(trace_path), "trace_bytes": trace_path.stat().st_size,

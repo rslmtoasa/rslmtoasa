@@ -1,0 +1,98 @@
+{
+  "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+  "cases": [
+    {
+      "Fe_nml_output_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+      "Fe_out_nml_output_sha256": "98658346b95bdf37676cb87bda96f6cbd5cc2b75e4150dfcbb7fdce1791c28e9",
+      "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+      "case": "positive_w1_local_u0_hoh",
+      "expected_log_text": "A5 test-only HOH guard bypass active",
+      "finite_entropy_TS": true,
+      "input_sha256": "417f088357d15b7a683a8e5ccfdd05ddae556e1027c0d60bb44acad6f64ec467",
+      "ks_branch": true,
+      "passed": true,
+      "returncode": 0,
+      "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+      "stdout_sha256": "43112050f82e65822f339926b55364d6940b4ae52b85d46da180f62d7ee46c69"
+    },
+    {
+      "Fe_nml_output_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+      "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+      "case": "negative_bypass_off",
+      "expected_log_text": "A4 test operator requires scalar-collinear nsp=1, lmax=2, and hoh=.false..",
+      "finite_entropy_TS": false,
+      "input_sha256": "f66d2f0d131cfc281a77e89b46d1200ee0327498f5c12c6b4312bdc870ce4a8d",
+      "ks_branch": false,
+      "passed": true,
+      "returncode": 1,
+      "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+      "stdout_sha256": "ec0c578f6a85f173dd2b172583d9de478671e8a9301beb210c875af4431be34f"
+    },
+    {
+      "Fe_nml_output_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+      "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+      "case": "negative_nonzero_u",
+      "expected_log_text": "A5 HOH bypass requires exactly U=J=0 on every atom and shell.",
+      "finite_entropy_TS": false,
+      "input_sha256": "0b84bf246abe624eb88b09bd85019f9414fd6bf44ab6605176b04f65d09570c6",
+      "ks_branch": false,
+      "passed": true,
+      "returncode": 1,
+      "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+      "stdout_sha256": "4a80bcf3465169be5364a5e7ca2ebe390967540dee058e292a569a9b4562f4ce"
+    },
+    {
+      "Fe_nml_output_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+      "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+      "case": "negative_nonzero_j",
+      "expected_log_text": "A5 HOH bypass requires exactly U=J=0 on every atom and shell.",
+      "finite_entropy_TS": false,
+      "input_sha256": "f9d9b74d0837e9a12e1eb1ea8cc2719430f004239701f4f267ffba90ffebd316",
+      "ks_branch": false,
+      "passed": true,
+      "returncode": 1,
+      "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+      "stdout_sha256": "5be6a5e7f30ae574b0b632e00bf8f64bc72c0fbbba7b1ae8126e09e82725f29c"
+    },
+    {
+      "Fe_nml_output_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+      "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+      "case": "negative_w2",
+      "expected_log_text": "A5 HOH bypass is only valid for explicit general U=J=0 local W1 test runs.",
+      "finite_entropy_TS": false,
+      "input_sha256": "c669fe8ddf1dd3af86fc7e78357126c9af885e58a908349c577020d807a605c2",
+      "ks_branch": false,
+      "passed": true,
+      "returncode": 1,
+      "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+      "stdout_sha256": "d04a1bb94935a8caaa95f210a02671c3aa9c74b6d926230f462a67ba68fc8c4b"
+    },
+    {
+      "Fe_nml_output_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+      "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+      "case": "negative_no_w_path",
+      "expected_log_text": "A5 HOH bypass is only valid for explicit general U=J=0 local W1 test runs.",
+      "finite_entropy_TS": false,
+      "input_sha256": "a477ec3389099631321f780fd34cc7d0bfde303962a17242fcca973cbeacdd69",
+      "ks_branch": false,
+      "passed": true,
+      "returncode": 1,
+      "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+      "stdout_sha256": "6494097be19a29c8121682fe18427cbb3d4e9d1a0d116180ecda8c74e45c3292"
+    },
+    {
+      "Fe_nml_output_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+      "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+      "case": "negative_spectral",
+      "expected_log_text": "A5 HOH bypass is only valid for explicit general U=J=0 local W1 test runs.",
+      "finite_entropy_TS": false,
+      "input_sha256": "98982793c44ae41f2caf64870b8bc6c8bda769608a5ed4e8d204c36a519c2ecf",
+      "ks_branch": false,
+      "passed": true,
+      "returncode": 1,
+      "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+      "stdout_sha256": "2501df98f56f607dab9eaa9b8289de357f8a758ae001af0a5756065efbb843f2"
+    }
+  ],
+  "status": "PASS"
+}

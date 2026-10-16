@@ -3,8 +3,9 @@
 This is the concise preregistration for the A5 diagnostics owned here. The
 first shared no-U attempt used a full trace, stopped at about iteration 43, and
 did not converge; it is partial raw evidence and is not an accepted endpoint.
-The authorized common initial restart for A5.2 is explicitly near-converged,
-not an accepted endpoint: `/private/tmp/a5-common-seed-near/Fe_out.nml`
+The authorized common initial restart for A5.2 is explicitly an RS-origin,
+near-converged seed, not a reciprocal-KS or accepted endpoint:
+`/private/tmp/a5-common-seed-near/Fe_out.nml`
 (SHA256 `25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5`)
 with `/private/tmp/a5-baseline-240/input.nml` (SHA256
 `ca65d9695b049f10beb3ee9461c05572b48f3973885de99ea7f8fee3dfc5699c`). Each
@@ -23,26 +24,52 @@ the Hamiltonian namelist include
 Run input and output hashes are captured in the associated receipts. A4
 evidence remains unchanged.
 
-The test-only HOH bypass boundary receipt is
-[`a5_hoh_guard_boundaries.json`](a5_hoh_guard_boundaries.json), captured with
-the final instrumented binary (SHA256
+The historical
+[`a5_hoh_guard_boundaries.json`](a5_hoh_guard_boundaries.json) receipt is
+preserved unchanged; its positive run was recursion because its input omitted
+`use_kspace`, so it is not the certified native-KS guard result. The corrected
+native-KS HOH bypass boundary receipt is
+[`a5_native_ks_guard_boundaries.json`](a5_native_ks_guard_boundaries.json),
+captured with the final instrumented binary (SHA256
 `52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225`). All
 seven runtime cases passed: the authorized W1/local/U=J=0 HOH case returned
 zero; bypass-off, nonzero U, nonzero J, W2, no-W, and spectral negatives each
 returned nonzero before SCF iteration markers. The receipt distinguishes the
 pre-run seed hash from runtime `Fe.nml` and `Fe_out.nml` output hashes.
 
-The same binary passed the actual one-step native-KS moments-only smoke,
-recorded in [`a5_moments_only_smoke.json`](a5_moments_only_smoke.json). It
+The earlier [`a5_moments_only_smoke.json`](a5_moments_only_smoke.json) receipt
+is retained byte-for-byte as historical evidence, but its deck also omitted
+`use_kspace` and is not a native-KS smoke. Its trace is setup-only and has no
+scientific interpretation. The corrected one-step native-KS moments-only
+smoke is recorded separately in
+[`a5_native_ks_moments_only_smoke.json`](a5_native_ks_moments_only_smoke.json). It
 captured physical `P_OUT` d-shell density matrices for both spins, q0 and
 applied `Tr(WP)` rows, ql/radial moments, and ASA energy fields while excluding
 onsite H, radial replay vectors, eigenpair, Green-function, and bulk-bond trace
-kinds. The CSV trace was 937,750 bytes; its hash and pre-run input/seed hashes
-are in the receipt.
+kinds. This smoke explicitly set `use_kspace=.true.`, confirmed the reciprocal
+KS branch and finite entropy/TS, and captured a 937,750-byte CSV trace; its
+input, pre-run seed, and output hashes are in the receipt.
 
 ## A5.2: local W1 non-stationarity controls
 
-Use the common near-converged KS no-U restart snapshot, scalar-collinear
+Setup audit update: the first λ=`-0.005 Ry` attempt reached its 240-step cap,
+but both it and the one authorized β=`0.05` continuation were invalid setup,
+not scientific endpoints. Their generated decks omitted `use_kspace`; its
+source default is false, so the solver ran recursion rather than reciprocal
+KS. Runtime output explicitly reported `entropy=UNAVAILABLE_KS_ONLY` and
+`TS=UNAVAILABLE_KS_ONLY`, and the expected reciprocal-KS branch marker was
+absent. The first attempt also reported `FIXED_U test-only R05 tightening
+requested but NOT APPLICABLE: fixed-U R05 is inactive.` No residual or W1
+response from these runs is used scientifically. Additive raw setup-failure
+receipts and all traces/restarts remain under the two output directories named
+in those receipts. Both input constructors now explicitly set
+`use_kspace=.true.` and require the reciprocal-KS branch marker and finite
+entropy/TS before accepting a run. The corrected A5.2 matrix will use the RS-
+origin near seed for each independent case while solving through reciprocal
+KS; the lead certified the corrected native-KS smoke and guard boundaries
+before this relaunch.
+
+Use the common RS-origin near-converged no-U restart snapshot, scalar-collinear
 `nsp=1`, `lmax=2`, local radial moments, W1, and the common 12³/300 K base
 setup. Each control's final SCF state must still meet the unchanged threshold.
 For each control,

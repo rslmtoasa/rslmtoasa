@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -90,7 +91,7 @@ def prepare_case(name: str, cfg: dict, base_input: Path, base_seed: Path,
     case_dir = output_root / name
     case_dir.mkdir(parents=True, exist_ok=False)
     deck = base_input.read_text()
-    deck = edit_group(deck, "self", {"nstep": "1"})
+    deck = edit_group(deck, "self", {"nstep": "1", "use_kspace": ".true."})
     ham = {
         "hoh": ".true." if cfg["hoh"] else ".false.",
         "hubbard_u_general(1,3)": f"{cfg['u_ev']:.16g}",
@@ -121,14 +122,20 @@ def prepare_case(name: str, cfg: dict, base_input: Path, base_seed: Path,
     if log_path.is_file():
         log += "\n" + log_path.read_text(errors="replace")
     passed = cfg["expect"] in log
+    ks_branch = "run_recursion: use_kspace=.true., skipping recursion solver stage" in log
+    thermo_pairs = re.findall(r"entropy=\s*([^\s]+).*?TS=\s*([^\s]+)", log)
+    number = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][+-]?\d+)?"
+    finite_thermo = bool(thermo_pairs) and all(
+        re.fullmatch(number, value) for value in thermo_pairs[-1])
     iteration_markers = ("SCF_B0C_ITER", "HUBBARD_MOMENT_ENERGY_TOTAL")
     if name.startswith("positive_"):
-        passed = passed and result.returncode == 0 and "fatal" not in log.lower()
+        passed = passed and result.returncode == 0 and "fatal" not in log.lower() and ks_branch and finite_thermo
     else:
         passed = passed and result.returncode != 0 and not any(marker in log for marker in iteration_markers)
     row = {
         "case": name, "expected_log_text": cfg["expect"], "passed": passed,
         "returncode": result.returncode,
+        "ks_branch": ks_branch, "finite_entropy_TS": finite_thermo,
         "binary_sha256": sha(binary), "input_sha256": input_sha256,
         "seed_input_sha256": seed_input_sha256,
         "stdout_sha256": sha(case_dir / "stdout.log"),

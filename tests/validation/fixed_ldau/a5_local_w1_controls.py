@@ -75,7 +75,7 @@ def run_case(binary: Path, base_input: Path, base_seed: Path, assets: Path,
     run_id = f"{control_name}_lambda_{lam:+.3f}"
     case_dir = output / run_id
     case_dir.mkdir(parents=True, exist_ok=False)
-    deck = edit_group(base_input.read_text(), "self", {})
+    deck = edit_group(base_input.read_text(), "self", {"use_kspace": ".true."})
     deck = edit_group(deck, "hamiltonian", {
         "hoh": cfg["hoh"], "hubbard_u_general(1,3)": "0.0", "hubbard_j_general(1,3)": "0.0",
         "hubbard_u_potential_form": "'liechtenstein'", "hubbard_radial_moments": "'local'",
@@ -110,7 +110,11 @@ def run_case(binary: Path, base_input: Path, base_seed: Path, assets: Path,
     if (case_dir / "testrun.log").is_file():
         log += "\n" + (case_dir / "testrun.log").read_text(errors="replace")
     converged = has_converged_marker(log)
-    if result.returncode != 0 or not converged or not trace.is_file():
+    ks_branch = "run_recursion: use_kspace=.true., skipping recursion solver stage" in log
+    thermo_pairs = re.findall(r"entropy=\s*([^\s]+).*?TS=\s*([^\s]+)", log)
+    number = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][+-]?\d+)?"
+    finite_thermo = bool(thermo_pairs) and all(re.fullmatch(number, x) for x in thermo_pairs[-1])
+    if result.returncode != 0 or not converged or not trace.is_file() or not ks_branch or not finite_thermo:
         failure = {"run_id": run_id, "control": control_name, "lambda_ry": lam,
             "returncode": result.returncode, "converged_marker": converged,
             "input_pre_sha256": input_sha, "seed_pre_sha256": seed_sha,
@@ -119,7 +123,8 @@ def run_case(binary: Path, base_input: Path, base_seed: Path, assets: Path,
                 ("Fe_out.nml", "Fe_scf.nml", "Fe_scf_beta.nml") if (case_dir / name).is_file()},
             "trace_sha256": sha(trace) if trace.is_file() else None,
             "stdout_sha256": sha(stdout), "trace_bytes": trace.stat().st_size if trace.is_file() else None,
-            "failure_reason": "returncode nonzero, no Converged! marker, or missing trace; preserve this raw case and stop campaign"}
+            "ks_branch_marker": ks_branch, "finite_entropy_TS_marker": finite_thermo,
+            "failure_reason": "returncode, convergence, trace, reciprocal-KS branch, or finite entropy/TS validation failed; preserve this raw case and stop campaign"}
         (case_dir / "failure.json").write_text(json.dumps(failure, indent=2, sort_keys=True) + "\n")
         raise RuntimeError(f"{run_id}: SCF did not exit successfully and converge; see {case_dir}")
     with trace.open(newline="") as stream:
@@ -128,13 +133,29 @@ def run_case(binary: Path, base_input: Path, base_seed: Path, assets: Path,
     kinds = {row["kind"] for row in rows}
     if not required <= kinds:
         raise RuntimeError(f"{run_id}: missing trace rows {sorted(required-kinds)}")
-    # At exactly lambda=0 the test hook intentionally suppresses the external
-    # perturbation and therefore reports no test-only free energy. The P_OUT
-    # moment capture remains the direct reference needed for the FD residual.
-    f_local = parse_last(log, "test_F_local") if lam != 0.0 else None
+    f_local = parse_last(log, "test_F_local")
+    physical_total_energy = parse_last(log, "physical_total_energy")
+    entropy = parse_last(log, "entropy")
+    ts = parse_last(log, "TS")
+    logger_external = parse_last(log, "test_lambda_trace_wp")
+    trace_iterations = {int(row["iteration"]) for row in rows
+                        if row["kind"] == "test_trace_wp" and row["stage"] == "P_OUT"}
+    if len(trace_iterations) != 1:
+        raise RuntimeError(f"{run_id}: expected one final-state P_OUT capture, got {sorted(trace_iterations)}")
+    endpoint_trace = sum(float(row["scalar"]) for row in rows
+                         if row["kind"] == "test_trace_wp" and row["stage"] == "P_OUT"
+                         and int(row["iteration"]) == next(iter(trace_iterations)))
+    external_test_energy = lam * endpoint_trace
+    f_total_with_external = physical_total_energy + external_test_energy - ts
     return {"run_id": run_id, "control": control_name, "lambda_ry": lam,
             "temperature_k": cfg["temperature"], "mesh": cfg["mesh"], "hoh": cfg["hoh"],
             "returncode": result.returncode, "converged": True, "F_local_ry": f_local,
+            "final_P_OUT_Tr_WP": endpoint_trace,
+            "physical_total_energy_ry": physical_total_energy, "entropy": entropy, "TS_ry": ts,
+            "logger_external_test_energy_ry": logger_external,
+            "logger_external_minus_P_OUT_lambda_Tr_WP_ry": logger_external - external_test_energy,
+            "reconstructed_external_test_energy_ry": external_test_energy,
+            "F_total_with_external_ry": f_total_with_external,
             "P_OUT_test_trace_wp_by_spin": {
                 spin: sum(float(row["scalar"]) for row in rows
                           if row["kind"] == "test_trace_wp" and row["stage"] == "P_OUT" and row["spin"] == spin)
@@ -167,12 +188,16 @@ def main() -> None:
                for name in CONTROLS}
     for name, cases in grouped.items():
         plus, zero, minus = (cases[str(x)] for x in (0.005, 0.0, -0.005))
-        fd = (plus["F_local_ry"] - minus["F_local_ry"]) / 0.01
+        fd_local = (plus["F_local_ry"] - minus["F_local_ry"]) / 0.01
+        fd = (plus["F_total_with_external_ry"] - minus["F_total_with_external_ry"]) / 0.01
         direct = sum(zero["P_OUT_test_trace_wp_by_spin"].values())
         residual = fd - direct
-        cases["summary"] = {"central_dF_dlambda": fd, "direct_Tr_WP_at_zero": direct,
+        cases["summary"] = {"central_dF_dlambda": fd,
+                            "raw_local_only_central_dF_dlambda": fd_local,
+                            "direct_Tr_WP_at_zero": direct,
                             "signed_residual": residual,
-                            "relative_residual": residual / direct if direct else None}
+                            "relative_residual": residual / direct if direct else None,
+                            "external_term_reconstructed_from_final_P_OUT": True}
     report = {"status": "MEASURED_A5_2_LOCAL_W1_CONTROLS", "initial_state_label": "shared immutable near-converged restart; not an accepted/converged endpoint",
               "binary_sha256": sha(args.binary),
               "base_input_sha256": sha(args.input), "base_seed_sha256": sha(args.seed),

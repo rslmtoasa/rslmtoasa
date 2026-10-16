@@ -1,5 +1,16 @@
 # A5.3 KS U/J energy-derivative experiment preregistration
 
+Backend setup correction before any decision-bearing run: the first launch
+decks inherited the recursion default because they omitted
+`&self use_kspace=.true.`. Those attempts are classified only as invalid
+non-KS setup in [`a5_invalid_backend_setup.md`](a5_invalid_backend_setup.md);
+their energies and convergence histories are excluded from A5. The corrected
+case constructor explicitly enables native reciprocal KS and verifies the
+reciprocal-SCF log marker and finite entropy/TS. A one-step corrected KS smoke
+using the common seed passed those checks. The common seed is a uniformly used
+RS-origin restart, not a converged KS state; every candidate starts from its
+own copy and must meet the existing unchanged endpoint criteria.
+
 At each spectral and local KS state `P(U=2 eV,J=0)`, compare the U
 derivative of each energy candidate with `dE_Hub/dU` evaluated at that fixed
 P by the production Liechtenstein `evaluate_hubbard_energy` routine at U0±
