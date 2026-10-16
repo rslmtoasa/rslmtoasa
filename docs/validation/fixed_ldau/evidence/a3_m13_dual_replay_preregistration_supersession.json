@@ -1,0 +1,10 @@
+{
+  "schema": "rslmto-a3-m13-preregistration-supersession-v1",
+  "status": "SUPERSEDED_BEFORE_ASSOCIATED_RADIAL_RESPONSES",
+  "superseded_preregistration": "a3_m13_local_spectral_dual_replay_preregistration.json",
+  "superseded_preregistration_sha256": "c971fbfb2507a64906da04f6a1da4321c5c114721ad2f4c6e0eadeea80390bdd",
+  "reason": "It proposed transporting the inverse correction onto the mixed LIVE_STATE radial q2 input while using P_OUT moments. This mixed two timing snapshots and was rejected before any radial response under that proposal.",
+  "what_was_measured_before_supersession": "Only the separate exact mixed LIVE_STATE local anchor, which reproduces its own captured PL/rho/energy outputs. It is retained solely as a timing diagnostic and is not a response under the superseded spectral proposal.",
+  "governing_preregistration": "a3_m13_pout_local_spectral_dual_replay_preregistration.json",
+  "governing_preregistration_sha256": "4b8e182cfabe175f030103581082a41e20c8f330a5035a6ead0ca3b1f4436325"
+}

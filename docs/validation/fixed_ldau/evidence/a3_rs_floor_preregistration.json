@@ -1,0 +1,41 @@
+{
+  "base": {
+    "accepted_threshold_ry": 3e-08,
+    "base_D0_ry": 5.056500278044496e-06,
+    "base_channels_ldos": 2500,
+    "base_final_seed_path": "/private/tmp/rslmto-localmom-a2-rs-floor3e8/Fe_out.nml",
+    "base_final_seed_sha256": "b6f3ce8058139380bd6fe44d74cf2889221da92ea8f30307944d3bfe515f998b",
+    "base_signed_D_ry": -5.056500278044496e-06,
+    "executable_path": "/private/tmp/rslmto-localmom-a11-run-bin-5f9/rslmto.x",
+    "executable_sha256": "7a98a68a11f6a4a062e1f8256ffb80a64b4dc8967c0165dab1ffb8910425a3fa",
+    "input_nml_sha256": "c666c25543e29bea125dc8586dfccafa7d89ac7ea8a7c5ea71a8826a7d441661",
+    "input_pre_sha256": "a13cee1205555e7db0925535971ce1071774a0197324309c5e906b49744d1690",
+    "manifest_path": "/private/tmp/rslmto-localmom-a2-rs-floor3e8/manifest.json",
+    "manifest_sha256": "12bfd935d486551577abb8acd2335fbf7c8c1cdf4ed0d673f01485fa732fdb87",
+    "records_csv_sha256": "406bc9b467dbd85bfd042d1bbd91f5ab6ec1b3d805a14b1c0cd52c111fbd7d21",
+    "source_path": "/private/tmp/rslmto-localmom-a11-source-5f9/source/self.f90",
+    "source_sha256": "5f9cf847738803a49fc8d35c51be7b5dd3e7083c851a5c07d1785e07bc1dab89"
+  },
+  "locked_analysis": {
+    "D0_definition": "abs(signed_D)",
+    "a2_primary_allowance": "Requires a separate RS no-U scalar fit under A2: A_RS=sum_s abs(r_fit,s(x_s))+D0_RS. Do not infer fit or allowance from KS.",
+    "convergence": "Each run must have an actual Converged marker at conv_thr=3e-8; report selected iteration and final charge/R05 metrics.",
+    "report": "Record every input/seed/source/executable/CSV/log/output hash, signed D, D0, per-spin Tr(M1) and SUMEV, convergence marker, changes, and deviations from base. No KS criterion or uncertainty is imported.",
+    "reporting": "Report u_RS separately; do not add it to or replace the primary A2 allowance without explicit user approval.",
+    "signed_D_definition": "sum_s Tr(M1_s)-SUMEV",
+    "uncertainty_ry": "u_RS=max(abs(D_repeat-D_base), abs(D_6000-D_base))"
+  },
+  "runs": {
+    "deterministic_repeat": {
+      "changes": "None to accepted floor input, final restart seed, executable, source, runtime or physics."
+    },
+    "restart_rule": "Both repeat and refinement start from a private copy of the accepted floor-run final Fe_out.nml (the accepted BASE FINAL seed), matching the KS repeat/refinement procedure. Do not use the pre-floor 240-step continuation seed.",
+    "spectral_refinement": {
+      "only_change": "channels_ldos 2500 to 6000",
+      "reason": "6000 is the existing M0.1 RS quadrature refinement endpoint; factor 2.4 over base.",
+      "seed_rule": "same accepted floor final Fe_out.nml as repeat"
+    }
+  },
+  "schema": "rslmto-a3-rs-floor-uncertainty-prereg-v2",
+  "status": "PREREGISTERED_BEFORE_REPEAT_OR_REFINEMENT_OUTCOMES"
+}

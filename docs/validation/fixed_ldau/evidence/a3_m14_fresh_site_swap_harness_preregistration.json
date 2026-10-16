@@ -1,0 +1,13 @@
+{
+  "schema": "rslmto-a3-m14-fresh-site-swap-harness-lock-v1",
+  "status": "LOCKED_BEFORE_HARNESS_EXECUTION",
+  "primary_prediction_preregistration_sha256": "e78b5a7810a51614c22839372a4c993e0c08994071c5653423a63f9b94cc44f0",
+  "target": "Run the independent math_mod correction helper on a fresh finite-H fixture, then on the same target P/M1/q0/c/q2 with the other site's same-spin V. No radial or production response is involved.",
+  "bindings": {
+    "test_source": {"path": "tests/unit/test_local_moments_site_swap.f90", "sha256": "bd3060e72bde701371dc272539fc665732cbe96477215d9221274ecbd7f9daa3"},
+    "cmake": {"path": "CMakeLists.txt", "sha256": "44f50aef56410fb67c582824cc6e117c3653d0186a6d26c822c892b76114f60d"},
+    "production_helper": {"path": "source/math.f90", "sha256": "4a93235e1f4c4b67c710fff3aededa15a5ad9f136b87cceb3246b2a1e42b0d09"},
+    "fixture_text": {"path": "tests/validation/fixed_ldau/data/a3_m14_fresh_site_swap_reference.txt", "sha256": "74dacddeef5f63b44420e8bc287da481cbc19bf10751e00b659fc1b4c7ed68a6"}
+  },
+  "frozen_criteria": "For every case, correct helper outputs must match independent direct finite-H predictions within the frozen correct bounds; alternate-V outputs must match frozen independent trace predictions within the frozen alternate-V bounds; each case must have center or q2 separation from correct result exceeding the sum of the corresponding bounds. Exact thresholds, units and predictions are in the bound primary preregistration. No criteria or source formulas changed."
+}

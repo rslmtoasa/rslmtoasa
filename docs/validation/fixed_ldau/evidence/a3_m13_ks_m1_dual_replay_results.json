@@ -1,0 +1,362 @@
+{
+  "M13_same_endpoint_production_diagnostics": {
+    "candidate_status": "PROVISIONAL_ONLY",
+    "energy_terms_ry": {
+      "E_DC": 2.646759512588076,
+      "E_Hub": 0.1104793774809081,
+      "E_int": 2.757238890068984,
+      "t_in_out": -0.2583779167349475
+    },
+    "final_diagnostic_line": "HUBBARD_MOMENT_ENERGY_TOTAL E_int=  0.2757238890068984E+01 E_DC=  0.2646759512588076E+01 E_Hub=  0.1104793774809081E+00 t_in_out= -0.2583779167349475E+00 physical_total_energy= -0.2541972663505471E+04 candidate_a=UNAVAILABLE candidate_b= -0.2541862184127990E+04 candidate_c=UNAVAILABLE candidate_status=PROVISIONAL_ONLY; unavailable candidates require the other radial representation",
+    "final_iteration_count": 34,
+    "note": "Candidate b is directly emitted for the local endpoint. The frozen P_OUT spectral dual replay is a radial diagnostic, not a converged spectral-mode endpoint; it does not authorize marking source candidate a/c as evaluated.",
+    "physical_total_energy_ry": -2541.972663505471,
+    "production_mode_candidate_status": {
+      "a": "UNAVAILABLE (requires spectral-mode endpoint diagnostic)",
+      "b": -2541.86218412799,
+      "c": "UNAVAILABLE (requires spectral-mode endpoint diagnostic)"
+    },
+    "run_directory": "/private/tmp/a3-ks-m1-local-u2",
+    "terminal_convergence_line": "Converged!0.0000000204",
+    "testrun_log_sha256": "01ffa00eb2aca826a9f1f47610b39e040e967447d74935b5b8307926f62341e1"
+  },
+  "P_OUT_carrier": {
+    "D0_added_once_ry": 5.028166848219939e-06,
+    "aggregate_allowance_A2_ry": 0.0018564194403382485,
+    "error_within_A_plus_guard": true,
+    "measured_delta_over_sum_t": 0.9930648153193707,
+    "measured_delta_sumEV_spectral_minus_local_ry": -0.2565860181649944,
+    "measured_minus_model_prediction_ry": -2.1498254580865073e-05,
+    "measured_minus_sum_t_ry": 0.0017918985699530987,
+    "per_spin_q0_ry": [
+      4.591825145009277,
+      1.929887769430912
+    ],
+    "per_spin_r_fit_ry": [
+      0.0018323940490119852,
+      -1.8997224478043316e-05
+    ],
+    "per_spin_t_Vin_Pout_ry": [
+      -0.2835306398186889,
+      0.025152723083741432
+    ],
+    "predicted_spectral_minus_local_delta_sumEV_ry": -0.2565645199104135,
+    "sum_r_fit_ry": 0.0018133968245339419,
+    "sum_t_ry": -0.2583779167349475,
+    "two_case_energy_guard_ry": 2e-08
+  },
+  "capture_csv_sha256": "f10790d5b007d41cfebfe86df1f1a305140769e0c43053f8a7eaf932e1de1c7c",
+  "capture_manifest_sha256": "474f142e976616fffc0ae2d7610e34a30143489e41e5f9bd94026530214e3502",
+  "component_semantics": "Frozen-input-density case-energy components: actual POISS0/VXC0SP sees rho_input, case SUMEC/SUMEV; output-rho components are reported separately as diagnostic only.",
+  "driver_sha256": "0c1c3c12e8501f4642af87168c611d261fb5a34cc4747aaef9c8420c2c6449c4",
+  "endpoint_fe_out_sha256": "23137d3165f92980da0a5dbe88940463850b2c8708e3e9acc4bce03dadbc57d7",
+  "local_POUT_CALCULATE_PL_anchor": {
+    "captured_POUT_output": true,
+    "max_abs_ry": 0.0,
+    "pass": true,
+    "tolerance_ry": 1e-10
+  },
+  "local_POUT_case": {
+    "actual_l2_rho_contribution_charge_by_spin": {
+      "1": 4.591832540887848,
+      "2": 1.9298884147282946
+    },
+    "actual_l2_rho_contribution_total": 6.521720955616143,
+    "frozen_input_rho_case_energy_components": {
+      "EKIN": {
+        "sum_over_spins_ry": 2574.984295225164
+      },
+      "ETOT": {
+        "sum_over_spins_ry": -2541.9726634731483
+      },
+      "RHOEPS": {
+        "sum_over_spins_ry": -108.30707738508474
+      },
+      "RHOMU": {
+        "sum_over_spins_ry": -143.0508921219345
+      },
+      "RHOVH": {
+        "sum_over_spins_ry": -3919.1305459715913
+      },
+      "SUMEC": {
+        "sum_over_spins_ry": -1485.325876742933
+      },
+      "SUMEV": {
+        "sum_over_spins_ry": -1.8712661254291132
+      },
+      "UTOT": {
+        "sum_over_spins_ry": -5008.6498813132275
+      },
+      "VNUCL": {
+        "sum_over_spins_ry": 234.54496987134092
+      },
+      "ZVNUCL": {
+        "sum_over_spins_ry": -6098.169216654864
+      }
+    },
+    "output_rho_diagnostic_components": {
+      "EKIN": {
+        "sum_over_spins_ry": 2574.98429627923
+      },
+      "ETOT": {
+        "sum_over_spins_ry": -2541.972661612509
+      },
+      "RHOEPS": {
+        "sum_over_spins_ry": -108.3070772408181
+      },
+      "RHOMU": {
+        "sum_over_spins_ry": -143.0508919333222
+      },
+      "RHOVH": {
+        "sum_over_spins_ry": -3919.1305472142694
+      },
+      "SUMEC": {
+        "sum_over_spins_ry": -1485.325876742933
+      },
+      "SUMEV": {
+        "sum_over_spins_ry": -1.8712661254291132
+      },
+      "UTOT": {
+        "sum_over_spins_ry": -5008.649880650921
+      },
+      "VNUCL": {
+        "sum_over_spins_ry": 234.54496977259888
+      },
+      "ZVNUCL": {
+        "sum_over_spins_ry": -6098.169214087571
+      }
+    },
+    "sphere_charge_by_spin": {
+      "1": 14.25539581185498,
+      "2": 11.74461215143867
+    },
+    "sphere_spin_moment": 2.51078366041631,
+    "sumec_by_spin_ry": {
+      "1": -743.2521639316836,
+      "2": -742.0737128112492
+    },
+    "sumec_total_ry": -1485.325876742933,
+    "sumev_by_spin_ry": {
+      "1": -1.2440567392862079,
+      "2": -0.6272093861429053
+    },
+    "sumev_total_ry": -1.8712661254291132
+  },
+  "local_output_sha256": "02a73a7af6f16b2fe6948fa829d30bcb457f485fbb8c34c4e9d068e15b9b86b3",
+  "local_payload_sha256": "3c4c52a2ac51ecdcad69fadd91ca9bfae00c0cd5932a2c9879a3465cf92df3a6",
+  "measured_per_spin_carrier_comparison": [
+    {
+      "delta_minus_t_plus_r_ry": -3.528554708209786e-05,
+      "delta_sumev_spectral_minus_local_ry": -0.28173353131675904,
+      "locked_r_fit_ry": 0.0018323940490119852,
+      "signed_ratio_delta_over_t": 0.9936616779651078,
+      "spin": 1,
+      "t_ry": -0.2835306398186889
+    },
+    {
+      "delta_minus_t_plus_r_ry": 1.3787292501277887e-05,
+      "delta_sumev_spectral_minus_local_ry": 0.025147513151764667,
+      "locked_r_fit_ry": -1.8997224478043316e-05,
+      "signed_ratio_delta_over_t": 0.9997928680739886,
+      "spin": 2,
+      "t_ry": 0.025152723083741432
+    }
+  ],
+  "mixed_live_anchor_output_sha256": "7e856db6aa7604f608a863a7172eb36a507031509b71a42882370a78b448dadd",
+  "preregistration_path": "/private/tmp/rslmto-ldau-local-moments-worktree/docs/validation/fixed_ldau/evidence/a3_m13_pout_local_spectral_dual_replay_preregistration.json",
+  "preregistration_sha256": "4b8e182cfabe175f030103581082a41e20c8f330a5035a6ead0ca3b1f4436325",
+  "same_state_gate_metrics": {
+    "expected_energy_delta_match": true,
+    "local_POUT_PL_anchor_pass": true,
+    "local_q2_min_ry2": 0.011105618607595086,
+    "measured_vs_locked_prediction_within_allowance": true,
+    "q2_nonnegative": true,
+    "spectral_q2_min_ry2": 0.01001940637716861
+  },
+  "schema": "rslmto-a3-m13-pout-local-spectral-dual-replay-results-v1",
+  "scope": "Candidate replay energy deltas do not relabel production physical_total_energy; M1 diagnostics remain PROVISIONAL_ONLY.",
+  "separate_mixed_LIVE_STATE_anchor_timing_diagnostic": {
+    "actual_l2_rho_contribution_charge_by_spin": {
+      "1": 4.591832562274925,
+      "2": 1.9298884724218184
+    },
+    "actual_l2_rho_contribution_total": 6.521721034696744,
+    "frozen_input_rho_case_energy_components": {
+      "EKIN": {
+        "sum_over_spins_ry": 2574.9842951928413
+      },
+      "ETOT": {
+        "sum_over_spins_ry": -2541.972663505471
+      },
+      "RHOEPS": {
+        "sum_over_spins_ry": -108.30707738508474
+      },
+      "RHOMU": {
+        "sum_over_spins_ry": -143.0508921219345
+      },
+      "RHOVH": {
+        "sum_over_spins_ry": -3919.1305459715913
+      },
+      "SUMEC": {
+        "sum_over_spins_ry": -1485.325876742933
+      },
+      "SUMEV": {
+        "sum_over_spins_ry": -1.8712661577516156
+      },
+      "UTOT": {
+        "sum_over_spins_ry": -5008.6498813132275
+      },
+      "VNUCL": {
+        "sum_over_spins_ry": 234.54496987134092
+      },
+      "ZVNUCL": {
+        "sum_over_spins_ry": -6098.169216654864
+      }
+    },
+    "output_rho_diagnostic_components": {
+      "EKIN": {
+        "sum_over_spins_ry": 2574.9842952753806
+      },
+      "ETOT": {
+        "sum_over_spins_ry": -2541.972663392079
+      },
+      "RHOEPS": {
+        "sum_over_spins_ry": -108.30707737968443
+      },
+      "RHOMU": {
+        "sum_over_spins_ry": -143.05089211480117
+      },
+      "RHOVH": {
+        "sum_over_spins_ry": -3919.130546061264
+      },
+      "SUMEC": {
+        "sum_over_spins_ry": -1485.325876742933
+      },
+      "SUMEV": {
+        "sum_over_spins_ry": -1.8712661577516156
+      },
+      "UTOT": {
+        "sum_over_spins_ry": -5008.649881287775
+      },
+      "VNUCL": {
+        "sum_over_spins_ry": 234.54496986593412
+      },
+      "ZVNUCL": {
+        "sum_over_spins_ry": -6098.169216514287
+      }
+    },
+    "sphere_charge_by_spin": {
+      "1": 14.255395833241877,
+      "2": 11.74461220913135
+    },
+    "sphere_spin_moment": 2.510783624110527,
+    "sumec_by_spin_ry": {
+      "1": -743.2521639316836,
+      "2": -742.0737128112492
+    },
+    "sumec_total_ry": -1485.325876742933,
+    "sumev_by_spin_ry": {
+      "1": -1.2440567604152954,
+      "2": -0.6272093973363203
+    },
+    "sumev_total_ry": -1.8712661577516156
+  },
+  "spectral_POUT_case": {
+    "actual_l2_rho_contribution_charge_by_spin": {
+      "1": 4.591830496386397,
+      "2": 1.929888391243929
+    },
+    "actual_l2_rho_contribution_total": 6.521718887630326,
+    "frozen_input_rho_case_energy_components": {
+      "EKIN": {
+        "sum_over_spins_ry": 2574.727709206999
+      },
+      "ETOT": {
+        "sum_over_spins_ry": -2542.229249491313
+      },
+      "RHOEPS": {
+        "sum_over_spins_ry": -108.30707738508474
+      },
+      "RHOMU": {
+        "sum_over_spins_ry": -143.0508921219345
+      },
+      "RHOVH": {
+        "sum_over_spins_ry": -3919.1305459715913
+      },
+      "SUMEC": {
+        "sum_over_spins_ry": -1485.325876742933
+      },
+      "SUMEV": {
+        "sum_over_spins_ry": -2.1278521435941076
+      },
+      "UTOT": {
+        "sum_over_spins_ry": -5008.6498813132275
+      },
+      "VNUCL": {
+        "sum_over_spins_ry": 234.54496987134092
+      },
+      "ZVNUCL": {
+        "sum_over_spins_ry": -6098.169216654864
+      }
+    },
+    "output_rho_diagnostic_components": {
+      "EKIN": {
+        "sum_over_spins_ry": 2578.3078758838756
+      },
+      "ETOT": {
+        "sum_over_spins_ry": -2534.154577860498
+      },
+      "RHOEPS": {
+        "sum_over_spins_ry": -107.84536233463156
+      },
+      "RHOMU": {
+        "sum_over_spins_ry": -142.4386307755983
+      },
+      "RHOVH": {
+        "sum_over_spins_ry": -3923.3229739948038
+      },
+      "SUMEC": {
+        "sum_over_spins_ry": -1485.325876742933
+      },
+      "SUMEV": {
+        "sum_over_spins_ry": -2.1278521435941076
+      },
+      "UTOT": {
+        "sum_over_spins_ry": -5004.617091409742
+      },
+      "VNUCL": {
+        "sum_over_spins_ry": 234.0735080317185
+      },
+      "ZVNUCL": {
+        "sum_over_spins_ry": -6085.911208824681
+      }
+    },
+    "sphere_charge_by_spin": {
+      "1": 14.255393767353532,
+      "2": 11.744612127954309
+    },
+    "sphere_spin_moment": 2.510781639399223,
+    "sumec_by_spin_ry": {
+      "1": -743.2521639316836,
+      "2": -742.0737128112492
+    },
+    "sumec_total_ry": -1485.325876742933,
+    "sumev_by_spin_ry": {
+      "1": -1.525790270602967,
+      "2": -0.6020618729911407
+    },
+    "sumev_total_ry": -2.1278521435941076
+  },
+  "spectral_output_sha256": "3b135c2de4b9eaf891eaa98a4f4acf15045bd78843f04d08c03286c920820688",
+  "spectral_payload_sha256": "af945544fd91dcc85e59ced58ca4899eaadf21ae947bb7d14675e5e243b72dae",
+  "status": "MEASURED_DUAL_REPLAY_DIAGNOSTIC",
+  "timing_gap_spectral_minus_mixed_anchor": {
+    "l2_charge_by_spin": {
+      "1": -2.065888528690607e-06,
+      "2": -8.117788929951075e-08
+    },
+    "sphere_spin": -1.984711303748554e-06,
+    "sumEC_ry": 0.0,
+    "sumEV_ry": -0.2565859858424919
+  }
+}

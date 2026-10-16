@@ -1,0 +1,80 @@
+{
+  "adapter_sha256": "0743222971e90060ce50e56cbaa5aeb58d6e37b9cdf8f828ea8cb82778ad8a7a",
+  "capture": {
+    "endpoint_fe_out_sha256": "23137d3165f92980da0a5dbe88940463850b2c8708e3e9acc4bce03dadbc57d7",
+    "executable_sha256": "71ad3c0861996ca714da5d4d2e03af2611995eb3cf627f856ed8c649e8136184",
+    "iteration": 34,
+    "manifest_path": "/private/tmp/a3-ks-m1-local-u2-capture/manifest.json",
+    "manifest_sha256": "474f142e976616fffc0ae2d7610e34a30143489e41e5f9bd94026530214e3502",
+    "records_path": "/private/tmp/a3-ks-m1-local-u2-capture/records.csv",
+    "records_sha256": "f10790d5b007d41cfebfe86df1f1a305140769e0c43053f8a7eaf932e1de1c7c",
+    "source_revision": "f122a001abd30d8213867b199b702d2d73ba915d"
+  },
+  "case_design": {
+    "both_cases": "same captured RADIAL_REPLAY mesh/V/rho/EC/EV/PL operands; production calculate_pl + NEWRHO fixture; zero external shifts",
+    "local": "exact captured local corrected QL, used as repeated calculate_pl anchor",
+    "no_double_correction": true,
+    "same_state_capture": true,
+    "spectral": "only d-shell l=2 gravity center and q2 changed; center set from direct spectral c; q2 input is captured radial-input local q2 plus independently reconstructed P_OUT spectral-minus-local q2 difference; q0 and other inputs unchanged"
+  },
+  "driver_sha256": "0c1c3c12e8501f4642af87168c611d261fb5a34cc4747aaef9c8420c2c6449c4",
+  "fit_sha256": "0ad6a7703aa26eb132602e7a43773d7619f70651c6b90817e4f945ff259cb993",
+  "gates": {
+    "both_spectral_candidate_q2_nonnegative": true,
+    "local_calculated_anchor_must_match_live_PL_rho_SUMEC_SUMEV_and_all_10_input_density_components_under_existing_guards_before_spectral": true,
+    "spectral_candidate_only_after_anchor_pass": true
+  },
+  "independent_reconstruction_preregistration_sha256": "ee1184d6776ad239b6cb1b3dbe902ba93e371a5620511c9471eabda75a33b8dd",
+  "limitations": "Candidate ETOTs are frozen replay diagnostics; production mode logger labels energy candidates PROVISIONAL_ONLY. No candidate relabels physical_total_energy.",
+  "local_anchor_csv_sha256": "7e856db6aa7604f608a863a7172eb36a507031509b71a42882370a78b448dadd",
+  "local_anchor_report_sha256": "ee584a12267531d678ba2a505ce9dd25271ce6e9cc3819768e37a6895a6e8eec",
+  "model": {
+    "D0_once_ry": 5.028166848219939e-06,
+    "aggregate_allowance_ry": 0.0018564194403382485,
+    "energy_guard_two_case_ry": 2e-08,
+    "predicted_delta_sumEV_spectral_minus_local_ry": -0.2565645199104135,
+    "predicted_operator_delta_sum_t_ry": -0.2583779167349475,
+    "sum_abs_r_fit_ry": 0.0018513912734900286,
+    "sum_r_fit_ry": 0.0018133968245339419
+  },
+  "moment_source": "locked direct eigenpair reconstruction; P_OUT/M1_OUT and actual Pin_H; not m0_carrier_* diagnostics",
+  "per_spin": [
+    {
+      "c_local_pout_ry": -0.21405859596859245,
+      "c_spec_ry": -0.2758054244877164,
+      "q0_radial_input": 4.591825166389063,
+      "q0_ry": 4.591825145009277,
+      "q2_local_pout_ry2": 0.04815571366001188,
+      "q2_local_radial_input_ry2": 0.048155725754792045,
+      "q2_spec_ry2": 0.04766026522965633,
+      "q2_spectral_radial_candidate_ry2": 0.04766027732443649,
+      "q2_transport_delta_ry2": -0.0004954484303555523,
+      "r_fit_ry": 0.0018323940490119852,
+      "signed_center_shift_ry": -0.06174682851912387,
+      "spin": 1,
+      "t_ry": -0.2835306398186889
+    },
+    {
+      "c_local_pout_ry": -0.19220152626738118,
+      "c_spec_ry": -0.1791682693691531,
+      "q0_radial_input": 1.9298878271246327,
+      "q0_ry": 1.929887769430912,
+      "q2_local_pout_ry2": 0.011105618607595086,
+      "q2_local_radial_input_ry2": 0.011105615690356615,
+      "q2_spec_ry2": 0.01001940637716861,
+      "q2_spectral_radial_candidate_ry2": 0.010019403459930139,
+      "q2_transport_delta_ry2": -0.001086212230426476,
+      "r_fit_ry": -1.8997224478043316e-05,
+      "signed_center_shift_ry": 0.013033256898228079,
+      "spin": 2,
+      "t_ry": 0.025152723083741432
+    }
+  ],
+  "pre_case_payloads": {
+    "local_calculated_anchor_sha256": "7e79d95290d4e5b6dde95ddee9b5e7bc1246d85391ef301a1945c588ad7f12f3",
+    "spectral_calculated_sha256": "167019a570d1d02ced78e1eb1bfecbc2f776094b6dda8ff59ecd0eb9cc263414"
+  },
+  "q2_source": "P_OUT radial_parameter order=3 is q2_local; order-2 radial_moment row is intentionally excluded because it stores c_local^2+q2_local with q2 unnormalized",
+  "schema": "rslmto-a3-m13-local-spectral-dual-replay-prereg-v1",
+  "status": "PRE_REGISTERED_BEFORE_SPECTRAL_CASE"
+}

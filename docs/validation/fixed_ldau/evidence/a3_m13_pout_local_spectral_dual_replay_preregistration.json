@@ -1,0 +1,74 @@
+{
+  "adapter_sha256": "0743222971e90060ce50e56cbaa5aeb58d6e37b9cdf8f828ea8cb82778ad8a7a",
+  "capture": {
+    "binary_sha256": "71ad3c0861996ca714da5d4d2e03af2611995eb3cf627f856ed8c649e8136184",
+    "csv_sha256": "f10790d5b007d41cfebfe86df1f1a305140769e0c43053f8a7eaf932e1de1c7c",
+    "endpoint_fe_out_sha256": "23137d3165f92980da0a5dbe88940463850b2c8708e3e9acc4bce03dadbc57d7",
+    "iteration": 34,
+    "manifest_sha256": "474f142e976616fffc0ae2d7610e34a30143489e41e5f9bd94026530214e3502",
+    "source_revision": "f122a001abd30d8213867b199b702d2d73ba915d"
+  },
+  "case_differences": {
+    "local": "P_OUT local-corrected d-shell center and q2 from pl_map_input/radial_parameter order 3",
+    "only_changed_operands": [
+      "d-shell gravity center in gc",
+      "d-shell QL second moment q2"
+    ],
+    "spectral": "same P_OUT q0 with independently reconstructed raw spectral center/q2 from bound eigensystem; correction applied exactly once by selecting representation; no m0_carrier_* fields consumed"
+  },
+  "cases": {
+    "local_payload_path": "/private/tmp/a3-ks-m1-local-u2-capture/local_pout_case.input",
+    "local_payload_sha256": "3c4c52a2ac51ecdcad69fadd91ca9bfae00c0cd5932a2c9879a3465cf92df3a6",
+    "spectral_payload_path": "/private/tmp/a3-ks-m1-local-u2-capture/spectral_pout_case.input",
+    "spectral_payload_sha256": "af945544fd91dcc85e59ced58ca4899eaadf21ae947bb7d14675e5e243b72dae"
+  },
+  "direct_spectral_reconstruction_lock_sha256": "ee1184d6776ad239b6cb1b3dbe902ba93e371a5620511c9471eabda75a33b8dd",
+  "driver_sha256": "0c1c3c12e8501f4642af87168c611d261fb5a34cc4747aaef9c8420c2c6449c4",
+  "execution_order": "Run LOCAL_POUT first and require its PL output agrees with captured P_OUT CALCULATE_PL mapped output under the existing 1e-10 check. Stop on failure. Only then run SPECTRAL_POUT. Report each response, per-spin/total energies, all 10 input/output density components, integrated actual l=2 delta-charge and sphere spin, and differences from separate mixed LIVE_STATE timing anchor. ETOT alternatives remain PROVISIONAL_ONLY.",
+  "fit_sha256": "0ad6a7703aa26eb132602e7a43773d7619f70651c6b90817e4f945ff259cb993",
+  "mixed_live_anchor_csv_sha256": "7e856db6aa7604f608a863a7172eb36a507031509b71a42882370a78b448dadd",
+  "mixed_live_anchor_report_sha256": "ee584a12267531d678ba2a505ce9dd25271ce6e9cc3819768e37a6895a6e8eec",
+  "payloads": {
+    "local_sha256": "3c4c52a2ac51ecdcad69fadd91ca9bfae00c0cd5932a2c9879a3465cf92df3a6",
+    "spectral_sha256": "af945544fd91dcc85e59ced58ca4899eaadf21ae947bb7d14675e5e243b72dae"
+  },
+  "per_spin_predictions": [
+    {
+      "c_local_POUT_ry": -0.21405859596859245,
+      "c_spectral_POUT_ry": -0.2758054244877164,
+      "locked_r_fit_ry": 0.0018323940490119852,
+      "q0_POUT": 4.591825145009277,
+      "q2_local_POUT_ry2": 0.04815571366001188,
+      "q2_spectral_POUT_ry2": 0.04766026522965633,
+      "signed_shift_ry": -0.06174682851912387,
+      "spin": 1,
+      "t_Vin_Pout_ry": -0.2835306398186889,
+      "vmad_ry": -1.3065493131847461e-11
+    },
+    {
+      "c_local_POUT_ry": -0.19220152626738118,
+      "c_spectral_POUT_ry": -0.1791682693691531,
+      "locked_r_fit_ry": -1.8997224478043316e-05,
+      "q0_POUT": 1.929887769430912,
+      "q2_local_POUT_ry2": 0.011105618607595086,
+      "q2_spectral_POUT_ry2": 0.01001940637716861,
+      "signed_shift_ry": 0.013033256898228079,
+      "spin": 2,
+      "t_Vin_Pout_ry": 0.025152723083741432,
+      "vmad_ry": -1.3065493131847461e-11
+    }
+  ],
+  "predictions": {
+    "D0_added_once_ry": 5.028166848219939e-06,
+    "aggregate_allowance_ry": 0.0018564194403382485,
+    "expected_spectral_minus_local_delta_sumEV_ry": -0.2565645199104135,
+    "operator_delta_sum_t_ry": -0.2583779167349475,
+    "sum_abs_r_fit_ry": 0.0018513912734900286,
+    "sum_r_fit_ry": 0.0018133968245339419,
+    "two_case_energy_guard_ry": 2e-08
+  },
+  "q2_measurement": "P_OUT radial_parameter order=3 scalar; radial_moment order=2 intentionally excluded because its displayed energy is c^2+q2 with unnormalized q2.",
+  "schema": "rslmto-a3-m13-pout-local-spectral-dual-replay-prereg-v1",
+  "state_definition": "Both measured cases are built from the same unmixed P_OUT radial q0/c/q2 for d shell, the same captured Vin/P_OUT/M1_OUT/eigensystem, and all common RADIAL_REPLAY mesh, V, rho, EC/EV seeds, non-d shell operands, and PL inputs. The separate LIVE_STATE mixed radial anchor is timing diagnostic only.",
+  "status": "PRE_REGISTERED_BEFORE_POUT_LOCAL_RESPONSE"
+}

@@ -139,6 +139,7 @@ contains
       jl_alpha = this%jl_alpha
       call move_alloc(this%velocity_scale, velocity_scale)
       hubbard_u_potential_form = this%hubbard_u_potential_form
+      hubbard_radial_moments = this%hubbard_radial_moments
       bounds_algorithm = this%bounds%algorithm
       bounds_scaling = this%bounds%scaling
       export = this%export
@@ -216,6 +217,11 @@ contains
       this%hubbard_u_potential_form = lower(trim(hubbard_u_potential_form))
       if (this%hubbard_u_potential_form /= 'liechtenstein' .and. this%hubbard_u_potential_form /= 'acbn0') then
          call g_logger%fatal("Invalid hubbard_u_potential_form. Use 'liechtenstein' or 'acbn0'.", __FILE__, __LINE__)
+      end if
+      this%hubbard_radial_moments = lower(trim(hubbard_radial_moments))
+      if (len_trim(this%hubbard_radial_moments) == 0) this%hubbard_radial_moments = 'spectral'
+      if (this%hubbard_radial_moments /= 'spectral' .and. this%hubbard_radial_moments /= 'local') then
+         call g_logger%fatal("Invalid hubbard_radial_moments. Use 'spectral' or 'local'.", __FILE__, __LINE__)
       end if
       this%bounds%algorithm = lower(trim(bounds_algorithm))
       if (len_trim(this%bounds%algorithm) == 0) this%bounds%algorithm = 'none'
@@ -433,6 +439,34 @@ contains
       ! Self-consistent U and fixed U/J are mutually exclusive in this implementation.
       if (this%hubbard_u_sc_check .and. this%hubbard_u_general_check) then
          call g_logger%fatal('Both hubbard_u_sc and explicit hubbard_u/hubbard_j are set. Use only one mode.', __FILE__, __LINE__)
+      end if
+
+      if (this%hubbard_radial_moments == 'local') then
+         if (.not. has_hubbard_general .and. .not. has_legacy_uj .and. .not. has_impurity_uj) then
+            call g_logger%fatal("hubbard_radial_moments='local' requires an explicit fixed Liechtenstein U/J input; "// &
+               'numeric U=J=0 is allowed and remains a no-op.', __FILE__, __LINE__)
+         end if
+         if (this%control%nsp /= 1) then
+            call g_logger%fatal("hubbard_radial_moments='local' requires nsp=1.", __FILE__, __LINE__)
+         end if
+         if (this%control%has_soc() .or. this%control%is_noncollinear()) then
+            call g_logger%fatal("hubbard_radial_moments='local' does not support SOC or noncollinear spin.", __FILE__, __LINE__)
+         end if
+         if (this%hoh) then
+            call g_logger%fatal("hubbard_radial_moments='local' does not support hoh=.true..", __FILE__, __LINE__)
+         end if
+         if (this%control%lmax /= 2) then
+            call g_logger%fatal("hubbard_radial_moments='local' requires lmax=2.", __FILE__, __LINE__)
+         end if
+         if (trim(this%hubbard_u_potential_form) /= 'liechtenstein') then
+            call g_logger%fatal("hubbard_radial_moments='local' requires fixed Liechtenstein U/J.", __FILE__, __LINE__)
+         end if
+         if (this%hubbard_u_sc_check) then
+            call g_logger%fatal("hubbard_radial_moments='local' does not support self-consistent U.", __FILE__, __LINE__)
+         end if
+         if (this%hubbard_v_check) then
+            call g_logger%fatal("hubbard_radial_moments='local' does not support intersite Hubbard V.", __FILE__, __LINE__)
+         end if
       end if
 
       ! The validated fixed-U implementation is collinear and orthogonal. The
@@ -655,6 +689,7 @@ contains
       this%js_alpha = 'z'
       this%jl_alpha = 'z'
       this%hubbard_u_potential_form = 'liechtenstein'
+      this%hubbard_radial_moments = 'spectral'
       this%hubbard_u_general_check = .false.
       this%hubbard_u_impurity_check = .false.
       this%hubbard_u_sc_check = .false.

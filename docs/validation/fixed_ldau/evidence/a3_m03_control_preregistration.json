@@ -1,0 +1,104 @@
+{
+  "A_true_ry": 0.001702238347231377,
+  "D0_ry": 5.028166848219939e-06,
+  "accepted_capture": {
+    "csv_sha256": "41e8bec19e50ba9931ccab2077686647300e1142774eea45567d1f65602472bc",
+    "input_pre_sha256": "d9d2fbb5a23619ba7fe9bd4d918037d87683bfe427b32fd08c8fd4203e2092c8",
+    "manifest_sha256": "4f6f82fa0d6779e07fd6babe21aaa0a70b511c9b8cf65594cf6cb0f17aedc54d",
+    "path": "/private/tmp/rslmto-localmom-a2-ks-u2-capture-d91",
+    "r05": {
+      "rp_abs": 4.9022e-08,
+      "rv_abs_Ry": 7.2061e-09,
+      "streak": 3
+    },
+    "seed_pre_sha256": "fd5d907628cc4ee41ac3b1147aeb1f9e8ec1fe8bb2f38069afe1cf63384ae233",
+    "selected_iteration": 32,
+    "source_self_sha256": "d91a468a4493da21710fc7f60e745b5f1bef8f20d5d667ae939c31d5ba3061ef"
+  },
+  "applicability_rule": "admissible iff predicted separation exceeds relevant correct plus wrong locked A2 fit-plus-floor allowances and E_num; no radial response is run before this preregistration is reviewed/frozen. For each spin, allocate the full D0 to each side conservatively.",
+  "iteration_provenance_control": {
+    "definition": "Use V from non-converged iteration 1 of same accepted SCF trajectory with accepted final P_out.",
+    "existing_capture_applicability": "MISSING/UNASSESSED: accepted iteration-32 capture has no V_1; no applicability conclusion or KS M0 PASS until a valid same-trajectory replay supplies V_1 or the user approves a scope resolution.",
+    "predeclared_procedure": "A diagnostic-only replay may use byte-identical accepted PRE and Fe seed, exact d91 source/executable and physical settings, changing only trace iteration selection to 1 in new scratch. Before any iteration-control calculate_pl/newrho replay, prove full 32-iteration convergence, exact accepted final Fe_out identity, matching charge/R05 history and final matrices. Then predeclare delta_s=Tr((V_1,s\u2212V_in,s)P_out,s), x_1,s=Tr(V_1,sP_out,s)/q0_s and locked A_k; run only if applicable. If the trajectory cannot be established, iteration control remains MISSING/UNASSESSED and KS M0 cannot pass absent user-approved scope resolution. Any trajectory mismatch invalidates V_1."
+  },
+  "locked_A2_fit_sha256": "0ad6a7703aa26eb132602e7a43773d7619f70651c6b90817e4f945ff259cb993",
+  "null_quantities": {
+    "1": {
+      "max_abs_P_minus_PT": 1.8014950832088636e-16,
+      "max_abs_Tr_difference_vout_minus_vin_ry": 1.0697739093460339e-08,
+      "max_abs_Vout_minus_Vin_ry": 3.962984718164364e-09,
+      "max_abs_im_P": 9.085402447191714e-17
+    },
+    "2": {
+      "max_abs_P_minus_PT": 6.282951589553498e-17,
+      "max_abs_Tr_difference_vout_minus_vin_ry": 1.4196767222346554e-09,
+      "max_abs_Vout_minus_Vin_ry": 1.4636140355239746e-09,
+      "max_abs_im_P": 3.144186300207963e-17
+    }
+  },
+  "numerical_guard": {
+    "E_num_ry": 2e-08,
+    "basis": "RAW-minus-control response contains two independently guarded radial cases; ENERGY_TOL=1e-8 Ry per case, so propagate 2e-8 Ry. Existing matrix/control arithmetic cross-check is <=2e-12 Ry and is negligible at this scale. No new outcome inspected."
+  },
+  "release_decision": "Per root clarification, controls (a) and (b) may run because their predictions are frozen and independently approved; iteration control (c) applicability remains pending the exact d91 replay. Final KS M0 decision remains blocked on c eligibility.",
+  "schema": "rslmto-a3-ks-m03-control-prereg-v1",
+  "sign_control": {
+    "A_wrong_ry": 0.0014899178111964784,
+    "admissible": true,
+    "applicability_bound_Atrue_plus_Awrong_plus_Enum_ry": 0.003192176158427855,
+    "definition": "c_wrong=c+t/q0; response-coordinate v=-t/q0",
+    "delta_control_minus_true_ry": 0.5092820280303152,
+    "locked_cubic_residual_at_wrong_shift_ry": {
+      "1": -0.0014780514771967088,
+      "2": -6.838167151549662e-06
+    },
+    "predicted_DeltaSUMEV_raw_minus_wrong_ry": 0.2531561243708093,
+    "predicted_ratio_Delta_over_sum_t": -0.994168694112018,
+    "q2_policy": "Hold correct q2_local fixed; sign control changes center only.",
+    "wrong_shift_v_ry": {
+      "1": 0.05994058070648333,
+      "2": -0.008035537048030585
+    }
+  },
+  "spin_provenance_control": {
+    "admissible_both_spins": true,
+    "definition": "t_wrong,s=Tr(V_in,other_spin P_out,s)",
+    "per_spin": {
+      "1": {
+        "A_true_spin_conservative_ry": 0.001687373961960249,
+        "A_wrong_spin_conservative_ry": 5.398031807361342e-05,
+        "E_num_ry": 2e-08,
+        "admissible": true,
+        "applicability_bound_ry": 0.0017413742800338624,
+        "predicted_DeltaSUMEV_raw_minus_wrong_ry": 0.05892307737444869,
+        "predicted_ratio_to_target_t": -0.21711757030955972,
+        "q2_local_wrong_ry2": 0.05060048866730395,
+        "r_fit_at_wrong_shift_ry": -4.895215122539348e-05,
+        "separation_delta_ry": 0.33035991071114396,
+        "source_potential_spin": 2,
+        "target_t_ry": -0.27138788118546986,
+        "wrong_shift_ry": 0.013024965152342404,
+        "wrong_t_ry": 0.05897202952567408
+      },
+      "2": {
+        "A_true_spin_conservative_ry": 1.989255211934802e-05,
+        "A_wrong_spin_conservative_ry": 0.0005739238442544091,
+        "E_num_ry": 2e-08,
+        "admissible": true,
+        "applicability_bound_ry": 0.0005938363963737571,
+        "predicted_DeltaSUMEV_raw_minus_wrong_ry": -0.12005395199172214,
+        "predicted_ratio_to_target_t": -7.1687409215584985,
+        "q2_local_wrong_ry2": 0.008291203806216153,
+        "r_fit_at_wrong_shift_ry": 0.0005688956774061891,
+        "separation_delta_ry": -0.1373697148394406,
+        "source_potential_spin": 1,
+        "target_t_ry": 0.01674686717031227,
+        "wrong_shift_ry": -0.05787765266344779,
+        "wrong_t_ry": -0.12062284766912833
+      }
+    },
+    "q2_policy": "Recompute q2_local using the other-spin potential and locked captured P,M1,q0,c,q2."
+  },
+  "status": "PREDICTIONS_PREREGISTERED; SIGN_AND_SPIN_CONTROLS_RELEASED; ITERATION_CONTROL_APPLICABILITY_PENDING",
+  "transpose_convention_oracle": "Do not rerun: cite M0.1 Class-B noncubic conjugation/transpose oracle mismatches 0.070-0.073 Ry (PASS); re-test in M1.4."
+}

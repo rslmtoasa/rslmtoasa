@@ -1,0 +1,204 @@
+{
+  "accepted_no_u_state": {
+    "D0_RS_ry": 5.056500278044496e-06,
+    "D_signed_ry": -5.056500278044496e-06,
+    "csv_sha256": "406bc9b467dbd85bfd042d1bbd91f5ab6ec1b3d805a14b1c0cd52c111fbd7d21",
+    "executable_sha256": "7a98a68a11f6a4a062e1f8256ffb80a64b4dc8967c0165dab1ffb8910425a3fa",
+    "existing_a1_eight_responses": [
+      {
+        "delta_sumev_ry": -0.08692410526085959,
+        "q0": 4.349220884209981,
+        "r_ry": 6.0312423340022625e-05,
+        "spin": 1,
+        "v_ry": -0.02
+      },
+      {
+        "delta_sumev_ry": -0.0429767681558717,
+        "q0": 2.1499357655013043,
+        "r_ry": 2.194715415438503e-05,
+        "spin": 2,
+        "v_ry": -0.02
+      },
+      {
+        "delta_sumev_ry": -0.04348443795274903,
+        "q0": 4.349220884209981,
+        "r_ry": 7.770889350770804e-06,
+        "spin": 1,
+        "v_ry": -0.01
+      },
+      {
+        "delta_sumev_ry": -0.021496490788180056,
+        "q0": 2.1499357655013043,
+        "r_ry": 2.8668668329880076e-06,
+        "spin": 2,
+        "v_ry": -0.01
+      },
+      {
+        "delta_sumev_ry": -0.02174500787261091,
+        "q0": 4.349220884209981,
+        "r_ry": 1.0965484389911795e-06,
+        "spin": 1,
+        "v_ry": -0.005
+      },
+      {
+        "delta_sumev_ry": -0.010749253323548702,
+        "q0": 2.1499357655013043,
+        "r_ry": 4.255039578199976e-07,
+        "spin": 2,
+        "v_ry": -0.005
+      },
+      {
+        "delta_sumev_ry": -0.010872851792048666,
+        "q0": 4.349220884209981,
+        "r_ry": 2.0041847628542164e-07,
+        "spin": 1,
+        "v_ry": -0.0025
+      },
+      {
+        "delta_sumev_ry": -0.00537475227752926,
+        "q0": 2.1499357655013043,
+        "r_ry": 8.713622400100679e-08,
+        "spin": 2,
+        "v_ry": -0.0025
+      },
+      {
+        "delta_sumev_ry": 0.010872851636045233,
+        "q0": 4.349220884209981,
+        "r_ry": -2.0057447971781606e-07,
+        "spin": 1,
+        "v_ry": 0.0025
+      },
+      {
+        "delta_sumev_ry": 0.005374752328856314,
+        "q0": 2.1499357655013043,
+        "r_ry": -8.708489694728844e-08,
+        "spin": 2,
+        "v_ry": 0.0025
+      },
+      {
+        "delta_sumev_ry": 0.021745032581319323,
+        "q0": 4.349220884209981,
+        "r_ry": -1.0718397305785332e-06,
+        "spin": 1,
+        "v_ry": 0.005
+      },
+      {
+        "delta_sumev_ry": 0.010749254860992874,
+        "q0": 2.1499357655013043,
+        "r_ry": -4.2396651364802473e-07,
+        "spin": 2,
+        "v_ry": 0.005
+      },
+      {
+        "delta_sumev_ry": 0.04348451093525463,
+        "q0": 4.349220884209981,
+        "r_ry": -7.697906845176294e-06,
+        "spin": 1,
+        "v_ry": 0.01
+      },
+      {
+        "delta_sumev_ry": 0.02149651818140541,
+        "q0": 2.1499357655013043,
+        "r_ry": -2.839473607633286e-06,
+        "spin": 2,
+        "v_ry": 0.01
+      },
+      {
+        "delta_sumev_ry": 0.08692500437309159,
+        "q0": 4.349220884209981,
+        "r_ry": -5.9413311108022504e-05,
+        "spin": 1,
+        "v_ry": 0.02
+      },
+      {
+        "delta_sumev_ry": 0.04297721694603729,
+        "q0": 2.1499357655013043,
+        "r_ry": -2.1498363988799174e-05,
+        "spin": 2,
+        "v_ry": 0.02
+      }
+    ],
+    "final_fe_sha256": "b6f3ce8058139380bd6fe44d74cf2889221da92ea8f30307944d3bfe515f998b",
+    "input_pre_sha256": "a13cee1205555e7db0925535971ce1071774a0197324309c5e906b49744d1690",
+    "iteration": 2,
+    "manifest_sha256": "12bfd935d486551577abb8acd2335fbf7c8c1cdf4ed0d673f01485fa732fdb87",
+    "path": "/private/tmp/rslmto-localmom-a2-rs-floor3e8",
+    "raw_per_spin": {
+      "1": {
+        "q0": 4.349220884209981,
+        "q2_ry2": 0.044900854898983295,
+        "sumev_ry": -1.281145765130413
+      },
+      "2": {
+        "q0": 2.1499357655013043,
+        "q2_ry2": 0.011907565208772921,
+        "sumev_ry": -0.7164489918294501
+      }
+    },
+    "run_id": "a2_rs_u0_floor_3e8_from_broyden240",
+    "seed_sha256": "8e56e21b1e0d980632a824a9e23d2e3640025547af725378d53e11eb9d97dfee",
+    "source_sha256": "5f9cf847738803a49fc8d35c51be7b5dd3e7083c851a5c07d1785e07bc1dab89",
+    "threshold_ry": 3e-08,
+    "u_RS_policy": "Report repeat/refinement uncertainty separately; do not add it to A2 primary allowance absent user-approved interpretation."
+  },
+  "backend": "RS",
+  "locked_models_and_checks": {
+    "E_num_basis": "For a raw-minus-shifted SUMEV response, propagate two per-case 1e-8 Ry ENERGY_TOL guards; applicable only to A3 control eligibility/comparison and not added to the A2 model allowance.",
+    "E_num_ry": 2e-08,
+    "all_signed_v_ry": [
+      -0.12,
+      -0.08,
+      -0.04,
+      -0.02,
+      -0.01,
+      -0.005,
+      -0.0025,
+      0.0025,
+      0.005,
+      0.01,
+      0.02,
+      0.04,
+      0.08,
+      0.12
+    ],
+    "allowance": "A_RS=sum_s abs(r_fit,s(t_s/q0_s))+D0_RS; D0_RS is added exactly once. This is RS-only; no KS fit/floor imported. Report u_RS separately.",
+    "fit": "Unweighted signed cubic r_fit(v)=a0+a1*v+a2*v^2+a3*v^3 on all 14 points, using the same A2.2 mathematical fit model; the RS-specific capture validator checks frozen-array/map provenance. Report signed quadratic and leave-one-magnitude-out/linear sensitivity only as diagnostics.",
+    "new_response_predictions": "No new six-shift response values are predicted; lock the model, measured-shift set, shape checks and allowance formula before those responses. U2 M0.3 controls must have a separate A3 preregistration from the captured RS U2 state before any U2 radial response.",
+    "no_u_gate": "If shape checks fail or actual U2 shifts exceed +/-0.12 Ry, stop RS M0.3 before radial U2 response.",
+    "residual_definition": "r_s(v)=(SUMEV_RAW_s-SUMEV_s(v))-v*q0_s",
+    "shape_checks": "Reuse A2.2 checks: constant nonzero sign within each signed branch; |r| strictly decreases toward zero as |v| halves; all-point log|r| versus log|v| OLS order >=2; |a0|<=10*D0_RS. Exact zero means log order unassessed and stop for review."
+  },
+  "new_shift_responses": {
+    "frozen_state": "Use the complete accepted per-stage RAW_PL snapshot from iteration 2: m0_replay_rofi, v_input, rho_input, EC/EV seeds, PL tuple inputs and returns, QL inputs, radial parameters, and order-indexed controls. Verify all existing A1_SHIFT_01..08 snapshots match RAW_PL exactly for every frozen input; only the d-shell PL center and its separately captured center-shift control may differ. Rehydrate only this RAW_PL time level (never generic RADIAL_REPLAY/LIVE_STATE arrays). Require exact A1 RAW q0/q2 identity and RAW_PL zero-anchor PL/rho/SUMEC/SUMEV reproduction under existing driver guards before accepting new shifts. Each response changes only the center shift and preserves captured q0/q2 and all other arrays. Run a standalone zero-shift RAW_PL anchor first and inspect its complete replay guards; do not invoke the six-shift response driver unless that anchor passes.",
+    "only_new_cases": true,
+    "signed_v_ry": [
+      -0.12,
+      -0.08,
+      -0.04,
+      0.04,
+      0.08,
+      0.12
+    ]
+  },
+  "production_replay_driver": {
+    "a1_oracle_path": "tests/validation/fixed_ldau/m0_a11_scaling_oracle.py",
+    "a1_oracle_sha256": "2537171d8bbeaa8eb7043510a28c6625e8534f215441b87de52b3c0917c81bd1",
+    "a22_oracle_path": "tests/validation/fixed_ldau/m0_a22_scaling_oracle.py",
+    "a22_oracle_sha256": "74fc69de0a3f32c7c8dacfc24b172ca25d081c4e7207f5188e594ccd998e2709",
+    "adapter_path": "tests/validation/fixed_ldau/accepted_m03_replay.py",
+    "adapter_sha256": "0743222971e90060ce50e56cbaa5aeb58d6e37b9cdf8f828ea8cb82778ad8a7a",
+    "bands_source_path": "/private/tmp/rslmto-localmom-m0-source-snapshot/source/bands.f90",
+    "bands_source_sha256": "937bfe6c17481c37a378f743960a21faf90660824f69f85a77a3b10a652c7a39",
+    "binary_path": "/private/tmp/rslmto-localmom-a2-u2-d91-bin/accepted_m03_replay_driver",
+    "binary_sha256": "0c1c3c12e8501f4642af87168c611d261fb5a34cc4747aaef9c8420c2c6449c4",
+    "method": "Read accepted base plus eight existing A1 rows from immutable capture; run one zero-shift anchor and six preregistered shifts through this exact production calculate_pl/NEWRHO fixture driver. The zero-shift anchor must reproduce accepted frozen state before any six-shift response is used.",
+    "scan_script_path": "tests/validation/fixed_ldau/a3_rs_scalar_scan.py",
+    "scan_script_sha256": "1c1a861bc927d4b2bbe5204a3ab77b57a7f040f61b1d1af2034d69d2b23e767d",
+    "source_path": "tests/validation/fixed_ldau/accepted_m03_replay_driver.f90",
+    "source_sha256": "124726aaab8f5937fa13be925969b67d4e647ee9c910596d58698ffb13e5476a",
+    "source_snapshot_rationale": "The fixture driver was built from the immutable M0 source snapshot; the live repository source has since advanced for M1. Verify calculate_pl source against that bound immutable snapshot, not the mutable checkout."
+  },
+  "schema": "rslmto-a3-rs-a22-scalar-fit-prereg-v1",
+  "scope": "Separate non-blocking RS M0 under A2/A3; this scalar calibration is only the no-U response model preregistration and does not claim an RS U2 M0 result.",
+  "status": "PREREGISTERED_BEFORE_SIX_NEW_RS_SHIFT_RESPONSES"
+}

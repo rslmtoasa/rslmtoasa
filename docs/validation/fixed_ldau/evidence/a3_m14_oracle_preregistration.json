@@ -1,0 +1,91 @@
+{
+  "schema": "rslmto-a3-m14-independent-finite-h-prereg-v1",
+  "status": "PREDICTIONS_LOCKED_BEFORE_PRODUCTION_HELPER_TEST",
+  "scope": "Independent mathematical finite-H helper oracle only. It does not claim material/SCF accuracy or authorize M2.",
+  "oracle": {
+    "script": "tests/validation/fixed_ldau/a3_m14_independent_reference.py",
+    "script_sha256": "8592d67235976fb9a504ff2eb0c33b806b3c2d9f6ad3565c51331c7d0371adfe",
+    "fixture_path": "/private/tmp/a3_m14_reference_fixture.json",
+    "fixture_sha256": "cd446109b92f8e117d9171a20a833dbb615f3df7f32e86471711900115650bc8",
+    "fortran_fixture_path": "tests/validation/fixed_ldau/data/a3_m14_reference_fixture.txt",
+    "fortran_fixture_sha256": "e10bb7dd15975c7a791e64978d8a41d5a7d24bb0747edd7341a5d2ce06443dbc",
+    "fortran_fixture_layout": "Header A3M14 1, case count; for each site/spin row (site spin q0 c q2 cprime_direct q2prime_direct Ecenter Eq2), then P, M1, Vin, Vout as 25 real/imaginary pairs each in Fortran column-major order.",
+    "seed": 20261015,
+    "layout": "two inequivalent type/site slots x two collinear spins; each local d block has five orbitals, embedded in an independent 8-dimensional complex Hermitian finite-H block",
+    "operator": "U=2 eV converted with the production ry2ev constant, J=0, V_in=U_Ry*(I/2-P_in), V_out=U_Ry*(I/2-P_out)",
+    "reference": "P and M1 are independently formed from exact finite-H eigenpair sums; direct cprime and q2prime are evaluated by H_LDA acting on those eigenvectors, not by repeating the matrix trace correction identity",
+    "input_convention": "P_ab=<c_b^dagger c_a>; type slots 1 and 2; spin slots 1 and 2; d-shell block indices 1:5 in the helper interface",
+    "independence": "The Python reference imports no RSLMTO production code and does not call the production helper. The Fortran helper test consumes the fixed arrays and outputs only after this preregistration is frozen."
+  },
+  "decision_criteria": {
+    "center_corrected_ry": {
+      "comparison": "abs(cprime_helper-cprime_direct)",
+      "threshold_by_site_spin": {
+        "site1_spin1": 1.4748084533239437e-12,
+        "site1_spin2": 1.5263279302889672e-12,
+        "site2_spin1": 1.3816568680256174e-12,
+        "site2_spin2": 1.7333716047032216e-12
+      },
+      "error_model": "Per-case gamma_4096 times absolute trace/product scale plus explicit finite-H eigensolver residual propagation; see fixture error_model. Units Ry."
+    },
+    "q2_corrected_ry2": {
+      "comparison": "abs(q2prime_helper-q2prime_direct_H0_eigenpair_sum)",
+      "threshold_by_site_spin": {
+        "site1_spin1": 9.949035302391432e-12,
+        "site1_spin2": 9.850247574064494e-12,
+        "site2_spin1": 7.981324831955818e-12,
+        "site2_spin2": 1.1316546497712522e-11
+      },
+      "error_model": "Per-case gamma_16384 times absolute-value bounds on all trace/matrix/direct-action intermediates plus explicit sum_n f_n*(2*||x_n||*||r_n,d||+||r_n,d||^2), with r=HU-U diag(e). gamma_n=n*epsilon/(1-n*epsilon). The operation count conservatively covers the 5x5 complex products/traces, 8x8 H0*U (512 complex multiply-accumulates), scalar operations and weighted 8-band five-orbital norms. Units Ry^2. Eigenpair residual and orthogonality residual are recorded in the fixture."
+    },
+    "q2_physicality": {
+      "comparison": "q2prime direct finite-H weighted squared norm >= 0; helper must return failure without clamping for deliberately negative q2prime",
+      "bad_case": "site2 spin1, positive input q2; alter only q2 so exact q2prime=-0.01 Ry^2",
+      "error_model": "The direct target is a sum of nonnegative weighted squared norms; -0.01 Ry^2 is over 8e8 times the largest q2 arithmetic bound and cannot be a roundoff ambiguity."
+    },
+    "density_physicality": {
+      "comparison": "helper status for P with min eigenvalue -0.01 and for P with anti-Hermitian residual 2e-3",
+      "threshold_source": "Existing math_mod::correct_d_shell_moments physicality policy, sourced from hubbard_density_diagnostics: max anti-Hermitian >1e-6 or min_eigenvalue<-1e-3 rejects; no threshold change is proposed.",
+      "error_model": "Fixture physical P has min eigenvalue 0.0992 to 0.2794. Deliberately invalid P min eigenvalue -0.01 is ten times beyond the existing -1e-3 rejection boundary; anti-Hermitian perturbation is 2e-3, 2000 times the existing bound."
+    },
+    "scalar_operator": {
+      "comparison": "V=vI, cprime=c-v, q2prime=q2",
+      "v_ry": 0.137,
+      "error_model": "Exact algebraic identity for scalar shifts; compare output using the same per-case propagated c and q2 arithmetic bounds above. Pure-oracle observed deviations are c=0 and q2<=4.17e-17 Ry^2."
+    },
+    "wrong_operator_and_mapping_controls": {
+      "controls": ["V_out in place of V_in", "transposed P and M1", "swap site/type slots 1 and 2 for each spin"],
+      "decision": "Each control is eligible only when its independent predicted center or q2 separation from the correct result exceeds the sum of the relevant per-case error bounds; otherwise report it as construction-null. No additional absolute mismatch cutoff is introduced.",
+      "site_swap_predicted_separation": {
+        "spin1_center_ry": 0.01377920623881837,
+        "spin2_center_ry": 0.026792904211745017,
+        "spin1_q2_ry2": 0.011547476430484135,
+        "spin2_q2_ry2": 0.009622287296923437
+      },
+      "error_model": "The comparison uses the direct eigenpair reference and the sum of the two cases' derived bounds. V_out and transposed-P predictions are fixed in the hash-bound fixture before any production helper result."
+    },
+    "zero_potential_noop": {
+      "comparison": "V=0 must produce status success and bitwise-identical c, q2, with t=0",
+      "error_model": "Algebraic identity; no tolerance is needed. Production spectral/no-U/U=J=0 baseline bitwise comparisons are separate end-to-end integration checks against base 3d7571a."
+    }
+  },
+  "production_integration_checks": {
+    "production_helper_under_test": {
+      "source": "source/math.f90",
+      "source_sha256": "4a93235e1f4c4b67c710fff3aededa15a5ad9f136b87cceb3246b2a1e42b0d09",
+      "interface": "math_mod::correct_d_shell_moments and extract_hubbard_d_shell_potential"
+    },
+    "unit_harness": {
+      "source": "tests/unit/test_local_moments_kernel.f90",
+      "source_sha256": "42550b28360fd38cea336f6caf6c2dd930567c5f2cc1a49e33f5954b89302d0e",
+      "cmake_path": "CMakeLists.txt",
+      "cmake_sha256": "9d555a5d5bb39a1c1d9857e0db4dac3f49fe4889c77f9bde76271fb62bd1979b",
+      "parser_boundary_test": "tests/validation/val04_lda_u_inputs.py",
+      "parser_boundary_test_sha256": "bc8651860735d376d10ba21862a3b469fbc27690cdfed064f9bf81c55002b2b5"
+    },
+    "site_mapping": "The production caller must map type/site slots 1 and 2, both spins, and orbital indices 1:5; compare each slot to the independent reference and run the predicted site-swap control.",
+    "unsupported_scope": "ACBN0, SC-U, intersite V, noncollinear/SOC or unsupported spin layouts, nonorthogonal overlap, spdf/lmax>2, and GPU paths must not silently enter this helper; verify existing selection/error guards before local-mode run.",
+    "baseline": "Default spectral mode and fixed-U=0/U=J=0 paths must remain bitwise identical to the frozen base 3d7571a outputs; local-mode KS U=2 eV M0.3 is rechecked with the locked A2 allowance and accepted convergence checks.",
+    "execution_order": "This file and the exact test harness/driver hashes must be frozen before invoking the production helper or inspecting its response. Gate M1 ends after the approved KS checks; no M2 work."
+  }
+}

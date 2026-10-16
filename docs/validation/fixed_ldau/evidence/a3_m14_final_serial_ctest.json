@@ -1,0 +1,38 @@
+{
+  "schema": "a3-m14-final-serial-ctest-v1",
+  "status": "PASS",
+  "source_commit": "f122a001abd30d8213867b199b702d2d73ba915d",
+  "build": {
+    "path": "/private/tmp/rslmto-localmom-m1-serial",
+    "type": "Release",
+    "compiler": "GNU Fortran 16.2.0 (/opt/homebrew/bin/gfortran)",
+    "accelerate": true,
+    "mpi": false,
+    "openmp": false,
+    "libxc": false,
+    "run_unit_tests": true,
+    "cmake_lists_sha256": "44f50aef56410fb67c582824cc6e117c3653d0186a6d26c822c892b76114f60d",
+    "ctest_registry_path": "/private/tmp/a3-m14-serial-final/CTestTestfile.cmake",
+    "ctest_registry_sha256": "833ae8b12c2e56f2c9daaa2ad47583c6ece1bf28d85c180e9b759baffb44a39c",
+    "registered_tests": 126,
+    "site_swap_test_registered": true,
+    "rslmto_binary_sha256": "71ad3c0861996ca714da5d4d2e03af2611995eb3cf627f856ed8c649e8136184",
+    "site_swap_test_binary_sha256": "f42e62f0baa354cc1ef5aa7ce4d4087b7efe0e368bd4c382de057f9828b52cf9"
+  },
+  "command": "ctest --test-dir /private/tmp/rslmto-localmom-m1-serial -LE 'validation|performance' --output-on-failure",
+  "tests_run": 121,
+  "tests_passed": 121,
+  "tests_failed": 0,
+  "excluded_by_labels": ["validation", "performance"],
+  "elapsed_seconds": 131.66,
+  "log_path": "/private/tmp/a3-m14-serial-final/LastTest.log",
+  "log_sha256": "3eded0b86179284e77ff23bd455764d16a035ae8992a0e38d86d4fed536c7238",
+  "source_file_sha256": {
+    "source/math.f90": "4a93235e1f4c4b67c710fff3aededa15a5ad9f136b87cceb3246b2a1e42b0d09",
+    "source/hamiltonian_build.f90": "290eb05fa3daad6cf420f24af6199e6e8748daf2662ac0a7f0dbdc700c1a7726",
+    "source/bands.f90": "ab3fcc2714f491f0029972fc30b3de20765e9b1317f5c8ba5bfda1c1dcbe5ea8",
+    "source/self.f90": "5831075524c7eeaa2599b3a47f8193df4324fc41d10cac7bdbb23429783b529b",
+    "source/hamiltonian.f90": "39aa6f2abc93fdee49047e35820bf401ca9ac8decdc6c2e314eb993b26d43956",
+    "source/include_codes/namelists/hamiltonian.f90": "acf393841752495dae5a3007b4631a363101f869c223939033848b0ab73c3b56"
+  }
+}

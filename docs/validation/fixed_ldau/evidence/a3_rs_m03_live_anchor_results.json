@@ -1,0 +1,205 @@
+{
+  "capture_convergence": {
+    "accepted": true,
+    "charge_history_ry": [
+      8.55e-08,
+      1.05e-08,
+      1.06e-08,
+      1.5e-08,
+      2.8e-08,
+      1.66e-08
+    ],
+    "charge_metric_final": 1.66e-08,
+    "charge_threshold": 3e-08,
+    "fixed_u_final": {
+      "physical": true,
+      "rp_abs": 9.3206e-08,
+      "rp_rel": 4.1487e-08,
+      "rv_abs_ry": 1.3701e-08,
+      "rv_rel": 1.3701e-08,
+      "streak": 3
+    },
+    "fixed_u_residual_lines": 6,
+    "fixed_u_residual_tail": [
+      {
+        "physical": true,
+        "rp_abs": 9.4233e-08,
+        "rp_rel": 4.1945e-08,
+        "rv_abs_ry": 1.3852e-08,
+        "rv_rel": 1.3852e-08,
+        "streak": 1
+      },
+      {
+        "physical": true,
+        "rp_abs": 9.1829e-08,
+        "rp_rel": 4.0875e-08,
+        "rv_abs_ry": 1.3499e-08,
+        "rv_rel": 1.3499e-08,
+        "streak": 2
+      },
+      {
+        "physical": true,
+        "rp_abs": 9.3206e-08,
+        "rp_rel": 4.1487e-08,
+        "rv_abs_ry": 1.3701e-08,
+        "rv_rel": 1.3701e-08,
+        "streak": 3
+      }
+    ],
+    "log_converged_marker": true
+  },
+  "capture_csv_sha256": "9982b7fc115e72d9f5236253717c8a6edcb8e9d2f95ade6a9766b7fd23189d4e",
+  "checks": {
+    "EV": {
+      "max_abs": 0.0,
+      "pass": true,
+      "tolerance": 1e-08
+    },
+    "LIVE_STATE_integrals": {
+      "actual_l2_rho_contribution_charge_by_spin": {
+        "1": 4.537785916894889,
+        "2": 2.0713838716943878
+      },
+      "actual_l2_rho_contribution_total": 6.609169788589277,
+      "method": "integrate NEWRHO-observed rho-after-minus-before l=2 with ATOMSC logarithmic Simpson metric",
+      "sphere_charge_by_spin": {
+        "1": 14.193265561620766,
+        "2": 11.80674115032229
+      },
+      "sphere_spin_moment": 2.386524411298476
+    },
+    "PL": {
+      "max_abs": 0.0,
+      "pass": true,
+      "tolerance": 1e-10
+    },
+    "RAW_PL_vs_LIVE_STATE_operands_diagnostic_only": {
+      "d_shell_pl": [
+        {
+          "difference": 4.8963380017141844e-09,
+          "live_pl": 3.7917079851686077,
+          "p_out_calculate_pl": 3.7917079900649457,
+          "spin": 1
+        },
+        {
+          "difference": -1.2018539941038853e-08,
+          "live_pl": 3.694411982778825,
+          "p_out_calculate_pl": 3.694411970760285,
+          "spin": 2
+        }
+      ],
+      "d_shell_ql_q0_q2": [
+        {
+          "difference": 8.317407829139256e-08,
+          "live_ql": 4.53777985534234,
+          "moment": 0,
+          "p_out_spectral": 4.537779938516418,
+          "spin": 1
+        },
+        {
+          "difference": 2.2085132542204455e-09,
+          "live_ql": 0.0507443323007201,
+          "moment": 2,
+          "p_out_spectral": 0.05074433450923335,
+          "spin": 1
+        },
+        {
+          "difference": -7.268468227294989e-08,
+          "live_ql": 2.0713832223082163,
+          "moment": 0,
+          "p_out_spectral": 2.071383149623534,
+          "spin": 2
+        },
+        {
+          "difference": -9.32302582357103e-10,
+          "live_ql": 0.008418676652028938,
+          "moment": 2,
+          "p_out_spectral": 0.008418675719726355,
+          "spin": 2
+        }
+      ],
+      "use": "Report mixing/operand gap; RAW_PL replay uses P_OUT moments while LIVE_STATE baseline uses captured actual PL/QL."
+    },
+    "SUMEC": {
+      "max_abs": 0.0,
+      "pass": true,
+      "tolerance": 1e-08
+    },
+    "SUMEV": {
+      "max_abs": 0.0,
+      "pass": true,
+      "tolerance": 1e-08
+    },
+    "captured_ATOMSC_input_density_components": {
+      "ekin": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "etot": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "pass": true,
+      "rhoeps": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "rhomu": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "rhovh": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "sumec": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "sumev": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "utot": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "vnucl": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "zvnucl": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      }
+    },
+    "pass": true,
+    "rho": {
+      "max_abs": 3.552713678800501e-15,
+      "pass": true,
+      "tolerance": 1e-10
+    }
+  },
+  "current_source_file_sha256": "5831075524c7eeaa2599b3a47f8193df4324fc41d10cac7bdbb23429783b529b",
+  "driver_output_sha256": "1f227d9e41fbd1cefd0c0a4836bce83951a291050ccf852277b7ae63e1aa4e46",
+  "driver_sha256": "0c1c3c12e8501f4642af87168c611d261fb5a34cc4747aaef9c8420c2c6449c4",
+  "input_sha256": "dacd759ad153d77bbae9ccae29af38fd6a75666d41cdefca194c7651451dad8d",
+  "iteration": 6,
+  "manifest_sha256": "54d0c8d8b510ac73254c3cf10f6fd7f9bdbcb16b125dec1e18ddbfa621443054",
+  "raw_output_path": "/private/tmp/a3-rs-m03-d91-anchor/anchor.final.report.v2.csv",
+  "raw_output_sha256": "1f227d9e41fbd1cefd0c0a4836bce83951a291050ccf852277b7ae63e1aa4e46",
+  "runner_sha256": "96c51a8e1e0b0809b35b7875a5c94b9be1e70e82180cb6693c13209fe9a0b515",
+  "schema": "a3-rs-m03-live-anchor-v1",
+  "source_sha256": "d91a468a4493da21710fc7f60e745b5f1bef8f20d5d667ae939c31d5ba3061ef",
+  "status": "PASS_LIVE_BASELINE"
+}

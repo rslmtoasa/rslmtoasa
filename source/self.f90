@@ -396,6 +396,7 @@ module self_mod
       procedure, private :: write_fixed_u_rs_bonds
       procedure, private :: write_fixed_u_csv_row
       procedure, private :: write_fixed_u_total_energy
+      procedure, private :: write_hubbard_moment_energy_diagnostics
       procedure, private :: write_fixed_u_radial_replay_input
       procedure, private :: write_fixed_u_radial_replay_output
       procedure, private :: verify_fixed_u_radial_replay
@@ -1962,6 +1963,109 @@ contains
             -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, energy_value, 0.0_rp, 0.0_rp)
       end subroutine total_row
    end subroutine write_fixed_u_total_energy
+
+   !> Report provisional fixed-U energy diagnostics without modifying the
+   !> physical total-energy field.  P_out is the unmixed density from this
+   !> iteration; V_in is the operator actually held by the Hamiltonian.
+   subroutine write_hubbard_moment_energy_diagnostics(this)
+      class(self), intent(inout) :: this
+      complex(rp), allocatable :: density(:, :, :, :, :), potential(:, :, :, :, :)
+      complex(rp) :: p_d(5, 5), v_d(5, 5)
+      real(rp), allocatable :: e_int(:, :), e_dc(:, :), e_hub(:, :), tr_vp(:, :)
+      real(rp) :: site_int, site_dc, site_hub, site_t, direct_t, etot_site
+      real(rp) :: total_int, total_dc, total_hub, total_t, value_a, value_b, value_c
+      integer :: isite, itype, spin, i, j, flat, status, orbital_i, orbital_j
+      character(len=64) :: candidate_a, candidate_b, candidate_c
+
+      if (.not. this%hamiltonian%hubbard_u_general_check .or. rank /= 0) return
+      allocate(density(this%lattice%ntype, 4, 2, 7, 7), potential(this%lattice%ntype, 4, 2, 7, 7))
+      allocate(e_int(this%lattice%ntype, 4), e_dc(this%lattice%ntype, 4), &
+               e_hub(this%lattice%ntype, 4), tr_vp(this%lattice%ntype, 4))
+      density = cmplx(0.0_rp, 0.0_rp, rp)
+      potential = cmplx(0.0_rp, 0.0_rp, rp)
+      total_int = 0.0_rp
+      total_dc = 0.0_rp
+      total_hub = 0.0_rp
+      total_t = 0.0_rp
+
+      do isite = 1, this%lattice%nrec
+         itype = this%lattice%ib(isite)
+         density = cmplx(0.0_rp, 0.0_rp, rp)
+         potential = cmplx(0.0_rp, 0.0_rp, rp)
+         direct_t = 0.0_rp
+         do spin = 1, 2
+            do i = 1, 5
+               orbital_i = 4 + i + spin_off*(spin - 1)
+               do j = 1, 5
+                  orbital_j = 4 + j + spin_off*(spin - 1)
+                  flat = (i - 1)*5 + j
+                  p_d(i, j) = this%mix%ldm_new(isite, 3, spin, flat)
+                  v_d(i, j) = this%hamiltonian%hubbard_u_pot(orbital_i, orbital_j, itype)
+                  density(itype, 3, spin, i, j) = p_d(i, j)
+                  potential(itype, 3, spin, i, j) = v_d(i, j)
+               end do
+            end do
+            do i = 1, 5
+               do j = 1, 5
+                  direct_t = direct_t + real(v_d(i, j)*p_d(j, i), rp)
+               end do
+            end do
+         end do
+         call this%hamiltonian%evaluate_hubbard_energy(density, potential, e_int, e_dc, e_hub, tr_vp)
+         site_int = sum(e_int(itype, :))
+         site_dc = sum(e_dc(itype, :))
+         site_hub = sum(e_hub(itype, :))
+         site_t = sum(tr_vp(itype, :))
+         etot_site = this%symbolic_atom(this%lattice%nbulk + isite)%potential%etot
+         value_a = 0.0_rp
+         value_b = 0.0_rp
+         value_c = 0.0_rp
+         candidate_a = 'UNAVAILABLE'
+         candidate_b = 'UNAVAILABLE'
+         candidate_c = 'UNAVAILABLE'
+         if (trim(this%hamiltonian%hubbard_radial_moments) == 'spectral') then
+            value_a = etot_site - site_t + site_hub
+            value_c = etot_site + site_hub
+            candidate_a = trim(fmt('e24.16', value_a))
+            candidate_c = trim(fmt('e24.16', value_c))
+         else
+            value_b = etot_site + site_hub
+            candidate_b = trim(fmt('e24.16', value_b))
+         end if
+         call g_logger%info('HUBBARD_MOMENT_ENERGY_SITE site='//fmt('i0', isite)//' type='//fmt('i0', itype)// &
+            ' E_int='//fmt('e24.16', site_int)//' E_DC='//fmt('e24.16', site_dc)// &
+            ' E_Hub='//fmt('e24.16', site_hub)//' t_in_out='//fmt('e24.16', site_t)// &
+            ' direct_trace_check='//fmt('e24.16', direct_t-site_t)// &
+            ' ETOT_selected='//fmt('e24.16', etot_site)//' candidate_a='//trim(candidate_a)// &
+            ' candidate_b='//trim(candidate_b)//' candidate_c='//trim(candidate_c)// &
+            ' candidate_status=PROVISIONAL_ONLY', __FILE__, __LINE__)
+         total_int = total_int + site_int
+         total_dc = total_dc + site_dc
+         total_hub = total_hub + site_hub
+         total_t = total_t + site_t
+      end do
+
+      candidate_a = 'UNAVAILABLE'
+      candidate_b = 'UNAVAILABLE'
+      candidate_c = 'UNAVAILABLE'
+      if (trim(this%hamiltonian%hubbard_radial_moments) == 'spectral') then
+         value_a = this%physical_total_energy - total_t + total_hub
+         value_c = this%physical_total_energy + total_hub
+         candidate_a = trim(fmt('e24.16', value_a))
+         candidate_c = trim(fmt('e24.16', value_c))
+      else
+         value_b = this%physical_total_energy + total_hub
+         candidate_b = trim(fmt('e24.16', value_b))
+      end if
+      call g_logger%info('HUBBARD_MOMENT_ENERGY_TOTAL E_int='//fmt('e24.16', total_int)// &
+         ' E_DC='//fmt('e24.16', total_dc)//' E_Hub='//fmt('e24.16', total_hub)// &
+         ' t_in_out='//fmt('e24.16', total_t)//' physical_total_energy='// &
+         fmt('e24.16', this%physical_total_energy)//' candidate_a='//trim(candidate_a)// &
+         ' candidate_b='//trim(candidate_b)//' candidate_c='//trim(candidate_c)// &
+         ' candidate_status=PROVISIONAL_ONLY; unavailable candidates require the other radial representation', &
+         __FILE__, __LINE__)
+      deallocate(density, potential, e_int, e_dc, e_hub, tr_vp)
+   end subroutine write_hubbard_moment_energy_diagnostics
 
    subroutine write_fixed_u_kspace_trace(this, capture_spectrum)
       class(self), intent(inout) :: this
@@ -3614,6 +3718,7 @@ contains
 
          this%physical_total_energy = sum(this%symbolic_atom(:)%potential%etot)
          call this%write_fixed_u_total_energy()
+         call this%write_hubbard_moment_energy_diagnostics()
          call this%write_gbt_scf_diagnostics(i)
          total_energy = this%physical_total_energy
          magnetic_moment = sum(this%symbolic_atom(this%lattice%nbulk + 1:this%lattice%nbulk + this%lattice%nrec)%potential%mtot)
@@ -3844,6 +3949,10 @@ contains
       real(rp) :: q_up, q_dn, mz, mtot
       real(rp) :: reciprocal_h2d, reciprocal_solver, reciprocal_d2h, reciprocal_total
       real(rp), allocatable :: kspace_spin_mom(:,:)
+      complex(rp), allocatable :: local_m1(:, :, :, :, :)
+      complex(rp) :: p_d(5, 5), m1_d(5, 5), v_d(5, 5)
+      real(rp) :: q0_d, center_d, q2_d, center_local, q2_local, t_local
+      integer :: moment_status, site_type
       logical :: use_shifted_kmesh
    
       if (rank == 0) call g_logger%info('Calculating the density of states and the new moment bands', __FILE__, __LINE__)
@@ -3917,6 +4026,20 @@ contains
             call g_scf_benchmark_profile%stop_stage('P_charge_spin_accumulate')
          end if
 
+         ! The opt-in local-moment route needs same-eigensystem P and M1
+         ! before the band center/second moment are mapped to radial state.
+         ! Keep the historical spectral ordering exactly as before.
+         if (trim(this%hamiltonian%hubbard_radial_moments) == 'local' .and. &
+             this%hamiltonian%hubbard_u_general_check) then
+            allocate(local_m1(this%lattice%nrec, lmax_basis + 1, 2, 2*lmax_basis + 1, 2*lmax_basis + 1))
+            call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos(this%lattice, &
+               fixed_liechtenstein=.true., m1_out=local_m1)
+            if (present(m1_out)) then
+               m1_out(:, 1:size(local_m1, 2), 1:size(local_m1, 3), &
+                  1:size(local_m1, 4), 1:size(local_m1, 5)) = local_m1
+            end if
+         end if
+
          ! Map reciprocal projected-DOS moments onto SCF quantities expected by mix/save_to.
          call g_scf_benchmark_profile%start_stage('P_density_build')
          do ia = 1, this%lattice%nrec
@@ -3936,6 +4059,29 @@ contains
                   this%reciprocal_scf_cache%band_moments(ia, l + 1, 1, 3)**2 * this%reciprocal_scf_cache%band_moments(ia, l + 1, 1, 1)
                this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(3, l, 2) = &
                   this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 3)**2 * this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 1)
+               if (l == 2 .and. allocated(local_m1)) then
+                  site_type = this%lattice%ib(ia)
+                  do li = 1, 2
+                     q0_d = this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(1, 2, li)
+                     center_d = this%reciprocal_scf_cache%band_moments(ia, 3, li, 2)
+                     q2_d = this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(3, 2, li)
+                     p_d = this%symbolic_atom(this%lattice%nbulk + ia)%potential%ldm(3, li, 1:5, 1:5)
+                     m1_d = local_m1(ia, 3, li, 1:5, 1:5)
+                     call extract_hubbard_d_shell_potential(this%hamiltonian%hubbard_u_pot, &
+                        site_type, li, spin_off, v_d, moment_status)
+                     if (moment_status /= 0) call g_logger%fatal( &
+                        'Unable to map local d-shell Hubbard potential in reciprocal path.', __FILE__, __LINE__)
+                     if (maxval(abs(v_d)) == 0.0_rp) cycle
+                     call correct_d_shell_moments(p_d, m1_d, v_d, q0_d, center_d, q2_d, &
+                        center_local, q2_local, t_local, moment_status)
+                     if (moment_status /= 0) call g_logger%fatal( &
+                        'Invalid local d-shell Hubbard moment correction in reciprocal path; status='// &
+                        fmt('i0', moment_status), __FILE__, __LINE__)
+                     this%symbolic_atom(this%lattice%nbulk + ia)%potential%gravity_center(3, li) = &
+                        center_local - this%symbolic_atom(this%lattice%nbulk + ia)%potential%vmad
+                     this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(3, 2, li) = q2_local
+                  end do
+               end if
             end do
 
             if (this%control%uses_spinor_representation()) then
@@ -4002,7 +4148,8 @@ contains
          this%en%fermi = this%reciprocal_scf_cache%fermi_level
          call g_scf_benchmark_profile%stop_stage('P_density_build')
 
-         if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
+         if ((this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) &
+             .and. .not. allocated(local_m1)) then
             call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos(this%lattice, &
                fixed_liechtenstein=this%hamiltonian%hubbard_u_general_check .and. &
                   trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein', m1_out=m1_out)

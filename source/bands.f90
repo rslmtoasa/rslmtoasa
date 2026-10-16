@@ -865,7 +865,7 @@ contains
       class(bands) :: this
       ! Optional diagnostic-only raw first spectral moment, shape
       ! (nrec,l+1,spin,m_a,m_b). It never feeds the radial moment path.
-      complex(rp), intent(out), optional :: m1_out(:, :, :, :, :)
+      complex(rp), intent(out), optional, target :: m1_out(:, :, :, :, :)
       real(rp), intent(out), optional :: pl_diag_out(:, :, :, :)
       ! Local variables
       integer :: i, j, l, m, o ! Orbital index
@@ -892,16 +892,21 @@ contains
       real(rp) :: ldm_trace, ldm_min_eig, ldm_max_eig, ldm_antiherm
       integer :: ldm_diag_info
       complex(rp), dimension(this%en%channels_ldos + 10) :: spectral_value
-      logical :: fixed_liechtenstein_active
+      logical :: fixed_liechtenstein_active, local_moments_active
       real(rp), dimension(7) :: occ_ch
       real(rp) :: occ_orb
       real(rp), allocatable :: ldm_comm(:, :, :, :)
       real(rp), allocatable :: ldm_comm_imag(:, :, :, :)
       real(rp), allocatable :: m1_comm_real(:, :, :, :, :)
       real(rp), allocatable :: m1_comm_imag(:, :, :, :, :)
+      complex(rp), pointer :: m1_target(:, :, :, :, :)
+      complex(rp), allocatable, target :: m1_local(:, :, :, :, :)
+      complex(rp) :: p_d(5, 5), m1_d(5, 5), v_d(5, 5)
       real(rp) :: m1_real, m1_imag
+      real(rp) :: q0_d, center_d, q2_d, center_local, q2_local, t_local
       real(rp), allocatable :: pl_comm(:, :, :)
       integer :: lcount_ldm, max_flat_ldm, local_flat
+      integer :: status_local, itype_local
       ! These diagnostic tolerances exceed observed finite-grid residuals
       ! (about 1e-8 anti-Hermitian and <1e-4 eigen/trace drift) without hiding
       ! material violations. Diagnostics never modify or project the LDM.
@@ -940,6 +945,14 @@ contains
                        this%recursion%hamiltonian%hubbard_v_check
       fixed_liechtenstein_active = this%recursion%hamiltonian%hubbard_u_general_check .and. &
          trim(lower(this%recursion%hamiltonian%hubbard_u_potential_form)) == 'liechtenstein'
+      local_moments_active = trim(this%recursion%hamiltonian%hubbard_radial_moments) == 'local'
+      nullify(m1_target)
+      if (present(m1_out)) m1_target => m1_out
+      if (local_moments_active .and. .not. present(m1_out)) then
+         allocate(m1_local(this%lattice%nrec, lmax_basis + 1, 2, 2*lmax_basis + 1, 2*lmax_basis + 1))
+         m1_target => m1_local
+      end if
+      if (associated(m1_target)) m1_target = cmplx(0.0_rp, 0.0_rp, rp)
 
       nchan_spin = lmax_basis + 1
       nchan = 2*nchan_spin
@@ -1149,16 +1162,16 @@ contains
       ! energy factor.  It is independent of ql/gravity_center and does not
       ! alter any density, PL, or energy state; present(m1_out) also enables
       ! the same measurement for a no-U reference calculation.
-      if (present(m1_out)) then
+      if (associated(m1_target)) then
          do na_glob = start_atom, end_atom
             na = g2l_map(na_glob)
-            do li = 0, min(lmax_basis, size(m1_out, 2) - 1)
+            do li = 0, min(lmax_basis, size(m1_target, 2) - 1)
                jdim = 2*li + 1
-               do ispin = 1, min(2, size(m1_out, 3))
+               do ispin = 1, min(2, size(m1_target, 3))
                   soff = spin_off*(ispin - 1)
-                  do i = 1, min(jdim, size(m1_out, 4))
+                  do i = 1, min(jdim, size(m1_target, 4))
                      iorb = li*li + i
-                     do j = 1, min(jdim, size(m1_out, 5))
+                     do j = 1, min(jdim, size(m1_target, 5))
                         jorb = li*li + j
                         do ie = 1, size(spectral_value)
                            spectral_value(ie) = hubbard_spectral_density_element( &
@@ -1171,24 +1184,53 @@ contains
                         m1_imag = 0.0_rp
                         call simpson_m(m1_real, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 1, this%en%ene)
                         call simpson_m(m1_imag, this%en%edel, this%en%fermi, this%nv1, y_imag, this%e1, 1, this%en%ene)
-                        m1_out(na_glob, li + 1, ispin, i, j) = cmplx(m1_real, m1_imag, rp)
+                        m1_target(na_glob, li + 1, ispin, i, j) = cmplx(m1_real, m1_imag, rp)
                      end do
                   end do
                end do
             end do
          end do
 #ifdef USE_MPI
-         allocate(m1_comm_real(size(m1_out, 1), size(m1_out, 2), size(m1_out, 3), size(m1_out, 4), size(m1_out, 5)))
-         allocate(m1_comm_imag(size(m1_out, 1), size(m1_out, 2), size(m1_out, 3), size(m1_out, 4), size(m1_out, 5)))
-         m1_comm_real = real(m1_out, rp)
-         m1_comm_imag = aimag(m1_out)
+         allocate(m1_comm_real(size(m1_target, 1), size(m1_target, 2), size(m1_target, 3), size(m1_target, 4), size(m1_target, 5)))
+         allocate(m1_comm_imag(size(m1_target, 1), size(m1_target, 2), size(m1_target, 3), size(m1_target, 4), size(m1_target, 5)))
+         m1_comm_real = real(m1_target, rp)
+         m1_comm_imag = aimag(m1_target)
          call MPI_ALLREDUCE(MPI_IN_PLACE, m1_comm_real, product(shape(m1_comm_real)), &
                             MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
          call MPI_ALLREDUCE(MPI_IN_PLACE, m1_comm_imag, product(shape(m1_comm_imag)), &
                             MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-         m1_out = cmplx(m1_comm_real, m1_comm_imag, rp)
+         m1_target = cmplx(m1_comm_real, m1_comm_imag, rp)
          deallocate(m1_comm_real, m1_comm_imag)
 #endif
+      end if
+
+      if (local_moments_active) then
+         if (.not. associated(m1_target)) call g_logger%fatal( &
+            'Local Hubbard radial moments require the current spectral M1 matrix.', __FILE__, __LINE__)
+         do na_glob = start_atom, end_atom
+            plusbulk = this%lattice%nbulk + na_glob
+            itype_local = this%lattice%ib(na_glob)
+            do ispin = 1, 2
+               call extract_hubbard_d_shell_potential(this%recursion%hamiltonian%hubbard_u_pot, &
+                  itype_local, ispin, spin_off, v_d, status_local)
+               if (status_local /= 0) call g_logger%fatal('Unable to map local d-shell Hubbard potential.', __FILE__, __LINE__)
+               if (maxval(abs(v_d)) == 0.0_rp) cycle
+               q0_d = this%symbolic_atom(plusbulk)%potential%ql(1, 2, ispin)
+               center_d = this%symbolic_atom(plusbulk)%potential%gravity_center(3, ispin) + &
+                          this%symbolic_atom(plusbulk)%potential%vmad
+               q2_d = this%symbolic_atom(plusbulk)%potential%ql(3, 2, ispin)
+               p_d = this%symbolic_atom(plusbulk)%potential%ldm(3, ispin, 1:5, 1:5)
+               m1_d = m1_target(na_glob, 3, ispin, 1:5, 1:5)
+               call correct_d_shell_moments(p_d, m1_d, v_d, q0_d, center_d, q2_d, &
+                                             center_local, q2_local, t_local, status_local)
+               if (status_local /= 0) call g_logger%fatal('Invalid local d-shell Hubbard moment correction; status='// &
+                  fmt('i0', status_local)//' type='//fmt('i0', itype_local)//' atom='//fmt('i0', na_glob)// &
+                  ' spin='//fmt('i0', ispin), __FILE__, __LINE__)
+               this%symbolic_atom(plusbulk)%potential%gravity_center(3, ispin) = &
+                  center_local - this%symbolic_atom(plusbulk)%potential%vmad
+               this%symbolic_atom(plusbulk)%potential%ql(3, 2, ispin) = q2_local
+            end do
+         end do
       end if
 
       if (present(pl_diag_out)) then

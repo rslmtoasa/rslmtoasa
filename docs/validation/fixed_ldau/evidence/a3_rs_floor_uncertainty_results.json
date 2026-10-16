@@ -1,0 +1,91 @@
+{
+  "baseline": {
+    "Fe_out_sha256": "b6f3ce8058139380bd6fe44d74cf2889221da92ea8f30307944d3bfe515f998b",
+    "M1_trace_by_spin_ry": {
+      "down": -0.716452424319083,
+      "up": -1.2811473259029003
+    },
+    "SUMEV_ry": -1.9975946937217053,
+    "channels_ldos": 2500,
+    "converged_marker": "Converged!0.0000000223",
+    "executable_sha256": "7a98a68a11f6a4a062e1f8256ffb80a64b4dc8967c0165dab1ffb8910425a3fa",
+    "input_sha256": "c666c25543e29bea125dc8586dfccafa7d89ac7ea8a7c5ea71a8826a7d441661",
+    "manifest_pre_sha256": "657a900b8c2a8e25cb165bcf88a6af74b0c8573c70d09b803b0234544c123303",
+    "manifest_sha256": "12bfd935d486551577abb8acd2335fbf7c8c1cdf4ed0d673f01485fa732fdb87",
+    "path": "/private/tmp/rslmto-localmom-a2-rs-floor3e8",
+    "records_csv_sha256": "406bc9b467dbd85bfd042d1bbd91f5ab6ec1b3d805a14b1c0cd52c111fbd7d21",
+    "seed_origin_sha256": "8e56e21b1e0d980632a824a9e23d2e3640025547af725378d53e11eb9d97dfee",
+    "signed_D_sum_TrM1_minus_SUMEV_ry": -5.056500278044496e-06,
+    "source_sha256": "5f9cf847738803a49fc8d35c51be7b5dd3e7083c851a5c07d1785e07bc1dab89",
+    "sum_Tr_M1_ry": -1.9975997502219833,
+    "testrun_log_sha256": "dcf70ff678c33786f0124973227d9296badc44a23d8f4ffb8cad59497ba979d8",
+    "threshold_ry": 3e-08
+  },
+  "pre_input_diff": "Only channels_ldos changes from 2500 to 6000; both PRE input files differ at that line only. Both restart from accepted base final Fe_out SHA b6f3ce8058139380bd6fe44d74cf2889221da92ea8f30307944d3bfe515f998b.",
+  "preregistration_path": "docs/validation/fixed_ldau/evidence/a3_rs_floor_preregistration.json",
+  "preregistration_sha256": "ee9d52104fc3fbd8071a68d4f84dbefeb73e053c9cc76f9a2cc740ac5276eef6",
+  "refine6000": {
+    "M1_trace_by_spin_ry": {
+      "down": -0.7164503034788912,
+      "up": -1.2811523960717057
+    },
+    "SUMEV_ry": -1.9975977093168837,
+    "channel_count": 6000,
+    "channel_only_diff_from_repeat": "channels_ldos 2500 to 6000 only",
+    "converged_marker": "[Oct 15 2026 19:33:08.253] [self.f90:3307]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mConverged!0.0000000251",
+    "executable_sha256": "7a98a68a11f6a4a062e1f8256ffb80a64b4dc8967c0165dab1ffb8910425a3fa",
+    "input_pre_sha256": "5a34bfa99ab70d71a51f814f1d45b7fe80a8b3cdf872a4b96986efb095bfcb07",
+    "output_Fe_out_sha256": "ca329b645e88d9962a47f08dde0d3e15c777aff432c72665dcbca0a54504fc27",
+    "pre_manifest_path": "/private/tmp/a3-rs-floor-uncertainty-provenanced/refine6000/manifest.pre.json",
+    "pre_manifest_sha256": "b0f594162fe4c2a51d25b989a0da913259f7d2236e717d79c921e52beaceff6f",
+    "records_csv_sha256": "51f47cfd7b56f15189190d8cf3418a8330c304af0289c116d28e7fd175fedca5",
+    "runner_sha256": "5d8a62a4692811cf8fa53262592024048fd79c5e87d1dc6956b4bc45af8b0445",
+    "seed_is_accepted_base_final": true,
+    "seed_pre_sha256": "b6f3ce8058139380bd6fe44d74cf2889221da92ea8f30307944d3bfe515f998b",
+    "signed_D_sum_TrM1_minus_SUMEV_ry": -4.9902337131424446e-06,
+    "source_sha256": "5f9cf847738803a49fc8d35c51be7b5dd3e7083c851a5c07d1785e07bc1dab89",
+    "sum_Tr_M1_ry": -1.9976026995505969,
+    "testrun_log_sha256": "83016d2d8a009bffcb55859c6fb41f2000b8745935ddb6d8672ee51ef95db067",
+    "threshold_ry": 3e-08
+  },
+  "repeat": {
+    "M1_trace_by_spin_ry": {
+      "down": -0.7164524099173947,
+      "up": -1.281147348247903
+    },
+    "SUMEV_ry": -1.9975947061089663,
+    "channel_count": 2500,
+    "channel_only_diff_from_repeat": "none",
+    "converged_marker": "[Oct 15 2026 19:30:17.420] [self.f90:3307]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mConverged!0.0000000098",
+    "executable_sha256": "7a98a68a11f6a4a062e1f8256ffb80a64b4dc8967c0165dab1ffb8910425a3fa",
+    "input_pre_sha256": "c666c25543e29bea125dc8586dfccafa7d89ac7ea8a7c5ea71a8826a7d441661",
+    "output_Fe_out_sha256": "4752e8b2e18bf6edb06dc693ea0727d5ebddc3fc8bf65dc41e74a1359d397700",
+    "pre_manifest_path": "/private/tmp/a3-rs-floor-uncertainty-provenanced/repeat/manifest.pre.json",
+    "pre_manifest_sha256": "302711d37a26763e1dec5c99b86d3c08c4af4012b2b7ac271d0899437332994e",
+    "records_csv_sha256": "895c4736664a64137e8724aecd73060704133de1ea9a722be237b2e70703e71f",
+    "runner_sha256": "5d8a62a4692811cf8fa53262592024048fd79c5e87d1dc6956b4bc45af8b0445",
+    "seed_is_accepted_base_final": true,
+    "seed_pre_sha256": "b6f3ce8058139380bd6fe44d74cf2889221da92ea8f30307944d3bfe515f998b",
+    "signed_D_sum_TrM1_minus_SUMEV_ry": -5.05205633150041e-06,
+    "source_sha256": "5f9cf847738803a49fc8d35c51be7b5dd3e7083c851a5c07d1785e07bc1dab89",
+    "sum_Tr_M1_ry": -1.9975997581652978,
+    "testrun_log_sha256": "9a654e812778ea83e4f539746c617794a49d7ff257625cf32c2c1dd9c47306bc",
+    "threshold_ry": 3e-08
+  },
+  "schema": "rslmto-a3-rs-floor-uncertainty-results-v1",
+  "status": "RS_A3_5_UNCERTAINTY_MEASURED",
+  "uncertainty": {
+    "A2_primary_allowance_policy": "u_RS is reported separately and is not silently added to A2.2. RS scalar allowance remains \u03a3|r_fit,s(t_s/q0_s)| + D0_RS, once.",
+    "D0_RS_abs_base_ry": 5.056500278044496e-06,
+    "D0_plus_u_diagnostic_only_ry": 5.122766842946547e-06,
+    "D_base_signed_ry": -5.056500278044496e-06,
+    "D_refine6000_signed_ry": -4.9902337131424446e-06,
+    "D_repeat_signed_ry": -5.05205633150041e-06,
+    "all_runs_converged_at_3e-8": true,
+    "formula": "u_RS=max(|D_repeat-D_base|,|D_refine-D_base|)",
+    "refine_abs_delta_ry": 6.626656490205107e-08,
+    "repeat_abs_delta_ry": 4.443946544085975e-09,
+    "u_RS_ry": 6.626656490205107e-08,
+    "uncertainty_is_nonblocking_for_KS": true
+  }
+}

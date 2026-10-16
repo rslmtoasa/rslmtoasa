@@ -673,6 +673,136 @@ energy control must use an accepted physical state and production
 outcome. The user must approve any future criterion change before new
 measurements are inspected.
 
+## Protocol amendment A3 (verbatim)
+
+```text
+Protocol amendment A3 (user-approved; supersedes the M0.3 negative-control
+criterion; record verbatim in LOCAL_MOMENTS.md; do not edit the user-owned
+protocol file or historical evidence).
+
+Rationale: on the converged collinear cubic bcc-Fe KS state, both mandatory
+controls are null by construction:
+  - P^T = P by time-reversal and cubic symmetry, so Tr(V P^T) = Tr(V P);
+  - V_out = V_in to the R05 tolerance at convergence.
+A control that cannot fail on the tested state protects no decision. Codex's
+proposed rule is adopted, with the substitutions below.
+
+A3.1 Control applicability rule (all future gates):
+  - Before measuring, compute each wrong control's predicted separation from the
+    captured state.
+  - A control is admissible only if that predicted separation exceeds the sum of
+    the relevant carrier allowances plus the numerical guard.
+  - An inadmissible control is recorded as "symmetry-/construction-null" together
+    with its measured null quantity, and is replaced by an admissible control that
+    tests the same convention. Where no state-level control exists, cite an
+    independent oracle that tests that convention.
+
+A3.2 Record the null quantities on the M0.3 state:
+  - max|P - P^T| and max|Im P| per spin;
+  - max|V_out - V_in| per spin.
+
+A3.3 Substitute admissible controls on the same frozen M0.3 state. Run each
+  through the same production calculate_pl/newrho pass and predeclare its
+  predicted carrier statistic before running:
+  (a) Sign control: c_wrong = c + t/q0. Predicted ratio ≈ -1.
+  (b) Spin-provenance control: t_wrong,s = Tr(V_in,s' P_out,s), using the
+      other spin's potential. Predicted separation |Tr((V_up - V_dn) P_s)|
+      per spin; it must exceed the allowance.
+  (c) Iteration-provenance control: V from a non-converged earlier SCF
+      iteration of the same run (e.g. iteration 1) in place of V_in, with the
+      predicted separation from the captured arrays. If this does not exceed
+      the allowance, record it as null under A3.1 and rely on (b) together
+      with the M1.4 finite-H V_out/V_in unit test.
+
+  The transpose convention is covered by the M0.1 class-B noncubic oracles
+  (conjugation/transpose mismatches 0.070-0.073 Ry, already PASS) and will
+  be re-tested in the M1.4 unit tests. Cite these; do not re-run them here.
+
+A3.4 KS M0 is PASS if:
+  - the A2.1 and A2.2 results stand;
+  - the M0.3 carrier, scalar and q2 checks stand;
+  - the A3.2 nulls are recorded;
+  - the admissible controls (a) and (b), and (c) if admissible, fail as predicted.
+
+  Then proceed to Stage M1 for KS and stop at Gate M1.
+
+A3.5 RS (separate, non-blocking):
+  - Measure the D0_RS uncertainty with the same deterministic repeat plus
+    refinement procedure used for KS, at the 3e-8 threshold.
+  - Then run RS M0.3 on the converged RS U = 2 eV state under A2 and A3.
+  - Report RS M0 separately.
+```
+
+### A3 control preregistration (before radial responses)
+
+The pre-A3 evidence inventory is bound in
+[`evidence/a3_pre_a3_evidence_snapshot.json`](evidence/a3_pre_a3_evidence_snapshot.json).
+The protocol hash and every listed historical evidence hash were recorded
+before A3 work; those files and the user-owned protocol remain unchanged.
+The verbatim A3 amendment above was recorded before this preregistration.
+
+For the accepted KS U=2 eV, J=0 capture (iteration 32; CSV SHA256
+`41e8bec19e50ba9931ccab2077686647300e1142774eea45567d1f65602472bc`),
+the locked A2 model remains unchanged (SHA256
+`0ad6a7703aa26eb132602e7a43773d7619f70651c6b90817e4f945ff259cb993`).
+Before any new radial response, the controls were evaluated from the frozen
+matrices. The pre-response machine-readable record is
+[`evidence/a3_m03_control_preregistration.json`](evidence/a3_m03_control_preregistration.json)
+(SHA256 `1f26829dfebffd2586ac891100f485bb3eda3ec7f6655fd100d56c6267dc177a`).
+It locks `E_num=2e-8 Ry`: the `RAW-control` difference propagates two
+per-case `ENERGY_TOL=1e-8 Ry` guards; the existing matrix/control arithmetic
+cross-check is at most `2e-12 Ry` and negligible at this scale. It also
+conservatively assigns the full `D0=5.028166848219939e-6 Ry` to each side of
+each spinwise applicability comparison. The true allowance is
+`A_true=0.001702238347231377 Ry`.
+
+The recorded per-spin nulls are `max|P-P^T|=(1.8015e-16,6.2830e-17)`,
+`max|Im P|=(9.0854e-17,3.1442e-17)`, and
+`max|V_out-V_in|=(3.9630e-9,1.4636e-9) Ry` (up, down). The trace differences
+for the last quantity are also recorded in the JSON. For the sign control,
+only the center changes (`c_wrong=c+t/q0`) and the correct `q2_local` is held
+fixed; its predicted ratio is `-0.9941686941`, with separation
+`0.5092820280 Ry` against an applicability bound of `0.0031921762 Ry`. For
+the spin-provenance control, `V_in` is taken from the other spin and
+`q2_local` is recomputed. Predicted separations are `0.3303599107` and
+`0.1373697148 Ry` against conservative spinwise bounds `0.0017413743` and
+`0.0005938364 Ry`; both are admissible. The transpose convention cites the
+already-passing M0.1 Class-B noncubic oracle (`0.070–0.073 Ry` mismatch) and
+is scheduled again in M1.4.
+
+Iteration-1 potential provenance is absent from the accepted iteration-32
+capture. Its applicability is MISSING/UNASSESSED, so no KS M0 PASS can be
+claimed until an exact d91 replay binds iteration 1 to the accepted endpoint
+and complete charge/R05 trajectory, or the user approves a scope resolution.
+The sign and spin predictions are preregistered and released for production
+response measurement; iteration control remains pending the exact d91 replay.
+RS remains a separate, non-blocking A3.5 task.
+
+The RS repeat/refinement protocol was preregistered separately before either
+outcome in [`evidence/a3_rs_floor_preregistration.json`](evidence/a3_rs_floor_preregistration.json)
+(SHA256 `ee9d52104fc3fbd8071a68d4f84dbefeb73e053c9cc76f9a2cc740ac5276eef6`).
+It binds the accepted no-U RS floor's final restart (SHA256
+`b6f3ce8058139380bd6fe44d74cf2889221da92ea8f30307944d3bfe515f998b`), the
+same base executable/source, repeats the 2,500-channel run unchanged, and
+refines only `channels_ldos` to 6,000. As in the KS procedure, both runs start
+from the accepted base final restart, not its pre-floor continuation seed. The
+6,000 endpoint is the existing M0.1 RS quadrature refinement endpoint. The
+RS uncertainty is the maximum absolute signed-D deviation of repeat/refined
+runs from the baseline and is reported separately. It is not silently added
+to the A2 allowance. RS requires its own no-U scalar fit and allowance
+`sum_s |r_fit,s(x_s)|+D0_RS`; no KS fit/allowance is imported. Runs use only
+the RS-specific `3e-8` threshold.
+
+The RS scalar-model preregistration for A2.2 is separately hash-bound in
+[`evidence/a3_rs_a22_scalar_preregistration.json`](evidence/a3_rs_a22_scalar_preregistration.json)
+(SHA256 `18e704b1fe9efe4ffedd9da3c54dd90d9e4f15d6a47eeacfce893b9cd135fd6d`).
+It binds the accepted RS no-U iteration-2 CSV and the existing base plus eight
+A1 signed responses, and preregisters only the six additional shifts
+`±0.04, ±0.08, ±0.12 Ry` before those responses. It locks the same A2.2
+14-point signed-cubic model and shape checks, but uses the RS floor and
+RS-specific allowance `Σ|r_fit,s(t_s/q0_s)|+D0_RS`. The A2.5 repeat/refinement
+uncertainty remains a separate diagnostic.
+
 ### Final A2 source verification
 
 The final production snapshot used by the A2 capture is `source/self.f90`
@@ -687,3 +817,196 @@ passed 3/3 on the same source; their log SHA256 is
 `9a01d251c77677384764aec77f7e05ea528e6802643ef33329d926e60ab9f07a`.
 These tests validate the diagnostic plumbing and production-source regression
 surface; they do not override the nondiscriminating M0.3 control verdict.
+
+### A3 KS Gate M1
+
+The independently reviewed A3.4 KS M0 gate passed, authorizing Stage M1 for KS
+only. Work stopped at Gate M1; no M2 work was started. The M1 production source
+is the frozen six-file snapshot recorded in the build/run manifests. The
+matched Release build uses GNU Fortran 16.2 with Accelerate, MPI and OpenMP
+disabled; its executable SHA256 is
+`71ad3c0861996ca714da5d4d2e03af2611995eb3cf627f856ed8c649e8136184`.
+
+The M1 local-moment KS U=2 eV, J=0 run converged at iteration 34 with final
+SCF difference `2.04e-8`; the accepted fixed-U residual streak was three, with
+final `RP=2.8483418472811053e-8` and `RV=4.1869823014390071e-9 Ry`. The
+capture-only deterministic repeat used the identical input PRE deck, Fe seed,
+executable, and physical settings. Both endpoint `Fe_out.nml` files have
+SHA256 `23137d3165f92980da0a5dbe88940463850b2c8708e3e9acc4bce03dadbc57d7`;
+all 102 normalized Hubbard-energy and convergence log lines match exactly
+(SHA256 `55ee48877b44e47ddeac9af0d9a49dbbede5a2223b69f0675bdb233399daff66`).
+The capture manifest is `/private/tmp/a3-ks-m1-local-u2-capture/manifest.json`
+(SHA256 `474f142e976616fffc0ae2d7610e34a30143489e41e5f9bd94026530214e3502`);
+its records CSV SHA256 is
+`f10790d5b007d41cfebfe86df1f1a305140769e0c43053f8a7eaf932e1de1c7c`.
+
+Before the paired frozen radial pass, the local and spectral P_OUT operands
+were preregistered in
+[`evidence/a3_m13_pout_local_spectral_dual_replay_preregistration.json`](evidence/a3_m13_pout_local_spectral_dual_replay_preregistration.json)
+(SHA256 `4b8e182cfabe175f030103581082a41e20c8f330a5035a6ead0ca3b1f4436325`).
+An earlier draft was superseded before its proposed radial responses because
+it mixed P_OUT moments with a LIVE_STATE radial q2 operand; its immutable
+supersession record is
+[`evidence/a3_m13_dual_replay_preregistration_supersession.json`](evidence/a3_m13_dual_replay_preregistration_supersession.json).
+Both cases use the same P_OUT d-shell occupation and the same captured radial
+mesh, potential, density, core/valence seeds, other-shell moments, and PL
+inputs. Only the d-shell gravity center and q2 differ: local P_OUT moments for
+the local case, and independently reconstructed spectral moments for the
+spectral case. The direct eigenpair reconstruction was independently checked
+against P_OUT/M1_OUT and the locked inverse identity in the separately locked
+[`evidence/a3_m13_spectral_reconstruction_preregistration.json`](evidence/a3_m13_spectral_reconstruction_preregistration.json)
+(SHA256 `ee1184d6776ad239b6cb1b3dbe902ba93e371a5620511c9471eabda75a33b8dd`).
+It does not use `m0_carrier_*` diagnostics or the misnormalized displayed
+second-moment field. The earlier mixed LIVE_STATE replay is reported only as a
+timing diagnostic and is not combined with the unmixed P_OUT moments.
+
+The frozen dual response measured
+`ΔΣSUMEV(spectral−local)=-0.2565860181649944 Ry`, with signed per-spin ratios
+`0.993661677965` and `0.999792868074` against `t_s=Tr(V_in,s P_out,s)`. The
+locked model predicted `-0.2565645199104135 Ry`; the `-2.14982546e-5 Ry`
+difference is within the unchanged A2 allowance `0.00185641944033825 Ry` plus
+the two-case `2e-8 Ry` numerical guard. `ΔΣSUMEC=0` exactly. Both local and
+spectral q2 values are nonnegative. The P_OUT local candidate reproduces its
+captured CALCULATE_PL output exactly; the separately captured mixed LIVE_STATE
+anchor reproduces PL, SUMEC, SUMEV and all ten frozen-input-density components
+exactly, with maximum rho difference `3.55e-15`.
+
+For the P_OUT local case, the sphere spin moment is `2.51078366041631`; the
+actual l=2 radial density changes integrate to `4.591832540887848` and
+`1.929888414728295` for up and down. For the spectral case, these are
+`2.510781639399223`, `4.591830496386397`, and `1.929888391243929`. The full
+ten-component frozen-input-density and output-density diagnostic tables,
+per-spin energies, charge integrals, response hashes, and mixed-anchor timing
+differences are in
+[`evidence/a3_m13_ks_m1_dual_replay_results.json`](evidence/a3_m13_ks_m1_dual_replay_results.json)
+(SHA256 recorded with the evidence artifact). Component labels distinguish
+the frozen input density used by POISS0/VXC0SP from output-density diagnostics.
+
+On the same converged local endpoint, production reports `E_int=2.757238890068984 Ry`,
+`E_DC=2.646759512588076 Ry`, `E_Hub=0.1104793774809081 Ry`,
+`t_in_out=-0.2583779167349475 Ry`, and physical total energy
+`-2541.972663505471 Ry`. Candidate b (`-2541.862184127990 Ry`) is emitted for
+the local mode. Candidates a and c remain `UNAVAILABLE` in that production
+run; the source marks all candidates `PROVISIONAL_ONLY`. The frozen radial
+comparison is diagnostic and does not relabel the self-consistent physical
+total energy. Applying the candidate formulas to the paired frozen P_OUT
+responses gives `ETOT_local=-2541.972663473148 Ry` and
+`ETOT_spectral=-2542.229249491313 Ry`, then
+`a=ETOT_spectral-t+E_Hub=-2541.860392197098 Ry`,
+`b=ETOT_local+E_Hub=-2541.862184095667 Ry`, and
+`c=ETOT_spectral+E_Hub=-2542.118770113832 Ry`. The site and total values
+coincide for this one-site Fe case. These are `PROVISIONAL_ONLY` frozen
+response candidates, not self-consistent production-mode totals. Candidate b
+differs from the separately logged live-mode b by `3.23e-8 Ry`, the recorded
+P_OUT-versus-LIVE mixed-snapshot timing difference. The formulas, endpoints,
+and hashes are in
+[`evidence/a3_m13_pout_energy_candidates.json`](evidence/a3_m13_pout_energy_candidates.json)
+(SHA256 `c0b561dcf99ebcf2481b93dd640dd2b3fb95a7b0b04b9b1c142cea49e26c0323`).
+No M1 scalar `+0.01 Ry` response was preregistered or run; the scalar response
+gate passed earlier under A3 M0.3. No M2 physical-energy determination is
+claimed.
+
+The matched baseline comparison against source commit `3d7571a` passed for
+no-U, explicit U=J=0, and spectral U>0. All eight registered numerical output
+artifacts matched bitwise in every pair; the M1 default absent keyword also
+matched explicit `spectral`. Source review confirmed the remaining differences
+were manifests/logs and elapsed `cpu_s` only. The comparison report is
+`/private/tmp/a3-m14-baseline-comparisons/comparison.final.json`, SHA256
+`b7d60bf6c1c9c4f47e1b1053c99d430d33878885051f799f0b75dc84be295d7a`.
+The first serial CTest run was superseded after audit found its registry lacked
+the newly added site-swap target. The refreshed Release registry contains 126
+tests, including both local-moment targets; the final filtered suite passed
+121/121 with validation/performance labels excluded. Its immutable log and
+source/build hashes are recorded in
+[`evidence/a3_m14_final_serial_ctest.json`](evidence/a3_m14_final_serial_ctest.json)
+(SHA256 `1a81bdd0781e30fb9f96ca769a59e7cf76d1de75db6624e0d5b1d1fd810e70ef`);
+the copied CTest log SHA256 is
+`3eded0b86179284e77ff23bd455764d16a035ae8992a0e38d86d4fed536c7238`. Targeted
+MPI checks passed 3/3 on the same frozen production source. These results
+complete KS Gate M1 only.
+
+### A3.5 RS floor uncertainty
+
+The RS deterministic repeat and 6,000-channel refinement were measured from
+the accepted base final restart, with the repeat retaining 2,500 channels and
+the refinement changing only `channels_ldos`. Both runs converged under the
+RS-only `3e-8 Ry` threshold. The signed floor values are
+`D_base=-5.056500278044496e-6 Ry`, `D_repeat=-5.052056331500410e-6 Ry`, and
+`D_refine6000=-4.990233713142445e-6 Ry`. Thus
+`u_RS=max(|D_repeat-D_base|,|D_refine-D_base|)=6.626656490205107e-8 Ry`.
+`D0_RS+u_RS=5.122766842946547e-6 Ry` is reported as a diagnostic; `u_RS` is
+not added to the A2 primary allowance, which remains the RS-specific
+`Σ|r_fit,s(t_s/q0_s)|+D0_RS` with `D0_RS` counted once. Full PRE/run manifests,
+input and endpoint hashes, convergence markers, and signed-D inputs are in
+[`evidence/a3_rs_floor_uncertainty_results.json`](evidence/a3_rs_floor_uncertainty_results.json)
+(SHA256 `b705d83cb206028115475afdb19a68939c19d503c7a6a6475126ea4881ef5056`).
+The uncertainty result is separate from the RS U=2 M0.3 assessment; it does
+not change the KS Gate M1 PASS or authorize M2.
+
+### A3.5 RS M0.3 result
+
+The RS-specific A2.2 scalar fit used the accepted RS no-U state, its original
+eight A1 shifts, and the six preregistered shifts. The source-aware fit report
+and raw measurements are preserved in
+[`evidence/a3_rs_a22_scalar_fit_results.json`](evidence/a3_rs_a22_scalar_fit_results.json)
+(SHA256 `0f0b543f81f53bc1c7fdfc46d3b404adef1ca455b8366a90e87154afd2b0987c`),
+[`evidence/a3_rs_a22_six_shift_responses.csv`](evidence/a3_rs_a22_six_shift_responses.csv)
+(SHA256 `293db40ac192edb5f4428e7a87fff85ad99061c6c51d602c1291a67aac46cdb0`),
+and [`evidence/a3_rs_a22_raw_anchor.csv`](evidence/a3_rs_a22_raw_anchor.csv)
+(SHA256 `60f5a8ff67804adcdbc4fcc7c8c4a4ef3d24bce6cf826762bb28116e9f09560f`).
+The six-point extensions passed the locked signed-cubic shape checks for both
+spins. This RS fit supplies the RS-specific residual allowances; no KS fit is
+used.
+
+The converged RS U=2 eV, J=0 capture used the matched d91 executable and the
+RS-only `3e-8 Ry` threshold. Iteration 6 was accepted at charge difference
+`1.66e-8 Ry` with a three-step physical R05 streak. The hash-bound capture
+manifest and CSV are `54d0c8d8b510ac73254c3cf10f6fd7f9bdbcb16b125dec1e18ddbfa621443054`
+and `9982b7fc115e72d9f5236253717c8a6edcb8e9d2f95ade6a9766b7fd23189d4e`.
+The capture-only same-run iteration-1 replay has matching endpoint and
+trajectory identity (`e65908b9756558ab343ea3722639b0d2738a6b9d74e6c2a0981c5bfa6bea74ec`,
+`b5f4fa1691e391d3f588137c809f39fa8e1e2fdcd19b8c7e93879b0b24fc776e`). Its
+potential separation is below the locked applicability threshold, so the
+iteration control is recorded as construction-null and no radial response was
+run for it.
+
+The first frozen LIVE anchor reproduced PL, SUMEC, SUMEV, EV, and all ten
+frozen-input-density energy components exactly; maximum density difference
+was `3.55e-15`. The measured carrier has signed per-spin ratios
+`0.994089411811` and `0.999901088591`; its total absolute deviation from
+`ΣTr(V_in P_out)` is `0.00161403350146 Ry`, within the RS allowance
+`0.00173036300335 Ry`. The minimum corrected `q2_local` is
+`0.00952358124507 Ry²`. The sign control has a `0.510786194545 Ry`
+separation from the true carrier; the opposite-spin control has a
+`0.197099739922 Ry` separation. Both responses agree with their
+residual-inclusive predictions within the RS-specific wrong-control
+allowances. The `+0.01 Ry` scalar response differs from `v q0` by
+`1.04448396420e-5 Ry`, within its `6.02422395038e-5 Ry` allowance. The
+measured `P-Pᵀ`, imaginary-P, and `V_out-V_in` null quantities are recorded
+per spin in the results report; transpose, Vout, and iteration controls are
+construction-null on this converged cubic state. A3’s transpose convention
+also remains covered by the already-passed M0.1 class-B noncubic oracles.
+
+The exact preregistration, prediction lock, anchor report and case report are
+[`evidence/a3_rs_m03_preregistration.json`](evidence/a3_rs_m03_preregistration.json),
+[`evidence/a3_rs_m03_prediction_lock.json`](evidence/a3_rs_m03_prediction_lock.json),
+[`evidence/a3_rs_m03_live_anchor_results.json`](evidence/a3_rs_m03_live_anchor_results.json)
+(SHA256 `f8f12836d9c33073d84b57512fb22d4a472c00fd3da5a62328721d7ccfa31e10`),
+and [`evidence/a3_rs_m03_response_results.json`](evidence/a3_rs_m03_response_results.json)
+(SHA256 `b7c7f2100f9c036949935d722c26ea0e4458fe481ef9261167b83b49ee883cb6`).
+The raw anchor and response CSV hashes are `1f227d9e41fbd1cefd0c0a4836bce83951a291050ccf852277b7ae63e1aa4e46` and
+`af6aa568b4a548430b359e1c633d24792e1a1d5365052576bdc64fc9f91ce7d7`.
+Independent review passed RS M0 under A2/A3. This closes the separate RS M0
+reporting item; no RS M1 or M2 work was started. All candidate energy values
+remain diagnostic/provisional and do not establish a physical-energy
+correction.
+
+An earlier set of RS A3 runner/lock copies remains in the original user
+workspace at `/Users/andersb/Jobb/rslmto_fable_v4b`:
+`tests/validation/fixed_ldau/rs_a3_m03_runner.py`,
+`docs/validation/fixed_ldau/evidence/a3_rs_m03_prediction_lock.json`, and
+`docs/validation/fixed_ldau/evidence/a3_rs_m03_preregistration.json`. These
+copies differ from the governing worktree versions and were left untouched.
+Automatic approval review rejected their removal as destructive because they
+are frozen runner/preregistration evidence; the active worktree versions and
+hashes above govern this record.

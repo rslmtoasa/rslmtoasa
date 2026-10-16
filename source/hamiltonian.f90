@@ -112,6 +112,8 @@ module hamiltonian_mod
       real(rp), dimension(:), allocatable :: theta_ss_sublattice, phi_ss_sublattice
       real(rp), dimension(:), allocatable :: velocity_scale
       character(len=16) :: hubbard_u_potential_form
+      !> Radial band-moment convention: legacy spectral or local Hubbard-adjusted.
+      character(len=16) :: hubbard_radial_moments = 'spectral'
       !> Sparse Real Space Hamiltonian (dense legacy format)
       complex(rp), dimension(:, :), allocatable :: h_sparse
       !> On-site potential correction for LDA+U (+J) in spin-orbital basis

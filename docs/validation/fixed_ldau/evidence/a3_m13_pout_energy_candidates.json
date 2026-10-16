@@ -1,0 +1,33 @@
+{
+  "candidate_formulas": {
+    "a": "ETOT_spectral - t_in_out + E_Hub",
+    "b": "ETOT_local + E_Hub",
+    "c": "ETOT_spectral + E_Hub"
+  },
+  "candidates_ry": {
+    "a": -2541.8603921970976,
+    "b": -2541.8621840956675,
+    "c": -2542.1187701138324
+  },
+  "frozen_POUT_values": {
+    "ETOT_local_input_density_ry": -2541.9726634731483,
+    "ETOT_spectral_input_density_ry": -2542.229249491313,
+    "E_Hub_from_same_endpoint_production_diagnostic_ry": 0.1104793774809081,
+    "t_in_out_from_same_endpoint_production_diagnostic_ry": -0.2583779167349475
+  },
+  "interpretation": "Computed from the two P_OUT frozen radial case ETOTs and the same endpoint production E_Hub/t diagnostic. These are candidate comparisons on an unmixed frozen P_OUT radial response; they are not self-consistent production-mode totals. Source M1 diagnostic labels remain PROVISIONAL_ONLY; no M2 conclusion or physical-energy correction is claimed.",
+  "provenance": {
+    "capture_csv_sha256": "f10790d5b007d41cfebfe86df1f1a305140769e0c43053f8a7eaf932e1de1c7c",
+    "capture_manifest_sha256": "474f142e976616fffc0ae2d7610e34a30143489e41e5f9bd94026530214e3502",
+    "dual_replay_report_path": "docs/validation/fixed_ldau/evidence/a3_m13_ks_m1_dual_replay_results.json",
+    "dual_replay_report_sha256": "c7402d9545087674ca6af9dda767b9bdf5e93bd600c8eae07c6493e3d29ab368",
+    "local_case_output_sha256": "02a73a7af6f16b2fe6948fa829d30bcb457f485fbb8c34c4e9d068e15b9b86b3",
+    "preregistration_sha256": "4b8e182cfabe175f030103581082a41e20c8f330a5035a6ead0ca3b1f4436325",
+    "production_diagnostic_line": "[Oct 15 2026 19:46:41.538] [self.f90:2066]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mHUBBARD_MOMENT_ENERGY_TOTAL E_int=  0.2757238890068984E+01 E_DC=  0.2646759512588076E+01 E_Hub=  0.1104793774809081E+00 t_in_out= -0.2583779167349475E+00 physical_total_energy= -0.2541972663505471E+04 candidate_a=UNAVAILABLE candidate_b= -0.2541862184127990E+04 candidate_c=UNAVAILABLE candidate_status=PROVISIONAL_ONLY; unavailable candidates require the other radial representation",
+    "production_hubbard_diagnostic_log_sha256": "01ffa00eb2aca826a9f1f47610b39e040e967447d74935b5b8307926f62341e1",
+    "spectral_case_output_sha256": "3b135c2de4b9eaf891eaa98a4f4acf15045bd78843f04d08c03286c920820688"
+  },
+  "schema": "rslmto-a3-m13-pout-energy-candidates-v1",
+  "site_and_total_values_coincide": true,
+  "status": "PROVISIONAL_ONLY"
+}

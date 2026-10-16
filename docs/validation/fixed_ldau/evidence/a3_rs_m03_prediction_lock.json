@@ -1,0 +1,297 @@
+{
+  "A2_1_old8_pass": true,
+  "A2_1_old8_product_ry": 2.22032122681938e-06,
+  "A_iteration1_ry": 0.0017303626818287,
+  "A_opposite_spin_ry": 0.0006290300039328287,
+  "A_scalar_plus_001_ry": 6.024223950375587e-05,
+  "A_sign_ry": 0.00151497024199169,
+  "A_true_ry": 0.0017303630033498247,
+  "D0_RS_ry": 5.056500278044496e-06,
+  "E_num_ry": 2e-08,
+  "a3_status": {
+    "iteration1": "construction-null; do not run radial response",
+    "opposite_spin": "predicted admissible; run after baseline anchor",
+    "scalar_plus_001": "run after baseline anchor with frozen q2",
+    "sign": "predicted admissible; run after baseline anchor",
+    "true_anchor": "run first and require exact production anchor",
+    "vout": "construction-null; report measured trace separation; no response unless eligible"
+  },
+  "capture_csv_sha256": "9982b7fc115e72d9f5236253717c8a6edcb8e9d2f95ade6a9766b7fd23189d4e",
+  "capture_final_fe_out_sha256": "6772c091d171f2dee1dbcba3a16bd89b30fa1b7ecfd16af3dac2aa1ba12d5d28",
+  "capture_manifest_sha256": "54d0c8d8b510ac73254c3cf10f6fd7f9bdbcb16b125dec1e18ddbfa621443054",
+  "capture_run_id": "a3_rs_u2_m03_d91_state_3e8",
+  "capture_settings": {
+    "F_core": 0,
+    "J_eV": 0.0,
+    "OMP_NUM_THREADS": 1,
+    "R05_streak": 3,
+    "TXC": 1,
+    "U_eV": 2.0,
+    "backend": "RS",
+    "binary_sha256": "b7ca883ec736211552ca1b8df7e2d519c7806459df9a6238dd597c58f3c49f7f",
+    "channels_ldos": 2500,
+    "conv_thr_ry": 3e-08,
+    "seed_sha256": "f4482119ecb33e1bd443ef9d9481f87c0b99c18a3fea4ee7acde61d49d572e3a"
+  },
+  "floor_uncertainty": {
+    "policy": "reported separately; not added to D0_RS or A_RS",
+    "report_sha256": "b705d83cb206028115475afdb19a68939c19d503c7a6a6475126ea4881ef5056",
+    "u_RS_ry": 6.626656490205107e-08
+  },
+  "input_hashes": {
+    "a2_prereg": "46ca7042678dc5b74ad15a7c2bc5f66786ca9191f70d2395405e78c69b5b1525",
+    "a2_report": "0f0b543f81f53bc1c7fdfc46d3b404adef1ca455b8366a90e87154afd2b0987c",
+    "binary": "b7ca883ec736211552ca1b8df7e2d519c7806459df9a6238dd597c58f3c49f7f",
+    "capture_csv": "9982b7fc115e72d9f5236253717c8a6edcb8e9d2f95ade6a9766b7fd23189d4e",
+    "capture_manifest": "54d0c8d8b510ac73254c3cf10f6fd7f9bdbcb16b125dec1e18ddbfa621443054",
+    "capture_pre_manifest": "3811a8fb71335e9c73a322919ec14e9271abc25e21b9b8ec1eb8850839ee192e",
+    "floor_uncertainty_report": "b705d83cb206028115475afdb19a68939c19d503c7a6a6475126ea4881ef5056",
+    "iter1_csv": "5c9901e462618290679472b7cb2350fc1e3d57de55bd02d21cdd45dd8a73b521",
+    "iter1_identity": "b5f4fa1691e391d3f588137c809f39fa8e1e2fdcd19b8c7e93879b0b24fc776e",
+    "iter1_manifest": "e65908b9756558ab343ea3722639b0d2738a6b9d74e6c2a0981c5bfa6bea74ec",
+    "iter1_pre_manifest": "24589c41e92509e96ad192911cc4646de943e4fa6e7a2828c0048b7d53e006bd",
+    "response_driver": "0c1c3c12e8501f4642af87168c611d261fb5a34cc4747aaef9c8420c2c6449c4",
+    "response_driver_source": "124726aa8b8f5937fa13be925969b67d4e647ee9c910596d58698ffb13e5476a",
+    "source_bands": "937bfe6c17481c37a378f743960a21faf90660824f69f85a77a3b10a652c7a39",
+    "source_math": "16dcbbb3b58e00d102b96700fafb2d157e5c8ff45aa74672152c9ffc4f74a7c4",
+    "source_self": "d91a468a4493da21710fc7f60e745b5f1bef8f20d5d667ae939c31d5ba3061ef"
+  },
+  "iter1_capture_manifest_path": "/private/tmp/a3-rs-m03-u2-d91-iter1/manifest.final.json",
+  "iter1_csv_sha256": "5c9901e462618290679472b7cb2350fc1e3d57de55bd02d21cdd45dd8a73b521",
+  "iter1_endpoint_fe_out_sha256": "6772c091d171f2dee1dbcba3a16bd89b30fa1b7ecfd16af3dac2aa1ba12d5d28",
+  "iter1_identity_path": "/private/tmp/a3-rs-m03-u2-d91-iter1/trajectory_identity.json",
+  "iter1_manifest_sha256": "e65908b9756558ab343ea3722639b0d2738a6b9d74e6c2a0981c5bfa6bea74ec",
+  "iter1_trajectory_identity_sha256": "b5f4fa1691e391d3f588137c809f39fa8e1e2fdcd19b8c7e93879b0b24fc776e",
+  "iteration1_manifest_sha256": "e65908b9756558ab343ea3722639b0d2738a6b9d74e6c2a0981c5bfa6bea74ec",
+  "old8_fit_method": "quadratic in v^2 least squares to symmetric slope error (s(v)/q0_noU - 1) using original eight signed A1 shifts only; no A2 14-point fit used.",
+  "scalar_control_semantics": "Apply V=vI to captured starting spectral moments: c_prime=c-0.01 Ry and q2_prime=q2_RAW. Predicted SUMEV response is 0.01*q0+r_fit(0.01); the scalar residual allowance remains A_scalar.",
+  "selected_iteration": 6,
+  "source_a2_prereg_sha256": "46ca7042678dc5b74ad15a7c2bc5f66786ca9191f70d2395405e78c69b5b1525",
+  "source_a2_report_sha256": "0f0b543f81f53bc1c7fdfc46d3b404adef1ca455b8366a90e87154afd2b0987c",
+  "target_spin": {
+    "1": {
+      "A1_intercept_ry": -7.591154669130026e-06,
+      "A1_old8_fit": {
+        "coefficients_ascending": [
+          -7.591154669130026e-06,
+          -1.7017981726542315,
+          0.6556849959003692
+        ],
+        "intercept_ry": -7.591154669130026e-06,
+        "magnitudes_ry": [
+          0.0025,
+          0.005,
+          0.01,
+          0.02
+        ],
+        "q0_no_u": 4.349220884209981,
+        "signed_shift_count": 8
+      },
+      "A2_cubic_coefficients_ascending": [
+        -2.288639651211184e-05,
+        -0.0012743728607536849,
+        0.034821613708339035,
+        -6.998981802197406
+      ],
+      "J0_reconstructed_vout_c_delta_ry": -5.551115123125783e-17,
+      "J0_reconstructed_vout_q2_delta_ry2": -1.3877787807814457e-17,
+      "J0_reconstructed_vout_t_delta_ry": 1.1102230246251565e-16,
+      "TrM1_minus_q0c_ry": -4.440892098500626e-16,
+      "TrP_minus_q0": 8.881784197001252e-16,
+      "captured_local_center_ry": -0.2653958449935981,
+      "captured_local_q2_ry2": 0.0513860207120025,
+      "center_ry": -0.32563738432354655,
+      "iteration1_control": {
+        "d_v1_ry": -0.06024153541918546,
+        "delta_t_ry": 1.7746181857347665e-08,
+        "predicted_Delta_raw_minus_v1_ry": -0.27165246690366684,
+        "r_fit_at_d_ry": 0.0017103639869391885,
+        "t_v1_on_final_p_ry": -0.27336283089060603
+      },
+      "iteration1_operator_applicability": {
+        "A_true_plus_A_wrong_plus_E_num_ry": 0.0034458034905670573,
+        "A_wrong_ry": 0.001715420487217233,
+        "absolute_separation_ry": 1.7746181857347665e-08,
+        "eligible": false,
+        "signed_delta_t_wrong_minus_true_ry": 1.7746181857347665e-08,
+        "true_t_ry": -0.2733628486367879,
+        "wrong_d_ry": -0.06024153541918546,
+        "wrong_t_ry": -0.27336283089060603
+      },
+      "nulls": {
+        "Tr_Vout_minus_Vin_ry": 8.064486457890667e-09,
+        "max_abs_P_minus_PT": 2.6738657166430283e-08,
+        "max_abs_Vout_minus_Vin_ry": 4.342575708748964e-09,
+        "max_abs_im_P": 1.3369328583215142e-08
+      },
+      "opposite_spin_control": {
+        "d_wrong_ry": 0.013407859733913688,
+        "predicted_Delta_raw_minus_wrong_ry": 0.060791333887527374,
+        "q2_wrong_ry2": 0.05089014096608211,
+        "r_fit_wrong_ry": -5.0583031468237e-05,
+        "separation_wrong_minus_true_ry": 0.3342047655557835,
+        "source_spin": 2,
+        "t_wrong_ry": 0.06084191691899561
+      },
+      "predicted_true_Delta_ry": -0.27165248433046213,
+      "production_control_delta_c_ry": 0.0,
+      "production_control_delta_q2_ry2": 1.3877787807814457e-17,
+      "q0": 4.537779938516418,
+      "q2_local_ry2": 0.05138602071200249,
+      "q2_ry2": 0.050744334509233366,
+      "r_fit_at_true_shift_ry": 0.0017103643063257354,
+      "scalar_plus_001": {
+        "center_shift_d_ry": 0.01,
+        "predicted_Delta_raw_minus_shifted_ry": 0.04533865243961317,
+        "q2_policy": "preserve captured RAW spectral q2 (V=vI leaves q2 invariant)",
+        "q2_raw_ry2": 0.050744334509233366,
+        "r_fit_ry": -3.91469455510122e-05
+      },
+      "sign_control": {
+        "center_shift_d_ry": 0.06024153932994846,
+        "predicted_Delta_raw_minus_wrong_ry": 0.27185944980862903,
+        "r_fit_ry": -0.0015033988281588412,
+        "separation_trace_ry": 0.5467256972735758,
+        "wrong_center_ry": -0.385878923653495,
+        "wrong_q2_policy": "hold correct local q2 fixed"
+      },
+      "t_ry": -0.2733628486367879,
+      "transpose_operator_applicability": {
+        "A_true_plus_A_wrong_plus_E_num_ry": 0.0034458038099536015,
+        "A_wrong_ry": 0.0017154208066037767,
+        "absolute_separation_ry": 1.6653345369377348e-16,
+        "eligible": false,
+        "signed_delta_t_wrong_minus_true_ry": 1.6653345369377348e-16,
+        "t_transpose_ry": -0.2733628486367877,
+        "t_true_ry": -0.2733628486367879,
+        "wrong_d_ry": -0.06024153932994842
+      },
+      "vout_center_ry": -0.2653958467707857,
+      "vout_operator_applicability": {
+        "A_true_plus_A_wrong_plus_E_num_ry": 0.0034458036648131705,
+        "A_wrong_ry": 0.0017154206614633462,
+        "absolute_separation_ry": 8.064486356484935e-09,
+        "eligible": false,
+        "signed_delta_t_wrong_minus_true_ry": 8.064486356484935e-09,
+        "true_t_ry": -0.2733628486367879,
+        "wrong_d_ry": -0.060241537552760835,
+        "wrong_t_ry": -0.27336284057230154
+      },
+      "vout_q2_ry2": 0.05138602087738042,
+      "vout_t_ry": -0.27336284057230154,
+      "x_t_over_q0": -0.06024153932994846
+    },
+    "2": {
+      "A1_intercept_ry": -8.438572309284707e-06,
+      "A1_old8_fit": {
+        "coefficients_ascending": [
+          -8.438572309284707e-06,
+          -1.242982342869167,
+          2.7248283491903957
+        ],
+        "intercept_ry": -8.438572309284707e-06,
+        "magnitudes_ry": [
+          0.0025,
+          0.005,
+          0.01,
+          0.02
+        ],
+        "q0_no_u": 2.1499357655013043,
+        "signed_shift_count": 8
+      },
+      "A2_cubic_coefficients_ascending": [
+        -1.1974096612893559e-05,
+        -0.0003300146960626679,
+        0.018054858543030267,
+        -2.570035955481962
+      ],
+      "J0_reconstructed_vout_c_delta_ry": 2.7755575615628914e-17,
+      "J0_reconstructed_vout_q2_delta_ry2": 3.469446951953614e-18,
+      "J0_reconstructed_vout_t_delta_ry": -4.163336342344337e-17,
+      "TrM1_minus_q0c_ry": -7.771561172376096e-16,
+      "TrP_minus_q0": -1.7763568394002505e-15,
+      "captured_local_center_ry": -0.24367091239571279,
+      "captured_local_q2_ry2": 0.009523581245070467,
+      "center_ry": -0.23536510129845192,
+      "iteration1_control": {
+        "d_v1_ry": 0.00830580729899462,
+        "delta_t_ry": -7.867664693350651e-09,
+        "predicted_Delta_raw_minus_v1_ry": 0.01718956708854615,
+        "r_fit_at_d_ry": -1.4942194611467217e-05,
+        "t_v1_on_final_p_ry": 0.017204509283157615
+      },
+      "iteration1_operator_applicability": {
+        "A_true_plus_A_wrong_plus_E_num_ry": 0.0017503816982393364,
+        "A_wrong_ry": 1.9998694889511713e-05,
+        "absolute_separation_ry": 7.867664693350651e-09,
+        "eligible": false,
+        "signed_delta_t_wrong_minus_true_ry": -7.867664693350651e-09,
+        "true_t_ry": 0.01720451715082231,
+        "wrong_d_ry": 0.00830580729899462,
+        "wrong_t_ry": 0.017204509283157615
+      },
+      "nulls": {
+        "Tr_Vout_minus_Vin_ry": -4.140398682737017e-09,
+        "max_abs_P_minus_PT": 3.585321685907842e-08,
+        "max_abs_Vout_minus_Vin_ry": 6.581609650942871e-09,
+        "max_abs_im_P": 1.792660842953921e-08
+      },
+      "opposite_spin_control": {
+        "d_wrong_ry": -0.05814219796542474,
+        "predicted_Delta_raw_minus_wrong_ry": -0.11986137867546998,
+        "q2_wrong_ry2": 0.00822240180158176,
+        "r_fit_wrong_ry": 0.0005733904721865473,
+        "separation_wrong_minus_true_ry": -0.13763928629847882,
+        "source_spin": 1,
+        "t_wrong_ry": -0.12043476914765652
+      },
+      "predicted_true_Delta_ry": 0.017189574954076265,
+      "production_control_delta_c_ry": 0.0,
+      "production_control_delta_q2_ry2": 0.0,
+      "q0": 2.071383149623534,
+      "q2_local_ry2": 0.009523581245070467,
+      "q2_ry2": 0.008418675719726355,
+      "r_fit_at_true_shift_ry": -1.4942196746044885e-05,
+      "scalar_plus_001": {
+        "center_shift_d_ry": 0.01,
+        "predicted_Delta_raw_minus_shifted_ry": 0.02069779270256064,
+        "q2_policy": "preserve captured RAW spectral q2 (V=vI leaves q2 invariant)",
+        "q2_raw_ry2": 0.008418675719726355,
+        "r_fit_ry": -1.6038793674699175e-05
+      },
+      "sign_control": {
+        "center_shift_d_ry": -0.008305811097260864,
+        "predicted_Delta_raw_minus_wrong_ry": -0.017211032064377112,
+        "r_fit_ry": -6.514913554804233e-06,
+        "separation_trace_ry": -0.03440903430164462,
+        "wrong_center_ry": -0.22705929020119106,
+        "wrong_q2_policy": "hold correct local q2 fixed"
+      },
+      "t_ry": 0.01720451715082231,
+      "transpose_operator_applicability": {
+        "A_true_plus_A_wrong_plus_E_num_ry": 0.0017503817003739143,
+        "A_wrong_ry": 1.999869702408947e-05,
+        "absolute_separation_ry": 3.191891195797325e-16,
+        "eligible": false,
+        "signed_delta_t_wrong_minus_true_ry": 3.191891195797325e-16,
+        "t_transpose_ry": 0.017204517150822628,
+        "t_true_ry": 0.01720451715082231,
+        "wrong_d_ry": 0.008305811097261018
+      },
+      "vout_center_ry": -0.24367091039685582,
+      "vout_operator_applicability": {
+        "A_true_plus_A_wrong_plus_E_num_ry": 0.0017503816992505816,
+        "A_wrong_ry": 1.999869590075684e-05,
+        "absolute_separation_ry": 4.140398638524667e-09,
+        "eligible": false,
+        "signed_delta_t_wrong_minus_true_ry": -4.140398638524667e-09,
+        "true_t_ry": 0.01720451715082231,
+        "wrong_d_ry": 0.008305809098403897,
+        "wrong_t_ry": 0.01720451301042367
+      },
+      "vout_q2_ry2": 0.009523581469325193,
+      "vout_t_ry": 0.01720451301042367,
+      "x_t_over_q0": 0.008305811097260864
+    }
+  }
+}

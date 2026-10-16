@@ -1,0 +1,26 @@
+{
+  "schema": "rslmto-a3-m14-fresh-held-p-site-swap-preregistration-v1",
+  "status": "predictions-and-error-model-locked-before-any-helper-evaluation",
+  "purpose": "Complete the M1.4 site/type mapping control with a fresh deterministic finite-H fixture. This control holds each target P/M1/q0/c/q2 fixed and substitutes the other site's same-spin V. The already measured same-P control remains diagnostic only and is not used as this prediction.",
+  "generator": {
+    "path": "tests/validation/fixed_ldau/a3_m14_fresh_site_swap_reference.py",
+    "sha256": "299143f4d0e93a7512007af844fda2ad458d59451b4ae6a3b56584df86f0a732",
+    "seed": 20261016,
+    "independent_reference_path": "tests/validation/fixed_ldau/a3_m14_independent_reference.py",
+    "independent_reference_sha256": "8592d67235976fb9a504ff2eb0c33b806b3c2d9f6ad3565c51331c7d0371adfe"
+  },
+  "fixtures": {
+    "json": {"path": "tests/validation/fixed_ldau/data/a3_m14_fresh_site_swap_reference.json", "sha256": "2abbbd24baa78dabd6dbd44e100404cdb67a92e150ea770bbf45eb5c029a86ad"},
+    "ordered_fortran_text": {"path": "tests/validation/fixed_ldau/data/a3_m14_fresh_site_swap_reference.txt", "sha256": "74dacddeef5f63b44420e8bc287da481cbc19bf10751e00b659fc1b4c7ed68a6"}
+  },
+  "method": "For each of two inequivalent sites and two spins, generate a fresh complex finite-H state from exact eigenpairs. Direct correct cprime/q2prime are computed independently from H0 eigenvector sums. The mapping negative control uses the same target P and M1 but the other site's same-spin V, with c_wrong=c-Tr(Vwrong P)/q0 and q2_wrong=q2-2Tr(Vwrong(M1-cP))+Tr(Vwrong^2 P)-Tr(Vwrong P)^2/q0. The alternate-V expected outputs are calculated before invoking the production helper.",
+  "decision": "For each slot independently, the control is eligible if either center separation exceeds correct-center-bound plus alternate-V-center-bound, or q2 separation exceeds correct-q2-bound plus alternate-V-q2-bound. No new magnitude cutoff is introduced. Existing operation-count gamma bounds and finite-H residual propagation are retained for the correct direct oracle. Since the held-P alternate-V calculation shares P/M1 and finite-H residual with the target, its error bound uses only the same gamma_4096/gamma_16384 operation-count model, with absolute intermediate scales recomputed for Vwrong. Units are Ry for centers and Ry^2 for q2.",
+  "predictions": [
+    {"site": 1, "spin": 1, "dc_ry": 0.0017353470384547376, "dc_bound_ry": 3.7913399362073985e-12, "dq2_ry2": 0.013330510576491289, "dq2_bound_ry2": 1.537016932462161e-11},
+    {"site": 1, "spin": 2, "dc_ry": 0.01490296471090996, "dc_bound_ry": 3.6022593279282634e-12, "dq2_ry2": 0.017718049586606444, "dq2_bound_ry2": 1.3306124710757745e-11},
+    {"site": 2, "spin": 1, "dc_ry": 0.006817167668240642, "dc_bound_ry": 2.5561272887452222e-12, "dq2_ry2": 0.0036599197044860504, "dq2_bound_ry2": 7.709417025877036e-12},
+    {"site": 2, "spin": 2, "dc_ry": 0.00027780686468953375, "dc_bound_ry": 3.2911182796765383e-12, "dq2_ry2": 0.0010826007599301357, "dq2_bound_ry2": 1.315621619580139e-11}
+  ],
+  "all_four_slots_have_center_and_q2_separation_above_combined_bounds": true,
+  "production_helper_evaluation": "not yet performed; source must bind the exact harness and production helper hashes additively before running this fixture"
+}

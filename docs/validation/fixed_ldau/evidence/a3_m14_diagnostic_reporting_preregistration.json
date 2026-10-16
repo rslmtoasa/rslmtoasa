@@ -1,0 +1,24 @@
+{
+  "schema": "rslmto-a3-m14-report-only-rerun-v1",
+  "status": "REPORTING_ONLY_LOCKED_BEFORE_RERUN",
+  "purpose": "Emit signed per-case helper outputs and residuals for transparency after the original M1.4 assertions passed but produced only aggregate PASS output. This rerun changes no fixture, oracle, formulas, decision criteria, thresholds, or assertions.",
+  "original_preregistration": "docs/validation/fixed_ldau/evidence/a3_m14_oracle_preregistration.json",
+  "original_preregistration_sha256": "837a57d0d076d8fbdce514c510343e5ffe9f4f681ef1bd759939bd6f11030078",
+  "original_harness_sha256": "42550b28360fd38cea336f6caf6c2dd930567c5f2cc1a49e33f5954b89302d0e",
+  "original_test_result": "PASS; preserved as prior artifact. This supplemental deterministic rerun only records values omitted from that test's stdout.",
+  "supplemental_harness": "tests/unit/test_local_moments_kernel.f90",
+  "supplemental_harness_sha256": "ebc75711ff201cb243faa44567b6750094c294df13054fe7d48efaa024104fe3",
+  "production_helper": "source/math.f90",
+  "production_helper_sha256": "4a93235e1f4c4b67c710fff3aededa15a5ad9f136b87cceb3246b2a1e42b0d09",
+  "fixture": "tests/validation/fixed_ldau/data/a3_m14_reference_fixture.txt",
+  "fixture_sha256": "e10bb7dd15975c7a791e64978d8a41d5a7d24bb0747edd7341a5d2ce06443dbc",
+  "independent_reference": "tests/validation/fixed_ldau/a3_m14_independent_reference.py",
+  "independent_reference_sha256": "8592d67235976fb9a504ff2eb0c33b806b3c2d9f6ad3565c51331c7d0371adfe",
+  "reporting_fields": [
+    "per-site/per-spin cprime and q2prime, signed errors versus direct finite-H oracle and bound",
+    "scalar-operator identity outputs and signed deviations",
+    "Vout and conjugated-eigenvector control values, signed deltas and summed bounds",
+    "site/type-swapped control values, signed deltas and summed bounds"
+  ],
+  "decision_rule": "No new decision or threshold is introduced. The existing preregistered comparisons, error bounds and pass/fail assertions are unchanged; this rerun's stdout is supplemental numeric reporting only."
+}

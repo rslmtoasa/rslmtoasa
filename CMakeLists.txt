@@ -754,6 +754,12 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitGammaSupercell ${TestDIR}/unit/test_gamma_supercell.f90)
   add_fortran_unit_test(UnitBsfSumRule ${TestDIR}/unit/test_bsf_sumrule.f90)
   add_fortran_unit_test(UnitMomentKernel ${TestDIR}/unit/test_moment_kernel.f90)
+  add_fortran_unit_test(UnitLocalMomentsKernel ${TestDIR}/unit/test_local_moments_kernel.f90
+    ${TestDIR}/validation/fixed_ldau/data/a3_m14_reference_fixture.txt)
+  set_tests_properties(UnitLocalMomentsKernel PROPERTIES LABELS "unit;lda_u;local_moments;oracle")
+  add_fortran_unit_test(UnitLocalMomentsSiteSwap ${TestDIR}/unit/test_local_moments_site_swap.f90
+    ${TestDIR}/validation/fixed_ldau/data/a3_m14_fresh_site_swap_reference.txt)
+  set_tests_properties(UnitLocalMomentsSiteSwap PROPERTIES LABELS "unit;lda_u;local_moments;oracle;mapping")
   add_library(SpinResponseTolerances STATIC ${TestDIR}/unit/spin_response_tolerances.f90)
   target_link_libraries(SpinResponseTolerances ${COMMON_LIBRARIES})
   add_fortran_unit_test(UnitSpinResponseKernels ${TestDIR}/unit/test_spin_response_kernels.f90

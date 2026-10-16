@@ -1,0 +1,52 @@
+{
+  "baseline_required": "First exact LIVE anchor; all governed PL/rho <=1e-10 and energy/SUMEC/SUMEV <=1e-8 Ry.",
+  "candidate_path": "/private/tmp/rslmto-ldau-local-moments-worktree/docs/validation/fixed_ldau/evidence/a3_rs_m03_prediction_lock.json",
+  "candidate_sha256": "d55ca7715dfc1cca22e8d6a23b467a95838466a793c0b70eb1bb9fa19cc7177d",
+  "capture_csv_sha256": "9982b7fc115e72d9f5236253717c8a6edcb8e9d2f95ade6a9766b7fd23189d4e",
+  "capture_manifest_sha256": "54d0c8d8b510ac73254c3cf10f6fd7f9bdbcb16b125dec1e18ddbfa621443054",
+  "capture_run_id": "a3_rs_u2_m03_d91_state_3e8",
+  "case_rules": {
+    "opposite_spin": "use opposite spin Vin with own independent q2 formula; predicted raw-minus-wrong is t_wrong+r_fit(t_wrong/q0).",
+    "scalar_plus_001": "Apply V=vI to captured starting spectral moments: c_prime=c-0.01 Ry and q2_prime=q2_RAW exactly. Predicted raw-minus-shifted SUMEV per spin is 0.01*q0+r_fit(0.01); compare residual-only error to A_scalar.",
+    "sign": "wrong center c+t/q0; hold correct local q2; predicted raw-minus-wrong is -t+r_fit(-t/q0)."
+  },
+  "driver_path": "/private/tmp/rslmto-localmom-a2-u2-d91-bin/accepted_m03_replay_driver",
+  "driver_sha256": "0c1c3c12e8501f4642af87168c611d261fb5a34cc4747aaef9c8420c2c6449c4",
+  "excluded_attempts": [
+    {
+      "attempt": "Initial five-case invocation before persistent-output fix",
+      "classification": "UNTRUSTED_AND_EXCLUDED",
+      "note": "The production driver completed, but report serialization failed because the output directory did not exist; TemporaryDirectory removed the raw driver output. The attempt also used an unexecuted scalar q2_LOCAL draft contrary to the locked RAW-q2 identity. No numeric case values were retained or inspected. The frozen five-case batch is rerun with captured RAW q2, persistent input/output files, unchanged physical predictions and allowances."
+    }
+  ],
+  "fit_adapter_path": "/private/tmp/a3-rs-fit-compat.json",
+  "fit_adapter_sha256": "48330ec758b680979eb08f1404eabecb9a685be3fa4412a63e14a4936365fb3d",
+  "iter1_identity_sha256": "b5f4fa1691e391d3f588137c809f39fa8e1e2fdcd19b8c7e93879b0b24fc776e",
+  "iter1_manifest_sha256": "e65908b9756558ab343ea3722639b0d2738a6b9d74e6c2a0981c5bfa6bea74ec",
+  "locked_fit_policy": "Use RS own fourteen-point cubic/loglog scan for A2.2 residuals; use original eight signed A1 shifts only for A2.1 intercept. D0_RS is used once; u_RS remains separate.",
+  "null_rule": "Compare signed Tr(V_wrong P)-Tr(V_true P) to A_true+A_wrong+E_num; operator null diagnostics P-P^T and ImP are measured without an invented energy cutoff.",
+  "omitted_as_construction_null": [
+    "ITERATION1_V1",
+    "VOUT_CONTROL",
+    "P_TRANSPOSE_CONTROL"
+  ],
+  "released_cases": [
+    "RAW_PL",
+    "LOCAL_PL",
+    "SIGN_WRONG",
+    "OPPOSITE_SPIN",
+    "SCALAR_V_PLUS_001"
+  ],
+  "runner_path": "/private/tmp/rslmto-ldau-local-moments-worktree/tests/validation/fixed_ldau/rs_a3_m03_runner.py",
+  "runner_sha256": "96c51a8e1e0b0809b35b7875a5c94b9be1e70e82180cb6693c13209fe9a0b515",
+  "scalar_gate": {
+    "A_scalar": "sum(abs(r_fit_s(0.01))) + D0_RS",
+    "formula": "abs(Delta_SUMEV_RAW_minus_SCALAR - 0.01*sum(q0)) <= A_scalar",
+    "residual_inclusive_prediction": "Delta_SUMEV = sum(0.01*q0_s + r_fit_s(0.01)); supplementary diagnostic only, not the gate comparator."
+  },
+  "schema": "a3-rs-m03-preregistration-v1",
+  "selected_iteration": 6,
+  "stage": "A3.5 RS M0.3 frozen-state response campaign",
+  "status": "LOCKED_BEFORE_RESPONSES",
+  "superseded_draft_note": "An unexecuted draft proposed holding local q2 for the scalar identity case; reviewer confirmed protocol requires captured RAW q2. No response runs were made under the draft."
+}

@@ -148,6 +148,8 @@ module math_mod
    public :: init_math_operators
    public :: hubbard_projector_element, hubbard_spectral_density_element
    public :: hubbard_density_diagnostics
+   public :: correct_d_shell_moments
+   public :: extract_hubbard_d_shell_potential
 
 contains
 
@@ -203,6 +205,100 @@ contains
       min_eigenvalue = minval(eigenvalues)
       max_eigenvalue = maxval(eigenvalues)
    end subroutine hubbard_density_diagnostics
+
+   !> Correct the d-shell radial first and second moments for the local
+   !> Hubbard operator present in the Hamiltonian.  Matrices use the
+   !> conventional P_ab = <c^+_b c_a> convention and are expressed in Ry.
+   !> A nonphysical density is rejected; no projection or q2 clamping occurs.
+   subroutine correct_d_shell_moments(p, m1, vin, q0, c, q2, cprime, q2prime, t, status)
+      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+      complex(rp), intent(in) :: p(5, 5), m1(5, 5), vin(5, 5)
+      real(rp), intent(in) :: q0, c, q2
+      real(rp), intent(out) :: cprime, q2prime, t
+      integer, intent(out) :: status
+      real(rp) :: p_trace, p_min, p_max, p_antiherm
+      real(rp) :: m1_antiherm, vin_antiherm
+      complex(rp) :: covariance(5, 5), product(5, 5)
+      integer :: info, i
+
+      cprime = c
+      q2prime = q2
+      t = 0.0_rp
+      status = 0
+      if (.not. all(ieee_is_finite(real(p, rp))) .or. .not. all(ieee_is_finite(aimag(p))) .or. &
+          .not. all(ieee_is_finite(real(m1, rp))) .or. .not. all(ieee_is_finite(aimag(m1))) .or. &
+          .not. all(ieee_is_finite(real(vin, rp))) .or. .not. all(ieee_is_finite(aimag(vin))) .or. &
+          .not. ieee_is_finite(q0) .or. .not. ieee_is_finite(c) .or. .not. ieee_is_finite(q2)) then
+         status = 5
+         return
+      end if
+      call hubbard_density_diagnostics(p, p_trace, p_min, p_max, p_antiherm, info)
+      if (info /= 0 .or. p_antiherm > 1.0e-6_rp .or. p_min < -1.0e-3_rp .or. &
+          p_max > 1.0_rp + 1.0e-3_rp) then
+         status = 1
+         return
+      end if
+      m1_antiherm = maxval(abs(m1 - transpose(conjg(m1))))
+      vin_antiherm = maxval(abs(vin - transpose(conjg(vin))))
+      if (m1_antiherm > 1.0e-6_rp .or. vin_antiherm > 1.0e-6_rp) then
+         status = 2
+         return
+      end if
+      if (q0 <= 0.0_rp) then
+         status = 3
+         return
+      end if
+
+      t = 0.0_rp
+      do i = 1, 5
+         t = t + real(sum(vin(i, :)*p(:, i)), rp)
+      end do
+      cprime = c - t/q0
+      covariance = m1 - c*p
+      product = matmul(vin, vin)
+      q2prime = q2
+      do i = 1, 5
+         q2prime = q2prime - 2.0_rp*real(sum(vin(i, :)*covariance(:, i)), rp) &
+            + real(sum(product(i, :)*p(:, i)), rp)
+      end do
+      q2prime = q2prime - t*t/q0
+      if (.not. ieee_is_finite(cprime) .or. .not. ieee_is_finite(q2prime) .or. .not. ieee_is_finite(t)) then
+         status = 5
+         return
+      end if
+      if (q2prime < 0.0_rp) status = 4
+   end subroutine correct_d_shell_moments
+
+   !> Extract the on-site, spin-diagonal d-shell block from the operator that
+   !> is actually stored in the Hamiltonian.  `spin_off` is the per-spin basis
+   !> stride; the real-harmonic d orbitals occupy indices 5:9 in each block.
+   subroutine extract_hubbard_d_shell_potential(hubbard_u_pot, site_type, spin, spin_off, v_d, status)
+      complex(rp), intent(in) :: hubbard_u_pot(:, :, :)
+      integer, intent(in) :: site_type, spin, spin_off
+      complex(rp), intent(out) :: v_d(5, 5)
+      integer, intent(out) :: status
+      integer :: i, j, orbital_i, orbital_j
+
+      v_d = cmplx(0.0_rp, 0.0_rp, rp)
+      status = 0
+      if (site_type < 1 .or. site_type > size(hubbard_u_pot, 3) .or. &
+          (spin /= 1 .and. spin /= 2) .or. spin_off < 9) then
+         status = 1
+         return
+      end if
+      do i = 1, 5
+         orbital_i = 4 + i + spin_off*(spin - 1)
+         do j = 1, 5
+            orbital_j = 4 + j + spin_off*(spin - 1)
+            if (orbital_i > size(hubbard_u_pot, 1) .or. orbital_j > size(hubbard_u_pot, 2)) then
+               status = 2
+               v_d = cmplx(0.0_rp, 0.0_rp, rp)
+               return
+            end if
+            v_d(i, j) = hubbard_u_pot(orbital_i, orbital_j, site_type)
+         end do
+      end do
+   end subroutine extract_hubbard_d_shell_potential
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

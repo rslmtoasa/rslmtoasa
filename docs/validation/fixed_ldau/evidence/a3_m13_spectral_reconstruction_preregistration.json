@@ -1,0 +1,59 @@
+{
+  "schema": "rslmto-a3-m13-spectral-moment-reconstruction-prereg-v1",
+  "status": "LOCKED_BEFORE_NUMERIC_COMPARISON",
+  "purpose": "Independently recover the spectral d-shell moments from the exact converged KS local-mode iteration-34 eigensystem, then cross-check the algebraic inverse of the local correction. No correction-model, gate threshold, or production output is changed.",
+  "capture": {
+    "manifest": "/private/tmp/a3-ks-m1-local-u2-capture/manifest.json",
+    "manifest_sha256": "474f142e976616fffc0ae2d7610e34a30143489e41e5f9bd94026530214e3502",
+    "records": "/private/tmp/a3-ks-m1-local-u2-capture/records.csv",
+    "records_sha256": "f10790d5b007d41cfebfe86df1f1a305140769e0c43053f8a7eaf932e1de1c7c",
+    "iteration": 34,
+    "accepted_final_Fe_out_sha256": "23137d3165f92980da0a5dbe88940463850b2c8708e3e9acc4bce03dadbc57d7",
+    "identity_note": "same initial PRE/Fe seed and executable as untraced run; normalized 102 diagnostic/convergence lines and final Fe_out match exactly."
+  },
+  "indices_and_units": {
+    "site": 0,
+    "type": 1,
+    "l": 2,
+    "spin_csv": [1, 2],
+    "basis_map_is_authoritative": true,
+    "d_shell_map": "Use captured EIGENPAIRS basis_map rows for (site=0,type=1,l=2), retaining each spin and m; do not infer spin offsets from dimensions.",
+    "energy_unit": "Ry",
+    "q0_unit": "electrons in projected d shell",
+    "q2_unit": "Ry^2 times projected d-shell occupation (unnormalized centered second moment)"
+  },
+  "registered_direct_model": {
+    "p_j[s]": "sum over k,n,m in the captured d-shell map of w_k*f_kn*|u_(m,s),kn|^2*epsilon_kn^j, j=0,1,2",
+    "q0_s": "p_0[s]",
+    "c_spectral_s": "p_1[s]/p_0[s]",
+    "q2_spectral_s": "p_2[s]-2*c_spectral_s*p_1[s]+c_spectral_s^2*p_0[s]",
+    "occupations": "captured eigenpair occupation scalar; k weights are captured EIGENPAIRS weights and must sum to one",
+    "independent_checks": ["Tr(P_OUT)=q0", "Re Tr(M1_OUT)=p1", "Re Tr(M1_OUT)/q0=c_spectral", "direct reconstructed P_OUT agrees with captured LDM matrix"]
+  },
+  "registered_local_cross_checks": {
+    "true_Vin": "captured actual Pin_H v_hub d-shell blocks at site=0,type=1,l=2, spins 1 and 2; do not use P_OUT stage's v_hub",
+    "t_s": "Re Tr(Vin_s P_OUT_s)",
+    "direct_cprime_s": "c_spectral_s-t_s/q0_s",
+    "direct_q2prime_s": "q2_spectral_s-2 Re Tr(Vin_s(M1_OUT_s-c_spectral_s*P_OUT_s))+Re Tr(Vin_s^2 P_OUT_s)-t_s^2/q0_s",
+    "inverse_c_spectral_s": "c_local_s+t_s/q0_s",
+    "inverse_q2_spectral_s": "q2_local_s+2 Re Tr(Vin_s(M1_OUT_s-c_spectral_s*P_OUT_s))-Re Tr(Vin_s^2 P_OUT_s)+t_s^2/q0_s",
+    "local_fields": "P_OUT radial_moment order=1 energy is c_local; P_OUT radial_parameter order=3 scalar is q2_local (cross-check ql3/ql parameter encoding). Do not use radial_moment order=2 as a raw second moment; its writer stores q0*(c_local^2+q2_local)."
+  },
+  "floating_point_error_model": {
+    "unit_roundoff": "u=2^-53 for IEEE binary64",
+    "gamma_definition": "gamma_n=n*u/(1-n*u)",
+    "direct_sum_terms": 155520,
+    "operations_per_term_bound": 32,
+    "n_direct": 4976640,
+    "direct_bound": "For j=0,1,2, absolute p_j summation error <= gamma_4976640 * A_j, where A_j=sum |w*f|*|epsilon|^j*|u_d|^2; add one half-ULP serialization contribution per captured scalar/matrix datum to the corresponding absolute scale.",
+    "propagation": "Propagate p0,p1,p2 absolute bounds through c=p1/p0 and q2=p2-2*c*p1+c^2*p0 using first-order absolute condition bounds with positive denominator q0; include quadratic remainder bounded by the same gamma_4976640 scale envelope. For matrix trace/helper and inverse expressions use gamma_16384 times the sum of absolute products in each expression, plus input serialization half-ULP bounds propagated by absolute products. Add direct and trace bounds for comparisons; no empirical tolerance is introduced.",
+    "eigensolver_residual": "Report max |H U-U epsilon| and max |U^H U-I| from captured full EIGENPAIRS matrices as provenance/precision diagnostics; direct moment target is the captured eigenpair sum, so no extra solver correction is presumed."
+  },
+  "production_identity": {
+    "source_sha256": "capture manifest source revision f122a001abd30d8213867b199b702d2d73ba915d; frozen source identity label a3-m1-f122a001-frozen",
+    "executable_sha256": "71ad3c0861996ca714da5d4d2e03af2611995eb3cf627f856ed8c649e8136184",
+    "input_PRE_sha256": "b17d5d417d1cfa9a7bfc9ec8d990e2f1980172f8e19fdc3b47c6cc173ca95b55",
+    "input_Fe_seed_sha256": "fd5d907628cc4ee41ac3b1147aeb1f9e8ec1fe8bb2f38069afe1cf63384ae233"
+  },
+  "decision": "Report direct and inverse reconstructions with propagated bounds. If intervals overlap for c/q2 and P/M1 checks, accept same-state moment recovery for diagnostic dual-candidate replay. Otherwise stop and identify provenance/implementation mismatch; do not widen bounds or infer missing spectral energy candidates."
+}

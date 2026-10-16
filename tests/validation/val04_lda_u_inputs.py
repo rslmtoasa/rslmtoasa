@@ -70,12 +70,17 @@ def main() -> None:
     # boundary: the fixed-U guard must not reject unrelated no-U SOC runs.
     no_u_nsp2 = run(binary, scratch, "no_u_nsp2", "", succeeds=True, nsp=2)
     zero_uj = run(binary, scratch, "zero_uj", "hubbard_u_general(1,3) = 0.0\nhubbard_j_general(1,3) = 0.0", succeeds=True)
+    local_zero_uj = run(binary, scratch, "local_zero_uj",
+                        "hubbard_radial_moments = 'local'\nhubbard_u_general(1,3) = 0.0\nhubbard_j_general(1,3) = 0.0",
+                        succeeds=True)
+    run(binary, scratch, "local_without_explicit_uj", "hubbard_radial_moments = 'local'", succeeds=False,
+        expected_message="requires an explicit fixed Liechtenstein U/J input")
     no_u_spdf = run(binary, scratch, "no_u_spdf", "", succeeds=True, lmax=3)
     zero_uj_spdf = run(binary, scratch, "zero_uj_spdf",
                        "hubbard_u_general(1,3) = 0.0\nhubbard_j_general(1,3) = 0.0",
                        succeeds=True, lmax=3)
     if any("HUBBARD summary:" in output or "HUBBARD fixed U/J" in output
-           for output in (no_u, no_u_nsp2, zero_uj, no_u_spdf, zero_uj_spdf)):
+           for output in (no_u, no_u_nsp2, zero_uj, local_zero_uj, no_u_spdf, zero_uj_spdf)):
         raise RuntimeError("no-U and explicit U=J=0 inputs must leave Hubbard inactive")
 
     u_only = run(binary, scratch, "u_only", "hubbard_u_general(1,3) = 2.0", succeeds=True)
@@ -131,7 +136,7 @@ def main() -> None:
         expected_message="SOC and noncollinear spinors are unsupported")
     run(binary, scratch, "unsupported_hoh", "hubbard_u_general(1,3) = 2.0", succeeds=False, hoh=True,
         expected_message="unsupported with hoh=.true.")
-    print("VAL-04 PASS: fixed-U inputs/units/guards; no-U nsp=1/2 and lmax=3 remain available")
+    print("VAL-04 PASS: fixed-U inputs/units/guards; local mode requires explicit U/J and accepts zero-U no-op")
 
 
 if __name__ == "__main__":
