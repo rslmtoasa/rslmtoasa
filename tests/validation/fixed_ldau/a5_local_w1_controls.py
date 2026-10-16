@@ -65,6 +65,11 @@ def parse_last(log: str, label: str) -> float:
     return value
 
 
+def has_converged_marker(log: str) -> bool:
+    """Match the positive marker without accepting `Not converged!`."""
+    return re.search(r"(?<!Not )Converged!", log, re.IGNORECASE) is not None
+
+
 def run_case(binary: Path, base_input: Path, base_seed: Path, assets: Path,
              output: Path, control_name: str, cfg: dict, lam: float) -> dict:
     run_id = f"{control_name}_lambda_{lam:+.3f}"
@@ -104,9 +109,10 @@ def run_case(binary: Path, base_input: Path, base_seed: Path, assets: Path,
     log = stdout.read_text(errors="replace")
     if (case_dir / "testrun.log").is_file():
         log += "\n" + (case_dir / "testrun.log").read_text(errors="replace")
-    if result.returncode != 0 or "Converged!" not in log or not trace.is_file():
+    converged = has_converged_marker(log)
+    if result.returncode != 0 or not converged or not trace.is_file():
         failure = {"run_id": run_id, "control": control_name, "lambda_ry": lam,
-            "returncode": result.returncode, "converged_marker": "Converged!" in log,
+            "returncode": result.returncode, "converged_marker": converged,
             "input_pre_sha256": input_sha, "seed_pre_sha256": seed_sha,
             "runtime_Fe_nml_sha256": sha(seed_path) if seed_path.is_file() else None,
             "runtime_restart_sha256": {name: sha(case_dir / name) for name in
@@ -122,7 +128,10 @@ def run_case(binary: Path, base_input: Path, base_seed: Path, assets: Path,
     kinds = {row["kind"] for row in rows}
     if not required <= kinds:
         raise RuntimeError(f"{run_id}: missing trace rows {sorted(required-kinds)}")
-    f_local = parse_last(log, "test_F_local")
+    # At exactly lambda=0 the test hook intentionally suppresses the external
+    # perturbation and therefore reports no test-only free energy. The P_OUT
+    # moment capture remains the direct reference needed for the FD residual.
+    f_local = parse_last(log, "test_F_local") if lam != 0.0 else None
     return {"run_id": run_id, "control": control_name, "lambda_ry": lam,
             "temperature_k": cfg["temperature"], "mesh": cfg["mesh"], "hoh": cfg["hoh"],
             "returncode": result.returncode, "converged": True, "F_local_ry": f_local,

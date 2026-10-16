@@ -7,6 +7,7 @@ import concurrent.futures
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -23,6 +24,11 @@ def sha(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             h.update(block)
     return h.hexdigest()
+
+
+def has_converged_marker(log: str) -> bool:
+    """Match the positive marker without accepting `Not converged!`."""
+    return re.search(r"(?<!Not )Converged!", log, re.IGNORECASE) is not None
 
 
 def edit_group(deck: str, group: str, assignments: dict[str, str]) -> str:
@@ -109,9 +115,25 @@ def run_case(cfg: dict, args: argparse.Namespace, assets_hashes: dict[str, str],
     outputs = {p.name: sha(p) for p in case_dir.iterdir() if p.is_file() and
                p.name not in {"input.nml", "Fe_out.nml"} and
                (p.name in {"stdout.log", "records.csv", "Fe_scf.nml", "Fe.nml"} or p.name.endswith("_out.nml"))}
+    converged_markers = re.findall(r"(?<!Not )Converged!", log_text, re.IGNORECASE)
+    converged = has_converged_marker(log_text)
+    r05_required = abs(float(cfg["u"])) > 1.0e-10 or abs(float(cfg["j"])) > 1.0e-10
+    r05_lines = re.findall(r"FIXED_U_RESIDUAL ([^\r\n]*)", log_text)
+    r05_values = dict(re.findall(r"([A-Za-z0-9_]+)=([^\s]+)", r05_lines[-1])) if r05_lines else {}
+    r05_streak = int(r05_values["streak"]) if "streak" in r05_values else None
+    r05_required_streak = int(r05_values["required_streak"]) if "required_streak" in r05_values else None
+    r05_physical = r05_values.get("physical", "").lower() == "true"
+    r05_ok = (not r05_required) or (r05_streak is not None and r05_required_streak is not None
+                                   and r05_streak >= r05_required_streak and r05_physical)
     row = {
         **cfg, "returncode": result.returncode,
-        "converged_marker_count": log_text.count("Converged!"),
+        "converged_marker_count": len(converged_markers),
+        "converged": converged,
+        "r05_required": r05_required, "r05_status": "PASS" if r05_ok and r05_required else
+            ("NOT_APPLICABLE" if not r05_required else "MISSING_OR_NOT_SATISFIED"),
+        "r05_latest_streak": r05_streak, "r05_required_streak": r05_required_streak,
+        "r05_latest_physical": r05_physical if r05_required else None,
+        "case_status": "CONVERGED" if result.returncode == 0 and converged and r05_ok else "NONCONVERGED",
         "input_sha256": input_sha, "seed_input_sha256": seed_sha,
         "runtime_Fe_out_sha256": sha(seed_path) if seed_path.exists() else None,
         "output_sha256": outputs,
@@ -160,10 +182,13 @@ def main() -> None:
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = [pool.submit(run_case, cfg, args, assets_hashes, source_hashes, binary_hash) for cfg in work]
         rows = [future.result() for future in futures]
-    summary = {"binary_sha256": binary_hash, "source_sha256": source_hashes,
+    complete = all(row["case_status"] == "CONVERGED" for row in rows)
+    summary = {"status": "COMPLETE" if complete else "INCOMPLETE_NONCONVERGED_CASES",
+               "binary_sha256": binary_hash, "source_sha256": source_hashes,
                "case_count": len(rows), "cases": rows}
     (args.output / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
-    print(json.dumps({"case_count": len(rows), "converged": sum(r["converged_marker_count"] > 0 for r in rows),
+    print(json.dumps({"status": summary["status"], "case_count": len(rows),
+                      "converged": sum(r["case_status"] == "CONVERGED" for r in rows),
                       "nonzero_exit": sum(r["returncode"] != 0 for r in rows),
                       "summary": str(args.output / "summary.json")}, sort_keys=True))
 
