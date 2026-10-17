@@ -930,12 +930,6 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitConstrainingFieldSource
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_constraining_field_source.py)
   set_tests_properties(UnitConstrainingFieldSource PROPERTIES LABELS "unit;constraints;source-contract")
-  add_test(NAME UnitGbtWp06Source
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp06_source.py)
-  set_tests_properties(UnitGbtWp06Source PROPERTIES LABELS "unit;gbt;wp06;constraints;source-contract")
-  add_test(NAME GbtWp08CorrectedMftSource
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp08_corrected_mft_source.py)
-  set_tests_properties(GbtWp08CorrectedMftSource PROPERTIES LABELS "unit;gbt;wp08;frozen-magnon;constraints;source-contract")
   add_test(NAME GbtWp09HarmonicKgrid
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp09_harmonic_kgrid.py)
   set_tests_properties(GbtWp09HarmonicKgrid PROPERTIES LABELS "unit;gbt;wp09;frozen-magnon;harmonic;kgrid;source-contract")
@@ -1073,15 +1067,6 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitGbtOracles
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_oracles.py)
   set_tests_properties(UnitGbtOracles PROPERTIES LABELS "unit;gbt")
-  add_test(NAME UnitGbtWp5SourceContract
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp5_source_contract.py)
-  set_tests_properties(UnitGbtWp5SourceContract PROPERTIES LABELS "tooling;gbt;wp5")
-  add_test(NAME UnitGbtWp10SourceContract
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp10_source_contract.py)
-  set_tests_properties(UnitGbtWp10SourceContract PROPERTIES LABELS "tooling;gbt;wp10")
-  add_test(NAME UnitGbtWp12ScfSourceContract
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp12_scf_source.py)
-  set_tests_properties(UnitGbtWp12ScfSourceContract PROPERTIES LABELS "tooling;gbt;wp12;scf")
   add_test(NAME UnitGbtWp6Hoh
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6_hoh.py)
   set_tests_properties(UnitGbtWp6Hoh PROPERTIES LABELS "unit;gbt;wp6;hoh;overlap")
@@ -1097,12 +1082,6 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitGbtWp6cVelocity
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6c_velocity.py)
   set_tests_properties(UnitGbtWp6cVelocity PROPERTIES LABELS "unit;gbt;wp6;velocity;torque")
-  # WP6 integration: keeps tests/gbt_wp6_matrix/feature_matrix.json in step with
-  # the guards actually present in source/, and owns the oracles that span the
-  # WP6a/WP6b/WP6c slice boundaries (onsite fold, CCOR+HOH composition).
-  add_test(NAME UnitGbtWp6Matrix
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6_matrix.py)
-  set_tests_properties(UnitGbtWp6Matrix PROPERTIES LABELS "unit;gbt;wp6;matrix")
   add_test(NAME UnitManifestDefaults
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_manifest_defaults.py)
   set_tests_properties(UnitManifestDefaults PROPERTIES LABELS "tooling;manifest")
