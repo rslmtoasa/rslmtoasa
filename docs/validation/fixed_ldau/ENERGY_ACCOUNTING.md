@@ -1,6 +1,34 @@
 # Fixed-U energy accounting evidence
 
-## Gate result
+## Current A4.4 status (KS scalar-collinear scope)
+
+The KS M2.2/M2.3 numerical comparison passes at the explicitly limited level
+“valid to the ASA base-functional accuracy measured in A5.1.” The selected
+candidate is **b = F_local + E_Hub(P_OUT)**: the local-mode base free energy
+plus production `evaluate_hubbard_energy` evaluated on the captured direct
+`P_OUT` matrix. At U=2 eV, J=0 and at J=0.5/0.9 eV, this derivative agrees
+with the fixed-P production Hubbard derivative within the preregistered
+charge-only ASA allowance. Candidate c lies outside that allowance; candidate
+a is report-only. No a-versus-b preference is claimed. The measured ranges
+and endpoint provenance are in [the U result](evidence/a5_m22_u2_derivative_result.md),
+[the J result](evidence/a5_m23_j_derivative_result.md), and the
+[A4.3 like-for-like table](evidence/a4_3_like_for_like_observables.md).
+
+This is a scoped numerical identity test, not a derivation of an exact general
+ASA energy functional. In particular, it does not establish the radial
+`SUMEV` double-count coefficient/sign for every backend or representation.
+The eligible implementation scope is being limited to native reciprocal KS,
+fixed Liechtenstein U/J, scalar-collinear `nsp=1`; RS remains guarded pending
+its own M1/M2, and SOC/noncollinear, SC-U, and intersite-V paths remain
+excluded. The source routing change and restart/MPI reproducibility checks are
+pending; until they pass, production `physical_total_energy` routing is not
+claimed as complete.
+
+## Gate result (historical pre-A5 status)
+
+The paragraph below records the earlier pre-A5 assessment. The current KS
+M2.2/M2.3 numerical result is summarized above; R04 remains pending only for
+the scoped production routing and restart/MPI implementation checks.
 
 The production energy-closure gate is **not established** for fixed Liechtenstein U/J in this implementation. No total-energy correction was added. The available source-connected captures validate the finite-H operator trace and the existing radial replay, but they do not derive the identity needed to place the fixed-U contribution in the current ASA radial total-energy functional.
 

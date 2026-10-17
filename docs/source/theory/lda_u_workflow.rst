@@ -103,6 +103,48 @@ Implementation status
 Validated ordinary on-site scope
 ================================
 
+Fixed-U energy-accounting status (A4.4)
+---------------------------------------
+
+For native reciprocal KS with fixed Liechtenstein U/J and scalar-collinear
+``nsp=1``, the current numerical M2.2/M2.3 result supports candidate
+``b = F_local + E_Hub(P_OUT)`` at the stated accuracy: “valid to the ASA
+base-functional accuracy measured in A5.1.” Here ``F_local`` is the local-mode
+base free energy, including the KS entropy term, and ``E_Hub`` is evaluated by
+the production Hubbard functional on the actual output density matrix
+``P_OUT``. The U=2,J=0 and J=0.5/0.9 eV derivatives lie within the
+pre-registered charge-only ASA allowances; the spectral candidate ``c`` lies
+outside them. Candidate ``a`` is reported without an a-versus-b claim.
+
+The tested derivative separates into the fixed-density Hubbard response and
+the change of the captured density:
+
+.. math::
+
+   \frac{d b}{d x} =
+   \left.\frac{\partial E_{\rm Hub}(P;x)}{\partial x}\right|_{P=P_{\rm OUT}}
+   + \mathrm{Tr}\!\left[V_{\rm Hub}(P_{\rm OUT};x)
+     \frac{dP_{\rm OUT}}{dx}\right]
+   + \frac{dF_{\rm local}}{dx}, \qquad x\in\{U,J\}.
+
+The first term is measured independently by applying the production
+``evaluate_hubbard_energy`` function to the direct captured ``P_OUT`` at the
+center parameter and nearby parameter values. The remaining response is
+checked against the charge-only ASA allowance derived from finite-W1 spin
+response and measured charge changes. Agreement is numerical and
+tolerance-limited for these KS states; it does not assert that the last two
+terms vanish or that the relation holds for arbitrary radial states.
+
+This evidence does not establish an exact general ASA energy identity. The
+selected formula is an empirically tested local base-functional correction
+within the measured numerical accuracy, and does not prove a universal
+``SUMEV`` double-counting coefficient. The source routing and restart/MPI
+reproducibility checks are pending. RS remains guarded until its independent
+M1 and M2 pass. SOC/noncollinear states, self-consistent U, and intersite V
+are outside this eligible path. See
+``docs/validation/fixed_ldau/ENERGY_ACCOUNTING.md`` for the current gate status
+and evidence links.
+
 For the ordinary fixed-U/J route, ``calculate_hubbard_u_potential_general``
 builds the rotationally invariant Liechtenstein orbital potential from the
 real, spin-resolved local occupation matrices ``ldm(l,ispin,m,m')``.  The

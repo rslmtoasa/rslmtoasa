@@ -1,0 +1,983 @@
+{
+  "schema": "A5.3-U2-derivative-result-draft-v1",
+  "basis": "Fine-grid charge-only A5.3 numeric allowance; candidate comparisons opened only after this numeric prereg was recorded. U subtest report only pending local tight trio, J budget/endpoints, and A4.3 table; no production adoption decision.",
+  "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+  "common_seed_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+  "fixed_p_targets": {
+    "local": {
+      "target_output_sha256": "c1448066fdc8ff7345ab5f6dceb3143faafc60c9d1fc0077ecaff82cc1acd3d7",
+      "p_sha256": "a07d70e9e86b442555831ab6feead2457b99329cb4d7a6ee9879d4e54283d5cc",
+      "dEhub_dU_Ry_per_eV": 0.05523968909191268,
+      "target_eps_eV": [
+        0.01,
+        0.005,
+        0.0025
+      ]
+    },
+    "spectral": {
+      "target_output_sha256": "01d2ff0f7570aec9749d689f5a6168f12998cf94d23894db8d8e0de0ebc47722",
+      "p_sha256": "c04d54d9531f5afb24a1e0fee1b395cec89686e2de66b02609de02e080b91669",
+      "dEhub_dU_Ry_per_eV": 0.05782769538760112,
+      "target_eps_eV": [
+        0.01,
+        0.005,
+        0.0025
+      ]
+    }
+  },
+  "mode_results": {
+    "local:candidate_b": {
+      "center_U_eV": 2,
+      "candidate": "b",
+      "candidate_energy_values": {
+        "1.9": {
+          "name": "u1.9_local_standard",
+          "path": "/private/tmp/a5-m22m23-remaining-ks-grid/u1.9_local_standard",
+          "candidate_F_Ry": -2541.867847358038,
+          "t_Ry": -0.2441620656775691,
+          "hashes": {
+            "input.nml": "fdfcceb5888e14ef41d46005aa50e878120818ea385fbe367012c86418f9ddf2",
+            "stdout.log": "21470733a1944a84645a1f89475ef9b783ed27e4036eb40b661ca37cececc946",
+            "records.csv": "1404714698c21df2cb6bba64f5a60bbaabb2d5dad099b3e7ebb0dba65aad8f16",
+            "Fe_scf.nml": "8aee860232f0ba9a941dc0da1622739fa0050c7c87c8c307649e1222ac26b9be"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "CONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "773e4b8ac4fd77c6741976200c96f39d6dcbc962758d49fcae1e5dc6fcd61dce",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "local",
+            "name": "u1.9_local_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "8aee860232f0ba9a941dc0da1622739fa0050c7c87c8c307649e1222ac26b9be",
+              "records.csv": "1404714698c21df2cb6bba64f5a60bbaabb2d5dad099b3e7ebb0dba65aad8f16",
+              "stdout.log": "21470733a1944a84645a1f89475ef9b783ed27e4036eb40b661ca37cececc946"
+            },
+            "r05_latest_physical": true,
+            "r05_latest_streak": 12,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "PASS",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "8aee860232f0ba9a941dc0da1622739fa0050c7c87c8c307649e1222ac26b9be",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 1.9
+          }
+        },
+        "1.95": {
+          "name": "u1.95_local_standard",
+          "path": "/private/tmp/a5-priority-ks-main-grid/u1.95_local_standard",
+          "candidate_F_Ry": -2541.865080911355,
+          "t_Ry": -0.251285678390442,
+          "hashes": {
+            "input.nml": "51d99253a705aa4de734bb6cebb168f380de888d779b0f8a73be8279aa0a3e80",
+            "stdout.log": "e627125eda265998129aa0d3ab72cad0c23a3d257b5cffe1ab2e840132055a12",
+            "records.csv": "bc70ebc2aa774eff1189378bdd2228d2d039d614908ba80b5cc4ed5625805cc5",
+            "Fe_scf.nml": "e828e0c00cc153a152e27bcf41b98f7874c44394d79c638d8e1652d15c828c9b"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "CONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "227e813e1c1dd8a78c5e025ce0f9f16fe92dfc56f73b1053198b76e6c1ec1611",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "local",
+            "name": "u1.95_local_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "e828e0c00cc153a152e27bcf41b98f7874c44394d79c638d8e1652d15c828c9b",
+              "records.csv": "bc70ebc2aa774eff1189378bdd2228d2d039d614908ba80b5cc4ed5625805cc5",
+              "stdout.log": "e627125eda265998129aa0d3ab72cad0c23a3d257b5cffe1ab2e840132055a12"
+            },
+            "r05_latest_physical": true,
+            "r05_latest_streak": 12,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "PASS",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "e828e0c00cc153a152e27bcf41b98f7874c44394d79c638d8e1652d15c828c9b",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 1.95
+          }
+        },
+        "2": {
+          "name": "u2_local_standard",
+          "path": "/private/tmp/a5-priority-local-u2-ks/u2_local_standard",
+          "candidate_F_Ry": -2541.862322175378,
+          "t_Ry": -0.2583779241628795,
+          "hashes": {
+            "input.nml": "ca995150bd98768e40539857f164e8508eb0f5a49a5cdec2cf86e095acd372fb",
+            "stdout.log": "ab6c91d7570183fcfe200d196994173f60e77474f244e2ddd185ef16e9b527db",
+            "records.csv": "a4b1d904f39d035fc427b41405e184b4ac0bd492704f31b0b6b19cfa16396fc6",
+            "Fe_scf.nml": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "NONCONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "7f0615d2ab190fe0c1db6fff46829be5e8944690d30c12653ace61bb6794c8c3",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "local",
+            "name": "u2_local_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+              "records.csv": "a4b1d904f39d035fc427b41405e184b4ac0bd492704f31b0b6b19cfa16396fc6",
+              "stdout.log": "ab6c91d7570183fcfe200d196994173f60e77474f244e2ddd185ef16e9b527db"
+            },
+            "r05_latest_physical": false,
+            "r05_latest_streak": 9,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "MISSING_OR_NOT_SATISFIED",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 2.0
+          },
+          "endpoint_verification_sha256": "e21914e74ae04c46f495ab0340f6bb13e76ee65970cb668054652a5f6a5662d8",
+          "verified_status": "CONVERGED_NATIVE_KS_R05_PHYSICAL; original receipt preserved and parser-only R05 status superseded by raw-log check"
+        },
+        "2.05": {
+          "name": "u2.05_local_standard",
+          "path": "/private/tmp/a5-priority-ks-main-grid/u2.05_local_standard",
+          "candidate_F_Ry": -2541.85957113233,
+          "t_Ry": -0.2654724858867865,
+          "hashes": {
+            "input.nml": "454925a6197fe414e8c11dc89635efc9f68af998a94fba8e32c945922202a17c",
+            "stdout.log": "fc0080e2585698e66e3084854d6caf4c916f914fd2fc480b0244f43d4e3fb686",
+            "records.csv": "7309cc7fede45a7463059e46849dbde076406f0fbead7e0ef6bdce44a901876c",
+            "Fe_scf.nml": "9092527c904224a4f49be50b9583473c5ab09ff12fa357f5a337e8731714ba8d"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "CONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "a425b2b2c40975d503d157ecd00650c2fed0d501539749f787e9ef4af914b997",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "local",
+            "name": "u2.05_local_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "9092527c904224a4f49be50b9583473c5ab09ff12fa357f5a337e8731714ba8d",
+              "records.csv": "7309cc7fede45a7463059e46849dbde076406f0fbead7e0ef6bdce44a901876c",
+              "stdout.log": "fc0080e2585698e66e3084854d6caf4c916f914fd2fc480b0244f43d4e3fb686"
+            },
+            "r05_latest_physical": true,
+            "r05_latest_streak": 12,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "PASS",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "9092527c904224a4f49be50b9583473c5ab09ff12fa357f5a337e8731714ba8d",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 2.05
+          }
+        },
+        "2.1": {
+          "name": "u2.1_local_standard",
+          "path": "/private/tmp/a5-m22m23-remaining-ks-grid/u2.1_local_standard",
+          "candidate_F_Ry": -2541.856827742148,
+          "t_Ry": -0.2725849074966598,
+          "hashes": {
+            "input.nml": "c6074ded793f5013419a7d9bdcad6496119c8b4c0caab54fdba06e3fcf94f8b2",
+            "stdout.log": "1f0961ab23f731050f912296ca85617cb27aec5e55c1b0ed2e006b0940f5a717",
+            "records.csv": "976f1ca6d7759285afeaa739eb3d2aa749b43091322aa5e5bdc8d52ded925fe0",
+            "Fe_scf.nml": "924843a63b07d51fb73d37461a94db3501325ec7f6bd3676e7dde5e7ce0ea94e"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "CONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "d33740e9b7797935d9a21a75075421be1ec1b85ed463b6501f80246bb6ca6ad3",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "local",
+            "name": "u2.1_local_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "924843a63b07d51fb73d37461a94db3501325ec7f6bd3676e7dde5e7ce0ea94e",
+              "records.csv": "976f1ca6d7759285afeaa739eb3d2aa749b43091322aa5e5bdc8d52ded925fe0",
+              "stdout.log": "1f0961ab23f731050f912296ca85617cb27aec5e55c1b0ed2e006b0940f5a717"
+            },
+            "r05_latest_physical": true,
+            "r05_latest_streak": 9,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "PASS",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "924843a63b07d51fb73d37461a94db3501325ec7f6bd3676e7dde5e7ce0ea94e",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 2.1
+          }
+        }
+      },
+      "D_h0.05_Ry_per_eV": 0.055097790250329126,
+      "D_h0.10_Ry_per_eV": 0.05509807944918066,
+      "D_Richardson_Ry_per_eV": 0.05509769385071195,
+      "Richardson_correction_from_h0.05_Ry_per_eV": -9.63996171776671e-08,
+      "tight_repeat": {
+        "D_h005_Ry_per_eV": 0.05509779351996258,
+        "standard_minus_tight_Ry_per_eV": -3.269633452873677e-09,
+        "paths": [
+          "/private/tmp/a5-local-followup-ks/u1.95_local_tight",
+          "/private/tmp/a5-local-followup-ks/u2.05_local_tight"
+        ],
+        "hashes": {
+          "/private/tmp/a5-local-followup-ks/u1.95_local_tight": "d200e5a8ac476250783787cb9ac1b324423805d529a033601aa5ce623be6fbd7",
+          "/private/tmp/a5-local-followup-ks/u2.05_local_tight": "a91ee80c4ee9dd3923fa74a4e11cb7b207be272ea6dc8e8d547c27e22a55c4a3"
+        }
+      },
+      "full_delta_grid_D_Ry_per_eV": {
+        "0.05": 0.055097790250329126,
+        "0.1": 0.05509807944918066,
+        "0.2": 0.05508656826236802,
+        "0.4": 0.05519713239266366
+      }
+    },
+    "spectral:candidate_a": {
+      "center_U_eV": 2,
+      "candidate": "a",
+      "candidate_energy_values": {
+        "1.9": {
+          "name": "u1.9_spectral_standard",
+          "path": "/private/tmp/a5-m22m23-remaining-ks-grid/u1.9_spectral_standard",
+          "candidate_F_Ry": -2541.860121723429,
+          "t_Ry": -0.2401018140178499,
+          "hashes": {
+            "input.nml": "1a3368d8d8ab2251c1862eee303b527a4e9abdc2dc475e4ae4eb0088fde82dc4",
+            "stdout.log": "b5ccb981f74a112e439cbca748798dbab943fe6f51fb8ea29f0149f893911cfc",
+            "records.csv": "674574a334bd7ee192da53eda03882b2fa5efc006057a1cb78e435d01147fc36",
+            "Fe_scf.nml": "80882f72d9a62b3f5eea8093c2d044bd9f8c0f950694896cdecc28691e6beeaf"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "CONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "5152be1af3a0839a98d26a66f8932168070556df2e291486fc46b1bb999d9894",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "spectral",
+            "name": "u1.9_spectral_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "80882f72d9a62b3f5eea8093c2d044bd9f8c0f950694896cdecc28691e6beeaf",
+              "records.csv": "674574a334bd7ee192da53eda03882b2fa5efc006057a1cb78e435d01147fc36",
+              "stdout.log": "b5ccb981f74a112e439cbca748798dbab943fe6f51fb8ea29f0149f893911cfc"
+            },
+            "r05_latest_physical": true,
+            "r05_latest_streak": 10,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "PASS",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "80882f72d9a62b3f5eea8093c2d044bd9f8c0f950694896cdecc28691e6beeaf",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 1.9
+          }
+        },
+        "1.95": {
+          "name": "u1.95_spectral_standard",
+          "path": "/private/tmp/a5-priority-ks-main-grid/u1.95_spectral_standard",
+          "candidate_F_Ry": -2541.85687914764,
+          "t_Ry": -0.2472708248996794,
+          "hashes": {
+            "input.nml": "1588693ac3b6b60ff52df4e538c84b1590ea10a22930b3ed66d63b1b73953344",
+            "stdout.log": "7124a608c5949bb2487654852874b2b0d8ee0df67baceb8377a4bc1e0ef33ab4",
+            "records.csv": "f73f464f29baa9a4543a0e8777fe6329a35311b3f4c2579ba9dfaa8c6e50fe77",
+            "Fe_scf.nml": "4c67209c30d0c209bd578e1c542a9c5d3c2c6ea9ac8ffaf95f0fb74a7acdceb7"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "CONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "7b5f44f644c34b3a0d8f0dd817ec8953861fc3ec03664043e60fc6ed14f0e55d",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "spectral",
+            "name": "u1.95_spectral_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "4c67209c30d0c209bd578e1c542a9c5d3c2c6ea9ac8ffaf95f0fb74a7acdceb7",
+              "records.csv": "f73f464f29baa9a4543a0e8777fe6329a35311b3f4c2579ba9dfaa8c6e50fe77",
+              "stdout.log": "7124a608c5949bb2487654852874b2b0d8ee0df67baceb8377a4bc1e0ef33ab4"
+            },
+            "r05_latest_physical": true,
+            "r05_latest_streak": 8,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "PASS",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "4c67209c30d0c209bd578e1c542a9c5d3c2c6ea9ac8ffaf95f0fb74a7acdceb7",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 1.95
+          }
+        },
+        "2": {
+          "name": "u2_spectral_standard",
+          "path": "/private/tmp/a5-priority-ks-main-grid/u2_spectral_standard",
+          "candidate_F_Ry": -2541.853628356088,
+          "t_Ry": -0.2546409525546395,
+          "hashes": {
+            "input.nml": "dfea2c3abf5ade47580bc9d7919ba1a3371c71704cd1910ddc677b5a72fc42bb",
+            "stdout.log": "ebadbcad2cea7b2eab08c665a15cce8b6ba245ae356a71655ed430331b269d7b",
+            "records.csv": "e1fb95e7df9d45fdda8fce4cd154ede52d4618c707ced2891f077abbcd7d799f",
+            "Fe_scf.nml": "5e53751adb87e119eec17b7b4eb9d38719c751370986cec19acbd254864515eb"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "CONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "1d7661194ab071ac32400bf5daeb6489b936151db653bfe5eb8a9b9808a12553",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "spectral",
+            "name": "u2_spectral_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "5e53751adb87e119eec17b7b4eb9d38719c751370986cec19acbd254864515eb",
+              "records.csv": "e1fb95e7df9d45fdda8fce4cd154ede52d4618c707ced2891f077abbcd7d799f",
+              "stdout.log": "ebadbcad2cea7b2eab08c665a15cce8b6ba245ae356a71655ed430331b269d7b"
+            },
+            "r05_latest_physical": true,
+            "r05_latest_streak": 13,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "PASS",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "5e53751adb87e119eec17b7b4eb9d38719c751370986cec19acbd254864515eb",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 2.0
+          }
+        },
+        "2.05": {
+          "name": "u2.05_spectral_standard",
+          "path": "/private/tmp/a5-priority-ks-main-grid/u2.05_spectral_standard",
+          "candidate_F_Ry": -2541.850386322766,
+          "t_Ry": -0.2621335221498775,
+          "hashes": {
+            "input.nml": "04b540556502ef01b571f9dee0ef62425544cee517692a55136a14274780f0d3",
+            "stdout.log": "2ea8cef39ee46adee139cd9a02f17b868e070ceed90e1f11fc81a9680fcb156d",
+            "records.csv": "ed23d93fce310f2ef76fdad4db0bb0e72a849d4b91aa4b404866cbf6c52545b2",
+            "Fe_scf.nml": "b8cae5aafc763cb05eae8a018e598df821920104f8c0413b8a8d151648a052f0"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "CONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "840e9b8437fe2f590d4388779b6803b58da945667b2e362beacc67bf239fe115",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "spectral",
+            "name": "u2.05_spectral_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "b8cae5aafc763cb05eae8a018e598df821920104f8c0413b8a8d151648a052f0",
+              "records.csv": "ed23d93fce310f2ef76fdad4db0bb0e72a849d4b91aa4b404866cbf6c52545b2",
+              "stdout.log": "2ea8cef39ee46adee139cd9a02f17b868e070ceed90e1f11fc81a9680fcb156d"
+            },
+            "r05_latest_physical": true,
+            "r05_latest_streak": 9,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "PASS",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "b8cae5aafc763cb05eae8a018e598df821920104f8c0413b8a8d151648a052f0",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 2.05
+          }
+        },
+        "2.1": {
+          "name": "u2.1_spectral_standard",
+          "path": "/private/tmp/a5-m22m23-remaining-ks-grid/u2.1_spectral_standard",
+          "candidate_F_Ry": -2541.847167447809,
+          "t_Ry": -0.2696318090984067,
+          "hashes": {
+            "input.nml": "7f6ff86674c32a238dbc339f83691afd0f1091a6b8613a6b876bfe7f9412479d",
+            "stdout.log": "523aeabc0cea261a372aad58e53eb99ea59b26d8a4dc054869b1f31829d1cc9e",
+            "records.csv": "a18c96a4a3b8edb596853a55ad9493ac44b241dd09175e4ffb94a75735bd797a",
+            "Fe_scf.nml": "c9020bc13c2016e5ae9317b26a5bc7b9956ff8dd4e554b3ed9b2a76ca26f79ce"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "CONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "6201764339a136fbe60719665d2dac633f2a51eebd9dd8d6f2786a9f6f9580ae",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "spectral",
+            "name": "u2.1_spectral_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "c9020bc13c2016e5ae9317b26a5bc7b9956ff8dd4e554b3ed9b2a76ca26f79ce",
+              "records.csv": "a18c96a4a3b8edb596853a55ad9493ac44b241dd09175e4ffb94a75735bd797a",
+              "stdout.log": "523aeabc0cea261a372aad58e53eb99ea59b26d8a4dc054869b1f31829d1cc9e"
+            },
+            "r05_latest_physical": true,
+            "r05_latest_streak": 9,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "PASS",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "c9020bc13c2016e5ae9317b26a5bc7b9956ff8dd4e554b3ed9b2a76ca26f79ce",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 2.1
+          }
+        }
+      },
+      "D_h0.05_Ry_per_eV": 0.06492824873930658,
+      "D_h0.10_Ry_per_eV": 0.06477137809952183,
+      "D_Richardson_Ry_per_eV": 0.06498053895256817,
+      "Richardson_correction_from_h0.05_Ry_per_eV": 5.229021326158545e-05,
+      "tight_repeat": {
+        "D_h005_Ry_per_eV": 0.06492823237294942,
+        "standard_minus_tight_Ry_per_eV": 1.6366357158403844e-08,
+        "paths": [
+          "/private/tmp/a5-m22m23-remaining-ks-grid/u1.95_spectral_tight",
+          "/private/tmp/a5-m22m23-remaining-ks-grid/u2.05_spectral_tight"
+        ]
+      },
+      "full_delta_grid_D_Ry_per_eV": {
+        "0.05": 0.06492824873930658,
+        "0.1": 0.06477137809952183,
+        "0.2": 0.06440850426770339,
+        "0.4": 0.06398494610607486
+      }
+    },
+    "spectral:candidate_c": {
+      "center_U_eV": 2,
+      "candidate": "c",
+      "candidate_energy_values": {
+        "1.9": {
+          "name": "u1.9_spectral_standard",
+          "path": "/private/tmp/a5-m22m23-remaining-ks-grid/u1.9_spectral_standard",
+          "candidate_F_Ry": -2542.100223537447,
+          "t_Ry": -0.2401018140178499,
+          "hashes": {
+            "input.nml": "1a3368d8d8ab2251c1862eee303b527a4e9abdc2dc475e4ae4eb0088fde82dc4",
+            "stdout.log": "b5ccb981f74a112e439cbca748798dbab943fe6f51fb8ea29f0149f893911cfc",
+            "records.csv": "674574a334bd7ee192da53eda03882b2fa5efc006057a1cb78e435d01147fc36",
+            "Fe_scf.nml": "80882f72d9a62b3f5eea8093c2d044bd9f8c0f950694896cdecc28691e6beeaf"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "CONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "5152be1af3a0839a98d26a66f8932168070556df2e291486fc46b1bb999d9894",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "spectral",
+            "name": "u1.9_spectral_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "80882f72d9a62b3f5eea8093c2d044bd9f8c0f950694896cdecc28691e6beeaf",
+              "records.csv": "674574a334bd7ee192da53eda03882b2fa5efc006057a1cb78e435d01147fc36",
+              "stdout.log": "b5ccb981f74a112e439cbca748798dbab943fe6f51fb8ea29f0149f893911cfc"
+            },
+            "r05_latest_physical": true,
+            "r05_latest_streak": 10,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "PASS",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "80882f72d9a62b3f5eea8093c2d044bd9f8c0f950694896cdecc28691e6beeaf",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 1.9
+          }
+        },
+        "1.95": {
+          "name": "u1.95_spectral_standard",
+          "path": "/private/tmp/a5-priority-ks-main-grid/u1.95_spectral_standard",
+          "candidate_F_Ry": -2542.10414997254,
+          "t_Ry": -0.2472708248996794,
+          "hashes": {
+            "input.nml": "1588693ac3b6b60ff52df4e538c84b1590ea10a22930b3ed66d63b1b73953344",
+            "stdout.log": "7124a608c5949bb2487654852874b2b0d8ee0df67baceb8377a4bc1e0ef33ab4",
+            "records.csv": "f73f464f29baa9a4543a0e8777fe6329a35311b3f4c2579ba9dfaa8c6e50fe77",
+            "Fe_scf.nml": "4c67209c30d0c209bd578e1c542a9c5d3c2c6ea9ac8ffaf95f0fb74a7acdceb7"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "CONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "7b5f44f644c34b3a0d8f0dd817ec8953861fc3ec03664043e60fc6ed14f0e55d",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "spectral",
+            "name": "u1.95_spectral_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "4c67209c30d0c209bd578e1c542a9c5d3c2c6ea9ac8ffaf95f0fb74a7acdceb7",
+              "records.csv": "f73f464f29baa9a4543a0e8777fe6329a35311b3f4c2579ba9dfaa8c6e50fe77",
+              "stdout.log": "7124a608c5949bb2487654852874b2b0d8ee0df67baceb8377a4bc1e0ef33ab4"
+            },
+            "r05_latest_physical": true,
+            "r05_latest_streak": 8,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "PASS",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "4c67209c30d0c209bd578e1c542a9c5d3c2c6ea9ac8ffaf95f0fb74a7acdceb7",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 1.95
+          }
+        },
+        "2": {
+          "name": "u2_spectral_standard",
+          "path": "/private/tmp/a5-priority-ks-main-grid/u2_spectral_standard",
+          "candidate_F_Ry": -2542.108269308643,
+          "t_Ry": -0.2546409525546395,
+          "hashes": {
+            "input.nml": "dfea2c3abf5ade47580bc9d7919ba1a3371c71704cd1910ddc677b5a72fc42bb",
+            "stdout.log": "ebadbcad2cea7b2eab08c665a15cce8b6ba245ae356a71655ed430331b269d7b",
+            "records.csv": "e1fb95e7df9d45fdda8fce4cd154ede52d4618c707ced2891f077abbcd7d799f",
+            "Fe_scf.nml": "5e53751adb87e119eec17b7b4eb9d38719c751370986cec19acbd254864515eb"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "CONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "1d7661194ab071ac32400bf5daeb6489b936151db653bfe5eb8a9b9808a12553",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "spectral",
+            "name": "u2_spectral_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "5e53751adb87e119eec17b7b4eb9d38719c751370986cec19acbd254864515eb",
+              "records.csv": "e1fb95e7df9d45fdda8fce4cd154ede52d4618c707ced2891f077abbcd7d799f",
+              "stdout.log": "ebadbcad2cea7b2eab08c665a15cce8b6ba245ae356a71655ed430331b269d7b"
+            },
+            "r05_latest_physical": true,
+            "r05_latest_streak": 13,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "PASS",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "5e53751adb87e119eec17b7b4eb9d38719c751370986cec19acbd254864515eb",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 2.0
+          }
+        },
+        "2.05": {
+          "name": "u2.05_spectral_standard",
+          "path": "/private/tmp/a5-priority-ks-main-grid/u2.05_spectral_standard",
+          "candidate_F_Ry": -2542.112519844916,
+          "t_Ry": -0.2621335221498775,
+          "hashes": {
+            "input.nml": "04b540556502ef01b571f9dee0ef62425544cee517692a55136a14274780f0d3",
+            "stdout.log": "2ea8cef39ee46adee139cd9a02f17b868e070ceed90e1f11fc81a9680fcb156d",
+            "records.csv": "ed23d93fce310f2ef76fdad4db0bb0e72a849d4b91aa4b404866cbf6c52545b2",
+            "Fe_scf.nml": "b8cae5aafc763cb05eae8a018e598df821920104f8c0413b8a8d151648a052f0"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "CONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "840e9b8437fe2f590d4388779b6803b58da945667b2e362beacc67bf239fe115",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "spectral",
+            "name": "u2.05_spectral_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "b8cae5aafc763cb05eae8a018e598df821920104f8c0413b8a8d151648a052f0",
+              "records.csv": "ed23d93fce310f2ef76fdad4db0bb0e72a849d4b91aa4b404866cbf6c52545b2",
+              "stdout.log": "2ea8cef39ee46adee139cd9a02f17b868e070ceed90e1f11fc81a9680fcb156d"
+            },
+            "r05_latest_physical": true,
+            "r05_latest_streak": 9,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "PASS",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "b8cae5aafc763cb05eae8a018e598df821920104f8c0413b8a8d151648a052f0",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 2.05
+          }
+        },
+        "2.1": {
+          "name": "u2.1_spectral_standard",
+          "path": "/private/tmp/a5-m22m23-remaining-ks-grid/u2.1_spectral_standard",
+          "candidate_F_Ry": -2542.116799256908,
+          "t_Ry": -0.2696318090984067,
+          "hashes": {
+            "input.nml": "7f6ff86674c32a238dbc339f83691afd0f1091a6b8613a6b876bfe7f9412479d",
+            "stdout.log": "523aeabc0cea261a372aad58e53eb99ea59b26d8a4dc054869b1f31829d1cc9e",
+            "records.csv": "a18c96a4a3b8edb596853a55ad9493ac44b241dd09175e4ffb94a75735bd797a",
+            "Fe_scf.nml": "c9020bc13c2016e5ae9317b26a5bc7b9956ff8dd4e554b3ed9b2a76ca26f79ce"
+          },
+          "receipt": {
+            "asset_input_sha256": {
+              "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+              "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+              "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+              "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+              "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+              "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+            },
+            "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+            "case_status": "CONVERGED",
+            "converged": true,
+            "converged_marker_count": 1,
+            "finite_entropy_TS": true,
+            "input_sha256": "6201764339a136fbe60719665d2dac633f2a51eebd9dd8d6f2786a9f6f9580ae",
+            "j": 0.0,
+            "ks_branch": true,
+            "mode": "spectral",
+            "name": "u2.1_spectral_standard",
+            "output_sha256": {
+              "Fe_scf.nml": "c9020bc13c2016e5ae9317b26a5bc7b9956ff8dd4e554b3ed9b2a76ca26f79ce",
+              "records.csv": "a18c96a4a3b8edb596853a55ad9493ac44b241dd09175e4ffb94a75735bd797a",
+              "stdout.log": "523aeabc0cea261a372aad58e53eb99ea59b26d8a4dc054869b1f31829d1cc9e"
+            },
+            "r05_latest_physical": true,
+            "r05_latest_streak": 9,
+            "r05_required": true,
+            "r05_required_streak": 3,
+            "r05_status": "PASS",
+            "returncode": 0,
+            "runtime_Fe_out_sha256": "c9020bc13c2016e5ae9317b26a5bc7b9956ff8dd4e554b3ed9b2a76ca26f79ce",
+            "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+            "source_sha256": {
+              "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+              "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+              "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+              "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+              "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+            },
+            "tight": false,
+            "u": 2.1
+          }
+        }
+      },
+      "D_h0.05_Ry_per_eV": -0.08369872375624254,
+      "D_h0.10_Ry_per_eV": -0.08287859730444325,
+      "D_Richardson_Ry_per_eV": -0.08397209924017564,
+      "Richardson_correction_from_h0.05_Ry_per_eV": -0.0002733754839330943,
+      "tight_repeat": {
+        "D_h005_Ry_per_eV": -0.08369873709852982,
+        "standard_minus_tight_Ry_per_eV": 1.3342287275008857e-08,
+        "paths": [
+          "/private/tmp/a5-m22m23-remaining-ks-grid/u1.95_spectral_tight",
+          "/private/tmp/a5-m22m23-remaining-ks-grid/u2.05_spectral_tight"
+        ]
+      },
+      "full_delta_grid_D_Ry_per_eV": {
+        "0.05": -0.08369872375624254,
+        "0.1": -0.08287859730444325,
+        "0.2": -0.08052999310734776,
+        "0.4": -0.07763239257769783
+      }
+    }
+  },
+  "full_delta_grid": {
+    "method": "central h=.05,.10,.20,.40 eV from the preregistered U values; adjacent O(h^2) Richardson estimates are retained as resolution diagnostics",
+    "cases": {
+      "local:candidate_b": {
+        "central_derivatives_Ry_per_eV": {
+          "0.05": 0.055097790250329126,
+          "0.1": 0.05509807944918066,
+          "0.2": 0.05508656826236802,
+          "0.4": 0.05519713239266366
+        },
+        "adjacent_Richardson_Ry_per_eV": {
+          "0.05_0.1": 0.05509769385071195,
+          "0.1_0.2": 0.05510191651145154,
+          "0.2_0.4": 0.05504971355226947
+        }
+      },
+      "spectral:candidate_a": {
+        "central_derivatives_Ry_per_eV": {
+          "0.05": 0.06492824873930658,
+          "0.1": 0.06477137809952183,
+          "0.2": 0.06440850426770339,
+          "0.4": 0.06398494610607486
+        },
+        "adjacent_Richardson_Ry_per_eV": {
+          "0.05_0.1": 0.06498053895256817,
+          "0.1_0.2": 0.0648923360434613,
+          "0.2_0.4": 0.06454969032157958
+        }
+      },
+      "spectral:candidate_c": {
+        "central_derivatives_Ry_per_eV": {
+          "0.05": -0.08369872375624254,
+          "0.1": -0.08287859730444325,
+          "0.2": -0.08052999310734776,
+          "0.4": -0.07763239257769783
+        },
+        "adjacent_Richardson_Ry_per_eV": {
+          "0.05_0.1": -0.08397209924017564,
+          "0.1_0.2": -0.08366146537014174,
+          "0.2_0.4": -0.08149585995056441
+        }
+      }
+    }
+  },
+  "direct_P_energy_audit": {
+    "path": "/private/tmp/a5-direct-p-u-audit/direct_p_u_audit.json",
+    "sha256": "7b8fc88e911bc6dcebc59044e7ec791db4ffe2ad335b0720d1ebe99f2ce2770e",
+    "max_abs_EHub_logger_delta_Ry": 4.163336342344337e-17,
+    "max_abs_t_logger_delta_Ry": 5.551115123125783e-17
+  }
+}

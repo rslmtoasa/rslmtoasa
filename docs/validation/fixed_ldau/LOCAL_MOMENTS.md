@@ -1418,3 +1418,35 @@ allowance, the user-approved A5.3 adoption rule applies. For A5.5, the
 observables are descriptive and do not independently gate energy adoption;
 they resolve whether the reported magnetic-moment difference survives
 identical integration and convergence definitions.
+
+## A4.4 current-stage status (2026-10-17)
+
+The native reciprocal KS M2.2/M2.3 numerical comparison passes at the
+user-approved scope label “valid to the ASA base-functional accuracy measured
+in A5.1.” The selected candidate is
+`b = F_local + E_Hub(P_OUT)`: local-mode base free energy plus the production
+Hubbard functional evaluated on the exact direct output density matrix. This
+is a scoped numerical result, not a claim that the radial `SUMEV` term has an
+exact universal double-counting identity. Candidate c is outside the
+registered allowance; candidate a is report-only, and no a-versus-b claim is
+made.
+
+At U=2 eV, J=0, the local b derivative is `+0.0550976939 Ry/eV` versus the
+direct-P production target `+0.0552396891 Ry/eV`; the residual
+`−0.0001419952 Ry/eV` lies within the fine-grid local ASA allowance
+`[0.00102115, 0.00155303] Ry/eV`. At J=0.5 and 0.9 eV, local b residuals are
+`−0.0003734601` and `+0.0001251389 Ry/eV`, within the respective registered
+allowances `[0.00118574,0.00174694]` and `[0.00117606,0.00258153] Ry/eV`.
+Spectral c is outside its registered allowance at U and both J centers. The
+complete values and provenance are linked in
+[the U result](evidence/a5_m22_u2_derivative_result.md),
+[the J result](evidence/a5_m23_j_derivative_result.md),
+[the preregistered allowance](evidence/a5_m22_numeric_allowance_preregistration.md),
+and [the A4.3 table](evidence/a4_3_like_for_like_observables.md).
+
+A4.4 source implementation and its restart/MPI reproducibility checks are
+pending. The authorized eligible path is fixed Liechtenstein U/J, native
+reciprocal KS, scalar-collinear `nsp=1`; RS remains guarded until its own M1
+and M2 pass. SOC/noncollinear states, self-consistent U, and intersite V are
+excluded. The earlier verbatim A4/A5 amendments and historical evidence above
+are unchanged.

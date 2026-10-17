@@ -1,0 +1,43 @@
+{
+  "status": "A5.4_W2_HF_DIAGNOSTIC_ONLY",
+  "free_energy_formula": "F(lambda)=ETOT+lambda*sum_s Tr(W2 P_s)-TS",
+  "lambda_half_width_ry": 0.01,
+  "endpoints": {
+    "-0.01": {
+      "ETOT_ry": -2541.9815158459055,
+      "TS_ry": 0.00009688935174454278,
+      "tr_wp_sum": 0.3712457147703938,
+      "F_ry": -2541.985325192405,
+      "tr_wp_capture_rounding_bound": 2e-15
+    },
+    "+0.01": {
+      "ETOT_ry": -2541.981542131514,
+      "TS_ry": 0.00009030297797852622,
+      "tr_wp_sum": 0.22061494682780927,
+      "F_ry": -2541.9794262850237,
+      "tr_wp_capture_rounding_bound": 2e-15
+    }
+  },
+  "central_finite_difference_slope_ry_per_ry": 0.2949453690689552,
+  "central_zero_field_target": {
+    "tr_w2_p": 0.29585118779267284,
+    "by_spin": {
+      "1": 0.2690576703568951,
+      "2": 0.026793517435777736
+    },
+    "input_sha256": "ebc750a1674d9dbe9a7b28993814fb6fffea6bebc641c8cf7845c3173fffd483",
+    "trace_sha256": "a59fd1474a6f86a01e51d64a5a375f1bf6304f50ad0c6a8888456eeb68305d5a",
+    "initial_seed_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+    "final_restart_sha256": "7f1222f106b6693407476cb11a064cfeac27fe348233cc585fd8d1277fa888b9",
+    "provenance": "A5.2 native-KS lambda=0, 300 K, 12^3, local moments, U=J=0, conv_thr=1e-9; posthoc W2 contraction against direct P_OUT. W1 test field is physically inactive at lambda=0."
+  },
+  "slope_minus_target_ry_per_ry": -0.000905818723717644,
+  "relative_minus_target": -0.0030617376610041717,
+  "endpoint_mean_tr_wp_descriptive_only": 0.2959303307991015,
+  "serialization_roundoff_estimate_ry_per_ry": 1e-10,
+  "limitations": [
+    "Serialization/accumulation estimate excludes endpoint SCF sensitivity.",
+    "O(h^2) central finite-difference truncation is not quantified; no smaller-step slope was run.",
+    "Diagnostic only; no HF slope gate or production change."
+  ]
+}

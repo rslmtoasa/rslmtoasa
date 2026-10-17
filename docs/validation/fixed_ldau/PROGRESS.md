@@ -9,6 +9,25 @@ superseded by A1.” The RS no-U reference did not converge and remains a
 separate backend task. No local-moment correction or physical-energy change is
 applied.
 
+## Current fixed-U energy stage
+
+KS M2.2/M2.3 numerical comparison is PASS at the limited label “valid to the
+ASA base-functional accuracy measured in A5.1.” Candidate b, local base free
+energy plus production `E_Hub` evaluated on direct `P_OUT`, agrees with the
+fixed-P production derivative at U=2,J=0 and J=0.5/0.9 within the registered
+charge-only ASA allowances; candidate c is outside allowance and candidate a
+is report-only. This does not claim an a-versus-b preference or an exact
+general radial energy identity. See the [U result](evidence/a5_m22_u2_derivative_result.md),
+[J result](evidence/a5_m23_j_derivative_result.md), and
+[A4.3 observables](evidence/a4_3_like_for_like_observables.md).
+
+The approved routing implementation and restart/MPI reproducibility checks
+are still pending. The intended eligible scope is native reciprocal KS,
+fixed Liechtenstein U/J, scalar-collinear nsp=1 only. RS remains guarded until
+its own M1/M2 pass; SOC/noncollinear, SC-U, and intersite-V remain excluded.
+Historical phase summaries below are retained as historical records; the
+current gate disposition is in [REMEDIATION_GATES.md](REMEDIATION_GATES.md).
+
 M0.1 finite-H RS/KS M1 extraction oracles and two-site mapping controls pass
 as class-B probes, both serially and in the targeted two-rank MPI tests; see
 [the machine-readable measurements](evidence/m0_1_finite_operator.json).
