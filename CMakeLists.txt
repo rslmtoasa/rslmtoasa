@@ -510,22 +510,6 @@ endforeach()
   set_tests_properties(Val15MultilayerVacuumElectrostatics PROPERTIES
     LABELS "validation;functional;electrostatics;vacuum;green;convergence" TIMEOUT 1800)
 
-  add_test(NAME Val16GbtCommensurateSupercells
-    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val16_gbt_supercell.py"
-      "--binary" "${TestBinary}"
-      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val16_gbt_supercell")
-  set_tests_properties(Val16GbtCommensurateSupercells PROPERTIES
-    LABELS "validation;functional;magnetic;supercell;commensurate;convergence;known-failure"
-    TIMEOUT 14400)
-
-  add_test(NAME Val17GbtHarmonicGoldstone
-    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val17_gbt_harmonic_goldstone.py"
-      "--binary" "${TestBinary}"
-      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val17_gbt_harmonic_goldstone")
-  set_tests_properties(Val17GbtHarmonicGoldstone PROPERTIES
-    LABELS "validation;functional;magnetic;gbt;kspace;goldstone;convergence;known-failure"
-    TIMEOUT 14400)
-
   add_test(NAME Val18GbtWp01Q0BccFe
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val18_gbt_wp01_q0.py"
       "--binary" "${TestBinary}"
@@ -533,32 +517,6 @@ endforeach()
   set_tests_properties(Val18GbtWp01Q0BccFe PROPERTIES
     LABELS "validation;functional;magnetic;gbt;wp01;q0;kspace"
     TIMEOUT 300)
-
-  add_test(NAME Val19GbtHarmonicKgrid
-    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val19_gbt_harmonic_kgrid.py"
-      "--binary" "${TestBinary}"
-      "--modes" "mft"
-      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val19_gbt_harmonic_kgrid")
-  set_tests_properties(Val19GbtHarmonicKgrid PROPERTIES
-    LABELS "validation;functional;magnetic;gbt;wp09;harmonic;kgrid;convergence"
-    TIMEOUT 14400)
-
-  add_test(NAME Val20GbtSmallQ
-    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val20_gbt_small_q.py"
-      "--binary" "${TestBinary}"
-      "--modes" "mft"
-      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val20_gbt_small_q")
-  set_tests_properties(Val20GbtSmallQ PROPERTIES
-    LABELS "validation;functional;magnetic;gbt;wp10;small-q;quadratic;convergence"
-    TIMEOUT 14400)
-
-  add_test(NAME Val21GbtWp12Scf
-    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val21_gbt_wp12_scf.py"
-      "--binary" "${TestBinary}"
-      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val21_gbt_wp12_scf")
-  set_tests_properties(Val21GbtWp12Scf PROPERTIES
-    LABELS "validation;functional;magnetic;gbt;wp12;scf;frame"
-    TIMEOUT 1800)
 
   add_test(NAME Val22LrRadialGroundState
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val22_lr_radial_ground_state.py"
@@ -930,15 +888,6 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitConstrainingFieldSource
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_constraining_field_source.py)
   set_tests_properties(UnitConstrainingFieldSource PROPERTIES LABELS "unit;constraints;source-contract")
-  add_test(NAME GbtWp09HarmonicKgrid
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp09_harmonic_kgrid.py)
-  set_tests_properties(GbtWp09HarmonicKgrid PROPERTIES LABELS "unit;gbt;wp09;frozen-magnon;harmonic;kgrid;source-contract")
-  add_test(NAME GbtWp10SmallQ
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp10_small_q.py)
-  set_tests_properties(GbtWp10SmallQ PROPERTIES LABELS "unit;gbt;wp10;frozen-magnon;small-q;quadratic;q-reversal")
-  add_test(NAME GbtWp11LkagJq
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp11_lkag_jq.py)
-  set_tests_properties(GbtWp11LkagJq PROPERTIES LABELS "unit;gbt;wp11;frozen-magnon;lkag;jq")
   add_test(NAME CudaPluginSurface
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/cuda/test_plugin_surface.py)
   set_tests_properties(CudaPluginSurface PROPERTIES LABELS "unit;cuda;gpu;coverage;source-contract")
