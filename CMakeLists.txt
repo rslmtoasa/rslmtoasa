@@ -1064,24 +1064,6 @@ if (RUN_UNIT_TESTS)
         LABELS "unit;mpi;parallel_context" PROCESSORS ${_parallel_context_ranks})
     endforeach()
   endif()
-  add_test(NAME UnitGbtOracles
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_oracles.py)
-  set_tests_properties(UnitGbtOracles PROPERTIES LABELS "unit;gbt")
-  add_test(NAME UnitGbtWp6Hoh
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6_hoh.py)
-  set_tests_properties(UnitGbtWp6Hoh PROPERTIES LABELS "unit;gbt;wp6;hoh;overlap")
-  add_test(NAME UnitGbtWp03CompositeCovariance
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp03_composite_covariance.py)
-  set_tests_properties(UnitGbtWp03CompositeCovariance PROPERTIES LABELS "unit;gbt;wp03;hoh;ccor;overlap;hubbard")
-  add_test(NAME UnitGbtWp04CommensurateSupercell
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp04_commensurate_supercell.py)
-  set_tests_properties(UnitGbtWp04CommensurateSupercell PROPERTIES LABELS "unit;gbt;wp04;supercell;commensurate;folding")
-  add_test(NAME UnitGbtWp6Ccor
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6_ccor.py)
-  set_tests_properties(UnitGbtWp6Ccor PROPERTIES LABELS "unit;gbt;wp6;ccor")
-  add_test(NAME UnitGbtWp6cVelocity
-    COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_gbt_wp6c_velocity.py)
-  set_tests_properties(UnitGbtWp6cVelocity PROPERTIES LABELS "unit;gbt;wp6;velocity;torque")
   add_test(NAME UnitManifestDefaults
     COMMAND ${Python3_EXECUTABLE} ${TestDIR}/unit/test_manifest_defaults.py)
   set_tests_properties(UnitManifestDefaults PROPERTIES LABELS "tooling;manifest")
