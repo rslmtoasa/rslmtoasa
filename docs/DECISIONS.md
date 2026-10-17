@@ -156,3 +156,7 @@ documents at `lr-campaign-archive-2026-10:docs/linear_response/`.
   proportional to the asymmetry; with the Fe projector factors −7.1e-5 Ry,
   same sign as Gate 1). Consequence: SOC gaps below about 1e-5 Ry cannot be
   measured with the projected vertex; FePt (1–3e-4 Ry) was not attempted.
+
+## GBT k-space restart, from 2026-10-17
+
+- 2026-10-17 — GBT restart opened (spec `cleanup/gbt_kspace_restart_spec.md`, branch `fable_v4b_gbt`); old GBT tests, fixtures and analysis tools archived at tag `gbt-campaign-archive-2026-10`.

@@ -24,10 +24,15 @@ the case-file format and how to add cases:
 campaigns and are not registered in CTest unless noted; each has its own
 README:
 
-- `gbt_wp01`, `gbt_wp2`, `gbt_wp5`, `gbt_wp6`, `gbt_wp6b`, `gbt_wp8_constraint`
-  — GBT work-package probes (see the GBT rows in `docs/DECISIONS.md`).
+- `gbt_wp01` — fixture read by `Val18GbtWp01Q0BccFe`.
 - `gbt_wp6_constraint` — fixture for `UnitGbtConstraintCovariance`.
-- `gbt_wp6_matrix` — feature matrix kept in step by `test_gbt_wp6_matrix.py`.
+- `gbt/fixtures` — two bcc Fe supercell lattices (q = 1/2 and 1/3) kept as inputs for
+  the k-space GBT commensurate-folding test.
+
+The GBT test set is being restarted under `cleanup/gbt_kspace_restart_spec.md`
+(slices, relations R1–R12, slim test list). The old GBT tests, fixtures, runners
+and analysis tools are removed from the tree and stay at tag
+`gbt-campaign-archive-2026-10`.
 - `magnetic_scf` — XCR-04 historical `nsp=2`, q = 0 magnetic SCF campaign.
 - `xc_reconciliation` — XCR-01 fixed-density XC reconciliation.
 
@@ -77,10 +82,10 @@ The unit tests exist only in a `-DRUN_UNIT_TESTS=ON` build. The two fast
 regression cases `bccFe_block_fast_sp` and `bccFe_chebyshev_fast_hoh` are
 kept out while they fail (`KNOWN_ISSUES.md`). The full suites run at the end
 of each stage in a fresh build.
-The historical WP8/WP9 decks and runners remain under
-`tests/regression/wp8_littlegroup/` and `tests/regression/wp9_validation/` for
-scientific reference, but are not registered in the active CTest harness.
-They require a separate validation decision before being run again.
+The historical WP8 deck remains under `tests/regression/wp8_littlegroup/` for
+scientific reference (its runner was removed in the GBT restart), but is not
+registered in the active CTest harness. It requires a separate validation
+decision before being run again.
 
 ## Regenerating references
 

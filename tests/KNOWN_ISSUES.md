@@ -1823,3 +1823,13 @@ campaign remain outside the established scope.
 - **Likely cause (read, not tested):** `source/symmetry.f90` passes `lattice%iz(i)` to spglib as the species, and the two sites carry different type labels, so spglib sees two species.
 - **Consequence:** the log reports the symmetry of the labelled structure, so differently labelled types of one element count as different species. Check physical inversion
   with spglib and element labels.
+
+## GBT: suspected double sign flip for sites with `mom(3) < 0` (F1) — 2026-10-17
+
+Found by reading, not by running. Not diagnosed; the real-space GBT route is frozen for the restart (`cleanup/gbt_kspace_restart_spec.md`).
+
+- **Read in the source (verified by reading):** `gbt_endpoint_angles` (`source/hamiltonian_build.f90:1814`) sets `axis_sign = -1` when `potential%mom(3) < 0`, and in the same branch returns `theta = pi - theta_ss`, `phi = pi`. `build_gbt_bulkham` passes that angle pair to `gbt_endpoint_link` (frame rotation) and `axis_sign` to `gbt_contract_collinear` and to the onsite term `cx0 +/- sign*cx1` (`:1607-1640`). In `gbt_contract_collinear` (`source/gbt_structure.f90:245`) the sign swaps which of `wx0 +/- wx1` multiplies the lab spin-up and spin-down rows. `set_probe_angles` (`source/calculation.f90:1806`) uses the same pattern: `theta -> pi - theta_probe`, `phi -> phi + pi` when `ref_theta > pi/2`.
+- **Algebra (by hand, not run):** at `theta_ss = 0` the frame for such a site is a pi rotation, which exchanges the local spin-up and spin-down channels, and `axis_sign = -1` exchanges the `wx0 +/- wx1` and `cx0 +/- cx1` assignment a second time. If `wx1`/`cx1` of that site are stored as for a majority-up site, the two exchanges cancel and the site's majority channel ends up on lab spin-up, i.e. parallel to a `mom(3) > 0` site instead of antiparallel.
+- **Not checked (guess):** whether the stored `wx1`/`cx1` of a `mom(3) < 0` site already follow a majority-first or a lab-spin convention. That decides whether the two flips cancel or are one intended flip. No test covers this branch: `UnitGbtWp01Q0` always passes sign = +1.
+- **Suspect in my own setup:** none yet; nothing was run.
+- **Diagnostic (spec slice D1, not yet run):** `tests/spin_response/cr_bcc` (two antiparallel sites), q = 0, theta = 0, one fixed-potential iteration each in (a) `periodic_nc` k-space, (b) `gbt_single_q` through the shared-`ee` k-space route, (c) `gbt_single_q` through real-space recursion; report the largest eigenvalue difference between (a) and (b) at five k-points, and the sign of each site moment in all three. Append the measured numbers here. Proposal only: the fix is parked until the developer unfreezes the route.
