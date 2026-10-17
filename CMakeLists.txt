@@ -1158,6 +1158,16 @@ register_example_tests(
 )
 
 add_test(
+  NAME AppGbtKspaceRsFreeze
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/run_rs_freeze.py"
+    --binary "${TestBinary}"
+    --scratch-root "${CMAKE_BINARY_DIR}/Testing/gbt/rs_freeze"
+)
+set_tests_properties(AppGbtKspaceRsFreeze PROPERTIES
+  LABELS "functional;gbt;rs" TIMEOUT 1200 SKIP_RETURN_CODE 77
+)
+
+add_test(
   NAME Example_si_chebyshev_kspace_dos_equivalence
   COMMAND
     "${EXAMPLE_PYTHON_EXECUTABLE}"
