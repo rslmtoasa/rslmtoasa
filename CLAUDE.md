@@ -26,12 +26,14 @@ new work: their numbers, conventions and tests are not references.
 
 1. **Bit-level behavior is the contract.** During development and before
    each commit, run the quick tier (`ctest -L '^quick$'`); it must pass.
-   At the end of each stage (not each step), run
-   `ctest -LE 'validation|performance'` in a fresh build; results must
-   match the previous such run, including known failures and their
-   values. Run the `validation` label only when the task touches what a
-   validation test covers, or when asked. CI runs the full suites on every
-   push.
+   Run the full `ctest -LE 'validation|performance'` only when the
+   developer asks. If you think a full run is suitable (for example after
+   a change to compiled code), say why in one line and ask; do not start it
+   unasked. Deletion-only and docs-only changes need the quick tier only. A full
+   run uses a fresh build, and its results must match the previous such
+   run, including known failures and their values. Run the `validation`
+   label only when the task touches what a validation test covers, or when
+   asked. CI runs the full suites on every push.
 2. **One task, one commit.** Don't batch unrelated changes into one commit. Only allow single line commit messages and do not add "Co-authored by".  If too complicated, ask.
 3. **KISS.** Write the smallest code that does the task. See "Simplicity".
 4. **Class-based architecture stays.** Derived types, constructors,
