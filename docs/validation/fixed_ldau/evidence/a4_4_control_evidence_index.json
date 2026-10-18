@@ -1,0 +1,242 @@
+{
+  "constraints_guard_pair": {
+    "classification": "guard-only PASS: identical restart/assets/binary; enabled case selected spectral and local_energy_adopted=false, then exited on expected zero-target fatal before SCF; constrained SCF untested.",
+    "enabled": "a4_4_constraints_guard_paired_enabled.json",
+    "positive": "a4_4_constraints_guard_paired_positive.json"
+  },
+  "matched_serial_mpi_pair": {
+    "note": "Distinct matched bundle: byte-identical input/restart/assets, separately run serial and two-rank MPI U=2,J=0 one-step endpoints.",
+    "receipt": "a4_4_matched_serial_mpi_repro.json",
+    "receipt_sha256": "2247ad3e5b68a74759861ae29625ef4d3db582cb063931652d159b7ea4a787f5"
+  },
+  "rs_scope_control": {
+    "receipt": "a4_4_rs_scope_control.json",
+    "receipt_sha256": "779a0aa4f9acd2e95ea3b81e45cc53f210c1f4cd4fec91016e1082b6244b75c7",
+    "summary": {
+      "binary_sha256": "3486220b5f38b7b3f0d2487a10c04c35504f8627bf875d15a426357aa234329d",
+      "case": {
+        "J_eV": 0.0,
+        "KS_TS_finite": true,
+        "KS_entropy_finite": true,
+        "P_OUT_rows": 0,
+        "P_OUT_sha256": null,
+        "U_eV": 2.0,
+        "assets_sha256_pre_run": {
+          "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+          "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+          "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+          "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+          "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+          "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+        },
+        "backend": "rs",
+        "binary_sha256": "3486220b5f38b7b3f0d2487a10c04c35504f8627bf875d15a426357aa234329d",
+        "case": "rs_u2_auto",
+        "constraints_enabled": false,
+        "direct_P_energy_helper": null,
+        "expected_local_energy_adopted": false,
+        "expected_resolved_mode": "spectral",
+        "fixed_UJ_fields_explicit": true,
+        "helper_minus_logged_E_Hub_Ry": null,
+        "input_sha256_pre_run": "99f6ca3f8eb0ac8f2962b9df769075e254846c5ea544c355fd38ec922572c9d5",
+        "local_energy_adopted": false,
+        "log_path": "/private/tmp/a5-a44-rs-control-final/rs_u2_auto/stdout.log",
+        "mode_runtime_fields": {
+          "local_energy_adopted": ".false.",
+          "mode": "spectral",
+          "source": "default",
+          "use_kspace": ".false."
+        },
+        "native_kspace_runtime_marker": false,
+        "observed_resolved_mode": "spectral",
+        "requested_mode": "auto_default",
+        "restart_sha256_pre_run": "b13d816769598d47ed8cb72b5b22dbd5ba29bf5f04cb4e530724c123289e9189",
+        "restart_source_sha256": "b13d816769598d47ed8cb72b5b22dbd5ba29bf5f04cb4e530724c123289e9189",
+        "returncode": 0,
+        "route_fields_raw": "E_int=  0.2746171457500114E+01 E_DC=  0.2637335359760599E+01 E_Hub=  0.1088360977395149E+00 E_Hub_P_OUT=  0.0000000000000000E+00 t_in_out= -0.2608812726341482E+00 t_U= -0.2608812726341482E+00 e_external=  0.0000000000000000E+00 t_total_actual_Vin= -0.2608812726341482E+00 base_physical_total_energy= -0.2542003984418374E+04 physical_total_energy= -0.2542003984418374E+04 candidate_a= -0.2541634267048000E+04 candidate_b=UNAVAILABLE candidate_c= -0.2541895148320634E+04 entropy=UNAVAILABLE_KS_ONLY TS=UNAVAILABLE_KS_ONLY candidate_a_F=UNAVAILABLE candidate_b_F=UNAVAILABLE candidate_c_F=UNAVAILABLE test_lambda_trace_wp=UNAVAILABLE test_F_local=UNAVAILABLE test_F_spectral=UNAVAILABLE candidate_status=PROVISIONAL_ONLY; unavailable candidates require the other radial representation",
+        "route_identity": {
+          "actual": "-2542.003984418374",
+          "base_field_matches_unmodified_site_ETOT": {
+            "actual": "-2542.003984418374",
+            "pass": true,
+            "residual": "0E-12",
+            "sum_operands": "-2542.003984418374",
+            "tolerance_ry": 7.275957614183426e-12
+          },
+          "candidate_energy_identities": {
+            "candidate_a": {
+              "actual": "-2541.634267048000",
+              "expected": "-2541.6342670480003369",
+              "label": "spectral candidate_a equals base ETOT - t + EHub",
+              "pass": true,
+              "residual": "3.369E-13",
+              "tolerance_ry": 7.275957614183426e-12
+            },
+            "candidate_c": {
+              "actual": "-2541.895148320634",
+              "expected": "-2541.8951483206344851",
+              "label": "spectral candidate_c equals base ETOT + EHub",
+              "pass": true,
+              "residual": "4.851E-13",
+              "tolerance_ry": 7.275957614183426e-12
+            }
+          },
+          "pass": true,
+          "residual": "0E-12",
+          "sum_operands": "-2542.003984418374",
+          "tolerance_ry": 7.275957614183426e-12
+        },
+        "runtime_output_sha256": {
+          "Fe_out.nml": "dd8da5436e3ef5fea6ad23d85a07a1ef4b96aea884bfa69ac2429631296ef984",
+          "Fe_scf.nml": "dd8da5436e3ef5fea6ad23d85a07a1ef4b96aea884bfa69ac2429631296ef984",
+          "records.csv": "44ccb9aa171602558a1ffab14f21588559488c5a42e85051da51b95456969e98",
+          "stdout.log": "8698f53fc408d44aaabcc255098af8d1dba1404d6774121a9967c9780648f615"
+        },
+        "site_energy_fields_raw": "site=1 type=1 E_int=  0.2746171457500114E+01 E_DC=  0.2637335359760599E+01 E_Hub=  0.1088360977395149E+00 t_in_out= -0.2608812726341482E+00 t_U= -0.2608812726341482E+00 e_external=  0.0000000000000000E+00 t_total_actual_Vin= -0.2608812726341482E+00 direct_trace_check=  0.0000000000000000E+00 ETOT_selected= -0.2542003984418374E+04 candidate_a= -0.2541634267048000E+04 candidate_b=UNAVAILABLE candidate_c= -0.2541895148320634E+04 candidate_F=UNAVAILABLE_GLOBAL_TS_NOT_SITE_DECOMPOSABLE candidate_status=PROVISIONAL_ONLY",
+        "test_lambda_Ry": 0.0,
+        "trace_path": "/private/tmp/a5-a44-rs-control-final/rs_u2_auto/records.csv",
+        "unmodified_site_ETOT_Ry": "-2542.003984418374"
+      },
+      "route_pass": true,
+      "source_hashes": {
+        "source/hamiltonian.f90": "410e799d4c5001f8c39b26d80b5435b265ae987a146a4457aa793e1162a0e837",
+        "source/hamiltonian_build.f90": "3af313bca28fa7e62024229a103244ebe631d01938c68e73f29b6a3f7e498f9b",
+        "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+        "source/include_codes/namelists/hamiltonian.f90": "ea9448c617daa5bc488d8fbd9ce559f6bde359bf0304dfbdc12347bc9c7a8e21",
+        "source/self.f90": "077150f760c546b229d04542caf99f488534b94382dab5408781618e9ea5e81e"
+      }
+    }
+  },
+  "schema": "a4_4_control_evidence_index_v1",
+  "serial_control_bundle": "/private/tmp/a5-a44-serial-controls-final (six individual one-step controls; interrupted combined runner after these receipts; raw outputs preserved)",
+  "serial_controls": [
+    {
+      "binary_sha256": "3486220b5f38b7b3f0d2487a10c04c35504f8627bf875d15a426357aa234329d",
+      "case": "ks_auto_local_serial",
+      "energy_helper_sha256": "757f72fd7b7e98df320b23a36d4d3d63f5d3efd042265cf027acc32e98d2b2ff",
+      "input_sha256_pre_run": "625fe68fc9264ecdb6575978624005947286d25887759bdfb6cae4573431076e",
+      "local_energy_adopted": true,
+      "receipt": "a4_4_ks_auto_local_serial.json",
+      "receipt_sha256": "2ccf41c1fe8bec884bfe88f623639b82fa106a8b58dc4e7f7803efe5456aa865",
+      "resolved_mode": "local",
+      "restart_sha256_pre_run": "b13d816769598d47ed8cb72b5b22dbd5ba29bf5f04cb4e530724c123289e9189",
+      "returncode": 0,
+      "route_identity_pass": true,
+      "source_sha256": {
+        "source/hamiltonian.f90": "410e799d4c5001f8c39b26d80b5435b265ae987a146a4457aa793e1162a0e837",
+        "source/hamiltonian_build.f90": "3af313bca28fa7e62024229a103244ebe631d01938c68e73f29b6a3f7e498f9b",
+        "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+        "source/include_codes/namelists/hamiltonian.f90": "ea9448c617daa5bc488d8fbd9ce559f6bde359bf0304dfbdc12347bc9c7a8e21",
+        "source/self.f90": "077150f760c546b229d04542caf99f488534b94382dab5408781618e9ea5e81e"
+      }
+    },
+    {
+      "binary_sha256": "3486220b5f38b7b3f0d2487a10c04c35504f8627bf875d15a426357aa234329d",
+      "case": "ks_auto_local_restart",
+      "energy_helper_sha256": "757f72fd7b7e98df320b23a36d4d3d63f5d3efd042265cf027acc32e98d2b2ff",
+      "input_sha256_pre_run": "625fe68fc9264ecdb6575978624005947286d25887759bdfb6cae4573431076e",
+      "local_energy_adopted": true,
+      "receipt": "a4_4_ks_auto_local_restart.json",
+      "receipt_sha256": "d075fed9c62f27460259617891ded95e1409857fca5b78182bfc0487f1eb80ba",
+      "resolved_mode": "local",
+      "restart_sha256_pre_run": "ef59612137ac10393af0bab2a973115e127e56cd72d45087b21ba433f77e1865",
+      "returncode": 0,
+      "route_identity_pass": true,
+      "source_sha256": {
+        "source/hamiltonian.f90": "410e799d4c5001f8c39b26d80b5435b265ae987a146a4457aa793e1162a0e837",
+        "source/hamiltonian_build.f90": "3af313bca28fa7e62024229a103244ebe631d01938c68e73f29b6a3f7e498f9b",
+        "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+        "source/include_codes/namelists/hamiltonian.f90": "ea9448c617daa5bc488d8fbd9ce559f6bde359bf0304dfbdc12347bc9c7a8e21",
+        "source/self.f90": "077150f760c546b229d04542caf99f488534b94382dab5408781618e9ea5e81e"
+      }
+    },
+    {
+      "binary_sha256": "3486220b5f38b7b3f0d2487a10c04c35504f8627bf875d15a426357aa234329d",
+      "case": "ks_explicit_spectral",
+      "energy_helper_sha256": "757f72fd7b7e98df320b23a36d4d3d63f5d3efd042265cf027acc32e98d2b2ff",
+      "input_sha256_pre_run": "b80a80d3c19141a0a8175cc24dbc6a4f681f99f319a31aa08c813e3b9a6e3822",
+      "local_energy_adopted": false,
+      "receipt": "a4_4_ks_explicit_spectral.json",
+      "receipt_sha256": "98ba59a807ed6c413db7604bcba2e2c407cbd08a1cb2b339130a25063229a03b",
+      "resolved_mode": "spectral",
+      "restart_sha256_pre_run": "b13d816769598d47ed8cb72b5b22dbd5ba29bf5f04cb4e530724c123289e9189",
+      "returncode": 0,
+      "route_identity_pass": true,
+      "source_sha256": {
+        "source/hamiltonian.f90": "410e799d4c5001f8c39b26d80b5435b265ae987a146a4457aa793e1162a0e837",
+        "source/hamiltonian_build.f90": "3af313bca28fa7e62024229a103244ebe631d01938c68e73f29b6a3f7e498f9b",
+        "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+        "source/include_codes/namelists/hamiltonian.f90": "ea9448c617daa5bc488d8fbd9ce559f6bde359bf0304dfbdc12347bc9c7a8e21",
+        "source/self.f90": "077150f760c546b229d04542caf99f488534b94382dab5408781618e9ea5e81e"
+      }
+    },
+    {
+      "binary_sha256": "3486220b5f38b7b3f0d2487a10c04c35504f8627bf875d15a426357aa234329d",
+      "case": "ks_explicit_local_nonzero_test_field",
+      "energy_helper_sha256": "757f72fd7b7e98df320b23a36d4d3d63f5d3efd042265cf027acc32e98d2b2ff",
+      "input_sha256_pre_run": "ed58631e737a96fb5a9fa8c56af5c92c7ba90af4b07794b990523961dbe47b1f",
+      "local_energy_adopted": false,
+      "receipt": "a4_4_ks_explicit_local_nonzero_test_field.json",
+      "receipt_sha256": "3ca37efc1358ceb0b1db6b543e5400dae632eeb4c60a9e2d1adda73a684c6008",
+      "resolved_mode": "local",
+      "restart_sha256_pre_run": "b13d816769598d47ed8cb72b5b22dbd5ba29bf5f04cb4e530724c123289e9189",
+      "returncode": 0,
+      "route_identity_pass": true,
+      "source_sha256": {
+        "source/hamiltonian.f90": "410e799d4c5001f8c39b26d80b5435b265ae987a146a4457aa793e1162a0e837",
+        "source/hamiltonian_build.f90": "3af313bca28fa7e62024229a103244ebe631d01938c68e73f29b6a3f7e498f9b",
+        "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+        "source/include_codes/namelists/hamiltonian.f90": "ea9448c617daa5bc488d8fbd9ce559f6bde359bf0304dfbdc12347bc9c7a8e21",
+        "source/self.f90": "077150f760c546b229d04542caf99f488534b94382dab5408781618e9ea5e81e"
+      }
+    },
+    {
+      "binary_sha256": "3486220b5f38b7b3f0d2487a10c04c35504f8627bf875d15a426357aa234329d",
+      "case": "ks_no_u_auto",
+      "energy_helper_sha256": "757f72fd7b7e98df320b23a36d4d3d63f5d3efd042265cf027acc32e98d2b2ff",
+      "input_sha256_pre_run": "af70eaaad4cdb71a99442b52721c0dec643b9f97dadb86c03aa7570b89e5b2b4",
+      "local_energy_adopted": false,
+      "receipt": "a4_4_ks_no_u_auto.json",
+      "receipt_sha256": "021bc454bb108b8af79484aeb9643455549cef39ac32803586c7b8a93563776e",
+      "resolved_mode": "spectral",
+      "restart_sha256_pre_run": "7f1222f106b6693407476cb11a064cfeac27fe348233cc585fd8d1277fa888b9",
+      "returncode": 0,
+      "route_identity_pass": true,
+      "source_sha256": {
+        "source/hamiltonian.f90": "410e799d4c5001f8c39b26d80b5435b265ae987a146a4457aa793e1162a0e837",
+        "source/hamiltonian_build.f90": "3af313bca28fa7e62024229a103244ebe631d01938c68e73f29b6a3f7e498f9b",
+        "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+        "source/include_codes/namelists/hamiltonian.f90": "ea9448c617daa5bc488d8fbd9ce559f6bde359bf0304dfbdc12347bc9c7a8e21",
+        "source/self.f90": "077150f760c546b229d04542caf99f488534b94382dab5408781618e9ea5e81e"
+      }
+    },
+    {
+      "binary_sha256": "3486220b5f38b7b3f0d2487a10c04c35504f8627bf875d15a426357aa234329d",
+      "case": "ks_explicit_zero_auto",
+      "energy_helper_sha256": "757f72fd7b7e98df320b23a36d4d3d63f5d3efd042265cf027acc32e98d2b2ff",
+      "input_sha256_pre_run": "86c803a627b301999cab75d53686f6a87461f0f923427177d2a8ed4cdf684b3a",
+      "local_energy_adopted": false,
+      "receipt": "a4_4_ks_explicit_zero_auto.json",
+      "receipt_sha256": "2648252a75a466c92d9ef9f10d2235b71ac6dacc6bf23f3739c82f2fde467a1c",
+      "resolved_mode": "spectral",
+      "restart_sha256_pre_run": "7f1222f106b6693407476cb11a064cfeac27fe348233cc585fd8d1277fa888b9",
+      "returncode": 0,
+      "route_identity_pass": true,
+      "source_sha256": {
+        "source/hamiltonian.f90": "410e799d4c5001f8c39b26d80b5435b265ae987a146a4457aa793e1162a0e837",
+        "source/hamiltonian_build.f90": "3af313bca28fa7e62024229a103244ebe631d01938c68e73f29b6a3f7e498f9b",
+        "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+        "source/include_codes/namelists/hamiltonian.f90": "ea9448c617daa5bc488d8fbd9ce559f6bde359bf0304dfbdc12347bc9c7a8e21",
+        "source/self.f90": "077150f760c546b229d04542caf99f488534b94382dab5408781618e9ea5e81e"
+      }
+    }
+  ],
+  "serial_controls_source_sha256": {
+    "source/hamiltonian.f90": "410e799d4c5001f8c39b26d80b5435b265ae987a146a4457aa793e1162a0e837",
+    "source/hamiltonian_build.f90": "3af313bca28fa7e62024229a103244ebe631d01938c68e73f29b6a3f7e498f9b",
+    "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+    "source/include_codes/namelists/hamiltonian.f90": "ea9448c617daa5bc488d8fbd9ce559f6bde359bf0304dfbdc12347bc9c7a8e21",
+    "source/self.f90": "077150f760c546b229d04542caf99f488534b94382dab5408781618e9ea5e81e"
+  }
+}

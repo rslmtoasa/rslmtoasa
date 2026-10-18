@@ -27,6 +27,7 @@ real(rp), dimension(:,:), allocatable :: hubbard_u_general, hubbard_j_general
 integer, dimension(:,:), allocatable :: hubbard_u_sc
 character(len=16) :: bounds_algorithm
 character(len=16) :: hubbard_u_potential_form
+! Omitted input uses an internal auto sentinel, resolved after backend selection.
 character(len=16) :: hubbard_radial_moments
 !> Explicit A4 test-only onsite d-shell operator selector and scale in Ry.
 character(len=16) :: hubbard_test_operator

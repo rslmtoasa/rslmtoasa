@@ -17,18 +17,26 @@ and endpoint provenance are in [the U result](evidence/a5_m22_u2_derivative_resu
 This is a scoped numerical identity test, not a derivation of an exact general
 ASA energy functional. In particular, it does not establish the radial
 `SUMEV` double-count coefficient/sign for every backend or representation.
-The eligible implementation scope is being limited to native reciprocal KS,
-fixed Liechtenstein U/J, scalar-collinear `nsp=1`; RS remains guarded pending
-its own M1/M2, and SOC/noncollinear, SC-U, and intersite-V paths remain
-excluded. The source routing change and restart/MPI reproducibility checks are
-pending; until they pass, production `physical_total_energy` routing is not
-claimed as complete.
+The implemented route is limited to ordinary native reciprocal KS
+(`use_kspace=.true.`, `calctype='B'`), clean bulk (`nbulk=0`, `nrec=ntype`),
+explicit fixed general Liechtenstein U/J, scalar-collinear `nsp=1`, `lmax=2`,
+and disabled constraints. SOC/noncollinear, HOH, self-consistent U, intersite
+V, impurity U, impurity/surface hosts, and nonzero test fields are excluded;
+RS remains on its guarded spectral path pending its own M1/M2. The scoped
+energy route and restart/serial-MPI checks pass. Individual serial route
+receipts, the distinct matched serial/MPI pair, and the RS spectral scope
+control are indexed in the [A4.4 control evidence](evidence/a4_4_control_evidence_index.json);
+the matched pair itself is [archived here](evidence/a4_4_matched_serial_mpi_repro.json).
+Constraints-enabled input reaches the spectral/non-adopted guard before its
+zero-target setup fatal; a successful constrained SCF route remains untested
+([paired guard receipts](evidence/a4_4_constraints_guard_paired_enabled.json),
+[positive control](evidence/a4_4_constraints_guard_paired_positive.json)).
 
 ## Gate result (historical pre-A5 status)
 
-The paragraph below records the earlier pre-A5 assessment. The current KS
-M2.2/M2.3 numerical result is summarized above; R04 remains pending only for
-the scoped production routing and restart/MPI implementation checks.
+The paragraph below records the earlier pre-A5 assessment and is superseded
+for the scoped KS path by the implementation and reproducibility results
+above. It remains relevant to the broader unvalidated functional and RS scope.
 
 The production energy-closure gate is **not established** for fixed Liechtenstein U/J in this implementation. No total-energy correction was added. The available source-connected captures validate the finite-H operator trace and the existing radial replay, but they do not derive the identity needed to place the fixed-U contribution in the current ASA radial total-energy functional.
 

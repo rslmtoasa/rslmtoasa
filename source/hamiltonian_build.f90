@@ -226,9 +226,10 @@ contains
          call g_logger%fatal("Invalid hubbard_u_potential_form. Use 'liechtenstein' or 'acbn0'.", __FILE__, __LINE__)
       end if
       this%hubbard_radial_moments = lower(trim(hubbard_radial_moments))
-      if (len_trim(this%hubbard_radial_moments) == 0) this%hubbard_radial_moments = 'spectral'
-      if (this%hubbard_radial_moments /= 'spectral' .and. this%hubbard_radial_moments /= 'local') then
-         call g_logger%fatal("Invalid hubbard_radial_moments. Use 'spectral' or 'local'.", __FILE__, __LINE__)
+      if (len_trim(this%hubbard_radial_moments) == 0) this%hubbard_radial_moments = 'auto'
+      if (this%hubbard_radial_moments /= 'spectral' .and. this%hubbard_radial_moments /= 'local' .and. &
+          this%hubbard_radial_moments /= 'auto') then
+         call g_logger%fatal("Invalid hubbard_radial_moments. Use 'auto', 'spectral', or 'local'.", __FILE__, __LINE__)
       end if
       this%hubbard_test_operator = lower(trim(hubbard_test_operator))
       if (len_trim(this%hubbard_test_operator) == 0) this%hubbard_test_operator = 'none'
@@ -772,7 +773,9 @@ contains
       this%js_alpha = 'z'
       this%jl_alpha = 'z'
       this%hubbard_u_potential_form = 'liechtenstein'
-      this%hubbard_radial_moments = 'spectral'
+      ! Resolve the omitted-option sentinel only after the self namelist tells
+      ! us whether this calculation uses the reciprocal KS backend.
+      this%hubbard_radial_moments = 'auto'
       this%hubbard_test_operator = 'none'
       this%hubbard_test_lambda = 0.0_rp
       this%hubbard_test_spin = 0

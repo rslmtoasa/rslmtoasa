@@ -107,7 +107,8 @@ Fixed-U energy-accounting status (A4.4)
 ---------------------------------------
 
 For native reciprocal KS with fixed Liechtenstein U/J and scalar-collinear
-``nsp=1``, the current numerical M2.2/M2.3 result supports candidate
+``nsp=1`` on clean bulk structures (``nbulk=0`` and ``nrec=ntype``), the
+current numerical M2.2/M2.3 result supports candidate
 ``b = F_local + E_Hub(P_OUT)`` at the stated accuracy: “valid to the ASA
 base-functional accuracy measured in A5.1.” Here ``F_local`` is the local-mode
 base free energy, including the KS entropy term, and ``E_Hub`` is evaluated by
@@ -138,12 +139,17 @@ terms vanish or that the relation holds for arbitrary radial states.
 This evidence does not establish an exact general ASA energy identity. The
 selected formula is an empirically tested local base-functional correction
 within the measured numerical accuracy, and does not prove a universal
-``SUMEV`` double-counting coefficient. The source routing and restart/MPI
-reproducibility checks are pending. RS remains guarded until its independent
-M1 and M2 pass. SOC/noncollinear states, self-consistent U, and intersite V
-are outside this eligible path. See
-``docs/validation/fixed_ldau/ENERGY_ACCOUNTING.md`` for the current gate status
-and evidence links.
+``SUMEV`` double-counting coefficient. The scoped source routing, restart continuity, and matched serial/MPI checks
+pass. The implementation is limited to ordinary native reciprocal KS
+(``use_kspace=.true.``, ``calctype='B'``), clean bulk (``nbulk=0`` and
+``nrec=ntype``), explicit fixed general Liechtenstein U/J, scalar-collinear
+``nsp=1``, ``lmax=2``, and disabled constraints. RS remains on its guarded
+spectral route pending independent M1/M2. Impurity/surface hosts, SOC/noncollinear
+states, HOH, self-consistent U, intersite V, impurity U, and nonzero test
+fields are excluded. Constraints-enabled input selects spectral mode before
+a zero-target setup fatal; successful constrained SCF behavior remains
+untested. See ``docs/validation/fixed_ldau/ENERGY_ACCOUNTING.md`` and the
+A4.4 control evidence index for current status and receipts.
 
 For the ordinary fixed-U/J route, ``calculate_hubbard_u_potential_general``
 builds the rotationally invariant Liechtenstein orbital potential from the

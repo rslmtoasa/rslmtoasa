@@ -1419,7 +1419,7 @@ observables are descriptive and do not independently gate energy adoption;
 they resolve whether the reported magnetic-moment difference survives
 identical integration and convergence definitions.
 
-## A4.4 current-stage status (2026-10-17)
+## A4.4 current-stage status (2026-10-18)
 
 The native reciprocal KS M2.2/M2.3 numerical comparison passes at the
 user-approved scope label “valid to the ASA base-functional accuracy measured
@@ -1443,10 +1443,22 @@ complete values and provenance are linked in
 [the J result](evidence/a5_m23_j_derivative_result.md),
 [the preregistered allowance](evidence/a5_m22_numeric_allowance_preregistration.md),
 and [the A4.3 table](evidence/a4_3_like_for_like_observables.md).
+The earlier spectral-only J checkpoint remains unchanged; its “local not
+launched” status is historical and is superseded by the completed combined
+[local/spectral J result](evidence/a5_m23_j_derivative_result.md).
 
-A4.4 source implementation and its restart/MPI reproducibility checks are
-pending. The authorized eligible path is fixed Liechtenstein U/J, native
-reciprocal KS, scalar-collinear `nsp=1`; RS remains guarded until its own M1
-and M2 pass. SOC/noncollinear states, self-consistent U, and intersite V are
-excluded. The earlier verbatim A4/A5 amendments and historical evidence above
-are unchanged.
+The scoped A4.4 implementation, serial restart continuity, and matched
+serial/MPI reproducibility checks pass. The eligible route is ordinary native
+reciprocal KS (`use_kspace=.true.`, `calctype='B'`), clean bulk
+(`nbulk=0`, `nrec=ntype`), explicit fixed general Liechtenstein U/J,
+scalar-collinear `nsp=1`, `lmax=2`, and disabled constraints. SOC/noncollinear
+states, HOH, self-consistent U, intersite V, impurity U, impurity/surface
+hosts, and nonzero test fields are excluded. RS remains on its guarded
+spectral route until its own M1 and M2 pass. The serial controls, distinct matched serial/MPI pair, and RS spectral scope
+control are indexed in [A4.4 control evidence](evidence/a4_4_control_evidence_index.json);
+the matched pair is [archived separately](evidence/a4_4_matched_serial_mpi_repro.json). A paired
+constraints-enabled input selects spectral mode and leaves local energy
+unadopted before the expected zero-target setup fatal; this verifies the
+eligibility guard only, not a successful constrained SCF route
+([receipt](evidence/a4_4_constraints_guard_paired_enabled.json)). The earlier
+verbatim A4/A5 amendments and historical evidence above are unchanged.

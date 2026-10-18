@@ -1,0 +1,32 @@
+{
+  "KS_marker": true,
+  "case": "positive",
+  "constraint_zero_target_fatal": false,
+  "log_sha256": "6b7e741d5b14031c5cacb303e7dd5426730627888224829ebce1c7d5656c887e",
+  "mode_marker": [
+    "[Oct 18 2026 09:29:06.791] [self.f90:3145]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mHUBBARD_RADIAL_MODE mode=local source=default use_kspace=.true. local_energy_adopted=.true."
+  ],
+  "pre_run_hashes": {
+    "assets": {
+      "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+      "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+      "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+      "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+      "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+      "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+    },
+    "binary": "3486220b5f38b7b3f0d2487a10c04c35504f8627bf875d15a426357aa234329d",
+    "input": "1c8e4e1916bb1e356e1d53bdf370b9cc56c46cc8804fea79910c647a64c891ad",
+    "restart": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5"
+  },
+  "returncode": 0,
+  "source_sha256": {
+    "source/hamiltonian.f90": "410e799d4c5001f8c39b26d80b5435b265ae987a146a4457aa793e1162a0e837",
+    "source/hamiltonian_build.f90": "3af313bca28fa7e62024229a103244ebe631d01938c68e73f29b6a3f7e498f9b",
+    "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+    "source/include_codes/namelists/hamiltonian.f90": "ea9448c617daa5bc488d8fbd9ce559f6bde359bf0304dfbdc12347bc9c7a8e21",
+    "source/self.f90": "077150f760c546b229d04542caf99f488534b94382dab5408781618e9ea5e81e"
+  },
+  "trace_sha256": "b33327077ed6a08136a7c6686e913c6914a5bde906f1526dcd0d3221cf9f7617"
+}

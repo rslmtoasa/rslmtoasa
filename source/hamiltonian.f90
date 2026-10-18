@@ -113,7 +113,7 @@ module hamiltonian_mod
       real(rp), dimension(:), allocatable :: velocity_scale
       character(len=16) :: hubbard_u_potential_form
       !> Radial band-moment convention: legacy spectral or local Hubbard-adjusted.
-      character(len=16) :: hubbard_radial_moments = 'spectral'
+      character(len=16) :: hubbard_radial_moments = 'auto'
       !> Explicit A4 test-only d-shell operator selector: none, w1, or w2.
       character(len=16) :: hubbard_test_operator = 'none'
       !> A4 external test-potential scale in Ry; ignored when selector is none.

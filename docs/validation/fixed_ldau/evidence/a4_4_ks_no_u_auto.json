@@ -1,0 +1,108 @@
+{
+  "J_eV": 0.0,
+  "KS_TS_finite": true,
+  "KS_entropy_finite": true,
+  "P_OUT_rows": 50,
+  "P_OUT_sha256": "14c46b09d83dceb4eec9524d46b3555968c1f5e9cfebfce5962dfbc717d70313",
+  "U_eV": 0.0,
+  "assets_sha256_pre_run": {
+    "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+    "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+    "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+    "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+    "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+    "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+  },
+  "backend": "ks",
+  "binary_sha256": "3486220b5f38b7b3f0d2487a10c04c35504f8627bf875d15a426357aa234329d",
+  "case": "ks_no_u_auto",
+  "constraints_enabled": false,
+  "direct_P_energy_helper": null,
+  "energy_helper_sha256": "757f72fd7b7e98df320b23a36d4d3d63f5d3efd042265cf027acc32e98d2b2ff",
+  "expected_local_energy_adopted": false,
+  "expected_resolved_mode": "spectral",
+  "fixed_UJ_fields_explicit": false,
+  "helper_minus_logged_E_Hub_Ry": null,
+  "input_sha256_pre_run": "af70eaaad4cdb71a99442b52721c0dec643b9f97dadb86c03aa7570b89e5b2b4",
+  "local_energy_adopted": false,
+  "log_path": "/private/tmp/a5-a44-serial-controls-final/ks_no_u_auto/stdout.log",
+  "mode_runtime_fields": {
+    "local_energy_adopted": ".false.",
+    "mode": "spectral",
+    "source": "default",
+    "use_kspace": ".true."
+  },
+  "native_kspace_runtime_marker": true,
+  "observed_resolved_mode": "spectral",
+  "requested_mode": "auto_default",
+  "restart_sha256_pre_run": "7f1222f106b6693407476cb11a064cfeac27fe348233cc585fd8d1277fa888b9",
+  "restart_source_sha256": "7f1222f106b6693407476cb11a064cfeac27fe348233cc585fd8d1277fa888b9",
+  "returncode": 0,
+  "route_fields_raw": "E_int=  0.0000000000000000E+00 E_DC=  0.0000000000000000E+00 E_Hub=  0.0000000000000000E+00 E_Hub_P_OUT=  0.0000000000000000E+00 t_in_out=  0.0000000000000000E+00 t_U=  0.0000000000000000E+00 e_external=  0.0000000000000000E+00 t_total_actual_Vin=  0.0000000000000000E+00 base_physical_total_energy= -0.2541981859278937E+04 physical_total_energy= -0.2541981859278937E+04 candidate_a= -0.2541981859278937E+04 candidate_b=UNAVAILABLE candidate_c= -0.2541981859278937E+04 entropy=  0.1229469991011767E+00 TS=  0.2336121364178820E-03 candidate_a_F= -0.2541982092891074E+04 candidate_b_F=UNAVAILABLE candidate_c_F= -0.2541982092891074E+04 test_lambda_trace_wp=  0.0000000000000000E+00 test_F_local=UNAVAILABLE test_F_spectral= -0.2541982092891074E+04 candidate_status=PROVISIONAL_ONLY; unavailable candidates require the other radial representation",
+  "route_identity": {
+    "actual": "-2541.981859278937",
+    "base_field_matches_unmodified_site_ETOT": {
+      "actual": "-2541.981859278937",
+      "pass": true,
+      "residual": "0E-12",
+      "sum_operands": "-2541.981859278937",
+      "tolerance_ry": 7.275957614183426e-12
+    },
+    "candidate_energy_identities": {
+      "candidate_a": {
+        "actual": "-2541.981859278937",
+        "expected": "-2541.9818592789370000",
+        "label": "spectral candidate_a equals base ETOT - t + EHub",
+        "pass": true,
+        "residual": "0E-16",
+        "tolerance_ry": 7.275957614183426e-12
+      },
+      "candidate_a_F": {
+        "actual": "-2541.982092891074",
+        "expected": "-2541.9820928910734178820",
+        "label": "spectral candidate_a_F subtracts finite TS",
+        "pass": true,
+        "residual": "-5.821180E-13",
+        "tolerance_ry": 7.275957614183426e-12
+      },
+      "candidate_c": {
+        "actual": "-2541.981859278937",
+        "expected": "-2541.9818592789370000",
+        "label": "spectral candidate_c equals base ETOT + EHub",
+        "pass": true,
+        "residual": "0E-16",
+        "tolerance_ry": 7.275957614183426e-12
+      },
+      "candidate_c_F": {
+        "actual": "-2541.982092891074",
+        "expected": "-2541.9820928910734178820",
+        "label": "spectral candidate_c_F subtracts finite TS",
+        "pass": true,
+        "residual": "-5.821180E-13",
+        "tolerance_ry": 7.275957614183426e-12
+      }
+    },
+    "pass": true,
+    "residual": "0E-12",
+    "sum_operands": "-2541.981859278937",
+    "tolerance_ry": 7.275957614183426e-12
+  },
+  "runtime_output_sha256": {
+    "Fe_out.nml": "a94c7507a98cd8c2ced7a6a3599d4c1de89ad232a80079afd1fa38737708073c",
+    "Fe_scf.nml": "a94c7507a98cd8c2ced7a6a3599d4c1de89ad232a80079afd1fa38737708073c",
+    "records.csv": "a88112b312f80f93cfbbd637ece1fd1cbd8f649bf3016c19f47a05d19b0efce7",
+    "stdout.log": "fea95c04fd1741b1a9d8a825afe16efd1f40ecce232365a1de6e1a8a98027501"
+  },
+  "site_energy_fields_raw": "site=1 type=1 E_int=  0.0000000000000000E+00 E_DC=  0.0000000000000000E+00 E_Hub=  0.0000000000000000E+00 t_in_out=  0.0000000000000000E+00 t_U=  0.0000000000000000E+00 e_external=  0.0000000000000000E+00 t_total_actual_Vin=  0.0000000000000000E+00 direct_trace_check=  0.0000000000000000E+00 ETOT_selected= -0.2541981859278937E+04 candidate_a= -0.2541981859278937E+04 candidate_b=UNAVAILABLE candidate_c= -0.2541981859278937E+04 candidate_F=UNAVAILABLE_GLOBAL_TS_NOT_SITE_DECOMPOSABLE candidate_status=PROVISIONAL_ONLY",
+  "source_sha256": {
+    "source/hamiltonian.f90": "410e799d4c5001f8c39b26d80b5435b265ae987a146a4457aa793e1162a0e837",
+    "source/hamiltonian_build.f90": "3af313bca28fa7e62024229a103244ebe631d01938c68e73f29b6a3f7e498f9b",
+    "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+    "source/include_codes/namelists/hamiltonian.f90": "ea9448c617daa5bc488d8fbd9ce559f6bde359bf0304dfbdc12347bc9c7a8e21",
+    "source/self.f90": "077150f760c546b229d04542caf99f488534b94382dab5408781618e9ea5e81e"
+  },
+  "test_lambda_Ry": 0.0,
+  "trace_path": "/private/tmp/a5-a44-serial-controls-final/ks_no_u_auto/records.csv",
+  "unmodified_site_ETOT_Ry": "-2541.981859278937"
+}

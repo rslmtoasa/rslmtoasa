@@ -6,8 +6,9 @@ statistic, controls, and evidence requirements. User-approved amendment A1
 supersedes the scalar-v0 criterion. Its scaling test is not yet run, so M0 is
 not passed; the historical v0 result is reclassified as “criterion ill-posed,
 superseded by A1.” The RS no-U reference did not converge and remains a
-separate backend task. No local-moment correction or physical-energy change is
-applied.
+separate backend task. The A4.4 entry below records the separately gated,
+scoped native-KS physical-energy route; it does not change local-moment
+correction status.
 
 ## Current fixed-U energy stage
 
@@ -21,10 +22,17 @@ general radial energy identity. See the [U result](evidence/a5_m22_u2_derivative
 [J result](evidence/a5_m23_j_derivative_result.md), and
 [A4.3 observables](evidence/a4_3_like_for_like_observables.md).
 
-The approved routing implementation and restart/MPI reproducibility checks
-are still pending. The intended eligible scope is native reciprocal KS,
-fixed Liechtenstein U/J, scalar-collinear nsp=1 only. RS remains guarded until
-its own M1/M2 pass; SOC/noncollinear, SC-U, and intersite-V remain excluded.
+The scoped routing implementation and restart/serial-MPI reproducibility
+checks pass. Eligibility is ordinary native reciprocal KS
+(`use_kspace=.true.`, `calctype='B'`), clean bulk (`nbulk=0`, `nrec=ntype`),
+explicit fixed general Liechtenstein U/J, scalar-collinear `nsp=1`, `lmax=2`,
+and disabled constraints. SOC/noncollinear, HOH, SC-U, intersite-V, impurity
+U, impurity/surface hosts, and nonzero test fields are excluded; RS remains
+guarded pending its own M1/M2. The serial controls, separate matched serial/MPI pair, and RS spectral scope
+control are indexed in [A4.4 control evidence](evidence/a4_4_control_evidence_index.json). The
+constraints-enabled guard resolves to spectral/non-adopted before the
+zero-target setup fatal, but successful constrained SCF behavior is untested
+([paired guard receipt](evidence/a4_4_constraints_guard_paired_enabled.json)).
 Historical phase summaries below are retained as historical records; the
 current gate disposition is in [REMEDIATION_GATES.md](REMEDIATION_GATES.md).
 
@@ -34,8 +42,8 @@ as class-B probes, both serially and in the targeted two-rank MPI tests; see
 The M0.2 KS floor/repeat/refinement and historical scalar-v0 measurement are
 recorded in [the preserved v0 artifact](evidence/m02_ks_scalar_v0_fail.json).
 That scalar criterion is superseded, not an active FAIL. A1.1 is pending; RS
-floor is unavailable due to nonconvergence. M0.3 has not started, so R04
-remains blocked.
+floor is unavailable due to nonconvergence. M0.3 has not started; that status
+does not block the separately gated native-KS R04 result recorded above.
 
 | Phase | Claim | Test/evidence | Result | Commit | Blocker |
 |---|---|---|---|---|---|

@@ -398,6 +398,8 @@ module self_mod
       procedure, private :: write_fixed_u_csv_row
       procedure, private :: write_fixed_u_total_energy
       procedure, private :: write_hubbard_moment_energy_diagnostics
+      procedure, private :: is_eligible_local_hubbard_ks
+      procedure, private :: fixed_hubbard_energy_pout
       procedure, private :: write_fixed_u_radial_replay_input
       procedure, private :: write_fixed_u_radial_replay_output
       procedure, private :: verify_fixed_u_radial_replay
@@ -2032,6 +2034,7 @@ contains
       real(rp) :: total_int, total_dc, total_hub, total_t, total_external, total_t_actual, value_a, value_b, value_c
       real(rp) :: entropy, ts, value_a_f, value_b_f, value_c_f
       real(rp) :: test_energy, test_f_local, test_f_spectral
+      real(rp) :: production_hub, base_physical_energy
       real(rp), allocatable :: local_weights(:)
       complex(rp) :: test_operator(5, 5)
       integer :: ik_global
@@ -2074,6 +2077,8 @@ contains
          end if
       end if
       if (rank /= 0) return
+      production_hub = this%fixed_hubbard_energy_pout()
+      base_physical_energy = this%physical_total_energy - production_hub
       test_operator = cmplx(0.0_rp, 0.0_rp, rp)
       if (this%hamiltonian%hubbard_test_operator_check) &
          call this%hamiltonian%get_hubbard_test_operator(test_operator)
@@ -2176,7 +2181,12 @@ contains
          value_a_f = value_a - ts
          value_c_f = value_c - ts
       else
-         value_b = this%physical_total_energy + total_hub + total_external
+         if (this%is_eligible_local_hubbard_ks() .and. &
+             trim(this%hamiltonian%hubbard_radial_moments) == 'local') then
+            value_b = this%physical_total_energy + total_external
+         else
+            value_b = this%physical_total_energy + total_hub + total_external
+         end if
          candidate_b = trim(fmt('e24.16', value_b))
          value_b_f = value_b - ts
       end if
@@ -2207,8 +2217,10 @@ contains
       end if
       call g_logger%info('HUBBARD_MOMENT_ENERGY_TOTAL E_int='//fmt('e24.16', total_int)// &
          ' E_DC='//fmt('e24.16', total_dc)//' E_Hub='//fmt('e24.16', total_hub)// &
+         ' E_Hub_P_OUT='//fmt('e24.16', production_hub)// &
          ' t_in_out='//fmt('e24.16', total_t)//' t_U='//fmt('e24.16', total_t)// &
          ' e_external='//fmt('e24.16', total_external)//' t_total_actual_Vin='//fmt('e24.16', total_t_actual)// &
+         ' base_physical_total_energy='//fmt('e24.16', base_physical_energy)// &
          ' physical_total_energy='// &
          fmt('e24.16', this%physical_total_energy)//' candidate_a='//trim(candidate_a)// &
          ' candidate_b='//trim(candidate_b)//' candidate_c='//trim(candidate_c)// &
@@ -2221,6 +2233,58 @@ contains
          __FILE__, __LINE__)
       deallocate(density, potential, e_int, e_dc, e_hub, tr_vp)
    end subroutine write_hubbard_moment_energy_diagnostics
+
+   logical function is_eligible_local_hubbard_ks(this) result(eligible)
+      class(self), intent(in) :: this
+
+      eligible = this%use_kspace .and. this%hamiltonian%hubbard_u_general_check .and. &
+         trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein' .and. &
+         this%control%nsp == 1 .and. this%control%lmax == 2 .and. &
+         this%control%calctype == 'B' .and. &
+         this%lattice%nbulk == 0 .and. this%lattice%nrec == this%lattice%ntype .and. &
+         .not. this%control%constraints_enable .and. &
+         .not. this%control%has_soc() .and. .not. this%control%is_noncollinear() .and. &
+         .not. this%hamiltonian%hoh .and. .not. this%hamiltonian%hubbard_u_sc_check .and. &
+         .not. this%hamiltonian%hubbard_v_check .and. .not. this%hamiltonian%hubbard_u_impurity_check .and. &
+         (.not. this%hamiltonian%hubbard_test_operator_check .or. &
+          this%hamiltonian%hubbard_test_lambda == 0.0_rp)
+   end function is_eligible_local_hubbard_ks
+
+   real(rp) function fixed_hubbard_energy_pout(this) result(total_hub)
+      class(self), intent(in) :: this
+      complex(rp), allocatable :: density(:, :, :, :, :), potential(:, :, :, :, :)
+      real(rp), allocatable :: e_int(:, :), e_dc(:, :), e_hub(:, :), tr_vp(:, :)
+      complex(rp) :: p_d, v_d
+      integer :: isite, itype, spin, i, j, orbital_i, orbital_j
+
+      total_hub = 0.0_rp
+      if (.not. this%is_eligible_local_hubbard_ks()) return
+      if (trim(this%hamiltonian%hubbard_radial_moments) /= 'local') return
+
+      allocate(density(this%lattice%ntype, 4, 2, 7, 7), potential(this%lattice%ntype, 4, 2, 7, 7))
+      allocate(e_int(this%lattice%ntype, 4), e_dc(this%lattice%ntype, 4), &
+               e_hub(this%lattice%ntype, 4), tr_vp(this%lattice%ntype, 4))
+      do isite = 1, this%lattice%nrec
+         itype = this%lattice%ib(isite)
+         density = cmplx(0.0_rp, 0.0_rp, rp)
+         potential = cmplx(0.0_rp, 0.0_rp, rp)
+         do spin = 1, 2
+            do i = 1, 5
+               orbital_i = 4 + i + spin_off*(spin - 1)
+               do j = 1, 5
+                  orbital_j = 4 + j + spin_off*(spin - 1)
+                  p_d = this%symbolic_atom(this%lattice%nbulk + isite)%potential%ldm(3, spin, i, j)
+                  v_d = this%hamiltonian%hubbard_u_pot(orbital_i, orbital_j, itype)
+                  density(itype, 3, spin, i, j) = p_d
+                  potential(itype, 3, spin, i, j) = v_d
+               end do
+            end do
+         end do
+         call this%hamiltonian%evaluate_hubbard_energy(density, potential, e_int, e_dc, e_hub, tr_vp)
+         total_hub = total_hub + sum(e_hub(itype, :))
+      end do
+      deallocate(density, potential, e_int, e_dc, e_hub, tr_vp)
+   end function fixed_hubbard_energy_pout
 
    subroutine write_fixed_u_kspace_trace(this, capture_spectrum)
       class(self), intent(inout) :: this
@@ -2932,6 +2996,8 @@ contains
 
       ! variables associated with the reading processes
       integer :: iostatus, funit, i
+      logical :: radial_mode_defaulted
+      character(len=8) :: radial_mode_source
 
       include 'include_codes/namelists/self.f90'
 
@@ -3063,6 +3129,20 @@ contains
       this%init = init
       this%cold = cold
       this%use_kspace = use_kspace
+      radial_mode_defaulted = trim(this%hamiltonian%hubbard_radial_moments) == 'auto'
+      if (trim(this%hamiltonian%hubbard_radial_moments) == 'auto') then
+         if (this%is_eligible_local_hubbard_ks()) then
+            this%hamiltonian%hubbard_radial_moments = 'local'
+         else
+            this%hamiltonian%hubbard_radial_moments = 'spectral'
+         end if
+      end if
+      radial_mode_source = 'explicit'
+      if (radial_mode_defaulted) radial_mode_source = 'default'
+      if (rank == 0) call g_logger%info('HUBBARD_RADIAL_MODE mode='//trim(this%hamiltonian%hubbard_radial_moments)// &
+         ' source='//trim(radial_mode_source)//' use_kspace='//trim(log2str(this%use_kspace))// &
+         ' local_energy_adopted='//trim(log2str(this%is_eligible_local_hubbard_ks() .and. &
+            trim(this%hamiltonian%hubbard_radial_moments) == 'local')), __FILE__, __LINE__)
       this%magnetic_seed_enable = magnetic_seed_enable
       this%magnetic_seed_steps = magnetic_seed_steps
       this%magnetic_seed_field = magnetic_seed_field
@@ -3874,6 +3954,7 @@ contains
          call g_scf_benchmark_profile%stop_stage('P_scf_io')
 
          this%physical_total_energy = sum(this%symbolic_atom(:)%potential%etot)
+         this%physical_total_energy = this%physical_total_energy + this%fixed_hubbard_energy_pout()
          call this%write_fixed_u_total_energy()
          call this%write_hubbard_moment_energy_diagnostics()
          call this%write_gbt_scf_diagnostics(i)
@@ -4525,6 +4606,7 @@ contains
          write (newunit, '(A)') '==========================================================================='
 !         write (newunit, ’(a,f20.10)’) ’Total energy of system: ’, sum(this%symbolic_atom(this%lattice%nbulk+1:this%lattice%ntype)%potential%etot)
          this%physical_total_energy = sum(this%symbolic_atom(:)%potential%etot)
+         this%physical_total_energy = this%physical_total_energy + this%fixed_hubbard_energy_pout()
          write (newunit, '(a,f20.10)') 'Physical DFT total energy of system: ', this%physical_total_energy
          ! Keep the historical key for downstream parsers, but make the
          ! physical meaning explicit through the dedicated line above.
