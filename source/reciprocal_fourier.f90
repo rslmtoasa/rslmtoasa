@@ -1,4 +1,5 @@
 submodule (reciprocal_mod) reciprocal_fourier
+   use magnetic_representation_mod, only: gbt_single_q
    implicit none
 
 contains
@@ -129,6 +130,10 @@ contains
       else
          workspace%active_tile_length = size(k_points,2)
          workspace%cached_operator_generation = this%hamiltonian%operator_generation
+      end if
+      if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q) then
+         call this%assemble_gbt(k_points, workspace)
+         return
       end if
       second_order = this%use_second_order .and. this%hamiltonian%hoh .and. allocated(this%hamiltonian%eeo)
       add_ccor = this%hamiltonian%ccor_2c

@@ -109,6 +109,7 @@ module reciprocal_mod
       procedure :: assemble_batch => reciprocal_assembler_assemble_batch
       procedure :: assemble_overlap_batch => reciprocal_assembler_assemble_overlap_batch
       procedure :: assemble_one => reciprocal_assembler_assemble_one
+      procedure :: assemble_gbt => reciprocal_assembler_assemble_gbt
    end type reciprocal_assembler
 
    !> Residency values reported by reciprocal_execution_capabilities.  The
@@ -1043,6 +1044,12 @@ module reciprocal_mod
       complex(rp), intent(out) :: hk_result(:, :)
       class(reciprocal_workspace), intent(inout) :: workspace
    end subroutine reciprocal_assembler_assemble_one
+
+   module subroutine reciprocal_assembler_assemble_gbt(this, k_points, workspace)
+      class(reciprocal_assembler), intent(in) :: this
+      real(rp), intent(in) :: k_points(:, :)
+      class(reciprocal_workspace), intent(inout) :: workspace
+   end subroutine reciprocal_assembler_assemble_gbt
 
    module subroutine make_reciprocal_assembler(this, assembler)
       class(reciprocal), intent(inout) :: this
