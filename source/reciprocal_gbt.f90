@@ -1,7 +1,7 @@
 !> k-space assembly of the GBT (gbt_single_q) Hamiltonian, relation R1 (see gbt_kspace_mod). It reads the structure
 !> constants, neighbour vectors and potential parameters and never the real-space blocks `ee`.
 submodule (reciprocal_mod) reciprocal_gbt
-   use gbt_kspace_mod, only: gbt_kspace_h1
+   use gbt_kspace_mod, only: gbt_kspace_h1, gbt_kspace_h2
    use gbt_structure_mod, only: gbt_reference_frame
    implicit none
 
@@ -18,8 +18,10 @@ contains
       integer :: nrec, nbond, isite, jsite, ntype_i, ia, ja, nr, ineigh, it, i, j, ik, s, t, i0, j0
       integer, allocatable :: bond_a(:), bond_b(:)
       real(rp), allocatable :: bond_d(:, :)
-      complex(rp), allocatable :: sblock(:, :, :), frame(:, :, :), w(:, :, :), c(:, :, :), h(:, :)
+      complex(rp), allocatable :: sblock(:, :, :), frame(:, :, :), w(:, :, :), c(:, :, :), h(:, :), h2(:, :)
+      complex(rp), allocatable :: obar(:, :, :), enu(:, :, :)
       real(rp) :: q_dir(3), theta, phi
+      logical :: second
 
       if (lower(trim(this%lattice%strux_backend)) /= 'strux_lib') &
          call g_logger%fatal("gbt_single_q k-space requires strux_backend='strux_lib'.", __FILE__, __LINE__)
@@ -35,13 +37,14 @@ contains
       if (this%hamiltonian%local_axis) call g_logger%fatal('gbt_single_q k-space does not support local_axis.', __FILE__, __LINE__)
       if (allocated(this%hamiltonian%theta_ss_sublattice)) &
          call g_logger%fatal('gbt_single_q k-space supports one cone angle for all sites only.', __FILE__, __LINE__)
-      if (this%use_second_order .and. this%hamiltonian%hoh) &
-         call g_logger%fatal('gbt_single_q k-space second order is not implemented yet.', __FILE__, __LINE__)
 
+      second = this%use_second_order .and. this%hamiltonian%hoh
+      if (second .and. .not. (allocated(this%hamiltonian%obarm) .and. allocated(this%hamiltonian%enim))) &
+         call g_logger%fatal('gbt_single_q k-space second order needs obarm and enim from the Hamiltonian build.', __FILE__, __LINE__)
       nrec = this%lattice%nrec
       allocate (bond_a(nrec*this%lattice%nn_max), bond_b(nrec*this%lattice%nn_max), bond_d(3, nrec*this%lattice%nn_max), &
                 sblock(norb, norb, nrec*this%lattice%nn_max), frame(2, 2, nrec), w(norb, 2, nrec), c(norb, 2, nrec), &
-                h(nb*nrec, nb*nrec))
+                h(nb*nrec, nb*nrec), h2(nb*nrec, nb*nrec), obar(nb, nb, nrec), enu(nb, nb, nrec))
       nbond = 0
       do isite = 1, nrec
          ntype_i = this%lattice%ib(isite)
@@ -64,6 +67,20 @@ contains
             w(:, 2, isite) = pot%wx0(1:norb) - pot%wx1(1:norb)
             c(:, 1, isite) = pot%cx0(1:norb) + pot%cx1(1:norb)
             c(:, 2, isite) = pot%cx0(1:norb) - pot%cx1(1:norb)
+            if (second) then
+               ! As the collinear route at second order: onsite cex in h, E_nu = cx - cex added by build_enim. obarm and
+               ! enim hold the spin blocks for the sign of mom(3); swapping them gives the sign +1 blocks.
+               c(:, 1, isite) = pot%cex0(1:norb) + pot%cex1(1:norb)
+               c(:, 2, isite) = pot%cex0(1:norb) - pot%cex1(1:norb)
+               obar(:, :, isite) = this%hamiltonian%obarm(:, :, it)
+               enu(:, :, isite) = this%hamiltonian%enim(:, :, it)
+               if (pot%mom(3) < 0.0_rp) then
+                  obar(1:norb, 1:norb, isite) = this%hamiltonian%obarm(norb + 1:nb, norb + 1:nb, it)
+                  obar(norb + 1:nb, norb + 1:nb, isite) = this%hamiltonian%obarm(1:norb, 1:norb, it)
+                  enu(1:norb, 1:norb, isite) = this%hamiltonian%enim(norb + 1:nb, norb + 1:nb, it)
+                  enu(norb + 1:nb, norb + 1:nb, isite) = this%hamiltonian%enim(1:norb, 1:norb, it)
+               end if
+            end if
          end associate
          do ineigh = 1, nr
             if (ineigh == 1) then
@@ -104,6 +121,10 @@ contains
                end do
             end do
          end do
+         if (second) then   ! h, obar and enu are all in the spherical-harmonic basis here
+            call gbt_kspace_h2(norb, nrec, h, obar, enu, h2)
+            h = h2
+         end if
          workspace%h(:, :, ik) = h
       end do
    end subroutine reciprocal_assembler_assemble_gbt

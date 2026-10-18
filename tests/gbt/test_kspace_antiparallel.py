@@ -11,11 +11,15 @@ import numpy as np
 from gbt_app_common import make_deck, read_export, run, tolerance
 
 binary, scratch = sys.argv[1], Path(sys.argv[2])
-decks = {rep: make_deck(scratch / rep, "cr_afm", rep, (4, 4, 4)) for rep in ("periodic_nc", "gbt_single_q")}
-for deck in decks.values():
-    run(binary, deck)
-(k_nc, e_nc), (k_gbt, e_gbt) = read_export(decks["periodic_nc"]), read_export(decks["gbt_single_q"])
-assert np.allclose(k_nc, k_gbt)
-dev = np.abs(np.sort(e_nc, axis=0) - np.sort(e_gbt, axis=0)).max()
-print(f"bcc Cr cell, q = 0, theta = 0: {len(k_gbt)} k-points, max |E_gbt - E_nc| = {dev:.3e} Ry, tolerance {tolerance('eig_identity_ry'):.1e}")
-sys.exit(0 if dev < tolerance("eig_identity_ry") else 1)
+worst = 0.0
+for order in ("first", "second"):
+    decks = {rep: make_deck(scratch / f"{rep}_{order}", "cr_afm", rep, (4, 4, 4), order=order) for rep in ("periodic_nc", "gbt_single_q")}
+    for deck in decks.values():
+        run(binary, deck)
+    (k_nc, e_nc), (k_gbt, e_gbt) = read_export(decks["periodic_nc"]), read_export(decks["gbt_single_q"])
+    assert np.allclose(k_nc, k_gbt)
+    dev = np.abs(np.sort(e_nc, axis=0) - np.sort(e_gbt, axis=0)).max()
+    print(f"bcc Cr cell, q = 0, theta = 0, {order} order: {len(k_gbt)} k-points, max |E_gbt - E_nc| = {dev:.3e} Ry")
+    worst = max(worst, dev)
+print(f"max over both orders {worst:.3e} Ry, tolerance {tolerance('eig_identity_ry'):.1e}")
+sys.exit(0 if worst < tolerance("eig_identity_ry") else 1)

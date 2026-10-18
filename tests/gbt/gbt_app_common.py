@@ -21,9 +21,9 @@ def lattice_vectors(kind):
     return np.array(f90nml.read(FIX / kind / "lattice.nml")["lattice"]["a"])      # rows are the lattice vectors
 
 
-def make_deck(dst, kind, rep, nk, q_dir=(0.0, 0.0, 0.0), order="first", spin_resolved=False):
+def make_deck(dst, kind, rep, nk, q_dir=(0.0, 0.0, 0.0), order="first", spin_resolved=False, theta_deg=0.0):
     """kind: bccFe_prim, bccFe_sc2 (Fe, same potential on every site) or cr_afm (cr_bcc, Cr2 = Cr1 with mom = -z).
-    q_dir is in direct coordinates of the cell; a gbt_single_q deck gets it as Cartesian q_ss with theta_ss = 0."""
+    q_dir is in direct coordinates of the cell; a gbt_single_q deck gets it as Cartesian q_ss with the cone angle theta_deg."""
     dst = Path(dst)
     shutil.rmtree(dst, ignore_errors=True)
     shutil.copytree(SR / "cr_bcc", dst)
@@ -39,12 +39,16 @@ def make_deck(dst, kind, rep, nk, q_dir=(0.0, 0.0, 0.0), order="first", spin_res
         nsite = 1 if kind == "bccFe_prim" else 2
         nml["lattice"].update(alat=2.8612, wav=1.4088, ntype=nsite, ct=[4.0] * nsite)
         nml["atoms"] = {"database": "./", "label": ["Fe"] * nsite}
+    return finish_deck(dst, nml, rep, nk, order, spin_resolved, q_dir=q_dir, kind=kind, theta_deg=theta_deg)
+
+
+def finish_deck(dst, nml, rep, nk, order, spin_resolved, q_dir=(0.0, 0.0, 0.0), kind="cr_afm", theta_deg=0.0):
     nml["calculation"].update(pre_processing="none", post_processing="fermi_surface")
     nml["control"].update(nsp=1 if spin_resolved else 3, recur="block")     # the spin-resolved export needs nsp = 1
     nml["hamiltonian"] = {"hoh": order == "second", "magnetic_representation": rep}
     if rep == "gbt_single_q":
         q_cart = np.linalg.inv(lattice_vectors(kind)) @ np.array(q_dir) if kind != "cr_afm" else np.array(q_dir)
-        nml["hamiltonian"].update(q_ss=list(q_cart), theta_ss=0.0)
+        nml["hamiltonian"].update(q_ss=list(q_cart), theta_ss=theta_deg)
     nml["lattice"]["strux_want_sdot"] = False
     nml["reciprocal"].update(nk1=nk[0], nk2=nk[1], nk3=nk[2], use_symmetry_reduction=False, use_time_reversal=False,
                              auto_find_fermi=True, kspace_ham_order=order, write_spin_resolved_eigenpairs=spin_resolved)
@@ -74,3 +78,39 @@ def mesh_index(k, nk):
     """Map direct k (nk points, folded or not) to mesh integer coordinates."""
     m = np.rint(k * np.array(nk)).astype(int) % np.array(nk)
     return {tuple(row): i for i, row in enumerate(m)}
+
+
+def make_super_deck(dst, fixture, positions_z, q_z, theta_deg, order, nk, gbt=False):
+    """periodic_nc supercell of Fe: one type per site, every type the Fe potential with its moment rotated to
+    m(R + tau) = (sin th cos(2 pi q.r), sin th sin(2 pi q.r), cos th), q = (0, 0, q_z) in 2 pi/alat. With gbt=True
+    the deck is a q = 0, theta = 0 gbt_single_q one (every mom = +z), used only for its bond dump."""
+    dst = Path(dst)
+    shutil.rmtree(dst, ignore_errors=True)
+    shutil.copytree(SR / "cr_bcc", dst)
+    for f in ("Cr1.nml", "Cr2.nml"):
+        (dst / f).unlink()
+    shutil.copy(FIX / fixture / "lattice.nml", dst / "lattice.nml")
+    th = np.radians(0.0 if gbt else theta_deg)
+    for i, z in enumerate(positions_z, start=1):
+        phi = 0.0 if gbt else 2.0 * np.pi * q_z * z
+        mom = ", ".join(repr(float(x)) for x in (np.sin(th) * np.cos(phi), np.sin(th) * np.sin(phi), np.cos(th)))
+        text = (SR / "fe_bcc" / "Fe.nml").read_text().replace("symbol = 'Fe'", f"symbol = 'Fe{i}'")
+        (dst / f"Fe{i}.nml").write_text(re.sub(r"^ mom = .*$", f" mom = {mom}", text, flags=re.M))
+    nml = f90nml.read(str(SR / "cr_bcc" / "input.nml"))
+    n = len(positions_z)
+    n3 = -(-20 // round(positions_z[-1] + 0.5))     # cells along z so that the cluster still reaches 20 alat
+    nml["lattice"].update(alat=2.8612, wav=1.4088, ntype=n, ct=[4.0] * n, n3=n3, ndim=20 * 20 * n3 * n + 1000)
+    nml["atoms"] = {"database": "./", "label": [f"Fe{i}" for i in range(1, n + 1)]}
+    return finish_deck(dst, nml, "gbt_single_q" if gbt else "periodic_nc", nk, order, False)
+
+
+def read_bonds(deck):
+    """Raw S blocks from the gbt_bonds.out dump of a gbt_single_q run: [(atom type, d Cartesian, S(i, j))]."""
+    bonds = []
+    for line in (deck / "gbt_bonds.out").read_text().splitlines():
+        f = line.split()
+        if f and f[0] == "bond":
+            bonds.append((int(f[1]), np.array([float(x) for x in f[-3:]]), np.zeros((9, 9), complex)))
+        elif f and f[0] == "S":
+            bonds[-1][2][int(f[1]) - 1, int(f[2]) - 1] = complex(float(f[3]), float(f[4]))
+    return bonds

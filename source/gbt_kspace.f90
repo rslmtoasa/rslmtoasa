@@ -11,7 +11,7 @@ module gbt_kspace_mod
    implicit none
    private
 
-   public :: gbt_kspace_h1
+   public :: gbt_kspace_h1, gbt_kspace_h2
 
 contains
 
@@ -79,5 +79,31 @@ contains
       end function ix
 
    end subroutine gbt_kspace_h1
+
+   !> Second-order Hamiltonian H = E_nu + h - h O h, the formula of the collinear assembler. O and E_nu are onsite blocks in
+   !> the local frame of each site (O = obar, E_nu = enu), and h1, obar and enu must be in the same orbital basis. The
+   !> onsite C inside h1 is the one the collinear route uses at second order (cex, not cx).
+   pure subroutine gbt_kspace_h2(norb, nsite, h1, obar, enu, h2)
+      integer, intent(in) :: norb, nsite
+      complex(rp), intent(in) :: h1(2*norb*nsite, 2*norb*nsite)
+      complex(rp), intent(in) :: obar(2*norb, 2*norb, nsite), enu(2*norb, 2*norb, nsite)
+      complex(rp), intent(out) :: h2(2*norb*nsite, 2*norb*nsite)
+
+      complex(rp), allocatable :: ho(:, :)
+      integer :: a, lo, hi
+
+      allocate (ho(2*norb*nsite, 2*norb*nsite))
+      do a = 1, nsite
+         lo = (a - 1)*2*norb + 1
+         hi = a*2*norb
+         ho(:, lo:hi) = matmul(h1(:, lo:hi), obar(:, :, a))
+      end do
+      h2 = h1 - matmul(ho, h1)
+      do a = 1, nsite
+         lo = (a - 1)*2*norb + 1
+         hi = a*2*norb
+         h2(lo:hi, lo:hi) = h2(lo:hi, lo:hi) + enu(:, :, a)
+      end do
+   end subroutine gbt_kspace_h2
 
 end module gbt_kspace_mod
