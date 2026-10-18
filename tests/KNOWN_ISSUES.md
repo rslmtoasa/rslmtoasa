@@ -1858,3 +1858,18 @@ Found during slice K3 of the GBT restart (AppGbtKspaceCommensurate). Fixed by ad
 - **Effect on K3:** AppGbtKspaceCommensurate (supercell `periodic_nc` against folded GBT eigenvalues; S-block precondition 4.3e-14 and 7.1e-14) gives 3.3e-15 Ry or better at first order for q = (0,0,1/2) and (0,0,1/3), th = 90 and 30. At second order: 5.6e-15 (q = 1/2, th = 90), 1.1e-9 (q = 1/2, th = 30), 5.8e-10 (q = 1/3, th = 90) and 1.2e-9 Ry (q = 1/3, th = 30), against the proposed `eig_identity_ry` = 1e-10. The failing cases are those that need a moment component that is not a single-precision number. Before the fix `AppGbtKspaceCommensurateSecondOrder` carried the label known-failure and pointed here. Tolerances were not changed.
 - **Fix applied (FIX-CMPLX, 2 lines):** `kind=rp` added to the `cmplx` calls at `hamiltonian_build.f90:1317` and `:1360`. `build_gbt_bulkham` calls the same two routines, so real-space `gbt_single_q` with `hoh = .true.` changes for moments with components that are not single-precision numbers; cases with moment components exactly representable in single precision (+-z, +-x) are unchanged. No reference was regenerated.
 - **After the fix (same decks, the `kind=rp` build):** `AppGbtKspaceCommensurateSecondOrder` gives 5.6e-15 (q = 1/2, th = 90), 6.2e-15 (q = 1/2, th = 30), 5.3e-15 (q = 1/3, th = 90) and 5.6e-15 Ry (q = 1/3, th = 30), against the earlier 5.6e-15, 1.1e-9, 5.8e-10 and 1.2e-9, with `eig_identity_ry` = 1e-10; its known-failure label is removed. The global rotation of the `periodic_nc` supercell at second order, th = 10 to 60, was 4.7e-15 Ry or less in the patch experiment above.
+
+## `cmplx` without `kind` rounds double-precision arguments to single precision in four places — 2026-10-18
+
+Found while fixing the same defect in `build_obarm`/`build_enim` (task FIX-CMPLX); found by reading, not run, not fixed. A search of `source/` found 14 `cmplx(` calls without a kind argument; four of them pass double-precision arguments, so the result carries single-precision rounding (relative error up to about 6e-8) before it is stored in a double-precision variable.
+
+| location | arguments | effect (by reading) |
+|---|---|---|
+| `source/bands.f90:1366` | `cmplx(0.0_rp, res)`, `res` is `real(rp)` | the imaginary part `eta` of a Gauss-Legendre node in `calculate_moments_gauss_legendre` is rounded to single precision |
+| `source/bands.f90:1444` | same | same, in `calculate_occupation_gauss_legendre` |
+| `source/green_block.f90:214` | same | same, in `calculate_intersite_gf_core` |
+| `source/hamiltonian_paoflow_io.f90:236` | `cmplx(dumre, dumcmplx)`, both `real(rp)` | legacy PAOFLOW reader: hopping values rounded to single precision before the division by 13.605703976 |
+
+The other ten calls are harmless: `hamiltonian_paoflow_io.f90:135` takes default-real data that were already single precision; `hamiltonian_build.f90:1191, 1193, 1217, 1267, 1269, 1312 (x2), 1351 (x2)` pass 0.0 or 0.5, which single precision holds exactly.
+
+Not measured: the size of the effect on any test or reference. Fixing these changes numbers at about the 1e-8 relative level in the real-space Green-function quadrature and the PAOFLOW import, so it needs its own task with the changed reference values listed for the developer's approval. Not touched in the GBT branch.
