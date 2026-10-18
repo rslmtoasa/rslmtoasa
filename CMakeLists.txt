@@ -1180,6 +1180,10 @@ add_test(NAME AppGbtKspaceCommensurateSecondOrder
 set_tests_properties(AppGbtKspaceGauge AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder
   PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
 
+add_test(NAME AppPeriodicNcRotation
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/noncollinear/test_periodic_nc_rotation.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/noncollinear/rotation")
+set_tests_properties(AppPeriodicNcRotation PROPERTIES LABELS "functional;noncollinear" TIMEOUT 600)
+
 add_test(
   NAME Example_si_chebyshev_kspace_dos_equivalence
   COMMAND
