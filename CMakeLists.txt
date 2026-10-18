@@ -1175,11 +1175,10 @@ add_test(NAME AppGbtKspaceAntiparallel
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_antiparallel.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/antiparallel")
 add_test(NAME AppGbtKspaceCommensurate
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_commensurate.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/commensurate" first)
-# Fails at second order by about 1e-9 Ry because build_obarm/build_enim round mom to single precision; see tests/KNOWN_ISSUES.md.
 add_test(NAME AppGbtKspaceCommensurateSecondOrder
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_commensurate.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/commensurate_second" second)
-set_tests_properties(AppGbtKspaceGauge AppGbtKspaceAntiparallel AppGbtKspaceCommensurate PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
-set_tests_properties(AppGbtKspaceCommensurateSecondOrder PROPERTIES LABELS "functional;gbt;kspace;known-failure" TIMEOUT 900)
+set_tests_properties(AppGbtKspaceGauge AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder
+  PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
 
 add_test(
   NAME Example_si_chebyshev_kspace_dos_equivalence

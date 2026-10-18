@@ -1314,7 +1314,7 @@ contains
             obm0(m, m) = this%lattice%symbolic_atoms(ntype)%potential%obx0(m)
             obm1(m, m) = this%lattice%symbolic_atoms(ntype)%potential%obx1(m)
          end do
-         mom(:) = cmplx(this%lattice%symbolic_atoms(ntype)%potential%mom(:), 0.0d0)
+         mom(:) = cmplx(this%lattice%symbolic_atoms(ntype)%potential%mom(:), 0.0d0, kind=rp)
          do m = 1, norb
             do l = 1, norb
                this%obarm(m, l, ntype) = obm0(m, l) + obm1(m, l)*mom(3)
@@ -1357,7 +1357,7 @@ contains
             em0(m, m) = ex0(m)
             em1(m, m) = ex1(m)
          end do
-         mom(:) = cmplx(this%lattice%symbolic_atoms(ntype)%potential%mom(:), 0.0d0)
+         mom(:) = cmplx(this%lattice%symbolic_atoms(ntype)%potential%mom(:), 0.0d0, kind=rp)
          do m = 1, norb
             do l = 1, norb
                this%enim(m, l, ntype) = em0(m, l) + em1(m, l)*mom(3)
