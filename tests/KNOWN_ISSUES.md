@@ -1873,3 +1873,7 @@ Found while fixing the same defect in `build_obarm`/`build_enim` (task FIX-CMPLX
 The other ten calls are harmless: `hamiltonian_paoflow_io.f90:135` takes default-real data that were already single precision; `hamiltonian_build.f90:1191, 1193, 1217, 1267, 1269, 1312 (x2), 1351 (x2)` pass 0.0 or 0.5, which single precision holds exactly.
 
 Not measured: the size of the effect on any test or reference. Fixing these changes numbers at about the 1e-8 relative level in the real-space Green-function quadrature and the PAOFLOW import, so it needs its own task with the changed reference values listed for the developer's approval. Not touched in the GBT branch.
+
+## `Example_bulk_bccFe_nsp2_hubbard` stops at the Fixed-U guard — 2026-10-18
+
+Found in the quick tier (Release, no `-march=native`) while doing K5. The run stops after about 1 s with `Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported` (`source/hamiltonian_build.f90:532`). It fails the same way on a clean checkout of c7c1fe1, so it is not caused by K5. Not triaged: whether the deck (nsp = 2) or the guard is wrong is not known.

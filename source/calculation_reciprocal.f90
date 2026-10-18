@@ -1,6 +1,7 @@
 submodule(calculation_mod) calculation_reciprocal
    use spin_response_mod, only: spin_response
    use alsda_radial_mod, only: alsda_kernel
+   use gbt_kspace_mod, only: grand_potential
 
 contains
 
@@ -646,5 +647,138 @@ contains
          mz(ie) = -aimag(tr_up - tr_dn)/pi
       end do
    end subroutine onsite_dos_mz
+
+   !> @brief k-space frozen magnon (relations R7, R8, R11 of the GBT restart spec): Omega(q, theta) of the GBT Hamiltonian at
+   !>        a fixed potential and a fixed mu, on a full Gamma-centred mesh. mu is solved once for (q, theta) = (0, 0).
+   !>        handled = .false. leaves everything to the real-space driver; it is the case unless use_kspace is set.
+   module subroutine frozen_magnon_kspace(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, mix_obj, self_obj, handled)
+      type(frozen_magnon), intent(in) :: fm_obj
+      real(rp), intent(in) :: q_ss_cart(:, :)
+      type(lattice), target, intent(inout) :: lattice_obj
+      type(hamiltonian), target, intent(inout) :: hamiltonian_obj
+      type(bands), target, intent(inout) :: bands_obj
+      type(mix), target, intent(inout) :: mix_obj
+      type(self), target, intent(inout) :: self_obj
+      logical, intent(out) :: handled
+
+      type(reciprocal) :: recip_obj
+      real(rp), allocatable :: eig(:, :), q_dir(:, :), omega(:), omega0(:), nel(:), nel0(:)
+      real(rp), parameter :: zero(3) = 0.0_rp
+      real(rp) :: kT, mu, moment, sin2theta, theta, omega_ref, n_ref, nearest(3)
+      integer :: iq, i, nk, unit
+
+      handled = .false.
+      if (lattice_obj%control%constraints_enable) return
+      self_obj = self(bands_obj, mix_obj)
+      if (.not. self_obj%use_kspace) return
+      handled = .true.
+      if (fm_obj%mode /= 'mft' .or. fm_obj%branch_mode /= 'acoustic') call g_logger%fatal( &
+         '[calculation.frozen_magnon_kspace]: only mode=''mft'' with branch_mode=''acoustic'' is supported.', __FILE__, __LINE__)
+
+      hamiltonian_obj%magnetic_representation = gbt_single_q
+      hamiltonian_obj%q_ss(:) = q_ss_cart(:, 1)
+      call self_obj%run()
+      theta = hamiltonian_obj%theta_ss
+      sin2theta = sin(theta)**2
+      moment = 0.0_rp
+      do i = 1, lattice_obj%nrec
+         moment = moment + lattice_obj%symbolic_atoms(lattice_obj%nbulk + i)%potential%mtot
+      end do
+      if (sin2theta < 1.0e-8_rp) call g_logger%fatal( &
+         '[calculation.frozen_magnon_kspace]: theta_ss must be nonzero to define omega(q).', __FILE__, __LINE__)
+      if (abs(moment) < 1.0e-12_rp) call g_logger%fatal( &
+         '[calculation.frozen_magnon_kspace]: total reference moment is zero; omega is undefined.', __FILE__, __LINE__)
+
+      recip_obj = reciprocal(hamiltonian_obj)
+      if (recip_obj%temperature <= 0.0_rp) call g_logger%fatal( &
+         '[calculation.frozen_magnon_kspace]: &reciprocal temperature must be > 0 (finite smearing is required).', &
+         __FILE__, __LINE__)
+      kT = recip_obj%temperature*kB_Ry_per_K
+      recip_obj%use_symmetry_reduction = .false.
+      recip_obj%use_time_reversal = .false.
+      call recip_obj%generate_mp_mesh()
+      nk = size(recip_obj%k_workset%points, 2)
+      do i = 1, 3
+         if (any(abs(recip_obj%k_workset%points(i, :)*recip_obj%nk_mesh(i) - &
+                     nint(recip_obj%k_workset%points(i, :)*recip_obj%nk_mesh(i))) > 1.0e-8_rp)) call g_logger%fatal( &
+            '[calculation.frozen_magnon_kspace]: the mesh must be Gamma-centred (k_offset = 0).', __FILE__, __LINE__)
+      end do
+      allocate (q_dir(3, fm_obj%n_q), omega(fm_obj%n_q), omega0(fm_obj%n_q), nel(fm_obj%n_q), nel0(fm_obj%n_q))
+      do iq = 1, fm_obj%n_q
+         do i = 1, 3
+            q_dir(i, iq) = dot_product(lattice_obj%a(:, i), q_ss_cart(:, iq))
+         end do
+         nearest = 2.0_rp*nint(0.5_rp*q_dir(:, iq)*recip_obj%nk_mesh)/recip_obj%nk_mesh
+         if (any(abs(nearest - q_dir(:, iq)) > 1.0e-8_rp)) then
+            write (*, '(a,i0,a,3f12.6)') 'q index ', iq, ': q/2 is not on the mesh; nearest allowed q (direct) = ', nearest
+            call g_logger%fatal('[calculation.frozen_magnon_kspace]: q/2 must be a mesh point.', __FILE__, __LINE__)
+         end if
+      end do
+
+      call hamiltonian_obj%build_bulkham()
+      mu = 0.0_rp
+      call probe(zero, 0.0_rp, omega_ref, n_ref, eig)
+      call move_alloc(eig, recip_obj%eigenvalues)
+      mu = recip_obj%find_fermi_level_from_eigenvalues(recip_obj%total_electrons)
+      deallocate (recip_obj%eigenvalues)
+      call probe(zero, 0.0_rp, omega_ref, n_ref)
+      do iq = 1, fm_obj%n_q
+         call probe(q_ss_cart(:, iq), 0.0_rp, omega0(iq), nel0(iq))
+         call probe(q_ss_cart(:, iq), theta, omega(iq), nel(iq))
+      end do
+
+      open (newunit=unit, file='frozen_magnon_kspace.dat', status='replace', action='write')
+      write (unit, '(a,es16.8,a,f8.2,a,3i4,a,f10.6)') '# mu [Ry] =', mu, '  T [K] =', recip_obj%temperature, '  mesh =', &
+         recip_obj%nk_mesh, '  M [muB] =', moment
+      write (unit, '(a)') '# q direct (3), q Cartesian 2pi/alat (3), theta [deg], Omega(q,theta) [Ry], Omega(q,0) [Ry], ' // &
+         'N(q,theta), omega [Ry], omega [meV], N(q,0)'
+      do iq = 1, fm_obj%n_q
+         write (unit, '(6f12.6,f9.3,3es20.12,2es18.8,es20.12)') q_dir(:, iq), q_ss_cart(:, iq), theta*180.0_rp/pi, omega(iq), omega0(iq), &
+            nel(iq), 4.0_rp*(omega(iq) - omega_ref)/(moment*sin2theta), &
+            4.0_rp*(omega(iq) - omega_ref)/(moment*sin2theta)*ry2ev*1000.0_rp, nel0(iq)
+      end do
+      close (unit)
+
+   contains
+
+      !> Omega and N at the current mu for one (q, theta), accumulated over tiles of the mesh without eigenvectors; the
+      !> eigenvalues are kept only when eig_out is present (the reference probe that fixes mu).
+      subroutine probe(q, theta_in, omega_out, n_out, eig_out)
+         real(rp), intent(in) :: q(3), theta_in
+         real(rp), intent(out) :: omega_out, n_out
+         real(rp), allocatable, intent(inout), optional :: eig_out(:, :)
+         type(reciprocal_execution_request) :: request
+         type(reciprocal_execution_result) :: result
+         integer :: first, last, tile, ik, ib
+
+         hamiltonian_obj%q_ss(:) = q
+         hamiltonian_obj%theta_ss = theta_in
+         call recip_obj%make_execution_backend()
+         tile = max(1, recip_obj%reciprocal_tile_size)
+         request%assemble_hamiltonian = .true.
+         request%solve_eigensystem = .true.
+         request%request_eigenvectors = .false.
+         request%operator_generation = hamiltonian_obj%operator_generation
+         omega_out = 0.0_rp
+         n_out = 0.0_rp
+         do first = 1, nk, tile
+            last = min(nk, first + tile - 1)
+            request%k_points = recip_obj%k_workset%points(:, first:last)
+            call recip_obj%execution_backend%execute_batch(request, result)
+            if (present(eig_out)) then
+               if (.not. allocated(eig_out)) allocate (eig_out(size(result%eigenvalues, 1), nk))
+               eig_out(:, first:last) = result%eigenvalues
+            end if
+            omega_out = omega_out + grand_potential(size(result%eigenvalues, 1), last - first + 1, result%eigenvalues, &
+                                                    recip_obj%k_workset%weights(first:last), mu, kT)
+            do ik = first, last
+               do ib = 1, size(result%eigenvalues, 1)
+                  n_out = n_out + recip_obj%k_workset%weights(ik)*fermi_dirac_occupation(result%eigenvalues(ib, ik - first + 1), mu, kT)
+               end do
+            end do
+         end do
+      end subroutine probe
+
+   end subroutine frozen_magnon_kspace
 
 end submodule calculation_reciprocal

@@ -107,8 +107,8 @@ contains
    end subroutine gbt_kspace_h2
 
    !> Mermin grand potential per cell (relation R11, Mermin 1965): sum_k w_k sum_n -kT ln(1 + exp(-(e - mu)/kT)), written
-   !> as (e - mu) - kT ln(1 + exp((e - mu)/kT)) for e < mu so that the exponential never overflows. kT = 0 gives
-   !> sum (e - mu) theta(mu - e). One state holds one electron (spinor bands), so there is no spin factor.
+   !> as (e - mu) - kT ln(1 + exp((e - mu)/kT)) for e < mu so that the exponential never overflows. kT > 0 is
+   !> required. One state holds one electron (spinor bands), so there is no spin factor.
    pure function grand_potential(nband, nk, eigenvalues, weights, mu, kT) result(omega)
       integer, intent(in) :: nband, nk
       real(rp), intent(in) :: eigenvalues(nband, nk), weights(nk), mu, kT
@@ -121,9 +121,7 @@ contains
       do ik = 1, nk
          do ib = 1, nband
             x = eigenvalues(ib, ik) - mu
-            if (kT <= 0.0_rp) then
-               if (x < 0.0_rp) omega = omega + weights(ik)*x
-            else if (x < 0.0_rp) then
+            if (x < 0.0_rp) then
                omega = omega + weights(ik)*(x - kT*log(1.0_rp + exp(x/kT)))
             else
                omega = omega - weights(ik)*kT*log(1.0_rp + exp(-x/kT))

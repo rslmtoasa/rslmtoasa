@@ -212,6 +212,17 @@ module calculation_mod
          class(calculation), intent(in) :: this
       end subroutine post_processing_kspace_green
 
+      module subroutine frozen_magnon_kspace(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, mix_obj, self_obj, handled)
+         type(frozen_magnon), intent(in) :: fm_obj
+         real(rp), intent(in) :: q_ss_cart(:, :)
+         type(lattice), target, intent(inout) :: lattice_obj
+         type(hamiltonian), target, intent(inout) :: hamiltonian_obj
+         type(bands), target, intent(inout) :: bands_obj
+         type(mix), target, intent(inout) :: mix_obj
+         type(self), target, intent(inout) :: self_obj
+         logical, intent(out) :: handled
+      end subroutine frozen_magnon_kspace
+
       module subroutine prepare_post_processing_stack(this, use_paoflow, use_exchange_pairs, &
                                                        energy_mesh_before_hamiltonian, stochastic_moments, &
                                                        control_obj, lattice_obj, charge_obj, mix_obj, energy_obj, &
@@ -1133,6 +1144,7 @@ contains
       real(rp), allocatable :: q_ss_cart(:, :)
       real(rp), dimension(3, 3) :: direct_to_cart
       integer :: iq
+      logical :: handled
 
       fm_obj = frozen_magnon(this%fname)
 
@@ -1149,6 +1161,9 @@ contains
       else
          q_ss_cart(:, :) = fm_obj%q_ss_list(:, :)
       end if
+
+      call frozen_magnon_kspace(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, mix_obj, self_obj, handled)
+      if (handled) return
 
       if (fm_obj%branch_mode == 'auto') then
          if (fm_obj%mode == 'mft_constrained') then

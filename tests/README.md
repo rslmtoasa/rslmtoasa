@@ -33,6 +33,7 @@ The GBT test set is being restarted under `cleanup/gbt_kspace_restart_spec.md`
 (slices, relations R1–R12, slim test list). The old GBT tests, fixtures, runners
 and analysis tools are removed from the tree and stay at tag
 `gbt-campaign-archive-2026-10`.
+`AppGbtKspaceRsFreeze` references are bound to the CI build configuration (Release, no `-march=native`).
 - `magnetic_scf` — XCR-04 historical `nsp=2`, q = 0 magnetic SCF campaign.
 - `xc_reconciliation` — XCR-01 fixed-density XC reconciliation.
 

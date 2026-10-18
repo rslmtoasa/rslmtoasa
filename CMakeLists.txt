@@ -1179,7 +1179,9 @@ add_test(NAME AppGbtKspaceCommensurate
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_commensurate.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/commensurate" first)
 add_test(NAME AppGbtKspaceCommensurateSecondOrder
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_commensurate.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/commensurate_second" second)
-set_tests_properties(AppGbtKspaceGauge AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder
+add_test(NAME AppGbtKspaceSymmetry
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_symmetry.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/symmetry")
+set_tests_properties(AppGbtKspaceGauge AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceSymmetry
   PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
 
 add_test(NAME AppPeriodicNcRotation
