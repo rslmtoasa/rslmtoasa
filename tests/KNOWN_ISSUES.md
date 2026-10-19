@@ -1877,3 +1877,14 @@ Not measured: the size of the effect on any test or reference. Fixing these chan
 ## `Example_bulk_bccFe_nsp2_hubbard` stops at the Fixed-U guard — 2026-10-18
 
 Found in the quick tier (Release, no `-march=native`) while doing K5. The run stops after about 1 s with `Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported` (`source/hamiltonian_build.f90:532`). It fails the same way on a clean checkout of c7c1fe1, so it is not caused by K5. Not triaged: whether the deck (nsp = 2) or the guard is wrong is not known.
+
+## Two screening-constant tables; stored `center_band`/`width_band` match only one — 2026-10-20
+
+Found in D6/D7a by reading and by arithmetic outside the code; no run. `predls` (`source/symbolic_atom.f90:287-308`) turns `c`, `enu`, `srdel`, `qpar` into `center_band`/`width_band` with a screening table `qm`: `qm_canonical` = (.348485, .053030, .010714) (`source/math.f90:113`), replaced by `potential%screening_alpha` when that is allocated with size `lmax + 1` (`symbolic_atom.f90:289-293`). `structb_strux` allocates it and stores the strux default (.3485, .0530, .0107, .00674) (`source/lattice.f90:48`, `source/lattice_strux.f90:274-285`), and the post-processing stack runs `structb` before `predls` (`source/calculation_reciprocal.f90:52-62`).
+
+| quantity | recomputed with strux alphas | recomputed with `qm_canonical` |
+|---|---|---|
+| max abs difference to stored `center_band` in `tests/spin_response/fe_bcc/Fe.nml` | 1.1e-16 Ry | 1.9e-4 Ry |
+| max abs difference to stored `width_band` | 5.6e-17 | 7.5e-5 |
+
+By this reading the exchange route (which calls `predls`, `source/calculation.f90:784`) and GBT at `nstep = 0` (stored values) use the same numbers for strux_lib runs. Not verified by a run. Not measured: the effect of `qm_canonical` versus the strux alphas on J, and which paths, if any, reach `predls` without `screening_alpha` allocated.
