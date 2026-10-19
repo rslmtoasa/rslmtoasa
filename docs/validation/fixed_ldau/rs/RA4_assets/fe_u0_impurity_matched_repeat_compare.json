@@ -1,0 +1,174 @@
+{
+  "analyzer": "RA4 read-only observables v2",
+  "comparison": {
+    "ldos": {
+      "comparison_points": 2510,
+      "d_dos_units": "states/Ry/site per spin channel",
+      "energy_axis": "E - E_F (Ry)",
+      "energy_interval_common": [
+        -0.93075,
+        0.57489
+      ],
+      "grid_definition": "uniform grid over interval intersection, linearly interpolated; no extrapolation",
+      "max_abs_d_ldos_down": 0.0,
+      "max_abs_d_ldos_spin_sum": 3.552713678800501e-15,
+      "max_abs_d_ldos_up": 0.0
+    },
+    "rounded_report_differences_abs": {
+      "d_occupation_down_report": 0.0,
+      "d_occupation_up_report": 0.0
+    },
+    "scalar_differences_abs": {
+      "d_occupation_down_ql": 0.0,
+      "d_occupation_up_ql": 0.0,
+      "sphere_moment_muB": 0.0
+    }
+  },
+  "runs": [
+    {
+      "files_sha256": {
+        "Fe-bulk.nml": "e1ebb1006e15eb9a7a32098bcc1d50e2be491031b220b1f3394840e6fa8f90d8",
+        "Fe-bulk_out.nml": "647e9df67510db0c133dd53975cece5f50b379e6e314542de336eec64575d327",
+        "Fe-imp.nml": "e1ebb1006e15eb9a7a32098bcc1d50e2be491031b220b1f3394840e6fa8f90d8",
+        "Fe_out.nml": "498dddba889bb4f35e3fb1710b3a9ad3a53c66ff21cd32d09a1d6fbaa528c23a",
+        "Fe_scf.nml": "498dddba889bb4f35e3fb1710b3a9ad3a53c66ff21cd32d09a1d6fbaa528c23a",
+        "clust": "f4256b62820df1400a6604cef8b84a0f1d3987ec5a815358b192c5ecabbb11ec",
+        "input.nml": "10bf09426c97ec8bd6eeba82892ccedf95653f9c8a05d055446db3bae27525c3",
+        "map": "607a594892814daed68b0e2a8dfec15169038430291b977a40811584bcbff593",
+        "outnewclu": "ab130ce8ef8daa4d8305a2aaa10f7c8676a1ffae99c5b862b5bd77f457a084f5",
+        "report.out": "f24888bd7b3e3e0f28513d4917ad4615ca2cc3df7392e0bf91efdfed009fd596",
+        "run.log": "d94308d8bdd21f7c7b5966fcc36aad4c39141ef25b8fb9c4bbb3fe0ec8ce7f34",
+        "sbar": "3a128331218bb4fce172f6838818c39b052cbebb25271373067fe3bf31ec80b8",
+        "str.out": "2569340fa8297560688dc0edfd8f09be0f27f734533e07b5479386574cf9d04d",
+        "view.sbar": "97e2c0e7e103ce89195cb929f0a92b21d42583c0ec9595b3984bcdaecfc36d49"
+      },
+      "hash_note": "hashes describe current on-disk files; input launch hashes must be taken from immutable pre-run copies",
+      "ldos": {
+        "d_dos_units": "states/Ry/site per spin channel",
+        "energy_axis": "E - E_F (Ry), as emitted by bands.f90",
+        "path": "/private/tmp/rslmto-ra4-frozen/fe_u0_impurity_matched/repeat1/Fe_orbital_dos.out",
+        "sha256": "c9e410a8a84ea7b56634527d8c460060403ecca4a53b081cfb4d0a324fab60da"
+      },
+      "observables": {
+        "backend": null,
+        "d_occupation_down_ql": 2.149933566340523,
+        "d_occupation_down_report": 2.149934,
+        "d_occupation_up_ql": 4.349201635942861,
+        "d_occupation_up_report": 4.349202,
+        "hubbard_active": false,
+        "hubbard_j": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "hubbard_u": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ldm_d_trace_per_spin": {
+          "down": {
+            "imag_trace": null,
+            "real_trace": 0.0
+          },
+          "up": {
+            "imag_trace": null,
+            "real_trace": 0.0
+          }
+        },
+        "ldm_trace_note": "inactive U/J; zero matrix is not an occupation oracle",
+        "radial_mode": null,
+        "site_index": 1,
+        "sphere_moment_muB": 2.103837,
+        "total_rms_diff_report_rounded": 0.0
+      },
+      "potential": {
+        "path": "/private/tmp/rslmto-ra4-frozen/fe_u0_impurity_matched/repeat1/Fe_out.nml",
+        "sha256": "498dddba889bb4f35e3fb1710b3a9ad3a53c66ff21cd32d09a1d6fbaa528c23a"
+      },
+      "run_dir": "/private/tmp/rslmto-ra4-frozen/fe_u0_impurity_matched/repeat1",
+      "status": {
+        "fixed_u_residual_same_iteration": null,
+        "run_log": "/private/tmp/rslmto-ra4-frozen/fe_u0_impurity_matched/repeat1/run.log",
+        "run_log_sha256": "d94308d8bdd21f7c7b5966fcc36aad4c39141ef25b8fb9c4bbb3fe0ec8ce7f34",
+        "scf_delta_last_completed_iteration": 4.6e-09,
+        "scf_iterations_completed": 86,
+        "scf_marker_last_completed_iteration": "Converged!",
+        "trailing_iteration_in_progress": null
+      }
+    },
+    {
+      "files_sha256": {
+        "Fe-bulk.nml": "e1ebb1006e15eb9a7a32098bcc1d50e2be491031b220b1f3394840e6fa8f90d8",
+        "Fe-bulk_out.nml": "647e9df67510db0c133dd53975cece5f50b379e6e314542de336eec64575d327",
+        "Fe-imp.nml": "e1ebb1006e15eb9a7a32098bcc1d50e2be491031b220b1f3394840e6fa8f90d8",
+        "Fe_out.nml": "498dddba889bb4f35e3fb1710b3a9ad3a53c66ff21cd32d09a1d6fbaa528c23a",
+        "Fe_scf.nml": "498dddba889bb4f35e3fb1710b3a9ad3a53c66ff21cd32d09a1d6fbaa528c23a",
+        "clust": "f4256b62820df1400a6604cef8b84a0f1d3987ec5a815358b192c5ecabbb11ec",
+        "input.nml": "10bf09426c97ec8bd6eeba82892ccedf95653f9c8a05d055446db3bae27525c3",
+        "map": "607a594892814daed68b0e2a8dfec15169038430291b977a40811584bcbff593",
+        "outnewclu": "ab130ce8ef8daa4d8305a2aaa10f7c8676a1ffae99c5b862b5bd77f457a084f5",
+        "report.out": "f24888bd7b3e3e0f28513d4917ad4615ca2cc3df7392e0bf91efdfed009fd596",
+        "run.log": "087b7202cde54ceb6189808b83c9e1377c7b3ab1f868c4bfe0e75e8acde3bb29",
+        "sbar": "3a128331218bb4fce172f6838818c39b052cbebb25271373067fe3bf31ec80b8",
+        "str.out": "2569340fa8297560688dc0edfd8f09be0f27f734533e07b5479386574cf9d04d",
+        "view.sbar": "97e2c0e7e103ce89195cb929f0a92b21d42583c0ec9595b3984bcdaecfc36d49"
+      },
+      "hash_note": "hashes describe current on-disk files; input launch hashes must be taken from immutable pre-run copies",
+      "ldos": {
+        "d_dos_units": "states/Ry/site per spin channel",
+        "energy_axis": "E - E_F (Ry), as emitted by bands.f90",
+        "path": "/private/tmp/rslmto-ra4-frozen/fe_u0_impurity_matched/repeat2/Fe_orbital_dos.out",
+        "sha256": "c9e410a8a84ea7b56634527d8c460060403ecca4a53b081cfb4d0a324fab60da"
+      },
+      "observables": {
+        "backend": null,
+        "d_occupation_down_ql": 2.149933566340523,
+        "d_occupation_down_report": 2.149934,
+        "d_occupation_up_ql": 4.349201635942861,
+        "d_occupation_up_report": 4.349202,
+        "hubbard_active": false,
+        "hubbard_j": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "hubbard_u": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ldm_d_trace_per_spin": {
+          "down": {
+            "imag_trace": null,
+            "real_trace": 0.0
+          },
+          "up": {
+            "imag_trace": null,
+            "real_trace": 0.0
+          }
+        },
+        "ldm_trace_note": "inactive U/J; zero matrix is not an occupation oracle",
+        "radial_mode": null,
+        "site_index": 1,
+        "sphere_moment_muB": 2.103837,
+        "total_rms_diff_report_rounded": 0.0
+      },
+      "potential": {
+        "path": "/private/tmp/rslmto-ra4-frozen/fe_u0_impurity_matched/repeat2/Fe_out.nml",
+        "sha256": "498dddba889bb4f35e3fb1710b3a9ad3a53c66ff21cd32d09a1d6fbaa528c23a"
+      },
+      "run_dir": "/private/tmp/rslmto-ra4-frozen/fe_u0_impurity_matched/repeat2",
+      "status": {
+        "fixed_u_residual_same_iteration": null,
+        "run_log": "/private/tmp/rslmto-ra4-frozen/fe_u0_impurity_matched/repeat2/run.log",
+        "run_log_sha256": "087b7202cde54ceb6189808b83c9e1377c7b3ab1f868c4bfe0e75e8acde3bb29",
+        "scf_delta_last_completed_iteration": 4.6e-09,
+        "scf_iterations_completed": 86,
+        "scf_marker_last_completed_iteration": "Converged!",
+        "trailing_iteration_in_progress": null
+      }
+    }
+  ],
+  "tolerances_applied": false
+}

@@ -1,0 +1,4562 @@
+{
+  "amendment": "C3",
+  "part_a_status": {
+    "provenance_path": "docs/validation/fixed_ldau/rs/C3_PART_A_PROVENANCE.json",
+    "provenance_sha256": "8685e811909855ba057708bbc1cc3c277b64e46da776fdfd7c9e778b6bb67ea9",
+    "results_path": "docs/validation/fixed_ldau/rs/C3_PART_A_RESULTS.md",
+    "results_sha256": "a9fb5ae6c91634fa76591c5dae5b4cc3e8449e9cc87b24cf102eceff3c72bad3",
+    "status": "OPEN; rc140/lld21 only, bulk FAILED_NONFINITE after 183 complete iterations at iteration 184; impurity PROVISIONAL at 200-step cap; 12-run C3 Part A budget exhausted"
+  },
+  "rc0": {
+    "entropy_in_scf_functional": false,
+    "fermi_factor_in_scf": false,
+    "functional": "E",
+    "mesh_for_rc1": {
+      "channels_ldos": 2500,
+      "energy_window_ry": [
+        -1.0,
+        0.5
+      ],
+      "fermi_level_policy": "free EF to hold electron count fixed"
+    },
+    "occupation_rule": "zero-temperature step function at EF; spectral occupations are integrated to EF on the configured energy mesh",
+    "source_paths": [
+      "source/energy.f90",
+      "source/recursion_haydock.f90"
+    ],
+    "temperature_note": "temperature is used in exchange integration, not in RS SCF occupations"
+  },
+  "rc1": {
+    "binary_path": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+    "binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+    "c1_qualified_continuations": [
+      {
+        "acceptance_path": "/private/tmp/c3-rc1-rs-w1/continuations/zero_beta005/accepted_snapshot_iter27/ACCEPTANCE.json",
+        "acceptance_sha256": "77c56e78ec71dcf8e9c917e98c223f08130f1bcd5bccc30f93fdc35928a58d4c",
+        "accepted_restart_sha256": "e691bdb27e795bf51e2333eb8436a645bfdc021806958c788e4134aa3f0e7b3f",
+        "case": "lambda=0.0 Ry",
+        "complete_iterations": 27,
+        "console_sha256": "ab335737961d0558920e96bdf20c9c70e97f10549a584e681a1267caa8d22dfb",
+        "continuation_index": 1,
+        "d_down_spread": 3.9000134766098427e-07,
+        "d_up_spread": 3.8003771685168886e-07,
+        "final_diff": 2.7e-08,
+        "input_sha256": "a133940274d10700d48e40f691632d7e5a409b3b7e44bbd6aa55713e3feac84a",
+        "predecessor_seed_sha256": "f24ca1c0ea208f9f6a5d621081cd6b25d88050014ca1eb5652c82fd372727b3c",
+        "saved_all_shell_ql_down": [
+          0.355721282760248,
+          0.44242353787096833,
+          2.1499412636025443
+        ],
+        "saved_all_shell_ql_up": [
+          0.33431509848537694,
+          0.36839936549180086,
+          4.349199451789025
+        ],
+        "saved_potential_semantics": "Fe_scf.nml is the post-mix accepted checkpoint; Fe_out.nml in this frozen directory is the predecessor seed.",
+        "saved_sphere_moment_abs_muB": 2.1038278315324423,
+        "snapshot_path": "/private/tmp/c3-rc1-rs-w1/continuations/zero_beta005/accepted_snapshot_iter27",
+        "sphere_moment_spread_muB": 7.85644532097507e-07,
+        "status": "C1_ACCEPTED_CHECKPOINT_CAPTURED",
+        "trace_sha256": "d398914c708b39da66d260bc77fa1a3a6a6b6d32367ffabf04a7ad7fd59d2e6a",
+        "window_iterations": [
+          8,
+          27
+        ]
+      }
+    ],
+    "continuation_status": "All five prescribed lambda cases are frozen. Four have C1-accepted continuation endpoints; +0.0025 Ry exhausted both registered continuations and is PROVISIONAL.",
+    "continuations_manifest_path": "/private/tmp/c3-rc1-rs-w1/continuations/RC1_CONTINUATIONS_PREREGISTRATION.json",
+    "execution_manifest_path": "/private/tmp/c3-rc1-rs-w1/runs/RC1_EXECUTION.json",
+    "execution_manifest_sha256": "8e8f0e3aed65fe2971d25deddb09a2268dcb1bee29e5abd29a1883ee14b6b436",
+    "final_gate": {
+      "basis": "C1 \u00a71.3 exhausted its two registered continuations for +0.0025 Ry; that result is PROVISIONAL and retained as a RECORD. Both residual magnitudes are below the C3 numeric 1% criterion. RC1 is not labeled PASS because one prescribed step-size endpoint is provisional; this does not block RC2 under C3, which only stops when the numeric RC1 criterion exceeds 1%.",
+      "eligible_h005_absolute_relative_residual": 0.0017124421398524037,
+      "eligible_h005_all_endpoints_c1_accepted": true,
+      "h0025_endpoint_c1_accepted": false,
+      "numeric_limit_abs_relative_residual": 0.01,
+      "relative_residuals": [
+        -0.0015898811120663586,
+        -0.0017124421398524037
+      ],
+      "source_results_path": "/private/tmp/c3-rc1-rs-w1/RC1_PROVISIONAL_RESULTS.json",
+      "source_results_sha256": "437fd2e99ce47f7828dd3c10671182a8c5879c58908f52d4b831968397c26a2f",
+      "status": "UNESTABLISHED_PROVISIONAL_RECORD",
+      "verdict": "UNESTABLISHED; no numeric failure"
+    },
+    "gate_relative_residual_abs_max": 0.01,
+    "phase0_runs": [
+      {
+        "C1_status": "NOT_ACCEPTED_OR_UNVERIFIED: one terminal-only rolling trace cannot establish last-20 P_OUT spreads",
+        "case": "zero",
+        "console_sha256": "9d1856c6194cd14fa348e49fc1d037cfb47b0eee001988606b21db59f39ce58b",
+        "diff_markers": 0,
+        "final_diff": null,
+        "input_sha256": "fb13267093f986bac758744732a581ecec8af076bbd74af32d623934f589ca22",
+        "lambda_ry": 0.0,
+        "restart_seed_sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c",
+        "returncode": 0,
+        "terminal_iteration": 1,
+        "terminal_restart_sha256": "f24ca1c0ea208f9f6a5d621081cd6b25d88050014ca1eb5652c82fd372727b3c",
+        "terminal_trace_sha256": "550bad7377100ab6dcbf265e7e0a73851907e2fcebf94614893eabf9d118dd74"
+      },
+      {
+        "C1_status": "NOT_ACCEPTED_OR_UNVERIFIED: one terminal-only rolling trace cannot establish last-20 P_OUT spreads",
+        "case": "m0p0025",
+        "console_sha256": "4d2673958b24d59889e03c1297411e5c59becf5a251fb315568dc125b090a6ca",
+        "diff_markers": 53,
+        "final_diff": 3.34e-08,
+        "input_sha256": "72f3212d62f1271806824db62b905ae3c5095a65957cb3c0b79f3026389320e8",
+        "lambda_ry": -0.0025,
+        "restart_seed_sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c",
+        "returncode": 0,
+        "terminal_iteration": 54,
+        "terminal_restart_sha256": "f81c4f634f582ad13fd906e2cd7b4e6278b3d2153cd30b61ae98459f74b33549",
+        "terminal_trace_sha256": "92ae9498128355aa38781aaa822a0f7fb87edf12a42ecb253ee1b871529d2388"
+      },
+      {
+        "C1_status": "NOT_ACCEPTED_OR_UNVERIFIED: one terminal-only rolling trace cannot establish last-20 P_OUT spreads",
+        "case": "p0p0025",
+        "console_sha256": "40139066a3302d2141e4277229585e5170b2faf5f8bfd002f3231040f199dea4",
+        "diff_markers": 58,
+        "final_diff": 3.86e-08,
+        "input_sha256": "99d616ff00222b92a5180dfe11ede8814bd665137954b927e8b4d275087aa0ca",
+        "lambda_ry": 0.0025,
+        "restart_seed_sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c",
+        "returncode": 0,
+        "terminal_iteration": 59,
+        "terminal_restart_sha256": "5aab3f0950fa1620c6f55548d393d568ba14f5a910bff12887a7bc4ec51f2ab5",
+        "terminal_trace_sha256": "11133457ed8585baddf802c366a41d81d94d68371be25f9cbc8fbd59f9c8b137"
+      },
+      {
+        "C1_status": "NOT_ACCEPTED_OR_UNVERIFIED: one terminal-only rolling trace cannot establish last-20 P_OUT spreads",
+        "case": "m0p0050",
+        "console_sha256": "297277c7963c61773ffd9dd7bda76ae184b7b40bb8cc5d264d36249242dc091f",
+        "diff_markers": 61,
+        "final_diff": 3.08e-08,
+        "input_sha256": "02f6f71790d8836c72976edf4d0f2d39dc4f3a6753b2392b24d76f85a24dbbce",
+        "lambda_ry": -0.005,
+        "restart_seed_sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c",
+        "returncode": 0,
+        "terminal_iteration": 62,
+        "terminal_restart_sha256": "6da542222c91f3292c022830cb905ba77e392a380581eeff8caa38073dc61c42",
+        "terminal_trace_sha256": "366928c3240e2c574721dcf0d4f3b2c8241b85e4f0fde013bef92a18778127b1"
+      },
+      {
+        "C1_status": "NOT_ACCEPTED_OR_UNVERIFIED: one terminal-only rolling trace cannot establish last-20 P_OUT spreads",
+        "case": "p0p0050",
+        "console_sha256": "186a72aa4bfba88dd0f11d213103ba37db560f505e8284f5220d14e2627d62ff",
+        "diff_markers": 65,
+        "final_diff": 4.7e-08,
+        "input_sha256": "851ce0568e0d6ed8a9ed215cfb1ff6a024e5d2475610d3e085a44ca96a1a268e",
+        "lambda_ry": 0.005,
+        "restart_seed_sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c",
+        "returncode": 0,
+        "terminal_iteration": 66,
+        "terminal_restart_sha256": "d5b42ab9f51a9da6ba5f0c81e737d924801ed7d16ea82bbb1893f9fe056b9eaa",
+        "terminal_trace_sha256": "24db182a909da3c76cefb60c92d355870e0544196d18e26e094a799138c1badf"
+      }
+    ],
+    "preliminary_rc1_residuals_not_gate_results": [
+      {
+        "direct_lambda0": 6.499140601719869,
+        "h_ry": 0.0025,
+        "relative_residual": 0.0015908864532727337,
+        "signed_residual": -0.010339394741190944,
+        "slope": 6.488801206978678
+      },
+      {
+        "direct_lambda0": 6.499140601719869,
+        "h_ry": 0.005,
+        "relative_residual": 0.0017139885930356306,
+        "signed_residual": -0.011139452855882581,
+        "slope": 6.488001148863987
+      }
+    ],
+    "preregistration_path": "/private/tmp/c3-rc1-rs-w1/runs/RC1_PREREGISTRATION.json",
+    "preregistration_sha256": "c0f25a931d6a2cb95483be27a135e2023e999032f73a4c2841cdd6d6ef9ecde5",
+    "provisional_endpoint_results": {
+      "cases": [
+        {
+          "F_lambda_Ry": -2541.981627525905,
+          "Tr_W1_P_OUT_from_d_QL_both_spins": 6.499140762092945,
+          "c1_accepted": true,
+          "case": "lambda0",
+          "checkpoint_path": "/private/tmp/c3-rc1-rs-w1/continuations/zero_beta005/accepted_snapshot_iter27/Fe_scf.nml",
+          "checkpoint_sha256": "e691bdb27e795bf51e2333eb8436a645bfdc021806958c788e4134aa3f0e7b3f",
+          "console_path": "/private/tmp/c3-rc1-rs-w1/continuations/zero_beta005/accepted_snapshot_iter27/console.log",
+          "console_sha256": "ab335737961d0558920e96bdf20c9c70e97f10549a584e681a1267caa8d22dfb",
+          "lambda_ry": 0.0,
+          "outer_diff": 2.7e-08,
+          "physical_total_energy_Ry": -2541.981627525905,
+          "selected_iteration": 27,
+          "trace_path": "/private/tmp/c3-rc1-rs-w1/continuations/zero_beta005/accepted_snapshot_iter27/fixed_u_trace.csv",
+          "trace_sha256": "d398914c708b39da66d260bc77fa1a3a6a6b6d32367ffabf04a7ad7fd59d2e6a"
+        },
+        {
+          "F_lambda_Ry": -2541.9978580099923,
+          "Tr_W1_P_OUT_from_d_QL_both_spins": 6.50232056219907,
+          "c1_accepted": true,
+          "case": "lambda_m0p0025",
+          "checkpoint_path": "/private/tmp/c3-rc1-rs-w1/continuations/m0p0025_beta005/accepted_snapshot_iter34/Fe_scf.nml",
+          "checkpoint_sha256": "5011b35d955583b973bcb0e7b0c9cf8ef2a8a5817529b1e0c4c9d0272de1e200",
+          "console_path": "/private/tmp/c3-rc1-rs-w1/continuations/m0p0025_beta005/accepted_snapshot_iter34/console.log",
+          "console_sha256": "b3a270f335a25cc85774ca2979ccb3e42aabe655ae298e839a5ec0ee94f41b1f",
+          "lambda_ry": -0.0025,
+          "outer_diff": 1.3e-08,
+          "physical_total_energy_Ry": -2541.981602208587,
+          "selected_iteration": 34,
+          "trace_path": "/private/tmp/c3-rc1-rs-w1/continuations/m0p0025_beta005/accepted_snapshot_iter34/fixed_u_trace.csv",
+          "trace_sha256": "981bc54bd5c3d5c9fc60c9e2d3388b3ab2e00b23ea9cc74ff49a74c1e44e6f81"
+        },
+        {
+          "F_lambda_Ry": -2541.9654139704876,
+          "Tr_W1_P_OUT_from_d_QL_both_spins": 6.495951903332919,
+          "c1_accepted": false,
+          "case": "lambda_p0p0025",
+          "checkpoint_path": "/private/tmp/c3-rc1-rs-w1/continuations/p0p0025_beta01_phase2/phase2_snapshot_iter200/Fe_scf.nml",
+          "checkpoint_sha256": "09471b3f79528cc50e9b431928e7ad7b2b84eeb8d06d3e0e1e159872f3741569",
+          "console_path": "/private/tmp/c3-rc1-rs-w1/continuations/p0p0025_beta01_phase2/phase2_snapshot_iter200/console.log",
+          "console_sha256": "2655ab7751ec29d059ca0ef1eef0a3f044467a1434d3662b2218525a85e49007",
+          "lambda_ry": 0.0025,
+          "outer_diff": 6.34e-08,
+          "physical_total_energy_Ry": -2541.981653850246,
+          "selected_iteration": 200,
+          "trace_path": "/private/tmp/c3-rc1-rs-w1/continuations/p0p0025_beta01_phase2/phase2_snapshot_iter200/fixed_u_trace.csv",
+          "trace_sha256": "fd29145332daf9aa9cf5a32c2c356d9d8f1aee31c76204101cb3b34639c95793"
+        },
+        {
+          "F_lambda_Ry": -2542.014084866401,
+          "Tr_W1_P_OUT_from_d_QL_both_spins": 6.505518998177098,
+          "c1_accepted": true,
+          "case": "lambda_m0p0050",
+          "checkpoint_path": "/private/tmp/c3-rc1-rs-w1/continuations/m0p0050_beta005/accepted_snapshot_iter45/Fe_scf.nml",
+          "checkpoint_sha256": "1343c992f878627a6273fb7c2db8790286327918eeb5395420521f0cb5890ef9",
+          "console_path": "/private/tmp/c3-rc1-rs-w1/continuations/m0p0050_beta005/accepted_snapshot_iter45/console.log",
+          "console_sha256": "43d6e480758ec1a680189504d5c66d9912ff83e2278bdd7952c3e2cc6d561418",
+          "lambda_ry": -0.005,
+          "outer_diff": 1.23e-08,
+          "physical_total_energy_Ry": -2541.98155727141,
+          "selected_iteration": 45,
+          "trace_path": "/private/tmp/c3-rc1-rs-w1/continuations/m0p0050_beta005/accepted_snapshot_iter45/fixed_u_trace.csv",
+          "trace_sha256": "eb297af57145c38c09ace0893aef8e6325f84e394effa153ee71c07e1c685cc7"
+        },
+        {
+          "F_lambda_Ry": -2541.949204752805,
+          "Tr_W1_P_OUT_from_d_QL_both_spins": 6.492771292145369,
+          "c1_accepted": true,
+          "case": "lambda_p0p0050",
+          "checkpoint_path": "/private/tmp/c3-rc1-rs-w1/continuations/p0p0050_beta005/accepted_snapshot_iter44/Fe_scf.nml",
+          "checkpoint_sha256": "2ec3372e779f618776deb069150294c2363650222cd69ec35a7e34d2cd90c425",
+          "console_path": "/private/tmp/c3-rc1-rs-w1/continuations/p0p0050_beta005/accepted_snapshot_iter44/console.log",
+          "console_sha256": "a1613bca03d6057d5e308233495762510a10a650a5f39421d315dfde422fd271",
+          "lambda_ry": 0.005,
+          "outer_diff": 9.5e-09,
+          "physical_total_energy_Ry": -2541.981668609266,
+          "selected_iteration": 44,
+          "trace_path": "/private/tmp/c3-rc1-rs-w1/continuations/p0p0050_beta005/accepted_snapshot_iter44/fixed_u_trace.csv",
+          "trace_sha256": "a8686da073707fa3eea851eb2626bf9eca830e46a3ff9179e473f222688f65fd"
+        }
+      ],
+      "finite_differences": [
+        {
+          "direct_Tr_W1_P_at_lambda0": 6.499140762092945,
+          "gate_eligible": false,
+          "h_ry": 0.0025,
+          "relative_residual": -0.0015898811120663586,
+          "signed_residual": -0.010332861142312133,
+          "slope_dF_dlambda": 6.488807900950633
+        },
+        {
+          "direct_Tr_W1_P_at_lambda0": 6.499140762092945,
+          "gate_eligible": true,
+          "h_ry": 0.005,
+          "relative_residual": -0.0017124421398524037,
+          "signed_residual": -0.011129402513840425,
+          "slope_dF_dlambda": 6.4880113595791045
+        }
+      ],
+      "functional": "F_lambda=ETOT_Ry+lambda_Ry*Tr(W1 P_OUT), TS=0; W1=I5, both spins. Tr(W1P) obtained as d-shell QL spin sum, previously crosschecked against direct P_OUT LDM trace to <=6.7e-15 on this setup.",
+      "gate_decision": "C3 RC1 numeric residual magnitudes at h=0.0025 and h=0.005 Ry are both within 1%. The h=0.0025 endpoint remains PROVISIONAL after its registered continuations, so the overall RC1 status is UNESTABLISHED_PROVISIONAL_RECORD rather than PASS. C3 authorizes proceeding to RC2 on the measured in-limit residual; RC2 proceeded and later stopped on the registered J=0.5 b gate.",
+      "schema": "c3-rc1-provisional-endpoint-comparison-v1",
+      "status": "PROVISIONAL_GATE_INELIGIBLE_PLUS_0P0025_NOT_C1_ACCEPTED"
+    },
+    "runner_path": "/private/tmp/c3-rc1-rs-w1/rc1_rs_w1.py",
+    "runner_sha256": "c8f82e0600d9da47bbbf1919a50c7f35ddf5bba6483c247f341a88f72bd852fe",
+    "status": "COMPLETE_NUMERIC_WITHIN_1_PERCENT; GATE_UNESTABLISHED_DUE_PROVISIONAL_H0025",
+    "trace_operator_crosscheck": {
+      "cases": [
+        {
+          "case": "m0p0025",
+          "direct_test_trace_wp_by_spin_1based": {
+            "1": 4.35055838529842,
+            "2": 2.151762073724665
+          },
+          "frozen_trace_path": "/private/tmp/c3-rc1-rs-w1/evidence_phase0/m0p0025_fixed_u_trace.csv",
+          "max_abs_difference": 1.7763568394002505e-15,
+          "ql_d_by_spin_1based": {
+            "1": 4.350558385298418,
+            "2": 2.1517620737246634
+          },
+          "ql_minus_direct_by_spin": {
+            "1": -1.7763568394002505e-15,
+            "2": -1.7763568394002505e-15
+          },
+          "terminal_iteration": 54,
+          "trace_sha256": "92ae9498128355aa38781aaa822a0f7fb87edf12a42ecb253ee1b871529d2388"
+        },
+        {
+          "case": "m0p0050",
+          "direct_test_trace_wp_by_spin_1based": {
+            "1": 4.3519374511514135,
+            "2": 2.1535814360414958
+          },
+          "frozen_trace_path": "/private/tmp/c3-rc1-rs-w1/evidence_phase0/m0p0050_fixed_u_trace.csv",
+          "max_abs_difference": 1.3322676295501878e-15,
+          "ql_d_by_spin_1based": {
+            "1": 4.3519374511514135,
+            "2": 2.153581436041497
+          },
+          "ql_minus_direct_by_spin": {
+            "1": 0.0,
+            "2": 1.3322676295501878e-15
+          },
+          "terminal_iteration": 62,
+          "trace_sha256": "366928c3240e2c574721dcf0d4f3b2c8241b85e4f0fde013bef92a18778127b1"
+        },
+        {
+          "case": "p0p0025",
+          "direct_test_trace_wp_by_spin_1based": {
+            "1": 4.347843433611981,
+            "2": 2.1481085105253106
+          },
+          "frozen_trace_path": "/private/tmp/c3-rc1-rs-w1/evidence_phase0/p0p0025_fixed_u_trace.csv",
+          "max_abs_difference": 8.881784197001252e-16,
+          "ql_d_by_spin_1based": {
+            "1": 4.34784343361198,
+            "2": 2.1481085105253115
+          },
+          "ql_minus_direct_by_spin": {
+            "1": -8.881784197001252e-16,
+            "2": 8.881784197001252e-16
+          },
+          "terminal_iteration": 59,
+          "trace_sha256": "11133457ed8585baddf802c366a41d81d94d68371be25f9cbc8fbd59f9c8b137"
+        },
+        {
+          "case": "p0p0050",
+          "direct_test_trace_wp_by_spin_1based": {
+            "1": 4.3465000742107875,
+            "2": 2.146271306343016
+          },
+          "frozen_trace_path": "/private/tmp/c3-rc1-rs-w1/evidence_phase0/p0p0050_fixed_u_trace.csv",
+          "max_abs_difference": 4.440892098500626e-15,
+          "ql_d_by_spin_1based": {
+            "1": 4.346500074210783,
+            "2": 2.1462713063430154
+          },
+          "ql_minus_direct_by_spin": {
+            "1": -4.440892098500626e-15,
+            "2": -4.440892098500626e-16
+          },
+          "terminal_iteration": 66,
+          "trace_sha256": "24db182a909da3c76cefb60c92d355870e0544196d18e26e094a799138c1badf"
+        },
+        {
+          "case": "zero",
+          "direct_test_trace_wp_by_spin_1based": {
+            "1": 4.349199488899754,
+            "2": 2.1499411128201147
+          },
+          "frozen_trace_path": "/private/tmp/c3-rc1-rs-w1/evidence_phase0/zero_fixed_u_trace.csv",
+          "max_abs_difference": 1.3322676295501878e-15,
+          "ql_d_by_spin_1based": {
+            "1": 4.349199488899753,
+            "2": 2.1499411128201134
+          },
+          "ql_minus_direct_by_spin": {
+            "1": -8.881784197001252e-16,
+            "2": -1.3322676295501878e-15
+          },
+          "terminal_iteration": 1,
+          "trace_sha256": "550bad7377100ab6dcbf265e7e0a73851907e2fcebf94614893eabf9d118dd74"
+        }
+      ],
+      "max_abs_ql_vs_direct_trace_wp": 4.440892098500626e-15,
+      "path": "/private/tmp/c3-rc1-rs-w1/evidence_phase0/crosscheck.json",
+      "sha256": "22d5d85c7109d12c1472caeed033fae811b8eb6c6fb720bbd88f81d011dbad22"
+    }
+  },
+  "rc2": {
+    "accepted_endpoint_counts_at_stop": {
+      "J0.5": 10,
+      "J0.9": 1,
+      "U": 10,
+      "total": 21
+    },
+    "analyzer_path": "tests/validation/fixed_ldau/rs_rc2_analyze.py",
+    "analyzer_sha256": "2fd445c987bac35d422b6e30c6f9774309ac8de5009b10607a5c6442ecd5490d",
+    "binary_path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x",
+    "binary_sha256": "bab5f7408f20192c575ea09be5501445f38f29bc2d34680da41daf733c96b2bf",
+    "campaign_path": "/private/tmp/c3-rc2-rs-hf/campaign/RC2_CAMPAIGN.json",
+    "campaign_sha256": "cbf2024d0b0b2ceef944a8d411259cf086c1e385aa8402af5056d0a1f3a98470",
+    "controller_path": "tests/validation/fixed_ldau/rs_rc2_campaign.py",
+    "controller_sha256": "09fb970d09183894ddbbd9b1a95cc0810cd8e8d63c6944cbc3cd3105f94502e9",
+    "gate_results": {
+      "J0.5": {
+        "candidate_slopes": {
+          "a": {
+            "h_0.05": -0.06985235192132677,
+            "h_0.10": -0.06991382515479927
+          },
+          "b": {
+            "h_0.05": -0.06195539191139687,
+            "h_0.10": -0.06199791331482629
+          },
+          "c": {
+            "h_0.05": 0.05483685275976313,
+            "h_0.10": 0.05481759014855925
+          }
+        },
+        "center_J_eV": 0.5,
+        "center_U_eV": 2.0,
+        "common_allowance_A_Ry_per_eV": 0.0003408831421857261,
+        "diagnostic_gate": "FAIL",
+        "endpoint_status": "ALL_C1_ACCEPTED",
+        "final_gate_verdict": "NOT_FINALIZED_PARTIAL_MODE",
+        "fixed_P_target": {
+          "0.05": {
+            "dEHub_dJ_Ry_per_eV": -0.06229672050170443,
+            "dEHub_dU_Ry_per_eV": 0.05807723986945401
+          },
+          "0.1": {
+            "dEHub_dJ_Ry_per_eV": -0.06229672050170887,
+            "dEHub_dU_Ry_per_eV": 0.05807723986945623
+          }
+        },
+        "gate": "FAIL",
+        "per_h": {
+          "h_0.05": {
+            "b_abs_error_Ry_per_eV": 0.0003413285903075547,
+            "b_within_A": false,
+            "c_abs_error_Ry_per_eV": 0.11713357326146756,
+            "c_miss_gt_10A": true,
+            "candidate_slopes_Ry_per_eV": {
+              "a": -0.06985235192132677,
+              "b": -0.06195539191139687,
+              "c": 0.05483685275976313
+            },
+            "fixed_P_U_normalizer_TU_h005_Ry_per_eV": 0.05807723986945401,
+            "target_TJ_Ry_per_eV": -0.06229672050170443
+          },
+          "h_0.10": {
+            "b_abs_error_Ry_per_eV": 0.000298807186882577,
+            "b_within_A": true,
+            "c_abs_error_Ry_per_eV": 0.11711431065026812,
+            "c_miss_gt_10A": true,
+            "candidate_slopes_Ry_per_eV": {
+              "a": -0.06991382515479927,
+              "b": -0.06199791331482629,
+              "c": 0.05481759014855925
+            },
+            "fixed_P_U_normalizer_TU_h005_Ry_per_eV": 0.05807723986945401,
+            "target_TJ_Ry_per_eV": -0.06229672050170887
+          }
+        }
+      },
+      "J0.9": {
+        "reason": "campaign stopped after the J=.5 gate failure per C1 \u00a75(b)",
+        "status": "NOT_RUN"
+      },
+      "U": {
+        "candidate_slopes": {
+          "a": {
+            "h_0.05": 0.0640596429911966,
+            "h_0.10": 0.0639746232741345
+          },
+          "b": {
+            "h_0.05": 0.05417043143097544,
+            "h_0.10": 0.05421136482937072
+          },
+          "c": {
+            "h_0.05": -0.08592340625909856,
+            "h_0.10": -0.08595378536483622
+          }
+        },
+        "center_U_eV": 2.0,
+        "common_allowance_A_Ry_per_eV": 0.00032051827019072136,
+        "diagnostic_gate": "PASS",
+        "endpoint_status": "ALL_C1_ACCEPTED",
+        "final_gate_verdict": "NOT_FINALIZED_PARTIAL_MODE",
+        "fixed_J_eV": 0.0,
+        "fixed_P_target": {
+          "0.05": {
+            "dEHub_dJ_Ry_per_eV": -0.05707038391423502,
+            "dEHub_dU_Ry_per_eV": 0.054422251763308616
+          },
+          "0.1": {
+            "dEHub_dJ_Ry_per_eV": -0.0570703839142328,
+            "dEHub_dU_Ry_per_eV": 0.05442225176329307
+          }
+        },
+        "gate": "PASS",
+        "per_h": {
+          "h_0.05": {
+            "b_abs_error_Ry_per_eV": 0.0002518203323331747,
+            "b_within_A": true,
+            "c_abs_error_Ry_per_eV": 0.14034565802240717,
+            "c_miss_gt_10A": true,
+            "candidate_slopes_Ry_per_eV": {
+              "a": 0.0640596429911966,
+              "b": 0.05417043143097544,
+              "c": -0.08592340625909856
+            },
+            "target_Ry_per_eV": 0.054422251763308616
+          },
+          "h_0.10": {
+            "b_abs_error_Ry_per_eV": 0.00021088693392234958,
+            "b_within_A": true,
+            "c_abs_error_Ry_per_eV": 0.1403760371281293,
+            "c_miss_gt_10A": true,
+            "candidate_slopes_Ry_per_eV": {
+              "a": 0.0639746232741345,
+              "b": 0.05421136482937072,
+              "c": -0.08595378536483622
+            },
+            "target_Ry_per_eV": 0.05442225176329307
+          }
+        }
+      },
+      "overall": "FAIL_J0.5_B_H005_AFTER_ONE_DEBUG_ATTEMPT"
+    },
+    "monitored_runner_path": "tests/validation/fixed_ldau/rs_rc2_monitored_runner.py",
+    "monitored_runner_sha256": "456e2411e78a3790000aee0be599649d91f37bed2845060f7460fe66a52e5e30",
+    "not_started_case_count": 5,
+    "partial_analysis": {
+      "analyzer_path": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/rs_rc2_analyze.py",
+      "analyzer_sha256": "2fd445c987bac35d422b6e30c6f9774309ac8de5009b10607a5c6442ecd5490d",
+      "blockers": [],
+      "campaign_completed_unix": null,
+      "campaign_path": "/private/tmp/c3-rc2-rs-hf/campaign/RC2_CAMPAIGN.json",
+      "campaign_sha256": "9f63fd0274a78a7e37e74503db160b91268c1896dc86889d9b31ca4900617c99",
+      "campaign_status": "RUNNING",
+      "case_endpoints": [
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 1.9889462985623585,
+                  "d_up": 4.521356847189828,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      1.9889461260192904,
+                      1.9889464733664772
+                    ],
+                    "d_up": [
+                      4.52135669637088,
+                      4.521356944831094
+                    ],
+                    "sphere_moment_muB": [
+                      2.3861249868110974,
+                      2.386125517610193
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p40/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "98483fb0a6b5cfb033ab4adcf96b0d1162cea274ec40c2a2a8936b52f3c7c475",
+                  "sphere_moment_muB": 2.3861251676190287
+                },
+                "final_diff": 1.19e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 3.4734718679096943e-07,
+                  "d_up": 2.4846021418056807e-07,
+                  "sphere_moment_muB": 5.307990957881259e-07
+                },
+                "window_iterations": [
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72,
+                  73,
+                  74,
+                  75,
+                  76,
+                  77,
+                  78,
+                  79,
+                  80,
+                  81,
+                  82,
+                  83,
+                  84,
+                  85,
+                  86
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p40/phase0_initial",
+              "runner_returncode": -15,
+              "solver_manifest_trace_sha256": "e45700ed8a9c41dd9a02d973557db1518f8ad124995efb8152f2bdcd34e54b7f",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p40/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "65face41a01f774ac978eadc4abb4d38640a9d8323711bc67e38c6a14706c6b3"
+            }
+          ],
+          "candidate_a_Ry": null,
+          "candidate_b_Ry": -2541.886422204543,
+          "candidate_c_Ry": null,
+          "case": "j0p5_local_u2p00_j0p40",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p40/phase0_initial/console.log",
+          "console_sha256": "7ba36eaa2346131206bb5cbc4853f79f46abe2b68e0559df200424916a5450bf",
+          "energy_log_line": 3792,
+          "energy_row_sha256": "bcbac8d511b2d1975814568ad969e802b219ed56fdca39ed023c500c42f9902c",
+          "family": "J0.5",
+          "ignored_live_post_checkpoint_iterations": [],
+          "j_eV": 0.4,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p40/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "e45700ed8a9c41dd9a02d973557db1518f8ad124995efb8152f2bdcd34e54b7f",
+          "matrix_entry_count": 50,
+          "mode": "local",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 1.9889462985623585,
+              "d_up": 4.521356847189828,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  1.9889461260192904,
+                  1.9889464733664772
+                ],
+                "d_up": [
+                  4.52135669637088,
+                  4.521356944831094
+                ],
+                "sphere_moment_muB": [
+                  2.3861249868110974,
+                  2.386125517610193
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p40/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "98483fb0a6b5cfb033ab4adcf96b0d1162cea274ec40c2a2a8936b52f3c7c475",
+              "sphere_moment_muB": 2.3861251676190287
+            },
+            "final_diff": 1.19e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 3.4734718679096943e-07,
+              "d_up": 2.4846021418056807e-07,
+              "sphere_moment_muB": 5.307990957881259e-07
+            },
+            "window_iterations": [
+              67,
+              68,
+              69,
+              70,
+              71,
+              72,
+              73,
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80,
+              81,
+              82,
+              83,
+              84,
+              85,
+              86
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p40/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2541.976654412194,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "65face41a01f774ac978eadc4abb4d38640a9d8323711bc67e38c6a14706c6b3",
+          "selected_diff": 1.19e-08,
+          "selected_iteration": 86,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p40/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "e45700ed8a9c41dd9a02d973557db1518f8ad124995efb8152f2bdcd34e54b7f",
+          "u_eV": 2.0,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 2.001252355236802,
+                  "d_up": 4.5084032301020915,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      2.001252230884109,
+                      2.0012525126659666
+                    ],
+                    "d_up": [
+                      4.508403065948815,
+                      4.508403369717176
+                    ],
+                    "sphere_moment_muB": [
+                      2.3627632156548186,
+                      2.3627637528621914
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p45/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "193d6b35cf0d75b2395900ef16c752a8dd7be591fabb272895ef1ab756fbf73e",
+                  "sphere_moment_muB": 2.36276349275794
+                },
+                "final_diff": 6.7e-09,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 2.817818574030184e-07,
+                  "d_up": 3.037683615758624e-07,
+                  "sphere_moment_muB": 5.372073728082682e-07
+                },
+                "window_iterations": [
+                  79,
+                  80,
+                  81,
+                  82,
+                  83,
+                  84,
+                  85,
+                  86,
+                  87,
+                  88,
+                  89,
+                  90,
+                  91,
+                  92,
+                  93,
+                  94,
+                  95,
+                  96,
+                  97,
+                  98
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p45/phase0_initial",
+              "runner_returncode": 0,
+              "solver_manifest_trace_sha256": "6d97ba02b124d1053f7ef81c8b9c32a598de8d3799fb713a0cbb82b22e85342a",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p45/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "0cae76a74b2d817336ad6c8ebc210d60ab71ecd84610ea2c2018d96ca46960c3"
+            }
+          ],
+          "candidate_a_Ry": null,
+          "candidate_b_Ry": -2541.889475448616,
+          "candidate_c_Ry": null,
+          "case": "j0p5_local_u2p00_j0p45",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p45/phase0_initial/console.log",
+          "console_sha256": "e46108b0d64353148f03e6f1461b61693c33a4aa5a2783f32a745d5f8bb666de",
+          "energy_log_line": 4320,
+          "energy_row_sha256": "03ba1d67f6a1b485b8c907a2d26d4b4a858d06ad45e0cdb38050039994d32d5c",
+          "family": "J0.5",
+          "ignored_live_post_checkpoint_iterations": [],
+          "j_eV": 0.45,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p45/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "6d97ba02b124d1053f7ef81c8b9c32a598de8d3799fb713a0cbb82b22e85342a",
+          "matrix_entry_count": 50,
+          "mode": "local",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 2.001252355236802,
+              "d_up": 4.5084032301020915,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  2.001252230884109,
+                  2.0012525126659666
+                ],
+                "d_up": [
+                  4.508403065948815,
+                  4.508403369717176
+                ],
+                "sphere_moment_muB": [
+                  2.3627632156548186,
+                  2.3627637528621914
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p45/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "193d6b35cf0d75b2395900ef16c752a8dd7be591fabb272895ef1ab756fbf73e",
+              "sphere_moment_muB": 2.36276349275794
+            },
+            "final_diff": 6.7e-09,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 2.817818574030184e-07,
+              "d_up": 3.037683615758624e-07,
+              "sphere_moment_muB": 5.372073728082682e-07
+            },
+            "window_iterations": [
+              79,
+              80,
+              81,
+              82,
+              83,
+              84,
+              85,
+              86,
+              87,
+              88,
+              89,
+              90,
+              91,
+              92,
+              93,
+              94,
+              95,
+              96,
+              97,
+              98
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p45/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2541.977136680234,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "0cae76a74b2d817336ad6c8ebc210d60ab71ecd84610ea2c2018d96ca46960c3",
+          "selected_diff": 6.7e-09,
+          "selected_iteration": 98,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p45/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "6d97ba02b124d1053f7ef81c8b9c32a598de8d3799fb713a0cbb82b22e85342a",
+          "u_eV": 2.0,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 2.013017685758621,
+                  "d_up": 4.4958712846398985,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      2.0130174817162754,
+                      2.013017873830875
+                    ],
+                    "d_up": [
+                      4.495871250684738,
+                      4.495871555005086
+                    ],
+                    "sphere_moment_muB": [
+                      2.34035082302417,
+                      2.340351296069782
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p50/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "de4ac6e4178e351a1fe2fff0c5da6614897cdd86c487972ae3b58338823b770b",
+                  "sphere_moment_muB": 2.3403509471232478
+                },
+                "final_diff": 2.73e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 3.9211459945676097e-07,
+                  "d_up": 3.0432034758831605e-07,
+                  "sphere_moment_muB": 4.730456120149995e-07
+                },
+                "window_iterations": [
+                  55,
+                  56,
+                  57,
+                  58,
+                  59,
+                  60,
+                  61,
+                  62,
+                  63,
+                  64,
+                  65,
+                  66,
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72,
+                  73,
+                  74
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p50/phase0_initial",
+              "runner_returncode": 0,
+              "solver_manifest_trace_sha256": "532ca71f8bc871f6361274a652179e892d8b886708c7b4940b68e37e6657c259",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p50/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "4d541ffbe4f001ac2239d4e23a7b5952319a0c53e3a7acc99311c6c38268b924"
+            }
+          ],
+          "candidate_a_Ry": null,
+          "candidate_b_Ry": -2541.892562842549,
+          "candidate_c_Ry": null,
+          "case": "j0p5_local_u2p00_j0p50",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p50/phase0_initial/console.log",
+          "console_sha256": "7650283b8dda9f00604b6eee3e530102adc3713758b9a872ba3e2b483fb80084",
+          "energy_log_line": 3264,
+          "energy_row_sha256": "12577c4db30981a08aa4b3173a9880c9552be038f28c8780554d02c5842ab072",
+          "family": "J0.5",
+          "ignored_live_post_checkpoint_iterations": [],
+          "j_eV": 0.5,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p50/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "532ca71f8bc871f6361274a652179e892d8b886708c7b4940b68e37e6657c259",
+          "matrix_entry_count": 50,
+          "mode": "local",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 2.013017685758621,
+              "d_up": 4.4958712846398985,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  2.0130174817162754,
+                  2.013017873830875
+                ],
+                "d_up": [
+                  4.495871250684738,
+                  4.495871555005086
+                ],
+                "sphere_moment_muB": [
+                  2.34035082302417,
+                  2.340351296069782
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p50/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "de4ac6e4178e351a1fe2fff0c5da6614897cdd86c487972ae3b58338823b770b",
+              "sphere_moment_muB": 2.3403509471232478
+            },
+            "final_diff": 2.73e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 3.9211459945676097e-07,
+              "d_up": 3.0432034758831605e-07,
+              "sphere_moment_muB": 4.730456120149995e-07
+            },
+            "window_iterations": [
+              55,
+              56,
+              57,
+              58,
+              59,
+              60,
+              61,
+              62,
+              63,
+              64,
+              65,
+              66,
+              67,
+              68,
+              69,
+              70,
+              71,
+              72,
+              73,
+              74
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p50/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2541.977568962037,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "4d541ffbe4f001ac2239d4e23a7b5952319a0c53e3a7acc99311c6c38268b924",
+          "selected_diff": 2.73e-08,
+          "selected_iteration": 74,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p50/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "532ca71f8bc871f6361274a652179e892d8b886708c7b4940b68e37e6657c259",
+          "u_eV": 2.0,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 2.0241858909134693,
+                  "d_up": 4.483858171911412,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      2.024185828294857,
+                      2.0241861879915035
+                    ],
+                    "d_up": [
+                      4.483857739273439,
+                      4.483858218505454
+                    ],
+                    "sphere_moment_muB": [
+                      2.3190442065402754,
+                      2.319044998929494
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p55/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "980db9a2b0c5e842db2b42f8c82011eb08314057f33e33cf5396b1f165a259de",
+                  "sphere_moment_muB": 2.319044906922867
+                },
+                "final_diff": 2.54e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 3.596966466901108e-07,
+                  "d_up": 4.792320149604734e-07,
+                  "sphere_moment_muB": 7.923892186845194e-07
+                },
+                "window_iterations": [
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72,
+                  73,
+                  74,
+                  75,
+                  76,
+                  77,
+                  78,
+                  79,
+                  80,
+                  81,
+                  82,
+                  83,
+                  84,
+                  85,
+                  86
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p55/phase0_initial",
+              "runner_returncode": 0,
+              "solver_manifest_trace_sha256": "79a2b3c275ce3732be11a03e85aeb340ecdc6149fd3fad39c5775cbb048468b8",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p55/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "679235dc189c565df98d1d35c54a359602dfe2be5856e617e9a82727574d528f"
+            }
+          ],
+          "candidate_a_Ry": null,
+          "candidate_b_Ry": -2541.895670987807,
+          "candidate_c_Ry": null,
+          "case": "j0p5_local_u2p00_j0p55",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p55/phase0_initial/console.log",
+          "console_sha256": "5008220f410c4ba3034b767ddf18ccac7e5d59aab4f3803cd8fd44febcf85de3",
+          "energy_log_line": 3792,
+          "energy_row_sha256": "dd6bdd7af0cea138f2e4388a23a8ddfd435b9943b5d28c97f0f39332503c9dc9",
+          "family": "J0.5",
+          "ignored_live_post_checkpoint_iterations": [],
+          "j_eV": 0.55,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p55/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "79a2b3c275ce3732be11a03e85aeb340ecdc6149fd3fad39c5775cbb048468b8",
+          "matrix_entry_count": 50,
+          "mode": "local",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 2.0241858909134693,
+              "d_up": 4.483858171911412,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  2.024185828294857,
+                  2.0241861879915035
+                ],
+                "d_up": [
+                  4.483857739273439,
+                  4.483858218505454
+                ],
+                "sphere_moment_muB": [
+                  2.3190442065402754,
+                  2.319044998929494
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p55/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "980db9a2b0c5e842db2b42f8c82011eb08314057f33e33cf5396b1f165a259de",
+              "sphere_moment_muB": 2.319044906922867
+            },
+            "final_diff": 2.54e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 3.596966466901108e-07,
+              "d_up": 4.792320149604734e-07,
+              "sphere_moment_muB": 7.923892186845194e-07
+            },
+            "window_iterations": [
+              67,
+              68,
+              69,
+              70,
+              71,
+              72,
+              73,
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80,
+              81,
+              82,
+              83,
+              84,
+              85,
+              86
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p55/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2541.97793929265,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "679235dc189c565df98d1d35c54a359602dfe2be5856e617e9a82727574d528f",
+          "selected_diff": 2.54e-08,
+          "selected_iteration": 86,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p55/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "79a2b3c275ce3732be11a03e85aeb340ecdc6149fd3fad39c5775cbb048468b8",
+          "u_eV": 2.0,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 2.0347329784931887,
+                  "d_up": 4.472377609440776,
+                  "inside_last20_ranges_diagnostic_only": false,
+                  "last20_ranges": {
+                    "d_down": [
+                      2.03473284214719,
+                      2.0347331202683154
+                    ],
+                    "d_up": [
+                      4.472377331115805,
+                      4.472377572134922
+                    ],
+                    "sphere_moment_muB": [
+                      2.298864403280657,
+                      2.298864957450863
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p60/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "56a78b7ddd1a3347c5fac9c0d7bad48fc25fd93f779a8ebd822e8415ef846b83",
+                  "sphere_moment_muB": 2.298864593916715
+                },
+                "final_diff": 2.66e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 2.7812112524117083e-07,
+                  "d_up": 2.410191175528098e-07,
+                  "sphere_moment_muB": 5.541702061684362e-07
+                },
+                "window_iterations": [
+                  91,
+                  92,
+                  93,
+                  94,
+                  95,
+                  96,
+                  97,
+                  98,
+                  99,
+                  100,
+                  101,
+                  102,
+                  103,
+                  104,
+                  105,
+                  106,
+                  107,
+                  108,
+                  109,
+                  110
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p60/phase0_initial",
+              "runner_returncode": 0,
+              "solver_manifest_trace_sha256": "8bad69a92fa1980feb1c674d6fa1cc8b613fef90892a6268e06f319d7dd9375e",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p60/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "5b4674023f4d8c10937a1b4d3ca8d8b70f31a9406c800caf92dd6f8d3cfcc9a0"
+            }
+          ],
+          "candidate_a_Ry": null,
+          "candidate_b_Ry": -2541.898821787206,
+          "candidate_c_Ry": null,
+          "case": "j0p5_local_u2p00_j0p60",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p60/phase0_initial/console.log",
+          "console_sha256": "a980e6e7d60f63c1c22ecd5ff63183079b195f27baff2cff9c6dc7ff8c14e2f6",
+          "energy_log_line": 4848,
+          "energy_row_sha256": "15c6bd1affc523bdc2bb29314d4cf6912c3c8bef2b5ab37ffa371d679b786ed6",
+          "family": "J0.5",
+          "ignored_live_post_checkpoint_iterations": [],
+          "j_eV": 0.6,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p60/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "8bad69a92fa1980feb1c674d6fa1cc8b613fef90892a6268e06f319d7dd9375e",
+          "matrix_entry_count": 50,
+          "mode": "local",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 2.0347329784931887,
+              "d_up": 4.472377609440776,
+              "inside_last20_ranges_diagnostic_only": false,
+              "last20_ranges": {
+                "d_down": [
+                  2.03473284214719,
+                  2.0347331202683154
+                ],
+                "d_up": [
+                  4.472377331115805,
+                  4.472377572134922
+                ],
+                "sphere_moment_muB": [
+                  2.298864403280657,
+                  2.298864957450863
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p60/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "56a78b7ddd1a3347c5fac9c0d7bad48fc25fd93f779a8ebd822e8415ef846b83",
+              "sphere_moment_muB": 2.298864593916715
+            },
+            "final_diff": 2.66e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 2.7812112524117083e-07,
+              "d_up": 2.410191175528098e-07,
+              "sphere_moment_muB": 5.541702061684362e-07
+            },
+            "window_iterations": [
+              91,
+              92,
+              93,
+              94,
+              95,
+              96,
+              97,
+              98,
+              99,
+              100,
+              101,
+              102,
+              103,
+              104,
+              105,
+              106,
+              107,
+              108,
+              109,
+              110
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p60/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2541.978274450125,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "5b4674023f4d8c10937a1b4d3ca8d8b70f31a9406c800caf92dd6f8d3cfcc9a0",
+          "selected_diff": 2.66e-08,
+          "selected_iteration": 110,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p60/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "8bad69a92fa1980feb1c674d6fa1cc8b613fef90892a6268e06f319d7dd9375e",
+          "u_eV": 2.0,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 2.114835389616746,
+                  "d_up": 4.465345662711469,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      2.114835330814814,
+                      2.114835609015306
+                    ],
+                    "d_up": [
+                      4.465345385074535,
+                      4.465345665421512
+                    ],
+                    "sphere_moment_muB": [
+                      2.2628362990705124,
+                      2.262836762035409
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p40/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "bad9e81b17497507a60921c6674f01c24ea1e3421bdf63e71ba41af57ae2e7c9",
+                  "sphere_moment_muB": 2.2628366283057364
+                },
+                "final_diff": 2.6e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 2.782004919765768e-07,
+                  "d_up": 2.8034697674428344e-07,
+                  "sphere_moment_muB": 4.629648966414379e-07
+                },
+                "window_iterations": [
+                  56,
+                  57,
+                  58,
+                  59,
+                  60,
+                  61,
+                  62,
+                  63,
+                  64,
+                  65,
+                  66,
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72,
+                  73,
+                  74,
+                  75
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p40/phase0_initial",
+              "runner_returncode": 0,
+              "solver_manifest_trace_sha256": "0d1e40b8f762eb01b20e8fb5e1b5b0b480807afba16313ade1440cc34900da7a",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p40/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "c1c010d21f36009c3e348e99e4da56139c012fa740acf8206a1b1f952142393b"
+            }
+          ],
+          "candidate_a_Ry": -2541.880770215574,
+          "candidate_b_Ry": null,
+          "candidate_c_Ry": -2542.081862645157,
+          "case": "j0p5_spectral_u2p00_j0p40",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p40/phase0_initial/console.log",
+          "console_sha256": "96cea238558eaa394835496b02ce30c61fed9ca89405a6f03ddd42b81dbd1560",
+          "energy_log_line": 3308,
+          "energy_row_sha256": "bdf7a35107850c568bbd192271c6ef78ef37d1828af2338747b3e115e57f2bbe",
+          "family": "J0.5",
+          "ignored_live_post_checkpoint_iterations": [],
+          "j_eV": 0.4,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p40/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "0d1e40b8f762eb01b20e8fb5e1b5b0b480807afba16313ade1440cc34900da7a",
+          "matrix_entry_count": 50,
+          "mode": "spectral",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 2.114835389616746,
+              "d_up": 4.465345662711469,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  2.114835330814814,
+                  2.114835609015306
+                ],
+                "d_up": [
+                  4.465345385074535,
+                  4.465345665421512
+                ],
+                "sphere_moment_muB": [
+                  2.2628362990705124,
+                  2.262836762035409
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p40/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "bad9e81b17497507a60921c6674f01c24ea1e3421bdf63e71ba41af57ae2e7c9",
+              "sphere_moment_muB": 2.2628366283057364
+            },
+            "final_diff": 2.6e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 2.782004919765768e-07,
+              "d_up": 2.8034697674428344e-07,
+              "sphere_moment_muB": 4.629648966414379e-07
+            },
+            "window_iterations": [
+              56,
+              57,
+              58,
+              59,
+              60,
+              61,
+              62,
+              63,
+              64,
+              65,
+              66,
+              67,
+              68,
+              69,
+              70,
+              71,
+              72,
+              73,
+              74,
+              75
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p40/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2542.174770027537,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "c1c010d21f36009c3e348e99e4da56139c012fa740acf8206a1b1f952142393b",
+          "selected_diff": 2.6e-08,
+          "selected_iteration": 75,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p40/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "0d1e40b8f762eb01b20e8fb5e1b5b0b480807afba16313ade1440cc34900da7a",
+          "u_eV": 2.0,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 2.1196291277136035,
+                  "d_up": 4.457054772574092,
+                  "inside_last20_ranges_diagnostic_only": false,
+                  "last20_ranges": {
+                    "d_down": [
+                      2.119628898656826,
+                      2.1196290403723106
+                    ],
+                    "d_up": [
+                      4.457054684711114,
+                      4.457054855754274
+                    ],
+                    "sphere_moment_muB": [
+                      2.249026199738946,
+                      2.249026572826266
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p45/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "894f6195d22787e49ad5cdffa1e46cd8dd353e048ae7dc4771371b2be129872f",
+                  "sphere_moment_muB": 2.24902606914973
+                },
+                "final_diff": 2.63e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 1.4171548468056017e-07,
+                  "d_up": 1.7104316007987563e-07,
+                  "sphere_moment_muB": 3.730873201490681e-07
+                },
+                "window_iterations": [
+                  74,
+                  75,
+                  76,
+                  77,
+                  78,
+                  79,
+                  80,
+                  81,
+                  82,
+                  83,
+                  84,
+                  85,
+                  86,
+                  87,
+                  88,
+                  89,
+                  90,
+                  91,
+                  92,
+                  93
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p45/phase0_initial",
+              "runner_returncode": 0,
+              "solver_manifest_trace_sha256": "628d6fcfbd6bb2a1e57f3d1b681a9f3ab03947e5d78b5143727f89f0c6d49d89",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p45/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "8caa4beb49dc89042b0395bf0c049c14448e8e756d1e47c8da188f018fb074a3"
+            }
+          ],
+          "candidate_a_Ry": -2541.884260240736,
+          "candidate_b_Ry": null,
+          "candidate_c_Ry": -2542.078963743755,
+          "case": "j0p5_spectral_u2p00_j0p45",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p45/phase0_initial/console.log",
+          "console_sha256": "ab1713adbbb70f0017a5b1d3b0843fed092beffad6e4ae1a33a2654c77a2b31e",
+          "energy_log_line": 4100,
+          "energy_row_sha256": "aa488e561806d2f11fea1cdb32889ea19841f5509d4475b66fab3c7af5bdfff1",
+          "family": "J0.5",
+          "ignored_live_post_checkpoint_iterations": [],
+          "j_eV": 0.45,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p45/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "628d6fcfbd6bb2a1e57f3d1b681a9f3ab03947e5d78b5143727f89f0c6d49d89",
+          "matrix_entry_count": 50,
+          "mode": "spectral",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 2.1196291277136035,
+              "d_up": 4.457054772574092,
+              "inside_last20_ranges_diagnostic_only": false,
+              "last20_ranges": {
+                "d_down": [
+                  2.119628898656826,
+                  2.1196290403723106
+                ],
+                "d_up": [
+                  4.457054684711114,
+                  4.457054855754274
+                ],
+                "sphere_moment_muB": [
+                  2.249026199738946,
+                  2.249026572826266
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p45/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "894f6195d22787e49ad5cdffa1e46cd8dd353e048ae7dc4771371b2be129872f",
+              "sphere_moment_muB": 2.24902606914973
+            },
+            "final_diff": 2.63e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 1.4171548468056017e-07,
+              "d_up": 1.7104316007987563e-07,
+              "sphere_moment_muB": 3.730873201490681e-07
+            },
+            "window_iterations": [
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80,
+              81,
+              82,
+              83,
+              84,
+              85,
+              86,
+              87,
+              88,
+              89,
+              90,
+              91,
+              92,
+              93
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p45/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2542.168920561048,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "8caa4beb49dc89042b0395bf0c049c14448e8e756d1e47c8da188f018fb074a3",
+          "selected_diff": 2.63e-08,
+          "selected_iteration": 93,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p45/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "628d6fcfbd6bb2a1e57f3d1b681a9f3ab03947e5d78b5143727f89f0c6d49d89",
+          "u_eV": 2.0,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 2.12424339206033,
+                  "d_up": 4.448990977867072,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      2.124243300638419,
+                      2.124243511462301
+                    ],
+                    "d_up": [
+                      4.44899084067702,
+                      4.448991208652425
+                    ],
+                    "sphere_moment_muB": [
+                      2.235654798874922,
+                      2.235655459274183
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p50/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "fcbe099b9db4ade099d4a91be34a8031e6e51d894a1ea66952eaf0f92af9b08f",
+                  "sphere_moment_muB": 2.23565515600301
+                },
+                "final_diff": 2.07e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 2.1082388190762913e-07,
+                  "d_up": 3.679754048135919e-07,
+                  "sphere_moment_muB": 6.60399261054323e-07
+                },
+                "window_iterations": [
+                  54,
+                  55,
+                  56,
+                  57,
+                  58,
+                  59,
+                  60,
+                  61,
+                  62,
+                  63,
+                  64,
+                  65,
+                  66,
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72,
+                  73
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p50/phase0_initial",
+              "runner_returncode": 0,
+              "solver_manifest_trace_sha256": "f591f0d5b62a7c4314263fda266d14263fc7930655e35243b24448f501399b76",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p50/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "2a369778062f94c63eefbabaf5f6ff3d5e4613178a1bfe88e4c6d0e9789bc927"
+            }
+          ],
+          "candidate_a_Ry": -2541.887748999402,
+          "candidate_b_Ry": null,
+          "candidate_c_Ry": -2542.076168213106,
+          "case": "j0p5_spectral_u2p00_j0p50",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p50/phase0_initial/console.log",
+          "console_sha256": "ec24245d44588280145698d4a92ecdd6490e18227c6a9da7559f264cea8b83d8",
+          "energy_log_line": 3220,
+          "energy_row_sha256": "c4586a0e82d7d631d5a65289199540d64aac3a2b63590814620ec8838088ef03",
+          "family": "J0.5",
+          "ignored_live_post_checkpoint_iterations": [
+            74
+          ],
+          "j_eV": 0.5,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p50/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "f591f0d5b62a7c4314263fda266d14263fc7930655e35243b24448f501399b76",
+          "matrix_entry_count": 50,
+          "mode": "spectral",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 2.12424339206033,
+              "d_up": 4.448990977867072,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  2.124243300638419,
+                  2.124243511462301
+                ],
+                "d_up": [
+                  4.44899084067702,
+                  4.448991208652425
+                ],
+                "sphere_moment_muB": [
+                  2.235654798874922,
+                  2.235655459274183
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p50/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "fcbe099b9db4ade099d4a91be34a8031e6e51d894a1ea66952eaf0f92af9b08f",
+              "sphere_moment_muB": 2.23565515600301
+            },
+            "final_diff": 2.07e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 2.1082388190762913e-07,
+              "d_up": 3.679754048135919e-07,
+              "sphere_moment_muB": 6.60399261054323e-07
+            },
+            "window_iterations": [
+              54,
+              55,
+              56,
+              57,
+              58,
+              59,
+              60,
+              61,
+              62,
+              63,
+              64,
+              65,
+              66,
+              67,
+              68,
+              69,
+              70,
+              71,
+              72,
+              73
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p50/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2542.16312989005,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "2a369778062f94c63eefbabaf5f6ff3d5e4613178a1bfe88e4c6d0e9789bc927",
+          "selected_diff": 2.07e-08,
+          "selected_iteration": 73,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p50/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "677d3437e14cebdeb73cb367fc21af1c891aec3cfa34005e02259ec755659525",
+          "u_eV": 2.0,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 2.128680897690132,
+                  "d_up": 4.441144015954552,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      2.1286806748720135,
+                      2.128680934883005
+                    ],
+                    "d_up": [
+                      4.441143879342952,
+                      4.441144293587135
+                    ],
+                    "sphere_moment_muB": [
+                      2.222745952606646,
+                      2.222746693065783
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p55/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "d929336117a5c2d7fa71ce2aa3e0863766e23dfa8c30b6d39846b9c33b0dcdab",
+                  "sphere_moment_muB": 2.222746205053072
+                },
+                "final_diff": 2.16e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 2.600109914041582e-07,
+                  "d_up": 4.142441829557697e-07,
+                  "sphere_moment_muB": 7.404591366722002e-07
+                },
+                "window_iterations": [
+                  61,
+                  62,
+                  63,
+                  64,
+                  65,
+                  66,
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72,
+                  73,
+                  74,
+                  75,
+                  76,
+                  77,
+                  78,
+                  79,
+                  80
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p55/phase0_initial",
+              "runner_returncode": 0,
+              "solver_manifest_trace_sha256": "89705f70ce67ec4a0650ed6b9aeeb7edf670415b27c54c6f2bd4f408210c477a",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p55/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "b7f7d30537004ea4f5dac1ae0126cabcc41faa83952e40986745aee38725b2b3"
+            }
+          ],
+          "candidate_a_Ry": -2541.891245475928,
+          "candidate_b_Ry": null,
+          "candidate_c_Ry": -2542.073480058479,
+          "case": "j0p5_spectral_u2p00_j0p55",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p55/phase0_initial/console.log",
+          "console_sha256": "7f634ed70cbb375aeb34f51f1447e16812a13e7f59aa327bfa1e727e72391f62",
+          "energy_log_line": 3528,
+          "energy_row_sha256": "66d157450f78deed0786d3aa792a26053e2320e7bb3b9d37cbe258f19e49d174",
+          "family": "J0.5",
+          "ignored_live_post_checkpoint_iterations": [],
+          "j_eV": 0.55,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p55/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "89705f70ce67ec4a0650ed6b9aeeb7edf670415b27c54c6f2bd4f408210c477a",
+          "matrix_entry_count": 50,
+          "mode": "spectral",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 2.128680897690132,
+              "d_up": 4.441144015954552,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  2.1286806748720135,
+                  2.128680934883005
+                ],
+                "d_up": [
+                  4.441143879342952,
+                  4.441144293587135
+                ],
+                "sphere_moment_muB": [
+                  2.222745952606646,
+                  2.222746693065783
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p55/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "d929336117a5c2d7fa71ce2aa3e0863766e23dfa8c30b6d39846b9c33b0dcdab",
+              "sphere_moment_muB": 2.222746205053072
+            },
+            "final_diff": 2.16e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 2.600109914041582e-07,
+              "d_up": 4.142441829557697e-07,
+              "sphere_moment_muB": 7.404591366722002e-07
+            },
+            "window_iterations": [
+              61,
+              62,
+              63,
+              64,
+              65,
+              66,
+              67,
+              68,
+              69,
+              70,
+              71,
+              72,
+              73,
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p55/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2542.157404171637,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "b7f7d30537004ea4f5dac1ae0126cabcc41faa83952e40986745aee38725b2b3",
+          "selected_diff": 2.16e-08,
+          "selected_iteration": 80,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p55/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "89705f70ce67ec4a0650ed6b9aeeb7edf670415b27c54c6f2bd4f408210c477a",
+          "u_eV": 2.0,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 2.1329441207307185,
+                  "d_up": 4.4335120315457175,
+                  "inside_last20_ranges_diagnostic_only": false,
+                  "last20_ranges": {
+                    "d_down": [
+                      2.132944122566127,
+                      2.132944516248963
+                    ],
+                    "d_up": [
+                      4.433511548533443,
+                      4.433511997119099
+                    ],
+                    "sphere_moment_muB": [
+                      2.210271697151726,
+                      2.2102725601359716
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p60/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "0876097efd41e8651a50ff8f7900e9859743d0c5104cf89673603cbb7ba62803",
+                  "sphere_moment_muB": 2.2102724840251
+                },
+                "final_diff": 2.69e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 3.9368283566432183e-07,
+                  "d_up": 4.4858565573235865e-07,
+                  "sphere_moment_muB": 8.62984245841858e-07
+                },
+                "window_iterations": [
+                  63,
+                  64,
+                  65,
+                  66,
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72,
+                  73,
+                  74,
+                  75,
+                  76,
+                  77,
+                  78,
+                  79,
+                  80,
+                  81,
+                  82
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p60/phase0_initial",
+              "runner_returncode": 0,
+              "solver_manifest_trace_sha256": "93a7afc44b4a1b40423d07b7f0c6154c597b5af3e1c042da8140da8111e53662",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p60/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "1ab1029a3ca5dfd55ad263f70a62a73d8ba60c821fea5647d564d785c84ebd32"
+            }
+          ],
+          "candidate_a_Ry": -2541.894752980605,
+          "candidate_b_Ry": null,
+          "candidate_c_Ry": -2542.070899127127,
+          "case": "j0p5_spectral_u2p00_j0p60",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p60/phase0_initial/console.log",
+          "console_sha256": "695c650428a8301020e6762e4567e0b8dcb2102c569b1a55770f4ade14300ad8",
+          "energy_log_line": 3616,
+          "energy_row_sha256": "eff45051e65ac0f6a998ddf3c3a1461704390b5d4db01d74772f1aa468cb2e78",
+          "family": "J0.5",
+          "ignored_live_post_checkpoint_iterations": [
+            83
+          ],
+          "j_eV": 0.6,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p60/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "93a7afc44b4a1b40423d07b7f0c6154c597b5af3e1c042da8140da8111e53662",
+          "matrix_entry_count": 50,
+          "mode": "spectral",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 2.1329441207307185,
+              "d_up": 4.4335120315457175,
+              "inside_last20_ranges_diagnostic_only": false,
+              "last20_ranges": {
+                "d_down": [
+                  2.132944122566127,
+                  2.132944516248963
+                ],
+                "d_up": [
+                  4.433511548533443,
+                  4.433511997119099
+                ],
+                "sphere_moment_muB": [
+                  2.210271697151726,
+                  2.2102725601359716
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p60/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "0876097efd41e8651a50ff8f7900e9859743d0c5104cf89673603cbb7ba62803",
+              "sphere_moment_muB": 2.2102724840251
+            },
+            "final_diff": 2.69e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 3.9368283566432183e-07,
+              "d_up": 4.4858565573235865e-07,
+              "sphere_moment_muB": 8.62984245841858e-07
+            },
+            "window_iterations": [
+              63,
+              64,
+              65,
+              66,
+              67,
+              68,
+              69,
+              70,
+              71,
+              72,
+              73,
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80,
+              81,
+              82
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p60/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2542.151744888674,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "1ab1029a3ca5dfd55ad263f70a62a73d8ba60c821fea5647d564d785c84ebd32",
+          "selected_diff": 2.69e-08,
+          "selected_iteration": 82,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_spectral_u2p00_j0p60/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "ddb5dea32d9399e5527c381807b3e42510aa6d3e47bf9dae6d0a30328897749c",
+          "u_eV": 2.0,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 1.9102412454978976,
+                  "d_up": 4.601209119035112,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      1.9102410769161986,
+                      1.9102415519884444
+                    ],
+                    "d_up": [
+                      4.601209057375991,
+                      4.601209320455185
+                    ],
+                    "sphere_moment_muB": [
+                      2.5329702133346035,
+                      2.532970824263647
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "ead87f9fae9d9667a30e11e428ec790c520e6ff90398a509deac65efb954023e",
+                  "sphere_moment_muB": 2.5329705060320395
+                },
+                "final_diff": 2.29e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 4.750722457647072e-07,
+                  "d_up": 2.6307919398504964e-07,
+                  "sphere_moment_muB": 6.109290433542469e-07
+                },
+                "window_iterations": [
+                  69,
+                  70,
+                  71,
+                  72,
+                  73,
+                  74,
+                  75,
+                  76,
+                  77,
+                  78,
+                  79,
+                  80,
+                  81,
+                  82,
+                  83,
+                  84,
+                  85,
+                  86,
+                  87,
+                  88
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase0_initial",
+              "runner_returncode": -15,
+              "solver_manifest_trace_sha256": "e8d81998b558a95806c108c84de26bc9b6a7b246183739656de47c3ff6c7cddc",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "dd6096343a42fd9980f22ce13e296358e12b6a350a961f819dbbb0dc6b335311"
+            },
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 1.9102412266159563,
+                  "d_up": 4.601209148877931,
+                  "inside_last20_ranges_diagnostic_only": false,
+                  "last20_ranges": {
+                    "d_down": [
+                      1.9102410116958577,
+                      1.910241207629964
+                    ],
+                    "d_up": [
+                      4.601209198367567,
+                      4.601209434258724
+                    ],
+                    "sphere_moment_muB": [
+                      2.5329704984216894,
+                      2.532970883685239
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase1_beta_halved/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "a7cb9a4deb8a19da063b986d292ccd05a8cbe1c02bb70e9f14d577f27a801235",
+                  "sphere_moment_muB": 2.5329705370817277
+                },
+                "final_diff": 1.96e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 1.959341062729436e-07,
+                  "d_up": 2.3589115727418175e-07,
+                  "sphere_moment_muB": 3.8526354950718655e-07
+                },
+                "window_iterations": [
+                  2,
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9,
+                  10,
+                  11,
+                  12,
+                  13,
+                  14,
+                  15,
+                  16,
+                  17,
+                  18,
+                  19,
+                  20,
+                  21
+                ]
+              },
+              "phase": 1,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase1_beta_halved",
+              "runner_returncode": -15,
+              "solver_manifest_trace_sha256": "6064eca96759013aa5788eb66b1dc48f56b5e9f3452be63a6e175266970a7d43",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase1_beta_halved/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "2d62347a575129c0d7d4642c1af1a9c9875e0b221701cd53512b92c86417edcc"
+            },
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 1.9102411965872312,
+                  "d_up": 4.601209221510352,
+                  "inside_last20_ranges_diagnostic_only": false,
+                  "last20_ranges": {
+                    "d_down": [
+                      1.9102409770055129,
+                      1.9102411858732902
+                    ],
+                    "d_up": [
+                      4.601209280253915,
+                      4.601209509672157
+                    ],
+                    "sphere_moment_muB": [
+                      2.5329707441851683,
+                      2.5329711519911773
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase2_broyden_beta001/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "374267469a12b2db7a78a15cb26872eadcae016adccf59aa169e5641e5fcbf45",
+                  "sphere_moment_muB": 2.5329706407428683
+                },
+                "final_diff": 1.82e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 2.088677772960068e-07,
+                  "d_up": 2.294182417372781e-07,
+                  "sphere_moment_muB": 4.078060089618418e-07
+                },
+                "window_iterations": [
+                  2,
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9,
+                  10,
+                  11,
+                  12,
+                  13,
+                  14,
+                  15,
+                  16,
+                  17,
+                  18,
+                  19,
+                  20,
+                  21
+                ]
+              },
+              "phase": 2,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase2_broyden_beta001",
+              "runner_returncode": -15,
+              "solver_manifest_trace_sha256": "7624e8c5c5cf1d8ac37dc442b55614d6347223802ca24cad1d334f2bc65a61a3",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase2_broyden_beta001/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "a890dfde99940c11365cf75884e7ea274163b5d633ae5d6ff0db5ab3a5191e08"
+            }
+          ],
+          "candidate_a_Ry": null,
+          "candidate_b_Ry": -2541.868420883981,
+          "candidate_c_Ry": null,
+          "case": "u_local_u1p90_j0p00",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase0_initial/console.log",
+          "console_sha256": "e098f37c6f34a2eb57b0f4cf283fbf811f8d91bcee34652f018df947e1ef9398",
+          "energy_log_line": 3880,
+          "energy_row_sha256": "83d3de9d03df14a220e4a16c3ed4219f8bee89871e0b0f7a6410c2a7f21bf119",
+          "family": "U",
+          "ignored_live_post_checkpoint_iterations": [
+            89
+          ],
+          "j_eV": 0.0,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "e8d81998b558a95806c108c84de26bc9b6a7b246183739656de47c3ff6c7cddc",
+          "matrix_entry_count": 50,
+          "mode": "local",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 1.9102412454978976,
+              "d_up": 4.601209119035112,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  1.9102410769161986,
+                  1.9102415519884444
+                ],
+                "d_up": [
+                  4.601209057375991,
+                  4.601209320455185
+                ],
+                "sphere_moment_muB": [
+                  2.5329702133346035,
+                  2.532970824263647
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "ead87f9fae9d9667a30e11e428ec790c520e6ff90398a509deac65efb954023e",
+              "sphere_moment_muB": 2.5329705060320395
+            },
+            "final_diff": 2.29e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 4.750722457647072e-07,
+              "d_up": 2.6307919398504964e-07,
+              "sphere_moment_muB": 6.109290433542469e-07
+            },
+            "window_iterations": [
+              69,
+              70,
+              71,
+              72,
+              73,
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80,
+              81,
+              82,
+              83,
+              84,
+              85,
+              86,
+              87,
+              88
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2541.972826097727,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "dd6096343a42fd9980f22ce13e296358e12b6a350a961f819dbbb0dc6b335311",
+          "selected_diff": 2.29e-08,
+          "selected_iteration": 88,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "e2af112a29753918e6511a536638775f4662fd035833dce76064038dcc616662",
+          "u_eV": 1.9,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 1.9026668653423808,
+                  "d_up": 4.608589943567258,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      1.9026666150005036,
+                      1.9026670164700432
+                    ],
+                    "d_up": [
+                      4.608589833889225,
+                      4.6085901136850955
+                    ],
+                    "sphere_moment_muB": [
+                      2.5462016050485987,
+                      2.5462021381069535
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p95_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "374ed91e1ed459dde2a675b87ac5bb57b75f90d8a9601b7ebaec9747d5a04300",
+                  "sphere_moment_muB": 2.546201876695423
+                },
+                "final_diff": 1.2e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 4.0146953961262e-07,
+                  "d_up": 2.797958709166437e-07,
+                  "sphere_moment_muB": 5.330583547902279e-07
+                },
+                "window_iterations": [
+                  71,
+                  72,
+                  73,
+                  74,
+                  75,
+                  76,
+                  77,
+                  78,
+                  79,
+                  80,
+                  81,
+                  82,
+                  83,
+                  84,
+                  85,
+                  86,
+                  87,
+                  88,
+                  89,
+                  90
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p95_j0p00/phase0_initial",
+              "runner_returncode": -15,
+              "solver_manifest_trace_sha256": "dcadfc6ab35ec404c743cf945f6a8d978d18100c9b03965ba102566fe8f0956e",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p95_j0p00/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "27c6d837e956ba85162f792de9e8e9b13a512a3d4c5310b41a03cd9ddb7c4aeb"
+            },
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 1.9026668785433583,
+                  "d_up": 4.608589939245287,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      1.902666858919897,
+                      1.9026670468149858
+                    ],
+                    "d_up": [
+                      4.608589845930744,
+                      4.60858999655304
+                    ],
+                    "sphere_moment_muB": [
+                      2.5462015822516073,
+                      2.54620186893233
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p95_j0p00/phase1_beta_halved/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "3e5f7e6b35fea26d3dd7ac3b14c26325ea25b2c8d9f5b47ad313ec5e1fb8001a",
+                  "sphere_moment_muB": 2.546201860029655
+                },
+                "final_diff": 6.1e-09,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 1.8789508882122163e-07,
+                  "d_up": 1.5062229596907173e-07,
+                  "sphere_moment_muB": 2.8668072271642586e-07
+                },
+                "window_iterations": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9,
+                  10,
+                  11,
+                  12,
+                  13,
+                  14,
+                  15,
+                  16,
+                  17,
+                  18,
+                  19,
+                  20
+                ]
+              },
+              "phase": 1,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p95_j0p00/phase1_beta_halved",
+              "runner_returncode": -15,
+              "solver_manifest_trace_sha256": "c8ddb4bf6e2f5c9740387e2e29dde0766a17ff39f8e41a21aa4ca5c329105124",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p95_j0p00/phase1_beta_halved/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "855c5a1fdfb0244f379b525082b5913d77a6c21b73d9db131d359b9f3938d430"
+            }
+          ],
+          "candidate_a_Ry": null,
+          "candidate_b_Ry": -2541.865691092456,
+          "candidate_c_Ry": null,
+          "case": "u_local_u1p95_j0p00",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p95_j0p00/phase0_initial/console.log",
+          "console_sha256": "ea8bf87231a0736784a50dfd2b9819137110e02e452da6d4cd62e623c6bac940",
+          "energy_log_line": 3968,
+          "energy_row_sha256": "3a27f057ae15606c047b40dbf7da6d72f7ec4690ee76bb24e65b5f868fd9c617",
+          "family": "U",
+          "ignored_live_post_checkpoint_iterations": [
+            91
+          ],
+          "j_eV": 0.0,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p95_j0p00/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "dcadfc6ab35ec404c743cf945f6a8d978d18100c9b03965ba102566fe8f0956e",
+          "matrix_entry_count": 50,
+          "mode": "local",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 1.9026668653423808,
+              "d_up": 4.608589943567258,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  1.9026666150005036,
+                  1.9026670164700432
+                ],
+                "d_up": [
+                  4.608589833889225,
+                  4.6085901136850955
+                ],
+                "sphere_moment_muB": [
+                  2.5462016050485987,
+                  2.5462021381069535
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p95_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "374ed91e1ed459dde2a675b87ac5bb57b75f90d8a9601b7ebaec9747d5a04300",
+              "sphere_moment_muB": 2.546201876695423
+            },
+            "final_diff": 1.2e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 4.0146953961262e-07,
+              "d_up": 2.797958709166437e-07,
+              "sphere_moment_muB": 5.330583547902279e-07
+            },
+            "window_iterations": [
+              71,
+              72,
+              73,
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80,
+              81,
+              82,
+              83,
+              84,
+              85,
+              86,
+              87,
+              88,
+              89,
+              90
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p95_j0p00/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2541.972318170529,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "27c6d837e956ba85162f792de9e8e9b13a512a3d4c5310b41a03cd9ddb7c4aeb",
+          "selected_diff": 1.2e-08,
+          "selected_iteration": 90,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p95_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "28ae92db60080a48ae8c114ad0637d7a71accfc2b0857c7d889209f85681b881",
+          "u_eV": 1.95,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 1.895454137089939,
+                  "d_up": 4.615578898732167,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      1.8954538127163723,
+                      1.895454304221671
+                    ],
+                    "d_up": [
+                      4.615578861728871,
+                      4.615579125011595
+                    ],
+                    "sphere_moment_muB": [
+                      2.5586810087031067,
+                      2.5586815968624665
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p00_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "c8f3195439381b059f6f036316733b195d9acb3ea41bf3bcb9148902ab9c5be6",
+                  "sphere_moment_muB": 2.5586811320427434
+                },
+                "final_diff": 1.3e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 4.91505298683137e-07,
+                  "d_up": 2.63282724510816e-07,
+                  "sphere_moment_muB": 5.881593598822121e-07
+                },
+                "window_iterations": [
+                  51,
+                  52,
+                  53,
+                  54,
+                  55,
+                  56,
+                  57,
+                  58,
+                  59,
+                  60,
+                  61,
+                  62,
+                  63,
+                  64,
+                  65,
+                  66,
+                  67,
+                  68,
+                  69,
+                  70
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p00_j0p00/phase0_initial",
+              "runner_returncode": -15,
+              "solver_manifest_trace_sha256": "452b6a57549226eafec213cb65ad609035e361e96443c0863cbc21823b08efa1",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p00_j0p00/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "0a917ae06fd1a3aa955123407260b3bdc3f50dbb6c881a32a93b68ce0daf555c"
+            }
+          ],
+          "candidate_a_Ry": null,
+          "candidate_b_Ry": -2541.862978162096,
+          "candidate_c_Ry": null,
+          "case": "u_local_u2p00_j0p00",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p00_j0p00/phase0_initial/console.log",
+          "console_sha256": "e3c94b00dec7e630cae0fe9737b733246594454e9f5942c9a72467e015ad6bef",
+          "energy_log_line": 3088,
+          "energy_row_sha256": "20ba148334221cf13d55222ec66a0d83fef7cba302f94aff4a605e2f5fbf798e",
+          "family": "U",
+          "ignored_live_post_checkpoint_iterations": [
+            71
+          ],
+          "j_eV": 0.0,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p00_j0p00/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "452b6a57549226eafec213cb65ad609035e361e96443c0863cbc21823b08efa1",
+          "matrix_entry_count": 50,
+          "mode": "local",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 1.895454137089939,
+              "d_up": 4.615578898732167,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  1.8954538127163723,
+                  1.895454304221671
+                ],
+                "d_up": [
+                  4.615578861728871,
+                  4.615579125011595
+                ],
+                "sphere_moment_muB": [
+                  2.5586810087031067,
+                  2.5586815968624665
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p00_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "c8f3195439381b059f6f036316733b195d9acb3ea41bf3bcb9148902ab9c5be6",
+              "sphere_moment_muB": 2.5586811320427434
+            },
+            "final_diff": 1.3e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 4.91505298683137e-07,
+              "d_up": 2.63282724510816e-07,
+              "sphere_moment_muB": 5.881593598822121e-07
+            },
+            "window_iterations": [
+              51,
+              52,
+              53,
+              54,
+              55,
+              56,
+              57,
+              58,
+              59,
+              60,
+              61,
+              62,
+              63,
+              64,
+              65,
+              66,
+              67,
+              68,
+              69,
+              70
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p00_j0p00/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2541.971822665622,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "0a917ae06fd1a3aa955123407260b3bdc3f50dbb6c881a32a93b68ce0daf555c",
+          "selected_diff": 1.3e-08,
+          "selected_iteration": 70,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p00_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "137c11ef6243f53ca9de91be0520cfcc553b8406a1a95643505324fa1240ac92",
+          "u_eV": 2.0,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 1.888619508960719,
+                  "d_up": 4.622166217003711,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      1.8886194842906088,
+                      1.8886198247577308
+                    ],
+                    "d_up": [
+                      4.6221659731200875,
+                      4.6221663810765445
+                    ],
+                    "sphere_moment_muB": [
+                      2.5703936647873484,
+                      2.5703942379188307
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p05_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "7efcd1225244d487b555f0b5325dfad66481a6457e7b402498da3e42133151db",
+                  "sphere_moment_muB": 2.5703940705283164
+                },
+                "final_diff": 1.96e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 3.4046712205082486e-07,
+                  "d_up": 4.079564570602656e-07,
+                  "sphere_moment_muB": 5.731314822732259e-07
+                },
+                "window_iterations": [
+                  73,
+                  74,
+                  75,
+                  76,
+                  77,
+                  78,
+                  79,
+                  80,
+                  81,
+                  82,
+                  83,
+                  84,
+                  85,
+                  86,
+                  87,
+                  88,
+                  89,
+                  90,
+                  91,
+                  92
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p05_j0p00/phase0_initial",
+              "runner_returncode": -15,
+              "solver_manifest_trace_sha256": "98112dc628e2838736f275df141edab1bf9ed3b481eda8c37791f832c315956c",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p05_j0p00/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "b853a4624252302a1e5456bbc403a159eef71a663b0c3c8bf03b9e8795f0f771"
+            }
+          ],
+          "candidate_a_Ry": null,
+          "candidate_b_Ry": -2541.860274049313,
+          "candidate_c_Ry": null,
+          "case": "u_local_u2p05_j0p00",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p05_j0p00/phase0_initial/console.log",
+          "console_sha256": "129ff2a512e3ff542609fad6c1c40a439682c3a4e4603a2f49db04908e1859db",
+          "energy_log_line": 4056,
+          "energy_row_sha256": "af20441254a1cfd0346af5db572596a9bc6ba60b99a3369b6b437abe52445867",
+          "family": "U",
+          "ignored_live_post_checkpoint_iterations": [],
+          "j_eV": 0.0,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p05_j0p00/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "98112dc628e2838736f275df141edab1bf9ed3b481eda8c37791f832c315956c",
+          "matrix_entry_count": 50,
+          "mode": "local",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 1.888619508960719,
+              "d_up": 4.622166217003711,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  1.8886194842906088,
+                  1.8886198247577308
+                ],
+                "d_up": [
+                  4.6221659731200875,
+                  4.6221663810765445
+                ],
+                "sphere_moment_muB": [
+                  2.5703936647873484,
+                  2.5703942379188307
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p05_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "7efcd1225244d487b555f0b5325dfad66481a6457e7b402498da3e42133151db",
+              "sphere_moment_muB": 2.5703940705283164
+            },
+            "final_diff": 1.96e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 3.4046712205082486e-07,
+              "d_up": 4.079564570602656e-07,
+              "sphere_moment_muB": 5.731314822732259e-07
+            },
+            "window_iterations": [
+              73,
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80,
+              81,
+              82,
+              83,
+              84,
+              85,
+              86,
+              87,
+              88,
+              89,
+              90,
+              91,
+              92
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p05_j0p00/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2541.971334480594,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "b853a4624252302a1e5456bbc403a159eef71a663b0c3c8bf03b9e8795f0f771",
+          "selected_diff": 1.96e-08,
+          "selected_iteration": 92,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p05_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "98112dc628e2838736f275df141edab1bf9ed3b481eda8c37791f832c315956c",
+          "u_eV": 2.05,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 1.882151075409772,
+                  "d_up": 4.628368274551109,
+                  "inside_last20_ranges_diagnostic_only": false,
+                  "last20_ranges": {
+                    "d_down": [
+                      1.882150821069537,
+                      1.8821510602562272
+                    ],
+                    "d_up": [
+                      4.6283682567586935,
+                      4.62836846584277
+                    ],
+                    "sphere_moment_muB": [
+                      2.581362459948789,
+                      2.581362857983532
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p10_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "8dd092137d8ec5cc24ffbee8c743f9a4db164c6ed7e4b6854d7716792b06a0b1",
+                  "sphere_moment_muB": 2.581362440749067
+                },
+                "final_diff": 1.78e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 2.391866902318185e-07,
+                  "d_up": 2.090840762747348e-07,
+                  "sphere_moment_muB": 3.9803474294330954e-07
+                },
+                "window_iterations": [
+                  73,
+                  74,
+                  75,
+                  76,
+                  77,
+                  78,
+                  79,
+                  80,
+                  81,
+                  82,
+                  83,
+                  84,
+                  85,
+                  86,
+                  87,
+                  88,
+                  89,
+                  90,
+                  91,
+                  92
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p10_j0p00/phase0_initial",
+              "runner_returncode": -15,
+              "solver_manifest_trace_sha256": "5f5449548b8d14548b159f71f642e3076a293a9a862a6410260d26dd5e7232d3",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p10_j0p00/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "5683f4fbb83d3187a3bbacbbca16562bebfda14ce2be5a99e80710fa0c4f8614"
+            }
+          ],
+          "candidate_a_Ry": null,
+          "candidate_b_Ry": -2541.857578611015,
+          "candidate_c_Ry": null,
+          "case": "u_local_u2p10_j0p00",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p10_j0p00/phase0_initial/console.log",
+          "console_sha256": "493de599d1ba58fdd97c6fdc83a737c28a560e66673f5158ce6798b896350913",
+          "energy_log_line": 4056,
+          "energy_row_sha256": "3ed6e76b7935e05ce4255c46e67a5f07391dcb18c53d1249aef2a6dd564408d1",
+          "family": "U",
+          "ignored_live_post_checkpoint_iterations": [],
+          "j_eV": 0.0,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p10_j0p00/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "5f5449548b8d14548b159f71f642e3076a293a9a862a6410260d26dd5e7232d3",
+          "matrix_entry_count": 50,
+          "mode": "local",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 1.882151075409772,
+              "d_up": 4.628368274551109,
+              "inside_last20_ranges_diagnostic_only": false,
+              "last20_ranges": {
+                "d_down": [
+                  1.882150821069537,
+                  1.8821510602562272
+                ],
+                "d_up": [
+                  4.6283682567586935,
+                  4.62836846584277
+                ],
+                "sphere_moment_muB": [
+                  2.581362459948789,
+                  2.581362857983532
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p10_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "8dd092137d8ec5cc24ffbee8c743f9a4db164c6ed7e4b6854d7716792b06a0b1",
+              "sphere_moment_muB": 2.581362440749067
+            },
+            "final_diff": 1.78e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 2.391866902318185e-07,
+              "d_up": 2.090840762747348e-07,
+              "sphere_moment_muB": 3.9803474294330954e-07
+            },
+            "window_iterations": [
+              73,
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80,
+              81,
+              82,
+              83,
+              84,
+              85,
+              86,
+              87,
+              88,
+              89,
+              90,
+              91,
+              92
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p10_j0p00/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2541.970854669734,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "5683f4fbb83d3187a3bbacbbca16562bebfda14ce2be5a99e80710fa0c4f8614",
+          "selected_diff": 1.78e-08,
+          "selected_iteration": 92,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p10_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "5f5449548b8d14548b159f71f642e3076a293a9a862a6410260d26dd5e7232d3",
+          "u_eV": 2.1,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 2.077554852962416,
+                  "d_up": 4.524709176757767,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      2.0775545678683898,
+                      2.0775550231939297
+                    ],
+                    "d_up": [
+                      4.5247090845971885,
+                      4.52470944698321
+                    ],
+                    "sphere_moment_muB": [
+                      2.3652860000063325,
+                      2.365286783867281
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p90_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "fcc8a16ff723c2a4ec0e3d388c9d7530b7a3d551e24ab33536c4acb41ee827a7",
+                  "sphere_moment_muB": 2.3652862051994465
+                },
+                "final_diff": 1.32e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 4.5532553993865577e-07,
+                  "d_up": 3.6238602163507494e-07,
+                  "sphere_moment_muB": 7.838609485943948e-07
+                },
+                "window_iterations": [
+                  63,
+                  64,
+                  65,
+                  66,
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72,
+                  73,
+                  74,
+                  75,
+                  76,
+                  77,
+                  78,
+                  79,
+                  80,
+                  81,
+                  82
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p90_j0p00/phase0_initial",
+              "runner_returncode": -15,
+              "solver_manifest_trace_sha256": "d283d417584e6d30ff8fa333f9baf35b1d5c17618aad1327d456a0b88a518cff",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p90_j0p00/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "1fb636b4f75171f88392313cd43099a444d2be02049c496749ec677be28090b7"
+            }
+          ],
+          "candidate_a_Ry": -2541.859578270579,
+          "candidate_b_Ry": null,
+          "candidate_c_Ry": -2542.100828829938,
+          "case": "u_spectral_u1p90_j0p00",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p90_j0p00/phase0_initial/console.log",
+          "console_sha256": "346797b4ec0974406621bd1dd092537ed3197a45a952a74bf9aa49e5d7c11f55",
+          "energy_log_line": 3616,
+          "energy_row_sha256": "8e14ba4adcc60b1fe99866b8dcb2ef7bee8b28fe3889cdda755e583075cb8694",
+          "family": "U",
+          "ignored_live_post_checkpoint_iterations": [],
+          "j_eV": 0.0,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p90_j0p00/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "d283d417584e6d30ff8fa333f9baf35b1d5c17618aad1327d456a0b88a518cff",
+          "matrix_entry_count": 50,
+          "mode": "spectral",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 2.077554852962416,
+              "d_up": 4.524709176757767,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  2.0775545678683898,
+                  2.0775550231939297
+                ],
+                "d_up": [
+                  4.5247090845971885,
+                  4.52470944698321
+                ],
+                "sphere_moment_muB": [
+                  2.3652860000063325,
+                  2.365286783867281
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p90_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "fcc8a16ff723c2a4ec0e3d388c9d7530b7a3d551e24ab33536c4acb41ee827a7",
+              "sphere_moment_muB": 2.3652862051994465
+            },
+            "final_diff": 1.32e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 4.5532553993865577e-07,
+              "d_up": 3.6238602163507494e-07,
+              "sphere_moment_muB": 7.838609485943948e-07
+            },
+            "window_iterations": [
+              63,
+              64,
+              65,
+              66,
+              67,
+              68,
+              69,
+              70,
+              71,
+              72,
+              73,
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80,
+              81,
+              82
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p90_j0p00/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2542.210700659473,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "1fb636b4f75171f88392313cd43099a444d2be02049c496749ec677be28090b7",
+          "selected_diff": 1.32e-08,
+          "selected_iteration": 82,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p90_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "d283d417584e6d30ff8fa333f9baf35b1d5c17618aad1327d456a0b88a518cff",
+          "u_eV": 1.9,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 2.0745500087133495,
+                  "d_up": 4.531094090246538,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      2.074549908521063,
+                      2.0745502272799135
+                    ],
+                    "d_up": [
+                      4.531093878387921,
+                      4.531094187351584
+                    ],
+                    "sphere_moment_muB": [
+                      2.3756461026930817,
+                      2.3756465860481604
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p95_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "30c69e0cbfe51fd7da4d1bcab090788e2035ed6f177a57bb0700c3189ea6e62e",
+                  "sphere_moment_muB": 2.3756465580400703
+                },
+                "final_diff": 2.12e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 3.18758850426093e-07,
+                  "d_up": 3.089636635422721e-07,
+                  "sphere_moment_muB": 4.833550786287333e-07
+                },
+                "window_iterations": [
+                  56,
+                  57,
+                  58,
+                  59,
+                  60,
+                  61,
+                  62,
+                  63,
+                  64,
+                  65,
+                  66,
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72,
+                  73,
+                  74,
+                  75
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p95_j0p00/phase0_initial",
+              "runner_returncode": -15,
+              "solver_manifest_trace_sha256": "9605ce78f13ee9e880b8af6f2d34669db7e4ffe3ac30dbdcef7e543eb289d006",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p95_j0p00/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "645a875e40f3a7edff2339eb11d66dbb0867cae7cee8001607647e033b5ab9a8"
+            }
+          ],
+          "candidate_a_Ry": -2541.856383204235,
+          "candidate_b_Ry": null,
+          "candidate_c_Ry": -2542.105035987156,
+          "case": "u_spectral_u1p95_j0p00",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p95_j0p00/phase0_initial/console.log",
+          "console_sha256": "28aba43b22df8eb065c394d2ed404c62dde644c7bc712fc58e3b7006382923f4",
+          "energy_log_line": 3308,
+          "energy_row_sha256": "ce63bdb5b38d945fa3acac76c0451f7c43a7b400c1f260183919c4beae819772",
+          "family": "U",
+          "ignored_live_post_checkpoint_iterations": [],
+          "j_eV": 0.0,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p95_j0p00/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "9605ce78f13ee9e880b8af6f2d34669db7e4ffe3ac30dbdcef7e543eb289d006",
+          "matrix_entry_count": 50,
+          "mode": "spectral",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 2.0745500087133495,
+              "d_up": 4.531094090246538,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  2.074549908521063,
+                  2.0745502272799135
+                ],
+                "d_up": [
+                  4.531093878387921,
+                  4.531094187351584
+                ],
+                "sphere_moment_muB": [
+                  2.3756461026930817,
+                  2.3756465860481604
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p95_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "30c69e0cbfe51fd7da4d1bcab090788e2035ed6f177a57bb0700c3189ea6e62e",
+              "sphere_moment_muB": 2.3756465580400703
+            },
+            "final_diff": 2.12e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 3.18758850426093e-07,
+              "d_up": 3.089636635422721e-07,
+              "sphere_moment_muB": 4.833550786287333e-07
+            },
+            "window_iterations": [
+              56,
+              57,
+              58,
+              59,
+              60,
+              61,
+              62,
+              63,
+              64,
+              65,
+              66,
+              67,
+              68,
+              69,
+              70,
+              71,
+              72,
+              73,
+              74,
+              75
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p95_j0p00/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2542.217393524862,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "645a875e40f3a7edff2339eb11d66dbb0867cae7cee8001607647e033b5ab9a8",
+          "selected_diff": 2.12e-08,
+          "selected_iteration": 75,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u1p95_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "9605ce78f13ee9e880b8af6f2d34669db7e4ffe3ac30dbdcef7e543eb289d006",
+          "u_eV": 1.95,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 2.0715468939907016,
+                  "d_up": 4.5375179289732355,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      2.0715466850450692,
+                      2.071547147169844
+                    ],
+                    "d_up": [
+                      4.537517871405907,
+                      4.537518087510528
+                    ],
+                    "sphere_moment_muB": [
+                      2.3860442962303607,
+                      2.3860451937405913
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p00_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "09b1f8727624709d91cc52ead48715e8d546d3dfeb1981cc7093f097d4614af4",
+                  "sphere_moment_muB": 2.3860446564003768
+                },
+                "final_diff": 2.5e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 4.621247748914925e-07,
+                  "d_up": 2.1610462130894348e-07,
+                  "sphere_moment_muB": 8.975102305797122e-07
+                },
+                "window_iterations": [
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72,
+                  73,
+                  74,
+                  75,
+                  76,
+                  77,
+                  78,
+                  79,
+                  80,
+                  81,
+                  82,
+                  83,
+                  84,
+                  85,
+                  86
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p00_j0p00/phase0_initial",
+              "runner_returncode": -15,
+              "solver_manifest_trace_sha256": "478f3acfc1a39e3a9cf74c40071c09e2122f6790cc6cc7dfc8a829e145317829",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p00_j0p00/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "d39f9bd178e8f46f60da5362ba6d54055c3250850f095fab44262bfe530f9549"
+            }
+          ],
+          "candidate_a_Ry": -2541.853182432701,
+          "candidate_b_Ry": null,
+          "candidate_c_Ry": -2542.109304113875,
+          "case": "u_spectral_u2p00_j0p00",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p00_j0p00/phase0_initial/console.log",
+          "console_sha256": "721adf45d216519d2a4742fc23a754adb2ece12ada2b0471e4ebbf1ebd2a8f83",
+          "energy_log_line": 3792,
+          "energy_row_sha256": "b995093370f1bcf477dd7ba0608ee91c5b4320412319699e23d5c30cde387f3a",
+          "family": "U",
+          "ignored_live_post_checkpoint_iterations": [],
+          "j_eV": 0.0,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p00_j0p00/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "478f3acfc1a39e3a9cf74c40071c09e2122f6790cc6cc7dfc8a829e145317829",
+          "matrix_entry_count": 50,
+          "mode": "spectral",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 2.0715468939907016,
+              "d_up": 4.5375179289732355,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  2.0715466850450692,
+                  2.071547147169844
+                ],
+                "d_up": [
+                  4.537517871405907,
+                  4.537518087510528
+                ],
+                "sphere_moment_muB": [
+                  2.3860442962303607,
+                  2.3860451937405913
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p00_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "09b1f8727624709d91cc52ead48715e8d546d3dfeb1981cc7093f097d4614af4",
+              "sphere_moment_muB": 2.3860446564003768
+            },
+            "final_diff": 2.5e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 4.621247748914925e-07,
+              "d_up": 2.1610462130894348e-07,
+              "sphere_moment_muB": 8.975102305797122e-07
+            },
+            "window_iterations": [
+              67,
+              68,
+              69,
+              70,
+              71,
+              72,
+              73,
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80,
+              81,
+              82,
+              83,
+              84,
+              85,
+              86
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p00_j0p00/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2542.224121739862,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "d39f9bd178e8f46f60da5362ba6d54055c3250850f095fab44262bfe530f9549",
+          "selected_diff": 2.5e-08,
+          "selected_iteration": 86,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p00_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "478f3acfc1a39e3a9cf74c40071c09e2122f6790cc6cc7dfc8a829e145317829",
+          "u_eV": 2.0,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 2.068578474115255,
+                  "d_up": 4.543930451065682,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      2.06857843836716,
+                      2.068578705282504
+                    ],
+                    "d_up": [
+                      4.543930379679576,
+                      4.543930501725143
+                    ],
+                    "sphere_moment_muB": [
+                      2.3964166782392713,
+                      2.3964169716213757
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p05_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "ccfece0ee6fad4b4e206c76f8589622906e16c41ae2127f72b46476cf950b0d4",
+                  "sphere_moment_muB": 2.3964169171328082
+                },
+                "final_diff": 5.8e-09,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 2.6691534404932327e-07,
+                  "d_up": 1.2204556654182852e-07,
+                  "sphere_moment_muB": 2.93382104388229e-07
+                },
+                "window_iterations": [
+                  79,
+                  80,
+                  81,
+                  82,
+                  83,
+                  84,
+                  85,
+                  86,
+                  87,
+                  88,
+                  89,
+                  90,
+                  91,
+                  92,
+                  93,
+                  94,
+                  95,
+                  96,
+                  97,
+                  98
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p05_j0p00/phase0_initial",
+              "runner_returncode": -15,
+              "solver_manifest_trace_sha256": "605e452f14128c59958793933c33f0aba965acb7c5987aec79932a71147a9808",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p05_j0p00/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "21c17af6cb2d81f77c90b013bf89982c3444084b2fd367f565e46100b046bf72"
+            }
+          ],
+          "candidate_a_Ry": -2541.849977239936,
+          "candidate_b_Ry": null,
+          "candidate_c_Ry": -2542.113628327782,
+          "case": "u_spectral_u2p05_j0p00",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p05_j0p00/phase0_initial/console.log",
+          "console_sha256": "907198a6fd862665b3c17008814b1a55ac7e87d2b550fde28ccbfcdff3068f6e",
+          "energy_log_line": 4320,
+          "energy_row_sha256": "0bc253674b4c1837a821ec1baa3b3b187017a3b463c6b3df15e1cb8316628777",
+          "family": "U",
+          "ignored_live_post_checkpoint_iterations": [],
+          "j_eV": 0.0,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p05_j0p00/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "605e452f14128c59958793933c33f0aba965acb7c5987aec79932a71147a9808",
+          "matrix_entry_count": 50,
+          "mode": "spectral",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 2.068578474115255,
+              "d_up": 4.543930451065682,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  2.06857843836716,
+                  2.068578705282504
+                ],
+                "d_up": [
+                  4.543930379679576,
+                  4.543930501725143
+                ],
+                "sphere_moment_muB": [
+                  2.3964166782392713,
+                  2.3964169716213757
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p05_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "ccfece0ee6fad4b4e206c76f8589622906e16c41ae2127f72b46476cf950b0d4",
+              "sphere_moment_muB": 2.3964169171328082
+            },
+            "final_diff": 5.8e-09,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 2.6691534404932327e-07,
+              "d_up": 1.2204556654182852e-07,
+              "sphere_moment_muB": 2.93382104388229e-07
+            },
+            "window_iterations": [
+              79,
+              80,
+              81,
+              82,
+              83,
+              84,
+              85,
+              86,
+              87,
+              88,
+              89,
+              90,
+              91,
+              92,
+              93,
+              94,
+              95,
+              96,
+              97,
+              98
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p05_j0p00/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2542.230882933899,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "21c17af6cb2d81f77c90b013bf89982c3444084b2fd367f565e46100b046bf72",
+          "selected_diff": 5.8e-09,
+          "selected_iteration": 98,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p05_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "605e452f14128c59958793933c33f0aba965acb7c5987aec79932a71147a9808",
+          "u_eV": 2.05,
+          "w1_trace_count": 2
+        },
+        {
+          "all_phase_records": [
+            {
+              "acceptance": {
+                "accepted": true,
+                "classification": "C1_ACCEPTED",
+                "endpoint": {
+                  "d_down": 2.065653192546333,
+                  "d_up": 4.55030111992606,
+                  "inside_last20_ranges_diagnostic_only": true,
+                  "last20_ranges": {
+                    "d_down": [
+                      2.0656530376529254,
+                      2.0656533201390372
+                    ],
+                    "d_up": [
+                      4.550300985048266,
+                      4.550301276237866
+                    ],
+                    "sphere_moment_muB": [
+                      2.4067453381093884,
+                      2.4067457771842027
+                    ]
+                  },
+                  "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p10_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+                  "sha256": "9ee5a4b6d5658da3c6fb89fddd2127efc103d8e0d17e91e047d727b5bd7654c7",
+                  "sphere_moment_muB": 2.4067454914555353
+                },
+                "final_diff": 1.57e-08,
+                "gate_limits": {
+                  "d_down": 5e-07,
+                  "d_up": 5e-07,
+                  "diff": 3e-08,
+                  "sphere_moment_muB": 1e-06
+                },
+                "spreads": {
+                  "d_down": 2.8248611183556704e-07,
+                  "d_up": 2.91189599543884e-07,
+                  "sphere_moment_muB": 4.3907481428462347e-07
+                },
+                "window_iterations": [
+                  66,
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72,
+                  73,
+                  74,
+                  75,
+                  76,
+                  77,
+                  78,
+                  79,
+                  80,
+                  81,
+                  82,
+                  83,
+                  84,
+                  85
+                ]
+              },
+              "phase": 0,
+              "run_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p10_j0p00/phase0_initial",
+              "runner_returncode": -15,
+              "solver_manifest_trace_sha256": "7867b192f2cdcfd2a6d8ea51bf5d404ee59cfeaf0d79a572c832d72c887ab634",
+              "trace_manifest_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p10_j0p00/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+              "trace_manifest_sha256": "714342aeacb24d373a70308c0b21bc0f1ce2343fbe9c6727267626e8417b07ea"
+            }
+          ],
+          "candidate_a_Ry": -2541.846783345924,
+          "candidate_b_Ry": null,
+          "candidate_c_Ry": -2542.118019587011,
+          "case": "u_spectral_u2p10_j0p00",
+          "checkpoint_trace_used": true,
+          "console_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p10_j0p00/phase0_initial/console.log",
+          "console_sha256": "dc98e34733d42160f8712b38d6ceaa8d028bb665912201ec2729fd67818fb4dd",
+          "energy_log_line": 3748,
+          "energy_row_sha256": "9b9ee2de80722fdbf1574ae27a870fda35c11ded7bdfabbdd9322d6282357e09",
+          "family": "U",
+          "ignored_live_post_checkpoint_iterations": [
+            86
+          ],
+          "j_eV": 0.0,
+          "live_trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p10_j0p00/phase0_initial/fixed_u_trace_history.csv",
+          "live_trace_sha256": "7867b192f2cdcfd2a6d8ea51bf5d404ee59cfeaf0d79a572c832d72c887ab634",
+          "matrix_entry_count": 50,
+          "mode": "spectral",
+          "phase": 0,
+          "phase_acceptance": {
+            "accepted": true,
+            "classification": "C1_ACCEPTED",
+            "endpoint": {
+              "d_down": 2.065653192546333,
+              "d_up": 4.55030111992606,
+              "inside_last20_ranges_diagnostic_only": true,
+              "last20_ranges": {
+                "d_down": [
+                  2.0656530376529254,
+                  2.0656533201390372
+                ],
+                "d_up": [
+                  4.550300985048266,
+                  4.550301276237866
+                ],
+                "sphere_moment_muB": [
+                  2.4067453381093884,
+                  2.4067457771842027
+                ]
+              },
+              "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p10_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+              "sha256": "9ee5a4b6d5658da3c6fb89fddd2127efc103d8e0d17e91e047d727b5bd7654c7",
+              "sphere_moment_muB": 2.4067454914555353
+            },
+            "final_diff": 1.57e-08,
+            "gate_limits": {
+              "d_down": 5e-07,
+              "d_up": 5e-07,
+              "diff": 3e-08,
+              "sphere_moment_muB": 1e-06
+            },
+            "spreads": {
+              "d_down": 2.8248611183556704e-07,
+              "d_up": 2.91189599543884e-07,
+              "sphere_moment_muB": 4.3907481428462347e-07
+            },
+            "window_iterations": [
+              66,
+              67,
+              68,
+              69,
+              70,
+              71,
+              72,
+              73,
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80,
+              81,
+              82,
+              83,
+              84,
+              85
+            ]
+          },
+          "phase_dir": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p10_j0p00/phase0_initial",
+          "phase_selection_policy": "earliest C1-accepted phase; if none, terminal recorded phase is provisional",
+          "physical_total_energy_Ry": -2542.237689689571,
+          "ql_entry_count": 6,
+          "run_manifest_sha256": "714342aeacb24d373a70308c0b21bc0f1ce2343fbe9c6727267626e8417b07ea",
+          "selected_diff": 1.57e-08,
+          "selected_iteration": 85,
+          "status": "C1_ACCEPTED",
+          "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_spectral_u2p10_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "trace_sha256": "ef2eafb668781278122dfffd1b7bd5e69308ce4580a6a261425bd3fb221541c5",
+          "u_eV": 2.1,
+          "w1_trace_count": 2
+        }
+      ],
+      "case_errors": [],
+      "derivative_families": {
+        "J0.5": {
+          "candidate_slopes": {
+            "a": {
+              "h_0.05": -0.06985235192132677,
+              "h_0.10": -0.06991382515479927
+            },
+            "b": {
+              "h_0.05": -0.06195539191139687,
+              "h_0.10": -0.06199791331482629
+            },
+            "c": {
+              "h_0.05": 0.05483685275976313,
+              "h_0.10": 0.05481759014855925
+            }
+          },
+          "center_J_eV": 0.5,
+          "center_U_eV": 2.0,
+          "common_allowance_A_Ry_per_eV": 0.0003408831421857261,
+          "diagnostic_gate": "FAIL",
+          "endpoint_status": "ALL_C1_ACCEPTED",
+          "final_gate_verdict": "NOT_FINALIZED_PARTIAL_MODE",
+          "fixed_P_target": {
+            "0.05": {
+              "dEHub_dJ_Ry_per_eV": -0.06229672050170443,
+              "dEHub_dU_Ry_per_eV": 0.05807723986945401
+            },
+            "0.1": {
+              "dEHub_dJ_Ry_per_eV": -0.06229672050170887,
+              "dEHub_dU_Ry_per_eV": 0.05807723986945623
+            }
+          },
+          "gate": "FAIL",
+          "per_h": {
+            "h_0.05": {
+              "b_abs_error_Ry_per_eV": 0.0003413285903075547,
+              "b_within_A": false,
+              "c_abs_error_Ry_per_eV": 0.11713357326146756,
+              "c_miss_gt_10A": true,
+              "candidate_slopes_Ry_per_eV": {
+                "a": -0.06985235192132677,
+                "b": -0.06195539191139687,
+                "c": 0.05483685275976313
+              },
+              "fixed_P_U_normalizer_TU_h005_Ry_per_eV": 0.05807723986945401,
+              "target_TJ_Ry_per_eV": -0.06229672050170443
+            },
+            "h_0.10": {
+              "b_abs_error_Ry_per_eV": 0.000298807186882577,
+              "b_within_A": true,
+              "c_abs_error_Ry_per_eV": 0.11711431065026812,
+              "c_miss_gt_10A": true,
+              "candidate_slopes_Ry_per_eV": {
+                "a": -0.06991382515479927,
+                "b": -0.06199791331482629,
+                "c": 0.05481759014855925
+              },
+              "fixed_P_U_normalizer_TU_h005_Ry_per_eV": 0.05807723986945401,
+              "target_TJ_Ry_per_eV": -0.06229672050170887
+            }
+          }
+        },
+        "U": {
+          "candidate_slopes": {
+            "a": {
+              "h_0.05": 0.0640596429911966,
+              "h_0.10": 0.0639746232741345
+            },
+            "b": {
+              "h_0.05": 0.05417043143097544,
+              "h_0.10": 0.05421136482937072
+            },
+            "c": {
+              "h_0.05": -0.08592340625909856,
+              "h_0.10": -0.08595378536483622
+            }
+          },
+          "center_U_eV": 2.0,
+          "common_allowance_A_Ry_per_eV": 0.00032051827019072136,
+          "diagnostic_gate": "PASS",
+          "endpoint_status": "ALL_C1_ACCEPTED",
+          "final_gate_verdict": "NOT_FINALIZED_PARTIAL_MODE",
+          "fixed_J_eV": 0.0,
+          "fixed_P_target": {
+            "0.05": {
+              "dEHub_dJ_Ry_per_eV": -0.05707038391423502,
+              "dEHub_dU_Ry_per_eV": 0.054422251763308616
+            },
+            "0.1": {
+              "dEHub_dJ_Ry_per_eV": -0.0570703839142328,
+              "dEHub_dU_Ry_per_eV": 0.05442225176329307
+            }
+          },
+          "gate": "PASS",
+          "per_h": {
+            "h_0.05": {
+              "b_abs_error_Ry_per_eV": 0.0002518203323331747,
+              "b_within_A": true,
+              "c_abs_error_Ry_per_eV": 0.14034565802240717,
+              "c_miss_gt_10A": true,
+              "candidate_slopes_Ry_per_eV": {
+                "a": 0.0640596429911966,
+                "b": 0.05417043143097544,
+                "c": -0.08592340625909856
+              },
+              "target_Ry_per_eV": 0.054422251763308616
+            },
+            "h_0.10": {
+              "b_abs_error_Ry_per_eV": 0.00021088693392234958,
+              "b_within_A": true,
+              "c_abs_error_Ry_per_eV": 0.1403760371281293,
+              "c_miss_gt_10A": true,
+              "candidate_slopes_Ry_per_eV": {
+                "a": 0.0639746232741345,
+                "b": 0.05421136482937072,
+                "c": -0.08595378536483622
+              },
+              "target_Ry_per_eV": 0.05442225176329307
+            }
+          }
+        }
+      },
+      "derivatives": null,
+      "driver_path": "/private/tmp/c3-rc2-rs-hf/rs_rc2_fixed_p_energy_ed6",
+      "driver_sha256": "bbcce2f3f1cef59509c9818262379481c7a67a693e9c20d7169aec469b6ee2fa",
+      "endpoint_status": "ALL_C1_ACCEPTED",
+      "family_progress": {
+        "J0.5": {
+          "gate": "NOT_YET_EVALUABLE",
+          "invalid_cases": [],
+          "missing_cases": [],
+          "required_case_count": 10,
+          "status": "DIAGNOSTIC_COMPLETE",
+          "valid_endpoint_count": 10
+        },
+        "J0.9": {
+          "gate": "NOT_YET_EVALUABLE",
+          "invalid_cases": [],
+          "missing_cases": [
+            "j0p9_local_u2p00_j0p80",
+            "j0p9_spectral_u2p00_j0p80",
+            "j0p9_local_u2p00_j0p85",
+            "j0p9_spectral_u2p00_j0p85",
+            "j0p9_local_u2p00_j0p90",
+            "j0p9_spectral_u2p00_j0p90",
+            "j0p9_local_u2p00_j0p95",
+            "j0p9_spectral_u2p00_j0p95",
+            "j0p9_local_u2p00_j1p00",
+            "j0p9_spectral_u2p00_j1p00"
+          ],
+          "required_case_count": 10,
+          "status": "NOT_YET_EVALUABLE",
+          "valid_endpoint_count": 0
+        },
+        "U": {
+          "gate": "NOT_YET_EVALUABLE",
+          "invalid_cases": [],
+          "missing_cases": [],
+          "required_case_count": 10,
+          "status": "DIAGNOSTIC_COMPLETE",
+          "valid_endpoint_count": 10
+        }
+      },
+      "final_gate_verdict": "NOT_YET_EVALUABLE",
+      "fixed_P_captures": {
+        "u2_j0": {
+          "capture_script_sha256": "c194e4b73dc63c06af217b3735efe2c0f4a281a379a22eabf7baa337dae9ce2c",
+          "case": "u_local_u2p00_j0p00",
+          "driver_path": "/private/tmp/c3-rc2-rs-hf/rs_rc2_fixed_p_energy_ed6",
+          "driver_sha256": "bbcce2f3f1cef59509c9818262379481c7a67a693e9c20d7169aec469b6ee2fa",
+          "evaluator_stdout_path": "/private/tmp/c3-rc2-rs-hf/partial_u_j05_analysis_assets/fixed_p/u_local_u2p00_j0p00/fixed_P_evaluator.stdout",
+          "evaluator_stdout_sha256": "b2c61e38e63906eda2491dbfd50feded67e19e013cc1e5f0b33d5aa1ff2ba63f",
+          "fixed_P_derivatives": {
+            "0.05": {
+              "dEHub_dJ_Ry_per_eV": -0.05707038391423502,
+              "dEHub_dU_Ry_per_eV": 0.054422251763308616
+            },
+            "0.1": {
+              "dEHub_dJ_Ry_per_eV": -0.0570703839142328,
+              "dEHub_dU_Ry_per_eV": 0.05442225176329307
+            }
+          },
+          "matrix_entry_count": 50,
+          "matrix_path": "/private/tmp/c3-rc2-rs-hf/partial_u_j05_analysis_assets/fixed_p/u_local_u2p00_j0p00/P_OUT_d_shell.txt",
+          "matrix_sha256": "7f31de77b24a5a95dc569bd73260d7cd3f4455dcff39f18efc7c6f6d056bd2b8",
+          "result_path": "/private/tmp/c3-rc2-rs-hf/partial_u_j05_analysis_assets/fixed_p/u_local_u2p00_j0p00/FIXED_P_RESULT.json",
+          "result_sha256": "5a10254e558712e7a28edaaa19ef8a9740587ff3f7a9c0bff908de88081a25d3",
+          "selected_iteration": 70,
+          "status": "C1_ACCEPTED"
+        },
+        "u2_j0.5": {
+          "capture_script_sha256": "c194e4b73dc63c06af217b3735efe2c0f4a281a379a22eabf7baa337dae9ce2c",
+          "case": "j0p5_local_u2p00_j0p50",
+          "driver_path": "/private/tmp/c3-rc2-rs-hf/rs_rc2_fixed_p_energy_ed6",
+          "driver_sha256": "bbcce2f3f1cef59509c9818262379481c7a67a693e9c20d7169aec469b6ee2fa",
+          "evaluator_stdout_path": "/private/tmp/c3-rc2-rs-hf/partial_u_j05_analysis_assets/fixed_p/j0p5_local_u2p00_j0p50/fixed_P_evaluator.stdout",
+          "evaluator_stdout_sha256": "9f86ebcd901bf26e3ce9c82288a5426bf370dc41ef7e79bc70d4871ab57954cd",
+          "fixed_P_derivatives": {
+            "0.05": {
+              "dEHub_dJ_Ry_per_eV": -0.06229672050170443,
+              "dEHub_dU_Ry_per_eV": 0.05807723986945401
+            },
+            "0.1": {
+              "dEHub_dJ_Ry_per_eV": -0.06229672050170887,
+              "dEHub_dU_Ry_per_eV": 0.05807723986945623
+            }
+          },
+          "matrix_entry_count": 50,
+          "matrix_path": "/private/tmp/c3-rc2-rs-hf/partial_u_j05_analysis_assets/fixed_p/j0p5_local_u2p00_j0p50/P_OUT_d_shell.txt",
+          "matrix_sha256": "cf2d4ee80a0b12225389eae1fb02e53487a19e2159c4ea60bd1c7a3728d16c6b",
+          "result_path": "/private/tmp/c3-rc2-rs-hf/partial_u_j05_analysis_assets/fixed_p/j0p5_local_u2p00_j0p50/FIXED_P_RESULT.json",
+          "result_sha256": "2b9c30acf19b3cdd8f35c710e79f0fed350124dfc68587b325b83f9492d9b967",
+          "selected_iteration": 74,
+          "status": "C1_ACCEPTED"
+        }
+      },
+      "r_rc1_used_eligible_h005_abs": 0.0017124421398524037,
+      "r_rc1_used_max_abs": 0.0017124421398524037,
+      "rc1_relative_residuals": [
+        -0.0015898811120663586,
+        -0.0017124421398524037
+      ],
+      "rc1_status": "UNESTABLISHED_PROVISIONAL_RECORD",
+      "registered_allowance_formulas": {
+        "J": "At each J center, A_J = 3*abs(r_RC1)*abs(T_U,h=.05 at that fixed P,J) + abs(D_b,J(h=.10)-D_b,J(h=.05)); the J target T_J is fixed-P production dE_Hub/dJ.",
+        "U": "A_U = 3*abs(r_RC1)*abs(T_U,h=.05) + abs(D_b,U(h=.10)-D_b,U(h=.05)); T_U is fixed-P production dE_Hub/dU at U=2,J=0; D_b,U is the local-b total candidate finite-difference slope.",
+        "gate": "At both h=.05 and h=.10, candidate b must lie within A of the fixed-P target, and candidate c must miss the fixed-P target by more than 10*A. Candidate a is RECORD only.",
+        "units": "Ry/eV; use absolute slope-difference spread, derived from signed slopes."
+      },
+      "registered_candidate_definitions": {
+        "a": "E_spectral - t + E_Hub",
+        "b": "E_local + E_Hub",
+        "c": "E_spectral + E_Hub"
+      },
+      "schema": "c3-rc2-endpoint-analysis-v1",
+      "staged_manifest_path": "/private/tmp/c3-rc2-rs-hf/staged_fullp/RC2_STAGED_DECKS.json",
+      "staged_manifest_sha256": "b9592feefe40f1bd875a4586ce25114ace62bd859f1aa46c19fe3bffb67c644d",
+      "status": "PARTIAL_PROGRESS"
+    },
+    "partial_analysis_path": "/private/tmp/c3-rc2-rs-hf/partial_u_j05_analysis.json",
+    "partial_analysis_sha256": "814fd3b2af740ecf45946a2f74e3bef497dc5bb0db9525b80fd11e5bcc79c71b",
+    "process_closure": {
+      "action": "SIGSTOP then SIGTERM only the verified campaign controller and its four exact runner/solver pairs after preserving logs/checkpoints.",
+      "checked_utc": "2026-10-19 18:53:55 UTC",
+      "controller_pid": 70420,
+      "owned_runner_solver_pids": [
+        13312,
+        13313,
+        15448,
+        15449,
+        19148,
+        19149,
+        20738,
+        20739
+      ],
+      "result": "No matching campaign controller, runner, or solver process remained; output contained only the scoped ps/rg inspection processes.",
+      "verification_command": "ps -axo pid,ppid,stat,etime,command | rg 'rs_rc2_campaign.py|rs_rc2_monitored_runner.py --binary /private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x|/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x'"
+    },
+    "rc3_status": "NOT_RUN; no energy-routing adoption or production-source changes made.",
+    "registered_debug_attempt": {
+      "auditor": "/root/ra4_independent_audit read-only check",
+      "checks": [
+        "Used the first C1-accepted phase for every case; all ten J=.5 endpoints are accepted phase0 records.",
+        "Each captured selected endpoint has 50 P entries, six ql values and two W1 traces; Hermiticity residual is zero and max |Tr(P)-QL_d| is 1.02e-14.",
+        "Central local U=2,J=.5 E_Hub from the selected log (0.08500611948806913 Ry) matches the production fixed-P evaluator (0.085006119488069132 Ry); candidate_b - physical_total - E_Hub residuals are <=6.7e-13 Ry over five local points.",
+        "Independent slopes, targets and allowance reproduce the registered analyzer values; no phase, units, energy or double-count discrepancy was found."
+      ],
+      "hypothesis": "The near-bound J=.5 miss could come from a wrong accepted phase, mismatched energy/P_OUT iteration, inconsistent Ry/eV or sign, Hubbard double counting, or an incorrect fixed-P derivative/matrix source.",
+      "result": "Hypothesis ruled out; original registered gate failure stands. No allowance, candidate formula, or physics setting changed.",
+      "solver_runs": 0
+    },
+    "staged_manifest_path": "/private/tmp/c3-rc2-rs-hf/staged_fullp/RC2_STAGED_DECKS.json",
+    "staged_manifest_sha256": "b9592feefe40f1bd875a4586ce25114ace62bd859f1aa46c19fe3bffb67c644d",
+    "status": "STOPPED_AFTER_REGISTERED_GATE_FAILURE",
+    "stop_rule": "C1 \u00a75(b): registered J=.5 RC2 gate failed and remained failed after one honest consistency/debug attempt.",
+    "stopped_partial_runs": [
+      {
+        "c1_status": "not evaluated as accepted; stop interrupted the run",
+        "case": "j0p9_local_u2p00_j0p85",
+        "completed_diff_markers": 64,
+        "files": {
+          "Fe_out.nml": {
+            "bytes": 6772,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p85/phase0_initial/Fe_out.nml",
+            "sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c"
+          },
+          "Fe_scf.nml": {
+            "bytes": 10596,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p85/phase0_initial/Fe_scf.nml",
+            "sha256": "8f8146d835e577dd60d602d3df8acc203cff0392a69c750e0deb874c709e248b"
+          },
+          "console.log": {
+            "bytes": 504751,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p85/phase0_initial/console.log",
+            "sha256": "11e2c6eb724ce5f79dd2bc33913fa27d30108a778da5a8026236f1d6d27a07d2"
+          },
+          "fixed_u_trace.csv": {
+            "bytes": 955795,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p85/phase0_initial/fixed_u_trace.csv",
+            "sha256": "d30d4c8f1913f1d48ca4d239e0acf013c9ae44e7b4ae15c2380054458caeb56d"
+          },
+          "input.nml": {
+            "bytes": 820,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p85/phase0_initial/input.nml",
+            "sha256": "8a6b7a8da9e8fb62e168fd8a43f6441a72eb7cb35b311a336dc8db42a3045df8"
+          }
+        },
+        "last_diff": 7.51e-08,
+        "status": "PARTIAL_STOPPED_FOR_GATE"
+      },
+      {
+        "c1_status": "not evaluated as accepted; stop interrupted the run",
+        "case": "j0p9_local_u2p00_j0p90",
+        "completed_diff_markers": 47,
+        "files": {
+          "Fe_out.nml": {
+            "bytes": 6772,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p90/phase0_initial/Fe_out.nml",
+            "sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c"
+          },
+          "Fe_scf.nml": {
+            "bytes": 10588,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p90/phase0_initial/Fe_scf.nml",
+            "sha256": "1929d853cfe47367baf64b6b28954cd23509b187199d5d6a3a9ee2ab2290a518"
+          },
+          "console.log": {
+            "bytes": 373274,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p90/phase0_initial/console.log",
+            "sha256": "b1e8711f7e9a99a3f092e90692a10bd17ce83a6043eee11e762e28ccb04cc24d"
+          },
+          "fixed_u_trace.csv": {
+            "bytes": 955795,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p90/phase0_initial/fixed_u_trace.csv",
+            "sha256": "d8a6d6673d1e53658f43a80ceed58c30169cd0a024500692006fc1608673369b"
+          },
+          "input.nml": {
+            "bytes": 820,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p90/phase0_initial/input.nml",
+            "sha256": "48b868cfd442b24103a48672c05b4ff73cbebfebed9e72a9bdfdb6d75707eb95"
+          }
+        },
+        "last_diff": 3.868e-07,
+        "status": "PARTIAL_STOPPED_FOR_GATE"
+      },
+      {
+        "c1_status": "not evaluated as accepted; stop interrupted the run",
+        "case": "j0p9_local_u2p00_j0p95",
+        "completed_diff_markers": 15,
+        "files": {
+          "Fe_out.nml": {
+            "bytes": 6772,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p95/phase0_initial/Fe_out.nml",
+            "sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c"
+          },
+          "Fe_scf.nml": {
+            "bytes": 10587,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p95/phase0_initial/Fe_scf.nml",
+            "sha256": "e914815d95951244834ae9abce63d74d707e9553027bd4c71118789161268fc5"
+          },
+          "console.log": {
+            "bytes": 123419,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p95/phase0_initial/console.log",
+            "sha256": "b34cb231b1f6702efda5292537a4d48e1c85929786e18f38a936da29c0bbcfce"
+          },
+          "fixed_u_trace.csv": {
+            "bytes": 955795,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p95/phase0_initial/fixed_u_trace.csv",
+            "sha256": "18461cac8504361a799e42f50972a1060d684c549bdafa8904b890e61c41ab15"
+          },
+          "input.nml": {
+            "bytes": 820,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p95/phase0_initial/input.nml",
+            "sha256": "08753d93510c4475a4decb7288a25f7bd7fa837f4dc90b7515a45976e3e7fccb"
+          }
+        },
+        "last_diff": 0.0001110421,
+        "status": "PARTIAL_STOPPED_FOR_GATE"
+      },
+      {
+        "c1_status": "not evaluated as accepted; stop interrupted the run",
+        "case": "j0p9_local_u2p00_j1p00",
+        "completed_diff_markers": 2,
+        "files": {
+          "Fe_out.nml": {
+            "bytes": 6772,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j1p00/phase0_initial/Fe_out.nml",
+            "sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c"
+          },
+          "Fe_scf.nml": {
+            "bytes": 10587,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j1p00/phase0_initial/Fe_scf.nml",
+            "sha256": "64b28de1a18afdd458966cf6892c7b384faa183b2614808619142ef72d4a11b6"
+          },
+          "console.log": {
+            "bytes": 21786,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j1p00/phase0_initial/console.log",
+            "sha256": "1a596a426e09fc9303313ac54c147b34cbfeb354f75dff04c368e2f63400653f"
+          },
+          "fixed_u_trace.csv": {
+            "bytes": 951316,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j1p00/phase0_initial/fixed_u_trace.csv",
+            "sha256": "9d317ec7727c6e9be083d03331143b5bae277e9f915d088006ac596b08d5600b"
+          },
+          "input.nml": {
+            "bytes": 820,
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j1p00/phase0_initial/input.nml",
+            "sha256": "f25ce2cd8de7f03e4eb3763ac4388b80f5cd8b4753a1e18f1835457606d17c8a"
+          }
+        },
+        "last_diff": 0.0060254852,
+        "status": "PARTIAL_STOPPED_FOR_GATE"
+      }
+    ]
+  },
+  "rc2_preregistration": {
+    "allowance": {
+      "J": "At each J center, A_J = 3*abs(r_RC1)*abs(T_U,h=.05 at that fixed P,J) + abs(D_b,J(h=.10)-D_b,J(h=.05)); the J target T_J is fixed-P production dE_Hub/dJ.",
+      "U": "A_U = 3*abs(r_RC1)*abs(T_U,h=.05) + abs(D_b,U(h=.10)-D_b,U(h=.05)); T_U is fixed-P production dE_Hub/dU at U=2,J=0; D_b,U is the local-b total candidate finite-difference slope.",
+      "gate": "At both h=.05 and h=.10, candidate b must lie within A of the fixed-P target, and candidate c must miss the fixed-P target by more than 10*A. Candidate a is RECORD only.",
+      "units": "Ry/eV; use absolute slope-difference spread, derived from signed slopes."
+    },
+    "candidate_definitions": {
+      "a": "E_spectral - t + E_Hub",
+      "b": "E_local + E_Hub",
+      "c": "E_spectral + E_Hub"
+    },
+    "candidate_modes": {
+      "a": "spectral",
+      "b": "local",
+      "c": "spectral"
+    },
+    "energy_derivative_stencils": {
+      "J_centers_eV": [
+        0.5,
+        0.9
+      ],
+      "J_steps_eV": [
+        0.05,
+        0.1
+      ],
+      "U_center_eV": 2.0,
+      "U_steps_eV": [
+        0.05,
+        0.1
+      ]
+    },
+    "fixed_P_targets": "Production Liechtenstein E_Hub evaluator on the captured central P; centered finite differences at h=.05 and .10 eV. For J tests, capture dE_Hub/dU at the same fixed P and J as the literal normalization scale and dE_Hub/dJ as comparison target.",
+    "prepared_execution": {
+      "campaign_scheduler": {
+        "C1_ladder": [
+          "initial 200 steps",
+          "continuation 1: 200 steps at half beta",
+          "continuation 2: 200 steps with Broyden beta=0.01"
+        ],
+        "acceptance": "Diff <=3e-8; last20 d-up/down spread <=5e-7; all-shell sphere-moment spread <=1e-6; complete contiguous trace and Diff marker association required",
+        "command_template": "python3 tests/validation/fixed_ldau/rs_rc2_campaign.py --rc-json docs/validation/fixed_ldau/rs/C3_RC_PROVENANCE.json --staged-manifest /private/tmp/c3-rc2-rs-hf/staged_fullp/RC2_STAGED_DECKS.json --binary /private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x --outdir /private/tmp/c3-rc2-rs-hf/campaign --workers 4 --launch",
+        "crash_policy": "nonzero unexpected exit or supported nonfinite diagnostic is preserved and returned for C2 triage, no automatic fallback",
+        "early_freeze": "SIGSTOP after first contiguous accepted 20-step P_OUT window and matching ordered Diff marker; copy frozen Fe_scf/DOS/report and full trace; SIGTERM only owned solver",
+        "endpoint_verification": "Every C1-accepted terminal checkpoint must have saved Fe_scf/Fe_out d occupations and |all-shell spin difference| inside the final-20 P_OUT ranges; stores exact path/hash.",
+        "gate": "Requires finite numeric RC1 residual evidence with max absolute value <=0.01. An RC1 status of UNESTABLISHED_PROVISIONAL_RECORD is permitted by C1 \u00a71.3 and C3 because C3 stops only on numeric residual >1%; provenance preserves that RC1 is not a gate PASS.",
+        "parallelism": {
+          "max_workers": 4,
+          "thread_caps": {
+            "MKL_NUM_THREADS": "1",
+            "OMP_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1",
+            "VECLIB_MAXIMUM_THREADS": "1"
+          }
+        },
+        "path": "tests/validation/fixed_ldau/rs_rc2_campaign.py",
+        "sha256": "90d7509ea31fb79311474da63b5dbea33a88a1ff89b4851b58f3e6c2c57d2009",
+        "status": "LAUNCH_READY_RC1_NUMERIC_WITHIN_LIMIT; RC1_GATE_UNESTABLISHED"
+      },
+      "capture_parser_validation": "py_compile; partial rolling-CSV row is safely treated as incomplete; nonfinite detection includes all six QL values; synthetic tests pass for both cases",
+      "capture_rule": "Use each accepted run\u2019s direct P_OUT matrix archived by the monitored runner for its fixed-P production derivative and candidate-energy record. Do not infer full P from ql; require a contiguous terminal trace suffix and a complete accepted 20-step window.",
+      "deck_generator": {
+        "command": "python3 tests/validation/fixed_ldau/rs_rc2_prepare.py --source /private/tmp/rslmto-ra4-frozen/c1_trace_qlhistory_smoke_compact --seed /private/tmp/rslmto-ra4-frozen/c1_trace_qlhistory_smoke_compact/Fe_out.nml --outdir /private/tmp/c3-rc2-rs-hf/staged_fullp",
+        "path": "tests/validation/fixed_ldau/rs_rc2_prepare.py",
+        "sha256": "0013e05b6f93280f26249e07b7968b05d9079a9f47d4c2b90d9b566bc1a590ba"
+      },
+      "fixed_P_evaluator": {
+        "binary_path": "/private/tmp/c3-rc2-rs-hf/rs_rc2_fixed_p_energy_ed6",
+        "binary_sha256": "bbcce2f3f1cef59509c9818262379481c7a67a693e9c20d7169aec469b6ee2fa",
+        "capture_parser_validation": "py_compile plus synthetic complete-iteration test for QL/matrix/W1 completeness and Hermiticity/trace checks; no solver invocation",
+        "capture_runner_path": "tests/validation/fixed_ldau/rs_rc2_fixed_p_capture.py",
+        "capture_runner_sha256": "c194e4b73dc63c06af217b3735efe2c0f4a281a379a22eabf7baa337dae9ce2c",
+        "compile_command": [
+          "/opt/homebrew/bin/gfortran",
+          "-ffree-line-length-0",
+          "-cpp",
+          "-mtune=native",
+          "-DCOLOR",
+          "-fopenmp",
+          "-DOpenMP_Fortran_FOUND",
+          "-g",
+          "-O0",
+          "-Wall",
+          "-Wno-tabs",
+          "-Wno-unused-variable",
+          "-Wno-unused-dummy-argument",
+          "-Wno-unused-function",
+          "-Wno-unused-label",
+          "-fbacktrace",
+          "-I/private/tmp/rslmto-c2-ed6-identity-debug-build/modules",
+          "tests/validation/fixed_ldau/rs_rc2_fixed_p_energy.f90",
+          "-o",
+          "/private/tmp/c3-rc2-rs-hf/rs_rc2_fixed_p_energy_ed6",
+          "-L/opt/homebrew/Cellar/spglib/2.8.0/lib",
+          "-Wl,-rpath,/opt/homebrew/Cellar/spglib/2.8.0/lib",
+          "/private/tmp/rslmto-c2-ed6-identity-debug-build/source/librslmto.a",
+          "-framework",
+          "Accelerate",
+          "-lm",
+          "-ldl",
+          "/opt/homebrew/Cellar/spglib/2.8.0/lib/libsymspg.dylib",
+          "/private/tmp/rslmto-c2-ed6-identity-debug-build/source/include_codes/abspinlib/libabspinlib.a",
+          "/private/tmp/rslmto-c2-ed6-identity-debug-build/source/include_codes/strux_lib/libstrux_lib.a",
+          "-framework",
+          "Accelerate",
+          "-lm",
+          "-ldl",
+          "/opt/homebrew/Cellar/gcc/16.2.0/lib/gcc/current/libgomp.dylib"
+        ],
+        "finite_difference_steps_eV": [
+          0.1,
+          0.05
+        ],
+        "production_library_path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/source/librslmto.a",
+        "production_library_sha256": "b6ce1efe22c974c433f4a17e15aeaea73a0ad31b51e3d90ea433cc4ccdd231f9",
+        "production_solver_binary_path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x",
+        "production_solver_binary_sha256": "bab5f7408f20192c575ea09be5501445f38f29bc2d34680da41daf733c96b2bf",
+        "smoke_test": {
+          "capture_command": "python3 tests/validation/fixed_ldau/rs_rc2_fixed_p_capture.py /private/tmp/a5-priority-local-u2-ks/u2_local_standard/records.csv 38 2.0 0.0 --driver /private/tmp/c3-rc2-rs-hf/rs_rc2_fixed_p_energy_ed6 --outdir /private/tmp/c3-rc2-rs-hf/fixed_p_capture_smoke",
+          "captured_matrix_sha256": "a07d70e9e86b442555831ab6feead2457b99329cb4d7a6ee9879d4e54283d5cc",
+          "iteration": 38,
+          "j_eV": 0.0,
+          "result": "extractor read exactly 50 P_OUT d entries and production evaluator returned finite h=.10/.05 U/J targets; this is an A5 historical matrix parser/tool smoke, not RC2 evidence",
+          "result_path": "/private/tmp/c3-rc2-rs-hf/fixed_p_capture_smoke/FIXED_P_RESULT.json",
+          "result_sha256": "cc5a397ff81981bc93028908b73773cd6cfe32025cd15c9e324e658bfb7de37e",
+          "returncode": 0,
+          "stdout_sha256": "5224615f05238d7ad237412c2b4241b435e40dc7984383fc8c6c8d61f674e387",
+          "trace_path": "/private/tmp/a5-priority-local-u2-ks/u2_local_standard/records.csv",
+          "trace_sha256": "a4b1d904f39d035fc427b41405e184b4ac0bd492704f31b0b6b19cfa16396fc6",
+          "u_eV": 2.0
+        },
+        "source_path": "tests/validation/fixed_ldau/rs_rc2_fixed_p_energy.f90",
+        "source_sha256": "c82bb19107763dee16f89aba3411f4eced0ea3469cc05abafcec207c8aae7a2c"
+      },
+      "monitored_solver_runner": {
+        "capture": "archives full rolling P_OUT records only when the iteration contains all 6 ql values, 50 complex d-shell P entries and 2 spin-resolved W1 traces; reports gaps, contiguous terminal suffix, per-spin Hermiticity, QL trace and Tr(WP) checks",
+        "early_stop": "first accepted complete C1 window; freezes/snapshots synchronized Fe_scf and endpoint files; deliberate SIGTERM is recorded separately from crash",
+        "environment": "Capture-only plus moments-only; one thread; not QL_ONLY because that suppresses full P matrices",
+        "mode": "launch only after RC1 passes",
+        "path": "tests/validation/fixed_ldau/rs_rc2_monitored_runner.py",
+        "sha256": "0c3489b4b899ac008cc111753284acbbbacda963352bd11365b99d02e549c85f"
+      },
+      "staged_decks_manifest": {
+        "case_count": 30,
+        "path": "/private/tmp/c3-rc2-rs-hf/staged_fullp/RC2_STAGED_DECKS.json",
+        "sha256": "b9592feefe40f1bd875a4586ce25114ace62bd859f1aa46c19fe3bffb67c644d",
+        "status": "STAGED_NOT_LAUNCHED_RC1_GATE_PENDING",
+        "test_operator": "W1 at lambda=0; direct measurement trace only; zero-amplitude insertion"
+      },
+      "status": "DECKS_AND_CAPTURE_TOOLING_STAGED; READY_TO_LAUNCH_WITH_RC1_PROVISIONAL_RECORD"
+    },
+    "rs_entropy": "TS=0; F=E",
+    "run_plan": "Run the preregistered local/spectral U/J endpoint campaign because RC1 numeric residual magnitudes are within 1%; retain RC1 gate status UNESTABLISHED because h=.0025 uses a C1 PROVISIONAL endpoint. Reuse only exact RS accepted states with matching geometry, EF/free-electron-number policy and production binary; otherwise run local/spectral RS endpoints for U=1.9,1.95,2.0,2.05,2.1 eV at J=0 and J=.4,.45,.5,.55,.6,.8,.85,.9,.95,1.0 eV at U=2.0, reusing common points and center states. Keep U/J in eV in input and report derivatives in Ry/eV.",
+    "source_references": [
+      "docs/validation/fixed_ldau/evidence/a5_m22_preregistration.md",
+      "docs/validation/fixed_ldau/evidence/a5_m23_preregistration.md",
+      "docs/validation/fixed_ldau/evidence/a5_m22_numeric_allowance_preregistration.md"
+    ],
+    "status": "FROZEN; LAUNCH AUTHORIZED BY C3 RC1 NUMERIC LIMIT; RC1 GATE UNESTABLISHED"
+  },
+  "rc3": {
+    "status": "NOT_STARTED_CONDITIONAL_ON_RC2_PASS"
+  },
+  "report_path": "docs/validation/fixed_ldau/rs/C3_RC_RESULTS.md",
+  "stage": "RC",
+  "status": "RC0_COMPLETE_RC1_NUMERIC_WITHIN_LIMIT_GATE_UNESTABLISHED_RC2_STOPPED_ON_REGISTERED_J05_GATE_FAILURE_RC3_NOT_RUN"
+}

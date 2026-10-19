@@ -63,8 +63,10 @@ module self_mod
 
    ! Historical ATOMSC control predicates are kept as small pure procedures
    ! so the iteration policy can be tested independently of the physical
-   ! residual observables.  The thresholds are intentionally unchanged.
+   ! residual observables. Production defaults remain historical unless the
+   ! explicitly named test-only ATOMSC controls are supplied.
    public :: atomsc_solver_tolerance, atomsc_mixing_beta, atomsc_should_stop
+   public :: fixed_u_r05_targets, atomsc_inner_controls
    public :: vxc0sp_pbe_origin_derivatives
    public :: vxc0sp
    !> Deterministic audit hook used by LR-BASIS-00 tests.  It calls the live
@@ -235,6 +237,15 @@ module self_mod
       !> Default: 0.5d-10.
       real(rp) :: conv_thr
 
+      ! Optional R05 fixed-U tolerances. Nonpositive values select backend defaults.
+      real(rp) :: r05_p_tolerance
+      real(rp) :: r05_v_tolerance
+
+      ! Test-only atomsc settings; all three must be supplied together.
+      real(rp) :: atomsc_test_tol
+      real(rp) :: atomsc_test_tolrsq
+      integer :: atomsc_test_inner_cap
+
       ! Constrains variables
 
       !> Freezes magnetic moment direction during nonlinear calculation. Default: false.
@@ -334,6 +345,7 @@ module self_mod
       logical, private :: fixed_u_trace_enabled = .false.
       logical, private :: fixed_u_trace_capture_only = .false.
       logical, private :: fixed_u_trace_moments_only = .false.
+      logical, private :: fixed_u_trace_ql_only = .false.
       logical, private :: fixed_u_trace_a2_scan_enabled = .false.
       integer, private :: fixed_u_trace_iteration = 0
       integer, private :: fixed_u_trace_selected_iteration = 0
@@ -398,6 +410,7 @@ module self_mod
       procedure, private :: write_fixed_u_csv_row
       procedure, private :: write_fixed_u_total_energy
       procedure, private :: write_hubbard_moment_energy_diagnostics
+      procedure, private :: validate_hubbard_mode_provenance
       procedure, private :: is_eligible_local_hubbard_ks
       procedure, private :: fixed_hubbard_energy_pout
       procedure, private :: write_fixed_u_radial_replay_input
@@ -482,7 +495,7 @@ contains
       character(len=128) :: trace_value
       character(len=128) :: root_run_id
       integer :: ios, unit, root_trace_enabled, root_selected_iteration, root_capture_only, root_a2_scan
-      integer :: root_moments_only
+      integer :: root_moments_only, root_ql_only
       real(rp) :: root_trace_lambda
 
       this%fixed_u_trace_enabled = .false.
@@ -491,6 +504,7 @@ contains
       this%fixed_u_trace_lambda = 1.0_rp
       this%fixed_u_trace_selected_iteration = 0
       this%fixed_u_trace_moments_only = .false.
+      this%fixed_u_trace_ql_only = .false.
 
       ! Rank zero owns environment parsing and file creation.  Every rank
       ! reaches the broadcasts below, including the no-trace and file-open
@@ -500,6 +514,7 @@ contains
       root_capture_only = 0
       root_a2_scan = 0
       root_moments_only = 0
+      root_ql_only = 0
       root_trace_lambda = 1.0_rp
       root_run_id = 'run'
       if (rank == 0) then
@@ -514,8 +529,11 @@ contains
             ! environment variable is absent. Other Hubbard modes remain out.
             if (this%hamiltonian%hubbard_u_general_check) then
                if (trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein') root_trace_enabled = 1
-            else if (.not. (this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check .or. &
-                            this%hamiltonian%hubbard_u_impurity_check)) then
+            else if (.not. (this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) .and. &
+                     (.not. this%hamiltonian%hubbard_u_impurity_check .or. &
+                      (trim(this%control%calctype) == 'I' .and. this%control%nsp == 1 .and. &
+                       this%control%lmax == 2 .and. &
+                       trim(this%hamiltonian%hubbard_radial_moments) == 'spectral'))) then
                root_trace_enabled = 1
             end if
          end if
@@ -546,6 +564,9 @@ contains
             if (ios == 0 .and. (trim(trace_value) == '1' .or. trim(trace_value) == 'true')) then
                root_moments_only = 1
             end if
+            trace_value = ''
+            call get_environment_variable('RSLMTO_FIXED_U_TRACE_QL_ONLY', trace_value, status=ios)
+            if (ios == 0 .and. (trim(trace_value) == '1' .or. trim(trace_value) == 'true')) root_ql_only = 1
          end if
 
          if (root_trace_enabled == 1) then
@@ -570,12 +591,14 @@ contains
       call MPI_BCAST(root_capture_only, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
       call MPI_BCAST(root_a2_scan, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
       call MPI_BCAST(root_moments_only, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+      call MPI_BCAST(root_ql_only, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
       call MPI_BCAST(root_trace_lambda, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
       call MPI_BCAST(root_run_id, len(root_run_id), MPI_CHARACTER, 0, MPI_COMM_WORLD, ierr)
 #endif
       this%fixed_u_trace_enabled = root_trace_enabled == 1
       this%fixed_u_trace_capture_only = root_capture_only == 1
       this%fixed_u_trace_moments_only = root_moments_only == 1
+      this%fixed_u_trace_ql_only = root_ql_only == 1
       this%fixed_u_trace_a2_scan_enabled = root_a2_scan == 1
       this%fixed_u_trace_selected_iteration = root_selected_iteration
       this%fixed_u_trace_lambda = root_trace_lambda
@@ -586,6 +609,7 @@ contains
       class(self), intent(in) :: this
       integer :: unit, ios
       if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
+      if (this%fixed_u_trace_ql_only) return
       open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='replace', action='write', iostat=ios)
       if (ios /= 0) return
       write(unit, '(a)') 'kind,run_id,lambda,iteration,stage,site,type,l,spin,k,band,row,col,order,weight,energy,scalar,re,im'
@@ -598,6 +622,10 @@ contains
       integer, intent(in) :: unit, iteration, site, type_id, ell, spin, k, band, row, col, order
       character(len=*), intent(in) :: kind, stage
       real(rp), intent(in) :: weight, energy_value, scalar, re, im
+      ! QL-only is the safe history mode used when diagnostic replay helpers
+      ! are excluded.  Keep its artifact strictly limited to the accepted
+      ! P_OUT occupations, including writes made by independent trace hooks.
+      if (this%fixed_u_trace_ql_only .and. (trim(kind) /= 'ql' .or. trim(stage) /= 'P_OUT')) return
       write(unit, '(a,",",a,",",es24.16,",",i0,",",a,",",9(i0,","),es24.16,",",es24.16,",",es24.16,",",es24.16,",",es24.16)') &
          trim(kind), trim(this%fixed_u_trace_run_id), this%fixed_u_trace_lambda, iteration, trim(stage), &
          site, type_id, ell, spin, k, band, row, col, order, weight, energy_value, scalar, re, im
@@ -618,6 +646,23 @@ contains
       open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
            action='write', iostat=ios)
       if (ios /= 0) return
+
+      if (this%fixed_u_trace_ql_only) then
+         if (trim(stage) == 'P_OUT') then
+            do ia = 1, this%lattice%nrec
+               plusbulk = this%lattice%nbulk + ia
+               do l = 0, this%symbolic_atom(plusbulk)%potential%lmax
+                  do spin = 1, 2
+                     call this%write_fixed_u_csv_row(unit, 'ql', this%fixed_u_trace_iteration, 'P_OUT', ia - 1, &
+                        this%lattice%iz(ia), l, spin, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
+                        this%symbolic_atom(plusbulk)%potential%ql(1, l, spin), 0.0_rp, 0.0_rp)
+                  end do
+               end do
+            end do
+         end if
+         close(unit)
+         return
+      end if
 
       test_operator = cmplx(0.0_rp, 0.0_rp, rp)
       if (this%fixed_u_trace_moments_only .and. this%hamiltonian%hubbard_test_operator_check) &
@@ -756,16 +801,23 @@ contains
    subroutine write_fixed_u_rs_bonds(this, unit)
       class(self), intent(in) :: this
       integer, intent(in) :: unit
-      integer :: ntype, isite, ia, ja, jsite, ineigh, nr, i, j, coord
+      integer :: ntype, isite, ia, ja, jsite, iclu, ineigh, nr, i, j, coord
       complex(rp) :: z
       real(rp) :: r_direct(3)
 
       ! Export fractional direct vectors without invoking clusba: clusba
       ! updates lattice%sbarvec, so even a diagnostic trace must not call it.
 
+      if (.not. allocated(this%lattice%irec) .or. .not. allocated(this%lattice%iz)) return
+      if (size(this%lattice%irec) < this%lattice%nrec) return
+      if (.not. allocated(this%lattice%atlist) .or. .not. allocated(this%lattice%nn)) return
+
       do ntype = 1, this%lattice%ntype
+         if (ntype > size(this%lattice%atlist)) cycle
          ia = this%lattice%atlist(ntype)
-         nr = this%lattice%nn(ia, 1)
+         if (ia < 1 .or. ia > size(this%lattice%nn, 1)) cycle
+         if (size(this%lattice%nn, 2) < 1) cycle
+         nr = min(this%lattice%nn(ia, 1), size(this%lattice%nn, 2), size(this%hamiltonian%ee, 3))
          do ineigh = 1, nr
             do i = 1, size(this%hamiltonian%ee, 1)
                do j = 1, size(this%hamiltonian%ee, 2)
@@ -779,9 +831,15 @@ contains
       end do
 
       do isite = 1, this%lattice%nrec
-         ntype = this%lattice%ib(isite)
+         iclu = this%lattice%irec(isite)
+         if (iclu < 1 .or. iclu > size(this%lattice%iz)) cycle
+         ntype = this%lattice%iz(iclu)
+         if (ntype < 1 .or. ntype > this%lattice%ntype) cycle
+         if (ntype > size(this%lattice%atlist)) cycle
          ia = this%lattice%atlist(ntype)
-         nr = this%lattice%nn(ia, 1)
+         if (ia < 1 .or. ia > size(this%lattice%nn, 1)) cycle
+         if (size(this%lattice%nn, 2) < 1) cycle
+         nr = min(this%lattice%nn(ia, 1), size(this%lattice%nn, 2))
          do ineigh = 1, nr
             if (ineigh == 1) then
                jsite = isite
@@ -1064,7 +1122,7 @@ contains
       complex(rp), intent(in) :: m1(:, :, :, :, :), vin(:, :, :)
       real(rp), intent(in) :: pl_diag(:, :, :, :)
       complex(rp), allocatable :: density_override(:, :, :, :, :), vout(:, :, :)
-      integer :: ia, plusbulk, itype, spin, i, j, k, rowoff, norb_l, unit, ios
+      integer :: ia, plusbulk, itype, iclu, spin, i, j, k, rowoff, norb_l, unit, ios
       complex(rp) :: p_ij, t_complex, vm1_complex, v2p_complex, v2_ij, p_trace, m1_trace
       real(rp), allocatable :: im_resid(:, :), p_trace_error(:, :), m1_trace_error(:, :)
       real(rp) :: q0, center, q2, t, local_q2, t_vout, vm1_vout, v2_vout
@@ -1078,6 +1136,8 @@ contains
       if (size(m1, 1) /= this%lattice%nrec .or. size(pl_diag, 1) /= this%lattice%nrec .or. &
           size(vin, 1) < nb .or. size(vin, 2) < nb) return
       if (lmax_basis < 2) return
+      if (.not. allocated(this%lattice%irec) .or. .not. allocated(this%lattice%iz)) return
+      if (size(this%lattice%irec) < this%lattice%nrec) return
 
       if (allocated(this%fixed_u_m0_q0)) deallocate(this%fixed_u_m0_q0)
       if (allocated(this%fixed_u_m0_center)) deallocate(this%fixed_u_m0_center)
@@ -1117,8 +1177,27 @@ contains
       im_resid = 0.0_rp
       p_trace_error = 0.0_rp
       m1_trace_error = 0.0_rp
-      p_available = this%hamiltonian%hubbard_u_general_check .and. &
-                     allocated(this%symbolic_atom(this%lattice%nbulk + 1)%potential%ldm)
+      p_available = this%hamiltonian%hubbard_u_general_check
+      if (p_available) then
+         do ia = 1, this%lattice%nrec
+            plusbulk = this%lattice%nbulk + ia
+            if (plusbulk < 1 .or. plusbulk > size(this%symbolic_atom)) then
+               p_available = .false.
+               exit
+            end if
+            if (.not. allocated(this%symbolic_atom(plusbulk)%potential%ldm)) then
+               p_available = .false.
+               exit
+            end if
+            if (size(this%symbolic_atom(plusbulk)%potential%ldm, 1) < 3 .or. &
+                size(this%symbolic_atom(plusbulk)%potential%ldm, 2) < 2 .or. &
+                size(this%symbolic_atom(plusbulk)%potential%ldm, 3) < 5 .or. &
+                size(this%symbolic_atom(plusbulk)%potential%ldm, 4) < 5) then
+               p_available = .false.
+               exit
+            end if
+         end do
+      end if
       this%fixed_u_m0_p_available = p_available
 
       ! Evaluate V(Pout) without changing the live Hamiltonian.  This is a
@@ -1129,10 +1208,21 @@ contains
       if (p_available) then
          do ia = 1, this%lattice%nrec
             plusbulk = this%lattice%nbulk + ia
-            itype = this%lattice%ib(ia)
+            iclu = this%lattice%irec(ia)
+            if (iclu < 1 .or. iclu > size(this%lattice%iz)) then
+               deallocate(im_resid, p_trace_error, m1_trace_error)
+               deallocate(density_override, vout)
+               return
+            end if
+            itype = this%lattice%iz(iclu)
+            if (itype < 1 .or. itype > this%lattice%ntype) then
+               deallocate(im_resid, p_trace_error, m1_trace_error)
+               deallocate(density_override, vout)
+               return
+            end if
             do spin = 1, 2
-               do i = 1, 7
-                  do j = 1, 7
+               do i = 1, min(5, size(this%symbolic_atom(plusbulk)%potential%ldm, 3))
+                  do j = 1, min(5, size(this%symbolic_atom(plusbulk)%potential%ldm, 4))
                      density_override(itype, 3, spin, i, j) = &
                         this%symbolic_atom(plusbulk)%potential%ldm(3, spin, i, j)
                   end do
@@ -1145,7 +1235,13 @@ contains
 
       do ia = 1, this%lattice%nrec
          plusbulk = this%lattice%nbulk + ia
-         itype = this%lattice%ib(ia)
+         iclu = this%lattice%irec(ia)
+         if (iclu < 1 .or. iclu > size(this%lattice%iz)) then
+            deallocate(im_resid, p_trace_error, m1_trace_error)
+            deallocate(density_override, vout)
+            return
+         end if
+         itype = this%lattice%iz(iclu)
          if (itype < 1 .or. itype > size(vin, 3)) return
          do spin = 1, 2
             do i = 1, 3
@@ -1811,8 +1907,8 @@ contains
       class(self), intent(inout) :: this
       complex(rp), allocatable :: density_override(:, :, :, :, :), vout(:, :, :)
       complex(rp), allocatable :: p_in(:, :, :, :), p_out(:, :, :, :), v_in(:, :, :, :), v_out(:, :, :, :)
-      integer, allocatable :: site_for_type(:)
-      integer :: nsite, ntype, block, isite, itype, il, ispin, mmax, i, j, flat, orbital_i, orbital_j, worst_block
+      integer, allocatable :: site_for_type(:), rec_type(:)
+      integer :: nsite, ntype, block, isite, iclu, itype, il, ispin, mmax, i, j, flat, orbital_i, orbital_j, worst_block
       integer :: worst_l, worst_site, unit, ios
       real(rp) :: rp_abs, rp_rel, rv_abs, rv_rel, antiherm_p, antiherm_v, u_value, j_value
       real(rp) :: rp_target, rv_target
@@ -1831,16 +1927,28 @@ contains
       nsite = this%lattice%nrec
       ntype = this%lattice%ntype
       if (nsite < 1 .or. ntype < 1) return
-      allocate(site_for_type(ntype))
+      if (.not. allocated(this%lattice%irec)) error stop 'active fixed-U residual: recursion-site map is not allocated'
+      if (.not. allocated(this%lattice%iz)) error stop 'active fixed-U residual: cluster type map is not allocated'
+      if (.not. allocated(this%lattice%symbolic_atoms)) &
+         error stop 'active fixed-U residual: symbolic atom table is not allocated'
+      if (size(this%lattice%irec) < nsite) error stop 'active fixed-U residual: recursion-site map is too short'
+      if (size(this%lattice%symbolic_atoms) < ntype) &
+         error stop 'active fixed-U residual: symbolic atom table is too short'
+      allocate(site_for_type(ntype), rec_type(nsite))
       site_for_type = 0
       do isite = 1, nsite
-         itype = this%lattice%ib(isite)
-         if (itype >= 1 .and. itype <= ntype .and. site_for_type(itype) == 0) site_for_type(itype) = isite
+         iclu = this%lattice%irec(isite)
+         if (iclu < 1) error stop 'active fixed-U residual: recursion site has no cluster mapping'
+         if (iclu > size(this%lattice%iz)) error stop 'active fixed-U residual: cluster mapping is out of range'
+         itype = this%lattice%iz(iclu)
+         if (itype < 1 .or. itype > ntype) error stop 'active fixed-U residual: mapped atom type is out of range'
+         rec_type(isite) = itype
+         if (site_for_type(itype) == 0) site_for_type(itype) = isite
       end do
 
       active = .false.
       do itype = 1, ntype
-         do il = 1, 4
+         do il = 1, min(4, size(this%mix%ldm_new, 2))
             u_value = 0.0_rp
             j_value = 0.0_rp
             if (allocated(this%lattice%symbolic_atoms(itype)%potential%hubbard_u)) then
@@ -1878,7 +1986,10 @@ contains
       do itype = 1, ntype
          isite = site_for_type(itype)
          if (isite == 0) cycle
-         do il = 1, 4
+         ! Only traverse angular-momentum channels represented by this build's
+         ! allocated LDM.  The fixed four-shell potential storage can exceed
+         ! the active basis (e.g. a d-only build has ldm_new(:,1:3,...)).
+         do il = 1, min(4, size(this%mix%ldm_new, 2))
             mmax = 2*il - 1
             do ispin = 1, 2
                do i = 1, mmax
@@ -1894,8 +2005,8 @@ contains
          density_override=density_override, potential_out=vout)
 
       do isite = 1, nsite
-         itype = this%lattice%ib(isite)
-         do il = 1, 4
+         itype = rec_type(isite)
+         do il = 1, min(4, size(this%mix%ldm_new, 2))
             u_value = 0.0_rp
             j_value = 0.0_rp
             if (allocated(this%lattice%symbolic_atoms(itype)%potential%hubbard_u)) then
@@ -1943,12 +2054,8 @@ contains
       this%fixed_u_worst_site = worst_site
       this%fixed_u_worst_l = worst_l
       this%fixed_u_residual_physical = physical
-      rp_target = fixed_u_density_tolerance
-      rv_target = fixed_u_potential_tolerance
-      if (this%hamiltonian%fixed_u_test_tighten_r05) then
-         rp_target = fixed_u_test_tight_density_tolerance
-         rv_target = fixed_u_test_tight_potential_tolerance
-      end if
+      call fixed_u_r05_targets(this%use_kspace, this%r05_p_tolerance, this%r05_v_tolerance, &
+         this%hamiltonian%fixed_u_test_tighten_r05, rp_target, rv_target)
       call this%mix%advance_fixed_u_convergence(rp_abs, rv_abs, physical, this%fixed_u_residual_converged, &
                                                 rp_target, rv_target)
       if (rank == 0) then
@@ -1986,7 +2093,7 @@ contains
             close(unit)
          end if
       end if
-      deallocate(site_for_type, density_override, vout, p_in, p_out, v_in, v_out)
+      deallocate(site_for_type, rec_type, density_override, vout, p_in, p_out, v_in, v_out)
    end subroutine update_fixed_u_residuals
 
    subroutine write_fixed_u_total_energy(this)
@@ -2039,12 +2146,12 @@ contains
       complex(rp) :: test_operator(5, 5)
       integer :: ik_global
       logical :: entropy_available
-      integer :: isite, itype, spin, i, j, flat, status, orbital_i, orbital_j
+      integer :: ia, plusbulk, itype, spin, i, j, flat, status, orbital_i, orbital_j
       character(len=64) :: candidate_a, candidate_b, candidate_c
       character(len=64) :: entropy_text, ts_text, candidate_a_f_text, candidate_b_f_text, candidate_c_f_text
       character(len=64) :: test_energy_text, test_f_local_text, test_f_spectral_text
 
-      if (.not. (this%hamiltonian%hubbard_u_general_check .or. &
+      if (.not. (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_impurity_check .or. &
                  this%hamiltonian%hubbard_test_operator_check)) return
       entropy = 0.0_rp
       ts = 0.0_rp
@@ -2094,10 +2201,16 @@ contains
       total_external = 0.0_rp
       total_t_actual = 0.0_rp
 
-      do isite = 1, this%lattice%nrec
-         itype = this%lattice%ib(isite)
+      do ia = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + ia
+         ! Recursive indices address cluster sites, while the energy
+         ! evaluator arrays are keyed by symbolic-atom type. In an impurity
+         ! cluster ib(ia) is a geometric representative index, not that type.
+         itype = plusbulk
          density = cmplx(0.0_rp, 0.0_rp, rp)
          potential = cmplx(0.0_rp, 0.0_rp, rp)
+         p_d = cmplx(0.0_rp, 0.0_rp, rp)
+         v_d = cmplx(0.0_rp, 0.0_rp, rp)
          direct_t = 0.0_rp
          site_external = 0.0_rp
          do spin = 1, 2
@@ -2106,7 +2219,7 @@ contains
                do j = 1, 5
                   orbital_j = 4 + j + spin_off*(spin - 1)
                   flat = (i - 1)*5 + j
-                  p_d(i, j) = this%mix%ldm_new(isite, 3, spin, flat)
+                  p_d(i, j) = this%mix%ldm_new(ia, 3, spin, flat)
                   v_d(i, j) = this%hamiltonian%hubbard_u_pot(orbital_i, orbital_j, itype)
                   density(itype, 3, spin, i, j) = p_d(i, j)
                   potential(itype, 3, spin, i, j) = v_d(i, j)
@@ -2132,7 +2245,7 @@ contains
          site_dc = sum(e_dc(itype, :))
          site_hub = sum(e_hub(itype, :))
          site_t = sum(tr_vp(itype, :))
-         etot_site = this%symbolic_atom(this%lattice%nbulk + isite)%potential%etot
+         etot_site = this%symbolic_atom(plusbulk)%potential%etot
          value_a = 0.0_rp
          value_b = 0.0_rp
          value_c = 0.0_rp
@@ -2148,7 +2261,7 @@ contains
             value_b = etot_site + site_hub + site_external
             candidate_b = trim(fmt('e24.16', value_b))
          end if
-         call g_logger%info('HUBBARD_MOMENT_ENERGY_SITE site='//fmt('i0', isite)//' type='//fmt('i0', itype)// &
+         call g_logger%info('HUBBARD_MOMENT_ENERGY_SITE site='//fmt('i0', ia)//' type='//fmt('i0', itype)// &
             ' E_int='//fmt('e24.16', site_int)//' E_DC='//fmt('e24.16', site_dc)// &
             ' E_Hub='//fmt('e24.16', site_hub)//' t_in_out='//fmt('e24.16', site_t)// &
             ' t_U='//fmt('e24.16', site_t)//' e_external='//fmt('e24.16', site_external)// &
@@ -2250,6 +2363,41 @@ contains
           this%hamiltonian%hubbard_test_lambda == 0.0_rp)
    end function is_eligible_local_hubbard_ks
 
+   subroutine validate_hubbard_mode_provenance(this)
+      class(self), intent(inout) :: this
+      integer :: ia
+      logical :: active
+      character(len=16) :: stored_mode, backend
+
+      backend = 'rs'
+      if (this%use_kspace) backend = 'ks'
+      do ia = 1, size(this%symbolic_atom)
+         if (.not. allocated(this%symbolic_atom(ia)%potential%hubbard_u) .or. &
+             .not. allocated(this%symbolic_atom(ia)%potential%hubbard_j)) cycle
+         active = any(abs(this%symbolic_atom(ia)%potential%hubbard_u) > 1.0e-10_rp) .or. &
+                  any(abs(this%symbolic_atom(ia)%potential%hubbard_j) > 1.0e-10_rp)
+         if (.not. active) cycle
+
+         if (this%symbolic_atom(ia)%potential%hubbard_file_has_uj) then
+            stored_mode = trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments)
+            if (len_trim(stored_mode) == 0) then
+               stored_mode = 'spectral'
+               if (rank == 0) call g_logger%warning('Legacy U-carrying potential for symbolic atom '//fmt('i0', ia)// &
+                  ' has no hubbard_radial_moments field; treating it as spectral.', __FILE__, __LINE__)
+            end if
+            if (trim(stored_mode) /= trim(this%hamiltonian%hubbard_radial_moments)) then
+               call g_logger%fatal('Fixed-U potential moment-mode mismatch for symbolic atom '//fmt('i0', ia)// &
+                  ': file mode='//trim(stored_mode)//', run mode='//trim(this%hamiltonian%hubbard_radial_moments)// &
+                  '. Regenerate the host potential in the selected mode or select the matching mode.', __FILE__, __LINE__)
+            end if
+         end if
+
+         this%symbolic_atom(ia)%potential%hubbard_radial_moments = &
+            trim(this%hamiltonian%hubbard_radial_moments)
+         this%symbolic_atom(ia)%potential%hubbard_backend = trim(backend)
+      end do
+   end subroutine validate_hubbard_mode_provenance
+
    real(rp) function fixed_hubbard_energy_pout(this) result(total_hub)
       class(self), intent(in) :: this
       complex(rp), allocatable :: density(:, :, :, :, :), potential(:, :, :, :, :)
@@ -2295,6 +2443,7 @@ contains
 
       if (.not. this%fixed_u_trace_enabled) return
       if (rank /= 0) return
+      if (this%fixed_u_trace_ql_only) return
       if (this%fixed_u_trace_moments_only) return
       if (this%fixed_u_trace_selected_iteration > 0 .and. &
           this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) then
@@ -2875,6 +3024,40 @@ contains
          rvh_spin = rvh_local
       end subroutine component_set
    end subroutine legacy_accepted_m03_components_fixture
+   pure subroutine fixed_u_r05_targets(use_kspace, p_override, v_override, test_tighten, p_target, v_target)
+      logical, intent(in) :: use_kspace, test_tighten
+      real(rp), intent(in) :: p_override, v_override
+      real(rp), intent(out) :: p_target, v_target
+
+      ! KS keeps its frozen 1e-7 defaults; RS uses the approved density
+      ! tolerance while retaining the same potential tolerance.
+      p_target = fixed_u_density_tolerance
+      v_target = fixed_u_potential_tolerance
+      if (.not. use_kspace) p_target = 5.0e-7_rp
+      if (p_override > 0.0_rp) p_target = p_override
+      if (v_override > 0.0_rp) v_target = v_override
+      if (test_tighten) then
+         p_target = fixed_u_test_tight_density_tolerance
+         v_target = fixed_u_test_tight_potential_tolerance
+      end if
+   end subroutine fixed_u_r05_targets
+
+   pure subroutine atomsc_inner_controls(test_tol, test_tolrsq, test_cap, tol, tolrsq, niter)
+      real(rp), intent(in) :: test_tol, test_tolrsq
+      integer, intent(in) :: test_cap
+      real(rp), intent(out) :: tol, tolrsq
+      integer, intent(out) :: niter
+
+      tol = 1.0e-6_rp
+      tolrsq = 1.0e-8_rp
+      niter = 80
+      if (test_cap > 0) then
+         tol = test_tol
+         tolrsq = test_tolrsq
+         niter = test_cap
+      end if
+   end subroutine atomsc_inner_controls
+
    pure function atomsc_solver_tolerance(iteration, drho_control, tolrsq) result(tolerance)
       integer, intent(in) :: iteration
       real(rp), intent(in) :: drho_control, tolrsq
@@ -2995,8 +3178,8 @@ contains
       class(self), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i
-      logical :: radial_mode_defaulted
+      integer :: iostatus, funit, i, k
+      logical :: radial_mode_defaulted, atomsc_control_active
       character(len=8) :: radial_mode_source
 
       include 'include_codes/namelists/self.f90'
@@ -3013,6 +3196,11 @@ contains
       init = this%init
       nstep = this%nstep
       conv_thr = this%conv_thr
+      r05_p_tolerance = this%r05_p_tolerance
+      r05_v_tolerance = this%r05_v_tolerance
+      atomsc_test_tol = this%atomsc_test_tol
+      atomsc_test_tolrsq = this%atomsc_test_tolrsq
+      atomsc_test_inner_cap = this%atomsc_test_inner_cap
       fix_soc = this%fix_soc
       soc_scale = this%soc_scale
       cold = this%cold
@@ -3107,6 +3295,36 @@ contains
       ! Convergence parameters
       this%conv_thr = conv_thr
       this%nstep = nstep
+      this%r05_p_tolerance = r05_p_tolerance
+      this%r05_v_tolerance = r05_v_tolerance
+      this%atomsc_test_tol = atomsc_test_tol
+      this%atomsc_test_tolrsq = atomsc_test_tolrsq
+      this%atomsc_test_inner_cap = atomsc_test_inner_cap
+      if (this%r05_p_tolerance > 0.0_rp .and. this%r05_p_tolerance > 1.0_rp) &
+         call g_logger%fatal('self%r05_p_tolerance must be in (0,1].', __FILE__, __LINE__)
+      if (this%r05_v_tolerance > 0.0_rp .and. this%r05_v_tolerance > 1.0_rp) &
+         call g_logger%fatal('self%r05_v_tolerance must be in (0,1] Ry.', __FILE__, __LINE__)
+      if ((this%atomsc_test_tol > 0.0_rp .or. this%atomsc_test_tolrsq > 0.0_rp .or. &
+           this%atomsc_test_inner_cap > 0) .and. &
+          (this%atomsc_test_tol <= 0.0_rp .or. this%atomsc_test_tolrsq <= 0.0_rp .or. &
+           this%atomsc_test_inner_cap < 2)) then
+         call g_logger%fatal('atomsc_test_tol, atomsc_test_tolrsq, and atomsc_test_inner_cap must be set together.', &
+                             __FILE__, __LINE__)
+      end if
+      if (this%atomsc_test_tol > 0.0_rp) then
+         if (use_kspace) call g_logger%fatal('atomsc test overrides are restricted to RS calculations.', __FILE__, __LINE__)
+         atomsc_control_active = .false.
+         do k = 1, size(this%symbolic_atom)
+            if (allocated(this%symbolic_atom(k)%potential%hubbard_u)) &
+               atomsc_control_active = atomsc_control_active .or. &
+                  any(abs(this%symbolic_atom(k)%potential%hubbard_u) > 1.0e-10_rp)
+            if (allocated(this%symbolic_atom(k)%potential%hubbard_j)) &
+               atomsc_control_active = atomsc_control_active .or. &
+                  any(abs(this%symbolic_atom(k)%potential%hubbard_j) > 1.0e-10_rp)
+         end do
+         if (atomsc_control_active) &
+            call g_logger%fatal('atomsc test overrides are restricted to U=J=0 controls.', __FILE__, __LINE__)
+      end if
 
       ! Constrains variables
       ! static magnetic momentum (non-linar calculation)
@@ -3143,6 +3361,7 @@ contains
          ' source='//trim(radial_mode_source)//' use_kspace='//trim(log2str(this%use_kspace))// &
          ' local_energy_adopted='//trim(log2str(this%is_eligible_local_hubbard_ks() .and. &
             trim(this%hamiltonian%hubbard_radial_moments) == 'local')), __FILE__, __LINE__)
+      call this%validate_hubbard_mode_provenance()
       this%magnetic_seed_enable = magnetic_seed_enable
       this%magnetic_seed_steps = magnetic_seed_steps
       this%magnetic_seed_field = magnetic_seed_field
@@ -3554,6 +3773,11 @@ contains
       ! Convergence parameters
       this%conv_thr = 0.5d-8
       this%nstep = 1
+      this%r05_p_tolerance = -1.0_rp
+      this%r05_v_tolerance = -1.0_rp
+      this%atomsc_test_tol = 0.0_rp
+      this%atomsc_test_tolrsq = 0.0_rp
+      this%atomsc_test_inner_cap = 0
 
       ! Constrains variables
       ! static magnetic momentum (non-linar calculation)
@@ -3894,7 +4118,8 @@ contains
             end if
             call run_dos(this, fixed_u_m1, fixed_u_pl_diag)
             call this%write_fixed_u_trace('P_OUT', fixed_u_m1, fixed_u_pl_diag)
-            call this%snapshot_fixed_u_m0_moments(fixed_u_m1, fixed_u_pl_diag, fixed_u_vin)
+            if (.not. this%fixed_u_trace_ql_only) &
+               call this%snapshot_fixed_u_m0_moments(fixed_u_m1, fixed_u_pl_diag, fixed_u_vin)
             deallocate(fixed_u_vin)
             deallocate(fixed_u_m1, fixed_u_pl_diag)
          else
@@ -4931,7 +5156,6 @@ contains
       call g_logger%info('XC functional: '//trim(xc_obj%TXCH)//' '//int2str(xc_obj%txc)//real2str(B), __FILE__, __LINE__)
 
       lmax = atom%potential%lmax
-      niter = 80
       qval(:) = 0
       atom%qc = 0
       ncore = 0
@@ -4940,6 +5164,8 @@ contains
       tol = 1.d-6
       tolrsq = 1.d-8
       beta = 0.3d0
+      call atomsc_inner_controls(this%atomsc_test_tol, this%atomsc_test_tolrsq, &
+         this%atomsc_test_inner_cap, tol, tolrsq, niter)
 
       ! Backward-compatible guard: legacy spd potential files promoted to lmax=3
       ! may not provide valid f-channel PL. Seed invalid channels from element
@@ -5118,6 +5344,7 @@ contains
          end if
          this%fixed_u_trace_capture_radial_state = LAST .and. this%fixed_u_trace_enabled .and. &
             rank == 0 .and. .not. this%fixed_u_trace_moments_only .and. &
+            .not. this%fixed_u_trace_ql_only .and. &
             (this%fixed_u_trace_selected_iteration <= 0 .or. &
                              this%fixed_u_trace_iteration == this%fixed_u_trace_selected_iteration)
          if (this%fixed_u_trace_capture_radial_state) then

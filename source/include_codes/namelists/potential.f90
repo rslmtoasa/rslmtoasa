@@ -16,6 +16,7 @@ real(rp), dimension(2) :: vrmax
 complex(rp), dimension(9, 2) :: cx, wx, cex, obx
 real(rp), dimension(2) :: xi_p, xi_d, rac
 real(rp), dimension(:), allocatable :: hubbard_u, hubbard_j
+character(len=16) :: hubbard_radial_moments, hubbard_backend
 real(rp), dimension(:,:,:), allocatable :: ldm_flatten
 real(rp), dimension(:,:,:), allocatable :: ldm_flatten_imag
 namelist /par/ &
@@ -31,4 +32,4 @@ namelist /par/ &
    width_band_d_up, width_band_d_dw, &
    cx, wx, cx0, wx0, cx1, wx1, &
    cshi, dw_l, cex, obx, xi_p, xi_d, rac, &
-   hubbard_u, hubbard_j, ldm_flatten, ldm_flatten_imag
+   hubbard_u, hubbard_j, hubbard_radial_moments, hubbard_backend, ldm_flatten, ldm_flatten_imag

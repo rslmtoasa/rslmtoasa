@@ -1,0 +1,830 @@
+{
+  "amendment": "C3",
+  "run_ledger": {
+    "limit": 12,
+    "new_solver_invocations": 12,
+    "remaining": 0,
+    "counting_rule": "Count each new material solver invocation, including failed invocations and continuations. Existing runs/evidence do not count.",
+    "runs": [
+      {
+        "invocation_index": 1,
+        "run_id": "pa_uplus_bulk_rc80_lld21",
+        "status": "A2_AND_TERMINATOR_CAPTURE_COMPLETE_A3_COEFFICIENT_CAPTURE_MISSING",
+        "manifest_path": "/private/tmp/rslmto-c3-partA-runs/pa_uplus_bulk_rc80_lld21/C3_launch.json",
+        "manifest_sha256_before_launch": "6951a411fc78ac247e3b9efd19cfd3e463aa45b0def98fce1c2429157f6432f7",
+        "working_directory": "/private/tmp/rslmto-c3-partA-runs/pa_uplus_bulk_rc80_lld21",
+        "command": [
+          "/private/tmp/rslmto-c3-partA-build/bin/rslmto.x"
+        ],
+        "executable_sha256": "ae21ba421388739be2d16bdf344cf5d19c5d455097219b75d34a25f1a82df8e1",
+        "input_sha256": "3aeb8b5e5570506095fd1508147c66b6167a1209454f55ed5edbc86ed83ffc4b",
+        "input_potential_files": {
+          "Fe.nml": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        "started_utc": "2026-10-19T13:51:32+00:00",
+        "pid": 76475,
+        "pgid": 76475,
+        "stdout_log": "/private/tmp/rslmto-c3-partA-runs/pa_uplus_bulk_rc80_lld21/c3_console.log",
+        "environment": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "RSLMTO_C3_A2_AUDIT": "1",
+          "RSLMTO_C3_A2_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs/pa_uplus_bulk_rc80_lld21/c3_a2_audit.dat",
+          "RSLMTO_C3_A3_AUDIT": "1",
+          "RSLMTO_C3_A3_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs/pa_uplus_bulk_rc80_lld21/c3_a3_audit.dat"
+        },
+        "manifest_sha256_after_launch": "0889d1860674e45b26d2d79a2e204a47c6df9da3fd91cd0ef7e7f6d32c347f8e",
+        "completed_utc": "2026-10-19T13:52:46+00:00",
+        "process_alive_at_check": false,
+        "exit_code": null,
+        "completion_marker": true,
+        "console_log_sha256": "08e2318ec4c3c0a34ab1eb9e6cc913c40d4339b81145b60e2ee9819b82c092d3",
+        "report_sha256": "a30fa676a3ed4733887ce09518ea9fca7ec83f3439734c2c026acbfefbb436b7",
+        "a2_path": "/private/tmp/rslmto-c3-partA-runs/pa_uplus_bulk_rc80_lld21/c3_a2_audit.dat",
+        "a2_sha256": "f34d3bc458f403badaa6fc3b51d8aa92ce9f343e7c0174b8943a5223422aa608",
+        "a3_path": "/private/tmp/rslmto-c3-partA-runs/pa_uplus_bulk_rc80_lld21/c3_a3_audit.dat",
+        "a3_sha256": "5aa089da574dceda8cc07281792aa6517519b4954b27615dd35d4be9bbe5a62a",
+        "manifest_sha256_final": "1547d13791ce6857f5be3503ff091cb2311be0b04109a773f773f8289688e1bb",
+        "exit_code_limit": "Detached launch wrapper did not retain the child's exit status; normal completion is supported by the final console marker and complete report/capture files.",
+        "a2_complete": true,
+        "a3_coefficient_records_complete": false,
+        "production_terminator_records_complete": true
+      },
+      {
+        "invocation_index": 2,
+        "run_id": "pa_uplus_imp_rc100_lld21",
+        "status": "A2_AND_TERMINATOR_CAPTURE_COMPLETE_A3_COEFFICIENT_CAPTURE_MISSING",
+        "manifest_path": "/private/tmp/rslmto-c3-partA-runs/pa_uplus_imp_rc100_lld21/C3_launch.json",
+        "manifest_sha256_before_launch": "a6f3719e34c961a4f3915cf16ec23a9ec8bd37d19afdb3f42777744bedb20ec2",
+        "working_directory": "/private/tmp/rslmto-c3-partA-runs/pa_uplus_imp_rc100_lld21",
+        "command": [
+          "/private/tmp/rslmto-c3-partA-build/bin/rslmto.x"
+        ],
+        "executable_sha256": "ae21ba421388739be2d16bdf344cf5d19c5d455097219b75d34a25f1a82df8e1",
+        "input_sha256": "c125e82d54746392c07ca8f7a4b4bb5183edafc403dd2cae2d1a4f9272c4f312",
+        "input_potential_files": {
+          "Fe-bulk.nml": "5803721506fc5d5acd2d8fa15628cb2b2a816f8ce883c2258e6226ce1564daf3",
+          "Fe-imp.nml": "72b23e80a7e95ffacc292f2a09ac5ac4729cebb2f529d8a88600f41f918056f0"
+        },
+        "started_utc": "2026-10-19T13:51:32+00:00",
+        "pid": 76479,
+        "pgid": 76479,
+        "stdout_log": "/private/tmp/rslmto-c3-partA-runs/pa_uplus_imp_rc100_lld21/c3_console.log",
+        "environment": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "RSLMTO_C3_A2_AUDIT": "1",
+          "RSLMTO_C3_A2_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs/pa_uplus_imp_rc100_lld21/c3_a2_audit.dat",
+          "RSLMTO_C3_A3_AUDIT": "1",
+          "RSLMTO_C3_A3_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs/pa_uplus_imp_rc100_lld21/c3_a3_audit.dat"
+        },
+        "manifest_sha256_after_launch": "03ffddeb1ea7f98e75d80549f36ffdb79adf7d600558bfb9606180e1c93030e6",
+        "completed_utc": "2026-10-19T13:52:46+00:00",
+        "process_alive_at_check": false,
+        "exit_code": null,
+        "completion_marker": true,
+        "console_log_sha256": "e93aa7cbc216f503394b920f87be30b623217194976b50187221d7d7de1a463b",
+        "report_sha256": "61e59215b5026c186aa8dac97663336e7074944d5eb68ffc6dcd8c111321cb8f",
+        "a2_path": "/private/tmp/rslmto-c3-partA-runs/pa_uplus_imp_rc100_lld21/c3_a2_audit.dat",
+        "a2_sha256": "32671023b12b6cf7b5f39ce7e2b74500ff58a2ced6c729234a2fc8ded45a5ba6",
+        "a3_path": "/private/tmp/rslmto-c3-partA-runs/pa_uplus_imp_rc100_lld21/c3_a3_audit.dat",
+        "a3_sha256": "238134eb1898c2e6dbd6c30ab71a568a7e3decff63069dd88f526314df270c62",
+        "manifest_sha256_final": "986ef36c34cf2683de29da390e07518f2d42756914a3e294660b962708971b8a",
+        "exit_code_limit": "Detached launch wrapper did not retain the child's exit status; normal completion is supported by the final console marker and complete report/capture files.",
+        "a2_complete": true,
+        "a3_coefficient_records_complete": false,
+        "production_terminator_records_complete": true
+      },
+      {
+        "invocation_index": 3,
+        "run_id": "pa_u0_bulk_rc80_lld21",
+        "status": "A2_AND_TERMINATOR_CAPTURE_COMPLETE_A3_COEFFICIENT_CAPTURE_MISSING",
+        "manifest_path": "/private/tmp/rslmto-c3-partA-runs/pa_u0_bulk_rc80_lld21/C3_launch.json",
+        "manifest_sha256_before_launch": "220c706b886fc72e862f939e52673dc007a3d0835391daae9200fafca1c8d181",
+        "working_directory": "/private/tmp/rslmto-c3-partA-runs/pa_u0_bulk_rc80_lld21",
+        "command": [
+          "/private/tmp/rslmto-c3-partA-build/bin/rslmto.x"
+        ],
+        "executable_sha256": "ae21ba421388739be2d16bdf344cf5d19c5d455097219b75d34a25f1a82df8e1",
+        "input_sha256": "e4d0e4e533d024ba6a5f59b90f0469bdc37cd4efdb29b29eac38e31640f97411",
+        "input_potential_files": {
+          "Fe.nml": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c"
+        },
+        "started_utc": "2026-10-19T13:51:32+00:00",
+        "pid": 76505,
+        "pgid": 76505,
+        "stdout_log": "/private/tmp/rslmto-c3-partA-runs/pa_u0_bulk_rc80_lld21/c3_console.log",
+        "environment": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "RSLMTO_C3_A2_AUDIT": "1",
+          "RSLMTO_C3_A2_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs/pa_u0_bulk_rc80_lld21/c3_a2_audit.dat",
+          "RSLMTO_C3_A3_AUDIT": "1",
+          "RSLMTO_C3_A3_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs/pa_u0_bulk_rc80_lld21/c3_a3_audit.dat"
+        },
+        "manifest_sha256_after_launch": "7754920623d920fe6fb417ca077f8732da9df53a146cf50a4cac9146b53bbf66",
+        "completed_utc": "2026-10-19T13:52:46+00:00",
+        "process_alive_at_check": false,
+        "exit_code": null,
+        "completion_marker": true,
+        "console_log_sha256": "44d0fe39ebc3d82005954b27e6fff50c7bd2236fe71d2fe47d35831b9f1a61cf",
+        "report_sha256": "f5440e73d01213077aad8b34b8d404a7a278f4550e8a2a058afafd15da2781d8",
+        "a2_path": "/private/tmp/rslmto-c3-partA-runs/pa_u0_bulk_rc80_lld21/c3_a2_audit.dat",
+        "a2_sha256": "2d16881a3427f760202cdc1cd5f79f904b058f8a7f90a06a0ba8a8ec57b6b1cb",
+        "a3_path": "/private/tmp/rslmto-c3-partA-runs/pa_u0_bulk_rc80_lld21/c3_a3_audit.dat",
+        "a3_sha256": "037cf4715d57765a19d141e2c10a9788157bf0b72f856e4095af82d32f05cc6d",
+        "manifest_sha256_final": "312710e7ae7c5afb7124790523b9a005b217f09eb38c8248df77ebbfec846602",
+        "exit_code_limit": "Detached launch wrapper did not retain the child's exit status; normal completion is supported by the final console marker and complete report/capture files.",
+        "a2_complete": true,
+        "a3_coefficient_records_complete": false,
+        "production_terminator_records_complete": true
+      },
+      {
+        "invocation_index": 4,
+        "run_id": "pa_u0_imp_rc100_lld21",
+        "status": "A2_AND_TERMINATOR_CAPTURE_COMPLETE_A3_COEFFICIENT_CAPTURE_MISSING",
+        "manifest_path": "/private/tmp/rslmto-c3-partA-runs/pa_u0_imp_rc100_lld21/C3_launch.json",
+        "manifest_sha256_before_launch": "e170809e095d1a8a7a05a34e36a3fd7ad90d987ad48ba432815ac75b6897cbc2",
+        "working_directory": "/private/tmp/rslmto-c3-partA-runs/pa_u0_imp_rc100_lld21",
+        "command": [
+          "/private/tmp/rslmto-c3-partA-build/bin/rslmto.x"
+        ],
+        "executable_sha256": "ae21ba421388739be2d16bdf344cf5d19c5d455097219b75d34a25f1a82df8e1",
+        "input_sha256": "de9415a9f08a509f3b2ed435873cab61fddb4877d2b7f57ebc2b016070591c77",
+        "input_potential_files": {
+          "Fe-bulk.nml": "e6b95b856e2cc65495eb7165fc7fa82395b41b5540e2b6aca05d7b39a92db6a8",
+          "Fe-imp.nml": "384cfb8b5bdfa91d4196108b7b8b075ecd1c9b2f05479ac4e387fb31bd869f0b"
+        },
+        "started_utc": "2026-10-19T13:51:32+00:00",
+        "pid": 76508,
+        "pgid": 76508,
+        "stdout_log": "/private/tmp/rslmto-c3-partA-runs/pa_u0_imp_rc100_lld21/c3_console.log",
+        "environment": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "RSLMTO_C3_A2_AUDIT": "1",
+          "RSLMTO_C3_A2_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs/pa_u0_imp_rc100_lld21/c3_a2_audit.dat",
+          "RSLMTO_C3_A3_AUDIT": "1",
+          "RSLMTO_C3_A3_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs/pa_u0_imp_rc100_lld21/c3_a3_audit.dat"
+        },
+        "manifest_sha256_after_launch": "9aa42095732369f09973f1353f4613faca74c75bac557e560a9b6e6a70e1c4fd",
+        "completed_utc": "2026-10-19T13:52:46+00:00",
+        "process_alive_at_check": false,
+        "exit_code": null,
+        "completion_marker": true,
+        "console_log_sha256": "de88e36f96037aa9c710276be5f8bf7d0a339cbb984c0bb9d0683700f98b01ea",
+        "report_sha256": "dd1e64de17a1c4f397e2924ed39aa8c76ef4464aba1e7e603df40e9bcf6ef060",
+        "a2_path": "/private/tmp/rslmto-c3-partA-runs/pa_u0_imp_rc100_lld21/c3_a2_audit.dat",
+        "a2_sha256": "0b1a7d664f9a54ca8bc6fdb6bd132ad91a6f03981c0ee34048b6a6bbcd259959",
+        "a3_path": "/private/tmp/rslmto-c3-partA-runs/pa_u0_imp_rc100_lld21/c3_a3_audit.dat",
+        "a3_sha256": "4fe0fbe49aad2e44717331a1b4054c3619bbef8372e52181dd2bc7ed59bb6529",
+        "manifest_sha256_final": "dc48cdf30e0f4aea76a4d6f5096f250e0be5845520e84cd2637ad4944e0784c2",
+        "exit_code_limit": "Detached launch wrapper did not retain the child's exit status; normal completion is supported by the final console marker and complete report/capture files.",
+        "a2_complete": true,
+        "a3_coefficient_records_complete": false,
+        "production_terminator_records_complete": true
+      },
+      {
+        "invocation_index": 5,
+        "run_id": "pa_uplus_bulk_rc80_lld21_v2_retry",
+        "status": "COMPLETED_A3_EXTENDED_COEFF_CAPTURE_NO_PRODUCTION_PREFIX",
+        "manifest_path": "/private/tmp/rslmto-c3-partA-runs-v2/pa_uplus_bulk_rc80_lld21/C3_launch.json",
+        "manifest_sha256": "0a3a9236e73a2e7db69855aa753b1feccab5f4f4fd81f913bade5718663e5d5b",
+        "working_directory": "/private/tmp/rslmto-c3-partA-runs-v2/pa_uplus_bulk_rc80_lld21",
+        "command": [
+          "/private/tmp/rslmto-c3-partA-build/bin/rslmto.x"
+        ],
+        "executable_sha256": "19cc7a5ffe130469b747ee72d377b5053b9b4f2cee558bc4964f79127a30f85a",
+        "source_sha256": {
+          "hamiltonian_build.f90": "53c9d74106f87f9aafc3959baa9c0c22628442adcaab5319099a241dea75f229",
+          "recursion_haydock.f90": "528225f1c30a258cc27941ddb4283502744327360faf01107354c849c8bf6882"
+        },
+        "input_sha256": "3aeb8b5e5570506095fd1508147c66b6167a1209454f55ed5edbc86ed83ffc4b",
+        "input_potential_files": {
+          "Fe.nml": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        "started_utc": "2026-10-19T13:54:38+00:00",
+        "completed_utc": "2026-10-19T13:54:50+00:00",
+        "exit_code": 0,
+        "completion_marker": true,
+        "environment": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "RSLMTO_C3_A2_AUDIT": "1",
+          "RSLMTO_C3_A2_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs-v2/pa_uplus_bulk_rc80_lld21/c3_a2_audit.dat",
+          "RSLMTO_C3_A3_AUDIT": "1",
+          "RSLMTO_C3_A3_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs-v2/pa_uplus_bulk_rc80_lld21/c3_a3_audit.dat"
+        },
+        "output_hashes": {
+          "console": "246ba624e122ce702d09ee35e19ba307faaf00d5e9b6aa7f06776a3750a0310a",
+          "report": "a30fa676a3ed4733887ce09518ea9fca7ec83f3439734c2c026acbfefbb436b7",
+          "a2": "f34d3bc458f403badaa6fc3b51d8aa92ce9f343e7c0174b8943a5223422aa608",
+          "a3": "5ac3e2f73c0f8f531af56a8133646c2949711a86515bbb94ac6d31797443291f"
+        },
+        "analysis": "Extended coefficients and production terminator captured; no raw production prefix rows. This capture is not used for production coefficient comparisons."
+      },
+      {
+        "invocation_index": 6,
+        "run_id": "pa_u0_bulk_rc80_lld21_v3_prefix_attempt",
+        "retry_of_initial_run": "pa_uplus_bulk_rc80_lld21",
+        "status": "COMPLETED_COEFF_CAPTURE_PREFIX_CAPTURE_MISSING",
+        "manifest_path": "/private/tmp/rslmto-c3-partA-runs-v2/pa_u0_bulk_rc80_lld21/C3_launch.json",
+        "working_directory": "/private/tmp/rslmto-c3-partA-runs-v2/pa_uplus_bulk_rc80_lld21",
+        "command": [
+          "/private/tmp/rslmto-c3-partA-build/bin/rslmto.x"
+        ],
+        "executable_sha256": "19cc7a5ffe130469b747ee72d377b5053b9b4f2cee558bc4964f79127a30f85a",
+        "input_sha256": "3aeb8b5e5570506095fd1508147c66b6167a1209454f55ed5edbc86ed83ffc4b",
+        "input_potential_files": {
+          "Fe.nml": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        "started_utc": "2026-10-19T13:54:38+00:00",
+        "pid": 81050,
+        "pgid": 81050,
+        "stdout_log": "/private/tmp/rslmto-c3-partA-runs-v2/pa_uplus_bulk_rc80_lld21/c3_console.log",
+        "retry_reason": "v1 diagnostic hook missed block backend and emitted no COEFF/B/B2 records",
+        "environment": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "RSLMTO_C3_A2_AUDIT": "1",
+          "RSLMTO_C3_A2_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs-v2/pa_uplus_bulk_rc80_lld21/c3_a2_audit.dat",
+          "RSLMTO_C3_A3_AUDIT": "1",
+          "RSLMTO_C3_A3_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs-v2/pa_uplus_bulk_rc80_lld21/c3_a3_audit.dat"
+        },
+        "exit_code": 0,
+        "completion_marker": true,
+        "completed_utc": "2026-10-19T13:54:50+00:00",
+        "output_hashes": {
+          "console_sha256": "246ba624e122ce702d09ee35e19ba307faaf00d5e9b6aa7f06776a3750a0310a",
+          "report_sha256": "a30fa676a3ed4733887ce09518ea9fca7ec83f3439734c2c026acbfefbb436b7",
+          "a2_sha256": "f34d3bc458f403badaa6fc3b51d8aa92ce9f343e7c0174b8943a5223422aa608",
+          "a3_sha256": "f07c1e3302bad517364e52434042e10baa967208c3711b7c14baf0d48b8be4a0"
+        },
+        "binary_frozen_copy": "/private/tmp/rslmto-c3-partA-frozen-v3/rslmto.x",
+        "binary_frozen_sha256": "2c755d55a0d814b7d74743a4505cdcea4deb2c4df6fd55b2b135d92f227b89b0",
+        "source_frozen_dir": "/private/tmp/rslmto-c3-partA-frozen-v3",
+        "source_frozen_sha256": {
+          "recursion_haydock.f90": "bf94d8c376140b7766d5ea2c9be913d7a68af958c5403e4b344a888a368e8958",
+          "hamiltonian_build.f90": "53c9d74106f87f9aafc3959baa9c0c22628442adcaab5319099a241dea75f229"
+        },
+        "a3_records_present": {
+          "COEFF_META_BLOCK": 1,
+          "COEFF": 2200,
+          "COEFF_B2": 2200,
+          "PREFIX_COMPARE": 0,
+          "PROD_COEFF": 0,
+          "RESTORE_CHECK": 0,
+          "TERM": 324
+        },
+        "analysis": {
+          "finding": "PREFIX_COMPARE/PROD_COEFF append was written before first c3_write_coefficients status=replace open and truncated. Retained but not used for A3 prefix validation.",
+          "exit_code": 0
+        }
+      },
+      {
+        "invocation_index": 7,
+        "run_id": "pa_u0_bulk_rc80_lld21_prefixfix",
+        "status": "COMPLETED_PREFIX_CAPTURE; PHYSICAL_REPORT_IDENTICAL_TO_V1",
+        "manifest_path": "/private/tmp/rslmto-c3-partA-runs-v4/pa_u0_bulk_rc80_lld21_prefixfix/C3_launch.json",
+        "manifest_sha256": "0574cca16c53c5b56c261d76ff4951f41ebaf4c42d9876ee8714703bb66bd3e3",
+        "working_directory": "/private/tmp/rslmto-c3-partA-runs-v4/pa_u0_bulk_rc80_lld21_prefixfix",
+        "command": [
+          "/private/tmp/rslmto-c3-partA-frozen-v4/rslmto.x"
+        ],
+        "executable_sha256": "a3451d7150ca553257e2e0834ad442f3c5d95e85ca31eb16be28a0a59ddea943",
+        "source_sha256": {
+          "hamiltonian_build.f90": "53c9d74106f87f9aafc3959baa9c0c22628442adcaab5319099a241dea75f229",
+          "recursion_haydock.f90": "42d8ae1fa98fd89ed6fefc3ead6528f1c08c8034667c6c1ca6791970065507c4"
+        },
+        "input_sha256": "e4d0e4e533d024ba6a5f59b90f0469bdc37cd4efdb29b29eac38e31640f97411",
+        "input_potential_files": {
+          "Fe.nml": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c"
+        },
+        "started_utc": "2026-10-19T14:04:00Z",
+        "completed_utc": "2026-10-19T14:04:11Z",
+        "exit_code": 0,
+        "completion_marker": true,
+        "environment": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "RSLMTO_C3_A2_AUDIT": "1",
+          "RSLMTO_C3_A2_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs-v4/pa_u0_bulk_rc80_lld21_prefixfix/c3_a2_audit.dat",
+          "RSLMTO_C3_A3_AUDIT": "1",
+          "RSLMTO_C3_A3_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs-v4/pa_u0_bulk_rc80_lld21_prefixfix/c3_a3_audit.dat"
+        },
+        "output_hashes": {
+          "c3_console.log": "1828c84b3eec0a9290db1adc80ca336955eff8257b88e12ddb435dde27ee4897",
+          "report.out": "f5440e73d01213077aad8b34b8d404a7a278f4550e8a2a058afafd15da2781d8",
+          "c3_a2_audit.dat": "2d16881a3427f760202cdc1cd5f79f904b058f8a7f90a06a0ba8a8ec57b6b1cb",
+          "c3_a3_audit.dat": "db833b6930497406e959940c59b812f11ac8bcbd966ba22e55679c9d47803646"
+        },
+        "a3_record_counts": {
+          "COEFF_META_BLOCK": 1,
+          "COEFF": 2200,
+          "COEFF_B2": 2200,
+          "PREFIX_COMPARE": 1,
+          "PROD_COEFF": 2100,
+          "RESTORE_CHECK": 1,
+          "TERM": 324
+        },
+        "prefix_compare_max_abs": {
+          "alpha_Ry": 7.755340565814392e-07,
+          "B2_Ry2": 2.0153399331106685e-07
+        },
+        "restore_check_max_abs": 0.0,
+        "interpretation": "The diagnostic emits production fast-backend d-block coefficients n=0..20 and extended legacy replay n=0..21. The first-lld comparison is not at roundoff; do not treat the replay tail as validated continuation. Raw production coefficients and production terminator remain captured. See analyzer/source review before deciding whether additional runs are useful.",
+        "analysis": {
+          "raw_production_rows": 2100,
+          "a_actual_n": "0..19",
+          "b2_actual_n": "0..20",
+          "a_padding_n20": true,
+          "prefix_A_max_abs_Ry": 7.755340565814392e-07,
+          "prefix_B2_max_abs_Ry2": 2.0153399331106685e-07,
+          "restore_check": 0.0,
+          "same_input_v1_report_sha256": "f5440e73d01213077aad8b34b8d404a7a278f4550e8a2a058afafd15da2781d8",
+          "interpretation": "FP32 production fast backend vs FP64 legacy extension; not production mutation."
+        }
+      },
+      {
+        "invocation_index": 8,
+        "run_id": "pa_uplus_bulk_rc80_lld21_prefixfix",
+        "status": "COMPLETED",
+        "manifest_path": "/private/tmp/rslmto-c3-partA-runs-v4/pa_uplus_bulk_rc80_lld21_prefixfix/C3_launch.json",
+        "manifest_sha256": "8c1ac35982f5f7fcc55372eee58b86ceee35686b14da6aaa430a365f5b10e9e5",
+        "working_directory": "/private/tmp/rslmto-c3-partA-runs-v4/pa_uplus_bulk_rc80_lld21_prefixfix",
+        "command": [
+          "/private/tmp/rslmto-c3-partA-frozen-v4/rslmto.x"
+        ],
+        "executable_sha256": "a3451d7150ca553257e2e0834ad442f3c5d95e85ca31eb16be28a0a59ddea943",
+        "source_sha256": {
+          "hamiltonian_build.f90": "53c9d74106f87f9aafc3959baa9c0c22628442adcaab5319099a241dea75f229",
+          "recursion_haydock.f90": "42d8ae1fa98fd89ed6fefc3ead6528f1c08c8034667c6c1ca6791970065507c4"
+        },
+        "input_sha256": "3aeb8b5e5570506095fd1508147c66b6167a1209454f55ed5edbc86ed83ffc4b",
+        "input_potential_files": {
+          "Fe.nml": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        "started_utc": "2026-10-19T14:06:40Z",
+        "completed_utc": "2026-10-19T14:06:50Z",
+        "exit_code": 0,
+        "completion_marker": true,
+        "environment": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "RSLMTO_C3_A2_AUDIT": "1",
+          "RSLMTO_C3_A2_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs-v4/pa_uplus_bulk_rc80_lld21_prefixfix/c3_a2_audit.dat",
+          "RSLMTO_C3_A3_AUDIT": "1",
+          "RSLMTO_C3_A3_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs-v4/pa_uplus_bulk_rc80_lld21_prefixfix/c3_a3_audit.dat"
+        },
+        "output_hashes": {
+          "c3_console.log": "5803d5b031e3431a63e36d9fb7dacc48ba4fd79625dc32d9274b741c83195433",
+          "report.out": "a30fa676a3ed4733887ce09518ea9fca7ec83f3439734c2c026acbfefbb436b7",
+          "c3_a2_audit.dat": "f34d3bc458f403badaa6fc3b51d8aa92ce9f343e7c0174b8943a5223422aa608",
+          "c3_a3_audit.dat": "74752a32838f0724dd49ebfec19269c55a8b1081cd2db1572a5240c50b4cd302"
+        },
+        "a3_record_counts": {
+          "COEFF_META_BLOCK": 1,
+          "COEFF": 2200,
+          "COEFF_B2": 2200,
+          "PREFIX_COMPARE": 1,
+          "PROD_COEFF": 2100,
+          "RESTORE_CHECK": 1,
+          "TERM": 100
+        },
+        "prefix_compare": {
+          "production_a_levels": 20,
+          "production_b2_levels": 21,
+          "max_abs_a_vs_extended_legacy_Ry": 6.44509261141485e-07,
+          "max_abs_b2_vs_extended_legacy_Ry2": 1.631579764472292e-07
+        },
+        "restore_check_max_abs": 0.0
+      },
+      {
+        "invocation_index": 9,
+        "run_id": "pa_uplus_imp_rc100_lld21_prefixfix",
+        "status": "COMPLETED",
+        "manifest_path": "/private/tmp/rslmto-c3-partA-runs-v4/pa_uplus_imp_rc100_lld21_prefixfix/C3_launch.json",
+        "manifest_sha256": "1cab67fe2e3fec1450d8244600fcf0ff24ed70c201d435e784676efb71ae27d2",
+        "working_directory": "/private/tmp/rslmto-c3-partA-runs-v4/pa_uplus_imp_rc100_lld21_prefixfix",
+        "command": [
+          "/private/tmp/rslmto-c3-partA-frozen-v4/rslmto.x"
+        ],
+        "executable_sha256": "a3451d7150ca553257e2e0834ad442f3c5d95e85ca31eb16be28a0a59ddea943",
+        "source_sha256": {
+          "hamiltonian_build.f90": "53c9d74106f87f9aafc3959baa9c0c22628442adcaab5319099a241dea75f229",
+          "recursion_haydock.f90": "42d8ae1fa98fd89ed6fefc3ead6528f1c08c8034667c6c1ca6791970065507c4"
+        },
+        "input_sha256": "c125e82d54746392c07ca8f7a4b4bb5183edafc403dd2cae2d1a4f9272c4f312",
+        "input_potential_files": {
+          "Fe-bulk.nml": "5803721506fc5d5acd2d8fa15628cb2b2a816f8ce883c2258e6226ce1564daf3",
+          "Fe-imp.nml": "72b23e80a7e95ffacc292f2a09ac5ac4729cebb2f529d8a88600f41f918056f0"
+        },
+        "started_utc": "2026-10-19T14:06:50Z",
+        "completed_utc": "2026-10-19T14:07:05Z",
+        "exit_code": 0,
+        "completion_marker": true,
+        "environment": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "RSLMTO_C3_A2_AUDIT": "1",
+          "RSLMTO_C3_A2_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs-v4/pa_uplus_imp_rc100_lld21_prefixfix/c3_a2_audit.dat",
+          "RSLMTO_C3_A3_AUDIT": "1",
+          "RSLMTO_C3_A3_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs-v4/pa_uplus_imp_rc100_lld21_prefixfix/c3_a3_audit.dat"
+        },
+        "output_hashes": {
+          "c3_console.log": "bb115a4864ab85d7dd9b32e58803e433f3c13da5aa9c512d5e639eb9c4f48d71",
+          "report.out": "61e59215b5026c186aa8dac97663336e7074944d5eb68ffc6dcd8c111321cb8f",
+          "c3_a2_audit.dat": "32671023b12b6cf7b5f39ce7e2b74500ff58a2ced6c729234a2fc8ded45a5ba6",
+          "c3_a3_audit.dat": "f8846c03e0fd51f1238aa73384e95968cd1a02a957f02f7cc64248015da75fba"
+        },
+        "a3_record_counts": {
+          "COEFF_META_BLOCK": 1,
+          "COEFF": 2200,
+          "COEFF_B2": 2200,
+          "PREFIX_COMPARE": 1,
+          "PROD_COEFF": 2100,
+          "RESTORE_CHECK": 1,
+          "TERM": 100
+        },
+        "prefix_compare": {
+          "production_a_levels": 20,
+          "production_b2_levels": 21,
+          "max_abs_a_vs_extended_legacy_Ry": 2.569884710812594e-06,
+          "max_abs_b2_vs_extended_legacy_Ry2": 6.509902662488283e-07
+        },
+        "restore_check_max_abs": 0.0
+      },
+      {
+        "invocation_index": 10,
+        "run_id": "pa_u0_imp_rc100_lld21_prefixfix",
+        "status": "COMPLETED",
+        "manifest_path": "/private/tmp/rslmto-c3-partA-runs-v4/pa_u0_imp_rc100_lld21_prefixfix/C3_launch.json",
+        "manifest_sha256": "3245ac1501f5dedfadf43b1b0162afa2659c7e32f01ccb72280e933f4deb9366",
+        "working_directory": "/private/tmp/rslmto-c3-partA-runs-v4/pa_u0_imp_rc100_lld21_prefixfix",
+        "command": [
+          "/private/tmp/rslmto-c3-partA-frozen-v4/rslmto.x"
+        ],
+        "executable_sha256": "a3451d7150ca553257e2e0834ad442f3c5d95e85ca31eb16be28a0a59ddea943",
+        "source_sha256": {
+          "hamiltonian_build.f90": "53c9d74106f87f9aafc3959baa9c0c22628442adcaab5319099a241dea75f229",
+          "recursion_haydock.f90": "42d8ae1fa98fd89ed6fefc3ead6528f1c08c8034667c6c1ca6791970065507c4"
+        },
+        "input_sha256": "de9415a9f08a509f3b2ed435873cab61fddb4877d2b7f57ebc2b016070591c77",
+        "input_potential_files": {
+          "Fe-bulk.nml": "e6b95b856e2cc65495eb7165fc7fa82395b41b5540e2b6aca05d7b39a92db6a8",
+          "Fe-imp.nml": "384cfb8b5bdfa91d4196108b7b8b075ecd1c9b2f05479ac4e387fb31bd869f0b"
+        },
+        "started_utc": "2026-10-19T14:07:05Z",
+        "completed_utc": "2026-10-19T14:07:18Z",
+        "exit_code": 0,
+        "completion_marker": true,
+        "environment": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "RSLMTO_C3_A2_AUDIT": "1",
+          "RSLMTO_C3_A2_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs-v4/pa_u0_imp_rc100_lld21_prefixfix/c3_a2_audit.dat",
+          "RSLMTO_C3_A3_AUDIT": "1",
+          "RSLMTO_C3_A3_AUDIT_FILE": "/private/tmp/rslmto-c3-partA-runs-v4/pa_u0_imp_rc100_lld21_prefixfix/c3_a3_audit.dat"
+        },
+        "output_hashes": {
+          "c3_console.log": "b7a45d5a22bff39dff43c963f76bf465a6d2ff8ea1aee41ea60421833626afcf",
+          "report.out": "dd1e64de17a1c4f397e2924ed39aa8c76ef4464aba1e7e603df40e9bcf6ef060",
+          "c3_a2_audit.dat": "0b1a7d664f9a54ca8bc6fdb6bd132ad91a6f03981c0ee34048b6a6bbcd259959",
+          "c3_a3_audit.dat": "003b7c9e35949683d52015c3f29cdb9d86223275de58765538bc246d5013deaf"
+        },
+        "a3_record_counts": {
+          "COEFF_META_BLOCK": 1,
+          "COEFF": 2200,
+          "COEFF_B2": 2200,
+          "PREFIX_COMPARE": 1,
+          "PROD_COEFF": 2100,
+          "RESTORE_CHECK": 1,
+          "TERM": 100
+        },
+        "prefix_compare": {
+          "production_a_levels": 20,
+          "production_b2_levels": 21,
+          "max_abs_a_vs_extended_legacy_Ry": 3.2615719511501093e-06,
+          "max_abs_b2_vs_extended_legacy_Ry2": 4.691319536453964e-07
+        },
+        "restore_check_max_abs": 0.0
+      },
+      {
+        "invocation_index": 11,
+        "run_id": "fe_uplus_bulk_rc140_lld21",
+        "status": "FAILED_NONFINITE",
+        "manifest_path": "/private/tmp/rslmto-c3-partA-runs-v4/fe_uplus_bulk_rc140_lld21/C3_launch.json",
+        "manifest_sha256": "dc581cb4916e0cc5003dc562a66bfd79cd96b07541e3c33e5e160d3191230bc8",
+        "working_directory": "/private/tmp/rslmto-c3-partA-runs-v4/fe_uplus_bulk_rc140_lld21",
+        "command": [
+          "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x"
+        ],
+        "executable_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+        "input_sha256": "fc298d9b284cb6a61b6d375063a1b396c59ef913af9f539b8a633f5e404549de",
+        "input_potential_files": {
+          "Fe.nml": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        "started_utc": "2026-10-19T14:11:40Z",
+        "pid": 5444,
+        "pgid": 5444,
+        "stdout_log": "/private/tmp/rslmto-c3-partA-runs-v4/fe_uplus_bulk_rc140_lld21/c3_console.log",
+        "environment": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "RSLMTO_FIXED_U_TRACE": "/private/tmp/rslmto-c3-partA-runs-v4/fe_uplus_bulk_rc140_lld21/fixed_u_trace.csv",
+          "RSLMTO_FIXED_U_TRACE_QL_ONLY": "1",
+          "RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY": "1",
+          "RSLMTO_FIXED_U_RUN_ID": "fe_uplus_bulk_rc140_lld21"
+        },
+        "physics": {
+          "material": "Fe",
+          "mode": "RS spectral/block",
+          "nsp": 1,
+          "U_eV": 3.8,
+          "J_eV": 1.1,
+          "rc": 140,
+          "lld": 21,
+          "nstep_cap": 200,
+          "conv_thr": 1e-30,
+          "fixed_fermi_Ry": -0.163441,
+          "energy_window_Ry": [
+            -1.0,
+            0.5
+          ],
+          "channels_ldos": 2500,
+          "mixing": "Broyden beta=0.015",
+          "only_physical_recipe_change_from_reference": "rc increased to 140; all other physical settings held as in corresponding accepted U+ recipe"
+        },
+        "source_reference": "C1_RB_PROVENANCE.json matched Debug identity build; executable SHA 7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+        "host_seed_note": "Both invocations started from the accepted earlier rc80 U+ Fe endpoint SHA 6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702; impurity did not start from a newly generated rc140 bulk endpoint. This is recorded as a host-reference limitation, not corrected by an out-of-budget run.",
+        "last_complete_iteration": 183,
+        "failed_iteration": 184,
+        "snapshot_path": "/private/tmp/rslmto-c3-partA-final-snapshots/fe_uplus_bulk_rc140_lld21_failed_nonfinite",
+        "input_provenance": "fresh atomic starting potential from Fe.nml; accepted radial endpoint was not loaded as a restart",
+        "actual_initialization_clarification": "Console reports fresh atomic starting potential loaded from Fe.nml / Fe-bulk.nml / Fe-imp.nml; the referenced accepted rc80 endpoint was not loaded as a restart. Preserve this pair as exploratory rc140 records only."
+      },
+      {
+        "invocation_index": 12,
+        "run_id": "fe_uplus_imp_rc140_lld21",
+        "status": "COMPLETED_CAP_NOT_RS_ACCEPTED",
+        "manifest_path": "/private/tmp/rslmto-c3-partA-runs-v4/fe_uplus_imp_rc140_lld21/C3_launch.json",
+        "manifest_sha256": "3b61532f9f100ba747c26ad3965be85224059a8339d0c5ef6c6c8eb3482bf8ce",
+        "working_directory": "/private/tmp/rslmto-c3-partA-runs-v4/fe_uplus_imp_rc140_lld21",
+        "command": [
+          "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x"
+        ],
+        "executable_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+        "input_sha256": "dad9ef983bbc11c0037adee47689fd828c7ec16d07868ca8c973f316e70ee3f1",
+        "input_potential_files": {
+          "Fe-bulk.nml": "5803721506fc5d5acd2d8fa15628cb2b2a816f8ce883c2258e6226ce1564daf3",
+          "Fe-imp.nml": "72b23e80a7e95ffacc292f2a09ac5ac4729cebb2f529d8a88600f41f918056f0"
+        },
+        "started_utc": "2026-10-19T14:11:40Z",
+        "pid": 5445,
+        "pgid": 5445,
+        "stdout_log": "/private/tmp/rslmto-c3-partA-runs-v4/fe_uplus_imp_rc140_lld21/c3_console.log",
+        "environment": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "RSLMTO_FIXED_U_TRACE": "/private/tmp/rslmto-c3-partA-runs-v4/fe_uplus_imp_rc140_lld21/fixed_u_trace.csv",
+          "RSLMTO_FIXED_U_TRACE_QL_ONLY": "1",
+          "RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY": "1",
+          "RSLMTO_FIXED_U_RUN_ID": "fe_uplus_imp_rc140_lld21"
+        },
+        "physics": {
+          "material": "Fe",
+          "mode": "RS spectral/block",
+          "nsp": 1,
+          "U_eV": 3.8,
+          "J_eV": 1.1,
+          "rc": 140,
+          "lld": 21,
+          "nstep_cap": 200,
+          "conv_thr": 1e-30,
+          "fixed_fermi_Ry": -0.163441,
+          "energy_window_Ry": [
+            -1.0,
+            0.5
+          ],
+          "channels_ldos": 2500,
+          "mixing": "Broyden beta=0.015",
+          "only_physical_recipe_change_from_reference": "rc increased to 140; all other physical settings held as in corresponding accepted U+ recipe"
+        },
+        "source_reference": "C1_RB_PROVENANCE.json matched Debug identity build; executable SHA 7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+        "host_seed_note": "Both invocations started from the accepted earlier rc80 U+ Fe endpoint SHA 6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702; impurity did not start from a newly generated rc140 bulk endpoint. This is recorded as a host-reference limitation, not corrected by an out-of-budget run.",
+        "input_provenance": "fresh atomic starting potential from Fe-bulk.nml and Fe-imp.nml; accepted radial endpoint was not loaded as a restart",
+        "last_diff": 3.16e-08,
+        "c1_spreads": [
+          1.8940809720646712e-07,
+          7.908213142115983e-07,
+          8.735069205734192e-07
+        ],
+        "snapshot_path": "/private/tmp/rslmto-c3-partA-final-snapshots/fe_uplus_imp_rc140_lld21_cap200",
+        "actual_initialization_clarification": "Console reports fresh atomic starting potential loaded from Fe.nml / Fe-bulk.nml / Fe-imp.nml; the referenced accepted rc80 endpoint was not loaded as a restart. Preserve this pair as exploratory rc140 records only."
+      }
+    ],
+    "planned_initial_captures": [
+      "pa_uplus_bulk_rc80_lld21",
+      "pa_uplus_imp_rc100_lld21",
+      "pa_u0_bulk_rc80_lld21",
+      "pa_u0_imp_rc100_lld21"
+    ],
+    "planned_capture_count": 4,
+    "adaptive_budget_after_initial_captures": 8,
+    "launch_status": "C3_PART_A_CLOSED_OPEN; C3_CAP_EXHAUSTED; PROCEED_TO_PART_B",
+    "completion_check_utc": "2026-10-19T14:07:18Z",
+    "analysis_attempts": [
+      {
+        "command": "python3 /private/tmp/rslmto-c3-partA-src/analyze_c3_captures.py --uplus-bulk ... --uplus-imp ... --u0-bulk ... --u0-imp ... --output /private/tmp/rslmto-c3-partA-runs/C3_analysis.json",
+        "exit_code": 1,
+        "result": "Parser could not evaluate A3 because all four captures contain TERM rows but no COEFF/COEFF_B2/COEFF_META_BLOCK. This identifies the extra-depth diagnostic hook not being reached by the active block-backend path; the existing A2 and production terminator capture outputs are retained.",
+        "solver_invocations_counted": 0
+      }
+    ],
+    "capture_count_after_v3": 6,
+    "remaining_budget": 0,
+    "prefix_fix_source": {
+      "recursion_haydock_sha256": "42d8ae1fa98fd89ed6fefc3ead6528f1c08c8034667c6c1ca6791970065507c4",
+      "binary_sha256": "a3451d7150ca553257e2e0834ad442f3c5d95e85ca31eb16be28a0a59ddea943",
+      "fix": "Initialize extended coefficient output before appending production-prefix rows; confirmed output rows survived."
+    },
+    "u0_bulk_same_input_physical_consistency": {
+      "v1_report_sha256": "f5440e73d01213077aad8b34b8d404a7a278f4550e8a2a058afafd15da2781d8",
+      "v4_report_sha256": "f5440e73d01213077aad8b34b8d404a7a278f4550e8a2a058afafd15da2781d8",
+      "terminal_diff_v1_v4": 3.46e-08,
+      "completion_marker_both": true,
+      "interpretation": "The report is byte-identical across the same physical input; debug capture did not change reported first-iteration observables."
+    },
+    "a3_analysis": {
+      "path": "/private/tmp/rslmto-c3-partA-runs-v4/C3_production_coefficients_comparison.json",
+      "sha256": "4e55a8781c69935643b37d817d859c9ca16b572f93397d62d7d1f0f737abe875",
+      "production_scope": {
+        "A": "raw production d-block A_n for n=0..19; n=20 is zero padding",
+        "B2": "raw production d-block (B_n^2)_dd for n=0..20",
+        "B": "not available as exact production B_dd; positive square root of d-subblock B2 is only an estimate and is excluded from claims",
+        "extension": "legacy FP64 replay n=0..21, not production-validated; prefix differs from production FP32 fast by O(1e-6)"
+      },
+      "ratios": {
+        "A_first_n_over_10x_U0": null,
+        "A_max_ratio": {
+          "n": 0,
+          "value": 5.078079463875881
+        },
+        "B2_no_ratio_over_10x_U0": true,
+        "B_exact_production_ratio": "not measured"
+      },
+      "terminator_Uplus_to_U0_ratios": {
+        "A_inf": 0.4037175954480578,
+        "B_inf": 0.2537143543693612,
+        "B_lld": 0.17529895041967894,
+        "B2_lld": 0.17067339271061926
+      },
+      "terminator_differences_nonzero_but_smaller_than_U0": true
+    },
+    "timebox_note": "C3 §5 includes C2 §1 triage but the Part A hard 12-total invocation cap was exhausted. Existing exact-deck C2 triage does not cover this rc140 deck; no extra invocations were launched. Bulk nonfinite cause remains unclassified.",
+    "a4_rc140_pair": {
+      "bulk": {
+        "run_id": "fe_uplus_bulk_rc140_lld21",
+        "status": "FAILED_NONFINITE",
+        "last_complete_iteration": 183,
+        "failed_iteration": 184,
+        "last_complete_diff": 0.58981294,
+        "failure": "RSEQ NIT GT 400 AND BAD NODES L=0; NaN radial table; pre-LU Q NaN; invalid PL before atomic core/valence setup",
+        "P_OUT_step184": "partial/zero-filled and excluded",
+        "snapshot": "/private/tmp/rslmto-c3-partA-final-snapshots/fe_uplus_bulk_rc140_lld21_failed_nonfinite"
+      },
+      "impurity": {
+        "run_id": "fe_uplus_imp_rc140_lld21",
+        "status": "PROVISIONAL_NOT_RS_ACCEPTED",
+        "completed_iterations": 200,
+        "last_diff": 3.16e-08,
+        "last20_spreads_d_up_d_down_sphere_moment": [
+          1.8940809720646712e-07,
+          7.908213142115983e-07,
+          8.735069205734192e-07
+        ],
+        "snapshot": "/private/tmp/rslmto-c3-partA-final-snapshots/fe_uplus_imp_rc140_lld21_cap200"
+      },
+      "starting_potential_provenance": "Both jobs logged fresh atomic starting potential from their Fe*.nml files; no accepted restart endpoint was loaded. Thus this pair does not establish rc scaling from an accepted prior host state.",
+      "c2_triage": "not run: C3 hard 12-total invocation cap exhausted. No PRE-EXISTING or new-branch cause classification claimed.",
+      "conclusion": "OPEN; full rc/lld grid not completed, bulk nonfinite, and impurity not RS-accepted."
+    },
+    "c2_triage_status": "INCOMPLETE_BY_C3_12_RUN_CAP_AFTER_BULK_NONFINITE",
+    "closing_status": "12/12 invocations used; no Part A solver invocations remain. Invocation 11 FAILED_NONFINITE after 183 completed iterations; invocation 12 is PROVISIONAL at its cap and failed the RS Diff criterion. The paired initial states were fresh atomic Fe*.nml potentials, not the referenced 6da638 restart endpoint."
+  },
+  "a1_fermi_level": {
+    "verdict": "PASS_NO_RERUN_REQUIRED",
+    "uplus_impurity_fermi_ry": -0.163441,
+    "uplus_bulk_fermi_ry": -0.163441,
+    "u0_impurity_fermi_ry": -0.069252,
+    "uplus_impurity_input_sha256": [
+      "abfb6689f6d0956bdadab509fb4ce809894f4da67406bb31ec5561da3281ca89",
+      "6e7ef023e80bd75a55e6ddc9a16b70741f6751275cacfdb26e36e0e7d4fa35dc"
+    ],
+    "uplus_bulk_input_path": "/private/tmp/rslmto-c2-requal/fe_uplus_bulk_requal/input.nml",
+    "uplus_bulk_input_sha256": "4082a703bd47eb38af31d6eb341707be371d2118b12ec59a419668f52a5472a5",
+    "uplus_bulk_endpoint_path": "/private/tmp/rslmto-c2-requal/fe_uplus_bulk_requal/C2_checkpoint_candidate.nml",
+    "uplus_bulk_endpoint_sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702",
+    "fixed_fermi": true,
+    "energy_window_ry": [
+      -1.0,
+      0.5
+    ],
+    "channels_ldos": 2500,
+    "evidence": "Prior C2 accepted run manifests and current RA4 input/runtime-byte audit; no new solver invocation."
+  },
+  "capture_design": {
+    "execution_root": "/private/tmp/rslmto-c3-partA-src",
+    "capture_mode": "isolated diagnostic-only source/build; no workspace production edits",
+    "a2": "Dump full hall and ee matrices after their Hubbard insertion, with site/type/neighbor/displacement mapping, Ry U/J, potential deltas, occupation matrices, per-m actual insertion counts, and complete cluster site map. Compare onsite hall(:,:,1,site) against ee(:,:,1,type); report hoppings by actual geometric shell, not neighbor-slot number. Production maps i<=nmax through hall and i>nmax through ee by iz(i); report nmax and kk.",
+    "a3": "Capture a_n for n=0..lld, b_n as the computed Hermitian positive square root of B², B² separately, and production get_terminf outputs. Extended recurrence workspace only; preserve original production lld and terminator path, and record exact restore check.",
+    "initial_capture_recipes": {
+      "uplus": "Fe bulk and impurity at EF=-0.163441 Ry; impurity host and seed derive from accepted U+ endpoint 6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702.",
+      "u0": "Matched Fe bulk and impurity control at EF=-0.069252 Ry with accepted U=0 host/seed states.",
+      "geometry_recipe_difference": "Established bulk rc=80 versus impurity rc=100 retained and reported.",
+      "invocations": "Each capture is a separately counted solver invocation; each requires its own immutable prelaunch manifest and verified first-iteration output/log association."
+    }
+  },
+  "source_review": {
+    "status": "CAPTURE_COMPLETE_FOR_RETAINED_SCOPE; NO_PRODUCTION_CHANGE",
+    "review_scope": "Read-only audit of isolated temp source; no solver invocation.",
+    "notes": [
+      "A2 local hall and bulk ee paths include their respective Hubbard blocks before capture; do not add U a second time.",
+      "Production recursion uses hall for i<=nmax and ee by iz(i) for i>nmax; site-role labels must expose nmax/kk and this mapping.",
+      "A3 extended recurrence uses copied work arrays and must restore production arrays/control; terminator is separately captured from the unextended production prefix.",
+      "Independent A2 audit closed on retained v1 files: all 15 local hall on-site blocks match same-capture type-specific EE exactly in U0/U+; first two bcc shell hopping maxima are exactly zero; impurity-run EE references cross-check pure bulk EE to 1.17e-15/1.15e-15 Ry.",
+      "Final v4 capture binary/source hashes are in the run entries; the rc140 pair used the separate final Debug identity binary recorded in those entries. No capture-build-pending status remains."
+    ]
+  },
+  "part_b": {
+    "status": "PART_A_CLOSED_OPEN; PROCEED_TO_RC0_RC1",
+    "artifact_names": [
+      "C3_RC_RESULTS.md",
+      "C3_RC_PROVENANCE.json"
+    ],
+    "handoff_basis": "C3 requires Part B in every Part A outcome; A4 is OPEN and the 12-run cap is exhausted."
+  },
+  "capture_build": {
+    "binary_path": "/private/tmp/rslmto-c3-partA-build/bin/rslmto.x",
+    "binary_sha256": "ae21ba421388739be2d16bdf344cf5d19c5d455097219b75d34a25f1a82df8e1",
+    "source_sha256": {
+      "hamiltonian_build.f90": "53c9d74106f87f9aafc3959baa9c0c22628442adcaab5319099a241dea75f229",
+      "recursion_haydock.f90": "f1ac0a85328c36d7f866dc6bfbbbcfa6c413132f55b1e24fcfda0c8244274d39"
+    },
+    "configuration": "Debug gfortran16.2 -O0, OpenMP on, MPI/GPU off, -fcheck=bounds",
+    "parser_path": "/private/tmp/rslmto-c3-partA-src/analyze_c3_captures.py",
+    "parser_sha256": "44b4800e962084bd154343e1db91668b492d0c8bc017ec2da10f29d2065a7266"
+  },
+  "a2_results": {
+    "status": "PASS_ON_RETAINED_V1_CAPTURES",
+    "scope": "A2 matrices are independent of the absent A3 coefficient hook; source capture occurred during the same one-step physical builds.",
+    "cluster_mapping": {
+      "kk_sites": 8392,
+      "explicit_LOCAL_HALL_sites": 15,
+      "EE_TYPE_REFERENCE_sites": 8377,
+      "explicit_local_sites": "central site + 8 first-shell + 6 second-shell",
+      "production_rule": "recursion_haydock uses hall for i<=nmax and ee by iz(i) for i>nmax"
+    },
+    "onsite_max_abs_diff_Ry": {
+      "U0_hall_vs_same_capture_type_EE": 0.0,
+      "Uplus_hall_vs_same_capture_type_EE": 0.0,
+      "U0_impurity_run_EE_vs_pure_bulk_EE": 1.17e-15,
+      "Uplus_impurity_run_EE_vs_pure_bulk_EE": 1.15e-15
+    },
+    "hopping_shells": [
+      {
+        "shell_distance": 0.8660254,
+        "bcc_coordination": 8,
+        "max_abs_diff_Ry_U0": 0.0,
+        "max_abs_diff_Ry_Uplus": 0.0
+      },
+      {
+        "shell_distance": 1.0,
+        "bcc_coordination": 6,
+        "max_abs_diff_Ry_U0": 0.0,
+        "max_abs_diff_Ry_Uplus": 0.0
+      }
+    ],
+    "hubbard_insertion": {
+      "Uplus_local_sites_count": 1,
+      "Uplus_local_sites_nonzero": 1,
+      "Uplus_max_abs_block_Ry": 0.1105575,
+      "U0_local_sites_count": 0,
+      "U0_local_sites_nonzero": 0
+    },
+    "configuration": "nsp=1; ccor_2c and constraints disabled; U0/Uplus measured with their corresponding inputs.",
+    "evidence": "Independent read-only audit of retained v1 A2 captures; files and hashes remain in run ledger entries 1-4."
+  }
+}

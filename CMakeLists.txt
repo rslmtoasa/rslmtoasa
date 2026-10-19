@@ -461,6 +461,31 @@ endforeach()
   set_tests_properties(Val04LdaUPhysics PROPERTIES
     LABELS "validation;lda_u;magnetic;kspace;known-failure" TIMEOUT 300)
 
+  add_test(NAME Val04RsEmbeddingProvenance
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/fixed_ldau/rs_embedding_ra2.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/rs_embedding_ra2")
+  set_tests_properties(Val04RsEmbeddingProvenance PROPERTIES
+    LABELS "validation;lda_u;rs;embedding;provenance" TIMEOUT 300)
+
+  add_executable(RsEmbeddingEnergyEvaluator ${TestDIR}/validation/fixed_ldau/a4_3_pout_hubbard_evaluator.f90)
+  target_link_libraries(RsEmbeddingEnergyEvaluator PRIVATE ${COMMON_LIBRARIES})
+  set_target_properties(RsEmbeddingEnergyEvaluator PROPERTIES LINKER_LANGUAGE "Fortran")
+  add_test(NAME Val04RsImpurityEnergyDiagnostic
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/fixed_ldau/rs_embedding_ra1.py"
+      "--binary" "${TestBinary}"
+      "--evaluator" "$<TARGET_FILE:RsEmbeddingEnergyEvaluator>"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/rs_embedding_ra1")
+  set_tests_properties(Val04RsImpurityEnergyDiagnostic PROPERTIES
+    LABELS "validation;lda_u;rs;impurity;diagnostics" TIMEOUT 300)
+
+  add_test(NAME Val04RsEmbeddingFixtures
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/fixed_ldau/rs_embedding_ra3.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/rs_embedding_ra3")
+  set_tests_properties(Val04RsEmbeddingFixtures PROPERTIES
+    LABELS "validation;lda_u;rs;impurity;fixtures;guards" TIMEOUT 300)
+
   add_test(NAME Val05GreenConvergence
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val05_green_convergence.py"
       "--binary" "${TestBinary}"

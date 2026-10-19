@@ -107,6 +107,9 @@ module potential_mod
       !> Hubbard parameters
       !> 1 = s-orbital, 2 = p-orbital, 3 = d-orbital (possible to generalize to f-orbitals)
       real(rp), dimension(:), allocatable :: hubbard_u, hubbard_j
+      !> Radial-moment convention and backend that produced a U-carrying potential.
+      character(len=16) :: hubbard_radial_moments, hubbard_backend
+      logical :: hubbard_file_has_uj
       !> Local density matrix /occupation matrix (integrated -im(g0)/pi)
       !> 1st index: 1 = s-orbital, 2 = p-orbital, 3 = d-orbital 
       !> 2nd index: 1 = spin-up, 2= spin-dw
@@ -255,6 +258,8 @@ contains
           xi_p = this%xi_p
       xi_d = this%xi_d
       rac = this%rac
+      hubbard_radial_moments = ''
+      hubbard_backend = ''
 
       ! Normalize the magnetic moments
       if (allocated(this%mom)) then
@@ -438,6 +443,9 @@ contains
           this%xi_p = xi_p
       this%xi_d = xi_d
       this%rac = rac
+      this%hubbard_radial_moments = trim(hubbard_radial_moments)
+      this%hubbard_backend = trim(hubbard_backend)
+      this%hubbard_file_has_uj = any(abs(hubbard_u) > 1.0e-10_rp) .or. any(abs(hubbard_j) > 1.0e-10_rp)
 
       call move_alloc(center_band, this%center_band)
       call move_alloc(width_band, this%width_band)
@@ -840,6 +848,9 @@ contains
       this%dele(:, :) = 0.0d0
       this%hubbard_u(:) = 0.0d0
       this%hubbard_j(:) = 0.0d0
+      this%hubbard_radial_moments = ''
+      this%hubbard_backend = ''
+      this%hubbard_file_has_uj = .false.
       this%ldm(:,:,:,:) = 0.0d0
       this%ldm_flatten(:,:,:) = 0.0d0
       this%ldm_flatten_imag(:,:,:) = 0.0d0
@@ -890,6 +901,8 @@ contains
       qpar = this%qpar
       srdel = this%srdel
       vl = this%vl
+      hubbard_radial_moments = this%hubbard_radial_moments
+      hubbard_backend = this%hubbard_backend
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -950,6 +963,8 @@ contains
       wx0 = this%wx0
       cx1 = this%cx1
       wx1 = this%wx1
+      hubbard_radial_moments = this%hubbard_radial_moments
+      hubbard_backend = this%hubbard_backend
 
       pl = this%pl
       cshi = this%cshi
@@ -1022,6 +1037,10 @@ contains
       call nml%add('rac', this%rac)
       call nml%add('hubbard_u', this%hubbard_u)
       call nml%add('hubbard_j', this%hubbard_j)
+      if (any(abs(this%hubbard_u) > 1.0e-10_rp) .or. any(abs(this%hubbard_j) > 1.0e-10_rp)) then
+         call nml%add('hubbard_radial_moments', trim(this%hubbard_radial_moments))
+         call nml%add('hubbard_backend', trim(this%hubbard_backend))
+      end if
       ! call nml%add('ldm', this%ldm)
       call nml%add('ldm_flatten', this%ldm_flatten)
       ! Preserve legacy no-U/real-density outputs byte-for-byte. Persist the

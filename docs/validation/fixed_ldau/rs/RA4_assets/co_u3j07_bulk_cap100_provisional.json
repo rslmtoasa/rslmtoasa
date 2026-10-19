@@ -1,0 +1,85 @@
+{
+  "analyzer": "RA4 read-only observables v2",
+  "runs": [
+    {
+      "files_sha256": {
+        "Co1.nml": "b167e717e94414171b700cacff6dc935225823aadf0382dafa45dc2d908cada3",
+        "Co1_out.nml": "59db0890992f489268c540b36fa0119f3950fa8da56480d95b5e934721ad58f8",
+        "Co1_scf.nml": "59db0890992f489268c540b36fa0119f3950fa8da56480d95b5e934721ad58f8",
+        "Co2.nml": "95367dd2cbcb805d522daa3941ce4ff05e04989654a43126d7824943bdbdfabd",
+        "Co2_out.nml": "e35f0cb233e465eae159bd8131c854e8b20e3ddd35d8f02635d13182fe7d1a91",
+        "Co2_scf.nml": "e35f0cb233e465eae159bd8131c854e8b20e3ddd35d8f02635d13182fe7d1a91",
+        "clust": "f3d74cc3b3467e06e818f3c542bc4670fcf92c65d4d64bd31a2fb7ca4f398951",
+        "input.nml": "ec918a7c9b9f6a21d1015ca425fe4cad8ee523487f8ce98736636d175499a6a8",
+        "map": "060016b10bb4709257663194144528bf4f707f822004c05e8d82910f33ecbcbc",
+        "report.out": "1626c2e4d724c45f6cb1bd44b2f5c6ef714725f6beed3134d78d73f703d24d2f",
+        "run.log": "422d36f49bf5051a807a726dcdbf68f414bb439563dd4e47ba8a5c28c335d0c4",
+        "sbar": "f3ad869c3c4f335970c6600b027065d9ebac98ece569db522bb59da7ff31f576",
+        "str.out": "6b5cf9e2eb9cb58dc7188aac7dff935ad048901982a19559bce2bf6b57d3fc11",
+        "view.sbar": "99dfefb617abdff7a63bb267cc46dd55199f4f82f5c6a88f3f5fd25cba7f1e81"
+      },
+      "hash_note": "hashes describe current on-disk files; input launch hashes must be taken from immutable pre-run copies",
+      "ldos": {
+        "d_dos_units": "states/Ry/site per spin channel",
+        "energy_axis": "E - E_F (Ry), as emitted by bands.f90",
+        "path": "/private/tmp/rslmto-ra4-frozen/co_bulk/u3j07/repeat1_full/Co1_orbital_dos.out",
+        "sha256": "354228098affe6f684c8dd5773ba339474d603bb694985c5820a5b3d72771591"
+      },
+      "observables": {
+        "backend": "rs",
+        "d_occupation_down_ql": 2.9990757807029857,
+        "d_occupation_down_report": 2.999076,
+        "d_occupation_up_ql": 4.678338890416843,
+        "d_occupation_up_report": 4.678339,
+        "hubbard_active": true,
+        "hubbard_j": [
+          0.0,
+          0.0,
+          0.051449010006007496
+        ],
+        "hubbard_u": [
+          0.0,
+          0.0,
+          0.2204957571686036
+        ],
+        "ldm_d_trace_per_spin": {
+          "down": {
+            "imag_trace": 0.0,
+            "real_trace": 2.9990758148229606
+          },
+          "up": {
+            "imag_trace": 0.0,
+            "real_trace": 4.678338858265334
+          }
+        },
+        "ldm_trace_note": "active U/J",
+        "radial_mode": "spectral",
+        "site_index": 1,
+        "sphere_moment_muB": 1.60126,
+        "total_rms_diff_report_rounded": 0.0
+      },
+      "potential": {
+        "path": "/private/tmp/rslmto-ra4-frozen/co_bulk/u3j07/repeat1_full/Co1_out.nml",
+        "sha256": "59db0890992f489268c540b36fa0119f3950fa8da56480d95b5e934721ad58f8"
+      },
+      "run_dir": "/private/tmp/rslmto-ra4-frozen/co_bulk/u3j07/repeat1_full",
+      "status": {
+        "fixed_u_residual_same_iteration": {
+          "physical": true,
+          "rp_abs": 1.8103e-07,
+          "rv_abs_Ry": 3.1825e-08,
+          "streak": 0,
+          "target_rp": 1e-07,
+          "target_rv_Ry": 1e-07
+        },
+        "run_log": "/private/tmp/rslmto-ra4-frozen/co_bulk/u3j07/repeat1_full/run.log",
+        "run_log_sha256": "422d36f49bf5051a807a726dcdbf68f414bb439563dd4e47ba8a5c28c335d0c4",
+        "scf_delta_last_completed_iteration": 6.3e-09,
+        "scf_iterations_completed": 100,
+        "scf_marker_last_completed_iteration": "Not converged! Diff=",
+        "trailing_iteration_in_progress": null
+      }
+    }
+  ],
+  "tolerances_applied": false
+}

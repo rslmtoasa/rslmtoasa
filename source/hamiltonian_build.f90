@@ -6,7 +6,73 @@ submodule(hamiltonian_mod) hamiltonian_build
                                 gbt_reference_moment_is_collinear
    use lmto_magnetic_tangent_mod, only: lmto_bond_value
 
+   integer, save :: c2_bulk_build_id = 0
+   integer, save :: c2_local_build_id = 0
+
 contains
+
+   logical function c2_hubbard_audit_enabled()
+      character(len=16) :: value
+      integer :: status
+
+      value = ''
+      call get_environment_variable('RSLMTO_C2_HUBBARD_AUDIT', value, status=status)
+      c2_hubbard_audit_enabled = status == 0 .and. trim(value) == '1'
+   end function c2_hubbard_audit_enabled
+
+   subroutine c2_write_hubbard_insertion(this, assembler, build_id, site_index, potential_type, base, correction, after)
+      use basis_mod, only: spin_off
+      class(hamiltonian), intent(in) :: this
+      character(len=*), intent(in) :: assembler
+      integer, intent(in) :: build_id, site_index, potential_type
+      complex(rp), intent(in) :: base(:, :), correction(:, :), after(:, :)
+      character(len=1024) :: path
+      integer :: unit, status, spin, i, j, row, col
+      complex(rp) :: before_value, correction_value, after_value
+
+      if (.not. c2_hubbard_audit_enabled()) return
+      if (rank /= 0) return
+      path = 'c2_hubbard_audit.dat'
+      call get_environment_variable('RSLMTO_C2_HUBBARD_AUDIT_FILE', path, status=status)
+      if (status /= 0 .or. len_trim(path) == 0) path = 'c2_hubbard_audit.dat'
+      open(newunit=unit, file=trim(path), status='unknown', position='append', action='write', iostat=status)
+      if (status /= 0) then
+         call g_logger%warning('C2 Hubbard audit could not open '//trim(path), __FILE__, __LINE__)
+         return
+      end if
+
+      write(unit, '(a,1x,a,1x,i0,1x,i0,1x,i0,1x,a,1x,es26.17e3,1x,es26.17e3,1x,i0)') &
+         'META', trim(assembler), build_id, site_index, potential_type, &
+         trim(this%lattice%symbolic_atoms(potential_type)%element%symbol), &
+         this%lattice%symbolic_atoms(potential_type)%potential%hubbard_u(3), &
+         this%lattice%symbolic_atoms(potential_type)%potential%hubbard_j(3), 1
+      do spin = 1, 2
+         do i = 1, 5
+            do j = 1, 5
+               write(unit, '(a,1x,a,1x,6(i0,1x),2(es26.17e3,1x))') &
+                  'OCC', trim(assembler), build_id, site_index, potential_type, spin, i, j, &
+                  real(this%lattice%symbolic_atoms(potential_type)%potential%ldm(3, spin, i, j), rp), &
+                  aimag(this%lattice%symbolic_atoms(potential_type)%potential%ldm(3, spin, i, j))
+            end do
+         end do
+      end do
+      do spin = 1, 2
+         do i = 1, 5
+            row = 4 + i + spin_off*(spin - 1)
+            do j = 1, 5
+               col = 4 + j + spin_off*(spin - 1)
+               before_value = base(row, col)
+               correction_value = correction(row, col)
+               after_value = after(row, col)
+               write(unit, '(a,1x,a,1x,7(i0,1x),6(es26.17e3,1x))') &
+                  'BLOCK', trim(assembler), build_id, site_index, potential_type, spin, i, j, 1, &
+                  real(before_value, rp), aimag(before_value), real(correction_value, rp), aimag(correction_value), &
+                  real(after_value, rp), aimag(after_value)
+            end do
+         end do
+      end do
+      close(unit)
+   end subroutine c2_write_hubbard_insertion
 
    !> @brief Construct a Hamiltonian object from an initialized charge object.
    !> @details Wires the Hamiltonian to charge, lattice, and control state, resets
@@ -1426,6 +1492,16 @@ contains
       ! Local variables
       integer :: i, j, k, l, m, n, itype, ino, ja, jo, ji, nr, ia
       integer :: ntype
+      integer :: c2_build_id
+      logical :: c2_audit_active
+      complex(rp) :: c2_block_before(nb, nb)
+
+      c2_audit_active = c2_hubbard_audit_enabled()
+      c2_build_id = 0
+      if (c2_audit_active) then
+         c2_bulk_build_id = c2_bulk_build_id + 1
+         c2_build_id = c2_bulk_build_id
+      end if
 
       ! This is the single production rebuild boundary shared by recursion and
       ! reciprocal space. Advancing the generation invalidates every derived
@@ -1485,11 +1561,16 @@ contains
             ! write(132,’(18f10.6)’) aimag(this%ee(:,:,m,ntype))
          end do ! end of neighbour number
          if (this%hubbard_u_general_check .or. this%hubbard_test_operator_check) then
+            if (c2_audit_active .and. this%hubbard_u_general_check) c2_block_before = this%ee(:, :, 1, ntype)
             do i = 1, nb
                do j = 1, nb
                   this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_u_pot(i, j, ntype)
                end do
             end do
+            if (c2_audit_active .and. this%hubbard_u_general_check) then
+               call c2_write_hubbard_insertion(this, 'BULK_EE', c2_build_id, ia, ntype, c2_block_before, &
+                  this%hubbard_u_pot(:, :, ntype), this%ee(:, :, 1, ntype))
+            end if
          end if
          if (this%hubbard_v_check) then
             do m = 1, nr
@@ -1883,7 +1964,17 @@ contains
    module subroutine build_locham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      integer :: it, ino, nr, nlim, m, i, j, ja, ji
+      integer :: it, ino, nr, nlim, m, i, j, ja, ji, u_type
+      integer :: c2_build_id
+      logical :: c2_audit_active
+      complex(rp) :: c2_block_before(nb, nb)
+
+      c2_audit_active = c2_hubbard_audit_enabled()
+      c2_build_id = 0
+      if (c2_audit_active) then
+         c2_local_build_id = c2_local_build_id + 1
+         c2_build_id = c2_local_build_id
+      end if
 
       if (this%hubbard_u_general_check) then
          if (rank == 0) call g_logger%info('HUBBARD applying on-site +U correction to local Hamiltonian', __FILE__, __LINE__)
@@ -1906,6 +1997,7 @@ contains
       do nlim = 1, this%charge%lattice%nmax
          nr = this%charge%lattice%nn(nlim, 1) ! Number of neighbours considered
          ino = this%charge%lattice%num(nlim)
+         u_type = this%charge%lattice%iz(nlim)
          call this%chbar_nc(nlim, nr, ino, nlim)
          call add_constraining_field_hmag(this, this%charge%lattice%iz(nlim))
          do m = 1, nr
@@ -1919,11 +2011,17 @@ contains
             end do
          end do
          if (this%hubbard_u_general_check .or. this%hubbard_test_operator_check) then
+            if (c2_audit_active .and. this%hubbard_u_general_check) c2_block_before = this%hall(:, :, 1, nlim)
             do i = 1, nb
                do j = 1, nb
-                  this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + this%hubbard_u_pot(i, j, ino)
+                  this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + &
+                     this%hubbard_u_pot(i, j, u_type)
                end do
             end do
+            if (c2_audit_active .and. this%hubbard_u_general_check) then
+               call c2_write_hubbard_insertion(this, 'LOCAL_HALL', c2_build_id, nlim, u_type, c2_block_before, &
+                  this%hubbard_u_pot(:, :, u_type), this%hall(:, :, 1, nlim))
+            end if
          end if
          if (this%hubbard_v_check) then
             do m = 1, nr
