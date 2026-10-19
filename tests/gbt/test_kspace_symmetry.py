@@ -5,8 +5,10 @@ R2: Omega(q,0) = Omega(0,0) and N(q,0) = N(0,0) for every q (q/2 on the mesh), w
 R4: Omega(q+G,theta) = Omega(q,theta), G a reciprocal lattice vector, q/2 and (q+G)/2 on the mesh.
 R5: Omega(-q,theta) = Omega(q,theta); weak in bcc (it also follows from inversion).
 R6: Omega(0,theta) = Omega(0,0) holds by construction (global rotation); reported, not counted.
+Zero SCF steps (&self nstep = 0): every potential parameter the run writes (Fe_scf.nml), or none is written, equals the input Fe.nml bit for bit.
 Bugs caught: a q/2 shift that is not a mesh translation (R2, R4), a mesh mapping that is off by one point (R2, R4),
-a lost q -> -q or q -> q+G symmetry in the q handling (R4, R5). A swapped sign of the +-q/2 assignment is not seen
+a lost q -> -q or q -> q+G symmetry in the q handling (R4, R5), a hidden SCF step that changes the reference potential
+(zero-step check). A swapped sign of the +-q/2 assignment is not seen
 here (R5, inversion); UnitGbtKspaceOneBand and AppGbtKspaceGauge guard it.
 usage: test_kspace_symmetry.py <rslmto.x> <scratch directory>"""
 import shutil
@@ -24,22 +26,26 @@ Q = [(0, 0, 0), (0, 0, 0.25), (0.25, 0, 0.5), (0, 0, -0.25), (0, 0, 1.25), (-0.2
 PAIRS_R4, PAIRS_R5 = [(1, 4)], [(1, 3), (2, 5)]                                                  # row indices of (q, q+G), (q, -q)
 THETA_DEG, NK = 10.0, 8
 
-shutil.rmtree(scratch, ignore_errors=True)
-shutil.copytree(SR / "fe_bcc", scratch)
-nml = f90nml.read(str(SR / "fe_bcc" / "input.nml"))
-nml["calculation"].update(pre_processing="none", post_processing="frozen_magnon")
-nml["lattice"].update(rc=80, ct=[3.0], r2=9.0)
-for key in ("n1", "n2", "n3", "b1", "b2", "b3", "pbc"):
-    nml["lattice"].pop(key, None)
-nml["self"].update(nstep=3)
-nml["control"].update(nsp=3)
-nml["mix"].update(beta=0.01)
-nml["reciprocal"].update(nk1=NK, nk2=NK, nk3=NK, use_symmetry_reduction=False, use_time_reversal=False, auto_find_fermi=False)
-nml["hamiltonian"] = {"hoh": False, "theta_ss": THETA_DEG}
-nml["frozen_magnon"] = {"mode": "mft", "q_file": "q.dat", "q_coordinates": "direct"}
-nml.write(str(scratch / "input.nml"), force=True)
-(scratch / "q.dat").write_text(f"{len(Q)}\n" + "\n".join(" ".join(map(str, q)) for q in Q) + "\n")
-subprocess.run([str(binary), "input.nml"], cwd=scratch, check=True, stdout=open(scratch / "run.log", "w"), stderr=subprocess.STDOUT)
+def make_deck(deck, nstep):
+    shutil.rmtree(deck, ignore_errors=True)
+    shutil.copytree(SR / "fe_bcc", deck)
+    nml = f90nml.read(str(SR / "fe_bcc" / "input.nml"))
+    nml["calculation"].update(pre_processing="none", post_processing="frozen_magnon")
+    nml["lattice"].update(rc=80, ct=[3.0], r2=9.0)
+    for key in ("n1", "n2", "n3", "b1", "b2", "b3", "pbc"):
+        nml["lattice"].pop(key, None)
+    nml["self"].update(nstep=nstep)
+    nml["control"].update(nsp=3)
+    nml["mix"].update(beta=0.01)
+    nml["reciprocal"].update(nk1=NK, nk2=NK, nk3=NK, use_symmetry_reduction=False, use_time_reversal=False, auto_find_fermi=False)
+    nml["hamiltonian"] = {"hoh": False, "theta_ss": THETA_DEG}
+    nml["frozen_magnon"] = {"mode": "mft", "q_file": "q.dat", "q_coordinates": "direct"}
+    nml.write(str(deck / "input.nml"), force=True)
+    (deck / "q.dat").write_text(f"{len(Q)}\n" + "\n".join(" ".join(map(str, q)) for q in Q) + "\n")
+    subprocess.run([str(binary), "input.nml"], cwd=deck, check=True, stdout=open(deck / "run.log", "w"), stderr=subprocess.STDOUT)
+
+
+make_deck(scratch, 3)
 
 row = np.loadtxt(scratch / "frozen_magnon_kspace.dat")        # q direct (3), q Cartesian (3), theta, Omega(q,theta), Omega(q,0), N(q,theta), omega (2), N(q,0)
 omega_t, omega_0, n_t, n_0 = row[:, 7], row[:, 8], row[:, 9], row[:, 12]
@@ -54,5 +60,12 @@ print(f"R5 max |Omega(-q,theta) - Omega(q,theta)| = {r5:.3e} Ry (tol {tol_omega:
 print(f"R6 |Omega(0,theta) - Omega(0,0)| = {abs(omega_t[0] - omega_0[0]):.3e} Ry, by construction, not counted")
 print(f"min over q != 0 of |Omega(q,theta) - Omega(0,0)| = {spread:.3e} Ry (the identities are not trivially zero)")
 ok = r2_omega < tol_omega and r2_n < tol_n and r4 < tol_omega and r5 < tol_omega and spread > 100 * tol_omega
+zero = scratch.parent / (scratch.name + "_nstep0")
+make_deck(zero, 0)
+out, given = zero / "Fe_scf.nml", f90nml.read(str(zero / "Fe.nml"))
+written = f90nml.read(str(out)) if out.exists() else {}
+changed = [f"{g}.{k}" for g in written for k in written[g] if np.any(np.asarray(written[g][k]) != np.asarray(given[g][k]))]
+print(f"zero SCF steps: {sum(len(written[g]) for g in written)} potential parameters written, {len(changed)} differ from the input: {changed[:4]}")
+ok = ok and not changed
 print("RESULT:", "PASS" if ok else "FAIL")
 sys.exit(0 if ok else 1)

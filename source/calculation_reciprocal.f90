@@ -664,6 +664,7 @@ contains
       type(reciprocal) :: recip_obj
       real(rp), allocatable :: eig(:, :), q_dir(:, :), omega(:), omega0(:), nel(:), nel0(:)
       real(rp), parameter :: zero(3) = 0.0_rp
+      real(rp), allocatable :: site_mom(:, :)
       real(rp) :: kT, mu, moment, sin2theta, theta, omega_ref, n_ref, nearest(3)
       integer :: iq, i, nk, unit
 
@@ -686,8 +687,6 @@ contains
       end do
       if (sin2theta < 1.0e-8_rp) call g_logger%fatal( &
          '[calculation.frozen_magnon_kspace]: theta_ss must be nonzero to define omega(q).', __FILE__, __LINE__)
-      if (abs(moment) < 1.0e-12_rp) call g_logger%fatal( &
-         '[calculation.frozen_magnon_kspace]: total reference moment is zero; omega is undefined.', __FILE__, __LINE__)
 
       recip_obj = reciprocal(hamiltonian_obj)
       if (recip_obj%temperature <= 0.0_rp) call g_logger%fatal( &
@@ -717,11 +716,19 @@ contains
 
       call hamiltonian_obj%build_bulkham()
       mu = 0.0_rp
-      call probe(zero, 0.0_rp, omega_ref, n_ref, eig)
+      call probe(zero, 0.0_rp, omega_ref, n_ref, eig_out=eig)
       call move_alloc(eig, recip_obj%eigenvalues)
       mu = recip_obj%find_fermi_level_from_eigenvalues(recip_obj%total_electrons)
       deallocate (recip_obj%eigenvalues)
-      call probe(zero, 0.0_rp, omega_ref, n_ref)
+      if (self_obj%nstep == 0) then   ! no SCF has set the moment: take it from the occupied states of the input potential
+         allocate (site_mom(3, lattice_obj%nrec))
+         call probe(zero, 0.0_rp, omega_ref, n_ref, site_mom)
+         moment = sum(norm2(site_mom, dim=1))
+      else
+         call probe(zero, 0.0_rp, omega_ref, n_ref)
+      end if
+      if (abs(moment) < 1.0e-12_rp) call g_logger%fatal( &
+         '[calculation.frozen_magnon_kspace]: total reference moment is zero; omega is undefined.', __FILE__, __LINE__)
       do iq = 1, fm_obj%n_q
          call probe(q_ss_cart(:, iq), 0.0_rp, omega0(iq), nel0(iq))
          call probe(q_ss_cart(:, iq), theta, omega(iq), nel(iq))
@@ -743,10 +750,13 @@ contains
 
       !> Omega and N at the current mu for one (q, theta), accumulated over tiles of the mesh without eigenvectors; the
       !> eigenvalues are kept only when eig_out is present (the reference probe that fixes mu).
-      subroutine probe(q, theta_in, omega_out, n_out, eig_out)
+      subroutine probe(q, theta_in, omega_out, n_out, site_mom_out, eig_out)
          real(rp), intent(in) :: q(3), theta_in
          real(rp), intent(out) :: omega_out, n_out
+         real(rp), intent(out), optional :: site_mom_out(:, :)
          real(rp), allocatable, intent(inout), optional :: eig_out(:, :)
+         type(reciprocal) :: tile_obj
+         real(rp) :: tile_mom(3, lattice_obj%nrec)
          type(reciprocal_execution_request) :: request
          type(reciprocal_execution_result) :: result
          integer :: first, last, tile, ik, ib
@@ -757,10 +767,11 @@ contains
          tile = max(1, recip_obj%reciprocal_tile_size)
          request%assemble_hamiltonian = .true.
          request%solve_eigensystem = .true.
-         request%request_eigenvectors = .false.
+         request%request_eigenvectors = present(site_mom_out)
          request%operator_generation = hamiltonian_obj%operator_generation
          omega_out = 0.0_rp
          n_out = 0.0_rp
+         if (present(site_mom_out)) site_mom_out = 0.0_rp
          do first = 1, nk, tile
             last = min(nk, first + tile - 1)
             request%k_points = recip_obj%k_workset%points(:, first:last)
@@ -768,6 +779,15 @@ contains
             if (present(eig_out)) then
                if (.not. allocated(eig_out)) allocate (eig_out(size(result%eigenvalues, 1), nk))
                eig_out(:, first:last) = result%eigenvalues
+            end if
+            if (present(site_mom_out)) then
+               tile_obj%eigenvalues = result%eigenvalues
+               tile_obj%eigenvectors = result%eigenvectors
+               tile_obj%k_weights = recip_obj%k_workset%weights(first:last)
+               tile_obj%fermi_level = mu
+               tile_obj%temperature = recip_obj%temperature
+               call self_obj%compute_kspace_spin_moments_spinor(tile_obj, tile_mom)
+               site_mom_out = site_mom_out + tile_mom
             end if
             omega_out = omega_out + grand_potential(size(result%eigenvalues, 1), last - first + 1, result%eigenvalues, &
                                                     recip_obj%k_workset%weights(first:last), mu, kT)
