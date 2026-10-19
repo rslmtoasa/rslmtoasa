@@ -28,6 +28,9 @@ KT = TEMPERATURE_K * KB_RY_PER_K
 N_ELECTRONS = 8.0
 Q_LIST = [(0.125, -0.125, 0.125), (0.25, -0.25, 0.25)]       # direct
 THETA_DEG = (0.25, 0.5, 1.0)
+ROT_THETA_DEG = (5.0, 30.0)                  # rotated eigenvalues (b) and the driver-level theta (c): 5 deg
+C1_C2_TOL = 1e-10                            # "ok" thresholds set by this generator (not by the developer): round-off scale
+C3_REL_TOL = 1e-4                            # tail-fit and theta^4 truncation scale
 
 # ------------------------------------------------------------------ input reading
 
@@ -371,6 +374,11 @@ def fmt(v):
     return ", ".join(f"{x:.16e}" for x in np.ravel(v))
 
 
+def fmtf(v):
+    """Fortran (column-major) flattening, first index fastest, so that a Fortran array declared with the stated shape reads correctly."""
+    return fmt(np.ravel(v, order="F"))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("export")
@@ -397,6 +405,19 @@ def main():
              f"  alpha = {fmt(ALPHA)}",
              f"  stored_param_dev = {model.stored_dev:.6e}",
              f"  s_hermiticity = {herm:.6e}", "/"]
+    new = []                                                  # groups added by the 2026-10 amendment (a), (b), (c); appended at the end
+    new += ["&o3_kernel",
+            "  ! (a) plain-array kernel inputs, one site, as the generator uses them. Arrays are written in Fortran order (first index fastest).",
+            "  ! bond_s_re/bond_s_im(i,j,m): S^alpha block of bond m, raw_orb(i,j) = sbar(j,i,m) as written in gbt_bonds.out; S(k) = sum_m exp(+2 pi i k_direct . bond_n_direct(:,m)) S(:,:,m).",
+            "  ! bond_n_direct(3,m): bond vector in direct (integer) coordinates of the bccFe_prim lattice (lattice.nml); bond 1 is onsite.",
+            "  ! cc(i,sigma) = c + vmad, dele(i,sigma) = sqrt(Delta) = srdel*wow^(0.5-(l+1)), gamma_minus_alpha(i,sigma) = qpar*wow^(1-2(l+1)) - alpha(l); l = orbital_l(i), sigma = 1 majority.",
+            "  ! wow = wav*ang2au/ws_r with the 1-based index l+1 of symbolic_atom.f90:297-298; reproduces the stored center_band/width_band (stored_param_dev, check P0).",
+            f"  n_bond = {len(model.n_direct)}",
+            f"  bond_n_direct = {fmtf(model.n_direct.T)}",
+            f"  bond_s_re = {fmtf(np.transpose(model.s_bonds.real, (1, 2, 0)))}",
+            f"  bond_s_im = {fmtf(np.transpose(model.s_bonds.imag, (1, 2, 0)))}",
+            f"  cc = {fmtf(model.cc.T)}", f"  dele = {fmtf(model.dele.T)}", f"  gamma_minus_alpha = {fmtf(model.gam_a.T)}", "/"]
+    status = {}
     ctx = mp.get_context("fork")
     pool = ctx.Pool(a.workers, initializer=init_worker, initargs=(a.export,))
     if not a.skip_checks:
@@ -426,6 +447,17 @@ def main():
                           f"  k{ik}_spin{sg + 1}_dev_second_minus_gamma_near_mu = {fmt((e2 - eg)[near])}"]
                 print(f"k{ik} spin{sg + 1}: within 0.1 Ry of mu: first-order dev {np.round((e1 - eg)[near], 5).tolist()}, second-order dev {np.round((e2 - eg)[near], 5).tolist()}")
         lines.append("/")
+        new += ["&o3_rotated", "  ! (b) sorted eigenvalues [Ry] of H_rot (18 values) at the k-points of &o3_kpoints; q1 = (0.125,-0.125,0.125), q2 = (0.25,-0.25,0.25) direct, phi = 0",
+                f"  k_index = {', '.join(str(i) for i in ks_idx)}", f"  q1_direct = {fmt(Q_LIST[0])}", f"  q2_direct = {fmt(Q_LIST[1])}"]
+        for ik, k in zip(ks_idx, ks):
+            for iq, q in enumerate(Q_LIST):
+                for th in ROT_THETA_DEG:
+                    e = np.sort(np.linalg.eigvalsh(model.h_rot(k[None], q, np.radians(th))[0])[0])
+                    new.append(f"  k{ik}_q{iq + 1}_theta{th:g}_h_rot = {fmt(e)}")
+        new.append("/")
+        status["P0"] = max(p0.values()) <= 1e-10
+        status["C1"] = max(c1) < C1_C2_TOL
+        status["C2"] = c2 < C1_C2_TOL
         cutoffs = [10.0, 20.0, 40.0]
         for n in a.check_meshes:
             t0 = time.time()
@@ -442,6 +474,16 @@ def main():
             rel = (ext - np.array(jr))/np.array(jr)
             print(f"   LKAG (cutoff {max(cutoffs):g} Ry with fitted tail) {np.round(ext*1e3, 6).tolist()} mRy; H_rot Richardson {np.round(np.array(jr)*1e3, 6).tolist()} mRy; relative difference {rel.tolist()}")
             lines += [f"  relative_difference = {fmt(rel)}", "/"]
+            status["C3"] = status.get("C3", True) and bool(np.max(np.abs(rel)) < C3_REL_TOL)
+            if n == 32:
+                om00, n00 = omega_probe(pool, n, (0, 0, 0), 0.0, mu)
+                new += [f"&o3_driver_mesh{n}", "  ! (c) direct sums on the Gamma-centred mesh, 300 K, mu solved for (q,theta) = (0,0); Omega in Ry per cell, N electrons per cell; theta = 5 deg, no Richardson",
+                        f"  mu_ry = {mu:.16e}", f"  omega_00_ry = {om00:.16e}", f"  n_00 = {n00:.16e}"]
+                for iq, q in enumerate(Q_LIST):
+                    o5, n5 = omega_probe(pool, n, q, np.radians(5.0), mu)
+                    o0, _ = omega_probe(pool, n, q, 0.0, mu)
+                    new += [f"  omega_q{iq + 1}_theta5_ry = {o5:.16e}", f"  n_q{iq + 1}_theta5 = {n5:.16e}", f"  omega_q{iq + 1}_theta0_ry = {o0:.16e}"]
+                new.append("/")
     if not a.skip_values:
         for n in a.meshes:
             t0 = time.time()
@@ -450,7 +492,9 @@ def main():
             print(f"values mesh {n}^3: mu = {mu:.12f} Ry, J(0)-J(q) = {np.round(np.array(jr)*1e3, 6).tolist()} mRy ({time.time() - t0:.0f} s)")
             lines += [f"&o3_values_mesh{n}", f"  mu_ry = {mu:.16e}", f"  j0_minus_jq_ry = {fmt(jr)}",
                       f"  omega_q0_theta_ry = {fmt(om0)}", "/"]
-    Path(a.out).write_text("\n".join(lines) + "\n")
+    Path(a.out).write_text("\n".join(lines + new) + "\n")
+    for name, ok in status.items():
+        print(f"self-check {name}: {'ok' if ok else 'DEVIATION (see values above)'}")
     print(f"total wall time {time.time() - t_start:.0f} s; written {a.out}")
 
 
