@@ -1,0 +1,40 @@
+{
+  "stage": "C4_RC1",
+  "verdict": "PASS_PREDECIDED",
+  "raw_inputs": {
+    "c3_rc_provenance": {
+      "path": "docs/validation/fixed_ldau/rs/C3_RC_PROVENANCE.json",
+      "sha256": "cb5cf12b4b313d1ed7628cb790674ffca6e38b797e4c6937db31d51424303ebd"
+    },
+    "rc1_results": {
+      "path": "/private/tmp/c3-rc1-rs-w1/RC1_PROVISIONAL_RESULTS.json",
+      "sha256": "437fd2e99ce47f7828dd3c10671182a8c5879c58908f52d4b831968397c26a2f"
+    },
+    "accepted_h005_minus_trace": {
+      "path": "/private/tmp/c3-rc1-rs-w1/continuations/m0p0050_beta005/accepted_snapshot_iter45/fixed_u_trace.csv",
+      "iteration": 45,
+      "sha256": "eb297af57145c38c09ace0893aef8e6325f84e394effa153ee71c07e1c685cc7"
+    },
+    "accepted_h005_plus_trace": {
+      "path": "/private/tmp/c3-rc1-rs-w1/continuations/p0p0050_beta005/accepted_snapshot_iter44/fixed_u_trace.csv",
+      "iteration": 44,
+      "sha256": "a8686da073707fa3eea851eb2626bf9eca830e46a3ffabf04a7ad7fd59d2e6a"
+    },
+    "accepted_lambda_zero_trace": {
+      "path": "/private/tmp/c3-rc1-rs-w1/continuations/zero_beta005/accepted_snapshot_iter27/fixed_u_trace.csv",
+      "iteration": 27,
+      "sha256": "d398914c708b39da66d260f0d59cc1b3b7aa31f24250d0e4b64ee0e1"
+    }
+  },
+  "recomputed": {
+    "dF_dlambda_total_Ry_per_Ry": 6.4880113595791045,
+    "Tr_WP_total": 6.499140762092945,
+    "residual_Ry_per_Ry": -0.011129402513840425,
+    "dq_total_dlambda_e_per_Ry": -1.2747706031729145,
+    "g_total_Ry_per_electron": 0.008730513934145681,
+    "relative_residual_h005": -0.0017124421398524037,
+    "relative_residual_h0025_supporting": -0.0015898811120663586
+  },
+  "decision_basis": "RC1 PASS at the accepted h=0.005 pair was decided by the user. The provisional h=0.0025 result is supporting only.",
+  "independent_auditor": "Recomputed from raw accepted RC1 outputs before recording the result."
+}

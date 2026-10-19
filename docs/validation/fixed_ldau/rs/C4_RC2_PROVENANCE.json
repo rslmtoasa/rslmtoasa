@@ -1,0 +1,223 @@
+{
+  "calculations": {
+    "U2_J0": {
+      "A_h005_Ry_per_eV": 0.00486432748127162,
+      "A_h010_Ry_per_eV": 0.00486447237548689,
+      "average_b_error_Ry_per_eV": 0.000231353633136,
+      "average_c_error_Ry_per_eV": 0.140360847576,
+      "candidate_a_average_error_RECORD_Ry_per_eV": 0.00959488136936,
+      "candidate_b_errors_Ry_per_eV": [
+        0.0002518203323331747,
+        0.00021088693392234958
+      ],
+      "candidate_b_slopes_Ry_per_eV": [
+        0.05417043143097544,
+        0.05421136482937072
+      ],
+      "candidate_c_errors_Ry_per_eV": [
+        0.14034565802240717,
+        0.1403760371281293
+      ],
+      "candidate_c_slopes_Ry_per_eV": [
+        -0.08592340625909856,
+        -0.08595378536483622
+      ],
+      "dq_up_down_dU_h005_e_per_eV": [
+        0.13576410266104233,
+        -0.14047359189276687
+      ],
+      "dq_up_down_dU_h010_e_per_eV": [
+        0.13579510220742996,
+        -0.14045089049562698
+      ],
+      "finite_step_spread_Ry_per_eV": 4.0933398395e-05,
+      "fixed_P_target_Ry_per_eV": 0.054422251763308616,
+      "response_allowance_h005_Ry_per_eV": 0.00482339408287662,
+      "response_allowance_h010_Ry_per_eV": 0.00482353897709189,
+      "verdict": "PASS"
+    },
+    "U2_J05": {
+      "A_h005_Ry_per_eV": 0.00833283715934669,
+      "A_h010_Ry_per_eV": 0.00831607564741027,
+      "average_b_error_Ry_per_eV": 0.000320067888593,
+      "average_c_error_Ry_per_eV": 0.117123941956,
+      "candidate_a_average_error_RECORD_Ry_per_eV": 0.00758636803636,
+      "candidate_b_errors_Ry_per_eV": [
+        0.0003413285903075547,
+        0.000298807186882577
+      ],
+      "candidate_b_slopes_Ry_per_eV": [
+        -0.06195539191139687,
+        -0.06199791331482629
+      ],
+      "candidate_c_errors_Ry_per_eV": [
+        0.11713357326146756,
+        0.11711431065026812
+      ],
+      "candidate_c_slopes_Ry_per_eV": [
+        0.05483685275976313,
+        0.05481759014855925
+      ],
+      "dq_up_down_dJ_h005_e_per_eV": [
+        -0.2454522702946793,
+        0.22933740523024326
+      ],
+      "dq_up_down_dJ_h010_e_per_eV": [
+        -0.24489672323957823,
+        0.22893301384054876
+      ],
+      "finite_step_spread_Ry_per_eV": 4.2521403429e-05,
+      "fixed_P_target_Ry_per_eV": -0.06229672050170443,
+      "response_allowance_h005_Ry_per_eV": 0.00829031575591769,
+      "response_allowance_h010_Ry_per_eV": 0.00827355424398127,
+      "verdict": "PASS"
+    }
+  },
+  "debugging_attempt": {
+    "hypothesis_tested": "Phase or selected-iteration mismatch in accepted occupation responses / fixed-P targets caused an artificially small allowance.",
+    "result": "No mismatch. Raw accepted energy rows, QL/P traces, central P matrices and fixed-P evaluator outputs are tied to the same accepted endpoints; the evaluator directly reproduces its target."
+  },
+  "discarded_interpretation": {
+    "disposition": "Rejected: C4 fallback replaces unavailable g_s with g_total; the displayed sum over spin and absolute values remains. RC2 spin responses are available and are retained separately.",
+    "hypothesis": "Collapse g_total*dq_tot/dX before applying the spin sum.",
+    "resulting_U_allowance_Ry_per_eV": 0.00012269708428,
+    "resulting_U_average_b_error_Ry_per_eV": 0.000231353633136
+  },
+  "formula": "A_X(h)=2*sum_s(abs(g_total*dq_s/dX(h))) + abs(D_X(0.05)-D_X(0.10)); g_total is the RC1 total W1 mismatch because no spin-split dF/dlambda is available.",
+  "independent_auditor": "Independently recomputed from raw outputs; PASS verdicts recorded after review.",
+  "raw_sources": {
+    "accepted_endpoint_traces_and_hashes": [
+      {
+        "case": "u_local_u1p90_j0p00",
+        "iteration": 88,
+        "ql_l2_up_down": [
+          4.601209237171831,
+          1.910241126662211
+        ],
+        "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p90_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+        "trace_sha256": "e2af112a29753918e6511a536638775f4662fd035833dce76064038dcc616662"
+      },
+      {
+        "case": "u_local_u1p95_j0p00",
+        "iteration": 90,
+        "ql_l2_up_down": [
+          4.608589919088361,
+          1.902666944390605
+        ],
+        "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u1p95_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+        "trace_sha256": "28ae92db60080a48ae8c114ad0637d7a71accfc2b0857c7d889209f85681b881"
+      },
+      {
+        "case": "u_local_u2p00_j0p00",
+        "iteration": 70,
+        "ql_l2_up_down": [
+          4.615578880407783,
+          1.895454231228449
+        ],
+        "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p00_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+        "trace_sha256": "137c11ef6243f53ca9de91be0520cfcc553b8406a1a95643505324fa1240ac92"
+      },
+      {
+        "case": "u_local_u2p05_j0p00",
+        "iteration": 92,
+        "ql_l2_up_down": [
+          4.622166329354466,
+          1.888619585201328
+        ],
+        "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p05_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+        "trace_sha256": "98112dc628e2838736f275df141edab1bf9ed3b481eda8c37791f832c315956c"
+      },
+      {
+        "case": "u_local_u2p10_j0p00",
+        "iteration": 92,
+        "ql_l2_up_down": [
+          4.628368257613317,
+          1.882150948563085
+        ],
+        "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p10_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+        "trace_sha256": "5f5449548b8d14548b159f71f642e3076a293a9a862a6410260d26dd5e7232d3"
+      },
+      {
+        "case": "j0p5_local_u2p00_j0p40",
+        "iteration": 86,
+        "ql_l2_up_down": [
+          4.521356818729564,
+          1.9889463076654357
+        ],
+        "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p40/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+        "trace_sha256": "e45700ed8a9c41dd9a02d973557db1518f8ad124995efb8152f2bdcd34e54b7f"
+      },
+      {
+        "case": "j0p5_local_u2p00_j0p45",
+        "iteration": 98,
+        "ql_l2_up_down": [
+          4.508403279175951,
+          2.00125232502445
+        ],
+        "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p45/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+        "trace_sha256": "6d97ba02b124d1053f7ef81c8b9c32a598de8d3799fb713a0cbb82b22e85342a"
+      },
+      {
+        "case": "j0p5_local_u2p00_j0p50",
+        "iteration": 74,
+        "ql_l2_up_down": [
+          4.495871390266281,
+          2.013017486624943
+        ],
+        "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p50/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+        "trace_sha256": "532ca71f8bc871f6361274a652179e892d8b886708c7b4940b68e37e6657c259"
+      },
+      {
+        "case": "j0p5_local_u2p00_j0p55",
+        "iteration": 86,
+        "ql_l2_up_down": [
+          4.483858052146483,
+          2.024186065547474
+        ],
+        "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p55/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+        "trace_sha256": "79a2b3c275ce3732be11a03e85aeb340ecdc6149fd3fad39c5775cbb048468b8"
+      },
+      {
+        "case": "j0p5_local_u2p00_j0p60",
+        "iteration": 110,
+        "ql_l2_up_down": [
+          4.472377474081648,
+          2.034732910433545
+        ],
+        "trace_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p5_local_u2p00_j0p60/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+        "trace_sha256": "8bad69a92fa1980feb1c674d6fa1cc8b613fef90892a6268e06f319d7dd9375e"
+      }
+    ],
+    "c3_provenance": {
+      "path": "docs/validation/fixed_ldau/rs/C3_RC_PROVENANCE.json",
+      "sha256": "cb5cf12b4b313d1ed7628cb790674ffca6e38b797e4c6937db31d51424303ebd"
+    },
+    "campaign": {
+      "path": "/private/tmp/c3-rc2-rs-hf/campaign/RC2_CAMPAIGN.json",
+      "sha256": "cbf2024d0b0b2ceef944a8d411259cf086c1e385aa8402af5056d0a1f3a98470"
+    },
+    "fixed_P_evaluator": {
+      "accepted_central_P_matrices": [
+        {
+          "path": "/private/tmp/c3-rc2-rs-hf/partial_u_j05_analysis_assets/fixed_p/u_local_u2p00_j0p00/P_OUT_d_shell.txt",
+          "sha256": "7f31de77b24a5a95dc569bd73260d7cd3f4455dcff39f18efc7c6f6d056bd2b8"
+        },
+        {
+          "path": "/private/tmp/c3-rc2-rs-hf/partial_u_j05_analysis_assets/fixed_p/j0p5_local_u2p00_j0p50/P_OUT_d_shell.txt",
+          "sha256": "cf2d4ee80a0b12225389eae1fb02e53487a19e2159c4ea60bd1c7a3728d16c6b"
+        }
+      ],
+      "accepted_central_P_matrix_paths": null,
+      "binary_path": "/private/tmp/c3-rc2-rs-hf/rs_rc2_fixed_p_energy_ed6",
+      "binary_sha256": "bbcce2f3f1cef59509c9818262379481c7a67a693e9c20d7169aec469b6ee2fa",
+      "source_path": "tests/validation/fixed_ldau/rs_rc2_fixed_p_energy.f90",
+      "source_sha256": "c82bb19107763dee16f89aba3411f4eced0ea3469cc05abafcec207c8aae7a2c"
+    }
+  },
+  "rc1_input": {
+    "g_total_Ry_per_electron": 0.008730513934145681,
+    "source": "C4_RC1_PROVENANCE.json"
+  },
+  "stage": "C4_RC2",
+  "status": "PARTIAL_U_AND_J05_AUDITED; J09_IN_PROGRESS"
+}
