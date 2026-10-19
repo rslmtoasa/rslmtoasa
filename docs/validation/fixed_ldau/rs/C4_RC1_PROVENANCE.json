@@ -23,7 +23,7 @@
     "accepted_lambda_zero_trace": {
       "path": "/private/tmp/c3-rc1-rs-w1/continuations/zero_beta005/accepted_snapshot_iter27/fixed_u_trace.csv",
       "iteration": 27,
-      "sha256": "d398914c708b39da66d260f0d59cc1b3b7aa31f24250d0e4b64ee0e1"
+      "sha256": "d398914c708b39da66d260bc77fa1a3a6a6b6d32367ffabf04a7ad7fd59d2e6a"
     }
   },
   "recomputed": {
