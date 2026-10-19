@@ -11,7 +11,7 @@ module gbt_kspace_mod
    implicit none
    private
 
-   public :: gbt_kspace_h1, gbt_kspace_h2, grand_potential
+   public :: gbt_kspace_h1, gbt_kspace_h2, grand_potential, gbt_kspace_horth
 
 contains
 
@@ -129,5 +129,36 @@ contains
          end do
       end do
    end function grand_potential
+
+   !> Exact-ASA Hamiltonian of a rigid spiral in the orthogonal representation (relation C1: Andersen & Jepsen, Phys. Rev.
+   !> Lett. 53, 2571 (1984); Turek et al., Electronic Structure of Disordered Alloys, Surfaces and Interfaces (1997)):
+   !>   S^gamma = S^alpha [1 - Gamma S^alpha]^-1 = [1 - S^alpha Gamma]^-1 S^alpha,   H = C + dele S^gamma dele.
+   !> srot is S^alpha_rot, which gbt_kspace_h1 returns with w = 1 and c = 0; cc, dele and gam (= gamma - alpha) are the local-frame
+   !> diagonals in the index order of h1. S^gamma comes from one LU solve, not an explicit inverse. h is returned as computed, not
+   !> symmetrised: its anti-Hermitian part is the caller's to inspect. The eigenvalues are the roots of det(P^alpha(e) - S^alpha) = 0.
+   subroutine gbt_kspace_horth(n, srot, cc, dele, gam, h)
+      integer, intent(in) :: n
+      complex(rp), intent(in) :: srot(n, n)
+      real(rp), intent(in) :: cc(n), dele(n), gam(n)
+      complex(rp), intent(out) :: h(n, n)
+
+      complex(rp) :: a(n, n)
+      integer :: ipiv(n), i, j, info
+      external :: zgesv
+
+      do j = 1, n
+         a(:, j) = -srot(:, j)*gam(j)
+         a(j, j) = a(j, j) + 1.0_rp
+      end do
+      h = srot
+      call zgesv(n, n, a, n, ipiv, h, n, info)
+      if (info /= 0) error stop 'gbt_kspace_horth: 1 - S Gamma is singular'
+      do j = 1, n
+         do i = 1, n
+            h(i, j) = dele(i)*h(i, j)*dele(j)
+         end do
+         h(j, j) = h(j, j) + cc(j)
+      end do
+   end subroutine gbt_kspace_horth
 
 end module gbt_kspace_mod
