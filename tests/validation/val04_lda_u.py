@@ -43,7 +43,8 @@ def run_case(binary: Path, fixture: Path, scratch_root: Path, name: str, u_ev: f
     input_path = workdir / "input.nml"
     text = input_path.read_text()
     text = text.replace("nstep = 2", f"nstep = {nstep}")
-    text = text.replace("nsp = 1", "nsp = 2")
+    # Preserve the fixture's supported scalar nsp=1 layout.  Fixed-U guards
+    # reject nsp>=2; the separate VAL-04 input-guard test covers that boundary.
     if u_ev is not None:
         text += (
             "\n&hamiltonian\n"
