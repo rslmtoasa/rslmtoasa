@@ -1878,13 +1878,20 @@ Not measured: the size of the effect on any test or reference. Fixing these chan
 
 Found in the quick tier (Release, no `-march=native`) while doing K5. The run stops after about 1 s with `Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported` (`source/hamiltonian_build.f90:532`). It fails the same way on a clean checkout of c7c1fe1, so it is not caused by K5. Not triaged: whether the deck (nsp = 2) or the guard is wrong is not known.
 
-## Two screening-constant tables; stored `center_band`/`width_band` match only one — 2026-10-20
+## Real-space LKAG exchange does not converge toward exact ASA with Hamiltonian order (bcc Fe, fixed potential) — 2026-10-22
 
-Found in D6/D7a by reading and by arithmetic outside the code; no run. `predls` (`source/symbolic_atom.f90:287-308`) turns `c`, `enu`, `srdel`, `qpar` into `center_band`/`width_band` with a screening table `qm`: `qm_canonical` = (.348485, .053030, .010714) (`source/math.f90:113`), replaced by `potential%screening_alpha` when that is allocated with size `lmax + 1` (`symbolic_atom.f90:289-293`). `structb_strux` allocates it and stores the strux default (.3485, .0530, .0107, .00674) (`source/lattice.f90:48`, `source/lattice_strux.f90:274-285`), and the post-processing stack runs `structb` before `predls` (`source/calculation_reciprocal.f90:52-62`).
+Measured in diagnostic D7b / oracle O3 (2026-10-22). `tests/spin_response/fe_bcc` potential, zero SCF steps. J(0) − J(q) in mRy at q = (0.125, −0.125, 0.125) / (0.25, −0.25, 0.25):
 
-| quantity | recomputed with strux alphas | recomputed with `qm_canonical` |
+| route | setting | J(0) − J(q) q1 / q2 [mRy] |
 |---|---|---|
-| max abs difference to stored `center_band` in `tests/spin_response/fe_bcc/Fe.nml` | 1.1e-16 Ry | 1.9e-4 Ry |
-| max abs difference to stored `width_band` | 5.6e-17 | 7.5e-5 |
+| exact rigid rotation of the ASA potential (oracle O3, `tests/gbt/oracles/o3_hgamma`, R8 self-check 1e-5) | 96³, 300 K | 3.82 / 11.01 |
+| real-space recursion LKAG (`recur = 'block'`, `lld = 31`, 2000 points, window −1.0 to 0.5 Ry, T = 0, 46 shells to 5a) | `hoh = .false.` | 2.26 / 6.82 |
+| same | `hoh = .true.` | 4.54 / 15.64 |
+| k-space GBT force theorem | first order, 96³, 300 K | 3.35 / 9.64 |
+| same | second order | 3.60 / 10.20 |
 
-By this reading the exchange route (which calls `predls`, `source/calculation.f90:784`) and GBT at `nstep = 0` (stored values) use the same numbers for strux_lib runs. Not verified by a run. Not measured: the effect of `qm_canonical` versus the strux alphas on J, and which paths, if any, reach `predls` without `screening_alpha` allocated.
+J_01 from the recursion route is 0.755 mRy with `hoh = .false.` and 2.175 mRy with `hoh = .true.`. Not yet matched between the routes: temperature (T = 0 against 300 K), energy window, recursion terminator, and the 5a cutoff (about 1% at the second q per the `fe_lswt.dat` header). Status: observed, not diagnosed; a separate, non-GBT investigation.
+
+## `tests/spin_response/oracles/fe_lswt.dat` is not reproducible from the repository — 2026-10-22
+
+Measured in diagnostic D7b / oracle O3 (2026-10-22). `make_fe_lswt.py` only converts UppASD AMS output; it does not drive the code. The Hamiltonian order, temperature, energy window and `nsp` of the exchange run behind the file are not recorded. With the recorded settings (`lld = 31`, 2000 energy points) and `hoh = .false.`, the real-space recursion route gives J_01 = 0.755 mRy against 0.838 mRy in the file (max shell deviation 0.083 mRy, at shell 1; D7b). The other settings in that run were taken from `tests/spin_response/fe_bcc` (`nsp = 1`, window −1.0 to 0.5 Ry, T = 0).
