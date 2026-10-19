@@ -1,0 +1,88 @@
+&calculation
+    post_processing = 'fermi_surface'
+    verbose = .true.
+    pre_processing = 'none'
+/
+
+&lattice
+    rc = 80
+    alat = 2.8612
+    crystal_sym = 'file'
+    wav = 1.4088
+    pbc = .true.
+    b1 = .true.
+    b2 = .true.
+    b3 = .true.
+    n1 = 20
+    n2 = 20
+    n3 = 20
+    ndim = 16000
+    ntype = 1
+    ct(:) = 4.0
+    r2 = 16.0
+    strux_backend = 'strux_lib'
+    strux_want_sdot = .false.
+/
+
+&atoms
+    database = './'
+    label = 'Fe'
+/
+
+&self
+    use_kspace = .true.
+    nstep = 25
+    cold = .true.
+/
+
+&energy
+    fermi = -0.016453
+    energy_min = -1.0
+    energy_max = 2.5
+    channels_ldos = 2500
+/
+
+&reciprocal
+    nk1 = 4
+    nk2 = 4
+    nk3 = 4
+    k_offset_x = 0.0
+    k_offset_y = 0.0
+    k_offset_z = 0.0
+    use_symmetry_reduction = .false.
+    use_time_reversal = .false.
+    use_shift = .false.
+    dos_method = 'tetrahedron'
+    gaussian_sigma = 0.005
+    temperature = 300.0
+    n_energy_points = 2000
+    dos_energy_min = -1.5
+    dos_energy_max = 2.0
+    auto_find_fermi = .true.
+    kspace_ham_order = 'first'
+    write_spin_resolved_eigenpairs = .false.
+/
+
+&symmetry
+    use_symmetry_reduction = .false.
+/
+
+&control
+    txc = 4
+    calctype = 'B'
+    nsp = 3
+    lld = 26
+    recur = 'block'
+/
+
+&mix
+    beta = 0.15
+    mixtype = 'broyden'
+/
+
+&hamiltonian
+    hoh = .false.
+    magnetic_representation = 'gbt_single_q'
+    q_ss = 0.0, 0.0, 0.0
+    theta_ss = 0.0
+/
