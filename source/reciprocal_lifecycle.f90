@@ -445,8 +445,8 @@ contains
 	         call g_logger%warning("kspace_ham_order='proper' is deprecated; using 'second'.", __FILE__, __LINE__)
 	      end if
 	      if (this%kspace_ham_order /= 'first' .and. this%kspace_ham_order /= 'second' .and. &
-	          this%kspace_ham_order /= 'auto') then
-	         call g_logger%warning("kspace_ham_order must be 'auto', 'first', 'second', or deprecated alias 'proper'. Falling back to auto.", __FILE__, __LINE__)
+	          this%kspace_ham_order /= 'orthogonal' .and. this%kspace_ham_order /= 'auto') then
+	         call g_logger%warning("kspace_ham_order must be 'auto', 'first', 'second', 'orthogonal', or deprecated alias 'proper'. Falling back to auto.", __FILE__, __LINE__)
 	         this%kspace_ham_order = 'auto'
 	      end if
 

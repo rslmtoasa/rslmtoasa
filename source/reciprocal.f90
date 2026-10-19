@@ -105,6 +105,7 @@ module reciprocal_mod
       class(control), pointer :: control => null()
       real(rp), allocatable :: ham_vec_type_direct(:, :, :)
       logical :: use_second_order = .false.
+      logical :: use_orthogonal = .false.   !> kspace_ham_order = 'orthogonal': exact-ASA H^gamma (gbt_single_q only)
    contains
       procedure :: assemble_batch => reciprocal_assembler_assemble_batch
       procedure :: assemble_overlap_batch => reciprocal_assembler_assemble_overlap_batch

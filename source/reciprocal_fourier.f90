@@ -104,8 +104,11 @@ contains
       select case (trim(this%kspace_ham_order))
       case ('second'); assembler%use_second_order = .true.
       case ('first');  assembler%use_second_order = .false.
+      case ('orthogonal'); assembler%use_orthogonal = .true.
       case default;    assembler%use_second_order = this%hamiltonian%hoh
       end select
+      if (assembler%use_orthogonal .and. trim(this%hamiltonian%magnetic_representation) /= gbt_single_q) &
+         call g_logger%fatal("kspace_ham_order='orthogonal' needs magnetic_representation='gbt_single_q'.", __FILE__, __LINE__)
    end subroutine make_reciprocal_assembler
 
    ! Assemble a whole tile.  The loop is serial by design: a workspace is

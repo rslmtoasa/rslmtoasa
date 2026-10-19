@@ -1,7 +1,7 @@
 !> k-space assembly of the GBT (gbt_single_q) Hamiltonian, relation R1 (see gbt_kspace_mod). It reads the structure
 !> constants, neighbour vectors and potential parameters and never the real-space blocks `ee`.
 submodule (reciprocal_mod) reciprocal_gbt
-   use gbt_kspace_mod, only: gbt_kspace_h1, gbt_kspace_h2
+   use gbt_kspace_mod, only: gbt_kspace_h1, gbt_kspace_h2, gbt_kspace_horth
    use gbt_structure_mod, only: gbt_reference_frame
    implicit none
 
@@ -19,7 +19,10 @@ contains
       integer, allocatable :: bond_a(:), bond_b(:)
       real(rp), allocatable :: bond_d(:, :)
       complex(rp), allocatable :: sblock(:, :, :), frame(:, :, :), w(:, :, :), c(:, :, :), h(:, :), h2(:, :)
-      complex(rp), allocatable :: obar(:, :, :), enu(:, :, :)
+      complex(rp), allocatable :: obar(:, :, :), enu(:, :, :), wunit(:, :, :), czero3(:, :, :)
+      real(rp), allocatable :: cvec(:), dvec(:), gvec(:)
+      real(rp) :: wow
+      integer :: lmax_o, l, o, sp, iv
       real(rp) :: q_dir(3), theta, phi
       logical :: second
 
@@ -41,10 +44,15 @@ contains
       second = this%use_second_order .and. this%hamiltonian%hoh
       if (second .and. .not. (allocated(this%hamiltonian%obarm) .and. allocated(this%hamiltonian%enim))) &
          call g_logger%fatal('gbt_single_q k-space second order needs obarm and enim from the Hamiltonian build.', __FILE__, __LINE__)
+      if (this%use_orthogonal .and. this%hamiltonian%hoh) &
+         call g_logger%fatal("kspace_ham_order='orthogonal' replaces h - h o h; hoh must be .false.", __FILE__, __LINE__)
       nrec = this%lattice%nrec
       allocate (bond_a(nrec*this%lattice%nn_max), bond_b(nrec*this%lattice%nn_max), bond_d(3, nrec*this%lattice%nn_max), &
                 sblock(norb, norb, nrec*this%lattice%nn_max), frame(2, 2, nrec), w(norb, 2, nrec), c(norb, 2, nrec), &
-                h(nb*nrec, nb*nrec), h2(nb*nrec, nb*nrec), obar(nb, nb, nrec), enu(nb, nb, nrec))
+                h(nb*nrec, nb*nrec), h2(nb*nrec, nb*nrec), obar(nb, nb, nrec), enu(nb, nb, nrec), &
+                cvec(nb*nrec), dvec(nb*nrec), gvec(nb*nrec), wunit(norb, 2, nrec), czero3(norb, 2, nrec))
+      wunit = cmplx(1.0_rp, 0.0_rp, rp)
+      czero3 = cmplx(0.0_rp, 0.0_rp, rp)
       nbond = 0
       do isite = 1, nrec
          ntype_i = this%lattice%ib(isite)
@@ -67,6 +75,24 @@ contains
             w(:, 2, isite) = pot%wx0(1:norb) - pot%wx1(1:norb)
             c(:, 1, isite) = pot%cx0(1:norb) + pot%cx1(1:norb)
             c(:, 2, isite) = pot%cx0(1:norb) - pot%cx1(1:norb)
+            if (this%use_orthogonal) then   ! exact ASA in the gamma representation: local-frame diagonals of C, sqrt(Delta), gamma - alpha
+               lmax_o = int(sqrt(real(norb - 1, rp)))
+               if (.not. allocated(pot%screening_alpha)) &
+                  call g_logger%fatal("kspace_ham_order='orthogonal' needs the strux screening alpha.", __FILE__, __LINE__)
+               if (size(pot%screening_alpha) /= lmax_o + 1 .or. size(pot%srdel, 1) < lmax_o + 1 .or. &
+                   size(pot%qpar, 1) < lmax_o + 1 .or. pot%ws_r <= 0.0_rp) &
+                  call g_logger%fatal("kspace_ham_order='orthogonal': potential parameters do not match the orbital basis.", __FILE__, __LINE__)
+               wow = this%lattice%wav*ang2au/pot%ws_r   ! as predls (symbolic_atom.f90:297-306), index l + 1 in the exponents
+               do sp = 1, 2
+                  do o = 1, norb
+                     l = int(sqrt(real(o - 1, rp)))
+                     iv = (isite - 1)*nb + (sp - 1)*norb + o
+                     cvec(iv) = pot%c(l, sp) + pot%vmad
+                     dvec(iv) = pot%srdel(l, sp)*wow**(0.5_rp - real(l + 1, rp))
+                     gvec(iv) = pot%qpar(l, sp)*wow**(1 - 2*(l + 1)) - pot%screening_alpha(l)
+                  end do
+               end do
+            end if
             if (second) then
                ! As the collinear route at second order: onsite cex in h, E_nu = cx - cex added by build_enim. obarm and
                ! enim hold the spin blocks for the sign of mom(3); swapping them gives the sign +1 blocks.
@@ -108,8 +134,14 @@ contains
       end do
 
       do ik = 1, size(k_points, 2)
-         call gbt_kspace_h1(norb, nrec, nbond, bond_a(1:nbond), bond_b(1:nbond), bond_d(:, 1:nbond), sblock(:, :, 1:nbond), &
-                            frame, w, c, k_points(:, ik), q_dir, h)
+         if (this%use_orthogonal) then   ! h1 with w = 1, c = 0 is S^alpha_rot
+            call gbt_kspace_h1(norb, nrec, nbond, bond_a(1:nbond), bond_b(1:nbond), bond_d(:, 1:nbond), sblock(:, :, 1:nbond), &
+                               frame, wunit, czero3, k_points(:, ik), q_dir, h2)
+            call gbt_kspace_horth(nb*nrec, h2, cvec, dvec, gvec, h)
+         else
+            call gbt_kspace_h1(norb, nrec, nbond, bond_a(1:nbond), bond_b(1:nbond), bond_d(:, 1:nbond), sblock(:, :, 1:nbond), &
+                               frame, w, c, k_points(:, ik), q_dir, h)
+         end if
          do isite = 1, nrec
             do jsite = 1, nrec
                do s = 0, 1
