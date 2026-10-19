@@ -1,0 +1,2046 @@
+{
+  "C2_D1_D2": {
+    "fix": "local Hubbard insertion now indexes the stored U/J array by physical atomic type iz(nlim), replacing recursion/site ordinal num(nlim); no physics formula changed",
+    "fixed_line": 2016,
+    "post_fix_D1": {
+      "binary": "/private/tmp/rslmto-c2-instrument-build/bin/rslmto.x",
+      "binary_sha256": "edf3d9d067268633978c8ab657453140d8d9f58235f890f514a177c72976fc03",
+      "bulk_ee_vs_impurity_hall_preblock_max_abs_difference": 5.55e-17,
+      "correction_max_abs_difference": 0.0,
+      "effective_UJ_equal": true,
+      "impurity_POUT_max_abs_difference": 4.144e-07,
+      "insertions_per_build": 1,
+      "instrumented_source_sha256": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+      "interpretation": "D1 blocks/values/counts agree; first P_OUT occupations differ by only 4.144e-7, at U=0-control scale. D3 later multistep difference remains.",
+      "postblock_max_abs_difference": 5.58e-17
+    },
+    "post_fix_D2": {
+      "J0": "J=0 decomposition completed; source/evidence in /private/tmp/rslmto-c2-d1d2/j0_case",
+      "host_only": "After fix, physical impurity target with zero effective U/J receives zero correction.",
+      "impurity_only_general": "After fix, physical target receives U/J 0.2792946257/0.0808484443 Ry; correction maxabs 0.1105574666; post-block match to bulk within 5.58e-17.",
+      "impurity_only_override": "Same effective U/J and correction as general-type path; post-block match within 5.58e-17."
+    },
+    "pre_fix_D2_observation": {
+      "bulk_local_preblock_max_abs_difference": 5.6e-17,
+      "host_only_Uplus_on_type1_physical_type2_U0_target": {
+        "observed_max_correction": 0.1105574666,
+        "result": "incorrectly received U+ correction through array element 1",
+        "target_effective_UJ": "zero"
+      },
+      "impurity_only_general_or_impurity_override": {
+        "observed_max_correction": 0.0,
+        "result": "physical target at ino=1 incorrectly read zero array entry",
+        "target_effective_UJ_Ry": [
+          0.2792946257,
+          0.0808484443
+        ]
+      },
+      "interpretation": "Before fix, host-only incorrectly received U+ via array element 1 while impurity-only paths read zero; fixed by indexing on physical type. Retained as historical evidence."
+    },
+    "regression": {
+      "status": "PASS",
+      "runner": "tests/validation/fixed_ldau/c2_operator_mapping_regression.py",
+      "runner_sha256": "de4a947c348bc2394597522a807a8ff8e0ab8f1dd8261308a3ffc8c2eb2856f9",
+      "provenance": "/private/tmp/rslmto-c2-d1d2/integration_regression_fixture_final/RUN_PROVENANCE.txt",
+      "provenance_sha256": "0856db6154ba4a77d11bf1ccfef39f6b2888ff0dcb1d75507553fd767957b571",
+      "result": "same-material impurity insertion follows physical type and reproduces bulk Hubbard block; no physics formula changed"
+    },
+    "source_file": "source/hamiltonian_build.f90",
+    "status": "COMPLETE: type-index bug fixed; D1/D2 operator checks and regression passed; D3 Green localization complete; <10 Fe moment ratio target not met."
+  },
+  "C2_crash_triage": {
+    "amendment": "docs/validation/fixed_ldau/rs/C2_AMENDMENT.md; verbatim user-authorized C2 extends C1 and replaces only C1 \u00a75(c)",
+    "case": "Corrected hcp Co impurity, nsp=1, spectral, U=3 eV, J=0.7 eV; input/lattice/host/seed audited before triage. The only lattice correction from earlier attempt was removal of unsupported lattice.nml ntype=2.",
+    "classification": "PRE-EXISTING ISSUE: same bounds failure occurs with U=J=0; clean 8b run did not reach SCF (SIGKILL, cause unknown). The failure line matches 8b8f7ef source. Hypothesis: file-lattice cluster construction leaves ct length at ndim=50000 while cluster routine expects ntype=3. No hypothesis has been proven beyond matching failure location.",
+    "debug_build": {
+      "baseline_comparison": "`source/lattice_cluster.f90:996` ctnew assignment source is byte-identical to `git show 8b8f7ef:source/lattice_cluster.f90`; the C1 change list does not include lattice_cluster.f90.",
+      "build_dir": "/private/tmp/rslmto-c2-bounds-snapshot",
+      "cmake_note": "GNU 16/macOS skipped -fcheck=all; explicit -fcheck=bounds was present",
+      "flags": "-g -O0 -fbacktrace -fcheck=bounds; OpenMP ON; MPI/libXC OFF",
+      "source_sha256": {
+        "source/hamiltonian_build.f90": "3af313bca28fa7e62024229a103244ebe631d01938c68e73f29b6a3f7e498f9b",
+        "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+        "source/include_codes/namelists/self.f90": "47787a34dabea3eeb2417bd1f9228cde5ce483391829b85f9597339f8c026c9c",
+        "source/lattice_cluster.f90": "05c47f8e7a7791b37510c3dbca296aef334540b59ce2fe305cb353fa45e01986",
+        "source/self.f90": "aa82116669fc322622f4db856de606035a4b454a1030ec8ed112d9433d189b73"
+      },
+      "source_snapshot": "/private/tmp/rslmto-c2-triage-src"
+    },
+    "decision": "Per C2 \u00a72, drop hcp Co RA4 and substitute direct-generated fcc Ni, nsp=1 spectral, U=3.0/J=0.7 eV. No Co code fix attempted.",
+    "i_debug_bounds": {
+      "binary": "/private/tmp/rslmto-c2-bounds-snapshot/bin/rslmto.x",
+      "binary_sha256": "ce16fc4a4964b0d1211c59bd27a0c7f1e3cc9f0d3921865bd62a9578bce77a88",
+      "build_flags": "-g -O0 -fbacktrace -fcheck=bounds; OpenMP ON; MPI/libXC OFF",
+      "console": {
+        "bytes": 510,
+        "path": "/private/tmp/rslmto-c2-hcp-triage/debug_bounds_plusu/c2_console.log",
+        "sha256": "a112bf56063469314a8de6a00b1cfabb742da902b7783582b953ad9509395c54"
+      },
+      "manifest": {
+        "bytes": 2096,
+        "path": "/private/tmp/rslmto-c2-hcp-triage/debug_bounds_plusu/C2_launch.json",
+        "sha256": "35c036b01b132858a406aafe9860e3fbd5abfca64ae4f860b8ef4ce801a6c4e9"
+      },
+      "result": "exit 2 before SCF; bounds error source/lattice_cluster.f90:996, ctnew(:)=this%ct(:)*nnscale, dimension 1 mismatch 3/50000; backtrace captured."
+    },
+    "ii_clean_8b": {
+      "baseline_provenance": "Binary built from git archive 8b8f7ef; existing no-U identity provenance pins the same baseline. Same corrected +U deck was used; process exited before SCF.",
+      "binary": "/private/tmp/rslmto-ra-base-build/bin/rslmto.x",
+      "binary_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+      "console": {
+        "bytes": 0,
+        "path": "/private/tmp/rslmto-c2-hcp-triage/clean_8b_plusu/c2_console.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "manifest": {
+        "bytes": 1657,
+        "path": "/private/tmp/rslmto-c2-hcp-triage/clean_8b_plusu/C2_launch.json",
+        "sha256": "5244f1d226a7c2701aa8c41d9c34004307d4cbddb480b3478a222bf3657c0259"
+      },
+      "result": "exit 137/SIGKILL before SCF; stdout empty; cause not established."
+    },
+    "iii_u0": {
+      "binary": "/private/tmp/rslmto-c2-bounds-snapshot/bin/rslmto.x",
+      "binary_sha256": "ce16fc4a4964b0d1211c59bd27a0c7f1e3cc9f0d3921865bd62a9578bce77a88",
+      "console": {
+        "bytes": 510,
+        "path": "/private/tmp/rslmto-c2-hcp-triage/debug_bounds_u0/c2_console.log",
+        "sha256": "0dadff2f851666e8392ab23ae3f57e45d139896745d822adee76b1457a324f98"
+      },
+      "effective_host_and_impurity_UJ": "all zero, verified in loaded potential arrays; explicit impurity U/J inputs zero",
+      "host_seed_potential_hashes": {
+        "Co-imp.nml": "314d6d697435ad24b2aedbdebb3088fc1cbc2a5e5256dd5d0da27faa34f290df",
+        "Co1-bulk_out.nml": "0aeb460c49180fca58486bece226de6ee94559ab927022fb25fb346cf56275a6",
+        "Co2-bulk_out.nml": "0764a794ca774dba06cfe78322529f775a3641baa81fd46885816942ab9e94f5"
+      },
+      "manifest": {
+        "bytes": 1522,
+        "path": "/private/tmp/rslmto-c2-hcp-triage/debug_bounds_u0/C2_launch.json",
+        "sha256": "0307056ab2b662032a6d371ce70d74beaf90c26e54d367b4cde1c6249a290a68"
+      },
+      "result": "same ctnew(3/50000) bounds error at source/lattice_cluster.f90:996, exit 2 before SCF."
+    }
+  },
+  "C2_Ni_nonfinite_triage": {
+    "deck": "fcc-generated Ni impurity; nsp=1, spectral block recursion, U=3.0/J=0.7 eV for plus-U; same input and potential bytes across Debug and clean 8b runs; no manual lattice. The zero-U rerun used the same deck/seed and exact zero-U bulk/impurity potentials.",
+    "debug_trace_failure": {
+      "path": "/private/tmp/rslmto-c2-ni-triage/debug_bounds_plusu_trace",
+      "manifest": "/private/tmp/rslmto-c2-ni-triage/debug_bounds_plusu_trace/C2_launch.json",
+      "binary_sha256": "39a3c9a2b1c3c6ad56963da41212a16f3bd6bdb9bfd5d0ed7a1fe541ec450e0e",
+      "console_sha256": "ba088b961130a09cdbd3160640dda474b62ce8e2af2a63bd6fd773fc3a6c47a8",
+      "result": "Debug/bounds exited before a completed SCF iteration at self.f90:1177: density_override dimension-1 index 20 exceeds upper bound 2. The path is the legacy fixed-U diagnostic replay; this is separate from the physical no-trace NaN below. This attempt is excluded from records."
+    },
+    "clean_8b_plus_u_no_trace": {
+      "path": "/private/tmp/rslmto-c2-ni-triage/clean_8b_plusu_no_trace",
+      "manifest": "/private/tmp/rslmto-c2-ni-triage/clean_8b_plusu_no_trace/C2_launch.json",
+      "binary_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+      "console_sha256": "6da6fcf44e6c09b1755a667a4451d6ea5830fa55514f4a3c591c7a876bd12adc",
+      "run_command": "cd /private/tmp/rslmto-c2-ni-triage/clean_8b_plusu_no_trace && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 /private/tmp/rslmto-ra-base-build/bin/rslmto.x",
+      "result": "Clean 8b8f7ef physical run with trace variables unset exited 1 during iteration 1: Pre-LU Q contains NaN, then mixed qia and PL become NaN. No unsupported trace instrumentation was enabled."
+    },
+    "zero_u_no_trace": {
+      "path": "/private/tmp/rslmto-c2-ni-triage/debug_u0_no_trace",
+      "binary": "/private/tmp/rslmto-c2-ni-debug-build/bin/rslmto.x",
+      "binary_sha256": "39a3c9a2b1c3c6ad56963da41212a16f3bd6bdb9bfd5d0ed7a1fe541ec450e0e",
+      "console_sha256": "d43e99f1f4abbbc28267a739bc1c8a2f2179a60717bdae82680777939e0c3e3d",
+      "run_command": "cd /private/tmp/rslmto-c2-ni-triage/debug_u0_no_trace && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 /private/tmp/rslmto-c2-ni-debug-build/bin/rslmto.x",
+      "effective_u_j": "All stored host and impurity U/J arrays are zero; no explicit impurity U/J values are present.",
+      "result": "Exited 1 during iteration 27 with the same Pre-LU Q NaN \u2192 mixed qia NaN \u2192 invalid PL chain. The seed in this initial attempt was the raw no-U radial potential (Ni-imp SHA 410ce443c953a96d4a2ac3fa6a2a336ea2266274efd5c30ce3140a585e6e2ec9), not the accepted endpoint; a corrected accepted-endpoint-seeded record is staged separately."
+    },
+    "classification": "PRE-EXISTING ISSUE under C2 \u00a71: the supported no-trace U+ deck fails on clean 8b8f7ef, and the zero-U run also reaches the same non-finite failure. This classification does not treat the Debug trace helper bounds error as a physics failure.",
+    "hypothesis": "The repeated non-finite Green-function Q and large charge-transfer/invalid PL behavior on both clean 8b U+ and Debug U=0 suggests an existing fcc-Ni impurity radial/embedding setup instability rather than a regression in the changed Hubbard insertion path. The precise numerical cause remains undetermined; no physics formula or source was changed for this issue.",
+    "next": "Use the accepted converged Ni U=0 endpoint as the symbol-renamed no-U impurity seed in corrected records. Preserve the old raw-seed attempts as triage evidence and keep their outputs out of RA4 comparisons."
+  },
+  "C2_Fe_residual_bounds_triage": {
+    "debug_bounds": {
+      "run_dir": "/private/tmp/rslmto-c2-qlonly-bounds-smoke",
+      "deck_sha256": "76ead93e7fcdd0ba9c631bf861155e33531a1209ed15ed0c08ed3035c540b3e2",
+      "seed_sha256": "d4abdc888fa8ee2d64deb71ac9feb81fd0c960fe7749b7cb5cb2f3ff754bbe38",
+      "binary_sha256": "9e35de34176cc5b5327be1372014fbdc531dce787cb6381c5c2e87af82743119",
+      "source_self_sha256": "cca01e0b91a06f1179f726cf79951f4f3994736f9b502232a589c6ba3fa96c78",
+      "result": "Debug/bounds error at source/self.f90:1928 after P_OUT: ldm_new second-dimension index 4 exceeds upper bound 3 while update_fixed_u_residuals loops l=1..4. Deck is bcc Fe bulk, nsp=1, U=3.8/J=1.1 eV, lmax=2."
+    },
+    "clean_8b_release": {
+      "run_dir": "/private/tmp/rslmto-c2-qlonly-bounds-smoke/triage_clean8b",
+      "binary_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+      "console_sha256": "c79c1f23c55b7863a12d51fc36aa36f99b2ffc11706213fee9ffc1ea81397d17",
+      "result": "With the same deck/seed and trace disabled, clean 8b exited 1 in iteration 1 on non-finite Green-function Q/NaN qia/PL before reaching the bounds access."
+    },
+    "source_ancestry": "Independent read-only audit found the same il=1..4 ldm_new access in clean 8b8f7ef source self.f90:1887 with caller at 4068; current line 1928 was an inherited traversal bug. The bounded traversal only visits allocated channels and changes no operator or physics formula.",
+    "u0_status": {
+      "run_dir": "/private/tmp/rslmto-c2-qlonly-u0-smoke",
+      "manifest": "/private/tmp/rslmto-c2-qlonly-u0-smoke/manifest.json",
+      "binary_sha256": "9e35de34176cc5b5327be1372014fbdc531dce787cb6381c5c2e87af82743119",
+      "input_sha256": "32e8a0a615e4e7d34ba9d6c74b2bee14d18015e1c086aba334d13faf2de8b919",
+      "seed_sha256": "d4abdc888fa8ee2d64deb71ac9feb81fd0c960fe7749b7cb5cb2f3ff754bbe38",
+      "console_sha256": "eb5533bdb7b9117b0cb521bff12d7f5a138c1c1d8d5a0b37e1b4bb3d29d4cddb",
+      "trace_sha256": "8f2ead71116893057169a30d5701e07dda95fd30277639373daffb89b3b670fb",
+      "input_UJ_eV": [
+        0.0,
+        0.0
+      ],
+      "loaded_effective_UJ": "The explicit zero inputs override the seed U/J arrays during loading; terminal Fe_scf.nml SHA 7098efd193e5c5bb75ab95f57175ceae8e49940a69a2c7bad58f55d8525a1601 stores U=(0,0,0), J=(0,0,0) Ry.",
+      "result": "Completed 21 iterations under -fcheck=bounds with no bounds error or non-finite failure. QL trace contains 126 P_OUT occupation rows (21 iterations \u00d7 3 shells \u00d7 2 spins).",
+      "command": "OMP_NUM_THREADS=1 RSLMTO_FIXED_U_TRACE=$PWD/fixed_u_trace.csv RSLMTO_FIXED_U_TRACE_QL_ONLY=1 RUN_ID=qlonly_u0_bounds_smoke /private/tmp/rslmto-c2-qlonly-bounds-build/bin/rslmto.x"
+    },
+    "classification": "No C2 stop triggered: source ancestry confirms the bounds access predates this branch, and clean 8b also fails on the same physical recipe before that access.",
+    "active_u_bounds_fix_smoke": {
+      "manifest": "/private/tmp/rslmto-c2-qlonly-final-bounds-smoke/manifest.json",
+      "binary_sha256": "2db54bcffe5633b8f16eb96ea1a9841fb448e01a4aa984f0686ba771c8587462",
+      "source_self_sha256": "6c3d72cd5dbb6ddd3ffcdefb1700589040294e112204cf19c0649f2b2154de4d",
+      "result": "Two active-U iterations passed -fcheck=bounds after traversal was bounded by min(4,size(mix%ldm_new,2)); 12 QL/P_OUT rows and no other trace rows. This is a focused bounds smoke, not an acceptance result."
+    }
+  },
+  "ldos": {
+    "fe_u0_control": {
+      "d_ldos_max_up_down_total_states_per_Ry_site": [
+        0.00041995,
+        0.000659995,
+        0.000659995
+      ],
+      "grid_E_minus_EF_Ry": [
+        -0.93075,
+        0.57489,
+        2510
+      ]
+    },
+    "fe_uplus_no_u_seed": {
+      "d_ldos_max_up_down_total_states_per_Ry_site": [
+        0.11815221509233709,
+        0.529063447190115,
+        0.5286835004649895
+      ],
+      "grid_E_minus_EF_Ry": [
+        -0.83656,
+        0.66913,
+        2510
+      ]
+    },
+    "fe_uplus_plus_u_seed": {
+      "d_ldos_max_up_down_total_states_per_Ry_site": [
+        0.1181222151,
+        0.5290133939,
+        0.5286334472
+      ],
+      "grid_E_minus_EF_Ry": [
+        -0.83656,
+        0.66913,
+        2510
+      ]
+    },
+    "ni_u0_control": {
+      "d_ldos_max_up_down_total_states_per_Ry_site": [
+        0.000339886807,
+        0.000289931181,
+        0.000609931181
+      ],
+      "grid_E_minus_EF_Ry": [
+        -0.93886,
+        0.56631,
+        2510
+      ]
+    },
+    "ni_uplus_no_u_seed": {
+      "d_ldos_max_up_down_total_states_per_Ry_site": [
+        0.00076,
+        0.000739959346,
+        0.00149995324
+      ],
+      "grid_E_minus_EF_Ry": [
+        -0.93886,
+        0.56631,
+        2510
+      ]
+    },
+    "ni_uplus_plus_u_seed": {
+      "d_ldos_max_up_down_total_states_per_Ry_site": [
+        0.00076,
+        0.000669959346,
+        0.00142995935
+      ],
+      "grid_E_minus_EF_Ry": [
+        -0.93886,
+        0.56631,
+        2510
+      ]
+    }
+  },
+  "observed_rows": [
+    {
+      "case": "fe_u0_control",
+      "status": "ACCEPTED_C1_STEP84",
+      "impurity": {
+        "d_up": 4.349201757078174,
+        "d_down": 2.149933472493237,
+        "abs_sphere_moment_muB": 2.1038373285763674
+      },
+      "bulk": {
+        "d_up": 4.349199654902913,
+        "d_down": 2.149941053241955,
+        "abs_sphere_moment_muB": 2.1038282828007704
+      },
+      "impurity_minus_bulk": {
+        "d_up": 2.1021752614203137e-06,
+        "d_down": -7.580748718094554e-06,
+        "abs_sphere_moment_muB": 9.045775597016359e-06
+      },
+      "matching_U0_difference": null,
+      "ratio_abs_difference_to_U0": null,
+      "endpoint_path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u0_control_no_u_seed/Fe_out.nml",
+      "endpoint_sha256": "b3592f26b79ec0f3dae9bfcee96d19720e0283dc112c69eeaef9f122b24ef2b0"
+    },
+    {
+      "case": "fe_uplus_no_u_seed",
+      "status": "ACCEPTED_C1_STEP100",
+      "impurity": {
+        "d_up": 4.554159011602983,
+        "d_down": 2.102614836692198,
+        "abs_sphere_moment_muB": 2.3834221901760912
+      },
+      "bulk": {
+        "d_up": 4.557606674800885,
+        "d_down": 2.099028890061353,
+        "abs_sphere_moment_muB": 2.3900696690841867
+      },
+      "impurity_minus_bulk": {
+        "d_up": -0.003447663197902351,
+        "d_down": 0.003585946630844994,
+        "abs_sphere_moment_muB": -0.006647478908095472
+      },
+      "matching_U0_difference": {
+        "d_up": 2.1021752614203137e-06,
+        "d_down": -7.580748718094554e-06,
+        "abs_sphere_moment_muB": 9.045775597016359e-06
+      },
+      "ratio_abs_difference_to_U0": [
+        1640.045557178221,
+        473.03330636532866,
+        734.8710828387191
+      ],
+      "endpoint_path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_no_u_seed/C2_frozen_step100/Fe-imp_out.nml",
+      "endpoint_sha256": "9b7ac487f20e519eb8e297f5daf6e7fc1e4794634e872dc852bac881621601a3"
+    },
+    {
+      "case": "fe_uplus_plus_u_seed",
+      "status": "ACCEPTED_C1_FALLBACK1_STEP27",
+      "impurity": {
+        "d_up": 4.5541590334068065,
+        "d_down": 2.102614896303756,
+        "abs_sphere_moment_muB": 2.3834221455184226
+      },
+      "bulk": {
+        "d_up": 4.557606674800885,
+        "d_down": 2.099028890061353,
+        "abs_sphere_moment_muB": 2.3900696690841867
+      },
+      "impurity_minus_bulk": {
+        "d_up": -0.0034476413940787154,
+        "d_down": 0.00358600624240335,
+        "abs_sphere_moment_muB": -0.006647523565764146
+      },
+      "matching_U0_difference": {
+        "d_up": 2.1021752614203137e-06,
+        "d_down": -7.580748718094554e-06,
+        "abs_sphere_moment_muB": 9.045775597016359e-06
+      },
+      "ratio_abs_difference_to_U0": [
+        1640.0351851488115,
+        473.04116991028616,
+        734.8760196921922
+      ],
+      "endpoint_path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_plus_u_seed_fallback_beta005/C2_frozen_step27/Fe-imp_scf.nml",
+      "endpoint_sha256": "30ae8608db589275058493292b4e0bcc825360dd8a357cf76c9f73b2c4d864c2"
+    },
+    {
+      "case": "ni_u0_control",
+      "status": "ACCEPTED_C1_STEP200",
+      "impurity": {
+        "d_up": 4.701521261991117,
+        "d_down": 4.701521425398992,
+        "abs_sphere_moment_muB": 2.6115967788342687e-07
+      },
+      "bulk": {
+        "d_up": 4.701519558204325,
+        "d_down": 4.701519612420077,
+        "abs_sphere_moment_muB": 7.912930310993715e-08
+      },
+      "impurity_minus_bulk": {
+        "d_up": 1.7037867925395744e-06,
+        "d_down": 1.8129789154386344e-06,
+        "abs_sphere_moment_muB": 1.820303747734897e-07
+      },
+      "matching_U0_difference": null,
+      "ratio_abs_difference_to_U0": null,
+      "endpoint_path": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql/Ni-imp_out.nml",
+      "endpoint_sha256": "addd6667159c9e4a5b6e4d3ff575143281877fb0b3c78832dccead1a34735e2d"
+    },
+    {
+      "case": "ni_uplus_no_u_seed",
+      "status": "ACCEPTED_C1_STEP60",
+      "impurity": {
+        "d_up": 4.7710985382419455,
+        "d_down": 4.771098567956434,
+        "abs_sphere_moment_muB": 5.670334246588027e-08
+      },
+      "bulk": {
+        "d_up": 4.771098119727522,
+        "d_down": 4.771098148803758,
+        "abs_sphere_moment_muB": 2.5491526223220262e-08
+      },
+      "impurity_minus_bulk": {
+        "d_up": 4.185144231172444e-07,
+        "d_down": 4.191526761232467e-07,
+        "abs_sphere_moment_muB": 3.1211816242660007e-08
+      },
+      "matching_U0_difference": {
+        "d_up": 1.7037867925395744e-06,
+        "d_down": 1.8129789154386344e-06,
+        "abs_sphere_moment_muB": 1.820303747734897e-07
+      },
+      "ratio_abs_difference_to_U0": [
+        0.24563779044995937,
+        0.23119556027590998,
+        0.1714648793175236
+      ],
+      "endpoint_path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_no_u_seed/C2_frozen_Ni-imp_scf.nml",
+      "endpoint_sha256": "829949db36e55b531a062e28bf7ede94c3ad923df24616102358678844441a64"
+    },
+    {
+      "case": "ni_uplus_plus_u_seed",
+      "status": "ACCEPTED_C1_STEP30",
+      "impurity": {
+        "d_up": 4.77109852635633,
+        "d_down": 4.771098540889266,
+        "abs_sphere_moment_muB": 4.5142321880575764e-08
+      },
+      "bulk": {
+        "d_up": 4.771098119727522,
+        "d_down": 4.771098148803758,
+        "abs_sphere_moment_muB": 2.5491526223220262e-08
+      },
+      "impurity_minus_bulk": {
+        "d_up": 4.0662880795849787e-07,
+        "d_down": 3.920855080608021e-07,
+        "abs_sphere_moment_muB": 1.96507956573555e-08
+      },
+      "matching_U0_difference": {
+        "d_up": 1.7037867925395744e-06,
+        "d_down": 1.8129789154386344e-06,
+        "abs_sphere_moment_muB": 1.820303747734897e-07
+      },
+      "ratio_abs_difference_to_U0": [
+        0.23866179133387838,
+        0.2162658951640044,
+        0.1079533878991792
+      ],
+      "endpoint_path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_plus_u_seed/C2_step30_Ni-imp_scf.nml",
+      "endpoint_sha256": "66a6639c9a89e82fe2a1a28023d9169f264e57f651502155c9dfbb13b11ce9da"
+    }
+  ],
+  "pending": {
+    "RA4": "Complete; six C1-accepted records with U=0 controls. Fe U+ discrepancy ratio target <10 was not met; D3 localized first-step Green-spectrum differences but not the multistep moment discrepancy.",
+    "RB": "Authorized C1 RB0\u2013RB6 execution; only marked RB gates can fail; RB5/RB6 remain records."
+  },
+  "protocol": {
+    "C1_amendment_path": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/rs/C1_AMENDMENT.md",
+    "C1_amendment_sha256": "d96270500a3cd91b4d6c6bb1a53ca58004c245f51dc6460b1f9303bd9e68dfe1",
+    "C2_amendment_path": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/rs/C2_AMENDMENT.md",
+    "C2_amendment_sha256": "ac9be6fa917685aed594afc6a736d0a9ae1d90f9e001c3951f460235c251d5cc",
+    "stop_conditions": "C1 \u00a75(a),(b),(d) plus C2 \u00a71. hcp Co was replaced with generated-lattice fcc Ni after triage."
+  },
+  "stage": "C1-RA4",
+  "status": "RA4 COMPLETE as RECORD; six cases C1 RS-accepted; C2 D3 <10 target not met but localized; proceeding to Stage RB.",
+  "c2_residual_mapping_regression": {
+    "status": "PASS",
+    "classification": "Focused two-step Debug/bounds diagnostic regression; not a convergence/physics acceptance result",
+    "runner": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/c2_residual_mapping_bounds_smoke.py",
+    "runner_sha256": "c14d60f4018c9acf01872999d5bafc08ecc3e96331c9ea54ea229a85eb1dec3d",
+    "command": "python3 /Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/c2_residual_mapping_bounds_smoke.py --binary /private/tmp/rslmto-c2-qlonly-bounds-build/bin/rslmto.x --workdir /private/tmp/rslmto-c2-residual-map-integration-smoke",
+    "binary_sha256": "43401c8d98764458220a90ade2f6ed0716c5ceae559d2c03f900e5d25ecbcabc",
+    "result_json": "/private/tmp/rslmto-c2-residual-map-integration-smoke/RESULT.json",
+    "result_json_sha256": "b4c92667e8427d28c7d1074927a8190f1b6cc1dbf234e2f45e2fdb0feba48ad6",
+    "fixture_input_sha256": "cbf421d32d61ef143a01eb56d7bbcc53a816f688c660634fef0269de62e5597e",
+    "plus_u_seed_sha256": "d4abdc888fa8ee2d64deb71ac9feb81fd0c960fe7749b7cb5cb2f3ff754bbe38",
+    "input_sha256": "265927d7b41946184fdc041747ab2b640bca1d916c658d6a7ea867c49a44cefe",
+    "geometry": {
+      "ntype": 2,
+      "nmax": 15,
+      "nbas": 9,
+      "nrec": 1,
+      "bulk_representative_indices": [
+        16
+      ]
+    },
+    "completed_residual_updates": 2,
+    "site_type_records": [
+      "HUBBARD_MOMENT_ENERGY_SITE site=1 type=2 E_int=  0.4642569393322395E+01 E_DC=  0.4501567772038938E+01 E_Hub=  0.1410016212834568E+00 t_in_out= -0.3786860849173204E+00 t_U= -0.3786860849173204E+00 e_external=  0.0000000000000000E+00 t_total_actual_Vin= -0.3786860849173204E+00 direct_trace_check=  0.0000000000000000E+00 ETOT_selected= -0.2542335828184107E+04 candidate_a= -0.2541816140477906E+04 candidate_b=UNAVAILABLE candidate_c= -0.2542194826562823E+04 candidate_F=UNAVAILABLE_GLOBAL_TS_NOT_SITE_DECOMPOSABLE candidate_status=PROVISIONAL_ONLY",
+      "HUBBARD_MOMENT_ENERGY_SITE site=1 type=2 E_int=  0.4648988868380899E+01 E_DC=  0.4508031424385933E+01 E_Hub=  0.1409574439949663E+00 t_in_out= -0.3779941928123903E+00 t_U= -0.3779941928123903E+00 e_external=  0.0000000000000000E+00 t_total_actual_Vin= -0.3779941928123903E+00 direct_trace_check=  0.0000000000000000E+00 ETOT_selected= -0.2542335731966443E+04 candidate_a= -0.2541816780329636E+04 candidate_b=UNAVAILABLE candidate_c= -0.2542194774522448E+04 candidate_F=UNAVAILABLE_GLOBAL_TS_NOT_SITE_DECOMPOSABLE candidate_status=PROVISIONAL_ONLY"
+    ],
+    "bounds_errors": [],
+    "source_sha256": {
+      "source/self.f90": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823",
+      "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e"
+    },
+    "interpretation": "Replaces physical ib indexing into site_for_type with explicit recursion-site-to-type mapping; Debug/bounds run confirmed recursion site 1 maps to type 2 for physical representative index 16."
+  },
+  "final_ra4_records": {
+    "status": "COMPLETE_RECORD",
+    "observable_convention": {
+      "ql": "central recursion atom ql(1,:,spin), l=0..2; d component l=2",
+      "sphere_moment": "abs(sum_l ql_up - sum_l ql_down), \u03bcB",
+      "ratios": "abs(U+ discrepancy)/abs(U=0 discrepancy)",
+      "d_ldos": "maximum absolute impurity-vs-bulk d-LDOS on common E\u2212EF grid; separate up/down and spin-summed maxima"
+    },
+    "cases": {
+      "fe_u0_control": {
+        "status": "ACCEPTED_C1_STEP84",
+        "run_dir": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u0_control_no_u_seed",
+        "launch_manifest": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u0_control_no_u_seed/C1_launch.json",
+        "launch_manifest_sha256": "8d81450da00d8da6996c5417f166b7c310b443ac534571d606b73c6d6510c144",
+        "input_sha256": null,
+        "binary": null,
+        "binary_sha256": null,
+        "source_hashes": null,
+        "command": "cd <run_dir> && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RSLMTO_FIXED_U_TRACE=$PWD/fixed_u_trace.csv RSLMTO_FIXED_U_TRACE_QL_ONLY=1 RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY=1 RSLMTO_FIXED_U_RUN_ID=fe_u0_control_no_u_seed /private/tmp/rslmto-ra4-frozen/bin/rslmto-c1-qlhistory.x",
+        "thread_caps": null,
+        "endpoint_path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u0_control_no_u_seed/Fe_out.nml",
+        "endpoint_sha256": "b3592f26b79ec0f3dae9bfcee96d19720e0283dc112c69eeaef9f122b24ef2b0",
+        "host_reference_path": "/private/tmp/rslmto-ra4-frozen/c1_trace_qlhistory_smoke_compact/Fe_out.nml",
+        "host_reference_sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c",
+        "seed_reference_path": "/private/tmp/rslmto-ra4-frozen/c1_trace_qlhistory_smoke_compact/Fe_out.nml",
+        "seed_reference_sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c",
+        "trace_path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u0_control_no_u_seed/fixed_u_trace.csv",
+        "trace_sha256": "74a63c61fee7b91b47ff0aa7a494082af9ef1e80e4578a46d08f0538b4f7dbb1",
+        "orbital_dos_path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u0_control_no_u_seed/Fe_orbital_dos.out",
+        "orbital_dos_sha256": "9e999cbc5abc8f9e933fce39fe045a7adabf39e0c12e40f327be0141630d67a0",
+        "total_dos_path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u0_control_no_u_seed/Fe_dos.out",
+        "total_dos_sha256": "3e7aa9a6078767dee4d3f4f488cbb114fb6bde376c2e0de44f51bd32a723fb98",
+        "acceptance_path": null,
+        "acceptance_sha256": null,
+        "acceptance": {},
+        "impurity": {
+          "d_up": 4.349201757078174,
+          "d_down": 2.149933472493237,
+          "abs_sphere_moment_muB": 2.1038373285763674
+        },
+        "bulk": {
+          "d_up": 4.349199654902913,
+          "d_down": 2.149941053241955,
+          "abs_sphere_moment_muB": 2.1038282828007704
+        },
+        "delta": {
+          "d_up": 2.1021752614203137e-06,
+          "d_down": -7.580748718094554e-06,
+          "abs_sphere_moment_muB": 9.045775597016359e-06
+        },
+        "d_ldos_max_up_down_total_states_per_Ry_site": [
+          0.00041995,
+          0.000659995,
+          0.000659995
+        ],
+        "ldos_grid_E_minus_EF_Ry": [
+          -0.93075,
+          0.57489,
+          2510
+        ]
+      },
+      "fe_uplus_no_u_seed": {
+        "status": "ACCEPTED_C1_STEP100",
+        "run_dir": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_no_u_seed",
+        "launch_manifest": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_no_u_seed/C2_launch.json",
+        "launch_manifest_sha256": "8e97fa80ceb52c8a1789a82bf4fc26fd3647a23749928b743d045a6430c84fd8",
+        "input_sha256": "abfb6689f6d0956bdadab509fb4ce809894f4da67406bb31ec5561da3281ca89",
+        "binary": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_no_u_seed/rslmto.x",
+        "binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+        "source_hashes": {
+          "source/self.f90": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823",
+          "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e"
+        },
+        "command": "cd /private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_no_u_seed && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RSLMTO_FIXED_U_TRACE=$PWD/fixed_u_trace.csv RSLMTO_FIXED_U_TRACE_QL_ONLY=1 RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY=1 RSLMTO_FIXED_U_RUN_ID=fe_uplus_imp_no_u_seed ./rslmto.x > c2_console.log 2>&1",
+        "thread_caps": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1"
+        },
+        "endpoint_path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_no_u_seed/C2_frozen_step100/Fe-imp_out.nml",
+        "endpoint_sha256": "9b7ac487f20e519eb8e297f5daf6e7fc1e4794634e872dc852bac881621601a3",
+        "host_reference_path": "/private/tmp/rslmto-c2-requal/fe_uplus_bulk_requal/C2_checkpoint_candidate.nml",
+        "host_reference_sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702",
+        "seed_reference_path": "/private/tmp/rslmto-ra4-frozen/c1_trace_qlhistory_smoke_compact/Fe_out.nml",
+        "seed_reference_sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c",
+        "trace_path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_no_u_seed/C2_frozen_step100/fixed_u_trace.csv",
+        "trace_sha256": "6630f285dde2b6ee47ac61d0b6463be19fb9059f4fd72e9ed8a9c783d27750d4",
+        "orbital_dos_path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_no_u_seed/C2_frozen_step100/Fe-imp_orbital_dos.out",
+        "orbital_dos_sha256": "62d77d41d9196c9b5f43ed5b785b64b71110d9e1e91b0b686cf99a822d56707e",
+        "total_dos_path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_no_u_seed/C2_frozen_step100/Fe-imp_dos.out",
+        "total_dos_sha256": "84a826fa02a02e9c1ce75526152db19260ae778c547891ca466fd1044f7de78a",
+        "acceptance_path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_no_u_seed/C2_acceptance.json",
+        "acceptance_sha256": "fbbc93de2125f57f72721de3dfc3889a1c1ff4a95ffb8f9bd6a696284868ac62",
+        "acceptance": {
+          "run_id": "fe_uplus_imp_no_u_seed",
+          "status": "ACCEPTED",
+          "complete_iterations": 100,
+          "accepted_window": [
+            81,
+            100
+          ],
+          "outer_Diff": 6.6e-09,
+          "d_up_spread": 1.325053871070736e-07,
+          "d_down_spread": 3.2959496820694767e-07,
+          "sphere_moment_abs_spread_muB": 3.972203184154921e-07,
+          "endpoint": "Fe-imp_out.nml",
+          "endpoint_sha256": "9b7ac487f20e519eb8e297f5daf6e7fc1e4794634e872dc852bac881621601a3",
+          "endpoint_equals_scf": true,
+          "frozen_files": {
+            "Fe-imp_out.nml": "9b7ac487f20e519eb8e297f5daf6e7fc1e4794634e872dc852bac881621601a3",
+            "Fe-imp_scf.nml": "9b7ac487f20e519eb8e297f5daf6e7fc1e4794634e872dc852bac881621601a3",
+            "Fe-imp_orbital_dos.out": "62d77d41d9196c9b5f43ed5b785b64b71110d9e1e91b0b686cf99a822d56707e",
+            "Fe-imp_dos.out": "84a826fa02a02e9c1ce75526152db19260ae778c547891ca466fd1044f7de78a",
+            "report.out": "6927cc046a42a2f33ec5bc17e32f2c981b5fd0581282389c9c35ed3fa567b4d8",
+            "fixed_u_trace.csv": "6630f285dde2b6ee47ac61d0b6463be19fb9059f4fd72e9ed8a9c783d27750d4",
+            "c2_console.log": "1f6e872011c07e15310e5beb1361bb261998a0d432add1d9ac757646dacbc454"
+          },
+          "accepted_at_utc": "2026-10-19T12:06:00Z"
+        },
+        "impurity": {
+          "d_up": 4.554159011602983,
+          "d_down": 2.102614836692198,
+          "abs_sphere_moment_muB": 2.3834221901760912
+        },
+        "bulk": {
+          "d_up": 4.557606674800885,
+          "d_down": 2.099028890061353,
+          "abs_sphere_moment_muB": 2.3900696690841867
+        },
+        "delta": {
+          "d_up": -0.003447663197902351,
+          "d_down": 0.003585946630844994,
+          "abs_sphere_moment_muB": -0.006647478908095472
+        },
+        "ratio_abs_delta_to_u0": [
+          1640.045557178221,
+          473.03330636532866,
+          734.8710828387191
+        ],
+        "d_ldos_max_up_down_total_states_per_Ry_site": [
+          0.11815221509233709,
+          0.529063447190115,
+          0.5286835004649895
+        ],
+        "ldos_grid_E_minus_EF_Ry": [
+          -0.83656,
+          0.66913,
+          2510
+        ]
+      },
+      "fe_uplus_plus_u_seed": {
+        "status": "ACCEPTED_C1_FALLBACK1_STEP27",
+        "run_dir": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_plus_u_seed_fallback_beta005",
+        "launch_manifest": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_plus_u_seed_fallback_beta005/C2_launch.json",
+        "launch_manifest_sha256": "d7981364e0ea67d534519d27bbeb06e5fcc48d589c4e5b92f89e15cb2236d441",
+        "input_sha256": "6e7ef023e80bd75a55e6ddc9a16b70741f6751275cacfdb26e36e0e7d4fa35dc",
+        "binary": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_plus_u_seed_fallback_beta005/rslmto.x",
+        "binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+        "source_hashes": {
+          "source/self.f90": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823",
+          "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e"
+        },
+        "command": "cd /private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_plus_u_seed_fallback_beta005 && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RSLMTO_FIXED_U_TRACE=$PWD/fixed_u_trace.csv RSLMTO_FIXED_U_TRACE_QL_ONLY=1 RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY=1 RSLMTO_FIXED_U_RUN_ID=fe_uplus_imp_plus_u_seed_fallback_beta005 ./rslmto.x > c2_console.log 2>&1",
+        "thread_caps": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1"
+        },
+        "endpoint_path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_plus_u_seed_fallback_beta005/C2_frozen_step27/Fe-imp_scf.nml",
+        "endpoint_sha256": "30ae8608db589275058493292b4e0bcc825360dd8a357cf76c9f73b2c4d864c2",
+        "host_reference_path": "/private/tmp/rslmto-c2-requal/fe_uplus_bulk_requal/C2_checkpoint_candidate.nml",
+        "host_reference_sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702",
+        "seed_reference_path": "/private/tmp/rslmto-c2-requal/fe_uplus_bulk_requal/C2_checkpoint_candidate.nml",
+        "seed_reference_sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702",
+        "trace_path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_plus_u_seed_fallback_beta005/C2_frozen_step27/fixed_u_trace.csv",
+        "trace_sha256": "2e92432dd9a69b855d617d6d6122c2cd212f5c066674819a8b1fd43d868c73fa",
+        "orbital_dos_path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_plus_u_seed_fallback_beta005/C2_frozen_step27/Fe-imp_orbital_dos.out",
+        "orbital_dos_sha256": "83c1bd3ed813f515cb58e954e0908fcf8c8bc80d4c70d288918301621d0884c4",
+        "total_dos_path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_plus_u_seed_fallback_beta005/C2_frozen_step27/Fe-imp_dos.out",
+        "total_dos_sha256": "843e90e13361f35ad31a2219408358413817cd487fb8ebb7c577b2c44aa80389",
+        "acceptance_path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_plus_u_seed_fallback_beta005/C2_acceptance.json",
+        "acceptance_sha256": "f939a880cf890b9c57697c58b2bfd60465355ea4999530a31310c15b8cf20341",
+        "acceptance": {
+          "run_id": "fe_uplus_imp_plus_u_seed_fallback_beta005",
+          "status": "ACCEPTED_C1_FALLBACK1",
+          "complete_fallback_iterations": 27,
+          "accepted_window": [
+            8,
+            27
+          ],
+          "outer_Diff": 1.9e-09,
+          "d_up_spread": 8.06648206008731e-08,
+          "d_down_spread": 8.151445740622876e-08,
+          "sphere_moment_abs_spread_muB": 1.446366417745537e-07,
+          "frozen_files": {
+            "Fe-imp_scf.nml": "30ae8608db589275058493292b4e0bcc825360dd8a357cf76c9f73b2c4d864c2",
+            "Fe-imp_orbital_dos.out": "83c1bd3ed813f515cb58e954e0908fcf8c8bc80d4c70d288918301621d0884c4",
+            "Fe-imp_dos.out": "843e90e13361f35ad31a2219408358413817cd487fb8ebb7c577b2c44aa80389",
+            "fixed_u_trace.csv": "2e92432dd9a69b855d617d6d6122c2cd212f5c066674819a8b1fd43d868c73fa",
+            "c2_console.log": "b7215f439c6db2d20bce8300f50e7a70572e5eadceb0f5cbdb482816fb677539"
+          },
+          "capture_utc": "2026-10-19T12:20:00Z",
+          "capture_method": "source and snapshot hashes stable; completed console marker and six P_OUT ql rows per iteration"
+        },
+        "impurity": {
+          "d_up": 4.5541590334068065,
+          "d_down": 2.102614896303756,
+          "abs_sphere_moment_muB": 2.3834221455184226
+        },
+        "bulk": {
+          "d_up": 4.557606674800885,
+          "d_down": 2.099028890061353,
+          "abs_sphere_moment_muB": 2.3900696690841867
+        },
+        "delta": {
+          "d_up": -0.0034476413940787154,
+          "d_down": 0.00358600624240335,
+          "abs_sphere_moment_muB": -0.006647523565764146
+        },
+        "ratio_abs_delta_to_u0": [
+          1640.0351851488115,
+          473.04116991028616,
+          734.8760196921922
+        ],
+        "d_ldos_max_up_down_total_states_per_Ry_site": [
+          0.1181222151,
+          0.5290133939,
+          0.5286334472
+        ],
+        "ldos_grid_E_minus_EF_Ry": [
+          -0.83656,
+          0.66913,
+          2510
+        ],
+        "fallback_parent_state_path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_plus_u_seed/C2_frozen_step100/Fe-imp_out.nml",
+        "fallback_parent_state_sha256": "b1725411ccbc4370a055b45c6cfba6798b18c85e875456ecd58b11f8a94cd46f"
+      },
+      "ni_u0_control": {
+        "status": "ACCEPTED_C1_STEP200",
+        "run_dir": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql",
+        "launch_manifest": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql/C2_launch.json",
+        "launch_manifest_sha256": "ff6cfc14d0c67adfe8b16755298166b2ef31ebd5f7879e0f749d27b2fd0e5fab",
+        "input_sha256": "4a268e5eddb779a01b858e2c13459ef55207d16ad4cbc4f9ed30b202d52395ac",
+        "binary": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql/rslmto.x",
+        "binary_sha256": "b07a0139df32e1b4c3d6c4cdeb44f376b0b7443c18a4cf1ad6d5143f041b7bca",
+        "source_hashes": {
+          "source/self.f90": "6c3d72cd5dbb6ddd3ffcdefb1700589040294e112204cf19c0649f2b2154de4d",
+          "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e"
+        },
+        "command": "cd /private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RSLMTO_FIXED_U_TRACE=$PWD/fixed_u_trace.csv RSLMTO_FIXED_U_TRACE_QL_ONLY=1 RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY=1 RSLMTO_FIXED_U_RUN_ID=ni_u0_imp_no_u_seed_debug_ql ./rslmto.x > c2_console.log 2>&1",
+        "thread_caps": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1"
+        },
+        "endpoint_path": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql/Ni-imp_out.nml",
+        "endpoint_sha256": "addd6667159c9e4a5b6e4d3ff575143281877fb0b3c78832dccead1a34735e2d",
+        "host_reference_path": "/private/tmp/rslmto-c2-ni-ra4/ni_bulk_u0_initial/Ni_out.nml",
+        "host_reference_sha256": "baf910e9b548c0876a68396232ea5c402c5f024d1ae884bd57076577b2c44eae",
+        "seed_reference_path": "/private/tmp/rslmto-c2-ni-ra4/ni_bulk_u0_initial/Ni_out.nml",
+        "seed_reference_sha256": "baf910e9b548c0876a68396232ea5c402c5f024d1ae884bd57076577b2c44eae",
+        "trace_path": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql/fixed_u_trace.csv",
+        "trace_sha256": "7a0d563813f3844631a279013412b6ed2c732b9e86a1a955ae8681357f698fb7",
+        "orbital_dos_path": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql/Ni-imp_orbital_dos.out",
+        "orbital_dos_sha256": "832fdd9e1958f994f10fa7f681031d30444993d563fbaa49fe190cad5edbd20e",
+        "total_dos_path": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql/Ni-imp_dos.out",
+        "total_dos_sha256": "ae89eb57ffe69d3fe2ae768a09a281672255fa6fbf3f7b817575cd44bb839fed",
+        "acceptance_path": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql/C2_acceptance.json",
+        "acceptance_sha256": "993c0203956361616050d444fbb542e780a1e32cfbd04f8e03c3a1e31fc383e4",
+        "acceptance": {
+          "run_id": "ni_u0_imp_no_u_seed_debug_ql",
+          "status": "ACCEPTED",
+          "classification": "RA4 matched fcc Ni U=0 impurity record from no-U seed, C1 RS-accepted by external criteria at the configured step cap; solver used 1e-30 convergence threshold so external C1 status controls",
+          "binary_sha256": "b07a0139df32e1b4c3d6c4cdeb44f376b0b7443c18a4cf1ad6d5143f041b7bca",
+          "input_sha256": "4a268e5eddb779a01b858e2c13459ef55207d16ad4cbc4f9ed30b202d52395ac",
+          "initial_input_sha256": "4a268e5eddb779a01b858e2c13459ef55207d16ad4cbc4f9ed30b202d52395ac",
+          "host_sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+          "impurity_seed_sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+          "impurity_final_potential_sha256": "addd6667159c9e4a5b6e4d3ff575143281877fb0b3c78832dccead1a34735e2d",
+          "console_sha256": "fe5e2faf5f5764993d146432ca20cc2521fe7564a493fec3a895385ea4bd0a43",
+          "trace_sha256": "7a0d563813f3844631a279013412b6ed2c732b9e86a1a955ae8681357f698fb7",
+          "completed_iterations": 200,
+          "final_outer_diff": 1.52e-08,
+          "last20_iterations": [
+            181,
+            200
+          ],
+          "last20_d_occupation_up_spread": 1.5948614784377924e-07,
+          "last20_d_occupation_down_spread": 7.839479465587829e-08,
+          "last20_sphere_moment_spread_muB": 3.8588745299161786e-07,
+          "c1_limits": {
+            "outer_Diff_max": 3e-08,
+            "d_occupation_spread_max": 5e-07,
+            "sphere_moment_spread_muB_max": 1e-06
+          },
+          "c1_pass": true,
+          "trace": {
+            "kind": "QL_ONLY",
+            "stage": "P_OUT",
+            "rows_per_iteration": 6,
+            "covers_iterations": [
+              1,
+              200
+            ],
+            "physics_unchanged": true
+          },
+          "completion": "normal process exit 0 at step cap 200; output files Ni-imp_out.nml and Ni-imp_scf.nml are byte-identical",
+          "source_at_build": {
+            "source/self.f90": "6c3d72cd5dbb6ddd3ffcdefb1700589040294e112204cf19c0649f2b2154de4d",
+            "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e"
+          },
+          "note": "This U=0 run has zero stored U/J arrays and zero explicit impurity U/J; the changed active-U residual mapping is not entered. The later D3 residual-map repair is for active-U impurity cases."
+        },
+        "impurity": {
+          "d_up": 4.701521261991117,
+          "d_down": 4.701521425398992,
+          "abs_sphere_moment_muB": 2.6115967788342687e-07
+        },
+        "bulk": {
+          "d_up": 4.701519558204325,
+          "d_down": 4.701519612420077,
+          "abs_sphere_moment_muB": 7.912930310993715e-08
+        },
+        "delta": {
+          "d_up": 1.7037867925395744e-06,
+          "d_down": 1.8129789154386344e-06,
+          "abs_sphere_moment_muB": 1.820303747734897e-07
+        },
+        "d_ldos_max_up_down_total_states_per_Ry_site": [
+          0.000339886807,
+          0.000289931181,
+          0.000609931181
+        ],
+        "ldos_grid_E_minus_EF_Ry": [
+          -0.93886,
+          0.56631,
+          2510
+        ]
+      },
+      "ni_uplus_no_u_seed": {
+        "status": "ACCEPTED_C1_STEP60",
+        "run_dir": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_no_u_seed",
+        "launch_manifest": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_no_u_seed/C2_launch.json",
+        "launch_manifest_sha256": "8a07c9a097e1b8c28e62aedc98393506720abf11329e816a6d349565bfde46a8",
+        "input_sha256": "6c9259303d349bd6d38b18d716e931495e19e6240b32d7ef2b5f1333173a0bba",
+        "binary": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_no_u_seed/rslmto.x",
+        "binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+        "source_hashes": {
+          "source/self.f90": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823",
+          "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e"
+        },
+        "command": "cd /private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_no_u_seed && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RSLMTO_FIXED_U_TRACE=$PWD/fixed_u_trace.csv RSLMTO_FIXED_U_TRACE_QL_ONLY=1 RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY=1 RSLMTO_FIXED_U_RUN_ID=ni_uplus_imp_no_u_seed ./rslmto.x > c2_console.log 2>&1",
+        "thread_caps": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1"
+        },
+        "endpoint_path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_no_u_seed/C2_frozen_Ni-imp_scf.nml",
+        "endpoint_sha256": "829949db36e55b531a062e28bf7ede94c3ad923df24616102358678844441a64",
+        "host_reference_path": "/private/tmp/rslmto-c2-requal/ni_uplus_bulk_requal/C2_checkpoint_candidate.nml",
+        "host_reference_sha256": "98db0dbac862cf6add01b470598ae5fcdbc90be86507fc01c4ef166b6eef8055",
+        "seed_reference_path": "/private/tmp/rslmto-c2-ni-ra4/ni_bulk_u0_initial/Ni_out.nml",
+        "seed_reference_sha256": "baf910e9b548c0876a68396232ea5c402c5f024d1ae884bd57076577b2c44eae",
+        "trace_path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_no_u_seed/fixed_u_trace.csv",
+        "trace_sha256": "c5eeabd076b8c2654f888663e03009daecf5ed64c826086d5f8e7e0569c96d7c",
+        "orbital_dos_path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_no_u_seed/C2_frozen_Ni-imp_orbital_dos.out",
+        "orbital_dos_sha256": "c524856edee36acd3999dae687a809fd207cb70a230b38748351f9cde21b7f51",
+        "total_dos_path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_no_u_seed/C2_frozen_Ni-imp_dos.out",
+        "total_dos_sha256": "2263ab8cfd7882f9df43f40cd1b801862be2fe7594b276fbeaf214b16fc1a81b",
+        "acceptance_path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_no_u_seed/C2_acceptance.json",
+        "acceptance_sha256": "38b3623065273ceaa128a4b2e2b0823d4a076d0b5b2598af4b5bc348d223ca01",
+        "acceptance": {
+          "run_id": "ni_uplus_imp_no_u_seed",
+          "status": "ACCEPTED_STEP60",
+          "classification": "C1 RS-accepted at step60; frozen stable checkpoint, early stop after acceptance; no numerical fallback",
+          "binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+          "source_hashes": {
+            "source/self.f90": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823",
+            "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e"
+          },
+          "input_sha256": "6c9259303d349bd6d38b18d716e931495e19e6240b32d7ef2b5f1333173a0bba",
+          "initial_input_sha256": "6c9259303d349bd6d38b18d716e931495e19e6240b32d7ef2b5f1333173a0bba",
+          "host_used_sha256": "16a934ce810e2e5310e19d8152ce92a82667d4e2d3cafa913bafa006dc2269bc",
+          "impurity_initial_seed_sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+          "accepted_endpoint_path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_no_u_seed/C2_frozen_Ni-imp_scf.nml",
+          "accepted_endpoint_sha256": "829949db36e55b531a062e28bf7ede94c3ad923df24616102358678844441a64",
+          "console_sha256": "e61e1de8a9a1cf6f0b37573016a4f10c7c5f9d59459c996eb77122da1cf94363",
+          "trace_sha256": "c5eeabd076b8c2654f888663e03009daecf5ed64c826086d5f8e7e0569c96d7c",
+          "matched_dos_files": {
+            "Ni-imp_orbital_dos.out": "c524856edee36acd3999dae687a809fd207cb70a230b38748351f9cde21b7f51",
+            "Ni-imp_dos.out": "2263ab8cfd7882f9df43f40cd1b801862be2fe7594b276fbeaf214b16fc1a81b"
+          },
+          "completed_iteration": 60,
+          "outer_Diff": 9.9e-09,
+          "last20_iterations": [
+            41,
+            60
+          ],
+          "last20_d_occupation_spreads": {
+            "up": {
+              "spread": 3.95341750447642e-08,
+              "min": 4.771098507427353,
+              "max": 4.771098546961528
+            },
+            "down": {
+              "spread": 5.11422326709976e-08,
+              "min": 4.771098548467329,
+              "max": 4.771098599609561
+            }
+          },
+          "last20_sphere_moment_spread_muB": 1.2583772607266397e-07,
+          "C1_tolerances": {
+            "Diff": 3e-08,
+            "d_up_down_spread": 5e-07,
+            "sphere_moment_spread_muB": 1e-06
+          },
+          "accepted": true,
+          "saved_potential_observables": {
+            "phase": "post-mix saved potential; used consistently for RA4 impurity/bulk U0/U+ comparison",
+            "d_up": 4.7710985382419455,
+            "d_down": 4.771098567956434,
+            "sphere_moment_abs_muB": 5.670334193852433e-08,
+            "sha256": "829949db36e55b531a062e28bf7ede94c3ad923df24616102358678844441a64"
+          },
+          "endpoint_in_last20_ranges": true,
+          "trace": {
+            "kind": "QL_ONLY",
+            "stage": "P_OUT",
+            "complete_through": 60,
+            "rows_per_iteration": 6
+          },
+          "termination": "Ctrl-C exit130 after step60 accepted output/DOS/checkpoint snapshots were frozen; not a solver crash or fallback",
+          "unqualified_extra_checkpoint": "The previously copied candidate artifact in the directory is not selected unless explicitly named in this record."
+        },
+        "impurity": {
+          "d_up": 4.7710985382419455,
+          "d_down": 4.771098567956434,
+          "abs_sphere_moment_muB": 5.670334246588027e-08
+        },
+        "bulk": {
+          "d_up": 4.771098119727522,
+          "d_down": 4.771098148803758,
+          "abs_sphere_moment_muB": 2.5491526223220262e-08
+        },
+        "delta": {
+          "d_up": 4.185144231172444e-07,
+          "d_down": 4.191526761232467e-07,
+          "abs_sphere_moment_muB": 3.1211816242660007e-08
+        },
+        "ratio_abs_delta_to_u0": [
+          0.24563779044995937,
+          0.23119556027590998,
+          0.1714648793175236
+        ],
+        "d_ldos_max_up_down_total_states_per_Ry_site": [
+          0.00076,
+          0.000739959346,
+          0.00149995324
+        ],
+        "ldos_grid_E_minus_EF_Ry": [
+          -0.93886,
+          0.56631,
+          2510
+        ]
+      },
+      "ni_uplus_plus_u_seed": {
+        "status": "ACCEPTED_C1_STEP30",
+        "run_dir": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_plus_u_seed",
+        "launch_manifest": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_plus_u_seed/C2_launch.json",
+        "launch_manifest_sha256": "8ac8aa44b1d5fe91422072b9c8019e0c9abd5643cbd211d721d39d578457f97b",
+        "input_sha256": "6c9259303d349bd6d38b18d716e931495e19e6240b32d7ef2b5f1333173a0bba",
+        "binary": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_plus_u_seed/rslmto.x",
+        "binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+        "source_hashes": {
+          "source/self.f90": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823",
+          "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e"
+        },
+        "command": "cd /private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_plus_u_seed && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RSLMTO_FIXED_U_TRACE=$PWD/fixed_u_trace.csv RSLMTO_FIXED_U_TRACE_QL_ONLY=1 RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY=1 RSLMTO_FIXED_U_RUN_ID=ni_uplus_imp_plus_u_seed ./rslmto.x > c2_console.log 2>&1",
+        "thread_caps": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1"
+        },
+        "endpoint_path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_plus_u_seed/C2_step30_Ni-imp_scf.nml",
+        "endpoint_sha256": "66a6639c9a89e82fe2a1a28023d9169f264e57f651502155c9dfbb13b11ce9da",
+        "host_reference_path": "/private/tmp/rslmto-c2-requal/ni_uplus_bulk_requal/C2_checkpoint_candidate.nml",
+        "host_reference_sha256": "98db0dbac862cf6add01b470598ae5fcdbc90be86507fc01c4ef166b6eef8055",
+        "seed_reference_path": "/private/tmp/rslmto-c2-requal/ni_uplus_bulk_requal/C2_checkpoint_candidate.nml",
+        "seed_reference_sha256": "98db0dbac862cf6add01b470598ae5fcdbc90be86507fc01c4ef166b6eef8055",
+        "trace_path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_plus_u_seed/fixed_u_trace.csv",
+        "trace_sha256": "b951215fa57c7dbaee2fba3bf5795da379c494ceed17c8be9a7eaed75526e7ad",
+        "orbital_dos_path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_plus_u_seed/C2_step30_Ni-imp_orbital_dos.out",
+        "orbital_dos_sha256": "a1ef24831aaeea3f3f740a7a017cb5542134dcad505b2e884d0ac45ba7a13d80",
+        "total_dos_path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_plus_u_seed/C2_step30_Ni-imp_dos.out",
+        "total_dos_sha256": "5c62fe4d4bfdc46e8167e295730a5e9393783d2fd9bba220101090062ee2214a",
+        "acceptance_path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_plus_u_seed/C2_acceptance.json",
+        "acceptance_sha256": "b1b4515dae721aba6fb68a802554108824fec820aa7eda6f0fbc7e3ed266bc81",
+        "acceptance": {
+          "run_id": "ni_uplus_imp_plus_u_seed",
+          "status": "ACCEPTED_STEP30",
+          "classification": "C1 RS-accepted at step30; safely stopped after accepted state snapshot was frozen (not a numerical failure and no C1 continuation required)",
+          "binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+          "input_sha256": "6c9259303d349bd6d38b18d716e931495e19e6240b32d7ef2b5f1333173a0bba",
+          "initial_input_sha256": "6c9259303d349bd6d38b18d716e931495e19e6240b32d7ef2b5f1333173a0bba",
+          "host_used_sha256": "16a934ce810e2e5310e19d8152ce92a82667d4e2d3cafa913bafa006dc2269bc",
+          "impurity_initial_seed_sha256": "464bd1be4e662b64475e74a9eda1e05398ff2dc58647bbc365ecda03aedcc3e0",
+          "accepted_endpoint_path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_plus_u_seed/C2_step30_Ni-imp_scf.nml",
+          "accepted_endpoint_sha256": "66a6639c9a89e82fe2a1a28023d9169f264e57f651502155c9dfbb13b11ce9da",
+          "console_sha256": "c54e9cf8b5196ca15cc62c540050297690410fb495c210e1d18af8704cc22afd",
+          "trace_sha256": "b951215fa57c7dbaee2fba3bf5795da379c494ceed17c8be9a7eaed75526e7ad",
+          "matched_dos_files": {
+            "Ni-imp_orbital_dos.out": "a1ef24831aaeea3f3f740a7a017cb5542134dcad505b2e884d0ac45ba7a13d80",
+            "Ni-imp_dos.out": "5c62fe4d4bfdc46e8167e295730a5e9393783d2fd9bba220101090062ee2214a"
+          },
+          "completed_iteration": 30,
+          "outer_Diff": 6.4e-09,
+          "last20_iterations": [
+            11,
+            30
+          ],
+          "last20_d_occupation_spreads": {
+            "up": {
+              "spread": 4.259698638264808e-08,
+              "min": 4.771098508745068,
+              "max": 4.771098551342054
+            },
+            "down": {
+              "spread": 4.291145216939185e-08,
+              "min": 4.771098515871683,
+              "max": 4.771098558783136
+            }
+          },
+          "last20_sphere_moment_spread_muB": 1.5363983596472508e-07,
+          "C1_tolerances": {
+            "Diff": 3e-08,
+            "d_up_down_spread": 5e-07,
+            "sphere_moment_spread_muB": 1e-06
+          },
+          "accepted": true,
+          "endpoint_values": {
+            "d_up": 4.771098517698383,
+            "d_down": 4.77109853388987,
+            "sphere_moment_muB": 3.172805485007757e-08
+          },
+          "endpoint_in_last20_ranges": true,
+          "trace": {
+            "kind": "QL_ONLY",
+            "stage": "P_OUT",
+            "complete_through": 30,
+            "rows_per_iteration": 6
+          },
+          "termination": "Ctrl-C exit130 after step30 had completed and accepted output/DOS/checkpoint snapshots were frozen; not a solver crash or C1 fallback",
+          "source_at_build": {
+            "source/self.f90": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823",
+            "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e"
+          },
+          "saved_potential_observables": {
+            "phase": "post-mix saved potential; used consistently for RA4 impurity/bulk U0/U+ comparison",
+            "d_up": 4.77109852635633,
+            "d_down": 4.771098540889266,
+            "sphere_moment_abs_muB": 4.514232204710922e-08,
+            "sha256": "66a6639c9a89e82fe2a1a28023d9169f264e57f651502155c9dfbb13b11ce9da"
+          },
+          "terminal_P_OUT_observables": {
+            "phase": "trace only, used for C1 last20 acceptance",
+            "d_up": 4.771098517698383,
+            "d_down": 4.77109853388987,
+            "sphere_moment_abs_muB": 3.172805485007757e-08
+          },
+          "nonselected_checkpoint_note": "C2_checkpoint_accepted.nml is the earlier step25 snapshot; the accepted step30 endpoint and matched DOS are the C2_step30_* files."
+        },
+        "impurity": {
+          "d_up": 4.77109852635633,
+          "d_down": 4.771098540889266,
+          "abs_sphere_moment_muB": 4.5142321880575764e-08
+        },
+        "bulk": {
+          "d_up": 4.771098119727522,
+          "d_down": 4.771098148803758,
+          "abs_sphere_moment_muB": 2.5491526223220262e-08
+        },
+        "delta": {
+          "d_up": 4.0662880795849787e-07,
+          "d_down": 3.920855080608021e-07,
+          "abs_sphere_moment_muB": 1.96507956573555e-08
+        },
+        "ratio_abs_delta_to_u0": [
+          0.23866179133387838,
+          0.2162658951640044,
+          0.1079533878991792
+        ],
+        "d_ldos_max_up_down_total_states_per_Ry_site": [
+          0.00076,
+          0.000669959346,
+          0.00142995935
+        ],
+        "ldos_grid_E_minus_EF_Ry": [
+          -0.93886,
+          0.56631,
+          2510
+        ]
+      }
+    },
+    "d1_d2_d3": {
+      "D1": "Post-fix impurity hall and same-type bulk ee Hubbard blocks match within 5.58e\u221217; effective U/J equal; one insertion per build. Frozen first-step P_OUT d difference 4.144e\u22127, within U=0 control scale.",
+      "D2": "Host-only and impurity-only tests isolated the pre-fix recursion-index/type-index mismatch. Post-fix impurity-only general and impurity-override paths apply identical effective U/J and correction; J=0 decomposition recorded.",
+      "D3": "Type-index correction was the smallest change and changed no physics formula. Operator regression passes. The Fe U+ moment discrepancy absolute ratio is 734.876, so the requested <10 target is NOT MET. Matched frozen Green inputs/operators agree; the first small differences occur in calculated Green spectra, and weighted integration reproduces P_OUT d occupations. Multistep moment discrepancy remains unexplained; continue RB under C1/C2.",
+      "green_localization_artifact": "/private/tmp/rslmto-c2-d3-green-capture/C2_D3_GREEN_LOCALIZATION.json",
+      "green_localization_artifact_sha256": "e0510cfae7f6dc74db95f25eff2311f8eb49aaf5b4d441896738ba0c44073758",
+      "operator_regression_artifact": "/private/tmp/rslmto-c2-d1d2",
+      "residual_mapping_runner": "tests/validation/fixed_ldau/c2_residual_mapping_bounds_smoke.py",
+      "residual_mapping_result": "/private/tmp/rslmto-c2-residual-map-integration-smoke/RESULT.json",
+      "green_localization_artifact_embedded": {
+        "schema": "rslmto.fixed_ldau.c2_d3_green_localization.v1",
+        "status": "diagnostic pair complete; no D3 production verdict",
+        "purpose": "Localize the first divergence in the correctly matched fixed-Fermi, same-seed Fe U+ bulk/impurity D1 pair without changing shared physics source.",
+        "provenance": {
+          "diagnostic_root": "/private/tmp/rslmto-c2-d3-green-capture",
+          "source_copy": "/private/tmp/rslmto-c2-d3-green-audit-src",
+          "build_directory": "/private/tmp/rslmto-c2-d3-green-audit-build",
+          "source_base": {
+            "self_f90_sha256": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823",
+            "hamiltonian_build_f90_sha256": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+            "hamiltonian_hubbard_f90_sha256": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee"
+          },
+          "diagnostic_source_delta": {
+            "path": "/private/tmp/rslmto-c2-d3-green-audit-src/trace-only-source-delta.patch",
+            "sha256": "33adbe7963e67eada3644f1671ff6b534222abc7392ddfa12751ae73858e24bd",
+            "source_copy_self_f90_sha256": "5d486faa24e2fede3912737054e138c5b8fd03eb14ec0ddfe9cdb7020471051f",
+            "scope": "Adds default-off RSLMTO_FIXED_U_TRACE_SKIP_M0_SNAPSHOT parsing/broadcast and gates only the post-P_OUT diagnostic snapshot call. No shared source was changed; production output and formulas are not modified by this audit-only source copy."
+          },
+          "binary": {
+            "path": "/private/tmp/rslmto-c2-d3-green-audit-build/bin/rslmto.x",
+            "sha256": "ac726776b3c0ba28f0aca775ad9d18f671adbdae198421efe4c2849f01bc91f1",
+            "compiler": "/opt/homebrew/bin/gfortran",
+            "build_type": "Debug",
+            "fortran_flags": "-ffree-line-length-0 -cpp -mtune=native -g -O0 -Wall -Wno-tabs -Wno-unused-variable -Wno-unused-dummy-argument -Wno-unused-function -Wno-unused-label -fbacktrace",
+            "openmp": "enabled (-fopenmp; run capped to one thread)",
+            "mpi": "disabled"
+          }
+        },
+        "pair": {
+          "same_material": "bcc Fe",
+          "backend": "RS",
+          "radial_moment_mode": "spectral",
+          "nsp": 1,
+          "U_eV": 3.8,
+          "J_eV": 1.1,
+          "effective_U_Ry": 0.27929462574689784,
+          "effective_J_Ry": 0.08084844429515466,
+          "fix_fermi": true,
+          "fixed_fermi_Ry": -0.163441,
+          "energy_input_Ry": [
+            -1.0,
+            0.5
+          ],
+          "channels_ldos": 2500,
+          "nstep": 1,
+          "bulk": {
+            "directory": "/private/tmp/rslmto-c2-d3-green-capture/bulk",
+            "command": "run /private/tmp/rslmto-c2-d3-green-audit-build/bin/rslmto.x from this directory with the environment below",
+            "exit_code": 0,
+            "input_nml_pre_run_sha256": "3aeb8b5e5570506095fd1508147c66b6167a1209454f55ed5edbc86ed83ffc4b",
+            "seed_Fe_nml_sha256": "d4abdc888fa8ee2d64deb71ac9feb81fd0c960fe7749b7cb5cb2f3ff754bbe38",
+            "fixed_u_trace_csv_sha256": "3b6f11704b474633889cb81dc030804c249d60a1e825d68e802773e83ba4de1a",
+            "c2_hubbard_audit_sha256": "04f3d1bddb96cf85f12416a5063c14c05a7a3a5223be9ce9b08d8b4fa593b6dc",
+            "run_log_sha256": "9771829cef67a42206bc22c1fdfb570c8b241ea18aca8caacc6137e2b7471b08",
+            "target_site_type": 1
+          },
+          "impurity": {
+            "directory": "/private/tmp/rslmto-c2-d3-green-capture/imp",
+            "command": "run /private/tmp/rslmto-c2-d3-green-audit-build/bin/rslmto.x from this directory with the environment below",
+            "exit_code": 0,
+            "input_nml_pre_run_sha256": "cbf421d32d61ef143a01eb56d7bbcc53a816f688c660634fef0269de62e5597e",
+            "Fe_bulk_seed_nml_sha256": "d4abdc888fa8ee2d64deb71ac9feb81fd0c960fe7749b7cb5cb2f3ff754bbe38",
+            "Fe_imp_seed_nml_sha256": "d4abdc888fa8ee2d64deb71ac9feb81fd0c960fe7749b7cb5cb2f3ff754bbe38",
+            "fixed_u_trace_csv_sha256": "13f5c9f9a935de5b8ee50c347941021b86ceeeae32e7f04992cde64094763766",
+            "c2_hubbard_audit_sha256": "f2944088721e75fb437b221fe367794c82bfbc525a082fdfe36cc04ec2a8be58",
+            "run_log_sha256": "ebb4098d7f4279c1e47022d3f802a4489c7cfdf6f02603656f819c018cdf7936",
+            "target_site_type": 2,
+            "target_recursion_site_zero_based": 0
+          },
+          "environment": {
+            "RSLMTO_C2_HUBBARD_AUDIT": "1",
+            "RSLMTO_FIXED_U_TRACE": "fixed_u_trace.csv",
+            "RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY": "1",
+            "RSLMTO_FIXED_U_TRACE_SKIP_M0_SNAPSHOT": "1",
+            "RSLMTO_FIXED_U_TRACE_QL_ONLY": "0",
+            "RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY": "0",
+            "OMP_NUM_THREADS": "1",
+            "trace": "full RS_GREEN capture; 452304 green_function rows per run"
+          }
+        },
+        "grid_and_mapping": {
+          "captured_energy_points": 1396,
+          "bulk_impurity_energy_grid_max_abs_difference_Ry": 0.0,
+          "bulk_impurity_quadrature_weight_max_abs_difference_Ry": 0.0,
+          "energy_grid_first_Ry": -1.0,
+          "energy_grid_last_Ry": -0.16284088593974166,
+          "green_matrix_size": "18x18 (lmax=2, spin_off=9)",
+          "green_d_indices_zero_based": {
+            "spin_up": [
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "spin_down": [
+              13,
+              14,
+              15,
+              16,
+              17
+            ]
+          },
+          "basis_map_verified": true,
+          "ldm_p_out_indices": "shell-local rows/columns 0..4 at l=2, separate spin records",
+          "interpretation": "Green global matrix indices and P_OUT shell-local indices are different coordinate systems; comparison applies the explicit l=2 basis map."
+        },
+        "measurements": {
+          "earliest_grid_point_d_green_max_abs_difference": {
+            "energy_index_zero_based": 0,
+            "energy_Ry": -1.0,
+            "global_row": 6,
+            "global_col": 6,
+            "spin": "up",
+            "orbital": "d, m=0",
+            "complex_bulk_minus_impurity": [
+              1.989898845700111e-08,
+              1.628899399434304e-11
+            ],
+            "absolute_difference": 1.98989951239551e-08
+          },
+          "largest_pointwise_d_green_difference": {
+            "energy_index_zero_based": 458,
+            "energy_Ry": -0.7251477604017216,
+            "global_row": 15,
+            "global_col": 15,
+            "spin": "down",
+            "orbital": "d, m=0",
+            "bulk_green": [
+              -1.5283711274037728,
+              -0.0021332709711538093
+            ],
+            "impurity_green": [
+              -1.5283710353720945,
+              -0.0019128141177470058
+            ],
+            "absolute_difference": 0.00022045687261652483
+          },
+          "near_resonance_d_green_difference": {
+            "energy_index_zero_based": 1177,
+            "energy_Ry": -0.2936657510760401,
+            "global_row": 6,
+            "global_col": 6,
+            "spin": "up",
+            "orbital": "d, m=0",
+            "absolute_difference": 0.0001485306296940626,
+            "bulk_green_magnitude_approx": 47.46,
+            "relative_difference_approx": 3.13e-06
+          },
+          "integrated_d_ql_bulk": [
+            4.554630824452251,
+            2.0965784404607204
+          ],
+          "integrated_d_ql_impurity": [
+            4.554631615147656,
+            2.0965771402119864
+          ],
+          "impurity_minus_bulk_d_ql": [
+            7.90695405e-07,
+            -1.30024873e-06
+          ],
+          "bulk_green_integral_vs_traced_p_out_d_matrix_max_abs_difference": 1.6051924157429854e-08,
+          "impurity_green_integral_vs_traced_p_out_d_matrix_max_abs_difference": 1.1339499453657774e-08,
+          "bulk_vs_impurity_traced_p_out_d_matrix_max_abs_difference": 4.1440288889305066e-07,
+          "bulk_vs_impurity_p_out_max_difference_location": {
+            "spin": "up",
+            "shell_local_row": 3,
+            "shell_local_col": 3,
+            "d_orbital_m": "+1"
+          },
+          "d_ql_trace_vs_green_integral_max_abs_difference": 2e-15
+        },
+        "conclusion": {
+          "localized_stage": "The first measurable difference is already in the local RS Green spectra after the matched P_IN/Hubbard blocks; weighted integration yields only sub-2e-6 d-occupation differences, and the traced P_OUT agrees with independently integrated Green matrices to about 1e-8.",
+          "d3_status": "This one-step pair finds no anomalous operator assembly, basis-index, or Green-to-occupation projection discrepancy. It does not explain or adjudicate the later multi-step Fe moment discrepancy; D3 remains a separate production-record comparison and is not a new acceptance gate.",
+          "limitations": [
+            "The bulk and impurity local Green functions have different recursion/embedding environments, so pointwise equality is not expected; the measured pointwise differences are not by themselves evidence of a bug.",
+            "Full CSV and diagnostic source/build artifacts are in /private/tmp and are referenced by SHA-256; they are not copied into the repository because the two Green traces are about 200 MB combined.",
+            "No SCF campaign, production source edit, or production binary change was made for this localization."
+          ]
+        }
+      },
+      "green_localization_original_sha256": "e0510cfae7f6dc74db95f25eff2311f8eb49aaf5b4d441896738ba0c44073758",
+      "green_localization_archived_copy": "/private/tmp/rslmto-c2-d3-green-capture/C2_D3_GREEN_LOCALIZATION.json"
+    },
+    "ldos_mapping": {
+      "source_refs": [
+        "source/bands.f90:492-493",
+        "source/basis.f90:15-19,48-56,92-94"
+      ],
+      "energy_column_1based": 1,
+      "d_up_columns_1based": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "d_down_columns_1based": [
+        14,
+        15,
+        16,
+        17,
+        18
+      ]
+    }
+  },
+  "historical_pre_C2_or_excluded_records": {
+    "observed_rows": [
+      {
+        "acceptance": {
+          "Diff": 2.3e-09,
+          "iterations": 84,
+          "spread_d_down": 2.21698e-07,
+          "spread_d_up": 2.13466e-07,
+          "spread_sphere_moment_muB": 2.394e-07
+        },
+        "bulk": {
+          "d_down": 2.14994095818039,
+          "d_up": 4.3491997462671375,
+          "sphere_moment_muB": 2.103828477208676
+        },
+        "bulk_potential": {
+          "path": "/private/tmp/rslmto-ra4-frozen/c1_trace_qlhistory_smoke_compact/Fe_out.nml",
+          "sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c"
+        },
+        "bulk_run_dir": "/private/tmp/rslmto-ra4-frozen/c1_trace_qlhistory_smoke_compact",
+        "case": "Fe U=0 impurity control",
+        "impurity": {
+          "d_down": 2.1499334602420035,
+          "d_up": 4.3492017699330745,
+          "sphere_moment_muB": 2.103837345922351
+        },
+        "impurity_minus_bulk": {
+          "d_down": -7.497938386613612e-06,
+          "d_up": 2.0236659370453935e-06,
+          "sphere_moment_muB": 8.868713675003193e-06
+        },
+        "launch_manifest": {
+          "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u0_control_no_u_seed/C1_launch.json",
+          "sha256": "8d81450da00d8da6996c5417f166b7c310b443ac534571d606b73c6d6510c144"
+        },
+        "matching_U0_difference": {
+          "d_down": -7.497938386613612e-06,
+          "d_up": 2.0236659370453935e-06,
+          "sphere_moment_muB": 8.868713675003193e-06
+        },
+        "potential": {
+          "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u0_control_no_u_seed/Fe_out.nml",
+          "sha256": "b3592f26b79ec0f3dae9bfcee96d19720e0283dc112c69eeaef9f122b24ef2b0"
+        },
+        "ratio_to_U0": null,
+        "run_dir": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u0_control_no_u_seed",
+        "seed": "no-U",
+        "solver_command": "cd <run_dir> && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RSLMTO_FIXED_U_TRACE=$PWD/fixed_u_trace.csv RSLMTO_FIXED_U_TRACE_QL_ONLY=1 RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY=1 RSLMTO_FIXED_U_RUN_ID=fe_u0_control_no_u_seed /private/tmp/rslmto-ra4-frozen/bin/rslmto-c1-qlhistory.x",
+        "solver_environment": null,
+        "status": "ACCEPTED"
+      },
+      {
+        "acceptance": {
+          "Diff": 4.7e-09,
+          "RS_accepted": false,
+          "iterations": 39,
+          "spread_d_down": 5.470570512144945e-07,
+          "spread_d_up": 2.5245454349231977e-07,
+          "spread_sphere_moment_muB": 6.353203141351571
+        },
+        "artifacts": {
+          "C1_initial_input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_no_u_seed_endpoint200/C1_initial_input.nml",
+            "sha256": "3870abd485de876708739921b625266de091c5fb8ec8a1c9cc55cb494962f3bc"
+          },
+          "Fe-bulk_out.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_no_u_seed_endpoint200/Fe-bulk_out.nml",
+            "sha256": "d4abdc888fa8ee2d64deb71ac9feb81fd0c960fe7749b7cb5cb2f3ff754bbe38"
+          },
+          "Fe-imp.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_no_u_seed_endpoint200/Fe-imp.nml",
+            "sha256": "e1ebb1006e15eb9a7a32098bcc1d50e2be491031b220b1f3394840e6fa8f90d8"
+          },
+          "Fe_orbital_dos.out": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_no_u_seed_endpoint200/Fe_orbital_dos.out",
+            "sha256": "f9cb644171fdb3b149bcaaaa6523098b3898b6e63f3dec3b904f36ac3cd4d027"
+          },
+          "Fe_out.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_no_u_seed_endpoint200/Fe_out.nml",
+            "sha256": "0dd5dd0a79753911d49f9e92bb27143520aa73f66c622612646b230170ecb3c0"
+          },
+          "c1_console.log": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_no_u_seed_endpoint200/c1_console.log",
+            "sha256": "cab63e810a986a9630ae5514d72ef633f88886cc8829c80eddafc315e8988fd2"
+          },
+          "fixed_u_trace.csv": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_no_u_seed_endpoint200/fixed_u_trace.csv",
+            "sha256": "91a23a7d2a4e2f1cde0aa27b2399296c6d36c16e47f6aad92a84cea01ceb3bd0"
+          },
+          "input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_no_u_seed_endpoint200/input.nml",
+            "sha256": "3870abd485de876708739921b625266de091c5fb8ec8a1c9cc55cb494962f3bc"
+          },
+          "report.out": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_no_u_seed_endpoint200/report.out",
+            "sha256": "9a29174cfd3a14a9bcfa5256bf0d0b8b448b0e4f2bd231d3ef07b3eb6b035d9a"
+          }
+        },
+        "bulk": {
+          "d_down": 2.0990289954407295,
+          "d_up": 4.557606615945333,
+          "sphere_moment_muB": 2.390069522764891
+        },
+        "bulk_potential": {
+          "path": "/private/tmp/rslmto-ra4-frozen/c1_qlmode_continuations/fe_bulk_u38j11_beta0015/Fe_out.nml",
+          "sha256": "d4abdc888fa8ee2d64deb71ac9feb81fd0c960fe7749b7cb5cb2f3ff754bbe38"
+        },
+        "bulk_run_dir": "/private/tmp/rslmto-ra4-frozen/c1_qlmode_continuations/fe_bulk_u38j11_beta0015",
+        "case": "Fe U=3.8,J=1.1 impurity from no-U seed",
+        "impurity": {
+          "d_down": 2.1015218661715416,
+          "d_up": 4.555158621155707,
+          "sphere_moment_muB": 2.385608749825778
+        },
+        "impurity_minus_bulk": {
+          "d_down": 0.002492870730812058,
+          "d_up": -0.0024479947896258736,
+          "sphere_moment_muB": -0.004460772939113067
+        },
+        "launch_manifest": {
+          "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_no_u_seed_endpoint200/C1_launch.json",
+          "sha256": "2576d58a7982262b5c3a287762f6a3b0fb01f6db39fad737015051c1040f36ca"
+        },
+        "matching_U0_difference": {
+          "d_down": -7.497938386613612e-06,
+          "d_up": 2.0236659370453935e-06,
+          "sphere_moment_muB": 8.868713675003193e-06
+        },
+        "ratio_to_U0": {
+          "d_down": -332.47415519747216,
+          "d_up": -1209.6832509816377,
+          "sphere_moment_muB": -502.9785719304396
+        },
+        "run_dir": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_no_u_seed_endpoint200",
+        "seed": "no-U",
+        "solver_command": "cd <run_dir> && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RSLMTO_FIXED_U_TRACE=$PWD/fixed_u_trace.csv RSLMTO_FIXED_U_TRACE_QL_ONLY=1 RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY=1 RSLMTO_FIXED_U_RUN_ID=fe_u38j11_imp_no_u_seed_endpoint200 /private/tmp/rslmto-ra4-frozen/bin/rslmto-c1-qlhistory.x",
+        "solver_environment": {
+          "MKL_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "RSLMTO_FIXED_U_RUN_ID": "fe_u38j11_imp_no_u_seed_endpoint200",
+          "RSLMTO_FIXED_U_TRACE": "<run_dir>/fixed_u_trace.csv",
+          "RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY": "1",
+          "RSLMTO_FIXED_U_TRACE_QL_ONLY": "1"
+        },
+        "status": "NOT RS-ACCEPTED; C1 fallback not run because \u00a75(c) STOP occurred"
+      },
+      {
+        "acceptance": {
+          "Diff": 3.6e-09,
+          "RS_accepted": true,
+          "iterations": 44,
+          "spread_d_down": 3.961379775319074e-07,
+          "spread_d_up": 1.4620627197814429e-07,
+          "spread_sphere_moment_muB": 4.486978260054286
+        },
+        "artifacts": {
+          "C1_initial_input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_plus_u_seed_endpoint200/C1_initial_input.nml",
+            "sha256": "3870abd485de876708739921b625266de091c5fb8ec8a1c9cc55cb494962f3bc"
+          },
+          "Fe-bulk_out.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_plus_u_seed_endpoint200/Fe-bulk_out.nml",
+            "sha256": "d4abdc888fa8ee2d64deb71ac9feb81fd0c960fe7749b7cb5cb2f3ff754bbe38"
+          },
+          "Fe-imp.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_plus_u_seed_endpoint200/Fe-imp.nml",
+            "sha256": "d4abdc888fa8ee2d64deb71ac9feb81fd0c960fe7749b7cb5cb2f3ff754bbe38"
+          },
+          "Fe_orbital_dos.out": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_plus_u_seed_endpoint200/Fe_orbital_dos.out",
+            "sha256": "a081d285ac27fd5708b7ce5f67560d4df77209ca737e38649ddfcf645c9f4c74"
+          },
+          "Fe_out.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_plus_u_seed_endpoint200/Fe_out.nml",
+            "sha256": "c16e9eb3aed354b83e02ddc83c5e1a38dfe0ee3dec99cf94e67e66d1aa84fe76"
+          },
+          "c1_console.log": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_plus_u_seed_endpoint200/c1_console.log",
+            "sha256": "e2604c7b9cdec9501a83f77db5725c428dfd7ee2532ee8a264867d26051cbf60"
+          },
+          "fixed_u_trace.csv": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_plus_u_seed_endpoint200/fixed_u_trace.csv",
+            "sha256": "5e88af3feb53487773024d0eebed3a3005f7aee4d148b1e5f61efa22417b1166"
+          },
+          "input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_plus_u_seed_endpoint200/input.nml",
+            "sha256": "3870abd485de876708739921b625266de091c5fb8ec8a1c9cc55cb494962f3bc"
+          },
+          "report.out": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_plus_u_seed_endpoint200/report.out",
+            "sha256": "2cdb96749074dbca1eac75fc9ee366be39d252136d68a888fd3e5d8af4cea952"
+          }
+        },
+        "bulk": {
+          "d_down": 2.0990289954407295,
+          "d_up": 4.557606615945333,
+          "sphere_moment_muB": 2.390069522764891
+        },
+        "bulk_potential": {
+          "path": "/private/tmp/rslmto-ra4-frozen/c1_qlmode_continuations/fe_bulk_u38j11_beta0015/Fe_out.nml",
+          "sha256": "d4abdc888fa8ee2d64deb71ac9feb81fd0c960fe7749b7cb5cb2f3ff754bbe38"
+        },
+        "bulk_run_dir": "/private/tmp/rslmto-ra4-frozen/c1_qlmode_continuations/fe_bulk_u38j11_beta0015",
+        "case": "Fe U=3.8,J=1.1 impurity from +U seed",
+        "impurity": {
+          "d_down": 2.10152171548604,
+          "d_up": 4.555158642078091,
+          "sphere_moment_muB": 2.3856089318581293
+        },
+        "impurity_minus_bulk": {
+          "d_down": 0.002492720045310648,
+          "d_up": -0.002447973867242048,
+          "sphere_moment_muB": -0.004460590906761652
+        },
+        "launch_manifest": {
+          "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_plus_u_seed_endpoint200/C1_launch.json",
+          "sha256": "b48b024933a0b765ed8f001b36964b42125a5ed33a5f226222a91fe1d8af1925"
+        },
+        "matching_U0_difference": {
+          "d_down": -7.497938386613612e-06,
+          "d_up": 2.0236659370453935e-06,
+          "sphere_moment_muB": 8.868713675003193e-06
+        },
+        "ratio_to_U0": {
+          "d_down": -332.45405827300567,
+          "d_up": -1209.672912129042,
+          "sphere_moment_muB": -502.958046704563
+        },
+        "run_dir": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_plus_u_seed_endpoint200",
+        "seed": "+U",
+        "solver_command": "cd <run_dir> && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RSLMTO_FIXED_U_TRACE=$PWD/fixed_u_trace.csv RSLMTO_FIXED_U_TRACE_QL_ONLY=1 RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY=1 RSLMTO_FIXED_U_RUN_ID=fe_u38j11_imp_plus_u_seed_endpoint200 /private/tmp/rslmto-ra4-frozen/bin/rslmto-c1-qlhistory.x",
+        "solver_environment": {
+          "MKL_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "RSLMTO_FIXED_U_RUN_ID": "fe_u38j11_imp_plus_u_seed_endpoint200",
+          "RSLMTO_FIXED_U_TRACE": "<run_dir>/fixed_u_trace.csv",
+          "RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY": "1",
+          "RSLMTO_FIXED_U_TRACE_QL_ONLY": "1"
+        },
+        "status": "ACCEPTED"
+      }
+    ],
+    "ldos": {
+      "Fe_U0_control_vs_U0_bulk": {
+        "common_interval_Ry": [
+          -0.93075,
+          0.57489
+        ],
+        "max_abs_down": 0.0006599948850798398,
+        "max_abs_spin_sum": 0.0006599948850798398,
+        "max_abs_up": 0.0004199496479344589,
+        "points": 2510
+      },
+      "Fe_Uplus_noU_seed_vs_Uplus_bulk": {
+        "common_interval_Ry": [
+          -0.83656,
+          0.66913
+        ],
+        "max_abs_down": 0.5396547257871624,
+        "max_abs_spin_sum": 0.5401546725122834,
+        "max_abs_up": 0.20867392188122835,
+        "points": 2510
+      },
+      "Fe_Uplus_plusU_seed_vs_Uplus_bulk": {
+        "common_interval_Ry": [
+          -0.83656,
+          0.66913
+        ],
+        "max_abs_down": 0.5396947790620423,
+        "max_abs_spin_sum": 0.5401947257871633,
+        "max_abs_up": 0.2086639705061799,
+        "points": 2510
+      },
+      "maximum_observed_spin_channel": 0.5396947790620423,
+      "maximum_observed_spin_sum": 0.5401947257871633,
+      "method": "RA4 read-only comparison: interpolate both d-spin DOS onto uniform common E\u2212EF interval; energy axis E\u2212EF (Ry), DOS states/Ry/site/spin"
+    },
+    "ni_impurity_records": {
+      "ni_u0_impurity_no_u_seed": {
+        "manifest": "/private/tmp/rslmto-c2-ni-ra4/ni_u0_impurity_no_u_seed/C1_launch.json",
+        "manifest_sha256": "d798caf08c552600cf454d82a65c2f01083116801798e64a9b1fa3afe13e73fb",
+        "run_dir": "/private/tmp/rslmto-c2-ni-ra4/ni_u0_impurity_no_u_seed",
+        "status": "LEGACY_TRACE_EXPOSED_ATTEMPT_EXCLUDED_RECORDED",
+        "reason": "These attempts used QL_ONLY before the guard skipped the unsafe M0/radial replay helpers. Do not use as accepted records; corrected accepted-seed directories are staged under /private/tmp/rslmto-c2-ni-ra4-corrected."
+      },
+      "ni_u3j07_impurity_no_u_seed": {
+        "manifest": "/private/tmp/rslmto-c2-ni-ra4/ni_u3j07_impurity_no_u_seed/C1_launch.json",
+        "manifest_sha256": "a21920d8132037239c4c328899fda01613d4c8ba6271ee0b9e193fd48efff4f4",
+        "run_dir": "/private/tmp/rslmto-c2-ni-ra4/ni_u3j07_impurity_no_u_seed",
+        "status": "LEGACY_TRACE_EXPOSED_ATTEMPT_EXCLUDED_RECORDED",
+        "reason": "These attempts used QL_ONLY before the guard skipped the unsafe M0/radial replay helpers. Do not use as accepted records; corrected accepted-seed directories are staged under /private/tmp/rslmto-c2-ni-ra4-corrected."
+      },
+      "ni_u3j07_impurity_plus_u_seed": {
+        "manifest": "/private/tmp/rslmto-c2-ni-ra4/ni_u3j07_impurity_plus_u_seed/C1_launch.json",
+        "manifest_sha256": "a523499594afd77e086c96c8b562321ba66bb9e5ed456535a9d7802ee3e1e4f3",
+        "run_dir": "/private/tmp/rslmto-c2-ni-ra4/ni_u3j07_impurity_plus_u_seed",
+        "status": "LEGACY_TRACE_EXPOSED_ATTEMPT_EXCLUDED_RECORDED",
+        "reason": "These attempts used QL_ONLY before the guard skipped the unsafe M0/radial replay helpers. Do not use as accepted records; corrected accepted-seed directories are staged under /private/tmp/rslmto-c2-ni-ra4-corrected."
+      }
+    },
+    "fe_no_u_seed_ladder": {
+      "first_fallback_result": {
+        "RS_accepted": true,
+        "current_completed_steps": 3,
+        "d_down": 2.101521866171538,
+        "d_up": 4.555158633677804,
+        "history_steps_from_prior_endpoint": 17,
+        "joined_last20_n": 20,
+        "last20_spread_d_down": 2.7852264761207834e-07,
+        "last20_spread_d_up": 1.9008645502083255e-07,
+        "last20_spread_sphere_moment_muB": 2.4909561657793233e-07,
+        "sphere_moment_muB": 2.38560877701969,
+        "terminal_diff": 2.4e-09
+      },
+      "joined_history_command": "python3 /private/tmp/rslmto-ra4-frozen/analyze_c1_joined.py /private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_no_u_seed_endpoint200 /private/tmp/rslmto-c2-fe-fallbacks/fe_u38_from_no_u_beta005_first 0",
+      "manifest": "/private/tmp/rslmto-c2-fe-fallbacks/fe_u38_from_no_u_beta005_first/C1_launch.json",
+      "run_dir": "/private/tmp/rslmto-c2-fe-fallbacks/fe_u38_from_no_u_beta005_first",
+      "session_id": null,
+      "source_endpoint": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/fe_u38j11_imp_no_u_seed_endpoint200/Fe_out.nml",
+      "source_endpoint_sha256": "0dd5dd0a79753911d49f9e92bb27143520aa73f66c622612646b230170ecb3c0",
+      "status": "C1 accepted after first fallback continuation; second fallback not needed"
+    },
+    "fe_post_d3_record_setup": {
+      "cases": {
+        "fe_u38j11_imp_no_u_seed_postfix": {
+          "launch_manifest": "/private/tmp/rslmto-c2-fe-fixed-records/fe_u38j11_imp_no_u_seed_postfix/C1_launch.json",
+          "launch_manifest_sha256": "ad226b5af8701203208936c72b15ec2ed6515edbda63381db5269d025b2941c0",
+          "run_dir": "/private/tmp/rslmto-c2-fe-fixed-records/fe_u38j11_imp_no_u_seed_postfix",
+          "status": "LEGACY_TRACE_EXPOSED_100_STEP_ATTEMPT_EXCLUDED"
+        },
+        "fe_u38j11_imp_plus_u_seed_postfix": {
+          "launch_manifest": "/private/tmp/rslmto-c2-fe-fixed-records/fe_u38j11_imp_plus_u_seed_postfix/C1_launch.json",
+          "launch_manifest_sha256": "430fce90ed27bcd42cf2763ee06dd1bd21a51a661e00a0df18be84c6b9befae0",
+          "run_dir": "/private/tmp/rslmto-c2-fe-fixed-records/fe_u38j11_imp_plus_u_seed_postfix",
+          "status": "LEGACY_TRACE_EXPOSED_100_STEP_ATTEMPT_EXCLUDED"
+        }
+      },
+      "policy": "The two prior post-D3 records reached their configured 100-step cap but used the unsafe legacy QL_ONLY M0 helper, so preserve as exposed diagnostic attempts and exclude from C1 acceptance. Requalify active-U Fe host and rerun both impurity seeds with the guarded binary."
+    },
+    "pending": {
+      "RA4": "Complete; six C1-accepted records with U=0 controls. Fe U+ discrepancy ratio target <10 was not met; D3 localized first-step Green-spectrum differences but not the multistep moment discrepancy.",
+      "RB": "Authorized C1 RB0\u2013RB6 execution; only marked RB gates can fail; RB5/RB6 remain records."
+    },
+    "crash_stop": {
+      "auditor_stack_classification": "SIGTRAP stack reached lattice print_state_full / recursion restore / region registry; no input-validation diagnostic and no resource cause established.",
+      "backtrace_path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_initial/c1_console.log",
+      "backtrace_sha256": "531c644fced87e5deb2e8b2530d288b1a0b59dd8733e5cba512c3fcb5a68f166",
+      "first_stop_trigger": "Co U+ seed corrected run, concurrent pair launch, at 2026-10-19T07:15:58.680480Z file mtime; exit 133 / SIGTRAP, before SCF iteration 1.",
+      "interpretation": "C1 \u00a75(c) STOP applied. No numerical run or source edit followed this explicit stop.",
+      "iterations_completed": 0,
+      "later_attempt": "One isolated corrected no-U-seed launch also SIGTRAPed at 2026-10-19T07:16:31.870525Z before SCF, after the first trigger and before the explicit cleanup-only instruction; the prepared plus-U serial directory was not launched.",
+      "paired_run": "Co U+ impurity from no-U seed started concurrently at 2026-10-19T07:15:57.885311Z and exited 137 / SIGKILL before SCF; cause unestablished.",
+      "supported_case": "Co impurity, spectral nsp=1, U=3 eV J=0.7 eV, corrected `lattice.nml` (only unsupported ntype=2 removed); independent prelaunch audit passed the full input/seed/host geometry and hash checks."
+    },
+    "process_closure": {
+      "checked_utc": "2026-10-19T07:22:34Z",
+      "exact_process_stopped": {
+        "attempt": "plain kill was denied by sandbox (Operation not permitted); exact PID retry using require_escalated succeeded, exit 0.",
+        "cwd": "/private/tmp/rslmto-ra4-frozen/c1_qlmode_continuations/co_bulk_u0_beta001_second",
+        "pid": 50776,
+        "signal": "SIGINT"
+      },
+      "query": "lsof -nP 2>/dev/null | rg '/private/tmp/rslmto-ra4-frozen/(c1_impurity_final|c1_qlmode_continuations)' | head -80",
+      "result": "Scoped lsof check at 2026-10-19T07:22:34Z returned no open files in campaign run paths; zero owned RA4 solver processes."
+    },
+    "co_bulk_u0_fallback_interrupted": {
+      "Diff": 2.09e-08,
+      "closure_result": "SIGINT sent successfully after \u00a75(c) stop; no process remains in campaign paths",
+      "command": "kill -INT 50776 (exact solver PID, exact cwd recorded below)",
+      "files": {
+        "Co1_out.nml": {
+          "path": "/private/tmp/rslmto-ra4-frozen/c1_qlmode_continuations/co_bulk_u0_beta001_second/Co1_out.nml",
+          "sha256": "0aeb460c49180fca58486bece226de6ee94559ab927022fb25fb346cf56275a6"
+        },
+        "Co2_out.nml": {
+          "path": "/private/tmp/rslmto-ra4-frozen/c1_qlmode_continuations/co_bulk_u0_beta001_second/Co2_out.nml",
+          "sha256": "0764a794ca774dba06cfe78322529f775a3641baa81fd46885816942ab9e94f5"
+        },
+        "c1_console.log": {
+          "path": "/private/tmp/rslmto-ra4-frozen/c1_qlmode_continuations/co_bulk_u0_beta001_second/c1_console.log",
+          "sha256": "3cf5742d7ab70dd558813bfb2cb07f7b4922752f05ec538f97468441d6cb97fd"
+        },
+        "fixed_u_trace.csv": {
+          "path": "/private/tmp/rslmto-ra4-frozen/c1_qlmode_continuations/co_bulk_u0_beta001_second/fixed_u_trace.csv",
+          "sha256": "e332f5c1f0ce9edaefc88d1c855f7e3b9d0cb2d6d64206498ebc3655c8c77875"
+        },
+        "input.nml": {
+          "path": "/private/tmp/rslmto-ra4-frozen/c1_qlmode_continuations/co_bulk_u0_beta001_second/input.nml",
+          "sha256": "b6b8c7b3e95ef270996f8621fc1f1200e1216d958433de9039577d18063e96ec"
+        }
+      },
+      "last_logged_complete_iteration": 39,
+      "run_dir": "/private/tmp/rslmto-ra4-frozen/c1_qlmode_continuations/co_bulk_u0_beta001_second"
+    },
+    "commands": {
+      "joined_window_analyzer": "python3 /private/tmp/rslmto-ra4-frozen/analyze_c1_joined.py <prior_run> <current_run> <site_index>",
+      "ldos_analysis": "Python import of /private/tmp/rslmto-ra4-frozen/ra4_analyze.py parse_ldos()/compare_ldos() on existing outputs; read-only",
+      "ql_history_analyzer": "python3 /private/tmp/rslmto-ra4-frozen/analyze_c1_acceptance.py <run_dir>"
+    },
+    "failed_co_attempts": [
+      {
+        "artifacts": {
+          "C1_initial_input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_endpoint200/C1_initial_input.nml",
+            "sha256": "41be9c3157831383e9c13e633735c7f35bbeb1d25fa6e8f8f0530b3f81ab067b"
+          },
+          "C1_launch.json": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_endpoint200/C1_launch.json",
+            "sha256": "d2cf84784148c8dfd5bd08e2d816495c907e493a99edbf7160b4ccbc506a9499"
+          },
+          "Co-imp.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_endpoint200/Co-imp.nml",
+            "sha256": "314d6d697435ad24b2aedbdebb3088fc1cbc2a5e5256dd5d0da27faa34f290df"
+          },
+          "Co1-bulk_out.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_endpoint200/Co1-bulk_out.nml",
+            "sha256": "4a55bb7d531cd97721bd928768e2983335534309b3056391b2a2c02dc40678b6"
+          },
+          "Co2-bulk_out.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_endpoint200/Co2-bulk_out.nml",
+            "sha256": "a8da82bc395b8f8b9c597376e96d4c5a7b9fe8c6e57626e4e23f8e2797a3e05c"
+          },
+          "c1_console.log": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_endpoint200/c1_console.log",
+            "sha256": "b95b861c964a9bfcefd1e3466cd83b0c049bacc2ea0734b163cf71c0ec2f532a"
+          },
+          "clust": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_endpoint200/clust",
+            "sha256": "ce5f84a0f7b9384a1189b925c571c371e898880ab1849b2614b945b7fac4618e"
+          },
+          "fort.800": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_endpoint200/fort.800",
+            "sha256": "28673a93845b6c4d197451f39f75f1e1d81540390ec5986c01e94257b9d2eebf"
+          },
+          "input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_endpoint200/input.nml",
+            "sha256": "41be9c3157831383e9c13e633735c7f35bbeb1d25fa6e8f8f0530b3f81ab067b"
+          },
+          "lattice.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_endpoint200/lattice.nml",
+            "sha256": "c405cd70881353046990d2d87ccff1642ec89b39fa3698eeb1e9492e1349820f"
+          }
+        },
+        "completed_scf_steps": 0,
+        "exit_code": null,
+        "log_mtime_utc": "2026-10-19T07:14:11.995474+00:00",
+        "manifest_sha256": "d2cf84784148c8dfd5bd08e2d816495c907e493a99edbf7160b4ccbc506a9499",
+        "poststop_launch": false,
+        "result": "input setup failure before SCF: unsupported lattice namelist ntype caused iostat=5010 and cluster inclusion mismatch",
+        "run_dir": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_endpoint200",
+        "signal": null
+      },
+      {
+        "artifacts": {
+          "C1_initial_input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_endpoint200/C1_initial_input.nml",
+            "sha256": "41be9c3157831383e9c13e633735c7f35bbeb1d25fa6e8f8f0530b3f81ab067b"
+          },
+          "C1_launch.json": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_endpoint200/C1_launch.json",
+            "sha256": "d08e20950b717166b05034e959b4fdb30cc085cff5207ac18f23f61ae5308923"
+          },
+          "Co-imp.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_endpoint200/Co-imp.nml",
+            "sha256": "0fc587606095a6ba198d7df4273114dcf876a700051d952f473fc102e298c80a"
+          },
+          "Co1-bulk_out.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_endpoint200/Co1-bulk_out.nml",
+            "sha256": "4a55bb7d531cd97721bd928768e2983335534309b3056391b2a2c02dc40678b6"
+          },
+          "Co2-bulk_out.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_endpoint200/Co2-bulk_out.nml",
+            "sha256": "a8da82bc395b8f8b9c597376e96d4c5a7b9fe8c6e57626e4e23f8e2797a3e05c"
+          },
+          "c1_console.log": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_endpoint200/c1_console.log",
+            "sha256": "d363a82e7f9e71a35f4550f3af23fa530c266b3e20c01e7961215c40e0d8561d"
+          },
+          "clust": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_endpoint200/clust",
+            "sha256": "ce5f84a0f7b9384a1189b925c571c371e898880ab1849b2614b945b7fac4618e"
+          },
+          "fort.800": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_endpoint200/fort.800",
+            "sha256": "28673a93845b6c4d197451f39f75f1e1d81540390ec5986c01e94257b9d2eebf"
+          },
+          "input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_endpoint200/input.nml",
+            "sha256": "41be9c3157831383e9c13e633735c7f35bbeb1d25fa6e8f8f0530b3f81ab067b"
+          },
+          "lattice.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_endpoint200/lattice.nml",
+            "sha256": "c405cd70881353046990d2d87ccff1642ec89b39fa3698eeb1e9492e1349820f"
+          }
+        },
+        "completed_scf_steps": 0,
+        "exit_code": null,
+        "log_mtime_utc": "2026-10-19T07:14:11.996567+00:00",
+        "manifest_sha256": "d08e20950b717166b05034e959b4fdb30cc085cff5207ac18f23f61ae5308923",
+        "poststop_launch": false,
+        "result": "input setup failure before SCF: unsupported lattice namelist ntype caused iostat=5010 and cluster inclusion mismatch",
+        "run_dir": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_endpoint200",
+        "signal": null
+      },
+      {
+        "artifacts": {
+          "C1_initial_input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_initial/C1_initial_input.nml",
+            "sha256": "41be9c3157831383e9c13e633735c7f35bbeb1d25fa6e8f8f0530b3f81ab067b"
+          },
+          "C1_launch.json": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_initial/C1_launch.json",
+            "sha256": "ecafa0fc8596b3993ffd8bf2279cb90508a7aea313f23cb090c5abb17fc2a686"
+          },
+          "Co-imp.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_initial/Co-imp.nml",
+            "sha256": "314d6d697435ad24b2aedbdebb3088fc1cbc2a5e5256dd5d0da27faa34f290df"
+          },
+          "Co1-bulk_out.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_initial/Co1-bulk_out.nml",
+            "sha256": "4a55bb7d531cd97721bd928768e2983335534309b3056391b2a2c02dc40678b6"
+          },
+          "Co2-bulk_out.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_initial/Co2-bulk_out.nml",
+            "sha256": "a8da82bc395b8f8b9c597376e96d4c5a7b9fe8c6e57626e4e23f8e2797a3e05c"
+          },
+          "c1_console.log": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_initial/c1_console.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "clust": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_initial/clust",
+            "sha256": "b32ae4d627a57a79af8e070179776b0b2e5fc806650a16baeedf297c9754e92e"
+          },
+          "fort.800": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_initial/fort.800",
+            "sha256": "872c931d9f09f6f896c17d598d04777bf21896f5553e58e075cc6e9796b209bb"
+          },
+          "input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_initial/input.nml",
+            "sha256": "41be9c3157831383e9c13e633735c7f35bbeb1d25fa6e8f8f0530b3f81ab067b"
+          },
+          "lattice.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_initial/lattice.nml",
+            "sha256": "c3c4bd7889383c11c6f7aad784e334a13c5563f755ff23c938bedb74f32975a8"
+          }
+        },
+        "completed_scf_steps": 0,
+        "exit_code": 137,
+        "log_mtime_utc": "2026-10-19T07:15:57.885311+00:00",
+        "manifest_sha256": "ecafa0fc8596b3993ffd8bf2279cb90508a7aea313f23cb090c5abb17fc2a686",
+        "poststop_launch": false,
+        "result": "paired simultaneous corrected launch terminated before SCF",
+        "run_dir": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_initial",
+        "signal": "SIGKILL"
+      },
+      {
+        "artifacts": {
+          "C1_initial_input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_initial/C1_initial_input.nml",
+            "sha256": "41be9c3157831383e9c13e633735c7f35bbeb1d25fa6e8f8f0530b3f81ab067b"
+          },
+          "C1_launch.json": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_initial/C1_launch.json",
+            "sha256": "5bc448f415afc7854773198cd62089622690ccbb1eef855bf0ebebe5b2a3aadb"
+          },
+          "Co-imp.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_initial/Co-imp.nml",
+            "sha256": "0fc587606095a6ba198d7df4273114dcf876a700051d952f473fc102e298c80a"
+          },
+          "Co1-bulk_out.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_initial/Co1-bulk_out.nml",
+            "sha256": "4a55bb7d531cd97721bd928768e2983335534309b3056391b2a2c02dc40678b6"
+          },
+          "Co2-bulk_out.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_initial/Co2-bulk_out.nml",
+            "sha256": "a8da82bc395b8f8b9c597376e96d4c5a7b9fe8c6e57626e4e23f8e2797a3e05c"
+          },
+          "c1_console.log": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_initial/c1_console.log",
+            "sha256": "531c644fced87e5deb2e8b2530d288b1a0b59dd8733e5cba512c3fcb5a68f166"
+          },
+          "clust": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_initial/clust",
+            "sha256": "b32ae4d627a57a79af8e070179776b0b2e5fc806650a16baeedf297c9754e92e"
+          },
+          "fort.800": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_initial/fort.800",
+            "sha256": "872c931d9f09f6f896c17d598d04777bf21896f5553e58e075cc6e9796b209bb"
+          },
+          "input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_initial/input.nml",
+            "sha256": "41be9c3157831383e9c13e633735c7f35bbeb1d25fa6e8f8f0530b3f81ab067b"
+          },
+          "lattice.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_initial/lattice.nml",
+            "sha256": "c3c4bd7889383c11c6f7aad784e334a13c5563f755ff23c938bedb74f32975a8"
+          }
+        },
+        "completed_scf_steps": 0,
+        "exit_code": 133,
+        "log_mtime_utc": "2026-10-19T07:15:58.680480+00:00",
+        "manifest_sha256": "5bc448f415afc7854773198cd62089622690ccbb1eef855bf0ebebe5b2a3aadb",
+        "poststop_launch": false,
+        "result": "supported corrected Co U+ configuration trapped before SCF",
+        "run_dir": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_initial",
+        "signal": "SIGTRAP"
+      },
+      {
+        "artifacts": {
+          "C1_initial_input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_serial_initial/C1_initial_input.nml",
+            "sha256": "41be9c3157831383e9c13e633735c7f35bbeb1d25fa6e8f8f0530b3f81ab067b"
+          },
+          "C1_launch.json": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_serial_initial/C1_launch.json",
+            "sha256": "42e379cb1210196482d658679c519b13fb025a55f32b69d570efe868935d0e1c"
+          },
+          "Co-imp.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_serial_initial/Co-imp.nml",
+            "sha256": "314d6d697435ad24b2aedbdebb3088fc1cbc2a5e5256dd5d0da27faa34f290df"
+          },
+          "Co1-bulk_out.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_serial_initial/Co1-bulk_out.nml",
+            "sha256": "4a55bb7d531cd97721bd928768e2983335534309b3056391b2a2c02dc40678b6"
+          },
+          "Co2-bulk_out.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_serial_initial/Co2-bulk_out.nml",
+            "sha256": "a8da82bc395b8f8b9c597376e96d4c5a7b9fe8c6e57626e4e23f8e2797a3e05c"
+          },
+          "c1_console.log": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_serial_initial/c1_console.log",
+            "sha256": "37de33e8528171affb596fefc3690d8c7e4ebe3e86c765e1b6b9157fbc0d7602"
+          },
+          "clust": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_serial_initial/clust",
+            "sha256": "b32ae4d627a57a79af8e070179776b0b2e5fc806650a16baeedf297c9754e92e"
+          },
+          "fort.800": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_serial_initial/fort.800",
+            "sha256": "872c931d9f09f6f896c17d598d04777bf21896f5553e58e075cc6e9796b209bb"
+          },
+          "input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_serial_initial/input.nml",
+            "sha256": "41be9c3157831383e9c13e633735c7f35bbeb1d25fa6e8f8f0530b3f81ab067b"
+          },
+          "lattice.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_serial_initial/lattice.nml",
+            "sha256": "c3c4bd7889383c11c6f7aad784e334a13c5563f755ff23c938bedb74f32975a8"
+          }
+        },
+        "completed_scf_steps": 0,
+        "exit_code": 133,
+        "log_mtime_utc": "2026-10-19T07:16:31.870525+00:00",
+        "manifest_sha256": "42e379cb1210196482d658679c519b13fb025a55f32b69d570efe868935d0e1c",
+        "poststop_launch": false,
+        "result": "isolated corrected Co no-U-seed launch trapped before SCF; occurred after paired U+ trap and before stop instruction was received",
+        "run_dir": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_no_u_seed_latticefix_serial_initial",
+        "signal": "SIGTRAP"
+      },
+      {
+        "artifacts": {
+          "C1_launch.json": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_serial_initial/C1_launch.json",
+            "sha256": "da0056ef49ecec88e7bb02e68c9afb254190e6eebe364b672640243fcdb635e5"
+          },
+          "input.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_serial_initial/input.nml",
+            "sha256": "41be9c3157831383e9c13e633735c7f35bbeb1d25fa6e8f8f0530b3f81ab067b"
+          },
+          "lattice.nml": {
+            "path": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_serial_initial/lattice.nml",
+            "sha256": "c3c4bd7889383c11c6f7aad784e334a13c5563f755ff23c938bedb74f32975a8"
+          }
+        },
+        "completed_scf_steps": 0,
+        "exit_code": null,
+        "manifest_sha256": "da0056ef49ecec88e7bb02e68c9afb254190e6eebe364b672640243fcdb635e5",
+        "result": "Prepared after the first supported SIGTRAP but not launched after C1 \u00a75(c) stop was recognized.",
+        "run_dir": "/private/tmp/rslmto-ra4-frozen/c1_impurity_final/co_u3j07_imp_plus_u_seed_latticefix_serial_initial",
+        "signal": null
+      }
+    ],
+    "ni_ra4_setup": {
+      "deck": "fcc built-in lattice; no manual lattice.nml; nsp=1; recur=block spectral; Ni potential from tests/spin_response/ni_fcc/Ni.nml; fixed EF=-0.061141 Ry; energy range [-1,0.5] Ry; channels=2500; nstep=200; beta=.1; conv_thr=1e-30 solely for full QL history capture",
+      "manifest": "/private/tmp/rslmto-c2-ni-ra4/ni_bulk_u0_initial/C2_launch.json",
+      "run_dir": "/private/tmp/rslmto-c2-ni-ra4/ni_bulk_u0_initial",
+      "session_id": 97989,
+      "status": "launched; current console reached step 9, Diff=0.0138967749"
+    },
+    "ni_ra4_u0_bulk": {
+      "completed_iterations": 200,
+      "d_down": 4.701519627365713,
+      "d_up": 4.701519589925717,
+      "last20_spread_d_down": 1.0726750332423762e-07,
+      "last20_spread_d_up": 9.843300752265804e-08,
+      "last20_spread_sphere_moment_muB": 2.4164191714248773e-07,
+      "manifest": "/private/tmp/rslmto-c2-ni-ra4/ni_bulk_u0_initial/C2_launch.json",
+      "manifest_sha256": "3c516152d8a6ba4ab392d843b766e35af2b82d5a0523d338b817964c06a5d2d8",
+      "potential_sha256": "baf910e9b548c0876a68396232ea5c402c5f024d1ae884bd57076577b2c44eae",
+      "run_dir": "/private/tmp/rslmto-c2-ni-ra4/ni_bulk_u0_initial",
+      "sphere_moment_muB": 1.3355702233042166e-07,
+      "status": "NORMAL_FINISH_RS_ACCEPTED",
+      "terminal_diff": 9.7e-09,
+      "trace_exposure": "U=0 source potential arrays and input are zero, so active-U-only M0 replay helper was not called; safe under the source audit. This accepted endpoint remains eligible as no-U host/seed."
+    },
+    "ni_ra4_u3j07_bulk": {
+      "last_observed_iteration": 167,
+      "latest_accepted_window": true,
+      "latest_diff": 7.5e-09,
+      "manifest": "/private/tmp/rslmto-c2-ni-ra4/ni_bulk_u3j07_initial/C2_launch.json",
+      "run_dir": "/private/tmp/rslmto-c2-ni-ra4/ni_bulk_u3j07_initial",
+      "status": "LEGACY_TRACE_EXPOSED_REQUALIFICATION_REQUIRED",
+      "trace_exposure": "The old QL_ONLY trace enabled the unsafe legacy M0 snapshot helper for active U. Preserve its 200-step output/metrics as historical diagnostic only; requalify from its terminal potential with the guarded final binary before using as an accepted host."
+    },
+    "ni_ra4_u3j07_setup": {
+      "manifest": "/private/tmp/rslmto-c2-ni-ra4/ni_bulk_u3j07_initial/C2_launch.json",
+      "run_dir": "/private/tmp/rslmto-c2-ni-ra4/ni_bulk_u3j07_initial",
+      "status": "launched in parallel with Ni U=0 bulk; see run manifest and console for current progress"
+    },
+    "runtime": {
+      "binary": "/private/tmp/rslmto-ra4-frozen/bin/rslmto-c1-qlhistory.x",
+      "binary_sha256": "43f73070de890cab26ea96e386959c2fac2b567abe02d731e64cee0a799d7555",
+      "environment": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY": "1",
+        "RSLMTO_FIXED_U_TRACE_QL_ONLY": "1",
+        "trace_stage": "P_OUT"
+      },
+      "source_commit": "8b8f7ef7bfc026fd34a56b37a3ad3281fd0a6832",
+      "source_hashes": {
+        "source/namelist self": "47787a34dabea3eeb2417bd1f9228cde5ce483391829b85f9597339f8c026c9c",
+        "source/self.f90": "aa82116669fc322622f4db856de606035a4b454a1030ec8ed112d9433d189b73"
+      }
+    }
+  }
+}

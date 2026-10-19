@@ -1,0 +1,32 @@
+{
+  "stage": "RA1",
+  "source_commit": "8b8f7ef7bfc026fd34a56b37a3ad3281fd0a6832",
+  "source_self_f90_sha256": "b779f884230b28c2a80c76f10191ba23ab62b9d0eca6f6968b941d6e347ac4dc",
+  "executable": "/tmp/rslmto-ra-current-build/bin/rslmto.x",
+  "executable_sha256": "6ec0e5820c711115570577ddf3b2ffe9fe8c9e222e6a50061fadf773cffc0041",
+  "command": "/Users/andersb/envs/p311/bin/python3 tests/validation/fixed_ldau/rs_embedding_ra1.py --binary /tmp/rslmto-ra-current-build/bin/rslmto.x --evaluator /tmp/rslmto-ra-current-build/bin/RsEmbeddingEnergyEvaluator --scratch-root /tmp/rslmto-ra1-verified",
+  "runner_sha256": "1475c0756efb5d097be31d333b869d46aeb10d935fe461349ab5dca1f3da6521",
+  "evaluator_source_sha256": "b85e6ab758c5a8da30551518bc3bf4a97d07326aa52754b346c37fdda7dc023a",
+  "evaluator_binary_sha256": "4675c8a577536ced13edd23b467b25aea9f5e19e6acbbca3c2cb5a356cedcb7f",
+  "raw_directory": "/tmp/rslmto-ra1-verified/impurity_one_step",
+  "input_sha256": "70b2e352ac91a763babbd5e42c9c325f294820e67f11280aaa91360346c14f00",
+  "run_log_sha256": "0933999e8add74261d2836be159a4a12e2161bf816dd0e5a207923a0d3fe1f13",
+  "occupation_potential_file": "Fe_out.nml",
+  "occupation_potential_sha256": "59a4a9a109b93df5303e7498c8e3c0d4d777f06e9f8de8694b055aa39fccca34",
+  "parsed_matrix_sha256": "4b11e8b04146acff568d8b2cc3af244b9a90a544146c07082869045ddea52e3a",
+  "expected_symbolic_type": 3,
+  "geometric_representative_index_ib_1": 16,
+  "reported_energy_Ry": {
+    "E_int": 2.6637383372882075,
+    "E_DC": 2.5582858248167537,
+    "E_Hub": 0.10545251247145383
+  },
+  "independent_energy_Ry": {
+    "E_int": 2.6637383372890966,
+    "E_DC": 2.5582858248167537,
+    "E_Hub": 0.10545251247234289
+  },
+  "max_abs_difference_Ry": 8.891e-13,
+  "threshold_Ry": 1e-12,
+  "result": "PASS"
+}

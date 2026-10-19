@@ -1,0 +1,100 @@
+{
+  "stage": "RA3",
+  "source_commit": "8b8f7ef7bfc026fd34a56b37a3ad3281fd0a6832",
+  "source_self_f90_sha256": "b779f884230b28c2a80c76f10191ba23ab62b9d0eca6f6968b941d6e347ac4dc",
+  "executable": "/tmp/rslmto-ra-current-build/bin/rslmto.x",
+  "executable_sha256": "6ec0e5820c711115570577ddf3b2ffe9fe8c9e222e6a50061fadf773cffc0041",
+  "runner": "tests/validation/fixed_ldau/rs_embedding_ra3.py",
+  "runner_sha256": "d100eb6c0110831192b6066b3a229739e5c0c520498ce16e906262ce1a25eb3e",
+  "raw_directory": "/tmp/rslmto-ra3-verified",
+  "cases": {
+    "nsp1_bulk": {
+      "expected": "completed",
+      "input": "/tmp/rslmto-ra3-verified/nsp1_bulk/input.nml",
+      "input_sha256": "dd015e634aa19658696d0d694db8412c24c8ccde40c5edf93b1af6551f97397f",
+      "run_log": "/tmp/rslmto-ra3-verified/nsp1_bulk/testrun.log",
+      "run_log_sha256": "9b930c2f1f16ec52bda7f33b830c520fdf8281974cdfdc56b4594ec7a2b81148",
+      "expected_token": "nsp=1 U bulk fixture completes"
+    },
+    "nsp1_impurity": {
+      "expected": "completed",
+      "input": "/tmp/rslmto-ra3-verified/nsp1_impurity/input.nml",
+      "input_sha256": "70b2e352ac91a763babbd5e42c9c325f294820e67f11280aaa91360346c14f00",
+      "run_log": "/tmp/rslmto-ra3-verified/nsp1_impurity/testrun.log",
+      "run_log_sha256": "c5b838be6509833bbb6127adab2d34809e2284945419937ed92ee330d82885c7",
+      "expected_token": "nsp=1 U impurity fixture completes"
+    },
+    "nsp2_bulk_soc_guard": {
+      "expected": "Fixed-U LDA+U currently requires collinear scalar-spin input",
+      "input": "/tmp/rslmto-ra3-verified/nsp2_bulk_soc_guard/input.nml",
+      "input_sha256": "57ce6bef82ad66ae0449a6a2a5b108a9487a2f62d598e6306a964e6c505bf7bd",
+      "run_log": "/tmp/rslmto-ra3-verified/nsp2_bulk_soc_guard/testrun.log",
+      "run_log_sha256": "bdb12af31f9bd79a5d59278ebb834a64110080c5fcd6dc7e7205184b0fb0480a",
+      "expected_token": "Fixed-U LDA+U currently requires collinear scalar-spin input"
+    },
+    "nsp2_bulk_mode_guard": {
+      "expected": "hubbard_radial_moments='local' requires nsp=1",
+      "input": "/tmp/rslmto-ra3-verified/nsp2_bulk_mode_guard/input.nml",
+      "input_sha256": "9199c7b0e42b667b01b596758544acc53c31c9e8436f944b88967404c9831bab",
+      "run_log": "/tmp/rslmto-ra3-verified/nsp2_bulk_mode_guard/testrun.log",
+      "run_log_sha256": "b8dfbbf811ad8eca18a892f4447850bfa2cbc10eff2c60e218fa3a5525e2fd6c",
+      "expected_token": "hubbard_radial_moments='local' requires nsp=1"
+    },
+    "nsp2_impurity_soc_guard": {
+      "expected": "Fixed-U LDA+U currently requires collinear scalar-spin input",
+      "input": "/tmp/rslmto-ra3-verified/nsp2_impurity_soc_guard/input.nml",
+      "input_sha256": "3e788414b20b3b9f261daf1b7d00cf367b04bb35f50e77efa669b349adfe3ce6",
+      "run_log": "/tmp/rslmto-ra3-verified/nsp2_impurity_soc_guard/testrun.log",
+      "run_log_sha256": "524c0a9288fc4aee68d38b67802f09271c1e8d5ae54cb1fa699c52dacd797f97",
+      "expected_token": "Fixed-U LDA+U currently requires collinear scalar-spin input"
+    },
+    "nsp2_impurity_mode_guard": {
+      "expected": "hubbard_radial_moments='local' requires nsp=1",
+      "input": "/tmp/rslmto-ra3-verified/nsp2_impurity_mode_guard/input.nml",
+      "input_sha256": "afd5a90bac2d289fbc77a71642eb3f42fadc6b452755741ac0a4343964db018f",
+      "run_log": "/tmp/rslmto-ra3-verified/nsp2_impurity_mode_guard/testrun.log",
+      "run_log_sha256": "03b29ea4987adc5b92f8f88a89a140feefb2a65653ee63d48269d1bec96a80d5",
+      "expected_token": "hubbard_radial_moments='local' requires nsp=1"
+    }
+  },
+  "result": "PASS",
+  "val04_nsp1_driver_validation": {
+    "result": "PASS",
+    "scope": "complete five-run VAL-04 k-space sweep on the fixture nsp=1 layout; baseline, U=0, U=2, U=4, and U=2 eight-step convergence cases; complements but does not replace RA3 guard-matrix cases",
+    "command": "/Users/andersb/envs/p311/bin/python3 tests/validation/val04_lda_u.py --binary /tmp/rslmto-ra-current-build/bin/rslmto.x --scratch-root /tmp/val04-ra3-nsp1",
+    "runner": "tests/validation/val04_lda_u.py",
+    "runner_sha256": "2bb051b897305bfef561f02d6423d03b4229a697c1958555e0ab299b1aa97c56",
+    "executable": "/tmp/rslmto-ra-current-build/bin/rslmto.x",
+    "executable_sha256": "6ec0e5820c711115570577ddf3b2ffe9fe8c9e222e6a50061fadf773cffc0041",
+    "raw_directory": "/tmp/val04-ra3-nsp1",
+    "post_run_input_hash_note": "input.nml hashes are post-run files; free-Fermi update may rewrite them during execution. The runner starts each case from tests/scf/cases/k_space_scf/bccFe/input.nml (nsp=1) and no longer changes nsp.",
+    "cases": {
+      "baseline": {
+        "post_run_input_sha256": "201121daee2723b580332b34cf4d582c9e7794a5353527692a597a77ac39ce04",
+        "Fe_out_sha256": "46a506a7fdb4672ce3a758debd0cef89e53ac359830d6124d50442a406bb1574",
+        "testrun_log_sha256": "0d74f303067b692627ef28d438847e50ca6802cd827a9a302a2e72f78c9f7245"
+      },
+      "u0": {
+        "post_run_input_sha256": "7a2f21b45ec4c4a1a9d843580951692447fdb66ea04fc30e190ae8c3affecd01",
+        "Fe_out_sha256": "46a506a7fdb4672ce3a758debd0cef89e53ac359830d6124d50442a406bb1574",
+        "testrun_log_sha256": "d35c908e383e2c307578e04febf96ccc7e1a61afca79358c9121b9851ffc237a"
+      },
+      "u2": {
+        "post_run_input_sha256": "98c74d325722c6f915615a63780f43171e4fe205df04a087a57c6cff21bcd4c3",
+        "Fe_out_sha256": "aeab21e118c096042a65b6527cd5739c2d1506857dbc34451b224e4270d6a22c",
+        "testrun_log_sha256": "68e06702f51a2805d1a075ceb547affcbd98b3fd3f4cbcd42ec3158aa91f7c0c"
+      },
+      "u4": {
+        "post_run_input_sha256": "26383a4d9b15714e24ecf561442d14670f7e7211f7ca41904be1c6de58370bbe",
+        "Fe_out_sha256": "453e4cab61dcd075729f437284c9eeb906794970702f46e22af713cfc230a120",
+        "testrun_log_sha256": "977100f6239b040f2d6745b5f1ad3c409bf56932f84fa452f1ac104f49d1cf89"
+      },
+      "u2_convergence": {
+        "post_run_input_sha256": "f20055bb8ffd9230063a1d2bec29053d86cf34d1f894b5cc05e0d8a0a9558057",
+        "Fe_out_sha256": "f12ef57c1a5cd5f7a810597402c574768cf88665b58882b29a7b7581d6120f2a",
+        "testrun_log_sha256": "19598a44ed45e6831115bfcb64070c504f88ace9fb1e3346d2b97a9a1d8adb6c"
+      }
+    },
+    "measured_output": "VAL-04 PASS; U=0 d_moment=2.199558, d_charge=6.499186; U=2 d_moment=2.478410, d_charge=6.556727, spin split=-0.073294 Ry; U=4 d_moment=2.637774, d_charge=6.598822, spin split=-0.163811 Ry; U=2 convergence residual first=2.299584e-2, minimum over eight steps=4.841082e-3."
+  }
+}

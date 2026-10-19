@@ -1,0 +1,65 @@
+{
+  "stage": "RA2",
+  "source_commit": "8b8f7ef7bfc026fd34a56b37a3ad3281fd0a6832",
+  "executable": "/private/tmp/rslmto-ra-current-build/bin/rslmto.x",
+  "executable_sha256": "6ec0e5820c711115570577ddf3b2ffe9fe8c9e222e6a50061fadf773cffc0041",
+  "command": [
+    "python3",
+    "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/rs_embedding_ra2.py",
+    "--binary",
+    "/private/tmp/rslmto-ra-current-build/bin/rslmto.x",
+    "--scratch-root",
+    "/tmp/rslmto-ra2-backend-verified"
+  ],
+  "raw_output_location": "/tmp/rslmto-ra2-backend-verified",
+  "scenarios": {
+    "ks_local_seed": {
+      "input": "/tmp/rslmto-ra2-backend-verified/ks_local_seed/input.nml",
+      "input_sha256": "405e964990cb3ae5c0a4405c49175afb26ba073145f18537c8cd7ab77927c529",
+      "log": "/tmp/rslmto-ra2-backend-verified/ks_local_seed/testrun.log",
+      "log_sha256": "a0cef60faec4d16d0f09ccddb50494c819516d3f7feb66d1040f10ea70b293c3",
+      "potential_output": "/tmp/rslmto-ra2-backend-verified/ks_local_seed/Fe_out.nml",
+      "potential_output_sha256": "867dd1916f24c0eee5ee0fdf7d04d17acff71655d23c63fb77f6d67f6ea09c5d"
+    },
+    "rs_matching_local": {
+      "input": "/tmp/rslmto-ra2-backend-verified/rs_matching_local/input.nml",
+      "input_sha256": "8c5349ab4ff50409377f65bbd388e7d29ac66de3895ab8877ead5a850e338cf6",
+      "log": "/tmp/rslmto-ra2-backend-verified/rs_matching_local/testrun.log",
+      "log_sha256": "c282b008ea05dfccb069565a9f52b8b0279d2ec19c60ff131302dfe59e749ed9",
+      "potential_output": "/tmp/rslmto-ra2-backend-verified/rs_matching_local/Fe_out.nml",
+      "potential_output_sha256": "2ae53339b973d75756da7a888dc35e6e575be9a02cf9458cb141646b892dfa38"
+    },
+    "rs_missing_backend_local": {
+      "input": "/tmp/rslmto-ra2-backend-verified/rs_missing_backend_local/input.nml",
+      "input_sha256": "8c5349ab4ff50409377f65bbd388e7d29ac66de3895ab8877ead5a850e338cf6",
+      "log": "/tmp/rslmto-ra2-backend-verified/rs_missing_backend_local/testrun.log",
+      "log_sha256": "82c8198d426d6e5aa0758ae10883c175b0158068a2bcf9d5eb427e651917891b",
+      "potential_output": "/tmp/rslmto-ra2-backend-verified/rs_missing_backend_local/Fe_out.nml",
+      "potential_output_sha256": "2ae53339b973d75756da7a888dc35e6e575be9a02cf9458cb141646b892dfa38"
+    },
+    "rs_mode_mismatch": {
+      "input": "/tmp/rslmto-ra2-backend-verified/rs_mode_mismatch/input.nml",
+      "input_sha256": "63472dd20de66042dc6fb3bd3899b8aadc3003b333fc906ceb0d979b804b6bb8",
+      "log": "/tmp/rslmto-ra2-backend-verified/rs_mode_mismatch/testrun.log",
+      "log_sha256": "863591e4beb8857605cc1a77f4d6936f1a12dda0e5e5b0b2dd4c8aa0855e9abf",
+      "potential_output": "/tmp/rslmto-ra2-backend-verified/rs_mode_mismatch/Fe_out.nml",
+      "potential_output_sha256": "867dd1916f24c0eee5ee0fdf7d04d17acff71655d23c63fb77f6d67f6ea09c5d"
+    },
+    "rs_legacy_spectral": {
+      "input": "/tmp/rslmto-ra2-backend-verified/rs_legacy_spectral/input.nml",
+      "input_sha256": "f5a0b2f5a321f66f67f88103d759740a994b19e3ec09cf40bd1d4f9c2fec8b17",
+      "log": "/tmp/rslmto-ra2-backend-verified/rs_legacy_spectral/testrun.log",
+      "log_sha256": "c5442c8f430754cd2497b00009a7b97c46a15d1654ff5af3344ad14a771f5fc4",
+      "potential_output": "/tmp/rslmto-ra2-backend-verified/rs_legacy_spectral/Fe_out.nml",
+      "potential_output_sha256": "27d82c29841b80bb40b3875703f9deec696f96cf7d3097a4077e05828fcc044e"
+    },
+    "no_u": {
+      "input": "/tmp/rslmto-ra2-backend-verified/no_u/input.nml",
+      "input_sha256": "1bee53960371bafd7bcd2750eacddc0a0c0fa12e468479ab0105aea0a6d74a41",
+      "log": "/tmp/rslmto-ra2-backend-verified/no_u/testrun.log",
+      "log_sha256": "7ae2768226ab7d8b263cbe70438fd102679640495249a7d037e08ea930dff180",
+      "potential_output": "/tmp/rslmto-ra2-backend-verified/no_u/Fe_out.nml",
+      "potential_output_sha256": "6db42dc853d77cdd46b11f99afb897734e2a773f772d2d95cd964e0dca6dcd13"
+    }
+  }
+}
