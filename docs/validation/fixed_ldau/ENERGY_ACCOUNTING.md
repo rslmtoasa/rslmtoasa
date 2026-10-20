@@ -18,12 +18,19 @@ This is a scoped numerical identity test, not a derivation of an exact general
 ASA energy functional. In particular, it does not establish the radial
 `SUMEV` double-count coefficient/sign for every backend or representation.
 The implemented route is limited to ordinary native reciprocal KS
-(`use_kspace=.true.`, `calctype='B'`), clean bulk (`nbulk=0`, `nrec=ntype`),
-explicit fixed general Liechtenstein U/J, scalar-collinear `nsp=1`, `lmax=2`,
-and disabled constraints. SOC/noncollinear, HOH, self-consistent U, intersite
-V, impurity U, impurity/surface hosts, and nonzero test fields are excluded;
-RS remains on its guarded spectral path pending its own M1/M2. The scoped
-energy route and restart/serial-MPI checks pass. Individual serial route
+(`use_kspace=.true.`, `calctype='B'`) and qualifying clean-bulk RS
+(`use_kspace=.false.`, `calctype='B'`), with `nbulk=0`, `nrec=ntype`, explicit
+fixed general Liechtenstein U/J, scalar-collinear `nsp=1`, `lmax=2`, and
+disabled constraints. SOC/noncollinear, HOH, self-consistent U, intersite V,
+impurity U, impurity/surface hosts, and nonzero test fields are excluded. For
+clean-bulk RS, the C4 RC2 candidate gate passes at U=2 eV and J=0, 0.5, and
+0.9 eV under the amended occupation-response allowance; the independent
+arithmetic is in `rs/C4_RC2_RESULTS.md`. The reviewed B3 extension enables the
+same local correction for qualifying clean-bulk RS runs; explicit spectral
+selection remains spectral/non-adopted. The measured base ASA non-stationarity
+remains −0.14% in KS and −0.16% to −0.17% in RS; the RS gate does not claim
+stricter stationarity or a reduction in that residual.
+The scoped energy route and restart/serial-MPI checks pass. Individual serial route
 receipts, the distinct matched serial/MPI pair, and the RS spectral scope
 control are indexed in the [A4.4 control evidence](evidence/a4_4_control_evidence_index.json);
 the matched pair itself is [archived here](evidence/a4_4_matched_serial_mpi_repro.json).
@@ -31,6 +38,22 @@ Constraints-enabled input reaches the spectral/non-adopted guard before its
 zero-target setup fatal; a successful constrained SCF route remains untested
 ([paired guard receipts](evidence/a4_4_constraints_guard_paired_enabled.json),
 [positive control](evidence/a4_4_constraints_guard_paired_positive.json)).
+
+### B3 reviewed scope extension
+
+B3 removes the backend selector from the shared local-Hubbard eligibility
+predicate. The existing guards remain: fixed Liechtenstein U/J, scalar
+collinear `nsp=1`, `lmax=2`, `calctype='B'`, clean bulk (`nbulk=0`,
+`nrec=ntype`), and no constraints, SOC/noncollinearity, HOH,
+self-consistent U/V, impurity U, or nonzero test-operator field. Thus the
+automatic local route is available to both RS and native KS when those
+conditions hold. In either backend, local `E_Hub(P_OUT)` is included in the
+physical total energy. Explicit spectral selection remains spectral and does
+not adopt the local correction; impurity/surface and constrained cases remain
+outside this eligibility scope. This describes the reviewed implementation scope; accepted-endpoint route
+reproduction and unchanged-mode/no-U controls are recorded in
+[C4 RC3 results](rs/C4_RC3_RESULTS.md). This is not a new RS ASA
+derivative-gate verdict.
 
 ## Gate result (historical pre-A5 status)
 

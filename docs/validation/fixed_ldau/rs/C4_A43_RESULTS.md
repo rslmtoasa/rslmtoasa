@@ -1,0 +1,5 @@
+# C4 A4.3 — Fe embedding disposition
+
+**Decision: NEITHER.** The matched impurity +U calculation did not produce an accepted endpoint, so the bulk/impurity ratio cannot be evaluated. The §2.4 clean-8b rerun and same-deck U=J=0 triage both reached non-finite Green-function values from the accepted restart; this meets the protocol's PRE-EXISTING ISSUE classification. A4.2 full production-coefficient and terminator cross-swaps reproduced the opposite native outputs exactly, so the evaluator-inconsistency condition was not met. There is no basis to classify this as a new production regression or to change production formulas.
+
+The Fe embedding known issue is closed as **pre-existing non-finite behavior, no accepted ratio**. This finding is separate from hcp Co and from the Fe `rc=140/lld=21` INVALID_SETUP record. The full run evidence and attempt accounting are in [C4_A41_RESULTS.md](C4_A41_RESULTS.md) and [C4_A41_PROVENANCE.json](C4_A41_PROVENANCE.json); A4.2 evidence is in [C4_A42_RESULTS.md](C4_A42_RESULTS.md).

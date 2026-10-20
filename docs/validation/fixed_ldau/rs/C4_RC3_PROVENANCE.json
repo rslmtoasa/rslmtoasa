@@ -1,0 +1,510 @@
+{
+  "accepted_rs_auto": {
+    "C3_accepted_P_OUT_q_l2_up_down": [
+      4.615578880407783,
+      1.8954542312284486
+    ],
+    "Fe_out_sha256": "c8f3195439381b059f6f036316733b195d9acb3ea41bf3bcb9148902ab9c5be6",
+    "Fe_scf_sha256": "3cbef185576ed5a1f94a75286a7630d005cec8ef8f3ded9036732f591d64abba",
+    "P_OUT_delta_vs_C3": [
+      5.87249165e-08,
+      -3.68626132e-08
+    ],
+    "P_OUT_q_l2_up_down": [
+      4.6155789391327,
+      1.8954541943658354
+    ],
+    "captured_iterations": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ],
+    "checkpoint_path": "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf-budget30/C1_ACCEPTED_LIVE_CHECKPOINT",
+    "command": "python3 tests/validation/fixed_ldau/rs_rc2_monitored_runner.py --binary /Users/andersb/Jobb/rslmto_fable_v4b/build/bin/rslmto.x --run-dir /private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf-budget30 --poll-seconds 1 --stop-on-c1",
+    "energy_identity": "At accepted iter20, physical_total_energy == candidate_b == -0.2541862978156120E+04 Ry (same printed decimal).",
+    "energy_line": {
+      "line": "[Oct 20 2026 07:27:05.001] [self.f90:2346]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mHUBBARD_MOMENT_ENERGY_TOTAL E_int=  0.2746158925146560E+01 E_DC=  0.2637314423076729E+01 E_Hub=  0.1088445020698305E+00 E_Hub_P_OUT=  0.1088445020698305E+00 t_in_out= -0.2608627254693827E+00 t_U= -0.2608627254693827E+00 e_external=  0.0000000000000000E+00 t_total_actual_Vin= -0.2608627254693827E+00 base_physical_total_energy= -0.2541971822658190E+04 physical_total_energy= -0.2541862978156120E+04 candidate_a=UNAVAILABLE candidate_b= -0.2541862978156120E+04 candidate_c=UNAVAILABLE entropy=UNAVAILABLE_KS_ONLY TS=UNAVAILABLE_KS_ONLY candidate_a_F=UNAVAILABLE candidate_b_F=UNAVAILABLE candidate_c_F=UNAVAILABLE test_lambda_trace_wp=UNAVAILABLE test_F_local=UNAVAILABLE test_F_spectral=UNAVAILABLE candidate_status=PROVISIONAL_ONLY; unavailable candidates require the other radial representation",
+      "physical_line_number": 888
+    },
+    "final_diff": 1.24e-08,
+    "input_sha256": "344c479c88c950b42b08e809e1f832d9476eb19fcbcc29893d96e96714f4f8a0",
+    "iteration": 20,
+    "missing_iterations": [],
+    "run_path": "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf-budget30",
+    "runner_solver_pids": [
+      24511,
+      24559
+    ],
+    "seed_path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p00_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+    "seed_q_l2_up_down": [
+      4.615578898732167,
+      1.895454137089939
+    ],
+    "seed_sha256": "c8f3195439381b059f6f036316733b195d9acb3ea41bf3bcb9148902ab9c5be6",
+    "stop": "Intentional accepted C1 freeze and exact owned-solver SIGTERM; both runner and solver subsequently absent.",
+    "trace_sha256": "044b8ad06a2d4b8f4f1927943ac356822c8821ee93b8fa23cfe694cc7855a4d1",
+    "window_spreads": {
+      "d_down": 1.8530542655881277e-07,
+      "d_up": 8.432928222390501e-08,
+      "sphere_moment_muB": 1.975500034667732e-07
+    }
+  },
+  "attempt_accounting": {
+    "accepted_correct_seed_attempt_steps": 20,
+    "budget": 200,
+    "interrupted_attempt_disposition": "returncode -15; signal cause and owning PID not recovered; counted",
+    "interrupted_correct_seed_attempt_steps": 19,
+    "remaining": 150,
+    "total_consumed": 50,
+    "wrong_seed_attempt_steps": 11,
+    "wrong_seed_disposition": "quarantined; used checkpoint Fe_out instead of required accepted Fe_scf"
+  },
+  "audited_verdict": "PASS",
+  "frozen_comparisons": {
+    "physical_outputs_equal": {
+      "ks_auto_local": true,
+      "ks_explicit_spectral": true,
+      "rs_explicit_spectral": true
+    },
+    "status": "PASS",
+    "str_out_runtime_difference": "The only differing line was STRUX result cpu_s; replacing only its numeric token produced matching normalized SHA256 for each pair.",
+    "summary": {
+      "label": "comparison.json",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/comparison.json",
+      "sha256": "53207285d631bf43ab22c3e8f08d9a322d2fc1457624efa72879d70cc8dabace",
+      "size_bytes": 35026
+    }
+  },
+  "independent_audit": "/root/auditor confirmed C1 acceptance, route identity, no-U identity and frozen-mode comparisons; root review PASS",
+  "limitations": [
+    "This is accepted-endpoint route reproduction and mode-preservation evidence, not a new ASA derivative gate.",
+    "Cross-run occupation deltas are reported descriptively without inventing a tolerance."
+  ],
+  "no_u_identity": {
+    "binary_sha256": {
+      "candidate": "e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0",
+      "clean8b": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd"
+    },
+    "cases": {
+      "ks": {
+        "differing_physical_files": {},
+        "files_per_side": {
+          "candidate": 25,
+          "clean8b": 25
+        }
+      },
+      "rs": {
+        "differing_physical_files": {},
+        "files_per_side": {
+          "candidate": 27,
+          "clean8b": 27
+        }
+      }
+    },
+    "report": {
+      "label": "identity.json",
+      "path": "/private/tmp/c4-b3-no-u-identity/identity.json",
+      "sha256": "2a4dca017afe5c3d669da4e843b58593a6afcc1ab09e4cfb4d03462fcbbb1717",
+      "size_bytes": 10840
+    },
+    "status": "PASS"
+  },
+  "raw_artifacts": [
+    {
+      "label": "candidate serial executable",
+      "path": "/Users/andersb/Jobb/rslmto_fable_v4b/build/bin/rslmto.x",
+      "sha256": "e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0",
+      "size_bytes": 7609112
+    },
+    {
+      "label": "changed source",
+      "path": "/Users/andersb/Jobb/rslmto_fable_v4b/source/self.f90",
+      "sha256": "c6a09b7f5d261e64af444d99362c336b414e9a6a7619eead62987123a6a69b1a",
+      "size_bytes": 364942
+    },
+    {
+      "label": "route regression harness",
+      "path": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/a4_4_energy_route_repro.py",
+      "sha256": "39f103b31ef17227df226ac110b766e1f73d69ed535ac0a7958e6877c1570ef5",
+      "size_bytes": 26817
+    },
+    {
+      "label": "8-case route suite summary",
+      "path": "/private/tmp/c4-b3-route-suite6/summary.json",
+      "sha256": "f6edb9bd51adfac56e0430210b52a25b85a176f65474418ab4ca4e83e66387f7",
+      "size_bytes": 48733
+    },
+    {
+      "label": "no-U exact identity report",
+      "path": "/private/tmp/c4-b3-no-u-identity/identity.json",
+      "sha256": "2a4dca017afe5c3d669da4e843b58593a6afcc1ab09e4cfb4d03462fcbbb1717",
+      "size_bytes": 10840
+    },
+    {
+      "label": "frozen-vs-candidate output comparison",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/comparison.json",
+      "sha256": "53207285d631bf43ab22c3e8f08d9a322d2fc1457624efa72879d70cc8dabace",
+      "size_bytes": 35026
+    },
+    {
+      "label": "accepted-auto executed input",
+      "path": "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf-budget30/input.nml",
+      "sha256": "344c479c88c950b42b08e809e1f832d9476eb19fcbcc29893d96e96714f4f8a0",
+      "size_bytes": 819
+    },
+    {
+      "label": "accepted-auto full log",
+      "path": "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf-budget30/console.log",
+      "sha256": "ce8de8ab21e5083b948ef0ae9444b9386acad4fb6a654e8fb5a0ac23bfc8cb2b",
+      "size_bytes": 157304
+    },
+    {
+      "label": "trace capture manifest",
+      "path": "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf-budget30/TRACE_ARCHIVE_MANIFEST.json",
+      "sha256": "2c21fcf98fb1921766764be08aaf8c25f272f321e0d9fe0fb6c3ec6abe434da1",
+      "size_bytes": 12686
+    },
+    {
+      "label": "accepted-auto P_OUT history",
+      "path": "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf-budget30/fixed_u_trace_history.csv",
+      "sha256": "044b8ad06a2d4b8f4f1927943ac356822c8821ee93b8fa23cfe694cc7855a4d1",
+      "size_bytes": 2240286
+    },
+    {
+      "label": "frozen C1 checkpoint trace",
+      "path": "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf-budget30/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+      "sha256": "044b8ad06a2d4b8f4f1927943ac356822c8821ee93b8fa23cfe694cc7855a4d1",
+      "size_bytes": 2240286
+    },
+    {
+      "label": "accepted C1 Fe_scf",
+      "path": "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf-budget30/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+      "sha256": "3cbef185576ed5a1f94a75286a7630d005cec8ef8f3ded9036732f591d64abba",
+      "size_bytes": 10598
+    },
+    {
+      "label": "accepted Fe_out",
+      "path": "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf-budget30/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_out.nml",
+      "sha256": "c8f3195439381b059f6f036316733b195d9acb3ea41bf3bcb9148902ab9c5be6",
+      "size_bytes": 10592
+    },
+    {
+      "label": "C3 accepted local U2/J0 seed Fe_scf",
+      "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p00_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+      "sha256": "c8f3195439381b059f6f036316733b195d9acb3ea41bf3bcb9148902ab9c5be6",
+      "size_bytes": 10592
+    },
+    {
+      "label": "C3 accepted local U2/J0 trace",
+      "path": "/private/tmp/c3-rc2-rs-hf/campaign/u_local_u2p00_j0p00/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+      "sha256": "137c11ef6243f53ca9de91be0520cfcc553b8406a1a95643505324fa1240ac92",
+      "size_bytes": 6933146
+    },
+    {
+      "label": "quarantined wrong-seed input",
+      "path": "/private/tmp/c4-b3-rs-u2-auto_QUARANTINE_invalid_Fe_out_seed_11_steps/input.nml",
+      "sha256": "4cd5a7b51f976bd1eae3b0f7d635a67c4026aa8eb1c83bf3b806f403a56d948f",
+      "size_bytes": 819
+    },
+    {
+      "label": "quarantined wrong-seed log, 11 steps",
+      "path": "/private/tmp/c4-b3-rs-u2-auto_QUARANTINE_invalid_Fe_out_seed_11_steps/console.log",
+      "sha256": "19158f7d54eb520f55d78665ecb6e41f289862ae5b5c4753d69fd31c1b3816f6",
+      "size_bytes": 85169
+    },
+    {
+      "label": "interrupted accepted-seed input",
+      "path": "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf/input.nml",
+      "sha256": "b3899addacbed0b49e426b1b7b72e1d096e2aa6272e55c3ee7e3e60e5009cd10",
+      "size_bytes": 819
+    },
+    {
+      "label": "interrupted accepted-seed log, 19 steps",
+      "path": "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf/console.log",
+      "sha256": "0a33dcc1657e585d53e0eb100dcace0a45bfde4527fccac33244b2be9584acf8",
+      "size_bytes": 157304
+    },
+    {
+      "label": "clean 8b8f7ef no-U baseline",
+      "path": "/private/tmp/rslmto-ra-base-build/bin/rslmto.x",
+      "sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+      "size_bytes": 7539432
+    },
+    {
+      "label": "pre-B3 frozen binary",
+      "path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x",
+      "sha256": "bab5f7408f20192c575ea09be5501445f38f29bc2d34680da41daf733c96b2bf",
+      "size_bytes": 7609672
+    },
+    {
+      "label": "ks_auto_local_serial receipt",
+      "path": "/private/tmp/c4-b3-route-suite6/ks_auto_local_serial/receipt.json",
+      "sha256": "6f9dfe6ed1aa3286f17dbce427895feb028336ecf56db965ebde71373555cb7a",
+      "size_bytes": 5447
+    },
+    {
+      "label": "ks_auto_local_serial raw stdout",
+      "path": "/private/tmp/c4-b3-route-suite6/ks_auto_local_serial/stdout.log",
+      "sha256": "79062d8c5258c24061ba2351d521ad16c64d81375d9cc87f8bdee4434b7efdef",
+      "size_bytes": 25028
+    },
+    {
+      "label": "ks_auto_local_restart receipt",
+      "path": "/private/tmp/c4-b3-route-suite6/ks_auto_local_restart/receipt.json",
+      "sha256": "c4d313c84713da0a66f3b1f63f629700831b4f4d8b4d850f28fddedf12bfb263",
+      "size_bytes": 5449
+    },
+    {
+      "label": "ks_auto_local_restart raw stdout",
+      "path": "/private/tmp/c4-b3-route-suite6/ks_auto_local_restart/stdout.log",
+      "sha256": "4840a5207e712fe8c2b85a0fdf86b92ee1d939b9f95886f83fc27035d8f6ad62",
+      "size_bytes": 25028
+    },
+    {
+      "label": "ks_auto_local_mpi receipt",
+      "path": "/private/tmp/c4-b3-route-suite6/ks_auto_local_mpi/receipt.json",
+      "sha256": "b9c8ccf488c30d27db565d5c5a0665b6664f0135a73d36ac22b9b9623b810b30",
+      "size_bytes": 5438
+    },
+    {
+      "label": "ks_auto_local_mpi raw stdout",
+      "path": "/private/tmp/c4-b3-route-suite6/ks_auto_local_mpi/stdout.log",
+      "sha256": "67acdba024c14c8484edd99dd08e2008f34fce64e3be67846e190aaeab41c398",
+      "size_bytes": 28561
+    },
+    {
+      "label": "ks_explicit_spectral receipt",
+      "path": "/private/tmp/c4-b3-route-suite6/ks_explicit_spectral/receipt.json",
+      "sha256": "7fc30cf3e7e827ae1e69a12d76abb27ef73452ac46ec8b810f932912736f655d",
+      "size_bytes": 5414
+    },
+    {
+      "label": "ks_explicit_spectral raw stdout",
+      "path": "/private/tmp/c4-b3-route-suite6/ks_explicit_spectral/stdout.log",
+      "sha256": "316b87cab5b63801cb6426cd302cac030a31d403ab52ceacf438a8076d6531cf",
+      "size_bytes": 24961
+    },
+    {
+      "label": "ks_explicit_local_nonzero_test_field receipt",
+      "path": "/private/tmp/c4-b3-route-suite6/ks_explicit_local_nonzero_test_field/receipt.json",
+      "sha256": "b6b8892a037242f90d786ec4c716e08b1e30712e04688bfbeec229175844f577",
+      "size_bytes": 4842
+    },
+    {
+      "label": "ks_explicit_local_nonzero_test_field raw stdout",
+      "path": "/private/tmp/c4-b3-route-suite6/ks_explicit_local_nonzero_test_field/stdout.log",
+      "sha256": "9d05d578bfca43bad67a5126c840db791cfe3a02c223b1a7da7daa8facd349ab",
+      "size_bytes": 25030
+    },
+    {
+      "label": "ks_no_u_auto receipt",
+      "path": "/private/tmp/c4-b3-route-suite6/ks_no_u_auto/receipt.json",
+      "sha256": "3d195de0105eb6b62e94f5b275884d3b0449770697c86e037a2632e8b64bfa0e",
+      "size_bytes": 5386
+    },
+    {
+      "label": "ks_no_u_auto raw stdout",
+      "path": "/private/tmp/c4-b3-route-suite6/ks_no_u_auto/stdout.log",
+      "sha256": "6df9ed1aa93bc95284c561c8f60e4fd02dfde11beeb2e849899bdda100965c5e",
+      "size_bytes": 23064
+    },
+    {
+      "label": "ks_explicit_zero_auto receipt",
+      "path": "/private/tmp/c4-b3-route-suite6/ks_explicit_zero_auto/receipt.json",
+      "sha256": "0dd56b5de8a41423b5c6d726be788299ad5485a6d6514e68bf2a63d77285e39d",
+      "size_bytes": 5412
+    },
+    {
+      "label": "ks_explicit_zero_auto raw stdout",
+      "path": "/private/tmp/c4-b3-route-suite6/ks_explicit_zero_auto/stdout.log",
+      "sha256": "63f5ec9e282cb8aa8516e31238b9f72170e571e9ccab7317db7f11b527980f6c",
+      "size_bytes": 23064
+    },
+    {
+      "label": "rs_u2_auto receipt",
+      "path": "/private/tmp/c4-b3-route-suite6/rs_u2_auto/receipt.json",
+      "sha256": "94b69ac685207925f9728cde41111f8e2550819e2d26123a74509fc252c4677a",
+      "size_bytes": 4361
+    },
+    {
+      "label": "rs_u2_auto raw stdout",
+      "path": "/private/tmp/c4-b3-route-suite6/rs_u2_auto/stdout.log",
+      "sha256": "323b6fbf45f20b1fd0b763693fbfa67a7f92361ec05c92c08b3e39c4e81fe54e",
+      "size_bytes": 12446
+    },
+    {
+      "label": "pre_b3 ks_auto_local input.nml",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/pre_b3/ks_auto_local/input.nml",
+      "sha256": "45c776f89303b7b14b5956203b93f0071a43d81a1f7d50f31f48fe25cf3791c8",
+      "size_bytes": 2216
+    },
+    {
+      "label": "pre_b3 ks_auto_local Fe_out.nml",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/pre_b3/ks_auto_local/Fe_out.nml",
+      "sha256": "2de09545bae0690a8f8c855a0e1b28472487c81dd43c1a23103c1a9674dd7f4f",
+      "size_bytes": 10587
+    },
+    {
+      "label": "pre_b3 ks_auto_local stdout.log",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/pre_b3/ks_auto_local/stdout.log",
+      "sha256": "001726fdb488735e4de25c762a5cb20b239305fe4335da583c55cfc7052884e5",
+      "size_bytes": 22987
+    },
+    {
+      "label": "pre_b3 ks_auto_local str.out",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/pre_b3/ks_auto_local/str.out",
+      "sha256": "8dbfee777b1bee82640895615b4551850cbf0e3aece71101d01d954e71e9e064",
+      "size_bytes": 1496
+    },
+    {
+      "label": "b3 ks_auto_local input.nml",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/b3/ks_auto_local/input.nml",
+      "sha256": "45c776f89303b7b14b5956203b93f0071a43d81a1f7d50f31f48fe25cf3791c8",
+      "size_bytes": 2216
+    },
+    {
+      "label": "b3 ks_auto_local Fe_out.nml",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/b3/ks_auto_local/Fe_out.nml",
+      "sha256": "2de09545bae0690a8f8c855a0e1b28472487c81dd43c1a23103c1a9674dd7f4f",
+      "size_bytes": 10587
+    },
+    {
+      "label": "b3 ks_auto_local stdout.log",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/b3/ks_auto_local/stdout.log",
+      "sha256": "95de86ca32e94bf23ee6dda2d5bd96da8bf515346f4c3feb596541a6b67f3199",
+      "size_bytes": 22987
+    },
+    {
+      "label": "b3 ks_auto_local str.out",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/b3/ks_auto_local/str.out",
+      "sha256": "24c44f1fed977f47c72ce2a4dac572cb2f2c903d92a71b797dd6a7d0b8137bb2",
+      "size_bytes": 1496
+    },
+    {
+      "label": "pre_b3 ks_explicit_spectral input.nml",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/pre_b3/ks_explicit_spectral/input.nml",
+      "sha256": "7e2e9598e65c3a1457bf5c8b7f083a072282001a0a69c532ca9deda2e31cee51",
+      "size_bytes": 2252
+    },
+    {
+      "label": "pre_b3 ks_explicit_spectral Fe_out.nml",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/pre_b3/ks_explicit_spectral/Fe_out.nml",
+      "sha256": "232f775927753816c59e8c8a63701dce5a9c899876980e5699da8137910ea20c",
+      "size_bytes": 10608
+    },
+    {
+      "label": "pre_b3 ks_explicit_spectral stdout.log",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/pre_b3/ks_explicit_spectral/stdout.log",
+      "sha256": "a28d599ee68778ee08cf4012a0077c1f189a9371a3889ccbcfc8229fb181adbf",
+      "size_bytes": 22920
+    },
+    {
+      "label": "pre_b3 ks_explicit_spectral str.out",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/pre_b3/ks_explicit_spectral/str.out",
+      "sha256": "c68608d4a4b754e7840ab7295c5525f65f0ca35956737355b3ae506e463fea07",
+      "size_bytes": 1496
+    },
+    {
+      "label": "b3 ks_explicit_spectral input.nml",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/b3/ks_explicit_spectral/input.nml",
+      "sha256": "7e2e9598e65c3a1457bf5c8b7f083a072282001a0a69c532ca9deda2e31cee51",
+      "size_bytes": 2252
+    },
+    {
+      "label": "b3 ks_explicit_spectral Fe_out.nml",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/b3/ks_explicit_spectral/Fe_out.nml",
+      "sha256": "232f775927753816c59e8c8a63701dce5a9c899876980e5699da8137910ea20c",
+      "size_bytes": 10608
+    },
+    {
+      "label": "b3 ks_explicit_spectral stdout.log",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/b3/ks_explicit_spectral/stdout.log",
+      "sha256": "483f0c21ac889d2e04e174f00fda3abb062b40a35281563bd0abd775e2ee9b8e",
+      "size_bytes": 22920
+    },
+    {
+      "label": "b3 ks_explicit_spectral str.out",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/b3/ks_explicit_spectral/str.out",
+      "sha256": "6c0745baa59b3bfcc854b479deaf581e5669923a6d84363170f875bc575fc366",
+      "size_bytes": 1496
+    },
+    {
+      "label": "pre_b3 rs_explicit_spectral input.nml",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/pre_b3/rs_explicit_spectral/input.nml",
+      "sha256": "e98845d57b7a8474b354a990081352d38708c9649a78a079e7ce57044914f0b1",
+      "size_bytes": 2253
+    },
+    {
+      "label": "pre_b3 rs_explicit_spectral Fe_out.nml",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/pre_b3/rs_explicit_spectral/Fe_out.nml",
+      "sha256": "49092790ce875c747c052005d6babc7824d1d5a8a358e458fd09c2073db903c9",
+      "size_bytes": 10587
+    },
+    {
+      "label": "pre_b3 rs_explicit_spectral stdout.log",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/pre_b3/rs_explicit_spectral/stdout.log",
+      "sha256": "5c1329155a8005a0f551b45a18e7a317972bedbea54016ef363f4f39d7759f0c",
+      "size_bytes": 12618
+    },
+    {
+      "label": "pre_b3 rs_explicit_spectral str.out",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/pre_b3/rs_explicit_spectral/str.out",
+      "sha256": "7c5429da197b167f880e4b13e06c12c9e650d6c9b2540bd39a09bd05b875cd35",
+      "size_bytes": 1496
+    },
+    {
+      "label": "b3 rs_explicit_spectral input.nml",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/b3/rs_explicit_spectral/input.nml",
+      "sha256": "e98845d57b7a8474b354a990081352d38708c9649a78a079e7ce57044914f0b1",
+      "size_bytes": 2253
+    },
+    {
+      "label": "b3 rs_explicit_spectral Fe_out.nml",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/b3/rs_explicit_spectral/Fe_out.nml",
+      "sha256": "49092790ce875c747c052005d6babc7824d1d5a8a358e458fd09c2073db903c9",
+      "size_bytes": 10587
+    },
+    {
+      "label": "b3 rs_explicit_spectral stdout.log",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/b3/rs_explicit_spectral/stdout.log",
+      "sha256": "60eb364954b9f8c8ee2a0f7f3bd7838c5583ac83eae2ce7634cc50e4c9a293f8",
+      "size_bytes": 12618
+    },
+    {
+      "label": "b3 rs_explicit_spectral str.out",
+      "path": "/private/tmp/c4-b3-spectral-ks-unchanged-v2/b3/rs_explicit_spectral/str.out",
+      "sha256": "a43882b46ca38373ca4d7cdb124892bb38ae2035455fe2f4a8b358ad42762e01",
+      "size_bytes": 1496
+    }
+  ],
+  "route_suite": {
+    "runs": 8,
+    "status": "PASS",
+    "summary": {
+      "label": "summary.json",
+      "path": "/private/tmp/c4-b3-route-suite6/summary.json",
+      "sha256": "f6edb9bd51adfac56e0430210b52a25b85a176f65474418ab4ca4e83e66387f7",
+      "size_bytes": 48733
+    }
+  },
+  "schema": "c4-rc3-provenance-v1",
+  "scope": "Shared local-Hubbard eligibility drops use_kspace only. Existing guards remain: fixed Liechtenstein U/J, nsp=1, lmax=2, calctype B, nbulk=0, nrec=ntype, constraints/SOC/noncollinear/HOH/SC-U/V/impurity/test-field exclusions. Qualifying RS and KS local routes adopt E_Hub(P_OUT); explicit spectral remains non-adopted.",
+  "stage": "B3 RS bulk local energy routing"
+}

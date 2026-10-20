@@ -20,7 +20,7 @@ The d-LDOS maxima compare impurity and bulk on the same fixed `E−EF` grid sepa
 3. Fe U>0 discrepancies remain much larger than the U=0 control; the C2 D3 requested ratio below 10 is **not met** (absolute moment ratio ≈734.9).
 4. D1 found matched first-iteration Hubbard blocks, values, and insertion counts; D2 isolated an impurity-type indexing inconsistency, which was fixed without changing a physics formula and covered by regression.
 5. The frozen Green comparison shows the first differences in computed Green spectra after matching operators; weighted Green integration reproduces P_OUT d occupations. It does not explain the later multistep Fe moment discrepancy, which remains unresolved.
-6. The supported hcp-Co setup failure was triaged as pre-existing; C2’s selected substitute, generated-lattice fcc Ni, completed the matched controls and both U>0 seed records.
+6. The hcp-Co impurity failure is reported as a pre-existing non-finite failure in the C4 amendment. The archived C1 Co triage does not independently establish that classification: its Debug run stopped at a bounds error before SCF and its clean-8b run was killed before SCF. C2’s selected substitute, generated-lattice fcc Ni, completed the matched controls and both U>0 seed records.
 7. D3’s below-10 target is reported as unmet within this RECORD; it is not a new gate or a C1/C2 stop condition. Continue with the authorized RB stage.
 
 ## C1 close (5 lines)
