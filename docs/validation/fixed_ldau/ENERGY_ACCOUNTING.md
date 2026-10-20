@@ -32,6 +32,22 @@ zero-target setup fatal; a successful constrained SCF route remains untested
 ([paired guard receipts](evidence/a4_4_constraints_guard_paired_enabled.json),
 [positive control](evidence/a4_4_constraints_guard_paired_positive.json)).
 
+### B3 reviewed scope extension
+
+B3 removes the backend selector from the shared local-Hubbard eligibility
+predicate. The existing guards remain: fixed Liechtenstein U/J, scalar
+collinear `nsp=1`, `lmax=2`, `calctype='B'`, clean bulk (`nbulk=0`,
+`nrec=ntype`), and no constraints, SOC/noncollinearity, HOH,
+self-consistent U/V, impurity U, or nonzero test-operator field. Thus the
+automatic local route is available to both RS and native KS when those
+conditions hold. In either backend, local `E_Hub(P_OUT)` is included in the
+physical total energy. Explicit spectral selection remains spectral and does
+not adopt the local correction; impurity/surface and constrained cases remain
+outside this eligibility scope. This describes the reviewed implementation scope; accepted-endpoint route
+reproduction and unchanged-mode/no-U controls are recorded in
+[C4 RC3 results](rs/C4_RC3_RESULTS.md). This is not a new RS ASA
+derivative-gate verdict.
+
 ## Gate result (historical pre-A5 status)
 
 The paragraph below records the earlier pre-A5 assessment and is superseded

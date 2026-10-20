@@ -139,17 +139,21 @@ terms vanish or that the relation holds for arbitrary radial states.
 This evidence does not establish an exact general ASA energy identity. The
 selected formula is an empirically tested local base-functional correction
 within the measured numerical accuracy, and does not prove a universal
-``SUMEV`` double-counting coefficient. The scoped source routing, restart continuity, and matched serial/MPI checks
-pass. The implementation is limited to ordinary native reciprocal KS
-(``use_kspace=.true.``, ``calctype='B'``), clean bulk (``nbulk=0`` and
-``nrec=ntype``), explicit fixed general Liechtenstein U/J, scalar-collinear
-``nsp=1``, ``lmax=2``, and disabled constraints. RS remains on its guarded
-spectral route pending independent M1/M2. Impurity/surface hosts, SOC/noncollinear
-states, HOH, self-consistent U, intersite V, impurity U, and nonzero test
-fields are excluded. Constraints-enabled input selects spectral mode before
-a zero-target setup fatal; successful constrained SCF behavior remains
-untested. See ``docs/validation/fixed_ldau/ENERGY_ACCOUNTING.md`` and the
-A4.4 control evidence index for current status and receipts.
+``SUMEV`` double-counting coefficient. The A4.4 source routing, restart
+continuity, and matched serial/MPI checks pass for native reciprocal KS. The
+reviewed B3 scope removes the backend selector from the shared local-Hubbard
+eligibility predicate, so qualifying clean-bulk RS and KS runs can use the
+same local correction and include ``E_Hub(P_OUT)`` in the physical total
+energy. The retained eligibility conditions are ``calctype='B'``, clean bulk
+(``nbulk=0`` and ``nrec=ntype``), fixed Liechtenstein U/J, scalar-collinear
+``nsp=1``, ``lmax=2``, and disabled constraints. Accepted-endpoint RS route reproduction and unchanged-mode/no-U controls are
+recorded in ``docs/validation/fixed_ldau/rs/C4_RC3_RESULTS.md``; this is
+route evidence, not a new ASA derivative-gate result. Explicit spectral selection remains
+spectral/non-adopted. Impurity/surface hosts, SOC/noncollinear states, HOH,
+self-consistent U, intersite V, impurity U, and nonzero test fields remain
+excluded. Constraints-enabled input selects spectral mode before a zero-target
+setup fatal; successful constrained SCF behavior remains untested. See
+``docs/validation/fixed_ldau/ENERGY_ACCOUNTING.md`` for scope and status.
 
 For the ordinary fixed-U/J route, ``calculate_hubbard_u_potential_general``
 builds the rotationally invariant Liechtenstein orbital potential from the

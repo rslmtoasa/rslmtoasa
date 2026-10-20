@@ -411,7 +411,7 @@ module self_mod
       procedure, private :: write_fixed_u_total_energy
       procedure, private :: write_hubbard_moment_energy_diagnostics
       procedure, private :: validate_hubbard_mode_provenance
-      procedure, private :: is_eligible_local_hubbard_ks
+      procedure, private :: is_eligible_local_hubbard
       procedure, private :: fixed_hubbard_energy_pout
       procedure, private :: write_fixed_u_radial_replay_input
       procedure, private :: write_fixed_u_radial_replay_output
@@ -2294,7 +2294,7 @@ contains
          value_a_f = value_a - ts
          value_c_f = value_c - ts
       else
-         if (this%is_eligible_local_hubbard_ks() .and. &
+         if (this%is_eligible_local_hubbard() .and. &
              trim(this%hamiltonian%hubbard_radial_moments) == 'local') then
             value_b = this%physical_total_energy + total_external
          else
@@ -2347,10 +2347,10 @@ contains
       deallocate(density, potential, e_int, e_dc, e_hub, tr_vp)
    end subroutine write_hubbard_moment_energy_diagnostics
 
-   logical function is_eligible_local_hubbard_ks(this) result(eligible)
+   logical function is_eligible_local_hubbard(this) result(eligible)
       class(self), intent(in) :: this
 
-      eligible = this%use_kspace .and. this%hamiltonian%hubbard_u_general_check .and. &
+      eligible = this%hamiltonian%hubbard_u_general_check .and. &
          trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein' .and. &
          this%control%nsp == 1 .and. this%control%lmax == 2 .and. &
          this%control%calctype == 'B' .and. &
@@ -2361,7 +2361,7 @@ contains
          .not. this%hamiltonian%hubbard_v_check .and. .not. this%hamiltonian%hubbard_u_impurity_check .and. &
          (.not. this%hamiltonian%hubbard_test_operator_check .or. &
           this%hamiltonian%hubbard_test_lambda == 0.0_rp)
-   end function is_eligible_local_hubbard_ks
+   end function is_eligible_local_hubbard
 
    subroutine validate_hubbard_mode_provenance(this)
       class(self), intent(inout) :: this
@@ -2406,7 +2406,7 @@ contains
       integer :: isite, itype, spin, i, j, orbital_i, orbital_j
 
       total_hub = 0.0_rp
-      if (.not. this%is_eligible_local_hubbard_ks()) return
+      if (.not. this%is_eligible_local_hubbard()) return
       if (trim(this%hamiltonian%hubbard_radial_moments) /= 'local') return
 
       allocate(density(this%lattice%ntype, 4, 2, 7, 7), potential(this%lattice%ntype, 4, 2, 7, 7))
@@ -3349,7 +3349,7 @@ contains
       this%use_kspace = use_kspace
       radial_mode_defaulted = trim(this%hamiltonian%hubbard_radial_moments) == 'auto'
       if (trim(this%hamiltonian%hubbard_radial_moments) == 'auto') then
-         if (this%is_eligible_local_hubbard_ks()) then
+         if (this%is_eligible_local_hubbard()) then
             this%hamiltonian%hubbard_radial_moments = 'local'
          else
             this%hamiltonian%hubbard_radial_moments = 'spectral'
@@ -3359,7 +3359,7 @@ contains
       if (radial_mode_defaulted) radial_mode_source = 'default'
       if (rank == 0) call g_logger%info('HUBBARD_RADIAL_MODE mode='//trim(this%hamiltonian%hubbard_radial_moments)// &
          ' source='//trim(radial_mode_source)//' use_kspace='//trim(log2str(this%use_kspace))// &
-         ' local_energy_adopted='//trim(log2str(this%is_eligible_local_hubbard_ks() .and. &
+         ' local_energy_adopted='//trim(log2str(this%is_eligible_local_hubbard() .and. &
             trim(this%hamiltonian%hubbard_radial_moments) == 'local')), __FILE__, __LINE__)
       call this%validate_hubbard_mode_provenance()
       this%magnetic_seed_enable = magnetic_seed_enable

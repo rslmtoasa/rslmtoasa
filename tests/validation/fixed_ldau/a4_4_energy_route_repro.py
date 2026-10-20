@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Focused A4.4 KS energy-routing, restart, scope, and MPI receipt runner.
+"""Focused LDA+U energy-routing, restart, scope, and MPI receipt runner.
 
 The positive path starts from the accepted KS U=2 eV,J=0 endpoint and omits
 ``hubbard_radial_moments`` to exercise the native-KS default. It checks the
 logged route identity from the same production helper and records a direct
 P_OUT re-evaluation from the lightweight trace. The serial continuation and
 two-rank run each start from their documented restart state. One-step scope
-controls cover explicit spectral, no-U default, and RS default behavior; they
-do not claim convergence or RS M2 evidence.
+controls cover explicit spectral, no-U default, and accepted RS-bulk auto
+routing. The one-step controls check routing identities, not convergence.
 """
 from __future__ import annotations
 
@@ -45,10 +45,13 @@ def source_hashes() -> dict[str, str]:
 
 def assert_route_eligibility_source_contract() -> dict[str, bool]:
     root = Path(__file__).resolve().parents[3]
-    source = (root / "source/self.f90").read_text()
+    source = re.sub(r"\s+", " ", (root / "source/self.f90").read_text())
     predicates = {
         "calctype_B": "this%control%calctype == 'B'" in source,
         "constraints_disabled": ".not. this%control%constraints_enable" in source,
+        "clean_bulk_no_impurity": "this%lattice%nbulk == 0 .and. this%lattice%nrec == this%lattice%ntype" in source,
+        "single_spin_d_shell": "this%control%nsp == 1 .and. this%control%lmax == 2" in source,
+        "fixed_liechtenstein": "this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein'" in source,
     }
     failed = [name for name, present in predicates.items() if not present]
     if failed:
@@ -275,9 +278,10 @@ def run_one(name: str, args, *, binary: Path, launcher: list[str], base_input: P
     if expected_mode == "local" and adopted:
         candidate_checks["candidate_b"] = check_equal(
             dec(fields, "candidate_b"), physical_energy, "local candidate_b equals adopted physical total")
-        candidate_checks["candidate_b_F"] = check_equal(
-            dec(fields, "candidate_b_F"), physical_energy - ts,
-            "local candidate_b_F equals adopted physical total minus TS")
+        if backend == "ks":
+            candidate_checks["candidate_b_F"] = check_equal(
+                dec(fields, "candidate_b_F"), physical_energy - ts,
+                "local candidate_b_F equals adopted physical total minus TS")
     elif expected_mode == "spectral":
         e_hub_diag = dec(fields, "E_Hub")
         t_diag = dec(fields, "t_in_out")
@@ -308,13 +312,13 @@ def run_one(name: str, args, *, binary: Path, launcher: list[str], base_input: P
     matrix_rows = extract_p(trace, matrix_file) if backend == "ks" else 0
     helper_result = None
     helper_delta = None
-    if adopted:
+    if adopted and backend == "ks":
         if not args.energy_helper:
             raise ValueError("--energy-helper is required to verify adopted local production EHub")
         helper = subprocess.run([str(args.energy_helper), str(matrix_file), str(u), str(j)],
                                 check=True, text=True, capture_output=True)
         helper_result = helper.stdout.strip()
-        match = re.search(rf"E_?Hub_Ry=\s*({FLOAT})", helper_result)
+        match = re.search(rf"(?:E_?Hub_Ry|EHub_Ucenter_Ry)=\s*({FLOAT})", helper_result)
         if not match:
             raise ValueError(f"{name}: direct-P helper did not return E_Hub_Ry")
         helper_delta = str(Decimal(match.group(1).replace("D", "E")) - hubbard_logged)
@@ -358,6 +362,7 @@ def main() -> None:
     p.add_argument("--mpi-ranks", type=int, default=2)
     p.add_argument("--accepted-input", type=Path, required=True)
     p.add_argument("--accepted-u2-restart", type=Path, required=True)
+    p.add_argument("--spectral-u2-restart", type=Path, required=True)
     p.add_argument("--no-u-restart", type=Path, required=True)
     p.add_argument("--rs-restart", type=Path, required=True)
     p.add_argument("--assets", type=Path, required=True)
@@ -366,7 +371,8 @@ def main() -> None:
     p.add_argument("--outdir", type=Path, required=True)
     args = p.parse_args()
     required = [args.serial_binary, args.mpi_binary, args.accepted_input,
-                args.accepted_u2_restart, args.no_u_restart, args.rs_restart,
+                args.accepted_u2_restart, args.spectral_u2_restart,
+                args.no_u_restart, args.rs_restart,
                 args.energy_helper, *(args.assets / x for x in ASSETS)]
     missing = [str(f) for f in required if not f.is_file()]
     if missing:
@@ -395,7 +401,7 @@ def main() -> None:
                       backend="ks", u=2.0, j=0.0, mode=None, expected_mode="local")
     rows.append(mpi_row)
     rows.append(run_one("ks_explicit_spectral", args, binary=args.serial_binary, launcher=[],
-                        base_input=args.accepted_input, seed=args.accepted_u2_restart,
+                        base_input=args.accepted_input, seed=args.spectral_u2_restart,
                         backend="ks", u=2.0, j=0.0, mode="spectral", expected_mode="spectral"))
     rows.append(run_one("ks_explicit_local_nonzero_test_field", args,
                         binary=args.serial_binary, launcher=[], base_input=args.accepted_input,
@@ -410,7 +416,7 @@ def main() -> None:
                         backend="ks", u=0.0, j=0.0, mode=None, expected_mode="spectral"))
     rows.append(run_one("rs_u2_auto", args, binary=args.serial_binary, launcher=[],
                         base_input=args.accepted_input, seed=args.rs_restart,
-                        backend="rs", u=2.0, j=0.0, mode=None, expected_mode="spectral"))
+                        backend="rs", u=2.0, j=0.0, mode=None, expected_mode="local"))
     mpi_case = args.outdir / "ks_auto_local_mpi"
     serial_case = args.outdir / "ks_auto_local_serial"
     serial_fields, _ = kv_fields((serial_case / "stdout.log").read_text(errors="replace"))
