@@ -24,7 +24,7 @@ contains
       real(rp), allocatable :: cvec(:), dvec(:), gvec(:)
       real(rp) :: wow
       integer :: lmax_o, l, o, sp, iv
-      real(rp) :: q_dir(3), theta, phi
+      real(rp) :: q_dir(3), theta, phi, mom_ref(3)
       logical :: second
 
       if (lower(trim(this%lattice%strux_backend)) /= 'strux_lib') &
@@ -65,7 +65,8 @@ contains
          associate (pot => this%lattice%symbolic_atoms(it)%potential)
             if (size(pot%wx0) < norb .or. size(pot%cx0) < norb) &
                call g_logger%fatal('gbt_single_q k-space: potential factors smaller than the orbital basis.', __FILE__, __LINE__)
-            call gbt_site_frame(pot%mom, this%hamiltonian%theta_ss, theta, phi)
+            mom_ref = pot%mom
+            call gbt_site_frame(mom_ref, this%hamiltonian%theta_ss, theta, phi)
             call gbt_reference_frame(theta, phi, frame(:, :, isite))
             if (this%control%constraints_enable) then   ! the target is the local axis, whatever the site orientation
                if (maxval(abs(this%lattice%symbolic_atoms(it)%constraint_target - [0.0_rp, 0.0_rp, 1.0_rp])) > 1.0e-10_rp) &
@@ -101,7 +102,7 @@ contains
                c(:, 2, isite) = pot%cex0(1:norb) - pot%cex1(1:norb)
                obar(:, :, isite) = this%hamiltonian%obarm(:, :, it)
                enu(:, :, isite) = this%hamiltonian%enim(:, :, it)
-               if (pot%mom(3) < 0.0_rp) then
+               if (mom_ref(3) < 0.0_rp) then
                   obar(1:norb, 1:norb, isite) = this%hamiltonian%obarm(norb + 1:nb, norb + 1:nb, it)
                   obar(norb + 1:nb, norb + 1:nb, isite) = this%hamiltonian%obarm(1:norb, 1:norb, it)
                   enu(1:norb, 1:norb, isite) = this%hamiltonian%enim(norb + 1:nb, norb + 1:nb, it)
