@@ -1824,7 +1824,7 @@ campaign remain outside the established scope.
 - **Consequence:** the log reports the symmetry of the labelled structure, so differently labelled types of one element count as different species. Check physical inversion
   with spglib and element labels.
 
-## [OPEN, 2026-10-20] hcp Co impurity non-finite Green-function report
+## [OPEN, 2026-10-20] RS impurity numerical instability — hcp Co non-finite Green-function report
 
 - **Reported behavior:** the C4 amendment records a pre-existing hcp-Co impurity run on clean `8b8f7ef` reaching non-finite Green-function values and stopping before a usable converged result. This issue is scoped to the hcp-Co impurity setup; it does not classify the separate Fe `rc=140/lld=21` run.
 - **Evidence limit:** the retained C1 Co triage does not contain the raw clean-8b non-finite run. Its Debug and U=0 cases stop before SCF at `source/lattice_cluster.f90:996` (dimension mismatch 3/50000), and its clean-8b run has empty stdout and exits SIGKILL before SCF. The C4 report is preserved in `docs/validation/fixed_ldau/rs/C4_AMENDMENT.md`; the C1 triage paths and hashes are in `docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json`. Therefore the reported non-finite behavior is recorded as pre-existing per the amendment, while this checkout's archived raw evidence does not independently reproduce it.
