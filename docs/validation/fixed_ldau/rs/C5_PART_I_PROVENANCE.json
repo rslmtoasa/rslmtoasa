@@ -1,0 +1,54 @@
+{
+  "schema": "c5-part-i-provenance-v1",
+  "part": "I",
+  "baseline": {
+    "branch": "fable_v4b_u",
+    "commit": "908074f64b4d3143d2d91c0124fc79d126b8dbea",
+    "working_tree": "clean"
+  },
+  "work_branch": "fix/ldau-rs-impurity",
+  "scope": "Documentation-only Part I; no campaigns or tests run.",
+  "files": {
+    "amendment": {
+      "path": "docs/validation/fixed_ldau/rs/C5_AMENDMENT.md",
+      "source": "/Users/andersb/.codex/attachments/366fc8c8-5740-4bf0-b9d7-31e0eff8a01d/Pasted text.txt",
+      "copy_method": "cp; verbatim",
+      "sha256": "7e26a428c115cd49b67ab38942cfdd14b41f6fa590d5fd4d86c0b90e8abcbc2a"
+    },
+    "known_issues": {
+      "path": "tests/KNOWN_ISSUES.md",
+      "change": "Replaced the two terminal C4-era Co/Fe records with the four Part I records; preserved preceding content.",
+      "sha256": "0c94c74dc963829c272d25a85a91900228dd80cba82a8bf0fa8d122cad4037d6"
+    },
+    "results": "docs/validation/fixed_ldau/rs/C5_PART_I_RESULTS.md",
+    "results_path": "docs/validation/fixed_ldau/rs/C5_PART_I_RESULTS.md",
+    "results_sha256": "399df6de1380fadb6ae04fff34bbab44381b9713200eb11dd9d88190815d3f4f"
+  },
+  "evidence_references": [
+    "docs/validation/fixed_ldau/rs/RA4_assets/prerun_inputs/co_hcp_lattice.nml",
+    "docs/validation/fixed_ldau/rs/C1_RA4_RESULTS.md",
+    "docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json",
+    "docs/validation/fixed_ldau/rs/C1_RB_RESULTS.md",
+    "docs/validation/fixed_ldau/rs/C1_RB_PROVENANCE.json",
+    "docs/validation/fixed_ldau/rs/C4_A41_RESULTS.md",
+    "docs/validation/fixed_ldau/rs/C4_A41_PROVENANCE.json"
+  ],
+  "commands": [
+    "git status --short --branch",
+    "git rev-parse HEAD",
+    "git switch -c fix/ldau-rs-impurity",
+    "cp /Users/andersb/.codex/attachments/366fc8c8-5740-4bf0-b9d7-31e0eff8a01d/Pasted text.txt docs/validation/fixed_ldau/rs/C5_AMENDMENT.md",
+    "sha256sum docs/validation/fixed_ldau/rs/C5_AMENDMENT.md"
+  ],
+  "repository_discovery": {
+    "instructions": "No AGENTS.md found in ancestors or repository. cleanup/ contains user-owned protocol documents and was left unchanged. tests/gbt/ was not touched.",
+    "build": "CMake project (CMakeLists.txt); no in-repository CMake cache or build directory discovered.",
+    "available_deck_and_records": "The hcp Co setup deck exists at RA4_assets/prerun_inputs/co_hcp_lattice.nml. Existing C1 RA4/RB results and provenance and C4 A4.1 records are present."
+  },
+  "verification": {
+    "kind": "Documentation review only",
+    "tests_run": false,
+    "campaigns_run": false,
+    "push": false
+  }
+}
