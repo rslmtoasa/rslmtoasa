@@ -58,3 +58,7 @@ pip-wheel-metadata/
 # Logs
 *.log
 *.out
+
+# Private diagnostic fixtures and matrix dumps
+/scratch/
+gf-audit-*.dat

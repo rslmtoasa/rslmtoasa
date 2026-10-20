@@ -1268,6 +1268,8 @@ contains
                itotfo(nv, :, :) = - isd(nv, :, :) + isc(nv, :, :)
             end do
          end do
+         ! Read-only opt-in dump, after all energy contractions and before integration.
+         call dump_gf_symmetry_pair(this, njij_glob, njij, dcc, dsc)
          ! Jij integration
          this%jij = 0.0d0
          call simpson_f(this%jij, this%en%ene, this%en%fermi, this%en%nv1, real(jtotso), .true., .false., 0.0d0)
@@ -1917,5 +1919,62 @@ contains
       call MPI_BARRIER(MPI_COMM_WORLD, ierr)
 #endif
    end subroutine calculate_exchange_gauss_legendre
+
+   ! Each pair has a single MPI owner; filenames include rank AND global pair.
+   subroutine dump_gf_symmetry_pair(this, pair, local_pair, dcc, dsc)
+      use mpi_mod, only: rank
+      use gf_audit_io_mod
+      class(exchange), intent(inout) :: this
+      integer, intent(in) :: pair, local_pair
+      complex(rp), intent(in) :: dcc(:, :), dsc(:, :)
+      integer :: unit, nv, i, j, step
+      real(rp) :: energy
+      complex(rp) :: di(9,9), dj(9,9)
+      if (.not. gf_audit_selected(pair)) return
+      call gf_audit_open(unit, 'gf', rank, pair)
+      if (unit == 0) return
+      i = this%lattice%ijpair(pair,1)
+      j = this%lattice%ijpair(pair,2)
+      write(unit, '(a,5(1x,i0),3(1x,es25.16e3))') 'P',pair,i,j,this%lattice%iz(i), &
+         this%lattice%iz(j),this%lattice%cr(:,j)-this%lattice%cr(:,i)
+      write(unit, '(a,1x,es25.16e3,1x,l1)') 'F',this%en%fermi,this%green%recursion%hamiltonian%local_axis
+      step = gf_audit_stride(size(dcc,1))
+      do nv = 1, size(dcc,1)
+         energy = this%en%ene(nv)
+         write(unit, '(a,1x,i0,7(1x,es25.16e3))') 'I',nv,energy,real(dcc(nv,:),rp),real(dsc(nv,:),rp)
+         if (mod(nv-1,step) /= 0 .and. nv /= size(dcc,1)) cycle
+         call this%symbolic_atom(this%lattice%iz(i))%d_matrix(di,energy)
+         call this%symbolic_atom(this%lattice%iz(j))%d_matrix(dj,energy)
+         call gf_audit_matrix(unit,nv,energy,'Delta_i',di)
+         call gf_audit_matrix(unit,nv,energy,'Delta_j',dj)
+         call gf_audit_matrix(unit,nv,energy,'gij',this%green%gij(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gji',this%green%gji(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'ginmag',this%green%ginmag(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gjnmag',this%green%gjnmag(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gix',this%green%gix(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gjx',this%green%gjx(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'giy',this%green%giy(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gjy',this%green%gjy(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'giz',this%green%giz(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gjz',this%green%gjz(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'g00ij',this%green%g00ij(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'g00ji',this%green%g00ji(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'g01ij',this%green%g01ij(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'g01ji',this%green%g01ji(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gx0ij',this%green%gx0ij(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gx0ji',this%green%gx0ji(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gx1ij',this%green%gx1ij(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gx1ji',this%green%gx1ji(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gy0ij',this%green%gy0ij(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gy0ji',this%green%gy0ji(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gy1ij',this%green%gy1ij(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gy1ji',this%green%gy1ji(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gz0ij',this%green%gz0ij(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gz0ji',this%green%gz0ji(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gz1ij',this%green%gz1ij(:,:,nv,local_pair))
+         call gf_audit_matrix(unit,nv,energy,'gz1ji',this%green%gz1ji(:,:,nv,local_pair))
+      end do
+      close(unit)
+   end subroutine dump_gf_symmetry_pair
 
 end module exchange_mod
