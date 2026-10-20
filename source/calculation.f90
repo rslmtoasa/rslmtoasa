@@ -1171,15 +1171,15 @@ contains
                                __FILE__, __LINE__)
          end if
          call post_processing_frozen_magnon_auto(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, &
-                                                mix_obj, self_obj, energy_obj)
+                                                mix_obj, self_obj)
       else
          call post_processing_frozen_magnon_acoustic(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, &
-                                                    mix_obj, self_obj, energy_obj)
+                                                    mix_obj, self_obj)
       end if
    end subroutine post_processing_frozen_magnon
 
    !---------------------------------------------------------------------------
-   subroutine post_processing_frozen_magnon_acoustic(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, mix_obj, self_obj, energy_obj)
+   subroutine post_processing_frozen_magnon_acoustic(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, mix_obj, self_obj)
       type(frozen_magnon), intent(in) :: fm_obj
       real(rp), intent(in) :: q_ss_cart(:, :)
       type(lattice), target, intent(inout) :: lattice_obj
@@ -1187,18 +1187,14 @@ contains
       type(bands), target, intent(inout) :: bands_obj
       type(mix), target, intent(inout) :: mix_obj
       type(self), target, intent(inout) :: self_obj
-      type(energy), target, intent(inout) :: energy_obj
-      type(reciprocal) :: recip_obj
       real(rp), allocatable :: etot_q(:), eband_q(:), eband_gauge_q(:), mtot_q(:, :), omega_q(:)
-      real(rp), allocatable :: fermi_q(:), electron_count_q(:), electron_error_q(:), target_electrons_q(:), weight_sum_q(:)
-      integer, allocatable :: nk_total_q(:), nk_mesh_q(:, :)
       real(rp), allocatable :: constraint_metric_q(:), constraint_penalty_q(:), constraint_coupling_q(:)
       real(rp), allocatable :: potential_drift_q(:), potential_transient_drift_q(:), field_magnitude_q(:, :)
       integer, allocatable :: constraint_iteration_q(:)
       logical, allocatable :: constraint_converged_q(:)
-      real(rp) :: sin2theta, etot_ref, theta_probe, ordinary_checksum
-      real(rp) :: delta_raw, delta_gauge, delta_final, e_q0, e_ref0
-      logical :: use_kspace, constraints_enabled, bare_mft, corrected_mft
+      real(rp) :: sin2theta, etot_ref, ordinary_checksum
+      real(rp) :: delta_raw, delta_gauge, delta_final
+      logical :: constraints_enabled, bare_mft, corrected_mft
       character(len=200) :: fmt_str
       integer :: iq, i, iter, newunit, diagnostic_unit
 
@@ -1209,9 +1205,7 @@ contains
                 constraint_coupling_q(fm_obj%n_q), potential_drift_q(fm_obj%n_q), &
                 potential_transient_drift_q(fm_obj%n_q), &
                 field_magnitude_q(lattice_obj%nrec, fm_obj%n_q), constraint_iteration_q(fm_obj%n_q), &
-                constraint_converged_q(fm_obj%n_q), fermi_q(fm_obj%n_q), electron_count_q(fm_obj%n_q), &
-                electron_error_q(fm_obj%n_q), target_electrons_q(fm_obj%n_q), weight_sum_q(fm_obj%n_q), nk_total_q(fm_obj%n_q), &
-                nk_mesh_q(3, fm_obj%n_q))
+                constraint_converged_q(fm_obj%n_q))
       if (bare_mft) allocate (eband_gauge_q(fm_obj%n_q))
       constraint_metric_q = 0.0_rp
       constraint_penalty_q = 0.0_rp
@@ -1221,13 +1215,6 @@ contains
       field_magnitude_q = 0.0_rp
       constraint_iteration_q = 0
       constraint_converged_q = .true.
-      fermi_q = 0.0_rp
-      electron_count_q = 0.0_rp
-      electron_error_q = 0.0_rp
-      target_electrons_q = 0.0_rp
-      weight_sum_q = 0.0_rp
-      nk_total_q = 0
-      nk_mesh_q = 0
 
       ! Reference point (row 1): converge the flat-spiral cone potential once. Its
       ! magnitudes/moments define the normalization.  Corrected MFT first obtains
@@ -1240,7 +1227,9 @@ contains
          lattice_obj%control%constraints_enable = .false.
       end if
       self_obj = self(bands_obj, mix_obj)
-      use_kspace = self_obj%use_kspace
+      if (self_obj%use_kspace) call g_logger%fatal( &
+         "constrained or non-mft frozen magnons are not supported on the k-space path (parked; see restart spec, "// &
+         "Parked items); use the real-space route or mode='mft' without constraints", __FILE__, __LINE__)
       ! GBT is a magnetic representation shared by both solvers.
       hamiltonian_obj%magnetic_representation = gbt_single_q
       hamiltonian_obj%q_ss(:) = q_ss_cart(:, 1)
@@ -1270,74 +1259,10 @@ contains
       if (bare_mft .or. (corrected_mft .and. .not. constraints_enabled)) then
          ! Bare MFT and the corrected zero-field limit rebuild ONLY the Hamiltonian
          ! per q and take a band-energy probe at the fixed ordinary potential.
-         if (use_kspace) then
-            recip_obj = reciprocal(hamiltonian_obj)
-            ! WP8: the mesh must never be built once from row 1’s q_ss and
-            ! reused blindly for every other q in the sweep -- each policy
-            ! below either shares one mesh proven valid for the whole sweep,
-            ! or rebuilds per q inside the loop.
-            select case (trim(recip_obj%q_symmetry_policy))
-            case ('little_group_common')
-               ! One mesh, reduced by the little group common to every q in
-               ! the sweep (not just row 1’s), valid for every probe below.
-               call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, &
-                                                 sum(abs(recip_obj%k_offset)) > 1.0e-12_rp, &
-                                                 q_list_cart=q_ss_cart)
-            case ('little_group')
-               ! Built per q inside the loop below.
-            case default   ! 'full_bz': WP0 oracle, unchanged from pre-WP8 behaviour.
-               if (.not. allocated(recip_obj%k_points)) then
-                  ! Every probe in one force-theorem difference must use the same
-                  ! integration contract.  If the sweep contains finite q, make
-                  ! the q=0 reference use the full chemical BZ as well.
-                  if (any(abs(q_ss_cart) > 1.0e-12_rp)) then
-                     recip_obj%use_symmetry_reduction = .false.
-                     recip_obj%use_time_reversal = .false.
-                     call recip_obj%generate_mp_mesh()
-                  else if (recip_obj%use_symmetry_reduction) then
-                     call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
-                                                                 sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
-                  else
-                     call recip_obj%generate_mp_mesh()
-                  end if
-               end if
-            end select
-         end if
          do iq = 1, fm_obj%n_q
             hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
-            if (use_kspace .and. trim(recip_obj%q_symmetry_policy) == 'little_group') then
-               ! Rebuild (or, via the cache key, reuse if unchanged) for this
-               ! specific q -- never reuse another q’s little-group mesh.
-               call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
-            end if
-
-            ! At finite q the GBT phase is a pure gauge when the cone is
-            ! collapsed onto the collinear reference axis.  In the continuum
-            ! E(q,theta=0) = E(0,theta), but a finite k mesh does not preserve
-            ! that identity when q is not a mesh translation.  Subtracting
-            ! E(0,theta) therefore leaves a q-only integration artifact which
-            ! is amplified by 1/sin^2(theta).  On the reciprocal route,
-            ! evaluate the exact same-q, zero-cone reference on the same
-            ! potential and same k-point set; this is a physical gauge
-            ! identity, not an empirical theta correction.  The real-space
-            ! path retains its established q=0 subtraction for compatibility.
-            if (bare_mft .and. use_kspace) then
-               theta_probe = hamiltonian_obj%theta_ss
-               hamiltonian_obj%theta_ss = 0.0_rp
-               eband_gauge_q(iq) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
-               hamiltonian_obj%theta_ss = theta_probe
-            end if
-            eband_q(iq) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
-            if (use_kspace) then
-               fermi_q(iq) = recip_obj%fermi_level
-               electron_count_q(iq) = recip_obj%canonical_electron_count
-               target_electrons_q(iq) = recip_obj%total_electrons
-               electron_error_q(iq) = recip_obj%canonical_electron_count - target_electrons_q(iq)
-               weight_sum_q(iq) = recip_obj%canonical_weight_sum
-               nk_total_q(iq) = recip_obj%nk_total
-               nk_mesh_q(:, iq) = recip_obj%nk_mesh
-            end if
-            if (bare_mft .and. .not. use_kspace) eband_gauge_q(iq) = eband_q(1)
+            eband_q(iq) = frozen_magnon_probe_energy(bands_obj)
+            if (bare_mft) eband_gauge_q(iq) = eband_q(1)
             etot_q(iq) = etot_ref   ! potential frozen; total energy not re-evaluated
             mtot_q(:, iq) = mtot_q(:, 1)
          end do
@@ -1349,35 +1274,8 @@ contains
          ! Corrected constrained MFT (Jacobsson convention): the ordinary
          ! potential is fixed, but the constraining field is converged separately
          ! at every q.  Only the final one-shot occupied-eigenvalue sum is used.
-         if (use_kspace) then
-            recip_obj = reciprocal(hamiltonian_obj)
-            select case (trim(recip_obj%q_symmetry_policy))
-            case ('little_group_common')
-               call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, &
-                                                 sum(abs(recip_obj%k_offset)) > 1.0e-12_rp, &
-                                                 q_list_cart=q_ss_cart)
-            case ('little_group')
-               ! Built for the current q inside the loop.
-            case default
-               if (.not. allocated(recip_obj%k_points)) then
-                  if (any(abs(q_ss_cart) > 1.0e-12_rp)) then
-                     recip_obj%use_symmetry_reduction = .false.
-                     recip_obj%use_time_reversal = .false.
-                     call recip_obj%generate_mp_mesh()
-                  else if (recip_obj%use_symmetry_reduction) then
-                     call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
-                                                                 sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
-                  else
-                     call recip_obj%generate_mp_mesh()
-                  end if
-               end if
-            end select
-         end if
          do iq = 1, fm_obj%n_q
             hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
-            if (use_kspace .and. trim(recip_obj%q_symmetry_policy) == 'little_group') then
-               call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
-            end if
             call set_constrained_spiral_targets(self_obj)
             call self_obj%reset_constraint_for_fixed_potential(fm_obj%constraint_start_from_zero)
             do iter = 1, fm_obj%constraint_max_iterations
@@ -1388,16 +1286,7 @@ contains
                call g_logger%fatal('[calculation.post_processing_frozen_magnon]: constraining field did not converge at q index '// &
                                   int2str(iq)//' within constraint_max_iterations.', __FILE__, __LINE__)
             end if
-            eband_q(iq) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
-            if (use_kspace) then
-               fermi_q(iq) = recip_obj%fermi_level
-               electron_count_q(iq) = recip_obj%canonical_electron_count
-               target_electrons_q(iq) = recip_obj%total_electrons
-               electron_error_q(iq) = recip_obj%canonical_electron_count - target_electrons_q(iq)
-               weight_sum_q(iq) = recip_obj%canonical_weight_sum
-               nk_total_q(iq) = recip_obj%nk_total
-               nk_mesh_q(:, iq) = recip_obj%nk_mesh
-            end if
+            eband_q(iq) = frozen_magnon_probe_energy(bands_obj)
             etot_q(iq) = etot_ref
             mtot_q(:, iq) = mtot_q(:, 1)
             constraint_metric_q(iq) = self_obj%constraint_metric
@@ -1419,7 +1308,7 @@ contains
             if (self_obj%control%constraints_enable) call set_constrained_spiral_targets(self_obj)
             call self_obj%run()
             etot_q(iq) = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
-            if (.not. self_obj%use_kspace) call bands_obj%calculate_band_energy()
+            call bands_obj%calculate_band_energy()
             eband_q(iq) = bands_obj%eband
             do i = 1, lattice_obj%nrec
                mtot_q(i, iq) = lattice_obj%symbolic_atoms(lattice_obj%nbulk + i)%potential%mtot
@@ -1461,9 +1350,6 @@ contains
       write (newunit, '(A)') '# q_ss units: Cartesian 2*pi/alat (same convention as &hamiltonian q_ss); row 1 is the reference point'
       write (newunit, '(A,A)') '# q_file coordinates: ', trim(fm_obj%q_coordinates)
       write (newunit, '(A)') '# omega uses eband in modes="mft"/"mft_constrained" and etot in mode="scf"'
-      if (bare_mft .and. use_kspace) then
-         write (newunit, '(A)') '# MFT k-space omega uses E(q,theta)-E(q,theta=0); E(q,theta=0) is the same-q GBT gauge reference'
-      end if
       if (corrected_mft) then
          write (newunit, '(A)') '# corrected MFT: ordinary potential frozen; q-specific constraint field converged before one-shot band energy'
          write (newunit, '(A)') '# detailed field, residual, checksum, and energy-component records are in frozen_magnon_constrained_diagnostics.dat'
@@ -1475,23 +1361,6 @@ contains
          write (newunit, fmt_str) q_ss_cart(:, iq), etot_q(iq), eband_q(iq), mtot_q(:, iq), omega_q(iq)
       end do
       close (newunit)
-
-      if (bare_mft .and. use_kspace) then
-         ! Keep the two subtraction choices visible in a separate diagnostic
-         ! file.  This makes the gauge-invariant production observable
-         ! auditable without changing the long-standing frozen_magnon.dat
-         ! column contract used by the quick fixtures.
-         open (newunit=diagnostic_unit, file='frozen_magnon_diagnostics.dat', status='replace', action='write')
-         write (diagnostic_unit, '(A)') '# Frozen-magnon MFT energy diagnostics'
-         write (diagnostic_unit, '(A)') '# Format: q1 q2 q3 E(q,theta) E(0,theta) DeltaE_raw E(q,0) DeltaE_gauge sin2theta Mtot omega'
-         do iq = 1, fm_obj%n_q
-            delta_raw = eband_q(iq) - eband_q(1)
-            delta_gauge = eband_q(iq) - eband_gauge_q(iq)
-            write (diagnostic_unit, '(3F12.6,1X,8(ES20.12E3,1X))') q_ss_cart(:, iq), eband_q(iq), eband_q(1), &
-               delta_raw, eband_gauge_q(iq), delta_gauge, sin2theta, sum(mtot_q(:, 1)), omega_q(iq)
-         end do
-         close (diagnostic_unit)
-      end if
 
       if (corrected_mft) then
          open (newunit=diagnostic_unit, file='frozen_magnon_constrained_diagnostics.dat', status='replace', action='write')
@@ -1516,47 +1385,6 @@ contains
                ordinary_checksum, potential_drift_q(iq), potential_transient_drift_q(iq), constraint_iteration_q(iq), &
                merge(1, 0, constraint_converged_q(iq)), sin2theta, sum(mtot_q(:, 1)), omega_q(iq), &
                field_magnitude_q(:, iq)
-         end do
-         close (diagnostic_unit)
-      end if
-
-      if (use_kspace) then
-         ! WP09 machine-readable contract.  Keep this file independent of the
-         ! legacy frozen_magnon.dat and of the mode-specific constraint audit:
-         ! every reciprocal acoustic run emits the raw q/theta energies plus
-         ! the canonical occupation and mesh metadata needed to distinguish a
-         ! physical cone response from finite-k quadrature noise.  For
-         ! corrected MFT, the zero-cone columns are zero and gauge_available is
-         ! false because the q-specific constraint field is not a pure-gauge
-         ! reference at theta=0.
-         open (newunit=diagnostic_unit, file='frozen_magnon_harmonic_diagnostics.dat', status='replace', action='write')
-         write (diagnostic_unit, '(A)') '# GBT WP09 harmonic cone-angle and k-grid diagnostics'
-         write (diagnostic_unit, '(A)') '# schema = gbt_wp09_harmonic_v1'
-         write (diagnostic_unit, '(A,A)') '# mode = ', trim(fm_obj%mode)
-         write (diagnostic_unit, '(A,A)') '# q_coordinates = ', trim(fm_obj%q_coordinates)
-         write (diagnostic_unit, '(A)') '# q_units = Cartesian 2*pi/alat, matching hamiltonian%q_ss'
-         write (diagnostic_unit, '(A,ES24.16)') '# alat_angstrom = ', lattice_obj%alat
-         write (diagnostic_unit, '(A)') '# gauge_available = true only for bare reciprocal MFT same-q theta=0 probes'
-         write (diagnostic_unit, '(A)') '# energy_bookkeeping = raw occupied-eigenvalue energies; no controller penalty or field coupling added'
-         write (diagnostic_unit, '(A)') '# columns = q1 q2 q3 theta_deg E_q_theta E_q0 E_qref_theta E_qref0 DeltaE_raw DeltaE_gauge DeltaE_pure sin2theta Mtot omega fermi_level electron_count electron_error target_electrons weight_sum nk1 nk2 nk3 nk_total gauge_available'
-         do iq = 1, fm_obj%n_q
-            if (bare_mft .and. use_kspace) then
-               e_q0 = eband_gauge_q(iq)
-               e_ref0 = eband_gauge_q(1)
-               delta_gauge = eband_q(iq) - eband_gauge_q(iq)
-               delta_final = eband_gauge_q(iq) - eband_gauge_q(1)
-            else
-               e_q0 = 0.0_rp
-               e_ref0 = 0.0_rp
-               delta_gauge = 0.0_rp
-               delta_final = 0.0_rp
-            end if
-            delta_raw = eband_q(iq) - eband_q(1)
-            write (diagnostic_unit, *) q_ss_cart(:, iq), hamiltonian_obj%theta_ss*180.0_rp/acos(-1.0_rp), &
-               eband_q(iq), e_q0, eband_q(1), e_ref0, delta_raw, delta_gauge, delta_final, &
-               sin2theta, sum(mtot_q(:, 1)), omega_q(iq), fermi_q(iq), electron_count_q(iq), electron_error_q(iq), &
-               target_electrons_q(iq), weight_sum_q(iq), nk_mesh_q(:, iq), nk_total_q(iq), &
-               merge(1, 0, bare_mft .and. use_kspace)
          end do
          close (diagnostic_unit)
       end if
@@ -1606,7 +1434,7 @@ contains
    !>        Assumptions: near-harmonic tilt angle (theta_probe ~ 5-30 deg); Hermitian/real
    !>        treatment appropriate for collinear FM/ferri references without SOC (the
    !>        antisymmetric DMI part is neglected).
-   subroutine post_processing_frozen_magnon_auto(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, mix_obj, self_obj, energy_obj)
+   subroutine post_processing_frozen_magnon_auto(fm_obj, q_ss_cart, lattice_obj, hamiltonian_obj, bands_obj, mix_obj, self_obj)
       type(frozen_magnon), intent(in) :: fm_obj
       real(rp), intent(in) :: q_ss_cart(:, :)
       type(lattice), target, intent(inout) :: lattice_obj
@@ -1614,14 +1442,11 @@ contains
       type(bands), target, intent(inout) :: bands_obj
       type(mix), target, intent(inout) :: mix_obj
       type(self), target, intent(inout) :: self_obj
-      type(energy), target, intent(inout) :: energy_obj
-      type(reciprocal) :: recip_obj
       complex(rp), allocatable :: omega_mat(:, :), eigvec(:, :)
       real(rp), allocatable :: eval(:), mtot_ref(:), ref_theta(:), ref_phi(:), single_energy(:), energy_gauge_q(:)
       real(rp), allocatable :: active_moment(:)
       integer, allocatable :: active_rec(:), active_type(:)
       real(rp) :: etot_ref, energy_ref, theta_probe, dmz_fac, e_pair, off
-      logical :: use_kspace
       integer :: iq, iact, jact, nactive, irec, branch, newunit_branch, newunit_modes
 
       ! theta_probe: SMALL cone angle for the harmonic finite-difference probes that
@@ -1649,9 +1474,11 @@ contains
       hamiltonian_obj%theta_ss = 0.0_rp
       hamiltonian_obj%q_ss(:) = 0.0_rp
       self_obj = self(bands_obj, mix_obj)
+      if (self_obj%use_kspace) call g_logger%fatal( &
+         "constrained or non-mft frozen magnons are not supported on the k-space path (parked; see restart spec, "// &
+         "Parked items); use the real-space route or mode='mft' without constraints", __FILE__, __LINE__)
       hamiltonian_obj%magnetic_representation = gbt_single_q
       call self_obj%run()
-      use_kspace = self_obj%use_kspace
       etot_ref = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
 
       ! Reference moments (fixed) and the set of active magnetic sublattices.
@@ -1674,48 +1501,13 @@ contains
          end if
       end do
 
-      ! --- Force-theorem evaluator: build a k-space mesh once if in k-space mode. ---
-      ! WP8: the mesh must never be built once (from whatever q_ss happens to be
-      ! set here) and reused blindly for every other q in the sweep below --
-      ! each policy either shares one mesh proven valid for the whole sweep, or
-      ! rebuilds per q inside the loop.
-      if (use_kspace) then
-         recip_obj = reciprocal(hamiltonian_obj)
-         select case (trim(recip_obj%q_symmetry_policy))
-         case ('little_group_common')
-            ! One mesh, reduced by the little group common to every q in the
-            ! sweep (not just row 1’s), valid for every probe below.
-            call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, &
-                                              sum(abs(recip_obj%k_offset)) > 1.0e-12_rp, &
-                                              q_list_cart=q_ss_cart)
-         case ('little_group')
-            ! q_ss is 0 here (reset below); build the ordinary q=0 mesh now so
-            ! the reference-energy probe has one. Per-nonzero-q rebuilds
-            ! happen inside the sweep loop below via the same cache key.
-            call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
-         case default   ! 'full_bz': WP0 oracle, unchanged from pre-WP8 behaviour.
-            if (.not. allocated(recip_obj%k_points)) then
-               if (any(abs(q_ss_cart) > 1.0e-12_rp)) then
-                  recip_obj%use_symmetry_reduction = .false.
-                  recip_obj%use_time_reversal = .false.
-                  call recip_obj%generate_mp_mesh()
-               else if (recip_obj%use_symmetry_reduction) then
-                  call recip_obj%generate_reduced_kpoint_mesh(recip_obj%nk_mesh, &
-                                                              sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
-               else
-                  call recip_obj%generate_mp_mesh()
-               end if
-            end if
-         end select
-      end if
-
       ! Reference band energy (collinear) via the force theorem at the fixed potential;
       ! q-independent (no transverse components), so evaluated once and reused.
       if (allocated(hamiltonian_obj%theta_ss_sublattice)) deallocate (hamiltonian_obj%theta_ss_sublattice)
       if (allocated(hamiltonian_obj%phi_ss_sublattice)) deallocate (hamiltonian_obj%phi_ss_sublattice)
       hamiltonian_obj%theta_ss = 0.0_rp
       hamiltonian_obj%q_ss(:) = 0.0_rp
-      energy_ref = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
+      energy_ref = frozen_magnon_probe_energy(bands_obj)
 
       open (newunit=newunit_branch, file='frozen_magnon_branches.dat', status='replace', action='write')
       open (newunit=newunit_modes, file='frozen_magnon_modes.dat', status='replace', action='write')
@@ -1726,30 +1518,14 @@ contains
                 energy_gauge_q(fm_obj%n_q))
       do iq = 1, fm_obj%n_q
          hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
-         if (use_kspace .and. trim(recip_obj%q_symmetry_policy) == 'little_group') then
-            ! Rebuild (or, via the cache key, reuse if unchanged) for this
-            ! specific q -- never reuse another q’s little-group mesh (WP8).
-            call recip_obj%ensure_kpoint_mesh(recip_obj%nk_mesh, sum(abs(recip_obj%k_offset)) > 1.0e-12_rp)
-         end if
          omega_mat(:, :) = cmplx(0.0_rp, 0.0_rp, kind=rp)
 
-         ! The collinear theta=0 state is a q-dependent pure gauge in the
-         ! continuum.  A finite k mesh can give it a small q-only integration
-         ! offset, which otherwise contaminates every harmonic coefficient.
-         ! Use the same-q collinear probe as the force-theorem reference on the
-         ! reciprocal route.  This is an invariant-preserving subtraction, not
-         ! a fitted diagonal shift; retain the historical RS reference energy.
-         if (use_kspace) then
-            call set_probe_angles(hamiltonian_obj, ref_theta, ref_phi, active_type, theta_probe, active_rec(1:0))
-            energy_gauge_q(iq) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
-         else
-            energy_gauge_q(iq) = energy_ref
-         end if
+         energy_gauge_q(iq) = energy_ref
 
          ! Diagonal: single-sublattice tilt. d^2E/dtheta_i^2 / M_i, in omega = dE/dm_z units.
          do iact = 1, nactive
             call set_probe_angles(hamiltonian_obj, ref_theta, ref_phi, active_type, theta_probe, [iact])
-            single_energy(iact) = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
+            single_energy(iact) = frozen_magnon_probe_energy(bands_obj)
             omega_mat(iact, iact) = cmplx((single_energy(iact) - energy_gauge_q(iq))/(active_moment(iact)*dmz_fac), &
                                           0.0_rp, kind=rp)
          end do
@@ -1761,7 +1537,7 @@ contains
          do iact = 1, nactive - 1
             do jact = iact + 1, nactive
                call set_probe_angles(hamiltonian_obj, ref_theta, ref_phi, active_type, theta_probe, [iact, jact])
-               e_pair = frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace)
+               e_pair = frozen_magnon_probe_energy(bands_obj)
                off = (e_pair - single_energy(iact) - single_energy(jact) + energy_gauge_q(iq)) / &
                      (2.0_rp*dmz_fac*sqrt(active_moment(iact)*active_moment(jact)))
                omega_mat(iact, jact) = cmplx(off, 0.0_rp, kind=rp)
@@ -1846,52 +1622,34 @@ contains
    !> @brief Magnetic force theorem: band energy at the FIXED reference potential for the
    !>        current spiral/tilt config (set on the hamiltonian via q_ss + theta/phi_ss_sublattice).
    !> @details Rebuilds only the Hamiltonian (rotated moment directions, fixed potential
-   !>        parameters) and evaluates the single-particle band energy through the k-space
-   !>        (build/diagonalize -> normalized eigenvalue occupations and EBAND) or real-space recursion
+   !>        parameters) and evaluates the single-particle band energy through the real-space recursion
    !>        (recursion -> Green -> fermi -> band energy) path. No charge/potential update
    !>        is done, so the reference potential is held fixed across every probe -- this is
    !>        the Liechtenstein/MFT energy surface whose second derivatives give the magnon
    !>        matrix (Essenberger PRB 84, 174425, Eq. 26).
-   function frozen_magnon_probe_energy(bands_obj, recip_obj, energy_obj, use_kspace) result(e_band)
+   function frozen_magnon_probe_energy(bands_obj) result(e_band)
       type(bands), target, intent(inout) :: bands_obj
-      type(reciprocal), intent(inout) :: recip_obj
-      type(energy), intent(in) :: energy_obj
-      logical, intent(in) :: use_kspace
       real(rp) :: e_band
 
       associate (ham => bands_obj%recursion%hamiltonian, rec => bands_obj%recursion, &
                  grn => bands_obj%green, ctl => bands_obj%lattice%control)
          if (ctl%nsp == 2 .or. ctl%nsp == 4) call ham%build_lsham()
          call ham%build_bulkham()
-         if (use_kspace) then
-            call recip_obj%build_kspace_hamiltonian()
-            call recip_obj%diagonalize_hamiltonian()
-            ! MFT must not depend on DOS window/grid/projections.  Seed the
-            ! reciprocal occupation evaluator from the converged SCF EF and
-            ! let the reciprocal namelist decide whether EF is re-solved from
-            ! the target electron count.  The previous unconditional
-            ! find_fermi=.true. made auto_find_fermi=.false. ineffective on
-            ! this force-theorem path and silently changed the occupation
-            ! contract at every q.
-            recip_obj%fermi_level = energy_obj%fermi
-            e_band = recip_obj%calculate_canonical_band_energy()
-         else
-            select case (ctl%recur)
-            case ('block')
-               call rec%recur_b()
-               call rec%zsqr()
-               call grn%block_green()
-            case ('chebyshev')
-               call rec%chebyshev_recur()
-               call grn%chebyshev_dos_dispatch()
-            case ('lanczos')
-               call rec%recur()
-               call grn%sgreen()
-            end select
-            call bands_obj%calculate_fermi()
-            call bands_obj%calculate_band_energy()
-            e_band = bands_obj%eband
-         end if
+         select case (ctl%recur)
+         case ('block')
+            call rec%recur_b()
+            call rec%zsqr()
+            call grn%block_green()
+         case ('chebyshev')
+            call rec%chebyshev_recur()
+            call grn%chebyshev_dos_dispatch()
+         case ('lanczos')
+            call rec%recur()
+            call grn%sgreen()
+         end select
+         call bands_obj%calculate_fermi()
+         call bands_obj%calculate_band_energy()
+         e_band = bands_obj%eband
       end associate
    end function frozen_magnon_probe_energy
 
