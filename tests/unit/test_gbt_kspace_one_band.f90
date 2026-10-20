@@ -20,13 +20,13 @@ program test_gbt_kspace_one_band
    real(rp) :: t, delta, w_up, w_dn, c_majority, c_minority, bond_s, bond_d(3*nbond_max)
    real(rp) :: k_direct(9), q_direct(9), theta_deg(4), phi_deg(2), a_cell(9), tau(6), k_cart(9), q_cart(9)
    real(rp) :: eig(2*ncase_max), eig_parallel(4*ncase_max), eig_antiparallel(4*ncase_max)
-   real(rp) :: eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel
+   real(rp) :: eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel, scf_identity_ry, scf_moment_mub
    namelist /o1_model/ t, delta, w_up, w_dn, c_majority, c_minority, s_rule, frame_rule, eigenvalue_order
    namelist /o1_cases/ nk, nq, ntheta, nphi, k_rule, k_direct, q_direct, theta_deg, phi_deg
    namelist /o1_one_site/ eig_shape, nsite, a_cell, tau, cart_rule, k_cart, q_cart, eig
    namelist /o1_two_site/ eig_shape, nsite, a_cell, tau, site_rule_parallel, site_rule_antiparallel, nbond, bond_s, &
       bond_site_a, bond_site_b, bond_d, cart_rule, k_cart, q_cart, eig_parallel, eig_antiparallel
-   namelist /gbt_tolerances/ eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel
+   namelist /gbt_tolerances/ eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel, scf_identity_ry, scf_moment_mub
    real(rp) :: one_site_d(3, 6), two_site_d(3, nbond_max), dev_one, dev_par, dev_anti
    integer :: u, one_site_a(6), one_site_b(6), i
 
