@@ -390,8 +390,8 @@ contains
       this%tetra_symmetry_mode = lower(trim(tetra_symmetry_mode))
       if (this%tetra_symmetry_mode /= 'full_expand_ref' .and. &
           this%tetra_symmetry_mode /= 'irreducible_native') then
-         call g_logger%warning("reciprocal%build_from_file: tetra_symmetry_mode must be 'full_expand_ref' or 'irreducible_native'. Falling back to irreducible_native.", __FILE__, __LINE__)
-         this%tetra_symmetry_mode = 'irreducible_native'
+         call g_logger%fatal("reciprocal%build_from_file: tetra_symmetry_mode='"//trim(this%tetra_symmetry_mode)// &
+                             "' is invalid; use 'full_expand_ref' or 'irreducible_native'.", __FILE__, __LINE__)
       end if
       this%q_symmetry_policy = lower(trim(q_symmetry_policy))
       if (this%q_symmetry_policy /= 'full_bz' .and. this%q_symmetry_policy /= 'little_group' .and. &
@@ -412,8 +412,8 @@ contains
       this%reciprocal_backend = lower(trim(reciprocal_backend))
       if (this%reciprocal_backend == 'cpu') this%reciprocal_backend = 'lapack'
       if (this%reciprocal_backend /= 'lapack' .and. this%reciprocal_backend /= 'cuda') then
-         call g_logger%warning("reciprocal%build_from_file: reciprocal_backend must be 'lapack' or 'cuda'. Falling back to lapack.", __FILE__, __LINE__)
-         this%reciprocal_backend = 'lapack'
+         call g_logger%fatal("reciprocal%build_from_file: reciprocal_backend='"//trim(this%reciprocal_backend)// &
+                             "' is invalid; use 'lapack' or 'cuda'.", __FILE__, __LINE__)
       end if
       this%kanpur_diagnostics = kanpur_diagnostics
       this%gamma_bounds_diagnostics = gamma_bounds_diagnostics
@@ -421,9 +421,8 @@ contains
       this%green_eta = green_eta
       this%green_backend = lower(trim(green_backend))
       if (this%green_backend /= 'lehmann' .and. this%green_backend /= 'dyson') then
-         call g_logger%warning("reciprocal%build_from_file: green_backend must be " // &
-            "'lehmann' or 'dyson'. Falling back to lehmann.", __FILE__, __LINE__)
-         this%green_backend = 'lehmann'
+         call g_logger%fatal("reciprocal%build_from_file: green_backend='"//trim(this%green_backend)// &
+                             "' is invalid; use 'lehmann' or 'dyson'.", __FILE__, __LINE__)
       end if
       this%write_eigenpair_projections = write_eigenpair_projections
       this%write_spin_resolved_eigenpairs = write_spin_resolved_eigenpairs
@@ -436,8 +435,8 @@ contains
       if (this%reciprocal_mode /= 'ham_only' .and. &
           this%reciprocal_mode /= 'generalized_overlap_proxy' .and. &
           this%reciprocal_mode /= 'generalized_overlap_kanpur') then
-         call g_logger%warning("reciprocal_mode must be 'ham_only', 'generalized_overlap_proxy', or 'generalized_overlap_kanpur'. Falling back to ham_only.", __FILE__, __LINE__)
-         this%reciprocal_mode = 'ham_only'
+         call g_logger%fatal("reciprocal%build_from_file: reciprocal_mode='"//trim(this%reciprocal_mode)// &
+                             "' is invalid; use 'ham_only', 'generalized_overlap_proxy' or 'generalized_overlap_kanpur'.", __FILE__, __LINE__)
       end if
 	      this%kspace_ham_order = lower(trim(kspace_ham_order))
 	      if (this%kspace_ham_order == 'proper') then
