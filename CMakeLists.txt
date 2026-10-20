@@ -1206,6 +1206,15 @@ add_test(NAME AppGbtKspaceScSpiralB2
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_b2.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_b2")
 set_tests_properties(AppGbtKspaceScSpiralB2 PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)
 
+foreach(case "fe;4;first" "fe;3;first" "fe;4;second")
+  list(GET case 0 i3_system)
+  list(GET case 1 i3_length)
+  list(GET case 2 i3_order)
+  add_test(NAME AppGbtKspaceScSpiralI3_${i3_system}_L${i3_length}_${i3_order}
+    COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_i3.py" ${i3_system} ${i3_length} ${i3_order} "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_i3_${i3_system}_${i3_length}_${i3_order}")
+  set_tests_properties(AppGbtKspaceScSpiralI3_${i3_system}_L${i3_length}_${i3_order} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 3600)
+endforeach()
+
 add_test(NAME AppConstraintsNamelistMom
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/constraints/test_constraints_namelist.py" mom "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/constraints/mom")
 add_test(NAME AppConstraintsNamelistMalformed
