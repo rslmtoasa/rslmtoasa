@@ -361,6 +361,7 @@ contains
       integer :: iostatus, funit
       integer :: iostatus2, funit2
       character(len=sl) :: fname_
+      character(len=256) :: iomsg_
 
       include 'include_codes/namelists/control.f90'
       include 'include_codes/namelists/constraints.f90'
@@ -494,9 +495,10 @@ contains
       ! Read optional constraints namelist and move values into the control object
       open (newunit=funit2, file=fname_, action='read', iostat=iostatus2, status='old')
       if (iostatus2 == 0) then
-         read (funit2, nml=constraints, iostat=iostatus2)
+         read (funit2, nml=constraints, iostat=iostatus2, iomsg=iomsg_)
          if (iostatus2 /= 0 .and. .not. IS_IOSTAT_END(iostatus2)) then
-            call g_logger%error('Error while reading constraints namelist', __FILE__, __LINE__)
+            call g_logger%fatal('Error while reading constraints namelist: iostat = '//fmt('I0', iostatus2)// &
+                                ', iomsg = '//trim(iomsg_), __FILE__, __LINE__)
          else
             this%constraints_enable = constraints_enable
             this%constraints_i_cons = constraints_i_cons
