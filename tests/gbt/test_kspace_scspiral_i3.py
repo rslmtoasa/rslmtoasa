@@ -12,7 +12,10 @@ Reported, not gated: the GBT |m_perp| per site (vanishes by symmetry without a f
 sides (maximum, spread over the supercell sites), and the drift of a supercell run with density_policy = relaxed_reference (angle between each written mom
 and its spiral direction).
 Bug caught: a wrong q.tau phase or site frame of the GBT operator at finite q and theta = 90 deg, a wrong site-resolved density (channel assignment).
-usage: test_kspace_scspiral_i3.py <fe|cr> <3|4> <first|second> <rslmto.x> <scratch directory> [N1 N2 N3]"""
+With the last argument ccor every deck carries ccor_2c (ccor_strict, Sdot, screening fitted). The supercell side builds Hcc from explicit moment
+vectors, the GBT side by linking S and Sdot; the SCF densities are built from the eigenvectors of H + Hcc on both sides. Bug caught there:
+the link or the onsite term of Hcc missing in the SCF assembly of the spiral at finite q and theta = 90 deg.
+usage: test_kspace_scspiral_i3.py <fe|cr> <3|4> <first|second> <rslmto.x> <scratch directory> [N1 N2 N3] [ccor]"""
 import math
 import re
 import shutil
@@ -26,6 +29,7 @@ import numpy as np
 from gbt_app_common import FIX, SR, tolerance
 
 SUPER = {3: "bccFe_super_q033", 4: "bccFe_super_q025"}
+CCOR = False         # set by the optional last argument ccor: every deck then carries ccor_2c (strict, Sdot, fitted screening)
 MIN_MOMENT = 0.1      # muB: non-triviality guard (not an identity tolerance); a collapsed moment would make every comparison hold trivially
 
 
@@ -74,6 +78,9 @@ def deck(dst, system, L, cell, kind, order, nk, relaxed=False, nstep=300):
         nml["control"].update(gbt_scf_diagnostics=True, density_policy="relaxed_reference" if relaxed else "constrained_spiral")
     nml["reciprocal"].update(nk1=nk[0], nk2=nk[1], nk3=nk[2], kspace_ham_order=order)
     nml["hamiltonian"] = {"hoh": order == "second"}
+    if CCOR:
+        nml["lattice"].update(strux_want_sdot=True, screening="fitted")
+        nml["hamiltonian"].update(ccor_2c=True, ccor_strict=True)
     if kind == "gbt":
         nml["hamiltonian"].update(magnetic_representation="gbt_single_q", q_ss=[0.0, 0.0, q_z], theta_ss=90.0)
     nml.write(str(dst / "input.nml"), force=True)
@@ -134,6 +141,9 @@ def main(binary, scratch, system, L, order, nk_super):
 
 
 if __name__ == "__main__":
+    CCOR = sys.argv[-1] == "ccor"
+    if CCOR:
+        sys.argv.pop()
     system, L, order = sys.argv[1], int(sys.argv[2]), sys.argv[3]
     binary, scratch = Path(sys.argv[4]).resolve(), Path(sys.argv[5])
     nk_super = tuple(int(x) for x in sys.argv[6:9]) if len(sys.argv) > 8 else (4, 4, 2)

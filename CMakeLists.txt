@@ -1221,6 +1221,10 @@ foreach(case "fe;4;first" "fe;3;first" "fe;4;second")
   set_tests_properties(AppGbtKspaceScSpiralI3_${i3_system}_L${i3_length}_${i3_order} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 3600)
 endforeach()
 
+add_test(NAME AppGbtKspaceScSpiralI3Ccor_fe_L4_first
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_i3.py" fe 4 first "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_i3_ccor_fe_4_first" ccor)
+set_tests_properties(AppGbtKspaceScSpiralI3Ccor_fe_L4_first PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 3600)
+
 add_test(NAME AppConstraintsNamelistMom
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/constraints/test_constraints_namelist.py" mom "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/constraints/mom")
 add_test(NAME AppConstraintsNamelistMalformed
