@@ -71,6 +71,50 @@
       "response_allowance_h005_Ry_per_eV": 0.00829031575591769,
       "response_allowance_h010_Ry_per_eV": 0.00827355424398127,
       "verdict": "PASS"
+    },
+    "U2_J09": {
+      "A_h005_Ry_per_eV": 0.0056821060112579235,
+      "A_h010_Ry_per_eV": 0.005696126965765189,
+      "D_h005_Ry_per_eV": -0.0655576906092,
+      "D_h010_Ry_per_eV": -0.065599810946,
+      "J_eV": 0.9,
+      "U_eV": 2.0,
+      "average_A_Ry_per_eV": 0.00568911648851156,
+      "average_b_error_Ry_per_eV": 0.0001450177562,
+      "average_c_error_Ry_per_eV": 0.10604572086589,
+      "candidate_a_average_error_RECORD_Ry_per_eV": 0.00497162819062,
+      "candidate_a_average_slope_Ry_per_eV": -0.0706953967244,
+      "candidate_b_errors_Ry_per_eV": [
+        0.0001660779246,
+        0.0001239575878
+      ],
+      "candidate_b_slopes_Ry_per_eV": [
+        -0.0655576906092,
+        -0.065599810946
+      ],
+      "candidate_c_errors_Ry_per_eV": [
+        0.10606545942135615,
+        0.10602598231042482
+      ],
+      "candidate_c_slopes_Ry_per_eV": [
+        0.040341690887544246,
+        0.040302213776612916
+      ],
+      "dq_up_down_dJ_h005_e_per_eV": [
+        -0.17262721827501437,
+        0.15037700101097506
+      ],
+      "dq_up_down_dJ_h010_e_per_eV": [
+        -0.17303902666780502,
+        0.1507681782507042
+      ],
+      "finite_step_spread_Ry_per_eV": 4.212033679999727e-05,
+      "fixed_P_target_Ry_per_eV": -0.0657237685338119,
+      "parameter": "J",
+      "response_allowance_h005_Ry_per_eV": 0.005639985674528356,
+      "response_allowance_h010_Ry_per_eV": 0.005654006629035622,
+      "ten_times_average_A_Ry_per_eV": 0.0568911648851156,
+      "verdict": "PASS"
     }
   },
   "debugging_attempt": {
@@ -84,7 +128,7 @@
     "resulting_U_average_b_error_Ry_per_eV": 0.000231353633136
   },
   "formula": "A_X(h)=2*sum_s(abs(g_total*dq_s/dX(h))) + abs(D_X(0.05)-D_X(0.10)); g_total is the RC1 total W1 mismatch because no spin-split dF/dlambda is available.",
-  "independent_auditor": "Independently recomputed from raw outputs; PASS verdicts recorded after review.",
+  "independent_auditor": "Independent recomputation confirmed candidate b within mean allowance and candidate c misses by more than 10 times mean allowance for J=.9; U2/J0 and J=.5 records remain PASS.",
   "raw_sources": {
     "accepted_endpoint_traces_and_hashes": [
       {
@@ -190,7 +234,7 @@
     ],
     "c3_provenance": {
       "path": "docs/validation/fixed_ldau/rs/C3_RC_PROVENANCE.json",
-      "sha256": "cb5cf12b4b313d1ed7628cb790674ffca6e38b797e4c6937db31d51424303ebd"
+      "sha256": "b15a08f03c51c813914262ac4e5037dd9bc1aff1f2a496838c30720dcd2bfaa6"
     },
     "campaign": {
       "path": "/private/tmp/c3-rc2-rs-hf/campaign/RC2_CAMPAIGN.json",
@@ -212,6 +256,1138 @@
       "binary_sha256": "bbcce2f3f1cef59509c9818262379481c7a67a693e9c20d7169aec469b6ee2fa",
       "source_path": "tests/validation/fixed_ldau/rs_rc2_fixed_p_energy.f90",
       "source_sha256": "c82bb19107763dee16f89aba3411f4eced0ea3469cc05abafcec207c8aae7a2c"
+    },
+    "j09_analysis_code": {
+      "campaign_driver": {
+        "path": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/rs_rc2_campaign.py",
+        "sha256": "09fb970d09183894ddbbd9b1a95cc0810cd8e8d63c6944cbc3cd3105f94502e9"
+      },
+      "fixed_P_driver_source": {
+        "path": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/rs_rc2_fixed_p_energy.f90",
+        "sha256": "c82bb19107763dee16f89aba3411f4eced0ea3469cc05abafcec207c8aae7a2c"
+      },
+      "monitored_runner": {
+        "path": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/rs_rc2_monitored_runner.py",
+        "sha256": "456e2411e78a3790000aee0be599649d91f37bed2845060f7460fe66a52e5e30"
+      },
+      "recomputation_note": "Independent auditor recomputed derivatives, per-spin response allowances, and candidate errors from accepted endpoint energy rows, QL/P traces, and fixed-P evaluator output. No standalone analysis command was archived."
+    },
+    "j09_audited_endpoints": [
+      {
+        "CASE_RESULT": {
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p85/CASE_RESULT.json",
+          "sha256": "c8375741c1916d109265b71b8f417af7f7eb4cf07010009c4ca64c025f2d7804"
+        },
+        "J_eV": 0.85,
+        "acceptance": {
+          "accepted": true,
+          "classification": "C1_ACCEPTED",
+          "endpoint": {
+            "d_down": 2.0794729977158464,
+            "d_up": 4.422411094743527,
+            "inside_last20_ranges_diagnostic_only": true,
+            "last20_ranges": {
+              "d_down": [
+                2.079472704396326,
+                2.079473063119459
+              ],
+              "d_up": [
+                4.422411068209457,
+                4.4224113669102225
+              ],
+              "sphere_moment_muB": [
+                2.2133648758038547,
+                2.213365451518534
+              ]
+            },
+            "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p85/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+            "sha256": "7ef8dc7e947fd2245822241dcea6477785294f7e41375a7be746f015d2f4fb18",
+            "sphere_moment_muB": 2.213364946166485
+          },
+          "final_diff": 2.53e-08,
+          "gate_limits": {
+            "d_down": 5e-07,
+            "d_up": 5e-07,
+            "diff": 3e-08,
+            "sphere_moment_muB": 1e-06
+          },
+          "spreads": {
+            "d_down": 3.587231329760243e-07,
+            "d_up": 2.9870076545535085e-07,
+            "sphere_moment_muB": 5.757146794849177e-07
+          },
+          "window_iterations": [
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55,
+            56,
+            57,
+            58,
+            59,
+            60,
+            61,
+            62
+          ]
+        },
+        "accepted_checkpoint_Fe_out": {
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p85/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_out.nml",
+          "sha256": "b55262c99bc6dfe6c0b102e1f069c71fe4a9f5f6c0659c8a7ca8fcd5bd5cb375"
+        },
+        "accepted_checkpoint_Fe_scf": {
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p85/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+          "sha256": "7ef8dc7e947fd2245822241dcea6477785294f7e41375a7be746f015d2f4fb18"
+        },
+        "accepted_trace": {
+          "compressed_copy": null,
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p85/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "sha256": "74b576f66ee4936a1436072cd7a76f6a0b94828a53772f213f153b313ccf2f98"
+        },
+        "binary": {
+          "path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x",
+          "sha256": "bab5f7408f20192c575ea09be5501445f38f29bc2d34680da41daf733c96b2bf"
+        },
+        "case": "j0p9_local_u2p00_j0p85",
+        "console": {
+          "path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p85/phase0_from_accepted_j08/console.log",
+          "sha256": "166c916cdfb867adfdcec426703f24ca79e39267751d93cdfb5ce121f31e8143"
+        },
+        "input": {
+          "path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p85/phase0_from_accepted_j08/input.nml",
+          "sha256": "d7fd9acc5976eff881f45245738957a1278ad89a9e33af47b0a1e7c02e859267"
+        },
+        "mode": "local",
+        "phase_manifest": {
+          "path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p85/phase0_from_accepted_j08/TRACE_ARCHIVE_MANIFEST.json",
+          "sha256": "899c1bee5e930c49f4f9cfcf17e170d19f38567f05e9fffafb89df4403e91190"
+        },
+        "selected_energy_record": {
+          "log_line_number": 2736,
+          "log_path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p85/phase0_from_accepted_j08/console.log",
+          "log_sha256": "166c916cdfb867adfdcec426703f24ca79e39267751d93cdfb5ce121f31e8143",
+          "parsed_fields": {
+            "E_Hub": "0.6439224730733484E-01",
+            "E_Hub_P_OUT": "0.0000000000000000E+00",
+            "base_physical_total_energy": "-0.2541979253388637E+04",
+            "candidate_a": "UNAVAILABLE",
+            "candidate_b": "-0.2541914861141330E+04",
+            "candidate_c": "UNAVAILABLE",
+            "physical_total_energy": "-0.2541979253388637E+04"
+          },
+          "selected_iteration": 62,
+          "target_candidate": "candidate_b",
+          "verbatim_line_sha256": "b04a028941c54df42fbdf93690323d4ece28ba45f7d79b46bea85229bd9d585c"
+        },
+        "selected_iteration": 62
+      },
+      {
+        "CASE_RESULT": {
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/CASE_RESULT.json",
+          "sha256": "8e3d7327121c0393a993fda4ee8c1b18786fe20ca3eac279228c62475b6c7931"
+        },
+        "J_eV": 0.9,
+        "acceptance": {
+          "accepted": true,
+          "classification": "C1_ACCEPTED",
+          "endpoint": {
+            "d_down": 2.0871452820456033,
+            "d_up": 4.413633430794936,
+            "inside_last20_ranges_diagnostic_only": false,
+            "last20_ranges": {
+              "d_down": [
+                2.087145308261639,
+                2.087145536953569
+              ],
+              "d_up": [
+                4.4136332310028505,
+                4.413633509516882
+              ],
+              "sphere_moment_muB": [
+                2.1987445938529873,
+                2.1987451313682653
+              ]
+            },
+            "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+            "sha256": "cc810f594bc0a850fe8f71771d8d81e433afa1fe8fde1d3d7bc60e50f39452e0",
+            "sphere_moment_muB": 2.1987450861649873
+          },
+          "final_diff": 2.37e-08,
+          "gate_limits": {
+            "d_down": 5e-07,
+            "d_up": 5e-07,
+            "diff": 3e-08,
+            "sphere_moment_muB": 1e-06
+          },
+          "spreads": {
+            "d_down": 2.2869193028185464e-07,
+            "d_up": 2.7851403139322883e-07,
+            "sphere_moment_muB": 5.375152780651149e-07
+          },
+          "window_iterations": [
+            55,
+            56,
+            57,
+            58,
+            59,
+            60,
+            61,
+            62,
+            63,
+            64,
+            65,
+            66,
+            67,
+            68,
+            69,
+            70,
+            71,
+            72,
+            73,
+            74
+          ]
+        },
+        "accepted_checkpoint_Fe_out": {
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_out.nml",
+          "sha256": "b55262c99bc6dfe6c0b102e1f069c71fe4a9f5f6c0659c8a7ca8fcd5bd5cb375"
+        },
+        "accepted_checkpoint_Fe_scf": {
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+          "sha256": "cc810f594bc0a850fe8f71771d8d81e433afa1fe8fde1d3d7bc60e50f39452e0"
+        },
+        "accepted_trace": {
+          "compressed_copy": "docs/validation/fixed_ldau/rs/C4_RC2_assets/j09_local_U2_J0p90_accepted_iter74_trace.csv.gz",
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "sha256": "fb3e65e1d51223a696ddc31734dca2c124135650cc3f7ca47da9de1edf7ac516"
+        },
+        "binary": {
+          "path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x",
+          "sha256": "bab5f7408f20192c575ea09be5501445f38f29bc2d34680da41daf733c96b2bf"
+        },
+        "case": "j0p9_local_u2p00_j0p90",
+        "console": {
+          "path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/phase0_from_accepted_j08/console.log",
+          "sha256": "2141b68a4c5197a5a7b31f36f11fdcb07bacffde501fd5edb63e52b94ca7c563"
+        },
+        "input": {
+          "path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/phase0_from_accepted_j08/input.nml",
+          "sha256": "3879393fce2f206e3fa0df2f0ba54d40b3a6b56e318a5b6670ddb7bb252bcdf6"
+        },
+        "mode": "local",
+        "phase_manifest": {
+          "path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/phase0_from_accepted_j08/TRACE_ARCHIVE_MANIFEST.json",
+          "sha256": "d8efb59b3602bd2bf81e7ab8b04c16ac95f5f6bf6ff4caf65f49a14e8709e555"
+        },
+        "selected_energy_record": {
+          "log_line_number": 3264,
+          "log_path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/phase0_from_accepted_j08/console.log",
+          "log_sha256": "2141b68a4c5197a5a7b31f36f11fdcb07bacffde501fd5edb63e52b94ca7c563",
+          "parsed_fields": {
+            "E_Hub": "0.6121811642055963E-01",
+            "E_Hub_P_OUT": "0.0000000000000000E+00",
+            "base_physical_total_energy": "-0.2541979343943813E+04",
+            "candidate_a": "UNAVAILABLE",
+            "candidate_b": "-0.2541918125827392E+04",
+            "candidate_c": "UNAVAILABLE",
+            "physical_total_energy": "-0.2541979343943813E+04"
+          },
+          "selected_iteration": 74,
+          "target_candidate": "candidate_b",
+          "verbatim_line_sha256": "128b62df62d294faa33dab38a22001bc9be7cf0c490a5f55f12cb177d4846c61"
+        },
+        "selected_iteration": 74
+      },
+      {
+        "CASE_RESULT": {
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p95/CASE_RESULT.json",
+          "sha256": "fa148fac6d71ad1cf27dfaba3a2cf6a2c76c35c14158c51b682148648d32a0d6"
+        },
+        "J_eV": 0.95,
+        "acceptance": {
+          "accepted": true,
+          "classification": "C1_ACCEPTED",
+          "endpoint": {
+            "d_down": 2.094510627107092,
+            "d_up": 4.405148217427892,
+            "inside_last20_ranges_diagnostic_only": false,
+            "last20_ranges": {
+              "d_down": [
+                2.0945103873758946,
+                2.0945105798534334
+              ],
+              "d_up": [
+                4.405148095266976,
+                4.405148583249087
+              ],
+              "sphere_moment_muB": [
+                2.184723323004176,
+                2.184723829529296
+              ]
+            },
+            "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p95/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+            "sha256": "238856cb11d069a17f426ab7074b03ce59b7afccb57c3dc6a8e532dbfe749216",
+            "sphere_moment_muB": 2.184723297693027
+          },
+          "final_diff": 2.86e-08,
+          "gate_limits": {
+            "d_down": 5e-07,
+            "d_up": 5e-07,
+            "diff": 3e-08,
+            "sphere_moment_muB": 1e-06
+          },
+          "spreads": {
+            "d_down": 1.9247753879625407e-07,
+            "d_up": 4.879821107195426e-07,
+            "sphere_moment_muB": 5.065251200697674e-07
+          },
+          "window_iterations": [
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55,
+            56,
+            57,
+            58,
+            59,
+            60,
+            61,
+            62,
+            63,
+            64,
+            65,
+            66,
+            67,
+            68
+          ]
+        },
+        "accepted_checkpoint_Fe_out": {
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p95/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_out.nml",
+          "sha256": "b55262c99bc6dfe6c0b102e1f069c71fe4a9f5f6c0659c8a7ca8fcd5bd5cb375"
+        },
+        "accepted_checkpoint_Fe_scf": {
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p95/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+          "sha256": "238856cb11d069a17f426ab7074b03ce59b7afccb57c3dc6a8e532dbfe749216"
+        },
+        "accepted_trace": {
+          "compressed_copy": null,
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p95/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "sha256": "a0b3c9a49ab5a0b3b38f92e3b8c1350b23b2b57f7d968ebc4472500e2d1e79f3"
+        },
+        "binary": {
+          "path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x",
+          "sha256": "bab5f7408f20192c575ea09be5501445f38f29bc2d34680da41daf733c96b2bf"
+        },
+        "case": "j0p9_local_u2p00_j0p95",
+        "console": {
+          "path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p95/phase0_from_accepted_j08/console.log",
+          "sha256": "6088232b9581e73b0321ac7c3a3d47f6d1cd223bf36769d8bd97832073c7db84"
+        },
+        "input": {
+          "path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p95/phase0_from_accepted_j08/input.nml",
+          "sha256": "c908496b10cb986423a73a7f99e62cf9798f8059a7c71ee12a27e104487e1a91"
+        },
+        "mode": "local",
+        "phase_manifest": {
+          "path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p95/phase0_from_accepted_j08/TRACE_ARCHIVE_MANIFEST.json",
+          "sha256": "abe77f669788a18ae9ff89b3f5fe6ac6aa30ab5ddbc3fb6bb2f6bf8307cba684"
+        },
+        "selected_energy_record": {
+          "log_line_number": 3000,
+          "log_path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p95/phase0_from_accepted_j08/console.log",
+          "log_sha256": "6088232b9581e73b0321ac7c3a3d47f6d1cd223bf36769d8bd97832073c7db84",
+          "parsed_fields": {
+            "E_Hub": "0.5799900514202871E-01",
+            "E_Hub_P_OUT": "0.0000000000000000E+00",
+            "base_physical_total_energy": "-0.2541979415915533E+04",
+            "candidate_a": "UNAVAILABLE",
+            "candidate_b": "-0.2541921416910391E+04",
+            "candidate_c": "UNAVAILABLE",
+            "physical_total_energy": "-0.2541979415915533E+04"
+          },
+          "selected_iteration": 68,
+          "target_candidate": "candidate_b",
+          "verbatim_line_sha256": "20a9f597df408cebe3c28c514f656de51785c5f93786919cdc0f274a558aa3ef"
+        },
+        "selected_iteration": 68
+      },
+      {
+        "CASE_RESULT": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p85/CASE_RESULT.json",
+          "sha256": "c2331dc59bde6038ae056abcaa4f3bd00a3db37db506b5206e806e334eb0327a"
+        },
+        "J_eV": 0.85,
+        "acceptance": {
+          "accepted": true,
+          "classification": "C1_ACCEPTED",
+          "endpoint": {
+            "d_down": 2.1519852177458065,
+            "d_up": 4.398320889805678,
+            "inside_last20_ranges_diagnostic_only": false,
+            "last20_ranges": {
+              "d_down": [
+                2.15198522057893,
+                2.1519853914377487
+              ],
+              "d_up": [
+                4.398320640352623,
+                4.3983207703104075
+              ],
+              "sphere_moment_muB": [
+                2.153854683784277,
+                2.153854992869941
+              ]
+            },
+            "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p85/phase0_from_accepted_j06/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+            "sha256": "ef7924980e576d7058db7fcf07e6c150ff49ba711f7920d9669782ff64513aaa",
+            "sphere_moment_muB": 2.153855181709396
+          },
+          "final_diff": 2.06e-08,
+          "gate_limits": {
+            "d_down": 5e-07,
+            "d_up": 5e-07,
+            "diff": 3e-08,
+            "sphere_moment_muB": 1e-06
+          },
+          "spreads": {
+            "d_down": 1.7085881864886687e-07,
+            "d_up": 1.2995778408964043e-07,
+            "sphere_moment_muB": 3.090856637300021e-07
+          },
+          "window_iterations": [
+            50,
+            51,
+            52,
+            53,
+            54,
+            55,
+            56,
+            57,
+            58,
+            59,
+            60,
+            61,
+            62,
+            63,
+            64,
+            65,
+            66,
+            67,
+            68,
+            69
+          ]
+        },
+        "accepted_checkpoint_Fe_out": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p85/phase0_from_accepted_j06/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_out.nml",
+          "sha256": "0876097efd41e8651a50ff8f7900e9859743d0c5104cf89673603cbb7ba62803"
+        },
+        "accepted_checkpoint_Fe_scf": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p85/phase0_from_accepted_j06/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+          "sha256": "ef7924980e576d7058db7fcf07e6c150ff49ba711f7920d9669782ff64513aaa"
+        },
+        "accepted_trace": {
+          "compressed_copy": null,
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p85/phase0_from_accepted_j06/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "sha256": "444e97937541361417c5c03b54f50fb595fc43e0d8d1a7178890a25052d87111"
+        },
+        "binary": {
+          "path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x",
+          "sha256": "bab5f7408f20192c575ea09be5501445f38f29bc2d34680da41daf733c96b2bf"
+        },
+        "case": "j0p9_spectral_u2p00_j0p85",
+        "console": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p85/phase0_from_accepted_j06/console.log",
+          "sha256": "c66c64154d7c2973eb70ce9c6c2069f37916c782f19c304d4eddc325842d7959"
+        },
+        "input": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p85/phase0_from_accepted_j06/input.nml",
+          "sha256": "e8e3bb257a08836661a88f95300c3d6851bf5c3fc734c33e9695753e15cb613a"
+        },
+        "mode": "spectral",
+        "phase_manifest": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p85/phase0_from_accepted_j06/TRACE_ARCHIVE_MANIFEST.json",
+          "sha256": "47a9007e15064f93d3db6beb09f530c6a6ec07a1d11f2840abd5a59d4ea2aece"
+        },
+        "selected_energy_record": {
+          "log_line_number": 3044,
+          "log_path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p85/phase0_from_accepted_j06/console.log",
+          "log_sha256": "c66c64154d7c2973eb70ce9c6c2069f37916c782f19c304d4eddc325842d7959",
+          "parsed_fields": {
+            "E_Hub": "0.6490337172851435E-01",
+            "E_Hub_P_OUT": "0.0000000000000000E+00",
+            "base_physical_total_energy": "-0.2542124274752699E+04",
+            "candidate_a": "-0.2541912351145477E+04",
+            "candidate_b": "UNAVAILABLE",
+            "candidate_c": "-0.2542059371380970E+04",
+            "physical_total_energy": "-0.2542124274752699E+04"
+          },
+          "selected_iteration": 69,
+          "target_candidate": "candidate_c",
+          "verbatim_line_sha256": "97b14ee78f1866feef76de8c43d4e8c106c6003b1a2c1deb67c13b79252b3d97"
+        },
+        "selected_iteration": 69
+      },
+      {
+        "CASE_RESULT": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p95/CASE_RESULT.json",
+          "sha256": "657d51e59e402beeb1971ba103d70448160c6beb152c96ad9e509c67e0bbaa44"
+        },
+        "J_eV": 0.95,
+        "acceptance": {
+          "accepted": true,
+          "classification": "C1_ACCEPTED",
+          "endpoint": {
+            "d_down": 2.1586962396073828,
+            "d_up": 4.385454030332138,
+            "inside_last20_ranges_diagnostic_only": true,
+            "last20_ranges": {
+              "d_down": [
+                2.1586960393792936,
+                2.158696496635806
+              ],
+              "d_up": [
+                4.385453791113852,
+                4.3854542544430135
+              ],
+              "sphere_moment_muB": [
+                2.1336992085915143,
+                2.13369994475625
+              ]
+            },
+            "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p95/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+            "sha256": "eb576ddfcd5de94899806f27905fb37ef132f8c3f25645eb6e30d2b43d17fdb4",
+            "sphere_moment_muB": 2.1336996334644533
+          },
+          "final_diff": 1.98e-08,
+          "gate_limits": {
+            "d_down": 5e-07,
+            "d_up": 5e-07,
+            "diff": 3e-08,
+            "sphere_moment_muB": 1e-06
+          },
+          "spreads": {
+            "d_down": 4.5725651265371425e-07,
+            "d_up": 4.6332916170399585e-07,
+            "sphere_moment_muB": 7.361647358372636e-07
+          },
+          "window_iterations": [
+            55,
+            56,
+            57,
+            58,
+            59,
+            60,
+            61,
+            62,
+            63,
+            64,
+            65,
+            66,
+            67,
+            68,
+            69,
+            70,
+            71,
+            72,
+            73,
+            74
+          ]
+        },
+        "accepted_checkpoint_Fe_out": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p95/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_out.nml",
+          "sha256": "9c55209a9b49a406cca5d3e111acdb9b0efa0e4da16c21cb1a0588af2083b164"
+        },
+        "accepted_checkpoint_Fe_scf": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p95/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+          "sha256": "eb576ddfcd5de94899806f27905fb37ef132f8c3f25645eb6e30d2b43d17fdb4"
+        },
+        "accepted_trace": {
+          "compressed_copy": null,
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p95/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "sha256": "d059991954371652ff1c9937d9d0226ce280ed01bdc6d5c47f3c5389d8690ee3"
+        },
+        "binary": {
+          "path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x",
+          "sha256": "bab5f7408f20192c575ea09be5501445f38f29bc2d34680da41daf733c96b2bf"
+        },
+        "case": "j0p9_spectral_u2p00_j0p95",
+        "console": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p95/phase0_from_accepted_j08/console.log",
+          "sha256": "9bd97844a11103aab51c5960bb06697eea8b0a85bc2d1482dd533527c64486f0"
+        },
+        "input": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p95/phase0_from_accepted_j08/input.nml",
+          "sha256": "4009d4a1b20858e50401ac4e5346fd738dccf6ce3cd4b36b08b42c908aa5095b"
+        },
+        "mode": "spectral",
+        "phase_manifest": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p95/phase0_from_accepted_j08/TRACE_ARCHIVE_MANIFEST.json",
+          "sha256": "3ccf85bcdace7b9af1fdb30afc7ff1de546b0f8b8745127e2accc76c3b0ffbf9"
+        },
+        "selected_energy_record": {
+          "log_line_number": 3264,
+          "log_path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p95/phase0_from_accepted_j08/console.log",
+          "log_sha256": "9bd97844a11103aab51c5960bb06697eea8b0a85bc2d1482dd533527c64486f0",
+          "parsed_fields": {
+            "E_Hub": "0.5829880279551292E-01",
+            "E_Hub_P_OUT": "0.0000000000000000E+00",
+            "base_physical_total_energy": "-0.2542113636014676E+04",
+            "candidate_a": "-0.2541919417275344E+04",
+            "candidate_b": "UNAVAILABLE",
+            "candidate_c": "-0.2542055337211881E+04",
+            "physical_total_energy": "-0.2542113636014676E+04"
+          },
+          "selected_iteration": 74,
+          "target_candidate": "candidate_c",
+          "verbatim_line_sha256": "16a472d260c3b57aa84cd09b42793407ab392b7109d9e47d291e9af28a2dca81"
+        },
+        "selected_iteration": 74
+      },
+      {
+        "CASE_RESULT": {
+          "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p80/CAMPAIGN_CASE.json",
+          "sha256": "9933b8e5d9b55c8bbac5842fedb62a581f147193adde7646a8cec2a45912fdaa"
+        },
+        "J_eV": 0.8,
+        "acceptance": {
+          "accepted": true,
+          "classification": "C1_ACCEPTED",
+          "endpoint": {
+            "d_down": 2.071429591977531,
+            "d_up": 4.431556366450598,
+            "inside_last20_ranges_diagnostic_only": true,
+            "last20_ranges": {
+              "d_down": [
+                2.0714294080837714,
+                2.071429858187055
+              ],
+              "d_up": [
+                4.431556150466027,
+                4.4315564954846876
+              ],
+              "sphere_moment_muB": [
+                2.2287320799603023,
+                2.2287325112729635
+              ]
+            },
+            "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p80/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+            "sha256": "b55262c99bc6dfe6c0b102e1f069c71fe4a9f5f6c0659c8a7ca8fcd5bd5cb375",
+            "sphere_moment_muB": 2.228732467212824
+          },
+          "final_diff": 1.65e-08,
+          "gate_limits": {
+            "d_down": 5e-07,
+            "d_up": 5e-07,
+            "diff": 3e-08,
+            "sphere_moment_muB": 1e-06
+          },
+          "spreads": {
+            "d_down": 4.50103283533565e-07,
+            "d_up": 3.4501866075231646e-07,
+            "sphere_moment_muB": 4.3131266114215805e-07
+          },
+          "window_iterations": [
+            55,
+            56,
+            57,
+            58,
+            59,
+            60,
+            61,
+            62,
+            63,
+            64,
+            65,
+            66,
+            67,
+            68,
+            69,
+            70,
+            71,
+            72,
+            73,
+            74
+          ]
+        },
+        "accepted_checkpoint_Fe_out": {
+          "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p80/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_out.nml",
+          "sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c"
+        },
+        "accepted_checkpoint_Fe_scf": {
+          "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p80/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+          "sha256": "b55262c99bc6dfe6c0b102e1f069c71fe4a9f5f6c0659c8a7ca8fcd5bd5cb375"
+        },
+        "accepted_trace": {
+          "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p80/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "sha256": "add5b9b3fc0bab1f7e1390915123a1a34a9e5c20e84f71438ffac5e20cd03fb1"
+        },
+        "binary": {
+          "path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x",
+          "sha256": "bab5f7408f20192c575ea09be5501445f38f29bc2d34680da41daf733c96b2bf"
+        },
+        "case": "j0p9_local_u2p00_j0p80",
+        "console": {
+          "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p80/phase0_initial/console.log",
+          "sha256": "2512aa94f9bb29409ec10b3ce04e81bcf8058b5399fabdae0f57b4b801a75113"
+        },
+        "input": {
+          "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p80/phase0_initial/input.nml",
+          "sha256": "8c0ceb9936c3a7c658ebbb257b65a40e6840563c5dfe7cdb9d0cd07485968e2f"
+        },
+        "lineage_note": "accepted C3 J=.8 baseline retained as C4 restart",
+        "mode": "local",
+        "phase_manifest": {
+          "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p80/phase0_initial/TRACE_ARCHIVE_MANIFEST.json",
+          "sha256": "b49c3ac045f61763ef1a22a17876ae147c50fc9c0fa7fcc0b930447360341aa1"
+        },
+        "selected_energy_record": {
+          "log_line_number": 3264,
+          "log_path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p80/phase0_initial/console.log",
+          "log_sha256": "2512aa94f9bb29409ec10b3ce04e81bcf8058b5399fabdae0f57b4b801a75113",
+          "parsed_fields": {
+            "E_Hub": "0.6751782851469024E-01",
+            "E_Hub_P_OUT": "0.0000000000000000E+00",
+            "base_physical_total_energy": "-0.2541979121829134E+04",
+            "candidate_a": "UNAVAILABLE",
+            "candidate_b": "-0.2541911604000619E+04",
+            "candidate_c": "UNAVAILABLE",
+            "physical_total_energy": "-0.2541979121829134E+04"
+          },
+          "selected_iteration": 74,
+          "target_candidate": "candidate_b",
+          "verbatim_line_sha256": "c88e7d35b6518fe862497864180da98418fef14c290f62e9d36c9db795d5e8d4"
+        },
+        "selected_iteration": 74
+      },
+      {
+        "CASE_RESULT": {
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j1p00/CASE_RESULT.json",
+          "sha256": "a5db2d00844eb2b89d8469d1f6b64642a6d5d8958e2a10b547917f07f1047d80"
+        },
+        "J_eV": 1.0,
+        "acceptance": {
+          "accepted": true,
+          "classification": "C1_ACCEPTED",
+          "endpoint": {
+            "d_down": 2.1015832459076904,
+            "d_up": 4.396948430551627,
+            "inside_last20_ranges_diagnostic_only": true,
+            "last20_ranges": {
+              "d_down": [
+                2.1015830905358985,
+                2.1015833227868006
+              ],
+              "d_up": [
+                4.396948346654942,
+                4.396948770721329
+              ],
+              "sphere_moment_muB": [
+                2.171276568683382,
+                2.1712770457321104
+              ]
+            },
+            "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j1p00/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+            "sha256": "9d736b52c12a547db27ed4aa8bcdff4b5076134bfd5de10d1a70563fb69561a3",
+            "sphere_moment_muB": 2.1712766895153393
+          },
+          "final_diff": 2.94e-08,
+          "gate_limits": {
+            "d_down": 5e-07,
+            "d_up": 5e-07,
+            "diff": 3e-08,
+            "sphere_moment_muB": 1e-06
+          },
+          "spreads": {
+            "d_down": 2.3225090206580035e-07,
+            "d_up": 4.24066386450761e-07,
+            "sphere_moment_muB": 4.770487285199465e-07
+          },
+          "window_iterations": [
+            62,
+            63,
+            64,
+            65,
+            66,
+            67,
+            68,
+            69,
+            70,
+            71,
+            72,
+            73,
+            74,
+            75,
+            76,
+            77,
+            78,
+            79,
+            80,
+            81
+          ]
+        },
+        "accepted_checkpoint_Fe_out": {
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j1p00/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_out.nml",
+          "sha256": "b55262c99bc6dfe6c0b102e1f069c71fe4a9f5f6c0659c8a7ca8fcd5bd5cb375"
+        },
+        "accepted_checkpoint_Fe_scf": {
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j1p00/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+          "sha256": "9d736b52c12a547db27ed4aa8bcdff4b5076134bfd5de10d1a70563fb69561a3"
+        },
+        "accepted_trace": {
+          "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j1p00/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "sha256": "584c6d9ee5fff66648e51c835577511fd9e3d6811ce236af54fe0a61f86fd0f9"
+        },
+        "binary": {
+          "path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x",
+          "sha256": "bab5f7408f20192c575ea09be5501445f38f29bc2d34680da41daf733c96b2bf"
+        },
+        "case": "j0p9_local_u2p00_j1p00",
+        "console": {
+          "path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j1p00/phase0_from_accepted_j08/console.log",
+          "sha256": "9b145e8f57ad6ee2aeb636e770e3312af116c6362802f31887e380954e0f6dbb"
+        },
+        "input": {
+          "path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j1p00/phase0_from_accepted_j08/input.nml",
+          "sha256": "a0932c02d4e8871296664b4b569c1a4b28c71bc2f9380a30bafb4c3b70e4a52b"
+        },
+        "lineage_note": "accepted C4 J=1.0 endpoint from accepted local J=.8 restart",
+        "mode": "local",
+        "phase_manifest": {
+          "path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j1p00/phase0_from_accepted_j08/TRACE_ARCHIVE_MANIFEST.json",
+          "sha256": "8cdf3b7893f396472ec417982025e9fb70c714ccb51bc319518c0dca5116cbd3"
+        },
+        "selected_energy_record": {
+          "log_line_number": 3572,
+          "log_path": "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j1p00/phase0_from_accepted_j08/console.log",
+          "log_sha256": "9b145e8f57ad6ee2aeb636e770e3312af116c6362802f31887e380954e0f6dbb",
+          "parsed_fields": {
+            "E_Hub": "0.5473775186190522E-01",
+            "E_Hub_P_OUT": "0.0000000000000000E+00",
+            "base_physical_total_energy": "-0.2541979461714670E+04",
+            "candidate_a": "UNAVAILABLE",
+            "candidate_b": "-0.2541924723962808E+04",
+            "candidate_c": "UNAVAILABLE",
+            "physical_total_energy": "-0.2541979461714670E+04"
+          },
+          "selected_iteration": 81,
+          "target_candidate": "candidate_b",
+          "verbatim_line_sha256": "583a86931c1ce524e026478702c1307e6f9dee5f1bafe39f3b6b1027cb5d44f8"
+        },
+        "selected_iteration": 81
+      },
+      {
+        "CASE_RESULT": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p80/CASE_RESULT.json",
+          "sha256": "2fe2f31eefbae9fe5a2cd8ca328b101532ba4764f96392cfe4a142caa83f41fe"
+        },
+        "J_eV": 0.8,
+        "acceptance": {
+          "accepted": true,
+          "classification": "C1_ACCEPTED",
+          "endpoint": {
+            "d_down": 2.1484519837317144,
+            "d_up": 4.404993763883179,
+            "inside_last20_ranges_diagnostic_only": true,
+            "last20_ranges": {
+              "d_down": [
+                2.1484518655769493,
+                2.1484521306794786
+              ],
+              "d_up": [
+                4.4049935566614895,
+                4.404993975494554
+              ],
+              "sphere_moment_muB": [
+                2.164402618302706,
+                2.1644033292816385
+              ]
+            },
+            "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p80/phase0_from_accepted_j06/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+            "sha256": "9c55209a9b49a406cca5d3e111acdb9b0efa0e4da16c21cb1a0588af2083b164",
+            "sphere_moment_muB": 2.164402895555498
+          },
+          "final_diff": 2.67e-08,
+          "gate_limits": {
+            "d_down": 5e-07,
+            "d_up": 5e-07,
+            "diff": 3e-08,
+            "sphere_moment_muB": 1e-06
+          },
+          "spreads": {
+            "d_down": 2.6510252926215117e-07,
+            "d_up": 4.188330642307392e-07,
+            "sphere_moment_muB": 7.109789326165128e-07
+          },
+          "window_iterations": [
+            61,
+            62,
+            63,
+            64,
+            65,
+            66,
+            67,
+            68,
+            69,
+            70,
+            71,
+            72,
+            73,
+            74,
+            75,
+            76,
+            77,
+            78,
+            79,
+            80
+          ]
+        },
+        "accepted_checkpoint_Fe_out": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p80/phase0_from_accepted_j06/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_out.nml",
+          "sha256": "0876097efd41e8651a50ff8f7900e9859743d0c5104cf89673603cbb7ba62803"
+        },
+        "accepted_checkpoint_Fe_scf": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p80/phase0_from_accepted_j06/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+          "sha256": "9c55209a9b49a406cca5d3e111acdb9b0efa0e4da16c21cb1a0588af2083b164"
+        },
+        "accepted_trace": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p80/phase0_from_accepted_j06/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "sha256": "41df4cf82bc8f1e46dcaa10e0afea9973dff5eca2f4d7ad9ad9f39aa409b1d7d"
+        },
+        "binary": {
+          "path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x",
+          "sha256": "bab5f7408f20192c575ea09be5501445f38f29bc2d34680da41daf733c96b2bf"
+        },
+        "case": "j0p9_spectral_u2p00_j0p80",
+        "console": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p80/phase0_from_accepted_j06/console.log",
+          "sha256": "291ac8013702d6649a0b456d5cdc3ae27cd501f267b285d4874a141053b7daf7"
+        },
+        "input": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p80/phase0_from_accepted_j06/input.nml",
+          "sha256": "8357f4497018d9a656fab0d6dea3e069e3891289d756e5e502f2f4b2ce5d7013"
+        },
+        "launch_manifest": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p80/LAUNCH_MANIFEST.json",
+          "sha256": "0558c32444d337f9c8603072ddf8e5e046f2384904e16f6ec5cc83cdddbfacc0"
+        },
+        "lineage_note": "accepted spectral J=.8 endpoint from accepted spectral J=.6 seed",
+        "mode": "spectral",
+        "phase_manifest": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p80/phase0_from_accepted_j06/TRACE_ARCHIVE_MANIFEST.json",
+          "sha256": "536ba6b0087009be554652228cda887105f43960754ea16ef5bcc52bbece7142"
+        },
+        "selected_energy_record": {
+          "log_line_number": 3528,
+          "log_path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j0p80/phase0_from_accepted_j06/console.log",
+          "log_sha256": "291ac8013702d6649a0b456d5cdc3ae27cd501f267b285d4874a141053b7daf7",
+          "parsed_fields": {
+            "E_Hub": "0.6815978876319218E-01",
+            "E_Hub_P_OUT": "0.0000000000000000E+00",
+            "base_physical_total_energy": "-0.2542129666078170E+04",
+            "candidate_a": "-0.2541908824468701E+04",
+            "candidate_b": "UNAVAILABLE",
+            "candidate_c": "-0.2542061506289407E+04",
+            "physical_total_energy": "-0.2542129666078170E+04"
+          },
+          "selected_iteration": 80,
+          "target_candidate": "candidate_c",
+          "verbatim_line_sha256": "d1eb9bfc92a107959f53420342743d568fdaf288e384258d82f6d3ec1ab6a1a7"
+        },
+        "selected_iteration": 80
+      },
+      {
+        "CASE_RESULT": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j1p00/CASE_RESULT.json",
+          "sha256": "2c32d2cc06f8cd9e168a0d478e29bf12d8badac790131d6c11250e90201716f3"
+        },
+        "J_eV": 1.0,
+        "acceptance": {
+          "accepted": true,
+          "classification": "C1_ACCEPTED",
+          "endpoint": {
+            "d_down": 2.161894576948799,
+            "d_up": 4.37922319374559,
+            "inside_last20_ranges_diagnostic_only": false,
+            "last20_ranges": {
+              "d_down": [
+                2.161894356763093,
+                2.161894532578307
+              ],
+              "d_up": [
+                4.379223176174051,
+                4.379223632538333
+              ],
+              "sphere_moment_muB": [
+                2.123997575186718,
+                2.1239985697995856
+              ]
+            },
+            "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j1p00/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+            "sha256": "d670315dcb7d20ee7370369279c650660d32e05e13921258eef41a43d2fd4537",
+            "sphere_moment_muB": 2.1239978213837487
+          },
+          "final_diff": 2.09e-08,
+          "gate_limits": {
+            "d_down": 5e-07,
+            "d_up": 5e-07,
+            "diff": 3e-08,
+            "sphere_moment_muB": 1e-06
+          },
+          "spreads": {
+            "d_down": 1.7581521394305355e-07,
+            "d_up": 4.5636428236406346e-07,
+            "sphere_moment_muB": 9.946128676219246e-07
+          },
+          "window_iterations": [
+            79,
+            80,
+            81,
+            82,
+            83,
+            84,
+            85,
+            86,
+            87,
+            88,
+            89,
+            90,
+            91,
+            92,
+            93,
+            94,
+            95,
+            96,
+            97,
+            98
+          ]
+        },
+        "accepted_checkpoint_Fe_out": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j1p00/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_out.nml",
+          "sha256": "9c55209a9b49a406cca5d3e111acdb9b0efa0e4da16c21cb1a0588af2083b164"
+        },
+        "accepted_checkpoint_Fe_scf": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j1p00/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+          "sha256": "d670315dcb7d20ee7370369279c650660d32e05e13921258eef41a43d2fd4537"
+        },
+        "accepted_trace": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j1p00/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+          "sha256": "7789403fe2d40af2739515d03ea6a0bcfe4f7a0ce6c60df8470aab9371d9c5ff"
+        },
+        "binary": {
+          "path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x",
+          "sha256": "bab5f7408f20192c575ea09be5501445f38f29bc2d34680da41daf733c96b2bf"
+        },
+        "case": "j0p9_spectral_u2p00_j1p00",
+        "console": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j1p00/phase0_from_accepted_j08/console.log",
+          "sha256": "914f751c03c89ff87f0942156ed3d3abf5d2c295ae3411cbe2adc521a184d764"
+        },
+        "input": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j1p00/phase0_from_accepted_j08/input.nml",
+          "sha256": "90cdbf0fff888c1aa427710c6cddc9b31974aa0d89c6fd27f40962b61d19581c"
+        },
+        "launch_manifest": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j1p00/LAUNCH_MANIFEST.json",
+          "sha256": "6686df6ab13e20f4b5e4566f46596577e537c155906f52d123c0a404a8b6e088"
+        },
+        "lineage_note": "accepted spectral J=1.0 endpoint from accepted spectral J=.8 seed",
+        "mode": "spectral",
+        "phase_manifest": {
+          "path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j1p00/phase0_from_accepted_j08/TRACE_ARCHIVE_MANIFEST.json",
+          "sha256": "94f674f4f57c42460a70ced6a4e5cd42e7642b6da754e75dde26b06c78d00c0e"
+        },
+        "selected_energy_record": {
+          "log_line_number": 4320,
+          "log_path": "/private/tmp/c4-rs-j09-spectral/j0p9_spectral_u2p00_j1p00/phase0_from_accepted_j08/console.log",
+          "log_sha256": "914f751c03c89ff87f0942156ed3d3abf5d2c295ae3411cbe2adc521a184d764",
+          "parsed_fields": {
+            "E_Hub": "0.5495298938530535E-01",
+            "E_Hub_P_OUT": "0.0000000000000000E+00",
+            "base_physical_total_energy": "-0.2542108398836037E+04",
+            "candidate_a": "-0.2541922970367656E+04",
+            "candidate_b": "UNAVAILABLE",
+            "candidate_c": "-0.2542053445846652E+04",
+            "physical_total_energy": "-0.2542108398836037E+04"
+          },
+          "selected_iteration": 98,
+          "target_candidate": "candidate_c",
+          "verbatim_line_sha256": "7e2c268597f96388750e282d9cc632f5d7d186467ffacadae1061d51cf0d2b13"
+        },
+        "selected_iteration": 98
+      }
+    ],
+    "j09_compact_trace_asset": {
+      "compressed_bytes": 310108,
+      "description": "Accepted U=2 eV, J=.9 local endpoint complete P_OUT trace through iteration 74; deterministic gzip copy of accepted checkpoint trace.",
+      "path": "docs/validation/fixed_ldau/rs/C4_RC2_assets/j09_local_U2_J0p90_accepted_iter74_trace.csv.gz",
+      "sha256": "e364ac3052d3f8a5f5d6b6c2c7bd14065dc5b8d0751c169d5094d1520655f214",
+      "uncompressed_bytes": 7689210,
+      "uncompressed_path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/phase0_from_accepted_j08/C1_ACCEPTED_LIVE_CHECKPOINT/fixed_u_trace_history.csv",
+      "uncompressed_sha256": "fb3e65e1d51223a696ddc31734dca2c124135650cc3f7ca47da9de1edf7ac516"
+    },
+    "j09_fixed_P_target": {
+      "evaluator_binary": {
+        "path": "/private/tmp/c3-rc2-rs-hf/rs_rc2_fixed_p_energy_ed6",
+        "sha256": "bbcce2f3f1cef59509c9818262379481c7a67a693e9c20d7169aec469b6ee2fa"
+      },
+      "evaluator_source": {
+        "path": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/rs_rc2_fixed_p_energy.f90",
+        "sha256": "c82bb19107763dee16f89aba3411f4eced0ea3469cc05abafcec207c8aae7a2c"
+      },
+      "invocation": [
+        "/private/tmp/c3-rc2-rs-hf/rs_rc2_fixed_p_energy_ed6",
+        "/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/fixed_p_target/P_OUT_d_shell.txt",
+        "2",
+        "0.9"
+      ],
+      "matrix": {
+        "iteration": 74,
+        "matrix_entry_count": 50,
+        "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/fixed_p_target/P_OUT_d_shell.txt",
+        "sha256": "33e01ae866172242732964d7679c032df1d9032ce2c1fa623ae707cf2edbcd46"
+      },
+      "result_manifest": {
+        "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/fixed_p_target/FIXED_P_RESULT.json",
+        "sha256": "f7486a67dfd472c2fe3cd025c8427fd15f672178efe691d7604e3274c830772e"
+      },
+      "stderr": {
+        "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/fixed_p_target/fixed_P_evaluator.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/private/tmp/c4-rs-j09-accepted-j08/j0p9_local_u2p00_j0p90/fixed_p_target/fixed_P_evaluator.stdout",
+        "sha256": "0e4d4236408b827cb5c76250d7f4d5a3d34847e7f50103c11ae019c19d082646"
+      },
+      "target_J_slope_Ry_per_eV": -0.0657237685338119
+    },
+    "j09_restart_and_launch": {
+      "accepted_J0p80_restart": {
+        "path": "/private/tmp/c3-rc2-rs-hf/campaign/j0p9_local_u2p00_j0p80/phase0_initial/C1_ACCEPTED_LIVE_CHECKPOINT/Fe_scf.nml",
+        "sha256": "b55262c99bc6dfe6c0b102e1f069c71fe4a9f5f6c0659c8a7ca8fcd5bd5cb375"
+      },
+      "binary_path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x",
+      "binary_sha256": "bab5f7408f20192c575ea09be5501445f38f29bc2d34680da41daf733c96b2bf",
+      "command_record_note": "C4 manually re-seeded the accepted local J=.85/.90/.95/1.00 endpoints from the accepted local J=.80 restart. The exact C4 shell CLI was not preserved; the command above is the C3 command template adjusted to the recorded C4 directory/worker count/resume mode, not claimed as the exact historical invocation.",
+      "launch_manifest": {
+        "path": "/private/tmp/c4-rs-j09-accepted-j08/LAUNCH_MANIFEST.json",
+        "sha256": "54cbad24f9253ad17d3c66d0e7e45e1f9952d19c48eba27cfd194fbf82fd8e54"
+      },
+      "restart_and_step_deviation": "The first /private/tmp/c4-rs-j09 run resumed wrong-lineage C3 partial J=.85/.90 histories; those 7 steps per affected case were discarded. Accepted C4 phases restart from the hash-bound accepted local J=.80 Fe_scf.nml. The accepted endpoint campaign records inherited beta=.01 and remaining initial-step budgets; selected accepted points required no fallback continuation.",
+      "results": {
+        "path": "/private/tmp/c4-rs-j09-accepted-j08/RESULTS.json",
+        "sha256": "dadb9381f3f7ff9a1752d1a657088667f32df9e2aa9049e2b33c87d9a781f207"
+      },
+      "solver_campaign_command_template": "python3 tests/validation/fixed_ldau/rs_rc2_campaign.py --rc-json docs/validation/fixed_ldau/rs/C3_RC_PROVENANCE.json --staged-manifest /private/tmp/c3-rc2-rs-hf/staged_fullp/RC2_STAGED_DECKS.json --binary /private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x --outdir /private/tmp/c4-rs-j09-accepted-j08 --workers 2 --resume --launch"
     }
   },
   "rc1_input": {
@@ -219,5 +1395,5 @@
     "source": "C4_RC1_PROVENANCE.json"
   },
   "stage": "C4_RC2",
-  "status": "PARTIAL_U_AND_J05_AUDITED; J09_IN_PROGRESS"
+  "status": "AUDITED_PASS_U2_J0_J05_J09"
 }
