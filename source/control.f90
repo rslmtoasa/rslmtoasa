@@ -425,20 +425,8 @@ contains
       constraints_code_prefac = this%constraints_code_prefac
       constraints_diagnostics = this%constraints_diagnostics
       constraints_tolerance = this%constraints_tolerance
-      if (allocated(this%constraints_mom_ref)) then
-         allocate(constraints_mom_ref, mold=this%constraints_mom_ref)
-         constraints_mom_ref = this%constraints_mom_ref
-      else
-         allocate(constraints_mom_ref(1, 1))
-         constraints_mom_ref = 0.0_rp
-      end if
-      if (allocated(this%constraints_bfield)) then
-         allocate(constraints_bfield, mold=this%constraints_bfield)
-         constraints_bfield = this%constraints_bfield
-      else
-         allocate(constraints_bfield(1, 1))
-         constraints_bfield = 0.0_rp
-      end if
+      constraints_mom_ref = huge(1.0_rp)
+      constraints_bfield = huge(1.0_rp)
 
       open (newunit=funit, file=fname_, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -505,16 +493,8 @@ contains
             this%constraints_code_prefac = constraints_code_prefac
             this%constraints_diagnostics = constraints_diagnostics
             this%constraints_tolerance = constraints_tolerance
-            if (allocated(constraints_mom_ref)) then
-               if (allocated(this%constraints_mom_ref)) deallocate(this%constraints_mom_ref)
-               allocate(this%constraints_mom_ref(size(constraints_mom_ref,1), size(constraints_mom_ref,2)))
-               this%constraints_mom_ref = constraints_mom_ref
-            end if
-            if (allocated(constraints_bfield)) then
-               if (allocated(this%constraints_bfield)) deallocate(this%constraints_bfield)
-               allocate(this%constraints_bfield(size(constraints_bfield,1), size(constraints_bfield,2)))
-               this%constraints_bfield = constraints_bfield
-            end if
+            call copy_set_columns(constraints_mom_ref, this%constraints_mom_ref)
+            call copy_set_columns(constraints_bfield, this%constraints_bfield)
          end if
          close (funit2)
       end if
@@ -544,6 +524,36 @@ contains
       ! check input
       call this%check_all()
    end subroutine build_from_file
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Copy the columns of a (3, n) namelist buffer that were set (not left at
+   !> huge) into dst, shaped (3, last set column). Unset entries become zero.
+   !> When nothing was set, dst keeps its value, or becomes a (1, 1) zero
+   !> array, which the self constructor reads as "not provided".
+   !---------------------------------------------------------------------------
+   subroutine copy_set_columns(buffer, dst)
+      real(rp), dimension(:, :), intent(in) :: buffer
+      real(rp), dimension(:, :), allocatable, intent(inout) :: dst
+
+      integer :: i, ncols
+
+      ncols = 0
+      do i = 1, size(buffer, 2)
+         if (any(buffer(:, i) /= huge(1.0_rp))) ncols = i
+      end do
+      if (ncols == 0) then
+         if (.not. allocated(dst)) then
+            allocate (dst(1, 1))
+            dst = 0.0_rp
+         end if
+         return
+      end if
+      if (allocated(dst)) deallocate (dst)
+      allocate (dst(3, ncols))
+      dst = merge(0.0_rp, buffer(:, :ncols), buffer(:, :ncols) == huge(1.0_rp))
+   end subroutine copy_set_columns
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
