@@ -1,0 +1,9 @@
+# C4 A4.2 compact replay assets
+
+This directory contains a focused replay patch and compact records for the frozen native coefficient/terminator cross-swap. The patch applies to base commit `18972d62f042ffe3fcb358a0d4d58767a5de69cc`; exact base and resulting instrumented source SHA-256 values are in `../C4_A42_PROVENANCE.json`. It excludes binaries and the full source tree.
+
+The `captures/` files contain each full-basis donor (6,804 rows of A plus exact post-`zsqr` B) and full terminator donor (324 rows). `outputs/` contains one native DOS and P_OUT/QL per context. Swap output files are omitted because their raw SHA-256 values equal the opposite native outputs exactly; swap logs record route, loaded row counts, memory readback, and stop-before-potential-update. `inputs/` contains each replay seed potential, the captured iteration-1 `*_out.nml` lineage snapshots, and the bulk/impurity captured static preprocessing files (`clust`, `mad.mat`, `str.out`, `ves.out`, `map`).
+
+To reconstruct source, checkout the base commit above, apply `patch/A42_replay_from_18972d6.patch`, then verify the two instrumented source hashes in the JSON. Build with `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_Fortran_COMPILER=gfortran && cmake --build build --target rslmto.x -j`. The JSON `durable_package.reconstruction.run_commands` gives concrete staging and native execution commands; set `ASSET` to this directory and use separate run directories. For swaps, decompress the donor A/exact-B and terminator streams and set `RSLMTO_A42_SWAP_FILE`, `RSLMTO_A42_TERM_FILE`, `RSLMTO_A42_STOP_AFTER_DOS=1`, and `RSLMTO_A42_POUT_FILE`; keep each recipient input and mesh unchanged. Both production contexts use `recur=block` and the CPU production FP32 branch.
+
+The JSON records every stored path, encoding, stored/source SHA-256, byte count, original path, historical command/environment, and native/swap hash relation. gzip uses mtime=0.
