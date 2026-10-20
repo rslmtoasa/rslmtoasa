@@ -1,0 +1,397 @@
+{
+  "objective": "C4 Part A Fe impurity \u00a72.4 triage, A4.1/A4.3 disposition, and matched-U0 beta continuation",
+  "evidence_note": "Raw evidence remains in the listed absolute run directories. Immutable-file hashes are SHA256 of exact bytes. The active beta0075 stage omits mutable outputs until terminal freeze; observation is an explicitly timestamped snapshot.",
+  "accepted_seed": {
+    "path": "/private/tmp/rslmto-c2-requal/fe_uplus_bulk_requal/C2_checkpoint_candidate.nml",
+    "sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702",
+    "q_d_up_down": [
+      4.557606674800885,
+      2.0990288900613527
+    ]
+  },
+  "classification": "PRE-EXISTING ISSUE under \u00a72.4; no accepted A4.1 impurity endpoint and no energy ratio. A4.3 NEITHER after A4.2 found no evaluator inconsistency.",
+  "attempts": [
+    {
+      "name": "production_uplus",
+      "run_directory": "/private/tmp/c4-a41-fe-u38j11-rc100",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/preflight.json",
+          "bytes": 9899,
+          "sha256": "5d6c06c8af5b087efa40024ba224d73ba8a7fb66dbd1a116358007437ac2bcbe"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/console.log",
+          "bytes": 1299805,
+          "sha256": "417ad9697ac96ba7a1fdc74897e1486055bf6e35cac8946afd96f856c01d6dca"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fixed_u_trace.csv",
+          "bytes": 300804,
+          "sha256": "fb5035ba98baa4346236af33799ec4bafc6f1979750f039c4dc726e74032ea10"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fixed_u_trace_history.csv",
+          "bytes": 100,
+          "sha256": "a77e1ba2959e4f61c99760d0bd3824830358b2dab29913bf85413ba0c5f6021b"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/Fe_scf.nml",
+          "bytes": 10226,
+          "sha256": "f4024152835bde9292d9bf915a392e4da2c74e2f7ee73a0c4f16bdb0cd73b555"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fatal_capture/manifest.json",
+          "bytes": 3002,
+          "sha256": "a769799983a232c3bd119ee99b0aaedc9a5ab5e7ee77d5ba52ac5390033acaae"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fatal_capture/console.log",
+          "bytes": 1299805,
+          "sha256": "417ad9697ac96ba7a1fdc74897e1486055bf6e35cac8946afd96f856c01d6dca"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fatal_capture/fixed_u_trace.csv",
+          "bytes": 300804,
+          "sha256": "fb5035ba98baa4346236af33799ec4bafc6f1979750f039c4dc726e74032ea10"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fatal_capture/input.nml",
+          "bytes": 710,
+          "sha256": "9adf908396a5f0d0cb6d0866ec98ec40f630b868e79c483f667a4d9f0ee2f0c1"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fatal_capture/Fe_scf.nml",
+          "bytes": 10226,
+          "sha256": "f4024152835bde9292d9bf915a392e4da2c74e2f7ee73a0c4f16bdb0cd73b555"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fatal_capture/Fe_out.nml",
+          "bytes": 10584,
+          "sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fatal_capture/preflight.json",
+          "bytes": 9899,
+          "sha256": "5d6c06c8af5b087efa40024ba224d73ba8a7fb66dbd1a116358007437ac2bcbe"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/debug_bgreen_preLU_site1_ie1.txt",
+          "bytes": 49128,
+          "sha256": "967e19b3a2a3ab6266c1856ee4f1a7b28235a6f25c08676a718658b3d093df65"
+        }
+      ],
+      "status": "PREFLIGHT_COMPLETE_NOT_LAUNCHED"
+    },
+    {
+      "name": "debug_bounds_rerun",
+      "run_directory": "/private/tmp/c4-a41-triage-debug",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-triage-debug/preflight.json",
+          "bytes": 1521,
+          "sha256": "6c6369fac5f4249ee4a725d6958f270b9c64cef6802c7c0db6b8616e3874d9c5"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-debug/console.log",
+          "bytes": 213293,
+          "sha256": "270c96e8493b702c496a5c029fbfdf9d93e23c08da08da20db0f922820f27b40"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-debug/fixed_u_trace.csv",
+          "bytes": 966380,
+          "sha256": "1199a33f746e9734547c3a687f7527ffa4053627defef86329095291f5cb8ec3"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-debug/fixed_u_trace_history.csv",
+          "bytes": 100,
+          "sha256": "a77e1ba2959e4f61c99760d0bd3824830358b2dab29913bf85413ba0c5f6021b"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-debug/Fe_scf.nml",
+          "bytes": 10585,
+          "sha256": "35945c48a7d98fe6b62dac937c3e38cc0acd0689e0e70a8ff4f5b070dc4e2935"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-debug/Fe_out.nml",
+          "bytes": 10584,
+          "sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-debug/input.nml",
+          "bytes": 710,
+          "sha256": "9adf908396a5f0d0cb6d0866ec98ec40f630b868e79c483f667a4d9f0ee2f0c1"
+        }
+      ],
+      "status": "PREFLIGHT_COMPLETE_NOT_LAUNCHED",
+      "binary_sha256": "bdae36d817cb5357a50dd6645489336d72ebbe6ceaf2a9c99a6ffcc54994243d"
+    },
+    {
+      "name": "clean8b_uncaptured_attempt",
+      "run_directory": "/private/tmp/c4-a41-triage-clean8b",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b/preflight.json",
+          "bytes": 1494,
+          "sha256": "10ab98e2b30c9cd5c04f30045ca16f01c890e16722f809436ef9c676e8025891"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b/console.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b/Fe_out.nml",
+          "bytes": 10584,
+          "sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b/input.nml",
+          "bytes": 710,
+          "sha256": "9adf908396a5f0d0cb6d0866ec98ec40f630b868e79c483f667a4d9f0ee2f0c1"
+        }
+      ],
+      "status": "PREFLIGHT_COMPLETE_NOT_LAUNCHED",
+      "binary_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd"
+    },
+    {
+      "name": "clean8b_captured_parser_attempt",
+      "run_directory": "/private/tmp/c4-a41-triage-clean8b-captured",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-captured/preflight.json",
+          "bytes": 1494,
+          "sha256": "10ab98e2b30c9cd5c04f30045ca16f01c890e16722f809436ef9c676e8025891"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-captured/launch_manifest.json",
+          "bytes": 3211,
+          "sha256": "e24ef809d69821ec316c9a8b8d9d4089aee3579638f07800c94d7aed0c612d0f"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-captured/console.log",
+          "bytes": 201067,
+          "sha256": "31ac40ec2b28d54477ea80fa1492f9af2427308f792731dc978fbf016b566c0d"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-captured/returncode.txt",
+          "bytes": 2,
+          "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-captured/Fe_out.nml",
+          "bytes": 10584,
+          "sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-captured/input.nml",
+          "bytes": 710,
+          "sha256": "9adf908396a5f0d0cb6d0866ec98ec40f630b868e79c483f667a4d9f0ee2f0c1"
+        }
+      ],
+      "status": "FAILED_NONFINITE_BEFORE_FIRST_COMPLETE_SCF_ITERATION",
+      "complete_outer_iterations": 0,
+      "returncode": 1,
+      "console_sha256": "31ac40ec2b28d54477ea80fa1492f9af2427308f792731dc978fbf016b566c0d",
+      "binary_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+      "input_initial_sha256": "9adf908396a5f0d0cb6d0866ec98ec40f630b868e79c483f667a4d9f0ee2f0c1",
+      "solver_pid": 95285
+    },
+    {
+      "name": "clean8b_metadata_compatible_uplus",
+      "run_directory": "/private/tmp/c4-a41-triage-clean8b-compatible",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/launch_manifest.json",
+          "bytes": 2121,
+          "sha256": "f70990f047bb61bfb1c83d95718224a679806361c52ad35e696834fb041d485d"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/compatibility_manifest.json",
+          "bytes": 1810,
+          "sha256": "ee9d98b6ac2e8c04763bd4a4d5899e9b096a3fd16bef59a032033817e1f901e7"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/preflight.json",
+          "bytes": 1494,
+          "sha256": "10ab98e2b30c9cd5c04f30045ca16f01c890e16722f809436ef9c676e8025891"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/console.log",
+          "bytes": 1266629,
+          "sha256": "3dfc7444c454c10059d0a31c8c112796bc883f8b6e75481618a9f4cb61ffee05"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/returncode.txt",
+          "bytes": 2,
+          "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/Fe_scf.nml",
+          "bytes": 10165,
+          "sha256": "42325f310649cefee8439eaaa5a42617f7641ecd831e9806b07671d4177c8831"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/Fe_out.nml",
+          "bytes": 10523,
+          "sha256": "8383518883f857721957b0387c94c7a66f17f6b5ca9d3e3b50b55424c0df0de9"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/input.nml",
+          "bytes": 710,
+          "sha256": "9adf908396a5f0d0cb6d0866ec98ec40f630b868e79c483f667a4d9f0ee2f0c1"
+        }
+      ],
+      "status": "FINISHED_NONFINITE",
+      "complete_outer_iterations": 102,
+      "fatal_attempted_iteration": 103,
+      "returncode": 1,
+      "console_sha256": "3dfc7444c454c10059d0a31c8c112796bc883f8b6e75481618a9f4cb61ffee05",
+      "binary_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+      "actual_input_sha256": "9adf908396a5f0d0cb6d0866ec98ec40f630b868e79c483f667a4d9f0ee2f0c1",
+      "solver_pid": 1416,
+      "finished_at_local": "2026-10-20T08:10:07+02:00",
+      "failure": "Pre-LU Q NaN at energies 2501-2510; NaN mixed qia; Invalid PL before atomic core/valence setup at clean8b self.f90:4981"
+    },
+    {
+      "name": "same_deck_u0_triage",
+      "run_directory": "/private/tmp/c4-a41-triage-u0-from-uplus-seed",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/launch_manifest.json",
+          "bytes": 3386,
+          "sha256": "dda03f536a96b13a4a15297ac2f32add131ca5d6c9394775d4dd3884e93855a2"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/console.log",
+          "bytes": 582023,
+          "sha256": "4cd26a794322457704f6953c9d8c1eb7f2c9e05eda0b231649336f4b9f8f99b0"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/Fe_scf.nml",
+          "bytes": 9613,
+          "sha256": "89148faa3154e9b17c34307b33a8e320f4ab75aa350ec606799055dccfb1f2cb"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/Fe_out.nml",
+          "bytes": 10584,
+          "sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/input.nml",
+          "bytes": 710,
+          "sha256": "4cc2219e9aac0e36c561c9d6940930f43ecca082e991df0d6cd90b7a10166957"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/fixed_u_trace.csv",
+          "bytes": 266006,
+          "sha256": "72fde245652fc21272ee851e5ed4b9d7ed5fdfb45bb23446cfc5b75028993665"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/fixed_u_trace_history.csv",
+          "bytes": 100,
+          "sha256": "a77e1ba2959e4f61c99760d0bd3824830358b2dab29913bf85413ba0c5f6021b"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/TRACE_ARCHIVE_MANIFEST.json",
+          "bytes": 3297,
+          "sha256": "423184bf604bb19d0b8b8459578503ca2c968da13121dc82c3edb3dcb89da144"
+        }
+      ],
+      "status": "FINISHED_NONFINITE",
+      "complete_outer_iterations": 34,
+      "fatal_attempted_iteration": 35,
+      "returncode": 1,
+      "console_sha256": "4cd26a794322457704f6953c9d8c1eb7f2c9e05eda0b231649336f4b9f8f99b0",
+      "trace_sha256": "72fde245652fc21272ee851e5ed4b9d7ed5fdfb45bb23446cfc5b75028993665",
+      "binary_sha256": "e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0",
+      "input_initial_sha256": "4cc2219e9aac0e36c561c9d6940930f43ecca082e991df0d6cd90b7a10166957",
+      "wrapper_pid": 7054,
+      "solver_pid": 7078,
+      "finished_at_local": "2026-10-20T08:05:46+02:00",
+      "failure": "Pre-LU Q contains NaN at energies 2507-2510; mixed qia NaN; Invalid PL before atomic core/valence setup at self.f90:5207"
+    },
+    {
+      "name": "matched_u0_beta015",
+      "run_directory": "/private/tmp/c4-a41-fe-u0-bulk-rc100",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/preflight.json",
+          "bytes": 1421,
+          "sha256": "334fa3de7f0b9d61a1c14f247fa9ed10a58503b6af6f6949d1d5bd0b86c1a492"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/console.log",
+          "bytes": 608298,
+          "sha256": "08f9e95e5e98227657f9abb01a788d59b84d866c6567492d4b2b53617efcc609"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/Fe_scf.nml",
+          "bytes": 6773,
+          "sha256": "8e4e0c49586b35109a420f30bbf53f65f51a1fc4ae302b68e340e849c1864128"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/Fe_out.nml",
+          "bytes": 6773,
+          "sha256": "8e4e0c49586b35109a420f30bbf53f65f51a1fc4ae302b68e340e849c1864128"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/input.nml",
+          "bytes": 581,
+          "sha256": "f3b30f3c70326ad8c76e0a3925eb490c9ba94e79b5077ef18c236198a663584a"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/fixed_u_trace.csv",
+          "bytes": 942710,
+          "sha256": "b7c115af5854ae41a6391c4d8d471a0a4e4e46448d451bff8740556fa732f0f5"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/fixed_u_trace_history.csv",
+          "bytes": 100,
+          "sha256": "a77e1ba2959e4f61c99760d0bd3824830358b2dab29913bf85413ba0c5f6021b"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/TRACE_ARCHIVE_MANIFEST.json",
+          "bytes": 3243,
+          "sha256": "dacf70842c70f5bbdb95e5b2d3c0141a91fb035bb44c552636a0e801a4d58ae6"
+        }
+      ],
+      "status": "PREFLIGHT_COMPLETE_NOT_LAUNCHED"
+    },
+    {
+      "name": "matched_u0_beta0075_live_snapshot",
+      "run_directory": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075/launch_manifest.json",
+          "bytes": 2325,
+          "sha256": "7dbce145bc784b1b306c7e9f8d13221f6a5abf58fb53155229311f3f777ff49f"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075/Fe_out.nml",
+          "bytes": 6773,
+          "sha256": "8e4e0c49586b35109a420f30bbf53f65f51a1fc4ae302b68e340e849c1864128"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075/input.nml",
+          "bytes": 582,
+          "sha256": "75f404320f6998afd210b3bb5d49ad71f336b84ebd3015dc897bf1612b1979fd"
+        }
+      ],
+      "status": "RUNNING",
+      "binary_sha256": "e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0",
+      "input_initial_sha256": "75f404320f6998afd210b3bb5d49ad71f336b84ebd3015dc897bf1612b1979fd",
+      "seed_sha256": "8e4e0c49586b35109a420f30bbf53f65f51a1fc4ae302b68e340e849c1864128",
+      "wrapper_pid": 5998,
+      "solver_pid": 6049,
+      "status_at_capture": "RUNNING; dynamic outputs are a timestamped snapshot and will be refreshed at final continuation closure",
+      "observation": "Console tail at capture: outer step 91 in progress; last completed Diff 0.0004243837; finite",
+      "observation_local": "2026-10-20T08:12:21+02:00",
+      "complete_iterations_in_this_stage": 100,
+      "cumulative_complete_iterations": 300,
+      "latest_diff": 0.0004858817,
+      "state": "RUNNING, finite; beta=.0075. At 200 this stage will continue to beta=.01 if still unaccepted.",
+      "mutable_files_note": "Console, Fe_scf, and trace are intentionally not hashed while the solver is running; they will be added after terminal freeze."
+    }
+  ]
+}
