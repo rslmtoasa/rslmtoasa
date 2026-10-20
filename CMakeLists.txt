@@ -1202,6 +1202,10 @@ foreach(mode identity identity_second rotation restart)
   set_tests_properties(AppGbtKspaceScSpiralAfm_${mode} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)
 endforeach()
 
+add_test(NAME AppGbtKspaceScSpiralB2
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_b2.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_b2")
+set_tests_properties(AppGbtKspaceScSpiralB2 PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)
+
 add_test(NAME AppConstraintsNamelistMom
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/constraints/test_constraints_namelist.py" mom "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/constraints/mom")
 add_test(NAME AppConstraintsNamelistMalformed

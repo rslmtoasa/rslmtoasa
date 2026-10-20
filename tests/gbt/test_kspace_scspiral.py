@@ -3,7 +3,7 @@
 16^3 mesh, 300 K, first order). Modes, each with its relation and the bug it catches:
   identity  I2 (spiral SCF at theta = 0 equals the collinear SCF): |dE|, |dE_F| < scf_identity_ry. Bug: the field leaking into H at
             B = 0, a wrong k -+ q/2 or a swapped spin channel in the SCF density.
-  converge  S3, S8: theta = 30 deg, q != 0: the SCF converges, max |m_perp| and sum_a |B_a||m_a_perp| fall below scf_identity_ry, N stays
+  converge  S3, S8: theta = 30 deg, q != 0: the SCF converges, max |m_perp| falls below scf_moment_mub and sum_a |B_a||m_a_perp| below scf_identity_ry, N stays
             neutral every iteration (|dN| < n_identity). Bug: a field that does not enter H (m_perp stays 3e-4 muB).
   chi       S3 (Pauli response): with H += +B.sigma, m = n_up - n_dn is pushed against B, so chi = dm_perp/dB at fixed potential is
             negative on both local axes (finite differences, b = 1e-4 Ry). Bug: a sign error of the field, or a conjugation error in the
@@ -82,10 +82,10 @@ def mode_identity(binary, scratch):
 
 
 def mode_converge(binary, scratch):
-    tol, tol_n = tolerance("scf_identity_ry"), tolerance("n_identity")
+    tol, tol_m, tol_n = tolerance("scf_identity_ry"), tolerance("scf_moment_mub"), tolerance("n_identity")
     r = scf(binary, scratch / "cone", nsp=3, q=Q, theta=30.0, constrained=True)
     print(f"converged {r['conv']}, max |m_perp| = {r['m_perp']:.3e} muB, residual = {r['residual']:.3e} Ry, max |dN| = {r['dN']:.2e}")
-    return r["conv"] and r["m_perp"] < tol and r["residual"] < tol and r["dN"] < tol_n
+    return r["conv"] and r["m_perp"] < tol_m and r["residual"] < tol and r["dN"] < tol_n
 
 
 def mode_chi(binary, scratch):
