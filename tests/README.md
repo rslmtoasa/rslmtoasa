@@ -83,10 +83,6 @@ The unit tests exist only in a `-DRUN_UNIT_TESTS=ON` build. The two fast
 regression cases `bccFe_block_fast_sp` and `bccFe_chebyshev_fast_hoh` are
 kept out while they fail (`KNOWN_ISSUES.md`). The full suites run at the end
 of each stage in a fresh build.
-The historical WP8 deck remains under `tests/regression/wp8_littlegroup/` for
-scientific reference (its runner was removed in the GBT restart), but is not
-registered in the active CTest harness. It requires a separate validation
-decision before being run again.
 
 ## Regenerating references
 

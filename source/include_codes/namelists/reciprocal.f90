@@ -19,8 +19,6 @@ logical :: strict_symmetry_checks          ! Enforce strict symmetry-map checks
 logical :: use_shift                       ! Additional Monkhorst-Pack shift (default: .false.)
 logical :: dump_symmetry_kmap              ! Dump full->irreducible map diagnostics
 character(len=32) :: tetra_symmetry_mode   ! 'full_expand_ref' or 'irreducible_native'
-character(len=32) :: q_symmetry_policy     ! Finite-q GBT BZ reduction: 'full_bz' (default/oracle),
-                                            ! 'little_group', or 'little_group_common'
 
 ! Dense Fermi-surface export settings (for post_processing = 'fermi_surface').
 ! The FS route always writes the complete BZ mesh; fs_use_symmetry_reduction is
@@ -70,7 +68,7 @@ character(len=256) :: eigenpair_output_file ! Base name, default 'fermi_surface'
 
 namelist /reciprocal/ nk1, nk2, nk3, k_offset_x, k_offset_y, k_offset_z, &
    use_symmetry_reduction, use_time_reversal, strict_symmetry_checks, use_shift, &
-   dump_symmetry_kmap, tetra_symmetry_mode, q_symmetry_policy, &
+   dump_symmetry_kmap, tetra_symmetry_mode, &
    fs_nk1, fs_nk2, fs_nk3, fs_use_symmetry_reduction, &
    n_energy_points, dos_energy_min, dos_energy_max, &
    gaussian_sigma, temperature, total_electrons, dos_method, &

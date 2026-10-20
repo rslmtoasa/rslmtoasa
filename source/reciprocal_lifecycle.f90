@@ -152,8 +152,6 @@ contains
       this%device_eigensystem_token = 0
       this%resident_lehmann_handoff_requested = .false.
 
-      this%q_symmetry_policy = 'full_bz'
-
    ! By default suppress internal verbose prints (can be enabled by user)
    this%suppress_internal_logs = .true.
 
@@ -317,7 +315,6 @@ contains
       strict_symmetry_checks = this%strict_symmetry_checks
       dump_symmetry_kmap = this%dump_symmetry_kmap
       tetra_symmetry_mode = this%tetra_symmetry_mode
-      q_symmetry_policy = this%q_symmetry_policy
       use_shift = .false.  ! Derived from k_offset
       n_energy_points = this%n_energy_points
       dos_energy_min = this%dos_energy_range(1)
@@ -382,11 +379,6 @@ contains
           this%tetra_symmetry_mode /= 'irreducible_native') then
          call g_logger%fatal("reciprocal%build_from_file: tetra_symmetry_mode='"//trim(this%tetra_symmetry_mode)// &
                              "' is invalid; use 'full_expand_ref' or 'irreducible_native'.", __FILE__, __LINE__)
-      end if
-      this%q_symmetry_policy = lower(trim(q_symmetry_policy))
-      if (this%q_symmetry_policy /= 'full_bz') then
-         call g_logger%fatal("reciprocal%build_from_file: q_symmetry_policy='"//trim(this%q_symmetry_policy)// &
-                             "' is invalid; the little-group policies were removed, use 'full_bz'.", __FILE__, __LINE__)
       end if
       this%n_energy_points = n_energy_points
       this%dos_energy_range = [dos_energy_min, dos_energy_max]
@@ -479,7 +471,6 @@ contains
          call root_info('reciprocal%build_from_file: strict_symmetry_checks = false', __FILE__, __LINE__)
       end if
       call root_info('reciprocal%build_from_file: tetra_symmetry_mode = ' // trim(this%tetra_symmetry_mode), __FILE__, __LINE__)
-      call root_info('reciprocal%build_from_file: q_symmetry_policy = ' // trim(this%q_symmetry_policy), __FILE__, __LINE__)
       
       if (this%auto_kpath) then
          call root_info('reciprocal%build_from_file: Automatic k-path generation enabled', __FILE__, __LINE__)

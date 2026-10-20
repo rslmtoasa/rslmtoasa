@@ -500,9 +500,6 @@ module reciprocal_mod
       !> Irreducible-k representative indices in full mesh
       integer, dimension(:), allocatable :: irred_to_full_k
 
-      !> BZ-reduction policy for finite-q GBT; only 'full_bz' has an effect.
-      character(len=32) :: q_symmetry_policy
-
       ! Real-space neighbor vectors per atom type (for multi-site H_k)
       !> Neighbor vectors for each atom type [3, nn_max, ntype]
       !> These are the R vectors for Fourier transform H(k) = Σ_R H(R) e^(ik·R)
