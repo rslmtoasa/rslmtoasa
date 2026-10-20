@@ -21,7 +21,7 @@ def lattice_vectors(kind):
     return np.array(f90nml.read(FIX / kind / "lattice.nml")["lattice"]["a"])      # rows are the lattice vectors
 
 
-def make_deck(dst, kind, rep, nk, q_dir=(0.0, 0.0, 0.0), order="first", spin_resolved=False, theta_deg=0.0):
+def make_deck(dst, kind, rep, nk, q_dir=(0.0, 0.0, 0.0), order="first", spin_resolved=False, theta_deg=0.0, ccor=False):
     """kind: bccFe_prim, bccFe_sc2 (Fe, same potential on every site) or cr_afm (cr_bcc, Cr2 = Cr1 with mom = -z).
     q_dir is in direct coordinates of the cell; a gbt_single_q deck gets it as Cartesian q_ss with the cone angle theta_deg."""
     dst = Path(dst)
@@ -39,10 +39,10 @@ def make_deck(dst, kind, rep, nk, q_dir=(0.0, 0.0, 0.0), order="first", spin_res
         nsite = 1 if kind == "bccFe_prim" else 2
         nml["lattice"].update(alat=2.8612, wav=1.4088, ntype=nsite, ct=[4.0] * nsite)
         nml["atoms"] = {"database": "./", "label": ["Fe"] * nsite}
-    return finish_deck(dst, nml, rep, nk, order, spin_resolved, q_dir=q_dir, kind=kind, theta_deg=theta_deg)
+    return finish_deck(dst, nml, rep, nk, order, spin_resolved, q_dir=q_dir, kind=kind, theta_deg=theta_deg, ccor=ccor)
 
 
-def finish_deck(dst, nml, rep, nk, order, spin_resolved, q_dir=(0.0, 0.0, 0.0), kind="cr_afm", theta_deg=0.0):
+def finish_deck(dst, nml, rep, nk, order, spin_resolved, q_dir=(0.0, 0.0, 0.0), kind="cr_afm", theta_deg=0.0, ccor=False):
     nml["calculation"].update(pre_processing="none", post_processing="fermi_surface")
     nml["control"].update(nsp=1 if spin_resolved else 3, recur="block")     # the spin-resolved export needs nsp = 1
     nml["hamiltonian"] = {"hoh": order == "second", "magnetic_representation": rep}
@@ -50,6 +50,9 @@ def finish_deck(dst, nml, rep, nk, order, spin_resolved, q_dir=(0.0, 0.0, 0.0), 
         q_cart = np.linalg.inv(lattice_vectors(kind)) @ np.array(q_dir) if kind != "cr_afm" else np.array(q_dir)
         nml["hamiltonian"].update(q_ss=list(q_cart), theta_ss=theta_deg)
     nml["lattice"]["strux_want_sdot"] = False
+    if ccor:       # the two-centre CCOR needs Sdot and a screened structure; strict turns a silent Hcc = 0 into a stop
+        nml["lattice"].update(strux_want_sdot=True, screening="fitted")
+        nml["hamiltonian"].update(ccor_2c=True, ccor_strict=True)
     nml["reciprocal"].update(nk1=nk[0], nk2=nk[1], nk3=nk[2], use_symmetry_reduction=False, use_time_reversal=False,
                              auto_find_fermi=True, kspace_ham_order=order, write_spin_resolved_eigenpairs=spin_resolved)
     nml.write(str(dst / "input.nml"), force=True)
@@ -80,7 +83,7 @@ def mesh_index(k, nk):
     return {tuple(row): i for i, row in enumerate(m)}
 
 
-def make_super_deck(dst, fixture, positions_z, q_z, theta_deg, order, nk, gbt=False):
+def make_super_deck(dst, fixture, positions_z, q_z, theta_deg, order, nk, gbt=False, ccor=False):
     """periodic_nc supercell of Fe: one type per site, every type the Fe potential with its moment rotated to
     m(R + tau) = (sin th cos(2 pi q.r), sin th sin(2 pi q.r), cos th), q = (0, 0, q_z) in 2 pi/alat. With gbt=True
     the deck is a q = 0, theta = 0 gbt_single_q one (every mom = +z), used only for its bond dump."""
@@ -101,7 +104,7 @@ def make_super_deck(dst, fixture, positions_z, q_z, theta_deg, order, nk, gbt=Fa
     n3 = -(-20 // round(positions_z[-1] + 0.5))     # cells along z so that the cluster still reaches 20 alat
     nml["lattice"].update(alat=2.8612, wav=1.4088, ntype=n, ct=[4.0] * n, n3=n3, ndim=20 * 20 * n3 * n + 1000)
     nml["atoms"] = {"database": "./", "label": [f"Fe{i}" for i in range(1, n + 1)]}
-    return finish_deck(dst, nml, "gbt_single_q" if gbt else "periodic_nc", nk, order, False)
+    return finish_deck(dst, nml, "gbt_single_q" if gbt else "periodic_nc", nk, order, False, ccor=ccor)
 
 
 def read_bonds(deck):

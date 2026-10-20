@@ -4,7 +4,11 @@ diagonal, spin up = H_up(k - q/2) and spin down = H_down(k + q/2) of the colline
 periodic_nc k-space route with independently solved spin sectors (consistency of two production routes, plus the
 R2 identity). Bug caught: a wrong k -+ q/2 assignment or q-to-direct conversion, a wrong S extraction or mesh mapping.
 (An orbital basis change is unitary and invisible to eigenvalues.)
-usage: test_kspace_gauge.py <rslmto.x> <scratch directory>"""
+With the optional argument ccor both sides carry ccor_2c (ccor_strict, screening fitted, Sdot); the two routes then differ in how
+the two-centre block gets its link: GBT lifts S and Sdot with U_a^dag diag(e^{i(k-q/2).d}, e^{i(k+q/2).d}) U_b, the collinear
+route Bloch-sums its own spin sectors. A wrong Sdot link or transposition, or Hcc inside h - h o h at second order, shows up as a
+difference. The shared ccd and lambda helpers feed both sides, so a wrong value of those is not visible here.
+usage: test_kspace_gauge.py <rslmto.x> <scratch directory> [ccor]"""
 import itertools
 import sys
 from pathlib import Path
@@ -14,13 +18,14 @@ import numpy as np
 from gbt_app_common import make_deck, mesh_index, read_export, run, tolerance
 
 binary, scratch = sys.argv[1], Path(sys.argv[2])
+ccor = len(sys.argv) > 3 and sys.argv[3] == "ccor"
 CASES = [((0.0, 0.0, 0.25), (4, 4, 8)), ((0.1, 0.2, 0.3), (20, 10, 20))]     # q direct; mesh with q/2 on it
 tol = tolerance("eig_identity_ry")
 worst = 0.0
 for order, kind, (iq, (q, nk)) in itertools.product(("first", "second"), ("bccFe_prim", "bccFe_sc2"), enumerate(CASES)):
     tag = f"{kind}_q{iq}_{order}"
-    ref = make_deck(scratch / f"{tag}_nc", kind, "periodic_nc", nk, order=order, spin_resolved=True)
-    gbt = make_deck(scratch / f"{tag}_gbt", kind, "gbt_single_q", nk, q_dir=q, order=order)
+    ref = make_deck(scratch / f"{tag}_nc", kind, "periodic_nc", nk, order=order, spin_resolved=True, ccor=ccor)
+    gbt = make_deck(scratch / f"{tag}_gbt", kind, "gbt_single_q", nk, q_dir=q, order=order, ccor=ccor)
     run(binary, ref)
     run(binary, gbt)
     k_ref, spin = read_export(ref, spin=True)

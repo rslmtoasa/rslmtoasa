@@ -1175,6 +1175,8 @@ set_tests_properties(AppGbtKspaceRsFreeze PROPERTIES
 
 add_test(NAME AppGbtKspaceGauge
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_gauge.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/gauge")
+add_test(NAME AppGbtKspaceGaugeCcor
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_gauge.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/gauge_ccor" ccor)
 add_test(NAME AppGbtKspaceAntiparallel
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_antiparallel.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/antiparallel")
 add_test(NAME AppGbtKspaceCommensurate
@@ -1187,7 +1189,7 @@ add_test(NAME AppGbtKspaceOrthogonal
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_orthogonal.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/orthogonal")
 add_test(NAME AppGbtKspaceHamOrderInvalid
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_ham_order_invalid.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/ham_order_invalid")
-set_tests_properties(AppGbtKspaceGauge AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceHamOrderInvalid
+set_tests_properties(AppGbtKspaceGauge AppGbtKspaceGaugeCcor AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceHamOrderInvalid
   PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
 
 foreach(mode identity converge chi symmetry guards)
