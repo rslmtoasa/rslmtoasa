@@ -11,7 +11,7 @@ module gbt_kspace_mod
    implicit none
    private
 
-   public :: gbt_kspace_h1, gbt_kspace_h2, grand_potential, gbt_kspace_horth, gbt_newton_field
+   public :: gbt_kspace_h1, gbt_kspace_h2, gbt_kspace_hcc, grand_potential, gbt_kspace_horth, gbt_newton_field
 
 contains
 
@@ -33,10 +33,8 @@ contains
       real(rp), intent(in) :: k(3), q(3)
       complex(rp), intent(out) :: h(2*norb*nsite, 2*norb*nsite)
 
-      real(rp), parameter :: two_pi = 2.0_rp*acos(-1.0_rp)
-      integer :: ibond, a, b, s, t, sigma, i, j
-      real(rp) :: angle
-      complex(rp) :: phase(2), link
+      integer :: ibond, a, b, s, t, i, j
+      complex(rp) :: link(2, 2)
 
       h = cmplx(0.0_rp, 0.0_rp, rp)
       do a = 1, nsite
@@ -50,20 +48,13 @@ contains
       do ibond = 1, nbond
          a = bond_a(ibond)
          b = bond_b(ibond)
-         angle = two_pi*dot_product(k - 0.5_rp*q, bond_d(:, ibond))
-         phase(1) = cmplx(cos(angle), sin(angle), rp)
-         angle = two_pi*dot_product(k + 0.5_rp*q, bond_d(:, ibond))
-         phase(2) = cmplx(cos(angle), sin(angle), rp)
+         call gbt_bond_link(frame(:, :, a), frame(:, :, b), k, q, bond_d(:, ibond), link)
          do s = 1, 2
             do t = 1, 2
-               link = cmplx(0.0_rp, 0.0_rp, rp)
-               do sigma = 1, 2
-                  link = link + conjg(frame(sigma, s, a))*phase(sigma)*frame(sigma, t, b)
-               end do
                do j = 1, norb
                   do i = 1, norb
                      h(ix(a, s, i), ix(b, t, j)) = h(ix(a, s, i), ix(b, t, j)) + &
-                        w(i, s, a)*link*sblock(i, j, ibond)*w(j, t, b)
+                        w(i, s, a)*link(s, t)*sblock(i, j, ibond)*w(j, t, b)
                   end do
                end do
             end do
@@ -79,6 +70,93 @@ contains
       end function ix
 
    end subroutine gbt_kspace_h1
+
+   !> Two-centre combined-correction block of the GBT Hamiltonian at one k, in the orbital basis and index order of `sblock`.
+   !> The spin link multiplies the primitive S and Sdot bonds before they meet the endpoint factors, as build_ccor_pair_block_gbt:
+   !>   H_{a s i, b t j} = link_st(d) w_{a s i} [ (lam(s) + lam(t))/2 Sdot_ij + (ccd1_{a i} lam(s) + ccd1_{b j} lam(t)) S_ij ] w_{b t j}
+   !> and the onsite term lam_site(s) ccd0 w^2. lam is VMT - E_lin of the bond by local spin (the same value in both entries for
+   !> a scalar VMT), with sign +1 at both ends because the frames carry the orientation. Hcc is added after the order step,
+   !> never inside h - h o h.
+   !> @param[in] sdotblock  sdotblock(i, j) = -avw^2 sdot(j, i, m, ino), the transposition and scaling of sblock
+   !> @param[in] ccd        ccd(i, 0:1, site), the coefficients of build_ccor_coefficients
+   !> @param[in] lam_site   onsite lambda per local spin and site
+   !> @param[in] lam_bond   lambda per local spin of each bond
+   pure subroutine gbt_kspace_hcc(norb, nsite, nbond, bond_a, bond_b, bond_d, sblock, sdotblock, frame, w, ccd, lam_site, lam_bond, &
+                                  k, q, h)
+      integer, intent(in) :: norb, nsite, nbond
+      integer, intent(in) :: bond_a(nbond), bond_b(nbond)
+      real(rp), intent(in) :: bond_d(3, nbond)
+      complex(rp), intent(in) :: sblock(norb, norb, nbond), sdotblock(norb, norb, nbond)
+      complex(rp), intent(in) :: frame(2, 2, nsite)
+      complex(rp), intent(in) :: w(norb, 2, nsite)
+      real(rp), intent(in) :: ccd(norb, 0:1, nsite), lam_site(2, nsite), lam_bond(2, nbond)
+      real(rp), intent(in) :: k(3), q(3)
+      complex(rp), intent(out) :: h(2*norb*nsite, 2*norb*nsite)
+
+      integer :: ibond, a, b, s, t, i, j
+      complex(rp) :: link(2, 2)
+
+      h = cmplx(0.0_rp, 0.0_rp, rp)
+      do a = 1, nsite
+         do s = 1, 2
+            do i = 1, norb
+               h(ix(a, s, i), ix(a, s, i)) = lam_site(s, a)*ccd(i, 0, a)*w(i, s, a)*w(i, s, a)
+            end do
+         end do
+      end do
+
+      do ibond = 1, nbond
+         a = bond_a(ibond)
+         b = bond_b(ibond)
+         call gbt_bond_link(frame(:, :, a), frame(:, :, b), k, q, bond_d(:, ibond), link)
+         do s = 1, 2
+            do t = 1, 2
+               do j = 1, norb
+                  do i = 1, norb
+                     h(ix(a, s, i), ix(b, t, j)) = h(ix(a, s, i), ix(b, t, j)) + link(s, t)*w(i, s, a)*w(j, t, b)* &
+                        (0.5_rp*(lam_bond(s, ibond) + lam_bond(t, ibond))*sdotblock(i, j, ibond) + &
+                         (ccd(i, 1, a)*lam_bond(s, ibond) + ccd(j, 1, b)*lam_bond(t, ibond))*sblock(i, j, ibond))
+                  end do
+               end do
+            end do
+         end do
+      end do
+
+   contains
+
+      pure integer function ix(site, spin, orbital)
+         integer, intent(in) :: site, spin, orbital
+
+         ix = (site - 1)*2*norb + (spin - 1)*norb + orbital
+      end function ix
+
+   end subroutine gbt_kspace_hcc
+
+   !> Spin link of one bond, link(s, t) = sum_sigma conj(U_a(sigma, s)) exp(2 pi i (k -+ q/2).d) U_b(sigma, t): sigma = 1 carries
+   !> k - q/2 and sigma = 2 carries k + q/2. Shared by the S bond of the Hamiltonian and the S and Sdot bonds of the CCOR block.
+   pure subroutine gbt_bond_link(frame_a, frame_b, k, q, d, link)
+      complex(rp), intent(in) :: frame_a(2, 2), frame_b(2, 2)
+      real(rp), intent(in) :: k(3), q(3), d(3)
+      complex(rp), intent(out) :: link(2, 2)
+
+      real(rp), parameter :: two_pi = 2.0_rp*acos(-1.0_rp)
+      real(rp) :: angle
+      complex(rp) :: phase(2)
+      integer :: s, t, sigma
+
+      angle = two_pi*dot_product(k - 0.5_rp*q, d)
+      phase(1) = cmplx(cos(angle), sin(angle), rp)
+      angle = two_pi*dot_product(k + 0.5_rp*q, d)
+      phase(2) = cmplx(cos(angle), sin(angle), rp)
+      do s = 1, 2
+         do t = 1, 2
+            link(s, t) = cmplx(0.0_rp, 0.0_rp, rp)
+            do sigma = 1, 2
+               link(s, t) = link(s, t) + conjg(frame_a(sigma, s))*phase(sigma)*frame_b(sigma, t)
+            end do
+         end do
+      end do
+   end subroutine gbt_bond_link
 
    !> Second-order Hamiltonian H = E_nu + h - h O h, the formula of the collinear assembler. O and E_nu are onsite blocks in
    !> the local frame of each site (O = obar, E_nu = enu), and h1, obar and enu must be in the same orbital basis. The
