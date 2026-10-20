@@ -18,14 +18,18 @@ This is a scoped numerical identity test, not a derivation of an exact general
 ASA energy functional. In particular, it does not establish the radial
 `SUMEV` double-count coefficient/sign for every backend or representation.
 The implemented route is limited to ordinary native reciprocal KS
-(`use_kspace=.true.`, `calctype='B'`), clean bulk (`nbulk=0`, `nrec=ntype`),
-explicit fixed general Liechtenstein U/J, scalar-collinear `nsp=1`, `lmax=2`,
-and disabled constraints. SOC/noncollinear, HOH, self-consistent U, intersite
-V, impurity U, impurity/surface hosts, and nonzero test fields are excluded;
-The reviewed B3 extension also enables the same local correction for qualifying
-clean-bulk RS runs; explicit spectral selection remains spectral/non-adopted.
-The measured base ASA non-stationarity is −0.14% in KS and −0.16% to −0.17%
-in RS, so the numerical comparison is limited to the measured ASA accuracy.
+(`use_kspace=.true.`, `calctype='B'`) and qualifying clean-bulk RS
+(`use_kspace=.false.`, `calctype='B'`), with `nbulk=0`, `nrec=ntype`, explicit
+fixed general Liechtenstein U/J, scalar-collinear `nsp=1`, `lmax=2`, and
+disabled constraints. SOC/noncollinear, HOH, self-consistent U, intersite V,
+impurity U, impurity/surface hosts, and nonzero test fields are excluded. For
+clean-bulk RS, the C4 RC2 candidate gate passes at U=2 eV and J=0, 0.5, and
+0.9 eV under the amended occupation-response allowance; the independent
+arithmetic is in `rs/C4_RC2_RESULTS.md`. The reviewed B3 extension enables the
+same local correction for qualifying clean-bulk RS runs; explicit spectral
+selection remains spectral/non-adopted. The measured base ASA non-stationarity
+remains −0.14% in KS and −0.16% to −0.17% in RS; the RS gate does not claim
+stricter stationarity or a reduction in that residual.
 The scoped energy route and restart/serial-MPI checks pass. Individual serial route
 receipts, the distinct matched serial/MPI pair, and the RS spectral scope
 control are indexed in the [A4.4 control evidence](evidence/a4_4_control_evidence_index.json);
