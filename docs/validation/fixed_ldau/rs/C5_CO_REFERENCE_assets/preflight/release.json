@@ -1,0 +1,120 @@
+{
+  "run_id": "C5-hcpCo-reference-validation-01",
+  "status": "PREFLIGHT_READY_NOT_LAUNCHED",
+  "source_reference": "/Users/andersb/Jobb/rslmto_fable_v4b/example/bulk/hcpCo-folder/hcpCo_ref",
+  "immutable_snapshot": "/private/tmp/c5-hcpco-reference/immutable_source",
+  "run_directory": "/private/tmp/c5-hcpco-reference/run",
+  "input_manifest": {
+    "path": "/private/tmp/c5-hcpco-reference/immutable_source/manifest.sha256",
+    "sha256": "2ab5a693913fffb0c793a17e807885df8d312684a771451d39a1bb636051d047",
+    "files_sha256": {
+      "Co1.nml": "19e93a01e37f1d4e6dd4568d25b7eaa935b146f1090e65992d249cadc85e45e4",
+      "Co2.nml": "18f2156ea75593d6adf562b713f2ebc3652233367fa9b3c6f0d4dbe8fa188b91",
+      "input.nml": "bd053da5f779f5f8f5cdd806f2d272e3e3dfc93c6abbe48d9282adc8831fc985",
+      "lattice.nml": "b99302fad18239e8d517399de913b3316c1bc812a6fcdecfbe68650e4f31dafa"
+    }
+  },
+  "run_staging_sha256": {
+    "Co1.nml": "19e93a01e37f1d4e6dd4568d25b7eaa935b146f1090e65992d249cadc85e45e4",
+    "Co1_out.nml": "19e93a01e37f1d4e6dd4568d25b7eaa935b146f1090e65992d249cadc85e45e4",
+    "Co2.nml": "18f2156ea75593d6adf562b713f2ebc3652233367fa9b3c6f0d4dbe8fa188b91",
+    "Co2_out.nml": "18f2156ea75593d6adf562b713f2ebc3652233367fa9b3c6f0d4dbe8fa188b91",
+    "input.nml": "bd053da5f779f5f8f5cdd806f2d272e3e3dfc93c6abbe48d9282adc8831fc985",
+    "lattice.nml": "b99302fad18239e8d517399de913b3316c1bc812a6fcdecfbe68650e4f31dafa"
+  },
+  "restart_staging": {
+    "Co1_out.nml": "byte-copy of supplied Co1.nml",
+    "Co2_out.nml": "byte-copy of supplied Co2.nml",
+    "selected_loader_semantics": "reload defaults true; _out.nml chosen when present; previous out.scf confirms restart provenance",
+    "restart_sha256": {
+      "Co1_out.nml": "19e93a01e37f1d4e6dd4568d25b7eaa935b146f1090e65992d249cadc85e45e4",
+      "Co2_out.nml": "18f2156ea75593d6adf562b713f2ebc3652233367fa9b3c6f0d4dbe8fa188b91"
+    }
+  },
+  "deck_parameters": {
+    "calctype": "B",
+    "crystal_sym": "hcp",
+    "strux_backend": "strux_lib",
+    "nsp": 1,
+    "lmax": 2,
+    "rc": 60,
+    "lld": 150,
+    "recur": "chebyshev",
+    "U_eV": [
+      0,
+      0,
+      0
+    ],
+    "J_eV": [
+      0,
+      0,
+      0
+    ],
+    "fermi_Ry": -0.032603,
+    "energy_window_Ry": [
+      -1.0,
+      1.3
+    ],
+    "nstep": 25,
+    "conv_thr": 5e-09,
+    "mixtype": "broyden",
+    "beta": 0.15,
+    "effective_kspace": false
+  },
+  "namelist_closure_counts": {
+    "Co1.nml": {
+      "groups": 2,
+      "terminators": 2
+    },
+    "Co2.nml": {
+      "groups": 2,
+      "terminators": 2
+    },
+    "input.nml": {
+      "groups": 7,
+      "terminators": 7
+    },
+    "lattice.nml": {
+      "groups": 1,
+      "terminators": 1
+    }
+  },
+  "previous_endpoint_evidence": {
+    "path": "/Users/andersb/Jobb/rslmto_fable_v4b/example/bulk/hcpCo-folder/hcpCo_ref/out.scf",
+    "converged_step": 8,
+    "reported_diff": 4.7e-09,
+    "conv_thr": 5e-09,
+    "restart_log_lines": [
+      "restart loaded from ./Co1_out.nml",
+      "restart loaded from ./Co2_out.nml"
+    ],
+    "nonfinite_tokens_in_out.scf_str.out_report.out": 0
+  },
+  "binary": {
+    "path": "/private/tmp/c5-r1-frozen/rslmto.x",
+    "sha256": "710f91b3b3478cb8e4c89961edb6eca02e1fc72244a0c8061154604761898794",
+    "expected_sha256": "710f91b3b3478cb8e4c89961edb6eca02e1fc72244a0c8061154604761898794",
+    "release_source_commit": "2686e4e29e4ae6e9661c0499ffe8b232c31eadf0",
+    "lattice_cluster_source_sha256": "203fb901b685f428a0d811766c0af6dcc4abc024aa5cde8689b8f7e9765a6bcb",
+    "cmake_cache_path": "/private/tmp/c5-r1-production-build/CMakeCache.txt",
+    "cmake_cache_sha256": "9ebc1a66d490311521605e4d01300af4d1791dc5846f7f4c15f268ab4a8a4874",
+    "compiler": "/opt/homebrew/bin/gfortran (GNU Fortran 16.2; prior frozen-build record)",
+    "flags": "-O3 -fbacktrace -g -g -ffree-line-length-0 -cpp -mtune=native",
+    "openmp": true,
+    "mpi": false,
+    "spglib": true
+  },
+  "process_plan": {
+    "command": "cd /private/tmp/c5-hcpco-reference/run && OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE OPENBLAS_NUM_THREADS=1 /private/tmp/c5-r1-frozen/rslmto.x > out.scf 2>&1",
+    "pid_capture": "shell captures $! to solver.pid before wait; preserve exit code in process_status.txt",
+    "live_checks": "kill -0 on recorded PID while running; poll at <=60 second intervals",
+    "cap": "use input nstep=25; if crash/nonfinite before completion, stop this reference task; no extra solver launch"
+  },
+  "authorization_scope": "One isolated short reference validation only; not a C5 no-U gate rerun, not a broad C5 resumption.",
+  "repository": {
+    "branch": "fix/ldau-rs-impurity",
+    "head": "d1b845ab7b6b252fb2249a242b7fb03c96904e01",
+    "tracked_worktree": "clean",
+    "only_untracked_user_reference": "/Users/andersb/Jobb/rslmto_fable_v4b/example/bulk/hcpCo-folder/hcpCo_ref"
+  }
+}

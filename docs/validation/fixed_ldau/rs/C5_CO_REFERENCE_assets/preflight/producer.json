@@ -1,0 +1,71 @@
+{
+  "run_id": "C5-hcpCo-reference-validation-producer-01",
+  "status": "PREFLIGHT_READY_NOT_LAUNCHED",
+  "purpose": "one exact producer-binary replay of the explicitly supplied hcpCo reference; not C5 campaign resumption or a GATE rerun",
+  "immutable_source_snapshot": "/private/tmp/c5-hcpco-reference/immutable_source",
+  "source_manifest_sha256": "2ab5a693913fffb0c793a17e807885df8d312684a771451d39a1bb636051d047",
+  "run_directory": "/private/tmp/c5-hcpco-reference/run_producer",
+  "input_hashes_sha256": {
+    "Co1.nml": "19e93a01e37f1d4e6dd4568d25b7eaa935b146f1090e65992d249cadc85e45e4",
+    "Co2.nml": "18f2156ea75593d6adf562b713f2ebc3652233367fa9b3c6f0d4dbe8fa188b91",
+    "input.nml": "bd053da5f779f5f8f5cdd806f2d272e3e3dfc93c6abbe48d9282adc8831fc985",
+    "lattice.nml": "b99302fad18239e8d517399de913b3316c1bc812a6fcdecfbe68650e4f31dafa"
+  },
+  "restart_aliases_sha256": {
+    "Co1_out.nml": "19e93a01e37f1d4e6dd4568d25b7eaa935b146f1090e65992d249cadc85e45e4",
+    "Co2_out.nml": "18f2156ea75593d6adf562b713f2ebc3652233367fa9b3c6f0d4dbe8fa188b91"
+  },
+  "restart_alias_method": "byte-copy supplied Co1.nml/Co2.nml to Co1_out.nml/Co2_out.nml; selected_symbolic_atom_source prefers _out.nml with reload=true",
+  "deck_parameters": {
+    "calctype": "B",
+    "crystal_sym": "hcp",
+    "strux_backend": "strux_lib",
+    "nsp": 1,
+    "lmax": 2,
+    "rc": 60,
+    "lld": 150,
+    "recur": "chebyshev",
+    "U_eV": [
+      0,
+      0,
+      0
+    ],
+    "J_eV": [
+      0,
+      0,
+      0
+    ],
+    "fermi_Ry": -0.032603,
+    "energy_window_Ry": [
+      -1.0,
+      1.3
+    ],
+    "nstep": 25,
+    "conv_thr": 5e-09,
+    "mixtype": "broyden",
+    "beta": 0.15,
+    "effective_kspace": false
+  },
+  "environment": {
+    "OMP_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "binary": {
+    "path": "/private/tmp/c5-hcpco-reference/frozen/e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0/rslmto.x",
+    "sha256": "e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0",
+    "expected_sha256": "e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0",
+    "role": "producer binary",
+    "config": "Debug; GNU Fortran; -g -O0 -Wall -Wno-tabs -Wno-unused-variable -Wno-unused-dummy-argument -Wno-unused-function -Wno-unused-label -fbacktrace; OpenMP ON; MPI OFF; SPGLIB ON; MARCH_NATIVE ON",
+    "cmake_cache_path": "/private/tmp/c5-hcpco-reference/frozen/e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0/CMakeCache.txt",
+    "cmake_cache_sha256": "d9563abb15d629134325d15266f5843ccee9d4de189b8482aea7f23c649bd523"
+  },
+  "command": "cd /private/tmp/c5-hcpco-reference/run_producer && OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE OPENBLAS_NUM_THREADS=1 /private/tmp/c5-hcpco-reference/frozen/e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0/rslmto.x > out.scf 2>&1",
+  "process_tracking": "launcher captures $! to solver.pid before wait; escalated targeted ps and output log monitored; exit code written to solver.exit",
+  "repository": {
+    "branch": "fix/ldau-rs-impurity",
+    "head": "d1b845ab7b6b252fb2249a242b7fb03c96904e01",
+    "tracked_worktree": "clean",
+    "reference_files": "untracked user-supplied inputs preserved untouched"
+  }
+}
