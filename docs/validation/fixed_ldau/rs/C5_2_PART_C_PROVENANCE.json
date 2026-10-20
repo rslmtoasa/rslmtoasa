@@ -1,0 +1,53 @@
+{
+  "part": "C5.2 Part C",
+  "status": "STOPPED_BEFORE_C2_C3_DUE_A4_IV_STOP",
+  "part_a_reference": {
+    "results": "C5_2_PART_A_RESULTS.md",
+    "provenance": "C5_2_PART_A_PROVENANCE.json",
+    "stop_basis": "A1 clean-8b repeat and both A2 matched comparisons were scientifically byte-identical; no first break/attribution was found; root and auditor confirmed A4(iv) STOP.",
+    "sha256": {
+      "results": {
+        "path": "docs/validation/fixed_ldau/rs/C5_2_PART_A_RESULTS.md",
+        "sha256": "b9b372626beb90aac33e8ad98f8e8a07a852b04f03514bb38b76da8fd4993a08"
+      },
+      "provenance": {
+        "path": "docs/validation/fixed_ldau/rs/C5_2_PART_A_PROVENANCE.json",
+        "sha256": "9102597adddbd316ed233bba42225e473369389e7ec4c95e09b4b8873632e4bf"
+      }
+    }
+  },
+  "C1": {
+    "status": "PRELIMINARY_OFFLINE_AUDIT_ONLY",
+    "runtime_validation": false,
+    "gate_complete": false,
+    "findings": {
+      "recursion_seed": "source/recursion_chebyshev.f90:740-801 seeds psi0 with the identity orbital block at each recursion site (GPU and CPU branches).",
+      "rs_dispatch": "source/self.f90:4386-4399 dispatches RS Chebyshev recursion; source/self.f90:4651-4665 selects Chebyshev DOS reconstruction.",
+      "full_green_function": "source/green_chebyshev.f90:273-329 reconstructs full g0(nb,nb,E,site) matrices from deterministic mu_n (CPU/GPU branches).",
+      "occupation_matrix_P": "source/bands.f90:1036-1076 loops both orbital indices for each angular channel/spin and integrates matrix spectral density into potential%ldm; the d block is the 5x5 li=2 submatrix.",
+      "energy_weighted_M1": "source/bands.f90:1162-1206 fills pairwise matrix entries with Simpson moment=1 when the M1 target is associated (local radial mode selects a target at 947-957).",
+      "local_correction": "source/bands.f90:1209-1235 passes d-block P/M1 and the applied potential to correct_d_shell_moments.",
+      "correction_checks": "source/math.f90:213-270 checks finite values, Hermiticity, P eigenvalue bounds, q0>0, and finite correction outputs.",
+      "stochastic_separation": "source/recursion_transport.f90:369-377 documents stochastic moments as transport response; lines 426-435 selects control%random_vec_num only when cond_calctype='random_vec'."
+    },
+    "interpretation": "The inspected fixed-U SCF path appears deterministic and supplies full P/M1 matrices. This source-only finding is not runtime validation and does not complete C1 as a campaign gate.",
+    "compatibility_guard_added": false
+  },
+  "C2": {
+    "status": "NOT_RUN",
+    "u0_pair": "NOT_RUN",
+    "u2_ev_local_pair": "NOT_RUN",
+    "gate": "NOT_EVALUATED"
+  },
+  "C3": {
+    "status": "NOT_RUN",
+    "gate": "NOT_EVALUATED"
+  },
+  "co_u_positive_admission": "NOT_ADMITTED; no C2/C3 compatibility gate passed.",
+  "solver_runs": 0,
+  "builds": 0,
+  "source_changes": [],
+  "commands": [],
+  "raw_run_paths": [],
+  "next_step": "User review of the no-reproduction branch is required before further work."
+}

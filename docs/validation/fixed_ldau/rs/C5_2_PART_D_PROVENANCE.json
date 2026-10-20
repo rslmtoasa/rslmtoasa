@@ -1,0 +1,44 @@
+{
+  "part": "C5.2 Part D / Stage RD",
+  "status": "NOT_STARTED_DUE_A4_IV_STOP",
+  "part_a_reference": {
+    "results": "C5_2_PART_A_RESULTS.md",
+    "provenance": "C5_2_PART_A_PROVENANCE.json",
+    "stop_basis": "A1 clean-8b repeat and both A2 matched comparisons were scientifically byte-identical; no first break/attribution was found; root and auditor confirmed A4(iv) STOP.",
+    "sha256": {
+      "results": {
+        "path": "docs/validation/fixed_ldau/rs/C5_2_PART_A_RESULTS.md",
+        "sha256": "b9b372626beb90aac33e8ad98f8e8a07a852b04f03514bb38b76da8fd4993a08"
+      },
+      "provenance": {
+        "path": "docs/validation/fixed_ldau/rs/C5_2_PART_A_PROVENANCE.json",
+        "sha256": "9102597adddbd316ed233bba42225e473369389e7ec4c95e09b4b8873632e4bf"
+      }
+    }
+  },
+  "RD1_RD5": "NOT_STARTED_DUE_A4_IV_STOP",
+  "RD3_comparisons": {
+    "status": "NOT_RUN",
+    "systems": [],
+    "u0_controls": "NOT_RUN",
+    "u_positive_comparisons": "NOT_RUN"
+  },
+  "RD4": {
+    "status": "NOT_MEASURED",
+    "candidate_energy_comparisons": "NOT_RUN",
+    "hellmann_feynman_derivatives": "NOT_RUN",
+    "routing_decision": "NOT_ADOPTED"
+  },
+  "RD5": {
+    "status": "NOT_ADOPTED",
+    "auto_mode_changes": false,
+    "energy_routing_changes": false
+  },
+  "gates": "NOT_EVALUATED",
+  "solver_runs": 0,
+  "builds": 0,
+  "production_changes": [],
+  "commands": [],
+  "raw_run_paths": [],
+  "next_step": "User review of the no-reproduction branch is required before further work."
+}
