@@ -1,6 +1,6 @@
 {
   "name": "Example_bulk_bccFe_nsp2_hubbard",
-  "quick": true,
+  "quick": false,
   "labels": [
     "functional",
     "rs",

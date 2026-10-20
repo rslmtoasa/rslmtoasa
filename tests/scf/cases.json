@@ -197,7 +197,7 @@
     },
     {
       "name": "Example_bulk_bccFe_nsp2_hubbard",
-      "quick": true,
+      "quick": false,
       "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
       "case": "bulk/bccFe_hubbard",
       "timeout": 300,
