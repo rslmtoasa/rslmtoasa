@@ -1,0 +1,644 @@
+{
+  "cases": [
+    {
+      "binary_sha256": "a52edcd37a796de1cf88598e6cf01b5b94250fdf44d65fd800128955c4d7e4fe",
+      "case": "native_bulk_final",
+      "command": [
+        "/private/tmp/c4-a42-offline/build/bin/rslmto.x"
+      ],
+      "cwd": "/private/tmp/c4-a42-offline/native_bulk_final",
+      "environment": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_A42_EXACT_B_FILE": "/private/tmp/c4-a42-offline/native_bulk_final/exact_B.dat",
+        "RSLMTO_A42_FULL_CHAIN_FILE": "/private/tmp/c4-a42-offline/native_bulk_final/full_chain.dat",
+        "RSLMTO_A42_POUT_FILE": "/private/tmp/c4-a42-offline/native_bulk_final/pout_ql.dat",
+        "RSLMTO_A42_STOP_AFTER_DOS": "1",
+        "RSLMTO_C3_A3_AUDIT": "1",
+        "RSLMTO_C3_A3_AUDIT_FILE": "/private/tmp/c4-a42-offline/native_bulk_final/full_capture.dat"
+      },
+      "files": [
+        {
+          "bytes": 10584,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/Fe.nml",
+          "sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        {
+          "bytes": 163150,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/Fe_1_spinene.out",
+          "sha256": "4ee0ed008fc07147a985618a70caaa5140895d92fc1a59a008cfa925378c8b8b"
+        },
+        {
+          "bytes": 163198,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/Fe_dos.out",
+          "sha256": "17313990dc42116c7ffbfda5e40b47b64fe99c92bb8f1c21d250c561d3944221"
+        },
+        {
+          "bytes": 163150,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/Fe_orbene.out",
+          "sha256": "899c40d57d1f14e238085f8cd5db5167c151be1cdbf74efb1eb576f61a238862"
+        },
+        {
+          "bytes": 765550,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/Fe_orbital_dos.out",
+          "sha256": "bf31b861c6b16ffaa8d1542f500134efe85a7823f14237e004b228a8b599bb0c"
+        },
+        {
+          "bytes": 302207,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/clust",
+          "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+        },
+        {
+          "bytes": 5234,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/console.log",
+          "sha256": "d395090f43218c5b872ffe0c6e650bea54262461ef0f1a13824892d1a5c28c06"
+        },
+        {
+          "bytes": 432245,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/exact_B.dat",
+          "sha256": "55deccc532be2e0ea8299953ad032e02addf7359a93e98362f297fdd0eea67d0"
+        },
+        {
+          "bytes": 287245,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/fort.800",
+          "sha256": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6"
+        },
+        {
+          "bytes": 616366,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/fort.805",
+          "sha256": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246"
+        },
+        {
+          "bytes": 1435857,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/full_capture.dat",
+          "sha256": "43801f7e71bffe6788682a06837117fb42737249ee879b2a4218a0a21db47e3c"
+        },
+        {
+          "bytes": 799661,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/full_chain.dat",
+          "sha256": "b57290c1c5a7a7bce3efd063293a4b4536d63be01dc5615e967b42363c82194e"
+        },
+        {
+          "bytes": 672,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/input.nml",
+          "sha256": "3aeb8b5e5570506095fd1508147c66b6167a1209454f55ed5edbc86ed83ffc4b"
+        },
+        {
+          "bytes": 1025,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/launch_snapshot.json",
+          "sha256": "00844d3e54097c241042b1cc5191add65a975d0237aae8f5f6945b3ffa11ede0"
+        },
+        {
+          "bytes": 16,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/mad.mat",
+          "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+        },
+        {
+          "bytes": 283683,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/magneticdos.out",
+          "sha256": "f0b7723168cf64d472e4c882494a4415fba9138edb7e30024c9c426a3ca1d44a"
+        },
+        {
+          "bytes": 406912,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/map",
+          "sha256": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5"
+        },
+        {
+          "bytes": 9970,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/pout_ql.dat",
+          "sha256": "97976dcb9c5a6bf7d67d82988b36eed750d518fde26f54d92df4eb90cd266291"
+        },
+        {
+          "bytes": 10800,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/sbar",
+          "sha256": "87d0395c7537bd90c253eff48b8ced94e6bb49644ecdd251d4c0e986ab6aad87"
+        },
+        {
+          "bytes": 6934,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/str.out",
+          "sha256": "fda4513e4a8033f3980d20d83e09d79b12fd9e0b732ea82d8c7d86d55148ff88"
+        },
+        {
+          "bytes": 82830,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/totaldos.out",
+          "sha256": "4d24df64cc93fc12e62d81c27f5041ebe677bae32d0bda08811f5d6cf0d47e96"
+        },
+        {
+          "bytes": 738,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/ves.out",
+          "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+        },
+        {
+          "bytes": 13350,
+          "path": "/private/tmp/c4-a42-offline/native_bulk_final/view.sbar",
+          "sha256": "a7e2558f9fd5cb643e2cba271be818ea051b56a5119fb0edf2367692ec08bc19"
+        }
+      ],
+      "input_nml_sha256": "3aeb8b5e5570506095fd1508147c66b6167a1209454f55ed5edbc86ed83ffc4b",
+      "route": "calctype=B; recur=block; no route override",
+      "stop_status": "STOP 0 after P_OUT/QL capture before potential update"
+    },
+    {
+      "binary_sha256": "a52edcd37a796de1cf88598e6cf01b5b94250fdf44d65fd800128955c4d7e4fe",
+      "case": "native_imp_final",
+      "command": [
+        "/private/tmp/c4-a42-offline/build/bin/rslmto.x"
+      ],
+      "cwd": "/private/tmp/c4-a42-offline/native_imp_final",
+      "environment": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_A42_EXACT_B_FILE": "/private/tmp/c4-a42-offline/native_imp_final/exact_B.dat",
+        "RSLMTO_A42_FULL_CHAIN_FILE": "/private/tmp/c4-a42-offline/native_imp_final/full_chain.dat",
+        "RSLMTO_A42_POUT_FILE": "/private/tmp/c4-a42-offline/native_imp_final/pout_ql.dat",
+        "RSLMTO_A42_STOP_AFTER_DOS": "1",
+        "RSLMTO_C3_A3_AUDIT": "1",
+        "RSLMTO_C3_A3_AUDIT_FILE": "/private/tmp/c4-a42-offline/native_imp_final/full_capture.dat"
+      },
+      "files": [
+        {
+          "bytes": 10589,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/Fe-bulk.nml",
+          "sha256": "5803721506fc5d5acd2d8fa15628cb2b2a816f8ce883c2258e6226ce1564daf3"
+        },
+        {
+          "bytes": 10588,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/Fe-imp.nml",
+          "sha256": "72b23e80a7e95ffacc292f2a09ac5ac4729cebb2f529d8a88600f41f918056f0"
+        },
+        {
+          "bytes": 163150,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/Fe-imp_1_spinene.out",
+          "sha256": "4f4e7a56ce46b937bfc556948f2e99b3a7d6d98af60240ad6fae74881dd83c51"
+        },
+        {
+          "bytes": 163198,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/Fe-imp_dos.out",
+          "sha256": "763d42bad0444aa373a9385f9c0093969fe49b5724002a8ad80cd6dfc6d67f6c"
+        },
+        {
+          "bytes": 163150,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/Fe-imp_orbene.out",
+          "sha256": "6e4eaa050bb2f38867f195f6383bf54d975fa9d7e2d3b3f87dcf76388ec65211"
+        },
+        {
+          "bytes": 765550,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/Fe-imp_orbital_dos.out",
+          "sha256": "d5fab83e8896fea56ffc3cfde4f2dcb7c8d1559d4d98b4679946df8efe93ff60"
+        },
+        {
+          "bytes": 423811,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/clust",
+          "sha256": "f4256b62820df1400a6604cef8b84a0f1d3987ec5a815358b192c5ecabbb11ec"
+        },
+        {
+          "bytes": 8512,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/console.log",
+          "sha256": "c51a3ef9217f1419a7d7746781107dee6904536543ca9b27aa0bae28f25d015f"
+        },
+        {
+          "bytes": 432245,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/exact_B.dat",
+          "sha256": "4343099c6c61725f1810c1f987dedf832d6d369955ea293b864320f047f7fd7b"
+        },
+        {
+          "bytes": 402829,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/fort.800",
+          "sha256": "91bf4a2359acaa9b47228d1869c3611328ae51f0237ee6ac3a4feb6d98d2de2c"
+        },
+        {
+          "bytes": 864390,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/fort.805",
+          "sha256": "07d7eef23c27cd92073cdbecab8ea98c786b29bb65647d6bf89c807eeebfea30"
+        },
+        {
+          "bytes": 1435857,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/full_capture.dat",
+          "sha256": "17729c9355a99a63178b5dbb367e9e593badafec3808bdebdd779103f3267e32"
+        },
+        {
+          "bytes": 799661,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/full_chain.dat",
+          "sha256": "aa28095caa8b9b2a962327ae2c045f7d832c934407acd0a3ce91d6269b449c36"
+        },
+        {
+          "bytes": 596,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/input.nml",
+          "sha256": "c125e82d54746392c07ca8f7a4b4bb5183edafc403dd2cae2d1a4f9272c4f312"
+        },
+        {
+          "bytes": 1019,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/launch_snapshot.json",
+          "sha256": "fe3660fadf2b084304c8549822de0946a5fc21bd761746db084bff9e2eaa70ff"
+        },
+        {
+          "bytes": 283683,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/magneticdos.out",
+          "sha256": "97a21f16703078975550da0f0acc98ad5b733ce57506d4c78cb48cbdbf728d76"
+        },
+        {
+          "bytes": 570656,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/map",
+          "sha256": "607a594892814daed68b0e2a8dfec15169038430291b977a40811584bcbff593"
+        },
+        {
+          "bytes": 347,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/outnewclu",
+          "sha256": "ab130ce8ef8daa4d8305a2aaa10f7c8676a1ffae99c5b862b5bd77f457a084f5"
+        },
+        {
+          "bytes": 9970,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/pout_ql.dat",
+          "sha256": "f8088cbcc2e52d1b30c864074b60ad4e7c834e971e1a0e0cba441b0ac6fa19c6"
+        },
+        {
+          "bytes": 10800,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/sbar",
+          "sha256": "3a128331218bb4fce172f6838818c39b052cbebb25271373067fe3bf31ec80b8"
+        },
+        {
+          "bytes": 8551,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/str.out",
+          "sha256": "2569340fa8297560688dc0edfd8f09be0f27f734533e07b5479386574cf9d04d"
+        },
+        {
+          "bytes": 82830,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/totaldos.out",
+          "sha256": "debff7ee1547a5eef2c32dc7816298fb001681a37eb5bbb86cfd535d923d46ca"
+        },
+        {
+          "bytes": 13350,
+          "path": "/private/tmp/c4-a42-offline/native_imp_final/view.sbar",
+          "sha256": "97e2c0e7e103ce89195cb929f0a92b21d42583c0ec9595b3984bcdaecfc36d49"
+        }
+      ],
+      "input_nml_sha256": "c125e82d54746392c07ca8f7a4b4bb5183edafc403dd2cae2d1a4f9272c4f312",
+      "route": "calctype=I; recur=block; no route override",
+      "stop_status": "STOP 0 after P_OUT/QL capture before potential update"
+    },
+    {
+      "binary_sha256": "a52edcd37a796de1cf88598e6cf01b5b94250fdf44d65fd800128955c4d7e4fe",
+      "case": "swap_bulk_from_imp_final",
+      "command": [
+        "/private/tmp/c4-a42-offline/build/bin/rslmto.x"
+      ],
+      "cwd": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final",
+      "environment": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_A42_POUT_FILE": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/pout_ql.dat",
+        "RSLMTO_A42_STOP_AFTER_DOS": "1",
+        "RSLMTO_A42_SWAP_FILE": "/private/tmp/c4-a42-offline/donor_imp_final_AB.dat",
+        "RSLMTO_A42_TERM_FILE": "/private/tmp/c4-a42-offline/donor_imp_final_TERM.dat",
+        "RSLMTO_C3_A3_AUDIT": "1",
+        "RSLMTO_C3_A3_AUDIT_FILE": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/trace.dat"
+      },
+      "files": [
+        {
+          "bytes": 10584,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/Fe.nml",
+          "sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        {
+          "bytes": 163150,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/Fe_1_spinene.out",
+          "sha256": "4f4e7a56ce46b937bfc556948f2e99b3a7d6d98af60240ad6fae74881dd83c51"
+        },
+        {
+          "bytes": 163198,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/Fe_dos.out",
+          "sha256": "763d42bad0444aa373a9385f9c0093969fe49b5724002a8ad80cd6dfc6d67f6c"
+        },
+        {
+          "bytes": 163150,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/Fe_orbene.out",
+          "sha256": "6e4eaa050bb2f38867f195f6383bf54d975fa9d7e2d3b3f87dcf76388ec65211"
+        },
+        {
+          "bytes": 765550,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/Fe_orbital_dos.out",
+          "sha256": "d5fab83e8896fea56ffc3cfde4f2dcb7c8d1559d4d98b4679946df8efe93ff60"
+        },
+        {
+          "bytes": 302207,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/clust",
+          "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+        },
+        {
+          "bytes": 5646,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/console.log",
+          "sha256": "bd620efdae60c9271be17d9d3b851d05317d9d6c1b7317a1bab8750342831751"
+        },
+        {
+          "bytes": 287245,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/fort.800",
+          "sha256": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6"
+        },
+        {
+          "bytes": 616366,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/fort.805",
+          "sha256": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246"
+        },
+        {
+          "bytes": 672,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/input.nml",
+          "sha256": "3aeb8b5e5570506095fd1508147c66b6167a1209454f55ed5edbc86ed83ffc4b"
+        },
+        {
+          "bytes": 1022,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/launch_snapshot.json",
+          "sha256": "98360ec7c4a64279803d8828a1d96d63c1958769dcf5801c44613195298003a0"
+        },
+        {
+          "bytes": 16,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/mad.mat",
+          "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+        },
+        {
+          "bytes": 283683,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/magneticdos.out",
+          "sha256": "97a21f16703078975550da0f0acc98ad5b733ce57506d4c78cb48cbdbf728d76"
+        },
+        {
+          "bytes": 406912,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/map",
+          "sha256": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5"
+        },
+        {
+          "bytes": 9970,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/pout_ql.dat",
+          "sha256": "f8088cbcc2e52d1b30c864074b60ad4e7c834e971e1a0e0cba441b0ac6fa19c6"
+        },
+        {
+          "bytes": 10800,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/sbar",
+          "sha256": "87d0395c7537bd90c253eff48b8ced94e6bb49644ecdd251d4c0e986ab6aad87"
+        },
+        {
+          "bytes": 6934,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/str.out",
+          "sha256": "fda4513e4a8033f3980d20d83e09d79b12fd9e0b732ea82d8c7d86d55148ff88"
+        },
+        {
+          "bytes": 82830,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/totaldos.out",
+          "sha256": "debff7ee1547a5eef2c32dc7816298fb001681a37eb5bbb86cfd535d923d46ca"
+        },
+        {
+          "bytes": 1435857,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/trace.dat",
+          "sha256": "2495ebb50b5d681b4d9799a02945fdaca2aadd6e5cf61f927054f854e1798e1c"
+        },
+        {
+          "bytes": 738,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/ves.out",
+          "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+        },
+        {
+          "bytes": 13350,
+          "path": "/private/tmp/c4-a42-offline/swap_bulk_from_imp_final/view.sbar",
+          "sha256": "a7e2558f9fd5cb643e2cba271be818ea051b56a5119fb0edf2367692ec08bc19"
+        }
+      ],
+      "input_nml_sha256": "3aeb8b5e5570506095fd1508147c66b6167a1209454f55ed5edbc86ed83ffc4b",
+      "route": "calctype=B; recur=block; no route override",
+      "stop_status": "STOP 0 after P_OUT/QL capture before potential update"
+    },
+    {
+      "binary_sha256": "a52edcd37a796de1cf88598e6cf01b5b94250fdf44d65fd800128955c4d7e4fe",
+      "case": "swap_imp_from_bulk_final",
+      "command": [
+        "/private/tmp/c4-a42-offline/build/bin/rslmto.x"
+      ],
+      "cwd": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final",
+      "environment": {
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_A42_POUT_FILE": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/pout_ql.dat",
+        "RSLMTO_A42_STOP_AFTER_DOS": "1",
+        "RSLMTO_A42_SWAP_FILE": "/private/tmp/c4-a42-offline/donor_bulk_final_AB.dat",
+        "RSLMTO_A42_TERM_FILE": "/private/tmp/c4-a42-offline/donor_bulk_final_TERM.dat",
+        "RSLMTO_C3_A3_AUDIT": "1",
+        "RSLMTO_C3_A3_AUDIT_FILE": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/trace.dat"
+      },
+      "files": [
+        {
+          "bytes": 10589,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/Fe-bulk.nml",
+          "sha256": "5803721506fc5d5acd2d8fa15628cb2b2a816f8ce883c2258e6226ce1564daf3"
+        },
+        {
+          "bytes": 10588,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/Fe-imp.nml",
+          "sha256": "72b23e80a7e95ffacc292f2a09ac5ac4729cebb2f529d8a88600f41f918056f0"
+        },
+        {
+          "bytes": 163150,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/Fe-imp_1_spinene.out",
+          "sha256": "4ee0ed008fc07147a985618a70caaa5140895d92fc1a59a008cfa925378c8b8b"
+        },
+        {
+          "bytes": 163198,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/Fe-imp_dos.out",
+          "sha256": "17313990dc42116c7ffbfda5e40b47b64fe99c92bb8f1c21d250c561d3944221"
+        },
+        {
+          "bytes": 163150,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/Fe-imp_orbene.out",
+          "sha256": "899c40d57d1f14e238085f8cd5db5167c151be1cdbf74efb1eb576f61a238862"
+        },
+        {
+          "bytes": 765550,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/Fe-imp_orbital_dos.out",
+          "sha256": "bf31b861c6b16ffaa8d1542f500134efe85a7823f14237e004b228a8b599bb0c"
+        },
+        {
+          "bytes": 423811,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/clust",
+          "sha256": "f4256b62820df1400a6604cef8b84a0f1d3987ec5a815358b192c5ecabbb11ec"
+        },
+        {
+          "bytes": 8924,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/console.log",
+          "sha256": "3f7a2c87ec8371a1d84f7e8614c5a588758f1606bd5acaefbb26a1a2cd8d39a0"
+        },
+        {
+          "bytes": 402829,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/fort.800",
+          "sha256": "91bf4a2359acaa9b47228d1869c3611328ae51f0237ee6ac3a4feb6d98d2de2c"
+        },
+        {
+          "bytes": 864390,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/fort.805",
+          "sha256": "07d7eef23c27cd92073cdbecab8ea98c786b29bb65647d6bf89c807eeebfea30"
+        },
+        {
+          "bytes": 596,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/input.nml",
+          "sha256": "c125e82d54746392c07ca8f7a4b4bb5183edafc403dd2cae2d1a4f9272c4f312"
+        },
+        {
+          "bytes": 1024,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/launch_snapshot.json",
+          "sha256": "a43611ad9a480e05fe63f4bde6e13527be69b0aa66d66862006e03543838516d"
+        },
+        {
+          "bytes": 283683,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/magneticdos.out",
+          "sha256": "f0b7723168cf64d472e4c882494a4415fba9138edb7e30024c9c426a3ca1d44a"
+        },
+        {
+          "bytes": 570656,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/map",
+          "sha256": "607a594892814daed68b0e2a8dfec15169038430291b977a40811584bcbff593"
+        },
+        {
+          "bytes": 347,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/outnewclu",
+          "sha256": "ab130ce8ef8daa4d8305a2aaa10f7c8676a1ffae99c5b862b5bd77f457a084f5"
+        },
+        {
+          "bytes": 9970,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/pout_ql.dat",
+          "sha256": "97976dcb9c5a6bf7d67d82988b36eed750d518fde26f54d92df4eb90cd266291"
+        },
+        {
+          "bytes": 10800,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/sbar",
+          "sha256": "3a128331218bb4fce172f6838818c39b052cbebb25271373067fe3bf31ec80b8"
+        },
+        {
+          "bytes": 8551,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/str.out",
+          "sha256": "2569340fa8297560688dc0edfd8f09be0f27f734533e07b5479386574cf9d04d"
+        },
+        {
+          "bytes": 82830,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/totaldos.out",
+          "sha256": "4d24df64cc93fc12e62d81c27f5041ebe677bae32d0bda08811f5d6cf0d47e96"
+        },
+        {
+          "bytes": 1435857,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/trace.dat",
+          "sha256": "f5c291a5cb61c94cb181a9f6b1570dad4cd4241e7c324a0d4c8e7fc408c30866"
+        },
+        {
+          "bytes": 13350,
+          "path": "/private/tmp/c4-a42-offline/swap_imp_from_bulk_final/view.sbar",
+          "sha256": "97e2c0e7e103ce89195cb929f0a92b21d42583c0ec9595b3984bcdaecfc36d49"
+        }
+      ],
+      "input_nml_sha256": "c125e82d54746392c07ca8f7a4b4bb5183edafc403dd2cae2d1a4f9272c4f312",
+      "route": "calctype=I; recur=block; no route override",
+      "stop_status": "STOP 0 after P_OUT/QL capture before potential update"
+    }
+  ],
+  "coefficient_differences": {
+    "first_A_difference": "k=0, site=1, i=1,j=2; bulk 4.0864849768655054e-17 - 6.612909303689471e-17i; imp 9.543686314581203e-17 - 1.156231472039846e-16i",
+    "first_B2_difference": "k=1, site=1,i=j=1; bulk 0.2383003979921341; imp 0.2383004128932953",
+    "first_exact_B_difference": "k=1,site=1,i=j=1; bulk 0.4881602175435174; imp 0.48816023280608895",
+    "max_abs_A_difference": 2.7790665784275084e-06,
+    "max_abs_B2_difference": 1.7285346984863332e-06,
+    "max_abs_exact_B_difference": 2.1314947754036417e-06
+  },
+  "coefficient_scope": {
+    "all_complex_entries": 6804,
+    "donor_readback_max_error": 0,
+    "levels": "k=0..20, 21 consumed levels; no 22nd production slot",
+    "shape": [
+      18,
+      18,
+      21,
+      1
+    ],
+    "terminator_matrix_rows": 324,
+    "terminator_shape": [
+      18,
+      18,
+      1
+    ]
+  },
+  "evidence_root": "/private/tmp/c4-a42-offline",
+  "frozen_inputs": [
+    {
+      "path": "/private/tmp/rslmto-c3-partA-runs-v4/pa_uplus_bulk_rc80_lld21_prefixfix/input.nml",
+      "sha256": "3aeb8b5e5570506095fd1508147c66b6167a1209454f55ed5edbc86ed83ffc4b"
+    },
+    {
+      "path": "/private/tmp/rslmto-c3-partA-runs-v4/pa_uplus_imp_rc100_lld21_prefixfix/input.nml",
+      "sha256": "c125e82d54746392c07ca8f7a4b4bb5183edafc403dd2cae2d1a4f9272c4f312"
+    }
+  ],
+  "objective": "Offline A4.2 coefficient+terminator cross-use; no SCF/potential update",
+  "precision_reconciliation": "Earlier ~1e-16 d-only values came from historical C3 diagnostic coefficient capture, not the production FP32 recurrence. Final full PROD_COEFF/replay uses production cheb_backend=fast FP32 branch, matching frozen d-block entries exactly; independent contexts differ at ~1e-6 in full production coefficients.",
+  "result_comparison": {
+    "bulk_native_dos": {
+      "path": "/private/tmp/c4-a42-offline/native_bulk_final/Fe_orbital_dos.out",
+      "sha256": "bf31b861c6b16ffaa8d1542f500134efe85a7823f14237e004b228a8b599bb0c"
+    },
+    "bulk_native_pout_ql": {
+      "path": "/private/tmp/c4-a42-offline/native_bulk_final/pout_ql.dat",
+      "sha256": "97976dcb9c5a6bf7d67d82988b36eed750d518fde26f54d92df4eb90cd266291"
+    },
+    "imp_native_dos": {
+      "path": "/private/tmp/c4-a42-offline/native_imp_final/Fe-imp_orbital_dos.out",
+      "sha256": "d5fab83e8896fea56ffc3cfde4f2dcb7c8d1559d4d98b4679946df8efe93ff60"
+    },
+    "imp_native_pout_ql": {
+      "path": "/private/tmp/c4-a42-offline/native_imp_final/pout_ql.dat",
+      "sha256": "f8088cbcc2e52d1b30c864074b60ad4e7c834e971e1a0e0cba441b0ac6fa19c6"
+    },
+    "serialized_dos_max_abs_difference": 0,
+    "serialized_pout_ql_max_abs_difference": 0,
+    "swap_bulk_from_imp_dos_sha256": "d5fab83e8896fea56ffc3cfde4f2dcb7c8d1559d4d98b4679946df8efe93ff60",
+    "swap_bulk_from_imp_pout_ql_sha256": "f8088cbcc2e52d1b30c864074b60ad4e7c834e971e1a0e0cba441b0ac6fa19c6",
+    "swap_imp_from_bulk_dos_sha256": "bf31b861c6b16ffaa8d1542f500134efe85a7823f14237e004b228a8b599bb0c",
+    "swap_imp_from_bulk_pout_ql_sha256": "97976dcb9c5a6bf7d67d82988b36eed750d518fde26f54d92df4eb90cd266291"
+  },
+  "shared_artifacts": [
+    {
+      "bytes": 771705,
+      "path": "/private/tmp/c4-a42-offline/donor_bulk_final_AB.dat",
+      "sha256": "45c417660b776ea5aa9570369fa4dc190005322e2bec9c8a0ea5de0830ce2568"
+    },
+    {
+      "bytes": 74520,
+      "path": "/private/tmp/c4-a42-offline/donor_bulk_final_TERM.dat",
+      "sha256": "85717017116cc767e76b96d8ef2c827cd527868b77b4e19d1a8f8c219aeb7079"
+    },
+    {
+      "bytes": 771760,
+      "path": "/private/tmp/c4-a42-offline/donor_imp_final_AB.dat",
+      "sha256": "037e4dc90fcea6a7e9d152f7d15adb0cbdfcfef57e406f2fdba4483d97fedd18"
+    },
+    {
+      "bytes": 74520,
+      "path": "/private/tmp/c4-a42-offline/donor_imp_final_TERM.dat",
+      "sha256": "1985ca2b3f771220eea2988dd1a71929c4f20687a6282731db62104f19b7af8b"
+    },
+    {
+      "bytes": 7693272,
+      "path": "/private/tmp/c4-a42-offline/build/bin/rslmto.x",
+      "sha256": "a52edcd37a796de1cf88598e6cf01b5b94250fdf44d65fd800128955c4d7e4fe"
+    },
+    {
+      "bytes": 81534,
+      "path": "/private/tmp/c4-a42-offline/source/source/recursion_haydock.f90",
+      "sha256": "14185b69678bf44b5b14e490e31cb6edc573fd51ff266530bd77c1ecd46ff506"
+    },
+    {
+      "bytes": 371704,
+      "path": "/private/tmp/c4-a42-offline/source/source/self.f90",
+      "sha256": "b2dcf52acf0494ff2986869a99e2400118c97d48511f2d71197db1e3170b1225"
+    },
+    {
+      "bytes": 15825,
+      "path": "/private/tmp/c4-a42-offline/source/source/density_of_states.f90",
+      "sha256": "f4e24b28f6d88db61ed8788cac87ded9814f05aa181048773e315ef37193cc0f"
+    }
+  ]
+}
