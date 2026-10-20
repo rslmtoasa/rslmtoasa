@@ -1190,6 +1190,13 @@ add_test(NAME AppGbtKspaceHamOrderInvalid
 set_tests_properties(AppGbtKspaceGauge AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceHamOrderInvalid
   PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
 
+add_test(NAME AppConstraintsNamelistMom
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/constraints/test_constraints_namelist.py" mom "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/constraints/mom")
+add_test(NAME AppConstraintsNamelistMalformed
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/constraints/test_constraints_namelist.py" malformed "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/constraints/malformed")
+set_tests_properties(AppConstraintsNamelistMom AppConstraintsNamelistMalformed
+  PROPERTIES LABELS "functional;quick;constraints" TIMEOUT 120)
+
 add_test(NAME ValGbtHarmonic
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/validation/val_gbt_harmonic.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/validation/gbt_harmonic")
 add_test(NAME ValGbtConvergence
