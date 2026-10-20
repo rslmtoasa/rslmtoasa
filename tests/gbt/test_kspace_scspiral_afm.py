@@ -5,6 +5,8 @@ site 1 and (0,0,-1) on site 2 (the frame carries the orientation, see reciprocal
   identity  I2 (Sandratskii 1998): theta = 0, q = 0, without and with constraints: |dE|, |dE_F| < scf_identity_ry against the collinear AFM SCF;
             the site moments are reported. Bug: the up/down projection axis taken from potential%mom (-z on site 2) swaps the spin channels of site 2: the moments
             collapse from 0.887 to 3e-4 muB, dE = 7.6e-4 Ry; or potential%mom rewritten to +z by the constraint update, so site 2 loses its frame.
+  identity_second  the same at kspace_ham_order = 'second' (hoh): also checks the obarm/enim swap of the antiparallel site. Bug: a swap keyed to
+            the wrong orientation (the second-order blocks of site 2 taken for the wrong spin).
   rotation  S4 for two sites (q = 0, theta = 30 deg is a global rotation), constrained: E(0) and E(30 deg) both equal the collinear AFM energy
             within scf_identity_ry. Bug: site 2 not antiparallel to site 1 at theta > 0 or at theta = 0 (the moments collapse and the energy rises).
   restart   the potential written by the constrained run keeps mom = (0,0,-1) on site 2 and, read again, reproduces the energy within
@@ -23,7 +25,7 @@ from gbt_app_common import SR, tolerance
 NK = 12
 
 
-def deck(dst, src, gbt, theta=0.0, constrained=True, nstep=80):
+def deck(dst, src, gbt, theta=0.0, constrained=True, nstep=80, order="first"):
     dst = Path(dst)
     shutil.rmtree(dst, ignore_errors=True)
     shutil.copytree(src, dst)
@@ -31,13 +33,14 @@ def deck(dst, src, gbt, theta=0.0, constrained=True, nstep=80):
     del nml["calculation"]["post_processing"]
     nml["calculation"]["pre_processing"] = "bravais"          # runs the SCF of the deck (crystal_sym = 'file')
     nml["self"]["nstep"] = nstep
-    nml["reciprocal"].update(nk1=NK, nk2=NK, nk3=NK, kspace_ham_order="first")
+    nml["reciprocal"].update(nk1=NK, nk2=NK, nk3=NK, kspace_ham_order=order)
+    nml["hamiltonian"] = {"hoh": order == "second"}
     if gbt:
         text = (dst / "Cr2.nml").read_text()      # channel 1 = majority spin, as the local frame of every GBT site needs
         (dst / "Cr1.nml").write_text(text.replace("symbol = 'Cr2'", "symbol = 'Cr1'"))
         (dst / "Cr2.nml").write_text(re.sub(r"^ mom = .*$", " mom = 0.0, 0.0, -1.0", text, flags=re.M))
         nml["control"]["nsp"] = 3
-        nml["hamiltonian"] = {"hoh": False, "magnetic_representation": "gbt_single_q", "q_ss": [0.0, 0.0, 0.0], "theta_ss": theta}
+        nml["hamiltonian"].update(magnetic_representation="gbt_single_q", q_ss=[0.0, 0.0, 0.0], theta_ss=theta)
     nml.write(str(dst / "input.nml"), force=True)
     if gbt and constrained:
         with open(dst / "input.nml", "a") as f:
@@ -57,17 +60,21 @@ def scf(binary, d):
                 moments=[float(m) for _, m in re.findall(r"Spin moment of atom\s+(\d+) is\s+(\S+)", log)[-2:]])
 
 
-def mode_identity(binary, scratch, src):
+def mode_identity(binary, scratch, src, order="first"):
     tol = tolerance("scf_identity_ry")
-    ref = scf(binary, deck(scratch / "collinear", src, False))
+    ref = scf(binary, deck(scratch / "collinear", src, False, order=order))
     ok = ref["conv"]
     for tag, constrained in (("free", False), ("constrained", True)):
-        gbt = scf(binary, deck(scratch / tag, src, True, constrained=constrained))
+        gbt = scf(binary, deck(scratch / tag, src, True, constrained=constrained, order=order))
         dE, dEF = gbt["E"] - ref["E"], gbt["EF"] - ref["EF"]
-        print(f"{tag}: converged {gbt['conv']}; dE = {dE:.3e} Ry, dE_F = {dEF:.3e} Ry, tolerance {tol:.1e}; "
+        print(f"{order} order, {tag}: converged {gbt['conv']}; dE = {dE:.3e} Ry, dE_F = {dEF:.3e} Ry, tolerance {tol:.1e}; "
               f"site moments [muB]: collinear {ref['moments']}, GBT {gbt['moments']}")
         ok = ok and gbt["conv"] and abs(dE) < tol and abs(dEF) < tol
     return ok
+
+
+def mode_identity_second(binary, scratch, src):
+    return mode_identity(binary, scratch, src, order="second")
 
 
 def mode_rotation(binary, scratch, src):
