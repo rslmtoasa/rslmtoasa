@@ -23,7 +23,7 @@ program test_gbt_kspace_force_theorem
    real(rp), dimension(nq_max*nth_max) :: omega, n, eband_fixed_mu
    real(rp), dimension(nth_max) :: omega_ref, n_ref, eband_fixed_mu_ref
    real(rp) :: omega_q0(nq_max), j0_minus_jq(nq_max)
-   real(rp) :: eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel
+   real(rp) :: eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel, scf_identity_ry, scf_moment_mub
    namelist /o1_model/ t, delta, w_up, w_dn, c_majority, c_minority, s_rule, frame_rule, eigenvalue_order
    namelist /o2_settings/ nk_mesh, k_offset, kt_ry, mesh_rule, nq, ntheta, n_richardson, q_direct, q_cart, theta_deg, &
       richardson_rule, array_rule, lkag_rule, mutation_rule, set_rule
@@ -33,7 +33,7 @@ program test_gbt_kspace_force_theorem
       omega_q0, omega_00, j0_minus_jq
    namelist /o2_set3/ n_electrons, c_shift_ry, mu_ry, omega, n, eband_fixed_mu, omega_ref, n_ref, eband_fixed_mu_ref, &
       omega_q0, omega_00, j0_minus_jq
-   namelist /gbt_tolerances/ eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel
+   namelist /gbt_tolerances/ eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel, scf_identity_ry, scf_moment_mub
    real(rp) :: dev_omega, dev_n, dev_ft, om(nq_max, nth_max), nn(nq_max, nth_max), om_ref(nth_max), nn_ref(nth_max)
    integer :: u, iset
    logical :: failed

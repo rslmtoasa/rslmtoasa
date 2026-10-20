@@ -14,8 +14,8 @@ program test_gbt_kspace_horth
    real(rp), parameter :: pi = acos(-1.0_rp)
    character(len=:), allocatable :: txt
    character(len=512) :: dir
-   real(rp) :: eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel
-   namelist /gbt_tolerances/ eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel
+   real(rp) :: eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel, scf_identity_ry, scf_moment_mub
+   namelist /gbt_tolerances/ eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel, scf_identity_ry, scf_moment_mub
    integer, parameter :: ones(nb) = 1
    character(len=17), parameter :: names(3) = [character(len=17) :: 'cc', 'dele', 'gamma_minus_alpha']
    real(rp) :: nd(3, nb), par(norb, 2, 3), kk(3, 5), antiherm, dev(3), ev(2*norb), flat(norb*norb*nb), flat2(norb*2)
