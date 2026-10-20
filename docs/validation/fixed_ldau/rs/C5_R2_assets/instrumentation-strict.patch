@@ -1,0 +1,188 @@
+--- a/source/self.f90
++++ b/source/self.f90
+@@ -20,9 +20,10 @@
+ !------------------------------------------------------------------------------
+ 
+ module self_mod
++   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+ 
+    use mpi_mod
+-   use symbolic_atom_mod, only: symbolic_atom, save_state_scf
++   use symbolic_atom_mod, only: symbolic_atom, save_state_scf, write_symbolic_snapshot => print_state_formatted
+    use potential_mod, only: potential
+    use logger_mod, only: g_logger
+ #ifdef USE_SAFE_ALLOC
+@@ -4056,6 +4057,7 @@
+          !                        PERFORM THE RECURSION
+          !=========================================================================
+          call run_recursion(this, i)
++         call r2_diag_coefficients(this, i)
+          this%fixed_u_trace_iteration = i
+          this%fixed_u_m0_snapshot_valid = .false.
+          if (this%fixed_u_trace_selected_iteration == 0) call this%reset_fixed_u_trace()
+@@ -4117,6 +4119,7 @@
+                fixed_u_vin = (0.0_rp, 0.0_rp)
+             end if
+             call run_dos(this, fixed_u_m1, fixed_u_pl_diag)
++            call r2_diag_qmoments(this, i, 'Q_MOMENTS')
+             call this%write_fixed_u_trace('P_OUT', fixed_u_m1, fixed_u_pl_diag)
+             if (.not. this%fixed_u_trace_ql_only) &
+                call this%snapshot_fixed_u_m0_moments(fixed_u_m1, fixed_u_pl_diag, fixed_u_vin)
+@@ -4133,6 +4136,7 @@
+          if (rank == 0) call g_logger%info('Mixtype is '//trim(this%mix%mixtype), __FILE__, __LINE__)
+          call g_scf_benchmark_profile%start_stage('P_mixing')
+          call this%mix%mixpq(this%mix%qia_old, this%mix%qia_new) ! Mix qia_new with qia_old
++         call r2_diag_qmoments(this, i, 'MIXED_Q')
+          if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
+             call this%mix%save_ldm_to('new') ! Save freshly computed LDA+U density matrices.
+             call this%update_fixed_u_residuals()
+@@ -4176,6 +4180,12 @@
+          call g_scf_benchmark_profile%start_stage('P_scf_io')
+          if (rank == 0) call update_fermi_in_input(this%en%fermi, this%control%fname)
+          if (rank == 0) call save_state_scf(this%lattice%symbolic_atoms(:))
++         ! Diagnostic-only immutable restart snapshots.  The ordinary *_scf.nml
++         ! files are overwritten on the next outer iteration, so retain a
++         ! per-iteration copy while the just-completed potential is still live.
++         if (rank == 0 .and. this%fixed_u_trace_enabled) then
++            call write_symbolic_snapshot(this%lattice%symbolic_atoms(:), suffix='_r2_i'//int2str(i))
++         end if
+          call g_scf_benchmark_profile%stop_stage('P_scf_io')
+ 
+          this%physical_total_energy = sum(this%symbolic_atom(:)%potential%etot)
+@@ -5070,6 +5080,10 @@
+       if (rank == 0) call g_logger%info(atom%element%symbol, __FILE__, __LINE__)
+ 
+       call this%atomsc(atom, v, rofi, "RHO")
++      if (any(.not. ieee_is_finite(v)) .or. any(.not. ieee_is_finite(rofi)) .or. &
++          any(.not. ieee_is_finite(atom%rho0(RADIAL_XC_SPIN_CHANNELS)))) then
++         write(*,'(a,1x,a)') 'R2_FIRST_NONFINITE quantity=RADIAL_SOLVER atom=',trim(atom%element%symbol)
++      end if
+ 
+       this%VZT(1, 1) = this%VZT(2, 1)
+       this%VZT(1, 2) = this%VZT(2, 2)
+@@ -7390,4 +7404,63 @@
+       ! 10003 format (/″  L″, 7x, ″ENU″, 9x, ″V″, 11x, ″C″, 10x, ″SRDEL″, 8x, ″1/Q″, 9x, ″1/SRP″)
+    end subroutine POTPAR
+ 
++
++   subroutine r2_diag_coefficients(this, iter)
++      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
++      class(self), intent(in) :: this
++      integer, intent(in) :: iter
++      integer :: i,j,k,l
++      real(rp) :: v
++      if (.not. allocated(this%recursion%a_b) .or. .not. allocated(this%recursion%b2_b)) return
++      do l=1,size(this%recursion%a_b,4); do k=1,size(this%recursion%a_b,3); do j=1,size(this%recursion%a_b,2); do i=1,size(this%recursion%a_b,1)
++         if (.not. ieee_is_finite(real(this%recursion%a_b(i,j,k,l),rp)) .or. .not. ieee_is_finite(aimag(this%recursion%a_b(i,j,k,l)))) then
++            write(*,'(a,i0,a,4(i0,1x))') 'R2_FIRST_NONFINITE iter=',iter,' quantity=A index=',i,j,k,l
++            return
++         end if
++      end do; end do; end do; end do
++      do l=1,size(this%recursion%b2_b,4); do k=1,size(this%recursion%b2_b,3); do j=1,size(this%recursion%b2_b,2); do i=1,size(this%recursion%b2_b,1)
++         if (.not. ieee_is_finite(real(this%recursion%b2_b(i,j,k,l),rp)) .or. .not. ieee_is_finite(aimag(this%recursion%b2_b(i,j,k,l)))) then
++            write(*,'(a,i0,a,4(i0,1x))') 'R2_FIRST_NONFINITE iter=',iter,' quantity=B2 index=',i,j,k,l
++            return
++         end if
++      end do; end do; end do; end do
++      do l=1,min(size(this%recursion%b2_b,4),this%lattice%nrec); do k=1,size(this%recursion%b2_b,3); do i=1,min(size(this%recursion%b2_b,1),size(this%recursion%b2_b,2))
++         v=real(this%recursion%b2_b(i,i,k,l),rp)
++         if (v < 0.0_rp) then
++            write(*,'(a,i0,a,3(i0,1x),es24.16)') 'R2_OUT_OF_RANGE iter=',iter,' quantity=B2_diag index=',i,k,l,v
++            return
++         end if
++      end do; end do; end do
++      write(*,'(a,i0,a)') 'R2_FINITE iter=',iter,' quantity=A,B2'
++   end subroutine r2_diag_coefficients
++
++   subroutine r2_diag_qmoments(this, iter, stage)
++      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
++      class(self), intent(in) :: this
++      integer, intent(in) :: iter
++      character(len=*), intent(in) :: stage
++      integer :: i,j
++      if (trim(stage) == 'MIXED_Q') then
++         if (.not. allocated(this%mix%qia)) return
++         do j=1,size(this%mix%qia,2); do i=1,size(this%mix%qia,1)
++            if (.not. ieee_is_finite(this%mix%qia(i,j))) then
++               write(*,'(a,i0,2a,2(i0,1x))') 'R2_FIRST_NONFINITE iter=',iter,' quantity=',trim(stage),' index=',i,j
++               return
++            end if
++         end do; end do
++         write(*,'(a,i0,2a,es24.16,1x,es24.16)') 'R2_FINITE iter=',iter,' quantity=',trim(stage), &
++            minval(this%mix%qia),maxval(this%mix%qia)
++      else
++         if (.not. allocated(this%mix%qia_new)) return
++         do j=1,size(this%mix%qia_new,2); do i=1,size(this%mix%qia_new,1)
++            if (.not. ieee_is_finite(this%mix%qia_new(i,j))) then
++               write(*,'(a,i0,2a,2(i0,1x))') 'R2_FIRST_NONFINITE iter=',iter,' quantity=',trim(stage),' index=',i,j
++               return
++            end if
++         end do; end do
++         write(*,'(a,i0,2a,es24.16,1x,es24.16)') 'R2_FINITE iter=',iter,' quantity=',trim(stage), &
++            minval(this%mix%qia_new),maxval(this%mix%qia_new)
++      end if
++   end subroutine r2_diag_qmoments
++
+ end module self_mod
+--- a/source/recursion_haydock.f90
++++ b/source/recursion_haydock.f90
+@@ -1,5 +1,5 @@
+ submodule(recursion_mod) recursion_haydock
+-
++   
+ contains
+ 
+    !> @brief Apply one block-Lanczos Hamiltonian hop with HOH correction.
+@@ -671,6 +671,7 @@
+    !> @param[out] a_inf0 Site-averaged diagonal alpha terminator.
+    !> @param[out] b_inf0 Site-averaged diagonal beta terminator.
+    module subroutine get_terminf(this, Acoef_b, B2coef_b, na, ll, ldim, nw, a_inf, b_inf, a_inf0, b_inf0)
++      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+       implicit none
+       class(recursion), intent(inout) :: this
+       integer, intent(in) :: na
+@@ -716,6 +717,18 @@
+          call this%get_cinf(Acoef_r, B2coef_r, ll_t, ldim*ldim, nw, a_inf(:, :, n), b_inf(:, :, n))
+          do j = 1, ldim
+             do i = 1, ldim
++               if (.not. ieee_is_finite(a_inf(i,j,n))) then
++                  write(*,'(a,3(i0,1x))') 'R2_FIRST_NONFINITE quantity=TERMINATOR_A index=',i,j,n
++                  exit
++               end if
++               if (.not. ieee_is_finite(b_inf(i,j,n))) then
++                  write(*,'(a,3(i0,1x))') 'R2_FIRST_NONFINITE quantity=TERMINATOR_B index=',i,j,n
++                  exit
++               end if
++            end do
++         end do
++         do j = 1, ldim
++            do i = 1, ldim
+                if (IsNaN(a_inf(i, j, n))) a_inf(i, j, n) = 0.0d0
+                if (IsNaN(b_inf(i, j, n))) b_inf(i, j, n) = 0.0d0
+             end do
+@@ -1402,3 +1415,4 @@
+    end subroutine emami
+ 
+ end submodule recursion_haydock
++   --- a/source/bands.f90
++++ b/source/bands.f90
+@@ -21,6 +21,7 @@
+ !------------------------------------------------------------------------------
+ 
+ module bands_mod
++   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use mpi_mod
+    use control_mod
+    use energy_mod
+@@ -2183,6 +2184,11 @@
+                      (rq*(this%symbolic_atom(plusbulk)%potential%c(i - 1, is) - this%symbolic_atom(plusbulk)%potential%gravity_center(i, is))/2./(2*(i - 1) + 1.)/ &
+                       (this%symbolic_atom(plusbulk)%potential%c(i - 1, is) - this%symbolic_atom(plusbulk)%potential%gravity_center(i, is) - delta2*rq) - 1.)
+                pli = -atan(dnu)/pi + 0.5d0 + INT(this%symbolic_atom(plusbulk)%potential%pl(i - 1, is))
++               if (.not. ieee_is_finite(rq) .or. .not. ieee_is_finite(delta2) .or. &
++                   .not. ieee_is_finite(dnu) .or. .not. ieee_is_finite(pli)) then
++                  write(*,'(a,4(i0,1x),4(es24.16,1x))') 'R2_FIRST_NONFINITE quantity=CALCULATE_PL_INPUT_OUTPUT index=', &
++                     ia,i,is,0,rq,delta2,dnu,pli
++               end if
+                if (present(diag_out)) then
+                   old_pl = this%symbolic_atom(plusbulk)%potential%pl(i - 1, is)
+                   diag_out(ia, i, is, 1) = this%symbolic_atom(plusbulk)%potential%gravity_center(i, is)

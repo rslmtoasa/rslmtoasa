@@ -1,11 +1,11 @@
 {
   "schema": "c5-part-ii-provenance-v1",
   "part": "II",
-  "scope": "R1 only; R2 and RD stopped by the no-U identity stop criterion.",
+  "scope": "R1 plus one R2 Fe rc=100 diagnostic capture; remaining R2 controls and Part III were stopped by the no-U RS identity failure.",
   "branch": "fix/ldau-rs-impurity",
   "parent_commit": "17732a7",
   "baseline_commit": "908074f64b4d3143d2d91c0124fc79d126b8dbea",
-  "auditor": "R1 setup audit PASS; matched Release no-U audit confirms RS byte-identity GATE FAIL and KS byte-identity GATE PASS.",
+  "auditor": "R1 setup PASS; matched Release no-U audit confirms RS byte-identity GATE FAIL and KS GATE PASS. R2 raw audit confirms first occupancy overshoot at iteration 90, latest wholly finite snapshot 101, first snapshot NaN at 102, and first observed radial RSEQ NaN at run.log line 5149; no root cause established.",
   "findings": {
     "R1_setup_gate": {
       "verdict": "PASS",
@@ -40,7 +40,7 @@
       "input_resolved_sha256": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01",
       "seed_Fe_nml_sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
       "different_scientific_files": [],
-      "str_out_difference": "only STRUX cpu_s timing; testrun.log timestamps/source-line diagnostics excluded by existing C1 comparison convention."
+      "str_out_difference": "Normalized STRUX output is equal after removing cpu_s and the TIMER REPORT timing block; testrun.log contains timing/source-line diagnostics and is excluded by the existing C1 comparison convention."
     },
     "u0_co_impurity_record": {
       "verdict": "NOT_RUN_INVALID_RESTART",
@@ -50,7 +50,7 @@
   },
   "stop": {
     "criterion": "C5 §2.5(a), no-U byte identity on standard RS bulk and KS fixtures",
-    "action": "STOP after RS identity failure; no additional campaign, RD implementation, or merge."
+    "action": "STOP after RS no-U identity failure; R2 bounded diagnostic capture completed before the stop was acted on. No further campaigns, RD implementation, or merge."
   },
   "run_budget": {
     "cap": 12,
@@ -133,9 +133,11 @@
       {
         "id": 11,
         "label": "R2 diagnostic capture owned by parallel worker",
-        "entered_scf": false,
+        "entered_scf": true,
         "counted": true,
-        "result": "reported by root; do not duplicate"
+        "result": "R2 Fe diagnostic capture completed 102 SCF iterations at cap; i101 last wholly finite snapshot, i102 first snapshot with radial derived-field NaNs; unaccepted.",
+        "solver_pid": 5989,
+        "exit": 0
       }
     ],
     "not_counted": "Debug regression CTest uses nstep=0 and runs cluster setup only; malformed missing-env wrapper invocation launched no solver."
@@ -347,13 +349,13 @@
         "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
       }
     },
-    "metadata_rule": "testrun.log excluded; str.out retained and parsed. Only cpu_s differs in each str.out."
+    "metadata_rule": "testrun.log excluded; str.out retained and parsed. Normalization removes cpu_s and the TIMER REPORT timing block; normalized str.out is equal."
   },
   "files_sha256": {
     "source/lattice_cluster.f90": "203fb901b685f428a0d811766c0af6dcc4abc024aa5cde8689b8f7e9765a6bcb",
     "CMakeLists.txt": "d77b30264b3ecd92f16d8cf4f0ed4c2b1739ee67d70dd27b4e9f8248c02d28eb",
     "tests/validation/fixed_ldau/c5_hcp_co_cluster_setup.py": "311f83ba4a2542130568e0c3639ba4659f3f743eb19174b51e5b248f97937fb9",
-    "tests/KNOWN_ISSUES.md": "219f0afbab3bbd1b3685d48b28af6c75ad672f50f57b725de07a5ab8b78b1229",
+    "tests/KNOWN_ISSUES.md": "86dcf8e17c5a0aca26123ed9a892a8a5ff4eb84d9dce8c30fb28dc84ae93c7f6",
     "frozen_production_binary": "710f91b3b3478cb8e4c89961edb6eca02e1fc72244a0c8061154604761898794",
     "clean8b_release_binary": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc",
     "debug_binary": "56904beb55878d0de3ebf6768afa047652e5017b578a8907cea25f5878d25b61",
@@ -368,21 +370,119 @@
     "matched_no_u_output_hashes": "54e5d5350c130ff9765a56338a9ceeb4cd384ca24e23b7d3827b557e21d708df",
     "part_i_amendment": "7e26a428c115cd49b67ab38942cfdd14b41f6fa590d5fd4d86c0b90e8abcbc2a",
     "part_i_results": "399df6de1380fadb6ae04fff34bbab44381b9713200eb11dd9d88190815d3f4f",
-    "part_ii_results": "336115e4de9ff6bf5d4347519f633efd06f9447462ae358bc7f83314c7a73cef",
+    "part_ii_results": "95a9ce3a7437432e842f68accacfa5439eb7d163c59836d5ee74078be0793261",
     "part_i_known_issues_diff": "cfe5821c5e0fa819895b5bfffbb4ee3b066fa33dff14ef53c42426aa2744e423",
-    "known_issues_after_r1": "0adb3900f490f72fb15fb08d405e8dab1443df9ec7e78129308dad526e67b5ce"
+    "known_issues_after_r1": "0adb3900f490f72fb15fb08d405e8dab1443df9ec7e78129308dad526e67b5ce",
+    "C5_AUDIT.json": "0e7f4c078d2fca8374f29d8a63bed15889ed21442ce8142c3921e6a5409751a2",
+    "C5_PART_II_RESULTS.md": "95a9ce3a7437432e842f68accacfa5439eb7d163c59836d5ee74078be0793261",
+    "C5_R2_bundle": "562192218c0ea716fb3a5ed96609470e2960a7bd6e3d151b2f2c808e6b7fb5f2",
+    "C5_R2_instrumentation_patch": "17c5e14ca582ea2e34655a0c77204991e5bfe78dc45b8eb26a73acf61a6565c5",
+    "C5_R2_instrumentation_strict_patch": "db6909a279e8120eb13ef07ea16ab93c6f802a55c04c4ae7947c80e8e2e9d082"
   },
   "raw_paths": {
     "no_u_runs": "/private/tmp/c5-no-u-release",
     "initial_invalid_comparability": "/private/tmp/c5-no-u-identity",
     "invalid_u0": "/private/tmp/c5-r1-u0-control",
     "debug_repro": "/private/tmp/c5-r1-repro-exact",
-    "regression": "/private/tmp/c5-r1-debug-build/Testing/validation/c5_hcp_co_cluster_setup"
+    "regression": "/private/tmp/c5-r1-debug-build/Testing/validation/c5_hcp_co_cluster_setup",
+    "r2_fe_capture": "/private/tmp/rslmto-c5-r2-runs/fe_rc100_debug_capture",
+    "r2_fe_bundle": "docs/validation/fixed_ldau/rs/C5_R2_assets/raw/fe_rc100_debug_capture.tar.gz"
   },
   "auditor_verdicts": {
     "R1_setup": "PASS",
     "R1_no_u_RS": "FAIL",
     "R1_no_u_KS": "PASS",
-    "stop": "STOP per C5 §2.5(a)"
+    "stop": "STOP per C5 §2.5(a)",
+    "R2_capture": "Auditor confirmed raw localization and instrumentation limits; no root cause or numerical fix established."
+  },
+  "r2_capture": {
+    "verdict": "UNACCEPTED_PARTIAL; diagnostic localization only; not an RS-accepted endpoint",
+    "run_count": 1,
+    "preflight_path": "/private/tmp/rslmto-c5-r2-runs/fe_rc100_debug_capture/preflight.json",
+    "preflight_sha256": "cc7efd01ed08544e5b70452862aed7efbf1866eca3f5934b6568b14454d6ce27",
+    "audit_path": "docs/validation/fixed_ldau/rs/C5_AUDIT.json",
+    "audit_sha256": "0e7f4c078d2fca8374f29d8a63bed15889ed21442ce8142c3921e6a5409751a2",
+    "deck": "C4 Fe U=3.8 eV J=1.1 eV fixed-EF rc=100 bulk deck; RS (`use_kspace` absent/false); spectral; Broyden beta .015; nstep 102.",
+    "restart_sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702",
+    "run": {
+      "solver_pid": 5989,
+      "wrapper_pid": 5860,
+      "exit_code": 0,
+      "completed_iterations": 102,
+      "reached_cap": true,
+      "accepted": false,
+      "running_image_sha256": "8aed8e6c69e5546ddc09bc5e4d843392dfad41506b2a151fad712475bbe0e987",
+      "strict_b2_build_later_on_disk_sha256": "f412bc589a550587b645473bed986ef38eb517c8a566d3417da44fa0360d3e47",
+      "source_manifest_sha256": "4a8de35c7629ccc708edda220c05e3094fad1b8c35ec9b3c062fc36716812045",
+      "debug_flags": "-g -O0 -fbacktrace -fcheck=bounds; OpenMP on; MPI/libXC off",
+      "command": "env OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RSLMTO_FIXED_U_TRACE=/private/tmp/rslmto-c5-r2-runs/fe_rc100_debug_capture/trace.csv RSLMTO_FIXED_U_TRACE_QL_ONLY=1 RSLMTO_FIXED_U_RUN_ID=C5_R2_Fe_rc100_debug_capture /private/tmp/rslmto-c5-r2-debug-build/bin/rslmto.x",
+      "natural_exit_process_verified_absent": true
+    },
+    "raw_findings": {
+      "first_d_spin_overshoot": {
+        "iteration": 90,
+        "l": 2,
+        "spin": 1,
+        "ql": 16.023218979776722,
+        "capacity": 5,
+        "log_recorded_after_step": 91,
+        "ndn_corresponding": 0.738851
+      },
+      "second_spin_overshoot": {
+        "iteration": 94,
+        "l": 2,
+        "spin": 2,
+        "ql": 5.167394717968493,
+        "capacity": 5
+      },
+      "last_in_range_snapshot": {
+        "iteration": 89,
+        "sha256": "5a8f322ff85849cc8e3632f2a8d796a5ca0848a9e7eefe5f8ad3c9f83cff2148",
+        "accepted": false
+      },
+      "last_wholly_finite_snapshot": {
+        "iteration": 101,
+        "sha256": "67417783391ef6fd6b9e496c06e9bb1e16b16836d682a45ff12f1dc1117ba957",
+        "accepted": false
+      },
+      "first_nan_snapshot": {
+        "iteration": 102,
+        "sha256": "f4024152835bde9292d9bf915a392e4da2c74e2f7ee73a0c4f16bdb0cd73b555",
+        "nan_token_count": 27
+      },
+      "first_observed_nan": "run.log line 5149, radial RSEQ diagnostics, l=2/channel0/E=-50 Ry; observed trajectory event, not proven arithmetic origin or root cause.",
+      "diagnostic_markers": {
+        "A_B2": 102,
+        "Q_MOMENTS": 102,
+        "MIXED_Q": 102,
+        "R2_FIRST_NONFINITE": 0,
+        "R2_OUT_OF_RANGE": 0
+      }
+    },
+    "coverage_limits": [
+      "Running executable B2 sign test used diagonal < -1e-12; small negative B2 is not excluded. The strict <0 executable was rebuilt only after this process started.",
+      "Terminator and calculate_pl finite checks exist in source but emitted no marker; trace was QL-only (612 QL rows, P_OUT).",
+      "Runtime radial check covered v/rofi/rho0 but missed derived fields center_band, width_band, shifted_band, obar, c, ppar, qpar, srdel, vl. The first observed radial NaN was in the RSEQ diagnostic.",
+      "These findings localize an observed failure; they do not identify its root cause."
+    ],
+    "decision": "No physics fix or safe-range rule established; issue 4 stays OPEN. The Fe U0/clean8b reruns and four one-control variants were not run after §2.5(a) STOP.",
+    "raw_bundle": {
+      "path": "docs/validation/fixed_ldau/rs/C5_R2_assets/raw/fe_rc100_debug_capture.tar.gz",
+      "sha256": "562192218c0ea716fb3a5ed96609470e2960a7bd6e3d151b2f2c808e6b7fb5f2"
+    }
+  },
+  "co_bulk_u0_r2": {
+    "verdict": "NOT_RUN_NO_COMPATIBLE_FINITE_RESTART",
+    "reason": "No finite endpoint matching the RB6 target deck was available; the auditor-rejected alternate continuation had different EF and lattice controls. Fresh atomic starts were not authorized."
+  },
+  "unrun_after_stop": {
+    "fe_clean8b_triage": "NOT RUN",
+    "fe_u0_triage": "NOT RUN",
+    "fe_lld31": "NOT RUN",
+    "fe_fast_dp": "NOT RUN",
+    "fe_channels_ldos": "NOT RUN",
+    "fe_beta_half": "NOT RUN",
+    "co_bulk_u0": "NOT RUN",
+    "reason": "Further campaign launches stopped after the confirmed no-U RS identity failure under §2.5(a)."
   }
 }

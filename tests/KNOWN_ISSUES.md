@@ -1840,10 +1840,12 @@ campaign remain outside the established scope.
 
 - An Fe impurity in an Fe host at U=3.8 eV, J=1.1 eV differs from RS bulk by −6.6×10⁻³ μB, about 735× the U=0 control. The Hubbard operators, Fermi level and Green's-function evaluation are identical; the recursion coefficients differ.
 - The probable cause is the cluster recipe mismatch: rc=80 for bulk and rc=100 for the impurity. The matched-cluster test is blocked by entry 4. Ni does not show the effect.
+- C5 R2 did not produce an RS-accepted rc=100 bulk reference or update the impurity-to-bulk ratio; this entry remains OPEN.
 - See the [C1 RA4 results](../docs/validation/fixed_ldau/rs/C1_RA4_RESULTS.md) and [C1 RA4 provenance](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json).
 
 ## [OPEN] RS rc=100 runs non-finite or non-converging
 
 - The Fe rc=100 impurity-style deck becomes non-finite after 102 iterations at U>0 and 34 at U=0. The rc=100 U=0 bulk is not accepted after 600 steps. These failures reproduce on `8b8f7ef`.
-- Fe rc=140 runs are INVALID_SETUP and are not part of this entry.
-- See the [C4 A4.1 results](../docs/validation/fixed_ldau/rs/C4_A41_RESULTS.md), [C4 A4.1 provenance](../docs/validation/fixed_ldau/rs/C4_A41_PROVENANCE.json), and [C1 RA4 provenance](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json).
+- C5 R2 captured one Debug Fe U>0 trajectory from the accepted rc=80 endpoint. The d-spin occupation first exceeded its five-state capacity at iteration 90 (`ql=16.023218979776722`); iteration 102 was the first snapshot with NaNs, with the first observed radial RSEQ NaN in the log at `l=2`, channel 0, `E=-50 Ry`. Snapshot 101 was wholly finite but already followed the occupation violation and was not accepted. This localizes an observed trajectory failure but does not establish its root cause.
+- Clean-8b and U=J=0 triage reruns, one-control variants, and a Co run were not performed after the separate no-U RS identity stop; no compatible finite Co target-deck restart was available. Fe rc=140 runs are INVALID_SETUP and are not part of this entry.
+- See the [C4 A4.1 results](../docs/validation/fixed_ldau/rs/C4_A41_RESULTS.md), [C4 A4.1 provenance](../docs/validation/fixed_ldau/rs/C4_A41_PROVENANCE.json), [C1 RA4 provenance](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json), and [C5 Part II results](../docs/validation/fixed_ldau/rs/C5_PART_II_RESULTS.md) with its [R2 provenance](../docs/validation/fixed_ldau/rs/C5_PART_II_PROVENANCE.json).
