@@ -1,0 +1,237 @@
+{
+  "a2_numeric_comparisons": {
+    "clean8b_vs_parent": {
+      "all_parsed_quantities_equal": true,
+      "asset": "C5_2_PART_A_assets/audit/a2_clean8b_parent_metrics.json",
+      "sha256": "31b2d116e28b4233e0a2f208c6a52178355db46dd4b48f166e8f6a9d37e6efb2"
+    },
+    "clean8b_vs_r1": {
+      "all_parsed_quantities_equal": true,
+      "asset": "C5_2_PART_A_assets/audit/a2_clean8b_r1_metrics.json",
+      "sha256": "8173ac973583dcc81ad3df3b5b5b3e59e29fa30161e04e2174f34a5689444f64"
+    },
+    "parent_vs_r1": {
+      "all_parsed_quantities_equal": true,
+      "asset": "C5_2_PART_A_assets/audit/a2_parent_r1_metrics.json",
+      "sha256": "be42c4ce40b075e1f0985abd5c0161294b5350be2fb9945861de3fdb186360ee"
+    }
+  },
+  "a3_prior_omp2_record": {
+    "a4_threshold_application": "Not applied: the prior pair is not the matched one-thread A2 attribution result. No tolerance or criterion was changed.",
+    "comparison_script_asset_sha256": "33813bedee855c696cb863b34f45e9038a5aa87cc0f80c4737514db4a2955bf5",
+    "interpretation": "Descriptive existing matched Release pair from the earlier OMP=2 context; not a new Part A run and not used to attribute A2 changes.",
+    "method": "Decimal |candidate-baseline| and relative only for nonzero baseline; zero-baseline counts retained; no denominator floor.",
+    "output_hash_map_asset": "C5_2_PART_A_assets/preflight/a3_omp2_output_hashes.json",
+    "output_hash_map_sha256": "54e5d5350c130ff9765a56338a9ceeb4cd384ca24e23b7d3827b557e21d708df",
+    "preflight_asset": "C5_2_PART_A_assets/preflight/a3_omp2_preflight.json",
+    "preflight_sha256": "61793302e19a3b790939f884aa695a5af0fdaee714b84beeee12fd6a11b64141",
+    "quantitative_metrics_asset": "C5_2_PART_A_assets/audit/a3_omp2_metrics.json",
+    "quantitative_metrics_sha256": "a7348e1b8e3b32c825fa960a16ac060db7c14e3947846d3b5ae0a6a79262b690",
+    "semantic_labels": {
+      "DOS": "header-labelled total/projected DOS quantities; signed-zero spelling differences are separately counted in the JSON",
+      "physical_sphere_spin": "radial_ground_state_Fe_1.dat header reported_moment_xyz_muB; component max absolute delta 3.62039682628931e-15; report.out spin moments identical at printed precision",
+      "potential_lmom": "orbital-angular-momentum vector; not sphere-spin magnitude",
+      "potential_mom": "normalized/reference spin axis; not physical sphere-spin magnitude",
+      "ql_occupation": "Fe_out.nml/Fe_scf.nml ql(n,l+1,spin); n=1 and ordered s/p/d are q0 occupations per spin."
+    }
+  },
+  "amendment": {
+    "append_is_exact_verbatim_suffix": true,
+    "appended_offset_bytes": 19731,
+    "attachment_bytes": 14772,
+    "attachment_path": "/Users/andersb/.codex/attachments/e593aaf6-1be9-46b4-9eb0-b42f28f44299/Pasted text.txt",
+    "attachment_sha256": "c7bd356a4d3f821e726fb5fab7074435f309740f9446ce5bec9fabd6c7a15c46",
+    "path": "docs/validation/fixed_ldau/rs/C5_AMENDMENT.md",
+    "prior_c5_prefix_sha256": "7e26a428c115cd49b67ab38942cfdd14b41f6fa590d5fd4d86c0b90e8abcbc2a",
+    "result_sha256": "a5d3db6a1f6eb70c0fb45725dc3ae47eed389da487347a985e4fdab538af3c2e"
+  },
+  "builds": {
+    "clean8b_baseline": {
+      "cmake_cache_path": "/private/tmp/c5-clean8b-release-build/CMakeCache.txt",
+      "cmake_cache_sha256": "d1fae4609de8f500177931a5c4c9a56122396d5a889bb21c6fe106fa98e6295f",
+      "configuration": "Release; GNU Fortran 16.2.0; OpenMP ON; MPI OFF; SPGLIB ON; MARCH_NATIVE ON; Accelerate BLAS/LAPACK; spglib 2.8.0",
+      "executable_path": "/private/tmp/c5-clean8b-release-build/bin/rslmto.x",
+      "executable_sha256": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc",
+      "source_commit": "8b8f7ef"
+    },
+    "comparison": "Generated parent/R1 Fortran flags.make and rslmto.x linker command match each other; effective compiler and linker settings match clean8b. The only flags.make difference is the generated VERSION macro string; CMakeLists, cmake, and source search found no active source use of VERSION.",
+    "discarded_preflight_correction": {
+      "description": "Initial configure accidentally passed Fortran flags that the project appended a second time. Those configurations were discarded before any solver launch; the corrected fresh builds above use exact baseline effective flags.",
+      "discarded_parent_cache_sha256": "63ab0915fdaf123c612698d3f1cc908163e1880abdfcf919b64b42f5be987659",
+      "discarded_parent_executable_sha256": "665c6d7bb16d6ca470229d464565b4b9730956311e4ae06fb2705dd4a7d3dbef",
+      "discarded_r1_cache_sha256": "82ecb2e41dcb9b416ea7880e607c8fe3d898ccd4405e95a67d522380afc5679b",
+      "discarded_r1_executable_sha256": "e724aa9b2fd627b9998c872434023ef69e228a3bfec0e16dd152c0445fc0d5be",
+      "solver_runs": 0
+    },
+    "parent_17732a7": {
+      "build_id_macro": "VERSION=gbt-campaign-archive-2026-10-31-g96f1-dirty; differs from the clean8b build-id string because CMake configured from the current checkout; audited as unused by active source.",
+      "build_path": "/private/tmp/c52-partA/a2-parent-build",
+      "cmake_cache_sha256": "ff98e07c2b30134495fdeea0c7eff7dddb91d2d8d639b0afc695e46dbd759fa8",
+      "configuration": "Matched clean8b Release compiler, effective compile/link flags, and linked dependencies.",
+      "executable_mode": "0555",
+      "executable_path": "/private/tmp/c52-partA/frozen/parent17732/rslmto.x",
+      "executable_sha256": "1c6b71c415ad051838ced841172e418a7f3f8f274cd272ee3cede5753b42d9a0",
+      "source_archive_path": "/private/tmp/c52-partA/a2-parent-source",
+      "source_commit": "17732a7"
+    },
+    "r1_2686e4e": {
+      "build_id_macro": "VERSION=gbt-campaign-archive-2026-10-31-g96f1-dirty; differs from the clean8b build-id string because CMake configured from the current checkout; audited as unused by active source.",
+      "build_path": "/private/tmp/c52-partA/a2-r1-build",
+      "cmake_cache_sha256": "5561187ad37f56e9ec7b814fa5baa637d4b7774c1457cc8686a7e059b7409092",
+      "configuration": "Matched clean8b Release compiler, effective compile/link flags, and linked dependencies.",
+      "executable_mode": "0555",
+      "executable_path": "/private/tmp/c52-partA/frozen/r1-2686/rslmto.x",
+      "executable_sha256": "c96036c32cdcc01b11dcdae8cc5b258841d9c800051ac5703e682f0197ddaed7",
+      "source_archive_path": "/private/tmp/c52-partA/a2-r1-source",
+      "source_commit": "2686e4e"
+    }
+  },
+  "durable_assets": {
+    "directory": "docs/validation/fixed_ldau/rs/C5_2_PART_A_assets",
+    "raw_a1_a2_archive": "C5_2_PART_A_assets/raw/a1_a2_one_thread_runs.tar.gz",
+    "raw_a1_a2_archive_sha256": "0c8a3ef9d0891ce4b3ebf28efa1481e5f03eb1ba68965a021060da022b6fc7ef",
+    "raw_prior_omp2_archive": "C5_2_PART_A_assets/raw/a3_prior_omp2_runs.tar.gz",
+    "raw_prior_omp2_archive_sha256": "fbaa7d3cd9371f3aa8a1b5fa78aadc440f9a72af3899b2c0becf32ccf66fdcef",
+    "raw_scope": "Four complete one-thread A1/A2 output dirs including logs plus external PID/exit records; the old OMP2 A3 matched pair is separately archived under distinct clean8b_release/ and fixed_release/ prefixes. Both 29-file subtrees verify against the corresponding A3 output-hash manifest. Includes generated build caches, source file snapshots, preflights, hash maps, and Decimal comparison outputs.",
+    "sha256sums_path": "C5_2_PART_A_assets/SHA256SUMS",
+    "sha256sums_sha256": "ae1d563b2a302a3b6ecd5a1472190fa053b49b998a64ed53b5b1698ad95b92f9"
+  },
+  "effective_environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "fixture": {
+    "case_name": "Example_bulk_bccFe_nsp2_block",
+    "case_path": "tests/scf/cases/bulk/bccFe",
+    "live_log": "backend=strux_lib; HUBBARD_RADIAL_MODE spectral; use_kspace=false; local_energy_adopted=false; block recursion; one step; Diff=0.0001099700 (nstep=1 smoke, expected not converged).",
+    "manifest": "tests/scf/cases.json",
+    "manifest_sha256": "11c552255a7271c7da4512a77e1de9eea7f3176ee306e92b0cf2f199a1d7cbfc",
+    "namelist_closure_and_parse": {
+      "Fe.nml": "2 groups / 2 slash terminators; f90nml 1.5.0 parses",
+      "input.nml": "8 groups / 8 slash terminators; f90nml 1.5.0 parses"
+    },
+    "resolved_input_sha256": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3",
+    "resolved_seed_Fe_nml_sha256": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+    "resolved_setup": {
+      "calctype": "B",
+      "cheb_backend": "legacy",
+      "hoh": false,
+      "lld": 20,
+      "nsp": 2,
+      "nstep": 1,
+      "recur": "block",
+      "strux_backend": "strux_lib"
+    },
+    "seed_policy": "The requested canonical fixture explicitly supplies Fe.nml as its standard atomic starting seed; identical immutable resolved inputs were used for all four runs."
+  },
+  "part_a": {
+    "a4_decision": "STOP (iv): matched one-thread controls show no scientific difference attributable to R1 or R2 production code; do not alter the byte criterion or choose an A4 tolerance",
+    "actual_run_ids": [
+      "C5.2-A1-RS-bccFe-run-1",
+      "C5.2-A1-RS-bccFe-run-2",
+      "C5.2-A2-RS-bccFe-parent17732",
+      "C5.2-A2-RS-bccFe-r1-2686e4e"
+    ],
+    "actual_solver_runs": 4,
+    "all_exit_zero_and_processes_gone": true,
+    "criterion_after_decision": "RS scientific-output byte identity remains unchanged; no tolerance was adopted",
+    "prior_mismatch_interpretation": "The earlier OMP=2 nine-file result remains recorded but is not proven to be thread nondeterminism; A1/A2 do not establish its cause.",
+    "run_cap": 8,
+    "user_review_option_only": "NOT ADOPTED: user review may consider a future amendment authorizing B-D if A1 and every matched A2 source comparison are scientifically byte-identical under the registered one-thread protocol, while retaining exact byte identity. This proposal authorizes nothing now and does not change the current A4(iv) STOP."
+  },
+  "prohibited_actions": {
+    "cleanup_or_tests_gbt_modified": false,
+    "criterion_changes": 0,
+    "generated_co_outputs_staged": false,
+    "merge_or_push": false,
+    "new_solver_runs_after_a4_stop": 0,
+    "production_source_changes": 0
+  },
+  "repository": {
+    "head_at_start_and_end": "96f1d72bc899aff40dbb412b7d855965d329527c",
+    "integration_branch": "fable_v4b_u",
+    "integration_tip_at_start_and_end": "908074f64b4d3143d2d91c0124fc79d126b8dbea",
+    "never_pushed_or_merged": true,
+    "path": "/Users/andersb/Jobb/rslmto_fable_v4b",
+    "source_inventory": [
+      {
+        "commit": "17732a7",
+        "relation": "parent of R1; source tree identical to 908074f"
+      },
+      {
+        "change": "one allocation extent; 4 insertions and 1 deletion in file",
+        "commit": "2686e4e",
+        "commit_source_sha256": "203fb901b685f428a0d811766c0af6dcc4abc024aa5cde8689b8f7e9765a6bcb",
+        "files": [
+          "source/lattice_cluster.f90"
+        ],
+        "parent_source_sha256": "05c47f8e7a7791b37510c3dbca296aef334540b59ce2fe305cb353fa45e01986",
+        "relation": "only commit in 908074f..HEAD touching production source"
+      },
+      {
+        "commit": "d1b845a",
+        "relation": "no production-source changes"
+      },
+      {
+        "commit": "deb92b1",
+        "relation": "no production-source changes"
+      },
+      {
+        "commit": "96f1d72",
+        "relation": "Co reference summary/evidence and the four Co input files only; no production-source changes"
+      }
+    ],
+    "work_branch": "fix/ldau-rs-impurity"
+  },
+  "runs": {
+    "a1": {
+      "comparison": "Same 28-file sets. All nonvolatile result files are byte-identical except str.out cpu_s=0.295 vs 0.246; testrun.log contains expected timestamps/runtime TIMER REPORT differences. Auditor PASS.",
+      "output_hash_assets": [
+        "C5_2_PART_A_assets/audit/a1_clean8b_hashes.json"
+      ],
+      "output_hash_map_sha256": "92658c561cc7a130c63295d731a40b639a5af5d89d79de4e821ab23f45f15539",
+      "preflight_asset": "C5_2_PART_A_assets/preflight/a1_clean8b.json",
+      "preflight_sha256": "5df4446dcbda71ff1c0a93d640845b7b21ffe9b754b3ecde5399f3672f3f4360",
+      "run_1": {
+        "command": "cd /private/tmp/c5-2-partA/a1_bccFe/run1 && env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 /private/tmp/c5-clean8b-release-build/bin/rslmto.x > testrun.log 2>&1",
+        "exit_code": 0,
+        "path": "/private/tmp/c5-2-partA/a1_bccFe/run1",
+        "pid": 41233
+      },
+      "run_2": {
+        "command": "cd /private/tmp/c5-2-partA/a1_bccFe/run2 && env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 /private/tmp/c5-clean8b-release-build/bin/rslmto.x > testrun.log 2>&1",
+        "exit_code": 0,
+        "path": "/private/tmp/c5-2-partA/a1_bccFe/run2",
+        "pid": 42505
+      }
+    },
+    "a2_parent_17732a7": {
+      "auditor_verdict": "PASS; only str.out cpu_s=0.127 and testrun.log differ from A1; all 26 other files byte-identical.",
+      "command": "cd /private/tmp/c52-partA/a2-runs/parent17732 && env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 /private/tmp/c52-partA/frozen/parent17732/rslmto.x > testrun.log 2>&1",
+      "exit_code": 0,
+      "output_hash_map_sha256": "ce17ed53fabe71303ee87e4346f9a727ee3ed8414d4026422be3a63f1a9f444b",
+      "path": "/private/tmp/c52-partA/a2-runs/parent17732",
+      "pid": 87158,
+      "preflight_asset": "C5_2_PART_A_assets/preflight/a2_parent17732.json",
+      "preflight_sha256": "c468b72e0556d25c9817d22ee872849e21d9609adbf3cd5be5caf4ab2177d3f6"
+    },
+    "a2_r1_2686e4e": {
+      "auditor_verdict": "PASS; only str.out cpu_s=0.167 and testrun.log differ from A1; all 26 other files byte-identical.",
+      "command": "cd /private/tmp/c52-partA/a2-runs/r1-2686 && env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 /private/tmp/c52-partA/frozen/r1-2686/rslmto.x > testrun.log 2>&1",
+      "exit_code": 0,
+      "output_hash_map_sha256": "d01f02fc7b0b4fc542faaec364afb46b3396d4968d6f7f30fe73513c0dc1a10a",
+      "path": "/private/tmp/c52-partA/a2-runs/r1-2686",
+      "pid": 87734,
+      "preflight_asset": "C5_2_PART_A_assets/preflight/a2_r1_2686.json",
+      "preflight_sha256": "9973cc9090caa2f922698d30b4031a94abe9bb8c93382f8e91d249690631a075"
+    }
+  },
+  "schema": "c5.2-part-a-provenance-v1",
+  "status": "STOP_A4_IV_NO_COMMIT_ATTRIBUTION"
+}

@@ -364,3 +364,292 @@ Commit after each RD item.
 - The 5-line summary.
 
 The next session after this one is Stage RE: surfaces, including the KS-host → RS-surface workflow and a 3d-adatom smoke test.
+
+# C5.2 — RS LDA+U: resolve the no-U identity failure, integrate the Chebyshev hcp Co reference, finish Stage RD
+
+**Session setup.** Sol is the orchestrator. Sol plans, delegates every execution task to Luna agents, reviews their output, and writes the final report. Sol does not run campaigns itself.
+
+Luna agents are used as follows:
+
+- **Workers** execute one well-defined task each. Independent runs may go in parallel.
+- **One auditor** recomputes every GATE verdict and its arithmetic from the raw outputs before Sol records it, and checks each run's preflight (§2.6).
+- **Workers never change criteria, tolerances or scope.** If a worker believes a criterion is wrong, it reports to Sol, and Sol applies §2.5.
+
+This amendment is user-approved. It **supersedes C5.1** and extends C5. Record it verbatim in `docs/validation/fixed_ldau/rs/C5_AMENDMENT.md`, appended below the C5 text.
+
+---
+
+## 1. Context
+
+### Repository and branches
+
+- Repository: `rslmtoasa/rslmtoasa`, local clone at `/Users/andersb/Jobb/rslmto_fable_v4b`.
+- Integration branch `fable_v4b_u` is at `908074f` (pushed).
+- Work branch: `fix/ldau-rs-impurity`. It contains:
+  - `d1b845a`: the C5 Parts I–II work, including the Co cluster-sizing fix (R1) in `source/lattice_cluster.f90` and the R2 diagnostics;
+  - `96f1d72`: "Record validated Chebyshev RS hcp Co reference", committed by the user.
+- **First action:** verify that `fix/ldau-rs-impurity` HEAD contains both commits and that the worktree is clean. Leave uncommitted generated outputs alone; do not commit them.
+- **Never push.** At the end, merge locally into `fable_v4b_u` (§7) and report the merge SHA. The user reviews and pushes.
+- `cleanup/` and `tests/gbt/` must never be committed.
+
+### Read before planning
+
+- `docs/validation/fixed_ldau/rs/C5_AMENDMENT.md`. Its §1 gives scope, physics and terminology. Its §5 gives the Stage RD specification (RD1–RD5), which this amendment executes with the changes in §5 below.
+- `docs/validation/fixed_ldau/rs/C5_PART_II_RESULTS.md` and `C5_PART_I_assets/known_issues.diff`.
+- **The hcp Co reference committed in `96f1d72`:** its validation summary and its four reference inputs. Note in particular the recursion method (`recur`), rc, lld, the energy window, `nsp`, the converged endpoint and the acceptance window.
+
+### Scope (fixed)
+
+**Primary target:** fixed-U LDA+U in real space (RS) for:
+
+- bulk (`calctype='B'`)
+- impurities (`calctype='I'`)
+- surfaces (`calctype='S'`)
+
+**Convenience path:** KS bulk. **A KS bulk host followed by an RS impurity or surface run is supported.** KS impurity is not.
+
+**Guarded scope, do not touch:**
+
+- SOC or noncollinear spin (`nsp>=2`)
+- shells other than d, and `lmax/=2`
+- HOH
+- self-consistent U, intersite V, ACBN0
+
+### Status
+
+**Validated:**
+
+- KS bulk and RS bulk local moments, with the energy routed as candidate b: E_local + E_Hub.
+- In both, `auto` resolves to `local`.
+
+**Not yet implemented:**
+
+- Impurities and surfaces are still spectral, with no energy routing.
+
+**What C5 left open:**
+
+1. **RS no-U byte identity failed in nine scientific files** on `fix/ldau-rs-impurity`. That stopped C5.
+2. **Part II, R2.** The Fe rc=100 block-recursion run puts more charge into a d channel than the shell can hold at iteration 90, then goes non-finite at iteration 102.
+3. **Co controls** lacked a valid restart. The new Chebyshev hcp Co reference resolves this.
+
+---
+
+## 2. Standing rules (unchanged from C5; restated)
+
+### 2.1 RS-accepted state
+
+All of the following must hold:
+
+- (a) outer Diff ≤ 3×10⁻⁸;
+- (b) over the last 20 complete iterations, the spread (max − min) of the d occupation per spin is ≤ 5×10⁻⁷, and the spread of the sphere moment is ≤ 10⁻⁶ μB;
+- (c) fixed-U P/V residuals are logged, not gated.
+
+### 2.2 Fallback ladder for an SCF that is not accepted at its step cap
+
+1. Continue from the last state for 200 steps with beta halved.
+2. Then continue for 200 steps with `broyden` and beta = 0.01.
+3. Then label the state PROVISIONAL, use it for RECORDS only, and move on.
+
+Interrupted or retried attempts count toward the same budget.
+
+### 2.3 RECORDS versus GATES
+
+- RECORDS cannot fail and never block progress.
+- Only items marked **GATE** can fail.
+
+### 2.4 Crash triage
+
+On a crash or a non-finite value:
+
+1. Rerun once with the Debug, bounds-checked build and capture the file:line backtrace.
+2. Rerun the same deck with the clean `8b8f7ef` binary.
+3. Rerun with U=J=0.
+
+If it also fails on `8b8f7ef` or at U=0, classify it as PRE-EXISTING and continue. STOP only if it is new relative to `8b8f7ef`, appears only with U>0, and lies in code changed since `8b8f7ef`.
+
+### 2.5 STOP only if
+
+- (a) the no-U criterion breaks. This is byte identity on the standard fixtures until §3 redefines it;
+- (b) a GATE fails after one honest debugging attempt (state the hypothesis you tested);
+- (c) §2.4 says stop;
+- (d) continuing would require touching guarded scope or changing a physics formula.
+
+**If a criterion turns out to rest on a wrong error model:** finish every other independent item, then report the exposing measurement together with a proposed corrected criterion. Never self-amend, and never loosen a tolerance after seeing results.
+
+### 2.6 Preflight checklist (auditor verifies for every run)
+
+- **Restart rule.** Start from the specified converged endpoint, never from fresh atomic potentials, unless a fresh start is explicitly requested.
+- **Backend.** `use_kspace` sits in the correct namelist, confirmed from the live log.
+- **Recursion method.** `recur` is confirmed from the live log.
+- **Input parsing.** Every namelist is closed with `/` and the input parses, confirmed before counting steps.
+- **Mixing.** The mixing parameters actually applied match the ladder step.
+- **Resolved mode.** The `HUBBARD_RADIAL_MODE` log line matches the intended mode.
+- **Executable.** Production and diagnostic builds are kept separate. Record both SHA256s.
+- **Processes.** Track solver PIDs. Kill and verify all owned processes at the end.
+
+### 2.7 Reporting
+
+- One markdown page per part: tables, GATE verdicts, and at most 10 lines of interpretation.
+- One JSON sidecar per part holds hashes, commands and paths.
+- Close with a 5-line summary: what passed, what was recorded, what is provisional, what stopped, and what comes next.
+
+---
+
+## 3. Part A — Resolve the no-U identity failure (do first; timebox 8 runs)
+
+**A1. Determinism control.**
+
+- Run RS `bulk/bccFe` twice with the clean `8b8f7ef` binary, single thread (`OMP_NUM_THREADS=1` and the BLAS thread caps).
+- Expectation: byte-identical.
+- If they differ: STOP and report an environment problem.
+
+**A2. Attribution.**
+
+- Build each commit in `908074f..HEAD` that touches `source/`:
+  - the parent of the R1 fix;
+  - the R1 fix;
+  - each R2 commit that touches production source.
+- `96f1d72` should touch only the reference inputs and documentation; verify that.
+- Run the RS no-U identity check at each build. Report the first commit that breaks it.
+
+**A3. Magnitude.** For each of the nine differing files, report the maximum absolute and relative difference in each scientific quantity:
+
+- d/s/p occupations;
+- sphere moments;
+- E_F;
+- ETOT components;
+- DOS values.
+
+**A4. Decision (fixed in advance):**
+
+| Finding | Action |
+|---|---|
+| (i) The cause is R1 and the max relative difference is ≤ 1×10⁻¹² (summation-order level) | Accept it and record "R1 summation-order change". For the rest of this session, the RS no-U criterion becomes: scientific quantities equal within 1×10⁻¹² relative, and KS no-U byte-identical. Regenerate the RS no-U reference outputs from the new tip and record both hashes. |
+| (ii) The cause is R1 and the difference is larger | Restrict the fix so the new sizing applies only where the old sizing violates bounds, keeping the old path bit-for-bit otherwise. Re-run A2 at the restricted fix; byte identity must be restored. Record the unrestricted fix's quantitative effect on bcc Fe as a RECORD, and add a KNOWN_ISSUES entry asking the user to decide whether the old sizing affected results. |
+| (iii) The cause is R2 production code | Remove the leak (diagnostics must not alter production paths) and restore byte identity. |
+| (iv) Anything else | Report and STOP. |
+
+Commit after A4.
+
+---
+
+## 4. Part B — Close Part II and integrate the Co reference (timebox 6 runs)
+
+**B1. Occupation-capacity guard (production).**
+
+- If any channel's occupation q0 per spin exceeds 2l+1 by more than 1×10⁻⁶, or a mixed q or PL value is non-finite, stop with an actionable error. The message names the atom, channel, iteration and value.
+- Never propagate NaNs silently.
+- Add a regression test with synthetic over-capacity input.
+- The no-U criterion (as fixed in A4) must still hold.
+
+**B2. Recursion-method attribution.** These are RECORDS, one run each, from converged endpoints and never from fresh potentials:
+
+- **(a) Fe rc=100, Chebyshev.** Fe U=0 RS bulk at rc=100 with `recur='chebyshev'`, using the same Chebyshev settings as the Co reference, restarted from the converged rc=80 endpoint. Does it converge, or does the B1 guard fire?
+- **(b) Co, block recursion.** Co U=0 RS bulk with `recur='block'`, using the Co reference geometry and its converged Chebyshev endpoint as the restart. Does the non-finite behaviour return?
+
+**B3. KNOWN_ISSUES update.**
+
+- **Entry 1 (hcp Co bounds violation):** CLOSED by R1, with a reference to the regression test.
+- **Entry 2 (Co bulk non-finite):** state the recursion-method attribution from B2(b). Point to the Chebyshev reference as the validated Co recipe.
+- **Entry 4 (rc=100 non-finite):** record the localisation (d occupation exceeds shell capacity at iteration 90, then non-finite), the B2(a) result, and that the B1 guard now reports the condition. If Chebyshev converges at rc=100, state that the issue is specific to block recursion at large rc.
+- **Entry 3 (Fe embedding offset):** unchanged until Part D.
+
+Commit.
+
+---
+
+## 5. Part C — Chebyshev compatibility of fixed-U LDA+U (GATE before Co enters Stage RD)
+
+The local-moment correction and the Hubbard occupation matrix were validated only with block recursion. The Co reference uses Chebyshev, so the Chebyshev path has to be checked first.
+
+**C1. Code audit.**
+
+- Establish from the code whether, under `recur='chebyshev'`, the fixed-U path fills the full d-block Green's function g0(i,j) used for the matrix spectral function and the occupation matrix P.
+- Establish the same for the energy-weighted occupation matrix M1, which the local moments need.
+- State whether any stochastic trace estimate enters P or M1, and how many random vectors are used. A stochastic P is not acceptable for the occupation matrix.
+- **Decision:**
+  - P and M1 are not filled, or are stochastic → Chebyshev is unsupported for fixed U. Add an actionable fatal guard (`recur='chebyshev'` with fixed U), drop Co U>0 from this session, and continue with Ni and Fe only.
+  - P and M1 are filled deterministically → continue with C2.
+
+**C2. Block versus Chebyshev, bcc Fe RS bulk (rc=80):**
+
+- at U=0;
+- at U=2 eV, J=0 in local mode.
+
+Compare the d occupations per spin, the sphere moment, E_F, and E_Hub.
+
+**GATE:** the U=2 block–Chebyshev difference does not exceed the U=0 block–Chebyshev difference by more than a factor of 10 for any quantity. Report the ratio.
+
+**C3. Carrier check on the Chebyshev U=2 local state** (frozen local-versus-spectral replay, as in RB3).
+
+**GATE:**
+
+- carrier ratio per spin within 1 ± 0.01;
+- q2′ ≥ 0.
+
+If C2 and C3 pass, Co enters Stage RD under Chebyshev. Otherwise, apply the guard from C1 and drop Co U>0.
+
+Commit.
+
+---
+
+## 6. Part D — Stage RD: impurities (`calctype='I'`)
+
+Execute C5 §5 (RD1–RD5) **with the following system definitions**.
+
+### Matched recipes
+
+- The host bulk reference and the impurity use the same rc, lld, energy window and recursion method.
+- **Ni:** fcc, block recursion, rc=80, U=3 eV, J=0.7 eV. Reuse the converged rc=80 Ni bulk as the host. Ni is the gating system.
+- **Fe:** bcc, rc=80, U=3.8 eV, J=1.1 eV. Use block recursion, or Chebyshev at rc=100 only if B2(a) converged. Fe is records only.
+- **Co:** hcp, the committed Chebyshev reference recipe, U=3 eV, J=0.7 eV. Only if Part C passed.
+- **The `B2FeCo_nsp1` fixture:** records only.
+- If the impurity recipe cannot use the host's rc, report which parameter forces it to differ, then use the smallest rc that converges and passes the B1 guard, for **both** host and impurity.
+
+### Changes to RD3 (all in local mode)
+
+- **(a) RS-bulk host → same-material impurity.**
+  - Ni: **GATE**, ratio to the U=0 control < 10.
+  - Fe: RECORD. If the Fe ratio is below 10 with matched clusters, close KNOWN_ISSUES entry 3 with "use the same rc for the bulk reference and the impurity cluster".
+  - Co: **GATE** if Part C passed, else omitted. It needs its own matched U=0 control first, built from the Co reference.
+- **(b) KS-bulk host → RS impurity.**
+  - Ni: **GATE** with the C5 formula: |Δ(U>0) − Δ(U=0)| ≤ |δ_RB5(U)| + 10 × |U=0 RS control|.
+  - Fe: RECORD.
+  - Co: RECORD (KS hcp Co with two atoms per cell). If KS hcp Co is impractical to converge, record why and skip it.
+- **(c) Mode-mismatch guard:** **GATE**, unchanged.
+- **(d) Local versus spectral:** RECORD, with Co added if Part C passed.
+
+### RD2, RD4, RD5
+
+- **RD2 and RD4** use Ni.
+- **RD5 adoption:** `auto` resolves to `local` for eligible impurity runs as in C5. If Part C failed, this includes the Chebyshev guard. Energy routing is adopted only if RD4 passed.
+
+Commit after each RD item.
+
+---
+
+## 7. Merge (local only)
+
+1. `git checkout fable_v4b_u && git pull --ff-only origin fable_v4b_u`
+2. `git merge --no-ff fix/ldau-rs-impurity -m "Merge RS LDA+U: robustness, Chebyshev compatibility, impurity stage (C5.2)"`
+3. On the merged tree:
+   - rebuild;
+   - run the LDA+U unit tests;
+   - run the no-U criterion as fixed in A4 (RS and KS);
+   - run one RS bulk +U `auto` smoke run, confirming `mode=local ... local_energy_adopted=.true.`;
+   - run one Ni impurity `auto` smoke run, confirming the RD5 behaviour.
+4. **Do not push.** Report the merge SHA.
+5. If the merge conflicts or a check fails, stop and report. Do not resolve conflicts in physics code on your own.
+
+---
+
+## 8. Final report
+
+- **Part A:** attribution, magnitudes, and the A4 decision.
+- **Part B:** the guard, the B2 records, and the KNOWN_ISSUES diff.
+- **Part C:** the Chebyshev audit, C2/C3 verdicts, and the Co status.
+- **Part D:** a table covering RD1–RD5 with GATE verdicts, the RD3 comparison table, and the RD4 energy decision.
+- The merge SHA.
+- The 5-line summary.
+
+The next session is Stage RE: surfaces, including the KS-host → RS-surface workflow and a 3d-adatom smoke test.

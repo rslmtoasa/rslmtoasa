@@ -1,0 +1,157 @@
+{
+  "auditor_verdict": "PASS: 28-file sets; only str.out cpu_s plus testrun.log differ; all 26 other files byte-identical.",
+  "binary": {
+    "build_id_macro": "VERSION=\"gbt-campaign-archive-2026-10-31-g96f1-dirty\"; differs from cached clean8b VERSION=\"gbt-campaign-archive-2026-10-27-g1773-dirty\" because configure ran from current checkout; auditor confirmed macro is not consumed by active source.",
+    "cmake_cache_path": "/private/tmp/c52-partA/a2-r1-build/CMakeCache.txt",
+    "cmake_cache_sha256": "5561187ad37f56e9ec7b814fa5baa637d4b7774c1457cc8686a7e059b7409092",
+    "compiler": "/opt/homebrew/bin/gfortran",
+    "configuration": "Release; GNU Fortran 16.2.0; OpenMP ON; MPI OFF; SPGLIB ON; ENABLE_MARCH_NATIVE ON; Accelerate BLAS/LAPACK; exact compiler/optimization flags matched to frozen clean8b baseline",
+    "executable_mode": "0555",
+    "expected_sha256": "c96036c32cdcc01b11dcdae8cc5b258841d9c800051ac5703e682f0197ddaed7",
+    "path": "/private/tmp/c52-partA/frozen/r1-2686/rslmto.x",
+    "sha256": "c96036c32cdcc01b11dcdae8cc5b258841d9c800051ac5703e682f0197ddaed7",
+    "source_commit": "2686e4e"
+  },
+  "build_configuration_validation": {
+    "active_source_consumes_VERSION_macro": false,
+    "clean8b_cache": "/private/tmp/c5-clean8b-release-build/CMakeCache.txt",
+    "corrected_cache_sha256": "5561187ad37f56e9ec7b814fa5baa637d4b7774c1457cc8686a7e059b7409092",
+    "effective_fortran_compile_flags_identical": true,
+    "rslmto_x_link_command_sha256": "baf888a39a9a5673e6b7e60f57f3289e00c1a78048e1a2fdea8a58deb7f82332"
+  },
+  "comparison_rule": "Compare scientific artifacts byte-for-byte against same-deck one-thread clean8b A1 baseline. A1 run1/run2 establish determinism. Compare parent17732 to clean8b and R1-2686 to both parent17732 and clean8b. Exclude only testrun.log, external PID/exit records, and proven runtime fields (cpu_s in str.out; TIMER REPORT in testrun.log); no scientific normalization. Report the first commit with any difference. Root decides A4 after raw auditor review; do not classify as A1 environment problem.",
+  "environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "fixture": {
+    "case_entry": {
+      "abs_tol": 1e-06,
+      "case": "bulk/bccFe",
+      "checks": {
+        "nml": [
+          {
+            "arrays": {
+              "mom": [
+                3
+              ]
+            },
+            "file": "Fe_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r"
+            ]
+          }
+        ],
+        "text": [
+          {
+            "cols": [
+              1,
+              2
+            ],
+            "file": "totaldos.out",
+            "rows": [
+              500,
+              1000,
+              1500
+            ]
+          }
+        ]
+      },
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "basis_spd",
+        "block"
+      ],
+      "name": "Example_bulk_bccFe_nsp2_block",
+      "namelists": {
+        "control": {
+          "cheb_backend": "legacy",
+          "lld": 20,
+          "nsp": 2,
+          "recur": "block"
+        },
+        "hamiltonian": {
+          "hoh": false
+        },
+        "lattice": {
+          "strux_backend": "strux_lib"
+        },
+        "self": {
+          "nstep": 1
+        }
+      },
+      "omp_threads": 2,
+      "rel_tol": 1e-06,
+      "timeout": 300
+    },
+    "case_manifest": "tests/scf/cases.json",
+    "case_manifest_sha256": "11c552255a7271c7da4512a77e1de9eea7f3176ee306e92b0cf2f199a1d7cbfc",
+    "case_name": "Example_bulk_bccFe_nsp2_block",
+    "case_path": "tests/scf/cases/bulk/bccFe",
+    "manifest_defaults": {
+      "namelists": {
+        "control": {
+          "cheb_backend": "legacy"
+        },
+        "lattice": {
+          "strux_backend": "strux_lib"
+        }
+      }
+    },
+    "runner_resolution": "tests/run_test.py::load_case applies manifest defaults; setup_scratch copies the fixture and removes *_out.nml; patch_input_nml applies the resolved case. Direct launch follows so effective OMP=1 is explicit."
+  },
+  "initial_snapshot": {
+    "files_sha256": {
+      "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+      "input.nml": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3"
+    },
+    "namelist_closure": {
+      "Fe.nml": {
+        "group_count": 2,
+        "slash_terminators": 2
+      },
+      "input.nml": {
+        "group_count": 8,
+        "slash_terminators": 8
+      }
+    },
+    "parse_check": "f90nml 1.5.0 parses input.nml and Fe.nml; closure group/terminator counts match",
+    "path": "/private/tmp/c52-partA/a2-runs/r1-2686",
+    "same_a1_resolved_fixture_snapshot": true
+  },
+  "launch": {
+    "actual_pid": 87734,
+    "command": "cd /private/tmp/c52-partA/a2-runs/r1-2686 && env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 /private/tmp/c52-partA/frozen/r1-2686/rslmto.x > testrun.log 2>&1",
+    "cwd": "/private/tmp/c52-partA/a2-runs/r1-2686",
+    "exit_code": 0,
+    "output_hash_manifest": "/private/tmp/c52-partA/r1_2686.output_hashes.json",
+    "process_tracking": "Direct frozen executable child; persist $! PID, wait, record exit, targeted kill -0/ps to confirm gone.",
+    "raw_run_path": "/private/tmp/c52-partA/a2-runs/r1-2686",
+    "state": "COMPLETED_EXIT_0"
+  },
+  "output_hash_manifest_sha256": "d01f02fc7b0b4fc542faaec364afb46b3396d4968d6f7f30fe73513c0dc1a10a",
+  "purpose": "A2 matched one-thread canonical RS bulk/bccFe identity run using isolated source commit 2686e4e",
+  "repository": {
+    "source_commit": "2686e4e",
+    "source_lattice_cluster_sha256": "203fb901b685f428a0d811766c0af6dcc4abc024aa5cde8689b8f7e9765a6bcb",
+    "source_snapshot": "/private/tmp/c52-partA/a2-r1-source"
+  },
+  "run_cap": {
+    "A1_actual_solver_runs": 2,
+    "A2_actual_solver_runs_before_preflight": 0,
+    "A2_planned_runs": 2,
+    "total_max": 8
+  },
+  "run_id": "C5.2-A2-RS-bccFe-r1-2686",
+  "status": "COMPLETED_EXIT_0_AUDITOR_PASS"
+}

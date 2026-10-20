@@ -1,0 +1,170 @@
+{
+  "auditor_verdict": "PASS: 28-file sets identical; only str.out cpu_s differs; testrun.log runtime metadata differs; all 26 other outputs byte-identical.",
+  "binary": {
+    "cmake_cache_path": "/private/tmp/c5-clean8b-release-build/CMakeCache.txt",
+    "cmake_cache_sha256": "d1fae4609de8f500177931a5c4c9a56122396d5a889bb21c6fe106fa98e6295f",
+    "configuration": "Release; GNU Fortran; OpenMP ON; MPI OFF; SPGLIB ON; MARCH_NATIVE ON",
+    "expected_sha256": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc",
+    "path": "/private/tmp/c5-clean8b-release-build/bin/rslmto.x",
+    "sha256": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc",
+    "source_commit": "8b8f7ef clean baseline"
+  },
+  "comparison_rule": "Compare all scientific generated artifacts byte-for-byte. Exclude only testrun.log, PID/exit records kept outside run directories, and proven runtime fields in str.out (cpu_s and TIMER REPORT), with raw and parsed proof retained. No scientific normalization or arbitrary exclusions. Any scientific difference means stop A1 and report ENVIRONMENT_PROBLEM; no A2.",
+  "environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "fixture": {
+    "case_entry": {
+      "abs_tol": 1e-06,
+      "case": "bulk/bccFe",
+      "checks": {
+        "nml": [
+          {
+            "arrays": {
+              "mom": [
+                3
+              ]
+            },
+            "file": "Fe_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r"
+            ]
+          }
+        ],
+        "text": [
+          {
+            "cols": [
+              1,
+              2
+            ],
+            "file": "totaldos.out",
+            "rows": [
+              500,
+              1000,
+              1500
+            ]
+          }
+        ]
+      },
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "basis_spd",
+        "block"
+      ],
+      "name": "Example_bulk_bccFe_nsp2_block",
+      "namelists": {
+        "control": {
+          "cheb_backend": "legacy",
+          "lld": 20,
+          "nsp": 2,
+          "recur": "block"
+        },
+        "hamiltonian": {
+          "hoh": false
+        },
+        "lattice": {
+          "strux_backend": "strux_lib"
+        },
+        "self": {
+          "nstep": 1
+        }
+      },
+      "omp_threads": 2,
+      "rel_tol": 1e-06,
+      "timeout": 300
+    },
+    "case_manifest": "tests/scf/cases.json",
+    "case_manifest_sha256": "11c552255a7271c7da4512a77e1de9eea7f3176ee306e92b0cf2f199a1d7cbfc",
+    "case_name": "Example_bulk_bccFe_nsp2_block",
+    "case_path": "tests/scf/cases/bulk/bccFe",
+    "manifest_defaults": {
+      "namelists": {
+        "control": {
+          "cheb_backend": "legacy"
+        },
+        "lattice": {
+          "strux_backend": "strux_lib"
+        }
+      }
+    },
+    "runner_resolution": "tests/run_test.py::load_case applies manifest defaults; setup_scratch copies the fixture and removes *_out.nml; patch_input_nml applies the resolved case. Direct launch follows so effective OMP=1 is explicit."
+  },
+  "initial_snapshot": {
+    "files_sha256": {
+      "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+      "input.nml": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3"
+    },
+    "namelist_closure": {
+      "Fe.nml": {
+        "group_count": 2,
+        "slash_terminators": 2
+      },
+      "input.nml": {
+        "group_count": 8,
+        "slash_terminators": 8
+      }
+    },
+    "parse_check": "f90nml 1.5.0 parses input.nml and Fe.nml; closure group/terminator counts match",
+    "path": "/private/tmp/c5-2-partA/a1_bccFe/source_snapshot",
+    "run1_initial_hashes": {
+      "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+      "input.nml": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3"
+    },
+    "run2_initial_hashes": {
+      "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+      "input.nml": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3"
+    },
+    "same_initial_tree_for_both_runs": true
+  },
+  "launches": [
+    {
+      "actual_pid": 41233,
+      "command": "cd /private/tmp/c5-2-partA/a1_bccFe/run1 && env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 /private/tmp/c5-clean8b-release-build/bin/rslmto.x > testrun.log 2>&1",
+      "cwd": "/private/tmp/c5-2-partA/a1_bccFe/run1",
+      "exit_code": 0,
+      "expected_initial_hashes": {
+        "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+        "input.nml": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3"
+      },
+      "output_hash_manifest": "/private/tmp/c52-partA/clean8b.output_hashes.json",
+      "raw_run_path": "/private/tmp/c5-2-partA/a1_bccFe/run1",
+      "run_id": "C5.2-A1-RS-bccFe-run-1",
+      "state": "COMPLETED_EXIT_0"
+    },
+    {
+      "actual_pid": 42505,
+      "command": "cd /private/tmp/c5-2-partA/a1_bccFe/run2 && env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 /private/tmp/c5-clean8b-release-build/bin/rslmto.x > testrun.log 2>&1",
+      "cwd": "/private/tmp/c5-2-partA/a1_bccFe/run2",
+      "exit_code": 0,
+      "expected_initial_hashes": {
+        "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+        "input.nml": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3"
+      },
+      "output_hash_manifest": "/private/tmp/c52-partA/clean8b.output_hashes.json",
+      "raw_run_path": "/private/tmp/c5-2-partA/a1_bccFe/run2",
+      "run_id": "C5.2-A1-RS-bccFe-run-2",
+      "state": "COMPLETED_EXIT_0"
+    }
+  ],
+  "process_tracking": "Directly launch frozen executable as child; capture actual $! PID and exit code in pair control directory; wait; targeted ps/kill -0 verification.",
+  "purpose": "A1: two identical one-thread runs of canonical manifest-resolved RS bulk/bccFe case using frozen clean 8b8f7ef Release binary.",
+  "repository": {
+    "branch": "fix/ldau-rs-impurity",
+    "head": "96f1d72bc899aff40dbb412b7d855965d329527c",
+    "integration_tip": "908074f64b4d3143d2d91c0124fc79d126b8dbea",
+    "tracked_worktree_clean_before_partA": true
+  },
+  "run_id": "C5.2-A1-RS-bccFe-determinism-pair",
+  "status": "COMPLETED_A1_PASS_AUDITOR_VERIFIED"
+}
