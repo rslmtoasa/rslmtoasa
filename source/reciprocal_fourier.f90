@@ -96,6 +96,7 @@ contains
    module subroutine make_reciprocal_assembler(this, assembler)
       class(reciprocal), intent(inout) :: this
       type(reciprocal_assembler), intent(out) :: assembler
+      integer :: i
       call this%build_neighbor_vectors()
       assembler%hamiltonian => this%hamiltonian
       assembler%lattice => this%lattice
@@ -107,6 +108,13 @@ contains
       case ('orthogonal'); assembler%use_orthogonal = .true.
       case default;    assembler%use_second_order = this%hamiltonian%hoh
       end select
+      if (this%control%constraints_enable .and. trim(this%hamiltonian%magnetic_representation) == gbt_single_q &
+          .and. .not. allocated(this%hamiltonian%gbt_ref_mom)) then   ! the SCF rewrites potential%mom; the frames keep this
+         allocate (this%hamiltonian%gbt_ref_mom(3, this%lattice%ntype))
+         do i = 1, this%lattice%ntype
+            this%hamiltonian%gbt_ref_mom(:, i) = this%lattice%symbolic_atoms(i)%potential%mom
+         end do
+      end if
       if (assembler%use_orthogonal .and. trim(this%hamiltonian%magnetic_representation) /= gbt_single_q) &
          call g_logger%fatal("kspace_ham_order='orthogonal' needs magnetic_representation='gbt_single_q'.", __FILE__, __LINE__)
    end subroutine make_reciprocal_assembler

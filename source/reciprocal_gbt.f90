@@ -66,6 +66,7 @@ contains
             if (size(pot%wx0) < norb .or. size(pot%cx0) < norb) &
                call g_logger%fatal('gbt_single_q k-space: potential factors smaller than the orbital basis.', __FILE__, __LINE__)
             mom_ref = pot%mom
+            if (allocated(this%hamiltonian%gbt_ref_mom)) mom_ref = this%hamiltonian%gbt_ref_mom(:, it)
             call gbt_site_frame(mom_ref, this%hamiltonian%theta_ss, theta, phi)
             call gbt_reference_frame(theta, phi, frame(:, :, isite))
             if (this%control%constraints_enable) then   ! the target is the local axis, whatever the site orientation

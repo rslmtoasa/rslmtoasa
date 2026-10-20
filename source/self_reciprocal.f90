@@ -372,7 +372,8 @@ contains
    !> (its output in mag_cfield is overwritten here). Constant-Jacobian Newton step per site in the local frame,
    !> B_new = B_used - alpha chi^-1 m_perp, with chi = dm_perp/dB measured by forward differences of two extra band solves per
    !> site at the potential and field of this iteration; it is measured again when the residual sum_a |B_a||m_a_perp| has grown
-   !> for two consecutive iterations. alpha and the probe field are internal constants.
+   !> for two consecutive iterations. alpha and the probe field are internal constants. The orientation potential%mom that
+   !> apply_constraints overwrote is restored from the copy taken before the first assembly.
    subroutine update_gbt_constraint_field(this)
       class(self), intent(inout) :: this
       real(rp), parameter :: alpha = 0.5_rp, b_probe = 1.0e-4_rp
@@ -422,7 +423,15 @@ contains
          if (.not. allocated(ham%gbt_bfield)) allocate (ham%gbt_bfield(2, nrec))
          ham%gbt_bfield = b_new
          ham%gbt_residual = [residual, ham%gbt_residual(1)]
+         do ia = 1, nrec   ! apply_constraints rewrote potential%mom to (0,0,+1); the potential written next keeps the reference
+            this%symbolic_atom(this%lattice%nbulk + ia)%potential%mom(:) = ham%gbt_ref_mom(:, ia)
+         end do
       end associate
+      do ia = 1, nrec
+         if (this%symbolic_atom(this%lattice%nbulk + ia)%constraint_actual(3) < 0.0_rp .and. rank == 0) call g_logger%warning( &
+            'GBT_CONSTRAINT: the moment of site '//fmt('i0', ia)//' is antiparallel to its local axis; channel 1 of its potential must be '// &
+            'the majority spin.', __FILE__, __LINE__)
+      end do
       write (line, '(*(es15.7))') b_new
       if (rank == 0) call g_logger%info('GBT_CONSTRAINT residual sum_a |B_a||m_a_perp| (Ry) = '//fmt('es14.6', residual)// &
                                         ' max |m_perp| (muB) = '//fmt('es14.6', maxval(norm2(m, dim=1)))// &

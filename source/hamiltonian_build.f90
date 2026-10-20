@@ -739,6 +739,7 @@ contains
       if (allocated(this%gbt_chi)) deallocate (this%gbt_chi)
       if (allocated(this%gbt_bfield)) deallocate (this%gbt_bfield)
       this%gbt_residual = huge(1.0_rp)
+      if (allocated(this%gbt_ref_mom)) deallocate (this%gbt_ref_mom)
       this%js_alpha = 'z'
       this%jl_alpha = 'z'
       this%hubbard_u_potential_form = 'liechtenstein'

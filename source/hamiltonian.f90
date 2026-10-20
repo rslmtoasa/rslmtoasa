@@ -114,6 +114,8 @@ module hamiltonian_mod
       real(rp), dimension(:, :, :), allocatable :: gbt_chi
       real(rp), dimension(:, :), allocatable :: gbt_bfield
       real(rp) :: gbt_residual(2) = huge(1.0_rp)
+      !> reference potential%mom of each type, captured before the first constrained k-space GBT assembly
+      real(rp), dimension(:, :), allocatable :: gbt_ref_mom
       real(rp), dimension(:), allocatable :: velocity_scale
       character(len=16) :: hubbard_u_potential_form
       !> Radial band-moment convention: legacy spectral or local Hubbard-adjusted.
