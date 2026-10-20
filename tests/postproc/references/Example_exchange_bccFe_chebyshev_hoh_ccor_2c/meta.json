@@ -1,0 +1,44 @@
+{
+  "name": "Example_exchange_bccFe_chebyshev_hoh_ccor_2c",
+  "case": "exchange/bccFe",
+  "timeout": 300,
+  "abs_tol": 0.0001,
+  "rel_tol": 0.0001,
+  "_note": "hoh with ccor_2c, Chebyshev exchange (chebyshev_recur_ij); the reference was generated with the legacy kernels. Chebyshev window from bounds_algorithm.",
+  "namelists": {
+    "lattice": {
+      "strux_backend": "strux_lib",
+      "screening": "fitted",
+      "strux_want_sdot": true
+    },
+    "control": {
+      "cheb_backend": "fast",
+      "nsp": 2,
+      "recur": "chebyshev",
+      "lld": 50
+    },
+    "self": {
+      "nstep": 1
+    },
+    "hamiltonian": {
+      "hoh": true,
+      "ccor_2c": true,
+      "ccor_elin": -0.07,
+      "bounds_algorithm": "both"
+    }
+  },
+  "checks": {
+    "text": [
+      {
+        "file": "jij.out",
+        "rows": [
+          1,
+          2
+        ],
+        "cols": [
+          6
+        ]
+      }
+    ]
+  }
+}

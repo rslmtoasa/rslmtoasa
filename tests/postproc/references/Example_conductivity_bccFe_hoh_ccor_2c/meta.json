@@ -1,0 +1,61 @@
+{
+  "name": "Example_conductivity_bccFe_hoh_ccor_2c",
+  "case": "exchange/bccFe",
+  "timeout": 300,
+  "_note": "hoh with ccor_2c, stochastic conductivity (compute_moments_stochastic) on the bcc Fe exchange deck with the fccPt conductivity keys; the reference was generated with the legacy kernels.",
+  "namelists": {
+    "lattice": {
+      "strux_backend": "strux_lib",
+      "screening": "fitted",
+      "strux_want_sdot": true
+    },
+    "control": {
+      "cheb_backend": "fast",
+      "nsp": 2,
+      "recur": "chebyshev",
+      "lld": 50,
+      "cond_ll": 50,
+      "cond_type": "spin",
+      "cond_calctype": "per_type"
+    },
+    "calculation": {
+      "post_processing": "conductivity"
+    },
+    "self": {
+      "nstep": 1
+    },
+    "hamiltonian": {
+      "v_alpha": [
+        0,
+        1,
+        0
+      ],
+      "v_beta": [
+        1,
+        0,
+        0
+      ],
+      "js_alpha": "z",
+      "hoh": true,
+      "ccor_2c": true,
+      "ccor_elin": -0.07,
+      "bounds_algorithm": "both"
+    }
+  },
+  "checks": {
+    "text": [
+      {
+        "file": "Fe_cond.out",
+        "rows": [
+          500,
+          1000,
+          1500
+        ],
+        "cols": [
+          2,
+          3
+        ]
+      }
+    ]
+  }
+}
