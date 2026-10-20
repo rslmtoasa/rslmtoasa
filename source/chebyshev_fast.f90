@@ -53,6 +53,7 @@ module chebyshev_fast_mod
       real(sp) :: inva = -1.0_sp
       real(sp) :: b = huge(1.0_sp)
       logical :: hoh = .false.
+      logical :: ccor = .false.
    end type cheb_cache_fingerprint_t
 
    !> @brief Per-process cache of fp32 Chebyshev operator, work, and pointer
@@ -77,6 +78,7 @@ module chebyshev_fast_mod
       complex(sp), pointer :: hee_cache(:, :, :, :) => null(), hha_cache(:, :, :, :) => null()
       complex(sp), pointer :: oee_cache(:, :, :, :) => null(), oha_cache(:, :, :, :) => null()
       complex(sp), pointer :: bee_cache(:, :, :, :) => null(), bha_cache(:, :, :, :) => null()
+      complex(sp), pointer :: cee_cache(:, :, :, :) => null(), cha_cache(:, :, :, :) => null()
       complex(sp), pointer :: hons_cache(:, :, :) => null()
       ! Raw fp32 mirrors for the conductivity/orbital fast kernels: velocity
       ! operators (fva/fvb), their hoh ortho (fvoa/fvob, on-site shell zeroed) and
@@ -126,6 +128,8 @@ contains
       if (associated(this%oha_cache)) deallocate (this%oha_cache)
       if (associated(this%bee_cache)) deallocate (this%bee_cache)
       if (associated(this%bha_cache)) deallocate (this%bha_cache)
+      if (associated(this%cee_cache)) deallocate (this%cee_cache)
+      if (associated(this%cha_cache)) deallocate (this%cha_cache)
       if (associated(this%hons_cache)) deallocate (this%hons_cache)
       if (associated(this%fva_cache)) deallocate (this%fva_cache)
       if (associated(this%fvb_cache)) deallocate (this%fvb_cache)
@@ -302,10 +306,13 @@ contains
    !>   bee/bha = (ee/hall)*inva                 -> sweep A: t = inva*h*x
    !>   oee/oha = eeo/hallo  (RAW, unscaled)     -> sweep B: eeo*t = inva*eeo*h*x
    !>   hons    = (enim + lsham - b*I)*inva      -> on-site, applied to x
+   !>   cee/cha = (eecc/hallcc)*inva             -> additive ccor term, applied to x
+   !> The ccor operands are built only when eecc_in and hallcc_in are present.
    !> Cached independently of the standard scaled-Hamiltonian cache.
    subroutine cheb_cache_ensure_scaled_ortho_sp(this, ee_in, hall_in, eeo_in, hallo_in, lsham_in, enim_in, &
                                                 iz_in, kk_in, nb_in, nnmax_in, ntype_in, nmax_in, inva_in, b_in, &
-                                                bee_out, bha_out, oee_out, oha_out, hons_out)
+                                                bee_out, bha_out, oee_out, oha_out, hons_out, &
+                                                eecc_in, hallcc_in, cee_out, cha_out)
       class(cheb_cache_t), intent(inout) :: this
       complex(rp), intent(in) :: ee_in(nb_in, nb_in, nnmax_in, ntype_in)
       complex(rp), intent(in) :: hall_in(nb_in, nb_in, nnmax_in, *)
@@ -318,8 +325,13 @@ contains
       complex(sp), pointer, intent(out) :: bee_out(:, :, :, :), bha_out(:, :, :, :)
       complex(sp), pointer, intent(out) :: oee_out(:, :, :, :), oha_out(:, :, :, :)
       complex(sp), pointer, intent(out) :: hons_out(:, :, :)
+      complex(rp), intent(in), optional :: eecc_in(nb_in, nb_in, nnmax_in, ntype_in)
+      complex(rp), intent(in), optional :: hallcc_in(nb_in, nb_in, nnmax_in, *)
+      complex(sp), pointer, intent(out), optional :: cee_out(:, :, :, :), cha_out(:, :, :, :)
       integer :: t_in, k_in, l_in
-      logical :: valid
+      logical :: valid, with_cc
+
+      with_cc = present(eecc_in) .and. present(hallcc_in)
 
       valid = this%ortho%valid &
          .and. this%ortho%nb == nb_in &
@@ -328,9 +340,12 @@ contains
          .and. this%ortho%nmax == nmax_in &
          .and. this%ortho%kk == kk_in &
          .and. this%ortho%inva == inva_in &
-         .and. this%ortho%b == b_in
+         .and. this%ortho%b == b_in &
+         .and. (this%ortho%ccor .eqv. with_cc)
 
       if (.not. valid) then
+         if (associated(this%cee_cache)) deallocate (this%cee_cache)
+         if (associated(this%cha_cache)) deallocate (this%cha_cache)
          if (associated(this%bee_cache)) deallocate (this%bee_cache)
          if (associated(this%bha_cache)) deallocate (this%bha_cache)
          if (associated(this%oee_cache)) deallocate (this%oee_cache)
@@ -355,11 +370,20 @@ contains
             end do
          end do
 
+         if (with_cc) then
+            allocate (this%cee_cache(nb_in, nb_in, nnmax_in, ntype_in))
+            this%cee_cache = cmplx(real(eecc_in, sp), aimag(eecc_in), sp)*inva_in
+         end if
+
          if (nmax_in > 0) then
             allocate (this%bha_cache(nb_in, nb_in, nnmax_in, nmax_in))
             this%bha_cache = cmplx(real(hall_in(:, :, :, 1:nmax_in), sp), aimag(hall_in(:, :, :, 1:nmax_in)), sp)*inva_in
             allocate (this%oha_cache(nb_in, nb_in, nnmax_in, nmax_in))
             this%oha_cache = cmplx(real(hallo_in(:, :, :, 1:nmax_in), sp), aimag(hallo_in(:, :, :, 1:nmax_in)), sp)
+            if (with_cc) then
+               allocate (this%cha_cache(nb_in, nb_in, nnmax_in, nmax_in))
+               this%cha_cache = cmplx(real(hallcc_in(:, :, :, 1:nmax_in), sp), aimag(hallcc_in(:, :, :, 1:nmax_in)), sp)*inva_in
+            end if
             ! Note: the impurity on-site enim/lsham fold is carried by hons via
             ! iz(k), identical to the bulk path (ham_hoh_vec_matmul applies
             ! lsham/enim on-site for both local and bulk regions).
@@ -372,6 +396,7 @@ contains
          this%ortho%kk = kk_in
          this%ortho%inva = inva_in
          this%ortho%b = b_in
+         this%ortho%ccor = with_cc
          this%ortho%valid = .true.
       end if
 
@@ -384,6 +409,14 @@ contains
       else
          nullify (bha_out)
          nullify (oha_out)
+      end if
+      if (present(cee_out)) then
+         nullify (cee_out)
+         if (with_cc) cee_out => this%cee_cache
+      end if
+      if (present(cha_out)) then
+         nullify (cha_out)
+         if (with_cc .and. associated(this%cha_cache)) cha_out => this%cha_cache
       end if
    end subroutine cheb_cache_ensure_scaled_ortho_sp
 
@@ -728,6 +761,22 @@ contains
       end if
    end subroutine hsweep_sp
 
+   !> In-place hsweep_sp: y = alpha*(Op x1)*inva + beta*y, with y distinct from x1.
+   subroutine hsweep_sp_inplace(opee, opha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, y, al, be, inva)
+      complex(sp), pointer, intent(in) :: opee(:, :, :, :), opha(:, :, :, :)
+      integer, intent(in) :: nn(kk, nnmax), iz(kk)
+      integer, intent(in) :: kk, nb, nnmax, ntype, nmax, ld
+      complex(sp), intent(in) :: x1(ld, nb)
+      complex(sp), intent(inout) :: y(ld, nb)
+      real(sp), intent(in) :: al, be, inva
+
+      if (associated(opha)) then
+         call spmv_block_sp_inplace(opee, opha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, y, al, be, inva, 0.0_sp)
+      else
+         call spmv_block_sp_inplace(opee, opee, nn, iz, kk, nb, nnmax, ntype, 0, ld, x1, y, al, be, inva, 0.0_sp)
+      end if
+   end subroutine hsweep_sp_inplace
+
    !> y = alpha*(H~ x1) + beta*x0, hoh-aware (two-sweep).
    subroutine happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
                         ld, x1, x0, y, al, be, wt, etmp)
@@ -759,7 +808,7 @@ contains
    !> mu    : (nb, nb, 2*lld+2) out, identical ordering to mu_n
    subroutine cheb_moments_fast(psi0, ee, hall, lsham, nn, iz, kk, nb, &
                                 nnmax, ntype, nmax, lld, a, b, mu, &
-                                hoh, eeo, hallo, enim)
+                                hoh, eeo, hallo, enim, eecc, hallcc)
       integer, intent(in) :: kk, nb, nnmax, ntype, nmax, lld
       complex(rp), intent(in) :: psi0(nb, nb, kk), ee(nb, nb, nnmax, ntype)
       complex(rp), intent(in) :: hall(nb, nb, nnmax, *), lsham(nb, nb, ntype)
@@ -770,10 +819,14 @@ contains
       complex(rp), intent(in), optional :: eeo(nb, nb, nnmax, ntype)
       complex(rp), intent(in), optional :: hallo(nb, nb, nnmax, *)
       complex(rp), intent(in), optional :: enim(nb, nb, ntype)
+      ! ccor_2c blocks, added to the hoh apply as an extra term CC*x (not part of h)
+      complex(rp), intent(in), optional :: eecc(nb, nb, nnmax, ntype)
+      complex(rp), intent(in), optional :: hallcc(nb, nb, nnmax, *)
       ! Locals
       complex(sp), pointer :: hee(:, :, :, :), hha(:, :, :, :)
       complex(sp), pointer :: bee(:, :, :, :), bha(:, :, :, :)
       complex(sp), pointer :: oee(:, :, :, :), oha(:, :, :, :)
+      complex(sp), pointer :: cee(:, :, :, :), cha(:, :, :, :)
       complex(sp), pointer :: hons(:, :, :)
       complex(sp), pointer :: w0(:, :), w1(:, :), w2(:, :)
       complex(sp), pointer, contiguous :: wt(:, :)
@@ -781,10 +834,11 @@ contains
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
       integer :: ld
       real(sp) :: inva, a_sp, b_sp
-      logical :: do_hoh
+      logical :: do_hoh, do_cc
 
       do_hoh = .false.
       if (present(hoh)) do_hoh = hoh
+      do_cc = do_hoh .and. present(eecc) .and. present(hallcc)
 
       ld = nb*kk
       a_sp = real(a, sp)
@@ -798,8 +852,14 @@ contains
       if (do_hoh) then
          ! --- two-sweep hoh operands (bare h, eeo, on-site) + extra buffer ---
          call cheb_cache%ensure_hoh_buffer(ld, nb, wt)
-         call cheb_cache%ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
-                                                nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons)
+         if (do_cc) then
+            call cheb_cache%ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
+                                                   nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons, &
+                                                   eecc, hallcc, cee, cha)
+         else
+            call cheb_cache%ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
+                                                   nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons)
+         end if
       else
          ! --- 1. scaled operator copies: Ht = (H + lsham - b*I)/a ----------
          call cheb_cache%ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
@@ -889,6 +949,7 @@ contains
       !>   sweep A:  t   = (h/a) * x1                  (bee/bha, into wt)
       !>   sweep B:  acc = t - eeo*t + hons*x1         (oee/oha raw, hons on-site)
       !>   combine:  y   = alpha*acc + beta*x0
+      !>   ccor:     y  += alpha*(CC/a)*x1             (cee/cha, only with ccor_2c)
       !> The 1/a scaling lives in bee/bha and hons; eeo is raw, so eeo*t already
       !> carries one factor of 1/a. The eeo sweep sees the BARE h*x (no on-site
       !> enim/lsham/-bI), exactly as in the legacy two-step recursion.
@@ -959,6 +1020,9 @@ contains
             end if
          end do
          !$omp end parallel do
+
+         ! --- ccor: y += alpha*(CC/a)*x1, applied to x1 (not to the bare h*x1)
+         if (do_cc) call hsweep_sp_inplace(cee, cha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, y, alpha, 1.0_sp, 1.0_sp)
       end subroutine apply_step_hoh
 
    end subroutine cheb_moments_fast
