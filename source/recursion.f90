@@ -2535,6 +2535,7 @@ contains
             else
                call this%cheb_1st_mom(psiref, a, b)
             end if
+            call dump_gf_h_action(this, ij, reci, a, b)
             this%mu_n(:, :, 2, ij_loc*4 - 4 + reci) = this%cheb_mom_temp(:, :)
             call g_timer%stop('<PSI_0|PSI_1>')
 
@@ -3896,6 +3897,45 @@ contains
       end if
 
    end subroutine restore_to_default
+
+   ! Diagnostic only: the real +/- seeds recover two full columns of H.
+   ! Nothing is applied again and no recursion work array is modified.
+   subroutine dump_gf_h_action(this, pair, seed, a, b)
+      use mpi_mod, only: rank
+      use gf_audit_io_mod
+      class(recursion), intent(in) :: this
+      integer, intent(in) :: pair, seed
+      real(rp), intent(in) :: a, b
+      integer :: unit, atom
+      character(2) :: tag, otag, etag, stag
+      if (.not. gf_audit_selected(pair)) return
+      if (.not. gf_audit_h_enabled()) return
+      if (seed > 2) return
+      call gf_audit_open(unit,'h',rank,pair,append=seed == 2)
+      if (unit == 0) return
+      if (seed == 1) then
+         write(unit, '(a,1x,i0,2(1x,es25.16e3))') 'S',pair,a,b
+         write(unit, '(a,2(1x,i0))') 'B',this%lattice%ijpair(pair,:)
+         do atom = 1, this%lattice%kk
+            write(unit, '(a,2(1x,i0),3(1x,es25.16e3))') 'A',atom, &
+               this%lattice%iz(atom),this%lattice%cr(:,atom)
+         end do
+      end if
+      tag = 'Hp'; otag = 'Op'; etag = 'Ep'; stag = 'Sp'
+      if (seed == 2) then
+         tag = 'Hm'; otag = 'Om'; etag = 'Em'; stag = 'Sm'
+      end if
+      do atom = 1, this%lattice%kk
+         if (maxval(abs(this%psi1(:,:,atom))) + maxval(abs(this%hohpsi(:,:,atom))) == 0.0_rp) cycle
+         call gf_audit_matrix(unit,atom,0.0_rp,tag,this%psi1(:,:,atom))
+         if (this%hamiltonian%hoh) then
+            call gf_audit_matrix(unit,atom,0.0_rp,otag,this%hohpsi(:,:,atom))
+            call gf_audit_matrix(unit,atom,0.0_rp,etag,this%enupsi(:,:,atom))
+            call gf_audit_matrix(unit,atom,0.0_rp,stag,this%socpsi(:,:,atom))
+         end if
+      end do
+      close(unit)
+   end subroutine dump_gf_h_action
 
 end module recursion_mod
 
