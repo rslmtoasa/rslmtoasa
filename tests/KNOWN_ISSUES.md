@@ -1909,3 +1909,13 @@ Found while reading `haydock_fast.f90` for the hoh+ccor_2c work. Read only, not 
 - **Consequence if the reading is right (algebra, not run):** with `hoh = .true.` and a nonzero `lsham` the fast block operator differs from the legacy one by `lsham psi - eeo (lsham psi)`.
 - **Not checked:** no run compares the two with a nonzero `lsham`. `lsham` is zero unless the spin-orbit build fills it, and the bccFe decks used for the fast-vs-legacy comparisons (`bccFe_block_fast_*_hoh_ccor_2c`, nsp = 1) have `lsham = 0`, so they cannot show it. Whether the nsp = 3/4 block hoh examples use a nonzero `lsham` was not checked.
 - **Proposal, not started:** a one-case fast-vs-legacy comparison with SOC on and `hoh = .true.`; if it differs, remove the shell-1 fold from the hoh branch of the two kernels (about 10 lines).
+- **Measured (2026-10-20, binary at `010b4c6`, one OpenMP thread, `hoh = .true.`, `ccor_2c = .false.`):** block intersite exchange on `tests/postproc/cases/exchange/bccFe` (`recur = 'block'`, `lld = 20`), J of the first two shells (`jij.out`, column 6):
+
+  | `nsp` | legacy | fast (fp32) | `fast_dp` |
+  |---|---|---|---|
+  | 2 | 1.919232, 0.371056 | 1.908953, 0.369334 | 1.908952, 0.369334 |
+  | 1 | 1.933942, 0.379545 | not run | 1.933942, 0.379545 |
+
+  The fp32 and fp64 fast routes agree with each other, so the 0.5 % difference at `nsp = 2` is not a precision effect. The one-step SCF of `tests/postproc/cases/orbital/bccFe` (`recur = 'block'`, `nsp = 2`, `rc = 12`) gives `etot` -2541.9809924013 (legacy) against -2541.9810543937 (fast), a difference of 6.2e-5 Ry.
+- **Not isolated:** the agreement at `nsp = 1` and the difference at `nsp = 2` fit the `lsham` reading above, but `nsp = 2` differs from `nsp = 1` in more than `lsham`, and no run switched `lsham` off at `nsp = 2`. The cause is untested.
+- **Consequence for the hoh+ccor_2c cases:** `Example_exchange_bccFe_hoh_ccor_2c` uses `nsp = 1`, and `Example_orbital_modern_bccFe_hoh_ccor_2c` uses a Chebyshev SCF step, so that fast-versus-legacy comparisons are not affected by this difference.
