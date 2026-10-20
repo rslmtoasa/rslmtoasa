@@ -150,6 +150,7 @@ module hamiltonian_mod
       procedure :: build_ccor_local
       procedure :: build_obarm
       procedure :: build_enim
+      procedure :: add_constraining_field_spin_block
       procedure :: build_from_paoflow
       procedure :: build_from_paoflow_opt
       procedure :: build_realspace_velocity_operators
@@ -349,6 +350,13 @@ module hamiltonian_mod
       complex(rp), dimension(norb, norb) :: Lx, Ly, Lz
       !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
    end subroutine torque_operator_collinear
+
+   !> @brief Add the site's constraining field (mag_cfield, local spin frame) to an onsite spinor block.
+   module subroutine add_constraining_field_spin_block(this, atom_type, block)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: atom_type
+      complex(rp), intent(inout) :: block(nb, nb)
+   end subroutine add_constraining_field_spin_block
 
    !> @brief Build overlap-bar matrices for the orthogonal representation.
    !> @details Converts potential/overlap information from symbolic atoms into

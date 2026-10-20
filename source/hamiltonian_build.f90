@@ -2424,7 +2424,7 @@ contains
    !> nevertheless a local spinor, so apply the same Pauli coefficient before
    !> the Cartesian-to-spherical conversion.  The term is onsite and carries no
    !> translational phase.
-   subroutine add_constraining_field_spin_block(this, atom_type, block)
+   module subroutine add_constraining_field_spin_block(this, atom_type, block)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: atom_type
       complex(rp), intent(inout) :: block(nb, nb)

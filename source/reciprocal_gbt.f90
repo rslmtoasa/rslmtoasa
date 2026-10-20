@@ -20,6 +20,7 @@ contains
       real(rp), allocatable :: bond_d(:, :)
       complex(rp), allocatable :: sblock(:, :, :), frame(:, :, :), w(:, :, :), c(:, :, :), h(:, :), h2(:, :)
       complex(rp), allocatable :: obar(:, :, :), enu(:, :, :), wunit(:, :, :), czero3(:, :, :)
+      complex(rp) :: blk(nb, nb)
       real(rp), allocatable :: cvec(:), dvec(:), gvec(:)
       real(rp) :: wow
       integer :: lmax_o, l, o, sp, iv
@@ -35,11 +36,13 @@ contains
          call g_logger%fatal('gbt_single_q k-space does not support onsite U.', __FILE__, __LINE__)
       if (this%hamiltonian%hubbard_v_check) &
          call g_logger%fatal('gbt_single_q k-space does not support intersite V.', __FILE__, __LINE__)
-      if (this%control%constraints_enable) &
-         call g_logger%fatal('gbt_single_q k-space does not support constraining fields.', __FILE__, __LINE__)
       if (this%hamiltonian%local_axis) call g_logger%fatal('gbt_single_q k-space does not support local_axis.', __FILE__, __LINE__)
-      if (allocated(this%hamiltonian%theta_ss_sublattice)) &
-         call g_logger%fatal('gbt_single_q k-space supports one cone angle for all sites only.', __FILE__, __LINE__)
+      if (this%control%constraints_enable) then   ! the field is stored per site and applied per type: they must coincide
+         if (this%use_orthogonal) &
+            call g_logger%fatal("gbt_single_q k-space: kspace_ham_order='orthogonal' does not support constraining fields.", __FILE__, __LINE__)
+         if (this%lattice%nrec /= this%lattice%ntype .or. this%lattice%nbulk /= 0) &
+            call g_logger%fatal('gbt_single_q k-space constraints need one type per site and nbulk = 0.', __FILE__, __LINE__)
+      end if
 
       second = this%use_second_order .and. this%hamiltonian%hoh
       if (second .and. .not. (allocated(this%hamiltonian%obarm) .and. allocated(this%hamiltonian%enim))) &
@@ -60,17 +63,15 @@ contains
          nr = this%lattice%nn(ia, 1)
          it = this%lattice%iz(ia)
          associate (pot => this%lattice%symbolic_atoms(it)%potential)
-            if (abs(pot%mom(1)) + abs(pot%mom(2)) > 1.0e-12_rp) &
-               call g_logger%fatal('gbt_single_q k-space needs potential%mom along +-z.', __FILE__, __LINE__)
             if (size(pot%wx0) < norb .or. size(pot%cx0) < norb) &
                call g_logger%fatal('gbt_single_q k-space: potential factors smaller than the orbital basis.', __FILE__, __LINE__)
-            theta = this%hamiltonian%theta_ss
-            phi = 0.0_rp
-            if (pot%mom(3) < 0.0_rp) then
-               theta = pi - theta
-               phi = pi
-            end if
+            call gbt_site_frame(pot%mom, this%hamiltonian%theta_ss, theta, phi)
             call gbt_reference_frame(theta, phi, frame(:, :, isite))
+            if (this%control%constraints_enable) then   ! the target is the local axis, whatever the site orientation
+               if (maxval(abs(this%lattice%symbolic_atoms(it)%constraint_target - [0.0_rp, 0.0_rp, 1.0_rp])) > 1.0e-10_rp) &
+                  call g_logger%fatal('gbt_single_q k-space needs constraints_mom_ref = 0, 0, 1 (local frame) for every site.', &
+                                      __FILE__, __LINE__)
+            end if
             w(:, 1, isite) = pot%wx0(1:norb) + pot%wx1(1:norb)
             w(:, 2, isite) = pot%wx0(1:norb) - pot%wx1(1:norb)
             c(:, 1, isite) = pot%cx0(1:norb) + pot%cx1(1:norb)
@@ -142,6 +143,14 @@ contains
             call gbt_kspace_h1(norb, nrec, nbond, bond_a(1:nbond), bond_b(1:nbond), bond_d(:, 1:nbond), sblock(:, :, 1:nbond), &
                                frame, w, c, k_points(:, ik), q_dir, h)
          end if
+         if (this%control%constraints_enable) then   ! -> +B.sigma onsite in the local spin basis, as the real-space route
+            do isite = 1, nrec
+               blk = cmplx(0.0_rp, 0.0_rp, rp)
+               call this%hamiltonian%add_constraining_field_spin_block(this%lattice%iz(this%lattice%atlist(this%lattice%ib(isite))), blk)
+               i0 = (isite - 1)*nb
+               h(i0 + 1:i0 + nb, i0 + 1:i0 + nb) = h(i0 + 1:i0 + nb, i0 + 1:i0 + nb) + blk
+            end do
+         end if
          do isite = 1, nrec
             do jsite = 1, nrec
                do s = 0, 1
@@ -160,5 +169,21 @@ contains
          workspace%h(:, :, ik) = h
       end do
    end subroutine reciprocal_assembler_assemble_gbt
+
+   !> Frame angles of one site from its reference moment (D2): +z gives (theta_ss, 0), -z gives (pi - theta_ss, pi), so the
+   !> antiparallel site stays at m_b = -m_a for every cone angle. A moment off the z axis is not supported yet.
+   subroutine gbt_site_frame(mom, theta_ss, theta, phi)
+      real(rp), intent(in) :: mom(3), theta_ss
+      real(rp), intent(out) :: theta, phi
+
+      if (abs(mom(1)) + abs(mom(2)) > 1.0e-12_rp) &
+         call g_logger%fatal('gbt_single_q k-space needs potential%mom along +-z.', __FILE__, __LINE__)
+      theta = theta_ss
+      phi = 0.0_rp
+      if (mom(3) < 0.0_rp) then
+         theta = pi - theta
+         phi = pi
+      end if
+   end subroutine gbt_site_frame
 
 end submodule reciprocal_gbt
