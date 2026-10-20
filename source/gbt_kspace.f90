@@ -11,7 +11,7 @@ module gbt_kspace_mod
    implicit none
    private
 
-   public :: gbt_kspace_h1, gbt_kspace_h2, grand_potential, gbt_kspace_horth
+   public :: gbt_kspace_h1, gbt_kspace_h2, grand_potential, gbt_kspace_horth, gbt_newton_field
 
 contains
 
@@ -160,5 +160,17 @@ contains
          h(j, j) = h(j, j) + cc(j)
       end do
    end subroutine gbt_kspace_horth
+
+   !> Constant-Jacobian Newton step of the constraining field of one site: b_new = b_old - alpha chi^-1 m_perp. chi = dm_perp/dB
+   !> (2x2, local frame, negative definite for +B.sigma), b and m_perp are the local x, y components.
+   pure subroutine gbt_newton_field(chi, b_old, m_perp, alpha, b_new)
+      real(rp), intent(in) :: chi(2, 2), b_old(2), m_perp(2), alpha
+      real(rp), intent(out) :: b_new(2)
+      real(rp) :: det
+
+      det = chi(1, 1)*chi(2, 2) - chi(1, 2)*chi(2, 1)
+      b_new(1) = b_old(1) - alpha*(chi(2, 2)*m_perp(1) - chi(1, 2)*m_perp(2))/det
+      b_new(2) = b_old(2) - alpha*(chi(1, 1)*m_perp(2) - chi(2, 1)*m_perp(1))/det
+   end subroutine gbt_newton_field
 
 end module gbt_kspace_mod

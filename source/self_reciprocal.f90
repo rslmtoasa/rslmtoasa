@@ -7,6 +7,7 @@
 !------------------------------------------------------------------------------
 
 submodule(self_mod) self_reciprocal
+   use gbt_kspace_mod, only: gbt_newton_field
 
    implicit none
 
@@ -241,6 +242,7 @@ contains
       integer :: i, isite, iorb
       real(rp), allocatable :: dos_up_tot(:), dos_dw_tot(:), dos_mx_tot(:), dos_my_tot(:), dos_mz_tot(:), dos_nmag_tot(:)
 
+      call update_gbt_constraint_field(this)
       if (rank /= 0) return
       if (.not. allocated(reciprocal_obj%total_dos)) return
       if (.not. allocated(reciprocal_obj%dos_energy_grid)) return
@@ -365,5 +367,87 @@ contains
       end if
 #endif
    end subroutine compute_kspace_spin_moments_spinor
+
+   !> Field update of the k-space GBT constrained spiral, replacing the lambda controller of apply_constraints on this path
+   !> (its output in mag_cfield is overwritten here). Constant-Jacobian Newton step per site in the local frame,
+   !> B_new = B_used - alpha chi^-1 m_perp, with chi = dm_perp/dB measured by forward differences of two extra band solves per
+   !> site at the potential and field of this iteration; it is measured again when the residual sum_a |B_a||m_a_perp| has grown
+   !> for two consecutive iterations. alpha and the probe field are internal constants.
+   subroutine update_gbt_constraint_field(this)
+      class(self), intent(inout) :: this
+      real(rp), parameter :: alpha = 0.5_rp, b_probe = 1.0e-4_rp
+      integer :: nrec, ia, ja, idir
+      real(rp), allocatable :: m(:, :), b_used(:, :), b_new(:, :), site_mom(:, :)
+      real(rp) :: residual
+      character(len=256) :: line
+
+      if (.not. this%control%constraints_enable .or. trim(this%hamiltonian%magnetic_representation) /= gbt_single_q) return
+      nrec = this%lattice%nrec
+      allocate (m(2, nrec), b_used(2, nrec), b_new(2, nrec), site_mom(3, nrec))
+      do ia = 1, nrec
+         m(:, ia) = this%symbolic_atom(this%lattice%nbulk + ia)%constraint_actual(1:2)
+      end do
+      if (allocated(this%hamiltonian%gbt_bfield)) then
+         b_used = this%hamiltonian%gbt_bfield
+      else   ! first iteration: the seed the Hamiltonian was built with
+         b_used = 0.0_rp
+         if (allocated(this%control%constraints_bfield)) then
+            if (size(this%control%constraints_bfield, 1) == 3 .and. size(this%control%constraints_bfield, 2) >= nrec) &
+               b_used = this%control%constraints_bfield(1:2, 1:nrec)
+         end if
+      end if
+      residual = 0.0_rp
+      do ia = 1, nrec
+         residual = residual + norm2(b_used(:, ia))*norm2(m(:, ia))
+      end do
+      associate (ham => this%hamiltonian)
+         if (.not. allocated(ham%gbt_chi) .or. (residual > ham%gbt_residual(1) .and. ham%gbt_residual(1) > ham%gbt_residual(2))) then
+            if (.not. allocated(ham%gbt_chi)) allocate (ham%gbt_chi(2, 2, nrec))
+            ham%gbt_residual = huge(1.0_rp)
+            do ia = 1, nrec
+               do idir = 1, 2
+                  do ja = 1, nrec
+                     this%symbolic_atom(this%lattice%nbulk + ja)%mag_cfield = [b_used(:, ja), 0.0_rp]
+                  end do
+                  this%symbolic_atom(this%lattice%nbulk + ia)%mag_cfield(idir) = b_used(idir, ia) + b_probe
+                  call solve_site_moments(site_mom)
+                  ham%gbt_chi(:, idir, ia) = (site_mom(1:2, ia) - m(:, ia))/b_probe
+               end do
+            end do
+         end if
+         do ia = 1, nrec
+            call gbt_newton_field(ham%gbt_chi(:, :, ia), b_used(:, ia), m(:, ia), alpha, b_new(:, ia))
+            this%symbolic_atom(this%lattice%nbulk + ia)%mag_cfield = [b_new(:, ia), 0.0_rp]
+         end do
+         if (.not. allocated(ham%gbt_bfield)) allocate (ham%gbt_bfield(2, nrec))
+         ham%gbt_bfield = b_new
+         ham%gbt_residual = [residual, ham%gbt_residual(1)]
+      end associate
+      write (line, '(*(es15.7))') b_new
+      if (rank == 0) call g_logger%info('GBT_CONSTRAINT residual sum_a |B_a||m_a_perp| (Ry) = '//fmt('es14.6', residual)// &
+                                        ' max |m_perp| (muB) = '//fmt('es14.6', maxval(norm2(m, dim=1)))// &
+                                        ' B_next_xy_per_site (Ry) ='//trim(line), __FILE__, __LINE__)
+
+   contains
+
+      !> Spin moments of the occupied states of the current Hamiltonian (canonical mu), on a fresh reciprocal object.
+      subroutine solve_site_moments(mom)
+         real(rp), intent(out) :: mom(:, :)
+         type(reciprocal) :: probe
+         real(rp) :: eband
+
+         probe = reciprocal(this%hamiltonian)
+         if (probe%use_symmetry_reduction) then
+            call probe%generate_reduced_kpoint_mesh(probe%nk_mesh, sum(abs(probe%k_offset)) > 1.0e-12_rp)
+         else
+            call probe%generate_mp_mesh()
+         end if
+         call probe%build_kspace_hamiltonian()
+         call probe%diagonalize_hamiltonian()
+         eband = probe%calculate_canonical_band_energy(.true.)
+         call this%compute_kspace_spin_moments_spinor(probe, mom)
+      end subroutine solve_site_moments
+
+   end subroutine update_gbt_constraint_field
 
 end submodule self_reciprocal

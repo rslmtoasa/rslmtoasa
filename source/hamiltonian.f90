@@ -110,6 +110,10 @@ module hamiltonian_mod
       real(rp), dimension(3) :: v_alpha, v_beta, q_ss
       real(rp) :: theta_ss
       real(rp), dimension(:), allocatable :: theta_ss_sublattice, phi_ss_sublattice
+      !> k-space GBT constraint controller state: chi(2,2,site), field used in the last solve (2,site), last two residuals
+      real(rp), dimension(:, :, :), allocatable :: gbt_chi
+      real(rp), dimension(:, :), allocatable :: gbt_bfield
+      real(rp) :: gbt_residual(2) = huge(1.0_rp)
       real(rp), dimension(:), allocatable :: velocity_scale
       character(len=16) :: hubbard_u_potential_form
       !> Radial band-moment convention: legacy spectral or local Hubbard-adjusted.

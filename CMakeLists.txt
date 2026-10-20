@@ -1190,7 +1190,7 @@ add_test(NAME AppGbtKspaceHamOrderInvalid
 set_tests_properties(AppGbtKspaceGauge AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceHamOrderInvalid
   PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
 
-foreach(mode chi guards)
+foreach(mode identity converge chi symmetry guards)
   add_test(NAME AppGbtKspaceScSpiral_${mode}
     COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral.py" ${mode} "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_${mode}")
   set_tests_properties(AppGbtKspaceScSpiral_${mode} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)

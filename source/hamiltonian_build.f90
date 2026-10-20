@@ -736,6 +736,9 @@ contains
       if (allocated(this%texture_moments)) deallocate(this%texture_moments)
       if (allocated(this%theta_ss_sublattice)) deallocate (this%theta_ss_sublattice)
       if (allocated(this%phi_ss_sublattice)) deallocate (this%phi_ss_sublattice)
+      if (allocated(this%gbt_chi)) deallocate (this%gbt_chi)
+      if (allocated(this%gbt_bfield)) deallocate (this%gbt_bfield)
+      this%gbt_residual = huge(1.0_rp)
       this%js_alpha = 'z'
       this%jl_alpha = 'z'
       this%hubbard_u_potential_form = 'liechtenstein'
