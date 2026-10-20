@@ -486,6 +486,14 @@ endforeach()
   set_tests_properties(Val04RsEmbeddingFixtures PROPERTIES
     LABELS "validation;lda_u;rs;impurity;fixtures;guards" TIMEOUT 300)
 
+  add_test(NAME Val04RsHcpCoClusterSetup
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/fixed_ldau/c5_hcp_co_cluster_setup.py"
+      "--binary" "${TestBinary}"
+      "--repo-root" "${CMAKE_SOURCE_DIR}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/c5_hcp_co_cluster_setup")
+  set_tests_properties(Val04RsHcpCoClusterSetup PROPERTIES
+    LABELS "validation;rs;impurity;cluster" TIMEOUT 180)
+
   add_test(NAME Val05GreenConvergence
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val05_green_convergence.py"
       "--binary" "${TestBinary}"

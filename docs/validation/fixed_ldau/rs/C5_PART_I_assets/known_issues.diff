@@ -1,0 +1,38 @@
+diff --git a/tests/KNOWN_ISSUES.md b/tests/KNOWN_ISSUES.md
+index 0a1eba6..d06a70e 100644
+--- a/tests/KNOWN_ISSUES.md
++++ b/tests/KNOWN_ISSUES.md
+@@ -1824,14 +1824,25 @@ campaign remain outside the established scope.
+ - **Consequence:** the log reports the symmetry of the labelled structure, so differently labelled types of one element count as different species. Check physical inversion
+   with spglib and element labels.
+ 
+-## [OPEN, 2026-10-20] RS impurity numerical instability — hcp Co non-finite Green-function report
++## [OPEN] hcp Co impurity setup — bounds violation before SCF
+ 
+-- **Reported behavior:** the C4 amendment records a pre-existing hcp-Co impurity run on clean `8b8f7ef` reaching non-finite Green-function values and stopping before a usable converged result. This issue is scoped to the hcp-Co impurity setup; it does not classify the separate Fe `rc=140/lld=21` run.
+-- **Evidence limit:** the retained C1 Co triage does not contain the raw clean-8b non-finite run. Its Debug and U=0 cases stop before SCF at `source/lattice_cluster.f90:996` (dimension mismatch 3/50000), and its clean-8b run has empty stdout and exits SIGKILL before SCF. The C4 report is preserved in `docs/validation/fixed_ldau/rs/C4_AMENDMENT.md`; the C1 triage paths and hashes are in `docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json`. Therefore the reported non-finite behavior is recorded as pre-existing per the amendment, while this checkout's archived raw evidence does not independently reproduce it.
+-- **Follow-up:** recover the amendment's source raw run or repeat the same supported hcp-Co deck on clean `8b8f7ef` before attributing a numerical cause. Do not generalize this issue to other elements or impurity geometries.
++- **Symptom:** the Debug build reports `source/lattice_cluster.f90:996`, dimension mismatch 3 vs 50000. The clean-baseline run exits SIGKILL before SCF. The same setup error occurs at U=0, so it is not LDA+U.
++- **Evidence:** the hcp-Co deck is [`co_hcp_lattice.nml`](../docs/validation/fixed_ldau/rs/RA4_assets/prerun_inputs/co_hcp_lattice.nml); see the [C1 Co triage records](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json) and [C1 RA4 results](../docs/validation/fixed_ldau/rs/C1_RA4_RESULTS.md).
++- **Follow-up:** Part II/R1 resolves the setup failure.
+ 
+-## [CLOSED, 2026-10-20] RS Fe embedding — pre-existing non-finite behavior, no accepted ratio
++## [OPEN] Co bulk U=0 non-finite
+ 
+-- **Verified (C4 A4.1 §2.4):** the Fe bulk-derived accepted restart, matched `rc=100` explicit-spectral U+ impurity deck is non-finite on clean `8b8f7ef` after a metadata-only compatibility adjustment. It reaches 102 complete outer iterations, then pre-LU Q/mixed-q NaNs and invalid PL; there is no accepted endpoint. The same-deck U=J=0 triage from the same accepted U+ seed also becomes non-finite after 34 complete iterations. Both outcomes satisfy the protocol's PRE-EXISTING ISSUE classification.
+-- **Scope:** the matched impurity U+ deck intentionally fixes EF at −0.163441 Ry to match the existing impurity; this result does not classify the dynamic-EF `rc=80` bulk recipe. No matched U+ impurity endpoint means no A4.1 bulk/impurity ratio. A4.2 full production A/exact-B/terminator cross-swaps reproduce the opposite native outputs exactly, so evaluator inconsistency is not found. A4.3 is NEITHER; no production formula change is justified. This is distinct from hcp Co and from the Fe `rc=140/lld=21` runs classified INVALID_SETUP.
+-- **Evidence:** [C4 A4.1 results](../docs/validation/fixed_ldau/rs/C4_A41_RESULTS.md) and [C4 A4.3 disposition](../docs/validation/fixed_ldau/rs/C4_A43_RESULTS.md); canonical raw path/hash/attempt records are in `docs/validation/fixed_ldau/rs/C4_A41_PROVENANCE.json`. The matched U=0 bulk continuation completed its 600-step ladder without C1 acceptance and is recorded PROVISIONAL, records only; it provides no accepted impurity ratio.
++- The RB6 records become non-finite after about 19–40 iterations, and the failure reproduces on `8b8f7ef`.
++- See the [RB6 results](../docs/validation/fixed_ldau/rs/C1_RB_RESULTS.md) and [RB6 provenance](../docs/validation/fixed_ldau/rs/C1_RB_PROVENANCE.json).
++
++## [OPEN, low priority] Fe U>0 embedding offset
++
++- An Fe impurity in an Fe host at U=3.8 eV, J=1.1 eV differs from RS bulk by −6.6×10⁻³ μB, about 735× the U=0 control. The Hubbard operators, Fermi level and Green's-function evaluation are identical; the recursion coefficients differ.
++- The probable cause is the cluster recipe mismatch: rc=80 for bulk and rc=100 for the impurity. The matched-cluster test is blocked by entry 4. Ni does not show the effect.
++- See the [C1 RA4 results](../docs/validation/fixed_ldau/rs/C1_RA4_RESULTS.md) and [C1 RA4 provenance](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json).
++
++## [OPEN] RS rc=100 runs non-finite or non-converging
++
++- The Fe rc=100 impurity-style deck becomes non-finite after 102 iterations at U>0 and 34 at U=0. The rc=100 U=0 bulk is not accepted after 600 steps. These failures reproduce on `8b8f7ef`.
++- Fe rc=140 runs are INVALID_SETUP and are not part of this entry.
++- See the [C4 A4.1 results](../docs/validation/fixed_ldau/rs/C4_A41_RESULTS.md), [C4 A4.1 provenance](../docs/validation/fixed_ldau/rs/C4_A41_PROVENANCE.json), and [C1 RA4 provenance](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json).

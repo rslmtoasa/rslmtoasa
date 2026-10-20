@@ -22,7 +22,12 @@
     },
     "results": "docs/validation/fixed_ldau/rs/C5_PART_I_RESULTS.md",
     "results_path": "docs/validation/fixed_ldau/rs/C5_PART_I_RESULTS.md",
-    "results_sha256": "399df6de1380fadb6ae04fff34bbab44381b9713200eb11dd9d88190815d3f4f"
+    "results_sha256": "faf4afc8b5f5a6f3b179d8c2d437ddbe27a3e4bbac8cae6ae45db097c70acd77",
+    "known_issues_diff": {
+      "path": "docs/validation/fixed_ldau/rs/C5_PART_I_assets/known_issues.diff",
+      "source_commit": "17732a7",
+      "sha256": "cfe5821c5e0fa819895b5bfffbb4ee3b066fa33dff14ef53c42426aa2744e423"
+    }
   },
   "evidence_references": [
     "docs/validation/fixed_ldau/rs/RA4_assets/prerun_inputs/co_hcp_lattice.nml",

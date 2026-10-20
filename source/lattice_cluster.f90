@@ -923,7 +923,10 @@ contains
 #else
       allocate (this%ib(this%nbulk), this%iu(this%ntot), this%irec(this%nrec))!, this%ct(this%ntype)) Now ct is defined at &lattice
 #endif
-      allocate (ctnew(this%ntype), ibulk(this%nbulk))
+      ! The cutoff vector can be larger than the number of currently defined
+      ! types (it is also passed to nncal's fixed-size cutoff argument).
+      ! Preserve its full extent when making the scaled copy.
+      allocate (ctnew(size(this%ct)), ibulk(this%nbulk))
       allocate (nn(ndi, nnmx), nn2(ndi, nnmx))
       allocate (izpo(kk), izp(kk), no(kk), nnmax(kk), izimp(kk), noimp(kk))
       allocate (acr(kk, 7), crd(3, kk), crimp(3, kk))

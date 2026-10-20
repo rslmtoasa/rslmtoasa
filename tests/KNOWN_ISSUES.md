@@ -1824,11 +1824,12 @@ campaign remain outside the established scope.
 - **Consequence:** the log reports the symmetry of the labelled structure, so differently labelled types of one element count as different species. Check physical inversion
   with spglib and element labels.
 
-## [OPEN] hcp Co impurity setup — bounds violation before SCF
+## [RESOLVED ON C5 BRANCH; NOT MERGED] hcp Co impurity setup — bounds violation before SCF
 
 - **Symptom:** the Debug build reports `source/lattice_cluster.f90:996`, dimension mismatch 3 vs 50000. The clean-baseline run exits SIGKILL before SCF. The same setup error occurs at U=0, so it is not LDA+U.
+- **Resolution on this branch:** `newclu` sizes its scaled cutoff copy to the full `this%ct` extent. The Debug regression completes cluster setup with `ntype=3`, `nbas=13`, and `nrec=1`; the C5 R1 setup GATE passes. The branch is not merged because the separate no-U RS identity GATE stopped C5.
 - **Evidence:** the hcp-Co deck is [`co_hcp_lattice.nml`](../docs/validation/fixed_ldau/rs/RA4_assets/prerun_inputs/co_hcp_lattice.nml); see the [C1 Co triage records](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json) and [C1 RA4 results](../docs/validation/fixed_ldau/rs/C1_RA4_RESULTS.md).
-- **Follow-up:** Part II/R1 resolves the setup failure.
+- **Follow-up:** the separate C5 no-U identity gate stopped Part II after the RS standard fixture's scientific outputs differed byte-for-byte from clean 8b; see [C5 Part II results](../docs/validation/fixed_ldau/rs/C5_PART_II_RESULTS.md).
 
 ## [OPEN] Co bulk U=0 non-finite
 

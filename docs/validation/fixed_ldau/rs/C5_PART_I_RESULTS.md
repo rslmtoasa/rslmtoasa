@@ -18,3 +18,5 @@ Recorded: four OPEN issues and their existing evidence links.
 Provisional: none.
 Stopped: no Part I GATE or campaign was run.
 Next: Part II/R1 hcp-Co setup triage.
+
+The exact Part I `tests/KNOWN_ISSUES.md` patch is preserved in [`C5_PART_I_assets/known_issues.diff`](C5_PART_I_assets/known_issues.diff) (commit `17732a7`).

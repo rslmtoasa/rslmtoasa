@@ -1,0 +1,388 @@
+{
+  "schema": "c5-part-ii-provenance-v1",
+  "part": "II",
+  "scope": "R1 only; R2 and RD stopped by the no-U identity stop criterion.",
+  "branch": "fix/ldau-rs-impurity",
+  "parent_commit": "17732a7",
+  "baseline_commit": "908074f64b4d3143d2d91c0124fc79d126b8dbea",
+  "auditor": "R1 setup audit PASS; matched Release no-U audit confirms RS byte-identity GATE FAIL and KS byte-identity GATE PASS.",
+  "findings": {
+    "R1_setup_gate": {
+      "verdict": "PASS",
+      "hypothesis": "Input typo/ntype mismatch vs cutoff-array sizing defect",
+      "finding": "Corrected C1 deck omits stale ntype; Debug failure is source sizing bug: ctnew was allocated to active type count 3 then assigned full cutoff vector extent 50000. Fix allocates ctnew(size(this%ct)) and preserves full cutoff capacity.",
+      "post_fix_output": "ntype=3, nbas=13, nrec=1; no dimension 50000 leaked to exported cluster record.",
+      "auditor": "PASS"
+    },
+    "no_u_rs_identity_gate": {
+      "verdict": "FAIL",
+      "standard_case": "tests/scf/cases/bulk/bccFe via Example_bulk_bccFe_nsp2_block",
+      "matched_release": true,
+      "input_resolved_sha256": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3",
+      "seed_Fe_nml_sha256": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+      "different_scientific_files": [
+        "Fe_1_spinene.out",
+        "Fe_dos.out",
+        "Fe_orbene.out",
+        "Fe_orbital_dos.out",
+        "Fe_orbquadene.out",
+        "Fe_out.nml",
+        "Fe_scf.nml",
+        "magneticdos.out",
+        "radial_ground_state_Fe_1.dat"
+      ],
+      "auditor": "FAIL: byte identity differs beyond permitted log/timing metadata. No tolerance change."
+    },
+    "no_u_ks_identity_gate": {
+      "verdict": "PASS",
+      "standard_case": "tests/scf/cases/k_space_scf/bccFe via Example_k_space_scf_bccFe",
+      "matched_release": true,
+      "input_resolved_sha256": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01",
+      "seed_Fe_nml_sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+      "different_scientific_files": [],
+      "str_out_difference": "only STRUX cpu_s timing; testrun.log timestamps/source-line diagnostics excluded by existing C1 comparison convention."
+    },
+    "u0_co_impurity_record": {
+      "verdict": "NOT_RUN_INVALID_RESTART",
+      "gate": false,
+      "reason": "The only launched attempt used a stale template (lattice ntype=2, provisional EF, no explicit U=J=0) and exited before SCF with namelist iostat 5010 / impurity not found. Corrected C1 deck preflight revealed only Co1-bulk.nml / Co2-bulk.nml source files, and symbolic_atom loader treats these as fresh atomic starting potentials; no authorized converged _out endpoint was staged. Under §2.6 restart rule, corrected deck was not launched. It is not a failed GATE."
+    }
+  },
+  "stop": {
+    "criterion": "C5 §2.5(a), no-U byte identity on standard RS bulk and KS fixtures",
+    "action": "STOP after RS identity failure; no additional campaign, RD implementation, or merge."
+  },
+  "run_budget": {
+    "cap": 12,
+    "conservatively_counted_total_at_stop": 11,
+    "counted_attempts": [
+      {
+        "id": 1,
+        "label": "Debug hcp Co bounds reproducer",
+        "entered_scf": false,
+        "counted": true,
+        "result": "pre-SCF bounds mismatch 3/50000"
+      },
+      {
+        "id": 2,
+        "label": "invalid U=0 control stale template",
+        "entered_scf": false,
+        "counted": true,
+        "result": "INVALID_SETUP; iostat 5010 and atoms not found"
+      },
+      {
+        "id": 3,
+        "label": "initial RS no-U baseline Debug Example run",
+        "entered_scf": true,
+        "counted": true,
+        "result": "INVALID_COMPARABILITY: baseline Debug"
+      },
+      {
+        "id": 4,
+        "label": "initial KS no-U baseline Debug Example run",
+        "entered_scf": true,
+        "counted": true,
+        "result": "INVALID_COMPARABILITY: baseline Debug"
+      },
+      {
+        "id": 5,
+        "label": "initial RS no-U fixed Release Example run",
+        "entered_scf": true,
+        "counted": true,
+        "result": "INVALID_COMPARABILITY: fixed Release"
+      },
+      {
+        "id": 6,
+        "label": "initial KS no-U fixed Release Example run",
+        "entered_scf": true,
+        "counted": true,
+        "result": "INVALID_COMPARABILITY: fixed Release"
+      },
+      {
+        "id": 7,
+        "label": "matched Release clean8b RS fixture",
+        "entered_scf": true,
+        "counted": true,
+        "solver_pid": 29116,
+        "exit": 0
+      },
+      {
+        "id": 8,
+        "label": "matched Release clean8b KS fixture",
+        "entered_scf": true,
+        "counted": true,
+        "solver_pid": 29307,
+        "exit": 0
+      },
+      {
+        "id": 9,
+        "label": "matched Release fixed RS fixture",
+        "entered_scf": true,
+        "counted": true,
+        "solver_pid": 29384,
+        "exit": 0
+      },
+      {
+        "id": 10,
+        "label": "matched Release fixed KS fixture",
+        "entered_scf": true,
+        "counted": true,
+        "solver_pid": 29580,
+        "exit": 0
+      },
+      {
+        "id": 11,
+        "label": "R2 diagnostic capture owned by parallel worker",
+        "entered_scf": false,
+        "counted": true,
+        "result": "reported by root; do not duplicate"
+      }
+    ],
+    "not_counted": "Debug regression CTest uses nstep=0 and runs cluster setup only; malformed missing-env wrapper invocation launched no solver."
+  },
+  "builds": {
+    "post_fix_debug": {
+      "path": "/private/tmp/c5-r1-debug-build/bin/rslmto.x",
+      "sha256": "56904beb55878d0de3ebf6768afa047652e5017b578a8907cea25f5878d25b61",
+      "source_sha256": "203fb901b685f428a0d811766c0af6dcc4abc024aa5cde8689b8f7e9765a6bcb",
+      "compiler": "GNU Fortran 16.2",
+      "build_type": "Debug",
+      "openmp": true,
+      "mpi": false,
+      "note": "GNU 16/macOS CMake skipped -fcheck=all due allocatable descriptor corruption warning; exact pre-fix reproducer used the earlier C1 Debug bounds-checked binary."
+    },
+    "post_fix_frozen_release": {
+      "path": "/private/tmp/c5-r1-frozen/rslmto.x",
+      "sha256": "710f91b3b3478cb8e4c89961edb6eca02e1fc72244a0c8061154604761898794",
+      "source_commit_parent": "17732a7",
+      "source_lattice_cluster_sha256": "203fb901b685f428a0d811766c0af6dcc4abc024aa5cde8689b8f7e9765a6bcb",
+      "compiler": "GNU Fortran 16.2",
+      "flags": "-O3 -fbacktrace -g -g -ffree-line-length-0 -cpp -mtune=native",
+      "openmp": true,
+      "mpi": false,
+      "cuda_plugin": false,
+      "spglib": true
+    },
+    "clean_8b_release": {
+      "path": "/private/tmp/c5-clean8b-release-build/bin/rslmto.x",
+      "sha256": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc",
+      "source_commit": "8b8f7ef7bfc026fd34a56b37a3ad3281fd0a6832",
+      "source_tree_manifest_sha256": "a874cdb23ed5b7c6817961cbb52f29ec4ea8605c03270a8cf60f9c6aa22f8569",
+      "compiler": "GNU Fortran 16.2",
+      "flags": "-O3 -fbacktrace -g -g -ffree-line-length-0 -cpp -mtune=native",
+      "openmp": true,
+      "mpi": false,
+      "cuda_plugin": false,
+      "spglib": true
+    }
+  },
+  "commands": {
+    "debug_build": "cmake -S . -B /private/tmp/c5-r1-debug-build -DCMAKE_BUILD_TYPE=Debug -DRUN_REG_TESTS=ON -DRUN_UNIT_TESTS=ON -DENABLE_OPENMP=ON -DENABLE_MPI=OFF -DENABLE_CUDA_PLUGIN=OFF -DENABLE_CUDA_RECIPROCAL=OFF -DENABLE_SPGLIB=ON; cmake --build /private/tmp/c5-r1-debug-build --target rslmto.x -j4",
+    "regression": "ctest --test-dir /private/tmp/c5-r1-debug-build --output-on-failure -R ^Val04RsHcpCoClusterSetup$",
+    "release_build": "cmake -S . -B /private/tmp/c5-r1-production-build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=OFF -DRUN_UNIT_TESTS=OFF -DENABLE_OPENMP=ON -DENABLE_MPI=OFF -DENABLE_CUDA_PLUGIN=OFF -DENABLE_CUDA_RECIPROCAL=OFF -DENABLE_SPGLIB=ON -DENABLE_FUSED_RECIPROCAL=OFF; cmake --build /private/tmp/c5-r1-production-build --target rslmto.x -j4",
+    "clean_baseline_release_build": "cmake -S /private/tmp/c5-clean8b-source -B /private/tmp/c5-clean8b-release-build -DCMAKE_BUILD_TYPE=Release -DRUN_REG_TESTS=OFF -DRUN_UNIT_TESTS=OFF -DRUN_EXAMPLE_TESTS=OFF -DENABLE_OPENMP=ON -DENABLE_MPI=OFF -DENABLE_CUDA_PLUGIN=OFF -DENABLE_CUDA_RECIPROCAL=OFF -DENABLE_SPGLIB=ON -DENABLE_FUSED_RECIPROCAL=OFF -DENABLE_MARCH_NATIVE=ON -DENABLE_LIBXC=OFF -DENABLE_FLUSH=OFF; cmake --build /private/tmp/c5-clean8b-release-build --target rslmto.x -j4",
+    "matched_no_u_runner": "/opt/homebrew/bin/python3.11 tests/run_test.py --binary /private/tmp/c5-no-u-release/solver-wrapper.sh --cases-json tests/scf/cases.json --case-name <standard case> --scratch-root <pair directory>; wrapper records solver PID; manifest threads RS=2, KS=1; all same resolved inputs within each pair.",
+    "pre_fix_debug_reproducer": "C1 corrected hcp-Co deck, ntype omitted; /private/tmp/rslmto-c2-bounds-snapshot/bin/rslmto.x; see raw log hash and full backtrace below."
+  },
+  "pre_fix_evidence": {
+    "deck_dir": "/private/tmp/c5-r1-repro-exact",
+    "debug_binary": "/private/tmp/rslmto-c2-bounds-snapshot/bin/rslmto.x",
+    "debug_binary_sha256": "ce16fc4a4964b0d1211c59bd27a0c7f1e3cc9f0d3921865bd62a9578bce77a88",
+    "log_path": "/private/tmp/c5-r1-repro-exact/debug-repro.log",
+    "log_sha256": "f2d2415a1ebc237041a52e0c7eed28348e073624980ba0b204950bf9c103e986",
+    "signature": "Array bound mismatch for dimension 1 of array ctnew (3/50000), source line 996, full backtrace preserved."
+  },
+  "post_fix_regression": {
+    "test": "Val04RsHcpCoClusterSetup",
+    "result": "PASS",
+    "output": "hcp Co impurity cluster setup passed: ntype=3, nbas=13, nrec=1",
+    "console_path": "/private/tmp/c5-r1-debug-build/Testing/validation/c5_hcp_co_cluster_setup/console.log",
+    "console_sha256": "15a311d35528b46ffe9c92386587153b320a1f9123429e7ff65b20772d945215",
+    "outnewclu_sha256": "9c4c9f52b548f11a364959c1cd33a5ec9f0e8b733be7852d9f3363b8ad2c36f4",
+    "regression_script_sha256": "311f83ba4a2542130568e0c3639ba4659f3f743eb19174b51e5b248f97937fb9"
+  },
+  "invalid_u0_attempt": {
+    "scratch": "/private/tmp/c5-r1-u0-control",
+    "pid": 8597,
+    "exit": 1,
+    "entered_scf": false,
+    "log_sha256": "506bea4f93760f291ec03d7a0df6d64e1b49576cffa89745f4074c193a9a7a38",
+    "input_sha256": "647ebc57ec04ca7504531eb4d2754a20b910c87e949637d5ffba9bafe738ec22",
+    "lattice_sha256": "c405cd70881353046990d2d87ccff1642ec89b39fa3698eeb1e9492e1349820f",
+    "log": "namelist iostat=5010 followed by impurity atoms not found; invalid stale lattice ntype and provisional deck. Corrected C1 deck was preflighted but not launched due restart source rule."
+  },
+  "corrected_u0_not_run": {
+    "preflight_path": "/private/tmp/c5-r1-u0-control-corrected/preflight.json",
+    "preflight_sha256": "1afe59012d2a55c2ca7fbec62dbf65aadd0f94504748dd43c30b3fd006730600",
+    "reason": "Only .nml fresh atomic host potentials were present; no authorized converged _out endpoint."
+  },
+  "matched_no_u": {
+    "preflight_path": "/private/tmp/c5-no-u-release/preflight.json",
+    "preflight_sha256": "61793302e19a3b790939f884aa695a5af0fdaee714b84beeee12fd6a11b64141",
+    "output_hash_file": "/private/tmp/c5-no-u-release/output_hashes.json",
+    "output_hash_file_sha256": "54e5d5350c130ff9765a56338a9ceeb4cd384ca24e23b7d3827b557e21d708df",
+    "run_dirs": {
+      "rs_clean8b": "/private/tmp/c5-no-u-release/clean8b_release/Example_bulk_bccFe_nsp2_block",
+      "rs_fixed": "/private/tmp/c5-no-u-release/fixed_release/Example_bulk_bccFe_nsp2_block",
+      "ks_clean8b": "/private/tmp/c5-no-u-release/clean8b_release/Example_k_space_scf_bccFe",
+      "ks_fixed": "/private/tmp/c5-no-u-release/fixed_release/Example_k_space_scf_bccFe"
+    },
+    "output_sha256": {
+      "rs_clean8b": {
+        "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+        "Fe_1_spinene.out": "fedf53a0f77cfd542db4edb416ccaa7cc2273715fbefbc8127e224a04deb9d3d",
+        "Fe_dos.out": "e511562194835fe426e44b2e569401413b4a9203478a98f3236bae0ee31c88c8",
+        "Fe_orbene.out": "582f996e4f731bf6db2e64af72b34ef5a6a2762fdaf43ca7547b29f1ac75f4f1",
+        "Fe_orbital_dos.out": "217523f520a39670420a4445c8e247e10fb886a0f46c571e80b3ff011efb5f8c",
+        "Fe_orbquadene.out": "b0c781d336f534d8520fda5d5eaaf69e44d75ee52dfbdd193187190928f7de48",
+        "Fe_out.nml": "2bbd31c22d3015ffcb5a0a876d86c2399313e2314b0e247dba2335512ad001bf",
+        "Fe_scf.nml": "2bbd31c22d3015ffcb5a0a876d86c2399313e2314b0e247dba2335512ad001bf",
+        "angles_lmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "angles_magmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "fort.1122": "204bf912e35b9cc4900ff4b62f79d1046301e7f338e15ec2c4b8c026bef14241",
+        "fort.800": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6",
+        "fort.805": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246",
+        "input.nml": "45e28a6c2f2853949d4bf947e9916cd763a71e350d394bbd9e3810b729e0054d",
+        "linfo.out": "d2e68d490870e6e242859132f6547528de60ebeaee6a0229faafe013f8230e8b",
+        "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "magneticdos.out": "1bbe0506ad55e83cc02afc01e3b9d97349bc2c8514cc7cd760455b3dd5d884d2",
+        "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+        "minfo.out": "d4dd542d56da29b9cf78c75305641afaf875083053708aee4649277fcad13918",
+        "radial_ground_state_Fe_1.dat": "8c5426ea60e8c8223a3c078e0770fd6543ff3238bfb1f3ec925172788e996505",
+        "report.out": "4132d5ff9f171f9afdc357135debd9a2d373ee6160ba5188efe24b6dbd2fdfb1",
+        "sbar": "fc72279e46def961c6f129cd0f6d83769ee52bc84b4b819ab3f8dc3959a1a101",
+        "solver.pid": "054ff70e07af57102517b303395206a6e1bb10ab3fafd1287d4f485afa398324",
+        "str.out": "d50341a34353300153dcbeaa5439401f780c9b64a707e5f81552b6106b63dc1e",
+        "testrun.log": "37915dca5b8883dfcf49ba6dcb72d960ca65db932741babbca4c6424188a0d45",
+        "totaldos.out": "974862892a174e6f1ce28015cae1b2999c6d45ba2ad5531a6e75db57d593d86d",
+        "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "view.sbar": "038e5ddd68645f3055bad2a8298c7a641800d6b0198208daa0d1b992d3f37153"
+      },
+      "rs_fixed": {
+        "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+        "Fe_1_spinene.out": "89101cc81a8c2be02d15d1e724281bb70157576599cf93f24b56b770840f73cd",
+        "Fe_dos.out": "b13048e0156042506764eb21e235c1a9fda642148685dfb09e9d6a36e4ed0121",
+        "Fe_orbene.out": "e9a84b5817d5bd6208d4a6bbe1d199fa49a4a13a13dd7c2e977dbfbcbc9b7978",
+        "Fe_orbital_dos.out": "ed3fc0e47a93c4320aa5e7304cbfcb0653eff0dac990b3dfa4fe04b8844b4354",
+        "Fe_orbquadene.out": "7a3025c5a1c559e1dc9fbc3dc2c9af88f2ac3c8ab41ed19ee2d63c1c3533976f",
+        "Fe_out.nml": "3014171b18060dd7f36257d58fbdcaaa619eb24073faf84007e1667072a285c7",
+        "Fe_scf.nml": "3014171b18060dd7f36257d58fbdcaaa619eb24073faf84007e1667072a285c7",
+        "angles_lmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "angles_magmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "fort.1122": "204bf912e35b9cc4900ff4b62f79d1046301e7f338e15ec2c4b8c026bef14241",
+        "fort.800": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6",
+        "fort.805": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246",
+        "input.nml": "45e28a6c2f2853949d4bf947e9916cd763a71e350d394bbd9e3810b729e0054d",
+        "linfo.out": "d2e68d490870e6e242859132f6547528de60ebeaee6a0229faafe013f8230e8b",
+        "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "magneticdos.out": "4bfc18c16548249534fc6320af4e0eb5b672cdc106970ed96826072f90dceb50",
+        "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+        "minfo.out": "d4dd542d56da29b9cf78c75305641afaf875083053708aee4649277fcad13918",
+        "radial_ground_state_Fe_1.dat": "2bf966c3997127848364b893acee82404cc668eaca33776ebba37c82b60d9deb",
+        "report.out": "4132d5ff9f171f9afdc357135debd9a2d373ee6160ba5188efe24b6dbd2fdfb1",
+        "sbar": "fc72279e46def961c6f129cd0f6d83769ee52bc84b4b819ab3f8dc3959a1a101",
+        "solver.pid": "5ed3a14ea487693b6ba340a45e9a9518a2a5de4f58460a784b5176359b4acb59",
+        "str.out": "4eefdef1ffa8b0fa303956f467d05decde09e423b976d073c38044fd8ce8b957",
+        "testrun.log": "c5f0edec6a8ab9efbd5575108dbe83f599d5bdc176c0d4a780b9f5121481a50d",
+        "totaldos.out": "974862892a174e6f1ce28015cae1b2999c6d45ba2ad5531a6e75db57d593d86d",
+        "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "view.sbar": "038e5ddd68645f3055bad2a8298c7a641800d6b0198208daa0d1b992d3f37153"
+      },
+      "ks_clean8b": {
+        "Fe.nml": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+        "Fe_out.nml": "357b02113b576cb57f3c698c854e4fcd796d82bdaf9b74eed9d4f5b0a34daf01",
+        "Fe_scf.nml": "357b02113b576cb57f3c698c854e4fcd796d82bdaf9b74eed9d4f5b0a34daf01",
+        "angles_lmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "angles_magmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "band_moments.dat": "721ade73326a05ac438380c4a175b3aa3632037f6f2b628b2c826eb0f33a4096",
+        "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "density_of_states.dat": "d8be999119983ab2dd25cf97f8e4c22a665275741b2e39491fb532dfd7ee1148",
+        "fort.800": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6",
+        "fort.805": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246",
+        "input.nml": "2ef0357f64b2fd64faabbc8218f07dd52cb02b91cfdf59519e1110274a93c2ad",
+        "linfo.out": "d2e68d490870e6e242859132f6547528de60ebeaee6a0229faafe013f8230e8b",
+        "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "magneticdos.out": "84ccba6fbe54d94587d6b010d7663b48b27c8dd3655dfd95492afe03a6afa149",
+        "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+        "minfo.out": "4d1f291b039e34ce4a2a0e9ad6d7daed1d077f44615b25fd57fda12e9553c449",
+        "projected_dos.dat": "8a628ebe2eea729eb002f7fa4c56709f517e6ebd429200246c0da3ee85220bfd",
+        "radial_ground_state_Fe_1.dat": "e4d941574cf325b79cadf23411f11c4ad843ebdf74c18593e9707e9964a730e8",
+        "report.out": "5936773f8fb0ea370e166bf09dddcb15089936c900255b6ca90fb6dff405dd3c",
+        "sbar": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c",
+        "solver.pid": "8d0e1ff101a72e3929f03e7c3a24fb13c8191e44384b3bb6b33621a67ea4df57",
+        "str.out": "7c5429da197b167f880e4b13e06c12c9e650d6c9b2540bd39a09bd05b875cd35",
+        "testrun.log": "ae5b0676ba0ab0caeb601e42aa78440834a7d758ceb8469cc7ece6495c19505e",
+        "totaldos.out": "2b847edfca523545de49d78986016292a09c640c78da01a140d61876786323d6",
+        "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+      },
+      "ks_fixed": {
+        "Fe.nml": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+        "Fe_out.nml": "357b02113b576cb57f3c698c854e4fcd796d82bdaf9b74eed9d4f5b0a34daf01",
+        "Fe_scf.nml": "357b02113b576cb57f3c698c854e4fcd796d82bdaf9b74eed9d4f5b0a34daf01",
+        "angles_lmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "angles_magmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "band_moments.dat": "721ade73326a05ac438380c4a175b3aa3632037f6f2b628b2c826eb0f33a4096",
+        "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "density_of_states.dat": "d8be999119983ab2dd25cf97f8e4c22a665275741b2e39491fb532dfd7ee1148",
+        "fort.800": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6",
+        "fort.805": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246",
+        "input.nml": "2ef0357f64b2fd64faabbc8218f07dd52cb02b91cfdf59519e1110274a93c2ad",
+        "linfo.out": "d2e68d490870e6e242859132f6547528de60ebeaee6a0229faafe013f8230e8b",
+        "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "magneticdos.out": "84ccba6fbe54d94587d6b010d7663b48b27c8dd3655dfd95492afe03a6afa149",
+        "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+        "minfo.out": "4d1f291b039e34ce4a2a0e9ad6d7daed1d077f44615b25fd57fda12e9553c449",
+        "projected_dos.dat": "8a628ebe2eea729eb002f7fa4c56709f517e6ebd429200246c0da3ee85220bfd",
+        "radial_ground_state_Fe_1.dat": "e4d941574cf325b79cadf23411f11c4ad843ebdf74c18593e9707e9964a730e8",
+        "report.out": "5936773f8fb0ea370e166bf09dddcb15089936c900255b6ca90fb6dff405dd3c",
+        "sbar": "7d4966c4c21aae488b7b6251a4a0518e5c7ef6b564983fb967ff367a7d10164c",
+        "solver.pid": "68aadd4afb3866a13fc53497e844bb529236fbe0cc877eaa87ff4427ae1e86de",
+        "str.out": "382ad1baf3e5bb0606ca8822960395e8f27f8c773faa73ebbc7c6d32a3ebb9fd",
+        "testrun.log": "8631d547017d27653e25d8501d4f8afae96436b3e9683b9a08bd45451cbfd73d",
+        "totaldos.out": "2b847edfca523545de49d78986016292a09c640c78da01a140d61876786323d6",
+        "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+      }
+    },
+    "metadata_rule": "testrun.log excluded; str.out retained and parsed. Only cpu_s differs in each str.out."
+  },
+  "files_sha256": {
+    "source/lattice_cluster.f90": "203fb901b685f428a0d811766c0af6dcc4abc024aa5cde8689b8f7e9765a6bcb",
+    "CMakeLists.txt": "d77b30264b3ecd92f16d8cf4f0ed4c2b1739ee67d70dd27b4e9f8248c02d28eb",
+    "tests/validation/fixed_ldau/c5_hcp_co_cluster_setup.py": "311f83ba4a2542130568e0c3639ba4659f3f743eb19174b51e5b248f97937fb9",
+    "tests/KNOWN_ISSUES.md": "219f0afbab3bbd1b3685d48b28af6c75ad672f50f57b725de07a5ab8b78b1229",
+    "frozen_production_binary": "710f91b3b3478cb8e4c89961edb6eca02e1fc72244a0c8061154604761898794",
+    "clean8b_release_binary": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc",
+    "debug_binary": "56904beb55878d0de3ebf6768afa047652e5017b578a8907cea25f5878d25b61",
+    "pre_fix_debug_reproducer_log": "f2d2415a1ebc237041a52e0c7eed28348e073624980ba0b204950bf9c103e986",
+    "post_fix_debug_ctest_console": "15a311d35528b46ffe9c92386587153b320a1f9123429e7ff65b20772d945215",
+    "post_fix_outnewclu": "9c4c9f52b548f11a364959c1cd33a5ec9f0e8b733be7852d9f3363b8ad2c36f4",
+    "invalid_u0_control_log": "506bea4f93760f291ec03d7a0df6d64e1b49576cffa89745f4074c193a9a7a38",
+    "invalid_u0_control_input": "647ebc57ec04ca7504531eb4d2754a20b910c87e949637d5ffba9bafe738ec22",
+    "invalid_u0_control_lattice": "c405cd70881353046990d2d87ccff1642ec89b39fa3698eeb1e9492e1349820f",
+    "corrected_u0_unlaunched_preflight": "1afe59012d2a55c2ca7fbec62dbf65aadd0f94504748dd43c30b3fd006730600",
+    "matched_no_u_preflight": "61793302e19a3b790939f884aa695a5af0fdaee714b84beeee12fd6a11b64141",
+    "matched_no_u_output_hashes": "54e5d5350c130ff9765a56338a9ceeb4cd384ca24e23b7d3827b557e21d708df",
+    "part_i_amendment": "7e26a428c115cd49b67ab38942cfdd14b41f6fa590d5fd4d86c0b90e8abcbc2a",
+    "part_i_results": "399df6de1380fadb6ae04fff34bbab44381b9713200eb11dd9d88190815d3f4f",
+    "part_ii_results": "336115e4de9ff6bf5d4347519f633efd06f9447462ae358bc7f83314c7a73cef",
+    "part_i_known_issues_diff": "cfe5821c5e0fa819895b5bfffbb4ee3b066fa33dff14ef53c42426aa2744e423",
+    "known_issues_after_r1": "0adb3900f490f72fb15fb08d405e8dab1443df9ec7e78129308dad526e67b5ce"
+  },
+  "raw_paths": {
+    "no_u_runs": "/private/tmp/c5-no-u-release",
+    "initial_invalid_comparability": "/private/tmp/c5-no-u-identity",
+    "invalid_u0": "/private/tmp/c5-r1-u0-control",
+    "debug_repro": "/private/tmp/c5-r1-repro-exact",
+    "regression": "/private/tmp/c5-r1-debug-build/Testing/validation/c5_hcp_co_cluster_setup"
+  },
+  "auditor_verdicts": {
+    "R1_setup": "PASS",
+    "R1_no_u_RS": "FAIL",
+    "R1_no_u_KS": "PASS",
+    "stop": "STOP per C5 §2.5(a)"
+  }
+}
