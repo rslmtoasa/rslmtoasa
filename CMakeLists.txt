@@ -1183,13 +1183,17 @@ add_test(NAME AppGbtKspaceCommensurate
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_commensurate.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/commensurate" first)
 add_test(NAME AppGbtKspaceCommensurateSecondOrder
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_commensurate.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/commensurate_second" second)
+add_test(NAME AppGbtKspaceCommensurateCcor
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_commensurate.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/commensurate_ccor_first" first ccor)
+add_test(NAME AppGbtKspaceCommensurateCcorSecondOrder
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_commensurate.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/commensurate_ccor_second" second ccor)
 add_test(NAME AppGbtKspaceSymmetry
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_symmetry.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/symmetry")
 add_test(NAME AppGbtKspaceOrthogonal
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_orthogonal.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/orthogonal")
 add_test(NAME AppGbtKspaceHamOrderInvalid
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_ham_order_invalid.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/ham_order_invalid")
-set_tests_properties(AppGbtKspaceGauge AppGbtKspaceGaugeCcor AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceHamOrderInvalid
+set_tests_properties(AppGbtKspaceGauge AppGbtKspaceGaugeCcor AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceCommensurateCcor AppGbtKspaceCommensurateCcorSecondOrder AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceHamOrderInvalid
   PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
 
 foreach(mode identity converge chi symmetry guards)
