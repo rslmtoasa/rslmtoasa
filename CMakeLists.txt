@@ -1190,6 +1190,12 @@ add_test(NAME AppGbtKspaceHamOrderInvalid
 set_tests_properties(AppGbtKspaceGauge AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceHamOrderInvalid
   PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
 
+add_test(NAME ValGbtHarmonic
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/validation/val_gbt_harmonic.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/validation/gbt_harmonic")
+add_test(NAME ValGbtConvergence
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/validation/val_gbt_convergence.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/validation/gbt_convergence")
+set_tests_properties(ValGbtHarmonic ValGbtConvergence PROPERTIES LABELS "validation;gbt" TIMEOUT 7200)
+
 add_test(NAME AppPeriodicNcRotation
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/noncollinear/test_periodic_nc_rotation.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/noncollinear/rotation")
 set_tests_properties(AppPeriodicNcRotation PROPERTIES LABELS "functional;noncollinear" TIMEOUT 600)

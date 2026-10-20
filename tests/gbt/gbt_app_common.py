@@ -114,3 +114,26 @@ def read_bonds(deck):
         elif f and f[0] == "S":
             bonds[-1][2][int(f[1]) - 1, int(f[2]) - 1] = complex(float(f[3]), float(f[4]))
     return bonds
+
+
+def run_orthogonal(binary, dst, nk, temperature, theta_deg, qs):
+    """frozen_magnon (mft) with kspace_ham_order = 'orthogonal' on the fixed tests/spin_response/fe_bcc potential, zero SCF
+    steps, Gamma-centred nk^3 mesh. Returns (mu, M, DeltaOmega/sin^2(theta) [mRy], omega [meV]) with DeltaOmega = Omega(q, theta) - Omega(0, 0)."""
+    dst = Path(dst)
+    shutil.rmtree(dst, ignore_errors=True)
+    shutil.copytree(SR / "fe_bcc", dst)
+    nml = f90nml.read(str(SR / "fe_bcc" / "input.nml"))
+    nml["calculation"].update(post_processing="frozen_magnon")
+    nml["self"].update(nstep=0)
+    nml["control"].update(nsp=3)
+    nml["reciprocal"].update(nk1=nk, nk2=nk, nk3=nk, temperature=temperature, auto_find_fermi=True, kspace_ham_order="orthogonal")
+    nml["hamiltonian"] = {"hoh": False, "theta_ss": theta_deg}
+    nml["frozen_magnon"] = {"mode": "mft", "q_file": "q.dat", "q_coordinates": "direct"}
+    nml.write(str(dst / "input.nml"), force=True)
+    (dst / "q.dat").write_text(f"{len(qs) + 1}\n0 0 0\n" + "\n".join(" ".join(map(str, q)) for q in qs) + "\n")
+    run(binary, dst)
+    header = (dst / "frozen_magnon_kspace.dat").read_text().splitlines()[0]
+    mu, moment = (float(re.search(rf"{k}\s*=\s*([-+0-9.eE]+)", header).group(1)) for k in (r"mu \[Ry\]", r"M \[muB\]"))
+    row = np.loadtxt(dst / "frozen_magnon_kspace.dat", ndmin=2)     # columns: see the file header; 7 Omega(q,theta), 8 Omega(q,0), 11 omega [meV]
+    dom = 1.0e3 * (row[1:, 7] - row[0, 8]) / np.sin(np.radians(theta_deg)) ** 2
+    return mu, moment, dom, row[1:, 11]
