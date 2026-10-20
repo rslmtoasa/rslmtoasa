@@ -62,6 +62,11 @@ RSLMTO_GF_AUDIT=all RSLMTO_GF_AUDIT_H=1 \
   mpiexec -n 2 /absolute/build_gf_audit/bin/rslmto.x input.nml
 ```
 
+On an existing SLURM allocation, the runner can use `--mpiexec srun`, with
+`--mpi "$SLURM_NTASKS" --threads "$SLURM_CPUS_PER_TASK"`. Keep OpenBLAS at one
+thread. Recursion buffers are still partly replicated, so increasing MPI ranks
+can increase total memory even though GF arrays are distributed.
+
 Controls:
 
 | Variable | Meaning |

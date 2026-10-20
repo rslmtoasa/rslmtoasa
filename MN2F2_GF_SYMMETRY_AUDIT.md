@@ -2,7 +2,7 @@
 
 ## Result and scope
 
-The earliest **measured** violation is nonreciprocity of the supplied screened
+The earliest **measured reciprocity failure** occurs in the supplied screened
 structure constants, before Hamiltonian construction, GF decomposition or CC/SC
 contraction. For the first Mn1->Mn2 bond,
 `max|Sbar_ij - Sbar_ji^t| = 1.1189163346969622e-6`. These matrices produce a
@@ -205,7 +205,15 @@ The source's bare block is reproduced as
 $$h_{ij}=W_i(1_2\otimes\bar S_{ij}^{\,t})W_j,
 \quad W_i=w_i^0+\boldsymbol\sigma\cdot\mathbf n_i\,w_i^1,$$
 
-with the `hcpx` transform applied to orbital blocks. Here w0,w1 are the shell
+with the `hcpx` transform applied to orbital blocks. Therefore, offsite,
+
+$$h_{ij}-h_{ji}^\dagger=W_i[1_2\otimes(\bar S_{ij}^{\,t}-\bar S_{ji})]W_j.$$
+
+This factorization directly predicts the hopping reciprocity error from the
+screened constants. For Hermitian overlap-correction O, the HoH defect obeys
+`h O h - h^dagger O h^dagger = (h-h^dagger) O h + h^dagger O (h-h^dagger)`;
+it can consequently generate onsite non-Hermiticity even when bare onsite h
+is Hermitian. Here w0,w1 are the shell
 expanded half-sum/difference of `width_band` channels. Onsite radial terms are
 added separately and are Hermitian. Reconstructed offsite h agrees with the
 capture at maximum residuals `2.57e-16` and `1.60e-16` Ry for ij and ji.
@@ -293,7 +301,25 @@ At sample 577, compare matched ji matrices between [100] and [-100]:
 | Gx0, same parity (allowed) | 4.29157 | 8.58315 | 3.29975e-7 |
 
 Thus the dominant allowed matrices follow nominal T parity while the leaking
-blocks have the opposite parity. Their products explain both observed odd CCx
+blocks have the opposite parity.
+
+The full axial runs confirm this beyond a single energy/bond. Over all 12
+intersublattice bonds, define aggregate relative residuals by concatenating the
+occupied-energy matrices/integrands and dividing by the plus-domain norm:
+`even=||F_- - F_+||/||F_+||`, `odd=||F_- + F_+||/||F_+||`.
+There are 606 occupied grid points per bond (7,272 integrand samples) and 19
+occupied matrix snapshots per bond (228 snapshots for each listed sector):
+
+| Quantity | Relative residual if even | Relative residual if odd |
+| --- | ---: | ---: |
+| CCx integrand | 1.99999979 | 1.69488e-4 |
+| SCx integrand | 2.00000004 | 1.19935e-4 |
+| G01_ij, forbidden same-parity blocks | 1.06146e-4 | 2.00000001 |
+| Gx0_ji, allowed same-parity blocks | 1.99999997 | 2.72546e-7 |
+| Gx1_ji, forbidden same-parity blocks | 2.00000000 | 2.01132e-4 |
+
+These are numerical residuals for the saved, approximately reversed domains;
+they are not assertions of exact input time reversal. Their products explain both observed odd CCx
 and odd SCx before any energy integration. No spin-axis output rotation is involved. Delta's inter-domain difference is
 small but nonzero: maximum Frobenius differences are `3.31e-8` and `1.38e-6`
 for sites i/j across samples. Its mirror commutator is still zero, and a diagonal
@@ -305,7 +331,8 @@ The analyzer uses orbital C2x derived from Cartesian polynomial parities and V,
 `C2z=I*M`, orbital inversion `(-1)^l`, and the corresponding spinor transformations.
 C2z*T uses the full transpose and the reverse raw GF; inversion and C2x are
 unitary. Directed bond maps use types and displacements, with the actual cluster
-indices retained. For the first four original pairs `(1,2)`, `(1,592)`, `(1,611)`,
+indices retained. Operations are centred in the Mn plane; periodic in-plane
+translations restore the source Mn1 to cluster index 1 where needed. For the first four original pairs `(1,2)`, `(1,592)`, `(1,611)`,
 `(1,612)`:
 
 | Operation | Mapped target indices in the same order |
@@ -334,15 +361,83 @@ asserted identical to this bare-block reconstruction. The detailed analyzer sepa
 pairs, absolute/relative raw covariance residuals at every sampled energy, and
 matrix-level bare-T residuals.
 
-Execution log and full-run numerical summary are completed below after the
-24-pair calculations. Initial validation: 15 synthetic/source/analyzer tests pass;
-unmodified baseline and instrumented serial first-pair [100]/[-100] runs succeed;
-`dijso.out` and `dijparts.out` are identical at printed precision for each domain.
-GNU Fortran 13.3, OpenBLAS 0.3.26 and OpenMPI 4.1.6 are available through a local
-toolchain. An MPI two-rank/two-pair smoke calculation succeeds, with separate rank
-and global-pair diagnostic files. Baseline serial smoke runtimes were about 93 s
-per domain; instrumented runtimes about 91-95 s under that load. Timing is not
-an overhead benchmark.
+## Completed full-run validation
+
+All four original 24-pair jobs completed successfully with **two MPI ranks and
+four OpenMP threads per rank**, using the unmodified saved grid, recursion length,
+Hamiltonian flags and atom-state files. This supplies 96 directed-bond results,
+6,144 sampled full-matrix bond-energy points, and all 192,960 pre-integration
+bond-energy integrand records. Each atom-state file is byte-identical to its
+supplied counterpart after execution; `local_axis=F` in every captured pair.
+
+Sums are over the 12 Mn1->Mn2 bonds. Output differences compare every matched
+ordered bond with the original supplied printed file, in mRy:
+
+| Case directory | Runtime (s) | Re-executed summed Dx | Re-executed summed Dz | max difference, dijso | max difference, dijparts |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 100 | 721.55 | 1.82060154e-06 | 0.00000000e+00 | 2.12075e-14 | 2.10205e-14 |
+| 1-00 | 778.00 | -1.82060134e-06 | 0.00000000e+00 | 4.35810e-14 | 4.36770e-14 |
+| 110 | 686.76 | 1.28719686e-06 | 4.37086780e-03 | 2.56110e-14 | 2.48840e-14 |
+| 1-1-0 | 744.70 | -1.28719677e-06 | 4.37065620e-03 | 3.52400e-14 | 3.18720e-14 |
+
+These cross-run differences are negligible compared with the reproducible
+longitudinal signal. Exact printed identity is not claimed between different
+compiler/parallel runs. The matched serial unmodified/instrumented axial smoke
+runs were exactly identical at printed precision. Independent unmodified baseline
+first-pair runs were also completed for both diagonal domains; their dijso/dijparts
+values match the full instrumented first pair exactly at printed precision.
+For the full axial run versus its independent baseline first pair, the largest
+remaining difference is `2.5e-16` mRy. Thus small parallel summation differences
+are measured rather than mistaken for instrumentation changes.
+
+Across every sampled pair/energy, independent raw Pauli and R-sector constructions
+agree **exactly**, Delta mirror commutators are zero, and the maximum independent
+CC/SC contraction error is `2.77556e-17`. Source comparison against the recorded
+base SHA confirms that production exchange and recursion bodies are unchanged
+after removing the two read-only diagnostic calls; green, Hamiltonian,
+symbolic-atom, math and lattice source files are byte-identical to main.
+
+Maximum orbital mirror Frobenius residuals over all 24 pairs and 64 energies per
+case (ij matrices, code GF units):
+
+| Sector | [100] | [-100] | [110] | [-1-10] |
+| --- | ---: | ---: | ---: | ---: |
+| G00 | 9.592241e-08 | 9.592258e-08 | 1.091792e-07 | 1.091777e-07 |
+| G01 | 8.825627e-06 | 8.825627e-06 | 8.824831e-06 | 8.824831e-06 |
+| Gx0 | 9.881688e-08 | 9.881705e-08 | 8.694192e-08 | 8.694189e-08 |
+| Gx1 | 5.463273e-06 | 5.463273e-06 | 3.862740e-06 | 3.862739e-06 |
+| Gy0 | 5.110873e-08 | 5.110874e-08 | 8.615789e-08 | 8.615780e-08 |
+| Gy1 | 6.693915e-08 | 6.693916e-08 | 3.862634e-06 | 3.862636e-06 |
+| Gz0 | 6.566117e-08 | 6.566118e-08 | 6.567364e-08 | 6.567363e-08 |
+| Gz1 | 4.984406e-08 | 4.984406e-08 | 3.795720e-08 | 3.795723e-08 |
+
+The diagonal runs independently reproduce the reversal of both in-plane
+components, with approximately parallel Dx,Dy, while Dz remains essentially even.
+Both Gx1 and Gy1 exhibit the analogous leaking blocks. C2x is **not** imposed as a
+same-domain symmetry for [110].
+
+Mapped raw-spinor covariance checks, maximum absolute element residual over all
+24 bonds and sampled energies:
+
+| Case | C2x | C2z*T retarded transpose | inversion |
+| --- | ---: | ---: | ---: |
+| 100 | 1.283204e-08 | 3.208400e-06 | 1.283204e-08 |
+| 1-00 | 1.283483e-08 | 3.208400e-06 | 1.283484e-08 |
+| 110 | not invariant | 3.208399e-06 | 1.278377e-08 |
+| 1-1-0 | not invariant | 3.208399e-06 | 1.270815e-08 |
+
+No required geometric partner is missing. The much larger antiunitary transpose
+residual is consistent with the identified missing Hermiticity assumption, rather
+than failure of direct antiunitary Hamiltonian covariance. Detailed per-energy
+absolute max/mean/Frobenius and relative residuals, both directions, and all
+orbital/angular trace partitions are retained in the private numerical archive.
+
+Fifteen source/synthetic/analyzer tests pass. Serial and MPI GNU Fortran 13.3 /
+OpenBLAS builds pass. The diagnostic code also passed GitHub binary builds on
+Ubuntu, Windows and macOS. The first full-job trials with six and four ranks hit
+the environment's 8 GiB memory limit because some recursion buffers are replicated;
+the two-rank runs completed without changing calculation parameters. No failed
+trial is counted as a completed calculation or used for matrix analysis.
 
 ## Decision tree and remaining uncertainty
 
