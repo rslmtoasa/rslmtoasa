@@ -103,6 +103,16 @@ Implementation status
 Validated ordinary on-site scope
 ================================
 
+Base ASA stationarity measurement
+---------------------------------
+
+The fixed-shift U=0 control has a base-energy derivative residual of −0.14% in
+KS and −0.16% to −0.17% in RS. This is a property of the ASA energy assembly
+and bounds the accuracy claimed for the matching fixed-U derivative tests.
+It does not imply that explicit spectral mode adopts the local Hubbard-energy
+correction; that mode remains spectral/non-adopted. See
+``docs/validation/fixed_ldau/ENERGY_ACCOUNTING.md`` for scope and receipts.
+
 Fixed-U energy-accounting status (A4.4)
 ---------------------------------------
 

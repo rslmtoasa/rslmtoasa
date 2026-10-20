@@ -51,7 +51,7 @@
   "C2_crash_triage": {
     "amendment": "docs/validation/fixed_ldau/rs/C2_AMENDMENT.md; verbatim user-authorized C2 extends C1 and replaces only C1 \u00a75(c)",
     "case": "Corrected hcp Co impurity, nsp=1, spectral, U=3 eV, J=0.7 eV; input/lattice/host/seed audited before triage. The only lattice correction from earlier attempt was removal of unsupported lattice.nml ntype=2.",
-    "classification": "PRE-EXISTING ISSUE: same bounds failure occurs with U=J=0; clean 8b run did not reach SCF (SIGKILL, cause unknown). The failure line matches 8b8f7ef source. Hypothesis: file-lattice cluster construction leaves ct length at ndim=50000 while cluster routine expects ntype=3. No hypothesis has been proven beyond matching failure location.",
+    "classification": "INCONCLUSIVE FOR NON-FINITE CLASSIFICATION: the archived Co Debug and U=0 runs stop before SCF at the same bounds error in lattice_cluster.f90:996; the archived clean-8b run was SIGKILLed before SCF with empty stdout and unknown cause. These records do not establish a Co non-finite failure on clean 8b. The C4 amendment separately reports that failure as pre-existing; its supporting raw run is not present in this C1 archive.",
     "debug_build": {
       "baseline_comparison": "`source/lattice_cluster.f90:996` ctnew assignment source is byte-identical to `git show 8b8f7ef:source/lattice_cluster.f90`; the C1 change list does not include lattice_cluster.f90.",
       "build_dir": "/private/tmp/rslmto-c2-bounds-snapshot",
@@ -66,7 +66,7 @@
       },
       "source_snapshot": "/private/tmp/rslmto-c2-triage-src"
     },
-    "decision": "Per C2 \u00a72, drop hcp Co RA4 and substitute direct-generated fcc Ni, nsp=1 spectral, U=3.0/J=0.7 eV. No Co code fix attempted.",
+    "decision": "Per C2 \u00a72, drop hcp Co RA4 and substitute direct-generated fcc Ni, nsp=1 spectral, U=3.0/J=0.7 eV. No Co code fix attempted. This is a setup-triage decision, not verified evidence of the reported clean-8b non-finite failure.",
     "i_debug_bounds": {
       "binary": "/private/tmp/rslmto-c2-bounds-snapshot/bin/rslmto.x",
       "binary_sha256": "ce16fc4a4964b0d1211c59bd27a0c7f1e3cc9f0d3921865bd62a9578bce77a88",

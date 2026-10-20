@@ -22,8 +22,11 @@ The implemented route is limited to ordinary native reciprocal KS
 explicit fixed general Liechtenstein U/J, scalar-collinear `nsp=1`, `lmax=2`,
 and disabled constraints. SOC/noncollinear, HOH, self-consistent U, intersite
 V, impurity U, impurity/surface hosts, and nonzero test fields are excluded;
-RS remains on its guarded spectral path pending its own M1/M2. The scoped
-energy route and restart/serial-MPI checks pass. Individual serial route
+The reviewed B3 extension also enables the same local correction for qualifying
+clean-bulk RS runs; explicit spectral selection remains spectral/non-adopted.
+The measured base ASA non-stationarity is −0.14% in KS and −0.16% to −0.17%
+in RS, so the numerical comparison is limited to the measured ASA accuracy.
+The scoped energy route and restart/serial-MPI checks pass. Individual serial route
 receipts, the distinct matched serial/MPI pair, and the RS spectral scope
 control are indexed in the [A4.4 control evidence](evidence/a4_4_control_evidence_index.json);
 the matched pair itself is [archived here](evidence/a4_4_matched_serial_mpi_repro.json).

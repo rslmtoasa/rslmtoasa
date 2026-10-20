@@ -1,6 +1,6 @@
 # C4 A4.2 — frozen native coefficient cross-swap
 
-Both original contexts use `recur='block'`; swaps preserved each receiver's mesh, precision, window, input, and native route and stopped before any potential update. The two directions exchanged full production A, exact post-`zsqr` B, and all four native terminator outputs (`a_inf`, `b_inf`, `a_inf0`, `b_inf0`); readback was exact across 6,804 coefficient entries and 324 terminator matrix rows. Both swaps reproduce the opposite native d-LDOS and complex P_OUT/QL exactly at serialized precision, so the A4.2 evaluator-inconsistency condition is not met.
+Both original contexts use `recur='block'`; swaps preserved each receiver's mesh, precision, window, input, and native route and stopped before any potential update. The two directions exchanged full production A, exact post-`zsqr` B, and injected the full `a_inf`/`b_inf` matrices while recomputing their averages; readback was exact across 6,804 coefficient entries and 324 terminator matrix rows. Both swaps reproduce the opposite native d-LDOS and complex P_OUT/QL exactly at serialized precision, so the A4.2 evaluator-inconsistency condition is not met.
 
 At A level k=0, the first off-diagonal difference is roundoff-sized (5.5e−17); at k=1, A(2,2) is −0.0176877658814 Ry (bulk) versus −0.0176877714694 Ry (impurity). The first k=1 B² and exact-B diagonal values differ by about 1.49e−8 Ry² and 1.53e−8 Ry, respectively. The full-array maxima are:
 
