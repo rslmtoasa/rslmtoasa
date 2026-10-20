@@ -1,0 +1,99 @@
+{
+  "run_id": "B2a_Fe_record",
+  "run_dir": "/private/tmp/c5-3-b-runs/b2a_fe",
+  "launch_count": "5 of 6 Part B launches; no further launch",
+  "process": {
+    "solver_pid": 85089,
+    "wrapper_pid": 85088,
+    "outer_shell_pid": 85087,
+    "verified_executable": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x",
+    "termination": "intentional SIGTERM authorized by root after freezing and audit clearance of step59 checkpoint",
+    "signal_command": "kill -TERM 85089",
+    "wrapper_exit_code": 143,
+    "monitor_finished_epoch": 1792511674.104361,
+    "monitor_finished_local": "2026-10-20T17:54:34.104361+02:00",
+    "monitor_samples": 60,
+    "process_gone_polls": 3,
+    "all_owned_processes_gone_verified_by_ps": true
+  },
+  "iteration_state": {
+    "completed_diff_rows": 65,
+    "last_completed_iteration": 65,
+    "last_completed_diff": {
+      "timestamp": "Oct 20 2026 17:53:25.861",
+      "diff": 1.77e-08,
+      "log_line": 1827
+    },
+    "final_log_tail": [
+      "[Oct 20 2026 17:54:09.594] [recursion_chebyshev.f90:189]  <info> Chebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]",
+      "[Oct 20 2026 17:54:09.627] [bands.f90:482]             <info> Valence is:        8.000000",
+      "[Oct 20 2026 17:54:09.629] [bands.f90:547]             <info> Free Fermi energy: -0.069208",
+      "[Oct 20 2026 17:54:09.690] [bands.f90:1701]            <info> Spin moment of atom   1 is   2.113688",
+      "[Oct 20 2026 17:54:09.690] [bands.f90:1711]            <info> Spin moment projections of atom   1 is   0.000000   0.000000   2.113688",
+      "[Oct 20 2026 17:54:09.771] [bands.f90:2072]            <info> Orbital moment of atom   1 is  -0.000000  -0.000000  -0.000000",
+      "[Oct 20 2026 17:54:09.772] [bands.f90:817]             <info> DENSITY_POLICY constrained_spiral atom   1 m_long=  2.113688 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)",
+      "[Oct 20 2026 17:54:09.772] [self.f90:4134]             <info> Mixtype is broyden",
+      "[Oct 20 2026 17:54:09.773] [mix.f90:712]               <info> Valence at atom   1 is   8.000000",
+      "[Oct 20 2026 17:54:09.773] [mix.f90:715]               <info> Charge transfer at atom    1:  -0.000000  -0.000000   0.000000",
+      "[Oct 20 2026 17:54:09.773] [mix.f90:725]               <info> Moment diff for atom:   1 is   0.000000",
+      "[Oct 20 2026 17:54:09.773] [charge.f90:714]            <info> Excess charge  -0.000000",
+      "[Oct 20 2026 17:54:09.773] [charge.f90:725]            <info> Class    1 Chg. Transfer=  -0.000000 VMAD=   0.000000",
+      "[Oct 20 2026 17:54:09.773] [self.f90:5092]             <info> Fe"
+    ],
+    "interrupted_in_next_iteration_after_moment_and_before_next_diff": true,
+    "latest_trace_snapshot_sha256": "8d0d57dbf99589f7b1d7bc8c99c19d4ee5703898083884fe46cb5cefcd7dfcd2",
+    "latest_trace_snapshot_mtime_ns": 1792511649837261879,
+    "latest_trace_snapshot_not_used_for_accepted_candidate": true
+  },
+  "accepted_candidate_checkpoint": {
+    "path": "/private/tmp/c5-3-b-runs/b2a_fe_step59_candidate_record/Fe_scf_step59.nml",
+    "sha256": "62211b6202872f855c732fb267b2c36f08b6a11d1785a00fc8d9dd7ee030bd10",
+    "candidate_manifest_sha256": "09c7fd4f4820397844c3ef72c01ca2d9c108e3da2c3de1a16ffdafd6b4241f2b",
+    "moment_addendum_sha256": "08c746035576cf5ad8d868f027d9e179a5de16a05d18375a40082087d5561209",
+    "candidate_not_replaced_by_later_live_outputs": true
+  },
+  "output_validation": {
+    "root_file_count": 22,
+    "output_hash_map_path": "/private/tmp/c5-3-b-runs/b2a_fe_terminal_record/output_hash_map.json",
+    "output_hash_map_sha256": "b5a2693b80042d4cbd5fef5336634d294c2097b33593b33231a518bc77611982",
+    "parsed_namelists": {
+      "Fe.nml": {
+        "parse": "PASS",
+        "numeric_value_count": 118,
+        "nonfinite_numeric_count": 0,
+        "nonfinite_values": []
+      },
+      "Fe_out.nml": {
+        "parse": "PASS",
+        "numeric_value_count": 278,
+        "nonfinite_numeric_count": 0,
+        "nonfinite_values": []
+      },
+      "Fe_scf.nml": {
+        "parse": "PASS",
+        "numeric_value_count": 278,
+        "nonfinite_numeric_count": 0,
+        "nonfinite_values": []
+      },
+      "input.nml": {
+        "parse": "PASS",
+        "numeric_value_count": 14,
+        "nonfinite_numeric_count": 0,
+        "nonfinite_values": []
+      }
+    },
+    "nonfinite_standalone_tokens": [],
+    "nonfinite_numeric_namelist_values": [],
+    "finite_parse_pass": true,
+    "scientific_outputs_hashed": true
+  },
+  "budget_and_scope": {
+    "six_run_cap_total": 6,
+    "used_solver_launches": 5,
+    "reserve_used": false,
+    "fallback_launched": false,
+    "source_changes": false,
+    "cleanup_tests_gbt_touched": false,
+    "user_inputs_modified": false
+  }
+}

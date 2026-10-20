@@ -1,0 +1,479 @@
+{
+  "status": "CANDIDATE_MONITORING_RECORD_ONLY_NOT_ACCEPTANCE",
+  "run_path": "/private/tmp/c5-3-b-runs/b2a_fe",
+  "frozen_record_dir": "/private/tmp/c5-3-b-runs/b2a_fe_step59_candidate_record",
+  "last20_diff_rows": [
+    40,
+    59
+  ],
+  "completed_diff_rows_at_capture": 60,
+  "capture_diff": 1.4e-08,
+  "capture_diff_timestamp": "Oct 20 2026 17:49:01.126000",
+  "all_snapshot_matches_unique": true,
+  "max_abs_snapshot_diff_time_sec": 0.0009407997131347656,
+  "physical_moment_source": "testrun.log Spin moment of atom 1 is; 6-decimal printed precision; not normalized mom axis or lmom",
+  "spreads": {
+    "ql1_d_spin1": {
+      "min": 4.353207618287576,
+      "max": 4.3532078197489055,
+      "spread": 2.0146132939657946e-07
+    },
+    "ql1_d_spin2": {
+      "min": 2.1444135048051587,
+      "max": 2.144413906208451,
+      "spread": 4.01403292382696e-07
+    },
+    "physical_spin_moment_muB_printed_6dp": {
+      "min": 2.113688,
+      "max": 2.113688,
+      "spread": 0.0,
+      "precision_note": "Each log value is printed to 6 decimal places; the observed zero spread does not prove a true spread <= 1e-6."
+    }
+  },
+  "rows": [
+    {
+      "iteration": 40,
+      "diff_timestamp_raw": "Oct 20 2026 17:09:40.048000",
+      "diff": 6.52e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:09:40.048] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000652",
+      "moment_timestamp_raw": "Oct 20 2026 17:09:39.923000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:09:39.923] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.125,
+      "snapshot": {
+        "iteration": 40,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_034_0d762ffa0cc9.nml",
+        "frozen_path": "states/iter_040_Fe_scf.nml",
+        "source_sha256": "0d762ffa0cc9f8bb350aecd4682336f04c172512058c84cf2eb7fc447367812b",
+        "frozen_sha256": "0d762ffa0cc9f8bb350aecd4682336f04c172512058c84cf2eb7fc447367812b",
+        "mtime_ns": 1792508980048842793,
+        "size": 6772,
+        "ql1_d_spin1": 4.3532078197489055,
+        "ql1_d_spin2": 2.1444135048051587,
+        "snapshot_minus_diff_seconds": 0.0008425712585449219
+      }
+    },
+    {
+      "iteration": 41,
+      "diff_timestamp_raw": "Oct 20 2026 17:10:19.952000",
+      "diff": 6.64e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:10:19.952] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000664",
+      "moment_timestamp_raw": "Oct 20 2026 17:10:19.822000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:10:19.822] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.12999987602233887,
+      "snapshot": {
+        "iteration": 41,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_035_08d8e0ba9643.nml",
+        "frozen_path": "states/iter_041_Fe_scf.nml",
+        "source_sha256": "08d8e0ba9643794ce927d1c622a880cf5ab6c8d136ae9897800c73f02169ae18",
+        "frozen_sha256": "08d8e0ba9643794ce927d1c622a880cf5ab6c8d136ae9897800c73f02169ae18",
+        "mtime_ns": 1792509019952940852,
+        "size": 6772,
+        "ql1_d_spin1": 4.353207817736658,
+        "ql1_d_spin2": 2.144413509392168,
+        "snapshot_minus_diff_seconds": 0.0009407997131347656
+      }
+    },
+    {
+      "iteration": 42,
+      "diff_timestamp_raw": "Oct 20 2026 17:11:00.866000",
+      "diff": 6.35e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:11:00.866] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000635",
+      "moment_timestamp_raw": "Oct 20 2026 17:11:00.726000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:11:00.726] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.1399998664855957,
+      "snapshot": {
+        "iteration": 42,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_036_c2e8319f4617.nml",
+        "frozen_path": "states/iter_042_Fe_scf.nml",
+        "source_sha256": "c2e8319f4617e1d5a5998a692d3a6d93bff7f6d0d4dd12dcf1f48c44fb864eef",
+        "frozen_sha256": "c2e8319f4617e1d5a5998a692d3a6d93bff7f6d0d4dd12dcf1f48c44fb864eef",
+        "mtime_ns": 1792509060866364032,
+        "size": 6772,
+        "ql1_d_spin1": 4.3532078144087505,
+        "ql1_d_spin2": 2.1444135207069484,
+        "snapshot_minus_diff_seconds": 0.00036406517028808594
+      }
+    },
+    {
+      "iteration": 43,
+      "diff_timestamp_raw": "Oct 20 2026 17:11:40.364000",
+      "diff": 6.04e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:11:40.364] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000604",
+      "moment_timestamp_raw": "Oct 20 2026 17:11:40.240000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:11:40.240] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.12400007247924805,
+      "snapshot": {
+        "iteration": 43,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_037_721eaa14fc50.nml",
+        "frozen_path": "states/iter_043_Fe_scf.nml",
+        "source_sha256": "721eaa14fc506ce3c49b304ed7556ed6fe1b4a00ebf44d360c171e305abdccd9",
+        "frozen_sha256": "721eaa14fc506ce3c49b304ed7556ed6fe1b4a00ebf44d360c171e305abdccd9",
+        "mtime_ns": 1792509100364940321,
+        "size": 6771,
+        "ql1_d_spin1": 4.353207802751418,
+        "ql1_d_spin2": 2.1444135572343828,
+        "snapshot_minus_diff_seconds": 0.0009403228759765625
+      }
+    },
+    {
+      "iteration": 44,
+      "diff_timestamp_raw": "Oct 20 2026 17:12:21.685000",
+      "diff": 5.17e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:12:21.685] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000517",
+      "moment_timestamp_raw": "Oct 20 2026 17:12:21.498000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:12:21.498] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.18700003623962402,
+      "snapshot": {
+        "iteration": 44,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_038_74da91f68d6a.nml",
+        "frozen_path": "states/iter_044_Fe_scf.nml",
+        "source_sha256": "74da91f68d6af6a4d4996e91ad30b277c5da5d354f8ca71aed08e8064cedf46b",
+        "frozen_sha256": "74da91f68d6af6a4d4996e91ad30b277c5da5d354f8ca71aed08e8064cedf46b",
+        "mtime_ns": 1792509141685581632,
+        "size": 6772,
+        "ql1_d_spin1": 4.3532077491516405,
+        "ql1_d_spin2": 2.1444137203587235,
+        "snapshot_minus_diff_seconds": 0.0005817413330078125
+      }
+    },
+    {
+      "iteration": 45,
+      "diff_timestamp_raw": "Oct 20 2026 17:13:07.358000",
+      "diff": 2.63e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:13:07.358] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000263",
+      "moment_timestamp_raw": "Oct 20 2026 17:13:07.219000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:13:07.219] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.13899993896484375,
+      "snapshot": {
+        "iteration": 45,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_039_60ff20045e93.nml",
+        "frozen_path": "states/iter_045_Fe_scf.nml",
+        "source_sha256": "60ff20045e938bc9ae8d882a114ff7803cb92eeea98fac25e55de95797bfddfd",
+        "frozen_sha256": "60ff20045e938bc9ae8d882a114ff7803cb92eeea98fac25e55de95797bfddfd",
+        "mtime_ns": 1792509187358132293,
+        "size": 6768,
+        "ql1_d_spin1": 4.353207719262478,
+        "ql1_d_spin2": 2.1444138089121623,
+        "snapshot_minus_diff_seconds": 0.00013208389282226562
+      }
+    },
+    {
+      "iteration": 46,
+      "diff_timestamp_raw": "Oct 20 2026 17:13:52.476000",
+      "diff": 3.37e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:13:52.476] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000337",
+      "moment_timestamp_raw": "Oct 20 2026 17:13:52.338000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:13:52.338] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.1380000114440918,
+      "snapshot": {
+        "iteration": 46,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_040_83d4cc1966da.nml",
+        "frozen_path": "states/iter_046_Fe_scf.nml",
+        "source_sha256": "83d4cc1966dab51a92903e73fd9845cac0affa8df03e734c974657dc136bdbbb",
+        "frozen_sha256": "83d4cc1966dab51a92903e73fd9845cac0affa8df03e734c974657dc136bdbbb",
+        "mtime_ns": 1792509232476807944,
+        "size": 6772,
+        "ql1_d_spin1": 4.353207717176995,
+        "ql1_d_spin2": 2.1444138107325195,
+        "snapshot_minus_diff_seconds": 0.0008077621459960938
+      }
+    },
+    {
+      "iteration": 47,
+      "diff_timestamp_raw": "Oct 20 2026 17:14:37.950000",
+      "diff": 3.43e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:14:37.950] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000343",
+      "moment_timestamp_raw": "Oct 20 2026 17:14:37.809000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:14:37.809] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.14100003242492676,
+      "snapshot": {
+        "iteration": 47,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_041_8b1ca6dd3916.nml",
+        "frozen_path": "states/iter_047_Fe_scf.nml",
+        "source_sha256": "8b1ca6dd39168e05da34b20c1056c5298a2dd72b6db6eedab0771f9469e1dacf",
+        "frozen_sha256": "8b1ca6dd39168e05da34b20c1056c5298a2dd72b6db6eedab0771f9469e1dacf",
+        "mtime_ns": 1792509277950783149,
+        "size": 6768,
+        "ql1_d_spin1": 4.353207715090264,
+        "ql1_d_spin2": 2.1444138126638035,
+        "snapshot_minus_diff_seconds": 0.0007832050323486328
+      }
+    },
+    {
+      "iteration": 48,
+      "diff_timestamp_raw": "Oct 20 2026 17:15:21.390000",
+      "diff": 2.67e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:15:21.390] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000267",
+      "moment_timestamp_raw": "Oct 20 2026 17:15:21.201000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:15:21.201] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.18900012969970703,
+      "snapshot": {
+        "iteration": 48,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_042_5a65dd098e6d.nml",
+        "frozen_path": "states/iter_048_Fe_scf.nml",
+        "source_sha256": "5a65dd098e6df26e2e289399312ed7264634e8345a43361739366863e0188181",
+        "frozen_sha256": "5a65dd098e6df26e2e289399312ed7264634e8345a43361739366863e0188181",
+        "mtime_ns": 1792509321390206786,
+        "size": 6771,
+        "ql1_d_spin1": 4.3532077100441295,
+        "ql1_d_spin2": 2.144413818120089,
+        "snapshot_minus_diff_seconds": 0.0002067089080810547
+      }
+    },
+    {
+      "iteration": 49,
+      "diff_timestamp_raw": "Oct 20 2026 17:16:05.468000",
+      "diff": 2.99e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:16:05.468] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000299",
+      "moment_timestamp_raw": "Oct 20 2026 17:16:05.339000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:16:05.339] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.12899994850158691,
+      "snapshot": {
+        "iteration": 49,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_043_301dfe8000dd.nml",
+        "frozen_path": "states/iter_049_Fe_scf.nml",
+        "source_sha256": "301dfe8000dd2b0b4353f227241d9186345efd0038ab11f683d7cebeac1f8001",
+        "frozen_sha256": "301dfe8000dd2b0b4353f227241d9186345efd0038ab11f683d7cebeac1f8001",
+        "mtime_ns": 1792509365468357880,
+        "size": 6767,
+        "ql1_d_spin1": 4.353207708254909,
+        "ql1_d_spin2": 2.144413819863751,
+        "snapshot_minus_diff_seconds": 0.0003578662872314453
+      }
+    },
+    {
+      "iteration": 50,
+      "diff_timestamp_raw": "Oct 20 2026 17:16:50.973000",
+      "diff": 2.68e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:16:50.973] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000268",
+      "moment_timestamp_raw": "Oct 20 2026 17:16:50.842000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:16:50.842] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.13100004196166992,
+      "snapshot": {
+        "iteration": 50,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_044_78df49c125af.nml",
+        "frozen_path": "states/iter_050_Fe_scf.nml",
+        "source_sha256": "78df49c125af79b7b636600043eb7bba3d1ec58a4736d01be2b9101a1002b9e4",
+        "frozen_sha256": "78df49c125af79b7b636600043eb7bba3d1ec58a4736d01be2b9101a1002b9e4",
+        "mtime_ns": 1792509410973584177,
+        "size": 6771,
+        "ql1_d_spin1": 4.353207701513394,
+        "ql1_d_spin2": 2.1444138268503687,
+        "snapshot_minus_diff_seconds": 0.0005841255187988281
+      }
+    },
+    {
+      "iteration": 51,
+      "diff_timestamp_raw": "Oct 20 2026 17:17:34.880000",
+      "diff": 2.54e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:17:34.880] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000254",
+      "moment_timestamp_raw": "Oct 20 2026 17:17:34.751000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:17:34.751] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.12900018692016602,
+      "snapshot": {
+        "iteration": 51,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_045_64a17322f820.nml",
+        "frozen_path": "states/iter_051_Fe_scf.nml",
+        "source_sha256": "64a17322f820c954ac468edb0dd772734615a622e15d7c6e64d248ebd72d408f",
+        "frozen_sha256": "64a17322f820c954ac468edb0dd772734615a622e15d7c6e64d248ebd72d408f",
+        "mtime_ns": 1792509454880914452,
+        "size": 6772,
+        "ql1_d_spin1": 4.353207684729169,
+        "ql1_d_spin2": 2.1444138441313614,
+        "snapshot_minus_diff_seconds": 0.0009143352508544922
+      }
+    },
+    {
+      "iteration": 52,
+      "diff_timestamp_raw": "Oct 20 2026 17:18:19.341000",
+      "diff": 1.98e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:18:19.341] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000198",
+      "moment_timestamp_raw": "Oct 20 2026 17:18:19.199000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:18:19.199] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.1420001983642578,
+      "snapshot": {
+        "iteration": 52,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_046_57453a7fc13d.nml",
+        "frozen_path": "states/iter_052_Fe_scf.nml",
+        "source_sha256": "57453a7fc13d2f61e3827f66509ad9229a7070bfb14ac95a61a18ad572bf36f4",
+        "frozen_sha256": "57453a7fc13d2f61e3827f66509ad9229a7070bfb14ac95a61a18ad572bf36f4",
+        "mtime_ns": 1792509499341447990,
+        "size": 6773,
+        "ql1_d_spin1": 4.353207661076884,
+        "ql1_d_spin2": 2.1444138683023537,
+        "snapshot_minus_diff_seconds": 0.0004477500915527344
+      }
+    },
+    {
+      "iteration": 53,
+      "diff_timestamp_raw": "Oct 20 2026 17:19:03.075000",
+      "diff": 1.46e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:19:03.075] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000146",
+      "moment_timestamp_raw": "Oct 20 2026 17:19:02.904000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:19:02.904] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.17100000381469727,
+      "snapshot": {
+        "iteration": 53,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_047_d2d663f5a623.nml",
+        "frozen_path": "states/iter_053_Fe_scf.nml",
+        "source_sha256": "d2d663f5a623b910c2a1ff15f0e5595a63a7cae03ec4da025c51cbe4b010888d",
+        "frozen_sha256": "d2d663f5a623b910c2a1ff15f0e5595a63a7cae03ec4da025c51cbe4b010888d",
+        "mtime_ns": 1792509543075839411,
+        "size": 6773,
+        "ql1_d_spin1": 4.353207637077474,
+        "ql1_d_spin2": 2.1444138924508835,
+        "snapshot_minus_diff_seconds": 0.0008394718170166016
+      }
+    },
+    {
+      "iteration": 54,
+      "diff_timestamp_raw": "Oct 20 2026 17:19:48.081000",
+      "diff": 1.85e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:19:48.081] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000185",
+      "moment_timestamp_raw": "Oct 20 2026 17:19:47.930000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:19:47.930] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.1510000228881836,
+      "snapshot": {
+        "iteration": 54,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_048_9477f22bf5a0.nml",
+        "frozen_path": "states/iter_054_Fe_scf.nml",
+        "source_sha256": "9477f22bf5a0ab26b94e4204b722dd42c955c5c8f0053d4b4db24f10d7e6fb04",
+        "frozen_sha256": "9477f22bf5a0ab26b94e4204b722dd42c955c5c8f0053d4b4db24f10d7e6fb04",
+        "mtime_ns": 1792509588081214004,
+        "size": 6773,
+        "ql1_d_spin1": 4.353207635736869,
+        "ql1_d_spin2": 2.1444138932700505,
+        "snapshot_minus_diff_seconds": 0.00021386146545410156
+      }
+    },
+    {
+      "iteration": 55,
+      "diff_timestamp_raw": "Oct 20 2026 17:20:35.120000",
+      "diff": 1.2e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:20:35.120] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000120",
+      "moment_timestamp_raw": "Oct 20 2026 17:20:34.948000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:20:34.948] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.17199993133544922,
+      "snapshot": {
+        "iteration": 55,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_049_cd554b9af284.nml",
+        "frozen_path": "states/iter_055_Fe_scf.nml",
+        "source_sha256": "cd554b9af284ff756487d351b06549b5ce3b99136010da0383a047118698e05e",
+        "frozen_sha256": "cd554b9af284ff756487d351b06549b5ce3b99136010da0383a047118698e05e",
+        "mtime_ns": 1792509635120314061,
+        "size": 6773,
+        "ql1_d_spin1": 4.35320763442444,
+        "ql1_d_spin2": 2.144413894005612,
+        "snapshot_minus_diff_seconds": 0.0003142356872558594
+      }
+    },
+    {
+      "iteration": 56,
+      "diff_timestamp_raw": "Oct 20 2026 17:24:50.665000",
+      "diff": 1.05e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:24:50.665] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000105",
+      "moment_timestamp_raw": "Oct 20 2026 17:24:50.535000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:24:50.535] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.12999987602233887,
+      "snapshot": {
+        "iteration": 56,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_050_c7358388a195.nml",
+        "frozen_path": "states/iter_056_Fe_scf.nml",
+        "source_sha256": "c7358388a195027e13ee9a932f1003b0318f9cb468c80a53e1b0ceb3a0f0c49b",
+        "frozen_sha256": "c7358388a195027e13ee9a932f1003b0318f9cb468c80a53e1b0ceb3a0f0c49b",
+        "mtime_ns": 1792509890665443853,
+        "size": 6773,
+        "ql1_d_spin1": 4.353207629497594,
+        "ql1_d_spin2": 2.1444138967356596,
+        "snapshot_minus_diff_seconds": 0.0004439353942871094
+      }
+    },
+    {
+      "iteration": 57,
+      "diff_timestamp_raw": "Oct 20 2026 17:44:27.078000",
+      "diff": 1.64e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:44:27.078] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000164",
+      "moment_timestamp_raw": "Oct 20 2026 17:44:26.788000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:44:26.788] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.28999996185302734,
+      "snapshot": {
+        "iteration": 57,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_051_c58eccd3d61b.nml",
+        "frozen_path": "states/iter_057_Fe_scf.nml",
+        "source_sha256": "c58eccd3d61bf2ce38ff111abc3167462ab1b12505d6fd06babf579813152dab",
+        "frozen_sha256": "c58eccd3d61bf2ce38ff111abc3167462ab1b12505d6fd06babf579813152dab",
+        "mtime_ns": 1792511067078796014,
+        "size": 6773,
+        "ql1_d_spin1": 4.353207628503363,
+        "ql1_d_spin2": 2.144413897544357,
+        "snapshot_minus_diff_seconds": 0.0007960796356201172
+      }
+    },
+    {
+      "iteration": 58,
+      "diff_timestamp_raw": "Oct 20 2026 17:48:16.080000",
+      "diff": 1.45e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:48:16.080] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000145",
+      "moment_timestamp_raw": "Oct 20 2026 17:48:15.939000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:48:15.939] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.14100003242492676,
+      "snapshot": {
+        "iteration": 58,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_052_90345caebf60.nml",
+        "frozen_path": "states/iter_058_Fe_scf.nml",
+        "source_sha256": "90345caebf601964693fb1bdd3ea6c57380ddc0e4537f8a33820e771890dda88",
+        "frozen_sha256": "90345caebf601964693fb1bdd3ea6c57380ddc0e4537f8a33820e771890dda88",
+        "mtime_ns": 1792511296079906847,
+        "size": 6773,
+        "ql1_d_spin1": 4.353207622543769,
+        "ql1_d_spin2": 2.144413902629883,
+        "snapshot_minus_diff_seconds": -9.322166442871094e-05
+      }
+    },
+    {
+      "iteration": 59,
+      "diff_timestamp_raw": "Oct 20 2026 17:49:01.126000",
+      "diff": 1.4e-08,
+      "diff_log_line_exact": "[Oct 20 2026 17:49:01.126] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000140",
+      "moment_timestamp_raw": "Oct 20 2026 17:49:00.956000",
+      "physical_spin_moment_muB_printed": 2.113688,
+      "physical_moment_log_line_exact": "[Oct 20 2026 17:49:00.956] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.113688",
+      "moment_minus_diff_seconds": -0.1699998378753662,
+      "snapshot": {
+        "iteration": 59,
+        "source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_053_62211b620287.nml",
+        "frozen_path": "states/iter_059_Fe_scf.nml",
+        "source_sha256": "62211b6202872f855c732fb267b2c36f08b6a11d1785a00fc8d9dd7ee030bd10",
+        "frozen_sha256": "62211b6202872f855c732fb267b2c36f08b6a11d1785a00fc8d9dd7ee030bd10",
+        "mtime_ns": 1792511341126145555,
+        "size": 6773,
+        "ql1_d_spin1": 4.353207618287576,
+        "ql1_d_spin2": 2.144413906208451,
+        "snapshot_minus_diff_seconds": 0.0001456737518310547
+      }
+    }
+  ],
+  "step59_checkpoint_sha256": "62211b6202872f855c732fb267b2c36f08b6a11d1785a00fc8d9dd7ee030bd10",
+  "step59_checkpoint_path": "/private/tmp/c5-3-b-runs/b2a_fe_step59_candidate_record/Fe_scf_step59.nml",
+  "raw_log_slice_sha256": "ef8b6c9e93dc70f927f3a667f60f9350de489ae74127e650b454b6f7e6f22bdc",
+  "step59_checkpoint_description": "Exact Fe_scf.nml snapshot hash-bound to the completion log row ordinal 59; this is a candidate per-iteration checkpoint, not a run-terminal result."
+}

@@ -61,6 +61,7 @@ add_library(${PROJECT_NAME} STATIC
     potential.f90
     radial_ground_state.f90
     precision.f90
+    scf_guard.f90
     kpm_profile.f90
     scf_benchmark_profile.f90
     kpoint_workset.f90

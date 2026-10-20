@@ -1,0 +1,124 @@
+{
+  "binary": {
+    "build": "GNU Fortran 16.2 Release; OpenMP ON, MPI OFF, SPGLIB ON, MARCH_NATIVE ON",
+    "manifest_sha256": "b2f3ab5d26c439520bdfcbca16163877b2e36d7bb9c3af0448e6941327ae5158",
+    "mode": "0555",
+    "path": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x",
+    "sha256": "a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3",
+    "source_base": "8c7251da74e7142df30cc4147d2a4f259badabf2"
+  },
+  "comparison_baseline": {
+    "binary_sha256": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc",
+    "cmake_cache_sha256": "d1fae4609de8f500177931a5c4c9a56122396d5a889bb21c6fe106fa98e6295f",
+    "output_hash_map": "/private/tmp/c5-3-b-runs/ks_clean8b_output_hashes.json",
+    "output_hash_map_sha256": "63f6c01375db473dfaa11e5e2de5eb55cb2ab53a03a1f02a2c8598cea5764175",
+    "run_dir": "/private/tmp/c5-3-b-runs/ks_clean8b"
+  },
+  "comparison_rule": "Compare all scientific artifacts byte-for-byte against the clean8b baseline generated from identical resolved input/seed under identical single-thread caps. Only testrun.log and proven runtime fields in str.out are metadata exclusions. If mismatch, apply C5.2 \u00a72.5(a) STOP; otherwise proceed to B2 records.",
+  "environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "fixture": {
+    "Fe_seed_sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+    "case": "Example_k_space_scf_bccFe",
+    "expected": {
+      "J_eV": 0,
+      "U_eV": 0,
+      "backend": "strux_lib",
+      "beta": 0.1,
+      "mixtype": "broyden",
+      "nsp": 1,
+      "nstep": 1,
+      "radial_mode": "spectral",
+      "recursion": "block",
+      "use_kspace": true
+    },
+    "resolved_deck": {
+      "atoms": {
+        "database": "./",
+        "label": [
+          "Fe"
+        ]
+      },
+      "calculation": {
+        "pre_processing": "bravais",
+        "verbose": true
+      },
+      "control": {
+        "calctype": "B",
+        "cheb_backend": "legacy",
+        "lld": 12,
+        "nsp": 1,
+        "recur": "block"
+      },
+      "energy": {
+        "channels_ldos": 2500,
+        "energy_max": 2.0,
+        "energy_min": -2.0,
+        "fermi": -0.06917
+      },
+      "lattice": {
+        "alat": 2.8612,
+        "crystal_sym": "bcc",
+        "ct": [
+          4.0
+        ],
+        "ntype": 1,
+        "r2": 16.0,
+        "rc": 80,
+        "strux_backend": "strux_lib",
+        "wav": 1.4088
+      },
+      "mix": {
+        "beta": 0.1,
+        "mixtype": "broyden"
+      },
+      "reciprocal": {
+        "auto_find_fermi": false,
+        "dos_energy_max": 1.0,
+        "dos_energy_min": -1.5,
+        "dos_method": "gaussian",
+        "gaussian_sigma": 0.01,
+        "k_offset_x": 0.0,
+        "k_offset_y": 0.0,
+        "k_offset_z": 0.0,
+        "n_energy_points": 40,
+        "nk1": 2,
+        "nk2": 2,
+        "nk3": 2,
+        "temperature": 300.0,
+        "use_shift": false,
+        "use_symmetry_reduction": false,
+        "use_time_reversal": true
+      },
+      "self": {
+        "nstep": 1,
+        "use_kspace": true
+      },
+      "symmetry": {
+        "use_symmetry_reduction": true
+      }
+    },
+    "resolved_input_sha256": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01"
+  },
+  "immutable_snapshot": "/private/tmp/c5-3-b2-prep/identity_ks/b1_candidate",
+  "initial_files_sha256": {
+    "Fe.nml": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+    "input.nml": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01"
+  },
+  "launch": {
+    "command": "cd /private/tmp/c5-3-b-runs/ks_candidate && env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 /private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x > testrun.log 2>&1",
+    "process_tracking": "direct frozen executable child; capture PID, wait/exit code, targeted process-gone verification"
+  },
+  "purpose": "Single-thread no-U KS identity check of frozen B1 candidate against newly measured clean8b baseline; Part B run 3/6.",
+  "run_directory": "/private/tmp/c5-3-b-runs/ks_candidate",
+  "run_id": "C5.3-B1-KS-candidate",
+  "status": "PREFLIGHT_PENDING_AUDITOR"
+}

@@ -33,6 +33,7 @@ module mix_mod
 #endif
    use basis_mod, only: lmax_basis
    use math_mod, only: hubbard_density_diagnostics
+   use scf_guard_mod, only: guard_q0_capacity, guard_nonfinite_scalar
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 #ifdef USE_MPI
    use mpi, only: MPI_COMM_WORLD, MPI_DOUBLE_PRECISION, MPI_INTEGER, MPI_MAX, MPI_MIN, MPI_IN_PLACE, MPI_ALLREDUCE
@@ -448,11 +449,20 @@ contains
    !--------------------------------------------------------------------------
    !> @brief
    !> Save or restore QL/PL parameters to/from `this%qia` arrays.
-   subroutine save_to(this, whereto)
+   subroutine save_to(this, whereto, iteration, guard_collinear)
       use mpi_mod
       class(mix), intent(inout) :: this
       character(len=*), intent(in) :: whereto
-      integer :: it, I, lcount, qcols
+      integer, intent(in), optional :: iteration
+      logical, intent(in), optional :: guard_collinear
+      integer :: it, I, lcount, qcols, spin
+      integer :: iteration_value
+      logical :: guard_active
+
+      iteration_value = 0
+      guard_active = .false.
+      if (present(iteration)) iteration_value = iteration
+      if (present(guard_collinear)) guard_active = guard_collinear
 
       select case (trim(whereto))
       case ('new')
@@ -461,6 +471,13 @@ contains
             lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
             qcols = size(this%qia_new, 2)
             do I = 1, lcount
+               if (guard_active) then
+                  do spin = 1, 2
+                     call guard_nonfinite_scalar(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                        it, I - 1, spin, 'new q1', iteration_value, &
+                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(2, I - 1, spin))
+                  end do
+               end if
                if (I              <= qcols) this%qia_new(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
                if (I +     lcount <= qcols) this%qia_new(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
                if (I + 2 * lcount <= qcols) this%qia_new(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
@@ -474,6 +491,7 @@ contains
                end if
             end if
          end do
+         if (guard_active) call validate_packed_q(this, this%qia_new, iteration_value, 'new')
       case ('old')
          this%qia_old = 0.0_rp
          do it = 1, this%lattice%nrec
@@ -598,10 +616,12 @@ contains
    !> @param[in] old and new potential variables qia_old and qia_new, respectively.
    !> @return type(mix): qia, the mix potential variable.
    !---------------------------------------------------------------------------
-   subroutine mixpq(this, qia_old, qia_new)
+   subroutine mixpq(this, qia_old, qia_new, iteration, guard_collinear)
       use mpi_mod
       class(mix), intent(inout) :: this
       real(rp), dimension(:, :), intent(in) :: qia_old, qia_new
+      integer, intent(in), optional :: iteration
+      logical, intent(in), optional :: guard_collinear
       real(rp), allocatable :: qi_to(:, :), qi_tn(:, :) ! Local variables for broyden mixing
       real(rp) :: delta_atom
       integer :: ia ! Atom index
@@ -611,6 +631,13 @@ contains
       integer :: ncols
       real(rp) :: denom
       integer :: broy_width
+      integer :: iteration_value
+      logical :: guard_active
+
+      iteration_value = 0
+      guard_active = .false.
+      if (present(iteration)) iteration_value = iteration
+      if (present(guard_collinear)) guard_active = guard_collinear
 
       if (size(qia_old, 1) /= this%lattice%nrec .or. size(qia_new, 1) /= this%lattice%nrec) then
          call g_logger%fatal('mixpq received qia arrays with inconsistent atom count', __FILE__, __LINE__)
@@ -619,6 +646,11 @@ contains
          call g_logger%fatal('mixpq received qia arrays with inconsistent packed widths', __FILE__, __LINE__)
       end if
       broy_width = this%lattice%nrec*size(qia_old, 2)
+
+      if (guard_active) then
+         call validate_packed_q(this, qia_old, iteration_value, 'old')
+         call validate_packed_q(this, qia_new, iteration_value, 'new')
+      end if
 
       select case (trim(this%mixtype))
       case ('linear')
@@ -636,7 +668,9 @@ contains
          deallocate(qi_to, qi_tn)
       end select
       ! Safety: detect NaNs produced by mixing (e.g., in Broyden) and fallback
-      if (any(this%qia /= this%qia)) then
+      if (guard_active) then
+         call validate_packed_q(this, this%qia, iteration_value, 'mixed')
+      else if (any(this%qia /= this%qia)) then
          call g_logger%error('NaN detected in mixed qia — reverting to linear mix', __FILE__, __LINE__)
          this%qia(:, :) = (1.0d0 - this%beta)*qia_old(:, :) + this%beta*qia_new(:, :)
       end if
@@ -695,6 +729,41 @@ contains
       denom = max(1.0_rp, real(nb_slice)/2.0_rp)
       this%delta = sqrt(sum((this%qia_old(:, 1:nb_slice) - this%qia_new(:, 1:nb_slice))**2))/denom/this%lattice%nrec
    end subroutine mixpq
+
+   subroutine validate_packed_q(this, values, iteration, stage)
+      class(mix), intent(in) :: this
+      real(rp), intent(in) :: values(:, :)
+      integer, intent(in) :: iteration
+      character(len=*), intent(in) :: stage
+      integer :: it, lcount, l, spin, q0_col, q2_col, pl_col, qcols
+      character(len=48) :: field
+
+      do it = 1, this%lattice%nrec
+         lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+         qcols = size(values, 2)
+         do spin = 1, 2
+            do l = 0, lcount - 1
+               q0_col = l + 1 + (spin - 1)*lcount
+               q2_col = l + 1 + (spin + 1)*lcount
+               pl_col = l + 1 + (spin + 3)*lcount
+               if (q0_col <= qcols) then
+                  call guard_q0_capacity(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                     it, l, spin, iteration, values(it, q0_col))
+               end if
+               if (q2_col <= qcols) then
+                  field = trim(stage)//' q2'
+                  call guard_nonfinite_scalar(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                     it, l, spin, trim(field), iteration, values(it, q2_col))
+               end if
+               if (pl_col <= qcols) then
+                  field = trim(stage)//' PL'
+                  call guard_nonfinite_scalar(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                     it, l, spin, trim(field), iteration, values(it, pl_col))
+               end if
+            end do
+         end do
+      end do
+   end subroutine validate_packed_q
 
    subroutine save_ldm_to(this, whereto)
       class(mix), intent(inout) :: this

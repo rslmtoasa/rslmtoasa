@@ -1,0 +1,14 @@
+Test project /private/tmp/c5-b1-guard-build-clean
+    Start 2: UnitScfB1GuardCapacityRequiresFatal
+1/3 Test #2: UnitScfB1GuardCapacityRequiresFatal ....   Passed    0.01 sec
+    Start 3: UnitScfB1GuardNonfiniteRequiresFatal
+2/3 Test #3: UnitScfB1GuardNonfiniteRequiresFatal ...   Passed    0.01 sec
+    Start 4: UnitScfB1GuardBoundary
+3/3 Test #4: UnitScfB1GuardBoundary .................   Passed    0.01 sec
+
+100% tests passed out of 3
+
+Label Time Summary:
+unit    =   0.03 sec*proc (3 tests)
+
+Total Test time (real) =   0.03 sec

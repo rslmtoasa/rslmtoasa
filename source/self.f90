@@ -50,6 +50,7 @@ module self_mod
    use precision_mod, only: rp
    use timer_mod, only: g_timer
    use scf_benchmark_profile_mod, only: g_scf_benchmark_profile
+   use scf_guard_mod, only: guard_q0_capacity
    use namelist_generator_mod, only: namelist_generator
       use cfd
       use Parameters
@@ -4116,14 +4117,14 @@ contains
                allocate(fixed_u_vin(nb, nb, this%lattice%ntype))
                fixed_u_vin = (0.0_rp, 0.0_rp)
             end if
-            call run_dos(this, fixed_u_m1, fixed_u_pl_diag)
+            call run_dos(this, fixed_u_m1, fixed_u_pl_diag, i)
             call this%write_fixed_u_trace('P_OUT', fixed_u_m1, fixed_u_pl_diag)
             if (.not. this%fixed_u_trace_ql_only) &
                call this%snapshot_fixed_u_m0_moments(fixed_u_m1, fixed_u_pl_diag, fixed_u_vin)
             deallocate(fixed_u_vin)
             deallocate(fixed_u_m1, fixed_u_pl_diag)
          else
-            call run_dos(this)
+            call run_dos(this, iteration=i)
             call this%write_fixed_u_trace('P_OUT')
          end if
    
@@ -4132,7 +4133,8 @@ contains
          !=========================================================================
          if (rank == 0) call g_logger%info('Mixtype is '//trim(this%mix%mixtype), __FILE__, __LINE__)
          call g_scf_benchmark_profile%start_stage('P_mixing')
-         call this%mix%mixpq(this%mix%qia_old, this%mix%qia_new) ! Mix qia_new with qia_old
+         call this%mix%mixpq(this%mix%qia_old, this%mix%qia_new, iteration=i, &
+                             guard_collinear=this%control%nsp == 1) ! Mix qia_new with qia_old
          if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
             call this%mix%save_ldm_to('new') ! Save freshly computed LDA+U density matrices.
             call this%update_fixed_u_residuals()
@@ -4247,7 +4249,7 @@ contains
       ! run_scf(), which is precisely the q-dependent ordinary-potential drift
       ! that corrected MFT must exclude.
       call run_recursion(this, iteration)
-      call run_dos(this)
+      call run_dos(this, iteration=iteration)
 
       max_drift = 0.0_rp
       do ia = 1, this%lattice%ntype
@@ -4404,11 +4406,13 @@ contains
    !=========================================================================
    !                   RUN DENSITY OF STATES CALCULATION
    !=========================================================================
-   subroutine run_dos(this, m1_out, pl_diag_out)
+   subroutine run_dos(this, m1_out, pl_diag_out, iteration)
       class(self), intent(inout) :: this
       complex(rp), intent(out), optional :: m1_out(:, :, :, :, :)
       real(rp), intent(out), optional :: pl_diag_out(:, :, :, :)
+      integer, intent(in), optional :: iteration
       integer :: ia, l, lmax_site, li, iorb, plusbulk
+      integer :: iteration_value, spin_check, l_check
       real(rp) :: q_up, q_dn, mz, mtot
       real(rp) :: reciprocal_h2d, reciprocal_solver, reciprocal_d2h, reciprocal_total
       real(rp), allocatable :: kspace_spin_mom(:,:)
@@ -4417,6 +4421,9 @@ contains
       real(rp) :: q0_d, center_d, q2_d, center_local, q2_local, t_local
       integer :: moment_status, site_type
       logical :: use_shifted_kmesh
+
+      iteration_value = 0
+      if (present(iteration)) iteration_value = iteration
    
       if (rank == 0) call g_logger%info('Calculating the density of states and the new moment bands', __FILE__, __LINE__)
       call g_timer%start('calculation-of-DOS')
@@ -4482,6 +4489,21 @@ contains
          ! Capture the same eigenpairs after the canonical Fermi level has
          ! been updated for this spectrum; Hamiltonian capture remains above.
          call this%write_fixed_u_kspace_trace(.true.)
+         if (this%control%nsp == 1) then
+            do ia = 1, this%lattice%nrec
+               lmax_site = this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax
+               do l_check = 0, lmax_site
+                  do spin_check = 1, 2
+                     q0_d = 0.0_rp
+                     if (l_check < this%reciprocal_scf_cache%n_orb_types) then
+                        q0_d = this%reciprocal_scf_cache%band_moments(ia, l_check + 1, spin_check, 1)
+                     end if
+                     call guard_q0_capacity(this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol, &
+                        ia, l_check, spin_check, iteration_value, q0_d)
+                  end do
+               end do
+            end do
+         end if
          if (this%control%uses_spinor_representation()) then
             allocate(kspace_spin_mom(3, this%lattice%nrec))
             call g_scf_benchmark_profile%start_stage('P_charge_spin_accumulate')
@@ -4604,9 +4626,9 @@ contains
 
          call this%apply_constraints()
          if (present(pl_diag_out)) then
-            call this%bands%calculate_pl(pl_diag_out)
+            call this%bands%calculate_pl(pl_diag_out, iteration_value)
          else
-            call this%bands%calculate_pl()
+            call this%bands%calculate_pl(iteration=iteration_value)
          end if
          this%en%fermi = this%reciprocal_scf_cache%fermi_level
          call g_scf_benchmark_profile%stop_stage('P_density_build')
@@ -4643,7 +4665,7 @@ contains
          ! Projected m0*m1 remains a DOS diagnostic inside reciprocal_dos.
          this%bands%eband = this%reciprocal_scf_cache%canonical_band_energy
 
-         call this%mix%save_to('new')
+         call this%mix%save_to('new', iteration=iteration_value, guard_collinear=this%control%nsp == 1)
          call g_timer%stop('calculation-of-DOS')
          return
       end if
@@ -4694,12 +4716,12 @@ contains
       !=========================================================================
       call g_scf_benchmark_profile%start_stage('P_rs_density_build')
       if (present(m1_out) .or. present(pl_diag_out)) then
-         call this%bands%calculate_moments(m1_out=m1_out, pl_diag_out=pl_diag_out)
+         call this%bands%calculate_moments(m1_out=m1_out, pl_diag_out=pl_diag_out, iteration=iteration_value)
       else
-         call this%bands%calculate_moments()
+         call this%bands%calculate_moments(iteration=iteration_value)
       end if
       call g_scf_benchmark_profile%stop_stage('P_rs_density_build')
-      call this%mix%save_to('new')
+      call this%mix%save_to('new', iteration=iteration_value, guard_collinear=this%control%nsp == 1)
 
       !=========================================================================
       !        CALCULATE l=1 DIPOLE CHARGE MOMENTS (B6, surface only)

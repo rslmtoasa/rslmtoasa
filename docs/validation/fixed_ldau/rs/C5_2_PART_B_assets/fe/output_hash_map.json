@@ -1,0 +1,115 @@
+{
+  "run_dir": "/private/tmp/c5-3-b-runs/b2a_fe",
+  "files": {
+    "Fe.nml": {
+      "size": 3232,
+      "sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+      "standalone_nonfinite_tokens": 0
+    },
+    "Fe_1_spinene.out": {
+      "size": 163150,
+      "sha256": "06bcc82f07fe1b648cb91626f0aee694349e75f13deab4633541448a6022373a",
+      "standalone_nonfinite_tokens": 0
+    },
+    "Fe_dos.out": {
+      "size": 163198,
+      "sha256": "e8806ad715f4933cd59ebe12b04117b93acfb06325bb8ff8d518b1478eee65cc",
+      "standalone_nonfinite_tokens": 0
+    },
+    "Fe_orbene.out": {
+      "size": 163150,
+      "sha256": "83a5e1a90d4228bc516c72f5508863202325be35eb407b24304cffe343ef2f1c",
+      "standalone_nonfinite_tokens": 0
+    },
+    "Fe_orbital_dos.out": {
+      "size": 765550,
+      "sha256": "279af410cf352f6f79fc676dd418555f33582d9a8552563678eecbe3fb3de62f",
+      "standalone_nonfinite_tokens": 0
+    },
+    "Fe_out.nml": {
+      "size": 6771,
+      "sha256": "647e9df67510db0c133dd53975cece5f50b379e6e314542de336eec64575d327",
+      "standalone_nonfinite_tokens": 0
+    },
+    "Fe_scf.nml": {
+      "size": 6773,
+      "sha256": "8d0d57dbf99589f7b1d7bc8c99c19d4ee5703898083884fe46cb5cefcd7dfcd2",
+      "standalone_nonfinite_tokens": 0
+    },
+    "clust": {
+      "size": 423811,
+      "sha256": "4a7f118270dc9ec9fe7926a428669227e4e015719d2aa60d91786261f3b756af",
+      "standalone_nonfinite_tokens": 0
+    },
+    "exit_code.txt": {
+      "size": 4,
+      "sha256": "9d9b18720961e9b4689fd763b85e7b6f36160ccd3a8a1c9ddc5103bb0f66c396",
+      "standalone_nonfinite_tokens": 0
+    },
+    "fort.800": {
+      "size": 400429,
+      "sha256": "3fbe0e47af4a7593c5647fc674d30704d6d2b97eabfa71c67c67aefb94e94c57",
+      "standalone_nonfinite_tokens": 0
+    },
+    "fort.805": {
+      "size": 861094,
+      "sha256": "65150b27b4f3377d5623a12479d9057d891108015bf9df9a76749314fb4e1332",
+      "standalone_nonfinite_tokens": 0
+    },
+    "input.nml": {
+      "size": 594,
+      "sha256": "5572755e6bd076825a67f9d47cac2b4a08a82a9c2b665d3b658cb724fa0c7d80",
+      "standalone_nonfinite_tokens": 0
+    },
+    "mad.mat": {
+      "size": 16,
+      "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+      "standalone_nonfinite_tokens": 0
+    },
+    "magneticdos.out": {
+      "size": 283683,
+      "sha256": "d4e45e3b3975f767147473ab79c4f10bf81f56e6098e39bc8f7f322138279f81",
+      "standalone_nonfinite_tokens": 0
+    },
+    "map": {
+      "size": 524416,
+      "sha256": "d0380ff43d87cb5f00bbdac1bb48c42996bf120ca109d0cfd39b5162784d387d",
+      "standalone_nonfinite_tokens": 0
+    },
+    "sbar": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "standalone_nonfinite_tokens": 0
+    },
+    "solver.pid": {
+      "size": 6,
+      "sha256": "281088466783009ddf0c500dd934d4d2604ea806f740f596fc486cdb7f44b251",
+      "standalone_nonfinite_tokens": 0
+    },
+    "str.out": {
+      "size": 1496,
+      "sha256": "3a2158c247a73118c94b16085f6a46025680567e79c87618673bec3140659718",
+      "standalone_nonfinite_tokens": 0
+    },
+    "testrun.log": {
+      "size": 229164,
+      "sha256": "248b0f8db257be45d2c83bdcb4854dc21e6a12960bd08a9c82f9350a2f48c48f",
+      "standalone_nonfinite_tokens": 0
+    },
+    "totaldos.out": {
+      "size": 82830,
+      "sha256": "f05f7ced1429174c1e2901df4d5b178020fd72e5e5391d9b62f028676f4878f7",
+      "standalone_nonfinite_tokens": 0
+    },
+    "ves.out": {
+      "size": 738,
+      "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+      "standalone_nonfinite_tokens": 0
+    },
+    "view.sbar": {
+      "size": 13350,
+      "sha256": "fb2a1349c9dae5f0f3bd4af07d5527cf98ad045952d4deecae8d340c8dc97bdc",
+      "standalone_nonfinite_tokens": 0
+    }
+  }
+}

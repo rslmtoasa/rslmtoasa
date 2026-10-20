@@ -1828,13 +1828,14 @@ campaign remain outside the established scope.
 
 - **Symptom:** the Debug build reports `source/lattice_cluster.f90:996`, dimension mismatch 3 vs 50000. The clean-baseline run exits SIGKILL before SCF. The same setup error occurs at U=0, so it is not LDA+U.
 - **Resolution on this branch:** `newclu` sizes its scaled cutoff copy to the full `this%ct` extent. The Debug regression completes cluster setup with `ntype=3`, `nbas=13`, and `nrec=1`; the C5 R1 setup GATE passes. C5.3 accepts R1 without restriction; the local merge remains scheduled after Parts B–D.
-- **Evidence:** the hcp-Co deck is [`co_hcp_lattice.nml`](../docs/validation/fixed_ldau/rs/RA4_assets/prerun_inputs/co_hcp_lattice.nml); see the [C1 Co triage records](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json) and [C1 RA4 results](../docs/validation/fixed_ldau/rs/C1_RA4_RESULTS.md).
+- **Evidence:** the hcp-Co deck is [`co_hcp_lattice.nml`](../docs/validation/fixed_ldau/rs/RA4_assets/prerun_inputs/co_hcp_lattice.nml); see the [C1 Co triage records](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json), [C1 RA4 results](../docs/validation/fixed_ldau/rs/C1_RA4_RESULTS.md), and [R1 cluster-sizing regression](validation/fixed_ldau/c5_hcp_co_cluster_setup.py).
 - **Follow-up:** C5.3 closed Part A after matched one-thread baseline, parent, and R1 outputs were byte-identical. See the [Part A results](../docs/validation/fixed_ldau/rs/C5_2_PART_A_RESULTS.md).
 
 ## [OPEN] Co bulk U=0 non-finite
 
 - The RB6 records become non-finite after about 19–40 iterations, and the failure reproduces on `8b8f7ef`.
-- See the [RB6 results](../docs/validation/fixed_ldau/rs/C1_RB_RESULTS.md) and [RB6 provenance](../docs/validation/fixed_ldau/rs/C1_RB_PROVENANCE.json).
+- C5 Part B also ran the fixed Co block deck to its nstep=25 cap: it remained finite, exited normally, and ended at Diff=0.0054412342 Ry with only 19 valid checkpoints. The result was unaccepted; the user directed that the six-run cap remain fixed, the continuation ladder be omitted, and no adoption occur. This cap-limited run does not establish that the earlier non-finite behavior is generally absent, so the issue remains OPEN.
+- See the [RB6 results](../docs/validation/fixed_ldau/rs/C1_RB_RESULTS.md), [RB6 provenance](../docs/validation/fixed_ldau/rs/C1_RB_PROVENANCE.json), and [C5.2 Part B record](../docs/validation/fixed_ldau/rs/C5_2_PART_B_RESULTS.md).
 
 ## [OPEN, low priority] Fe U>0 embedding offset
 
@@ -1847,8 +1848,10 @@ campaign remain outside the established scope.
 
 - The Fe rc=100 impurity-style deck becomes non-finite after 102 iterations at U>0 and 34 at U=0. The rc=100 U=0 bulk is not accepted after 600 steps. These failures reproduce on `8b8f7ef`.
 - C5 R2 captured one Debug Fe U>0 trajectory from the accepted rc=80 endpoint. The d-spin occupation first exceeded its five-state capacity at iteration 90 (`ql=16.023218979776722`); iteration 102 was the first snapshot with NaNs, with the first observed radial RSEQ NaN in the log at `l=2`, channel 0, `E=-50 Ry`. Snapshot 101 was wholly finite but already followed the occupation violation and was not accepted. This localizes an observed trajectory failure but does not establish its root cause.
-- Clean-8b and U=J=0 triage reruns, one-control variants, and a Co run were not performed after the separate no-U RS identity stop; no compatible finite Co target-deck restart was available. Fe rc=140 runs are INVALID_SETUP and are not part of this entry.
-- See the [C4 A4.1 results](../docs/validation/fixed_ldau/rs/C4_A41_RESULTS.md), [C4 A4.1 provenance](../docs/validation/fixed_ldau/rs/C4_A41_PROVENANCE.json), [C1 RA4 provenance](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json), and [C5 Part II results](../docs/validation/fixed_ldau/rs/C5_PART_II_RESULTS.md) with its [R2 provenance](../docs/validation/fixed_ldau/rs/C5_PART_II_PROVENANCE.json).
+- C5.3 B1 now stops collinear `nsp=1` SCF when active q0 exceeds the per-spin `2l+1` capacity by more than 1e-6, and rejects non-finite active mixed-q/PL or new q1 values; the [B1 regression tests](../docs/validation/fixed_ldau/rs/C5_2_PART_B_RESULTS.md) cover the guard and allowed boundary. This guard changes no physics arithmetic or defaults.
+- The C5 B2(a) Fe rc=100 Chebyshev run reached an accepted step59 endpoint (Diff=1.40e-8 Ry; d-spin ql spreads 2.0146e-7 and 4.0140e-7). Twenty printed physical moment values matched at F10.6, bounding the true spread by <=1e-6 μB without claiming zero. The worker intentionally stopped after preserving this endpoint; later in-progress outputs were not used. This does not identify why earlier block runs became non-finite or establish a general safe range.
+- Fe rc=140 runs are INVALID_SETUP and are not part of this entry.
+- See the [C4 A4.1 results](../docs/validation/fixed_ldau/rs/C4_A41_RESULTS.md), [C4 A4.1 provenance](../docs/validation/fixed_ldau/rs/C4_A41_PROVENANCE.json), [C1 RA4 provenance](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json), and [C5.2 Part B results](../docs/validation/fixed_ldau/rs/C5_2_PART_B_RESULTS.md) and [provenance](../docs/validation/fixed_ldau/rs/C5_2_PART_B_PROVENANCE.json).
 
 ## [INFORMATIONAL] RS/KS identity checks and thread counts
 

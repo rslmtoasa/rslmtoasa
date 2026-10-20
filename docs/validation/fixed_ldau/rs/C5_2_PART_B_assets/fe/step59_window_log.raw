@@ -1,0 +1,60 @@
+=== completed_diff_row=40 ===
+[Oct 20 2026 17:09:39.923] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:09:40.048] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000652
+=== completed_diff_row=41 ===
+[Oct 20 2026 17:10:19.822] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:10:19.952] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000664
+=== completed_diff_row=42 ===
+[Oct 20 2026 17:11:00.726] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:11:00.866] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000635
+=== completed_diff_row=43 ===
+[Oct 20 2026 17:11:40.240] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:11:40.364] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000604
+=== completed_diff_row=44 ===
+[Oct 20 2026 17:12:21.498] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:12:21.685] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000517
+=== completed_diff_row=45 ===
+[Oct 20 2026 17:13:07.219] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:13:07.358] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000263
+=== completed_diff_row=46 ===
+[Oct 20 2026 17:13:52.338] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:13:52.476] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000337
+=== completed_diff_row=47 ===
+[Oct 20 2026 17:14:37.809] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:14:37.950] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000343
+=== completed_diff_row=48 ===
+[Oct 20 2026 17:15:21.201] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:15:21.390] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000267
+=== completed_diff_row=49 ===
+[Oct 20 2026 17:16:05.339] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:16:05.468] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000299
+=== completed_diff_row=50 ===
+[Oct 20 2026 17:16:50.842] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:16:50.973] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000268
+=== completed_diff_row=51 ===
+[Oct 20 2026 17:17:34.751] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:17:34.880] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000254
+=== completed_diff_row=52 ===
+[Oct 20 2026 17:18:19.199] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:18:19.341] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000198
+=== completed_diff_row=53 ===
+[Oct 20 2026 17:19:02.904] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:19:03.075] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000146
+=== completed_diff_row=54 ===
+[Oct 20 2026 17:19:47.930] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:19:48.081] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000185
+=== completed_diff_row=55 ===
+[Oct 20 2026 17:20:34.948] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:20:35.120] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000120
+=== completed_diff_row=56 ===
+[Oct 20 2026 17:24:50.535] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:24:50.665] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000105
+=== completed_diff_row=57 ===
+[Oct 20 2026 17:44:26.788] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:44:27.078] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000164
+=== completed_diff_row=58 ===
+[Oct 20 2026 17:48:15.939] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:48:16.080] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000145
+=== completed_diff_row=59 ===
+[Oct 20 2026 17:49:00.956] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.113688
+[Oct 20 2026 17:49:01.126] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000140

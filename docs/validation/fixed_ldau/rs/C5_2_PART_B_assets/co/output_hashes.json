@@ -1,0 +1,194 @@
+{
+  "artifact_names": [
+    "Co1.nml",
+    "Co1_1_spinene.out",
+    "Co1_dos.out",
+    "Co1_orbene.out",
+    "Co1_orbital_dos.out",
+    "Co1_orbquadene.out",
+    "Co1_out.nml",
+    "Co1_scf.nml",
+    "Co2.nml",
+    "Co2_2_spinene.out",
+    "Co2_dos.out",
+    "Co2_orbene.out",
+    "Co2_orbital_dos.out",
+    "Co2_orbquadene.out",
+    "Co2_out.nml",
+    "Co2_scf.nml",
+    "angles_lmom.out",
+    "angles_magmom.out",
+    "clust",
+    "fort.800",
+    "fort.805",
+    "input.nml",
+    "lattice.nml",
+    "linfo.out",
+    "mad.mat",
+    "magneticdos.out",
+    "map",
+    "minfo.out",
+    "radial_ground_state_Co1_1.dat",
+    "radial_ground_state_Co2_2.dat",
+    "report.out",
+    "sbar",
+    "str.out",
+    "totaldos.out",
+    "ves.out",
+    "view.sbar"
+  ],
+  "control": {
+    "actual_executable_pid": 89945,
+    "actual_process_check": "ps at 16:51:43+0200 found neither PID89945 nor shell wrapper PID89944; natural termination after normal step25 record",
+    "exit_code": "0",
+    "testrun_log_sha256": "2fa95b05b177bdb9dd98fc558fa92de84f00439fc95952e442e4957133713c19",
+    "wrapper_and_solver_pid_file": "89945"
+  },
+  "files": {
+    "Co1.nml": {
+      "bytes": 6777,
+      "sha256": "19e93a01e37f1d4e6dd4568d25b7eaa935b146f1090e65992d249cadc85e45e4"
+    },
+    "Co1_1_spinene.out": {
+      "bytes": 163150,
+      "sha256": "117299c7c0fcad798de39efea95b2024cc4d85242c29b194e907109ae693694d"
+    },
+    "Co1_dos.out": {
+      "bytes": 163198,
+      "sha256": "39b1d622e5c7f61a3bbae66cfcf3e9b01481436313012e693719c6a1095f1d67"
+    },
+    "Co1_orbene.out": {
+      "bytes": 163150,
+      "sha256": "be91e801322bc3c3adf77ae8fc8350a24279bb1a3f72e0d92ac7009bd9a4b2ae"
+    },
+    "Co1_orbital_dos.out": {
+      "bytes": 765550,
+      "sha256": "1bc205426c880f78045c60d2e65d41e3f979427a910b7a8c03ce45e65d00b6b2"
+    },
+    "Co1_orbquadene.out": {
+      "bytes": 363950,
+      "sha256": "1934c66ffc0047deb5a109eba3ceff60e4951d49173b838424a2d3a6f15c10c6"
+    },
+    "Co1_out.nml": {
+      "bytes": 6785,
+      "sha256": "189addcdb37b7b80017f947788f094f02391ddef19f59c8efaab77a624342615"
+    },
+    "Co1_scf.nml": {
+      "bytes": 6785,
+      "sha256": "189addcdb37b7b80017f947788f094f02391ddef19f59c8efaab77a624342615"
+    },
+    "Co2.nml": {
+      "bytes": 6777,
+      "sha256": "18f2156ea75593d6adf562b713f2ebc3652233367fa9b3c6f0d4dbe8fa188b91"
+    },
+    "Co2_2_spinene.out": {
+      "bytes": 163150,
+      "sha256": "f2e6fd8e70274984635bc0151e6a705531652ddbb4fefea35bd1e2ab924b4ad2"
+    },
+    "Co2_dos.out": {
+      "bytes": 163198,
+      "sha256": "894f21b86bc073e1dd3c753f0dfb5360f0805b6e0a5fcfd6b80d221a5f67f476"
+    },
+    "Co2_orbene.out": {
+      "bytes": 163150,
+      "sha256": "3695461f14917118d8da293d47c9417092b3af2fea4d70935756373fdc5a60ff"
+    },
+    "Co2_orbital_dos.out": {
+      "bytes": 765550,
+      "sha256": "aefb55d3fe3062b7632bccb1efa7fd572856c96e6a42ea4d754fc228c18fa4f8"
+    },
+    "Co2_orbquadene.out": {
+      "bytes": 363950,
+      "sha256": "8f813c07ef25c92030dde2613bb0f55692efefd2a719fd4520184617a54a48f6"
+    },
+    "Co2_out.nml": {
+      "bytes": 6786,
+      "sha256": "6f1bcbcde421091de613b6d6e0177c5e2772dcc86e8be2d1411e6e252d878ea4"
+    },
+    "Co2_scf.nml": {
+      "bytes": 6786,
+      "sha256": "6f1bcbcde421091de613b6d6e0177c5e2772dcc86e8be2d1411e6e252d878ea4"
+    },
+    "angles_lmom.out": {
+      "bytes": 66,
+      "sha256": "734963a7dddcdc2b1a2ffd48a8ab62d56f071889b9fcf38ec2e9c6c8f3b2b251"
+    },
+    "angles_magmom.out": {
+      "bytes": 66,
+      "sha256": "19a45486b9942fccd0304a3550b55b5161f12c42dd36a5dbe3bb721445837145"
+    },
+    "clust": {
+      "bytes": 101015,
+      "sha256": "89312bfa73b0435dbefb675c9337b598362a1c2f0a54a6c09b5c791b8873c9a8"
+    },
+    "fort.800": {
+      "bytes": 96013,
+      "sha256": "c87d2b740e7f3db94d1bb21062217d434341f355d818ff92e06ae037f03f25f3"
+    },
+    "fort.805": {
+      "bytes": 206014,
+      "sha256": "9d3e32d4caf357e5dc3ec120e145aa4ee5c012d6a9c126cf63c2341b67084659"
+    },
+    "input.nml": {
+      "bytes": 805,
+      "sha256": "e8adcbd3edcb831959c9d17bae5035294f75b2fa1096dcd3e90be12e28ef67ee"
+    },
+    "lattice.nml": {
+      "bytes": 523,
+      "sha256": "b99302fad18239e8d517399de913b3316c1bc812a6fcdecfbe68650e4f31dafa"
+    },
+    "linfo.out": {
+      "bytes": 136,
+      "sha256": "8fbf15213bee67b7af6eea02ae8df1fad20d8983af2c296aed7c2bb99bf8984f"
+    },
+    "mad.mat": {
+      "bytes": 48,
+      "sha256": "cfc2dd9700fac4bd7a6c34372b22d8369c1793a70bf744b3f2b92f86f2b2767f"
+    },
+    "magneticdos.out": {
+      "bytes": 283683,
+      "sha256": "8cce450e234bd998a5f1f8c05d14c2169dfa8c9bcc89aed583b1a63a0f307821"
+    },
+    "map": {
+      "bytes": 168000,
+      "sha256": "63b825628b5e33e850c15ffe9ff5cb5e1959cddfac29266d2f6f86bcdcc4088e"
+    },
+    "minfo.out": {
+      "bytes": 130,
+      "sha256": "f5b446356f61ab05ee12eb48cb3bf4c5a15de7bdb6276d894f88ea6ab26810c4"
+    },
+    "radial_ground_state_Co1_1.dat": {
+      "bytes": 142314,
+      "sha256": "5f96950fff6f079b27550efafda4d01d408b32caf11c5878dbab61d0736d63fe"
+    },
+    "radial_ground_state_Co2_2.dat": {
+      "bytes": 142314,
+      "sha256": "637f11cfa122adbd5d1a7658d7459d0f86ed98a016c3aaccb908e1c3ccf20940"
+    },
+    "report.out": {
+      "bytes": 3230,
+      "sha256": "1286390642302864e329014e2edec925f26cd6518c125898c2268dfcd9e863b6"
+    },
+    "sbar": {
+      "bytes": 73872,
+      "sha256": "6cabb7df490f0126cd80c57213a9fd93cfa6ceb3d93090961eaa12c39361a990"
+    },
+    "str.out": {
+      "bytes": 2538,
+      "sha256": "d6e0ea72955a0b1548dddf3043f77c4111705e9f7884847af96e0fa84543044d"
+    },
+    "totaldos.out": {
+      "bytes": 82830,
+      "sha256": "474dddd81aae4cf283dd04f36c8b8f3d3bbc1ffd344d58b696ed9af777633f9a"
+    },
+    "ves.out": {
+      "bytes": 984,
+      "sha256": "df2ca71ec9c082b92a160d3efcdb4df8682987f5f76ac0ae4dcc71d18350fb81"
+    },
+    "view.sbar": {
+      "bytes": 33820,
+      "sha256": "bd763447dfe08a6bca390ea97a3bbc9d7ff973637378a3a0d8370948f3a61d9d"
+    }
+  },
+  "run_dir": "/private/tmp/c5-3-b-runs/b2b_co"
+}

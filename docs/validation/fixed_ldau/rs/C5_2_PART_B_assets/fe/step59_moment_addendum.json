@@ -1,0 +1,16 @@
+{
+  "type": "audited_interpretation_addendum",
+  "base_manifest_path": "/private/tmp/c5-3-b-runs/b2a_fe_step59_candidate_record/manifest.json",
+  "base_manifest_sha256": "09c7fd4f4820397844c3ef72c01ca2d9c108e3da2c3de1a16ffdafd6b4241f2b",
+  "window_iterations": [
+    40,
+    59
+  ],
+  "final_iteration_diff": 1.4e-08,
+  "window_max_diff": 6.64e-08,
+  "window_max_diff_iteration": 41,
+  "physical_moment_log_source": "testrun.log, bands.f90:1701 `Spin moment of atom 1 is`; auditor confirms F10.6 precision",
+  "printed_values_all_identical": "2.113688 \u03bcB",
+  "interpretation": "The zero displayed range is not an exact-zero claim. Under the reported F10.6 quantization, identical displayed values bound the pairwise moment spread to at most one 1e-6 \u03bcB quantization interval (inclusive); actual sub-quantization values are not retained in these log lines.",
+  "status": "candidate monitoring evidence only; no solver stop, final acceptance, or terminal verdict authorized by this addendum."
+}

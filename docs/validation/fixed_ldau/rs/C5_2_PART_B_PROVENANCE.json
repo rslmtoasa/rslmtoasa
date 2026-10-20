@@ -1,38 +1,357 @@
 {
-  "part": "C5.2 Part B",
-  "status": "NOT_STARTED_DUE_A4_IV_STOP",
-  "part_a_reference": {
-    "results": "C5_2_PART_A_RESULTS.md",
-    "provenance": "C5_2_PART_A_PROVENANCE.json",
-    "stop_basis": "A1 clean-8b repeat and both A2 matched comparisons were scientifically byte-identical; no first break/attribution was found; root and auditor confirmed A4(iv) STOP.",
-    "sha256": {
-      "results": {
-        "path": "docs/validation/fixed_ldau/rs/C5_2_PART_A_RESULTS.md",
-        "sha256": "b9b372626beb90aac33e8ad98f8e8a07a852b04f03514bb38b76da8fd4993a08"
-      },
-      "provenance": {
-        "path": "docs/validation/fixed_ldau/rs/C5_2_PART_A_PROVENANCE.json",
-        "sha256": "9102597adddbd316ed233bba42225e473369389e7ec4c95e09b4b8873632e4bf"
-      }
+  "schema": "c5-2-part-b-v1",
+  "part": "B (B1-B3)",
+  "status": "COMPLETE; B1, B2(a/b), identity checks, and B3 records are finalized; five of six solver launches used and all owned processes are gone.",
+  "protocol": "C5.3; A4(v) accepted; identity checks use OMP_NUM_THREADS=1 plus registered BLAS/NUMEXPR caps. SCF campaigns may use multithreading.",
+  "baseline_commit": "8b8f7ef (clean baseline for B identity fixtures)",
+  "candidate_source_base_commit": "8c7251da74e7142df30cc4147d2a4f259badabf2",
+  "working_source_manifest": {
+    "tracked_diff_sha256": "44d76933e95e5bb44eeceb9204b32c32e1ed10bb28814803aa97ff1b03dfa007",
+    "files": {
+      "CMakeLists.txt": "6f4dbe61e45a7c42a5e4cc5ac2977059102f974fd20e0376ac9e2ee63c46d419",
+      "source/CMakeLists.txt": "38c03906064b587d6a40c99160f80bfe154dcbcacdbf677bceba1c969fefdc26",
+      "source/bands.f90": "ea924d76e09c534d33275e9e330d872e9351d14ba33629013d409784280838cc",
+      "source/mix.f90": "f75c1d98d57e8a114d188c28089ec3f565d5a64328679f50224618a0f6e202fd",
+      "source/self.f90": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+      "source/scf_guard.f90": "3f232e9cea4a84acfbe98b7636da0b02318253d5a21f776bb2763e607571c415",
+      "tests/unit/test_scf_b1_guard.f90": "d000c46c13e6eb503aa65487f6861928deb752ecc4c8cbdc1573a73364ba7434"
+    },
+    "candidate_executable_path": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x",
+    "candidate_executable_sha256": "a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3",
+    "candidate_manifest_path": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/manifest.json",
+    "candidate_manifest_sha256": "b2f3ab5d26c439520bdfcbca16163877b2e36d7bb9c3af0448e6941327ae5158",
+    "build": {
+      "directory": "/private/tmp/c5-b1-guard-build-clean",
+      "configure_command": "cmake -S . -B /private/tmp/c5-b1-guard-build-clean -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/cc -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DCMAKE_Fortran_COMPILER=/opt/homebrew/bin/gfortran -DENABLE_CUDA_PLUGIN=OFF -DENABLE_CUDA_RECIPROCAL=OFF -DENABLE_FLUSH=OFF -DENABLE_FUSED_RECIPROCAL=OFF -DENABLE_LIBXC=OFF -DENABLE_MARCH_NATIVE=ON -DENABLE_MKL_KERNELS=OFF -DENABLE_MPI=OFF -DENABLE_OPENMP=ON -DENABLE_SPGLIB=ON -DRUN_EXAMPLE_TESTS=OFF -DRUN_REG_TESTS=OFF -DRUN_UNIT_TESTS=ON -DBUILD_TESTING=ON",
+      "build_command": "cmake --build /private/tmp/c5-b1-guard-build-clean --target rslmto.x -j2",
+      "release_fortran_flags": "-ffree-line-length-0 -cpp -mtune=native -DCOLOR -fopenmp -DOpenMP_Fortran_FOUND -O3 -fbacktrace -g -g",
+      "fortran_flags_make_sha256": "0539978fb85b636f91ea64bb5429064bece78600bc990b9af68bfedf4ee35150",
+      "link_command_file": "/private/tmp/c5-b1-guard-build-clean/CMakeFiles/rslmto.x.dir/link.txt",
+      "link_command_file_sha256": "baf888a39a9a5673e6b7e60f57f3289e00c1a78048e1a2fdea8a58deb7f82332",
+      "cmake_cache_sha256": "c1f6e9c6444be7d93add9232024612eedf2ff26cde14b051bac724b816b83435",
+      "compiler": "GNU Fortran (Homebrew GCC 16.2.0) 16.2.0",
+      "cmake": "cmake version 4.4.4"
+    },
+    "regression_tests": {
+      "command": "ctest --test-dir /private/tmp/c5-b1-guard-build-clean -R '^UnitScfB1Guard' --output-on-failure",
+      "output_file": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/ctest.txt",
+      "output_sha256": "5e4c1c2fd580906d2949e26a4f70ca9f59320ba8b0a0fe5b38e5771ddca00841",
+      "result": "3/3 passed: over-capacity diagnostic regex, nonfinite diagnostic regex, allowed-boundary success"
     }
   },
   "B1": {
-    "status": "NOT_IMPLEMENTED",
-    "guard": false,
-    "regression": false,
-    "production_changes": false
+    "status": "PASS",
+    "scope": "For nsp==1, guard per-spin q0 above 2l+1+1e-6 and non-finite active q0/q2/PL mixed values plus active new/unmixed q1 before propagation. Actual SCF iteration, atom/site, l/channel/spin and offending value are reported. nsp>=2 and inactive padding are unchanged.",
+    "test_output_sha256": "5e4c1c2fd580906d2949e26a4f70ca9f59320ba8b0a0fe5b38e5771ddca00841",
+    "auditor": "Source/test review PASS; clean build CTest 3/3 PASS."
   },
-  "B2": {
-    "status": "NOT_RUN",
-    "fe_rc100_chebyshev": "NOT_RUN",
-    "co_block": "NOT_RUN",
-    "solver_runs": 0
+  "identity_checks": [
+    {
+      "name": "RS candidate vs C5.2 A1 clean baseline",
+      "status": "PASS",
+      "difference": "All scientific outputs byte-identical; only str.out cpu_s differs (.132 versus .295).",
+      "candidate_map": "/private/tmp/c5-3-b-runs/rs_candidate_output_hashes.json",
+      "candidate_map_sha256": "5e2831e267ca29ea274e8a930a9ca889334d76f214176a9ee473e4b84f1db57e",
+      "preflight": "/private/tmp/c5-3-b-runs/rs_candidate_preflight.json"
+    },
+    {
+      "name": "KS candidate vs clean-8b",
+      "status": "PASS",
+      "difference": "All scientific outputs byte-identical; only str.out cpu_s differs (1.307 versus 1.286).",
+      "baseline_map": "/private/tmp/c5-3-b-runs/ks_clean8b_output_hashes.json",
+      "baseline_map_sha256": "63f6c01375db473dfaa11e5e2de5eb55cb2ab53a03a1f02a2c8598cea5764175",
+      "candidate_map": "/private/tmp/c5-3-b-runs/ks_candidate_output_hashes.json",
+      "candidate_map_sha256": "90d2175ba40d191eeae9e6d4ec0ab76ed751802e39f4c3e962b6ea0ec8a325ca",
+      "preflights": [
+        "/private/tmp/c5-3-b-runs/ks_clean8b_preflight.json",
+        "/private/tmp/c5-3-b-runs/ks_candidate_preflight.json"
+      ]
+    }
+  ],
+  "B2a_Fe": {
+    "status": "ACCEPTED_AT_STEP_59; subsequent continuation intentionally terminated after preserving accepted endpoint; all owned processes verified gone.",
+    "endpoint": {
+      "step": 59,
+      "Diff_Ry": 1.4e-08,
+      "d_spin_ql_spread_spin1": 2.0146132939657946e-07,
+      "d_spin_ql_spread_spin2": 4.01403292382696e-07,
+      "physical_mtot": "20 consecutive printed F10.6 moment lines are identical; true spread is bounded by <=1e-6 muB at printed precision, not asserted zero.",
+      "hubbard_energy_U0": "inactive/N/A"
+    },
+    "acceptance": "Root and auditor cleared the registered RS acceptance at step59; full preflight check passed.",
+    "stop": "Intentional SIGTERM after preserving accepted step59 checkpoint; wrapper exit143. Terminal raw record and independent process cleanup verification are complete; later iteration65/66 outputs are excluded.",
+    "run_preflight": "/private/tmp/c5-3-b-runs/b2a_fe_preflight.json",
+    "terminal_record_path": "C5_2_PART_B_assets/fe/terminal_status.json",
+    "terminal_record_sha256": "98b273c7c6be45f16a21f7819bc4e8bb5c9724680e2c6194b612d3f4ef4ee905",
+    "terminal_output_hash_map": "C5_2_PART_B_assets/fe/output_hash_map.json",
+    "terminal_output_hash_map_sha256": "b5a2693b80042d4cbd5fef5336634d294c2097b33593b33231a518bc77611982",
+    "terminal_sha256sums_path": "C5_2_PART_B_assets/fe/SHA256SUMS",
+    "terminal_sha256sums_sha256": "8164deafd14ea64b16c65b79dbc78d93c877da413e48ff5d6609e9fbfea27aad",
+    "accepted_checkpoint": "C5_2_PART_B_assets/fe/Fe_scf_step59.nml.gz",
+    "accepted_checkpoint_sha256": "62211b6202872f855c732fb267b2c36f08b6a11d1785a00fc8d9dd7ee030bd10",
+    "candidate_manifest_sha256": "09c7fd4f4820397844c3ef72c01ca2d9c108e3da2c3de1a16ffdafd6b4241f2b",
+    "moment_addendum_sha256": "08c746035576cf5ad8d868f027d9e179a5de16a05d18375a40082087d5561209",
+    "terminal_process": {
+      "solver_pid": 85089,
+      "wrapper_pid": 85088,
+      "outer_shell_pid": 85087,
+      "termination": "authorized intentional SIGTERM after accepted step59 checkpoint",
+      "wrapper_exit_code": 143,
+      "all_pids_gone_verified": true,
+      "completed_diff_rows": 65,
+      "last_completed_iteration": 65,
+      "last_completed_diff_Ry": 1.77e-08,
+      "interrupted_iteration66_not_used": true
+    },
+    "auditor": "PASS: accepted step59 raw record, process cleanup, and preservation verified.",
+    "accepted_checkpoint_encoding": "gzip with original NML bytes preserved; decompress to reproduce accepted checkpoint",
+    "accepted_checkpoint_gzip_sha256": "d6896ceef55392c0b61938d642953ac23fd3f645329bb1e36e5505c47ed3faa8",
+    "accepted_window_snapshots": [
+      {
+        "iteration": 40,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_034_0d762ffa0cc9.nml",
+        "uncompressed_sha256": "0d762ffa0cc9f8bb350aecd4682336f04c172512058c84cf2eb7fc447367812b",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_040_Fe_scf.nml.gz",
+        "compressed_sha256": "633c9f3290bdca2f657423739e9a09466f0fb1daf6566d94ca2d5663631a40d0"
+      },
+      {
+        "iteration": 41,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_035_08d8e0ba9643.nml",
+        "uncompressed_sha256": "08d8e0ba9643794ce927d1c622a880cf5ab6c8d136ae9897800c73f02169ae18",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_041_Fe_scf.nml.gz",
+        "compressed_sha256": "9cf62b7166690dc59aa566ca5ce974eaf79432cd7dfe878005b972532d5d54ae"
+      },
+      {
+        "iteration": 42,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_036_c2e8319f4617.nml",
+        "uncompressed_sha256": "c2e8319f4617e1d5a5998a692d3a6d93bff7f6d0d4dd12dcf1f48c44fb864eef",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_042_Fe_scf.nml.gz",
+        "compressed_sha256": "4fa0a866e23468f291e2c367b4f5145db8edc9cdc6a7c6025ddba491a39314dc"
+      },
+      {
+        "iteration": 43,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_037_721eaa14fc50.nml",
+        "uncompressed_sha256": "721eaa14fc506ce3c49b304ed7556ed6fe1b4a00ebf44d360c171e305abdccd9",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_043_Fe_scf.nml.gz",
+        "compressed_sha256": "3ebd3502aedacb769dbebf7d0cfc8a220f4b2d228d39d2454ed503e62a6c336d"
+      },
+      {
+        "iteration": 44,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_038_74da91f68d6a.nml",
+        "uncompressed_sha256": "74da91f68d6af6a4d4996e91ad30b277c5da5d354f8ca71aed08e8064cedf46b",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_044_Fe_scf.nml.gz",
+        "compressed_sha256": "a44529bbd0fc38c1e1d3f8805f8a5dcc46431c9d0389c0e04a9631754bf45fbb"
+      },
+      {
+        "iteration": 45,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_039_60ff20045e93.nml",
+        "uncompressed_sha256": "60ff20045e938bc9ae8d882a114ff7803cb92eeea98fac25e55de95797bfddfd",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_045_Fe_scf.nml.gz",
+        "compressed_sha256": "b30321a1af075320b4ccd4886b0f13276ea103b31d8497a4e91f817ed4ebd2ae"
+      },
+      {
+        "iteration": 46,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_040_83d4cc1966da.nml",
+        "uncompressed_sha256": "83d4cc1966dab51a92903e73fd9845cac0affa8df03e734c974657dc136bdbbb",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_046_Fe_scf.nml.gz",
+        "compressed_sha256": "884c31bc4845fbb732683c3b64b879c2bd6a013a4a8f5da234ff6e1a675c729f"
+      },
+      {
+        "iteration": 47,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_041_8b1ca6dd3916.nml",
+        "uncompressed_sha256": "8b1ca6dd39168e05da34b20c1056c5298a2dd72b6db6eedab0771f9469e1dacf",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_047_Fe_scf.nml.gz",
+        "compressed_sha256": "d985217da4b2e397f9550493db33839f70c5578b362d4ff5a077dad1c988bbfc"
+      },
+      {
+        "iteration": 48,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_042_5a65dd098e6d.nml",
+        "uncompressed_sha256": "5a65dd098e6df26e2e289399312ed7264634e8345a43361739366863e0188181",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_048_Fe_scf.nml.gz",
+        "compressed_sha256": "203e4b0d7f9ea3f73a47f46a54d7b87c02b936a5d16de39eeedcaffd74ab190a"
+      },
+      {
+        "iteration": 49,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_043_301dfe8000dd.nml",
+        "uncompressed_sha256": "301dfe8000dd2b0b4353f227241d9186345efd0038ab11f683d7cebeac1f8001",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_049_Fe_scf.nml.gz",
+        "compressed_sha256": "274bdd2e96c57e367c9345e9b81385d6cd455c212b31a0f9b7952d2a77d03d73"
+      },
+      {
+        "iteration": 50,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_044_78df49c125af.nml",
+        "uncompressed_sha256": "78df49c125af79b7b636600043eb7bba3d1ec58a4736d01be2b9101a1002b9e4",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_050_Fe_scf.nml.gz",
+        "compressed_sha256": "72fa7fd8426ec3cab7b6f8778fab4c5e5797ec01d6c493b367f15ffd08af8e99"
+      },
+      {
+        "iteration": 51,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_045_64a17322f820.nml",
+        "uncompressed_sha256": "64a17322f820c954ac468edb0dd772734615a622e15d7c6e64d248ebd72d408f",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_051_Fe_scf.nml.gz",
+        "compressed_sha256": "14cbac79aa38d4ee42334bf3c7f0749cfa7f2fe66995bbd2f96cf1e9158ea041"
+      },
+      {
+        "iteration": 52,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_046_57453a7fc13d.nml",
+        "uncompressed_sha256": "57453a7fc13d2f61e3827f66509ad9229a7070bfb14ac95a61a18ad572bf36f4",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_052_Fe_scf.nml.gz",
+        "compressed_sha256": "b879840014d0d26b783154659f6642f39c538051c411dd46e7fb02eef32ceddc"
+      },
+      {
+        "iteration": 53,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_047_d2d663f5a623.nml",
+        "uncompressed_sha256": "d2d663f5a623b910c2a1ff15f0e5595a63a7cae03ec4da025c51cbe4b010888d",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_053_Fe_scf.nml.gz",
+        "compressed_sha256": "55c415f8f871ade62e1732fc08ce65da04b963cd51e2a8f77789fa0081475cb0"
+      },
+      {
+        "iteration": 54,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_048_9477f22bf5a0.nml",
+        "uncompressed_sha256": "9477f22bf5a0ab26b94e4204b722dd42c955c5c8f0053d4b4db24f10d7e6fb04",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_054_Fe_scf.nml.gz",
+        "compressed_sha256": "7fba3339e0061235834ea0fbff99dff4174f570cfc3753ab56ae19b07340f65e"
+      },
+      {
+        "iteration": 55,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_049_cd554b9af284.nml",
+        "uncompressed_sha256": "cd554b9af284ff756487d351b06549b5ce3b99136010da0383a047118698e05e",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_055_Fe_scf.nml.gz",
+        "compressed_sha256": "971ebdc320da4d4024d3ea59641f3a6fb12e1e5bf8604bc3edc86300e77cb991"
+      },
+      {
+        "iteration": 56,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_050_c7358388a195.nml",
+        "uncompressed_sha256": "c7358388a195027e13ee9a932f1003b0318f9cb468c80a53e1b0ceb3a0f0c49b",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_056_Fe_scf.nml.gz",
+        "compressed_sha256": "51a3592db07bbfbb54d782da00c598f9f3491d59662c586e36cb4b0c141e51e5"
+      },
+      {
+        "iteration": 57,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_051_c58eccd3d61b.nml",
+        "uncompressed_sha256": "c58eccd3d61bf2ce38ff111abc3167462ab1b12505d6fd06babf579813152dab",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_057_Fe_scf.nml.gz",
+        "compressed_sha256": "b8d81f7ed52b6ef523e6b2443636ad745fc91419ebfb73e9c64d28b202834b68"
+      },
+      {
+        "iteration": 58,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_052_90345caebf60.nml",
+        "uncompressed_sha256": "90345caebf601964693fb1bdd3ea6c57380ddc0e4537f8a33820e771890dda88",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_058_Fe_scf.nml.gz",
+        "compressed_sha256": "6dfa49505a9280665735a2b9de40aa5fd9f7d733c06c13d9e6eb10c6ff2ecb73"
+      },
+      {
+        "iteration": 59,
+        "original_source_path": "/private/tmp/c5-3-b-runs/b2a_fe/trace/Fe_scf_053_62211b620287.nml",
+        "uncompressed_sha256": "62211b6202872f855c732fb267b2c36f08b6a11d1785a00fc8d9dd7ee030bd10",
+        "compressed_asset": "C5_2_PART_B_assets/fe/last20/iter_059_Fe_scf.nml.gz",
+        "compressed_sha256": "8e351258511ca4db48b30cad2f69da83bac8920186bb3448fca34bea5117d703"
+      }
+    ],
+    "accepted_window_manifest": "C5_2_PART_B_assets/fe/step59_candidate_manifest.json",
+    "accepted_window_rule": "Rows/iterations 40–59 are the audited last-20 acceptance window; all 20 NML snapshots are archived as gzip and can be decompressed to the recorded uncompressed SHA256 values."
   },
-  "B3_known_issues": "UNCHANGED",
-  "gates": "NOT_EVALUATED",
-  "interpretation": "No environment cause is asserted. Further work requires user review of the no-reproduction branch and new authorization.",
-  "commands": [],
-  "raw_run_paths": [],
-  "source_changes": [],
-  "tests_added": []
+  "B2b_Co": {
+    "status": "FINITE_UNACCEPTED_CAP_LIMITED_NO_ADOPTION",
+    "settings_summary": "RS Chebyshev; nsp=1; U=J=0; rc=60; nstep=25; Broyden beta .15; lld150; energy window [-1.0,1.3] Ry; free EF with supplied initial seed.",
+    "terminal": "Normal exit code 0 at cap step25; final Diff 0.0054412342 Ry; no NaN/Inf; 19 distinct valid checkpoints, so no complete 20-observation acceptance window.",
+    "preflight": "/private/tmp/c5-3-b-runs/b2b_co_preflight.json",
+    "preflight_sha256": "9839b5fc827c2a3079eb30d97cfd094271ceb4dc21e763342866492a29a1d05a",
+    "output_hash_map": "/private/tmp/c5-3-b-runs/b2b_co_output_hashes.json",
+    "output_hash_map_sha256": "3ed19fe1c8ad96d1bc331ad3d5daa3e1dc4e14bc7bec128afcdeca83020d7076",
+    "auditor": "Raw terminal audit PASS.",
+    "durable_raw_log": "C5_2_PART_B_assets/co/testrun.log.gz",
+    "durable_restart_outputs": {
+      "Co1_out.nml.gz": "C5_2_PART_B_assets/co/Co1_out.nml.gz",
+      "Co2_out.nml.gz": "C5_2_PART_B_assets/co/Co2_out.nml.gz"
+    }
+  },
+  "run_budget": {
+    "cap": 6,
+    "launched_or_counted_at_latest_update": 5,
+    "active_run": "none; Fe continuation intentionally stopped after step59 acceptance and all owned processes are gone.",
+    "remaining_after_active_run": 1,
+    "no_extra_solver_runs_authorized_by_this_record": true,
+    "unrun": "Co two-run continuation ladder omitted; no other retries planned.",
+    "launched_or_counted_total": 5,
+    "reserve_used": false,
+    "fallback_launched": false,
+    "unused_launches": 1
+  },
+  "user_clarification": {
+    "date": "2026-10-20",
+    "context": "The six-run Part B cap conflicted with C5.2 §2.2 two-run Co continuation ladder; five runs had been used including active Fe.",
+    "question": "The auditor found a protocol conflict: C5.2 caps Part B at six solver runs, but §2.2 requires two continuation runs for the unconverged Co record; five runs are already used, including the active Fe run. How should I reconcile this? Fe and independent preparation will continue while awaiting your answer.",
+    "answer": "Keep the six-run cap; record Co as finite but unaccepted, omit its ladder and continue with no adoption.",
+    "appendix": "docs/validation/fixed_ldau/rs/C5_AMENDMENT.md",
+    "appendix_sha256": "1472655b97fd43ecc0da1efdb82c2e0006f32f8292d61212d65fef4139e37363"
+  },
+  "historical_C5_Part_II_record": {
+    "path": "docs/validation/fixed_ldau/rs/C5_PART_II_PROVENANCE.json",
+    "sha256": "dda694b0ed075d3a791a2fe007004538530fb7561bfb3021fa12ecabf0ddeb9f",
+    "scope": "Historical C5 Part II R1/R2 record; its C5.2 12-run cap and §2.5(a) stop belong to that earlier protocol and do not describe this C5.3 Part B."
+  },
+  "B3_KNOWN_ISSUES": "Updated entries 1, 2, and 4; entry 3 unchanged. Co issue remains OPEN; Fe prior failure root cause remains OPEN; B1 guard described without changing physics/defaults.",
+  "final_verdict": "B1 PASS; RS/KS no-U identity PASS; Fe B2(a) accepted at step59; Co B2(b) finite but unaccepted; no Co ladder and no adoption. Five of six Part B launches used; no active process.",
+  "durable_assets": {
+    "directory": "C5_2_PART_B_assets/",
+    "file_sha256": {
+      "build/b1_ctest.txt": "5e4c1c2fd580906d2949e26a4f70ca9f59320ba8b0a0fe5b38e5771ddca00841",
+      "build/b1_manifest.json": "b2f3ab5d26c439520bdfcbca16163877b2e36d7bb9c3af0448e6941327ae5158",
+      "co/Co1_out.nml.gz": "8dd1e9a85f7b52fd41a12ffed18e20e00a0a66f42c1d8e90fe09bf9e26c392d3",
+      "co/Co2_out.nml.gz": "fffd9f406d6e6c07add409a4045db256e2b7e3302e18a5e4ef410fe8e149e2cc",
+      "co/b2b_preflight.json": "9839b5fc827c2a3079eb30d97cfd094271ceb4dc21e763342866492a29a1d05a",
+      "co/output_hashes.json": "3ed19fe1c8ad96d1bc331ad3d5daa3e1dc4e14bc7bec128afcdeca83020d7076",
+      "co/testrun.log": "2fa95b05b177bdb9dd98fc558fa92de84f00439fc95952e442e4957133713c19",
+      "co/testrun.log.gz": "02bac0c1d0ab200f80be8f5fba27dae0f626afc71a2e43507b4031384219052c",
+      "fe/Fe_scf_step59.nml.gz": "d6896ceef55392c0b61938d642953ac23fd3f645329bb1e36e5505c47ed3faa8",
+      "fe/SHA256SUMS": "8164deafd14ea64b16c65b79dbc78d93c877da413e48ff5d6609e9fbfea27aad",
+      "fe/b2a_preflight.json": "319a72f53f74b2db2b1ca69fecc19124eba10a9d23fd80f5700972bf899a7f0d",
+      "fe/last20/iter_040_Fe_scf.nml.gz": "633c9f3290bdca2f657423739e9a09466f0fb1daf6566d94ca2d5663631a40d0",
+      "fe/last20/iter_041_Fe_scf.nml.gz": "9cf62b7166690dc59aa566ca5ce974eaf79432cd7dfe878005b972532d5d54ae",
+      "fe/last20/iter_042_Fe_scf.nml.gz": "4fa0a866e23468f291e2c367b4f5145db8edc9cdc6a7c6025ddba491a39314dc",
+      "fe/last20/iter_043_Fe_scf.nml.gz": "3ebd3502aedacb769dbebf7d0cfc8a220f4b2d228d39d2454ed503e62a6c336d",
+      "fe/last20/iter_044_Fe_scf.nml.gz": "a44529bbd0fc38c1e1d3f8805f8a5dcc46431c9d0389c0e04a9631754bf45fbb",
+      "fe/last20/iter_045_Fe_scf.nml.gz": "b30321a1af075320b4ccd4886b0f13276ea103b31d8497a4e91f817ed4ebd2ae",
+      "fe/last20/iter_046_Fe_scf.nml.gz": "884c31bc4845fbb732683c3b64b879c2bd6a013a4a8f5da234ff6e1a675c729f",
+      "fe/last20/iter_047_Fe_scf.nml.gz": "d985217da4b2e397f9550493db33839f70c5578b362d4ff5a077dad1c988bbfc",
+      "fe/last20/iter_048_Fe_scf.nml.gz": "203e4b0d7f9ea3f73a47f46a54d7b87c02b936a5d16de39eeedcaffd74ab190a",
+      "fe/last20/iter_049_Fe_scf.nml.gz": "274bdd2e96c57e367c9345e9b81385d6cd455c212b31a0f9b7952d2a77d03d73",
+      "fe/last20/iter_050_Fe_scf.nml.gz": "72fa7fd8426ec3cab7b6f8778fab4c5e5797ec01d6c493b367f15ffd08af8e99",
+      "fe/last20/iter_051_Fe_scf.nml.gz": "14cbac79aa38d4ee42334bf3c7f0749cfa7f2fe66995bbd2f96cf1e9158ea041",
+      "fe/last20/iter_052_Fe_scf.nml.gz": "b879840014d0d26b783154659f6642f39c538051c411dd46e7fb02eef32ceddc",
+      "fe/last20/iter_053_Fe_scf.nml.gz": "55c415f8f871ade62e1732fc08ce65da04b963cd51e2a8f77789fa0081475cb0",
+      "fe/last20/iter_054_Fe_scf.nml.gz": "7fba3339e0061235834ea0fbff99dff4174f570cfc3753ab56ae19b07340f65e",
+      "fe/last20/iter_055_Fe_scf.nml.gz": "971ebdc320da4d4024d3ea59641f3a6fb12e1e5bf8604bc3edc86300e77cb991",
+      "fe/last20/iter_056_Fe_scf.nml.gz": "51a3592db07bbfbb54d782da00c598f9f3491d59662c586e36cb4b0c141e51e5",
+      "fe/last20/iter_057_Fe_scf.nml.gz": "b8d81f7ed52b6ef523e6b2443636ad745fc91419ebfb73e9c64d28b202834b68",
+      "fe/last20/iter_058_Fe_scf.nml.gz": "6dfa49505a9280665735a2b9de40aa5fd9f7d733c06c13d9e6eb10c6ff2ecb73",
+      "fe/last20/iter_059_Fe_scf.nml.gz": "8e351258511ca4db48b30cad2f69da83bac8920186bb3448fca34bea5117d703",
+      "fe/output_hash_map.json": "b5a2693b80042d4cbd5fef5336634d294c2097b33593b33231a518bc77611982",
+      "fe/step59_candidate_SHA256SUMS": "3a0c79d130428aa781a8e822e170cb64305c3e798226bc988ead96d421fcc8e5",
+      "fe/step59_candidate_manifest.json": "09c7fd4f4820397844c3ef72c01ca2d9c108e3da2c3de1a16ffdafd6b4241f2b",
+      "fe/step59_moment_addendum.json": "08c746035576cf5ad8d868f027d9e179a5de16a05d18375a40082087d5561209",
+      "fe/step59_window_log.raw": "ef8b6c9e93dc70f927f3a667f60f9350de489ae74127e650b454b6f7e6f22bdc",
+      "fe/terminal_status.json": "98b273c7c6be45f16a21f7819bc4e8bb5c9724680e2c6194b612d3f4ef4ee905",
+      "fe/testrun.log": "248b0f8db257be45d2c83bdcb4854dc21e6a12960bd08a9c82f9350a2f48c48f",
+      "identity/ks_candidate_output_hashes.json": "90d2175ba40d191eeae9e6d4ec0ab76ed751802e39f4c3e962b6ea0ec8a325ca",
+      "identity/ks_candidate_preflight.json": "69e77caf61b1f7467d4a62f46331a49b0fc01268bed0417746297923f270422c",
+      "identity/ks_candidate_testrun.log": "c8c511bac12f7ab02fbf9d60c446fbc38337654e4af3a5d3990c46daceb98770",
+      "identity/ks_clean8b_output_hashes.json": "63f6c01375db473dfaa11e5e2de5eb55cb2ab53a03a1f02a2c8598cea5764175",
+      "identity/ks_clean8b_preflight.json": "05865faefba58359b389691b8a00797d0b5bb72719332105a05247785fd496c6",
+      "identity/ks_clean8b_testrun.log": "9084115b16013bd000afe5afbbffa83958a615e4bb584d1cdaf2ef5ce42dc548",
+      "identity/rs_candidate_output_hashes.json": "5e2831e267ca29ea274e8a930a9ca889334d76f214176a9ee473e4b84f1db57e",
+      "identity/rs_candidate_preflight.json": "dc571a24ea807cd59bd269154b56ea13a41f52db8f716d5692136ed755548998",
+      "identity/rs_candidate_testrun.log": "96da336eff1223336c1d64feccef246ed5226ea6dc8356155144bfb7356ece87"
+    }
+  },
+  "identity_environment": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "BLIS_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1"
+  },
+  "stop_semantics": "No §2.5 protocol STOP was triggered. The live Fe continuation was intentionally SIGTERM’d after accepted step59 preservation; wrapper exit 143 and process cleanup are recorded."
 }

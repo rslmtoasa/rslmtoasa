@@ -687,3 +687,12 @@ workers plus the Luna auditor.
    Use the single-thread rule from item 1 for every identity check, including those in RD5 and
    in the merge verification.
    Do not push. Report the merge SHA.
+
+
+## User clarification — Part B Co continuation ladder (2026-10-20)
+
+Context: the six-run Part B limit conflicted with the prescribed two-run continuation ladder for the unconverged Co record; five runs had been used, including the active Fe run. The clarification preserves the cap and directs that Co remain unaccepted without adoption.
+
+Question: “The auditor found a protocol conflict: C5.2 caps Part B at six solver runs, but §2.2 requires two continuation runs for the unconverged Co record; five runs are already used, including the active Fe run. How should I reconcile this? Fe and independent preparation will continue while awaiting your answer.”
+
+Reply: “Keep the six-run cap; record Co as finite but unaccepted, omit its ladder and continue with no adoption.”

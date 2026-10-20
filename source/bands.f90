@@ -32,6 +32,7 @@ module bands_mod
    use precision_mod, only: rp
    use math_mod
    use logger_mod, only: g_logger
+   use scf_guard_mod, only: guard_q0_capacity, guard_nonfinite_scalar
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -860,13 +861,14 @@ contains
    !> @brief
    !> Calculates the moments m^(q), q = 0, 1 and 2
    !---------------------------------------------------------------------------
-   subroutine calculate_moments(this, m1_out, pl_diag_out)
+   subroutine calculate_moments(this, m1_out, pl_diag_out, iteration)
       use mpi_mod
       class(bands) :: this
       ! Optional diagnostic-only raw first spectral moment, shape
       ! (nrec,l+1,spin,m_a,m_b). It never feeds the radial moment path.
       complex(rp), intent(out), optional, target :: m1_out(:, :, :, :, :)
       real(rp), intent(out), optional :: pl_diag_out(:, :, :, :)
+      integer, intent(in), optional :: iteration
       ! Local variables
       integer :: i, j, l, m, o ! Orbital index
       integer :: na ! Atom index
@@ -880,7 +882,7 @@ contains
       integer :: nchan, nchan_spin
 
       real(rp), dimension(:), allocatable :: pot_arr
-      integer :: na_glob, pot_size
+      integer :: na_glob, pot_size, iteration_value, l_check, spin_check
       real(rp), dimension(:, :), allocatable :: T_comm
       real(rp), dimension(3, atoms_per_process) :: mom_prev
       logical :: hubbard_active
@@ -912,6 +914,9 @@ contains
       ! material violations. Diagnostics never modify or project the LDM.
       real(rp), parameter :: ldm_hermiticity_tol = 1.0e-6_rp
       real(rp), parameter :: ldm_occupation_tol = 1.0e-3_rp
+
+      iteration_value = 0
+      if (present(iteration)) iteration_value = iteration
 
       if (present(m1_out)) then
          if (size(m1_out, 1) /= this%lattice%nrec .or. size(m1_out, 2) < lmax_basis + 1 .or. &
@@ -1017,6 +1022,15 @@ contains
                this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(3, i - soff - 1, nsp) = 0.0_rp
             end if
          end do
+         if (this%control%nsp == 1) then
+            do l_check = 0, min(this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%lmax, lmax_basis)
+               do spin_check = 1, 2
+                  call guard_q0_capacity(this%symbolic_atom(this%lattice%nbulk + na_glob)%element%symbol, &
+                     na_glob, l_check, spin_check, iteration_value, &
+                     this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, l_check, spin_check))
+               end do
+            end do
+         end if
          ! if (this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%lmax >= 3) then
          !    call g_logger%info(’DEBUG:bands ql atom’//fmt(’i4’, na_glob)// &
          !                       ’ ql_s_up=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 0, 1))// &
@@ -1236,9 +1250,9 @@ contains
       end if
 
       if (present(pl_diag_out)) then
-         call this%calculate_pl(pl_diag_out)
+         call this%calculate_pl(pl_diag_out, iteration_value)
       else
-         call this%calculate_pl()
+         call this%calculate_pl(iteration=iteration_value)
       end if
 
       ! Transfer calculated moments across MPI ranks
@@ -2147,15 +2161,17 @@ contains
       end do
    end subroutine calculate_projected_green
 
-   subroutine calculate_pl(this, diag_out)
+   subroutine calculate_pl(this, diag_out, iteration)
       use mpi_mod
       class(bands) :: this
       real(rp), intent(out), optional :: diag_out(:, :, :, :)
+      integer, intent(in), optional :: iteration
       ! Local variables
       integer :: i ! orbital index
       integer :: is ! spin channel index
       integer :: ia ! atom index
       integer :: plusbulk
+      integer :: iteration_value
       real(rp) :: rq, dnu, pli, delta2 ! Local variables
       real(rp) :: old_pl
       real(rp), allocatable :: diag_comm(:, :, :, :)
@@ -2170,12 +2186,20 @@ contains
 
       !integer :: ia_glob
 
+      iteration_value = 0
+      if (present(iteration)) iteration_value = iteration
+
       !do ia=1, this%lattice%nrec
       do ia = start_atom, end_atom
          !ia = g2l_map(ia_glob)
          plusbulk = this%lattice%nbulk + ia
          do is = 1, 2
             do i = 1, lmax_basis + 1
+               old_pl = this%symbolic_atom(plusbulk)%potential%pl(i - 1, is)
+               if (this%control%nsp == 1) then
+                  call guard_nonfinite_scalar(this%symbolic_atom(plusbulk)%element%symbol, ia, i - 1, is, &
+                     'input PL', iteration_value, old_pl)
+               end if
                rq = 1/this%symbolic_atom(plusbulk)%potential%qpar(i - 1, is)
                delta2 = this%symbolic_atom(plusbulk)%potential%srdel(i - 1, is)*this%symbolic_atom(plusbulk)%potential%srdel(i - 1, is)
                dnu = (i - 1.) + &
@@ -2183,8 +2207,11 @@ contains
                      (rq*(this%symbolic_atom(plusbulk)%potential%c(i - 1, is) - this%symbolic_atom(plusbulk)%potential%gravity_center(i, is))/2./(2*(i - 1) + 1.)/ &
                       (this%symbolic_atom(plusbulk)%potential%c(i - 1, is) - this%symbolic_atom(plusbulk)%potential%gravity_center(i, is) - delta2*rq) - 1.)
                pli = -atan(dnu)/pi + 0.5d0 + INT(this%symbolic_atom(plusbulk)%potential%pl(i - 1, is))
+               if (this%control%nsp == 1) then
+                  call guard_nonfinite_scalar(this%symbolic_atom(plusbulk)%element%symbol, ia, i - 1, is, &
+                     'PL', iteration_value, pli)
+               end if
                if (present(diag_out)) then
-                  old_pl = this%symbolic_atom(plusbulk)%potential%pl(i - 1, is)
                   diag_out(ia, i, is, 1) = this%symbolic_atom(plusbulk)%potential%gravity_center(i, is)
                   diag_out(ia, i, is, 2) = this%symbolic_atom(plusbulk)%potential%c(i - 1, is)
                   diag_out(ia, i, is, 3) = this%symbolic_atom(plusbulk)%potential%qpar(i - 1, is)
