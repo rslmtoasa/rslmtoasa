@@ -67,7 +67,6 @@ contains
       character(len=*), intent(in) :: feature
       logical, intent(in), optional :: require_nsp1
       logical, intent(in), optional :: allow_hoh
-      integer :: backend
       logical :: nsp1_only, hoh_ok
 
       gpu_plugin_ready = .false.
@@ -113,12 +112,6 @@ contains
          return
       end if
 
-      backend = decode_gpu_backend(this%control%gpu_backend)
-      if (backend < 0) then
-         call g_logger%warning('Unknown gpu_backend='//trim(this%control%gpu_backend)// &
-            '. Falling back to current recursion path.', __FILE__, __LINE__)
-         return
-      end if
       if (gpu_periodic_backend(this)) then
          if (trim(feature) == 'chebyshev_orbital_mod()') then
             call g_logger%warning('gpu_backend='//trim(this%control%gpu_backend)// &
