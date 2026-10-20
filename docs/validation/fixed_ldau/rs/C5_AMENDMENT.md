@@ -653,3 +653,37 @@ Commit after each RD item.
 - The 5-line summary.
 
 The next session is Stage RE: surfaces, including the KS-host → RS-surface workflow and a 3d-adatom smoke test.
+
+Protocol amendment C5.3 (user-approved; extends C5.2; record verbatim in
+docs/validation/fixed_ldau/rs/C5_AMENDMENT.md). Same session setup: Sol orchestrates, Luna
+workers plus the Luna auditor.
+
+1. A4 RESOLUTION (adopts the proposed no-reproduction branch)
+   A4(v): not reproduced under the controlled one-thread conditions. Clean baseline, R1 parent
+   and R1 were all byte-identical in A1/A2.
+   - Classify the earlier mismatch as thread-order nondeterminism (OpenMP/BLAS reduction order;
+     magnitudes about 4e-15).
+   - Part A is CLOSED. R1 is accepted with no restriction.
+   - The no-U criterion stays EXACT BYTE IDENTITY, but is always evaluated single-threaded:
+     OMP_NUM_THREADS=1 and the BLAS/NUMEXPR thread caps, in both builds being compared.
+     Multi-threaded runs remain allowed for SCF campaigns and records.
+   - Add a KNOWN_ISSUES entry, informational: "RS/KS results are not bitwise reproducible across
+     thread counts (reduction order, ~1e-15 relative). Use single-thread runs for identity
+     checks."
+   - Note the same requirement in the testing documentation wherever byte-identity checks are
+     described.
+
+2. RULE FOR OUTCOMES A DECISION TABLE DOES NOT COVER (applies to all remaining items)
+   If a measured outcome matches no row of a decision table:
+   - do not stop and do not change any criterion;
+   - take the action that leaves production behaviour and defaults unchanged (no adoption, no
+     fix);
+   - record the outcome and that choice in the stage report, and continue with the next
+     independent item.
+   STOP remains limited to C5.2 §2.5 (a)-(d).
+
+3. CONTINUE C5.2 AS WRITTEN
+   Part B (B1-B3) -> Part C (C1-C3) -> Part D (RD1-RD5) -> §7 local merge.
+   Use the single-thread rule from item 1 for every identity check, including those in RD5 and
+   in the merge verification.
+   Do not push. Report the merge SHA.

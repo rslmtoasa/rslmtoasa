@@ -43,7 +43,20 @@
     "attachment_sha256": "c7bd356a4d3f821e726fb5fab7074435f309740f9446ce5bec9fabd6c7a15c46",
     "path": "docs/validation/fixed_ldau/rs/C5_AMENDMENT.md",
     "prior_c5_prefix_sha256": "7e26a428c115cd49b67ab38942cfdd14b41f6fa590d5fd4d86c0b90e8abcbc2a",
-    "result_sha256": "a5d3db6a1f6eb70c0fb45725dc3ae47eed389da487347a985e4fdab538af3c2e"
+    "result_sha256": "e57938346359fbaa4fd30db86a9e3d36edaff542a90a76ab41131c0f6b6af4c4",
+    "c5_3": {
+      "source": "Exact user-approved C5.3 text supplied in root task payload.",
+      "old_c5_2_prefix_bytes": 34505,
+      "old_c5_2_prefix_sha256": "a5d3db6a1f6eb70c0fb45725dc3ae47eed389da487347a985e4fdab538af3c2e",
+      "separator_bytes": 2,
+      "separator_sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070",
+      "body_offset_bytes": 34507,
+      "body_bytes": 1874,
+      "body_sha256": "0ad25af1a3b4bf8e58ce9ccd85097a685f99bbdec140efed0baf7b8311e0c41a",
+      "file_sha256": "e57938346359fbaa4fd30db86a9e3d36edaff542a90a76ab41131c0f6b6af4c4",
+      "verbatim_body_at_eof": true
+    },
+    "c5_2_result_sha256": "a5d3db6a1f6eb70c0fb45725dc3ae47eed389da487347a985e4fdab538af3c2e"
   },
   "builds": {
     "clean8b_baseline": {
@@ -131,7 +144,7 @@
     "seed_policy": "The requested canonical fixture explicitly supplies Fe.nml as its standard atomic starting seed; identical immutable resolved inputs were used for all four runs."
   },
   "part_a": {
-    "a4_decision": "STOP (iv): matched one-thread controls show no scientific difference attributable to R1 or R2 production code; do not alter the byte criterion or choose an A4 tolerance",
+    "a4_decision": "CLOSED under C5.3 A4(v): prior mismatch classified as thread-order nondeterminism; clean baseline, R1 parent, and R1 are byte-identical in A1/A2 under controlled one-thread conditions.",
     "actual_run_ids": [
       "C5.2-A1-RS-bccFe-run-1",
       "C5.2-A1-RS-bccFe-run-2",
@@ -140,10 +153,11 @@
     ],
     "actual_solver_runs": 4,
     "all_exit_zero_and_processes_gone": true,
-    "criterion_after_decision": "RS scientific-output byte identity remains unchanged; no tolerance was adopted",
-    "prior_mismatch_interpretation": "The earlier OMP=2 nine-file result remains recorded but is not proven to be thread nondeterminism; A1/A2 do not establish its cause.",
+    "criterion_after_decision": "Exact scientific-output byte identity retained; evaluate identity checks single-threaded with OMP_DYNAMIC=FALSE, RSLMTO_OMP_THREADS_SERIAL=1, and OMP/BLAS/NUMEXPR caps=1 in both builds. Multi-threaded campaign/record runs remain allowed.",
+    "prior_mismatch_interpretation": "C5.3 classifies the earlier approximately 4e-15 OMP/BLAS reduction-order mismatch as thread-order nondeterminism; the controlled one-thread A1/A2 comparisons reproduce no difference.",
     "run_cap": 8,
-    "user_review_option_only": "NOT ADOPTED: user review may consider a future amendment authorizing B-D if A1 and every matched A2 source comparison are scientifically byte-identical under the registered one-thread protocol, while retaining exact byte identity. This proposal authorizes nothing now and does not change the current A4(iv) STOP."
+    "user_review_option_only": "Superseded and adopted by C5.3: A4(v) closes Part A and accepts unrestricted R1. The exact-byte criterion remains in force for single-thread identity checks.",
+    "historical_c5_2_a4_decision": "STOP (iv): matched one-thread controls show no scientific difference attributable to R1 or R2 production code; do not alter the byte criterion or choose an A4 tolerance"
   },
   "prohibited_actions": {
     "cleanup_or_tests_gbt_modified": false,
@@ -233,5 +247,23 @@
     }
   },
   "schema": "c5.2-part-a-provenance-v1",
-  "status": "STOP_A4_IV_NO_COMMIT_ATTRIBUTION"
+  "status": "CLOSED_A4_V_R1_ACCEPTED_UNRESTRICTED_C5_3",
+  "c5_3_resolution": {
+    "a4": "A4(v): not reproduced under controlled one-thread conditions; clean baseline, R1 parent, and R1 were byte-identical in A1/A2.",
+    "prior_mismatch": "Classified as thread-order nondeterminism (OpenMP/BLAS reduction order; magnitudes about 4e-15), as explicitly directed by the user.",
+    "part_a": "CLOSED; R1 accepted without restriction.",
+    "criterion": "Exact byte identity; identity checks use the same single-thread caps in both builds.",
+    "outcome_rule": "For uncovered outcomes in remaining decision tables, preserve production behavior/defaults, make no adoption/fix, record, and continue; STOP only under C5.2 §2.5 (a)-(d).",
+    "continuation": "Part B -> Part C -> Part D -> §7 local merge; no push; report merge SHA.",
+    "identity_environment": {
+      "BLIS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "OMP_DYNAMIC": "FALSE",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "RSLMTO_OMP_THREADS_SERIAL": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    }
+  }
 }

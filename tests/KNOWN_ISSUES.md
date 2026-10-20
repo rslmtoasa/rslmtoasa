@@ -1824,12 +1824,12 @@ campaign remain outside the established scope.
 - **Consequence:** the log reports the symmetry of the labelled structure, so differently labelled types of one element count as different species. Check physical inversion
   with spglib and element labels.
 
-## [RESOLVED ON C5 BRANCH; NOT MERGED] hcp Co impurity setup — bounds violation before SCF
+## [RESOLVED ON WORK BRANCH; ACCEPTED BY C5.3] hcp Co impurity setup — bounds violation before SCF
 
 - **Symptom:** the Debug build reports `source/lattice_cluster.f90:996`, dimension mismatch 3 vs 50000. The clean-baseline run exits SIGKILL before SCF. The same setup error occurs at U=0, so it is not LDA+U.
-- **Resolution on this branch:** `newclu` sizes its scaled cutoff copy to the full `this%ct` extent. The Debug regression completes cluster setup with `ntype=3`, `nbas=13`, and `nrec=1`; the C5 R1 setup GATE passes. The branch is not merged because the separate no-U RS identity GATE stopped C5.
+- **Resolution on this branch:** `newclu` sizes its scaled cutoff copy to the full `this%ct` extent. The Debug regression completes cluster setup with `ntype=3`, `nbas=13`, and `nrec=1`; the C5 R1 setup GATE passes. C5.3 accepts R1 without restriction; the local merge remains scheduled after Parts B–D.
 - **Evidence:** the hcp-Co deck is [`co_hcp_lattice.nml`](../docs/validation/fixed_ldau/rs/RA4_assets/prerun_inputs/co_hcp_lattice.nml); see the [C1 Co triage records](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json) and [C1 RA4 results](../docs/validation/fixed_ldau/rs/C1_RA4_RESULTS.md).
-- **Follow-up:** the separate C5 no-U identity gate stopped Part II after the RS standard fixture's scientific outputs differed byte-for-byte from clean 8b; see [C5 Part II results](../docs/validation/fixed_ldau/rs/C5_PART_II_RESULTS.md).
+- **Follow-up:** C5.3 closed Part A after matched one-thread baseline, parent, and R1 outputs were byte-identical. See the [Part A results](../docs/validation/fixed_ldau/rs/C5_2_PART_A_RESULTS.md).
 
 ## [OPEN] Co bulk U=0 non-finite
 
@@ -1849,3 +1849,7 @@ campaign remain outside the established scope.
 - C5 R2 captured one Debug Fe U>0 trajectory from the accepted rc=80 endpoint. The d-spin occupation first exceeded its five-state capacity at iteration 90 (`ql=16.023218979776722`); iteration 102 was the first snapshot with NaNs, with the first observed radial RSEQ NaN in the log at `l=2`, channel 0, `E=-50 Ry`. Snapshot 101 was wholly finite but already followed the occupation violation and was not accepted. This localizes an observed trajectory failure but does not establish its root cause.
 - Clean-8b and U=J=0 triage reruns, one-control variants, and a Co run were not performed after the separate no-U RS identity stop; no compatible finite Co target-deck restart was available. Fe rc=140 runs are INVALID_SETUP and are not part of this entry.
 - See the [C4 A4.1 results](../docs/validation/fixed_ldau/rs/C4_A41_RESULTS.md), [C4 A4.1 provenance](../docs/validation/fixed_ldau/rs/C4_A41_PROVENANCE.json), [C1 RA4 provenance](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json), and [C5 Part II results](../docs/validation/fixed_ldau/rs/C5_PART_II_RESULTS.md) with its [R2 provenance](../docs/validation/fixed_ldau/rs/C5_PART_II_PROVENANCE.json).
+
+## [INFORMATIONAL] RS/KS identity checks and thread counts
+
+RS/KS results are not bitwise reproducible across thread counts (reduction order, ~1e-15 relative). Use single-thread runs for identity checks.

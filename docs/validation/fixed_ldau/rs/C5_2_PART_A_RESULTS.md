@@ -1,14 +1,17 @@
 # C5.2 Part A — RS no-U identity attribution
 
+**Current disposition under C5.3:** Part A is CLOSED (A4(v)); R1 is accepted without restriction. The C5.2 A4(iv) stop below is retained as the historical decision before the user-approved amendment. The prior OMP=2 difference is classified by C5.3 as thread-order nondeterminism; the exact-byte criterion remains in force for identity checks performed with the registered single-thread environment.
+
 | Check | Evidence | Verdict |
 |---|---|---|
 | A1 determinism | Canonical manifest-resolved `Example_bulk_bccFe_nsp2_block`; clean `8b8f7ef` Release binary; two runs, one thread; all scientific/result artifacts byte-identical. `str.out` differs only in `cpu_s` (0.295 vs 0.246); `testrun.log` is runtime metadata. | **PASS** |
 | A2 parent | `17732a7` built with matched Release compiler/link settings; one run against the same fixture snapshot. Scientific artifacts byte-identical to A1 baseline; `str.out` only `cpu_s` (0.127), plus runtime log. | **PASS** |
 | A2 R1 | `2686e4e` built with matched Release compiler/link settings; one run against the same fixture snapshot. Scientific artifacts byte-identical to A1 and parent; `str.out` only `cpu_s` (0.167), plus runtime log. | **PASS** |
 | A3 prior pair | Existing matched Release OMP=2 outputs: nine files had the small printed-value changes detailed below and in the JSON sidecar. This is descriptive prior evidence, not attribution under the new one-thread controls. | RECORD |
-| A4 | No scientific difference is attributable to R1 or R2 under the prescribed one-thread matched-build controls. | **STOP (iv)** |
+| A4 (C5.2 historical) | No scientific difference is attributable to R1 or R2 under the prescribed one-thread matched-build controls. | **STOP (iv), superseded by C5.3 A4(v)** |
+| A4 (C5.3 resolution) | The prior mismatch was not reproduced in controlled one-thread comparisons; clean baseline, R1 parent, and R1 were byte-identical in A1/A2. | **CLOSED; R1 accepted without restriction** |
 
-The canonical fixture resolved `strux_lib` and legacy Chebyshev backend, `recur='block'`, `nsp=2`, `lld=20`, `nstep=1`; live logs show RS spectral mode and `use_kspace=false`. This explicitly specified standard fixture seed was used from the same immutable input snapshot in all four runs. Each solver exited 0; all four PIDs were confirmed gone. Total Part A usage: **4 of 8** solver runs.
+The canonical fixture resolved `strux_lib` and legacy Chebyshev backend, `recur='block'`, `nsp=2`, `lld=20`, `nstep=1`; live logs show RS spectral mode and `use_kspace=false`. This explicitly specified standard fixture seed was used from the same immutable input snapshot in all four runs. Each solver exited 0; all four PIDs were confirmed gone. Total Part A usage: **4 of 8** solver runs. Every no-U identity check uses `OMP_NUM_THREADS=1`, `OMP_DYNAMIC=FALSE`, `RSLMTO_OMP_THREADS_SERIAL=1`, and `OPENBLAS_NUM_THREADS=1`, `MKL_NUM_THREADS=1`, `VECLIB_MAXIMUM_THREADS=1`, `BLIS_NUM_THREADS=1`, `NUMEXPR_NUM_THREADS=1` in both compared builds; multi-threaded SCF campaigns and records remain allowed.
 
 Only `2686e4e` changes production source in `908074f..HEAD`, modifying `source/lattice_cluster.f90`; its parent `17732a7` is source-identical to `908074f`. `96f1d72` is documentation and the four Co reference inputs; the later C5 commits contain no production-source changes. Thus neither the R1 change nor an R2 production change explains the earlier nine-file OMP=2 result in these A2 runs.
 
@@ -29,7 +32,7 @@ Only `2686e4e` changes production source in `908074f..HEAD`, modifying `source/l
 **Interpretation and close (five lines):**
 
 - Passed: A1 determinism and A2 parent/R1 scientific identity under the registered one-thread protocol.
-- Recorded: prior OMP=2 nine-file metrics separately; they are not proven to be thread nondeterminism.
+- Recorded: prior OMP=2 nine-file metrics separately; C5.3 classifies the approximately 4e-15 differences as thread-order nondeterminism.
 - Provisional: none; no Part A state is provisional.
-- Stopped: A4(iv); no commit attribution, tolerance change, fix restriction, or criterion relaxation is adopted.
-- Next: user review only may consider a future amendment authorizing B–D if A1 and every matched A2 comparison are scientifically byte-identical under the registered one-thread protocol; this proposal authorizes nothing now.
+- Stopped: no Part A stop remains; exact byte identity is retained for single-thread identity checks, and R1 is accepted without restriction.
+- Next: continue with Part B under C5.3; no tolerance change or criterion relaxation is adopted.
