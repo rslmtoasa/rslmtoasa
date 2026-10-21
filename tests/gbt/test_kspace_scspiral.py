@@ -3,6 +3,8 @@
 16^3 mesh, 300 K, first order). Modes, each with its relation and the bug it catches:
   identity  I2 (spiral SCF at theta = 0 equals the collinear SCF): |dE|, |dE_F| < scf_identity_ry. Bug: the field leaking into H at
             B = 0, a wrong k -+ q/2 or a swapped spin channel in the SCF density.
+  identity_ccor, identity_ccor_second  the same with ccor_2c on both sides (first and second order). Bug: Hcc missing or wrong in the spiral SCF
+            assembly (also in the SCF density: the moments then differ), Hcc inside h - h o h at second order.
   converge  S3, S8: theta = 30 deg, q != 0: the SCF converges, max |m_perp| falls below scf_moment_mub and sum_a |B_a||m_a_perp| below scf_identity_ry, N stays
             neutral every iteration (|dN| < n_identity). Bug: a field that does not enter H (m_perp stays 3e-4 muB).
   chi       S3 (Pauli response): with H += +B.sigma, m = n_up - n_dn is pushed against B, so chi = dm_perp/dB at fixed potential is
@@ -26,7 +28,7 @@ Q = (0.0, 0.25, 0.0)           # Cartesian, 2 pi/alat: direct (0.125, -0.125, 0.
 NK = 16
 
 
-def deck(dst, nsp, q=None, theta=0.0, constrained=False, nstep=60, bfield=None, order="first", target=(0.0, 0.0, 1.0)):
+def deck(dst, nsp, q=None, theta=0.0, constrained=False, nstep=60, bfield=None, order="first", target=(0.0, 0.0, 1.0), ccor=False):
     dst = Path(dst)
     shutil.rmtree(dst, ignore_errors=True)
     shutil.copytree(SR / "fe_bcc", dst)
@@ -35,6 +37,9 @@ def deck(dst, nsp, q=None, theta=0.0, constrained=False, nstep=60, bfield=None, 
     nml["control"]["nsp"] = nsp
     nml["reciprocal"].update(nk1=NK, nk2=NK, nk3=NK, kspace_ham_order=order)
     nml["hamiltonian"] = {"hoh": order == "second"}
+    if ccor:       # two-centre CCOR on both sides: Sdot, fitted screening, strict
+        nml["lattice"].update(strux_want_sdot=True, screening="fitted")
+        nml["hamiltonian"].update(ccor_2c=True, ccor_strict=True)
     if q is not None:
         nml["hamiltonian"].update(magnetic_representation="gbt_single_q", q_ss=list(q), theta_ss=theta)
     nml.write(str(dst / "input.nml"), force=True)
@@ -72,13 +77,21 @@ def scf(binary, d, **kw):
     return results(d, log)
 
 
-def mode_identity(binary, scratch):
+def mode_identity(binary, scratch, order="first", ccor=False):
     tol = tolerance("scf_identity_ry")
-    ref = scf(binary, scratch / "collinear", nsp=1)
-    spiral = scf(binary, scratch / "spiral", nsp=3, q=Q, theta=0.0, constrained=True)
+    ref = scf(binary, scratch / "collinear", nsp=1, order=order, ccor=ccor)
+    spiral = scf(binary, scratch / "spiral", nsp=3, q=Q, theta=0.0, constrained=True, order=order, ccor=ccor)
     dE, dEF = spiral["E"] - ref["E"], spiral["EF"] - ref["EF"]
     print(f"collinear E = {ref['E']:.10f} Ry, E_F = {ref['EF']:.10f} Ry; spiral dE = {dE:.3e} Ry, dE_F = {dEF:.3e} Ry, tolerance {tol:.1e}")
     return spiral["conv"] and abs(dE) < tol and abs(dEF) < tol
+
+
+def mode_identity_ccor(binary, scratch):
+    return mode_identity(binary, scratch, ccor=True)
+
+
+def mode_identity_ccor_second(binary, scratch):
+    return mode_identity(binary, scratch, order="second", ccor=True)
 
 
 def mode_converge(binary, scratch):

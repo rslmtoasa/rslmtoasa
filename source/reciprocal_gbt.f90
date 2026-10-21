@@ -1,7 +1,7 @@
 !> k-space assembly of the GBT (gbt_single_q) Hamiltonian, relation R1 (see gbt_kspace_mod). It reads the structure
 !> constants, neighbour vectors and potential parameters and never the real-space blocks `ee`.
 submodule (reciprocal_mod) reciprocal_gbt
-   use gbt_kspace_mod, only: gbt_kspace_h1, gbt_kspace_h2, gbt_kspace_horth
+   use gbt_kspace_mod, only: gbt_kspace_h1, gbt_kspace_h2, gbt_kspace_hcc, gbt_kspace_horth
    use gbt_structure_mod, only: gbt_reference_frame
    implicit none
 
@@ -19,6 +19,9 @@ contains
       integer, allocatable :: bond_a(:), bond_b(:)
       real(rp), allocatable :: bond_d(:, :)
       complex(rp), allocatable :: sblock(:, :, :), frame(:, :, :), w(:, :, :), c(:, :, :), h(:, :), h2(:, :)
+      complex(rp), allocatable :: sdotblock(:, :, :), hcc(:, :)
+      real(rp), allocatable :: ccd(:, :, :)
+      real(rp) :: ccd_full(norb, 0:2), lam
       complex(rp), allocatable :: obar(:, :, :), enu(:, :, :), wunit(:, :, :), czero3(:, :, :)
       complex(rp) :: blk(nb, nb)
       real(rp), allocatable :: cvec(:), dvec(:), gvec(:)
@@ -31,7 +34,14 @@ contains
          call g_logger%fatal("gbt_single_q k-space requires strux_backend='strux_lib'.", __FILE__, __LINE__)
       if (this%control%nsp == 2 .or. this%control%nsp == 4) &
          call g_logger%fatal('gbt_single_q k-space does not support SOC (nsp = 2 or 4).', __FILE__, __LINE__)
-      if (this%hamiltonian%ccor_2c) call g_logger%fatal('gbt_single_q k-space does not support ccor_2c.', __FILE__, __LINE__)
+      if (this%hamiltonian%ccor_2c) then   ! Hcc is added after the order step; the orthogonal H^gamma has no CCOR formulation here
+         if (this%use_orthogonal) &
+            call g_logger%fatal("gbt_single_q k-space: kspace_ham_order='orthogonal' does not support ccor_2c.", __FILE__, __LINE__)
+         if (trim(this%hamiltonian%ccor_vmt_mode) == 'pair_surface') &
+            call g_logger%fatal("gbt_single_q k-space: the channel-wise pair average of ccor_vmt_mode='pair_surface' is not defined for rotated local frames; use 'surface_scalar'.", __FILE__, __LINE__)
+         call this%hamiltonian%validate_ccor_inputs()
+         lam = this%hamiltonian%ccor_vmt_scalar() - this%hamiltonian%ccor_elin
+      end if
       if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_test_operator_check) &
          call g_logger%fatal('gbt_single_q k-space does not support onsite U.', __FILE__, __LINE__)
       if (this%hamiltonian%hubbard_v_check) &
@@ -53,7 +63,8 @@ contains
       allocate (bond_a(nrec*this%lattice%nn_max), bond_b(nrec*this%lattice%nn_max), bond_d(3, nrec*this%lattice%nn_max), &
                 sblock(norb, norb, nrec*this%lattice%nn_max), frame(2, 2, nrec), w(norb, 2, nrec), c(norb, 2, nrec), &
                 h(nb*nrec, nb*nrec), h2(nb*nrec, nb*nrec), obar(nb, nb, nrec), enu(nb, nb, nrec), &
-                cvec(nb*nrec), dvec(nb*nrec), gvec(nb*nrec), wunit(norb, 2, nrec), czero3(norb, 2, nrec))
+                cvec(nb*nrec), dvec(nb*nrec), gvec(nb*nrec), wunit(norb, 2, nrec), czero3(norb, 2, nrec), &
+                sdotblock(norb, norb, nrec*this%lattice%nn_max), hcc(nb*nrec, nb*nrec), ccd(norb, 0:1, nrec))
       wunit = cmplx(1.0_rp, 0.0_rp, rp)
       czero3 = cmplx(0.0_rp, 0.0_rp, rp)
       nbond = 0
@@ -78,6 +89,10 @@ contains
             w(:, 2, isite) = pot%wx0(1:norb) - pot%wx1(1:norb)
             c(:, 1, isite) = pot%cx0(1:norb) + pot%cx1(1:norb)
             c(:, 2, isite) = pot%cx0(1:norb) - pot%cx1(1:norb)
+            if (this%hamiltonian%ccor_2c) then   ! sign +1 for every site: the frame carries the orientation, as for w and c
+               call this%hamiltonian%build_ccor_coefficients(ia, it, ccd_full)
+               ccd(:, :, isite) = ccd_full(:, 0:1)
+            end if
             if (this%use_orthogonal) then   ! exact ASA in the gamma representation: local-frame diagonals of C, sqrt(Delta), gamma - alpha
                lmax_o = int(sqrt(real(norb - 1, rp)))
                if (.not. allocated(pot%screening_alpha)) &
@@ -130,6 +145,14 @@ contains
                   sblock(i, j, nbond) = this%lattice%sbar(j, i, ineigh, this%lattice%num(ia))   ! as raw_orb in build_gbt_bulkham
                end do
             end do
+            if (this%hamiltonian%ccor_2c) then   ! as raw_sdot in build_gbt_bulkham
+               do j = 1, norb
+                  do i = 1, norb
+                     sdotblock(i, j, nbond) = this%hamiltonian%normalize_ccor_sdot( &
+                        this%lattice%sdot(j, i, ineigh, this%lattice%num(ia)))
+                  end do
+               end do
+            end if
          end do
       end do
       do i = 1, 3
@@ -153,23 +176,39 @@ contains
                h(i0 + 1:i0 + nb, i0 + 1:i0 + nb) = h(i0 + 1:i0 + nb, i0 + 1:i0 + nb) + blk
             end do
          end if
+         call to_spherical(h)
+         if (second) then   ! h, obar and enu are all in the spherical-harmonic basis here
+            call gbt_kspace_h2(norb, nrec, h, obar, enu, h2)
+            h = h2
+         end if
+         if (this%hamiltonian%ccor_2c) then   ! after the order step: Hcc never enters h - h o h
+            call gbt_kspace_hcc(norb, nrec, nbond, bond_a(1:nbond), bond_b(1:nbond), bond_d(:, 1:nbond), sblock(:, :, 1:nbond), &
+                                sdotblock(:, :, 1:nbond), frame, w, ccd, lam, k_points(:, ik), q_dir, hcc)
+            call to_spherical(hcc)
+            h = h + hcc
+         end if
+         workspace%h(:, :, ik) = h
+      end do
+   contains
+
+      !> Cartesian-to-spherical orbital basis of every (site, spin) block, as build_gbt_bulkham.
+      subroutine to_spherical(m)
+         complex(rp), intent(inout) :: m(:, :)
+         integer :: isite, jsite, s, t, i0, j0
+
          do isite = 1, nrec
             do jsite = 1, nrec
                do s = 0, 1
                   do t = 0, 1
                      i0 = (isite - 1)*nb + s*norb
                      j0 = (jsite - 1)*nb + t*norb
-                     call hcpx(h(i0 + 1:i0 + norb, j0 + 1:j0 + norb), 'cart2sph')   ! as build_gbt_bulkham
+                     call hcpx(m(i0 + 1:i0 + norb, j0 + 1:j0 + norb), 'cart2sph')
                   end do
                end do
             end do
          end do
-         if (second) then   ! h, obar and enu are all in the spherical-harmonic basis here
-            call gbt_kspace_h2(norb, nrec, h, obar, enu, h2)
-            h = h2
-         end if
-         workspace%h(:, :, ik) = h
-      end do
+      end subroutine to_spherical
+
    end subroutine reciprocal_assembler_assemble_gbt
 
    !> Frame angles of one site from its reference moment (D2): +z gives (theta_ss, 0), -z gives (pi - theta_ss, pi), so the

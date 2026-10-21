@@ -154,6 +154,10 @@ module hamiltonian_mod
       procedure :: build_locham
       procedure :: build_ccor_bulk
       procedure :: build_ccor_local
+      procedure :: validate_ccor_inputs
+      procedure :: build_ccor_coefficients
+      procedure :: normalize_ccor_sdot
+      procedure :: ccor_vmt_scalar
       procedure :: build_obarm
       procedure :: build_enim
       procedure :: add_constraining_field_spin_block

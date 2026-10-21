@@ -6,7 +6,11 @@ supercell length in alat), because the translation by L carries D(2 pi M) = (-1)
 fixtures tests/gbt/fixtures/bccFe_super_q050 and _q033 (every type the Fe potential, moment rotated). Precondition,
 checked first: the supercell S blocks equal the primitive ones for corresponding bonds (gbt_bonds.out of both).
 Bug caught: any operator error at finite q and theta, in either order.
-usage: test_kspace_commensurate.py <rslmto.x> <scratch directory> <first|second>"""
+With the optional argument ccor, every deck carries ccor_2c (ccor_strict, screening fitted, Sdot). The supercell side builds its
+two-centre block from explicit moment vectors (build_ccor_pair_block_noncollinear), the GBT side by lifting S and Sdot with the
+spin link, so they are different constructions. Bug caught there: the link missing on Sdot or on the onsite term at finite theta,
+Hcc inside h - h o h. The S-block precondition does not cover Sdot, which gbt_bonds.out does not dump.
+usage: test_kspace_commensurate.py <rslmto.x> <scratch directory> <first|second> [ccor]"""
 import sys
 from pathlib import Path
 
@@ -15,6 +19,7 @@ import numpy as np
 from gbt_app_common import make_deck, make_super_deck, mesh_index, read_bonds, read_export, run, tolerance
 
 binary, scratch, order = sys.argv[1], Path(sys.argv[2]), sys.argv[3]
+ccor = len(sys.argv) > 4 and sys.argv[4] == "ccor"
 tol = tolerance("eig_identity_ry")
 FIXTURES = {"bccFe_super_q050": ([0.0, 0.5, 1.0, 1.5], 0.5), "bccFe_super_q033": ([0.0, 0.5, 1.0, 1.5, 2.0, 2.5], 1.0 / 3.0)}
 NK_SUPER = (4, 4, 2)
@@ -23,8 +28,8 @@ for fixture, (z, q_z) in FIXTURES.items():
     length = round(z[-1] + 0.5)                     # supercell length in alat; M = q_z L = 1
     winding = round(q_z * length)
     nk_prim = (4, 4, 2 * length)
-    prim = make_deck(scratch / f"{fixture}_prim_bonds", "bccFe_sc2", "gbt_single_q", (2, 2, 2))
-    sup = make_super_deck(scratch / f"{fixture}_super_bonds", fixture, z, q_z, 0.0, "first", (2, 2, 2), gbt=True)
+    prim = make_deck(scratch / f"{fixture}_prim_bonds", "bccFe_sc2", "gbt_single_q", (2, 2, 2), ccor=ccor)
+    sup = make_super_deck(scratch / f"{fixture}_super_bonds", fixture, z, q_z, 0.0, "first", (2, 2, 2), gbt=True, ccor=ccor)
     run(binary, prim)
     run(binary, sup)
     p_bonds, s_bonds = read_bonds(prim), read_bonds(sup)
@@ -38,8 +43,8 @@ for fixture, (z, q_z) in FIXTURES.items():
         sys.exit("precondition failed: supercell and primitive S blocks differ; stopping")
     for theta in (90.0, 30.0):
         tag = f"{fixture}_th{theta:.0f}_{order}"
-        ref = make_super_deck(scratch / f"{tag}_nc", fixture, z, q_z, theta, order, NK_SUPER)
-        gbt = make_deck(scratch / f"{tag}_gbt", "bccFe_sc2", "gbt_single_q", nk_prim, q_dir=(0.0, 0.0, q_z), order=order, theta_deg=theta)
+        ref = make_super_deck(scratch / f"{tag}_nc", fixture, z, q_z, theta, order, NK_SUPER, ccor=ccor)
+        gbt = make_deck(scratch / f"{tag}_gbt", "bccFe_sc2", "gbt_single_q", nk_prim, q_dir=(0.0, 0.0, q_z), order=order, theta_deg=theta, ccor=ccor)
         run(binary, ref)
         run(binary, gbt)
         (k_s, e_s), (k_g, e_g) = read_export(ref), read_export(gbt)
