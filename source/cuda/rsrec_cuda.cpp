@@ -164,13 +164,15 @@ extern "C" int rsrec_cuda_set_hamiltonian(rsrec_cuda_ctx *ctx, const void *ee,
                                           const void *hall,
                                           const void *lsham, const int *nn,
                                           const int *iz, const void *eeo,
-                                          const void *hallo, const void *enim) {
+                                          const void *hallo, const void *enim,
+                                          const void *eecc,
+                                          const void *hallcc) {
     if (!ctx) {
         set_error("rsrec_cuda_set_hamiltonian: null ctx");
         return 1;
     }
     const int status = rsrec_set_hamiltonian(ctx->inner, ee, hall, lsham, nn, iz,
-                                             eeo, hallo, enim);
+                                             eeo, hallo, enim, eecc, hallcc);
     if (status != 0) {
         set_error(std::string("rsrec_cuda_set_hamiltonian: ") +
                   rsrec_last_error());

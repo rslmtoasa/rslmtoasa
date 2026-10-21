@@ -100,12 +100,6 @@ contains
          return
       end if
 
-      if (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh) then
-         call g_logger%warning('gpu_plugin does not support additive ccor_2c with hoh in '// &
-            trim(feature)//'. Falling back to current recursion path.', __FILE__, __LINE__)
-         return
-      end if
-
       if (nsp1_only .and. this%control%nsp /= 1) then
          call g_logger%warning('gpu_plugin scalar Lanczos path is restricted '// &
             'to nsp=1. Falling back to current recursion path.', __FILE__, __LINE__)
@@ -158,7 +152,13 @@ contains
       this%gpu_backend => get_gpu_context(this%lattice%kk, nb, size(this%lattice%nn, 2), &
          this%lattice%ntype, this%lattice%nmax)
       if (this%lattice%nmax > 0) then
-         if (this%hamiltonian%hoh) then
+         if (this%hamiltonian%hoh .and. this%hamiltonian%ccor_2c) then
+            call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
+               this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
+               this%lattice%iz, this%lattice%nmax, eeo=this%hamiltonian%eeo, &
+               hallo=this%hamiltonian%hallo, enim=this%hamiltonian%enim, &
+               eecc=this%hamiltonian%eecc, hallcc=this%hamiltonian%hallcc)
+         else if (this%hamiltonian%hoh) then
             call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
                this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
                this%lattice%iz, this%lattice%nmax, eeo=this%hamiltonian%eeo, &
@@ -173,7 +173,13 @@ contains
                this%lattice%iz, this%lattice%nmax)
          end if
       else
-         if (this%hamiltonian%hoh) then
+         if (this%hamiltonian%hoh .and. this%hamiltonian%ccor_2c) then
+            call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
+               lsham=this%hamiltonian%lsham, nn=this%lattice%nn, &
+               iz=this%lattice%iz, nmax=this%lattice%nmax, &
+               eeo=this%hamiltonian%eeo, enim=this%hamiltonian%enim, &
+               eecc=this%hamiltonian%eecc)
+         else if (this%hamiltonian%hoh) then
             call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
                lsham=this%hamiltonian%lsham, nn=this%lattice%nn, &
                iz=this%lattice%iz, nmax=this%lattice%nmax, &

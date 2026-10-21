@@ -96,6 +96,14 @@ struct rsrec_ctx {
     int f_hoh_ver = -1;
     bool have_hoh = false;
 
+    /* ccor_2c operand for the hoh apply (CC*x, added to the on-site term):
+     * CC' = eecc/hallcc with the on-site (enim + lsham) of the site's type
+     * added into shell 1, so one step_apply gives o = CC'*x. Raw, like the
+     * other hoh operands. Present only when set_hamiltonian received eecc.   */
+    zc *d_cc_ee = nullptr, *d_cc_hall = nullptr;
+    fc *f_cc_ee = nullptr, *f_cc_hall = nullptr;
+    bool have_cc = false;
+
     /* Velocity orthogonalisation operators for the hoh two-sweep velocity apply
      * (out = v*psi - vo*(h_bare*psi); vo on-site shell-1 is zeroed on upload to
      * match velo_hoh_vec_matmul). fp32 mirrors of v_a/v_b/vo_a/vo_b for the
@@ -344,6 +352,8 @@ extern "C" void rsrec_destroy(rsrec_ctx *c) {
                     (void *)c->d_eeo, (void *)c->d_hallo, (void *)c->d_hons,
                     (void *)c->f_ee_bare, (void *)c->f_hall_bare,
                     (void *)c->f_eeo, (void *)c->f_hallo, (void *)c->f_hons,
+                    (void *)c->d_cc_ee, (void *)c->d_cc_hall,
+                    (void *)c->f_cc_ee, (void *)c->f_cc_hall,
                     (void *)c->d_voa, (void *)c->d_vob,
                     (void *)c->f_va, (void *)c->f_vb,
                     (void *)c->f_voa, (void *)c->f_vob})
@@ -409,13 +419,16 @@ extern "C" int rsrec_set_hamiltonian(rsrec_ctx *c, const void *ee_,
                                      const void *hall_, const void *lsham_,
                                      const int *nn, const int *iz,
                                      const void *eeo_, const void *hallo_,
-                                     const void *enim_) {
+                                     const void *enim_, const void *eecc_,
+                                     const void *hallcc_) {
     const cplx *ee = (const cplx *)ee_;
     const cplx *hall = (const cplx *)hall_;
     const cplx *ls = (const cplx *)lsham_;
     const cplx *eeo = (const cplx *)eeo_;
     const cplx *hallo = (const cplx *)hallo_;
     const cplx *enim = (const cplx *)enim_;
+    const cplx *eecc = (const cplx *)eecc_;
+    const cplx *hallcc = (const cplx *)hallcc_;
     if (!ee || !nn || !iz) FAIL("set_hamiltonian: null input");
     clear_resident_moments(c);
     if (c->nmax > 0 && !hall) FAIL("set_hamiltonian: nmax>0 but hall is null");
@@ -457,6 +470,7 @@ extern "C" int rsrec_set_hamiltonian(rsrec_ctx *c, const void *ee_,
 
     /* --- two-sweep hoh operands (uploaded raw; combine applies 1/a) ------ */
     c->have_hoh = false;
+    c->have_cc = false;
     if (hoh) {
         /* bare h: ee/hall WITHOUT the lsham fold (the eeo sweep must see the
          * bare h*x; lsham + enim are carried on-site by d_hons).            */
@@ -486,6 +500,28 @@ extern "C" int rsrec_set_hamiltonian(rsrec_ctx *c, const void *ee_,
         if (!c->d_hons) CUCHK(cudaMalloc(&c->d_hons, bb * c->ntype * sizeof(zc)));
         CUCHK(cudaMemcpy(c->d_hons, hons.data(), bb * c->ntype * sizeof(zc),
                          cudaMemcpyHostToDevice));
+        /* ccor_2c: CC' = CC + on-site (enim + lsham) in shell 1 (see d_cc_ee) */
+        if (eecc && (c->nmax == 0 || hallcc)) {
+            std::vector<cplx> cee(eecc, eecc + bb * nnmax * c->ntype);
+            for (int t = 0; t < c->ntype; ++t)
+                for (size_t i = 0; i < bb; ++i)
+                    cee[i + bb * (size_t)nnmax * t] += hons[i + bb * t];
+            if (!c->d_cc_ee) CUCHK(cudaMalloc(&c->d_cc_ee, cee.size() * sizeof(zc)));
+            CUCHK(cudaMemcpy(c->d_cc_ee, cee.data(), cee.size() * sizeof(zc),
+                             cudaMemcpyHostToDevice));
+            if (c->nmax > 0) {
+                std::vector<cplx> cha(hallcc, hallcc + bb * nnmax * c->nmax);
+                for (int k = 0; k < c->nmax; ++k) {
+                    int t = iz[k] - 1;
+                    for (size_t i = 0; i < bb; ++i)
+                        cha[i + bb * (size_t)nnmax * k] += hons[i + bb * t];
+                }
+                if (!c->d_cc_hall) CUCHK(cudaMalloc(&c->d_cc_hall, cha.size() * sizeof(zc)));
+                CUCHK(cudaMemcpy(c->d_cc_hall, cha.data(), cha.size() * sizeof(zc),
+                                 cudaMemcpyHostToDevice));
+            }
+            c->have_cc = true;
+        }
         c->have_hoh = true;
     }
     c->have_h = true;
@@ -1412,10 +1448,18 @@ __global__ void k_combine_hoh(size_t n, const CT *__restrict__ t,
     y[i] = r;
 }
 
+/* ccor_2c operand of the hoh apply at the engine precision CT. */
+template <class CT> static const CT *cc_ee(const rsrec_ctx *c);
+template <> inline const fc *cc_ee<fc>(const rsrec_ctx *c) { return c->f_cc_ee; }
+template <> inline const zc *cc_ee<zc>(const rsrec_ctx *c) { return c->d_cc_ee; }
+template <class CT> static const CT *cc_hall(const rsrec_ctx *c);
+template <> inline const fc *cc_hall<fc>(const rsrec_ctx *c) { return c->f_cc_hall; }
+template <> inline const zc *cc_hall<zc>(const rsrec_ctx *c) { return c->d_cc_hall; }
+
 /* Two-sweep hoh step (block-ELL), mirrors ham_hoh_vec_matmul:
  *   sweep A: t = h * x1            (bare ee/hall, unscaled)
  *   sweep B: e = eeo * t           (eeo/hallo, unscaled)
- *   on-site: o = (enim+lsham)*x1
+ *   on-site: o = (enim+lsham)*x1, or o = (CC + enim + lsham)*x1 with ccor_2c
  *   combine: y = alpha*((t - e + o - bsc*x1)*inva) + beta*x0
  * Operator pointers (bare/eeo/hons) and scratch (t/e/o) are caller-provided
  * in the engine's precision CT, so the whole apply runs at that precision.  */
@@ -1433,8 +1477,13 @@ static int step_apply_hoh(rsrec_ctx *c, const CT *bare, const CT *bare_imp,
     /* sweep B: e = eeo*t */
     if (step_apply<CT, RT>(c, eeo, eeo_imp, c->nmax > 0, t, nullptr, e, nrhs,
                            (RT)1, (RT)0, (RT)1, (RT)0)) return 1;
-    /* on-site: o = hons*x1 (loop column slabs so blockDim.y stays <= 1024) */
-    {
+    if (c->have_cc) {
+        /* ccor_2c: o = CC'*x1 over all shells, CC' includes the on-site term */
+        if (step_apply<CT, RT>(c, cc_ee<CT>(c), cc_hall<CT>(c), c->nmax > 0, x1,
+                               nullptr, o, nrhs, (RT)1, (RT)0, (RT)1, (RT)0))
+            return 1;
+    } else {
+        /* on-site: o = hons*x1 (loop column slabs so blockDim.y stays <= 1024) */
         int cs = std::max(1, 1024 / c->nb);
         for (int c0 = 0; c0 < nrhs; c0 += cs) {
             int nc = std::min(cs, nrhs - c0);
@@ -1606,6 +1655,14 @@ static int ensure_f32_hoh(rsrec_ctx *c) {
     if (c->nmax > 0) {
         RSREC_DOWNCONV(nha, c->d_hall_bare, c->f_hall_bare)
         RSREC_DOWNCONV(nha, c->d_hallo, c->f_hallo)
+    }
+    if (c->have_cc) {
+        if (!c->f_cc_ee) CUCHK(cudaMalloc(&c->f_cc_ee, nee * sizeof(fc)));
+        RSREC_DOWNCONV(nee, c->d_cc_ee, c->f_cc_ee)
+        if (c->nmax > 0) {
+            if (!c->f_cc_hall) CUCHK(cudaMalloc(&c->f_cc_hall, nha * sizeof(fc)));
+            RSREC_DOWNCONV(nha, c->d_cc_hall, c->f_cc_hall)
+        }
     }
 #undef RSREC_DOWNCONV
     c->f_hoh_ver = c->ham_ver;
