@@ -1,0 +1,1 @@
+{"record":"ledger_initialized","card":"T0","attempts":0,"cap":8,"count_rule":"append one attempt record immediately before each solver invocation; continuations and failed starts count"}
