@@ -1229,6 +1229,23 @@ contains
          rd1_use_vin_capture = this%recursion%hamiltonian%rd1_local_impurity_eligible() .and. &
             this%recursion%hamiltonian%rd1_capture_required
          do na_glob = start_atom, end_atom
+            ! Impurity U/J are attached to recursive atoms, while the legacy
+            ! lattice type map may not contain an entry for an untreated atom.
+            ! Such atoms have an exactly zero local operator and need no moment
+            ! correction; skip them before attempting the type lookup.
+            if (this%control%calctype == 'I' .and. &
+                .not. this%recursion%hamiltonian%hubbard_u_general_check .and. &
+                .not. this%recursion%hamiltonian%hubbard_u_sc_check .and. &
+                .not. this%recursion%hamiltonian%hubbard_test_operator_check .and. &
+                allocated(this%recursion%hamiltonian%hubbard_u_impurity) .and. &
+                allocated(this%recursion%hamiltonian%hubbard_j_impurity)) then
+               if (na_glob <= size(this%recursion%hamiltonian%hubbard_u_impurity, 1) .and. &
+                   na_glob <= size(this%recursion%hamiltonian%hubbard_j_impurity, 1)) then
+                  if (.not. fixed_impurity_atom_carries_uj( &
+                      this%recursion%hamiltonian%hubbard_u_impurity(na_glob, :), &
+                      this%recursion%hamiltonian%hubbard_j_impurity(na_glob, :))) cycle
+               end if
+            end if
             plusbulk = this%lattice%nbulk + na_glob
             if (rd1_use_vin_capture) then
                call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &

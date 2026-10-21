@@ -150,6 +150,7 @@ module math_mod
    public :: hubbard_density_diagnostics
    public :: correct_d_shell_moments
    public :: extract_hubbard_d_shell_potential
+   public :: fixed_impurity_atom_carries_uj
 
 contains
 
@@ -300,6 +301,11 @@ contains
          end do
       end do
    end subroutine extract_hubbard_d_shell_potential
+
+   pure logical function fixed_impurity_atom_carries_uj(u_row, j_row)
+      real(rp), intent(in) :: u_row(:), j_row(:)
+      fixed_impurity_atom_carries_uj = any(abs(u_row) > 1.0e-10_rp) .or. any(abs(j_row) > 1.0e-10_rp)
+   end function fixed_impurity_atom_carries_uj
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

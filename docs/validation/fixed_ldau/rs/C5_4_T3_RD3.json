@@ -1,0 +1,96 @@
+{
+  "schema": "c5_4_t3_provenance_rd3_v1",
+  "status": "CONDITIONAL_ZERO_U_MAPPING_GUARD_FIXED_RD3A_PASS_RD3B_NOT_EVALUATED",
+  "cause": {
+    "prior_record": "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_rd3_ni_record/u0_control/unmodified_attempt/fatal_attempt_001_record/failure_record.json",
+    "prior_fatal": "Unable to map local d-shell Hubbard potential.",
+    "deck_u_eV": 0.0,
+    "deck_j_eV": 0.0,
+    "source_path": "source/bands.f90 local_moments_active recursion loop",
+    "mechanism": "The local correction attempted the legacy lattice%ib(na_glob) lookup and d-potential extraction for an impurity recursion atom with U=J=0. In cluster layouts ib is allocated for bulk atoms; recursion-site provenance is separate. No local Hubbard correction exists for this untreated atom, so the invalid lookup was unnecessary.",
+    "fix_scope": "Skip only recursion atoms with zero fixed impurity U and J, before the fallback type lookup; retain general-U, self-consistent-U and test-operator paths."
+  },
+  "implementation": {
+    "source": ["source/bands.f90", "source/math.f90"],
+    "test": "tests/unit/test_local_moments_kernel.f90",
+    "test_command": "ctest --test-dir /private/tmp/c54-t2-build-fresh --output-on-failure -R '^UnitLocalMomentsKernel$'",
+    "test_result": "PASS (1/1); zero U/J skips, nonzero U and nonzero J retain correction path",
+    "build_command": "cmake --build /private/tmp/c54-t2-build-fresh --target rslmto.x UnitLocalMomentsKernel -j1",
+    "build_result": "PASS",
+    "release_binary": "/private/tmp/c54-t2-build-fresh/bin/rslmto.x",
+    "release_binary_sha256": "4554ea2b10a29d35e455be34f7e97c7651aae43c859be00abd08c5a726fdc22e",
+    "pre_fix_t2_identity_binary_preserved_at": "/private/tmp/c54-t2-baseline/rslmto.x"
+  },
+  "u0_impurity_control": {
+    "status": "ACCEPTED_EARLIEST_WINDOW_26",
+    "run_id": "rd_ni_i_u0_c54_t3",
+    "run_dir": "/private/tmp/c54-t3-ni-u0/run01",
+    "recipe": "matched fcc Ni RS impurity; rc=80, lld=21, fixed EF, block recursion, local mode, U=J=0, beta=0.1 Broyden, frozen accepted Ni U0 bulk and impurity seeds",
+    "preflight": {
+      "path": "docs/validation/fixed_ldau/rs/C5_4_PREFLIGHT.py",
+      "result": "PASS",
+      "record": "/private/tmp/c54-t3-ni-u0/preflight.json",
+      "sha256": "5b862c9d8b4123ec1864edaf284c2503a58bcc020aa2dd9e90e437fa7ac6b69c"
+    },
+    "trace_capture": {
+      "watcher": "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_rd3_ni_record/u0_control/unmodified_attempt/fatal_attempt_001_record/watch_trace_and_state.py",
+      "mode": "existing watcher snapshots each complete stable iteration; full ql and moment trace plus state paired per loop",
+      "captured_iterations": "1-76",
+      "manifest": "/private/tmp/c54-t3-ni-u0/captures/trace_state_manifest.jsonl",
+      "manifest_sha256": "da166e4bbf8575d31829cbe87a80c580e8e0eab3885259ad9eb1dff3b3a3f025",
+      "trace_sha256": "b9eadb458d7922a548c37234d91ed8b3d91bc1986c083e8c73d6a5acb0f73b0e",
+      "state_sha256": "3e802abbcf91cafe839664f3723a5607894d2b0ec4c6443ab259d637db703379"
+    },
+    "acceptance": {
+      "criterion": "unchanged C5.2 §2.1; earliest complete 20-iteration window",
+      "endpoint_iteration": 26,
+      "window_iterations": "7-26",
+      "same_loop_diff": "1.60e-8",
+      "d_q0_spin1_spread": "2.565453280e-7",
+      "d_q0_spin2_spread": "2.291862727e-7",
+      "sphere_moment_spread": "1.8939831990e-7",
+      "result": "PASS",
+      "recomputed_scan": "/private/tmp/c54-t3-ni-u0/acceptance_scan_final.json",
+      "scan_sha256": "7b3abec9550f830137c931506f1534e5722a041430f37205bc0fc0907d368575"
+    },
+    "max_q0_all_captured_iterations": 4.701521651223641,
+    "termination": "Owned solver was SIGTERM-stopped after endpoint 26 passed; exit code 143 is deliberate stop, not a solver failure.",
+    "testrun_log_sha256": "191c349d463f68b2732aa620e28d0b7dd072bfef3ba04a76d3de0cd65c676b28"
+  },
+  "rd3a": {
+    "status": "PASS",
+    "source_u3_endpoints": "existing accepted RD3 local Ni endpoints: impurity iter 23, RS bulk iter 74",
+    "source_u0_endpoints": "new accepted U0 impurity iter 26, existing accepted RS bulk iter 24",
+    "moment_convention": "sphere moment at each endpoint is abs(sum_l(q_up-q_down)); impurity-minus-bulk differences below are signed; ratios are abs(Delta_U3)/abs(Delta_U0)",
+    "impurity_minus_bulk": {
+      "U0_control": {
+        "d_q_spin1": 1.7917497610042687e-6,
+        "d_q_spin2": 1.6850840944826473e-6,
+        "sphere_moment": -5.857085200178247e-8
+      },
+      "U3_J07": {
+        "d_q_spin1": 1.1550153802275531e-6,
+        "d_q_spin2": 1.00803999547594e-6,
+        "sphere_moment": -4.726366498175594e-8
+      }
+    },
+    "absolute_component_ratios_to_u0_control": {
+      "d_q_spin1": 0.6446298503091031,
+      "d_q_spin2": 0.59821346529618,
+      "sphere_moment": 0.8069485651381266
+    },
+    "criterion": "each reported component ratio < 10",
+    "verdict": "PASS; every reported component ratio is below 10",
+    "max_d_ldos_difference": "NOT_COMPUTED; endpoint-bound LDOS was not captured"
+  },
+  "rd3b": {
+    "status": "NOT_EVALUATED",
+    "reason": "T2 produced no accepted Ni KS U0/U3 host endpoints; no new KS campaign was authorized on T3."
+  },
+  "attempts": {
+    "T3_scf_invocations": 1,
+    "cumulative_T2_T3": 5,
+    "cap": 8,
+    "ledger": "docs/validation/fixed_ldau/rs/C5_4_RUN_LEDGER.jsonl"
+  }
+}

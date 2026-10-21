@@ -1,6 +1,6 @@
 program test_local_moments_kernel
    use precision_mod, only: rp
-   use math_mod, only: correct_d_shell_moments, extract_hubbard_d_shell_potential
+   use math_mod, only: correct_d_shell_moments, extract_hubbard_d_shell_potential, fixed_impurity_atom_carries_uj
    implicit none
    integer, parameter :: ncase = 4
    character(len=1024) :: path, magic
@@ -140,6 +140,12 @@ program test_local_moments_kernel
    call correct_d_shell_moments(p,m1,vin,1.0_rp,0.123_rp,0.456_rp,cp,q2p,t,status)
    call check(status == 0 .and. cp == 0.123_rp .and. q2p == 0.456_rp .and. t == 0.0_rp, &
       'zero-potential exact no-op', 0)
+   call check(.not. fixed_impurity_atom_carries_uj([0.0_rp, 0.0_rp], [0.0_rp, 0.0_rp]), &
+      'zero-U/J impurity is not a correction-bearing atom', 0)
+   call check(fixed_impurity_atom_carries_uj([0.0_rp, 0.4_rp], [0.0_rp, 0.0_rp]), &
+      'nonzero impurity U retains local correction', 0)
+   call check(fixed_impurity_atom_carries_uj([0.0_rp, 0.0_rp], [0.0_rp, 0.2_rp]), &
+      'nonzero impurity J retains local correction', 0)
    if (failed) error stop 'local moment kernel failed'
    write(*,'(a)') 'RESULT: PASS'
 contains
