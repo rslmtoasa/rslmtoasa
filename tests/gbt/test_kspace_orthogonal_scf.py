@@ -8,6 +8,10 @@ AppGbtKspaceOrthogonal; the moments by O3b. The checks here are of the SCF wirin
              wrong moment components. Bug caught there: dropping the local-to-lab rotation of H (the moment then comes out along the wrong axis).
   collinear  consistency, not validation: the nsp = 1 SCF equals the nsp = 3 SCF with mom = +z (E, E_F, |m|). Bug caught: a spin channel
              of the collinear path taken from the moment sign instead of the lab order.
+  afm        consistency, not validation: collinear AFM bcc Cr (tests/spin_response/cr_bcc, CsCl cell, 12^3 mesh): the nsp = 1 SCF equals the nsp = 3 SCF (periodic_nc,
+             mom = +z / -z per site, the mirror-image state with channel 1 = majority on both sites) in E, E_F (scf_identity_ry) and the two |m| (scf_moment_mub).
+             Bug caught: the nsp = 3 frame ignoring the moment sign (site 2 not flipped: the nsp = 3 moments collapse to 0, dE = 1.2e-3 Ry). An nsp = 1 frame
+             taken from the moment sign is not reachable here: the nsp = 1 SCF leaves mom = +z on both sites, and mom = -z in an nsp = 1 file collapses the moment.
   guards     'orthogonal' stops with its message for ccor_2c, for hoh = .true. and for constraining fields. Bug caught: a guard removed, the run
              then solves a Hamiltonian that is not the one asked for (CCOR dropped silently, h - h o h on top of H^gamma).
 usage: test_kspace_orthogonal_scf.py <mode> <rslmto.x> <scratch directory>"""
@@ -49,7 +53,8 @@ def scf(binary, d):
     proj = [float(x) for x in re.findall(r"Spin moment projections of atom\s+1 is\s+(\S+)\s+(\S+)\s+(\S+)", log)[-1]]
     return dict(E=float(re.search(r"Physical DFT total energy of system:\s+(\S+)", (d / "report.out").read_text()).group(1)),
                 EF=float(re.findall(r"EF=\s*(\S+) Ry", log)[-1]), conv="Converged!" in log,
-                m=float(re.findall(r"Spin moment of atom\s+1 is\s+(\S+)", log)[-1]), vec=np.array(proj))
+                m=float(re.findall(r"Spin moment of atom\s+1 is\s+(\S+)", log)[-1]), vec=np.array(proj),
+                moments=np.array([float(m) for _, m in re.findall(r"Spin moment of atom\s+(\d+) is\s+(\S+)", log)[-2:]]))
 
 
 def mode_rotation(binary, scratch):
@@ -76,6 +81,40 @@ def mode_collinear(binary, scratch):
     dE, dEF, dm = nc["E"] - col["E"], nc["EF"] - col["EF"], abs(nc["m"] - col["m"])
     print(f"nsp = 1: E = {col['E']:.10f} Ry, E_F = {col['EF']:.10f} Ry, |m| = {col['m']:.6f} muB; nsp = 3 minus nsp = 1: "
           f"dE = {dE:.3e} Ry, dE_F = {dEF:.3e} Ry, d|m| = {dm:.3e} muB (tolerances {tol:.1e}, {tol_m:.1e})")
+    return col["conv"] and nc["conv"] and abs(dE) < tol and abs(dEF) < tol and dm < tol_m
+
+
+def afm_deck(dst, nsp):
+    """cr_bcc as the deck of test_kspace_scspiral_afm. nsp = 1: the files as they stand (Cr1 holds the minority values in channel 1, Cr2 the majority; mom = +z in both,
+    the SCF then sets mom from the sign of the site moment). nsp = 3: the Cr2 potential (channel 1 = majority) on both sites with mom = +z, -z."""
+    dst = Path(dst)
+    shutil.rmtree(dst, ignore_errors=True)
+    shutil.copytree(SR / "cr_bcc", dst)
+    nml = f90nml.read(str(SR / "cr_bcc" / "input.nml"))
+    del nml["calculation"]["post_processing"]
+    nml["calculation"]["pre_processing"] = "bravais"
+    nml["self"]["nstep"] = 80
+    nml["control"]["nsp"] = nsp
+    nml["reciprocal"].update(nk1=NK, nk2=NK, nk3=NK, kspace_ham_order="orthogonal")
+    nml["hamiltonian"] = {"hoh": False}
+    nml.write(str(dst / "input.nml"), force=True)
+    cr2 = (dst / "Cr2.nml").read_text()
+    setmom = lambda text, z: re.sub(r"^ mom = .*$", f" mom = 0.0, 0.0, {z}", text, flags=re.M)
+    if nsp == 3:
+        (dst / "Cr1.nml").write_text(setmom(cr2.replace("symbol = 'Cr2'", "symbol = 'Cr1'"), 1.0))
+        (dst / "Cr2.nml").write_text(setmom(cr2, -1.0))
+    return dst
+
+
+def mode_afm(binary, scratch):
+    tol, tol_m = tolerance("scf_identity_ry"), tolerance("scf_moment_mub")
+    col, nc = (scf(binary, afm_deck(scratch / f"nsp{n}", n)) for n in (1, 3))
+    dE, dEF, dm = nc["E"] - col["E"], nc["EF"] - col["EF"], np.abs(nc["moments"] - col["moments"]).max()
+    print(f"nsp = 1: converged {col['conv']}, E = {col['E']:.10f} Ry, E_F = {col['EF']:.10f} Ry, |m| = {col['moments']} muB; nsp = 3 minus nsp = 1: "
+          f"dE = {dE:.3e} Ry, dE_F = {dEF:.3e} Ry, max d|m| = {dm:.3e} muB (nsp = 3 |m| = {nc['moments']}; tolerances {tol:.1e}, {tol_m:.1e})")
+    if col["moments"].min() < 0.1:
+        print("the collinear AFM moment collapsed (below 0.1 muB); the identity would be trivial")
+        return False
     return col["conv"] and nc["conv"] and abs(dE) < tol and abs(dEF) < tol and dm < tol_m
 
 
