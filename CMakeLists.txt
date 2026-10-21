@@ -1197,7 +1197,7 @@ add_test(NAME AppGbtKspaceGaugeOrthogonal
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_gauge.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/gauge_orthogonal" plain orthogonal)
 add_test(NAME AppGbtKspaceNio_r2_orthogonal
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_nio.py" r2_orthogonal "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/nio_r2_orthogonal")
-foreach(mode rotation collinear afm guards)
+foreach(mode rotation collinear afm moments guards)
   add_test(NAME AppKspaceOrthogonalScf_${mode}
     COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_orthogonal_scf.py" ${mode} "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/orthogonal_scf_${mode}")
   set_tests_properties(AppKspaceOrthogonalScf_${mode} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)

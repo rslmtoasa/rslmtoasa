@@ -12,6 +12,10 @@ AppGbtKspaceOrthogonal; the moments by O3b. The checks here are of the SCF wirin
              mom = +z / -z per site, the mirror-image state with channel 1 = majority on both sites) in E, E_F (scf_identity_ry) and the two |m| (scf_moment_mub).
              Bug caught: the nsp = 3 frame ignoring the moment sign (site 2 not flipped: the nsp = 3 moments collapse to 0, dE = 1.2e-3 Ry). An nsp = 1 frame
              taken from the moment sign is not reachable here: the nsp = 1 SCF leaves mom = +z on both sites, and mom = -z in an nsp = 1 file collapses the moment.
+  moments    identity against oracle O3b (tests/gbt/oracles/o3_hgamma, H^gamma moments of bcc Fe): the nsp = 1 SCF of the fixed fe_bcc potential at 300 K on the full
+             Gamma-centred 8^3 and 16^3 meshes (no symmetry reduction, weights 1/N^3), read after one iteration with linear mixing beta = 1, which returns the raw
+             moments: ql(1) = n0, gravity_center + vmad (input file) = centre, ql(3) = central q2, per l and spin (1 = majority). Bug caught: a moment taken from
+             another eigensystem than the H^gamma one (e.g. the first-order H), a weight or Fermi-level error, a wrong l or spin assignment.
   guards     'orthogonal' stops with its message for ccor_2c, for hoh = .true. and for constraining fields. Bug caught: a guard removed, the run
              then solves a Hamiltonian that is not the one asked for (CCOR dropped silently, h - h o h on top of H^gamma).
 usage: test_kspace_orthogonal_scf.py <mode> <rslmto.x> <scratch directory>"""
@@ -24,7 +28,7 @@ from pathlib import Path
 import f90nml
 import numpy as np
 
-from gbt_app_common import SR, tolerance
+from gbt_app_common import ROOT, SR, tolerance
 
 NK = 12
 
@@ -116,6 +120,35 @@ def mode_afm(binary, scratch):
         print("the collinear AFM moment collapsed (below 0.1 muB); the identity would be trivial")
         return False
     return col["conv"] and nc["conv"] and abs(dE) < tol and abs(dEF) < tol and dm < tol_m
+
+
+def par_array(text, key):
+    """(l, spin) values of a &par line such as 'ql(1, :, 1) = a, b, c' (key 'ql(1, :, {s})') for spin 1, 2."""
+    return np.array([[float(x) for x in re.search(rf"^\s*{re.escape(key.format(s=s))}\s*=\s*(.*)$", text, re.M).group(1).split(",")] for s in (1, 2)]).T
+
+
+def mode_moments(binary, scratch):
+    tol = tolerance("n_identity")
+    oracle = f90nml.read(str(ROOT / "tests/gbt/oracles/o3_hgamma/o3_fe_bcc.nml"))
+    vmad = float(re.search(r"^\s*vmad\s*=\s*(\S+)", (SR / "fe_bcc" / "Fe.nml").read_text(), re.M).group(1).replace("D", "E"))
+    ok = True
+    for n in (8, 16):
+        d = deck(scratch / f"mesh{n}", 1, nstep=1)
+        nml = f90nml.read(str(d / "input.nml"))
+        nml["reciprocal"].update(nk1=n, nk2=n, nk3=n, temperature=300.0)
+        nml["mix"] = {"beta": 1.0, "mixtype": "linear"}
+        nml.write(str(d / "input.nml"), force=True)
+        r = scf(binary, d)
+        text = (d / "Fe_scf.nml").read_text()
+        ref = oracle[f"o3b_moments_mesh{n}"]
+        pairs = {"n0": (par_array(text, "ql(1, :, {s})"), ref["n0"]),
+                 "centre": (par_array(text, "gravity_center(:, {s})") + vmad, ref["centre_ry"]),
+                 "central q2": (par_array(text, "ql(3, :, {s})"), ref["central_q2_ry2"])}
+        dev = {k: np.abs(v[0] - np.array(v[1]).reshape((3, 2), order="F")).max() for k, v in pairs.items()}
+        print(f"{n}^3 (one iteration, mixing beta = 1): E_F code {r['EF']:.10f} Ry, O3b mu {ref['mu_ry']:.10f} Ry; max |code - O3b| over l, spin: "
+              + ", ".join(f"{k} {v:.3e}" for k, v in dev.items()) + f" (tolerance {tol:.1e})")
+        ok = ok and all(v < tol for v in dev.values())
+    return ok
 
 
 def mode_guards(binary, scratch):
