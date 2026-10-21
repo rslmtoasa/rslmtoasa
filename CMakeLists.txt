@@ -1225,7 +1225,9 @@ endforeach()
 
 add_test(NAME AppGbtKspaceScSpiralB2
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_b2.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_b2")
-set_tests_properties(AppGbtKspaceScSpiralB2 PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)
+add_test(NAME AppGbtKspaceScSpiralB2_orthogonal
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_b2.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_b2_orthogonal" orthogonal)
+set_tests_properties(AppGbtKspaceScSpiralB2 AppGbtKspaceScSpiralB2_orthogonal PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)
 
 foreach(case "fe;4;first" "fe;3;first" "fe;4;second")
   list(GET case 0 i3_system)

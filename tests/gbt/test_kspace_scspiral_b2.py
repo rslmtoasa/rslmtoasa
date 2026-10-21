@@ -5,10 +5,12 @@ per site and constraining field per site, at theta = 0 and 30 deg, q = (0, 0.25,
 phase between the two sites). The two Gamma-centred meshes sample the same k set (the primitive k and k + a3-direction half step fold onto one
 doubled-cell k), which is the precondition: the collinear SCF of the two cells must agree in E per atom and E_F within scf_identity_ry, else
 the test stops. The CsCl cell (bccFe_sc2) has no equivalent mesh pair: a primitive n^3 mesh is the even-parity half of the cubic n^3 mesh.
-Deck: tests/spin_response/fe_bcc potential, first order, 300 K. Tolerances: scf_identity_ry (E per atom, E_F, B), scf_moment_mub (M).
+Deck: tests/spin_response/fe_bcc potential, 300 K, first order (or kspace_ham_order = 'orthogonal' with the optional 3rd argument; the collinear
+precondition then runs in 'orthogonal' too). Tolerances: scf_identity_ry (E per atom, E_F, B), scf_moment_mub (M).
 Bug caught: a missing or wrong q.tau phase between the sites, a frame mix-up between the sites, or the constraining field indexed by type instead
 of by site (a site left without its field: its B and m_perp differ from the primitive cell).
-usage: test_kspace_scspiral_b2.py <rslmto.x> <scratch directory>"""
+At 'orthogonal', injected: the bond vectors of inter-site GBT bonds set to zero (|dE/atom| = 0.11 Ry, the collinear precondition unaffected).
+usage: test_kspace_scspiral_b2.py <rslmto.x> <scratch directory> [first|orthogonal]"""
 import re
 import shutil
 import subprocess
@@ -21,10 +23,12 @@ import numpy as np
 from gbt_app_common import FIX, SR, tolerance
 
 Q = (0.0, 0.25, 0.0)
+ORDER = sys.argv[3] if len(sys.argv) > 3 else "first"
 CELLS = {"prim": ("bccFe_prim", (16, 16, 16), 1), "dbl": ("bccFe_dbl", (16, 16, 8), 2)}
 
 
 def deck(dst, cell, nsp, theta=0.0, constrained=True, nstep=80):
+    """The module-level ORDER is the kspace_ham_order of every deck."""
     fixture, nk, n = CELLS[cell]
     dst = Path(dst)
     shutil.rmtree(dst, ignore_errors=True)
@@ -38,7 +42,7 @@ def deck(dst, cell, nsp, theta=0.0, constrained=True, nstep=80):
     nml["atoms"] = {"database": "./", "label": [f"Fe{i}" for i in range(1, n + 1)]}
     nml["self"]["nstep"] = nstep
     nml["control"]["nsp"] = nsp
-    nml["reciprocal"].update(nk1=nk[0], nk2=nk[1], nk3=nk[2], kspace_ham_order="first")
+    nml["reciprocal"].update(nk1=nk[0], nk2=nk[1], nk3=nk[2], kspace_ham_order=ORDER)
     nml["hamiltonian"] = {"hoh": False}
     if nsp == 3:
         nml["hamiltonian"].update(magnetic_representation="gbt_single_q", q_ss=list(Q), theta_ss=theta)
