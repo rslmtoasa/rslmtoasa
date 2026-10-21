@@ -42,10 +42,11 @@ def make_deck(dst, kind, rep, nk, q_dir=(0.0, 0.0, 0.0), order="first", spin_res
     return finish_deck(dst, nml, rep, nk, order, spin_resolved, q_dir=q_dir, kind=kind, theta_deg=theta_deg, ccor=ccor)
 
 
-def make_nio_deck(dst, nid, rep, nk, q_dir=(0.0, 0.0, 0.0), order="second", spin_resolved=False, theta_deg=0.0, nstep=0, vmt_mode=None, nid_file=None):
+def make_nio_deck(dst, nid, rep, nk, q_dir=(0.0, 0.0, 0.0), order="second", spin_resolved=False, theta_deg=0.0, nstep=0, vmt_mode=None, nid_file=None, ccor=True):
     """AFM-II NiO, four sites (Niu, Nid, O1, O2), hoh + ccor_2c (strict) as the deck of the fixture nio_af. nid is 'mirrored' (the
     deck's Nid: mom = +z, spin 1 holds the minority values) or 'b1' (Nid_B1: mom = -z, spin 1 holds the majority values).
-    nstep = 0 probes the stored potentials unchanged. vmt_mode sets ccor_vmt_mode, nid_file replaces Nid.nml."""
+    nstep = 0 probes the stored potentials unchanged. vmt_mode sets ccor_vmt_mode, nid_file replaces Nid.nml, ccor = False
+    drops ccor_2c (needed for kspace_ham_order = 'orthogonal')."""
     dst = Path(dst)
     shutil.rmtree(dst, ignore_errors=True)
     dst.mkdir(parents=True)
@@ -55,10 +56,10 @@ def make_nio_deck(dst, nid, rep, nk, q_dir=(0.0, 0.0, 0.0), order="second", spin
         shutil.copy(nid_file or FIX / "nio_af" / "Nid_B1.nml", dst / "Nid.nml")
     nml = f90nml.read(str(FIX / "nio_af" / "input.nml"))
     nml["self"]["nstep"] = nstep
-    return finish_deck(dst, nml, rep, nk, order, spin_resolved, q_dir=q_dir, kind="nio_af", theta_deg=theta_deg, ccor=True, vmt_mode=vmt_mode)
+    return finish_deck(dst, nml, rep, nk, order, spin_resolved, q_dir=q_dir, kind="nio_af", theta_deg=theta_deg, ccor=ccor, vmt_mode=vmt_mode)
 
 
-def make_nio_scf_deck(dst, nid, gbt, nk, q_dir=(0.0, 0.0, 0.0), order="second", nstep=250):
+def make_nio_scf_deck(dst, nid, gbt, nk, q_dir=(0.0, 0.0, 0.0), order="second", nstep=250, ccor=True):
     """Self-consistent run of the nio_af deck (hoh + ccor_2c strict): nsp = 1 collinear (nid 'mirrored' only) or, with gbt, an
     unconstrained nsp = 3 gbt_single_q at theta = 0 with q_dir (direct coordinates). txc = 1 (native Barth-Hedin) replaces the
     fixture's libXC selector, which the CI configuration does not have."""
@@ -73,7 +74,9 @@ def make_nio_scf_deck(dst, nid, gbt, nk, q_dir=(0.0, 0.0, 0.0), order="second", 
     nml["self"]["nstep"] = nstep
     nml["control"].update(txc=1, nsp=3 if gbt else 1)
     nml["reciprocal"].update(nk1=nk[0], nk2=nk[1], nk3=nk[2], kspace_ham_order=order)
-    nml["hamiltonian"] = {"hoh": order == "second", "ccor_2c": True, "ccor_strict": True}
+    nml["hamiltonian"] = {"hoh": order == "second"}
+    if ccor:
+        nml["hamiltonian"].update(ccor_2c=True, ccor_strict=True)
     if gbt:
         q_cart = np.linalg.inv(lattice_vectors("nio_af")) @ np.array(q_dir)
         nml["hamiltonian"].update(magnetic_representation="gbt_single_q", q_ss=list(q_cart), theta_ss=0.0)
