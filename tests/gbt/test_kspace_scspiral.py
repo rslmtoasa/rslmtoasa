@@ -3,6 +3,10 @@
 16^3 mesh, 300 K, first order). Modes, each with its relation and the bug it catches:
   identity  I2 (spiral SCF at theta = 0 equals the collinear SCF): |dE|, |dE_F| < scf_identity_ry. Bug: the field leaking into H at
             B = 0, a wrong k -+ q/2 or a swapped spin channel in the SCF density.
+  identity_orthogonal  the same at kspace_ham_order = 'orthogonal'. Consistency, not validation: both sides run the same H^gamma kernel family
+            (the physics anchors are O3 and O3b). Bug caught: a k -+ q/2 shift that is not a mesh translation (q
+            scaled by 0.3 in the assembly: dE = 1.1e-4 Ry). Not caught: errors shared with the nsp = 1 path (a swapped spin channel of C moves both sides), or
+            a shift by a multiple of q/2 (a mesh translation).
   identity_ccor, identity_ccor_second  the same with ccor_2c on both sides (first and second order). Bug: Hcc missing or wrong in the spiral SCF
             assembly (also in the SCF density: the moments then differ), Hcc inside h - h o h at second order.
   converge  S3, S8: theta = 30 deg, q != 0: the SCF converges, max |m_perp| falls below scf_moment_mub and sum_a |B_a||m_a_perp| below scf_identity_ry, N stays
@@ -86,6 +90,10 @@ def mode_identity(binary, scratch, order="first", ccor=False):
     dE, dEF = spiral["E"] - ref["E"], spiral["EF"] - ref["EF"]
     print(f"collinear E = {ref['E']:.10f} Ry, E_F = {ref['EF']:.10f} Ry; spiral dE = {dE:.3e} Ry, dE_F = {dEF:.3e} Ry, tolerance {tol:.1e}")
     return spiral["conv"] and abs(dE) < tol and abs(dEF) < tol
+
+
+def mode_identity_orthogonal(binary, scratch):
+    return mode_identity(binary, scratch, order="orthogonal")
 
 
 def mode_identity_ccor(binary, scratch):
