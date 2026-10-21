@@ -297,7 +297,7 @@ contains
             end do
             call this%gpu_backend%block_lanczos(this%psi_b, llmax, &
                this%atemp_b, this%b2temp_b, &
-               prec=merge(1, 0, trim(this%control%cheb_backend) == 'fast_dp'))
+               prec=this%gpu_precision_code(block=.true.))
             do ll = 1, llmax
                do l = 1, nb
                   do m = 1, nb

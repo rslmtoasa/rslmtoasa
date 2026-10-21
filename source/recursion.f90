@@ -119,6 +119,7 @@ module recursion_mod
       procedure :: ham_hoh_vec_matmul
       procedure :: velo_vec_matmul
       procedure :: velo_hoh_vec_matmul
+      procedure :: gpu_precision_code
       procedure :: restore_to_default
       final :: destructor
    end type recursion
@@ -254,6 +255,19 @@ module recursion_mod
       logical :: nsp1_only, hoh_ok
 
    end function gpu_plugin_ready
+
+   !> @brief GPU arithmetic precision selected by the input: 0 = fp32, 1 = fp64.
+   !> @details Follows control%gpu_precision for every GPU kernel (Chebyshev
+   !>          moments, orbital, stochastic, block Lanczos, reconstruction).
+   !> @param[in] this Recursion object whose control carries gpu_precision.
+   !> @param[in] block When true, cheb_backend = 'fast_dp' also gives fp64. This
+   !>          is the older way to ask for fp64 block Lanczos on the GPU.
+   !> @return 1 for fp64, 0 for fp32.
+   module function gpu_precision_code(this, block) result(prec)
+      class(recursion), intent(in) :: this
+      logical, intent(in), optional :: block
+      integer :: prec
+   end function gpu_precision_code
 
    !> @brief Ensure the CUDA backend has the current real-space Hamiltonian uploaded.
    !> @details Acquires the shared plugin context and transfers the Hamiltonian in

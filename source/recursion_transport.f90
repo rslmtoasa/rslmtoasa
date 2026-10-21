@@ -640,7 +640,6 @@ contains
          else
             call this%gpu_backend%set_velocity(this%hamiltonian%v_a, this%hamiltonian%v_b)
          end if
-         call this%gpu_backend%set_precision(merge(1, 0, trim(this%control%gpu_precision) == 'fp64'))
          call this%gpu_backend%clear_resident_moments()
          call g_kpm_profile%add_bytes('H2D', operator_h2d_bytes)
       end if
@@ -958,7 +957,7 @@ contains
 
                call this%gpu_backend%block_lanczos(this%psi_b, llmax, &
                   this%atemp_b, this%b2temp_b, &
-                  prec=merge(1, 0, trim(this%control%cheb_backend) == 'fast_dp'))
+                  prec=this%gpu_precision_code(block=.true.))
 
                do ll = 1, llmax
                   do l = 1, nb
