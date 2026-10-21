@@ -1,0 +1,132 @@
+{
+  "schema": "c5_4_t5_rd5_spectral_identity_hashes_v1",
+  "runs": {
+    "old": {
+      "run_dir": "/private/tmp/c54-t5-spectral-old/run01",
+      "binary": "/private/tmp/c5-rd1-frozen/4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f/rslmto.x",
+      "binary_sha256": "4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f",
+      "preflight": "/private/tmp/c54-t5-spectral-old/preflight.json",
+      "preflight_sha256": "51701a752a7135f4f4ef35992a7f8e298511ed986799d41d46439c5664e4cd14",
+      "solver_pid": 24697,
+      "exit_code": 0,
+      "input_nml_postrun_sha256": "50d7feb3f47f81dace28673304f9b4059c7cdfa2d4bd4b028a1999567dc31ee9",
+      "Ni_imp_scf_postrun_sha256": "d593237b32f33486d65db3fb6d1d24916da2b70c71ea2aea1ddb5ad4e5f47bcb",
+      "outputs_sha256": {
+        "Ni-bulk.nml": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+        "Ni-bulk_out.nml": "280230f9616412cea4f6016d9d6cb1e18bcc37e82a6b2f815b5e0bd98366d7bd",
+        "Ni-bulk_scf.nml": "280230f9616412cea4f6016d9d6cb1e18bcc37e82a6b2f815b5e0bd98366d7bd",
+        "Ni-imp.nml": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+        "Ni-imp_1_spinene.out": "18cf11ebaea1a2000545487ad68e0572c2e167d0eb15310ed4c5fc052bda2c7e",
+        "Ni-imp_dos.out": "6a28bf62c2b523e1cb80745190761e631772e0090ea8f7aad1dd84a378e05515",
+        "Ni-imp_orbene.out": "dac6d4de278436a5433aa78992379d74203fa77a182d56a81e07f62e1b6216cc",
+        "Ni-imp_orbital_dos.out": "a0009d524fdf644db72c3e6c474524d29cecd94be83f1dede1ed4ad1bd1bec85",
+        "Ni-imp_out.nml": "d593237b32f33486d65db3fb6d1d24916da2b70c71ea2aea1ddb5ad4e5f47bcb",
+        "Ni-imp_scf.nml": "d593237b32f33486d65db3fb6d1d24916da2b70c71ea2aea1ddb5ad4e5f47bcb",
+        "angles_lmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "angles_magmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "clust": "ae7a0f3bdb39550c0581796dc13ebe384124de281866832ff6204854cf1248f4",
+        "fort.800": "e363c368c0674d2f398a7e45f2de4528cce48c333bf017660e04086f7056c32e",
+        "fort.805": "30600f281c01df6b9119b11dbcae0e6bbd1f03aa4e757bad2bfc7c9958041335",
+        "input.nml": "50d7feb3f47f81dace28673304f9b4059c7cdfa2d4bd4b028a1999567dc31ee9",
+        "linfo.out": "bfde4d5b006fefb141b3de71e249d5b719ecc2af58d57a50713919c79227350b",
+        "magneticdos.out": "4200a85327a16f2613ec25cd704b97034eb60ed15ef3e76cbd0d1de1be6086b7",
+        "map": "751af46b20a682f2b2f686f70af9f67ec2ace7090ec1ef1972568242b5b10383",
+        "minfo.out": "4d1f291b039e34ce4a2a0e9ad6d7daed1d077f44615b25fd57fda12e9553c449",
+        "outnewclu": "2d2d17dacf3db3c5cd4cda2c9bc5753b1410306da445fd3fcdd25e2b50205710",
+        "radial_ground_state_Ni-imp_1.dat": "c550a2b97069e646136986584a5cf9e217a8ae64063a3beef554f1d27d1a3696",
+        "report.out": "3ef14801e9dd98aa0438047ccab700031a1c3cf4ac461ddd11284c2ad30bedc4",
+        "sbar": "e78d67b1614650a57f0e1feb6dfa77f4698af2db6463c4794291ee07d1435930",
+        "str.out": "da7fcad70580cbab47d9ac9c31638a07c02265731db28a78c74975c3042f8cbd",
+        "totaldos.out": "248d66231a04ca64ae147bd9c4c10f6152e1c9e55eefce803dbd25e8febbb81e",
+        "view.sbar": "fb0bf215653388e5890e28f0c6a9a36df8c51a0c85e18118fb8ea5416ce48ea8"
+      }
+    },
+    "new": {
+      "run_dir": "/private/tmp/c54-t5-spectral-new/run01",
+      "binary": "/private/tmp/c54-t2-build-fresh/bin/rslmto.x",
+      "binary_sha256": "4554ea2b10a29d35e455be34f7e97c7651aae43c859be00abd08c5a726fdc22e",
+      "preflight": "/private/tmp/c54-t5-spectral-new/preflight.json",
+      "preflight_sha256": "7a31d86d1a208802b1a1603d19ed50729dd7f87f00bc8df5cd7f7190d571f702",
+      "solver_pid": 24970,
+      "exit_code": 0,
+      "input_nml_postrun_sha256": "50d7feb3f47f81dace28673304f9b4059c7cdfa2d4bd4b028a1999567dc31ee9",
+      "Ni_imp_scf_postrun_sha256": "d593237b32f33486d65db3fb6d1d24916da2b70c71ea2aea1ddb5ad4e5f47bcb",
+      "outputs_sha256": {
+        "Ni-bulk.nml": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+        "Ni-bulk_out.nml": "280230f9616412cea4f6016d9d6cb1e18bcc37e82a6b2f815b5e0bd98366d7bd",
+        "Ni-bulk_scf.nml": "280230f9616412cea4f6016d9d6cb1e18bcc37e82a6b2f815b5e0bd98366d7bd",
+        "Ni-imp.nml": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+        "Ni-imp_1_spinene.out": "18cf11ebaea1a2000545487ad68e0572c2e167d0eb15310ed4c5fc052bda2c7e",
+        "Ni-imp_dos.out": "6a28bf62c2b523e1cb80745190761e631772e0090ea8f7aad1dd84a378e05515",
+        "Ni-imp_orbene.out": "dac6d4de278436a5433aa78992379d74203fa77a182d56a81e07f62e1b6216cc",
+        "Ni-imp_orbital_dos.out": "a0009d524fdf644db72c3e6c474524d29cecd94be83f1dede1ed4ad1bd1bec85",
+        "Ni-imp_out.nml": "d593237b32f33486d65db3fb6d1d24916da2b70c71ea2aea1ddb5ad4e5f47bcb",
+        "Ni-imp_scf.nml": "d593237b32f33486d65db3fb6d1d24916da2b70c71ea2aea1ddb5ad4e5f47bcb",
+        "angles_lmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "angles_magmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "clust": "ae7a0f3bdb39550c0581796dc13ebe384124de281866832ff6204854cf1248f4",
+        "fort.800": "e363c368c0674d2f398a7e45f2de4528cce48c333bf017660e04086f7056c32e",
+        "fort.805": "30600f281c01df6b9119b11dbcae0e6bbd1f03aa4e757bad2bfc7c9958041335",
+        "input.nml": "50d7feb3f47f81dace28673304f9b4059c7cdfa2d4bd4b028a1999567dc31ee9",
+        "linfo.out": "bfde4d5b006fefb141b3de71e249d5b719ecc2af58d57a50713919c79227350b",
+        "magneticdos.out": "4200a85327a16f2613ec25cd704b97034eb60ed15ef3e76cbd0d1de1be6086b7",
+        "map": "751af46b20a682f2b2f686f70af9f67ec2ace7090ec1ef1972568242b5b10383",
+        "minfo.out": "4d1f291b039e34ce4a2a0e9ad6d7daed1d077f44615b25fd57fda12e9553c449",
+        "outnewclu": "2d2d17dacf3db3c5cd4cda2c9bc5753b1410306da445fd3fcdd25e2b50205710",
+        "radial_ground_state_Ni-imp_1.dat": "c550a2b97069e646136986584a5cf9e217a8ae64063a3beef554f1d27d1a3696",
+        "report.out": "3ef14801e9dd98aa0438047ccab700031a1c3cf4ac461ddd11284c2ad30bedc4",
+        "sbar": "e78d67b1614650a57f0e1feb6dfa77f4698af2db6463c4794291ee07d1435930",
+        "str.out": "da7fcad70580cbab47d9ac9c31638a07c02265731db28a78c74975c3042f8cbd",
+        "totaldos.out": "248d66231a04ca64ae147bd9c4c10f6152e1c9e55eefce803dbd25e8febbb81e",
+        "view.sbar": "fb0bf215653388e5890e28f0c6a9a36df8c51a0c85e18118fb8ea5416ce48ea8"
+      }
+    }
+  },
+  "common_inputs": {
+    "fixture_dir": "/private/tmp/c54-t5-spectral-fixture",
+    "input_nml_prelaunch_sha256": "2a264bf43fd1e5d0b90877d3280820e0f8d48b05e40b7da74d7a73f1ad145f8c",
+    "input_original_sha256": "602ebe9932f37ada880b1b083118048b38ee570704989a1393be5093abb02b3f",
+    "Ni_bulk_nml_sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+    "Ni_imp_nml_sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+    "Ni_bulk_out_nml_sha256": "280230f9616412cea4f6016d9d6cb1e18bcc37e82a6b2f815b5e0bd98366d7bd",
+    "Ni_imp_out_nml_sha256": "a42774de195d11190be68af0661f66f75301226286031d37559a4fc3ebc4e43b",
+    "Ni_imp_scf_accepted_iteration22_sha256": "d3d47850e7e8f35581ea402ac0d117d45fdd981719f346c9944bcf09f5b68c02",
+    "settings": "same Ni U=3 J=0.7 explicit spectral RS fixture; copied accepted iteration-22 restart; changed only self.nstep to 1 for bounded phase check"
+  },
+  "thread_caps": {
+    "OMP_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "BLIS_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1"
+  },
+  "commands": {
+    "preflight_stage": "/Users/andersb/envs/p311/bin/python3 docs/validation/fixed_ldau/rs/C5_4_PREFLIGHT.py RUN_DIR --stage FIXTURE/input.nml FIXTURE/Ni-bulk.nml FIXTURE/Ni-imp.nml FIXTURE/Ni-bulk_out.nml FIXTURE/Ni-imp_out.nml FIXTURE/Ni-imp_scf.nml",
+    "preflight_check": "env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 /Users/andersb/envs/p311/bin/python3 docs/validation/fixed_ldau/rs/C5_4_PREFLIGHT.py RUN_DIR --deck RUN_DIR/input.nml --restart RUN_DIR/Ni-imp_scf.nml --guard LAUNCH.sh > PREFLIGHT.json",
+    "launch": "LAUNCH.sh; wrapper sets all eight thread caps, disables core dump, records solver PID and exit code, and invokes exactly one binary"
+  },
+  "comparison": {
+    "output_names_equal": true,
+    "output_count_each": 27,
+    "byte_identical_output_names_and_hashes": true,
+    "registered_solver_log_exclusion": "testrun.log; timestamps vary between executions",
+    "wrapper_metadata_excluded": [
+      "solver.pid",
+      "exit_code.txt"
+    ],
+    "str_out_sha256_old": "da7fcad70580cbab47d9ac9c31638a07c02265731db28a78c74975c3042f8cbd",
+    "str_out_sha256_new": "da7fcad70580cbab47d9ac9c31638a07c02265731db28a78c74975c3042f8cbd",
+    "str_out_exact": true,
+    "scf_semantic_lines_equal": true,
+    "scf_semantic_lines": [
+      "[self.f90:3364]             <info> HUBBARD_RADIAL_MODE mode=spectral source=explicit use_kspace=.false. local_energy_adopted=.false.",
+      "[self.f90:2347]             <info> HUBBARD_MOMENT_ENERGY_TOTAL E_int=  0.8097563966210418E+01 E_DC=  0.8060764126079837E+01 E_Hub=  0.3679984013058046E-01 E_Hub_P_OUT=  0.0000000000000000E+00 t_in_out= -0.7329389494928541E+00 t_U= -0.7329389494928541E+00 e_external=  0.0000000000000000E+00 t_total_actual_Vin= -0.7329389494928541E+00 base_physical_total_energy= -0.6074755644354032E+04 physical_total_energy= -0.6074755644354032E+04 candidate_a= -0.6073985905564409E+04 candidate_b=UNAVAILABLE candidate_c= -0.6074718844513902E+04 entropy=UNAVAILABLE_KS_ONLY TS=UNAVAILABLE_KS_ONLY candidate_a_F=UNAVAILABLE candidate_b_F=UNAVAILABLE candidate_c_F=UNAVAILABLE test_lambda_trace_wp=UNAVAILABLE test_F_local=UNAVAILABLE test_F_spectral=UNAVAILABLE candidate_status=PROVISIONAL_ONLY; unavailable candidates require the other radial representation",
+      "[self.f90:4206]             <info> Not converged! Diff= 0.0000000937"
+    ],
+    "old_exit_code": 0,
+    "new_exit_code": 0
+  }
+}

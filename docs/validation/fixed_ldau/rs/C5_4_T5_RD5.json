@@ -1,0 +1,60 @@
+{
+  "schema": "c5_4_t5_rd5_verification_v1",
+  "status": "RD5_EXPLICIT_SPECTRAL_IDENTITY_PASS_AUTO_NOT_EVALUATED_NO_ADOPTION_NO_MERGE",
+  "rd2": {
+    "status": "PASS",
+    "record": "C5_4_T1_RD2.json",
+    "scf_solver_invocations": 0
+  },
+  "rd3a": {
+    "status": "PASS",
+    "record": "C5_4_T3_RD3.json",
+    "component_ratios": {
+      "d_q_spin1": 0.6446298503091031,
+      "d_q_spin2": 0.59821346529618,
+      "sphere_moment": 0.8069485651381266
+    }
+  },
+  "rd3b": {
+    "status": "NOT_EVALUATED",
+    "reason": "T2 produced no accepted Ni KS U0/U3 host endpoints; do not launch a new KS campaign."
+  },
+  "rd4": {
+    "status": "NOT_MEASURED",
+    "energy_routing": "OFF; no adoption",
+    "record": "C5_4_T4_RD4.json"
+  },
+  "rd5": {
+    "no_u_identity_rs_ks": "PASS; prior RD5_RESULT plus C5.4 T2 single-thread identities",
+    "rs_ks_bulk_unchanged": "PASS within prior no-U RS/KS fixture comparisons; C5_2_PART_D_PROVENANCE.json RD5 record",
+    "explicit_spectral_identity": "PASS for bounded matched one-step verification; see C5_4_T5_spectral_identity_hashes.json",
+    "auto_rs_impurity": "NOT_EVALUATED; production eligibility still excludes calctype I and no candidate source change was made",
+    "auto_ks_impurity": "NOT_EVALUATED; no accepted KS endpoint and no new KS campaign authorized",
+    "auto_spectral_host_behavior": "NOT_EVALUATED in this verification",
+    "adoption": "NOT_ADOPTED"
+  },
+  "explicit_spectral_identity": {
+    "fixture": "accepted Ni U=3 eV/J=0.7 spectral impurity endpoint, iteration 22, window 3-22",
+    "source_record": "C5_2_PART_D_assets/ni_rd3_ni_record/spectral_impurity/accepted_checkpoint_22_window3_22/accepted_window.json",
+    "binary_pair": "frozen pre-T2 RD1 binary 4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f vs T3 production binary 4554ea2b10a29d35e455be34f7e97c7651aae43c859be00abd08c5a726fdc22e",
+    "comparison": "27/27 solver output files exact byte identity; exit 0 each; same mode= spectral, local_energy_adopted=false; physical energy diagnostics and one-step Diff exact; see complete maps",
+    "preflight": "PASS both; docs/validation/fixed_ldau/rs/C5_4_PREFLIGHT.py",
+    "scf_invocations": 2,
+    "invocation_record": "separate T5 verification invocations, not counted in T2-T4 6/8 ledger"
+  },
+  "t5_attempts": {
+    "count": 2,
+    "purpose": "bounded explicit-spectral identity: one matched SCF iteration per binary",
+    "preflight_results": [
+      "PASS",
+      "PASS"
+    ],
+    "attempts_not_campaign": "No new host or KS campaign; each was a one-step verification on the frozen accepted Ni spectral fixture."
+  },
+  "auto_gap": "Required accepted RS-local and KS-local Ni impurity auto reproduction cannot be established because no eligible KS host endpoint exists and production auto remains bulk-only. No auto adoption or energy change.",
+  "candidate_source": "No candidate applied to production. An unused exploratory patch exists at /private/tmp/c54-t5-auto-impurity-candidate.patch; not built, tested, committed, or recommended.",
+  "merge_readiness": "NO MERGE. C5.4 amendment requires sole final audit; RD3(b), accepted KS auto, RS impurity auto, and \u00a77 merge verification remain uncovered. Energy routing stays off because RD4 is unmeasured.",
+  "hash_manifest": "C5_4_T5_spectral_identity_hashes.json",
+  "scf_ledger": "C5_4_RUN_LEDGER.jsonl",
+  "scf_ledger_T2_T4_total": "6/8; T5 two invocations separately recorded here."
+}
