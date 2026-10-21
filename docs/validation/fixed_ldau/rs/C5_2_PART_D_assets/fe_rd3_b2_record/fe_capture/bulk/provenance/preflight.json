@@ -1,0 +1,194 @@
+{
+  "analysis": {
+    "method": "For each captured RS_GREEN energy point, use source basis_map (l,m,spin), sum diagonal Im(G)/(-pi) over d orbitals m for each spin, then report maximum absolute bulk/impurity difference per spin and across both. The parser requires complete n\u00d7n G matrices, complete l<=2 spin basis, and exact same energy grid; if grids differ it returns NOT_COMPUTED and does not interpolate. Source formula: source/bands.f90 calculate_dos, `dosial = -aimag(g0(j,j,...))/pi`.",
+    "parser_path": "/private/tmp/c52-fe-rd3-capture-preflight/analyze_d_ldos.py",
+    "parser_sha256": "2507518b2e8f259aa29570a33adc3fe6f6e2e950583756266f0ae06499bd906a",
+    "smoke": {
+      "command": "/opt/homebrew/opt/python@3.11/bin/python3.11 /private/tmp/c52-fe-rd3-capture-preflight/analyze_d_ldos.py /private/tmp/c52-c2-stage/c3_run_debug_i1/records.csv /private/tmp/c52-c2-stage/c3_run_debug_i1/records.csv --output /private/tmp/c52-fe-rd3-capture-preflight/analyzer_self_smoke.json",
+      "f90nml_version": "1.4.4",
+      "input_c3_records_sha256": "d45cc08bc72752b167bf244fcf8ffeda8a9658e223a5321876d04f486f9722d4",
+      "output_path": "/private/tmp/c52-fe-rd3-capture-preflight/analyzer_self_smoke.json",
+      "output_sha256": "de26523349a36ce26badac2a93147ae187b05888e55d399569bd5193401c3cfa",
+      "status": "HARNESS_ONLY_IDENTICAL_INPUT_SELF_COMPARISON; NOT SCIENTIFIC FE RESULT"
+    }
+  },
+  "binary": {
+    "binary_role": "single common RD1 Release binary for both diagnostic captures; source formulas and production inputs remain unchanged",
+    "build_manifest": "/private/tmp/c5-rd1-frozen/4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f",
+    "build_source_head": "683eff937241a463d2dacb395485d6b7c0b43264 (RD1 release build)",
+    "mode": "0555",
+    "path": "/private/tmp/c5-rd1-frozen/4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f/rslmto.x",
+    "sha256": "4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f",
+    "source_identity": {
+      "bands_f90_path": "/Users/andersb/Jobb/rslmto_fable_v4b/source/bands.f90",
+      "bands_f90_sha256": "0f130331ded7fea3d12edd2a716c04f1473855a9b89ccfbf70fdafa73a38724e",
+      "cmake_cache_path": "/private/tmp/c5-rd1-release-build/CMakeCache.txt",
+      "cmake_cache_sha256": "1d9cfd811da21ec7392e3019322a812b04ba5c8bf17be7cd717c43ff1a9232f1",
+      "commit": "683eff937241a463d2dacb395485d6b7c0b43264",
+      "rd1_provenance_path": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/RD1_unit_gate/RD1_PROVENANCE.json",
+      "rd1_provenance_sha256": "5cb639a0c30aa0ec67eb1513b98f98717c2f37a126a55c094850f6fae412f9c1",
+      "rd1_source_manifest_path": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/RD1_unit_gate/RD1_SOURCE_MANIFEST.json",
+      "rd1_source_manifest_sha256": "b2e6726fe407689b42b033db6536b3053e2f742d2523c32ffe21ba18fd07af57",
+      "self_f90_path": "/Users/andersb/Jobb/rslmto_fable_v4b/source/self.f90",
+      "self_f90_sha256": "d8ca2650b871c051c4023298300c8727f2199260948f9cfdaf6faa516a9c3b02",
+      "tree": "76bba643134258c389217efadb699888701ec2f3"
+    }
+  },
+  "comparison_scope": "Record-only Fe RD3(a' ): no U=0 control means no U>0/U0 ratio. Bulk B and impurity I EF policies differ by program defaults; both resolve to serialized -0.085152 Ry at six decimals, without claiming higher-precision EF identity.",
+  "endpoint": {
+    "accepted_endpoint_id": "fe_u38j11_rs_bulk_rc80_block:trace92:window73-92",
+    "accepted_package": "/private/tmp/c52-fe-u38-rs-bulk-preflight/accepted_candidate_73_92",
+    "accepted_package_manifest": "/private/tmp/c52-fe-u38-rs-bulk-preflight/accepted_candidate_73_92/SHA256SUMS",
+    "accepted_package_manifest_sha256": "31741c6b96dd3e10515fcb9372f192d9136f0eea99321d4db06b883056f7e17a",
+    "checkpoint_path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/accepted_candidate_73_92/iter0092_Fe_scf.nml",
+    "checkpoint_sha256": "6e93e4141e8a84b1d4c3bac0d1f62997bf3c702e56e923f5c043e7becb86d16b",
+    "trace_path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/accepted_candidate_73_92/iter0092_trace.csv",
+    "trace_sha256": "a8297b63b4a84392e81dd17e6cc025204fad07481107b78954e085f5420fd69d"
+  },
+  "execution": {
+    "blas_openmp_numexpr_caps": 1,
+    "command_template": "C52_FE_LDOS_CAPTURE_AUTHORIZED=1 /private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/collector/launch_capture.sh",
+    "cwd": "/private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/run",
+    "lifecycle": "wrapper records its PID and actual solver PID, waits for solver, saves exit status; full CSV and stdout retained. No readiness watcher required for this one-step bounded diagnostic, but raw trace is solver-written.",
+    "no_solver_launched": true,
+    "omp_num_threads": 1,
+    "result_files": {
+      "actual_exit": "run/exit_code.txt",
+      "actual_solver_pid": "run/solver.pid",
+      "lifecycle": "run/lifecycle.txt",
+      "raw_full_trace": "run/records.csv",
+      "stdout": "run/testrun.log"
+    },
+    "rslmto_omp_threads_serial": 1,
+    "safety": "Hash-verifies immutable/run copies and the frozen executable; refuses stale outputs or <1GiB disk; captures wrapper/actual solver PID and waits for exact child exit status. Authorization variable is absent from this prepared-only environment.",
+    "wrapper_path": "/private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/collector/launch_capture.sh",
+    "wrapper_sha256": "d1756512152078d5dcbbedbf907eab859551088b4f67b21561bc36ffcb9fad74"
+  },
+  "input": {
+    "element_inputs": [
+      {
+        "immutable_mode": "0444",
+        "immutable_path": "/private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/immutable/Fe.nml",
+        "role": "Fe.nml",
+        "run_mode": "0644",
+        "run_path": "/private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/run/Fe.nml",
+        "run_sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+        "sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+        "source_path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/accepted_candidate_73_92/immutable_element_Fe.nml",
+        "source_sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1"
+      }
+    ],
+    "immutable_capture_deck": "/private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/immutable/input.nml",
+    "immutable_sha256": "a8ebb01a16416a28e1d022d8b92103578eee41d25da15edf84a8fbb206152ac5",
+    "only_textual_input_change": "self.nstep 100 -> 1",
+    "origin_path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/accepted_candidate_73_92/immutable_input.nml",
+    "origin_sha256": "d9f9b142e69ac365c72c0ce7faac8da2ff867289436df27ca3810cc2ac739b8b",
+    "restart_inputs": [
+      {
+        "immutable_mode": "0444",
+        "immutable_path": "/private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/immutable/Fe_out.nml",
+        "role": "Fe_out.nml",
+        "run_mode": "0644",
+        "run_path": "/private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/run/Fe_out.nml",
+        "run_sha256": "6e93e4141e8a84b1d4c3bac0d1f62997bf3c702e56e923f5c043e7becb86d16b",
+        "sha256": "6e93e4141e8a84b1d4c3bac0d1f62997bf3c702e56e923f5c043e7becb86d16b",
+        "source_path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/accepted_candidate_73_92/iter0092_Fe_scf.nml",
+        "source_sha256": "6e93e4141e8a84b1d4c3bac0d1f62997bf3c702e56e923f5c043e7becb86d16b"
+      }
+    ],
+    "run_deck": "/private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/run/input.nml",
+    "run_sha256": "a8ebb01a16416a28e1d022d8b92103578eee41d25da15edf84a8fbb206152ac5",
+    "schema_source_script": "/private/tmp/c52-c-private/fortran_namelist_schema.py",
+    "schema_source_script_sha256": "d8bea2b4825e443c81322d37e6b3ead324cde69fca32ef8096ddb9739c06e953",
+    "schema_validation": {
+      "groups": [
+        "atoms",
+        "calculation",
+        "control",
+        "energy",
+        "hamiltonian",
+        "lattice",
+        "mix",
+        "self"
+      ],
+      "member_counts": {
+        "atoms": 2,
+        "calculation": 2,
+        "control": 5,
+        "energy": 4,
+        "hamiltonian": 3,
+        "lattice": 7,
+        "mix": 2,
+        "self": 3
+      },
+      "path": "/private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/immutable/input.nml",
+      "schema_valid": true
+    },
+    "schema_validation_path": "/private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/provenance/schema_validation.json",
+    "schema_validation_sha256": "0acdf0e6e3ae61959902314aa0beb20b8ece6295fa950960a17c5c3953529e80",
+    "validation_command": "/opt/homebrew/opt/python@3.11/bin/python3.11 /private/tmp/c52-fe-rd3-capture-preflight/prepare.py"
+  },
+  "no_claims": [
+    "no solver launch",
+    "no d-LDOS result yet",
+    "no RD3 gate or ratio",
+    "no production/source modification"
+  ],
+  "purpose": "Obtain endpoint-specific full RS Green energy grid and P_OUT ql from the exact accepted recursive state; derive d-LDOS on the captured grid. This is a diagnostic capture, not another converged SCF or an acceptance gate.",
+  "run_id": "c52_fe_u38_bulk_endpoint92_full_green_i1",
+  "schema": "c52-fe-rd3-one-step-full-green-capture-preflight-v1",
+  "settings": {
+    "EF_value_Ry": -0.085152,
+    "U_J_eV": [
+      3.8,
+      1.1
+    ],
+    "backend": "RS",
+    "calctype": "B",
+    "energy_window_Ry": [
+      -1.0,
+      0.5
+    ],
+    "fermi_policy": "free EF under calctype=B (input fermi is the seed/initial value)",
+    "lld": 21,
+    "lmax": 2,
+    "nsp": 1,
+    "only_deck_control_change": "nstep is reduced to 1; no other namelist member changed",
+    "radial_mode": "local",
+    "rc": 80,
+    "recur": "block"
+  },
+  "status": "PREPARED_ONLY_NO_SOLVER_LAUNCHED",
+  "system": {
+    "accepted_endpoint_id": "fe_u38j11_rs_bulk_rc80_block:trace92:window73-92",
+    "accepted_package": "/private/tmp/c52-fe-u38-rs-bulk-preflight/accepted_candidate_73_92",
+    "accepted_package_manifest": "/private/tmp/c52-fe-u38-rs-bulk-preflight/accepted_candidate_73_92/SHA256SUMS",
+    "calctype": "B",
+    "checkpoint_path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/accepted_candidate_73_92/iter0092_Fe_scf.nml",
+    "comparison_id": "Fe RD3(a') bulk U3.8/J1.1",
+    "ef": -0.085152,
+    "fermi_policy": "free EF under calctype=B (input fermi is the seed/initial value)",
+    "trace_path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/accepted_candidate_73_92/iter0092_trace.csv",
+    "uj": [
+      3.8,
+      1.1
+    ]
+  },
+  "trace": {
+    "d_ldos_definition": "For each spin and energy grid point, sum the five diagonal l=2 Green-function elements over m using the established RS Green basis_map; compute the corresponding spectral LDOS using the repository\u2019s existing sign/normalization convention. Compare only if both runs expose matching energy grids; no interpolation/floor/acceptance tolerance is introduced by this preflight.",
+    "env": {
+      "RSLMTO_FIXED_U_RUN_ID": "c52_fe_u38_bulk_endpoint92_full_green_i1",
+      "RSLMTO_FIXED_U_TRACE": "/private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/run/records.csv",
+      "RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY": "1",
+      "RSLMTO_FIXED_U_TRACE_ITERATION": "1",
+      "RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY": "0",
+      "RSLMTO_FIXED_U_TRACE_QL_ONLY": "0"
+    },
+    "purpose_rows": [
+      "basis_map/RS_GREEN",
+      "green_function/RS_GREEN",
+      "ql/P_OUT",
+      "radial replay rows"
+    ]
+  }
+}

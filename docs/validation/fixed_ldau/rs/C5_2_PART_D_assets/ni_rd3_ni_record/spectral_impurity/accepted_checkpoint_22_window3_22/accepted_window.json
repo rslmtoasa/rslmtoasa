@@ -1,0 +1,269 @@
+{
+  "schema": "c52-ni-u3j07-spectral-impurity-record-accepted-window-v1",
+  "status": "RAW_WINDOW_AUDIT_PASS_CANDIDATE_FROZEN",
+  "run_id": "rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80",
+  "endpoint_iteration": 22,
+  "window": [
+    3,
+    22
+  ],
+  "endpoint_state_sha256": "d3d47850e7e8f35581ea402ac0d117d45fdd981719f346c9944bcf09f5b68c02",
+  "auditor_metrics": {
+    "same_loop_Diff_iter22": 2.01e-08,
+    "d_q0_spin_spread": [
+      4.174415525e-07,
+      4.284925614e-07
+    ],
+    "physical_moment_spread": 2.9752873938e-07
+  },
+  "raw_window": {
+    "trace_csv_count": 20,
+    "six_P_OUT_ql_rows_each": true,
+    "six_POST_SCF_RADIAL_rows_each": true,
+    "last_kind": "etot_total",
+    "all_iteration_bound": true
+  },
+  "frozen_utc": "2026-10-21T17:17:43Z",
+  "evidence_files": [
+    {
+      "path": "support/Ni-bulk_out.nml",
+      "bytes": 10642,
+      "sha256": "280230f9616412cea4f6016d9d6cb1e18bcc37e82a6b2f815b5e0bd98366d7bd"
+    },
+    {
+      "path": "support/Ni-imp_out.nml",
+      "bytes": 10641,
+      "sha256": "a42774de195d11190be68af0661f66f75301226286031d37559a4fc3ebc4e43b"
+    },
+    {
+      "path": "support/Ni-imp_scf.nml",
+      "bytes": 10640,
+      "sha256": "bf2fda195e07388e247d9bd0e56cfbb686b726da6d0d3ee7bf2d5899af81a786"
+    },
+    {
+      "path": "support/fixed_u_trace.csv",
+      "bytes": 1339504,
+      "sha256": "b5beef0ca1c9823621a03ba8cb227c6ba33416021f3bf6883373e68066c727ed"
+    },
+    {
+      "path": "support/input.nml",
+      "bytes": 738,
+      "sha256": "602ebe9932f37ada880b1b083118048b38ee570704989a1393be5093abb02b3f"
+    },
+    {
+      "path": "support/input.nml",
+      "bytes": 738,
+      "sha256": "602ebe9932f37ada880b1b083118048b38ee570704989a1393be5093abb02b3f"
+    },
+    {
+      "path": "support/testrun.log",
+      "bytes": 730286,
+      "sha256": "4796a8260341f0b7af0028cdf0ff1437bfd6c34aa07bb41fffc97a41b7b23c18"
+    },
+    {
+      "path": "support/trace_state_manifest.jsonl",
+      "bytes": 84311,
+      "sha256": "31fea9b54e6c893469f445a4cd72daaf10c6248f68d01423a7490dbbc41bd10c"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0003_51074edd4703.csv",
+      "bytes": 1334071,
+      "sha256": "51074edd4703b94a86a7801bca2c8d422c1cd29f5ee4227efadce78fa54950f1"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0003_Ni-imp_scf_d310348a6eb3.nml",
+      "bytes": 10640,
+      "sha256": "d310348a6eb321822a6a00c14146d8ef02db7c8afe4a79495cd1f2c3e7a38b4c"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0004_Ni-imp_scf_49da1b316fd2.nml",
+      "bytes": 10642,
+      "sha256": "49da1b316fd2fd6e14cb695a79d3bfaf8301d6430229f876f969a95b3434c56b"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0004_f25188b9d8dd.csv",
+      "bytes": 1334071,
+      "sha256": "f25188b9d8dd783249ea50d4fe83727865ec651888657522cd91ca96318c80e3"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0005_Ni-imp_scf_fb56e8d8d6df.nml",
+      "bytes": 10638,
+      "sha256": "fb56e8d8d6df4ddd77aebe368621cf97a1176d81666b2ce43a15d74a7634e2e9"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0005_ea92fd11e4ad.csv",
+      "bytes": 1334071,
+      "sha256": "ea92fd11e4adb4af7bec16dfdeff48f2296037afe077dfbc5ae52660eca8b650"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0006_1fe0c938c643.csv",
+      "bytes": 1334071,
+      "sha256": "1fe0c938c6431cfa0090c54a4654af352928d103bc7225333f1cee700b163701"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0006_Ni-imp_scf_44eaa2f148f0.nml",
+      "bytes": 10641,
+      "sha256": "44eaa2f148f08c43e22e71ddf7da6a13fe25825abd8af90d03690b0794e77114"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0007_7594b1aa2f06.csv",
+      "bytes": 1334071,
+      "sha256": "7594b1aa2f060b658de6c7fd71baca94db85d9008e89e7ea85feac8c5ef5b76f"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0007_Ni-imp_scf_891a25d32cf1.nml",
+      "bytes": 10637,
+      "sha256": "891a25d32cf1bc630c6edc1a3c0561fb72751ba274fce4df22e355e96b246258"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0008_Ni-imp_scf_e76a910363fb.nml",
+      "bytes": 10637,
+      "sha256": "e76a910363fbe4749e344e18fb5a991a5d75c23d919f21756c10bcbdd730d74f"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0008_b6e8d6df2fa6.csv",
+      "bytes": 1334071,
+      "sha256": "b6e8d6df2fa64a3f731c57f4b6e6ef9d83d3a248be321930716e776193dbe7d4"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0009_Ni-imp_scf_966aeb8287ae.nml",
+      "bytes": 10637,
+      "sha256": "966aeb8287ae7b2b376ce4bad35dccad9de540ac828b9d79937c1a5fb8edafdd"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0009_a871bae96d57.csv",
+      "bytes": 1334071,
+      "sha256": "a871bae96d57dee764deeb69b224568da5347b5643d216b57b7736b1ca03498f"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0010_Ni-imp_scf_4f799bdb6d36.nml",
+      "bytes": 10639,
+      "sha256": "4f799bdb6d363702a4d55208829b9777aa5d76c3df9fdea13d1f0a9437d39378"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0010_d92d2fbf67d0.csv",
+      "bytes": 1339504,
+      "sha256": "d92d2fbf67d01fbab5b652b77f755b2b418a709b80ed137fd5f42f7d164d80c7"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0011_Ni-imp_scf_6b81ad18010f.nml",
+      "bytes": 10641,
+      "sha256": "6b81ad18010f98afbf5417a62b55ef7eb8f9dff6e34fa9c7bca0a3742205165f"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0011_d4065a15505b.csv",
+      "bytes": 1339504,
+      "sha256": "d4065a15505b529e3f342aa4b6c130c864b93fa26b90001a9cd361ccdd5830af"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0012_Ni-imp_scf_215bab8a7f57.nml",
+      "bytes": 10639,
+      "sha256": "215bab8a7f57b518f07629587c504f5fe19e3dcfa4f461ad2b20293418d43103"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0012_ea9ccf3f3731.csv",
+      "bytes": 1339504,
+      "sha256": "ea9ccf3f373107320806406b99e8602a7468cb7978f8c79a01b127d6577c5a60"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0013_0631af8e10cd.csv",
+      "bytes": 1339504,
+      "sha256": "0631af8e10cd84f08a4d02d6bb35b16a4ebaa5ce4f12abbb3a5dba2d6b0cc528"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0013_Ni-imp_scf_82c70d7589f8.nml",
+      "bytes": 10643,
+      "sha256": "82c70d7589f8c679e26722c6ee520a25cdecab932f7df420e167076e2e6c8f3b"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0014_776a57ef868b.csv",
+      "bytes": 1339504,
+      "sha256": "776a57ef868bb8ba4fc9a351a049d6272e2ee35844dd0f7f5208703a1ef3e397"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0014_Ni-imp_scf_8d153f78db57.nml",
+      "bytes": 10640,
+      "sha256": "8d153f78db57be42246828bc82566be099c395000173c58f0bf5e88329e6f6a8"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0015_172f3ac6bb12.csv",
+      "bytes": 1339504,
+      "sha256": "172f3ac6bb12fa207e7b3b4d8a16c2c06d6f73801da211c0205473d947eda5df"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0015_Ni-imp_scf_8ed9be1270e0.nml",
+      "bytes": 10643,
+      "sha256": "8ed9be1270e09ed87a0d82d1711bf095fe43f3e52d02f5f1e79c9cdd6524c5d5"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0016_2d104a8ff585.csv",
+      "bytes": 1339504,
+      "sha256": "2d104a8ff5858214ab910659ca77e4fbad2232bac95a366f407999d1f04f1c42"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0016_Ni-imp_scf_9fb16ab58262.nml",
+      "bytes": 10640,
+      "sha256": "9fb16ab582626a93880f999cd76f9db2328210915ccf9fed6e0ff3ac57708870"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0017_Ni-imp_scf_ce93248701e2.nml",
+      "bytes": 10640,
+      "sha256": "ce93248701e2b5227b6ed63fa5dd60145be4b8c03ed996b33249707005cbf925"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0017_f0a569d9ca9e.csv",
+      "bytes": 1339504,
+      "sha256": "f0a569d9ca9e254ebfca9bd73b8961140efa9fc66dac756f9df864e2f2b011ca"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0018_Ni-imp_scf_8647b7b8094c.nml",
+      "bytes": 10639,
+      "sha256": "8647b7b8094c6c99da3e9b59315c981f691cb6770bec5cff5f7f1d31284ff6f7"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0018_b72f1104e4f1.csv",
+      "bytes": 1339504,
+      "sha256": "b72f1104e4f1fb0172a060ffcf23a74df5027a8a46a2eaeb2a55108d0e066fdc"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0019_421ee1ae74d6.csv",
+      "bytes": 1339504,
+      "sha256": "421ee1ae74d697a3da3b3bdf5bb87e8e561232b97a9596be349410c0c2301c9c"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0019_Ni-imp_scf_e408c359f897.nml",
+      "bytes": 10639,
+      "sha256": "e408c359f897be874845eca50f0a823247839102d84c28b5ff93cb0284c2e792"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0020_7adb382648c8.csv",
+      "bytes": 1339504,
+      "sha256": "7adb382648c88e64b670971949fd537a6464019a4d68f4e97eac97a339bac16a"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0020_Ni-imp_scf_760961315f91.nml",
+      "bytes": 10642,
+      "sha256": "760961315f9143b20d166a0741396c5cba8112f886c8af34a4c98d2c0079d29c"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0021_5c080e335e9a.csv",
+      "bytes": 1339504,
+      "sha256": "5c080e335e9a234801df46f580486288bb3a432ec3dcb9fa7feca8dc4a1a9bde"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0021_Ni-imp_scf_a907eca59935.nml",
+      "bytes": 10643,
+      "sha256": "a907eca599358e631ec810ac19a96d8f62553309c188fceb190f845671430c17"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0022_2a9fac366cf6.csv",
+      "bytes": 1339504,
+      "sha256": "2a9fac366cf65132bf6cbc3f3fee99f3884b53896f6d637f0f3fa0759194b096"
+    },
+    {
+      "path": "trace_window/rd_ni_i_u3j07_spectral_from_bulk_spectral_u3_rc80_traceiter0022_Ni-imp_scf_d3d47850e7e8.nml",
+      "bytes": 10639,
+      "sha256": "d3d47850e7e8f35581ea402ac0d117d45fdd981719f346c9944bcf09f5b68c02"
+    }
+  ]
+}

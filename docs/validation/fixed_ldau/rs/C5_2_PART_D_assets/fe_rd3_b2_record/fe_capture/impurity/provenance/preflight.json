@@ -1,0 +1,223 @@
+{
+  "analysis": {
+    "method": "For each captured RS_GREEN energy point, use source basis_map (l,m,spin), sum diagonal Im(G)/(-pi) over d orbitals m for each spin, then report maximum absolute bulk/impurity difference per spin and across both. The parser requires complete n\u00d7n G matrices, complete l<=2 spin basis, and exact same energy grid; if grids differ it returns NOT_COMPUTED and does not interpolate. Source formula: source/bands.f90 calculate_dos, `dosial = -aimag(g0(j,j,...))/pi`.",
+    "parser_path": "/private/tmp/c52-fe-rd3-capture-preflight/analyze_d_ldos.py",
+    "parser_sha256": "2507518b2e8f259aa29570a33adc3fe6f6e2e950583756266f0ae06499bd906a",
+    "smoke": {
+      "command": "/opt/homebrew/opt/python@3.11/bin/python3.11 /private/tmp/c52-fe-rd3-capture-preflight/analyze_d_ldos.py /private/tmp/c52-c2-stage/c3_run_debug_i1/records.csv /private/tmp/c52-c2-stage/c3_run_debug_i1/records.csv --output /private/tmp/c52-fe-rd3-capture-preflight/analyzer_self_smoke.json",
+      "f90nml_version": "1.4.4",
+      "input_c3_records_sha256": "d45cc08bc72752b167bf244fcf8ffeda8a9658e223a5321876d04f486f9722d4",
+      "output_path": "/private/tmp/c52-fe-rd3-capture-preflight/analyzer_self_smoke.json",
+      "output_sha256": "de26523349a36ce26badac2a93147ae187b05888e55d399569bd5193401c3cfa",
+      "status": "HARNESS_ONLY_IDENTICAL_INPUT_SELF_COMPARISON; NOT SCIENTIFIC FE RESULT"
+    }
+  },
+  "binary": {
+    "binary_role": "single common RD1 Release binary for both diagnostic captures; source formulas and production inputs remain unchanged",
+    "build_manifest": "/private/tmp/c5-rd1-frozen/4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f",
+    "build_source_head": "683eff937241a463d2dacb395485d6b7c0b43264 (RD1 release build)",
+    "mode": "0555",
+    "path": "/private/tmp/c5-rd1-frozen/4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f/rslmto.x",
+    "sha256": "4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f",
+    "source_identity": {
+      "bands_f90_path": "/Users/andersb/Jobb/rslmto_fable_v4b/source/bands.f90",
+      "bands_f90_sha256": "0f130331ded7fea3d12edd2a716c04f1473855a9b89ccfbf70fdafa73a38724e",
+      "cmake_cache_path": "/private/tmp/c5-rd1-release-build/CMakeCache.txt",
+      "cmake_cache_sha256": "1d9cfd811da21ec7392e3019322a812b04ba5c8bf17be7cd717c43ff1a9232f1",
+      "commit": "683eff937241a463d2dacb395485d6b7c0b43264",
+      "rd1_provenance_path": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/RD1_unit_gate/RD1_PROVENANCE.json",
+      "rd1_provenance_sha256": "5cb639a0c30aa0ec67eb1513b98f98717c2f37a126a55c094850f6fae412f9c1",
+      "rd1_source_manifest_path": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/RD1_unit_gate/RD1_SOURCE_MANIFEST.json",
+      "rd1_source_manifest_sha256": "b2e6726fe407689b42b033db6536b3053e2f742d2523c32ffe21ba18fd07af57",
+      "self_f90_path": "/Users/andersb/Jobb/rslmto_fable_v4b/source/self.f90",
+      "self_f90_sha256": "d8ca2650b871c051c4023298300c8727f2199260948f9cfdaf6faa516a9c3b02",
+      "tree": "76bba643134258c389217efadb699888701ec2f3"
+    }
+  },
+  "comparison_scope": "Record-only Fe RD3(a' ): no U=0 control means no U>0/U0 ratio. Bulk B and impurity I EF policies differ by program defaults; both resolve to serialized -0.085152 Ry at six decimals, without claiming higher-precision EF identity.",
+  "endpoint": {
+    "accepted_endpoint_id": "fe_u38j11_local_i:trace20:window1-20",
+    "accepted_package": "/private/tmp/c52-fe-u38-impurity-record/local/continuation_beta005/candidate_window_01_20",
+    "accepted_package_manifest": "/private/tmp/c52-fe-u38-impurity-record/local/continuation_beta005/candidate_window_01_20/SHA256SUMS",
+    "accepted_package_manifest_sha256": "51801cf274e95a6d28c8c171172e9ef9a1ea94cca705dc2238aff7fa2dd5aa01",
+    "checkpoint_path": "/private/tmp/c52-fe-u38-impurity-record/local/continuation_beta005/candidate_window_01_20/state/c52_fe_u38j11_local_i_beta005_from_terminal100_traceiter0020_Fe-imp_scf_cb4b3b2f2eca.nml",
+    "checkpoint_sha256": "cb4b3b2f2eca12d48030e6e2447a619bbe53ed8f2ba61988818fde64dda165aa",
+    "host_restart_mapping": {
+      "bulk_accepted_state_path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/accepted_candidate_73_92/iter0092_Fe_scf.nml",
+      "bulk_accepted_state_sha256": "6e93e4141e8a84b1d4c3bac0d1f62997bf3c702e56e923f5c043e7becb86d16b",
+      "impurity_run_alias_path": "/private/tmp/c52-fe-u38-impurity-record/local/continuation_beta005/immutable/Fe-bulk_out.nml",
+      "impurity_run_alias_sha256": "1599d4f9da34163e2940396ce981f75124ba6ffb62fbf98a237d59c5e970e9e7",
+      "relation": "Exact bytes after changing only the element symbol from Fe to Fe-bulk; capture uses original validated Fe-bulk_out alias, no potential-array/metadata surgery."
+    },
+    "trace_path": "/private/tmp/c52-fe-u38-impurity-record/local/continuation_beta005/candidate_window_01_20/trace/c52_fe_u38j11_local_i_beta005_from_terminal100_traceiter0020_1646f4dcfd4a.csv",
+    "trace_sha256": "1646f4dcfd4a713cfc5eff3412ca1391a7fe587286f02ea573c695e765a3babc"
+  },
+  "execution": {
+    "blas_openmp_numexpr_caps": 1,
+    "command_template": "C52_FE_LDOS_CAPTURE_AUTHORIZED=1 /private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/collector/launch_capture.sh",
+    "cwd": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/run",
+    "lifecycle": "wrapper records its PID and actual solver PID, waits for solver, saves exit status; full CSV and stdout retained. No readiness watcher required for this one-step bounded diagnostic, but raw trace is solver-written.",
+    "no_solver_launched": true,
+    "omp_num_threads": 1,
+    "result_files": {
+      "actual_exit": "run/exit_code.txt",
+      "actual_solver_pid": "run/solver.pid",
+      "lifecycle": "run/lifecycle.txt",
+      "raw_full_trace": "run/records.csv",
+      "stdout": "run/testrun.log"
+    },
+    "rslmto_omp_threads_serial": 1,
+    "safety": "Hash-verifies immutable/run copies and the frozen executable; refuses stale outputs or <1GiB disk; captures wrapper/actual solver PID and waits for exact child exit status. Authorization variable is absent from this prepared-only environment.",
+    "wrapper_path": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/collector/launch_capture.sh",
+    "wrapper_sha256": "d181373287486790c57ae6a5518971c7f98f44169ba97bbb77d00b63af4c79da"
+  },
+  "input": {
+    "element_inputs": [
+      {
+        "immutable_mode": "0444",
+        "immutable_path": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/immutable/Fe-bulk.nml",
+        "role": "Fe-bulk.nml",
+        "run_mode": "0644",
+        "run_path": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/run/Fe-bulk.nml",
+        "run_sha256": "30827a14531045ee4f6543ed8bf86b3a15f6af426adb33b32059bc033b436c5f",
+        "sha256": "30827a14531045ee4f6543ed8bf86b3a15f6af426adb33b32059bc033b436c5f",
+        "source_path": "/private/tmp/c52-fe-u38-impurity-record/local/continuation_beta005/immutable/Fe-bulk.nml",
+        "source_sha256": "30827a14531045ee4f6543ed8bf86b3a15f6af426adb33b32059bc033b436c5f"
+      },
+      {
+        "immutable_mode": "0444",
+        "immutable_path": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/immutable/Fe-imp.nml",
+        "role": "Fe-imp.nml",
+        "run_mode": "0644",
+        "run_path": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/run/Fe-imp.nml",
+        "run_sha256": "376ad9793e29f02a0126c8964f68e1eeef7d7f63f2552cdcb113b447b65453b0",
+        "sha256": "376ad9793e29f02a0126c8964f68e1eeef7d7f63f2552cdcb113b447b65453b0",
+        "source_path": "/private/tmp/c52-fe-u38-impurity-record/local/continuation_beta005/immutable/Fe-imp.nml",
+        "source_sha256": "376ad9793e29f02a0126c8964f68e1eeef7d7f63f2552cdcb113b447b65453b0"
+      }
+    ],
+    "immutable_capture_deck": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/immutable/input.nml",
+    "immutable_sha256": "0cf94b6ecd4c87f33855cab80868962128a43acc915212eb43a38daec721fbca",
+    "only_textual_input_change": "self.nstep 200 -> 1",
+    "origin_path": "/private/tmp/c52-fe-u38-impurity-record/local/continuation_beta005/immutable/input.nml",
+    "origin_sha256": "8ddab50977516d11b653b97f02a865042a161942931f63386778d85be54bdc01",
+    "restart_inputs": [
+      {
+        "immutable_mode": "0444",
+        "immutable_path": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/immutable/Fe-bulk_out.nml",
+        "role": "Fe-bulk_out.nml",
+        "run_mode": "0644",
+        "run_path": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/run/Fe-bulk_out.nml",
+        "run_sha256": "1599d4f9da34163e2940396ce981f75124ba6ffb62fbf98a237d59c5e970e9e7",
+        "sha256": "1599d4f9da34163e2940396ce981f75124ba6ffb62fbf98a237d59c5e970e9e7",
+        "source_path": "/private/tmp/c52-fe-u38-impurity-record/local/continuation_beta005/immutable/Fe-bulk_out.nml",
+        "source_sha256": "1599d4f9da34163e2940396ce981f75124ba6ffb62fbf98a237d59c5e970e9e7"
+      },
+      {
+        "immutable_mode": "0444",
+        "immutable_path": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/immutable/Fe-imp_out.nml",
+        "role": "Fe-imp_out.nml",
+        "run_mode": "0644",
+        "run_path": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/run/Fe-imp_out.nml",
+        "run_sha256": "cb4b3b2f2eca12d48030e6e2447a619bbe53ed8f2ba61988818fde64dda165aa",
+        "sha256": "cb4b3b2f2eca12d48030e6e2447a619bbe53ed8f2ba61988818fde64dda165aa",
+        "source_path": "/private/tmp/c52-fe-u38-impurity-record/local/continuation_beta005/candidate_window_01_20/state/c52_fe_u38j11_local_i_beta005_from_terminal100_traceiter0020_Fe-imp_scf_cb4b3b2f2eca.nml",
+        "source_sha256": "cb4b3b2f2eca12d48030e6e2447a619bbe53ed8f2ba61988818fde64dda165aa"
+      }
+    ],
+    "run_deck": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/run/input.nml",
+    "run_sha256": "0cf94b6ecd4c87f33855cab80868962128a43acc915212eb43a38daec721fbca",
+    "schema_source_script": "/private/tmp/c52-c-private/fortran_namelist_schema.py",
+    "schema_source_script_sha256": "d8bea2b4825e443c81322d37e6b3ead324cde69fca32ef8096ddb9739c06e953",
+    "schema_validation": {
+      "groups": [
+        "atoms",
+        "calculation",
+        "control",
+        "energy",
+        "hamiltonian",
+        "lattice",
+        "mix",
+        "self"
+      ],
+      "member_counts": {
+        "atoms": 2,
+        "calculation": 2,
+        "control": 5,
+        "energy": 4,
+        "hamiltonian": 4,
+        "lattice": 10,
+        "mix": 2,
+        "self": 3
+      },
+      "path": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/immutable/input.nml",
+      "schema_valid": true
+    },
+    "schema_validation_path": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/provenance/schema_validation.json",
+    "schema_validation_sha256": "63fbc3adbdb049df283ffc217104a26a1905469a7393212a6cf3cc292c3e3784",
+    "validation_command": "/opt/homebrew/opt/python@3.11/bin/python3.11 /private/tmp/c52-fe-rd3-capture-preflight/prepare.py"
+  },
+  "no_claims": [
+    "no solver launch",
+    "no d-LDOS result yet",
+    "no RD3 gate or ratio",
+    "no production/source modification"
+  ],
+  "purpose": "Obtain endpoint-specific full RS Green energy grid and P_OUT ql from the exact accepted recursive state; derive d-LDOS on the captured grid. This is a diagnostic capture, not another converged SCF or an acceptance gate.",
+  "run_id": "c52_fe_u38_imp_endpoint20_full_green_i1",
+  "schema": "c52-fe-rd3-one-step-full-green-capture-preflight-v1",
+  "settings": {
+    "EF_value_Ry": -0.085152,
+    "U_J_eV": [
+      3.8,
+      1.1
+    ],
+    "backend": "RS",
+    "calctype": "I",
+    "energy_window_Ry": [
+      -1.0,
+      0.5
+    ],
+    "fermi_policy": "calctype-I default fixes EF to host EF at six-decimal serialized precision",
+    "lld": 21,
+    "lmax": 2,
+    "nsp": 1,
+    "only_deck_control_change": "nstep is reduced to 1; no other namelist member changed",
+    "radial_mode": "local",
+    "rc": 80,
+    "recur": "block"
+  },
+  "status": "PREPARED_ONLY_NO_SOLVER_LAUNCHED",
+  "system": {
+    "accepted_endpoint_id": "fe_u38j11_local_i:trace20:window1-20",
+    "accepted_package": "/private/tmp/c52-fe-u38-impurity-record/local/continuation_beta005/candidate_window_01_20",
+    "accepted_package_manifest": "/private/tmp/c52-fe-u38-impurity-record/local/continuation_beta005/candidate_window_01_20/SHA256SUMS",
+    "calctype": "I",
+    "checkpoint_path": "/private/tmp/c52-fe-u38-impurity-record/local/continuation_beta005/candidate_window_01_20/state/c52_fe_u38j11_local_i_beta005_from_terminal100_traceiter0020_Fe-imp_scf_cb4b3b2f2eca.nml",
+    "comparison_id": "Fe RD3(a') impurity U3.8/J1.1",
+    "ef": -0.085152,
+    "fermi_policy": "calctype-I default fixes EF to host EF at six-decimal serialized precision",
+    "trace_path": "/private/tmp/c52-fe-u38-impurity-record/local/continuation_beta005/candidate_window_01_20/trace/c52_fe_u38j11_local_i_beta005_from_terminal100_traceiter0020_1646f4dcfd4a.csv",
+    "uj": [
+      3.8,
+      1.1
+    ]
+  },
+  "trace": {
+    "d_ldos_definition": "For each spin and energy grid point, sum the five diagonal l=2 Green-function elements over m using the established RS Green basis_map; compute the corresponding spectral LDOS using the repository\u2019s existing sign/normalization convention. Compare only if both runs expose matching energy grids; no interpolation/floor/acceptance tolerance is introduced by this preflight.",
+    "env": {
+      "RSLMTO_FIXED_U_RUN_ID": "c52_fe_u38_imp_endpoint20_full_green_i1",
+      "RSLMTO_FIXED_U_TRACE": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/run/records.csv",
+      "RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY": "1",
+      "RSLMTO_FIXED_U_TRACE_ITERATION": "1",
+      "RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY": "0",
+      "RSLMTO_FIXED_U_TRACE_QL_ONLY": "0"
+    },
+    "purpose_rows": [
+      "basis_map/RS_GREEN",
+      "green_function/RS_GREEN",
+      "ql/P_OUT",
+      "radial replay rows"
+    ]
+  }
+}

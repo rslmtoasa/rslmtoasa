@@ -1,0 +1,15 @@
+{
+  "count_in_derived": 1,
+  "count_in_source": 1,
+  "derived_path": "/private/tmp/c52-rd-ni-impurity-u3j07/immutable/Ni-bulk_U3_endpoint74_rekeyed.nml",
+  "derived_sha256": "428dfff8800ca5064a1c91ff7ba1a47d412cfd33e5a7febb04703b89156bce8c",
+  "derived_symbol": "Ni-bulk",
+  "exact_replacement": "symbol = 'Ni-imp' -> symbol = 'Ni-bulk'",
+  "parsed_all_groups_equal_except_element_symbol": true,
+  "record_type": "single_field_label_rekey_proof",
+  "reverse_replacement_restores_source_bytes": true,
+  "role": "derived host alias Ni-bulk_out.nml; original accepted state is also used byte-identically as Ni-imp_out.nml",
+  "source_path": "/private/tmp/c52-rd-ni-impurity-u3j07/immutable/Ni-bulk_U3_endpoint74_original.nml",
+  "source_sha256": "bc3340a8ad20d2467eaeccd43929a659d4cfff2a9f28b748fb6554edc4ee3ac9",
+  "source_symbol": "Ni-imp"
+}

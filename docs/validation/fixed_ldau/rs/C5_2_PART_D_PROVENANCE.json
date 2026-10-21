@@ -41,24 +41,27 @@
     "debug_replay_byte_identical": true,
     "adoption": false,
     "proposal": "Future pre-registered non-degenerate spin-asymmetric state selection addresses spin-swap identifiability only; scalar-shift failure remains unresolved and its allowance is unchanged.",
-    "independent_items_continue": "C5.3 §2.5 (a)-(d) clause; no criterion/tolerance changes."
+    "independent_items_continue": "C5.3 \u00a72.5 (a)-(d) clause; no criterion/tolerance changes."
   },
   "RD3": {
-    "status": "IN_PROGRESS; independent evidence retained; dependent Ni KS gates unevaluated",
-    "comparisons": {
-      "a": "RS host prerequisites present; impurity comparison remains to be completed/reported",
-      "a_prime": "Fe RECORD work continues independently",
-      "b": "Ni KS-bulk gate UNEVALUATED: U0 and U3 KS host endpoints unavailable after finite B1 guards",
-      "b_prime": "Fe RECORD work continues independently",
-      "c": "NOT_STARTED",
-      "d": "Ni spectral bulk accepted at iteration 47 after independent raw-capture audit; RD3(d) impurity comparison NOT_RUN."
-    }
+    "status": "PARTIAL_RECORD; gates unevaluated where controls/unavailable endpoints prevent them",
+    "ni_record": "C5_2_PART_D_assets/ni_rd3_ni_record/RD3_NI_RECORD.json",
+    "ni_record_sha256": "c8bcfacc67a27b3ecf797787683ca5c8749ec42cc6115d41da3286a904ccd242",
+    "fe_b2_record": "C5_2_PART_D_assets/fe_rd3_b2_record/RD3_FE_B2_RECORD.json",
+    "fe_b2_record_sha256": "455d9ea1027f024ab50ea978e494a999dff8d294a9648c569de701176e6b0862",
+    "a": "UNEVALUATED; three U0 local control mapping-fatal records; no ratio",
+    "b": "UNEVALUATED; required KS hosts ended at finite B1 capacity guards",
+    "c": "NOT_RUN",
+    "d": "Ni local and spectral RECORD; impurity windows 4-23 and 3-22, spectral accepted; no U0 ratio and no endpoint-bound LDOS maximum. Fe local candidate pending audit; one-step captures exit 0 but both Green and orbital grids differ, so LDOS not computed. B2FeCo seed inventory found no accepted restart; not evaluated."
   },
   "RD4": {
-    "status": "NOT_MEASURED",
+    "status": "PREPARED_NOT_RUN",
     "candidate_energy_comparisons": "NOT_RUN",
     "hellmann_feynman_derivatives": "NOT_RUN",
-    "routing_decision": "NOT_ADOPTED"
+    "routing_decision": "NOT_ADOPTED",
+    "w1_snapshot_sha256": "a422c31398cbc6f54f4fa26bb8b2a1eaf2647c43d52a9764bfb11a99f970c825",
+    "focused_unit": "PASS; RD4_BUILD_PREFLIGHT 9a7a098dfc59daad01d38c4d517032902c98eeb8648835d9c2335f64000a7045; one registered unit execution only",
+    "execution_preflight": "PENDING"
   },
   "RD5": {
     "status": "NOT_STARTED",
@@ -125,13 +128,13 @@
       "d_q0_spin2_spread": "3.818701053e-7",
       "physical_q0_moment_spread": "2.1492751976e-7",
       "endpoint_state_sha256": "a42774de195d11190be68af0661f66f75301226286031d37559a4fc3ebc4e43b",
-      "recipe": "fcc Ni, block rc80, U=3 eV, J=0.7 eV; 100 captures, first §2.1 passing window ends at 47",
+      "recipe": "fcc Ni, block rc80, U=3 eV, J=0.7 eV; 100 captures, first \u00a72.1 passing window ends at 47",
       "raw_audit": "PASS; auditor independently recomputed P_OUT ql spreads, same-loop Diff, and endpoint hash",
       "rd3d_comparison": "NOT_RUN"
     }
   },
   "rd2_dependent_impurity_solver_runs": 1,
-  "rd2_dependent_impurity_campaign_status": "RD2 frozen replay completed and measured FAIL after exactly one byte-identical diagnostic replay; no adoption. Continue independent items under C5.3 §2.5.",
+  "rd2_dependent_impurity_campaign_status": "RD2 frozen replay completed and measured FAIL after exactly one byte-identical diagnostic replay; no adoption. Continue independent items under C5.3 \u00a72.5.",
   "production_energy_or_default_changes": false,
-  "next_step": "Continue independent Stage RD items; Ni spectral host is accepted at window 28–47, and RD3(d) impurity comparison remains to be run; RD2 remains FAIL with no adoption."
+  "next_step": "Audit the frozen RD4 W1 execution preflight and RD3 staged scope; no W1 solver runs until audit and root authorization. RD2 remains FAIL/no adoption."
 }

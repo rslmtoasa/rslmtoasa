@@ -1,0 +1,113 @@
+{
+  "accepted_endpoint_source": "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_u0_bulk_rc80_host/accepted/iter0024_state.nml.gz",
+  "accepted_seed_raw_sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a",
+  "baseline_commit": "8b8f7ef7bfc026fd34a56b37a3ad3281fd0a6832",
+  "binary": {
+    "build_cache_sha256": "d1fae4609de8f500177931a5c4c9a56122396d5a889bb21c6fe106fa98e6295f",
+    "build_manifest_path": "/private/tmp/c5-clean8b-release-build/CMakeCache.txt",
+    "build_manifest_sha256": "d1fae4609de8f500177931a5c4c9a56122396d5a889bb21c6fe106fa98e6295f",
+    "library_flags_sha256": "e2d1329fd19ec6ddfb5362d210c172db9b281d57340eb735560087bf52facf0b",
+    "library_link_sha256": "932d874eff7ff9cda34ee8700da5a43ca8e55e8325e270018fa66172d8eec77b",
+    "main_flags_sha256": "ced6f164295c4d07e23afaa541eb15cecc329c8720c6ffbefc41e704b5325892",
+    "main_link_sha256": "baf888a39a9a5673e6b7e60f57f3289e00c1a78048e1a2fdea8a58deb7f82332",
+    "mode": "0555",
+    "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/frozen/clean8b/2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc/rslmto.x",
+    "sha256": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc"
+  },
+  "build_cache": {
+    "path": "/private/tmp/c5-clean8b-release-build/CMakeCache.txt",
+    "sha256": "d1fae4609de8f500177931a5c4c9a56122396d5a889bb21c6fe106fa98e6295f"
+  },
+  "clean8b_source_snapshot": {
+    "commit": "8b8f7ef7bfc026fd34a56b37a3ad3281fd0a6832",
+    "git_archive_path": "/private/tmp/c52-ni-clean8b-source-8b8f7ef.tar",
+    "git_archive_sha256": "cb39ff944b042483e38547ace6564bb8a2ee057b3449c2abcd3e52c5f7c66947",
+    "manifest_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/provenance/clean8b_source_manifest.json",
+    "method": "immutable git archive plus SHA256 for every extracted tracked file",
+    "path": "/private/tmp/c52-ni-clean8b-source-8b8f7ef",
+    "sha256_manifest": "436f5b0992420c8f68ec0bc2dae2f9485ea23f5c1490e80a2e496cddce76ade9",
+    "tracked_file_count": 1811
+  },
+  "current_head": "683eff937241a463d2dacb395485d6b7c0b43264",
+  "exact_settings": {
+    "J_eV": 0,
+    "U_eV": 0,
+    "beta": 0.1,
+    "calctype": "I",
+    "conv_thr": 1e-30,
+    "energy_window_Ry": [
+      -1.0,
+      0.5
+    ],
+    "fixed_EF_Ry": -0.061141,
+    "lld": 21,
+    "lmax": 2,
+    "mixer": "Broyden",
+    "nsp": 1,
+    "nstep": 200,
+    "radial_mode": "explicit local",
+    "rc": 80,
+    "recursion": "block",
+    "use_kspace": false
+  },
+  "expected_outcome": "observe same-deck clean8b compatibility/termination only; if metadata unsupported, classify INVALID_COMPARABILITY. Do not alter deck, seed metadata, mode or backend.",
+  "input": {
+    "immutable_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/immutable/input.nml",
+    "same_as_RD1_U0_control_deck": true,
+    "sha256": "008bce3b5160ef76b40201b2d03797db346da9eef9a07046b5150907b90538b7",
+    "working_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/run/input.nml"
+  },
+  "launcher": {
+    "authorization_required": true,
+    "command": "C52_NI_U0_TRIAGE_CLEAN8B_AUTHORIZED=1 /private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/collector/launch.sh",
+    "disk_floor_bytes": 1073741824,
+    "disk_guard_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/collector/disk_guard.sh",
+    "disk_guard_sha256": "3049362e51a3165866c73bb997667a0c74662fc673328085b2636c25dae74cdd",
+    "environment": {
+      "BLIS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "4",
+      "OPENBLAS_NUM_THREADS": "1",
+      "RSLMTO_OMP_THREADS_SERIAL": "4",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    },
+    "no_launch_authorized": true,
+    "path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/collector/launch.sh",
+    "sha256": "cc1e2998c23baeaeaefc38b7c38e0e0d70619fb09603157f3d86b979c199ab72",
+    "watcher_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/collector/watch_trace_and_state.py",
+    "watcher_sha256": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be"
+  },
+  "namelist_schema": {
+    "path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/provenance/schema_validation.json",
+    "result": "PASS all eight input/restart groups/members against clean baseline source declarations",
+    "sha256": "12aeba1befde622955f413cf9840b7a603ba82b984ffdc63fd9e50becdc52956"
+  },
+  "purpose": "\u00a72.4 same-deck comparison after RD1 Debug U0 impurity fatal; exact input and accepted U0 restart bytes are unchanged; no compatibility repair or metadata surgery.",
+  "repository": "/Users/andersb/Jobb/rslmto_fable_v4b",
+  "restart_pair": {
+    "Ni-bulk.nml": {
+      "immutable_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/immutable/Ni-bulk.nml",
+      "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+      "working_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/run/Ni-bulk.nml"
+    },
+    "Ni-bulk_out.nml": {
+      "immutable_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/immutable/Ni-bulk_out.nml",
+      "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4",
+      "working_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/run/Ni-bulk_out.nml"
+    },
+    "Ni-imp.nml": {
+      "immutable_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/immutable/Ni-imp.nml",
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+      "working_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/run/Ni-imp.nml"
+    },
+    "Ni-imp_out.nml": {
+      "immutable_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/immutable/Ni-imp_out.nml",
+      "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a",
+      "working_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/run/Ni-imp_out.nml"
+    }
+  },
+  "run_id": "c52_ni_u0_impurity_clean8b_same_input",
+  "schema": "c5_3_ni_u0_impurity_clean8b_triage_preflight_v1",
+  "status": "PREPARED_ONLY_NOT_LAUNCHED"
+}

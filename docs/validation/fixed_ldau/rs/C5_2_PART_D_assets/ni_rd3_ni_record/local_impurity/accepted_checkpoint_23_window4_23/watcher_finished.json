@@ -1,0 +1,9 @@
+{
+  "captured_entries": 200,
+  "ended_local": "2026-10-21T09:50:48.081077+02:00",
+  "manifest_path": "/private/tmp/c52-rd-ni-impurity-u3j07/captures/trace_state_manifest.jsonl",
+  "record_type": "read_only_trace_watcher_stop",
+  "run_id": "rd_ni_i_u3j07_local_from_rs_bulk_u3_rc80",
+  "solver_pid": 74569,
+  "stop_requested": false
+}

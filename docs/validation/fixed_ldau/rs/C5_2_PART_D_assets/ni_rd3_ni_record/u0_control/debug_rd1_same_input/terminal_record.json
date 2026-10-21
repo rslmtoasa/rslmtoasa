@@ -1,0 +1,51 @@
+{
+  "schema": "c5_3_ni_u0_debug_triage_terminal_record_v1",
+  "run_id": "c52_ni_u0_impurity_rd1_debug_same_input",
+  "preflight_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/provenance/preflight.json",
+  "preflight_sha256": "a1d313b854536280ca04270b491f13bf5dbd2bd2d95f292201751ce0ba76b907",
+  "frozen_executable_path": "/private/tmp/c52-rd-ni-u0-triage/debug_frozen/7169cba37c47318a5925f4335b39987755e2dee3001fa2a528af99ea4abe33c0/rslmto.x",
+  "frozen_executable_sha256": "7169cba37c47318a5925f4335b39987755e2dee3001fa2a528af99ea4abe33c0",
+  "launch_command": "C52_NI_U0_TRIAGE_DEBUG_AUTHORIZED=1 /private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/collector/launch.sh",
+  "foreground_exec_session_id": 36682,
+  "pids": {
+    "launcher": 37037,
+    "watcher": 37107,
+    "solver": 37124
+  },
+  "lifecycle_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/run/lifecycle.txt",
+  "exit_code": 1,
+  "terminal_status": "same fatal reproduced before any complete SCF trace entry; no endpoint",
+  "fatal": {
+    "source": "source/bands.f90:1269",
+    "text": "Unable to map local d-shell Hubbard potential."
+  },
+  "startup_observed": [
+    "restart loaded from ./Ni-bulk_out.nml",
+    "restart loaded from ./Ni-imp_out.nml",
+    "HUBBARD_RADIAL_MODE mode=local source=explicit use_kspace=.false. local_energy_adopted=.false.",
+    "Perform recursion at step 1",
+    "Fast block recursion on progress for atom 1",
+    "Fixed Fermi energy: -0.061141"
+  ],
+  "capture": {
+    "watcher_finished_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/captures/watcher_finished.json",
+    "captured_entries": 0,
+    "trace_state_manifest_entries": 0
+  },
+  "process_absence_check": {
+    "command": "ps -axo pid,ppid,stat,command | rg '(^| )(37037|37107|37124)( |$)|c52-rd-ni-u0-triage/debug_rd1_same_input' | rg -v 'rg ' || true",
+    "stdout": "",
+    "shell_exit_code": 0,
+    "method": "escalated read-only targeted process check after launcher returned"
+  },
+  "immutable_input_sha256": "008bce3b5160ef76b40201b2d03797db346da9eef9a07046b5150907b90538b7",
+  "restart_sha256": {
+    "Ni-bulk_out.nml": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4",
+    "Ni-imp_out.nml": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+  },
+  "raw_log_sha256": "56cc05377e8ebd8062fb9c2bf45ea74b3e2fe2d903a21d8d0bc0a7f2d1dda303",
+  "run_output_manifest_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/provenance/run_output_manifest.json",
+  "run_output_manifest_sha256": "684a66942787613d8d55fc9e273514d199cf39d124a9b0ec0e551108ff4ba487",
+  "source_modified": false,
+  "interpretation": "This is a measured same-deck Debug bounds replay of the prior Release fatal. It does not attribute the cause. Clean8b preflight remains unlaunched."
+}
