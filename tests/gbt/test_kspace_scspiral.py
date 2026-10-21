@@ -11,7 +11,7 @@
             negative on both local axes (finite differences, b = 1e-4 Ry). Bug: a sign error of the field, or a conjugation error in the
             Bx -+ i By term (chi_xx and chi_yy of opposite sign).
   symmetry  S7: E(q) = E(-q) (weak in centrosymmetric bcc) and E(q + G) = E(q), G = (1,1,0) 2pi/alat (even mesh), constrained SCF at theta = 30 deg.
-  guards    the k-space GBT constraint guards stop the run with their message (orthogonal order; a target other than (0,0,1)).
+  guards    the k-space GBT constraint guard stops the run with its message (a target other than (0,0,1)).
 usage: test_kspace_scspiral.py <mode> <rslmto.x> <scratch directory>"""
 import re
 import shutil
@@ -128,8 +128,7 @@ def mode_symmetry(binary, scratch):
 
 
 def mode_guards(binary, scratch):
-    cases = (("orthogonal", dict(order="orthogonal"), "does not support constraining fields"),
-             ("target", dict(target=(0.0, 1.0, 0.0)), "needs constraints_mom_ref = 0, 0, 1"))
+    cases = (("target", dict(target=(0.0, 1.0, 0.0)), "needs constraints_mom_ref = 0, 0, 1"),)
     ok = True
     for tag, kw, message in cases:
         d = deck(scratch / tag, nsp=3, q=Q, theta=30.0, constrained=True, nstep=1, **kw)

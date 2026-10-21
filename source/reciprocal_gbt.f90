@@ -24,8 +24,7 @@ contains
       real(rp), allocatable :: ccd(:, :, :)
       real(rp) :: ccd_full(norb, 0:2), lam
       complex(rp), allocatable :: obar(:, :, :), enu(:, :, :), wunit(:, :, :), czero3(:, :, :)
-      complex(rp) :: blk(nb, nb)
-      complex(rp), allocatable :: cmat(:, :)
+      complex(rp), allocatable :: fieldblk(:, :, :), cmat(:, :)
       real(rp), allocatable :: cvec(:), dvec(:), gvec(:)
       real(rp) :: wow
       integer :: lmax_o, l, o, sp, iv
@@ -53,8 +52,8 @@ contains
          call g_logger%fatal('k-space GBT/orthogonal does not support intersite V.', __FILE__, __LINE__)
       if (this%hamiltonian%local_axis) call g_logger%fatal('k-space GBT/orthogonal does not support local_axis.', __FILE__, __LINE__)
       if (this%control%constraints_enable) then   ! the field is stored per site and applied per type: they must coincide
-         if (this%use_orthogonal) &
-            call g_logger%fatal("k-space GBT/orthogonal: kspace_ham_order='orthogonal' does not support constraining fields.", __FILE__, __LINE__)
+         if (this%use_orthogonal .and. .not. gbt_rep) &
+            call g_logger%fatal("k-space GBT/orthogonal: kspace_ham_order='orthogonal' does not support constraining fields outside gbt_single_q.", __FILE__, __LINE__)
          if (this%lattice%nrec /= this%lattice%ntype .or. this%lattice%nbulk /= 0) &
             call g_logger%fatal('k-space GBT/orthogonal constraints need one type per site and nbulk = 0.', __FILE__, __LINE__)
       end if
@@ -68,7 +67,7 @@ contains
       allocate (bond_a(nrec*this%lattice%nn_max), bond_b(nrec*this%lattice%nn_max), bond_d(3, nrec*this%lattice%nn_max), &
                 sblock(norb, norb, nrec*this%lattice%nn_max), frame(2, 2, nrec), w(norb, 2, nrec), c(norb, 2, nrec), &
                 h(nb*nrec, nb*nrec), h2(nb*nrec, nb*nrec), obar(nb, nb, nrec), enu(nb, nb, nrec), &
-                cvec(nb*nrec), dvec(nb*nrec), gvec(nb*nrec), cmat(nb*nrec, nb*nrec), wunit(norb, 2, nrec), czero3(norb, 2, nrec), &
+                cvec(nb*nrec), dvec(nb*nrec), gvec(nb*nrec), cmat(nb*nrec, nb*nrec), fieldblk(nb, nb, nrec), wunit(norb, 2, nrec), czero3(norb, 2, nrec), &
                 sdotblock(norb, norb, nrec*this%lattice%nn_max), hcc(nb*nrec, nb*nrec), ccd(norb, 0:1, nrec))
       wunit = cmplx(1.0_rp, 0.0_rp, rp)
       czero3 = cmplx(0.0_rp, 0.0_rp, rp)
@@ -165,9 +164,20 @@ contains
          end do
       end do
       cmat = cmplx(0.0_rp, 0.0_rp, rp)
+      fieldblk = cmplx(0.0_rp, 0.0_rp, rp)
       if (this%use_orthogonal) then
          do iv = 1, nb*nrec
             cmat(iv, iv) = cvec(iv)
+         end do
+      end if
+      if (this%control%constraints_enable) then   ! -> +B.sigma onsite in the local spin basis, as the real-space route
+         do isite = 1, nrec
+            call this%hamiltonian%add_constraining_field_spin_block(this%lattice%iz(this%lattice%atlist(this%lattice%ib(isite))), fieldblk(:, :, isite))
+            i0 = (isite - 1)*nb
+            ! A constant potential shift inside a sphere shifts C and leaves Delta and gamma unchanged (exact for spin-diagonal shifts).
+            ! For the off-diagonal B.sigma this holds to first order in B, with corrections O(B (Delta_up - Delta_dn)/Delta); first and
+            ! second order make the same approximation. H = C + dele S^gamma dele then takes the field in C.
+            if (this%use_orthogonal) cmat(i0 + 1:i0 + nb, i0 + 1:i0 + nb) = cmat(i0 + 1:i0 + nb, i0 + 1:i0 + nb) + fieldblk(:, :, isite)
          end do
       end if
       q_dir = 0.0_rp
@@ -186,12 +196,10 @@ contains
             call gbt_kspace_h1(norb, nrec, nbond, bond_a(1:nbond), bond_b(1:nbond), bond_d(:, 1:nbond), sblock(:, :, 1:nbond), &
                                frame, w, c, k_points(:, ik), q_dir, h)
          end if
-         if (this%control%constraints_enable) then   ! -> +B.sigma onsite in the local spin basis, as the real-space route
+         if (this%control%constraints_enable .and. .not. this%use_orthogonal) then
             do isite = 1, nrec
-               blk = cmplx(0.0_rp, 0.0_rp, rp)
-               call this%hamiltonian%add_constraining_field_spin_block(this%lattice%iz(this%lattice%atlist(this%lattice%ib(isite))), blk)
                i0 = (isite - 1)*nb
-               h(i0 + 1:i0 + nb, i0 + 1:i0 + nb) = h(i0 + 1:i0 + nb, i0 + 1:i0 + nb) + blk
+               h(i0 + 1:i0 + nb, i0 + 1:i0 + nb) = h(i0 + 1:i0 + nb, i0 + 1:i0 + nb) + fieldblk(:, :, isite)
             end do
          end if
          call to_spherical(h)
