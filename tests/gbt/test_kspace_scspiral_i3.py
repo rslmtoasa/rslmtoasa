@@ -81,6 +81,8 @@ def deck(dst, system, L, cell, kind, order, nk, relaxed=False, nstep=300):
     if CCOR:
         nml["lattice"].update(strux_want_sdot=True, screening="fitted")
         nml["hamiltonian"].update(ccor_2c=True, ccor_strict=True)
+        if order == "second":
+            nml["self"]["conv_thr"] = 5.0e-10      # ten times below the default 5e-9: the collinear precondition sat at 1.4e-7 with it
     if kind == "gbt":
         nml["hamiltonian"].update(magnetic_representation="gbt_single_q", q_ss=[0.0, 0.0, q_z], theta_ss=90.0)
     nml.write(str(dst / "input.nml"), force=True)
