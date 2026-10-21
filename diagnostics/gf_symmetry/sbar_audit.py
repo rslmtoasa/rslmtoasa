@@ -16,9 +16,9 @@ from symmetry import V,SIGMA,MIRROR,OPS,UH,sectors,residual,leakage
 from analyze import read_dump,h_columns
 
 
-def read_sbar(job):
+def read_sbar(job, binary=None):
     rows=[]
-    with (job/'sbar.').open('rb') as f:
+    with (binary or job/'sbar.').open('rb') as f:
         while head:=f.read(4):
             if len(head)!=4: raise ValueError('Truncated record marker')
             n=struct.unpack('<I',head)[0]
@@ -26,7 +26,9 @@ def read_sbar(job):
             chunk=f.read(n)
             if len(chunk)!=n or f.read(4)!=head: raise ValueError('Invalid Fortran record')
             rows.append(np.frombuffer(chunk,dtype='<f8'))
+    if not rows or len(rows)%9: raise ValueError('Incomplete or empty sbar block sequence')
     blocks=np.array(rows).reshape(-1,9,9)
+    if not np.isfinite(blocks).all(): raise ValueError('Nonfinite sbar matrix')
     text=(job/'view.sbar.').read_text()
     labels=re.findall(r'VECTOR=\s*(\S+)\s+(\S+)\s+(\S+)\s+ICLUS=\s*(\d+)',text)
     if len(labels)!=len(blocks): raise ValueError('Preview/binary block counts differ')
@@ -38,8 +40,9 @@ def read_sbar(job):
     for block,label in zip(blocks,labels):
         r=np.array(label[:3],float); ti=int(label[3])
         distances=np.linalg.norm(coords-(bases[ti]+r),axis=1)
-        hit=int(distances.argmin())
-        if distances[hit]>2e-6: raise ValueError('Cannot identify destination type from rounded vector label')
+        hits=np.flatnonzero(distances<=2e-6)
+        if len(hits)!=1: raise ValueError('Missing or ambiguous destination from rounded vector label')
+        hit=int(hits[0])
         tj=int(cluster[hit,3])
         key=ti,tj,*r
         if key in matrices: raise ValueError('Duplicate structure-constant key')
