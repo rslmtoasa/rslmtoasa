@@ -1,0 +1,123 @@
+{
+  "schema": "c5_4_batched_independent_gate_audit_v1",
+  "scope": {
+    "branch": "fix/ldau-rs-impurity",
+    "head": "50576d81ef753e3be533bd54920eefd12ba55acb",
+    "plan": "C5_4_PLAN.md",
+    "method": "single consolidated audit; recomputed RD2 cubic fit/control classifications and T5 raw hash-map equality; checked captured run records, thresholds, acceptance evidence, and protocol dependencies"
+  },
+  "gates": {
+    "T1_RD2": {
+      "verdict": "PASS",
+      "basis": {
+        "carrier_ratios": [
+          0.9914299182168642,
+          0.9914299103155894
+        ],
+        "q2prime_ry2": [
+          0.13781601632237825,
+          0.1378160027236608
+        ],
+        "A2_2_allowance_ry": 0.00270055749913764,
+        "measured_scalar_deviation_ry": 0.002695820416586253,
+        "margin_ry": 4.73708255138e-06,
+        "sign_control": "predicted 1.4357880571 Ry; measured 1.3962656345 Ry > 0.0615241337 Ry threshold; admissible pass",
+        "spin_swap_control": "predicted 3.33e-16 Ry < threshold; NULL, not failure"
+      },
+      "raw_recalculation": "Cubic least-squares recomputation from the eight listed signed scan residuals reproduces per-spin fitted residuals and allowance to displayed precision."
+    },
+    "T2_guard": {
+      "verdict": "PASS",
+      "basis": "Warning strictly above capacity+1e-6; fatal strictly above capacity+0.05 or non-finite; four focused boundary/nonfinite tests reported passed."
+    },
+    "T2_no_U_identity": {
+      "verdict": "PASS",
+      "basis": "Single-thread RS and KS comparisons; candidate name sets match; 27 RS and 24 KS scientific artifacts; registered exclusions only; mismatch lists empty."
+    },
+    "T2_Ni_KS_U0_endpoint": {
+      "verdict": "UNEVALUATED",
+      "basis": "Finite fatal at iteration 2, q0=5.1605390187; this is the guard operating at its specified boundary and leaves no accepted host endpoint (not a separate guard-test failure)."
+    },
+    "T2_Ni_KS_U3_endpoint": {
+      "verdict": "UNEVALUATED",
+      "basis": "Converged at iteration 42, Diff=1.7e-9, but only rolling-last trace; \u00a72.1 full 20-iteration qP/moment window cannot be recomputed. Peak q0 exact value unavailable; zero warnings bounds it at <=5.000001."
+    },
+    "T3_zero_U_mapping_scope_fix": {
+      "verdict": "PASS",
+      "basis": "Narrow zero-U/J skip before legacy lookup; focused test reported passed; nonzero U and J paths retained."
+    },
+    "RD3a_Ni_RS_embedding": {
+      "verdict": "PASS",
+      "basis": {
+        "U0_control_acceptance": "iterations 7-26; Diff 1.60e-8; d-q0 spreads 2.565453280e-7 and 2.291862727e-7; sphere moment spread 1.893983199e-7",
+        "ratios": [
+          0.6446298503,
+          0.5982134653,
+          0.8069485651
+        ],
+        "criterion": "each ratio < 10"
+      }
+    },
+    "RD3b_Ni_KS_host_embedding": {
+      "verdict": "UNEVALUATED",
+      "basis": "T2 yielded no accepted KS host. C5.4 T3 made this comparison conditional on accepted T2 KS hosts; no host or comparison is claimed."
+    },
+    "RD4_energy": {
+      "verdict": "UNEVALUATED",
+      "basis": "No Debug W1 points measured; table not applied. RelWithDebInfo same-deck lambda0 crash reproduced (exit 139) with address-only stack; this does not measure the energy gate. Energy routing remains off."
+    },
+    "RD5_no_U_identity": {
+      "verdict": "PASS",
+      "basis": "Satisfied by T2 RS/KS no-U identity."
+    },
+    "RD5_explicit_spectral_identity": {
+      "verdict": "PASS",
+      "basis": "Independent comparison of the recorded output maps: identical 27-name sets and identical SHA256 for every file; old/new binary hashes recorded, both preflights pass, full single-thread caps recorded, both exit 0."
+    },
+    "RD5_RS_impurity_auto_endpoint": {
+      "verdict": "UNEVALUATED",
+      "basis": "No auto run or accepted RD3 endpoint reproduction recorded."
+    },
+    "RD5_KS_impurity_auto_endpoint": {
+      "verdict": "UNEVALUATED",
+      "basis": "No accepted KS host endpoint exists, hence the required accepted-endpoint auto reproduction cannot be performed from captured evidence."
+    },
+    "RD5_bulk_behavior_unchanged": {
+      "verdict": "PASS",
+      "basis": "Prior C5.2 no-U RS/KS evidence and C5.4 T2 identities as referenced in RD5 record."
+    },
+    "C5_2_section7_merge_verification": {
+      "verdict": "UNEVALUATED",
+      "basis": "No merge, merged-tree rebuild, LDA+U unit-test run, no-U identity rerun, or RS-bulk +U auto smoke verification recorded."
+    }
+  },
+  "adoption": {
+    "verdict": "NOT_ADOPTED",
+    "reason": "RD4 energy remains unmeasured and RD5 auto gates are incomplete; no energy routing or auto default adoption is supported."
+  },
+  "protocol_judgment": {
+    "missing_accepted_KS_auto_endpoint": "The C5.4 T5 instruction is conditional on RD2 and RD3(a) passing; both pass, so T5 must complete the RD5 explicit-spectral and auto cases before the \u00a77 merge. The absent accepted KS endpoint makes the KS auto case UNEVALUATED. C5.4 does not waive that gate when the T2 budget is exhausted; record the blocker and continue under C5.3 item 2. No speculation or criterion change is warranted.",
+    "merge_permitted": false
+  },
+  "budget": {
+    "T2_T4_ledger_entries": 6,
+    "cap": 8,
+    "T5_separate_identity_invocations": 2,
+    "total_solver_invocations_reported": 8,
+    "ledger_consistent": true
+  },
+  "scope_notes": [
+    "No SCF run launched by auditor.",
+    "No production source changes or merge made by auditor.",
+    "T1 scan script re-execution was blocked before analysis by missing f90nml in the ambient Python; the independently recomputed fit used the frozen eight-point values in the report JSON."
+  ],
+  "records": {
+    "T1": "C5_4_T1_RD2.json",
+    "T2": "C5_4_T2.json",
+    "T3": "C5_4_T3_RD3.json",
+    "T4": "C5_4_T4_RD4.json",
+    "T5": "C5_4_T5_RD5.json",
+    "spectral_hashes": "C5_4_T5_spectral_identity_hashes.json",
+    "ledger": "C5_4_RUN_LEDGER.jsonl"
+  }
+}

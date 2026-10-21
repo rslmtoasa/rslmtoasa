@@ -33,7 +33,14 @@
     "scalar_shift_within_fitted_allowance": false,
     "sign_wrong_separation_over_10x_carrier_error": true,
     "spin_swap_separation_over_10x_carrier_error": false,
-    "status": "GATE_MEASURED_FAIL"
+    "status": "GATE_MEASURED_FAIL",
+    "current_c54_verdict": {
+      "status": "AUDITED_PASS",
+      "record": "C5_4_T1_RD2.json",
+      "supersedes": "C5.2 historical RD2 gate verdict only; frozen report and its evidence remain unchanged",
+      "method": "C5.4-required eight-point per-state A2.2 scalar fit and corrected scalar-control classification; no formula or tolerance changed",
+      "audit_record": "C5_4_AUDIT.json"
+    }
   },
   "RD3": {
     "a": "UNEVALUATED; three U0 local control mapping-fatal records; no ratio",
@@ -85,7 +92,7 @@
     "rs_bulk_unchanged": "PASS within RS no-U identity comparison",
     "rs_no_u_identity": "PASS; all scientific artifacts identical after registered exclusions",
     "source_evidence_manifest_sha256": "5896bbb3e961912b046e6df2fcca754ef36417841bde1e2712d75da4014917b6",
-    "status": "PARTIAL_NO_U_RS_KS_IDENTITY_PASS; ADOPTION_BLOCKED_BY_RD2_FAIL"
+    "status": "HISTORICAL_C5_2_PARTIAL_NO_U_RS_KS_IDENTITY_PASS; ADOPTION_BLOCKED_THEN_BY_C5_2_RD2_FAIL"
   },
   "build": {
     "cache_sha256": "1d9cfd811da21ec7392e3019322a812b04ba5c8bf17be7cd717c43ff1a9232f1",
@@ -158,10 +165,22 @@
     "accepted_u0_bulk_rc80_bundle": "C5_2_PART_D_assets/ni_u0_bulk_rc80_host",
     "note": "Existing audited bundles preserved unchanged; active follow-up run directories remain outside the repository asset copy."
   },
-  "next_step": "No further RD5 campaign is authorized. Preserve RD5 no-U RS/KS identity PASS as a partial result. Explicit-spectral identity remains unrun; RD2 FAIL blocks adoption, automatic impurity mode, impurity energy routing, and merge. RD4 remains NOT MEASURED.",
+  "next_step": "Historical C5.2 RD2 FAIL is superseded for the current C5.4 execution by amended RD2 PASS, confirmed by the sole consolidated audit (C5_4_AUDIT.json). Preserve the original RD2 report and evidence. C5.4 RD5 explicit-spectral identity PASS; both required impurity auto endpoint checks remain UNEVALUATED and the accepted Ni KS endpoint is missing. RD3(b) remains UNEVALUATED; RD4 is NOT MEASURED and energy routing remains OFF. No adoption or merge is permitted under C5.3 item 2.",
   "part": "C5.2 Part D / Stage RD",
   "production_energy_or_default_changes": false,
-  "rd2_dependent_impurity_campaign_status": "RD2 frozen replay completed and measured FAIL after exactly one byte-identical diagnostic replay; no adoption. Continue independent items under C5.3 \u00a72.5.",
+  "rd2_dependent_impurity_campaign_status": "Historical C5.2 replay measured FAIL after one byte-identical diagnostic replay. C5.4 amended offline RD2 is PASS and confirmed by the sole consolidated audit; frozen C5.2 report and raw evidence are preserved.",
   "rd2_dependent_impurity_solver_runs": 1,
-  "status": "RD1_PASS_RD2_FAIL_RD3_RECORDED_RD4_NOT_MEASURED_RD5_ADOPTION_BLOCKED"
+  "status": "C5_2_HISTORICAL_RD2_FAIL_SUPERSEDED_BY_C5_4_AMENDED_RD2_PASS_AUDITED; RD4_UNMEASURED; RD5_ADOPTION_BLOCKED_BY_UNEVALUATED_AUTO",
+  "C5_4_supersession": {
+    "amended_rd2": "C5_4_T1_RD2.json",
+    "current_gate_packet": "C5_4_FINAL_STATUS.md",
+    "historical_rd2_report": "C5_2_PART_D_assets/ni_u3j07_rd2_replay/RD2_REPORT.md",
+    "historical_report_mutated": false,
+    "audit_status": "AUDITED_PASS",
+    "rd3a": "PASS",
+    "rd3b": "NOT_EVALUATED; no accepted Ni KS hosts",
+    "rd4": "NOT_MEASURED; energy OFF",
+    "rd5": "explicit-spectral identity PASS; auto NOT_EVALUATED; no adoption or merge",
+    "audit_record": "C5_4_AUDIT.json"
+  }
 }
