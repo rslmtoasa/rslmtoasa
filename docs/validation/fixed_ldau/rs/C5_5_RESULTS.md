@@ -1,0 +1,34 @@
+# C5.5 preparation and campaign record
+
+Date: 2026-10-21. Status after sole audit: T1 PASS; T2 BLOCKED / UNEVALUATED before solver launch; T3 NOT RUN; no adoption or merge. Campaign count is 1/3. Required identity/unit/§7 verification is tracked separately, per the C5.5 clarification in `C5_AMENDMENT.md`. Audit verdict and evidence are in `C5_5_AUDIT.md` and `C5_5_AUDIT.json`.
+
+## T1 — Ni RS local default mode
+
+The isolated candidate binary was `2846c846857468666fa5389a283dbbe7b760621050f851c9d2e4046e240d6fed` (`/private/tmp/c55-candidate-build/bin/rslmto.x`). It reported `HUBBARD_RADIAL_MODE mode=local source=default use_kspace=.false. local_energy_adopted=.false.` Impurity energy adoption therefore remained off.
+
+The fresh-run preflight passed at `/private/tmp/c55-t1-ni-auto/preflight.json` (SHA256 `eb23da1fa40766a19927407f1b8f6b01e784f0d49a16e9af1f865cc826cfc9f7`). Its staged default-mode deck SHA256 was `e77f2aa4d72d525865a621bdb963de040fa8f3382a96856e84e5dffdaf3cdb5a`; the original explicitly-local deck was retained separately. The accepted RS-local Ni U=3/J=0.7 bulk endpoint74 was the host and initial impurity state (state SHA256 `bc3340a8ad20d2467eaeccd43929a659d4cfff2a9f28b748fb6554edc4ee3ac9`; working host alias SHA256 `428dfff8800ca5064a1c91ff7ba1a47d412cfd33e5a7febb04703b89156bce8c`). The matching Ni U=0 control tolerances came from `C5_4_T3_RD3.json`.
+
+The earliest accepted window was iterations 4–23, with same-loop Diff `1.78e-8`; d-occupation spreads `1.940081198e-7` and `1.178661817e-7`; absolute-sphere-moment spread `2.3691291473e-7`. Impurity-minus-bulk values were d spin 1 `1.1550153801e-6`, d spin 2 `1.0080399956e-6`, and moment `-4.726366475e-8`. Against the accepted RD3(a) values, component errors were `1.275531e-16`, `1.2406e-16`, and `2.3175594e-16`, respectively, all within the measured U=0 control tolerances `1.7917497610042687e-6`, `1.6850840944826473e-6`, and `5.857085200178247e-8`.
+
+The endpoint trace SHA256 is `cdb9b4a8beadd4e35e3adf6ae500fd9d861b95074ec138fc59f035d1bbfc14f4`; endpoint state SHA256 is `7ea1b7b8bd6e06be39816251a1de218a9009c39f2ad73d8fd25c52655476e60f`. The full watcher manifest contains 31 paired full-trace/state captures (final SHA256 `34f1e620d0e1e87eceb367407ca323d0b924d1b17e07bf0e65337f3eb0d75896`). The full run log SHA256 is `d30e2b4fe74553b7dfc3c74ebef21558d921cb1f528ceeba9ad7c3806cc5d44f`; the raw trace SHA256 is `5da4736fee0465fe204994bff503af83894c1ba3f3966b646bb1126867c242f8`. After iteration 23 qualified, the authorized stop signal ended the solver with exit code 143; capture continued through iteration 31 and watcher finished normally. This was one campaign attempt.
+
+## T2 — accepted KS U=2/J=0 Fe host provenance gate
+
+The accepted KS proof is `evidence/a5_native_ks_local_u2_endpoint.md` (SHA256 `525526942f864bfee22a8e0a708467e40522847ee92a26670104d3936c2f9a88`). It binds the raw run `/private/tmp/a5-priority-local-u2-ks/u2_local_standard`, binary `52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225`, input `ca995150bd98768e40539857f164e8508eb0f5a49a5cdec2cf86e095acd372fb`, stdout `ab6c91d7570183fcfe200d196994173f60e77474f244e2ddd185ef16e9b527db`, and raw endpoint verification `e21914e74ae04c46f495ab0340f6bb13e76ee65970cb668054652a5f6a5662d8`. The raw input explicitly requests `hubbard_radial_moments='local'` and native KS `use_kspace=.true.`. Accepted `Fe_out.nml` and `Fe_scf.nml` are byte-identical, each SHA256 `bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b`; they carry U `0.14699717144573571` Ry and J `0`, but neither serializes `hubbard_radial_moments` or a backend/mode field. The exact accepted state bytes were preserved unchanged.
+
+An actual U=2/J=0 RS bulk counterpart exists: `C5_2_PART_C_assets/C3/inputs/accepted_endpoint_lock.json` (SHA256 `d923078e644eaf7ada1926a53a4c92adf3d138e22ba8307ca87896d567cec1f5`) records RS, U=2/J=0, local, Chebyshev, `nsp=1`, `lmax=2`, and `rc=80`. Its accepted deck hash is `276eabe5a405848935179ce21eac25a59a01f6aa7316d8ecbe3dbfdd5ac17760`; endpoint state hash is `c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83e`. This binds the matching bulk radius. No same-U2/J0 accepted RS Fe impurity endpoint/recipe was found; the existing beta=.005 Fe impurity input at that radius is U=3.8/J=1.1 and was not used as a substitute.
+
+The unchanged candidate initializes the run mode as `auto` when the namelist omits the field (`source/hamiltonian.f90:124`, `source/hamiltonian_build.f90:472`). The candidate resolver only selects local when every active host potential records local provenance. For a U-carrying potential with no saved field, the host mode remains spectral; the legacy unit case covers this fallback. `validate_hubbard_mode_provenance` also treats a missing mode on a U-carrying state as legacy spectral. Therefore, despite the accepted *input* requesting local mode, the saved KS endpoint cannot qualify as a local-provenance host for this auto resolver. Predicted spectral fallback is an inference from the preserved state and candidate code, not a measured T2 model log. No T2 SCF was launched; there is no T2 acceptance window or campaign continuation.
+
+A fresh T2 staging directory was created privately for inspection, then left unused. It is not accepted evidence and does not modify any accepted source bytes. No source tagging, metadata synthesis, resolver relaxation, T2 continuation, or new host campaign was performed.
+
+## Isolated candidate and verification
+
+Candidate source remains isolated at `/private/tmp/c55-candidate`; production sources are unchanged. The review patch is `C5_5_candidate.patch` (SHA256 recorded in the companion JSON). It adds the narrow auto resolver, keeps explicit modes and energy routing unchanged, and includes resolver tests for all-local, mixed local/spectral, empty legacy provenance, guarded scope, and no-U fallback. Candidate binary SHA256 is `2846c846857468666fa5389a283dbbe7b760621050f851c9d2e4046e240d6fed`. `UnitAutoImpurityLocalMode` passed after rebuilding its single target; its executable SHA256 is `9b491239ff1868f3bf8a597a99f709afc00f00b0764f28746ebae6de6a6094a0`. This unit invocation is separate from the campaign count. No production candidate adoption was made.
+
+
+## Sole audit and remaining work
+
+The consolidated audit verdict is T1 PASS, T2 BLOCKED / UNEVALUATED before measurement, and T3, production adoption, and §7 merge NOT PERFORMED. The candidate patch remains unapplied. Required single-thread no-U identity, explicit-spectral identity, bulk regression, and §7 checks remain unrun; the isolated resolver unit passed separately. No further solver runs or candidate adoption are authorized by this record.
+
+Disk observations are recorded in the companion JSON. After the initial records commit, `/private/tmp` had 6,627,504 KiB available. No cleanup or compression was performed.

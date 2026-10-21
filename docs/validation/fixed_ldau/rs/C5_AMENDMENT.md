@@ -761,3 +761,54 @@ The prior Ni U=0 fatal was the local d-potential extraction reached for an untre
 ### C5.4 T4 result (2026-10-21)
 
 The full Debug W1 series could not fit the remaining run budget together with the required RelWithDebInfo replay; no Debug λ point was launched, the RD4 table is **NOT_APPLIED**, and energy routing remains off. The one fresh, preflight-passing RelWithDebInfo λ=0 replay reproduced SIGSEGV during the first recursion, after the l=1, spin=2 Hubbard LDM physicality diagnostics. The captured `-g -fbacktrace` output contains three address-only frames and no source-symbolized frame; no crash cause or fix is claimed. The raw trace file is incomplete and no energy or accepted endpoint exists. One solver attempt used slot 6; two slots remain. See `C5_4_T4_RD4.json` and the OPEN entry in `tests/KNOWN_ISSUES.md`.
+
+## C5.5
+
+C5.5 (user-approved; record verbatim in C5_AMENDMENT.md). OBJECTIVE: adopt impurity local
+moments (density only) and merge.
+Token rules as in C5.4: Sol plans in at most 1/2 page, ONE Luna worker sequentially, ONE batched
+audit at the end. Preflight script before every run. Identity checks single-threaded.
+Budget: 3 SCF runs.
+
+T1 RS-host auto GATE: Ni impurity on the accepted RS-local Ni host, with
+   hubbard_radial_moments left at its default.
+   GATE: the log shows mode=local, and the run reproduces the accepted RD3(a) Ni local endpoint
+   (d occupations and moment within the U=0 control difference).
+
+T2 KS-host smoke GATE (replaces the RD5 KS-host endpoint check):
+   - Use the accepted KS bcc Fe U=2 eV, J=0 local bulk state from the KS validation evidence as
+     the host.
+   - Run an RS Fe impurity (same U, J; same rc as that host's RS counterpart, if one exists) with
+     auto mode.
+   - GATE: resolves mode=local; no provenance or mode-mismatch error; RS-accepted within ladder
+     steps 1-2.
+   - RECORD: impurity-minus-KS-bulk d occupations and moment.
+
+T3 Adopt RD5 (density only):
+   - auto resolves to local for calctype='I' when every U-carrying host file is stored in local
+     mode; otherwise spectral, with a log line stating why.
+   - Energy routing stays OFF for impurities.
+   - GATES (single-thread): no-U RS/KS identity; explicit-spectral impurity unchanged; RS and KS
+     bulk unchanged.
+   - Documentation: lda_u_workflow.rst (both host workflows, the mode rule, "impurity energies
+     exclude the Hubbard term").
+   - KNOWN_ISSUES, OPEN entries:
+       (a) KS-host -> RS-impurity numerical equivalence not yet validated (no accepted Ni KS
+           host);
+       (b) impurity energy (RD4) unmeasured; the Release crash in the W path is recorded.
+
+T4 Local merge per C5.2 §7. Report the SHA. Do not push.
+
+If T1 or T2 fails: commit the records and stop with a 5-line summary.
+Uncovered outcomes: C5.3 item 2.
+
+### C5.5 clarification — run budget (2026-10-21)
+
+Question: “Does the three-run cap cover the T1/T2 campaign attempts, with identity, unit,
+and §7 verification tracked separately?”
+
+Reply: “Yes—three campaign runs; verification separate”.
+
+Count T1/T2 campaigns, including failed starts and continuations, against the three-run cap.
+Track required identity, unit, and §7 verification invocations separately; they do not consume
+the campaign-run cap.
