@@ -13,14 +13,13 @@
 - RD1 remains the only passed production unit gate; no energy route or default changed.
 - RD2 is a measured gate failure, reproduced byte for byte by its single authorized diagnostic replay; see [RD2 report](C5_2_PART_D_assets/ni_u3j07_rd2_replay/RD2_REPORT.md).
 - The proposed non-degenerate spin-asymmetric state selection addresses spin-swap identifiability only; the scalar-shift failure remains unresolved and its registered allowance is unchanged. The proposal is not adopted.
-- C5.3 §2.5: no-U RS/KS identity and bulk checks pass; explicit-spectral identity and `auto` cases remain unrun. RD2 FAIL blocks adoption and merge.
+- C5.2 §2.5, as extended by C5.3: no-U RS/KS identity and bulk checks pass; explicit-spectral identity and `auto` cases remain unrun. RD2 FAIL blocks adoption and merge.
 - Ni U=3 RS bulk host is accepted at window 55–74; Ni U=0 KS continuation and U=3 KS host ended at finite B1 capacity guards, leaving the dependent Ni KS gate unevaluated.
 - Ni spectral bulk and impurity are accepted under §2.1 (windows 28–47 and 3–22); RD3(d) is RECORD only. Ni impurity-minus-bulk d shifts are +4.57772565632e−7/+3.56986588734e−7, with no U=0 ratio or LDOS maximum. See [Ni RD3 record](C5_2_PART_D_assets/ni_rd3_ni_record/RD3_NI_RECORD.json).
 - Fe U3.8/J1.1 local endpoint is accepted at window 1–20 under §2.1; one-step capture grids differ, so d-LDOS is unavailable. B2FeCo has no eligible accepted restart. See [Fe/B2 record](C5_2_PART_D_assets/fe_rd3_b2_record/RD3_FE_B2_RECORD.json). RD2 does not authorize criterion changes.
 
 Passed: RD1 unit GATE.
-Recorded: RD2 measured FAIL after one byte-identical debug replay; no adoption; Ni RD3(d) RECORD only.
-Recorded: Ni local/spectral impurity windows 4–23 and 3–22; Fe local endpoint window 1–20 accepted under §2.1.
+Recorded: RD2 measured FAIL after one byte-identical debug replay; no adoption; Ni RD3(d) RECORD only; Ni local/spectral impurity windows 4–23 and 3–22; Fe local endpoint window 1–20 accepted under §2.1.
 Recorded: RD5 no-U RS/KS byte identity and unchanged bulk outputs PASS; explicit-spectral identity and `auto` adoption checks remain unrun.
 Stopped: no active STOP; historical C5.2 A4(iv) remains superseded by C5.3 A4(v).
 Next: RD4 remains unmeasured after bounded §2.4 triage; RD5 adoption and merge remain blocked by RD2 FAIL.
