@@ -843,3 +843,30 @@ T4 Local merge per C5.2 §7. Report the SHA. Do not push.
 
 If T2a or T2b fails: commit the records and stop with a 5-line summary.
 Uncovered outcomes: C5.3 item 2.
+
+## C5.7
+
+C5.7 (user-approved; record verbatim in C5_AMENDMENT.md). OBJECTIVE: fix the provenance-guard
+scope, then finish T2-T4 of C5.6.
+Token rules as in C5.4. Budget: 3 SCF runs.
+
+T1 Guard scope fix (production change, design correction):
+   - Enforce the mode-consistency check ONLY for atoms that are frozen in the current run: host
+     atoms in calctype 'I'/'S' whose potentials are not updated by the SCF.
+   - For atoms the SCF updates (all atoms in a bulk run; recursion atoms in 'I'/'S'): if the
+     stored mode is missing or different, log INFO "restart seed in <mode>, run uses <mode>; seed
+     will be rewritten", and proceed. The written file carries the run's mode and backend.
+   - Apply the legacy-file WARNING from C5.6 T3 only to frozen host atoms.
+   - Unit/fixture tests:
+       (a) a bulk +U restart from a legacy file (no provenance) runs and writes provenance;
+       (b) a bulk restart from a spectral-stored file with auto -> local runs (INFO logged);
+       (c) an impurity with a frozen local host and a forced spectral impurity -> fatal
+           (existing gate);
+       (d) an impurity with a legacy frozen host -> WARNING, run is spectral.
+   - GATE: single-thread no-U RS/KS identity.
+
+T2a/T2b, T3, T4 exactly as in C5.6, using the fixed binary.
+   (T3's legacy warning is now scoped as described in T1.)
+
+If T2a or T2b fails: commit the records and stop with a 5-line summary.
+Uncovered outcomes: C5.3 item 2.

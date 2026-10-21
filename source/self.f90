@@ -412,6 +412,8 @@ module self_mod
       procedure, private :: write_fixed_u_total_energy
       procedure, private :: write_hubbard_moment_energy_diagnostics
       procedure, private :: validate_hubbard_mode_provenance
+      procedure, private :: is_frozen_hubbard_host
+      procedure, private :: all_frozen_hubbard_hosts_local
       procedure, private :: is_eligible_local_hubbard
       procedure, private :: fixed_hubbard_energy_pout
       procedure, private :: write_fixed_u_radial_replay_input
@@ -2364,10 +2366,84 @@ contains
           this%hamiltonian%hubbard_test_lambda == 0.0_rp)
    end function is_eligible_local_hubbard
 
+   logical function is_frozen_hubbard_host(this, atom_type) result(frozen)
+      class(self), intent(in) :: this
+      integer, intent(in) :: atom_type
+      integer :: isite, cluster_site, mapped_type
+
+      frozen = .false.
+      if (this%control%calctype /= 'I' .and. this%control%calctype /= 'S') return
+      if (.not. allocated(this%lattice%irec) .or. .not. allocated(this%lattice%ib) .or. &
+          .not. allocated(this%lattice%iz)) then
+         call g_logger%fatal('Cannot classify fixed-U provenance without the SCF host/recursion ownership maps.', &
+            __FILE__, __LINE__)
+         return
+      end if
+      if (this%lattice%nrec > size(this%lattice%irec) .or. this%lattice%nbulk > size(this%lattice%ib)) then
+         call g_logger%fatal('Fixed-U SCF ownership map is shorter than lattice%nrec/nbulk.', __FILE__, __LINE__)
+         return
+      end if
+      ! The recursion ownership map is the same map consumed by the SCF
+      ! update: recursion index -> cluster site -> symbolic atom type.
+      do isite = 1, min(this%lattice%nrec, size(this%lattice%irec))
+         cluster_site = this%lattice%irec(isite)
+         if (cluster_site < 1 .or. cluster_site > size(this%lattice%iz)) then
+            call g_logger%fatal('Fixed-U recursion ownership map has an invalid cluster-site index.', __FILE__, __LINE__)
+            return
+         end if
+         mapped_type = this%lattice%iz(cluster_site)
+         if (mapped_type < 1 .or. mapped_type > size(this%symbolic_atom)) then
+            call g_logger%fatal('Fixed-U recursion ownership map has an invalid symbolic atom type.', __FILE__, __LINE__)
+            return
+         end if
+         if (mapped_type == atom_type) return
+      end do
+      ! A type is a frozen host only if the lattice host ownership table
+      ! contains it. Unreferenced symbolic types are not inferred as hosts.
+      do isite = 1, min(this%lattice%nbulk, size(this%lattice%ib))
+         cluster_site = this%lattice%ib(isite)
+         if (cluster_site < 1 .or. cluster_site > size(this%lattice%iz)) then
+            call g_logger%fatal('Fixed-U frozen-host ownership map has an invalid cluster-site index.', __FILE__, __LINE__)
+            return
+         end if
+         mapped_type = this%lattice%iz(cluster_site)
+         if (mapped_type < 1 .or. mapped_type > size(this%symbolic_atom)) then
+            call g_logger%fatal('Fixed-U frozen-host ownership map has an invalid symbolic atom type.', __FILE__, __LINE__)
+            return
+         end if
+         if (mapped_type == atom_type) then
+            frozen = .true.
+            return
+         end if
+      end do
+   end function is_frozen_hubbard_host
+
+   logical function all_frozen_hubbard_hosts_local(this) result(all_local)
+      class(self), intent(in) :: this
+      integer :: ia
+      logical :: active, found
+
+      all_local = .false.
+      found = .false.
+      do ia = 1, size(this%symbolic_atom)
+         if (.not. this%is_frozen_hubbard_host(ia)) cycle
+         if (.not. allocated(this%symbolic_atom(ia)%potential%hubbard_u) .or. &
+             .not. allocated(this%symbolic_atom(ia)%potential%hubbard_j)) cycle
+         active = any(abs(this%symbolic_atom(ia)%potential%hubbard_u) > 1.0e-10_rp) .or. &
+                  any(abs(this%symbolic_atom(ia)%potential%hubbard_j) > 1.0e-10_rp)
+         if (.not. active) cycle
+         found = .true.
+         if (.not. this%symbolic_atom(ia)%potential%hubbard_file_has_uj .or. &
+             trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments) /= 'local') return
+      end do
+      all_local = found
+   end function all_frozen_hubbard_hosts_local
+
    subroutine validate_hubbard_mode_provenance(this)
       class(self), intent(inout) :: this
       integer :: ia
       logical :: active
+      logical :: frozen
       character(len=16) :: stored_mode, backend
 
       backend = 'rs'
@@ -2379,23 +2455,41 @@ contains
                   any(abs(this%symbolic_atom(ia)%potential%hubbard_j) > 1.0e-10_rp)
          if (.not. active) cycle
 
-         if (this%symbolic_atom(ia)%potential%hubbard_file_has_uj) then
+         frozen = this%is_frozen_hubbard_host(ia)
+
+         if (frozen) then
             stored_mode = trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments)
             if (len_trim(stored_mode) == 0) then
                stored_mode = 'spectral'
                if (rank == 0) call g_logger%warning('Legacy U-carrying potential for symbolic atom '//fmt('i0', ia)// &
-                  ' has no hubbard_radial_moments field; treating it as spectral.', __FILE__, __LINE__)
+                  ' has no hubbard_radial_moments field; its mode is unknown, treating it as spectral; '// &
+                  'restart the host once with the current version to record its mode.', __FILE__, __LINE__)
             end if
-            if (trim(stored_mode) /= trim(this%hamiltonian%hubbard_radial_moments)) then
+            if (this%symbolic_atom(ia)%potential%hubbard_file_has_uj .and. &
+                trim(stored_mode) /= trim(this%hamiltonian%hubbard_radial_moments)) then
                call g_logger%fatal('Fixed-U potential moment-mode mismatch for symbolic atom '//fmt('i0', ia)// &
                   ': file mode='//trim(stored_mode)//', run mode='//trim(this%hamiltonian%hubbard_radial_moments)// &
                   '. Regenerate the host potential in the selected mode or select the matching mode.', __FILE__, __LINE__)
             end if
          end if
 
-         this%symbolic_atom(ia)%potential%hubbard_radial_moments = &
-            trim(this%hamiltonian%hubbard_radial_moments)
-         this%symbolic_atom(ia)%potential%hubbard_backend = trim(backend)
+         if (.not. frozen) then
+            stored_mode = trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments)
+            if (len_trim(stored_mode) == 0) then
+               stored_mode = 'spectral'
+               if (rank == 0) call g_logger%info('restart seed in '//trim(stored_mode)//', run uses '// &
+                  trim(this%hamiltonian%hubbard_radial_moments)//'; seed will be rewritten', __FILE__, __LINE__)
+            else if (trim(stored_mode) /= trim(this%hamiltonian%hubbard_radial_moments) .and. rank == 0) then
+               call g_logger%info('restart seed in '//trim(stored_mode)//', run uses '// &
+                  trim(this%hamiltonian%hubbard_radial_moments)//'; seed will be rewritten', __FILE__, __LINE__)
+            end if
+         end if
+
+         if (.not. frozen) then
+            this%symbolic_atom(ia)%potential%hubbard_radial_moments = &
+               trim(this%hamiltonian%hubbard_radial_moments)
+            this%symbolic_atom(ia)%potential%hubbard_backend = trim(backend)
+         end if
       end do
    end subroutine validate_hubbard_mode_provenance
 
@@ -3350,7 +3444,14 @@ contains
       this%use_kspace = use_kspace
       radial_mode_defaulted = trim(this%hamiltonian%hubbard_radial_moments) == 'auto'
       if (trim(this%hamiltonian%hubbard_radial_moments) == 'auto') then
-         if (this%is_eligible_local_hubbard()) then
+         if (this%is_eligible_local_hubbard() .or. &
+             (this%control%calctype == 'I' .and. this%control%nsp == 1 .and. this%control%lmax == 2 .and. &
+              this%hamiltonian%hubbard_u_general_check .and. &
+              trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein' .and. &
+              .not. this%control%constraints_enable .and. .not. this%control%has_soc() .and. &
+              .not. this%control%is_noncollinear() .and. .not. this%hamiltonian%hoh .and. &
+              .not. this%hamiltonian%hubbard_u_sc_check .and. .not. this%hamiltonian%hubbard_v_check .and. &
+              .not. this%hamiltonian%hubbard_u_impurity_check .and. this%all_frozen_hubbard_hosts_local())) then
             this%hamiltonian%hubbard_radial_moments = 'local'
          else
             this%hamiltonian%hubbard_radial_moments = 'spectral'
