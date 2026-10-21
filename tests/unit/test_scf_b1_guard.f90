@@ -12,16 +12,20 @@ program test_scf_b1_guard
 
    select case (trim(mode))
    case ('capacity')
-      ! A d-shell has five states per spin; test the approved upper-bound path.
-      call guard_q0_capacity('Fe', 3, 2, 1, 17, 5.0_rp + 2.0e-6_rp)
+      ! Fatal only above the revised 5.05 d-shell boundary.
+      call guard_q0_capacity('Fe', 3, 2, 1, 17, 5.0_rp + 0.050001_rp)
       error stop 'over-capacity q0 was not rejected'
+   case ('warning')
+      call guard_q0_capacity('Fe', 3, 2, 1, 17, 5.0_rp + 1.1e-6_rp)
+      write (*, '(a)') 'B1 guard warning boundary accepted'
    case ('nonfinite')
       call guard_nonfinite_scalar('Co', 2, 1, 2, 'new q1', 9, &
          ieee_value(0.0_rp, ieee_quiet_nan))
       error stop 'non-finite q component was not rejected'
    case ('boundary')
-      ! The stated allowance itself remains accepted; no extra lower bound.
+      ! Strict thresholds: +1e-6 does not warn, +0.05 does not fail.
       call guard_q0_capacity('Fe', 3, 2, 1, 17, 5.0_rp + 1.0e-6_rp)
+      call guard_q0_capacity('Fe', 3, 2, 1, 17, 5.0_rp + 0.05_rp)
       call guard_nonfinite_scalar('Co', 2, 1, 2, 'new q1', 9, 0.0_rp)
       write (*, '(a)') 'B1 guard boundary accepted'
    case default

@@ -1,0 +1,107 @@
+{
+  "schema": "c5_4_t2_guard_identity_hosts_v1",
+  "status": "THRESHOLD_TESTS_PASS_RS_KS_NO_U_IDENTITY_PASS_HOSTS_NOT_ACCEPTED",
+  "binary": {
+    "path": "/private/tmp/c54-t2-build-fresh/bin/rslmto.x",
+    "sha256": "71676b79b4d8b5f1fd408c365b42c2ed671466a5b9eb58800739df2026e55815",
+    "build_type": "Release",
+    "thread_caps": {
+      "OMP_NUM_THREADS": "1",
+      "OMP_DYNAMIC": "FALSE",
+      "RSLMTO_OMP_THREADS_SERIAL": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "BLIS_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1"
+    }
+  },
+  "guard": {
+    "warning_if_strictly_above_capacity": 0.000001,
+    "fatal_if_strictly_above_capacity": 0.05,
+    "fatal_on_nonfinite": true,
+    "active_channels_only": true,
+    "unit_tests": {
+      "command": "ctest --test-dir /private/tmp/c54-t2-build-fresh --output-on-failure -R 'UnitScfB1Guard(CapacityRequiresFatal|WarningBoundary|NonfiniteRequiresFatal|Boundary)$'",
+      "result": "4/4 passed"
+    }
+  },
+  "identity": {
+    "criterion": "exact artifact names and bytes; exclude only testrun.log and normalize only STRUX runtime cpu_s in str.out",
+    "RS": {
+      "status": "PASS",
+      "baseline": "/private/tmp/c52-rd5-no-u/rs_rd1",
+      "candidate": "/private/tmp/c54-t2-id-rs-frozen",
+      "input_sha256": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3",
+      "restart_sha256": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+      "candidate_testrun_log_sha256": "e6f12294210a45195af8ae621248f26afe895744b9e808c025ee772b999d3beb",
+      "candidate_output_name_sets_equal": true,
+      "candidate_output_count": 27,
+      "mismatches_after_registered_exclusions": []
+    },
+    "KS": {
+      "status": "PASS",
+      "baseline": "/private/tmp/c52-rd5-no-u/ks_rd1",
+      "candidate": "/private/tmp/c54-t2-id-ks-frozen",
+      "input_sha256": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01",
+      "restart_sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+      "candidate_testrun_log_sha256": "2f7acdc7b9d18c3b1dfa99727fd9b2ebc9ea8c4e4cb42017f49ca552eaaf5e25",
+      "candidate_output_name_sets_equal": true,
+      "candidate_output_count": 24,
+      "mismatches_after_registered_exclusions": []
+    }
+  },
+  "hosts": {
+    "U0": {
+      "status": "FINITE_FATAL_NOT_ACCEPTED",
+      "old_peak_q0": 5.60508913417065,
+      "new_peak_q0": 5.1605390187379587,
+      "iteration": 2,
+      "warning_observed": true,
+      "fatal_observed": true,
+      "exit_code": 1,
+      "input_beta": 0.025,
+      "restart_source": "committed runtime/Ni-imp_scf.nml captured state",
+      "candidate_log_sha256": "0590aead9aaff113e220227b937ff695489088ddb60f9e35f0e057f22ee136f8",
+      "trace_sha256": "79457a0952c91817f42d63a1122c2524867eeb6626f9627cb6fa5fa67251e404"
+    },
+    "U3": {
+      "status": "CONVERGED_BUT_NOT_ACCEPTED_RAW_WINDOW_UNAVAILABLE",
+      "old_peak_q0": 5.379234343721036,
+      "new_peak_q0_exact": null,
+      "new_peak_q0_upper_bound_from_zero_warning_records": 5.000001,
+      "warning_count": 0,
+      "fatal_count": 0,
+      "exit_code": 0,
+      "converged_iteration": 42,
+      "outer_diff": 1.7e-9,
+      "input_beta": 0.05,
+      "restart_source": "committed runtime/Ni-imp_scf.nml captured state",
+      "trace_mode": "rolling-last; only iteration 42 is present",
+      "acceptance_limitation": "The trace does not contain the full raw per-loop qP/moment series needed to recompute the unchanged §2.1 20-iteration window. Rounded log diagnostics are not substituted. No accepted endpoint is claimed.",
+      "candidate_log_sha256": "e6fac6f6490e669473b91d0ef095d2c3a9f24bf2ac44a5d8e2be6b6192ca4b4a",
+      "trace_sha256": "8e80ae9c15b0d3746ef573d9f60869e1b5ab1990f77e5bedd35cf31938fd9e57"
+    }
+  },
+  "preflight": {
+    "path": "C5_4_PREFLIGHT.py",
+    "max_lines": 80,
+    "actual_lines": 80,
+    "use_kspace": "explicit setting or resolved source default; RS default false at source/self.f90:3804",
+    "unknown_groups": "reported as unconsumed; source-declared group members remain schema-validated",
+    "restart": "writable working copy; available d channel checked from parsed restart element and lmax",
+    "launch": "bash wrapper, fresh whitelist staging, full thread caps, disk floor and attempt-ledger append"
+  },
+  "attempts": {
+    "card_total": 4,
+    "cap": 8,
+    "allocation": [
+      "1: U0 KS half-beta continuation (fatal at iteration 2)",
+      "2: U3 KS half-beta continuation (converged but endpoint not accepted)",
+      "3: RS no-U identity candidate",
+      "4: KS no-U identity candidate"
+    ],
+    "ledger": "C5_4_RUN_LEDGER.jsonl"
+  },
+  "adoption": "No accepted Ni KS host endpoint; no T2 adoption claim."
+}

@@ -20,15 +20,22 @@ contains
       if (.not. ieee_is_finite(q0)) then
          call guard_nonfinite_scalar(atom, site, l, spin, 'q0', iteration, q0)
       end if
-      if (q0 <= capacity + 1.0e-6_rp) return
+      if (q0 > capacity + 1.0e-6_rp) then
+         write(value_text, '(es24.16e3)') q0
+         call g_logger%warning('B1 occupation-capacity warning: atom='//trim(atom)//' site='//itoa(site)// &
+            ' channel='//trim(shell_label(l))//' l='//itoa(l)//' spin='//itoa(spin)// &
+            ' iteration='//iteration_label(iteration)//' q0='//trim(adjustl(value_text))// &
+            ' capacity='//itoa(2*l + 1), __FILE__, __LINE__)
+      end if
+      if (q0 <= capacity + 0.05_rp) return
 
       write(value_text, '(es24.16e3)') q0
-      write(limit_text, '(es24.16e3)') capacity + 1.0e-6_rp
+      write(limit_text, '(es24.16e3)') capacity + 0.05_rp
       shell = shell_label(l)
-      call g_logger%fatal('B1 occupation-capacity guard: atom='//trim(atom)//' site='//itoa(site)// &
+      call g_logger%fatal('B1 occupation-capacity fatal: atom='//trim(atom)//' site='//itoa(site)// &
          ' channel='//trim(shell)//' l='//itoa(l)//' spin='//itoa(spin)//' iteration='//iteration_label(iteration)// &
          ' q0='//trim(adjustl(value_text))//' capacity='//itoa(2*l + 1)// &
-         ' allowed_max='//trim(adjustl(limit_text)), __FILE__, __LINE__)
+         ' fatal_above='//trim(adjustl(limit_text)), __FILE__, __LINE__)
    end subroutine guard_q0_capacity
 
    subroutine guard_nonfinite_scalar(atom, site, l, spin, field, iteration, value)

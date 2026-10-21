@@ -658,7 +658,10 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitBasisDimensions ${TestDIR}/unit/test_basis_dimensions.f90)
   add_fortran_unit_test(UnitScfB1GuardCapacityRequiresFatal ${TestDIR}/unit/test_scf_b1_guard.f90 capacity)
   set_tests_properties(UnitScfB1GuardCapacityRequiresFatal PROPERTIES
-    PASS_REGULAR_EXPRESSION "B1 occupation-capacity guard.*site=3.*channel=d.*iteration=17.*q0=")
+    PASS_REGULAR_EXPRESSION "B1 occupation-capacity fatal.*site=3.*channel=d.*iteration=17.*q0=")
+  add_fortran_unit_test(UnitScfB1GuardWarningBoundary ${TestDIR}/unit/test_scf_b1_guard.f90 warning)
+  set_tests_properties(UnitScfB1GuardWarningBoundary PROPERTIES
+    PASS_REGULAR_EXPRESSION "B1 occupation-capacity warning.*site=3.*channel=d.*iteration=17.*q0=")
   add_fortran_unit_test(UnitScfB1GuardNonfiniteRequiresFatal ${TestDIR}/unit/test_scf_b1_guard.f90 nonfinite)
   set_tests_properties(UnitScfB1GuardNonfiniteRequiresFatal PROPERTIES
     PASS_REGULAR_EXPRESSION "B1 non-finite guard.*site=2.*channel=p.*iteration=9.*field=new q1.*value=")
