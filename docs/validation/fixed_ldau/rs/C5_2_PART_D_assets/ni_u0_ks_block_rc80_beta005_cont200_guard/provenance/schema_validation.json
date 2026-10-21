@@ -1,0 +1,60 @@
+{
+  "status": "PASS_SOURCE_SCHEMA",
+  "python": "/opt/homebrew/opt/python@3.11/bin/python3.11",
+  "f90nml": "1.4.4",
+  "source_commit": "0469135d935dd31fb6ce055d819cdb54811c52fa",
+  "source_schema_file_count": 20,
+  "validated_decks": [
+    {
+      "path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/immutable/input.nml",
+      "groups": [
+        "atoms",
+        "calculation",
+        "control",
+        "energy",
+        "hamiltonian",
+        "lattice",
+        "mix",
+        "reciprocal",
+        "self"
+      ],
+      "member_counts": {
+        "atoms": 2,
+        "calculation": 2,
+        "control": 5,
+        "energy": 5,
+        "hamiltonian": 3,
+        "lattice": 11,
+        "mix": 2,
+        "reciprocal": 12,
+        "self": 3
+      },
+      "schema_valid": true
+    },
+    {
+      "path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/immutable/Ni-imp.nml",
+      "groups": [
+        "element",
+        "par"
+      ],
+      "member_counts": {
+        "element": 9,
+        "par": 32
+      },
+      "schema_valid": true
+    },
+    {
+      "path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/immutable/Ni-imp_out.nml",
+      "groups": [
+        "element",
+        "par"
+      ],
+      "member_counts": {
+        "element": 9,
+        "par": 32
+      },
+      "schema_valid": true
+    }
+  ],
+  "no_unknown_group_or_member": true
+}

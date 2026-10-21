@@ -1,6 +1,6 @@
 {
   "part": "C5.2 Part D / Stage RD",
-  "status": "RD1_PASS_RD2_RD5_PENDING",
+  "status": "RD1_PASS_RD2_FAIL_RD3_RD5_IN_PROGRESS_RD4_NOT_MEASURED",
   "current_amendment": "C5.3 A4(v): no-R1 attribution branch adopted; historical C5.2 A4(iv) stop is superseded",
   "historical_c5_2_a4_iv": {
     "status": "STOP(iv)",
@@ -27,18 +27,31 @@
     "asset_checksums_sha256": "c7eec929c0a4473e6570e4605ea6451dcbb888066186dfa00f385220fecf739b"
   },
   "RD2": {
-    "status": "PENDING",
-    "reason": "No impurity solver run; awaits accepted Ni local impurity state"
+    "status": "GATE_MEASURED_FAIL",
+    "package": "C5_2_PART_D_assets/ni_u3j07_rd2_replay",
+    "report": "C5_2_PART_D_assets/ni_u3j07_rd2_replay/RD2_REPORT.md",
+    "report_sha256": "d9540983da29641e7c756ed57e28900bfb824371961c28d5aa5d54afb4a45948",
+    "provenance_sha256": "c93e74be71fcfd194a822c30c3a3430dd2cda976c3d405ef68fef8eb1766ffdd",
+    "carrier_ratio_each_spin_within_1_percent": true,
+    "q2prime_nonnegative": true,
+    "scalar_shift_within_fitted_allowance": false,
+    "sign_wrong_separation_over_10x_carrier_error": true,
+    "spin_swap_separation_over_10x_carrier_error": false,
+    "debug_replays": 1,
+    "debug_replay_byte_identical": true,
+    "adoption": false,
+    "proposal": "Future pre-registered non-degenerate spin-asymmetric state selection addresses spin-swap identifiability only; scalar-shift failure remains unresolved and its allowance is unchanged.",
+    "independent_items_continue": "C5.3 §2.5 (a)-(d) clause; no criterion/tolerance changes."
   },
   "RD3": {
-    "status": "PENDING",
+    "status": "IN_PROGRESS; independent evidence retained; dependent Ni KS gates unevaluated",
     "comparisons": {
-      "a": "NOT_STARTED",
-      "a_prime": "NOT_STARTED",
-      "b": "NOT_STARTED",
-      "b_prime": "NOT_STARTED",
+      "a": "RS host prerequisites present; impurity comparison remains to be completed/reported",
+      "a_prime": "Fe RECORD work continues independently",
+      "b": "Ni KS-bulk gate UNEVALUATED: U0 and U3 KS host endpoints unavailable after finite B1 guards",
+      "b_prime": "Fe RECORD work continues independently",
       "c": "NOT_STARTED",
-      "d": "NOT_STARTED"
+      "d": "Ni spectral bulk accepted at iteration 47 after independent raw-capture audit; RD3(d) impurity comparison NOT_RUN."
     }
   },
   "RD4": {
@@ -90,12 +103,35 @@
       "status": "exit 0 at 100-step cap, unconverged; final Diff 0.0105018834",
       "terminal_snapshot": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80/terminal_snapshot_001/",
       "terminal_snapshot_manifest_sha256": "305583f91585ff428de4e2a44685e1b9a91b2a4ab1cacdecbc678f3ec7fa8981",
-      "continuation": "beta 0.05, 200-step continuation preflight audited; prepared only, no continuation solver run launched",
-      "continuation_preflight_sha256": "506069af6f99ff51cef654def23ae96b4e23592789e58c772e03d3b8f5b24c01"
+      "continuation": "beta 0.05, 200-step continuation was launched; finite B1 occupation-capacity guard stopped it before convergence (exit 1).",
+      "continuation_preflight_sha256": "506069af6f99ff51cef654def23ae96b4e23592789e58c772e03d3b8f5b24c01",
+      "continuation_asset": "C5_2_PART_D_assets/ni_u0_ks_block_rc80_beta005_cont200_guard",
+      "continuation_terminal_status": "FINITE_B1_OCCUPATION_CAPACITY_GUARD_STOP_NOT_CONVERGED"
+    },
+    "rd_ni_ks_u3_bulk_rc80_block": {
+      "purpose": "Ni U=3 KS bulk host for RD3(b); no accepted endpoint",
+      "status": "FINITE_B1_OCCUPATION_CAPACITY_GUARD_STOP_NOT_CONVERGED; exit 1",
+      "asset": "C5_2_PART_D_assets/ni_u3_ks_block_rc80_guard",
+      "rd3_gate": "UNEVALUATED; dependent comparison not launched"
+    },
+    "rd_ni_u3_spectral_bulk_rc80_block": {
+      "purpose": "Ni spectral U3/J0.7 bulk reference for RD3(d)",
+      "status": "ACCEPTED_WINDOW_28_47_AFTER_INDEPENDENT_RAW_AUDIT",
+      "asset": "/private/tmp/c52-rd-ni-spectral-host-preflight",
+      "acceptance_scan": "/private/tmp/c52-rd-ni-spectral-host-preflight/acceptance_scan.json",
+      "endpoint_iteration": 47,
+      "same_loop_diff": "1.30e-8",
+      "d_q0_spin1_spread": "4.095347119e-7",
+      "d_q0_spin2_spread": "3.818701053e-7",
+      "physical_q0_moment_spread": "2.1492751976e-7",
+      "endpoint_state_sha256": "a42774de195d11190be68af0661f66f75301226286031d37559a4fc3ebc4e43b",
+      "recipe": "fcc Ni, block rc80, U=3 eV, J=0.7 eV; 100 captures, first §2.1 passing window ends at 47",
+      "raw_audit": "PASS; auditor independently recomputed P_OUT ql spreads, same-loop Diff, and endpoint hash",
+      "rd3d_comparison": "NOT_RUN"
     }
   },
-  "rd2_dependent_impurity_solver_runs": 0,
-  "rd2_dependent_impurity_campaign_status": "NOT_STARTED; waits for accepted Ni local impurity state",
+  "rd2_dependent_impurity_solver_runs": 1,
+  "rd2_dependent_impurity_campaign_status": "RD2 frozen replay completed and measured FAIL after exactly one byte-identical diagnostic replay; no adoption. Continue independent items under C5.3 §2.5.",
   "production_energy_or_default_changes": false,
-  "next_step": "RD2 frozen Ni replay after the accepted Ni local impurity state and separate preflight are available"
+  "next_step": "Continue independent Stage RD items; Ni spectral host is accepted at window 28–47, and RD3(d) impurity comparison remains to be run; RD2 remains FAIL with no adoption."
 }

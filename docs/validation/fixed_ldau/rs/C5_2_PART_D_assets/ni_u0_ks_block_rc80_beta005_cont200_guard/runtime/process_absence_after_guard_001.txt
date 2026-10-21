@@ -1,0 +1,3 @@
+  PID  PPID STAT COMMAND
+command=ps -p 53019,53078,53064,53079 -o pid,ppid,stat,command
+exit_status=1

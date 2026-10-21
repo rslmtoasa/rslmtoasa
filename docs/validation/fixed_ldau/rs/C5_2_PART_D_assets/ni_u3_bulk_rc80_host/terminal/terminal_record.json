@@ -1,0 +1,77 @@
+{
+  "record_type": "terminal_record_after_accepted_rs_window",
+  "run_id": "rd_ni_u3_bulk_rc80_block",
+  "accepted_candidate_bundle": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/accepted_checkpoint_55_74",
+  "accepted_candidate_record_sha256": "45ce2f7f6ac66e65d287073da5b19f9ba64d078227942f81e39e8396e0837470",
+  "accepted_candidate_sha256sums_sha256": "55d6c71dd93a4f9f525dcad742afbbfbdd4e355edf33f083b14b6b87f122ac86",
+  "accepted_endpoint_iteration": 74,
+  "accepted_window": [
+    55,
+    74
+  ],
+  "stop": {
+    "authorization": "root authorized after auditor independent full window PASS",
+    "target_solver_pid": 26911,
+    "exact_command": "kill -TERM 26911",
+    "command_record_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/run/authorized_sigterm_record.txt",
+    "command_record_sha256": "a431c3a28530d4a289ea6b16f8512e1a3669fb095614744262253f0613300e96",
+    "observed_signal_time_local": "2026-10-21T09:24:06+0200",
+    "kill_exit_code": 0,
+    "solver_wait_exit_code": 143,
+    "wrapper_wait_exit_code": 143,
+    "lifecycle_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/run/lifecycle.txt",
+    "lifecycle_sha256": "d40aed8bc888d49a2c3faeb6c2c3753d3f45fc8ad355eff75243408bd45930e1",
+    "exit_code_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/run/exit_code.txt",
+    "exit_code_sha256": "9d9b18720961e9b4689fd763b85e7b6f36160ccd3a8a1c9ddc5103bb0f66c396",
+    "watcher_finished_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/captures/watcher_finished.json",
+    "watcher_finished_sha256": "4efd4f90ba522285b61bb7c78d9f06cf54d8f8af24797597ae163d15bbb4ac24",
+    "watcher_captured_entries": 89,
+    "watcher_stop_requested": false,
+    "targeted_process_absence_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/process_absence_after_stop_002.txt",
+    "targeted_process_absence_sha256": "b91c1233ad349d1aa4bf5e6a565a56043fc421a9f6f432673bf1e05281f1cb74",
+    "targeted_pids": [
+      26522,
+      26911,
+      26885,
+      26912
+    ],
+    "absence_observation": "ps produced no rows; exit1 means no selected processes"
+  },
+  "post_stop_unaccepted_outputs": {
+    "path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/post_stop_live_outputs",
+    "record_sha256": "6ec829a34c9d645051617cedf007d66762330d4dd6bab537481ebe2c0d21b7a6",
+    "sums_sha256": "f76524f824976fe98061fdbfec7dec32c8bac26f1b798e9a2fd4d8ca17c17a22",
+    "ids": [
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89
+    ]
+  },
+  "full_run_outputs_after_stop": {
+    "log_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/run/testrun.log",
+    "log_sha256": "a4dc1640efc6c2eddab97c6ba2d7f6fc84d5faa539f9843b410a6c5e3c341e77",
+    "trace_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/run/fixed_u_trace.csv",
+    "trace_sha256": "938432bd26ffb07dbe859e4adb59214219695ba130e28bd6dfa70cda215da16e",
+    "manifest_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/captures/trace_state_manifest.jsonl",
+    "manifest_sha256": "725407fc9569ee2cedfee55c0f256694142116f38de286fd21629feacb4b648e",
+    "working_output_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/run/Ni-imp_out.nml",
+    "working_output_sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a",
+    "working_state_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/run/Ni-imp_scf.nml",
+    "working_state_sha256": "4788d181bd3f838edbfa3843bd30607f7da78227e225256adba8bca9efc6c793",
+    "note": "full output files contain later steps75\u201389 and are not the accepted endpoint; exact accepted state and log/manifest prefixes are isolated in the candidate bundle"
+  },
+  "accepted_endpoint_source": "accepted candidate state snapshot from the trace manifest at iteration74; do not use mutable run/Ni-imp_out.nml as the accepted state",
+  "acceptance_status": "independent auditor PASS; exact thresholds unchanged"
+}

@@ -1,0 +1,38 @@
+{
+  "schema": "c5_3_ni_u3_ks_terminal_v1",
+  "run_id": "rd_ni_u3_ks_bulk_rc80",
+  "preflight_path": "provenance/preflight.json",
+  "preflight_sha256": "6dcc8a3257605d2df39310a6576a41071075ed9d8feeea7f1c12a29b81efc1ed",
+  "status": "FINITE_B1_OCCUPATION_CAPACITY_GUARD_STOP_NOT_CONVERGED",
+  "exit_code": 1,
+  "wrapper_pid": 67472,
+  "solver_pid": 67542,
+  "disk_guard_pid": 67543,
+  "started_local": "2026-10-21T09:38:52+02:00",
+  "ended_local": "2026-10-21T09:39:34+02:00",
+  "guard": {
+    "source": "source/scf_guard.f90:31",
+    "atom": "Ni-imp",
+    "site": 1,
+    "channel": "d",
+    "l": 2,
+    "spin": 2,
+    "iteration": 54,
+    "q0": 5.3792343437210359,
+    "capacity": 5,
+    "allowed_max": 5.0000010000000001,
+    "classification": "finite occupation-capacity guard event; not nonfinite and not convergence"
+  },
+  "process_absence_path": "runtime/process_absence_after_guard_001.txt",
+  "process_absence_sha256": "e9e2628105361d0d314760e1924670abfccaebdac4400405f19abd70920056cb",
+  "trace": {
+    "path": "runtime/fixed_u_trace.csv",
+    "sha256": "ae7a58ae2af2c3ec285388d2dcd1691657998aaf0af1de11e3d6ab2af397e106",
+    "line_count": 993,
+    "last_trace_iteration": 54,
+    "paired_RS_state_snapshots": false,
+    "RS_last20_gate_applied": false
+  },
+  "input_note": "Immutable input is retained. Solver rewrote only the runtime EF field; runtime input is separately preserved. Ni-imp_out.nml remains the accepted RS U3 seed, so no terminal KS state was saved.",
+  "retry": "No retry or criteria change performed; C5.3 uncovered outcome leaves production/defaults unchanged with no adoption."
+}

@@ -1,0 +1,30 @@
+{
+  "actual_argv": [
+    "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/collector/watch_trace_and_state.py",
+    "--run-id",
+    "rd_ni_ks_u0_bulk_rc80_beta005_cont200",
+    "--solver-pid-file",
+    "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/run/solver.pid",
+    "--run-dir",
+    "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/run",
+    "--state-file",
+    "Ni-imp_scf.nml",
+    "--output-dir",
+    "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/captures",
+    "--ready-file",
+    "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/run/watcher.ready"
+  ],
+  "manifest_path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/captures/trace_state_manifest.jsonl",
+  "output_dir": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/captures",
+  "ready_file": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/run/watcher.ready",
+  "record_type": "read_only_trace_watcher_start",
+  "run_dir": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/run",
+  "run_id": "rd_ni_ks_u0_bulk_rc80_beta005_cont200",
+  "solver_pid": null,
+  "solver_pid_file": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/run/solver.pid",
+  "started_local": "2026-10-21T09:28:30.354069+02:00",
+  "state_file": "Ni-imp_scf.nml",
+  "state_source": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/run/Ni-imp_scf.nml",
+  "trace_source": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/run/fixed_u_trace.csv",
+  "watcher_process_pid": 53064
+}

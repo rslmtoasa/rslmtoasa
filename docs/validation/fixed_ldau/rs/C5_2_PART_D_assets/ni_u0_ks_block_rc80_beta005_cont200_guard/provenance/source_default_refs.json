@@ -1,0 +1,115 @@
+{
+  "source_commit": "0469135d935dd31fb6ce055d819cdb54811c52fa",
+  "facts": {
+    "use_kspace": "declared in &self",
+    "kspace_scf": "run_dos calls k-space DOS with auto_find_fermi=.true.; a supplied EF is not a fixed k-space SCF acceptance condition",
+    "reciprocal_defaults": "source restores tetrahedron, 300 K, auto Fermi and reciprocal symmetry reduction by default",
+    "prepared_ks_deck": "explicit 12x12x12 mesh, zero offset, symmetry and time-reversal reductions enabled, no shift; tetrahedron and 300 K explicit",
+    "legacy_example": "repository example uses nk=12 cubed and tetrahedron but includes an &symmetry group absent from declared namelists; that group is omitted from prepared schema-valid input",
+    "C1_threshold_scope": "RS acceptance only; not claimed for KS control"
+  },
+  "files": {
+    "source/self.f90": {
+      "commit": "0469135d935dd31fb6ce055d819cdb54811c52fa",
+      "sha256": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+      "evidence_lines": [
+        {
+          "line": 3361,
+          "text": "if (rank == 0) call g_logger%info('HUBBARD_RADIAL_MODE mode='//trim(this%hamiltonian%hubbard_radial_moments)// &"
+        },
+        {
+          "line": 4483,
+          "text": "call this%reciprocal_scf_cache%calculate_density_of_states( &"
+        },
+        {
+          "line": 4488,
+          "text": "auto_find_fermi=.true.)"
+        }
+      ]
+    },
+    "source/reciprocal_lifecycle.f90": {
+      "commit": "0469135d935dd31fb6ce055d819cdb54811c52fa",
+      "sha256": "b05e252a71e89573a85b600691c810486ee9ed5e5f6a73b5f95b26ffc75cf727",
+      "evidence_lines": [
+        {
+          "line": 178,
+          "text": "this%dos_method = 'tetrahedron'  ! Default to tetrahedron method"
+        },
+        {
+          "line": 180,
+          "text": "this%temperature = 300.0_rp  ! Default temperature in Kelvin"
+        },
+        {
+          "line": 187,
+          "text": "this%auto_find_fermi = .true.  ! Auto-find Fermi level from eigenvalue occupations"
+        },
+        {
+          "line": 206,
+          "text": "this%use_symmetry_reduction = .true.  ! Use symmetry reduction by default"
+        },
+        {
+          "line": 386,
+          "text": "this%use_symmetry_reduction = use_symmetry_reduction"
+        },
+        {
+          "line": 407,
+          "text": "this%temperature = temperature"
+        },
+        {
+          "line": 408,
+          "text": "this%dos_method = dos_method"
+        },
+        {
+          "line": 409,
+          "text": "this%auto_find_fermi = auto_find_fermi"
+        },
+        {
+          "line": 458,
+          "text": "this%use_symmetry_reduction = .false."
+        },
+        {
+          "line": 581,
+          "text": "this%use_symmetry_reduction = .false."
+        }
+      ]
+    },
+    "source/include_codes/namelists/reciprocal.f90": {
+      "commit": "0469135d935dd31fb6ce055d819cdb54811c52fa",
+      "sha256": "514c4ac9292f8addc4042fe8216094594ea1bfe4c3ee467dc6688acbf6421159",
+      "evidence_lines": [
+        {
+          "line": 71,
+          "text": "namelist /reciprocal/ nk1, nk2, nk3, k_offset_x, k_offset_y, k_offset_z, &"
+        }
+      ]
+    },
+    "source/include_codes/namelists/self.f90": {
+      "commit": "0469135d935dd31fb6ce055d819cdb54811c52fa",
+      "sha256": "47787a34dabea3eeb2417bd1f9228cde5ce483391829b85f9597339f8c026c9c",
+      "evidence_lines": [
+        {
+          "line": 16,
+          "text": "namelist /self/ ws_all, all_inequivalent, &"
+        }
+      ]
+    },
+    "example/k_space_scf/bccFe/input.nml": {
+      "commit": "0469135d935dd31fb6ce055d819cdb54811c52fa",
+      "sha256": "018e97e3097b29b539c563bab0cb017b80f9decf1e95b846808197c33b4f6ef8",
+      "evidence_lines": [
+        {
+          "line": 31,
+          "text": "nk1 = 12"
+        },
+        {
+          "line": 41,
+          "text": "use_symmetry_reduction = .false.   ! Use crystal symmetry"
+        },
+        {
+          "line": 48,
+          "text": "dos_method = 'tetrahedron'        ! Use tetrahedron method (more accurate)"
+        }
+      ]
+    }
+  }
+}
