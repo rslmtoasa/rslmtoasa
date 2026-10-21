@@ -115,8 +115,6 @@ contains
             this%hamiltonian%gbt_ref_mom(:, i) = this%lattice%symbolic_atoms(i)%potential%mom
          end do
       end if
-      if (assembler%use_orthogonal .and. trim(this%hamiltonian%magnetic_representation) /= gbt_single_q) &
-         call g_logger%fatal("kspace_ham_order='orthogonal' needs magnetic_representation='gbt_single_q'.", __FILE__, __LINE__)
    end subroutine make_reciprocal_assembler
 
    ! Assemble a whole tile.  The loop is serial by design: a workspace is
@@ -142,7 +140,7 @@ contains
          workspace%active_tile_length = size(k_points,2)
          workspace%cached_operator_generation = this%hamiltonian%operator_generation
       end if
-      if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q) then
+      if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q .or. this%use_orthogonal) then
          call this%assemble_gbt(k_points, workspace)
          return
       end if
