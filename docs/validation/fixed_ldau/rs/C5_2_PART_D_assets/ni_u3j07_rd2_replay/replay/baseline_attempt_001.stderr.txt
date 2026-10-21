@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/private/tmp/c52-rd2-private/rd2_replay_adapter.py", line 360, in <module>
+    main()
+  File "/private/tmp/c52-rd2-private/rd2_replay_adapter.py", line 350, in main
+    if args.mode=='baseline': baseline(args)
+                              ^^^^^^^^^^^^^^
+  File "/private/tmp/c52-rd2-private/rd2_replay_adapter.py", line 140, in baseline
+    runner, rows, nr, ncore, nval, _, _, binding = load_bound_rows(args.capture_dir, args.binding)
+                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/c52-rd2-private/rd2_replay_adapter.py", line 121, in load_bound_rows
+    need((nr, lmax, ncore, nval) == (495, 2, 10, 6), 'unsupported frozen radial replay dimensions')
+  File "/private/tmp/c52-rd2-private/rd2_replay_adapter.py", line 49, in need
+    raise ValueError(message)
+ValueError: unsupported frozen radial replay dimensions

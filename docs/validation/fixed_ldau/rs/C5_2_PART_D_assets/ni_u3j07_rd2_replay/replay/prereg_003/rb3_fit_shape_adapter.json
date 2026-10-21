@@ -1,0 +1,26 @@
+{
+  "D0_RS_ry": 5.056500278044496e-06,
+  "per_site_spin": {
+    "site=0,type=0,spin=1": {
+      "a0_ry": -8.002186942983094e-06,
+      "r_cubic_coefficients_ascending": [
+        -2.288639651211184e-05,
+        -0.0012743728607536849,
+        0.034821613708339035,
+        -6.998981802197406
+      ]
+    },
+    "site=0,type=0,spin=2": {
+      "a0_ry": -8.586825946662462e-06,
+      "r_cubic_coefficients_ascending": [
+        -1.1974096612893559e-05,
+        -0.0003300146960626679,
+        0.018054858543030267,
+        -2.570035955481962
+      ]
+    }
+  },
+  "schema": "rslmto-rb3-fit-shape-adapter-v1",
+  "source_fit_sha256": "0f0b543f81f53bc1c7fdfc46d3b404adef1ca455b8366a90e87154afd2b0987c",
+  "source_prereg_sha256": "46ca7042678dc5b74ad15a7c2bc5f66786ca9191f70d2395405e78c69b5b1525"
+}

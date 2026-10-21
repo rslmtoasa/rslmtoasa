@@ -1,0 +1,18 @@
+{
+  "adapter_path": "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py",
+  "adapter_sha256": "69fa79fa86d921d26635ea6a121c88aa8e735a9fa87ad8cf5bbe840ba0c4e6e9",
+  "authorization_basis": {
+    "auditor": "Static PASS for the exact NR501 private harness and full plan consistency.",
+    "root": "Explicitly authorized baseline for final plan d75437db91edb599df8c0d9cc65e80c0e490b3d8e679c1b49605ccee5f7652f0."
+  },
+  "binding_path": "/private/tmp/c52-rd2-private/vin_binding.json",
+  "binding_sha256": "704cc1e38d537101c70d26a463965e99d79eb9ee1de048912ec29f1f9aecead6",
+  "driver_path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501",
+  "driver_sha256": "34b4456919a77513504ceddc9890dd3dac7d23c9fbe6f0bbbed50c0a6d112508",
+  "mode": "baseline",
+  "plan_path": "/private/tmp/c52-rd2-private/rd2_replay_plan.json",
+  "plan_sha256": "d75437db91edb599df8c0d9cc65e80c0e490b3d8e679c1b49605ccee5f7652f0",
+  "schema": "c5-rd2-explicit-mode-authorization-v1",
+  "scope": "One frozen radial-helper raw-state baseline only; no preregistration, case replay, or SCF solver.",
+  "status": "ROOT_AND_AUDITOR_CLEARED"
+}

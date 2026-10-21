@@ -1,0 +1,11 @@
+launcher_pid=37037
+preexec_free_bytes=10150043648
+started_local=2026-10-21T12:59:12+0200
+solver_pid=37124
+watcher_pid=37107
+env_OMP_NUM_THREADS=4
+env_RSLMTO_OMP_THREADS_SERIAL=4
+env_library_thread_caps=1
+exec_local=2026-10-21T12:59:12+0200
+exit_code=1
+ended_local=2026-10-21T12:59:19+0200

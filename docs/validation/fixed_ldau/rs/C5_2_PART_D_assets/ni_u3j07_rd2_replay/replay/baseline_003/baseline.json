@@ -1,0 +1,105 @@
+{
+  "authorization_sha256": "e8b898a17affb43e4398954dbdc0c5d30e6d3ae11a5bed964f7fefec82ddfa22",
+  "binding_sha256": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668",
+  "capture_csv_sha256": "b2ad9e75f0a471c8f6139d983951c2527692e3d9be9b0f1b30b317a3bd701a0d",
+  "checks": {
+    "EV": {
+      "max_abs": 0.0,
+      "pass": true,
+      "tolerance": 1e-08
+    },
+    "LIVE_STATE_integrals": {
+      "actual_l2_rho_contribution_charge_by_spin": {
+        "1": 4.7387798959630825,
+        "2": 4.738779920224232
+      },
+      "actual_l2_rho_contribution_total": 9.477559816187314,
+      "method": "same captured logarithmic Simpson metric, with the exact 501-point mesh extent",
+      "sphere_charge_by_spin": {
+        "1": 14.571483913654212,
+        "2": 14.571484000420654
+      },
+      "sphere_spin_moment": -8.67664411430269e-08
+    },
+    "PL": {
+      "max_abs": 0.0,
+      "pass": true,
+      "tolerance": 1e-10
+    },
+    "SUMEC": {
+      "max_abs": 0.0,
+      "pass": true,
+      "tolerance": 1e-08
+    },
+    "SUMEV": {
+      "max_abs": 0.0,
+      "pass": true,
+      "tolerance": 1e-08
+    },
+    "captured_ATOMSC_input_density_components": {
+      "ekin": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "etot": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "pass": true,
+      "rhoeps": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "rhomu": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "rhovh": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "sumec": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "sumev": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "utot": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "vnucl": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "zvnucl": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      }
+    },
+    "pass": true,
+    "rho": {
+      "max_abs": 7.105427357601002e-15,
+      "pass": true,
+      "tolerance": 1e-10
+    }
+  },
+  "driver_input_sha256": "bb0e2c5c3305125439461d51c8268e1acd1bfa1df99baaf42700f6a60f3f805d",
+  "driver_output_sha256": "28a01e5429c3b8df3b9f990764a96804dbfd8b2f8714d059b5e7e2e40c8477f2",
+  "driver_sha256": "34b4456919a77513504ceddc9890dd3dac7d23c9fbe6f0bbbed50c0a6d112508",
+  "purpose": "B1-linked frozen radial helper reproduction of captured raw state; not an RD2 response case",
+  "schema": "c5-rd2-frozen-replay-baseline-v1",
+  "status": "PASS"
+}

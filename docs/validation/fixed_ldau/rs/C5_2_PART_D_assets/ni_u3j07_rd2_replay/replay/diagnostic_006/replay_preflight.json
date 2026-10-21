@@ -1,0 +1,183 @@
+{
+  "attempt": {
+    "new_output_dir": "/private/tmp/c52-rd2-private/diagnostic_006/replay_006",
+    "no_scf_solver": true,
+    "one_replay_only": true,
+    "run_id": "rd2_identical_debug_replay_006",
+    "same_case_input_path": "/private/tmp/c52-rd2-private/prereg_005/driver.input.txt",
+    "same_case_input_sha256": "78e8825610e1652f2407979322aa968fb3d3b888431226b78e31133ac082a829",
+    "same_frozen_driver_path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501",
+    "same_frozen_driver_sha256": "34b4456919a77513504ceddc9890dd3dac7d23c9fbe6f0bbbed50c0a6d112508"
+  },
+  "authorization": {
+    "must_bind_preflight_sha256": true,
+    "not_created_by_worker": true,
+    "required_mode": "cases",
+    "required_path": "/private/tmp/c52-rd2-private/diagnostic_006/replay_authorization.json",
+    "required_scope": "one exact five-case reproducibility replay; no SCF solver"
+  },
+  "commands": {
+    "actual_adapter_argv": [
+      "/opt/homebrew/opt/python@3.11/bin/python3.11",
+      "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py",
+      "--mode",
+      "cases",
+      "--capture-dir",
+      "/private/tmp/c52-rd2-ni-u3j07-capture/run",
+      "--binding",
+      "/private/tmp/c52-rd2-private/vin_binding_nr501.json",
+      "--driver",
+      "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501",
+      "--authorization",
+      "/private/tmp/c52-rd2-private/diagnostic_006/replay_authorization.json",
+      "--baseline-report",
+      "/private/tmp/c52-rd2-private/baseline_003/baseline.json",
+      "--prereg-report",
+      "/private/tmp/c52-rd2-private/prereg_005/preregistration.json",
+      "--output-dir",
+      "/private/tmp/c52-rd2-private/diagnostic_006/replay_006"
+    ],
+    "cwd": "/Users/andersb/Jobb/rslmto_fable_v4b",
+    "effective_environment": {
+      "BLIS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "OMP_DYNAMIC": "FALSE",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "RSLMTO_OMP_THREADS_SERIAL": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    },
+    "entrypoint": [
+      "/opt/homebrew/opt/python@3.11/bin/python3.11",
+      "/private/tmp/c52-rd2-private/diagnostic_006/run_identical_replay.py"
+    ],
+    "process_model": "Adapter invokes frozen helper exactly once with argv [driver, immutable prereg_005/driver.input.txt, new replay_006/driver.output.csv].",
+    "python_version": "3.11.17"
+  },
+  "components": {
+    "adapter": {
+      "bytes": 32812,
+      "path": "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py",
+      "sha256": "1dd57269556549c79c5d1ae3549237e8188e06649d1c4d2137a12ce911b7d233"
+    },
+    "baseline_report": {
+      "bytes": 2822,
+      "path": "/private/tmp/c52-rd2-private/baseline_003/baseline.json",
+      "sha256": "dd6eb6919ae1673459afe8f636289b9fc010b02bdc11dbdfc34745f6ded0153f"
+    },
+    "binding": {
+      "bytes": 32363,
+      "path": "/private/tmp/c52-rd2-private/vin_binding_nr501.json",
+      "sha256": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668"
+    },
+    "capture_csv": {
+      "bytes": 131064800,
+      "path": "/private/tmp/c52-rd2-ni-u3j07-capture/run/records.csv",
+      "sha256": "b2ad9e75f0a471c8f6139d983951c2527692e3d9be9b0f1b30b317a3bd701a0d"
+    },
+    "case_input": {
+      "bytes": 65244,
+      "path": "/private/tmp/c52-rd2-private/prereg_005/driver.input.txt",
+      "sha256": "78e8825610e1652f2407979322aa968fb3d3b888431226b78e31133ac082a829"
+    },
+    "derived_runner": {
+      "bytes": 44916,
+      "path": "/private/tmp/c52-rd2-private/nr501_adapter/rs_a3_m03_runner_nr501.py",
+      "sha256": "2ff698eb1d03ca793906c0efb016868089cc1d324b2d093d739100ebd9a6944b"
+    },
+    "driver": {
+      "bytes": 3508192,
+      "path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501",
+      "sha256": "34b4456919a77513504ceddc9890dd3dac7d23c9fbe6f0bbbed50c0a6d112508"
+    },
+    "first_authorization": {
+      "bytes": 1500,
+      "path": "/private/tmp/c52-rd2-private/cases_005.authorization.json",
+      "sha256": "88587a762630b94848721331d836a7d4ee7cd1d6e396fce27872b404a3aaa58b"
+    },
+    "first_output": {
+      "bytes": 326355,
+      "path": "/private/tmp/c52-rd2-private/cases_005/driver.output.csv",
+      "sha256": "49206e51fd5b8cd1bbab83d79dca7d47b74ef760725e8eff6fee3d616954c32e"
+    },
+    "first_report": {
+      "bytes": 13622,
+      "path": "/private/tmp/c52-rd2-private/cases_005/rd2_cases_report.json",
+      "sha256": "29539bcb06648f139719514e8b49b0c1d97efdd009ed8544f7e6e08ff1032153"
+    },
+    "local_hall": {
+      "bytes": 290009,
+      "path": "/private/tmp/c52-rd2-ni-u3j07-capture/run/c2_hubbard_audit.dat",
+      "sha256": "49ea181b2febed08ab66529290acdd3d99b977b8d202f519c57aa82681c58826"
+    },
+    "local_hall_parser": {
+      "bytes": 5976,
+      "path": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/c2_hubbard_operator_audit.py",
+      "sha256": "cf4e9c38a835b6ff24029b28af34385df74a66a8f5d8f5a0710419e565199034"
+    },
+    "payload_diagnostic_report": {
+      "bytes": 17638,
+      "path": "/private/tmp/c52-rd2-private/diagnostic_006/payload_phase_spin_audit.json",
+      "sha256": "d0c2866a167d20910fedb2ab5afdbbabfe95b363b08fef7aae1622795aa2159d"
+    },
+    "payload_diagnostic_script": {
+      "bytes": 15939,
+      "path": "/private/tmp/c52-rd2-private/diagnostic_006/audit_payload.py",
+      "sha256": "c3e38f5d7eab5c6b7e32c8761e6d136ab2ad6a07aee65c18091b7d96b9408d38"
+    },
+    "plan": {
+      "bytes": 19219,
+      "path": "/private/tmp/c52-rd2-private/rd2_replay_plan.json",
+      "sha256": "faa27e52fed0f8830b8088256418e8d972738020b2147027d7415e212cd2eb2d"
+    },
+    "prereg_report": {
+      "bytes": 9591,
+      "path": "/private/tmp/c52-rd2-private/prereg_005/preregistration.json",
+      "sha256": "e6a4c4464603da4a965d8bd7a8dca842f8eb1cbd422c9f81a63670411fb84433"
+    },
+    "production_moment_source": {
+      "bytes": 74002,
+      "path": "/Users/andersb/Jobb/rslmto_fable_v4b/source/math.f90",
+      "sha256": "e4bbcaecb2d8978fd3cc0d5e8b376285bd6b60aaa336a49a60911eaa7851b7ec"
+    },
+    "replay_script": {
+      "bytes": 6436,
+      "path": "/private/tmp/c52-rd2-private/diagnostic_006/run_identical_replay.py",
+      "sha256": "5aa88aadf2128fba97158c3296d8a07e9dceb8534837720690f13cb6f6345ba3"
+    }
+  },
+  "diagnostic": {
+    "checks": "five decoded case records and 501-point input payload; P_OUT and M1_OUT matrices versus all 1,567 RS Green blocks for P/M1/M2; exact LOCAL_HALL Vin versus v_hub type2; true/opposite-spin Tr(VP); P_OUT, m0, and saved radial QL q0; same-phase PL gc and q2 payload.",
+    "report_path": "/private/tmp/c52-rd2-private/diagnostic_006/payload_phase_spin_audit.json",
+    "report_sha256": "d0c2866a167d20910fedb2ab5afdbbabfe95b363b08fef7aae1622795aa2159d",
+    "script_path": "/private/tmp/c52-rd2-private/diagnostic_006/audit_payload.py",
+    "script_sha256": "c3e38f5d7eab5c6b7e32c8761e6d136ab2ad6a07aee65c18091b7d96b9408d38"
+  },
+  "diagnostic_summary": {
+    "Vin_up_minus_down_frobenius": 9.932164440462364e-09,
+    "Vin_up_minus_down_max_entry": 5.330290642113009e-09,
+    "q0_Pout_minus_saved_QL_abs_by_spin": [
+      2.412443578236889e-10,
+      4.233676875742276e-08
+    ],
+    "relative_Vin_difference": 5.86373438259428e-08,
+    "swapped_total_TrVP_Ry": -0.7178940285707092,
+    "total_swap_delta_Ry": 3.3306690738754696e-16,
+    "true_total_TrVP_Ry": -0.7178940285707095
+  },
+  "formal_first_result": {
+    "formal_causes": [
+      "scalar residual exceeds registered A_scalar",
+      "OPPOSITE_SPIN separation below 10x carrier error"
+    ],
+    "legacy_diagnostics_not_gates": true,
+    "raw_csv_sha256": "49206e51fd5b8cd1bbab83d79dca7d47b74ef760725e8eff6fee3d616954c32e",
+    "report_path": "/private/tmp/c52-rd2-private/cases_005/rd2_cases_report.json",
+    "report_sha256": "29539bcb06648f139719514e8b49b0c1d97efdd009ed8544f7e6e08ff1032153",
+    "status": "GATE_MEASURED_FAIL"
+  },
+  "hypothesis": "A remaining payload/phase/spin binding issue, rather than the measured Ni response, may explain the two formal gate failures; audit the frozen case payload and repeat it exactly once.",
+  "schema": "c5-rd2-identical-debug-replay-preflight-v1",
+  "status": "PREPARED_FOR_STATIC_AUDIT; no replay executed"
+}

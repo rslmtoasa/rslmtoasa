@@ -1,0 +1,575 @@
+{
+  "LOCAL_HALL_vs_v_hub_type2_P_insertion_max_abs_by_spin": {
+    "1": 0.0,
+    "2": 0.0
+  },
+  "Vin_spin_traces_and_identifiability": {
+    "1": {
+      "P_trace": 4.73876233594598,
+      "Tr_Vopposite_Psame": -0.3589470137857329,
+      "Tr_VsPs": -0.35894700967858617,
+      "V_frobenius": 0.1693829176555357,
+      "V_max_abs": 0.07935889183058756,
+      "Vin_antihermitian_max": 0.0
+    },
+    "2": {
+      "P_trace": 4.73876240278789,
+      "Tr_Vopposite_Psame": -0.3589470147849762,
+      "Tr_VsPs": -0.3589470188921233,
+      "V_frobenius": 0.16938291969018995,
+      "V_max_abs": 0.07935889527675691,
+      "Vin_antihermitian_max": 0.0
+    },
+    "Vspin_difference": {
+      "frobenius_norm": 9.932164440462364e-09,
+      "max_abs_entry": 5.330290642113009e-09,
+      "relative_to_mean_V_frobenius": 5.86373438259428e-08
+    },
+    "per_spin_true_minus_swapped_TrVP": {
+      "1": 4.107146733822731e-09,
+      "2": -4.107147122400789e-09
+    },
+    "total_swap_delta": 3.3306690738754696e-16,
+    "total_swapped_Tr_VP": -0.7178940285707092,
+    "total_true_Tr_VP": -0.7178940285707095
+  },
+  "binding_runtime_map": {
+    "host_sites": "2..19, type1",
+    "irec_cluster_site": 1,
+    "iz_type": 2,
+    "nlim": 1,
+    "recursion_ordinal": 1,
+    "symbol": "Ni-imp"
+  },
+  "capture_dimensions": {
+    "P_OUT_P_M1_shells_present": true,
+    "backend": "RS",
+    "energy_points": 1567,
+    "full_matrices_complete": true,
+    "green_site": 0,
+    "green_type": 2,
+    "matrix_dimension": 18
+  },
+  "formal_case_summary": {
+    "carrier": {
+      "absolute_error_ry": 0.006152413372614851,
+      "allowance_ry": 0.004553865505880194,
+      "delta_sumev_by_spin_ry": {
+        "1": -0.35587080444982866,
+        "2": -0.355870810748266
+      },
+      "errors_by_spin_ry": {
+        "1": 0.0030762052287575115,
+        "2": 0.0030762081438573396
+      },
+      "pass": false,
+      "signed_ratio_by_spin": {
+        "1": 0.9914299182168642,
+        "2": 0.9914299103155894
+      },
+      "true_trace_by_spin_ry": {
+        "1": -0.35894700967858617,
+        "2": -0.3589470188921233
+      }
+    },
+    "formal_gates": {
+      "all_rd2_gate_conditions_pass": false,
+      "carrier_ratio_each_spin_within_1_percent": true,
+      "measured_carrier_error_ry": 0.006152413372614851,
+      "q2_prime_nonnegative": true,
+      "scalar_control_within_registered_fit_allowance": false,
+      "sign_and_spin_swap_each_exceed_10x_carrier_error": false,
+      "wrong_control_separation_ry": {
+        "OPPOSITE_SPIN": 0.0061524133745932685,
+        "SIGN_WRONG": 1.3962656345471736
+      }
+    },
+    "scalar_plus_001": {
+      "absolute_deviation_from_v_sum_q0_ry": 0.002695820416586253,
+      "allowance_ry": 6.0242239503755855e-05,
+      "delta_sumev_by_spin_ry": {
+        "1": 0.04603971331632095,
+        "2": 0.04603971365443149
+      },
+      "deviation_from_residual_inclusive_prediction_by_spin_ry": {
+        "1": -0.001308763097587838,
+        "2": -0.0013318715797727074
+      },
+      "deviation_from_vq0_by_spin_ry": {
+        "1": -0.0013479100431388474,
+        "2": -0.0013479103734474057
+      },
+      "ideal_vq0_by_spin_ry": {
+        "1": 0.0473876233594598,
+        "2": 0.0473876240278789
+      },
+      "pass": false,
+      "q2_input_policy": "captured RAW q2 invariant under V=vI",
+      "residual_inclusive_prediction_by_spin_ry": {
+        "1": 0.04734847641390879,
+        "2": 0.0473715852342042
+      }
+    },
+    "status": "GATE_MEASURED_FAIL",
+    "wrong_controls": {
+      "OPPOSITE_SPIN": {
+        "absolute_separation_from_true_carrier_ry": 0.0061524133745932685,
+        "delta_sumev_by_spin_ry": {
+          "1": -0.3558708085569111,
+          "2": -0.3558708066392051
+        },
+        "detectability_allowance_A_true_ry": 0.004553865505880194,
+        "detectable": true,
+        "errors_by_spin_ry": {
+          "1": -0.0002390342546375046,
+          "2": 0.0018426385545347035
+        },
+        "fit_within_allowance": true,
+        "predicted_delta_by_spin_ry": {
+          "1": -0.3556317743022736,
+          "2": -0.3577134451937398
+        },
+        "relevant_allowance_ry": 0.004553865574973748,
+        "residual_inclusive_fit_error_ry": 0.0016036042998972544,
+        "true_carrier_total_ry": -0.7178940285707095
+      },
+      "SIGN_WRONG": {
+        "absolute_separation_from_true_carrier_ry": 1.3962656345471736,
+        "delta_sumev_by_spin_ry": {
+          "1": 0.3391857997548756,
+          "2": 0.33918580622158834
+        },
+        "detectability_allowance_A_true_ry": 0.004553865505880194,
+        "detectable": true,
+        "errors_by_spin_ry": {
+          "1": -0.016799783250001366,
+          "2": -0.01871087822759998
+        },
+        "fit_within_allowance": false,
+        "predicted_delta_by_spin_ry": {
+          "1": 0.355985583004877,
+          "2": 0.3578966844491883
+        },
+        "relevant_allowance_ry": 0.00401681761692226,
+        "residual_inclusive_fit_error_ry": 0.03551066147760129,
+        "true_carrier_total_ry": -0.7178940285707095
+      }
+    }
+  },
+  "hashes": {
+    "/Users/andersb/Jobb/rslmto_fable_v4b/source/math.f90": "e4bbcaecb2d8978fd3cc0d5e8b376285bd6b60aaa336a49a60911eaa7851b7ec",
+    "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/c2_hubbard_operator_audit.py": "cf4e9c38a835b6ff24029b28af34385df74a66a8f5d8f5a0710419e565199034",
+    "/private/tmp/c52-rd2-ni-u3j07-capture/run/c2_hubbard_audit.dat": "49ea181b2febed08ab66529290acdd3d99b977b8d202f519c57aa82681c58826",
+    "/private/tmp/c52-rd2-ni-u3j07-capture/run/records.csv": "b2ad9e75f0a471c8f6139d983951c2527692e3d9be9b0f1b30b317a3bd701a0d",
+    "/private/tmp/c52-rd2-private/cases_005/driver.output.csv": "49206e51fd5b8cd1bbab83d79dca7d47b74ef760725e8eff6fee3d616954c32e",
+    "/private/tmp/c52-rd2-private/cases_005/rd2_cases_report.json": "29539bcb06648f139719514e8b49b0c1d97efdd009ed8544f7e6e08ff1032153",
+    "/private/tmp/c52-rd2-private/prereg_005/driver.input.txt": "78e8825610e1652f2407979322aa968fb3d3b888431226b78e31133ac082a829",
+    "/private/tmp/c52-rd2-private/prereg_005/preregistration.json": "e6a4c4464603da4a965d8bd7a8dca842f8eb1cbd422c9f81a63670411fb84433",
+    "/private/tmp/c52-rd2-private/vin_binding_nr501.json": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668"
+  },
+  "independent_Green_P_M1_M2_and_Vin_moment_reconstruction": {
+    "1": {
+      "M2_trace": 1.303249860138569,
+      "P_OUT_center_crosscheck": -0.42019093440178407,
+      "P_OUT_q2_crosscheck": 0.13781601632237034,
+      "Tr_VP_true": -0.3589470096785861,
+      "Tr_Vopposite_Psame": -0.35894701378573285,
+      "center_after_swapped_V": -0.42019093353506964,
+      "center_after_true_V": -0.42019093440178257,
+      "center_raw_from_M1": -0.4959379299739779,
+      "payload_opposite_spin_q2": 0.13781601641252236,
+      "payload_true_local_q2": 0.13781601632237825,
+      "q0": 4.73876233594598,
+      "q2_after_swapped_V": 0.13781601641252217,
+      "q2_after_true_V": 0.13781601632237805,
+      "q2_raw_from_Green_M2": 0.13773026906220198
+    },
+    "2": {
+      "M2_trace": 1.3032498263970473,
+      "P_OUT_center_crosscheck": -0.42019092571090855,
+      "P_OUT_q2_crosscheck": 0.13781600272365438,
+      "Tr_VP_true": -0.35894701889212344,
+      "Tr_Vopposite_Psame": -0.3589470147849763,
+      "center_after_swapped_V": -0.4201909265776206,
+      "center_after_true_V": -0.42019092571090755,
+      "center_raw_from_M1": -0.49593792215895677,
+      "payload_opposite_spin_q2": 0.1378160026335166,
+      "payload_true_local_q2": 0.1378160027236608,
+      "q0": 4.738762402787891,
+      "q2_after_swapped_V": 0.13781600263351584,
+      "q2_after_true_V": 0.13781600272366004,
+      "q2_raw_from_Green_M2": 0.13773025561327867
+    }
+  },
+  "local_hall_meta": {
+    "correction_source": "exact after-before additive LOCAL_HALL BLOCK",
+    "entry_count": 50,
+    "physical_type": 2,
+    "site": 1,
+    "symbol": "Ni-imp"
+  },
+  "notes": [
+    "P_OUT P/M1, Green P/M1/M2, radial QL, and payload QL are checked separately; the latter can be a different phase.",
+    "Opposite-spin binding uses V from LOCAL_HALL blocks keyed by spin and P/M1/Green matrices keyed by captured spin; no renaming/reordering occurs.",
+    "Reproduction command is to be run only after independent preflight audit and root authorization."
+  ],
+  "payload_decode": {
+    "case_ql_input_checks": [
+      {
+        "case": "RAW_PL",
+        "d_q2_payload": [
+          0.13781601632237825,
+          0.1378160027236608
+        ],
+        "q0_q1_and_non_d_q2_match_saved_QL": true,
+        "registered_expected_d_q2": [
+          0.13781601632237825,
+          0.1378160027236608
+        ]
+      },
+      {
+        "case": "LOCAL_PL",
+        "d_q2_payload": [
+          0.13781601632237825,
+          0.1378160027236608
+        ],
+        "q0_q1_and_non_d_q2_match_saved_QL": true,
+        "registered_expected_d_q2": [
+          0.13781601632237825,
+          0.1378160027236608
+        ]
+      },
+      {
+        "case": "SIGN_WRONG",
+        "d_q2_payload": [
+          0.13781601632237825,
+          0.1378160027236608
+        ],
+        "q0_q1_and_non_d_q2_match_saved_QL": true,
+        "registered_expected_d_q2": [
+          0.13781601632237825,
+          0.1378160027236608
+        ]
+      },
+      {
+        "case": "OPPOSITE_SPIN",
+        "d_q2_payload": [
+          0.13781601641252236,
+          0.1378160026335166
+        ],
+        "q0_q1_and_non_d_q2_match_saved_QL": true,
+        "registered_expected_d_q2": [
+          0.13781601641252236,
+          0.1378160026335166
+        ]
+      },
+      {
+        "case": "SCALAR_V_PLUS_001",
+        "d_q2_payload": [
+          0.13781601632237825,
+          0.1378160027236608
+        ],
+        "q0_q1_and_non_d_q2_match_saved_QL": true,
+        "registered_expected_d_q2": [
+          0.13781601632237825,
+          0.1378160027236608
+        ]
+      }
+    ],
+    "cases": [
+      {
+        "calc_flag": ".true.",
+        "name": "RAW_PL",
+        "payload_d_q0": [],
+        "payload_d_q0_by_spin": [
+          4.738762336187224,
+          4.738762360451121
+        ],
+        "payload_d_q1_by_spin": [
+          0.0,
+          0.0
+        ],
+        "payload_d_q2_by_spin": [
+          0.13781601632237825,
+          0.1378160027236608
+        ],
+        "q0_d_payload_vs_P_OUT_abs_by_spin": [
+          2.412443578236889e-10,
+          4.233676875742276e-08
+        ],
+        "q0_d_payload_vs_saved_QL_abs_by_spin": [
+          0.0,
+          0.0
+        ],
+        "q1_d_payload_vs_saved_QL_abs_by_spin": [
+          0.0,
+          0.0
+        ],
+        "registered_shift_by_spin_ry": [
+          0.0,
+          0.0
+        ],
+        "shift_by_spin_ry": [
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "calc_flag": ".true.",
+        "name": "LOCAL_PL",
+        "payload_d_q0": [],
+        "payload_d_q0_by_spin": [
+          4.738762336187224,
+          4.738762360451121
+        ],
+        "payload_d_q1_by_spin": [
+          0.0,
+          0.0
+        ],
+        "payload_d_q2_by_spin": [
+          0.13781601632237825,
+          0.1378160027236608
+        ],
+        "q0_d_payload_vs_P_OUT_abs_by_spin": [
+          2.412443578236889e-10,
+          4.233676875742276e-08
+        ],
+        "q0_d_payload_vs_saved_QL_abs_by_spin": [
+          0.0,
+          0.0
+        ],
+        "q1_d_payload_vs_saved_QL_abs_by_spin": [
+          0.0,
+          0.0
+        ],
+        "registered_shift_by_spin_ry": [
+          -0.07574699557219534,
+          -0.07574699644804919
+        ],
+        "shift_by_spin_ry": [
+          -0.07574699557219534,
+          -0.07574699644804919
+        ]
+      },
+      {
+        "calc_flag": ".true.",
+        "name": "SIGN_WRONG",
+        "payload_d_q0": [],
+        "payload_d_q0_by_spin": [
+          4.738762336187224,
+          4.738762360451121
+        ],
+        "payload_d_q1_by_spin": [
+          0.0,
+          0.0
+        ],
+        "payload_d_q2_by_spin": [
+          0.13781601632237825,
+          0.1378160027236608
+        ],
+        "q0_d_payload_vs_P_OUT_abs_by_spin": [
+          2.412443578236889e-10,
+          4.233676875742276e-08
+        ],
+        "q0_d_payload_vs_saved_QL_abs_by_spin": [
+          0.0,
+          0.0
+        ],
+        "q1_d_payload_vs_saved_QL_abs_by_spin": [
+          0.0,
+          0.0
+        ],
+        "registered_shift_by_spin_ry": [
+          0.07574699557219534,
+          0.07574699644804919
+        ],
+        "shift_by_spin_ry": [
+          0.07574699557219534,
+          0.07574699644804919
+        ]
+      },
+      {
+        "calc_flag": ".true.",
+        "name": "OPPOSITE_SPIN",
+        "payload_d_q0": [],
+        "payload_d_q0_by_spin": [
+          4.738762336187224,
+          4.738762360451121
+        ],
+        "payload_d_q1_by_spin": [
+          0.0,
+          0.0
+        ],
+        "payload_d_q2_by_spin": [
+          0.13781601641252236,
+          0.1378160026335166
+        ],
+        "q0_d_payload_vs_P_OUT_abs_by_spin": [
+          2.412443578236889e-10,
+          4.233676875742276e-08
+        ],
+        "q0_d_payload_vs_saved_QL_abs_by_spin": [
+          0.0,
+          0.0
+        ],
+        "q1_d_payload_vs_saved_QL_abs_by_spin": [
+          0.0,
+          0.0
+        ],
+        "registered_shift_by_spin_ry": [
+          -0.0757469964389083,
+          -0.07574699558133616
+        ],
+        "shift_by_spin_ry": [
+          -0.0757469964389083,
+          -0.07574699558133616
+        ]
+      },
+      {
+        "calc_flag": ".true.",
+        "name": "SCALAR_V_PLUS_001",
+        "payload_d_q0": [],
+        "payload_d_q0_by_spin": [
+          4.738762336187224,
+          4.738762360451121
+        ],
+        "payload_d_q1_by_spin": [
+          0.0,
+          0.0
+        ],
+        "payload_d_q2_by_spin": [
+          0.13781601632237825,
+          0.1378160027236608
+        ],
+        "q0_d_payload_vs_P_OUT_abs_by_spin": [
+          2.412443578236889e-10,
+          4.233676875742276e-08
+        ],
+        "q0_d_payload_vs_saved_QL_abs_by_spin": [
+          0.0,
+          0.0
+        ],
+        "q1_d_payload_vs_saved_QL_abs_by_spin": [
+          0.0,
+          0.0
+        ],
+        "registered_shift_by_spin_ry": [
+          0.01,
+          0.01
+        ],
+        "shift_by_spin_ry": [
+          0.01,
+          0.01
+        ]
+      }
+    ],
+    "header": [
+      2,
+      501,
+      10,
+      6,
+      5,
+      0,
+      1
+    ],
+    "line_count": 607,
+    "path": "/private/tmp/c52-rd2-private/prereg_005/driver.input.txt",
+    "pl_input_by_spin_ell": {
+      "1": {
+        "0": [
+          -0.041995168560506335,
+          -0.19576753222088283,
+          0.4211455785507352,
+          0.44519883451066955,
+          4.8039787709864,
+          4.8039787741040865
+        ],
+        "1": [
+          0.11283892055814015,
+          0.8483856056637141,
+          0.11083185341114002,
+          0.41991873277141833,
+          4.595196759900628,
+          4.595196759800031
+        ],
+        "2": [
+          0.1996049440707346,
+          0.27114259495749365,
+          -0.011536560286511389,
+          0.13464086873748204,
+          3.9012463123659233,
+          3.901246311841297
+        ]
+      },
+      "2": {
+        "0": [
+          -0.04199529506336275,
+          -0.19576753422578697,
+          0.4211455808073584,
+          0.44519883362525514,
+          4.803978745477384,
+          4.803978747371929
+        ],
+        "1": [
+          0.11283895877307348,
+          0.8483856041578509,
+          0.11083185369333837,
+          0.4199187331920871,
+          4.595196747971879,
+          4.595196751250932
+        ],
+        "2": [
+          0.19960495188575594,
+          0.271142590452474,
+          -0.01153656090086208,
+          0.13464086854933838,
+          3.901246319065873,
+          3.9012463190102715
+        ]
+      }
+    },
+    "sha256": "78e8825610e1652f2407979322aa968fb3d3b888431226b78e31133ac082a829"
+  },
+  "schema": "c5-rd2-debugging-attempt-payload-phase-spin-audit-v1",
+  "spin_matrix_checks": {
+    "1": {
+      "Green_q2_raw": 0.13773026906220198,
+      "M1_vs_Green_max_abs": 2.4980018054066022e-15,
+      "P_OUT_after_local_center": -0.42019093440178407,
+      "P_OUT_after_local_q2": 0.13781601632237034,
+      "P_OUT_q2": 0.13781601632237034,
+      "P_vs_Green_max_abs": 1.6653345369377348e-15,
+      "live_q2": 0.13781601682449776,
+      "m0_type_writer_metadata": 19,
+      "q0_P_OUT_matrix_trace": 4.73876233594598,
+      "q0_P_to_live_QL_abs": 2.412443578236889e-10,
+      "q0_P_to_m0_abs": 0.0,
+      "q0_P_to_radial_abs": 0.0,
+      "q0_RS_GREEN_matrix_trace": 4.73876233594598,
+      "q0_m0_carrier_input": 4.73876233594598,
+      "q0_radial_moment_P_OUT": 4.73876233594598,
+      "q0_radial_replay_QL": 4.738762336187224,
+      "raw_M2_trace": 1.303249860138569
+    },
+    "2": {
+      "Green_q2_raw": 0.13773025561327867,
+      "M1_vs_Green_max_abs": 2.1094237467877974e-15,
+      "P_OUT_after_local_center": -0.42019092571090855,
+      "P_OUT_after_local_q2": 0.13781600272365438,
+      "P_OUT_q2": 0.13781600272365438,
+      "P_vs_Green_max_abs": 3.6637359812630166e-15,
+      "live_q2": 0.1378159937479713,
+      "m0_type_writer_metadata": 19,
+      "q0_P_OUT_matrix_trace": 4.73876240278789,
+      "q0_P_to_live_QL_abs": 4.233676875742276e-08,
+      "q0_P_to_m0_abs": 0.0,
+      "q0_P_to_radial_abs": 0.0,
+      "q0_RS_GREEN_matrix_trace": 4.738762402787891,
+      "q0_m0_carrier_input": 4.73876240278789,
+      "q0_radial_moment_P_OUT": 4.73876240278789,
+      "q0_radial_replay_QL": 4.738762360451121,
+      "raw_M2_trace": 1.3032498263970473
+    }
+  },
+  "status": "PREPARED_READ_ONLY_DIAGNOSTIC; no replay of helper yet"
+}

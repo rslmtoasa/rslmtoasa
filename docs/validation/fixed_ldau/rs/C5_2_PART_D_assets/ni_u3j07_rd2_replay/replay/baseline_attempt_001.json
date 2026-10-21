@@ -1,0 +1,41 @@
+{
+  "adapter_sha256_at_attempt": "5f212d37398901346f081d52589727557fe6a2c73ebd6fe80d1ec447f9da5839",
+  "argv": [
+    "/opt/homebrew/opt/python@3.11/bin/python3.11",
+    "/private/tmp/c52-rd2-private/rd2_replay_adapter.py",
+    "--mode",
+    "baseline",
+    "--capture-dir",
+    "/private/tmp/c52-rd2-ni-u3j07-capture/run",
+    "--binding",
+    "/private/tmp/c52-rd2-private/vin_binding.json",
+    "--driver",
+    "/private/tmp/c52-c-private/helper-build/accepted_m03_replay_driver",
+    "--authorization",
+    "/private/tmp/c52-rd2-private/execution_authorization.json",
+    "--output-dir",
+    "/private/tmp/c52-rd2-private/baseline_001"
+  ],
+  "attempt": "baseline_001",
+  "authorization_sha256": "569854f5463ba75945cc9e975a93c38b2fdb3cdf999ba545d54239d5d5e6d0c9",
+  "capture_sha256": "b2ad9e75f0a471c8f6139d983951c2527692e3d9be9b0f1b30b317a3bd701a0d",
+  "classification": "PREFLIGHT_REJECTED_BEFORE_DRIVER; no numerical helper invoked",
+  "driver_invocations": 0,
+  "environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "exit_code": 1,
+  "output_dir_created": false,
+  "reason": "capture radial_NR is 501, while adapter incorrectly expected 495",
+  "schema": "c5-rd2-baseline-attempt-v1",
+  "solver_launches": 0,
+  "stderr_path": "/private/tmp/c52-rd2-private/baseline_attempt_001.stderr.txt",
+  "stderr_sha256": "bb480dfcaeda6e2bc4b73766a9b3cb6a4d28f4b0e01e1c6ffd79aac042fd5590"
+}

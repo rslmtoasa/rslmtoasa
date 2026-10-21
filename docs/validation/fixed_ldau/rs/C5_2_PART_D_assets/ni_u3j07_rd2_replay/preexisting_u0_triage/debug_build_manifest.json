@@ -1,0 +1,85 @@
+{
+  "build_command": [
+    "cmake",
+    "--build",
+    "/private/tmp/c52-rd-ni-u0-triage/debug_build/build",
+    "--target",
+    "rslmto.x",
+    "--parallel",
+    "1"
+  ],
+  "build_exit_code": 0,
+  "build_observation": "CMake output completed [100%] Linking Fortran executable; target built successfully in session 39922. No raw build log was redirected; CMake generated build files and flags are hashed below.",
+  "build_output_path": "/private/tmp/c52-rd-ni-u0-triage/debug_build/build/bin/rslmto.x",
+  "cmake_cache_sha256": "1e666ac27aecf8729fbfb968734ed7555f5b49cee2b46cefab3632a55a8ce36f",
+  "cmake_version": "cmake version 4.4.4",
+  "compiler_version": "GNU Fortran (Homebrew GCC 16.2.0) 16.2.0",
+  "configure_command": [
+    "cmake",
+    "-S",
+    "/private/tmp/c52-rd-ni-u0-triage/debug_build/source_tree",
+    "-B",
+    "/private/tmp/c52-rd-ni-u0-triage/debug_build/build",
+    "-G",
+    "Unix Makefiles",
+    "-DCMAKE_BUILD_TYPE=Debug",
+    "-DCMAKE_Fortran_COMPILER=/opt/homebrew/bin/gfortran",
+    "-DCMAKE_Fortran_FLAGS=",
+    "-DCMAKE_Fortran_FLAGS_DEBUG=-g -fcheck=bounds -ffpe-trap=invalid,zero,overflow",
+    "-DENABLE_OPENMP=ON",
+    "-DENABLE_MPI=OFF",
+    "-DENABLE_SPGLIB=ON",
+    "-DENABLE_MARCH_NATIVE=ON"
+  ],
+  "effective_cache_values": {
+    "BLAS_Accelerate_LIBRARY": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Accelerate.framework",
+    "CMAKE_BUILD_TYPE": "Debug",
+    "CMAKE_Fortran_FLAGS": " -ffree-line-length-0 -cpp -mtune=native",
+    "CMAKE_Fortran_FLAGS_DEBUG": "-g -fcheck=bounds -ffpe-trap=invalid,zero,overflow -O0 -Wall -Wno-tabs -Wno-unused-variable -Wno-unused-dummy-argument -Wno-unused-function -Wno-unused-label -fbacktrace",
+    "ENABLE_MARCH_NATIVE": "ON",
+    "ENABLE_MPI": "OFF",
+    "ENABLE_OPENMP": "ON",
+    "ENABLE_SPGLIB": "ON"
+  },
+  "frozen_executable": {
+    "mode": "0555",
+    "path": "/private/tmp/c52-rd-ni-u0-triage/debug_frozen/7169cba37c47318a5925f4335b39987755e2dee3001fa2a528af99ea4abe33c0/rslmto.x",
+    "sha256": "7169cba37c47318a5925f4335b39987755e2dee3001fa2a528af99ea4abe33c0",
+    "size_bytes": 15094984
+  },
+  "generated_files": {
+    "CMakeCache.txt": {
+      "path": "/private/tmp/c52-rd-ni-u0-triage/debug_build/build/CMakeCache.txt",
+      "sha256": "1e666ac27aecf8729fbfb968734ed7555f5b49cee2b46cefab3632a55a8ce36f"
+    },
+    "library_flags.make": {
+      "path": "/private/tmp/c52-rd-ni-u0-triage/debug_build/build/source/CMakeFiles/rslmto.dir/flags.make",
+      "sha256": "3027e3f7f53d75f7be4538686007f4460c7fa7cfffbb90155d6abe0a31021a63"
+    },
+    "library_link.txt": {
+      "path": "/private/tmp/c52-rd-ni-u0-triage/debug_build/build/source/CMakeFiles/rslmto.dir/link.txt",
+      "sha256": "b6829c280872c028083dde1a2fcac4f3a8ab91d1a135467a21cc14b5be081435"
+    },
+    "solver_flags.make": {
+      "path": "/private/tmp/c52-rd-ni-u0-triage/debug_build/build/CMakeFiles/rslmto.x.dir/flags.make",
+      "sha256": "83645774ea82fda89212ece850ed06732f2e02efc0e247d7b30397f01f53cfd7"
+    },
+    "solver_link.txt": {
+      "path": "/private/tmp/c52-rd-ni-u0-triage/debug_build/build/CMakeFiles/rslmto.x.dir/link.txt",
+      "sha256": "4d72badacec3604f394fd3739667dc20d5d6ec917ec0281efb249b98955e59f0"
+    }
+  },
+  "notes": [
+    "Exact RD1 source archive and per-file SHA manifest bind all tracked files from commit 683eff937241a463d2dacb395485d6b7c0b43264.",
+    "Debug bounds/floating-point flags match the reviewed C5.2 Debug bounds template; no production source edits were made.",
+    "Build used one job; no solver launched during build."
+  ],
+  "schema": "c5_3_ni_u0_triage_rd1_debug_build_v1",
+  "source_archive_path": "/private/tmp/c52-rd-ni-u0-triage/debug_build/source-683eff937241a463d2dacb395485d6b7c0b43264.tar",
+  "source_archive_sha256": "f6c83e2d5e2fa904f7dc8149b0324424fccc26a5d6b70171b2e6435da44559a7",
+  "source_commit": "683eff937241a463d2dacb395485d6b7c0b43264",
+  "source_manifest_entries": 2546,
+  "source_manifest_path": "/private/tmp/c52-rd-ni-u0-triage/debug_build/source_manifest.json",
+  "source_manifest_sha256": "2c0778a29658498877cadf78401a90bb421171f13a1eed3c89929cb5c3893b72",
+  "status": "BUILD_SUCCESS_FROZEN_NOT_LAUNCHED"
+}

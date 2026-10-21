@@ -1,0 +1,96 @@
+{
+  "baseline_context": "Production source at 683eff937241a463d2dacb395485d6b7c0b43264; source archive and tracked-file manifest hashes are in debug_build_manifest.json.",
+  "debug_build_manifest_path": "/private/tmp/c52-rd-ni-u0-triage/debug_build_manifest.json",
+  "debug_build_manifest_sha256": "3383e0276595a2957fb88900aea9c8d82bd11837b7f60461bb07263146c63373",
+  "exact_settings": {
+    "J_eV": 0,
+    "U_eV": 0,
+    "beta": 0.1,
+    "calctype": "I",
+    "conv_thr": 1e-30,
+    "energy_window_Ry": [
+      -1.0,
+      0.5
+    ],
+    "fixed_EF_Ry": -0.061141,
+    "lld": 21,
+    "lmax": 2,
+    "mixer": "Broyden",
+    "nsp": 1,
+    "nstep": 200,
+    "radial_mode": "explicit local",
+    "rc": 80,
+    "recursion": "block",
+    "use_kspace": false
+  },
+  "frozen_executable": {
+    "mode": "0555",
+    "path": "/private/tmp/c52-rd-ni-u0-triage/debug_frozen/7169cba37c47318a5925f4335b39987755e2dee3001fa2a528af99ea4abe33c0/rslmto.x",
+    "sha256": "7169cba37c47318a5925f4335b39987755e2dee3001fa2a528af99ea4abe33c0",
+    "size_bytes": 15094984
+  },
+  "input": {
+    "immutable_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/immutable/input.nml",
+    "same_bytes_as_failed_RD1_release_attempt": true,
+    "sha256": "008bce3b5160ef76b40201b2d03797db346da9eef9a07046b5150907b90538b7",
+    "working_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/run/input.nml"
+  },
+  "launch": {
+    "authorization_required": true,
+    "capture": "six P_OUT ql keys plus six POST_SCF_RADIAL ending etot_total and state snapshot each complete iteration; same-loop Diff required",
+    "command": "C52_NI_U0_TRIAGE_DEBUG_AUTHORIZED=1 /private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/collector/launch.sh",
+    "disk_floor_bytes": 1073741824,
+    "disk_guard_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/collector/disk_guard.sh",
+    "disk_guard_sha256": "3049362e51a3165866c73bb997667a0c74662fc673328085b2636c25dae74cdd",
+    "environment": {
+      "BLIS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "4",
+      "OPENBLAS_NUM_THREADS": "1",
+      "RSLMTO_OMP_THREADS_SERIAL": "4",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    },
+    "launch_wrapper_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/collector/launch.sh",
+    "launch_wrapper_sha256": "9158270b307f3485d959340fccd3b6278e4cb973626f83d4cd69e24ec3a5635e",
+    "no_launch_authorized": true,
+    "readiness": "collector-owned ready file fsync after initialization; Bash wrapper writes actual solver PID then waits and records exit",
+    "watcher_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/collector/watch_trace_and_state.py",
+    "watcher_sha256": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be"
+  },
+  "observed_failure_to_reproduce": "RD1 Release U0 attempt terminated before first SCF Diff at bands.f90:1269 with Unable to map local d-shell Hubbard potential; do not infer numerical cause before exact same-deck triage.",
+  "purpose": "\u00a72.4 same-deck diagnostic replay of the observed local d-shell mapping fatal using a current-HEAD RD1 Debug bounds binary. Immutable input/restart bytes are identical to the Release attempt; no metadata/mode/backend changes.",
+  "repository": "/Users/andersb/Jobb/rslmto_fable_v4b",
+  "restart_and_element_files": {
+    "Ni-bulk.nml": {
+      "immutable_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/immutable/Ni-bulk.nml",
+      "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+      "working_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/run/Ni-bulk.nml"
+    },
+    "Ni-bulk_out.nml": {
+      "immutable_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/immutable/Ni-bulk_out.nml",
+      "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4",
+      "working_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/run/Ni-bulk_out.nml"
+    },
+    "Ni-imp.nml": {
+      "immutable_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/immutable/Ni-imp.nml",
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+      "working_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/run/Ni-imp.nml"
+    },
+    "Ni-imp_out.nml": {
+      "immutable_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/immutable/Ni-imp_out.nml",
+      "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a",
+      "working_path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/run/Ni-imp_out.nml"
+    }
+  },
+  "run_id": "c52_ni_u0_impurity_rd1_debug_same_input",
+  "schema": "c5_3_ni_u0_impurity_rd1_debug_triage_preflight_v1",
+  "source_archive_sha256": "f6c83e2d5e2fa904f7dc8149b0324424fccc26a5d6b70171b2e6435da44559a7",
+  "source_manifest_sha256": "2c0778a29658498877cadf78401a90bb421171f13a1eed3c89929cb5c3893b72",
+  "source_schema": {
+    "path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/provenance/schema_validation.json",
+    "result": "PASS all input/restart/element groups and members against RD1 source",
+    "sha256": "30ae0717b98d4cf2c5fab6e4b201994acae3fd900b0f2914580c0faca03471a8"
+  },
+  "status": "PREPARED_ONLY_NOT_LAUNCHED"
+}

@@ -1,0 +1,59 @@
+{
+  "SCF_solver_launched": false,
+  "adapter_sha256": "1dd57269556549c79c5d1ae3549237e8188e06649d1c4d2137a12ce911b7d233",
+  "authorization_sha256_at_execution": "84df9031c0e7560834b28cefeee883eda2ac6b8a51367ad6279f18c362703bf5",
+  "baseline_report_sha256": "dd6eb6919ae1673459afe8f636289b9fc010b02bdc11dbdfc34745f6ded0153f",
+  "binding_sha256": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668",
+  "command": [
+    "/opt/homebrew/opt/python@3.11/bin/python3.11",
+    "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py",
+    "--mode",
+    "preregister",
+    "--capture-dir",
+    "/private/tmp/c52-rd2-ni-u3j07-capture/run",
+    "--binding",
+    "/private/tmp/c52-rd2-private/vin_binding_nr501.json",
+    "--driver",
+    "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501",
+    "--authorization",
+    "/private/tmp/c52-rd2-private/execution_authorization.json",
+    "--baseline-report",
+    "/private/tmp/c52-rd2-private/baseline_003/baseline.json",
+    "--output-dir",
+    "/private/tmp/c52-rd2-private/prereg_005"
+  ],
+  "driver_sha256": "34b4456919a77513504ceddc9890dd3dac7d23c9fbe6f0bbbed50c0a6d112508",
+  "environment_caps": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "exit_code": 0,
+  "mode": "preregister",
+  "outputs": {
+    "driver.input.txt": {
+      "path": "/private/tmp/c52-rd2-private/prereg_005/driver.input.txt",
+      "sha256": "78e8825610e1652f2407979322aa968fb3d3b888431226b78e31133ac082a829",
+      "size_bytes": 65244
+    },
+    "preregistration.json": {
+      "path": "/private/tmp/c52-rd2-private/prereg_005/preregistration.json",
+      "sha256": "e6a4c4464603da4a965d8bd7a8dca842f8eb1cbd422c9f81a63670411fb84433",
+      "size_bytes": 9591
+    },
+    "rb3_fit_shape_adapter.json": {
+      "path": "/private/tmp/c52-rd2-private/prereg_005/rb3_fit_shape_adapter.json",
+      "sha256": "e96aaf99aa4143b3f8b61373b26b6249fe5882c57fa1f067f4a42430e4635158",
+      "size_bytes": 792
+    }
+  },
+  "plan_sha256_at_execution": "b28317d9e00cdd51b1688a081178fd969a49990185b3054098492cf61f46cde8",
+  "response_driver_called": false,
+  "schema": "c5-rd2-prereg-execution-record-v1",
+  "status": "EXIT0_PAYLOAD_PREPARED_NO_RESPONSE_DRIVER_OR_SOLVER_INVOKED"
+}

@@ -1,0 +1,18 @@
+{
+  "adapter_path": "/private/tmp/c52-rd2-private/rd2_replay_adapter.py",
+  "adapter_sha256": "5f212d37398901346f081d52589727557fe6a2c73ebd6fe80d1ec447f9da5839",
+  "authorization_basis": {
+    "auditor": "Auditor static review passed the exact adapter logic; root then authorized the refreshed plan which differs only by explicit single-thread helper caps.",
+    "root": "Root authorized baseline and preregistration after baseline PASS in the current task message."
+  },
+  "binding_path": "/private/tmp/c52-rd2-private/vin_binding.json",
+  "binding_sha256": "704cc1e38d537101c70d26a463965e99d79eb9ee1de048912ec29f1f9aecead6",
+  "driver_path": "/private/tmp/c52-c-private/helper-build/accepted_m03_replay_driver",
+  "driver_sha256": "9e3f44379b8933d21eafb78e8008cbf0d44dd9b65a77140af2920c26713ac9d7",
+  "mode": "baseline",
+  "plan_path": "/private/tmp/c52-rd2-private/rd2_replay_plan.json",
+  "plan_sha256": "46000cb165f46d26189399f534e68ff660796337e177e16a4dd66a7c43d01cfd",
+  "schema": "c5-rd2-explicit-mode-authorization-v1",
+  "scope": "One frozen radial-helper raw-state baseline only; no case replay or SCF solver.",
+  "status": "ROOT_AND_AUDITOR_CLEARED"
+}

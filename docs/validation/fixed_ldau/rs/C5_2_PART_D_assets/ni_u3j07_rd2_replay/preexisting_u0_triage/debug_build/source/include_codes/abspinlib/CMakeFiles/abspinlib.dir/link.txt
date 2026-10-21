@@ -1,0 +1,2 @@
+/usr/bin/ar qc libabspinlib.a CMakeFiles/abspinlib.dir/depondt.f90.o CMakeFiles/abspinlib.dir/constants.f90.o CMakeFiles/abspinlib.dir/mtprng.f90.o CMakeFiles/abspinlib.dir/stdtypes.f90.o CMakeFiles/abspinlib.dir/randomnumbers.f90.o CMakeFiles/abspinlib.dir/parameters.f90.o CMakeFiles/abspinlib.dir/abSpinlib.f90.o CMakeFiles/abspinlib.dir/constrain.f90.o
+/usr/bin/ranlib libabspinlib.a

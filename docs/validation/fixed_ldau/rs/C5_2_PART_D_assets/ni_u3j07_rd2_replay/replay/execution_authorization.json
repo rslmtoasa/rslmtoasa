@@ -1,0 +1,19 @@
+{
+  "adapter_path": "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py",
+  "adapter_sha256": "1dd57269556549c79c5d1ae3549237e8188e06649d1c4d2137a12ce911b7d233",
+  "authorization_basis": {
+    "auditor": "Current adapter and phase proof reviewed; prereg payload awaits independent audit.",
+    "root": "Authorized preregistered payload generation with corrected raw Green moment phase and same-phase gravity-center offset; no response driver execution."
+  },
+  "baseline_report_sha256": "dd6eb6919ae1673459afe8f636289b9fc010b02bdc11dbdfc34745f6ded0153f",
+  "binding_path": "/private/tmp/c52-rd2-private/vin_binding_nr501.json",
+  "binding_sha256": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668",
+  "driver_path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501",
+  "driver_sha256": "34b4456919a77513504ceddc9890dd3dac7d23c9fbe6f0bbbed50c0a6d112508",
+  "mode": "preregister",
+  "plan_path": "/private/tmp/c52-rd2-private/rd2_replay_plan.json",
+  "plan_sha256": "b28317d9e00cdd51b1688a081178fd969a49990185b3054098492cf61f46cde8",
+  "schema": "c5-rd2-explicit-mode-authorization-v1",
+  "scope": "Generate and inspect preregistered RD2 case operands/payloads after frozen raw-state baseline PASS. This mode does not invoke the response driver or launch an SCF solver; response cases remain separately gated.",
+  "status": "ROOT_AND_AUDITOR_CLEARED"
+}

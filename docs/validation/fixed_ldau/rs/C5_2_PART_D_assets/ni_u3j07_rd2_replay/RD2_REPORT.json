@@ -1,0 +1,26 @@
+{
+  "schema": "c5-rd2-stage-report-v1",
+  "status": "GATE_MEASURED_FAIL",
+  "adoption": false,
+  "criteria_or_tolerances_changed": false,
+  "debug_replays": 1,
+  "debug_replay_byte_identical": true,
+  "checks": {
+    "carrier_ratio_each_spin_within_1_percent": {"status": "PASS", "spin1": 0.9914299182168642, "spin2": 0.9914299103155894},
+    "q2prime_nonnegative": {"status": "PASS", "minimum_ry2": 0.1378160027236608},
+    "scalar_shift_within_fitted_allowance": {"status": "FAIL", "deviation_ry": 0.002695820416586253, "allowance_ry": 0.000060242239503755855},
+    "sign_wrong_separation_over_10x_carrier_error": {"status": "PASS", "separation_ry": 1.3962656345471736, "threshold_ry": 0.06152413372614851},
+    "spin_swap_separation_over_10x_carrier_error": {"status": "FAIL", "separation_ry": 0.0061524133745932685, "threshold_ry": 0.06152413372614851}
+  },
+  "diagnosis": {
+    "opposite_spin_degenerate": true,
+    "true_vs_swapped_total_trvp_delta_ry": 3.33e-16,
+    "vin_spin_norm_delta": 9.93e-9
+  },
+  "proposed_future_criterion": "Use a pre-registered non-degenerate spin-asymmetric accepted state for RD2 and retain the existing spin-swap separation threshold and all other criteria unchanged; validate state selection before any new replay.",
+  "proposal_adopted": false,
+  "primary_report": "replay/cases_005/rd2_cases_report.json",
+  "primary_report_sha256": "29539bcb06648f139719514e8b49b0c1d97efdd009ed8544f7e6e08ff1032153",
+  "identical_replay_output": "replay/diagnostic_006/replay_006/driver.output.csv",
+  "identical_replay_output_sha256": "49206e51fd5b8cd1bbab83d79dca7d47b74ef760725e8eff6fee3d616954c32e"
+}

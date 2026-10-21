@@ -1,0 +1,20 @@
+{
+  "adapter_path": "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py",
+  "adapter_sha256": "1dd57269556549c79c5d1ae3549237e8188e06649d1c4d2137a12ce911b7d233",
+  "authorization_basis": {
+    "auditor": "Prereg_005 payload independently matches audited prereg_004 operands; frozen plan faa27e52 status refresh reviewed.",
+    "root": "Explicitly authorized the five response cases using the audited preregistered payload SHA 78e8825610e1652f2407979322aa968fb3d3b888431226b78e31133ac082a829."
+  },
+  "baseline_report_sha256": "dd6eb6919ae1673459afe8f636289b9fc010b02bdc11dbdfc34745f6ded0153f",
+  "binding_path": "/private/tmp/c52-rd2-private/vin_binding_nr501.json",
+  "binding_sha256": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668",
+  "driver_path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501",
+  "driver_sha256": "34b4456919a77513504ceddc9890dd3dac7d23c9fbe6f0bbbed50c0a6d112508",
+  "mode": "cases",
+  "plan_path": "/private/tmp/c52-rd2-private/rd2_replay_plan.json",
+  "plan_sha256": "faa27e52fed0f8830b8088256418e8d972738020b2147027d7415e212cd2eb2d",
+  "prereg_report_sha256": "e6a4c4464603da4a965d8bd7a8dca842f8eb1cbd422c9f81a63670411fb84433",
+  "schema": "c5-rd2-explicit-mode-authorization-v1",
+  "scope": "Run exactly the five preregistered frozen radial helper response cases. No SCF solver launch. Preserve raw case outputs and audit before any gate verdict.",
+  "status": "ROOT_AND_AUDITOR_CLEARED"
+}

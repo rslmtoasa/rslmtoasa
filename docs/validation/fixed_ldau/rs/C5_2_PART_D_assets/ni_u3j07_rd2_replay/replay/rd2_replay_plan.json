@@ -1,0 +1,363 @@
+{
+  "attempt_history": {
+    "attempt_001": "adapter rejected NR=501 before driver invocation; zero helper/SCF runs; stderr and auth preserved",
+    "attempt_002": "baseline rejected before helper invocation due stale driver binding; preserved separately",
+    "baseline_003": "frozen helper baseline PASS; report SHA dd6eb6919ae1673459afe8f636289b9fc010b02bdc11dbdfc34745f6ded0153f",
+    "prereg_003": "prereg calculations rejected before response driver because m0 type is writer metadata 19, not physical type2; no case helper invoked"
+  },
+  "capture_binding": {
+    "Vin": "Exact additive LOCAL_HALL BLOCK correction (after-before), site=1/type=2, 50 complex entries; independently equals captured v_hub type=2 Pin_H d-block exactly. Do not use type-1 host selector.",
+    "accepted_impurity_checkpoint_iteration": 23,
+    "accepted_state_sha256": "7ea1b7b8bd6e06be39816251a1de218a9009c39f2ad73d8fd25c52655476e60f",
+    "accepted_trace_sha256": "247fe7012d829eefa8f9765688dc27e5abb972c9591029a9a43d697f679133aa",
+    "binding": {
+      "path": "/private/tmp/c52-rd2-private/vin_binding_nr501.json",
+      "sha256": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668"
+    },
+    "capture_csv": {
+      "path": "/private/tmp/c52-rd2-ni-u3j07-capture/run/records.csv",
+      "sha256": "b2ad9e75f0a471c8f6139d983951c2527692e3d9be9b0f1b30b317a3bd701a0d"
+    },
+    "capture_erratum": {
+      "path": "/private/tmp/c52-rd2-ni-u3j07-capture/analysis/runtime_mapping_erratum.json",
+      "sha256": "2357bbfa41cc429063904191a1f01aa8e1c9df438b6e7d1c56211cc2cf8b702c"
+    },
+    "capture_status": "RD2_CAPTURE_INTEGRITY_PASS; no RD2 numerical replay/gate executed",
+    "iteration": 1,
+    "local_hall": {
+      "path": "/private/tmp/c52-rd2-ni-u3j07-capture/run/c2_hubbard_audit.dat",
+      "sha256": "49ea181b2febed08ab66529290acdd3d99b977b8d202f519c57aa82681c58826"
+    },
+    "original_preflight_preserved": {
+      "erratum": "Original expected nlim2 is superseded by append-only runtime mapping erratum; no raw record rewritten.",
+      "path": "/private/tmp/c52-rd2-ni-u3j07-capture/provenance/preflight.json",
+      "sha256": "75b944fa34fb896ff365c0c984b7d328ec0ca6498463d5af950a2b5425aaaf1f"
+    },
+    "radial_replay_dimensions": {
+      "NR": 501,
+      "core_seed_count": 10,
+      "evidence": "unique RADIAL_REPLAY rows in records.csv; prior adapter expectation NR=495 was a preflight-only defect",
+      "lmax": 2,
+      "valence_seed_count": 6
+    },
+    "run_id": "rd2_ni_u3j07_endpoint23_fullgreen_i1",
+    "runtime_map": "recursion ordinal 1 -> irec(1)=1 -> cluster nlim/site 1 -> iz(1)=type 2 (Ni-imp); sites 2..19 are frozen host type 1"
+  },
+  "case_phase_contract": "Following accepted runner.prepare_rs, all cases share exact-V corrected q2prime. Reconstruct raw c and q2 from RS_GREEN/M1 before correction. RAW_PL uses the raw center with vmad removed via same-phase CALCULATE_PL gc plus (raw c\u2212captured local m0 c); LOCAL_PL shifts by x=t/q0 once and returns the captured local gc. SCALAR_V_PLUS_001 shifts by +0.01, SIGN_WRONG applies -x, and OPPOSITE_SPIN applies the opposite-spin shift/q2. Captured P_OUT/m0 are post-correction cross-checks, not raw operands. m0 type=19 is lattice-ib writer metadata; physical Vin type2 comes from runtime map.",
+  "command_sequence": {
+    "authorization_contract": "Each mode requires exact-hash authorization. The current execution_authorization.json is present and scoped to preregister only, bound to the passing baseline. No cases-mode authorization exists; response-driver execution is not authorized.",
+    "baseline": {
+      "argv": [
+        "/opt/homebrew/opt/python@3.11/bin/python3.11",
+        "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py",
+        "--mode",
+        "baseline",
+        "--capture-dir",
+        "/private/tmp/c52-rd2-ni-u3j07-capture/run",
+        "--binding",
+        "/private/tmp/c52-rd2-private/vin_binding_nr501.json",
+        "--driver",
+        "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501",
+        "--authorization",
+        "/private/tmp/c52-rd2-private/execution_authorization.json",
+        "--output-dir",
+        "/private/tmp/c52-rd2-private/baseline_003"
+      ],
+      "expected_report": "/private/tmp/c52-rd2-private/baseline_003/baseline.json",
+      "purpose": "frozen radial helper baseline against captured raw-state outputs; this is a numerical replay and requires separately hash-bound authorization"
+    },
+    "cases": {
+      "argv": [
+        "/opt/homebrew/opt/python@3.11/bin/python3.11",
+        "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py",
+        "--mode",
+        "cases",
+        "--capture-dir",
+        "/private/tmp/c52-rd2-ni-u3j07-capture/run",
+        "--binding",
+        "/private/tmp/c52-rd2-private/vin_binding_nr501.json",
+        "--driver",
+        "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501",
+        "--authorization",
+        "/private/tmp/c52-rd2-private/execution_authorization.json",
+        "--baseline-report",
+        "/private/tmp/c52-rd2-private/baseline_003/baseline.json",
+        "--prereg-report",
+        "/private/tmp/c52-rd2-private/prereg_005/preregistration.json",
+        "--output-dir",
+        "/private/tmp/c52-rd2-private/cases_005"
+      ],
+      "expected_outputs": [
+        "/private/tmp/c52-rd2-private/cases_005/driver.output.csv",
+        "/private/tmp/c52-rd2-private/cases_005/driver.stdout.log",
+        "/private/tmp/c52-rd2-private/cases_005/driver.stderr.log"
+      ],
+      "purpose": "five frozen radial helper cases only; not an SCF solver run"
+    },
+    "preregister": {
+      "argv": [
+        "/opt/homebrew/opt/python@3.11/bin/python3.11",
+        "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py",
+        "--mode",
+        "preregister",
+        "--capture-dir",
+        "/private/tmp/c52-rd2-ni-u3j07-capture/run",
+        "--binding",
+        "/private/tmp/c52-rd2-private/vin_binding_nr501.json",
+        "--driver",
+        "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501",
+        "--authorization",
+        "/private/tmp/c52-rd2-private/execution_authorization.json",
+        "--baseline-report",
+        "/private/tmp/c52-rd2-private/baseline_003/baseline.json",
+        "--output-dir",
+        "/private/tmp/c52-rd2-private/prereg_005"
+      ],
+      "expected_outputs": [
+        "/private/tmp/c52-rd2-private/prereg_005/preregistration.json",
+        "/private/tmp/c52-rd2-private/prereg_005/driver.input.txt",
+        "/private/tmp/c52-rd2-private/prereg_005/rb3_fit_shape_adapter.json"
+      ],
+      "purpose": "derive exact operands/case payloads and fit allowances only after baseline PASS and separate authorization"
+    }
+  },
+  "components": {
+    "adapter": {
+      "path": "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py",
+      "sha256": "1dd57269556549c79c5d1ae3549237e8188e06649d1c4d2137a12ce911b7d233"
+    },
+    "attempt_001": {
+      "path": "/private/tmp/c52-rd2-private/baseline_attempt_001.json",
+      "sha256": "32d62f1eafe8fbc544c186c9edde2e71abe4951c652a04d0843a809bffbceeb2"
+    },
+    "attempt_001_authorization": {
+      "path": "/private/tmp/c52-rd2-private/baseline_attempt_001.authorization.json",
+      "sha256": "569854f5463ba75945cc9e975a93c38b2fdb3cdf999ba545d54239d5d5e6d0c9"
+    },
+    "attempt_001_stderr": {
+      "path": "/private/tmp/c52-rd2-private/baseline_attempt_001.stderr.txt",
+      "sha256": "bb480dfcaeda6e2bc4b73766a9b3cb6a4d28f4b0e01e1c6ffd79aac042fd5590"
+    },
+    "attempt_002": {
+      "path": "/private/tmp/c52-rd2-private/baseline_002.exit_code.txt",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "attempt_002_authorization": {
+      "path": "/private/tmp/c52-rd2-private/baseline_attempt_002.authorization.json",
+      "sha256": "34b5cb9742b64fc1f66a15547198d4049fc9c12e8f2b78df17559a94ce3c0238"
+    },
+    "attempt_002_stderr": {
+      "path": "/private/tmp/c52-rd2-private/baseline_002.stderr.txt",
+      "sha256": "485255788466da0d75fd7275d80f7ef41e8fe33d27871f098017de88683ef6d7"
+    },
+    "attempt_002_stdout": {
+      "path": "/private/tmp/c52-rd2-private/baseline_002.stdout.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "baseline_report": {
+      "path": "/private/tmp/c52-rd2-private/baseline_003/baseline.json",
+      "sha256": "dd6eb6919ae1673459afe8f636289b9fc010b02bdc11dbdfc34745f6ded0153f"
+    },
+    "binding": {
+      "path": "/private/tmp/c52-rd2-private/vin_binding_nr501.json",
+      "sha256": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668"
+    },
+    "binding_script": {
+      "path": "/private/tmp/c52-rd2-private/rd2_binding_preflight.py",
+      "sha256": "8ac2520de7df50a6a7cdb64b82bc072ffb67b92420379e7a4466dec3444a52e2"
+    },
+    "builder": {
+      "path": "/private/tmp/c52-rd2-private/write_plan_phasefix.py",
+      "sha256": "b5d49fd18fbfcaa617b547f5938d71e4754aecfd562f3ede7902fce55ddc2e38"
+    },
+    "c2_parser": {
+      "path": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/c2_hubbard_operator_audit.py",
+      "sha256": "cf4e9c38a835b6ff24029b28af34385df74a66a8f5d8f5a0710419e565199034"
+    },
+    "capture_csv": {
+      "path": "/private/tmp/c52-rd2-ni-u3j07-capture/run/records.csv",
+      "sha256": "b2ad9e75f0a471c8f6139d983951c2527692e3d9be9b0f1b30b317a3bd701a0d"
+    },
+    "derived_runner": {
+      "path": "/private/tmp/c52-rd2-private/nr501_adapter/rs_a3_m03_runner_nr501.py",
+      "sha256": "2ff698eb1d03ca793906c0efb016868089cc1d324b2d093d739100ebd9a6944b"
+    },
+    "driver": {
+      "path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501",
+      "sha256": "34b4456919a77513504ceddc9890dd3dac7d23c9fbe6f0bbbed50c0a6d112508"
+    },
+    "driver_build_invocation": {
+      "path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/build_invocation.json",
+      "sha256": "db2ab2c0fa00f9a1fbaddb0dc16d618fc2524ae3153eefa66089b6e07428775a"
+    },
+    "driver_build_log": {
+      "path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/build.stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "driver_build_record": {
+      "path": "/private/tmp/c52-c-private/helper-build/helper_build_record.json",
+      "sha256": "286aedbe02a33fdd94a24e700c41af5541b6de6057f956641e913115e7aaf1c2"
+    },
+    "driver_build_stdout": {
+      "path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/build.stdout.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "driver_manifest": {
+      "path": "/private/tmp/c52-c-private/helper-build/source_build_manifest.json",
+      "sha256": "46c65c1ae8227370cb2be630754de8e6eda8422b84e7884ef69036ffd47bae17"
+    },
+    "driver_source": {
+      "path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501.f90",
+      "sha256": "b4e0736474d6daeb741169cc66ba74190f94ba1a1bbf25e249faa69d730b34e1"
+    },
+    "fit": {
+      "path": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/evidence/a3_rs_a22_scalar_fit_results.json",
+      "sha256": "0f0b543f81f53bc1c7fdfc46d3b404adef1ca455b8366a90e87154afd2b0987c"
+    },
+    "fit_prereg": {
+      "path": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/evidence/a3_rs_a22_scalar_preregistration_v3.json",
+      "sha256": "46ca7042678dc5b74ad15a7c2bc5f66786ca9191f70d2395405e78c69b5b1525"
+    },
+    "local_formula_helper": {
+      "path": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/local_moment_capture_oracle.py",
+      "sha256": "98d14387be47c3cea4a4803ce331a1c92cb8c0d9d5d3ca412b5491634b68645d"
+    },
+    "local_hall": {
+      "path": "/private/tmp/c52-rd2-ni-u3j07-capture/run/c2_hubbard_audit.dat",
+      "sha256": "49ea181b2febed08ab66529290acdd3d99b977b8d202f519c57aa82681c58826"
+    },
+    "no_driver_smoke": {
+      "path": "/private/tmp/c52-rd2-private/oracle_helper_smoke.py",
+      "sha256": "61d6fe31edb9e294d5116d57874e076876cb6f6965e4c3724eee56eced77a6ca"
+    },
+    "original_driver_source": {
+      "path": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/accepted_m03_replay_driver.f90",
+      "sha256": "124726aaab8f5937fa13be925969b67d4e647ee9c910596d58698ffb13e5476a"
+    },
+    "original_runner": {
+      "path": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/rs_a3_m03_runner.py",
+      "sha256": "96c51a8e1e0b0809b35b7875a5c94b9be1e70e82180cb6693c13209fe9a0b515"
+    },
+    "phase_proof": {
+      "path": "/private/tmp/c52-rd2-private/green_phase_proof_002.json",
+      "sha256": "33eb6ddcc570fa26c30a4ae9bcc8065e121e0bb044f60861fe1f8be62ee74471"
+    },
+    "prereg_attempt_003_auth": {
+      "path": "/private/tmp/c52-rd2-private/prereg_003.authorization.json",
+      "sha256": "f67d11a0acbf41a665968b2c6fae100aff0e0dd8c8727da082c770d39bb0b7d2"
+    },
+    "prereg_attempt_003_exit": {
+      "path": "/private/tmp/c52-rd2-private/prereg_003.exit_code.txt",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "prereg_attempt_003_stderr": {
+      "path": "/private/tmp/c52-rd2-private/prereg_003.stderr.txt",
+      "sha256": "0370e359904e5c159482e958a25603a60d92e70275516e506aa7c65e719d374c"
+    },
+    "runner": {
+      "path": "/private/tmp/c52-rd2-private/nr501_adapter/rs_a3_m03_runner_nr501.py",
+      "sha256": "2ff698eb1d03ca793906c0efb016868089cc1d324b2d093d739100ebd9a6944b"
+    },
+    "variant_manifest": {
+      "path": "/private/tmp/c52-rd2-private/nr501_adapter/variant_manifest.json",
+      "sha256": "c27785d28f37f2133beff76d7466250880b83ebbd37830b922c0588ce8547346"
+    }
+  },
+  "execution_environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "purpose": "single-thread deterministic frozen-helper execution; no SCF solver process"
+  },
+  "execution_status": {
+    "SCF_solver_launches": 0,
+    "active_authorization_file_exists": true,
+    "active_authorization_mode": "preregister",
+    "baseline_attempt_001": "PREFLIGHT_REJECTED_BEFORE_DRIVER because adapter expected NR=495, capture NR=501; exact traceback and stale authorization preserved separately",
+    "baseline_attempt_002": "PREFLIGHT_REJECTED_BEFORE_DRIVER due driver SHA mismatch against original binding; no helper invocation, exact evidence preserved",
+    "baseline_attempt_003": "PASS; helper baseline report is frozen and separately audited",
+    "baseline_attempts": 3,
+    "baseline_helper_runs": 1,
+    "case_replays": 0,
+    "cases_authorization_present": false,
+    "prereg_004": "successful preparation preserved under prior plan/auth; output retained as historical, no response driver invoked",
+    "prereg_005": "PREPARED_SUCCESSFULLY_EXIT0; PAYLOAD_HASH_MATCHES_AUDITED_PREREG_004; NO RESPONSE DRIVER INVOKED",
+    "prereg_attempt_003": "FAILED_CLOSED_BEFORE_RESPONSE_DRIVER: obsolete m0 type assertion; no case helper invocation",
+    "preregistration_calculations": 2
+  },
+  "formula": {
+    "Vin_source": "Captured exact additive LOCAL_HALL insertion at recursive site1/type2. Historical generic RB3 spin-fit keys receive per-spin coefficients only; they do not select Vin/site/type.",
+    "carrier_shift_x_s_ry": "t_s / q0_s",
+    "carrier_t_s_ry": "Re Tr(Vin_s P_s)",
+    "corrected_center_cprime_s_ry": "c_s - x_s",
+    "corrected_q2_q2prime_s_ry2": "q2_s - 2 Re Tr(Vin_s (M1_s - c_s P_s)) + Re Tr(Vin_s^2 P_s) - t_s^2/q0_s",
+    "moment_phase": "P_OUT/m0 is post-bands local correction; prereg raw c comes from Tr(M1)/q0 cross-checked with full RS_GREEN p2/p1, and raw q2 from p3-2*c*p2+c^2*p1. Apply Vin correction exactly once; RAW replay center is reconstructed c_raw, LOCAL shifts c_raw by t/q0, and RAW/LOCAL/SCALAR share corrected q2prime."
+  },
+  "limitations": [
+    "Capture is a one-iteration full-Green integrity capture, not itself a response measurement.",
+    "No baseline/helper replay, response preregistration arithmetic, case replay, or RD2 gate result has been executed in this preparation.",
+    "The private adapter fails closed behind a separate exact-hash authorization file; this plan grants no execution authorization."
+  ],
+  "locked_fit_control": {
+    "D0_RS_ry": 5.056500278044496e-06,
+    "fit": {
+      "path": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/evidence/a3_rs_a22_scalar_fit_results.json",
+      "sha256": "0f0b543f81f53bc1c7fdfc46d3b404adef1ca455b8366a90e87154afd2b0987c"
+    },
+    "fit_mapping": "coefficients copied by spin into generic compatibility keys site=0,type=0,spin=1/2 only; no type/site inference",
+    "fit_preregistration": {
+      "path": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/evidence/a3_rs_a22_scalar_preregistration_v3.json",
+      "sha256": "46ca7042678dc5b74ad15a7c2bc5f66786ca9191f70d2395405e78c69b5b1525"
+    },
+    "fit_response": "per-spin cubic residual r_s(x) from locked A3 RS A2.2 fit; registered D0 is added to absolute fit-residual sums for allowances"
+  },
+  "nr501_harness_variant": {
+    "path": "/private/tmp/c52-rd2-private/nr501_adapter/variant_manifest.json",
+    "sha256": "c27785d28f37f2133beff76d7466250880b83ebbd37830b922c0588ce8547346"
+  },
+  "registered_gate_and_cases": {
+    "carrier_ratio": "per-spin measured local replay carrier / exact captured true t_s, inclusive [0.99,1.01]",
+    "cases": [
+      {
+        "name": "RAW_PL",
+        "q2": "exact-V corrected q2prime, matching accepted runner.prepare_rs construction",
+        "shift_ry": "[0,0]"
+      },
+      {
+        "name": "LOCAL_PL",
+        "q2": "exact corrected formula above",
+        "shift_ry": "[x_up,x_down] from exact Vin"
+      },
+      {
+        "name": "SCALAR_V_PLUS_001",
+        "q2": "same exact-V corrected q2prime as RAW_PL/LOCAL_PL",
+        "shift_ry": "[0.01,0.01]"
+      },
+      {
+        "name": "SIGN_WRONG",
+        "q2": "same corrected q2 as LOCAL_PL",
+        "shift_ry": "[-x_up,-x_down]"
+      },
+      {
+        "name": "OPPOSITE_SPIN",
+        "q2": "corrected formula using opposite-spin Vin",
+        "shift_ry": "[t_down/q0_up,t_up/q0_down]"
+      }
+    ],
+    "q2prime": "both spin q2prime >= 0",
+    "scalar_control": "absolute scalar +0.01 replay response deviation from registered ideal V*q0 response <= locked scalar fit allowance (RB3 formula)",
+    "wrong_controls": "SIGN_WRONG and OPPOSITE_SPIN absolute separation from measured true carrier each > 10 \u00d7 measured carrier error"
+  },
+  "repository": {
+    "branch": "fix/ldau-rs-impurity",
+    "head": "683eff937241a463d2dacb395485d6b7c0b43264",
+    "path": "/Users/andersb/Jobb/rslmto_fable_v4b"
+  },
+  "schema": "c5-rd2-ni-frozen-replay-plan-v1",
+  "status": "PREREG_005_PAYLOAD_PREPARED_AND_AUDITED; RESPONSE_CASES_NOT_EXECUTED_PENDING_SEPARATE_CASES_AUTHORIZATION"
+}

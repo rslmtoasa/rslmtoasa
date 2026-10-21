@@ -1,0 +1,54 @@
+{
+  "schema": "c5_3_ni_u0_clean8b_triage_terminal_record_v1",
+  "run_id": "c52_ni_u0_impurity_clean8b_same_input",
+  "preflight_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/provenance/preflight.json",
+  "preflight_sha256": "85eb77a00397099ba5dfb3bda2566d186fdb8220565f6b0beb9dabf94bafe521",
+  "frozen_executable_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/frozen/clean8b/2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc/rslmto.x",
+  "frozen_executable_sha256": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc",
+  "source_commit": "8b8f7ef7bfc026fd34a56b37a3ad3281fd0a6832",
+  "source_archive_sha256": "cb39ff944b042483e38547ace6564bb8a2ee057b3449c2abcd3e52c5f7c66947",
+  "source_manifest_sha256": "436f5b0992420c8f68ec0bc2dae2f9485ea23f5c1490e80a2e496cddce76ade9",
+  "launch_command": "C52_NI_U0_TRIAGE_CLEAN8B_AUTHORIZED=1 /private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/collector/launch.sh",
+  "foreground_exec_session_id": 91039,
+  "pids": {
+    "launcher": 38936,
+    "watcher": 38991,
+    "solver": 39008
+  },
+  "lifecycle_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/run/lifecycle.txt",
+  "exit_code": 1,
+  "terminal_status": "same local d-shell potential mapping fatal reproduced under clean8b on unchanged deck/restarts; no completed SCF trace; no endpoint",
+  "fatal": {
+    "source": "source/bands.f90:1218",
+    "text": "Unable to map local d-shell Hubbard potential."
+  },
+  "startup_observed": [
+    "restart loaded from ./Ni-bulk_out.nml",
+    "restart loaded from ./Ni-imp_out.nml",
+    "HUBBARD_RADIAL_MODE mode=local source=explicit use_kspace=.false. local_energy_adopted=.false.",
+    "Perform recursion at step 1",
+    "Fast block recursion on progress for atom 1",
+    "Fixed Fermi energy: -0.061141"
+  ],
+  "capture": {
+    "watcher_finished_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/captures/watcher_finished.json",
+    "captured_entries": 0,
+    "trace_state_manifest_entries": 0
+  },
+  "process_absence_check": {
+    "command": "ps -axo pid,ppid,stat,command | rg '(^| )(38936|38991|39008)( |$)|c52-rd-ni-u0-triage/clean8b_same_input' | rg -v 'rg ' || true",
+    "stdout": "",
+    "shell_exit_code": 0,
+    "method": "escalated read-only targeted process check after launcher returned"
+  },
+  "immutable_input_sha256": "008bce3b5160ef76b40201b2d03797db346da9eef9a07046b5150907b90538b7",
+  "restart_sha256": {
+    "Ni-bulk_out.nml": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4",
+    "Ni-imp_out.nml": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+  },
+  "raw_log_sha256": "f45643205d54b9dccd8c3b3867175c04ad53e8bc6c81e22fc2df5a886bc71823",
+  "run_output_manifest_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/provenance/run_output_manifest.json",
+  "run_output_manifest_sha256": "202bb5a797aea4c1d090bab285e8eb9ae840470e66a9adeca18af8fa847b4e67",
+  "comparison_to_debug": "same fatal reproduced on the unchanged same-deck input and restart pair; this is setup/runtime path evidence, not a converged scientific result or root-cause attribution",
+  "source_modified": false
+}

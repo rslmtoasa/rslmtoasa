@@ -1,0 +1,271 @@
+{
+  "P_M1_source": "P_OUT and M1_OUT matrices at recursion-site site0, per spin; P is cross-checked against q0 and M1 trace against raw Green p2/p1.",
+  "Vin_exact_replay_operand_path": "/private/tmp/c52-rd2-private/vin_binding_nr501.json",
+  "Vin_exact_replay_operand_sha256": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668",
+  "Vin_source": "LOCAL_HALL additive BLOCK operand at runtime nlim=1,type2; not v_hub type1",
+  "authorization_sha256": "84df9031c0e7560834b28cefeee883eda2ac6b8a51367ad6279f18c362703bf5",
+  "baseline_report_path": "/private/tmp/c52-rd2-private/baseline_003/baseline.json",
+  "baseline_report_sha256": "dd6eb6919ae1673459afe8f636289b9fc010b02bdc11dbdfc34745f6ded0153f",
+  "binding_path": "/private/tmp/c52-rd2-private/vin_binding_nr501.json",
+  "binding_sha256": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668",
+  "capture_csv_sha256": "b2ad9e75f0a471c8f6139d983951c2527692e3d9be9b0f1b30b317a3bd701a0d",
+  "case_definitions": [
+    {
+      "name": "RAW_PL",
+      "q2": "exact-V corrected q2prime, matching accepted prepare_rs control construction",
+      "shift_by_spin_ry": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "LOCAL_PL",
+      "q2": "correct_d_shell_moments formula with exact LOCAL_HALL Vin",
+      "shift_by_spin_ry": [
+        -0.07574699557219534,
+        -0.07574699644804919
+      ]
+    },
+    {
+      "name": "SIGN_WRONG",
+      "q2": "same corrected q2; wrong sign control",
+      "shift_by_spin_ry": [
+        0.07574699557219534,
+        0.07574699644804919
+      ]
+    },
+    {
+      "name": "OPPOSITE_SPIN",
+      "q2": "same formula using opposite-spin Vin; spin-swap control",
+      "shift_by_spin_ry": [
+        -0.0757469964389083,
+        -0.07574699558133616
+      ]
+    },
+    {
+      "name": "SCALAR_V_PLUS_001",
+      "q2": "same exact-V corrected q2prime as RAW_PL/LOCAL_PL; scalar changes center shift only",
+      "shift_by_spin_ry": [
+        0.01,
+        0.01
+      ]
+    }
+  ],
+  "case_driver_input_path": "/private/tmp/c52-rd2-private/prereg_005/driver.input.txt",
+  "case_driver_input_sha256": "78e8825610e1652f2407979322aa968fb3d3b888431226b78e31133ac082a829",
+  "gravity_center_convention": {
+    "captured_local_calculate_pl_gc_ry": [
+      0.2753519396429291,
+      0.2753519483338046
+    ],
+    "later_atomsc_vmad_ry": -0.6955428778838478,
+    "later_vmad_minus_same_phase_vmad_ry": [
+      -3.839134676830724e-09,
+      -3.839134676830724e-09
+    ],
+    "later_vmad_not_used_for_replay_binding": true,
+    "m0_local_center_including_vmad_ry": [
+      -0.42019093440178407,
+      -0.42019092571090855
+    ],
+    "post_shift_gc_ry": [
+      0.2753519396429299,
+      0.27535194833380516
+    ],
+    "raw_gc_excluding_vmad_ry": [
+      0.1996049440707346,
+      0.19960495188575594
+    ],
+    "same_phase_center_offset_ry": [
+      -0.0757469955721945,
+      -0.07574699644804866
+    ],
+    "same_phase_vmad_pre_ry": [
+      -0.6955428740447132,
+      -0.6955428740447132
+    ]
+  },
+  "green_moment_formula": "For each complete RS_GREEN energy block, spectral=1j*(G-G\u2020)/(2\u03c0); p_n=sum(weight*E^n*Tr_d(spectral)), n=1,2,3; c_raw=p2/p1; q2_raw=p3-2*c_raw*p2+c_raw^2*p1.",
+  "no_gate_claim": "These are preregistered operands/allowances only; no driver case output has been measured.",
+  "phase_order_source": "bands.correct_d_shell_moments executes before run_dos returns; P_OUT and FROZEN_REPLAY m0 are therefore post-correction. Raw center/q2 are reconstructed from M1_OUT/RS_GREEN, not copied from those already-local values.",
+  "post_correction_crosscheck": {
+    "center_local_captured_m0": [
+      -0.42019093440178407,
+      -0.42019092571090855
+    ],
+    "center_local_from_green_vin": [
+      -0.42019093440178323,
+      -0.420190925710908
+    ],
+    "q2_local_captured_m0": [
+      0.13781601632237034,
+      0.13781600272365435
+    ],
+    "q2_local_from_green_vin": [
+      0.13781601632237825,
+      0.1378160027236608
+    ]
+  },
+  "q0_center_q2_source": "q0 from P_OUT d-shell trace; raw center from Tr(M1_OUT)/q0 cross-checked against RS_GREEN p2/p1; raw q2 from RS_GREEN p3-2*c*p2+c^2*p1. m0_carrier_input is already post-bands local-corrected and is used only as a cross-check. Its type=19 is lattice-ib writer metadata, not the physical type; physical Vin maps via LOCAL_HALL to recursion site1/type2.",
+  "raw_green_moments_by_spin": [
+    {
+      "center_raw_ry": -0.49593792997397856,
+      "ell": 2,
+      "energy_blocks": 1567,
+      "m0_writer_type": 19,
+      "p1": 4.7387623359459665,
+      "p2": -2.3501319835276977,
+      "p3": 1.3032498601385687,
+      "q2_raw_ry2": 0.13773026906220198,
+      "site": 0,
+      "spin": 1
+    },
+    {
+      "center_raw_ry": -0.4959379221589572,
+      "ell": 2,
+      "energy_blocks": 1567,
+      "m0_writer_type": 19,
+      "p1": 4.738762402787887,
+      "p2": -2.350131979643612,
+      "p3": 1.303249826397049,
+      "q2_raw_ry2": 0.13773025561327912,
+      "site": 0,
+      "spin": 2
+    }
+  ],
+  "registered_fit_control": {
+    "A_opposite_spin_ry": 0.004553865574973748,
+    "A_scalar_plus_001_ry": 6.0242239503755855e-05,
+    "A_sign_ry": 0.00401681761692226,
+    "A_true_ry": 0.004553865505880194,
+    "D0_RS_ry": 5.056500278044496e-06,
+    "fit_sha256": "0f0b543f81f53bc1c7fdfc46d3b404adef1ca455b8366a90e87154afd2b0987c",
+    "mapping": "per_spin fit coefficients go only to generic RB3 spin slots; old site/type labels do not select Vin",
+    "per_spin_fit_responses": {
+      "1": {
+        "opposite_spin_predicted_delta_ry": -0.3556317743022736,
+        "r_scalar_plus_001_ry": -3.914694555101219e-05,
+        "r_sign_wrong_ry": -0.0029614266737092005,
+        "r_spin_swap_ry": 0.0033152394834593253,
+        "r_true_ry": 0.0033152393733678277,
+        "scalar_plus_001_predicted_delta_ry": 0.04734847641390879,
+        "sign_wrong_predicted_delta_ry": 0.355985583004877,
+        "t_spin_swap_ry": -0.3589470137857329,
+        "t_true_ry": -0.35894700967858617,
+        "x_spin_swap_ry": -0.0757469964389083,
+        "x_true_ry": -0.07574699557219534
+      },
+      "2": {
+        "opposite_spin_predicted_delta_ry": -0.3577134451937398,
+        "r_scalar_plus_001_ry": -1.6038793674699172e-05,
+        "r_sign_wrong_ry": -0.0010503344429350146,
+        "r_spin_swap_ry": 0.001233569591236378,
+        "r_true_ry": 0.0012335696322343219,
+        "scalar_plus_001_predicted_delta_ry": 0.0473715852342042,
+        "sign_wrong_predicted_delta_ry": 0.3578966844491883,
+        "t_spin_swap_ry": -0.3589470147849762,
+        "t_true_ry": -0.3589470188921233,
+        "x_spin_swap_ry": -0.07574699558133616,
+        "x_true_ry": -0.07574699644804919
+      }
+    },
+    "prereg_sha256": "46ca7042678dc5b74ad15a7c2bc5f66786ca9191f70d2395405e78c69b5b1525"
+  },
+  "schema": "c5-rd2-response-preregistration-v1",
+  "status": "PREPARED_AFTER_RAW_BASELINE; AWAIT_AUDITOR_REVIEW_BEFORE_CASE_REPLAY",
+  "summary_seed": {
+    "case_names": [
+      "RAW_PL",
+      "LOCAL_PL",
+      "SIGN_WRONG",
+      "OPPOSITE_SPIN",
+      "SCALAR_V_PLUS_001"
+    ],
+    "preregistration": {
+      "A_opposite_spin_ry": 0.004553865574973748,
+      "A_scalar_plus_001_ry": 6.0242239503755855e-05,
+      "A_sign_ry": 0.00401681761692226,
+      "A_true_ry": 0.004553865505880194,
+      "terms": {
+        "1": {
+          "opposite_spin_predicted_delta_ry": -0.3556317743022736,
+          "r_scalar_plus_001_ry": -3.914694555101219e-05,
+          "r_sign_wrong_ry": -0.0029614266737092005,
+          "r_spin_swap_ry": 0.0033152394834593253,
+          "r_true_ry": 0.0033152393733678277,
+          "scalar_plus_001_predicted_delta_ry": 0.04734847641390879,
+          "sign_wrong_predicted_delta_ry": 0.355985583004877,
+          "t_spin_swap_ry": -0.3589470137857329,
+          "t_true_ry": -0.35894700967858617,
+          "x_spin_swap_ry": -0.0757469964389083,
+          "x_true_ry": -0.07574699557219534
+        },
+        "2": {
+          "opposite_spin_predicted_delta_ry": -0.3577134451937398,
+          "r_scalar_plus_001_ry": -1.6038793674699172e-05,
+          "r_sign_wrong_ry": -0.0010503344429350146,
+          "r_spin_swap_ry": 0.001233569591236378,
+          "r_true_ry": 0.0012335696322343219,
+          "scalar_plus_001_predicted_delta_ry": 0.0473715852342042,
+          "sign_wrong_predicted_delta_ry": 0.3578966844491883,
+          "t_spin_swap_ry": -0.3589470147849762,
+          "t_true_ry": -0.3589470188921233,
+          "x_spin_swap_ry": -0.07574699558133616,
+          "x_true_ry": -0.07574699644804919
+        }
+      }
+    },
+    "target": {
+      "q0": [
+        4.73876233594598,
+        4.73876240278789
+      ],
+      "q2_local": [
+        0.13781601632237825,
+        0.1378160027236608
+      ],
+      "t": [
+        -0.35894700967858617,
+        -0.3589470188921233
+      ]
+    }
+  },
+  "target_operands": {
+    "carrier_trace_vin_p_ry": [
+      -0.35894700967858617,
+      -0.3589470188921233
+    ],
+    "center_raw_ry": [
+      -0.49593792997397856,
+      -0.4959379221589572
+    ],
+    "local_shift_by_spin_ry": [
+      -0.07574699557219534,
+      -0.07574699644804919
+    ],
+    "q0": [
+      4.73876233594598,
+      4.73876240278789
+    ],
+    "q2_prime_by_spin_ry2": [
+      0.13781601632237825,
+      0.1378160027236608
+    ],
+    "q2_raw_ry2": [
+      0.13773026906220198,
+      0.13773025561327912
+    ],
+    "spin_swap_carrier_ry": [
+      -0.3589470137857329,
+      -0.3589470147849762
+    ],
+    "spin_swap_q2_prime_ry2": [
+      0.13781601641252236,
+      0.1378160026335166
+    ],
+    "spin_swap_shift_ry": [
+      -0.0757469964389083,
+      -0.07574699558133616
+    ]
+  }
+}
