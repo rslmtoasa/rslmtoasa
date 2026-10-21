@@ -5,7 +5,7 @@ import tempfile
 import unittest
 import numpy as np
 from causal_summary import complete,parity
-from symmetry import SECTORS,BARE_T,MIRROR,P
+from symmetry import SECTORS,BARE_T,MIRROR,P,UT
 
 
 class CausalSummaryTests(unittest.TestCase):
@@ -32,6 +32,9 @@ class CausalSummaryTests(unittest.TestCase):
         a={'ti':1,'tj':2,'r':np.array([-.5,.5,0]),'fermi':0.,
            'matrices':{},'integrands':{1:np.array([-.1,1.,0.,3.,2.,0.,4.])}}
         b={**a,'matrices':{},'integrands':{1:np.array([-.1,-1.,0.,3.,-2.,0.,4.])}}
+        for d in (a,b):
+            for direction in ('ij','ji'):
+                d['matrices'][1,'g'+direction]=(-.1,np.eye(18,dtype=complex))
         for k in SECTORS:
             allowed=P[:,None]*P[None,:]==MIRROR[k]
             for direction in ('ij','ji'):
@@ -55,6 +58,28 @@ class CausalSummaryTests(unittest.TestCase):
         r=parity([a],[b])
         self.assertEqual(r['01ij']['difference_fro'],0)
         self.assertEqual(r['x1ji']['difference_fro'],0)
+
+    def test_raw_retarded_reciprocal_time_reversal(self):
+        rng=np.random.default_rng(42)
+        a={'ti':1,'tj':2,'r':np.array([-.5,.5,0]),'fermi':0.,
+           'matrices':{},'integrands':{1:np.zeros(7)}}
+        b={**a,'matrices':{}}
+        for direction in ('ij','ji'):
+            raw=rng.normal(size=(18,18))+1j*rng.normal(size=(18,18))
+            a['matrices'][1,'g'+direction]=(-.1,raw)
+        for direction,reverse in (('ij','ji'),('ji','ij')):
+            raw=a['matrices'][1,'g'+reverse][1]
+            b['matrices'][1,'g'+direction]=(-.1,UT@raw.T@UT.conj().T)
+            for k in SECTORS:
+                a['matrices'][1,'g'+k+direction]=(-.1,np.zeros((9,9),complex))
+                b['matrices'][1,'g'+k+direction]=(-.1,np.zeros((9,9),complex))
+        result=parity([a],[b])
+        self.assertEqual(result['raw_T_ij']['difference_fro'],0.)
+        self.assertEqual(result['raw_T_ji']['difference_fro'],0.)
+        b['matrices'][1,'gij'][1][0,0]+=1e-4
+        result=parity([a],[b])
+        self.assertAlmostEqual(result['raw_T_ij']['difference_fro'],1e-4)
+        self.assertEqual(result['raw_T_ji']['difference_fro'],0.)
 
 
 if __name__=='__main__': unittest.main()

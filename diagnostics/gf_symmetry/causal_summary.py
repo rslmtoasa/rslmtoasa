@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 from analyze import (read_dump, stage_report, h_report, bond_key, matrix,
                      same_grid, covariance_report)
-from symmetry import SECTORS,BARE_T,MIRROR,P
+from symmetry import SECTORS,BARE_T,MIRROR,P,UT
 
 
 def complete(root):
@@ -106,6 +106,9 @@ def parity(plus,minus):
                     add('integrand_'+k,d['integrands'][n][q+1],other['integrands'][n][q+1])
         for n in sorted({i for i,t in d['matrices']}):
             if d['integrands'][n][0]>d['fermi']: continue
+            for direction,reverse in (('ij','ji'),('ji','ij')):
+                expected=UT@matrix(d,n,'g'+reverse).T@UT.conj().T
+                add('raw_T_'+direction,expected,matrix(other,n,'g'+direction))
             for k in SECTORS:
                 for direction in ('ij','ji'):
                     a=matrix(d,n,'g'+k+direction);b=matrix(other,n,'g'+k+direction)
