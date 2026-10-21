@@ -7,3 +7,7 @@ One Luna worker executes sequentially; one final batched Luna audit precedes mer
 3. T2b: use the regenerated host for the C5.5 Fe RS impurity auto smoke. Require local mode, no provenance/mismatch error and registered RS acceptance; record impurity-minus-KS-host occupations and moment.
 4. T3: complete the density-only auto candidate, provenance WARNING and its unit test; keep impurity Hubbard energy excluded. Complete C5.5 regression checks, workflow documentation and OPEN issues.
 5. Audit all gates once. Adopt and execute C5.2 §7 local merge and verification only if supported. Otherwise preserve defaults, commit records and report five lines. Report the merge SHA only after successful merge verification.
+
+## Execution outcome (2026-10-21)
+
+T0 completed within its authorized closed-run scope: 24 directories were deleted after evidence binding, with 250,454,016 allocated bytes estimated reclaimed and 242,360 KiB observed available-space increase. The sole T2a campaign attempt failed before SCF at the legacy provenance-mode guard: native KS default auto resolved to local, while the accepted legacy U-carrying restart was interpreted as spectral. KS acceptance is unevaluated and no regenerated host exists. T2b was not run; T3 and T4/merge were stopped under the failure branch. The single batched audit passed the recorded T0 evidence and T2a failure classification. Campaign use is 1/2. No retry, retag, source modification, adoption, merge, or push occurred. See C5_6_RESULTS.md and C5_6_AUDIT.md.

@@ -1,0 +1,231 @@
+{
+  "schema": "c56_t2a_ks_u2_auto_provenance_v1",
+  "date": "2026-10-21",
+  "run_id": "c56_t2a_ks_fe_u2_auto",
+  "verdict": "FAIL_PRE_SCF_PROVENANCE; KS acceptance unevaluated",
+  "campaign_budget": {
+    "c56_attempts_cap": 2,
+    "c56_attempts_used": 1,
+    "c56_attempts_remaining": 1,
+    "t2a_invocations": 1,
+    "t2b_invocations": 0,
+    "t2b_status": "NOT_RUN; no regenerated accepted host exists"
+  },
+  "objective": "Regenerate the accepted native-KS bcc Fe U=2 eV/J=0 host from the exact protected legacy accepted state using production default radial mode and record serialized mode/backend.",
+  "source": {
+    "repository_head_before_run": "e67291fc1a09abc4a437285912ecc2b56da2459b",
+    "latest_source_commit": "683eff937241a463d2dacb395485d6b7c0b43264",
+    "source_tree_manifest_sha256": "212f92cd9ab968b01e0bb43116d457469449ea957dd06a9b76bc07fa1e7a3603",
+    "core_source_file_sha256": {
+      "source/hamiltonian.f90": "928434dd722b1faced7e3413de3e7c1f62188bf6225708e6223597ce0ad52bdc",
+      "source/hamiltonian_build.f90": "75e16120e99b85004436a0a336e467504e8f22f295e29dd5c75943f74783c04f",
+      "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+      "source/include_codes/namelists/hamiltonian.f90": "ea9448c617daa5bc488d8fbd9ce559f6bde359bf0304dfbdc12347bc9c7a8e21",
+      "source/self.f90": "d8ca2650b871c051c4023298300c8727f2199260948f9cfdaf6faa516a9c3b02"
+    },
+    "binary_path": "/private/tmp/c54-t2-build-fresh/bin/rslmto.x",
+    "binary_launch_copy": "/private/tmp/c56-t2a-ks-u2-auto/immutable/rslmto.x",
+    "binary_sha256": "4554ea2b10a29d35e455be34f7e97c7651aae43c859be00abd08c5a726fdc22e",
+    "production_binary_reference": "C5_4_T3_RD3.json release binary SHA256 4554ea2b10a29d35e455be34f7e97c7651aae43c859be00abd08c5a726fdc22e"
+  },
+  "restart": {
+    "accepted_source_directory": "/private/tmp/a5-priority-local-u2-ks/u2_local_standard",
+    "accepted_state_source_sha256": {
+      "Fe_scf.nml": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+      "Fe_out.nml": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b"
+    },
+    "accepted_state_expected_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+    "accepted_F_scf_and_F_out_identical": true,
+    "staged_seed_sha256": {
+      "Fe_scf.nml": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+      "Fe_out.nml": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b"
+    },
+    "run_copy_unchanged_after_fatal": true,
+    "accepted_legacy_mode_field": "absent",
+    "accepted_legacy_backend_field": "absent",
+    "u_eV": 2.0,
+    "j_eV": 0.0,
+    "solver_restart_log_line": "SCF input provenance: restart loaded from ./Fe_out.nml"
+  },
+  "recipe": {
+    "deck_source_sha256": "ca995150bd98768e40539857f164e8508eb0f5a49a5cdec2cf86e095acd372fb",
+    "historical_pre_run_deck_sha256_from_accepted_endpoint": "7f0615d2ab190fe0c1db6fff46829be5e8944690d30c12653ace61bb6794c8c3",
+    "staged_auto_deck_sha256": "1af5bcc4c3633f238043438e0aaa59575c8854f8fdbbd927af52f5660ae04083",
+    "mode_change": "Only the explicit hubbard_radial_moments=local input line was removed; U/J and all other deck settings were preserved.",
+    "calctype": "B",
+    "backend_requested": "use_kspace=.true.",
+    "nsp": 1,
+    "lmax": 2,
+    "recur": "block",
+    "lld": 21,
+    "beta": 0.1,
+    "mixtype": "broyden",
+    "nstep": 240,
+    "conv_thr": "1.0d-9",
+    "U_eV": 2.0,
+    "J_eV": 0.0,
+    "hubbard_test_operator": "w1",
+    "hubbard_test_lambda_Ry": 0.0,
+    "run_static_receipt_asset_inputs": {
+      "clust": {
+        "source_path": "/private/tmp/a5-priority-local-u2-ks/u2_local_standard/clust",
+        "expected_sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "immutable_sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "run_sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "receipt_match": true
+      },
+      "mad.mat": {
+        "source_path": "/private/tmp/a5-priority-local-u2-ks/u2_local_standard/mad.mat",
+        "expected_sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "immutable_sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "run_sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "receipt_match": true
+      },
+      "map": {
+        "source_path": "/private/tmp/a5-spin-w1-inputs-prepared/base_h0/map",
+        "expected_sha256": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+        "immutable_sha256": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+        "run_sha256": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+        "receipt_match": true
+      },
+      "sbar": {
+        "source_path": "/private/tmp/a5-spin-w1-inputs-prepared/base_h0/sbar",
+        "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "immutable_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "run_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "receipt_match": true
+      },
+      "str.out": {
+        "source_path": "/private/tmp/a5-spin-w1-inputs-prepared/base_h0/str.out",
+        "expected_sha256": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+        "immutable_sha256": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+        "run_sha256": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+        "receipt_match": true
+      },
+      "ves.out": {
+        "source_path": "/private/tmp/a5-priority-local-u2-ks/u2_local_standard/ves.out",
+        "expected_sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "immutable_sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "run_sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "receipt_match": true
+      },
+      "view.sbar": {
+        "source_path": "/private/tmp/a5-priority-local-u2-ks/u2_local_standard/view.sbar",
+        "expected_sha256": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c",
+        "immutable_sha256": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c",
+        "run_sha256": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c",
+        "receipt_match": true
+      }
+    },
+    "receipt_asset_input_verdict": "PASS"
+  },
+  "preflight": {
+    "status": "PASS",
+    "tool": "docs/validation/fixed_ldau/rs/C5_4_PREFLIGHT.py",
+    "tool_sha256": "ec5f7c7daee89b37413d85d96b421bea9dc2b5b323ca3807d2743a2b6066fe93",
+    "record_path": "/private/tmp/c56-t2a-ks-u2-auto/preflight.json",
+    "record_sha256": "92b1a4289a0f1fda7595767b52ea4fe54dbfdd17e5202ebdfd4b3cc616fbba55",
+    "unconsumed_groups": [
+      "symmetry"
+    ],
+    "run_dir_fresh_before_start": true,
+    "single_thread_caps": {
+      "OMP_NUM_THREADS": "1",
+      "OMP_DYNAMIC": "FALSE",
+      "RSLMTO_OMP_THREADS_SERIAL": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "BLIS_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1"
+    },
+    "disk_floor_bytes": 1073741824,
+    "disk_prelaunch_df": "Filesystem   1024-blocks      Used Available Capacity  Mounted on\n/dev/disk3s5   482797652 445645604   7386188    99%    /System/Volumes/Data",
+    "mode_absent_from_staged_input": true,
+    "restart_exact_accepted_bytes": true
+  },
+  "capture": {
+    "started_before_solver": true,
+    "watcher_ready_file": "/private/tmp/c56-t2a-ks-u2-auto/run/watcher.ready",
+    "trace_environment": "RSLMTO_FIXED_U_TRACE_ITERATION=0; TRACE_MOMENTS_ONLY=0; TRACE_QL_ONLY=0; TRACE_CAPTURE_ONLY=0",
+    "watcher_sha256": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be",
+    "manifest_path": "/private/tmp/c56-t2a-ks-u2-auto/captures/trace_state_manifest.jsonl",
+    "captured_iterations": 0,
+    "reason": "The solver stopped in provenance validation before the first SCF iteration; no qL/Diff trace row exists."
+  },
+  "observed_runtime": {
+    "HUBBARD_RADIAL_MODE_line": "[Oct 21 2026 22:34:12.056] [/Users/andersb/Jobb/rslmto_fable_v4b/source/self.f90:2392]  \u001b[1m\u001b[31m<fatal> \u001b[0m\u001b[0mFixed-U potential moment-mode mismatch for symbolic atom 1: file mode=spectral, run mode=local. Regenerate the host potential in the selected mode or select the matching mode.",
+    "legacy_provenance_warning": "[Oct 21 2026 22:34:12.055] [/Users/andersb/Jobb/rslmto_fable_v4b/source/self.f90:2387]  \u001b[1m\u001b[33m<warning> \u001b[0m\u001b[0mLegacy U-carrying potential for symbolic atom 1 has no hubbard_radial_moments field; treating it as spectral.",
+    "fatal_line": "[Oct 21 2026 22:34:12.056] [/Users/andersb/Jobb/rslmto_fable_v4b/source/self.f90:2392]  \u001b[1m\u001b[31m<fatal> \u001b[0m\u001b[0mFixed-U potential moment-mode mismatch for symbolic atom 1: file mode=spectral, run mode=local. Regenerate the host potential in the selected mode or select the matching mode.",
+    "log_sha256": "788ffba610b7a7400cd0d0e975cbe51cca613df4048ff0ebefee26b7dbe2e5a6",
+    "log_path": "/private/tmp/c56-t2a-ks-u2-auto/run/testrun.log",
+    "exit_code": 1,
+    "solver_pid": 65207,
+    "lifecycle_path": "/private/tmp/c56-t2a-ks-u2-auto/run/lifecycle.txt",
+    "disk_events_path": "/private/tmp/c56-t2a-ks-u2-auto/run/disk_guard_events.jsonl",
+    "disk_guard_triggered": false,
+    "disk_guard_samples": [
+      {
+        "event": "preexec",
+        "available_bytes": 7547469824,
+        "floor_bytes": 1073741824,
+        "time": "2026-10-21T22:34:06+02:00"
+      },
+      {
+        "event": "guard_started",
+        "solver_pid": 65207,
+        "available_bytes": 7545925632,
+        "floor_bytes": 1073741824
+      },
+      {
+        "event": "periodic",
+        "solver_pid": 65207,
+        "available_bytes": 7545925632,
+        "floor_bytes": 1073741824
+      },
+      {
+        "event": "periodic",
+        "solver_pid": 65207,
+        "available_bytes": 7545163776,
+        "floor_bytes": 1073741824
+      },
+      {
+        "event": "periodic",
+        "solver_pid": 65207,
+        "available_bytes": 7551438848,
+        "floor_bytes": 1073741824
+      }
+    ]
+  },
+  "output_gate": {
+    "status": "FAIL_BEFORE_SCF",
+    "resolved_mode": "local",
+    "mode_source": "default",
+    "backend": "ks",
+    "legacy_restart_mode_interpreted": "spectral",
+    "failure": "Current production validation rejects the legacy U-carrying restart because its missing mode defaults to spectral while the native-KS default run resolves to local.",
+    "KS_acceptance": "UNEVALUATED; zero complete SCF iterations, no convergence marker or R05 physical streak measured.",
+    "newly_serialized_host_metadata": "NONE; run Fe_scf/Fe_out remain byte-identical to legacy accepted input and still lack mode/backend fields.",
+    "no_accepted_host_created": true
+  },
+  "processes": {
+    "launcher_pid": 65142,
+    "solver_pid": 65207,
+    "watcher_pid": 65196,
+    "disk_guard_pid": 65210,
+    "owned_processes_confirmed_exited": true
+  },
+  "disk": {
+    "preexec_available_bytes": 7547469824,
+    "minimum_periodic_guard_available_bytes": 7545163776,
+    "post_run_df": "Filesystem   1024-blocks      Used Available Capacity  Mounted on\n/dev/disk3s5   482797652 445715552   7316240    99%    /System/Volumes/Data",
+    "external_disk_activity_note": "Available space fluctuated during the run; 1 GiB floor was not approached."
+  },
+  "raw_packet": {
+    "path": "docs/validation/fixed_ldau/rs/C5_6_T2A_assets/t2a_ks_u2_auto_failed_raw.tar.gz",
+    "sha256": "49c1562e95b419a6206fe1d816fc48f22b335dc3194d670bed386f7e417cdec4",
+    "readable": true,
+    "contains": "Whitelisted accepted legacy inputs/state, run outputs, full preflight/source manifest, launch and guard scripts, watcher records, complete solver log, and zero-iteration capture manifest. Binary is represented by its exact hash and retained at the production build path."
+  },
+  "next_action": "Stop C5.6 campaign work pending the sole batched audit; no T2a retry, metadata tag, source change, or T2b launch."
+}

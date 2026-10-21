@@ -1,0 +1,63 @@
+{
+  "schema": "c5_6_campaign_results_v1",
+  "date": "2026-10-21",
+  "campaign_status": "AUDIT_PASS; T2A_FAILED_BEFORE_SCF; T2B_T3_T4_STOPPED",
+  "campaign_attempt_cap": 2,
+  "campaign_attempts_used": 1,
+  "campaign_attempts_remaining": 1,
+  "attempts": {
+    "T2a": {
+      "invocations": 1,
+      "status": "FAIL_BEFORE_SCF",
+      "KS_acceptance": "UNEVALUATED",
+      "exit_code": 1,
+      "log_sha256": "788ffba610b7a7400cd0d0e975cbe51cca613df4048ff0ebefee26b7dbe2e5a6",
+      "raw_packet": "docs/validation/fixed_ldau/rs/C5_6_T2A_assets/t2a_ks_u2_auto_failed_raw.tar.gz",
+      "raw_packet_sha256": "49c1562e95b419a6206fe1d816fc48f22b335dc3194d670bed386f7e417cdec4",
+      "binary_sha256": "4554ea2b10a29d35e455be34f7e97c7651aae43c859be00abd08c5a726fdc22e",
+      "source_tree_manifest_sha256": "212f92cd9ab968b01e0bb43116d457469449ea957dd06a9b76bc07fa1e7a3603",
+      "repo_head_before_run": "e67291fc1a09abc4a437285912ecc2b56da2459b",
+      "accepted_legacy_state_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+      "failure": "Default mode resolved to local for native KS; legacy U-carrying restart had no mode metadata and was treated as spectral; fatal mismatch before SCF.",
+      "iterations_captured": 0,
+      "new_accepted_host_created": false,
+      "owned_processes_confirmed_exited": true
+    },
+    "T2b": {
+      "invocations": 0,
+      "status": "NOT_RUN",
+      "reason": "T2a produced no accepted regenerated host."
+    }
+  },
+  "disk": {
+    "t0_pre_available_kib": 9046720,
+    "t0_post_available_kib": 9289080,
+    "t0_observed_delta_kib": 242360,
+    "t0_allocated_bytes_reclaimed_estimate": 250454016,
+    "t2a_prelaunch_available_bytes": 7547469824,
+    "t2a_periodic_min_available_bytes": 7545163776,
+    "t2a_postrun_available_kib": 7316240,
+    "t2a_guard_floor_bytes": 1073741824,
+    "t2a_guard_triggered": false
+  },
+  "t0_ledger": "docs/validation/fixed_ldau/rs/C5_6_T0_DELETION_LEDGER.json",
+  "t0_audit": "docs/validation/fixed_ldau/rs/C5_6_AUDIT.json",
+  "t0_status": "PASS_WITH_RECORDED_SCOPE",
+  "t2a_report": "docs/validation/fixed_ldau/rs/C5_6_T2A_RESULTS.md",
+  "t2a_provenance": "docs/validation/fixed_ldau/rs/C5_6_T2A_PROVENANCE.json",
+  "preservation": {
+    "accepted_original_checkpoint_modified": false,
+    "user_co_files_touched": false,
+    "metadata_retagging_performed": false,
+    "source_changes_performed": false,
+    "further_campaign_work_authorized": false
+  },
+  "audit": {
+    "status": "PASS_ON_RECORDED_FAILURE_AND_SCOPE",
+    "record": "docs/validation/fixed_ldau/rs/C5_6_AUDIT.json",
+    "disk_available_kib_at_audit": 7223536,
+    "disk_available_kib_later_sample": 7221952,
+    "merge": "NOT_PERFORMED",
+    "push": "NOT_PERFORMED"
+  }
+}
