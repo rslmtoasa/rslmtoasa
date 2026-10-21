@@ -9,6 +9,19 @@ from symmetry import SECTORS,BARE_T,MIRROR,P,UT
 
 
 class CausalSummaryTests(unittest.TestCase):
+    def test_diagonal_input_integrity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);cases=('110','1-1-0')
+            manifest={'one_pair':None,'pair_count':None,'cases':{}}
+            for case in cases:
+                (root/case).mkdir();f=root/case/'input.nml';f.write_text('saved diagonal state\n')
+                manifest['cases'][case]={'returncode':0,'potentials_unchanged':True,
+                    'copied_hashes_before_pair_selection':{'input.nml':hashlib.sha256(f.read_bytes()).hexdigest()}}
+            (root/'manifest.json').write_text(json.dumps(manifest))
+            self.assertEqual(complete(root,cases),manifest)
+            (root/'1-1-0/input.nml').write_text('changed diagonal state\n')
+            with self.assertRaisesRegex(ValueError,'Input changed'): complete(root,cases)
+
     def test_completed_manifest_and_mutated_input_rejection(self):
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp)

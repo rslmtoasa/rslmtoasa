@@ -172,6 +172,23 @@ python diagnostics/gf_symmetry/causal_summary.py \
   --output /absolute/private/causal-summary.json
 ```
 
+For the diagonal extension, run `run_saved.py` with `--cases 110 1-1-0`
+and the separately validated reciprocal binary. The same bare-H graph gate
+executes before recursion. Summarize completed reciprocal endpoints with:
+
+```bash
+python diagnostics/gf_symmetry/diagonal_summary.py \
+  --reciprocal /absolute/private/diagonal-reciprocal \
+  --fixtures /absolute/private/mn2f2 \
+  --output /absolute/private/diagonal-summary.json
+```
+
+This checks immutable inputs and complete H/GF coverage, evaluates both
+in-plane components and their domain parity, and uses [110] covariance controls.
+In particular, C2x is excluded because it does not stabilize this domain.
+Its original-output comparison is explicitly the supplied fixture benchmark;
+it does not imply a newly executed unsymmetrized diagonal baseline.
+
 **Rebuild this branch:** `post_processing_exchange` calls `structb(.true.)`,
 which regenerates Sbar and ignores the saved `sbar.` file. Replacing that file
 alone has no effect. The runner therefore sets `RSLMTO_AUDIT_SBAR` to the

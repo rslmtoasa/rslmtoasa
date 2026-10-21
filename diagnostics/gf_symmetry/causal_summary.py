@@ -14,9 +14,9 @@ from analyze import (read_dump, stage_report, h_report, bond_key, matrix,
 from symmetry import SECTORS,BARE_T,MIRROR,P,UT
 
 
-def complete(root):
+def complete(root,cases=('100','1-00')):
     manifest=json.loads((root/'manifest.json').read_text())
-    for case in ('100','1-00'):
+    for case in cases:
         item=manifest['cases'][case]
         if item['returncode'] or not item['potentials_unchanged']:
             raise ValueError('Incomplete run or changed potentials')
@@ -34,7 +34,7 @@ def maximum(store,key,value):
     store[key]=max(store.get(key,0.0),float(value))
 
 
-def directory(path):
+def directory(path,neel='100'):
     data=[read_dump(p) for p in sorted(path.glob('gf-audit-gf-*.dat'))]
     if len(data)!=24 or len({bond_key(d) for d in data})!=24:
         raise ValueError('Expected 24 unique directed bonds')
@@ -72,7 +72,9 @@ def directory(path):
         maximum(out['H_max'],'direct_mzT',max(x['mirror']['max'] for x in h['columns']))
         if h['missing_mirror_atoms']: raise ValueError('Missing H mirror partner')
         if h['pair']==1: out['first_pair_H']=entries
-    cov=covariance_report(data)
+    # C2x does not stabilize the [110] domain; do not mislabel it a symmetry.
+    cov=[x for x in covariance_report(data,neel=neel)
+         if x.get('status')!='not a symmetry of this domain']
     if any('status' in x for x in cov): raise ValueError('Missing GF spatial partner')
     out['spatial_raw_fro_max']={}
     for x in cov:
