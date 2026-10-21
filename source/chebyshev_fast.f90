@@ -777,14 +777,16 @@ contains
       end if
    end subroutine hsweep_sp_inplace
 
-   !> y = alpha*(H~ x1) + beta*x0, hoh-aware (two-sweep).
+   !> y = alpha*(H~ x1) + beta*x0, hoh-aware (two-sweep). With hoh, an associated
+   !> cee adds the ccor_2c term alpha*(CC/a)*x1 (y must differ from x1).
    subroutine happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
-                        ld, x1, x0, y, al, be, wt, etmp)
+                        ld, x1, x0, y, al, be, wt, etmp, cee, cha)
       logical, intent(in) :: do_hoh
       complex(sp), pointer, intent(in) :: hee(:, :, :, :), hha(:, :, :, :)
       complex(sp), pointer, intent(in) :: bee(:, :, :, :), bha(:, :, :, :)
       complex(sp), pointer, intent(in) :: oee(:, :, :, :), oha(:, :, :, :)
       complex(sp), pointer, intent(in) :: hons(:, :, :)
+      complex(sp), pointer, intent(in) :: cee(:, :, :, :), cha(:, :, :, :)
       integer, intent(in) :: nn(kk, nnmax), iz(kk)
       integer, intent(in) :: kk, nb, nnmax, ntype, nmax, ld
       complex(sp), intent(in) :: x1(ld, nb), x0(ld, nb)
@@ -796,6 +798,7 @@ contains
          call hsweep_sp(bee, bha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, x1, wt, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
          call hsweep_sp(oee, oha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, wt, wt, etmp, 1.0_sp, 0.0_sp, 1.0_sp, 0.0_sp)
          call combine_hoh_sp(wt, etmp, hons, iz, kk, nb, ntype, ld, x1, x0, y, al, be)
+         if (associated(cee)) call hsweep_sp_inplace(cee, cha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, y, al, 1.0_sp, 1.0_sp)
       else
          call hsweep_sp(hee, hha, nn, iz, kk, nb, nnmax, ntype, nmax, ld, x1, x0, y, al, be, 1.0_sp, 0.0_sp)
       end if
@@ -1490,7 +1493,7 @@ contains
    !>   and velocity v - vo*(h*.)). Mirrors compute_moments_stochastic.
    subroutine cheb_moments_stochastic_fast(psiref, ee, hall, lsham, nn, iz, kk, nb, &
                                            nnmax, ntype, nmax, cond_ll, a, b, mu_nm, &
-                                           hoh, eeo, hallo, enim, v_a, v_b, vo_a, vo_b)
+                                           hoh, eeo, hallo, enim, v_a, v_b, vo_a, vo_b, eecc, hallcc)
       integer, intent(in) :: kk, nb, nnmax, ntype, nmax, cond_ll
       complex(rp), intent(in) :: psiref(nb, nb, kk), ee(nb, nb, nnmax, ntype)
       complex(rp), intent(in) :: hall(nb, nb, nnmax, *), lsham(nb, nb, ntype)
@@ -1502,9 +1505,12 @@ contains
       complex(rp), intent(in) :: enim(nb, nb, ntype)
       complex(rp), intent(in) :: v_a(nb, nb, nnmax, ntype), v_b(nb, nb, nnmax, ntype)
       complex(rp), intent(in) :: vo_a(nb, nb, nnmax, ntype), vo_b(nb, nb, nnmax, ntype)
+      ! ccor_2c blocks, added to the hoh H~ apply as an extra term CC*x (not to the velocity)
+      complex(rp), intent(in), optional :: eecc(nb, nb, nnmax, ntype), hallcc(nb, nb, nnmax, *)
       ! Locals
       complex(sp), pointer :: hee(:, :, :, :), hha(:, :, :, :)
       complex(sp), pointer :: bee(:, :, :, :), bha(:, :, :, :), oee(:, :, :, :), oha(:, :, :, :), hons(:, :, :)
+      complex(sp), pointer :: cee(:, :, :, :), cha(:, :, :, :)
       complex(sp), pointer :: fva(:, :, :, :), fvb(:, :, :, :), fvoa(:, :, :, :), fvob(:, :, :, :)
       complex(sp), pointer :: fvee(:, :, :, :), fvha(:, :, :, :)
       complex(sp), allocatable :: leftst(:, :, :), p0(:, :), p1(:, :), p2(:, :), rr(:, :)
@@ -1515,7 +1521,7 @@ contains
       real(sp) :: inva, a_sp, b_sp
       logical :: do_hoh
 
-      nullify (hee, hha, bee, bha, oee, oha, hons)
+      nullify (hee, hha, bee, bha, oee, oha, hons, cee, cha)
       nullify (fva, fvb, fvoa, fvob, fvee, fvha)
       do_hoh = hoh
       ld = nb*kk
@@ -1523,7 +1529,7 @@ contains
 
       if (do_hoh) then
          call cheb_cache%ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
-            nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons)
+            nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons, eecc, hallcc, cee, cha)
       else
          call cheb_cache%ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
       end if
@@ -1549,10 +1555,10 @@ contains
       do m = 2, cond_ll
          if (m == 2) then
             call happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
-                           ld, p1, p1, p2, 1.0_sp, 0.0_sp, wt, etmp)
+                           ld, p1, p1, p2, 1.0_sp, 0.0_sp, wt, etmp, cee, cha)
          else
             call happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
-                           ld, p1, p0, p2, 2.0_sp, -1.0_sp, wt, etmp)
+                           ld, p1, p0, p2, 2.0_sp, -1.0_sp, wt, etmp, cee, cha)
          end if
          p0 = p1; p1 = p2
          leftst(:, :, m) = p1
@@ -1566,10 +1572,10 @@ contains
          else if (n == 2) then
             p0 = p1
             call happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
-                           ld, p0, p0, p1, 1.0_sp, 0.0_sp, wt, etmp)
+                           ld, p0, p0, p1, 1.0_sp, 0.0_sp, wt, etmp, cee, cha)
          else
             call happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
-                           ld, p1, p0, p2, 2.0_sp, -1.0_sp, wt, etmp)
+                           ld, p1, p0, p2, 2.0_sp, -1.0_sp, wt, etmp, cee, cha)
             p0 = p1; p1 = p2
          end if
          call vapply(fva, fvoa, p1, rr)              ! rr = v_a v_n
@@ -1602,7 +1608,7 @@ contains
    !>   Single precision; hoh-aware. Mirrors chebyshev_orbital_mod.
    subroutine cheb_moments_orbital_fast(left, psiref, ee, hall, lsham, nn, iz, kk, nb, &
                                         nnmax, ntype, nmax, lld, a, b, mu, &
-                                        hoh, eeo, hallo, enim)
+                                        hoh, eeo, hallo, enim, eecc, hallcc)
       integer, intent(in) :: kk, nb, nnmax, ntype, nmax, lld
       complex(rp), intent(in) :: left(nb, nb, kk), psiref(nb, nb, kk)
       complex(rp), intent(in) :: ee(nb, nb, nnmax, ntype), hall(nb, nb, nnmax, *), lsham(nb, nb, ntype)
@@ -1612,9 +1618,12 @@ contains
       logical, intent(in) :: hoh
       complex(rp), intent(in) :: eeo(nb, nb, nnmax, ntype), hallo(nb, nb, nnmax, *)
       complex(rp), intent(in) :: enim(nb, nb, ntype)
+      ! ccor_2c blocks, added to the hoh H~ apply as an extra term CC*x
+      complex(rp), intent(in), optional :: eecc(nb, nb, nnmax, ntype), hallcc(nb, nb, nnmax, *)
       ! Locals
       complex(sp), pointer :: hee(:, :, :, :), hha(:, :, :, :)
       complex(sp), pointer :: bee(:, :, :, :), bha(:, :, :, :), oee(:, :, :, :), oha(:, :, :, :), hons(:, :, :)
+      complex(sp), pointer :: cee(:, :, :, :), cha(:, :, :, :)
       complex(sp), allocatable :: lp(:, :), p0(:, :), p1(:, :), p2(:, :), wt(:, :), etmp(:, :)
       complex(sp) :: dum(nb, nb)
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp)
@@ -1622,14 +1631,14 @@ contains
       real(sp) :: inva, a_sp, b_sp
       logical :: do_hoh
 
-      nullify (hee, hha, bee, bha, oee, oha, hons)
+      nullify (hee, hha, bee, bha, oee, oha, hons, cee, cha)
       do_hoh = hoh
       ld = nb*kk
       a_sp = real(a, sp); b_sp = real(b, sp); inva = 1.0_sp/a_sp
 
       if (do_hoh) then
          call cheb_cache%ensure_scaled_ortho_sp(ee, hall, eeo, hallo, lsham, enim, iz, kk, nb, &
-            nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons)
+            nnmax, ntype, nmax, inva, b_sp, bee, bha, oee, oha, hons, eecc, hallcc, cee, cha)
       else
          call cheb_cache%ensure_scaled_hamiltonian_sp(ee, hall, lsham, iz, kk, nb, nnmax, ntype, nmax, inva, b_sp, hee, hha)
       end if
@@ -1653,10 +1662,10 @@ contains
          else if (n == 2) then
             p0 = p1
             call happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
-                           ld, p0, p0, p1, 1.0_sp, 0.0_sp, wt, etmp)
+                           ld, p0, p0, p1, 1.0_sp, 0.0_sp, wt, etmp, cee, cha)
          else
             call happly_sp(do_hoh, hee, hha, bee, bha, oee, oha, hons, nn, iz, kk, nb, nnmax, ntype, nmax, &
-                           ld, p1, p0, p2, 2.0_sp, -1.0_sp, wt, etmp)
+                           ld, p1, p0, p2, 2.0_sp, -1.0_sp, wt, etmp, cee, cha)
             p0 = p1; p1 = p2
          end if
          call cgemm('C', 'N', nb, nb, ld, cone, lp, ld, p1, ld, czero, dum, nb)
