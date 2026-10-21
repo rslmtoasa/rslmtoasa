@@ -11,6 +11,7 @@
             negative on both local axes (finite differences, b = 1e-4 Ry). Bug: a sign error of the field, or a conjugation error in the
             Bx -+ i By term (chi_xx and chi_yy of opposite sign).
   symmetry  S7: E(q) = E(-q) (weak in centrosymmetric bcc) and E(q + G) = E(q), G = (1,1,0) 2pi/alat (even mesh), constrained SCF at theta = 30 deg.
+  chi_orthogonal  the same at kspace_ham_order = 'orthogonal' (see its docstring): negative definite and symmetric.
   guards    the k-space GBT constraint guard stops the run with its message (a target other than (0,0,1)).
 usage: test_kspace_scspiral.py <mode> <rslmto.x> <scratch directory>"""
 import re
@@ -101,20 +102,36 @@ def mode_converge(binary, scratch):
     return r["conv"] and r["m_perp"] < tol_m and r["residual"] < tol and r["dN"] < tol_n
 
 
-def mode_chi(binary, scratch):
-    b = 1.0e-4
+def chi_tensor(binary, scratch, q, order, b=1.0e-4):
+    """chi[a, c] = dm_perp_a/dB_c [muB/Ry] at fixed potential (one iteration, central differences in the local x, y components)."""
     m_perp = {}
     for tag, field in (("px", (b, 0, 0)), ("mx", (-b, 0, 0)), ("py", (0, b, 0)), ("my", (0, -b, 0))):
-        d = deck(scratch / tag, nsp=3, q=Q, theta=30.0, constrained=True, nstep=1, bfield=field)
+        d = deck(scratch / tag, nsp=3, q=q, theta=30.0, constrained=True, nstep=1, bfield=field, order=order)
         assert run(binary, d)[0] == 0
         row = [float(x) for x in [l for l in (d / "constraint_diagnostics.dat").read_text().splitlines() if not l.startswith("#")][0].split()]
         m_perp[tag] = row[8] * np.array(row[5:7])            # moment magnitude * local direction (x, y)
-    chi_xx = (m_perp["px"][0] - m_perp["mx"][0]) / (2 * b)
-    chi_yy = (m_perp["py"][1] - m_perp["my"][1]) / (2 * b)
-    chi_xy = (m_perp["py"][0] - m_perp["my"][0]) / (2 * b)
-    chi_yx = (m_perp["px"][1] - m_perp["mx"][1]) / (2 * b)
-    print(f"chi [muB/Ry]: xx {chi_xx:.4f}, xy {chi_xy:.4f}, yx {chi_yx:.4f}, yy {chi_yy:.4f}")
-    return chi_xx < 0 and chi_yy < 0
+    return np.array([[(m_perp["px"][a] - m_perp["mx"][a]) / (2 * b), (m_perp["py"][a] - m_perp["my"][a]) / (2 * b)] for a in range(2)])
+
+
+def mode_chi(binary, scratch):
+    chi = chi_tensor(binary, scratch, Q, "first")
+    print(f"chi [muB/Ry]: xx {chi[0, 0]:.4f}, xy {chi[0, 1]:.4f}, yx {chi[1, 0]:.4f}, yy {chi[1, 1]:.4f}")
+    return chi[0, 0] < 0 and chi[1, 1] < 0
+
+
+def mode_chi_orthogonal(binary, scratch):
+    """Same at kspace_ham_order = 'orthogonal', q = (0, 0, 0.125): chi negative definite (both eigenvalues of its symmetric part < 0) and
+    symmetric, |chi_xy - chi_yx| b < scf_moment_mub (H is linear in B, so the response is a second derivative of the grand potential).
+    The symmetry check holds by construction here: chi_xy = chi_yx = 0 by the mirror symmetry of the cone (measured 0 to 1e-17 muB); only a
+    bug that makes chi_xx and chi_yy differ or flip sign is caught, through the eigenvalues.
+    Bug caught: a sign error or conjugation error of the field in H (chi_xx, chi_yy of opposite sign, or chi_xy != chi_yx)."""
+    b, tol_m = 1.0e-4, tolerance("scf_moment_mub")
+    chi = chi_tensor(binary, scratch, (0.0, 0.0, 0.125), "orthogonal", b)
+    eig = np.linalg.eigvalsh((chi + chi.T) / 2)
+    asym = abs(chi[0, 1] - chi[1, 0]) * b
+    print(f"chi [muB/Ry]: xx {chi[0, 0]:.4f}, xy {chi[0, 1]:.4f}, yx {chi[1, 0]:.4f}, yy {chi[1, 1]:.4f}; eigenvalues of the symmetric part "
+          f"{eig[0]:.4f}, {eig[1]:.4f}; |chi_xy - chi_yx| b = {asym:.3e} muB, tolerance {tol_m:.1e}")
+    return eig[1] < 0 and asym < tol_m
 
 
 def mode_symmetry(binary, scratch):
