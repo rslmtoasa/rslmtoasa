@@ -696,3 +696,54 @@ Context: the six-run Part B limit conflicted with the prescribed two-run continu
 Question: “The auditor found a protocol conflict: C5.2 caps Part B at six solver runs, but §2.2 requires two continuation runs for the unconverged Co record; five runs are already used, including the active Fe run. How should I reconcile this? Fe and independent preparation will continue while awaiting your answer.”
 
 Reply: “Keep the six-run cap; record Co as finite but unaccepted, omit its ladder and continue with no adoption.”
+
+## C5.4
+
+C5.4 (user-approved; record verbatim in C5_AMENDMENT.md). OBJECTIVE: decide impurity adoption,
+then merge. Token rules:
+- Sol writes a plan of at most 1 page, dispatches the task cards below to ONE Luna worker
+  sequentially, collects outputs, and runs ONE batched Luna audit of the GATE verdicts at the end.
+- Sol does no per-run reviews and does not re-read protocol documents beyond the files named here.
+- Every run passes the existing preflight script first. If no script exists, T0 writes one
+  (python, at most 80 lines: namelist closure, use_kspace, recur, restart source, fresh run dir,
+  thread caps).
+- Identity checks are single-threaded (C5.3).
+
+T1 RD2 re-judgement (offline, frozen RD2 Ni state, no SCF):
+   (a) Ni scalar scan v in {+/-0.0025, +/-0.005, +/-0.01, +/-0.02} Ry; fit r(v) exactly as A2.2.
+       Scalar control passes if its deviation is within the Ni-fitted allowance at its v.
+   (b) Compute the predicted separation of each control from the frozen matrices. If it is
+       < 10x the carrier error, mark the control NULL (A3.1).
+   (c) Run the sign control (c + t/q0) if it was not already run.
+   RD2 GATE = carrier ratio per spin within 1 +/- 0.01, q2' >= 0, scalar within the Ni fit,
+   and every ADMISSIBLE control separates by > 10x the carrier error.
+   Criterion correction (user-approved): the allowance is fitted per system/state; null
+   controls are not failures.
+
+T2 Occupation guard margin (production change):
+   - Warning at q0 > 2l+1 + 1e-6.
+   - Fatal only at q0 > 2l+1 + 0.05, or on any non-finite value.
+   - Report the peak q0 reached in the Ni KS runs.
+   - Unit test for both thresholds. Single-thread no-U identity must hold.
+   - Resume the Ni KS U=0 and U=3 hosts from their last states (ladder steps 1-2 at most).
+
+T3 Provenance guard scope: if the RD3 U=0 "mapping fatal" is the provenance guard firing for
+   atoms with U=J=0, restrict the guard to U-carrying atoms and add a test. Then run the Ni U=0
+   impurity control and evaluate RD3(a) Ni (GATE: ratio < 10) and, if T2 produced KS hosts,
+   RD3(b) Ni (GATE as in C5).
+
+T4 RD4 with the DEBUG build: W1 on the Ni impurity d shell, U=0, host frozen,
+   lambda in {0, +/-0.0025, +/-0.005}. Apply the C5 RD4 decision table.
+   Also record ONE RelWithDebInfo run (-g, -fbacktrace) of the Release crash to capture its
+   backtrace, as a KNOWN_ISSUES entry; no fix.
+
+T5 If RD2 and RD3(a) pass: finish RD5 (explicit-spectral identity, the auto cases), then do the
+   C5.2 §7 local merge, report the SHA, and do not push.
+   If either fails: commit the records and stop with a 5-line summary.
+
+Timebox: 8 SCF runs in total (T2+T3+T4), plus offline replays.
+Uncovered outcomes: C5.3 item 2 (no change, record, continue).
+
+### C5.4 T1 result (2026-10-21)
+
+The amended RD2 gate **PASSes** on the frozen Ni endpoint, with zero SCF solver invocations. Per-spin carrier ratios are 0.9914299182 and 0.9914299103; q2′ is 0.1378160163 and 0.1378160027 Ry². The eight-point per-spin A2.2 scalar fit gives an allowance of 0.0027005575 Ry at v=+0.01 Ry, including D0=5.0565×10⁻⁶ Ry; measured deviation is 0.0026958204 Ry, a 4.7371×10⁻⁶ Ry pass margin. The sign control predicts 1.4357881 Ry separation and measures 1.3962656 Ry against a 0.0615241 Ry threshold, so it is ADMISSIBLE and passes. The spin-swap control predicts 3.33×10⁻¹⁶ Ry, below that threshold, so it is NULL; its 0.0061524 Ry measured separation is not a failure. The sign control was already run and reused from the byte-identical frozen-state replay. Full fit data, coefficients, preflight and hashes are in `C5_4_T1_RD2.json`; reproduction is `C5_4_T1_scalar_scan.py`.

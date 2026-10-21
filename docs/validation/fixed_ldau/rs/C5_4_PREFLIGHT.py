@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """C5.4 run staging/preflight; copies only explicitly whitelisted inputs."""
-import argparse, json, os, shutil, sys
+import argparse, hashlib, json, os, shutil, sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[4]
@@ -49,10 +49,27 @@ def check(run, deck, restart, guard):
       "available_orbital_channels": ["d"] if restart else [],
       "fresh_run_dir":str(run), "thread_caps":THREADS}, indent=2))
 
+def offline(run, payload, base, driver, binding):
+    if run.exists(): raise SystemExit("offline output directory must be fresh")
+    b=json.loads(binding.read_text())
+    if hashlib.sha256(driver.read_bytes()).hexdigest()!=b["driver"]["sha256"]:
+        raise SystemExit("offline driver hash differs from frozen binding")
+    src=base.read_text().splitlines(); dst=payload.read_text().splitlines()
+    h=list(map(int,src[0].split())); start=3+h[1]+2+6
+    sh,dh=src[0].split(),dst[0].split()
+    if sh[:4]+sh[5:]!=dh[:4]+dh[5:] or dst[1:start]!=src[1:start] or int(dh[4])!=8 or len(dst)!=start+8*19:
+        raise SystemExit("offline scalar scan changed frozen payload prefix/dimensions")
+    if any(os.environ.get(k)!=v for k,v in THREADS.items()): raise SystemExit("offline thread caps missing")
+    run.mkdir(parents=True); shutil.copy2(payload,run/"driver.input.txt")
+    print(json.dumps({"status":"PASS_OFFLINE","driver_sha256":b["driver"]["sha256"],
+      "fresh_run_dir":str(run),"thread_caps":THREADS}))
+
 if __name__ == "__main__":
     ap=argparse.ArgumentParser(); ap.add_argument("run_dir", type=Path); ap.add_argument("--stage", nargs="+", type=Path)
     ap.add_argument("--deck", type=Path); ap.add_argument("--restart", type=Path); ap.add_argument("--guard", type=Path)
+    ap.add_argument("--offline", nargs=4, metavar=("PAYLOAD","BASE","DRIVER","BINDING"), type=Path)
     a=ap.parse_args()
     if a.stage: stage(a.run_dir, a.stage)
     if a.deck: check(a.run_dir, a.deck, a.restart, a.guard)
+    if a.offline: offline(a.run_dir, *a.offline)
     elif not a.stage: ap.error("provide --stage whitelist files and/or --deck")
