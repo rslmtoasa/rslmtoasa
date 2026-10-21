@@ -1193,22 +1193,31 @@ add_test(NAME AppGbtKspaceNio_i2
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_nio.py" i2 "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/nio_i2")
 add_test(NAME AppGbtKspaceNio_guard
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_nio.py" guard "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/nio_guard")
+add_test(NAME AppGbtKspaceGaugeOrthogonal
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_gauge.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/gauge_orthogonal" plain orthogonal)
+add_test(NAME AppGbtKspaceNio_r2_orthogonal
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_nio.py" r2_orthogonal "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/nio_r2_orthogonal")
+foreach(mode rotation collinear afm moments guards)
+  add_test(NAME AppKspaceOrthogonalScf_${mode}
+    COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_orthogonal_scf.py" ${mode} "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/orthogonal_scf_${mode}")
+  set_tests_properties(AppKspaceOrthogonalScf_${mode} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
+endforeach()
 add_test(NAME AppGbtKspaceSymmetry
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_symmetry.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/symmetry")
 add_test(NAME AppGbtKspaceOrthogonal
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_orthogonal.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/orthogonal")
 add_test(NAME AppGbtKspaceHamOrderInvalid
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_ham_order_invalid.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/ham_order_invalid")
-set_tests_properties(AppGbtKspaceGauge AppGbtKspaceGaugeCcor AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceCommensurateCcor AppGbtKspaceCommensurateCcorSecondOrder AppGbtKspaceNio_r2 AppGbtKspaceNio_i2 AppGbtKspaceNio_guard AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceHamOrderInvalid
+set_tests_properties(AppGbtKspaceGauge AppGbtKspaceGaugeCcor AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceCommensurateCcor AppGbtKspaceCommensurateCcorSecondOrder AppGbtKspaceNio_r2 AppGbtKspaceNio_i2 AppGbtKspaceNio_guard AppGbtKspaceGaugeOrthogonal AppGbtKspaceNio_r2_orthogonal AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceHamOrderInvalid
   PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
 
-foreach(mode identity identity_ccor identity_ccor_second converge chi symmetry guards)
+foreach(mode identity identity_orthogonal identity_ccor identity_ccor_second converge converge_orthogonal chi chi_orthogonal symmetry symmetry_orthogonal guards)
   add_test(NAME AppGbtKspaceScSpiral_${mode}
     COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral.py" ${mode} "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_${mode}")
   set_tests_properties(AppGbtKspaceScSpiral_${mode} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)
 endforeach()
 
-foreach(mode identity identity_second rotation restart)
+foreach(mode identity identity_second identity_orthogonal rotation restart)
   add_test(NAME AppGbtKspaceScSpiralAfm_${mode}
     COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_afm.py" ${mode} "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_afm_${mode}")
   set_tests_properties(AppGbtKspaceScSpiralAfm_${mode} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)
@@ -1216,7 +1225,9 @@ endforeach()
 
 add_test(NAME AppGbtKspaceScSpiralB2
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_b2.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_b2")
-set_tests_properties(AppGbtKspaceScSpiralB2 PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)
+add_test(NAME AppGbtKspaceScSpiralB2_orthogonal
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_b2.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_b2_orthogonal" orthogonal)
+set_tests_properties(AppGbtKspaceScSpiralB2 AppGbtKspaceScSpiralB2_orthogonal PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)
 
 foreach(case "fe;4;first" "fe;3;first" "fe;4;second")
   list(GET case 0 i3_system)

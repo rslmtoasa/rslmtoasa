@@ -6,7 +6,7 @@ built so that it does not depend on the code's first- or second-order Hamiltonia
 | File | Content |
 |---|---|
 | `make_hgamma_reference.py` | numpy-only generator; prints every check and writes `o3_fe_bcc.nml` |
-| `o3_fe_bcc.nml` | values: checks, 5-k-point eigenvalues, J(0) - J(q) on four meshes |
+| `o3_fe_bcc.nml` | values: checks, 5-k-point eigenvalues, J(0) - J(q) on four meshes, O3b moments on three meshes (`&o3b_moments_mesh{4,8,16}`, appended at the end) |
 
 ## Inputs (exported by the code, none of its results is used except in P0)
 Run the built binary once per deck from `tests/gbt/gbt_app_common.py` (`make_deck`, `run`), kind `bccFe_prim`, mesh 4x4x4:
@@ -78,6 +78,45 @@ and for the eigenvalues within 0.1 Ry of mu = -0.069305 Ry the deviations from H
 Note mu from H^gamma (-0.0838 Ry) differs from the code's first-order mu (-0.0693 Ry) by 0.0145 Ry.
 
 Context only, used in no check: code GBT first order at 96^3 = 3.3514 and 9.6438 mRy; fe_lswt oracle 2.8615 and 7.7902 mRy.
+
+## O3b: l-resolved moments of H^gamma (collinear bcc Fe, per spin)
+Same H^gamma_sigma(k) as above (eigenvalues include vmad), Gamma-centred full meshes 4^3, 8^3, 16^3 (weight 1/N^3 per k), 300 K, mu solved by bisection for 8 electrons
+(both spins, no spin degeneracy factor). For eigenvectors u_j of H^gamma (Andersen, Jepsen, Sob; Kanpur notes eqs. 2.51-2.55):
+
+    n^q_{l,sigma} = sum_k w_k sum_j f(e_j - mu) e_j^q sum_{m in l} |u_{m,j}|^2,  q = 0, 1, 2;  centre = n1/n0;  central q2 = n2 - 2 centre n1 + centre^2 n0
+
+Orbital index to l is the S-parity assignment above. Written in `&o3b_moments_mesh{4,8,16}` of `o3_fe_bcc.nml`; arrays have shape (l = 0, 1, 2; sigma = 1 majority, 2 minority), Fortran order.
+
+| name | unit |
+|---|---|
+| `mu_ry` | Ry |
+| `n0` | electrons per cell |
+| `n1` | Ry electrons (absolute energy scale, vmad included) |
+| `n2` | Ry^2 electrons |
+| `centre_ry` | Ry |
+| `central_q2_ry2` | Ry^2 electrons |
+
+### Self-checks (printed `ok` or `DEVIATION`; threshold 1e-10 set by the generator)
+| check | what | measured (3 meshes) |
+|---|---|---|
+| M1 | sum over l and sigma of n0 = 8 (tests the bisection and the weights) | 5.0e-14 |
+| M2 | all moments after H -> V^dag H V, V a random unitary within each l shell, re-diagonalised | 1.8e-15 |
+| M3 | 4^3 eigenvalues at the 5 k-points of the table above against the `h_gamma` values of `&o3_kpoints` as read from the previous `o3_fe_bcc.nml` on disk (n/a if none) | 4.0e-15 Ry |
+| M4 | eigenvalues and mu shifted by 0.37 Ry: n0 and central q2 unchanged, centre shifted by 0.37 | 6.9e-15 |
+
+M3 compares the same construction (`h_gamma`) with its own earlier output; it checks the mesh bookkeeping (k ordering, eigh against eigvalsh), not the physics. M2 and M4 hold analytically
+(unitary invariance of the shell trace; algebra of the central moment); they check the code of the script. None of M1 to M4 is validation of the moments against an independent route.
+
+### Values (mu [Ry]; moments are in the `.nml`)
+| mesh | mu [Ry] |
+|---|---|
+| 4^3 | -0.067451 |
+| 8^3 | -0.083497 |
+| 16^3 | -0.082936 |
+
+n0 per (l, sigma) at 16^3: s 0.330816 / 0.337962, p 0.378182 / 0.432434, d 4.401480 / 2.119126 (majority / minority). Central q2 at 16^3 [Ry^2 electrons]:
+s 0.005294 / 0.004916, p 0.005354 / 0.006414, d 0.046979 / 0.010940. From 4^3 to 16^3 d n0 changes by +0.0647 (majority) and -0.1519 (minority).
+Reproducible as for O3: `python3 make_hgamma_reference.py export o3_fe_bcc.nml` from this directory, numpy only, deterministic apart from round-off (existing values changed between the committed file and the rerun with O3b added by at most 1.9e-14 (LKAG, absolute) and 9.2e-11 Ry (J(0) - J(q), 2.4e-8 relative); the O3b block has no random input except the unitaries of M2, seed 2). Wall time of the full run with O3b: 277 s.
 
 ## Not covered
 Orbital layout of the strux library itself (the code's own S layout is used as exported); more than one site; SOC; any comparison with the real-space

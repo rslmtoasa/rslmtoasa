@@ -3,15 +3,25 @@
 16^3 mesh, 300 K, first order). Modes, each with its relation and the bug it catches:
   identity  I2 (spiral SCF at theta = 0 equals the collinear SCF): |dE|, |dE_F| < scf_identity_ry. Bug: the field leaking into H at
             B = 0, a wrong k -+ q/2 or a swapped spin channel in the SCF density.
+  identity_orthogonal  the same at kspace_ham_order = 'orthogonal'. Consistency, not validation: both sides run the same H^gamma kernel family
+            (the physics anchors are O3 and O3b). Bug caught: a k -+ q/2 shift that is not a mesh translation (q
+            scaled by 0.3 in the assembly: dE = 1.1e-4 Ry). Not caught: errors shared with the nsp = 1 path (a swapped spin channel of C moves both sides; that one is caught by
+            AppKspaceOrthogonalScf_moments (O3b), not by I2), or
+            a shift by a multiple of q/2 (a mesh translation).
   identity_ccor, identity_ccor_second  the same with ccor_2c on both sides (first and second order). Bug: Hcc missing or wrong in the spiral SCF
             assembly (also in the SCF density: the moments then differ), Hcc inside h - h o h at second order.
   converge  S3, S8: theta = 30 deg, q != 0: the SCF converges, max |m_perp| falls below scf_moment_mub and sum_a |B_a||m_a_perp| below scf_identity_ry, N stays
             neutral every iteration (|dN| < n_identity). Bug: a field that does not enter H (m_perp stays 3e-4 muB).
+  converge_orthogonal  the same at kspace_ham_order = 'orthogonal'. Bug: the field not entering H there (m_perp stays at its unconstrained value).
   chi       S3 (Pauli response): with H += +B.sigma, m = n_up - n_dn is pushed against B, so chi = dm_perp/dB at fixed potential is
             negative on both local axes (finite differences, b = 1e-4 Ry). Bug: a sign error of the field, or a conjugation error in the
             Bx -+ i By term (chi_xx and chi_yy of opposite sign).
   symmetry  S7: E(q) = E(-q) (weak in centrosymmetric bcc) and E(q + G) = E(q), G = (1,1,0) 2pi/alat (even mesh), constrained SCF at theta = 30 deg.
-  guards    the k-space GBT constraint guards stop the run with their message (orthogonal order; a target other than (0,0,1)).
+  chi_orthogonal  the same at kspace_ham_order = 'orthogonal' (see its docstring): negative definite and symmetric.
+  symmetry_orthogonal  the same at kspace_ham_order = 'orthogonal'. The E(-q) = E(q) half is weak in bcc (inversion); the E(q + G) half is the
+            informative one. Bug caught: q not handled lattice-periodically (injected: q reduced by 10% of
+            its nearest-integer direct part, dE(q + G) = -5.3e-4 Ry). Not caught: the lattice matrix transposed (bcc is cubic: E unchanged).
+  guards    the k-space GBT constraint guard stops the run with its message (a target other than (0,0,1)).
 usage: test_kspace_scspiral.py <mode> <rslmto.x> <scratch directory>"""
 import re
 import shutil
@@ -86,6 +96,10 @@ def mode_identity(binary, scratch, order="first", ccor=False):
     return spiral["conv"] and abs(dE) < tol and abs(dEF) < tol
 
 
+def mode_identity_orthogonal(binary, scratch):
+    return mode_identity(binary, scratch, order="orthogonal")
+
+
 def mode_identity_ccor(binary, scratch):
     return mode_identity(binary, scratch, ccor=True)
 
@@ -94,42 +108,65 @@ def mode_identity_ccor_second(binary, scratch):
     return mode_identity(binary, scratch, order="second", ccor=True)
 
 
-def mode_converge(binary, scratch):
+def mode_converge(binary, scratch, order="first"):
     tol, tol_m, tol_n = tolerance("scf_identity_ry"), tolerance("scf_moment_mub"), tolerance("n_identity")
-    r = scf(binary, scratch / "cone", nsp=3, q=Q, theta=30.0, constrained=True)
+    r = scf(binary, scratch / "cone", nsp=3, q=Q, theta=30.0, constrained=True, order=order)
     print(f"converged {r['conv']}, max |m_perp| = {r['m_perp']:.3e} muB, residual = {r['residual']:.3e} Ry, max |dN| = {r['dN']:.2e}")
     return r["conv"] and r["m_perp"] < tol_m and r["residual"] < tol and r["dN"] < tol_n
 
 
-def mode_chi(binary, scratch):
-    b = 1.0e-4
+def chi_tensor(binary, scratch, q, order, b=1.0e-4):
+    """chi[a, c] = dm_perp_a/dB_c [muB/Ry] at fixed potential (one iteration, central differences in the local x, y components)."""
     m_perp = {}
     for tag, field in (("px", (b, 0, 0)), ("mx", (-b, 0, 0)), ("py", (0, b, 0)), ("my", (0, -b, 0))):
-        d = deck(scratch / tag, nsp=3, q=Q, theta=30.0, constrained=True, nstep=1, bfield=field)
+        d = deck(scratch / tag, nsp=3, q=q, theta=30.0, constrained=True, nstep=1, bfield=field, order=order)
         assert run(binary, d)[0] == 0
         row = [float(x) for x in [l for l in (d / "constraint_diagnostics.dat").read_text().splitlines() if not l.startswith("#")][0].split()]
         m_perp[tag] = row[8] * np.array(row[5:7])            # moment magnitude * local direction (x, y)
-    chi_xx = (m_perp["px"][0] - m_perp["mx"][0]) / (2 * b)
-    chi_yy = (m_perp["py"][1] - m_perp["my"][1]) / (2 * b)
-    chi_xy = (m_perp["py"][0] - m_perp["my"][0]) / (2 * b)
-    chi_yx = (m_perp["px"][1] - m_perp["mx"][1]) / (2 * b)
-    print(f"chi [muB/Ry]: xx {chi_xx:.4f}, xy {chi_xy:.4f}, yx {chi_yx:.4f}, yy {chi_yy:.4f}")
-    return chi_xx < 0 and chi_yy < 0
+    return np.array([[(m_perp["px"][a] - m_perp["mx"][a]) / (2 * b), (m_perp["py"][a] - m_perp["my"][a]) / (2 * b)] for a in range(2)])
 
 
-def mode_symmetry(binary, scratch):
+def mode_converge_orthogonal(binary, scratch):
+    return mode_converge(binary, scratch, order="orthogonal")
+
+
+def mode_chi(binary, scratch):
+    chi = chi_tensor(binary, scratch, Q, "first")
+    print(f"chi [muB/Ry]: xx {chi[0, 0]:.4f}, xy {chi[0, 1]:.4f}, yx {chi[1, 0]:.4f}, yy {chi[1, 1]:.4f}")
+    return chi[0, 0] < 0 and chi[1, 1] < 0
+
+
+def mode_chi_orthogonal(binary, scratch):
+    """Same at kspace_ham_order = 'orthogonal', q = (0, 0, 0.125): chi negative definite (both eigenvalues of its symmetric part < 0) and
+    symmetric, |chi_xy - chi_yx| b < scf_moment_mub (H is linear in B, so the response is a second derivative of the grand potential).
+    The symmetry check holds by construction here: chi_xy = chi_yx = 0 by the mirror symmetry of the cone (measured 0 to 1e-17 muB); only a
+    bug that makes chi_xx and chi_yy differ or flip sign is caught, through the eigenvalues.
+    Bug caught: a sign error or conjugation error of the field in H (chi_xx, chi_yy of opposite sign, or chi_xy != chi_yx)."""
+    b, tol_m = 1.0e-4, tolerance("scf_moment_mub")
+    chi = chi_tensor(binary, scratch, (0.0, 0.0, 0.125), "orthogonal", b)
+    eig = np.linalg.eigvalsh((chi + chi.T) / 2)
+    asym = abs(chi[0, 1] - chi[1, 0]) * b
+    print(f"chi [muB/Ry]: xx {chi[0, 0]:.4f}, xy {chi[0, 1]:.4f}, yx {chi[1, 0]:.4f}, yy {chi[1, 1]:.4f}; eigenvalues of the symmetric part "
+          f"{eig[0]:.4f}, {eig[1]:.4f}; |chi_xy - chi_yx| b = {asym:.3e} muB, tolerance {tol_m:.1e}")
+    return eig[1] < 0 and asym < tol_m
+
+
+def mode_symmetry(binary, scratch, order="first"):
     tol = tolerance("scf_identity_ry")
     E = {}
     for tag, q in (("q", Q), ("minus_q", (0.0, -Q[1], 0.0)), ("q_plus_G", (1.0, 1.0 + Q[1], 0.0))):
-        E[tag] = scf(binary, scratch / tag, nsp=3, q=q, theta=30.0, constrained=True)["E"]
+        E[tag] = scf(binary, scratch / tag, nsp=3, q=q, theta=30.0, constrained=True, order=order)["E"]
     d1, d2 = E["minus_q"] - E["q"], E["q_plus_G"] - E["q"]
     print(f"E(q) = {E['q']:.10f} Ry; E(-q) - E(q) = {d1:.3e} Ry (weak: inversion); E(q+G) - E(q) = {d2:.3e} Ry; tolerance {tol:.1e}")
     return abs(d1) < tol and abs(d2) < tol
 
 
+def mode_symmetry_orthogonal(binary, scratch):
+    return mode_symmetry(binary, scratch, order="orthogonal")
+
+
 def mode_guards(binary, scratch):
-    cases = (("orthogonal", dict(order="orthogonal"), "does not support constraining fields"),
-             ("target", dict(target=(0.0, 1.0, 0.0)), "needs constraints_mom_ref = 0, 0, 1"))
+    cases = (("target", dict(target=(0.0, 1.0, 0.0)), "needs constraints_mom_ref = 0, 0, 1"),)
     ok = True
     for tag, kw, message in cases:
         d = deck(scratch / tag, nsp=3, q=Q, theta=30.0, constrained=True, nstep=1, **kw)

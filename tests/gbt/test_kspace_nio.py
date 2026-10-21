@@ -9,6 +9,9 @@ relation and the bug it catches:
             mirrored Nid and with the B1 Nid. (b) q = 0: GBT with the B1 Nid equals periodic_nc nsp = 3 with the same B1 file.
             Bug caught: a sign +1 convention of W, C, ccd, obar or E_nu that a mom(3) < 0 site breaks with CCOR, a mom, center_band,
             width_band, shifted_band or obar field of the B1 file left unswapped, Hcc inside h - h o h.
+  r2_orthogonal  the same two checks with kspace_ham_order = 'orthogonal' and no CCOR. The GBT B1 file is compared with the mirrored collinear reference,
+            and 'orthogonal' reads c, srdel and qpar, which first and second order do not: an unswapped one of them breaks the identity. Both
+            sides run the same kernel (consistency of the frame and spin-channel handling); the physics anchor of H^gamma is O3.
   i2        I2 (Sandratskii 1998): self-consistent, unconstrained, theta = 0, q != 0, second order. The GBT SCF equals the collinear
             nsp = 1 SCF of the deck (mirrored Nid) in E and E_F (scf_identity_ry) and in the four site moments (scf_moment_mub); GBT with
             the mirrored Nid and with the B1 Nid. Bug caught: Hcc missing or misplaced in the spiral SCF, a spin channel of a mom(3) < 0
@@ -41,28 +44,28 @@ def sector_deviation(e_gbt, k_gbt, spin, index, shift):
     return dev
 
 
-def mode_r2(binary, scratch):
+def mode_r2(binary, scratch, orders=("first", "second"), ccor=True):
     tol = tolerance("eig_identity_ry")
     shift = 0.5 * np.array(Q) * np.array(NK)
     assert np.allclose(shift, np.rint(shift)), "q/2 is not a mesh translation"
     shift = np.rint(shift).astype(int)
     worst = 0.0
-    for order in ("first", "second"):
-        ref = make_nio_deck(scratch / f"ref_{order}", "mirrored", "periodic_nc", NK, order=order, spin_resolved=True)
+    for order in orders:
+        ref = make_nio_deck(scratch / f"ref_{order}", "mirrored", "periodic_nc", NK, order=order, spin_resolved=True, ccor=ccor)
         run(binary, ref)
         k_ref, spin = read_export(ref, spin=True)
         index = mesh_index(k_ref, NK)
         shutil.rmtree(ref)
         for nid in ("mirrored", "b1"):
-            gbt = make_nio_deck(scratch / f"gbt_{nid}_{order}", nid, "gbt_single_q", NK, q_dir=Q, order=order)
+            gbt = make_nio_deck(scratch / f"gbt_{nid}_{order}", nid, "gbt_single_q", NK, q_dir=Q, order=order, ccor=ccor)
             run(binary, gbt)
             k_gbt, e_gbt = read_export(gbt)
             shutil.rmtree(gbt)
             dev = sector_deviation(e_gbt, k_gbt, spin, index, shift)
             print(f"(a) q != 0, {order}, GBT Nid {nid}: {len(k_gbt)} k-points, max |E_gbt - E_nc(k -+ q/2)| = {dev:.3e} Ry")
             worst = max(worst, dev)
-        ref = make_nio_deck(scratch / f"ref0_{order}", "b1", "periodic_nc", NK0, order=order)
-        gbt = make_nio_deck(scratch / f"gbt0_{order}", "b1", "gbt_single_q", NK0, order=order)
+        ref = make_nio_deck(scratch / f"ref0_{order}", "b1", "periodic_nc", NK0, order=order, ccor=ccor)
+        gbt = make_nio_deck(scratch / f"gbt0_{order}", "b1", "gbt_single_q", NK0, order=order, ccor=ccor)
         run(binary, ref)
         run(binary, gbt)
         dev = np.abs(np.sort(read_export(ref)[1], axis=0) - np.sort(read_export(gbt)[1], axis=0)).max()
@@ -110,7 +113,11 @@ def mode_guard(binary, scratch):
     return r.returncode != 0 and found
 
 
-MODES = {"r2": mode_r2, "i2": mode_i2, "guard": mode_guard}
+def mode_r2_orthogonal(binary, scratch):
+    return mode_r2(binary, scratch, orders=("orthogonal",), ccor=False)
+
+
+MODES = {"r2": mode_r2, "r2_orthogonal": mode_r2_orthogonal, "i2": mode_i2, "guard": mode_guard}
 
 if __name__ == "__main__":
     mode, binary, scratch = sys.argv[1], sys.argv[2], Path(sys.argv[3])

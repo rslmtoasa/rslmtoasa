@@ -352,16 +352,15 @@ module reciprocal_mod
       ! token is opaque to physics code and is invalidated by later backend
       ! solves or backend recreation.
       integer :: device_eigensystem_token = 0
-      !> Reciprocal solver mode: ’ham_only’, ’generalized_overlap_proxy’,
-      !> or ’generalized_overlap_kanpur’.
+      !> Reciprocal solver mode: ’ham_only’ or ’generalized_overlap_proxy’ (S = I + eeo; not a
+      !> formal Kanpur overlap). ’generalized_overlap_kanpur’ is not implemented and stops the run.
       character(len=32) :: reciprocal_mode
       !> Production normal-mesh backend: ’lapack’ (default) or ’cuda’.
       character(len=16) :: reciprocal_backend = 'lapack'
       !> K-space Hamiltonian order:
       !>   ’first’  -> H(k) = h(k)            (first-order, current behaviour)
       !>   ’second’ -> H(k) = E_nu + h(k) - [hoh](k) + L.S   (second-order ASA)
-      !> The second-order path is the seam where the combined correction (CCOR)
-      !> and the ″proper″ k-space second order (generalized_overlap_kanpur) plug in.
+      !> ’orthogonal’ -> exact-ASA H^gamma (gbt_kspace_horth).
       character(len=16) :: kspace_ham_order
       !> Kanpur-alignment diagnostics toggle
       logical :: kanpur_diagnostics

@@ -8,8 +8,10 @@ Overview
 ========
 
 The reciprocal-space workflow is controlled from ``&reciprocal`` with
-``kspace_ham_order``. All active paths build a standard Hermitian
-Hamiltonian and solve with identity overlap.
+``kspace_ham_order``. All ``reciprocal_mode='ham_only'`` paths build a
+standard Hermitian Hamiltonian and solve with identity overlap.
+``reciprocal_mode='generalized_overlap_proxy'`` solves with ``S = I + eeo`` and is not a formal Kanpur overlap;
+``reciprocal_mode='generalized_overlap_kanpur'`` is not implemented and stops the run.
 
 Available options:
 
@@ -17,6 +19,17 @@ Available options:
 - ``kspace_ham_order='first'``: first-order ``h(k) + H_LS`` Hamiltonian.
 - ``kspace_ham_order='auto'``: use the default production path.
 - ``kspace_ham_order='proper'``: deprecated alias for ``second``.
+- ``kspace_ham_order='orthogonal'``: exact-ASA ``H^gamma = C + sqrt(Delta) S^gamma sqrt(Delta)``,
+  ``S^gamma = S^alpha [1 - (gamma - alpha) S^alpha]^-1`` (Kanpur 2.47, 3.39, 3.41), built from the orthogonal-representation
+  parameters ``c``, ``srdel`` and ``qpar`` of the potential. It works for the fixed-potential force theorem and the constrained-spiral SCF (``gbt_single_q``; the constraining field is added to ``C``,
+  an approximation of the same order as at ``'first'`` and ``'second'``) and for the self-consistent ``periodic_nc`` and collinear (``nsp = 1``) k-space runs, where the local frames follow the current moment
+  directions each iteration (the collinear run keeps the lab spin channels). It needs ``hoh = .false.``, no SOC, no ``ccor_2c`` and,
+  outside ``gbt_single_q``, no constraining fields; each of these stops the run.
+
+``kspace_ham_order`` is read by the k-space (``reciprocal``) code only and is never read on the real-space path. A k-space host that
+serves a real-space impurity run is converged in the real-space Hamiltonian order (``hoh``, with or without ``ccor_2c``), not in
+``'orthogonal'``: the real-space route has no ``'orthogonal'`` Hamiltonian, so a host in that order would not be the host the impurity
+run assumes.
 
 Current Functionality Inventory
 ===============================

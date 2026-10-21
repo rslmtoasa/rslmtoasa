@@ -411,11 +411,11 @@ contains
          this%reciprocal_mode = 'generalized_overlap_proxy'
          call g_logger%warning("reciprocal_mode='generalized_overlap' is deprecated alias; using 'generalized_overlap_proxy'.", __FILE__, __LINE__)
       end if
-      if (this%reciprocal_mode /= 'ham_only' .and. &
-          this%reciprocal_mode /= 'generalized_overlap_proxy' .and. &
-          this%reciprocal_mode /= 'generalized_overlap_kanpur') then
+      if (this%reciprocal_mode == 'generalized_overlap_kanpur') &
+         call g_logger%fatal("reciprocal%build_from_file: reciprocal_mode='generalized_overlap_kanpur' is not implemented.", __FILE__, __LINE__)
+      if (this%reciprocal_mode /= 'ham_only' .and. this%reciprocal_mode /= 'generalized_overlap_proxy') then
          call g_logger%fatal("reciprocal%build_from_file: reciprocal_mode='"//trim(this%reciprocal_mode)// &
-                             "' is invalid; use 'ham_only', 'generalized_overlap_proxy' or 'generalized_overlap_kanpur'.", __FILE__, __LINE__)
+                             "' is invalid; use 'ham_only' or 'generalized_overlap_proxy'.", __FILE__, __LINE__)
       end if
 	      this%kspace_ham_order = lower(trim(kspace_ham_order))
 	      if (this%kspace_ham_order == 'proper') then

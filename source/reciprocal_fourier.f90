@@ -115,8 +115,6 @@ contains
             this%hamiltonian%gbt_ref_mom(:, i) = this%lattice%symbolic_atoms(i)%potential%mom
          end do
       end if
-      if (assembler%use_orthogonal .and. trim(this%hamiltonian%magnetic_representation) /= gbt_single_q) &
-         call g_logger%fatal("kspace_ham_order='orthogonal' needs magnetic_representation='gbt_single_q'.", __FILE__, __LINE__)
    end subroutine make_reciprocal_assembler
 
    ! Assemble a whole tile.  The loop is serial by design: a workspace is
@@ -142,7 +140,7 @@ contains
          workspace%active_tile_length = size(k_points,2)
          workspace%cached_operator_generation = this%hamiltonian%operator_generation
       end if
-      if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q) then
+      if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q .or. this%use_orthogonal) then
          call this%assemble_gbt(k_points, workspace)
          return
       end if
@@ -923,15 +921,7 @@ contains
 
       call root_info('reciprocal%build_kspace_hamiltonian: K-space Hamiltonian built successfully', __FILE__, __LINE__)
 #ifdef RSLMTO_DISABLE_FUSED_RECIPROCAL
-      if (trim(this%reciprocal_mode) == 'generalized_overlap_proxy') then
-         call this%build_kspace_overlap()
-      else if (trim(this%reciprocal_mode) == 'generalized_overlap_kanpur') then
-         call g_logger%warning('reciprocal%build_kspace_hamiltonian: generalized_overlap_kanpur requested but not implemented yet. Using ham_only solve path.', __FILE__, __LINE__)
-      end if
-#else
-      if (trim(this%reciprocal_mode) == 'generalized_overlap_kanpur') then
-         call g_logger%warning('reciprocal%build_kspace_hamiltonian: generalized_overlap_kanpur requested but not implemented yet. Using ham_only solve path.', __FILE__, __LINE__)
-      end if
+      if (trim(this%reciprocal_mode) == 'generalized_overlap_proxy') call this%build_kspace_overlap()
 #endif
       
       ! Diagnostic: Check H(k) at Gamma point for multi-site systems

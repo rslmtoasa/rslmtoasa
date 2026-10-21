@@ -3,6 +3,7 @@
 submodule (reciprocal_mod) reciprocal_gbt
    use gbt_kspace_mod, only: gbt_kspace_h1, gbt_kspace_h2, gbt_kspace_hcc, gbt_kspace_horth
    use gbt_structure_mod, only: gbt_reference_frame
+   use magnetic_representation_mod, only: gbt_single_q
    implicit none
 
 contains
@@ -23,47 +24,50 @@ contains
       real(rp), allocatable :: ccd(:, :, :)
       real(rp) :: ccd_full(norb, 0:2), lam
       complex(rp), allocatable :: obar(:, :, :), enu(:, :, :), wunit(:, :, :), czero3(:, :, :)
-      complex(rp) :: blk(nb, nb)
+      complex(rp), allocatable :: fieldblk(:, :, :), cmat(:, :)
       real(rp), allocatable :: cvec(:), dvec(:), gvec(:)
       real(rp) :: wow
       integer :: lmax_o, l, o, sp, iv
       real(rp) :: q_dir(3), theta, phi, mom_ref(3)
-      logical :: second
+      logical :: second, gbt_rep
 
+      gbt_rep = trim(this%hamiltonian%magnetic_representation) == gbt_single_q
+      if (.not. gbt_rep .and. .not. this%use_orthogonal) &
+         call g_logger%fatal("k-space GBT/orthogonal assembler called for neither gbt_single_q nor kspace_ham_order='orthogonal'.", __FILE__, __LINE__)
       if (lower(trim(this%lattice%strux_backend)) /= 'strux_lib') &
-         call g_logger%fatal("gbt_single_q k-space requires strux_backend='strux_lib'.", __FILE__, __LINE__)
+         call g_logger%fatal("k-space GBT/orthogonal requires strux_backend='strux_lib'.", __FILE__, __LINE__)
       if (this%control%nsp == 2 .or. this%control%nsp == 4) &
-         call g_logger%fatal('gbt_single_q k-space does not support SOC (nsp = 2 or 4).', __FILE__, __LINE__)
+         call g_logger%fatal('k-space GBT/orthogonal does not support SOC (nsp = 2 or 4).', __FILE__, __LINE__)
       if (this%hamiltonian%ccor_2c) then   ! Hcc is added after the order step; the orthogonal H^gamma has no CCOR formulation here
          if (this%use_orthogonal) &
-            call g_logger%fatal("gbt_single_q k-space: kspace_ham_order='orthogonal' does not support ccor_2c.", __FILE__, __LINE__)
+            call g_logger%fatal("k-space GBT/orthogonal: kspace_ham_order='orthogonal' does not support ccor_2c.", __FILE__, __LINE__)
          if (trim(this%hamiltonian%ccor_vmt_mode) == 'pair_surface') &
-            call g_logger%fatal("gbt_single_q k-space: the channel-wise pair average of ccor_vmt_mode='pair_surface' is not defined for rotated local frames; use 'surface_scalar'.", __FILE__, __LINE__)
+            call g_logger%fatal("k-space GBT/orthogonal: the channel-wise pair average of ccor_vmt_mode='pair_surface' is not defined for rotated local frames; use 'surface_scalar'.", __FILE__, __LINE__)
          call this%hamiltonian%validate_ccor_inputs()
          lam = this%hamiltonian%ccor_vmt_scalar() - this%hamiltonian%ccor_elin
       end if
       if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_test_operator_check) &
-         call g_logger%fatal('gbt_single_q k-space does not support onsite U.', __FILE__, __LINE__)
+         call g_logger%fatal('k-space GBT/orthogonal does not support onsite U.', __FILE__, __LINE__)
       if (this%hamiltonian%hubbard_v_check) &
-         call g_logger%fatal('gbt_single_q k-space does not support intersite V.', __FILE__, __LINE__)
-      if (this%hamiltonian%local_axis) call g_logger%fatal('gbt_single_q k-space does not support local_axis.', __FILE__, __LINE__)
+         call g_logger%fatal('k-space GBT/orthogonal does not support intersite V.', __FILE__, __LINE__)
+      if (this%hamiltonian%local_axis) call g_logger%fatal('k-space GBT/orthogonal does not support local_axis.', __FILE__, __LINE__)
       if (this%control%constraints_enable) then   ! the field is stored per site and applied per type: they must coincide
-         if (this%use_orthogonal) &
-            call g_logger%fatal("gbt_single_q k-space: kspace_ham_order='orthogonal' does not support constraining fields.", __FILE__, __LINE__)
+         if (this%use_orthogonal .and. .not. gbt_rep) &
+            call g_logger%fatal("k-space GBT/orthogonal: kspace_ham_order='orthogonal' does not support constraining fields outside gbt_single_q.", __FILE__, __LINE__)
          if (this%lattice%nrec /= this%lattice%ntype .or. this%lattice%nbulk /= 0) &
-            call g_logger%fatal('gbt_single_q k-space constraints need one type per site and nbulk = 0.', __FILE__, __LINE__)
+            call g_logger%fatal('k-space GBT/orthogonal constraints need one type per site and nbulk = 0.', __FILE__, __LINE__)
       end if
 
       second = this%use_second_order .and. this%hamiltonian%hoh
       if (second .and. .not. (allocated(this%hamiltonian%obarm) .and. allocated(this%hamiltonian%enim))) &
-         call g_logger%fatal('gbt_single_q k-space second order needs obarm and enim from the Hamiltonian build.', __FILE__, __LINE__)
+         call g_logger%fatal('k-space GBT/orthogonal second order needs obarm and enim from the Hamiltonian build.', __FILE__, __LINE__)
       if (this%use_orthogonal .and. this%hamiltonian%hoh) &
          call g_logger%fatal("kspace_ham_order='orthogonal' replaces h - h o h; hoh must be .false.", __FILE__, __LINE__)
       nrec = this%lattice%nrec
       allocate (bond_a(nrec*this%lattice%nn_max), bond_b(nrec*this%lattice%nn_max), bond_d(3, nrec*this%lattice%nn_max), &
                 sblock(norb, norb, nrec*this%lattice%nn_max), frame(2, 2, nrec), w(norb, 2, nrec), c(norb, 2, nrec), &
                 h(nb*nrec, nb*nrec), h2(nb*nrec, nb*nrec), obar(nb, nb, nrec), enu(nb, nb, nrec), &
-                cvec(nb*nrec), dvec(nb*nrec), gvec(nb*nrec), wunit(norb, 2, nrec), czero3(norb, 2, nrec), &
+                cvec(nb*nrec), dvec(nb*nrec), gvec(nb*nrec), cmat(nb*nrec, nb*nrec), fieldblk(nb, nb, nrec), wunit(norb, 2, nrec), czero3(norb, 2, nrec), &
                 sdotblock(norb, norb, nrec*this%lattice%nn_max), hcc(nb*nrec, nb*nrec), ccd(norb, 0:1, nrec))
       wunit = cmplx(1.0_rp, 0.0_rp, rp)
       czero3 = cmplx(0.0_rp, 0.0_rp, rp)
@@ -75,14 +79,18 @@ contains
          it = this%lattice%iz(ia)
          associate (pot => this%lattice%symbolic_atoms(it)%potential)
             if (size(pot%wx0) < norb .or. size(pot%cx0) < norb) &
-               call g_logger%fatal('gbt_single_q k-space: potential factors smaller than the orbital basis.', __FILE__, __LINE__)
+               call g_logger%fatal('k-space GBT/orthogonal: potential factors smaller than the orbital basis.', __FILE__, __LINE__)
             mom_ref = pot%mom
             if (allocated(this%hamiltonian%gbt_ref_mom)) mom_ref = this%hamiltonian%gbt_ref_mom(:, it)
-            call gbt_site_frame(mom_ref, this%hamiltonian%theta_ss, theta, phi)
+            if (gbt_rep) then
+               call gbt_site_frame(mom_ref, this%hamiltonian%theta_ss, theta, phi)
+            else   ! 'orthogonal' outside GBT: nsp = 1 keeps the lab spin channels, nsp = 3 follows the current moment direction
+               call mom_frame(pot%mom, this%control%nsp == 1, theta, phi)
+            end if
             call gbt_reference_frame(theta, phi, frame(:, :, isite))
             if (this%control%constraints_enable) then   ! the target is the local axis, whatever the site orientation
                if (maxval(abs(this%lattice%symbolic_atoms(it)%constraint_target - [0.0_rp, 0.0_rp, 1.0_rp])) > 1.0e-10_rp) &
-                  call g_logger%fatal('gbt_single_q k-space needs constraints_mom_ref = 0, 0, 1 (local frame) for every site.', &
+                  call g_logger%fatal('k-space GBT/orthogonal needs constraints_mom_ref = 0, 0, 1 (local frame) for every site.', &
                                       __FILE__, __LINE__)
             end if
             w(:, 1, isite) = pot%wx0(1:norb) + pot%wx1(1:norb)
@@ -155,28 +163,47 @@ contains
             end if
          end do
       end do
-      do i = 1, 3
-         q_dir(i) = dot_product(this%lattice%a(:, i), this%hamiltonian%q_ss)   ! q_ss is Cartesian in 2 pi/alat
-      end do
+      cmat = cmplx(0.0_rp, 0.0_rp, rp)
+      fieldblk = cmplx(0.0_rp, 0.0_rp, rp)
+      if (this%use_orthogonal) then
+         do iv = 1, nb*nrec
+            cmat(iv, iv) = cvec(iv)
+         end do
+      end if
+      if (this%control%constraints_enable) then   ! -> +B.sigma onsite in the local spin basis, as the real-space route
+         do isite = 1, nrec
+            call this%hamiltonian%add_constraining_field_spin_block(this%lattice%iz(this%lattice%atlist(this%lattice%ib(isite))), fieldblk(:, :, isite))
+            i0 = (isite - 1)*nb
+            ! A constant potential shift inside a sphere shifts C and leaves Delta and gamma unchanged (exact for spin-diagonal shifts).
+            ! For the off-diagonal B.sigma this holds to first order in B, with corrections O(B (Delta_up - Delta_dn)/Delta); first and
+            ! second order make the same approximation. H = C + dele S^gamma dele then takes the field in C.
+            if (this%use_orthogonal) cmat(i0 + 1:i0 + nb, i0 + 1:i0 + nb) = cmat(i0 + 1:i0 + nb, i0 + 1:i0 + nb) + fieldblk(:, :, isite)
+         end do
+      end if
+      q_dir = 0.0_rp
+      if (gbt_rep) then
+         do i = 1, 3
+            q_dir(i) = dot_product(this%lattice%a(:, i), this%hamiltonian%q_ss)   ! q_ss is Cartesian in 2 pi/alat
+         end do
+      end if
 
       do ik = 1, size(k_points, 2)
          if (this%use_orthogonal) then   ! h1 with w = 1, c = 0 is S^alpha_rot
             call gbt_kspace_h1(norb, nrec, nbond, bond_a(1:nbond), bond_b(1:nbond), bond_d(:, 1:nbond), sblock(:, :, 1:nbond), &
                                frame, wunit, czero3, k_points(:, ik), q_dir, h2)
-            call gbt_kspace_horth(nb*nrec, h2, cvec, dvec, gvec, h)
+            call gbt_kspace_horth(nb*nrec, h2, cmat, dvec, gvec, h)
          else
             call gbt_kspace_h1(norb, nrec, nbond, bond_a(1:nbond), bond_b(1:nbond), bond_d(:, 1:nbond), sblock(:, :, 1:nbond), &
                                frame, w, c, k_points(:, ik), q_dir, h)
          end if
-         if (this%control%constraints_enable) then   ! -> +B.sigma onsite in the local spin basis, as the real-space route
+         if (this%control%constraints_enable .and. .not. this%use_orthogonal) then
             do isite = 1, nrec
-               blk = cmplx(0.0_rp, 0.0_rp, rp)
-               call this%hamiltonian%add_constraining_field_spin_block(this%lattice%iz(this%lattice%atlist(this%lattice%ib(isite))), blk)
                i0 = (isite - 1)*nb
-               h(i0 + 1:i0 + nb, i0 + 1:i0 + nb) = h(i0 + 1:i0 + nb, i0 + 1:i0 + nb) + blk
+               h(i0 + 1:i0 + nb, i0 + 1:i0 + nb) = h(i0 + 1:i0 + nb, i0 + 1:i0 + nb) + fieldblk(:, :, isite)
             end do
          end if
          call to_spherical(h)
+         if (.not. gbt_rep .and. this%control%nsp /= 1) call to_lab(h)   ! outside GBT the eigenvectors are in the lab spin basis
          if (second) then   ! h, obar and enu are all in the spherical-harmonic basis here
             call gbt_kspace_h2(norb, nrec, h, obar, enu, h2)
             h = h2
@@ -209,7 +236,58 @@ contains
          end do
       end subroutine to_spherical
 
+      !> Local-frame spin basis to lab spin basis, H_lab(sigma, sigma') = sum_{s,t} F_a(sigma, s) H(s, t) conj(F_b(sigma', t)). At q = 0 the
+      !> frames are the rotations that take z to the moment direction, so this is the same H as C0 + C1 sigma.m with a rotated S^gamma.
+      subroutine to_lab(m)
+         complex(rp), intent(inout) :: m(:, :)
+         complex(rp) :: blk(norb, norb, 2, 2), rot(norb, norb, 2, 2)
+         integer :: isite, jsite, s, t, sg, sp, i0, j0
+
+         do isite = 1, nrec
+            do jsite = 1, nrec
+               i0 = (isite - 1)*nb
+               j0 = (jsite - 1)*nb
+               do s = 1, 2
+                  do t = 1, 2
+                     blk(:, :, s, t) = m(i0 + (s - 1)*norb + 1:i0 + s*norb, j0 + (t - 1)*norb + 1:j0 + t*norb)
+                  end do
+               end do
+               rot = cmplx(0.0_rp, 0.0_rp, rp)
+               do sg = 1, 2
+                  do sp = 1, 2
+                     do s = 1, 2
+                        do t = 1, 2
+                           rot(:, :, sg, sp) = rot(:, :, sg, sp) + frame(sg, s, isite)*blk(:, :, s, t)*conjg(frame(sp, t, jsite))
+                        end do
+                     end do
+                  end do
+               end do
+               do sg = 1, 2
+                  do sp = 1, 2
+                     m(i0 + (sg - 1)*norb + 1:i0 + sg*norb, j0 + (sp - 1)*norb + 1:j0 + sp*norb) = rot(:, :, sg, sp)
+                  end do
+               end do
+            end do
+         end do
+      end subroutine to_lab
+
    end subroutine reciprocal_assembler_assemble_gbt
+
+   !> Frame angles of one site for 'orthogonal' outside GBT: the direction of the current moment (theta from z, phi azimuth), or the
+   !> identity frame when the lab spin channels are kept (nsp = 1). The moment direction is the majority axis, as for ham0m_nc.
+   subroutine mom_frame(mom, keep_lab, theta, phi)
+      real(rp), intent(in) :: mom(3)
+      logical, intent(in) :: keep_lab
+      real(rp), intent(out) :: theta, phi
+      real(rp) :: norm
+
+      theta = 0.0_rp
+      phi = 0.0_rp
+      norm = sqrt(sum(mom**2))
+      if (keep_lab .or. norm <= 1.0e-12_rp) return
+      theta = acos(max(-1.0_rp, min(1.0_rp, mom(3)/norm)))
+      if (abs(mom(1)) + abs(mom(2)) > 1.0e-12_rp) phi = atan2(mom(2), mom(1))
+   end subroutine mom_frame
 
    !> Frame angles of one site from its reference moment (D2): +z gives (theta_ss, 0), -z gives (pi - theta_ss, pi), so the
    !> antiparallel site stays at m_b = -m_a for every cone angle. A moment off the z axis is not supported yet.
@@ -218,7 +296,7 @@ contains
       real(rp), intent(out) :: theta, phi
 
       if (abs(mom(1)) + abs(mom(2)) > 1.0e-12_rp) &
-         call g_logger%fatal('gbt_single_q k-space needs potential%mom along +-z.', __FILE__, __LINE__)
+         call g_logger%fatal('k-space GBT/orthogonal needs potential%mom along +-z.', __FILE__, __LINE__)
       theta = theta_ss
       phi = 0.0_rp
       if (mom(3) < 0.0_rp) then

@@ -1927,3 +1927,25 @@ The k-space GBT route with the B1 file matches `periodic_nc` with the same B1 fi
 ## I3 with `ccor_2c` at second order needs a tighter SCF criterion — 2026-10-22
 
 Found registering `AppGbtKspaceScSpiralI3Ccor_fe_L4_second` (bcc Fe, `fe_bcc` potential, `hoh = .true.`, `ccor_2c`, `screening = 'fitted'`, 4x4x8 CsCl-cell and 4x4x2 supercell meshes, CI configuration). With the default `conv_thr` (5e-9) the test's own precondition, two collinear `nsp = 1` SCFs of the CsCl cell and of the 8-atom supercell, gave |dE/atom| = 1.390e-07 Ry and |dE_F| = 4.6e-08 Ry against `scf_identity_ry` = 1e-07 although both runs reported `Converged!` (SCF differences 4.4e-09 and 4.6e-09). With `conv_thr = 5e-10` in those decks it gives 3.3e-09 and 0 Ry, and the case passes (|dE/atom| = 2.3e-08 Ry). At first order the default criterion was enough (5.8e-08 and 3.4e-08 Ry). So the residual was the SCF stopping criterion, not a difference between the cells.
+
+## k-space `'orthogonal'` SCF of AFM NiO without CCOR collapses and ends in a LAPACK failure — 2026-10-22
+
+Found probing the `'orthogonal'` SCF on `tests/gbt/fixtures/nio_af` (collinear `nsp = 1`, 6x6x6 mesh, 300 K deck default, `txc = 1`, no `hoh`, no `ccor_2c`, start from the deck potentials). With the deck's `beta = 0.1` the SCF difference runs 0.23, 0.50, 1.2, 3.4 and the run stops in the third iteration with `reciprocal backend: LAPACK eigensolver failed`; first-iteration Ni moment 1.53 muB (the CCOR SCF at second order gives 0.795 muB). With `beta = 0.02` Broyden the Ni moment falls 1.53, 1.37, 1.11, 0.72, 0.28, 0.05, 0.02, 0.004 muB over eight iterations, then the difference grows again and the same LAPACK failure follows. Untriaged. Not known: whether the collapse is the physics of the exact-ASA Hamiltonian without CCOR for NiO, a poor start, or the mixing; and what makes the eigenproblem non-finite after the collapse. Not tried: other starts, other meshes. Fe converges with `'orthogonal'` (see the report of the OR task). The NiO check of `'orthogonal'` is therefore the fixed-potential `AppGbtKspaceNio_r2_orthogonal`; an NiO `'orthogonal'` SCF waits for CCOR with `'orthogonal'`.
+
+## nsp = 1 AFM with `mom = -z` in a potential file collapses the moment — 2026-10-21
+
+Observation while writing `AppKspaceOrthogonalScf_afm`; existing collinear behaviour, not triaged, not fixed.
+
+Verified (12^3 mesh, tests/spin_response/cr_bcc as the nsp = 1 deck, one converged SCF per row, CI build, hoh off):
+
+| Cr1.nml mom | Cr2.nml mom | kspace_ham_order | E [Ry] | E_F [Ry] | site moments [muB] |
+|---|---|---|---|---|---|
+| +z (as shipped) | +z (as shipped) | orthogonal | -4195.4954991779 | -0.0092139615 | 0.919776, 0.919776 |
+| -z | +z | orthogonal | -4195.4943368659 | -0.0130560952 | 0, 0 |
+| -z | +z | first | -4195.5016632209 | -0.0165993972 | 0, 0 |
+
+Only `mom` of Cr1.nml was edited; channel 1 of Cr1 holds the minority values, so -z is the lab orientation that file describes. The nsp = 1 SCF leaves `mom` at +z in both written potentials. The collapse is the same at first order and 'orthogonal', so it is not specific to the new path.
+
+Suspected, not checked: other code reads `mom(3)` in the nsp = 1 path (`hamiltonian_build.f90:1324` and `1367` obarm/enim, `1824`; `calculation.f90:1412` and `1584`), which would swap spin channels of a mirrored file. The deck was hand-edited and only this one deck was run, so the deck is a live suspect.
+
+Proposal: none needed for the tests, since nsp = 1 AFM is encoded by mirrored potentials with `mom = +z` (as the NiO `Nid` fixture); a check or a documented convention would be a separate task.
