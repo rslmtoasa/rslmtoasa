@@ -1,0 +1,242 @@
+{
+  "binary": {
+    "CMakeCache_sha256": "347a558d13e7aff984d33f9882e38b713fcc3e2f45f72072c3b74b2e2895c80e",
+    "build_manifest_frozen_sha256": "8f38624f52755a410534e24847cf31e0eca266bd9db1da27e9acb428aa394a32",
+    "build_manifest_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/debug_bounds_build_manifest.json",
+    "build_manifest_sha256": "8f38624f52755a410534e24847cf31e0eca266bd9db1da27e9acb428aa394a32",
+    "build_type": "Debug",
+    "compiler": "GNU Fortran 16.2.0",
+    "debug_flags": "-g -fcheck=bounds -ffpe-trap=invalid,zero,overflow -O0 -Wall -Wno-tabs -Wno-unused-variable -Wno-unused-dummy-argument -Wno-unused-function -Wno-unused-label -fbacktrace",
+    "flags_make_sha256": "481f79db62eee0167127af91e0a471786eb068f9392b5d2b6eef00de47529e85",
+    "link_txt_sha256": "4d72badacec3604f394fd3739667dc20d5d6ec917ec0281efb249b98955e59f0",
+    "mode": "0o555",
+    "openmp": true,
+    "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x",
+    "repository_head": "8a107432e3ca2e00c815c217d52e7aa2a8e30736",
+    "sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69",
+    "source_archive_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/source-8a107432e3ca2e00c815c217d52e7aa2a8e30736.tar",
+    "source_archive_sha256": "4c714648b7d7d83caa0e63f014a680c2b72fa69e797c816947ef1b8594572fcd"
+  },
+  "environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "4",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_FIXED_U_A2_SCAN": "0",
+    "RSLMTO_FIXED_U_RUN_ID": "c52_u0_clean8b_section24_triage",
+    "RSLMTO_FIXED_U_TRACE": "<absolute run>/fixed_u_trace.csv",
+    "RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY": "0",
+    "RSLMTO_FIXED_U_TRACE_ITERATION": "0",
+    "RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY": "1",
+    "RSLMTO_FIXED_U_TRACE_QL_ONLY": "0",
+    "RSLMTO_OMP_THREADS_SERIAL": "4",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "exact_repro_environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "4",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "4",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "expected_log_observables": [
+    "restart loader reads ./Fe_out.nml (accepted U2 seed); no saved-potential metadata editing or fresh atomic reconstruction",
+    "startup identifies RS backend, Chebyshev recurrence, and local radial-moment mode",
+    "input U0 overrides the restart\u2019s serialized U2; first produced potential/trace should show effective U=J=0",
+    "no mode mismatch: saved seed mode is local, matching input mode; explicit numeric U=J=0 is permitted by current source"
+  ],
+  "final_artifact_hashes": {
+    "collector": "35721504f361c7c47bf5eec962b9ba8b18f08adcd49102543853fa43d5a512fe",
+    "disk_guard": "3049362e51a3165866c73bb997667a0c74662fc673328085b2636c25dae74cdd",
+    "immutable_input": "4da65a5fcc023a0845f736ef5dc2f8b4437829480125e2527351bd4ce2446502",
+    "immutable_seed": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+    "launcher": "2e308175c4e6de0b3b18983cf8d391ad57b294085b18b653d0dd1d3b197ef266",
+    "readiness_smoke": "a0363ba8ad5d06e6b586ea06919b20353a7d3faf8822bb225c054c2f1e41a6f7",
+    "schema_validator": "d8bea2b4825e443c81322d37e6b3ead324cde69fca32ef8096ddb9739c06e953",
+    "working_input": "4da65a5fcc023a0845f736ef5dc2f8b4437829480125e2527351bd4ce2446502",
+    "working_seed": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62"
+  },
+  "historical_context": {
+    "clean8b_note": "The preceding clean8b attempt was later classified INVALID_COMPARABILITY because two restart metadata fields were unknown. It established no numerical verdict. This preflight reuses the same accepted U2 Fe restart, changes only explicit U2 to 0, and leaves its metadata untouched."
+  },
+  "immutable_prelaunch": {
+    "input_mode": "0444",
+    "input_path": "/private/tmp/c52-u0-triage-preflight/immutable/input.nml",
+    "input_sha256": "4da65a5fcc023a0845f736ef5dc2f8b4437829480125e2527351bd4ce2446502",
+    "seed_mode": "0444",
+    "seed_note": "Exact accepted U2 Fe_out restart preserved; no metadata edits.",
+    "seed_path": "/private/tmp/c52-u0-triage-preflight/immutable/Fe_out.nml",
+    "seed_sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62"
+  },
+  "input_delta": {
+    "field": "&hamiltonian hubbard_u_general(1,3)",
+    "from_ev": 2.0,
+    "other_namelist_semantics_equal": true,
+    "textual_replacement_count": 1,
+    "to_ev": 0.0
+  },
+  "invocation": {
+    "authorization_env_required": "C52_EXPLICIT_RUN_AUTHORIZED=1",
+    "launcher": "/bin/bash --noprofile --norc /private/tmp/c52-u0-triage-preflight/launch_triage.sh",
+    "solver_pid": "Bash background-child $! recorded in solver.pid / solver_pid.actual; wrapper waits and writes exit_code.txt",
+    "status": "NOT INVOKED; explicit root authorization pending",
+    "working_directory": "/private/tmp/c52-u0-triage-preflight/run"
+  },
+  "launch_allowed": false,
+  "launch_safety": {
+    "collector_provenance": "Reuses audited launch_u2_corrected Bash $! PID/wait lifecycle and exact trace collector logic; local copy adds --solver-pid-file/--ready-file so collector owns readiness and attaches after PID file appears.",
+    "collector_script": "/private/tmp/c52-u0-triage-preflight/watch_trace_and_state.py",
+    "collector_script_sha256": "35721504f361c7c47bf5eec962b9ba8b18f08adcd49102543853fa43d5a512fe",
+    "disk_free_floor_bytes": 1073741824,
+    "disk_guard_floor_bytes": 1073741824,
+    "disk_guard_implementation": "Preflight checks before watcher and immediately before exec; disk_guard.sh polls available bytes every 2 seconds and SIGTERMs only the recorded solver PID below floor.",
+    "disk_guard_min_free_bytes": 1073741824,
+    "disk_guard_script": "/private/tmp/c52-u0-triage-preflight/disk_guard.sh",
+    "disk_guard_script_sha256": "3049362e51a3165866c73bb997667a0c74662fc673328085b2636c25dae74cdd",
+    "launcher_path": "/private/tmp/c52-u0-triage-preflight/launch_triage.sh",
+    "launcher_pid_records": "solver.pid and solver_pid.actual contain actual shell $! PID; exit_code.txt contains wait result; lifecycle.txt records launcher PID, preexec space and working input modes.",
+    "launcher_sha256": "2e308175c4e6de0b3b18983cf8d391ad57b294085b18b653d0dd1d3b197ef266",
+    "launcher_uses_bash3_2_compatible_solver_pid": "$!",
+    "preexec_hash_recheck": true,
+    "readiness_before_exec": true,
+    "readiness_dummy_test_path": "/private/tmp/c52-c2-stage/launch_u2_corrected/readiness_smoke/smoke_results.json",
+    "readiness_owner": "collector process itself. After argparse succeeds, signal handlers are installed, output directory/manifest are created and durable startup record is written; it then fsyncs watcher.ready before waiting for solver.pid.",
+    "readiness_smoke": {
+      "path": "/private/tmp/c52-u0-triage-preflight/readiness_smoke/collector_handshake_smoke.json",
+      "result": "PASS: no-solver collector handshake wrote ready only after watcher_started.json and manifest existed; SIGTERM produced watcher_finished.json and exit0. Invalid CLI argument exited2 before ready marker. No scientific solver invoked.",
+      "sha256": "a0363ba8ad5d06e6b586ea06919b20353a7d3faf8822bb225c054c2f1e41a6f7"
+    },
+    "readiness_smoke_path": "/private/tmp/c52-c2-stage/launch_u2_corrected/readiness_smoke/smoke_results.json",
+    "readiness_smoke_sha256": "203f5d1f2b77f1a6849a429b9ab6a1d95bfd8132f78868eaf4455abc3ea7c702",
+    "readiness_test_scientific_solver_invoked": false,
+    "test_results": {
+      "bash_syntax": "PASS: bash -n launch_triage.sh and disk_guard.sh",
+      "collector_handshake": "PASS; see readiness_smoke",
+      "existing_launch_lifecycle_fixture": {
+        "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/readiness_smoke/smoke_results.json",
+        "scope": "Previously approved Bash $! readiness/wait/exit fixture; no scientific executable invoked.",
+        "sha256": "203f5d1f2b77f1a6849a429b9ab6a1d95bfd8132f78868eaf4455abc3ea7c702"
+      },
+      "python_syntax": "PASS: ast.parse on collector and source schema validator"
+    },
+    "wait_and_record_actual_solver_exit_code": true,
+    "watcher_marks_ready_only_after_initialization": true,
+    "watcher_readiness_detail": "The collector itself writes the ready marker only after argument parsing, handlers, output directory/manifest and startup record are initialized; launcher waits on that marker before exec.",
+    "watcher_ready_file": "/private/tmp/c52-u0-triage-preflight/run/watcher.ready",
+    "working_input_permissions": "Both mutable run/input.nml and run/Fe_out.nml have mode 0644, owner-write bit, and os.access(W_OK)=true. Launcher requires writable run directory and both files before exec; it performs no chmod."
+  },
+  "mutable_working_copy": {
+    "directory": "/private/tmp/c52-u0-triage-preflight/run",
+    "files": {
+      "Fe_out.nml": {
+        "mode_octal": "0o644",
+        "os_access_writable": true,
+        "owner_write_bit": true,
+        "path": "/private/tmp/c52-u0-triage-preflight/run/Fe_out.nml",
+        "regular_file": true,
+        "sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+        "symlink": false
+      },
+      "input.nml": {
+        "mode_octal": "0o644",
+        "os_access_writable": true,
+        "owner_write_bit": true,
+        "path": "/private/tmp/c52-u0-triage-preflight/run/input.nml",
+        "regular_file": true,
+        "sha256": "4da65a5fcc023a0845f736ef5dc2f8b4437829480125e2527351bd4ce2446502",
+        "symlink": false
+      },
+      "run_directory": {
+        "mode_octal": "0o755",
+        "os_access_writable": true,
+        "owner_write_bit": true,
+        "path": "/private/tmp/c52-u0-triage-preflight/run"
+      }
+    },
+    "files_are_distinct_from_immutable": true,
+    "preflight_write_access_check": "PASS using os.access(path, os.W_OK) plus owner-write mode-bit inspection; launcher repeats [ -w ] and stat mode checks before exec; launcher does not chmod working inputs."
+  },
+  "purpose": "Clean 8b Debug-binary baseline crash triage after U2 Fe trajectory; one controlled U2->0 change; no physics/formula changes.",
+  "repository": {
+    "head": "8a107432e3ca2e00c815c217d52e7aa2a8e30736",
+    "path": "/Users/andersb/Jobb/rslmto_fable_v4b"
+  },
+  "restart_and_modes": {
+    "backend": "RS (self.use_kspace=.false.)",
+    "fermi": "free; supplied initial seed only",
+    "fresh_start": false,
+    "hubbard_j_ev": 0.0,
+    "hubbard_radial_moments": "local",
+    "recur": "chebyshev",
+    "restart_file": "Fe_out.nml",
+    "restart_sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62"
+  },
+  "run_id": "c52_u0_clean8b_section24_triage",
+  "schema": "c52-u0-section24-triage-preflight-v1",
+  "schema_validation": {
+    "f90nml_version": "1.4.4",
+    "result": {
+      "groups": [
+        "atoms",
+        "calculation",
+        "control",
+        "energy",
+        "hamiltonian",
+        "lattice",
+        "mix",
+        "self"
+      ],
+      "member_counts": {
+        "atoms": 2,
+        "calculation": 2,
+        "control": 5,
+        "energy": 5,
+        "hamiltonian": 4,
+        "lattice": 7,
+        "mix": 2,
+        "self": 3
+      },
+      "path": "/private/tmp/c52-u0-triage-preflight/immutable/input.nml",
+      "schema_valid": true
+    },
+    "source_declared_group_count": 20,
+    "unknown_groups_or_members": false,
+    "validator_path": "/private/tmp/c52-u0-triage-preflight/fortran_namelist_schema.py",
+    "validator_sha256": "d8bea2b4825e443c81322d37e6b3ead324cde69fca32ef8096ddb9739c06e953"
+  },
+  "solver_launched": false,
+  "source_input": {
+    "note": "Authoritative corrected U2 input; copied byte-for-byte then only hubbard_u_general(1,3) 2.0->0.0.",
+    "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/reconstructed_corrected_input.nml",
+    "sha256": "276eabe5a405848935179ce21eac25a59a01f6aa7316d8ecbe3dbfdd5ac17760"
+  },
+  "source_proof": {
+    "expected_observation": "Startup should report loading ./Fe_out.nml and use RS/Chebyshev/local. The restart file itself remains the U2 seed; after namelist application, first produced Fe_scf output / trace should show effective explicit U=0 and J=0. No seed metadata editing or silent atomic restart substitution.",
+    "explicit_zero_validity": {
+      "claim": "Local mode requires explicit fixed Liechtenstein U/J, nsp=1, lmax=2, and numeric U=J=0 is allowed as a no-op.",
+      "file": "source/hamiltonian_build.f90",
+      "lines": "560-585"
+    },
+    "input_override": {
+      "claim": "Explicit hubbard_u_general and hubbard_j_general values are assigned to each symbolic potential, overriding values loaded from its restart potential.",
+      "file": "source/hamiltonian_build.f90",
+      "lines": "388-401"
+    },
+    "mode_validation": {
+      "claim": "Mode validation checks active potential U/J; the explicit U0 override makes the U/J arrays inactive, so the saved U2 mode marker does not trigger an incompatible-mode rejection. It does not rewrite or edit the seed metadata before restart.",
+      "file": "source/self.f90",
+      "lines": "2378-2398"
+    },
+    "saved_seed_metadata": {
+      "claim": "Potential reader retains the saved radial mode/backend and records whether the restart file has nonzero U/J metadata. The selected seed is U2, J0, local, RS; U2 is stored as 0.14699717144573571 internal Ry.",
+      "file": "source/potential.f90",
+      "lines": "446-448"
+    }
+  },
+  "status": "PREFLIGHT_READY_FOR_AUDIT; NO RUN; WAITING_ROOT_AUTHORIZATION"
+}

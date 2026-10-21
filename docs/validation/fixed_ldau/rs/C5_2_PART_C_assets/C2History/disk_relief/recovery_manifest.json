@@ -1,0 +1,175 @@
+{
+  "record": "scope_recovery_after_overbroad_compression",
+  "created_local": "2026-10-20T22:57:29.107674+02:00",
+  "compression_plan_path": "/private/tmp/c52-disk-relief/candidate_plan.json",
+  "compression_plan_sha256": "ad1f7a0897e116a2ad0b7261978566befaba4f2019c0d8091bacef35f231d37d",
+  "compression_ledger_path": "/private/tmp/c52-disk-relief/compression_ledger.jsonl",
+  "compression_ledger_sha256": "3e1d8551ba1a6790d61936b74bca11f19ed0eaeb2a1368e251e2f70c02634d87",
+  "compression_ledger_entries": 3444,
+  "restored_originals": 20,
+  "restore_method": "losslessly decompressed retained, previously SHA-verified gzip copy; exact original hashes and byte counts rechecked",
+  "restored_entries": [
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/clust",
+      "original_sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+      "original_bytes": 302207,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/clust.gz",
+      "retained_gzip_sha256": "6376d851bd92e886a6eee4877e5e9292a4a3c30af0619e15b059b7a53d2fd6fd",
+      "retained_gzip_bytes": 36569
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/fort.800",
+      "original_sha256": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6",
+      "original_bytes": 287245,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/fort.800.gz",
+      "retained_gzip_sha256": "158669039a52e00402f4ee009ee373ede0f1a7a1b0c22eb4dd85205a6d80c50d",
+      "retained_gzip_bytes": 38933
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/fort.805",
+      "original_sha256": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246",
+      "original_bytes": 616366,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/fort.805.gz",
+      "retained_gzip_sha256": "105f72fe6a77e9791f166ff8fcd887db5e24503dc303ec0b881bba6bad5bc807",
+      "retained_gzip_bytes": 46016
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/gbt_bonds.out",
+      "original_sha256": "ff037937533aacb4c8663199db12e92417bcb167cbcd1945ea77ba31e7818ed9",
+      "original_bytes": 315814,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/gbt_bonds.out.gz",
+      "retained_gzip_sha256": "126bbb987edd3264dd21267d3ff15941e0ab2cbbbc741aea4efaf6ae862b28f7",
+      "retained_gzip_bytes": 28912
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/kspace_green_c1.dat",
+      "original_sha256": "f88ace25bbb1f92699f25b3712bc9e61febe3e2a69c30005f46ea34383f6adda",
+      "original_bytes": 30855,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/kspace_green_c1.dat.gz",
+      "retained_gzip_sha256": "0fda4ae66d5985fe1df8acf9b968b506eb38c0d1424e45fbdab81f2e64dffc6d",
+      "retained_gzip_bytes": 13644
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/kspace_green_gf.dat",
+      "original_sha256": "aae2a192b3d8f63eecef709046671f85936f547ef214a5c66176c9ece8c2ebd4",
+      "original_bytes": 86994,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/kspace_green_gf.dat.gz",
+      "retained_gzip_sha256": "38195b1ac923ac5abe7665d18c5514573b4187e83c94caadeeb4c9def2c92469",
+      "retained_gzip_bytes": 34777
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/str.out",
+      "original_sha256": "065052df6285330cc08be7864e8c0cb0683e59783894ea28422865ead46bc58c",
+      "original_bytes": 1496,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/str.out.gz",
+      "retained_gzip_sha256": "782c40e81f9f3a5bb1cb6238ce982cc7ab52752f052c1b93391602f0a5419246",
+      "retained_gzip_bytes": 621
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/testrun.log",
+      "original_sha256": "fc7fbdc7a2b32cfedc36b611f552f04e98d9cd1c854eb5b4dbfacde8a81a1ecf",
+      "original_bytes": 8349,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/testrun.log.gz",
+      "retained_gzip_sha256": "d57d630200c7df8cebf677d99dce39e70fa3c801d3cf381af3c07ef1a1591ca7",
+      "retained_gzip_bytes": 2313
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/ves.out",
+      "original_sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+      "original_bytes": 738,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/ves.out.gz",
+      "retained_gzip_sha256": "aef2e1779dca069efad434f2566662ae9939f01bd5e00e706b3a0092a24080e6",
+      "retained_gzip_bytes": 363
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/view.sbar",
+      "original_sha256": "038e5ddd68645f3055bad2a8298c7a641800d6b0198208daa0d1b992d3f37153",
+      "original_bytes": 13350,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_fix_cmplx/Testing/validation/val18_gbt_wp01_q0/gbt/view.sbar.gz",
+      "retained_gzip_sha256": "94a45cf7fc2c6789c8835c5de3fa4388410ac8e1e9a954a3506374f7f81d74f1",
+      "retained_gzip_bytes": 2460
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/clust",
+      "original_sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+      "original_bytes": 302207,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/clust.gz",
+      "retained_gzip_sha256": "6376d851bd92e886a6eee4877e5e9292a4a3c30af0619e15b059b7a53d2fd6fd",
+      "retained_gzip_bytes": 36569
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/fort.800",
+      "original_sha256": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6",
+      "original_bytes": 287245,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/fort.800.gz",
+      "retained_gzip_sha256": "158669039a52e00402f4ee009ee373ede0f1a7a1b0c22eb4dd85205a6d80c50d",
+      "retained_gzip_bytes": 38933
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/fort.805",
+      "original_sha256": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246",
+      "original_bytes": 616366,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/fort.805.gz",
+      "retained_gzip_sha256": "105f72fe6a77e9791f166ff8fcd887db5e24503dc303ec0b881bba6bad5bc807",
+      "retained_gzip_bytes": 46016
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/gbt_bonds.out",
+      "original_sha256": "ff037937533aacb4c8663199db12e92417bcb167cbcd1945ea77ba31e7818ed9",
+      "original_bytes": 315814,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/gbt_bonds.out.gz",
+      "retained_gzip_sha256": "126bbb987edd3264dd21267d3ff15941e0ab2cbbbc741aea4efaf6ae862b28f7",
+      "retained_gzip_bytes": 28912
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/kspace_green_c1.dat",
+      "original_sha256": "f88ace25bbb1f92699f25b3712bc9e61febe3e2a69c30005f46ea34383f6adda",
+      "original_bytes": 30855,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/kspace_green_c1.dat.gz",
+      "retained_gzip_sha256": "0fda4ae66d5985fe1df8acf9b968b506eb38c0d1424e45fbdab81f2e64dffc6d",
+      "retained_gzip_bytes": 13644
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/kspace_green_gf.dat",
+      "original_sha256": "aae2a192b3d8f63eecef709046671f85936f547ef214a5c66176c9ece8c2ebd4",
+      "original_bytes": 86994,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/kspace_green_gf.dat.gz",
+      "retained_gzip_sha256": "38195b1ac923ac5abe7665d18c5514573b4187e83c94caadeeb4c9def2c92469",
+      "retained_gzip_bytes": 34777
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/str.out",
+      "original_sha256": "095cefc88500a7dacc658cac88ccc0d8d336cccc2b26d472d2973ffdb26c820f",
+      "original_bytes": 1496,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/str.out.gz",
+      "retained_gzip_sha256": "0c0b055d74a7d9dbc5c59d6e40527afa95fb0791442b69ff9029ed44933d5908",
+      "retained_gzip_bytes": 621
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/testrun.log",
+      "original_sha256": "6e8ae9bff2883e0e93b38a17d4df3c3c7fcf20663c3b393174552a728bdad151",
+      "original_bytes": 8349,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/testrun.log.gz",
+      "retained_gzip_sha256": "5d8d2f2283c782e0a8180dddc70f1558206b2d64a23409a32f6a0c9e21646a1a",
+      "retained_gzip_bytes": 2325
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/ves.out",
+      "original_sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+      "original_bytes": 738,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/ves.out.gz",
+      "retained_gzip_sha256": "aef2e1779dca069efad434f2566662ae9939f01bd5e00e706b3a0092a24080e6",
+      "retained_gzip_bytes": 363
+    },
+    {
+      "original_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/view.sbar",
+      "original_sha256": "038e5ddd68645f3055bad2a8298c7a641800d6b0198208daa0d1b992d3f37153",
+      "original_bytes": 13350,
+      "retained_gzip_path": "/private/tmp/rslmto-c2-triage-src/build_gbt_c1/Testing/validation/val18_gbt_wp01_q0/gbt/view.sbar.gz",
+      "retained_gzip_sha256": "94a45cf7fc2c6789c8835c5de3fa4388410ac8e1e9a954a3506374f7f81d74f1",
+      "retained_gzip_bytes": 2460
+    }
+  ],
+  "free_bytes_after_restore": 3146092544,
+  "free_human_after_restore": "2.93 GiB"
+}

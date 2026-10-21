@@ -1,0 +1,376 @@
+{
+  "status": "PASS_AGGREGATE_NO_NUMERIC_TRANSFORMS",
+  "candidate_endpoint_valid": true,
+  "run_id": "c52_triage_debug_u2",
+  "trace_to_log_mapping": "self.f90 calls run_recursion(this,i) at 4059, sets fixed_u_trace_iteration=i at 4060, then records Pin_H/P_OUT/mix/radial/save/POST_SCF_RADIAL and emits Diff in the same loop i. Bind trace ID i only to exactly one completion Diff in the `Perform recursion at step i` segment before the next step marker. Zero matches are pending; multiple matches are rejected as duplicate. Candidate acceptance requires exactly one same-index completion Diff per selected ID; never use global last-Diff.",
+  "duplicate_rule": "first complete capture in append-only manifest order per explicit trace ID",
+  "requested_trace_ids": [
+    "80",
+    "81",
+    "82",
+    "83",
+    "84",
+    "85",
+    "86",
+    "87",
+    "88",
+    "89",
+    "90",
+    "91",
+    "92",
+    "93",
+    "94",
+    "95",
+    "96",
+    "97",
+    "98",
+    "99"
+  ],
+  "selected": [
+    {
+      "trace_iteration": "80",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0080_e76893a597f2.csv",
+      "trace_sha256": "e76893a597f21946b4523a3abefa8890725dd4ac7a7604303f9692dc56afda23",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0080_Fe_scf_e2d658594fc3.nml",
+      "Fe_scf_sha256": "e2d658594fc3cb28f8b4d78c6eea71dc54b484c0bae9cf9929b4a7dafdfe8481",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000251",
+        "line_context": "adial representation\n[Oct 20 2026 23:24:47.912] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000251\n[Oct 20 2026 23:24:47.912] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "81",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0081_b7aff8c2af6a.csv",
+      "trace_sha256": "b7aff8c2af6ae600d985a9098652a986c9be47c39227f675f36f571921555a41",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0081_Fe_scf_b62ff9a8b0b3.nml",
+      "Fe_scf_sha256": "b62ff9a8b0b369397febaf1e94eca6c2f4b67b9e77610007a343c902bdc731ca",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000222",
+        "line_context": "adial representation\n[Oct 20 2026 23:25:00.749] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000222\n[Oct 20 2026 23:25:00.749] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "82",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0082_ba4046e57259.csv",
+      "trace_sha256": "ba4046e57259df97b52fde1550c861c0dbf943b5ccbe71f89d554df418f803dd",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0082_Fe_scf_db5476f22212.nml",
+      "Fe_scf_sha256": "db5476f22212188f9e71dbde7d4713065ff427a01e65d0e71473bbddddaa891a",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000236",
+        "line_context": "adial representation\n[Oct 20 2026 23:25:13.595] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000236\n[Oct 20 2026 23:25:13.595] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "83",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0083_3254691be89f.csv",
+      "trace_sha256": "3254691be89f0ad2169996cf71885879463690fb40f1664f3224eb1bd81f580c",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0083_Fe_scf_0363b0d04854.nml",
+      "Fe_scf_sha256": "0363b0d04854c507f53a695b77a4ffb5855e33abe60d4231abb86d392477a800",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000264",
+        "line_context": "adial representation\n[Oct 20 2026 23:25:26.348] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000264\n[Oct 20 2026 23:25:26.348] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "84",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0084_ee8b7634db08.csv",
+      "trace_sha256": "ee8b7634db08c554e3e85532ece6b577418dac24e9c0f83ac8a6d7d60e2289ef",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0084_Fe_scf_f2b63c694ebc.nml",
+      "Fe_scf_sha256": "f2b63c694ebcec24a53daacccf47d4ff8953715eac5ae80f57895676f12b1568",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000227",
+        "line_context": "adial representation\n[Oct 20 2026 23:25:38.310] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000227\n[Oct 20 2026 23:25:38.310] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "85",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0085_3a237ba68a52.csv",
+      "trace_sha256": "3a237ba68a52c1acd38bf84fed951b79ac9809a837159343b7e73c9f947abb86",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0085_Fe_scf_20ab33eec4a0.nml",
+      "Fe_scf_sha256": "20ab33eec4a08a4f679b07d7cd663a60500b6c393e05319c5d47b1d9cec86c0e",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000216",
+        "line_context": "adial representation\n[Oct 20 2026 23:25:49.569] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000216\n[Oct 20 2026 23:25:49.569] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "86",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0086_00655c26e200.csv",
+      "trace_sha256": "00655c26e2004be82f66d6e10b096ad26b349a4c2533c8bd5ae07733647a0111",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0086_Fe_scf_95aec804a00e.nml",
+      "Fe_scf_sha256": "95aec804a00e87dca472823f6af6624700732c04c5dafe65dd922f08fcc3621b",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000242",
+        "line_context": "adial representation\n[Oct 20 2026 23:26:03.368] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000242\n[Oct 20 2026 23:26:03.368] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "87",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0087_77cf49b4a662.csv",
+      "trace_sha256": "77cf49b4a6623fd4a44fb6b3a43daf23a123d96288939d765181edcf7a609d98",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0087_Fe_scf_4a64f6f99305.nml",
+      "Fe_scf_sha256": "4a64f6f99305dd542094050cbac14dfc53677678323d906aea90d38fd79ebd1f",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000243",
+        "line_context": "adial representation\n[Oct 20 2026 23:26:16.287] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000243\n[Oct 20 2026 23:26:16.287] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "88",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0088_064235ee4142.csv",
+      "trace_sha256": "064235ee4142b6875d99529ba11a6dafd950ea5677441f08ab8dd83e15b398bf",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0088_Fe_scf_199b6a77a9c9.nml",
+      "Fe_scf_sha256": "199b6a77a9c93875c60f7e32b85cb1f0042d933013f9badfbd042497677353d8",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000246",
+        "line_context": "adial representation\n[Oct 20 2026 23:26:29.224] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000246\n[Oct 20 2026 23:26:29.224] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "89",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0089_7e734db8a2ac.csv",
+      "trace_sha256": "7e734db8a2ac4bb417822212d29e98618bf9839ba5687a0bd281ebda0c73f941",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0089_Fe_scf_654f30fba2c4.nml",
+      "Fe_scf_sha256": "654f30fba2c4d22085ec9cc15770b3e2de6d987f0ea143af89dae0b940a89985",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000234",
+        "line_context": "adial representation\n[Oct 20 2026 23:26:42.108] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000234\n[Oct 20 2026 23:26:42.108] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "90",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0090_ac7a73a3f815.csv",
+      "trace_sha256": "ac7a73a3f81531bd09157d0d07cd84a2663bb1aa798d326d8f1c52f20b181876",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0090_Fe_scf_42d91ac47e7c.nml",
+      "Fe_scf_sha256": "42d91ac47e7c43aca17b6cfc4561e88e8476b09a9f125293eacb0fb275381619",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000228",
+        "line_context": "adial representation\n[Oct 20 2026 23:26:56.036] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000228\n[Oct 20 2026 23:26:56.036] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "91",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0091_84ac2e4d4eed.csv",
+      "trace_sha256": "84ac2e4d4eed76e491469afbf7e348ab387676710d9c18e76d1eb958078c804f",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0091_Fe_scf_a0ffdaf0331f.nml",
+      "Fe_scf_sha256": "a0ffdaf0331fc576029bb27fd4d4a2c06ba285becc04aed9414021b7ddf9c731",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000234",
+        "line_context": "adial representation\n[Oct 20 2026 23:27:09.401] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000234\n[Oct 20 2026 23:27:09.401] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "92",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0092_233ee11f7caf.csv",
+      "trace_sha256": "233ee11f7caf645b633a0a6524e08943777d4cc94e78caaf4926fe2b54435769",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0092_Fe_scf_c5122949315c.nml",
+      "Fe_scf_sha256": "c5122949315c5abd0023ae5f5c37b4848907f7ef1edce5cdac9a205287aa846b",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000263",
+        "line_context": "adial representation\n[Oct 20 2026 23:27:22.168] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000263\n[Oct 20 2026 23:27:22.168] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "93",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0093_3be91aed97ae.csv",
+      "trace_sha256": "3be91aed97ae10bc442d5acbdcaff4df49004a6a84512df8aa425eb88638f3b3",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0093_Fe_scf_8510496fd1dc.nml",
+      "Fe_scf_sha256": "8510496fd1dc4cda95386d6338aab90bf5627bda1729ceb7986f791cabfc2959",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000300",
+        "line_context": "adial representation\n[Oct 20 2026 23:27:34.928] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000300\n[Oct 20 2026 23:27:34.928] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "94",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0094_d8eb5317cc11.csv",
+      "trace_sha256": "d8eb5317cc1133f2c9b943afc13e6b074f2706f4b6eb67ae72cb6d8997984139",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0094_Fe_scf_73bbfeeb3bca.nml",
+      "Fe_scf_sha256": "73bbfeeb3bca9d896e6fb4c8fc338d2e63b4c66008494bb5909b9c1238261a28",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000280",
+        "line_context": "adial representation\n[Oct 20 2026 23:27:47.622] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000280\n[Oct 20 2026 23:27:47.622] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "95",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0095_bc6fe3afedcf.csv",
+      "trace_sha256": "bc6fe3afedcfd214be647ae5bc79349fd194f493f6bddd009af259d32d6c5e92",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0095_Fe_scf_713b2df822ae.nml",
+      "Fe_scf_sha256": "713b2df822aee53130000df5ebdef8f50065430d863d6a4050a2bf2bc5e00ace",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000238",
+        "line_context": "adial representation\n[Oct 20 2026 23:28:00.418] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000238\n[Oct 20 2026 23:28:00.418] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "96",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0096_99dd61c9a590.csv",
+      "trace_sha256": "99dd61c9a590c8998fece3adb6f6c969acef385838a9eb8eef568d94ab4804d4",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0096_Fe_scf_e7d96c55ae52.nml",
+      "Fe_scf_sha256": "e7d96c55ae5246355911aad2cb1f363ca3d953ca4c122fc50b7b13c39737d2db",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000250",
+        "line_context": "adial representation\n[Oct 20 2026 23:28:13.368] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000250\n[Oct 20 2026 23:28:13.368] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "97",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0097_861397e13ce4.csv",
+      "trace_sha256": "861397e13ce46bd5dde60fe12d0414829874d38d5a01a0b319b296086bc67791",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0097_Fe_scf_79b37f736bb8.nml",
+      "Fe_scf_sha256": "79b37f736bb856ab54a1141857bef45db51064892213cc0c43a940b8e97b9d32",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000295",
+        "line_context": "adial representation\n[Oct 20 2026 23:28:26.028] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000295\n[Oct 20 2026 23:28:26.028] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "98",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0098_32be480a0ced.csv",
+      "trace_sha256": "32be480a0cedbb60957508bd28041b9116fbb18c84ae9e1e1467220a6db4da13",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0098_Fe_scf_3bd79d80a438.nml",
+      "Fe_scf_sha256": "3bd79d80a43850644c9ee70c42b0741aca28c88ac6013f1b32852dcd4fe9281b",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000268",
+        "line_context": "adial representation\n[Oct 20 2026 23:28:39.716] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000268\n[Oct 20 2026 23:28:39.716] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "99",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0099_98298a9075bf.csv",
+      "trace_sha256": "98298a9075bf83c7fe4f8049c8cc50949123d336819f82cc1406edb35212bbae",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0099_Fe_scf_c84c8e2b3200.nml",
+      "Fe_scf_sha256": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000229",
+        "line_context": "adial representation\n[Oct 20 2026 23:28:52.441] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000229\n[Oct 20 2026 23:28:52.441] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    }
+  ],
+  "duplicate_entries_omitted": [],
+  "header_written_once": true,
+  "concatenated_rows": 88500,
+  "output": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/accepted_checkpoint_trace99_window80_99/aggregate.csv",
+  "output_sha256": "39a3d5420f9fc06648f0f319583c7cdf1719dc8fd7f4478c47a63d88a8b25561"
+}

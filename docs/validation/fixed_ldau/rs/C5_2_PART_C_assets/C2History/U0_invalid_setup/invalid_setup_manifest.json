@@ -1,0 +1,275 @@
+{
+  "classification": "C2 U0 pair invalid setup; retained only as diagnostic raw data, not acceptance evidence",
+  "captured": "2026-10-20T22:04:18.693654+02:00",
+  "root_stop_authorization": "SIGTERM invalid Chebyshev PID52847; block guard process had already exited",
+  "runs": [
+    {
+      "run_id": "c2_u0_block",
+      "classification": "INVALID_SETUP: use_kspace is placed in &control but its compiled Fortran declaration is in &self; runtime defaults cannot validate the requested deck. Block also hit a guard, but that outcome is nested under invalid setup and not a valid C2 comparison.",
+      "input_sha256": "ceedfd03e09b3a3d86787e60e7d13abfc821361e5aefdbf90255c83ba751a684",
+      "final_log_snapshot": "/private/tmp/c52-c2-stage/launch_u0/invalid_setup_evidence/c2_u0_block_final_testrun.log",
+      "final_log_sha256": "eb5f8a39f63678316312637f52f67292e6a5dd466193341a634430a960fb019a",
+      "exit_code": "1",
+      "solver_pid": "52846",
+      "files": [
+        {
+          "name": "Fe_1_spinene.out",
+          "bytes": 163150,
+          "sha256": "27701d5df4e507f18496b424fa6fee80c2024ed214c7c4fc9ab0a03437588dad"
+        },
+        {
+          "name": "Fe_dos.out",
+          "bytes": 163198,
+          "sha256": "be82d04cd02c7b3260c35b43c2a50067bbaee572b51762f5734997fb555ffe31"
+        },
+        {
+          "name": "Fe_orbene.out",
+          "bytes": 163150,
+          "sha256": "589c8a3303c71e3696d58602715df205f35a3a08ec1e34757c0eaf5c7d775d8b"
+        },
+        {
+          "name": "Fe_orbital_dos.out",
+          "bytes": 765550,
+          "sha256": "e5de9a65879160301b9330fb89042f905ad2ec796d8483d5f5f9a7a033d2a6b8"
+        },
+        {
+          "name": "Fe_out.nml",
+          "bytes": 6771,
+          "sha256": "647e9df67510db0c133dd53975cece5f50b379e6e314542de336eec64575d327"
+        },
+        {
+          "name": "Fe_scf.nml",
+          "bytes": 6772,
+          "sha256": "460e4f08c24bc7993ca4530b9b4888185498aea376b928d0da61c3a90e2bed57"
+        },
+        {
+          "name": "clust",
+          "bytes": 302207,
+          "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+        },
+        {
+          "name": "exit_code.txt",
+          "bytes": 2,
+          "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+        },
+        {
+          "name": "fixed_u_trace.csv",
+          "bytes": 72720,
+          "sha256": "567faa21b1275a4f9f14d377c9ed144160085fd84900333bd64f2ff8a10c93ee"
+        },
+        {
+          "name": "fort.800",
+          "bytes": 287245,
+          "sha256": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6"
+        },
+        {
+          "name": "fort.805",
+          "bytes": 616366,
+          "sha256": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246"
+        },
+        {
+          "name": "input.nml",
+          "bytes": 753,
+          "sha256": "ceedfd03e09b3a3d86787e60e7d13abfc821361e5aefdbf90255c83ba751a684"
+        },
+        {
+          "name": "launch_preflight.json",
+          "bytes": 8038,
+          "sha256": "37244971d648f0692b0e7465dd76ec548c78fe582323c274a4ea45104a77598a"
+        },
+        {
+          "name": "mad.mat",
+          "bytes": 16,
+          "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+        },
+        {
+          "name": "magneticdos.out",
+          "bytes": 283683,
+          "sha256": "2977b99c6a7142566396a7d22ad1a2e3251908faf079a9604894080f20f6044d"
+        },
+        {
+          "name": "map",
+          "bytes": 406912,
+          "sha256": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5"
+        },
+        {
+          "name": "sbar",
+          "bytes": 10800,
+          "sha256": "b32a32dc743416e6dad05612d8a4cb7b02bf76fa6eba705dc8555705dadf06c7"
+        },
+        {
+          "name": "solver.pid",
+          "bytes": 6,
+          "sha256": "8f4df50985bcb5b1529f3ae97e52dd5052ee4a9db42970caf81412724134d40a"
+        },
+        {
+          "name": "str.out",
+          "bytes": 6934,
+          "sha256": "fda4513e4a8033f3980d20d83e09d79b12fd9e0b732ea82d8c7d86d55148ff88"
+        },
+        {
+          "name": "testrun.log",
+          "bytes": 108617,
+          "sha256": "eb5f8a39f63678316312637f52f67292e6a5dd466193341a634430a960fb019a"
+        },
+        {
+          "name": "totaldos.out",
+          "bytes": 82830,
+          "sha256": "71051baf90b5bd03b162eb2cd350d350ed7741348504712cde5d96072a9df735"
+        },
+        {
+          "name": "ves.out",
+          "bytes": 738,
+          "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+        },
+        {
+          "name": "view.sbar",
+          "bytes": 13350,
+          "sha256": "57bfa6474db2fbb124cede64ad677d9a124023c40fa2222b6dc9b10ffcabd33e"
+        },
+        {
+          "name": "wrapper.pid",
+          "bytes": 6,
+          "sha256": "261473e472ba3d7b3ee174b1d62830c49da0924e5df15fd2ab84a3098096aed9"
+        }
+      ]
+    },
+    {
+      "run_id": "c2_u0_chebyshev",
+      "classification": "INVALID_SETUP: use_kspace is placed in &control but its compiled Fortran declaration is in &self; runtime defaults cannot validate the requested deck. Block also hit a guard, but that outcome is nested under invalid setup and not a valid C2 comparison.",
+      "input_sha256": "f2974c024bd8e6a391cb5c8956654d7ee57ea259d456a78be891b966c9b852e9",
+      "final_log_snapshot": "/private/tmp/c52-c2-stage/launch_u0/invalid_setup_evidence/c2_u0_chebyshev_final_testrun.log",
+      "final_log_sha256": "9cfa19cc0f3716830bc463f843e2916606f021af240fc20fe11b08aeb4f9438b",
+      "exit_code": "143",
+      "solver_pid": "52847",
+      "files": [
+        {
+          "name": "Fe_1_spinene.out",
+          "bytes": 163150,
+          "sha256": "3275b2b20f3f7af3ce445b9d9632fb4f94e89ff27941e52bf43b92a0d28162fa"
+        },
+        {
+          "name": "Fe_dos.out",
+          "bytes": 163198,
+          "sha256": "b8485867046ae5f910ea5b8f6376cd089869d81a40e313f27ebce97e7f1f64cc"
+        },
+        {
+          "name": "Fe_orbene.out",
+          "bytes": 163150,
+          "sha256": "6e664cd28b8573d278c996fa573376daeb5a725d7d7c9b50828a450d2a0830c8"
+        },
+        {
+          "name": "Fe_orbital_dos.out",
+          "bytes": 765550,
+          "sha256": "88fa638c2f66c4f6979f95c6a447a4537c947e26fd3e9fd80938bb871f13506b"
+        },
+        {
+          "name": "Fe_out.nml",
+          "bytes": 6771,
+          "sha256": "647e9df67510db0c133dd53975cece5f50b379e6e314542de336eec64575d327"
+        },
+        {
+          "name": "Fe_scf.nml",
+          "bytes": 6773,
+          "sha256": "9d848b32056b8ca344653157e21c30291025d10b4861017a4f1114968dac2a52"
+        },
+        {
+          "name": "clust",
+          "bytes": 302207,
+          "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+        },
+        {
+          "name": "exit_code.txt",
+          "bytes": 4,
+          "sha256": "9d9b18720961e9b4689fd763b85e7b6f36160ccd3a8a1c9ddc5103bb0f66c396"
+        },
+        {
+          "name": "fixed_u_trace.csv",
+          "bytes": 904856,
+          "sha256": "4d470ab0650273bcfaac8404088b173dc34484162b3c0e9db327474c6d44e02c"
+        },
+        {
+          "name": "fort.800",
+          "bytes": 284845,
+          "sha256": "58cc4601e8bfa820acce8913603e162d3f0278a4d9d43ac09d50891abcbb3229"
+        },
+        {
+          "name": "fort.805",
+          "bytes": 613894,
+          "sha256": "22007191599a4cc2e7b738353c0c40dc300e5611e40ff5e3713ecc24277e10db"
+        },
+        {
+          "name": "input.nml",
+          "bytes": 757,
+          "sha256": "f2974c024bd8e6a391cb5c8956654d7ee57ea259d456a78be891b966c9b852e9"
+        },
+        {
+          "name": "launch_preflight.json",
+          "bytes": 8078,
+          "sha256": "9ed2dcb5ca4300203eda027379e55d0c562252a9ea43a0f9c26f64b75febb3e9"
+        },
+        {
+          "name": "mad.mat",
+          "bytes": 16,
+          "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+        },
+        {
+          "name": "magneticdos.out",
+          "bytes": 283683,
+          "sha256": "966897889449b6d9e9f0beb41d9abc59d8478701ca45702b82eb657d7f060cb9"
+        },
+        {
+          "name": "map",
+          "bytes": 393312,
+          "sha256": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842"
+        },
+        {
+          "name": "sbar",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "solver.pid",
+          "bytes": 6,
+          "sha256": "cc1a87dbd623e0ae88932e65e54f873b4fe7cf200e711d4302854a90c4979ad0"
+        },
+        {
+          "name": "str.out",
+          "bytes": 6934,
+          "sha256": "fda4513e4a8033f3980d20d83e09d79b12fd9e0b732ea82d8c7d86d55148ff88"
+        },
+        {
+          "name": "testrun.log",
+          "bytes": 237392,
+          "sha256": "9cfa19cc0f3716830bc463f843e2916606f021af240fc20fe11b08aeb4f9438b"
+        },
+        {
+          "name": "totaldos.out",
+          "bytes": 82830,
+          "sha256": "b14f252f6044c855ea927461594025dd76da4ece31ae00be6628ae52e0067ac1"
+        },
+        {
+          "name": "ves.out",
+          "bytes": 738,
+          "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+        },
+        {
+          "name": "view.sbar",
+          "bytes": 12460,
+          "sha256": "2ed5b82de9633c0321013936fac1c95de9c7d53441af1af3b4f068a20cddf673"
+        },
+        {
+          "name": "wrapper.pid",
+          "bytes": 6,
+          "sha256": "c880f9924d515b7f43f48a223b7fc9d361b13d0e2c4a59bdee6978d5c9bcada1"
+        }
+      ]
+    }
+  ],
+  "paired_trace_state_manifest": "/private/tmp/c52-c2-stage/launch_u0/snapshots_watcher/trace_state_manifest.jsonl",
+  "paired_trace_state_manifest_sha256": "968a6da8ebe77f9d634a99588c919ee9853a07a0b212003188eeb2400a28e2d8",
+  "paired_snapshot_count": 70,
+  "evidence_dir": "/private/tmp/c52-c2-stage/launch_u0/invalid_setup_evidence",
+  "no_relaunch": true,
+  "no_u2_launch": true
+}

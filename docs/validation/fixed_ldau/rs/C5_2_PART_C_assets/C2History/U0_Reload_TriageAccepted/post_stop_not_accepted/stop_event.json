@@ -1,0 +1,17 @@
+{
+  "record_type": "authorized_intentional_solver_stop_after_audited_checkpoint",
+  "solver_pid": 8704,
+  "launcher_pid": 8648,
+  "watcher_pid": 8672,
+  "disk_guard_pid": 8705,
+  "binary_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x",
+  "binary_sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69",
+  "pre_signal_escalated_ps": "2026-10-21T08:40:50+02:00 showed PID8704, PPID8648, state R, exact binary above",
+  "signal_command": "kill -TERM 8704",
+  "signal_timestamp": "2026-10-21T08:40:52+02:00",
+  "kill_exit_code": 0,
+  "wrapper_evidence": "Foreground launch_triage.sh session emitted child 8704 Terminated: 15; run/exit_code.txt=143; lifecycle.txt ended 08:40:52+0200",
+  "post_signal_escalated_ps": "Targeted ps for 8704,8648,8672,8705 returned no process rows after stop",
+  "accepted_endpoint": "iteration 76, window 57\u201376, auditor PASS; endpoint frozen separately",
+  "later_live_outputs": "not accepted checkpoint; preserved under post_stop_not_accepted/"
+}

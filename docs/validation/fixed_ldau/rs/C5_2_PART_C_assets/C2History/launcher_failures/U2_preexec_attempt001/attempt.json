@@ -1,0 +1,11 @@
+{
+  "attempt": "u2_chebyshev_preexec_001",
+  "classification": "pre-exec launcher failure; no solver PID and frozen executable never invoked",
+  "authorized_scope": "one corrected U2 Chebyshev solver launch",
+  "launch_session_id": 94061,
+  "launcher_pid": 47192,
+  "watcher_pid": 47223,
+  "exit_code": 143,
+  "cause": "launch_one.sh awaited nonempty watcher.ready with test -s; watch_one.sh created it as a zero-byte file",
+  "action": "intentionally stopped only owned launcher/watcher wrappers; no scientific process existed"
+}

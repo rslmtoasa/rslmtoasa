@@ -1,0 +1,20 @@
+{
+  "abs_q0_physical_moment_spread": "2.6941277814e-7",
+  "accepted_checkpoint": "trace99/window80-99",
+  "accepted_package_sha256": "80defa530c3e94b286df1c66d97eae07ee1af71835349e86e37d9b41b217eb69",
+  "accepted_state_sha256": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+  "accepted_trace_sha256": "98298a9075bf83c7fe4f8049c8cc50949123d336819f82cc1406edb35212bbae",
+  "d_spin_spreads": [
+    "1.050120080e-7",
+    "1.206028603e-7"
+  ],
+  "post_exit_iter100": "Separate stable capture; not substituted for accepted trace99.",
+  "run_id": "c52_triage_debug_u2",
+  "same_loop_diff_step99": "2.29e-8",
+  "terminal_exit_code": 2,
+  "terminal_reason": "After step100, Fortran runtime error opening read-only restart alias Fe_out.nml at symbolic_atom.f90:624; staging permission failure, not numerical failure or accepted endpoint replacement.",
+  "window": [
+    80,
+    99
+  ]
+}

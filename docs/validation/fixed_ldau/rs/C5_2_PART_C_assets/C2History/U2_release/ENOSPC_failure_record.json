@@ -1,0 +1,161 @@
+{
+  "capture_manifest": {
+    "completed_trace_ids": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57
+    ],
+    "last_complete_trace_id": 57,
+    "missing_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/snapshots_watcher/c2_u2_chebyshev_prospective_002/trace_state_manifest.jsonl"
+  },
+  "classification": "infrastructure failure under \u00a72.4 review; preserve this attempt and do not relaunch until root allocates/resolves",
+  "disk_check_after_concurrent_cleanup": {
+    "available": "2.6Gi on shared /dev/disk3s5 at record time; prior ENOSPC was transient and capacity has since been freed",
+    "command": "df -h /private/tmp /Users/andersb/Jobb/rslmto_fable_v4b"
+  },
+  "failure": {
+    "backtrace": [
+      "#0  0x10105b323",
+      "#1  0x10105bef7",
+      "#2  0x10105c7cb",
+      "#3  0x101174d93",
+      "#4  0x101174fbb",
+      "#5  0x1003f03eb",
+      "#6  0x1007a16df",
+      "#7  0x1007c4687",
+      "#8  0x10048238f",
+      "#9  0x10046f697",
+      "#10 0x1003dcfaf",
+      "#11 0x100831d1f"
+    ],
+    "kind": "filesystem ENOSPC during solver output",
+    "line": 525,
+    "log_lines": [
+      2687,
+      2702
+    ],
+    "message": "Fortran runtime error: Cannot open file 'totaldos.out': No space left on device",
+    "source": "/Users/andersb/Jobb/rslmto_fable_v4b/source/bands.f90",
+    "unit": 125
+  },
+  "iteration_state": {
+    "acceptance_endpoint": "none at trace57; no same-loop Diff57, so trace/state57 is not a complete endpoint",
+    "last_complete_watcher_trace_and_state": 57,
+    "last_same_loop_diff": 56,
+    "partial_iteration": 58,
+    "partial_iteration_phase": "Pin_H only; no P_OUT, no POST_SCF_RADIAL completion marker, no same-loop Diff",
+    "partial_iteration_trace_rows": 250
+  },
+  "launch": {
+    "outer_pid": 57996,
+    "solver_pid": 58026,
+    "solver_session_id": 37113,
+    "watcher_pid": 63377,
+    "watcher_session_id": 34452,
+    "wrapper_pid": 57997
+  },
+  "no_further_solver_launch": true,
+  "observed_local_time": "2026-10-20T22:52:17+02:00",
+  "partial_output_note": "totaldos.out exists after the failed open with 82,830 bytes; treat it as partial/uncertain output, not a valid completed result. Other files written near failure are preserved and should be assessed individually.",
+  "preserved_artifacts": [
+    {
+      "bytes": 470197,
+      "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev/testrun.log",
+      "sha256": "6c20da1e57dffcb686b0e9c96c78dae55b77c6b7ef044e521c419634382cb4ec"
+    },
+    {
+      "bytes": 999506,
+      "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev/fixed_u_trace.csv",
+      "sha256": "ae1060a7ba5fd4d62b2ca64a3c2bfc0cd9cd7b0cdb7c11edab7b8a1004ca981c"
+    },
+    {
+      "bytes": 10588,
+      "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev/Fe_scf.nml",
+      "sha256": "96aac59b812cff8671222f4a81bf6cf46912011df0731b1af80f4ed3afe81ffd"
+    },
+    {
+      "bytes": 82830,
+      "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev/totaldos.out",
+      "sha256": "d45757d6e8acedb5634025615bcc4527e93b6ad0d2acaf6ab204d5801477c7d7"
+    },
+    {
+      "bytes": 57696,
+      "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/snapshots_watcher/c2_u2_chebyshev_prospective_002/trace_state_manifest.jsonl",
+      "sha256": "0c8bd29cd7e2c22748d43a3fa8d129d3fc1c3c2424a9b230f5d95dbf23e2eef0"
+    },
+    {
+      "bytes": 1172,
+      "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/snapshots_watcher/c2_u2_chebyshev_prospective_002/watcher_started.json",
+      "sha256": "71032a85e58d67b635495e2db776b472992f099e4a9f44d2cc63032b0830e8a5"
+    },
+    {
+      "bytes": 4586,
+      "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev/actual_launch_status_001.json",
+      "sha256": "d174580b4d88adc2048499d1f63f3f465ecc62617bfe11c8e717d2850133eba0"
+    }
+  ],
+  "process_check": {
+    "method": "targeted escalated `ps -p 57996,57997,58026,63377,61507 -o pid=,ppid=,stat=,etime=,command=`, captured 2026-10-20 after failure",
+    "result": "no process rows; command exit 1 indicates all targeted owned processes absent",
+    "session_poll": "solver exec session 37113 unavailable after completion; do not infer solver exit code"
+  },
+  "record_type": "C2_U2_CHEB_INFRASTRUCTURE_DISK_WRITE_FAILURE",
+  "run_id": "c2_u2_chebyshev",
+  "solver_exit_status": "UNKNOWN; Fortran runtime error and process disappearance were observed; wrapper exit 1 only reflects failure to write its status file and must not be attributed to the solver"
+}

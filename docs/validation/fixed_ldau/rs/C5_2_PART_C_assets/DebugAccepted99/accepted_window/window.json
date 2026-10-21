@@ -1,0 +1,198 @@
+{
+  "status": "INTERIM_MONITORING_ONLY",
+  "run_id": "c52_triage_debug_u2",
+  "iterations": [
+    80,
+    81,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    92,
+    93,
+    94,
+    95,
+    96,
+    97,
+    98,
+    99
+  ],
+  "ql_phase": "P_OUT fresh-unmixed DOS output; q0 d values, separate from Fe_scf P_MIX state",
+  "spin1_q0_d": {
+    "min": "4.6106008534939100",
+    "max": "4.6106009585059180",
+    "spread": "1.050120080E-7",
+    "n": 20
+  },
+  "spin2_q0_d": {
+    "min": "1.9021652899986117",
+    "max": "1.9021654106014720",
+    "spread": "1.206028603E-7",
+    "n": 20
+  },
+  "physical_sphere_spin_moment_source": "Spin moment of atom 1 from bands.f90:1701 in the same-loop testrun.log section; output format F10.6 (six digits after decimal point). Printed spread is reported separately from exact q0-derived occupation spreads; raw line evidence retained below.",
+  "sphere_moment": {
+    "min": "2.551176",
+    "max": "2.551176",
+    "spread": "0.000000",
+    "n": 20
+  },
+  "sphere_moment_raw_records": [
+    {
+      "iteration": 80,
+      "value_token": "2.551176",
+      "source_line_number_1based": 3736,
+      "raw_source_line": "[Oct 20 2026 23:24:47.557] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 81,
+      "value_token": "2.551176",
+      "source_line_number_1based": 3783,
+      "raw_source_line": "[Oct 20 2026 23:25:00.369] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 82,
+      "value_token": "2.551176",
+      "source_line_number_1based": 3830,
+      "raw_source_line": "[Oct 20 2026 23:25:13.230] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 83,
+      "value_token": "2.551176",
+      "source_line_number_1based": 3877,
+      "raw_source_line": "[Oct 20 2026 23:25:25.976] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 84,
+      "value_token": "2.551176",
+      "source_line_number_1based": 3924,
+      "raw_source_line": "[Oct 20 2026 23:25:37.986] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 85,
+      "value_token": "2.551176",
+      "source_line_number_1based": 3971,
+      "raw_source_line": "[Oct 20 2026 23:25:49.245] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 86,
+      "value_token": "2.551176",
+      "source_line_number_1based": 4018,
+      "raw_source_line": "[Oct 20 2026 23:26:03.005] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 87,
+      "value_token": "2.551176",
+      "source_line_number_1based": 4065,
+      "raw_source_line": "[Oct 20 2026 23:26:15.947] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 88,
+      "value_token": "2.551176",
+      "source_line_number_1based": 4112,
+      "raw_source_line": "[Oct 20 2026 23:26:28.864] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 89,
+      "value_token": "2.551176",
+      "source_line_number_1based": 4159,
+      "raw_source_line": "[Oct 20 2026 23:26:41.753] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 90,
+      "value_token": "2.551176",
+      "source_line_number_1based": 4206,
+      "raw_source_line": "[Oct 20 2026 23:26:55.660] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 91,
+      "value_token": "2.551176",
+      "source_line_number_1based": 4253,
+      "raw_source_line": "[Oct 20 2026 23:27:09.067] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 92,
+      "value_token": "2.551176",
+      "source_line_number_1based": 4300,
+      "raw_source_line": "[Oct 20 2026 23:27:21.803] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 93,
+      "value_token": "2.551176",
+      "source_line_number_1based": 4347,
+      "raw_source_line": "[Oct 20 2026 23:27:34.593] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 94,
+      "value_token": "2.551176",
+      "source_line_number_1based": 4394,
+      "raw_source_line": "[Oct 20 2026 23:27:47.263] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 95,
+      "value_token": "2.551176",
+      "source_line_number_1based": 4441,
+      "raw_source_line": "[Oct 20 2026 23:28:00.080] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 96,
+      "value_token": "2.551176",
+      "source_line_number_1based": 4488,
+      "raw_source_line": "[Oct 20 2026 23:28:13.008] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 97,
+      "value_token": "2.551176",
+      "source_line_number_1based": 4535,
+      "raw_source_line": "[Oct 20 2026 23:28:25.679] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 98,
+      "value_token": "2.551176",
+      "source_line_number_1based": 4582,
+      "raw_source_line": "[Oct 20 2026 23:28:39.369] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    },
+    {
+      "iteration": 99,
+      "value_token": "2.551176",
+      "source_line_number_1based": 4629,
+      "raw_source_line": "[Oct 20 2026 23:28:52.089] [bands.f90:1701]            \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mSpin moment of atom   1 is   2.551176"
+    }
+  ],
+  "same_loop_diff": {
+    "80": "0.0000000251",
+    "81": "0.0000000222",
+    "82": "0.0000000236",
+    "83": "0.0000000264",
+    "84": "0.0000000227",
+    "85": "0.0000000216",
+    "86": "0.0000000242",
+    "87": "0.0000000243",
+    "88": "0.0000000246",
+    "89": "0.0000000234",
+    "90": "0.0000000228",
+    "91": "0.0000000234",
+    "92": "0.0000000263",
+    "93": "0.0000000300",
+    "94": "0.0000000280",
+    "95": "0.0000000238",
+    "96": "0.0000000250",
+    "97": "0.0000000295",
+    "98": "0.0000000268",
+    "99": "0.0000000229"
+  },
+  "numerical_method": "Decimal parse of emitted tokens and max-minus-min; no denominator floor or numerical transformation",
+  "source_refs": {
+    "aggregate_csv": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/accepted_checkpoint_trace99_window80_99/aggregate.csv",
+    "aggregate_sha256": "39a3d5420f9fc06648f0f319583c7cdf1719dc8fd7f4478c47a63d88a8b25561",
+    "aggregate_manifest": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/accepted_checkpoint_trace99_window80_99/aggregate.manifest.json",
+    "log": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/run/testrun.log"
+  },
+  "note": "Monitoring only; criteria verdict requires full independent audit and endpoint completeness."
+}

@@ -1,0 +1,15 @@
+test_c3_does_not_floor_zero_carriers_or_hide_negative_q2 (test_c3_c2_adapter.C3AdapterSmoke.test_c3_does_not_floor_zero_carriers_or_hide_negative_q2) ... ok
+test_c3_has_only_registered_scientific_gates_and_inclusive_bounds (test_c3_c2_adapter.C3AdapterSmoke.test_c3_has_only_registered_scientific_gates_and_inclusive_bounds) ... ok
+test_capture_integrity_binds_c2_state_and_all_trace_rows (test_c3_c2_adapter.C3AdapterSmoke.test_capture_integrity_binds_c2_state_and_all_trace_rows) ... ok
+test_full_green_capture_rejects_nonbijective_basis_map (test_c3_c2_adapter.C3AdapterSmoke.test_full_green_capture_rejects_nonbijective_basis_map) ... ok
+test_full_green_capture_requires_every_matrix_pair (test_c3_c2_adapter.C3AdapterSmoke.test_full_green_capture_requires_every_matrix_pair) ... ok
+test_preregister_accepts_baseline_writer_shape_and_rejects_wrong_bindings (test_c3_c2_adapter.C3AdapterSmoke.test_preregister_accepts_baseline_writer_shape_and_rejects_wrong_bindings) ... ok
+test_requires_accepted_c2_chebyshev_endpoint (test_c3_c2_adapter.C3AdapterSmoke.test_requires_accepted_c2_chebyshev_endpoint) ... ok
+test_real_staged_deck_rejects_unknown_control_use_kspace (test_namelist_schema.NamelistSchemaSmoke.test_real_staged_deck_rejects_unknown_control_use_kspace) ... ok
+test_unknown_member_rejected (test_namelist_schema.NamelistSchemaSmoke.test_unknown_member_rejected) ... ok
+test_use_kspace_is_valid_only_in_self_group (test_namelist_schema.NamelistSchemaSmoke.test_use_kspace_is_valid_only_in_self_group) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.027s
+
+OK

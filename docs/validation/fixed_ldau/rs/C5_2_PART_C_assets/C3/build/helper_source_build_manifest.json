@@ -1,0 +1,1524 @@
+{
+  "schema": "c5-c3-helper-build-source-audit-v1",
+  "head": "8a107432e3ca2e00c815c217d52e7aa2a8e30736",
+  "build_path": "/private/tmp/c5-b1-guard-build-clean",
+  "compiled_source_dependency_file": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/DependInfo.cmake",
+  "compiled_source_count": 98,
+  "all_compiled_tracked_sources_match_head": true,
+  "compiled_sources": [
+    {
+      "path": "source/alsda_radial.f90",
+      "head_git_blob": "a18ffc7e22d3ce834b1beb51461deb75660479d7",
+      "working_git_blob": "a18ffc7e22d3ce834b1beb51461deb75660479d7",
+      "match_head": true,
+      "source_sha256": "625dfe2972c7446ae0fd0afad8f396767b02035bae9ce0d28b854cd8031ff7ac",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/alsda_radial.f90.o",
+      "object_sha256": "8a6a75cf94493044da895ad63f00105331ca272444d414a4af10ef8ef7bc9039"
+    },
+    {
+      "path": "source/array.f90",
+      "head_git_blob": "f24b842511e973465564a600360693abedd12aa9",
+      "working_git_blob": "f24b842511e973465564a600360693abedd12aa9",
+      "match_head": true,
+      "source_sha256": "cd5bb9a83e81c40cb9ee4011b53470f996a72af680316b24459f37113dce309a",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/array.f90.o",
+      "object_sha256": "b2a22a23526eb30a496901e7288905a1803eb256b05b0787fb1bf563b11f38e2"
+    },
+    {
+      "path": "source/bands.f90",
+      "head_git_blob": "d762374314dfab1dee6e24c7343e4123a9a62f90",
+      "working_git_blob": "d762374314dfab1dee6e24c7343e4123a9a62f90",
+      "match_head": true,
+      "source_sha256": "ea924d76e09c534d33275e9e330d872e9351d14ba33629013d409784280838cc",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/bands.f90.o",
+      "object_sha256": "9ec84915e2977471aebd9154facb602d2c3d89b5002d8640ab4188cef301a7bf"
+    },
+    {
+      "path": "source/basis.f90",
+      "head_git_blob": "f606151647045bd297b5f607ceb1b0aa71387270",
+      "working_git_blob": "f606151647045bd297b5f607ceb1b0aa71387270",
+      "match_head": true,
+      "source_sha256": "4fee37ec159042acab8ab304cf61fa1664c6b010b56e06a0158cb478e18eb1d1",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/basis.f90.o",
+      "object_sha256": "225cca9a8267dc85e8d2daf5c20eb9213d9ed781ed7c53b5da1311c984cdb81e"
+    },
+    {
+      "path": "source/bounds.f90",
+      "head_git_blob": "399bb25bf3e05c6a8f51bd17ce52c0cc0674f65b",
+      "working_git_blob": "399bb25bf3e05c6a8f51bd17ce52c0cc0674f65b",
+      "match_head": true,
+      "source_sha256": "0c5eccffc51e52aad4dc69576323bebbd6bfc79d869a217cd57e3bcdd6789c3f",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/bounds.f90.o",
+      "object_sha256": "6112ba412f65a14df0eff98fc4bc399095c9cb5cd1d4b72860068e0a85ceb571"
+    },
+    {
+      "path": "source/bsf_kernel.f90",
+      "head_git_blob": "d6de6163e196701ee4b1a3c183224295cea4f847",
+      "working_git_blob": "d6de6163e196701ee4b1a3c183224295cea4f847",
+      "match_head": true,
+      "source_sha256": "ba7bcf14ab0c4aff9137da39ae308a455320ac7abd92ee3929ce0c9c0fa4133d",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/bsf_kernel.f90.o",
+      "object_sha256": "2d8600d6a2bb67b2e8222f6ba8e161ee68da7cbe55fcafd83f29ea1a48147100"
+    },
+    {
+      "path": "source/calculation.f90",
+      "head_git_blob": "dbac8faa145c36b512e0db1011e9b9d0985c49bf",
+      "working_git_blob": "dbac8faa145c36b512e0db1011e9b9d0985c49bf",
+      "match_head": true,
+      "source_sha256": "da6b699df7a866ae2bd7d8332f69d54366c5ee7146dc6e3fbe1df1ae5d1dcc27",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/calculation.f90.o",
+      "object_sha256": "b0edc085aba7be915b9c2a421b4e4da8327bf83c22d55ec3a7fc22f0423c6fcf"
+    },
+    {
+      "path": "source/calculation_preprocessing.f90",
+      "head_git_blob": "dcd77c4ce73aacb5654b93f6afc22bbeff595d7d",
+      "working_git_blob": "dcd77c4ce73aacb5654b93f6afc22bbeff595d7d",
+      "match_head": true,
+      "source_sha256": "9d1b359707682676e9e785759201bdb0b3aeeaa6015c6325d05fa2b02494eebf",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/calculation_preprocessing.f90.o",
+      "object_sha256": "391506de0555d37c133399b9f538eef645c1a44553778aa35e3b41ca96b59bfc"
+    },
+    {
+      "path": "source/calculation_reciprocal.f90",
+      "head_git_blob": "3f7ac0dd73d7e246d72230a64751fb28b43ee3b2",
+      "working_git_blob": "3f7ac0dd73d7e246d72230a64751fb28b43ee3b2",
+      "match_head": true,
+      "source_sha256": "57e97cd365034cd32992892641a5f8e0f8dcc34db430a5a53c4834930b70b05c",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/calculation_reciprocal.f90.o",
+      "object_sha256": "6816d65b499e45803d5a07bc1daba5ed732bdef709cb02a58ada4047bcdec967"
+    },
+    {
+      "path": "source/charge.f90",
+      "head_git_blob": "06c6dd8eaa2d834645f36c4513107b5aff48ed21",
+      "working_git_blob": "06c6dd8eaa2d834645f36c4513107b5aff48ed21",
+      "match_head": true,
+      "source_sha256": "f3424259e62ffced5ee7f3a944ae93c1264fd1c023d1f6a5e3f54b52b1ff1bd8",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/charge.f90.o",
+      "object_sha256": "41110f56e1466ff75e7f5f8fdc63471dcd4f75cd05fe1ce30b1ed4988a24d774"
+    },
+    {
+      "path": "source/charge_interface.f90",
+      "head_git_blob": "24706be426d2a82b563ef0104e9dc063d26592ac",
+      "working_git_blob": "24706be426d2a82b563ef0104e9dc063d26592ac",
+      "match_head": true,
+      "source_sha256": "3dced4baaa472ceca7df9feef9e60fc93de32e6df1b9c57fd607bb6f9f1fdd73",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/charge_interface.f90.o",
+      "object_sha256": "68795761c58bf8d12a0d616cac3464c336e631c922c8092388580622b02823bd"
+    },
+    {
+      "path": "source/charge_madelung_2d.f90",
+      "head_git_blob": "2ab444f6cf7b2916375967395889f7e621456f91",
+      "working_git_blob": "2ab444f6cf7b2916375967395889f7e621456f91",
+      "match_head": true,
+      "source_sha256": "f9c2f32f492da8324f44f6bd59ae8b73d81b83c463ed65d9acbfe17fe84f79c3",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/charge_madelung_2d.f90.o",
+      "object_sha256": "7306b411146b03b3afaaac1b52e2cd6d73988e7e39ab8f986b52a8a3ca32aada"
+    },
+    {
+      "path": "source/chebyshev_fast.f90",
+      "head_git_blob": "e9c2a16135c5800515bd38fb9b0dda273d64178d",
+      "working_git_blob": "e9c2a16135c5800515bd38fb9b0dda273d64178d",
+      "match_head": true,
+      "source_sha256": "ae7353b2d0ba602aca5710cc0b8cf179bf4f40739a07356f26660cafc9039416",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/chebyshev_fast.f90.o",
+      "object_sha256": "7ea0e0ff101a34ed5008deea68695d484e78eee517c8b3565f4fcc3c2a4e7b81"
+    },
+    {
+      "path": "source/conductivity.f90",
+      "head_git_blob": "e9752cbafe94ca5f797cdb3e0188f79b878e84f4",
+      "working_git_blob": "e9752cbafe94ca5f797cdb3e0188f79b878e84f4",
+      "match_head": true,
+      "source_sha256": "a402d949f7b0da824f247047408e5fab294930036fa4c761ef537932a1b49a28",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/conductivity.f90.o",
+      "object_sha256": "f06de4f4aee6df1e3a80d53f208311e8c740acc3c1976bacb9127a58309b3b2d"
+    },
+    {
+      "path": "source/control.f90",
+      "head_git_blob": "4e04e528ffba046cdba30c4cd988a467148ea51a",
+      "working_git_blob": "4e04e528ffba046cdba30c4cd988a467148ea51a",
+      "match_head": true,
+      "source_sha256": "99a2d8ade20302d0aa8b05a8e4bf4b84b484713d9002ce3b7bbcb4b919243184",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/control.f90.o",
+      "object_sha256": "2ccbbebd6485e3948e3b86987bccd04e0d05649f1c626cca9cf6b80426c668ce"
+    },
+    {
+      "path": "source/density_of_states.f90",
+      "head_git_blob": "4f9a171ee453e89ff584e4c0f4e6ff9fe45c40ec",
+      "working_git_blob": "4f9a171ee453e89ff584e4c0f4e6ff9fe45c40ec",
+      "match_head": true,
+      "source_sha256": "f4e24b28f6d88db61ed8788cac87ded9814f05aa181048773e315ef37193cc0f",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/density_of_states.f90.o",
+      "object_sha256": "a179d93bf565c2b647346b8dba53dfda5a4f511e3ab1acae87d0a2077ec34b33"
+    },
+    {
+      "path": "source/dyson_kernel.f90",
+      "head_git_blob": "f82edb2260be730e848b968d5b5024e16e684626",
+      "working_git_blob": "f82edb2260be730e848b968d5b5024e16e684626",
+      "match_head": true,
+      "source_sha256": "135b2cd69b87e1351eca590d3b66022f1594c2bce77c434a24528b0208cb0a4e",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/dyson_kernel.f90.o",
+      "object_sha256": "56c681b8bcbd3583606953ad45ff6331a8ac4e11eee3eb5463b57ea302c57517"
+    },
+    {
+      "path": "source/electrostatics_multipole.f90",
+      "head_git_blob": "3d53c370fd59c8bfa8e22b540b9603716659daa6",
+      "working_git_blob": "3d53c370fd59c8bfa8e22b540b9603716659daa6",
+      "match_head": true,
+      "source_sha256": "69785b9377847077324a6478e4c7308a1609b19fce9a4ca971c4ef8c8f2dc7ee",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/electrostatics_multipole.f90.o",
+      "object_sha256": "ff95bf18a6153776113bf10450e5f598953922eb2faf959a39d34eec8dbef954"
+    },
+    {
+      "path": "source/element.f90",
+      "head_git_blob": "d5aced8ad2809a5abc656b3b256ac13f79c8a54f",
+      "working_git_blob": "d5aced8ad2809a5abc656b3b256ac13f79c8a54f",
+      "match_head": true,
+      "source_sha256": "8696d94cf5363442245b664c90f2828ace1c601a78b9af41e1bf2c5263c5d805",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/element.f90.o",
+      "object_sha256": "be65b38b2bb843d027e571f6c073e8e374af614ae12d36a4861af35c69702b9e"
+    },
+    {
+      "path": "source/energy.f90",
+      "head_git_blob": "62201e33854b55657414c8972e57f90972e50775",
+      "working_git_blob": "62201e33854b55657414c8972e57f90972e50775",
+      "match_head": true,
+      "source_sha256": "dccbf63ee75a415be100cf92a0ae408b81f5bf49dd5e074413d1aec2e25f81da",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/energy.f90.o",
+      "object_sha256": "47b42ed468e1638ef39a23882730d96feb8d226d6058f5baffe9acfc46d232b0"
+    },
+    {
+      "path": "source/exchange.f90",
+      "head_git_blob": "182c5942e5fc0ca4398b1aea994d59effca01513",
+      "working_git_blob": "182c5942e5fc0ca4398b1aea994d59effca01513",
+      "match_head": true,
+      "source_sha256": "f199e3bbddd8e4148b4fba7941ee6cc8a71a6736bc7dcb4f879bcfa13276990d",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/exchange.f90.o",
+      "object_sha256": "3ad830e626c0527ea14c29a932fbbfdec1f06493504a4973272f6f509bb33a42"
+    },
+    {
+      "path": "source/exchange_dynamics.f90",
+      "head_git_blob": "0f98c2a0794d286864ecb2d0e2ea8dec2ed32ede",
+      "working_git_blob": "0f98c2a0794d286864ecb2d0e2ea8dec2ed32ede",
+      "match_head": true,
+      "source_sha256": "9cd864d160ff8ec77dc24b3b096f3ae146770f31f93a9b5ccbf4c2ac2c854eaa",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/exchange_dynamics.f90.o",
+      "object_sha256": "5b1fc5e2764dcfd7001fd30fb5c0de52deaf2e3eeaf75204b0bdcad336676645"
+    },
+    {
+      "path": "source/face.F90",
+      "head_git_blob": "b359883b228dfb1a9a54b10943b717f48231abf1",
+      "working_git_blob": "b359883b228dfb1a9a54b10943b717f48231abf1",
+      "match_head": true,
+      "source_sha256": "ed2485179b281b70920a7bbaa10e395257bc024d5eed407647e1381bfb4bac74",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/face.F90.o",
+      "object_sha256": "91f877fd168d3db8fc41a36b30f8c3588c32dfde58c39e3f9063b8b7a8190592"
+    },
+    {
+      "path": "source/frozen_magnon.f90",
+      "head_git_blob": "45c1ed399ab91efce601c6d0996259d637e50041",
+      "working_git_blob": "45c1ed399ab91efce601c6d0996259d637e50041",
+      "match_head": true,
+      "source_sha256": "34a5583dae67c510902d63bb66108dee2f7939e57e28f1bfe92edb05d9dba959",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/frozen_magnon.f90.o",
+      "object_sha256": "9d6232fb62d5f0c7297e31067630486be605a9c055e777bbfeff2552b8b5a8ce"
+    },
+    {
+      "path": "source/gbt_structure.f90",
+      "head_git_blob": "718fcd8e64a35fb35ecce9887868f44c2519afd8",
+      "working_git_blob": "718fcd8e64a35fb35ecce9887868f44c2519afd8",
+      "match_head": true,
+      "source_sha256": "cedc9a46706ab88c93578498224be9c9db7f9a73bfa9fd0af1d3748290e8c2a8",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/gbt_structure.f90.o",
+      "object_sha256": "35cd673de8cf7e068d853d84f704f6194aa1e821b9fa24f8b80f54d5d7cb8cef"
+    },
+    {
+      "path": "source/globals.f90",
+      "head_git_blob": "1e13450616afc5427604bbbb3698e4ad7d71a860",
+      "working_git_blob": "1e13450616afc5427604bbbb3698e4ad7d71a860",
+      "match_head": true,
+      "source_sha256": "d35814b10241a6b1d1e776adced6a4b28c626bfe97b939b3e17111d69d13ab5c",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/globals.f90.o",
+      "object_sha256": "23142f8791168f4778645d604204b8b646004fc21c59f490cd4a92b4f8188114"
+    },
+    {
+      "path": "source/green.f90",
+      "head_git_blob": "93b6856c5da5a849564ebbb2d9e5ae5465e3481c",
+      "working_git_blob": "93b6856c5da5a849564ebbb2d9e5ae5465e3481c",
+      "match_head": true,
+      "source_sha256": "6ecfcbe1e33b907511f048b0888ed72213e1611a340d0d11efd68f7eaf15a408",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/green.f90.o",
+      "object_sha256": "1fc5f35e4d1bd468c56bc246ec2df2ad85c74632bd6031e1a7352a0059bd8542"
+    },
+    {
+      "path": "source/green_block.f90",
+      "head_git_blob": "50efd4c8e3a4eade4e58f4814af1da5d04c1ebfc",
+      "working_git_blob": "50efd4c8e3a4eade4e58f4814af1da5d04c1ebfc",
+      "match_head": true,
+      "source_sha256": "5cbabafdf7b3c4ffe82136216e3a83c8dc032d0ca383f86e1de1989483a9e62e",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/green_block.f90.o",
+      "object_sha256": "beda14f880a9322aef3bcf89b2640e90e51c6aa924c1330d02b15ac752d34aa4"
+    },
+    {
+      "path": "source/green_chebyshev.f90",
+      "head_git_blob": "c02e695ea054f891840d465e230c844638ea3504",
+      "working_git_blob": "c02e695ea054f891840d465e230c844638ea3504",
+      "match_head": true,
+      "source_sha256": "5f544e4a8db7cf4dfce893a6bd8da28bae530ed2174121f95a14db2afcbd4795",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/green_chebyshev.f90.o",
+      "object_sha256": "c060c3fda14a282777569b51569a271637321ebf23c3da3a3aab936a95dd949e"
+    },
+    {
+      "path": "source/green_lanczos.f90",
+      "head_git_blob": "a04b7f8eb75d8c583853943d62ecb47cd4720c90",
+      "working_git_blob": "a04b7f8eb75d8c583853943d62ecb47cd4720c90",
+      "match_head": true,
+      "source_sha256": "3382eef6ef382751fbe8a75b323875cb42d219bce1baaa313ff747bae0936cd7",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/green_lanczos.f90.o",
+      "object_sha256": "a9e6158415f320cbb93fc6cfc9fecae3b53f14d0d6e086c91a2faf9e89aaf588"
+    },
+    {
+      "path": "source/green_lifecycle.f90",
+      "head_git_blob": "2fa300d5a78e70a387d7d16e32eaae61ff67b3f7",
+      "working_git_blob": "2fa300d5a78e70a387d7d16e32eaae61ff67b3f7",
+      "match_head": true,
+      "source_sha256": "c29568eea69c6de07b8b2fc62db20283e0a5b74fbdf18ecca4655b1e7b1a3fa7",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/green_lifecycle.f90.o",
+      "object_sha256": "52a44922082f7bec203a859e931a8526e7310579cb67769f16311861d26d5fa9"
+    },
+    {
+      "path": "source/hamiltonian.f90",
+      "head_git_blob": "e5745bbcc6d8115524605851fb0c201c8d8fe3de",
+      "working_git_blob": "e5745bbcc6d8115524605851fb0c201c8d8fe3de",
+      "match_head": true,
+      "source_sha256": "410e799d4c5001f8c39b26d80b5435b265ae987a146a4457aa793e1162a0e837",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/hamiltonian.f90.o",
+      "object_sha256": "0c17a9581158639fadca34d1ee379549e06a0482079deffcf6a49cc40b4071f8"
+    },
+    {
+      "path": "source/hamiltonian_build.f90",
+      "head_git_blob": "f57a93bbc3f0cd8d7d60fb49f19c68ed8ebe286d",
+      "working_git_blob": "f57a93bbc3f0cd8d7d60fb49f19c68ed8ebe286d",
+      "match_head": true,
+      "source_sha256": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/hamiltonian_build.f90.o",
+      "object_sha256": "3216656df0b62ed3f6f85d12c9fbd5d2ede641fb7c0ec7a4245ea3f83eccd97c"
+    },
+    {
+      "path": "source/hamiltonian_ccor.f90",
+      "head_git_blob": "9d85af542e27d01e4ff234ba95d7dd8b171bcfce",
+      "working_git_blob": "9d85af542e27d01e4ff234ba95d7dd8b171bcfce",
+      "match_head": true,
+      "source_sha256": "3ea62d416a17f197de03652a149895017ec7bd25d993fe8a0678522b8612a19a",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/hamiltonian_ccor.f90.o",
+      "object_sha256": "408344cb8c4208b0dc00473e81a993150b80ace25ae73e79383879760e26f66d"
+    },
+    {
+      "path": "source/hamiltonian_hubbard.f90",
+      "head_git_blob": "c86a9aca9aeab8776358d151d12da3868ab39866",
+      "working_git_blob": "c86a9aca9aeab8776358d151d12da3868ab39866",
+      "match_head": true,
+      "source_sha256": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/hamiltonian_hubbard.f90.o",
+      "object_sha256": "9cebeb8494351f1e36af9ec61a65c6dbdadb5bb6894b65125c3b48ac86f7c794"
+    },
+    {
+      "path": "source/hamiltonian_paoflow_io.f90",
+      "head_git_blob": "9a4180e2e6acbeab3e7b0263947728f7ab1babae",
+      "working_git_blob": "9a4180e2e6acbeab3e7b0263947728f7ab1babae",
+      "match_head": true,
+      "source_sha256": "d59b1b0176c2068a3dde51d8c0cbede17ff94de0f72d1eb671fc5cfd74880c0f",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/hamiltonian_paoflow_io.f90.o",
+      "object_sha256": "c012f8ad2243d008d893ef89ad6f2dbe2fe50609e23e2288d04430292aafa2f2"
+    },
+    {
+      "path": "source/haydock_fast.f90",
+      "head_git_blob": "a549765de6cbe322745dd8889480b0ca110f6649",
+      "working_git_blob": "a549765de6cbe322745dd8889480b0ca110f6649",
+      "match_head": true,
+      "source_sha256": "82abc70fa06248573f8d5567680dbc1f6f0abb71cd89f225b32db5aa84316efb",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/haydock_fast.f90.o",
+      "object_sha256": "442c6def3d43e66df11526c2446ba1fa7bbbc4887ae492a8baa2b39dc2199f97"
+    },
+    {
+      "path": "source/kpm_profile.f90",
+      "head_git_blob": "2900a43da0a4f39571394e17260720367b9d0995",
+      "working_git_blob": "2900a43da0a4f39571394e17260720367b9d0995",
+      "match_head": true,
+      "source_sha256": "85d8cf74450e3c9a7d9cb2b9f0f293abd4a39b0abf3f7a7021fe74ef2ba470ac",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/kpm_profile.f90.o",
+      "object_sha256": "a5510daca090d5605de377003f10b5e208aed2b4556cc00e76d04422f784a72f"
+    },
+    {
+      "path": "source/kpoint_workset.f90",
+      "head_git_blob": "b4d410785fc87799c6b48702c81372e16de80b1d",
+      "working_git_blob": "b4d410785fc87799c6b48702c81372e16de80b1d",
+      "match_head": true,
+      "source_sha256": "6df0c8c15ca88b52f47fcff599c67c13545daf6591c113728b65b326b9cc108e",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/kpoint_workset.f90.o",
+      "object_sha256": "906a73a72e01996e017ca7b2a846d0cd5e7b6a5e02fcc130a804020e5a2da3e7"
+    },
+    {
+      "path": "source/lattice.f90",
+      "head_git_blob": "04dcb4e5ab1e334d86d8c423068ea413686618ed",
+      "working_git_blob": "04dcb4e5ab1e334d86d8c423068ea413686618ed",
+      "match_head": true,
+      "source_sha256": "29449faaf0d72af03af21c05616d82d8d9fad4fcb6c46a7d87dc0d69a8625707",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/lattice.f90.o",
+      "object_sha256": "6d5b242070cb7b1da79df0ec49290115a11cf2483652d0b05519397f1f86d606"
+    },
+    {
+      "path": "source/lattice_cluster.f90",
+      "head_git_blob": "03ed4c97bbe49c6977900de5ebec3c85e6f783b0",
+      "working_git_blob": "03ed4c97bbe49c6977900de5ebec3c85e6f783b0",
+      "match_head": true,
+      "source_sha256": "203fb901b685f428a0d811766c0af6dcc4abc024aa5cde8689b8f7e9765a6bcb",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/lattice_cluster.f90.o",
+      "object_sha256": "e4d1b9425e36bd857d6083c94a7713163a61f938e97839e58a52f283d38ac46e"
+    },
+    {
+      "path": "source/lattice_lifecycle.f90",
+      "head_git_blob": "20d39f04263b2871374f514a70f501a61ca370b0",
+      "working_git_blob": "20d39f04263b2871374f514a70f501a61ca370b0",
+      "match_head": true,
+      "source_sha256": "65b48f5d50278623b21ebb26866a0cdf98f490e24e62383b7c2f2e4a1a2fc347",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/lattice_lifecycle.f90.o",
+      "object_sha256": "25521e71e3da53f0a1124b54201a04b968fc1f7337e2d12895b8c9a6931052d8"
+    },
+    {
+      "path": "source/lattice_print.f90",
+      "head_git_blob": "d5ae4976dc373d986668b406452d6311b625d13c",
+      "working_git_blob": "d5ae4976dc373d986668b406452d6311b625d13c",
+      "match_head": true,
+      "source_sha256": "3af221fe6c8e0659db1e2b6a94c8cdfd7b7938c34fab88ee1d7e7b98cd822e02",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/lattice_print.f90.o",
+      "object_sha256": "99b1e94d77e88f1f5bd0d2a174e60ee2a6b4a8be29b096984bfdf253d91628e6"
+    },
+    {
+      "path": "source/lattice_strux.f90",
+      "head_git_blob": "8672f3c6b3ef73b82b17bac04f4907f341794d74",
+      "working_git_blob": "8672f3c6b3ef73b82b17bac04f4907f341794d74",
+      "match_head": true,
+      "source_sha256": "50a3c1270ad6b54025e503b99d89f5906a62f1e72b02b830ea83a971b390345d",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/lattice_strux.f90.o",
+      "object_sha256": "c5fe126eefa5956e5e6973831b6b50587e25cf328a956f3e77383ca000b57c50"
+    },
+    {
+      "path": "source/lehmann_kernel.f90",
+      "head_git_blob": "9d592c1e80c97bc12586313bbf0ae690c975a61c",
+      "working_git_blob": "9d592c1e80c97bc12586313bbf0ae690c975a61c",
+      "match_head": true,
+      "source_sha256": "271c7df06136f6aedf16af18696698591b51bf10a611d2a454318bf0626e5ec4",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/lehmann_kernel.f90.o",
+      "object_sha256": "a8690b92bd32773be5e46f4a111fb94d17cf96b26c46a4f4dfa03635b194896a"
+    },
+    {
+      "path": "source/lmto_magnetic_tangent.f90",
+      "head_git_blob": "321c3401f95fa1a7f637a197f9cf67f4afceaca1",
+      "working_git_blob": "321c3401f95fa1a7f637a197f9cf67f4afceaca1",
+      "match_head": true,
+      "source_sha256": "466bf1753b9906a1879ca56c2d5135070efe93b801df6b8c84f7cb0e7e39ea5f",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/lmto_magnetic_tangent.f90.o",
+      "object_sha256": "5c15c86d89af7d904d22006eb5b08a2054d927738eb77c78a968c619f741527a"
+    },
+    {
+      "path": "source/lmto_radial_augmentation.f90",
+      "head_git_blob": "b4394e34b34a1089ef0d767fb7a587c5003652ca",
+      "working_git_blob": "b4394e34b34a1089ef0d767fb7a587c5003652ca",
+      "match_head": true,
+      "source_sha256": "92c6710cbb3820a4bc419b6a62d76daa0a5ad35d7c9555e78524c5db9476e34e",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/lmto_radial_augmentation.f90.o",
+      "object_sha256": "cad432d5cf47d0ca315f7d7e0bbb9547370bc665a39ecf0c27342fb37ff39355"
+    },
+    {
+      "path": "source/logger.f90",
+      "head_git_blob": "03400d9721d4f264bb31e5ac3e3845d126266d76",
+      "working_git_blob": "03400d9721d4f264bb31e5ac3e3845d126266d76",
+      "match_head": true,
+      "source_sha256": "2adac1168f2f1ea5fcb0d4169fc937a33dcc64cea9371d762fd006278d43ae94",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/logger.f90.o",
+      "object_sha256": "f821090b1cff316f4ef5698448ac17632d340cc1e4f0af80145a35cb40bd7f2e"
+    },
+    {
+      "path": "source/magnetic_representation.f90",
+      "head_git_blob": "d38bf2a0f840277e0a2d7356fcb862eba7c6ef1f",
+      "working_git_blob": "d38bf2a0f840277e0a2d7356fcb862eba7c6ef1f",
+      "match_head": true,
+      "source_sha256": "7d87226e44d2b2096cb4a61371dd39ad02ad455d8f4c78e40d5f03b27d02beee",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/magnetic_representation.f90.o",
+      "object_sha256": "81965e06f2d6022cc7417e7e80b96ca456b66c4b1a7da993d522da9af24fd955"
+    },
+    {
+      "path": "source/math.f90",
+      "head_git_blob": "100b4d917e64fa557a278133b8de77e52282a71e",
+      "working_git_blob": "100b4d917e64fa557a278133b8de77e52282a71e",
+      "match_head": true,
+      "source_sha256": "e4bbcaecb2d8978fd3cc0d5e8b376285bd6b60aaa336a49a60911eaa7851b7ec",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/math.f90.o",
+      "object_sha256": "f535f3120eaff7fcd1ac4856e0631766fe0f8162e224c7cc8e5a8e844514ba80"
+    },
+    {
+      "path": "source/mix.f90",
+      "head_git_blob": "4b23adca55aaf73803e62b1532cef1e0cbcf5250",
+      "working_git_blob": "4b23adca55aaf73803e62b1532cef1e0cbcf5250",
+      "match_head": true,
+      "source_sha256": "f75c1d98d57e8a114d188c28089ec3f565d5a64328679f50224618a0f6e202fd",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/mix.f90.o",
+      "object_sha256": "6bfd98fc77cbe95512086627fc71c95fd498cf83f85bbb54de17802e282ef24d"
+    },
+    {
+      "path": "source/moment_kernel.f90",
+      "head_git_blob": "0bd700028cc627209099d2f958c5e136b361a133",
+      "working_git_blob": "0bd700028cc627209099d2f958c5e136b361a133",
+      "match_head": true,
+      "source_sha256": "727d6e0d63436470200bc2ee6cf805ffc94c5b5a75469eab3d53b57dc8cc7f55",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/moment_kernel.f90.o",
+      "object_sha256": "ce0cdd8d22fa5bd41a48daec4531e8c49f6cfcccfa4820e0ae4e628ec394956e"
+    },
+    {
+      "path": "source/mpi.f90",
+      "head_git_blob": "817701f2ba9a51ee4aea1a735ee68736fd1951bd",
+      "working_git_blob": "817701f2ba9a51ee4aea1a735ee68736fd1951bd",
+      "match_head": true,
+      "source_sha256": "05bd3ed8a825615d2dedae21eb38ab239d91b9b3a21652eca91866d0caf1bf64",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/mpi.f90.o",
+      "object_sha256": "eb49edc3a24d4d1724c1825c0f179b08706fb6fbc3359021c09fecb52ff79ef2"
+    },
+    {
+      "path": "source/namelist_generator.f90",
+      "head_git_blob": "5c4888d7ba00ed192c8ea8a322f9903b9bc6aefb",
+      "working_git_blob": "5c4888d7ba00ed192c8ea8a322f9903b9bc6aefb",
+      "match_head": true,
+      "source_sha256": "53b7326a75fd41cc30241f94bfe95e77558b90379dee3ddd4e3cd0dcd632f747",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/namelist_generator.f90.o",
+      "object_sha256": "3397edac119314ccc5011ec239882d4198d55d86a2219507918ea0a18730669a"
+    },
+    {
+      "path": "source/os.f90",
+      "head_git_blob": "7da3e361aff95aaf45051201f9e6be4d41c5047f",
+      "working_git_blob": "7da3e361aff95aaf45051201f9e6be4d41c5047f",
+      "match_head": true,
+      "source_sha256": "fa944b8c98f78343d637ba297947b4e76dec21ee45dafffb650bc3f09d168567",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/os.f90.o",
+      "object_sha256": "d47a2f49c25bfc1026c9b717bc32fbacb3e7e8674dd569891529eb6f19421691"
+    },
+    {
+      "path": "source/pauli_ground_state_projection.f90",
+      "head_git_blob": "b0506362d47140b7f9f71cafbb4ae65834780c06",
+      "working_git_blob": "b0506362d47140b7f9f71cafbb4ae65834780c06",
+      "match_head": true,
+      "source_sha256": "bfb63b76a558ea6ca7a6219b10a7bfb1698fd2cf65dd273eccf30153cae22b17",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/pauli_ground_state_projection.f90.o",
+      "object_sha256": "4d46e19d0543cf8a9a63a468e427754b4cc81a33ecbe26ddce1408c83428c5b7"
+    },
+    {
+      "path": "source/potential.f90",
+      "head_git_blob": "d165a191385e648bb83cac529aa120251362b6cd",
+      "working_git_blob": "d165a191385e648bb83cac529aa120251362b6cd",
+      "match_head": true,
+      "source_sha256": "368fb1e7602b72bf12a806a303a2d6ed111e1dc4eb94cb154264366306497c2e",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/potential.f90.o",
+      "object_sha256": "2c67037d6b033deb0075af5d53ed8622b44d5cf170a96f9e88a4d525a671ae73"
+    },
+    {
+      "path": "source/precision.f90",
+      "head_git_blob": "1c193f8174ac0dc70444daf4926b6e3bccaf86c7",
+      "working_git_blob": "1c193f8174ac0dc70444daf4926b6e3bccaf86c7",
+      "match_head": true,
+      "source_sha256": "e9e2b1fe82c26fdc2c647c23b2b1d7e52484edbadaaa9128fde92348a4732f51",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/precision.f90.o",
+      "object_sha256": "53fd318567211f85aadcf1f5a132b28131b9eec22ce9b8f8a781529afead6b4b"
+    },
+    {
+      "path": "source/radial_ground_state.f90",
+      "head_git_blob": "c7560119f0800e929b2a10083ba317311c1f5ec9",
+      "working_git_blob": "c7560119f0800e929b2a10083ba317311c1f5ec9",
+      "match_head": true,
+      "source_sha256": "d19da269adfcfb84ed940771268a8cc2170e26fd31591788a0c3797ecc40e2ad",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/radial_ground_state.f90.o",
+      "object_sha256": "97b989f744eb215de980425d5b13919f85ec45902f380c46c12e42cc4b3e733b"
+    },
+    {
+      "path": "source/reciprocal.f90",
+      "head_git_blob": "13d775e8996c56a2b2537b2a180f1c8ae51d7803",
+      "working_git_blob": "13d775e8996c56a2b2537b2a180f1c8ae51d7803",
+      "match_head": true,
+      "source_sha256": "7e0bc468e294b13a8bf12257f99c79d80f2613e8009804901fa1d6e78d248a23",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/reciprocal.f90.o",
+      "object_sha256": "d90d6c8ec0ebe3e42b1bb7b0198b5a928c2003b4b35e3bf07e9e2baaac9b513c"
+    },
+    {
+      "path": "source/reciprocal_backend.f90",
+      "head_git_blob": "c30527c1233aa716b467318aaa74e2355062ed2d",
+      "working_git_blob": "c30527c1233aa716b467318aaa74e2355062ed2d",
+      "match_head": true,
+      "source_sha256": "60a49689a59388991e8b12e516578faa40642a945159ae927988ea0b0ca1026f",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/reciprocal_backend.f90.o",
+      "object_sha256": "688c0f32467eaf5fb50331b5603c11145ac5a3e290eae0fb76918091b4889255"
+    },
+    {
+      "path": "source/reciprocal_bands.f90",
+      "head_git_blob": "a7128ce131950c9e4df4ab9960b749f404ad764e",
+      "working_git_blob": "a7128ce131950c9e4df4ab9960b749f404ad764e",
+      "match_head": true,
+      "source_sha256": "5fb2fb7ac0c912be87103e3b18f628bed2a75fa94ae68ea0297c5ef1185d5257",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/reciprocal_bands.f90.o",
+      "object_sha256": "b53d772e42d8ea2f0c604f2f2211ce9b591edce9c3c0f2285cf02c1e2f13c389"
+    },
+    {
+      "path": "source/reciprocal_bsf.f90",
+      "head_git_blob": "e3e4ce0e51c37362a383c9f79b670386bdf2839d",
+      "working_git_blob": "e3e4ce0e51c37362a383c9f79b670386bdf2839d",
+      "match_head": true,
+      "source_sha256": "060c1b87d3ae885313db2b0fb76887ee462ee6507fd51f4a5293babcba49e401",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/reciprocal_bsf.f90.o",
+      "object_sha256": "706fbc0c8082ff0009319bd99e677b6df35d8a6afc61ab533d1d3ccc9b4091f6"
+    },
+    {
+      "path": "source/reciprocal_dos.f90",
+      "head_git_blob": "fdd7bce8837ee50bf593e26cc91c336c878d44a5",
+      "working_git_blob": "fdd7bce8837ee50bf593e26cc91c336c878d44a5",
+      "match_head": true,
+      "source_sha256": "0a8b09ef91ac3fae2ceb56c2643b419209cc7429792136dacecbaa37929cfdad",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/reciprocal_dos.f90.o",
+      "object_sha256": "9fc0cef2a94e8a033ff5a3d46d92b60a27b1f4fd2d49fcb7d7a01e67db4373ed"
+    },
+    {
+      "path": "source/reciprocal_export.f90",
+      "head_git_blob": "414d38a4da64bca89b1efbc5dc8059993b50abe4",
+      "working_git_blob": "414d38a4da64bca89b1efbc5dc8059993b50abe4",
+      "match_head": true,
+      "source_sha256": "ab6bcb79ef863124ab63312318b5b7cbdcbfeb8854000ef12592019db50e218e",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/reciprocal_export.f90.o",
+      "object_sha256": "074ff7e14e7bb55ac06d6cac311eab88e85df774b8ce178569973b6a1bc57f96"
+    },
+    {
+      "path": "source/reciprocal_fourier.f90",
+      "head_git_blob": "49ca2886d0c54dff892af7af038ee2021a822f26",
+      "working_git_blob": "49ca2886d0c54dff892af7af038ee2021a822f26",
+      "match_head": true,
+      "source_sha256": "83be3d20f7ea198f8ea61a73c48c048c4fe34dee97764d2e0ca958171e113ce7",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/reciprocal_fourier.f90.o",
+      "object_sha256": "e97a3dfa8fb1351fcfa4044ced420f00604c08bfb9aee25956000044ffa8e3d5"
+    },
+    {
+      "path": "source/reciprocal_green.f90",
+      "head_git_blob": "c13769f580d93868cc9a6d8b5a2d74824775033c",
+      "working_git_blob": "c13769f580d93868cc9a6d8b5a2d74824775033c",
+      "match_head": true,
+      "source_sha256": "67fd13a20f6374518e6f109474cac55b1de6f8fe1baac1ca5abd556c38c43c3e",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/reciprocal_green.f90.o",
+      "object_sha256": "f4da1c07f27149c325db183178589636db3fff7ed8d1c7b2f8100d7e0a1cfe4a"
+    },
+    {
+      "path": "source/reciprocal_lifecycle.f90",
+      "head_git_blob": "66509d9d7e040178f3c00b2face74f683f758225",
+      "working_git_blob": "66509d9d7e040178f3c00b2face74f683f758225",
+      "match_head": true,
+      "source_sha256": "b05e252a71e89573a85b600691c810486ee9ed5e5f6a73b5f95b26ffc75cf727",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/reciprocal_lifecycle.f90.o",
+      "object_sha256": "c8cc4cb4c09e4f12e600c492eac0a19e44f1013249fb49f9e16f8343441be91e"
+    },
+    {
+      "path": "source/reciprocal_moments.f90",
+      "head_git_blob": "e7b21d391452e57f9ee416d0c073a91b65d370be",
+      "working_git_blob": "e7b21d391452e57f9ee416d0c073a91b65d370be",
+      "match_head": true,
+      "source_sha256": "60c2e50be6ddc3b664273f91d9d0f99c917b79c6c5699166dce5af27194e6e61",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/reciprocal_moments.f90.o",
+      "object_sha256": "796b20a8656dc9f583d0cc6b3dce07e2fa61ed41fd119ea84d1c21eabed025a3"
+    },
+    {
+      "path": "source/reciprocal_occupations.f90",
+      "head_git_blob": "83c9be813ec88117985f5f132e3e49361d8e9b51",
+      "working_git_blob": "83c9be813ec88117985f5f132e3e49361d8e9b51",
+      "match_head": true,
+      "source_sha256": "8a2f569bc3eca77691491276b936c0eea3ab01e32a6c65747f4b9dab5824821b",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/reciprocal_occupations.f90.o",
+      "object_sha256": "5584d515d116dcb07f51874b0aea38506a97c7c60d6c8ab4a87f678b85503a30"
+    },
+    {
+      "path": "source/reciprocal_projection.f90",
+      "head_git_blob": "617d055d4cba023b968cf76bf9a058269e660b46",
+      "working_git_blob": "617d055d4cba023b968cf76bf9a058269e660b46",
+      "match_head": true,
+      "source_sha256": "387c32e05649d5a3aaf4bed90b6aca0d2c8012f9d91c23b6373d3604e4d0014f",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/reciprocal_projection.f90.o",
+      "object_sha256": "50cb1f35fdd73529152660a1d5d502e3899949f5855c32423697f3584c0077ee"
+    },
+    {
+      "path": "source/reciprocal_spin_density.f90",
+      "head_git_blob": "a98dae6d4a0b6f14bf6531d60a7ca6ddd9d30b5a",
+      "working_git_blob": "a98dae6d4a0b6f14bf6531d60a7ca6ddd9d30b5a",
+      "match_head": true,
+      "source_sha256": "83f520240aef172b17a9c03d4d57667ebb95edc1d67c1fb239e2fb215ec6431c",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/reciprocal_spin_density.f90.o",
+      "object_sha256": "c76e1de42f9ed3d30e1c42973926b8137485ed60104290c184890cc7750851a7"
+    },
+    {
+      "path": "source/recursion.f90",
+      "head_git_blob": "8feb36a4237661e762309a3327ed9047b2ed43eb",
+      "working_git_blob": "8feb36a4237661e762309a3327ed9047b2ed43eb",
+      "match_head": true,
+      "source_sha256": "5e36ee1eaa4f60270134dd32d3c831108eeda414146322efc200c81931f0803e",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/recursion.f90.o",
+      "object_sha256": "3dc867845d7ac0822eb2cbc8236ab5afbe74d6c0b9e71b2e7e29a8031352fdc2"
+    },
+    {
+      "path": "source/recursion_chebyshev.f90",
+      "head_git_blob": "1e998e6b62f245fa4447470a3e88fa42e72fd501",
+      "working_git_blob": "1e998e6b62f245fa4447470a3e88fa42e72fd501",
+      "match_head": true,
+      "source_sha256": "54ddfebb0f6b64afc8dedc7799cb932f442d708001f75342de720947def74a2c",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/recursion_chebyshev.f90.o",
+      "object_sha256": "ef1606e8c47ff7fb528059910c3b242e8123ba91a5b4f1c0b4abf04da77f8c34"
+    },
+    {
+      "path": "source/recursion_core.f90",
+      "head_git_blob": "8c31784dfb870268b570b7f51ba1a966503f8ea1",
+      "working_git_blob": "8c31784dfb870268b570b7f51ba1a966503f8ea1",
+      "match_head": true,
+      "source_sha256": "024b7df62542a786a868fb3dd93319897945899ea7e1be3bd530b9a81a97f108",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/recursion_core.f90.o",
+      "object_sha256": "8f8d357043cfeb3a09301807af29bb092bec31608b27a67f677206b361e13857"
+    },
+    {
+      "path": "source/recursion_haydock.f90",
+      "head_git_blob": "4404a07330ca8d668749d4e962a3b0af0bab035f",
+      "working_git_blob": "4404a07330ca8d668749d4e962a3b0af0bab035f",
+      "match_head": true,
+      "source_sha256": "8b7b8a763a7d705e0995dccf552994e6e34ba4a601c7f9d8647282e8bf832e51",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/recursion_haydock.f90.o",
+      "object_sha256": "43378ade44c148354ca80161475d65473b6fe86dd311ba06cdaa7a8ec890e8bc"
+    },
+    {
+      "path": "source/recursion_transport.f90",
+      "head_git_blob": "8339af3c0f88a2429b01ee96f62c9d09529c9fd6",
+      "working_git_blob": "8339af3c0f88a2429b01ee96f62c9d09529c9fd6",
+      "match_head": true,
+      "source_sha256": "69c34c495519310e1c85dd3cbcd85446e920a1fb3d1b0934a7700130f1346fcf",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/recursion_transport.f90.o",
+      "object_sha256": "15942b30cb04b4fd6ba030c0a6335faa84d5a30e013c97bee4c2c729c8abf332"
+    },
+    {
+      "path": "source/region_registry.f90",
+      "head_git_blob": "ecd010a4fce816cba2b74942a3592f2e17dcb0bd",
+      "working_git_blob": "ecd010a4fce816cba2b74942a3592f2e17dcb0bd",
+      "match_head": true,
+      "source_sha256": "20d2b604630f9b833a6c8f8e4cfaadb98037f79dea8bac3b7415c4b4c811fa03",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/region_registry.f90.o",
+      "object_sha256": "a2117f50dba54b9259daa986c5bf2ba72bed8c859d8ecc5252ebbbab28a9216d"
+    },
+    {
+      "path": "source/report.f90",
+      "head_git_blob": "c5ddb5271778d6cc19024354decf9387b8e9d977",
+      "working_git_blob": "c5ddb5271778d6cc19024354decf9387b8e9d977",
+      "match_head": true,
+      "source_sha256": "98f4a0953c50293fe27c7392f10b060318d3ed4d6f7d86277165a31957c3c5c0",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/report.f90.o",
+      "object_sha256": "f1e44d6b998f2784cf2a895b65c0d80c9adcf32dd2128f690d297d50c3987c83"
+    },
+    {
+      "path": "source/rsrec_cuda_plugin.f90",
+      "head_git_blob": "ca59b9543df765fbe602b9b9b5f2df9ea82bab5c",
+      "working_git_blob": "ca59b9543df765fbe602b9b9b5f2df9ea82bab5c",
+      "match_head": true,
+      "source_sha256": "af101c57a0c6158d2ea34b094bbbe42a00692089e2d7a206843419c9dcbe516b",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/rsrec_cuda_plugin.f90.o",
+      "object_sha256": "d460e8d658a72b2d6133fce381a09f159b558a28ab30b05e341e94da0405e068"
+    },
+    {
+      "path": "source/safe_alloc.f90",
+      "head_git_blob": "5a9793a3de09ce4f0f0512419038219807dd90e4",
+      "working_git_blob": "5a9793a3de09ce4f0f0512419038219807dd90e4",
+      "match_head": true,
+      "source_sha256": "2d7b205b929ee1a1f4e06f7ea54c9b28e88a729371376cac9657cae6d4b231f6",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/safe_alloc.f90.o",
+      "object_sha256": "7244a4a93b19ba89eabc88c172a93a1c115605ec10106650c1069cbc381b4205"
+    },
+    {
+      "path": "source/scf_benchmark_profile.f90",
+      "head_git_blob": "78ef4b4a64c719b12598a467fefd88fc1062ded3",
+      "working_git_blob": "78ef4b4a64c719b12598a467fefd88fc1062ded3",
+      "match_head": true,
+      "source_sha256": "45924d35864b7fd907989d11e82aa27445479c539e8d8cfadf2de99dfabbd25d",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/scf_benchmark_profile.f90.o",
+      "object_sha256": "7dea5da233334a7c757e57241e17053690523a9d439b0d791c9741b2d21ce381"
+    },
+    {
+      "path": "source/scf_guard.f90",
+      "head_git_blob": "97465984b16bc07ab989b173994712b1024a9e6a",
+      "working_git_blob": "97465984b16bc07ab989b173994712b1024a9e6a",
+      "match_head": true,
+      "source_sha256": "3f232e9cea4a84acfbe98b7636da0b02318253d5a21f776bb2763e607571c415",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/scf_guard.f90.o",
+      "object_sha256": "ba192a0d868ce98b777735554a15c9e2d3b8ddf89328fcb36a43177992482ee5"
+    },
+    {
+      "path": "source/self.f90",
+      "head_git_blob": "fc3761060124d5fcd8ecdabb1da2cbdec882132f",
+      "working_git_blob": "fc3761060124d5fcd8ecdabb1da2cbdec882132f",
+      "match_head": true,
+      "source_sha256": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/self.f90.o",
+      "object_sha256": "ed0c394418f47811a35ace9506961a2741ba68ef8dd04042fb40284d3dd62daa"
+    },
+    {
+      "path": "source/self_reciprocal.f90",
+      "head_git_blob": "e507fc1a6ca3dfb8c7d8bd6ed17a914fb1095dbe",
+      "working_git_blob": "e507fc1a6ca3dfb8c7d8bd6ed17a914fb1095dbe",
+      "match_head": true,
+      "source_sha256": "fd06f33bd31aae9f145a71d92c986235f5a7f6eebb867bdabc24a7322387e841",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/self_reciprocal.f90.o",
+      "object_sha256": "ed779a00a10c71881a3971afac265e68a16e754c41cab18bc5659ef53382dde3"
+    },
+    {
+      "path": "source/sigma_provider.f90",
+      "head_git_blob": "aa4cfc97339f3cb2d07b1648d4ffc4b11e17136f",
+      "working_git_blob": "aa4cfc97339f3cb2d07b1648d4ffc4b11e17136f",
+      "match_head": true,
+      "source_sha256": "11678c739545f8524e2938221ad23d1ad6a6f00008b0feea95e9174c75b64dc1",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/sigma_provider.f90.o",
+      "object_sha256": "1c30ec15bf3ae717f9100eae14934fc0e4cdfec2d8f9cf2809bbc2c3a5b3d85c"
+    },
+    {
+      "path": "source/sparse.f90",
+      "head_git_blob": "08a673330fabc6f984de785c35182b3125eb46ed",
+      "working_git_blob": "08a673330fabc6f984de785c35182b3125eb46ed",
+      "match_head": true,
+      "source_sha256": "07a04836bf6326034363abef93b4bdf6b62ee9703648e05b95f46335ed6ddcaa",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/sparse.f90.o",
+      "object_sha256": "c10138b0e43f319e4f3813ffdae86f014c304997e38c7483323087493db3ad4e"
+    },
+    {
+      "path": "source/spglib_interface.f90",
+      "head_git_blob": "28ebdcea5819b1556901dc08498c32416eb61305",
+      "working_git_blob": "28ebdcea5819b1556901dc08498c32416eb61305",
+      "match_head": true,
+      "source_sha256": "8be9128fdadc4392e24d627173ccb4063bcd0e7b4773d78f4df3ba6a4c33fff0",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/spglib_interface.f90.o",
+      "object_sha256": "5962d76f193dd81b0679365cab6f914fea41bc8b5a02a143005314e5f57337ca"
+    },
+    {
+      "path": "source/spin_density.f90",
+      "head_git_blob": "581c6718dfc6fd9a60d6835d09f9db5cb1895c71",
+      "working_git_blob": "581c6718dfc6fd9a60d6835d09f9db5cb1895c71",
+      "match_head": true,
+      "source_sha256": "8c21d303fb92153877bfadea51844d42eea5833684b84b48ab1cf92054895f18",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/spin_density.f90.o",
+      "object_sha256": "6328275cf9c003eda56db47c08c22419b9d6bb4e8131b8a84799b25335391c25"
+    },
+    {
+      "path": "source/spin_dynamics.f90",
+      "head_git_blob": "673097291fc94af2ded6252369c5f25d4bf3b255",
+      "working_git_blob": "673097291fc94af2ded6252369c5f25d4bf3b255",
+      "match_head": true,
+      "source_sha256": "637b9dd1fc47ecce13483a29c6eab2a689b0d5e21363414795767c7658c1f32c",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/spin_dynamics.f90.o",
+      "object_sha256": "2d030585c044c1acd3ad30546f776b09e2b8551aff409c6c957c311117cfe737"
+    },
+    {
+      "path": "source/spin_response.f90",
+      "head_git_blob": "58959ec3b9de66d29438719edbfbb9fb355ccaef",
+      "working_git_blob": "58959ec3b9de66d29438719edbfbb9fb355ccaef",
+      "match_head": true,
+      "source_sha256": "103003bd43a6aefa710e268bcdb66d5c873d43df278de99a8638a68980ce3af7",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/spin_response.f90.o",
+      "object_sha256": "4c594b3f5c4686df31b3e9ddd909b20f505708f90346cdcdf0cf5ca7c84e1431"
+    },
+    {
+      "path": "source/string.f90",
+      "head_git_blob": "7687adbdae174e485c82b4b4fb8685888f8a5641",
+      "working_git_blob": "7687adbdae174e485c82b4b4fb8685888f8a5641",
+      "match_head": true,
+      "source_sha256": "99b7640db54ccdd867bde1ff0bc342376b0f599af4148949533dc5ad2fbf8f5c",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/string.f90.o",
+      "object_sha256": "207611c0cd01d7b892738032e50723e78977c68da0d3ba0a4d7ba8dd04723fc9"
+    },
+    {
+      "path": "source/symbolic_atom.f90",
+      "head_git_blob": "d788915cf8ea380c4126c1c36b1b622e0b9ca2e4",
+      "working_git_blob": "d788915cf8ea380c4126c1c36b1b622e0b9ca2e4",
+      "match_head": true,
+      "source_sha256": "852d1d3c56f8bd682aa3edeee8f4acacab66c52b7b9535004cf5d8cbfffe9eb6",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/symbolic_atom.f90.o",
+      "object_sha256": "651fd594246063189787c7814d1b41434a463dce43f68d8fa89cd4f4849ee0ca"
+    },
+    {
+      "path": "source/symmetry.f90",
+      "head_git_blob": "3559c04e5222296277ed19677d6320b15393f39e",
+      "working_git_blob": "3559c04e5222296277ed19677d6320b15393f39e",
+      "match_head": true,
+      "source_sha256": "8c7766afbe9a8ce3200dff2c379090a15321a3a649e09bd95ef4cab5641ff68f",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/symmetry.f90.o",
+      "object_sha256": "730f9d15334ef6db6281806f323770c3a2ff71637399f5f987da95be494a84e9"
+    },
+    {
+      "path": "source/timer.f90",
+      "head_git_blob": "6d3298d997feff7d8fb8b9eaf2ed31a4ec3bcb4e",
+      "working_git_blob": "6d3298d997feff7d8fb8b9eaf2ed31a4ec3bcb4e",
+      "match_head": true,
+      "source_sha256": "18a390c415b4d60c50c03409a0b29ee08cce84dae413ae4923bfeb0be8f01d3b",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/timer.f90.o",
+      "object_sha256": "8c980b767aee048592b687e7a18c2673883791fa8edb17e877d2dcd1e3fbd9f4"
+    },
+    {
+      "path": "source/vacuum_lead.f90",
+      "head_git_blob": "22bb0297a086d1027b77f8ea0e3b95c749ad7322",
+      "working_git_blob": "22bb0297a086d1027b77f8ea0e3b95c749ad7322",
+      "match_head": true,
+      "source_sha256": "9d594c995a8f4a5ca911beab8bf7d170b142a324fd981383c705a4278500cc97",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/vacuum_lead.f90.o",
+      "object_sha256": "e5682ffbd7fa6997f0988a3de0b97ef39f56a97b52b810e3baf0fe413cc5c8ac"
+    },
+    {
+      "path": "source/xc.f90",
+      "head_git_blob": "7f3e12759540c66ccdba2beae76c90cb0807f3f1",
+      "working_git_blob": "7f3e12759540c66ccdba2beae76c90cb0807f3f1",
+      "match_head": true,
+      "source_sha256": "facda3eb8e68127303c8086145c6283ba91e997f1ec6a0cb487745bfa4a5612b",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/xc.f90.o",
+      "object_sha256": "cfc67ef627d6b0e6a96870f02ba9f6f5e0f3b779bb513b186984bb62768ebc15"
+    },
+    {
+      "path": "source/xc_radial.f90",
+      "head_git_blob": "6640c9523c5d5c91caf5f2546145d4554aad2ab2",
+      "working_git_blob": "6640c9523c5d5c91caf5f2546145d4554aad2ab2",
+      "match_head": true,
+      "source_sha256": "2e9a5b7e6727bbaaa2b0b6e9ca7abf8621a37e244a0d7a4edf28e71074900f9e",
+      "object_path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/xc_radial.f90.o",
+      "object_sha256": "525863293e690f7b1f444ccb067fa4c27661f0b359dbffcba5ef6ea95a17c568"
+    }
+  ],
+  "archive": {
+    "path": "/private/tmp/c5-b1-guard-build-clean/source/librslmto.a",
+    "sha256": "36725c2ae3ba7c07c74c17940d9047bf8a314431146782bdd4e09ecc0e5dcead"
+  },
+  "key_sources": {
+    "source/math.f90": "e4bbcaecb2d8978fd3cc0d5e8b376285bd6b60aaa336a49a60911eaa7851b7ec",
+    "source/self.f90": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+    "tests/validation/fixed_ldau/accepted_m03_replay_driver.f90": "124726aaab8f5937fa13be925969b67d4e647ee9c910596d58698ffb13e5476a"
+  },
+  "key_objects": {
+    "math": {
+      "path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/math.f90.o",
+      "sha256": "f535f3120eaff7fcd1ac4856e0631766fe0f8162e224c7cc8e5a8e844514ba80"
+    },
+    "self": {
+      "path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/self.f90.o",
+      "sha256": "ed0c394418f47811a35ace9506961a2741ba68ef8dd04042fb40284d3dd62daa"
+    },
+    "bands": {
+      "path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/bands.f90.o",
+      "sha256": "9ec84915e2977471aebd9154facb602d2c3d89b5002d8640ab4188cef301a7bf"
+    }
+  },
+  "module_files": [
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/abspinlib.mod",
+      "sha256": "a894326132bd6da62d0fe8d4b411bcdb1685628cf65cf83efcf21deab46208f6"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/alsda_radial_mod.mod",
+      "sha256": "7d18a36900a4f9bb5e836f18b16ed9cfcf4c03dded313709f7e11c6d3072ec16"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/alsda_radial_mod.smod",
+      "sha256": "ae4b30494796a95c1ffe09c28c339249fc8adc31865eb21ec97cc78256126da8"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/array_mod.mod",
+      "sha256": "7b8ee54711ab5be2ac720c1cf9b7d19cbcb1a68474f64363267519a91bfcf7d2"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/bands_mod.mod",
+      "sha256": "a47fb46b4675633ec408c6b459b93ac7168415fd919bc0f7f6db2f6cdecf8d01"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/bands_mod.smod",
+      "sha256": "0b1eaaebdc7e80052df17e3c61252fb314a07ad751358a8087b3960a6b37c7fa"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/basis_mod.mod",
+      "sha256": "347bb0cab32e6be4eed560f0dbfce39293a9efd79954bb01b8ee9625e44bc624"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/bsf_kernel_mod.mod",
+      "sha256": "8fa58b1bbcfd97def142f035d5f4a30b49f9881cb170e297a2cbaabe270cab96"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/calculation_mod.mod",
+      "sha256": "83d4554002a32ebe38e83dcfbc0edbd3516fe31aeda1b9de95517ec012a2ecbe"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/calculation_mod.smod",
+      "sha256": "739360b93b7730292db291251ea80e834268ebb16fd38847d2bea44c23496feb"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/calculation_mod@calculation_preprocessing.smod",
+      "sha256": "6ea78d33d804c7a44d815577691cb3707a7192328e41610b87eb8129cd508d23"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/calculation_mod@calculation_reciprocal.smod",
+      "sha256": "70837cee11328edfc07888829e4f778a32f7903f45757cc1879bc15480837975"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/cfd.mod",
+      "sha256": "74cf7dd46b24214e168013de525e6a3924c130c644a07aafa9fc065c097b785e"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/charge_mod.mod",
+      "sha256": "a16a42e1258cfaf7fedc56e359f0cf305820a9b39266b0f0faeedc3d19d9d6c6"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/charge_mod.smod",
+      "sha256": "70ee1493b36d33440e19179f942b8d2b645083677a31b4ab540192103620469e"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/charge_mod@charge_interface.smod",
+      "sha256": "bb4c8e1e1d80eebfddcd35994a014b737908183527a2fb62807ac2837a5b4c9a"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/charge_mod@charge_madelung_2d.smod",
+      "sha256": "29723a3f08641d83935f178d37bd31223d393496c9a131ea5b290e7e9e266d4d"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/chebyshev_fast_mod.mod",
+      "sha256": "d006652b244b6d72dff380fff77c00806bbfbde716a8a3afc30e527bc434bdba"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/conductivity_mod.mod",
+      "sha256": "880127eaa886100385f148c07f2face18b7ab8c1800453626887390b9fa06fb1"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/conductivity_mod.smod",
+      "sha256": "4531788c6497625aeb6af657cc1cda704d7b844f646e0c9c9374686be6e716c3"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/constants.mod",
+      "sha256": "a33b7039b88e117c69828a6fa2e881dee4969abef616a598c623fa1d02e69f39"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/control_mod.mod",
+      "sha256": "0988dfa9afb408b6ea4cfbee78ad47fbd8e3241712207282df0a00ae4693c67e"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/density_of_states_mod.mod",
+      "sha256": "cde8fe2d54386caeffb6728bb7c102a5d843f53e03c748bf353259cd5b35c82d"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/density_of_states_mod.smod",
+      "sha256": "3a54a36dbcc857aa4811ebe95ee2fd7e53a8151a06043cd3855ab969f3ea7957"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/depondt.mod",
+      "sha256": "8b9dc97cb000c0c9a5b0fc29cafdcbc3ce7b74fcc0e5ce0dc2b0580d5bee919d"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/dyson_kernel_mod.mod",
+      "sha256": "725d8cfca981ea554f5ad79c93792e6306ffb9dabcce8f7bcd2f62294c581f86"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/electrostatics_multipole_mod.mod",
+      "sha256": "89add4ab72a81477d046dc7472745a4386a997879fa1b764883d0b7a4e44501c"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/electrostatics_multipole_mod.smod",
+      "sha256": "6b70947fdcdaf7513c9bbec5a3307df8ce9978ed65e449ac8fd92eef33b5f129"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/element_mod.mod",
+      "sha256": "c6f2460083b67804f9af9ed0069cfa702084d43e0c7087fe747e26b553996052"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/energy_mod.mod",
+      "sha256": "c40a4a95969a54bad562e9a276c95426a71820155621f13cdcbfe665ba0089f6"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/energy_mod.smod",
+      "sha256": "f3cd43e386ae4bc39441a087f57a975494dfab0d10d89f63d656338f60f5d879"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/exchange_mod.mod",
+      "sha256": "12f8dc4cc86c595d3b1629be99f03739e7a0234a06d52f2ea915d95abf9959cf"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/exchange_mod.smod",
+      "sha256": "fa27b47a61f9bc265306080f032b20ff6136acaa701f644b9ab8c5556e117f63"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/exchange_mod@exchange_dynamics.smod",
+      "sha256": "f52b668e02f9822bb70121701ee4f3ae7f6ecb1037e5c925d3bd2f40708812c1"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/face.mod",
+      "sha256": "49373cf3fab06a3f1e0bf18c1989a1b198ac85c46f8648b51d1bafeebc903217"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/frozen_magnon_mod.mod",
+      "sha256": "06f1f38a214fc0c1a658912b060b17ffb869b4e8d59c99202ccb343d6d206d04"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/gbt_structure_mod.mod",
+      "sha256": "21153a8a898dc04bb3660efa310dacb591504a0fe3c00169923c14bb95456b49"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/globals_mod.mod",
+      "sha256": "115b0748bc3ba19ddcb30c03489a7154ce22c8245ea600586cfdf69197b045fb"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/green_mod.mod",
+      "sha256": "a1253e05dd39b33864e2ac0bae516dda4ab8dc80784ccf8be8ab70a99d25897a"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/green_mod.smod",
+      "sha256": "157cb9aa590572dfd814ad29fbe984a8a6dd9d0f96b959e51cfc69438a21ae2a"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/green_mod@green_block.smod",
+      "sha256": "13381e1faadaee6a5739909a809c7021c51b8a20b18f6023f1ce25beb241fb67"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/green_mod@green_chebyshev.smod",
+      "sha256": "313b5a80727ed9fb8836084526f524e51cc2720ba1baabae6729a2f57ff588fb"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/green_mod@green_lanczos.smod",
+      "sha256": "43fc9dc3c52571ec9db1768dba188332d3b003ef8161e39d05cf5f3eb3576285"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/green_mod@green_lifecycle.smod",
+      "sha256": "85bdf1529a2d789cd687a08694ee6aaf4f03c4475f3f2132a7f991aec8ae6616"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/hamiltonian_mod.mod",
+      "sha256": "a4f06fe1674e4337e80b313beba3b60e03d27249d3aee7b593dd9ac51ce16c31"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/hamiltonian_mod.smod",
+      "sha256": "5fd891ee3a71beadc9d791eb8fc08dfb98d6ffa69628a842c00c4cd7ac3c719e"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/hamiltonian_mod@hamiltonian_build.smod",
+      "sha256": "b8dd62d17bffc2d6934e829b90c19c7c602e725fed5d48811e556c4c15340cb1"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/hamiltonian_mod@hamiltonian_ccor.smod",
+      "sha256": "7b80a6b1a897e1e9f92d8f314a5ade89e1ac5442a9b96a0dce27673a5bfc86c9"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/hamiltonian_mod@hamiltonian_hubbard.smod",
+      "sha256": "f7a5dc61b6e9240ff06d77284705c3f8f2598c59b2579906bfa0d6486a915076"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/hamiltonian_mod@hamiltonian_paoflow_io.smod",
+      "sha256": "e28c4be22aa054890a42ef9f6354edbcea30d51bef64349ac1582cef449b65ec"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/haydock_fast_mod.mod",
+      "sha256": "b750bbc6b6c512b83eee27b05553a77e2ed02626696df0a07369fd24c5349450"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/kpm_profile_mod.mod",
+      "sha256": "6e987f93e1c8ed6f016d2f06812e9e2652c236e4a48d6700bbd639e50c32a537"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/kpoint_workset_mod.mod",
+      "sha256": "5ad0e672803acf7d4bb5cdb5ec0502e093450369bec9e431ee38cc8fe6d8342b"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/lattice_mod.mod",
+      "sha256": "4cad49c19469307d4399dc307852769f7801c571f4880b494de135bc0685280b"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/lattice_mod.smod",
+      "sha256": "896249f75f437ffca7a964fab8f5aa5a6456f76799298c0d766be59d327f6514"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/lattice_mod@lattice_cluster.smod",
+      "sha256": "a340c69952df9ec1262fa83e75e51a646276512f3603439fff179f08a268143f"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/lattice_mod@lattice_lifecycle.smod",
+      "sha256": "b50efdba7d860f5cd1388cad5f2e36ab7111fa8748cdde80a884a9872e2893fb"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/lattice_mod@lattice_print.smod",
+      "sha256": "f815a8e435481ca97c6b328b5bc6e8526be48e047bab20fa278fd9d87a9dc33e"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/lattice_mod@lattice_strux.smod",
+      "sha256": "b5d15d7798ee022ce46d0bb38184c6cf4fcf07864234e0d3aea6fa4f35e84614"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/lehmann_kernel_mod.mod",
+      "sha256": "8c0c15b69ae77565e4cfc5a3f5841ebd493d4aee1607f63c1ac6422b7d7992d6"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/lmto_magnetic_tangent_mod.mod",
+      "sha256": "743dcdc87a492deee47f4b2298efdaacbfeb0f65f0bfc5c37694bc4df4bd1f9c"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/lmto_radial_augmentation_mod.mod",
+      "sha256": "6dc6f18b46457b569905377447cb83f21de47f89908c6aa5c5f78fd0e42994b4"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/lmto_strux_bessel.mod",
+      "sha256": "c4f238365dd04e919fcc104283d9ae70755bdf534943c12362f2ef29a200e1d9"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/logger_mod.mod",
+      "sha256": "40ae53996138fda3e81b616525e918d57efaa0678a534c95fa6a3a4401959381"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/magnetic_representation_mod.mod",
+      "sha256": "93bc4d84794ebaace1e38f839b82316b8095db663382b7cbd322c29aae7905be"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/math_mod.mod",
+      "sha256": "05b978b959e43f36e60e75d9f4655f4bc450b1d0a740f7c38ea0ef2abdae4bbf"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/mix_mod.mod",
+      "sha256": "d3bf4e773194a7e07bd161984a526f349d73bb4d1b610f8d9fbad62ff3351442"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/mix_mod.smod",
+      "sha256": "0d6e50f377e4db3f080dd7beedbbdbd668ce40bed6279c10d1d79a8c12b6c46e"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/moment_kernel_mod.mod",
+      "sha256": "f197f8607a5b9869af222674614bb20ae779c523151f634779753d7274f2f9be"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/mpi_mod.mod",
+      "sha256": "b5067c4e5a400364ebeccc6d6aaf5b838fc742ee43fc951adf2b9018030e320a"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/mtprng.mod",
+      "sha256": "decdfa7ff64fd198e4e81416eff6c229813931260857c974c2f358caf10c77e7"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/namelist_generator_mod.mod",
+      "sha256": "6ab23ac35d8806dd54b22a5bce76920ebdcdf89d5859e6c564934eea9abbf27d"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/os_mod.mod",
+      "sha256": "b5f7745a46ce56ee3df729fb654b6639ce8db654e81d2d545338fd194c5bfc8c"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/parameters.mod",
+      "sha256": "a7a59fbcca5c498997dce4e9891f4b9e481712773510c331c745035c6437215b"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/pauli_ground_state_projection_mod.mod",
+      "sha256": "9bbed88157d53ee7934d9c69fdc9e780ea3a32eb45dbe1137366e6276b2ffa51"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/pauli_ground_state_projection_mod.smod",
+      "sha256": "86cefa6acf5380c7ea78be784d42200e39bb9aeafe8a66081443d0353edba6c4"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/potential_mod.mod",
+      "sha256": "ae2ffad22f439c51d29f12bcadc9760ae27cfb7c634d5f43629dfbb0c790debe"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/precision_mod.mod",
+      "sha256": "dcc9db011f4044f9d16bbef818dc4aab36c320a8cc9548b11b0a7793d7b79933"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/radial_ground_state_mod.mod",
+      "sha256": "ed30b4fb6ab078515cd77790fbf60205205cdd70ef18820e542b0e29f0c98d2f"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/randomnumbers.mod",
+      "sha256": "910230d03a8d6476a27f1bc529109741b7241d6950a84ea1667b17e6bf640978"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/reciprocal_mod.mod",
+      "sha256": "90d6f2fe3bedd94219dbd59181cdbab0d4c885fe873f2e8fe284317e5e39a64c"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/reciprocal_mod.smod",
+      "sha256": "af44b849acab299062262128928b118637237e0b61cdde8015880e79c4bd9c7f"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/reciprocal_mod@reciprocal_backend.smod",
+      "sha256": "1c3475992f7de1262fb2d727dad154089dfe3dd5f4ff261e8f0a7726e8ddfe3a"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/reciprocal_mod@reciprocal_bands.smod",
+      "sha256": "42732a2255cd534b8a5e1e45c489ee04dffd3d032e5f895f607dbc6de10a474a"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/reciprocal_mod@reciprocal_bsf.smod",
+      "sha256": "f2c6bd6aacb1aa03220c4191c43385c6cf930f628f224e0d2a1c0508c83f2203"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/reciprocal_mod@reciprocal_dos.smod",
+      "sha256": "ff3502161929a313fd39b15083f7793201460705ff8071e10773d30e2fe0bde2"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/reciprocal_mod@reciprocal_export.smod",
+      "sha256": "12081598ed19a8b91195fa25c4fde6ad25a0831b78059284e4c69bb4bfd16013"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/reciprocal_mod@reciprocal_fourier.smod",
+      "sha256": "ba656b6463fd61da185b480f75c03002cdecfa736bac06b663b996d2843ff211"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/reciprocal_mod@reciprocal_green.smod",
+      "sha256": "0369e87efebb7eea08c11b66d7ba851b8271f5104ddcc9482b46581ef7d3c25a"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/reciprocal_mod@reciprocal_lifecycle.smod",
+      "sha256": "4b3eb397369c9e063d5c6320b4fcc5ab3340608a72cb081bb896f34bc77617e5"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/reciprocal_mod@reciprocal_moments.smod",
+      "sha256": "712632c68666a9dbc6ca90cfa2b992a10819c212b1063370a6ad3f19badfd373"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/reciprocal_mod@reciprocal_occupations.smod",
+      "sha256": "f5970a6e97905c5baa289626560a779cd91beb118fdea00f38694ac67ecdf220"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/reciprocal_mod@reciprocal_projection.smod",
+      "sha256": "46ee80b66340f7257d7085f38d0f2de5dbad4e781eeb8c5c46a514074fc22ece"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/reciprocal_mod@reciprocal_spin_density.smod",
+      "sha256": "6bb2c01b4a6f5414e73b4a3403b158af329bd683345cd75e719ca324d133b0cb"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/recursion_mod.mod",
+      "sha256": "78f932c7a221be3be1951829aeac950620fb60fe2d2daa23eb03de2c154e2692"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/recursion_mod.smod",
+      "sha256": "032a1e5bdcdfb610001f860eb1111b0fda98cf1b33c28b13619b0f292bda0977"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/recursion_mod@recursion_chebyshev.smod",
+      "sha256": "7773f7459b051a9d77819514fb788ab44d41c441cc6d9399f01251239eb52dcb"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/recursion_mod@recursion_core.smod",
+      "sha256": "eb89ee8d011993a9fe8f687e3862032af4838382f1fe93ced67b51f33c3056a5"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/recursion_mod@recursion_haydock.smod",
+      "sha256": "bbe5bba260bda3c4cedf788052bf91370272b82b715cf120a3328fba566b5c82"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/recursion_mod@recursion_transport.smod",
+      "sha256": "af92606f4bb632db53850451a4d4e27dfe7e725116f6b0301468a284115d54b9"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/region_registry_mod.mod",
+      "sha256": "f84788541106e18926b24fe96ad140d554338d9d9ec5e87d8ae40e560edbd349"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/report_mod.mod",
+      "sha256": "386efe3d9842f71bc94007670c98b0ec75e3a6257bd76c3955eab949a29246e2"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/rsrec_cuda_plugin_mod.mod",
+      "sha256": "445a41ba8498aaa4c7750c902db7620018505b9602755499c83e2ed82a2878aa"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/rsrec_cuda_plugin_mod.smod",
+      "sha256": "8e466b4002b2eb7dfe7c902d35086326522fe6e220f4af67f9cbd1ce67412afa"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/safe_alloc_mod.mod",
+      "sha256": "03f9b34952e183de2deb83c1115c674a39cef7519cb0873e997c94d706b9a1ca"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/scf_benchmark_profile_mod.mod",
+      "sha256": "4a92387e3b936d544d2e3104b75dff486bb1f815c314707078e5ca9e59347ba5"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/scf_guard_mod.mod",
+      "sha256": "151c7742d4f716e816cacd0e341399e1a7ccfb66710f87e9ec59517c9300fba4"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/self_mod.mod",
+      "sha256": "81de2484a10e9035342039d3c93e662a4195f09327e0b9286912c1926194a02b"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/self_mod.smod",
+      "sha256": "3f7c0ce1ad3275b7d395d4a93502d5c654c839a9cf7d3418cc733172bcd5854f"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/self_mod@self_reciprocal.smod",
+      "sha256": "2b5ff9d1b9126deeefa7daaef5c308617780a306771b3165cf901f716ba4494e"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/sigma_provider_mod.mod",
+      "sha256": "f7be6df1261987aebb1fc3c544823691fd18c6d4d86a2a6cd4fc035f7e6e6ddb"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/sparse_mod.mod",
+      "sha256": "9eba8e43c151aa99db63ad40709ac3d96bc685703350acdc851942ac08de2f27"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/sparse_mod.smod",
+      "sha256": "01ebd8d30188303c272c2c1c087b755c8b6655a474483ddb2ac27789b95bd259"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/spectrum_bounds_mod.mod",
+      "sha256": "6e1a9c4131714bbe9ec31fad15fadeb8269972e516c2a10457764b787845f375"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/spglib_interface_mod.mod",
+      "sha256": "797b90a125c78e2c4c13f17e88d96013979d7c22f2c3e8aee29bbe9c9ac823fb"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/spin_density_mod.mod",
+      "sha256": "27e645cc11427fbcaf0d82834675354aa860e0cfeec58525de76da1ca5d7c01e"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/spin_dynamics_mod.mod",
+      "sha256": "415fcb896f6e3c68691a47045305158b5ec9d40c9595bb5f654efd8581b6dcf0"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/spin_dynamics_mod.smod",
+      "sha256": "9735fd8f91bd4a1c7f37685d7bdc2e69f1c65f2f35b61c7ce1fe33681c21523c"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/spin_response_mod.mod",
+      "sha256": "2e5b3fae0c8e9751e7c9d564c3140a2ab2e986f47571d7950221d812fa27d4c7"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/spin_response_mod.smod",
+      "sha256": "504537a6f1b0c1547010cf3e1fa1cc4ed582a7f828c9eda8ec74384378db3098"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/stdtypes.mod",
+      "sha256": "ffaf376d39f8882c52bf0e0fde398c2930b2e79790ee26c04fa4213684c525bc"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/string_mod.mod",
+      "sha256": "d3aef9fd7ecfc9a8ab3c22e8b625974f3e0f055953a8a81838f8e7023b351088"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_errors.mod",
+      "sha256": "bd0bb16e0bd91995ec067142919f2522655ee897ae80c8da315c3d15f2477664"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_expansion_indexing.mod",
+      "sha256": "b5e7c141bb83da0dc4f549fef10b14aefdec16105a80d2a7a1fa1f09203b4259"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_gaunt.mod",
+      "sha256": "3a9935c7778d8f681867161374409d7c3f11d3a589cefd2f3e9a1652664b7ebb"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_geometry_math.mod",
+      "sha256": "c1e9cbe46fc644844f92279a9b7c6d702a4594094c686b4e173e1b31d452e764"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_harmonics.mod",
+      "sha256": "0c196ccea32a889aedb9032f08a1b201fd661dd457bdac362fca5610efbc8982"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_lib.mod",
+      "sha256": "a8e548bb96157d7dccbdcfcb7ebc2996d05d70823bd5136fc654c95072f9d929"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_lmto47_mode_solver.mod",
+      "sha256": "a36fe02e78661b28ac82c08529fad73eeb33a5693465e52cce67d5854c5951b9"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_matrix_utils.mod",
+      "sha256": "8d42d46cf197ccebc4c8a188e20c8e38e6816d5f97a3cdaf8a456aff0087683c"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_orbital_indexing.mod",
+      "sha256": "d2620f24c334b819b0afa5f14fe1499a78a6f369635af9322f43fd32288e40b2"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_pair_expansion.mod",
+      "sha256": "c3e938a6659accacfb5e3d3355173dc3e3ee3335f5ad6d6510e43fa4558dc5eb"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_pair_table.mod",
+      "sha256": "092b6b61d9473b6c9fb6e3198d2b7a4cb2c29c1f947766649a87065d3804b28d"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_solver_assembly.mod",
+      "sha256": "8a2e4c5ececca185e5fb2d54d61acef7af8f28067c77ca1179efa2999bf6e9e9"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_spherical_norms.mod",
+      "sha256": "2e8a388c77e3c911f9ff0a2eb460e41015ab79e35f3bf54538f02c34eddb2585"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_support.mod",
+      "sha256": "75f87f59774905984434112ea746f195645e0dfca3cc39e9d405e67755c53e55"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_tb_driver.mod",
+      "sha256": "9ee397a47c65cc50d79193c831e2b71286ac4ae1a42301d38d159ec0c13bf750"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/strux_utils.mod",
+      "sha256": "21a5e641f70af03b263942a8d911100eb7b8b22fb45ac2375289e2ce51ba0750"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/symbolic_atom_mod.mod",
+      "sha256": "63637ec8860be947bc69cfa4e7e45c3c1f0c6c4020e176d07878534b52a4c1cb"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/symmetry_mod.mod",
+      "sha256": "ee3941df08485629f0939695ba9f3066f3cb516b56a2573dc567247954b40aee"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/symmetry_mod.smod",
+      "sha256": "112d000ebf945dcfb98c8a86e5385ed887677a67ee4dd6b3c829bd627b4acae2"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/timer_mod.mod",
+      "sha256": "15280f3c4e21f8b80961e25fee430dce4d87a80d56ad8a076f8cd3bdcc358e02"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/vacuum_lead_mod.mod",
+      "sha256": "7dc3c715de10ebfdf646bc37b66b1bd94106c36885afaa4d95e2667f62427899"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/vacuum_lead_mod.smod",
+      "sha256": "d81179db21774cc53276fdc8682cddf44e9e3148efc684c17421597a5a337d07"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/xc_mod.mod",
+      "sha256": "e9f6ae08e4901bddd6786f3a6cfab1e296f449dd2dcf06e3c110ece22f499f8b"
+    },
+    {
+      "path": "/private/tmp/c5-b1-guard-build-clean/modules/xc_radial_mod.mod",
+      "sha256": "c5717d2185a8e3bab0ca4ff04214c92f9a413f3f8e72c3300a5e5f9bff08cab7"
+    }
+  ],
+  "module_manifest_sha256": "570296046057ea9c8238350a7d596a76cffd71dde7101b2928cbebde106eb850",
+  "compiler": {
+    "path": "/opt/homebrew/bin/gfortran",
+    "version": "GNU Fortran (Homebrew GCC 16.2.0) 16.2.0\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+    "version_sha256": "1392507dec14d57f4be4b7ebe1c1b1a792c478a8dc1c9c4c10e2d8d4bbb12f81"
+  },
+  "fortran_flags_file": {
+    "path": "/private/tmp/c5-b1-guard-build-clean/source/CMakeFiles/rslmto.dir/flags.make",
+    "sha256": "0539978fb85b636f91ea64bb5429064bece78600bc990b9af68bfedf4ee35150",
+    "contents": "# CMAKE generated file: DO NOT EDIT!\n# Generated by \"Unix Makefiles\" Generator, CMake Version 4.4\n\n# compile Fortran with /opt/homebrew/bin/gfortran\nFortran_DEFINES = -DRSLMTO_DISABLE_FUSED_RECIPROCAL -DUSE_SPGLIB -DVERSION=\\\"gbt-campaign-archive-2026-10-34-g8c72-dirty\\\"\n\nFortran_INCLUDES = -I/opt/homebrew/Cellar/spglib/2.8.0/include\n\nFortran_FLAGS =  -ffree-line-length-0 -cpp -mtune=native -DCOLOR -fopenmp -DOpenMP_Fortran_FOUND -O3 -fbacktrace -g -g -J../modules\n\n"
+  },
+  "solver_link_file": {
+    "path": "/private/tmp/c5-b1-guard-build-clean/CMakeFiles/rslmto.x.dir/link.txt",
+    "sha256": "baf888a39a9a5673e6b7e60f57f3289e00c1a78048e1a2fdea8a58deb7f82332",
+    "contents": "/opt/homebrew/bin/gfortran  -ffree-line-length-0 -cpp -mtune=native -DCOLOR -fopenmp -DOpenMP_Fortran_FOUND -O3 -fbacktrace -g -g CMakeFiles/rslmto.x.dir/source/main.f90.o -o bin/rslmto.x   -L/opt/homebrew/Cellar/spglib/2.8.0/lib  -Wl,-rpath,/opt/homebrew/Cellar/spglib/2.8.0/lib source/librslmto.a -framework Accelerate -lm -ldl /opt/homebrew/Cellar/spglib/2.8.0/lib/libsymspg.dylib source/include_codes/abspinlib/libabspinlib.a source/include_codes/strux_lib/libstrux_lib.a -framework Accelerate -lm -ldl /opt/homebrew/Cellar/gcc/16.2.0/lib/gcc/current/libgomp.dylib\n"
+  },
+  "cmake_cache": {
+    "path": "/private/tmp/c5-b1-guard-build-clean/CMakeCache.txt",
+    "sha256": "c1f6e9c6444be7d93add9232024612eedf2ff26cde14b051bac724b816b83435"
+  },
+  "source_worktree_diff": "clean: verified no tracked source changes",
+  "objects_not_newer_than_source": [],
+  "all_compiled_objects_at_or_after_source_mtime": true
+}

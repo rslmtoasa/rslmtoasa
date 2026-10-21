@@ -1,53 +1,613 @@
 {
-  "part": "C5.2 Part C",
-  "status": "STOPPED_BEFORE_C2_C3_DUE_A4_IV_STOP",
-  "part_a_reference": {
-    "results": "C5_2_PART_A_RESULTS.md",
-    "provenance": "C5_2_PART_A_PROVENANCE.json",
-    "stop_basis": "A1 clean-8b repeat and both A2 matched comparisons were scientifically byte-identical; no first break/attribution was found; root and auditor confirmed A4(iv) STOP.",
-    "sha256": {
-      "results": {
-        "path": "docs/validation/fixed_ldau/rs/C5_2_PART_A_RESULTS.md",
-        "sha256": "b9b372626beb90aac33e8ad98f8e8a07a852b04f03514bb38b76da8fd4993a08"
+  "schema": "c5-2-part-c-v2",
+  "part": "C (C1-C3)",
+  "status": "PART_C_EVIDENCE_COMPLETE; C1 COMPLETE; C2 NOT_EVALUATED; C3 PASS; Co NOT_ADMITTED; C5.3 NO PRODUCTION/DEFAULT CHANGE.",
+  "protocol": "C5.3 continuation after A4(v); preserve the original criteria and no-adoption rule for uncovered outcomes.",
+  "head_commit_at_audit": "8a107432e3ca2e00c815c217d52e7aa2a8e30736",
+  "part_b_commit": "8a107432e3ca2e00c815c217d52e7aa2a8e30736",
+  "part_b_commit_verified": true,
+  "c1": {
+    "status": "DETERMINISTIC_SOURCE_AUDIT_COMPLETE",
+    "gate_complete": false,
+    "guard_or_source_change_for_c1": false,
+    "findings": {
+      "chebyshev_identity_block": {
+        "source": "source/recursion_chebyshev.f90:766-800",
+        "detail": "GPU and CPU branches initialize psi0 to zero, write the identity orbital block at each recursion site, then compute Chebyshev moments."
       },
-      "provenance": {
-        "path": "docs/validation/fixed_ldau/rs/C5_2_PART_A_PROVENANCE.json",
-        "sha256": "9102597adddbd316ed233bba42225e473369389e7ec4c95e09b4b8873632e4bf"
+      "rs_and_dos_dispatch": {
+        "source": [
+          "source/self.f90:4388-4400",
+          "source/self.f90:4673-4685"
+        ],
+        "detail": "The RS recursion selector calls chebyshev_recur for Chebyshev mode; DOS selects Chebyshev spectral reconstruction."
+      },
+      "full_g0": {
+        "source": "source/green_chebyshev.f90:287-329",
+        "detail": "GPU and CPU branches reconstruct the full nb-by-nb matrix Green function from deterministic moments."
+      },
+      "occupation_P": {
+        "source": "source/bands.f90:1050-1089",
+        "detail": "For both spin channels and all orbital-pair indices in each l block, matrix spectral density is integrated with Simpson moment=0 into potential%ldm; the d block is 5x5."
+      },
+      "local_M1": {
+        "source": "source/bands.f90:1176-1203",
+        "detail": "For each orbital pair and spin, the same spectral density is integrated with Simpson moment=1 into M1; local mode selects/associates the M1 target at source/bands.f90:948-962."
+      },
+      "local_correction": {
+        "source": "source/bands.f90:1223-1247",
+        "detail": "Current d-block P, M1, and stored Hubbard potential block are passed to correct_d_shell_moments; corrected center and q2 are applied to the radial potential."
+      },
+      "existing_guard": {
+        "source": "source/math.f90:213-269",
+        "detail": "Correction helper checks finite P/M1/V/q0/c/q2, P density diagnostics/Hermiticity/eigenvalue bounds, q0>0, and finite correction outputs."
+      },
+      "stochastic_separation": {
+        "source": "source/recursion_transport.f90:369-377,422-427",
+        "detail": "The stochastic routine is transport; random_vec_num is read only in the random_vec cond_calctype branch. No random-vector count is used by the fixed-U SCF recursion/P/M1 path."
       }
+    },
+    "interpretation": "The required source audit is complete and independently crosschecked: fixed-U Chebyshev SCF forms deterministic full-matrix g0, P and local-mode M1 without stochastic trace. This resolves C1; C2/C3 remain campaign gates.",
+    "audit_complete": true
+  },
+  "source_file_sha256": {
+    "source/recursion_chebyshev.f90": "54ddfebb0f6b64afc8dedc7799cb932f442d708001f75342de720947def74a2c",
+    "source/self.f90": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+    "source/green_chebyshev.f90": "5f544e4a8db7cf4dfce893a6bd8da28bae530ed2174121f95a14db2afcbd4795",
+    "source/bands.f90": "ea924d76e09c534d33275e9e330d872e9351d14ba33629013d409784280838cc",
+    "source/math.f90": "e4bbcaecb2d8978fd3cc0d5e8b376285bd6b60aaa336a49a60911eaa7851b7ec",
+    "source/recursion_transport.f90": "69c34c495519310e1c85dd3cbcd85446e920a1fb3d1b0934a7700130f1346fcf"
+  },
+  "c2": {
+    "status": "NOT_EVALUATED",
+    "scientific_pass": false,
+    "gate": "NOT_EVALUATED",
+    "reason": "C2 method comparisons are NOT_EVALUATED: U0 Chebyshev has an accepted control endpoint at iteration76/window57–76, but the corrected U0 block arm stopped at the finite B1 capacity guard at iteration36 and has no accepted endpoint; U2 block was not launched. The accepted U2 Chebyshev local endpoint is independently used for C3.",
+    "user_rule": "Under C5.3, an uncovered outcome leaves production/defaults unchanged; no fix or adoption is made. Record and continue. Co remains NOT_ADMITTED until its required compatibility evidence passes.",
+    "actual_solver_launch_count": 8,
+    "attempt_history": [
+      {
+        "sequence": 1,
+        "id": "u0_wrapper_attempt_001",
+        "classification": "PRE_EXEC_FAILURE_NO_SOLVER",
+        "path": "/private/tmp/c52-c2-stage/launch_u0/launcher_attempt_001.txt",
+        "sha256": "c974dce15e6fa55d8de9be52c68fcc9cb80264b6b974dcde57ef932f7f146d69",
+        "detail": "Bash 3.2 readiness/BASHPID failure before executable launch; no solver PID or SCF output."
+      },
+      {
+        "sequence": 2,
+        "id": "c2_u0_block_original",
+        "classification": "INVALID_SETUP",
+        "path": "/private/tmp/c52-c2-stage/launch_u0/invalid_setup_evidence/c2_u0_block_final_testrun.log",
+        "sha256": "eb5f8a39f63678316312637f52f67292e6a5dd466193341a634430a960fb019a",
+        "detail": "Unknown control.use_kspace namelist member; Fortran iostat5010. Invalid regardless of default RS startup/follow-on guard."
+      },
+      {
+        "sequence": 3,
+        "id": "c2_u0_chebyshev_original",
+        "classification": "INVALID_SETUP",
+        "path": "/private/tmp/c52-c2-stage/launch_u0/invalid_setup_evidence/c2_u0_chebyshev_final_testrun.log",
+        "sha256": "9cfa19cc0f3716830bc463f843e2916606f021af240fc20fe11b08aeb4f9438b",
+        "detail": "Unknown control.use_kspace namelist member; Fortran iostat5010. Invalid regardless of default RS startup/follow-on output."
+      },
+      {
+        "sequence": 4,
+        "id": "c2_u0_block_corrected",
+        "classification": "VALID_SETUP_FINITE_GUARD_STOP_NOT_ACCEPTED",
+        "path": "/private/tmp/c52-c2-stage/launch_u0_corrected/c2_u0_block/testrun.log",
+        "sha256": "4d0c47bcc5f3f81da056c2c88741f7cc4ef811204b105425d4a2740850fa2f55",
+        "detail": "Finite B1 occupation capacity guard at iteration36: Fe site1, s l0 spin1 q0=1.3221639993438128, capacity1. Not a NaN/Inf crash."
+      },
+      {
+        "sequence": 5,
+        "id": "c2_u0_chebyshev_corrected",
+        "classification": "ACCEPTED_ENDPOINT_PRESERVED_THEN_INTENTIONALLY_STOPPED",
+        "path": "/private/tmp/c52-c2-stage/launch_u0_corrected/accepted_candidate_iter0059/trace_window40_59.manifest.json",
+        "sha256": "adc29dfc297a45ae5e2ba8e67d2095057d4dfa796c46b7ee55305c070a4e15d7",
+        "detail": "Accepted endpoint step59/window40-59 frozen. It continued later to step81 and was intentionally stopped after endpoint preservation; process exit143."
+      },
+      {
+        "sequence": 6,
+        "id": "c2_u2_chebyshev_preexec_attempt_001",
+        "classification": "PRE_EXEC_FAILURE_NO_SOLVER",
+        "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/history/preexec_attempt001/attempt.json",
+        "sha256": "e39941015bd1062bc4aabd1a900073fb26cc7e6369a1ae20819b238805f9b0ce",
+        "detail": "Watcher readiness marker was empty; failed before solver exec."
+      },
+      {
+        "sequence": 7,
+        "id": "c2_u2_chebyshev_watcher_capture_failure_001",
+        "classification": "POST_LAUNCH_CAPTURE_FAILURE_WATCHER_ONLY",
+        "files": [
+          {
+            "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/history/watcher_capture_failure001/u2_watcher.log.stale_u0_capture",
+            "sha256": "96918b60b422901df7c88c59712bbbd3b6fcb852290b66b5b5b85078c48fa7f9"
+          },
+          {
+            "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/history/watcher_capture_failure001/watch_trace_and_state.py.stale_u0_hardcoded",
+            "sha256": "c08f8fd1fd97c5627962129439f6edd7564e779bd3b523bd06d8954a7ff5854f"
+          }
+        ],
+        "detail": "Solver remained a valid clean U2 Chebyshev launch; stale watcher targeted U0 and missed IDs1-9. Preserve this capture gap and first unbound capture attempt; do not fabricate those snapshots."
+      },
+      {
+        "sequence": 8,
+        "id": "c2_u2_chebyshev_corrected",
+        "classification": "VALID_SETUP_ENOSPC_NO_ACCEPTED_ENDPOINT",
+        "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev",
+        "sha256": "d174580b4d88adc2048499d1f63f3f465ecc62617bfe11c8e717d2850133eba0",
+        "run_id": "c2_u2_chebyshev",
+        "solver_pid": 58026,
+        "watcher_pid": 63377,
+        "detail": "Release U2/J0 local RS Chebyshev run ended on ENOSPC. Last complete same-loop Diff is step56, trace/state iteration57 is complete, and iteration58 is partial without P_OUT, POST_SCF_RADIAL or Diff. This is a resource failure, not a numerical endpoint.",
+        "terminal_record_path": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev/failure.json",
+        "terminal_record_sha256": "653376f32c1c21a2d648a443586ba886d796ba61e2a342fcc01f08ac6378c24c"
+      },
+      {
+        "sequence": 9,
+        "id": "c2_u2_chebyshev_debug",
+        "classification": "ACCEPTED_LOCAL_STATE_ITER99_THEN_FINAL_SAVE_EXIT2",
+        "run_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2",
+        "accepted_endpoint": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0099_Fe_scf_c84c8e2b3200.nml",
+        "accepted_endpoint_sha256": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+        "accepted_window": "iterations 80-99",
+        "accepted_window_package_sha256": "80defa530c3e94b286df1c66d97eae07ee1af71835349e86e37d9b41b217eb69",
+        "accepted_metrics": {
+          "outer_diff": "2.29e-8",
+          "d_q0_spin1_spread": "1.050120080e-7",
+          "d_q0_spin2_spread": "1.206028603e-7",
+          "abs_physical_moment_spread_muB": "2.6941277814e-7"
+        },
+        "later_run_status": "Reached completed Diff step100=2.21e-8; then exit2 at final save because Fe_out.nml was read-only (symbolic_atom.f90:624). Accepted iteration99 endpoint/window retained; exit2 is not a rejection of that endpoint.",
+        "full_log_sha256": "97db325895cba493bde483c774f8beacd19229ce39115ffa0e4cc0e95bf213a6",
+        "post_exit_trace_sha256": "46ea2d54ea92de9351af6c0c1745f20441b7c85fd62cc7ef69cec9f578863c94",
+        "step100_Fe_scf_sha256": "b5d3f2de5d844987a2cd3f91674e9d13ac79bd0b26b22bdf0b182d5d8f4d893c"
+      },
+      {
+        "sequence": 10,
+        "id": "c2_u2_clean8b",
+        "classification": "INVALID_COMPARABILITY_RESTART_READER_METADATA_MISMATCH",
+        "run_path": "/private/tmp/c52-c2-stage/launch_clean8b_u2",
+        "preflight_path": "/private/tmp/c52-c2-stage/launch_clean8b_u2/preflight.json",
+        "preflight_sha256": "bc0494151e24acc4709765a4c72780d11d18404f4e22319ff312a89f525e674f",
+        "detail": "Clean8b restart reader lacks endpoint fields hubbard_backend and hubbard_radial_moments; Fortran iostat5010 was followed by incomplete-read data (zero ql then NaN/PL fatal at step1). This attempt is invalid for numerical comparison and is not evidence of a pre-existing physics failure.",
+        "testrun_log_sha256": "c05dd9e19db4117ca4b55bb9bd63b9bc858b492ee5511fadd4a258db2a5ffb23",
+        "trace_sha256": "8caebd3409d5dca37dbb3abfd7fad9e92a5bcb33ccb29bc3dfc7926f5b7e1c1e",
+        "watcher_sha256": "1856b0d0f282def337075ec787c213807116a4d615f276d9a11c2eb859946e6b"
+      },
+      {
+        "sequence": 11,
+        "id": "c2_u0_debug_triage",
+        "classification": "ACCEPTED_U0_CONTROL_ITERATION76_THEN_AUTHORIZED_SIGTERM_EXIT143",
+        "run_path": "/private/tmp/c52-u0-triage-preflight/run",
+        "preflight_path": "/private/tmp/c52-u0-triage-preflight/preflight.json",
+        "preflight_sha256": "9a59cfeeaecf0518a1ecef39bc3fed8080adfb3a75a581c6a54e606225a4ab35",
+        "input_immutable_sha256": "4da65a5fcc023a0845f736ef5dc2f8b4437829480125e2527351bd4ce2446502",
+        "restart_seed_sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+        "frozen_debug_executable_sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69",
+        "build_manifest_sha256": "8f38624f52755a410534e24847cf31e0eca266bd9db1da27e9acb428aa394a32",
+        "solver_pid": 8704,
+        "launcher_pid": 8648,
+        "collector_pid": 8672,
+        "disk_guard_pid": 8705,
+        "last_observation_local": "2026-10-21T07:53:52+02:00",
+        "last_captured_iteration": 40,
+        "last_completed_diff": "7.167e-7 (step39)",
+        "trace_snapshot_sha256": "28361ce2c645565bf67a45fff6a4cdfdf6e341a334ab062d2b13b4fb7e9243bb",
+        "trace_state_manifest_path": "/private/tmp/c52-u0-triage-preflight/watcher/trace_state_manifest.jsonl",
+        "detail": "Independent audit accepted the complete window57–76 and iteration76 state as the U0 control endpoint. Same-loop Diff=2.03e-8; q0 d-up/q0 d-down spreads=1.915970733e-7/3.719324333e-7; physical q0-derived sphere-moment spread=3.9860898427e-7. After endpoint preservation the authorized SIGTERM stopped solver PID8704; wrapper/run exit=143 at 08:40:52+02:00 and targeted process checks found all owned PIDs absent. Subsequent live outputs are separate and not substituted for the accepted endpoint.",
+        "trace_snapshot_path": "/private/tmp/c52-u0-triage-preflight/watcher/c52_u0_clean8b_section24_triage_traceiter0039_04dc403099b1.csv",
+        "last_completed_diff_observed_local": "2026-10-21T07:53:52+02:00",
+        "paired_Fe_scf_sha256": "0e759f2be2a9b23c08e9d11c26f32321e39206a71cf94b13efe0da3a83bd7b0c",
+        "testrun_log_sha256_at_observation": "e21133b0697afdaf5a1790cdb93c7bf0f5c9c5e06e3e6cc63a4185bc84418d35",
+        "watcher_manifest_sha256_at_observation": "222fb9dd1da99544b3930aafa8b2713159dc71fe4074d74d02fc6bc10497d6b8",
+        "accepted_endpoint_path": "/private/tmp/c52-u0-triage-preflight/watcher/c52_u0_clean8b_section24_triage_traceiter0076_Fe_scf_2339abf608c6.nml",
+        "accepted_endpoint_sha256": "2339abf608c6e372f281340fd64a8abc27ed4fa5f28eb0f263804caf4d848390",
+        "accepted_window": "iterations 57–76",
+        "accepted_window_metrics": {
+          "same_loop_diff_endpoint": "2.03e-8",
+          "d_q0_spin1_spread": "1.915970733e-7",
+          "d_q0_spin2_spread": "3.719324333e-7",
+          "physical_q0_moment_spread_muB": "3.9860898427e-7"
+        },
+        "accepted_window_analysis_path": "/private/tmp/c52-u0-triage-preflight/analysis/window57_76.json",
+        "accepted_window_analysis_sha256": "f8feb325ca525f4791f9100218c248f0be4c5236b19e7fa750eae4458e066e12",
+        "testrun_log_sha256_at_latest_local_read": "260bbd7e84e782054bc38522e16418eb10f7d2b495be41b98b403ffbd0a48f49",
+        "watcher_manifest_sha256_at_latest_local_read": "1854979d1c61015bd5296de538ce04b3eb3ca9028f2f2742bd9ad5a3317b851e",
+        "terminal_status": "Authorized SIGTERM; wrapper and run exit_code=143 at 2026-10-21T08:40:52+02:00; escalated targeted process check returned no rows for solver8704/launcher8648/watcher8672/disk_guard8705.",
+        "terminal_run_exit_code": 143,
+        "accepted_bundle_path": "/private/tmp/c52-u0-triage-preflight/accepted_checkpoint57_76",
+        "accepted_bundle_inventory_sha256": "1975ccb77362935c39524ed2ae525786306d2d2d30277170e4879a6691e7d2d1",
+        "accepted_checksum_manifest_sha256": "1975ccb77362935c39524ed2ae525786306d2d2d30277170e4879a6691e7d2d1",
+        "candidate_record_sha256": "5c7eda203d37a393ea717afdb30451ad5aef23bec614d19ec1f811bc3cc7715a",
+        "accepted_window_log_snapshot_sha256": "0b3689567acaade94dd49ef25fc159429c90c67e00debc4916dfbae80a6aef10",
+        "post_stop_live_outputs_manifest_sha256": "a8b3cb776cc48e71c8891086187fd2be99b19e87b1d5519fe905f191541a0d23"
+      }
+    ],
+    "u0_method_comparison": {
+      "status": "NOT_EVALUATED",
+      "block_status": "VALID_SETUP_FINITE_CAPACITY_GUARD_ITERATION36",
+      "chebyshev_status": "ACCEPTED_ITERATION76_WINDOW57_76",
+      "reason": "No accepted block arm, so no paired method comparison."
+    },
+    "u2_method_comparison": {
+      "status": "NOT_EVALUATED",
+      "reason": "Accepted local U2 Chebyshev endpoint exists, but no U2 block endpoint/run was available; a method-comparison verdict cannot be computed. The endpoint is independently eligible for C3 capture."
+    },
+    "u2_chebyshev_last_observation": {
+      "status": "RELEASE_ATTEMPT_ENOSPC; DEBUG_ENDPOINT_ACCEPTED_ITER99",
+      "release_run_path": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev",
+      "release_terminal_record_sha256": "653376f32c1c21a2d648a443586ba886d796ba61e2a342fcc01f08ac6378c24c",
+      "release_last_complete_diff_step": 56,
+      "release_last_complete_state_iteration": 57,
+      "release_partial_iteration": 58,
+      "debug_endpoint_sha256": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+      "debug_endpoint_lock_sha256": "d923078e644eaf7ada1926a53a4c92adf3d138e22ba8307ca87896d567cec1f5",
+      "debug_package_sha256": "80defa530c3e94b286df1c66d97eae07ee1af71835349e86e37d9b41b217eb69",
+      "debug_window": "iterations 80-99",
+      "debug_metrics": {
+        "outer_diff": "2.29e-8",
+        "d_q0_spin1_spread": "1.050120080e-7",
+        "d_q0_spin2_spread": "1.206028603e-7",
+        "abs_physical_moment_spread_muB": "2.6941277814e-7"
+      },
+      "debug_final_save_exit2": "step100 final save failed on read-only Fe_out.nml; accepted i99 endpoint preserved."
+    },
+    "co_u_positive_admission": "NOT_ADMITTED; C2/C3 evidence incomplete.",
+    "production_decision": "Under C5.3, production/defaults remain unchanged; no fix or adoption is made for uncovered method comparison. Co U>0 remains NOT_ADMITTED.",
+    "u0_control_endpoint": {
+      "status": "ACCEPTED_AND_FROZEN; AUTHORIZED_SIGTERM_EXIT143; PROCESS_CLEANUP_VERIFIED",
+      "path": "/private/tmp/c52-u0-triage-preflight/watcher/c52_u0_clean8b_section24_triage_traceiter0076_Fe_scf_2339abf608c6.nml",
+      "sha256": "2339abf608c6e372f281340fd64a8abc27ed4fa5f28eb0f263804caf4d848390",
+      "window": "57–76",
+      "window_analysis_sha256": "f8feb325ca525f4791f9100218c248f0be4c5236b19e7fa750eae4458e066e12",
+      "metrics": {
+        "same_loop_diff": "2.03e-8",
+        "d_q0_spin1_spread": "1.915970733e-7",
+        "d_q0_spin2_spread": "3.719324333e-7",
+        "physical_q0_sphere_moment_spread_muB": "3.9860898427e-7"
+      },
+      "durable_bundle": "docs/validation/fixed_ldau/rs/C5_2_PART_C_assets/C2History/U0_Reload_TriageAccepted",
+      "bundle_manifest_sha256": "a6452695da89abf3cd0de4b527b0a178ce9fb5a6aff5e0866546e9365a70a62b",
+      "bundle_sha256s_sha256": "086171d0f087dbae3dca2e69fef22a3fd9855895a77eadb6b47d701a86f5888d",
+      "raw_window_archive_sha256": "d16320226411462e73a0e86086eb12abdc09c53590d9004783394a7ddbb4fae2",
+      "post_stop_outputs_manifest_sha256": "a8b3cb776cc48e71c8891086187fd2be99b19e87b1d5519fe905f191541a0d23",
+      "run_exit_code": 143,
+      "sigterm_local": "2026-10-21T08:40:52+02:00",
+      "owned_processes_absent": [
+        8648,
+        8672,
+        8704,
+        8705
+      ]
     }
   },
-  "C1": {
-    "status": "PRELIMINARY_OFFLINE_AUDIT_ONLY",
-    "runtime_validation": false,
-    "gate_complete": false,
-    "findings": {
-      "recursion_seed": "source/recursion_chebyshev.f90:740-801 seeds psi0 with the identity orbital block at each recursion site (GPU and CPU branches).",
-      "rs_dispatch": "source/self.f90:4386-4399 dispatches RS Chebyshev recursion; source/self.f90:4651-4665 selects Chebyshev DOS reconstruction.",
-      "full_green_function": "source/green_chebyshev.f90:273-329 reconstructs full g0(nb,nb,E,site) matrices from deterministic mu_n (CPU/GPU branches).",
-      "occupation_matrix_P": "source/bands.f90:1036-1076 loops both orbital indices for each angular channel/spin and integrates matrix spectral density into potential%ldm; the d block is the 5x5 li=2 submatrix.",
-      "energy_weighted_M1": "source/bands.f90:1162-1206 fills pairwise matrix entries with Simpson moment=1 when the M1 target is associated (local radial mode selects a target at 947-957).",
-      "local_correction": "source/bands.f90:1209-1235 passes d-block P/M1 and the applied potential to correct_d_shell_moments.",
-      "correction_checks": "source/math.f90:213-270 checks finite values, Hermiticity, P eigenvalue bounds, q0>0, and finite correction outputs.",
-      "stochastic_separation": "source/recursion_transport.f90:369-377 documents stochastic moments as transport response; lines 426-435 selects control%random_vec_num only when cond_calctype='random_vec'."
+  "c3": {
+    "status": "PASS_C3_GATES_ON_ACCEPTED_DEBUG_U2_LOCAL_ENDPOINT",
+    "scientific_pass": true,
+    "gate": "PASS",
+    "accepted_c2_u2_chebyshev_endpoint_sha256": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+    "scope": "Frozen local-versus-spectral replay on the accepted Fe U=2 eV, J=0 RS Chebyshev local state, as RB3; no block-recursion coefficients are inputs to the replay calculation.",
+    "sequence": [
+      "Require and freeze an accepted Fe U=2 eV, J=0 RS Chebyshev local endpoint under its registered local-state acceptance criteria. Bind exact run ID, accepted step, terminal deck/run manifest, binary/source identity, and endpoint bytes. Record block/Cheb method-comparison status descriptively; it is not an extra C3 prerequisite. Do not use a fallback endpoint or block-recursion coefficients.",
+      "From an isolated copy of the accepted endpoint, run one diagnostic continuation with the same frozen B1 production executable, using RSLMTO_FIXED_U_TRACE=<absolute run>/records.csv, RSLMTO_FIXED_U_RUN_ID=c3_fe_u2_cheb_capture, RSLMTO_FIXED_U_TRACE_ITERATION=1, RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY=1, RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY=0, RSLMTO_FIXED_U_TRACE_QL_ONLY=0. Preserve endpoint bytes and capture output separately. Confirm capture mode actually emits all required row kinds and full Green matrix before accepting it.",
+      "Bind the trace/checkpoint in a C2-specific pre-response lock or narrowly scoped C2 adapter binding; the current RB3 adapter cannot consume the C2 state lock unchanged because it requires RB2/C1 accepted status, the C1 fit hash, and RB2-specific checkpoint metadata.",
+      "Run adapter modes in order: baseline -> preregister -> cases, each with a new output directory and all outputs/hash-bound to the accepted C2 endpoint, trace CSV/manifest, source, frozen production executable, and driver. Use the existing gate arithmetic unchanged: carrier ratio per spin in [0.99,1.01], q2_local_min_ry2 >= 0."
+    ],
+    "capture_contract": {
+      "trace_environment_source": "source/self.f90:524-569",
+      "capture_only_behavior_source": "source/self.f90:1419 and 5368-5384; capture_only skips the independent live-state replay verification after producing replay input/output, not the capture itself.",
+      "selected_phase": "P_OUT at outer iteration 1; full capture requires moments_only=false and ql_only=false. For RS, the P_OUT writer additionally emits full Green matrices at source/self.f90:2577-2631.",
+      "csv_header": "kind,run_id,lambda,iteration,stage,site,type,l,spin,k,band,row,col,order,weight,energy,scalar,re,im",
+      "required_row_families": [
+        "green_function",
+        "basis_map",
+        "radial_replay_mesh",
+        "radial_replay_v",
+        "radial_replay_rho_in",
+        "radial_replay_ec_seed",
+        "radial_replay_eigen_seed",
+        "radial_replay_ql",
+        "radial_replay_pl",
+        "pl_map_input",
+        "m0_carrier_input",
+        "m0_carrier_local",
+        "m0_carrier_control",
+        "m0_trace_consistency"
+      ],
+      "replay_dimensions_from_existing_adapter": [
+        "nr=495",
+        "ncore=10",
+        "nval=6",
+        "lmax=2"
+      ],
+      "full_green_expected": "For each traced RS recursion site, each energy grid point (nv1+2), each matrix row/column of g0; the adapter requires the full Green rows and reconstructs a frozen radial replay from records rather than recursion coefficients.",
+      "c2_trace_not_substitute": "Current C2 scalar/moments-only history trace is not a C3 capture: it suppresses full Green and radial replay rows."
     },
-    "interpretation": "The inspected fixed-U SCF path appears deterministic and supplies full P/M1 matrices. This source-only finding is not runtime validation and does not complete C1 as a campaign gate.",
-    "compatibility_guard_added": false
+    "existing_harness": {
+      "adapter_source_path": "tests/validation/fixed_ldau/rb3_capture_adapter.py",
+      "adapter_source_sha256": "b87eceaa1f3e730bb590d239c3461ef22344cd594ab493679385c87ff13748d7",
+      "runner_source_path": "tests/validation/fixed_ldau/rs_a3_m03_runner.py",
+      "runner_source_sha256": "96c51a8e1e0b0809b35b7875a5c94b9be1e70e82180cb6693c13209fe9a0b515",
+      "driver_source_path": "tests/validation/fixed_ldau/accepted_m03_replay_driver.f90",
+      "driver_source_sha256": "124726aaab8f5937fa13be925969b67d4e647ee9c910596d58698ffb13e5476a",
+      "existing_frozen_driver_path": "/private/tmp/rslmto-rb3-final/accepted_m03_replay_driver",
+      "existing_frozen_driver_sha256": "e3cb6af947ef15a2e934b07a252d5e622367d760f2e6d2fcea0dc21dfd180513",
+      "existing_diagnostic_capture_binary_path": "/private/tmp/rslmto-rb3-capture-bounds-build/bin/rslmto.x",
+      "existing_diagnostic_capture_binary_sha256": "68abefd5e008f406f6c9e3230ac846a4ef0696b7b420ebbb7e30b814e55efea1",
+      "prior_rb3_lock_path": "/private/tmp/rslmto-c1-rb-prep/RB3_capture/lock/rb3_capture_lock.json",
+      "prior_rb3_lock_sha256": "8f8f97f7a8dafe8b44061b6dfe7a60b674fc19df0a4169e0069becf203c916f5",
+      "reuse_boundary": "Replay driver and capture row contract are recurrence-agnostic and consume full Green/radial/QL/PL/M1 operands; prior lock/adapter validation is specifically RB2/C1-bound and must not be mislabeled as already supporting C2. No capture binary is authorized by this plan; the accepted frozen C2 executable is intended for the diagnostic opt-in if auditor preflight confirms it has the required code."
+    },
+    "command_templates": {
+      "capture": "env RSLMTO_FIXED_U_TRACE=<absolute-run-dir>/records.csv RSLMTO_FIXED_U_RUN_ID=c3_fe_u2_cheb_capture RSLMTO_FIXED_U_TRACE_ITERATION=1 RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY=1 RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY=0 RSLMTO_FIXED_U_TRACE_QL_ONLY=0 <frozen-accepted-C2-U2-Chebyshev-executable> <staged-capture-deck>",
+      "adapter_baseline": "python3 tests/validation/fixed_ldau/rb3_capture_adapter.py <capture-dir> --lock <C2-specific-accepted-state-lock> --source <hash-bound-source-self.f90> --binary <frozen-capture-executable> --rb2-binary <frozen-accepted-C2-executable> --driver <frozen-driver> --mode baseline --output <new-output-dir>/baseline.json",
+      "adapter_preregister": "same binding arguments, --mode preregister --baseline-report <passing-baseline.json> --output <new-output-dir>/preregistration.json",
+      "adapter_cases": "same binding arguments, --mode cases --baseline-report <passing-baseline.json> --preregistration <locked-preregistration.json> --output <new-output-dir>/cases.json",
+      "caveat": "Templates only; exact launch command, environment, deck/restart paths and lock schema require final endpoint capture and auditor-approved preflight. Existing RB3 adapter will reject a C2 lock until the C2-specific binding is implemented or an audited equivalent is provided."
+    },
+    "adapter_design": {
+      "status": "PRIVATE_IMPLEMENTATION_READY_FOR_AUDIT_NOT_COMMITTED",
+      "preserve_legacy_rb3": "Keep current default RB2/C1 profile behavior and old lock validator byte-for-byte semantically; route any new C2 behavior behind an explicit C2 profile or a separate C2 adapter module.",
+      "c2_binding_contract": "Require an accepted C2 U=2,J=0 Chebyshev RS local endpoint lock binding its exact run id, accepted step, outer Diff and last-20 occupation/sphere-moment evidence, deck/restart hashes, frozen executable/source hashes, and frozen Fe_out endpoint hash. Retain C2 method-comparison status descriptively; it is not a C3 prerequisite. Revalidate hashes and RS local-state acceptance; do not infer acceptance from a trace alone.",
+      "generic_capture_checks_to_reuse": "CSV schema/finite-number check, single run ID/iteration, capture manifest/deck/checkpoint/source/executable hashes, full RS Green rows, basis map, complete radial replay inputs/outputs, QL/PL/M1, and M0 carrier rows; run LIVE_STATE replay baseline as execution integrity and bind its result to the same capture and driver.",
+      "do_not_reuse_as_c3_scientific_gates": "RB2/C1 fit hash, A2.1 old-eight allowance, A2.2 fitted scalar allowance, scalar +0.01 response gate, sign/wrong-spin detectability gates. These are unrelated to the C5.2 C3 criteria.",
+      "c3_cases_and_metrics": "From exact capture operands construct the raw/spectral and local-corrected replay cases using captured P, M1, Vin, q0, center and q2. Record per-spin carrier ratio from measured replay energy response divided by the captured trace(Vin P) carrier; gate only each spin ratio in [0.99,1.01]. Compute and report q2prime from the registered local formula and gate q2prime >= 0. Auxiliary wrong-control outputs, if retained, are RECORDS only.",
+      "implementation_outline": "Best minimal implementation is a separate C2 C3 adapter script that imports the existing generic row parsing, text-input serialization, persistent-driver runner and output parser; it validates a new C2 acceptance lock and implements C3-only preparation/summary. Avoid broad refactoring of rb3_capture_adapter.py and do not change its default RB2/C1 behavior.",
+      "tests_before_capture": "Synthetic full-row fixture verifies C2 lock validation/hashes, expected trace row cardinality, C2 profile skips all A2.2 fit gates, reports both required C3 gates only, rejects missing carrier/q2 operands, and confirms default RB2 lock path still validates as before."
+    },
+    "driver_math_provenance": {
+      "current_math_source_path": "source/math.f90",
+      "current_math_source_sha256": "e4bbcaecb2d8978fd3cc0d5e8b376285bd6b60aaa336a49a60911eaa7851b7ec",
+      "math_source_last_commit": "390e4b907cee344779dd5aeb31d8e325f81d04dc",
+      "math_source_last_commit_date": "2026-10-16T18:01:50+02:00",
+      "candidate_library_build_path": "/private/tmp/rslmto-rb-impl-build/source/librslmto.a",
+      "candidate_library_sha256": "26197ed74378ca8360a09f28193d7e1cfeb3131c452b1b35be554d95c19358ed",
+      "math_object_sha256": "b214b5c508c4a779bdaa8469eb2ed7d09b4f8fac76188da8ad682f925e12ddfb",
+      "math_object_compile_time": "2026-10-19 08:01:54 Europe/Stockholm",
+      "build_rule_source": "/private/tmp/rslmto-rb-impl-build/source/CMakeFiles/rslmto.dir/build.make:725-728 names current checkout source/math.f90 as math.o input and invokes /opt/homebrew/bin/gfortran.",
+      "driver_compile_record_path": "/private/tmp/rslmto-c1-rb-prep/RB_PREPARATION_MANIFEST.json (RB3_replay_driver_build)",
+      "source_connected_driver_path": "/private/tmp/rslmto-c1-rb-prep/accepted_m03_replay_driver_c1",
+      "source_connected_driver_sha256": "d4f4f96ed1e3374b81433b7314c457adccef8a68e7bf90f3c792b5ffb94f6e37",
+      "driver_source_sha256": "124726aaab8f5937fa13be925969b67d4e647ee9c910596d58698ffb13e5476a",
+      "provenance_limit": "This manifest-bound driver was linked against the exact candidate library hash above, whose math object was compiled from the current math.f90 path/hash. The library predates the 2026-10-20 Part B commit and therefore does not prove the entire replay driver library matches current HEAD self.f90 after B1; use it only as an existing source-connected reference, not final C3 driver.",
+      "unproven_driver_to_avoid": {
+        "path": "/private/tmp/rslmto-rb3-final/accepted_m03_replay_driver",
+        "sha256": "e3cb6af947ef15a2e934b07a252d5e622367d760f2e6d2fcea0dc21dfd180513",
+        "reason": "No exact link-library/source manifest found tying this binary to current HEAD; different from both C1 manifest-bound d4f driver and prior RB3 lock expected e3e1 driver."
+      },
+      "recommended_final_binding": "Once C2 endpoint is accepted, build a separate driver/library from exact committed Part B HEAD and preserve full CMake cache, compiler flags, build rule, source hashes, linked archive SHA, driver source hash and driver executable SHA. This is a helper rebuild only; it does not rebuild/change the frozen production solver.",
+      "current_b1_archive": {
+        "archive_path": "/private/tmp/c5-b1-guard-build-clean/source/librslmto.a",
+        "archive_sha256": "36725c2ae3ba7c07c74c17940d9047bf8a314431146782bdd4e09ecc0e5dcead",
+        "compiled_source_count": 98,
+        "all_compiled_sources_match_head": true,
+        "source_manifest_sha256": "46c65c1ae8227370cb2be630754de8e6eda8422b84e7884ef69036ffd47bae17",
+        "math_source_sha256": "e4bbcaecb2d8978fd3cc0d5e8b376285bd6b60aaa336a49a60911eaa7851b7ec",
+        "math_object_sha256": "f535f3120eaff7fcd1ac4856e0631766fe0f8162e224c7cc8e5a8e844514ba80",
+        "module_manifest_sha256": "570296046057ea9c8238350a7d596a76cffd71dde7101b2928cbebde106eb850",
+        "compiler": "/opt/homebrew/bin/gfortran release build; see helper_build_record for version/flags/link/cache hashes",
+        "source_connected_helper_rebuilt_against_this_archive": true,
+        "helper_binary_sha256": "9e3f44379b8933d21eafb78e8008cbf0d44dd9b65a77140af2920c26713ac9d7"
+      }
+    },
+    "adapter_implementation": {
+      "script_path": "/private/tmp/c52-c-private/c3_c2_adapter.py",
+      "script_sha256": "903cdb373527c628b3e3d346c52046c62ab582e2e6c0e87fbbf717df0d2ca646",
+      "pre_fix_copy_path": "/private/tmp/c52-c-private/c3_c2_adapter.pre_preregister_fix.py",
+      "pre_fix_sha256": "c0244025b492775f3b551f2c5a301e5bc7fe65c5af695d3af8c079b2f2a24696",
+      "tests_path": "/private/tmp/c52-c-private/test_c3_c2_adapter.py",
+      "tests_sha256": "e63ccf639d873733bd4d2e27eb5f1c5467303b661129f41846504725b81d8d9d",
+      "test_scope": "7 C3 adapter tests; the combined suite adds 3 Fortran namelist-schema tests for 10 total.",
+      "combined_test_command": "cd /private/tmp/c52-c-private && /opt/homebrew/opt/python@3.11/bin/python3.11 -m unittest -v test_c3_c2_adapter test_namelist_schema",
+      "combined_test_output_path": "/private/tmp/c52-c-private/adapter_fix_tests.txt",
+      "combined_test_output_sha256": "ea0c068b49a14253bef38b3950aac3c9beace23d053b44e6527d18cec1c1ad9f",
+      "combined_test_result": "10 passed: 7 C3 adapter + 3 schema tests.",
+      "fix_scope": "Baseline preregistration binding now reads nested capture.csv_sha256 and capture.manifest_sha256 as baseline mode actually writes them, and validates exact driver hash/status. No scientific arithmetic or criteria changed.",
+      "solver_launches": 0,
+      "accepted_endpoint_used": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+      "legacy_rb3_adapter_untouched": true,
+      "production_source_edits": false,
+      "adapter_tests_only_command": "cd /private/tmp/c52-c-private && /opt/homebrew/opt/python@3.11/bin/python3.11 -m unittest -v test_c3_c2_adapter (7 adapter tests)",
+      "adapter_test_scope_count": 7,
+      "combined_suite_additional_tests": "3 source Fortran namelist-schema tests; combined total 10."
+    },
+    "c2_method_comparison_status": "DESCRIPTIVE_ONLY; U0 comparison NOT_EVALUATED because the valid block arm stopped at finite capacity guard i36; U2 block was not launched.",
+    "c3_gates_only": [
+      "carrier ratio per spin in [0.99,1.01]",
+      "q2_local_min_ry2 >= 0"
+    ],
+    "capture_run": {
+      "status": "COMPLETE_EXIT0; FULL_MATRIX_INTEGRITY_PASS",
+      "run_path": "/private/tmp/c52-c2-stage/c3_run_debug_i1",
+      "preflight_path": "/private/tmp/c52-c2-stage/c3_debug_capture_template/preflight.json",
+      "preflight_sha256": "f6bc770329f5f742041b94b474e25ebe5d8073356fd6e37cebea7a019f9b4985",
+      "wrapper_sha256": "a944bd17f8176bc2b7dc5971ded4d45cf8bd825e8189ea445d92b607c4f30e59",
+      "manifest_path": "/private/tmp/c52-c2-stage/c3_run_debug_i1/manifest.json",
+      "manifest_sha256": "aaadf126ced0950254955e92ce1895607386bc007b48ad979205001498a03568",
+      "records_csv_sha256": "d45cc08bc72752b167bf244fcf8ffeda8a9658e223a5321876d04f486f9722d4",
+      "records_csv_bytes": 82018671,
+      "accepted_endpoint_sha256": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+      "accepted_endpoint_lock_sha256": "d923078e644eaf7ada1926a53a4c92adf3d138e22ba8307ca87896d567cec1f5",
+      "capture_input_sha256": "03a6f0ed8e35f46ddfc05c466cdc4d895c9b4c2e532bdc1c85cdc8ac6ed77878",
+      "producer_debug_executable_sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69",
+      "source_self_sha256": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+      "row_count": 357876,
+      "site0_basis_dimension": 18,
+      "site0_energy_grid_points": 999,
+      "green_matrix_count": 999,
+      "all_green_matrices_complete": true,
+      "all_numeric_values_finite": true,
+      "exit_code": 0,
+      "exit_code_file_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "final_Fe_scf_and_Fe_out_sha256": "c23c44b6c1e27c812f1e0af0090e8af467c50923cc29ed0a068ad15b8a075e73",
+      "startup": "RS legacy/local, use_kspace=false, Chebyshev; accepted restart loaded; serialized U=2 eV/J=0.",
+      "process_cleanup": "wrapper PID21701 and solver PID21749 absent after exit."
+    },
+    "accepted_endpoint_used": "Debug U2 Chebyshev iteration99 endpoint; exact lock and SHA bound above.",
+    "scientific_result": {
+      "status": "PASS_C3_GATES",
+      "independent_raw_audit": "Auditor recomputed from raw driver output and capture operands.",
+      "carrier_ratio_each_spin_within_1_percent": true,
+      "spin1": {
+        "vin_p_ry": -0.28701910847837886,
+        "measured_delta_ev_ry": -0.28508208223865894,
+        "ratio": 0.9932512289861501,
+        "pass": true
+      },
+      "spin2": {
+        "vin_p_ry": 0.026921158018393464,
+        "measured_delta_ev_ry": 0.026914680887630604,
+        "ratio": 0.9997594037092151,
+        "pass": true
+      },
+      "q2prime_each_spin_nonnegative": true,
+      "q2prime_ry2": {
+        "spin1": 0.013665611639277323,
+        "spin2": 0.011285244008227068
+      },
+      "cases_json_path": "/private/tmp/c52-c2-stage/c3_run_debug_i1/analysis/cases.json",
+      "cases_json_sha256": "8d8ed6f7cca82cf2deb65c41422b45169a00b6014e324bc1cb3c6c6a0195a9d1",
+      "cases_raw_csv_path": "/private/tmp/c52-c2-stage/c3_run_debug_i1/analysis/cases.csv",
+      "cases_raw_csv_sha256": "1c1e56e5a2cd34a59523c6d9cedade4b72f6bdf50e6832b41bfd424ad1ffd086",
+      "preregistration_path": "/private/tmp/c52-c2-stage/c3_run_debug_i1/analysis/preregistration.json",
+      "preregistration_sha256": "629dab6456be59c48e0337f3943b68402d3507191984f6ad17117596a8e9fb7d",
+      "baseline_report_path": "/private/tmp/c52-c2-stage/c3_run_debug_i1/analysis/baseline.json",
+      "baseline_report_sha256": "4a1d500c506346bbf8bfbc23f79737b32ad3ba94114c900b7c36579e06b52b5d",
+      "baseline_driver_output_sha256": "0fe2d321c35d1d12733e6e45c3254c6c7b34d43d8aa6371ab6eceaac1c6d1490",
+      "adapter_hash_fix_failed_attempt": "A preregister attempt with pre-fix adapter failed before cases because it read missing top-level capture hashes; this was a harness metadata-path defect, not a scientific gate. The old adapter bytes are preserved separately; final result uses the audited fixed adapter and audited preregistration.",
+      "adapter_hash_fix_failed_attempt_path": "/private/tmp/c52-c2-stage/c3_run_debug_i1/analysis/preregister_failed_attempt001.txt",
+      "adapter_hash_fix_failed_attempt_sha256": "60b3612356381a7433c30d077eae4859a6f2dd776f820f19c89810555590fa28",
+      "adapter_hash_fix_failed_attempt_error": "ValueError: LIVE_STATE baseline is not passing or not bound to this capture/driver; the pre-fix reader expected absent top-level hash keys although baseline writer stored them under capture.",
+      "cases_command": "/opt/homebrew/opt/python@3.11/bin/python3.11 /private/tmp/c52-c-private/c3_c2_adapter.py --capture /private/tmp/c52-c2-stage/c3_run_debug_i1 --lock /private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/accepted_c2_u2_chebyshev_endpoint_lock.json --source /Users/andersb/Jobb/rslmto_fable_v4b/source/self.f90 --binary /private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x --driver /private/tmp/c52-c-private/helper-build/accepted_m03_replay_driver --mode cases --baseline-report /private/tmp/c52-c2-stage/c3_run_debug_i1/analysis/baseline.json --preregistration /private/tmp/c52-c2-stage/c3_run_debug_i1/analysis/preregistration.json --output /private/tmp/c52-c2-stage/c3_run_debug_i1/analysis/cases.json",
+      "adapter_test_7_command": "cd /private/tmp/c52-c-private && /opt/homebrew/opt/python@3.11/bin/python3.11 -m unittest -v test_c3_c2_adapter",
+      "adapter_test_count": 7,
+      "combined_test_count": 10,
+      "combined_test_scope": "7 C3 adapter tests plus 3 source namelist-schema tests."
+    }
   },
-  "C2": {
-    "status": "NOT_RUN",
-    "u0_pair": "NOT_RUN",
-    "u2_ev_local_pair": "NOT_RUN",
-    "gate": "NOT_EVALUATED"
+  "co_u_positive_admission": "NOT_ADMITTED; Co compatibility gate not established; C5.3 leaves production/defaults unchanged.",
+  "solver_runs": {
+    "actual_solver_launches": 9,
+    "count_breakdown": [
+      "2 original invalid-setup U0 launches",
+      "2 corrected U0 launches",
+      "1 Release U2 Chebyshev ENOSPC launch",
+      "1 Debug U2 Chebyshev local-state run",
+      "1 clean8b U2 invalid-comparability launch",
+      "1 Debug U0 triage run; accepted at iteration76, then intentionally SIGTERM’d with exit143 and verified process cleanup",
+      "1 Debug U2 capture-only C3 launch; completed exit0 and passed full-matrix integrity"
+    ],
+    "no_solver_launch_attempts": [
+      "original U0 wrapper readiness failure",
+      "corrected U2 pre-exec readiness failure"
+    ],
+    "other_nonlaunch_attempts": [
+      "one U2 stale-watcher capture failure; the solver remained a valid run and IDs1-9 were not recovered or fabricated"
+    ],
+    "current_processes_at_latest_part_i_report": {
+      "u0_run": {
+        "solver_pid": 8704,
+        "status": "accepted endpoint frozen at iteration76; authorized SIGTERM at 08:40:52+02:00, wrapper/run exit143; all solver/launcher/watcher/disk_guard PIDs verified absent"
+      },
+      "c3_capture": {
+        "solver_pid": null,
+        "status": "complete exit0; independent full-capture integrity PASS"
+      }
+    },
+    "c3_replay_or_adapter_runs": 3,
+    "source_changes_for_C": false
   },
-  "C3": {
-    "status": "NOT_RUN",
-    "gate": "NOT_EVALUATED"
-  },
-  "co_u_positive_admission": "NOT_ADMITTED; no C2/C3 compatibility gate passed.",
-  "solver_runs": 0,
   "builds": 0,
   "source_changes": [],
-  "commands": [],
-  "raw_run_paths": [],
-  "next_step": "User review of the no-reproduction branch is required before further work."
+  "user_co_outputs_read_only_inventory": {
+    "policy": "Outputs remain untracked user data under example/bulk/hcpCo-folder/hcpCo_ref; this worker did not modify or stage them.",
+    "sha256": {
+      "Co1_out.nml": "19e93a01e37f1d4e6dd4568d25b7eaa935b146f1090e65992d249cadc85e45e4",
+      "Co1_scf.nml": "19e93a01e37f1d4e6dd4568d25b7eaa935b146f1090e65992d249cadc85e45e4",
+      "Co2_out.nml": "18f2156ea75593d6adf562b713f2ebc3652233367fa9b3c6f0d4dbe8fa188b91",
+      "Co2_scf.nml": "18f2156ea75593d6adf562b713f2ebc3652233367fa9b3c6f0d4dbe8fa188b91",
+      "out.scf": "c19ebfdffb8e8c5de73b404e4646aa51be27283f51a9ca8724e0922db7b25f30",
+      "radial_ground_state_Co1_1.dat": "7b913cc38868b6baa14662e818cbd7f8841b879d35c79ef5971f3a5437a23234",
+      "radial_ground_state_Co2_2.dat": "ba5c003cd1a0564813d83b9856c3c1a3c339f318731a9ad7c9267f8ec8c877b7"
+    }
+  },
+  "attempt_history_note": "The original invalid-setup scalar-history observations (block first ID12, Chebyshev first ID19, paired IDs14/21) remain classified only as invalid-attempt history and are not attributed to corrected U0 runs.",
+  "disk_relief_and_recovery": {
+    "scope": "Temporary disk-relief operation confined to task-owned old CTest output files; no repository/user data or solver outputs were selected.",
+    "candidate_plan_path": "/private/tmp/c52-disk-relief/candidate_plan.json",
+    "candidate_plan_sha256": "ad1f7a0897e116a2d2b0b7261978566befaba4f2019c0d8091bacef35f231d37d",
+    "compression_ledger_path": "/private/tmp/c52-disk-relief/compression_ledger.jsonl",
+    "compression_ledger_sha256": "3e1d8551ba1a6790d61936b74bca11f19ed0eaeb2a1368e251e2f70c02634d87",
+    "entries_compressed": 3444,
+    "original_bytes": 524630532,
+    "compressed_bytes": 89567643,
+    "filter_error": "Initial path filter excluded only a leading gbt component and included 20 nested .../gbt/... files despite required exclusion.",
+    "recovery_manifest_path": "/private/tmp/c52-disk-relief/recovery_manifest.json",
+    "recovery_manifest_sha256": "a1ad78687c9027b891cb6a76795ed51c752cfcd6bf4733a4449eb1a687616fc0",
+    "classification": {
+      "authorized_compressions": 3424,
+      "overbroad_nested_gbt_entries_restored": 20
+    },
+    "recovery": "Auditor restored all 20 nested-gbt originals byte-for-byte from verified gzip copies; both original and gzip copies remain. No further cleanup performed."
+  },
+  "durable_raw_evidence_inventory": {
+    "archive_status": "All Part C assets are durable under docs/validation/fixed_ldau/rs/C5_2_PART_C_assets; the top-level 310-entry manifest and SHA list include C3, accepted Debug99, C2History, and accepted U0 Reload Triage evidence.",
+    "retain_for_debug_u2_acceptance": [
+      "accepted endpoint iteration99 Fe_scf SHA c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+      "all 20 raw trace/state pairs for iterations80-99 with their manifest/hash records",
+      "accepted endpoint lock d923078e644eaf7ada1926a53a4c92adf3d138e22ba8307ca87896d567cec1f5",
+      "full testrun.log SHA 97db325895cba493bde483c774f8beacd19229ce39115ffa0e4cc0e95bf213a6 and terminal exit2 record",
+      "input/deck and frozen executable/build manifest hashes"
+    ],
+    "retain_for_release_u2_enospc": [
+      "run deck and accepted seed copy",
+      "full testrun.log SHA 6c20da1e57dffcb686b0e9c96c78dae55b77c6b7ef044e521c419634382cb4ec",
+      "full fixed_u_trace.csv SHA ae1060a7ba5fd4d62b2ca64a3c2bfc0cd9cd7b0cdb7c11edab7b8a1004ca981c",
+      "complete iteration57 state/trace and partial iteration58 raw evidence",
+      "ENOSPC terminal record SHA 653376f32c1c21a2d648a443586ba886d796ba61e2a342fcc01f08ac6378c24c"
+    ],
+    "retain_for_clean8b_comparability": [
+      "deck/preflight and raw testrun log SHA c05dd9e19db4117ca4b55bb9bd63b9bc858b492ee5511fadd4a258db2a5ffb23",
+      "trace SHA 8caebd3409d5dca37dbb3abfd7fad9e92a5bcb33ccb29bc3dfc7926f5b7e1c1e",
+      "restart-reader error evidence and incompatible metadata field list"
+    ],
+    "retain_for_u0_triage": [
+      "accepted iteration76 Fe_scf SHA 2339abf608c6e372f281340fd64a8abc27ed4fa5f28eb0f263804caf4d848390 and complete window57–76 (20 trace/state pairs)",
+      "accepted bundle manifest/hash list and q0/moment analysis; full captured log snapshot and preflight/input/restart seed",
+      "authorized SIGTERM, exit143, process-absence evidence, and separate post-stop outputs manifest a8b3cb776cc48e71c8891086187fd2be99b19e87b1d5519fe905f191541a0d23; later outputs are not the accepted checkpoint"
+    ],
+    "retain_for_c3_capture": [
+      "complete full Green capture (357,876 rows; 18x18 matrices at 999 energy points), capture manifest, exit0 and startup evidence",
+      "accepted U2 endpoint lock/input, producer Debug executable/source identity and full capture preflight",
+      "audited baseline/preregistration/cases outputs and adapter fix/test artifacts; preserved pre-fix preregistration failure as a harness metadata-path defect"
+    ],
+    "avoid_redundant_archives": "Do not archive duplicate interim aggregates if raw trace/snapshot sources and the final accepted analysis package are present; preserve small terminal/preflight/status JSONs and exact command/environment records.",
+    "c2history_bundle": {
+      "path": "docs/validation/fixed_ldau/rs/C5_2_PART_C_assets/C2History",
+      "submanifest": "C2HISTORY_MANIFEST.json",
+      "submanifest_sha256": "9a3c367c7a89621bceccda62469d2b5482b245c37d1e573f540703d9d55577cb",
+      "sha256s_file": "SHA256SUMS",
+      "sha256s_sha256": "cb260ad85dee3403f94a04ed83a9353900298bd20599003bd97b43ac8c029e1f",
+      "note": "Historical C2 attempts preserve corrected U0 guard36, original Release U0 Chebyshev accepted step59/window40–59, invalid setup attempts, Release U2 ENOSPC, and disk-relief recovery. A separate accepted U0 Debug reload triage subbundle contains accepted step76/window57–76 and post-stop outputs; no later live state is substituted.",
+      "u0_accepted_subbundle": {
+        "path": "docs/validation/fixed_ldau/rs/C5_2_PART_C_assets/C2History/U0_Reload_TriageAccepted",
+        "asset_manifest_sha256": "a6452695da89abf3cd0de4b527b0a178ce9fb5a6aff5e0866546e9365a70a62b",
+        "sha256s_sha256": "086171d0f087dbae3dca2e69fef22a3fd9855895a77eadb6b47d701a86f5888d",
+        "archive_sha256": "d16320226411462e73a0e86086eb12abdc09c53590d9004783394a7ddbb4fae2",
+        "detail": "20 trace/state pairs for accepted window57–76, endpoint76, input/restart/preflight, accepted-window log snapshot, and separate post-stop outputs labelled not accepted.",
+        "note": "New accepted U0 Debug reload triage bundle, distinct from the original Release U0 Chebyshev accepted step59/window40–59 retained in the historical C2History manifest."
+      }
+    },
+    "top_level_asset_inventory": {
+      "path": "docs/validation/fixed_ldau/rs/C5_2_PART_C_assets/PART_C_ASSET_MANIFEST.json",
+      "sha256": "b1bf6090469e5dd15673b42ce27de3e5a4321be79b2f63bffbe479af50c080f9",
+      "sha256s_path": "docs/validation/fixed_ldau/rs/C5_2_PART_C_assets/SHA256SUMS",
+      "sha256s_sha256": "7a14430e6f21d6b53da1f9d0ef8c9444fbd6076195d7ee63b601e4032da29b49",
+      "entries": 310,
+      "total_bytes": 24727561
+    }
+  },
+  "c2_method_comparison_status": "NOT_EVALUATED; U0 Chebyshev control endpoint accepted at iteration76/window57–76, but no accepted U0 block endpoint; U2 block was not launched. C5.3 leaves production/defaults unchanged.",
+  "u0_status_caveat": "U0 Debug triage accepted endpoint iteration76/window57–76 was frozen; authorized SIGTERM and lifecycle completed at 2026-10-21T08:40:52+02:00 with exit143 and all owned solver/launcher/watcher/disk-guard PIDs absent. Later live outputs are separately preserved and are not the accepted endpoint."
 }

@@ -1,0 +1,376 @@
+{
+  "status": "PASS_AGGREGATE_NO_NUMERIC_TRANSFORMS",
+  "candidate_endpoint_valid": true,
+  "run_id": "c2_u0_chebyshev",
+  "trace_to_log_mapping": "self.f90 calls run_recursion(this,i) at 4059, sets fixed_u_trace_iteration=i at 4060, then records Pin_H/P_OUT/mix/radial/save/POST_SCF_RADIAL and emits Diff in the same loop i. Bind trace ID i only to exactly one completion Diff in the `Perform recursion at step i` segment before the next step marker. Zero matches are pending; multiple matches are rejected as duplicate. Candidate acceptance requires exactly one same-index completion Diff per selected ID; never use global last-Diff.",
+  "duplicate_rule": "first complete capture in append-only manifest order per explicit trace ID",
+  "requested_trace_ids": [
+    "40",
+    "41",
+    "42",
+    "43",
+    "44",
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50",
+    "51",
+    "52",
+    "53",
+    "54",
+    "55",
+    "56",
+    "57",
+    "58",
+    "59"
+  ],
+  "selected": [
+    {
+      "trace_iteration": "40",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0040_b070cb9612b5.csv",
+      "trace_sha256": "b070cb9612b561e2f1a3888c04fff171b246a4bb1d602687e27873053bd561e3",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0040_Fe_scf_10c279c70847.nml",
+      "Fe_scf_sha256": "10c279c70847d30079004171b4a2a457b8f27d070bfba21cf122673c3efb41a5",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000872",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:23:01.210] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000872\n[Oct 20 2026 22:23:01.210] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "41",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0041_a1104b7a7911.csv",
+      "trace_sha256": "a1104b7a7911f703a2855beaaa850f76144cffed43402269d91ab6e86ec14aa6",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0041_Fe_scf_2c272122b0c1.nml",
+      "Fe_scf_sha256": "2c272122b0c1a77f176a71373b2903ef02155999e97c9efbcbc62696e278af19",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000960",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:23:19.086] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000960\n[Oct 20 2026 22:23:19.086] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "42",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0042_0b2642d3b740.csv",
+      "trace_sha256": "0b2642d3b7403286db0d22a04323877fe6aa23dc62f6212201b3f45269cfcf5a",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0042_Fe_scf_0786d5f5f8e8.nml",
+      "Fe_scf_sha256": "0786d5f5f8e8dd195c386c84b106d45efb7e91e2b98109d09920682e04a5e077",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000001036",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:23:39.250] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000001036\n[Oct 20 2026 22:23:39.250] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "43",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0043_f5671122de2f.csv",
+      "trace_sha256": "f5671122de2fc77df61f93da064cd49fba91b4963f0fecae9df8fe7da7efa438",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0043_Fe_scf_eaa06da3351c.nml",
+      "Fe_scf_sha256": "eaa06da3351c5cbd5b373103afe91284f088f889f1f116c6e71a7b561819ae68",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000001025",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:24:02.143] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000001025\n[Oct 20 2026 22:24:02.143] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "44",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0044_b9a52b7ed67b.csv",
+      "trace_sha256": "b9a52b7ed67b049b9eb8fc94509a1d0a04e0602048ea76e346dcb5a118f71e27",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0044_Fe_scf_fc29f8809af9.nml",
+      "Fe_scf_sha256": "fc29f8809af99086336a81a58ed0b79fb314b4090234ab981b65d70daa186187",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000001033",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:24:21.613] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000001033\n[Oct 20 2026 22:24:21.613] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "45",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0045_dba536daa3e0.csv",
+      "trace_sha256": "dba536daa3e02dbebfb89ce2a39c7cba01840e2266397af964501a0203ff85e8",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0045_Fe_scf_4590ab7a8d4a.nml",
+      "Fe_scf_sha256": "4590ab7a8d4ad783e823209f10940270bab1b10c98daf5760d1132ae8c88677b",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000996",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:24:43.020] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000996\n[Oct 20 2026 22:24:43.020] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "46",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0046_136d3fe3e2b0.csv",
+      "trace_sha256": "136d3fe3e2b02ba84db003ed8a0f4255fd988ba81bc18eb5cb443818bece36a6",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0046_Fe_scf_3bf85c84a359.nml",
+      "Fe_scf_sha256": "3bf85c84a3591bc09723495323aa3d6856e299741850eaaa6d540a79061395ae",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000869",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:25:16.709] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000869\n[Oct 20 2026 22:25:16.709] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "47",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0047_df6ef73167b6.csv",
+      "trace_sha256": "df6ef73167b63545db0ce48492459c14ee02a8b40dcdeb4054cf99bb7231860a",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0047_Fe_scf_7c494b27918d.nml",
+      "Fe_scf_sha256": "7c494b27918d55551b0cc779a6f20cbd0b383011ab61fc27c4cf81e8076c9185",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000600",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:25:48.081] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000600\n[Oct 20 2026 22:25:48.081] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "48",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0048_02f43b58df8b.csv",
+      "trace_sha256": "02f43b58df8bd9597e018c68ef5b5af1105546b7b067e72f82f808a05a2c6d42",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0048_Fe_scf_9c7a50eefdf2.nml",
+      "Fe_scf_sha256": "9c7a50eefdf2b647adb5cde141118894b61438fc78a375536aa7f05a4d5678a1",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000443",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:26:18.227] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000443\n[Oct 20 2026 22:26:18.227] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "49",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0049_9b0fb0bf3c48.csv",
+      "trace_sha256": "9b0fb0bf3c484274ebe508c34d3d0bc021279c4665077c716d4eaf02d8044064",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0049_Fe_scf_2a7c8d59c826.nml",
+      "Fe_scf_sha256": "2a7c8d59c826aa1e32da98ba06f1b2bae71da82b38db8fe573403c16ae10f557",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000408",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:26:45.705] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000408\n[Oct 20 2026 22:26:45.706] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "50",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0050_a978a130ffcd.csv",
+      "trace_sha256": "a978a130ffcd0c576c1df1ab3850e0896c3405964480911cad2e8037f0eae43d",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0050_Fe_scf_81a045f531a8.nml",
+      "Fe_scf_sha256": "81a045f531a83cb55d678484db393fdce3485a9bd4d0bc36195dd913ee34b045",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000283",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:27:14.371] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000283\n[Oct 20 2026 22:27:14.371] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "51",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0051_5c844b8b107a.csv",
+      "trace_sha256": "5c844b8b107af8696571dc58e457b88784bc90914565d10378061e4057284530",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0051_Fe_scf_19c5fbcdeae5.nml",
+      "Fe_scf_sha256": "19c5fbcdeae5a640097cb8be00966809e073110247a3df30f823e5ca4737380a",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000238",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:27:42.146] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000238\n[Oct 20 2026 22:27:42.147] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "52",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0052_95fee8fc4b1d.csv",
+      "trace_sha256": "95fee8fc4b1d1a8ef4504bbbfa9c7713e60557d8387f8a884db4a6c4eb788df6",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0052_Fe_scf_659fa2a7fff2.nml",
+      "Fe_scf_sha256": "659fa2a7fff2f256b48a40aa4fe8d59d5feb1c71470430e6dc89f4dbae03b57a",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000255",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:28:06.690] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000255\n[Oct 20 2026 22:28:06.690] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "53",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0053_7be84d5b4e8e.csv",
+      "trace_sha256": "7be84d5b4e8ed50c1c1fb482348356411a666f508720c2aa7265c7a9dba7806e",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0053_Fe_scf_9568e757c061.nml",
+      "Fe_scf_sha256": "9568e757c061f60ede0f7352699112eb22fdf7cffc917e55d88f06707743124f",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000240",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:28:26.965] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000240\n[Oct 20 2026 22:28:26.965] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "54",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0054_c61a9a276de0.csv",
+      "trace_sha256": "c61a9a276de07978362c00e33b5075b9abdbb0f17add68c29e37872d0f65839b",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0054_Fe_scf_2274ed770d98.nml",
+      "Fe_scf_sha256": "2274ed770d98a0e26e2f6ce9a91f20ce78d62d6c6357d5ccd93d0589ebeb2ff4",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000222",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:28:44.339] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000222\n[Oct 20 2026 22:28:44.339] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "55",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0055_ee750adfc545.csv",
+      "trace_sha256": "ee750adfc5453452c90c2c371cc3576a97d05945e82d992ffbdb678349f66fa6",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0055_Fe_scf_549bb59ea262.nml",
+      "Fe_scf_sha256": "549bb59ea262041d88522fe71fb78c4c8bcfc0f8b7bdea28ae69eab7bca1a20e",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000150",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:28:58.566] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000150\n[Oct 20 2026 22:28:58.566] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "56",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0056_7780073a0653.csv",
+      "trace_sha256": "7780073a06535537e610988353a81fbb3522a2ee2bcc13d9b13e888f49b5ed47",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0056_Fe_scf_589276434c5e.nml",
+      "Fe_scf_sha256": "589276434c5ee9706fc58f8c32df8eb3060a8d69150375958530b832b8fe29e9",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000281",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:29:12.701] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000281\n[Oct 20 2026 22:29:12.701] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "57",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0057_8638a78f7000.csv",
+      "trace_sha256": "8638a78f70004b083f951f4808f95055c616967a135a2d22765ef2ad42310eb7",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0057_Fe_scf_7c74760f8e2a.nml",
+      "Fe_scf_sha256": "7c74760f8e2acb8482cda437b313cc5459ae9de8916673628a75b1e192cdafdc",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000291",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:29:26.612] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000291\n[Oct 20 2026 22:29:26.613] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "58",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0058_a899c557a200.csv",
+      "trace_sha256": "a899c557a200ba1b1cedc314e0c1d4d98fbd323e4302af4b7cbe7b61fbf3520f",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0058_Fe_scf_760a36b23bf5.nml",
+      "Fe_scf_sha256": "760a36b23bf5827531dce59c738a7014660dc7ceeff8a362eb568867d2621041",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000278",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:29:40.316] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000278\n[Oct 20 2026 22:29:40.316] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    },
+    {
+      "trace_iteration": "59",
+      "trace_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0059_1a5ab5cdf82b.csv",
+      "trace_sha256": "1a5ab5cdf82b27e5fbc13ed2dde1378bbce33163a8f33f5c69576985f4ecd3a7",
+      "Fe_scf_snapshot": "/private/tmp/c52-c2-stage/launch_u0_corrected/snapshots_watcher/c2_u0_chebyshev_traceiter0059_Fe_scf_9f3b6c9dbe75.nml",
+      "Fe_scf_sha256": "9f3b6c9dbe759a530a3e772c2977c88aee233ddfe7135096cec99fc58c3ccd99",
+      "Fe_scf_state_phase": "P_MIX mixed state; ql matches P_MIX, distinct from P_OUT fresh-unmixed ql",
+      "P_OUT_ql_phase": "fresh DOS ql used for criterion",
+      "post_radial_records": 6,
+      "post_radial_last": "etot_total",
+      "P_OUT_ql_records": 6,
+      "matching_same_loop_diff": {
+        "status": "logged",
+        "diff_token": "0.0000000232",
+        "line_context": "TB basis for atom Fe\n[Oct 20 2026 22:29:54.716] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000232\n[Oct 20 2026 22:29:54.716] [self.f90:4340]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0m"
+      }
+    }
+  ],
+  "duplicate_entries_omitted": [],
+  "header_written_once": true,
+  "concatenated_rows": 84120,
+  "output": "/private/tmp/c52-c2-stage/launch_u0_corrected/accepted_candidate_iter0059/trace_window40_59.csv",
+  "output_sha256": "a53cd027099732fc336f7c0284862e25ff04f651f89942a2d2e564b19329ad8a"
+}

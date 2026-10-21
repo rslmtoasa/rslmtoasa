@@ -1,0 +1,11 @@
+#!/bin/bash
+set -u
+if [ "$#" -ne 1 ]; then echo 'usage: watch_one.sh c2_u2_block|c2_u2_chebyshev' >&2; exit 64; fi
+run_id="$1"
+case "$run_id" in c2_u2_block|c2_u2_chebyshev) ;; *) echo 'invalid run id' >&2; exit 64;; esac
+ROOT=/private/tmp/c52-c2-stage/launch_u2_corrected
+run_dir="$ROOT/$run_id"
+mkdir -p "$ROOT/snapshots_watcher/$run_id"
+: > "$run_dir/watcher.ready"
+while [ ! -s "$run_dir/solver.pid" ]; do sleep 0.1; done
+exec python3 "$ROOT/watch_trace_and_state.py" "$run_id" "$(cat "$run_dir/solver.pid")" "$ROOT" "$ROOT/snapshots_watcher/$run_id"

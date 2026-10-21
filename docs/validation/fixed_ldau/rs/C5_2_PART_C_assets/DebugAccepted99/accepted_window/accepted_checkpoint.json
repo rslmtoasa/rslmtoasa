@@ -1,0 +1,43 @@
+{
+  "acceptance_window": [
+    80,
+    99
+  ],
+  "all_criteria_pass": true,
+  "analysis_manifest_sha256": "b46181361cb6911084a5d46d19afbb6eb1b2556b644bd899b5b7790cc9044877",
+  "checkpoint_trace_id": 99,
+  "criteria": {
+    "q0_abs_physical_moment_spread_max": 1e-06,
+    "q0_d_spin_spread_max": 5e-07,
+    "same_loop_diff_max": 3e-08
+  },
+  "criteria_source": "C5.2 \u00a72.1 / C5.3 unchanged",
+  "endpoint_capture": {
+    "Fe_scf_path": "../snapshots/c52_triage_debug_u2_traceiter0099_Fe_scf_c84c8e2b3200.nml",
+    "Fe_scf_sha256": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+    "phase": "trace contains fresh P_OUT ql; Fe_scf snapshot is corresponding following P_MIX state",
+    "trace_path": "../snapshots/c52_triage_debug_u2_traceiter0099_98298a9075bf.csv",
+    "trace_sha256": "98298a9075bf83c7fe4f8049c8cc50949123d336819f82cc1406edb35212bbae"
+  },
+  "measured": {
+    "abs_q0_physical_moment_spread": "2.6941277814E-7",
+    "same_loop_diff_step99": "0.0000000229",
+    "spin1_q0_d_spread": "1.050120080E-7",
+    "spin2_q0_d_spread": "1.206028603E-7"
+  },
+  "preserved_files": {
+    "aggregate.csv": "39a3d5420f9fc06648f0f319583c7cdf1719dc8fd7f4478c47a63d88a8b25561",
+    "aggregate.manifest.json": "c63dfd3fa0ceabb333298c65de5ef3a0140caee1ce2abeb7e0be36a5a4a1654d",
+    "aggregate.stdout": "c63dfd3fa0ceabb333298c65de5ef3a0140caee1ce2abeb7e0be36a5a4a1654d",
+    "q0.stdout": "3f7e55ee4332b6e65b38b55372a0cb6458989b2cca0618597ccb7c1ffde94088",
+    "q0_moment.json": "3f7e55ee4332b6e65b38b55372a0cb6458989b2cca0618597ccb7c1ffde94088",
+    "window.json": "3f81f6b015d4f561a586d45b9c781a2c908f693903e116163125b8df2c2b3660",
+    "window.stdout": "3f81f6b015d4f561a586d45b9c781a2c908f693903e116163125b8df2c2b3660"
+  },
+  "q0_metrics_sha256": "3f7e55ee4332b6e65b38b55372a0cb6458989b2cca0618597ccb7c1ffde94088",
+  "record_type": "frozen_c52_debug_u2_accepted_checkpoint",
+  "run_id": "c52_triage_debug_u2",
+  "source_log_sha256": "97db325895cba493bde483c774f8beacd19229ce39115ffa0e4cc0e95bf213a6",
+  "terminal_note": "Solver reached step100 Diff<=3e-8 but exited2 after Fortran runtime error opening read-only restart alias Fe_out.nml at symbolic_atom.f90:624. Endpoint/window99 are earlier complete immutable captures; terminal write failure is separately preserved and does not alter this frozen checkpoint.",
+  "window_json_metrics_sha256": "3f81f6b015d4f561a586d45b9c781a2c908f693903e116163125b8df2c2b3660"
+}

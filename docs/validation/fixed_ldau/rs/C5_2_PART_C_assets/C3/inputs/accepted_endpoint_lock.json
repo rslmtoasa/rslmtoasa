@@ -1,0 +1,130 @@
+{
+  "acceptance": {
+    "c1_rs_status": "ACCEPTED",
+    "c2_gate_status": "NOT_EVALUATED: valid block U0 capacity guard prevented C2 numerical ratio; C3 carrier/q2-prime check proceeds independently under C5.3",
+    "convergence": {
+      "last20_d_occupation_by_spin": {
+        "1": [
+          "  4.6106009147109521E+00",
+          "  4.6106009406192747E+00",
+          "  4.6106009445197795E+00",
+          "  4.6106009140383062E+00",
+          "  4.6106009136050297E+00",
+          "  4.6106009585059180E+00",
+          "  4.6106009137299182E+00",
+          "  4.6106008987598583E+00",
+          "  4.6106008936582281E+00",
+          "  4.6106009059526247E+00",
+          "  4.6106009155159491E+00",
+          "  4.6106009123636937E+00",
+          "  4.6106008950495614E+00",
+          "  4.6106008534939100E+00",
+          "  4.6106008696269001E+00",
+          "  4.6106009091977702E+00",
+          "  4.6106009026743724E+00",
+          "  4.6106008564746741E+00",
+          "  4.6106008783761654E+00",
+          "  4.6106008958997000E+00"
+        ],
+        "2": [
+          "  1.9021653319008409E+00",
+          "  1.9021653022601936E+00",
+          "  1.9021653304003279E+00",
+          "  1.9021653600092578E+00",
+          "  1.9021652986336175E+00",
+          "  1.9021652899986117E+00",
+          "  1.9021653208728777E+00",
+          "  1.9021653121879378E+00",
+          "  1.9021653438770516E+00",
+          "  1.9021653085879839E+00",
+          "  1.9021653109046535E+00",
+          "  1.9021653371313807E+00",
+          "  1.9021653677635477E+00",
+          "  1.9021654106014720E+00",
+          "  1.9021653878510933E+00",
+          "  1.9021653400015355E+00",
+          "  1.9021653738060651E+00",
+          "  1.9021654102287255E+00",
+          "  1.9021654011210121E+00",
+          "  1.9021653690650266E+00"
+        ]
+      },
+      "last20_sphere_moment_muB": [
+        "2.55117610857980513",
+        "2.55117621733061630",
+        "2.55117617224002829",
+        "2.55117607178531120",
+        "2.55117618174919440",
+        "2.55117622288822452",
+        "2.55117610525785643",
+        "2.55117612457196662",
+        "2.55117610715614250",
+        "2.55117613590152316",
+        "2.55117615211061886",
+        "2.55117614278656687",
+        "2.55117605387871086",
+        "2.55117600935936974",
+        "2.55117603624330032",
+        "2.55117611380040074",
+        "2.55117605554645165",
+        "2.55117595347544638",
+        "2.55117602216142179",
+        "2.55117611222748178"
+      ],
+      "outer_diff": 2.29e-08,
+      "registered_spreads": {
+        "abs_physical_moment": "2.6941277814E-7",
+        "d_spin1": "1.050120080E-7",
+        "d_spin2": "1.206028603E-7"
+      },
+      "source_evidence_sha256": {
+        "accepted_checkpoint_package": "80defa530c3e94b286df1c66d97eae07ee1af71835349e86e37d9b41b217eb69",
+        "aggregate": "39a3d5420f9fc06648f0f319583c7cdf1719dc8fd7f4478c47a63d88a8b25561",
+        "q0_moment": "3f7e55ee4332b6e65b38b55372a0cb6458989b2cca0618597ccb7c1ffde94088",
+        "window": "3f81f6b015d4f561a586d45b9c781a2c908f693903e116163125b8df2c2b3660"
+      },
+      "window": [
+        80,
+        99
+      ]
+    }
+  },
+  "accepted_endpoint": {
+    "acceptance_package_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/accepted_checkpoint_trace99_window80_99/accepted_checkpoint.json",
+    "acceptance_package_sha256": "80defa530c3e94b286df1c66d97eae07ee1af71835349e86e37d9b41b217eb69",
+    "accepted_iteration": 99,
+    "checkpoint_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0099_Fe_scf_c84c8e2b3200.nml",
+    "checkpoint_sha256": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+    "deck_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/immutable_inputs/input.nml",
+    "deck_sha256": "276eabe5a405848935179ce21eac25a59a01f6aa7316d8ecbe3dbfdd5ac17760",
+    "run_id": "c52_triage_debug_u2",
+    "terminal_status": "Process later exited2 on attempted write to read-only Fe_out.nml at self.f90? symbolic_atom.f90:624. This accepted earlier checkpoint is a frozen valid state; later failure not substituted.",
+    "trace_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0099_98298a9075bf.csv",
+    "trace_sha256": "98298a9075bf83c7fe4f8049c8cc50949123d336819f82cc1406edb35212bbae",
+    "window": [
+      80,
+      99
+    ]
+  },
+  "executable": {
+    "binary_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x",
+    "binary_sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69",
+    "build_manifest_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/debug_bounds_build_manifest.json",
+    "build_manifest_sha256": "8f38624f52755a410534e24847cf31e0eca266bd9db1da27e9acb428aa394a32",
+    "role": "actual endpoint-producing current-source bounds-checked Debug executable; C3 capture will use this same executable to honor lock identity",
+    "source_path": "/Users/andersb/Jobb/rslmto_fable_v4b/source/self.f90",
+    "source_sha256": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107"
+  },
+  "schema": "rslmto-c5-c3-c2-accepted-endpoint-v1",
+  "status": "C2_ACCEPTED_CHEBYSHEV_U2_LOCAL_RS",
+  "system": {
+    "backend": "RS",
+    "calctype": "B",
+    "j_ev": 0.0,
+    "lmax": 2,
+    "nsp": 1,
+    "radial_moments": "local",
+    "recurrence": "chebyshev",
+    "u_ev": 2.0
+  }
+}

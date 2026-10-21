@@ -1,0 +1,10 @@
+{
+  "captured_entries": 99,
+  "ended_local": "2026-10-20T23:29:05.225501+02:00",
+  "manifest_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/trace_state_manifest.jsonl",
+  "record_type": "debug_u2_trace_watcher_stop",
+  "run_id": "c52_triage_debug_u2",
+  "solver_pid": 36518,
+  "stop_requested": false,
+  "watcher_pid": 36506
+}

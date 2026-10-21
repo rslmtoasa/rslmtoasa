@@ -1,0 +1,10 @@
+test_c3_does_not_floor_zero_carriers_or_hide_negative_q2 (test_c3_c2_adapter.C3AdapterSmoke.test_c3_does_not_floor_zero_carriers_or_hide_negative_q2) ... ok
+test_c3_has_only_registered_scientific_gates_and_inclusive_bounds (test_c3_c2_adapter.C3AdapterSmoke.test_c3_has_only_registered_scientific_gates_and_inclusive_bounds) ... ok
+test_capture_integrity_binds_c2_state_and_all_trace_rows (test_c3_c2_adapter.C3AdapterSmoke.test_capture_integrity_binds_c2_state_and_all_trace_rows) ... ok
+test_full_green_capture_requires_every_matrix_pair (test_c3_c2_adapter.C3AdapterSmoke.test_full_green_capture_requires_every_matrix_pair) ... ok
+test_requires_accepted_c2_chebyshev_endpoint (test_c3_c2_adapter.C3AdapterSmoke.test_requires_accepted_c2_chebyshev_endpoint) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.032s
+
+OK

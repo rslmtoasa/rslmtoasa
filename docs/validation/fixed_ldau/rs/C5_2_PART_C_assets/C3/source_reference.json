@@ -1,0 +1,11 @@
+{
+  "commit": "8a107432e3ca2e00c815c217d52e7aa2a8e30736",
+  "debug_binary_sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69",
+  "note": "Source identity is committed source plus per-file hashes; no source tar or executable copied.",
+  "repo": "/Users/andersb/Jobb/rslmto_fable_v4b",
+  "source_archive_sha256": "4c714648b7d7d83caa0e63f014a680c2b72fa69e797c816947ef1b8594572fcd",
+  "source_file_sha256": {
+    "source/math.f90": "e4bbcaecb2d8978fd3cc0d5e8b376285bd6b60aaa336a49a60911eaa7851b7ec",
+    "source/self.f90": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107"
+  }
+}
