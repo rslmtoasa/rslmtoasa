@@ -48,11 +48,11 @@
     "ni_record": "C5_2_PART_D_assets/ni_rd3_ni_record/RD3_NI_RECORD.json",
     "ni_record_sha256": "c8bcfacc67a27b3ecf797787683ca5c8749ec42cc6115d41da3286a904ccd242",
     "fe_b2_record": "C5_2_PART_D_assets/fe_rd3_b2_record/RD3_FE_B2_RECORD.json",
-    "fe_b2_record_sha256": "455d9ea1027f024ab50ea978e494a999dff8d294a9648c569de701176e6b0862",
+    "fe_b2_record_sha256": "006f1d4c4380b89ce4c2708cc941583e2599ae72112273e3569b137b9c47c8e3",
     "a": "UNEVALUATED; three U0 local control mapping-fatal records; no ratio",
     "b": "UNEVALUATED; required KS hosts ended at finite B1 capacity guards",
     "c": "NOT_RUN",
-    "d": "Ni local and spectral RECORD; impurity windows 4-23 and 3-22, spectral accepted; no U0 ratio and no endpoint-bound LDOS maximum. Fe local candidate pending audit; one-step captures exit 0 but both Green and orbital grids differ, so LDOS not computed. B2FeCo seed inventory found no accepted restart; not evaluated."
+    "d": "Ni local and spectral RECORD; impurity windows 4-23 and 3-22, spectral accepted; no U0 ratio and no endpoint-bound LDOS maximum. Fe local endpoint accepted under \u00a72.1 at window 1-20; one-step captures exit 0 but both Green and orbital grids differ, so LDOS not computed. B2FeCo seed inventory found no accepted restart; not evaluated."
   },
   "RD4": {
     "status": "PREPARED_NOT_RUN",

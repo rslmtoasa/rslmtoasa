@@ -1,8 +1,8 @@
 {
   "schema": "c5_3_rd3_fe_b2_record_v1",
-  "fe_local_candidate_status": "CANDIDATE_AWAITING_INDEPENDENT_AUDIT_NOT_YET_ACCEPTED",
+  "fe_local_candidate_status": "ACCEPTED_UNDER_C5_2_SECTION_2_1_RAW_AUDIT",
   "fe_bulk_endpoint": "Fe U3.8/J1.1 RS bcc bulk accepted endpoint iteration 92; state 6e93e4141e8a84b1d4c3bac0d1f62997bf3c702e56e923f5c043e7becb86d16; P_OUT d 4.6519194389087062/1.8573696818368057; mtot 2.61403614983530890",
-  "fe_local_endpoint": "Fe U3.8/J1.1 local I beta .005 candidate window 1-20, pending auditor acceptance; state cb4b3b2f2eca12d48030e6e2447a619bbe53ed8f2ba61988818fde64dda165aa; d 4.6519207879528413/1.8573618222099855; mtot 2.61404594429375149",
+  "fe_local_endpoint": "Fe U3.8/J1.1 local I beta .005 accepted endpoint window 1-20 under independent \u00a72.1 raw audit; state cb4b3b2f2eca12d48030e6e2447a619bbe53ed8f2ba61988818fde64dda165aa; d 4.6519207879528413/1.8573618222099855; mtot 2.61404594429375149",
   "fe_local_minus_bulk_d_occupancy": [
     "+1.3490441351e-6",
     "-7.8596268202e-6"
@@ -11,5 +11,17 @@
   "fe_endpoint_d_ldos": "NOT_COMPUTED: one-step captures exit 0 but derived energy grids differ from distinct initial EF values; no interpolation or fabricated matching. Both Green and orbital d-LDOS remain unavailable.",
   "b2_feco": "NOT_EVALUATED; bounded search found no accepted B2 FeCo nsp1 U>0 local/spectral endpoint or fixed-U restart; RA1/RA3 are nstep=1 fixtures only; no new campaign or atomic substitution.",
   "files": "See SHA256SUMS; capture data includes compressed raw records.csv.gz with original raw SHAs and output verification metadata in capture_results.json.",
-  "status": "RECORD_ONLY; no thresholds or ratios invented."
+  "status": "RECORD_ONLY; no thresholds or ratios invented.",
+  "fe_local_endpoint_audit": {
+    "window": "iterations 1-20",
+    "same_loop_diff": "1.53e-8",
+    "d_q0_spin_spread": [
+      "5.26431165e-8",
+      "4.196629e-7"
+    ],
+    "physical_q0_moment_spread": "3.9331755164e-7",
+    "endpoint_state_sha256": "cb4b3b2f2eca12d48030e6e2447a619bbe53ed8f2ba61988818fde64dda165aa",
+    "auditor": "independent raw verification confirmed"
+  },
+  "historical_candidate_record_note": "The copied candidate_record.json retains its contemporaneous pending-audit label; this record binds the subsequent independent acceptance."
 }
