@@ -923,15 +923,7 @@ contains
 
       call root_info('reciprocal%build_kspace_hamiltonian: K-space Hamiltonian built successfully', __FILE__, __LINE__)
 #ifdef RSLMTO_DISABLE_FUSED_RECIPROCAL
-      if (trim(this%reciprocal_mode) == 'generalized_overlap_proxy') then
-         call this%build_kspace_overlap()
-      else if (trim(this%reciprocal_mode) == 'generalized_overlap_kanpur') then
-         call g_logger%warning('reciprocal%build_kspace_hamiltonian: generalized_overlap_kanpur requested but not implemented yet. Using ham_only solve path.', __FILE__, __LINE__)
-      end if
-#else
-      if (trim(this%reciprocal_mode) == 'generalized_overlap_kanpur') then
-         call g_logger%warning('reciprocal%build_kspace_hamiltonian: generalized_overlap_kanpur requested but not implemented yet. Using ham_only solve path.', __FILE__, __LINE__)
-      end if
+      if (trim(this%reciprocal_mode) == 'generalized_overlap_proxy') call this%build_kspace_overlap()
 #endif
       
       ! Diagnostic: Check H(k) at Gamma point for multi-site systems

@@ -8,8 +8,10 @@ Overview
 ========
 
 The reciprocal-space workflow is controlled from ``&reciprocal`` with
-``kspace_ham_order``. All active paths build a standard Hermitian
-Hamiltonian and solve with identity overlap.
+``kspace_ham_order``. All ``reciprocal_mode='ham_only'`` paths build a
+standard Hermitian Hamiltonian and solve with identity overlap.
+``reciprocal_mode='generalized_overlap_proxy'`` solves with ``S = I + eeo`` and is not a formal Kanpur overlap;
+``reciprocal_mode='generalized_overlap_kanpur'`` is not implemented and stops the run.
 
 Available options:
 
