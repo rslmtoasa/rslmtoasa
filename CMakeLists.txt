@@ -1193,6 +1193,11 @@ add_test(NAME AppGbtKspaceNio_i2
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_nio.py" i2 "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/nio_i2")
 add_test(NAME AppGbtKspaceNio_guard
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_nio.py" guard "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/nio_guard")
+foreach(mode rotation collinear guards)
+  add_test(NAME AppKspaceOrthogonalScf_${mode}
+    COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_orthogonal_scf.py" ${mode} "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/orthogonal_scf_${mode}")
+  set_tests_properties(AppKspaceOrthogonalScf_${mode} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
+endforeach()
 add_test(NAME AppGbtKspaceSymmetry
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_symmetry.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/symmetry")
 add_test(NAME AppGbtKspaceOrthogonal
