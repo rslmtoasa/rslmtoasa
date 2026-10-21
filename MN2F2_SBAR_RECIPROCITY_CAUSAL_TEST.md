@@ -10,13 +10,14 @@ unchanged frozen potentials. Restoring only the real-basis Sbar reciprocity
 restores Hermitian Hamiltonian ingredients, suppresses forbidden G01/Gx1
 orbital blocks, and removes the dominant time-odd longitudinal Dx. The numerical
 tables below distinguish surviving residuals from exact symmetry restoration.
+The [110]/[-1-10] extension below also completed both full intervention runs.
 No incomplete, interrupted or file-replacement-only run is endpoint evidence.
 
 This is a fixed-potential intervention, not an SCF calculation or a study of
 screening convergence. Screening cutoffs, real-space sums, HoH, SOC, recursion,
 energy grid, atom files and exchange formulas are unchanged. Neither Dx nor any
-GF component is set to zero. Diagonal domains and lambda interpolation have not
-been run in this task.
+GF component is set to zero. Both diagonal domains were subsequently run in
+the extension below; lambda interpolation has not been run.
 
 ## Intervention and binary validation
 
@@ -453,13 +454,184 @@ Shell summary (all 24 ordered pairs, maximum absolute changes in mRy):
 
 The private compact numerical archive retains all bondwise D/CC/SC vectors, full H maximum/Frobenius residuals, orbital trace angular-parity resolution and even/odd domain residuals.
 
+## Diagonal [110] reciprocity extension
+
+Both full 24-pair diagonal-domain intervention runs completed with the same
+executable SHA256 used above, original energy/recursion settings and unchanged
+saved potentials. Each working copy changes only `sbar.` and announces the
+diagnostic override. Independent projection of each diagonal original binary
+gives the same reciprocal binary hash as the axial projection. No physical
+exchange formula, screening parameter or SCF input was changed.
+
+All these tested bond vectors have Rz=0. The magnetic mz*T operation survives
+for the in-plane [110] spin direction. The orbital mirror signs given above
+therefore forbid both x and y CC/SC traces individually in the ideal symmetry.
+C2x is not a stabilizer for this domain and is excluded from the controls.
+Finite Dz remains symmetry allowed.
+
+The original-exchange benchmark below is the supplied fixture output, previously
+reproduced in the GF audit. This extension does not claim a newly executed
+unsymmetrized diagonal baseline. The reciprocal results are fresh calculations.
+
+### Sums and bondwise maxima
+
+The sums cover the 12 Mn1-to-Mn2 bonds; maxima cover all 24 ordered pairs.
+All exchange values in these tables are in mRy.
+
+Both in-plane components are suppressed bond by bond: the maximum total
+residual is about `1.38e-11` mRy, compared with the original `2.75e-7` mRy.
+Across both domains, the largest even Dx/Dy parts are `1.378610e-11` /
+`1.378434e-11` mRy; the largest odd parts are `1.432105e-13` /
+`1.434080e-13` mRy. Thus the remaining signal is predominantly even, but neither
+component is claimed to be mathematically zero. Net Dz remains finite.
+
+| Domain | Component | Original sum | Reciprocal sum | Original max bond | Reciprocal max bond |
+|---|---|---|---|---|---|
+| 110 | Dx | 1.2871968700e-06 | -6.4305000000e-16 | 2.7497560000e-07 | 1.3797850000e-11 |
+| 110 | Dy | 1.2871968800e-06 | 4.8851900000e-15 | 2.7497560000e-07 | 1.3795230000e-11 |
+| 110 | Dz | 4.3708678000e-03 | 4.3708714000e-03 | 2.5956400000e-03 | 2.5957160000e-03 |
+| 1-1-0 | Dx | -1.2871967800e-06 | -6.7696100000e-15 | 2.7497550000e-07 | 1.3774350000e-11 |
+| 1-1-0 | Dy | -1.2871967800e-06 | 3.1438600000e-15 | 2.7497550000e-07 | 1.3773450000e-11 |
+| 1-1-0 | Dz | 4.3706562000e-03 | 4.3706596000e-03 | 2.5955860000e-03 | 2.5956620000e-03 |
+
+Same-ordered-bond magnetic-domain parity of the sums:
+
+| Component | Parity | Original benchmark | Reciprocal |
+|---|---|---|---|
+| Dx | odd | 1.2871968250e-06 | 3.0632800000e-15 |
+| Dx | even | 4.5000000163e-14 | -3.7063300000e-15 |
+| Dy | odd | 1.2871968300e-06 | 8.7066500000e-16 |
+| Dy | even | 4.9999999970e-14 | 4.0145250000e-15 |
+| Dz | odd | 1.0580000000e-07 | 1.0590000000e-07 |
+| Dz | even | 4.3707620000e-03 | 4.3707655000e-03 |
+| CCx | odd | 4.2972548500e-07 | 7.0541750000e-16 |
+| CCx | even | 2.5000000011e-14 | 3.8325750000e-16 |
+| CCy | odd | 4.2972548500e-07 | 5.6320000000e-16 |
+| CCy | even | 1.5000000001e-14 | 6.6463000000e-16 |
+| CCz | odd | -1.9999999920e-11 | 0.0000000000e+00 |
+| CCz | even | 1.7891360900e-03 | 1.7891458820e-03 |
+| SCx | odd | 8.5747126100e-07 | 2.3542500000e-15 |
+| SCx | even | -5.7000000154e-14 | -4.0876500000e-15 |
+| SCy | odd | 8.5747126100e-07 | 3.0515000000e-16 |
+| SCy | even | -5.7000000048e-14 | 3.3547500000e-15 |
+| SCz | odd | 1.0480000000e-07 | 1.0490000000e-07 |
+| SCz | even | 2.5816260000e-03 | 2.5816205000e-03 |
+
+The two diagonal saved states are not exact time-reversed inputs: the prior input audit measured an F moment-direction reversal residual of `2.20819e-4` in unit-direction parameters. Therefore the z odd residual is also reported rather than silently imposing exact domain reversal. This does not change the same-domain magnetic-mirror selection rule for x/y.
+
+
+Maximum absolute bondwise domain-parity components:
+
+| Component | Parity | Original benchmark | Reciprocal |
+|---|---|---|---|
+| Dx | odd | 2.7496780000e-07 | 1.4321050000e-13 |
+| Dx | even | 1.3800000000e-11 | 1.3786100000e-11 |
+| Dy | odd | 2.7496780000e-07 | 1.4340800000e-13 |
+| Dy | even | 1.3800000000e-11 | 1.3784340000e-11 |
+
+All [110] bonds, with Dz changes retained:
+
+| Pair | Original Dx | Original Dy | Reciprocal Dx | Reciprocal Dy | Reciprocal Dz | delta Dz |
+|---|---|---|---|---|---|---|
+| 1 | 2.7494800000e-07 | 2.7494800000e-07 | -1.3797850000e-11 | -1.3794190000e-11 | -8.3006500000e-04 | -7.0500000000e-08 |
+| 2 | 2.7497180000e-07 | 2.7496350000e-07 | 4.1720690000e-12 | -4.1726960000e-12 | 2.5957160000e-03 | 7.6000000000e-08 |
+| 3 | 2.7497560000e-07 | 2.7497560000e-07 | 1.3795650000e-11 | 1.3795230000e-11 | -8.3006500000e-04 | -7.0500000000e-08 |
+| 4 | 2.7496350000e-07 | 2.7497180000e-07 | -4.1723880000e-12 | 4.1746620000e-12 | 2.5957160000e-03 | 7.6000000000e-08 |
+| 5 | -6.1213520000e-12 | -1.2439900000e-11 | -6.1446860000e-12 | -1.2470530000e-11 | -6.6104480000e-15 | -1.3452603000e-14 |
+| 6 | 4.5164540000e-12 | 4.5707960000e-12 | 4.5394290000e-12 | 4.5932930000e-12 | -1.5243410000e-15 | -2.2628273000e-15 |
+| 7 | -4.5176080000e-12 | -4.5699640000e-12 | -4.5393150000e-12 | -4.5898150000e-12 | 4.7075250000e-15 | 7.6558330000e-15 |
+| 8 | 6.1222700000e-12 | 1.2439520000e-11 | 6.1383890000e-12 | 1.2468380000e-11 | 7.9213470000e-15 | 1.3490058000e-14 |
+| 9 | -1.8745770000e-12 | 3.8843820000e-12 | -1.8723680000e-12 | 3.8864890000e-12 | -4.2821820000e-16 | -1.0317990000e-16 |
+| 10 | -1.2971420000e-12 | -1.9932490000e-12 | -1.3007520000e-12 | -2.0050050000e-12 | 1.1135170000e-15 | -3.6125000000e-16 |
+| 11 | 1.2985410000e-12 | 1.9934910000e-12 | 1.3011510000e-12 | 2.0041130000e-12 | 8.0643020000e-16 | 1.7763406000e-15 |
+| 12 | 1.8761200000e-12 | -3.8839110000e-12 | 1.8717290000e-12 | -3.8862040000e-12 | -8.2730860000e-16 | -5.4228910000e-16 |
+| 13 | 2.3803250000e-08 | 2.3012170000e-08 | -1.5957110000e-12 | 3.1529400000e-13 | 4.0963020000e-04 | -5.5000000000e-09 |
+| 14 | 2.3047690000e-08 | 2.3804510000e-08 | -5.1311150000e-14 | -7.3527310000e-14 | -1.9973790000e-04 | 3.6000000000e-09 |
+| 15 | 2.3011520000e-08 | 2.3806430000e-08 | -3.1284480000e-13 | 1.5976770000e-12 | 4.0963040000e-04 | -5.5000000000e-09 |
+| 16 | 2.3804490000e-08 | 2.3047670000e-08 | -7.4142810000e-14 | -5.1686970000e-14 | -1.9973800000e-04 | 3.7000000000e-09 |
+| 17 | 2.3804640000e-08 | 2.3047770000e-08 | 7.4532190000e-14 | 5.2258770000e-14 | -1.9973800000e-04 | 3.7000000000e-09 |
+| 18 | 2.3012150000e-08 | 2.3803230000e-08 | 3.1320470000e-13 | -1.5966350000e-12 | 4.0963040000e-04 | -5.5000000000e-09 |
+| 19 | 2.3047790000e-08 | 2.3804660000e-08 | 5.2257820000e-14 | 7.3822600000e-14 | -1.9973790000e-04 | 3.6000000000e-09 |
+| 20 | 2.3806440000e-08 | 2.3011540000e-08 | 1.5958910000e-12 | -3.1532390000e-13 | 4.0963020000e-04 | -5.5000000000e-09 |
+| 21 | 1.2247630000e-12 | 1.4207590000e-12 | 1.2210330000e-12 | 1.4149050000e-12 | -8.4509010000e-16 | -4.1964461000e-15 |
+| 22 | -5.8052930000e-13 | -1.5175390000e-13 | -5.8175820000e-13 | -1.5725360000e-13 | -1.7707820000e-15 | -2.3146954000e-15 |
+| 23 | 5.8091500000e-13 | 1.5233930000e-13 | 5.8194280000e-13 | 1.5451040000e-13 | 1.0124300000e-15 | 7.5818250000e-16 |
+| 24 | -1.2218580000e-12 | -1.4197110000e-12 | -1.2186620000e-12 | -1.4158800000e-12 | 1.8192820000e-15 | 3.4190560000e-15 |
+
+Allowed exchange shifts, maximum absolute differences (mRy):
+
+| Domain | max delta Dz | max delta Jijso |
+|---|---|---|
+| 110 | 7.6000000000e-08 | 9.0000000004e-06 |
+| 1-1-0 | 7.6000000000e-08 | 9.0000000004e-06 |
+
+### Hamiltonian and individual GF controls
+
+| Domain | Full graph bare-H max (Ry) | Full graph bare-H Fro (Ry) | Effective pair max (Ry) | Effective onsite max (Ry) | Direct mz*T max (Ry) |
+|---|---|---|---|---|---|
+| 110 | 2.7755575616e-17 | 5.2410730530e-15 | 3.8857805862e-16 | 8.3466570465e-17 | 1.2049236609e-10 |
+| 1-1-0 | 1.3877791716e-17 | 5.1886201652e-15 | 2.2921992997e-16 | 8.3267071505e-17 | 1.2039427793e-10 |
+
+All-edge O/energy-centre/SOC Hermiticity controls and weighted-h identity checks remain in the private compact result. No dense full effective-H matrix was constructed.
+
+Maximum forbidden/allowed orbital Frobenius norms over 24 bonds, 64 sampled energies and both directions, in inverse Ry. The mirror residual is twice the forbidden norm.
+
+| Domain | Sector | Forbidden | Allowed |
+|---|---|---|---|
+| 110 | G00 | 1.7740648790e-08 | 1.7508674305e+01 |
+| 110 | G01 | 6.3916643992e-10 | 1.3579053025e+00 |
+| 110 | Gx0 | 1.3869253472e-08 | 1.1405062920e+01 |
+| 110 | Gx1 | 5.1107035205e-10 | 9.8173087630e-01 |
+| 110 | Gy0 | 1.3848390960e-08 | 1.1404963557e+01 |
+| 110 | Gy1 | 5.9948007953e-10 | 9.5301894974e-01 |
+| 110 | Gz0 | 2.7686475650e-10 | 3.8688758773e-01 |
+| 110 | Gz1 | 8.0886572312e-10 | 5.0067523203e-01 |
+| 1-1-0 | G00 | 1.8190954394e-08 | 1.7508675470e+01 |
+| 1-1-0 | G01 | 6.3638338204e-10 | 1.3579054067e+00 |
+| 1-1-0 | Gx0 | 1.4201879473e-08 | 1.1405063804e+01 |
+| 1-1-0 | Gx1 | 5.0903022159e-10 | 9.8173094344e-01 |
+| 1-1-0 | Gy0 | 1.4211847791e-08 | 1.1404964433e+01 |
+| 1-1-0 | Gy1 | 5.9732314590e-10 | 9.5301903750e-01 |
+| 1-1-0 | Gz0 | 2.7545962767e-10 | 3.8688758083e-01 |
+| 1-1-0 | Gz1 | 8.2965087151e-10 | 5.0067520660e-01 |
+
+Read-only reconstruction controls:
+
+| Domain | Raw magnetic-mirror Fro max (1/Ry) | Sector reconstruction max (1/Ry) | Delta mirror max (Ry) | CC/SC trace max error |
+|---|---|---|---|---|
+| 110 | 7.4807338319e-08 | 0.0000000000e+00 | 0.0000000000e+00 | 6.9388939039e-18 |
+| 1-1-0 | 7.6695169918e-08 | 0.0000000000e+00 | 0.0000000000e+00 | 6.9388939039e-18 |
+
+Remaining occupied sampled real trace contributions, dimensionless, maximum absolute value. All-allowed and all-forbidden x/y terms are structurally zero by opposite mirror signs.
+
+| Domain | Trace | Allowed/forbidden | Forbidden/allowed |
+|---|---|---|---|
+| 110 | CCx | 7.3336973763e-11 | 5.2842254952e-11 |
+| 110 | SCx | 4.8330877569e-11 | 7.0935271966e-11 |
+| 110 | CCy | 7.2787340206e-11 | 5.2615175572e-11 |
+| 110 | SCy | 4.6899978711e-11 | 6.2737975849e-11 |
+| 1-1-0 | CCx | 7.4063579280e-11 | 5.3252620799e-11 |
+| 1-1-0 | SCx | 4.8735214858e-11 | 7.1666164269e-11 |
+| 1-1-0 | CCy | 7.3531744111e-11 | 5.3027027833e-11 |
+| 1-1-0 | SCy | 4.7347490805e-11 | 6.3364213960e-11 |
+
+These are measured residuals, not values imposed by projection of a GF or exchange vector. The separate Sbar intervention restores Hermitian ingredients; remaining saved-input symmetry differences and finite arithmetic are retained. The private diagonal summary includes all D/CC/SC vectors and raw-domain parity controls.
+
+The original diagonal audit found G01/Gx1/Gy1 mirror Frobenius residuals of
+approximately `8.82e-6` / `3.86e-6` / `3.86e-6` inverse Ry. The fresh reciprocal
+[110] values are `1.27833e-9` / `1.02214e-9` / `1.19896e-9` inverse Ry.
+Delta mirror commutators are exactly zero in the dumps, and CC/SC trace
+reconstruction agrees with production to `6.94e-18`. The suppression therefore
+appears in the individual orbital matrices before their physical contractions,
+in addition to the bondwise and summed exchange outputs.
+
 ## Validation and reproducibility
 
-The 24-test suite passes, including shuffled reverse pairs, onsite, Mn-F and F-F,
+The 25-test suite passes, including shuffled reverse pairs, onsite, Mn-F and F-F,
 missing/ambiguous partners, format errors, exclusive writes, marker preservation,
 byte idempotence, actual Fortran input loading/rejection, graph checks,
 failed/modified-input rejection and known even-scalar/odd-vector leakage parity.
-CI commit `2d5d49c44fdaab08b5e43379e35410ac8316efcb` passes all platform builds; the diagnostic suite runs on Linux/macOS. The GNU Fortran 13.3 build passes. Production exchange, Green-function,
+CI commit `97e048bc4545f49f501d08056f85da0d418637b8` passes all platform builds; the diagnostic suite runs on Linux/macOS. The GNU Fortran 13.3 build passes. Production exchange, Green-function,
 recursion, Hamiltonian and screening formulas have no source diff.
 
 See [diagnostic run instructions](diagnostics/gf_symmetry/README.md#frozen-input-reciprocity-intervention).
@@ -504,3 +676,5 @@ counterfactual is not a prediction from a newly self-consistent electronic state
 | Physical DMI contractions/integration, unchanged | [exchange.f90](source/exchange.f90#L1176) |
 | Fresh-copy runner and hashes | [run_saved.py](diagnostics/gf_symmetry/run_saved.py) |
 | Complete-run parity and trace analysis | [causal_summary.py](diagnostics/gf_symmetry/causal_summary.py) |
+
+The diagonal endpoint summary is generated by [diagonal_summary.py](diagnostics/gf_symmetry/diagonal_summary.py).
