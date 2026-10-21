@@ -19,6 +19,17 @@ Available options:
 - ``kspace_ham_order='first'``: first-order ``h(k) + H_LS`` Hamiltonian.
 - ``kspace_ham_order='auto'``: use the default production path.
 - ``kspace_ham_order='proper'``: deprecated alias for ``second``.
+- ``kspace_ham_order='orthogonal'``: exact-ASA ``H^gamma = C + sqrt(Delta) S^gamma sqrt(Delta)``,
+  ``S^gamma = S^alpha [1 - (gamma - alpha) S^alpha]^-1`` (Kanpur 2.47, 3.39, 3.41), built from the orthogonal-representation
+  parameters ``c``, ``srdel`` and ``qpar`` of the potential. It works for the fixed-potential force theorem (``gbt_single_q``) and for
+  the self-consistent ``periodic_nc`` and collinear (``nsp = 1``) k-space runs, where the local frames follow the current moment
+  directions each iteration (the collinear run keeps the lab spin channels). It needs ``hoh = .false.``, no SOC, no ``ccor_2c`` and,
+  outside ``gbt_single_q``, no constraining fields; each of these stops the run.
+
+``kspace_ham_order`` is read by the k-space (``reciprocal``) code only and is never read on the real-space path. A k-space host that
+serves a real-space impurity run is converged in the real-space Hamiltonian order (``hoh``, with or without ``ccor_2c``), not in
+``'orthogonal'``: the real-space route has no ``'orthogonal'`` Hamiltonian, so a host in that order would not be the host the impurity
+run assumes.
 
 Current Functionality Inventory
 ===============================
