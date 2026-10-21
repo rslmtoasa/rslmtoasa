@@ -812,3 +812,34 @@ Reply: “Yes—three campaign runs; verification separate”.
 Count T1/T2 campaigns, including failed starts and continuations, against the three-run cap.
 Track required identity, unit, and §7 verification invocations separately; they do not consume
 the campaign-run cap.
+
+## C5.6
+
+C5.6 (user-approved; record verbatim in C5_AMENDMENT.md). OBJECTIVE: finish T2-T4 of C5.5.
+Token rules as in C5.4. Budget: the 2 remaining SCF runs.
+
+T0 Disk: delete raw run directories under /private/tmp that belong to CLOSED items
+   (RA4, RB, C3, C4, C5 Parts A-B, RD1-RD3) whose compact evidence is committed.
+   Keep:
+     - the accepted checkpoints that later items use as hosts or references (KS Fe U=2,
+       Ni RS-local host, the Ni U=0 control);
+     - the user's Co files.
+   Report the freed space.
+
+T2a Regenerate the KS Fe host:
+   - KS bcc Fe U=2 eV, J=0, auto mode, restarted from the accepted KS Fe state with the current
+     binary.
+   - Continue until KS-accepted (expect a few steps; ladder steps 1-2 at most).
+   - Confirm the written potential file carries mode=local and backend=ks.
+
+T2b KS-host smoke GATE as in C5.5 T2, using the regenerated host.
+
+T3 As in C5.5 T3, plus: for any U-carrying host file without provenance, log a WARNING stating
+   that its mode is unknown, that it is treated as spectral, and that the user should restart the
+   host once with the current version to record its mode. Add a unit test for the warning.
+   Add the same note to lda_u_workflow.rst.
+
+T4 Local merge per C5.2 §7. Report the SHA. Do not push.
+
+If T2a or T2b fails: commit the records and stop with a 5-line summary.
+Uncovered outcomes: C5.3 item 2.
