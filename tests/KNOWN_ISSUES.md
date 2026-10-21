@@ -1856,3 +1856,9 @@ campaign remain outside the established scope.
 ## [INFORMATIONAL] RS/KS identity checks and thread counts
 
 RS/KS results are not bitwise reproducible across thread counts (reduction order, ~1e-15 relative). Use single-thread runs for identity checks.
+
+## [OPEN, 2026-10-21] Ni impurity W1 lambda-zero SIGSEGV in optimized builds
+
+- **Symptom:** the same frozen Ni lambda=0 W1 deck exits with SIGSEGV during the first recursion in Release and RelWithDebInfo. The RelWithDebInfo run reaches the d-shell physicality diagnostics for l=1, spin=2, then reports only three raw address frames; no complete SCF trace or endpoint is produced.
+- **Evidence:** the fresh RelWithDebInfo replay, exact input hashes, source/build provenance, preflight and raw log are recorded in [`C5_4_T4_RD4.json`](../docs/validation/fixed_ldau/rs/C5_4_T4_RD4.json). The prior Debug bounds run passed 36 loops without a bounds error or backtrace; this does not identify the optimized-build crash cause.
+- **Disposition:** OPEN; no cause or fix claimed. The RD4 W1 energy series is not measured, energy routing remains off, and no diagnostic energy term is adopted.

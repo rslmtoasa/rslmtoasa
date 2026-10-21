@@ -8,7 +8,7 @@ THREADS = {"OMP_NUM_THREADS": "1", "OMP_DYNAMIC": "FALSE",
  "RSLMTO_OMP_THREADS_SERIAL": "1", "OPENBLAS_NUM_THREADS": "1",
  "MKL_NUM_THREADS": "1", "VECLIB_MAXIMUM_THREADS": "1",
  "BLIS_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1"}
-SCHEMA = source_schema(REPO)
+SCHEMA_ROOT=Path(os.environ.get("C5_4_PREFLIGHT_SOURCE_ROOT", REPO)); SCHEMA = source_schema(SCHEMA_ROOT)
 def validate(nml, path):
     ignored=[]
     for group, values in nml.items():
@@ -52,7 +52,7 @@ def check(run, deck, restart, guard):
         raise SystemExit("Ni d orbital channel absent from actual restart source")
     print(json.dumps({"status":"PASS", "deck":str(deck), "recur":ctl["recur"],
       "use_kspace":use_kspace, "use_kspace_source":default_source,
-      "unconsumed_groups":sorted(set(ignored)), "restart_source":str(restart) if restart else None,
+      "unconsumed_groups":sorted(set(ignored)), "schema_source":str(SCHEMA_ROOT), "restart_source":str(restart) if restart else None,
       "available_orbital_channels": ["d"] if restart else [],
       "fresh_run_dir":str(run), "thread_caps":THREADS}, indent=2))
 def offline(run, payload, base, driver, binding):

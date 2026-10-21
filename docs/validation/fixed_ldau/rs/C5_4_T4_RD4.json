@@ -1,0 +1,84 @@
+{
+  "schema": "c5_4_t4_rd4_diagnostic_v1",
+  "status": "RD4_NOT_MEASURED_RWD_REPRODUCED_SIGSEGV_NO_SYMBOLIZED_STACK_ENERGY_OFF",
+  "budget": {
+    "after_T3": "5/8",
+    "T4_solver_invocations": 1,
+    "cumulative": "6/8",
+    "remaining": 2,
+    "unspent_reason": "The five-point Debug W1 series plus the required RWD crash replay exceeds the remaining three-slot allocation; a partial series has no RD4 table decision value."
+  },
+  "debug_W1_series": {
+    "lambda_Ry": [0.0, 0.0025, -0.0025, 0.005, -0.005],
+    "status": "NOT_MEASURED",
+    "decision": "No Debug lambda points were launched. The Release T3 U0 control is not a Debug lambda0 anchor; no exact binary/build/trace-energy equivalence was established.",
+    "rd4_table_verdict": "NOT_APPLIED",
+    "physical_energy_routing": "OFF; no adoption"
+  },
+  "same_deck_rwd_crash_replay": {
+    "status": "SIGSEGV_REPRODUCED",
+    "prior_release_binary_sha256": "9b0b339bac638bcafcc572b7feebba601d42e72fb81d7ee8d37f5cb3cb1bfa54",
+    "rwd_binary": "/private/tmp/c54-t4-rwd/build/bin/rslmto.x",
+    "rwd_binary_sha256": "6664d034308fd8d068b1a5ba96960c539343dc1bc12bf5d38e556a0c3e2a031a",
+    "source_tree": "/private/tmp/c52-rd4-w1-build/source",
+    "source_tree_manifest": "/private/tmp/c52-rd4-w1-private/triage_001/SOURCE_TREE_MANIFEST.json",
+    "source_tree_manifest_sha256": "a5d100a13f74eb4ceac871a3f35d9f92dd80284da5d9e91d1716b2e62d5495e4",
+    "instrumentation_patch_sha256": "715833673d20d3614e16838f5165bf7980e33ae6697c298bb6486dbb1e680cf5",
+    "build": {
+      "type": "RelWithDebInfo",
+      "fortran_flags": "-g -O2 -fbacktrace (CMake effective flags also include the default -O2 -g -fbacktrace)",
+      "jobs": 1,
+      "build_exit_code": 0,
+      "build_cache_sha256": "56cc8af585949c20943423af7764485a444072aae841a2df7bdca879a7b7bbe6"
+    },
+    "preflight": {
+      "script": "docs/validation/fixed_ldau/rs/C5_4_PREFLIGHT.py",
+      "result": "PASS",
+      "schema_source": "/private/tmp/c52-rd4-w1-build/source",
+      "record": "/private/tmp/c54-t4-rwd/preflight.json",
+      "sha256": "3ecc17f3b0e2a118b327faa2438c3f1d8f89fd3d41d65cd49f3b48fbf25ce569"
+    },
+    "input_hashes": {
+      "input.nml": "1f63c85f66c328811d9c0ef99f3e82454491ec40dbffcffdff455ec48e26e14c",
+      "Ni-bulk.nml": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+      "Ni-bulk_out.nml": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4",
+      "Ni-imp.nml": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+      "Ni-imp_out.nml": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    "run_dir": "/private/tmp/c54-t4-rwd/run01",
+    "solver_exit_code": 139,
+    "crash_phase": "first recursion; after l=1, spin=2 HUBBARD_LDM_PHYSICALITY diagnostics and before a complete SCF trace entry",
+    "backtrace": {
+      "captured_in": "/private/tmp/c54-t4-rwd/run01/testrun.log",
+      "log_sha256": "0c81062346a7b8bb5bb471147176f94a05f2c69caddf6c8035dc36b871e43e8f",
+      "frames_printed": 3,
+      "symbolized": false,
+      "classification": "Crash reproduced; stack contains addresses only and does not identify a source frame. No crash cause or fix claimed."
+    },
+    "raw_capture": {
+      "fixed_u_trace": "/private/tmp/c54-t4-rwd/run01/fixed_u_trace.csv",
+      "bytes": 120412624,
+      "sha256": "59d49886bb6424576e49f9877e55819976954bc6ddfec5d023063f34c9a55585",
+      "per_iteration_manifest": "/private/tmp/c54-t4-rwd/run01/captures/trace_state_manifest.jsonl",
+      "manifest_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "complete_iteration_state_pairs": 0
+    },
+    "thread_caps": {
+      "OMP_NUM_THREADS": 1,
+      "OMP_DYNAMIC": false,
+      "RSLMTO_OMP_THREADS_SERIAL": 1,
+      "OPENBLAS_NUM_THREADS": 1,
+      "MKL_NUM_THREADS": 1,
+      "VECLIB_MAXIMUM_THREADS": 1,
+      "BLIS_NUM_THREADS": 1,
+      "NUMEXPR_NUM_THREADS": 1
+    },
+    "core_dump": "disabled; Fortran backtrace is preserved in testrun.log"
+  },
+  "known_issue": {
+    "status": "OPEN",
+    "entry": "tests/KNOWN_ISSUES.md",
+    "disposition": "The same lambda0 first-recursion SIGSEGV reproduces in Release and RelWithDebInfo. Prior Debug bounds run passed 36 loops without a bounds failure/backtrace, which does not explain or clear the optimized-build crash. No crash fix made."
+  },
+  "adoption": "No RD4 energy adoption; energy routing remains off."
+}
