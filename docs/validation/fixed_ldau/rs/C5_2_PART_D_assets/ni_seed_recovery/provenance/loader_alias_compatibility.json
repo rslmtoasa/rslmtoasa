@@ -1,0 +1,43 @@
+{
+  "schema": "c5_2_ni_seed_loader_proof_v1",
+  "status": "SOURCE_AUDIT_ONLY; NO_LAUNCH",
+  "seed_path": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql/Ni-imp_out.nml",
+  "seed_sha256": "addd6667159c9e4a5b6e4d3ff575143281877fb0b3c78832dccead1a34735e2d",
+  "method": "Use the existing stored potential unchanged under its original basename in a writable run copy; set the input atom label to Ni-imp so original constructors resolve Ni-imp_out.nml directly. Keep an immutable verified source copy outside the run directory. The candidate input must leave fresh_start false so reload is enabled. This avoids rewriting the serialized symbol, U/J, ql/pl, or any other potential fields.",
+  "compatibility_facts": [
+    "symbolic_atom_mod selected_symbolic_atom_source checks <label>_out.nml first when reload is true and marks it as a restart.",
+    "symbolic_atom constructor passes the same label/database/reload to element and potential constructors.",
+    "element and potential constructors independently prefer <label>_out.nml and parse the existing namelists.",
+    "the endpoint has lmax=2 matching the proposal basis; build_from_file stores its arrays at the active lmax and zero U/J make hubbard_file_has_uj false.",
+    "fresh_start false is the default and load_symbolic_atoms_if_needed calls array_of_symbolic_atoms with reload=.not.fresh_start.",
+    "SCF save routines use the parsed element%symbol for output names; with unchanged Ni-imp symbol, output remains Ni-imp_*."
+  ],
+  "source_files": [
+    {
+      "path": "source/symbolic_atom.f90",
+      "sha256": "852d1d3c56f8bd682aa3edeee8f4acacab66c52b7b9535004cf5d8cbfffe9eb6",
+      "lines": "123-157, 172-194, 805-812, 847-854, 889-896, 937-950"
+    },
+    {
+      "path": "source/potential.f90",
+      "sha256": "368fb1e7602b72bf12a806a303a2d6ed111e1dc4eb94cb154264366306497c2e",
+      "lines": "177-208, 227-245, 440-448"
+    },
+    {
+      "path": "source/element.f90",
+      "sha256": "8696d94cf5363442245b664c90f2828ace1c601a78b9af41e1bf2c5263c5d805",
+      "lines": "78-108, 130-166"
+    },
+    {
+      "path": "source/lattice_strux.f90",
+      "sha256": "50a3c1270ad6b54025e503b99d89f5906a62f1e72b02b830ea83a971b390345d",
+      "lines": "194-199"
+    },
+    {
+      "path": "source/control.f90",
+      "sha256": "99a2d8ade20302d0aa8b05a8e4bf4b84b484713d9002ce3b7bbcb4b919243184",
+      "lines": "598"
+    }
+  ],
+  "launch_precondition": "Before future launch, audit exact run input/database resolution, ensure source copy hash and mutable working Ni-imp_out.nml hash both equal the accepted endpoint SHA before process start, and confirm startup reports Ni-imp_out.nml as loaded restart. No alias-file content edits are permitted."
+}

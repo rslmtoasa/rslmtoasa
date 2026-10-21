@@ -9,15 +9,17 @@
 ! included exactly once in H.
 program projector_multisite_frozen_h
    use precision_mod, only: rp
-   use basis_mod, only: basis_init, nb, norb, lmax_basis
-   use math_mod, only: init_math_operators, pi, simpson_m, hubbard_spectral_density_element
+   use basis_mod, only: basis_init, nb, norb, spin_off, lmax_basis
+   use math_mod, only: init_math_operators, pi, simpson_m, hubbard_spectral_density_element, &
+      correct_d_shell_moments, extract_hubbard_d_shell_potential
    use logger_mod, only: g_logger
    use mpi_mod, only: rank, numprocs, ierr, atoms_per_process, start_atom, end_atom, g2l_map, &
                       get_mpi_variables, parallel_context, assignment(=)
    use control_mod, only: control
    use lattice_mod, only: lattice
    use charge_mod, only: charge
-   use hamiltonian_mod, only: hamiltonian
+   use hamiltonian_mod, only: hamiltonian, rd1_vin_ok, rd1_vin_not_recursion_site, rd1_vin_duplicate, &
+      rd1_vin_wrong_type, rd1_vin_missing_or_stale
    use energy_mod, only: energy
    use recursion_mod, only: recursion
    use density_of_states_mod, only: dos
@@ -216,6 +218,8 @@ program projector_multisite_frozen_h
    end do
    if (rs_m1_transpose_mismatch < tol_wrong_m1) failed = .true.
 
+   call test_rd1_recursive_vin_oracle()
+
 #ifdef USE_MPI
    call reduce_failure(failed)
 #endif
@@ -262,6 +266,267 @@ program projector_multisite_frozen_h
    if (failed) error stop 1
 
 contains
+
+   subroutine test_rd1_recursive_vin_oracle()
+      integer :: nspinorb
+      integer :: spin_id, i, j, site_i, site_j, orb_i, orb_j, row_i, row_j, state
+      integer :: info, lwork, status, extract_status, drow(5)
+      integer :: global_i, global_j, host_type, recursive_type, mapped_cluster, mapped_type
+      complex(rp), allocatable :: spin_h(:,:), h_total(:,:), hbare(:,:)
+      complex(rp) :: p_d(5,5), m1_d(5,5), vin_d(5,5), host_vin(5,5)
+      complex(rp) :: captured(5,5,2), captured_valid(5,5,2), captured_probe(5,5,2), host_state_before(2,5,5)
+      complex(rp) :: work_query(1)
+      complex(rp), allocatable :: work(:), eigenvectors(:,:)
+      real(rp), allocatable :: eigenvalues(:), rwork(:)
+      real(rp) :: q0, center, q2, corrected_center, corrected_q2, t_value
+      real(rp) :: direct_center, direct_q2, wrong_center, wrong_q2, host_center_before
+      real(rp) :: oracle_error
+      integer :: saved_nrec, saved_nbulk
+      integer :: saved_nsp, saved_lmax
+      integer, allocatable :: saved_irec(:), saved_ib(:), saved_iz(:)
+      character :: saved_calctype
+      character(len=16) :: saved_radial_mode, saved_potential_form
+      character(len=16) :: saved_test_operator
+      logical :: saved_constraints, saved_general, saved_impurity, saved_sc, saved_v, saved_test, saved_hoh, saved_hoh_bypass
+      external :: zheev
+
+      nspinorb = nsites*norb
+      allocate(spin_h(nspinorb,nspinorb), h_total(nspinorb,nspinorb), hbare(nspinorb,nspinorb), &
+               eigenvalues(nspinorb), rwork(max(1,3*nspinorb-2)))
+      saved_nrec = lat%nrec
+      saved_nbulk = lat%nbulk
+      saved_nsp = ctl%nsp
+      saved_lmax = ctl%lmax
+      saved_calctype = ctl%calctype
+      saved_constraints = ctl%constraints_enable
+      saved_radial_mode = ham%hubbard_radial_moments
+      saved_potential_form = ham%hubbard_u_potential_form
+      saved_general = ham%hubbard_u_general_check
+      saved_impurity = ham%hubbard_u_impurity_check
+      saved_sc = ham%hubbard_u_sc_check
+      saved_v = ham%hubbard_v_check
+      saved_test = ham%hubbard_test_operator_check
+      saved_test_operator = ham%hubbard_test_operator
+      saved_hoh = ham%hoh
+      saved_hoh_bypass = ham%fixed_u_test_allow_hoh_w1_u0
+      saved_ib = lat%ib
+      saved_iz = lat%iz
+      if (allocated(lat%irec)) saved_irec = lat%irec
+      host_type = 1
+      recursive_type = 2
+      lat%nrec = 1
+      lat%nbulk = 1
+      if (allocated(lat%irec)) deallocate(lat%irec)
+      allocate(lat%irec(1))
+      lat%irec = [2]
+      ! Deliberately leave ib(1)=1 while irec(1)=2 and iz(2)=2.
+      lat%ib(1) = host_type
+      lat%iz(1) = host_type
+      lat%iz(2) = recursive_type
+      ctl%calctype = 'I'
+      ctl%nsp = 1
+      ctl%lmax = 2
+      ctl%constraints_enable = .false.
+      ham%hubbard_radial_moments = 'local'
+      ham%hubbard_u_potential_form = 'liechtenstein'
+      ham%hubbard_u_general_check = .true.
+      ham%hubbard_u_impurity_check = .false.
+      ham%hubbard_u_sc_check = .false.
+      ham%hubbard_v_check = .false.
+      ham%hubbard_test_operator_check = .false.
+      ham%fixed_u_test_allow_hoh_w1_u0 = .false.
+      ham%hoh = .false.
+      ham%hubbard_u_general_check = .false.
+      ham%hubbard_u_impurity_check = .true.
+      if (.not. ham%rd1_local_impurity_eligible()) failed = .true.
+      ham%hubbard_u_general_check = .true.
+      ham%hubbard_u_impurity_check = .false.
+      ham%hubbard_test_operator = 'w1'
+      ham%hubbard_test_operator_check = .true.
+      if (ham%rd1_local_impurity_eligible()) failed = .true.
+      call ham%get_rd1_recursion_site_type(1, mapped_cluster, mapped_type, status)
+      if (status /= rd1_vin_ok .or. mapped_cluster /= 2 .or. mapped_type /= recursive_type) failed = .true.
+      write(*,'(a,4(i0,1x))') 'RD1_CAPTURE map rec-index cluster type status=', 1, mapped_cluster, mapped_type, status
+      ham%hubbard_test_operator = saved_test_operator
+      ham%hubbard_test_operator_check = .false.
+      ham%hubbard_u_general_check = .true.
+      ham%hubbard_u_impurity_check = .true.
+
+      do spin_id = 1, 2
+         host_state_before(spin_id,:,:) = lat%symbolic_atoms(host_type)%potential%ldm(3, spin_id, 1:5, 1:5)
+      end do
+      host_center_before = lat%symbolic_atoms(host_type)%potential%gravity_center(3, 1)
+      call ham%begin_rd1_vin_capture(7, enable_rs_capture=.true.)
+      call ham%capture_rd1_vin_insertion(1, host_type, ham%hubbard_u_pot(:, :, host_type), status)
+      if (status /= rd1_vin_not_recursion_site) failed = .true.
+      call ham%capture_rd1_vin_insertion(2, host_type, ham%hubbard_u_pot(:, :, host_type), status)
+      if (status /= rd1_vin_wrong_type) failed = .true.
+      call ham%capture_rd1_vin_insertion(2, recursive_type, ham%hubbard_u_pot(:, :, recursive_type), status)
+      if (status /= rd1_vin_ok) failed = .true.
+      call ham%capture_rd1_vin_insertion(2, recursive_type, ham%hubbard_u_pot(:, :, recursive_type), status)
+      if (status /= rd1_vin_duplicate) failed = .true.
+      call ham%get_rd1_vin_for_recursion(1, 7, captured, status)
+      if (status /= rd1_vin_ok) failed = .true.
+      if (maxval(abs(captured(:, :, 1)-captured(:, :, 2))) <= 1.0e-5_rp) failed = .true.
+      captured_valid = captured
+      if (maxval(abs(captured_valid)) <= 1.0e-5_rp) failed = .true.
+      do spin_id = 1, 2
+         call extract_hubbard_d_shell_potential(ham%hubbard_u_pot, recursive_type, spin_id, &
+            spin_off, vin_d, extract_status)
+         if (extract_status /= 0 .or. maxval(abs(captured_valid(:, :, spin_id)-vin_d)) > 0.0_rp) failed = .true.
+         call extract_hubbard_d_shell_potential(ham%hubbard_u_pot, host_type, spin_id, &
+            spin_off, host_vin, extract_status)
+         if (extract_status /= 0 .or. maxval(abs(captured_valid(:, :, spin_id)-host_vin)) <= 1.0e-5_rp) failed = .true.
+      end do
+      if (maxval(abs(host_state_before-lat%symbolic_atoms(host_type)%potential%ldm(3, :, 1:5, 1:5))) > 0.0_rp .or. &
+          host_center_before /= lat%symbolic_atoms(host_type)%potential%gravity_center(3, 1)) failed = .true.
+      call ham%get_rd1_vin_for_recursion(1, 6, captured_probe, status)
+      if (status /= rd1_vin_missing_or_stale) failed = .true.
+
+      drow = [(norb + 4 + i, i=1,5)]
+      do spin_id = 1, 2
+         do site_i = 1, nsites
+            do orb_i = 1, norb
+               i = (site_i-1)*norb + orb_i
+               global_i = (site_i-1)*nb + (spin_id-1)*norb + orb_i
+               do site_j = 1, nsites
+                  do orb_j = 1, norb
+                     j = (site_j-1)*norb + orb_j
+                     global_j = (site_j-1)*nb + (spin_id-1)*norb + orb_j
+                     spin_h(i,j) = htarget(global_i,global_j)
+                  end do
+               end do
+            end do
+         end do
+         ! htarget is the finite two-site H with each type-specific V-in
+         ! included once; the recursive d block is the captured operand.
+         h_total = spin_h
+         call zheev('V', 'U', nspinorb, spin_h, nspinorb, eigenvalues, work_query, -1, rwork, info)
+         if (info /= 0) then
+            failed = .true.
+            cycle
+         end if
+         lwork = max(1, int(real(work_query(1), rp)))
+         allocate(work(lwork), eigenvectors(nspinorb,nspinorb))
+         call zheev('V', 'U', nspinorb, spin_h, nspinorb, eigenvalues, work, lwork, rwork, info)
+         if (info /= 0) then
+            failed = .true.
+            deallocate(work, eigenvectors)
+            cycle
+         end if
+         eigenvectors = spin_h
+         p_d = cmplx(0.0_rp,0.0_rp,rp)
+         m1_d = cmplx(0.0_rp,0.0_rp,rp)
+         q2 = 0.0_rp
+         direct_center = 0.0_rp
+         direct_q2 = 0.0_rp
+         do i = 1, 5
+            row_i = drow(i)
+            do j = 1, 5
+               row_j = drow(j)
+               do state = 1, nspinorb
+                  if (eigenvalues(state) >= ef) cycle
+                  p_d(i,j) = p_d(i,j) + eigenvectors(row_i,state)*conjg(eigenvectors(row_j,state))
+                  m1_d(i,j) = m1_d(i,j) + eigenvalues(state)* &
+                     eigenvectors(row_i,state)*conjg(eigenvectors(row_j,state))
+               end do
+            end do
+         end do
+         q0 = real(sum([(p_d(i,i),i=1,5)]),rp)
+         center = real(sum([(m1_d(i,i),i=1,5)]),rp)/q0
+         do state = 1, nspinorb
+            if (eigenvalues(state) >= ef) cycle
+            do i = 1, 5
+               row_i = drow(i)
+               q2 = q2 + abs(sum(h_total(row_i,:)*eigenvectors(:,state)) - &
+                  center*eigenvectors(row_i,state))**2
+            end do
+         end do
+         hbare = h_total
+         do i = 1, 5
+            do j = 1, 5
+               row_i = drow(i)
+               row_j = drow(j)
+               hbare(row_i,row_j) = hbare(row_i,row_j) - captured_valid(i,j,spin_id)
+            end do
+         end do
+         do state = 1, nspinorb
+            if (eigenvalues(state) >= ef) cycle
+            do i = 1, 5
+               row_i = drow(i)
+               direct_center = direct_center + real(conjg(eigenvectors(row_i,state))* &
+                  sum(hbare(row_i,:)*eigenvectors(:,state)),rp)
+            end do
+         end do
+         direct_center = direct_center/q0
+         do state = 1, nspinorb
+            if (eigenvalues(state) >= ef) cycle
+            do i = 1, 5
+               row_i = drow(i)
+               direct_q2 = direct_q2 + abs(sum(hbare(row_i,:)*eigenvectors(:,state)) - &
+                  direct_center*eigenvectors(row_i,state))**2
+            end do
+         end do
+         call correct_d_shell_moments(p_d, m1_d, captured_valid(:, :, spin_id), q0, center, q2, &
+            corrected_center, corrected_q2, t_value, status)
+         if (status /= 0) failed = .true.
+         oracle_error = max(abs(corrected_center-direct_center), abs(corrected_q2-direct_q2))
+         if (oracle_error > 1.0e-12_rp) failed = .true.
+         write(*,'(a,i0,1x,6(es24.16e3,1x))') &
+            'RD1_ORACLE spin production_center production_q2 direct_center direct_q2 abs_center_error abs_q2_error=', &
+            spin_id, corrected_center, corrected_q2, direct_center, direct_q2, &
+            abs(corrected_center-direct_center), abs(corrected_q2-direct_q2)
+
+         call extract_hubbard_d_shell_potential(ham%hubbard_u_pot, host_type, spin_id, &
+            spin_off, host_vin, extract_status)
+         if (extract_status /= 0) then
+            failed = .true.
+         else
+            call correct_d_shell_moments(p_d, m1_d, host_vin, q0, center, q2, &
+               wrong_center, wrong_q2, t_value, status)
+            if (status /= 0 .or. max(abs(wrong_center-direct_center),abs(wrong_q2-direct_q2)) <= 1.0e-12_rp) then
+               failed = .true.
+            end if
+         end if
+         write(*,'(a,2(i0,1x),4(es24.16e3,1x))') &
+            'RD1_ORACLE wrong_site spin status wrong_center wrong_q2 abs_center_error abs_q2_error=', &
+            spin_id, status, wrong_center, wrong_q2, abs(wrong_center-direct_center), abs(wrong_q2-direct_q2)
+         deallocate(work, eigenvectors)
+      end do
+
+      call ham%begin_rd1_vin_capture(8, enable_rs_capture=.true.)
+      call ham%get_rd1_vin_for_recursion(1, 8, captured_probe, status)
+      if (status /= rd1_vin_missing_or_stale) failed = .true.
+      call ham%begin_rd1_vin_capture(0, enable_rs_capture=.true.)
+      if (.not. ham%rd1_capture_required .or. ham%rd1_capture_enabled) failed = .true.
+      call ham%get_rd1_vin_for_recursion(1, 7, captured_probe, status)
+      if (status /= rd1_vin_missing_or_stale) failed = .true.
+      call ham%begin_rd1_vin_capture(0, enable_rs_capture=.false.)
+      if (allocated(lat%irec)) deallocate(lat%irec)
+      if (allocated(saved_irec)) then
+         allocate(lat%irec(size(saved_irec)))
+         lat%irec = saved_irec
+      end if
+      lat%ib = saved_ib
+      lat%iz = saved_iz
+      lat%nrec = saved_nrec
+      lat%nbulk = saved_nbulk
+      ctl%nsp = saved_nsp
+      ctl%lmax = saved_lmax
+      ctl%calctype = saved_calctype
+      ctl%constraints_enable = saved_constraints
+      ham%hubbard_radial_moments = saved_radial_mode
+      ham%hubbard_u_potential_form = saved_potential_form
+      ham%hubbard_u_general_check = saved_general
+      ham%hubbard_u_impurity_check = saved_impurity
+      ham%hubbard_u_sc_check = saved_sc
+      ham%hubbard_v_check = saved_v
+      ham%hubbard_test_operator_check = saved_test
+      ham%hubbard_test_operator = saved_test_operator
+      ham%hoh = saved_hoh
+      ham%fixed_u_test_allow_hoh_w1_u0 = saved_hoh_bypass
+      deallocate(spin_h, h_total, hbare, eigenvalues, rwork)
+   end subroutine test_rd1_recursive_vin_oracle
 
    subroutine run_simpson_mesh_refinement(errors, m1_errors, finest_projector, finest_m1)
       real(rp), intent(out) :: errors(4)

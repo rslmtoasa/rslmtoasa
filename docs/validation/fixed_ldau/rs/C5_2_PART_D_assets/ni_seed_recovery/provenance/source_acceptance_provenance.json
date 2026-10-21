@@ -1,0 +1,60 @@
+{
+  "accepted_record": "C1-accepted Ni U=0 impurity potential; permitted as atomic-potential seed for a new rc80 bulk host only, not a bulk reference.",
+  "c1_provenance": {
+    "path": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json",
+    "sha256": "322b7ce817273f0cf55fbf4c0ff4662b6a35f99b8e94180982e22734bb610dd9",
+    "json_pointer": "/final_ra4_records/cases/ni_u0_control"
+  },
+  "c2_launch": {
+    "path": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql/C2_launch.json",
+    "sha256": "ff6cfc14d0c67adfe8b16755298166b2ef31ebd5f7879e0f749d27b2fd0e5fab"
+  },
+  "c2_acceptance": {
+    "path": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql/C2_acceptance.json",
+    "sha256": "993c0203956361616050d444fbb542e780a1e32cfbd04f8e03c3a1e31fc383e4"
+  },
+  "build_source_hashes": {
+    "source/self.f90": "6c3d72cd5dbb6ddd3ffcdefb1700589040294e112204cf19c0649f2b2154de4d",
+    "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e"
+  },
+  "binary_sha256": "b07a0139df32e1b4c3d6c4cdeb44f376b0b7443c18a4cf1ad6d5143f041b7bca",
+  "input_sha256": "4a268e5eddb779a01b858e2c13459ef55207d16ad4cbc4f9ed30b202d52395ac",
+  "impurity_seed_sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+  "host_sha256_used_by_impurity_run": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+  "termination": "normal process exit 0 at step cap 200; output files Ni-imp_out.nml and Ni-imp_scf.nml are byte-identical",
+  "criteria": {
+    "outer_Diff_max": 3e-08,
+    "d_occupation_spread_max": 5e-07,
+    "sphere_moment_spread_muB_max": 1e-06
+  },
+  "observed": {
+    "iterations": 200,
+    "final_Diff": 1.52e-08,
+    "last20_iterations": [
+      181,
+      200
+    ],
+    "d_up_spread": 1.5948614784377924e-07,
+    "d_down_spread": 7.839479465587829e-08,
+    "sphere_moment_spread_muB": 3.8588745299161786e-07
+  },
+  "seed_potential_metadata": {
+    "symbol": "Ni-imp",
+    "atomic_number": 28,
+    "lmax": 2,
+    "hubbard_u": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "hubbard_j": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "nsp": 1,
+    "source_run_calctype": "I",
+    "source_run_rc": 30
+  },
+  "scope_note": "Seed generated in an impurity calculation at rc30. The accepted endpoint is used only as a converged atomic-potential seed to generate a new rc80 bulk host; the impurity potential is never compared as the bulk result."
+}

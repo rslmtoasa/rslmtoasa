@@ -1,0 +1,37 @@
+{
+  "purpose": "C5.3 Part B frozen candidate Release solver; no solver invocation has occurred",
+  "frozen_executable": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x",
+  "executable_sha256": "a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3",
+  "mode": "0555",
+  "repo": "/Users/andersb/Jobb/rslmto_fable_v4b",
+  "head_commit_base": "8c7251da74e7142df30cc4147d2a4f259badabf2",
+  "tracked_working_diff_sha256": "44d76933e95e5bb44eeceb9204b32c32e1ed10bb28814803aa97ff1b03dfa007",
+  "source_manifest": {
+    "CMakeLists.txt": "6f4dbe61e45a7c42a5e4cc5ac2977059102f974fd20e0376ac9e2ee63c46d419",
+    "source/CMakeLists.txt": "38c03906064b587d6a40c99160f80bfe154dcbcacdbf677bceba1c969fefdc26",
+    "source/bands.f90": "ea924d76e09c534d33275e9e330d872e9351d14ba33629013d409784280838cc",
+    "source/mix.f90": "f75c1d98d57e8a114d188c28089ec3f565d5a64328679f50224618a0f6e202fd",
+    "source/self.f90": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+    "source/scf_guard.f90": "3f232e9cea4a84acfbe98b7636da0b02318253d5a21f776bb2763e607571c415",
+    "tests/unit/test_scf_b1_guard.f90": "d000c46c13e6eb503aa65487f6861928deb752ecc4c8cbdc1573a73364ba7434"
+  },
+  "build": {
+    "directory": "/private/tmp/c5-b1-guard-build-clean",
+    "configure_command": "cmake -S . -B /private/tmp/c5-b1-guard-build-clean -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/cc -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DCMAKE_Fortran_COMPILER=/opt/homebrew/bin/gfortran -DENABLE_CUDA_PLUGIN=OFF -DENABLE_CUDA_RECIPROCAL=OFF -DENABLE_FLUSH=OFF -DENABLE_FUSED_RECIPROCAL=OFF -DENABLE_LIBXC=OFF -DENABLE_MARCH_NATIVE=ON -DENABLE_MKL_KERNELS=OFF -DENABLE_MPI=OFF -DENABLE_OPENMP=ON -DENABLE_SPGLIB=ON -DRUN_EXAMPLE_TESTS=OFF -DRUN_REG_TESTS=OFF -DRUN_UNIT_TESTS=ON -DBUILD_TESTING=ON",
+    "build_command": "cmake --build /private/tmp/c5-b1-guard-build-clean --target rslmto.x -j2",
+    "release_fortran_flags": "-ffree-line-length-0 -cpp -mtune=native -DCOLOR -fopenmp -DOpenMP_Fortran_FOUND -O3 -fbacktrace -g -g",
+    "fortran_flags_make_sha256": "0539978fb85b636f91ea64bb5429064bece78600bc990b9af68bfedf4ee35150",
+    "link_command_file": "/private/tmp/c5-b1-guard-build-clean/CMakeFiles/rslmto.x.dir/link.txt",
+    "link_command_file_sha256": "baf888a39a9a5673e6b7e60f57f3289e00c1a78048e1a2fdea8a58deb7f82332",
+    "cmake_cache_sha256": "c1f6e9c6444be7d93add9232024612eedf2ff26cde14b051bac724b816b83435",
+    "compiler": "GNU Fortran (Homebrew GCC 16.2.0) 16.2.0",
+    "cmake": "cmake version 4.4.4"
+  },
+  "guard_tests": {
+    "command": "ctest --test-dir /private/tmp/c5-b1-guard-build-clean -R '^UnitScfB1Guard' --output-on-failure",
+    "output_file": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/ctest.txt",
+    "output_sha256": "5e4c1c2fd580906d2949e26a4f70ca9f59320ba8b0a0fe5b38e5771ddca00841",
+    "result": "3/3 passed: over-capacity diagnostic regex, nonfinite diagnostic regex, allowed-boundary success"
+  },
+  "discarded_build_path": "/private/tmp/c5-b1-guard-build (configure included duplicate flags; not used for executable or tests)"
+}

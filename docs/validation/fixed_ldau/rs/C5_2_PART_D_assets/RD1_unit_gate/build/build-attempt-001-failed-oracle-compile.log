@@ -1,0 +1,199 @@
+[  0%] Building Fortran object source/include_codes/strux_lib/CMakeFiles/strux_lib.dir/strux_angular.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+[  0%] Building Fortran object source/include_codes/strux_lib/CMakeFiles/strux_lib.dir/strux_errors.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+[  0%] Building Fortran object source/include_codes/strux_lib/CMakeFiles/strux_lib.dir/strux_bessel.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+[  2%] Building Fortran object source/include_codes/strux_lib/CMakeFiles/strux_lib.dir/strux_utils.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+[  4%] Building Fortran object source/include_codes/strux_lib/CMakeFiles/strux_lib.dir/strux_geometry.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+[  4%] Building Fortran object source/include_codes/strux_lib/CMakeFiles/strux_lib.dir/strux_pair_expansion.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+[  6%] Building Fortran object source/include_codes/strux_lib/CMakeFiles/strux_lib.dir/strux_solver_assembly.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+[  6%] Building Fortran object source/include_codes/strux_lib/CMakeFiles/strux_lib.dir/strux_support.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+[  6%] Building Fortran object source/include_codes/strux_lib/CMakeFiles/strux_lib.dir/strux_lmto47_mode.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+[  9%] Building Fortran object source/include_codes/strux_lib/CMakeFiles/strux_lib.dir/strux_api.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+[  9%] Building Fortran object source/include_codes/strux_lib/CMakeFiles/strux_lib.dir/strux_linalg.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+[  9%] Building Fortran object source/include_codes/strux_lib/CMakeFiles/strux_lib.dir/strux_tb.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+[ 11%] Linking Fortran static library libstrux_lib.a
+[ 11%] Built target strux_lib
+[ 11%] Building Fortran object source/include_codes/abspinlib/CMakeFiles/abspinlib.dir/parameters.f90.o
+[ 13%] Building Fortran object source/include_codes/abspinlib/CMakeFiles/abspinlib.dir/constants.f90.o
+[ 13%] Building Fortran object source/include_codes/abspinlib/CMakeFiles/abspinlib.dir/stdtypes.f90.o
+[ 13%] Building Fortran object source/include_codes/abspinlib/CMakeFiles/abspinlib.dir/mtprng.f90.o
+[ 15%] Building Fortran object source/include_codes/abspinlib/CMakeFiles/abspinlib.dir/randomnumbers.f90.o
+[ 15%] Building Fortran object source/include_codes/abspinlib/CMakeFiles/abspinlib.dir/depondt.f90.o
+[ 18%] Building Fortran object source/include_codes/abspinlib/CMakeFiles/abspinlib.dir/abSpinlib.f90.o
+[ 18%] Building Fortran object source/include_codes/abspinlib/CMakeFiles/abspinlib.dir/constrain.f90.o
+/Users/andersb/Jobb/rslmto_fable_v4b/source/include_codes/abspinlib/constrain.f90:451:74:
+
+  451 |       if (diagnostics_enabled .and. i_cons == 5) write (stdout, '(4x,a,f12.4a,g10.2)') " | New lambda_t: ", lambda_t, "     error: ", constrained_mom_err
+      |                                                                          1
+Warning: Legacy Extension: Missing comma in FORMAT string at (1)
+[ 18%] Linking Fortran static library libabspinlib.a
+[ 18%] Built target abspinlib
+[ 18%] Building Fortran object source/CMakeFiles/rslmto.dir/face.F90.o
+[ 20%] Building Fortran object source/CMakeFiles/rslmto.dir/precision.f90.o
+[ 22%] Building Fortran object source/CMakeFiles/rslmto.dir/string.f90.o
+[ 22%] Building Fortran object source/CMakeFiles/rslmto.dir/logger.f90.o
+[ 22%] Building Fortran object source/CMakeFiles/rslmto.dir/mpi.f90.o
+[ 22%] Building Fortran object source/CMakeFiles/rslmto.dir/basis.f90.o
+[ 22%] Building Fortran object source/CMakeFiles/rslmto.dir/math.f90.o
+[ 25%] Building Fortran object source/CMakeFiles/rslmto.dir/array.f90.o
+[ 25%] Building Fortran object source/CMakeFiles/rslmto.dir/namelist_generator.f90.o
+[ 25%] Building Fortran object source/CMakeFiles/rslmto.dir/gbt_structure.f90.o
+[ 27%] Building Fortran object source/CMakeFiles/rslmto.dir/spin_density.f90.o
+[ 27%] Building Fortran object source/CMakeFiles/rslmto.dir/control.f90.o
+[ 29%] Building Fortran object source/CMakeFiles/rslmto.dir/globals.f90.o
+[ 31%] Building Fortran object source/CMakeFiles/rslmto.dir/os.f90.o
+[ 34%] Building Fortran object source/CMakeFiles/rslmto.dir/element.f90.o
+[ 34%] Building Fortran object source/CMakeFiles/rslmto.dir/potential.f90.o
+[ 34%] Building Fortran object source/CMakeFiles/rslmto.dir/radial_ground_state.f90.o
+[ 34%] Building Fortran object source/CMakeFiles/rslmto.dir/symbolic_atom.f90.o
+[ 36%] Building Fortran object source/CMakeFiles/rslmto.dir/report.f90.o
+[ 38%] Building Fortran object source/CMakeFiles/rslmto.dir/timer.f90.o
+[ 38%] Building Fortran object source/CMakeFiles/rslmto.dir/lattice.f90.o
+[ 38%] Building Fortran object source/CMakeFiles/rslmto.dir/energy.f90.o
+[ 40%] Building Fortran object source/CMakeFiles/rslmto.dir/chebyshev_fast.f90.o
+[ 40%] Building Fortran object source/CMakeFiles/rslmto.dir/region_registry.f90.o
+[ 43%] Building Fortran object source/CMakeFiles/rslmto.dir/charge.f90.o
+[ 45%] Building Fortran object source/CMakeFiles/rslmto.dir/magnetic_representation.f90.o
+[ 47%] Building Fortran object source/CMakeFiles/rslmto.dir/bounds.f90.o
+[ 50%] Building Fortran object source/CMakeFiles/rslmto.dir/hamiltonian.f90.o
+[ 50%] Building Fortran object source/CMakeFiles/rslmto.dir/haydock_fast.f90.o
+[ 50%] Building Fortran object source/CMakeFiles/rslmto.dir/sparse.f90.o
+[ 50%] Building Fortran object source/CMakeFiles/rslmto.dir/rsrec_cuda_plugin.f90.o
+[ 50%] Building Fortran object source/CMakeFiles/rslmto.dir/recursion.f90.o
+[ 52%] Building Fortran object source/CMakeFiles/rslmto.dir/density_of_states.f90.o
+[ 52%] Building Fortran object source/CMakeFiles/rslmto.dir/green.f90.o
+[ 52%] Building Fortran object source/CMakeFiles/rslmto.dir/scf_guard.f90.o
+[ 52%] Building Fortran object source/CMakeFiles/rslmto.dir/bands.f90.o
+[ 52%] Building Fortran object source/CMakeFiles/rslmto.dir/electrostatics_multipole.f90.o
+[ 54%] Building Fortran object source/CMakeFiles/rslmto.dir/mix.f90.o
+[ 54%] Building Fortran object source/CMakeFiles/rslmto.dir/kpoint_workset.f90.o
+[ 56%] Building Fortran object source/CMakeFiles/rslmto.dir/sigma_provider.f90.o
+[ 56%] Building Fortran object source/CMakeFiles/rslmto.dir/spglib_interface.f90.o
+[ 56%] Building Fortran object source/CMakeFiles/rslmto.dir/symmetry.f90.o
+[ 56%] Building Fortran object source/CMakeFiles/rslmto.dir/reciprocal.f90.o
+[ 59%] Building Fortran object source/CMakeFiles/rslmto.dir/scf_benchmark_profile.f90.o
+[ 59%] Building Fortran object source/CMakeFiles/rslmto.dir/xc_radial.f90.o
+[ 61%] Building Fortran object source/CMakeFiles/rslmto.dir/xc.f90.o
+[ 61%] Building Fortran object source/CMakeFiles/rslmto.dir/self.f90.o
+[ 61%] Building Fortran object source/CMakeFiles/rslmto.dir/spin_response.f90.o
+[ 61%] Building Fortran object source/CMakeFiles/rslmto.dir/alsda_radial.f90.o
+[ 61%] Building Fortran object source/CMakeFiles/rslmto.dir/bsf_kernel.f90.o
+[ 61%] Building Fortran object source/CMakeFiles/rslmto.dir/exchange.f90.o
+[ 61%] Building Fortran object source/CMakeFiles/rslmto.dir/kpm_profile.f90.o
+[ 63%] Building Fortran object source/CMakeFiles/rslmto.dir/conductivity.f90.o
+[ 63%] Building Fortran object source/CMakeFiles/rslmto.dir/frozen_magnon.f90.o
+[ 63%] Building Fortran object source/CMakeFiles/rslmto.dir/spin_dynamics.f90.o
+[ 63%] Building Fortran object source/CMakeFiles/rslmto.dir/vacuum_lead.f90.o
+[ 65%] Building Fortran object source/CMakeFiles/rslmto.dir/calculation.f90.o
+[ 65%] Building Fortran object source/CMakeFiles/rslmto.dir/calculation_preprocessing.f90.o
+[ 65%] Building Fortran object source/CMakeFiles/rslmto.dir/calculation_reciprocal.f90.o
+[ 65%] Building Fortran object source/CMakeFiles/rslmto.dir/charge_interface.f90.o
+[ 65%] Building Fortran object source/CMakeFiles/rslmto.dir/charge_madelung_2d.f90.o
+[ 65%] Building Fortran object source/CMakeFiles/rslmto.dir/dyson_kernel.f90.o
+[ 68%] Building Fortran object source/CMakeFiles/rslmto.dir/exchange_dynamics.f90.o
+[ 68%] Building Fortran object source/CMakeFiles/rslmto.dir/green_block.f90.o
+[ 70%] Building Fortran object source/CMakeFiles/rslmto.dir/green_chebyshev.f90.o
+[ 70%] Building Fortran object source/CMakeFiles/rslmto.dir/green_lanczos.f90.o
+[ 70%] Building Fortran object source/CMakeFiles/rslmto.dir/green_lifecycle.f90.o
+[ 72%] Building Fortran object source/CMakeFiles/rslmto.dir/lmto_magnetic_tangent.f90.o
+[ 72%] Building Fortran object source/CMakeFiles/rslmto.dir/hamiltonian_build.f90.o
+[ 72%] Building Fortran object source/CMakeFiles/rslmto.dir/hamiltonian_ccor.f90.o
+[ 72%] Building Fortran object source/CMakeFiles/rslmto.dir/hamiltonian_hubbard.f90.o
+[ 75%] Building Fortran object source/CMakeFiles/rslmto.dir/hamiltonian_paoflow_io.f90.o
+[ 77%] Building Fortran object source/CMakeFiles/rslmto.dir/lattice_cluster.f90.o
+[ 77%] Building Fortran object source/CMakeFiles/rslmto.dir/lattice_lifecycle.f90.o
+[ 79%] Building Fortran object source/CMakeFiles/rslmto.dir/lattice_print.f90.o
+[ 79%] Building Fortran object source/CMakeFiles/rslmto.dir/lattice_strux.f90.o
+[ 81%] Building Fortran object source/CMakeFiles/rslmto.dir/lehmann_kernel.f90.o
+[ 81%] Building Fortran object source/CMakeFiles/rslmto.dir/lmto_radial_augmentation.f90.o
+[ 81%] Building Fortran object source/CMakeFiles/rslmto.dir/moment_kernel.f90.o
+[ 81%] Building Fortran object source/CMakeFiles/rslmto.dir/pauli_ground_state_projection.f90.o
+[ 84%] Building Fortran object source/CMakeFiles/rslmto.dir/reciprocal_backend.f90.o
+[ 84%] Building Fortran object source/CMakeFiles/rslmto.dir/reciprocal_bands.f90.o
+[ 84%] Building Fortran object source/CMakeFiles/rslmto.dir/reciprocal_bsf.f90.o
+[ 84%] Building Fortran object source/CMakeFiles/rslmto.dir/reciprocal_dos.f90.o
+[ 84%] Building Fortran object source/CMakeFiles/rslmto.dir/reciprocal_export.f90.o
+[ 86%] Building Fortran object source/CMakeFiles/rslmto.dir/reciprocal_fourier.f90.o
+[ 88%] Building Fortran object source/CMakeFiles/rslmto.dir/reciprocal_green.f90.o
+[ 88%] Building Fortran object source/CMakeFiles/rslmto.dir/reciprocal_lifecycle.f90.o
+[ 88%] Building Fortran object source/CMakeFiles/rslmto.dir/reciprocal_moments.f90.o
+[ 90%] Building Fortran object source/CMakeFiles/rslmto.dir/reciprocal_occupations.f90.o
+[ 90%] Building Fortran object source/CMakeFiles/rslmto.dir/reciprocal_projection.f90.o
+[ 93%] Building Fortran object source/CMakeFiles/rslmto.dir/reciprocal_spin_density.f90.o
+[ 93%] Building Fortran object source/CMakeFiles/rslmto.dir/recursion_chebyshev.f90.o
+[ 95%] Building Fortran object source/CMakeFiles/rslmto.dir/recursion_core.f90.o
+[ 95%] Building Fortran object source/CMakeFiles/rslmto.dir/recursion_haydock.f90.o
+[ 97%] Building Fortran object source/CMakeFiles/rslmto.dir/recursion_transport.f90.o
+[ 97%] Building Fortran object source/CMakeFiles/rslmto.dir/safe_alloc.f90.o
+[ 97%] Building Fortran object source/CMakeFiles/rslmto.dir/self_reciprocal.f90.o
+[ 97%] Linking Fortran static library librslmto.a
+[ 97%] Built target rslmto
+[100%] Building Fortran object CMakeFiles/rslmto.x.dir/source/main.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+[100%] Linking Fortran executable bin/rslmto.x
+[100%] Built target rslmto.x
+[ 11%] Built target strux_lib
+[ 18%] Built target abspinlib
+[100%] Built target rslmto
+[100%] Building Fortran object CMakeFiles/UnitLdaUProjectorMultisiteFrozenH.dir/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90:271:50:
+
+  271 |       integer, parameter :: nspinorb = nsites*norb
+      |                                                  1
+Error: Parameter 'norb' at (1) has not been declared or is a variable, which does not reduce to a constant expression
+/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90:280:63:
+
+  280 |       real(rp) :: eigenvalues(nspinorb), rwork(max(1,3*nspinorb-2))
+      |                                                               1
+Error: Symbol 'nspinorb' is used before it is typed at (1)
+/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90:275:36:
+
+  275 |       complex(rp) :: spin_h(nspinorb,nspinorb), h_total(nspinorb,nspinorb), hbare(nspinorb,nspinorb)
+      |                                    1
+Error: Symbol 'nspinorb' at (1) has no IMPLICIT type; did you mean 'spin_h'?
+/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90:398:92:
+
+  398 |          call zheev('V', 'U', nspinorb, spin_h, nspinorb, eigenvalues, work_query, -1, rwork, info)
+      |                                                                                            1
+Error: Symbol 'rwork' at (1) has no IMPLICIT type; did you mean 'lwork'?
+/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90:422:22:
+
+  422 |                   if (eigenvalues(state) >= ef) cycle
+      |                      1
+Error: Function 'eigenvalues' at (1) has no IMPLICIT type
+/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90:424:53:
+
+  424 |                   m1_d(i,j) = m1_d(i,j) + eigenvalues(state)* &
+      |                                                     1
+Error: Function 'eigenvalues' at (1) has no IMPLICIT type
+/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90:432:16:
+
+  432 |             if (eigenvalues(state) >= ef) cycle
+      |                1
+Error: Function 'eigenvalues' at (1) has no IMPLICIT type
+/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90:448:16:
+
+  448 |             if (eigenvalues(state) >= ef) cycle
+      |                1
+Error: Function 'eigenvalues' at (1) has no IMPLICIT type
+/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90:457:16:
+
+  457 |             if (eigenvalues(state) >= ef) cycle
+      |                1
+Error: Function 'eigenvalues' at (1) has no IMPLICIT type
+gmake[3]: *** [CMakeFiles/UnitLdaUProjectorMultisiteFrozenH.dir/build.make:78: CMakeFiles/UnitLdaUProjectorMultisiteFrozenH.dir/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90.o] Error 1
+gmake[2]: *** [CMakeFiles/Makefile2:2273: CMakeFiles/UnitLdaUProjectorMultisiteFrozenH.dir/all] Error 2
+gmake[1]: *** [CMakeFiles/Makefile2:2280: CMakeFiles/UnitLdaUProjectorMultisiteFrozenH.dir/rule] Error 2
+gmake: *** [Makefile:927: UnitLdaUProjectorMultisiteFrozenH] Error 2

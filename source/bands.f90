@@ -909,6 +909,9 @@ contains
       real(rp), allocatable :: pl_comm(:, :, :)
       integer :: lcount_ldm, max_flat_ldm, local_flat
       integer :: status_local, itype_local
+      integer :: cluster_site_local
+      logical :: rd1_use_vin_capture
+      complex(rp) :: rd1_vin_snapshot(5, 5, 2)
       ! These diagnostic tolerances exceed observed finite-grid residuals
       ! (about 1e-8 anti-Hermitian and <1e-4 eigen/trace drift) without hiding
       ! material violations. Diagnostics never modify or project the LDM.
@@ -1223,13 +1226,48 @@ contains
       if (local_moments_active) then
          if (.not. associated(m1_target)) call g_logger%fatal( &
             'Local Hubbard radial moments require the current spectral M1 matrix.', __FILE__, __LINE__)
+         rd1_use_vin_capture = this%recursion%hamiltonian%rd1_local_impurity_eligible() .and. &
+            this%recursion%hamiltonian%rd1_capture_required
          do na_glob = start_atom, end_atom
             plusbulk = this%lattice%nbulk + na_glob
-            itype_local = this%lattice%ib(na_glob)
+            if (rd1_use_vin_capture) then
+               call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
+                  cluster_site_local, itype_local, status_local)
+               if (status_local /= 0) then
+                  call g_logger%fatal('RD1 local correction has invalid mapped cluster site at iteration='// &
+                     fmt('i0', iteration_value)//' recursion='//fmt('i0', na_glob)// &
+                     ' cluster='//fmt('i0', cluster_site_local), __FILE__, __LINE__)
+               end if
+               call this%recursion%hamiltonian%get_rd1_vin_for_recursion(na_glob, iteration_value, &
+                  rd1_vin_snapshot, status_local)
+               if (status_local /= 0) call g_logger%fatal('RD1 exact V-in snapshot missing/stale: status='// &
+                  fmt('i0', status_local)//' iteration='//fmt('i0', iteration_value)// &
+                  ' recursion='//fmt('i0', na_glob)//' cluster='//fmt('i0', cluster_site_local)// &
+                  ' type='//fmt('i0', itype_local), __FILE__, __LINE__)
+            else if (this%control%calctype == 'I' .and. &
+                     this%recursion%hamiltonian%hubbard_test_operator_check) then
+               ! The non-adopted local W test still has a recursion-site
+               ! potential. Use its actual irec->iz map without broadening the
+               ! fixed-U RD1 capture eligibility or changing the test formula.
+               call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
+                  cluster_site_local, itype_local, status_local)
+               if (status_local /= 0) then
+                  call g_logger%fatal('Local impurity test operator has invalid recursion-site map: recursion='// &
+                     fmt('i0', na_glob)//' cluster='//fmt('i0', cluster_site_local), __FILE__, __LINE__)
+               end if
+            else
+               ! Preserve the legacy spectral and reciprocal paths outside the
+               ! narrowly enabled real-space impurity correction.
+               itype_local = this%lattice%ib(na_glob)
+            end if
             do ispin = 1, 2
-               call extract_hubbard_d_shell_potential(this%recursion%hamiltonian%hubbard_u_pot, &
-                  itype_local, ispin, spin_off, v_d, status_local)
-               if (status_local /= 0) call g_logger%fatal('Unable to map local d-shell Hubbard potential.', __FILE__, __LINE__)
+               if (rd1_use_vin_capture) then
+                  v_d = rd1_vin_snapshot(:, :, ispin)
+               else
+                  call extract_hubbard_d_shell_potential(this%recursion%hamiltonian%hubbard_u_pot, &
+                     itype_local, ispin, spin_off, v_d, status_local)
+                  if (status_local /= 0) call g_logger%fatal('Unable to map local d-shell Hubbard potential.', __FILE__, __LINE__)
+               end if
                if (maxval(abs(v_d)) == 0.0_rp) cycle
                q0_d = this%symbolic_atom(plusbulk)%potential%ql(1, 2, ispin)
                center_d = this%symbolic_atom(plusbulk)%potential%gravity_center(3, ispin) + &

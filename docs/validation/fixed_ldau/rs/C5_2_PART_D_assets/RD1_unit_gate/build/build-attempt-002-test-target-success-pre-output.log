@@ -1,0 +1,7 @@
+[ 11%] Built target strux_lib
+[ 18%] Built target abspinlib
+[100%] Built target rslmto
+[100%] Building Fortran object CMakeFiles/UnitLdaUProjectorMultisiteFrozenH.dir/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90.o
+f951: Warning: command-line option '-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks' is valid for C/C++/ObjC/ObjC++ but not for Fortran
+[100%] Linking Fortran executable bin/UnitLdaUProjectorMultisiteFrozenH
+[100%] Built target UnitLdaUProjectorMultisiteFrozenH

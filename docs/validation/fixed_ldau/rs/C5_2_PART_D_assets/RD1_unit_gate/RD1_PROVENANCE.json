@@ -1,0 +1,130 @@
+{
+  "purpose": "C5.2 Part D RD1 unit gate build and oracle provenance; no impurity solver campaign launched",
+  "baseline_head": "0469135d935dd31fb6ce055d819cdb54811c52fa",
+  "changed_files": {
+    "source/hamiltonian.f90": {
+      "baseline_HEAD_sha256": "410e799d4c5001f8c39b26d80b5435b265ae987a146a4457aa793e1162a0e837",
+      "working_sha256": "928434dd722b1faced7e3413de3e7c1f62188bf6225708e6223597ce0ad52bdc"
+    },
+    "source/hamiltonian_build.f90": {
+      "baseline_HEAD_sha256": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+      "working_sha256": "75e16120e99b85004436a0a336e467504e8f22f295e29dd5c75943f74783c04f"
+    },
+    "source/self.f90": {
+      "baseline_HEAD_sha256": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+      "working_sha256": "d8ca2650b871c051c4023298300c8727f2199260948f9cfdaf6faa516a9c3b02"
+    },
+    "source/bands.f90": {
+      "baseline_HEAD_sha256": "ea924d76e09c534d33275e9e330d872e9351d14ba33629013d409784280838cc",
+      "working_sha256": "0f130331ded7fea3d12edd2a716c04f1473855a9b89ccfbf70fdafa73a38724e"
+    },
+    "tests/validation/fixed_ldau/projector_multisite_frozen_h.f90": {
+      "baseline_HEAD_sha256": "5d5d24c40e8505494ee57b116003a22bb9ce397e0140574d566a1fcb91b1891b",
+      "working_sha256": "c63bf9f72b4682fd6c2d48f216d258466a80ec16c8dfd3f3cacdaf549d7e4dfb"
+    }
+  },
+  "tracked_patch_sha256": "25a6c519e1ae6f280d90261e00fa5ecc6871ffa0d1fc9289a8960aba0b26ab7b",
+  "review_packet": {
+    "path": "RD1_REVIEW_PACKET.md",
+    "sha256": "5a65c48520ba455ae14fc01ec703339845cce4654698351e995ca7ca8d8c0610"
+  },
+  "build": {
+    "directory": "/private/tmp/c5-rd1-release-build",
+    "configure_command": "cmake -S . -B /private/tmp/c5-rd1-release-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/cc -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DCMAKE_Fortran_COMPILER=/opt/homebrew/bin/gfortran -DENABLE_CUDA_PLUGIN=OFF -DENABLE_CUDA_RECIPROCAL=OFF -DENABLE_FLUSH=OFF -DENABLE_FUSED_RECIPROCAL=OFF -DENABLE_LIBXC=OFF -DENABLE_MARCH_NATIVE=ON -DENABLE_MKL_KERNELS=OFF -DENABLE_MPI=OFF -DENABLE_OPENMP=ON -DENABLE_SPGLIB=ON -DRUN_EXAMPLE_TESTS=OFF -DRUN_REG_TESTS=OFF -DRUN_UNIT_TESTS=ON -DBUILD_TESTING=ON",
+    "compiler": "GNU Fortran (Homebrew GCC 16.2.0) 16.2.0",
+    "cmake": "cmake version 4.4.4",
+    "effective_fortran_flags": "-ffree-line-length-0 -cpp -mtune=native -DCOLOR -fopenmp -DOpenMP_Fortran_FOUND -O3 -fbacktrace -g -g",
+    "cmake_version_macro": "gbt-campaign-archive-2026-10-36-g0469-dirty (build metadata only)",
+    "cmake_cache_sha256": "1d9cfd811da21ec7392e3019322a812b04ba5c8bf17be7cd717c43ff1a9232f1",
+    "solver_flags_make_sha256": "c8e7ce9c8fb42cd1e0f0989adec79d1217c67cbbc3a5b21679fdc785d65582b3",
+    "solver_link_sha256": "baf888a39a9a5673e6b7e60f57f3289e00c1a78048e1a2fdea8a58deb7f82332",
+    "unit_flags_make_sha256": "c8e7ce9c8fb42cd1e0f0989adec79d1217c67cbbc3a5b21679fdc785d65582b3",
+    "unit_link_sha256": "9d850b73d33dfcce703d2af8d54e74c891e3cd8d6e80f875908f99d450764d3b",
+    "build_attempts": [
+      {
+        "command": "cmake --build /private/tmp/c5-rd1-release-build --target rslmto.x UnitLdaUProjectorMultisiteFrozenH -j1",
+        "result": "solver built; unit compile failed because norb is runtime not a constant; preserved raw log",
+        "path": "build/build-attempt-001-failed-oracle-compile.log",
+        "sha256": "b73e35a37e55cae981e08bf47745a47860adc32a9534c719fce51b21202e53eb"
+      },
+      {
+        "command": "cmake --build /private/tmp/c5-rd1-release-build --target UnitLdaUProjectorMultisiteFrozenH -j1",
+        "result": "test-target build succeeded before final raw-output correction; preserved raw log",
+        "path": "build/build-attempt-002-test-target-success-pre-output.log",
+        "sha256": "1ca4f3e4f39141e5c41d7fe158c452b257efafc3bea935b9ad6ea8499bca8c95"
+      },
+      {
+        "command": "cmake --build /private/tmp/c5-rd1-release-build --target UnitLdaUProjectorMultisiteFrozenH -j1",
+        "result": "final focused test target build succeeded",
+        "path": "build/build-attempt-003-final-test-success.log",
+        "sha256": "1ca4f3e4f39141e5c41d7fe158c452b257efafc3bea935b9ad6ea8499bca8c95"
+      }
+    ],
+    "solver_executable": {
+      "path": "/private/tmp/c5-rd1-frozen/4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f/rslmto.x",
+      "sha256": "4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f",
+      "mode": "0555"
+    },
+    "test_executable": {
+      "path": "/private/tmp/c5-rd1-frozen/4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f/oracle-c63bf9f72b4682fd6c2d48f216d258466a80ec16c8dfd3f3cacdaf549d7e4dfb/UnitLdaUProjectorMultisiteFrozenH",
+      "sha256": "5e81dc7f905345363ae648466df3fe52b1176811c70cd4efa0f3c6de24472489",
+      "mode": "0555"
+    }
+  },
+  "unit_gate": {
+    "command": "ctest --test-dir /private/tmp/c5-rd1-release-build -R ^UnitLdaUProjectorMultisiteFrozenH$ --output-on-failure -V",
+    "result": "PASS; 1/1 tests passed",
+    "raw_output": {
+      "path": "raw/ctest-rd1-attempt-001-verbose.log",
+      "sha256": "6f2665d7177d9078dafa8615178e330af889c8d9c33a9545c506e2092c12a22d"
+    },
+    "independent_auditor_verdict": "PASS: arithmetic, wrong-site control and raw output independently checked",
+    "capture_map": {
+      "recursion_index": 1,
+      "cluster_site": 2,
+      "atom_type": 2,
+      "status": 0
+    },
+    "per_spin": {
+      "1": {
+        "corrected_center": -0.2684974055496902,
+        "direct_center": -0.2684974055496905,
+        "center_abs_error": 2.7755575615628914e-16,
+        "corrected_q2": 0.0021152255772529907,
+        "direct_q2": 0.002115225577253,
+        "q2_abs_error": 9.107298248878237e-18,
+        "wrong_host_center": -0.28098741118705156,
+        "wrong_host_q2": 0.001714917180123628,
+        "wrong_host_center_error": 0.012490005637361079,
+        "wrong_host_q2_error": 0.00040030839712937175
+      },
+      "2": {
+        "corrected_center": -0.23340947371550536,
+        "direct_center": -0.23340947371550547,
+        "center_abs_error": 1.1102230246251565e-16,
+        "corrected_q2": 0.0020361385152931795,
+        "direct_q2": 0.0020361385152931847,
+        "q2_abs_error": 5.204170427930421e-18,
+        "wrong_host_center": -0.24724331646945846,
+        "wrong_host_q2": 0.0016519367534429917,
+        "wrong_host_center_error": 0.013833842753952996,
+        "wrong_host_q2_error": 0.000384201761850193
+      }
+    },
+    "acceptance": {
+      "oracle_error_threshold": 1e-12,
+      "max_observed_oracle_error": 2.7755575615628914e-16,
+      "wrong_site_negative_control_minimum_error": 1e-12,
+      "smallest_observed_wrong_site_error": 0.000384201761850193
+    }
+  },
+  "campaigns": {
+    "RD1_impurity_solver_runs": 0,
+    "RD2_RD5": "pending/not started"
+  },
+  "binary_policy": "No executable binaries copied into repository assets.",
+  "source_manifest": {
+    "path": "RD1_SOURCE_MANIFEST.json",
+    "sha256": "b2e6726fe407689b42b033db6536b3053e2f742d2523c32ffe21ba18fd07af57"
+  }
+}

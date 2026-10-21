@@ -1,27 +1,45 @@
 {
   "part": "C5.2 Part D / Stage RD",
-  "status": "NOT_STARTED_DUE_A4_IV_STOP",
-  "part_a_reference": {
-    "results": "C5_2_PART_A_RESULTS.md",
-    "provenance": "C5_2_PART_A_PROVENANCE.json",
-    "stop_basis": "A1 clean-8b repeat and both A2 matched comparisons were scientifically byte-identical; no first break/attribution was found; root and auditor confirmed A4(iv) STOP.",
-    "sha256": {
-      "results": {
-        "path": "docs/validation/fixed_ldau/rs/C5_2_PART_A_RESULTS.md",
-        "sha256": "b9b372626beb90aac33e8ad98f8e8a07a852b04f03514bb38b76da8fd4993a08"
-      },
-      "provenance": {
-        "path": "docs/validation/fixed_ldau/rs/C5_2_PART_A_PROVENANCE.json",
-        "sha256": "9102597adddbd316ed233bba42225e473369389e7ec4c95e09b4b8873632e4bf"
-      }
-    }
+  "status": "RD1_PASS_RD2_RD5_PENDING",
+  "current_amendment": "C5.3 A4(v): no-R1 attribution branch adopted; historical C5.2 A4(iv) stop is superseded",
+  "historical_c5_2_a4_iv": {
+    "status": "STOP(iv)",
+    "basis": "A1 clean-8b repeat and both A2 matched comparisons were scientifically byte-identical; no first break or attribution was found.",
+    "superseded_by": "C5.3 A4(v); preserved as historical record"
   },
-  "RD1_RD5": "NOT_STARTED_DUE_A4_IV_STOP",
-  "RD3_comparisons": {
-    "status": "NOT_RUN",
-    "systems": [],
-    "u0_controls": "NOT_RUN",
-    "u_positive_comparisons": "NOT_RUN"
+  "RD1": {
+    "status": "PASS_UNIT_GATE",
+    "description": "One frozen-host and one recursion-site finite-H oracle; exact inserted V-in is mapped through irec to cluster site and iz type, captured by iteration, and compared against direct eigenvectors per spin.",
+    "production_changes": [
+      "source/hamiltonian.f90",
+      "source/hamiltonian_build.f90",
+      "source/self.f90",
+      "source/bands.f90"
+    ],
+    "test_change": "tests/validation/fixed_ldau/projector_multisite_frozen_h.f90",
+    "solver_campaign_runs": 0,
+    "unit_gate_runs": 1,
+    "unit_gate_output_sha256": "6f2665d7177d9078dafa8615178e330af889c8d9c33a9545c506e2092c12a22d",
+    "auditor_verdict": "PASS; raw arithmetic and site-swap negative control independently recomputed",
+    "asset_manifest": "C5_2_PART_D_assets/RD1_unit_gate/RD1_PROVENANCE.json",
+    "asset_manifest_sha256": "5cb639a0c30aa0ec67eb1513b98f98717c2f37a126a55c094850f6fae412f9c1",
+    "asset_checksums": "C5_2_PART_D_assets/RD1_unit_gate/SHA256SUMS",
+    "asset_checksums_sha256": "c7eec929c0a4473e6570e4605ea6451dcbb888066186dfa00f385220fecf739b"
+  },
+  "RD2": {
+    "status": "PENDING",
+    "reason": "No impurity solver run; awaits accepted Ni local impurity state"
+  },
+  "RD3": {
+    "status": "PENDING",
+    "comparisons": {
+      "a": "NOT_STARTED",
+      "a_prime": "NOT_STARTED",
+      "b": "NOT_STARTED",
+      "b_prime": "NOT_STARTED",
+      "c": "NOT_STARTED",
+      "d": "NOT_STARTED"
+    }
   },
   "RD4": {
     "status": "NOT_MEASURED",
@@ -30,15 +48,54 @@
     "routing_decision": "NOT_ADOPTED"
   },
   "RD5": {
-    "status": "NOT_ADOPTED",
+    "status": "NOT_STARTED",
     "auto_mode_changes": false,
     "energy_routing_changes": false
   },
-  "gates": "NOT_EVALUATED",
-  "solver_runs": 0,
-  "builds": 0,
-  "production_changes": [],
-  "commands": [],
-  "raw_run_paths": [],
-  "next_step": "User review of the no-reproduction branch is required before further work."
+  "build": {
+    "configuration": "Isolated GNU Fortran 16.2.0 Release; same compiler, effective flags, dependencies and link command as frozen B1 Release",
+    "solver_sha256": "4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f",
+    "unit_executable_sha256": "5e81dc7f905345363ae648466df3fe52b1176811c70cd4efa0f3c6de24472489",
+    "cache_sha256": "1d9cfd811da21ec7392e3019322a812b04ba5c8bf17be7cd717c43ff1a9232f1",
+    "flags_sha256": "c8e7ce9c8fb42cd1e0f0989adec79d1217c67cbbc3a5b21679fdc785d65582b3",
+    "solver_link_sha256": "baf888a39a9a5673e6b7e60f57f3289e00c1a78048e1a2fdea8a58deb7f82332",
+    "unit_link_sha256": "9d850b73d33dfcce703d2af8d54e74c891e3cd8d6e80f875908f99d450764d3b",
+    "failed_initial_test_compile_preserved": true,
+    "no_executable_binaries_in_repo_assets": true
+  },
+  "known_ni_inputs": {
+    "accepted_seed_bundle": "C5_2_PART_D_assets/ni_seed_recovery",
+    "accepted_u0_bulk_rc80_bundle": "C5_2_PART_D_assets/ni_u0_bulk_rc80_host",
+    "note": "Existing audited bundles preserved unchanged; active follow-up run directories remain outside the repository asset copy."
+  },
+  "bulk_reference_runs": {
+    "rd_ni_u3_bulk_rc80_block": {
+      "purpose": "Ni U=3 bulk reference generation; not an RD2 impurity campaign",
+      "run_directory": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/run",
+      "solver_pid_observed": 26911,
+      "accepted_checkpoint": "window 55-74; acceptance independently audited; endpoint P_MIX state SHA256 bc3340a8ad20d2467eaeccd43929a659d4cfff2a9f28b748fb6554edc4ee3ac9; P_OUT trace SHA256 40a69d8effacaa34254cd99315ec0a9724e560d2f80710eef946667672e6d16b",
+      "checkpoint_bundle": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/accepted_checkpoint_55_74/",
+      "checkpoint_manifest_sha256": "55d6c71dd93a4f9f525dcad742afbbfbdd4e355edf33f083b14b6b87f122ac86",
+      "terminal_record_sha256": "bcc6714402752a8019df558c61a6a6d0d29f1bf06996c1fa6632d1e02f17215c",
+      "stop": "Authorized intentional SIGTERM after accepted checkpoint preservation; wrapper and solver exited 143 at 2026-10-21 09:24:06+0200. This is run lifecycle, not a C5.2 protocol STOP.",
+      "authorized_sigterm_record_sha256": "a431c3a28530d4a289ea6b16f8512e1a3669fb095614744262253f0613300e96",
+      "process_absence_record_sha256": "b91c1233ad349d1aa4bf5e6a565a56043fc421a9f6f432673bf1e05281f1cb74",
+      "post_stop_live_outputs": "IDs 75-89 retained separately and not substituted for the accepted checkpoint",
+      "post_stop_record_sha256": "6ec829a34c9d645051617cedf007d66762330d4dd6bab537481ebe2c0d21b7a6",
+      "post_stop_checksums_sha256": "f76524f824976fe98061fdbfec7dec32c8bac26f1b798e9a2fd4d8ca17c17a22"
+    },
+    "rd_ni_ks_u0_bulk_rc80_block": {
+      "purpose": "Ni U=0 KS bulk reference; not an RD2 impurity campaign",
+      "run_directory": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80/",
+      "status": "exit 0 at 100-step cap, unconverged; final Diff 0.0105018834",
+      "terminal_snapshot": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80/terminal_snapshot_001/",
+      "terminal_snapshot_manifest_sha256": "305583f91585ff428de4e2a44685e1b9a91b2a4ab1cacdecbc678f3ec7fa8981",
+      "continuation": "beta 0.05, 200-step continuation preflight audited; prepared only, no continuation solver run launched",
+      "continuation_preflight_sha256": "506069af6f99ff51cef654def23ae96b4e23592789e58c772e03d3b8f5b24c01"
+    }
+  },
+  "rd2_dependent_impurity_solver_runs": 0,
+  "rd2_dependent_impurity_campaign_status": "NOT_STARTED; waits for accepted Ni local impurity state",
+  "production_energy_or_default_changes": false,
+  "next_step": "RD2 frozen Ni replay after the accepted Ni local impurity state and separate preflight are available"
 }

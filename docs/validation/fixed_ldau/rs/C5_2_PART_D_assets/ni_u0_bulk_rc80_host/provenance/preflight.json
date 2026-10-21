@@ -1,0 +1,268 @@
+{
+  "schema": "c5_3_rd_ni_u0_bulk_host_preflight_v1",
+  "status": "PREPARED_NO_LAUNCH_PENDING_AUDITOR_PASS_AND_ROOT_AUTHORIZATION",
+  "run_id": "rd_ni_u0_bulk_rc80_block",
+  "repo": "/Users/andersb/Jobb/rslmto_fable_v4b",
+  "current_commit": "0469135d935dd31fb6ce055d819cdb54811c52fa",
+  "current_commit_tree": "811eeeceeeefebb0cfbb16586707be25547f459e",
+  "binary_source_commits": {
+    "B1_source_commit": "8a107432e3ca2e00c815c217d52e7aa2a8e30736",
+    "PartC_head": "0469135d935dd31fb6ce055d819cdb54811c52fa"
+  },
+  "source_edits_by_this_task": false,
+  "solver_launches": 0,
+  "host_definition": {
+    "system": "fcc monatomic Ni bulk",
+    "calctype": "B",
+    "rc": 80,
+    "lld": 21,
+    "recursion": "block",
+    "nsp": 1,
+    "lmax": 2,
+    "explicit_hubbard_override": {
+      "hubbard_u_general(1,3)": 0.0,
+      "hubbard_j_general(1,3)": 0.0,
+      "unit": "eV",
+      "hubbard_radial_moments": "local"
+    },
+    "lattice": {
+      "alat": 3.5234,
+      "crystal_sym": "fcc",
+      "pbc": true,
+      "n1": 16,
+      "n2": 16,
+      "n3": 16,
+      "wav": 1.37692,
+      "ntype": 1,
+      "ct_1": 4.0,
+      "r2": 16.0
+    },
+    "fermi": {
+      "initial_Ry": -0.061141,
+      "fix_fermi": true
+    },
+    "energy_window_Ry": [
+      -1.0,
+      0.5
+    ],
+    "channels_ldos": 2500,
+    "mixing": {
+      "beta": 0.1,
+      "mixtype": "broyden"
+    },
+    "initial_step_cap": 100,
+    "input_conv_thr": 1e-30,
+    "acceptance_limits_from_registered_C1": {
+      "same_loop_endpoint_Diff_max": 3e-08,
+      "each_d_occupation_q0_spin_spread_last20_max": 5e-07,
+      "physical_sphere_moment_spread_last20_max_muB": 1e-06
+    },
+    "if_initial_cap_not_accepted": [
+      "continue by +200 steps with beta halved",
+      "then +200 steps with Broyden beta 0.01"
+    ],
+    "recipe_basis": "Ni U0 accepted impurity control input has fcc alat=3.52340/wav=1.37692, EF=-0.061141 fixed, window[-1,0.5], channels2500, beta0.1 Broyden; RD host definition supplies rc80/lld21/block. This new run creates the bulk endpoint; no old unverified host substituted."
+  },
+  "restart_seed": {
+    "durable_accepted_seed": "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_seed_recovery/endpoint/Ni-imp_out.nml",
+    "source_run": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql",
+    "source_role": "accepted fcc Ni U0 impurity endpoint; seed only, not accepted bulk host",
+    "endpoint_sha256": "addd6667159c9e4a5b6e4d3ff575143281877fb0b3c78832dccead1a34735e2d",
+    "acceptance_path": "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_seed_recovery/provenance/C2_acceptance.json",
+    "acceptance_sha256": "993c0203956361616050d444fbb542e780a1e32cfbd04f8e03c3a1e31fc383e4",
+    "acceptance_status": "ACCEPTED; 200 steps, Diff 1.52e-8, last20 d q0 spreads 1.594861478e-7/7.839479466e-8 and sphere moment 3.858874530e-7",
+    "source_UJ_arrays": "all zero; lmax2; no serialized radial mode field",
+    "input_mode": "label Ni-imp, fresh_start=false, loader selects <label>_out.nml before <label>.nml",
+    "no_metadata_or_array_edits": true,
+    "immutable_path": "/private/tmp/c52-rd-ni-u0-host/immutable/Ni-imp_out.nml",
+    "working_restart_path": "/private/tmp/c52-rd-ni-u0-host/run/Ni-imp_out.nml",
+    "working_restart_hash_before_launch": "addd6667159c9e4a5b6e4d3ff575143281877fb0b3c78832dccead1a34735e2d",
+    "loader_source_proof": "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_seed_recovery/provenance/loader_alias_compatibility.json"
+  },
+  "files": {
+    "input_nml": {
+      "immutable": {
+        "path": "/private/tmp/c52-rd-ni-u0-host/immutable/input.nml",
+        "bytes": 633,
+        "sha256": "52d233e0c999089a588bbcabe77d7f040a9f42788b6c380c0523c14d353a57c5"
+      },
+      "working": {
+        "path": "/private/tmp/c52-rd-ni-u0-host/run/input.nml",
+        "bytes": 633,
+        "sha256": "52d233e0c999089a588bbcabe77d7f040a9f42788b6c380c0523c14d353a57c5"
+      }
+    },
+    "Ni_imp_nml": {
+      "immutable": {
+        "path": "/private/tmp/c52-rd-ni-u0-host/immutable/Ni-imp.nml",
+        "bytes": 6793,
+        "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+      },
+      "working": {
+        "path": "/private/tmp/c52-rd-ni-u0-host/run/Ni-imp.nml",
+        "bytes": 6793,
+        "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+      }
+    },
+    "Ni_imp_out_seed": {
+      "immutable": {
+        "path": "/private/tmp/c52-rd-ni-u0-host/immutable/Ni-imp_out.nml",
+        "bytes": 6794,
+        "sha256": "addd6667159c9e4a5b6e4d3ff575143281877fb0b3c78832dccead1a34735e2d"
+      },
+      "working": {
+        "path": "/private/tmp/c52-rd-ni-u0-host/run/Ni-imp_out.nml",
+        "bytes": 6794,
+        "sha256": "addd6667159c9e4a5b6e4d3ff575143281877fb0b3c78832dccead1a34735e2d"
+      }
+    },
+    "all_three_working_files_match_immutable": true,
+    "working_modes": "0644 owner-writable; immutable source snapshots mode0444"
+  },
+  "namelist_schema": {
+    "command": "/opt/homebrew/opt/python@3.11/bin/python3.11 /private/tmp/c52-rd-ni-u0-host/analysis/validate_preflight.py",
+    "validated_groups_members_all_three_inputs": true,
+    "validation_result_path": "/private/tmp/c52-rd-ni-u0-host/analysis/schema_validation.json",
+    "validation_result_sha256": "efa1c7bea2df9ed5244a44f86e900d49dd46a727d0af10908229a63ab4494837",
+    "complete_declared_source_schema_path": "/private/tmp/c52-rd-ni-u0-host/analysis/source_namelist_schema.json",
+    "complete_declared_source_schema_sha256": "ee1153c3011f96131a493ef5c1aa9ca3ad82b2b855f19809f1ba1809307b42ef",
+    "declared_group_count": 20,
+    "declaration_file_count": 20,
+    "all_groups_and_members_listed": true,
+    "runtime_value_assertions": "geometry, calctype B, nsp1, lmax2 seed, RS self.use_kspace=false, block recurrence, fresh_start=false, EF/window, mixing, U/J zero sparse d overrides, local mode, nstep100"
+  },
+  "binary": {
+    "path": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x",
+    "sha256": "a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3",
+    "mode": "0555",
+    "build_manifest": {
+      "path": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/manifest.json",
+      "bytes": 3161,
+      "sha256": "b2f3ab5d26c439520bdfcbca16163877b2e36d7bb9c3af0448e6941327ae5158"
+    },
+    "build_manifest_sha256": "b2f3ab5d26c439520bdfcbca16163877b2e36d7bb9c3af0448e6941327ae5158",
+    "original_build_base_commit": "8c7251da74e7142df30cc4147d2a4f259badabf2",
+    "source_file_manifest": {
+      "CMakeLists.txt": "6f4dbe61e45a7c42a5e4cc5ac2977059102f974fd20e0376ac9e2ee63c46d419",
+      "source/CMakeLists.txt": "38c03906064b587d6a40c99160f80bfe154dcbcacdbf677bceba1c969fefdc26",
+      "source/bands.f90": "ea924d76e09c534d33275e9e330d872e9351d14ba33629013d409784280838cc",
+      "source/mix.f90": "f75c1d98d57e8a114d188c28089ec3f565d5a64328679f50224618a0f6e202fd",
+      "source/self.f90": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+      "source/scf_guard.f90": "3f232e9cea4a84acfbe98b7636da0b02318253d5a21f776bb2763e607571c415",
+      "tests/unit/test_scf_b1_guard.f90": "d000c46c13e6eb503aa65487f6861928deb752ecc4c8cbdc1573a73364ba7434"
+    },
+    "frozen_sources_match_committed_B1_and_C5_2_HEAD": {
+      "B1_source_commit": {
+        "CMakeLists.txt": true,
+        "source/CMakeLists.txt": true,
+        "source/bands.f90": true,
+        "source/mix.f90": true,
+        "source/self.f90": true,
+        "source/scf_guard.f90": true,
+        "tests/unit/test_scf_b1_guard.f90": true
+      },
+      "current_C5_2_head": {
+        "CMakeLists.txt": true,
+        "source/CMakeLists.txt": true,
+        "source/bands.f90": true,
+        "source/mix.f90": true,
+        "source/self.f90": true,
+        "source/scf_guard.f90": true,
+        "tests/unit/test_scf_b1_guard.f90": true
+      }
+    },
+    "build_directory": "/private/tmp/c5-b1-guard-build-clean",
+    "cmake_cache": {
+      "path": "/private/tmp/c5-b1-guard-build-clean/CMakeCache.txt",
+      "bytes": 35017,
+      "sha256": "c1f6e9c6444be7d93add9232024612eedf2ff26cde14b051bac724b816b83435"
+    },
+    "release_flags": "-ffree-line-length-0 -cpp -mtune=native -DCOLOR -fopenmp -DOpenMP_Fortran_FOUND -O3 -fbacktrace -g -g",
+    "flags_make": {
+      "path": "/private/tmp/c5-b1-guard-build-clean/CMakeFiles/rslmto.x.dir/flags.make",
+      "bytes": 599,
+      "sha256": "b988b130bc6deb7e3639dadd6926385078d61960d75e5cd9e90cc327c4845efa"
+    },
+    "link_command": {
+      "path": "/private/tmp/c5-b1-guard-build-clean/CMakeFiles/rslmto.x.dir/link.txt",
+      "bytes": 569,
+      "sha256": "baf888a39a9a5673e6b7e60f57f3289e00c1a78048e1a2fdea8a58deb7f82332"
+    },
+    "compiler": "GNU Fortran (Homebrew GCC 16.2.0) 16.2.0",
+    "cmake": "cmake version 4.4.4",
+    "B1_guard_ctest": {
+      "path": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/ctest.txt",
+      "bytes": 532,
+      "sha256": "5e4c1c2fd580906d2949e26a4f70ca9f59320ba8b0a0fe5b38e5771ddca00841"
+    },
+    "guard_ctest_result": "3/3 passed (capacity diagnostic, nonfinite diagnostic, allowed boundary)"
+  },
+  "runtime_and_lifecycle": {
+    "run_dir": "/private/tmp/c52-rd-ni-u0-host/run",
+    "exact_authorized_wrapper_command": "C52_RD_NI_U0_AUTHORIZED=1 /private/tmp/c52-rd-ni-u0-host/collector/launch_host.sh",
+    "frozen_solver_command": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x",
+    "environment": {
+      "OMP_NUM_THREADS": "1",
+      "OMP_DYNAMIC": "FALSE",
+      "RSLMTO_OMP_THREADS_SERIAL": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "BLIS_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "RSLMTO_FIXED_U_TRACE": "<run>/fixed_u_trace.csv",
+      "RSLMTO_FIXED_U_RUN_ID": "rd_ni_u0_bulk_rc80_block",
+      "RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY": "1",
+      "RSLMTO_FIXED_U_TRACE_QL_ONLY": "0",
+      "RSLMTO_FIXED_U_TRACE_ITERATION": "0",
+      "RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY": "0",
+      "RSLMTO_FIXED_U_A2_SCAN": "0"
+    },
+    "capture_contract": "per outer iteration, six P_OUT ql rows covering l0-2 x spin1-2, six POST_SCF_RADIAL records through etot_total, plus stable double-read Ni-imp_scf.nml snapshot and SHA",
+    "readiness_contract": "collector-owned marker follows args parsing, signal handlers, output-dir/manifest creation and watcher_started record fsync; wrapper waits before exec",
+    "tracking_contract": "foreground wrapper launches executable, writes solver PID, starts guard, waits actual solver and records exact return code, then joins guard/collector; output log complete",
+    "working_write_checks": "input.nml, Ni-imp.nml, Ni-imp_out.nml owner writable; seed/input hashes rechecked before exec",
+    "disk_guard_floor_bytes": 1073741824,
+    "expected_loaded_restart_log": "Ni-imp_out.nml loaded as restart; verify actual startup before accepting run",
+    "required_startup_logs": [
+      "calctype B / bulk",
+      "RS use_kspace false",
+      "block recursion",
+      "U=0/J=0 and local radial mode",
+      "EF fixed at -0.061141 Ry"
+    ]
+  },
+  "analysis": {
+    "acceptance_script": {
+      "path": "/private/tmp/c52-rd-ni-u0-host/analysis/scan_acceptance.py",
+      "bytes": 4155,
+      "sha256": "cfacac8d8cbc90f025da669b90e594d255a2fbf06a327a4e643723d999e655a3"
+    },
+    "acceptance_method": "Decimal tokens, exact same-loop Diff parsed from each step section; 20 consecutive captured states; d q0 spin spreads and absolute q0-derived sphere moment; original limits only; first qualifying endpoint",
+    "no_new_thresholds_or_denominator_floors": true
+  },
+  "collector_assets": {
+    "collector/watch_trace_and_state.py": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be",
+    "collector/launch_host.sh": "2cd415db89a957d48a14c4376c0da65a387291b9915a6ac681362f8c7fda583a",
+    "collector/disk_guard.sh": "3049362e51a3165866c73bb997667a0c74662fc673328085b2636c25dae74cdd",
+    "analysis/validate_preflight.py": "e2695fea35947bf9b6fb2ae5091ef1b90cf19c66acce30454993fad09e3ffc82",
+    "analysis/scan_acceptance.py": "cfacac8d8cbc90f025da669b90e594d255a2fbf06a327a4e643723d999e655a3",
+    "analysis/write_source_schema.py": "1396d175e38a8f300c3e34e9c72d349b2bb8c3b12fa3f2c922c95e5ddf070c0e",
+    "analysis/write_preflight.py": "bbdd60a04f1c8071ffed85a4ab4fe6b560950ae918014c6bc9b2261d67cbcde8",
+    "analysis/source_namelist_schema.json": "ee1153c3011f96131a493ef5c1aa9ca3ad82b2b855f19809f1ba1809307b42ef",
+    "analysis/schema_validation.json": "efa1c7bea2df9ed5244a44f86e900d49dd46a727d0af10908229a63ab4494837"
+  },
+  "prelaunch_state": {
+    "binary_path_hash_and_mode_verified": true,
+    "immutable_and_mutable_seed_separate": true,
+    "all_groups_and_members_source_schema_checked": true,
+    "wrapper_shell_syntax_checked": true,
+    "collector_and_analyzers_py_compile_checked": true,
+    "collector_owned_readiness_handshake_smoke": "PASS; watcher_started.json and manifest exist before ready is consumed; dummy process only, zero solver launches",
+    "readiness_smoke_started_sha256": "d0429ca06304af885eebd3a6753132d6889e35947232c1fb95b13c44e20bd14b",
+    "readiness_smoke_finished_sha256": "4db8e81f514186c98b746d9835b9868a580f96c613d34744344ab66170800add",
+    "auditor_review_required": true,
+    "root_launch_authorization_required": true,
+    "no_solver_has_been_launched": true
+  }
+}
