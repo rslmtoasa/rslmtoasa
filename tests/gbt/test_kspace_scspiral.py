@@ -5,7 +5,8 @@
             B = 0, a wrong k -+ q/2 or a swapped spin channel in the SCF density.
   identity_orthogonal  the same at kspace_ham_order = 'orthogonal'. Consistency, not validation: both sides run the same H^gamma kernel family
             (the physics anchors are O3 and O3b). Bug caught: a k -+ q/2 shift that is not a mesh translation (q
-            scaled by 0.3 in the assembly: dE = 1.1e-4 Ry). Not caught: errors shared with the nsp = 1 path (a swapped spin channel of C moves both sides), or
+            scaled by 0.3 in the assembly: dE = 1.1e-4 Ry). Not caught: errors shared with the nsp = 1 path (a swapped spin channel of C moves both sides; that one is caught by
+            AppKspaceOrthogonalScf_moments (O3b), not by I2), or
             a shift by a multiple of q/2 (a mesh translation).
   identity_ccor, identity_ccor_second  the same with ccor_2c on both sides (first and second order). Bug: Hcc missing or wrong in the spiral SCF
             assembly (also in the SCF density: the moments then differ), Hcc inside h - h o h at second order.
