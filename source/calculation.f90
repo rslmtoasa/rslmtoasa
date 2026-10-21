@@ -42,6 +42,7 @@ module calculation_mod
    use string_mod, only: sl, fmt, real2str
    use timer_mod, only: g_timer
    use logger_mod, only: g_logger
+   use gf_audit_io_mod, only: gf_audit_load_sbar, gf_audit_graph
    implicit none
 
    private
@@ -856,6 +857,8 @@ contains
          call lattice_obj%newclu()
          call lattice_obj%structb(.true.)
       end select
+      ! Explicit frozen-input counterfactual; unset environment leaves Sbar intact.
+      call gf_audit_load_sbar(lattice_obj%sbar)
       ! Creating the symbolic_atom object
       call lattice_obj%atomlist()
 
@@ -906,6 +909,12 @@ contains
          call hamiltonian_obj%build_bulkham() ! Build the bulk Hamiltonian
          call hamiltonian_obj%build_locham() ! Build the local Hamiltonian
       end select
+
+      if (rank == 0 .and. control_obj%calctype == 'B' .and. hamiltonian_obj%hoh .and. .not. hamiltonian_obj%local_axis) then
+         call gf_audit_graph(lattice_obj%nn(1:lattice_obj%kk,:), lattice_obj%iz(1:lattice_obj%kk), &
+                             hamiltonian_obj%ee, hamiltonian_obj%eeo, &
+                             hamiltonian_obj%obarm, hamiltonian_obj%enim, hamiltonian_obj%lsham)
+      end if
 
       ! Creating recursion object
       recursion_obj = recursion(hamiltonian_obj, energy_obj)

@@ -99,6 +99,10 @@ jobs:
             python -m ensurepip 
             python -m pip install -r requirements.txt
 
+      - name: Test magnetic GF diagnostics ${{ matrix.icon}}
+        if: runner.os != 'Windows'
+        run: python -m unittest discover -s diagnostics/gf_symmetry -p 'test_*.py' -v
+
       - name: Test binaries ${{ matrix.icon}}
         if: runner.os != 'Windows'
         run: |

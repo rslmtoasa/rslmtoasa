@@ -1,8 +1,9 @@
 # Magnetic Green-function diagnostics
 
 Read `../../MN2F2_GF_SYMMETRY_AUDIT.md` for the derivation and measured findings.
-These tools read data and report violations; they never project production matrices
-or change exchange formulas. Python requires NumPy (already a repository dependency).
+The original tools read data and report violations. The explicitly labelled
+reciprocity intervention below projects a separate saved input copy. Exchange
+formulas remain unchanged. Python requires NumPy (already a repository dependency).
 
 ## Tests and build
 
@@ -129,5 +130,88 @@ between supplied outputs and a new build for an instrumentation regression.
 reconstructs bare spinor hopping from saved widths/moments, and optionally compares
 it with the first-action capture. The accepted binary format is checked, not guessed.
 
-Run only on complete output files. Detailed reports remain private. No script
-changes potentials, reruns SCF, symmetrizes structure constants, or discards Dx.
+Run only on complete output files. Detailed reports remain private. Analysis
+scripts do not change potentials, rerun SCF, or discard Dx.
+
+## Frozen-input reciprocity intervention
+
+`reciprocal_sbar.py` projects a **new binary copy**, pairing physical reverse
+bonds in the real basis. It refuses to overwrite an existing file, rejects
+missing/ambiguous partners, and checks byte roundtrip and idempotence. This is
+a counterfactual at fixed potentials, not a screening-convergence calculation.
+
+```bash
+python diagnostics/gf_symmetry/reciprocal_sbar.py \
+  /absolute/private/mn2f2/100/exchange_jobs/Mn1 \
+  --output /absolute/private/sbar.reciprocal \
+  --report /absolute/private/projection.json
+
+# First-pair gate in both domains. Use the SAME rebuilt binary for the control.
+python diagnostics/gf_symmetry/run_saved.py \
+  --fixtures /absolute/private/mn2f2 --binary /absolute/build/bin/rslmto.x \
+  --destination /absolute/private/gate-reciprocal --cases 100 1-00 \
+  --sbar /absolute/private/sbar.reciprocal --one-pair 1 \
+  --audit 1 --h-action --threads 4
+
+# Full baseline: omit both --one-pair and --sbar.
+python diagnostics/gf_symmetry/run_saved.py \
+  --fixtures /absolute/private/mn2f2 --binary /absolute/build/bin/rslmto.x \
+  --destination /absolute/private/full-original --cases 100 1-00 \
+  --audit all --h-action --mpi 2 --threads 4
+
+# Full intervention: original pair list, grid, potentials, flags and settings.
+python diagnostics/gf_symmetry/run_saved.py \
+  --fixtures /absolute/private/mn2f2 --binary /absolute/build/bin/rslmto.x \
+  --destination /absolute/private/full-reciprocal --cases 100 1-00 \
+  --sbar /absolute/private/sbar.reciprocal \
+  --audit all --h-action --mpi 2 --threads 4
+
+python diagnostics/gf_symmetry/causal_summary.py \
+  --original /absolute/private/full-original \
+  --reciprocal /absolute/private/full-reciprocal \
+  --output /absolute/private/causal-summary.json
+```
+
+For the diagonal extension, run `run_saved.py` with `--cases 110 1-1-0`
+and the separately validated reciprocal binary. The same bare-H graph gate
+executes before recursion. Summarize completed reciprocal endpoints with:
+
+```bash
+python diagnostics/gf_symmetry/diagonal_summary.py \
+  --reciprocal /absolute/private/diagonal-reciprocal \
+  --fixtures /absolute/private/mn2f2 \
+  --output /absolute/private/diagonal-summary.json
+```
+
+This checks immutable inputs and complete H/GF coverage, evaluates both
+in-plane components and their domain parity, and uses [110] covariance controls.
+In particular, C2x is excluded because it does not stabilize this domain.
+Its original-output comparison is explicitly the supplied fixture benchmark;
+it does not imply a newly executed unsymmetrized diagonal baseline.
+
+**Rebuild this branch:** `post_processing_exchange` calls `structb(.true.)`,
+which regenerates Sbar and ignores the saved `sbar.` file. Replacing that file
+alone has no effect. The runner therefore sets `RSLMTO_AUDIT_SBAR` to the
+copied binary and `RSLMTO_AUDIT_SBAR_VIEW` to unchanged `view.sbar.`. The optional
+hook requires GF audit mode, checks fresh versus saved vector/type ordering
+and binary dimensions, and loads the copy after screening, before Hamiltonian
+construction. Screening parameters and all physical formulas stay unchanged.
+The runner rejects an executable that does not log the override.
+
+For bulk, global-axis, HoH audit runs, `gf-audit-graph.dat` checks every actual
+cluster bare-hopping edge and its reverse, `hO=h*O`, and Hermiticity of O,
+energy-centre and SOC matrices. Padding beyond `kk` atoms is excluded. These
+are full-graph prerequisites for Hermiticity of `H=h-h*O*h+E_nu+SOC`; they are
+not a dense reconstruction of every effective-H entry. For an override,
+failure above `1e-12` aborts before recursion. H-action captures independently
+measure actual effective-H and HoH onsite/offsite residuals for requested columns.
+
+Full-run analysis refuses failed/missing manifests, reduced pair lists,
+unmatched domain grids, missing spatial partners or changed saved potentials.
+All original/copied file hashes are logged before explicit pair-list reduction.
+Use one full job at a time if memory is limited.
+
+Fortran integration tests run when `gfortran` exists or `FC` names a compiler;
+optional `FFLAGS` are used in the isolated test build. They exercise successful
+loading, inactive defaults, mismatched labels, corrupt/trailing records,
+audit-mode requirements and whole-graph reciprocity checks.
