@@ -1,0 +1,232 @@
+{
+  "accepted_checkpoint": {
+    "Fe_out_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+    "Fe_scf_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+    "backend_field": "absent",
+    "both_runs_unchanged": true,
+    "mode_field": "absent",
+    "source_directory": "/private/tmp/a5-priority-local-u2-ks/u2_local_standard"
+  },
+  "attempts": [
+    {
+      "accepted_local_source_deck_sha256": "ca995150bd98768e40539857f164e8508eb0f5a49a5cdec2cf86e095acd372fb",
+      "accepted_seed_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+      "attempt": 1,
+      "binary_expected_sha256": "07a94dd35208ed7ace3b3c729f7d122e5771924265035a57606f7b84a446ea10",
+      "binary_sha256": "07a94dd35208ed7ace3b3c729f7d122e5771924265035a57606f7b84a446ea10",
+      "classification": "T2a runtime failure; no accepted endpoint",
+      "complete_POST_SCF_RADIAL_rows": 0,
+      "disk_floor_bytes": 1073741824,
+      "disk_guard_sha256": "50af6200b10b46ca8e4b3dc0c4de64e02535543c601540b1e1dd74e200821f21",
+      "disk_min_periodic_bytes": 14160949248,
+      "disk_post_df_kib": 13345692,
+      "disk_preexec_bytes": 15524487168,
+      "exit_code": 139,
+      "input_sha256": "1af5bcc4c3633f238043438e0aaa59575c8854f8fdbbd927af52f5660ae04083",
+      "launcher_sha256": "5051e509b322135ef5a8ad4f363df7bc1a5960c7d7b822e857dcad8a62098be3",
+      "lifecycle": [
+        "launcher_pid=27317",
+        "binary=/private/tmp/c57-t2a-ks-fe-auto/immutable/rslmto.x",
+        "binary_sha256=07a94dd35208ed7ace3b3c729f7d122e5771924265035a57606f7b84a446ea10",
+        "preexec_free_bytes=15524487168",
+        "run_id=c57_t2a_ks_fe_u2_auto",
+        "started_local=2026-10-21T23:11:27+02:00",
+        "solver_pid=27360",
+        "watcher_pid=27354",
+        "OMP_NUM_THREADS=1",
+        "RSLMTO_OMP_THREADS_SERIAL=1",
+        "library_thread_caps=1",
+        "environment_recorded_local=2026-10-21T23:11:27+02:00",
+        "exit_code=139",
+        "ended_local=2026-10-21T23:11:36+02:00"
+      ],
+      "paired_state_capture_count": 0,
+      "pid_files": {
+        "disk_guard.pid": 27362,
+        "solver.pid": 27360,
+        "watcher.pid": 27354
+      },
+      "preflight_sha256": "e03fed5531047e23e6d3bf28bd67f42bcdf6fbaaf808da4f493c0ab14f29b575",
+      "preflight_status": "PASS",
+      "root": "/private/tmp/c57-t2a-ks-fe-auto",
+      "run_feout_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+      "run_fescf_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+      "run_id": "c57_t2a_ks_fe_u2_auto",
+      "run_log_sha256": "abb7b4caf79782db24c74c1306dc35f0f93d3ccdbcc25fadda28b93b99b8e29b",
+      "source_commit": "0526b579e27a3cf20b56fa438c038f7dfe0ca17b",
+      "source_manifest_sha256": "9d7c35869edd2571361f33e0480ddff1023f69755a0a6dc91c4a793af7562259",
+      "source_self_f90_sha256": "33c33aa6d6a49a25dc0015e45a9a30143b83f5e9ebb5b4510485df1dab0240ba",
+      "thread_caps": {
+        "BLIS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_OMP_THREADS_SERIAL": "1",
+        "VECLIB_MAXIMUM_THREADS": "1"
+      },
+      "trace_iterations": {
+        "1": 1219081
+      },
+      "trace_rows": 1219081,
+      "trace_sha256": "209e2de76f96f1de60ec2134246df65e176475e2f6441df2d700e2561cc1b58d",
+      "trace_stage_counts": {
+        "CALCULATE_PL": 36,
+        "EIGENPAIRS": 1188885,
+        "FROZEN_REPLAY": 12,
+        "M1_OUT": 76,
+        "P_MIX": 756,
+        "P_OUT": 756,
+        "P_TRANSPOSE_CONTROL": 2,
+        "Pin_H": 756,
+        "RADIAL_REPLAY": 22886,
+        "RS_OPERATOR": 4905,
+        "SCF_CONVERGENCE": 9,
+        "VOUT_CONTROL": 2
+      },
+      "watcher_finished_sha256": "c632bcc8fc7714308950ebc87b380692ded3b81190abc91a48405c823e4cb521",
+      "watcher_sha256": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be",
+      "watcher_started_sha256": "5159b15c1bb2b995fd06efa76fb9266edb20654c39e0388a331323de0d63c1cd"
+    },
+    {
+      "accepted_local_source_deck_sha256": "ca995150bd98768e40539857f164e8508eb0f5a49a5cdec2cf86e095acd372fb",
+      "accepted_seed_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+      "attempt": 2,
+      "binary_expected_sha256": "07a94dd35208ed7ace3b3c729f7d122e5771924265035a57606f7b84a446ea10",
+      "binary_sha256": "07a94dd35208ed7ace3b3c729f7d122e5771924265035a57606f7b84a446ea10",
+      "classification": "T2a runtime failure; no accepted endpoint",
+      "complete_POST_SCF_RADIAL_rows": 0,
+      "disk_floor_bytes": 1073741824,
+      "disk_guard_sha256": "50af6200b10b46ca8e4b3dc0c4de64e02535543c601540b1e1dd74e200821f21",
+      "disk_min_periodic_bytes": 13805854720,
+      "disk_post_df_kib": 13344828,
+      "disk_preexec_bytes": 14076960768,
+      "exit_code": 139,
+      "input_sha256": "1af5bcc4c3633f238043438e0aaa59575c8854f8fdbbd927af52f5660ae04083",
+      "launcher_sha256": "293a13b10969123e419ccb8e91f469bfe7b4d40c4b8bf8e9c6078486064bf578",
+      "lifecycle": [
+        "launcher_pid=28671",
+        "binary=/private/tmp/c57-t2a-ks-fe-auto-cont2/immutable/rslmto.x",
+        "binary_sha256=07a94dd35208ed7ace3b3c729f7d122e5771924265035a57606f7b84a446ea10",
+        "preexec_free_bytes=14076960768",
+        "run_id=c57_t2a_cont2_ks_fe_u2_auto",
+        "started_local=2026-10-21T23:12:25+02:00",
+        "solver_pid=28724",
+        "watcher_pid=28700",
+        "OMP_NUM_THREADS=1",
+        "RSLMTO_OMP_THREADS_SERIAL=1",
+        "library_thread_caps=1",
+        "environment_recorded_local=2026-10-21T23:12:26+02:00",
+        "exit_code=139",
+        "ended_local=2026-10-21T23:12:33+02:00"
+      ],
+      "paired_state_capture_count": 0,
+      "pid_files": {
+        "disk_guard.pid": 28726,
+        "solver.pid": 28724,
+        "watcher.pid": 28700
+      },
+      "preflight_sha256": "ed822aea582216bf2ae49148adba675cb5c10846b3691044bbed1d5a73ee9cb5",
+      "preflight_status": "PASS",
+      "registered_continuation": false,
+      "root": "/private/tmp/c57-t2a-ks-fe-auto-cont2",
+      "run_feout_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+      "run_fescf_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+      "run_id": "c57_t2a_cont2_ks_fe_u2_auto",
+      "run_log_sha256": "101352cff9d94c7a191c0c9f4e2533808486177bd8e38f736cf60497538cbb9d",
+      "scope_deviation": "Fresh rerun from unchanged accepted seed after the zero-state SIGSEGV; not a continuation. Already launched before corrective stop instruction arrived.",
+      "source_commit": "0526b579e27a3cf20b56fa438c038f7dfe0ca17b",
+      "source_manifest_sha256": "9d7c35869edd2571361f33e0480ddff1023f69755a0a6dc91c4a793af7562259",
+      "source_self_f90_sha256": "33c33aa6d6a49a25dc0015e45a9a30143b83f5e9ebb5b4510485df1dab0240ba",
+      "thread_caps": {
+        "BLIS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "RSLMTO_OMP_THREADS_SERIAL": "1",
+        "VECLIB_MAXIMUM_THREADS": "1"
+      },
+      "trace_iterations": {
+        "1": 1219081
+      },
+      "trace_rows": 1219081,
+      "trace_sha256": "1782bda07d9c8fd365665ea873375e69f8efc609724b66b6a7035ca907b22813",
+      "trace_stage_counts": {
+        "CALCULATE_PL": 36,
+        "EIGENPAIRS": 1188885,
+        "FROZEN_REPLAY": 12,
+        "M1_OUT": 76,
+        "P_MIX": 756,
+        "P_OUT": 756,
+        "P_TRANSPOSE_CONTROL": 2,
+        "Pin_H": 756,
+        "RADIAL_REPLAY": 22886,
+        "RS_OPERATOR": 4905,
+        "SCF_CONVERGENCE": 9,
+        "VOUT_CONTROL": 2
+      },
+      "watcher_finished_sha256": "6b168c3c7372d289d1df6e22e4de144953e845f05a3a644754fc208a45e2ffc3",
+      "watcher_sha256": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be",
+      "watcher_started_sha256": "f49256ddc1a8961b22445dfeefb57596dfd25d47543f4bcc9cf7b1fbc0e092c5"
+    }
+  ],
+  "audit": {
+    "attempt_2_deviation": "confirmed and recorded; attempt 2 was a fresh same-seed invocation, not a registered continuation",
+    "json": "C5_7_AUDIT.json",
+    "markdown": "C5_7_AUDIT.md",
+    "status": "sole final batched audit complete; audit artifacts included unchanged",
+    "verdict": "T1 PASS; T2a runtime FAIL; KS acceptance unevaluated; adoption and merge not permitted"
+  },
+  "backend": "ks",
+  "campaign_budget": {
+    "attempt_2_scope_note": "Attempt 2 was a fresh rerun from the exact accepted seed after attempt 1 left no complete state; it was not a registered continuation and is recorded candidly as a stop-rule deviation. It had already been launched before the corrective stop instruction arrived. No third attempt was launched.",
+    "attempts_remaining": 1,
+    "campaign_attempts_used": 2,
+    "cap": 3,
+    "t2a_attempts": 2,
+    "t2b_attempts": 0,
+    "t2b_status": "NOT RUN; explicit T2a failure stop"
+  },
+  "date": "2026-10-21",
+  "disk": {
+    "final_df_sample": {
+      "available_kib": 13319216,
+      "path": "/private/tmp",
+      "sampled_at": "2026-10-21T23:16:54+02:00"
+    },
+    "floor_bytes": 1073741824,
+    "minimum_observed_periodic_available_bytes": 13805854720,
+    "post_run_available_kib": 13344828
+  },
+  "expected_guard_behavior": "updated bulk seed mode mismatch logged INFO and continues; provenance written only if endpoint output is produced",
+  "mode_source": "default (native KS)",
+  "next_action": "Stop after the audited T2a failure. T2b/T3/T4, further solver attempts, adoption and merge are not permitted by this result.",
+  "objective": "Regenerate the accepted native-KS bcc Fe U=2 eV/J=0 host using auto mode, exact accepted legacy seed, fixed T1 binary; verify complete KS acceptance and written local/KS provenance.",
+  "raw_packet": {
+    "contains": "Both full raw run directories, exact staged decks/seeds, immutable inputs and binary, logs, trace CSVs, preflight outputs, launcher/watcher/disk guard and capture records.",
+    "path": "docs/validation/fixed_ldau/rs/C5_7_T2A_assets/t2a_ks_fe_u2_auto_failed_raw.tar.gz",
+    "readable": true,
+    "sha256": "2a1764877602a99de12966814f41a1734f79b7b034d66596e92f087dbba9a65a"
+  },
+  "resolved_mode": "local",
+  "runtime_observation": {
+    "acceptance": "UNEVALUATED; no complete POST_SCF_RADIAL trace phase or complete paired state snapshot; no twenty-iteration acceptance window.",
+    "both_attempts_exit_139": true,
+    "cause": "UNEXPLAINED; no crash triage or cause claim was performed.",
+    "observed_last_user_log_context": "Immediately after LDM calculation and mix.f90 charge-transfer output, then Fortran SIGSEGV and address-only backtrace. No SCF outer iteration completed.",
+    "trace_capture": "Watcher and disk guard were running before each solver start. The trace has iteration-1 partial records only; no POST_SCF_RADIAL rows, so no stable full qL/Diff plus state pair qualified.",
+    "written_mode_backend": "NONE; Fe_scf.nml and Fe_out.nml remain byte-identical to accepted seed."
+  },
+  "schema": "c57_t2a_ks_fe_u2_auto_result_v1",
+  "source": {
+    "binary_sha256": "07a94dd35208ed7ace3b3c729f7d122e5771924265035a57606f7b84a446ea10",
+    "repository_head": "0526b579e27a3cf20b56fa438c038f7dfe0ca17b",
+    "source_manifest_path": "docs/validation/fixed_ldau/rs/C5_7_T2A_assets/source_manifest.json",
+    "source_manifest_sha256": "9d7c35869edd2571361f33e0480ddff1023f69755a0a6dc91c4a793af7562259",
+    "source_self_f90_sha256": "33c33aa6d6a49a25dc0015e45a9a30143b83f5e9ebb5b4510485df1dab0240ba"
+  },
+  "verdict": "FAIL_RUNTIME_SEGFAULT; KS acceptance unevaluated; T2b/T3/T4 stopped"
+}
