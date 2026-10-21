@@ -7,6 +7,9 @@ site 1 and (0,0,-1) on site 2 (the frame carries the orientation, see reciprocal
             collapse from 0.887 to 3e-4 muB, dE = 7.6e-4 Ry; or potential%mom rewritten to +z by the constraint update, so site 2 loses its frame.
   identity_second  the same at kspace_ham_order = 'second' (hoh): also checks the obarm/enim swap of the antiparallel site. Bug: a swap keyed to
             the wrong orientation (the second-order blocks of site 2 taken for the wrong spin).
+  identity_orthogonal  the same at kspace_ham_order = 'orthogonal' (consistency: the same H^gamma kernel family on both sides; the physics anchors are O3
+            and O3b). A moment collapse below 0.1 muB is to be reported, not registered. Bug caught: as for identity (injected: site 2 frame
+            from |mom_z|: moments 0.92 -> 0.0 muB, dE = 1.2e-3 Ry).
   rotation  S4 for two sites (q = 0, theta = 30 deg is a global rotation), constrained: E(0) and E(30 deg) both equal the collinear AFM energy
             within scf_identity_ry. Bug: site 2 not antiparallel to site 1 at theta > 0 or at theta = 0 (the moments collapse and the energy rises).
   restart   the potential written by the constrained run keeps mom = (0,0,-1) on site 2 and, read again, reproduces the energy within
@@ -75,6 +78,10 @@ def mode_identity(binary, scratch, src, order="first"):
 
 def mode_identity_second(binary, scratch, src):
     return mode_identity(binary, scratch, src, order="second")
+
+
+def mode_identity_orthogonal(binary, scratch, src):
+    return mode_identity(binary, scratch, src, order="orthogonal")
 
 
 def mode_rotation(binary, scratch, src):

@@ -1217,7 +1217,7 @@ foreach(mode identity identity_orthogonal identity_ccor identity_ccor_second con
   set_tests_properties(AppGbtKspaceScSpiral_${mode} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)
 endforeach()
 
-foreach(mode identity identity_second rotation restart)
+foreach(mode identity identity_second identity_orthogonal rotation restart)
   add_test(NAME AppGbtKspaceScSpiralAfm_${mode}
     COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_afm.py" ${mode} "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_afm_${mode}")
   set_tests_properties(AppGbtKspaceScSpiralAfm_${mode} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)
