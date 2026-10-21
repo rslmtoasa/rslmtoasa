@@ -1187,13 +1187,19 @@ add_test(NAME AppGbtKspaceCommensurateCcor
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_commensurate.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/commensurate_ccor_first" first ccor)
 add_test(NAME AppGbtKspaceCommensurateCcorSecondOrder
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_commensurate.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/commensurate_ccor_second" second ccor)
+add_test(NAME AppGbtKspaceNio_r2
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_nio.py" r2 "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/nio_r2")
+add_test(NAME AppGbtKspaceNio_i2
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_nio.py" i2 "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/nio_i2")
+add_test(NAME AppGbtKspaceNio_guard
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_nio.py" guard "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/nio_guard")
 add_test(NAME AppGbtKspaceSymmetry
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_symmetry.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/symmetry")
 add_test(NAME AppGbtKspaceOrthogonal
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_orthogonal.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/orthogonal")
 add_test(NAME AppGbtKspaceHamOrderInvalid
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_ham_order_invalid.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/ham_order_invalid")
-set_tests_properties(AppGbtKspaceGauge AppGbtKspaceGaugeCcor AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceCommensurateCcor AppGbtKspaceCommensurateCcorSecondOrder AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceHamOrderInvalid
+set_tests_properties(AppGbtKspaceGauge AppGbtKspaceGaugeCcor AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceCommensurateCcor AppGbtKspaceCommensurateCcorSecondOrder AppGbtKspaceNio_r2 AppGbtKspaceNio_i2 AppGbtKspaceNio_guard AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceHamOrderInvalid
   PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
 
 foreach(mode identity identity_ccor identity_ccor_second converge chi symmetry guards)

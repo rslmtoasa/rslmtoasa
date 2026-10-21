@@ -1,0 +1,66 @@
+&calculation
+pre_processing = 'bravais'
+verbose = T
+/
+&lattice
+rc = 080 ! radius cut. We could think about setting a default
+alat = 4.1684002458
+crystal_sym = 'file' ! options are bcc, fcc and hcp so far.
+wav = 1.2929345694
+ntype = 4
+ct(1) = 3.3
+ct(2) = 3.3
+ct(3) = 3.3
+ct(4) = 3.3
+r2 = 10.9
+pbc = .true.
+b1 = .true.
+b2 = .true.
+b3 = .true.
+n1 = 10
+n2 = 10
+n3 = 10
+strux_backend = 'strux_lib'
+strux_want_sdot  = .true.
+screening = 'fitted'
+/
+&atoms
+database = './'
+label(1) = 'Niu'
+label(2) = 'Nid'
+label(3) = 'O1'
+label(4) = 'O2'
+/
+&hamiltonian
+hoh = .true.
+ccor_2c = .true.
+/
+&self
+nstep = 35
+use_kspace = .true.
+cold = .true.
+/
+&energy
+fermi = -0.130612
+energy_min = -1.0
+energy_max = 1.5
+channels_ldos = 2000
+/
+&control
+gpu_plugin = .false.
+txc = 106
+calctype = 'B'
+nsp = 1 ! type of calculation, nsp can be 1, 2, 3 or 4
+lld = 200
+recur = 'chebyshev'
+/
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/
+&reciprocal
+!kspace_ham_order = 'orthogonal'
+nk1 = 12
+nk2 = 12
+nk3 = 12
+/
