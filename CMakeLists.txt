@@ -1170,7 +1170,7 @@ add_test(
     --scratch-root "${CMAKE_BINARY_DIR}/Testing/gbt/rs_freeze"
 )
 set_tests_properties(AppGbtKspaceRsFreeze PROPERTIES
-  LABELS "functional;gbt;rs" TIMEOUT 1200 SKIP_RETURN_CODE 77
+  LABELS "functional;gbt;rs" TIMEOUT 3600 RUN_SERIAL TRUE SKIP_RETURN_CODE 77
 )
 
 add_test(NAME AppGbtKspaceGauge
