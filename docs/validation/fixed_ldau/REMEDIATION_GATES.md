@@ -44,3 +44,17 @@ The two output snapshots are finite-step no-U RS baselines from the same family 
 | R15 — VAL-04/docs/release | NOT_RUN | Prior input campaign is finite-step and the original nsp=2 VAL-04 conflicts with the fixed-U guard. Criterion: modern scalar production campaign, separate SOC campaign, current maturity docs and full regression. |
 
 No SOC+U or material-physics support is certified by this ledger. Reevaluate every row after integrated production evidence; status changes must cite the source/binary SHA, independent assessor, command, exact input and raw output location, measured observable, criterion and negative control.
+
+## C5 Stage RD disposition (2026-10-21)
+
+RD1 passed its focused unit gate. RD2 remains a measured GATE FAIL: the scalar
+shift exceeds its registered allowance and the spin-swap separation misses its
+registered requirement. The proposed state-selection response addresses
+spin-swap identifiability only; it does not resolve the scalar failure and was
+not adopted. RD3 is a partial record with required controls/gates unavailable
+as documented in the Part D report. RD4 is NOT MEASURED: the Release W1 run
+crashed before SCF, bounded Debug triage did not explain it, and the clean8b
+same-deck input was incompatible before SCF. RD5 defaults, ``auto`` behavior,
+energy routing, and merge remain blocked by RD2. The frozen unchanged-behavior
+preflight has not been executed. Production energy formulas remain unchanged.
+See ``rs/C5_2_PART_D_RESULTS.md`` and its linked evidence packages.

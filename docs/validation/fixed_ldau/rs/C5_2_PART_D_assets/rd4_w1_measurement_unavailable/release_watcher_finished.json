@@ -1,0 +1,9 @@
+{
+  "captured_entries": 0,
+  "ended_local": "2026-10-21T19:46:35.141863+02:00",
+  "manifest_path": "/private/tmp/c52-rd4-w1-build/w1_execution_v5/captures/lambda_0p0/trace_state_manifest.jsonl",
+  "record_type": "read_only_trace_watcher_stop",
+  "run_id": "rd4_w1_lambda_0p0",
+  "solver_pid": 68773,
+  "stop_requested": false
+}

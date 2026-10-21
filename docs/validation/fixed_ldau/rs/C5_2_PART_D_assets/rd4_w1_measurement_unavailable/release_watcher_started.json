@@ -1,0 +1,30 @@
+{
+  "actual_argv": [
+    "/private/tmp/c52-rd4-w1-build/w1_execution_v5/collector/watch_trace_and_state.py",
+    "--run-id",
+    "rd4_w1_lambda_0p0",
+    "--solver-pid-file",
+    "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v6/lambda_0p0/run/solver.pid",
+    "--run-dir",
+    "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v6/lambda_0p0/run",
+    "--state-file",
+    "Ni-imp_scf.nml",
+    "--output-dir",
+    "/private/tmp/c52-rd4-w1-build/w1_execution_v5/captures/lambda_0p0",
+    "--ready-file",
+    "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v6/lambda_0p0/run/watcher.ready"
+  ],
+  "manifest_path": "/private/tmp/c52-rd4-w1-build/w1_execution_v5/captures/lambda_0p0/trace_state_manifest.jsonl",
+  "output_dir": "/private/tmp/c52-rd4-w1-build/w1_execution_v5/captures/lambda_0p0",
+  "ready_file": "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v6/lambda_0p0/run/watcher.ready",
+  "record_type": "read_only_trace_watcher_start",
+  "run_dir": "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v6/lambda_0p0/run",
+  "run_id": "rd4_w1_lambda_0p0",
+  "solver_pid": null,
+  "solver_pid_file": "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v6/lambda_0p0/run/solver.pid",
+  "started_local": "2026-10-21T19:46:24.183641+02:00",
+  "state_file": "Ni-imp_scf.nml",
+  "state_source": "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v6/lambda_0p0/run/Ni-imp_scf.nml",
+  "trace_source": "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v6/lambda_0p0/run/fixed_u_trace.csv",
+  "watcher_process_pid": 68739
+}

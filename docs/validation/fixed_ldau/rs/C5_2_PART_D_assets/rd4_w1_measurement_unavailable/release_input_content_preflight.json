@@ -1,0 +1,349 @@
+{
+  "schema": "rd4-w1-five-deck-clean-preflight-v3",
+  "status": "PREPARED_NOT_LAUNCHED_AWAITING_AUDIT",
+  "source_input_sha256": "c8566156f0e7479135dbeccadb05f4c4eef0f82892960096e2408e60262986bb",
+  "accepted_u0_seed_sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a",
+  "rekey": {
+    "schema": "rd4-w1-ni-host-rekey-v1",
+    "source_seed": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_u0_bulk_rc80_host/accepted/iter0024_state.nml.gz",
+    "source_gzip_sha256": "f6787f8afb39b3067ea01e9ab4a8657ca030cdf74c6f69db60951d7e51255e81",
+    "source_state_sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a",
+    "derived_state_sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4",
+    "operation": "symbol = 'Ni-imp' -> symbol = 'Ni-bulk'",
+    "reverse_replacement_restores_bytes": true,
+    "source_role": "Ni U0 accepted RS bulk endpoint24; copied byte-identically for the recursive Ni initializer and symbol-only rekeyed for frozen host"
+  },
+  "lamdas_Ry": [
+    0.0,
+    0.0025,
+    -0.0025,
+    0.005,
+    -0.005
+  ],
+  "requirements": {
+    "calctype_I": true,
+    "RS_real_space": true,
+    "nsp1": true,
+    "rc80": true,
+    "lld21": true,
+    "block": true,
+    "EF_fixed": true,
+    "window": true,
+    "local_radial": true,
+    "no_U_impurity": true,
+    "w1_impurity_only_flag": true
+  },
+  "unit_executed": true,
+  "w1_launch_authorized": false,
+  "decks": [
+    {
+      "path": "lambda_0p0",
+      "lambda_Ry": 0.0,
+      "input_sha256": "1f63c85f66c328811d9c0ef99f3e82454491ec40dbffcffdff455ec48e26e14c",
+      "host_seed_sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4",
+      "impurity_seed_sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    {
+      "path": "lambda_0p0025",
+      "lambda_Ry": 0.0025,
+      "input_sha256": "8bfc62c77aa262344c2b47c71a9066348ddbf9c001767ebdc9fb0ea3bfe880f0",
+      "host_seed_sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4",
+      "impurity_seed_sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    {
+      "path": "lambda_0p005",
+      "lambda_Ry": 0.005,
+      "input_sha256": "d37e359f9c0d8891ec029a54fa9b14347c1f4c1fed0d68888dab46e2a4fd9900",
+      "host_seed_sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4",
+      "impurity_seed_sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    {
+      "path": "lambda_m0p0025",
+      "lambda_Ry": -0.0025,
+      "input_sha256": "8e7271e822b60e9676816231c95186b93b58be88d6afa056bdbd31f60e9ef786",
+      "host_seed_sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4",
+      "impurity_seed_sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    {
+      "path": "lambda_m0p005",
+      "lambda_Ry": -0.005,
+      "input_sha256": "bb1eb68aad943bfa1f9880b6519c564f900fa0550e2d22a4fb447f76a4524f30",
+      "host_seed_sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4",
+      "impurity_seed_sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    }
+  ],
+  "files": [
+    {
+      "path": "NOOP_AND_SCOPE_PROOF.json",
+      "bytes": 1135,
+      "sha256": "e9385b235c4146411b4555125b758337667ed7f8e1ca350984586bb69d0549b8"
+    },
+    {
+      "path": "lambda_0p0/immutable/Ni-bulk.nml",
+      "bytes": 6794,
+      "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac"
+    },
+    {
+      "path": "lambda_0p0/immutable/Ni-bulk_out.nml",
+      "bytes": 6796,
+      "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4"
+    },
+    {
+      "path": "lambda_0p0/immutable/Ni-imp.nml",
+      "bytes": 6793,
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+    },
+    {
+      "path": "lambda_0p0/immutable/Ni-imp_out.nml",
+      "bytes": 6795,
+      "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    {
+      "path": "lambda_0p0/immutable/input.nml",
+      "bytes": 1139,
+      "sha256": "1f63c85f66c328811d9c0ef99f3e82454491ec40dbffcffdff455ec48e26e14c"
+    },
+    {
+      "path": "lambda_0p0/run/Ni-bulk.nml",
+      "bytes": 6794,
+      "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac"
+    },
+    {
+      "path": "lambda_0p0/run/Ni-bulk_out.nml",
+      "bytes": 6796,
+      "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4"
+    },
+    {
+      "path": "lambda_0p0/run/Ni-imp.nml",
+      "bytes": 6793,
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+    },
+    {
+      "path": "lambda_0p0/run/Ni-imp_out.nml",
+      "bytes": 6795,
+      "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    {
+      "path": "lambda_0p0/run/input.nml",
+      "bytes": 1139,
+      "sha256": "1f63c85f66c328811d9c0ef99f3e82454491ec40dbffcffdff455ec48e26e14c"
+    },
+    {
+      "path": "lambda_0p0025/immutable/Ni-bulk.nml",
+      "bytes": 6794,
+      "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac"
+    },
+    {
+      "path": "lambda_0p0025/immutable/Ni-bulk_out.nml",
+      "bytes": 6796,
+      "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4"
+    },
+    {
+      "path": "lambda_0p0025/immutable/Ni-imp.nml",
+      "bytes": 6793,
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+    },
+    {
+      "path": "lambda_0p0025/immutable/Ni-imp_out.nml",
+      "bytes": 6795,
+      "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    {
+      "path": "lambda_0p0025/immutable/input.nml",
+      "bytes": 1142,
+      "sha256": "8bfc62c77aa262344c2b47c71a9066348ddbf9c001767ebdc9fb0ea3bfe880f0"
+    },
+    {
+      "path": "lambda_0p0025/run/Ni-bulk.nml",
+      "bytes": 6794,
+      "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac"
+    },
+    {
+      "path": "lambda_0p0025/run/Ni-bulk_out.nml",
+      "bytes": 6796,
+      "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4"
+    },
+    {
+      "path": "lambda_0p0025/run/Ni-imp.nml",
+      "bytes": 6793,
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+    },
+    {
+      "path": "lambda_0p0025/run/Ni-imp_out.nml",
+      "bytes": 6795,
+      "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    {
+      "path": "lambda_0p0025/run/input.nml",
+      "bytes": 1142,
+      "sha256": "8bfc62c77aa262344c2b47c71a9066348ddbf9c001767ebdc9fb0ea3bfe880f0"
+    },
+    {
+      "path": "lambda_0p005/immutable/Ni-bulk.nml",
+      "bytes": 6794,
+      "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac"
+    },
+    {
+      "path": "lambda_0p005/immutable/Ni-bulk_out.nml",
+      "bytes": 6796,
+      "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4"
+    },
+    {
+      "path": "lambda_0p005/immutable/Ni-imp.nml",
+      "bytes": 6793,
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+    },
+    {
+      "path": "lambda_0p005/immutable/Ni-imp_out.nml",
+      "bytes": 6795,
+      "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    {
+      "path": "lambda_0p005/immutable/input.nml",
+      "bytes": 1141,
+      "sha256": "d37e359f9c0d8891ec029a54fa9b14347c1f4c1fed0d68888dab46e2a4fd9900"
+    },
+    {
+      "path": "lambda_0p005/run/Ni-bulk.nml",
+      "bytes": 6794,
+      "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac"
+    },
+    {
+      "path": "lambda_0p005/run/Ni-bulk_out.nml",
+      "bytes": 6796,
+      "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4"
+    },
+    {
+      "path": "lambda_0p005/run/Ni-imp.nml",
+      "bytes": 6793,
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+    },
+    {
+      "path": "lambda_0p005/run/Ni-imp_out.nml",
+      "bytes": 6795,
+      "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    {
+      "path": "lambda_0p005/run/input.nml",
+      "bytes": 1141,
+      "sha256": "d37e359f9c0d8891ec029a54fa9b14347c1f4c1fed0d68888dab46e2a4fd9900"
+    },
+    {
+      "path": "lambda_m0p0025/immutable/Ni-bulk.nml",
+      "bytes": 6794,
+      "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac"
+    },
+    {
+      "path": "lambda_m0p0025/immutable/Ni-bulk_out.nml",
+      "bytes": 6796,
+      "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4"
+    },
+    {
+      "path": "lambda_m0p0025/immutable/Ni-imp.nml",
+      "bytes": 6793,
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+    },
+    {
+      "path": "lambda_m0p0025/immutable/Ni-imp_out.nml",
+      "bytes": 6795,
+      "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    {
+      "path": "lambda_m0p0025/immutable/input.nml",
+      "bytes": 1143,
+      "sha256": "8e7271e822b60e9676816231c95186b93b58be88d6afa056bdbd31f60e9ef786"
+    },
+    {
+      "path": "lambda_m0p0025/run/Ni-bulk.nml",
+      "bytes": 6794,
+      "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac"
+    },
+    {
+      "path": "lambda_m0p0025/run/Ni-bulk_out.nml",
+      "bytes": 6796,
+      "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4"
+    },
+    {
+      "path": "lambda_m0p0025/run/Ni-imp.nml",
+      "bytes": 6793,
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+    },
+    {
+      "path": "lambda_m0p0025/run/Ni-imp_out.nml",
+      "bytes": 6795,
+      "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    {
+      "path": "lambda_m0p0025/run/input.nml",
+      "bytes": 1143,
+      "sha256": "8e7271e822b60e9676816231c95186b93b58be88d6afa056bdbd31f60e9ef786"
+    },
+    {
+      "path": "lambda_m0p005/immutable/Ni-bulk.nml",
+      "bytes": 6794,
+      "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac"
+    },
+    {
+      "path": "lambda_m0p005/immutable/Ni-bulk_out.nml",
+      "bytes": 6796,
+      "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4"
+    },
+    {
+      "path": "lambda_m0p005/immutable/Ni-imp.nml",
+      "bytes": 6793,
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+    },
+    {
+      "path": "lambda_m0p005/immutable/Ni-imp_out.nml",
+      "bytes": 6795,
+      "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    {
+      "path": "lambda_m0p005/immutable/input.nml",
+      "bytes": 1142,
+      "sha256": "bb1eb68aad943bfa1f9880b6519c564f900fa0550e2d22a4fb447f76a4524f30"
+    },
+    {
+      "path": "lambda_m0p005/run/Ni-bulk.nml",
+      "bytes": 6794,
+      "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac"
+    },
+    {
+      "path": "lambda_m0p005/run/Ni-bulk_out.nml",
+      "bytes": 6796,
+      "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4"
+    },
+    {
+      "path": "lambda_m0p005/run/Ni-imp.nml",
+      "bytes": 6793,
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+    },
+    {
+      "path": "lambda_m0p005/run/Ni-imp_out.nml",
+      "bytes": 6795,
+      "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    },
+    {
+      "path": "lambda_m0p005/run/input.nml",
+      "bytes": 1142,
+      "sha256": "bb1eb68aad943bfa1f9880b6519c564f900fa0550e2d22a4fb447f76a4524f30"
+    }
+  ],
+  "required_measurements": {
+    "physical_reported_energy": "Record the solver-reported physical energy for every deck without changing energy formulas or adopting the diagnostic term.",
+    "full_per_spin_density": "Preserve full per-spin P_OUT projector matrices and raw q/P values for all orbitals/types at every required recorded step.",
+    "raw_trace": "Preserve complete iteration-bound trace and state captures with stable source hashes and same-loop Diff binding.",
+    "lambda0_identity": "Confirm lambda=0 is a Hamiltonian no-op from source proof and compare against the zero-lambda run; frozen host is excluded by production target mask.",
+    "execution_gate": "No lambda deck launch before mixed-map unit oracle PASS and batched campaign preflight audit."
+  },
+  "parent_historical_snapshot_sha256": "a422c31398cbc6f54f4fa26bb8b2a1eaf2647c43d52a9764bfb11a99f970c825",
+  "correction": {
+    "only_change": "Removed explicit zero hubbard_u_general/hubbard_j_general entries for inactive channel 4, both types, from immutable/run input.nml in all five decks. Channels 1-3 remain explicitly U=J=0 on both types; no source/formula/default/energy/lambda/seed change.",
+    "removed_occurrences": 40,
+    "reason": "v4 lambda0 failed validation before SCF because explicit zero channel4 assignments exceed available channels for spd basis; no scientific measurement.",
+    "failed_attempt_path": "/private/tmp/c52-rd4-w1-build/w1_execution_v3/failed_attempt_002_lambda0_inactive_channel.json"
+  },
+  "parent_corrected_snapshot_sha256": "d91e77bffff7d56869d21c5d810a4745c31ccc9da30dcb34d24ea24679d060ba",
+  "clean_construction": "Created each lambda immutable/run directory from the five explicitly listed immutable inputs only; no directory-tree copy. Run directories contain exactly those five owner-writable inputs and no runtime artifacts.",
+  "parent_clean_snapshot_sha256": "33af727db45de3137147d9da2d7e1ea6795a610d6425e026bae1db161320c087"
+}

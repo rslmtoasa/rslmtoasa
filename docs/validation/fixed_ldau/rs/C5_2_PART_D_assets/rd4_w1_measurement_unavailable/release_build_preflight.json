@@ -1,0 +1,54 @@
+{
+  "schema": "c5-rd4-w1-private-build-and-mixed-map-preflight-v1",
+  "status": "BUILD_COMPLETE; MIXED_MAP_UNIT_COMPILED_NOT_EXECUTED; W1_SCF_NOT_RUN; READY_FOR_AUDIT",
+  "base_commit": "683eff937241a463d2dacb395485d6b7c0b43264",
+  "patch_path": "/private/tmp/c52-rd4-w1-private/RD4_W1_PRIVATE.patch",
+  "patch_sha256": "f0d622724f1311d059a3c51892ee6578c8c7e3dffb4e5d63266b978ea52610a9",
+  "patch_static_audit": "RD4_W1_REVIEW.md; manifest bound base/candidate changed-file hashes",
+  "private_source_root": "/private/tmp/c52-rd4-w1-build/source",
+  "source_manifest": "/private/tmp/c52-rd4-w1-build/CANDIDATE_SOURCE_MANIFEST.json",
+  "build_directory": "/private/tmp/c52-rd4-w1-build/build",
+  "configure_command": "CMake Release matching RD1 flags/dependencies; RUN_UNIT_TESTS=OFF for solver build, BUILD_TESTING=OFF",
+  "build_command": "cmake --build /private/tmp/c52-rd4-w1-build/build --target rslmto.x -j1",
+  "mixed_map_unit_preflight": {
+    "test_path": "tests/validation/fixed_ldau/projector_multisite_frozen_h.f90",
+    "test_source_sha256": "48eb4c5ecd8cb4219a9c6b26cf55344e1a5ed00e1938814cae367dee02b465c4",
+    "case_lines": "369-415",
+    "permuted_mapping": "recursion irec(1)=2 -> cluster site 2 -> iz(type2), while frozen host type1",
+    "positive": "target mask [false,true], production recursion type helper selects cluster2/type2; applying lambda changes only recursive type potential, host potential exactly unchanged",
+    "negative": "make frozen host share type2; production mask helper must return rd4_w1_scope_shared_host_type",
+    "scope": "compile only; do not execute unit binary or any W1 SCF before audit/root authorization"
+  },
+  "patch_source_sha256": {
+    "source/hamiltonian.f90": "ada47b11f0a662955b9a12ecbbfffb86faa98f5816d9dd6179c89d14f68648c7",
+    "source/hamiltonian_build.f90": "3ea25a6f6e755ac30e35705fb8c3d2df9788139c6687faa338f0cb4c2ead945c",
+    "source/hamiltonian_hubbard.f90": "ff0ddde2042473e14b8c6dff461cdf6a6cf78b4ffebf50dd36cd902b75d23151",
+    "source/include_codes/namelists/hamiltonian.f90": "fb6e6a25281a55da835482b95799c10caaa41d2d2c31ed5aca8c362363c18cbc",
+    "source/self.f90": "835d6776b921a765ea161ca4d2035747663061fb3b603dc821e7056a936b2269",
+    "tests/validation/fixed_ldau/projector_multisite_frozen_h.f90": "48eb4c5ecd8cb4219a9c6b26cf55344e1a5ed00e1938814cae367dee02b465c4"
+  },
+  "source_manifest_sha256": "f6c153f751ac981928382ca9e8cecff3d2aec6c23c0ab8980d007cf3ec1624fa",
+  "build": {
+    "compiler": "/opt/homebrew/bin/gfortran",
+    "compiler_version": "GNU Fortran (Homebrew GCC 16.2.0) 16.2.0",
+    "configure_cache": "/private/tmp/c52-rd4-w1-build/build/CMakeCache.txt",
+    "configure_cache_sha256": "d576d2f79e9aa875c46de376d988e79a38d951b53fe497c4ca6129c84deaf8cb",
+    "cmake_build_type": "Release",
+    "fortran_flags": "-ffree-line-length-0 -cpp -mtune=native -O3 -fbacktrace -g -g -fopenmp",
+    "solver_configure_options": "RUN_UNIT_TESTS=OFF; BUILD_TESTING=OFF (solver build)",
+    "unit_configure_options": "RUN_UNIT_TESTS=ON; BUILD_TESTING=ON (unit target compile only)",
+    "static_archive": "/private/tmp/c52-rd4-w1-build/build/source/librslmto.a",
+    "static_archive_sha256": "5dcb7e2a9803604cef6e655c961b8c5b0b761729a07400254bd0b2dde78f73c0",
+    "solver_binary": "/private/tmp/c52-rd4-w1-build/build/bin/rslmto.x",
+    "solver_binary_sha256": "4474dfcf3c5db01e4db814bcc315f23c79d368dc0b464de02e33a0e89085e137",
+    "unit_binary": "/private/tmp/c52-rd4-w1-build/build/bin/UnitLdaUProjectorMultisiteFrozenH",
+    "unit_binary_sha256": "a6c3d2f5fdd8edf36bcaa34217f26221c70a2a5bb2e35ee9c5a2b3aa559e67be",
+    "unit_test_command": "ctest --test-dir /private/tmp/c52-rd4-w1-build/build -R '^UnitLdaUProjectorMultisiteFrozenH$' --output-on-failure",
+    "unit_test_executed": false
+  },
+  "w1_packet": {
+    "path": "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v2",
+    "preflight_sha256": "442cad59221918f09f1d254cedf774cda079e4273d9ca38d2c2e3313e74465a9",
+    "status": "PREPARED_NOT_LAUNCHED_AWAITING_UNIT_PASS_AND_AUDIT"
+  }
+}

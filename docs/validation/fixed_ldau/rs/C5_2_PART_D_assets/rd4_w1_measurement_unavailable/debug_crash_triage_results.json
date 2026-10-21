@@ -1,0 +1,58 @@
+{
+  "schema": "rd4-w1-crash-triage-run-results-v1",
+  "status": "RUNS_COMPLETE_AWAITING_INDEPENDENT_CLASSIFICATION",
+  "preflight_sha256": "ba70ef02240d272b3364588173d817bf04cba3fe98a6a3857b4366caa83ddb35",
+  "debug_bounds": {
+    "solver_sha256": "09add8a2e679681ad9914fa3a5bb0f6fd60fb0e66d4632ca28b21a85636ec1c0",
+    "authorized_run_pid": 94058,
+    "same_deck_files_unchanged": true,
+    "threads": {
+      "OMP_NUM_THREADS": 1,
+      "OMP_DYNAMIC": false,
+      "RSLMTO_OMP_THREADS_SERIAL": 1,
+      "BLAS_family": 1,
+      "NUMEXPR_NUM_THREADS": 1
+    },
+    "log": {
+      "path": "/private/tmp/c52-rd4-w1-private/triage_001/debug_same_deck/run/testrun.log",
+      "bytes": 244336,
+      "sha256": "7c1e37659a51a7e2ac609c0d28a8b68dbf9ae9e390f9f1dad930ae56f8f30c16"
+    },
+    "exit_code_file": {
+      "path": "/private/tmp/c52-rd4-w1-private/triage_001/debug_same_deck/run/exit_code.txt",
+      "bytes": 4,
+      "sha256": "9d9b18720961e9b4689fd763b85e7b6f36160ccd3a8a1c9ddc5103bb0f66c396"
+    },
+    "exit_code": 143,
+    "stop": "Exact diagnostic PID SIGTERM after 36 complete Not-converged loops; original Release crash point repeatedly passed. Stopped before deck nstep=200 to bound crash localization; no accepted endpoint or energy measurement.",
+    "bounds_backtrace": "No bounds error or crash backtrace; raw output reaches 36 loops."
+  },
+  "clean8b": {
+    "solver_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+    "provenance_sha256": "10ab98e2b30c9cd5c04f30045ca16f01c890e16722f809436ef9c676e8025891",
+    "same_deck_files_unchanged": true,
+    "threads": {
+      "OMP_NUM_THREADS": 1,
+      "OMP_DYNAMIC": false,
+      "RSLMTO_OMP_THREADS_SERIAL": 1,
+      "BLAS_family": 1,
+      "NUMEXPR_NUM_THREADS": 1
+    },
+    "log": {
+      "path": "/private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run/testrun.log",
+      "bytes": 1655,
+      "sha256": "3450c7309f1d09cac7030d5b2115abf3f7e95a44aeba2f525b2bccfa46afd8a5"
+    },
+    "exit_code_file": {
+      "path": "/private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run/exit_code.txt",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "exit_code": 1,
+    "observed": "Invalid &hamiltonian namelist or out-of-range input (iostat=5010) at baseline hamiltonian_build.f90:188 before SCF; unchanged deck has W1 fields absent from clean8b schema. Baseline execution is input-incompatible, not comparable runtime evidence."
+  },
+  "no_next_lambda": true,
+  "no_energy_gate_result": true,
+  "classification": "AWAITING_AUDITOR_REVIEW",
+  "owned_solver_processes_remaining": 0
+}

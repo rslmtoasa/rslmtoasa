@@ -100,6 +100,20 @@ Implementation status
   :math:`-V^{IJ} n^{JI,\sigma}_{m' m}` is not yet active and must not be
   described as a validated inter-site DFT+U+V implementation.
 
+C5 impurity status (2026-10-21)
+--------------------------------
+
+The current C5 stage keeps ``calctype='I'`` in its existing explicit mode;
+``auto`` has not been extended for impurity runs. An explicitly selected
+``local`` mode changes the impurity density moments, but this does not imply
+that ``E_Hub(P_imp)`` is included in the reported impurity energy. Impurity
+energy routing remains off. C5 RD2 is a measured gate failure, and RD4 has no
+energy measurement because the authorized W1 solver crashed before SCF; its
+bounded diagnostics did not resolve the crash. The RD5 unchanged-behavior
+checks remain prepared, not run. Do not infer adoption or alter the production
+energy formula from the bulk energy results above. See
+``docs/validation/fixed_ldau/rs/C5_2_PART_D_RESULTS.md``.
+
 Validated ordinary on-site scope
 ================================
 

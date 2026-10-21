@@ -1,0 +1,107 @@
+{
+  "schema": "rd4-w1-instrumentation-build-unit-result-v1",
+  "status": "BUILD_PASS; TWO_FOCUSED_UNITS_PASS; NO_SCF",
+  "base_commit": "683eff937241a463d2dacb395485d6b7c0b43264",
+  "static_review": "PASS",
+  "environment": {
+    "OMP_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "OMP_DYNAMIC": "not explicitly set",
+    "BLAS_family_threads": "not explicitly set",
+    "build_jobs": 1,
+    "build_type": "Release"
+  },
+  "build_attempts": [
+    {
+      "command": "cmake --build /private/tmp/c52-rd4-w1-build/build --target rslmto.x UnitRd4W1ZeroGeneralScope UnitLdaUProjectorMultisiteFrozenH -j1",
+      "exit_code": 1,
+      "result": "rslmto.x built; no rule for UnitRd4W1ZeroGeneralScope in this invocation after reconfiguration; no test executed."
+    },
+    {
+      "command": "cmake --build /private/tmp/c52-rd4-w1-build/build --target UnitRd4W1ZeroGeneralScope UnitLdaUProjectorMultisiteFrozenH -j1",
+      "exit_code": 0,
+      "result": "both unit executables linked against rebuilt private static library."
+    }
+  ],
+  "test_command": "env OMP_NUM_THREADS=1 RSLMTO_OMP_THREADS_SERIAL=1 ctest --test-dir /private/tmp/c52-rd4-w1-build/build -R '^(UnitRd4W1ZeroGeneralScope|UnitLdaUProjectorMultisiteFrozenH)$' --output-on-failure",
+  "tests": {
+    "UnitRd4W1ZeroGeneralScope": "PASS",
+    "UnitLdaUProjectorMultisiteFrozenH": "PASS",
+    "count": 2,
+    "ctest_exit_code": 0,
+    "executed_once_each": true
+  },
+  "no_scf_executed": true,
+  "v5_preflight_file_manifest_verified": {
+    "expected_records": 51,
+    "mismatches": 0
+  },
+  "bindings": {
+    "instrumentation_patch": {
+      "path": "/private/tmp/c52-rd4-w1-private/instrumentation_v1/RD4_W1_INSTRUMENTATION.patch",
+      "bytes": 7854,
+      "sha256": "715833673d20d3614e16838f5165bf7980e33ae6697c298bb6486dbb1e680cf5"
+    },
+    "instrumentation_preflight": {
+      "path": "/private/tmp/c52-rd4-w1-private/instrumentation_v1/INSTRUMENTATION_PREFLIGHT.json",
+      "bytes": 1745,
+      "sha256": "3ea06f36d240f9409696f1d1fceb6e537b34d1eb677222072df938f5530b6d25"
+    },
+    "build_log": {
+      "path": "/private/tmp/c52-rd4-w1-private/instrumentation_v1/build_unit_raw.log",
+      "bytes": 10613,
+      "sha256": "b8a36c586fb52c960ca761f805ea90ca67043ca7900cfde858070510bb030843"
+    },
+    "build_exit_code": {
+      "path": "/private/tmp/c52-rd4-w1-private/instrumentation_v1/build_exit_code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "ctest_log": {
+      "path": "/private/tmp/c52-rd4-w1-private/instrumentation_v1/ctest_raw.log",
+      "bytes": 700,
+      "sha256": "1fa2c94d59de7744cef72e7897bd15667e88db674521f17d4e0b5de5d4adbe6a"
+    },
+    "ctest_exit_code": {
+      "path": "/private/tmp/c52-rd4-w1-private/instrumentation_v1/ctest_exit_code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "build_cache": {
+      "path": "/private/tmp/c52-rd4-w1-build/build/CMakeCache.txt",
+      "bytes": 35421,
+      "sha256": "d576d2f79e9aa875c46de376d988e79a38d951b53fe497c4ca6129c84deaf8cb"
+    },
+    "static_archive": {
+      "path": "/private/tmp/c52-rd4-w1-build/build/source/librslmto.a",
+      "bytes": 15856264,
+      "sha256": "60c6fb209a97be74260391db2ddbe8a25d8f5fe6a9c2f1d639ff861c288cbdc0"
+    },
+    "solver": {
+      "path": "/private/tmp/c52-rd4-w1-build/build/bin/rslmto.x",
+      "bytes": 5741912,
+      "sha256": "9b0b339bac638bcafcc572b7feebba601d42e72fb81d7ee8d37f5cb3cb1bfa54"
+    },
+    "focused_unit": {
+      "path": "/private/tmp/c52-rd4-w1-build/build/bin/UnitRd4W1ZeroGeneralScope",
+      "bytes": 1665288,
+      "sha256": "1ec8d7367ca2176d488a17bebc64edcd5c9964afee45ff1ac38555919d6a20d9"
+    },
+    "existing_mapped_unit": {
+      "path": "/private/tmp/c52-rd4-w1-build/build/bin/UnitLdaUProjectorMultisiteFrozenH",
+      "bytes": 3247840,
+      "sha256": "b57b721abbc6fefad2ea789b4132fc8e692657c4926e9ed8cfff2664131fd1d2"
+    },
+    "v5_preflight": {
+      "path": "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v5/preflight.json",
+      "bytes": 13739,
+      "sha256": "49f34478d2450223edfea4c66329f26c841ceeb7d86dd5cbafdbbfb5b94a6816"
+    },
+    "v5_scope_proof": {
+      "path": "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v5/NOOP_AND_SCOPE_PROOF.json",
+      "bytes": 1135,
+      "sha256": "e9385b235c4146411b4555125b758337667ed7f8e1ca350984586bb69d0549b8"
+    }
+  },
+  "test_environment_note": "Only OMP_NUM_THREADS=1 and RSLMTO_OMP_THREADS_SERIAL=1 were explicitly set in the shell; do not infer additional BLAS-family or OMP_DYNAMIC caps."
+}

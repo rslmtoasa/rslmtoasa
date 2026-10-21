@@ -141,3 +141,18 @@ Primary references checked for scope and conventions:
 - O. K. Andersen, O. Jepsen, and D. Glötzel, “Canonical description of the band structures of metals,” in *Highlights of Condensed-Matter Theory* (Varenna, 1985), [author-hosted notes](https://www2.fkf.mpg.de/andersen/users/jepsen/Varenna_1985.pdf). The notes separate solving the one-electron problem, constructing charge density, and evaluating total energy after self-consistency; they motivate checking the actual energy path rather than assuming an eigenvalue-sum identity.
 - R. W. Tank et al., “Improved LMTO-ASA methods part II: Total energy,” (1997), [author-hosted abstract](https://www2.fkf.mpg.de/andersen/docs/pub/abstract/and1997-25.html). This work addresses ASA total-energy accuracy by retaining nonspherical charge in electrostatic evaluation; it supports treating the spherical radial approximation as a relevant limitation, not a proof of a particular missing Hubbard term.
 - The [Questaal ASA documentation](https://www.questaal.org/docs/code/asaoverview/) describes the ASA band/atomic cycle as exchanging Q0/Q1/Q2 moments and potential parameters. This is supporting documentation, while the findings about this implementation above come from direct source tracing and the recorded production captures.
+
+## C5 impurity energy status
+
+C5 Stage RD has not adopted impurity energy routing. RD2 is a measured gate
+failure; its scalar-shift failure remains unresolved, and the separately
+proposed state-selection change is not adopted. RD4 is NOT MEASURED: the
+authorized W1 Release run exited 139 before a complete SCF iteration, so no
+``dE/dλ``, ``Tr(WP)``, residual, or energy-gate verdict exists. The bounded
+same-deck Debug run reached 36 loops without a bounds error; the clean8b
+binary rejected the deck before SCF as input-incompatible. Neither result
+establishes a fix or a pre-existing defect. Impurity Hubbard-energy routing
+remains off; no correction formula or tolerance has been added or changed.
+RD5 adoption and merge remain blocked by RD2. See
+``rs/C5_2_PART_D_RESULTS.md`` and
+``rs/C5_2_PART_D_assets/rd4_w1_measurement_unavailable/README.md``.

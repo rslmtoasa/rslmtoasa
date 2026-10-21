@@ -1,14 +1,10 @@
 {
-  "part": "C5.2 Part D / Stage RD",
-  "status": "RD1_PASS_RD2_FAIL_RD3_RD5_IN_PROGRESS_RD4_NOT_MEASURED",
-  "current_amendment": "C5.3 A4(v): no-R1 attribution branch adopted; historical C5.2 A4(iv) stop is superseded",
-  "historical_c5_2_a4_iv": {
-    "status": "STOP(iv)",
-    "basis": "A1 clean-8b repeat and both A2 matched comparisons were scientifically byte-identical; no first break or attribution was found.",
-    "superseded_by": "C5.3 A4(v); preserved as historical record"
-  },
   "RD1": {
-    "status": "PASS_UNIT_GATE",
+    "asset_checksums": "C5_2_PART_D_assets/RD1_unit_gate/SHA256SUMS",
+    "asset_checksums_sha256": "c7eec929c0a4473e6570e4605ea6451dcbb888066186dfa00f385220fecf739b",
+    "asset_manifest": "C5_2_PART_D_assets/RD1_unit_gate/RD1_PROVENANCE.json",
+    "asset_manifest_sha256": "5cb639a0c30aa0ec67eb1513b98f98717c2f37a126a55c094850f6fae412f9c1",
+    "auditor_verdict": "PASS; raw arithmetic and site-swap negative control independently recomputed",
     "description": "One frozen-host and one recursion-site finite-H oracle; exact inserted V-in is mapped through irec to cluster site and iz type, captured by iteration, and compared against direct eigenvectors per spin.",
     "production_changes": [
       "source/hamiltonian.f90",
@@ -16,125 +12,142 @@
       "source/self.f90",
       "source/bands.f90"
     ],
-    "test_change": "tests/validation/fixed_ldau/projector_multisite_frozen_h.f90",
     "solver_campaign_runs": 0,
-    "unit_gate_runs": 1,
+    "status": "PASS_UNIT_GATE",
+    "test_change": "tests/validation/fixed_ldau/projector_multisite_frozen_h.f90",
     "unit_gate_output_sha256": "6f2665d7177d9078dafa8615178e330af889c8d9c33a9545c506e2092c12a22d",
-    "auditor_verdict": "PASS; raw arithmetic and site-swap negative control independently recomputed",
-    "asset_manifest": "C5_2_PART_D_assets/RD1_unit_gate/RD1_PROVENANCE.json",
-    "asset_manifest_sha256": "5cb639a0c30aa0ec67eb1513b98f98717c2f37a126a55c094850f6fae412f9c1",
-    "asset_checksums": "C5_2_PART_D_assets/RD1_unit_gate/SHA256SUMS",
-    "asset_checksums_sha256": "c7eec929c0a4473e6570e4605ea6451dcbb888066186dfa00f385220fecf739b"
+    "unit_gate_runs": 1
   },
   "RD2": {
-    "status": "GATE_MEASURED_FAIL",
+    "adoption": false,
+    "carrier_ratio_each_spin_within_1_percent": true,
+    "debug_replay_byte_identical": true,
+    "debug_replays": 1,
+    "independent_items_continue": "C5.3 \u00a72.5 (a)-(d) clause; no criterion/tolerance changes.",
     "package": "C5_2_PART_D_assets/ni_u3j07_rd2_replay",
+    "proposal": "Future pre-registered non-degenerate spin-asymmetric state selection addresses spin-swap identifiability only; scalar-shift failure remains unresolved and its allowance is unchanged.",
+    "provenance_sha256": "c93e74be71fcfd194a822c30c3a3430dd2cda976c3d405ef68fef8eb1766ffdd",
+    "q2prime_nonnegative": true,
     "report": "C5_2_PART_D_assets/ni_u3j07_rd2_replay/RD2_REPORT.md",
     "report_sha256": "d9540983da29641e7c756ed57e28900bfb824371961c28d5aa5d54afb4a45948",
-    "provenance_sha256": "c93e74be71fcfd194a822c30c3a3430dd2cda976c3d405ef68fef8eb1766ffdd",
-    "carrier_ratio_each_spin_within_1_percent": true,
-    "q2prime_nonnegative": true,
     "scalar_shift_within_fitted_allowance": false,
     "sign_wrong_separation_over_10x_carrier_error": true,
     "spin_swap_separation_over_10x_carrier_error": false,
-    "debug_replays": 1,
-    "debug_replay_byte_identical": true,
-    "adoption": false,
-    "proposal": "Future pre-registered non-degenerate spin-asymmetric state selection addresses spin-swap identifiability only; scalar-shift failure remains unresolved and its allowance is unchanged.",
-    "independent_items_continue": "C5.3 \u00a72.5 (a)-(d) clause; no criterion/tolerance changes."
+    "status": "GATE_MEASURED_FAIL"
   },
   "RD3": {
-    "status": "PARTIAL_RECORD; gates unevaluated where controls/unavailable endpoints prevent them",
-    "ni_record": "C5_2_PART_D_assets/ni_rd3_ni_record/RD3_NI_RECORD.json",
-    "ni_record_sha256": "c8bcfacc67a27b3ecf797787683ca5c8749ec42cc6115d41da3286a904ccd242",
-    "fe_b2_record": "C5_2_PART_D_assets/fe_rd3_b2_record/RD3_FE_B2_RECORD.json",
-    "fe_b2_record_sha256": "006f1d4c4380b89ce4c2708cc941583e2599ae72112273e3569b137b9c47c8e3",
     "a": "UNEVALUATED; three U0 local control mapping-fatal records; no ratio",
     "b": "UNEVALUATED; required KS hosts ended at finite B1 capacity guards",
     "c": "NOT_RUN",
-    "d": "Ni local and spectral RECORD; impurity windows 4-23 and 3-22, spectral accepted; no U0 ratio and no endpoint-bound LDOS maximum. Fe local endpoint accepted under \u00a72.1 at window 1-20; one-step captures exit 0 but both Green and orbital grids differ, so LDOS not computed. B2FeCo seed inventory found no accepted restart; not evaluated."
+    "d": "Ni local and spectral RECORD; impurity windows 4-23 and 3-22, spectral accepted; no U0 ratio and no endpoint-bound LDOS maximum. Fe local endpoint accepted under \u00a72.1 at window 1-20; one-step captures exit 0 but both Green and orbital grids differ, so LDOS not computed. B2FeCo seed inventory found no accepted restart; not evaluated.",
+    "fe_b2_record": "C5_2_PART_D_assets/fe_rd3_b2_record/RD3_FE_B2_RECORD.json",
+    "fe_b2_record_sha256": "006f1d4c4380b89ce4c2708cc941583e2599ae72112273e3569b137b9c47c8e3",
+    "ni_record": "C5_2_PART_D_assets/ni_rd3_ni_record/RD3_NI_RECORD.json",
+    "ni_record_sha256": "c8bcfacc67a27b3ecf797787683ca5c8749ec42cc6115d41da3286a904ccd242",
+    "status": "PARTIAL_RECORD; gates unevaluated where controls/unavailable endpoints prevent them"
   },
   "RD4": {
-    "status": "PREPARED_NOT_RUN",
+    "auditor_verdict": "PASS on bounded triage classification; no \u00a72.5(c) STOP",
     "candidate_energy_comparisons": "NOT_RUN",
-    "hellmann_feynman_derivatives": "NOT_RUN",
-    "routing_decision": "NOT_ADOPTED",
-    "w1_snapshot_sha256": "a422c31398cbc6f54f4fa26bb8b2a1eaf2647c43d52a9764bfb11a99f970c825",
-    "focused_unit": "PASS; RD4_BUILD_PREFLIGHT 9a7a098dfc59daad01d38c4d517032902c98eeb8648835d9c2335f64000a7045; one registered unit execution only",
-    "execution_preflight": "PENDING"
+    "classification": "Release crash cause unexplained; Debug survival does not establish a fix or a pre-existing defect; baseline result is incomparable.",
+    "clean8b_outcome": "INPUT_INCOMPATIBLE_BEFORE_SCF; iostat=5010; current W1 fields absent from baseline schema",
+    "clean8b_solver_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+    "debug_bounds_complete_loops": 36,
+    "debug_bounds_no_error_or_backtrace": true,
+    "debug_bounds_solver_sha256": "09add8a2e679681ad9914fa3a5bb0f6fd60fb0e66d4632ca28b21a85636ec1c0",
+    "evidence_manifest": "C5_2_PART_D_assets/rd4_w1_measurement_unavailable/EVIDENCE_MANIFEST.json",
+    "evidence_package": "C5_2_PART_D_assets/rd4_w1_measurement_unavailable/README.md",
+    "hellmann_feynman_derivatives": "NOT_MEASURED",
+    "production_energy_formula_changed": false,
+    "release_raw_log_sha256": "8504fa16e384c02688c73a8d81a5653d52ec3dedb6e3eb8c133ed43ab4d4a004",
+    "release_run_exit_code": 139,
+    "release_solver_sha256": "9b0b339bac638bcafcc572b7feebba601d42e72fb81d7ee8d37f5cb3cb1bfa54",
+    "release_trace_manifest_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "routing_decision": "NOT_ADOPTED; energy routing remains OFF",
+    "status": "MEASUREMENT_UNAVAILABLE_AFTER_BOUNDED_SECTION_2_4_TRIAGE"
   },
   "RD5": {
-    "status": "NOT_STARTED",
     "auto_mode_changes": false,
-    "energy_routing_changes": false
+    "energy_routing_changes": false,
+    "merge_authorized": false,
+    "preflight": "C5_2_PART_D_assets/rd5_unchanged_behavior_preflight.json",
+    "status": "ADOPTION_BLOCKED_BY_RD2_FAIL; UNCHANGED_BEHAVIOR_PREFLIGHT_PREPARED_NOT_RUN"
   },
   "build": {
+    "cache_sha256": "1d9cfd811da21ec7392e3019322a812b04ba5c8bf17be7cd717c43ff1a9232f1",
     "configuration": "Isolated GNU Fortran 16.2.0 Release; same compiler, effective flags, dependencies and link command as frozen B1 Release",
+    "failed_initial_test_compile_preserved": true,
+    "flags_sha256": "c8e7ce9c8fb42cd1e0f0989adec79d1217c67cbbc3a5b21679fdc785d65582b3",
+    "no_executable_binaries_in_repo_assets": true,
+    "solver_link_sha256": "baf888a39a9a5673e6b7e60f57f3289e00c1a78048e1a2fdea8a58deb7f82332",
     "solver_sha256": "4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f",
     "unit_executable_sha256": "5e81dc7f905345363ae648466df3fe52b1176811c70cd4efa0f3c6de24472489",
-    "cache_sha256": "1d9cfd811da21ec7392e3019322a812b04ba5c8bf17be7cd717c43ff1a9232f1",
-    "flags_sha256": "c8e7ce9c8fb42cd1e0f0989adec79d1217c67cbbc3a5b21679fdc785d65582b3",
-    "solver_link_sha256": "baf888a39a9a5673e6b7e60f57f3289e00c1a78048e1a2fdea8a58deb7f82332",
-    "unit_link_sha256": "9d850b73d33dfcce703d2af8d54e74c891e3cd8d6e80f875908f99d450764d3b",
-    "failed_initial_test_compile_preserved": true,
-    "no_executable_binaries_in_repo_assets": true
+    "unit_link_sha256": "9d850b73d33dfcce703d2af8d54e74c891e3cd8d6e80f875908f99d450764d3b"
+  },
+  "bulk_reference_runs": {
+    "rd_ni_ks_u0_bulk_rc80_block": {
+      "continuation": "beta 0.05, 200-step continuation was launched; finite B1 occupation-capacity guard stopped it before convergence (exit 1).",
+      "continuation_asset": "C5_2_PART_D_assets/ni_u0_ks_block_rc80_beta005_cont200_guard",
+      "continuation_preflight_sha256": "506069af6f99ff51cef654def23ae96b4e23592789e58c772e03d3b8f5b24c01",
+      "continuation_terminal_status": "FINITE_B1_OCCUPATION_CAPACITY_GUARD_STOP_NOT_CONVERGED",
+      "purpose": "Ni U=0 KS bulk reference; not an RD2 impurity campaign",
+      "run_directory": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80/",
+      "status": "exit 0 at 100-step cap, unconverged; final Diff 0.0105018834",
+      "terminal_snapshot": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80/terminal_snapshot_001/",
+      "terminal_snapshot_manifest_sha256": "305583f91585ff428de4e2a44685e1b9a91b2a4ab1cacdecbc678f3ec7fa8981"
+    },
+    "rd_ni_ks_u3_bulk_rc80_block": {
+      "asset": "C5_2_PART_D_assets/ni_u3_ks_block_rc80_guard",
+      "purpose": "Ni U=3 KS bulk host for RD3(b); no accepted endpoint",
+      "rd3_gate": "UNEVALUATED; dependent comparison not launched",
+      "status": "FINITE_B1_OCCUPATION_CAPACITY_GUARD_STOP_NOT_CONVERGED; exit 1"
+    },
+    "rd_ni_u3_bulk_rc80_block": {
+      "accepted_checkpoint": "window 55-74; acceptance independently audited; endpoint P_MIX state SHA256 bc3340a8ad20d2467eaeccd43929a659d4cfff2a9f28b748fb6554edc4ee3ac9; P_OUT trace SHA256 40a69d8effacaa34254cd99315ec0a9724e560d2f80710eef946667672e6d16b",
+      "authorized_sigterm_record_sha256": "a431c3a28530d4a289ea6b16f8512e1a3669fb095614744262253f0613300e96",
+      "checkpoint_bundle": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/accepted_checkpoint_55_74/",
+      "checkpoint_manifest_sha256": "55d6c71dd93a4f9f525dcad742afbbfbdd4e355edf33f083b14b6b87f122ac86",
+      "post_stop_checksums_sha256": "f76524f824976fe98061fdbfec7dec32c8bac26f1b798e9a2fd4d8ca17c17a22",
+      "post_stop_live_outputs": "IDs 75-89 retained separately and not substituted for the accepted checkpoint",
+      "post_stop_record_sha256": "6ec829a34c9d645051617cedf007d66762330d4dd6bab537481ebe2c0d21b7a6",
+      "process_absence_record_sha256": "b91c1233ad349d1aa4bf5e6a565a56043fc421a9f6f432673bf1e05281f1cb74",
+      "purpose": "Ni U=3 bulk reference generation; not an RD2 impurity campaign",
+      "run_directory": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/run",
+      "solver_pid_observed": 26911,
+      "stop": "Authorized intentional SIGTERM after accepted checkpoint preservation; wrapper and solver exited 143 at 2026-10-21 09:24:06+0200. This is run lifecycle, not a C5.2 protocol STOP.",
+      "terminal_record_sha256": "bcc6714402752a8019df558c61a6a6d0d29f1bf06996c1fa6632d1e02f17215c"
+    },
+    "rd_ni_u3_spectral_bulk_rc80_block": {
+      "acceptance_scan": "/private/tmp/c52-rd-ni-spectral-host-preflight/acceptance_scan.json",
+      "asset": "/private/tmp/c52-rd-ni-spectral-host-preflight",
+      "d_q0_spin1_spread": "4.095347119e-7",
+      "d_q0_spin2_spread": "3.818701053e-7",
+      "endpoint_iteration": 47,
+      "endpoint_state_sha256": "a42774de195d11190be68af0661f66f75301226286031d37559a4fc3ebc4e43b",
+      "physical_q0_moment_spread": "2.1492751976e-7",
+      "purpose": "Ni spectral U3/J0.7 bulk reference for RD3(d)",
+      "raw_audit": "PASS; auditor independently recomputed P_OUT ql spreads, same-loop Diff, and endpoint hash",
+      "rd3d_comparison": "NOT_RUN",
+      "recipe": "fcc Ni, block rc80, U=3 eV, J=0.7 eV; 100 captures, first \u00a72.1 passing window ends at 47",
+      "same_loop_diff": "1.30e-8",
+      "status": "ACCEPTED_WINDOW_28_47_AFTER_INDEPENDENT_RAW_AUDIT"
+    }
+  },
+  "current_amendment": "C5.3 A4(v): no-R1 attribution branch adopted; historical C5.2 A4(iv) stop is superseded",
+  "historical_c5_2_a4_iv": {
+    "basis": "A1 clean-8b repeat and both A2 matched comparisons were scientifically byte-identical; no first break or attribution was found.",
+    "status": "STOP(iv)",
+    "superseded_by": "C5.3 A4(v); preserved as historical record"
   },
   "known_ni_inputs": {
     "accepted_seed_bundle": "C5_2_PART_D_assets/ni_seed_recovery",
     "accepted_u0_bulk_rc80_bundle": "C5_2_PART_D_assets/ni_u0_bulk_rc80_host",
     "note": "Existing audited bundles preserved unchanged; active follow-up run directories remain outside the repository asset copy."
   },
-  "bulk_reference_runs": {
-    "rd_ni_u3_bulk_rc80_block": {
-      "purpose": "Ni U=3 bulk reference generation; not an RD2 impurity campaign",
-      "run_directory": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/run",
-      "solver_pid_observed": 26911,
-      "accepted_checkpoint": "window 55-74; acceptance independently audited; endpoint P_MIX state SHA256 bc3340a8ad20d2467eaeccd43929a659d4cfff2a9f28b748fb6554edc4ee3ac9; P_OUT trace SHA256 40a69d8effacaa34254cd99315ec0a9724e560d2f80710eef946667672e6d16b",
-      "checkpoint_bundle": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/accepted_checkpoint_55_74/",
-      "checkpoint_manifest_sha256": "55d6c71dd93a4f9f525dcad742afbbfbdd4e355edf33f083b14b6b87f122ac86",
-      "terminal_record_sha256": "bcc6714402752a8019df558c61a6a6d0d29f1bf06996c1fa6632d1e02f17215c",
-      "stop": "Authorized intentional SIGTERM after accepted checkpoint preservation; wrapper and solver exited 143 at 2026-10-21 09:24:06+0200. This is run lifecycle, not a C5.2 protocol STOP.",
-      "authorized_sigterm_record_sha256": "a431c3a28530d4a289ea6b16f8512e1a3669fb095614744262253f0613300e96",
-      "process_absence_record_sha256": "b91c1233ad349d1aa4bf5e6a565a56043fc421a9f6f432673bf1e05281f1cb74",
-      "post_stop_live_outputs": "IDs 75-89 retained separately and not substituted for the accepted checkpoint",
-      "post_stop_record_sha256": "6ec829a34c9d645051617cedf007d66762330d4dd6bab537481ebe2c0d21b7a6",
-      "post_stop_checksums_sha256": "f76524f824976fe98061fdbfec7dec32c8bac26f1b798e9a2fd4d8ca17c17a22"
-    },
-    "rd_ni_ks_u0_bulk_rc80_block": {
-      "purpose": "Ni U=0 KS bulk reference; not an RD2 impurity campaign",
-      "run_directory": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80/",
-      "status": "exit 0 at 100-step cap, unconverged; final Diff 0.0105018834",
-      "terminal_snapshot": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80/terminal_snapshot_001/",
-      "terminal_snapshot_manifest_sha256": "305583f91585ff428de4e2a44685e1b9a91b2a4ab1cacdecbc678f3ec7fa8981",
-      "continuation": "beta 0.05, 200-step continuation was launched; finite B1 occupation-capacity guard stopped it before convergence (exit 1).",
-      "continuation_preflight_sha256": "506069af6f99ff51cef654def23ae96b4e23592789e58c772e03d3b8f5b24c01",
-      "continuation_asset": "C5_2_PART_D_assets/ni_u0_ks_block_rc80_beta005_cont200_guard",
-      "continuation_terminal_status": "FINITE_B1_OCCUPATION_CAPACITY_GUARD_STOP_NOT_CONVERGED"
-    },
-    "rd_ni_ks_u3_bulk_rc80_block": {
-      "purpose": "Ni U=3 KS bulk host for RD3(b); no accepted endpoint",
-      "status": "FINITE_B1_OCCUPATION_CAPACITY_GUARD_STOP_NOT_CONVERGED; exit 1",
-      "asset": "C5_2_PART_D_assets/ni_u3_ks_block_rc80_guard",
-      "rd3_gate": "UNEVALUATED; dependent comparison not launched"
-    },
-    "rd_ni_u3_spectral_bulk_rc80_block": {
-      "purpose": "Ni spectral U3/J0.7 bulk reference for RD3(d)",
-      "status": "ACCEPTED_WINDOW_28_47_AFTER_INDEPENDENT_RAW_AUDIT",
-      "asset": "/private/tmp/c52-rd-ni-spectral-host-preflight",
-      "acceptance_scan": "/private/tmp/c52-rd-ni-spectral-host-preflight/acceptance_scan.json",
-      "endpoint_iteration": 47,
-      "same_loop_diff": "1.30e-8",
-      "d_q0_spin1_spread": "4.095347119e-7",
-      "d_q0_spin2_spread": "3.818701053e-7",
-      "physical_q0_moment_spread": "2.1492751976e-7",
-      "endpoint_state_sha256": "a42774de195d11190be68af0661f66f75301226286031d37559a4fc3ebc4e43b",
-      "recipe": "fcc Ni, block rc80, U=3 eV, J=0.7 eV; 100 captures, first \u00a72.1 passing window ends at 47",
-      "raw_audit": "PASS; auditor independently recomputed P_OUT ql spreads, same-loop Diff, and endpoint hash",
-      "rd3d_comparison": "NOT_RUN"
-    }
-  },
-  "rd2_dependent_impurity_solver_runs": 1,
-  "rd2_dependent_impurity_campaign_status": "RD2 frozen replay completed and measured FAIL after exactly one byte-identical diagnostic replay; no adoption. Continue independent items under C5.3 \u00a72.5.",
+  "next_step": "RD4 is NOT MEASURED after completed bounded \u00a72.4 triage. Audit/authorize the frozen RD5 unchanged-behavior preflight before any execution; RD5 adoption, automatic impurity mode, energy routing, and merge remain blocked by RD2 FAIL.",
+  "part": "C5.2 Part D / Stage RD",
   "production_energy_or_default_changes": false,
-  "next_step": "Audit the frozen RD4 W1 execution preflight and RD3 staged scope; no W1 solver runs until audit and root authorization. RD2 remains FAIL/no adoption."
+  "rd2_dependent_impurity_campaign_status": "RD2 frozen replay completed and measured FAIL after exactly one byte-identical diagnostic replay; no adoption. Continue independent items under C5.3 \u00a72.5.",
+  "rd2_dependent_impurity_solver_runs": 1,
+  "status": "RD1_PASS_RD2_FAIL_RD3_RECORDED_RD4_NOT_MEASURED_RD5_ADOPTION_BLOCKED"
 }
