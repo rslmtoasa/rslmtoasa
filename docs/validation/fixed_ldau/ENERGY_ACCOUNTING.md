@@ -153,6 +153,7 @@ same-deck Debug run reached 36 loops without a bounds error; the clean8b
 binary rejected the deck before SCF as input-incompatible. Neither result
 establishes a fix or a pre-existing defect. Impurity Hubbard-energy routing
 remains off; no correction formula or tolerance has been added or changed.
-RD5 adoption and merge remain blocked by RD2. See
+The no-U RS/KS identity checks passed; explicit-spectral identity remains
+unrun, and RD5 automatic adoption and merge remain blocked by RD2. See
 ``rs/C5_2_PART_D_RESULTS.md`` and
 ``rs/C5_2_PART_D_assets/rd4_w1_measurement_unavailable/README.md``.

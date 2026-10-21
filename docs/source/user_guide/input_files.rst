@@ -144,7 +144,9 @@ C5 status: impurity radial mode selection remains explicit; ``auto`` has not
 been adopted for impurity runs. Selecting ``local`` for an impurity affects
 local-moment evaluation only. The impurity energy does not currently route an
 added Hubbard term. RD2 failed, and RD4 has no measured energy derivative, so
-no energy-routing or default change is supported. See
+no energy-routing or default change is supported. The RD5 no-U RS/KS byte
+identity checks passed; explicit-spectral identity and ``auto`` checks remain
+unrun. See
 ``docs/validation/fixed_ldau/rs/C5_2_PART_D_RESULTS.md``.
 
 **Exchange interactions:**

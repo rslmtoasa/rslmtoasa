@@ -67,11 +67,25 @@
     "status": "MEASUREMENT_UNAVAILABLE_AFTER_BOUNDED_SECTION_2_4_TRIAGE"
   },
   "RD5": {
+    "auditor_verdict": "PASS; all four solver invocations, inputs/seeds, full caps, output bytes/name sets, and complete evidence manifest independently recomputed",
     "auto_mode_changes": false,
+    "auto_mode_checks": "NOT_RUN; adoption blocked by RD2 measured FAIL",
     "energy_routing_changes": false,
+    "evidence_manifest": "C5_2_PART_D_assets/rd5_no_u_identity_checks/SHA256SUMS",
+    "evidence_manifest_sha256": "b7108acd4c8ac304b9ad2d8ed52cf4f4f8d5c6ef9522d65902a701a0f9ff6d06",
+    "explicit_spectral_identity": "NOT_RUN under two-comparison authorization; prior RD3(d) record is not an identity result",
+    "ks_bulk_unchanged": "PASS within KS no-U identity comparison",
+    "ks_no_u_identity": "PASS; all scientific artifacts identical after registered exclusions",
     "merge_authorized": false,
     "preflight": "C5_2_PART_D_assets/rd5_unchanged_behavior_preflight.json",
-    "status": "ADOPTION_BLOCKED_BY_RD2_FAIL; UNCHANGED_BEHAVIOR_PREFLIGHT_PREPARED_NOT_RUN"
+    "preflight_sha256": "29e3ec7a8b4c676cc7cb443d4dec34297bf7c10545571fa8c1602a4dc285aa6f",
+    "repository_evidence_scope": "Selected output files plus full output SHA256 maps; complete raw run directories/logs retained in /private/tmp/c52-rd5-no-u.",
+    "results": "C5_2_PART_D_assets/rd5_no_u_identity_checks/RD5_RESULT.json",
+    "results_sha256": "a5e3ed8c1abc24deeabae63808b564e304b87bc4ef48be0f1c95867b41937e4e",
+    "rs_bulk_unchanged": "PASS within RS no-U identity comparison",
+    "rs_no_u_identity": "PASS; all scientific artifacts identical after registered exclusions",
+    "source_evidence_manifest_sha256": "5896bbb3e961912b046e6df2fcca754ef36417841bde1e2712d75da4014917b6",
+    "status": "PARTIAL_NO_U_RS_KS_IDENTITY_PASS; ADOPTION_BLOCKED_BY_RD2_FAIL"
   },
   "build": {
     "cache_sha256": "1d9cfd811da21ec7392e3019322a812b04ba5c8bf17be7cd717c43ff1a9232f1",
@@ -144,7 +158,7 @@
     "accepted_u0_bulk_rc80_bundle": "C5_2_PART_D_assets/ni_u0_bulk_rc80_host",
     "note": "Existing audited bundles preserved unchanged; active follow-up run directories remain outside the repository asset copy."
   },
-  "next_step": "RD4 is NOT MEASURED after completed bounded \u00a72.4 triage. Audit/authorize the frozen RD5 unchanged-behavior preflight before any execution; RD5 adoption, automatic impurity mode, energy routing, and merge remain blocked by RD2 FAIL.",
+  "next_step": "No further RD5 campaign is authorized. Preserve RD5 no-U RS/KS identity PASS as a partial result. Explicit-spectral identity remains unrun; RD2 FAIL blocks adoption, automatic impurity mode, impurity energy routing, and merge. RD4 remains NOT MEASURED.",
   "part": "C5.2 Part D / Stage RD",
   "production_energy_or_default_changes": false,
   "rd2_dependent_impurity_campaign_status": "RD2 frozen replay completed and measured FAIL after exactly one byte-identical diagnostic replay; no adoption. Continue independent items under C5.3 \u00a72.5.",

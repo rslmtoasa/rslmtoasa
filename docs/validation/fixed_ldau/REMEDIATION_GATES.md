@@ -55,6 +55,7 @@ not adopted. RD3 is a partial record with required controls/gates unavailable
 as documented in the Part D report. RD4 is NOT MEASURED: the Release W1 run
 crashed before SCF, bounded Debug triage did not explain it, and the clean8b
 same-deck input was incompatible before SCF. RD5 defaults, ``auto`` behavior,
-energy routing, and merge remain blocked by RD2. The frozen unchanged-behavior
-preflight has not been executed. Production energy formulas remain unchanged.
+energy routing, and merge remain blocked by RD2. The no-U RS/KS identity comparisons passed with the original byte criterion;
+explicit-spectral identity and automatic impurity checks remain unrun. RD5
+adoption remains blocked. Production energy formulas remain unchanged.
 See ``rs/C5_2_PART_D_RESULTS.md`` and its linked evidence packages.

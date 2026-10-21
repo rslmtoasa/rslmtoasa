@@ -109,9 +109,9 @@ The current C5 stage keeps ``calctype='I'`` in its existing explicit mode;
 that ``E_Hub(P_imp)`` is included in the reported impurity energy. Impurity
 energy routing remains off. C5 RD2 is a measured gate failure, and RD4 has no
 energy measurement because the authorized W1 solver crashed before SCF; its
-bounded diagnostics did not resolve the crash. The RD5 unchanged-behavior
-checks remain prepared, not run. Do not infer adoption or alter the production
-energy formula from the bulk energy results above. See
+bounded diagnostics did not resolve the crash. RD5 no-U RS/KS identity and bulk checks passed byte comparison; the explicit
+spectral identity and ``auto`` checks remain unrun. No adoption follows, and the
+production energy formula is unchanged. See
 ``docs/validation/fixed_ldau/rs/C5_2_PART_D_RESULTS.md``.
 
 Validated ordinary on-site scope
