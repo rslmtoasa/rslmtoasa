@@ -5,6 +5,7 @@ Keeps bond values, peak trace decompositions and norm residuals, not raw matrice
 Only read completed runs: output files alone are not completion evidence.
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import numpy as np
@@ -19,6 +20,11 @@ def complete(root):
         item=manifest['cases'][case]
         if item['returncode'] or not item['potentials_unchanged']:
             raise ValueError('Incomplete run or changed potentials')
+        # Check immutable calculation inputs after execution as well as on copy.
+        for name,expected in item['copied_hashes_before_pair_selection'].items():
+            if name.endswith('.nml') or name in ('clust','sbar.','view.sbar.','map.'):
+                actual=hashlib.sha256((root/case/name).read_bytes()).hexdigest()
+                if actual!=expected: raise ValueError(f'Input changed during execution: {case}/{name}')
     if manifest['one_pair'] or manifest['pair_count']:
         raise ValueError('Full 24-pair runs required')
     return manifest
@@ -32,14 +38,20 @@ def directory(path):
     data=[read_dump(p) for p in sorted(path.glob('gf-audit-gf-*.dat'))]
     if len(data)!=24 or len({bond_key(d) for d in data})!=24:
         raise ValueError('Expected 24 unique directed bonds')
-    out={'mirror_fro_max':{},'leakage_fro_max':{},'trace_block_abs_max':{},
-         'H_max':{},'H_fro_max':{},'trace_peaks':{},'contraction_error_max':0.0}
+    out={'mirror_fro_max':{},'leakage_fro_max':{},'allowed_fro_max':{},'trace_block_abs_max':{},
+         'H_max':{},'H_fro_max':{},'trace_peaks':{},'fixed_probes':{},'reconstruction_max':{},'contraction_error_max':0.0}
     out['full_graph']={k:float(v) for k,v in (line.split() for line in (path/'gf-audit-graph.dat').read_text().splitlines())}
     for d in data:
         s=stage_report(d)
         for e in s['energies']:
+            for stage in ('projection','raw_pauli','delta'):
+                for v in e[stage].values(): maximum(out['reconstruction_max'],stage,v['max'])
             for k,v in e['mirror'].items(): maximum(out['mirror_fro_max'],k,v['fro'])
-            for k,v in e['leakage'].items(): maximum(out['leakage_fro_max'],k,v['fro'])
+            for k,v in e['leakage'].items():
+                maximum(out['leakage_fro_max'],k,v['fro'])
+                maximum(out['allowed_fro_max'],k,np.sqrt(max(0,e['mirror'][k]['scale']**2-v['fro']**2)))
+            if d['pair']==1 and e['index'] in (513,577):
+                out['fixed_probes'][str(e['index'])]={'energy':e['energy'],'trace':e['trace']}
             if e['energy']<=d['fermi']:
                 for kind,v in e['trace'].items():
                     for k,x in v['blocks'].items(): maximum(out['trace_block_abs_max'],kind+':'+k,abs(x))
@@ -116,6 +128,11 @@ def main():
     args=p.parse_args();out={}
     for label,root in [('original',args.original),('reciprocal',args.reciprocal)]:
         manifest=complete(root);group={'binary_sha256':manifest['binary_sha256'],'cases':{}};data={}
+        for item in manifest['cases'].values():
+            if item['sbar_override_loaded']!=(label=='reciprocal'):
+                raise ValueError('Incorrect saved-Sbar intervention state')
+            if item['changed_on_copy']!=(['sbar.'] if label=='reciprocal' else []):
+                raise ValueError('Unexpected input intervention')
         for case in ('100','1-00'): group['cases'][case],data[case]=directory(root/case)
         group['occupied_domain_residuals']=parity(data['100'],data['1-00'])
         for kind in ('D','CC','SC'):
