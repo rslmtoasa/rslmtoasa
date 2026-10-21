@@ -73,23 +73,20 @@ contains
 
    !> Two-centre combined-correction block of the GBT Hamiltonian at one k, in the orbital basis and index order of `sblock`.
    !> The spin link multiplies the primitive S and Sdot bonds before they meet the endpoint factors, as build_ccor_pair_block_gbt:
-   !>   H_{a s i, b t j} = link_st(d) w_{a s i} [ (lam(s) + lam(t))/2 Sdot_ij + (ccd1_{a i} lam(s) + ccd1_{b j} lam(t)) S_ij ] w_{b t j}
-   !> and the onsite term lam_site(s) ccd0 w^2. lam is VMT - E_lin of the bond by local spin (the same value in both entries for
-   !> a scalar VMT), with sign +1 at both ends because the frames carry the orientation. Hcc is added after the order step,
-   !> never inside h - h o h.
+   !>   H_{a s i, b t j} = lam link_st(d) w_{a s i} [ Sdot_ij + (ccd1_{a i} + ccd1_{b j}) S_ij ] w_{b t j}
+   !> and the onsite term lam ccd0 w^2, with the scalar lam = VMT - E_lin. Hcc is added after the order step, never inside
+   !> h - h o h.
    !> @param[in] sdotblock  sdotblock(i, j) = -avw^2 sdot(j, i, m, ino), the transposition and scaling of sblock
    !> @param[in] ccd        ccd(i, 0:1, site), the coefficients of build_ccor_coefficients
-   !> @param[in] lam_site   onsite lambda per local spin and site
-   !> @param[in] lam_bond   lambda per local spin of each bond
-   pure subroutine gbt_kspace_hcc(norb, nsite, nbond, bond_a, bond_b, bond_d, sblock, sdotblock, frame, w, ccd, lam_site, lam_bond, &
-                                  k, q, h)
+   !> @param[in] lam        VMT - E_lin
+   pure subroutine gbt_kspace_hcc(norb, nsite, nbond, bond_a, bond_b, bond_d, sblock, sdotblock, frame, w, ccd, lam, k, q, h)
       integer, intent(in) :: norb, nsite, nbond
       integer, intent(in) :: bond_a(nbond), bond_b(nbond)
       real(rp), intent(in) :: bond_d(3, nbond)
       complex(rp), intent(in) :: sblock(norb, norb, nbond), sdotblock(norb, norb, nbond)
       complex(rp), intent(in) :: frame(2, 2, nsite)
       complex(rp), intent(in) :: w(norb, 2, nsite)
-      real(rp), intent(in) :: ccd(norb, 0:1, nsite), lam_site(2, nsite), lam_bond(2, nbond)
+      real(rp), intent(in) :: ccd(norb, 0:1, nsite), lam
       real(rp), intent(in) :: k(3), q(3)
       complex(rp), intent(out) :: h(2*norb*nsite, 2*norb*nsite)
 
@@ -100,7 +97,7 @@ contains
       do a = 1, nsite
          do s = 1, 2
             do i = 1, norb
-               h(ix(a, s, i), ix(a, s, i)) = lam_site(s, a)*ccd(i, 0, a)*w(i, s, a)*w(i, s, a)
+               h(ix(a, s, i), ix(a, s, i)) = lam*ccd(i, 0, a)*w(i, s, a)*w(i, s, a)
             end do
          end do
       end do
@@ -114,8 +111,7 @@ contains
                do j = 1, norb
                   do i = 1, norb
                      h(ix(a, s, i), ix(b, t, j)) = h(ix(a, s, i), ix(b, t, j)) + link(s, t)*w(i, s, a)*w(j, t, b)* &
-                        (0.5_rp*(lam_bond(s, ibond) + lam_bond(t, ibond))*sdotblock(i, j, ibond) + &
-                         (ccd(i, 1, a)*lam_bond(s, ibond) + ccd(j, 1, b)*lam_bond(t, ibond))*sblock(i, j, ibond))
+                        (lam*sdotblock(i, j, ibond) + (ccd(i, 1, a)*lam + ccd(j, 1, b)*lam)*sblock(i, j, ibond))
                   end do
                end do
             end do

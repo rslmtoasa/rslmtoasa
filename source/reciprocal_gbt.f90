@@ -20,9 +20,8 @@ contains
       real(rp), allocatable :: bond_d(:, :)
       complex(rp), allocatable :: sblock(:, :, :), frame(:, :, :), w(:, :, :), c(:, :, :), h(:, :), h2(:, :)
       complex(rp), allocatable :: sdotblock(:, :, :), hcc(:, :)
-      real(rp), allocatable :: ccd(:, :, :), lam_site(:, :), lam_bond(:, :)
-      real(rp) :: ccd_full(norb, 0:2)
-      integer :: jt
+      real(rp), allocatable :: ccd(:, :, :)
+      real(rp) :: ccd_full(norb, 0:2), lam
       complex(rp), allocatable :: obar(:, :, :), enu(:, :, :), wunit(:, :, :), czero3(:, :, :)
       complex(rp) :: blk(nb, nb)
       real(rp), allocatable :: cvec(:), dvec(:), gvec(:)
@@ -41,6 +40,7 @@ contains
          if (trim(this%hamiltonian%ccor_vmt_mode) == 'pair_surface') &
             call g_logger%fatal("gbt_single_q k-space: the channel-wise pair average of ccor_vmt_mode='pair_surface' is not defined for rotated local frames; use 'surface_scalar'.", __FILE__, __LINE__)
          call this%hamiltonian%validate_ccor_inputs()
+         lam = this%hamiltonian%ccor_vmt_scalar() - this%hamiltonian%ccor_elin
       end if
       if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_test_operator_check) &
          call g_logger%fatal('gbt_single_q k-space does not support onsite U.', __FILE__, __LINE__)
@@ -64,8 +64,7 @@ contains
                 sblock(norb, norb, nrec*this%lattice%nn_max), frame(2, 2, nrec), w(norb, 2, nrec), c(norb, 2, nrec), &
                 h(nb*nrec, nb*nrec), h2(nb*nrec, nb*nrec), obar(nb, nb, nrec), enu(nb, nb, nrec), &
                 cvec(nb*nrec), dvec(nb*nrec), gvec(nb*nrec), wunit(norb, 2, nrec), czero3(norb, 2, nrec), &
-                sdotblock(norb, norb, nrec*this%lattice%nn_max), hcc(nb*nrec, nb*nrec), ccd(norb, 0:1, nrec), lam_site(2, nrec), &
-                lam_bond(2, nrec*this%lattice%nn_max))
+                sdotblock(norb, norb, nrec*this%lattice%nn_max), hcc(nb*nrec, nb*nrec), ccd(norb, 0:1, nrec))
       wunit = cmplx(1.0_rp, 0.0_rp, rp)
       czero3 = cmplx(0.0_rp, 0.0_rp, rp)
       nbond = 0
@@ -93,7 +92,6 @@ contains
             if (this%hamiltonian%ccor_2c) then   ! sign +1 for every site: the frame carries the orientation, as for w and c
                call this%hamiltonian%build_ccor_coefficients(ia, it, ccd_full)
                ccd(:, :, isite) = ccd_full(:, 0:1)
-               lam_site(:, isite) = ccor_lambda(this%hamiltonian, it, it)
             end if
             if (this%use_orthogonal) then   ! exact ASA in the gamma representation: local-frame diagonals of C, sqrt(Delta), gamma - alpha
                lmax_o = int(sqrt(real(norb - 1, rp)))
@@ -154,9 +152,6 @@ contains
                         this%lattice%sdot(j, i, ineigh, this%lattice%num(ia)))
                   end do
                end do
-               jt = it
-               if (ineigh > 1) jt = jsite
-               lam_bond(:, nbond) = ccor_lambda(this%hamiltonian, it, jt)
             end if
          end do
       end do
@@ -188,7 +183,7 @@ contains
          end if
          if (this%hamiltonian%ccor_2c) then   ! after the order step: Hcc never enters h - h o h
             call gbt_kspace_hcc(norb, nrec, nbond, bond_a(1:nbond), bond_b(1:nbond), bond_d(:, 1:nbond), sblock(:, :, 1:nbond), &
-                                sdotblock(:, :, 1:nbond), frame, w, ccd, lam_site, lam_bond(:, 1:nbond), k_points(:, ik), q_dir, hcc)
+                                sdotblock(:, :, 1:nbond), frame, w, ccd, lam, k_points(:, ik), q_dir, hcc)
             call to_spherical(hcc)
             h = h + hcc
          end if
@@ -215,20 +210,6 @@ contains
       end subroutine to_spherical
 
    end subroutine reciprocal_assembler_assemble_gbt
-
-   !> VMT - E_lin by local spin for the bond between types it and jt, with sign +1 at both ends (the frame carries the
-   !> orientation): the pair surface value in ccor_vmt_mode 'pair_surface', the same scalar for both spins otherwise.
-   function ccor_lambda(ham, it, jt) result(lam)
-      class(hamiltonian), intent(in) :: ham
-      integer, intent(in) :: it, jt
-      real(rp) :: lam(2)
-
-      if (trim(ham%ccor_vmt_mode) == 'pair_surface') then
-         lam = ham%ccor_vmt_pair_surface(it, jt) - ham%ccor_elin
-      else
-         lam = ham%ccor_vmt_scalar() - ham%ccor_elin
-      end if
-   end function ccor_lambda
 
    !> Frame angles of one site from its reference moment (D2): +z gives (theta_ss, 0), -z gives (pi - theta_ss, pi), so the
    !> antiparallel site stays at m_b = -m_a for every cone angle. A moment off the z axis is not supported yet.
