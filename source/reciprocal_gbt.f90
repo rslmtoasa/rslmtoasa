@@ -25,6 +25,7 @@ contains
       real(rp) :: ccd_full(norb, 0:2), lam
       complex(rp), allocatable :: obar(:, :, :), enu(:, :, :), wunit(:, :, :), czero3(:, :, :)
       complex(rp) :: blk(nb, nb)
+      complex(rp), allocatable :: cmat(:, :)
       real(rp), allocatable :: cvec(:), dvec(:), gvec(:)
       real(rp) :: wow
       integer :: lmax_o, l, o, sp, iv
@@ -67,7 +68,7 @@ contains
       allocate (bond_a(nrec*this%lattice%nn_max), bond_b(nrec*this%lattice%nn_max), bond_d(3, nrec*this%lattice%nn_max), &
                 sblock(norb, norb, nrec*this%lattice%nn_max), frame(2, 2, nrec), w(norb, 2, nrec), c(norb, 2, nrec), &
                 h(nb*nrec, nb*nrec), h2(nb*nrec, nb*nrec), obar(nb, nb, nrec), enu(nb, nb, nrec), &
-                cvec(nb*nrec), dvec(nb*nrec), gvec(nb*nrec), wunit(norb, 2, nrec), czero3(norb, 2, nrec), &
+                cvec(nb*nrec), dvec(nb*nrec), gvec(nb*nrec), cmat(nb*nrec, nb*nrec), wunit(norb, 2, nrec), czero3(norb, 2, nrec), &
                 sdotblock(norb, norb, nrec*this%lattice%nn_max), hcc(nb*nrec, nb*nrec), ccd(norb, 0:1, nrec))
       wunit = cmplx(1.0_rp, 0.0_rp, rp)
       czero3 = cmplx(0.0_rp, 0.0_rp, rp)
@@ -163,6 +164,12 @@ contains
             end if
          end do
       end do
+      cmat = cmplx(0.0_rp, 0.0_rp, rp)
+      if (this%use_orthogonal) then
+         do iv = 1, nb*nrec
+            cmat(iv, iv) = cvec(iv)
+         end do
+      end if
       q_dir = 0.0_rp
       if (gbt_rep) then
          do i = 1, 3
@@ -174,7 +181,7 @@ contains
          if (this%use_orthogonal) then   ! h1 with w = 1, c = 0 is S^alpha_rot
             call gbt_kspace_h1(norb, nrec, nbond, bond_a(1:nbond), bond_b(1:nbond), bond_d(:, 1:nbond), sblock(:, :, 1:nbond), &
                                frame, wunit, czero3, k_points(:, ik), q_dir, h2)
-            call gbt_kspace_horth(nb*nrec, h2, cvec, dvec, gvec, h)
+            call gbt_kspace_horth(nb*nrec, h2, cmat, dvec, gvec, h)
          else
             call gbt_kspace_h1(norb, nrec, nbond, bond_a(1:nbond), bond_b(1:nbond), bond_d(:, 1:nbond), sblock(:, :, 1:nbond), &
                                frame, w, c, k_points(:, ik), q_dir, h)
