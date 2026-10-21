@@ -17,6 +17,9 @@
             Bx -+ i By term (chi_xx and chi_yy of opposite sign).
   symmetry  S7: E(q) = E(-q) (weak in centrosymmetric bcc) and E(q + G) = E(q), G = (1,1,0) 2pi/alat (even mesh), constrained SCF at theta = 30 deg.
   chi_orthogonal  the same at kspace_ham_order = 'orthogonal' (see its docstring): negative definite and symmetric.
+  symmetry_orthogonal  the same at kspace_ham_order = 'orthogonal'. The E(-q) = E(q) half is weak in bcc (inversion); the E(q + G) half is the
+            informative one. Bug caught: q not handled lattice-periodically (injected: q reduced by 10% of
+            its nearest-integer direct part, dE(q + G) = -5.3e-4 Ry). Not caught: the lattice matrix transposed (bcc is cubic: E unchanged).
   guards    the k-space GBT constraint guard stops the run with its message (a target other than (0,0,1)).
 usage: test_kspace_scspiral.py <mode> <rslmto.x> <scratch directory>"""
 import re
@@ -147,14 +150,18 @@ def mode_chi_orthogonal(binary, scratch):
     return eig[1] < 0 and asym < tol_m
 
 
-def mode_symmetry(binary, scratch):
+def mode_symmetry(binary, scratch, order="first"):
     tol = tolerance("scf_identity_ry")
     E = {}
     for tag, q in (("q", Q), ("minus_q", (0.0, -Q[1], 0.0)), ("q_plus_G", (1.0, 1.0 + Q[1], 0.0))):
-        E[tag] = scf(binary, scratch / tag, nsp=3, q=q, theta=30.0, constrained=True)["E"]
+        E[tag] = scf(binary, scratch / tag, nsp=3, q=q, theta=30.0, constrained=True, order=order)["E"]
     d1, d2 = E["minus_q"] - E["q"], E["q_plus_G"] - E["q"]
     print(f"E(q) = {E['q']:.10f} Ry; E(-q) - E(q) = {d1:.3e} Ry (weak: inversion); E(q+G) - E(q) = {d2:.3e} Ry; tolerance {tol:.1e}")
     return abs(d1) < tol and abs(d2) < tol
+
+
+def mode_symmetry_orthogonal(binary, scratch):
+    return mode_symmetry(binary, scratch, order="orthogonal")
 
 
 def mode_guards(binary, scratch):
