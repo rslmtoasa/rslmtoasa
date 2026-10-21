@@ -30,6 +30,8 @@ Q_LIST = [(0.125, -0.125, 0.125), (0.25, -0.25, 0.25)]       # direct
 THETA_DEG = (0.25, 0.5, 1.0)
 ROT_THETA_DEG = (5.0, 30.0)                  # rotated eigenvalues (b) and the driver-level theta (c): 5 deg
 C1_C2_TOL = 1e-10                            # "ok" thresholds set by this generator (not by the developer): round-off scale
+MOMENT_MESHES = (4, 8, 16)
+M_TOL = 1e-10                                # O3b self-checks, round-off scale (set by this generator)
 C3_REL_TOL = 1e-4                            # tail-fit and theta^4 truncation scale
 
 # ------------------------------------------------------------------ input reading
@@ -367,6 +369,63 @@ def check_c2(model, ks, q):
     return np.abs(e_rot - e_ref).max()
 
 
+# ------------------------------------------------------------------ O3b: l-resolved moments of H^gamma (collinear)
+
+
+def hgamma_eig(model, n, rot=None):
+    """Eigenpairs of H^gamma_sigma on the Gamma-centred n^3 mesh, both spins; rot = 9x9 unitary V gives H -> V^dag H V."""
+    s = model.s_of_k(mesh_k(n, 0, n**3))
+    out = []
+    for sg in (0, 1):
+        h = model.h_gamma(s, sg)
+        if rot is not None:
+            h = rot.conj().T[None] @ h @ rot[None]
+        out.append(np.linalg.eigh(h))
+    return out
+
+
+def solve_mu_eigs(eig, n):
+    e = np.concatenate([x[0] for x in eig], axis=1)
+    lo_, hi_ = e.min() - 1.0, e.max() + 1.0
+    for _ in range(80):
+        mu = 0.5*(lo_ + hi_)
+        if np.sum(0.5*(1.0 - np.tanh(0.5*(e - mu)/KT)))/n**3 < N_ELECTRONS:
+            lo_ = mu
+        else:
+            hi_ = mu
+    return mu
+
+
+def moments(model, eig, n, mu, shift=0.0):
+    """n_q(l, sigma) = sum_k w_k sum_j f(e_j - mu) e_j^q sum_{m in l} |u_{m j}|^2, q = 0, 1, 2, w_k = 1/n^3; shape (3 q, 3 l, 2 sigma).
+    shift adds a constant to all eigenvalues and to mu."""
+    sel = np.zeros((3, 9))
+    sel[model.lmap, np.arange(9)] = 1.0
+    out = np.zeros((3, 3, 2))
+    for sg in (0, 1):
+        e, u = eig[sg]
+        e = e + shift
+        f = 0.5*(1.0 - np.tanh(0.5*(e - (mu + shift))/KT))
+        wl = np.einsum("lm,kmj->klj", sel, np.abs(u)**2)
+        for q in range(3):
+            out[q, :, sg] = np.einsum("kj,klj->l", f*e**q, wl)/n**3
+    return out
+
+
+def central(nq):
+    centre = nq[1]/nq[0]
+    return centre, nq[2] - 2*centre*nq[1] + centre**2*nq[0]
+
+
+def random_l_unitary(model, rng):
+    v = np.zeros((9, 9), complex)
+    for l in range(3):
+        idx = np.where(model.lmap == l)[0]
+        g = rng.normal(size=(len(idx), len(idx))) + 1j*rng.normal(size=(len(idx), len(idx)))
+        v[np.ix_(idx, idx)] = np.linalg.qr(g)[0]
+    return v
+
+
 # ------------------------------------------------------------------ output
 
 
@@ -418,10 +477,11 @@ def main():
             f"  bond_s_im = {fmtf(np.transpose(model.s_bonds.imag, (1, 2, 0)))}",
             f"  cc = {fmtf(model.cc.T)}", f"  dele = {fmtf(model.dele.T)}", f"  gamma_minus_alpha = {fmtf(model.gam_a.T)}", "/"]
     status = {}
+    ks_idx, ks = [0, 7, 19, 36, 53], None
+    prior = Path(a.out).read_text() if Path(a.out).exists() else ""          # previous output, for the 5-k comparison (M3)
     ctx = mp.get_context("fork")
     pool = ctx.Pool(a.workers, initializer=init_worker, initargs=(a.export,))
     if not a.skip_checks:
-        ks_idx = [0, 7, 19, 36, 53]
         p0, kk = check_p0(model, a.export, ks_idx)
         print(f"P0 max |eig(H) - code periodic_nc| at 5 k: first {p0['first']:.2e}, second {p0['second']:.2e} Ry (target 1e-10)")
         if max(p0.values()) > 1e-10:
@@ -492,6 +552,49 @@ def main():
             print(f"values mesh {n}^3: mu = {mu:.12f} Ry, J(0)-J(q) = {np.round(np.array(jr)*1e3, 6).tolist()} mRy ({time.time() - t0:.0f} s)")
             lines += [f"&o3_values_mesh{n}", f"  mu_ry = {mu:.16e}", f"  j0_minus_jq_ry = {fmt(jr)}",
                       f"  omega_q0_theta_ry = {fmt(om0)}", "/"]
+    # ---- O3b: l-resolved moments of H^gamma (collinear, per spin), Gamma-centred full meshes, 300 K, mu for N_ELECTRONS on each mesh
+    rng_m = np.random.default_rng(2)
+    e_shift = 0.37
+    dev_n0, dev_rot, dev_shift, dev_eig = 0.0, 0.0, 0.0, None
+    for n in MOMENT_MESHES:
+        eig = hgamma_eig(model, n)
+        mu = solve_mu_eigs(eig, n)
+        nq = moments(model, eig, n, mu)
+        centre, cq2 = central(nq)
+        dev_n0 = max(dev_n0, abs(nq[0].sum() - N_ELECTRONS))
+        v = random_l_unitary(model, rng_m)
+        dev_rot = max(dev_rot, np.abs(moments(model, hgamma_eig(model, n, v), n, mu) - nq).max())
+        nqs = moments(model, eig, n, mu, e_shift)
+        cs, cq2s = central(nqs)
+        dev_shift = max(dev_shift, np.abs(nqs[0] - nq[0]).max(), np.abs(cs - (centre + e_shift)).max(), np.abs(cq2s - cq2).max())
+        print(f"moments mesh {n}^3: mu = {mu:.12f} Ry, sum n0 = {nq[0].sum():.12f}")
+        for l in range(3):
+            for sg in (0, 1):
+                print(f"   l={l} spin{sg + 1}: n0 {nq[0, l, sg]:.9f}  n1 {nq[1, l, sg]:.9f}  n2 {nq[2, l, sg]:.9f}  centre {centre[l, sg]:.9f}  central q2 {cq2[l, sg]:.9f}")
+        if n == 4 and ks is not None and prior:
+            dev_eig = 0.0
+            for ik, k in zip(ks_idx, ks):
+                m = int(np.argmin(np.abs(((mesh_k(4, 0, 64) - k + 0.5) % 1.0 - 0.5)).sum(axis=1)))
+                for sg in (0, 1):
+                    old = re.search(rf"k{ik}_spin{sg + 1}_h_gamma = (.*)", prior)
+                    if old:
+                        dev_eig = max(dev_eig, np.abs(eig[sg][0][m] - np.array(read_numbers(old.group(1)))).max())
+                    else:
+                        dev_eig = None
+                        break
+                if dev_eig is None:
+                    break
+        new += [f"&o3b_moments_mesh{n}",
+                "  ! (O3b) l-resolved moments of H^gamma per spin, Gamma-centred full mesh n^3, 300 K, mu solved for 8 electrons (both spins), eigenvalues include vmad. Arrays (l = 0, 1, 2; sigma = 1 majority, 2 minority), Fortran order.",
+                "  ! n0 [electrons], n1 = sum f e [Ry electrons], n2 = sum f e^2 [Ry^2 electrons], centre = n1/n0 [Ry], central_q2 = n2 - 2 centre n1 + centre^2 n0 [Ry^2 electrons]; mu_ry [Ry]",
+                f"  mu_ry = {mu:.16e}", f"  n0 = {fmtf(nq[0])}", f"  n1 = {fmtf(nq[1])}", f"  n2 = {fmtf(nq[2])}",
+                f"  centre_ry = {fmtf(centre)}", f"  central_q2_ry2 = {fmtf(cq2)}", "/"]
+    print(f"M1 |sum n0 - 8| = {dev_n0:.2e}; M2 per-l moments under random unitary within each l shell: max |change| = {dev_rot:.2e}; "
+          f"M3 eigenvalues vs previous 5-k values: {'n/a' if dev_eig is None else f'{dev_eig:.2e} Ry'}; M4 energy zero shifted by {e_shift} Ry: max |change| = {dev_shift:.2e}")
+    status["M1"] = dev_n0 < M_TOL
+    status["M2"] = dev_rot < M_TOL
+    status["M3"] = dev_eig is not None and dev_eig < M_TOL
+    status["M4"] = dev_shift < M_TOL
     Path(a.out).write_text("\n".join(lines + new) + "\n")
     for name, ok in status.items():
         print(f"self-check {name}: {'ok' if ok else 'DEVIATION (see values above)'}")
