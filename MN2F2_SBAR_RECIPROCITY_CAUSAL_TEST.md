@@ -8,8 +8,10 @@ Date: 2026-10-21. Stacked on `codex/mn2f2-gf-symmetry-audit` at
 The completed first-pair gate supports the causal interpretation: restoring
 real-basis Sbar reciprocity restores the tested Hamiltonian's Hermiticity and
 reduces time-odd Dx from `3.8867415e-7` to `-2.455e-15` mRy on that bond.
-The full 24-pair MPI endpoint runs are in progress. Full-run tables and the final
-conclusion will be added after their manifests and complete dumps are verified.
+The reciprocal [100] 24-pair MPI endpoint completed and was analyzed successfully.
+The execution service subsequently disconnected and could not be recovered.
+The full reversed-domain endpoint and same-executable original baselines remain
+unverified; this PR is intentionally draft and the full-domain test is incomplete.
 No incomplete, interrupted or file-replacement-only run is endpoint evidence.
 
 This is a fixed-potential intervention, not an SCF calculation or a study of
@@ -118,7 +120,7 @@ failure above `1e-12` aborts before recursion.
 
 The previous audit derives mirror signs and the reciprocal orbital transpose
 `R(A)=C A^T C`. Its sector definitions and all exchange contractions are retained.
-These are maxima of `||M G M - s G||F` across the 64 sampled energies, ij direction:
+These are maxima of `||M G M - s G||F` in inverse Ry across the 64 sampled energies, ij direction:
 
 | Sector, [100] first pair | Original | Reciprocal |
 |---|---:|---:|
@@ -147,11 +149,97 @@ it must not be claimed to be unaffected. Printed-output precision limits the las
 digits of the parity differences. Full-run CCx/SCx orbital-block decomposition,
 all-bond/shell comparisons and summed even/odd tables are pending the complete runs.
 
+## Confirmed full reciprocal [100] endpoint
+
+All 24 original pairs completed with return code 0 in 698.28 s. Both MPI ranks
+announced loading all 86 projected blocks, the original pair-list input hash
+remained `c0ad589c764f88148c0a832d89539b5be60e4d2b84f42389c1745543deb1b583`,
+and all saved output-potential hashes were unchanged. The complete GF and
+H-action dumps were parsed and the spatial partner maps validated before the
+execution connection was lost.
+
+The calculation executable SHA256 is
+`3ba06baf0852f56449e4826e263b06e5954a343aa19b5439982c39f29ed890ed`
+(GNU Fortran 13.3, OpenBLAS 0.3.26, Open MPI 4.1.6; two ranks,
+four OpenMP threads per rank, BLAS one thread).
+
+For the 12 Mn1-to-Mn2 bonds, in mRy:
+
+| Sum | Reciprocal [100] |
+|---|---:|
+| Dx | -4.3910e-16 |
+| Dy | -3.8661e-15 |
+| Dz | 0 |
+| CCx | -7.0730e-16 |
+| SCx | +2.6500e-16 |
+
+The supplied original [100] benchmark has sum Dx `+1.82060157e-6` mRy.
+This supplied benchmark is **not** presented as a completed same-executable
+baseline. Small discrepancies between the independently printed D and CC+SC
+sums are at their rounding level.
+
+Across all 24 H-action captures, maximum element residuals are:
+
+| Quantity | Reciprocal [100] maximum (Ry) |
+|---|---:|
+| bare-h pair Hermiticity | 1.8962018370e-16 |
+| HoH pair Hermiticity | 1.1796130168e-16 |
+| effective-H pair Hermiticity | 1.8471416906e-16 |
+| effective-H onsite Hermiticity | 5.6182374711e-17 |
+| direct mz*T covariance | 1.2035838992e-10 |
+
+Across all 24 pairs, 64 sampled energies and both directions, mirror-residual
+Frobenius maxima, in inverse Ry, are:
+
+| Sector | Reciprocal [100] mirror residual |
+|---|---:|
+| G00 | 3.4928303045e-8 |
+| G01 | 1.2467169606e-9 |
+| Gx0 | 3.8552353477e-8 |
+| Gx1 | 1.3207890962e-9 |
+| Gz0 | 5.9193153088e-10 |
+| Gz1 | 1.5907809497e-9 |
+
+The forbidden-block norm is half the corresponding mirror residual. Residual
+forbidden blocks remain; claiming they vanish exactly would be incorrect.
+
+Compared with the **supplied** original [100] output, maximum bondwise changes
+are `3.88674184e-7`, `5.62589424e-10`, `7.4e-8` mRy in Dx, Dy, Dz,
+and `9e-6` mRy in Jijso. Thus allowed exchange values shift under the
+intervention; they are not numerically unchanged.
+
+The reversed-domain reciprocal job was launched, passed the full graph gate
+(max bare-h defect `2.7755575616e-17` Ry; full Frobenius defect
+`4.7410690851e-15` Ry), and was last observed progressing through its bond
+recursions. Its completion and final outputs could not be verified. No full-run
+summed odd/even Dx, final all-bond CC/SC decomposition or matching original
+endpoint regression is claimed from that incomplete observation.
+
+## Remaining work after execution access is restored
+
+1. Recover the existing `endpoints-reciprocal` and `endpoints-original`
+   manifests if available; the shell was scheduled to run both original
+   baselines after both reciprocal domains. Do not infer completion from output
+   files that may have been copied from the fixtures.
+2. Validate both cases' return codes, override announcements, immutable-input
+   hashes and identical executable SHA. Recreate fresh runs if the interrupted
+   workspace is unavailable; never reuse a partial destination.
+3. Run `causal_summary.py` on complete 24-pair endpoint roots. It checks
+   manifests, input integrity, pair coverage and matching energy grids.
+4. Add the full summed odd/even Dx and CCx/SCx tables, bond/shell Dz/Jij
+   comparisons, and complete before/after orbital trace decomposition.
+5. Preserve the private numerical archive, update the scientific conclusion,
+   and only then mark this stacked PR ready for review. Do not merge.
+
 ## Validation and reproducibility
 
-The 21-test suite passes, including shuffled reverse pairs, onsite, Mn-F and F-F,
+The 23-test suite passes, including shuffled reverse pairs, onsite, Mn-F and F-F,
 missing/ambiguous partners, format errors, exclusive writes, marker preservation,
-byte idempotence, actual Fortran input loading/rejection and graph checks.
+byte idempotence, actual Fortran input loading/rejection, graph checks,
+failed/modified-input rejection and known even-scalar/odd-vector leakage parity.
+CI commit `d3f5dd328bede51b2d7d2d86f6eca1101df98006` passes all three
+platform builds; the diagnostic test step passes on Linux and macOS and is
+explicitly skipped on Windows.
 The GNU Fortran 13.3 build passes. Production exchange, Green-function,
 recursion, Hamiltonian and screening formulas have no source diff.
 
@@ -167,7 +255,9 @@ The first-pair intervention changes the independently identified upstream
 reciprocity defect, restores Hermitian Hamiltonian ingredients, collapses the
 forbidden G01/Gx1 blocks and removes the dominant time-odd Dx. This supports the
 nonreciprocity mechanism rather than a physical higher-order interpretation of
-that signal. Full-run confirmation is pending.
+that signal. The full reciprocal [100] endpoint also shows collapse of summed
+Dx to the numerical residual level. Full two-domain confirmation is blocked by
+the execution-service disconnection and is not claimed.
 
 It does not identify why the original screening construction produces the
 nonreciprocal coefficients. No cutoff, radius, real-space sum or convergence
