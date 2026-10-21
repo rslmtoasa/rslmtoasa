@@ -38,6 +38,8 @@ contains
       if (this%hamiltonian%ccor_2c) then   ! Hcc is added after the order step; the orthogonal H^gamma has no CCOR formulation here
          if (this%use_orthogonal) &
             call g_logger%fatal("gbt_single_q k-space: kspace_ham_order='orthogonal' does not support ccor_2c.", __FILE__, __LINE__)
+         if (trim(this%hamiltonian%ccor_vmt_mode) == 'pair_surface') &
+            call g_logger%fatal("gbt_single_q k-space: the channel-wise pair average of ccor_vmt_mode='pair_surface' is not defined for rotated local frames; use 'surface_scalar'.", __FILE__, __LINE__)
          call this%hamiltonian%validate_ccor_inputs()
       end if
       if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_test_operator_check) &
