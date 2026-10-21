@@ -3,7 +3,7 @@
 outside GBT (periodic_nc nsp = 3 and collinear nsp = 1). The exact-ASA H^gamma itself is anchored by oracle O3 (eigenvalues) through
 AppGbtKspaceOrthogonal; the moments by O3b. The checks here are of the SCF wiring, and the first two modes run the same kernel on both sides:
   rotation   global spin rotation (no SOC): the SCF with every moment rotated to (theta, phi) gives the same E and E_F (scf_identity_ry), the
-             same |m| and the moment direction of the start, as |m| * (final direction - start direction) (scf_moment_mub). Eigenvalues are invariant under the frame
+             same |m| and the moment direction of the start, as |m| * (final direction - start direction) (scf_moment_mub), the direction read from the written potential Fe_scf.nml at full precision. Eigenvalues are invariant under the frame
              rotation anyway, so what this can catch is the eigenvectors: a local-frame instead of lab spin basis, or a frame built from the
              wrong moment components. Bug caught there: dropping the local-to-lab rotation of H (the moment then comes out along the wrong axis).
   collinear  consistency, not validation: the nsp = 1 SCF equals the nsp = 3 SCF with mom = +z (E, E_F, |m|). Bug caught: a spin channel
@@ -54,11 +54,15 @@ def scf(binary, d):
     log = re.sub(r"\x1b\[[0-9;]*m", "", r.stdout + r.stderr)
     (d / "run.log").write_text(log)
     assert r.returncode == 0, f"{d}: exit code {r.returncode}"
-    proj = [float(x) for x in re.findall(r"Spin moment projections of atom\s+1 is\s+(\S+)\s+(\S+)\s+(\S+)", log)[-1]]
     return dict(E=float(re.search(r"Physical DFT total energy of system:\s+(\S+)", (d / "report.out").read_text()).group(1)),
                 EF=float(re.findall(r"EF=\s*(\S+) Ry", log)[-1]), conv="Converged!" in log,
-                m=float(re.findall(r"Spin moment of atom\s+1 is\s+(\S+)", log)[-1]), vec=np.array(proj),
+                m=float(re.findall(r"Spin moment of atom\s+1 is\s+(\S+)", log)[-1]),
                 moments=np.array([float(m) for _, m in re.findall(r"Spin moment of atom\s+(\d+) is\s+(\S+)", log)[-2:]]))
+
+
+def final_direction(d):
+    """Unit moment direction of atom 1 from the potential written by the run (Fe_scf.nml, full precision; the log prints f10.6)."""
+    return np.array([float(x) for x in re.search(r"^\s*mom\s*=\s*(.*)$", (d / "Fe_scf.nml").read_text(), re.M).group(1).split(",")])
 
 
 def mode_rotation(binary, scratch):
@@ -69,9 +73,10 @@ def mode_rotation(binary, scratch):
     for theta, phi in ((30, 0), (45, 45), (60, 120), (180, 0)):
         t, p = np.radians(theta), np.radians(phi)
         start = np.array([np.sin(t) * np.cos(p), np.sin(t) * np.sin(p), np.cos(t)])
-        r = scf(binary, deck(scratch / f"rot_{theta}_{phi}", 3, start))
+        d = deck(scratch / f"rot_{theta}_{phi}", 3, start)
+        r = scf(binary, d)
         dE, dEF, dm = r["E"] - ref["E"], r["EF"] - ref["EF"], abs(r["m"] - ref["m"])
-        dvec = r["m"] * np.abs(r["vec"] - start).max()
+        dvec = r["m"] * np.abs(final_direction(d) - start).max()
         print(f"theta {theta}, phi {phi}: converged {r['conv']}; dE = {dE:.3e} Ry, dE_F = {dEF:.3e} Ry, d|m| = {dm:.3e} muB, "
               f"|m| max |dir - start| = {dvec:.3e} muB (tolerances {tol:.1e}, {tol_m:.1e})")
         ok = ok and r["conv"] and abs(dE) < tol and abs(dEF) < tol and dm < tol_m and dvec < tol_m
