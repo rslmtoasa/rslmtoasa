@@ -158,7 +158,6 @@ module hamiltonian_mod
       procedure :: build_ccor_coefficients
       procedure :: normalize_ccor_sdot
       procedure :: ccor_vmt_scalar
-      procedure :: ccor_vmt_pair_surface
       procedure :: build_obarm
       procedure :: build_enim
       procedure :: add_constraining_field_spin_block
