@@ -802,6 +802,14 @@ T4 Local merge per C5.2 §7. Report the SHA. Do not push.
 If T1 or T2 fails: commit the records and stop with a 5-line summary.
 Uncovered outcomes: C5.3 item 2.
 
+### C5.9 result (2026-10-22)
+
+T1(a) passes: the regenerated T2a run reports outer Diff `2e-10` and R05 physical P/V streak 3. The d-up, d-down, and physical sphere moment `sum_l(q_l(up)-q_l(down))` from the actual written output agree with the immutable accepted-seed snapshot within `6.1e-9`; T1(c) passes because both written potential files record `local`/`ks`. The snapshot is bound to accepted restart SHA-256 `bb647254…ead6b` by the committed C5.5/C5.6 records. The original accepted raw source directory is empty; no deletion is inferred.
+
+T1(b) is **UNEVALUATED / UNCOVERED** under C5.3 item 2. The regenerated output reports `E_F=-0.0829496275 Ry`, but no accepted endpoint EF is present in the committed proof or old checkpoint fields, and the old raw endpoint directory is empty. The initial deck value `fermi=-0.082950 Ry` is not evidence of the accepted endpoint EF and is not used as the comparison. Therefore T2b, production adoption, and merge were not performed.
+
+The required bounded RD4 lambda-zero Release rerun passed preflight and captured one complete stable iteration/state pair before the external SIGTERM (exit 143); no crash occurred through iteration 1. This is a diagnostic regression only; no energy measurement was made. C5.9 used 0/2 campaign runs and 1 separately budgeted short invocation. Full evidence is in `C5_9_RESULTS.md` and `C5_9_RESULTS.json`.
+
 ### C5.5 clarification — run budget (2026-10-21)
 
 Question: “Does the three-run cap cover the T1/T2 campaign attempts, with identity, unit,
@@ -906,4 +914,26 @@ T4 Continue C5.6 T2a, T2b, T3, T4 with the fixed binary (or the Debug binary per
    Local merge only; report the SHA; do not push.
 
 If T2a or T2b then fails for any other reason: commit the records and stop with a 5-line summary.
+Uncovered outcomes: C5.3 item 2.
+
+C5.9 (user-approved; record verbatim in C5_AMENDMENT.md). OBJECTIVE: accept the regenerated
+KS Fe host, then finish T2b-T4.
+Token rules as in C5.4. Budget: 2 SCF runs.
+
+T1 KS host acceptance. This defines "KS-accepted" for host regeneration and replaces the RS
+   window rule for this case. Evaluate from the existing T2a run; no new run.
+   (a) It reported production KS convergence: outer threshold met and R05 P/V streak of 3.
+   (b) d occupations per spin and the sphere moment agree with the previously accepted KS Fe
+       U=2 eV, J=0 state within 1e-6, and E_F within 1e-6 Ry.
+   (c) The written potential file carries mode=local and backend=ks.
+   If (a)-(c) hold, the host is accepted. If (b) fails, record the differences and stop with a
+   5-line summary.
+
+T2 C5.6 T2b: KS-host smoke GATE (RS Fe impurity on this host, auto mode).
+   RS acceptance (20-iteration window) applies to the impurity run as before.
+
+T3, T4 as in C5.6. Local merge only; report the SHA; do not push.
+   Also rerun the RD4 lambda=0 deck once in Release (short invocation) and record whether its
+   crash is gone. No RD4 measurement.
+
 Uncovered outcomes: C5.3 item 2.
