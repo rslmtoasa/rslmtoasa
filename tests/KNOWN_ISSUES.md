@@ -1871,11 +1871,11 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 - No accepted Ni KS host is available, so the KS-host-to-RS-impurity Ni comparison remains unvalidated. The C5 Fe smoke run does not close this Ni-specific issue.
 - Impurity Hubbard energy remains excluded; RD4 energy is unmeasured. See `docs/validation/fixed_ldau/rs/C5_10_RESULTS.md`.
 
-## [OPEN, 2026-10-22] Same-material accepted local host for surface LDA+U
+## [OPEN, 2026-10-22] Surface LDA+U smoke validation: local d-shell mapping and fixture iteration limit
 
-- C6.1 supplies accepted same-material RS Ni hosts and requests copying the fcc Cu(001) fixture while preserving its other settings. The fixture sets `nsp=2`, but `source/self.f90::is_eligible_local_moments` requires `nsp=1` for auto-local mode. Changing `nsp` is outside the authorized deck edits, so the required Ni surface local-mode gate cannot be reached.
-- The Ni surface smoke, layer-resolved occupations and moments, surface-minus-bulk comparisons, and the Cu KS-host workflow remain unevaluated. No surface or Cu host SCF was launched after identifying the gate conflict. See `docs/validation/fixed_ldau/rs/C6_1_RESULTS.md`.
-- Surface Hubbard-energy routing remains OFF; no surface energy claim or numerical comparison is made.
+- C6.2's authorized `nsp=1` change resolves the previous auto-local eligibility conflict for copied `fccCu001` decks. In the Ni(001) RS-local U=3/J=0.7 smoke attempt, auto selected `mode=local` without a provenance error, then the first recursion stopped with fatal `Unable to map local d-shell Hubbard potential.` No completed iteration or smoke window was produced.
+- The copied surface fixture keeps `nstep=1` under the allowed deck changes, so it cannot provide the C5.13 final 20-step spread. The Ni U=0 one-step baseline reported `Not converged! Diff=0.0162421175`; no converged layer moments or surface-minus-bulk comparison is available. T3 Cu KS-host validation remains unrun after the T2 gate failure.
+- Surface Hubbard-energy routing remains OFF; no surface energy claim or numerical comparison is made. See `docs/validation/fixed_ldau/rs/C6_2_RESULTS.md`.
 
 ## [CLOSED, 2026-10-22] Impurity auto mode with local U-carrying hosts
 
