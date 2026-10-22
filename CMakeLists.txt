@@ -802,6 +802,10 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitLocalMomentsKernel ${TestDIR}/unit/test_local_moments_kernel.f90
     ${TestDIR}/validation/fixed_ldau/data/a3_m14_reference_fixture.txt)
   set_tests_properties(UnitLocalMomentsKernel PROPERTIES LABELS "unit;lda_u;local_moments;oracle")
+  add_fortran_unit_test(UnitAutoImpurityLocalMode ${TestDIR}/unit/test_auto_impurity_local_mode.f90
+    ${TestDIR}/validation/fixed_ldau/fixtures/c5_impurity_auto_local/input.nml
+    ${TestDIR}/validation/fixed_ldau/fixtures/c5_impurity_auto_local/Fe-host_out.nml)
+  set_tests_properties(UnitAutoImpurityLocalMode PROPERTIES LABELS "unit;lda_u;local_moments;resolver")
   add_fortran_unit_test(UnitLocalMomentsSiteSwap ${TestDIR}/unit/test_local_moments_site_swap.f90
     ${TestDIR}/validation/fixed_ldau/data/a3_m14_fresh_site_swap_reference.txt)
   set_tests_properties(UnitLocalMomentsSiteSwap PROPERTIES LABELS "unit;lda_u;local_moments;oracle;mapping")

@@ -100,19 +100,41 @@ Implementation status
   :math:`-V^{IJ} n^{JI,\sigma}_{m' m}` is not yet active and must not be
   described as a validated inter-site DFT+U+V implementation.
 
-C5 impurity status (2026-10-21)
---------------------------------
+C5 impurity radial-moment mode
+-----------------------------
 
-The current C5 stage keeps ``calctype='I'`` in its existing explicit mode;
-``auto`` has not been extended for impurity runs. An explicitly selected
-``local`` mode changes the impurity density moments, but this does not imply
-that ``E_Hub(P_imp)`` is included in the reported impurity energy. Impurity
-energy routing remains off. C5 RD2 is a measured gate failure, and RD4 has no
-energy measurement because the authorized W1 solver crashed before SCF; its
-bounded diagnostics did not resolve the crash. RD5 no-U RS/KS identity and bulk checks passed byte comparison; the explicit
-spectral identity and ``auto`` checks remain unrun. No adoption follows, and the
-production energy formula is unchanged. See
-``docs/validation/fixed_ldau/rs/C5_2_PART_D_RESULTS.md``.
+For fixed Liechtenstein U/J in the supported scalar-collinear d-shell scope,
+``hubbard_radial_moments='auto'`` selects ``local`` for an RS impurity only
+when every U-carrying frozen host potential records ``local`` mode. This
+applies to both an RS-local host feeding an RS impurity and a KS-local bulk
+host feeding an RS impurity. Impurity U/J may be supplied through the general
+``hubbard_u_general``/``hubbard_j_general`` fields or through the
+``hubbard_u_impurity``/``hubbard_j_impurity`` override fields. The selected
+radial mode is independent of the host's electronic-structure backend.
+
+If any U-carrying frozen host records ``spectral`` mode, or lacks mode
+provenance, ``auto`` selects ``spectral`` and logs the reason. A legacy host
+without ``hubbard_radial_moments`` has unknown mode; it is treated as
+``spectral`` and emits a warning asking the user to restart the host once with
+the current version so its mode is recorded. Updated impurity potentials are
+written with the run's selected mode and backend. A forced explicit
+``spectral`` choice remains spectral.
+
+For impurity decks, copy a working deck, then set ``fermi`` and the energy
+window to the host endpoint values before launch. The C5.4 preflight compares
+the deck Fermi value with the host run output's endpoint ``E_F`` and requires
+a difference no greater than ``1e-6 Ry``. It records the host output path and
+value, and rejects a mismatch before the solver starts.
+
+Selecting local impurity density moments does not add ``E_Hub(P_imp)`` to the
+reported impurity energy; impurity energies exclude the Hubbard term. Impurity
+Hubbard-energy routing remains off. The
+clean-bulk eligibility and energy formula are unchanged. C5's numerical
+KS-host-to-RS-impurity equivalence for Ni remains unvalidated, and RD4 has no
+energy measurement: its optimized Release diagnostic has only been checked
+through one complete iteration. See the C5 records in
+``docs/validation/fixed_ldau/rs/C5_AMENDMENT.md`` and
+``C5_10_RESULTS.md``.
 
 Validated ordinary on-site scope
 ================================

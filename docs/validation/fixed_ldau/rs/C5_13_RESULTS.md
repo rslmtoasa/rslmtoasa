@@ -1,0 +1,11 @@
+# C5.13 results
+
+**Disposition: T1 smoke PASS; documentation complete; local merge and merged-tree checks pending.** The existing C5.12 run 2 passes C5.13's smoke criteria in its final 20-iteration window (iterations 81–100). It completed 100 iterations with return code 0, logged `mode=local source=explicit`, and recorded no provenance or mode error. This is an explicit-local smoke result; it does not relabel the C5.11 auto impurity-U fixture or the existing RD3(a) Ni auto case as this run's mode.
+
+The final window has maximum outer Diff `5.71e-8` (limit `1e-7`), spin d-occupation spreads `1.9525747685e-7` and `8.2702854765e-7` (limits `1e-5` each), and sphere-moment spread `7.662924717e-7 μB` (limit `1e-5 μB`). All pass. The C5.4 preflight record confirms the deck Fermi value equals the accepted host endpoint EF (`-0.08294962745148776 Ry`) with zero mismatch, within `1e-6 Ry`.
+
+Across iterations 81–100, the mean impurity d occupations are `4.61112236993682` (spin 1) and `1.89894029715840` (spin 2), and the mean sphere moment is `2.71218207277842 μB`. Against the accepted C5.10 KS Fe host endpoint values (`4.59182514259224`, `1.92988783761720`, and `2.51077692086392 μB`), impurity-minus-host differences are `+0.01929722734458`, `−0.03094754045880`, and `+0.20140515191450 μB`, respectively. These are recorded as smoke observations, not reference equivalence gates.
+
+The workflow guide now states both RS-local and KS-local host paths, both general and impurity U/J input styles, the auto mode and legacy provenance rules, the impurity energy convention, and the deck rule to set `fermi` and the window to the host endpoint. The preflight's existing host EF comparison is retained. `tests/KNOWN_ISSUES.md` closes only the impurity-auto mode-selection entry; KS-local-host to RS-impurity numerical equivalence for Ni remains OPEN, and impurity energy (RD4) remains unmeasured. The amendment records that strict C5.2 §2.1 RS acceptance remains required only for states used as references or inputs to equivalence gates. C5.3 item 2 remains uncovered and is not adopted.
+
+The exact C5.12 capture source, thresholds, observed values, mean occupations, and signed deltas are recorded in `C5_13_RESULTS.json`. No SCF run was performed for C5.13. Local merge and the requested checks on the merged tree are pending.

@@ -1,0 +1,9 @@
+{
+  "source_checkpoint": "/private/tmp/c512-t2/run1/Fe-imp_scf.nml",
+  "source_checkpoint_sha256": "eb791ab162c3112dc48e49d51f7a5275f8cd9d3c65a04a1e3f9b9a43a0711cb0",
+  "run2_restart_path": "/private/tmp/c512-t2/run2/Fe-imp_out.nml",
+  "restart_sha256": "eb791ab162c3112dc48e49d51f7a5275f8cd9d3c65a04a1e3f9b9a43a0711cb0",
+  "input_source": "/private/tmp/c512-t2/run1/input.nml",
+  "run2_input_sha256": "56fc09aa6de98cb9ec4eba247d25c647085db23c1cd3333e43a06238f874e427",
+  "input_identical": true
+}

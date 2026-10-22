@@ -949,3 +949,104 @@ It does not block, provided the gate's remaining quantitative sub-criteria pass.
 
 Continue with C5.9 T2, T3, T4 (budget 2 SCF runs). Local merge only; report the SHA; do not push.
 Uncovered outcomes: C5.3 item 2.
+
+C5.11 (user-approved; record verbatim in C5_AMENDMENT.md). OBJECTIVE: close the impurity auto
+workflow. Base: fable_v4b_u at b04bcba; work branch fix/ldau-impurity-auto.
+Token rules: Sol plans in at most 1/2 page; ONE Luna worker sequentially; ONE batched audit at the
+end. Preflight script before every run. Identity checks single-threaded.
+Budget: 2 SCF runs.
+
+T1 Apply docs/validation/fixed_ldau/rs/C5_10_AUTO_CANDIDATE.patch: auto -> local for
+   calctype='I' also when hubbard_u_impurity is set, provided every U-carrying frozen host is
+   stored local. Keep its unit test (UnitAutoImpurityLocalMode).
+   Add a fixture test: a hubbard_u_impurity deck on a local U-carrying host resolves to local with
+   no provenance error.
+   GATES: single-thread no-U RS/KS identity; the 13 guard fixtures; the existing RD3(a) Ni
+   auto case still resolves to local.
+
+T2 KS-host smoke GATE, redone. Build the deck by COPYING the existing accepted Fe RS impurity
+   deck (RA4/C3 rc=80 recipe, ct = 3.0 per type) and changing ONLY:
+     - the host potential file -> the accepted KS Fe host from C5.8/C5.10;
+     - U = 2 eV, J = 0 on host and impurity.
+   Before launch, diff the deck against its source; the diff must show only those changes.
+   GATE: resolves mode=local; no provenance error; RS-accepted within ladder steps 1-2.
+   RECORD: impurity-minus-KS-bulk d occupations and moment.
+
+T3 Documentation (lda_u_workflow.rst): both host workflows, both U-input styles, the mode rule,
+   "impurity energies exclude the Hubbard term", and the legacy-file restart note.
+   KNOWN_ISSUES: close the impurity-auto entry.
+
+T4 Merge locally into fable_v4b_u with --no-ff. Report the SHA. Do not push.
+
+If T2 fails: commit the records and stop with a 5-line summary.
+Uncovered outcomes: C5.3 item 2.
+
+C5.12 (user-approved; record verbatim in C5_AMENDMENT.md). OBJECTIVE: resolve the C5.11 T2
+failure. Work branch fix/ldau-impurity-auto.
+Token rules as in C5.11. Budget: 2 SCF runs.
+
+T0 (no runs) Compare the T2 deck's &energy fermi value (and its energy window) with the KS host's
+   endpoint E_F, -0.082949627451487762 Ry. Report both values.
+
+T1a If T0 shows a mismatch:
+   - Correct the T2 deck: fermi = the KS host E_F. Keep the window width, shifted by the same
+     amount as E_F.
+   - Diff against the C5.11 deck; it may differ ONLY in fermi and the window.
+   - Rerun T2 (GATE and RECORD as in C5.11).
+
+T1b If T0 shows no mismatch:
+   - Run ONE U=0 control: same deck, same KS host, U=J=0.
+       * converges  -> the problem is specific to +U on a KS host: RECORD and stop.
+       * oscillates -> KS-host -> RS-impurity embedding is generally unstable for this recipe:
+         KNOWN_ISSUES entry and stop.
+   - Do not merge in either case.
+
+T2 If T1a passes: complete C5.11 T3 (documentation) and T4 (local merge, report the SHA, do not
+   push).
+
+Deck rule for all future impurity decks: copy from a working deck, then set fermi and the energy
+window to the HOST endpoint values, and diff before launch. Add this rule to the preflight script
+as a check: fermi within 1e-6 Ry of the host E_F recorded in the host's run output.
+Uncovered outcomes: C5.3 item 2.
+
+C5.13 (user-approved; record verbatim in C5_AMENDMENT.md). OBJECTIVE: close C5.11 and merge.
+No SCF runs.
+
+T1 T2 smoke GATE verdict, re-judged with the correct criterion for a smoke test (it protects
+   "the workflow resolves, passes provenance and converges", not reference precision):
+   - mode = local;
+   - no provenance or mode error;
+   - final outer Diff <= 1e-7;
+   - 20-step spreads <= 1e-5 (d per spin) and <= 1e-5 muB (moment).
+   Evaluate on the existing C5.12 run. If it passes: T2 = PASS.
+   RECORD: impurity-minus-KS-bulk d occupations and moment from the final window.
+   Note in C5_AMENDMENT.md: the strict RS-accepted window (C5.2 §2.1) remains required only for
+   states used as references or as inputs to equivalence gates.
+
+T2 C5.11 T3: documentation (both host workflows, both U-input styles, the mode rule, impurity
+   energies exclude the Hubbard term, the legacy-file restart note, and the deck rule "set fermi
+   and the window to the host endpoint"). KNOWN_ISSUES: close the impurity-auto entry.
+
+T3 C5.11 T4: local --no-ff merge into fable_v4b_u.
+   Checks on the merged tree:
+   - single-thread no-U RS/KS identity;
+   - the 13 guard fixtures;
+   - the auto impurity fixture.
+   Report the SHA. Do not push.
+
+Uncovered outcomes: C5.3 item 2.
+
+Note from C5.13: the strict RS-accepted window (C5.2 §2.1) remains required only for states used as references or as inputs to equivalence gates.
+
+
+C5.13 outcome (2026-10-22): T1 PASS under the C5.13 smoke-test criteria on the
+existing C5.12 run 2, iterations 81–100. It used explicit local mode, logged no
+provenance or mode error, completed with return code 0, and had final-window
+Diff 5.71e-8, d spreads 1.9525747685e-7 and 8.2702854765e-7, and sphere-moment
+spread 7.662924717e-7 μB. These pass the C5.13 limits. This is not an auto-mode
+T2 execution; auto remains evidenced by the C5.11 impurity-U fixture and prior
+RD3(a) Ni case. Final-window means and impurity-minus-KS-host differences are
+recorded in `C5_13_RESULTS.md`. The strict RS-accepted window in C5.2 §2.1
+remains required only for states used as references or inputs to equivalence
+gates. T2 documentation was completed; T3 local merge/check results follow in
+`C5_13_RESULTS.md`. C5.3 item 2 remains uncovered and is not adopted.
