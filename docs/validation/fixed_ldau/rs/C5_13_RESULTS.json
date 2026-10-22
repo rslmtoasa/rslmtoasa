@@ -6,7 +6,10 @@
   "smoke": {
     "status": "PASS_C5_13_SMOKE",
     "source": "docs/validation/fixed_ldau/rs/C5_12_assets/T2_run2_full_capture.tar.gz",
-    "window_iterations": [81, 100],
+    "window_iterations": [
+      81,
+      100
+    ],
     "input_sha256": "56fc09aa6de98cb9ec4eba247d25c647085db23c1cd3333e43a06238f874e427",
     "returncode": 0,
     "completed_iterations": 100,
@@ -19,25 +22,25 @@
       "host_ef_ry": -0.08294962745148776,
       "input_fermi_ry": -0.08294962745148776,
       "delta_ry": 0.0,
-      "tolerance_ry": 1e-6,
+      "tolerance_ry": 1e-06,
       "record": "docs/validation/fixed_ldau/rs/C5_12_assets/run2_preflight.json"
     },
     "thresholds": {
-      "max_outer_Diff": 1e-7,
-      "d_spread_per_spin": 1e-5,
-      "sphere_moment_spread_muB": 1e-5
+      "max_outer_Diff": 1e-07,
+      "d_spread_per_spin": 1e-05,
+      "sphere_moment_spread_muB": 1e-05
     },
     "observed": {
-      "max_outer_Diff": 5.71e-8,
-      "d_spread_spin1": 1.9525747685378292e-7,
-      "d_spread_spin2": 8.270285476452699e-7,
-      "sphere_moment_spread_muB": 7.662924716989039e-7
+      "max_outer_Diff": 5.71e-08,
+      "d_spread_spin1": 1.9525747685378292e-07,
+      "d_spread_spin2": 8.270285476452699e-07,
+      "sphere_moment_spread_muB": 7.662924716989039e-07
     },
     "final_window_means": {
       "impurity_d_spin1": 4.61112236993682,
       "impurity_d_spin2": 1.8989402971583988,
       "impurity_sphere_moment_muB": 2.712182072778421,
-      "accepted_C5_10_KS_host_d_spin1": 4.5918251425922421,
+      "accepted_C5_10_KS_host_d_spin1": 4.591825142592242,
       "accepted_C5_10_KS_host_d_spin2": 1.9298878376171982,
       "accepted_C5_10_KS_host_sphere_moment_muB": 2.5107769208639206,
       "impurity_minus_host_d_spin1": 0.01929722734457773,
@@ -55,10 +58,37 @@
     "deck_rule_preflight": "C5.4 preflight compares fermi with host output endpoint EF within 1e-6 Ry"
   },
   "merged_checks": {
-    "status": "PENDING",
-    "no_u_rs_ks_identity": "NOT_RUN",
-    "guard_fixtures_13": "NOT_RUN",
-    "auto_impurity_fixture": "NOT_RUN"
+    "status": "PASS",
+    "merge_commit": "fe4ae42132b3cf726a3ed8e9827c567884637723",
+    "binary": "/private/tmp/c511-release-build/bin/rslmto.x",
+    "binary_sha256": "535909c7687e45fa501715ee7e65e9ba4766194e75d563094ac18e4529fa92ee",
+    "no_u_rs_ks_identity": {
+      "status": "PASS",
+      "evidence": "/private/tmp/c513_merged_identity.json",
+      "RS": "27/27 matched artifacts",
+      "KS": "24/24 matched artifacts",
+      "thread_caps": {
+        "OMP_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "RSLMTO_OMP_THREADS_SERIAL": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "VECLIB_MAXIMUM_THREADS": "1",
+        "BLIS_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1"
+      }
+    },
+    "guard_fixtures_13": {
+      "status": "PASS",
+      "evidence": "/private/tmp/c513_merged_ra2/RA2_provenance.json",
+      "thread_caps": "single-thread; recorded in provenance"
+    },
+    "auto_impurity_fixture": {
+      "status": "PASS",
+      "test": "UnitAutoImpurityLocalMode",
+      "command": "ctest --test-dir /private/tmp/c511-release-build -R ^UnitAutoImpurityLocalMode$ --output-on-failure",
+      "result": "1/1 passed"
+    }
   },
   "uncovered": "C5.3 item 2 remains not adopted."
 }

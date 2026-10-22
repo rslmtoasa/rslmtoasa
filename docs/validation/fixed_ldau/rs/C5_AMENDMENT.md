@@ -1048,5 +1048,8 @@ T2 execution; auto remains evidenced by the C5.11 impurity-U fixture and prior
 RD3(a) Ni case. Final-window means and impurity-minus-KS-host differences are
 recorded in `C5_13_RESULTS.md`. The strict RS-accepted window in C5.2 §2.1
 remains required only for states used as references or inputs to equivalence
-gates. T2 documentation was completed; T3 local merge/check results follow in
-`C5_13_RESULTS.md`. C5.3 item 2 remains uncovered and is not adopted.
+gates. T2 documentation was completed. T3 merged locally into `fable_v4b_u` with
+`--no-ff` at `fe4ae42132b3cf726a3ed8e9827c567884637723` (no push). On the
+merged tree, single-thread no-U RS/KS identity passed (27/27 and 24/24), the
+13 guard fixtures passed, and `UnitAutoImpurityLocalMode` passed. Details are
+in `C5_13_RESULTS.md`. C5.3 item 2 remains uncovered and is not adopted.
