@@ -949,3 +949,34 @@ It does not block, provided the gate's remaining quantitative sub-criteria pass.
 
 Continue with C5.9 T2, T3, T4 (budget 2 SCF runs). Local merge only; report the SHA; do not push.
 Uncovered outcomes: C5.3 item 2.
+
+C5.11 (user-approved; record verbatim in C5_AMENDMENT.md). OBJECTIVE: close the impurity auto
+workflow. Base: fable_v4b_u at b04bcba; work branch fix/ldau-impurity-auto.
+Token rules: Sol plans in at most 1/2 page; ONE Luna worker sequentially; ONE batched audit at the
+end. Preflight script before every run. Identity checks single-threaded.
+Budget: 2 SCF runs.
+
+T1 Apply docs/validation/fixed_ldau/rs/C5_10_AUTO_CANDIDATE.patch: auto -> local for
+   calctype='I' also when hubbard_u_impurity is set, provided every U-carrying frozen host is
+   stored local. Keep its unit test (UnitAutoImpurityLocalMode).
+   Add a fixture test: a hubbard_u_impurity deck on a local U-carrying host resolves to local with
+   no provenance error.
+   GATES: single-thread no-U RS/KS identity; the 13 guard fixtures; the existing RD3(a) Ni
+   auto case still resolves to local.
+
+T2 KS-host smoke GATE, redone. Build the deck by COPYING the existing accepted Fe RS impurity
+   deck (RA4/C3 rc=80 recipe, ct = 3.0 per type) and changing ONLY:
+     - the host potential file -> the accepted KS Fe host from C5.8/C5.10;
+     - U = 2 eV, J = 0 on host and impurity.
+   Before launch, diff the deck against its source; the diff must show only those changes.
+   GATE: resolves mode=local; no provenance error; RS-accepted within ladder steps 1-2.
+   RECORD: impurity-minus-KS-bulk d occupations and moment.
+
+T3 Documentation (lda_u_workflow.rst): both host workflows, both U-input styles, the mode rule,
+   "impurity energies exclude the Hubbard term", and the legacy-file restart note.
+   KNOWN_ISSUES: close the impurity-auto entry.
+
+T4 Merge locally into fable_v4b_u with --no-ff. Report the SHA. Do not push.
+
+If T2 fails: commit the records and stop with a 5-line summary.
+Uncovered outcomes: C5.3 item 2.
