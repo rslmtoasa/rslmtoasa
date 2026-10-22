@@ -42,3 +42,39 @@ T4 Documentation: the surface workflow (both hosts), "surface energies exclude t
 
 If T1 or a smoke GATE fails: commit the records and stop with a 5-line summary.
 Uncovered outcomes: C5.3 item 2.
+
+C6.1 (user-approved; record verbatim in C6_AMENDMENT.md). OBJECTIVE: complete Stage RE smoke
+validation. Branch fix/ldau-surface (fa68c56c).
+Token rules as in C6. Budget: 4 SCF runs. Smoke criteria from C5.13. Standing rules: C5.2 §2,
+C5.3 item 2.
+
+T1 (no SCF) Rerun the gates for the C6 T1 code change: single-thread no-U RS/KS identity, the 13
+   guard fixtures, the impurity auto fixture, and the surface auto unit test. Any failure: stop.
+
+T2 Ni(001), RS host. Build the deck by COPYING tests/scf/cases/surface/fccCu001 and changing only:
+   - alat and wav, taken from the accepted Ni bulk deck;
+   - labels and potential files: host = the accepted RS Ni bulk; surface/subsurface seeds =
+     copies of that Ni bulk potential; ES stays ES;
+   - U/J on the Ni d channels only;
+   - fermi and window = the Ni host endpoint.
+   First verify that layer positions are in alat units. If they are absolute, STOP and report;
+   do not edit geometry. The worker lists every changed line with its reason; the auditor checks
+   the diff.
+   Runs:
+   (a) U=0 with the accepted Ni U=0 bulk as host;
+   (b) U=3/J=0.7 auto with the accepted RS-local Ni U=3/J=0.7 host.
+   GATE (smoke, b): mode=local; no provenance error; smoke convergence.
+   RECORD: layer-resolved d occupations and moments for (a) and (b), and surface minus bulk at
+   U>0 versus U=0.
+
+T3 Cu(001), KS host (workflow smoke):
+   (a) KS fcc Cu bulk, U=3/J=0, auto (writes local provenance); KS production convergence.
+   (b) Unchanged fccCu001 deck with that host, the same U, and fermi/window = the KS host
+       endpoint.
+   GATE (smoke, b): as in T2. RECORD: layer d occupations.
+
+T4 Documentation and KNOWN_ISSUES (close the C6 OPEN entry, or update it). Local --no-ff merge
+   into fable_v4b_u, with the merged-tree checks as in C6 T4. Report the SHA. Do not push.
+
+If a GATE fails: commit the records and stop with a 5-line summary.
+Uncovered outcomes: C5.3 item 2.

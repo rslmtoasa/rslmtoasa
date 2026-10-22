@@ -1873,8 +1873,8 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 
 ## [OPEN, 2026-10-22] Same-material accepted local host for surface LDA+U
 
-- The only SCF surface fixture in this checkout is fcc Cu(001), but its bulk Cu potential carries U=J=0. The accepted U-carrying local bulk endpoints recorded here are Fe and Ni; there is no Fe or Ni surface fixture.
-- The C6 same-material RS/KS host smoke and layer-moment comparisons are therefore unevaluated. No Cu host was inferred from the U=0 fixture and no surface deck was launched. See `docs/validation/fixed_ldau/rs/C6_T0_RESULTS.md`.
+- C6.1 supplies accepted same-material RS Ni hosts and requests copying the fcc Cu(001) fixture while preserving its other settings. The fixture sets `nsp=2`, but `source/self.f90::is_eligible_local_moments` requires `nsp=1` for auto-local mode. Changing `nsp` is outside the authorized deck edits, so the required Ni surface local-mode gate cannot be reached.
+- The Ni surface smoke, layer-resolved occupations and moments, surface-minus-bulk comparisons, and the Cu KS-host workflow remain unevaluated. No surface or Cu host SCF was launched after identifying the gate conflict. See `docs/validation/fixed_ldau/rs/C6_1_RESULTS.md`.
 - Surface Hubbard-energy routing remains OFF; no surface energy claim or numerical comparison is made.
 
 ## [CLOSED, 2026-10-22] Impurity auto mode with local U-carrying hosts
