@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "deck": "/private/tmp/c512-t2/run1/input.nml",
+  "recur": "block",
+  "use_kspace": false,
+  "use_kspace_source": "explicit",
+  "unconsumed_groups": [],
+  "schema_source": "/Users/andersb/Jobb/rslmto_fable_v4b",
+  "restart_source": "/private/tmp/c512-t2/run1/Fe-bulk_out.nml",
+  "host_ef_check": {
+    "status": "PASS",
+    "host_ef_trace": "/private/tmp/c58-t2a-fixed-release/run/fixed_u_trace.csv",
+    "host_ef": -0.08294962745148776,
+    "input_fermi": -0.08294962745148776,
+    "delta_ry": 0.0,
+    "tolerance_ry": 1e-06
+  },
+  "available_orbital_channels": [
+    "d"
+  ],
+  "fresh_run_dir": "/private/tmp/c512-t2/run1",
+  "thread_caps": {
+    "OMP_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "BLIS_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1"
+  }
+}

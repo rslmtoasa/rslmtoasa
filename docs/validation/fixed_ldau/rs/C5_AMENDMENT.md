@@ -980,3 +980,31 @@ T4 Merge locally into fable_v4b_u with --no-ff. Report the SHA. Do not push.
 
 If T2 fails: commit the records and stop with a 5-line summary.
 Uncovered outcomes: C5.3 item 2.
+
+C5.12 (user-approved; record verbatim in C5_AMENDMENT.md). OBJECTIVE: resolve the C5.11 T2
+failure. Work branch fix/ldau-impurity-auto.
+Token rules as in C5.11. Budget: 2 SCF runs.
+
+T0 (no runs) Compare the T2 deck's &energy fermi value (and its energy window) with the KS host's
+   endpoint E_F, -0.082949627451487762 Ry. Report both values.
+
+T1a If T0 shows a mismatch:
+   - Correct the T2 deck: fermi = the KS host E_F. Keep the window width, shifted by the same
+     amount as E_F.
+   - Diff against the C5.11 deck; it may differ ONLY in fermi and the window.
+   - Rerun T2 (GATE and RECORD as in C5.11).
+
+T1b If T0 shows no mismatch:
+   - Run ONE U=0 control: same deck, same KS host, U=J=0.
+       * converges  -> the problem is specific to +U on a KS host: RECORD and stop.
+       * oscillates -> KS-host -> RS-impurity embedding is generally unstable for this recipe:
+         KNOWN_ISSUES entry and stop.
+   - Do not merge in either case.
+
+T2 If T1a passes: complete C5.11 T3 (documentation) and T4 (local merge, report the SHA, do not
+   push).
+
+Deck rule for all future impurity decks: copy from a working deck, then set fermi and the energy
+window to the HOST endpoint values, and diff before launch. Add this rule to the preflight script
+as a check: fermi within 1e-6 Ry of the host E_F recorded in the host's run output.
+Uncovered outcomes: C5.3 item 2.

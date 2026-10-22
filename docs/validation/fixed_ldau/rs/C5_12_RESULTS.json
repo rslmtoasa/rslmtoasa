@@ -1,0 +1,83 @@
+{
+  "schema": "c5_12_fermi_window_results_v1",
+  "date": "2026-10-22",
+  "branch": "fix/ldau-impurity-auto",
+  "base_head": "01370313c8d6",
+  "disposition": "T0_MISMATCH_T1A_CORRECTED_T2_FAILED_NO_MERGE",
+  "budget": {"scf_runs_used": 2, "scf_runs_max": 2, "push": false, "merge": false},
+  "t0": {
+    "source_deck": "/private/tmp/c511-t2/run/input.nml",
+    "source_sha256": "e89477c0ea100bad84cdfe017d797da616459c3b54b9ba58f91062e59fe8b625",
+    "continuation_deck": "/private/tmp/c511-t2/run2/input.nml",
+    "continuation_sha256": "e89477c0ea100bad84cdfe017d797da616459c3b54b9ba58f91062e59fe8b625",
+    "run1_continuation_energy_identical": true,
+    "host_ef_trace": "/private/tmp/c58-t2a-fixed-release/run/fixed_u_trace.csv",
+    "host_ef_trace_sha256": "e58bbba679aeb07f9bd5ed7b791e65028256c23031c3a9fb98a606b79cec3d02",
+    "host_ef_ry": -0.082949627451487762,
+    "source_energy_ry": {"fermi": -0.085152, "energy_min": -1.0, "energy_max": 0.5},
+    "source_window_width_ry": 1.5,
+    "source_fermi_minus_host_ef_ry": -0.002202372548512238,
+    "required_shift_ry": 0.002202372548512238,
+    "corrected_energy_ry": {"fermi": -0.082949627451487762, "energy_min": -0.997797627451487762, "energy_max": 0.502202372548512238},
+    "corrected_window_width_ry": 1.5
+  },
+  "t1a": {
+    "status": "PASS",
+    "strict_diff": "docs/validation/fixed_ldau/rs/C5_12_assets/T1a_diff_check.json",
+    "corrected_deck_sha256": "56fc09aa6de98cb9ec4eba247d25c647085db23c1cd3333e43a06238f874e427",
+    "changed_values_only": ["energy.fermi", "energy.energy_min", "energy.energy_max"],
+    "preflight_script": "docs/validation/fixed_ldau/rs/C5_4_PREFLIGHT.py",
+    "preflight_test": "tests/validation/fixed_ldau/test_c5_4_preflight_host_ef.py",
+    "preflight_test_status": "PASS_2_CASES"
+  },
+  "binary": {"path": "/private/tmp/c511-release-build/bin/rslmto.x", "sha256": "535909c7687e45fa501715ee7e65e9ba4766194e75d563094ac18e4529fa92ee"},
+  "t2": {
+    "status": "FAIL_NO_ACCEPTED_WINDOW_WITHIN_TWO_RUNS",
+    "host": {"potential_path": "/private/tmp/c58-t2a-fixed-release/run/Fe_out.nml", "potential_sha256": "2284194179736d2e6694dd40514b55578bdf2558e9826d5d7ba9d5c6cc13b4bd", "backend": "ks", "mode": "local"},
+    "recipe": {"mode": "explicit local", "rc": 80, "ct_per_type": "2*3.0d0", "U_eV": 2.0, "J_eV": 0.0},
+    "run1": {
+      "path": "/private/tmp/c512-t2/run1",
+      "returncode": 0,
+      "completed_iterations": 100,
+      "preflight": "docs/validation/fixed_ldau/rs/C5_12_assets/run1_preflight.json",
+      "preflight_sha256": "d2588172871ec106dcb3584fb6e5a599a5fe20b61ef049aad0a885f59ea71601",
+      "binary_sha256": "535909c7687e45fa501715ee7e65e9ba4766194e75d563094ac18e4529fa92ee",
+      "capture_manifest": "docs/validation/fixed_ldau/rs/C5_12_assets/T2_run1_full_capture.tar.gz",
+      "capture_archive_sha256": "a16734d56715dad141ec7d2cedd39b77f352c31937c4286b6b16efe4b1187af3",
+      "input_sha256": "56fc09aa6de98cb9ec4eba247d25c647085db23c1cd3333e43a06238f874e427",
+      "captured_trace_iterations": [1, 99],
+      "thread_caps": {"OMP_NUM_THREADS": "1", "OMP_DYNAMIC": "FALSE", "RSLMTO_OMP_THREADS_SERIAL": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "VECLIB_MAXIMUM_THREADS": "1", "BLIS_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1"},
+      "disk_free_bytes_min": 10587815936,
+      "accepted_20_step_window": false
+    },
+    "run2": {
+      "path": "/private/tmp/c512-t2/run2",
+      "returncode": 0,
+      "completed_iterations": 100,
+      "restart_source": "/private/tmp/c512-t2/run1/Fe-imp_scf.nml",
+      "restart_sha256": "eb791ab162c3112dc48e49d51f7a5275f8cd9d3c65a04a1e3f9b9a43a0711cb0",
+      "restart_copy_sha256": "eb791ab162c3112dc48e49d51f7a5275f8cd9d3c65a04a1e3f9b9a43a0711cb0",
+      "input_identical_to_run1": true,
+      "preflight": "docs/validation/fixed_ldau/rs/C5_12_assets/run2_preflight.json",
+      "preflight_sha256": "6cfc62e917bb3772488546573df8f45522f644e646cf1e27b0a53fd751489a85",
+      "binary_sha256": "535909c7687e45fa501715ee7e65e9ba4766194e75d563094ac18e4529fa92ee",
+      "capture_manifest": "docs/validation/fixed_ldau/rs/C5_12_assets/T2_run2_full_capture.tar.gz",
+      "capture_archive_sha256": "3e7d0f4fa41ede719ca55b4b5b7c97308e73ea2a04f9371475d0e193c17b5892",
+      "input_sha256": "56fc09aa6de98cb9ec4eba247d25c647085db23c1cd3333e43a06238f874e427",
+      "captured_trace_iterations": [1, 100],
+      "thread_caps": {"OMP_NUM_THREADS": "1", "OMP_DYNAMIC": "FALSE", "RSLMTO_OMP_THREADS_SERIAL": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "VECLIB_MAXIMUM_THREADS": "1", "BLIS_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1"},
+      "disk_free_bytes_min": 10350182400,
+      "windows": {
+        "1_20": {"max_outer_Diff": 2.38165e-5, "d_spread_spin1": 5.5497901798595706e-5, "d_spread_spin2": 2.8096115144493616e-4, "sphere_moment_spread_muB": 2.3300397295100694e-4, "accepted": false},
+        "21_40": {"max_outer_Diff": 2.62289e-5, "d_spread_spin1": 1.0940146855542565e-4, "d_spread_spin2": 3.242662571089084e-4, "sphere_moment_spread_muB": 2.196831731087201e-4, "accepted": false},
+        "41_60": {"max_outer_Diff": 2.188e-6, "d_spread_spin1": 6.512105235501053e-6, "d_spread_spin2": 8.474551341564052e-6, "sphere_moment_spread_muB": 1.581048306720234e-5, "accepted": false},
+        "61_80": {"max_outer_Diff": 8.85e-8, "d_spread_spin1": 4.450308113135293e-7, "d_spread_spin2": 9.397894471518953e-7, "sphere_moment_spread_muB": 7.867074951484199e-7, "accepted": false},
+        "81_100": {"max_outer_Diff": 5.71e-8, "d_spread_spin1": 1.9525747685378292e-7, "d_spread_spin2": 8.270285476452699e-7, "sphere_moment_spread_muB": 7.662924716989039e-7, "accepted": false}
+      },
+      "no_accepted_20_step_window": true
+    }
+  },
+  "t3": {"status": "EXISTING_C5_11_DOCUMENTATION_RETAINED", "known_issues": "tests/KNOWN_ISSUES.md", "theory_guide": "docs/source/theory/lda_u_workflow.rst"},
+  "t4": {"status": "NOT_RUN_T2_FAILED", "merge": false, "push": false},
+  "uncovered": "C5.3 outcome not adopted."
+}

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """C5.4 run staging/preflight; copies only explicitly whitelisted inputs."""
-import argparse, hashlib, json, os, shutil, sys, f90nml
+import argparse, csv, hashlib, json, os, shutil, sys, f90nml
 from pathlib import Path
 REPO = Path(__file__).resolve().parents[4]; sys.path.insert(0, "/private/tmp/c52-c-private")
 from fortran_namelist_schema import source_schema
@@ -25,10 +25,26 @@ def stage(run, sources):
         if not src.is_file(): raise SystemExit(f"missing whitelist input: {src}")
         shutil.copy2(src, run / src.name)
     for p in run.iterdir(): p.chmod(p.stat().st_mode | 0o200)
-def check(run, deck, restart, guard):
+def check_host_fermi(nml, trace_path, tolerance=1e-6):
+    """Compare input &energy fermi to the unique fermi_level row in host trace."""
+    energy = nml.get("energy", {})
+    if "fermi" not in energy: raise SystemExit("input &energy.fermi missing for host-EF check")
+    host_ef = []
+    with trace_path.open(newline="") as stream:
+        for row in csv.DictReader(stream):
+            if row.get("kind", "").strip() == "fermi_level":
+                host_ef.append(float(row["scalar"]))
+    if len(host_ef) != 1: raise SystemExit(f"{trace_path}: expected one fermi_level row, found {len(host_ef)}")
+    delta = float(energy["fermi"]) - host_ef[0]
+    if abs(delta) > tolerance:
+        raise SystemExit(f"input fermi {energy['fermi']} differs from host EF {host_ef[0]} by {delta} Ry (limit {tolerance})")
+    return {"status": "PASS", "host_ef_trace": str(trace_path), "host_ef": host_ef[0],
+      "input_fermi": float(energy["fermi"]), "delta_ry": delta, "tolerance_ry": tolerance}
+def check(run, deck, restart, guard, host_ef_trace=None):
     if not deck.is_file() or not os.access(deck, os.W_OK): raise SystemExit("working deck missing/not writable")
     nml = f90nml.read(str(deck))
     ignored=validate(nml, deck)
+    host_ef_check = check_host_fermi(nml, host_ef_trace) if host_ef_trace else None
     ctl = nml.get("control", {}); selfn = nml.get("self", {})
     if ctl.get("recur") not in ("block", "cheby"): raise SystemExit("recur missing/unsupported")
     use_kspace=selfn.get("use_kspace", False); default_source="explicit"
@@ -53,6 +69,7 @@ def check(run, deck, restart, guard):
     print(json.dumps({"status":"PASS", "deck":str(deck), "recur":ctl["recur"],
       "use_kspace":use_kspace, "use_kspace_source":default_source,
       "unconsumed_groups":sorted(set(ignored)), "schema_source":str(SCHEMA_ROOT), "restart_source":str(restart) if restart else None,
+      "host_ef_check":host_ef_check,
       "available_orbital_channels": ["d"] if restart else [],
       "fresh_run_dir":str(run), "thread_caps":THREADS}, indent=2))
 def offline(run, payload, base, driver, binding):
@@ -72,9 +89,10 @@ def offline(run, payload, base, driver, binding):
 if __name__ == "__main__":
     ap=argparse.ArgumentParser(); ap.add_argument("run_dir", type=Path); ap.add_argument("--stage", nargs="+", type=Path)
     ap.add_argument("--deck", type=Path); ap.add_argument("--restart", type=Path); ap.add_argument("--guard", type=Path)
+    ap.add_argument("--host-ef-trace", type=Path, help="host fixed_u_trace.csv with one fermi_level row")
     ap.add_argument("--offline", nargs=4, metavar=("PAYLOAD","BASE","DRIVER","BINDING"), type=Path)
     a=ap.parse_args()
     if a.stage: stage(a.run_dir, a.stage)
-    if a.deck: check(a.run_dir, a.deck, a.restart, a.guard)
+    if a.deck: check(a.run_dir, a.deck, a.restart, a.guard, a.host_ef_trace)
     if a.offline: offline(a.run_dir, *a.offline)
     elif not a.stage and not a.deck: ap.error("provide --stage whitelist files and/or --deck")
