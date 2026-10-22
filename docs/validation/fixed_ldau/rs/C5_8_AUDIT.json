@@ -1,0 +1,45 @@
+{
+  "schema": "c5_8_audit_v1",
+  "verdict": "FIXED_DIAGNOSTIC_CRASH; T2A_ACCEPTANCE_UNCOVERED",
+  "source_fix": {
+    "commit": "e805f64f0de02914b788478c26cd2ee398f6ef71",
+    "change": "pl_bands%control => this%control",
+    "claim": "Supported: fixes the null control pointer read at bands.f90:2254, offset 0x14; diagnostic replay setup only"
+  },
+  "t1": {
+    "short_invocations": "11/12",
+    "campaigns": "1/3",
+    "908074f": "Strict provenance guard rejected legacy seed; invalid comparison",
+    "8b8f7ef": "Exact trace watcher failed to stop at first iteration; natural convergence after three iterations; not a first-iteration pass",
+    "disposition": "Record both as comparability/stop-control deviations; do not claim historical reproduction"
+  },
+  "gates": {
+    "ra2_fixtures": "13/13 reported pass; 11 expected successful cases return 0, two forced-invalid cases return 1",
+    "no_u_identity": {
+      "RS": {"status": "PASS", "artifacts": 27, "mismatches": 0},
+      "KS": {"status": "PASS", "artifacts": 24, "mismatches": 0},
+      "threading": "single-thread with registered cpu_s normalization"
+    }
+  },
+  "rd4": {
+    "preflight": "PASS",
+    "source": "private W1 source plus only pointer assignment",
+    "input_hashes": "match original T4",
+    "outcome": "complete first iteration captured; external SIGTERM, exit 143",
+    "watcher_deviation": "Repeated missing-state polls before successful capture",
+    "energy_claim": "none"
+  },
+  "t2a": {
+    "solver": "converged after three iterations",
+    "saved_metadata": "local radial moments; KS backend in both Fe_scf.nml and Fe_out.nml",
+    "acceptance": "UNEVALUATED/UNCOVERED: one final-iteration observation, fewer than required 20 rolling observations",
+    "follow_on": "no T2b, adoption, merge, or push"
+  },
+  "side_effects": {
+    "solver_or_build_run_by_auditor": false,
+    "cleanup_or_merge": false,
+    "user_co_references_or_gbt_touched": false,
+    "audit_time_available_kib": 10118568,
+    "provided_end_available_kib": 10137536
+  }
+}
