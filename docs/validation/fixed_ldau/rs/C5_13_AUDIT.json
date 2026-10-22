@@ -1,0 +1,83 @@
+{
+  "schema": "c5_13_final_audit_v1",
+  "date": "2026-10-22",
+  "disposition": "PASS",
+  "scope": "Read-only audit of amendment, plan/results, documentation, merge metadata, and existing verification evidence. No solver or tests rerun.",
+  "checks": {
+    "amendment_records_user_approved_c5_13_criteria_and_outcome": "PASS",
+    "existing_c5_12_t2_smoke": {
+      "status": "PASS",
+      "source": "docs/validation/fixed_ldau/rs/C5_12_assets/T2_run2_full_capture.tar.gz",
+      "window_iterations": [81, 100],
+      "mode": "explicit local",
+      "returncode": 0,
+      "completed_iterations": 100,
+      "no_provenance_or_mode_errors": true,
+      "observed": {
+        "max_outer_diff": 5.71e-8,
+        "max_outer_diff_limit": 1e-7,
+        "d_spread_spin1": 1.9525747685378292e-7,
+        "d_spread_spin2": 8.270285476452699e-7,
+        "d_spread_limit_each": 1e-5,
+        "sphere_moment_spread_muB": 7.662924716989039e-7,
+        "sphere_moment_spread_limit_muB": 1e-5
+      },
+      "host_endpoint_fermi_preflight": {
+        "status": "PASS",
+        "host_ef_ry": -0.08294962745148776,
+        "input_fermi_ry": -0.08294962745148776,
+        "delta_ry": 0.0,
+        "tolerance_ry": 1e-6
+      }
+    },
+    "workflow_documentation": {
+      "status": "PASS",
+      "covers": [
+        "RS-local and KS-local host workflows",
+        "general and impurity U/J input styles",
+        "impurity auto mode rule",
+        "impurity energies exclude Hubbard term",
+        "legacy-host restart guidance",
+        "fermi and energy window set to host endpoint; host-EF difference <= 1e-6 Ry"
+      ]
+    },
+    "impurity_auto_known_issue_closed": "PASS; separate KS-local-host to RS-impurity Ni numerical-equivalence issue remains OPEN",
+    "local_no_ff_merge": {
+      "status": "PASS",
+      "commit": "fe4ae42132b3cf726a3ed8e9827c567884637723",
+      "parents": [
+        "b04bcba47375620dc6e57873b7c88eaacb0f1de9",
+        "f49113552bbaad66e28e3bd3093046f0b4b8d2be"
+      ],
+      "merge_diff_includes_co_reference_outputs": false,
+      "push_recorded": false
+    },
+    "merged_tree_verification": {
+      "status": "PASS",
+      "no_u_single_thread_rs_ks_identity": {
+        "status": "PASS",
+        "RS": "27/27",
+        "KS": "24/24",
+        "evidence": "/private/tmp/c513_merged_identity.json"
+      },
+      "guard_fixtures": {
+        "status": "PASS",
+        "count": 13,
+        "evidence": "/private/tmp/c513_merged_ra2/RA2_provenance.json"
+      },
+      "auto_impurity_fixture": {
+        "status": "PASS",
+        "test": "UnitAutoImpurityLocalMode",
+        "result": "1/1"
+      },
+      "identity_and_guard_source_commit": "fe4ae42132b3cf726a3ed8e9827c567884637723"
+    },
+    "new_scf": "NONE_RECORDED",
+    "c5_3_item_2": "REMAINS_UNCOVERED"
+  },
+  "files_created": [
+    "docs/validation/fixed_ldau/rs/C5_13_AUDIT.md",
+    "docs/validation/fixed_ldau/rs/C5_13_AUDIT.json"
+  ],
+  "committed": false
+}
