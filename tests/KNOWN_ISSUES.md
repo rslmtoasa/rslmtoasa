@@ -1886,6 +1886,9 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
   was not run after the T2 smoke gate failed.
 - Surface Hubbard-energy routing remains OFF; no surface energy claim or comparison is made. See
   `docs/validation/fixed_ldau/rs/C6_4_RESULTS.md`.
+- **Stage status: PAUSED** pending a user-provided converged no-U Ni(001) or Fe(001) reference
+  with `nsp=1`. C6.5 adds the checked launcher; future campaign runs require its matching
+  `preflight.json`. See `docs/validation/fixed_ldau/rs/C6_5_RESULTS.md`.
 
 ## [CLOSED, 2026-10-22] Impurity auto mode with local U-carrying hosts
 

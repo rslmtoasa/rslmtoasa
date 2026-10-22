@@ -125,3 +125,23 @@ T2/T3 as in C6.2, with additional allowed deck changes:
    Rerun T2(a) and T2(b), then T3(a) and T3(b). Smoke criteria from C5.13.
 
 T4 As in C6.1. Uncovered outcomes: C5.3 item 2.
+
+C6.5 (user-approved; record verbatim in C6_AMENDMENT.md). OBJECTIVE: enforce preflight
+mechanically. No SCF runs.
+
+T1 Add tools/run_rslmto_checked.py (repository .venv):
+   - it runs the existing preflight on the target run directory;
+   - it writes preflight.json;
+   - it launches rslmto.x ONLY if preflight passes, otherwise it exits non-zero without
+     launching.
+   All future campaign runs must be launched through this wrapper. The auditor rejects any run
+   without a matching preflight.json.
+
+T2 Unit test: a deck with an unclosed namelist and a deck with a fermi/host-E_F mismatch are both
+   refused; a valid deck launches (dry-run mode).
+
+T3 Mark the surface stage PAUSED in C6_AMENDMENT.md, pending a user-provided converged no-U
+   Ni(001) or Fe(001) reference (nsp=1). Commit. No merge.
+
+Surface stage status: PAUSED pending a user-provided converged no-U Ni(001) or Fe(001) reference
+(nsp=1).
