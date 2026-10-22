@@ -1,0 +1,57 @@
+{
+  "schema": "c5_10_audit_v1",
+  "date": "2026-10-22",
+  "verdict": "T1_ACCEPTED_T2_FAILED_BUDGET_EXHAUSTED_NO_ADOPTION_NO_MERGE",
+  "source_records": {
+    "results": "C5_10_RESULTS.json",
+    "head_before_evidence": "141b64461a0c5398ebbf5c2b7110a9342cf86d01",
+    "checked_repository_head": "046003e90bcd8f97573b8ec500870609d945bd4f"
+  },
+  "t1": {
+    "verdict": "ACCEPTED_UNDER_C5_10",
+    "old_endpoint_ef": "N/A; unavailable reference",
+    "new_endpoint_ef_ry": -0.08294962745148776,
+    "endpoint_source": "/private/tmp/c58-t2a-fixed-release/run/fixed_u_trace.csv",
+    "source_row": "fermi_level endpoint record; report/log are rounded to -0.082950 Ry"
+  },
+  "t2": {
+    "verdict": "FAILED_NO_ACCEPTANCE_WINDOW",
+    "starts_used": 2,
+    "starts_cap": 2,
+    "attempt_1": {
+      "run": "/private/tmp/c510-t2-rs-fe-u2/run2",
+      "preflight_passed": true,
+      "failure": "Generated namelist uses hubbard_u_impurity(:,1) and hubbard_j_impurity(:,1); reader fatal before SCF",
+      "completed_scf_iterations": 0,
+      "classification": "INPUT_PREPARATION_ERROR"
+    },
+    "attempt_2": {
+      "run": "/private/tmp/c510-t2-rs-fe-u2/run4",
+      "preflight_passed": true,
+      "u_j_indices": "(1,3), valid",
+      "ct_per_type": 6.0,
+      "recipe_ct_per_type": 3.0,
+      "completed_iterations": 3,
+      "outer_diff_first_three": [0.1967289821, 0.2034926014, 0.2010702253],
+      "fourth_iteration": "Invalid local d-shell Hubbard moment correction; occupation-capacity warning present",
+      "diagnostics": "Repeated missing-neighbour-vector messages",
+      "classification": "INVALID_SETUP_NOT_PHYSICS_FAILURE"
+    },
+    "acceptance_window": false,
+    "retry_or_continuation_authorized": false
+  },
+  "rd4_short": {
+    "verdict": "NO_CRASH_THROUGH_ONE_COMPLETE_ITERATION_ONLY",
+    "mode": "local",
+    "exit_code": 143,
+    "stop": "External SIGTERM after stable complete iteration capture",
+    "energy_measurement": "NONE"
+  },
+  "candidate": "PRIVATE_DIAGNOSTIC_ONLY_NOT_ADOPTED",
+  "t3_identity_gates": "STOPPED_AFTER_T2_FAILURE",
+  "production_adoption": "NOT_PERFORMED",
+  "merge": "NOT_PERFORMED",
+  "push": "NOT_PERFORMED",
+  "production_paths_diff_from_restored_binding": "EMPTY",
+  "worktree_untracked_paths": "User-owned example/bulk/hcpCo-folder/hcpCo_ref outputs only; untouched by audit"
+}

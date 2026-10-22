@@ -8,8 +8,10 @@
     "accepted_ks_host": "/private/tmp/c58-t2a-fixed-release/run/Fe_out.nml",
     "accepted_ks_host_sha256": "2284194179736d2e6694dd40514b55578bdf2558e9826d5d7ba9d5c6cc13b4bd",
     "old_endpoint_ef": "N/A; no stored reference value",
-    "new_endpoint_ef_ry": -0.0829496275,
-    "new_endpoint_ef_source": "/private/tmp/c58-t2a-fixed-release/run/testrun.log"
+    "new_endpoint_ef_ry": -0.08294962745148776,
+    "new_endpoint_ef_source": "/private/tmp/c58-t2a-fixed-release/run/fixed_u_trace.csv",
+    "new_endpoint_ef_ry_exact": "-0.082949627451487762",
+    "new_endpoint_ef_rounded_log_ry": -0.0829496275
   },
   "t2": {
     "status": "FAILED_WITHIN_BUDGET_NO_ACCEPTANCE_WINDOW",
@@ -51,7 +53,7 @@
           "0.2034926014",
           "0.2010702253"
         ],
-        "failure": "Invalid cluster geometry: ct was set to 6.0 per type; Fe rc=80 input recipe requires 3.0 per type (2*3.0d0). Repeated missing-neighbour-vector diagnostics; stopped, no 20-window evaluation.",
+        "failure": "Invalid setup: ct was 6.0 per type rather than the Fe recipe value 3.0 (2*3.0d0). Repeated missing-neighbour-vector diagnostics accompanied three completed iterations; the attempted fourth iteration terminated fatally on an invalid local d-shell moment correction, with an occupation-capacity warning. No 20-iteration acceptance window; not evidence of a physics failure.",
         "disk_free_start_bytes": 9635647488,
         "periodic_samples_kib": [
           9409820,
@@ -65,7 +67,8 @@
           9406636,
           9407324
         ],
-        "campaign_start_counted": true
+        "campaign_start_counted": true,
+        "attempted_fatal_iteration": 4
       }
     ],
     "disposition": "No continuation or additional campaign; no T2 pass, adoption, or merge",
