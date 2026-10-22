@@ -1,0 +1,268 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 17eb81b..7d0da76 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -802,6 +802,8 @@ if (RUN_UNIT_TESTS)
+   add_fortran_unit_test(UnitLocalMomentsKernel ${TestDIR}/unit/test_local_moments_kernel.f90
+     ${TestDIR}/validation/fixed_ldau/data/a3_m14_reference_fixture.txt)
+   set_tests_properties(UnitLocalMomentsKernel PROPERTIES LABELS "unit;lda_u;local_moments;oracle")
++  add_fortran_unit_test(UnitAutoImpurityLocalMode ${TestDIR}/unit/test_auto_impurity_local_mode.f90)
++  set_tests_properties(UnitAutoImpurityLocalMode PROPERTIES LABELS "unit;lda_u;local_moments;resolver")
+   add_fortran_unit_test(UnitLocalMomentsSiteSwap ${TestDIR}/unit/test_local_moments_site_swap.f90
+     ${TestDIR}/validation/fixed_ldau/data/a3_m14_fresh_site_swap_reference.txt)
+   set_tests_properties(UnitLocalMomentsSiteSwap PROPERTIES LABELS "unit;lda_u;local_moments;oracle;mapping")
+diff --git a/docs/source/theory/lda_u_workflow.rst b/docs/source/theory/lda_u_workflow.rst
+index 2b1b1fd..5782077 100644
+--- a/docs/source/theory/lda_u_workflow.rst
++++ b/docs/source/theory/lda_u_workflow.rst
+@@ -100,19 +100,32 @@ Implementation status
+   :math:`-V^{IJ} n^{JI,\sigma}_{m' m}` is not yet active and must not be
+   described as a validated inter-site DFT+U+V implementation.
+ 
+-C5 impurity status (2026-10-21)
+---------------------------------
+-
+-The current C5 stage keeps ``calctype='I'`` in its existing explicit mode;
+-``auto`` has not been extended for impurity runs. An explicitly selected
+-``local`` mode changes the impurity density moments, but this does not imply
+-that ``E_Hub(P_imp)`` is included in the reported impurity energy. Impurity
+-energy routing remains off. C5 RD2 is a measured gate failure, and RD4 has no
+-energy measurement because the authorized W1 solver crashed before SCF; its
+-bounded diagnostics did not resolve the crash. RD5 no-U RS/KS identity and bulk checks passed byte comparison; the explicit
+-spectral identity and ``auto`` checks remain unrun. No adoption follows, and the
+-production energy formula is unchanged. See
+-``docs/validation/fixed_ldau/rs/C5_2_PART_D_RESULTS.md``.
++C5 impurity radial-moment mode
++-----------------------------
++
++For fixed Liechtenstein U/J in the supported scalar-collinear d-shell scope,
++``hubbard_radial_moments='auto'`` selects ``local`` for an RS impurity only
++when every U-carrying frozen host potential records ``local`` mode. This
++applies to both an RS-local host feeding an RS impurity and a KS-local bulk
++host feeding an RS impurity. The selected radial mode is independent of the
++host's electronic-structure backend.
++
++If any U-carrying frozen host records ``spectral`` mode, or lacks mode
++provenance, ``auto`` selects ``spectral`` and logs the reason. A legacy host
++without ``hubbard_radial_moments`` has unknown mode; it is treated as
++``spectral`` and emits a warning asking the user to restart the host once with
++the current version so its mode is recorded. Updated impurity potentials are
++written with the run's selected mode and backend. A forced explicit
++``spectral`` choice remains spectral.
++
++Selecting local impurity density moments does not add ``E_Hub(P_imp)`` to the
++reported impurity energy. Impurity Hubbard-energy routing remains off. The
++clean-bulk eligibility and energy formula are unchanged. C5's numerical
++KS-host-to-RS-impurity equivalence for Ni remains unvalidated, and RD4 has no
++energy measurement: its optimized Release diagnostic has only been checked
++through one complete iteration. See the C5 records in
++``docs/validation/fixed_ldau/rs/C5_AMENDMENT.md`` and
++``C5_10_RESULTS.md``.
+ 
+ Validated ordinary on-site scope
+ ================================
+diff --git a/source/math.f90 b/source/math.f90
+index 48f400b..1fe16f3 100644
+--- a/source/math.f90
++++ b/source/math.f90
+@@ -151,6 +151,7 @@ module math_mod
+    public :: correct_d_shell_moments
+    public :: extract_hubbard_d_shell_potential
+    public :: fixed_impurity_atom_carries_uj
++   public :: auto_impurity_local_host_eligible
+ 
+ contains
+ 
+@@ -307,6 +308,30 @@ contains
+       fixed_impurity_atom_carries_uj = any(abs(u_row) > 1.0e-10_rp) .or. any(abs(j_row) > 1.0e-10_rp)
+    end function fixed_impurity_atom_carries_uj
+ 
++   pure subroutine auto_impurity_local_host_eligible(scope_eligible, host_active, host_mode, eligible, reason)
++      logical, intent(in) :: scope_eligible, host_active(:)
++      character(len=*), intent(in) :: host_mode(:)
++      logical, intent(out) :: eligible
++      character(len=*), intent(out) :: reason
++      integer :: i
++
++      eligible = .false.
++      reason = 'impurity is outside fixed Liechtenstein scalar d-shell scope'
++      if (.not. scope_eligible) return
++      reason = 'no U-carrying frozen host potential was found'
++      if (size(host_active) /= size(host_mode)) return
++      if (.not. any(host_active)) return
++      do i = 1, size(host_active)
++         if (.not. host_active(i)) cycle
++         if (trim(host_mode(i)) /= 'local') then
++            reason = 'at least one U-carrying frozen host potential is spectral or has legacy provenance'
++            return
++         end if
++      end do
++      eligible = .true.
++      reason = 'all U-carrying frozen host potentials record local moments'
++   end subroutine auto_impurity_local_host_eligible
++
+    !---------------------------------------------------------------------------
+    ! DESCRIPTION:
+    !> @brief Allocate and fill the spin and orbital angular momentum operators.
+diff --git a/source/self.f90 b/source/self.f90
+index 46ac304..fea8046 100644
+--- a/source/self.f90
++++ b/source/self.f90
+@@ -415,6 +415,7 @@ module self_mod
+       procedure, private :: is_frozen_hubbard_host
+       procedure, private :: all_frozen_hubbard_hosts_local
+       procedure, private :: is_eligible_local_hubbard
++      procedure, private :: is_eligible_local_moments
+       procedure, private :: fixed_hubbard_energy_pout
+       procedure, private :: write_fixed_u_radial_replay_input
+       procedure, private :: write_fixed_u_radial_replay_output
+@@ -2367,6 +2368,54 @@ contains
+           this%hamiltonian%hubbard_test_lambda == 0.0_rp)
+    end function is_eligible_local_hubbard
+ 
++   logical function is_eligible_local_moments(this, reason) result(eligible)
++      class(self), intent(in) :: this
++      character(len=*), intent(out), optional :: reason
++      integer :: ia, ntype
++      logical :: scope_eligible, active
++      logical, allocatable :: host_active(:)
++      character(len=16), allocatable :: host_mode(:)
++      character(len=128) :: local_reason
++
++      if (this%control%calctype == 'B') then
++         eligible = this%is_eligible_local_hubbard()
++         local_reason = 'existing fixed-U clean-bulk eligibility'
++         if (.not. eligible) local_reason = 'bulk is outside existing fixed-U clean-bulk eligibility'
++         if (present(reason)) reason = trim(local_reason)
++         return
++      end if
++
++      scope_eligible = (this%hamiltonian%hubbard_u_general_check .or. &
++         this%hamiltonian%hubbard_u_impurity_check) .and. &
++         trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein' .and. &
++         this%control%nsp == 1 .and. this%control%lmax == 2 .and. &
++         (this%control%calctype == 'B' .or. this%control%calctype == 'I') .and. &
++         .not. this%control%constraints_enable .and. &
++         .not. this%control%has_soc() .and. .not. this%control%is_noncollinear() .and. &
++         .not. this%hamiltonian%hoh .and. .not. this%hamiltonian%hubbard_u_sc_check .and. &
++         .not. this%hamiltonian%hubbard_v_check .and. &
++         .not. this%hamiltonian%hubbard_test_operator_check
++
++      ntype = size(this%symbolic_atom)
++      allocate(host_active(ntype), host_mode(ntype))
++      host_active = .false.
++      host_mode = 'spectral'
++      do ia = 1, ntype
++         if (.not. this%is_frozen_hubbard_host(ia)) cycle
++         if (.not. allocated(this%symbolic_atom(ia)%potential%hubbard_u) .or. &
++             .not. allocated(this%symbolic_atom(ia)%potential%hubbard_j)) cycle
++         active = any(abs(this%symbolic_atom(ia)%potential%hubbard_u) > 1.0e-10_rp) .or. &
++                  any(abs(this%symbolic_atom(ia)%potential%hubbard_j) > 1.0e-10_rp)
++         if (.not. active) cycle
++         host_active(ia) = .true.
++         if (.not. this%symbolic_atom(ia)%potential%hubbard_file_has_uj) cycle
++         if (len_trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments) > 0) &
++            host_mode(ia) = trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments)
++      end do
++      call auto_impurity_local_host_eligible(scope_eligible, host_active, host_mode, eligible, local_reason)
++      if (present(reason)) reason = trim(local_reason)
++   end function is_eligible_local_moments
++
+    logical function is_frozen_hubbard_host(this, atom_type) result(frozen)
+       class(self), intent(in) :: this
+       integer, intent(in) :: atom_type
+@@ -3276,6 +3325,7 @@ contains
+       ! variables associated with the reading processes
+       integer :: iostatus, funit, i, k
+       logical :: radial_mode_defaulted, atomsc_control_active
++      character(len=128) :: radial_mode_reason
+       character(len=8) :: radial_mode_source
+ 
+       include 'include_codes/namelists/self.f90'
+@@ -3445,17 +3495,12 @@ contains
+       this%use_kspace = use_kspace
+       radial_mode_defaulted = trim(this%hamiltonian%hubbard_radial_moments) == 'auto'
+       if (trim(this%hamiltonian%hubbard_radial_moments) == 'auto') then
+-         if (this%is_eligible_local_hubbard() .or. &
+-             (this%control%calctype == 'I' .and. this%control%nsp == 1 .and. this%control%lmax == 2 .and. &
+-              this%hamiltonian%hubbard_u_general_check .and. &
+-              trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein' .and. &
+-              .not. this%control%constraints_enable .and. .not. this%control%has_soc() .and. &
+-              .not. this%control%is_noncollinear() .and. .not. this%hamiltonian%hoh .and. &
+-              .not. this%hamiltonian%hubbard_u_sc_check .and. .not. this%hamiltonian%hubbard_v_check .and. &
+-              .not. this%hamiltonian%hubbard_u_impurity_check .and. this%all_frozen_hubbard_hosts_local())) then
++         if (this%is_eligible_local_moments(radial_mode_reason)) then
+             this%hamiltonian%hubbard_radial_moments = 'local'
+          else
+             this%hamiltonian%hubbard_radial_moments = 'spectral'
++            if (rank == 0 .and. this%control%calctype == 'I') &
++               call g_logger%info('HUBBARD_RADIAL_MODE auto retained spectral: '//trim(radial_mode_reason), __FILE__, __LINE__)
+          end if
+       end if
+       radial_mode_source = 'explicit'
+diff --git a/tests/KNOWN_ISSUES.md b/tests/KNOWN_ISSUES.md
+index 0a6f802..21daf0b 100644
+--- a/tests/KNOWN_ISSUES.md
++++ b/tests/KNOWN_ISSUES.md
+@@ -1862,4 +1862,11 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
+ - **Symptom:** the same frozen Ni lambda=0 W1 deck exits with SIGSEGV during the first recursion in Release and RelWithDebInfo. The RelWithDebInfo run reaches the d-shell physicality diagnostics for l=1, spin=2, then reports only three raw address frames; no complete SCF trace or endpoint is produced.
+ - **Evidence:** the fresh RelWithDebInfo replay, exact input hashes, source/build provenance, preflight and raw log are recorded in [`C5_4_T4_RD4.json`](../docs/validation/fixed_ldau/rs/C5_4_T4_RD4.json). The prior Debug bounds run passed 36 loops without a bounds error or backtrace; this does not identify the optimized-build crash cause.
+ - **C5.8 update:** the current Release trace crash was localized to an unassociated `pl_bands%control` read in fixed-U replay (`source/self.f90` replay setup called `calculate_pl`, which reads `this%control%nsp` at `source/bands.f90:2254`; the fault address was `0x14`). Binding the replay object's control pointer fixes that diagnostic path. The fixed current Release T2a campaign completed three iterations. A separate Release regression using the exact private C52/C54 W1 source plus only this pointer binding captured the first complete lambda-zero iteration and was externally stopped; it did not crash through that iteration. This is a bounded diagnostic regression, not an RD4 energy measurement or proof of longer-run behavior.
++- **C5.9 bounded rerun:** the exact Release lambda-zero deck on the pointer-fixed W1 source captured one complete stable iteration and was externally stopped; no crash occurred through that iteration. No RD4 energy was measured, and longer-run behavior remains untested.
+ - **Disposition:** OPEN for RD4 energy/longer-run behavior; impurity energy routing remains off and no diagnostic energy term is adopted. The C5.8 cause and bounded regression are recorded in [`C5_8_RESULTS.md`](../docs/validation/fixed_ldau/rs/C5_8_RESULTS.md) and [`C5_8_RESULTS.json`](../docs/validation/fixed_ldau/rs/C5_8_RESULTS.json).
++
++## [OPEN, 2026-10-22] KS-local host to RS impurity numerical equivalence for Ni
++
++- The production `auto` rule selects local impurity density moments only when every U-carrying frozen host potential records local mode. The rule supports both RS-local and KS-local hosts; it does not establish numerical equivalence between those workflows.
++- No accepted Ni KS host is available, so the KS-host-to-RS-impurity Ni comparison remains unvalidated. The C5 Fe smoke run does not close this Ni-specific issue.
++- Impurity Hubbard energy remains excluded; RD4 energy is unmeasured. See `docs/validation/fixed_ldau/rs/C5_10_RESULTS.md`.
+diff --git a/tests/unit/test_auto_impurity_local_mode.f90 b/tests/unit/test_auto_impurity_local_mode.f90
+new file mode 100644
+index 0000000..8c5e7ad
+--- /dev/null
++++ b/tests/unit/test_auto_impurity_local_mode.f90
+@@ -0,0 +1,44 @@
++program test_auto_impurity_local_mode
++   use math_mod, only: auto_impurity_local_host_eligible
++   implicit none
++   logical :: eligible
++   character(len=128) :: reason
++   logical :: frozen_u_host(3)
++   character(len=16) :: mode(3)
++
++   frozen_u_host = [.true., .true., .false.]
++   mode = ['local           ', 'local           ', 'spectral        ']
++   call auto_impurity_local_host_eligible(.true., frozen_u_host, mode, eligible, reason)
++   call check(eligible, 'every U-carrying frozen host is local')
++
++   mode(2) = 'spectral'
++   call auto_impurity_local_host_eligible(.true., frozen_u_host, mode, eligible, reason)
++   call check(.not. eligible .and. index(reason, 'spectral') > 0, &
++      'spectral frozen host keeps auto mode spectral with a reason')
++
++   mode(2) = ''
++   call auto_impurity_local_host_eligible(.true., frozen_u_host, mode, eligible, reason)
++   call check(.not. eligible .and. index(reason, 'legacy provenance') > 0, &
++      'legacy frozen host keeps auto mode spectral with a reason')
++
++   mode(2) = 'local'
++   call auto_impurity_local_host_eligible(.false., frozen_u_host, mode, eligible, reason)
++   call check(.not. eligible .and. index(reason, 'scope') > 0, &
++      'guarded or unsupported impurity scope remains ineligible')
++
++   frozen_u_host = .false.
++   call auto_impurity_local_host_eligible(.true., frozen_u_host, mode, eligible, reason)
++   call check(.not. eligible .and. index(reason, 'no U-carrying') > 0, &
++      'no U-carrying frozen host keeps the default spectral')
++
++   write(*,'(a)') 'RESULT: PASS'
++contains
++   subroutine check(ok, label)
++      logical, intent(in) :: ok
++      character(len=*), intent(in) :: label
++      if (.not. ok) then
++         write(*,'(a)') 'FAIL: '//label
++         error stop 1
++      end if
++   end subroutine check
++end program test_auto_impurity_local_mode

@@ -937,3 +937,15 @@ T3, T4 as in C5.6. Local merge only; report the SHA; do not push.
    crash is gone. No RD4 measurement.
 
 Uncovered outcomes: C5.3 item 2.
+
+C5.10 (user-approved; record verbatim in C5_AMENDMENT.md).
+
+T1 KS Fe host: ACCEPTED. C5.9 T1 (a) and (c) pass; (b) passes on the d occupations and the
+   sphere moment. The E_F comparison is N/A (no stored reference value); record the new E_F as
+   the reference for future use.
+
+Rule for the rest of C5: a sub-criterion whose reference data does not exist is recorded as N/A.
+It does not block, provided the gate's remaining quantitative sub-criteria pass.
+
+Continue with C5.9 T2, T3, T4 (budget 2 SCF runs). Local merge only; report the SHA; do not push.
+Uncovered outcomes: C5.3 item 2.

@@ -1,0 +1,117 @@
+{
+  "schema": "c5_10_results_v1",
+  "date": "2026-10-22",
+  "status": "T1_ACCEPTED_T2_FAILED_BUDGET_EXHAUSTED_RD4_BOUNDED_NO_CRASH",
+  "head_before_evidence": "141b64461a0c5398ebbf5c2b7110a9342cf86d01",
+  "t1": {
+    "status": "ACCEPTED_UNDER_C5_10",
+    "accepted_ks_host": "/private/tmp/c58-t2a-fixed-release/run/Fe_out.nml",
+    "accepted_ks_host_sha256": "2284194179736d2e6694dd40514b55578bdf2558e9826d5d7ba9d5c6cc13b4bd",
+    "old_endpoint_ef": "N/A; no stored reference value",
+    "new_endpoint_ef_ry": -0.0829496275,
+    "new_endpoint_ef_source": "/private/tmp/c58-t2a-fixed-release/run/testrun.log"
+  },
+  "t2": {
+    "status": "FAILED_WITHIN_BUDGET_NO_ACCEPTANCE_WINDOW",
+    "campaign_starts_used": 2,
+    "campaign_starts_cap": 2,
+    "u_ev": 2.0,
+    "j_ev": 0.0,
+    "rc": 80,
+    "mode_requested": "auto",
+    "binary": "/private/tmp/c510-fixed-release-build/bin/rslmto.x",
+    "binary_sha256": "267a8ae30a3415f8af2204be30b81bee319fa98c4e60075c1d9d5e7ea6f4f05a",
+    "attempts": [
+      {
+        "attempt": 1,
+        "run_dir": "/private/tmp/c510-t2-rs-fe-u2/run2",
+        "preflight": "/private/tmp/c510-t2-rs-fe-u2/preflight_final.json",
+        "preflight_sha256": "9c0c56f31d9cf3007937d7d14187b952f85b3d84405ad4f1ce24d77735b19669",
+        "input_sha256": "6099280e57944c76454be13fd63e3c38b3dfcf686a441103623de9541c12b6c3",
+        "exit_code": 1,
+        "complete_iterations": 0,
+        "failure": "Fortran hamiltonian namelist rejected generated impurity U/J indices (serialized (:,1), intended (1,3)); no SCF observation was captured",
+        "disk_free_start_bytes": 9647529984,
+        "periodic_samples_kib": [
+          9421540,
+          9418476
+        ],
+        "campaign_start_counted": true
+      },
+      {
+        "attempt": 2,
+        "run_dir": "/private/tmp/c510-t2-rs-fe-u2/run4",
+        "preflight": "/private/tmp/c510-t2-rs-fe-u2/preflight_retry_final.json",
+        "preflight_sha256": "a013072f1717fd7581a61d38c4a2e8073f3a6f135eb04b2cde326e1c74c62028",
+        "input_sha256": "bee82534fde8fe6ddd79d1919fa3c5a0b662d2b659bc985a06d527a23354dfdb",
+        "exit_code": 1,
+        "complete_iterations": 3,
+        "outer_diff_first_three": [
+          "0.1967289821",
+          "0.2034926014",
+          "0.2010702253"
+        ],
+        "failure": "Invalid cluster geometry: ct was set to 6.0 per type; Fe rc=80 input recipe requires 3.0 per type (2*3.0d0). Repeated missing-neighbour-vector diagnostics; stopped, no 20-window evaluation.",
+        "disk_free_start_bytes": 9635647488,
+        "periodic_samples_kib": [
+          9409820,
+          9409788,
+          9406844,
+          9406932,
+          9409964,
+          9409924,
+          9410024,
+          9406668,
+          9406636,
+          9407324
+        ],
+        "campaign_start_counted": true
+      }
+    ],
+    "disposition": "No continuation or additional campaign; no T2 pass, adoption, or merge",
+    "t3": "STOPPED_AFTER_T2_FAILURE; no identity verification runs launched"
+  },
+  "candidate": {
+    "status": "PRIVATE_DIAGNOSTIC_ONLY_NOT_ADOPTED",
+    "preserved_path": "/private/tmp/c510-candidate-preserved",
+    "binding_json": "/private/tmp/c510-candidate-preserved/candidate_binding.json",
+    "binding_sha256": "a3ffbdd659e9ef8fae1e93340516fc9fb27d05836ccb1b20f600b7074fba6565",
+    "unit_test": "UnitAutoImpurityLocalMode",
+    "unit_result": "PASS",
+    "source_restored_to_head": "141b64461a0c5398ebbf5c2b7110a9342cf86d01",
+    "review_patch": "docs/validation/fixed_ldau/rs/C5_10_AUTO_CANDIDATE.patch",
+    "review_binding": "docs/validation/fixed_ldau/rs/C5_10_AUTO_CANDIDATE_BINDING.json",
+    "review_patch_sha256": "4b3b733e6849c520cd3fd6cc10c8673edf718ea3c8f47f07b144622f17c0aa7c"
+  },
+  "rd4_short": {
+    "status": "NO_CRASH_THROUGH_ONE_COMPLETE_ITERATION",
+    "run_dir": "/private/tmp/c510-rd4-lambda0-rerun/run",
+    "binary_sha256": "d87479d402f959b2fe80975fdb8a25afa2a1794ecae1f58146b8c5f6cbf26f7e",
+    "input_source": "/private/tmp/c510-rd4-lambda0-rerun/immutable",
+    "input_nml_sha256": "1f63c85f66c328811d9c0ef99f3e82454491ec40dbffcffdff455ec48e26e14c",
+    "preflight": "/private/tmp/c510-rd4-lambda0-rerun/preflight.json",
+    "preflight_sha256": "26a33d5a4c104712853922a0fa9f4e6c95f61dc875879a343103c31266b7e974",
+    "schema_source": "/private/tmp/c58-rd4-w1-fixed-source",
+    "watcher_sha256": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be",
+    "captured_iteration": 1,
+    "complete_trace_state_pairs": 1,
+    "stable_double_read": true,
+    "p_out_ql_channels": 6,
+    "post_scf_radial_channels": 6,
+    "trace_sha256": "32c40ab07177f31a5207c20280bf176d62eb690d6f7c78f00c54704a4556e157",
+    "state_sha256": "88f9cd7409f9fbd6ae9730b590d2b4476dccb3f1faeb50c382c191ad23db4c40",
+    "exit_code": 143,
+    "stop": "External SIGTERM after watcher confirmed one stable complete iteration",
+    "energy_measurement": "NONE",
+    "disk": {
+      "start_bytes": 9631133696,
+      "minimum_periodic_kib": 8212520,
+      "launcher_end_bytes": 8412008448,
+      "after_df_available_kib": 8214656,
+      "floor_bytes": 1073741824
+    }
+  },
+  "production_adoption": "NOT_PERFORMED",
+  "merge": "NOT_PERFORMED",
+  "push": "NOT_PERFORMED"
+}
