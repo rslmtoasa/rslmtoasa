@@ -870,3 +870,40 @@ T2a/T2b, T3, T4 exactly as in C5.6, using the fixed binary.
 
 If T2a or T2b fails: commit the records and stop with a 5-line summary.
 Uncovered outcomes: C5.3 item 2.
+
+## C5.8
+
+C5.8 (user-approved; record verbatim in C5_AMENDMENT.md). OBJECTIVE: find and fix the
+Release-only pre-SCF crash, then finish T2a-T4.
+Token rules as in C5.4.
+Budget:
+  - up to 12 SHORT reproduction invocations (stop after the first SCF iteration or at the crash);
+    these do not count as SCF runs;
+  - 3 SCF runs.
+
+T1 Reproduce and classify (short invocations, the T2a deck):
+   (a) Release build at the current tip: confirm the segfault, with OMP_NUM_THREADS=1.
+   (b) RelWithDebInfo (-O2 -g -fbacktrace -fcheck=bounds,pointer -finit-real=snan
+       -finit-integer=-999999): capture the backtrace or the first check failure.
+   (c) Debug build: does it pass?
+   (d) Release builds at 908074f (fable_v4b_u tip) and at 8b8f7ef, same deck.
+       Whatever needs adapting (for example provenance fields unknown to old binaries): remove
+       only those lines, and record what was removed.
+
+T2 Bisect: if (d) passes at 908074f, build Release at each commit in 908074f..HEAD that touches
+   source/ (binary search) and report the first crashing commit.
+
+T3 Fix:
+   - Smallest change that removes the cause (uninitialised variable, out-of-bounds access,
+     unallocated or unassociated array, etc.). No physics change.
+   - Regression: the T2a deck passes in Release.
+   - Also rerun the RD4 lambda=0 deck once in Release and record whether that crash is gone.
+   - GATE: single-thread no-U RS/KS identity; the guard fixtures (13) still pass.
+   If (d) also crashes at 908074f/8b8f7ef: classify as PRE-EXISTING, record the backtrace in
+   KNOWN_ISSUES, and continue T2a with the Debug build instead.
+
+T4 Continue C5.6 T2a, T2b, T3, T4 with the fixed binary (or the Debug binary per T3).
+   Local merge only; report the SHA; do not push.
+
+If T2a or T2b then fails for any other reason: commit the records and stop with a 5-line summary.
+Uncovered outcomes: C5.3 item 2.

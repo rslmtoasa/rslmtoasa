@@ -1428,6 +1428,7 @@ contains
       pl_atoms = this%symbolic_atom
       pl_bands%symbolic_atom => pl_atoms
       pl_bands%lattice => this%lattice
+      pl_bands%control => this%control
       call load_captured_pl_inputs(pl_atoms)
       call pl_bands%calculate_pl()
       allocate(pl_raw(lmax + 1, 2), pl_local(lmax + 1, 2))
