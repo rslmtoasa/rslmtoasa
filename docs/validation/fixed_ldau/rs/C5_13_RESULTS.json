@@ -1,0 +1,64 @@
+{
+  "schema": "c5_13_impurity_auto_results_v1",
+  "date": "2026-10-22",
+  "branch": "fix/ldau-impurity-auto",
+  "base_commit": "b04bcba47375",
+  "smoke": {
+    "status": "PASS_C5_13_SMOKE",
+    "source": "docs/validation/fixed_ldau/rs/C5_12_assets/T2_run2_full_capture.tar.gz",
+    "window_iterations": [81, 100],
+    "input_sha256": "56fc09aa6de98cb9ec4eba247d25c647085db23c1cd3333e43a06238f874e427",
+    "returncode": 0,
+    "completed_iterations": 100,
+    "mode": "local",
+    "mode_source": "explicit",
+    "auto_mode_tested": false,
+    "provenance_or_mode_errors": false,
+    "host_ef_preflight": {
+      "status": "PASS",
+      "host_ef_ry": -0.08294962745148776,
+      "input_fermi_ry": -0.08294962745148776,
+      "delta_ry": 0.0,
+      "tolerance_ry": 1e-6,
+      "record": "docs/validation/fixed_ldau/rs/C5_12_assets/run2_preflight.json"
+    },
+    "thresholds": {
+      "max_outer_Diff": 1e-7,
+      "d_spread_per_spin": 1e-5,
+      "sphere_moment_spread_muB": 1e-5
+    },
+    "observed": {
+      "max_outer_Diff": 5.71e-8,
+      "d_spread_spin1": 1.9525747685378292e-7,
+      "d_spread_spin2": 8.270285476452699e-7,
+      "sphere_moment_spread_muB": 7.662924716989039e-7
+    },
+    "final_window_means": {
+      "impurity_d_spin1": 4.61112236993682,
+      "impurity_d_spin2": 1.8989402971583988,
+      "impurity_sphere_moment_muB": 2.712182072778421,
+      "accepted_C5_10_KS_host_d_spin1": 4.5918251425922421,
+      "accepted_C5_10_KS_host_d_spin2": 1.9298878376171982,
+      "accepted_C5_10_KS_host_sphere_moment_muB": 2.5107769208639206,
+      "impurity_minus_host_d_spin1": 0.01929722734457773,
+      "impurity_minus_host_d_spin2": -0.03094754045879933,
+      "impurity_minus_host_sphere_moment_muB": 0.2014051519145004,
+      "host_reference": "docs/validation/fixed_ldau/rs/C5_9_RESULTS.json regenerated values, accepted under C5.10"
+    },
+    "disposition": "Smoke thresholds pass. This result is explicit-local and does not relabel the C5.11 auto fixture or RD3(a) Ni auto evidence. Strict C5.2 section 2.1 RS acceptance remains required only for states used as references or inputs to equivalence gates."
+  },
+  "documentation": {
+    "status": "DONE",
+    "workflow": "docs/source/theory/lda_u_workflow.rst",
+    "known_issues": "tests/KNOWN_ISSUES.md",
+    "amendment": "docs/validation/fixed_ldau/rs/C5_AMENDMENT.md",
+    "deck_rule_preflight": "C5.4 preflight compares fermi with host output endpoint EF within 1e-6 Ry"
+  },
+  "merged_checks": {
+    "status": "PENDING",
+    "no_u_rs_ks_identity": "NOT_RUN",
+    "guard_fixtures_13": "NOT_RUN",
+    "auto_impurity_fixture": "NOT_RUN"
+  },
+  "uncovered": "C5.3 item 2 remains not adopted."
+}

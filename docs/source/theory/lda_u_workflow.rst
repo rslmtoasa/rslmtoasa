@@ -120,6 +120,12 @@ the current version so its mode is recorded. Updated impurity potentials are
 written with the run's selected mode and backend. A forced explicit
 ``spectral`` choice remains spectral.
 
+For impurity decks, copy a working deck, then set ``fermi`` and the energy
+window to the host endpoint values before launch. The C5.4 preflight compares
+the deck Fermi value with the host run output's endpoint ``E_F`` and requires
+a difference no greater than ``1e-6 Ry``. It records the host output path and
+value, and rejects a mismatch before the solver starts.
+
 Selecting local impurity density moments does not add ``E_Hub(P_imp)`` to the
 reported impurity energy; impurity energies exclude the Hubbard term. Impurity
 Hubbard-energy routing remains off. The

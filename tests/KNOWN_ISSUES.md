@@ -1874,5 +1874,5 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 ## [CLOSED, 2026-10-22] Impurity auto mode with local U-carrying hosts
 
 - For `calctype='I'`, `auto` now selects local impurity density moments when every U-carrying frozen host potential records local mode, including decks that supply `hubbard_u_impurity`/`hubbard_j_impurity`. The focused fixture verifies this path has no provenance error; the existing RD3(a) Ni auto case continues to resolve local.
-- This closes the mode-selection issue only. The C5.11 Fe smoke run did not meet the RS acceptance window, and the separate OPEN KS-local-host to RS-impurity numerical-equivalence issue for Ni remains open. Impurity Hubbard energy routing remains off; RD4 energy remains unmeasured.
-- Evidence: `docs/validation/fixed_ldau/rs/C5_11_RESULTS.md`.
+- This closes the mode-selection issue only. The C5.12 Fe smoke run, rejudged under C5.13 workflow thresholds, passed convergence, provenance, and explicit-local mode checks; it did not exercise `auto`. The separate OPEN KS-local-host to RS-impurity numerical-equivalence issue for Ni remains open. Impurity Hubbard energy routing remains off; RD4 energy remains unmeasured.
+- Evidence: `docs/validation/fixed_ldau/rs/C5_13_RESULTS.md`; the auto impurity-U fixture and prior RD3(a) Ni auto case are recorded in `C5_11_RESULTS.md`.

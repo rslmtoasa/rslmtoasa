@@ -1008,3 +1008,45 @@ Deck rule for all future impurity decks: copy from a working deck, then set ferm
 window to the HOST endpoint values, and diff before launch. Add this rule to the preflight script
 as a check: fermi within 1e-6 Ry of the host E_F recorded in the host's run output.
 Uncovered outcomes: C5.3 item 2.
+
+C5.13 (user-approved; record verbatim in C5_AMENDMENT.md). OBJECTIVE: close C5.11 and merge.
+No SCF runs.
+
+T1 T2 smoke GATE verdict, re-judged with the correct criterion for a smoke test (it protects
+   "the workflow resolves, passes provenance and converges", not reference precision):
+   - mode = local;
+   - no provenance or mode error;
+   - final outer Diff <= 1e-7;
+   - 20-step spreads <= 1e-5 (d per spin) and <= 1e-5 muB (moment).
+   Evaluate on the existing C5.12 run. If it passes: T2 = PASS.
+   RECORD: impurity-minus-KS-bulk d occupations and moment from the final window.
+   Note in C5_AMENDMENT.md: the strict RS-accepted window (C5.2 §2.1) remains required only for
+   states used as references or as inputs to equivalence gates.
+
+T2 C5.11 T3: documentation (both host workflows, both U-input styles, the mode rule, impurity
+   energies exclude the Hubbard term, the legacy-file restart note, and the deck rule "set fermi
+   and the window to the host endpoint"). KNOWN_ISSUES: close the impurity-auto entry.
+
+T3 C5.11 T4: local --no-ff merge into fable_v4b_u.
+   Checks on the merged tree:
+   - single-thread no-U RS/KS identity;
+   - the 13 guard fixtures;
+   - the auto impurity fixture.
+   Report the SHA. Do not push.
+
+Uncovered outcomes: C5.3 item 2.
+
+Note from C5.13: the strict RS-accepted window (C5.2 §2.1) remains required only for states used as references or as inputs to equivalence gates.
+
+
+C5.13 outcome (2026-10-22): T1 PASS under the C5.13 smoke-test criteria on the
+existing C5.12 run 2, iterations 81–100. It used explicit local mode, logged no
+provenance or mode error, completed with return code 0, and had final-window
+Diff 5.71e-8, d spreads 1.9525747685e-7 and 8.2702854765e-7, and sphere-moment
+spread 7.662924717e-7 μB. These pass the C5.13 limits. This is not an auto-mode
+T2 execution; auto remains evidenced by the C5.11 impurity-U fixture and prior
+RD3(a) Ni case. Final-window means and impurity-minus-KS-host differences are
+recorded in `C5_13_RESULTS.md`. The strict RS-accepted window in C5.2 §2.1
+remains required only for states used as references or inputs to equivalence
+gates. T2 documentation was completed; T3 local merge/check results follow in
+`C5_13_RESULTS.md`. C5.3 item 2 remains uncovered and is not adopted.
