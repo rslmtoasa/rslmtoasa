@@ -101,3 +101,27 @@ T2/T3 as in C6.1, with one additional allowed deck change in every copied deck: 
 T4 As in C6.1.
 
 Uncovered outcomes: C5.3 item 2. Do not stop at an uncovered outcome if independent items remain.
+
+C6.4 (user-approved; record verbatim in C6_AMENDMENT.md). Branch fix/ldau-surface (1ebee1e).
+Token rules as in C6. Python: .venv. Budget: 4 new SCF runs.
+
+T1 Code fix: in bands.f90 local-moment correction, use the recursion-site -> cluster-site -> type
+   map (get_rd1_recursion_site_type) and the inserted-V_in path for calctype 'S' exactly as for
+   'I'. Generalise rd1_local_impurity_eligible() to embedded runs ('I' and 'S') under the same
+   conditions; keep the bulk path unchanged. Atoms whose type carries no U/J (e.g. ES) are skipped
+   before extraction, as in the impurity path.
+   Unit test (extend the frozen-plus-recursive-site oracle): a surface-like layout with
+     - one frozen host type with U,
+     - one empty-sphere recursion type without U,
+     - one recursion type with U;
+   the mapping returns the correct types, the U site's corrected moments match the direct
+   construction to 1e-12, and the ES site is skipped.
+   GATES (same scripts as C6.2 T1): RS 27/27, KS 24/24, guards 13/13, impurity and surface auto
+   fixtures, plus the new test.
+
+T2/T3 as in C6.2, with additional allowed deck changes:
+   - nstep = 200;
+   - &mix parameters copied from the accepted bulk host deck of the same material.
+   Rerun T2(a) and T2(b), then T3(a) and T3(b). Smoke criteria from C5.13.
+
+T4 As in C6.1. Uncovered outcomes: C5.3 item 2.

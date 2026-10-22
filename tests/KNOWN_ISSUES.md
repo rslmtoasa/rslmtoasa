@@ -1871,11 +1871,21 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 - No accepted Ni KS host is available, so the KS-host-to-RS-impurity Ni comparison remains unvalidated. The C5 Fe smoke run does not close this Ni-specific issue.
 - Impurity Hubbard energy remains excluded; RD4 energy is unmeasured. See `docs/validation/fixed_ldau/rs/C5_10_RESULTS.md`.
 
-## [OPEN, 2026-10-22] Surface LDA+U smoke validation: local d-shell mapping and fixture iteration limit
+## [OPEN, 2026-10-22] Surface LDA+U smoke validation: Ni baseline and local-density physicality
 
-- C6.2's authorized `nsp=1` change resolves the previous auto-local eligibility conflict for copied `fccCu001` decks. In the Ni(001) RS-local U=3/J=0.7 smoke attempt, auto selected `mode=local` without a provenance error, then the first recursion stopped with fatal `Unable to map local d-shell Hubbard potential.` No completed iteration or smoke window was produced.
-- The copied surface fixture keeps `nstep=1` under the allowed deck changes, so it cannot provide the C5.13 final 20-step spread. The Ni U=0 one-step baseline reported `Not converged! Diff=0.0162421175`; no converged layer moments or surface-minus-bulk comparison is available. T3 Cu KS-host validation remains unrun after the T2 gate failure.
-- Surface Hubbard-energy routing remains OFF; no surface energy claim or numerical comparison is made. See `docs/validation/fixed_ldau/rs/C6_2_RESULTS.md`.
+- C6.4 fixes the surface recursion-site to cluster-site to type mapping for the local-moment
+  correction. Its T1 identity (RS 27/27, KS 24/24), 13 guard fixtures, impurity/surface auto
+  fixture, and frozen-plus-recursive-site oracle all pass. In the Ni(001) RS-local U=3/J=0.7
+  smoke run, auto selected `mode=local` without a provenance error, but the moment routine stopped
+  on a negative rotating-frame density eigenvalue at site 2, l=0 (`lambda_min=-3.15867e-6`)
+  before C5.13 convergence. The final Diff and 20-step spread criteria were not met.
+- The C6.4 U=0 Ni control launch failed at iteration 8 on a non-finite guard for the ES site's
+  `PL` field. That launch missed its required C5.4 preflight and is recorded only as a failed
+  diagnostic attempt, not valid baseline evidence. Neither attempt provides converged layer
+  occupations/moments or a U-dependent surface-minus-bulk comparison. T3 Cu KS-host validation
+  was not run after the T2 smoke gate failed.
+- Surface Hubbard-energy routing remains OFF; no surface energy claim or comparison is made. See
+  `docs/validation/fixed_ldau/rs/C6_4_RESULTS.md`.
 
 ## [CLOSED, 2026-10-22] Impurity auto mode with local U-carrying hosts
 

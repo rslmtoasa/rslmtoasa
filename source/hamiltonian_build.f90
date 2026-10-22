@@ -80,7 +80,7 @@ contains
 
       eligible = .false.
       if (.not. associated(this%control) .or. .not. associated(this%lattice)) return
-      eligible = trim(this%control%calctype) == 'I' .and. &
+      eligible = (trim(this%control%calctype) == 'I' .or. trim(this%control%calctype) == 'S') .and. &
          (this%hubbard_u_general_check .or. this%hubbard_u_impurity_check) .and. &
          trim(this%hubbard_radial_moments) == 'local' .and. this%control%nsp == 1 .and. &
          this%control%lmax == 2 .and. trim(this%hubbard_u_potential_form) == 'liechtenstein' .and. &

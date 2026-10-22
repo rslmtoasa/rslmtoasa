@@ -17,6 +17,7 @@ program projector_multisite_frozen_h
                       get_mpi_variables, parallel_context, assignment(=)
    use control_mod, only: control
    use lattice_mod, only: lattice
+   use symbolic_atom_mod, only: symbolic_atom
    use charge_mod, only: charge
    use hamiltonian_mod, only: hamiltonian, rd1_vin_ok, rd1_vin_not_recursion_site, rd1_vin_duplicate, &
       rd1_vin_wrong_type, rd1_vin_missing_or_stale
@@ -272,6 +273,7 @@ contains
       integer :: spin_id, i, j, site_i, site_j, orb_i, orb_j, row_i, row_j, state
       integer :: info, lwork, status, extract_status, drow(5)
       integer :: global_i, global_j, host_type, recursive_type, mapped_cluster, mapped_type
+      integer :: surface_map_status, es_type, frozen_host_type
       complex(rp), allocatable :: spin_h(:,:), h_total(:,:), hbare(:,:)
       complex(rp) :: p_d(5,5), m1_d(5,5), vin_d(5,5), host_vin(5,5)
       complex(rp) :: captured(5,5,2), captured_valid(5,5,2), captured_probe(5,5,2), host_state_before(2,5,5)
@@ -281,9 +283,12 @@ contains
       real(rp) :: q0, center, q2, corrected_center, corrected_q2, t_value
       real(rp) :: direct_center, direct_q2, wrong_center, wrong_q2, host_center_before
       real(rp) :: oracle_error
-      integer :: saved_nrec, saved_nbulk
+      real(rp) :: saved_host_u, saved_host_j
+      logical :: surface_es_has_uj
+      integer :: saved_nrec, saved_nbulk, saved_ntype
       integer :: saved_nsp, saved_lmax
       integer, allocatable :: saved_irec(:), saved_ib(:), saved_iz(:)
+      type(symbolic_atom), allocatable :: saved_surface_symbols(:)
       character :: saved_calctype
       character(len=16) :: saved_radial_mode, saved_potential_form
       character(len=16) :: saved_test_operator
@@ -295,6 +300,7 @@ contains
                eigenvalues(nspinorb), rwork(max(1,3*nspinorb-2)))
       saved_nrec = lat%nrec
       saved_nbulk = lat%nbulk
+      saved_ntype = lat%ntype
       saved_nsp = ctl%nsp
       saved_lmax = ctl%lmax
       saved_calctype = ctl%calctype
@@ -494,6 +500,71 @@ contains
          deallocate(work, eigenvectors)
       end do
 
+      ! Surface-like map with three distinct roles: the frozen host is type 1
+      ! (selected by ib), the U recursion site is type 2, and the ES recursion
+      ! site is type 3 with no U/J. Only the latter two are in irec.
+      frozen_host_type = host_type
+      es_type = 3
+      saved_host_u = lat%symbolic_atoms(frozen_host_type)%potential%hubbard_u(3)
+      saved_host_j = lat%symbolic_atoms(frozen_host_type)%potential%hubbard_j(3)
+      if (saved_host_u <= 0.0_rp .or. saved_host_j <= 0.0_rp) failed = .true.
+      call move_alloc(lat%symbolic_atoms, saved_surface_symbols)
+      allocate(lat%symbolic_atoms(3))
+      lat%symbolic_atoms(1:2) = saved_surface_symbols
+      call lat%symbolic_atoms(es_type)%restore_to_default()
+      deallocate(lat%iz)
+      allocate(lat%iz(3))
+      lat%iz = [frozen_host_type, es_type, recursive_type]
+      lat%ntype = 3
+      lat%ib(1) = frozen_host_type
+      if (allocated(lat%irec)) deallocate(lat%irec)
+      allocate(lat%irec(2))
+      lat%irec = [2, 3]
+      lat%nrec = 2
+      ctl%calctype = 'S'
+      ham%hubbard_u_general_check = .true.
+      ham%hubbard_u_impurity_check = .false.
+      if (.not. ham%rd1_local_impurity_eligible()) failed = .true.
+      if (lat%ib(1) /= frozen_host_type .or. &
+          lat%symbolic_atoms(frozen_host_type)%potential%hubbard_u(3) <= 0.0_rp .or. &
+          lat%symbolic_atoms(frozen_host_type)%potential%hubbard_j(3) <= 0.0_rp) failed = .true.
+      call ham%get_rd1_recursion_site_type(1, mapped_cluster, mapped_type, surface_map_status)
+      if (surface_map_status /= rd1_vin_ok .or. mapped_cluster /= 2 .or. mapped_type /= es_type) failed = .true.
+      surface_es_has_uj = .false.
+      if (allocated(lat%symbolic_atoms(es_type)%potential%hubbard_u)) then
+         surface_es_has_uj = any(abs(lat%symbolic_atoms(es_type)%potential%hubbard_u) > 1.0e-10_rp)
+      end if
+      if (allocated(lat%symbolic_atoms(es_type)%potential%hubbard_j)) then
+         surface_es_has_uj = surface_es_has_uj .or. &
+            any(abs(lat%symbolic_atoms(es_type)%potential%hubbard_j) > 1.0e-10_rp)
+      end if
+      if (surface_es_has_uj) failed = .true.
+      call ham%get_rd1_recursion_site_type(2, mapped_cluster, mapped_type, surface_map_status)
+      if (surface_map_status /= rd1_vin_ok .or. mapped_cluster /= 3 .or. mapped_type /= recursive_type) failed = .true.
+      if (lat%symbolic_atoms(mapped_type)%potential%hubbard_u(3) <= 0.0_rp .or. &
+          lat%symbolic_atoms(mapped_type)%potential%hubbard_j(3) <= 0.0_rp) failed = .true.
+      call extract_hubbard_d_shell_potential(ham%hubbard_u_pot, mapped_type, 2, spin_off, vin_d, extract_status)
+      if (extract_status /= 0) failed = .true.
+      call correct_d_shell_moments(p_d, m1_d, vin_d, q0, center, q2, &
+         corrected_center, corrected_q2, t_value, status)
+      if (status /= 0 .or. max(abs(corrected_center-direct_center), abs(corrected_q2-direct_q2)) > 1.0e-12_rp) then
+         failed = .true.
+      end if
+      write(*,'(a,6(i0,1x),es24.16e3)') &
+         'RD1_SURFACE frozen_host ES_cluster ES_type U_cluster U_type ES_has_UJ moment_error=', &
+         frozen_host_type, 2, es_type, 3, mapped_type, merge(1, 0, surface_es_has_uj), &
+         max(abs(corrected_center-direct_center), abs(corrected_q2-direct_q2))
+      call ham%begin_rd1_vin_capture(9, enable_rs_capture=.true.)
+      if (.not. ham%rd1_capture_required .or. .not. ham%rd1_capture_enabled) failed = .true.
+      call ham%capture_rd1_vin_insertion(3, recursive_type, ham%hubbard_u_pot(:, :, recursive_type), status)
+      if (status /= rd1_vin_ok) failed = .true.
+      call ham%get_rd1_vin_for_recursion(1, 9, captured_probe, status)
+      if (status /= rd1_vin_missing_or_stale) failed = .true.
+      call ham%get_rd1_vin_for_recursion(2, 9, captured_probe, status)
+      if (status /= rd1_vin_ok .or. maxval(abs(captured_probe(:, :, 2)-vin_d)) > 0.0_rp) failed = .true.
+      deallocate(lat%symbolic_atoms)
+      call move_alloc(saved_surface_symbols, lat%symbolic_atoms)
+
       call ham%begin_rd1_vin_capture(8, enable_rs_capture=.true.)
       call ham%get_rd1_vin_for_recursion(1, 8, captured_probe, status)
       if (status /= rd1_vin_missing_or_stale) failed = .true.
@@ -511,6 +582,7 @@ contains
       lat%iz = saved_iz
       lat%nrec = saved_nrec
       lat%nbulk = saved_nbulk
+      lat%ntype = saved_ntype
       ctl%nsp = saved_nsp
       ctl%lmax = saved_lmax
       ctl%calctype = saved_calctype
