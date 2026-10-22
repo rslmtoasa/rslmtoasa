@@ -78,3 +78,26 @@ T4 Documentation and KNOWN_ISSUES (close the C6 OPEN entry, or update it). Local
 
 If a GATE fails: commit the records and stop with a 5-line summary.
 Uncovered outcomes: C5.3 item 2.
+
+C6.2 (user-approved; record verbatim in C6_AMENDMENT.md). Branch fix/ldau-surface (945ff47).
+Token rules and budget as in C6.1 (4 SCF runs).
+
+T1 MANDATORY, before anything else: rerun, on the current branch tip, the exact C5.13 gate
+   scripts:
+   - single-thread RS identity (27 cases) and KS identity (24 cases);
+   - the 13 guard fixtures;
+   - the impurity auto fixture;
+   - the surface auto unit test.
+   Report counts. Prior evidence does NOT substitute for this. Any failure: stop.
+
+T2/T3 as in C6.1, with one additional allowed deck change in every copied deck: nsp = 1.
+   - Ni: the surface/subsurface seeds are copies of the accepted nsp=1 Ni bulk potential, as
+     already planned.
+   - Cu: if the fixture's ES.nml / Cu-S.nml seeds fail to read under nsp=1, replace them with
+     copies of the converged Cu bulk host potential (ES stays an empty sphere) and record the
+     substitution.
+   - No other deck changes beyond the C6.1 list.
+
+T4 As in C6.1.
+
+Uncovered outcomes: C5.3 item 2. Do not stop at an uncovered outcome if independent items remain.
