@@ -1,0 +1,60 @@
+{
+  "schema": "c5_11_batched_audit_v1",
+  "date": "2026-10-22",
+  "head": "a2972286d377964f99f4e2f58d1bfb70c9f3aad2",
+  "base": "b04bcba47375620dc6e57873b7c88eaacb0f1de9",
+  "verdict": "T1_PASS_T2_FAIL_NO_MERGE",
+  "budget": {
+    "scf_runs_used": 2,
+    "scf_runs_max": 2,
+    "merge": false,
+    "push": false
+  },
+  "t1": {
+    "status": "PASS",
+    "guard_fixtures": 13,
+    "unit_fixture": "UnitAutoImpurityLocalMode",
+    "identity": {"RS": "27/27", "KS": "24/24"},
+    "rd3a_ni_auto": "PASS_REUSED_PRIOR_EVIDENCE_LOCAL",
+    "t2_recipe_mode": "explicit_local_preserved"
+  },
+  "t2": {
+    "status": "FAIL_NO_ACCEPTED_WINDOW_WITHIN_TWO_RUNS",
+    "recipe": {"source": "accepted Fe RA4/C3", "rc": 80, "ct": "2*3.0d0"},
+    "run1": {"returncode": -15, "last_complete_iteration": 26, "cause": "unknown SIGTERM"},
+    "run2": {
+      "returncode": 0,
+      "completed_iterations": 100,
+      "restart_from_run1_checkpoint": true,
+      "mode": "explicit local",
+      "provenance_error": false,
+      "first_window_1_20_accepted": false,
+      "final_window_81_100_accepted": false,
+      "any_window_1_100_accepted": false
+    },
+    "archive": {
+      "path": "docs/validation/fixed_ldau/rs/C5_11_T2_window_001_020.tar.gz",
+      "sha256": "c9e8646020e99a893c30b027b7152aba610dc03ed750823ab473fde36cf64e59",
+      "trace_csv_count": 20,
+      "paired_state_count": 20,
+      "manifest_present": true
+    },
+    "disposition": "endpoint values are records, not accepted values"
+  },
+  "t3": {
+    "status": "DONE",
+    "open_issues_preserved": [
+      "Ni KS-host-to-RS-impurity equivalence",
+      "RD4 energy and longer-run behavior"
+    ]
+  },
+  "audit_validation": {
+    "results_json_parsed": true,
+    "gate_assertions": "PASS",
+    "archive_hash_and_contents": "PASS",
+    "git_diff_check": "PASS",
+    "source_or_solver_actions": false,
+    "merge_or_push": false
+  },
+  "worktree_observation": "Pre-existing untracked Co reference outputs observed and left untouched."
+}
