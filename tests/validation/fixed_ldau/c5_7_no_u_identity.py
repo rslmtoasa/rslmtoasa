@@ -44,8 +44,8 @@ def normalized(path: Path) -> bytes:
     return data
 
 
-def run_one(binary: Path, scratch: Path, route: str) -> dict:
-    baseline = BASE / f"{route}_rd1"
+def run_one(binary: Path, scratch: Path, route: str, baseline_override: Path | None = None) -> dict:
+    baseline = baseline_override if baseline_override is not None else BASE / f"{route}_rd1"
     work = scratch / f"{route}_candidate"
     work.mkdir()
     input_source = INPUTS[route]
@@ -113,10 +113,18 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--scratch", type=Path, required=True)
+    parser.add_argument("--rs-baseline", type=Path,
+                        help="override the historical RS baseline with a versioned artifact directory")
+    parser.add_argument("--ks-baseline", type=Path,
+                        help="override the historical KS baseline with a versioned artifact directory")
+    parser.add_argument("--result", type=Path,
+                        default=ROOT / "docs/validation/fixed_ldau/rs/C5_7_NO_U_IDENTITY.json",
+                        help="identity result JSON destination")
     args = parser.parse_args()
     binary = args.binary.resolve()
     args.scratch.mkdir(parents=True, exist_ok=False)
-    results = {route.upper(): run_one(binary, args.scratch, route) for route in ("rs", "ks")}
+    baselines = {"rs": args.rs_baseline, "ks": args.ks_baseline}
+    results = {route.upper(): run_one(binary, args.scratch, route, baselines[route]) for route in ("rs", "ks")}
     result = {
         "schema": "c5_7_no_u_identity_v1", "binary": str(binary), "binary_sha256": sha(binary),
         "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
@@ -125,7 +133,7 @@ def main() -> None:
         "criterion": "exact artifact names/bytes; exclude testrun.log and preflight record; normalize only cpu_s fields in str.out",
         "results": results,
     }
-    destination = ROOT / "docs/validation/fixed_ldau/rs/C5_7_NO_U_IDENTITY.json"
+    destination = args.result
     destination.write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({route: {"status": row["status"], "artifact_count": row["artifact_count"]}
                       for route, row in results.items()}, indent=2))
