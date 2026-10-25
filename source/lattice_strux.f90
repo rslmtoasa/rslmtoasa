@@ -299,6 +299,7 @@ contains
       integer :: ii, ia, ib, ja, jb, m, is, js, nspec, nl, nl2, sbar_dim, pair_idx, nt_store
       integer :: nbas, nttab
       integer :: label, species_idx
+      logical :: finite_cluster
       integer, allocatable :: ips(:), lmxb(:), orb_map(:), species_labels(:)
       real(rp) :: pair_cutoff, solve_cutoff, pair_cutoff_bohr, solve_cutoff_bohr, alat_bohr, wav_bohr
       real(rp) :: t_total_start, t_total_end, t_map_start, t_map_end, t_inputs_start, t_inputs_end, t_store_start, t_store_end, t_remap_end
@@ -427,9 +428,13 @@ contains
       if (allocated(result%s)) deallocate(result%s)
       if (allocated(result%sdot)) deallocate(result%sdot)
 
-      if (.not. this%pbc .and. trim(lower(this%crystal_sym)) == 'file') then
+      ! Surface builds (calctype 'S') also leave a finite cluster in this%cr
+      ! although crystal_sym names the bulk lattice.
+      finite_cluster = .not. this%pbc .and. (trim(lower(this%crystal_sym)) == 'file' .or. this%control%calctype == 'S')
+
+      if (finite_cluster) then
          ! A non-periodic lattice has already been expanded into the finite
-         ! cluster in lattice%bravais.  Preserve that boundary condition for
+         ! cluster in lattice%bravais or build_surf_full.  Preserve that boundary condition for
          ! screening: a primitive-cell solve would silently reintroduce the
          ! periodic images that the legacy dbar1 path does not see.
          select case (effective_screening)
@@ -515,7 +520,7 @@ contains
             end if
          end select
       end do
-      if (this%pbc .or. trim(lower(this%crystal_sym)) /= 'file') then
+      if (.not. finite_cluster) then
       do ii = 1, this%ntot
          ia = representative_atom_index(this, ii)
          ib = primitive_basis_label(this, ia)
