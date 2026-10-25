@@ -26,6 +26,14 @@ the observed mismatch on this fixture.
 The source diff since the last passing C6.2 gate is limited to the surface and
 impurity local-moment paths in `bands.f90` and `hamiltonian_build.f90`; the
 identity deck is bulk (`calctype='B'`). No direct cause has been identified.
-The RS gate remains failed, so the remaining T1 gates and all surface campaign
-runs remain stopped. This diagnostic adds one solver invocation; no surface
-probe was launched.
+The RS gate remains failed, so surface campaign runs remain stopped. The
+no-LibXC diagnostic adds one solver invocation; no surface probe was launched.
+
+At the user's request, an additional checked RS run used the retained executable
+at `/private/tmp/c511-release-build/bin/rslmto.x` (current file SHA-256
+`46524061a637a1c9ec7f25df74d26d1d0a74cec65222a2241a2842c990366082`). It also
+produced the same 12/27 baseline mismatch and byte-identical output to the current
+no-LibXC build. This is the executable currently at that path; its hash is not
+bound to the earlier C6.2 passing run. The separate KS comparison passes 24/24;
+RA2 passes all 13 fixtures; `UnitAutoImpurityLocalMode` and
+`UnitLdaUProjectorMultisiteFrozenH` both pass. No reference oracle was changed.
