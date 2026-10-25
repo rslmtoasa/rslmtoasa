@@ -110,6 +110,12 @@ module hamiltonian_mod
       real(rp), dimension(3) :: v_alpha, v_beta, q_ss
       real(rp) :: theta_ss
       real(rp), dimension(:), allocatable :: theta_ss_sublattice, phi_ss_sublattice
+      !> k-space GBT constraint controller state: chi(2,2,site), field used in the last solve (2,site), last two residuals
+      real(rp), dimension(:, :, :), allocatable :: gbt_chi
+      real(rp), dimension(:, :), allocatable :: gbt_bfield
+      real(rp) :: gbt_residual(2) = huge(1.0_rp)
+      !> reference potential%mom of each type, captured before the first constrained k-space GBT assembly
+      real(rp), dimension(:, :), allocatable :: gbt_ref_mom
       real(rp), dimension(:), allocatable :: velocity_scale
       character(len=16) :: hubbard_u_potential_form
       !> Radial band-moment convention: legacy spectral or local Hubbard-adjusted.
@@ -148,8 +154,13 @@ module hamiltonian_mod
       procedure :: build_locham
       procedure :: build_ccor_bulk
       procedure :: build_ccor_local
+      procedure :: validate_ccor_inputs
+      procedure :: build_ccor_coefficients
+      procedure :: normalize_ccor_sdot
+      procedure :: ccor_vmt_scalar
       procedure :: build_obarm
       procedure :: build_enim
+      procedure :: add_constraining_field_spin_block
       procedure :: build_from_paoflow
       procedure :: build_from_paoflow_opt
       procedure :: build_realspace_velocity_operators
@@ -349,6 +360,13 @@ module hamiltonian_mod
       complex(rp), dimension(norb, norb) :: Lx, Ly, Lz
       !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
    end subroutine torque_operator_collinear
+
+   !> @brief Add the site's constraining field (mag_cfield, local spin frame) to an onsite spinor block.
+   module subroutine add_constraining_field_spin_block(this, atom_type, block)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: atom_type
+      complex(rp), intent(inout) :: block(nb, nb)
+   end subroutine add_constraining_field_spin_block
 
    !> @brief Build overlap-bar matrices for the orthogonal representation.
    !> @details Converts potential/overlap information from symbolic atoms into

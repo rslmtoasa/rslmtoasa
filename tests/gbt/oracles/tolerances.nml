@@ -5,5 +5,9 @@
   model_eig_ry      = 1.0d-12  ! O1; generator self-checks <= 3.3e-16 Ry
   model_ft_rel      = 1.0d-6   ! O2; |Richardson(0.25, 0.5, 1 deg) DeltaOmega/sin^2(theta) - (J(0)-J(q))| / max_q |J(0)-J(q)|
                                ! demonstrated <= 2.3e-8; targeted bugs (E_F*DeltaN mixing) give 0.66-100 on this scale
+  scf_identity_ry   = 1.0e-7
+  scf_moment_mub    = 1.0d-6   ! SCF-level identities for site moments (mu_B); ~10x the moment change per iteration
+                               ! at the SCF convergence criterion used in the GBT SCF tests; measured identities so far
+                               ! <= 5.1e-8 mu_B (I1, I2)
 /
 

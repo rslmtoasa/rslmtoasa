@@ -1934,3 +1934,75 @@ Found while adding the `gpu_precision = 'fp64'` pass to `tests/regression/run_gp
 - **Measured (2026-10-21, `build_gpu` at `f2bc31c`, one SCF step):** `|etot(GPU fp64) - etot(CPU legacy)|` is 9.5e-10 (diamond Si case) and 5.8e-9 (`bccFe_chebyshev_fast_hoh`), but 2.6e-8 (`bccFe_chebyshev_legacy_hoh`), 2.3e-8 (`bccFe_chebyshev_fast_hoh_ccor_2c`) and 5.0e-8 (`bccFe_chebyshev_fast_sp`). For comparison `|etot(GPU fp32) - etot(CPU legacy)|` is 4.9e-8 (Si), 1.1e-6, 5.6e-7, 2.2e-7 and 3.5e-9. Running the GPU fp64 case with `cheb_backend = 'legacy'` gave the same numbers to the printed digits.
 - **Not verified:** that the remaining 2e-8 to 5e-8 comes from the CPU reconstruction in the legacy run. It is the explanation the code reading suggests; no run replaced that reconstruction by a double-precision one. Varying the window (-3.0 to 1.8) or `lld` (100) for `bccFe_chebyshev_fast_sp` changed the fp64 residual (4.2e-8, 2.8e-9) and the fp32 one (1.1e-6, 4.7e-7) without a pattern I could explain.
 - **Consequence:** the fp64 rows of `run_gpu_matrix.py` use two criteria (the fp64 run differs from the fp32 run by at least 1e-9, and stays within 1e-7 of legacy) instead of a tight comparison with legacy. They cannot detect an fp64 kernel error smaller than about 5e-8 in `etot`.
+
+## k-space GBT constrained spiral: the constrain.f90 controller diverges, S9 does not match, two unit tests miss `scf_identity_ry` — 2026-10-20
+
+Found in SC2 (bcc Fe, `fe_bcc` potential, 16^3, 300 K, first order, q = (0,0.25,0) 2pi/alat, theta_ss = 30 deg). Measured:
+- With `H += +B.sigma` and the `constrain` controller (`i_cons = 3`, lambda = 10, no key), m_perp goes 3.0e-4 -> 0.035 -> 2.8 -> 8.0 muB in three iterations and the eigensolver then fails; with `H -= B.sigma` it overshoots by the same factor. At fixed potential the response is chi = dm_perp/dB = -24.5 (xx), -24.9 (yy), 0 (xy, yx) muB/Ry (b = 1e-4 Ry). The loop gain lambda*chi/M is about 100. The k-space GBT path therefore replaces the controller by a Newton step with the measured chi (`update_gbt_constraint_field`, `source/self_reciprocal.f90`); `constrain.f90` is unchanged for every other route. Not checked: whether the real-space and `periodic_nc` k-space routes have the same gain (an SC0 `periodic_nc` k-space run with a target 20 deg off the potential axis diverged; that deck was hand-built).
+- S9, dE/dtheta = -M B^x (derived in the SC1 plan): explained by D-S9 (2026-10-22, developer accepted H1). The relation does not hold in this scheme, and the table below shows by how much. Measured (bcc Fe, `fe_bcc` potential, 16^3, 300 K, first order, q = (0.125,-0.125,0.125) direct, h = 1 deg central difference, binary of `f9e5e73`; SC2 first found 9.49e-4, 2.316e-3, 3.053e-3, 3.281e-3 Ry/rad):
+
+  | theta | dE/dtheta SCF (Ry/rad) | dOmega/dtheta, force theorem (Ry/rad) | M (muB) | B^x (Ry) | -M B^x (Ry/rad) |
+  | --- | --- | --- | --- | --- | --- |
+  | 15 deg | 9.486e-4 | 1.025e-3 | 2.12999 | 3.172e-4 | -6.757e-4 |
+  | 30 deg | 2.318e-3 | 2.279e-3 | 2.11609 | 3.320e-4 | -7.026e-4 |
+  | 45 deg | 3.053e-3 | 3.001e-3 | 2.11711 | 1.686e-4 | -3.569e-4 |
+  | 60 deg | 3.286e-3 | 2.973e-3 | 2.14177 | -5.64e-5 | +1.207e-4 |
+
+  The force theorem is `frozen_magnon` (first order) on the converged theta = 0 potential, Omega at fixed mu = -0.068155 Ry, against the SCF at fixed N. Zero-field theta = 30 deg SCF (constraints off): E = -2541.9807268637 Ry against -2541.9807253147 Ry with the field, 15 iterations, m_x = 8.158e-3 muB (tilt 0.2209 deg), written `mom` stays (0, 0, 1). At that potential chi_xx = -24.575 and chi_yy = -24.97 muB/Ry, -m_x/chi_xx = 3.3195e-4 Ry against B = 3.3204e-4 Ry in the constrained SCF, and dOmega/dtheta = 2.194e-3 Ry/rad. Relations, with H = H_0(theta; V projected on the local axis) + b sigma_x in the local frame: (1) dOmega_band/db = m_x, so the converged field is B* = -m_x(theta, 0)/chi_xx, the field that cancels the m_perp the projected potential leaves; (2) E(constrained) - E(zero field) = +1.549e-6 Ry measured, against +(1/2)|chi_xx| B*^2 = 1.35e-6 Ry (the band energy is stationary in b at B*, a maximum because chi < 0); (3) because of that stationarity dE/dtheta = <dH/dtheta> at fixed V and B* (the frame/link torque), independent of B* and dB*/dtheta, and the SCF finite difference differs from the force-theorem value above by 8%, 1.7%, 1.7% and 10% at 15, 30, 45 and 60 deg. The direction is held by the projection (`spin_density.f90:272-282`, `mix_magnetic_state` in `self.f90`); its multiplier is the transverse exchange field the projection removes, lambda = -(1/M) dE/dtheta = -1.04e-3 Ry at 30 deg, against B* = +3.32e-4 Ry. The code does not compute or print lambda or dE/dtheta; the `torque` columns of `constraint_diagnostics.dat` and the `DENSITY_POLICY` torque are dimensionless reference-times-moment cross products. Not measured: the split of dE/dtheta into onsite and bond (spin-dependent W) parts, which needs a commutator expectation.
+- `source/self.f90:3209` (`write_gbt_scf_diagnostics`) forms the transverse moment as the square root of a difference of squares, so near convergence it carries a cancellation error: 4.03e-8 muB against 4.17e-8 muB for the component itself (theta = 30 deg, last iteration). It feeds only `gbt_scf_diagnostics.dat`, not the controller. Not fixed (`self.f90` is off-limits).
+- `f103c5d` added `scf_identity_ry` to `tests/gbt/oracles/tolerances.nml`; `UnitGbtKspaceForceTheorem` and `UnitGbtKspaceHorth` declared the `gbt_tolerances` namelist without it and stopped with `Cannot match namelist object name scf_identity_ry`. Fixed by declaring the key (and `scf_moment_mub`) in both tests.
+
+## Explicit-supercell SCF diverges at the default mixing; Cr flat spirals collapse to non-magnetic on `cr_bcc` — 2026-10-20
+
+Found in SC4 (bcc Fe, `fe_bcc` potential, first order, 300 K). Measured:
+- The collinear `periodic_nc`-free SCF (`nsp = 1`) of the 8-atom supercell `tests/gbt/fixtures/bccFe_super_q025` with `&mix` `beta = 0.1`, `mixtype = 'broyden'` falls to a SCF difference of 1e-5 after about 10 iterations, then grows by a factor of about 4 per iteration to 0.17; the moment collapses from 2.10 to about 0 muB and E_F reaches -0.32 Ry (4x4x2 and 8x8x4 meshes). `beta = 0.05` with `mixtype = 'linear'` does not converge, and `beta = 0.05` Broyden diverges for the non-collinear supercell. `beta = 0.02` Broyden converges (4x4x2 mesh, collinear: 60 iterations; non-collinear: about 160 iterations at about 4% per iteration). The CsCl cell converges at the default beta. Untriaged; suspects: the Broyden history with 2L equivalent sites, charge sloshing on the larger cell. `tests/gbt/test_kspace_scspiral_i3.py` uses `beta = 0.02`.
+- Cr (`tests/spin_response/cr_bcc`, 2.95 Angstrom, antiferromagnetic CsCl cell): the flat spiral at q = (0,0,1/4) 2pi/alat on the 8x8x16 mesh converges to |m| = 0 on both sites (GBT and supercell), and on the 4x4x8 mesh even the collinear AFM state collapses to 6e-4 muB. The I3 identity then holds trivially, so the Cr I3 cases are not registered; they wait for the developer's expanded Cr deck (D5).
+
+## `ccor_vmt_mode = 'pair_surface'`: the ordinary `periodic_nc` route gives different eigenvalues for the mirrored and the B1 encoding of the same NiO deck — 2026-10-22
+
+Found in the `AppGbtKspaceNio` R2 check (CCOR on the k-space GBT path). The AFM-II NiO deck (`example/bulk/fccNiO/AF`, copied to `tests/gbt/fixtures/nio_af`) stores the down-spin Ni as `Nid` with `mom = +z` and the spin-1 channel holding the minority values (mirrored). `Nid_B1.nml` (made by `make_nid_b1.py`) swaps every spin-indexed field and flips `vrmax(2)`, with `mom = -z`. Measured, `periodic_nc` with `nsp = 3`, 4x4x4 mesh, `ccor_2c`, fixed potentials, max |E(mirrored) - E(B1)| over all k and bands:
+
+| `ccor_vmt_mode` | first order | second order |
+| --- | --- | --- |
+| `surface_scalar` | 5.0e-15 Ry | 1.0e-14 Ry |
+| `pair_surface` | 1.42e-03 Ry | 1.43e-03 Ry |
+
+The k-space GBT route with the B1 file matches `periodic_nc` with the same B1 file to 1e-14 Ry in both modes (q = 0, theta = 0), so the difference is in the ordinary route and is shared by it. Not diagnosed. Suspect, from reading `hamiltonian_ccor.f90`: `ccor_vmt_pair_surface` averages `vrmax` index by index over the two endpoint types (`vi`, `vj` at `:598-603`) before the moment orientation is applied (`ccor_lambda_components`, `:661-673`); the average is then not invariant under the spin-swapped encoding of a site. Which encoding is the intended one is the developer's decision. The k-space GBT glue refuses `ccor_vmt_mode = 'pair_surface'` (the channel-wise pair average is not defined for rotated local frames), so `AppGbtKspaceNio` runs `surface_scalar` only. The same index-wise average sits in `build_ccor_pair_block_gbt` (`:210-215`) and was not run for the real-space GBT route.
+
+## I3 with `ccor_2c` at second order needs a tighter SCF criterion — 2026-10-22
+
+Found registering `AppGbtKspaceScSpiralI3Ccor_fe_L4_second` (bcc Fe, `fe_bcc` potential, `hoh = .true.`, `ccor_2c`, `screening = 'fitted'`, 4x4x8 CsCl-cell and 4x4x2 supercell meshes, CI configuration). With the default `conv_thr` (5e-9) the test's own precondition, two collinear `nsp = 1` SCFs of the CsCl cell and of the 8-atom supercell, gave |dE/atom| = 1.390e-07 Ry and |dE_F| = 4.6e-08 Ry against `scf_identity_ry` = 1e-07 although both runs reported `Converged!` (SCF differences 4.4e-09 and 4.6e-09). With `conv_thr = 5e-10` in those decks it gives 3.3e-09 and 0 Ry, and the case passes (|dE/atom| = 2.3e-08 Ry). At first order the default criterion was enough (5.8e-08 and 3.4e-08 Ry). So the residual was the SCF stopping criterion, not a difference between the cells.
+
+## k-space `'orthogonal'` SCF of AFM NiO without CCOR collapses and ends in a LAPACK failure — 2026-10-22
+
+Found probing the `'orthogonal'` SCF on `tests/gbt/fixtures/nio_af` (collinear `nsp = 1`, 6x6x6 mesh, 300 K deck default, `txc = 1`, no `hoh`, no `ccor_2c`, start from the deck potentials). With the deck's `beta = 0.1` the SCF difference runs 0.23, 0.50, 1.2, 3.4 and the run stops in the third iteration with `reciprocal backend: LAPACK eigensolver failed`; first-iteration Ni moment 1.53 muB (the CCOR SCF at second order gives 0.795 muB). With `beta = 0.02` Broyden the Ni moment falls 1.53, 1.37, 1.11, 0.72, 0.28, 0.05, 0.02, 0.004 muB over eight iterations, then the difference grows again and the same LAPACK failure follows. Untriaged. Not known: whether the collapse is the physics of the exact-ASA Hamiltonian without CCOR for NiO, a poor start, or the mixing; and what makes the eigenproblem non-finite after the collapse. Not tried: other starts, other meshes. Fe converges with `'orthogonal'` (see the report of the OR task). The NiO check of `'orthogonal'` is therefore the fixed-potential `AppGbtKspaceNio_r2_orthogonal`; an NiO `'orthogonal'` SCF waits for CCOR with `'orthogonal'`.
+
+## nsp = 1 AFM with `mom = -z` in a potential file collapses the moment — 2026-10-21
+
+Observation while writing `AppKspaceOrthogonalScf_afm`; existing collinear behaviour, not triaged, not fixed.
+
+Verified (12^3 mesh, tests/spin_response/cr_bcc as the nsp = 1 deck, one converged SCF per row, CI build, hoh off):
+
+| Cr1.nml mom | Cr2.nml mom | kspace_ham_order | E [Ry] | E_F [Ry] | site moments [muB] |
+|---|---|---|---|---|---|
+| +z (as shipped) | +z (as shipped) | orthogonal | -4195.4954991779 | -0.0092139615 | 0.919776, 0.919776 |
+| -z | +z | orthogonal | -4195.4943368659 | -0.0130560952 | 0, 0 |
+| -z | +z | first | -4195.5016632209 | -0.0165993972 | 0, 0 |
+
+Only `mom` of Cr1.nml was edited; channel 1 of Cr1 holds the minority values, so -z is the lab orientation that file describes. The nsp = 1 SCF leaves `mom` at +z in both written potentials. The collapse is the same at first order and 'orthogonal', so it is not specific to the new path.
+
+Suspected, not checked: other code reads `mom(3)` in the nsp = 1 path (`hamiltonian_build.f90:1324` and `1367` obarm/enim, `1824`; `calculation.f90:1412` and `1584`), which would swap spin channels of a mirrored file. The deck was hand-edited and only this one deck was run, so the deck is a live suspect.
+
+Proposal: none needed for the tests, since nsp = 1 AFM is encoded by mirrored potentials with `mom = +z` (as the NiO `Nid` fixture); a check or a documented convention would be a separate task.
+
+## `AppGbtKspaceRsFreeze` fails at round-off level in the full run of feat/gbt-scspiral at cecc48a — 2026-10-25
+
+Full run `ctest -LE 'validation|performance'` in `build/` (RelWithDebInfo, `ENABLE_MARCH_NATIVE=ON`), 240 tests, 8908 s: 2 skipped (`Regression_diamondSi_sp_chebyshev_mkl_batch`, `_mkl_sparse`), 2 failed. `Example_bulk_bccFe_nsp2_hubbard` is the Fixed-U guard entry above (2026-10-18). `AppGbtKspaceRsFreeze` fails on four decks; the test compares printed digits with tolerance 0 against references generated at C5, so any difference fails it. Measured (from `LastTest.log`):
+
+- `Example_bulk_bccFe_nsp4_block_spiral_qplus`, 6 of 281 values: `etot` |diff| 1.8e-10 (rel 7.2e-14), `sumec` 2.2e-10, `sumev` 7.9e-11 (rel 4.0e-11), `utot` 1.8e-10, `ekin` 2.3e-11, `rhoeps` 2.9e-11.
+- `Example_bulk_bccFe_nsp4_block_spiral_qminus`, the same 6 values: `etot` 9.5e-10 (rel 3.7e-13), `sumev` 2.8e-10 (rel 1.4e-10), `utot` 8.9e-10, others 1e-10 to 5e-10.
+- `Example_frozen_magnon_bccFe_auto` and `_auto_scf`, 3 of 45 values each, `frozen_magnon_branches.dat` column 5: row 12 run 2.100e-14 against ref 3.500e-15; row 13 |diff| 1.2e-10 on 4.598e-5 (rel 1.2e-10); row 14 |diff| 1.0e-11 on 1.231e-3.
+
+Not diagnosed. Not checked: whether `fable_v4b_gbt` (merge base, `fd5c8f5`) fails the same way with the same build flags, and what configuration generated the references. Candidates, neither tested: the references come from a build without `-march=native` (FMA contraction moves results at this size), or a change on this branch moved the real-space numerics (the only edits to `source/hamiltonian_build.f90` read are an array reset near line 736 and a `module` binding of `add_constraining_field_spin_block`). The failing values are round-off sized, but the test treats them as a failure.
+
+Proposal (about 0 lines of source): run `AppGbtKspaceRsFreeze` on `fable_v4b_gbt` with the same build; if it fails there too, the references need the developer's decision, and if it passes there, bisect the 53 commits.

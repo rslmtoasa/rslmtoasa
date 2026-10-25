@@ -1170,25 +1170,81 @@ add_test(
     --scratch-root "${CMAKE_BINARY_DIR}/Testing/gbt/rs_freeze"
 )
 set_tests_properties(AppGbtKspaceRsFreeze PROPERTIES
-  LABELS "functional;gbt;rs" TIMEOUT 1200 SKIP_RETURN_CODE 77
+  LABELS "functional;gbt;rs" TIMEOUT 3600 RUN_SERIAL TRUE SKIP_RETURN_CODE 77
 )
 
 add_test(NAME AppGbtKspaceGauge
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_gauge.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/gauge")
+add_test(NAME AppGbtKspaceGaugeCcor
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_gauge.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/gauge_ccor" ccor)
 add_test(NAME AppGbtKspaceAntiparallel
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_antiparallel.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/antiparallel")
 add_test(NAME AppGbtKspaceCommensurate
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_commensurate.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/commensurate" first)
 add_test(NAME AppGbtKspaceCommensurateSecondOrder
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_commensurate.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/commensurate_second" second)
+add_test(NAME AppGbtKspaceCommensurateCcor
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_commensurate.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/commensurate_ccor_first" first ccor)
+add_test(NAME AppGbtKspaceCommensurateCcorSecondOrder
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_commensurate.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/commensurate_ccor_second" second ccor)
+add_test(NAME AppGbtKspaceNio_r2
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_nio.py" r2 "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/nio_r2")
+add_test(NAME AppGbtKspaceNio_i2
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_nio.py" i2 "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/nio_i2")
+add_test(NAME AppGbtKspaceNio_guard
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_nio.py" guard "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/nio_guard")
+add_test(NAME AppGbtKspaceGaugeOrthogonal
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_gauge.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/gauge_orthogonal" plain orthogonal)
+add_test(NAME AppGbtKspaceNio_r2_orthogonal
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_nio.py" r2_orthogonal "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/nio_r2_orthogonal")
+foreach(mode rotation collinear afm moments guards)
+  add_test(NAME AppKspaceOrthogonalScf_${mode}
+    COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_orthogonal_scf.py" ${mode} "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/orthogonal_scf_${mode}")
+  set_tests_properties(AppKspaceOrthogonalScf_${mode} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
+endforeach()
 add_test(NAME AppGbtKspaceSymmetry
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_symmetry.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/symmetry")
 add_test(NAME AppGbtKspaceOrthogonal
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_orthogonal.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/orthogonal")
+add_test(NAME AppGbtKspaceScSweep
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scsweep.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scsweep")
 add_test(NAME AppGbtKspaceHamOrderInvalid
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_ham_order_invalid.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/ham_order_invalid")
-set_tests_properties(AppGbtKspaceGauge AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceHamOrderInvalid
+set_tests_properties(AppGbtKspaceGauge AppGbtKspaceGaugeCcor AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceCommensurateCcor AppGbtKspaceCommensurateCcorSecondOrder AppGbtKspaceNio_r2 AppGbtKspaceNio_i2 AppGbtKspaceNio_guard AppGbtKspaceGaugeOrthogonal AppGbtKspaceNio_r2_orthogonal AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceScSweep AppGbtKspaceHamOrderInvalid
   PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
+
+foreach(mode identity identity_orthogonal identity_ccor identity_ccor_second converge converge_orthogonal chi chi_orthogonal symmetry symmetry_orthogonal guards)
+  add_test(NAME AppGbtKspaceScSpiral_${mode}
+    COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral.py" ${mode} "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_${mode}")
+  set_tests_properties(AppGbtKspaceScSpiral_${mode} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)
+endforeach()
+
+foreach(mode identity identity_second identity_orthogonal rotation restart)
+  add_test(NAME AppGbtKspaceScSpiralAfm_${mode}
+    COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_afm.py" ${mode} "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_afm_${mode}")
+  set_tests_properties(AppGbtKspaceScSpiralAfm_${mode} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)
+endforeach()
+
+add_test(NAME AppGbtKspaceScSpiralB2
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_b2.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_b2")
+add_test(NAME AppGbtKspaceScSpiralB2_orthogonal
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_b2.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_b2_orthogonal" orthogonal)
+set_tests_properties(AppGbtKspaceScSpiralB2 AppGbtKspaceScSpiralB2_orthogonal PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 1800)
+
+foreach(case "fe;4;first" "fe;3;first" "fe;4;second")
+  list(GET case 0 i3_system)
+  list(GET case 1 i3_length)
+  list(GET case 2 i3_order)
+  add_test(NAME AppGbtKspaceScSpiralI3_${i3_system}_L${i3_length}_${i3_order}
+    COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_i3.py" ${i3_system} ${i3_length} ${i3_order} "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_i3_${i3_system}_${i3_length}_${i3_order}")
+  set_tests_properties(AppGbtKspaceScSpiralI3_${i3_system}_L${i3_length}_${i3_order} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 3600)
+endforeach()
+
+foreach(i3_order first second)
+  add_test(NAME AppGbtKspaceScSpiralI3Ccor_fe_L4_${i3_order}
+    COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_i3.py" fe 4 ${i3_order} "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_i3_ccor_fe_4_${i3_order}" ccor)
+  set_tests_properties(AppGbtKspaceScSpiralI3Ccor_fe_L4_${i3_order} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 3600)
+endforeach()
 
 add_test(NAME AppConstraintsNamelistMom
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/constraints/test_constraints_namelist.py" mom "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/constraints/mom")

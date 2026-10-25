@@ -14,8 +14,8 @@ program test_gbt_kspace_horth
    real(rp), parameter :: pi = acos(-1.0_rp)
    character(len=:), allocatable :: txt
    character(len=512) :: dir
-   real(rp) :: eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel
-   namelist /gbt_tolerances/ eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel
+   real(rp) :: eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel, scf_identity_ry, scf_moment_mub
+   namelist /gbt_tolerances/ eig_identity_ry, omega_identity_ry, n_identity, model_eig_ry, model_ft_rel, scf_identity_ry, scf_moment_mub
    integer, parameter :: ones(nb) = 1
    character(len=17), parameter :: names(3) = [character(len=17) :: 'cc', 'dele', 'gamma_minus_alpha']
    real(rp) :: nd(3, nb), par(norb, 2, 3), kk(3, 5), antiherm, dev(3), ev(2*norb), flat(norb*norb*nb), flat2(norb*2)
@@ -95,9 +95,9 @@ contains
    subroutine rot_eigs(k, qdir, theta, evals)
       real(rp), intent(in) :: k(3), qdir(3), theta
       real(rp), intent(out) :: evals(2*norb)
-      complex(rp) :: srot(2*norb, 2*norb), h(2*norb, 2*norb), frame(2, 2, 1), w(norb, 2, 1), c(norb, 2, 1), work(64)
+      complex(rp) :: srot(2*norb, 2*norb), h(2*norb, 2*norb), cmat(2*norb, 2*norb), frame(2, 2, 1), w(norb, 2, 1), c(norb, 2, 1), work(64)
       real(rp) :: rwork(6*norb), cc18(2*norb), dele18(2*norb), gam18(2*norb)
-      integer :: info
+      integer :: info, i
       call gbt_reference_frame(theta, 0.0_rp, frame(:, :, 1))
       w = cmplx(1.0_rp, 0.0_rp, rp)
       c = cmplx(0.0_rp, 0.0_rp, rp)
@@ -105,7 +105,11 @@ contains
       cc18 = [par(:, 1, 1), par(:, 2, 1)]
       dele18 = [par(:, 1, 2), par(:, 2, 2)]
       gam18 = [par(:, 1, 3), par(:, 2, 3)]
-      call gbt_kspace_horth(2*norb, srot, cc18, dele18, gam18, h)
+      cmat = (0.0_rp, 0.0_rp)
+      do i = 1, 2*norb
+         cmat(i, i) = cc18(i)
+      end do
+      call gbt_kspace_horth(2*norb, srot, cmat, dele18, gam18, h)
       antiherm = max(antiherm, maxval(abs(h - conjg(transpose(h))))/maxval(abs(h)))
       call zheev('N', 'U', 2*norb, h, 2*norb, evals, work, 64, rwork, info)
       if (info /= 0) error stop 'zheev failed'

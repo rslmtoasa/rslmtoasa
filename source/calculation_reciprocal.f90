@@ -673,11 +673,16 @@ contains
       self_obj = self(bands_obj, mix_obj)
       if (.not. self_obj%use_kspace) return
       handled = .true.
-      if (fm_obj%mode /= 'mft' .or. fm_obj%branch_mode /= 'acoustic') call g_logger%fatal( &
-         '[calculation.frozen_magnon_kspace]: only mode=''mft'' with branch_mode=''acoustic'' is supported.', __FILE__, __LINE__)
+      if ((fm_obj%mode /= 'mft' .and. fm_obj%mode /= 'scf') .or. fm_obj%branch_mode /= 'acoustic') call g_logger%fatal( &
+         '[calculation.frozen_magnon_kspace]: only mode=''mft'' or ''scf'' with branch_mode=''acoustic'' is supported.', &
+         __FILE__, __LINE__)
 
       hamiltonian_obj%magnetic_representation = gbt_single_q
       hamiltonian_obj%q_ss(:) = q_ss_cart(:, 1)
+      if (fm_obj%mode == 'scf') then
+         call scf_sweep()
+         return
+      end if
       call self_obj%run()
       theta = hamiltonian_obj%theta_ss
       sin2theta = sin(theta)**2
@@ -702,17 +707,8 @@ contains
                      nint(recip_obj%k_workset%points(i, :)*recip_obj%nk_mesh(i))) > 1.0e-8_rp)) call g_logger%fatal( &
             '[calculation.frozen_magnon_kspace]: the mesh must be Gamma-centred (k_offset = 0).', __FILE__, __LINE__)
       end do
-      allocate (q_dir(3, fm_obj%n_q), omega(fm_obj%n_q), omega0(fm_obj%n_q), nel(fm_obj%n_q), nel0(fm_obj%n_q))
-      do iq = 1, fm_obj%n_q
-         do i = 1, 3
-            q_dir(i, iq) = dot_product(lattice_obj%a(:, i), q_ss_cart(:, iq))
-         end do
-         nearest = 2.0_rp*nint(0.5_rp*q_dir(:, iq)*recip_obj%nk_mesh)/recip_obj%nk_mesh
-         if (any(abs(nearest - q_dir(:, iq)) > 1.0e-8_rp)) then
-            write (*, '(a,i0,a,3f12.6)') 'q index ', iq, ': q/2 is not on the mesh; nearest allowed q (direct) = ', nearest
-            call g_logger%fatal('[calculation.frozen_magnon_kspace]: q/2 must be a mesh point.', __FILE__, __LINE__)
-         end if
-      end do
+      allocate (omega(fm_obj%n_q), omega0(fm_obj%n_q), nel(fm_obj%n_q), nel0(fm_obj%n_q))
+      call check_q_on_mesh()
 
       call hamiltonian_obj%build_bulkham()
       mu = 0.0_rp
@@ -747,6 +743,61 @@ contains
       close (unit)
 
    contains
+
+      !> q in direct coordinates; stops unless q/2 is a translation of the Gamma-centred mesh (R2), printing the nearest allowed q.
+      subroutine check_q_on_mesh()
+         allocate (q_dir(3, fm_obj%n_q))
+         do iq = 1, fm_obj%n_q
+            do i = 1, 3
+               q_dir(i, iq) = dot_product(lattice_obj%a(:, i), q_ss_cart(:, iq))
+            end do
+            nearest = 2.0_rp*nint(0.5_rp*q_dir(:, iq)*recip_obj%nk_mesh)/recip_obj%nk_mesh
+            if (any(abs(nearest - q_dir(:, iq)) > 1.0e-8_rp)) then
+               write (*, '(a,i0,a,3f12.6)') 'q index ', iq, ': q/2 is not on the mesh; nearest allowed q (direct) = ', nearest
+               call g_logger%fatal('[calculation.frozen_magnon_kspace]: q/2 must be a mesh point.', __FILE__, __LINE__)
+            end if
+         end do
+      end subroutine check_q_on_mesh
+
+      !> mode = 'scf': an unconstrained self-consistent GBT spiral at every q;
+      !> omega from the total-energy difference to the first q.
+      subroutine scf_sweep()
+         real(rp), allocatable :: etot(:), mtot(:)
+         logical, allocatable :: conv(:)
+
+         theta = hamiltonian_obj%theta_ss
+         sin2theta = sin(theta)**2
+         if (sin2theta < 1.0e-8_rp) call g_logger%fatal( &
+            '[calculation.frozen_magnon_kspace]: theta_ss must be nonzero to define omega(q).', __FILE__, __LINE__)
+         recip_obj = reciprocal(hamiltonian_obj)
+         call check_q_on_mesh()
+         allocate (etot(fm_obj%n_q), mtot(fm_obj%n_q), conv(fm_obj%n_q))
+         do iq = 1, fm_obj%n_q
+            hamiltonian_obj%q_ss(:) = q_ss_cart(:, iq)
+            self_obj = self(bands_obj, mix_obj)
+            call self_obj%run()
+            etot(iq) = sum(lattice_obj%symbolic_atoms(:)%potential%etot)
+            mtot(iq) = 0.0_rp
+            do i = 1, lattice_obj%nrec
+               mtot(iq) = mtot(iq) + lattice_obj%symbolic_atoms(lattice_obj%nbulk + i)%potential%mtot
+            end do
+            conv(iq) = self_obj%converged
+         end do
+         if (abs(mtot(1)) < 1.0e-12_rp) call g_logger%fatal( &
+            '[calculation.frozen_magnon_kspace]: total reference moment is zero; omega is undefined.', __FILE__, __LINE__)
+
+         open (newunit=unit, file='frozen_magnon_kspace.dat', status='replace', action='write')
+         write (unit, '(a,f8.2,a,3i4,a,f8.3,a,f10.6)') '# mode = scf (unconstrained)  T [K] =', recip_obj%temperature, '  mesh =', &
+            recip_obj%nk_mesh, '  theta [deg] =', theta*180.0_rp/pi, '  M(q1) [muB] =', mtot(1)
+         write (unit, '(a)') '# q direct (3), q Cartesian 2pi/alat (3), E_tot [Ry], E_tot - E_tot(q1) [Ry], M [muB], ' // &
+            'omega [Ry], omega [meV], converged (1/0)'
+         do iq = 1, fm_obj%n_q
+            write (unit, '(6f12.6,es22.12,es18.8,f12.6,2es18.8,i3)') q_dir(:, iq), q_ss_cart(:, iq), etot(iq), etot(iq) - etot(1), &
+               mtot(iq), 4.0_rp*(etot(iq) - etot(1))/(mtot(1)*sin2theta), &
+               4.0_rp*(etot(iq) - etot(1))/(mtot(1)*sin2theta)*ry2ev*1000.0_rp, merge(1, 0, conv(iq))
+         end do
+         close (unit)
+      end subroutine scf_sweep
 
       !> Omega and N at the current mu for one (q, theta), accumulated over tiles of the mesh without eigenvectors; the
       !> eigenvalues are kept only when eig_out is present (the reference probe that fixes mu).
