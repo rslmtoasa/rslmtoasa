@@ -145,3 +145,13 @@ T3 Mark the surface stage PAUSED in C6_AMENDMENT.md, pending a user-provided con
 
 Surface stage status: PAUSED pending a user-provided converged no-U Ni(001) or Fe(001) reference
 (nsp=1).
+
+C6.6 (user-approved; verbatim selection recorded here).
+The user approved replacing the C5.13 20-step smoke gate for the surface response probe and
+superseding C6.5's no-SCF pause, selecting this acceptance condition verbatim:
+
+> Yes: require Diff ≤ 5e-8 within two steps
+
+The surface response probe is limited to two SCF steps and passes only if Diff <= 5e-8 within
+those steps. This is a probe gate and does not claim a 20-step stability window. No SCF was
+launched because the mandatory current-tip T1 gates failed before launching.
