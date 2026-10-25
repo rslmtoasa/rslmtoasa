@@ -11,14 +11,24 @@ The gate stops here, before KS or any other fixture, as instructed.
 
 | Gate | Result | Detail |
 |---|---|---|
-| RS identity | FAIL | After repair, 1 RS solver run exited 0; 12/27 artifacts differ from the registered baseline. Mismatches: `Fe_1_spinene.out`, `Fe_dos.out`, `Fe_orbene.out`, `Fe_orbital_dos.out`, `Fe_orbquadene.out`, `Fe_out.nml`, `Fe_scf.nml`, `input.nml`, `magneticdos.out`, `radial_ground_state_Fe_1.dat`, `report.out`, `totaldos.out`. |
+| RS identity | FAIL | Initial run and one user-authorized no-LibXC diagnostic run exited 0; both show 12/27 artifacts differing from the registered baseline. Mismatches: `Fe_1_spinene.out`, `Fe_dos.out`, `Fe_orbene.out`, `Fe_orbital_dos.out`, `Fe_orbquadene.out`, `Fe_out.nml`, `Fe_scf.nml`, `input.nml`, `magneticdos.out`, `radial_ground_state_Fe_1.dat`, `report.out`, `totaldos.out`. |
 | KS identity | NOT RUN | Stopped after the RS identity mismatch; 0/24 identity cases completed. |
 | 13 guard fixtures | NOT RUN | Stopped after the RS identity failure, as instructed. |
 | Impurity auto fixture | NOT RUN | Stopped after the RS identity failure, as instructed. |
 | Surface auto fixture | NOT RUN | Stopped after the RS identity failure, as instructed. |
 | C6.4 frozen-plus-recursive-site test | NOT RUN | Stopped after the RS identity failure, as instructed. |
 
-One solver run was launched for the RS identity gate; no surface campaign probe run was launched.
+Two solver runs were launched for the RS identity gate/diagnosis; no surface campaign probe run was launched.
 The response-probe gate selected in C6.6 is `Diff <= 5e-8` within at most two steps; it was not
 executed because T1 failed. The setup gaps are fixed, but the RS identity mismatch must be
 resolved before the remaining T1 gates and surface probe can proceed.
+
+## Follow-up diagnosis
+
+At the user's direction, the current branch was rebuilt with `ENABLE_LIBXC=OFF`
+and the RS identity deck was rerun through the checked preflight wrapper. It
+still fails 12/27 artifacts, with the same Fermi level, moment, Diff, and
+mismatch set as the LibXC-enabled run; the two current-branch output sets match
+each other byte-for-byte. LibXC is therefore ruled out as the cause of this
+observed mismatch. The root cause remains unresolved, and the stop disposition
+still applies. Details and hashes are in [`C6_6_RS_DIAG.md`](C6_6_RS_DIAG.md).
