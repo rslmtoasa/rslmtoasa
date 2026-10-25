@@ -153,5 +153,5 @@ superseding C6.5's no-SCF pause, selecting this acceptance condition verbatim:
 > Yes: require Diff ≤ 5e-8 within two steps
 
 The surface response probe is limited to two SCF steps and passes only if Diff <= 5e-8 within
-those steps. This is a probe gate and does not claim a 20-step stability window. No SCF was
-launched because the mandatory current-tip T1 gates failed before launching.
+those steps. This is a probe gate and does not claim a 20-step stability window. No surface
+campaign probe was launched because the mandatory current-tip T1 gates failed during RS identity.

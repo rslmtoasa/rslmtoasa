@@ -2,7 +2,9 @@
 """C5.4 run staging/preflight; copies only explicitly whitelisted inputs."""
 import argparse, csv, hashlib, json, os, shutil, sys, f90nml
 from pathlib import Path
-REPO = Path(__file__).resolve().parents[4]; sys.path.insert(0, "/private/tmp/c52-c-private")
+REPO = Path(__file__).resolve().parents[4]
+SCHEMA_MODULE_DIR = REPO / "docs/validation/fixed_ldau/rs/C5_2_PART_C_assets/C3/scripts"
+sys.path.insert(0, str(SCHEMA_MODULE_DIR))
 from fortran_namelist_schema import source_schema
 THREADS = {"OMP_NUM_THREADS": "1", "OMP_DYNAMIC": "FALSE",
  "RSLMTO_OMP_THREADS_SERIAL": "1", "OPENBLAS_NUM_THREADS": "1",

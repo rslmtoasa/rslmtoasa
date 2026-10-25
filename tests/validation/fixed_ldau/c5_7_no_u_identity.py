@@ -18,9 +18,13 @@ ROOT = Path(__file__).resolve().parents[3]
 PREFLIGHT = ROOT / "docs/validation/fixed_ldau/rs/C5_4_PREFLIGHT.py"
 LAUNCHER = ROOT / "tests/validation/fixed_ldau/c5_7_launch.sh"
 BASE = Path("/private/tmp/c52-rd5-no-u")
+ARCHIVED_INPUTS = ROOT / "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/rd5_no_u_identity_checks"
 INPUTS = {
-    "rs": Path("/private/tmp/c5-2-partA/a1_bccFe/source_snapshot"),
-    "ks": Path("/private/tmp/c5-3-b2-prep/identity_ks/clean8b_baseline"),
+    # Use the repository-archived copies of the exact original identity inputs.
+    # Their hashes match the C5.7 successful run; the former /private/tmp source
+    # paths are disposable and may exist as empty directories after cleanup.
+    "rs": ARCHIVED_INPUTS / "rs_rd1",
+    "ks": ARCHIVED_INPUTS / "ks_rd1",
 }
 CAPS = {
     "OMP_NUM_THREADS": "1", "OMP_DYNAMIC": "FALSE", "RSLMTO_OMP_THREADS_SERIAL": "1",
