@@ -1959,3 +1959,15 @@ Only `mom` of Cr1.nml was edited; channel 1 of Cr1 holds the minority values, so
 Suspected, not checked: other code reads `mom(3)` in the nsp = 1 path (`hamiltonian_build.f90:1324` and `1367` obarm/enim, `1824`; `calculation.f90:1412` and `1584`), which would swap spin channels of a mirrored file. The deck was hand-edited and only this one deck was run, so the deck is a live suspect.
 
 Proposal: none needed for the tests, since nsp = 1 AFM is encoded by mirrored potentials with `mom = +z` (as the NiO `Nid` fixture); a check or a documented convention would be a separate task.
+
+## `AppGbtKspaceRsFreeze` fails at round-off level in the full run of feat/gbt-scspiral at cecc48a — 2026-10-25
+
+Full run `ctest -LE 'validation|performance'` in `build/` (RelWithDebInfo, `ENABLE_MARCH_NATIVE=ON`), 240 tests, 8908 s: 2 skipped (`Regression_diamondSi_sp_chebyshev_mkl_batch`, `_mkl_sparse`), 2 failed. `Example_bulk_bccFe_nsp2_hubbard` is the Fixed-U guard entry above (2026-10-18). `AppGbtKspaceRsFreeze` fails on four decks; the test compares printed digits with tolerance 0 against references generated at C5, so any difference fails it. Measured (from `LastTest.log`):
+
+- `Example_bulk_bccFe_nsp4_block_spiral_qplus`, 6 of 281 values: `etot` |diff| 1.8e-10 (rel 7.2e-14), `sumec` 2.2e-10, `sumev` 7.9e-11 (rel 4.0e-11), `utot` 1.8e-10, `ekin` 2.3e-11, `rhoeps` 2.9e-11.
+- `Example_bulk_bccFe_nsp4_block_spiral_qminus`, the same 6 values: `etot` 9.5e-10 (rel 3.7e-13), `sumev` 2.8e-10 (rel 1.4e-10), `utot` 8.9e-10, others 1e-10 to 5e-10.
+- `Example_frozen_magnon_bccFe_auto` and `_auto_scf`, 3 of 45 values each, `frozen_magnon_branches.dat` column 5: row 12 run 2.100e-14 against ref 3.500e-15; row 13 |diff| 1.2e-10 on 4.598e-5 (rel 1.2e-10); row 14 |diff| 1.0e-11 on 1.231e-3.
+
+Not diagnosed. Not checked: whether `fable_v4b_gbt` (merge base, `fd5c8f5`) fails the same way with the same build flags, and what configuration generated the references. Candidates, neither tested: the references come from a build without `-march=native` (FMA contraction moves results at this size), or a change on this branch moved the real-space numerics (the only edits to `source/hamiltonian_build.f90` read are an array reset near line 736 and a `module` binding of `add_constraining_field_spin_block`). The failing values are round-off sized, but the test treats them as a failure.
+
+Proposal (about 0 lines of source): run `AppGbtKspaceRsFreeze` on `fable_v4b_gbt` with the same build; if it fails there too, the references need the developer's decision, and if it passes there, bisect the 53 commits.
