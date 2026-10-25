@@ -554,7 +554,7 @@ contains
                   end if
                end do
             end do
-            call write_strux_block(this, nl2, m, ia, ja)
+            call write_strux_block(this, nl2, m, ii, ia, ja)
          end do
          call cpu_time(t_map_end)
          write (17, '(a, i5, a, f10.3, a, i6)') 'STRUX done  center ', ii, ' cpu_s=', t_map_end - t_map_start, ' stored_nn=', nt_store
@@ -716,9 +716,9 @@ contains
                end do
             end do
             if (m == 1) then
-               call write_strux_block(this, nl2, m, ia, ia)
+               call write_strux_block(this, nl2, m, ii, ia, ia)
             else
-               call write_strux_block(this, nl2, m, ia, ja)
+               call write_strux_block(this, nl2, m, ii, ia, ja)
             end if
          end do
          deallocate(local_global, local_pos, local_ips, local_plat)
@@ -729,18 +729,19 @@ contains
    !> @param[in] this Lattice object containing sbar and neighbor vectors.
    !> @param[in] nl2 Block dimension to write.
    !> @param[in] m Neighbor slot.
-   !> @param[in] ii Representative atom/type index.
+   !> @param[in] ii Type index of the sbar/sdot block to write.
+   !> @param[in] iclus Cluster atom index used as the ICLUS label.
    !> @param[in] jclus Cluster atom index associated with the block.
-   module subroutine write_strux_block(this, nl2, m, ii, jclus)
+   module subroutine write_strux_block(this, nl2, m, ii, iclus, jclus)
       class(lattice), intent(in) :: this
-      integer, intent(in) :: nl2, m, ii, jclus
+      integer, intent(in) :: nl2, m, ii, iclus, jclus
       integer :: is, js
 
       ! write (*, '(" SBAR neighbor center=",i5," slot=",i5," iclus=",i5," vec=",3f12.6)') ii, m, iclus, &
       !    this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m)
-      write (16, '(" VECTOR=",3f12.6,"   ICLUS=",i5," JCLUS=",i5)') this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m), ii, jclus
+      write (16, '(" VECTOR=",3f12.6,"   ICLUS=",i5," JCLUS=",i5)') this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m), iclus, jclus
       if (this%strux_want_sdot) then
-         write (15, '(" VECTOR=",3f12.6,"   ICLUS=",i5," JCLUS=",i5)') this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m), ii, jclus
+         write (15, '(" VECTOR=",3f12.6,"   ICLUS=",i5," JCLUS=",i5)') this%sbarvec(1, m), this%sbarvec(2, m), this%sbarvec(3, m), iclus, jclus
       end if
 
       do is = 1, nl2

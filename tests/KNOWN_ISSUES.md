@@ -2006,3 +2006,20 @@ Full run `ctest -LE 'validation|performance'` in `build/` (RelWithDebInfo, `ENAB
 Not diagnosed. Not checked: whether `fable_v4b_gbt` (merge base, `fd5c8f5`) fails the same way with the same build flags, and what configuration generated the references. Candidates, neither tested: the references come from a build without `-march=native` (FMA contraction moves results at this size), or a change on this branch moved the real-space numerics (the only edits to `source/hamiltonian_build.f90` read are an array reset near line 736 and a `module` binding of `add_constraining_field_spin_block`). The failing values are round-off sized, but the test treats them as a failure.
 
 Proposal (about 0 lines of source): run `AppGbtKspaceRsFreeze` on `fable_v4b_gbt` with the same build; if it fails there too, the references need the developer's decision, and if it passes there, bisect the 53 commits.
+
+## `write_strux_block` indexed `sbar` with a cluster atom index; strux_lib surface decks crashed in `buildsurf` — 2026-10-25
+
+Symptom: `pre_processing = 'buildsurf'`, `strux_backend = 'strux_lib'`, non-periodic `crystal_sym = 'file'` (deck `RS_references/Surface/Cheb/bccFe110_strux`) stops after `DEBUG_STRUX_DIAG` in `write_strux_block`, `lattice_strux.f90:748`, called from `structb_strux_local`.
+
+Measured on the unfixed source:
+
+- Debug build (`-fcheck=all`): `Index '2167' of dimension 4 of array 'this%sbar' above upper bound of 1`. The 4th index is `ia`, the cluster atom index passed by the call sites; the upper bound is `ntot` = 1.
+- RelWithDebInfo build (`-O2 -g -march=native`): SIGSEGV with `write_strux_block` in the backtrace.
+
+Cause (read from the code, matches the measured index): the three call sites passed `ia = iu(ii)` where `write_strux_block` expects the type index `ii` of `sbar(:,:,:,ii)`. For bulk cells `ia <= ntot`, so the read stayed in bounds and wrote the block of type `ia` to units 13/15/16.
+
+Fix: `write_strux_block(this, nl2, m, ii, iclus, jclus)`; `ii` indexes `sbar`/`sdot`, `iclus` is only the ICLUS label.
+
+After the fix (RelWithDebInfo): the same deck passes `structb` and enters SCF; stopped by hand at SCF step 10 after 580 s, no error in the log. `view.sbar` of that run prints `ICLUS= 2167`. Bulk strux_lib decks (82 test directories from `ctest -L '^quick$'` plus `-L strux`): `sbar`, `view.sbar`, `sdot`, `view.sdot` and `str.out` (cpu_s lines excluded) byte-identical before and after.
+
+Separate, undiagnosed: `example/surface/fccCu001` with `strux_backend = 'strux_lib'` and `crystal_sym = 'fcc'` takes the `structb_strux` periodic branch and fails in `salph1_lmto47_direct` (`strux_lmto47_mode.f90:455`) on `Error allocating 611648968392 bytes` (Debug build, 68 s). It never reaches `write_strux_block`. The SIGKILL (exit 137) seen on the Mac with this deck may be the same allocation; not checked.

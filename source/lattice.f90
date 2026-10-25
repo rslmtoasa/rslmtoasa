@@ -846,11 +846,12 @@ module lattice_mod
    !> @param[in] this Lattice object containing sbar and neighbor vectors.
    !> @param[in] nl2 Block dimension to write.
    !> @param[in] m Neighbor slot.
-   !> @param[in] ii Representative atom/type index.
+   !> @param[in] ii Type index of the sbar/sdot block to write.
+   !> @param[in] iclus Cluster atom index used as the ICLUS label.
    !> @param[in] jclus Cluster atom index associated with the block.
-   module subroutine write_strux_block(this, nl2, m, ii, jclus)
+   module subroutine write_strux_block(this, nl2, m, ii, iclus, jclus)
       class(lattice), intent(in) :: this
-      integer, intent(in) :: nl2, m, ii, jclus
+      integer, intent(in) :: nl2, m, ii, iclus, jclus
       integer :: is, js
 
       ! write (*, ’(″ SBAR neighbor center=″,i5,″ slot=″,i5,″ iclus=″,i5,″ vec=″,3f12.6)’) ii, m, iclus, &
