@@ -1206,9 +1206,11 @@ add_test(NAME AppGbtKspaceSymmetry
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_symmetry.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/symmetry")
 add_test(NAME AppGbtKspaceOrthogonal
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_orthogonal.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/orthogonal")
+add_test(NAME AppGbtKspaceScSweep
+  COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scsweep.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scsweep")
 add_test(NAME AppGbtKspaceHamOrderInvalid
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_ham_order_invalid.py" "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/ham_order_invalid")
-set_tests_properties(AppGbtKspaceGauge AppGbtKspaceGaugeCcor AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceCommensurateCcor AppGbtKspaceCommensurateCcorSecondOrder AppGbtKspaceNio_r2 AppGbtKspaceNio_i2 AppGbtKspaceNio_guard AppGbtKspaceGaugeOrthogonal AppGbtKspaceNio_r2_orthogonal AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceHamOrderInvalid
+set_tests_properties(AppGbtKspaceGauge AppGbtKspaceGaugeCcor AppGbtKspaceAntiparallel AppGbtKspaceCommensurate AppGbtKspaceCommensurateSecondOrder AppGbtKspaceCommensurateCcor AppGbtKspaceCommensurateCcorSecondOrder AppGbtKspaceNio_r2 AppGbtKspaceNio_i2 AppGbtKspaceNio_guard AppGbtKspaceGaugeOrthogonal AppGbtKspaceNio_r2_orthogonal AppGbtKspaceSymmetry AppGbtKspaceOrthogonal AppGbtKspaceScSweep AppGbtKspaceHamOrderInvalid
   PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 900)
 
 foreach(mode identity identity_orthogonal identity_ccor identity_ccor_second converge converge_orthogonal chi chi_orthogonal symmetry symmetry_orthogonal guards)

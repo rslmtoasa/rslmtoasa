@@ -67,7 +67,12 @@ mode
   that converged potential for a single-iteration band-energy pass at
   every other q. Cheap — one real SCF convergence for the whole sweep.
 - ``'scf'``: converge SCF fully and independently at every q-point.
-  Expensive but does not assume the force-theorem approximation.
+  Expensive but does not assume the force-theorem approximation. On the
+  k-space path (``use_kspace``) only the unconstrained form is supported: q/2 must be a point of the
+  Gamma-centred mesh, and ``frozen_magnon_kspace.dat`` has one row per q: q
+  direct (3), q Cartesian (3), E_tot [Ry], E_tot - E_tot(q1) [Ry], M [muB],
+  omega [Ry], omega [meV], converged (1/0). Constrained ``'scf'`` and
+  ``'mft_constrained'`` run on the real-space route only.
 - The first q-point is **always** the reference point regardless of mode;
   every other point's E(q)/:math:`\omega`\ (q) is measured relative to it.
 
