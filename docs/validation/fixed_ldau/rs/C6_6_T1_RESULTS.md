@@ -54,3 +54,12 @@ solely an input-deck edit. The paired reruns support the refreshed reference; th
 The refreshed identity result is [`C6_6_RS_REFRESHED_IDENTITY.json`](C6_6_RS_REFRESHED_IDENTITY.json).
 The C5.7 runner accepts `--rs-baseline` and `--result` so future checks can use the refreshed
 reference without rewriting the historical C5.7 record.
+
+
+## Current-tip rerun and surface follow-up
+
+On 2026-10-25 the mandatory gates were rerun after the RS oracle refresh: RS identity 27/27, KS
+identity 24/24, guards 13/13, impurity/surface auto unit 1/1, and frozen-plus-recursive-site
+oracle 1/1 all passed. The two Ni surface response runs and their failed Diff gate are recorded
+in [`C6_6_SURFACE_PROBE_RESULTS.md`](C6_6_SURFACE_PROBE_RESULTS.md). The T3 Cu workflow was
+not launched because the RS surface gate failed.

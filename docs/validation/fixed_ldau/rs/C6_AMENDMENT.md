@@ -155,3 +155,12 @@ superseding C6.5's no-SCF pause, selecting this acceptance condition verbatim:
 The surface response probe is limited to two SCF steps and passes only if Diff <= 5e-8 within
 those steps. This is a probe gate and does not claim a 20-step stability window. No surface
 campaign probe was launched because the mandatory current-tip T1 gates failed during RS identity.
+
+
+C6.6 follow-up execution (2026-10-25): the current-tip T1 gates were rerun and passed (RS 27/27,
+KS 24/24, guards 13/13, impurity/surface auto 1/1, frozen-plus-recursive-site 1/1). Two
+checked Ni(001) RS surface probe runs were then completed. Auto selected local with no provenance
+error on U=3/J=0.7, but the two-step Diff was 0.3869175281, above the approved 5e-8 threshold.
+Per the gate-failure stop rule, Cu T3 and T4 were not run. Detailed deck audit, preflight evidence,
+occupations, moments, and raw artifact hashes are in `C6_6_SURFACE_PROBE_RESULTS.md`. The
+user-supplied six-layer no-U snapshot is still not an accepted reference under C5.3 item 2.

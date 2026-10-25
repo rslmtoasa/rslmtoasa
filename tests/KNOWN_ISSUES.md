@@ -1886,9 +1886,20 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
   was not run after the T2 smoke gate failed.
 - Surface Hubbard-energy routing remains OFF; no surface energy claim or comparison is made. See
   `docs/validation/fixed_ldau/rs/C6_4_RESULTS.md`.
-- **Stage status: PAUSED** pending a user-provided converged no-U Ni(001) or Fe(001) reference
-  with `nsp=1`. C6.5 adds the checked launcher; future campaign runs require its matching
-  `preflight.json`. See `docs/validation/fixed_ldau/rs/C6_5_RESULTS.md`.
+- The user supplied a six-layer no-U Ni(001) snapshot, but its candidate manifest has only one
+  Diff record (6.68e-8), no matching preflight, and host metadata E_F (-0.061969 Ry) inconsistent
+  with the surface deck/log (-0.062420 Ry); it does not satisfy the reference condition.
+- **Latest checked probe (2026-10-25):** current-tip T1 passed (RS 27/27, KS 24/24, guards
+  13/13, auto fixtures 1/1, multisite oracle 1/1). In the copied two-layer Ni(001) fixture,
+  U=3/J=0.7 auto selected local with no provenance error. The two-step Diffs were
+  0.0163260002 and 0.3869175281, failing the user-approved <=5e-8 response gate. The U=0
+  control Diffs were 0.0162421175 and 0.3840255893. Layer occupations/moments and checked
+  preflights are recorded in `docs/validation/fixed_ldau/rs/C6_6_SURFACE_PROBE_RESULTS.md`.
+  These short probes do not establish converged surface observables or an accepted no-U surface
+  reference.
+- C6 stopped after the failed RS smoke gate; Cu T3 and workflow documentation/merge remain
+  unrun. Surface Hubbard-energy routing remains OFF. C6.5's checked launcher is mandatory for
+  campaign runs.
 
 ## [CLOSED, 2026-10-22] Impurity auto mode with local U-carrying hosts
 
