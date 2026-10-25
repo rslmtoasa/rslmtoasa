@@ -40,9 +40,9 @@
 /
 
 &reciprocal
-    nk1 = 16
-    nk2 = 16
-    nk3 = 16
+    nk1 = 32
+    nk2 = 32
+    nk3 = 32
     k_offset_x = 0.0
     k_offset_y = 0.0
     k_offset_z = 0.0
@@ -79,5 +79,5 @@
     hoh = .true.
     magnetic_representation = 'gbt_single_q'
     q_ss = 0.0, 0.0, @QZ@
-    theta_ss = 90.0
+    theta_ss = 30.0
 /
