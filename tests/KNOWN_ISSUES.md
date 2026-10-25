@@ -1902,9 +1902,12 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
   insertion used by surfaces. Both omissions are fixed on the work branch. The checked rerun now
   completes and consumes the current-iteration surface operand, but its final Diff is unchanged
   (`0.3869175281`) and the <=5e-8 two-step gate still fails. The U=0 control also fails with
-  Diff `0.3840255893`; the large Diff is therefore not isolated to the LDA+U correction. Its cause
-  remains OPEN. See `docs/validation/fixed_ldau/rs/C6_6_CAPTURE_FIX_RESULTS.md` and its archived
-  preflight-bound evidence.
+  Diff `0.3840255893`; the large Diff is therefore not isolated to the LDA+U correction. A checked
+  U=0 diagnostic lowering beta from 0.1 to the fixture's 0.002 leaves step-2 Diff at 0.3838386972
+  and retains the external-layer charge warning. The failure arises during the surface
+  charge/density response from the bulk-potential seed and is not fixed by beta reduction; later
+  convergence remains unevaluated. See `docs/validation/fixed_ldau/rs/C6_6_CAPTURE_FIX_RESULTS.md`
+  and its archived preflight-bound evidence.
 - C6 stopped after the failed RS smoke gate; Cu T3 and workflow documentation/merge remain
   unrun. Surface Hubbard-energy routing remains OFF. C6.5's checked launcher is mandatory for
   campaign runs.
