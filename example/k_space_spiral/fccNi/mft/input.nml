@@ -1,0 +1,87 @@
+&calculation
+    pre_processing = 'bravais'
+    verbose = .true.
+    post_processing = 'frozen_magnon'
+/
+
+&lattice
+    rc = 80
+    alat = 3.5234
+    crystal_sym = 'file'
+    pbc = .true.
+    b1 = .true.
+    b2 = .true.
+    b3 = .true.
+    n1 = 20
+    n2 = 20
+    n3 = 20
+    strux_backend = 'strux_lib'
+    wav = 1.37692
+    ntype = 1
+    ct(:) = 4.0
+    r2 = 16.0
+/
+
+&atoms
+    database = './'
+    label(1) = 'Ni'
+/
+
+&self
+    use_kspace = .true.
+    nstep = 0
+/
+
+&energy
+    fermi = -0.061141
+    energy_min = -1.0
+    energy_max = 0.5
+    channels_ldos = 2500
+/
+
+&reciprocal
+    nk1 = 16
+    nk2 = 16
+    nk3 = 16
+    k_offset_x = 0.0
+    k_offset_y = 0.0
+    k_offset_z = 0.0
+    use_symmetry_reduction = .false.
+    use_time_reversal = .false.
+    use_shift = .false.
+    dos_method = 'tetrahedron'
+    gaussian_sigma = 0.005
+    temperature = 300.0
+    n_energy_points = 2000
+    dos_energy_min = -1.5
+    dos_energy_max = 1.0
+    auto_find_fermi = .true.
+    kspace_ham_order = 'second'
+/
+
+&symmetry
+    use_symmetry_reduction = .false.
+/
+
+&control
+    calctype = 'B'
+    nsp = 3
+    lld = 21
+    recur = 'block'
+/
+
+&mix
+    beta = 0.1
+    mixtype = 'broyden'
+/
+
+&hamiltonian
+    hoh = .true.
+    theta_ss = 5.0
+/
+
+&frozen_magnon
+    mode = 'mft'
+    q_coordinates = 'direct'
+    q_file = 'q_path.dat'
+/
