@@ -1,0 +1,76 @@
+ERROR: serial run failed with exit code 1
+--- testrun.log (tail -n 120) ---
+[Oct 25 2026 17:26:13.891] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+[Oct 25 2026 17:26:15.291] [lattice_strux.f90:89]      [1m[32m<info> [0m[0mSTRUCTB structure-constants, backend=legacy
+[Oct 25 2026 17:26:16.160] [symbolic_atom.f90:189]     [1m[32m<info> [0m[0mSCF input provenance: fresh atomic starting potential from ./Ni-imp.nml
+[Oct 25 2026 17:26:16.160] [symbolic_atom.f90:189]     [1m[32m<info> [0m[0mSCF input provenance: fresh atomic starting potential from ./ES.nml
+[Oct 25 2026 17:26:16.161] [symbolic_atom.f90:189]     [1m[32m<info> [0m[0mSCF input provenance: fresh atomic starting potential from ./Ni-imp-S.nml
+[Oct 25 2026 17:26:16.191] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+[Oct 25 2026 17:26:16.282] [hamiltonian_build.f90:822]  [1m[32m<info> [0m[0mHUBBARD summary: form=liechtenstein fixed_UJ=T sc_U=F V=F
+[Oct 25 2026 17:26:16.282] [hamiltonian_build.f90:854]  [1m[32m<info> [0m[0mHUBBARD fixed U/J type=   1 [Ry] U=   0.000000   0.000000   0.220496 J=   0.000000   0.000000   0.051449
+[Oct 25 2026 17:26:16.282] [hamiltonian_build.f90:854]  [1m[32m<info> [0m[0mHUBBARD fixed U/J type=   2 [Ry] U=   0.000000   0.000000   0.000000 J=   0.000000   0.000000   0.000000
+[Oct 25 2026 17:26:16.282] [hamiltonian_build.f90:854]  [1m[32m<info> [0m[0mHUBBARD fixed U/J type=   3 [Ry] U=   0.000000   0.000000   0.220496 J=   0.000000   0.000000   0.051449
+[Oct 25 2026 17:26:16.862] [self.f90:3512]             [1m[32m<info> [0m[0mHUBBARD_RADIAL_MODE mode=local source=default use_kspace=.false. local_energy_adopted=.false.
+[Oct 25 2026 17:26:16.862] [self.f90:4488]             [1m[32m<info> [0m[0mPerform recursion at step 1
+[Oct 25 2026 17:26:16.863] [hamiltonian_build.f90:1713]  [1m[32m<info> [0m[0mHUBBARD applying on-site +U correction to bulk Hamiltonian
+[Oct 25 2026 17:26:16.863] [hamiltonian_hubbard.f90:306]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   1 l= 2 tr_up=  4.738761 tr_dn=  4.738761 maxabs=  9.6941E-01
+[Oct 25 2026 17:26:16.863] [hamiltonian_hubbard.f90:310]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   1 l= 2 U=  0.220496 J=  0.051449 nup=  4.738761 ndn=  4.738761 ntot=  9.477523
+[Oct 25 2026 17:26:16.863] [hamiltonian_hubbard.f90:323]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   1 l= 2 ql_up=  4.738761 ql_dn=  4.738761 ldm_up=  4.738761 ldm_dn=  4.738761 d_up(ql-ldm)=  0.000000 d_dn(ql-ldm)=  0.000000
+[Oct 25 2026 17:26:16.863] [hamiltonian_hubbard.f90:306]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   3 l= 2 tr_up=  4.738761 tr_dn=  4.738761 maxabs=  9.6941E-01
+[Oct 25 2026 17:26:16.864] [hamiltonian_hubbard.f90:310]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   3 l= 2 U=  0.220496 J=  0.051449 nup=  4.738761 ndn=  4.738761 ntot=  9.477523
+[Oct 25 2026 17:26:16.864] [hamiltonian_hubbard.f90:323]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   3 l= 2 ql_up=  4.738761 ql_dn=  4.738761 ldm_up=  4.738761 ldm_dn=  4.738761 d_up(ql-ldm)=  0.000000 d_dn(ql-ldm)=  0.000000
+[Oct 25 2026 17:26:16.866] [hamiltonian_hubbard.f90:540]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   1 l= 2 avg_up=  -0.075691 avg_dn=  -0.075691 split(up-dn)=   0.000000
+[Oct 25 2026 17:26:16.868] [hamiltonian_hubbard.f90:540]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   3 l= 2 avg_up=  -0.075691 avg_dn=  -0.075691 split(up-dn)=   0.000000
+[Oct 25 2026 17:26:16.868] [hamiltonian_hubbard.f90:572]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  7.9359E-02
+[Oct 25 2026 17:26:16.868] [hamiltonian_hubbard.f90:572]  [1m[32m<info> [0m[0mHUBBARD_POT type=   2 maxabs=  0.0000E+00
+[Oct 25 2026 17:26:16.869] [hamiltonian_hubbard.f90:572]  [1m[32m<info> [0m[0mHUBBARD_POT type=   3 maxabs=  7.9359E-02
+[Oct 25 2026 17:26:16.882] [recursion_haydock.f90:326]  [1m[32m<info> [0m[0mFast block recursion on progress for atom 355
+[Oct 25 2026 17:26:23.795] [recursion_haydock.f90:326]  [1m[32m<info> [0m[0mFast block recursion on progress for atom 970
+[Oct 25 2026 17:26:30.862] [self.f90:4580]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 25 2026 17:26:33.787] [bands.f90:482]             [1m[32m<info> [0m[0mValence is:       10.000000
+[Oct 25 2026 17:26:33.790] [bands.f90:553]             [1m[32m<info> [0m[0mFixed Fermi energy: -0.061141
+[Oct 25 2026 17:26:33.933] [bands.f90:1780]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Oct 25 2026 17:26:33.933] [bands.f90:1790]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Oct 25 2026 17:26:33.984] [bands.f90:1780]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Oct 25 2026 17:26:33.985] [bands.f90:1790]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   0.000000
+[Oct 25 2026 17:26:34.108] [bands.f90:2151]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is  -0.000000   0.000000   0.000000
+[Oct 25 2026 17:26:34.221] [bands.f90:2151]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is   0.000000   0.000000  -0.000000
+[Oct 25 2026 17:26:34.223] [bands.f90:817]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long= -0.000000 |m_transverse|=  0.000000 torque=( -0.000000,  0.000000,  0.000000)
+[Oct 25 2026 17:26:34.223] [bands.f90:817]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  0.000000 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 25 2026 17:26:34.224] [bands.f90:1140]            [1m[32m<info> [0m[0mHUBBARD_LDM_CHECK atom=   1 max_antiherm=  0.0000E+00
+[Oct 25 2026 17:26:34.225] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   1 l= 0 ql_up=  0.067300 ql_dn=  0.067300 ldm_up=  0.067300 ldm_dn=  0.067300
+[Oct 25 2026 17:26:34.225] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 0 spin= 1 trace=  0.067300 eig_min=  0.067300 eig_max=  0.067300 max_antiherm=  0.0000E+00
+[Oct 25 2026 17:26:34.225] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 0 spin= 2 trace=  0.067300 eig_min=  0.067300 eig_max=  0.067300 max_antiherm=  0.0000E+00
+[Oct 25 2026 17:26:34.225] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   1 l= 1 ql_up=  0.071774 ql_dn=  0.071774 ldm_up=  0.071774 ldm_dn=  0.071774
+[Oct 25 2026 17:26:34.225] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 1 spin= 1 trace=  0.071774 eig_min=  0.020730 eig_max=  0.030314 max_antiherm=  0.0000E+00
+[Oct 25 2026 17:26:34.225] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 1 spin= 2 trace=  0.071774 eig_min=  0.020730 eig_max=  0.030314 max_antiherm=  0.0000E+00
+[Oct 25 2026 17:26:34.225] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   1 l= 2 ql_up=  0.031230 ql_dn=  0.031230 ldm_up=  0.031230 ldm_dn=  0.031230
+[Oct 25 2026 17:26:34.225] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 2 spin= 1 trace=  0.031230 eig_min=  0.001168 eig_max=  0.011398 max_antiherm=  0.0000E+00
+[Oct 25 2026 17:26:34.226] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 2 spin= 2 trace=  0.031230 eig_min=  0.001168 eig_max=  0.011398 max_antiherm=  0.0000E+00
+[Oct 25 2026 17:26:34.227] [bands.f90:1140]            [1m[32m<info> [0m[0mHUBBARD_LDM_CHECK atom=   2 max_antiherm=  0.0000E+00
+[Oct 25 2026 17:26:34.227] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   2 l= 0 ql_up=  0.363978 ql_dn=  0.363978 ldm_up=  0.363978 ldm_dn=  0.363978
+[Oct 25 2026 17:26:34.227] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 0 spin= 1 trace=  0.363978 eig_min=  0.363978 eig_max=  0.363978 max_antiherm=  0.0000E+00
+[Oct 25 2026 17:26:34.227] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 0 spin= 2 trace=  0.363978 eig_min=  0.363978 eig_max=  0.363978 max_antiherm=  0.0000E+00
+Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG
+ERROR STOP 
+
+Error termination. Backtrace:
+#0  0x103077323
+#1  0x103077ef7
+#2  0x103079113
+#3  0x102749ba3
+#4  0x1024cb363
+#5  0x102877107
+#6  0x1028992b3
+#7  0x102564b0b
+#8  0x10253d3bf
+#9  0x1024a8faf
+#10  0x10290619f
+[Oct 25 2026 17:26:34.233] [/Users/andersb/Jobb/rslmto_fable_v4b/source/bands.f90:1302]  [1m[31m<fatal> [0m[0mRD1 exact V-in snapshot missing/stale: status=5 iteration=1 recursion=2 cluster=970 type=3
+[Oct 25 2026 17:26:34.228] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   2 l= 1 ql_up=  0.672950 ql_dn=  0.672950 ldm_up=  0.672950 ldm_dn=  0.672950
+[Oct 25 2026 17:26:34.228] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 1 spin= 1 trace=  0.672950 eig_min=  0.207552 eig_max=  0.232699 max_antiherm=  0.0000E+00
+[Oct 25 2026 17:26:34.228] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 1 spin= 2 trace=  0.672950 eig_min=  0.207552 eig_max=  0.232699 max_antiherm=  0.0000E+00
+[Oct 25 2026 17:26:34.228] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   2 l= 2 ql_up=  4.742725 ql_dn=  4.742725 ldm_up=  4.742725 ldm_dn=  4.742725
+[Oct 25 2026 17:26:34.228] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 2 spin= 1 trace=  4.742725 eig_min=  0.893845 eig_max=  0.978117 max_antiherm=  0.0000E+00
+[Oct 25 2026 17:26:34.228] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 2 spin= 2 trace=  4.742725 eig_min=  0.893845 eig_max=  0.978117 max_antiherm=  0.0000E+00
+----------------------------------

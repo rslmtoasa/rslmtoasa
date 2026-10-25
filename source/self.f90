@@ -4494,7 +4494,7 @@ contains
          call g_scf_benchmark_profile%start_stage('P_rs_hamiltonian_prepare')
       end if
 
-      if (this%control%calctype == 'I') then
+      if (this%control%calctype == 'I' .or. this%control%calctype == 'S') then
          call this%hamiltonian%begin_rd1_vin_capture(iter, enable_rs_capture=.not. this%use_kspace)
       end if
    

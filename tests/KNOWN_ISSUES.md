@@ -1897,6 +1897,14 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
   preflights are recorded in `docs/validation/fixed_ldau/rs/C6_6_SURFACE_PROBE_RESULTS.md`.
   These short probes do not establish converged surface observables or an accepted no-U surface
   reference.
+- **Capture-path correction (2026-10-25):** investigation found that surface recursion initialized
+  exact RD1 `V_in` capture neither at the `S` recursion entry nor at the `build_bulkham` `ee`
+  insertion used by surfaces. Both omissions are fixed on the work branch. The checked rerun now
+  completes and consumes the current-iteration surface operand, but its final Diff is unchanged
+  (`0.3869175281`) and the <=5e-8 two-step gate still fails. The U=0 control also fails with
+  Diff `0.3840255893`; the large Diff is therefore not isolated to the LDA+U correction. Its cause
+  remains OPEN. See `docs/validation/fixed_ldau/rs/C6_6_CAPTURE_FIX_RESULTS.md` and its archived
+  preflight-bound evidence.
 - C6 stopped after the failed RS smoke gate; Cu T3 and workflow documentation/merge remain
   unrun. Surface Hubbard-energy routing remains OFF. C6.5's checked launcher is mandatory for
   campaign runs.
