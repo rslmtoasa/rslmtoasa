@@ -1878,6 +1878,10 @@ Not measured: the size of the effect on any test or reference. Fixing these chan
 
 Found in the quick tier (Release, no `-march=native`) while doing K5. The run stops after about 1 s with `Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported` (`source/hamiltonian_build.f90:532`). It fails the same way on a clean checkout of c7c1fe1, so it is not caused by K5. Not triaged: whether the deck (nsp = 2) or the guard is wrong is not known.
 
+Update 2026-10-26 (Debug build, `-fcheck=all`). Verified: `Val04LdaUPhysics` stops at the same guard, because `val04_lda_u.py:46` rewrites `nsp = 1` to `nsp = 2` and `has_soc()` is true for `nsp = 2`; the guard was added in 37a52f8d (2026-10-14), after both tests, and `has_soc` is from 7682dbe3 (2026-08-31). Verified in a scratch copy of the example deck with `nsp = 1` and nothing else changed: the guard passes and the run then aborts in `update_fixed_u_residuals` (`source/self.f90:1843`), "Index '4' of dimension 2 of array 'this%mix%_data%ldm_new' above upper bound 3". Not checked: whether a Release build runs past that line, whether `ldm_new` is sized too small or the loop runs too far, Val04 at `nsp = 1`. `self.f90` is off-limits, so this is not fixed.
+
+Proposal: none for now. Either the two tests move to `nsp = 1` after the `self.f90:1843` bound is triaged and the example's references are regenerated, or the guard is extended to collinear `nsp = 2` once an independent spinor-basis oracle exists; both are the developer's decision.
+
 ## Real-space LKAG exchange does not converge toward exact ASA with Hamiltonian order (bcc Fe, fixed potential) — 2026-10-22
 
 Measured in diagnostic D7b / oracle O3 (2026-10-22). `tests/spin_response/fe_bcc` potential, zero SCF steps. J(0) − J(q) in mRy at q = (0.125, −0.125, 0.125) / (0.25, −0.25, 0.25):
