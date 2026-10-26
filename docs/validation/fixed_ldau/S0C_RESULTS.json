@@ -1,0 +1,156 @@
+{
+  "task": "S0c",
+  "merge_sha": "7d28265c",
+  "base": "a67715a",
+  "reference_commit": "90f57c3",
+  "reference_binary": {
+    "binary": "/private/tmp/claude-501/-Users-andersb-Jobb-rslmto-fable-v4b/b0f6a48b-9da8-44de-95c6-39f047c59377/scratchpad/ref90f/build/bin/rslmto.x",
+    "sha256": "8dc179ed2c5f7c79494964669fdec980c93f6dddd24c5049509de482394c8256"
+  },
+  "candidate_binary": {
+    "binary": "/Users/andersb/Jobb/rslmto_fable_v4b/build/bin/rslmto.x",
+    "sha256": "afa98866798f7191649f716845d10bcd58e6a7db3a7ea7ff218687ec566f25b2"
+  },
+  "regression_command": ".venv/bin/python tools/ldau_regression.py --ref REF/rslmto.x --cand build/bin/rslmto.x --work DIR --json OUT",
+  "regression_rows": [
+    {
+      "check": "no-U RS bulk/bccFe, byte-identical",
+      "result": "PASS",
+      "detail": "26 files byte-identical",
+      "gate": true
+    },
+    {
+      "check": "no-U KS k_space_scf/bccFe, byte-identical",
+      "result": "PASS",
+      "detail": "24 files byte-identical",
+      "gate": true
+    },
+    {
+      "check": "+U RS bulk/bccFe_hubbard_nsp1, by value",
+      "result": "PASS",
+      "detail": "26 files, 2 potential files, 600 occupation values equal",
+      "gate": true
+    },
+    {
+      "check": "+U KS bccFe U=2 J=0.5, by value",
+      "result": "PASS",
+      "detail": "24 files, 2 potential files, 600 occupation values equal",
+      "gate": true
+    },
+    {
+      "check": "+U impurity/B2FeCo_nsp1, by value",
+      "result": "PASS",
+      "detail": "28 files, 4 potential files, 600 occupation values equal",
+      "gate": true
+    },
+    {
+      "check": "guard fixtures (RA2), candidate binary",
+      "result": "PASS",
+      "detail": "13 scenarios",
+      "gate": true
+    },
+    {
+      "check": "guard fixtures (RA2), reference binary",
+      "result": "FAIL",
+      "detail": "AttributeError: 'NoneType' object has no attribute 'group'",
+      "gate": false
+    },
+    {
+      "check": "CTest label lda_u",
+      "result": "FAIL",
+      "detail": "12 tests, 1 failed",
+      "gate": true
+    },
+    {
+      "check": "impurity/surface auto fixtures (UnitAutoImpurityLocalMode)",
+      "result": "PASS",
+      "detail": "1 tests, 0 failed",
+      "gate": true
+    },
+    {
+      "check": "dm: legacy inline vs dm-backed restart, all outputs",
+      "result": "PASS",
+      "detail": "26 files byte-identical",
+      "gate": true
+    },
+    {
+      "check": "dm: control, perturbed legacy occupation changes output",
+      "result": "PASS",
+      "detail": "outputs differ as required",
+      "gate": true
+    },
+    {
+      "check": "dm: missing sidecar is fatal",
+      "result": "PASS",
+      "detail": "rc=1; [Oct 26 2026 14:17:02.589] [/Users/andersb/Jobb/rslmto_fable_v4b/source/potential.f90:1711",
+      "gate": true
+    },
+    {
+      "check": "dm: hash mismatch is fatal",
+      "result": "PASS",
+      "detail": "rc=1; [Oct 26 2026 14:17:03.007] [/Users/andersb/Jobb/rslmto_fable_v4b/source/potential.f90:1713",
+      "gate": true
+    }
+  ],
+  "regression_work": "/private/tmp/claude-501/-Users-andersb-Jobb-rslmto-fable-v4b/b0f6a48b-9da8-44de-95c6-39f047c59377/scratchpad/t0_final",
+  "t1": {
+    "fe_runs": {
+      "fe_block_U0": {
+        "dir": "/private/tmp/claude-501/-Users-andersb-Jobb-rslmto-fable-v4b/b0f6a48b-9da8-44de-95c6-39f047c59377/scratchpad/t1/fe_block_U0"
+      },
+      "fe_cheb_U0": {
+        "dir": "/private/tmp/claude-501/-Users-andersb-Jobb-rslmto-fable-v4b/b0f6a48b-9da8-44de-95c6-39f047c59377/scratchpad/t1/fe_cheb_U0"
+      },
+      "fe_block_U2": {
+        "dir": "/private/tmp/claude-501/-Users-andersb-Jobb-rslmto-fable-v4b/b0f6a48b-9da8-44de-95c6-39f047c59377/scratchpad/t1/fe_block_U2"
+      },
+      "fe_cheb_U2": {
+        "dir": "/private/tmp/claude-501/-Users-andersb-Jobb-rslmto-fable-v4b/b0f6a48b-9da8-44de-95c6-39f047c59377/scratchpad/t1/fe_cheb_U2"
+      }
+    },
+    "chebyshev_minus_block": {
+      "d_up": {
+        "U0": 0.00331,
+        "U2": -0.00498
+      },
+      "d_dn": {
+        "U0": -0.00464,
+        "U2": 0.00671
+      },
+      "moment": {
+        "U0": 0.00827,
+        "U2": -0.00753
+      },
+      "E_F": {
+        "U0": 2.7e-05,
+        "U2": 0.000975
+      },
+      "E_Hub_U2": 0.000446
+    },
+    "gate": "U=2 difference <= 10x U=0 difference",
+    "verdict": "FAIL on E_F (ratio 36)",
+    "replay": "not run"
+  },
+  "t2": {
+    "ni_u0": {
+      "dir": "/private/tmp/claude-501/-Users-andersb-Jobb-rslmto-fable-v4b/b0f6a48b-9da8-44de-95c6-39f047c59377/scratchpad/t2/ni_a",
+      "steps": 18,
+      "diff": 7.5e-09,
+      "moment_muB": 0.670705
+    },
+    "ni_u3_j07": {
+      "dir": "/private/tmp/claude-501/-Users-andersb-Jobb-rslmto-fable-v4b/b0f6a48b-9da8-44de-95c6-39f047c59377/scratchpad/t2/ni_b",
+      "steps": 76,
+      "diff": 5e-09,
+      "moment_muB": 0.786506,
+      "E_F": -0.07776,
+      "E_Hub": 0.09116
+    }
+  },
+  "commits": [
+    "6a55296a",
+    "21d3d458",
+    "f171133e",
+    "176448f6"
+  ]
+}

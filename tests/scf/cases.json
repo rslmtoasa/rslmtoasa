@@ -201,19 +201,12 @@
       "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
       "case": "bulk/bccFe_hubbard",
       "timeout": 300,
-      "_note": "End-to-end Hubbard smoke-and-compare only; hubbard_u_general(1,3)/hubbard_j_general(1,3) are set directly in input.nml (not an LDA+U algebra oracle or material-validation study)",
+      "_note": "nsp=2 with fixed U is the SOC guard: expected to stop with the fatal below until SOC+U exists",
+      "expect_fatal": "Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.",
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 21 },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": false }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3], "hubbard_u": [3] } }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ]
       }
     },
     {

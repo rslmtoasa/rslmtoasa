@@ -53,6 +53,8 @@ Reference data is driven by a "checks" dict in cases.json:
   }
 
 If a case has no "checks" key the test still runs as a smoke test.
+A case with "expect_fatal": "<message>" passes only if the binary exits non-zero and
+testrun.log contains that exact message; no other checks run.
 """
 
 from __future__ import annotations
@@ -125,7 +127,8 @@ def patch_input_nml(workdir: str, case: dict) -> None:
 # Binary invocation
 # ---------------------------------------------------------------------------
 
-def run_binary(binary: str, workdir: str, mpi_procs: int = 1, serial_omp_threads: int | None = None) -> None:
+def run_binary(binary: str, workdir: str, mpi_procs: int = 1, serial_omp_threads: int | None = None,
+               expect_fatal: str | None = None) -> None:
     run_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_binary.sh")
     # MSYS Python uses the native Windows process API, where the POSIX path
     # /bin/bash is not executable.  Resolve bash through its MSYS-provided
@@ -141,6 +144,15 @@ def run_binary(binary: str, workdir: str, mpi_procs: int = 1, serial_omp_threads
     if mpi_procs <= 1 and serial_omp_threads is not None:
         env["RSLMTO_OMP_THREADS_SERIAL"] = str(serial_omp_threads)
     result = subprocess.run(cmd, cwd=workdir, env=env)
+    if expect_fatal is not None:
+        log_path = os.path.join(workdir, "testrun.log")
+        content = open(log_path).read() if os.path.exists(log_path) else ""
+        if result.returncode != 0 and expect_fatal in content:
+            print(f"PASS: binary stopped with the expected fatal message: {expect_fatal}")
+            sys.exit(0)
+        print(f"ERROR: expected a non-zero exit with the fatal message '{expect_fatal}'; "
+              f"exit code {result.returncode}")
+        sys.exit(1)
     if result.returncode != 0:
         print(f"ERROR: binary returned non-zero exit code {result.returncode}")
         log_path = os.path.join(workdir, "testrun.log")
@@ -668,7 +680,7 @@ def main() -> None:
         args.mpi_procs if args.mpi_enabled and args.mpi_procs is not None else
         (case.get("mpi_procs", 1) if args.mpi_enabled else 1)
     )
-    run_binary(binary, workdir, mpi_procs, serial_omp)
+    run_binary(binary, workdir, mpi_procs, serial_omp, case.get("expect_fatal"))
     check_log(workdir, args.case_name)
     check_output_files(workdir, args.case_name, case.get("outputs", []))
     check_text_dimensions(workdir, args.case_name, case.get("checks", {}).get("dimensions", []))
