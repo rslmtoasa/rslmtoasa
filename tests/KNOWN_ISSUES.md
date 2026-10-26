@@ -1869,6 +1869,7 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 
 - The user-supplied Chebyshev/`rc=60` bulk references are magnetic: no-U `0.670705 μB`, explicit U=J=0 `0.670705 μB`, and U=4/J=1 eV `0.808656 μB`. Using the explicit-zero-U potential as the seed for the requested RS fcc block-recursion/`rc=80` U=0 host produced an RS-accepted endpoint with P_OUT q0-derived moment `7.5853e-8 μB` (saved post-mix state ql moment `1.6378e-9 μB`). Restarting from that endpoint with U=3/J=0.7 and `auto` (resolved to `local`) produced an RS-accepted endpoint with P_OUT q0-derived moment `1.3419e-8 μB` (saved post-mix state ql moment `4.8535e-9 μB`). Both are below the `0.4 μB` gate. RD2 and RD3(a) were not run because the S0b stop condition was met.
 - Recheck the magnetic host workflow before treating Ni impurity results as representative. Evidence and uncovered checks: [`S0B_RESULTS.md`](../docs/validation/fixed_ldau/S0B_RESULTS.md); corrected run artifacts are under `/private/tmp/s0b_ni_t1a_userseed` and `/private/tmp/s0b_ni_t1b_userseed`.
+- **S0c update (2026-10-26):** the earlier RD2/RD3(a)/`auto` Ni gates ran on effectively non-magnetic block-recursion Ni; they are consistency tests, not tests of the spin-dependent correction. The user's own Chebyshev bulk deck (`RS-utils/tmp/Cheb/fccNi`, rc=60, lld=150, nsp=1, restarted from the user's `Ni_out.nml`, only `nstep` changed) gives a magnetic host: U=0 stopped at its convergence test after 18 steps, Diff `7.5e-9`, moment `0.670705 μB` (the user's value). Restarting that state with U=3/J=0.7 eV and `auto` (resolved to `local`) converged at step 76, Diff `5.0e-9`, moment `0.786506 μB`, d occupations `4.719841/3.869480` (up/down), E_F `-0.077760 Ry`, E_Hub `0.09116 Ry`. Occupation and moment values are logged to six decimals, so the 20-step spreads (`0`, `0`, `1e-6 μB`) are at that resolution, and the U=0 run had 18 iterations in its window. RD2 and RD3(a) on this host remain unrun. Artifacts: `/private/tmp/claude-501/-Users-andersb-Jobb-rslmto-fable-v4b/b0f6a48b-9da8-44de-95c6-39f047c59377/scratchpad/t2/`.
 
 ## [OPEN, 2026-10-22] KS-local host to RS impurity numerical equivalence for Ni
 
@@ -1940,3 +1941,24 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 - For `calctype='I'`, `auto` now selects local impurity density moments when every U-carrying frozen host potential records local mode, including decks that supply `hubbard_u_impurity`/`hubbard_j_impurity`. The focused fixture verifies this path has no provenance error; the existing RD3(a) Ni auto case continues to resolve local.
 - This closes the mode-selection issue only. The C5.12 Fe smoke run, rejudged under C5.13 workflow thresholds, passed convergence, provenance, and explicit-local mode checks; it did not exercise `auto`. The separate OPEN KS-local-host to RS-impurity numerical-equivalence issue for Ni remains open. Impurity Hubbard energy routing remains off; RD4 energy remains unmeasured.
 - Evidence: `docs/validation/fixed_ldau/rs/C5_13_RESULTS.md`; the auto impurity-U fixture and prior RD3(a) Ni auto case are recorded in `C5_11_RESULTS.md`.
+
+## [OPEN, 2026-10-26] Chebyshev recursion with fixed U: block comparison failed on E_F, replay not run
+
+- **Verified (source audit):** with `recur='chebyshev'` the SCF fills the full on-site `g0(i,j)` from `mu_n(nb,nb,...)`, whose starting states are identity blocks on the recursion site (`recursion_chebyshev.f90:chebyshev_recur`). `P` and the energy-weighted matrix read that same `g0` (`bands.f90`). No random vectors enter; `RSLMTO_KPM_RANDOM_SEED` is used only in the transport code (`recursion_transport.f90`). No guard was added.
+- **Measured (T1(b), bcc Fe rc=80, nsp=1, local, J=0, window -1.0 to 1.3 Ry, 2500 points, 60 steps each from the C5.2 accepted Chebyshev states; block lld=21, Chebyshev lld=150, beta 0.005):** Chebyshev minus block.
+
+| quantity | U=0 | U=2 eV | ratio U=2/U=0 |
+|---|---|---|---|
+| d occupation up | 3.31e-3 | -4.98e-3 | 1.5 |
+| d occupation down | -4.64e-3 | 6.71e-3 | 1.4 |
+| sphere moment (μB) | 8.27e-3 | -7.53e-3 | 0.91 |
+| E_F (Ry) | 2.7e-5 | 9.75e-4 | 36 |
+| E_Hub (Ry) | n/a (zero at U=0) | 5e-4 (0.1093 vs 0.1088) | n/a |
+
+  The gate (U=2 difference at most 10x the U=0 difference) fails on E_F. The block arms ended at Diff 3.1e-8 (U=0) and 1.3e-8 (U=2), last-20 maxima 4.9e-8 and 1.5e-7; the Chebyshev arms at 1.1e-8 and 2.0e-8. Occupations and moments are logged to six decimals, so the acceptance spreads are not resolved, and U=0 d occupations are taken from the final `ql`. The E_F offset is about one energy-grid spacing (2.3 Ry/2500 = 9.2e-4 Ry); that is a guess and was not tested.
+- **Not run:** T1(c) frozen local-versus-spectral replay. The existing C3 pipeline is bound to a frozen Debug binary and private `/private/tmp/c52-c2-stage` artifacts. The C5.2 Part C record of a replay on an accepted Chebyshev U=2 state (carrier ratios 0.99325 and 0.99976, q2' 0.01367 and 0.01129 Ry^2) predates S0 and is not new evidence. Chebyshev stays unvalidated for fixed U.
+
+## [OPEN, 2026-10-26] Tests failing at both `90f57c3` and the S0 merge
+
+- `Val04RsImpurityEnergyDiagnostic` (`rs_embedding_ra1.py`): the reported and independently evaluated impurity energies differ by 1.24e-12 Ry against a 1e-12 tolerance. The original script with the `90f57c3` binary gives identical numbers, so it is not caused by S0. Tolerance not touched.
+- `Example_bulk_bccFe_nsp2_hubbard` (quick tier): fatal "Fixed-U LDA+U currently requires collinear scalar-spin input" for an `nsp=2` deck. The `90f57c3` binary stops with the same fatal.
