@@ -320,6 +320,7 @@ contains
       hubbard_experimental = this%hubbard_experimental
       hubbard_log_level = this%hubbard_log_level
       hubbard_spinor_dm_diagnostic = this%hubbard_spinor_dm_diagnostic
+      hubbard_soc_experimental = this%hubbard_soc_experimental
       hubbard_u_potential_form = this%hubbard_u_potential_form
       hubbard_radial_moments = this%hubbard_radial_moments
       hubbard_test_operator = this%hubbard_test_operator
@@ -465,6 +466,7 @@ contains
 
       this%hubbard_experimental = hubbard_experimental
       this%hubbard_spinor_dm_diagnostic = hubbard_spinor_dm_diagnostic
+      this%hubbard_soc_experimental = hubbard_soc_experimental
       this%hubbard_log_level = lower(trim(hubbard_log_level))
       if (len_trim(this%hubbard_log_level) == 0) this%hubbard_log_level = 'summary'
       if (this%hubbard_log_level /= 'summary' .and. this%hubbard_log_level /= 'detailed' .and. this%hubbard_log_level /= 'debug') then
@@ -682,6 +684,17 @@ contains
          call g_logger%fatal('Both hubbard_u_sc and explicit hubbard_u/hubbard_j are set. Use only one mode.', __FILE__, __LINE__)
       end if
 
+      ! Experimental spinor U at nsp=2: radial moments stay spectral until the spinor local-moment
+      ! correction exists, so 'local' and 'auto' are replaced with a warning.
+      if (this%hubbard_soc_experimental .and. this%hubbard_u_general_check .and. this%control%nsp == 2) then
+         if (trim(this%hubbard_radial_moments) /= 'spectral') then
+            call g_logger%warning("hubbard_soc_experimental: hubbard_radial_moments='"// &
+               trim(this%hubbard_radial_moments)//"' is replaced by 'spectral'; the spinor local-moment "// &
+               'correction is not implemented.', __FILE__, __LINE__)
+            this%hubbard_radial_moments = 'spectral'
+         end if
+      end if
+
       if (this%hubbard_radial_moments == 'local') then
          if (.not. has_hubbard_general .and. .not. has_legacy_uj .and. .not. has_impurity_uj .and. &
              .not. this%hubbard_test_operator_check) then
@@ -752,7 +765,16 @@ contains
                end if
             end do
          end do
-         if (this%control%has_soc() .or. this%control%is_noncollinear()) then
+         if (this%hubbard_soc_experimental .and. this%control%nsp == 2) then
+            if (trim(this%control%calctype) /= 'B') then
+               call g_logger%fatal('hubbard_soc_experimental: SOC+U embedded runs (calctype I or S) are not yet supported.', &
+                                   __FILE__, __LINE__)
+            end if
+            if (trim(this%control%density_policy) /= 'constrained_spiral') then
+               call g_logger%fatal('hubbard_soc_experimental requires density_policy=constrained_spiral: the P/V frame and '// &
+                                   'the radial-channel frame must coincide until the spinor local moments exist.', __FILE__, __LINE__)
+            end if
+         else if (this%control%has_soc() .or. this%control%is_noncollinear()) then
             call g_logger%fatal('Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.', &
                                 __FILE__, __LINE__)
          end if
@@ -948,6 +970,7 @@ contains
       this%hubbard_experimental = .false.
       this%hubbard_log_level = 'summary'
       this%hubbard_spinor_dm_diagnostic = .false.
+      this%hubbard_soc_experimental = .false.
       this%hubbard_u_potential_form = 'liechtenstein'
       ! Resolve the omitted-option sentinel only after the self namelist tells
       ! us whether this calculation uses the reciprocal KS backend.
