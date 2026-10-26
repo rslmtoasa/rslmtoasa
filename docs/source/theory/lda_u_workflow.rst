@@ -93,8 +93,10 @@ Implementation status
   RS impurity density only. Surfaces are experimental. The Dudarev validation
   limit is ``J=0`` with ``U``; this does not validate arbitrary J.
   Chebyshev recursion with fixed U is not validated: the on-site Green function and
-  occupation matrices are deterministic, but a bcc Fe block-versus-Chebyshev comparison at
-  U=2 eV differed in E_F by 9.75e-4 Ry against 2.7e-5 Ry at U=0 (see ``tests/KNOWN_ISSUES.md``).
+  occupation matrices are deterministic. In a bcc Fe block-versus-Chebyshev comparison at
+  U=2 eV, E_F differed by 9.75e-4 Ry (limit 1.84e-3) and E_Hub by 4.1e-3 relative (limit 1e-2),
+  but the same-call identity Tr(M1)=q0*c did not hold in local mode as written (residual
+  equal to Tr(V_in P); see ``tests/KNOWN_ISSUES.md``).
 - ``acbn0`` potential path:
   optional path is available, but should currently be treated as an
   implementation-in-progress path for validation studies.
