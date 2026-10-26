@@ -74,10 +74,21 @@ def run_case(binary: Path, fixture: Path, scratch_root: Path, name: str, u_ev: f
     ql = output["ql"]
     d_up = float(ql[0][2][0])
     d_down = float(ql[1][2][0])
-    ldm = output["ldm_flatten"]
-    # f90nml reverses the Fortran index order: ldm_flatten(k, spin, l)
-    # is represented as ldm_flatten[k][spin][l].
-    d_matrices = [[ldm[k][spin][2] for k in range(25)] for spin in range(2)]
+    if "dm_file" in output:
+        # U-carrying potentials store the occupation matrix in a dm sidecar:
+        # dm_re(l, spin_row, spin_col, m1, :) with one row per m1.
+        sidecar = (workdir / output["dm_file"]).read_text()
+        d_matrices = [[0.0] * 25 for _ in range(2)]
+        for match in re.finditer(r"dm_re\(3,(\d),(\d),(\d),:\)\s*=\s*(.*)", sidecar):
+            spin, spin_col, m1 = (int(match.group(i)) - 1 for i in (1, 2, 3))
+            if spin == spin_col:
+                values = [float(v) for v in match.group(4).replace("D", "E").split()]
+                d_matrices[spin][m1 * 5:(m1 + 1) * 5] = values
+    else:
+        ldm = output["ldm_flatten"]
+        # f90nml reverses the Fortran index order: ldm_flatten(k, spin, l)
+        # is represented as ldm_flatten[k][spin][l].
+        d_matrices = [[ldm[k][spin][2] for k in range(25)] for spin in range(2)]
     herm_residual = max(
         abs(matrix[i * 5 + j] - matrix[j * 5 + i])
         for matrix in d_matrices for i in range(5) for j in range(5)

@@ -92,6 +92,33 @@ def run(binary: Path, work: Path, *, restart_name: str = "Fe.nml") -> tuple[int,
     return proc.returncode, output
 
 
+def copy_potential(source: Path, name: str, destination: Path) -> None:
+    """Copy a potential and, when it names one, its dm sidecar."""
+    shutil.copy2(source / "Fe_out.nml", destination / name)
+    match = re.search(r"(?m)^\s*dm_file\s*=\s*'([^']*)'", (source / "Fe_out.nml").read_text())
+    if match:
+        shutil.copy2(source / match.group(1), destination / match.group(1))
+
+
+def legacy_potential(source: Path) -> str:
+    """Potential text with the dm sidecar inlined as ldm_flatten and no provenance fields."""
+    text = (source / "Fe_out.nml").read_text()
+    sidecar = (source / re.search(r"(?m)^\s*dm_file\s*=\s*'([^']*)'", text).group(1)).read_text()
+    rows: dict = {}
+    for m in re.finditer(r"dm_(re|im)\((\d+),(\d+),(\d+),(\d+),:\)\s*=\s*(.*)", sidecar):
+        part, l, spin_row, spin_col, row = m.group(1), *(int(m.group(i)) for i in (2, 3, 4, 5))
+        if spin_row == spin_col:
+            rows.setdefault((part, l, spin_row), {})[row] = m.group(6).split()
+    inline = ""
+    for (part, l, spin), block in sorted(rows.items()):
+        values = [v for row in sorted(block) for v in block[row]]
+        values += ["0.0"] * (25 - len(values))
+        name = "ldm_flatten" if part == "re" else "ldm_flatten_imag"
+        inline += f" {name}({l}, {spin}, :) = " + ", ".join(values) + "\n"
+    text = re.sub(r"(?m)^\s*dm_file\s*=.*\n", inline, text)
+    return re.sub(r"(?im)^\s*(dm_sha256|hubbard_radial_moments|hubbard_backend)\s*=.*\n", "", text)
+
+
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -172,10 +199,7 @@ def main() -> None:
     # Bulk auto restart converts both a provenance-free legacy seed and a
     # spectral-stamped seed to the selected local mode, then stamps this run.
     bulk_legacy = fresh_work(scratch, "bulk_legacy_auto_local")
-    legacy_text = (seed / "Fe_out.nml").read_text()
-    legacy_text = re.sub(r"(?im)^\s*hubbard_radial_moments\s*=.*\n", "", legacy_text)
-    legacy_text = re.sub(r"(?im)^\s*hubbard_backend\s*=.*\n", "", legacy_text)
-    (bulk_legacy / "Fe_out.nml").write_text(legacy_text)
+    (bulk_legacy / "Fe_out.nml").write_text(legacy_potential(seed))
     configure(bulk_legacy, backend="ks", mode=None)
     status, log = run(binary, bulk_legacy)
     legacy_output = (bulk_legacy / "Fe_out.nml").read_text().lower()
@@ -189,7 +213,7 @@ def main() -> None:
     if status != 0:
         raise RuntimeError(f"bulk spectral seed run failed:\n{log[-4000:]}")
     bulk_auto = fresh_work(scratch, "bulk_spectral_auto_local")
-    shutil.copy2(bulk_spectral / "Fe_out.nml", bulk_auto / "Fe_out.nml")
+    copy_potential(bulk_spectral, "Fe_out.nml", bulk_auto)
     configure(bulk_auto, backend="ks", mode=None)
     status, log = run(binary, bulk_auto)
     rewritten = (bulk_auto / "Fe_out.nml").read_text().lower()
@@ -200,7 +224,7 @@ def main() -> None:
 
     # A matching local-mode RS restart is accepted; the backend is informational.
     matching = fresh_work(scratch, "rs_matching_local")
-    shutil.copy2(seed / "Fe_out.nml", matching / "Fe_out.nml")
+    copy_potential(seed, "Fe_out.nml", matching)
     configure(matching, backend="rs", mode="local")
     status, log = run(binary, matching)
     if status != 0:
@@ -209,6 +233,7 @@ def main() -> None:
     # Backend provenance is informational: an RS consumer must accept the
     # same local-mode host even when the backend field is absent.
     missing_backend = fresh_work(scratch, "rs_missing_backend_local")
+    copy_potential(seed, "Fe_out.nml", missing_backend)
     backendless_text = re.sub(r"(?im)^\s*hubbard_backend\s*=.*\n", "", (seed / "Fe_out.nml").read_text())
     (missing_backend / "Fe_out.nml").write_text(backendless_text)
     configure(missing_backend, backend="rs", mode="local")
@@ -219,7 +244,7 @@ def main() -> None:
     # An updated bulk atom may convert a stored local seed to the selected
     # spectral mode, even if auto selected local for the KS seed run.
     mismatch = fresh_work(scratch, "rs_mode_mismatch")
-    shutil.copy2(seed / "Fe_out.nml", mismatch / "Fe_out.nml")
+    copy_potential(seed, "Fe_out.nml", mismatch)
     configure(mismatch, backend="rs", mode="spectral")
     status, log = run(binary, mismatch)
     rewritten = (mismatch / "Fe_out.nml").read_text().lower()
@@ -230,10 +255,7 @@ def main() -> None:
 
     # A legacy U-carrying file without the new fields is classified as spectral.
     legacy = fresh_work(scratch, "rs_legacy_spectral")
-    legacy_text = (seed / "Fe_out.nml").read_text()
-    legacy_text = re.sub(r"(?im)^\s*hubbard_radial_moments\s*=.*\n", "", legacy_text)
-    legacy_text = re.sub(r"(?im)^\s*hubbard_backend\s*=.*\n", "", legacy_text)
-    (legacy / "Fe_out.nml").write_text(legacy_text)
+    (legacy / "Fe_out.nml").write_text(legacy_potential(seed))
     configure(legacy, backend="rs", mode="spectral")
     status, log = run(binary, legacy)
     legacy_output = (legacy / "Fe_out.nml").read_text().lower()
@@ -245,22 +267,19 @@ def main() -> None:
     # In an impurity calculation, only frozen host ownership is strict. A
     # local frozen host conflicts fatally with forced spectral, while a legacy
     # frozen host is warned about and classified spectral.
-    host_seed = (seed / "Fe_out.nml").read_text()
     impurity_mismatch = fresh_impurity(scratch, "impurity_frozen_local_forced_spectral")
-    shutil.copy2(seed / "Fe_out.nml", impurity_mismatch / "Fe.nml")
+    copy_potential(seed, "Fe.nml", impurity_mismatch)
     configure_impurity(impurity_mismatch, "spectral")
     status, log = run(binary, impurity_mismatch)
     if status == 0 or "fixed-u potential moment-mode mismatch" not in log.lower():
         raise RuntimeError(f"frozen local host did not reject forced spectral impurity:\n{log[-4000:]}")
 
     impurity_legacy = fresh_impurity(scratch, "impurity_legacy_frozen_host")
-    legacy_host = re.sub(r"(?im)^\s*hubbard_radial_moments\s*=.*\n", "", host_seed)
-    legacy_host = re.sub(r"(?im)^\s*hubbard_backend\s*=.*\n", "", legacy_host)
-    (impurity_legacy / "Fe.nml").write_text(legacy_host)
+    (impurity_legacy / "Fe.nml").write_text(legacy_potential(seed))
     configure_impurity(impurity_legacy, None)
     status, log = run(binary, impurity_legacy)
     if (status != 0 or "mode is unknown, treating it as spectral" not in log.lower() or
-            "hubbard_radial_mode mode=spectral" not in log.lower()):
+            not re.search(r"radial_mode[ =]+(mode=)?spectral", log.lower())):
         raise RuntimeError(f"legacy frozen host did not warn and proceed in spectral mode:\n{log[-4000:]}")
 
     # Surface ownership uses its own recursion-site map. The frozen type 1

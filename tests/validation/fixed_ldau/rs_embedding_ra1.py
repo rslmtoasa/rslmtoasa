@@ -70,13 +70,19 @@ def main() -> None:
     if not out_path.exists():
         raise RuntimeError("recursion atom potential output Fe_out.nml is missing")
     output = f90nml.read(out_path)["par"]
-    ldm = output["ldm_flatten"]
+    # U-carrying potentials keep the occupation matrix in a dm sidecar.
+    sidecar = (work / output["dm_file"]).read_text()
+    d_block = [[[0.0] * 5 for _ in range(5)] for _ in range(2)]
+    for match in re.finditer(r"dm_re\(3,(\d),(\d),(\d),:\)\s*=\s*(.*)", sidecar):
+        spin, spin_col, row = (int(match.group(i)) - 1 for i in (1, 2, 3))
+        if spin == spin_col:
+            d_block[spin][row] = [float(v) for v in match.group(4).replace("D", "E").split()]
     matrix_path = work / "impurity_p_matrix.txt"
     with matrix_path.open("w") as stream:
         for spin in range(2):
             for i in range(5):
                 for j in range(5):
-                    stream.write(f"{spin + 1} {i + 1} {j + 1} {float(ldm[(i * 5 + j)][spin][2]):.17e} 0.0\n")
+                    stream.write(f"{spin + 1} {i + 1} {j + 1} {d_block[spin][i][j]:.17e} 0.0\n")
     evaluator = subprocess.run(
         [str(args.evaluator.resolve()), str(matrix_path), "2.0", "0.0"],
         cwd=work, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
