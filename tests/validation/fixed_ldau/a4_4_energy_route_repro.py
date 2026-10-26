@@ -98,6 +98,7 @@ def configure(base: str, *, backend: str, u: float, j: float,
         "hubbard_test_operator": "'w1'",
         "hubbard_test_lambda": f"{test_lambda:.16g}",
         "hubbard_test_spin": "0",
+        "hubbard_log_level": "'detailed'",
         "fixed_u_test_tighten_r05": ".false.",
     }
     return set_group(deck, "hamiltonian", ham)
@@ -255,12 +256,12 @@ def run_one(name: str, args, *, binary: Path, launcher: list[str], base_input: P
         ts = dec(fields, "TS")
         if not entropy.is_finite() or not ts.is_finite():
             raise AssertionError(f"{name}: KS entropy/TS is non-finite")
-    mode_rows = re.findall(r"HUBBARD_RADIAL_MODE ([^\r\n]*)", text)
+    mode_rows = re.findall(r"HUBBARD_RUN ([^\r\n]*)", text)
     mode_fields = dict(re.findall(r"([A-Za-z0-9_]+)=([^\s]+)", mode_rows[-1])) if mode_rows else {}
-    actual_mode = mode_fields.get("mode")
+    actual_mode = mode_fields.get("radial_mode")
     if actual_mode not in {"local", "spectral"}:
-        raise ValueError(f"{name}: missing/invalid HUBBARD_RADIAL_MODE runtime marker")
-    adopted = mode_fields.get("local_energy_adopted", "").lower() == ".true."
+        raise ValueError(f"{name}: missing/invalid HUBBARD_RUN radial_mode field")
+    adopted = mode_fields.get("energy_routing", "") == "adopted"
     if actual_mode != expected_mode:
         raise AssertionError(f"{name}: expected mode {expected_mode}, observed {actual_mode}")
     expected_adopted = expected_mode == "local" and test_lambda == 0.0

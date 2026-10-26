@@ -19,6 +19,8 @@ real(rp), dimension(:), allocatable :: hubbard_u, hubbard_j
 character(len=16) :: hubbard_radial_moments, hubbard_backend
 real(rp), dimension(:,:,:), allocatable :: ldm_flatten
 real(rp), dimension(:,:,:), allocatable :: ldm_flatten_imag
+character(len=256) :: dm_file
+character(len=64) :: dm_sha256
 namelist /par/ &
    center_band, width_band, shifted_band, obar, gravity_center, &
     sumec, sumev, etot, utot, ekin, rhoeps, vmad, vrmax, q10, &
@@ -32,4 +34,4 @@ namelist /par/ &
    width_band_d_up, width_band_d_dw, &
    cx, wx, cx0, wx0, cx1, wx1, &
    cshi, dw_l, cex, obx, xi_p, xi_d, rac, &
-   hubbard_u, hubbard_j, hubbard_radial_moments, hubbard_backend, ldm_flatten, ldm_flatten_imag
+   hubbard_u, hubbard_j, hubbard_radial_moments, hubbard_backend, ldm_flatten, ldm_flatten_imag, dm_file, dm_sha256

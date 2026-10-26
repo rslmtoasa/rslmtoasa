@@ -59,6 +59,7 @@ add_library(${PROJECT_NAME} STATIC
     namelist_generator.f90
     os.f90
     potential.f90
+    sha256.f90
     radial_ground_state.f90
     precision.f90
     scf_guard.f90
@@ -91,6 +92,7 @@ add_library(${PROJECT_NAME} STATIC
     sigma_provider.f90
     self.f90
     self_reciprocal.f90
+    ldau_diagnostics.f90
     bounds.f90
     spglib_interface.f90
     spin_dynamics.f90

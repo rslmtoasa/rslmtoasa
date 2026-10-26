@@ -1865,13 +1865,19 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 - **C5.9 bounded rerun:** the exact Release lambda-zero deck on the pointer-fixed W1 source captured one complete stable iteration and was externally stopped; no crash occurred through that iteration. No RD4 energy was measured, and longer-run behavior remains untested.
 - **Disposition:** OPEN for RD4 energy/longer-run behavior; impurity energy routing remains off and no diagnostic energy term is adopted. The C5.8 cause and bounded regression are recorded in [`C5_8_RESULTS.md`](../docs/validation/fixed_ldau/rs/C5_8_RESULTS.md) and [`C5_8_RESULTS.json`](../docs/validation/fixed_ldau/rs/C5_8_RESULTS.json).
 
+## [OPEN, 2026-10-26] Ni gating host magnetic seed for S0b
+
+- The Ni host used for the gating workflow was non-magnetic. Recheck S0b with a magnetic host before treating the Ni result as representative.
+
 ## [OPEN, 2026-10-22] KS-local host to RS impurity numerical equivalence for Ni
 
 - The production `auto` rule selects local impurity density moments only when every U-carrying frozen host potential records local mode. The rule supports both RS-local and KS-local hosts; it does not establish numerical equivalence between those workflows.
 - No accepted Ni KS host is available, so the KS-host-to-RS-impurity Ni comparison remains unvalidated. The C5 Fe smoke run does not close this Ni-specific issue.
 - Impurity Hubbard energy remains excluded; RD4 energy is unmeasured. See `docs/validation/fixed_ldau/rs/C5_10_RESULTS.md`.
 
-## [OPEN, 2026-10-22] Surface LDA+U smoke validation: Ni baseline and local-density physicality
+## [EXPERIMENTAL, OPEN, 2026-10-22] Surface LDA+U: Ni baseline and local-density physicality
+
+- Surface LDA+U remains experimental. Ni(001) probes observed a narrow-window projected-DOS/NaN failure; widening the energy window to 1.5 Ry did not change it.
 
 - C6.4 fixes the surface recursion-site to cluster-site to type mapping for the local-moment
   correction. Its T1 identity (RS 27/27, KS 24/24), 13 guard fixtures, impurity/surface auto

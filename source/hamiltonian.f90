@@ -120,6 +120,8 @@ module hamiltonian_mod
       real(rp), dimension(:), allocatable :: theta_ss_sublattice, phi_ss_sublattice
       real(rp), dimension(:), allocatable :: velocity_scale
       character(len=16) :: hubbard_u_potential_form
+      logical :: hubbard_experimental = .false.
+      character(len=16) :: hubbard_log_level = 'summary'
       !> Radial band-moment convention: legacy spectral or local Hubbard-adjusted.
       character(len=16) :: hubbard_radial_moments = 'auto'
       !> Explicit A4 test-only d-shell operator selector: none, w1, or w2.

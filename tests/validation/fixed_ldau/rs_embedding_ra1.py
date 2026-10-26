@@ -33,6 +33,11 @@ def main() -> None:
     input_path = work / "input.nml"
     text = input_path.read_text()
     text = re.sub(r"(?m)^nstep\s*=\s*\d+", "nstep = 1", text)
+    if re.search(r"(?ims)^\s*&hamiltonian\b.*?^\s*/\s*$", text):
+        text = re.sub(r"(?ims)(^\s*&hamiltonian\b.*?)(^\s*/\s*$)",
+                      r"\1 hubbard_log_level = 'detailed'\n\2", text, count=1)
+    else:
+        text += "\n&hamiltonian\nhubbard_log_level = 'detailed'\n/\n"
     input_path.write_text(text)
     env = os.environ.copy()
     env["RSLMTO_OMP_THREADS_SERIAL"] = "1"

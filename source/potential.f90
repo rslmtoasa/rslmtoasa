@@ -29,6 +29,8 @@ module potential_mod
    use logger_mod, only: g_logger
    use namelist_generator_mod, only: namelist_generator
    use basis_mod, only: lmax_basis
+   use math_mod, only: ry2ev
+   use sha256_mod, only: sha256_file
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -109,6 +111,10 @@ module potential_mod
       real(rp), dimension(:), allocatable :: hubbard_u, hubbard_j
       !> Radial-moment convention and backend that produced a U-carrying potential.
       character(len=16) :: hubbard_radial_moments, hubbard_backend
+      character(len=256) :: dm_file = ''
+      character(len=64) :: dm_sha256 = ''
+      character(len=128) :: dm_run_id = 'run'
+      integer :: dm_iteration = 0
       logical :: hubbard_file_has_uj
       !> Local density matrix /occupation matrix (integrated -im(g0)/pi)
       !> 1st index: 1 = s-orbital, 2 = p-orbital, 3 = d-orbital 
@@ -142,6 +148,7 @@ module potential_mod
       procedure :: copy_mom_to_scal
       procedure :: flatten_ldm
       procedure :: expand_ldm
+      procedure :: write_density_matrix_file
       final :: destructor
    end type potential
 
@@ -260,6 +267,8 @@ contains
       rac = this%rac
       hubbard_radial_moments = ''
       hubbard_backend = ''
+      dm_file = ''
+      dm_sha256 = ''
 
       ! Normalize the magnetic moments
       if (allocated(this%mom)) then
@@ -473,6 +482,8 @@ contains
 
       call move_alloc(hubbard_u, this%hubbard_u)
       call move_alloc(hubbard_j, this%hubbard_j)
+      this%dm_file = trim(dm_file)
+      this%dm_sha256 = trim(dm_sha256)
       ! call move_alloc(ldm, this%ldm)
       call move_alloc(ldm_flatten, this%ldm_flatten)
       call move_alloc(ldm_flatten_imag, this%ldm_flatten_imag)
@@ -482,7 +493,12 @@ contains
       ! Reconstruct 4D density matrix from serialized restart storage.
       ! Without this, potential%ldm can stay at constructor defaults (zeros)
       ! even when ldm_flatten was read from *_out.nml.
-      call this%expand_ldm()
+      if (len_trim(this%dm_file) > 0) then
+         call read_density_matrix_file(this, fname)
+         call this%flatten_ldm()
+      else
+         call this%expand_ldm()
+      end if
 
       !print *,'AB Finished building potential from file '//trim(fname)//'. Final lmax = '//int2str(this%lmax)
       ! If we promoted from a smaller basis, seed newly introduced channels with
@@ -851,6 +867,10 @@ contains
       this%hubbard_radial_moments = ''
       this%hubbard_backend = ''
       this%hubbard_file_has_uj = .false.
+      this%dm_file = ''
+      this%dm_sha256 = ''
+      this%dm_run_id = 'run'
+      this%dm_iteration = 0
       this%ldm(:,:,:,:) = 0.0d0
       this%ldm_flatten(:,:,:) = 0.0d0
       this%ldm_flatten_imag(:,:,:) = 0.0d0
@@ -903,6 +923,8 @@ contains
       vl = this%vl
       hubbard_radial_moments = this%hubbard_radial_moments
       hubbard_backend = this%hubbard_backend
+      dm_file = this%dm_file
+      dm_sha256 = this%dm_sha256
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -965,6 +987,8 @@ contains
       wx1 = this%wx1
       hubbard_radial_moments = this%hubbard_radial_moments
       hubbard_backend = this%hubbard_backend
+      dm_file = this%dm_file
+      dm_sha256 = this%dm_sha256
 
       pl = this%pl
       cshi = this%cshi
@@ -1040,12 +1064,14 @@ contains
       if (any(abs(this%hubbard_u) > 1.0e-10_rp) .or. any(abs(this%hubbard_j) > 1.0e-10_rp)) then
          call nml%add('hubbard_radial_moments', trim(this%hubbard_radial_moments))
          call nml%add('hubbard_backend', trim(this%hubbard_backend))
+         call nml%add('dm_file', trim(this%dm_file))
+         call nml%add('dm_sha256', trim(this%dm_sha256))
       end if
       ! call nml%add('ldm', this%ldm)
-      call nml%add('ldm_flatten', this%ldm_flatten)
-      ! Preserve legacy no-U/real-density outputs byte-for-byte. Persist the
-      ! optional imaginary companion only when it contains meaningful data.
-      if (any(this%ldm_flatten_imag /= 0.0_rp)) call nml%add('ldm_flatten_imag', this%ldm_flatten_imag)
+      if (.not. (any(abs(this%hubbard_u) > 1.0e-10_rp) .or. any(abs(this%hubbard_j) > 1.0e-10_rp))) then
+         call nml%add('ldm_flatten', this%ldm_flatten)
+         if (any(this%ldm_flatten_imag /= 0.0_rp)) call nml%add('ldm_flatten_imag', this%ldm_flatten_imag)
+      end if
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -1610,5 +1636,109 @@ contains
          end do
       end do
    end subroutine expand_ldm
+
+   subroutine write_density_matrix_file(this, label)
+      class(potential), intent(inout) :: this
+      character(len=*), intent(in) :: label
+      integer :: unit, l, spin, i, j, ios
+      character(len=256) :: filename
+      real(rp) :: value
+
+      if (rank /= 0) return
+      if (.not. allocated(this%hubbard_u) .or. .not. allocated(this%hubbard_j)) return
+      if (.not. (any(abs(this%hubbard_u) > 1.0e-10_rp) .or. any(abs(this%hubbard_j) > 1.0e-10_rp))) return
+      filename = trim(label)//'_dm.nml'
+      this%dm_file = trim(filename)
+      call this%flatten_ldm()
+      open(newunit=unit, file=trim(filename), status='replace', action='write', iostat=ios)
+      if (ios /= 0) call g_logger%fatal('Cannot create density-matrix file '//trim(filename), __FILE__, __LINE__)
+      write(unit, '(a)') '&density_matrix'
+      write(unit, '(a)') " label = '"//trim(label)//"'"
+      write(unit, '(a)') " radial_mode = '"//trim(this%hubbard_radial_moments)//"'"
+      write(unit, '(a)') " backend = '"//trim(this%hubbard_backend)//"'"
+      write(unit, '(a)') " run_id = '"//trim(this%dm_run_id)//"'"
+      write(unit, '(a,i0)') ' iteration = ', this%dm_iteration
+      do l = 1, min(size(this%hubbard_u), size(this%hubbard_j))
+         write(unit, '(a,i0,a,es24.16)') ' hubbard_u_ev(',l,') = ', this%hubbard_u(l)*ry2ev
+         write(unit, '(a,i0,a,es24.16)') ' hubbard_j_ev(',l,') = ', this%hubbard_j(l)*ry2ev
+      end do
+      do l = 1, size(this%ldm, 1)
+         do spin = 1, 2
+            do i = 1, 2*l - 1
+               write(unit, '(a,i0,a,i0,a,i0,a,i0,a)', advance='no') ' dm_re(',l,',',spin,',',spin,',',i,',:) ='
+               do j = 1, 2*l - 1
+                  value = real(this%ldm(l, spin, i, j), rp)
+                  write(unit, '(1x,es24.16)', advance='no') value
+               end do
+               write(unit, *)
+               write(unit, '(a,i0,a,i0,a,i0,a,i0,a)', advance='no') ' dm_im(',l,',',spin,',',spin,',',i,',:) ='
+               do j = 1, 2*l - 1
+                  value = aimag(this%ldm(l, spin, i, j))
+                  write(unit, '(1x,es24.16)', advance='no') value
+               end do
+               write(unit, *)
+            end do
+         end do
+      end do
+      write(unit, '(a)') '/'
+      close(unit)
+      this%dm_sha256 = sha256_file(trim(filename))
+      if (len_trim(this%dm_sha256) /= 64) call g_logger%fatal('Could not hash density-matrix file '//trim(filename), __FILE__, __LINE__)
+   end subroutine write_density_matrix_file
+
+   subroutine read_density_matrix_file(this, potential_file)
+      class(potential), intent(inout) :: this
+      character(len=*), intent(in) :: potential_file
+      character(len=256) :: dm_file
+      character(len=64) :: dm_sha256
+      character(len=128) :: label, radial_mode, backend, run_id
+      character(len=pl) :: dm_path
+      real(rp), allocatable :: dm_re(:, :, :, :, :), dm_im(:, :, :, :, :)
+      real(rp) :: hubbard_u_ev(4), hubbard_j_ev(4)
+      integer :: iteration, unit, ios, slash, l, spin, nm
+#ifdef USE_MPI
+      integer :: mpi_error
+#endif
+      namelist /density_matrix/ label, radial_mode, backend, hubbard_u_ev, hubbard_j_ev, run_id, iteration, dm_re, dm_im
+
+      dm_file = trim(this%dm_file)
+      dm_sha256 = trim(this%dm_sha256)
+      slash = index(trim(potential_file), '/', back=.true.)
+      dm_path = trim(dm_file)
+      if (slash > 0) dm_path = potential_file(:slash)//trim(dm_file)
+      if (rank == 0) then
+         if (.not. exists(trim(dm_path))) &
+            call g_logger%fatal('Referenced density-matrix file is missing: '//trim(dm_path), __FILE__, __LINE__)
+         if (sha256_file(trim(dm_path)) /= trim(dm_sha256)) &
+            call g_logger%fatal('Density-matrix SHA-256 mismatch for '//trim(dm_path), __FILE__, __LINE__)
+         allocate(dm_re(this%lmax + 1, 2, 2, 2*this%lmax + 1, 2*this%lmax + 1))
+         allocate(dm_im(this%lmax + 1, 2, 2, 2*this%lmax + 1, 2*this%lmax + 1))
+         dm_re = 0.0_rp
+         dm_im = 0.0_rp
+         hubbard_u_ev = 0.0_rp
+         hubbard_j_ev = 0.0_rp
+         label = ''
+         radial_mode = ''
+         backend = ''
+         run_id = ''
+         iteration = 0
+         open(newunit=unit, file=trim(dm_path), status='old', action='read', iostat=ios)
+         if (ios /= 0) call g_logger%fatal('Cannot open referenced density-matrix file '//trim(dm_path), __FILE__, __LINE__)
+         read(unit, nml=density_matrix, iostat=ios)
+         close(unit)
+         if (ios /= 0) call g_logger%fatal('Invalid density-matrix namelist in '//trim(dm_path), __FILE__, __LINE__)
+         do l = 1, size(this%ldm, 1)
+            nm = 2*l - 1
+            do spin = 1, 2
+               this%ldm(l, spin, 1:nm, 1:nm) = cmplx(dm_re(l, spin, spin, 1:nm, 1:nm), &
+                                                       dm_im(l, spin, spin, 1:nm, 1:nm), rp)
+            end do
+         end do
+         deallocate(dm_re, dm_im)
+      end if
+#ifdef USE_MPI
+      call MPI_BCAST(this%ldm, size(this%ldm), MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD, mpi_error)
+#endif
+   end subroutine read_density_matrix_file
 
 end module potential_mod
