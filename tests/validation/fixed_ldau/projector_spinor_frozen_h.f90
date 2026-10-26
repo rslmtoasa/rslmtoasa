@@ -10,7 +10,8 @@ program projector_spinor_frozen_h
    use precision_mod, only: rp
    use basis_mod, only: basis_init, nb, norb
    use math_mod, only: init_math_operators, pi, simpson_m, hubbard_spectral_density_element, &
-                       hubbard_density_diagnostics
+                       hubbard_density_diagnostics, correct_d_shell_moments_spinor
+   use hubbard_spinor_mod, only: hubbard_d_tensor, hubbard_spinor_functional
    use logger_mod, only: g_logger
    use mpi_mod, only: rank, ierr, atoms_per_process, get_mpi_variables, parallel_context, assignment(=), numprocs
    use control_mod, only: control
@@ -158,6 +159,8 @@ program projector_spinor_frozen_h
    call ks%calculate_spinor_dm(lat)
    call report('(b) control, xi=0.35 without the coupling: KS spin-off-diagonal blocks', &
       maxval(abs(lat%symbolic_atoms(1)%potential%ldm_spinor(1:5, 6:10))), tol_zero, .true.)
+
+   call check_local_moments()
 
 #ifdef USE_MPI
    call reduce_failure()
@@ -317,6 +320,127 @@ contains
       end do
       deallocate (work, rwork)
    end subroutine exact_references
+
+   !> Local d-shell radial moments per spin channel from the exact eigenpairs of H = H_LDA + V_U, with a
+   !> spinor V_U (spin-off-diagonal blocks) from the S1 functional: c'_s and q2'_s straight from
+   !> b'_s = Pi_s[(eps - c'_s) a - V a] for every occupied state, against correct_d_shell_moments_spinor.
+   subroutine check_local_moments()
+      complex(rp), allocatable :: htot(:, :), qq(:, :), work(:)
+      real(rp), allocatable :: ee(:), rwork(:)
+      complex(rp) :: t5(5, 5, 5, 5), v10(10, 10), vdrop(10, 10), a(10), va(10), b(10), p10(10, 10), m10(10, 10)
+      complex(rp) :: vp(10, 10), vvp(10, 10), vm1c(10, 10)
+      real(rp) :: q0s(2), cs(2), q2s(2), cp(2), q2p(2), ts(2), cp_drop(2), q2p_drop(2), t_drop(2)
+      real(rp) :: cdir(2), q2dir(2), q2_ctrl(2), w, gap, gap_best
+      integer :: info, i, j, k, n, nocc, s, sj, r
+
+      call build_model(0.35_rp, 1.0_rp)
+      call exact_references()
+      call hubbard_d_tensor(0.25_rp, 0.04_rp, t5)
+      call hubbard_spinor_functional(t5, 0.25_rp, 0.04_rp, p_exact, gap, gap_best, w, v10)
+      allocate (htot(nb, nb), qq(nb, nb), ee(nb), work(2*nb), rwork(3*nb - 2))
+      htot = h
+      do s = 1, 2
+         do sj = 1, 2
+            do i = 1, 5
+               do j = 1, 5
+                  htot((s - 1)*norb + 4 + i, (sj - 1)*norb + 4 + j) = htot((s - 1)*norb + 4 + i, (sj - 1)*norb + 4 + j) + &
+                     v10((s - 1)*5 + i, (sj - 1)*5 + j)
+               end do
+            end do
+         end do
+      end do
+      qq = htot
+      call zheev('V', 'U', nb, qq, nb, ee, work, 2*nb, rwork, info)
+      if (info /= 0) failed = .true.
+      gap_best = 0.0_rp
+      nocc = 9
+      do k = 6, 11
+         gap = ee(k + 1) - ee(k)
+         if (gap > gap_best) then
+            gap_best = gap
+            nocc = k
+         end if
+      end do
+      p10 = (0.0_rp, 0.0_rp)
+      m10 = (0.0_rp, 0.0_rp)
+      q0s = 0.0_rp
+      cs = 0.0_rp
+      do n = 1, nocc
+         do s = 1, 2
+            do i = 1, 5
+               a((s - 1)*5 + i) = qq((s - 1)*norb + 4 + i, n)
+            end do
+         end do
+         p10 = p10 + spread(a, 2, 10)*spread(conjg(a), 1, 10)
+         m10 = m10 + ee(n)*spread(a, 2, 10)*spread(conjg(a), 1, 10)
+         do s = 1, 2
+            w = sum(abs(a((s - 1)*5 + 1:s*5))**2)
+            q0s(s) = q0s(s) + w
+            cs(s) = cs(s) + ee(n)*w
+         end do
+      end do
+      cs = cs/q0s
+      q2s = 0.0_rp
+      do n = 1, nocc
+         do s = 1, 2
+            do i = 1, 5
+               a((s - 1)*5 + i) = qq((s - 1)*norb + 4 + i, n)
+            end do
+         end do
+         do s = 1, 2
+            q2s(s) = q2s(s) + (ee(n) - cs(s))**2*sum(abs(a((s - 1)*5 + 1:s*5))**2)
+         end do
+      end do
+      ! direct definition: H_LDA a = eps a - V a, projected on the spin channel
+      cdir = 0.0_rp
+      do n = 1, nocc
+         do s = 1, 2
+            do i = 1, 5
+               a((s - 1)*5 + i) = qq((s - 1)*norb + 4 + i, n)
+            end do
+         end do
+         va = matmul(v10, a)
+         do s = 1, 2
+            cdir(s) = cdir(s) + real(dot_product(a((s - 1)*5 + 1:s*5), ee(n)*a((s - 1)*5 + 1:s*5) - va((s - 1)*5 + 1:s*5)), rp)
+         end do
+      end do
+      cdir = cdir/q0s
+      q2dir = 0.0_rp
+      do n = 1, nocc
+         do s = 1, 2
+            do i = 1, 5
+               a((s - 1)*5 + i) = qq((s - 1)*norb + 4 + i, n)
+            end do
+         end do
+         va = matmul(v10, a)
+         do s = 1, 2
+            b = (0.0_rp, 0.0_rp)
+            b((s - 1)*5 + 1:s*5) = (ee(n) - cdir(s))*a((s - 1)*5 + 1:s*5) - va((s - 1)*5 + 1:s*5)
+            q2dir(s) = q2dir(s) + real(dot_product(b, b), rp)
+         end do
+      end do
+      call correct_d_shell_moments_spinor(p10, m10, v10, q0s, cs, q2s, cp, q2p, ts, info)
+      call report('(b) local moments: max |V_U spin-off-diagonal block| (nonzero)', maxval(abs(v10(1:5, 6:10))), 1.0e-3_rp, .true.)
+      call report('(b) local c prime, kernel vs direct b-prime definition', maxval(abs(cp - cdir)), 1.0e-12_rp)
+      call report('(b) local q2 prime, kernel vs direct b-prime definition', maxval(abs(q2p - q2dir)), 1.0e-12_rp)
+      vdrop = v10
+      vdrop(1:5, 6:10) = (0.0_rp, 0.0_rp)
+      vdrop(6:10, 1:5) = (0.0_rp, 0.0_rp)
+      call correct_d_shell_moments_spinor(p10, m10, vdrop, q0s, cs, q2s, cp_drop, q2p_drop, t_drop, info)
+      call report('(b) control, spin-off-diagonal V blocks dropped: c prime', maxval(abs(cp_drop - cdir)), 1.0e-12_rp, .true.)
+      call report('(b) control, spin-off-diagonal V blocks dropped: q2 prime', maxval(abs(q2p_drop - q2dir)), 1.0e-12_rp, .true.)
+      vp = matmul(v10, p10)
+      vvp = matmul(matmul(v10, v10), p10)
+      do s = 1, 2
+         vm1c = matmul(v10, m10 - cs(s)*p10)
+         q2_ctrl(s) = q2s(s)
+         do r = (s - 1)*5 + 1, s*5
+            q2_ctrl(s) = q2_ctrl(s) - 2.0_rp*real(vm1c(r, r), rp) + real(vvp(r, r), rp)
+         end do
+         q2_ctrl(s) = q2_ctrl(s) - ts(s)**2/q0s(s)
+      end do
+      call report('(b) control, Pi_s V V in place of V Pi_s V: q2 prime', maxval(abs(q2_ctrl - q2dir)), 1.0e-12_rp, .true.)
+   end subroutine check_local_moments
 
    !> Independent Simpson integration of the Lorentzian spectral function at four meshes.
    subroutine mesh_refinement()
