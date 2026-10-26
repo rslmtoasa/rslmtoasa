@@ -319,6 +319,7 @@ contains
       call move_alloc(this%velocity_scale, velocity_scale)
       hubbard_experimental = this%hubbard_experimental
       hubbard_log_level = this%hubbard_log_level
+      hubbard_spinor_dm_diagnostic = this%hubbard_spinor_dm_diagnostic
       hubbard_u_potential_form = this%hubbard_u_potential_form
       hubbard_radial_moments = this%hubbard_radial_moments
       hubbard_test_operator = this%hubbard_test_operator
@@ -463,6 +464,7 @@ contains
       has_hubbard_u_sc = any(hubbard_u_sc /= hubbard_sc_sentinel)
 
       this%hubbard_experimental = hubbard_experimental
+      this%hubbard_spinor_dm_diagnostic = hubbard_spinor_dm_diagnostic
       this%hubbard_log_level = lower(trim(hubbard_log_level))
       if (len_trim(this%hubbard_log_level) == 0) this%hubbard_log_level = 'summary'
       if (this%hubbard_log_level /= 'summary' .and. this%hubbard_log_level /= 'detailed' .and. this%hubbard_log_level /= 'debug') then
@@ -945,6 +947,7 @@ contains
       this%jl_alpha = 'z'
       this%hubbard_experimental = .false.
       this%hubbard_log_level = 'summary'
+      this%hubbard_spinor_dm_diagnostic = .false.
       this%hubbard_u_potential_form = 'liechtenstein'
       ! Resolve the omitted-option sentinel only after the self namelist tells
       ! us whether this calculation uses the reciprocal KS backend.

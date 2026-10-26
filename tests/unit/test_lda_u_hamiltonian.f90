@@ -45,6 +45,7 @@ program test_lda_u_hamiltonian
       call test_d_shell_complex_derivative()
    call test_correlated_trace_and_common_state_fourier()
    call test_a4_w2_operator_insertion()
+   call test_spinor_dm_roundtrip()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -715,6 +716,77 @@ contains
       deallocate(ham%hubbard_u_pot)
       allocate(ham%hubbard_u_pot(nb,nb,1))
    end subroutine test_d_shell_complex_derivative
+
+   !> Spinor d-shell P through the dm sidecar: the spin-off-diagonal blocks must survive write/read
+   !> bitwise, and a collinear (no spinor array) file must neither gain nor read spinor content.
+   subroutine test_spinor_dm_roundtrip()
+      complex(rp) :: expected(10, 10)
+      character(len=*), parameter :: label = 'UnitSpinorDm', potfile = 'UnitSpinorDm_pot.nml'
+      character(len=4096) :: text
+      character(len=512) :: line
+      logical :: has_spinor_marker
+      integer :: unit, ios, i, j, s
+
+      call basis_init(2)
+      ctl%lmax = 2
+      lat%symbolic_atoms(1)%potential%hubbard_u(3) = 1.4_rp
+      lat%symbolic_atoms(1)%potential%hubbard_j(3) = 0.2_rp
+      do s = 1, 2
+         do i = 1, 5
+            do j = 1, 5
+               lat%symbolic_atoms(1)%potential%ldm(3, s, i, j) = cmplx(sin(0.37_rp*real(i*j + s, rp))/7.0_rp, &
+                  cos(0.91_rp*real(i - j*s, rp))/11.0_rp*real(sign(1, i - j), rp), rp)
+               if (i == j) lat%symbolic_atoms(1)%potential%ldm(3, s, i, j) = cmplx(0.1_rp*real(i + s, rp)/3.0_rp, 0.0_rp, rp)
+            end do
+         end do
+         lat%symbolic_atoms(1)%potential%ldm(3, s, 1:5, 1:5) = 0.5_rp*(lat%symbolic_atoms(1)%potential%ldm(3, s, 1:5, 1:5) + &
+            conjg(transpose(lat%symbolic_atoms(1)%potential%ldm(3, s, 1:5, 1:5))))
+      end do
+      expected = (0.0_rp, 0.0_rp)
+      expected(1:5, 1:5) = lat%symbolic_atoms(1)%potential%ldm(3, 1, 1:5, 1:5)
+      expected(6:10, 6:10) = lat%symbolic_atoms(1)%potential%ldm(3, 2, 1:5, 1:5)
+      do i = 1, 5
+         do j = 1, 5
+            expected(i, 5 + j) = cmplx(sqrt(2.0_rp)*sin(real(3*i + j, rp))/13.0_rp, cos(real(i*i - 2*j, rp))/17.0_rp, rp)
+         end do
+      end do
+      expected(6:10, 1:5) = conjg(transpose(expected(1:5, 6:10)))
+      if (allocated(lat%symbolic_atoms(1)%potential%ldm_spinor)) deallocate (lat%symbolic_atoms(1)%potential%ldm_spinor)
+      allocate (lat%symbolic_atoms(1)%potential%ldm_spinor(10, 10))
+      lat%symbolic_atoms(1)%potential%ldm_spinor = expected
+
+      call lat%symbolic_atoms(1)%potential%write_density_matrix_file(label)
+      open (newunit=unit, file=potfile, status='replace', action='write', iostat=ios)
+      call lat%symbolic_atoms(1)%potential%print_state_formatted(unit=unit)
+      close (unit)
+      deallocate (lat%symbolic_atoms(1)%potential%ldm_spinor)
+      lat%symbolic_atoms(1)%potential%ldm = (0.0_rp, 0.0_rp)
+      call lat%symbolic_atoms(1)%potential%build_from_file(potfile)
+      call require(allocated(lat%symbolic_atoms(1)%potential%ldm_spinor), 'spinor dm file restores the spinor array')
+      if (allocated(lat%symbolic_atoms(1)%potential%ldm_spinor)) then
+         call require(maxval(abs(lat%symbolic_atoms(1)%potential%ldm_spinor - expected)) == 0.0_rp, &
+            'spinor P round trip through the dm file is bitwise exact (all four spin blocks)')
+         call require(maxval(abs(conjg(transpose(lat%symbolic_atoms(1)%potential%ldm_spinor(1:5, 6:10))) - &
+            expected(1:5, 6:10))) > 1.0e-3_rp, &
+            'control: the up-down block read back is not its conjugate transpose')
+      end if
+
+      ! Collinear file: no spinor array, no marker, no spin-off-diagonal d entries, none restored.
+      deallocate (lat%symbolic_atoms(1)%potential%ldm_spinor)
+      call lat%symbolic_atoms(1)%potential%write_density_matrix_file(label)
+      open (newunit=unit, file=label//'_dm.nml', status='old', action='read', iostat=ios)
+      text = ''
+      has_spinor_marker = .false.
+      do
+         read (unit, '(a)', iostat=ios) line
+         if (ios /= 0) exit
+         if (index(line, 'spinor_d') > 0 .or. index(line, 'dm_re(3,1,2') > 0) has_spinor_marker = .true.
+      end do
+      close (unit, status='delete')
+      call require(.not. has_spinor_marker, 'collinear dm file carries no spinor content')
+      open (newunit=unit, file=potfile, status='old', iostat=ios)
+      if (ios == 0) close (unit, status='delete')
+   end subroutine test_spinor_dm_roundtrip
 
    function complex_d_energy(pup,pdn,u,jbar) result(energy)
       complex(rp), intent(in) :: pup(5,5), pdn(5,5)

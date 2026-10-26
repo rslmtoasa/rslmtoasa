@@ -147,7 +147,7 @@ module math_mod
 
    public :: init_math_operators
    public :: hubbard_projector_element, hubbard_spectral_density_element
-   public :: hubbard_density_diagnostics
+   public :: hubbard_density_diagnostics, spinor_dm_summary
    public :: correct_d_shell_moments
    public :: extract_hubbard_d_shell_potential
    public :: fixed_impurity_atom_carries_uj
@@ -207,6 +207,28 @@ contains
       min_eigenvalue = minval(eigenvalues)
       max_eigenvalue = maxval(eigenvalues)
    end subroutine hubbard_density_diagnostics
+
+   !> One-line summary of a spinor d-shell density P(10,10) (index (sigma-1)*5+(m+3)): Hermiticity,
+   !> traces against the radial d charges ql_up and ql_dn, eigenvalue bounds, max|P_up,dn|.
+   subroutine spinor_dm_summary(p, ql_up, ql_dn, line)
+      complex(rp), intent(in) :: p(10, 10)
+      real(rp), intent(in) :: ql_up, ql_dn
+      character(len=*), intent(out) :: line
+      real(rp) :: trace_value, min_eig, max_eig, antiherm, tr_up, tr_dn
+      integer :: info, i
+
+      call hubbard_density_diagnostics(p, trace_value, min_eig, max_eig, antiherm, info)
+      tr_up = 0.0_rp
+      tr_dn = 0.0_rp
+      do i = 1, 5
+         tr_up = tr_up + real(p(i, i), rp)
+         tr_dn = tr_dn + real(p(i + 5, i + 5), rp)
+      end do
+      write (line, '(a,es10.3,a,f12.8,a,es10.3,a,es10.3,a,f10.6,a,f10.6,a,es10.3,a,es10.3)') &
+         'antiherm=', antiherm, ' trace=', trace_value, ' trace_minus_ql=', trace_value - ql_up - ql_dn, &
+         ' tr_up_minus_ql=', tr_up - ql_up, ' eig_min=', min_eig, ' eig_max=', max_eig, &
+         ' max_up_dn=', maxval(abs(p(1:5, 6:10))), ' info=', real(info, rp)
+   end subroutine spinor_dm_summary
 
    !> Correct the d-shell radial first and second moments for the local
    !> Hubbard operator present in the Hamiltonian.  Matrices use the

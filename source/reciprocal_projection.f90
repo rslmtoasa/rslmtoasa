@@ -1100,4 +1100,82 @@ end subroutine calculate_band_moments
       
    end subroutine calculate_ldm_from_eigenvectors
 
+   !> Full spinor d-shell P = sum f psi psi^dagger and M1 = sum f eps psi psi^dagger (index
+   !> (sigma-1)*5+(m+3)) with the k weights and Fermi-Dirac occupations of the collinear producer.
+   module subroutine calculate_spinor_dm(this, lattice_obj)
+      use lattice_mod
+      class(reciprocal), intent(inout) :: this
+      type(lattice), intent(inout) :: lattice_obj
+      integer :: nsites, n_orb_site, n_orb_per_spin
+      real(rp) :: kT
+      complex(rp), allocatable :: p(:, :, :), m1(:, :, :)
+      real(rp), allocatable :: comm_real(:, :, :, :), comm_imag(:, :, :, :)
+      real(rp) :: kweight, occ
+      complex(rp) :: element
+      character(len=400) :: line
+      integer :: ik, ik_global, isite, ib, s, t, i, j, row, col, plusbulk, site_offset
+
+      call this%ensure_full_mesh_for_spinor_integrations('calculate_spinor_dm')
+      kT = max(this%temperature*kB_Ry_per_K, 1.0e-10_rp)
+      nsites = lattice_obj%nrec
+      n_orb_site = size(this%eigenvectors, 1)/nsites
+      n_orb_per_spin = n_orb_site/this%n_spin_components
+      if (n_orb_per_spin < 9) return
+      allocate(p(nsites, 10, 10), m1(nsites, 10, 10))
+      p = (0.0_rp, 0.0_rp)
+      m1 = (0.0_rp, 0.0_rp)
+      do ik = 1, size(this%eigenvalues, 2)
+         ik_global = local_k_index_to_global(this, ik)
+         kweight = this%k_weights(ik_global)
+         do isite = 1, nsites
+            site_offset = (isite - 1)*n_orb_site
+            do ib = 1, size(this%eigenvalues, 1)
+               occ = fermi_dirac_occupation(this%eigenvalues(ib, ik), this%fermi_level, kT)*kweight
+               do s = 1, 2
+                  do t = 1, 2
+                     do i = 1, 5
+                        do j = 1, 5
+                           row = site_offset + (s - 1)*n_orb_per_spin + 4 + i
+                           col = site_offset + (t - 1)*n_orb_per_spin + 4 + j
+                           element = hubbard_projector_element(this%eigenvectors(row, ib, ik), &
+                                                               this%eigenvectors(col, ib, ik))*occ
+                           p(isite, (s - 1)*5 + i, (t - 1)*5 + j) = p(isite, (s - 1)*5 + i, (t - 1)*5 + j) + element
+                           m1(isite, (s - 1)*5 + i, (t - 1)*5 + j) = &
+                              m1(isite, (s - 1)*5 + i, (t - 1)*5 + j) + element*this%eigenvalues(ib, ik)
+                        end do
+                     end do
+                  end do
+               end do
+            end do
+         end do
+      end do
+#ifdef USE_MPI
+      if (this%k_mesh_distributed_active) then
+         allocate(comm_real(nsites, 10, 10, 2), comm_imag(nsites, 10, 10, 2))
+         comm_real(:, :, :, 1) = real(p, rp)
+         comm_real(:, :, :, 2) = real(m1, rp)
+         comm_imag(:, :, :, 1) = aimag(p)
+         comm_imag(:, :, :, 2) = aimag(m1)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, comm_real, size(comm_real), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         call MPI_ALLREDUCE(MPI_IN_PLACE, comm_imag, size(comm_imag), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+         p = cmplx(comm_real(:, :, :, 1), comm_imag(:, :, :, 1), rp)
+         m1 = cmplx(comm_real(:, :, :, 2), comm_imag(:, :, :, 2), rp)
+         deallocate(comm_real, comm_imag)
+      end if
+#endif
+      do isite = 1, nsites
+         plusbulk = lattice_obj%nbulk + isite
+         if (.not. allocated(lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_spinor)) &
+            allocate(lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_spinor(10, 10))
+         if (.not. allocated(lattice_obj%symbolic_atoms(plusbulk)%potential%m1_spinor)) &
+            allocate(lattice_obj%symbolic_atoms(plusbulk)%potential%m1_spinor(10, 10))
+         lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_spinor = p(isite, :, :)
+         lattice_obj%symbolic_atoms(plusbulk)%potential%m1_spinor = m1(isite, :, :)
+         call spinor_dm_summary(p(isite, :, :), lattice_obj%symbolic_atoms(plusbulk)%potential%ql(1, 2, 1), &
+                                lattice_obj%symbolic_atoms(plusbulk)%potential%ql(1, 2, 2), line)
+         call root_info('HUBBARD_SPINOR_DM backend=ks atom='//trim(int2str(isite))//' '//trim(line), __FILE__, __LINE__)
+      end do
+      deallocate(p, m1)
+   end subroutine calculate_spinor_dm
+
 end submodule reciprocal_projection

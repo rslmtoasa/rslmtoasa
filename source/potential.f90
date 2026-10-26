@@ -125,6 +125,9 @@ module potential_mod
       real(rp), dimension(:,:,:), allocatable :: ldm_flatten
       !> Imaginary part paired with ldm_flatten; absent in legacy restart files.
       real(rp), dimension(:,:,:), allocatable :: ldm_flatten_imag
+      !> Spinor d-shell P and M1, index (sigma-1)*5+(m+3); allocated only by the spinor diagnostic
+      !> (nsp>=2). The spin-diagonal blocks of ldm_spinor are those of ldm(3,:,:,:). M1 is not persisted.
+      complex(rp), dimension(:,:), allocatable :: ldm_spinor, m1_spinor
       !> Optional screening constants used by the strux backend (indexed by l=0..lmax).
       real(rp), dimension(:), allocatable :: screening_alpha
       !> Optional screening sigma values used by the strux backend (indexed by l=0..lmax).
@@ -874,6 +877,8 @@ contains
       this%ldm(:,:,:,:) = 0.0d0
       this%ldm_flatten(:,:,:) = 0.0d0
       this%ldm_flatten_imag(:,:,:) = 0.0d0
+      if (allocated(this%ldm_spinor)) deallocate (this%ldm_spinor)
+      if (allocated(this%m1_spinor)) deallocate (this%m1_spinor)
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------
@@ -1640,7 +1645,7 @@ contains
    subroutine write_density_matrix_file(this, label)
       class(potential), intent(inout) :: this
       character(len=*), intent(in) :: label
-      integer :: unit, l, spin, i, j, ios
+      integer :: unit, l, spin, tspin, i, j, ios
       character(len=256) :: filename
       real(rp) :: value
 
@@ -1658,6 +1663,7 @@ contains
       write(unit, '(a)') " backend = '"//trim(this%hubbard_backend)//"'"
       write(unit, '(a)') " run_id = '"//trim(this%dm_run_id)//"'"
       write(unit, '(a,i0)') ' iteration = ', this%dm_iteration
+      if (allocated(this%ldm_spinor)) write(unit, '(a)') ' spinor_d = 1'
       do l = 1, min(size(this%hubbard_u), size(this%hubbard_j))
          write(unit, '(a,i0,a,es24.16)') ' hubbard_u_ev(',l,') = ', this%hubbard_u(l)*ry2ev
          write(unit, '(a,i0,a,es24.16)') ' hubbard_j_ev(',l,') = ', this%hubbard_j(l)*ry2ev
@@ -1680,6 +1686,26 @@ contains
             end do
          end do
       end do
+      ! Spinor d shell: the spin-off-diagonal blocks (the diagonal blocks are those of ldm above).
+      if (allocated(this%ldm_spinor)) then
+         do spin = 1, 2
+            do tspin = 1, 2
+               if (tspin == spin) cycle
+               do i = 1, 5
+                  write(unit, '(a,i0,a,i0,a,i0,a)', advance='no') ' dm_re(3,', spin, ',', tspin, ',', i, ',:) ='
+                  do j = 1, 5
+                     write(unit, '(1x,es24.16)', advance='no') real(this%ldm_spinor((spin - 1)*5 + i, (tspin - 1)*5 + j), rp)
+                  end do
+                  write(unit, *)
+                  write(unit, '(a,i0,a,i0,a,i0,a)', advance='no') ' dm_im(3,', spin, ',', tspin, ',', i, ',:) ='
+                  do j = 1, 5
+                     write(unit, '(1x,es24.16)', advance='no') aimag(this%ldm_spinor((spin - 1)*5 + i, (tspin - 1)*5 + j))
+                  end do
+                  write(unit, *)
+               end do
+            end do
+         end do
+      end if
       write(unit, '(a)') '/'
       close(unit)
       this%dm_sha256 = sha256_file(trim(filename))
@@ -1695,14 +1721,16 @@ contains
       character(len=pl) :: dm_path
       real(rp), allocatable :: dm_re(:, :, :, :, :), dm_im(:, :, :, :, :)
       real(rp) :: hubbard_u_ev(4), hubbard_j_ev(4)
-      integer :: iteration, unit, ios, slash, l, spin, nm
+      integer :: iteration, unit, ios, slash, l, spin, nm, spinor_d, tspin
+      character(len=256) :: ios_message
 #ifdef USE_MPI
       integer :: mpi_error
 #endif
-      namelist /density_matrix/ label, radial_mode, backend, hubbard_u_ev, hubbard_j_ev, run_id, iteration, dm_re, dm_im
+      namelist /density_matrix/ label, radial_mode, backend, hubbard_u_ev, hubbard_j_ev, run_id, iteration, dm_re, dm_im, spinor_d
 
       dm_file = trim(this%dm_file)
       dm_sha256 = trim(this%dm_sha256)
+      spinor_d = 0
       slash = index(trim(potential_file), '/', back=.true.)
       dm_path = trim(dm_file)
       if (slash > 0) dm_path = potential_file(:slash)//trim(dm_file)
@@ -1724,9 +1752,10 @@ contains
          iteration = 0
          open(newunit=unit, file=trim(dm_path), status='old', action='read', iostat=ios)
          if (ios /= 0) call g_logger%fatal('Cannot open referenced density-matrix file '//trim(dm_path), __FILE__, __LINE__)
-         read(unit, nml=density_matrix, iostat=ios)
+         read(unit, nml=density_matrix, iostat=ios, iomsg=ios_message)
          close(unit)
-         if (ios /= 0) call g_logger%fatal('Invalid density-matrix namelist in '//trim(dm_path), __FILE__, __LINE__)
+         if (ios /= 0) call g_logger%fatal('Invalid density-matrix namelist in '//trim(dm_path)//': '//trim(ios_message), &
+            __FILE__, __LINE__)
          do l = 1, size(this%ldm, 1)
             nm = 2*l - 1
             do spin = 1, 2
@@ -1734,10 +1763,28 @@ contains
                                                        dm_im(l, spin, spin, 1:nm, 1:nm), rp)
             end do
          end do
+         if (spinor_d == 1 .and. this%lmax >= 2) then
+            if (.not. allocated(this%ldm_spinor)) allocate(this%ldm_spinor(10, 10))
+            do spin = 1, 2
+               do tspin = 1, 2
+                  if (spin == tspin) then
+                     this%ldm_spinor((spin - 1)*5 + 1:spin*5, (tspin - 1)*5 + 1:tspin*5) = this%ldm(3, spin, 1:5, 1:5)
+                  else
+                     this%ldm_spinor((spin - 1)*5 + 1:spin*5, (tspin - 1)*5 + 1:tspin*5) = &
+                        cmplx(dm_re(3, spin, tspin, 1:5, 1:5), dm_im(3, spin, tspin, 1:5, 1:5), rp)
+                  end if
+               end do
+            end do
+         end if
          deallocate(dm_re, dm_im)
       end if
 #ifdef USE_MPI
       call MPI_BCAST(this%ldm, size(this%ldm), MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD, mpi_error)
+      call MPI_BCAST(spinor_d, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, mpi_error)
+      if (spinor_d == 1) then
+         if (.not. allocated(this%ldm_spinor)) allocate(this%ldm_spinor(10, 10))
+         call MPI_BCAST(this%ldm_spinor, 100, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD, mpi_error)
+      end if
 #endif
    end subroutine read_density_matrix_file
 

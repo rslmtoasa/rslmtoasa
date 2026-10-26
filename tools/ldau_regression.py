@@ -269,7 +269,12 @@ def main() -> int:
     ks_u = lambda t: add_u(ks(t), 2.0, 0.5)
     imp = lambda t: set_nstep(t)
 
-    paired("no-U RS bulk/bccFe, byte-identical", "noU_rs", "bulk/bccFe", n, compare_identical, base, ref, cand)
+    nsp1 = lambda t: set_nstep(t).replace("nsp = 2", "nsp = 1")
+    ks_nsp2 = lambda t: use_kspace(set_nstep(t)).replace("nsp = 1", "nsp = 2").replace("&control", "&control\nlmax = 2", 1)
+    paired("no-U RS bulk/bccFe (nsp=2), byte-identical", "noU_rs", "bulk/bccFe", n, compare_identical, base, ref, cand)
+    paired("no-U RS bulk/bccFe, nsp=1, byte-identical", "noU_rs_nsp1", "bulk/bccFe", nsp1, compare_identical, base, ref, cand)
+    paired("no-U KS k_space_scf/bccFe, nsp=2, byte-identical", "noU_ks_nsp2", "k_space_scf/bccFe", ks_nsp2,
+           compare_identical, base, ref, cand)
     paired("no-U KS k_space_scf/bccFe, byte-identical", "noU_ks", "k_space_scf/bccFe", ks, compare_identical, base, ref, cand)
     rs_u = paired("+U RS bulk/bccFe_hubbard_nsp1, by value", "U_rs", "bulk/bccFe_hubbard_nsp1", n,
                   compare_by_value, base, ref, cand, restart="Fe.nml")

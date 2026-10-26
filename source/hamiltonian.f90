@@ -122,6 +122,8 @@ module hamiltonian_mod
       character(len=16) :: hubbard_u_potential_form
       logical :: hubbard_experimental = .false.
       character(len=16) :: hubbard_log_level = 'summary'
+      !> Extract the full spinor d-shell P and M1 at nsp>=2 (diagnostic; not used by the Hamiltonian).
+      logical :: hubbard_spinor_dm_diagnostic = .false.
       !> Radial band-moment convention: legacy spectral or local Hubbard-adjusted.
       character(len=16) :: hubbard_radial_moments = 'auto'
       !> Explicit A4 test-only d-shell operator selector: none, w1, or w2.

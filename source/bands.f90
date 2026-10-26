@@ -116,6 +116,7 @@ module bands_mod
       procedure :: calculate_occupation_gauss_legendre
       procedure :: calculate_angles
       procedure :: calculate_hubbard_u_sc
+      procedure :: calculate_spinor_dm
       !procedure :: calculate_conductivity_tensor
       procedure :: fermi
       procedure :: restore_to_default
@@ -1365,6 +1366,10 @@ contains
          call this%calculate_pl(iteration=iteration_value)
       end if
 
+      if (this%control%nsp >= 2 .and. lmax_basis >= 2 .and. &
+          (this%recursion%hamiltonian%hubbard_spinor_dm_diagnostic .or. fixed_liechtenstein_active)) &
+         call this%calculate_spinor_dm()
+
       ! Transfer calculated moments across MPI ranks
 #ifdef USE_MPI
       ! Synchronize Hubbard LDM explicitly across ranks.
@@ -1448,6 +1453,76 @@ contains
       !end do
       !write(*,*) ´Total electrons s, p and d:´, sums, sump, sumd
    end subroutine calculate_moments
+
+   !> Full spinor d-shell P and M1 (index (sigma-1)*5+(m+3)) from the retarded Green function
+   !> A_ab = i(G_ab - G_ba^*)/(2 pi), with the integrator, mesh and Fermi endpoint of the collinear
+   !> P (weight power 0) and M1 (power 1). Stored in potential%ldm_spinor and potential%m1_spinor.
+   subroutine calculate_spinor_dm(this)
+      use mpi_mod
+      class(bands) :: this
+      complex(rp), dimension(this%en%channels_ldos + 10) :: spectral_value
+      real(rp), dimension(this%en%channels_ldos + 10) :: y, y_imag
+      real(rp), allocatable :: comm_real(:, :, :, :), comm_imag(:, :, :, :)
+      real(rp) :: p_real, p_imag, m1_real, m1_imag
+      character(len=400) :: line
+      integer :: na, na_glob, plusbulk, s, t, i, j, ie, row, col
+
+      allocate (comm_real(this%lattice%nrec, 10, 10, 2), comm_imag(this%lattice%nrec, 10, 10, 2))
+      comm_real = 0.0_rp
+      comm_imag = 0.0_rp
+      do na_glob = start_atom, end_atom
+         na = g2l_map(na_glob)
+         do s = 1, 2
+            do t = 1, 2
+               do i = 1, 5
+                  do j = 1, 5
+                     row = (s - 1)*spin_off + 4 + i
+                     col = (t - 1)*spin_off + 4 + j
+                     do ie = 1, size(spectral_value)
+                        spectral_value(ie) = hubbard_spectral_density_element( &
+                           this%green%g0(row, col, ie, na), this%green%g0(col, row, ie, na))
+                     end do
+                     y(:) = real(spectral_value, rp)
+                     y_imag(:) = aimag(spectral_value)
+                     p_real = 0.0_rp
+                     p_imag = 0.0_rp
+                     m1_real = 0.0_rp
+                     m1_imag = 0.0_rp
+                     call simpson_m(p_real, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 0, this%en%ene)
+                     call simpson_m(p_imag, this%en%edel, this%en%fermi, this%nv1, y_imag, this%e1, 0, this%en%ene)
+                     call simpson_m(m1_real, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 1, this%en%ene)
+                     call simpson_m(m1_imag, this%en%edel, this%en%fermi, this%nv1, y_imag, this%e1, 1, this%en%ene)
+                     comm_real(na_glob, (s - 1)*5 + i, (t - 1)*5 + j, 1) = p_real
+                     comm_imag(na_glob, (s - 1)*5 + i, (t - 1)*5 + j, 1) = p_imag
+                     comm_real(na_glob, (s - 1)*5 + i, (t - 1)*5 + j, 2) = m1_real
+                     comm_imag(na_glob, (s - 1)*5 + i, (t - 1)*5 + j, 2) = m1_imag
+                  end do
+               end do
+            end do
+         end do
+      end do
+#ifdef USE_MPI
+      call MPI_ALLREDUCE(MPI_IN_PLACE, comm_real, size(comm_real), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, comm_imag, size(comm_imag), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+#endif
+      do na_glob = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + na_glob
+         if (.not. allocated(this%symbolic_atom(plusbulk)%potential%ldm_spinor)) &
+            allocate (this%symbolic_atom(plusbulk)%potential%ldm_spinor(10, 10))
+         if (.not. allocated(this%symbolic_atom(plusbulk)%potential%m1_spinor)) &
+            allocate (this%symbolic_atom(plusbulk)%potential%m1_spinor(10, 10))
+         this%symbolic_atom(plusbulk)%potential%ldm_spinor = &
+            cmplx(comm_real(na_glob, :, :, 1), comm_imag(na_glob, :, :, 1), rp)
+         this%symbolic_atom(plusbulk)%potential%m1_spinor = &
+            cmplx(comm_real(na_glob, :, :, 2), comm_imag(na_glob, :, :, 2), rp)
+         if (rank == 0) then
+            call spinor_dm_summary(this%symbolic_atom(plusbulk)%potential%ldm_spinor, &
+               this%symbolic_atom(plusbulk)%potential%ql(1, 2, 1), this%symbolic_atom(plusbulk)%potential%ql(1, 2, 2), line)
+            call g_logger%info('HUBBARD_SPINOR_DM backend=rs atom='//fmt('i4', na_glob)//' '//trim(line), __FILE__, __LINE__)
+         end if
+      end do
+      deallocate (comm_real, comm_imag)
+   end subroutine calculate_spinor_dm
 
    subroutine calculate_moments_gauss_legendre(this)
       use mpi_mod
