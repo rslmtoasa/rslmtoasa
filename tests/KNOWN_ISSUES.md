@@ -1865,9 +1865,10 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 - **C5.9 bounded rerun:** the exact Release lambda-zero deck on the pointer-fixed W1 source captured one complete stable iteration and was externally stopped; no crash occurred through that iteration. No RD4 energy was measured, and longer-run behavior remains untested.
 - **Disposition:** OPEN for RD4 energy/longer-run behavior; impurity energy routing remains off and no diagnostic energy term is adopted. The C5.8 cause and bounded regression are recorded in [`C5_8_RESULTS.md`](../docs/validation/fixed_ldau/rs/C5_8_RESULTS.md) and [`C5_8_RESULTS.json`](../docs/validation/fixed_ldau/rs/C5_8_RESULTS.json).
 
-## [OPEN, 2026-10-26] Ni gating host magnetic seed for S0b
+## [OPEN, 2026-10-26] Ni magnetic host collapses from supplied magnetic bulk seeds in S0b
 
-- The Ni host used for the gating workflow was non-magnetic. Recheck S0b with a magnetic host before treating the Ni result as representative.
+- The user-supplied Chebyshev/`rc=60` bulk references are magnetic: no-U `0.670705 μB`, explicit U=J=0 `0.670705 μB`, and U=4/J=1 eV `0.808656 μB`. Using the explicit-zero-U potential as the seed for the requested RS fcc block-recursion/`rc=80` U=0 host produced an RS-accepted endpoint with P_OUT q0-derived moment `7.5853e-8 μB` (saved post-mix state ql moment `1.6378e-9 μB`). Restarting from that endpoint with U=3/J=0.7 and `auto` (resolved to `local`) produced an RS-accepted endpoint with P_OUT q0-derived moment `1.3419e-8 μB` (saved post-mix state ql moment `4.8535e-9 μB`). Both are below the `0.4 μB` gate. RD2 and RD3(a) were not run because the S0b stop condition was met.
+- Recheck the magnetic host workflow before treating Ni impurity results as representative. Evidence and uncovered checks: [`S0B_RESULTS.md`](../docs/validation/fixed_ldau/S0B_RESULTS.md); corrected run artifacts are under `/private/tmp/s0b_ni_t1a_userseed` and `/private/tmp/s0b_ni_t1b_userseed`.
 
 ## [OPEN, 2026-10-22] KS-local host to RS impurity numerical equivalence for Ni
 
