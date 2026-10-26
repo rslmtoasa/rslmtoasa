@@ -54,6 +54,7 @@ add_library(${PROJECT_NAME} STATIC
     # lists.f90
     logger.f90
     math.f90
+    hubbard_spinor.f90
     mix.f90
     mpi.f90
     namelist_generator.f90
