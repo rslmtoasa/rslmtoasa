@@ -3120,6 +3120,8 @@ contains
             call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos( &
                this%lattice, m1_out=m1_out, m1_only=.true.)
          end if
+         if (this%control%nsp >= 2 .and. (this%hamiltonian%hubbard_spinor_dm_diagnostic .or. &
+             this%hamiltonian%hubbard_u_general_check)) call this%reciprocal_scf_cache%calculate_spinor_dm(this%lattice)
          call this%write_kspace_scf_dos_outputs(this%reciprocal_scf_cache)
 
          ! Canonical k-space EBAND is the projection-free occupied-eigenvalue
