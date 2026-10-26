@@ -1,0 +1,56 @@
+&calculation
+pre_processing = 'buildsurf'
+verbose = .true.
+/
+
+&lattice
+rc = 100
+alat = 3.5234
+crystal_sym = 'fcc'
+ntype = 4
+ct(1:4) = 4.0, 4.0, 4.0, 4.0
+r2 = 16.0
+wav = 1.37692
+surftype = '0 0 1'
+nlay = 3
+/
+
+&atoms
+database = './'
+label(1:4) = 'Ni', 'ES', 'Ni-S', 'Ni-S-1'
+/
+
+&self
+ws_all = .true.
+nstep = 2
+conv_thr = 5.0d-8
+/
+
+&energy
+fermi = -0.061141
+energy_min = -3.0
+energy_max = 1.5
+channels_ldos = 2500
+fix_fermi = .true.
+/
+
+&control
+calctype = 'S'
+nsp = 1
+lld = 200
+recur = 'chebyshev'
+/
+
+&mix
+beta = 0.005
+mixtype = 'broyden'
+/
+&hamiltonian
+hubbard_radial_moments = 'auto'
+hubbard_u_general(1,3) = 4.0
+hubbard_j_general(1,3) = 1.0
+hubbard_u_general(3,3) = 4.0
+hubbard_j_general(3,3) = 1.0
+hubbard_u_general(4,3) = 4.0
+hubbard_j_general(4,3) = 1.0
+/

@@ -1,0 +1,58 @@
+{
+  "bulk_dir": "/Users/andersb/Jobb/RS-utils/tmp/fccNi",
+  "charge_transfer_profile": "erf-derivative layer weights",
+  "charge_transfer_sigma_layers": 1.0,
+  "crystal_sym": "fcc",
+  "empty_sphere_initial_occupancy": 0.2,
+  "empty_spheres": 1,
+  "fermi": -0.061969,
+  "generated_atomic_files": [
+    "ES.nml",
+    "Ni-S-1.nml",
+    "Ni-S-2.nml",
+    "Ni-S-3.nml",
+    "Ni-S-4.nml",
+    "Ni-S.nml"
+  ],
+  "geometry_generation": "RS-LMTO buildsurf at calculation runtime",
+  "host_labels": [
+    "Ni"
+  ],
+  "miller_reduced": [
+    0,
+    0,
+    1
+  ],
+  "miller_requested": [
+    0,
+    0,
+    1
+  ],
+  "mixing_beta": 0.01,
+  "nlay": 6,
+  "ntype_bulk": 1,
+  "ntype_surface": 7,
+  "orientation": "preserve",
+  "output_crystal_sym": "fcc",
+  "rc": 100,
+  "schema_version": "rsutil-surface-setup-v1",
+  "self_steps": 15,
+  "staged_restart_files": [
+    "Ni.nml",
+    "Ni_out.nml",
+    "radial_ground_state_Ni_1.dat"
+  ],
+  "surface_grid": {
+    "n1": 32,
+    "n2": 32,
+    "n3": 32
+  },
+  "surface_labels": [
+    "ES",
+    "Ni-S",
+    "Ni-S-1",
+    "Ni-S-2",
+    "Ni-S-3",
+    "Ni-S-4"
+  ]
+}

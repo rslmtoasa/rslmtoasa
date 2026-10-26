@@ -76,6 +76,15 @@ class CheckedLauncherTest(unittest.TestCase):
         self.assertEqual(record["launch"]["returncode"], 0)
         self.assertEqual(self.marker.read_text(), "stub launch\n")
 
+    def test_runtime_chebyshev_keyword_passes_preflight(self) -> None:
+        deck_text = DECK_FIXTURE.read_text().replace("recur = 'block'", "recur = 'chebyshev'")
+        result, run_dir = self.run_deck("chebyshev", deck_text)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = json.loads((run_dir / "preflight.json").read_text())
+        self.assertEqual(record["status"], "RUN_COMPLETED")
+        self.assertEqual(record["preflight_result"]["recur"], "chebyshev")
+        self.assertEqual(self.marker.read_text(), "stub launch\n")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

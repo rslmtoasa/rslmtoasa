@@ -1,0 +1,239 @@
+{
+  "all_saved_output_potentials_have_zero_U_and_J": true,
+  "classification": "candidate; not auditor-accepted because no matching preflight.json and no 20-step log window",
+  "current_deck": {
+    "calctype": "S",
+    "fermi": -0.06242,
+    "hamiltonian_group_present": false,
+    "nlay": 6,
+    "nsp": 1,
+    "nstep": 1,
+    "sha256": "c9b33c5ef9ba0d5b2243b59808c1187cd07c636d9d5995a54ce78b1f814dd542"
+  },
+  "file_count": 99,
+  "files_sha256": {
+    "Cont/ES_out.nml": "fb583fee2525a7b3c39c2c271fad9975863b2befe6f48d7fcec76c8da4564613",
+    "Cont/Ni-S-1_out.nml": "8eaa6dad5171504fcfee0546d9a148f2f4c8f137c976ed941ac9918f59f46f47",
+    "Cont/Ni-S-2_out.nml": "5e8965095e277e3b0db88f41d2565f535edd3c842480e0c493db8928340bde5c",
+    "Cont/Ni-S-3_out.nml": "f13ec1a80c95ea80f02e06cdc19201b1e3b34a53f7aeb8659b0148a465879a6b",
+    "Cont/Ni-S-4_out.nml": "7b700f222c53adbaa1cce06bea022ebf344bbb50c61f302bc0a2f93e287ec5df",
+    "Cont/Ni-S_out.nml": "fddea769d901947f423af5b8fbfad5ff1e09d153d866681230b8f5c173ce19db",
+    "Cont/Ni_out.nml": "c59001649e0c81bb4f177d30e741adef3570bf8a0c087368a80445bf3b2dd6ce",
+    "Cont/input.nml": "a6319b15bd6b4a2ec2c63b676b895b2e0a6a50826c2c5fc708d4bfca9f59c336",
+    "Cont/linfo.out": "3117a829975c8b152d3e7af33a58b8da4ced987a1bbde0aaa72cb54765f79114",
+    "Conv/ES_out.nml": "1542b0ae4f48a91bd83b0506a21bcda326f78603004397fe647885871d43fcfd",
+    "Conv/Ni-S-1_out.nml": "ec0003e1cf931a5ce6a7ca00726e7d0aa4da153082c39871cb205f170fa58484",
+    "Conv/Ni-S-2_out.nml": "05e6a8dac66b3656a5bff6506ca46b2f54c2f362557abb2b73c9f35864b1ed63",
+    "Conv/Ni-S-3_out.nml": "ecf02e48cffa1623dfaf5c13007026ae6ed0fc56ec2ddc29aeb82930f0028ae0",
+    "Conv/Ni-S-4_out.nml": "de65dea3c82e8a90306063c58e300dcb862f5e073eca028d82abca8a08841bc9",
+    "Conv/Ni-S_out.nml": "d337492c667efb14a3382ad6089b859577ab25dc7f45e4819ecfccfa1da14dda",
+    "Conv/Ni_out.nml": "068cfa830e49cd508998688cedb2a306ff1d8c545c27ce0a06308cbd4177b684",
+    "ES.nml": "b7a2b9e6549e4668b6739dad9bf6075645a8e8c944bad1a5d96b63a94e30e5c4",
+    "ES_1_spinene.out": "55cbbadc13f38a95caa61218d499f7f09464aa4053f732bdb5e57ce1a722efdb",
+    "ES_dos.out": "e3217adaf34153558814e0c4846dc3f37b3194452502a26b2067d70a3d658db8",
+    "ES_orbene.out": "1fdab4b0178822e1c4505a08349cd80a2e65fb5f65a63ea0d7825905b8bf07c0",
+    "ES_orbital_dos.out": "422b342d380c3131351eeecde56c46459785c8f59f1766be1b7d6d406eb7abac",
+    "ES_out.nml": "907d7d084e84c3df84ab9b51eab2d587390ec9a8c6a6540a2d791878c93a034f",
+    "ES_scf.nml": "907d7d084e84c3df84ab9b51eab2d587390ec9a8c6a6540a2d791878c93a034f",
+    "Ni-S-1.nml": "2dd839c1cb0f28092390f64442354be8ddc431344e6857202721bd42cc87032d",
+    "Ni-S-1_3_spinene.out": "eb3795f30e9c0d2f5f47d8fd30a3901f3ad6efcce466e1a7274c239bf1f75d02",
+    "Ni-S-1_dos.out": "1f84fc98c463c4977b8846ec6b21902e7c4fa05c70e394c156236e30d92f6cf6",
+    "Ni-S-1_orbene.out": "57f6dc93bd596c0eeabf430b961ce1cefeb82edac8b6159345805d542d719064",
+    "Ni-S-1_orbital_dos.out": "18b8cd028afe5f027983624af7575fb9d5d0bf7fe314e12f200a9b6eebf6fe8e",
+    "Ni-S-1_out.nml": "1345fdd6d6b9ac3fa159631908ad80a1641c1385fa8260e3775a5365287901af",
+    "Ni-S-1_scf.nml": "1345fdd6d6b9ac3fa159631908ad80a1641c1385fa8260e3775a5365287901af",
+    "Ni-S-2.nml": "2355e31741ce6bc7ae8f21028641e2b8549e40c0e85e236ddd101d6e0581ac30",
+    "Ni-S-2_4_spinene.out": "b07bad91dc2a3822048c07499f10dce9b8a73419c643e53c7e7ebcc652c3a4b5",
+    "Ni-S-2_dos.out": "be29b1c084ff6edc4e952c1408a64b350ce59da65f302a07a2b8071cd39df723",
+    "Ni-S-2_orbene.out": "4d252d9fd03ba749e894b791d16d550e59e8e047becc4060555d48977beaaefc",
+    "Ni-S-2_orbital_dos.out": "3b6f65e76ee8e1370f6dda5e4f75b97b31c077954992f9e4cf95c5ace028bd46",
+    "Ni-S-2_out.nml": "76ecb05d73579c22bd64f41223d25197a5f7dd210daf0df5f057e2e557689a7e",
+    "Ni-S-2_scf.nml": "76ecb05d73579c22bd64f41223d25197a5f7dd210daf0df5f057e2e557689a7e",
+    "Ni-S-3.nml": "58cae04f57c0a470908337f9e1105086c3ace5c3fea1fa98f379154aa4a92a45",
+    "Ni-S-3_5_spinene.out": "6297f02d4b3aff583f834ae4060f31302a861f897e491838c82f65d65c960940",
+    "Ni-S-3_dos.out": "c7b93e84fdad00bbca0791cd719c7a455a02989168713da6f96fa6a732e10024",
+    "Ni-S-3_orbene.out": "6d366fdcb3737b9c64b1370666de4414f7f175650a44ce5ed74f4905d89539e8",
+    "Ni-S-3_orbital_dos.out": "dd53b9329610fe82a287b8d1b1402bec715adc2c72505725a7b5373d0ec07c96",
+    "Ni-S-3_out.nml": "29e3b03f90b10fb962e625827bcc270461e2961653a1dcdabcfe3854c305f2d6",
+    "Ni-S-3_scf.nml": "29e3b03f90b10fb962e625827bcc270461e2961653a1dcdabcfe3854c305f2d6",
+    "Ni-S-4.nml": "2a89c8237cfabce985756b0ee5ae6a89dcb7533182d0c04bfc0ec9692714f90c",
+    "Ni-S-4_6_spinene.out": "49d5c20953055fec4b49ea4aafcebb56c50e8303b004ac0a69fe48511d778243",
+    "Ni-S-4_dos.out": "0ec94260b98ad8c856ad45125a5cae0a86789b027c8bc6ea832d9b2fd7e1b788",
+    "Ni-S-4_orbene.out": "225545d82d38ca2dda73bfcabe4817d2567bf1342684c2045e969fe91e15c0f7",
+    "Ni-S-4_orbital_dos.out": "64a4b5410305e64eee22d9cb40f1de9057d87bd1ce3314f6b84e65b6954527c8",
+    "Ni-S-4_out.nml": "9acf758bc10b62901923611ea81ea03406cb29425c17dadcbc65406e71459f2c",
+    "Ni-S-4_scf.nml": "9acf758bc10b62901923611ea81ea03406cb29425c17dadcbc65406e71459f2c",
+    "Ni-S.nml": "6a211a54dba3db3827e54c065a01e4050215575b1cecb4c8825cb76b74064f76",
+    "Ni-S_2_spinene.out": "f7c021beaa8275a07a4618be8cc9cba96e03bf39a7d047b7781a405dd9fd4af1",
+    "Ni-S_dos.out": "530eac0611b4377804683515a0cc27280834d064fd22f2e0545643bd121617e0",
+    "Ni-S_orbene.out": "dcc4186689162319760ace15080c49251e318cc950c5e9f1f43fd9beda7f1564",
+    "Ni-S_orbital_dos.out": "8c971ece24d133947c52c43782c5bd99d4cb48e31aa015e045c97788e6d0a819",
+    "Ni-S_out.nml": "8c5359b53e74516260a146d74c00b9d1d413371d08b5e4c085ec0335afdf3a71",
+    "Ni-S_scf.nml": "8c5359b53e74516260a146d74c00b9d1d413371d08b5e4c085ec0335afdf3a71",
+    "Ni.nml": "1178e5f14f65b1f6b619f1a58560841be87973c7e020dcc4608203eb9ac9cdf3",
+    "Ni_out.nml": "068cfa830e49cd508998688cedb2a306ff1d8c545c27ce0a06308cbd4177b684",
+    "Ni_scf.nml": "068cfa830e49cd508998688cedb2a306ff1d8c545c27ce0a06308cbd4177b684",
+    "Ref/ES_out.nml": "8e1469c848089f94924e86836e3917e07d4c72003b07dac0b2dd92b164c8a659",
+    "Ref/Ni-S-1_out.nml": "affb4a57f2dd7b6e63abc142bda61d70e6e96e8c29420e1ae66dbd42d2b7fa52",
+    "Ref/Ni-S-2_out.nml": "f4f05bda0b39b1d4ca1c294134cd9017280a2a8a8d81d86aa5ab46a2572e9fdc",
+    "Ref/Ni-S-3_out.nml": "37bff3742315b896442c17d1c975bcc500abd39c23632c371f7f7912fc32fc58",
+    "Ref/Ni-S-4_out.nml": "561614a640d7cf2184beba78038406d8d9783b3e53f677523785b206fa6f37f7",
+    "Ref/Ni-S_out.nml": "63c00f6455538a79ec1c565b89b37f6580d324779fc1e83cf660d99ac26d6e48",
+    "Ref/Ni_out.nml": "c59001649e0c81bb4f177d30e741adef3570bf8a0c087368a80445bf3b2dd6ce",
+    "Ref/input.nml": "6d077c968b158ea9cbf82eccd25e4f0888e8ee993c39b3835f537e28d141155b",
+    "Ref/linfo.out": "ea7378fd8924ea97b81746c9471bec2976a5cde6de178a7cb14d6fe689b81b35",
+    "alelay.out": "01b65b50b7a547565979f5b10e512b4cb18f769f9f0588a5408d4d5669addaf9",
+    "angles_lmom.out": "6c9299df436b083258221d315fa4f6ec78b821bcf361525c00c2e9d8e31111e4",
+    "angles_magmom.out": "29ffec7e4d76558dc6c6e6ef2ed3123411498fef8c31a4dd1d67bf0a72b45578",
+    "clust": "f5ff97070e7827680bf7bdf193e0123c775accc9af7f30c3f35adcfe00870bd7",
+    "fort.120": "916062594517351a7b827706f8623d8337017ec29d75f9a862899f202c787dce",
+    "fort.800": "9ad8ed7cf538f4950daead12cd01c89a3988a3925628133bfc6400d0fa7b78b6",
+    "fort.805": "330d4dd8577abce7a40a9ac6f48cd3f981978ca551887fe8540842f19466a07e",
+    "input.nml": "c9b33c5ef9ba0d5b2243b59808c1187cd07c636d9d5995a54ce78b1f814dd542",
+    "linfo.out": "841f66c38347d56cd79e5f2d787c114645d1077fec548427f998adf31386dc0f",
+    "magneticdos.out": "ccf6e77398a60381b867245e281d5412abe996927766af06e62dc50cf4adf0c6",
+    "map": "17776e8ceefb0ca36e00027b92c0b8538f05e5bc06a641cf1c53174cd613b15f",
+    "minfo.out": "3d8fac7ee91afc7a3714208a08224fb5a60a269612ed370024d627abd86740f2",
+    "out.scf": "3690f5cf7dbf544a2f4507012f8b94b4ce55cbb52257716ac44b0a27def2ccf1",
+    "out.scf.before_user_log_correction": "3f9c574d560f4ecfdb4b9d4470593ce6ca7cd57611ab8178f29e1d02869fa80b",
+    "out.surf": "3690f5cf7dbf544a2f4507012f8b94b4ce55cbb52257716ac44b0a27def2ccf1",
+    "radial_ground_state_ES_1.dat": "53b40efc3aca189e4b18e867c51d6d6a91d4e61162f1b3daa29efd7594ccbfac",
+    "radial_ground_state_Ni-S-1_3.dat": "f07f53226b789ccb518de9919ff4c08e3c41b97129b3ffb44e88f1aea9b6813a",
+    "radial_ground_state_Ni-S-2_4.dat": "6ad730b43b1349c3113f9d98fef5c27e7f5bdeee07eca03de483a9a289ad0e75",
+    "radial_ground_state_Ni-S-3_5.dat": "df3bf91c6dbf588f1a0c32d1c5de14bf63bbb9b4879c75416af726f559276a44",
+    "radial_ground_state_Ni-S-4_6.dat": "98b4df0dd925c35ee21cb6f08533b2cfe7bf36732cbf02210db5276868dfb947",
+    "radial_ground_state_Ni-S_2.dat": "260a130abdb3fc0434d3659cb81c048cac598a781d2269ba6c139bc4ac5c2d06",
+    "radial_ground_state_Ni_1.dat": "1ba3060881fae5814fd5f426a605a7895b0cade6da94cfdb1c778b2c75e31af3",
+    "report.out": "c31c4c3879237b19039aa7f433c22cba613273a8ec6bde62633a6c7b60193154",
+    "sbar": "2c4ec369833c2bc0a9d5a2cb277c3b255055b6c8a8ad2daaad0d4d0d54f9c0f6",
+    "str.out": "97ec3a9b183f9e75ea67af50fd107b198f72fbe70d328d3ef3e4f05e2ebababd",
+    "surface_setup.json": "82f5032f1c6eff3edf831fc04adbcdb24fb8462a1d7d4dd690191b3d8ddb9111",
+    "surfclu.out": "86d8509a1a90c9b8973f92389c493cc0a787522d1ca0d4c162a58e880c2c74a3",
+    "totaldos.out": "66f8ac4d117f78659e42af0213caa89312f785318c0d3d8630359bd95686c442",
+    "view.sbar": "50235153482ebe3872f15d1c47b1890234ba70dd0e85a60c4fb1ca7469839785"
+  },
+  "matched_stdout": {
+    "completed_marker": true,
+    "diff_records": 1,
+    "final_diff": 6.68e-08,
+    "last_20_diff_spread": null,
+    "out_scf_equals_out_surf": true,
+    "out_scf_sha256": "3690f5cf7dbf544a2f4507012f8b94b4ce55cbb52257716ac44b0a27def2ccf1",
+    "out_surf_sha256": "3690f5cf7dbf544a2f4507012f8b94b4ce55cbb52257716ac44b0a27def2ccf1"
+  },
+  "saved_output_potentials": [
+    {
+      "file": "ES_out.nml",
+      "hubbard_j": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hubbard_u": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "zero": true
+    },
+    {
+      "file": "Ni-S-1_out.nml",
+      "hubbard_j": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hubbard_u": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "zero": true
+    },
+    {
+      "file": "Ni-S-2_out.nml",
+      "hubbard_j": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hubbard_u": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "zero": true
+    },
+    {
+      "file": "Ni-S-3_out.nml",
+      "hubbard_j": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hubbard_u": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "zero": true
+    },
+    {
+      "file": "Ni-S-4_out.nml",
+      "hubbard_j": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hubbard_u": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "zero": true
+    },
+    {
+      "file": "Ni-S_out.nml",
+      "hubbard_j": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hubbard_u": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "zero": true
+    },
+    {
+      "file": "Ni_out.nml",
+      "hubbard_j": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hubbard_u": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "zero": true
+    }
+  ],
+  "scf_runs_performed_by_this_inspection": 0,
+  "schema": "c6_5_ni001_candidate_snapshot_v1",
+  "snapshot_refresh": "out.scf refreshed from user-provided same-folder stdout; previous copied out.scf retained as out.scf.before_user_log_correction",
+  "source_directory": "/Users/andersb/Jobb/RS-utils/tmp/Cheb/fccNi001",
+  "surface_setup_metadata": {
+    "bulk_dir": "/Users/andersb/Jobb/RS-utils/tmp/fccNi",
+    "fermi": -0.061969,
+    "mixing_beta": 0.01,
+    "self_steps": 15
+  },
+  "unresolved_evidence_gaps": [
+    "No preflight.json from the original run is present; C6.5 audit rules do not accept a run without its matching preflight record.",
+    "The copied current stdout contains one Diff record only, so a 20-step convergence window is not available in this run log.",
+    "The current deck/log Fermi value (-0.062420) differs from surface_setup.json bulk Fermi metadata (-0.061969); identify the authoritative host endpoint and input provenance."
+  ]
+}

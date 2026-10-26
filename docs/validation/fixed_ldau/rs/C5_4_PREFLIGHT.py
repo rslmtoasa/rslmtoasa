@@ -48,7 +48,11 @@ def check(run, deck, restart, guard, host_ef_trace=None):
     ignored=validate(nml, deck)
     host_ef_check = check_host_fermi(nml, host_ef_trace) if host_ef_trace else None
     ctl = nml.get("control", {}); selfn = nml.get("self", {})
-    if ctl.get("recur") not in ("block", "cheby"): raise SystemExit("recur missing/unsupported")
+    # Keep this list aligned with self%run_recursion, which dispatches on
+    # 'block' and 'chebyshev'. The shorter 'cheby' spelling is not a runtime
+    # alias and made the preflight reject valid user decks while accepting an
+    # unsupported spelling.
+    if ctl.get("recur") not in ("block", "chebyshev"): raise SystemExit("recur missing/unsupported")
     use_kspace=selfn.get("use_kspace", False); default_source="explicit"
     if "use_kspace" not in selfn:
         lines=(REPO/"source/self.f90").read_text().splitlines()

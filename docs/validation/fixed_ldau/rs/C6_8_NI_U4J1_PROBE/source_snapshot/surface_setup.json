@@ -1,0 +1,55 @@
+{
+  "bulk_dir": "/home/andersb/Nano/RS_references/Surface/Cheb/fccNi",
+  "charge_transfer_profile": "erf-derivative layer weights",
+  "charge_transfer_sigma_layers": 0.5,
+  "crystal_sym": "fcc",
+  "empty_sphere_initial_occupancy": 0.2,
+  "empty_spheres": 1,
+  "fermi": -0.06242,
+  "generated_atomic_files": [
+    "ES.nml",
+    "Ni-S-1.nml",
+    "Ni-S.nml"
+  ],
+  "geometry_generation": "RS-LMTO buildsurf at calculation runtime",
+  "host_labels": [
+    "Ni"
+  ],
+  "inplane_bond_alignment": null,
+  "miller_reduced": [
+    0,
+    0,
+    1
+  ],
+  "miller_requested": [
+    0,
+    0,
+    1
+  ],
+  "mixing_beta": 0.01,
+  "nlay": 3,
+  "ntype_bulk": 1,
+  "ntype_surface": 4,
+  "orientation": "preserve",
+  "output_crystal_sym": "fcc",
+  "rc": 100,
+  "rotation_matrix_cartesian": null,
+  "schema_version": "rsutil-surface-setup-v1",
+  "seed_surface_dir": null,
+  "self_steps": 15,
+  "staged_restart_files": [
+    "Ni.nml",
+    "Ni_out.nml",
+    "radial_ground_state_Ni_1.dat"
+  ],
+  "surface_grid": {
+    "n1": 32,
+    "n2": 32,
+    "n3": 32
+  },
+  "surface_labels": [
+    "ES",
+    "Ni-S",
+    "Ni-S-1"
+  ]
+}

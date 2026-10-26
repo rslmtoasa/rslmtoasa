@@ -164,3 +164,13 @@ error on U=3/J=0.7, but the two-step Diff was 0.3869175281, above the approved 5
 Per the gate-failure stop rule, Cu T3 and T4 were not run. Detailed deck audit, preflight evidence,
 occupations, moments, and raw artifact hashes are in `C6_6_SURFACE_PROBE_RESULTS.md`. The
 user-supplied six-layer no-U snapshot is still not an accepted reference under C5.3 item 2.
+
+C6 follow-up direction (2026-10-25; verbatim user instruction):
+
+> YEs, but that target is not relevant for surfaces like these. We should increase that tolerance, but regardless you must agree that the noU vs zeroU being identical is relevant regardless of level of convergence. So the zero-U gate comparison is now solved. Document it and proceed.
+
+Disposition: the no-U versus explicit-zero-U equivalence comparison is a separate gate and passes
+independently of convergence. The previous `Diff <= 5e-8` criterion is not used to judge that
+equivalence. The user has asked for a higher tolerance for surface response probes; this direction
+does not specify its replacement numerical value. The user-run comparison and its limitations are
+recorded in `C6_7_ZERO_U_COMPARISON/RESULTS.md`.

@@ -1908,6 +1908,22 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
   charge/density response from the bulk-potential seed and is not fixed by beta reduction; later
   convergence remains unevaluated. See `docs/validation/fixed_ldau/rs/C6_6_CAPTURE_FIX_RESULTS.md`
   and its archived preflight-bound evidence.
+- **User Ni(001) zero-U comparison (2026-10-25):** the user-run no-U deck and explicit U=J=0 deck
+  produce identical physical output for their one-step runs, so the zero-U deck-equivalence gate
+  passes independently of convergence. Both report Diff `7.71e-8`; this does not test nonzero U.
+  The user states that the `5e-8` threshold is unsuitable for these surface probes and should be
+  raised; a replacement value remains unspecified. These outputs had no C6.5 preflight record and
+  are documented as a zero-U comparison, not checked smoke evidence. Follow-up checked U=3/J=0.7
+  diagnostics selected local mode, but Chebyshev runs produced NaN projected DOS / `g0` and stopped
+  at the local moment correction. Widening the energy window from `0.5` to `1.5` Ry did not change
+  the failure. A block-recursion diagnostic was interrupted after it stopped producing output and
+  is inconclusive. A later user Ni U=4/J=1 probe completed one widened-window step (Diff 0.0232231)
+  but step 2 again produced NaNs and the status-5 local-moment fatal. The user-supplied magnetic
+  `Ni_out.nml` was not used as the bulk regeneration seed; the symmetric accepted Ni seed yielded
+  very small moments. A type-4-off attempt was invalid because the copied restart potential itself
+  embedded U/J. The zero-U equivalence gate is closed; the nonzero-U response remains OPEN. See
+  `docs/validation/fixed_ldau/rs/C6_7_ZERO_U_COMPARISON/RESULTS.md` and
+  `docs/validation/fixed_ldau/rs/C6_8_NI_U4J1_PROBE/RESULTS.md`.
 - C6 stopped after the failed RS smoke gate; Cu T3 and workflow documentation/merge remain
   unrun. Surface Hubbard-energy routing remains OFF. C6.5's checked launcher is mandatory for
   campaign runs.
