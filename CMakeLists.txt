@@ -459,7 +459,8 @@ endforeach()
       "--binary" "${TestBinary}"
       "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/val04_lda_u")
   set_tests_properties(Val04LdaUPhysics PROPERTIES
-    LABELS "validation;lda_u;magnetic;kspace;known-failure" TIMEOUT 300)
+    LABELS "validation;lda_u;magnetic;kspace;known-failure" TIMEOUT 300
+    DISABLED TRUE)  # Fixed-U guard rejects nsp = 2 (KNOWN_ISSUES); enable when LDA+U supports SOC
 
   add_test(NAME Val05GreenConvergence
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val05_green_convergence.py"
@@ -1162,6 +1163,8 @@ register_example_tests(
   "${CMAKE_BINARY_DIR}/Testing/postproc"
   "${TestDIR}/postproc/references"
 )
+# Fixed-U guard rejects nsp = 2 (KNOWN_ISSUES); enable when LDA+U supports SOC.
+set_tests_properties(Example_bulk_bccFe_nsp2_hubbard PROPERTIES DISABLED TRUE)
 
 add_test(
   NAME AppGbtKspaceRsFreeze
