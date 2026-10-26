@@ -1964,3 +1964,9 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 
 - `Val04RsImpurityEnergyDiagnostic` (`rs_embedding_ra1.py`): the reported and independently evaluated impurity energies differ by 1.24e-12 Ry against a 1e-12 tolerance. The original script with the `90f57c3` binary gives identical numbers, so it is not caused by S0. Tolerance not touched.
 - `Example_bulk_bccFe_nsp2_hubbard` (quick tier): fatal "Fixed-U LDA+U currently requires collinear scalar-spin input" for an `nsp=2` deck. The `90f57c3` binary stops with the same fatal.
+
+## [OPEN, 2026-10-26] `calctype='B'` with an impurity cluster stops in the local Hubbard correction even at U=0
+
+- **Verified:** the user's Ni impurity deck (`example/impurity/fccNi`, `pre_processing='newclubulk'`, two types, Chebyshev, `hubbard_radial_moments='local'`, all U/J zero) with `calctype='B'` stops with "Unable to map local d-shell Hubbard potential" (`bands.f90`, `extract_hubbard_d_shell_potential`) after the first recursion. The log shows a freely solved E_F of +0.002069 Ry against the host's -0.0635. The same deck with only `calctype='I'` runs (preflight host-E_F check passed; one step gave an impurity moment of 0.682485 muB, Diff 1.66e-3). The stop reproduces with a converged magnetic U=0 host in place of the example's `Ni_out.nml`, so it does not depend on the host file.
+- **Not verified:** the cause. The code path for `B` uses `itype_local = ib(na_glob)`, the geometric representative index, which can exceed the number of Hubbard types; this matches the symptom but was not instrumented.
+- **Proposal (not done):** a fatal at input time for `calctype='B'` with an impurity-cluster pre-processing, or skipping the correction when no atom carries U/J. About 10 lines.
