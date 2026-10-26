@@ -92,6 +92,9 @@ Implementation status
   [VAL-04]. Validated scope: KS and RS bulk energies for fixed d-shell U/J;
   RS impurity density only. Surfaces are experimental. The Dudarev validation
   limit is ``J=0`` with ``U``; this does not validate arbitrary J.
+  Chebyshev recursion with fixed U is not validated: the on-site Green function and
+  occupation matrices are deterministic, but a bcc Fe block-versus-Chebyshev comparison at
+  U=2 eV differed in E_F by 9.75e-4 Ry against 2.7e-5 Ry at U=0 (see ``tests/KNOWN_ISSUES.md``).
 - ``acbn0`` potential path:
   optional path is available, but should currently be treated as an
   implementation-in-progress path for validation studies.
