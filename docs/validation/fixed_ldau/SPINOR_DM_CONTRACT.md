@@ -68,3 +68,21 @@ Production smoke, U=0, flag on, 4 steps, single-threaded (RECORDS, not gates):
 | Current guard | `hamiltonian_build.f90:756`: fixed U with SOC or noncollinear spinors is fatal. |
 | SOC scaling | `soc_scale` in `&self` (default 1.0) multiplies `xi_p` and `xi_d` of every symbolic atom (`self.f90:1787`); there is no knob in `&hamiltonian` or `&control`. |
 | Density policies | `control%density_policy` is `constrained_spiral` (default) or `relaxed_reference`; any other value is fatal (`control.f90:793`). Both resolve a per-site axis from `constraint_target` if nonzero, else `potential%mom` (z if that is zero) via `resolve_site_axis`/`set_axis`, and every later radial spin projection uses that axis. Under `constrained_spiral` the reference stays fixed and the unabsorbed transverse density is reported as residual and torque; under `relaxed_reference` the reference `potential%mom` follows the density. The axis is therefore z only when `mom` is along z and no constraint target is set. |
+
+## Spinor V insertion at nsp=2 (S3; experimental, not merged)
+
+Key `hubbard_soc_experimental` (default `.false.`). With fixed U, `nsp=2` and the key on: the nsp>=2 guard is lifted for `nsp=2` only; `calctype` other than `B`, a `density_policy` other than `constrained_spiral`, a `constraint_target`, or a site reference axis with |x| or |y| above 1e-8 is fatal; `hubbard_radial_moments` `local` and `auto` become `spectral` with a warning. `calculate_hubbard_u_potential_general` fills the d block of `hubbard_u_pot` from `hubbard_spinor_functional` and the spinor P (`ldm_spinor`, or the collinear `ldm` blocks before the first extraction), rows and columns `(sigma-1)*spin_off+4+i`, including the up-down blocks; the existing build routines add it once. Energy routing is unchanged (off).
+
+Operator test `UnitLdaUSocInsertion` (bcc Fe nsp=2, U=2 eV, J=0.5 eV, a frozen Hermitian P with |V_up,dn| = 1.9e-2): inserted block minus the no-U build against the S1 V, RS `ee` 4.3e-19 and KS H(k) 1.4e-17 and 2.8e-17 (limit 1e-14); controls that must exceed 1e-14: 2V (count) 1.9e-2, transposed V 3.4e-2, spin-diagonal blocks only 1.9e-2. Collinear limit (zero coherences) against the existing path 1.9e-16 (limit 1e-14); control with coherences 2.7e-2. Guard cases (all stop with the stated message): `Example_impurity_soc_u_guard`, `Example_bulk_bccFe_soc_u_policy_guard`, `Example_bulk_bccFe_soc_u_tilted_axis_guard`; `Example_bulk_bccFe_nsp2_hubbard` (flag off) still stops at the SOC guard.
+
+SOC -> 0 in production (bcc Fe, RS block, nsp=2 with `soc_scale=0` against nsp=1, 4 steps, fresh deck copies, single-threaded; differences nsp=2 minus nsp=1):
+
+| quantity | (c0) U=0 baseline | (c1) U=2/J=0 spectral, flag on | bound max(1e-10, 10 x c0) | (c1) soc_scale=1 control |
+|---|---|---|---|---|
+| d occupation up (`ql`) | 8.0e-5 | 3.8e-5 | 8.0e-4 | 3.6e-5 |
+| d occupation down (`ql`) | 3.6e-5 | 2.0e-5 | 3.6e-4 | 1.6e-5 |
+| moment from `ql` | 1.7e-5 | 5.8e-5 | 1.7e-4 | 5.2e-5 |
+| E_F (6 printed decimals) | 7.2e-5 | 3.0e-4 | 7.2e-4 | 3.0e-4 |
+| logged "Spin moment of atom 1" | 8.8e-5 | **2.83e-3** | 8.8e-4 | 2.89e-3 |
+
+The logged spin moment exceeds the bound. Per-iteration values of the two (c1) runs are identical at iteration 1 (spin moment 2.101202, E_F -0.003690, Diff 2.30e-2 in both) and differ from iteration 2 (1.8e-3, 2.5e-3, 2.8e-3). The U=0 pair differs at iteration 2 by 2.0e-5. The +U runs are far from converged (Diff 2.6e-2 after 4 steps against 9e-6 for U=0), so the same path difference is amplified; this reading was not tested further. Only the iteration-1 spin moment separates soc_scale=1 from soc_scale=0 (8.1e-4); later iterations are dominated by the path difference, so the control does not discriminate at 4 steps (E_F and the `ql` quantities are below the bound for the control). Not run: the 100-step SCF smoke (T2(d)) and the merge.
