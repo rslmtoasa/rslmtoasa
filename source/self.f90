@@ -1798,6 +1798,7 @@ contains
       this%init = init
       this%cold = cold
       this%use_kspace = use_kspace
+      radial_mode_reason = 'n/a'
       radial_mode_defaulted = trim(this%hamiltonian%hubbard_radial_moments) == 'auto'
       if (trim(this%hamiltonian%hubbard_radial_moments) == 'auto') then
          if (this%is_eligible_local_moments(radial_mode_reason)) then
