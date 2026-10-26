@@ -106,3 +106,26 @@ bcc Fe, RS block recursion, `recur='block'`, beta 0.01 Broyden, fresh deck copie
 | E_F (6 printed decimals) | -1.1e-4 | -2.9e-5 | 0.3 | 1.1e-3 | PASS |
 
 States: U=0 nsp=2 / nsp=1 moment 2.104064 / 2.103830; U=2 nsp=2 / nsp=1 2.380491 / 2.386010. The nsp=2 minus nsp=1 difference changes sign between U=0 and U=2, so it is not a simple amplification of the U=0 offset. The cause is not identified. Established: the V insertion matches the collinear V at the first two builds (S3.1 trace), the spinor block fill equals the collinear path for zero coherences (1.9e-16), and the nsp=2 and nsp=1 converged states already differ by 2.3e-4 at U=0.
+
+### S3.2: the SOC-to-zero comparisons need `fix_soc`
+
+Cause of the nsp=2 versus nsp=1 offsets recorded above (S3 c0/c1 and S3.1): `soc_scale` multiplies `xi_p` and `xi_d` once, when the restart potential is read (`self.f90:1787`); after every atomic SFC `xi_p`, `xi_d` and `rac` are recomputed from the radial potential unless `fix_soc = .true.` (`self.f90:5711`). With `soc_scale=0` alone SOC is off in iteration 1 only. That matches iteration-1 equality and divergence from iteration 2, the same offset in RS and KS, and `soc_scale=0` giving the same converged state as `soc_scale=1`. Those earlier comparisons therefore measured the real SOC effect, not a spinor-path difference. The valid SOC-to-zero test is `soc_scale=0` with `fix_soc=.true.`.
+
+KS gate (bcc Fe, `k_space_scf/bccFe` namelists with `lmax=2`, 12x12x12 mesh, fresh deck copies, all runs converged to Diff < 1e-8; nsp=2 with `soc_scale=0`, `fix_soc` against nsp=1; U=2 eV, J=0, spectral, flag on for nsp=2):
+
+| quantity (nsp=2 minus nsp=1) | A0, U=0 | A1, U=2 | bound max(1e-7, 10 x A0) | A1 control: `soc_scale=1` |
+|---|---|---|---|---|
+| d occupation up (`ql`) | 0 | 9.4e-10 | 1e-7 | 1.27e-3 (exceeds) |
+| d occupation down | 0 | 5.2e-10 | 1e-7 | 1.00e-3 (exceeds) |
+| moment from `ql` | 0 | 1.4e-9 | 1e-7 | 2.40e-3 (exceeds) |
+| logged spin moment (6 decimals) | 0 | 0 | 1e-7 | 2.39e-3 (exceeds) |
+| E_F (6 decimals) | 0 | 0 | 1e-7 | 2.7e-4 (exceeds) |
+| P diagonal blocks (dm sidecar) | n/a | 6.7e-11 | 1e-7 | 2.06e-2 (exceeds) |
+
+GATE passes. The same runs without `fix_soc` (soc_scale only) differ from nsp=1 by 2.4e-4 (U=0) and 1.2e-3 to 2.4e-3 (U=2) in the d occupations and moments, and equal the `soc_scale=1` runs to 1e-8.
+
+RS (bcc Fe, RS block, 200 steps, `conv_thr=1e-30`, same decks as S3.1 plus `fix_soc`): nsp=2 with `soc_scale=0`, `fix_soc` reproduces nsp=1 at every iteration: the per-iteration logged spin moment, E_F and Diff differ by 0.0 over 200 iterations at U=0 and at U=2 (J=0, spectral, flag on), and the final `ql` occupations agree in every printed digit; the potential files differ only in `xi_p`, `xi_d`, `rac` and the sidecar's `spinor_d` blocks (zeros). The nsp=1 +U trajectory itself stalls at Diff 2.7e-6 (beta 0.01), so that pair is compared at equal step count, not at convergence. The RS recursion-terminator diagnosis (S3.2 B) was not needed: there is no RS offset to explain.
+
+Real SOC effect (converged, nsp=2 full SOC minus nsp=1; moment from `ql`): RS U=0 +2.3e-4 (2.104064 against 2.103830), RS U=2 -5.5e-3 (2.380491 against 2.386010); KS U=0 -2.8e-4 (2.086904 against 2.087188), KS U=2 -2.35e-3 (2.353949 against 2.356302).
+
+Smoke (T2(d)): bcc Fe, nsp=2, RS block, U=2 eV, J=0, flag on, spectral, `soc_scale=1` (default), fixture seed, 100 steps, `conv_thr=1e-30`, `hubbard_spinor_dm_diagnostic` on. GATE (final Diff <= 1e-7, 20-step spreads <= 1e-5, no guard or NaN): Diff 1.0e-8 (window maximum 4.8e-8), 20-step spread of the logged moment 1.0e-6 and of E_F 0, no fatal or NaN: passes. Records: spin moment 2.380490 muB, orbital moment 0.0979 muB along z (0.0417 muB at U=0 converged, same code and seed); max |P_up,dn| 1.26e-2 at the first step and 1.53e-2 at the last (1.245e-2 at U=0, S2); P eigenvalues in [0.270, 0.964]; Hermiticity 0 and |trace - ql| 1.6e-14 (both by construction in RS).
