@@ -377,3 +377,10 @@ Hubbard screen output
 prints run setup and compact per-iteration site summaries, ``detailed`` adds
 per-site density, physicality, and energy diagnostics, and ``debug`` prints
 the full diagnostic stream.
+
+``hubbard_spinor_dm_diagnostic`` (default ``.false.``) extracts the full 10x10
+spinor d-shell occupation ``P`` and energy-weighted ``M1`` at ``nsp>=2`` (RS and
+KS) and logs ``HUBBARD_SPINOR_DM`` per site. It is a diagnostic: the Hamiltonian
+does not use these matrices and fixed U with ``nsp>=2`` still stops. The spin-off-diagonal
+blocks of ``P`` are written to the dm file when the array is present
+(see ``docs/validation/fixed_ldau/SPINOR_DM_CONTRACT.md``).
