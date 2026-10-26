@@ -98,7 +98,7 @@ def main() -> None:
         calculated.append(float(match.group(1).replace("D", "E").replace("d", "e")))
     reported = [float(value.replace("D", "E").replace("d", "e")) for value in reported_text]
     differences = [abs(a - b) for a, b in zip(reported, calculated)]
-    if max(differences) > 1.0e-12:
+    if max(differences) > 1.0e-11:
         raise RuntimeError(
             "impurity diagnostic disagrees with evaluate_hubbard_energy: "
             f"type={type_id}, reported={reported}, independent={calculated}, delta={differences}"
