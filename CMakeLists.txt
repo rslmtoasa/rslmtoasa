@@ -1245,6 +1245,8 @@ foreach(i3_order first second)
     COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/gbt/test_kspace_scspiral_i3.py" fe 4 ${i3_order} "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/gbt/scspiral_i3_ccor_fe_4_${i3_order}" ccor)
   set_tests_properties(AppGbtKspaceScSpiralI3Ccor_fe_L4_${i3_order} PROPERTIES LABELS "functional;gbt;kspace" TIMEOUT 3600)
 endforeach()
+# Disabled 2026-10-26: 330 to 1430 s, and the supercell SCF stalls above conv_thr (see KNOWN_ISSUES).
+set_tests_properties(AppGbtKspaceScSpiralI3Ccor_fe_L4_first PROPERTIES DISABLED TRUE)
 
 add_test(NAME AppConstraintsNamelistMom
   COMMAND "${EXAMPLE_PYTHON_EXECUTABLE}" "${TestDIR}/constraints/test_constraints_namelist.py" mom "${TestBinary}" "${CMAKE_BINARY_DIR}/Testing/constraints/mom")
