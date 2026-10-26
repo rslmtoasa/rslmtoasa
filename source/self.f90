@@ -880,6 +880,12 @@ contains
          eligible = this%is_eligible_local_hubbard()
          local_reason = 'existing fixed-U clean-bulk eligibility'
          if (.not. eligible) local_reason = 'bulk is outside existing fixed-U clean-bulk eligibility'
+         ! nsp=2 spinor U (experimental): local radial moments only; the Hubbard energy stays unrouted.
+         if (.not. eligible .and. this%hamiltonian%hubbard_soc_experimental .and. this%control%nsp == 2 .and. &
+             this%hamiltonian%hubbard_u_general_check .and. this%control%lmax == 2 .and. .not. this%hamiltonian%hoh) then
+            eligible = .true.
+            local_reason = 'spinor fixed-U bulk (hubbard_soc_experimental)'
+         end if
          if (present(reason)) reason = trim(local_reason)
          return
       end if
@@ -2880,6 +2886,8 @@ contains
       real(rp), allocatable :: kspace_spin_mom(:,:)
       complex(rp), allocatable :: local_m1(:, :, :, :, :)
       complex(rp) :: p_d(5, 5), m1_d(5, 5), v_d(5, 5)
+      complex(rp) :: v_spinor(10, 10)
+      real(rp) :: q0_spin(2), c_spin(2), q2_spin(2), c_local_spin(2), q2_local_spin(2), t_local_spin(2)
       real(rp) :: q0_d, center_d, q2_d, center_local, q2_local, t_local
       integer :: moment_status, site_type
       logical :: use_shifted_kmesh
@@ -2981,6 +2989,8 @@ contains
             allocate(local_m1(this%lattice%nrec, lmax_basis + 1, 2, 2*lmax_basis + 1, 2*lmax_basis + 1))
             call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos(this%lattice, &
                fixed_liechtenstein=.true., m1_out=local_m1)
+            if (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental) &
+               call this%reciprocal_scf_cache%calculate_spinor_dm(this%lattice)
             if (present(m1_out)) then
                m1_out(:, 1:size(local_m1, 2), 1:size(local_m1, 3), &
                   1:size(local_m1, 4), 1:size(local_m1, 5)) = local_m1
@@ -3008,6 +3018,31 @@ contains
                   this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 3)**2 * this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 1)
                if (l == 2 .and. allocated(local_m1)) then
                   site_type = this%lattice%ib(ia)
+                  if (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental) then
+                     ! nsp=2 spinor operator: both radial spin channels from the full 10x10 P, M1 and V_in.
+                     call extract_hubbard_d_spinor_potential(this%hamiltonian%hubbard_u_pot, site_type, spin_off, &
+                        v_spinor, moment_status)
+                     if (moment_status /= 0) call g_logger%fatal( &
+                        'Unable to map local d-shell spinor Hubbard potential in reciprocal path.', __FILE__, __LINE__)
+                     if (maxval(abs(v_spinor)) == 0.0_rp) cycle
+                     do li = 1, 2
+                        q0_spin(li) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(1, 2, li)
+                        c_spin(li) = this%reciprocal_scf_cache%band_moments(ia, 3, li, 2)
+                        q2_spin(li) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(3, 2, li)
+                     end do
+                     call correct_d_shell_moments_spinor(this%symbolic_atom(this%lattice%nbulk + ia)%potential%ldm_spinor, &
+                        this%symbolic_atom(this%lattice%nbulk + ia)%potential%m1_spinor, v_spinor, q0_spin, c_spin, &
+                        q2_spin, c_local_spin, q2_local_spin, t_local_spin, moment_status)
+                     if (moment_status /= 0) call g_logger%fatal( &
+                        'Invalid local d-shell spinor Hubbard moment correction in reciprocal path; status='// &
+                        fmt('i0', moment_status), __FILE__, __LINE__)
+                     do li = 1, 2
+                        this%symbolic_atom(this%lattice%nbulk + ia)%potential%gravity_center(3, li) = &
+                           c_local_spin(li) - this%symbolic_atom(this%lattice%nbulk + ia)%potential%vmad
+                        this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(3, 2, li) = q2_local_spin(li)
+                     end do
+                     cycle
+                  end if
                   do li = 1, 2
                      q0_d = this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(1, 2, li)
                      center_d = this%reciprocal_scf_cache%band_moments(ia, 3, li, 2)

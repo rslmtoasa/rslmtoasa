@@ -148,8 +148,8 @@ module math_mod
    public :: init_math_operators
    public :: hubbard_projector_element, hubbard_spectral_density_element
    public :: hubbard_density_diagnostics, spinor_dm_summary
-   public :: correct_d_shell_moments
-   public :: extract_hubbard_d_shell_potential
+   public :: correct_d_shell_moments, correct_d_shell_moments_spinor
+   public :: extract_hubbard_d_shell_potential, extract_hubbard_d_spinor_potential
    public :: fixed_impurity_atom_carries_uj
    public :: auto_impurity_local_host_eligible
 
@@ -324,6 +324,98 @@ contains
          end do
       end do
    end subroutine extract_hubbard_d_shell_potential
+
+   !> Full 10x10 on-site d-shell block (index (sigma-1)*5+(m+3)) of the operator stored in the
+   !> Hamiltonian, including the spin-off-diagonal blocks.
+   subroutine extract_hubbard_d_spinor_potential(hubbard_u_pot, site_type, spin_off, v_d, status)
+      complex(rp), intent(in) :: hubbard_u_pot(:, :, :)
+      integer, intent(in) :: site_type, spin_off
+      complex(rp), intent(out) :: v_d(10, 10)
+      integer, intent(out) :: status
+      integer :: i, j, si, sj
+
+      v_d = cmplx(0.0_rp, 0.0_rp, rp)
+      status = 0
+      if (site_type < 1 .or. site_type > size(hubbard_u_pot, 3) .or. spin_off < 9 .or. &
+          4 + 5 + spin_off > size(hubbard_u_pot, 1) .or. 4 + 5 + spin_off > size(hubbard_u_pot, 2)) then
+         status = 1
+         return
+      end if
+      do si = 1, 2
+         do sj = 1, 2
+            do i = 1, 5
+               do j = 1, 5
+                  v_d((si - 1)*5 + i, (sj - 1)*5 + j) = &
+                     hubbard_u_pot(4 + i + spin_off*(si - 1), 4 + j + spin_off*(sj - 1), site_type)
+               end do
+            end do
+         end do
+      end do
+   end subroutine extract_hubbard_d_spinor_potential
+
+   !> Spinor generalisation of correct_d_shell_moments: the d-shell radial moments of each global-z spin
+   !> channel s with the Hubbard operator removed, from the spinor P, the energy-weighted M1 and V_in
+   !> (10x10, index (sigma-1)*5+(m+3)). With Pi_s the spin-s projector, q0_s = Tr(Pi_s P) is passed in:
+   !>   t_s   = Re Tr(Pi_s V P),            c'_s  = c_s - t_s/q0_s,
+   !>   q2'_s = q2_s - 2 Re Tr(Pi_s V M1c_s) + Tr(V Pi_s V P) - t_s^2/q0_s,   M1c_s = M1 - c_s P.
+   !> Only V is subtracted. Rejections and status codes are those of correct_d_shell_moments.
+   subroutine correct_d_shell_moments_spinor(p, m1, vin, q0, c, q2, cprime, q2prime, t, status)
+      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+      complex(rp), intent(in) :: p(10, 10), m1(10, 10), vin(10, 10)
+      real(rp), intent(in) :: q0(2), c(2), q2(2)
+      real(rp), intent(out) :: cprime(2), q2prime(2), t(2)
+      integer, intent(out) :: status
+      real(rp) :: p_trace, p_min, p_max, p_antiherm
+      complex(rp) :: vp(10, 10), vpv(10, 10), vm1c(10, 10)
+      integer :: info, s, k, lo, hi
+
+      cprime = c
+      q2prime = q2
+      t = 0.0_rp
+      status = 0
+      if (.not. all(ieee_is_finite(real(p, rp))) .or. .not. all(ieee_is_finite(aimag(p))) .or. &
+          .not. all(ieee_is_finite(real(m1, rp))) .or. .not. all(ieee_is_finite(aimag(m1))) .or. &
+          .not. all(ieee_is_finite(real(vin, rp))) .or. .not. all(ieee_is_finite(aimag(vin))) .or. &
+          .not. all(ieee_is_finite(q0)) .or. .not. all(ieee_is_finite(c)) .or. .not. all(ieee_is_finite(q2))) then
+         status = 5
+         return
+      end if
+      call hubbard_density_diagnostics(p, p_trace, p_min, p_max, p_antiherm, info)
+      if (info /= 0 .or. p_antiherm > 1.0e-6_rp .or. p_min < -1.0e-3_rp .or. p_max > 1.0_rp + 1.0e-3_rp) then
+         status = 1
+         return
+      end if
+      if (maxval(abs(m1 - transpose(conjg(m1)))) > 1.0e-6_rp .or. &
+          maxval(abs(vin - transpose(conjg(vin)))) > 1.0e-6_rp) then
+         status = 2
+         return
+      end if
+      if (any(q0 <= 0.0_rp)) then
+         status = 3
+         return
+      end if
+      vp = matmul(vin, p)
+      vpv = matmul(vp, vin)
+      do s = 1, 2
+         lo = (s - 1)*5 + 1
+         hi = s*5
+         vm1c = matmul(vin, m1 - c(s)*p)
+         t(s) = 0.0_rp
+         q2prime(s) = q2(s)
+         do k = lo, hi
+            t(s) = t(s) + real(vp(k, k), rp)
+            q2prime(s) = q2prime(s) - 2.0_rp*real(vm1c(k, k), rp) + real(vpv(k, k), rp)
+         end do
+         cprime(s) = c(s) - t(s)/q0(s)
+         q2prime(s) = q2prime(s) - t(s)*t(s)/q0(s)
+      end do
+      if (.not. all(ieee_is_finite(cprime)) .or. .not. all(ieee_is_finite(q2prime)) .or. &
+          .not. all(ieee_is_finite(t))) then
+         status = 5
+         return
+      end if
+      if (any(q2prime < 0.0_rp)) status = 4
+   end subroutine correct_d_shell_moments_spinor
 
    pure logical function fixed_impurity_atom_carries_uj(u_row, j_row)
       real(rp), intent(in) :: u_row(:), j_row(:)

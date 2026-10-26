@@ -128,6 +128,8 @@ module potential_mod
       !> Spinor d-shell P and M1, index (sigma-1)*5+(m+3); allocated only by the spinor diagnostic
       !> (nsp>=2). The spin-diagonal blocks of ldm_spinor are those of ldm(3,:,:,:). M1 is not persisted.
       complex(rp), dimension(:,:), allocatable :: ldm_spinor, m1_spinor
+      !> Spinor P of the previous iteration (the P that built the Hamiltonian's V_in); not persisted.
+      complex(rp), dimension(:,:), allocatable :: ldm_spinor_prev
       !> Optional screening constants used by the strux backend (indexed by l=0..lmax).
       real(rp), dimension(:), allocatable :: screening_alpha
       !> Optional screening sigma values used by the strux backend (indexed by l=0..lmax).
@@ -879,6 +881,7 @@ contains
       this%ldm_flatten_imag(:,:,:) = 0.0d0
       if (allocated(this%ldm_spinor)) deallocate (this%ldm_spinor)
       if (allocated(this%m1_spinor)) deallocate (this%m1_spinor)
+      if (allocated(this%ldm_spinor_prev)) deallocate (this%ldm_spinor_prev)
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------

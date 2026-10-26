@@ -117,6 +117,7 @@ module bands_mod
       procedure :: calculate_angles
       procedure :: calculate_hubbard_u_sc
       procedure :: calculate_spinor_dm
+      procedure :: write_spinor_moments_trace
       !procedure :: calculate_conductivity_tensor
       procedure :: fermi
       procedure :: restore_to_default
@@ -905,7 +906,9 @@ contains
       real(rp), allocatable :: m1_comm_imag(:, :, :, :, :)
       complex(rp), pointer :: m1_target(:, :, :, :, :)
       complex(rp), allocatable, target :: m1_local(:, :, :, :, :)
-      complex(rp) :: p_d(5, 5), m1_d(5, 5), v_d(5, 5)
+      complex(rp) :: p_d(5, 5), m1_d(5, 5), v_d(5, 5), v_spinor(10, 10)
+      real(rp) :: q0_spin(2), c_spin(2), q2_spin(2), c_local_spin(2), q2_local_spin(2), t_local_spin(2)
+      logical :: spinor_local, spinor_flag
       real(rp) :: m1_real, m1_imag
       real(rp) :: q0_d, center_d, q2_d, center_local, q2_local, t_local
       real(rp), allocatable :: pl_comm(:, :, :)
@@ -1255,6 +1258,11 @@ contains
 #endif
       end if
 
+      spinor_flag = this%control%nsp == 2 .and. this%recursion%hamiltonian%hubbard_soc_experimental .and. lmax_basis >= 2
+      spinor_local = local_moments_active .and. spinor_flag
+      ! The spinor correction needs the current spinor P and M1 before the radial moments are mapped.
+      if (spinor_flag) call this%calculate_spinor_dm()
+
       if (local_moments_active) then
          if (.not. associated(m1_target)) call g_logger%fatal( &
             'Local Hubbard radial moments require the current spectral M1 matrix.', __FILE__, __LINE__)
@@ -1333,6 +1341,31 @@ contains
                   ' recursion='//fmt('i0', na_glob)//' cluster='//fmt('i0', cluster_site_local)// &
                   ' type='//fmt('i0', itype_local), __FILE__, __LINE__)
             end if
+            if (spinor_local) then
+               ! nsp=2 spinor operator: both radial spin channels from the full 10x10 P, M1 and V_in.
+               call extract_hubbard_d_spinor_potential(this%recursion%hamiltonian%hubbard_u_pot, &
+                  itype_local, spin_off, v_spinor, status_local)
+               if (status_local /= 0) call g_logger%fatal('Unable to map local d-shell spinor Hubbard potential.', &
+                  __FILE__, __LINE__)
+               if (maxval(abs(v_spinor)) == 0.0_rp) cycle
+               do ispin = 1, 2
+                  q0_spin(ispin) = this%symbolic_atom(plusbulk)%potential%ql(1, 2, ispin)
+                  c_spin(ispin) = this%symbolic_atom(plusbulk)%potential%gravity_center(3, ispin) + &
+                                  this%symbolic_atom(plusbulk)%potential%vmad
+                  q2_spin(ispin) = this%symbolic_atom(plusbulk)%potential%ql(3, 2, ispin)
+               end do
+               call correct_d_shell_moments_spinor(this%symbolic_atom(plusbulk)%potential%ldm_spinor, &
+                  this%symbolic_atom(plusbulk)%potential%m1_spinor, v_spinor, q0_spin, c_spin, q2_spin, &
+                  c_local_spin, q2_local_spin, t_local_spin, status_local)
+               if (status_local /= 0) call g_logger%fatal('Invalid local d-shell spinor Hubbard moment correction; status='// &
+                  fmt('i0', status_local)//' type='//fmt('i0', itype_local)//' atom='//fmt('i0', na_glob), __FILE__, __LINE__)
+               do ispin = 1, 2
+                  this%symbolic_atom(plusbulk)%potential%gravity_center(3, ispin) = &
+                     c_local_spin(ispin) - this%symbolic_atom(plusbulk)%potential%vmad
+                  this%symbolic_atom(plusbulk)%potential%ql(3, 2, ispin) = q2_local_spin(ispin)
+               end do
+               cycle
+            end if
             do ispin = 1, 2
                if (rd1_use_vin_capture) then
                   v_d = rd1_vin_snapshot(:, :, ispin)
@@ -1360,13 +1393,15 @@ contains
          end do
       end if
 
+      if (spinor_flag) call this%write_spinor_moments_trace()
+
       if (present(pl_diag_out)) then
          call this%calculate_pl(pl_diag_out, iteration_value)
       else
          call this%calculate_pl(iteration=iteration_value)
       end if
 
-      if (this%control%nsp >= 2 .and. lmax_basis >= 2 .and. &
+      if (this%control%nsp >= 2 .and. lmax_basis >= 2 .and. .not. spinor_flag .and. &
           (this%recursion%hamiltonian%hubbard_spinor_dm_diagnostic .or. fixed_liechtenstein_active)) &
          call this%calculate_spinor_dm()
 
@@ -1523,6 +1558,44 @@ contains
       end do
       deallocate (comm_real, comm_imag)
    end subroutine calculate_spinor_dm
+
+   !> Diagnostic dump (environment variable RSLMTO_SPINOR_TRACE = file): the spinor P, M1 and V_in of
+   !> every site and the d-shell q0, c, q2 per spin exactly as they enter calculate_pl (spectral values,
+   !> or the local-corrected ones after the spinor correction). Row format: label, i, j, re, im.
+   subroutine write_spinor_moments_trace(this)
+      class(bands) :: this
+      character(len=1024) :: path
+      complex(rp) :: v_spinor(10, 10)
+      integer :: unit, ios, na_glob, plusbulk, i, j, s, status
+
+      call get_environment_variable('RSLMTO_SPINOR_TRACE', path, status=ios)
+      if (ios /= 0 .or. len_trim(path) == 0 .or. rank /= 0) return
+      open (newunit=unit, file=trim(path), status='replace', action='write', iostat=ios)
+      if (ios /= 0) return
+      do na_glob = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + na_glob
+         call extract_hubbard_d_spinor_potential(this%recursion%hamiltonian%hubbard_u_pot, &
+            this%lattice%ib(na_glob), spin_off, v_spinor, status)
+         if (status /= 0) cycle
+         do i = 1, 10
+            do j = 1, 10
+               write (unit, '(a,2(1x,i0),2(1x,es26.17e3))') 'P', i, j, &
+                  real(this%symbolic_atom(plusbulk)%potential%ldm_spinor(i, j), rp), &
+                  aimag(this%symbolic_atom(plusbulk)%potential%ldm_spinor(i, j))
+               write (unit, '(a,2(1x,i0),2(1x,es26.17e3))') 'M1', i, j, &
+                  real(this%symbolic_atom(plusbulk)%potential%m1_spinor(i, j), rp), &
+                  aimag(this%symbolic_atom(plusbulk)%potential%m1_spinor(i, j))
+               write (unit, '(a,2(1x,i0),2(1x,es26.17e3))') 'V', i, j, real(v_spinor(i, j), rp), aimag(v_spinor(i, j))
+            end do
+         end do
+         do s = 1, 2
+            write (unit, '(a,1x,i0,3(1x,es26.17e3))') 'MOMENTS', s, this%symbolic_atom(plusbulk)%potential%ql(1, 2, s), &
+               this%symbolic_atom(plusbulk)%potential%gravity_center(3, s) + this%symbolic_atom(plusbulk)%potential%vmad, &
+               this%symbolic_atom(plusbulk)%potential%ql(3, 2, s)
+         end do
+      end do
+      close (unit)
+   end subroutine write_spinor_moments_trace
 
    subroutine calculate_moments_gauss_legendre(this)
       use mpi_mod
