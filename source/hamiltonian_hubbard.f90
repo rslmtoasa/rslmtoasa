@@ -185,7 +185,7 @@ contains
       real(rp) :: vdiag_up_avg, vdiag_dn_avg, vdiag_split
       real(rp), dimension(2, 7) :: occ_m
       real(rp), dimension(2, 7, 7) :: pbar
-      logical :: use_acbn0, emit_logs
+      logical :: use_acbn0, emit_logs, type_has_uj
       real(rp), dimension(this%lattice%ntype, 4) :: hub_u, hub_j
       real(rp), dimension(this%lattice%ntype, 4, 4) :: f
       complex(rp), dimension(this%lattice%ntype, 4, 2, 7, 7) :: ldm, hub_pot
@@ -559,6 +559,7 @@ contains
       end do
 
       do na = 1, this%lattice%ntype
+         type_has_uj = any(abs(hub_u(na, :)) > 1.0e-10_rp) .or. any(abs(hub_j(na, :)) > 1.0e-10_rp)
          hup_max_abs = 0.0_rp
          do i = 1, nb
             do j = 1, nb
@@ -569,7 +570,7 @@ contains
                end if
             end do
          end do
-         if (rank == 0 .and. emit_logs .and. this%hubbard_log_level /= 'summary') &
+         if (rank == 0 .and. emit_logs .and. type_has_uj .and. this%hubbard_log_level /= 'summary') &
             call g_logger%info('HUBBARD_POT type='//fmt('i4', na)//' maxabs='//fmt('es12.4', hup_max_abs), __FILE__, __LINE__)
       end do
 
