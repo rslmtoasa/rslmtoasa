@@ -1871,6 +1871,63 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 - No accepted Ni KS host is available, so the KS-host-to-RS-impurity Ni comparison remains unvalidated. The C5 Fe smoke run does not close this Ni-specific issue.
 - Impurity Hubbard energy remains excluded; RD4 energy is unmeasured. See `docs/validation/fixed_ldau/rs/C5_10_RESULTS.md`.
 
+## [OPEN, 2026-10-22] Surface LDA+U smoke validation: Ni baseline and local-density physicality
+
+- C6.4 fixes the surface recursion-site to cluster-site to type mapping for the local-moment
+  correction. Its T1 identity (RS 27/27, KS 24/24), 13 guard fixtures, impurity/surface auto
+  fixture, and frozen-plus-recursive-site oracle all pass. In the Ni(001) RS-local U=3/J=0.7
+  smoke run, auto selected `mode=local` without a provenance error, but the moment routine stopped
+  on a negative rotating-frame density eigenvalue at site 2, l=0 (`lambda_min=-3.15867e-6`)
+  before C5.13 convergence. The final Diff and 20-step spread criteria were not met.
+- The C6.4 U=0 Ni control launch failed at iteration 8 on a non-finite guard for the ES site's
+  `PL` field. That launch missed its required C5.4 preflight and is recorded only as a failed
+  diagnostic attempt, not valid baseline evidence. Neither attempt provides converged layer
+  occupations/moments or a U-dependent surface-minus-bulk comparison. T3 Cu KS-host validation
+  was not run after the T2 smoke gate failed.
+- Surface Hubbard-energy routing remains OFF; no surface energy claim or comparison is made. See
+  `docs/validation/fixed_ldau/rs/C6_4_RESULTS.md`.
+- The user supplied a six-layer no-U Ni(001) snapshot, but its candidate manifest has only one
+  Diff record (6.68e-8), no matching preflight, and host metadata E_F (-0.061969 Ry) inconsistent
+  with the surface deck/log (-0.062420 Ry); it does not satisfy the reference condition.
+- **Latest checked probe (2026-10-25):** current-tip T1 passed (RS 27/27, KS 24/24, guards
+  13/13, auto fixtures 1/1, multisite oracle 1/1). In the copied two-layer Ni(001) fixture,
+  U=3/J=0.7 auto selected local with no provenance error. The two-step Diffs were
+  0.0163260002 and 0.3869175281, failing the user-approved <=5e-8 response gate. The U=0
+  control Diffs were 0.0162421175 and 0.3840255893. Layer occupations/moments and checked
+  preflights are recorded in `docs/validation/fixed_ldau/rs/C6_6_SURFACE_PROBE_RESULTS.md`.
+  These short probes do not establish converged surface observables or an accepted no-U surface
+  reference.
+- **Capture-path correction (2026-10-25):** investigation found that surface recursion initialized
+  exact RD1 `V_in` capture neither at the `S` recursion entry nor at the `build_bulkham` `ee`
+  insertion used by surfaces. Both omissions are fixed on the work branch. The checked rerun now
+  completes and consumes the current-iteration surface operand, but its final Diff is unchanged
+  (`0.3869175281`) and the <=5e-8 two-step gate still fails. The U=0 control also fails with
+  Diff `0.3840255893`; the large Diff is therefore not isolated to the LDA+U correction. A checked
+  U=0 diagnostic lowering beta from 0.1 to the fixture's 0.002 leaves step-2 Diff at 0.3838386972
+  and retains the external-layer charge warning. The failure arises during the surface
+  charge/density response from the bulk-potential seed and is not fixed by beta reduction; later
+  convergence remains unevaluated. See `docs/validation/fixed_ldau/rs/C6_6_CAPTURE_FIX_RESULTS.md`
+  and its archived preflight-bound evidence.
+- **User Ni(001) zero-U comparison (2026-10-25):** the user-run no-U deck and explicit U=J=0 deck
+  produce identical physical output for their one-step runs, so the zero-U deck-equivalence gate
+  passes independently of convergence. Both report Diff `7.71e-8`; this does not test nonzero U.
+  The user states that the `5e-8` threshold is unsuitable for these surface probes and should be
+  raised; a replacement value remains unspecified. These outputs had no C6.5 preflight record and
+  are documented as a zero-U comparison, not checked smoke evidence. Follow-up checked U=3/J=0.7
+  diagnostics selected local mode, but Chebyshev runs produced NaN projected DOS / `g0` and stopped
+  at the local moment correction. Widening the energy window from `0.5` to `1.5` Ry did not change
+  the failure. A block-recursion diagnostic was interrupted after it stopped producing output and
+  is inconclusive. A later user Ni U=4/J=1 probe completed one widened-window step (Diff 0.0232231)
+  but step 2 again produced NaNs and the status-5 local-moment fatal. The user-supplied magnetic
+  `Ni_out.nml` was not used as the bulk regeneration seed; the symmetric accepted Ni seed yielded
+  very small moments. A type-4-off attempt was invalid because the copied restart potential itself
+  embedded U/J. The zero-U equivalence gate is closed; the nonzero-U response remains OPEN. See
+  `docs/validation/fixed_ldau/rs/C6_7_ZERO_U_COMPARISON/RESULTS.md` and
+  `docs/validation/fixed_ldau/rs/C6_8_NI_U4J1_PROBE/RESULTS.md`.
+- C6 stopped after the failed RS smoke gate; Cu T3 and workflow documentation/merge remain
+  unrun. Surface Hubbard-energy routing remains OFF. C6.5's checked launcher is mandatory for
+  campaign runs.
+
 ## [CLOSED, 2026-10-22] Impurity auto mode with local U-carrying hosts
 
 - For `calctype='I'`, `auto` now selects local impurity density moments when every U-carrying frozen host potential records local mode, including decks that supply `hubbard_u_impurity`/`hubbard_j_impurity`. The focused fixture verifies this path has no provenance error; the existing RD3(a) Ni auto case continues to resolve local.

@@ -136,6 +136,32 @@ through one complete iteration. See the C5 records in
 ``docs/validation/fixed_ldau/rs/C5_AMENDMENT.md`` and
 ``C5_10_RESULTS.md``.
 
+C6 surface density-only mode
+-----------------------------
+
+For ``calctype='S'`` in the same supported fixed Liechtenstein, scalar-collinear
+d-shell scope, ``hubbard_radial_moments='auto'`` selects ``local`` when every
+U-carrying frozen host potential records ``local`` mode. This applies to an
+RS-local or KS-local bulk host. The surface recursion layers remain the active
+surface density sites; the host mode is resolved from the frozen-host ownership
+map. A legacy U-carrying host with missing mode provenance is treated as
+``spectral`` and does not qualify for automatic local mode. Explicit
+``spectral`` remains available.
+
+To prepare a surface deck, copy an existing surface fixture. Replace only the
+frozen host potential with the accepted local host potential, set U/J, and set
+``fermi`` and the energy window to the host endpoint values. Run the host-E_F
+preflight before launch. Use the same deck for RS and KS surface calculations;
+the local density mode is independent of the host's backend.
+
+Surface Hubbard support is density-only. Surface energies exclude the Hubbard
+term; surface Hubbard-energy routing remains off. The same-material RS/KS
+surface smoke and layer-moment comparison are still OPEN because this checkout
+has no accepted local U-carrying Cu bulk endpoint for its only surface fixture,
+fcc Cu(001). See the C6 records in
+``docs/validation/fixed_ldau/rs/C6_T0_RESULTS.md`` and
+``C6_AMENDMENT.md``.
+
 Validated ordinary on-site scope
 ================================
 

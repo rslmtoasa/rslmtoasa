@@ -2,7 +2,9 @@
 """C5.4 run staging/preflight; copies only explicitly whitelisted inputs."""
 import argparse, csv, hashlib, json, os, shutil, sys, f90nml
 from pathlib import Path
-REPO = Path(__file__).resolve().parents[4]; sys.path.insert(0, "/private/tmp/c52-c-private")
+REPO = Path(__file__).resolve().parents[4]
+SCHEMA_MODULE_DIR = REPO / "docs/validation/fixed_ldau/rs/C5_2_PART_C_assets/C3/scripts"
+sys.path.insert(0, str(SCHEMA_MODULE_DIR))
 from fortran_namelist_schema import source_schema
 THREADS = {"OMP_NUM_THREADS": "1", "OMP_DYNAMIC": "FALSE",
  "RSLMTO_OMP_THREADS_SERIAL": "1", "OPENBLAS_NUM_THREADS": "1",
@@ -46,7 +48,11 @@ def check(run, deck, restart, guard, host_ef_trace=None):
     ignored=validate(nml, deck)
     host_ef_check = check_host_fermi(nml, host_ef_trace) if host_ef_trace else None
     ctl = nml.get("control", {}); selfn = nml.get("self", {})
-    if ctl.get("recur") not in ("block", "cheby"): raise SystemExit("recur missing/unsupported")
+    # Keep this list aligned with self%run_recursion, which dispatches on
+    # 'block' and 'chebyshev'. The shorter 'cheby' spelling is not a runtime
+    # alias and made the preflight reject valid user decks while accepting an
+    # unsupported spelling.
+    if ctl.get("recur") not in ("block", "chebyshev"): raise SystemExit("recur missing/unsupported")
     use_kspace=selfn.get("use_kspace", False); default_source="explicit"
     if "use_kspace" not in selfn:
         lines=(REPO/"source/self.f90").read_text().splitlines()

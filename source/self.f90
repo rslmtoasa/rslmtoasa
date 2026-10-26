@@ -2389,7 +2389,8 @@ contains
          this%hamiltonian%hubbard_u_impurity_check) .and. &
          trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein' .and. &
          this%control%nsp == 1 .and. this%control%lmax == 2 .and. &
-         (this%control%calctype == 'B' .or. this%control%calctype == 'I') .and. &
+         (this%control%calctype == 'B' .or. this%control%calctype == 'I' .or. &
+          this%control%calctype == 'S') .and. &
          .not. this%control%constraints_enable .and. &
          .not. this%control%has_soc() .and. .not. this%control%is_noncollinear() .and. &
          .not. this%hamiltonian%hoh .and. .not. this%hamiltonian%hubbard_u_sc_check .and. &
@@ -3499,7 +3500,7 @@ contains
             this%hamiltonian%hubbard_radial_moments = 'local'
          else
             this%hamiltonian%hubbard_radial_moments = 'spectral'
-            if (rank == 0 .and. this%control%calctype == 'I') &
+            if (rank == 0 .and. (this%control%calctype == 'I' .or. this%control%calctype == 'S')) &
                call g_logger%info('HUBBARD_RADIAL_MODE auto retained spectral: '//trim(radial_mode_reason), __FILE__, __LINE__)
          end if
       end if
@@ -4493,7 +4494,7 @@ contains
          call g_scf_benchmark_profile%start_stage('P_rs_hamiltonian_prepare')
       end if
 
-      if (this%control%calctype == 'I') then
+      if (this%control%calctype == 'I' .or. this%control%calctype == 'S') then
          call this%hamiltonian%begin_rd1_vin_capture(iter, enable_rs_capture=.not. this%use_kspace)
       end if
    

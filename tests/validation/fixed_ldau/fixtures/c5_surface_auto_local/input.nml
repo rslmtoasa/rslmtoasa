@@ -1,0 +1,20 @@
+&calculation
+ pre_processing = 'buildsurf'
+/
+&lattice
+ nlay = 2
+ ntype = 3
+/
+&control
+ calctype = 'S'
+ nsp = 1
+ lmax = 2
+/
+&self
+ use_kspace = .false.
+/
+&hamiltonian
+ hubbard_radial_moments = 'auto'
+ hubbard_u(1,3) = 2.0
+ hubbard_j(1,3) = 0.0
+/

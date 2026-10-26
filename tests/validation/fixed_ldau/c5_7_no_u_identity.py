@@ -18,9 +18,13 @@ ROOT = Path(__file__).resolve().parents[3]
 PREFLIGHT = ROOT / "docs/validation/fixed_ldau/rs/C5_4_PREFLIGHT.py"
 LAUNCHER = ROOT / "tests/validation/fixed_ldau/c5_7_launch.sh"
 BASE = Path("/private/tmp/c52-rd5-no-u")
+ARCHIVED_INPUTS = ROOT / "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/rd5_no_u_identity_checks"
 INPUTS = {
-    "rs": Path("/private/tmp/c5-2-partA/a1_bccFe/source_snapshot"),
-    "ks": Path("/private/tmp/c5-3-b2-prep/identity_ks/clean8b_baseline"),
+    # Use the repository-archived copies of the exact original identity inputs.
+    # Their hashes match the C5.7 successful run; the former /private/tmp source
+    # paths are disposable and may exist as empty directories after cleanup.
+    "rs": ARCHIVED_INPUTS / "rs_rd1",
+    "ks": ARCHIVED_INPUTS / "ks_rd1",
 }
 CAPS = {
     "OMP_NUM_THREADS": "1", "OMP_DYNAMIC": "FALSE", "RSLMTO_OMP_THREADS_SERIAL": "1",
@@ -40,8 +44,8 @@ def normalized(path: Path) -> bytes:
     return data
 
 
-def run_one(binary: Path, scratch: Path, route: str) -> dict:
-    baseline = BASE / f"{route}_rd1"
+def run_one(binary: Path, scratch: Path, route: str, baseline_override: Path | None = None) -> dict:
+    baseline = baseline_override if baseline_override is not None else BASE / f"{route}_rd1"
     work = scratch / f"{route}_candidate"
     work.mkdir()
     input_source = INPUTS[route]
@@ -109,10 +113,18 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--scratch", type=Path, required=True)
+    parser.add_argument("--rs-baseline", type=Path,
+                        help="override the historical RS baseline with a versioned artifact directory")
+    parser.add_argument("--ks-baseline", type=Path,
+                        help="override the historical KS baseline with a versioned artifact directory")
+    parser.add_argument("--result", type=Path,
+                        default=ROOT / "docs/validation/fixed_ldau/rs/C5_7_NO_U_IDENTITY.json",
+                        help="identity result JSON destination")
     args = parser.parse_args()
     binary = args.binary.resolve()
     args.scratch.mkdir(parents=True, exist_ok=False)
-    results = {route.upper(): run_one(binary, args.scratch, route) for route in ("rs", "ks")}
+    baselines = {"rs": args.rs_baseline, "ks": args.ks_baseline}
+    results = {route.upper(): run_one(binary, args.scratch, route, baselines[route]) for route in ("rs", "ks")}
     result = {
         "schema": "c5_7_no_u_identity_v1", "binary": str(binary), "binary_sha256": sha(binary),
         "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
@@ -121,7 +133,7 @@ def main() -> None:
         "criterion": "exact artifact names/bytes; exclude testrun.log and preflight record; normalize only cpu_s fields in str.out",
         "results": results,
     }
-    destination = ROOT / "docs/validation/fixed_ldau/rs/C5_7_NO_U_IDENTITY.json"
+    destination = args.result
     destination.write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({route: {"status": row["status"], "artifact_count": row["artifact_count"]}
                       for route, row in results.items()}, indent=2))

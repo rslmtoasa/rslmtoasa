@@ -1,0 +1,1 @@
+Diagnostic copy of c67 nonzero-U deck. Only energy_max changed 0.5 -> 1.5 to match the finite user noU/zeroU Chebyshev deck. Fresh run directory; local U host potentials and ES seed restaged. No SCF launched yet.

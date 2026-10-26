@@ -80,7 +80,7 @@ contains
 
       eligible = .false.
       if (.not. associated(this%control) .or. .not. associated(this%lattice)) return
-      eligible = trim(this%control%calctype) == 'I' .and. &
+      eligible = (trim(this%control%calctype) == 'I' .or. trim(this%control%calctype) == 'S') .and. &
          (this%hubbard_u_general_check .or. this%hubbard_u_impurity_check) .and. &
          trim(this%hubbard_radial_moments) == 'local' .and. this%control%nsp == 1 .and. &
          this%control%lmax == 2 .and. trim(this%hubbard_u_potential_form) == 'liechtenstein' .and. &
@@ -1678,7 +1678,7 @@ contains
       ! Local variables
       integer :: i, j, k, l, m, n, itype, ino, ja, jo, ji, nr, ia
       integer :: ntype
-      integer :: c2_build_id
+      integer :: c2_build_id, rd1_status
       logical :: c2_audit_active
       complex(rp) :: c2_block_before(nb, nb)
 
@@ -1753,6 +1753,18 @@ contains
                   this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_u_pot(i, j, ntype)
                end do
             end do
+            ! Surface recursion consumes the type-based ee Hamiltonian built
+            ! here (unlike impurities, it does not call build_locham). Capture
+            ! the exact operand at this insertion so RD1 uses the same V_in.
+            if (trim(this%control%calctype) == 'S' .and. this%rd1_capture_enabled .and. &
+                this%rd1_local_impurity_eligible()) then
+               call this%capture_rd1_vin_insertion(ia, ntype, this%hubbard_u_pot(:, :, ntype), rd1_status)
+               if (rd1_status /= rd1_vin_ok .and. rd1_status /= rd1_vin_not_recursion_site) then
+                  call g_logger%fatal('RD1 surface V-in capture failed: status='//fmt('i0', rd1_status)// &
+                     ' iteration='//fmt('i0', this%rd1_capture_iteration)//' cluster='//fmt('i0', ia)// &
+                     ' type='//fmt('i0', ntype), __FILE__, __LINE__)
+               end if
+            end if
             if (c2_audit_active .and. this%hubbard_u_general_check) then
                call c2_write_hubbard_insertion(this, 'BULK_EE', c2_build_id, ia, ntype, c2_block_before, &
                   this%hubbard_u_pot(:, :, ntype), this%ee(:, :, 1, ntype))

@@ -1,0 +1,49 @@
+&calculation
+pre_processing = 'bravais'
+verbose = .true.
+/
+&lattice
+rc = 80
+alat = 3.52340
+crystal_sym = 'fcc'
+pbc = .true.
+n1 = 16
+n2 = 16
+n3 = 16
+wav = 1.37692
+ntype = 1
+ct(1) = 4.0d0
+r2 = 16.0d0
+/
+&atoms
+database = './'
+label(1) = 'Ni-imp'
+/
+&self
+nstep = 100
+conv_thr = 1.0d-30
+use_kspace = .false.
+/
+&energy
+fermi = -0.061141
+energy_min = -1.0
+energy_max = 0.5
+channels_ldos = 2500
+fix_fermi = .true.
+/
+&control
+calctype = 'B'
+nsp = 1
+lld = 21
+recur = 'block'
+fresh_start = .false.
+/
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/
+&hamiltonian
+hubbard_u_general(1,3) = 3.0
+hubbard_j_general(1,3) = 0.7
+hubbard_radial_moments = 'local'
+/

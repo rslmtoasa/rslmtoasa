@@ -910,7 +910,7 @@ contains
       integer :: lcount_ldm, max_flat_ldm, local_flat
       integer :: status_local, itype_local
       integer :: cluster_site_local
-      logical :: rd1_use_vin_capture
+      logical :: rd1_use_vin_capture, local_atom_carries_uj
       complex(rp) :: rd1_vin_snapshot(5, 5, 2)
       ! These diagnostic tolerances exceed observed finite-grid residuals
       ! (about 1e-8 anti-Hermitian and <1e-4 eigen/trace drift) without hiding
@@ -1229,10 +1229,9 @@ contains
          rd1_use_vin_capture = this%recursion%hamiltonian%rd1_local_impurity_eligible() .and. &
             this%recursion%hamiltonian%rd1_capture_required
          do na_glob = start_atom, end_atom
-            ! Impurity U/J are attached to recursive atoms, while the legacy
-            ! lattice type map may not contain an entry for an untreated atom.
-            ! Such atoms have an exactly zero local operator and need no moment
-            ! correction; skip them before attempting the type lookup.
+            plusbulk = this%lattice%nbulk + na_glob
+            ! Preserve the impurity path's historical early skip: an untreated
+            ! recursion atom may not have a meaningful legacy ib entry.
             if (this%control%calctype == 'I' .and. &
                 .not. this%recursion%hamiltonian%hubbard_u_general_check .and. &
                 .not. this%recursion%hamiltonian%hubbard_u_sc_check .and. &
@@ -1246,7 +1245,6 @@ contains
                       this%recursion%hamiltonian%hubbard_j_impurity(na_glob, :))) cycle
                end if
             end if
-            plusbulk = this%lattice%nbulk + na_glob
             if (rd1_use_vin_capture) then
                call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
                   cluster_site_local, itype_local, status_local)
@@ -1255,27 +1253,53 @@ contains
                      fmt('i0', iteration_value)//' recursion='//fmt('i0', na_glob)// &
                      ' cluster='//fmt('i0', cluster_site_local), __FILE__, __LINE__)
                end if
-               call this%recursion%hamiltonian%get_rd1_vin_for_recursion(na_glob, iteration_value, &
-                  rd1_vin_snapshot, status_local)
-               if (status_local /= 0) call g_logger%fatal('RD1 exact V-in snapshot missing/stale: status='// &
-                  fmt('i0', status_local)//' iteration='//fmt('i0', iteration_value)// &
-                  ' recursion='//fmt('i0', na_glob)//' cluster='//fmt('i0', cluster_site_local)// &
-                  ' type='//fmt('i0', itype_local), __FILE__, __LINE__)
-            else if (this%control%calctype == 'I' .and. &
+            else if ((this%control%calctype == 'I' .or. this%control%calctype == 'S') .and. &
                      this%recursion%hamiltonian%hubbard_test_operator_check) then
-               ! The non-adopted local W test still has a recursion-site
-               ! potential. Use its actual irec->iz map without broadening the
-               ! fixed-U RD1 capture eligibility or changing the test formula.
                call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
                   cluster_site_local, itype_local, status_local)
                if (status_local /= 0) then
-                  call g_logger%fatal('Local impurity test operator has invalid recursion-site map: recursion='// &
+                  call g_logger%fatal('Local Hubbard test operator has invalid recursion-site map: recursion='// &
+                     fmt('i0', na_glob)//' cluster='//fmt('i0', cluster_site_local), __FILE__, __LINE__)
+               end if
+            else if (this%control%calctype == 'S' .and. local_moments_active) then
+               ! Surface recursion sites use irec -> iz; ib describes the
+               ! frozen host and is not the local potential type.
+               call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
+                  cluster_site_local, itype_local, status_local)
+               if (status_local /= 0) then
+                  call g_logger%fatal('Surface local correction has invalid recursion-site map: recursion='// &
                      fmt('i0', na_glob)//' cluster='//fmt('i0', cluster_site_local), __FILE__, __LINE__)
                end if
             else
                ! Preserve the legacy spectral and reciprocal paths outside the
                ! narrowly enabled real-space impurity correction.
                itype_local = this%lattice%ib(na_glob)
+            end if
+            ! A surface recursion layer can be an empty sphere or another
+            ! type with no U/J. Skip it before extracting a d-shell operator.
+            if (this%control%calctype == 'S' .and. local_moments_active) then
+               if (itype_local < 1 .or. itype_local > size(this%lattice%symbolic_atoms)) then
+                  call g_logger%fatal('Surface local correction has invalid symbolic atom type='// &
+                     fmt('i0', itype_local), __FILE__, __LINE__)
+               end if
+               local_atom_carries_uj = .false.
+               if (allocated(this%lattice%symbolic_atoms(itype_local)%potential%hubbard_u)) then
+                  local_atom_carries_uj = any(abs( &
+                     this%lattice%symbolic_atoms(itype_local)%potential%hubbard_u) > 1.0e-10_rp)
+               end if
+               if (allocated(this%lattice%symbolic_atoms(itype_local)%potential%hubbard_j)) then
+                  local_atom_carries_uj = local_atom_carries_uj .or. any(abs( &
+                     this%lattice%symbolic_atoms(itype_local)%potential%hubbard_j) > 1.0e-10_rp)
+               end if
+               if (.not. local_atom_carries_uj) cycle
+            end if
+            if (rd1_use_vin_capture) then
+               call this%recursion%hamiltonian%get_rd1_vin_for_recursion(na_glob, iteration_value, &
+                  rd1_vin_snapshot, status_local)
+               if (status_local /= 0) call g_logger%fatal('RD1 exact V-in snapshot missing/stale: status='// &
+                  fmt('i0', status_local)//' iteration='//fmt('i0', iteration_value)// &
+                  ' recursion='//fmt('i0', na_glob)//' cluster='//fmt('i0', cluster_site_local)// &
+                  ' type='//fmt('i0', itype_local), __FILE__, __LINE__)
             end if
             do ispin = 1, 2
                if (rd1_use_vin_capture) then
