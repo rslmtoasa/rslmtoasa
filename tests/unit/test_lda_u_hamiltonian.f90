@@ -102,7 +102,7 @@ contains
    end subroutine test_a4_w2_operator_insertion
 
    subroutine test_nonmutating_hubbard_potential_snapshot()
-      complex(rp) :: density(1,4,2,7,7), live_ldm(2,7,7)
+      complex(rp) :: density(1,4,2,7,7), live_ldm(2,5,5)
       complex(rp), allocatable :: v_in(:, :, :), v_out(:, :, :)
       integer :: spin
 
@@ -125,7 +125,7 @@ contains
       call ham%calculate_hubbard_u_potential_general()
       v_in = ham%hubbard_u_pot
       density = (0.0_rp,0.0_rp)
-      density(1,3,:,:, :) = live_ldm
+      density(1,3,:,1:5,1:5) = live_ldm
       density(1,3,1,1,1) = 0.5_rp
       density(1,3,1,1,2) = cmplx(0.0_rp,0.1_rp,rp)
       density(1,3,1,2,1) = conjg(density(1,3,1,1,2))
@@ -138,7 +138,7 @@ contains
       call require(maxval(abs(v_out-v_in)) > 1.0e-4_rp, 'explicit density produces its own V(Pout)')
       call require(maxval(abs(v_out(:,:,1)-transpose(conjg(v_out(:,:,1))))) < tolerance, &
          'nonmutating explicit V(Pout) remains Hermitian')
-      lat%symbolic_atoms(1)%potential%ldm(3,:,:,:) = density(1,3,:,:,:)
+      lat%symbolic_atoms(1)%potential%ldm(3,:,:,:) = density(1,3,:,1:5,1:5)
       call ham%calculate_hubbard_u_potential_general()
       call require(maxval(abs(ham%hubbard_u_pot-v_out)) < tolerance, &
          'nonmutating explicit V(Pout) equals the ordinary production evaluation')
