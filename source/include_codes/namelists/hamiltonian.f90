@@ -29,6 +29,7 @@ character(len=16) :: bounds_algorithm
 logical :: hubbard_experimental = .false. ! Opt in to experimental ACBN0 and +V paths.
 character(len=16) :: hubbard_log_level = 'summary'
 logical :: hubbard_spinor_dm_diagnostic = .false. ! Extract the spinor d-shell P and M1 at nsp>=2 (diagnostic).
+logical :: hubbard_soc_experimental = .false. ! Experimental: spinor fixed U (nsp=2, bulk, spectral radial moments).
 character(len=16) :: hubbard_u_potential_form
 ! Omitted input uses an internal auto sentinel, resolved after backend selection.
 character(len=16) :: hubbard_radial_moments
@@ -46,5 +47,5 @@ character(len=16) :: export
 namelist /hamiltonian/ hoh, local_axis, orb_pol, v_alpha, v_beta, js_alpha, jl_alpha, velocity_scale, q_ss, theta_ss, magnetic_representation, ccor_2c, ccor_elin, &
         ccor_vmt_mode, ccor_debug, ccor_strict, uj_orb, hubbard_u, hubbard_j, hubbard_v, &
         hubbard_u_sc, hubbard_u_impurity, hubbard_j_impurity, hubbard_u_general, hubbard_j_general, bounds_algorithm, bounds_scaling, &
-        hubbard_experimental, hubbard_log_level, hubbard_spinor_dm_diagnostic, hubbard_u_potential_form, hubbard_radial_moments, hubbard_test_operator, hubbard_test_lambda, hubbard_test_spin, &
+        hubbard_experimental, hubbard_log_level, hubbard_spinor_dm_diagnostic, hubbard_soc_experimental, hubbard_u_potential_form, hubbard_radial_moments, hubbard_test_operator, hubbard_test_lambda, hubbard_test_spin, &
         fixed_u_test_tighten_r05, fixed_u_test_allow_hoh_w1_u0, export

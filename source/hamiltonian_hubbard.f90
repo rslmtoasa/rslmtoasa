@@ -1,4 +1,5 @@
 submodule(hamiltonian_mod) hamiltonian_hubbard
+   use hubbard_spinor_mod, only: hubbard_d_tensor, hubbard_spinor_functional
 
 contains
 
@@ -200,6 +201,9 @@ contains
       real(rp) :: ldm_trace_up, ldm_trace_dn, ldm_max_abs, hup_max_abs
       real(rp) :: ql_occ_up, ql_occ_dn
       real(rp) :: imag_ldm_max
+      complex(rp) :: t_spinor(5, 5, 5, 5), p_spinor(10, 10), v_spinor(10, 10)
+      real(rp) :: e_int_s, e_dc_s, e_hub_s, u_spinor, j_spinor, axis_ref(3), axis_norm
+      integer :: spin_row, spin_col, row_offset, col_offset
 
       ms(1)%val = [0]
       ms(2)%val = [-1, 0, 1]
@@ -227,6 +231,50 @@ contains
          potential_out = 0.0_rp
       else
          this%hubbard_u_pot(:, :, :) = 0.0_rp
+      end if
+
+      ! Experimental spinor fixed U (nsp=2, bulk): the full 10x10 d-shell V, including the up-down
+      ! blocks, from the spinor P; the build routines add hubbard_u_pot to the on-site block once.
+      if (this%hubbard_soc_experimental .and. this%control%nsp == 2 .and. .not. present(potential_out)) then
+         do na = 1, this%lattice%ntype
+            u_spinor = this%lattice%symbolic_atoms(na)%potential%hubbard_u(3)
+            j_spinor = this%lattice%symbolic_atoms(na)%potential%hubbard_j(3)
+            if (abs(u_spinor) <= 1.0e-10_rp .and. abs(j_spinor) <= 1.0e-10_rp) cycle
+            ! Frame condition: the resolved radial axis (constrained_spiral: the reference direction)
+            ! must be global z for every correlated site.
+            if (sqrt(sum(this%lattice%symbolic_atoms(na)%constraint_target(:)**2)) > 1.0e-12_rp) then
+               call g_logger%fatal('hubbard_soc_experimental: site '//fmt('i0', na)//' has a constraint_target; the P/V frame '// &
+                  'and the radial-channel frame must coincide until the spinor local moments exist.', __FILE__, __LINE__)
+            end if
+            axis_ref = [0.0_rp, 0.0_rp, 1.0_rp]
+            axis_norm = sqrt(sum(this%lattice%symbolic_atoms(na)%potential%mom(:)**2))
+            if (axis_norm > 1.0e-12_rp) axis_ref = this%lattice%symbolic_atoms(na)%potential%mom(:)/axis_norm
+            if (abs(axis_ref(1)) > 1.0e-8_rp .or. abs(axis_ref(2)) > 1.0e-8_rp) then
+               call g_logger%fatal('hubbard_soc_experimental: the radial axis of site '//fmt('i0', na)//' is not parallel to global z; '// &
+                  'the P/V frame and the radial-channel frame must coincide until the spinor local moments exist.', __FILE__, __LINE__)
+            end if
+            if (allocated(this%lattice%symbolic_atoms(na)%potential%ldm_spinor)) then
+               p_spinor = this%lattice%symbolic_atoms(na)%potential%ldm_spinor
+            else
+               ! before the first spinor extraction: the collinear density with zero spin coherences
+               p_spinor = (0.0_rp, 0.0_rp)
+               do ispin = 1, 2
+                  p_spinor((ispin - 1)*5 + 1:ispin*5, (ispin - 1)*5 + 1:ispin*5) = &
+                     this%lattice%symbolic_atoms(na)%potential%ldm(3, ispin, 1:5, 1:5)
+               end do
+            end if
+            call hubbard_d_tensor(u_spinor, j_spinor, t_spinor)
+            call hubbard_spinor_functional(t_spinor, u_spinor, j_spinor, p_spinor, e_int_s, e_dc_s, e_hub_s, v_spinor)
+            do spin_row = 1, 2
+               do spin_col = 1, 2
+                  row_offset = (spin_row - 1)*spin_off + 4
+                  col_offset = (spin_col - 1)*spin_off + 4
+                  this%hubbard_u_pot(row_offset + 1:row_offset + 5, col_offset + 1:col_offset + 5, na) = &
+                     v_spinor((spin_row - 1)*5 + 1:spin_row*5, (spin_col - 1)*5 + 1:spin_col*5)
+               end do
+            end do
+         end do
+         return
       end if
       hub_u(:, :) = 0.0_rp
       hub_j(:, :) = 0.0_rp
