@@ -20,10 +20,11 @@ The moved diagnostics retain the TRACE family and W test-operator path. The clos
 - The DM-backed impurity-host and inline-host runs produce identical solver outputs after excluding the changed input host file and the new DM sidecar.
 - No-U RS outputs match byte for byte. No-U KS outputs match except for the measured `cpu_s` value in `str.out`.
 - Python syntax compilation, GBT negative-fixture JSON parsing, and `git diff --check`: PASS.
+- Final batched audit found broad LDM and potential diagnostics for zero-U/J atoms/types; those outputs and the physicality warning count are now restricted to U/J-carrying channels. The inventory labels retired C2 audit-record readers as historical artifacts, not screen-log parsers. Rebuild and the 12 selected unit/guard tests passed after these corrections.
 
 ## Uncovered outcomes
 
-The 12-run ceiling was reached before runtime fatal probes for a missing DM sidecar and a DM hash mismatch, before rerunning the 13 guard fixtures, and before a fresh merged-tree identity run. Those outcomes remain uncovered; the read path contains explicit fatal checks for both missing files and hash mismatches. The existing provenance decision path was not changed. After the identity runs, the final source received log-only edits to remove repeated +U/+V messages and compact the U/J summary formatting; the Release build and unit tests passed afterward. No solver runs remain within the authorized budget.
+The 12-run ceiling was reached before runtime fatal probes for a missing DM sidecar and a DM hash mismatch, before rerunning the 13 guard fixtures, and before a fresh merged-tree identity run. Those outcomes remain uncovered; the read path contains explicit fatal checks for both missing files and hash mismatches. The existing provenance decision path was not changed. After the identity runs, the source received log-only edits to remove repeated +U/+V messages, compact U/J summary formatting, and restrict diagnostics to U/J carriers; the Release build and selected unit/guard tests passed afterward. No solver runs remain within the authorized budget.
 
 The initial KS+U fixture preparation appended a duplicate `&self` namelist, which made preflight reject the deck before the solver launched. The deck was corrected to set `use_kspace` in its existing group, then preflight and the checked run passed. This was a tooling/deck-preparation correction, not a gate result.
 

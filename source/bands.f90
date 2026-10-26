@@ -889,6 +889,7 @@ contains
       integer :: li, iorb, jorb, jdim, ispin
       integer :: ncap_orb, ncap_trace
       integer :: nphys_warn
+      logical :: l_channel_carries_uj
       real(rp) :: occ_raw, ch_sum, scale_ch, ldm_val, max_herm
       real(rp) :: ldm_imag_val
       real(rp) :: ldm_trace, ldm_min_eig, ldm_max_eig, ldm_antiherm
@@ -1056,6 +1057,14 @@ contains
          do na_glob = start_atom, end_atom
             na = g2l_map(na_glob)
             plusbulk = this%lattice%nbulk + na_glob
+            local_atom_carries_uj = .false.
+            if (allocated(this%symbolic_atom(plusbulk)%potential%hubbard_u)) then
+               local_atom_carries_uj = any(abs(this%symbolic_atom(plusbulk)%potential%hubbard_u) > 1.0e-10_rp)
+            end if
+            if (allocated(this%symbolic_atom(plusbulk)%potential%hubbard_j)) then
+               local_atom_carries_uj = local_atom_carries_uj .or. &
+                  any(abs(this%symbolic_atom(plusbulk)%potential%hubbard_j) > 1.0e-10_rp)
+            end if
             this%symbolic_atom(plusbulk)%potential%ldm(:, :, :, :) = 0.0_rp
             ncap_orb = 0
             ncap_trace = 0
@@ -1063,6 +1072,18 @@ contains
             do ispin = 1, 2
                soff = (ispin - 1)*spin_off
                do li = 0, min(3, lmax_basis)
+                  l_channel_carries_uj = .false.
+                  if (allocated(this%symbolic_atom(plusbulk)%potential%hubbard_u)) then
+                     if (li + 1 <= size(this%symbolic_atom(plusbulk)%potential%hubbard_u)) then
+                        l_channel_carries_uj = abs(this%symbolic_atom(plusbulk)%potential%hubbard_u(li + 1)) > 1.0e-10_rp
+                     end if
+                  end if
+                  if (allocated(this%symbolic_atom(plusbulk)%potential%hubbard_j)) then
+                     if (li + 1 <= size(this%symbolic_atom(plusbulk)%potential%hubbard_j)) then
+                        l_channel_carries_uj = l_channel_carries_uj .or. &
+                           abs(this%symbolic_atom(plusbulk)%potential%hubbard_j(li + 1)) > 1.0e-10_rp
+                     end if
+                  end if
                   jdim = 2*li + 1
                   occ_ch(:) = 0.0_rp
                   do iorb = li*li + 1, (li + 1)*(li + 1)
@@ -1098,7 +1119,8 @@ contains
                         occ_orb = max(0.0_rp, min(1.0_rp, occ_orb))
                         if (abs(occ_orb - occ_raw) > 1.0e-12_rp) ncap_orb = ncap_orb + 1
                         this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb - li*li, iorb - li*li) = cmplx(occ_orb, 0.0_rp, rp)
-                     else if (occ_raw < -1.0e-3_rp .or. occ_raw > 1.0_rp + 1.0e-3_rp) then
+                     else if (l_channel_carries_uj .and. &
+                              (occ_raw < -1.0e-3_rp .or. occ_raw > 1.0_rp + 1.0e-3_rp)) then
                         ! Diagnose appreciable integration drift without projecting
                         ! the matrix back into a different density.
                         nphys_warn = nphys_warn + 1
@@ -1117,18 +1139,18 @@ contains
                   end if
                end do
             end do
-            if (rank == 0 .and. (ncap_orb > 0 .or. ncap_trace > 0)) then
+            if (rank == 0 .and. local_atom_carries_uj .and. (ncap_orb > 0 .or. ncap_trace > 0)) then
                call g_logger%warning('HUBBARD_LDM_CAP atom='//fmt('i4', na_glob)// &
                                      ' orb_caps='//fmt('i0', ncap_orb)// &
                                      ' trace_caps='//fmt('i0', ncap_trace), __FILE__, __LINE__)
             end if
-            if (rank == 0 .and. fixed_liechtenstein_active .and. nphys_warn > 0 .and. &
+            if (rank == 0 .and. local_atom_carries_uj .and. fixed_liechtenstein_active .and. nphys_warn > 0 .and. &
                 this%recursion%hamiltonian%hubbard_log_level /= 'summary') then
                call g_logger%warning('HUBBARD_LDM_PHYSICALITY atom='//fmt('i4', na_glob)// &
                                      ' diagonal_out_of_range='//fmt('i0', nphys_warn)// &
                                      ' tolerance=1e-3 (values retained)', __FILE__, __LINE__)
             end if
-            if (rank == 0) then
+            if (rank == 0 .and. local_atom_carries_uj) then
                max_herm = 0.0_rp
                do li = 0, min(3, lmax_basis)
                   jdim = 2*li + 1
