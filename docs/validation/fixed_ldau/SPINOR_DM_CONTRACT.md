@@ -55,3 +55,16 @@ Production smoke, U=0, flag on, 4 steps, single-threaded (RECORDS, not gates):
 | KS `k_space_scf/bccFe`, nsp=2, lmax=2, 2x2x2 mesh (documented fixture namelists) | 1.1e-17 | 1.8e-15 | 0.217, 0.996 | 0.9e-2 to 1.8e-2 |
 
 `control%has_soc()` is true for nsp=2 and nsp=4; the nonzero spin-off-diagonal block in a collinear z-magnetized Fe run is the effect of the l.s term. The RS block-recursion run populates the spin-off-diagonal blocks, so no Chebyshev run was needed.
+
+## Inventory for inserting a spinor V (S3 T0; read from source at `9dcbecee`, no runs)
+
+| item | finding |
+|---|---|
+| `l.s` operator | `hamiltonian%build_lsham` (`hamiltonian_build.f90`) fills `lsham(nb,nb,ntype)`: `prefac*Lz` (up-up), `prefac*(Lx-i Ly)` (up-down), `prefac*(Lx+i Ly)` (down-up), `-prefac*Lz` (down-down) with `prefac=0.5*xi` (p: `sqrt(xi_p(1) xi_p(2))`, d: `sqrt(xi_d(1) xi_d(2))`). Called at `nsp==2` or `4` from `calculation.f90:1849` and `calculation_reciprocal.f90`. |
+| RS bulk | `locham = ee(:,:,m,type) + lsham(:,:,type)` (`hamiltonian_build.f90:1281`); the Chebyshev recursion adds `lsham` as a separate `zgemm` term (`recursion_chebyshev.f90`) and in the scaled cache (`chebyshev_fast.f90`). `build_bulkham` adds `hubbard_u_pot(:,:,type)` to `ee(:,:,1,type)` as a full `nb x nb` matrix (`hamiltonian_build.f90:1665`), as does the surface path (`:1904`). |
+| RS cluster/impurity | `build_locham` adds `hubbard_u_pot(:,:,u_type)` to `hall(:,:,1,nlim)` as a full `nb x nb` matrix (`:2112`). `hall` is spin-resolved and already carries spin-off-diagonal blocks (`hmag` x,y). |
+| KS | the k-space Hamiltonian is assembled from the same `ee` and `lsham` (`hamiltonian_build.f90:2556, 2598`), so a `hubbard_u_pot` entry in `ee(:,:,1,type)` reaches KS. |
+| Consequence | because insertion is of the whole `hubbard_u_pot(nb,nb,ntype)` matrix, a spinor V written into its d rows and columns `(sigma-1)*spin_off + 4 + i` (including the up-down blocks) is added by the existing code, once per build. Only `calculate_hubbard_u_potential_general` (collinear, same-spin blocks) has to change. |
+| Current guard | `hamiltonian_build.f90:756`: fixed U with SOC or noncollinear spinors is fatal. |
+| SOC scaling | `soc_scale` in `&self` (default 1.0) multiplies `xi_p` and `xi_d` of every symbolic atom (`self.f90:1787`); there is no knob in `&hamiltonian` or `&control`. |
+| Density policies | `control%density_policy` is `constrained_spiral` (default) or `relaxed_reference`; any other value is fatal (`control.f90:793`). Both resolve a per-site axis from `constraint_target` if nonzero, else `potential%mom` (z if that is zero) via `resolve_site_axis`/`set_axis`, and every later radial spin projection uses that axis. Under `constrained_spiral` the reference stays fixed and the unabsorbed transverse density is reported as residual and torque; under `relaxed_reference` the reference `potential%mom` follows the density. The axis is therefore z only when `mom` is along z and no constraint target is set. |
