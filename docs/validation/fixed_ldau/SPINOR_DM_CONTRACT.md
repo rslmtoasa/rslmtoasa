@@ -92,3 +92,17 @@ The logged spin moment exceeds the bound. Per-iteration values of the two (c1) r
 Code: the collinear `ldm` is saved as old and new around the DOS step and blended by `mix%mix_ldm_linear` with `ldm_beta`, whose default is 1.0 (no blending); the result is written back to `potential%ldm` before the next Hamiltonian build. `potential%ldm_spinor` is overwritten by the extraction every iteration. With the default `ldm_beta` both are the latest P_out. The trace machinery (`write_fixed_u_trace`) is limited to nsp=1, so a temporary log line (not committed) was added to the spinor branch: at every Hamiltonian build of the nsp=2, soc_scale=0, U=2 eV, J=0 run the diagonal blocks of `ldm_spinor` minus `ldm` were 0.0E+00 (first build: spinor array not yet allocated, collinear blocks used). V diagonal averages (up, down), nsp=2 spinor path against the nsp=1 `HUBBARD_VDIAG` line: build 1 0.073499, 0.073499 in both; build 2 -0.051767, 0.012573 in both; build 3 -0.058575, 0.013292 against -0.058611, 0.013310; build 4 -0.059511, 0.013827 against -0.059560, 0.013853. Both paths therefore build V from the same P; V is identical through iteration 2 and the difference first appears in the P_out of iteration 2. The hypothesis is not confirmed.
 
 Spin-moment definitions: the logged `Spin moment of atom` is `potential%mtot = |m|` of the projected-DOS spin integrals (all orbitals, up to E_F, that iteration's unmixed output); the `ql`-derived moment is `sum_l [ql(1,l,up) - ql(1,l,dn)]` from the potential file, the mixed band-moment charges after the last iteration.
+
+### S3.1: converged comparison (replaces T2(c))
+
+bcc Fe, RS block recursion, `recur='block'`, beta 0.01 Broyden, fresh deck copies from the fixture seed, 200 steps with `conv_thr=1e-30`, single-threaded; nsp=2 runs use `soc_scale=0`, the +U runs U=2 eV, J=0, `spectral`, flag on for nsp=2. Acceptance on the last 20 steps: U=0 nsp=2 Diff 1.5e-8 (window maximum 4.0e-8), nsp=1 Diff 7.6e-9 (3.3e-8), spreads at the 1e-6 print resolution; nsp=2 +U Diff 1.8e-8 (2.2e-8). The nsp=1 +U run did not meet the smoke criteria after 200 steps (Diff 2.7e-6, 20-step spread of the logged moment 1.2e-5) nor after the ladder step (200 more steps, beta 0.005: Diff 1.9e-6, spread 1.2e-5); its moment moved by 1e-6 between the two, so it is PROVISIONAL and its state is not in doubt at the size of the differences below.
+
+| quantity (nsp=2 minus nsp=1) | U=0 baseline | U=2, J=0 | ratio | bound max(1e-10, 10 x baseline) | |
+|---|---|---|---|---|---|
+| d occupation up (`ql`) | +2.7e-4 | -2.99e-3 | 11.2 | 2.7e-3 | FAIL |
+| d occupation down (`ql`) | -1.8e-4 | +2.48e-3 | 13.9 | 1.8e-3 | FAIL |
+| moment from `ql` | +2.34e-4 | -5.53e-3 | 23.6 | 2.3e-3 | FAIL |
+| logged spin moment | +2.34e-4 | -5.52e-3 | 23.6 | 2.3e-3 | FAIL |
+| E_F (6 printed decimals) | -1.1e-4 | -2.9e-5 | 0.3 | 1.1e-3 | PASS |
+
+States: U=0 nsp=2 / nsp=1 moment 2.104064 / 2.103830; U=2 nsp=2 / nsp=1 2.380491 / 2.386010. The nsp=2 minus nsp=1 difference changes sign between U=0 and U=2, so it is not a simple amplification of the U=0 offset. The cause is not identified. Established: the V insertion matches the collinear V at the first two builds (S3.1 trace), the spinor block fill equals the collinear path for zero coherences (1.9e-16), and the nsp=2 and nsp=1 converged states already differ by 2.3e-4 at U=0.
