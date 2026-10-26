@@ -321,7 +321,9 @@ contains
 
       do ik = 1, size(reciprocal_obj%eigenvalues, 2)
          ik_global = ik
-         if (allocated(reciprocal_obj%k_l2g_map) .and. ik <= size(reciprocal_obj%k_l2g_map)) ik_global = reciprocal_obj%k_l2g_map(ik)
+         if (allocated(reciprocal_obj%k_l2g_map)) then
+            if (ik <= size(reciprocal_obj%k_l2g_map)) ik_global = reciprocal_obj%k_l2g_map(ik)
+         end if
          wk = reciprocal_obj%k_weights(ik_global)
          do ib = 1, size(reciprocal_obj%eigenvalues, 1)
             e = reciprocal_obj%eigenvalues(ib, ik)
