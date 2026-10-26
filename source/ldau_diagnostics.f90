@@ -240,11 +240,14 @@ contains
                               real(z, rp), aimag(z))
                         end do
                      end do
-                     call this%write_fixed_u_csv_row(unit, 'm1_trace_consistency', &
-                        this%fixed_u_trace_iteration, 'M1_OUT', ia - 1, this%lattice%iz(ia), l, spin, &
-                        -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
-                        real(m1_trace, rp) - this%symbolic_atom(plusbulk)%potential%ql(1, l, spin)*center, &
-                        aimag(m1_trace), 0.0_rp)
+                     ! In local mode the stored d-shell centre is c' = c - t/q0, so this row would
+                     ! carry t; the d-shell identity is written as m0_trace_consistency instead.
+                     if (.not. (l == 2 .and. trim(this%hamiltonian%hubbard_radial_moments) == 'local')) &
+                        call this%write_fixed_u_csv_row(unit, 'm1_trace_consistency', &
+                           this%fixed_u_trace_iteration, 'M1_OUT', ia - 1, this%lattice%iz(ia), l, spin, &
+                           -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
+                           real(m1_trace, rp) - this%symbolic_atom(plusbulk)%potential%ql(1, l, spin)*center, &
+                           aimag(m1_trace), 0.0_rp)
                   end if
                end if
             end do
@@ -600,8 +603,8 @@ contains
       complex(rp) :: p_ij, t_complex, vm1_complex, v2p_complex, v2_ij, p_trace, m1_trace
       real(rp), allocatable :: im_resid(:, :), p_trace_error(:, :), m1_trace_error(:, :)
       real(rp) :: q0, center, q2, t, local_q2, t_vout, vm1_vout, v2_vout
-      real(rp) :: t_pt, vm1_pt, v2_pt
-      logical :: p_available
+      real(rp) :: t_pt, vm1_pt, v2_pt, center_spectral
+      logical :: p_available, local_mode
 
       this%fixed_u_m0_snapshot_valid = .false.
       if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
@@ -673,6 +676,9 @@ contains
          end do
       end if
       this%fixed_u_m0_p_available = p_available
+      ! In local mode the stored centre and q2 are the corrected values c' and q2'
+      ! (c' = c - t/q0); the unshifted centre is c' + t/q0.
+      local_mode = trim(this%hamiltonian%hubbard_radial_moments) == 'local'
 
       ! Evaluate V(Pout) without changing the live Hamiltonian.  This is a
       ! deliberately wrong-pairing control for the frozen radial replay.
@@ -750,8 +756,7 @@ contains
                   if (i == j) p_trace = p_trace + p_ij
                   t_complex = t_complex + vin(rowoff + i, rowoff + j, itype)* &
                      this%symbolic_atom(plusbulk)%potential%ldm(3, spin, j, i)
-                  vm1_complex = vm1_complex + vin(rowoff + i, rowoff + j, itype)* &
-                     (m1(ia, 3, spin, j, i) - center*this%symbolic_atom(plusbulk)%potential%ldm(3, spin, j, i))
+                  vm1_complex = vm1_complex + vin(rowoff + i, rowoff + j, itype)*m1(ia, 3, spin, j, i)
                   v2_ij = (0.0_rp, 0.0_rp)
                   do k = 1, norb_l
                      v2_ij = v2_ij + vin(rowoff + i, rowoff + k, itype)*vin(rowoff + k, rowoff + j, itype)
@@ -761,12 +766,17 @@ contains
             end do
             end if
             t = real(t_complex, rp)
+            center_spectral = center
+            if (local_mode) center_spectral = center + t/q0
+            ! Tr(V M1c) with M1c = M1 - c_spectral P
+            vm1_complex = vm1_complex - center_spectral*t_complex
             local_q2 = q2 - 2.0_rp*real(vm1_complex, rp) + real(v2p_complex, rp) - t*t/q0
+            if (local_mode) local_q2 = q2
             im_resid(ia, spin) = max(abs(aimag(t_complex)), abs(aimag(vm1_complex)), abs(aimag(v2p_complex)))
             p_trace_error(ia, spin) = real(p_trace, rp) - q0
-            m1_trace_error(ia, spin) = real(m1_trace, rp) - q0*center
+            m1_trace_error(ia, spin) = real(m1_trace, rp) - q0*center_spectral
             this%fixed_u_m0_trvp(ia, spin) = t
-            this%fixed_u_m0_local_center(ia, spin) = center - t/q0
+            this%fixed_u_m0_local_center(ia, spin) = merge(center, center - t/q0, local_mode)
             this%fixed_u_m0_local_q2(ia, spin) = local_q2
 
             t_vout = 0.0_rp
@@ -775,7 +785,7 @@ contains
             t_pt = 0.0_rp
             vm1_pt = 0.0_rp
             v2_pt = 0.0_rp
-            if (p_available) then
+            if (p_available .and. .not. local_mode) then
             do i = 1, norb_l
                do j = 1, norb_l
                   t_vout = t_vout + real(vout(rowoff+i, rowoff+j, itype)* &
@@ -799,10 +809,12 @@ contains
                end do
             end do
             end if
-            this%fixed_u_m0_vout_center(ia, spin) = center - t_vout/q0
-            this%fixed_u_m0_vout_q2(ia, spin) = q2 - 2.0_rp*vm1_vout + v2_vout - t_vout*t_vout/q0
-            this%fixed_u_m0_pt_center(ia, spin) = center - t_pt/q0
-            this%fixed_u_m0_pt_q2(ia, spin) = q2 - 2.0_rp*vm1_pt + v2_pt - t_pt*t_pt/q0
+            if (.not. local_mode) then
+               this%fixed_u_m0_vout_center(ia, spin) = center - t_vout/q0
+               this%fixed_u_m0_vout_q2(ia, spin) = q2 - 2.0_rp*vm1_vout + v2_vout - t_vout*t_vout/q0
+               this%fixed_u_m0_pt_center(ia, spin) = center - t_pt/q0
+               this%fixed_u_m0_pt_q2(ia, spin) = q2 - 2.0_rp*vm1_pt + v2_pt - t_pt*t_pt/q0
+            end if
             this%fixed_u_m0_t_vout(ia, spin) = t_vout
             this%fixed_u_m0_t_pt(ia, spin) = t_pt
          end do
