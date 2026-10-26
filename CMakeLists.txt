@@ -858,6 +858,18 @@ if (RUN_UNIT_TESTS)
     set_tests_properties(${_t} PROPERTIES LABELS "unit;spin-response;quick"
       FIXTURES_REQUIRED SpinResponseFeScratch RESOURCE_LOCK SpinResponseFeScratch)
   endforeach()
+  # Spinor U insertion: scratch bcc-Fe nsp=2 deck with base and U inputs.
+  set(_soc_u_scratch "${CMAKE_BINARY_DIR}/Testing/validation/soc_u_insertion")
+  add_test(NAME LdaUSocInsertionScratch
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/fixed_ldau/soc_u_scratch.py"
+      "${TestDIR}/scf/cases/bulk/bccFe" "${_soc_u_scratch}")
+  set_tests_properties(LdaUSocInsertionScratch PROPERTIES
+    LABELS "lda_u;spinor" FIXTURES_SETUP LdaUSocInsertionScratch RESOURCE_LOCK LdaUSocInsertionScratch)
+  add_fortran_component_unit_test(UnitLdaUSocInsertion ${TestDIR}/unit/test_hubbard_soc_insertion.f90)
+  target_link_libraries(UnitLdaUSocInsertion SpinResponseFeState)
+  add_test(NAME UnitLdaUSocInsertion COMMAND UnitLdaUSocInsertion WORKING_DIRECTORY "${_soc_u_scratch}")
+  set_tests_properties(UnitLdaUSocInsertion PROPERTIES LABELS "unit;lda_u;spinor"
+    FIXTURES_REQUIRED LdaUSocInsertionScratch RESOURCE_LOCK LdaUSocInsertionScratch)
   # S2': two-atom bcc Fe cell with antiparallel moments, (up, down) against (down, up).
   set(_af_scratch "${CMAKE_BINARY_DIR}/Testing/spin_response/af")
   add_test(NAME SpinResponseAfDriver

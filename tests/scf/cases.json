@@ -210,6 +210,47 @@
       }
     },
     {
+      "name": "Example_impurity_soc_u_guard",
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
+      "case": "impurity/B2FeCo_nsp1",
+      "timeout": 300,
+      "_note": "hubbard_soc_experimental with calctype I stops: spinor U is bulk only",
+      "expect_fatal": "SOC+U embedded runs (calctype I or S) are not yet supported",
+      "namelists": {
+        "control":     {"nsp": 2, "recur": "block", "lld": 21},
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false, "hubbard_soc_experimental": true }
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_soc_u_policy_guard",
+      "quick": true,
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
+      "case": "bulk/bccFe_hubbard",
+      "timeout": 300,
+      "_note": "hubbard_soc_experimental with relaxed_reference stops: P/V frame and radial frame must coincide",
+      "expect_fatal": "requires density_policy=constrained_spiral",
+      "namelists": {
+        "control":     {"nsp": 2, "recur": "block", "lld": 21, "density_policy": "relaxed_reference"},
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false, "hubbard_soc_experimental": true }
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_soc_u_tilted_axis_guard",
+      "quick": true,
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
+      "case": "bulk/bccFe_hubbard_soc_tilted",
+      "timeout": 300,
+      "_note": "hubbard_soc_experimental with a tilted reference axis (mom 0.2,0,0.98) stops",
+      "expect_fatal": "is not parallel to global z",
+      "namelists": {
+        "control":     {"nsp": 2, "recur": "block", "lld": 21},
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false, "hubbard_soc_experimental": true }
+      }
+    },
+    {
       "name": "Example_bulk_bccFe_nsp3_block_hoh",
       "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hoh"],
       "case": "bulk/bccFe",
