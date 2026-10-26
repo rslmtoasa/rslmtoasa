@@ -1122,7 +1122,8 @@ contains
                                      ' orb_caps='//fmt('i0', ncap_orb)// &
                                      ' trace_caps='//fmt('i0', ncap_trace), __FILE__, __LINE__)
             end if
-            if (rank == 0 .and. fixed_liechtenstein_active .and. nphys_warn > 0) then
+            if (rank == 0 .and. fixed_liechtenstein_active .and. nphys_warn > 0 .and. &
+                this%recursion%hamiltonian%hubbard_log_level /= 'summary') then
                call g_logger%warning('HUBBARD_LDM_PHYSICALITY atom='//fmt('i4', na_glob)// &
                                      ' diagonal_out_of_range='//fmt('i0', nphys_warn)// &
                                      ' tolerance=1e-3 (values retained)', __FILE__, __LINE__)
@@ -1138,7 +1139,14 @@ contains
                end do
                call g_logger%info('HUBBARD_LDM_CHECK atom='//fmt('i4', na_glob)// &
                                   ' max_antiherm='//fmt('e12.4', max_herm), __FILE__, __LINE__)
+               if (this%recursion%hamiltonian%hubbard_log_level /= 'summary') then
                do li = 0, min(3, lmax_basis)
+                  if (.not. allocated(this%symbolic_atom(plusbulk)%potential%hubbard_u) .or. &
+                      .not. allocated(this%symbolic_atom(plusbulk)%potential%hubbard_j)) cycle
+                  if (li + 1 > size(this%symbolic_atom(plusbulk)%potential%hubbard_u) .or. &
+                      li + 1 > size(this%symbolic_atom(plusbulk)%potential%hubbard_j)) cycle
+                  if (abs(this%symbolic_atom(plusbulk)%potential%hubbard_u(li + 1)) <= 1.0e-10_rp .and. &
+                      abs(this%symbolic_atom(plusbulk)%potential%hubbard_j(li + 1)) <= 1.0e-10_rp) cycle
                   call g_logger%info('HUBBARD_BANDCMP atom='//fmt('i4', na_glob)//' l='//fmt('i2', li)// &
                                      ' ql_up='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%ql(1, li, 1))// &
                                      ' ql_dn='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%ql(1, li, 2))// &
@@ -1171,6 +1179,7 @@ contains
                      end do
                   end if
                end do
+               end if
             end if
             call this%symbolic_atom(plusbulk)%potential%flatten_ldm()
          end do

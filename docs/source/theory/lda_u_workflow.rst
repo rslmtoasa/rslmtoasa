@@ -69,9 +69,11 @@ Simplified Dudarev form:
 
 .. math::
 
-   E_U - E_{dc} = \frac{U_{\mathrm{eff}}}{2}\sum_{\sigma}
-   \mathrm{Tr}\left[n^{\sigma}(1-n^{\sigma})\right], \quad
-   U_{\mathrm{eff}} = U - J.
+   E_U - E_{dc} = \frac{U}{2}\sum_{\sigma}
+   \mathrm{Tr}\left[n^{\sigma}(1-n^{\sigma})\right].
+
+The validated implementation limit is ``J=0`` with nonzero ``U``; the full
+Liechtenstein U/J implementation is described above.
 
 Extended +V correction (nearest-neighbor inter-site contribution):
 
@@ -87,9 +89,9 @@ Implementation status
 
 - ``liechtenstein`` potential path:
   the ordinary on-site U/J potential is wired and is the validated scope of
-  [VAL-04].  The physical validation is scoped to collinear bcc-Fe with a
-  fixed d-shell U/J input; it is not a blanket validation of every magnetic,
-  SOC, or self-consistent-U combination.
+  [VAL-04]. Validated scope: KS and RS bulk energies for fixed d-shell U/J;
+  RS impurity density only. Surfaces are experimental. The Dudarev validation
+  limit is ``J=0`` with ``U``; this does not validate arbitrary J.
 - ``acbn0`` potential path:
   optional path is available, but should currently be treated as an
   implementation-in-progress path for validation studies.
@@ -155,10 +157,9 @@ preflight before launch. Use the same deck for RS and KS surface calculations;
 the local density mode is independent of the host's backend.
 
 Surface Hubbard support is density-only. Surface energies exclude the Hubbard
-term; surface Hubbard-energy routing remains off. The same-material RS/KS
-surface smoke and layer-moment comparison are still OPEN because this checkout
-has no accepted local U-carrying Cu bulk endpoint for its only surface fixture,
-fcc Cu(001). See the C6 records in
+term; surface Hubbard-energy routing remains off. Surface density support is experimental. A Ni(001) probe showed a narrow-window
+non-finite/NaN projected-DOS observation; widening the energy window did not
+remove it. See the C6 records in
 ``docs/validation/fixed_ldau/rs/C6_T0_RESULTS.md`` and
 ``C6_AMENDMENT.md``.
 
@@ -352,3 +353,22 @@ Notes and constraints
 See `VAL-04 developer record <../../dev/VAL-04_LDA_U.md>`_ for the material response envelope,
 occupation-matrix checks, convergence result, and the explicit RS/KS,
 noncollinear, and SOC support classification.
+
+
+Restart density-matrix files
+=============================
+
+For each atom type carrying U or J, the solver writes ``<label>_dm.nml`` beside
+``<label>_out.nml``. The density file records the label, radial mode, backend,
+per-channel U/J in eV, run id, iteration, and square real/imaginary blocks
+indexed by angular momentum and row/column spin. Collinear output contains only
+spin-diagonal blocks. The potential restart stores ``dm_file`` and
+``dm_sha256``; legacy inline ``ldm_flatten`` fields remain readable.
+
+Hubbard screen output
+=====================
+
+``hubbard_log_level`` controls Hubbard diagnostics: ``summary`` (default)
+prints run setup and compact per-iteration site summaries, ``detailed`` adds
+per-site density, physicality, and energy diagnostics, and ``debug`` prints
+the full diagnostic stream.

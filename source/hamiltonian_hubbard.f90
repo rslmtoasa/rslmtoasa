@@ -300,7 +300,7 @@ contains
                   ldm_max_abs = max(ldm_max_abs, abs(ldm(na, l, 2, i, j)))
                end do
             end do
-            if (rank == 0 .and. emit_logs) then
+            if (rank == 0 .and. emit_logs .and. this%hubbard_log_level /= 'summary') then
                call g_logger%info('HUBBARD_LDM type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
                   ' tr_up='//fmt('f10.6', ldm_trace_up)//' tr_dn='//fmt('f10.6', ldm_trace_dn)// &
                   ' maxabs='//fmt('es12.4', ldm_max_abs), __FILE__, __LINE__)
@@ -315,7 +315,7 @@ contains
                ql_occ_up = this%lattice%symbolic_atoms(na)%potential%ql(1, l - 1, 1)
                ql_occ_dn = this%lattice%symbolic_atoms(na)%potential%ql(1, l - 1, 2)
             end if
-            if (rank == 0 .and. emit_logs) then
+            if (rank == 0 .and. emit_logs .and. this%hubbard_log_level /= 'summary') then
                call g_logger%info('HUBBARD_QLCMP type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
                   ' ql_up='//fmt('f10.6', ql_occ_up)//' ql_dn='//fmt('f10.6', ql_occ_dn)// &
                   ' ldm_up='//fmt('f10.6', ldm_trace_up)//' ldm_dn='//fmt('f10.6', ldm_trace_dn)// &
@@ -569,7 +569,8 @@ contains
                end if
             end do
          end do
-         if (rank == 0 .and. emit_logs) call g_logger%info('HUBBARD_POT type='//fmt('i4', na)//' maxabs='//fmt('es12.4', hup_max_abs), __FILE__, __LINE__)
+         if (rank == 0 .and. emit_logs .and. this%hubbard_log_level /= 'summary') &
+            call g_logger%info('HUBBARD_POT type='//fmt('i4', na)//' maxabs='//fmt('es12.4', hup_max_abs), __FILE__, __LINE__)
       end do
 
       do na = 1, this%lattice%ntype
