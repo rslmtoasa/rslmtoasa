@@ -6,6 +6,13 @@ Run with the repository .venv interpreter:
 
 Every deck is copied fresh from tests/scf/cases into a new run directory and
 launched single-threaded through tools/run_rslmto_checked.py (4 SCF steps).
+
+The guard-fixture script (RA2) runs against the candidate binary only: the
+reference binary predates the guards it checks, so a reference row cannot pass.
+
+The SOC-on nsp=2 +U rows compare the candidate with a committed snapshot
+(tests/validation/fixed_ldau/data/soc_u_snapshot.txt) at 1e-10. Rewrite the
+snapshot only with --update-snapshot "one-line reason".
 """
 
 from __future__ import annotations
@@ -24,6 +31,9 @@ ROOT = Path(__file__).resolve().parents[1]
 CASES = ROOT / "tests/scf/cases"
 WRAPPER = ROOT / "tools/run_rslmto_checked.py"
 RA2 = ROOT / "tests/validation/fixed_ldau/rs_embedding_ra2.py"
+SNAPSHOT = ROOT / "tests/validation/fixed_ldau/data/soc_u_snapshot.txt"
+SNAPSHOT_TOL = 1e-10
+SOC0_TOL = 1e-9  # the logged Diff has 10 decimals
 PY = str(ROOT / ".venv/bin/python")
 NSTEP = 4
 NOT_SCIENTIFIC = {"preflight.json", "checked_launcher.log", "testrun.log", "run_monitor.json"}
@@ -56,8 +66,22 @@ def use_kspace(text: str) -> str:
     return re.sub(r"(?m)^&self\s*$", "&self\nuse_kspace = .true.", text, count=1)
 
 
-def add_u(text: str, u: float, j: float) -> str:
-    return text + f"\n&hamiltonian\nhubbard_u_general(1,3) = {u}\nhubbard_j_general(1,3) = {j}\n/\n"
+def add_u(text: str, u: float, j: float, extra: str = "") -> str:
+    return text + f"\n&hamiltonian\nhubbard_u_general(1,3) = {u}\nhubbard_j_general(1,3) = {j}\n{extra}/\n"
+
+
+LOCAL = "hubbard_radial_moments = 'local'\n"
+SPINOR_LOCAL = "hubbard_soc_experimental = .true.\n" + LOCAL
+
+
+def in_hamiltonian(text: str, keys: str) -> str:
+    """Insert keys into the existing &hamiltonian group (a second group would be ignored)."""
+    return text.replace("&hamiltonian", "&hamiltonian\n" + keys, 1)
+
+
+def soc_off(text: str) -> str:
+    """SOC held at zero: soc_scale alone is undone by the per-iteration xi update, fix_soc keeps it."""
+    return text.replace("&self", "&self\nsoc_scale = 0.0\nfix_soc = .true.", 1)
 
 
 def run(binary: Path, work: Path, restart: str | None = None) -> int:
@@ -166,6 +190,64 @@ def compare_by_value(ref: Path, cand: Path) -> tuple[bool, str]:
             f"{len(set(ro) & set(co))} files, {n_nml} potential files, {n_vals} occupation values equal")
 
 
+def signature(work: Path, diag_only: bool) -> dict[str, list[float]]:
+    """Per-iteration Diff, Fermi energy, spin moment from the log; dm sidecar entries (spin-diagonal only if asked)."""
+    text = log_text(work)
+    sig = {"diff": numbers(" ".join(re.findall(r"Diff=\s*([0-9.Ee+-]+)", text))),
+           "fermi": numbers(" ".join(re.findall(r"(?:Free Fermi energy:|Using canonical/fixed Fermi level =)\s*([0-9.Ee+-]+)", text))),
+           "spin_moment": numbers(" ".join(re.findall(r"Spin moment of atom\s+1 is\s+([0-9.Ee+-]+)", text)))}
+    for side in sorted(work.glob("*_dm.nml")):
+        for line in side.read_text().splitlines():
+            m = re.match(r"\s*(dm_(?:re|im)\((\d+),(\d+),(\d+),(\d+),:\))\s*=\s*(.*)", line)
+            if m and (not diag_only or m.group(3) == m.group(4)):
+                sig[m.group(1).replace("dm_", "dm_" + side.stem + "_")] = numbers(m.group(6))
+    return sig
+
+
+def compare_signatures(a: dict, b: dict, tol: float) -> tuple[bool, str]:
+    if set(a) != set(b) or any(len(a[k]) != len(b[k]) for k in a):
+        return False, "signature keys or lengths differ"
+    worst = max((abs(x - y) for k in a for x, y in zip(a[k], b[k])), default=float("inf"))
+    if not a["diff"] or not a["fermi"]:
+        return False, "no SCF log values found"
+    return worst <= tol, f"{len(a['diff'])} iterations, {len(a)} quantities, max |delta| {worst:.2e} (tol {tol:.0e})"
+
+
+def soc0_vs_nsp1(name, tag, case1, edit1, case2, edit2, base, cand, restart=None):
+    """Candidate nsp=2 with SOC held at zero against the candidate nsp=1 path, same U."""
+    dirs = []
+    for sub, case, edit in (("nsp1", case1, edit1), ("nsp2_soc0", case2, edit2)):
+        d = prepare(CASES / case, base / f"{tag}_{sub}", edit)
+        rc = run(cand, d, restart)
+        if rc != 0:
+            record(name, False, f"{sub} run failed rc={rc}")
+            return
+        dirs.append(d)
+    ok, detail = compare_signatures(signature(dirs[0], True), signature(dirs[1], True), SOC0_TOL)
+    record(name, ok, detail)
+
+
+def snapshot_rows(runs: dict[str, Path]) -> dict[str, dict]:
+    return {tag: signature(d, False) for tag, d in runs.items()}
+
+
+def read_snapshot() -> dict[str, dict]:
+    snap: dict[str, dict] = {}
+    for line in SNAPSHOT.read_text().splitlines():
+        if line and not line.startswith("#"):
+            tag, key, *vals = line.split()
+            snap.setdefault(tag, {})[key] = [float(v) for v in vals]
+    return snap
+
+
+def write_snapshot(rows_: dict[str, dict], reason: str, cand: Path) -> None:
+    lines = ["# SOC-on nsp=2 +U regression snapshot (bcc Fe, U=2 J=0, flag on, local, 4 steps); columns: case key values",
+             f"# reason: {reason}", f"# candidate sha256: {sha256(cand)}"]
+    for tag, sig in rows_.items():
+        lines += [f"{tag} {key} " + " ".join(f"{v:.17e}" for v in vals) for key, vals in sig.items()]
+    SNAPSHOT.write_text("\n".join(lines) + "\n")
+
+
 def compare_identical(ref: Path, cand: Path, skip: tuple[str, ...] = ()) -> tuple[bool, str]:
     ro = {k: v for k, v in outputs(ref).items() if k not in skip}
     co = {k: v for k, v in outputs(cand).items() if k not in skip}
@@ -245,11 +327,11 @@ def ctest(name: str, build: Path, selector: list[str]) -> None:
     record(name, p.returncode == 0 and bool(m), f"{m.group(3)} tests, {m.group(2)} failed" if m else "ctest failed")
 
 
-def guard_fixtures(binary: Path, base: Path, label: str, gate: bool) -> None:
+def guard_fixtures(binary: Path, base: Path, label: str) -> None:
     p = subprocess.run([PY, str(RA2), "--binary", str(binary), "--scratch-root", str(base / f"ra2_{label}")],
                        cwd=ROOT, capture_output=True, text=True)
     detail = "13 scenarios" if p.returncode == 0 else (p.stderr.strip().splitlines() or ["failed"])[-1][:160]
-    record(f"guard fixtures (RA2), {label} binary", p.returncode == 0, detail, gate)
+    record(f"guard fixtures (RA2), {label} binary", p.returncode == 0, detail)
 
 
 def main() -> int:
@@ -259,6 +341,7 @@ def main() -> int:
     ap.add_argument("--cand-build", type=Path, default=ROOT / "build", help="build directory for ctest")
     ap.add_argument("--work", type=Path, help="scratch root (default: new temporary directory)")
     ap.add_argument("--json", type=Path, help="write a JSON sidecar here")
+    ap.add_argument("--update-snapshot", metavar="REASON", help="rewrite the SOC-on +U snapshot; REASON is recorded in its header")
     args = ap.parse_args()
     ref, cand = args.ref.resolve(), args.cand.resolve()
     base = (args.work or Path(tempfile.mkdtemp(prefix="ldau_regression_"))).resolve()
@@ -281,8 +364,35 @@ def main() -> int:
     paired("+U KS bccFe U=2 J=0.5, by value", "U_ks", "k_space_scf/bccFe", ks_u, compare_by_value, base, ref, cand)
     paired("+U impurity/B2FeCo_nsp1, by value", "U_imp", "impurity/B2FeCo_nsp1", imp, compare_by_value, base, ref, cand)
 
-    guard_fixtures(cand, base, "candidate", True)
-    guard_fixtures(ref, base, "reference", False)
+    # nsp=2 +U (flag on, local): SOC held at zero against nsp=1, then SOC on against the committed snapshot
+    rs_soc0 = lambda t: soc_off(in_hamiltonian(set_nstep(t), SPINOR_LOCAL))
+    rs_soc = lambda t: in_hamiltonian(set_nstep(t), SPINOR_LOCAL)
+    soc0_vs_nsp1("+U RS nsp=2 soc_scale=0 fix_soc versus nsp=1, local", "U_rs_soc0", "bulk/bccFe_hubbard_nsp1",
+                 lambda t: in_hamiltonian(set_nstep(t), LOCAL), "bulk/bccFe_hubbard", rs_soc0, base, cand, restart="Fe.nml")
+    soc0_vs_nsp1("+U KS nsp=2 soc_scale=0 fix_soc versus nsp=1, local", "U_ks_soc0", "k_space_scf/bccFe",
+                 lambda t: add_u(ks(t), 2.0, 0.0, LOCAL), "k_space_scf/bccFe",
+                 lambda t: soc_off(add_u(ks_nsp2(t), 2.0, 0.0, SPINOR_LOCAL)), base, cand)
+    soc_runs = {}
+    for tag, case, edit, restart in (("rs_soc_u2", "bulk/bccFe_hubbard", rs_soc, "Fe.nml"),
+                                     ("ks_soc_u2", "k_space_scf/bccFe",
+                                      lambda t: add_u(ks_nsp2(t), 2.0, 0.0, SPINOR_LOCAL), None)):
+        d = prepare(CASES / case, base / tag, edit)
+        if run(cand, d, restart) == 0:
+            soc_runs[tag] = d
+        else:
+            record(f"+U nsp=2 SOC on {tag[:2].upper()} versus snapshot", False, "run failed")
+    if args.update_snapshot is not None and len(soc_runs) == 2:
+        write_snapshot(snapshot_rows(soc_runs), args.update_snapshot, cand)
+    for tag, d in soc_runs.items():
+        name = f"+U nsp=2 SOC on {tag[:2].upper()} versus snapshot"
+        if not SNAPSHOT.is_file():
+            record(name, False, "no snapshot; create it with --update-snapshot")
+            continue
+        snap = read_snapshot().get(tag, {})
+        ok, detail = compare_signatures(snap, signature(d, False), SNAPSHOT_TOL) if snap else (False, "case not in snapshot")
+        record(name, ok, detail)
+
+    guard_fixtures(cand, base, "candidate")
     ctest("CTest label lda_u", args.cand_build, ["-L", "lda_u"])
     ctest("impurity/surface auto fixtures (UnitAutoImpurityLocalMode)", args.cand_build, ["-R", "UnitAutoImpurityLocalMode"])
     if rs_u:
