@@ -48,6 +48,7 @@ module self_mod
    use electrostatics_multipole_mod, only: compute_dipole_moments
    use math_mod
    use precision_mod, only: rp
+   use hubbard_spinor_mod, only: hubbard_d_tensor, hubbard_spinor_functional
    use timer_mod, only: g_timer
    use scf_benchmark_profile_mod, only: g_scf_benchmark_profile
    use scf_guard_mod, only: guard_q0_capacity
@@ -732,6 +733,8 @@ contains
          site_dc = sum(e_dc(itype, :))
          site_hub = sum(e_hub(itype, :))
          site_t = sum(tr_vp(itype, :))
+         if (this%hamiltonian%hubbard_soc_experimental .and. this%control%nsp == 2) &
+            call spinor_site_hubbard_energy(this%symbolic_atom(plusbulk)%potential, site_int, site_dc, site_hub)
          etot_site = this%symbolic_atom(plusbulk)%potential%etot
          p_residual_text = 'NA'
          v_residual_text = 'NA'
@@ -1085,6 +1088,17 @@ contains
       end do
       deallocate(density, potential, e_int, e_dc, e_hub, tr_vp)
    end function fixed_hubbard_energy_pout
+
+   !> Spinor d-shell E_int, E_DC and E_Hub (Ry) of one site from the full 10x10 P_out held in ldm_spinor.
+   subroutine spinor_site_hubbard_energy(site, e_int, e_dc, e_hub)
+      type(potential), intent(in) :: site
+      real(rp), intent(out) :: e_int, e_dc, e_hub
+      complex(rp) :: t(5, 5, 5, 5), v10(10, 10)
+
+      if (.not. allocated(site%ldm_spinor)) error stop 'spinor Hubbard energy: the spinor density was not extracted'
+      call hubbard_d_tensor(site%hubbard_u(3), site%hubbard_j(3), t)
+      call hubbard_spinor_functional(t, site%hubbard_u(3), site%hubbard_j(3), site%ldm_spinor, e_int, e_dc, e_hub, v10)
+   end subroutine spinor_site_hubbard_energy
    !> @brief Generate one deterministic scalar-relativistic radial channel
    !>        through the unchanged production RSEQSR/PHDFSR routines.
    !>

@@ -168,3 +168,24 @@ RS block recursion, fixture seed `tests/scf/cases/bulk/bccFe/Fe.nml` (sha256 `6d
 | P diagonal blocks (dm sidecar) | | | 1.17e-7 | 1e-6 |
 
 GATE passes. For reference the RB2 accepted nsp=1 state (other seed and recipe) has d occupations 4.615579, 1.895454 and moment 2.558681 (`C1_RB_RESULTS.md`). The iteration-20 P diagonal blocks of both runs (and the iteration-150 ones) are in `tests/validation/fixed_ldau/data/fe_bcc_u2_local_p_diagonal_blocks.txt`; at iteration 20 the two runs differ by 3.95e-6, at iteration 150 by 1.17e-7.
+
+## nsp=2 energy candidates and Hellmann-Feynman checks (S5; experimental, flag `hubbard_soc_experimental`, energy not routed)
+
+Code: with the flag, `HUBBARD_MOMENT_ENERGY_SITE/TOTAL` take `E_int`, `E_DC`, `E_Hub` from `hubbard_spinor_functional` on the full 10x10 `ldm_spinor` (P_out) (`spinor_site_hubbard_energy`, `self.f90`); `candidate_b = E_phys + E_Hub` (local), `candidate_c = E_phys + E_Hub` (spectral), `_F` versions subtract T*S (KS). `physical_total_energy` is unchanged (`E_Hub_P_OUT` stays 0 at nsp=2). The W1 test operator is accepted at nsp=2 with the flag (`hamiltonian_build.f90`). Driver and analysis: `tests/validation/fixed_ldau/soc_u_hf.py`, `soc_u_fixed_p_derivative.f90`.
+
+T1 SOC to 0 (KS, bcc Fe, 12x12x12, U=2 eV, J=0, local, both converged; nsp=2 with `soc_scale=0`, `fix_soc`; the nsp=1 partner is the converged S4 KS run `k_nsp1`, same code path, run with the S4 binary): candidate b -2541.862184127762 against -2541.862184127180 Ry, |delta E| 5.8e-10 (gate 1e-7); E_Hub 0.110479378744488 against 0.1104793787442344, |delta E_Hub| 2.5e-13 (gate 1e-9); candidate b_F differs by 5.8e-10. nsp=2 run: 40 steps, Diff 1.36e-8. Control (SOC on): candidate b_F of the SOC-on KS runs at U=1.95 and 2.05 eV averaged (-2541.862686138 Ry, midpoint of two runs, not a run at 2.0) differs from the `soc_scale=0` value (-2541.862322177) by -3.6e-4 Ry, far above the 1e-7 gate.
+
+T2(a) W1, U=J=0, SOC on, local, lambda = +-0.005 Ry, identity on the d block; F = candidate b (KS: F with -TS) + lambda Tr(W P), Tr(W P) from the d occupations `ql` (the logged `e_external` is 0 at U=J=0, see KNOWN_ISSUES). dF/dlambda against Tr(W P): KS 6.489010 against 6.498365 (-0.144%), RS 6.488623 against 6.499235 (-0.163%); gate 1%. Spin-selective runs (spin 1 only) and `R^T g = B`: g_s (Ry/electron) KS 0.00636, 0.00919; RS 0.00747, 0.00896.
+
+T2(b) U derivative at U0=2 eV, J=0, central differences. Target dE_Hub/dU at fixed P (spinor functional at U +- eps, P of the two runs averaged) and measured dF_b/dU, Ry/eV:
+
+| | step (eV) | measured D_b | target | b - target | A_U | b within A_U |
+|---|---|---|---|---|---|---|
+| KS | 0.05, 0.10 averaged | 0.05508311 | 0.05522711 | -1.44e-4 | 2.65e-3 (|D(h1)-D(h2)| 1.8e-6) | yes |
+| RS (150 steps, beta 0.005) | 0.10 only | 0.05427951 | 0.05452495 | -2.45e-4 | 4.80e-3 (no step-difference term) | yes |
+
+Candidate c (spectral, 0.10 eV only): KS D_c -0.08237415, miss -1.401e-1 = 52.8 A_U; RS D_c -0.08599122, miss -1.434e-1 = 29.9 A_U (gate: more than 10 A_U). Last-20-step spread of candidate b in the RS runs 1.3e-8 to 6.1e-8 Ry; all KS runs converged with Diff at most 2.5e-8 (W1) and 1.4e-8 (U, J).
+
+T2(c) J derivative, KS, U=2 eV, J0=0.5 eV, local, step 0.10 eV only: D_b -0.06388335, target -0.06348434, miss -3.99e-4, A_J 3.10e-3 (no step-difference term). Not run for lack of KS budget (14 runs used): the 0.05 eV step, and candidate c at J. The gate on the average of two step sizes and the c miss test for J are therefore uncovered, and nothing is routed.
+
+The driver's E_Hub at the sidecar P equals the logged E_Hub to 1.3e-15 (KS) and 4e-17 (RS): by construction (same functional, same P); it checks the sidecar orientation only.

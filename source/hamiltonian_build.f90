@@ -437,11 +437,13 @@ contains
          call g_logger%fatal("hubbard_test_lambda requires hubbard_test_operator='w1' or 'w2'.", __FILE__, __LINE__)
       end if
       if (this%hubbard_test_operator_check) then
-         if (this%control%nsp /= 1 .or. this%control%lmax /= 2 .or. &
+         if (.not. (this%control%nsp == 1 .or. (this%control%nsp == 2 .and. hubbard_soc_experimental)) .or. &
+             this%control%lmax /= 2 .or. &
              (this%hoh .and. .not. fixed_u_test_allow_hoh_w1_u0) .or. &
-             this%control%has_soc() .or. this%control%is_noncollinear()) then
-            call g_logger%fatal('A4 test operator requires scalar-collinear nsp=1, lmax=2, and hoh=.false..', &
-                                __FILE__, __LINE__)
+             (this%control%has_soc() .and. .not. (this%control%nsp == 2 .and. hubbard_soc_experimental)) .or. &
+             this%control%is_noncollinear()) then
+            call g_logger%fatal('A4 test operator requires scalar-collinear nsp=1 (nsp=2 only with hubbard_soc_experimental), '// &
+                                'lmax=2, and hoh=.false..', __FILE__, __LINE__)
          end if
          if (trim(this%hubbard_u_potential_form) /= 'liechtenstein') then
             call g_logger%fatal('A4 test operator requires the fixed Liechtenstein basis convention.', __FILE__, __LINE__)

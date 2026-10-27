@@ -1988,3 +1988,9 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 - **Verified:** bcc Fe, RS block, nsp=1, U=2 eV, J=0, `hubbard_radial_moments='local'`, beta 0.01 Broyden, fixture seed, 20 steps. Changing one seed occupation by a relative 1e-13 changes the logged Diff by 7.3e-9 at iteration 3, 6.3e-8 at iteration 12 and 1.1e-6 at iteration 20, and the logged spin moment by up to 7e-6. The trajectory has large steps (E_F -0.103 Ry to -0.071 Ry at iteration 7).
 - **Consequence:** two implementations that differ at roundoff level cannot be required to agree to 1e-10 over the first 20 iterations of this run; the nsp=2 spinor run stays identical to nsp=1 through iteration 11 (see `SPINOR_DM_CONTRACT.md`). Converged KS states agree to 1e-9.
 - **Not diagnosed:** which step of the SCF cycle amplifies (suspect the discrete Fermi-level grid search); the converged states of the nsp=1 +U RS run stall at Diff about 2e-6 with beta 0.01.
+
+## [OPEN, 2026-10-27] `e_external` and `test_lambda_trace_wp` are 0 for W1 runs with U=J=0
+
+- **Verified:** bcc Fe, KS nsp=1, `hubbard_u_general(1,3)=0`, `hubbard_j_general(1,3)=0`, `hubbard_radial_moments='local'`, `hubbard_test_operator='w1'`, lambda 0.005, 3 steps: `HUBBARD_MOMENT_ENERGY_TOTAL` prints `e_external=0` and `n_up=n_dn=0` in the site line, with the `90f57c3` binary and the current one. `hubbard_u_general_check` is false at U=J=0, and `save_ldm_to('new')` is guarded by it (`self.f90`), so `ldm_new` stays zero.
+- **Not verified:** how the earlier W1 U=0 campaign obtained its `Tr(W P)` (the A5 harness may have used other decks or its own P_OUT capture).
+- **Workaround used (S5):** `Tr(W P)` from the d occupations `ql` of the same run (`soc_u_hf.py`). **Proposal (not done):** include `hubbard_test_operator_check` in the two `save_ldm_to` guards. About 2 lines, but it changes nsp=1 behaviour for W1 runs and was not tested.
