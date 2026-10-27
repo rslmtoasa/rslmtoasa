@@ -201,8 +201,7 @@
       "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
       "case": "bulk/bccFe_hubbard",
       "timeout": 300,
-      "_note": "nsp=2 with fixed U is the SOC guard: expected to stop with the fatal below until SOC+U exists",
-      "expect_fatal": "Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.",
+      "_note": "nsp=2 bulk SOC+U runs by default (spinor local moments, energy routed); smoke only",
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 21 },
         "self":        { "nstep": 1 },
@@ -214,12 +213,12 @@
       "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
       "case": "impurity/B2FeCo_nsp1",
       "timeout": 300,
-      "_note": "hubbard_soc_experimental with calctype I stops: spinor U is bulk only",
+      "_note": "nsp=2 SOC+U with calctype I stops: spinor U is bulk only",
       "expect_fatal": "SOC+U embedded runs (calctype I or S) are not yet supported",
       "namelists": {
         "control":     {"nsp": 2, "recur": "block", "lld": 21},
         "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false, "hubbard_soc_experimental": true }
+        "hamiltonian": { "hoh": false }
       }
     },
     {
@@ -228,12 +227,12 @@
       "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
       "case": "bulk/bccFe_hubbard",
       "timeout": 300,
-      "_note": "hubbard_soc_experimental with relaxed_reference stops: P/V frame and radial frame must coincide",
+      "_note": "nsp=2 SOC+U with relaxed_reference stops: P/V frame and radial frame must coincide",
       "expect_fatal": "requires density_policy=constrained_spiral",
       "namelists": {
         "control":     {"nsp": 2, "recur": "block", "lld": 21, "density_policy": "relaxed_reference"},
         "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false, "hubbard_soc_experimental": true }
+        "hamiltonian": { "hoh": false }
       }
     },
     {
@@ -242,12 +241,12 @@
       "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
       "case": "bulk/bccFe_hubbard_soc_tilted",
       "timeout": 300,
-      "_note": "hubbard_soc_experimental with a tilted reference axis (mom 0.2,0,0.98) stops",
+      "_note": "nsp=2 SOC+U with a tilted reference axis (mom 0.2,0,0.98) stops",
       "expect_fatal": "is not parallel to global z",
       "namelists": {
         "control":     {"nsp": 2, "recur": "block", "lld": 21},
         "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false, "hubbard_soc_experimental": true }
+        "hamiltonian": { "hoh": false }
       }
     },
     {

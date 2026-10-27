@@ -6,7 +6,7 @@
 
 Decks are fresh copies of tests/scf/cases (bulk/bccFe or k_space_scf/bccFe) with the listed edits. W1 runs are U=J=0
 with an identity test operator on the d block (both spins, or spin 1 for s1*), lambda = +-0.005 Ry. F is candidate_b_F (KS,
-free energy) or candidate_b (RS) plus lambda*Tr(W P) with Tr(W P) from the d occupations ql (the logged e_external is zero at U=J=0).
+free energy) or candidate_b (RS) plus lambda*Tr(W P) with Tr(W P) from the d occupations ql (runs before the W1 logging fix had e_external=0 at U=J=0; the ql route is kept for those).
 Target dE_Hub/dX at fixed P: hubbard_spinor_functional at X +- eps through soc_u_fixed_p_derivative (build it with
 gfortran -Ibuild/modules soc_u_fixed_p_derivative.f90 build/source/librslmto.a -framework Accelerate -o WORK/fixedp).
 Allowance A_X = 2 sum_s |g_s dq_s/dX| + |D(h1) - D(h2)|, g_s from R^T g = B (R[s,a] = dq_s/dlambda_a, B_a = dF/dlambda_a - q_a).
@@ -29,9 +29,9 @@ def spec(name):
     if name.startswith("w1_"):
         tag = name[3:]
         return 0.0, 0.0, "local", (LAM if tag.endswith("p") else -LAM), (1 if tag.startswith("s1") else 0)
-    m = re.fullmatch(r"(Us|U|J)(\d+)", name)
+    m = re.fullmatch(r"(Us|Js|U|J)(\d+)", name)
     v = int(m.group(2)) / 100.0
-    return {"U": (v, 0.0, "local"), "Us": (v, 0.0, "spectral"), "J": (2.0, v, "local")}[m.group(1)] + (0.0, 0)
+    return {"U": (v, 0.0, "local"), "Us": (v, 0.0, "spectral"), "J": (2.0, v, "local"), "Js": (2.0, v, "spectral")}[m.group(1)] + (0.0, 0)
 
 
 def deck(kind):
@@ -131,7 +131,7 @@ def analyze(args):
     def allowance(lo, hi, h):
         return 2 * np.sum(np.abs(g * (q(hi) - q(lo)) / (2 * h)))
 
-    for X, lo_hi in (("U", [(0.05, "U195", "U205"), (0.10, "U190", "U210")]), ("J", [(0.10, "J040", "J060")])):
+    for X, lo_hi in (("U", [(0.05, "U195", "U205"), (0.10, "U190", "U210")]), ("J", [(0.05, "J045", "J055"), (0.10, "J040", "J060")])):
         D, T, A = [], [], []
         for h, lo, hi in lo_hi:
             if lo not in r or hi not in r:
@@ -146,11 +146,12 @@ def analyze(args):
         a_x = np.mean(A) + (abs(D[0] - D[1]) if len(D) == 2 else 0.0)
         print(f"{X} b: steps {len(D)}  D {np.mean(D):.8f}  target {np.mean(T):.8f}  miss {np.mean(D) - np.mean(T):+.3e}  A_X {a_x:.3e}"
               f"{'' if len(D) == 2 else ' (single step: no |D(h1)-D(h2)| term)'}  b within A_X: {abs(np.mean(D) - np.mean(T)) <= a_x}")
-        if X == "U" and "Us190" in r and "Us210" in r:
-            Dc = (r["Us210"][ckey] - r["Us190"][ckey]) / 0.2
-            Tc = 0.5 * (fixed_p("Us190", 1.9, 0.0)[1] + fixed_p("Us210", 2.1, 0.0)[1])
-            print(f"U c (spectral, h=0.10): D {Dc:.8f}  target {Tc:.8f}  miss {Dc - Tc:+.3e}  miss/A_X {abs(Dc - Tc) / a_x:.1f}")
-
+        cl, ch, xlo, xhi = ("Us190", "Us210", (1.9, 0.0), (2.1, 0.0)) if X == "U" else ("Js040", "Js060", (2.0, 0.4), (2.0, 0.6))
+        if cl in r and ch in r:
+            i = 1 if X == "U" else 2
+            Dc = (r[ch][ckey] - r[cl][ckey]) / 0.2
+            Tc = 0.5 * (fixed_p(cl, *xlo)[i] + fixed_p(ch, *xhi)[i])
+            print(f"{X} c (spectral, h=0.10): D {Dc:.8f}  target {Tc:.8f}  miss {Dc - Tc:+.3e}  miss/A_X {abs(Dc - Tc) / a_x:.1f}")
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

@@ -437,13 +437,12 @@ contains
          call g_logger%fatal("hubbard_test_lambda requires hubbard_test_operator='w1' or 'w2'.", __FILE__, __LINE__)
       end if
       if (this%hubbard_test_operator_check) then
-         if (.not. (this%control%nsp == 1 .or. (this%control%nsp == 2 .and. hubbard_soc_experimental)) .or. &
+         if (.not. (this%control%nsp == 1 .or. this%control%nsp == 2) .or. &
              this%control%lmax /= 2 .or. &
              (this%hoh .and. .not. fixed_u_test_allow_hoh_w1_u0) .or. &
-             (this%control%has_soc() .and. .not. (this%control%nsp == 2 .and. hubbard_soc_experimental)) .or. &
+             (this%control%has_soc() .and. this%control%nsp /= 2) .or. &
              this%control%is_noncollinear()) then
-            call g_logger%fatal('A4 test operator requires scalar-collinear nsp=1 (nsp=2 only with hubbard_soc_experimental), '// &
-                                'lmax=2, and hoh=.false..', __FILE__, __LINE__)
+            call g_logger%fatal('A4 test operator requires nsp=1 or nsp=2, lmax=2, and hoh=.false..', __FILE__, __LINE__)
          end if
          if (trim(this%hubbard_u_potential_form) /= 'liechtenstein') then
             call g_logger%fatal('A4 test operator requires the fixed Liechtenstein basis convention.', __FILE__, __LINE__)
@@ -681,6 +680,13 @@ contains
          end if
       end do
 
+      ! SOC+U bulk is the default at nsp=2; the former opt-in flag is accepted and ignored. The internal field
+      ! marks "spinor U active" for the code below and the solvers.
+      if (hubbard_soc_experimental .and. rank == 0) &
+         call g_logger%info('hubbard_soc_experimental is a no-op: SOC+U bulk is now default.', __FILE__, __LINE__)
+      this%hubbard_soc_experimental = this%control%nsp == 2 .and. &
+         (this%hubbard_u_general_check .or. this%hubbard_test_operator_check)
+
       ! Self-consistent U and fixed U/J are mutually exclusive in this implementation.
       if (this%hubbard_u_sc_check .and. this%hubbard_u_general_check) then
          call g_logger%fatal('Both hubbard_u_sc and explicit hubbard_u/hubbard_j are set. Use only one mode.', __FILE__, __LINE__)
@@ -693,7 +699,7 @@ contains
                'numeric U=J=0 is allowed and remains a no-op.', __FILE__, __LINE__)
          end if
          if (this%control%nsp /= 1 .and. .not. (this%hubbard_soc_experimental .and. this%control%nsp == 2)) then
-            call g_logger%fatal("hubbard_radial_moments='local' requires nsp=1 (nsp=2 only with hubbard_soc_experimental).", __FILE__, __LINE__)
+            call g_logger%fatal("hubbard_radial_moments='local' requires nsp=1 (nsp=2 only for bulk fixed U/J).", __FILE__, __LINE__)
          end if
          if ((this%control%has_soc() .and. .not. (this%hubbard_soc_experimental .and. this%control%nsp == 2)) .or. &
              this%control%is_noncollinear()) then
