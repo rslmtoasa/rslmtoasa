@@ -152,3 +152,19 @@ Production checks (bcc Fe, U=2 eV, J=0, local mode, flag on for nsp=2; every `so
 - T3(a) KS, converged (Diff 3.5e-9, 40 steps each), nsp=2 minus nsp=1 local: d occupation up 7.8e-10, down 7.3e-12, moment from `ql` 1.7e-10, logged spin moment 0, E_F 0 (6 decimals), P diagonal blocks 3.7e-11; bound 1e-7 (the U=0 difference is 0): passes. State: moment 2.51078 muB, E_F -0.08295 Ry.
 - T3(a) RS, first 20 iterations, nsp=2 against nsp=1 (local, `fix_soc`): iterations 1-11 equal in every printed digit (Diff to 10 digits, spin moment, E_F, R05 residual); from iteration 12 they differ (Diff 6.5e-9 at 12, 6.6e-8 at 15, 6.2e-7 at 20; spin moment 1e-6 to 1.2e-5), so the gate "identical or within 1e-10" FAILS as written from iteration 12. Control: an nsp=1 run with its seed changed by a relative 1e-13 differs from the unperturbed nsp=1 run by 7.3e-9 in Diff already at iteration 3 and by 1.1e-6 at iteration 20 (spin moment up to 7e-6), as much as the spinor run. The U=2 local transient has large steps (E_F -0.103 to -0.071 at iteration 7), which amplify any tiny difference. The nsp=2 iteration-20 P diagonal blocks were not recorded because the runs are not identical.
 - T3(c) smoke (RS block, nsp=2, SOC on, U=2/J=0, local, `hubbard_spinor_dm_diagnostic` on, fixture seed, 150 steps, `conv_thr=1e-30`): final Diff 9.2e-9 (window maximum 1.9e-8), 20-step spreads 0 (logged moment) and 0 (E_F), no fatal or NaN: passes. Records against the spectral smoke of S3: spin moment 2.551792 (2.380490), orbital moment 0.0688 muB (0.0979), E_F -0.083471 (-0.134657); max |P_up,dn| 1.262e-2 at step 1, 1.294e-2 at step 150 (1.26e-2, 1.53e-2); P eigenvalues in [0.259, 0.966]. R05 on the full spinor matrices: rp_abs 2.14, 0.119, 1.5e-3 (iteration 5), 1.1e-2 (10), 9.1e-4 (20), 4.4e-7 (50), 9.1e-8 (100); rv_abs 0.314, 1.7e-2, 2.2e-4, 1.6e-3, 1.3e-4, 6.4e-8 (50); the three-update streak is first reached at iteration 49.
+
+### S4: the RS gate as redefined (replaces the iteration-by-iteration criterion)
+
+(i) nsp=2 (`soc_scale=0`, `fix_soc`) and nsp=1 RS local trajectories (U=2 eV, J=0, fixture seed, beta 0.01) are identical through iteration 11 in every printed digit: PASS. (ii) The iteration-by-iteration criterion over 20 iterations is retired for local-mode +U transients: an nsp=1 run with its seed changed by a relative 1e-13 differs from the unperturbed nsp=1 run by 7.3e-9 in Diff at iteration 3 and 1.1e-6 at iteration 20 (spin moment up to 7e-6), so no equivalent implementation can meet it. Converged-state check:
+
+RS block recursion, fixture seed `tests/scf/cases/bulk/bccFe/Fe.nml` (sha256 `6ded298a…`), U=2 eV, J=0, local, beta 0.005 (the RB2 continuation setting; the RB2 seed, sha `64f34f28…`, and its run directories are not available, so the recipe could not be matched and both partners were run), 150 steps, `conv_thr=1e-30`, per-iteration potential snapshots. Both reach the RS acceptance window: nsp=2 final Diff 1.56e-8 (window maximum 2.7e-8), spreads of d up, d down and moment over the last 20 iterations 1.1e-8, 1.6e-8, 1.0e-8; nsp=1 Diff 9.9e-9 (1.7e-8), spreads 3.8e-9, 1.2e-9, 9.3e-9.
+
+| quantity | nsp=2 | nsp=1 | difference | bound |
+|---|---|---|---|---|
+| d occupation up | 4.615565472 | 4.615565620 | 1.48e-7 | 1e-6 |
+| d occupation down | 1.895463860 | 1.895463740 | 1.21e-7 | 1e-6 |
+| moment from `ql` (muB) | 2.558679698 | 2.558679966 | 2.68e-7 | 2e-6 |
+| E_F (Ry, 6 decimals) | -0.083263 | -0.083263 | equal | equal |
+| P diagonal blocks (dm sidecar) | | | 1.17e-7 | 1e-6 |
+
+GATE passes. For reference the RB2 accepted nsp=1 state (other seed and recipe) has d occupations 4.615579, 1.895454 and moment 2.558681 (`C1_RB_RESULTS.md`). The iteration-20 P diagonal blocks of both runs (and the iteration-150 ones) are in `tests/validation/fixed_ldau/data/fe_bcc_u2_local_p_diagonal_blocks.txt`; at iteration 20 the two runs differ by 3.95e-6, at iteration 150 by 1.17e-7.
