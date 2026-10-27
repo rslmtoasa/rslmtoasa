@@ -2607,6 +2607,8 @@ contains
             call this%mix%save_ldm_to('new') ! Save freshly computed LDA+U density matrices.
             call this%update_fixed_u_residuals()
             call this%mix%mix_ldm_linear() ! Optional linear mixing controlled by mix%ldm_beta.
+         else if (this%hamiltonian%hubbard_test_operator_check) then
+            call this%mix%save_ldm_to('new') ! W1 at U=J=0: P_out for the logged Tr(W P) only.
          end if
          call g_scf_benchmark_profile%stop_stage('P_mixing')
    
