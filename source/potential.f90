@@ -24,6 +24,9 @@ module potential_mod
    use os_mod, only: exists
    use precision_mod, only: rp
    use mpi_mod
+#ifdef USE_MPI
+   use mpi
+#endif
    use globals_mod, only: GLOBAL_DATABASE_FOLDER, GLOBAL_CHAR_SIZE
    use string_mod, only: path_join, sl, pl, fmt, real2str, int2str
    use logger_mod, only: g_logger
