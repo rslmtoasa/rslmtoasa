@@ -859,11 +859,12 @@ contains
 
       eligible = this%hamiltonian%hubbard_u_general_check .and. &
          trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein' .and. &
-         this%control%nsp == 1 .and. this%control%lmax == 2 .and. &
+         this%control%lmax == 2 .and. &
+         ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. &
+          (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental)) .and. &
          this%control%calctype == 'B' .and. &
          this%lattice%nbulk == 0 .and. this%lattice%nrec == this%lattice%ntype .and. &
-         .not. this%control%constraints_enable .and. &
-         .not. this%control%has_soc() .and. .not. this%control%is_noncollinear() .and. &
+         .not. this%control%constraints_enable .and. .not. this%control%is_noncollinear() .and. &
          .not. this%hamiltonian%hoh .and. .not. this%hamiltonian%hubbard_u_sc_check .and. &
          .not. this%hamiltonian%hubbard_v_check .and. .not. this%hamiltonian%hubbard_u_impurity_check .and. &
          (.not. this%hamiltonian%hubbard_test_operator_check .or. &
@@ -883,7 +884,7 @@ contains
          eligible = this%is_eligible_local_hubbard()
          local_reason = 'existing fixed-U clean-bulk eligibility'
          if (.not. eligible) local_reason = 'bulk is outside existing fixed-U clean-bulk eligibility'
-         ! nsp=2 spinor U (experimental): local radial moments only; the Hubbard energy stays unrouted.
+         ! nsp=2 spinor U with a nonzero test operator: still local radial moments (the energy is not routed then).
          if (.not. eligible .and. this%hamiltonian%hubbard_soc_experimental .and. this%control%nsp == 2 .and. &
              this%hamiltonian%hubbard_u_general_check .and. this%control%lmax == 2 .and. .not. this%hamiltonian%hoh) then
             eligible = .true.
@@ -1057,12 +1058,21 @@ contains
       complex(rp), allocatable :: density(:, :, :, :, :), potential(:, :, :, :, :)
       real(rp), allocatable :: e_int(:, :), e_dc(:, :), e_hub(:, :), tr_vp(:, :)
       complex(rp) :: p_d, v_d
+      real(rp) :: e_int_s, e_dc_s, e_hub_s
       integer :: isite, itype, spin, i, j, flat, orbital_i, orbital_j
 
       total_hub = 0.0_rp
       if (.not. this%is_eligible_local_hubbard()) return
       if (trim(this%hamiltonian%hubbard_radial_moments) /= 'local') return
 
+      if (this%control%nsp == 2) then
+         ! Spinor d shell: the full 10x10 P_out of every site.
+         do isite = 1, this%lattice%nrec
+            call spinor_site_hubbard_energy(this%symbolic_atom(this%lattice%nbulk + isite)%potential, e_int_s, e_dc_s, e_hub_s)
+            total_hub = total_hub + e_hub_s
+         end do
+         return
+      end if
       allocate(density(this%lattice%ntype, 4, 2, 7, 7), potential(this%lattice%ntype, 4, 2, 7, 7))
       allocate(e_int(this%lattice%ntype, 4), e_dc(this%lattice%ntype, 4), &
                e_hub(this%lattice%ntype, 4), tr_vp(this%lattice%ntype, 4))
