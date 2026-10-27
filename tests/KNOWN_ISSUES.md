@@ -1982,3 +1982,9 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 - **Effect on records:** the S3 and S3.1 nsp=2 versus nsp=1 comparisons without `fix_soc` measured the real SOC effect (converged moment from `ql`, nsp=2 minus nsp=1: RS +2.3e-4 at U=0 and -5.5e-3 at U=2; KS -2.8e-4 and -2.35e-3), not a spinor-path difference.
 - **Proposal (not done):** document that `soc_scale=0` needs `fix_soc`, or apply `soc_scale` after the recomputation. About 3 lines.
 
+
+## [OPEN, 2026-10-26] RS local-mode +U transient amplifies 1e-13 seed perturbations
+
+- **Verified:** bcc Fe, RS block, nsp=1, U=2 eV, J=0, `hubbard_radial_moments='local'`, beta 0.01 Broyden, fixture seed, 20 steps. Changing one seed occupation by a relative 1e-13 changes the logged Diff by 7.3e-9 at iteration 3, 6.3e-8 at iteration 12 and 1.1e-6 at iteration 20, and the logged spin moment by up to 7e-6. The trajectory has large steps (E_F -0.103 Ry to -0.071 Ry at iteration 7).
+- **Consequence:** two implementations that differ at roundoff level cannot be required to agree to 1e-10 over the first 20 iterations of this run; the nsp=2 spinor run stays identical to nsp=1 through iteration 11 (see `SPINOR_DM_CONTRACT.md`). Converged KS states agree to 1e-9.
+- **Not diagnosed:** which step of the SCF cycle amplifies (suspect the discrete Fermi-level grid search); the converged states of the nsp=1 +U RS run stall at Diff about 2e-6 with beta 0.01.

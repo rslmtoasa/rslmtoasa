@@ -684,27 +684,17 @@ contains
          call g_logger%fatal('Both hubbard_u_sc and explicit hubbard_u/hubbard_j are set. Use only one mode.', __FILE__, __LINE__)
       end if
 
-      ! Experimental spinor U at nsp=2: radial moments stay spectral until the spinor local-moment
-      ! correction exists, so 'local' and 'auto' are replaced with a warning.
-      if (this%hubbard_soc_experimental .and. this%hubbard_u_general_check .and. this%control%nsp == 2) then
-         if (trim(this%hubbard_radial_moments) /= 'spectral') then
-            call g_logger%warning("hubbard_soc_experimental: hubbard_radial_moments='"// &
-               trim(this%hubbard_radial_moments)//"' is replaced by 'spectral'; the spinor local-moment "// &
-               'correction is not implemented.', __FILE__, __LINE__)
-            this%hubbard_radial_moments = 'spectral'
-         end if
-      end if
-
       if (this%hubbard_radial_moments == 'local') then
          if (.not. has_hubbard_general .and. .not. has_legacy_uj .and. .not. has_impurity_uj .and. &
              .not. this%hubbard_test_operator_check) then
             call g_logger%fatal("hubbard_radial_moments='local' requires an explicit fixed Liechtenstein U/J input; "// &
                'numeric U=J=0 is allowed and remains a no-op.', __FILE__, __LINE__)
          end if
-         if (this%control%nsp /= 1) then
-            call g_logger%fatal("hubbard_radial_moments='local' requires nsp=1.", __FILE__, __LINE__)
+         if (this%control%nsp /= 1 .and. .not. (this%hubbard_soc_experimental .and. this%control%nsp == 2)) then
+            call g_logger%fatal("hubbard_radial_moments='local' requires nsp=1 (nsp=2 only with hubbard_soc_experimental).", __FILE__, __LINE__)
          end if
-         if (this%control%has_soc() .or. this%control%is_noncollinear()) then
+         if ((this%control%has_soc() .and. .not. (this%hubbard_soc_experimental .and. this%control%nsp == 2)) .or. &
+             this%control%is_noncollinear()) then
             call g_logger%fatal("hubbard_radial_moments='local' does not support SOC or noncollinear spin.", __FILE__, __LINE__)
          end if
          if (this%hoh .and. .not. fixed_u_test_allow_hoh_w1_u0) then

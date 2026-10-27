@@ -135,7 +135,8 @@ contains
       rv_abs = huge(1.0_rp); rv_rel = huge(1.0_rp)
       antiherm_p = huge(1.0_rp); antiherm_v = huge(1.0_rp)
       physical = .false.; worst_site = 0
-      if (nsite < 1 .or. nspin /= 2 .or. norb < 1) return
+      ! nspin=2: collinear spin blocks; nspin=1: one full spinor block per site (nsp=2 spinor U)
+      if (nsite < 1 .or. nspin < 1 .or. nspin > 2 .or. norb < 1) return
       if (size(p_out,1) /= nsite .or. size(v_in,1) /= nsite .or. size(v_out,1) /= nsite .or. &
           size(p_out,2) /= nspin .or. size(v_in,2) /= nspin .or. size(v_out,2) /= nspin .or. &
           size(p_out,3) /= norb .or. size(p_out,4) /= norb .or. &

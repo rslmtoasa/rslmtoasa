@@ -1,5 +1,6 @@
 ! Fixed-U trace setup and CSV serialization procedures.
 submodule(self_mod) ldau_diagnostics
+   use hubbard_spinor_mod, only: hubbard_d_tensor, hubbard_spinor_functional
    implicit none
 contains
 
@@ -1378,7 +1379,7 @@ contains
       integer :: worst_l, worst_site, unit, ios
       real(rp) :: rp_abs, rp_rel, rv_abs, rv_rel, antiherm_p, antiherm_v, u_value, j_value
       real(rp) :: rp_target, rv_target
-      logical :: active, physical
+      logical :: active, physical, spinor_mode
 
       this%fixed_u_residual_active = .false.
       this%fixed_u_residual_converged = .false.
@@ -1437,75 +1438,88 @@ contains
       if (.not. allocated(this%hamiltonian%hubbard_u_pot)) &
          error stop 'active fixed-U residual: Hubbard potential is not allocated'
 
-      allocate(density_override(ntype, 4, 2, 7, 7), vout(nb, nb, ntype))
-      allocate(p_in(nsite*4, 2, 7, 7), p_out(nsite*4, 2, 7, 7), &
-               v_in(nsite*4, 2, 7, 7), v_out(nsite*4, 2, 7, 7))
-      density_override = 0.0_rp
-      vout = 0.0_rp
+      spinor_mode = this%hamiltonian%hubbard_soc_experimental .and. this%control%nsp == 2
+      if (spinor_mode) then
+         ! Full 10x10 d-shell spinor P and V (spin-off-diagonal blocks included), one block per site.
+         allocate(p_in(nsite, 1, 10, 10), p_out(nsite, 1, 10, 10), v_in(nsite, 1, 10, 10), v_out(nsite, 1, 10, 10))
+      else
+         allocate(density_override(ntype, 4, 2, 7, 7), vout(nb, nb, ntype))
+         allocate(p_in(nsite*4, 2, 7, 7), p_out(nsite*4, 2, 7, 7), &
+                  v_in(nsite*4, 2, 7, 7), v_out(nsite*4, 2, 7, 7))
+         density_override = 0.0_rp
+         vout = 0.0_rp
+      end if
       p_in = 0.0_rp
       p_out = 0.0_rp
       v_in = 0.0_rp
       v_out = 0.0_rp
-
-      ! The production Hubbard operator is type-local. Use the same first
-      ! site-of-type density convention for its read-only Pout evaluation;
-      ! residuals below remain site-resolved using each site's own P matrices.
-      do itype = 1, ntype
-         isite = site_for_type(itype)
-         if (isite == 0) cycle
-         ! Only traverse angular-momentum channels represented by this build's
-         ! allocated LDM.  The fixed four-shell potential storage can exceed
-         ! the active basis (e.g. a d-only build has ldm_new(:,1:3,...)).
-         do il = 1, min(4, size(this%mix%ldm_new, 2))
-            mmax = 2*il - 1
-            do ispin = 1, 2
-               do i = 1, mmax
-                  do j = 1, mmax
-                     flat = (i - 1)*mmax + j
-                     density_override(itype, il, ispin, i, j) = this%mix%ldm_new(isite, il, ispin, flat)
+      if (spinor_mode) then
+         call spinor_residual_arrays(this, nsite, rec_type, p_in, p_out, v_in, v_out)
+         worst_block = 0
+      else
+         ! The production Hubbard operator is type-local. Use the same first
+         ! site-of-type density convention for its read-only Pout evaluation;
+         ! residuals below remain site-resolved using each site's own P matrices.
+         do itype = 1, ntype
+            isite = site_for_type(itype)
+            if (isite == 0) cycle
+            ! Only traverse angular-momentum channels represented by this build's
+            ! allocated LDM.  The fixed four-shell potential storage can exceed
+            ! the active basis (e.g. a d-only build has ldm_new(:,1:3,...)).
+            do il = 1, min(4, size(this%mix%ldm_new, 2))
+               mmax = 2*il - 1
+               do ispin = 1, 2
+                  do i = 1, mmax
+                     do j = 1, mmax
+                        flat = (i - 1)*mmax + j
+                        density_override(itype, il, ispin, i, j) = this%mix%ldm_new(isite, il, ispin, flat)
+                     end do
                   end do
                end do
             end do
          end do
-      end do
-      call this%hamiltonian%calculate_hubbard_u_potential_general( &
-         density_override=density_override, potential_out=vout)
+         call this%hamiltonian%calculate_hubbard_u_potential_general( &
+            density_override=density_override, potential_out=vout)
 
-      do isite = 1, nsite
-         itype = rec_type(isite)
-         do il = 1, min(4, size(this%mix%ldm_new, 2))
-            u_value = 0.0_rp
-            j_value = 0.0_rp
-            if (allocated(this%lattice%symbolic_atoms(itype)%potential%hubbard_u)) then
-               if (il <= size(this%lattice%symbolic_atoms(itype)%potential%hubbard_u)) &
-                  u_value = this%lattice%symbolic_atoms(itype)%potential%hubbard_u(il)
-            end if
-            if (allocated(this%lattice%symbolic_atoms(itype)%potential%hubbard_j)) then
-               if (il <= size(this%lattice%symbolic_atoms(itype)%potential%hubbard_j)) &
-                  j_value = this%lattice%symbolic_atoms(itype)%potential%hubbard_j(il)
-            end if
-            if (abs(u_value) <= 1.0e-10_rp .and. abs(j_value) <= 1.0e-10_rp) cycle
-            block = (il - 1)*nsite + isite
-            mmax = 2*il - 1
-            do ispin = 1, 2
-               do i = 1, mmax
-                  do j = 1, mmax
-                     flat = (i - 1)*mmax + j
-                     p_in(block, ispin, i, j) = this%mix%ldm_old(isite, il, ispin, flat)
-                     p_out(block, ispin, i, j) = this%mix%ldm_new(isite, il, ispin, flat)
-                     orbital_i = (il - 1)**2 + i + (ispin - 1)*spin_off
-                     orbital_j = (il - 1)**2 + j + (ispin - 1)*spin_off
-                     v_in(block, ispin, i, j) = this%hamiltonian%hubbard_u_pot(orbital_i, orbital_j, itype)
-                     v_out(block, ispin, i, j) = vout(orbital_i, orbital_j, itype)
+         do isite = 1, nsite
+            itype = rec_type(isite)
+            do il = 1, min(4, size(this%mix%ldm_new, 2))
+               u_value = 0.0_rp
+               j_value = 0.0_rp
+               if (allocated(this%lattice%symbolic_atoms(itype)%potential%hubbard_u)) then
+                  if (il <= size(this%lattice%symbolic_atoms(itype)%potential%hubbard_u)) &
+                     u_value = this%lattice%symbolic_atoms(itype)%potential%hubbard_u(il)
+               end if
+               if (allocated(this%lattice%symbolic_atoms(itype)%potential%hubbard_j)) then
+                  if (il <= size(this%lattice%symbolic_atoms(itype)%potential%hubbard_j)) &
+                     j_value = this%lattice%symbolic_atoms(itype)%potential%hubbard_j(il)
+               end if
+               if (abs(u_value) <= 1.0e-10_rp .and. abs(j_value) <= 1.0e-10_rp) cycle
+               block = (il - 1)*nsite + isite
+               mmax = 2*il - 1
+               do ispin = 1, 2
+                  do i = 1, mmax
+                     do j = 1, mmax
+                        flat = (i - 1)*mmax + j
+                        p_in(block, ispin, i, j) = this%mix%ldm_old(isite, il, ispin, flat)
+                        p_out(block, ispin, i, j) = this%mix%ldm_new(isite, il, ispin, flat)
+                        orbital_i = (il - 1)**2 + i + (ispin - 1)*spin_off
+                        orbital_j = (il - 1)**2 + j + (ispin - 1)*spin_off
+                        v_in(block, ispin, i, j) = this%hamiltonian%hubbard_u_pot(orbital_i, orbital_j, itype)
+                        v_out(block, ispin, i, j) = vout(orbital_i, orbital_j, itype)
+                     end do
                   end do
                end do
             end do
          end do
-      end do
+      end if
 
       call fixed_u_residual_metrics(p_in, p_out, v_in, v_out, rp_abs, rp_rel, rv_abs, rv_rel, &
                                     physical, antiherm_p, antiherm_v, worst_block)
-      if (worst_block > 0) then
+      if (worst_block > 0 .and. spinor_mode) then
+         worst_site = worst_block
+         worst_l = 2
+      else if (worst_block > 0) then
          worst_site = mod(worst_block - 1, nsite) + 1
          worst_l = (worst_block - 1)/nsite
       else
@@ -1560,9 +1574,58 @@ contains
             close(unit)
          end if
       end if
-      deallocate(site_for_type, rec_type, density_override, vout, p_in, p_out, v_in, v_out)
+      if (allocated(density_override)) deallocate(density_override)
+      if (allocated(vout)) deallocate(vout)
+      deallocate(site_for_type, rec_type, p_in, p_out, v_in, v_out)
    end procedure update_fixed_u_residuals
 
+
+   !> Spinor P_in (the P that built V_in), P_out, V_in (as inserted) and V_out(P_out) of every site for
+   !> the flagged nsp=2 residual; before the first spinor extraction P_in is the collinear old density
+   !> with zero spin coherences. The current P_out is kept as the next iteration's P_in.
+   subroutine spinor_residual_arrays(this, nsite, rec_type, p_in, p_out, v_in, v_out)
+      class(self), intent(inout) :: this
+      integer, intent(in) :: nsite, rec_type(:)
+      complex(rp), intent(out) :: p_in(:, :, :, :), p_out(:, :, :, :), v_in(:, :, :, :), v_out(:, :, :, :)
+      complex(rp) :: t(5, 5, 5, 5), v10(10, 10)
+      real(rp) :: u_d, j_d, e_int, e_dc, e_hub
+      integer :: isite, itype, plusbulk, s, i, j, status
+
+      p_in = (0.0_rp, 0.0_rp)
+      p_out = (0.0_rp, 0.0_rp)
+      v_in = (0.0_rp, 0.0_rp)
+      v_out = (0.0_rp, 0.0_rp)
+      do isite = 1, nsite
+         itype = rec_type(isite)
+         plusbulk = this%lattice%nbulk + isite
+         u_d = this%lattice%symbolic_atoms(itype)%potential%hubbard_u(3)
+         j_d = this%lattice%symbolic_atoms(itype)%potential%hubbard_j(3)
+         if (abs(u_d) <= 1.0e-10_rp .and. abs(j_d) <= 1.0e-10_rp) cycle
+         if (.not. allocated(this%symbolic_atom(plusbulk)%potential%ldm_spinor)) &
+            error stop 'spinor fixed-U residual: the spinor density was not extracted'
+         p_out(isite, 1, :, :) = this%symbolic_atom(plusbulk)%potential%ldm_spinor
+         if (allocated(this%symbolic_atom(plusbulk)%potential%ldm_spinor_prev)) then
+            p_in(isite, 1, :, :) = this%symbolic_atom(plusbulk)%potential%ldm_spinor_prev
+         else
+            do s = 1, 2
+               do i = 1, 5
+                  do j = 1, 5
+                     p_in(isite, 1, (s - 1)*5 + i, (s - 1)*5 + j) = this%mix%ldm_old(isite, 3, s, (i - 1)*5 + j)
+                  end do
+               end do
+            end do
+         end if
+         call extract_hubbard_d_spinor_potential(this%hamiltonian%hubbard_u_pot, itype, spin_off, v10, status)
+         if (status /= 0) error stop 'spinor fixed-U residual: cannot map the d-shell Hubbard potential'
+         v_in(isite, 1, :, :) = v10
+         call hubbard_d_tensor(u_d, j_d, t)
+         call hubbard_spinor_functional(t, u_d, j_d, p_out(isite, 1, :, :), e_int, e_dc, e_hub, v10)
+         v_out(isite, 1, :, :) = v10
+         if (.not. allocated(this%symbolic_atom(plusbulk)%potential%ldm_spinor_prev)) &
+            allocate (this%symbolic_atom(plusbulk)%potential%ldm_spinor_prev(10, 10))
+         this%symbolic_atom(plusbulk)%potential%ldm_spinor_prev = this%symbolic_atom(plusbulk)%potential%ldm_spinor
+      end do
+   end subroutine spinor_residual_arrays
 
    module procedure write_fixed_u_total_energy
       integer :: unit, ios

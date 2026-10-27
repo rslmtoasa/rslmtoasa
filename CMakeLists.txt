@@ -774,6 +774,8 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitLdaUHamiltonian ${TestDIR}/unit/test_lda_u_hamiltonian.f90)
   set_tests_properties(UnitLdaUHamiltonian PROPERTIES LABELS "unit;lda_u;hamiltonian")
   add_fortran_unit_test(UnitLdaUTensor ${TestDIR}/unit/test_lda_u_tensor.f90)
+  add_fortran_unit_test(UnitHubbardSpinorMoments ${TestDIR}/unit/test_hubbard_spinor_moments.f90)
+  set_tests_properties(UnitHubbardSpinorMoments PROPERTIES LABELS "unit;lda_u;spinor")
   add_fortran_unit_test(UnitHubbardSpinor ${TestDIR}/unit/test_hubbard_spinor.f90
     "${TestDIR}/validation/fixed_ldau/data/spinor_oracle_reference.txt")
   set_tests_properties(UnitHubbardSpinor PROPERTIES LABELS "unit;lda_u;spinor")
