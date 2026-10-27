@@ -1294,7 +1294,7 @@ contains
                      ' cluster='//fmt('i0', cluster_site_local), __FILE__, __LINE__)
                end if
             else if ((this%control%calctype == 'I' .or. this%control%calctype == 'S') .and. &
-                     this%recursion%hamiltonian%hubbard_test_operator_check) then
+                     (this%recursion%hamiltonian%hubbard_test_operator_check .or. spinor_local)) then
                call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
                   cluster_site_local, itype_local, status_local)
                if (status_local /= 0) then

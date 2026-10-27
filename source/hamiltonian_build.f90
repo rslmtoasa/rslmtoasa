@@ -764,8 +764,8 @@ contains
             end do
          end do
          if (this%hubbard_soc_experimental .and. this%control%nsp == 2) then
-            if (trim(this%control%calctype) /= 'B') then
-               call g_logger%fatal('hubbard_soc_experimental: SOC+U embedded runs (calctype I or S) are not yet supported.', &
+            if (trim(this%control%calctype) /= 'B' .and. trim(this%control%calctype) /= 'I') then
+               call g_logger%fatal('SOC+U surface runs (calctype S) are not yet supported.', &
                                    __FILE__, __LINE__)
             end if
             if (trim(this%control%density_policy) /= 'constrained_spiral') then

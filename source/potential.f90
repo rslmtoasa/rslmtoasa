@@ -113,6 +113,8 @@ module potential_mod
       character(len=16) :: hubbard_radial_moments, hubbard_backend
       character(len=256) :: dm_file = ''
       character(len=64) :: dm_sha256 = ''
+      !> nsp of the run that wrote a U-carrying potential; 0 = not recorded.
+      integer :: hubbard_nsp = 0
       character(len=128) :: dm_run_id = 'run'
       integer :: dm_iteration = 0
       logical :: hubbard_file_has_uj
@@ -274,6 +276,7 @@ contains
       hubbard_backend = ''
       dm_file = ''
       dm_sha256 = ''
+      hubbard_nsp = 0
 
       ! Normalize the magnetic moments
       if (allocated(this%mom)) then
@@ -489,6 +492,7 @@ contains
       call move_alloc(hubbard_j, this%hubbard_j)
       this%dm_file = trim(dm_file)
       this%dm_sha256 = trim(dm_sha256)
+      this%hubbard_nsp = hubbard_nsp
       ! call move_alloc(ldm, this%ldm)
       call move_alloc(ldm_flatten, this%ldm_flatten)
       call move_alloc(ldm_flatten_imag, this%ldm_flatten_imag)
@@ -874,6 +878,7 @@ contains
       this%hubbard_file_has_uj = .false.
       this%dm_file = ''
       this%dm_sha256 = ''
+      this%hubbard_nsp = 0
       this%dm_run_id = 'run'
       this%dm_iteration = 0
       this%ldm(:,:,:,:) = 0.0d0
@@ -933,6 +938,7 @@ contains
       hubbard_backend = this%hubbard_backend
       dm_file = this%dm_file
       dm_sha256 = this%dm_sha256
+      hubbard_nsp = this%hubbard_nsp
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -997,6 +1003,7 @@ contains
       hubbard_backend = this%hubbard_backend
       dm_file = this%dm_file
       dm_sha256 = this%dm_sha256
+      hubbard_nsp = this%hubbard_nsp
 
       pl = this%pl
       cshi = this%cshi
@@ -1074,6 +1081,7 @@ contains
          call nml%add('hubbard_backend', trim(this%hubbard_backend))
          call nml%add('dm_file', trim(this%dm_file))
          call nml%add('dm_sha256', trim(this%dm_sha256))
+         call nml%add('hubbard_nsp', this%hubbard_nsp)
       end if
       ! call nml%add('ldm', this%ldm)
       if (.not. (any(abs(this%hubbard_u) > 1.0e-10_rp) .or. any(abs(this%hubbard_j) > 1.0e-10_rp))) then
