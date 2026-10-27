@@ -71,7 +71,6 @@ def add_u(text: str, u: float, j: float, extra: str = "") -> str:
 
 
 LOCAL = "hubbard_radial_moments = 'local'\n"
-SPINOR_LOCAL = "hubbard_soc_experimental = .true.\n" + LOCAL
 
 
 def in_hamiltonian(text: str, keys: str) -> str:
@@ -191,11 +190,12 @@ def compare_by_value(ref: Path, cand: Path) -> tuple[bool, str]:
 
 
 def signature(work: Path, diag_only: bool) -> dict[str, list[float]]:
-    """Per-iteration Diff, Fermi energy, spin moment from the log; dm sidecar entries (spin-diagonal only if asked)."""
+    """Per-iteration Diff, Fermi energy, spin moment, routed energy from the log; dm sidecar entries (spin-diagonal only if asked)."""
     text = log_text(work)
     sig = {"diff": numbers(" ".join(re.findall(r"Diff=\s*([0-9.Ee+-]+)", text))),
            "fermi": numbers(" ".join(re.findall(r"(?:Free Fermi energy:|Using canonical/fixed Fermi level =)\s*([0-9.Ee+-]+)", text))),
-           "spin_moment": numbers(" ".join(re.findall(r"Spin moment of atom\s+1 is\s+([0-9.Ee+-]+)", text)))}
+           "spin_moment": numbers(" ".join(re.findall(r"Spin moment of atom\s+1 is\s+([0-9.Ee+-]+)", text))),
+           "energy": numbers(" ".join(re.findall(r"(?<!base_)physical_total_energy=\s*([0-9.Ee+-]+)", text)))}
     for side in sorted(work.glob("*_dm.nml")):
         for line in side.read_text().splitlines():
             m = re.match(r"\s*(dm_(?:re|im)\((\d+),(\d+),(\d+),(\d+),:\))\s*=\s*(.*)", line)
@@ -365,17 +365,17 @@ def main() -> int:
     paired("+U impurity/B2FeCo_nsp1, by value", "U_imp", "impurity/B2FeCo_nsp1", imp, compare_by_value, base, ref, cand)
 
     # nsp=2 +U (flag on, local): SOC held at zero against nsp=1, then SOC on against the committed snapshot
-    rs_soc0 = lambda t: soc_off(in_hamiltonian(set_nstep(t), SPINOR_LOCAL))
-    rs_soc = lambda t: in_hamiltonian(set_nstep(t), SPINOR_LOCAL)
+    rs_soc0 = lambda t: soc_off(in_hamiltonian(set_nstep(t), LOCAL))
+    rs_soc = lambda t: in_hamiltonian(set_nstep(t), LOCAL)
     soc0_vs_nsp1("+U RS nsp=2 soc_scale=0 fix_soc versus nsp=1, local", "U_rs_soc0", "bulk/bccFe_hubbard_nsp1",
                  lambda t: in_hamiltonian(set_nstep(t), LOCAL), "bulk/bccFe_hubbard", rs_soc0, base, cand, restart="Fe.nml")
     soc0_vs_nsp1("+U KS nsp=2 soc_scale=0 fix_soc versus nsp=1, local", "U_ks_soc0", "k_space_scf/bccFe",
                  lambda t: add_u(ks(t), 2.0, 0.0, LOCAL), "k_space_scf/bccFe",
-                 lambda t: soc_off(add_u(ks_nsp2(t), 2.0, 0.0, SPINOR_LOCAL)), base, cand)
+                 lambda t: soc_off(add_u(ks_nsp2(t), 2.0, 0.0, LOCAL)), base, cand)
     soc_runs = {}
     for tag, case, edit, restart in (("rs_soc_u2", "bulk/bccFe_hubbard", rs_soc, "Fe.nml"),
                                      ("ks_soc_u2", "k_space_scf/bccFe",
-                                      lambda t: add_u(ks_nsp2(t), 2.0, 0.0, SPINOR_LOCAL), None)):
+                                      lambda t: add_u(ks_nsp2(t), 2.0, 0.0, LOCAL), None)):
         d = prepare(CASES / case, base / tag, edit)
         if run(cand, d, restart) == 0:
             soc_runs[tag] = d

@@ -189,3 +189,19 @@ Candidate c (spectral, 0.10 eV only): KS D_c -0.08237415, miss -1.401e-1 = 52.8 
 T2(c) J derivative, KS, U=2 eV, J0=0.5 eV, local, step 0.10 eV only: D_b -0.06388335, target -0.06348434, miss -3.99e-4, A_J 3.10e-3 (no step-difference term). Not run for lack of KS budget (14 runs used): the 0.05 eV step, and candidate c at J. The gate on the average of two step sizes and the c miss test for J are therefore uncovered, and nothing is routed.
 
 The driver's E_Hub at the sidecar P equals the logged E_Hub to 1.3e-15 (KS) and 4e-17 (RS): by construction (same functional, same P); it checks the sidecar orientation only.
+
+### S5b: completed T2 and adoption
+
+Additional runs: KS J = 0.5 +- 0.05 (local) and spectral J = 0.5 +- 0.10, RS U = 2 +- 0.05 (local). Final T2 table (Ry/eV; target from the spinor functional at fixed P; A_X = 2 sum_s |g_s dq_s/dX| + |D(h1) - D(h2)|):
+
+| | steps (eV) | D_b | target | b - target | A_X | b within A_X | c miss / A_X (h=0.10, need > 10) |
+|---|---|---|---|---|---|---|---|
+| KS, U | 0.05, 0.10 | 0.05508311 | 0.05522711 | -1.44e-4 | 2.65e-3 | yes | 52.8 |
+| KS, J | 0.05, 0.10 | -0.06389993 | -0.06351369 | -3.86e-4 | 3.08e-3 | yes | 41.6 |
+| RS, U | 0.05, 0.10 | 0.05427910 | 0.05451721 | -2.38e-4 | 4.80e-3 | yes | 29.9 |
+
+RS J: not tested. The RS U = 2.05 run ended at Diff 1.57e-6 (the recorded RS local-mode transient; the 20-step spread of candidate b is 4.1e-7 Ry, which bounds its effect on D at 4e-6 Ry/eV for the 0.05 step); the other RS runs ended at Diff at most 1.9e-8. The RS U = 1.95 and 2.05 runs used the binary before the W1 logging fix; the fix does not touch these paths.
+
+Adoption (both backends): `physical_total_energy` includes the spinor E_Hub of P_out for nsp=2 bulk, `auto` resolves to local, `hubbard_soc_experimental` is a no-op. Logged routed energy at the first nsp=2 regression decks: base -2541.981867214201 (unchanged) plus E_Hub 0.1144260991844432 gives -2541.867441115017 Ry (RS). The regression snapshot was rewritten with the routed energy added to its signature. Tests changed with the behaviour: `Example_bulk_bccFe_nsp2_hubbard` now runs (smoke), `rs_embedding_ra3.py` runs the nsp=2 bulk fixtures instead of expecting the old fatal, and the impurity guard messages are those of the calctype I/S fatal.
+
+W1 logging fix: with U=J=0 and a test operator, `ldm_new` is now saved (for the log only), so `e_external` equals lambda Tr(W P) (KS nsp=2 check: 0.0324621 against 0.005 x (4.3385006 + 2.1539252)).

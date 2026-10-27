@@ -168,6 +168,28 @@ remove it. See the C6 records in
 ``docs/validation/fixed_ldau/rs/C6_T0_RESULTS.md`` and
 ``C6_AMENDMENT.md``.
 
+SOC+U for bulk (nsp=2)
+======================
+
+Fixed Liechtenstein U/J with spin-orbit coupling (``nsp=2``) runs by default for ``calctype='B'`` clean bulk,
+``lmax=2``, in both the RS and the k-space (KS) solvers. The d shell is treated as a 10x10 spinor block: the
+density matrix P and the first energy moment M1 keep the spin-off-diagonal blocks, the potential V and the
+energies come from the spinor functional, and the radial moments use the spinor local correction (``auto`` resolves to
+``local``). The Hubbard energy of the spinor P_out is added to ``physical_total_energy`` (candidate b). The former
+switch ``hubbard_soc_experimental`` is accepted and ignored (info line "SOC+U bulk is now default").
+
+Frame restrictions (each stops with a fatal): ``calctype`` ``I`` or ``S`` with U, ``density_policy`` other than
+``constrained_spiral``, a ``constraint_target``, a reference axis not parallel to global z, ``nsp=3`` or ``4`` with U,
+HOH, self-consistent U, intersite V. Explicit ``hubbard_radial_moments='spectral'`` is accepted and its energy is not
+routed (as at nsp=1).
+
+Validation numbers (bcc Fe, U=2 eV; details in ``docs/validation/fixed_ldau/SPINOR_DM_CONTRACT.md``). With
+``soc_scale=0`` and ``fix_soc``, nsp=2 reproduces nsp=1: KS candidate b differs by 5.8e-10 Ry and E_Hub by 2.5e-13 Ry.
+Hellmann-Feynman checks at nsp=2 with SOC on, dF_b/dU and dF_b/dJ against dE_Hub/dX at fixed spinor P: the difference
+is 1.4e-4 (KS, U), 3.9e-4 (KS, J) and 2.4e-4 (RS, U) Ry/eV against allowances of 2.7e-3, 3.1e-3 and 4.8e-3 Ry/eV; the
+spectral candidate misses by 53, 42 (KS) and 30 (RS) allowances. The RS J derivative was not tested. The base ASA
+functional's W1 derivative residual (-0.14% KS, -0.16% RS) bounds the claim, as at nsp=1.
+
 Validated ordinary on-site scope
 ================================
 
@@ -227,7 +249,7 @@ energy. The retained eligibility conditions are ``calctype='B'``, clean bulk
 ``nsp=1``, ``lmax=2``, and disabled constraints. Accepted-endpoint RS route reproduction and unchanged-mode/no-U controls are
 recorded in ``docs/validation/fixed_ldau/rs/C4_RC3_RESULTS.md``; this is
 route evidence, not a new ASA derivative-gate result. Explicit spectral selection remains
-spectral/non-adopted. Impurity/surface hosts, SOC/noncollinear states, HOH,
+spectral/non-adopted. Impurity/surface hosts, noncollinear states, nsp=2 outside the SOC+U bulk scope (next section), HOH,
 self-consistent U, intersite V, impurity U, and nonzero test fields remain
 excluded. Constraints-enabled input selects spectral mode before a zero-target
 setup fatal; successful constrained SCF behavior remains untested. See
