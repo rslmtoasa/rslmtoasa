@@ -224,7 +224,9 @@ def soc0_vs_nsp1(name, tag, case1, edit1, case2, edit2, base, cand, restart=None
             return
         dirs.append(d)
     ok, detail = compare_signatures(signature(dirs[0], True), signature(dirs[1], True), SOC0_TOL)
-    record(name, ok, detail)
+    offdiag = max((abs(x) for k, v in signature(dirs[1], False).items() if re.match(r"dm_\w+\(3,([12]),([12]),", k)
+                   and k.split("(3,")[1][0] != k.split("(3,")[1][2] for x in v), default=0.0)
+    record(name, ok and offdiag <= 1e-12, f"{detail}; max |P_up,dn| {offdiag:.1e} (tol 1e-12)")
 
 
 def snapshot_rows(runs: dict[str, Path]) -> dict[str, dict]:
@@ -372,6 +374,10 @@ def main() -> int:
     soc0_vs_nsp1("+U KS nsp=2 soc_scale=0 fix_soc versus nsp=1, local", "U_ks_soc0", "k_space_scf/bccFe",
                  lambda t: add_u(ks(t), 2.0, 0.0, LOCAL), "k_space_scf/bccFe",
                  lambda t: soc_off(add_u(ks_nsp2(t), 2.0, 0.0, LOCAL)), base, cand)
+    with_beta = lambda f: (lambda t: f(t).replace("&mix", "&mix\nldm_beta = 0.3", 1))
+    soc0_vs_nsp1("+U RS nsp=2 soc_scale=0 fix_soc versus nsp=1, local, ldm_beta=0.3", "U_rs_soc0_ldmb", "bulk/bccFe_hubbard_nsp1",
+                 with_beta(lambda t: in_hamiltonian(set_nstep(t), LOCAL)), "bulk/bccFe_hubbard", with_beta(rs_soc0),
+                 base, cand, restart="Fe.nml")
     soc_runs = {}
     for tag, case, edit, restart in (("rs_soc_u2", "bulk/bccFe_hubbard", rs_soc, "Fe.nml"),
                                      ("ks_soc_u2", "k_space_scf/bccFe",

@@ -135,6 +135,8 @@ module potential_mod
       complex(rp), dimension(:,:), allocatable :: ldm_spinor, m1_spinor
       !> Spinor P of the previous iteration (the P that built the Hamiltonian's V_in); not persisted.
       complex(rp), dimension(:,:), allocatable :: ldm_spinor_prev
+      !> Linearly mixed spinor P (ldm_beta) that builds V at nsp>=2; the mixing history. Not persisted.
+      complex(rp), dimension(:,:), allocatable :: ldm_spinor_mix
       !> Optional screening constants used by the strux backend (indexed by l=0..lmax).
       real(rp), dimension(:), allocatable :: screening_alpha
       !> Optional screening sigma values used by the strux backend (indexed by l=0..lmax).
@@ -890,6 +892,7 @@ contains
       if (allocated(this%ldm_spinor)) deallocate (this%ldm_spinor)
       if (allocated(this%m1_spinor)) deallocate (this%m1_spinor)
       if (allocated(this%ldm_spinor_prev)) deallocate (this%ldm_spinor_prev)
+      if (allocated(this%ldm_spinor_mix)) deallocate (this%ldm_spinor_mix)
    end subroutine restore_to_default
 
    !---------------------------------------------------------------------------

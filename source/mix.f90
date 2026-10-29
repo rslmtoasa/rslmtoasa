@@ -99,6 +99,7 @@ module mix_mod
       procedure :: mixpq
       procedure :: save_ldm_to
       procedure :: mix_ldm_linear
+      procedure :: mix_ldm_spinor_linear
       procedure :: advance_fixed_u_convergence
       procedure :: mix_magnetic_moments
       final :: destructor
@@ -825,6 +826,33 @@ contains
       beta_loc = min(1.0_rp, max(0.0_rp, this%ldm_beta))
       this%ldm_mix(:, :, :, :) = (1.0_rp - beta_loc)*this%ldm_old(:, :, :, :) + beta_loc*this%ldm_new(:, :, :, :)
    end subroutine mix_ldm_linear
+   !> Linear mixing of the spinor d-shell P with ldm_beta: P_mix = beta*P_out + (1-beta)*P_prev. The history
+   !> starts from the mixed collinear ldm with zero spin coherences. P_out (ldm_spinor) is left unchanged.
+   subroutine mix_ldm_spinor_linear(this)
+      class(mix), intent(inout) :: this
+      real(rp) :: beta_loc
+      integer :: it, na, s, i, j
+
+      beta_loc = min(1.0_rp, max(0.0_rp, this%ldm_beta))
+      do it = 1, this%lattice%nrec
+         na = this%lattice%nbulk + it
+         if (.not. allocated(this%symbolic_atom(na)%potential%ldm_spinor)) cycle
+         if (.not. allocated(this%symbolic_atom(na)%potential%ldm_spinor_mix)) then
+            allocate (this%symbolic_atom(na)%potential%ldm_spinor_mix(10, 10))
+            this%symbolic_atom(na)%potential%ldm_spinor_mix = (0.0_rp, 0.0_rp)
+            do s = 1, 2
+               do i = 1, 5
+                  do j = 1, 5
+                     this%symbolic_atom(na)%potential%ldm_spinor_mix((s - 1)*5 + i, (s - 1)*5 + j) = &
+                        this%ldm_old(it, 3, s, (i - 1)*5 + j)
+                  end do
+               end do
+            end do
+         end if
+         this%symbolic_atom(na)%potential%ldm_spinor_mix = (1.0_rp - beta_loc)*this%symbolic_atom(na)%potential%ldm_spinor_mix &
+                                                           + beta_loc*this%symbolic_atom(na)%potential%ldm_spinor
+      end do
+   end subroutine mix_ldm_spinor_linear
    subroutine broydn(pmix, amix, reset, mu, f, fsq, imu, itr, fsqo, u, v, muo, fo, nmix)
       ! mix potentials with broydens jacobian updating method as
       ! implemented by g.p.srivastava, j. phys a 17, l317(1984),

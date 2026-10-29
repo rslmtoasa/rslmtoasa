@@ -253,7 +253,9 @@ contains
                call g_logger%fatal('hubbard_soc_experimental: the radial axis of site '//fmt('i0', na)//' is not parallel to global z; '// &
                   'the P/V frame and the radial-channel frame must coincide until the spinor local moments exist.', __FILE__, __LINE__)
             end if
-            if (allocated(this%lattice%symbolic_atoms(na)%potential%ldm_spinor)) then
+            if (allocated(this%lattice%symbolic_atoms(na)%potential%ldm_spinor_mix)) then
+               p_spinor = this%lattice%symbolic_atoms(na)%potential%ldm_spinor_mix
+            else if (allocated(this%lattice%symbolic_atoms(na)%potential%ldm_spinor)) then
                p_spinor = this%lattice%symbolic_atoms(na)%potential%ldm_spinor
             else
                ! before the first spinor extraction: the collinear density with zero spin coherences
