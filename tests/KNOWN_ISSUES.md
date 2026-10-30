@@ -2000,4 +2000,18 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 
 - **Not tested:** the RS J derivative at nsp=2; k-space meshes other than 12x12x12 and materials other than bcc Fe; multi-site cells; nsp=2 with U on more than one shell.
 - **Verified:** the RS U = 2.05 eV Hellmann-Feynman run ended at Diff 1.57e-6 after 150 steps (beta 0.005; the recorded RS local-mode transient). The remaining RS runs ended at Diff at most 1.9e-8.
-- **Unchanged limits:** calctype I/S with U at nsp=2, density_policy other than constrained_spiral, a constraint_target, a non-z reference axis and nsp=3/4 with U stop with a fatal.
+- **Unchanged limits:** calctype S with U at nsp=2 (calctype I: see S6 below), density_policy other than constrained_spiral, a constraint_target, a non-z reference axis and nsp=3/4 with U stop with a fatal.
+
+## [CLOSED, 2026-10-30] `ldm_beta` had no effect at nsp>=2 (S6)
+
+- **Verified:** at nsp=2 V is built from the spinor P (`ldm_spinor`, P_out), not from the mixed collinear ldm. Host-seeded Ni impurity runs with and without `ldm_beta = 0.3` (SOC on and SOC->0, U=3/J=0.7) gave identical Diff series in every printed digit.
+- **Fixed:** `mix_ldm_spinor_linear` mixes the 10x10 P with `ldm_beta` (history seeded from the mixed ldm, zero coherences); V reads the mixed P. Default `ldm_beta=1`: one step from the same restart with the old and new binary gave byte-identical outputs (31 files, logs excepted). The sidecar still writes P_out for the spin-off-diagonal blocks.
+- **Test:** RS bcc Fe, nsp=2 `soc_scale=0`/`fix_soc` against nsp=1, `ldm_beta=0.3`, 4 iterations: max delta 0.0 with the fix, 1.56e-1 without (old binary); P_up,dn 0.
+
+## [OPEN, 2026-10-30] SOC+U impurity at nsp=2: records and untriaged findings (S6)
+
+- **Oscillation without damping:** Ni (RS Chebyshev, local) U=3/J=0.7 impurity runs at beta 0.05 and `ldm_beta=1` oscillated (Diff 1e-4 to 7e-2 over 200 steps) at nsp=1 (r2), SOC->0 (r6) and SOC on (r8). Host-seeded SOC on runs without effective damping ended at Diff 4.7e-2. With `ldm_beta=0.3`: nsp=1 reached last-20 max Diff 2.6e-8, SOC on 1.0e-8 (spreads <= 1.0e-8); SOC->0 4.2e-8. The nsp=1 oscillation at `ldm_beta=1` is not diagnosed.
+- **Adoption numbers (impurity minus bulk, U=3 against U=0):** d up 6.9e-4 / 1.3e-3, d down -1.9e-3 / -2.8e-3, moment 2.1e-3 / 3.7e-3 muB, orbital moment -1.8e-4 / -1.1e-4 muB (ratios 0.53, 0.67, 0.57, 1.59; limit 10). The U=0 runs write no spinor sidecar; the P_up,dn block difference at U=0 was bounded from the logged `max_up_dn` (9.575e-3 bulk, 9.618e-3 impurity: difference of maxima 4.3e-5, a lower bound on the block difference); U=3 block difference 2.4e-5.
+- **Cross-run identity (one-step traces from the converged U=3 impurity):** stored c'/q2' minus the spinor formulas 0.0 and 0.0 on both spins; dropping the off-diagonal V blocks changes c' by 1.4e-5 and 1.8e-5 and q2' by 8.6e-5 and 9.1e-5 (|V_up,dn| max 2.9e-3).
+- **KS-host smoke (bcc Fe nsp=2, U=2/J=0, RS impurity, `auto`):** resolves to local, no provenance or nsp error. Not met: after 100 steps final Diff 1.3e-7 (`ldm_beta=1`) and 2.5e-6 (`ldm_beta=0.3`), 20-step spreads 5e-5 to 1e-4 (limits 1e-7, 1e-5). Spin moment 2.5442 muB. The first attempt, seeded from a +U Fe-imp file, diverged to NaN; the host-seeded runs did not.
+- **Seed label:** the element `symbol` in the impurity seed file names the output files; a seed copied from the host must be relabelled.
