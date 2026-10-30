@@ -37,7 +37,7 @@ SOC0_TOL = 1e-9  # the logged Diff has 10 decimals
 PY = str(ROOT / ".venv/bin/python")
 NSTEP = 4
 NOT_SCIENTIFIC = {"preflight.json", "checked_launcher.log", "testrun.log", "run_monitor.json"}
-DM_LINE = re.compile(r"^\s*(ldm_flatten|ldm_flatten_imag|dm_file|dm_sha256)\b", re.M)
+DM_LINE = re.compile(r"^\s*(ldm_flatten|ldm_flatten_imag|dm_file|dm_sha256|hubbard_nsp)\b", re.M)
 
 rows: list[dict] = []
 
