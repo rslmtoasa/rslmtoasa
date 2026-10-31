@@ -897,11 +897,11 @@ contains
       scope_eligible = (this%hamiltonian%hubbard_u_general_check .or. &
          this%hamiltonian%hubbard_u_impurity_check) .and. &
          trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein' .and. &
-         this%control%nsp == 1 .and. this%control%lmax == 2 .and. &
-         (this%control%calctype == 'B' .or. this%control%calctype == 'I' .or. &
-          this%control%calctype == 'S') .and. &
-         .not. this%control%constraints_enable .and. &
-         .not. this%control%has_soc() .and. .not. this%control%is_noncollinear() .and. &
+         this%control%lmax == 2 .and. &
+         ((this%control%nsp == 1 .and. .not. this%control%has_soc() .and. &
+           (this%control%calctype == 'B' .or. this%control%calctype == 'I' .or. this%control%calctype == 'S')) .or. &
+          (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental .and. this%control%calctype == 'I')) .and. &
+         .not. this%control%constraints_enable .and. .not. this%control%is_noncollinear() .and. &
          .not. this%hamiltonian%hoh .and. .not. this%hamiltonian%hubbard_u_sc_check .and. &
          .not. this%hamiltonian%hubbard_v_check .and. &
          .not. this%hamiltonian%hubbard_test_operator_check
@@ -1001,7 +1001,7 @@ contains
 
    subroutine validate_hubbard_mode_provenance(this)
       class(self), intent(inout) :: this
-      integer :: ia
+      integer :: ia, stored_nsp
       logical :: active
       logical :: frozen
       character(len=16) :: stored_mode, backend
@@ -1018,6 +1018,19 @@ contains
          frozen = this%is_frozen_hubbard_host(ia)
 
          if (frozen) then
+            stored_nsp = this%symbolic_atom(ia)%potential%hubbard_nsp
+            if (stored_nsp == 0) then
+               stored_nsp = merge(2, 1, allocated(this%symbolic_atom(ia)%potential%ldm_spinor))
+               if (rank == 0) call g_logger%info('Potential for symbolic atom '//fmt('i0', ia)// &
+                  ' has no hubbard_nsp field; inferred nsp='//fmt('i0', stored_nsp)//' from its density-matrix file.', &
+                  __FILE__, __LINE__)
+            end if
+            if (stored_nsp /= this%control%nsp .or. &
+                (this%control%nsp == 2 .and. .not. allocated(this%symbolic_atom(ia)%potential%ldm_spinor))) then
+               call g_logger%fatal('Frozen U-carrying host (symbolic atom '//fmt('i0', ia)//') was written at nsp='// &
+                  fmt('i0', stored_nsp)//', run nsp='//fmt('i0', this%control%nsp)//'. Regenerate the host at nsp='// &
+                  fmt('i0', this%control%nsp)//'.', __FILE__, __LINE__)
+            end if
             stored_mode = trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments)
             if (len_trim(stored_mode) == 0) then
                stored_mode = 'spectral'
@@ -1049,6 +1062,7 @@ contains
             this%symbolic_atom(ia)%potential%hubbard_radial_moments = &
                trim(this%hamiltonian%hubbard_radial_moments)
             this%symbolic_atom(ia)%potential%hubbard_backend = trim(backend)
+            this%symbolic_atom(ia)%potential%hubbard_nsp = this%control%nsp
          end if
       end do
    end subroutine validate_hubbard_mode_provenance
@@ -2617,6 +2631,7 @@ contains
             call this%mix%save_ldm_to('new') ! Save freshly computed LDA+U density matrices.
             call this%update_fixed_u_residuals()
             call this%mix%mix_ldm_linear() ! Optional linear mixing controlled by mix%ldm_beta.
+            call this%mix%mix_ldm_spinor_linear() ! Same mixing for the spinor P that builds V at nsp>=2.
          else if (this%hamiltonian%hubbard_test_operator_check) then
             call this%mix%save_ldm_to('new') ! W1 at U=J=0: P_out for the logged Tr(W P) only.
          end if

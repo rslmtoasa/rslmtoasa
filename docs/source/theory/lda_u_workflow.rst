@@ -178,7 +178,7 @@ energies come from the spinor functional, and the radial moments use the spinor 
 ``local``). The Hubbard energy of the spinor P_out is added to ``physical_total_energy`` (candidate b). The former
 switch ``hubbard_soc_experimental`` is accepted and ignored (info line "SOC+U bulk is now default").
 
-Frame restrictions (each stops with a fatal): ``calctype`` ``I`` or ``S`` with U, ``density_policy`` other than
+Frame restrictions (each stops with a fatal): ``calctype`` ``S`` with U, ``density_policy`` other than
 ``constrained_spiral``, a ``constraint_target``, a reference axis not parallel to global z, ``nsp=3`` or ``4`` with U,
 HOH, self-consistent U, intersite V. Explicit ``hubbard_radial_moments='spectral'`` is accepted and its energy is not
 routed (as at nsp=1).
@@ -189,6 +189,29 @@ Hellmann-Feynman checks at nsp=2 with SOC on, dF_b/dU and dF_b/dJ against dE_Hub
 is 1.4e-4 (KS, U), 3.9e-4 (KS, J) and 2.4e-4 (RS, U) Ry/eV against allowances of 2.7e-3, 3.1e-3 and 4.8e-3 Ry/eV; the
 spectral candidate misses by 53, 42 (KS) and 30 (RS) allowances. The RS J derivative was not tested. The base ASA
 functional's W1 derivative residual (-0.14% KS, -0.16% RS) bounds the claim, as at nsp=1.
+
+SOC+U for impurities (nsp=2, calctype I)
+----------------------------------------
+
+Impurity runs (``calctype='I'``) with U accept ``nsp=2``; surfaces (``S``) do not. The density is spinor as in the bulk;
+impurity energies exclude the Hubbard term (density only, no energy routing), as at nsp=1.
+
+Host requirements. Every U-carrying frozen host must be local mode, written at ``nsp=2``, and carry the spinor
+density matrix (``spinor_d = 1`` in its ``_dm`` file). The potential file records ``hubbard_nsp``; a host written at another
+nsp stops with "Frozen U-carrying host ... was written at nsp=X, run nsp=Y. Regenerate the host at nsp=Y." (legacy files
+without the field: nsp is inferred from ``spinor_d`` with an info line). Both host workflows work: an RS bulk run
+(``calctype='B'``) or a KS run (``use_kspace``) at ``nsp=2`` with U, local mode. ``fermi`` and the energy window must equal the host
+endpoint, as for collinear impurities. ``auto`` resolves to ``local`` for these impurities.
+
+Frame restriction: as for the bulk (reference axis parallel to global z, ``constrained_spiral``, no ``constraint_target``).
+
+Mixing: ``ldm_beta`` mixes the spinor P that builds V (full 10x10, same parameter and history as the collinear ldm).
+Before this change it had no effect at nsp>=2. Ni impurities at U=3/J=0.7 oscillated without it.
+
+Measured (RS Chebyshev Ni, U=3/J=0.7, SOC on; host and impurity runs read from the potential-file ``ql``; records in
+``tests/KNOWN_ISSUES.md``): impurity minus bulk, d up 6.9e-4, d down -1.9e-3, spin moment 2.1e-3 muB, orbital moment
+-1.8e-4 muB, against 1.3e-3, -2.8e-3, 3.7e-3 and -1.1e-4 at U=0. With ``soc_scale=0`` and ``fix_soc`` the nsp=2 impurity
+agrees with the nsp=1 impurity to 9e-9 (d up), 1.9e-8 (d down) and 2.6e-7 muB (moment).
 
 Validated ordinary on-site scope
 ================================

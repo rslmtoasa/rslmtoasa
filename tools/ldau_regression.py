@@ -31,13 +31,15 @@ ROOT = Path(__file__).resolve().parents[1]
 CASES = ROOT / "tests/scf/cases"
 WRAPPER = ROOT / "tools/run_rslmto_checked.py"
 RA2 = ROOT / "tests/validation/fixed_ldau/rs_embedding_ra2.py"
+S6_GUARDS = ROOT / "tests/validation/fixed_ldau/s6_nsp2_impurity_guards.py"
 SNAPSHOT = ROOT / "tests/validation/fixed_ldau/data/soc_u_snapshot.txt"
 SNAPSHOT_TOL = 1e-10
 SOC0_TOL = 1e-9  # the logged Diff has 10 decimals
+IMP_KS_SOC0_TOL = 1e-7  # the two impurity soc0 rows only, reasons next to their use
 PY = str(ROOT / ".venv/bin/python")
 NSTEP = 4
 NOT_SCIENTIFIC = {"preflight.json", "checked_launcher.log", "testrun.log", "run_monitor.json"}
-DM_LINE = re.compile(r"^\s*(ldm_flatten|ldm_flatten_imag|dm_file|dm_sha256)\b", re.M)
+DM_LINE = re.compile(r"^\s*(ldm_flatten|ldm_flatten_imag|dm_file|dm_sha256|hubbard_nsp)\b", re.M)
 
 rows: list[dict] = []
 
@@ -193,7 +195,7 @@ def signature(work: Path, diag_only: bool) -> dict[str, list[float]]:
     """Per-iteration Diff, Fermi energy, spin moment, routed energy from the log; dm sidecar entries (spin-diagonal only if asked)."""
     text = log_text(work)
     sig = {"diff": numbers(" ".join(re.findall(r"Diff=\s*([0-9.Ee+-]+)", text))),
-           "fermi": numbers(" ".join(re.findall(r"(?:Free Fermi energy:|Using canonical/fixed Fermi level =)\s*([0-9.Ee+-]+)", text))),
+           "fermi": numbers(" ".join(re.findall(r"(?:Free Fermi energy:|Fixed Fermi energy:|Using canonical/fixed Fermi level =)\s*([0-9.Ee+-]+)", text))),
            "spin_moment": numbers(" ".join(re.findall(r"Spin moment of atom\s+1 is\s+([0-9.Ee+-]+)", text))),
            "energy": numbers(" ".join(re.findall(r"(?<!base_)physical_total_energy=\s*([0-9.Ee+-]+)", text)))}
     for side in sorted(work.glob("*_dm.nml")):
@@ -224,7 +226,39 @@ def soc0_vs_nsp1(name, tag, case1, edit1, case2, edit2, base, cand, restart=None
             return
         dirs.append(d)
     ok, detail = compare_signatures(signature(dirs[0], True), signature(dirs[1], True), SOC0_TOL)
-    record(name, ok, detail)
+    offdiag = max((abs(x) for k, v in signature(dirs[1], False).items() if re.match(r"dm_\w+\(3,([12]),([12]),", k)
+                   and k.split("(3,")[1][0] != k.split("(3,")[1][2] for x in v), default=0.0)
+    record(name, ok and offdiag <= 1e-12, f"{detail}; max |P_up,dn| {offdiag:.1e} (tol 1e-12)")
+
+
+def ks_host_and_impurity(base: Path, tag: str, cand: Path, nsp: int, soc0: bool, rs_host: bool = False) -> Path | None:
+    """Fe host (KS U=2 J=0 local, or the RS bulk +U fixture) at the given nsp, then the B2FeCo impurity deck embedded in it at the same nsp."""
+    if rs_host:
+        case, restart = ("bulk/bccFe_hubbard" if nsp == 2 else "bulk/bccFe_hubbard_nsp1"), "Fe.nml"
+        host_edit = lambda t: in_hamiltonian(set_nstep(t), LOCAL)
+    else:
+        case, restart = "k_space_scf/bccFe", None
+        host_edit = lambda t: add_u(use_kspace(set_nstep(t)), 2.0, 0.0, LOCAL)
+        if nsp == 2:
+            host_edit = lambda t: add_u(ks_nsp2_deck(t), 2.0, 0.0, LOCAL)
+    if nsp == 2 and soc0:
+        host_edit = lambda t, f=host_edit: soc_off(f(t))
+    host = prepare(CASES / case, base / f"{tag}_host", host_edit)
+    if run(cand, host, restart) != 0:
+        return None
+
+    def imp_edit(t):
+        t = in_hamiltonian(set_nstep(t).replace("nsp = 1", f"nsp = {nsp}"), LOCAL)
+        return soc_off(t) if soc0 else t
+
+    d = prepare(CASES / "impurity/B2FeCo_nsp1", base / tag, imp_edit)
+    shutil.copy2(host / "Fe_out.nml", d / "Fe.nml")
+    shutil.copy2(host / "Fe_dm.nml", d / "Fe_dm.nml")
+    return d if run(cand, d, "Fe.nml") == 0 else None
+
+
+def ks_nsp2_deck(t: str) -> str:
+    return use_kspace(set_nstep(t)).replace("nsp = 1", "nsp = 2").replace("&control", "&control\nlmax = 2", 1)
 
 
 def snapshot_rows(runs: dict[str, Path]) -> dict[str, dict]:
@@ -241,7 +275,7 @@ def read_snapshot() -> dict[str, dict]:
 
 
 def write_snapshot(rows_: dict[str, dict], reason: str, cand: Path) -> None:
-    lines = ["# SOC-on nsp=2 +U regression snapshot (bcc Fe, U=2 J=0, flag on, local, 4 steps); columns: case key values",
+    lines = ["# SOC-on nsp=2 +U regression snapshot (bcc Fe, U=2 J=0, local, 4 steps; imp_soc_u2: B2FeCo impurity in the KS Fe host); columns: case key values",
              f"# reason: {reason}", f"# candidate sha256: {sha256(cand)}"]
     for tag, sig in rows_.items():
         lines += [f"{tag} {key} " + " ".join(f"{v:.17e}" for v in vals) for key, vals in sig.items()]
@@ -332,6 +366,10 @@ def guard_fixtures(binary: Path, base: Path, label: str) -> None:
                        cwd=ROOT, capture_output=True, text=True)
     detail = "13 scenarios" if p.returncode == 0 else (p.stderr.strip().splitlines() or ["failed"])[-1][:160]
     record(f"guard fixtures (RA2), {label} binary", p.returncode == 0, detail)
+    p = subprocess.run([PY, str(S6_GUARDS), "--binary", str(binary), "--scratch-root", str(base / f"s6_{label}")],
+                       cwd=ROOT, capture_output=True, text=True)
+    detail = f"{p.stdout.count('PASS ')} scenarios" if p.returncode == 0 else (p.stdout.strip().splitlines() or ["failed"])[-1][:160]
+    record(f"guard fixtures (S6 nsp=2 impurity), {label} binary", p.returncode == 0, detail)
 
 
 def main() -> int:
@@ -372,6 +410,10 @@ def main() -> int:
     soc0_vs_nsp1("+U KS nsp=2 soc_scale=0 fix_soc versus nsp=1, local", "U_ks_soc0", "k_space_scf/bccFe",
                  lambda t: add_u(ks(t), 2.0, 0.0, LOCAL), "k_space_scf/bccFe",
                  lambda t: soc_off(add_u(ks_nsp2(t), 2.0, 0.0, LOCAL)), base, cand)
+    with_beta = lambda f: (lambda t: f(t).replace("&mix", "&mix\nldm_beta = 0.3", 1))
+    soc0_vs_nsp1("+U RS nsp=2 soc_scale=0 fix_soc versus nsp=1, local, ldm_beta=0.3", "U_rs_soc0_ldmb", "bulk/bccFe_hubbard_nsp1",
+                 with_beta(lambda t: in_hamiltonian(set_nstep(t), LOCAL)), "bulk/bccFe_hubbard", with_beta(rs_soc0),
+                 base, cand, restart="Fe.nml")
     soc_runs = {}
     for tag, case, edit, restart in (("rs_soc_u2", "bulk/bccFe_hubbard", rs_soc, "Fe.nml"),
                                      ("ks_soc_u2", "k_space_scf/bccFe",
@@ -381,10 +423,41 @@ def main() -> int:
             soc_runs[tag] = d
         else:
             record(f"+U nsp=2 SOC on {tag[:2].upper()} versus snapshot", False, "run failed")
-    if args.update_snapshot is not None and len(soc_runs) == 2:
+    # nsp=2 impurity (KS Fe host, spinor dm): SOC held at zero against nsp=1, and SOC on into the snapshot
+    imp1 = ks_host_and_impurity(base, "imp_nsp1", cand, 1, False)
+    imp0 = ks_host_and_impurity(base, "imp_nsp2_soc0", cand, 2, True)
+    name0 = "+U impurity nsp=2 soc_scale=0 fix_soc versus nsp=1, local, KS host"
+    if imp1 and imp0:
+        s1, s0 = signature(imp1, True), signature(imp0, True)
+        # KS nsp=2 vs nsp=1 hosts differ at ~1e-10 (equivalent code paths); local-mode +U transient amplification
+        # over 4 steps (documented S4 / KNOWN_ISSUES 2026-10-26) gives ~4e-8. Defects this row targets (missing
+        # coherences, site map, unmixed occupation) produce 1e-2 to 1e-1 differences, so 1e-7 still discriminates.
+        ok, detail = compare_signatures(s1, s0, IMP_KS_SOC0_TOL)
+        first = max(abs(s1[k][0] - s0[k][0]) for k in ("diff", "fermi", "spin_moment", "energy"))
+        record(name0, ok and first <= SOC0_TOL, f"{detail}; iteration-1 max |delta| {first:.2e} (tol {SOC0_TOL:.0e})")
+    else:
+        record(name0, False, "run failed")
+    nameR = "+U impurity nsp=2 soc_scale=0 fix_soc versus nsp=1, local, RS host"
+    imp1r = ks_host_and_impurity(base, "imp_rs_nsp1", cand, 1, False, rs_host=True)
+    imp0r = ks_host_and_impurity(base, "imp_rs_nsp2_soc0", cand, 2, True, rs_host=True)
+    if imp1r and imp0r:
+        # Impurity local-mode +U transient amplifies roundoff-level differences between the nsp=2 (10x10) and
+        # nsp=1 (5x5) paths over 4 steps (measured 7.15e-9 RS, ~4e-8 KS). Targeted defects produce 1e-2 to 1e-1.
+        r1, r0 = signature(imp1r, True), signature(imp0r, True)
+        ok, detail = compare_signatures(r1, r0, IMP_KS_SOC0_TOL)
+        first = max(abs(r1[k][0] - r0[k][0]) for k in ("diff", "fermi", "spin_moment", "energy"))
+        record(nameR, ok and first <= SOC0_TOL, f"{detail}; iteration-1 max |delta| {first:.2e} (tol {SOC0_TOL:.0e})")
+    else:
+        record(nameR, False, "run failed")
+    imp_soc = ks_host_and_impurity(base, "imp_soc_u2", cand, 2, False)
+    if imp_soc:
+        soc_runs["imp_soc_u2"] = imp_soc
+    else:
+        record("+U impurity nsp=2 SOC on versus snapshot", False, "run failed")
+    if args.update_snapshot is not None and len(soc_runs) == 3:
         write_snapshot(snapshot_rows(soc_runs), args.update_snapshot, cand)
-    for tag, d in soc_runs.items():
-        name = f"+U nsp=2 SOC on {tag[:2].upper()} versus snapshot"
+    for tag, d in list(soc_runs.items()):
+        name = "+U impurity nsp=2 SOC on versus snapshot" if tag == "imp_soc_u2" else f"+U nsp=2 SOC on {tag[:2].upper()} versus snapshot"
         if not SNAPSHOT.is_file():
             record(name, False, "no snapshot; create it with --update-snapshot")
             continue

@@ -64,15 +64,13 @@ def main() -> None:
         (ROOT / "tests/scf/cases/impurity/B2FeCo_nsp1", "nsp1_impurity", False, None, True, None),
         (ROOT / "tests/scf/cases/bulk/bccFe_hubbard", "nsp2_bulk", False, None, True, None),
         (ROOT / "tests/scf/cases/bulk/bccFe_hubbard", "nsp2_bulk_local", False, "local", True, None),
-        (ROOT / "tests/scf/cases/impurity/B2FeCo", "nsp2_impurity_soc_guard", True, None, False,
-         "SOC+U embedded runs (calctype I or S) are not yet supported"),
-        (ROOT / "tests/scf/cases/impurity/B2FeCo", "nsp2_impurity_mode_guard", True, "local", False,
-         "SOC+U embedded runs (calctype I or S) are not yet supported"),
+        (ROOT / "tests/scf/cases/impurity/B2FeCo", "nsp2_impurity", True, None, True, None),
+        (ROOT / "tests/scf/cases/impurity/B2FeCo", "nsp2_impurity_local", True, "local", True, None),
     )
     for fixture, name, active_impurity, radial_mode, should_pass, expected_error in cases:
         run(binary, fixture, scratch / name, active_impurity=active_impurity, radial_mode=radial_mode,
             should_pass=should_pass, expected_error=expected_error)
-    print("RA3 PASS: nsp=1 and nsp=2 bulk and nsp=1 impurity U fixtures run; nsp=2 impurity SOC and local-mode guards are exercised")
+    print("RA3 PASS: nsp=1 and nsp=2 bulk and nsp=1 impurity U fixtures run; nsp=2 impurity U runs with non-U hosts (the former SOC guard is lifted; nsp=2 guards: s6_nsp2_impurity_guards.py)")
 
 
 if __name__ == "__main__":

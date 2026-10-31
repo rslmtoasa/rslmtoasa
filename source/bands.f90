@@ -1294,7 +1294,7 @@ contains
                      ' cluster='//fmt('i0', cluster_site_local), __FILE__, __LINE__)
                end if
             else if ((this%control%calctype == 'I' .or. this%control%calctype == 'S') .and. &
-                     this%recursion%hamiltonian%hubbard_test_operator_check) then
+                     (this%recursion%hamiltonian%hubbard_test_operator_check .or. spinor_local)) then
                call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
                   cluster_site_local, itype_local, status_local)
                if (status_local /= 0) then
@@ -1566,7 +1566,7 @@ contains
       class(bands) :: this
       character(len=1024) :: path
       complex(rp) :: v_spinor(10, 10)
-      integer :: unit, ios, na_glob, plusbulk, i, j, s, status
+      integer :: unit, ios, na_glob, plusbulk, i, j, s, status, cluster_site, itype
 
       call get_environment_variable('RSLMTO_SPINOR_TRACE', path, status=ios)
       if (ios /= 0 .or. len_trim(path) == 0 .or. rank /= 0) return
@@ -1574,8 +1574,11 @@ contains
       if (ios /= 0) return
       do na_glob = 1, this%lattice%nrec
          plusbulk = this%lattice%nbulk + na_glob
+         itype = this%lattice%ib(na_glob)
+         if (this%control%calctype == 'I') call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
+            cluster_site, itype, status)
          call extract_hubbard_d_spinor_potential(this%recursion%hamiltonian%hubbard_u_pot, &
-            this%lattice%ib(na_glob), spin_off, v_spinor, status)
+            itype, spin_off, v_spinor, status)
          if (status /= 0) cycle
          do i = 1, 10
             do j = 1, 10
