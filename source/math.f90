@@ -210,24 +210,34 @@ contains
 
    !> One-line summary of a spinor d-shell density P(10,10) (index (sigma-1)*5+(m+3)): Hermiticity,
    !> traces against the radial d charges ql_up and ql_dn, eigenvalue bounds, max|P_up,dn|.
-   subroutine spinor_dm_summary(p, ql_up, ql_dn, line)
+   !> n_up and n_dn are Tr(Pi_+-(axis) P), the d charges along the site's radial spin axis;
+   !> `detailed` appends the axis and both of them.
+   subroutine spinor_dm_summary(p, ql_up, ql_dn, axis, detailed, line)
       complex(rp), intent(in) :: p(10, 10)
-      real(rp), intent(in) :: ql_up, ql_dn
+      real(rp), intent(in) :: ql_up, ql_dn, axis(3)
+      logical, intent(in) :: detailed
       character(len=*), intent(out) :: line
       real(rp) :: trace_value, min_eig, max_eig, antiherm, tr_up, tr_dn
-      integer :: info, i
+      complex(rp) :: pi_up(10, 10), pi_dn(10, 10)
+      integer :: info, k, l
 
       call hubbard_density_diagnostics(p, trace_value, min_eig, max_eig, antiherm, info)
+      call spin_axis_projector(axis, 1, pi_up)
+      call spin_axis_projector(axis, 2, pi_dn)
       tr_up = 0.0_rp
       tr_dn = 0.0_rp
-      do i = 1, 5
-         tr_up = tr_up + real(p(i, i), rp)
-         tr_dn = tr_dn + real(p(i + 5, i + 5), rp)
+      do k = 1, 10
+         do l = 1, 10
+            tr_up = tr_up + real(pi_up(k, l)*p(l, k), rp)
+            tr_dn = tr_dn + real(pi_dn(k, l)*p(l, k), rp)
+         end do
       end do
       write (line, '(a,es10.3,a,f12.8,a,es10.3,a,es10.3,a,f10.6,a,f10.6,a,es10.3,a,es10.3)') &
          'antiherm=', antiherm, ' trace=', trace_value, ' trace_minus_ql=', trace_value - ql_up - ql_dn, &
          ' tr_up_minus_ql=', tr_up - ql_up, ' eig_min=', min_eig, ' eig_max=', max_eig, &
          ' max_up_dn=', maxval(abs(p(1:5, 6:10))), ' info=', real(info, rp)
+      if (detailed) write (line, '(a,a,3f12.8,a,f12.8,a,f12.8)') trim(line), ' axis=', axis, &
+         ' n_up=', tr_up, ' n_dn=', tr_dn
    end subroutine spinor_dm_summary
 
    !> Correct the d-shell radial first and second moments for the local
@@ -353,21 +363,23 @@ contains
       end do
    end subroutine extract_hubbard_d_spinor_potential
 
-   !> Spinor generalisation of correct_d_shell_moments: the d-shell radial moments of each global-z spin
-   !> channel s with the Hubbard operator removed, from the spinor P, the energy-weighted M1 and V_in
-   !> (10x10, index (sigma-1)*5+(m+3)). With Pi_s the spin-s projector, q0_s = Tr(Pi_s P) is passed in:
+   !> Spinor generalisation of correct_d_shell_moments: the d-shell radial moments of each spin
+   !> channel s along the site's radial spin axis n, with the Hubbard operator removed, from the spinor
+   !> P, the energy-weighted M1 and V_in (10x10 in the global spin frame, index (sigma-1)*5+(m+3)).
+   !> Pi_s = (1 +- n.sigma)/2 x 1_orb (s=1: +, along n) and q0_s = Tr(Pi_s P) is passed in:
    !>   t_s   = Re Tr(Pi_s V P),            c'_s  = c_s - t_s/q0_s,
    !>   q2'_s = q2_s - 2 Re Tr(Pi_s V M1c_s) + Tr(V Pi_s V P) - t_s^2/q0_s,   M1c_s = M1 - c_s P.
    !> Only V is subtracted. Rejections and status codes are those of correct_d_shell_moments.
-   subroutine correct_d_shell_moments_spinor(p, m1, vin, q0, c, q2, cprime, q2prime, t, status)
+   subroutine correct_d_shell_moments_spinor(p, m1, vin, axis, q0, c, q2, cprime, q2prime, t, status)
       use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
       complex(rp), intent(in) :: p(10, 10), m1(10, 10), vin(10, 10)
+      real(rp), intent(in) :: axis(3)
       real(rp), intent(in) :: q0(2), c(2), q2(2)
       real(rp), intent(out) :: cprime(2), q2prime(2), t(2)
       integer, intent(out) :: status
       real(rp) :: p_trace, p_min, p_max, p_antiherm
-      complex(rp) :: vp(10, 10), vpv(10, 10), vm1c(10, 10)
-      integer :: info, s, k, lo, hi
+      complex(rp) :: vp(10, 10), vpv(10, 10), vm1c(10, 10), pi_s(10, 10)
+      integer :: info, s, k, l
 
       cprime = c
       q2prime = q2
@@ -397,14 +409,15 @@ contains
       vp = matmul(vin, p)
       vpv = matmul(vp, vin)
       do s = 1, 2
-         lo = (s - 1)*5 + 1
-         hi = s*5
+         call spin_axis_projector(axis, s, pi_s)
          vm1c = matmul(vin, m1 - c(s)*p)
          t(s) = 0.0_rp
          q2prime(s) = q2(s)
-         do k = lo, hi
-            t(s) = t(s) + real(vp(k, k), rp)
-            q2prime(s) = q2prime(s) - 2.0_rp*real(vm1c(k, k), rp) + real(vpv(k, k), rp)
+         do k = 1, 10
+            do l = 1, 10
+               t(s) = t(s) + real(pi_s(k, l)*vp(l, k), rp)
+               q2prime(s) = q2prime(s) - 2.0_rp*real(pi_s(k, l)*vm1c(l, k), rp) + real(pi_s(k, l)*vpv(l, k), rp)
+            end do
          end do
          cprime(s) = c(s) - t(s)/q0(s)
          q2prime(s) = q2prime(s) - t(s)*t(s)/q0(s)
@@ -416,6 +429,25 @@ contains
       end if
       if (any(q2prime < 0.0_rp)) status = 4
    end subroutine correct_d_shell_moments_spinor
+
+   !> Spin projector Pi_s = (1 +- n.sigma)/2 x 1_orb on the 10-component d spinor (index (sigma-1)*5+(m+3)),
+   !> s=1 (+, along the unit vector n) or 2 (-). sigma in the global frame: (1,2) element n_x - i n_y.
+   pure subroutine spin_axis_projector(axis, s, pi_s)
+      real(rp), intent(in) :: axis(3)
+      integer, intent(in) :: s
+      complex(rp), intent(out) :: pi_s(10, 10)
+      real(rp) :: sgn
+      integer :: i
+
+      sgn = merge(1.0_rp, -1.0_rp, s == 1)
+      pi_s = (0.0_rp, 0.0_rp)
+      do i = 1, 5
+         pi_s(i, i) = cmplx(0.5_rp*(1.0_rp + sgn*axis(3)), 0.0_rp, rp)
+         pi_s(i + 5, i + 5) = cmplx(0.5_rp*(1.0_rp - sgn*axis(3)), 0.0_rp, rp)
+         pi_s(i, i + 5) = 0.5_rp*sgn*cmplx(axis(1), -axis(2), rp)
+         pi_s(i + 5, i) = 0.5_rp*sgn*cmplx(axis(1), axis(2), rp)
+      end do
+   end subroutine spin_axis_projector
 
    pure logical function fixed_impurity_atom_carries_uj(u_row, j_row)
       real(rp), intent(in) :: u_row(:), j_row(:)

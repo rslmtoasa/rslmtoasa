@@ -202,7 +202,8 @@ contains
       real(rp) :: ql_occ_up, ql_occ_dn
       real(rp) :: imag_ldm_max
       complex(rp) :: t_spinor(5, 5, 5, 5), p_spinor(10, 10), v_spinor(10, 10)
-      real(rp) :: e_int_s, e_dc_s, e_hub_s, u_spinor, j_spinor, axis_ref(3), axis_norm
+      real(rp) :: e_int_s, e_dc_s, e_hub_s, u_spinor, j_spinor, axis_ref(3), axis_norm, axis_first(3)
+      logical :: have_axis
       integer :: spin_row, spin_col, row_offset, col_offset
 
       ms(1)%val = [0]
@@ -236,22 +237,30 @@ contains
       ! Experimental spinor fixed U (nsp=2, bulk): the full 10x10 d-shell V, including the up-down
       ! blocks, from the spinor P; the build routines add hubbard_u_pot to the on-site block once.
       if (this%hubbard_soc_experimental .and. this%control%nsp == 2 .and. .not. present(potential_out)) then
+         have_axis = .false.
          do na = 1, this%lattice%ntype
             u_spinor = this%lattice%symbolic_atoms(na)%potential%hubbard_u(3)
             j_spinor = this%lattice%symbolic_atoms(na)%potential%hubbard_j(3)
             if (abs(u_spinor) <= 1.0e-10_rp .and. abs(j_spinor) <= 1.0e-10_rp) cycle
-            ! Frame condition: the resolved radial axis (constrained_spiral: the reference direction)
-            ! must be global z for every correlated site.
+            ! nsp=2 is collinear: every correlated site's reference axis (constraint_target, else mom)
+            ! must lie on one line; n and -n are the same axis.
             if (sqrt(sum(this%lattice%symbolic_atoms(na)%constraint_target(:)**2)) > 1.0e-12_rp) then
-               call g_logger%fatal('hubbard_soc_experimental: site '//fmt('i0', na)//' has a constraint_target; the P/V frame '// &
-                  'and the radial-channel frame must coincide until the spinor local moments exist.', __FILE__, __LINE__)
+               axis_ref = this%lattice%symbolic_atoms(na)%constraint_target(:)
+            else
+               axis_ref = this%lattice%symbolic_atoms(na)%potential%mom(:)
             end if
-            axis_ref = [0.0_rp, 0.0_rp, 1.0_rp]
-            axis_norm = sqrt(sum(this%lattice%symbolic_atoms(na)%potential%mom(:)**2))
-            if (axis_norm > 1.0e-12_rp) axis_ref = this%lattice%symbolic_atoms(na)%potential%mom(:)/axis_norm
-            if (abs(axis_ref(1)) > 1.0e-8_rp .or. abs(axis_ref(2)) > 1.0e-8_rp) then
-               call g_logger%fatal('hubbard_soc_experimental: the radial axis of site '//fmt('i0', na)//' is not parallel to global z; '// &
-                  'the P/V frame and the radial-channel frame must coincide until the spinor local moments exist.', __FILE__, __LINE__)
+            axis_norm = sqrt(sum(axis_ref**2))
+            if (axis_norm > 1.0e-12_rp) then
+               axis_ref = axis_ref/axis_norm
+            else
+               axis_ref = [0.0_rp, 0.0_rp, 1.0_rp]
+            end if
+            if (.not. have_axis) then
+               axis_first = axis_ref
+               have_axis = .true.
+            else if (norm2(cross_product(axis_ref, axis_first)) > 1.0e-8_rp) then
+               call g_logger%fatal('SOC+U at nsp=2: the axis of site '//fmt('i0', na)//' differs from that of the other '// &
+                  'correlated sites. noncollinear: use nsp=3/4, not yet supported with U.', __FILE__, __LINE__)
             end if
             if (allocated(this%lattice%symbolic_atoms(na)%potential%ldm_spinor_mix)) then
                p_spinor = this%lattice%symbolic_atoms(na)%potential%ldm_spinor_mix

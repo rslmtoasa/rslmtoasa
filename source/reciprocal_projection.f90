@@ -1110,7 +1110,7 @@ end subroutine calculate_band_moments
       real(rp) :: kT
       complex(rp), allocatable :: p(:, :, :), m1(:, :, :)
       real(rp), allocatable :: comm_real(:, :, :, :), comm_imag(:, :, :, :)
-      real(rp) :: kweight, occ
+      real(rp) :: kweight, occ, axis(3)
       complex(rp) :: element
       character(len=400) :: line
       integer :: ik, ik_global, isite, ib, s, t, i, j, row, col, plusbulk, site_offset
@@ -1171,8 +1171,11 @@ end subroutine calculate_band_moments
             allocate(lattice_obj%symbolic_atoms(plusbulk)%potential%m1_spinor(10, 10))
          lattice_obj%symbolic_atoms(plusbulk)%potential%ldm_spinor = p(isite, :, :)
          lattice_obj%symbolic_atoms(plusbulk)%potential%m1_spinor = m1(isite, :, :)
+         call this%rf_density%get_axis(isite, axis)
+         call lattice_obj%symbolic_atoms(plusbulk)%potential%set_hubbard_axis(axis, isite)
          call spinor_dm_summary(p(isite, :, :), lattice_obj%symbolic_atoms(plusbulk)%potential%ql(1, 2, 1), &
-                                lattice_obj%symbolic_atoms(plusbulk)%potential%ql(1, 2, 2), line)
+                                lattice_obj%symbolic_atoms(plusbulk)%potential%ql(1, 2, 2), axis, &
+                                this%hamiltonian%hubbard_log_level /= 'summary', line)
          call root_info('HUBBARD_SPINOR_DM backend=ks atom='//trim(int2str(isite))//' '//trim(line), __FILE__, __LINE__)
       end do
       deallocate(p, m1)
