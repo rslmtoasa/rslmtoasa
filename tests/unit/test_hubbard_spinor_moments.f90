@@ -4,11 +4,12 @@
 ! eigenpairs of H0 + V (random Hermitian, with spin-off-diagonal V); R05: a sequence whose only change is
 ! in the spin-off-diagonal blocks of P and V is not declared converged; (f) the spin-frame axis n: n = z
 ! against the S4 z-block loop (bitwise), n against the z kernel on spin-rotated inputs, global covariance,
-! and a +n / -n site pair. The finite-H comparison with the
+! and a +n / -n site pair; (g) the d-shell orbital moment Tr(P L.n) against the closed form for a|m=2> + b|m=1>. The finite-H comparison with the
 ! direct definition of c' and q2' is in projector_spinor_frozen_h.f90. Every control must exceed its tolerance.
 program test_hubbard_spinor_moments
    use precision_mod, only: rp
-   use math_mod, only: correct_d_shell_moments, correct_d_shell_moments_spinor
+   use math_mod, only: correct_d_shell_moments, correct_d_shell_moments_spinor, init_math_operators, spinor_orbital_moment
+   use basis_mod, only: basis_init
    use mix_mod, only: mix, fixed_u_residual_metrics
    implicit none
 
@@ -17,10 +18,13 @@ program test_hubbard_spinor_moments
    real(rp), parameter :: zaxis(3) = [0.0_rp, 0.0_rp, 1.0_rp]
    external :: zheev
 
+   call basis_init(2)
+   call init_math_operators()
    call test_collinear_reduction()
    call test_q2_nonnegative()
    call test_r05_off_diagonal_blocks()
    call test_frame_rotation()
+   call test_orbital_moment()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -392,5 +396,51 @@ contains
       call check('(f) +n / -n site pair: the -n site equals the +n site', worst_afm, 1.0e-13_rp)
       call check('(f) control, the -n site with the +n projectors', worst_afm_ctrl, 1.0e-13_rp, .true.)
    end subroutine test_frame_rotation
+
+   !> m_L = Tr(P L.n) against closed forms. The d basis of the code (cart2sph) has L_z = 3 - k on index k and the
+   !> neighbouring-state elements of L_x, L_y carry the opposite sign to the Condon-Shortley convention (basis phase
+   !> (-1)^m; read off the L matrices, so the sign of <Lx>, <Ly> is not independent of them; the magnitudes are).
+   !> For psi = a|k> + b|k+1> (spin up) with m = 3 - k and c = sqrt(l(l+1) - m(m-1))/2 the |m-1>,|m> element of L_x:
+   !> <Lx> = -2 c Re(a* b), <Ly> = -2 c Im(a* b), <Lz> = m|a|^2 + (m-1)|b|^2; a spin-down |k=1> adds 2 n.z.
+   subroutine test_orbital_moment()
+      complex(rp) :: psi(10), chi(10), p(10, 10), a, b, v(10)
+      real(rp) :: n(3), expected, worst, worst_t, worst_diag, lvec(3), c
+      integer :: trial, k, m
+
+      worst_diag = 0.0_rp
+      do k = 1, 5
+         v = (0.0_rp, 0.0_rp)
+         v(k) = (1.0_rp, 0.0_rp)
+         p = spread(v, 2, 10)*spread(conjg(v), 1, 10)
+         worst_diag = max(worst_diag, abs(spinor_orbital_moment(p, zaxis) - real(3 - k, rp)), &
+                          abs(spinor_orbital_moment(p, [1.0_rp, 0.0_rp, 0.0_rp])), abs(spinor_orbital_moment(p, [0.0_rp, 1.0_rp, 0.0_rp])))
+      end do
+      call check('(g) orbital moment of |k> along z = 3 - k, zero along x and y', worst_diag, 1.0e-13_rp)
+
+      worst = 0.0_rp
+      worst_t = 0.0_rp
+      do trial = 1, 8
+         k = 1 + mod(trial, 2)
+         m = 3 - k
+         c = 0.5_rp*sqrt(6.0_rp - real(m*(m - 1), rp))
+         a = cmplx(0.6_rp, 0.0_rp, rp)
+         b = 0.8_rp*exp(cmplx(0.0_rp, 0.4_rp + 0.9_rp*real(trial, rp), rp))
+         psi = (0.0_rp, 0.0_rp)
+         psi(k) = a
+         psi(k + 1) = b
+         chi = (0.0_rp, 0.0_rp)
+         chi(6) = (1.0_rp, 0.0_rp)
+         p = spread(psi, 2, 10)*spread(conjg(psi), 1, 10) + spread(chi, 2, 10)*spread(conjg(chi), 1, 10)
+         n = random_unit()
+         lvec = [-2.0_rp*c*real(conjg(a)*b, rp), -2.0_rp*c*aimag(conjg(a)*b), &
+                 real(m, rp)*abs(a)**2 + real(m - 1, rp)*abs(b)**2]
+         expected = dot_product(n, lvec) + 2.0_rp*n(3)
+         worst = max(worst, abs(spinor_orbital_moment(p, n) - expected))
+         ! control: the transposed P flips the sign of <Ly>
+         worst_t = max(worst_t, abs(spinor_orbital_moment(transpose(p), n) - expected))
+      end do
+      call check('(g) orbital moment Tr(P L.n) vs the closed form, 8 states', worst, 1.0e-13_rp)
+      call check('(g) control, transposed P', worst_t, 1.0e-13_rp, .true.)
+   end subroutine test_orbital_moment
 
 end program test_hubbard_spinor_moments

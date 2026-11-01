@@ -147,7 +147,7 @@ module math_mod
 
    public :: init_math_operators
    public :: hubbard_projector_element, hubbard_spectral_density_element
-   public :: hubbard_density_diagnostics, spinor_dm_summary
+   public :: hubbard_density_diagnostics, spinor_dm_summary, spinor_orbital_moment
    public :: correct_d_shell_moments, correct_d_shell_moments_spinor
    public :: extract_hubbard_d_shell_potential, extract_hubbard_d_spinor_potential
    public :: fixed_impurity_atom_carries_uj
@@ -236,9 +236,31 @@ contains
          'antiherm=', antiherm, ' trace=', trace_value, ' trace_minus_ql=', trace_value - ql_up - ql_dn, &
          ' tr_up_minus_ql=', tr_up - ql_up, ' eig_min=', min_eig, ' eig_max=', max_eig, &
          ' max_up_dn=', maxval(abs(p(1:5, 6:10))), ' info=', real(info, rp)
-      if (detailed) write (line, '(a,a,3f12.8,a,f12.8,a,f12.8)') trim(line), ' axis=', axis, &
-         ' n_up=', tr_up, ' n_dn=', tr_dn
+      if (detailed) write (line, '(a,a,3f12.8,a,f12.8,a,f12.8,a,f12.8)') trim(line), ' axis=', axis, &
+         ' n_up=', tr_up, ' n_dn=', tr_dn, ' m_L=', spinor_orbital_moment(p, axis)
    end subroutine spinor_dm_summary
+
+   !> d-shell orbital moment along the unit vector n from the spinor P (index (sigma-1)*5+(m+3), P(a,b) =
+   !> sum f psi(a) conj(psi(b))): m_L = Tr(P (L.n x 1_spin)), with L the d block of the same spherical-basis
+   !> angular momentum matrices that build_lsham uses.
+   function spinor_orbital_moment(p, axis) result(ml)
+      complex(rp), intent(in) :: p(10, 10)
+      real(rp), intent(in) :: axis(3)
+      real(rp) :: ml
+      complex(rp) :: ln(norb, norb)
+      integer :: s, i, j
+
+      ln = axis(1)*L_x + axis(2)*L_y + axis(3)*L_z
+      call hcpx(ln, 'cart2sph')
+      ml = 0.0_rp
+      do s = 1, 2
+         do i = 1, 5
+            do j = 1, 5
+               ml = ml + real(ln(4 + i, 4 + j)*p((s - 1)*5 + j, (s - 1)*5 + i), rp)
+            end do
+         end do
+      end do
+   end function spinor_orbital_moment
 
    !> Correct the d-shell radial first and second moments for the local
    !> Hubbard operator present in the Hamiltonian.  Matrices use the
