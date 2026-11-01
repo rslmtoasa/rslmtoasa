@@ -236,13 +236,28 @@
       "expect_fatal": "noncollinear: use nsp=3/4, not yet supported with U.",
       "namelists": {
         "lattice":     { "strux_backend": "legacy" },
-        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50 },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": false,
                          "hubbard_u_general": [[null, null, null, null], [null, null, null, null], [3.0, null, 1.0, null]],
                          "hubbard_j_general": [[null, null, null, null], [null, null, null, null], [0.0, null, 0.0, null]] }
       },
       "potentials": { "Mn.nml": { "par": { "mom": [1.0, 0.0, 0.0] } } }
+    },
+    {
+      "name": "Example_bulk_bccFe_soc_u_tilted_block_guard",
+      "quick": true,
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
+      "case": "bulk/bccFe_hubbard",
+      "timeout": 300,
+      "_note": "nsp=2 SOC+U, RS block recursion, Fe moment patched along x, stops: block recursion is not spin-rotation invariant",
+      "expect_fatal": "tilted spin axis requires recur='chebyshev' in RS",
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "block", "lld": 21 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
+      },
+      "potentials": { "Fe.nml": { "par": { "mom": [1.0, 0.0, 0.0] } } }
     },
     {
       "name": "Example_bulk_bccFe_nsp3_u_guard",

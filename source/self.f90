@@ -1096,6 +1096,12 @@ contains
             this%symbolic_atom(ia)%potential%hubbard_nsp = this%control%nsp
          end if
       end do
+      ! The RS block-recursion terminator is built in the global-z spin basis (KNOWN_ISSUES, S6b).
+      if (this%control%nsp == 2 .and. .not. this%use_kspace .and. trim(this%control%recur) /= 'chebyshev' .and. &
+          norm2(cross_product(run_axis, [0.0_rp, 0.0_rp, 1.0_rp])) > 1.0e-8_rp) then
+         call g_logger%fatal("tilted spin axis requires recur='chebyshev' in RS (block recursion is not spin-rotation "// &
+            "invariant, see KNOWN_ISSUES)", __FILE__, __LINE__)
+      end if
    end subroutine validate_hubbard_mode_provenance
 
    real(rp) function fixed_hubbard_energy_pout(this) result(total_hub)
