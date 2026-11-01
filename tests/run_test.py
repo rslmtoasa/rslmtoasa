@@ -47,6 +47,9 @@ Reference data is driven by a "checks" dict in cases.json:
         "tolerances": { "fermi_level": { "abs_tol": 1e-3 } }
       }
     ],
+    "log_patterns": [
+      { "file": "testrun.log", "must_match": "regex that must occur", "must_not_match": "regex that must not occur" }
+    ],
     "outputs": [
       { "file": "totaldos.out", "min_lines": 50 }
     ]
@@ -297,6 +300,17 @@ def check_log_assertions(workdir: str, case_name: str, assertions: list[dict]) -
                 f"actual={actual!r}, expected={expected!r}, tolerance={tolerance!r}"
             )
             sys.exit(1)
+
+
+def check_log_patterns(workdir: str, case_name: str, patterns: list[dict]) -> None:
+    """Each entry names a file and a regex that must (must_match) or must not (must_not_match) occur in it."""
+    for entry in patterns:
+        with open(os.path.join(workdir, entry["file"])) as fh:
+            text = re.sub(r"\x1b\[[0-9;]*m", "", fh.read())
+        for key, want in (("must_match", True), ("must_not_match", False)):
+            if key in entry and (re.search(entry[key], text) is not None) != want:
+                print(f"ERROR [{case_name}]: {entry['file']} {key} failed: {entry[key]}")
+                sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -686,6 +700,7 @@ def main() -> None:
     check_text_dimensions(workdir, args.case_name, case.get("checks", {}).get("dimensions", []))
     check_text_finite(workdir, args.case_name, case.get("checks", {}).get("finite", []))
     check_log_assertions(workdir, args.case_name, case.get("checks", {}).get("assertions", []))
+    check_log_patterns(workdir, args.case_name, case.get("checks", {}).get("log_patterns", []))
 
     if args.compare_ref:
         abs_tol = case.get("abs_tol", args.abs_tol)
