@@ -71,6 +71,7 @@ module self_mod
    public :: fixed_u_r05_targets, atomsc_inner_controls
    public :: vxc0sp_pbe_origin_derivatives
    public :: vxc0sp
+   public :: poiss0
    !> Deterministic audit hook used by LR-BASIS-00 tests.  It calls the live
    !> RSEQSR/PHDFSR machinery; it does not provide an alternative radial solver.
    public :: legacy_radial_fixture
