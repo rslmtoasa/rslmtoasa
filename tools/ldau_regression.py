@@ -10,7 +10,7 @@ launched single-threaded through tools/run_rslmto_checked.py (4 SCF steps).
 The guard-fixture script (RA2) runs against the candidate binary only: the
 reference binary predates the guards it checks, so a reference row cannot pass.
 
-The SOC-on nsp=2 +U rows compare the candidate with a committed snapshot
+The SOC-on nsp=2 +U rows (z axis, and an x-axis KS row since S6b) compare the candidate with a committed snapshot
 (tests/validation/fixed_ldau/data/soc_u_snapshot.txt) at 1e-10. Rewrite the
 snapshot only with --update-snapshot "one-line reason".
 """
@@ -27,6 +27,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import numpy as np
+
 ROOT = Path(__file__).resolve().parents[1]
 CASES = ROOT / "tests/scf/cases"
 WRAPPER = ROOT / "tools/run_rslmto_checked.py"
@@ -35,6 +37,7 @@ S6_GUARDS = ROOT / "tests/validation/fixed_ldau/s6_nsp2_impurity_guards.py"
 SNAPSHOT = ROOT / "tests/validation/fixed_ldau/data/soc_u_snapshot.txt"
 SNAPSHOT_TOL = 1e-10
 SOC0_TOL = 1e-9  # the logged Diff has 10 decimals
+AXIS_TOL = 1e-8  # S6b: x-axis against z-axis at SOC held at zero, after spin rotation
 IMP_KS_SOC0_TOL = 1e-7  # the two impurity soc0 rows only, reasons next to their use
 PY = str(ROOT / ".venv/bin/python")
 NSTEP = 4
@@ -289,6 +292,52 @@ def compare_identical(ref: Path, cand: Path, skip: tuple[str, ...] = ()) -> tupl
     return (not bad, f"{len(set(ro) & set(co))} files byte-identical" if not bad else "differ: " + ", ".join(bad[:5]))
 
 
+def set_mom(path: Path, axis: tuple[float, float, float]) -> None:
+    path.write_text(re.sub(r"(?m)^(\s*mom\s*=).*$", r"\g<1> %.16f, %.16f, %.16f" % axis, path.read_text(), count=1))
+
+
+def no_symmetry(text: str) -> str:
+    """Full k mesh: the spglib reduction uses the crystal group, not the magnetic group of a tilted axis."""
+    return text.replace("use_symmetry_reduction = .true.", "use_symmetry_reduction = .false.")
+
+
+def spinor_p(work: Path) -> np.ndarray:
+    """Full 10x10 d spinor P of the Fe dm sidecar, index (s-1)*5+m."""
+    p = np.zeros((10, 10), complex)
+    for line in (work / "Fe_dm.nml").read_text().splitlines():
+        m = re.match(r"\s*dm_(re|im)\(3,(\d),(\d),(\d),:\)\s*=\s*(.*)", line)
+        if m:
+            s, t, m1 = int(m.group(2)), int(m.group(3)), int(m.group(4))
+            p[(s - 1) * 5 + m1 - 1, (t - 1) * 5:t * 5] += np.array(numbers(m.group(5))) * (1 if m.group(1) == "re" else 1j)
+    return p
+
+
+def to_z_frame(p: np.ndarray, n: tuple[float, float, float]) -> np.ndarray:
+    """U P U^dagger with U = rows <n+|, <n-| (|n+> = (cos t/2, e^{i f} sin t/2)) x 1_5."""
+    th, ph = np.arccos(n[2]), np.arctan2(n[1], n[0])
+    r2 = np.array([[np.cos(th / 2), np.exp(-1j * ph) * np.sin(th / 2)],
+                   [-np.exp(1j * ph) * np.sin(th / 2), np.cos(th / 2)]])
+    u = np.kron(r2, np.eye(5))
+    return u @ p @ u.conj().T
+
+
+def axis_rotation_row(base: Path, cand: Path, edit) -> None:
+    """KS bcc Fe nsp=2, U=2 J=0 local, SOC held at zero: magnetisation along x against z, by value after rotation."""
+    name = "+U KS nsp=2 soc_scale=0 fix_soc, axis x versus z (rotated)"
+    dirs = {}
+    for tag, axis in (("z", (0.0, 0.0, 1.0)), ("x", (1.0, 0.0, 0.0))):
+        d = prepare(CASES / "k_space_scf/bccFe", base / f"axis_soc0_{tag}", edit)
+        set_mom(d / "Fe.nml", axis)
+        if run(cand, d) != 0:
+            record(name, False, f"{tag} run failed")
+            return
+        dirs[tag] = (d, axis)
+    sz, sx = ({k: v for k, v in signature(d, False).items() if not k.startswith("dm_")} for d, _ in dirs.values())
+    ok, detail = compare_signatures(sz, sx, AXIS_TOL)
+    dp = np.abs(to_z_frame(spinor_p(dirs["x"][0]), dirs["x"][1]) - spinor_p(dirs["z"][0])).max()
+    record(name, ok and dp <= AXIS_TOL, f"{detail}; max |U P_x U^+ - P_z| {dp:.2e} (tol {AXIS_TOL:.0e})")
+
+
 # --------------------------------------------------------------- the rows
 def paired(name, tag, case, edit, comparator, base, ref, cand, restart=None):
     dirs = {}
@@ -414,15 +463,21 @@ def main() -> int:
     soc0_vs_nsp1("+U RS nsp=2 soc_scale=0 fix_soc versus nsp=1, local, ldm_beta=0.3", "U_rs_soc0_ldmb", "bulk/bccFe_hubbard_nsp1",
                  with_beta(lambda t: in_hamiltonian(set_nstep(t), LOCAL)), "bulk/bccFe_hubbard", with_beta(rs_soc0),
                  base, cand, restart="Fe.nml")
+    # S6b: magnetisation axis x against z with SOC held at zero (KS), and an x-axis SOC-on snapshot row
+    axis_rotation_row(base, cand, lambda t: no_symmetry(soc_off(add_u(ks_nsp2(t), 2.0, 0.0, LOCAL))))
     soc_runs = {}
     for tag, case, edit, restart in (("rs_soc_u2", "bulk/bccFe_hubbard", rs_soc, "Fe.nml"),
                                      ("ks_soc_u2", "k_space_scf/bccFe",
-                                      lambda t: add_u(ks_nsp2(t), 2.0, 0.0, LOCAL), None)):
+                                      lambda t: add_u(ks_nsp2(t), 2.0, 0.0, LOCAL), None),
+                                     ("ks_soc_u2_x", "k_space_scf/bccFe",
+                                      lambda t: no_symmetry(add_u(ks_nsp2(t), 2.0, 0.0, LOCAL)), None)):
         d = prepare(CASES / case, base / tag, edit)
+        if tag == "ks_soc_u2_x":
+            set_mom(d / "Fe.nml", (1.0, 0.0, 0.0))
         if run(cand, d, restart) == 0:
             soc_runs[tag] = d
         else:
-            record(f"+U nsp=2 SOC on {tag[:2].upper()} versus snapshot", False, "run failed")
+            record(f"+U nsp=2 SOC on {tag.upper()} versus snapshot", False, "run failed")
     # nsp=2 impurity (KS Fe host, spinor dm): SOC held at zero against nsp=1, and SOC on into the snapshot
     imp1 = ks_host_and_impurity(base, "imp_nsp1", cand, 1, False)
     imp0 = ks_host_and_impurity(base, "imp_nsp2_soc0", cand, 2, True)
@@ -454,10 +509,10 @@ def main() -> int:
         soc_runs["imp_soc_u2"] = imp_soc
     else:
         record("+U impurity nsp=2 SOC on versus snapshot", False, "run failed")
-    if args.update_snapshot is not None and len(soc_runs) == 3:
+    if args.update_snapshot is not None and len(soc_runs) == 4:
         write_snapshot(snapshot_rows(soc_runs), args.update_snapshot, cand)
     for tag, d in list(soc_runs.items()):
-        name = "+U impurity nsp=2 SOC on versus snapshot" if tag == "imp_soc_u2" else f"+U nsp=2 SOC on {tag[:2].upper()} versus snapshot"
+        name = "+U impurity nsp=2 SOC on versus snapshot" if tag == "imp_soc_u2" else f"+U nsp=2 SOC on {tag.upper()} versus snapshot"
         if not SNAPSHOT.is_file():
             record(name, False, "no snapshot; create it with --update-snapshot")
             continue

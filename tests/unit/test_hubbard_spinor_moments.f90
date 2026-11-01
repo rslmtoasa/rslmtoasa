@@ -2,7 +2,9 @@
 !
 ! (a) block-diagonal inputs reproduce the collinear kernel; (c) q2' >= 0 for states built from the exact
 ! eigenpairs of H0 + V (random Hermitian, with spin-off-diagonal V); R05: a sequence whose only change is
-! in the spin-off-diagonal blocks of P and V is not declared converged. The finite-H comparison with the
+! in the spin-off-diagonal blocks of P and V is not declared converged; (f) the spin-frame axis n: n = z
+! against the S4 z-block loop (bitwise), n against the z kernel on spin-rotated inputs, global covariance,
+! and a +n / -n site pair. The finite-H comparison with the
 ! direct definition of c' and q2' is in projector_spinor_frozen_h.f90. Every control must exceed its tolerance.
 program test_hubbard_spinor_moments
    use precision_mod, only: rp
@@ -12,11 +14,13 @@ program test_hubbard_spinor_moments
 
    integer(8) :: seed = 20261027_8
    logical :: failed = .false.
+   real(rp), parameter :: zaxis(3) = [0.0_rp, 0.0_rp, 1.0_rp]
    external :: zheev
 
    call test_collinear_reduction()
    call test_q2_nonnegative()
    call test_r05_off_diagonal_blocks()
+   call test_frame_rotation()
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'
@@ -126,7 +130,7 @@ contains
       v(6:10, 6:10) = rand_hermitian(5, 0.4_rp)
       h = h0 + v
       call moments_of(h, 6, p, m1, q0, c, q2)
-      call correct_d_shell_moments_spinor(p, m1, v, q0, c, q2, cp, q2p, t, status)
+      call correct_d_shell_moments_spinor(p, m1, v, zaxis, q0, c, q2, cp, q2p, t, status)
       do s = 1, 2
          lo = (s - 1)*5 + 1
          hi = s*5
@@ -141,7 +145,7 @@ contains
       vsw(6:10, 6:10) = v(1:5, 1:5)
       vsw(1:5, 6:10) = (0.0_rp, 0.0_rp)
       vsw(6:10, 1:5) = (0.0_rp, 0.0_rp)
-      call correct_d_shell_moments_spinor(p, m1, vsw, q0, c, q2, cp2, q2p2, t2, status)
+      call correct_d_shell_moments_spinor(p, m1, vsw, zaxis, q0, c, q2, cp2, q2p2, t2, status)
       worst_swap = max(maxval(abs(cp2 - cs)), maxval(abs(q2p2 - q2s)))
       call check('(a) control, V spin blocks swapped', worst_swap, 1.0e-14_rp, .true.)
 
@@ -150,10 +154,10 @@ contains
       v(6:10, 1:5) = conjg(transpose(v(1:5, 6:10)))
       h = h0 + v
       call moments_of(h, 6, p, m1, q0, c, q2)
-      call correct_d_shell_moments_spinor(p, m1, v, q0, c, q2, cp, q2p, t, status)
+      call correct_d_shell_moments_spinor(p, m1, v, zaxis, q0, c, q2, cp, q2p, t, status)
       v(1:5, 6:10) = (0.0_rp, 0.0_rp)
       v(6:10, 1:5) = (0.0_rp, 0.0_rp)
-      call correct_d_shell_moments_spinor(p, m1, v, q0, c, q2, cp2, q2p2, t2, status)
+      call correct_d_shell_moments_spinor(p, m1, v, zaxis, q0, c, q2, cp2, q2p2, t2, status)
       worst_off = max(maxval(abs(cp - cp2)), maxval(abs(q2p - q2p2)))
       call check('(a) control, spin-off-diagonal V blocks dropped', worst_off, 1.0e-14_rp, .true.)
    end subroutine test_collinear_reduction
@@ -170,7 +174,7 @@ contains
          v = rand_hermitian(10, 0.8_rp)
          h = h0 + v
          call moments_of(h, 3 + mod(trial, 5), p, m1, q0, c, q2)
-         call correct_d_shell_moments_spinor(p, m1, v, q0, c, q2, cp, q2p, t, status)
+         call correct_d_shell_moments_spinor(p, m1, v, zaxis, q0, c, q2, cp, q2p, t, status)
          min_q2p = min(min_q2p, minval(q2p))
          ! control: the positive Tr(V Pi_s V P) term dropped
          vp = matmul(v, p)
@@ -236,5 +240,157 @@ contains
       call check('R05 control, diagonal blocks only: the same sequence is declared converged (1 = yes)', &
          merge(1.0_rp, 0.0_rp, ever_collinear), 0.5_rp, .true.)
    end subroutine test_r05_off_diagonal_blocks
+
+   !> 2x2 spin rotation taking the unit vector n to z, from the eigenvectors of n.sigma
+   !> (rows <n+| and <n-|, |n+> = (cos(t/2), e^{i f} sin(t/2))), as a 10x10 spin x orbital matrix.
+   function rotation_to_z(n) result(u)
+      real(rp), intent(in) :: n(3)
+      complex(rp) :: u(10, 10), r2(2, 2)
+      real(rp) :: theta, phi
+
+      theta = acos(n(3))
+      phi = atan2(n(2), n(1))
+      r2(1, :) = [cmplx(cos(0.5_rp*theta), 0.0_rp, rp), exp(cmplx(0.0_rp, -phi, rp))*sin(0.5_rp*theta)]
+      r2(2, :) = [-exp(cmplx(0.0_rp, phi, rp))*sin(0.5_rp*theta), cmplx(cos(0.5_rp*theta), 0.0_rp, rp)]
+      u = spin_matrix(r2)
+   end function rotation_to_z
+
+   !> W = exp(-i alpha m.sigma/2) x 1_orb; it rotates spin vectors by +alpha about the unit vector m.
+   function spin_rotation(m, alpha) result(u)
+      real(rp), intent(in) :: m(3), alpha
+      complex(rp) :: u(10, 10), r2(2, 2)
+      complex(rp), parameter :: im = (0.0_rp, 1.0_rp)
+
+      r2(1, 1) = cos(0.5_rp*alpha) - im*sin(0.5_rp*alpha)*m(3)
+      r2(1, 2) = -im*sin(0.5_rp*alpha)*cmplx(m(1), -m(2), rp)
+      r2(2, 1) = -im*sin(0.5_rp*alpha)*cmplx(m(1), m(2), rp)
+      r2(2, 2) = cos(0.5_rp*alpha) + im*sin(0.5_rp*alpha)*m(3)
+      u = spin_matrix(r2)
+   end function spin_rotation
+
+   function spin_matrix(r2) result(u)
+      complex(rp), intent(in) :: r2(2, 2)
+      complex(rp) :: u(10, 10)
+      integer :: i
+
+      u = (0.0_rp, 0.0_rp)
+      do i = 1, 5
+         u(i, i) = r2(1, 1)
+         u(i, i + 5) = r2(1, 2)
+         u(i + 5, i) = r2(2, 1)
+         u(i + 5, i + 5) = r2(2, 2)
+      end do
+   end function spin_matrix
+
+   !> Rodrigues: rotation of v by alpha about the unit vector m.
+   function rotate_vector(m, alpha, v) result(w)
+      real(rp), intent(in) :: m(3), alpha, v(3)
+      real(rp) :: w(3), mxv(3)
+
+      mxv = [m(2)*v(3) - m(3)*v(2), m(3)*v(1) - m(1)*v(3), m(1)*v(2) - m(2)*v(1)]
+      w = v*cos(alpha) + mxv*sin(alpha) + m*dot_product(m, v)*(1.0_rp - cos(alpha))
+   end function rotate_vector
+
+   function random_unit() result(n)
+      real(rp) :: n(3)
+
+      n = [uniform() - 0.5_rp, uniform() - 0.5_rp, uniform() - 0.5_rp]
+      n = n/norm2(n)
+   end function random_unit
+
+   !> The S4 z-frame kernel loop (global-z diagonal blocks), kept as the regression reference for n = z.
+   subroutine s4_z_kernel(p, m1, vin, q0, c, q2, cprime, q2prime, t)
+      complex(rp), intent(in) :: p(10, 10), m1(10, 10), vin(10, 10)
+      real(rp), intent(in) :: q0(2), c(2), q2(2)
+      real(rp), intent(out) :: cprime(2), q2prime(2), t(2)
+      complex(rp) :: vp(10, 10), vpv(10, 10), vm1c(10, 10)
+      integer :: s, k
+
+      vp = matmul(vin, p)
+      vpv = matmul(vp, vin)
+      do s = 1, 2
+         vm1c = matmul(vin, m1 - c(s)*p)
+         t(s) = 0.0_rp
+         q2prime(s) = q2(s)
+         do k = (s - 1)*5 + 1, s*5
+            t(s) = t(s) + real(vp(k, k), rp)
+            q2prime(s) = q2prime(s) - 2.0_rp*real(vm1c(k, k), rp) + real(vpv(k, k), rp)
+         end do
+         cprime(s) = c(s) - t(s)/q0(s)
+         q2prime(s) = q2prime(s) - t(s)*t(s)/q0(s)
+      end do
+   end subroutine s4_z_kernel
+
+   subroutine test_frame_rotation()
+      complex(rp) :: h(10, 10), v(10, 10), pz(10, 10), m1z(10, 10), vz(10, 10), u(10, 10), w(10, 10)
+      complex(rp) :: p(10, 10), m1(10, 10), pw(10, 10), m1w(10, 10), vw(10, 10)
+      real(rp) :: q0(2), c(2), q2(2), cp(2), q2p(2), t(2), cpr(2), q2pr(2), tr(2), cpw(2), q2pw(2), tw(2)
+      real(rp) :: n(3), m(3), nw(3), worst_z, worst_rot, worst_cov, worst_ctrl, worst_afm, worst_afm_ctrl, alpha
+      integer :: trial, status, st
+
+      ! n = z: bitwise against the S4 loop, on general (spin-mixed) inputs
+      worst_z = 0.0_rp
+      do trial = 1, 10
+         h = rand_hermitian(10, 1.5_rp)
+         v = rand_hermitian(10, 0.6_rp)
+         call moments_of(h + v, 3 + mod(trial, 5), p, m1, q0, c, q2)
+         call correct_d_shell_moments_spinor(p, m1, v, zaxis, q0, c, q2, cp, q2p, t, status)
+         call s4_z_kernel(p, m1, v, q0, c, q2, cpr, q2pr, tr)
+         worst_z = max(worst_z, maxval(abs(cp - cpr)), maxval(abs(q2p - q2pr)), maxval(abs(t - tr)))
+      end do
+      call check('(f) n = z vs the S4 z-block loop (bitwise)', worst_z, 0.0_rp)
+
+      worst_rot = 0.0_rp
+      worst_cov = 0.0_rp
+      worst_ctrl = 0.0_rp
+      worst_afm = 0.0_rp
+      worst_afm_ctrl = 0.0_rp
+      do trial = 1, 20
+         n = random_unit()
+         u = rotation_to_z(n)
+         ! a physical state in the n frame: q0, c, q2 along n are the z-block moments of the rotated problem
+         h = rand_hermitian(10, 1.5_rp)
+         v = rand_hermitian(10, 0.6_rp)
+         call moments_of(h + v, 3 + mod(trial, 5), pz, m1z, q0, c, q2)
+         vz = v
+         p = matmul(conjg(transpose(u)), matmul(pz, u))
+         m1 = matmul(conjg(transpose(u)), matmul(m1z, u))
+         v = matmul(conjg(transpose(u)), matmul(vz, u))
+         call correct_d_shell_moments_spinor(p, m1, v, n, q0, c, q2, cp, q2p, t, status)
+         if (status /= 0) failed = .true.
+         call correct_d_shell_moments_spinor(pz, m1z, vz, zaxis, q0, c, q2, cpr, q2pr, tr, status)
+         worst_rot = max(worst_rot, maxval(abs(cp - cpr)), maxval(abs(q2p - q2pr)), maxval(abs(t - tr)))
+         ! control: the z projectors on the tilted state
+         call correct_d_shell_moments_spinor(p, m1, v, zaxis, q0, c, q2, cpw, q2pw, tw, status)
+         worst_ctrl = max(worst_ctrl, maxval(abs(cpw - cpr)), maxval(abs(q2pw - q2pr)))
+         ! global covariance: P, M1, V and n rotated together by W
+         m = random_unit()
+         alpha = 6.0_rp*uniform()
+         w = spin_rotation(m, alpha)
+         pw = matmul(w, matmul(p, conjg(transpose(w))))
+         m1w = matmul(w, matmul(m1, conjg(transpose(w))))
+         vw = matmul(w, matmul(v, conjg(transpose(w))))
+         nw = rotate_vector(m, alpha, n)
+         call correct_d_shell_moments_spinor(pw, m1w, vw, nw, q0, c, q2, cpw, q2pw, tw, status)
+         worst_cov = max(worst_cov, maxval(abs(cpw - cp)), maxval(abs(q2pw - q2p)), maxval(abs(tw - t)))
+         ! +n / -n site pair: the second site is the first rotated by pi about an axis normal to n
+         m = [n(2), -n(1), 0.0_rp]
+         m = m/norm2(m)
+         w = spin_rotation(m, acos(-1.0_rp))
+         pw = matmul(w, matmul(p, conjg(transpose(w))))
+         m1w = matmul(w, matmul(m1, conjg(transpose(w))))
+         vw = matmul(w, matmul(v, conjg(transpose(w))))
+         call correct_d_shell_moments_spinor(pw, m1w, vw, -n, q0, c, q2, cpw, q2pw, tw, status)
+         worst_afm = max(worst_afm, maxval(abs(cpw - cp)), maxval(abs(q2pw - q2p)), maxval(abs(tw - t)))
+         ! control (pre-S6b behaviour for -z): the -n site evaluated with the +n projectors
+         call correct_d_shell_moments_spinor(pw, m1w, vw, n, q0, c, q2, cpw, q2pw, tw, status)
+         worst_afm_ctrl = max(worst_afm_ctrl, maxval(abs(cpw - cp)), maxval(abs(q2pw - q2p)))
+      end do
+      call check('(f) random n vs the z kernel on spin-rotated P, M1, V', worst_rot, 1.0e-13_rp)
+      call check('(f) control, z projectors with a tilted n', worst_ctrl, 1.0e-13_rp, .true.)
+      call check('(f) global covariance: P, M1, V and n rotated together', worst_cov, 1.0e-13_rp)
+      call check('(f) +n / -n site pair: the -n site equals the +n site', worst_afm, 1.0e-13_rp)
+      call check('(f) control, the -n site with the +n projectors', worst_afm_ctrl, 1.0e-13_rp, .true.)
+   end subroutine test_frame_rotation
 
 end program test_hubbard_spinor_moments

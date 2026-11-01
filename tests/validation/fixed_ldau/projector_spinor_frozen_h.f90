@@ -25,6 +25,7 @@ program projector_spinor_frozen_h
    use bands_mod, only: bands
    use reciprocal_mod, only: reciprocal
    use kpoint_workset_mod, only: kpoint_workset, make_kpoint_workset
+   use spin_density_mod, only: spin_density
 #ifdef USE_MPI
    use mpi
 #endif
@@ -160,7 +161,8 @@ program projector_spinor_frozen_h
    call report('(b) control, xi=0.35 without the coupling: KS spin-off-diagonal blocks', &
       maxval(abs(lat%symbolic_atoms(1)%potential%ldm_spinor(1:5, 6:10))), tol_zero, .true.)
 
-   call check_local_moments()
+   call check_local_moments([0.0_rp, 0.0_rp, 1.0_rp], '(b)')
+   call check_local_moments([0.48_rp, -0.36_rp, 0.8_rp], '(b) tilted n')
 
 #ifdef USE_MPI
    call reduce_failure()
@@ -321,18 +323,50 @@ contains
       deallocate (work, rwork)
    end subroutine exact_references
 
-   !> Local d-shell radial moments per spin channel from the exact eigenpairs of H = H_LDA + V_U, with a
-   !> spinor V_U (spin-off-diagonal blocks) from the S1 functional: c'_s and q2'_s straight from
-   !> b'_s = Pi_s[(eps - c'_s) a - V a] for every occupied state, against correct_d_shell_moments_spinor.
-   subroutine check_local_moments()
+   !> Spin projector |n s><n s| x 1_orb on the 10-component d spinor, from the eigenvectors of n.sigma:
+   !> |n+> = (cos(t/2), e^{i f} sin(t/2)), |n-> = (-e^{-i f} sin(t/2), cos(t/2)), n = (sin t cos f, sin t sin f, cos t).
+   function axis_projector(axis, s) result(pr)
+      real(rp), intent(in) :: axis(3)
+      integer, intent(in) :: s
+      complex(rp) :: pr(10, 10), u(2)
+      real(rp) :: theta, phi
+      integer :: i
+
+      theta = acos(axis(3))
+      phi = atan2(axis(2), axis(1))
+      if (s == 1) then
+         u = [cmplx(cos(0.5_rp*theta), 0.0_rp, rp), exp(cmplx(0.0_rp, phi, rp))*sin(0.5_rp*theta)]
+      else
+         u = [-exp(cmplx(0.0_rp, -phi, rp))*sin(0.5_rp*theta), cmplx(cos(0.5_rp*theta), 0.0_rp, rp)]
+      end if
+      pr = (0.0_rp, 0.0_rp)
+      do i = 1, 5
+         pr(i, i) = u(1)*conjg(u(1))
+         pr(i, i + 5) = u(1)*conjg(u(2))
+         pr(i + 5, i) = u(2)*conjg(u(1))
+         pr(i + 5, i + 5) = u(2)*conjg(u(2))
+      end do
+   end function axis_projector
+
+   !> Local d-shell radial moments per spin channel along the unit axis n from the exact eigenpairs of
+   !> H = H_LDA + V_U, with a spinor V_U (spin-off-diagonal blocks) from the S1 functional: c'_s and q2'_s
+   !> straight from b'_s = Pi_s(n)[(eps - c'_s) a - V a] for every occupied state, against
+   !> correct_d_shell_moments_spinor. Controls: spin-off-diagonal V dropped, Pi_s V V in place of
+   !> V Pi_s V, and (tilted n only) the global-z projectors.
+   subroutine check_local_moments(axis, tag)
+      real(rp), intent(in) :: axis(3)
+      character(len=*), intent(in) :: tag
       complex(rp), allocatable :: htot(:, :), qq(:, :), work(:)
       real(rp), allocatable :: ee(:), rwork(:)
       complex(rp) :: t5(5, 5, 5, 5), v10(10, 10), vdrop(10, 10), a(10), va(10), b(10), p10(10, 10), m10(10, 10)
-      complex(rp) :: vp(10, 10), vvp(10, 10), vm1c(10, 10)
+      complex(rp) :: vm1c(10, 10), vvp(10, 10), prj(10, 10, 2)
       real(rp) :: q0s(2), cs(2), q2s(2), cp(2), q2p(2), ts(2), cp_drop(2), q2p_drop(2), t_drop(2)
       real(rp) :: cdir(2), q2dir(2), q2_ctrl(2), w, gap, gap_best
-      integer :: info, i, j, k, n, nocc, s, sj, r
+      integer :: info, i, j, k, n, nocc, s, sj
 
+      do s = 1, 2
+         prj(:, :, s) = axis_projector(axis, s)
+      end do
       call build_model(0.35_rp, 1.0_rp)
       call exact_references()
       call hubbard_d_tensor(0.25_rp, 0.04_rp, t5)
@@ -361,86 +395,83 @@ contains
             nocc = k
          end if
       end do
+      ! q0_s, c_s, q2_s along n, P, M1 and the direct c'_s from H_LDA a = eps a - V a projected on channel s
       p10 = (0.0_rp, 0.0_rp)
       m10 = (0.0_rp, 0.0_rp)
       q0s = 0.0_rp
       cs = 0.0_rp
+      cdir = 0.0_rp
       do n = 1, nocc
-         do s = 1, 2
-            do i = 1, 5
-               a((s - 1)*5 + i) = qq((s - 1)*norb + 4 + i, n)
-            end do
-         end do
+         a = d_spinor(qq, n)
+         va = matmul(v10, a)
          p10 = p10 + spread(a, 2, 10)*spread(conjg(a), 1, 10)
          m10 = m10 + ee(n)*spread(a, 2, 10)*spread(conjg(a), 1, 10)
          do s = 1, 2
-            w = sum(abs(a((s - 1)*5 + 1:s*5))**2)
+            w = real(dot_product(a, matmul(prj(:, :, s), a)), rp)
             q0s(s) = q0s(s) + w
             cs(s) = cs(s) + ee(n)*w
+            cdir(s) = cdir(s) + real(dot_product(a, matmul(prj(:, :, s), ee(n)*a - va)), rp)
          end do
       end do
       cs = cs/q0s
-      q2s = 0.0_rp
-      do n = 1, nocc
-         do s = 1, 2
-            do i = 1, 5
-               a((s - 1)*5 + i) = qq((s - 1)*norb + 4 + i, n)
-            end do
-         end do
-         do s = 1, 2
-            q2s(s) = q2s(s) + (ee(n) - cs(s))**2*sum(abs(a((s - 1)*5 + 1:s*5))**2)
-         end do
-      end do
-      ! direct definition: H_LDA a = eps a - V a, projected on the spin channel
-      cdir = 0.0_rp
-      do n = 1, nocc
-         do s = 1, 2
-            do i = 1, 5
-               a((s - 1)*5 + i) = qq((s - 1)*norb + 4 + i, n)
-            end do
-         end do
-         va = matmul(v10, a)
-         do s = 1, 2
-            cdir(s) = cdir(s) + real(dot_product(a((s - 1)*5 + 1:s*5), ee(n)*a((s - 1)*5 + 1:s*5) - va((s - 1)*5 + 1:s*5)), rp)
-         end do
-      end do
       cdir = cdir/q0s
+      q2s = 0.0_rp
       q2dir = 0.0_rp
       do n = 1, nocc
-         do s = 1, 2
-            do i = 1, 5
-               a((s - 1)*5 + i) = qq((s - 1)*norb + 4 + i, n)
-            end do
-         end do
+         a = d_spinor(qq, n)
          va = matmul(v10, a)
          do s = 1, 2
-            b = (0.0_rp, 0.0_rp)
-            b((s - 1)*5 + 1:s*5) = (ee(n) - cdir(s))*a((s - 1)*5 + 1:s*5) - va((s - 1)*5 + 1:s*5)
+            b = matmul(prj(:, :, s), (ee(n) - cs(s))*a)
+            q2s(s) = q2s(s) + real(dot_product(b, b), rp)
+            b = matmul(prj(:, :, s), (ee(n) - cdir(s))*a - va)
             q2dir(s) = q2dir(s) + real(dot_product(b, b), rp)
          end do
       end do
-      call correct_d_shell_moments_spinor(p10, m10, v10, q0s, cs, q2s, cp, q2p, ts, info)
-      call report('(b) local moments: max |V_U spin-off-diagonal block| (nonzero)', maxval(abs(v10(1:5, 6:10))), 1.0e-3_rp, .true.)
-      call report('(b) local c prime, kernel vs direct b-prime definition', maxval(abs(cp - cdir)), 1.0e-12_rp)
-      call report('(b) local q2 prime, kernel vs direct b-prime definition', maxval(abs(q2p - q2dir)), 1.0e-12_rp)
+      call correct_d_shell_moments_spinor(p10, m10, v10, axis, q0s, cs, q2s, cp, q2p, ts, info)
+      call report(tag//' local moments: max |V_U spin-off-diagonal block| (nonzero)', maxval(abs(v10(1:5, 6:10))), &
+         1.0e-3_rp, .true.)
+      call report(tag//' local c prime, kernel vs direct b-prime definition', maxval(abs(cp - cdir)), 1.0e-12_rp)
+      call report(tag//' local q2 prime, kernel vs direct b-prime definition', maxval(abs(q2p - q2dir)), 1.0e-12_rp)
       vdrop = v10
       vdrop(1:5, 6:10) = (0.0_rp, 0.0_rp)
       vdrop(6:10, 1:5) = (0.0_rp, 0.0_rp)
-      call correct_d_shell_moments_spinor(p10, m10, vdrop, q0s, cs, q2s, cp_drop, q2p_drop, t_drop, info)
-      call report('(b) control, spin-off-diagonal V blocks dropped: c prime', maxval(abs(cp_drop - cdir)), 1.0e-12_rp, .true.)
-      call report('(b) control, spin-off-diagonal V blocks dropped: q2 prime', maxval(abs(q2p_drop - q2dir)), 1.0e-12_rp, .true.)
-      vp = matmul(v10, p10)
+      call correct_d_shell_moments_spinor(p10, m10, vdrop, axis, q0s, cs, q2s, cp_drop, q2p_drop, t_drop, info)
+      call report(tag//' control, spin-off-diagonal V blocks dropped: c prime', maxval(abs(cp_drop - cdir)), 1.0e-12_rp, .true.)
+      call report(tag//' control, spin-off-diagonal V blocks dropped: q2 prime', maxval(abs(q2p_drop - q2dir)), 1.0e-12_rp, .true.)
       vvp = matmul(matmul(v10, v10), p10)
       do s = 1, 2
          vm1c = matmul(v10, m10 - cs(s)*p10)
          q2_ctrl(s) = q2s(s)
-         do r = (s - 1)*5 + 1, s*5
-            q2_ctrl(s) = q2_ctrl(s) - 2.0_rp*real(vm1c(r, r), rp) + real(vvp(r, r), rp)
+         do i = 1, 10
+            do j = 1, 10
+               q2_ctrl(s) = q2_ctrl(s) + real(prj(i, j, s)*(-2.0_rp*vm1c(j, i) + vvp(j, i)), rp)
+            end do
          end do
          q2_ctrl(s) = q2_ctrl(s) - ts(s)**2/q0s(s)
       end do
-      call report('(b) control, Pi_s V V in place of V Pi_s V: q2 prime', maxval(abs(q2_ctrl - q2dir)), 1.0e-12_rp, .true.)
+      call report(tag//' control, Pi_s V V in place of V Pi_s V: q2 prime', maxval(abs(q2_ctrl - q2dir)), 1.0e-12_rp, .true.)
+      if (abs(axis(3) - 1.0_rp) > 1.0e-12_rp) then
+         call correct_d_shell_moments_spinor(p10, m10, v10, [0.0_rp, 0.0_rp, 1.0_rp], q0s, cs, q2s, cp_drop, q2p_drop, &
+            t_drop, info)
+         call report(tag//' control, global-z projectors: c prime', maxval(abs(cp_drop - cdir)), 1.0e-12_rp, .true.)
+         call report(tag//' control, global-z projectors: q2 prime', maxval(abs(q2p_drop - q2dir)), 1.0e-12_rp, .true.)
+      end if
+
    end subroutine check_local_moments
+
+   !> The 10-component d spinor of eigenvector n of the 18x18 problem.
+   function d_spinor(qq, n) result(d)
+      complex(rp), intent(in) :: qq(:, :)
+      integer, intent(in) :: n
+      complex(rp) :: d(10)
+      integer :: s, i
+
+      do s = 1, 2
+         do i = 1, 5
+            d((s - 1)*5 + i) = qq((s - 1)*norb + 4 + i, n)
+         end do
+      end do
+   end function d_spinor
 
    !> Independent Simpson integration of the Lorentzian spectral function at four meshes.
    subroutine mesh_refinement()
@@ -577,6 +608,9 @@ contains
       ks%k_mesh_distributed_active = numprocs > 1
       ks%use_symmetry_reduction = .false.
       ks%temperature = 0.0_rp; ks%fermi_level = ef
+      ! production resolves the radial axis before calculate_spinor_dm; the model is magnetised along z
+      ks%rf_density = spin_density(1, 3)
+      call ks%rf_density%set_axis(1, [0.0_rp, 0.0_rp, 1.0_rp])
       ks%k_workset = workset
       if (allocated(ks%eigenvalues)) deallocate (ks%eigenvalues, ks%eigenvectors, ks%k_weights, ks%k_l2g_map, ks%k_g2l_map)
       allocate (ks%eigenvalues(nb, local_nk), ks%eigenvectors(nb, nb, local_nk))
