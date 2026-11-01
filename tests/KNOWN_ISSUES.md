@@ -2038,3 +2038,9 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 - **Verified (U=2/J=0, local, block, 200 steps, `bulk/bccFe_hubbard`):** iteration-1 Diff differs by 3.5e-5; converged spin moment by 1.1e-2 muB, d up by 5.5e-3. The deck's collinear `ldm` seed is polarised along z and was not rotated for the x run (my setup; a suspect for part of this).
 - **Contrast:** the KS solver gives z, x, [111] and -z within 1e-9 in energy and occupations (S6b T2(c)).
 - **Handling in S6b:** nsp=2 U runs with a tilted spin axis (RS, `recur` other than `chebyshev`) stop with a fatal; KS and Chebyshev are accepted.
+
+## [OPEN, 2026-11-01] Constraint controller diverges in a KS nsp=2 bcc Fe smoke; S6b T2(e) not met (untriaged)
+
+- **Verified:** KS bcc Fe (`k_space_scf/bccFe`, 12^3 full mesh, nsp=2, SOC on), `&constraints` with `constraints_enable`, `constraints_mom_ref(:,1) = 1,0,0`, seed `mom` along x. The target is read and the resolved axis is x (`projection axis = (1,0,0)`, no frame guard fires). With `constraints_i_cons = 3` and with `= 5` the RMS angle error grows (3e-6, 2e-4, 1.7e-2, 0.9), the moment runs away (2.4 to 8.0 muB) and the run stops at iteration 13 with `reciprocal backend: LAPACK eigensolver failed`. The same deck at U=0 (no Hubbard code active) stops the same way at iteration 13; a second deck with seed `mom` along z and target x stops at iteration 4.
+- **Not verified:** whether the deck is wrong. It is hand-built, and the only constraint deck in the repository (`example/bulk/bccFe/input_frozen_magnon_constrained.nml`) is an nsp=4 frozen-magnon run, so no known-good nsp=2 constraint deck exists to compare. Two attempts were made (`i_cons` 3 and 5), then stopped.
+- **Consequence:** the S6b constraint-target path (target read, axis resolved, V and the local-moment correction built along it) is exercised only up to the divergence; there is no converged constraint-target run.
