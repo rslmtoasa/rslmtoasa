@@ -2000,7 +2000,7 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 
 - **Not tested:** the RS J derivative at nsp=2; k-space meshes other than 12x12x12 and materials other than bcc Fe; multi-site cells; nsp=2 with U on more than one shell.
 - **Verified:** the RS U = 2.05 eV Hellmann-Feynman run ended at Diff 1.57e-6 after 150 steps (beta 0.005; the recorded RS local-mode transient). The remaining RS runs ended at Diff at most 1.9e-8.
-- **Unchanged limits:** calctype S with U at nsp=2 (calctype I: see S6 below), density_policy other than constrained_spiral, a constraint_target, a non-z reference axis and nsp=3/4 with U stop with a fatal.
+- **Unchanged limits:** calctype S with U at nsp=2 (calctype I: see S6 below) and nsp=3/4 with U stop with a fatal. Lifted in S6b: density_policy other than constrained_spiral, a constraint_target, a non-z reference axis (see the S6b entries below).
 
 ## [CLOSED, 2026-10-30] `ldm_beta` had no effect at nsp>=2 (S6)
 
@@ -2016,3 +2016,22 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 - **KS-host smoke (bcc Fe nsp=2, U=2/J=0, RS impurity, `auto`):** resolves to local, no provenance or nsp error. Not met: after 100 steps final Diff 1.3e-7 (`ldm_beta=1`) and 2.5e-6 (`ldm_beta=0.3`), 20-step spreads 5e-5 to 1e-4 (limits 1e-7, 1e-5). Spin moment 2.5442 muB. The first attempt, seeded from a +U Fe-imp file, diverged to NaN; the host-seeded runs did not.
 - **Regression impurity soc0 rows (tolerance 1e-7):** impurity local-mode +U transient amplifies roundoff-level differences between the nsp=2 (10x10) and nsp=1 (5x5) paths over 4 steps (measured 7.15e-9 RS host, 3.97e-8 KS host; iteration 1 agrees to 8.19e-11 on the KS host). Targeted defects produce 1e-2 to 1e-1 differences. Cause of the amplification not diagnosed.
 - **Seed label:** the element `symbol` in the impurity seed file names the output files; a seed copied from the host must be relabelled.
+
+## [CLOSED, 2026-11-01] nsp=2 SOC+U local-moment correction used swapped spin channels for an axis along -z (S6b)
+
+- **Verified (code reading at `e5d68b66`, unit control):** before S6b, nsp=2 SOC+U with any site axis along -z applied the local-moment correction to swapped spin channels. The radial channels (`ql`, `gravity_center`) are resolved along the site axis, while `correct_d_shell_moments_spinor` used the global-z blocks as Pi_s; the S3 frame guard checked only |x| and |y| of the axis, so -z passed it. Unit control in `UnitHubbardSpinorMoments` ((f) "-n site with the +n projectors"): 2.4 against a tolerance of 1e-13.
+- **Fixed in S6b:** the kernel takes the site axis n and projects with Pi_+-(n) = (1 +- n.sigma)/2.
+
+## [OPEN, 2026-11-01] `&constraints` with `constraints_mom_ref` is not read (S6b, untriaged)
+
+- **Verified:** Pt2MnGa (4 sites), `&constraints` with `constraints_enable = .true.` and `constraints_mom_ref(:,1..4)` (f90nml layout): the log shows `Error while reading constraints namelist` (`control.f90`) at error level, the run continues with constraints off and exits 0.
+- **Verified:** the single-site form fails the same way: KS bcc Fe (1 site), `constraints_mom_ref(:,1) = 1.0, 0.0, 0.0`, 1 step: the same error, constraints off. Without `constraints_mom_ref` the target defaults to `mom0`, which is zero in a fresh KS run: `Constraint target for site 1 has zero length` (fatal). No input route to a constraint target was found for this deck, so the S6b constraint-target smoke (T2(e)) was not run.
+- **Guess, not verified:** `control.f90` allocates `constraints_mom_ref(1,1)` before the namelist read when it is unset, so any index beyond (1,1) is out of range.
+- **Proposal (not done):** size the arrays (3, nrec) before the read, or read them through a deferred-shape path. Small; touches `control.f90` only.
+
+## [OPEN, 2026-11-01] RS solver is not spin-rotation invariant at SOC->0: x axis against z axis (S6b, untriaged)
+
+- **Verified (U=0, no Hubbard code involved):** bcc Fe `bulk/bccFe`, nsp=2, `soc_scale=0` with `fix_soc`, seed `Fe.nml` with `mom` along z and along x, iteration 1. Block recursion (lld 21): Diff 3.10e-5 against 1.07e-4, E_F -0.069252 against -0.068955 Ry, spin moment 2.103974 against 2.103790 muB. Chebyshev (lld 100): Diff 7.004175e-4 against 7.005169e-4; E_F and moment equal in all printed digits.
+- **Verified (U=2/J=0, local, block, 200 steps, `bulk/bccFe_hubbard`):** iteration-1 Diff differs by 3.5e-5; converged spin moment by 1.1e-2 muB, d up by 5.5e-3. Part of this may come from the seed: the deck's collinear `ldm` is polarised along z and was not rotated for the x run (my setup; a suspect).
+- **Contrast:** the KS solver gives z, x, [111] and -z within 1e-9 in energy and occupations (S6b T2(c)).
+- **Not diagnosed.** Suspects, none checked: the block-recursion terminator or recursion with large spin-off-diagonal on-site blocks; the RS spin-density accumulation for a tilted axis.
