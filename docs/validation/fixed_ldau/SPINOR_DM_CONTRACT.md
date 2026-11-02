@@ -229,3 +229,7 @@ Guards and provenance. The calctype guard for nsp=2 with U is `hamiltonian_build
 | n_up, n_dn definitions | `HUBBARD_SPINOR_DM` (`spinor_dm_summary`, `math.f90`): `tr_up` = trace of the global-z up block, compared with `ql_up` (along the axis): mismatched for a tilted axis. `ql(1,2,s)` and the moment from `ql` are along the axis. The logged `Spin moment of atom` is `mtot = |m|` (frame-free). |
 | Host provenance | `validate_hubbard_mode_provenance` (`self.f90`): frozen U-carrying hosts checked for `hubbard_nsp` (inferred from `spinor_d` if missing) and `hubbard_radial_moments`; non-frozen atoms get the run's values. Written by `potential.f90` only when U or J is nonzero. No axis field exists. |
 | Other | `hamiltonian%local_axis` rotates H into local frames (RS); with it on, `g0` and thus P would not be global. Not checked whether it can be combined with U at nsp=2. |
+
+## d-shell basis note (S6b, `spinor_orbital_moment` test)
+
+The compact index `(m+3)` above is a label, not the physical `m`: in the code's d basis (`hcpx(...,'cart2sph')`, d block rows 5..9) index k carries L_z = 3-k, and the neighbouring L_x/L_y elements have the opposite sign to the Condon-Shortley convention. `spinor_orbital_moment` and `test_orbital_moment` use the basis as built; a closed form written in Condon-Shortley `m` fails against it. The frame-aware kernel is independent of this labelling because it projects the spin index only.
