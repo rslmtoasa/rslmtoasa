@@ -1,0 +1,1 @@
+RS Chebyshev fcc Ni host nsp=2, U=0 eV, soc_scale=0 with fix_soc, z/x pair (S6b T2(f)): seed example/impurity/fccNi/Ni_out.nml with mom set to the axis in Ni.nml; beta 0.05, Broyden.

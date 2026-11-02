@@ -1,0 +1,1 @@
+RS Chebyshev Ni impurity in the fcc Ni host (deck rs_ni_host_u0, same axis, its E_F -0.063637), nsp=2, U=0 eV, soc_scale=0 with fix_soc, z/x pair (S6b T2(f)); cluster files from example/impurity/fccNi, impurity potential seeded from the host output with the symbol Ni-imp.
