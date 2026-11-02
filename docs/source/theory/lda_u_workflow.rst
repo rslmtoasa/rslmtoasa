@@ -178,10 +178,70 @@ energies come from the spinor functional, and the radial moments use the spinor 
 ``local``). The Hubbard energy of the spinor P_out is added to ``physical_total_energy`` (candidate b). The former
 switch ``hubbard_soc_experimental`` is accepted and ignored (info line "SOC+U bulk is now default").
 
-Frame restrictions (each stops with a fatal): ``calctype`` ``S`` with U, ``density_policy`` other than
-``constrained_spiral``, a ``constraint_target``, a reference axis not parallel to global z, ``nsp=3`` or ``4`` with U,
-HOH, self-consistent U, intersite V. Explicit ``hubbard_radial_moments='spectral'`` is accepted and its energy is not
-routed (as at nsp=1).
+Restrictions (each stops with a fatal): ``calctype`` ``S`` with U, ``nsp=3`` or ``4`` with U, HOH, self-consistent U,
+intersite V, correlated sites whose spin axes are not parallel or antiparallel (message "noncollinear: use nsp=3/4, not
+yet supported with U"), and RS block recursion with a spin axis not parallel to global z (see "Spin axis" below).
+Explicit ``hubbard_radial_moments='spectral'`` is accepted and its energy is not routed (as at nsp=1).
+
+Spin axis (nsp=2)
+-----------------
+
+The magnetisation of an ``nsp=2`` run is collinear along one axis n, which need not be z. P, M1 and V stay in the
+global spin frame; the local-moment correction projects them with the spin projectors Pi_pm(n) = (1 +- n.sigma)/2 (x 1 on
+the orbital index). For n = z the kernel is bitwise equal to the earlier z-only loop; for n = -z it fixes a channel swap
+the earlier loop made (it swapped the up and down channels).
+
+The axis of a site is, in order: its ``constraint_target`` if non-zero, else the potential-file ``mom``, else z. With
+``density_policy='constrained_spiral'`` the axis is that reference; with ``'relaxed_reference'`` it is the current moment divided by its length. Both policies, and a ``constraint_target``, are accepted. All correlated sites must share one axis (n and
+-n count as one), checked once where V is built. The axis of each site is logged as a ``HUBBARD_AXIS`` info line the
+first time and whenever it moves by more than 1e-8.
+The potential file of a U-carrying host records the axis as ``hubbard_axis`` (written only when non-zero); a run along a
+different axis stops with a fatal, and a legacy file without the field is read as z with an info line. At
+``hubbard_log_level='detailed'`` the ``HUBBARD_SPINOR_DM`` line adds ``axis``, ``n_up``, ``n_dn`` (the d-shell trace of
+P along n, up and down) and ``m_L``, the d-shell orbital moment along n. The line is printed with U, or at U=0 with
+``hubbard_spinor_dm_diagnostic``.
+
+Measured rotation invariance, bcc Fe, U=2/J=0, KS, ``soc_scale=0`` with ``fix_soc``, axes z, x, [111], -z, full 12x12x12
+mesh: the F_b difference against z is 6.2e-11 (x), 5.6e-10 ([111]) and 8.3e-10 Ry (-z); the E_Hub difference is 1.2e-11 or smaller; the d
+occupations along n agree to the printed 8 digits. With SOC on the x and z runs agree in F_b to 2.2e-10 Ry (the cubic
+axes are equivalent, so this is the noise floor of the comparison) and the d occupations along n to the printed 8 digits.
+
+Constraint targets set the axis. The constraint controller itself did not converge in the one KS smoke deck tried
+(``tests/KNOWN_ISSUES.md``); use a constraint target for the axis only until that is triaged.
+
+RS recursion and tilted axes. RS ``recur='chebyshev'`` accepts any shared axis. RS block recursion is not invariant under
+a rotation of the spin axis, even at U=0 and SOC to zero (iteration-1 dE_F 3e-4 Ry, dmoment 1.8e-4 muB, x against z;
+with ``sym_term`` the converged differences are still 2.4e-5 Ry and 6.1e-5 muB); it is therefore not supported with U for
+a tilted axis (fatal), and RS block recursion along z is unchanged. See ``tests/KNOWN_ISSUES.md``.
+
+RS Chebyshev is not exactly spin-rotation invariant: d occupations and moments differ by up to ~5e-6 between equivalent
+axes; total energies by ~1e-7 Ry (bulk) and ~2e-6 Ry (impurity). Anisotropy energies below this floor are not
+resolvable in RS; use KS (invariant to ~1e-10) for strict anisotropy comparisons. Block recursion with a tilted axis is not
+supported with U (see KNOWN_ISSUES).
+
+Measured floor, z against x at ``soc_scale=0`` with ``fix_soc``, RS Chebyshev, converged to ``conv_thr`` 1e-8 (``etot`` is
+the ``etot`` of the output potential file, the only total energy printed at U=0; candidate b is printed only with U):
+
+===================  ====  ===========  ===========  ===========  ============
+system               U     d_up         d_dn         moment       etot (Ry)
+===================  ====  ===========  ===========  ===========  ============
+Fe bulk              0     3.9e-8       3.3e-7       3.1e-7       3.3e-7
+Fe bulk              2     1.34e-6      1.08e-6      3.3e-6       2.2e-7
+Ni host              0     1.30e-6      1.22e-6      2.3e-6       4.2e-7
+Ni host              3     1.74e-6      2.55e-6      4.7e-6       5.6e-8
+Ni impurity          0     3.0e-8       5.4e-7       1.1e-6       2.0e-6
+Ni impurity          3     1.48e-6      4.6e-7       1.2e-6       1.6e-6
+===================  ====  ===========  ===========  ===========  ============
+
+Candidate b, z against x: Fe U=2 1.2e-7 Ry (3.7e-8 after a restart at beta 0.005 and conv_thr 1e-10, where etot gives
+7.1e-8), Ni host U=3 2.2e-8 Ry, Ni impurity U=3 1.7e-6 Ry. The densities are the d shell along n from the output ``ql``;
+the moment is the sum of ``ql`` up minus down. E_F agrees to the printed 6 digits in every pair.
+
+Magnetic anisotropy. KS [111] against [001], U=2/J=0, SOC on, 12x12x12 mesh, with no further k-point refinement:
+F_b([111]) - F_b([001]) = -4.8e-7 Ry, against 2.2e-10 Ry for x against z. The d occupations along n differ by 5.5e-5 (up)
+and 8.4e-5 (down), the moment by 1.05e-4 muB. This is a record on one mesh, not a converged anisotropy energy: anisotropy
+energies of this size need dense k-meshes, and the force theorem (anisotropy from a non-self-consistent rotation) is not
+tested.
 
 Validation numbers (bcc Fe, U=2 eV; details in ``docs/validation/fixed_ldau/SPINOR_DM_CONTRACT.md``). With
 ``soc_scale=0`` and ``fix_soc``, nsp=2 reproduces nsp=1: KS candidate b differs by 5.8e-10 Ry and E_Hub by 2.5e-13 Ry.
@@ -203,7 +263,8 @@ without the field: nsp is inferred from ``spinor_d`` with an info line). Both ho
 (``calctype='B'``) or a KS run (``use_kspace``) at ``nsp=2`` with U, local mode. ``fermi`` and the energy window must equal the host
 endpoint, as for collinear impurities. ``auto`` resolves to ``local`` for these impurities.
 
-Frame restriction: as for the bulk (reference axis parallel to global z, ``constrained_spiral``, no ``constraint_target``).
+Spin axis: as for the bulk, with the host axis matching the impurity axis; RS impurities along a tilted axis need
+``recur='chebyshev'``.
 
 Mixing: ``ldm_beta`` mixes the spinor P that builds V (full 10x10, same parameter and history as the collinear ldm).
 Before this change it had no effect at nsp>=2. Ni impurities at U=3/J=0.7 oscillated without it.

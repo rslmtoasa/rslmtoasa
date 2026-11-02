@@ -77,15 +77,11 @@ def main() -> None:
     status, log = ra2.run(binary, w, restart_name="Cu.nml")
     expect_fatal("g2 nsp=2 surface with U", status, log, "soc+u surface runs")
 
-    # (g3) tilted axis: frozen host, and the U-carrying impurity atom
-    w = impurity("g3_host_tilted", hosts[2])
-    tilt_mom(w / "Fe.nml")
-    status, log = ra2.run(binary, w)
-    expect_fatal("g3 tilted axis on the frozen host", status, log, "not parallel to global z")
-    w = impurity("g3_imp_tilted", hosts[2], imp_u=True)
+    # (g3) frozen host written along z (hubbard_axis recorded), run axis along x (the U-carrying impurity atom)
+    w = impurity("g3_host_axis_mismatch", hosts[2], imp_u=True)
     tilt_mom(w / "Fe-imp.nml")
     status, log = ra2.run(binary, w)
-    expect_fatal("g3 tilted axis on the impurity atom", status, log, "not parallel to global z")
+    expect_fatal("g3 frozen host axis differs from the run axis", status, log, "regenerate the host along the run axis")
     print("s6_nsp2_impurity_guards: PASS")
 
 

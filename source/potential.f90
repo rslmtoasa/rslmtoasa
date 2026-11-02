@@ -118,6 +118,9 @@ module potential_mod
       character(len=64) :: dm_sha256 = ''
       !> nsp of the run that wrote a U-carrying potential; 0 = not recorded.
       integer :: hubbard_nsp = 0
+      !> Spin axis of the radial channels of the run that wrote a U-carrying potential; 0 = not recorded.
+      real(rp), dimension(3) :: hubbard_axis = 0.0_rp
+      logical :: hubbard_axis_logged = .false.
       character(len=128) :: dm_run_id = 'run'
       integer :: dm_iteration = 0
       logical :: hubbard_file_has_uj
@@ -158,6 +161,7 @@ module potential_mod
       procedure :: expand_potential_full
       procedure :: print_hyperfine
       procedure :: copy_mom_to_scal
+      procedure :: set_hubbard_axis
       procedure :: flatten_ldm
       procedure :: expand_ldm
       procedure :: write_density_matrix_file
@@ -282,6 +286,7 @@ contains
       dm_file = ''
       dm_sha256 = ''
       hubbard_nsp = 0
+      hubbard_axis = 0.0_rp
 
       ! Normalize the magnetic moments
       if (allocated(this%mom)) then
@@ -498,6 +503,7 @@ contains
       this%dm_file = trim(dm_file)
       this%dm_sha256 = trim(dm_sha256)
       this%hubbard_nsp = hubbard_nsp
+      this%hubbard_axis = hubbard_axis
       ! call move_alloc(ldm, this%ldm)
       call move_alloc(ldm_flatten, this%ldm_flatten)
       call move_alloc(ldm_flatten_imag, this%ldm_flatten_imag)
@@ -884,6 +890,8 @@ contains
       this%dm_file = ''
       this%dm_sha256 = ''
       this%hubbard_nsp = 0
+      this%hubbard_axis = 0.0_rp
+      this%hubbard_axis_logged = .false.
       this%dm_run_id = 'run'
       this%dm_iteration = 0
       this%ldm(:,:,:,:) = 0.0d0
@@ -945,6 +953,7 @@ contains
       dm_file = this%dm_file
       dm_sha256 = this%dm_sha256
       hubbard_nsp = this%hubbard_nsp
+      hubbard_axis = this%hubbard_axis
 
       if (present(unit) .and. present(file)) then
          call g_logger%fatal('Argument error: both unit and file are present', __FILE__, __LINE__)
@@ -1010,6 +1019,7 @@ contains
       dm_file = this%dm_file
       dm_sha256 = this%dm_sha256
       hubbard_nsp = this%hubbard_nsp
+      hubbard_axis = this%hubbard_axis
 
       pl = this%pl
       cshi = this%cshi
@@ -1088,6 +1098,7 @@ contains
          call nml%add('dm_file', trim(this%dm_file))
          call nml%add('dm_sha256', trim(this%dm_sha256))
          call nml%add('hubbard_nsp', this%hubbard_nsp)
+         if (any(this%hubbard_axis /= 0.0_rp)) call nml%add('hubbard_axis', this%hubbard_axis)
       end if
       ! call nml%add('ldm', this%ldm)
       if (.not. (any(abs(this%hubbard_u) > 1.0e-10_rp) .or. any(abs(this%hubbard_j) > 1.0e-10_rp))) then
@@ -1606,6 +1617,24 @@ contains
                          , __FILE__, __LINE__)
 
    end subroutine print_hyperfine
+
+   !> Store the radial spin axis the density resolver returned for this site (nsp=2). For a U-carrying
+   !> site it is logged the first time and whenever it moves by more than 1e-8.
+   subroutine set_hubbard_axis(this, axis, site)
+      class(potential), intent(inout) :: this
+      real(rp), intent(in) :: axis(3)
+      integer, intent(in) :: site
+
+      if (allocated(this%hubbard_u) .and. allocated(this%hubbard_j)) then
+         if ((any(abs(this%hubbard_u) > 1.0e-10_rp) .or. any(abs(this%hubbard_j) > 1.0e-10_rp)) .and. &
+             (.not. this%hubbard_axis_logged .or. maxval(abs(axis - this%hubbard_axis)) > 1.0e-8_rp)) then
+            if (rank == 0) call g_logger%info('HUBBARD_AXIS atom='//fmt('i4', site)//' axis=('// &
+               fmt('f12.8', axis(1))//','//fmt('f12.8', axis(2))//','//fmt('f12.8', axis(3))//')', __FILE__, __LINE__)
+            this%hubbard_axis_logged = .true.
+         end if
+      end if
+      this%hubbard_axis = axis
+   end subroutine set_hubbard_axis
 
    subroutine copy_mom_to_scal(this)
       class(potential) :: this

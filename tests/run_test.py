@@ -126,6 +126,14 @@ def patch_input_nml(workdir: str, case: dict) -> None:
     os.replace(tmp_path, input_path)
 
 
+def patch_potentials(workdir: str, case: dict) -> None:
+    """Patch the scratch copies of potential files: {"Mn.nml": {"par": {"mom": [1, 0, 0]}}}."""
+    for name, patch in case.get("potentials", {}).items():
+        path = os.path.join(workdir, name)
+        f90nml.patch(path, patch, path + ".tmp")
+        os.replace(path + ".tmp", path)
+
+
 # ---------------------------------------------------------------------------
 # Binary invocation
 # ---------------------------------------------------------------------------
@@ -685,6 +693,7 @@ def main() -> None:
 
     setup_scratch(case_dir, workdir, preserve_outputs=case.get("preserve_outputs", False))
     patch_input_nml(workdir, case)
+    patch_potentials(workdir, case)
     serial_omp = case.get("omp_threads", None)
     if args.mpi_procs is not None and args.mpi_procs < 1:
         parser.error("--mpi-procs must be a positive integer")

@@ -685,6 +685,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitXcSelectorSemantics PROPERTIES LABELS "unit;xc;selector;libxc")
   add_fortran_unit_test(UnitControlSpinSemantics ${TestDIR}/unit/test_control_spin_semantics.f90)
   set_tests_properties(UnitControlSpinSemantics PROPERTIES LABELS "unit;control;spin;semantics")
+  add_fortran_unit_test(UnitControlConstraintsRead ${TestDIR}/unit/test_control_constraints_read.f90)
+  set_tests_properties(UnitControlConstraintsRead PROPERTIES LABELS "unit;control;constraints;quick")
   add_fortran_unit_test(UnitXcUnknownSelectorRequiresFatal ${TestDIR}/unit/test_xc_unknown_selector_requires_fatal.f90)
   set_tests_properties(UnitXcUnknownSelectorRequiresFatal PROPERTIES
     LABELS "unit;xc;selector;negative;unsupported"

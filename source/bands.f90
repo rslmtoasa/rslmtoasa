@@ -1355,7 +1355,8 @@ contains
                   q2_spin(ispin) = this%symbolic_atom(plusbulk)%potential%ql(3, 2, ispin)
                end do
                call correct_d_shell_moments_spinor(this%symbolic_atom(plusbulk)%potential%ldm_spinor, &
-                  this%symbolic_atom(plusbulk)%potential%m1_spinor, v_spinor, q0_spin, c_spin, q2_spin, &
+                  this%symbolic_atom(plusbulk)%potential%m1_spinor, v_spinor, &
+                  this%symbolic_atom(plusbulk)%potential%hubbard_axis, q0_spin, c_spin, q2_spin, &
                   c_local_spin, q2_local_spin, t_local_spin, status_local)
                if (status_local /= 0) call g_logger%fatal('Invalid local d-shell spinor Hubbard moment correction; status='// &
                   fmt('i0', status_local)//' type='//fmt('i0', itype_local)//' atom='//fmt('i0', na_glob), __FILE__, __LINE__)
@@ -1498,7 +1499,7 @@ contains
       complex(rp), dimension(this%en%channels_ldos + 10) :: spectral_value
       real(rp), dimension(this%en%channels_ldos + 10) :: y, y_imag
       real(rp), allocatable :: comm_real(:, :, :, :), comm_imag(:, :, :, :)
-      real(rp) :: p_real, p_imag, m1_real, m1_imag
+      real(rp) :: p_real, p_imag, m1_real, m1_imag, axis(3)
       character(len=400) :: line
       integer :: na, na_glob, plusbulk, s, t, i, j, ie, row, col
 
@@ -1542,6 +1543,8 @@ contains
 #endif
       do na_glob = 1, this%lattice%nrec
          plusbulk = this%lattice%nbulk + na_glob
+         call this%rf_density%get_axis(na_glob, axis)
+         call this%symbolic_atom(plusbulk)%potential%set_hubbard_axis(axis, na_glob)
          if (.not. allocated(this%symbolic_atom(plusbulk)%potential%ldm_spinor)) &
             allocate (this%symbolic_atom(plusbulk)%potential%ldm_spinor(10, 10))
          if (.not. allocated(this%symbolic_atom(plusbulk)%potential%m1_spinor)) &
@@ -1552,7 +1555,8 @@ contains
             cmplx(comm_real(na_glob, :, :, 2), comm_imag(na_glob, :, :, 2), rp)
          if (rank == 0) then
             call spinor_dm_summary(this%symbolic_atom(plusbulk)%potential%ldm_spinor, &
-               this%symbolic_atom(plusbulk)%potential%ql(1, 2, 1), this%symbolic_atom(plusbulk)%potential%ql(1, 2, 2), line)
+               this%symbolic_atom(plusbulk)%potential%ql(1, 2, 1), this%symbolic_atom(plusbulk)%potential%ql(1, 2, 2), &
+               axis, this%recursion%hamiltonian%hubbard_log_level /= 'summary', line)
             call g_logger%info('HUBBARD_SPINOR_DM backend=rs atom='//fmt('i4', na_glob)//' '//trim(line), __FILE__, __LINE__)
          end if
       end do

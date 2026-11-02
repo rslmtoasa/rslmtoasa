@@ -1006,9 +1006,25 @@ contains
       logical :: active
       logical :: frozen
       character(len=16) :: stored_mode, backend
+      real(rp) :: run_axis(3), host_axis(3)
 
       backend = 'rs'
       if (this%use_kspace) backend = 'ks'
+      ! nsp=2 run axis: reference of the first U-carrying site that is not a frozen host (constraint_target, else mom).
+      run_axis = [0.0_rp, 0.0_rp, 1.0_rp]
+      do ia = 1, size(this%symbolic_atom)
+         if (.not. allocated(this%symbolic_atom(ia)%potential%hubbard_u) .or. &
+             .not. allocated(this%symbolic_atom(ia)%potential%hubbard_j)) cycle
+         if (.not. (any(abs(this%symbolic_atom(ia)%potential%hubbard_u) > 1.0e-10_rp) .or. &
+                    any(abs(this%symbolic_atom(ia)%potential%hubbard_j) > 1.0e-10_rp))) cycle
+         if (this%is_frozen_hubbard_host(ia)) cycle
+         if (norm2(this%symbolic_atom(ia)%constraint_target) > 1.0e-12_rp) then
+            run_axis = this%symbolic_atom(ia)%constraint_target/norm2(this%symbolic_atom(ia)%constraint_target)
+         else if (norm2(this%symbolic_atom(ia)%potential%mom) > 1.0e-12_rp) then
+            run_axis = this%symbolic_atom(ia)%potential%mom/norm2(this%symbolic_atom(ia)%potential%mom)
+         end if
+         exit
+      end do
       do ia = 1, size(this%symbolic_atom)
          if (.not. allocated(this%symbolic_atom(ia)%potential%hubbard_u) .or. &
              .not. allocated(this%symbolic_atom(ia)%potential%hubbard_j)) cycle
@@ -1031,6 +1047,20 @@ contains
                call g_logger%fatal('Frozen U-carrying host (symbolic atom '//fmt('i0', ia)//') was written at nsp='// &
                   fmt('i0', stored_nsp)//', run nsp='//fmt('i0', this%control%nsp)//'. Regenerate the host at nsp='// &
                   fmt('i0', this%control%nsp)//'.', __FILE__, __LINE__)
+            end if
+            if (this%control%nsp == 2) then
+               host_axis = this%symbolic_atom(ia)%potential%hubbard_axis
+               if (norm2(host_axis) <= 1.0e-12_rp) then
+                  host_axis = [0.0_rp, 0.0_rp, 1.0_rp]
+                  if (rank == 0) call g_logger%info('Potential for symbolic atom '//fmt('i0', ia)// &
+                     ' has no hubbard_axis field; treating its axis as z.', __FILE__, __LINE__)
+               end if
+               if (norm2(cross_product(host_axis, run_axis)) > 1.0e-8_rp) then
+                  call g_logger%fatal('Frozen U-carrying host (symbolic atom '//fmt('i0', ia)//') was written along axis ('// &
+                     fmt('f8.5', host_axis(1))//','//fmt('f8.5', host_axis(2))//','//fmt('f8.5', host_axis(3))// &
+                     '), run axis ('//fmt('f8.5', run_axis(1))//','//fmt('f8.5', run_axis(2))//','// &
+                     fmt('f8.5', run_axis(3))//'). Regenerate the host along the run axis.', __FILE__, __LINE__)
+               end if
             end if
             stored_mode = trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments)
             if (len_trim(stored_mode) == 0) then
@@ -1066,6 +1096,12 @@ contains
             this%symbolic_atom(ia)%potential%hubbard_nsp = this%control%nsp
          end if
       end do
+      ! The RS block-recursion terminator is built in the global-z spin basis (KNOWN_ISSUES, S6b).
+      if (this%control%nsp == 2 .and. .not. this%use_kspace .and. trim(this%control%recur) /= 'chebyshev' .and. &
+          norm2(cross_product(run_axis, [0.0_rp, 0.0_rp, 1.0_rp])) > 1.0e-8_rp) then
+         call g_logger%fatal("tilted spin axis requires recur='chebyshev' in RS (block recursion is not spin-rotation "// &
+            "invariant, see KNOWN_ISSUES)", __FILE__, __LINE__)
+      end if
    end subroutine validate_hubbard_mode_provenance
 
    real(rp) function fixed_hubbard_energy_pout(this) result(total_hub)
@@ -3073,7 +3109,8 @@ contains
                         q2_spin(li) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(3, 2, li)
                      end do
                      call correct_d_shell_moments_spinor(this%symbolic_atom(this%lattice%nbulk + ia)%potential%ldm_spinor, &
-                        this%symbolic_atom(this%lattice%nbulk + ia)%potential%m1_spinor, v_spinor, q0_spin, c_spin, &
+                        this%symbolic_atom(this%lattice%nbulk + ia)%potential%m1_spinor, v_spinor, &
+                        this%symbolic_atom(this%lattice%nbulk + ia)%potential%hubbard_axis, q0_spin, c_spin, &
                         q2_spin, c_local_spin, q2_local_spin, t_local_spin, moment_status)
                      if (moment_status /= 0) call g_logger%fatal( &
                         'Invalid local d-shell spinor Hubbard moment correction in reciprocal path; status='// &

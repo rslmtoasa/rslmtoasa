@@ -768,10 +768,6 @@ contains
                call g_logger%fatal('SOC+U surface runs (calctype S) are not yet supported.', &
                                    __FILE__, __LINE__)
             end if
-            if (trim(this%control%density_policy) /= 'constrained_spiral') then
-               call g_logger%fatal('hubbard_soc_experimental requires density_policy=constrained_spiral: the P/V frame and '// &
-                                   'the radial-channel frame must coincide until the spinor local moments exist.', __FILE__, __LINE__)
-            end if
          else if (this%control%has_soc() .or. this%control%is_noncollinear()) then
             call g_logger%fatal('Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.', &
                                 __FILE__, __LINE__)
