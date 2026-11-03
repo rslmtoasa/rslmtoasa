@@ -80,6 +80,14 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
 #SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
 #                 Fortran "-std=legacy")
 
+# gfortran >= 10 rejects MPI calls whose buffer type/rank differ between calls
+# when the MPI library's `mpi` module has no generic interfaces.
+if(ENABLE_MPI AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU"
+   AND CMAKE_Fortran_COMPILER_VERSION VERSION_GREATER_EQUAL 10)
+    SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}"
+                     Fortran "-fallow-argument-mismatch")
+endif()
+
 message(STATUS "CMAKE_Fortran_FLAGS_RELEASE        : ${CMAKE_Fortran_FLAGS_RELEASE}")
 message(STATUS "CMAKE_Fortran_FLAGS_RELWITHDEBINFO : ${CMAKE_Fortran_FLAGS_RELWITHDEBINFO}")
 message(STATUS "CMAKE_Fortran_FLAGS_TEST           : ${CMAKE_Fortran_FLAGS_TEST}")
