@@ -227,6 +227,23 @@
       }
     },
     {
+      "name": "Example_surface_fccNi001_uhost_guard",
+      "quick": true,
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "chebyshev", "hubbard"],
+      "case": "surface/fccNi001_uhost_guard",
+      "timeout": 300,
+      "_note": "U on frozen host type 1 whose potential file was converged at U=0 stops before the SCF loop. Explicit legacy structure-constant sentinel as in Example_surface_fccCu001_block_hoh (strux_lib expands this surface route to an impractical allocation)",
+      "expect_fatal": "host Ni was converged without U; use a host converged at the same U, or remove U from that type",
+      "namelists": {
+        "lattice": { "strux_backend": "legacy" },
+        "control": { "recur": "chebyshev" },
+        "hamiltonian": {
+          "hubbard_u_general": [[null], [null], [3.0]],
+          "hubbard_j_general": [[null], [null], [0.7]]
+        }
+      }
+    },
+    {
       "name": "Example_bulk_Pt2MnGa_soc_u_mixed_axes_guard",
       "quick": true,
       "labels": ["functional", "rs", "metallic", "magnetic", "multi_sublattice", "basis_spd", "block", "hubbard", "legacy_strux"],

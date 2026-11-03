@@ -1035,6 +1035,10 @@ contains
          frozen = this%is_frozen_hubbard_host(ia)
 
          if (frozen) then
+            if (.not. this%symbolic_atom(ia)%potential%hubbard_file_has_uj) then
+               call g_logger%fatal('host '//trim(this%symbolic_atom(ia)%element%symbol)//' was converged without U; '// &
+                  'use a host converged at the same U, or remove U from that type', __FILE__, __LINE__)
+            end if
             stored_nsp = this%symbolic_atom(ia)%potential%hubbard_nsp
             if (stored_nsp == 0) then
                stored_nsp = merge(2, 1, allocated(this%symbolic_atom(ia)%potential%ldm_spinor))
