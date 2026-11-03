@@ -147,6 +147,7 @@ module math_mod
 
    public :: init_math_operators
    public :: hubbard_projector_element, hubbard_spectral_density_element
+   public :: project_spectral_density_2x2
    public :: hubbard_density_diagnostics, spinor_dm_summary, spinor_orbital_moment
    public :: correct_d_shell_moments, correct_d_shell_moments_spinor
    public :: extract_hubbard_d_shell_potential, extract_hubbard_d_spinor_potential
@@ -168,6 +169,41 @@ contains
       complex(rp) :: a_ab
       a_ab = i_unit*(g_ab-conjg(g_ba))/(2.0_rp*pi)
    end function hubbard_spectral_density_element
+
+   !> Project a Hermitian 2x2 spectral-density block onto the positive
+   !> semidefinite cone.  For a retarded Green function this block is a
+   !> physical spin density and must obey a_uu >= 0, a_dd >= 0, and
+   !> |a_ud|^2 <= a_uu*a_dd.  Small violations arise from finite Chebyshev
+   !> expansions and reduced-precision reconstruction.  Keeping the diagonal
+   !> entries non-negative and reducing only an overlarge coherence is the
+   !> least invasive projection needed for charge and spin moments.
+   pure subroutine project_spectral_density_2x2(a_uu, a_ud, a_dd, corrected)
+      real(rp), intent(inout) :: a_uu, a_dd
+      complex(rp), intent(inout) :: a_ud
+      logical, intent(out) :: corrected
+      real(rp) :: coherence, coherence_limit
+
+      corrected = .false.
+      if (a_uu < 0.0_rp) then
+         a_uu = 0.0_rp
+         corrected = .true.
+      end if
+      if (a_dd < 0.0_rp) then
+         a_dd = 0.0_rp
+         corrected = .true.
+      end if
+
+      coherence = abs(a_ud)
+      coherence_limit = sqrt(a_uu)*sqrt(a_dd)
+      if (coherence > coherence_limit) then
+         if (coherence_limit == 0.0_rp) then
+            a_ud = cmplx(0.0_rp, 0.0_rp, rp)
+         else
+            a_ud = a_ud*(coherence_limit/coherence)
+         end if
+         corrected = .true.
+      end if
+   end subroutine project_spectral_density_2x2
 
    !> Report trace, anti-Hermitian residual, and eigenvalue bounds for an LDM.
    !> Eigenvalues are evaluated on the Hermitian part solely for diagnostics;
