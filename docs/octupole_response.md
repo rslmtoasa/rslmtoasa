@@ -75,10 +75,35 @@ and v_beta; set linear_out independently with pol_alpha and v_alpha as needed.
 
 ## Current scope and limitations
 
-Both octupole accumulation and current responses require hoh=.false. and
-nmax=0. Setup explicitly rejects HOH and local impurity Hamiltonians because
-the existing velocity path is incomplete. The new current builder also rejects
-HOH directly. A broader HOH velocity repair is deliberately separate.
+All supported `linear_in`/`linear_out` operators now work with either value of
+`hoh`, including local impurity rows (`nmax > 0`). The stochastic Kubo kernel
+uses one matrix-free Hamiltonian action throughout:
+
+$$H=h-hoh+E_\nu+H_{\rm SOC},\qquad V=v-voh-hov.$$
+
+Here `o` is the on-site overlap correction and `v = -i[X,h]` in the code's
+units. For `hoh=.false.`, the action reduces to `H=h+H_SOC` and `V=v`.
+Both product-rule terms are retained without assuming commuting matrices.
+
+| Input keyword | Operator action |
+| --- | --- |
+| `charge` | Full velocity `V` |
+| `spin`, `orbital`, `quadrupole` / `oap`, `octupole` / `octupole_current` | `(A V + V A)/2` for the selected S/L/Q/O |
+| Corresponding `*_accumulation` (including `oap_accumulation`) | Local selected S/L/Q/O |
+| `spin_torque` | `-i[S,H-H_SOC]`, including spin-dependent HOH and E_nu terms |
+| `spin_soc_torque` / `soc_spin_torque` | `-i[S,H_SOC]` |
+| `orbital_torque` | `-i[L,H]` |
+
+Polarization selectors and direction conventions are unchanged. The input slot
+retains the symmetric bond weight `max(velocity_scale(i),velocity_scale(j))`
+on each bare velocity insertion in both HOH terms. The output slot is unweighted.
+For ordinary Hall response use `linear_in='charge'` and the desired output
+current, with transverse `v_beta` and `v_alpha`; set `hoh=.true.` in `&hamiltonian`.
+
+All intermediate actions traverse the complete cluster so two-hop paths cannot
+be truncated by the older recursion support masks. This costs extra sparse
+matrix actions and temporary vectors, but does not assemble a dense Hamiltonian.
+Legacy block builders remain bare-block helpers; the Kubo path bypasses them.
 
 This change adds and tests the operators, not a validated material conductivity.
 Previously identified energy-integration bounds, normalization/unit conversion,
@@ -104,3 +129,13 @@ p-shell vanishing, dipole orthogonality, legacy migration, seven-component
 independence and conventional-current matrix algebra for both slots. Source
 routing and example namelist checks cover the integration contract. These are
 not compiled Fortran or end-to-end Kubo tests.
+
+The compiled HOH test requires gfortran and pytest:
+
+    FC=gfortran OPENBLAS_NUM_THREADS=1 python -m pytest -q tests/regression/test_hoh_transport.py
+
+It compares the production Fortran actions against dense matrices for all
+operator families, all seven pure octupoles, HOH on/off, zero/nonzero overlap,
+impurity rows, input weighting, and one/two OpenMP threads. It checks complete
+matrix elements and Hermiticity, including an induced two-hop bond. This is
+operator-level validation, not a material-level Kubo integration benchmark.

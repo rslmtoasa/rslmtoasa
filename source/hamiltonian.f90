@@ -38,6 +38,7 @@ module hamiltonian_mod
    implicit none
 
    private
+   public :: select_spin_operator, select_orbital_operator, select_quadrupole_operator, select_octupole_operator
 
    !> Module´s main procedure
    type, public :: hamiltonian

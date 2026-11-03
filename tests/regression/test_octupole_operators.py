@@ -122,17 +122,19 @@ class OctupoleTests(unittest.TestCase):
         self.assertIn("set_kubo_operator_slot(linear_in, 'b')", setup)
         self.assertIn("set_kubo_operator_slot(linear_out, 'a')", setup)
         self.assertIn('this%hamiltonian%hoh', setup)
-        self.assertIn('this%lattice%nmax /= 0', setup)
+        self.assertIn('this%transport%nmax = this%lattice%nmax', setup)
         dispatch = subroutine(R, 'set_kubo_operator_slot')
         self.assertRegex(dispatch, r"case\('a'\)\s+pol = this%hamiltonian%pol_alpha")
         self.assertRegex(dispatch, r"case\('b'\)\s+pol = this%hamiltonian%pol_beta")
-        for keyword, call in [('octupole', 'build_realspace_octupole_velocity_operators(pol, slot)'),
-                              ('octupole_accumulation', 'build_realspace_octupole_accumulation_operators(pol)')]:
-            block = dispatch.split("      case('"+keyword+"'", 1)[1].split('         end select', 1)[0]
-            self.assertIn(call, block)
-            for slot in ['a', 'b']:
-                self.assertIn('this%hamiltonian%v_'+slot+'(:, :, :, :)  = this%hamiltonian%jl_a', block)
-                self.assertIn('this%hamiltonian%vo_'+slot+'(:, :, :, :) = this%hamiltonian%jlo_a', block)
+        self.assertIn("case('octupole', 'octupole_current', 'octupole_accumulation')", dispatch)
+        self.assertIn('call select_octupole_operator(pol, q)', dispatch)
+        self.assertIn("kind = 'local'", dispatch)
+        apply = subroutine(R, 'apply_kubo_operator')
+        self.assertIn('this%transport_dir_a, .false., psi, out)', apply)
+        self.assertIn('this%transport_dir_b, .true., psi, out)', apply)
+        moments = subroutine(R, 'compute_moments_stochastic')
+        self.assertEqual(moments.count('call this%transport%hamiltonian('), 4)
+        self.assertEqual(moments.count('call this%apply_kubo_operator('), 2)
         accumulation = subroutine(H, 'build_realspace_octupole_accumulation_operators')
         self.assertIn('this%jl_a(:, :, 1, ntype) = O_op(:, :)', accumulation)
         self.assertIn('this%jlo_a(:, :, :, :) = (0.0_rp, 0.0_rp)', accumulation)
