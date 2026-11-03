@@ -1771,6 +1771,7 @@ contains
       character(len=256) :: ios_message
 #ifdef USE_MPI
       integer :: mpi_error
+      complex(rp) :: spinor_flag
 #endif
       namelist /density_matrix/ label, radial_mode, backend, hubbard_u_ev, hubbard_j_ev, run_id, iteration, dm_re, dm_im, spinor_d
 
@@ -1826,7 +1827,11 @@ contains
       end if
 #ifdef USE_MPI
       call MPI_BCAST(this%ldm, size(this%ldm), MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD, mpi_error)
-      call MPI_BCAST(spinor_d, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, mpi_error)
+      ! Flag is sent as complex so every MPI_BCAST in this routine has the same buffer type
+      ! (gfortran >= 10 rejects mixed types with MPI libraries lacking generic interfaces).
+      spinor_flag = cmplx(real(spinor_d, rp), 0.0_rp, rp)
+      call MPI_BCAST(spinor_flag, 1, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD, mpi_error)
+      spinor_d = nint(real(spinor_flag))
       if (spinor_d == 1) then
          if (.not. allocated(this%ldm_spinor)) allocate(this%ldm_spinor(10, 10))
          call MPI_BCAST(this%ldm_spinor, 100, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD, mpi_error)
