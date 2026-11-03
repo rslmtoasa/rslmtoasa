@@ -100,22 +100,33 @@ on each bare velocity insertion in both HOH terms. The output slot is unweighted
 For ordinary Hall response use `linear_in='charge'` and the desired output
 current, with transverse `v_beta` and `v_alpha`; set `hoh=.true.` in `&hamiltonian`.
 
-All intermediate actions traverse the complete cluster so two-hop paths cannot
-be truncated by the older recursion support masks. This costs extra sparse
-matrix actions and temporary vectors, but does not assemble a dense Hamiltonian.
-The multiplication routines live in `recursion.f90`, alongside the existing
-`ham_vec_matmul`/`ham_hoh_vec_matmul` routines. They access the existing Hamiltonian
-and lattice objects directly and use explicit `zgemm` calls. The standalone
-transport module and unused real-space operator block builders have been removed,
-including their outdated HOH rejection. The selected S/L/Q/O matrices still come
-from `hamiltonian.f90`.
+The original `ham_vec_matmul` local/bulk loops now serve both conductivity and
+`orbital_modern`. `ham_hoh_vec_matmul` retains the original two explicit passes,
+each with separate impurity and bulk loops. Its second pass forms h_ij*o_j
+using the actual intermediate site before multiplying by h*psi. The routines apply the original
+shift and scale internally. Intermediate bare h products and torque products
+use a=1, b=0; velocities remain unscaled. The non-HOH action is h+SOC.
 
-The Kubo caller allocates a six-plane scratch array once per moment calculation.
-Planes 1:3 serve H/V products; planes 4:6 hold the operator intermediates.
-Input, output, and scratch must not overlap. The multiplication routines perform
-no explicit allocations and retain every intermediate site. This cleanup does
-not restore the old one-sided HOH formula or the old support masks. It changes
-no `input.nml` settings and does not change non-transport recursion routines.
+All products honor `izero` as input support and return conservative output
+support in `idum`. HOH expands support for each hop, preserving two-hop paths.
+The velocity first pass builds h*psi and v*psi together, as in the original
+routine. They share a conservative one-hop map. The second pass expands that
+map for both v*o*h and h*o*v, including the on-site h*o contribution. Local accumulation preserves site support.
+The input map is restored on return, including for the output observable, which
+must not change the support of the evolving Chebyshev state. Masks include the
+original support so the recurrence subtraction and energy shift remain valid.
+Zero neighbor entries are checked before indexing the map.
+
+The routines remain in `recursion.f90`, using explicit BLAS `zgemm` calls and
+OpenMP loops over output sites. Each thread writes its own output site and map
+entry. Local impurity rows use `hall`; bulk rows use `ee` with the type mapping.
+The caller allocates six scratch planes once: 1:3 for H/V, 4:6 for observable
+products. Within the HOH loops these have the familiar names psi1, psi2 and
+hohpsi, assigned to existing storage once at entry. Older HOH Hamiltonian callers
+can still use the existing object scratch arrays.
+Input, output and scratch must not overlap. No new Fortran file/module or input
+setting is introduced. The standalone transport module and obsolete operator
+builders remain removed; selectors still come from `hamiltonian.f90`.
 
 This change adds and tests the operators, not a validated material conductivity.
 Previously identified energy-integration bounds, normalization/unit conversion,
@@ -158,3 +169,73 @@ operator-level validation, not a material-level Kubo integration benchmark.
 configuration arguments (for example explicit BLAS/LAPACK library paths) can be
 provided through `RS_LMTO_TEST_CMAKE_ARGS`. The fixture runner is an explicit
 `transport_operator_test` target and is not built by default.
+
+## Which multiplication routines are used?
+
+The conductivity and conductivity_p2rs workflows call `compute_moments_stochastic`.
+Its H dispatcher selects the original multiplication routines and passes a,b;
+it contains no independent Hamiltonian implementation. Observable selection
+remains in `apply_kubo_operator` / `kubo_operator_vec_matmul`.
+
+| Routine | Current use |
+| --- | --- |
+| `setup_kubo_operators`, `set_kubo_operator_slot` | Configure slots and selectors |
+| `apply_kubo_operator`, `kubo_operator_vec_matmul` | Apply current, accumulation or torque |
+| `kubo_ham_vec_matmul` | Select original H routine; unscaled defaults for torques |
+| `ham_vec_matmul` | Original masked local/bulk H loops, including shift/scale; bare h when SOC disabled |
+| `ham_hoh_vec_matmul` | Two bare h products, overlap, E_nu and optional SOC; shift/scale |
+| `velo_vec_matmul` | Masked bare velocity, including local impurity rows |
+| `velo_hoh_vec_matmul` | Full v-v*o*h-h*o*v with intermediate support propagation |
+| `onsite_vec_matmul` | Masked local SOC products for SOC torque |
+| Former `hopping_vec_matmul` | Removed; bare H uses the original H loops |
+| Former operator block builders and standalone transport module | Removed |
+
+`chebyshev_orbital_mod` still calls the H routines directly with its original
+arguments. Other SCF/Lanczos and Chebyshev routines are unchanged.
+
+## Direct comparison with the old multiplication routines
+
+The initial checks compared the new operators with independent dense matrices.
+They did not execute the old kernels. The regression driver now also calls the
+test-only archived copies of the pre-refactor H kernels and the old velocity
+kernels from commit `e604f4029e59d35b6e53551dd2d95919a9baf8e0`. Active statements
+are unchanged apart from procedure names; archived kernels are not linked into
+the solver. This keeps the old/new comparison independent of the modified H routines.
+
+The comparison accounts for these different contracts:
+
+- Both H paths are compared with the same internal `(H-b)*psi/a` shift/scale.
+- Old routines require initialized scratch and valid support masks. Tests cover
+  full support and a state localized on the first site, repeated calls,
+  `nmax=0` and `nmax=2`, zero/nonzero overlap, and one/two OpenMP threads.
+- For the old routines, neighbor lists are compact: their compound `.and.`
+  guard does not guarantee short-circuit evaluation before indexing a neighbor.
+  The new routines remain separately tested with zero neighbor entries.
+- Bulk non-HOH velocity agrees with the old ordinary (`c_or_n='n'`) action.
+- HOH velocity deliberately differs: `V_new*psi - V_old*psi = -h*o*v*psi`.
+  The old routines do not implement impurity velocity rows; these are checked
+  against the dense reference instead of being compared with omitted rows.
+
+The deterministic three-site fixture checks against independent dense H/V and
+observable matrices, including the HOH-generated 1--3 bond absent from bare h.
+Additional tests compare masked and all-site actions for every observable kind,
+both slots, both Hamiltonians and impurity settings, and assert the output maps.
+Six successive shifted/scaled Chebyshev steps check support preservation and
+scratch reuse. Empty support must produce zero output and an empty map.
+
+Each run writes `legacy_comparison.csv` in its pytest temporary directory.
+These are multiplication-kernel comparisons; they do not validate the complete
+`orbital_modern` algorithm or the unresolved conductivity integration/units.
+
+The routine headers document scaling, scratch, maps and callers. Products use
+explicit `zgemm` calls. No `ASSOCIATE` blocks are used in the transport routines;
+the HOH scratch pointers only select existing caller or object storage. The
+explicit H/V loops contain no calls to other multiplication helpers. The
+observable dispatcher and six-plane storage interface remain in place; the
+routines are therefore not literal copies of the historical source.
+
+Validation of the restored masked implementation: GNU Fortran 13 Debug with
+bounds checks, reference BLAS/LAPACK, OpenMP 1 and 2 threads: 10 tests and
+15 subtests passed. Both caller-owned and original object HOH scratch paths
+are covered. The complete `rslmto.x` executable also builds successfully.
+No material-scale performance benchmark was performed.
