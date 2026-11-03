@@ -13,18 +13,37 @@ from test_octupole_operators import matrices, PURE
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize('zero_overlap', [False, True])
-@pytest.mark.parametrize('threads', [1, 2])
-def test_compiled_actions(tmp_path, zero_overlap, threads):
+@pytest.fixture(scope='session')
+def transport_executable(tmp_path_factory):
+    """Build the real recursion module; no copied kernels or mock derived types."""
     fc = shlex.split(os.environ.get('FC', 'gfortran'))
     if not shutil.which(fc[0]):
         pytest.skip('Fortran compiler required (set FC)')
-    exe = tmp_path / 'transport_test'
-    subprocess.run(fc + ['-O0', '-g', '-fopenmp', '-fcheck=all', '-ffree-line-length-none',
-                        str(ROOT/'source/precision.f90'),
-                        str(ROOT/'source/transport_operators.f90'),
-                        str(Path(__file__).with_name('transport_driver.f90')),
-                        '-o', str(exe)], cwd=tmp_path, check=True)
+    cmake = os.environ.get('CMAKE', 'cmake')
+    if not shutil.which(cmake):
+        pytest.skip('CMake required (set CMAKE)')
+    build = tmp_path_factory.mktemp('transport_build')
+    args = [cmake, '-S', str(ROOT), '-B', str(build),
+            '-DCMAKE_Fortran_COMPILER=' + fc[0], '-DCMAKE_BUILD_TYPE=Debug',
+            '-DENABLE_OPENMP=ON', '-DENABLE_MPI=OFF', '-DBUILD_TESTING=ON']
+    if len(fc) > 1:
+        args += ['-DCMAKE_Fortran_FLAGS=' + ' '.join(fc[1:])]
+    args += shlex.split(os.environ.get('RS_LMTO_TEST_CMAKE_ARGS', ''))
+    log = build / 'build.log'
+    with log.open('w') as output:
+        for command in [args, [cmake, '--build', str(build), '--target',
+                               'transport_operator_test', '-j', '4']]:
+            result = subprocess.run(command, stdout=output, stderr=subprocess.STDOUT)
+            if result.returncode:
+                output.flush()
+                pytest.fail('Fortran build failed: ' + str(log) + '\n' + log.read_text()[-8000:])
+    return build / 'bin/transport_operator_test'
+
+
+@pytest.mark.parametrize('zero_overlap', [False, True])
+@pytest.mark.parametrize('threads', [1, 2])
+def test_compiled_actions(tmp_path, zero_overlap, threads, transport_executable):
+    exe = transport_executable
     rng = np.random.default_rng(981)
     b, n, d = 18, 3, 54
     def herm(size):
@@ -62,9 +81,25 @@ def test_compiled_actions(tmp_path, zero_overlap, threads):
     qs += [(ls[0]@ls[0]-ls[1]@ls[1])/2,(3*ls[2]@ls[2]-l2)/2]
     qs += [np.kron(np.eye(2),ops[name]) for name in PURE]
     qs = [np.asarray(q, dtype=complex) for q in qs]
+    # Exercise the actual slot setup and compiled selectors, not just the kernels.
+    cases = [('charge', 'z', np.eye(b))]
+    for keyword in ['spin', 'spin_accumulation', 'spin_torque', 'spin_soc_torque', 'soc_spin_torque']:
+        cases += [(keyword, axis, q) for axis, q in zip('xyz', spin)]
+    for keyword in ['orbital', 'orbital_accumulation', 'orbital_torque']:
+        cases += [(keyword, axis, q) for axis, q in zip('xyz', ls)]
+    qlabels = ['Qxx', 'Qyy', 'Qzz', 'Qxy', 'Qyz', 'Qzx', 'Qx2y2', 'Q3z2r2']
+    for keyword in ['quadrupole', 'oap', 'quadrupole_accumulation', 'oap_accumulation']:
+        cases += [(keyword, label, q) for label, q in zip(qlabels, qs[7:15])]
+    oct_labels = PURE + ['Mx3y2r2', 'My3z2r2', 'Mz3x2r2', 'Mx3z2r2', 'My3x2r2', 'Mz3y2r2']
+    for keyword in ['octupole', 'octupole_current', 'octupole_accumulation']:
+        cases += [(keyword, label, np.kron(np.eye(2), ops[label])) for label in oct_labels]
     def write(f,a): np.asarray(a).ravel(order='F').tofile(f)
     with (tmp_path/'fixture.bin').open('wb') as f:
         for a in [nn,iz,cr,scale,h,hl,o,e,s,psi,direction,np.array(len(qs),np.int32),*qs]: write(f,a)
+        write(f, np.array(len(cases), np.int32))
+        for keyword, label, _ in cases:
+            f.write(keyword.ljust(32).encode('ascii'))
+            f.write(label.ljust(10).encode('ascii'))
     subprocess.run([str(exe)],cwd=tmp_path,check=True, env={**os.environ, 'OMP_NUM_THREADS': str(threads)})
     raw = np.fromfile(tmp_path/'result.bin',complex)
     offset = 0
@@ -100,4 +135,21 @@ def test_compiled_actions(tmp_path, zero_overlap, threads):
                     V=v0-v0@O@H0-H0@O@v0 if ih else v0
                     if not iw: np.testing.assert_allclose(V,-1j*(x[:,None]-x[None,:])*H,atol=1e-13)
                     for expected in [V,Q,(Q@V+V@Q)/2,-1j*(Q@Hns-Hns@Q),-1j*(Q@H-H@Q),-1j*(Q@S-S@Q)]: check(expected)
+    # Last H0 above is the impurity Hamiltonian; slot b uses the opposite
+    # direction and a nonuniform bond weight, while slot a stays unweighted.
+    for keyword, label, q in cases:
+        Q = np.kron(np.eye(n), q)
+        for ih in range(2):
+            Hns = H0-H0@O@H0+E if ih else H0
+            H = Hns+S
+            for iw in range(2):
+                v0 = -v*np.maximum(weights[:,None],weights[None,:]) if iw else v
+                V = v0-v0@O@H0-H0@O@v0 if ih else v0
+                if keyword == 'charge': expected = V
+                elif keyword.endswith('_accumulation'): expected = Q
+                elif keyword == 'spin_torque': expected = -1j*(Q@Hns-Hns@Q)
+                elif keyword == 'orbital_torque': expected = -1j*(Q@H-H@Q)
+                elif keyword in ['spin_soc_torque', 'soc_spin_torque']: expected = -1j*(Q@S-S@Q)
+                else: expected = (Q@V+V@Q)/2
+                check(expected)
     assert offset == raw.size

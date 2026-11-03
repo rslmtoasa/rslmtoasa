@@ -203,6 +203,15 @@ INSTALL(TARGETS ${PROJECT_BINARY} RUNTIME DESTINATION bin)
 # Tests
 ##############################################################################################
 include(CTest)
+# Dense-reference fixture runner: link the same production modules and libraries.
+# Built explicitly by tests/regression/test_hoh_transport.py, not by default.
+if(BUILD_TESTING)
+  add_executable(transport_operator_test EXCLUDE_FROM_ALL tests/regression/transport_driver.f90)
+  target_include_directories(transport_operator_test PRIVATE ${fortran_module_directory})
+  get_target_property(transport_test_libraries ${PROJECT_BINARY} LINK_LIBRARIES)
+  target_link_libraries(transport_operator_test PRIVATE ${transport_test_libraries})
+endif()
+
 #CMAKE_DEPENDENT_OPTION(RUN_REGRESSION_TESTS "Run regression tests"  OFF "BUILD_TESTING" OFF)
 ###############################################################################################
 ## Add tests directory

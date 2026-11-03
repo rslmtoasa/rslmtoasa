@@ -95,34 +95,10 @@ class OctupoleTests(unittest.TestCase):
         self.assertNotIn('z', ops)
         self.assertTrue(all(len(name) <= 10 for name in ops))
 
-    def test_current_against_dense_anticommutator(self):
-        _, ops, _ = matrices()
-        builder = subroutine(H, 'build_realspace_octupole_velocity_operators')
-        expr = re.search(r'this%jl_a\(:, :, m, ntype\) = ([^\n]+)', builder).group(1)
-        rng = np.random.default_rng(4801)
-        # Two sites with general complex, spin-mixing hopping. Check both
-        # independent velocity slots and reverse-bond Hermiticity.
-        for slot in ['a', 'b']:
-            self.assertIn('velocity = this%v_'+slot+'(:, :, m, ntype)', builder)
-            t = rng.normal(size=(18, 18)) + 1j*rng.normal(size=(18, 18))
-            velocity = -1j*t
-            v = np.block([[np.zeros((18, 18)), velocity], [velocity.conj().T, np.zeros((18, 18))]])
-            for name in PURE:
-                with self.subTest(slot=slot, component=name):
-                    o = np.kron(np.eye(2), ops[name])
-                    block = evaluate(expr, {'matmul': np.matmul, 'O_op': o, 'velocity': velocity})
-                    reverse = evaluate(expr, {'matmul': np.matmul, 'O_op': o, 'velocity': velocity.conj().T})
-                    actual = np.block([[np.zeros((18, 18)), block], [reverse, np.zeros((18, 18))]])
-                    observable = np.kron(np.eye(2), o)
-                    np.testing.assert_allclose(actual, (observable @ v + v @ observable)/2, atol=1e-13)
-                    np.testing.assert_allclose(actual, actual.conj().T, atol=1e-13)
-
     def test_routing_and_guards(self):
         setup = subroutine(R, 'setup_kubo_operators')
         self.assertIn("set_kubo_operator_slot(linear_in, 'b')", setup)
         self.assertIn("set_kubo_operator_slot(linear_out, 'a')", setup)
-        self.assertIn('this%hamiltonian%hoh', setup)
-        self.assertIn('this%transport%nmax = this%lattice%nmax', setup)
         dispatch = subroutine(R, 'set_kubo_operator_slot')
         self.assertRegex(dispatch, r"case\('a'\)\s+pol = this%hamiltonian%pol_alpha")
         self.assertRegex(dispatch, r"case\('b'\)\s+pol = this%hamiltonian%pol_beta")
@@ -130,14 +106,11 @@ class OctupoleTests(unittest.TestCase):
         self.assertIn('call select_octupole_operator(pol, q)', dispatch)
         self.assertIn("kind = 'local'", dispatch)
         apply = subroutine(R, 'apply_kubo_operator')
-        self.assertIn('this%transport_dir_a, .false., psi, out)', apply)
-        self.assertIn('this%transport_dir_b, .true., psi, out)', apply)
+        self.assertIn('this%transport_dir_a, .false., psi, out, work)', apply)
+        self.assertIn('this%transport_dir_b, .true., psi, out, work)', apply)
         moments = subroutine(R, 'compute_moments_stochastic')
-        self.assertEqual(moments.count('call this%transport%hamiltonian('), 4)
+        self.assertEqual(moments.count('call this%kubo_ham_vec_matmul('), 4)
         self.assertEqual(moments.count('call this%apply_kubo_operator('), 2)
-        accumulation = subroutine(H, 'build_realspace_octupole_accumulation_operators')
-        self.assertIn('this%jl_a(:, :, 1, ntype) = O_op(:, :)', accumulation)
-        self.assertIn('this%jlo_a(:, :, :, :) = (0.0_rp, 0.0_rp)', accumulation)
         self.assertIn('Unknown linear-response operator type', dispatch)
         for name in ['hamiltonian', 'control']:
             source = (ROOT / ('source/'+name+'.f90')).read_text()

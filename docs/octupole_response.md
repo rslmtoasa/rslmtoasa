@@ -55,7 +55,7 @@ and `octupole_accumulation` for the local O. Operator keywords are lowercase.
 Use `charge` input for the electric-field-driven response. Other input
 operators require defining the conjugate external perturbation and units.
 Directions are normalized; their magnitudes are not field strengths. Both
-vectors must be finite and nonzero because setup builds both bare velocities.
+vectors must be finite and nonzero; setup validates and normalizes both directions.
 pol_alpha/pol_beta have length 10; every documented component fits. Defaults
 are 'z', which is not an octupole component: set the relevant pol explicitly.
 
@@ -103,7 +103,19 @@ current, with transverse `v_beta` and `v_alpha`; set `hoh=.true.` in `&hamiltoni
 All intermediate actions traverse the complete cluster so two-hop paths cannot
 be truncated by the older recursion support masks. This costs extra sparse
 matrix actions and temporary vectors, but does not assemble a dense Hamiltonian.
-Legacy block builders remain bare-block helpers; the Kubo path bypasses them.
+The multiplication routines live in `recursion.f90`, alongside the existing
+`ham_vec_matmul`/`ham_hoh_vec_matmul` routines. They access the existing Hamiltonian
+and lattice objects directly and use explicit `zgemm` calls. The standalone
+transport module and unused real-space operator block builders have been removed,
+including their outdated HOH rejection. The selected S/L/Q/O matrices still come
+from `hamiltonian.f90`.
+
+The Kubo caller allocates a six-plane scratch array once per moment calculation.
+Planes 1:3 serve H/V products; planes 4:6 hold the operator intermediates.
+Input, output, and scratch must not overlap. The multiplication routines perform
+no explicit allocations and retain every intermediate site. This cleanup does
+not restore the old one-sided HOH formula or the old support masks. It changes
+no `input.nml` settings and does not change non-transport recursion routines.
 
 This change adds and tests the operators, not a validated material conductivity.
 Previously identified energy-integration bounds, normalization/unit conversion,
@@ -126,16 +138,23 @@ Run from the repository root:
 The octupole checks evaluate the actual selector expressions and actual hcpx
 basis transformation extracted from source. They test all aliases, pure rank,
 p-shell vanishing, dipole orthogonality, legacy migration, seven-component
-independence and conventional-current matrix algebra for both slots. Source
-routing and example namelist checks cover the integration contract. These are
-not compiled Fortran or end-to-end Kubo tests.
+independence. Source routing and example namelist checks cover the input
+contract. These Python-only checks are complemented by the compiled tests below.
 
-The compiled HOH test requires gfortran and pytest:
+The compiled HOH test requires gfortran, CMake, BLAS/LAPACK, NumPy, f90nml, and pytest:
 
     FC=gfortran OPENBLAS_NUM_THREADS=1 python -m pytest -q tests/regression/test_hoh_transport.py
 
-It compares the production Fortran actions against dense matrices for all
+It builds and links the production recursion module in Debug mode with bounds
+checking, then compares its Fortran actions against dense matrices for all
 operator families, all seven pure octupoles, HOH on/off, zero/nonzero overlap,
 impurity rows, input weighting, and one/two OpenMP threads. It checks complete
-matrix elements and Hermiticity, including an induced two-hop bond. This is
+matrix elements and Hermiticity, including an induced two-hop bond. Both response
+slots and all supported operator keywords are also exercised through compiled
+setup and selector routines, with independently normalized directions. This is
 operator-level validation, not a material-level Kubo integration benchmark.
+
+`FC` and `CMAKE` select the compiler and CMake executable. Additional CMake
+configuration arguments (for example explicit BLAS/LAPACK library paths) can be
+provided through `RS_LMTO_TEST_CMAKE_ARGS`. The fixture runner is an explicit
+`transport_operator_test` target and is not built by default.
