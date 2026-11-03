@@ -26,7 +26,6 @@ add_library(${PROJECT_NAME} STATIC
     os.f90
     potential.f90
     precision.f90
-    transport_operators.f90
     recursion.f90
     report.f90
     safe_alloc.f90

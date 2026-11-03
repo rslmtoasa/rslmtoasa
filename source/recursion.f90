@@ -20,8 +20,6 @@
 !------------------------------------------------------------------------------
 
 module recursion_mod
-   use transport_operators_mod, only: transport_operators
-
    use hamiltonian_mod
    use lattice_mod
    use control_mod
@@ -48,7 +46,6 @@ module recursion_mod
       class(energy), pointer :: en
       !> Control
       class(control), pointer :: control
-      type(transport_operators) :: transport
       character(len=16) :: transport_kind_a, transport_kind_b
       complex(rp) :: transport_q_a(18,18), transport_q_b(18,18)
       real(rp) :: transport_dir_a(3), transport_dir_b(3)
@@ -110,6 +107,11 @@ module recursion_mod
       !procedure :: compute_moments ! temporary for test purposes
       !procedure :: evaluate_chebyshev ! temporary for test purposes
       !procedure :: calculate_gamma_nm
+      procedure :: hopping_vec_matmul
+      procedure :: onsite_vec_matmul
+      procedure :: kubo_ham_vec_matmul
+      procedure :: velo_vec_matmul
+      procedure :: kubo_operator_vec_matmul
       procedure :: apply_kubo_operator
       procedure :: setup_kubo_operators
       procedure :: set_kubo_operator_slot
@@ -248,18 +250,6 @@ contains
       class(recursion), intent(inout) :: this
       character(len=*), intent(in) :: linear_out, linear_in
       real(rp) :: na, nb
-      this%transport%nn => this%lattice%nn
-      this%transport%iz => this%lattice%iz
-      this%transport%cr => this%lattice%cr
-      this%transport%scale => this%hamiltonian%velocity_scale
-      this%transport%h => this%hamiltonian%ee
-      if (allocated(this%hamiltonian%hall)) this%transport%h_local => this%hamiltonian%hall
-      this%transport%overlap => this%hamiltonian%obarm
-      this%transport%enu => this%hamiltonian%enim
-      this%transport%soc => this%hamiltonian%lsham
-      this%transport%nmax = this%lattice%nmax
-      this%transport%alat = this%lattice%alat
-      this%transport%hoh = this%hamiltonian%hoh
       na = norm2(this%hamiltonian%v_alpha)
       nb = norm2(this%hamiltonian%v_beta)
       if (.not. ieee_is_finite(na) .or. .not. ieee_is_finite(nb)) then
@@ -277,18 +267,19 @@ contains
       this%idum = 1
    end subroutine setup_kubo_operators
 
-   subroutine apply_kubo_operator(this, slot, psi, out)
+   subroutine apply_kubo_operator(this, slot, psi, out, work)
       class(recursion), intent(inout) :: this
       character(len=*), intent(in) :: slot
-      complex(rp), intent(in) :: psi(:,:,:)
-      complex(rp), intent(out) :: out(:,:,:)
+      complex(rp), contiguous, intent(in) :: psi(:,:,:)
+      complex(rp), contiguous, intent(out) :: out(:,:,:)
+      complex(rp), contiguous, intent(inout) :: work(:, :, :, :)
       select case(slot)
       case('a')
-         call this%transport%response(this%transport_kind_a, this%transport_q_a, &
-              this%transport_dir_a, .false., psi, out)
+         call this%kubo_operator_vec_matmul(this%transport_kind_a, this%transport_q_a, &
+              this%transport_dir_a, .false., psi, out, work)
       case('b')
-         call this%transport%response(this%transport_kind_b, this%transport_q_b, &
-              this%transport_dir_b, .true., psi, out)
+         call this%kubo_operator_vec_matmul(this%transport_kind_b, this%transport_q_b, &
+              this%transport_dir_b, .true., psi, out, work)
       case default
          call g_logger%fatal('Invalid Kubo slot', __FILE__, __LINE__)
       end select
@@ -379,6 +370,174 @@ contains
          this%transport_q_b = q
       end select
    end subroutine set_kubo_operator_slot
+
+   !---------------------------------------------------------------------------
+   !> Kubo matrix-vector products. Work arrays are allocated once by the caller.
+   !> All intermediate sites are retained, including two-hop impurity paths.
+   !---------------------------------------------------------------------------
+   ! Optional direction turns h into its bare velocity. Scale weights only
+   ! the input slot, preserving the existing symmetric bond max(s_i,s_j).
+   subroutine hopping_vec_matmul(this, psi, out, direction, weighted)
+      class(recursion), intent(in) :: this
+      complex(rp), contiguous, intent(in) :: psi(:, :, :)
+      complex(rp), contiguous, intent(out) :: out(:, :, :)
+      real(rp), intent(in), optional :: direction(3)
+      logical, intent(in), optional :: weighted
+      integer :: i, j, m, it, hblocksize, nrhs
+      complex(rp) :: block(size(psi, 1), size(psi, 1)), factor
+      real(rp) :: distance
+      hblocksize = size(psi, 1)
+      nrhs = size(psi, 2)
+      out = (0.0_rp, 0.0_rp)
+      !$omp parallel do default(shared) private(i,j,m,it,block,factor,distance)
+      do i = 1, size(psi, 3)
+         it = this%lattice%iz(i)
+         do m = 1, this%lattice%nn(i, 1)
+            j = i
+            if (m > 1) j = this%lattice%nn(i, m)
+            if (j == 0) cycle
+            if (i <= this%lattice%nmax) then
+               block = this%hamiltonian%hall(:, :, m, i)
+            else
+               block = this%hamiltonian%ee(:, :, m, it)
+            end if
+            if (present(direction)) then
+               distance = dot_product(direction, this%lattice%cr(:, i)-this%lattice%cr(:, j))*this%lattice%alat
+               factor = cmplx(0.0_rp, -distance, rp)
+               if (present(weighted)) then
+                  if (weighted) factor = factor*max(this%hamiltonian%velocity_scale(it), this%hamiltonian%velocity_scale(this%lattice%iz(j)))
+               end if
+               block = factor*block
+            end if
+            call zgemm('n', 'n', hblocksize, nrhs, hblocksize, cone, block, hblocksize, &
+                       psi(:, :, j), hblocksize, cone, out(:, :, i), hblocksize)
+         end do
+      end do
+      !$omp end parallel do
+   end subroutine hopping_vec_matmul
+
+   subroutine onsite_vec_matmul(this, matrix, psi, out)
+      class(recursion), intent(in) :: this
+      complex(rp), contiguous, intent(in) :: matrix(:, :, :), psi(:, :, :)
+      complex(rp), contiguous, intent(out) :: out(:, :, :)
+      integer :: i, hblocksize, nrhs
+      hblocksize = size(psi, 1)
+      nrhs = size(psi, 2)
+      !$omp parallel do default(shared) private(i)
+      do i = 1, size(psi, 3)
+         call zgemm('n', 'n', hblocksize, nrhs, hblocksize, cone, matrix(:, :, this%lattice%iz(i)), &
+                    hblocksize, psi(:, :, i), hblocksize, czero, out(:, :, i), hblocksize)
+      end do
+      !$omp end parallel do
+   end subroutine onsite_vec_matmul
+
+   ! H = h - h o h + E_nu + H_SOC. E_nu belongs only to the HOH representation.
+   subroutine kubo_ham_vec_matmul(this, psi, out, work, include_soc)
+      class(recursion), intent(in) :: this
+      complex(rp), contiguous, intent(in) :: psi(:, :, :)
+      complex(rp), contiguous, intent(out) :: out(:, :, :)
+      logical, intent(in), optional :: include_soc
+      ! Caller-owned scratch: H/V use planes 1:3, operator products use 4:6.
+      ! psi, out, and scratch must not overlap.
+      complex(rp), contiguous, intent(inout) :: work(:, :, :, :)
+      logical :: with_soc
+      with_soc = .true.
+      if (present(include_soc)) with_soc = include_soc
+      associate(tmp => work(:, :, :, 1), tmp2 => work(:, :, :, 2))
+         call this%hopping_vec_matmul(psi, out)
+         if (this%hamiltonian%hoh) then
+            call this%onsite_vec_matmul(this%hamiltonian%obarm, out, tmp)
+            call this%hopping_vec_matmul(tmp, tmp2)
+            out = out - tmp2
+            call this%onsite_vec_matmul(this%hamiltonian%enim, psi, tmp)
+            out = out + tmp
+         end if
+         if (with_soc) then
+            call this%onsite_vec_matmul(this%hamiltonian%lsham, psi, tmp)
+            out = out + tmp
+         end if
+      end associate
+   end subroutine kubo_ham_vec_matmul
+
+   ! Full product rule V = v - v o h - h o v, without assuming [o,h]=0.
+   subroutine velo_vec_matmul(this, psi, out, work, direction, weighted)
+      class(recursion), intent(in) :: this
+      complex(rp), contiguous, intent(in) :: psi(:, :, :)
+      complex(rp), contiguous, intent(out) :: out(:, :, :)
+      real(rp), intent(in) :: direction(3)
+      logical, intent(in) :: weighted
+      ! Caller-owned scratch: H/V use planes 1:3, operator products use 4:6.
+      ! psi, out, and scratch must not overlap.
+      complex(rp), contiguous, intent(inout) :: work(:, :, :, :)
+      call this%hopping_vec_matmul(psi, out, direction, weighted)
+      if (.not. this%hamiltonian%hoh) return
+      associate(tmp => work(:, :, :, 1), tmp2 => work(:, :, :, 2), correction => work(:, :, :, 3))
+         call this%onsite_vec_matmul(this%hamiltonian%obarm, out, tmp)
+         call this%hopping_vec_matmul(tmp, correction)
+         out = out - correction
+         call this%hopping_vec_matmul(psi, tmp)
+         call this%onsite_vec_matmul(this%hamiltonian%obarm, tmp, tmp2)
+         call this%hopping_vec_matmul(tmp2, correction, direction, weighted)
+         out = out - correction
+      end associate
+   end subroutine velo_vec_matmul
+
+   ! q is the local S/L/Q/O matrix, in the same basis as h.
+   ! spin_torque = (1/i)[S,H_without_SOC]; spin-independent terms commute
+   ! with S, so this includes all spin-dependent HOH and E_nu contributions.
+   subroutine kubo_operator_vec_matmul(this, kind, q, direction, weighted, psi, out, work)
+      class(recursion), intent(in) :: this
+      character(len=*), intent(in) :: kind
+      complex(rp), contiguous, intent(in) :: q(:, :), psi(:, :, :)
+      real(rp), intent(in) :: direction(3)
+      logical, intent(in) :: weighted
+      complex(rp), contiguous, intent(out) :: out(:, :, :)
+      ! Caller-owned scratch: H/V use planes 1:3, operator products use 4:6.
+      ! psi, out, and scratch must not overlap.
+      complex(rp), contiguous, intent(inout) :: work(:, :, :, :)
+      integer :: i, hblocksize, nrhs
+      hblocksize = size(psi, 1)
+      nrhs = size(psi, 2)
+      if (kind == 'charge') then
+         call this%velo_vec_matmul(psi, out, work(:, :, :, 1:3), direction, weighted)
+         return
+      end if
+      associate(qpsi => work(:, :, :, 4), tmp => work(:, :, :, 5), other => work(:, :, :, 6))
+         do i = 1, size(psi, 3)
+            call zgemm('n', 'n', hblocksize, nrhs, hblocksize, cone, q, hblocksize, &
+                       psi(:, :, i), hblocksize, czero, qpsi(:, :, i), hblocksize)
+         end do
+         if (kind == 'local') then
+            out = qpsi
+            return
+         end if
+         select case(kind)
+         case('current')
+            call this%velo_vec_matmul(psi, tmp, work(:, :, :, 1:3), direction, weighted)
+            call this%velo_vec_matmul(qpsi, other, work(:, :, :, 1:3), direction, weighted)
+         case('spin_torque')
+            call this%kubo_ham_vec_matmul(psi, tmp, work(:, :, :, 1:3), .false.)
+            call this%kubo_ham_vec_matmul(qpsi, other, work(:, :, :, 1:3), .false.)
+         case('orbital_torque')
+            call this%kubo_ham_vec_matmul(psi, tmp, work(:, :, :, 1:3))
+            call this%kubo_ham_vec_matmul(qpsi, other, work(:, :, :, 1:3))
+         case('soc_torque')
+            call this%onsite_vec_matmul(this%hamiltonian%lsham, psi, tmp)
+            call this%onsite_vec_matmul(this%hamiltonian%lsham, qpsi, other)
+         case default
+            call g_logger%fatal('Invalid Kubo response kind: '//trim(kind), __FILE__, __LINE__)
+         end select
+         do i = 1, size(psi, 3)
+            call zgemm('n', 'n', hblocksize, nrhs, hblocksize, cone, q, hblocksize, &
+                       tmp(:, :, i), hblocksize, czero, out(:, :, i), hblocksize)
+            if (kind == 'current') then
+               out(:, :, i) = 0.5_rp*(out(:, :, i) + other(:, :, i))
+            else
+               out(:, :, i) = cmplx(0.0_rp, -1.0_rp, rp)*(out(:, :, i) - other(:, :, i))
+            end if
+         end do
+      end associate
+   end subroutine kubo_operator_vec_matmul
 
    subroutine ham_hoh_vec_matmul(this, psi_in, psi_out, a, b)
       class(recursion), intent(inout) :: this
@@ -579,10 +738,8 @@ contains
       ! Local variables
       integer :: nb, ih, i, j, k, nr, ll, m, n, l, hblocksize, nat, nnmap, loop_over, ie, lmax, ntype
       complex(rp), dimension(18, 18) :: dum, dum1, dum2
-      complex(rp), dimension(:, :), allocatable :: S_op, L_op
-      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
       complex(rp), dimension(:, :, :), allocatable :: psiref, w0, w1, w2, right_vec, v0, v1, v2, cn
-      complex(rp), dimension(:, :, :, :), allocatable :: left_vec
+      complex(rp), dimension(:, :, :, :), allocatable :: left_vec, work
       real(rp), dimension(this%en%channels_ldos + 10) :: w, wscale
       real(rp), dimension(this%control%cond_ll) :: kernel
       complex(rp), dimension(18, 18, this%en%channels_ldos + 10) :: g0
@@ -615,7 +772,7 @@ contains
       allocate(psiref(hblocksize, hblocksize, this%lattice%kk), left_vec(hblocksize, hblocksize, this%lattice%kk, this%control%cond_ll))
       allocate(w0(hblocksize, hblocksize, this%lattice%kk), w1(hblocksize, hblocksize, this%lattice%kk), right_vec(hblocksize, hblocksize, this%lattice%kk))
       allocate(w2(hblocksize, hblocksize, this%lattice%kk), v0(hblocksize, hblocksize, this%lattice%kk), v1(hblocksize, hblocksize, this%lattice%kk))
-      allocate(v2(hblocksize, hblocksize, this%lattice%kk), S_op(hblocksize, hblocksize), L_op(hblocksize, hblocksize))
+      allocate(v2(hblocksize, hblocksize, this%lattice%kk), work(hblocksize, hblocksize, this%lattice%kk, 6))
 
       ! General procedures
       a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
@@ -678,11 +835,11 @@ contains
                w1(:, :, :) = psiref(:, :, :)
             else if (m == 2) then
                w0(:, :, :) = w1(:, :, :)
-               call this%transport%hamiltonian(w0, w1)
+               call this%kubo_ham_vec_matmul(w0, w1, work)
                w1 = (w1 - b*w0)/a
                this%izero(:) = this%idum(:)
             else if (m > 2) then
-               call this%transport%hamiltonian(w1, w2)
+               call this%kubo_ham_vec_matmul(w1, w2, work)
                w2 = (w2 - b*w1)/a
                this%izero(:) = this%idum(:)
                w2(:, :, :) = 2 * w2(:, :, :) - w0(:, :, :)
@@ -704,7 +861,7 @@ contains
 
          ! Computing the right vector v_a*Tn(H)*v_b|r>
          ! Multiply with the velocity operator v_b
-         call this%apply_kubo_operator('b', psiref, v0)
+         call this%apply_kubo_operator('b', psiref, v0, work)
          this%izero(:) = this%idum(:) 
          do n=1, this%control%cond_ll
             call show_progress(n, this%control%cond_ll)
@@ -712,11 +869,11 @@ contains
                v1(:, :, :) = v0(:, :, :) 
             else if (n == 2) then
                v0(:, :, :) = v1(:, :, :)
-               call this%transport%hamiltonian(v0, v1)
+               call this%kubo_ham_vec_matmul(v0, v1, work)
                v1 = (v1 - b*v0)/a
                this%izero(:) = this%idum(:)
             else if (n > 2) then
-               call this%transport%hamiltonian(v1, v2)
+               call this%kubo_ham_vec_matmul(v1, v2, work)
                v2 = (v2 - b*v1)/a
                this%izero(:) = this%idum(:)
                v2(:, :, :) = 2 * v2(:, :, :) - v0(:, :, :)
@@ -725,7 +882,7 @@ contains
                v2(:, :, :) = (0.0d0, 0.0d0)
             end if
             ! Multiply with the velocity operator v_a
-            call this%apply_kubo_operator('a', v1, right_vec)
+            call this%apply_kubo_operator('a', v1, right_vec, work)
             this%izero(:) = this%idum(:)
             !$omp parallel do default(shared) private(m, dum, k) schedule(dynamic)
             do m=1, this%control%cond_ll
@@ -739,7 +896,7 @@ contains
          end do
       end do
 
-      deallocate(psiref, w0, w1, w2, right_vec, v0, v1, v2, left_vec, S_op, L_op)
+      deallocate(psiref, w0, w1, w2, right_vec, v0, v1, v2, left_vec, work)
 
    end subroutine compute_moments_stochastic
 
