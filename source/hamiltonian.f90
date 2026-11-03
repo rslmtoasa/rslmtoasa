@@ -485,14 +485,19 @@ contains
    !> Select orbital quadrupole / OAP operator from a component label.
    !>
    !> Definitions:
-   !>   Qxx = Lx^2
-   !>   Qyy = Ly^2
-   !>   Qzz = Lz^2
+   !>   Qxx = Lx^2 - L^2/3
+   !>   Qyy = Ly^2 - L^2/3
+   !>   Qzz = Lz^2 - L^2/3
    !>   Qxy = 1/2 {Lx,Ly}
    !>   Qyz = 1/2 {Ly,Lz}
    !>   Qzx = 1/2 {Lz,Lx}
-   !>   Qx2y2  = Qxx - Qyy
-   !>   Q3z2r2 = 2 Qzz - Qxx - Qyy
+   !>   Qx2y2  = (Qxx - Qyy)/2
+   !>   Q3z2r2 = (2 Qzz - Qxx - Qyy)/2
+   !>
+   !> L^2 = Lx^2 + Ly^2 + Lz^2. Matrices use hbar = 1; the
+   !> physical quadrupoles are angular-momentum bilinears divided by hbar.
+   !> The diagonal Cartesian components now form a traceless tensor.
+   !> Both accumulation and current builders use this selector.
    !>
    !> The math_mod L matrices are transformed from Cartesian to spherical basis
    !> before forming products, exactly as done for orbital accumulation/current.
@@ -503,7 +508,7 @@ contains
 
       complex(rp), dimension(9, 9) :: mLx, mLy, mLz
       complex(rp), dimension(9, 9) :: Q9
-      complex(rp), dimension(9, 9) :: Lx2, Ly2, Lz2
+      complex(rp), dimension(9, 9) :: Lx2, Ly2, Lz2, L2
 
       mLx(:, :) = L_x(:, :)
       mLy(:, :) = L_y(:, :)
@@ -516,19 +521,20 @@ contains
       Lx2 = matmul(mLx, mLx)
       Ly2 = matmul(mLy, mLy)
       Lz2 = matmul(mLz, mLz)
+      L2 = Lx2 + Ly2 + Lz2
 
       Q9(:, :) = (0.0_rp, 0.0_rp)
 
       select case(trim(pol))
 
       case('Qxx', 'qxx', 'xx')
-         Q9 = Lx2
+         Q9 = Lx2 - L2 / 3.0_rp
 
       case('Qyy', 'qyy', 'yy')
-         Q9 = Ly2
+         Q9 = Ly2 - L2 / 3.0_rp
 
       case('Qzz', 'qzz', 'zz')
-         Q9 = Lz2
+         Q9 = Lz2 - L2 / 3.0_rp
 
       case('Qxy', 'qxy', 'xy')
          Q9 = 0.5_rp * (matmul(mLx, mLy) + matmul(mLy, mLx))
@@ -540,10 +546,10 @@ contains
          Q9 = 0.5_rp * (matmul(mLz, mLx) + matmul(mLx, mLz))
 
       case('Qx2y2', 'qx2y2', 'x2y2')
-         Q9 = Lx2 - Ly2
+         Q9 = 0.5_rp * (Lx2 - Ly2)
 
       case('Q3z2r2', 'q3z2r2', '3z2r2')
-         Q9 = 2.0_rp * Lz2 - Lx2 - Ly2
+         Q9 = 0.5_rp * (2.0_rp * Lz2 - Lx2 - Ly2)
 
       case default
          call g_logger%fatal('Invalid quadrupole component: '//trim(pol), __FILE__, __LINE__)
