@@ -69,8 +69,32 @@ if (ENABLE_MKL_KERNELS OR ENABLE_CUDA_PLUGIN OR ENABLE_CUDA_RECIPROCAL)
 endif()
 
 if (ENABLE_CUDA_PLUGIN OR ENABLE_CUDA_RECIPROCAL)
+  # Let a CUDA build target the GPU present while it is configured.  This
+  # avoids carrying a stale architecture from a different machine (for
+  # example, sm_75 code falling back to PTX JIT on an Ada GPU).  Do not
+  # replace an explicit -DCMAKE_CUDA_ARCHITECTURES=... or CUDAARCHS choice:
+  # those are required for cross-compiles, headless build hosts, and
+  # distributable multi-architecture binaries.
+  #
+  # CMake added the `native` architecture selector in 3.24.  Retain the
+  # project's 3.19 minimum for CPU and older-CMake CUDA builds; on those
+  # versions the CUDA compiler's default remains in effect and we explain how
+  # to select an architecture explicitly.
+  if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES AND "$ENV{CUDAARCHS}" STREQUAL "")
+    if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
+      set(CMAKE_CUDA_ARCHITECTURES native CACHE STRING
+          "CUDA architectures to build for; use native to detect the configuration host GPU")
+      message(STATUS "CUDA architectures: native (detected from the configuration host GPU)")
+    else()
+      message(STATUS
+        "CMake ${CMAKE_VERSION} cannot auto-detect CUDA architectures; "
+        "set -DCMAKE_CUDA_ARCHITECTURES=<NN> when configuring CUDA builds")
+    endif()
+  endif()
+
   enable_language(CUDA)
   message(STATUS "Using CUDA compiler ${CMAKE_CUDA_COMPILER_ID} CUDA ${CMAKE_CUDA_COMPILER_VERSION}")
+  message(STATUS "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
   set(_cuda_toolkit_components cudart)
   if (ENABLE_CUDA_PLUGIN)
     list(APPEND _cuda_toolkit_components cusparse cufft cublas)
