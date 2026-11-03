@@ -244,6 +244,18 @@ contains
       character(len=*), intent(in) :: linear_out
       character(len=*), intent(in) :: linear_in
 
+      ! Both accumulation and current responses may use the charge velocity
+      ! in the other slot. Reject all octupole HOH requests until it is fixed.
+      if (index(trim(linear_in), 'octupole') == 1 .or. index(trim(linear_out), 'octupole') == 1) then
+         if (this%hamiltonian%hoh) then
+            call g_logger%fatal('Octupole response requires hoh=.false.; full HOH velocity is not implemented', &
+                                __FILE__, __LINE__)
+         end if
+         if (this%lattice%nmax /= 0) then
+            call g_logger%fatal('Octupole response with local impurity Hamiltonians is not implemented', __FILE__, __LINE__)
+         end if
+      end if
+
       ! First build the ordinary charge-current velocity operators.
       !
       ! This creates:
@@ -288,6 +300,7 @@ contains
    !>   orbital_torque
    !>   quadrupole
    !>   quadrupole_accumulation
+   !>   octupole / octupole_current
    !>   octupole_accumulation
    !>
    !> Notes:
@@ -412,6 +425,21 @@ contains
       case('quadrupole', 'oap')
 
          call this%hamiltonian%build_realspace_quadrupole_velocity_operators(pol, slot)
+
+         select case(trim(slot))
+         case('a')
+            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
+            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
+
+         case('b')
+            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
+            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
+         end select
+
+      ! Conventional octupole current, using the requested direction slot.
+      case('octupole', 'octupole_current')
+
+         call this%hamiltonian%build_realspace_octupole_velocity_operators(pol, slot)
 
          select case(trim(slot))
          case('a')
