@@ -316,3 +316,9 @@ For an up-to-date citation recommendation, contact the maintainers through the r
 ## License
 
 RS-LMTO-ASA is distributed under the **GNU General Public License, version 3**. See [`LICENSE`](LICENSE) for the full terms.
+
+### Orbital octupole operators
+
+See [octupole response inputs and conventions](docs/octupole_response.md) for
+pure rank-three accumulation/current components, migration from mixed cubic
+operators, Hall-response input fragments, and current validation limitations.

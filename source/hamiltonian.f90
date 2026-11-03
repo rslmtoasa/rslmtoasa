@@ -38,6 +38,7 @@ module hamiltonian_mod
    implicit none
 
    private
+   public :: select_spin_operator, select_orbital_operator, select_quadrupole_operator, select_octupole_operator
 
    !> Module´s main procedure
    type, public :: hamiltonian
@@ -101,6 +102,7 @@ module hamiltonian_mod
       procedure :: build_realspace_orbital_torque_operators
       procedure :: build_realspace_quadrupole_velocity_operators
       procedure :: build_realspace_quadrupole_accumulation_operators
+      procedure :: build_realspace_octupole_velocity_operators
       procedure :: build_realspace_octupole_accumulation_operators
       procedure :: block_to_sparse
       procedure :: torque_operator_collinear
@@ -230,8 +232,7 @@ contains
 
       read (funit, nml=hamiltonian, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error('iostatus = '//int2str(iostatus), __FILE__, __LINE__)
+         call g_logger%fatal('Invalid &hamiltonian namelist; iostatus = '//int2str(iostatus), __FILE__, __LINE__)
       end if
       close (funit)
 
@@ -485,14 +486,19 @@ contains
    !> Select orbital quadrupole / OAP operator from a component label.
    !>
    !> Definitions:
-   !>   Qxx = Lx^2
-   !>   Qyy = Ly^2
-   !>   Qzz = Lz^2
+   !>   Qxx = Lx^2 - L^2/3
+   !>   Qyy = Ly^2 - L^2/3
+   !>   Qzz = Lz^2 - L^2/3
    !>   Qxy = 1/2 {Lx,Ly}
    !>   Qyz = 1/2 {Ly,Lz}
    !>   Qzx = 1/2 {Lz,Lx}
-   !>   Qx2y2  = Qxx - Qyy
-   !>   Q3z2r2 = 2 Qzz - Qxx - Qyy
+   !>   Qx2y2  = (Qxx - Qyy)/2
+   !>   Q3z2r2 = (2 Qzz - Qxx - Qyy)/2
+   !>
+   !> L^2 = Lx^2 + Ly^2 + Lz^2. Matrices use hbar = 1; the
+   !> physical quadrupoles are angular-momentum bilinears divided by hbar.
+   !> The diagonal Cartesian components now form a traceless tensor.
+   !> Both accumulation and current builders use this selector.
    !>
    !> The math_mod L matrices are transformed from Cartesian to spherical basis
    !> before forming products, exactly as done for orbital accumulation/current.
@@ -503,7 +509,7 @@ contains
 
       complex(rp), dimension(9, 9) :: mLx, mLy, mLz
       complex(rp), dimension(9, 9) :: Q9
-      complex(rp), dimension(9, 9) :: Lx2, Ly2, Lz2
+      complex(rp), dimension(9, 9) :: Lx2, Ly2, Lz2, L2
 
       mLx(:, :) = L_x(:, :)
       mLy(:, :) = L_y(:, :)
@@ -516,19 +522,20 @@ contains
       Lx2 = matmul(mLx, mLx)
       Ly2 = matmul(mLy, mLy)
       Lz2 = matmul(mLz, mLz)
+      L2 = Lx2 + Ly2 + Lz2
 
       Q9(:, :) = (0.0_rp, 0.0_rp)
 
       select case(trim(pol))
 
       case('Qxx', 'qxx', 'xx')
-         Q9 = Lx2
+         Q9 = Lx2 - L2 / 3.0_rp
 
       case('Qyy', 'qyy', 'yy')
-         Q9 = Ly2
+         Q9 = Ly2 - L2 / 3.0_rp
 
       case('Qzz', 'qzz', 'zz')
-         Q9 = Lz2
+         Q9 = Lz2 - L2 / 3.0_rp
 
       case('Qxy', 'qxy', 'xy')
          Q9 = 0.5_rp * (matmul(mLx, mLy) + matmul(mLy, mLx))
@@ -540,10 +547,10 @@ contains
          Q9 = 0.5_rp * (matmul(mLz, mLx) + matmul(mLx, mLz))
 
       case('Qx2y2', 'qx2y2', 'x2y2')
-         Q9 = Lx2 - Ly2
+         Q9 = 0.5_rp * (Lx2 - Ly2)
 
       case('Q3z2r2', 'q3z2r2', '3z2r2')
-         Q9 = 2.0_rp * Lz2 - Lx2 - Ly2
+         Q9 = 0.5_rp * (2.0_rp * Lz2 - Lx2 - Ly2)
 
       case default
          call g_logger%fatal('Invalid quadrupole component: '//trim(pol), __FILE__, __LINE__)
@@ -569,18 +576,13 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Select an orbital octupole operator from a component label.
-   !>
-   !> Definitions follow the symmetrized orbital-multipole convention:
-   !>
-   !>   Oxyz = (1/6) sum_perm Lx Ly Lz
-   !>
-   !>   O_a(3 b^2-r^2)
-   !>      = 1/2 {L_a,L_b^2} - 1/3 L_a L^2
-   !>
-   !> with L^2 = Lx^2 + Ly^2 + Lz^2. The second term is written below
-   !> as -(1/6){L_a,L^2}; this is identical because [L_a,L^2] = 0 and
-   !> keeps Hermiticity explicit in the numerical construction.
+   !> Select a local orbital octupole, in hbar = 1 units.
+   !> Oabb (a /= b) = {La,Lb^2}/2 - {La,L^2}/10 - La/10.
+   !> These seven pure rank-three components include fully symmetrized Oxyz.
+   !> Oa5b2r2 is an alias of Oabb, with the SAME normalization (no factor 5).
+   !> Explicit Ma3b2r2 labels retain the old mixed dipole/octupole observable.
+   !> Old Oa3b2r2 labels are rejected to prevent silent reinterpretation.
+   !> Physical operators in angular-momentum units are these matrices times hbar.
    !---------------------------------------------------------------------------
    subroutine select_octupole_operator(pol, O_op)
       character(len=*), intent(in) :: pol
@@ -615,29 +617,77 @@ contains
             + matmul(matmul(mLz, mLx), mLy) &
             + matmul(matmul(mLz, mLy), mLx) ) / 6.0_rp
 
-      case('Ox3y2r2', 'ox3y2r2')
+      case('Oxyy', 'oxyy', 'xyy', 'Ox5y2r2', 'ox5y2r2')
+         O9 = 0.5_rp * (matmul(mLx, Ly2) + matmul(Ly2, mLx)) &
+            - (matmul(mLx, L2) + matmul(L2, mLx)) / 10.0_rp - mLx / 10.0_rp
+
+      case('Mx3y2r2', 'mx3y2r2')
          O9 = 0.5_rp * (matmul(mLx, Ly2) + matmul(Ly2, mLx)) &
             - (matmul(mLx, L2) + matmul(L2, mLx)) / 6.0_rp
 
-      case('Oy3z2r2', 'oy3z2r2')
+      case('Oyzz', 'oyzz', 'yzz', 'Oy5z2r2', 'oy5z2r2')
+         O9 = 0.5_rp * (matmul(mLy, Lz2) + matmul(Lz2, mLy)) &
+            - (matmul(mLy, L2) + matmul(L2, mLy)) / 10.0_rp - mLy / 10.0_rp
+
+      case('My3z2r2', 'my3z2r2')
          O9 = 0.5_rp * (matmul(mLy, Lz2) + matmul(Lz2, mLy)) &
             - (matmul(mLy, L2) + matmul(L2, mLy)) / 6.0_rp
 
-      case('Oz3x2r2', 'oz3x2r2')
+      case('Ozxx', 'ozxx', 'zxx', 'Oz5x2r2', 'oz5x2r2')
+         O9 = 0.5_rp * (matmul(mLz, Lx2) + matmul(Lx2, mLz)) &
+            - (matmul(mLz, L2) + matmul(L2, mLz)) / 10.0_rp - mLz / 10.0_rp
+
+      case('Mz3x2r2', 'mz3x2r2')
          O9 = 0.5_rp * (matmul(mLz, Lx2) + matmul(Lx2, mLz)) &
             - (matmul(mLz, L2) + matmul(L2, mLz)) / 6.0_rp
 
-      case('Ox3z2r2', 'ox3z2r2')
+      case('Oxzz', 'oxzz', 'xzz', 'Ox5z2r2', 'ox5z2r2')
+         O9 = 0.5_rp * (matmul(mLx, Lz2) + matmul(Lz2, mLx)) &
+            - (matmul(mLx, L2) + matmul(L2, mLx)) / 10.0_rp - mLx / 10.0_rp
+
+      case('Mx3z2r2', 'mx3z2r2')
          O9 = 0.5_rp * (matmul(mLx, Lz2) + matmul(Lz2, mLx)) &
             - (matmul(mLx, L2) + matmul(L2, mLx)) / 6.0_rp
 
-      case('Oy3x2r2', 'oy3x2r2')
+      case('Oyxx', 'oyxx', 'yxx', 'Oy5x2r2', 'oy5x2r2')
+         O9 = 0.5_rp * (matmul(mLy, Lx2) + matmul(Lx2, mLy)) &
+            - (matmul(mLy, L2) + matmul(L2, mLy)) / 10.0_rp - mLy / 10.0_rp
+
+      case('My3x2r2', 'my3x2r2')
          O9 = 0.5_rp * (matmul(mLy, Lx2) + matmul(Lx2, mLy)) &
             - (matmul(mLy, L2) + matmul(L2, mLy)) / 6.0_rp
 
-      case('Oz3y2r2', 'oz3y2r2')
+      case('Ozyy', 'ozyy', 'zyy', 'Oz5y2r2', 'oz5y2r2')
+         O9 = 0.5_rp * (matmul(mLz, Ly2) + matmul(Ly2, mLz)) &
+            - (matmul(mLz, L2) + matmul(L2, mLz)) / 10.0_rp - mLz / 10.0_rp
+
+      case('Mz3y2r2', 'mz3y2r2')
          O9 = 0.5_rp * (matmul(mLz, Ly2) + matmul(Ly2, mLz)) &
             - (matmul(mLz, L2) + matmul(L2, mLz)) / 6.0_rp
+
+      case('Ox3y2r2', 'ox3y2r2')
+         call g_logger%fatal('Ambiguous legacy component: use Oxyy for pure rank three or Mx3y2r2 for the old mixed operator', &
+                             __FILE__, __LINE__)
+
+      case('Oy3z2r2', 'oy3z2r2')
+         call g_logger%fatal('Ambiguous legacy component: use Oyzz for pure rank three or My3z2r2 for the old mixed operator', &
+                             __FILE__, __LINE__)
+
+      case('Oz3x2r2', 'oz3x2r2')
+         call g_logger%fatal('Ambiguous legacy component: use Ozxx for pure rank three or Mz3x2r2 for the old mixed operator', &
+                             __FILE__, __LINE__)
+
+      case('Ox3z2r2', 'ox3z2r2')
+         call g_logger%fatal('Ambiguous legacy component: use Oxzz for pure rank three or Mx3z2r2 for the old mixed operator', &
+                             __FILE__, __LINE__)
+
+      case('Oy3x2r2', 'oy3x2r2')
+         call g_logger%fatal('Ambiguous legacy component: use Oyxx for pure rank three or My3x2r2 for the old mixed operator', &
+                             __FILE__, __LINE__)
+
+      case('Oz3y2r2', 'oz3y2r2')
+         call g_logger%fatal('Ambiguous legacy component: use Ozyy for pure rank three or Mz3y2r2 for the old mixed operator', &
+                             __FILE__, __LINE__)
 
       case default
          call g_logger%fatal('Invalid octupole component: '//trim(pol), __FILE__, __LINE__)
@@ -651,6 +701,39 @@ contains
       O_op(10:18, 10:18) = O9(:, :)
 
    end subroutine select_octupole_operator
+
+   !> Conventional octupole current j = {O,v}/2, for the selected slot.
+   !> HOH must be rejected: the existing factorized velocity omits h o v.
+   subroutine build_realspace_octupole_velocity_operators(this, pol, velocity_slot)
+      class(hamiltonian), intent(inout) :: this
+      character(len=*), intent(in) :: pol, velocity_slot
+      integer :: ntype, ia, nr, m
+      complex(rp) :: O_op(18, 18), velocity(18, 18)
+
+      if (this%hoh) then
+         call g_logger%fatal('Octupole currents require hoh=.false. until the full HOH velocity is implemented', &
+                             __FILE__, __LINE__)
+      end if
+      if (velocity_slot /= 'a' .and. velocity_slot /= 'b') then
+         call g_logger%fatal('Invalid octupole velocity slot: '//trim(velocity_slot), __FILE__, __LINE__)
+      end if
+      call select_octupole_operator(pol, O_op)
+      this%jl_a = (0.0_rp, 0.0_rp)
+      this%jlo_a = (0.0_rp, 0.0_rp)
+      do ntype = 1, this%charge%lattice%ntype
+         ia = this%charge%lattice%atlist(ntype)
+         nr = this%charge%lattice%nn(ia, 1)
+         do m = 1, nr
+            select case(velocity_slot)
+            case('a')
+               velocity = this%v_a(:, :, m, ntype)
+            case('b')
+               velocity = this%v_b(:, :, m, ntype)
+            end select
+            this%jl_a(:, :, m, ntype) = 0.5_rp * (matmul(O_op, velocity) + matmul(velocity, O_op))
+         end do
+      end do
+   end subroutine build_realspace_octupole_velocity_operators
 
    !**************************************************************************
    !> @brief Build a local orbital-octupole accumulation operator.
@@ -1638,6 +1721,7 @@ contains
    !>
    !**************************************************************************
    subroutine build_realspace_velocity_operators(this)
+      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
       ! Arguments
       class(hamiltonian), intent(inout) :: this
    
@@ -1657,6 +1741,12 @@ contains
       norm_a = norm2(this%v_alpha)
       norm_b = norm2(this%v_beta)
 
+      if (.not. ieee_is_finite(norm_a) .or. .not. ieee_is_finite(norm_b)) then
+         call g_logger%fatal('v_alpha and v_beta must be finite direction vectors', __FILE__, __LINE__)
+      end if
+      if (norm_a <= tiny(1.0_rp) .or. norm_b <= tiny(1.0_rp)) then
+         call g_logger%fatal('v_alpha and v_beta must be nonzero direction vectors', __FILE__, __LINE__)
+      end if
       dir_a(:) = this%v_alpha(:) / norm_a
       dir_b(:) = this%v_beta(:) / norm_b
 

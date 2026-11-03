@@ -20,6 +20,7 @@
 !------------------------------------------------------------------------------
 
 module recursion_mod
+   use transport_operators_mod, only: transport_operators
 
    use hamiltonian_mod
    use lattice_mod
@@ -47,6 +48,10 @@ module recursion_mod
       class(energy), pointer :: en
       !> Control
       class(control), pointer :: control
+      type(transport_operators) :: transport
+      character(len=16) :: transport_kind_a, transport_kind_b
+      complex(rp) :: transport_q_a(18,18), transport_q_b(18,18)
+      real(rp) :: transport_dir_a(3), transport_dir_b(3)
       ! General variables
 
       !> Scalar recursion coefficients
@@ -105,12 +110,11 @@ module recursion_mod
       !procedure :: compute_moments ! temporary for test purposes
       !procedure :: evaluate_chebyshev ! temporary for test purposes
       !procedure :: calculate_gamma_nm
+      procedure :: apply_kubo_operator
       procedure :: setup_kubo_operators
       procedure :: set_kubo_operator_slot
       procedure :: ham_vec_matmul
       procedure :: ham_hoh_vec_matmul
-      procedure :: velo_vec_matmul
-      procedure :: velo_hoh_vec_matmul
       procedure :: restore_to_default
       final :: destructor
    end type recursion
@@ -220,8 +224,8 @@ contains
    !> Setup the two operators entering the Kubo-Bastin linear-response kernel.
    !>
    !> Convention:
-   !>   linear_in   -> entrance operator  -> v_b / vo_b
-   !>   linear_out  -> response operator  -> v_a / vo_a
+   !>   linear_in   -> entrance operator  -> slot b
+   !>   linear_out  -> response operator  -> slot a
    !>
    !> The Chebyshev kernel later evaluates:
    !>
@@ -240,26 +244,57 @@ contains
    !>   pol_beta  controls the entrance/input polarization
    !---------------------------------------------------------------------------
    subroutine setup_kubo_operators(this, linear_out, linear_in)
+      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
       class(recursion), intent(inout) :: this
-      character(len=*), intent(in) :: linear_out
-      character(len=*), intent(in) :: linear_in
-
-      ! First build the ordinary charge-current velocity operators.
-      !
-      ! This creates:
-      !   v_a  from v_alpha
-      !   v_b  from v_beta
-      !   vo_a from v_alpha, if hoh = .true.
-      !   vo_b from v_beta,  if hoh = .true.
-      call this%hamiltonian%build_realspace_velocity_operators()
-
-      ! Entrance/input operator: placed in v_b / vo_b.
+      character(len=*), intent(in) :: linear_out, linear_in
+      real(rp) :: na, nb
+      this%transport%nn => this%lattice%nn
+      this%transport%iz => this%lattice%iz
+      this%transport%cr => this%lattice%cr
+      this%transport%scale => this%hamiltonian%velocity_scale
+      this%transport%h => this%hamiltonian%ee
+      if (allocated(this%hamiltonian%hall)) this%transport%h_local => this%hamiltonian%hall
+      this%transport%overlap => this%hamiltonian%obarm
+      this%transport%enu => this%hamiltonian%enim
+      this%transport%soc => this%hamiltonian%lsham
+      this%transport%nmax = this%lattice%nmax
+      this%transport%alat = this%lattice%alat
+      this%transport%hoh = this%hamiltonian%hoh
+      na = norm2(this%hamiltonian%v_alpha)
+      nb = norm2(this%hamiltonian%v_beta)
+      if (.not. ieee_is_finite(na) .or. .not. ieee_is_finite(nb)) then
+         call g_logger%fatal('Transport directions must be finite', __FILE__, __LINE__)
+      end if
+      if (na <= tiny(1.0_rp) .or. nb <= tiny(1.0_rp)) then
+         call g_logger%fatal('Transport directions must be nonzero', __FILE__, __LINE__)
+      end if
+      this%transport_dir_a = this%hamiltonian%v_alpha/na
+      this%transport_dir_b = this%hamiltonian%v_beta/nb
       call this%set_kubo_operator_slot(linear_in, 'b')
-
-      ! Response/output operator: placed in v_a / vo_a.
       call this%set_kubo_operator_slot(linear_out, 'a')
-
+      ! All transport intermediates traverse the complete cluster. The legacy
+      ! recursion mask is not used by this path and cannot truncate two-hop terms.
+      this%idum = 1
    end subroutine setup_kubo_operators
+
+   subroutine apply_kubo_operator(this, slot, psi, out)
+      class(recursion), intent(inout) :: this
+      character(len=*), intent(in) :: slot
+      complex(rp), intent(in) :: psi(:,:,:)
+      complex(rp), intent(out) :: out(:,:,:)
+      select case(slot)
+      case('a')
+         call this%transport%response(this%transport_kind_a, this%transport_q_a, &
+              this%transport_dir_a, .false., psi, out)
+      case('b')
+         call this%transport%response(this%transport_kind_b, this%transport_q_b, &
+              this%transport_dir_b, .true., psi, out)
+      case default
+         call g_logger%fatal('Invalid Kubo slot', __FILE__, __LINE__)
+      end select
+      this%idum = 1
+   end subroutine apply_kubo_operator
+
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
@@ -268,12 +303,12 @@ contains
    !>
    !> slot = 'a':
    !>   response/output operator
-   !>   fills this%hamiltonian%v_a and this%hamiltonian%vo_a
+   !>   configures transport_kind_a and transport_q_a
    !>   uses this%hamiltonian%pol_alpha when a polarization is needed.
    !>
    !> slot = 'b':
    !>   entrance/input operator
-   !>   fills this%hamiltonian%v_b and this%hamiltonian%vo_b
+   !>   configures transport_kind_b and transport_q_b
    !>   uses this%hamiltonian%pol_beta when a polarization is needed.
    !>
    !> op_type can be:
@@ -288,571 +323,62 @@ contains
    !>   orbital_torque
    !>   quadrupole
    !>   quadrupole_accumulation
+   !>   octupole / octupole_current
    !>   octupole_accumulation
    !>
    !> Notes:
-   !>   - js_a, jso_a, jl_a, and jlo_a are used only as temporary containers.
-   !>   - For spin/orbital currents, the Hamiltonian builder must know which
-   !>     velocity slot to use:
-   !>        slot = 'a' -> build from v_a / vo_a
-   !>        slot = 'b' -> build from v_b / vo_b
-   !>   - spin_torque is the exchange contribution:
-   !>        tau^xc = (1/i) [S_pol, H_xc]
-   !>   - spin_soc_torque / soc_spin_torque is the SOC contribution:
-   !>        tau^SOC = (1/i) [S_pol, H_SOC]
+   !>   Currents use the full velocity anticommutator at action level.
+   !>   spin_torque excludes SOC; spin_soc_torque includes only SOC.
+   !>   orbital_torque uses the complete Hamiltonian.
    !---------------------------------------------------------------------------
    subroutine set_kubo_operator_slot(this, op_type, slot)
       class(recursion), intent(inout) :: this
-      character(len=*), intent(in) :: op_type
-      character(len=*), intent(in) :: slot
-
-      integer :: ntype
+      character(len=*), intent(in) :: op_type, slot
       character(len=10) :: pol
-      complex(rp), dimension(18, 18) :: S_op, L_op
-      complex(rp), dimension(9, 9) :: mLx, mLy, mLz
-
-      S_op(:, :) = (0.0_rp, 0.0_rp)
-      L_op(:, :) = (0.0_rp, 0.0_rp)
-
-      !-----------------------------------------------------------------------
-      ! Select the polarization associated with the requested Kubo slot.
-      !
-      ! slot = 'a' uses pol_alpha and fills v_a / vo_a.
-      ! slot = 'b' uses pol_beta  and fills v_b / vo_b.
-      !-----------------------------------------------------------------------
-      select case(trim(slot))
+      character(len=16) :: kind
+      complex(rp) :: q(18,18)
+      select case(slot)
       case('a')
          pol = this%hamiltonian%pol_alpha
-
       case('b')
          pol = this%hamiltonian%pol_beta
-
       case default
          call g_logger%fatal('Invalid Kubo operator slot: '//trim(slot), __FILE__, __LINE__)
       end select
-
+      q = (0.0_rp, 0.0_rp)
+      kind = 'current'
       select case(trim(op_type))
-
-      !-----------------------------------------------------------------------
-      ! Ordinary charge-current operator.
-      !
-      ! build_realspace_velocity_operators() already created:
-      !   v_a  / vo_a from v_alpha
-      !   v_b  / vo_b from v_beta
-      !
-      ! Therefore:
-      !   slot = 'a' -> v_a is already the output charge-current operator.
-      !   slot = 'b' -> v_b is already the input charge-current operator.
-      !-----------------------------------------------------------------------
       case('charge')
-
-         continue
-
-      !-----------------------------------------------------------------------
-      ! Spin-current operator:
-      !
-      !   j^S_pol = 1/2 {S_pol, v_slot}
-      !
-      ! For slot = 'a', the spin current is built from v_a / vo_a.
-      ! For slot = 'b', the spin current is built from v_b / vo_b.
-      !
-      ! The result is first stored in js_a / jso_a as temporary containers,
-      ! then copied into the requested Kubo slot.
-      !-----------------------------------------------------------------------
-      case('spin')
-
-         call this%hamiltonian%build_realspace_spin_operators(pol, slot)
-
-         select case(trim(slot))
-         case('a')
-            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%js_a(:, :, :, :)
-            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
-
-         case('b')
-            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%js_a(:, :, :, :)
-            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
-         end select
-
-      !-----------------------------------------------------------------------
-      ! Orbital-current operator:
-      !
-      !   j^L_pol = 1/2 {L_pol, v_slot}
-      !
-      ! For slot = 'a', the orbital current is built from v_a / vo_a.
-      ! For slot = 'b', the orbital current is built from v_b / vo_b.
-      !
-      ! The result is first stored in jl_a / jlo_a as temporary containers,
-      ! then copied into the requested Kubo slot.
-      !-----------------------------------------------------------------------
-      case('orbital')
-
-         call this%hamiltonian%build_realspace_orbital_velocity_operators(pol, slot)
-
-         select case(trim(slot))
-         case('a')
-            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
-            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
-
-         case('b')
-            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
-            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
-         end select
-
-      !-----------------------------------------------------------------------
-      ! Quadrupole/OAP-current operator:
-      !
-      !   j^Q_pol = 1/2 {Q_pol, v_slot}
-      !
-      ! For slot = 'a', the quadrupole current is built from v_a / vo_a.
-      ! For slot = 'b', the quadrupole current is built from v_b / vo_b.
-      !
-      ! The result is first stored in jl_a / jlo_a as temporary containers,
-      ! then copied into the requested Kubo slot.
-      !-----------------------------------------------------------------------
-      case('quadrupole', 'oap')
-
-         call this%hamiltonian%build_realspace_quadrupole_velocity_operators(pol, slot)
-
-         select case(trim(slot))
-         case('a')
-            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
-            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
-
-         case('b')
-            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
-            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
-         end select
-   
-      !-----------------------------------------------------------------------
-      ! Spin accumulation:
-      !
-      !   local S_pol operator
-      !
-      ! This is a local on-site operator. Therefore only the m = 1 block is
-      ! filled for each atom type.
-      !-----------------------------------------------------------------------
-      case('spin_accumulation')
-
-         select case(trim(pol))
-         case('x')
-            S_op(:, :) = S_x(:, :)
-
-         case('y')
-            S_op(:, :) = S_y(:, :)
-
-         case('z')
-            S_op(:, :) = S_z(:, :)
-
-         case default
-            call g_logger%fatal('Invalid spin accumulation polarization: '//trim(pol), __FILE__, __LINE__)
-         end select
-
-         select case(trim(slot))
-         case('a')
-            this%hamiltonian%v_a(:, :, :, :)  = (0.0_rp, 0.0_rp)
-            this%hamiltonian%vo_a(:, :, :, :) = (0.0_rp, 0.0_rp)
-
-            do ntype = 1, this%lattice%ntype
-               this%hamiltonian%v_a(:, :, 1, ntype) = S_op(:, :)
-            end do
-
-         case('b')
-            this%hamiltonian%v_b(:, :, :, :)  = (0.0_rp, 0.0_rp)
-            this%hamiltonian%vo_b(:, :, :, :) = (0.0_rp, 0.0_rp)
-
-            do ntype = 1, this%lattice%ntype
-               this%hamiltonian%v_b(:, :, 1, ntype) = S_op(:, :)
-            end do
-         end select
-
-      !-----------------------------------------------------------------------
-      ! Orbital accumulation:
-      !
-      !   local L_pol operator
-      !
-      ! The L_x, L_y, and L_z matrices from math_mod are given in Cartesian
-      ! harmonics and are transformed here to spherical-harmonics coordinates.
-      ! The same 9 x 9 orbital operator is used for the spin-up and spin-down
-      ! blocks.
-      !
-      ! This is a local on-site operator. Therefore only the m = 1 block is
-      ! filled for each atom type.
-      !-----------------------------------------------------------------------
-      case('orbital_accumulation')
-
-         ! Angular momentum matrices from math_mod are in Cartesian harmonics.
-         mLx(:, :) = L_x(:, :)
-         mLy(:, :) = L_y(:, :)
-         mLz(:, :) = L_z(:, :)
-
-         ! Transform to spherical-harmonics coordinates.
-         call hcpx(mLx, 'cart2sph')
-         call hcpx(mLy, 'cart2sph')
-         call hcpx(mLz, 'cart2sph')
-
-         L_op(:, :) = (0.0_rp, 0.0_rp)
-
-         select case(trim(pol))
-         case('x')
-            L_op(1:9, 1:9)     = mLx(:, :)
-            L_op(10:18, 10:18) = mLx(:, :)
-
-         case('y')
-            L_op(1:9, 1:9)     = mLy(:, :)
-            L_op(10:18, 10:18) = mLy(:, :)
-
-         case('z')
-            L_op(1:9, 1:9)     = mLz(:, :)
-            L_op(10:18, 10:18) = mLz(:, :)
-
-         case default
-            call g_logger%fatal('Invalid orbital accumulation polarization: '//trim(pol), __FILE__, __LINE__)
-         end select
-
-         select case(trim(slot))
-         case('a')
-            this%hamiltonian%v_a(:, :, :, :)  = (0.0_rp, 0.0_rp)
-            this%hamiltonian%vo_a(:, :, :, :) = (0.0_rp, 0.0_rp)
-
-            do ntype = 1, this%lattice%ntype
-               this%hamiltonian%v_a(:, :, 1, ntype) = L_op(:, :)
-            end do
-
-         case('b')
-            this%hamiltonian%v_b(:, :, :, :)  = (0.0_rp, 0.0_rp)
-            this%hamiltonian%vo_b(:, :, :, :) = (0.0_rp, 0.0_rp)
-
-            do ntype = 1, this%lattice%ntype
-               this%hamiltonian%v_b(:, :, 1, ntype) = L_op(:, :)
-            end do
-         end select
-
-      !-----------------------------------------------------------------------
-      ! Quadrupole/OAP accumulation:
-      !
-      !   local Q_pol operator
-      !
-      ! This is a local on-site operator. Therefore only the m = 1 block is
-      ! filled for each atom type.
-      !-----------------------------------------------------------------------
-      case('quadrupole_accumulation', 'oap_accumulation')
-
-         call this%hamiltonian%build_realspace_quadrupole_accumulation_operators(pol)
-
-         select case(trim(slot))
-         case('a')
-            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
-            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
-
-         case('b')
-            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
-            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
-         end select
-
-      !-----------------------------------------------------------------------
-      ! Orbital octupole accumulation:
-      !
-      !   local O_pol operator
-      !
-      ! This is a local on-site observable. Therefore only the m = 1 block is
-      ! filled for each atom type.
-      !-----------------------------------------------------------------------
-      case('octupole_accumulation')
-
-         call this%hamiltonian%build_realspace_octupole_accumulation_operators(pol)
-
-         select case(trim(slot))
-         case('a')
-            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
-            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
-
-         case('b')
-            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
-            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
-         end select
-
-      !-----------------------------------------------------------------------
-      ! Exchange spin torque:
-      !
-      !   tau^xc_pol = (1/i) [S_pol, H_xc]
-      !
-      ! This is the exchange-field contribution to spin non-conservation.
-      ! The result is first stored in js_a / jso_a as temporary containers,
-      ! then copied into the requested Kubo slot.
-      !-----------------------------------------------------------------------
-      case('spin_torque')
-
-         call this%hamiltonian%build_realspace_spin_torque_operators(pol)
-
-         select case(trim(slot))
-         case('a')
-            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%js_a(:, :, :, :)
-            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
-
-         case('b')
-            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%js_a(:, :, :, :)
-            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
-         end select
-
-      !-----------------------------------------------------------------------
-      ! SOC spin torque:
-      !
-      !   tau^SOC_pol = (1/i) [S_pol, H_SOC]
-      !
-      ! This is the spin-orbit contribution to spin non-conservation.
-      ! It is distinct from the exchange spin torque:
-      !
-      !   tau^xc_pol = (1/i) [S_pol, H_xc]
-      !
-      ! Accepted input keywords:
-      !   spin_soc_torque
-      !   soc_spin_torque
-      !
-      ! The result is first stored in js_a / jso_a as temporary containers,
-      ! then copied into the requested Kubo slot.
-      !-----------------------------------------------------------------------
-      case('spin_soc_torque', 'soc_spin_torque')
-
-         call this%hamiltonian%build_realspace_spin_soc_torque_operators(pol)
-
-         select case(trim(slot))
-         case('a')
-            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%js_a(:, :, :, :)
-            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
-
-         case('b')
-            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%js_a(:, :, :, :)
-            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
-         end select
-
-      !-----------------------------------------------------------------------
-      ! Orbital torque:
-      !
-      !   tau^L_pol = (1/i) [L_pol, H]
-      !
-      ! This is the rate of change of orbital angular momentum due to the
-      ! Hamiltonian. The result is first stored in jl_a / jlo_a as temporary
-      ! containers, then copied into the requested Kubo slot.
-      !-----------------------------------------------------------------------
-      case('orbital_torque')
-
-         call this%hamiltonian%build_realspace_orbital_torque_operators(pol)
-
-         select case(trim(slot))
-         case('a')
-            this%hamiltonian%v_a(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
-            this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
-
-         case('b')
-            this%hamiltonian%v_b(:, :, :, :)  = this%hamiltonian%jl_a(:, :, :, :)
-            this%hamiltonian%vo_b(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
-         end select
-
+         kind = 'charge'
+      case('spin', 'spin_accumulation', 'spin_torque', 'spin_soc_torque', 'soc_spin_torque')
+         call select_spin_operator(pol, q)
+      case('orbital', 'orbital_accumulation', 'orbital_torque')
+         call select_orbital_operator(pol, q)
+      case('quadrupole', 'oap', 'quadrupole_accumulation', 'oap_accumulation')
+         call select_quadrupole_operator(pol, q)
+      case('octupole', 'octupole_current', 'octupole_accumulation')
+         call select_octupole_operator(pol, q)
       case default
          call g_logger%fatal('Unknown linear-response operator type: '//trim(op_type), __FILE__, __LINE__)
-
       end select
-
+      select case(trim(op_type))
+      case('spin_accumulation', 'orbital_accumulation', 'quadrupole_accumulation', &
+           'oap_accumulation', 'octupole_accumulation')
+         kind = 'local'
+      case('spin_torque', 'orbital_torque')
+         kind = trim(op_type)
+      case('spin_soc_torque', 'soc_spin_torque')
+         kind = 'soc_torque'
+      end select
+      select case(slot)
+      case('a')
+         this%transport_kind_a = kind
+         this%transport_q_a = q
+      case('b')
+         this%transport_kind_b = kind
+         this%transport_q_b = q
+      end select
    end subroutine set_kubo_operator_slot
-
-
-   subroutine velo_vec_matmul(this, c_or_n, v_op, psi_in, psi_out)
-      class(recursion), intent(inout) :: this
-      complex(rp), dimension(:, :, :, :), intent(in) :: v_op
-      complex(rp), dimension(:, :, :), intent(in) :: psi_in
-      character :: c_or_n 
-      complex(rp), dimension(:, :, :), intent(out) :: psi_out
-      ! Local variables
-      integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
-      complex(rp), dimension(18, 18) :: dum1, dum2, locham
-      hblocksize = 18
-      nat = this%lattice%kk
-
-      psi_out(:, :, :) = (0.0d0, 0.0d0)
-
-      ! NOT YET IMPLEMENTED THE VELOCITY OPERATOR FOR THE LOCAL HAMILTONIAN
-      ! Write H*|phi_1> for the local Hamiltonian
-      nlimplus1 = this%lattice%nmax + 1
-      !if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-      !   !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
-      !   do k = 1, this%lattice%nmax ! Loop in the neighbouring
-      !      this%idum(k) = this%izero(k)
-      !      ih = this%lattice%iz(k)
-      !      nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
-      !      if (this%izero(k) /= 0) then
-      !         locham = this%hamiltonian%hall(1:18, 1:18, 1, k) + this%hamiltonian%lsham(1:18, 1:18, ih)
-      !         call zgemm('n', 'n', 18, 18, 18, cone, locham, 18, psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18)
-      !      end if
-      !      if (nr >= 2) then
-      !         do nb = 2, nr ! Loop on the neighbouring
-      !            nnmap = this%lattice%nn(k, nb)
-      !            if (nnmap /= 0) then
-      !               if (this%izero(nnmap) /= 0) then
-      !                  call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hall(:, :, nb, k), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
-      !                  this%idum(k) = 1
-      !               end if
-      !            end if
-      !         end do ! End of loop in the neighbouring
-      !      end if
-      !      ! Do the scaling and shifting
-      !      psi_out(:, :, k) = psi_out(:, :, k) - b*psi_in(:, :, k)
-      !      psi_out(:, :, k) = psi_out(:, :, k)/a
-      !   end do ! End of loop in the neighbouring
-      !   !$omp end parallel do
-      !end if ! End of local Hamiltonian loop
-
-      ! Write H*|phi_1> for the bulk Hamiltonian
-      !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap)
-      do k = nlimplus1, this%lattice%kk ! Loop in the clust
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k)
-         nr = this%lattice%nn(k, 1)
-         if (this%izero(k) /= 0) then
-            !!!!! Probably useless because the onsite term is null. Here for consistency only
-            call zgemm('n', 'n', 18, 18, 18, cone, v_op(:, :, 1, ih), 18, psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18) 
-            !!!!! Probably useless because the onsite term is null. Here for consistency only
-         end if
-         if (nr >= 2) then
-            do nb = 2, nr ! Loop in the neighbouring
-               nnmap = this%lattice%nn(k, nb)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm(c_or_n, 'n', 18, 18, 18, cone, v_op(:, :, nb, ih), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
-                  this%idum(k) = 1
-               end if
-            end do ! End of the loop in the neighbouring
-         end if
-      end do ! End loop in the clust
-      !$omp end parallel do
-   end subroutine velo_vec_matmul
-
-   subroutine velo_hoh_vec_matmul(this, v_op, vo_op, psi_in, psi_out)
-      class(recursion), intent(inout) :: this
-      complex(rp), dimension(:, :, :), intent(in) :: psi_in
-      complex(rp), dimension(:, :, :), intent(out) :: psi_out
-      complex(rp), dimension(:, :, :, :), intent(in) :: v_op
-      complex(rp), dimension(:, :, :, :), intent(in) :: vo_op
-      ! Local variables
-      integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
-      complex(rp), dimension(18, 18) :: dum1, dum2, locham
-
-      hblocksize = 18
-      nat = this%lattice%kk
-
-      this%hohpsi(:, :, :) = (0.0d0, 0.0d0)
-      this%enupsi(:, :, :) = (0.0d0, 0.0d0)
-      this%socpsi(:, :, :) = (0.0d0, 0.0d0)
-
-      ! Write H*|phi_1> for the local Hamiltonian
-      nlimplus1 = this%lattice%nmax + 1
-      !if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-      !   !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
-      !   do k = 1, this%lattice%nmax ! Loop in the neighbouring
-      !      this%idum(k) = this%izero(k)
-      !      ih = this%lattice%iz(k)
-      !      nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
-      !      if (this%izero(k) /= 0) then
-      !         locham = this%hamiltonian%hall(1:18, 1:18, 1, k)
-      !         call zgemm('n', 'n', 18, 18, 18, cone, locham, 18, psi_in(:, :, k), 18, cone, this%psi2(:, :, k), 18)
-      !         call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%lsham(:, :, ih), 18, psi_in(:, :, k), 18, cone, this%socpsi(:, :, k), 18)
-      !         call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%enim(:, :, ih), 18, psi_in(:, :, k), 18, cone, this%enupsi(:, :, k), 18)
-      !      end if
-      !      if (nr >= 2) then
-      !         do nb = 2, nr ! Loop on the neighbouring
-      !            nnmap = this%lattice%nn(k, nb)
-      !            if (nnmap /= 0) then
-      !               if (this%izero(nnmap) /= 0) then
-      !                  call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hall(:, :, nb, k), 18, psi_in(:, :, nnmap), 18, cone, this%psi2(:, :, k), 18)
-      !                  this%idum(k) = 1
-      !               end if
-      !            end if
-      !         end do ! End of loop in the neighbouring
-      !      end if
-      !   end do ! End of loop in the neighbouring
-      !   !$omp end parallel do
-      !end if ! End of local Hamiltonian loop
-
-      ! Write H*|phi_1> for the bulk Hamiltonian
-      !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
-      do k = nlimplus1, this%lattice%kk ! Loop in the clust
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k)
-         nr = this%lattice%nn(k, 1)
-         if (this%izero(k) /= 0) then
-            !locham = this%hamiltonian%ee(1:18, 1:18, 1, ih)
-            call zgemm('n', 'n', 18, 18, 18, cone, v_op(:, :, 1, ih), 18, psi_in(:, :, k), 18, cone, this%psi2(:, :, k), 18)
-            call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(:, :, 1, ih), 18, psi_in(:, :, k), 18, cone, this%psi1(:, :, k), 18)
-            !call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%enim(:, :, ih), 18, psi_in(:, :, k), 18, cone, this%enupsi(:, :, k), 18)
-            !call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%lsham(:, :, ih), 18, psi_in(:, :, k), 18, cone, this%socpsi(:, :, k), 18)
-         end if
-         if (nr >= 2) then
-            do nb = 2, nr ! Loop in the neighbouring
-               nnmap = this%lattice%nn(k, nb)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', 18, 18, 18, cone, v_op(:, :, nb, ih), 18, psi_in(:, :, nnmap), 18, cone, this%psi2(:, :, k), 18)
-                  call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(:, :, nb, ih), 18, psi_in(:, :, nnmap), 18, cone, this%psi1(:, :, k), 18)
-                  this%idum(k) = 1
-               end if
-            end do ! End of the loop in the neighbouring
-         end if
-      end do ! End loop in the clust
-      !$omp end parallel do
-
-      ! Mapping update for hoh calculation
-      this%izero(:) = this%idum(:)
-
-      !if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-      !   !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
-      !   do k = 1, this%lattice%nmax ! Loop in the neighbouring
-      !      this%idum(k) = this%izero(k)
-      !      ih = this%lattice%iz(k)
-      !      nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
-      !      if (this%izero(k) /= 0) then
-      !         call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hallo(:, :, 1, k), 18, this%psi2(:, :, k), 18, cone, this%hohpsi(:, :, k), 18)
-      !      end if
-      !      if (nr >= 2) then
-      !         do nb = 2, nr ! Loop on the neighbouring
-      !            nnmap = this%lattice%nn(k, nb)
-      !            if (nnmap /= 0) then
-      !               if (this%izero(nnmap) /= 0) then
-      !                  call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hallo(:, :, nb, k), 18, this%psi2(:, :, nnmap), 18, cone, this%hohpsi(:, :, k), 18)
-      !                  this%idum(k) = 1
-      !               end if
-      !            end if
-      !         end do ! End of loop in the neighbouring
-      !      end if
-      !   end do ! End of loop in the neighbouring
-      !   !$omp end parallel do
-      !end if ! End of local Hamiltonian loop
-
-      !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
-      do k = nlimplus1, this%lattice%kk ! Loop to find the bulk atoms using the bulk Hamiltonian
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k) ! Atom type
-         nr = this%lattice%nn(k, 1) ! Number of neighbours
-         if (this%izero(k) /= 0) then
-         !   call zgemm('n', 'n', 18, 18, 18, cone, vo_op(:, :, 1, ih), 18, this%psi2(:, :, k), 18, cone, this%hohpsi(:, :, k), 18)
-         end if
-         if (nr >= 2) then
-            do nb = 2, nr ! Loop on the neighbouring
-               nnmap = this%lattice%nn(k, nb)
-               if (nnmap /= 0) then
-                  if (this%izero(nnmap) /= 0) then
-                     call zgemm('n', 'n', 18, 18, 18, cone, vo_op(:, :, nb, ih), 18, this%psi1(:, :, nnmap), 18, cone, this%hohpsi(:, :, k), 18)
-                     this%idum(k) = 1
-                  end if
-               end if
-            end do ! End of loop in the neighbouring
-         end if
-      end do
-      !$omp end parallel do
-
-      ! H = h - hoh + e_nu + l.s
-      psi_out(:, :, :) = this%psi2(:, :, :) - this%hohpsi(:, :, :) + this%enupsi(:, :, :) + this%socpsi(:, :, :)
-
-      this%psi2(:, :, :) = (0.0_rp, 0.0_rp)
-      this%psi1(:, :, :) = (0.0_rp, 0.0_rp)
-
-   end subroutine velo_hoh_vec_matmul
 
    subroutine ham_hoh_vec_matmul(this, psi_in, psi_out, a, b)
       class(recursion), intent(inout) :: this
@@ -1098,74 +624,6 @@ contains
       call this%setup_kubo_operators(this%control%linear_out, &
                                      this%control%linear_in)
 
-      ! Check the type of conductivity
-      !select case(this%control%cond_type)
-      !case ('charge')
-      !   ! Redundant, but just testing
-      !   this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%v_a(:, :, :, :)
-      !   this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%vo_a(:, :, :, :)
-      !case('spin')
-      !   call this%hamiltonian%build_realspace_spin_operators()
-      !   this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%js_a(:, :, :, :) 
-      !   this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
-      !case('orbital')
-      !   call this%hamiltonian%build_realspace_orbital_velocity_operators()
-      !   this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%jl_a(:, :, :, :)
-      !   this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
-      !case('spin_accumulation')
-      !   select case(this%hamiltonian%js_alpha)
-      !   case('z')
-      !      S_op = S_z
-      !   case('x')
-      !      S_op = S_x
-      !   case('y')
-      !      S_op = S_y
-      !   end select
-      !   this%hamiltonian%v_a(:, :, :, :) = (0.d0, 0.0d0)
-      !   this%hamiltonian%vo_a(:, :, :, :) = (0.d0, 0.0d0)
-      !   do ntype = 1, this%lattice%ntype
-      !      this%hamiltonian%v_a(:, :, 1, ntype) = S_op(:, :)
-      !   end do
-      !case('spin_torque')
-      !   call this%hamiltonian%build_realspace_spin_torque_operators()
-      !   this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%js_a(:, :, :, :)
-      !   this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jso_a(:, :, :, :)
-      !case('orbital_torque')
-      !   call this%hamiltonian%build_realspace_orbital_torque_operators()
-      !   this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%jl_a(:, :, :, :)
-      !   this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
-      !case('orbital_accumulation')
-      !   !  Getting the angular momentum operators from the math_mod that are in cartesian coordinates
-      !   mLx(:, :) = L_x(:, :)
-      !   mLy(:, :) = L_y(:, :)
-      !   mLz(:, :) = L_z(:, :)
-   
-      !   ! Transforming them into the spherical harmonics coordinates
-      !   call hcpx(mLx, 'cart2sph')
-      !   call hcpx(mLy, 'cart2sph')
-      !   call hcpx(mLz, 'cart2sph') 
-      !      
-      !   L_op(:, :) = (0.0d0, 0.0d0)
-
-      !   ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
-      !   select case (this%hamiltonian%jl_alpha)   ! or whichever variable holds 'x','y','z'
-      !   case ('x')
-      !      L_op(1:9, 1:9) = mLx(:, :)
-      !      L_op(10:18, 10:18) = mLx(:, :)
-      !   case ('y') 
-      !      L_op(1:9, 1:9) = mLy(:, :)
-      !      L_op(10:18, 10:18) = mLy(:, :)
-      !   case ('z')
-      !      L_op(1:9, 1:9) = mLz(:, :)
-      !      L_op(10:18, 10:18) = mLz(:, :)
-      !   end select
-      !   this%hamiltonian%v_a(:, :, :, :) = (0.d0, 0.0d0)
-      !   this%hamiltonian%vo_a(:, :, :, :) = (0.d0, 0.0d0)
-      !   do ntype = 1, this%lattice%ntype
-      !      this%hamiltonian%v_a(:, :, 1, ntype) = L_op(:, :)
-      !   end do
-      !end select
-
       ! Check what kind of calculation
       select case(this%control%cond_calctype)
       case('per_type')
@@ -1220,18 +678,12 @@ contains
                w1(:, :, :) = psiref(:, :, :)
             else if (m == 2) then
                w0(:, :, :) = w1(:, :, :)
-               if (this%hamiltonian%hoh) then
-                  call this%ham_hoh_vec_matmul(w0, w1, a, b)
-               else
-                  call this%ham_vec_matmul(w0, w1, a, b)
-               end if
+               call this%transport%hamiltonian(w0, w1)
+               w1 = (w1 - b*w0)/a
                this%izero(:) = this%idum(:)
             else if (m > 2) then
-               if (this%hamiltonian%hoh) then
-                  call this%ham_hoh_vec_matmul(w1, w2, a, b)
-               else
-                  call this%ham_vec_matmul(w1, w2, a, b)
-               end if
+               call this%transport%hamiltonian(w1, w2)
+               w2 = (w2 - b*w1)/a
                this%izero(:) = this%idum(:)
                w2(:, :, :) = 2 * w2(:, :, :) - w0(:, :, :)
                w0(:, :, :) = w1(:, :, :)
@@ -1252,11 +704,7 @@ contains
 
          ! Computing the right vector v_a*Tn(H)*v_b|r>
          ! Multiply with the velocity operator v_b
-         if (this%hamiltonian%hoh) then
-            call this%velo_hoh_vec_matmul(this%hamiltonian%v_b, this%hamiltonian%vo_b, psiref, v0)
-         else
-            call this%velo_vec_matmul('n',this%hamiltonian%v_b, psiref, v0)
-         end if
+         call this%apply_kubo_operator('b', psiref, v0)
          this%izero(:) = this%idum(:) 
          do n=1, this%control%cond_ll
             call show_progress(n, this%control%cond_ll)
@@ -1264,18 +712,12 @@ contains
                v1(:, :, :) = v0(:, :, :) 
             else if (n == 2) then
                v0(:, :, :) = v1(:, :, :)
-               if (this%hamiltonian%hoh) then
-                  call this%ham_hoh_vec_matmul(v0, v1, a, b)
-               else
-                  call this%ham_vec_matmul(v0, v1, a, b)
-               end if
+               call this%transport%hamiltonian(v0, v1)
+               v1 = (v1 - b*v0)/a
                this%izero(:) = this%idum(:)
             else if (n > 2) then
-               if (this%hamiltonian%hoh) then
-                  call this%ham_hoh_vec_matmul(v1, v2, a, b)
-               else
-                  call this%ham_vec_matmul(v1, v2, a, b)
-               end if
+               call this%transport%hamiltonian(v1, v2)
+               v2 = (v2 - b*v1)/a
                this%izero(:) = this%idum(:)
                v2(:, :, :) = 2 * v2(:, :, :) - v0(:, :, :)
                v0(:, :, :) = v1(:, :, :)
@@ -1283,11 +725,7 @@ contains
                v2(:, :, :) = (0.0d0, 0.0d0)
             end if
             ! Multiply with the velocity operator v_a
-            if (this%hamiltonian%hoh) then
-               call this%velo_hoh_vec_matmul(this%hamiltonian%v_a, this%hamiltonian%vo_a, v1, right_vec)
-            else
-               call this%velo_vec_matmul('n',this%hamiltonian%v_a, v1, right_vec)
-            end if
+            call this%apply_kubo_operator('a', v1, right_vec)
             this%izero(:) = this%idum(:)
             !$omp parallel do default(shared) private(m, dum, k) schedule(dynamic)
             do m=1, this%control%cond_ll
