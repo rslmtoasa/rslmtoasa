@@ -1179,7 +1179,8 @@ contains
       allocate(v2(hblocksize, hblocksize, this%lattice%kk), work(hblocksize, hblocksize, this%lattice%kk, 6))
 
       ! General procedures
-      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
+      ! Match the conductivity kernel rescaling in full rp precision.
+      a = (this%en%energy_max - this%en%energy_min)/(2.0_rp - 0.3_rp)
       b = (this%en%energy_max + this%en%energy_min)/2
 
       call this%setup_kubo_operators(this%control%linear_out, &
