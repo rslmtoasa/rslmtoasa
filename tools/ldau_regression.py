@@ -274,7 +274,7 @@ def surface_deck(dest: Path, host: str, nsp: int, soc0: bool) -> Path:
     text = re.sub(r"(?m)^lld\s*=.*$", "lld = 50", text)
     text = re.sub(r"(?m)^channels_ldos\s*=.*$", "channels_ldos = 500", text)
     text = re.sub(r"(?m)^rc\s*=.*$", "rc = 100\nstrux_backend = 'legacy'", text)
-    text = re.sub(r"(?m)^fermi\s*=.*$", "fermi = " + ("-0.076743" if host == "host_soc0" else "-0.076576"), text)
+    text = re.sub(r"(?m)^fermi\s*=.*$", "fermi = " + ("-0.076743" if host == "host_soc0" else "-0.076843"), text)
     deck.write_text(soc_off(text) if soc0 else text)
     if nsp == 1:
         dm = dest / "Ni_dm.nml"

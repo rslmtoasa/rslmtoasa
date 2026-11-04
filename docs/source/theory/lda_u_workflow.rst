@@ -290,9 +290,11 @@ iteration 1 by 7.0e-9 in ``ql`` and 1.5e-8 Ry in ``etot``; no converged rotation
 steps from the nsp=1 seeds: U=0, orbital moments flat from step 2 (Ni-S 0.0647, Ni-S-1 0.0402 muB); U=3, the Ni-S orbital moment rises
 0.066 -> 0.109 muB with decreasing increments and Diff stays at 1.2e-4 to 1.9e-4, as the (unconverged) bulk host does. Converged
 surface-versus-bulk values are not available.
-A 20-step continuation at U=3 (SOC on, unconverged host) shows Diff rising from 1.5e-4 to 2.3e-4 with two excursions and an orbital moment still rising
-(Ni-S 0.117 -> 0.173 muB); it is not shown to approach a fixed point (``tests/KNOWN_ISSUES.md``). Testing policy: few-iteration trajectories,
-see ``docs/validation/fixed_ldau/TESTING_POLICY.md``.
+A 20-step continuation at U=3 (SOC on) from the step-5 state, with the converged bulk host (59 iterations, orbital moment 0.0751 muB),
+shows Diff rising from 1.2e-4 to 2.1e-4, a jump in the layer occupation at step 17, and a surface orbital moment still rising
+(Ni-S 0.118 -> 0.175 muB). The same happens with J=0 on the layers, so it is not attributed to J; it is recorded as an undiagnosed
+surface SCF instability (``tests/KNOWN_ISSUES.md``). Frozen hosts must be converged; the testing policy is
+``docs/validation/fixed_ldau/TESTING_POLICY.md``.
 
 Validated ordinary on-site scope
 ================================

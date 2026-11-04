@@ -26,7 +26,7 @@ conv_thr = 5.0e-6
 /
 
 &energy
-fermi = -0.076576
+fermi = -0.076843
 energy_min = -1.0
 energy_max = 1.5
 channels_ldos = 2500
