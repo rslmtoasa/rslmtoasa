@@ -101,6 +101,12 @@ def test_compiled_actions(tmp_path, zero_overlap, threads, transport_executable)
             f.write(keyword.ljust(32).encode('ascii'))
             f.write(label.ljust(10).encode('ascii'))
     subprocess.run([str(exe)],cwd=tmp_path,check=True, env={**os.environ, 'OMP_NUM_THREADS': str(threads)})
+    legacy = np.genfromtxt(tmp_path/'legacy_comparison.csv', delimiter=',', names=True, dtype=None, encoding='utf-8')
+    assert len(legacy) == 32
+    assert np.max(legacy['max_abs_error']) < 5e-13
+    if not zero_overlap:
+        hoh_velocity = (legacy['kind'] == 'V') & (legacy['hoh'] == 1)
+        assert np.min(legacy['missing_term_size'][hoh_velocity]) > 1e-6
     raw = np.fromfile(tmp_path/'result.bin',complex)
     offset = 0
     def check(expected):

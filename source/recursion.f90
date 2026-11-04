@@ -107,7 +107,7 @@ module recursion_mod
       !procedure :: compute_moments ! temporary for test purposes
       !procedure :: evaluate_chebyshev ! temporary for test purposes
       !procedure :: calculate_gamma_nm
-      procedure :: hopping_vec_matmul
+      procedure :: velo_hoh_vec_matmul
       procedure :: onsite_vec_matmul
       procedure :: kubo_ham_vec_matmul
       procedure :: velo_vec_matmul
@@ -267,6 +267,19 @@ contains
       this%idum = 1
    end subroutine setup_kubo_operators
 
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Apply one configured Kubo slot to a wave-function block.
+   !>
+   !> Slot a is linear_out: pol_alpha/v_alpha, no velocity_scale bond weight.
+   !> Slot b is linear_in: pol_beta/v_beta, with velocity_scale bond weights.
+   !> setup_kubo_operators must run first. It selects q/kind and normalizes the
+   !> directions without changing the Hamiltonian blocks. work is the reusable
+   !> six-slot scratch allocated by compute_moments_stochastic. No allocation
+   !> or energy rescaling is performed here. izero is preserved; idum returns
+   !> the output support of the selected observable.
+   !---------------------------------------------------------------------------
    subroutine apply_kubo_operator(this, slot, psi, out, work)
       class(recursion), intent(inout) :: this
       character(len=*), intent(in) :: slot
@@ -283,7 +296,6 @@ contains
       case default
          call g_logger%fatal('Invalid Kubo slot', __FILE__, __LINE__)
       end select
-      this%idum = 1
    end subroutine apply_kubo_operator
 
 
@@ -375,47 +387,100 @@ contains
    !> Kubo matrix-vector products. Work arrays are allocated once by the caller.
    !> All intermediate sites are retained, including two-hop impurity paths.
    !---------------------------------------------------------------------------
-   ! Optional direction turns h into its bare velocity. Scale weights only
-   ! the input slot, preserving the existing symmetric bond max(s_i,s_j).
-   subroutine hopping_vec_matmul(this, psi, out, direction, weighted)
-      class(recursion), intent(in) :: this
-      complex(rp), contiguous, intent(in) :: psi(:, :, :)
-      complex(rp), contiguous, intent(out) :: out(:, :, :)
-      real(rp), intent(in), optional :: direction(3)
-      logical, intent(in), optional :: weighted
-      integer :: i, j, m, it, hblocksize, nrhs
-      complex(rp) :: block(size(psi, 1), size(psi, 1)), factor
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Apply the bare velocity v_ij = -i*dot(direction,r_i-r_j)*h_ij.
+   !> Keep separate local/bulk neighbor loops and the original izero/idum mapping.
+   !> The local loop supplies the impurity rows missing from the old velocity.
+   !> Zero neighbors are checked before indexing izero. On-site velocity is zero.
+   !> weighted applies the maximum endpoint velocity_scale (input slot b).
+   !> No energy shift/scaling or SOC is included; input/output must not overlap.
+   !---------------------------------------------------------------------------
+   subroutine velo_vec_matmul(this, psi_in, psi_out, direction, weighted)
+      class(recursion), intent(inout) :: this
+      complex(rp), dimension(:, :, :), intent(in) :: psi_in
+      complex(rp), dimension(:, :, :), intent(out) :: psi_out
+      real(rp), intent(in) :: direction(3)
+      logical, intent(in) :: weighted
+      ! Local variables
+      integer :: nb, ih, k, nr, nrhs, nnmap, nlimplus1
+      complex(rp) :: factor
       real(rp) :: distance
-      hblocksize = size(psi, 1)
-      nrhs = size(psi, 2)
-      out = (0.0_rp, 0.0_rp)
-      !$omp parallel do default(shared) private(i,j,m,it,block,factor,distance)
-      do i = 1, size(psi, 3)
-         it = this%lattice%iz(i)
-         do m = 1, this%lattice%nn(i, 1)
-            j = i
-            if (m > 1) j = this%lattice%nn(i, m)
-            if (j == 0) cycle
-            if (i <= this%lattice%nmax) then
-               block = this%hamiltonian%hall(:, :, m, i)
-            else
-               block = this%hamiltonian%ee(:, :, m, it)
+
+      nrhs = size(psi_in, 2)
+      nlimplus1 = this%lattice%nmax + 1
+      psi_out(:, :, :) = (0.0_rp, 0.0_rp)
+
+      ! Local Hamiltonian: site-specific impurity-region blocks.
+      if (this%lattice%nmax /= 0) then
+         !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap, distance, factor)
+         do k = 1, this%lattice%nmax
+            this%idum(k) = this%izero(k)
+            ih = this%lattice%iz(k)
+            nr = this%lattice%nn(k, 1)
+            ! The on-site velocity vanishes because r_k-r_k = 0.
+            if (nr >= 2) then
+               do nb = 2, nr
+                  nnmap = this%lattice%nn(k, nb)
+                  if (nnmap /= 0) then
+                     if (this%izero(nnmap) /= 0) then
+                        distance = dot_product(direction, this%lattice%cr(:, k) - this%lattice%cr(:, nnmap))*this%lattice%alat
+                        factor = cmplx(0.0_rp, -distance, rp)
+                        if (weighted) then
+                           factor = factor*max(this%hamiltonian%velocity_scale(ih), &
+                                               this%hamiltonian%velocity_scale(this%lattice%iz(nnmap)))
+                        end if
+                        call zgemm('n', 'n', 18, nrhs, 18, factor, this%hamiltonian%hall(:, :, nb, k), 18, &
+                                   psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
+                        this%idum(k) = 1
+                     end if
+                  end if
+               end do
             end if
-            if (present(direction)) then
-               distance = dot_product(direction, this%lattice%cr(:, i)-this%lattice%cr(:, j))*this%lattice%alat
-               factor = cmplx(0.0_rp, -distance, rp)
-               if (present(weighted)) then
-                  if (weighted) factor = factor*max(this%hamiltonian%velocity_scale(it), this%hamiltonian%velocity_scale(this%lattice%iz(j)))
-               end if
-               block = factor*block
-            end if
-            call zgemm('n', 'n', hblocksize, nrhs, hblocksize, cone, block, hblocksize, &
-                       psi(:, :, j), hblocksize, cone, out(:, :, i), hblocksize)
          end do
+         !$omp end parallel do
+      end if
+
+      ! Bulk Hamiltonian: blocks indexed by atom type.
+      !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap, distance, factor)
+      do k = nlimplus1, this%lattice%kk
+         this%idum(k) = this%izero(k)
+         ih = this%lattice%iz(k)
+         nr = this%lattice%nn(k, 1)
+         ! The on-site velocity vanishes because r_k-r_k = 0.
+         if (nr >= 2) then
+            do nb = 2, nr
+               nnmap = this%lattice%nn(k, nb)
+               if (nnmap /= 0) then
+                  if (this%izero(nnmap) /= 0) then
+                     distance = dot_product(direction, this%lattice%cr(:, k) - this%lattice%cr(:, nnmap))*this%lattice%alat
+                     factor = cmplx(0.0_rp, -distance, rp)
+                     if (weighted) then
+                        factor = factor*max(this%hamiltonian%velocity_scale(ih), &
+                                            this%hamiltonian%velocity_scale(this%lattice%iz(nnmap)))
+                     end if
+                     call zgemm('n', 'n', 18, nrhs, 18, factor, this%hamiltonian%ee(:, :, nb, ih), 18, &
+                                psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
+                     this%idum(k) = 1
+                  end if
+               end if
+            end do
+         end if
       end do
       !$omp end parallel do
-   end subroutine hopping_vec_matmul
+   end subroutine velo_vec_matmul
 
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Multiply a site-type-dependent on-site matrix by the wave-function block.
+   !>
+   !> out(:,:,i) = matrix(:,:,iz(i))*psi(:,:,i). Used for H_SOC in SOC torque.
+   !> This helper neither hops between sites nor applies energy rescaling.
+   !> The matrix is indexed by atom type, including impurity sites.
+   !> psi and out must be distinct contiguous arrays. BLAS beta=0 overwrites out.
+   !---------------------------------------------------------------------------
    subroutine onsite_vec_matmul(this, matrix, psi, out)
       class(recursion), intent(in) :: this
       complex(rp), contiguous, intent(in) :: matrix(:, :, :), psi(:, :, :)
@@ -423,70 +488,269 @@ contains
       integer :: i, hblocksize, nrhs
       hblocksize = size(psi, 1)
       nrhs = size(psi, 2)
+      out(:, :, :) = (0.0_rp, 0.0_rp)
       !$omp parallel do default(shared) private(i)
       do i = 1, size(psi, 3)
+         if (this%izero(i) == 0) cycle
          call zgemm('n', 'n', hblocksize, nrhs, hblocksize, cone, matrix(:, :, this%lattice%iz(i)), &
                     hblocksize, psi(:, :, i), hblocksize, czero, out(:, :, i), hblocksize)
       end do
       !$omp end parallel do
    end subroutine onsite_vec_matmul
 
-   ! H = h - h o h + E_nu + H_SOC. E_nu belongs only to the HOH representation.
-   subroutine kubo_ham_vec_matmul(this, psi, out, work, include_soc)
-      class(recursion), intent(in) :: this
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Select the original non-HOH or HOH Hamiltonian multiplication routine.
+   !>
+   !> The original routines apply (H-b)*psi/a internally. Defaults a=1 and b=0
+   !> give the physical H for torques; the Chebyshev recurrence supplies its a,b.
+   !> include_soc defaults to true; spin_torque uses false. izero is preserved,
+   !> idum returns conservative output support. work holds reusable HOH scratch.
+   !---------------------------------------------------------------------------
+   subroutine kubo_ham_vec_matmul(this, psi, out, work, include_soc, a, b)
+      class(recursion), intent(inout) :: this
       complex(rp), contiguous, intent(in) :: psi(:, :, :)
       complex(rp), contiguous, intent(out) :: out(:, :, :)
-      logical, intent(in), optional :: include_soc
-      ! Caller-owned scratch: H/V use planes 1:3, operator products use 4:6.
-      ! psi, out, and scratch must not overlap.
       complex(rp), contiguous, intent(inout) :: work(:, :, :, :)
+      logical, intent(in), optional :: include_soc
+      real(rp), intent(in), optional :: a, b
+      real(rp) :: scale, shift
       logical :: with_soc
+
+      scale = 1.0_rp
+      shift = 0.0_rp
       with_soc = .true.
+      if (present(a)) scale = a
+      if (present(b)) shift = b
       if (present(include_soc)) with_soc = include_soc
-      associate(tmp => work(:, :, :, 1), tmp2 => work(:, :, :, 2))
-         call this%hopping_vec_matmul(psi, out)
-         if (this%hamiltonian%hoh) then
-            call this%onsite_vec_matmul(this%hamiltonian%obarm, out, tmp)
-            call this%hopping_vec_matmul(tmp, tmp2)
-            out = out - tmp2
-            call this%onsite_vec_matmul(this%hamiltonian%enim, psi, tmp)
-            out = out + tmp
-         end if
-         if (with_soc) then
-            call this%onsite_vec_matmul(this%hamiltonian%lsham, psi, tmp)
-            out = out + tmp
-         end if
-      end associate
+      if (this%hamiltonian%hoh) then
+         call this%ham_hoh_vec_matmul(psi, out, scale, shift, work, with_soc)
+      else
+         call this%ham_vec_matmul(psi, out, scale, shift, with_soc)
+      end if
    end subroutine kubo_ham_vec_matmul
 
-   ! Full product rule V = v - v o h - h o v, without assuming [o,h]=0.
-   subroutine velo_vec_matmul(this, psi, out, work, direction, weighted)
-      class(recursion), intent(in) :: this
-      complex(rp), contiguous, intent(in) :: psi(:, :, :)
-      complex(rp), contiguous, intent(out) :: out(:, :, :)
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Apply V*psi = (v - v*o*h - h*o*v)*psi without energy shift/scaling.
+   !> Keep the original two-pass structure and named psi1, psi2, hohpsi scratch.
+   !> First pass: psi1=h*psi and psi2=v*psi. Second pass: the original v*o*h
+   !> term plus the missing h*o*v term. Both passes include local impurity rows.
+   !> The two first-pass products share a conservative one-hop support map;
+   !> expanding this map once more includes both second-pass products.
+   !> work supplies existing named scratch storage. Input/output/work must not
+   !> overlap. izero is restored on return and idum contains output support.
+   !---------------------------------------------------------------------------
+   subroutine velo_hoh_vec_matmul(this, psi_in, psi_out, work, direction, weighted)
+      class(recursion), intent(inout) :: this
+      complex(rp), dimension(:, :, :), intent(in) :: psi_in
+      complex(rp), dimension(:, :, :), intent(out) :: psi_out
+      complex(rp), target, contiguous, intent(inout) :: work(:, :, :, :)
       real(rp), intent(in) :: direction(3)
       logical, intent(in) :: weighted
-      ! Caller-owned scratch: H/V use planes 1:3, operator products use 4:6.
-      ! psi, out, and scratch must not overlap.
-      complex(rp), contiguous, intent(inout) :: work(:, :, :, :)
-      call this%hopping_vec_matmul(psi, out, direction, weighted)
-      if (.not. this%hamiltonian%hoh) return
-      associate(tmp => work(:, :, :, 1), tmp2 => work(:, :, :, 2), correction => work(:, :, :, 3))
-         call this%onsite_vec_matmul(this%hamiltonian%obarm, out, tmp)
-         call this%hopping_vec_matmul(tmp, correction)
-         out = out - correction
-         call this%hopping_vec_matmul(psi, tmp)
-         call this%onsite_vec_matmul(this%hamiltonian%obarm, tmp, tmp2)
-         call this%hopping_vec_matmul(tmp2, correction, direction, weighted)
-         out = out - correction
-      end associate
-   end subroutine velo_vec_matmul
+      ! Local variables
+      integer :: nb, ih, k, nr, nrhs, nnmap, nlimplus1
+      integer :: input_map(size(psi_in, 3))
+      complex(rp), dimension(18, 18) :: locham
+      complex(rp), pointer :: psi1(:, :, :), psi2(:, :, :), hohpsi(:, :, :)
+      complex(rp) :: factor
+      real(rp) :: distance
 
-   ! q is the local S/L/Q/O matrix, in the same basis as h.
-   ! spin_torque = (1/i)[S,H_without_SOC]; spin-independent terms commute
-   ! with S, so this includes all spin-dependent HOH and E_nu contributions.
+      ! Name existing storage, matching the original intermediate wavefunctions.
+      psi1 => work(:, :, :, 1)
+      psi2 => work(:, :, :, 2)
+      hohpsi => work(:, :, :, 3)
+      nrhs = size(psi_in, 2)
+      nlimplus1 = this%lattice%nmax + 1
+      input_map(:) = this%izero(:)
+      psi1(:, :, :) = (0.0_rp, 0.0_rp)
+      psi2(:, :, :) = (0.0_rp, 0.0_rp)
+      hohpsi(:, :, :) = (0.0_rp, 0.0_rp)
+
+      ! First pass: v*psi and h*psi, as in the original velocity routine.
+
+      ! Local Hamiltonian: site-specific impurity-region blocks.
+      if (this%lattice%nmax /= 0) then
+         !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap, locham, distance, factor)
+         do k = 1, this%lattice%nmax
+            this%idum(k) = this%izero(k)
+            ih = this%lattice%iz(k)
+            nr = this%lattice%nn(k, 1)
+            if (this%izero(k) /= 0) then
+               call zgemm('n', 'n', 18, nrhs, 18, cone, this%hamiltonian%hall(:, :, 1, k), 18, &
+                          psi_in(:, :, k), 18, cone, psi1(:, :, k), 18)
+            end if
+            if (nr >= 2) then
+               do nb = 2, nr
+                  nnmap = this%lattice%nn(k, nb)
+                  if (nnmap /= 0) then
+                     if (this%izero(nnmap) /= 0) then
+                        call zgemm('n', 'n', 18, nrhs, 18, cone, this%hamiltonian%hall(:, :, nb, k), 18, &
+                                   psi_in(:, :, nnmap), 18, cone, psi1(:, :, k), 18)
+                        distance = dot_product(direction, this%lattice%cr(:, k) - this%lattice%cr(:, nnmap))*this%lattice%alat
+                        factor = cmplx(0.0_rp, -distance, rp)
+                        if (weighted) then
+                           factor = factor*max(this%hamiltonian%velocity_scale(ih), &
+                                               this%hamiltonian%velocity_scale(this%lattice%iz(nnmap)))
+                        end if
+                        call zgemm('n', 'n', 18, nrhs, 18, factor, this%hamiltonian%hall(:, :, nb, k), 18, &
+                                   psi_in(:, :, nnmap), 18, cone, psi2(:, :, k), 18)
+                        this%idum(k) = 1
+                     end if
+                  end if
+               end do
+            end if
+         end do
+         !$omp end parallel do
+      end if
+
+      ! Bulk Hamiltonian: blocks indexed by atom type.
+      !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap, locham, distance, factor)
+      do k = nlimplus1, this%lattice%kk
+         this%idum(k) = this%izero(k)
+         ih = this%lattice%iz(k)
+         nr = this%lattice%nn(k, 1)
+         if (this%izero(k) /= 0) then
+            call zgemm('n', 'n', 18, nrhs, 18, cone, this%hamiltonian%ee(:, :, 1, ih), 18, &
+                       psi_in(:, :, k), 18, cone, psi1(:, :, k), 18)
+         end if
+         if (nr >= 2) then
+            do nb = 2, nr
+               nnmap = this%lattice%nn(k, nb)
+               if (nnmap /= 0) then
+                  if (this%izero(nnmap) /= 0) then
+                     call zgemm('n', 'n', 18, nrhs, 18, cone, this%hamiltonian%ee(:, :, nb, ih), 18, &
+                                psi_in(:, :, nnmap), 18, cone, psi1(:, :, k), 18)
+                     distance = dot_product(direction, this%lattice%cr(:, k) - this%lattice%cr(:, nnmap))*this%lattice%alat
+                     factor = cmplx(0.0_rp, -distance, rp)
+                     if (weighted) then
+                        factor = factor*max(this%hamiltonian%velocity_scale(ih), &
+                                            this%hamiltonian%velocity_scale(this%lattice%iz(nnmap)))
+                     end if
+                     call zgemm('n', 'n', 18, nrhs, 18, factor, this%hamiltonian%ee(:, :, nb, ih), 18, &
+                                psi_in(:, :, nnmap), 18, cone, psi2(:, :, k), 18)
+                     this%idum(k) = 1
+                  end if
+               end if
+            end do
+         end if
+      end do
+      !$omp end parallel do
+
+      ! Mapping update for both second-hop corrections.
+      this%izero(:) = this%idum(:)
+
+      ! Local Hamiltonian: site-specific impurity-region blocks.
+      if (this%lattice%nmax /= 0) then
+         !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap, locham, distance, factor)
+         do k = 1, this%lattice%nmax
+            this%idum(k) = this%izero(k)
+            ih = this%lattice%iz(k)
+            nr = this%lattice%nn(k, 1)
+            if (this%izero(k) /= 0) then
+               call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hall(:, :, 1, k), 18, &
+                          this%hamiltonian%obarm(:, :, this%lattice%iz(k)), 18, czero, locham, 18)
+               ! Missing old term: (h*o)*(v*psi), including the on-site h*o block.
+               call zgemm('n', 'n', 18, nrhs, 18, cone, locham, 18, &
+                          psi2(:, :, k), 18, cone, hohpsi(:, :, k), 18)
+            end if
+            if (nr >= 2) then
+               do nb = 2, nr
+                  nnmap = this%lattice%nn(k, nb)
+                  if (nnmap /= 0) then
+                     if (this%izero(nnmap) /= 0) then
+                        call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hall(:, :, nb, k), 18, &
+                                   this%hamiltonian%obarm(:, :, this%lattice%iz(nnmap)), 18, czero, locham, 18)
+                        ! Missing old term: (h*o)*(v*psi), including the on-site h*o block.
+                        call zgemm('n', 'n', 18, nrhs, 18, cone, locham, 18, &
+                                   psi2(:, :, nnmap), 18, cone, hohpsi(:, :, k), 18)
+                        ! Original term: (v*o)*(h*psi), with v_ij = factor*h_ij.
+                        distance = dot_product(direction, this%lattice%cr(:, k) - this%lattice%cr(:, nnmap))*this%lattice%alat
+                        factor = cmplx(0.0_rp, -distance, rp)
+                        if (weighted) then
+                           factor = factor*max(this%hamiltonian%velocity_scale(ih), &
+                                               this%hamiltonian%velocity_scale(this%lattice%iz(nnmap)))
+                        end if
+                        call zgemm('n', 'n', 18, nrhs, 18, factor, locham, 18, &
+                                   psi1(:, :, nnmap), 18, cone, hohpsi(:, :, k), 18)
+                        this%idum(k) = 1
+                     end if
+                  end if
+               end do
+            end if
+         end do
+         !$omp end parallel do
+      end if
+
+      ! Bulk Hamiltonian: blocks indexed by atom type.
+      !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap, locham, distance, factor)
+      do k = nlimplus1, this%lattice%kk
+         this%idum(k) = this%izero(k)
+         ih = this%lattice%iz(k)
+         nr = this%lattice%nn(k, 1)
+         if (this%izero(k) /= 0) then
+            call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(:, :, 1, ih), 18, &
+                       this%hamiltonian%obarm(:, :, this%lattice%iz(k)), 18, czero, locham, 18)
+            ! Missing old term: (h*o)*(v*psi), including the on-site h*o block.
+            call zgemm('n', 'n', 18, nrhs, 18, cone, locham, 18, &
+                       psi2(:, :, k), 18, cone, hohpsi(:, :, k), 18)
+         end if
+         if (nr >= 2) then
+            do nb = 2, nr
+               nnmap = this%lattice%nn(k, nb)
+               if (nnmap /= 0) then
+                  if (this%izero(nnmap) /= 0) then
+                     call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(:, :, nb, ih), 18, &
+                                this%hamiltonian%obarm(:, :, this%lattice%iz(nnmap)), 18, czero, locham, 18)
+                     ! Missing old term: (h*o)*(v*psi), including the on-site h*o block.
+                     call zgemm('n', 'n', 18, nrhs, 18, cone, locham, 18, &
+                                psi2(:, :, nnmap), 18, cone, hohpsi(:, :, k), 18)
+                     ! Original term: (v*o)*(h*psi), with v_ij = factor*h_ij.
+                     distance = dot_product(direction, this%lattice%cr(:, k) - this%lattice%cr(:, nnmap))*this%lattice%alat
+                     factor = cmplx(0.0_rp, -distance, rp)
+                     if (weighted) then
+                        factor = factor*max(this%hamiltonian%velocity_scale(ih), &
+                                            this%hamiltonian%velocity_scale(this%lattice%iz(nnmap)))
+                     end if
+                     call zgemm('n', 'n', 18, nrhs, 18, factor, locham, 18, &
+                                psi1(:, :, nnmap), 18, cone, hohpsi(:, :, k), 18)
+                     this%idum(k) = 1
+                  end if
+               end if
+            end do
+         end if
+      end do
+      !$omp end parallel do
+
+      ! Complete velocity: v*psi - v*o*h*psi - h*o*v*psi.
+      psi_out(:, :, :) = psi2(:, :, :) - hohpsi(:, :, :)
+      this%izero(:) = input_map(:)
+      psi2(:, :, :) = (0.0_rp, 0.0_rp)
+   end subroutine velo_hoh_vec_matmul
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Apply the selected observable to psi after input/output slot selection.
+   !>
+   !> kind='charge': V*psi; kind='local': q*psi for an accumulation.
+   !> kind='current': (q*V + V*q)*psi/2 for spin/orbital/quadrupole/octupole.
+   !> Torques use -i*(q*Hpart-Hpart*q): spin_torque excludes SOC,
+   !> orbital_torque includes all H terms, and soc_torque uses only H_SOC.
+   !> q is the 18x18 on-site selector matrix from hamiltonian.f90.
+   !>
+   !> Called through apply_kubo_operator for either response slot. Form the
+   !> complete H or V action before combining products: q need not commute with
+   !> h or o. In particular, do not dress a bare multipole current by hoh.
+   !> Scratch slots 1:3 belong to the nested H/V routines. Slots 4:6 hold q*psi,
+   !> Hpart*psi (or V*psi), and Hpart*q*psi (or V*q*psi), respectively.
+   !> Local q preserves support, so both branches have the same conservative
+   !> output map. Nested H/V calls preserve izero and return that map in idum.
+   !---------------------------------------------------------------------------
    subroutine kubo_operator_vec_matmul(this, kind, q, direction, weighted, psi, out, work)
-      class(recursion), intent(in) :: this
+      class(recursion), intent(inout) :: this
       character(len=*), intent(in) :: kind
       complex(rp), contiguous, intent(in) :: q(:, :), psi(:, :, :)
       real(rp), intent(in) :: direction(3)
@@ -498,62 +762,277 @@ contains
       integer :: i, hblocksize, nrhs
       hblocksize = size(psi, 1)
       nrhs = size(psi, 2)
+      this%idum(:) = this%izero(:)
       if (kind == 'charge') then
-         call this%velo_vec_matmul(psi, out, work(:, :, :, 1:3), direction, weighted)
+         if (this%hamiltonian%hoh) then
+            call this%velo_hoh_vec_matmul(psi, out, work(:, :, :, 1:3), direction, weighted)
+         else
+            call this%velo_vec_matmul(psi, out, direction, weighted)
+         end if
          return
       end if
-      associate(qpsi => work(:, :, :, 4), tmp => work(:, :, :, 5), other => work(:, :, :, 6))
-         do i = 1, size(psi, 3)
-            call zgemm('n', 'n', hblocksize, nrhs, hblocksize, cone, q, hblocksize, &
-                       psi(:, :, i), hblocksize, czero, qpsi(:, :, i), hblocksize)
-         end do
-         if (kind == 'local') then
-            out = qpsi
-            return
+
+      work(:, :, :, 4) = (0.0_rp, 0.0_rp)
+      !$omp parallel do default(shared) private(i)
+      do i = 1, size(psi, 3)
+         if (this%izero(i) == 0) cycle
+         call zgemm('n', 'n', hblocksize, nrhs, hblocksize, cone, q, hblocksize, &
+                    psi(:, :, i), hblocksize, czero, work(:, :, i, 4), hblocksize)
+      end do
+      !$omp end parallel do
+      if (kind == 'local') then
+         out = work(:, :, :, 4)
+         return
+      end if
+      select case(kind)
+      case('current')
+         ! Keep V*psi and V*(q*psi) separate until the final anticommutator.
+         if (this%hamiltonian%hoh) then
+            call this%velo_hoh_vec_matmul(psi, work(:, :, :, 5), work(:, :, :, 1:3), direction, weighted)
+         else
+            call this%velo_vec_matmul(psi, work(:, :, :, 5), direction, weighted)
          end if
-         select case(kind)
-         case('current')
-            call this%velo_vec_matmul(psi, tmp, work(:, :, :, 1:3), direction, weighted)
-            call this%velo_vec_matmul(qpsi, other, work(:, :, :, 1:3), direction, weighted)
-         case('spin_torque')
-            call this%kubo_ham_vec_matmul(psi, tmp, work(:, :, :, 1:3), .false.)
-            call this%kubo_ham_vec_matmul(qpsi, other, work(:, :, :, 1:3), .false.)
-         case('orbital_torque')
-            call this%kubo_ham_vec_matmul(psi, tmp, work(:, :, :, 1:3))
-            call this%kubo_ham_vec_matmul(qpsi, other, work(:, :, :, 1:3))
-         case('soc_torque')
-            call this%onsite_vec_matmul(this%hamiltonian%lsham, psi, tmp)
-            call this%onsite_vec_matmul(this%hamiltonian%lsham, qpsi, other)
-         case default
-            call g_logger%fatal('Invalid Kubo response kind: '//trim(kind), __FILE__, __LINE__)
-         end select
-         do i = 1, size(psi, 3)
-            call zgemm('n', 'n', hblocksize, nrhs, hblocksize, cone, q, hblocksize, &
-                       tmp(:, :, i), hblocksize, czero, out(:, :, i), hblocksize)
-            if (kind == 'current') then
-               out(:, :, i) = 0.5_rp*(out(:, :, i) + other(:, :, i))
-            else
-               out(:, :, i) = cmplx(0.0_rp, -1.0_rp, rp)*(out(:, :, i) - other(:, :, i))
-            end if
-         end do
-      end associate
+         if (this%hamiltonian%hoh) then
+            call this%velo_hoh_vec_matmul(work(:, :, :, 4), work(:, :, :, 6), work(:, :, :, 1:3), direction, weighted)
+         else
+            call this%velo_vec_matmul(work(:, :, :, 4), work(:, :, :, 6), direction, weighted)
+         end if
+      case('spin_torque')
+         call this%kubo_ham_vec_matmul(psi, work(:, :, :, 5), work(:, :, :, 1:3), .false.)
+         call this%kubo_ham_vec_matmul(work(:, :, :, 4), work(:, :, :, 6), work(:, :, :, 1:3), .false.)
+      case('orbital_torque')
+         call this%kubo_ham_vec_matmul(psi, work(:, :, :, 5), work(:, :, :, 1:3))
+         call this%kubo_ham_vec_matmul(work(:, :, :, 4), work(:, :, :, 6), work(:, :, :, 1:3))
+      case('soc_torque')
+         call this%onsite_vec_matmul(this%hamiltonian%lsham, psi, work(:, :, :, 5))
+         call this%onsite_vec_matmul(this%hamiltonian%lsham, work(:, :, :, 4), work(:, :, :, 6))
+      case default
+         call g_logger%fatal('Invalid Kubo response kind: '//trim(kind), __FILE__, __LINE__)
+      end select
+      ! Left product q*(V*psi) or q*(Hpart*psi), then add/subtract right product.
+      out(:, :, :) = (0.0_rp, 0.0_rp)
+      !$omp parallel do default(shared) private(i)
+      do i = 1, size(psi, 3)
+         if (this%idum(i) == 0) cycle
+         call zgemm('n', 'n', hblocksize, nrhs, hblocksize, cone, q, hblocksize, &
+                    work(:, :, i, 5), hblocksize, czero, out(:, :, i), hblocksize)
+         if (kind == 'current') then
+            out(:, :, i) = 0.5_rp*(out(:, :, i) + work(:, :, i, 6))
+         else
+            out(:, :, i) = cmplx(0.0_rp, -1.0_rp, rp)*(out(:, :, i) - work(:, :, i, 6))
+         end if
+      end do
+      !$omp end parallel do
    end subroutine kubo_operator_vec_matmul
 
-   subroutine ham_hoh_vec_matmul(this, psi_in, psi_out, a, b)
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Apply (H-b)*psi/a with H = h - h*o*h + E_nu + H_SOC.
+   !> Keep the original two passes, each with separate local and bulk loops.
+   !> psi2 holds h*psi; hohpsi holds h*o*h*psi. The on-site E_nu/SOC terms
+   !> accumulate directly into psi_out during the first pass.
+   !> The second pass forms each h_ij*o_j block explicitly, using the actual
+   !> intermediate site, rather than assuming a representative bulk neighbor.
+   !> izero is expanded between passes and restored on return; idum is output support.
+   !> Optional work supplies the named scratch arrays without allocation. Older
+   !> callers use the existing object arrays. Input/output/scratch must not overlap.
+   !---------------------------------------------------------------------------
+   subroutine ham_hoh_vec_matmul(this, psi_in, psi_out, a, b, work, include_soc)
+      class(recursion), target, intent(inout) :: this
+      complex(rp), dimension(:, :, :), intent(in) :: psi_in
+      complex(rp), dimension(:, :, :), intent(out) :: psi_out
+      real(rp), intent(in) :: a, b
+      complex(rp), target, contiguous, optional, intent(inout) :: work(:, :, :, :)
+      logical, optional, intent(in) :: include_soc
+      ! Local variables
+      integer :: nb, ih, k, nr, nrhs, nnmap, nlimplus1
+      integer :: input_map(size(psi_in, 3))
+      complex(rp), dimension(18, 18) :: locham
+      complex(rp), pointer :: psi2(:, :, :), hohpsi(:, :, :)
+      logical :: with_soc
+
+      ! Name existing storage; no allocation or copy is performed here.
+      if (present(work)) then
+         psi2 => work(:, :, :, 1)
+         hohpsi => work(:, :, :, 2)
+      else
+         psi2 => this%psi2
+         hohpsi => this%hohpsi
+      end if
+      nrhs = size(psi_in, 2)
+      nlimplus1 = this%lattice%nmax + 1
+      with_soc = .true.
+      if (present(include_soc)) with_soc = include_soc
+      input_map(:) = this%izero(:)
+      psi2(:, :, :) = (0.0_rp, 0.0_rp)
+      hohpsi(:, :, :) = (0.0_rp, 0.0_rp)
+      psi_out(:, :, :) = (0.0_rp, 0.0_rp)
+
+      ! First pass: h*psi and the on-site E_nu/SOC terms.
+
+      ! Local Hamiltonian: site-specific impurity-region blocks.
+      if (this%lattice%nmax /= 0) then
+         !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap, locham)
+         do k = 1, this%lattice%nmax
+            this%idum(k) = this%izero(k)
+            ih = this%lattice%iz(k)
+            nr = this%lattice%nn(k, 1)
+            if (this%izero(k) /= 0) then
+               call zgemm('n', 'n', 18, nrhs, 18, cone, this%hamiltonian%hall(:, :, 1, k), 18, &
+                          psi_in(:, :, k), 18, cone, psi2(:, :, k), 18)
+               locham = this%hamiltonian%enim(:, :, ih)
+               if (with_soc) locham = locham + this%hamiltonian%lsham(:, :, ih)
+               call zgemm('n', 'n', 18, nrhs, 18, cone, locham, 18, &
+                          psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18)
+            end if
+            if (nr >= 2) then
+               do nb = 2, nr
+                  nnmap = this%lattice%nn(k, nb)
+                  if (nnmap /= 0) then
+                     if (this%izero(nnmap) /= 0) then
+                        call zgemm('n', 'n', 18, nrhs, 18, cone, this%hamiltonian%hall(:, :, nb, k), 18, &
+                                   psi_in(:, :, nnmap), 18, cone, psi2(:, :, k), 18)
+                        this%idum(k) = 1
+                     end if
+                  end if
+               end do
+            end if
+         end do
+         !$omp end parallel do
+      end if
+
+      ! Bulk Hamiltonian: blocks indexed by atom type.
+      !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap, locham)
+      do k = nlimplus1, this%lattice%kk
+         this%idum(k) = this%izero(k)
+         ih = this%lattice%iz(k)
+         nr = this%lattice%nn(k, 1)
+         if (this%izero(k) /= 0) then
+            call zgemm('n', 'n', 18, nrhs, 18, cone, this%hamiltonian%ee(:, :, 1, ih), 18, &
+                       psi_in(:, :, k), 18, cone, psi2(:, :, k), 18)
+            locham = this%hamiltonian%enim(:, :, ih)
+            if (with_soc) locham = locham + this%hamiltonian%lsham(:, :, ih)
+            call zgemm('n', 'n', 18, nrhs, 18, cone, locham, 18, &
+                       psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18)
+         end if
+         if (nr >= 2) then
+            do nb = 2, nr
+               nnmap = this%lattice%nn(k, nb)
+               if (nnmap /= 0) then
+                  if (this%izero(nnmap) /= 0) then
+                     call zgemm('n', 'n', 18, nrhs, 18, cone, this%hamiltonian%ee(:, :, nb, ih), 18, &
+                                psi_in(:, :, nnmap), 18, cone, psi2(:, :, k), 18)
+                     this%idum(k) = 1
+                  end if
+               end if
+            end do
+         end if
+      end do
+      !$omp end parallel do
+
+      ! Mapping update for the second hop in h*o*h.
+      this%izero(:) = this%idum(:)
+
+      ! Local Hamiltonian: site-specific impurity-region blocks.
+      if (this%lattice%nmax /= 0) then
+         !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap, locham)
+         do k = 1, this%lattice%nmax
+            this%idum(k) = this%izero(k)
+            ih = this%lattice%iz(k)
+            nr = this%lattice%nn(k, 1)
+            if (this%izero(k) /= 0) then
+               call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hall(:, :, 1, k), 18, &
+                          this%hamiltonian%obarm(:, :, this%lattice%iz(k)), 18, czero, locham, 18)
+               call zgemm('n', 'n', 18, nrhs, 18, cone, locham, 18, &
+                          psi2(:, :, k), 18, cone, hohpsi(:, :, k), 18)
+            end if
+            if (nr >= 2) then
+               do nb = 2, nr
+                  nnmap = this%lattice%nn(k, nb)
+                  if (nnmap /= 0) then
+                     if (this%izero(nnmap) /= 0) then
+                        call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hall(:, :, nb, k), 18, &
+                                   this%hamiltonian%obarm(:, :, this%lattice%iz(nnmap)), 18, czero, locham, 18)
+                        call zgemm('n', 'n', 18, nrhs, 18, cone, locham, 18, &
+                                   psi2(:, :, nnmap), 18, cone, hohpsi(:, :, k), 18)
+                        this%idum(k) = 1
+                     end if
+                  end if
+               end do
+            end if
+         end do
+         !$omp end parallel do
+      end if
+
+      ! Bulk Hamiltonian: blocks indexed by atom type.
+      !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap, locham)
+      do k = nlimplus1, this%lattice%kk
+         this%idum(k) = this%izero(k)
+         ih = this%lattice%iz(k)
+         nr = this%lattice%nn(k, 1)
+         if (this%izero(k) /= 0) then
+            call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(:, :, 1, ih), 18, &
+                       this%hamiltonian%obarm(:, :, this%lattice%iz(k)), 18, czero, locham, 18)
+            call zgemm('n', 'n', 18, nrhs, 18, cone, locham, 18, &
+                       psi2(:, :, k), 18, cone, hohpsi(:, :, k), 18)
+         end if
+         if (nr >= 2) then
+            do nb = 2, nr
+               nnmap = this%lattice%nn(k, nb)
+               if (nnmap /= 0) then
+                  if (this%izero(nnmap) /= 0) then
+                     call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(:, :, nb, ih), 18, &
+                                this%hamiltonian%obarm(:, :, this%lattice%iz(nnmap)), 18, czero, locham, 18)
+                     call zgemm('n', 'n', 18, nrhs, 18, cone, locham, 18, &
+                                psi2(:, :, nnmap), 18, cone, hohpsi(:, :, k), 18)
+                     this%idum(k) = 1
+                  end if
+               end if
+            end do
+         end if
+      end do
+      !$omp end parallel do
+
+      ! H = h - h*o*h + E_nu + H_SOC.
+      psi_out(:, :, :) = psi2(:, :, :) - hohpsi(:, :, :) + psi_out(:, :, :)
+
+      ! Do the scaling and shifting only after assembling the complete H.
+      psi_out(:, :, :) = psi_out(:, :, :) - b*psi_in(:, :, :)
+      psi_out(:, :, :) = psi_out(:, :, :)/a
+      this%izero(:) = input_map(:)
+      psi2(:, :, :) = (0.0_rp, 0.0_rp)
+   end subroutine ham_hoh_vec_matmul
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Apply ((h+H_SOC)-b)*psi/a using the original local/bulk BLAS loops.
+   !>
+   !> izero is read-only input support; idum conservatively includes the original
+   !> and one-hop support. This also preserves support needed by the Chebyshev
+   !> subtraction of the previous vector. include_soc=.false., a=1 and b=0 gives
+   !> bare h for HOH intermediates. This routine never adds HOH terms itself.
+   !> Conductivity and orbital_modern use these same multiplication loops.
+   !---------------------------------------------------------------------------
+   subroutine ham_vec_matmul(this, psi_in, psi_out, a, b, include_soc)
       class(recursion), intent(inout) :: this
       complex(rp), dimension(:, :, :), intent(in) :: psi_in
       complex(rp), dimension(:, :, :), intent(out) :: psi_out
       real(rp), intent(in) :: a, b
+      logical, intent(in), optional :: include_soc
+      logical :: with_soc
+      integer :: nrhs
       ! Local variables
       integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
       complex(rp), dimension(18, 18) :: dum1, dum2, locham
-
+      with_soc = .true.
+      if (present(include_soc)) with_soc = include_soc
+      nrhs = size(psi_in, 2)
       hblocksize = 18
       nat = this%lattice%kk
 
-      this%hohpsi(:, :, :) = (0.0d0, 0.0d0)
-      this%enupsi(:, :, :) = (0.0d0, 0.0d0)
-      this%socpsi(:, :, :) = (0.0d0, 0.0d0)
+      psi_out(:, :, :) = (0.0d0, 0.0d0)
 
       ! Write H*|phi_1> for the local Hamiltonian
       nlimplus1 = this%lattice%nmax + 1
@@ -565,16 +1044,15 @@ contains
             nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
             if (this%izero(k) /= 0) then
                locham = this%hamiltonian%hall(1:18, 1:18, 1, k)
-               call zgemm('n', 'n', 18, 18, 18, cone, locham, 18, psi_in(:, :, k), 18, cone, this%psi2(:, :, k), 18)
-               call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%lsham(:, :, ih), 18, psi_in(:, :, k), 18, cone, this%socpsi(:, :, k), 18)
-               call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%enim(:, :, ih), 18, psi_in(:, :, k), 18, cone, this%enupsi(:, :, k), 18)
+               if (with_soc) locham = locham + this%hamiltonian%lsham(1:18, 1:18, ih)
+               call zgemm('n', 'n', 18, nrhs, 18, cone, locham, 18, psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18)
             end if
             if (nr >= 2) then
                do nb = 2, nr ! Loop on the neighbouring
                   nnmap = this%lattice%nn(k, nb)
                   if (nnmap /= 0) then
                      if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hall(:, :, nb, k), 18, psi_in(:, :, nnmap), 18, cone, this%psi2(:, :, k), 18)
+                        call zgemm('n', 'n', 18, nrhs, 18, cone, this%hamiltonian%hall(:, :, nb, k), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
                         this%idum(k) = 1
                      end if
                   end if
@@ -592,136 +1070,15 @@ contains
          nr = this%lattice%nn(k, 1)
          if (this%izero(k) /= 0) then
             locham = this%hamiltonian%ee(1:18, 1:18, 1, ih)
-            call zgemm('n', 'n', 18, 18, 18, cone, locham, 18, psi_in(:, :, k), 18, cone, this%psi2(:, :, k), 18)
-            call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%enim(:, :, ih), 18, psi_in(:, :, k), 18, cone, this%enupsi(:, :, k), 18)
-            call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%lsham(:, :, ih), 18, psi_in(:, :, k), 18, cone, this%socpsi(:, :, k), 18)
+            if (with_soc) locham = locham + this%hamiltonian%lsham(1:18, 1:18, ih)
+            call zgemm('n', 'n', 18, nrhs, 18, cone, locham, 18, psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18)
          end if
          if (nr >= 2) then
             do nb = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, nb)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(:, :, nb, ih), 18, psi_in(:, :, nnmap), 18, cone, this%psi2(:, :, k), 18)
-                  this%idum(k) = 1
-               end if
-            end do ! End of the loop in the neighbouring
-         end if
-      end do ! End loop in the clust
-      !$omp end parallel do
-
-      ! Mapping update for hoh calculation
-      this%izero(:) = this%idum(:)
-
-      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-         !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
-         do k = 1, this%lattice%nmax ! Loop in the neighbouring
-            this%idum(k) = this%izero(k)
-            ih = this%lattice%iz(k)
-            nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
-            if (this%izero(k) /= 0) then
-               call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hallo(:, :, 1, k), 18, this%psi2(:, :, k), 18, cone, this%hohpsi(:, :, k), 18)
-            end if
-            if (nr >= 2) then
-               do nb = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(k, nb)
-                  if (nnmap /= 0) then
-                     if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hallo(:, :, nb, k), 18, this%psi2(:, :, nnmap), 18, cone, this%hohpsi(:, :, k), 18)
-                        this%idum(k) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-         end do ! End of loop in the neighbouring
-         !$omp end parallel do
-      end if ! End of local Hamiltonian loop
-
-      !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
-      do k = nlimplus1, this%lattice%kk ! Loop to find the bulk atoms using the bulk Hamiltonian
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k) ! Atom type
-         nr = this%lattice%nn(k, 1) ! Number of neighbours
-         if (this%izero(k) /= 0) then
-            call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%eeo(:, :, 1, ih), 18, this%psi2(:, :, k), 18, cone, this%hohpsi(:, :, k), 18)
-         end if
-         if (nr >= 2) then
-            do nb = 2, nr ! Loop on the neighbouring
-               nnmap = this%lattice%nn(k, nb)
-               if (nnmap /= 0) then
-                  if (this%izero(nnmap) /= 0) then
-                     call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%eeo(:, :, nb, ih), 18, this%psi2(:, :, nnmap), 18, cone, this%hohpsi(:, :, k), 18)
-                     this%idum(k) = 1
-                  end if
-               end if
-            end do ! End of loop in the neighbouring
-         end if
-      end do
-      !$omp end parallel do
-
-      ! H = h - hoh + e_nu + l.s
-      psi_out(:, :, :) = this%psi2(:, :, :) - this%hohpsi(:, :, :) + this%enupsi(:, :, :) + this%socpsi(:, :, :)
-
-      ! Do the scaling and shifting
-      psi_out(:, :, :) = psi_out(:, :, :) - b*psi_in(:, :, :)
-      psi_out(:, :, :) = psi_out(:, :, :)/a
-     
-      this%psi2(:, :, :) = (0.0_rp, 0.0_rp)
-   end subroutine ham_hoh_vec_matmul
-
-   subroutine ham_vec_matmul(this, psi_in, psi_out, a, b)
-      class(recursion), intent(inout) :: this
-      complex(rp), dimension(:, :, :), intent(in) :: psi_in
-      complex(rp), dimension(:, :, :), intent(out) :: psi_out
-      real(rp), intent(in) :: a, b
-      ! Local variables
-      integer :: nb, ih, j, k, nr, m, n, l, hblocksize, nat, nnmap, nlimplus1
-      complex(rp), dimension(18, 18) :: dum1, dum2, locham
-      hblocksize = 18
-      nat = this%lattice%kk
-
-      psi_out(:, :, :) = (0.0d0, 0.0d0)
-
-      ! Write H*|phi_1> for the local Hamiltonian
-      nlimplus1 = this%lattice%nmax + 1
-      if (this%lattice%nmax /= 0) then ! In case of impurities using the local hamiltonian
-         !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
-         do k = 1, this%lattice%nmax ! Loop in the neighbouring
-            this%idum(k) = this%izero(k)
-            ih = this%lattice%iz(k)
-            nr = this%lattice%nn(k, 1) ! Number of neighbours of atom i
-            if (this%izero(k) /= 0) then
-               locham = this%hamiltonian%hall(1:18, 1:18, 1, k) + this%hamiltonian%lsham(1:18, 1:18, ih)
-               call zgemm('n', 'n', 18, 18, 18, cone, locham, 18, psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18)
-            end if
-            if (nr >= 2) then
-               do nb = 2, nr ! Loop on the neighbouring
-                  nnmap = this%lattice%nn(k, nb)
-                  if (nnmap /= 0) then
-                     if (this%izero(nnmap) /= 0) then
-                        call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%hall(:, :, nb, k), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
-                        this%idum(k) = 1
-                     end if
-                  end if
-               end do ! End of loop in the neighbouring
-            end if
-         end do ! End of loop in the neighbouring
-         !$omp end parallel do
-      end if ! End of local Hamiltonian loop
-
-      ! Write H*|phi_1> for the bulk Hamiltonian
-      !$omp parallel do default(shared) private(k, ih, nr, nb, nnmap,locham)
-      do k = nlimplus1, this%lattice%kk ! Loop in the clust
-         this%idum(k) = this%izero(k)
-         ih = this%lattice%iz(k)
-         nr = this%lattice%nn(k, 1)
-         if (this%izero(k) /= 0) then
-            locham = this%hamiltonian%ee(1:18, 1:18, 1, ih) + this%hamiltonian%lsham(1:18, 1:18, ih)
-            call zgemm('n', 'n', 18, 18, 18, cone, locham, 18, psi_in(:, :, k), 18, cone, psi_out(:, :, k), 18)
-         end if
-         if (nr >= 2) then
-            do nb = 2, nr ! Loop in the neighbouring
-               nnmap = this%lattice%nn(k, nb)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
-                  call zgemm('n', 'n', 18, 18, 18, cone, this%hamiltonian%ee(:, :, nb, ih), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
+               if (nnmap == 0) cycle
+               if (this%izero(nnmap) /= 0) then
+                  call zgemm('n', 'n', 18, nrhs, 18, cone, this%hamiltonian%ee(:, :, nb, ih), 18, psi_in(:, :, nnmap), 18, cone, psi_out(:, :, k), 18)
                   this%idum(k) = 1
                end if
             end do ! End of the loop in the neighbouring
@@ -835,12 +1192,10 @@ contains
                w1(:, :, :) = psiref(:, :, :)
             else if (m == 2) then
                w0(:, :, :) = w1(:, :, :)
-               call this%kubo_ham_vec_matmul(w0, w1, work)
-               w1 = (w1 - b*w0)/a
+               call this%kubo_ham_vec_matmul(w0, w1, work, a=a, b=b)
                this%izero(:) = this%idum(:)
             else if (m > 2) then
-               call this%kubo_ham_vec_matmul(w1, w2, work)
-               w2 = (w2 - b*w1)/a
+               call this%kubo_ham_vec_matmul(w1, w2, work, a=a, b=b)
                this%izero(:) = this%idum(:)
                w2(:, :, :) = 2 * w2(:, :, :) - w0(:, :, :)
                w0(:, :, :) = w1(:, :, :)
@@ -869,21 +1224,19 @@ contains
                v1(:, :, :) = v0(:, :, :) 
             else if (n == 2) then
                v0(:, :, :) = v1(:, :, :)
-               call this%kubo_ham_vec_matmul(v0, v1, work)
-               v1 = (v1 - b*v0)/a
+               call this%kubo_ham_vec_matmul(v0, v1, work, a=a, b=b)
                this%izero(:) = this%idum(:)
             else if (n > 2) then
-               call this%kubo_ham_vec_matmul(v1, v2, work)
-               v2 = (v2 - b*v1)/a
+               call this%kubo_ham_vec_matmul(v1, v2, work, a=a, b=b)
                this%izero(:) = this%idum(:)
                v2(:, :, :) = 2 * v2(:, :, :) - v0(:, :, :)
                v0(:, :, :) = v1(:, :, :)
                v1(:, :, :) = v2(:, :, :)
                v2(:, :, :) = (0.0d0, 0.0d0)
             end if
-            ! Multiply with the velocity operator v_a
+            ! Multiply with the output observable. Its output map belongs to
+            ! right_vec; keep izero for the next Chebyshev step of v1.
             call this%apply_kubo_operator('a', v1, right_vec, work)
-            this%izero(:) = this%idum(:)
             !$omp parallel do default(shared) private(m, dum, k) schedule(dynamic)
             do m=1, this%control%cond_ll
                dum(:, :) = (0.0d0, 0.0d0)
