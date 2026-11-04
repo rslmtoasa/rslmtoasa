@@ -1,0 +1,2 @@
+cond_ll,status,memory_limit_bytes,gamma_bytes,moments_bytes,reason
+500,stopped_without_result,8589934592,10040000000,1296000000,integration tensors alone exceed container memory limit

@@ -1,6 +1,7 @@
 ! Binary fixture runner for the actual production matrix-free transport action.
 program transport_driver
  use precision_mod, only: rp
+ use logger_mod, only: g_logger
  use math_mod, only: cone, czero
  use recursion_mod, only: recursion
  use hamiltonian_mod, only: hamiltonian
@@ -12,7 +13,12 @@ program transport_driver
  complex(rp),target :: h(b,b,4,n),hl(b,b,4,n),o(b,b,n),e(b,b,n),s(b,b,n)
  complex(rp) :: psi(b,d,n),out(b,d,n),q(b,b)
  real(rp) :: direction(3)
- integer :: ih,iw,im,nq,k,j,u,ncases
+ integer :: ih,iw,im,nq,k,j,u,ncases,gu
+ logical :: periodic_fixture, ambiguous
+ real(rp) :: vector(3)
+ character(32) :: mode
+ integer :: flags(4),cells(3)
+ real(rp) :: axes(3,3)
  character(32) :: keyword
  character(10) :: pol
  character(16) :: kinds(6)=[character(16)::'charge','local','current','spin_torque','orbital_torque','soc_torque']
@@ -20,15 +26,48 @@ program transport_driver
  type(hamiltonian), target :: ham
  type(lattice), target :: lat
  complex(rp) :: work(b,d,n,6)
+ call get_command_argument(1,mode)
+ if (trim(mode)=='degenerate') then
+  call g_logger%init()
+  lat%pbc=.true.; lat%b1=.true.; lat%b2=.false.; lat%b3=.false.
+  lat%n1=4; lat%n2=4; lat%n3=4; lat%alat=1.0_rp; lat%kk=n
+  lat%a=0; lat%a(1,1)=1; lat%a(2,2)=1; lat%a(3,3)=1
+  cr=0; cr(1,2)=2; cr(1,3)=.25_rp
+  call lat%f_wrap_coord_diff(n,cr,1,2,vector,ambiguous)
+  if (.not. ambiguous) error stop 'Tie not detected'
+  cr(1,2)=1.99_rp
+  call lat%f_wrap_coord_diff(n,cr,1,2,vector,ambiguous)
+  if (ambiguous) error stop 'Unique image marked ambiguous'
+  cr(1,2)=2
+  lat%cr=cr; nn=0; lat%nn=nn; lat%nn(:,1)=2; lat%nn(1,2)=2; lat%nn(2,2)=1
+  t%lattice=>lat
+  call t%setup_kubo_bonds()
+  error stop 'Ambiguous cache unexpectedly accepted'
+ end if
  open(newunit=u,file='fixture.bin',access='stream',form='unformatted',status='old')
  read(u) nn,iz,cr,scale,h,hl,o,e,s,psi,direction,nq
  t%lattice => lat
  t%hamiltonian => ham
+ lat%pbc=.false.; lat%b1=.false.; lat%b2=.false.; lat%b3=.false.
  lat%nn=nn; lat%iz=iz; lat%cr=cr; lat%alat=1.3_rp; lat%kk=n
  ham%ee=h; ham%hall=hl; ham%obarm=o; ham%enim=e; ham%lsham=s
  ham%velocity_scale=scale
  allocate(t%idum(n))
- call check_legacy_products()
+ inquire(file='geometry.bin',exist=periodic_fixture)
+ if (periodic_fixture) then
+  allocate(t%izero(n))
+  open(newunit=gu,file='geometry.bin',access='stream',form='unformatted',status='old')
+  read(gu) flags,cells,axes
+  close(gu)
+  lat%pbc=flags(1)==1; lat%b1=flags(2)==1; lat%b2=flags(3)==1; lat%b3=flags(4)==1
+  lat%n1=cells(1); lat%n2=cells(2); lat%n3=cells(3); lat%a=axes
+ else
+  call check_legacy_products()
+ end if
+ call t%setup_kubo_bonds()
+ open(newunit=gu,file='bonds.bin',access='stream',form='unformatted',status='replace')
+ write(gu) t%transport_bond
+ close(gu)
  t%izero=1
  call check_masked_products()
  t%izero=1

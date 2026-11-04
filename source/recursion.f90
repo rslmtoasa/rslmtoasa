@@ -49,6 +49,8 @@ module recursion_mod
       character(len=16) :: transport_kind_a, transport_kind_b
       complex(rp) :: transport_q_a(18,18), transport_q_b(18,18)
       real(rp) :: transport_dir_a(3), transport_dir_b(3)
+      ! Physical directed bonds, indexed by neighbor slot and actual site.
+      real(rp), allocatable :: transport_bond(:, :, :)
       ! General variables
 
       !> Scalar recursion coefficients
@@ -113,6 +115,7 @@ module recursion_mod
       procedure :: velo_vec_matmul
       procedure :: kubo_operator_vec_matmul
       procedure :: apply_kubo_operator
+      procedure :: setup_kubo_bonds
       procedure :: setup_kubo_operators
       procedure :: set_kubo_operator_slot
       procedure :: ham_vec_matmul
@@ -155,6 +158,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine destructor(this)
       type(recursion) :: this
+      if (allocated(this%transport_bond)) deallocate(this%transport_bond)
 #ifdef USE_SAFE_ALLOC
       if (allocated(this%a)) call g_safe_alloc%deallocate('recursion.a', this%a)
       if (allocated(this%b2)) call g_safe_alloc%deallocate('recursion.b2', this%b2)
@@ -222,6 +226,46 @@ contains
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
+   !> @brief Cache geometry once, outside all OpenMP/matvec loops. Rebuild explicitly
+   ! after changing coordinates, cell flags, or the neighbor map. remd and
+   ! chbar_nc use this same image selector in physical units, with j-i sign.
+   ! Multiple equally short images cannot be represented by the current
+   ! single-entry neighbor map; do not silently choose a different hopping.
+   !---------------------------------------------------------------------------
+   subroutine setup_kubo_bonds(this)
+      class(recursion), intent(inout) :: this
+      real(rp), allocatable :: coord(:, :)
+      real(rp) :: bond(3)
+      integer :: k, nb, j
+      logical :: ambiguous
+
+      if (allocated(this%transport_bond)) deallocate(this%transport_bond)
+      allocate(this%transport_bond(3, size(this%lattice%nn, 2), this%lattice%kk))
+      this%transport_bond = 0.0_rp
+      if (this%lattice%pbc) then
+         allocate(coord(3, this%lattice%kk))
+         coord = this%lattice%cr(:, 1:this%lattice%kk)*this%lattice%alat
+      end if
+      do k = 1, this%lattice%kk
+         do nb = 2, this%lattice%nn(k, 1)
+            j = this%lattice%nn(k, nb)
+            if (j == 0) cycle
+            if (this%lattice%pbc) then
+               call this%lattice%f_wrap_coord_diff(this%lattice%kk, coord, k, j, bond, ambiguous)
+               if (ambiguous) then
+                  call g_logger%fatal('Ambiguous periodic transport bond: enlarge the supercell', __FILE__, __LINE__)
+               end if
+               this%transport_bond(:, nb, k) = -bond
+            else
+               this%transport_bond(:, nb, k) = &
+                  (this%lattice%cr(:, k)-this%lattice%cr(:, j))*this%lattice%alat
+            end if
+         end do
+      end do
+   end subroutine setup_kubo_bonds
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
    !> @brief
    !> Setup the two operators entering the Kubo-Bastin linear-response kernel.
    !>
@@ -250,6 +294,7 @@ contains
       class(recursion), intent(inout) :: this
       character(len=*), intent(in) :: linear_out, linear_in
       real(rp) :: na, nb
+      call this%setup_kubo_bonds()
       na = norm2(this%hamiltonian%v_alpha)
       nb = norm2(this%hamiltonian%v_beta)
       if (.not. ieee_is_finite(na) .or. .not. ieee_is_finite(nb)) then
@@ -390,7 +435,7 @@ contains
    !---------------------------------------------------------------------------
    ! DESCRIPTION:
    !> @brief
-   !> Apply the bare velocity v_ij = -i*dot(direction,r_i-r_j)*h_ij.
+   !> Apply v_ij = -i*dot(direction,r_i-r_j_image)*h_ij using cached bonds.
    !> Keep separate local/bulk neighbor loops and the original izero/idum mapping.
    !> The local loop supplies the impurity rows missing from the old velocity.
    !> Zero neighbors are checked before indexing izero. On-site velocity is zero.
@@ -408,6 +453,7 @@ contains
       complex(rp) :: factor
       real(rp) :: distance
 
+      if (.not. allocated(this%transport_bond)) call this%setup_kubo_bonds()
       nrhs = size(psi_in, 2)
       nlimplus1 = this%lattice%nmax + 1
       psi_out(:, :, :) = (0.0_rp, 0.0_rp)
@@ -425,7 +471,7 @@ contains
                   nnmap = this%lattice%nn(k, nb)
                   if (nnmap /= 0) then
                      if (this%izero(nnmap) /= 0) then
-                        distance = dot_product(direction, this%lattice%cr(:, k) - this%lattice%cr(:, nnmap))*this%lattice%alat
+                        distance = dot_product(direction, this%transport_bond(:, nb, k))
                         factor = cmplx(0.0_rp, -distance, rp)
                         if (weighted) then
                            factor = factor*max(this%hamiltonian%velocity_scale(ih), &
@@ -454,7 +500,7 @@ contains
                nnmap = this%lattice%nn(k, nb)
                if (nnmap /= 0) then
                   if (this%izero(nnmap) /= 0) then
-                     distance = dot_product(direction, this%lattice%cr(:, k) - this%lattice%cr(:, nnmap))*this%lattice%alat
+                     distance = dot_product(direction, this%transport_bond(:, nb, k))
                      factor = cmplx(0.0_rp, -distance, rp)
                      if (weighted) then
                         factor = factor*max(this%hamiltonian%velocity_scale(ih), &
@@ -562,6 +608,7 @@ contains
       psi1 => work(:, :, :, 1)
       psi2 => work(:, :, :, 2)
       hohpsi => work(:, :, :, 3)
+      if (.not. allocated(this%transport_bond)) call this%setup_kubo_bonds()
       nrhs = size(psi_in, 2)
       nlimplus1 = this%lattice%nmax + 1
       input_map(:) = this%izero(:)
@@ -589,7 +636,7 @@ contains
                      if (this%izero(nnmap) /= 0) then
                         call zgemm('n', 'n', 18, nrhs, 18, cone, this%hamiltonian%hall(:, :, nb, k), 18, &
                                    psi_in(:, :, nnmap), 18, cone, psi1(:, :, k), 18)
-                        distance = dot_product(direction, this%lattice%cr(:, k) - this%lattice%cr(:, nnmap))*this%lattice%alat
+                        distance = dot_product(direction, this%transport_bond(:, nb, k))
                         factor = cmplx(0.0_rp, -distance, rp)
                         if (weighted) then
                            factor = factor*max(this%hamiltonian%velocity_scale(ih), &
@@ -623,7 +670,7 @@ contains
                   if (this%izero(nnmap) /= 0) then
                      call zgemm('n', 'n', 18, nrhs, 18, cone, this%hamiltonian%ee(:, :, nb, ih), 18, &
                                 psi_in(:, :, nnmap), 18, cone, psi1(:, :, k), 18)
-                     distance = dot_product(direction, this%lattice%cr(:, k) - this%lattice%cr(:, nnmap))*this%lattice%alat
+                     distance = dot_product(direction, this%transport_bond(:, nb, k))
                      factor = cmplx(0.0_rp, -distance, rp)
                      if (weighted) then
                         factor = factor*max(this%hamiltonian%velocity_scale(ih), &
@@ -667,7 +714,7 @@ contains
                         call zgemm('n', 'n', 18, nrhs, 18, cone, locham, 18, &
                                    psi2(:, :, nnmap), 18, cone, hohpsi(:, :, k), 18)
                         ! Original term: (v*o)*(h*psi), with v_ij = factor*h_ij.
-                        distance = dot_product(direction, this%lattice%cr(:, k) - this%lattice%cr(:, nnmap))*this%lattice%alat
+                        distance = dot_product(direction, this%transport_bond(:, nb, k))
                         factor = cmplx(0.0_rp, -distance, rp)
                         if (weighted) then
                            factor = factor*max(this%hamiltonian%velocity_scale(ih), &
@@ -708,7 +755,7 @@ contains
                      call zgemm('n', 'n', 18, nrhs, 18, cone, locham, 18, &
                                 psi2(:, :, nnmap), 18, cone, hohpsi(:, :, k), 18)
                      ! Original term: (v*o)*(h*psi), with v_ij = factor*h_ij.
-                     distance = dot_product(direction, this%lattice%cr(:, k) - this%lattice%cr(:, nnmap))*this%lattice%alat
+                     distance = dot_product(direction, this%transport_bond(:, nb, k))
                      factor = cmplx(0.0_rp, -distance, rp)
                      if (weighted) then
                         factor = factor*max(this%hamiltonian%velocity_scale(ih), &
