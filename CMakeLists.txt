@@ -492,6 +492,13 @@ endforeach()
   set_tests_properties(Val04RsEmbeddingProvenance PROPERTIES
     LABELS "validation;lda_u;rs;embedding;provenance" TIMEOUT 300)
 
+  add_test(NAME Val04RsFrozenHostFiles
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/fixed_ldau/frozen_host_files.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/frozen_host_files")
+  set_tests_properties(Val04RsFrozenHostFiles PROPERTIES
+    LABELS "functional;lda_u;rs;surface;embedding" TIMEOUT 1800)
+
   add_executable(RsEmbeddingEnergyEvaluator ${TestDIR}/validation/fixed_ldau/a4_3_pout_hubbard_evaluator.f90)
   target_link_libraries(RsEmbeddingEnergyEvaluator PRIVATE ${COMMON_LIBRARIES})
   set_target_properties(RsEmbeddingEnergyEvaluator PROPERTIES LINKER_LANGUAGE "Fortran")

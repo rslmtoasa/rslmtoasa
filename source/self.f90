@@ -411,6 +411,7 @@ module self_mod
       procedure, private :: write_hubbard_moment_energy_diagnostics
       procedure, private :: validate_hubbard_mode_provenance
       procedure, private :: is_frozen_hubbard_host
+      procedure, private :: mark_frozen_hosts
       procedure, private :: all_frozen_hubbard_hosts_local
       procedure, private :: is_eligible_local_hubbard
       procedure, private :: is_eligible_local_moments
@@ -978,6 +979,15 @@ contains
          end if
       end do
    end function is_frozen_hubbard_host
+
+   subroutine mark_frozen_hosts(this)
+      class(self), intent(inout) :: this
+      integer :: ia
+
+      do ia = 1, size(this%symbolic_atom)
+         this%symbolic_atom(ia)%potential%frozen_host = this%is_frozen_hubbard_host(ia)
+      end do
+   end subroutine mark_frozen_hosts
 
    logical function all_frozen_hubbard_hosts_local(this) result(all_local)
       class(self), intent(in) :: this
@@ -1894,6 +1904,7 @@ contains
       end if
       radial_mode_source = 'explicit'
       if (radial_mode_defaulted) radial_mode_source = 'default'
+      call this%mark_frozen_hosts()
       call this%validate_hubbard_mode_provenance()
       call this%write_hubbard_run_summary(radial_mode_source, radial_mode_reason)
       this%magnetic_seed_enable = magnetic_seed_enable

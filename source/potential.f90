@@ -116,6 +116,8 @@ module potential_mod
       character(len=16) :: hubbard_radial_moments, hubbard_backend
       character(len=256) :: dm_file = ''
       character(len=64) :: dm_sha256 = ''
+      !> Frozen host of an embedded run (calctype I/S): its dm file is never written.
+      logical :: frozen_host = .false.
       !> nsp of the run that wrote a U-carrying potential; 0 = not recorded.
       integer :: hubbard_nsp = 0
       !> Spin axis of the radial channels of the run that wrote a U-carrying potential; 0 = not recorded.
@@ -889,6 +891,7 @@ contains
       this%hubbard_file_has_uj = .false.
       this%dm_file = ''
       this%dm_sha256 = ''
+      this%frozen_host = .false.
       this%hubbard_nsp = 0
       this%hubbard_axis = 0.0_rp
       this%hubbard_axis_logged = .false.
@@ -1696,6 +1699,7 @@ contains
       real(rp) :: value
 
       if (rank /= 0) return
+      if (this%frozen_host) return
       if (.not. allocated(this%hubbard_u) .or. .not. allocated(this%hubbard_j)) return
       if (.not. (any(abs(this%hubbard_u) > 1.0e-10_rp) .or. any(abs(this%hubbard_j) > 1.0e-10_rp))) return
       filename = trim(label)//'_dm.nml'
