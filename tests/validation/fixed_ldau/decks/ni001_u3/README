@@ -1,0 +1,27 @@
+RS Chebyshev Ni(001) surface, calctype S, nsp=1 (collinear spin-polarised), LDA+U U=3 eV / J=0.7 eV on the d channel of types 1 (frozen Ni host), 3 (Ni-S) and 4 (Ni-S-1); no U on ES. hubbard_radial_moments='local', lld=200, 2500 channels, fixed E_F -0.076743, beta 0.005 Broyden, ldm_beta 0.3. Same geometry and recursion settings as ni001_u0.
+
+Files: input.nml (surface); bulk_input.nml (Ni bulk host); Ni.nml + Ni_dm.nml (U=3/J=0.7 bulk host, frozen in the surface run; Ni_dm.nml sha256 aad75ab2... is the one recorded in Ni.nml); ES.nml, Ni-S.nml, Ni-S-1.nml (seeds, copied from ni001_u0, the converged U=0 surface).
+
+Recipe:
+1. Host: bulk_input.nml run in a directory holding the U=0 Ni.nml from ni001_u0 (chebyshev, nsp=1, lld=200, 2500 channels, rc=100, beta 0.05, ldm_beta 0.3, conv_thr 1e-8). 31 steps in the first part, restarted once from Ni_scf.nml after the job was killed by a pkill of mine (restart also needed Ni_dm.nml next to it). Converged, Diff 8.9e-9. ql window over the last 12 snapshots: d_up 9.93e-09, d_dn 2.53e-08, moment 1.22e-08. Stored Hubbard values 0.2205/0.05145 Ry. Host: moment 0.766353 muB (>0.4), n_d 8.590988, E_F (free) -0.076743 Ry, etot -3037.6067720042438 Ry.
+2. Energy window: d-PDOS at the window edges 0 to 1e-5 states/Ry against peaks of 32-50 (nearly converged U=3 host and the U=0 surface); the >1%-of-peak d band is about -0.47 to 0.84 Ry inside -0.92 to 1.59 Ry (E_F-shifted).
+3. Surface: input.nml run in a directory holding the seeds, Ni.nml and Ni_dm.nml. 3 MPI ranks x 2 OpenMP threads, Release build, ~70 s/step. Guard (6c69dcd4) did not fire (HUBBARD_RUN provenance=PASS, energy_routing=off).
+
+Convergence. The run was launched with conv_thr 1.0e-7 and ran all 200 steps. On the user's instruction conv_thr in input.nml was then raised to 5.0e-6 and the run taken as converged. Nothing was rerun with 5.0e-6. Diff per step: 1: 1.17e-1; 6: 1.37e-1 (peak); 17: 8.7e-3; 49: 3.0e-3; 100: 8.5e-4; 127: 4.6e-4; 150: 1.1e-5; 179: 4.963e-6 (first below 5e-6); 200: 3.501e-6. Diff exceeds 5e-6 again at steps 182 and 196 (max after step 179: 6.01e-6).
+RS window (d q0 spread per spin <= 5e-7, moment spread <= 1e-6) over steps 181-200, not met:
+layer    d_up spread  d_dn spread  moment spread
+ES       6.80e-06     2.79e-06     2.76e-05
+Ni-S     4.66e-06     1.37e-06     1.23e-06
+Ni-S-1   1.19e-05     4.64e-06     3.18e-05
+
+Results, from ql(1,:,spin) of <label>_scf.nml (moment = sum_l q0up-q0dn, n_d = d q0up+q0dn). Step 179 = first step with Diff < 5e-6; step 200 = last step. U=0 is ni001_u0.
+type     moment [muB] U=3 (179 / 200)   n_d U=3 (179 / 200)   moment U=0   n_d U=0
+Ni       0.766353 (frozen host)          8.590988               0.674368     8.540250
+Ni-S     0.767916 / 0.767916             8.646890 / 8.646895    0.688932     8.580286
+Ni-S-1   0.713364 / 0.713403             8.635789 / 8.635798    0.640194     8.581251
+ES       -0.012562 / -0.012528           0.038756 / 0.038761    n/a          n/a
+Deepest layer (Ni-S-1) minus host: U=3 moment -0.052950 muB (step 200), n_d +0.044810; U=0 moment -0.034174 muB, n_d +0.041001.
+
+Observations, not diagnosed: the early steps overshoot (steps 2-5 n_d ~9.4 on the surface layers, Diff spikes at steps 6, 9, 12) before settling; the surface run rewrote the frozen host's Ni_dm.nml (only the header line iteration = 31 became 200; sha256 now b614e9be...).
+
+U->0 wiring evidence (reduced deck: nstep 1, lld 50, 500 channels, U on d of Ni, Ni-S, Ni-S-1, J=0, against the same deck without U): etot shift of Ni-S 1.99e-7, 1.89e-6, 1.88e-5 Ry at U = 1e-4, 1e-3, 1e-2 eV (ratios 9.53, 9.95 per decade). Wiring evidence only.

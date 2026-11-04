@@ -1939,6 +1939,7 @@ RS/KS results are not bitwise reproducible across thread counts (reduction order
 - C6 stopped after the failed RS smoke gate; Cu T3 and workflow documentation/merge remain
   unrun. Surface Hubbard-energy routing remains OFF. C6.5's checked launcher is mandatory for
   campaign runs.
+- **Update (2026-11-04):** collinear Ni(001) U=3/J=0.7 on types 1, 3, 4 with a U=3 bulk host ran 200 steps, Diff 3.5e-6 (first below 5e-6 at step 179; RS window not met, spreads 1e-6 to 3e-5); taken as converged at conv_thr 5e-6 by the user. Moments 0.768/0.713 muB (Ni-S/Ni-S-1) vs U=0 0.689/0.640; tables in `tests/validation/fixed_ldau/decks/ni001_u3/README`.
 
 ## [CLOSED, 2026-10-22] Impurity auto mode with local U-carrying hosts
 
