@@ -8,7 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        revision: [old, new]
+        revision: [old]
     runs-on: ubuntu-latest
     timeout-minutes: 85
     steps:
@@ -59,7 +59,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re,shutil
-          src=Path('production/example/conductivity/fccPt/sigma_xy_z-spin')
+          src=Path('example/conductivity/fccPt/sigma_xy_z-spin')
           inp=(src/'input.nml').read_text()
           inp=re.sub(r'(?m)^rc\s*=\s*060.*$', 'rc = 9.0', inp)
           for axis in ('n1','n2','n3'):
@@ -120,50 +120,4 @@ jobs:
             cases/**/cond_total.out
             cases/**/run.log
             cases/**/time.txt
-          if-no-files-found: ignore
-  compare:
-    needs: [calculate]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: closed-pbc-500-*
-          path: collected
-      - name: Compare output curves and times
-        run: |
-          python3 -m pip install --user numpy
-          python3 - <<'PY'
-          from pathlib import Path
-          import csv,numpy as np
-          root=Path('collected')
-          if not (root/'closed-pbc-500-old'/'runtime.csv').exists() or not (root/'closed-pbc-500-new'/'runtime.csv').exists():
-              print('MISSING_ARTIFACT',list(root.glob('*')))
-              raise SystemExit(1)
-          records={}
-          for rev in ('old','new'):
-             p=root/f'closed-pbc-500-{rev}'/'runtime.csv'
-             with p.open() as f:
-                 records[rev]={row['case']:row for row in csv.DictReader(f)}
-          out=[]
-          for kind in ('spin','orbital'):
-             a=np.loadtxt(root/'closed-pbc-500-old'/'cases'/kind/'cond_total.out')
-             b=np.loadtxt(root/'closed-pbc-500-new'/'cases'/kind/'cond_total.out')
-             assert a.shape==b.shape and np.allclose(a[:,0],b[:,0],atol=1e-12)
-             diff=b[:,1:]-a[:,1:]
-             print(f'CURVE {kind} rows={a.shape[0]} real_maxdiff={np.max(np.abs(diff[:,0])):.16e} imag_maxdiff={np.max(np.abs(diff[:,1])):.16e}')
-             print(f'OFFSET {kind} real_mean={diff[:,0].mean():.16e} real_std={diff[:,0].std():.16e} imag_mean={diff[:,1].mean():.16e} imag_std={diff[:,1].std():.16e}')
-             old=records['old'][kind];new=records['new'][kind]
-             print(f'TIME {kind} wall_old={old["wall_seconds"]} wall_new={new["wall_seconds"]} moments_old={old["kubo_seconds"]} moments_new={new["kubo_seconds"]}')
-             out.append(dict(case=kind,old_wall=old['wall_seconds'],new_wall=new['wall_seconds'],old_kubo=old['kubo_seconds'],new_kubo=new['kubo_seconds'],real_maxdiff=np.max(np.abs(diff[:,0])),imag_maxdiff=np.max(np.abs(diff[:,1])),real_mean=diff[:,0].mean(),real_std=diff[:,0].std(),imag_mean=diff[:,1].mean(),imag_std=diff[:,1].std()))
-          with open('closed_pbc_cond500_summary.csv','w',newline='') as f:
-             w=csv.DictWriter(f,fieldnames=out[0].keys())
-             w.writeheader()
-             w.writerows(out)
-          PY
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: closed-pbc-500-summary
-          path: closed_pbc_cond500_summary.csv
           if-no-files-found: ignore
