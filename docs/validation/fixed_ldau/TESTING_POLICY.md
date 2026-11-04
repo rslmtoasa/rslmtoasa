@@ -8,8 +8,7 @@ Convergence of a surface or an impurity is slow and sensitive, and a host conver
 - Record per step, from the log: Diff; d trace (or n_d) per layer; spin moment; orbital moment; max |P_up,dn| of the spinor d density matrix. Report the numbers, not "ran" or "converged".
 - Equivalence checks (SOC->0 against nsp=1, tilted axis against z): iteration 1 within the stated tolerance, then the 4-step regression rows. The nsp=1 comparison run takes the same host numbers as the nsp=2 run (derive the nsp=1 host from the nsp=2 host: spinor_d line dropped, hubbard_nsp=1, new dm hash); an independently converged host differs at its own convergence level (about 1e-8) and spoils a 1e-9 check.
 - Tilted axes: seed the run with the exactly rotated state (`tests/validation/fixed_ldau/rotate_spin_frame.py`: host and surface P rotated, mom and hubbard_axis along the axis, dm hashes updated), not with a collinear z-frame seed along a tilted axis. The collinear seed gave a slowly relaxing x host (KNOWN_ISSUES, S6c).
-- Frozen hosts need not be converged for a smoke or trajectory run; state the host's Diff and step count in the deck README.
-- No convergence studies, no reference-state acceptance windows (last-20 spreads), no energy-anisotropy runs, unless the task asks for them by name.
+- No convergence studies of surfaces or impurities, no reference-state acceptance windows (last-20 spreads), no energy-anisotropy runs, and no runs of more than 20 iterations, unless the task asks for them by name. Exception to the iteration limit: states used as FROZEN HOSTS for embedded runs must be converged (they are inputs, not results); bulk hosts converge reliably. State the host's iteration count and final Diff in the deck README.
 
 ## Tier 2 (optional): one longer run
 

@@ -3,8 +3,8 @@ input_b0.nml: nsp=2, no U (hubbard lines removed), fermi -0.061969 (start value)
 input_b1.nml: nsp=2, U=3/J=0.7 local, SOC on; seed Ni.nml + Ni_dm.nml of ni001_u3 (nsp=1 host).
 input_b2.nml: as b1 with soc_scale=0 and fix_soc; seed as b1.
 
-Runs stopped early by choice (no convergence study); numbers are per-step values from the log (d trace, spin moment mspin in muB, |L| orbital moment in muB, max |P_up,dn| of the spinor d density matrix):
-b2 (SOC->0): converged at step 5, Diff 9.9e-9; mspin 0.766354, d trace 8.5905, host differs from the nsp=1 U=3 host by at most 1.8e-8 in any potential parameter (gravity_center), E_F -0.076743.
-b1 (SOC on): stopped after step 7. Diff 9.9e-5, 9.8e-5, 9.7e-5, 9.6e-5, 5.0e-5, 8.0e-5, 7.8e-5. |L| 0.0446, 0.0504, 0.0551, 0.0589, 0.0620, 0.0645, 0.0665 (still rising, increments 5.8e-3 falling to 2.0e-3 per step); mspin 0.76584 -> 0.76543; d trace 8.59025 -> 8.59034; max |P_up,dn| 9.0e-3 -> 1.1e-2; E_F -0.076576.
-b0 (U=0, SOC on): stopped after step 7. Diff 6.8e-4, 6.5e-4, 2.6e-4, 2.4e-4, 1.3e-4, 1.1e-4, 9.1e-5. |L| 0.04327 -> 0.04358; mspin 0.68382 -> 0.68817; E_F -0.063070.
-The step-7 potential of b0 and b1 (Ni_scf.nml, Ni_dm.nml) is the host of ni001_soc_u0 / ni001_soc_u3/host_soc; it is not a converged state.
+Converged hosts (the frozen-host rule of TESTING_POLICY.md). b0 and b1 were continued from their step-7 state (Ni_scf.nml, and Ni_dm.nml for b1) with the same input until the code's conv_thr 1e-8 was met; input_b0.nml and input_b1.nml are those continuation inputs (the solver rewrites fermi to the host E_F).
+b0 (U=0, SOC on): 7 + 27 iterations, converged at Diff 9.9e-9 (Diff 8.3e-5 at the first continuation step, 1.0e-6 at the 10th, 5.5e-8 at the 20th). Final: spin moment 0.687954 muB, orbital moment 0.04356 muB (along z), E_F -0.062882. Potential in ni001_soc_u0/Ni.nml.
+b1 (U=3/J=0.7 local, SOC on): 7 + 52 iterations, converged at Diff 7.9e-9 (5.9e-5 at the first continuation step, 2.3e-5 at the 10th, 2.2e-6 at the 20th). Final: spin moment 0.764832 muB, d trace 8.590761, orbital moment 0.07511 muB (0.0681 at the first continuation step, 0.0741 at the 10th, 0.0750 at the 20th), max |P_up,dn| 1.2e-2, E_F -0.076843 (against -0.076743 with SOC held at zero). Potential and dm file in ni001_soc_u3/host_soc/.
+Before the continuation (first 7 steps, SOC switched on from the SOC-free seeds): b1 Diff 9.9e-5 to 5.0e-5, |L| 0.0446 -> 0.0665; b0 Diff 6.8e-4 -> 9.1e-5, |L| 0.04327 -> 0.04358.
+b2 (SOC->0): converged at step 5, Diff 9.9e-9; mspin 0.766354, d trace 8.5905, host differs from the nsp=1 U=3 host by at most 1.8e-8 in any potential parameter (gravity_center), E_F -0.076743. Potential and dm file in ni001_soc_u3/host_soc0/.

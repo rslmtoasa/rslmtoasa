@@ -1,4 +1,4 @@
-RS Chebyshev Ni(001) surface, calctype S, nsp=2 SOC on, U=0 (no U lines), z axis, nstep 5, fermi -0.063070 = E_F of the host (step 7 of b0, ni_host_soc, not converged). Seeds ES.nml, Ni-S.nml, Ni-S-1.nml are those of ni001_u0 (converged nsp=1 U=0 surface); Ni.nml is the b0 host. Same settings as ni001_u0.
+RS Chebyshev Ni(001) surface, calctype S, nsp=2 SOC on, U=0 (no U lines), z axis, nstep 5, fermi -0.062882 = E_F of the converged b0 host (ni_host_soc). The 5-step table below was run with the step-7 b0 host (E_F -0.063070). Seeds ES.nml, Ni-S.nml, Ni-S-1.nml are those of ni001_u0 (converged nsp=1 U=0 surface); Ni.nml is the converged b0 host. Same settings as ni001_u0.
 
 Per-step values from the log (mspin, |L| in muB):
 step  Diff       Ni-S: mspin    |L|       Ni-S-1: mspin   |L|       ES: mspin    |L|
