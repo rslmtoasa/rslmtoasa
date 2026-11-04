@@ -1,0 +1,168 @@
+name: fccPt closed-periodic cond_ll500 legacy comparison
+on:
+  push:
+    branches: [audit/conductivity-legacy-20261103]
+    paths: [.github/workflows/conductivity-closed-pbc500.yml]
+jobs:
+  calculate:
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [old, new]
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Fortran and libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gfortran cmake ninja-build libopenblas-dev liblapack-dev
+      - name: Build actual historical solver with timing and precision instrumentation
+        run: |
+          set -euo pipefail
+          rev="${{ matrix.revision }}"
+          case "$rev" in
+            old) sha=e604f4029e59d35b6e53551dd2d95919a9baf8e0 ;;
+            new) sha=3957b2c8f3a4f4ec449dea93f43ffe185b463200 ;;
+            *) exit 3 ;;
+          esac
+          git worktree add --detach production "$sha"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('production/source/conductivity.f90')
+          txt=p.read_text()
+          assert "write(3, '(3es16.6)')" in txt
+          p.write_text(txt.replace("write(3, '(3es16.6)')", "write(3, '(3es25.16)')",1))
+          p=Path('production/source/calculation.f90')
+          txt=p.read_text()
+          start=txt.index('subroutine post_processing_conductivity(this)')
+          end=txt.index('end subroutine post_processing_conductivity',start)
+          part=txt[start:end]
+          assert part.count('       integer :: i')==1
+          assert part.count('call recursion_obj%compute_moments_stochastic()')==1
+          part=part.replace('       integer :: i','       integer :: i\n       integer(kind=8) :: audit_t0, audit_t1, audit_rate',1)
+          part=part.replace('       call recursion_obj%compute_moments_stochastic()',
+            "       call system_clock(audit_t0, audit_rate)\n"
+            "       call recursion_obj%compute_moments_stochastic()\n"
+            "       call system_clock(audit_t1)\n"
+            "       write(*,'(A,ES25.16)') 'AUDIT_KUBO_SECONDS=', &\n"
+            "            real(audit_t1-audit_t0,8)/real(audit_rate,8)",1)
+          p.write_text(txt[:start]+part+txt[end:])
+          PY
+          cmake -S production -B production/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_MPI=OFF -DENABLE_OPENMP=ON -DENABLE_MARCH_NATIVE=OFF -DBUILD_TESTING=OFF
+          cmake --build production/build --target rslmto.x --parallel 4
+          sha256sum production/build/bin/rslmto.x
+      - name: Setup matched 12x12x12 Pt inputs with all periodic wrapping enabled
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re,shutil
+          src=Path('production/example/conductivity/fccPt/sigma_xy_z-spin')
+          inp=(src/'input.nml').read_text()
+          inp=re.sub(r'(?m)^rc\s*=\s*060.*$', 'rc = 9.0', inp)
+          for axis in ('n1','n2','n3'):
+             inp=re.sub(rf'(?m)^{axis}\s*=\s*\d+', f'{axis} = 12', inp)
+          for axis in ('b1','b2','b3'):
+             inp=re.sub(rf'(?m)^{axis}\s*=\s*\.false\.', f'{axis} = .true.', inp)
+          inp=re.sub(r'(?m)^cond_ll\s*=\s*\d+', 'cond_ll = 500', inp)
+          inp=re.sub(r'(?m)^channels_ldos\s*=\s*\d+', 'channels_ldos = 200', inp)
+          for marker in ('n1 = 12','n2 = 12','n3 = 12','b1 = .true.','b2 = .true.','b3 = .true.','cond_ll = 500','pbc = .true.','hoh = .false.','nsp = 2'):
+             assert marker in inp,marker
+          for case in ['spin','orbital']:
+             dest=Path('cases')/case
+             dest.mkdir(parents=True,exist_ok=True)
+             (dest/'input.nml').write_text(inp.replace("linear_out = 'spin'", f"linear_out = '{case}'"))
+             shutil.copy2(src/'Pt_out.nml',dest/'Pt_out.nml')
+          print('Confirmed closed PBC on all three axes, 1728 sites, 500 Chebyshev moments')
+          PY
+      - name: Execute two representative conductivity responses
+        env:
+          OMP_NUM_THREADS: "4"
+          OPENBLAS_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+          OMP_DYNAMIC: "FALSE"
+        run: |
+          python3 -u - <<'PY'
+          import subprocess,time,csv,re
+          from pathlib import Path
+          root=Path.cwd()
+          exe=root/'production/build/bin/rslmto.x'
+          rows=[]
+          for kind in ('spin','orbital'):
+             run=root/'cases'/kind
+             print(f'RUN_BEGIN {kind}',flush=True)
+             start=time.perf_counter()
+             with (run/'run.log').open('w') as fh, (run/'time.txt').open('w') as tf:
+               p=subprocess.run(['/usr/bin/time','-f','AUDIT_MAX_RSS_KB=%M', '-o', str(run/'time.txt'), str(exe)],cwd=run,stdout=fh,stderr=subprocess.STDOUT,timeout=2400,check=False)
+             wall=time.perf_counter()-start
+             log=(run/'run.log').read_text(errors='replace')
+             marker=re.findall(r'AUDIT_KUBO_SECONDS=\s*([0-9.Ee+-]+)',log)
+             rss=re.findall(r'AUDIT_MAX_RSS_KB=(\d+)',(run/'time.txt').read_text(errors='replace'))
+             print(f'RUN_END {kind} wall={wall:.3f} moment={marker[-1] if marker else "missing"} rss={rss[-1] if rss else "missing"} exit={p.returncode}',flush=True)
+             rows.append(dict(case=kind,wall_seconds=wall,kubo_seconds=float(marker[-1]) if marker else None,peak_rss_kb=int(rss[-1]) if rss else None,exit_code=p.returncode))
+             with (root/'runtime.csv').open('w',newline='') as f:
+                w=csv.DictWriter(f,fieldnames=rows[0].keys())
+                w.writeheader()
+                w.writerows(rows)
+             if p.returncode!=0 or not (run/'cond_total.out').is_file():
+                print('FAIL LOG:',log[-9000:],flush=True)
+                raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: closed-pbc-500-${{ matrix.revision }}
+          path: |
+            runtime.csv
+            cases/**/input.nml
+            cases/**/cond_total.out
+            cases/**/run.log
+            cases/**/time.txt
+          if-no-files-found: ignore
+  compare:
+    needs: [calculate]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: closed-pbc-500-*
+          path: collected
+      - name: Compare output curves and times
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import csv,numpy as np
+          root=Path('collected')
+          if not (root/'closed-pbc-500-old'/'runtime.csv').exists() or not (root/'closed-pbc-500-new'/'runtime.csv').exists():
+              print('MISSING_ARTIFACT',list(root.glob('*')))
+              raise SystemExit(1)
+          records={}
+          for rev in ('old','new'):
+             p=root/f'closed-pbc-500-{rev}'/'runtime.csv'
+             with p.open() as f:
+                 records[rev]={row['case']:row for row in csv.DictReader(f)}
+          out=[]
+          for kind in ('spin','orbital'):
+             a=np.loadtxt(root/'closed-pbc-500-old'/'cases'/kind/'cond_total.out')
+             b=np.loadtxt(root/'closed-pbc-500-new'/'cases'/kind/'cond_total.out')
+             assert a.shape==b.shape and np.allclose(a[:,0],b[:,0],atol=1e-12)
+             diff=b[:,1:]-a[:,1:]
+             print(f'CURVE {kind} rows={a.shape[0]} real_maxdiff={np.max(np.abs(diff[:,0])):.16e} imag_maxdiff={np.max(np.abs(diff[:,1])):.16e}')
+             print(f'OFFSET {kind} real_mean={diff[:,0].mean():.16e} real_std={diff[:,0].std():.16e} imag_mean={diff[:,1].mean():.16e} imag_std={diff[:,1].std():.16e}')
+             old=records['old'][kind];new=records['new'][kind]
+             print(f'TIME {kind} wall_old={old["wall_seconds"]} wall_new={new["wall_seconds"]} moments_old={old["kubo_seconds"]} moments_new={new["kubo_seconds"]}')
+             out.append(dict(case=kind,old_wall=old['wall_seconds'],new_wall=new['wall_seconds'],old_kubo=old['kubo_seconds'],new_kubo=new['kubo_seconds'],real_maxdiff=np.max(np.abs(diff[:,0])),imag_maxdiff=np.max(np.abs(diff[:,1])),real_mean=diff[:,0].mean(),real_std=diff[:,0].std(),imag_mean=diff[:,1].mean(),imag_std=diff[:,1].std()))
+          with open('closed_pbc_cond500_summary.csv','w',newline='') as f:
+             w=csv.DictWriter(f,fieldnames=out[0].keys())
+             w.writeheader()
+             w.writerows(out)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: closed-pbc-500-summary
+          path: closed_pbc_cond500_summary.csv
+          if-no-files-found: ignore
