@@ -81,8 +81,7 @@ def deck(dst, system, L, cell, kind, order, nk, relaxed=False, nstep=300):
     if CCOR:
         nml["lattice"].update(strux_want_sdot=True, screening="fitted")
         nml["hamiltonian"].update(ccor_2c=True, ccor_strict=True)
-        if order == "second":
-            nml["self"]["conv_thr"] = 5.0e-10      # ten times below the default 5e-9: the collinear precondition sat at 1.4e-7 with it
+        nml["self"]["conv_thr"] = 5.0e-10 if order == "second" else 1.0e-9   # below the default 5e-9: the collinear precondition sat at 1e-7 and above with it
     if kind == "gbt":
         nml["hamiltonian"].update(magnetic_representation="gbt_single_q", q_ss=[0.0, 0.0, q_z], theta_ss=90.0)
     nml.write(str(dst / "input.nml"), force=True)
@@ -116,7 +115,7 @@ def main(binary, scratch, system, L, order, nk_super):
     d_pre = (abs(pre[0]["E"] - pre[1]["E"]), abs(pre[0]["EF"] - pre[1]["EF"]))
     print(f"precondition (collinear, {order} order): |dE/atom| = {d_pre[0]:.3e} Ry, |dE_F| = {d_pre[1]:.3e} Ry, tolerance {tol:.1e}")
     if max(d_pre) >= tol:
-        sys.exit("precondition failed: the two meshes do not sample the same k set; stopping")
+        sys.exit("collinear precondition failed: mesh pair or SCF convergence")
     gbt = scf(binary, deck(scratch / "gbt", system, L, "sc2", "gbt", order, nk_cell), 2)
     nc = scf(binary, deck(scratch / "nc", system, L, "super", "nc", order, nk_super), n)
     if min(gbt["par"].min(), nc["par"].min()) < MIN_MOMENT:
