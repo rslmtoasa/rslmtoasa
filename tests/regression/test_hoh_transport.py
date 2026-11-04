@@ -42,7 +42,7 @@ def transport_executable(tmp_path_factory):
 
 @pytest.mark.parametrize('zero_overlap', [False, True])
 @pytest.mark.parametrize('threads', [1, 2])
-def test_compiled_actions(tmp_path, zero_overlap, threads, transport_executable):
+def test_compiled_actions(tmp_path, zero_overlap, threads, transport_executable, geometry=None):
     exe = transport_executable
     rng = np.random.default_rng(981)
     b, n, d = 18, 3, 54
@@ -69,6 +69,12 @@ def test_compiled_actions(tmp_path, zero_overlap, threads, transport_executable)
     if zero_overlap: o[:] = 0
     cr = rng.normal(size=(3,n)); scale = np.array([.4,1.2,2.1])
     direction = np.array([1.,2.,-1.]); direction /= np.linalg.norm(direction)
+    bond = cr[:, :, None]-cr[:, None, :]
+    if geometry is not None:
+        cr, bond, flags, axes, direction = geometry
+        with (tmp_path/'geometry.bin').open('wb') as f:
+            for a in [np.array(flags,np.int32), np.array([4,4,4],np.int32), axes]:
+                np.asarray(a).ravel(order='F').tofile(f)
     psi = np.stack([np.eye(d,dtype=complex)[i*b:(i+1)*b] for i in range(n)],axis=2)
     angular, ops, _ = matrices()
     spin = [np.kron(a,np.eye(9))/2 for a in
@@ -101,12 +107,20 @@ def test_compiled_actions(tmp_path, zero_overlap, threads, transport_executable)
             f.write(keyword.ljust(32).encode('ascii'))
             f.write(label.ljust(10).encode('ascii'))
     subprocess.run([str(exe)],cwd=tmp_path,check=True, env={**os.environ, 'OMP_NUM_THREADS': str(threads)})
-    legacy = np.genfromtxt(tmp_path/'legacy_comparison.csv', delimiter=',', names=True, dtype=None, encoding='utf-8')
-    assert len(legacy) == 32
-    assert np.max(legacy['max_abs_error']) < 5e-13
-    if not zero_overlap:
-        hoh_velocity = (legacy['kind'] == 'V') & (legacy['hoh'] == 1)
-        assert np.min(legacy['missing_term_size'][hoh_velocity]) > 1e-6
+    if geometry is None:
+        legacy = np.genfromtxt(tmp_path/'legacy_comparison.csv', delimiter=',', names=True, dtype=None, encoding='utf-8')
+        assert len(legacy) == 32
+        assert np.max(legacy['max_abs_error']) < 5e-13
+        if not zero_overlap:
+            hoh_velocity = (legacy['kind'] == 'V') & (legacy['hoh'] == 1)
+            assert np.min(legacy['missing_term_size'][hoh_velocity]) > 1e-6
+    cached = np.fromfile(tmp_path/'bonds.bin',float).reshape((3,4,n),order='F')
+    for i in range(n):
+        for m in range(1,4):
+            j=nn[i,m]-1
+            expected=bond[:,i,j]*1.3 if j>=0 else np.zeros(3)
+            np.testing.assert_allclose(cached[:,m,i],expected,atol=3e-14,rtol=3e-14)
+    errors=[]
     raw = np.fromfile(tmp_path/'result.bin',complex)
     offset = 0
     def check(expected):
@@ -114,6 +128,8 @@ def test_compiled_actions(tmp_path, zero_overlap, threads, transport_executable)
         actual = raw[offset:offset+b*d*n].reshape((b,d,n),order='F')
         offset += b*d*n
         actual = np.concatenate([actual[:,:,i] for i in range(n)])
+        errors.append((float(np.max(np.abs(actual-expected))),
+                       float(np.linalg.norm(actual-expected)/max(np.linalg.norm(expected),1e-300))))
         np.testing.assert_allclose(actual,expected,atol=5e-13,rtol=5e-13)
         np.testing.assert_allclose(actual,actual.conj().T,atol=5e-13)
     def local(a):
@@ -131,7 +147,8 @@ def test_compiled_actions(tmp_path, zero_overlap, threads, transport_executable)
                 H0[:b,:b]=hl[:,:,0,0]
                 H0[:b,b:2*b]=hl[:,:,1,0]
                 H0[b:2*b,:b]=hl[:,:,1,1]
-            v=-1j*(x[:,None]-x[None,:])*H0
+            displacement=np.repeat(np.repeat(direction@bond.reshape(3,-1)*1.3,b).reshape(n,n*b),b,axis=0)
+            v=-1j*displacement*H0
             for ih in range(2):
                 Hns=H0-H0@O@H0+E if ih else H0
                 H=Hns+S
@@ -139,7 +156,7 @@ def test_compiled_actions(tmp_path, zero_overlap, threads, transport_executable)
                 for iw in range(2):
                     v0=v*np.maximum(weights[:,None],weights[None,:]) if iw else v
                     V=v0-v0@O@H0-H0@O@v0 if ih else v0
-                    if not iw: np.testing.assert_allclose(V,-1j*(x[:,None]-x[None,:])*H,atol=1e-13)
+                    if not iw and geometry is None: np.testing.assert_allclose(V,-1j*(x[:,None]-x[None,:])*H,atol=1e-13)
                     for expected in [V,Q,(Q@V+V@Q)/2,-1j*(Q@Hns-Hns@Q),-1j*(Q@H-H@Q),-1j*(Q@S-S@Q)]: check(expected)
     # Last H0 above is the impurity Hamiltonian; slot b uses the opposite
     # direction and a nonuniform bond weight, while slot a stays unweighted.
@@ -159,3 +176,41 @@ def test_compiled_actions(tmp_path, zero_overlap, threads, transport_executable)
                 else: expected = (Q@V+V@Q)/2
                 check(expected)
     assert offset == raw.size
+
+    np.savetxt(tmp_path/'operator_errors.csv',np.array(errors),delimiter=',',
+               header='max_abs_error,relative_frobenius_error',comments='')
+
+
+@pytest.mark.parametrize('axis', [0,1,2])
+@pytest.mark.parametrize('case', ['open','disabled','x','y','z','all','skew','origin','image'])
+def test_periodic_actions(tmp_path, transport_executable, axis, case):
+    # Independent analytic images, no minimum-image search in the reference.
+    axes=np.eye(3)
+    if case in ['skew','origin','image']:
+        axes=np.array([[1.,.25,.125],[0.,1.,.25],[0.,0.,1.]])
+    frac=np.array([[.05,.95,.85],[.08,.92,.82],[.10,.90,.80]])
+    flags=[1,1,1,1]
+    if case=='open': flags=[0,1,1,1]
+    if case=='disabled': flags=[1,0,0,0]
+    if case in ['x','y','z']:
+        flags=[1,0,0,0]; flags['xyz'.index(case)+1]=1
+    delta=frac[:,:,None]-frac[:,None,:]
+    if flags[0]:
+        for k in range(3):
+            if flags[k+1]:
+                delta[k,0,1:]+=1
+                delta[k,1:,0]-=1
+    bond=(4*axes@delta.reshape(3,-1)).reshape(3,3,3)
+    cr=4*axes@frac
+    if case=='origin': cr+=np.array([[13.],[-7.],[3.]])
+    if case=='image': cr[:,0]+=4*axes[:,0]
+    direction=np.eye(3)[axis]
+    test_compiled_actions(tmp_path, False, 2, transport_executable,
+                          (cr,bond,flags,axes,direction))
+
+
+def test_ambiguous_image_rejected(tmp_path, transport_executable):
+    result=subprocess.run([str(transport_executable),'degenerate'],cwd=tmp_path,
+                          text=True,capture_output=True)
+    assert result.returncode != 0
+    assert 'Ambiguous periodic transport bond' in result.stdout+result.stderr
