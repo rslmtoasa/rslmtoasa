@@ -34,11 +34,11 @@ jobs:
             section=section.replace('       integer :: i\n',
               '       integer :: i\n       integer(kind=8) :: bench_start, bench_end, bench_rate\n',1)
             section=section.replace('       call recursion_obj%compute_moments_stochastic()',
-              '''       call system_clock(bench_start, bench_rate)
-       call recursion_obj%compute_moments_stochastic()
-       call system_clock(bench_end)
-       write(*,'(a,es25.16)') 'BENCH_KUBO_MOMENTS_SEC=', &
-            real(bench_end-bench_start,8)/real(bench_rate,8)''',1)
+              "       call system_clock(bench_start, bench_rate)\n"
+              "       call recursion_obj%compute_moments_stochastic()\n"
+              "       call system_clock(bench_end)\n"
+              "       write(*,'(a,es25.16)') 'BENCH_KUBO_MOMENTS_SEC=', &\n"
+              "            real(bench_end-bench_start,8)/real(bench_rate,8)",1)
             p.write_text(txt[:a]+section+txt[b:])
             p=Path(f'compare-{rev}/source/conductivity.f90')
             txt=p.read_text()
