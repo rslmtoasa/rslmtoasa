@@ -39,6 +39,8 @@ SNAPSHOT_TOL = 1e-10
 SOC0_TOL = 1e-9  # the logged Diff has 10 decimals
 AXIS_TOL = 1e-8  # S6b: x-axis against z-axis at SOC held at zero, after spin rotation
 IMP_KS_SOC0_TOL = 1e-7  # the two impurity soc0 rows only, reasons next to their use
+SURFACE = ROOT / "tests/validation/fixed_ldau/decks/ni001_soc_u3"
+SURF_SOC0_TOL = 1e-7  # surface soc0 row, 4 steps (iteration 1 uses SOC0_TOL)
 PY = str(ROOT / ".venv/bin/python")
 NSTEP = 4
 NOT_SCIENTIFIC = {"preflight.json", "checked_launcher.log", "testrun.log", "run_monitor.json"}
@@ -260,6 +262,50 @@ def ks_host_and_impurity(base: Path, tag: str, cand: Path, nsp: int, soc0: bool,
     return d if run(cand, d, "Fe.nml") == 0 else None
 
 
+def surface_deck(dest: Path, host: str, nsp: int, soc0: bool) -> Path:
+    """Reduced Ni(001) U=3/J=0.7 surface from the committed seeds and the frozen host in <host>/.
+    nsp=1 derives its host from the nsp=2 one: spinor blocks dropped, nsp=1, new dm hash (same numbers)."""
+    fresh(SURFACE, dest)
+    for f in (dest / host).iterdir():
+        shutil.copy2(f, dest / f.name)
+    deck = dest / "input.nml"
+    text = set_nstep(deck.read_text())
+    text = re.sub(r"(?m)^nsp\s*=.*$", f"nsp = {nsp}", text)
+    text = re.sub(r"(?m)^lld\s*=.*$", "lld = 50", text)
+    text = re.sub(r"(?m)^channels_ldos\s*=.*$", "channels_ldos = 500", text)
+    text = re.sub(r"(?m)^rc\s*=.*$", "rc = 100\nstrux_backend = 'legacy'", text)
+    text = re.sub(r"(?m)^fermi\s*=.*$", "fermi = " + ("-0.076743" if host == "host_soc0" else "-0.076576"), text)
+    deck.write_text(soc_off(text) if soc0 else text)
+    if nsp == 1:
+        dm = dest / "Ni_dm.nml"
+        dm.write_text(dm.read_text().replace(" spinor_d = 1\n", ""))
+        pot = dest / "Ni.nml"
+        pot.write_text(re.sub(r"dm_sha256 = '[0-9a-f]+'", f"dm_sha256 = '{sha256(dm)}'",
+                              pot.read_text().replace("hubbard_nsp = 2", "hubbard_nsp = 1")))
+    return dest
+
+
+def surface_rows(base: Path, cand: Path) -> dict[str, Path]:
+    """nsp=2 surface: SOC held at zero against nsp=1 (same host numbers); returns the SOC-on run for the snapshot."""
+    name = "+U surface nsp=2 soc_scale=0 fix_soc versus nsp=1, local"
+    runs = {}
+    for tag, host, nsp, soc0 in (("surf_nsp1", "host_soc0", 1, False), ("surf_nsp2_soc0", "host_soc0", 2, True),
+                                 ("surf_soc_u3", "host_soc", 2, False)):
+        d = surface_deck(base / tag, host, nsp, soc0)
+        if run(cand, d) != 0:
+            record(name if tag != "surf_soc_u3" else "+U surface nsp=2 SOC on versus snapshot", False, f"{tag} run failed")
+            return {}
+        runs[tag] = d
+    s1, s0 = signature(runs["surf_nsp1"], True), signature(runs["surf_nsp2_soc0"], True)
+    ok, detail = compare_signatures(s1, s0, SURF_SOC0_TOL)
+    first = max(abs(s1[k][0] - s0[k][0]) for k in ("diff", "fermi", "spin_moment", "energy"))
+    offdiag = max((abs(x) for k, v in signature(runs["surf_nsp2_soc0"], False).items()
+                   if (m := re.match(r"dm_Ni-S(?:-1)?_dm_(?:re|im)\(3,(\d),(\d),", k)) and m[1] != m[2] for x in v), default=0.0)
+    record(name, ok and first <= SOC0_TOL and offdiag <= 1e-12,
+           f"{detail}; iteration-1 max |delta| {first:.2e} (tol {SOC0_TOL:.0e}); max |P_up,dn| {offdiag:.1e} (tol 1e-12)")
+    return {"surf_soc_u3": runs["surf_soc_u3"]}
+
+
 def ks_nsp2_deck(t: str) -> str:
     return use_kspace(set_nstep(t)).replace("nsp = 1", "nsp = 2").replace("&control", "&control\nlmax = 2", 1)
 
@@ -278,7 +324,7 @@ def read_snapshot() -> dict[str, dict]:
 
 
 def write_snapshot(rows_: dict[str, dict], reason: str, cand: Path) -> None:
-    lines = ["# SOC-on nsp=2 +U regression snapshot (bcc Fe, U=2 J=0, local, 4 steps; imp_soc_u2: B2FeCo impurity in the KS Fe host); columns: case key values",
+    lines = ["# SOC-on nsp=2 +U regression snapshot (bcc Fe, U=2 J=0, local, 4 steps; imp_soc_u2: B2FeCo impurity in the KS Fe host; surf_soc_u3: reduced Ni(001) U=3 J=0.7 surface); columns: case key values",
              f"# reason: {reason}", f"# candidate sha256: {sha256(cand)}"]
     for tag, sig in rows_.items():
         lines += [f"{tag} {key} " + " ".join(f"{v:.17e}" for v in vals) for key, vals in sig.items()]
@@ -509,10 +555,12 @@ def main() -> int:
         soc_runs["imp_soc_u2"] = imp_soc
     else:
         record("+U impurity nsp=2 SOC on versus snapshot", False, "run failed")
-    if args.update_snapshot is not None and len(soc_runs) == 4:
+    soc_runs.update(surface_rows(base, cand))
+    if args.update_snapshot is not None and len(soc_runs) == 5:
         write_snapshot(snapshot_rows(soc_runs), args.update_snapshot, cand)
     for tag, d in list(soc_runs.items()):
-        name = "+U impurity nsp=2 SOC on versus snapshot" if tag == "imp_soc_u2" else f"+U nsp=2 SOC on {tag.upper()} versus snapshot"
+        name = {"imp_soc_u2": "+U impurity nsp=2 SOC on versus snapshot",
+                "surf_soc_u3": "+U surface nsp=2 SOC on versus snapshot"}.get(tag, f"+U nsp=2 SOC on {tag.upper()} versus snapshot")
         if not SNAPSHOT.is_file():
             record(name, False, "no snapshot; create it with --update-snapshot")
             continue
