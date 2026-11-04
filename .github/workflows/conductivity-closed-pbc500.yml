@@ -40,15 +40,15 @@ jobs:
           start=txt.index('subroutine post_processing_conductivity(this)')
           end=txt.index('end subroutine post_processing_conductivity',start)
           part=txt[start:end]
-          assert part.count('       integer :: i')==1
+          assert part.count('      integer :: i')==1
           assert part.count('call recursion_obj%compute_moments_stochastic()')==1
-          part=part.replace('       integer :: i','       integer :: i\n       integer(kind=8) :: audit_t0, audit_t1, audit_rate',1)
-          part=part.replace('       call recursion_obj%compute_moments_stochastic()',
-            "       call system_clock(audit_t0, audit_rate)\n"
-            "       call recursion_obj%compute_moments_stochastic()\n"
-            "       call system_clock(audit_t1)\n"
-            "       write(*,'(A,ES25.16)') 'AUDIT_KUBO_SECONDS=', &\n"
-            "            real(audit_t1-audit_t0,8)/real(audit_rate,8)",1)
+          part=part.replace('      integer :: i','      integer :: i\n      integer(kind=8) :: audit_t0, audit_t1, audit_rate',1)
+          part=part.replace('      call recursion_obj%compute_moments_stochastic()',
+            "      call system_clock(audit_t0, audit_rate)\n"
+            "      call recursion_obj%compute_moments_stochastic()\n"
+            "      call system_clock(audit_t1)\n"
+            "      write(*,'(A,ES25.16)') 'AUDIT_KUBO_SECONDS=', &\n"
+            "           real(audit_t1-audit_t0,8)/real(audit_rate,8)",1)
           p.write_text(txt[:start]+part+txt[end:])
           PY
           cmake -S production -B production/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_MPI=OFF -DENABLE_OPENMP=ON -DENABLE_MARCH_NATIVE=OFF -DBUILD_TESTING=OFF
@@ -132,6 +132,7 @@ jobs:
           path: collected
       - name: Compare output curves and times
         run: |
+          python3 -m pip install --user numpy
           python3 - <<'PY'
           from pathlib import Path
           import csv,numpy as np
