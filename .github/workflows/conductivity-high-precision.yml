@@ -1,0 +1,116 @@
+name: High precision conductivity audit
+on:
+  push:
+    branches: [audit/conductivity-legacy-20261103]
+    paths: [.github/workflows/conductivity-high-precision.yml]
+jobs:
+  check-operators:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gfortran cmake ninja-build libopenblas-dev liblapack-dev
+      - name: Build pinned code with precision-only output changes
+        run: |
+          set -euo pipefail
+          git worktree add --detach compare-old e604f4029e59d35b6e53551dd2d95919a9baf8e0
+          git worktree add --detach compare-new 3957b2c8f3a4f4ec449dea93f43ffe185b463200
+          python3 - <<'PY'
+          from pathlib import Path
+          for rev in ('old','new'):
+            p=Path(f'compare-{rev}/source/conductivity.f90')
+            txt=p.read_text()
+            assert "write(3, '(3es16.6)')" in txt,rev
+            txt=txt.replace("write(3, '(3es16.6)')", "write(3, '(3es25.16)')")
+            p.write_text(txt)
+            print(f'{rev}: changed only total curve output format to 16 fractional digits')
+          PY
+          for rev in old new; do
+            cmake -S compare-$rev -B compare-$rev/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_MPI=OFF -DENABLE_OPENMP=OFF -DENABLE_MARCH_NATIVE=OFF -DBUILD_TESTING=OFF
+            cmake --build compare-$rev/build --target rslmto.x --parallel 3
+            sha256sum compare-$rev/build/bin/rslmto.x
+          done
+      - name: Make identical fixed inputs
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re,shutil
+          src=Path('compare-new/example/conductivity/fccPt/sigma_xy_z-spin')
+          inp=(src/'input.nml').read_text()
+          inp=re.sub(r'(?m)^rc\s*=\s*060.*$', 'rc = 9.0', inp)
+          for axis in ('n1','n2','n3'):
+            inp=re.sub(rf'(?m)^{axis}\s*=\s*\d+', f'{axis} = 12', inp)
+          inp=re.sub(r'(?m)^cond_ll\s*=\s*\d+', 'cond_ll = 50', inp)
+          inp=re.sub(r'(?m)^channels_ldos\s*=\s*\d+', 'channels_ldos = 200', inp)
+          cases={
+            'spin_z': dict(out='spin', pol='z', da='0, 1, 0', db='1, 0, 0'),
+            'spin_y': dict(out='spin', pol='y', da='0, 0, 1', db='1, 0, 0'),
+            'orbital_y':dict(out='orbital',pol='y', da='0, 0, 1', db='1, 0, 0'),
+          }
+          for case,c in cases.items():
+            n=inp.replace("linear_out = 'spin'",f"linear_out = '{c['out']}'")
+            n=n.replace("pol_alpha = 'z'",f"pol_alpha = '{c['pol']}'")
+            n=n.replace("v_alpha = 0, 1, 0",f"v_alpha = {c['da']}")
+            n=n.replace("v_beta =  1, 0, 0",f"v_beta = {c['db']}")
+            for rev in ('old','new'):
+              dest=Path('comparison')/rev/case
+              dest.mkdir(parents=True,exist_ok=True)
+              (dest/'input.nml').write_text(n)
+              shutil.copy2(src/'Pt_out.nml',dest/'Pt_out.nml')
+          PY
+      - name: Run identical old and new calculations
+        run: |
+          set -euo pipefail
+          export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+          for case in spin_z spin_y orbital_y; do
+            for rev in old new; do
+              echo "RUN $case $rev"
+              exe="$GITHUB_WORKSPACE/compare-$rev/build/bin/rslmto.x"
+              (cd comparison/$rev/$case && timeout 600 "$exe" > run.log 2>&1) || { tail -n 100 comparison/$rev/$case/run.log; exit 1; }
+              test -s comparison/$rev/$case/cond_total.out
+            done
+          done
+      - name: Compare up to 16 fractional digits
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import csv,math,hashlib
+          fields=['case','part','n','max_abs','rms','rel_max','byte_identical','sha_old','sha_new']
+          out=[]
+          for case in ('spin_z','spin_y','orbital_y'):
+            files=[Path('comparison')/v/case/'cond_total.out' for v in ('old','new')]
+            raw=[p.read_bytes() for p in files]
+            vals=[[list(map(float,line.split())) for line in t.decode().splitlines()] for t in raw]
+            assert len(vals[0])==len(vals[1])>0
+            for a,b in zip(*vals):
+              assert abs(a[0]-b[0])<1.e-14
+            print(f'{case}: byte-identical 16-digit output = {raw[0]==raw[1]}')
+            for j,label in [(1,'real'),(2,'imag')]:
+              diffs=[abs(a[j]-b[j]) for a,b in zip(*vals)]
+              maxabs=max(diffs)
+              rms=math.sqrt(sum(x*x for x in diffs)/len(diffs))
+              scale=max(1.e-30,max(abs(a[j]) for a in vals[0]),max(abs(b[j]) for b in vals[1]))
+              rel=maxabs/scale
+              print(f' {label}: max_abs={maxabs:.16e}, rms={rms:.16e}, maxdiff/scale={rel:.16e}')
+              out.append(dict(case=case,part=label,n=len(diffs),max_abs=maxabs,rms=rms,rel_max=rel,byte_identical=(raw[0]==raw[1]),sha_old=hashlib.sha256(raw[0]).hexdigest(),sha_new=hashlib.sha256(raw[1]).hexdigest()))
+          with open('high_precision_comparison.csv','w',newline='') as f:
+            w=csv.DictWriter(f,fieldnames=fields)
+            w.writeheader()
+            w.writerows(out)
+          PY
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: high-precision-transport-audit
+          path: |
+            comparison/**/input.nml
+            comparison/**/cond_total.out
+            comparison/**/run.log
+            high_precision_comparison.csv
+          if-no-files-found: ignore
