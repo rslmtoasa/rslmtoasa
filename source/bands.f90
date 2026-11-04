@@ -1579,8 +1579,8 @@ contains
       do na_glob = 1, this%lattice%nrec
          plusbulk = this%lattice%nbulk + na_glob
          itype = this%lattice%ib(na_glob)
-         if (this%control%calctype == 'I') call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
-            cluster_site, itype, status)
+         if (this%control%calctype == 'I' .or. this%control%calctype == 'S') &
+            call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, cluster_site, itype, status)
          call extract_hubbard_d_spinor_potential(this%recursion%hamiltonian%hubbard_u_pot, &
             itype, spin_off, v_spinor, status)
          if (status /= 0) cycle

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""nsp=2 impurity/surface guards: each scenario must stop with its message (fatal)."""
+"""nsp=2 impurity guards: each scenario must stop with its message (fatal). The surface guard case was removed with the calctype S guard (S6c); the nsp=2 surface with an nsp=1 U host is Example_surface_soc_u_nsp1_host_guard."""
 
 from __future__ import annotations
 
@@ -69,13 +69,6 @@ def main() -> None:
     w = impurity("g1_host_nsp1", hosts[1])
     status, log = ra2.run(binary, w)
     expect_fatal("g1 nsp=2 impurity with an nsp=1 host file", status, log, "regenerate the host at nsp=2")
-
-    # (g2) nsp=2 surface with U
-    w = ra2.fresh_surface(scratch, "g2_surface")
-    text = (w / "input.nml").read_text() + "\n&hamiltonian\nhubbard_u_general(1,3) = 2.0\nhubbard_j_general(1,3) = 0.0\n/\n"
-    (w / "input.nml").write_text(text)
-    status, log = ra2.run(binary, w, restart_name="Cu.nml")
-    expect_fatal("g2 nsp=2 surface with U", status, log, "soc+u surface runs")
 
     # (g3) frozen host written along z (hubbard_axis recorded), run axis along x (the U-carrying impurity atom)
     w = impurity("g3_host_axis_mismatch", hosts[2], imp_u=True)

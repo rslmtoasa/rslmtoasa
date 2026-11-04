@@ -1,4 +1,7 @@
 ! S6 T2(a): nsp=2 impurity local moments, one frozen U-carrying host plus one recursion atom.
+! S6c T2(a): the same checks on a surface-like layout (calctype S, second half of the program):
+! a frozen U host (type 1), an empty sphere without U (type 2) and two surface types with U (types 3, 4),
+! three recursion atoms with irec(k)=k+1 and the legacy ib map deliberately pointing at the host.
 !
 ! The recursion atom (type 2) has H = d crystal field + exchange + xi L.S + spin mixing + the spinor V_U
 ! built from its own P_in; the frozen host (type 1) carries a different P and U. Deliberately ib(1)=1
@@ -41,9 +44,9 @@ program projector_spinor_impurity_frozen_h
    type(recursion), target :: rec
    type(dos), target :: dos_state
    type(green), target :: gr
-   type(bands) :: rs
-   complex(rp), allocatable :: q(:, :), h(:, :)
-   real(rp), allocatable :: eig(:)
+   type(bands), allocatable :: rs
+   complex(rp), allocatable :: q(:, :), h(:, :), qa(:, :, :)
+   real(rp), allocatable :: eig(:), eiga(:, :)
    complex(rp) :: p_rec(10, 10), p_host(10, 10), v_rec(10, 10), v_host(10, 10), v_ctl(10, 10)
    complex(rp) :: v_prod_rec(10, 10), v_prod_host(10, 10), p_scratch(10, 10)
    complex(rp) :: p_spec(10, 10), m1_spec(10, 10), t5(5, 5, 5, 5)
@@ -54,6 +57,10 @@ program projector_spinor_impurity_frozen_h
    real(rp) :: host_c_before(2), host_q0_before(2), host_q2_before(2)
    logical :: failed = .false.
    integer :: s
+   !> Model parameters (xi, spin coupling, d level shift) of types 1..4 of the surface layout.
+   real(rp), parameter :: model_xi(4) = [0.0_rp, 0.05_rp, 0.35_rp, 0.2_rp]
+   real(rp), parameter :: model_cpl(4) = [0.0_rp, 0.3_rp, 1.0_rp, 0.7_rp]
+   real(rp), parameter :: model_shift(4) = [0.0_rp, 0.2_rp, 0.0_rp, 0.15_rp]
 
    external :: zheev
 #ifdef USE_MPI
@@ -63,9 +70,8 @@ program projector_spinor_impurity_frozen_h
    call g_logger%init()
    call basis_init(2)
    call init_math_operators()
-   call get_mpi_variables(rank, 1)
-   allocate (q(nb, nb), h(nb, nb), eig(nb))
-   call setup_objects()
+   allocate (q(nb, nb), h(nb, nb), eig(nb), qa(nb, nb, 3), eiga(nb, 3))
+   call setup_objects('I', 2)
    call hubbard_d_tensor(u_d, j_d, t5)
 
    ! P_in of the recursion atom: the full model; of the host: the model without spin mixing.
@@ -89,6 +95,8 @@ program projector_spinor_impurity_frozen_h
    call build_model(0.35_rp, 1.0_rp)
    call add_v(v_prod_rec)
    call exact_references(p_scratch)
+   qa(:, :, 1) = q
+   eiga(:, 1) = eig
    call setup_rs_green()
    host_p_before = lat%symbolic_atoms(1)%potential%ldm_spinor
    host_c_before = lat%symbolic_atoms(1)%potential%gravity_center(3, :)
@@ -115,7 +123,7 @@ program projector_spinor_impurity_frozen_h
    call report('(a) local c prime vs spinor formula on the spectral quantities', maxval(abs(c_loc - c_exp)), 1.0e-12_rp)
    call report('(a) local q2 prime vs spinor formula on the spectral quantities', maxval(abs(q2_loc - q2_exp)), 1.0e-10_rp)
    call report('(a) size of the c prime shift (resolvable)', maxval(abs(c_loc - c_spec)), 1.0e-3_rp, .true.)
-   call exact_c_prime(v_rec, c_dir)
+   call exact_c_prime(v_rec, 1, c_dir)
    call report('(a) local c prime vs exact eigenpairs with Lorentzian occupations (RS quadrature)', &
       maxval(abs(c_loc - c_dir)), tol_rs_c)
 
@@ -135,6 +143,8 @@ program projector_spinor_impurity_frozen_h
    call formulas(v_ctl, p_spec, m1_spec, q0, c_spec, q2_spec, c_ctl, q2_ctl)
    call report('(a) control, spin-off-diagonal V blocks dropped: c prime', maxval(abs(c_loc - c_ctl)), 1.0e-6_rp, .true.)
    call report('(a) control, spin-off-diagonal V blocks dropped: q2 prime', maxval(abs(q2_loc - q2_ctl)), 1.0e-6_rp, .true.)
+
+   call surface_case()
 
 #ifdef USE_MPI
    call reduce_failure()
@@ -226,8 +236,9 @@ contains
 
    !> c'_s = [sum_n occ1_n <a_n|Pi_s|a_n> eps-weighted - sum_n occ_n Re <a_n|Pi_s V|a_n>] / sum_n occ_n <a_n|Pi_s|a_n> from the eigenpairs of H
    !> (H already contains V), with the finite-window Lorentzian occupations of the RS quadrature.
-   subroutine exact_c_prime(v, cp)
+   subroutine exact_c_prime(v, ka, cp)
       complex(rp), intent(in) :: v(10, 10)
+      integer, intent(in) :: ka
       real(rp), intent(out) :: cp(2)
       complex(rp) :: a(10), va(10)
       real(rp) :: occ, occ_m1, num(2), den(2)
@@ -236,11 +247,11 @@ contains
       num = 0.0_rp
       den = 0.0_rp
       do k = 1, nb
-         occ = (atan((ef - eig(k))/eta) - atan((emin - eig(k))/eta))/pi
-         occ_m1 = eig(k)*occ + eta/(2.0_rp*pi)*log(((ef - eig(k))**2 + eta**2)/((emin - eig(k))**2 + eta**2))
+         occ = (atan((ef - eiga(k, ka))/eta) - atan((emin - eiga(k, ka))/eta))/pi
+         occ_m1 = eiga(k, ka)*occ + eta/(2.0_rp*pi)*log(((ef - eiga(k, ka))**2 + eta**2)/((emin - eiga(k, ka))**2 + eta**2))
          do sr = 1, 2
             do i = 1, 5
-               a((sr - 1)*5 + i) = q((sr - 1)*norb + 4 + i, k)
+               a((sr - 1)*5 + i) = qa((sr - 1)*norb + 4 + i, k, ka)
             end do
          end do
          va = matmul(v, a)
@@ -253,8 +264,9 @@ contains
       cp = num/den
    end subroutine exact_c_prime
 
-   subroutine build_model(xi, coupling)
+   subroutine build_model(xi, coupling, dshift)
       real(rp), intent(in) :: xi, coupling
+      real(rp), intent(in), optional :: dshift
       complex(rp) :: hd(5, 5), lz(5, 5), lp(5, 5), x(5, 5), e5(5, 5)
       real(rp) :: lm
       real(rp), parameter :: es(4) = [-1.4_rp, -1.0_rp, -0.8_rp, -0.6_rp]
@@ -287,6 +299,7 @@ contains
          lm = sqrt(6.0_rp - real(m*(m + 1), rp))
          lp(m + 4, m + 3) = cmplx(lm, 0.0_rp, rp)
       end do
+      if (present(dshift)) hd = hd + dshift*e5
       h(5:9, 5:9) = hd - 0.07_rp*e5 + 0.5_rp*xi*lz
       h(norb + 5:nb, norb + 5:nb) = hd + 0.07_rp*e5 - 0.5_rp*xi*lz
       h(5:9, norb + 5:nb) = 0.5_rp*xi*conjg(transpose(lp)) + coupling*x
@@ -334,43 +347,171 @@ contains
       deallocate (work, rwork)
    end subroutine exact_references
 
-   !> Two symbolic atoms: type 1 frozen host (not a recursion site), type 2 the recursion atom.
-   subroutine setup_objects()
-      integer :: i
+   !> Surface-like layout: type 1 frozen U host, type 2 empty sphere (no U), types 3 and 4 surface layers with U,
+   !> each recursion atom k (type k+1) with its own H (crystal field, exchange, xi L.S, spin mixing, own V).
+   subroutine surface_case()
+      complex(rp) :: p_in(10, 10, 4), v_t(10, 10, 4), p_sp(10, 10, 3), m1_sp(10, 10, 3), vv(10, 10), vctl(10, 10)
+      complex(rp) :: host_p_before(10, 10)
+      real(rp) :: q0a(2, 3), ca(2, 3), q2a(2, 3), cl(2, 3), q2l(2, 3), ce(2), q2e(2), cd(2), cc(2), q2c(2)
+      real(rp) :: host_c_before(2), host_q0_before(2), host_q2_before(2), e_i, e_d, e_h
+      character(len=40) :: tag
+      integer :: k, t, sp
 
+      call setup_objects('S', 4)
+      do t = 1, 4
+         call build_model(model_xi(t), model_cpl(t), model_shift(t))
+         call exact_references(p_in(:, :, t))
+         lat%symbolic_atoms(t)%potential%ldm_spinor = p_in(:, :, t)
+      end do
+      call ham%calculate_hubbard_u_potential_general()
+      do t = 1, 4
+         write (tag, '(a,i0)') '(S) type ', t
+         if (t == 2) then
+            call report(trim(tag)//' empty sphere: inserted V is zero', maxval(abs(ham%hubbard_u_pot(:, :, 2))), 0.0_rp)
+            v_t(:, :, 2) = (0.0_rp, 0.0_rp)
+            cycle
+         end if
+         call hubbard_spinor_functional(t5, u_d, j_d, p_in(:, :, t), e_i, e_d, e_h, v_t(:, :, t))
+         call spinor_block(ham%hubbard_u_pot(:, :, t), vv)
+         call report(trim(tag)//' inserted V vs S1 functional of its P_in', maxval(abs(vv - v_t(:, :, t))), 1.0e-14_rp)
+      end do
+      call report('(S) max |V_up,dn| of type 3 (nonzero)', maxval(abs(v_t(1:5, 6:10, 3))), 1.0e-3_rp, .true.)
+      call report('(S) max |V_up,dn| of type 4 (nonzero)', maxval(abs(v_t(1:5, 6:10, 4))), 1.0e-3_rp, .true.)
+      call report('(S) V of type 3 differs from V of type 4 (site map is observable)', &
+         maxval(abs(v_t(:, :, 3) - v_t(:, :, 4))), 1.0e-3_rp, .true.)
+
+      ! H of recursion atom k (type k+1) with its own inserted V; exact eigenpairs, E_F in the widest gap.
+      do k = 1, 3
+         t = k + 1
+         call build_model(model_xi(t), model_cpl(t), model_shift(t))
+         if (t /= 2) call add_v(v_t(:, :, t))
+         call exact_references(vv)
+         qa(:, :, k) = q
+         eiga(:, k) = eig
+      end do
+      call setup_rs_green()
+      host_p_before = lat%symbolic_atoms(1)%potential%ldm_spinor
+      host_c_before = lat%symbolic_atoms(1)%potential%gravity_center(3, :)
+      host_q0_before = lat%symbolic_atoms(1)%potential%ql(1, 2, :)
+      host_q2_before = lat%symbolic_atoms(1)%potential%ql(3, 2, :)
+
+      ham%hubbard_radial_moments = 'spectral'
+      call rs%calculate_moments()
+      do k = 1, 3
+         p_sp(:, :, k) = lat%symbolic_atoms(k + 1)%potential%ldm_spinor
+         m1_sp(:, :, k) = lat%symbolic_atoms(k + 1)%potential%m1_spinor
+         do sp = 1, 2
+            q0a(sp, k) = lat%symbolic_atoms(k + 1)%potential%ql(1, 2, sp)
+            ca(sp, k) = lat%symbolic_atoms(k + 1)%potential%gravity_center(3, sp) + lat%symbolic_atoms(k + 1)%potential%vmad
+            q2a(sp, k) = lat%symbolic_atoms(k + 1)%potential%ql(3, 2, sp)
+         end do
+      end do
+      ham%hubbard_radial_moments = 'local'
+      call rs%calculate_moments()
+      do k = 1, 3
+         do sp = 1, 2
+            cl(sp, k) = lat%symbolic_atoms(k + 1)%potential%gravity_center(3, sp) + lat%symbolic_atoms(k + 1)%potential%vmad
+            q2l(sp, k) = lat%symbolic_atoms(k + 1)%potential%ql(3, 2, sp)
+         end do
+      end do
+
+      do k = 1, 3
+         t = k + 1
+         write (tag, '(a,i0)') '(S) type ', t
+         if (t == 2) then
+            call report(trim(tag)//' empty sphere skipped: c, q2 equal the spectral run', &
+               max(maxval(abs(cl(:, k) - ca(:, k))), maxval(abs(q2l(:, k) - q2a(:, k)))), 0.0_rp)
+            call formulas(v_t(:, :, 1), p_sp(:, :, k), m1_sp(:, :, k), q0a(:, k), ca(:, k), q2a(:, k), cc, q2c)
+            call report(trim(tag)//' control, host V applied to the empty sphere: c prime', &
+               maxval(abs(cl(:, k) - cc)), 1.0e-6_rp, .true.)
+            cycle
+         end if
+         call formulas(v_t(:, :, t), p_sp(:, :, k), m1_sp(:, :, k), q0a(:, k), ca(:, k), q2a(:, k), ce, q2e)
+         call report(trim(tag)//' local c prime vs spinor formula on the spectral quantities', &
+            maxval(abs(cl(:, k) - ce)), 1.0e-12_rp)
+         call report(trim(tag)//' local q2 prime vs spinor formula on the spectral quantities', &
+            maxval(abs(q2l(:, k) - q2e)), 1.0e-10_rp)
+         call report(trim(tag)//' size of the c prime shift (resolvable)', maxval(abs(cl(:, k) - ca(:, k))), 1.0e-3_rp, .true.)
+         call exact_c_prime(v_t(:, :, t), k, cd)
+         call report(trim(tag)//' local c prime vs exact eigenpairs with Lorentzian occupations (RS quadrature)', &
+            maxval(abs(cl(:, k) - cd)), tol_rs_c)
+         ! site swap: the V of the other surface type
+         call formulas(v_t(:, :, 7 - t), p_sp(:, :, k), m1_sp(:, :, k), q0a(:, k), ca(:, k), q2a(:, k), cc, q2c)
+         call report(trim(tag)//' control, site swap (V of the other surface type): c prime', &
+            maxval(abs(cl(:, k) - cc)), 1.0e-6_rp, .true.)
+         call report(trim(tag)//' control, site swap (V of the other surface type): q2 prime', &
+            maxval(abs(q2l(:, k) - q2c)), 1.0e-6_rp, .true.)
+         call formulas(v_t(:, :, 1), p_sp(:, :, k), m1_sp(:, :, k), q0a(:, k), ca(:, k), q2a(:, k), cc, q2c)
+         call report(trim(tag)//' control, host V (legacy ib map): c prime', maxval(abs(cl(:, k) - cc)), 1.0e-6_rp, .true.)
+         vctl = v_t(:, :, t)
+         vctl(1:5, 6:10) = (0.0_rp, 0.0_rp)
+         vctl(6:10, 1:5) = (0.0_rp, 0.0_rp)
+         call formulas(vctl, p_sp(:, :, k), m1_sp(:, :, k), q0a(:, k), ca(:, k), q2a(:, k), cc, q2c)
+         call report(trim(tag)//' control, spin-off-diagonal V blocks dropped: c prime', &
+            maxval(abs(cl(:, k) - cc)), 1.0e-6_rp, .true.)
+         call report(trim(tag)//' control, spin-off-diagonal V blocks dropped: q2 prime', &
+            maxval(abs(q2l(:, k) - q2c)), 1.0e-6_rp, .true.)
+      end do
+
+      call report('(S) host skipped: P unchanged', maxval(abs(lat%symbolic_atoms(1)%potential%ldm_spinor - host_p_before)), 0.0_rp)
+      call report('(S) host skipped: centre unchanged', &
+         maxval(abs(lat%symbolic_atoms(1)%potential%gravity_center(3, :) - host_c_before)), 0.0_rp)
+      call report('(S) host skipped: q0, q2 unchanged', &
+         max(maxval(abs(lat%symbolic_atoms(1)%potential%ql(1, 2, :) - host_q0_before)), &
+             maxval(abs(lat%symbolic_atoms(1)%potential%ql(3, 2, :) - host_q2_before))), 0.0_rp)
+   end subroutine surface_case
+
+   !> Symbolic types 1..ntype; type 1 is the frozen host (not a recursion site), types 2..ntype are recursion atoms
+   !> (irec(k) = k+1). The legacy ib map points every recursion atom at the host. U on every type but 2 when
+   !> calctype is S (type 2 is the empty sphere); U on both types when calctype is I.
+   subroutine setup_objects(calctype, ntype)
+      character(len=1), intent(in) :: calctype
+      integer, intent(in) :: ntype
+      integer :: i, nrec
+
+      nrec = ntype - 1
+      call get_mpi_variables(rank, nrec)
       call ctl%restore_to_default()
       ctl%lmax = 2
       ctl%nsp = 2
-      ctl%calctype = 'I'
+      ctl%calctype = calctype
       ctl%density_policy = 'constrained_spiral'
 
-      lat%nrec = 1; lat%nbulk = 1; lat%nbulk_bulk = 1; lat%ntype = 2
-      lat%nn_max = 1; lat%kk = 1; lat%nmax = 2; lat%alat = 1.0_rp
+      lat%nrec = nrec; lat%nbulk = 1; lat%nbulk_bulk = 1; lat%ntype = ntype
+      lat%nn_max = 1; lat%kk = 1; lat%nmax = ntype; lat%alat = 1.0_rp
       lat%r2 = 1.0_rp; lat%a = 0.0_rp; lat%a(1, 1) = 1.0_rp
       lat%a(2, 2) = 1.0_rp; lat%a(3, 3) = 1.0_rp
       lat%a_cart_inv = lat%a; lat%a_cart_inv_ready = .true.
       lat%control => ctl
-      allocate (lat%ib(1), lat%irec(1), lat%atlist(2), lat%iz(2), lat%num(2), lat%nn(2, 1), &
-                lat%sbar(norb, norb, 1, 2), lat%symbolic_atoms(2))
-      ! Deliberately ib(1)=1 while irec(1)=2 and iz(2)=2.
-      lat%ib = 1; lat%irec = 2; lat%atlist = [1, 2]; lat%iz = [1, 2]; lat%num = 1; lat%nn = 1
+      if (allocated(lat%ib)) deallocate (lat%ib, lat%irec, lat%atlist, lat%iz, lat%num, lat%nn, lat%sbar, lat%symbolic_atoms)
+      allocate (lat%ib(nrec), lat%irec(nrec), lat%atlist(ntype), lat%iz(ntype), lat%num(ntype), lat%nn(ntype, 1), &
+                lat%sbar(norb, norb, 1, ntype), lat%symbolic_atoms(ntype))
+      ! Deliberately ib(k)=1 while irec(k)=k+1 and iz(k+1)=k+1.
+      lat%ib = 1; lat%num = 1; lat%nn = 1
       lat%sbar = cmplx(0.0_rp, 0.0_rp, rp)
-      do i = 1, 2
+      do i = 1, ntype
+         lat%atlist(i) = i
+         lat%iz(i) = i
+         if (i > 1) lat%irec(i - 1) = i
+      end do
+      do i = 1, ntype
          call lat%symbolic_atoms(i)%restore_to_default()
-         lat%symbolic_atoms(i)%potential%hubbard_u(3) = u_d
-         lat%symbolic_atoms(i)%potential%hubbard_j(3) = j_d
+         if (.not. (calctype == 'S' .and. i == 2)) then
+            lat%symbolic_atoms(i)%potential%hubbard_u(3) = u_d
+            lat%symbolic_atoms(i)%potential%hubbard_j(3) = j_d
+         end if
          lat%symbolic_atoms(i)%potential%mom = [0.0_rp, 0.0_rp, 1.0_rp]
          lat%symbolic_atoms(i)%potential%qpar = 1.0_rp
          lat%symbolic_atoms(i)%potential%srdel = 0.1_rp
          lat%symbolic_atoms(i)%potential%c = 0.0_rp
          lat%symbolic_atoms(i)%potential%gravity_center = 0.0_rp
          lat%symbolic_atoms(i)%potential%pl = 0.0_rp
+         allocate (lat%symbolic_atoms(i)%potential%ldm_spinor(10, 10))
       end do
       ! A distinctive host state, so that "untouched" is a real statement.
       lat%symbolic_atoms(1)%potential%gravity_center(3, :) = [0.123_rp, 0.234_rp]
       lat%symbolic_atoms(1)%potential%ql(1, 2, :) = [4.5_rp, 4.1_rp]
       lat%symbolic_atoms(1)%potential%ql(3, 2, :) = [0.31_rp, 0.29_rp]
-      allocate (lat%symbolic_atoms(1)%potential%ldm_spinor(10, 10), lat%symbolic_atoms(2)%potential%ldm_spinor(10, 10))
 
       chg%lattice => lat
       chg%symbolic_atom => lat%symbolic_atoms
@@ -381,7 +522,8 @@ contains
       ham%hubbard_soc_experimental = .true.
       ham%hubbard_u_potential_form = 'liechtenstein'
       ham%hubbard_u_sc_check = .false.; ham%hubbard_v_check = .false.
-      allocate (ham%hubbard_u_pot(nb, nb, 2))
+      if (allocated(ham%hubbard_u_pot)) deallocate (ham%hubbard_u_pot)
+      allocate (ham%hubbard_u_pot(nb, nb, ntype))
       ham%hubbard_u_pot = cmplx(0.0_rp, 0.0_rp, rp)
 
       en%lattice => lat
@@ -398,9 +540,12 @@ contains
       dos_state%control => ctl; dos_state%symbolic_atom => lat%symbolic_atoms
       gr%recursion => rec; gr%lattice => lat; gr%symbolic_atom => lat%symbolic_atoms
       gr%dos => dos_state; gr%control => ctl; gr%en => en
+      if (allocated(gr%g0)) deallocate (gr%g0)
       allocate (gr%g0(nb, nb, nch + 10, atoms_per_process))
       gr%g0 = cmplx(0.0_rp, 0.0_rp, rp)
 
+      if (allocated(rs)) deallocate (rs)
+      allocate (rs)
       rs%green => gr; rs%lattice => lat; rs%symbolic_atom => lat%symbolic_atoms
       rs%dos => dos_state; rs%en => en; rs%control => ctl; rs%recursion => rec
       call rs%restore_to_default()
@@ -412,20 +557,23 @@ contains
       complex(rp), allocatable :: gmat(:, :)
       integer :: ie, band, a, b
       complex(rp) :: z
+      integer :: ka
 
       gr%g0 = cmplx(0.0_rp, 0.0_rp, rp)
       allocate (gmat(nb, nb))
-      do ie = 1, nch + 10
-         gmat = cmplx(0.0_rp, 0.0_rp, rp)
-         do band = 1, nb
-            z = cmplx(en%ene(ie) - eig(band), eta, rp)
-            do a = 1, nb
-               do b = 1, nb
-                  gmat(a, b) = gmat(a, b) + q(a, band)*conjg(q(b, band))/z
+      do ka = 1, size(gr%g0, 4)
+         do ie = 1, nch + 10
+            gmat = cmplx(0.0_rp, 0.0_rp, rp)
+            do band = 1, nb
+               z = cmplx(en%ene(ie) - eiga(band, ka), eta, rp)
+               do a = 1, nb
+                  do b = 1, nb
+                     gmat(a, b) = gmat(a, b) + qa(a, band, ka)*conjg(qa(b, band, ka))/z
+                  end do
                end do
             end do
+            gr%g0(:, :, ie, ka) = gmat
          end do
-         gr%g0(:, :, ie, 1) = gmat
       end do
       deallocate (gmat)
    end subroutine setup_rs_green

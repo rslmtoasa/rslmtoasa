@@ -902,7 +902,8 @@ contains
          this%control%lmax == 2 .and. &
          ((this%control%nsp == 1 .and. .not. this%control%has_soc() .and. &
            (this%control%calctype == 'B' .or. this%control%calctype == 'I' .or. this%control%calctype == 'S')) .or. &
-          (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental .and. this%control%calctype == 'I')) .and. &
+          (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental .and. &
+           (this%control%calctype == 'I' .or. this%control%calctype == 'S'))) .and. &
          .not. this%control%constraints_enable .and. .not. this%control%is_noncollinear() .and. &
          .not. this%hamiltonian%hoh .and. .not. this%hamiltonian%hubbard_u_sc_check .and. &
          .not. this%hamiltonian%hubbard_v_check .and. &

@@ -209,20 +209,32 @@
       }
     },
     {
-      "name": "Example_surface_soc_u_guard",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
-      "case": "surface/fccCu001",
+      "name": "Example_surface_soc_u_nsp1_host_guard",
+      "quick": true,
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "chebyshev", "hubbard"],
+      "case": "surface/fccNi001_uhost_guard",
       "timeout": 300,
-      "_note": "nsp=2 SOC+U with calctype S stops: surfaces stay out of scope. Legacy strux sentinel as in Example_surface_fccCu001_block_hoh (strux_lib expands this route to an impractical allocation)",
-      "expect_fatal": "SOC+U surface runs (calctype S) are not yet supported.",
+      "_note": "nsp=2 surface with a frozen U host written at nsp=1 stops before the SCF loop. Explicit legacy structure-constant sentinel as in Example_surface_fccCu001_block_hoh",
+      "expect_fatal": "was written at nsp=1, run nsp=2. Regenerate the host at nsp=2.",
       "namelists": {
         "lattice": { "strux_backend": "legacy" },
-        "control": { "nsp": 2, "recur": "block", "lld": 20 },
+        "control": { "nsp": 2, "recur": "chebyshev" },
         "self": { "nstep": 1 },
         "hamiltonian": {
-          "hoh": false,
-          "hubbard_u_general": [[null, null, null], [null, null, null], [null, null, 2.0]],
-          "hubbard_j_general": [[null, null, null], [null, null, null], [null, null, 0.0]]
+          "hubbard_radial_moments": "local",
+          "hubbard_u_general": [[null], [null], [3.0]],
+          "hubbard_j_general": [[null], [null], [0.7]]
+        }
+      },
+      "potentials": {
+        "Ni.nml": {
+          "par": {
+            "hubbard_nsp": 1,
+            "hubbard_radial_moments": "local",
+            "hubbard_backend": "rs",
+            "hubbard_u": [0.0, 0.0, 0.22049575716860359],
+            "hubbard_j": [0.0, 0.0, 0.051449010006007496]
+          }
         }
       }
     },

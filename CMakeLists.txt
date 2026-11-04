@@ -909,6 +909,17 @@ if (RUN_UNIT_TESTS)
   add_test(NAME UnitLdaUSocInsertion COMMAND UnitLdaUSocInsertion WORKING_DIRECTORY "${_soc_u_scratch}")
   set_tests_properties(UnitLdaUSocInsertion PROPERTIES LABELS "unit;lda_u;spinor"
     FIXTURES_REQUIRED LdaUSocInsertionScratch RESOURCE_LOCK LdaUSocInsertionScratch)
+  # Spinor U insertion, surface (calctype S): scratch Ni(001) nsp=2 deck with base and U inputs.
+  set(_soc_us_scratch "${CMAKE_BINARY_DIR}/Testing/validation/soc_u_surface_insertion")
+  add_test(NAME LdaUSocSurfaceInsertionScratch
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/fixed_ldau/soc_u_surface_scratch.py"
+      "${TestDIR}/validation/fixed_ldau/decks/ni001_u3" "${_soc_us_scratch}")
+  set_tests_properties(LdaUSocSurfaceInsertionScratch PROPERTIES
+    LABELS "lda_u;spinor" FIXTURES_SETUP LdaUSocSurfaceInsertionScratch RESOURCE_LOCK LdaUSocSurfaceInsertionScratch)
+  add_fortran_component_unit_test(UnitLdaUSocSurfaceInsertion ${TestDIR}/unit/test_hubbard_soc_surface_insertion.f90)
+  add_test(NAME UnitLdaUSocSurfaceInsertion COMMAND UnitLdaUSocSurfaceInsertion WORKING_DIRECTORY "${_soc_us_scratch}")
+  set_tests_properties(UnitLdaUSocSurfaceInsertion PROPERTIES LABELS "unit;lda_u;spinor"
+    FIXTURES_REQUIRED LdaUSocSurfaceInsertionScratch RESOURCE_LOCK LdaUSocSurfaceInsertionScratch)
   # S2': two-atom bcc Fe cell with antiparallel moments, (up, down) against (down, up).
   set(_af_scratch "${CMAKE_BINARY_DIR}/Testing/spin_response/af")
   add_test(NAME SpinResponseAfDriver
