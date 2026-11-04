@@ -233,3 +233,7 @@ Guards and provenance. The calctype guard for nsp=2 with U is `hamiltonian_build
 ## d-shell basis note (S6b, `spinor_orbital_moment` test)
 
 The compact index `(m+3)` above is a label, not the physical `m`: in the code's d basis (`hcpx(...,'cart2sph')`, d block rows 5..9) index k carries L_z = 3-k, and the neighbouring L_x/L_y elements have the opposite sign to the Condon-Shortley convention. `spinor_orbital_moment` and `test_orbital_moment` use the basis as built; a closed form written in Condon-Shortley `m` fails against it. The frame-aware kernel is independent of this labelling because it projects the spin index only.
+
+## Frozen host files in embedded runs (calctype I/S)
+
+Embedded runs never modify frozen host INPUT files; host *_out/*_scf are still written as outputs, with the unchanged dm hash.
