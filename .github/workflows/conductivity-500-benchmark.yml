@@ -1,0 +1,142 @@
+name: Cond_ll 500 old versus refactored runtime benchmark
+on:
+  push:
+    branches: [audit/conductivity-legacy-20261103]
+    paths: [.github/workflows/conductivity-500-benchmark.yml]
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install GNU Fortran and BLAS
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gfortran cmake ninja-build libopenblas-dev liblapack-dev
+      - name: Build pinned old and new, instrumenting Kubo moment duration only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach compare-old e604f4029e59d35b6e53551dd2d95919a9baf8e0
+          git worktree add --detach compare-new 3957b2c8f3a4f4ec449dea93f43ffe185b463200
+          python3 - <<'PY'
+          from pathlib import Path
+          for rev in ('old','new'):
+            p=Path(f'compare-{rev}/source/calculation.f90')
+            txt=p.read_text()
+            a=txt.index('    subroutine post_processing_conductivity(this)')
+            b=txt.index('    end subroutine post_processing_conductivity',a)
+            section=txt[a:b]
+            assert section.count('       integer :: i\n')==1
+            assert section.count('       call recursion_obj%compute_moments_stochastic()')==1
+            section=section.replace('       integer :: i\n',
+              '       integer :: i\n       integer(kind=8) :: bench_start, bench_end, bench_rate\n',1)
+            section=section.replace('       call recursion_obj%compute_moments_stochastic()',
+              '''       call system_clock(bench_start, bench_rate)
+       call recursion_obj%compute_moments_stochastic()
+       call system_clock(bench_end)
+       write(*,'(a,es25.16)') 'BENCH_KUBO_MOMENTS_SEC=', &
+            real(bench_end-bench_start,8)/real(bench_rate,8)''',1)
+            p.write_text(txt[:a]+section+txt[b:])
+            p=Path(f'compare-{rev}/source/conductivity.f90')
+            txt=p.read_text()
+            assert "write(3, '(3es16.6)')" in txt
+            p.write_text(txt.replace("write(3, '(3es16.6)')", "write(3, '(3es25.16)')"))
+          PY
+          for rev in old new; do
+            cmake -S compare-$rev -B compare-$rev/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_MPI=OFF -DENABLE_OPENMP=OFF -DENABLE_MARCH_NATIVE=OFF -DBUILD_TESTING=OFF
+            cmake --build compare-$rev/build --target rslmto.x --parallel 3
+          done
+          sha256sum compare-{old,new}/build/bin/rslmto.x
+      - name: Create identical fccPt inputs at cond_ll=500
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re,shutil
+          root=Path('compare-new/example/conductivity/fccPt/sigma_xy_z-spin')
+          txt=(root/'input.nml').read_text()
+          txt=re.sub(r'(?m)^rc\s*=\s*060.*$', 'rc = 9.0',txt)
+          for axis in ('n1','n2','n3'):
+            txt=re.sub(rf'(?m)^{axis}\s*=\s*\d+',f'{axis} = 6',txt)
+          assert re.search(r'(?m)^cond_ll\s*=\s*500',txt)
+          txt=re.sub(r'(?m)^channels_ldos\s*=\s*\d+', 'channels_ldos = 200', txt)
+          for op in ['spin','orbital']:
+            op_txt=txt.replace("linear_out = 'spin'",f"linear_out = '{op}'")
+            for rev in ('old','new'):
+              for repeat in (1,2):
+                dst=Path(f'results/{op}/r{repeat}/{rev}')
+                dst.mkdir(parents=True,exist_ok=True)
+                (dst/'input.nml').write_text(op_txt)
+                shutil.copy2(root/'Pt_out.nml',dst/'Pt_out.nml')
+          PY
+      - name: Run two interleaved repeats and log time/memory
+        shell: bash
+        run: |
+          set -euo pipefail
+          export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+          for repeat in 1 2; do
+            if [ "$repeat" = 1 ]; then order='old new'; else order='new old'; fi
+            for op in spin orbital; do
+              for rev in $order; do
+                echo "RUN $op/$repeat/$rev"
+                exe="$GITHUB_WORKSPACE/compare-$rev/build/bin/rslmto.x"
+                (cd "results/$op/r$repeat/$rev" && timeout 1200 /usr/bin/time -f 'BENCH_TOTAL_WALL_SEC=%e\nBENCH_MAX_RSS_KB=%M' "$exe" > run.log 2>&1) || {
+                  echo "FAIL $op/$repeat/$rev"
+                  tail -n 100 "results/$op/r$repeat/$rev/run.log"
+                  exit 1
+                }
+                test -s "results/$op/r$repeat/$rev/cond_total.out"
+                grep 'BENCH_' "results/$op/r$repeat/$rev/run.log"
+              done
+            done
+          done
+      - name: Compare runtimes and accuracy
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re,statistics,csv,math
+          rows=[]
+          for op in ('spin','orbital'):
+            for repeat in (1,2):
+              series={}
+              for rev in ('old','new'):
+                p=Path(f'results/{op}/r{repeat}/{rev}')
+                log=(p/'run.log').read_text()
+                def pull(key):
+                  match=re.search(rf'{key}=([0-9.Ee+\-]+)',log)
+                  if not match: raise ValueError(f'{key} missing from {p}')
+                  return float(match.group(1))
+                series[rev]=[tuple(float(x) for x in line.split()) for line in (p/'cond_total.out').read_text().splitlines()]
+                rows.append(dict(op=op,repeat=repeat,revision=rev,kubo_sec=pull('BENCH_KUBO_MOMENTS_SEC'),total_sec=pull('BENCH_TOTAL_WALL_SEC'),peak_rss_kb=pull('BENCH_MAX_RSS_KB')))
+              old,new=series['old'],series['new']
+              assert len(old)==len(new)>0,(op,repeat)
+              assert all(abs(a[0]-b[0])<1.e-12 for a,b in zip(old,new))
+              errs=[abs(a[i]-b[i]) for a,b in zip(old,new) for i in (1,2)]
+              print(f'ACCURACY {op} repeat={repeat}: max abs={max(errs):.8g}, N={len(old)}')
+              if not all(math.isfinite(x) for row in new+old for x in row):
+                raise AssertionError('Nonfinite conductivity')
+          path=Path('runtime_summary.csv')
+          with path.open('w',newline='') as f:
+            writer=csv.DictWriter(f,fieldnames=rows[0].keys())
+            writer.writeheader();writer.writerows(rows)
+          for op in ('spin','orbital'):
+            d={rev:[r for r in rows if r['op']==op and r['revision']==rev] for rev in ('old','new')}
+            for metric in ('kubo_sec','total_sec'):
+              old=statistics.mean(r[metric] for r in d['old'])
+              new=statistics.mean(r[metric] for r in d['new'])
+              print(f'PERFORMANCE {op} {metric}: old={old:.6f}s new={new:.6f}s change={(new/old-1)*100:+.3f}%')
+            print(f'MEMORY {op}: old mean peak RSS={statistics.mean(r["peak_rss_kb"] for r in d["old"]):.0f}KB, new={statistics.mean(r["peak_rss_kb"] for r in d["new"]):.0f}KB')
+          PY
+      - name: Upload logs and CSV
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conductivity-condll500-benchmark
+          path: |
+            runtime_summary.csv
+            results/**/run.log
+            results/**/input.nml
+            results/**/cond_total.out
+          if-no-files-found: ignore
