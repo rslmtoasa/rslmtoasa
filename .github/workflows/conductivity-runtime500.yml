@@ -1,0 +1,106 @@
+name: Cond_ll 500 legacy versus refactored runtime
+on:
+  push:
+    branches: [audit/conductivity-legacy-20261103]
+    paths: [.github/workflows/conductivity-runtime500.yml]
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: System dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gfortran cmake ninja-build libopenblas-dev liblapack-dev
+      - name: Build pinned historical and current implementations
+        run: |
+          set -euo pipefail
+          git worktree add --detach compare-old e604f4029e59d35b6e53551dd2d95919a9baf8e0
+          git worktree add --detach compare-new 3957b2c8f3a4f4ec449dea93f43ffe185b463200
+          for rev in old new; do
+            cmake -S compare-$rev -B compare-$rev/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_MPI=OFF -DENABLE_OPENMP=OFF -DENABLE_MARCH_NATIVE=OFF -DBUILD_TESTING=OFF
+            cmake --build compare-$rev/build --target rslmto.x --parallel 3
+            sha256sum compare-$rev/build/bin/rslmto.x
+          done
+      - name: Prepare exactly matched fccPt inputs (cond_ll=500)
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re,shutil
+          src=Path('compare-new/example/conductivity/fccPt/sigma_xy_z-spin')
+          inp=(src/'input.nml').read_text()
+          inp=re.sub(r'(?m)^rc\s*=\s*060.*$', 'rc = 9.0', inp)
+          for axis in ('n1','n2','n3'):
+            inp=re.sub(rf'(?m)^{axis}\s*=\s*\d+', f'{axis} = 12', inp)
+          inp=re.sub(r'(?m)^cond_ll\s*=\s*\d+', 'cond_ll = 500', inp)
+          inp=re.sub(r'(?m)^channels_ldos\s*=\s*\d+', 'channels_ldos = 200', inp)
+          assert "cond_ll = 500" in inp and "hoh = .false." in inp and "nsp = 2" in inp
+          for case in ('spin','orbital'):
+            n=inp.replace("linear_out = 'spin'", f"linear_out = '{case}'")
+            for rev in ('old','new'):
+              for repetition in (1,2):
+                dest=Path('benchmark')/rev/case/str(repetition)
+                dest.mkdir(parents=True,exist_ok=True)
+                (dest/'input.nml').write_text(n)
+                shutil.copy2(src/'Pt_out.nml',dest/'Pt_out.nml')
+          PY
+      - name: Benchmark repeated runs sequentially
+        env:
+          OMP_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+        run: |
+          python3 -u - <<'PY'
+          import csv,os,subprocess,time
+          from pathlib import Path
+          root=Path.cwd()
+          order=[('spin','old',1),('spin','new',1),('orbital','new',1),('orbital','old',1),
+                 ('spin','new',2),('spin','old',2),('orbital','old',2),('orbital','new',2)]
+          rows=[]
+          for case,rev,rep in order:
+            run=root/'benchmark'/rev/case/str(rep)
+            exe=root/f'compare-{rev}'/'build/bin/rslmto.x'
+            print(f'BEGIN {case} {rev} rep={rep}',flush=True)
+            t0=time.perf_counter()
+            with (run/'run.log').open('w') as fout:
+              try:
+                ret=subprocess.run([str(exe)],cwd=run,stdout=fout,stderr=subprocess.STDOUT,timeout=1500,check=False)
+                code=ret.returncode
+              except subprocess.TimeoutExpired:
+                code=124
+            wall=time.perf_counter()-t0
+            size=(run/'cond_total.out').stat().st_size if (run/'cond_total.out').exists() else 0
+            print(f'END {case} {rev} rep={rep}: wall={wall:.5f}s exit={code} bytes={size}',flush=True)
+            rows.append(dict(case=case,revision=rev,repetition=rep,wall_seconds=round(wall,6),exit_code=code,output_bytes=size))
+            with (root/'runtime500_runs.csv').open('w',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=rows[0].keys())
+              w.writeheader()
+              w.writerows(rows)
+            if code!=0 or size==0:
+              print((run/'run.log').read_text(errors='replace')[-3000:])
+              raise SystemExit('Fatal: benchmark case failed')
+          for case in ('spin','orbital'):
+            old=[r['wall_seconds'] for r in rows if r['case']==case and r['revision']=='old']
+            new=[r['wall_seconds'] for r in rows if r['case']==case and r['revision']=='new']
+            av_old=sum(old)/len(old)
+            av_new=sum(new)/len(new)
+            print(f'SUMMARY {case} old={av_old:.5f}s new={av_new:.5f}s ratio={av_new/av_old:.5f} change_pct={(av_new/av_old-1)*100:+.3f}%',flush=True)
+            for rep in (1,2):
+              oa=(root/'benchmark'/'old'/case/str(rep)/'cond_total.out').read_bytes()
+              na=(root/'benchmark'/'new'/case/str(rep)/'cond_total.out').read_bytes()
+              print(f'OUTPUT_CHECK {case} rep={rep} byte_identical={oa==na} old_bytes={len(oa)} new_bytes={len(na)}')
+          PY
+      - name: Upload outputs and benchmarks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fccPt-cond_ll-500-runtime-comparison
+          path: |
+            runtime500_runs.csv
+            benchmark/**/run.log
+            benchmark/**/input.nml
+            benchmark/**/cond_total.out
+          if-no-files-found: ignore
