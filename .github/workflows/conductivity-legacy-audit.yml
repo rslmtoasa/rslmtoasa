@@ -1,0 +1,115 @@
+name: Isolated legacy vs new conductivity comparison
+on:
+  push:
+    branches:
+      - audit/conductivity-legacy-20261103
+jobs:
+  compare-fccpt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install compiler and BLAS
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gfortran cmake ninja-build libopenblas-dev liblapack-dev
+      - name: Build pinned old and new executables
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach compare-old e604f4029e59d35b6e53551dd2d95919a9baf8e0
+          git worktree add --detach compare-new 3957b2c8f3a4f4ec449dea93f43ffe185b463200
+          for rev in old new; do
+            cmake -S compare-$rev -B compare-$rev/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_MPI=OFF -DENABLE_OPENMP=OFF -DENABLE_MARCH_NATIVE=OFF -DBUILD_TESTING=OFF
+            cmake --build compare-$rev/build --target rslmto.x --parallel 3
+          done
+      - name: Generate identical frozen-Pt inputs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, shutil
+          root=Path('compare-new/example/conductivity/fccPt/sigma_xy_z-spin')
+          txt=(root/'input.nml').read_text()
+          txt=re.sub(r'(?m)^rc\s*=\s*060.*$', 'rc = 9.0', txt)
+          for axis in ['n1','n2','n3']:
+              txt=re.sub(rf'(?m)^{axis}\s*=\s*\d+', f'{axis} = 12', txt)
+          txt=re.sub(r'(?m)^cond_ll\s*=\s*\d+', 'cond_ll = 50', txt)
+          txt=re.sub(r'(?m)^channels_ldos\s*=\s*\d+', 'channels_ldos = 200', txt)
+          for op in ['charge','spin','orbital']:
+              variant=txt.replace("linear_out = 'spin'", f"linear_out = '{op}'")
+              for rev in ['old','new']:
+                  dst=Path('comparison')/rev/op
+                  dst.mkdir(parents=True,exist_ok=True)
+                  (dst/'input.nml').write_text(variant)
+                  shutil.copy2(root/'Pt_out.nml', dst/'Pt_out.nml')
+          PY
+      - name: Execute old and new Pt calculations
+        shell: bash
+        run: |
+          set -euo pipefail
+          export OMP_NUM_THREADS=1
+          export OPENBLAS_NUM_THREADS=1
+          for op in charge spin orbital; do
+            for rev in old new; do
+              echo "RUN case=$op revision=$rev"
+              absbinary="$GITHUB_WORKSPACE/compare-$rev/build/bin/rslmto.x"
+              (cd "comparison/$rev/$op"; timeout 600 "$absbinary" > run.log 2>&1) || { echo "FAILED $rev/$op"; tail -n 120 "comparison/$rev/$op/run.log"; exit 1; }
+              if [ ! -s "comparison/$rev/$op/cond_total.out" ]; then
+                echo "Missing conductivity curve $rev/$op"
+                tail -n 100 "comparison/$rev/$op/run.log"
+                exit 1
+              fi
+              echo "OK $rev/$op"
+            done
+          done
+      - name: Compare curves
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import csv, math
+          from pathlib import Path
+          results=[]
+          for op in ['charge','spin','orbital']:
+              def read(rev):
+                  path=Path('comparison')/rev/op/'cond_total.out'
+                  rows=[]
+                  for line in path.read_text().splitlines():
+                      v=line.split()
+                      if len(v)>=3:
+                          rows.append(tuple(map(lambda z: float(z.replace('D','E')), v[:3])))
+                  return rows
+              old,new=read('old'),read('new')
+              if len(old)!=len(new):raise AssertionError(f'row-count mismatch {op}: {len(old)} {len(new)}')
+              if not old:raise AssertionError(f'empty output {op}')
+              for (e,*_), (f,*_) in zip(old,new):
+                  if not math.isclose(e,f,abs_tol=1e-9,rel_tol=1e-10): raise AssertionError(f'energy mismatch {op}: {e}, {f}')
+              for j,name in [(1,'real'),(2,'imag')]:
+                  vals=[(r[j],s[j]) for r,s in zip(old,new)]
+                  scale=max(1e-12,max(abs(a) for a,b in vals),max(abs(b) for a,b in vals))
+                  err=max(abs(a-b) for a,b in vals)
+                  rms=math.sqrt(sum((a-b)**2 for a,b in vals)/len(vals))
+                  ratio=err/scale
+                  results.append(dict(operator=op,component=name,rows=len(vals),max_abs_err=err,rms_err=rms,scale=scale,max_err_over_max_signal=ratio))
+                  print(f'{op:8s} {name:4s} N={len(vals)} max|diff|={err:.9e}, rms={rms:.9e}, max|diff|/max_signal={ratio:.9e}')
+          with open('conductivity_legacy_comparison.csv','w',newline='') as f:
+              w=csv.DictWriter(f,fieldnames=results[0].keys())
+              w.writeheader()
+              w.writerows(results)
+          # Strict flag for gross discrepancies, but preserve all artifacts/logs.
+          if any(r['max_err_over_max_signal']>0.02 for r in results):
+              print('WARNING: relative disagreement above 2% in at least one channel')
+          PY
+      - name: Upload reproducible outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conductivity-legacy-vs-new
+          path: |
+            comparison/**/cond_total.out
+            comparison/**/run.log
+            comparison/**/input.nml
+            conductivity_legacy_comparison.csv
+          if-no-files-found: ignore
