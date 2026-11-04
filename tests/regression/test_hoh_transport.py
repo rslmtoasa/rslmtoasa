@@ -32,7 +32,7 @@ def transport_executable(tmp_path_factory):
     log = build / 'build.log'
     with log.open('w') as output:
         for command in [args, [cmake, '--build', str(build), '--target',
-                               'transport_operator_test', '-j', '4']]:
+                               'transport_operator_test', 'response_units_test', '-j', '4']]:
             result = subprocess.run(command, stdout=output, stderr=subprocess.STDOUT)
             if result.returncode:
                 output.flush()
