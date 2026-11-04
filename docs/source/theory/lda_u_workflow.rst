@@ -250,11 +250,11 @@ is 1.4e-4 (KS, U), 3.9e-4 (KS, J) and 2.4e-4 (RS, U) Ry/eV against allowances of
 spectral candidate misses by 53, 42 (KS) and 30 (RS) allowances. The RS J derivative was not tested. The base ASA
 functional's W1 derivative residual (-0.14% KS, -0.16% RS) bounds the claim, as at nsp=1.
 
-SOC+U for impurities (nsp=2, calctype I)
-----------------------------------------
+SOC+U for impurities and surfaces (nsp=2, calctype I and S)
+----------------------------------------------------------
 
-Impurity runs (``calctype='I'``) with U accept ``nsp=2``; surfaces (``S``) do not. The density is spinor as in the bulk;
-impurity energies exclude the Hubbard term (density only, no energy routing), as at nsp=1.
+Impurity (``calctype='I'``) and surface (``'S'``) runs with U accept ``nsp=2``. The density is spinor as in the bulk;
+impurity and surface energies exclude the Hubbard term (density only, no energy routing), as at nsp=1.
 
 Host requirements. Every U-carrying frozen host must be local mode, written at ``nsp=2``, and carry the spinor
 density matrix (``spinor_d = 1`` in its ``_dm`` file). The potential file records ``hubbard_nsp``; a host written at another
@@ -273,6 +273,23 @@ Measured (RS Chebyshev Ni, U=3/J=0.7, SOC on; host and impurity runs read from t
 ``tests/KNOWN_ISSUES.md``): impurity minus bulk, d up 6.9e-4, d down -1.9e-3, spin moment 2.1e-3 muB, orbital moment
 -1.8e-4 muB, against 1.3e-3, -2.8e-3, 3.7e-3 and -1.1e-4 at U=0. With ``soc_scale=0`` and ``fix_soc`` the nsp=2 impurity
 agrees with the nsp=1 impurity to 9e-9 (d up), 1.9e-8 (d down) and 2.6e-7 muB (moment).
+
+Surfaces (RS, ``recur='chebyshev'`` or ``'block'`` along z; tilted axes need Chebyshev) follow the impurity rules: every
+U-carrying frozen host written at ``nsp=2`` in local mode with the spinor ``_dm`` file and a matching axis, ``fermi`` equal to the host E_F,
+``ldm_beta=0.3``, and the energy window checked against the U-shifted d band. The empty sphere carries no U. ``auto`` resolves to ``local``
+under the impurity host rule; ``nsp=3/4`` with U stays fatal and KS surfaces are not supported. Seed a surface from the converged
+``nsp=1`` surface (zero spin coherences) or, for SOC on, expect the spin-orbit transient: a host converged without SOC moves when SOC is
+switched on (``ni_host_soc`` in ``tests/validation/fixed_ldau/decks``).
+
+Surface energies exclude the Hubbard term, so U enters them only through the density.
+
+Measured (Ni(001), U=3/J=0.7, short runs; per-step tables in the ``ni001_soc_u3``, ``ni001_soc_u0`` and ``ni_host_soc`` READMEs): with
+``soc_scale=0`` and ``fix_soc`` the nsp=2 surface reproduces the nsp=1 surface at iteration 1 (``ql`` 6.9e-18, Diff 3.1737e-6 in both;
+a host converged independently at nsp=1 differs by 2.5e-10 in ``ql``). A surface along x against the exactly rotated z state differs at
+iteration 1 by 7.0e-9 in ``ql`` and 1.5e-8 Ry in ``etot``; no converged rotation floor or surface anisotropy was computed. With SOC on, 5
+steps from the nsp=1 seeds: U=0, orbital moments flat from step 2 (Ni-S 0.0647, Ni-S-1 0.0402 muB); U=3, the Ni-S orbital moment rises
+0.066 -> 0.109 muB with decreasing increments and Diff stays at 1.2e-4 to 1.9e-4, as the (unconverged) bulk host does. Converged
+surface-versus-bulk values are not available.
 
 Validated ordinary on-site scope
 ================================
