@@ -209,24 +209,6 @@
       }
     },
     {
-      "name": "Example_surface_soc_u_guard",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
-      "case": "surface/fccCu001",
-      "timeout": 300,
-      "_note": "nsp=2 SOC+U with calctype S stops: surfaces stay out of scope. Legacy strux sentinel as in Example_surface_fccCu001_block_hoh (strux_lib expands this route to an impractical allocation)",
-      "expect_fatal": "SOC+U surface runs (calctype S) are not yet supported.",
-      "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control": { "nsp": 2, "recur": "block", "lld": 20 },
-        "self": { "nstep": 1 },
-        "hamiltonian": {
-          "hoh": false,
-          "hubbard_u_general": [[null, null, null], [null, null, null], [null, null, 2.0]],
-          "hubbard_j_general": [[null, null, null], [null, null, null], [null, null, 0.0]]
-        }
-      }
-    },
-    {
       "name": "Example_surface_fccNi001_uhost_guard",
       "quick": true,
       "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "chebyshev", "hubbard"],

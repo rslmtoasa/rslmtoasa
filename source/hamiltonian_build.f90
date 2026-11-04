@@ -763,12 +763,8 @@ contains
                end if
             end do
          end do
-         if (this%hubbard_soc_experimental .and. this%control%nsp == 2) then
-            if (trim(this%control%calctype) /= 'B' .and. trim(this%control%calctype) /= 'I') then
-               call g_logger%fatal('SOC+U surface runs (calctype S) are not yet supported.', &
-                                   __FILE__, __LINE__)
-            end if
-         else if (this%control%has_soc() .or. this%control%is_noncollinear()) then
+         if (.not. (this%hubbard_soc_experimental .and. this%control%nsp == 2) .and. &
+             (this%control%has_soc() .or. this%control%is_noncollinear())) then
             call g_logger%fatal('Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.', &
                                 __FILE__, __LINE__)
          end if
