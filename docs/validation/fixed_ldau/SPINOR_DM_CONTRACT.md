@@ -274,4 +274,6 @@ By construction: the c', q2' agreement with the spinor formula (the oracle evalu
 
 Not run, by decision: converged-state agreement of the nsp=2 SOC->0 surface with the converged nsp=1 surface; converged SOC-on surfaces; the surface anisotropy E(x) - E(z). The tilted-axis check is iteration 1 only (decks/ni001_soc_u3/README). What the short SOC-on runs show (5 steps from the nsp=1 seeds, hosts not converged) is in the deck READMEs: at U=3 the surface orbital moment keeps rising (Ni-S 0.066 -> 0.109 muB, increments falling by about 0.88 per step) and Diff stays at 1.2e-4 to 1.9e-4; the b1 bulk host rises the same way (0.0446 -> 0.0665 over 7 steps); the d traces and spin moments move by at most 5.5e-3 (n_d, Ni-S, against the seed) and 2.3e-3 muB (moment) during the 5 steps.
 
+Tier 2 (20 steps from the step-5 state, U=3, SOC on): Diff 1.50e-4 -> 2.25e-4 (steps 1-13) with excursions to 4.18e-4 (step 15) and 2.35e-4 (step 20); Ni-S orbital moment 0.117 -> 0.173 muB, not saturated; not diagnosed (decks/ni001_soc_u3/README).
+
 Open: the RS surface rotation floor at a converged state; the surface-versus-bulk U enhancement of the orbital moment at convergence.
