@@ -303,6 +303,20 @@
       }
     },
     {
+      "name": "Example_bulk_bccFe_nsp4_u_guard",
+      "quick": true,
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
+      "case": "bulk/bccFe_hubbard",
+      "timeout": 300,
+      "_note": "nsp=4 (noncollinear with SOC) with fixed U stops: S7 scope",
+      "expect_fatal": "Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.",
+      "namelists": {
+        "control":     { "nsp": 4, "recur": "block", "lld": 21 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
+      }
+    },
+    {
       "name": "Example_bulk_bccFe_nsp3_block_hoh",
       "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hoh"],
       "case": "bulk/bccFe",
