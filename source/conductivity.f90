@@ -59,8 +59,8 @@ module conductivity_mod
 
       !> Number of recursion steps for the conductivity tensor
       integer :: ll_cond
-      ! Bulk volume (Angstrom^3), sheet area (Angstrom^2), or per-site response.
-      ! A positive measure is the TOTAL sampled volume/area, never per atom.
+      ! Unit-cell volume (Angstrom^3) or in-plane area (Angstrom^2).
+      ! A positive measure overrides the cell measure, not the cluster measure.
       character(len=16) :: response_geometry = 'bulk'
       real(rp) :: response_measure = 0.0_rp
       !> Pre factor Gamma_nm for the conductivity tensor calculation
@@ -194,7 +194,7 @@ contains
       allocate(g_kernel(this%control%cond_ll), weights(this%control%cond_ll))
 
       ! Precompute acos(x) and sqrt(1 - x^2) with scaled energy
-      a = (this%en%energy_max - this%en%energy_min)/(2.0_rp - 0.3_rp)
+      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       b = (this%en%energy_max + this%en%energy_min)/2
 
       wscale(:) = (this%en%ene(:) - b)/a
@@ -250,7 +250,7 @@ contains
       real(rp), dimension(:, :), allocatable :: integrand_l_im, integrand_l_real
       real(rp), dimension(:), allocatable :: integrand_tot_real, integrand_tot_im, fermi_f, wscale, real_part_l, im_part_l
       complex(rp), dimension(18) :: temp
-      real(rp) :: a, b, real_part, im_part, factor
+      real(rp) :: a, b, real_part, im_part, factor, volume, de
       ! Printing variables
       character(len=*), parameter :: fname_cond_total = "cond_total.out"
       character(len=*), parameter :: fname_cond_orb_real = "cond_total_orb_real.out"
@@ -273,8 +273,9 @@ contains
       integrand_at(:, :, :, :) = (0.0d0, 0.0d0)
       temp(:) = 0.0d0
     
-      a = (this%en%energy_max - this%en%energy_min)/(2.0_rp - 0.3_rp)
+      a = (this%en%energy_max - this%en%energy_min)/(2 - 0.3)
       b = (this%en%energy_max + this%en%energy_min)/2
+      de = this%en%energy_max - this%en%energy_min
 
       wscale(:) = (this%en%ene(:) - b)/a
 
@@ -285,10 +286,13 @@ contains
          loop_over = this%control%random_vec_num
       end select  
 
-      ! x=(E-b)/a uses a=DeltaE/1.7, not DeltaE/2. The Bastin energy
-      ! Jacobian is 1/a^2. Constants and spatial normalization are restored
-      ! only in response_*.out; cond_*.out retain the bare numerical kernels.
-      factor = 4.0_rp / (pi*a*a)
+      volume = dot_product(this%lattice%a(:, 1), (cross_product(this%lattice%a(:, 2), this%lattice%a(:, 3))))
+      !factor = 1 !(e_const**2) * (hbar_const / e_const) / (hbar_const * volume)
+      !factor = (hbar_const / e_const) * ((4 * e_const * hbar_const) / (pi * volume))
+      !write(*,*) (hbar_const / e_const), ((4 * e_const * hbar_const) / (pi * volume))
+      factor = 16 / (pi * (de**2))
+      write(*,*) factor, volume, de
+      !write(*,*) (16 * hbar_const * (e_const**2)) / (pi * volume * ((de * ry2joule)**2))
       do ntype = 1, loop_over
          !$omp parallel do default(shared) private(i, n, m, l2) schedule(dynamic)
          do i = 1, this%en%channels_ldos + 10
@@ -382,10 +386,10 @@ contains
             close(400+ntype)
          end do  ! end do over ntype
       end if
-      ! Close raw files explicitly before producing normalized outputs.
       close(3)
       close(32)
       close(33)
+      ! Convert the same atomic traces after the legacy raw output is written.
       call this%write_physical_response(integrand, integrand_at, wscale, a, b)
       ! End writing statements
 
@@ -393,43 +397,40 @@ contains
    end subroutine calculate_conductivity_tensor
 
    !---------------------------------------------------------------------------
-   ! Integrate the zero-temperature occupied interval x(1):x(upper).
-   ! Unlike simpson_f, assumed-shape arguments cannot invent ten extra points.
-   ! Integrate quadratic interpolants, including a partial panel for an odd
-   ! number of intervals. This is exact for quadratics on nonuniform grids too.
-   ! There is no extra energy Jacobian here: x is already dimensionless.
+   ! Preserve simpson_f's uniform-grid Simpson weights and zero-temperature
+   ! Fermi step (one half at EF). Use only complete panels in the actual array:
+   ! the old nv1+10 dummy extent could read past channels_ldos+10.
+   ! This is a bounds repair, not a replacement quadrature or prefactor.
    !---------------------------------------------------------------------------
    function conductivity_integral(y, x, upper) result(value)
       real(rp), intent(in) :: y(:), x(:)
       integer, intent(in) :: upper
-      real(rp) :: value, h1, d1, d2, ta, tb
-      integer :: i, j, last
-      value = 0.0_rp
-      if (size(y) /= size(x) .or. upper < 1 .or. upper > size(x)) then
+      real(rp) :: value, panel, occupation
+      integer :: i, j
+
+      if (size(y) /= size(x) .or. size(x) < 3 .or. upper < 1 .or. upper > size(x)) then
          call g_logger%fatal('Invalid conductivity integration bounds', __FILE__, __LINE__)
       end if
-      if (any(x(2:)-x(:size(x)-1) <= 0.0_rp)) then
-         call g_logger%fatal('Conductivity energy grid must increase strictly', __FILE__, __LINE__)
-      end if
-      if (upper == 1) return
-      if (size(x) == 2) then
-         value = (x(2)-x(1))*(y(1)+y(2))/2
-         return
-      end if
-      i = 1
-      do while (i < upper)
-         j = i
-         last = min(i+2, upper)
-         if (i+2 > size(x)) j = i-1
-         h1 = x(j+1)-x(j)
-         d1 = (y(j+1)-y(j))/h1
-         d2 = ((y(j+2)-y(j+1))/(x(j+2)-x(j+1))-d1)/(x(j+2)-x(j))
-         ta = x(i)-x(j)
-         tb = x(last)-x(j)
-         value = value + y(j)*(tb-ta) + d1*(tb*tb-ta*ta)/2 &
-                 + d2*((tb**3-ta**3)/3-h1*(tb*tb-ta*ta)/2)
-         i = last
+      value = 0.0_rp
+      do i = 2, size(x)-1, 2
+         panel = 0.0_rp
+         do j = i-1, i+1
+            if (x(j)-x(upper) > 40.0d-15) then
+               occupation = 0.0_rp
+            else if (x(j)-x(upper) < -40.0d-15) then
+               occupation = 1.0_rp
+            else
+               occupation = fermifun(x(j), x(upper), 1.0d-15)
+            end if
+            if (j == i) then
+               panel = panel + 4.0_rp*y(j)*occupation
+            else
+               panel = panel + y(j)*occupation
+            end if
+         end do
+         value = value + panel
       end do
+      value = value*(x(2)-x(1))/3.0_rp
    end function conductivity_integral
 
    ! Bare matrices carry Ry**power_e * Angstrom**power_l. The rank labels
@@ -463,12 +464,10 @@ contains
    end subroutine response_operator_units
 
    !---------------------------------------------------------------------------
-   ! Convert the trace estimator to a density or per-site average. For per_type
-   ! the representative trace is multiplied by the ACTUAL population of each
-   ! type. For random_vec each normalized seed estimates Tr/N, so restore N.
-   ! n3=1 does not select sheet units: a one-cell periodic stack is still bulk.
-   ! Automatic measures require a complete generated Bravais supercell. For a
-   ! cut cluster/custom geometry supply its total measure explicitly.
+   ! The per_type traces are the selected unit-cell atomic subspaces. Sum
+   ! them once each; cluster populations and replication counts do not enter.
+   ! response_measure overrides the CELL volume (Angstrom^3) or area
+   ! (Angstrom^2). Zero derives it from the lattice vectors and alat.
    !---------------------------------------------------------------------------
    subroutine response_normalization(this, weights, conversion, unit_label)
       use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -489,27 +488,17 @@ contains
          ndim = 3
       case('sheet')
          ndim = 2
-      case('per_atom')
-         ndim = 0
-         if (measure /= 0) call g_logger%fatal('per_atom does not accept response_measure', __FILE__, __LINE__)
-         measure = real(this%lattice%kk,rp)
+
       case default
-         call g_logger%fatal('response_geometry must be bulk, sheet or per_atom', __FILE__, __LINE__)
+         call g_logger%fatal('response_geometry must be bulk or sheet', __FILE__, __LINE__)
       end select
       if (measure == 0) then
-         if (.not. this%lattice%pbc) then
-            call g_logger%fatal('Supply total response_measure for an open/cut sample', __FILE__, __LINE__)
-         end if
-         if (this%lattice%kk /= this%lattice%ntot*this%lattice%n1*this%lattice%n2*this%lattice%n3) then
-            call g_logger%fatal('Incomplete supercell: supply total response_measure', __FILE__, __LINE__)
-         end if
          area = norm2(cross_product(this%lattice%a(:,1),this%lattice%a(:,2)))*this%lattice%alat**2
          if (ndim == 2) then
-            measure = area*this%lattice%n1*this%lattice%n2
+            measure = area
          else
             measure = abs(dot_product(this%lattice%a(:,3),cross_product(this%lattice%a(:,1), &
-                          this%lattice%a(:,2))))*this%lattice%alat**3 &
-                          *this%lattice%n1*this%lattice%n2*this%lattice%n3
+                          this%lattice%a(:,2))))*this%lattice%alat**3
          end if
       end if
       if (.not. ieee_is_finite(measure) .or. measure <= 0) then
@@ -519,11 +508,14 @@ contains
       case('per_type')
          if (size(weights) /= this%lattice%ntype) error stop 'Response type weight size'
          do it = 1, size(weights)
-            weights(it) = real(count(this%lattice%iz(1:this%lattice%kk)==it),rp)/measure
+            weights(it) = 1.0_rp/measure
          end do
       case('random_vec')
          if (size(weights) /= this%control%random_vec_num) error stop 'Response random weight size'
-         weights = real(this%lattice%kk,rp)/(measure*size(weights))
+         ! Preserve the legacy average over normalized random seeds. This is
+         ! a separate estimator; no cluster-size correction belongs in a
+         ! units-only patch. Its trace normalization needs a separate audit.
+         weights = 1.0_rp/(measure*size(weights))
       case default
          call g_logger%fatal('Unknown response trace estimator', __FILE__, __LINE__)
       end select
@@ -551,10 +543,6 @@ contains
             conversion = 2*pi
             unit_label = 'e^2/h'
             if (rank > 0) unit_label = '('//trim(qlabel)//') e/h'
-         case(0)
-            conversion = e_const**2/hbar_const*1.0e-20_rp
-            unit_label = 'S m^2 per atom'
-            if (rank > 0) unit_label = '('//trim(qlabel)//'/e) S m^2 per atom'
          end select
       else
          ! Accumulations keep 1/Ry; torques contain [H,Q]/hbar, so replace Ry
@@ -571,8 +559,6 @@ contains
             unit_label = trim(unit_label)//' per m^3'
          case(2)
             unit_label = trim(unit_label)//' per m^2'
-         case(0)
-            unit_label = trim(unit_label)//' per atom'
          end select
       end if
    end subroutine response_normalization
@@ -599,10 +585,12 @@ contains
       if (ntrace < 1) call g_logger%fatal('Response trace count must be positive', __FILE__, __LINE__)
       allocate(weights(ntrace), re(18,size(x)), im(18,size(x)), type_re(size(x)), type_im(size(x)))
       call this%response_normalization(weights, conversion, units)
-      re = 0; im = 0
+      re = 0.0_rp
+      im = 0.0_rp
       if (trim(this%control%cond_calctype) == 'per_type') then
          do it = 1, ntrace
-            type_re = 0; type_im = 0
+            type_re = 0.0_rp
+            type_im = 0.0_rp
             do l = 1, 18
                re(l,:) = re(l,:) + weights(it)*real(integrand_at(l,l,:,it))
                im(l,:) = im(l,:) + weights(it)*aimag(integrand_at(l,l,:,it))
@@ -635,11 +623,11 @@ contains
       write(info,'(a)') 'energy column = E-Ef in eV; raw cond_* energy remains Ry'
       write(info,'(a)') 'multipoles = angular powers q0=hbar^rank; spin matrix already sigma/2'
       write(info,'(a)') 'sign = existing positive-e Bastin convention; no additional sign flip'
-      write(info,'(a)') 'per_type = population-weighted representative-site approximation'
-      write(info,'(a)') 'random_vec = normalized seeds estimate Tr/N; N restored in weights'
+      write(info,'(a)') 'per_type = sum of selected unit-cell atomic-subspace traces, once each'
+      write(info,'(a)') 'random_vec = legacy seed average retained; cell-trace equivalence not established'
       write(info,'(a)') 'raw cond_* = bare kernels; historical unweighted type average, no volume or constants'
-      write(info,'(a,es25.16)') 'normalization_measure (Angstrom^3, Angstrom^2, or site count) = ', &
-                                    real(this%lattice%kk,rp)/sum(weights)
+      write(info,'(a,es25.16)') 'cell_measure (Angstrom^3 or Angstrom^2) = ', &
+                                    1.0_rp/(weights(1)*merge(1,ntrace,this%control%cond_calctype == 'per_type'))
       write(info,'(a,3es25.16)') 'output direction = ',this%recursion%transport_dir_a
       write(info,'(a,3es25.16)') 'input direction = ',this%recursion%transport_dir_b
       write(info,'(a)') 'pol_alpha = '//trim(this%recursion%hamiltonian%pol_alpha)

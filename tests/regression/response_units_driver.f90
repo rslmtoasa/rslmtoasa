@@ -1,6 +1,7 @@
 ! Production conductivity normalization, integration and output fixture.
 program response_units_driver
  use precision_mod, only: rp
+ use math_mod, only: simpson_f
  use conductivity_mod, only: conductivity, conductivity_integral, response_operator_units
  use control_mod, only: control
  use lattice_mod, only: lattice
@@ -15,11 +16,11 @@ program response_units_driver
  type(energy), target :: en
  type(recursion), target :: rec
  type(hamiltonian), target :: ham
- real(rp) :: x(12), y(12), weights(2), conversion, height
+ real(rp) :: x(12), y(12), weights(2), conversion, height, reference
  complex(rp) :: at(18,18,12,2), total(18,18,12)
  character(len=160) :: units
  character(len=32) :: name, argument
- integer :: i, j, pe, pl, rank, u
+ integer :: i, j, pe, pl, rank, u, replicas
  call g_logger%init()
  c%control=>ctl; c%lattice=>lat; c%en=>en; c%recursion=>rec
  lat%control=>ctl
@@ -39,6 +40,13 @@ program response_units_driver
  lat%alat=2; lat%iz=[1,1,1,2,2]
  call get_command_argument(4,argument)
  if (trim(argument)=="open") lat%pbc=.false.
+ call get_command_argument(5,argument)
+ if (len_trim(argument)>0) then
+  read(argument,*) replicas
+  lat%n1=replicas; lat%n2=replicas; lat%n3=replicas
+  lat%kk=7
+  lat%iz=[1,1,1,1,1,1,2]
+ end if
  ctl%cond_calctype='per_type'; ctl%random_vec_num=2; ctl%cond_ll=4
  call c%restore_to_default()
  call c%build_from_file()
@@ -52,15 +60,23 @@ program response_units_driver
  do i=1,12
   x(i)=-.7_rp+real(i-1,rp)*1.4_rp/11
  end do
- ! Integrate several polynomials on an explicitly nonuniform grid; every
- ! prefix includes the formerly out-of-bounds final and partial panels.
+ ! Exercise legacy Simpson panels at every Fermi-grid point.
  open(newunit=u,file='quadrature.txt',status='replace')
  do j=0,2
   y=(x+1)**2
   y=y**j
   do i=1,12
-   write(u,'(i3,i3,es25.16)') j,i,conductivity_integral(y,(x+1)**2,i)
+   write(u,'(i3,i3,es25.16)') j,i,conductivity_integral(y,x,i)
   end do
+ end do
+ close(u)
+ ! Compare directly with the unmodified production integrator on 11 valid
+ ! points (NPTS=1 means NPTS+10=11), including all endpoint parities.
+ open(newunit=u,file='legacy_comparison.txt',status='replace')
+ y=1+2*x+3*x*x
+ do i=1,11
+  call simpson_f(reference,x(:11),x(i),1,y(:11),.true.,.false.,0.0_rp)
+  write(u,'(2es25.16)') reference,conductivity_integral(y,x,i)
  end do
  close(u)
  en%channels_ldos=2; en%nv1=3; en%energy_min=-1.5_rp; en%energy_max=1.9_rp; en%fermi=.1_rp
@@ -75,6 +91,7 @@ program response_units_driver
  at(2,2,:,2)=3*(1+2*x+3*x*x)
  total=at(:,:,:,1)+at(:,:,:,2)
  call c%write_physical_response(total,at,x,2.0_rp,.2_rp)
+ call execute_command_line('cp response_total.out cell_total.out')
  ! Exercise the raw pipeline too, without requiring atomic potential files.
  ctl%cond_calctype='random_vec'
  allocate(rec%mu_nm_stochastic(18,18,4,4,2))
