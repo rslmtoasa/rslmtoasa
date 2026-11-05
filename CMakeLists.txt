@@ -79,15 +79,24 @@ if (ENABLE_OPENMP)
   endif()
 endif(ENABLE_OPENMP)
 
+# Keep the compiler chosen at configure time. For Intel oneAPI, use ifx
+# with -DMPI_Fortran_COMPILER=mpiifx, or select mpiifx as the compiler.
+# Do not set I_MPI_F90 to a wrapper: that can make it invoke itself.
 if(ENABLE_MPI)
-    find_package(MPI REQUIRED)
-    if(MPI_Fortran_FOUND)
-        set(CMAKE_Fortran_COMPILER ${MPI_Fortran_COMPILER})
-        include_directories(${MPI_Fortran_INCLUDE_PATH})
-        add_definitions(${MPI_Fortran_COMPILE_FLAGS})
-        set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DUSE_MPI")
+    find_package(MPI REQUIRED COMPONENTS Fortran)
+    add_compile_definitions(USE_MPI)
+endif()
+
+# The source uses default-width BLAS/LAPACK integer arguments. Avoid silently
+# changing all Fortran integers (including MPI arguments) to eight bytes.
+if(BLA_VENDOR MATCHES "ilp" OR BLA_SIZEOF_INTEGER STREQUAL "8")
+    message(FATAL_ERROR "Use LP64 BLAS/LAPACK, e.g. -DBLA_VENDOR=Intel10_64lp")
+endif()
+if(BLA_VENDOR MATCHES "^Intel" AND DEFINED ENV{MKL_IL})
+    if(NOT "$ENV{MKL_IL}" STREQUAL "lp64")
+        message(FATAL_ERROR "This build requires MKL_IL=lp64 (or unset MKL_IL)")
     endif()
-endif(ENABLE_MPI)
+endif()
 
 find_package(BLAS REQUIRED)
 if(BLAS_FOUND)
@@ -110,49 +119,9 @@ if(LAPACK95_FOUND)
   set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DLAPACK95_FOUND")
 endif()
 
-# MKL machine dependent settings
-if (BLAS_FOUND AND BLAS95_FOUND)
-  if (BLA_VENDOR MATCHES "^Intel")
-    if(NOT DEFINED ENV{MKL_IL})
-      set(ENV{MKL_IL} ilp64)
-    elseif(NOT $ENV{MKL_IL} STREQUAL lp64 OR NOT $ENV{MKL_IL} STREQUAL ilp64)
-      message(FATAL_ERROR "Invalid option for MKL_IL")
-    endif()
-
-    if(NOT EXISTS "$ENV{MKLROOT}/include")
-      set(ENV{MKLROOT} "$ENV{MKLROOT}/mkl")
-    endif()
-
-    if ($ENV{MKL_IL} STREQUAL lp64)
-      set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -m64 -I$ENV{MKLROOT}/include -I$ENV{MKLROOT}/include/intel64/lp64")
-    endif()
-
-    if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-      if ($ENV{MKL_IL} STREQUAL ilp64)
-        set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -m64 -fdefault-integer-8 -I$ENV{MKLROOT}/include -I$ENV{MKLROOT}/include/intel64/ilp64")
-      endif()
-    endif()
-
-    if (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
-      if ($ENV{MKL_IL} STREQUAL ilp64)
-        set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -m64 -i8 -I$ENV{MKLROOT}/include -I$ENV{MKLROOT}/include/intel64/ilp64")
-      endif()
-      if (APPLE)
-        set(MKL_LIBRARY_DIRS "$ENV{MKLROOT}/lib")
-        find_library(MKL_CORE mkl_core.a HINTS ${MKL_LIBRARY_DIRS})
-        find_library(MKL_COMPILER mkl_intel_$ENV{MKL_IL}.a HINTS ${MKL_LIBRARY_DIRS})
-        find_library(MKL_THREADING mkl_intel_thread.a HINTS ${MKL_LIBRARY_DIRS})
-      endif()
-      if (UNIX AND NOT APPLE)
-        set(MKL_LIBRARY_DIRS "$ENV{MKLROOT}/lib/intel64")
-        find_library(MKL_CORE libmkl_core.a HINTS ${MKL_LIBRARY_DIRS})
-        find_library(MKL_COMPILER libmkl_intel_$ENV{MKL_IL}.a HINTS ${MKL_LIBRARY_DIRS})
-        find_library(MKL_THREADING libmkl_intel_thread.a HINTS ${MKL_LIBRARY_DIRS})
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-intel -Wl,--start-group ${MKL_CORE} ${MKL_COMPILER} ${MKL_THREADING} -Wl,--end-group")
-      endif()
-    endif()
-  endif()
-endif()
+# FindBLAS/FindLAPACK supply the selected MKL link dependencies for both
+# Intel (ifort) and IntelLLVM (ifx). Do not override them with hard-coded
+# archive paths, global -i8 flags, or CMAKE_EXE_LINKER_FLAGS.
 
 ##############################################################################################
 # Determine and set compiler-dependent flags
@@ -164,15 +133,18 @@ add_executable(${PROJECT_BINARY} ${SRC}/main.f90)
 # Add the directory of the sources
 add_subdirectory(${SRC})
 
+# Apply MPI usage requirements to the library that compiles mpi.f90.
+# The plain signature matches source/CMakeLists.txt and propagates these
+# requirements to the main executable and the existing test executables.
+if(ENABLE_MPI)
+    target_link_libraries(${PROJECT_NAME} MPI::MPI_Fortran)
+endif()
+
 # Linking with Libraries
-if(ENABLE_OPENMP AND ENABLE_MPI AND OpenMP_Fortran_FOUND AND MPI_Fortran_FOUND)
-    target_link_libraries(${PROJECT_BINARY} ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} ${MPI_Fortran_LIBRARIES} OpenMP::OpenMP_Fortran Threads::Threads ${CMAKE_DL_LIBS})
-elseif(ENABLE_OPENMP AND OpenMP_Fortran_FOUND)
-    target_link_libraries(${PROJECT_BINARY} ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} OpenMP::OpenMP_Fortran Threads::Threads ${CMAKE_DL_LIBS})
-elseif(ENABLE_MPI AND MPI_Fortran_FOUND)
-    target_link_libraries(${PROJECT_BINARY} ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} ${MPI_Fortran_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
+if(ENABLE_OPENMP AND OpenMP_Fortran_FOUND)
+    target_link_libraries(${PROJECT_BINARY} ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${BLAS_LIBRARIES} ${LAPACK95_LIBRARIES} OpenMP::OpenMP_Fortran Threads::Threads ${CMAKE_DL_LIBS})
 else()
-    target_link_libraries(${PROJECT_BINARY} ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
+    target_link_libraries(${PROJECT_BINARY} ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${BLAS_LIBRARIES} ${LAPACK95_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
 endif()
 
 ##############################################################################################

@@ -322,3 +322,23 @@ RS-LMTO-ASA is distributed under the **GNU General Public License, version 3**. 
 See [octupole response inputs and conventions](docs/octupole_response.md) for
 pure rank-three accumulation/current components, migration from mixed cubic
 operators, Hall-response input fragments, and current validation limitations.
+
+### Intel oneAPI with MPI (Linux)
+
+Load the matching compiler, Intel MPI and MKL environment, then configure a
+fresh build directory. Select LP64 MKL; global eight-byte integer builds are
+not supported by this configuration. MPI remains optional (OFF by default).
+
+```sh
+source /opt/intel/oneapi/setvars.sh
+cmake -S . -B build-ifx-mpi \
+  -DCMAKE_Fortran_COMPILER=ifx \
+  -DMPI_Fortran_COMPILER=mpiifx \
+  -DENABLE_MPI=ON -DENABLE_OPENMP=ON \
+  -DBLA_VENDOR=Intel10_64lp -DCMAKE_BUILD_TYPE=Release
+cmake --build build-ifx-mpi --parallel
+```
+
+Alternatively, select `-DCMAKE_Fortran_COMPILER=mpiifx` in a fresh build
+folder. Do not set `I_MPI_F90` to `mpiifx` itself. Keep the oneAPI environment
+loaded when running so the MPI and MKL shared libraries can be found.
