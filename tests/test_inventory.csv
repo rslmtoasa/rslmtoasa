@@ -272,10 +272,10 @@ AppGbtKspaceScSpiralAfm_rotation,functional;gbt;kspace,364.74,GBT,
 AppGbtKspaceScSpiralAfm_restart,functional;gbt;kspace,170.71,GBT,
 AppGbtKspaceScSpiralB2,functional;gbt;kspace,351.83,GBT,
 AppGbtKspaceScSpiralB2_orthogonal,functional;gbt;kspace,316.18,GBT,
-AppGbtKspaceScSpiralI3_fe_L4_first,functional;gbt;kspace,1033.54,GBT,
-AppGbtKspaceScSpiralI3_fe_L3_first,functional;gbt;kspace,667.19,GBT,
+AppGbtKspaceScSpiralI3_fe_L4_first,functional;gbt;kspace,1033.54,GBT,tests;tests/gbt;tests/gbt/fixtures/bccFe_sc2/lattice.nml;tests/gbt/fixtures/bccFe_super_q025/lattice.nml;tests/gbt/gbt_app_common.py;tests/gbt/oracles/tolerances.nml;tests/gbt/test_kspace_scspiral_i3.py;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml
+AppGbtKspaceScSpiralI3_fe_L3_first,functional;gbt;kspace,667.19,GBT,tests;tests/gbt;tests/gbt/fixtures/bccFe_sc2/lattice.nml;tests/gbt/fixtures/bccFe_super_q033/lattice.nml;tests/gbt/gbt_app_common.py;tests/gbt/oracles/tolerances.nml;tests/gbt/test_kspace_scspiral_i3.py;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml
 AppGbtKspaceScSpiralI3_fe_L4_second,functional;gbt;kspace,468.28,GBT,
-AppGbtKspaceScSpiralI3Ccor_fe_L4_first,functional;gbt;kspace,1089.28,GBT,
+AppGbtKspaceScSpiralI3Ccor_fe_L4_first,functional;gbt;kspace,1089.28,GBT,tests;tests/gbt;tests/gbt/fixtures/bccFe_sc2/lattice.nml;tests/gbt/fixtures/bccFe_super_q025/lattice.nml;tests/gbt/gbt_app_common.py;tests/gbt/oracles/tolerances.nml;tests/gbt/test_kspace_scspiral_i3.py;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml
 AppGbtKspaceScSpiralI3Ccor_fe_L4_second,functional;gbt;kspace,908.97,GBT,
 AppConstraintsNamelistMom,constraints;functional;quick,4.14,SCF example,
 AppConstraintsNamelistMalformed,constraints;functional;quick,0.17,SCF example,
