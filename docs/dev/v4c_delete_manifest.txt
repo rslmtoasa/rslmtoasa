@@ -1,6 +1,8 @@
 # bytes<TAB>path<TAB>reason  (all recoverable from archive/{fable_v4b,fable_v4b_u,fable_v4b_gbt,main}-2026-11-05)
 259905644	docs/validation/fixed_ldau/rs	LDA+U run evidence (archive/fable_v4b_u-2026-11-05)
 21238617	example/bulk/fccNiO_tetralith_runs	variant run directory
+5942031	tests/spin_response/oracles/	oracle .nml files of the spin-response kernels, regenerated at test time by tests/spin_response/with_oracles.py
+4420033	tests/validation/fixed_ldau/	data, scripts or decks of retired tests (150 files)
 3564513	example/bulk/hcpCo-folder/hcpCo_ramon	variant run directory
 3414498	example/bulk/hcpCo-folder/hcpCo_testing	variant run directory
 3048441	docs/validation/fixed_ldau/evidence	LDA+U run evidence (archive/fable_v4b_u-2026-11-05)
@@ -11,9 +13,12 @@
 1520100	example/impurity/hcpCo-bulk-Fe-imp-dir/Co-host-Fe-imp/fort.1122	generated run output
 1293118	example/bulk/fccNiO/clust	generated run output
 1229101	example/bulk/fccNiO/fort.800	generated run output
+1049831	tests/gbt/oracles/	data, scripts or decks of retired tests (9 files)
+939011	tests/magnetic_scf/results/	data, scripts or decks of retired tests (56 files)
 874152	example/bulk/fccNiO/rs2paoham.dat	generated run output
 864390	example/impurity/u_imp_comparison/Fe_bulk_u/fort.805	generated run output
 864390	example/impurity/u_imp_comparison/imp_u_from_start/fort.805	generated run output
+838892	tests/xc_reconciliation/results/	data, scripts or decks of retired tests (9 files)
 790452	example/impurity/u_imp_comparison/imp_u_from_start/fort.1122	generated run output
 690120	example/bulk/B2Fe/rs2paoham.dat	generated run output
 616366	example/impurity/implementation-write-to-out/imp-u/fort.805	generated run output
@@ -32,6 +37,7 @@
 479410	example/impurity/u_imp_comparison/Fe_bulk_u/fort.451	generated run output
 479410	example/impurity/u_imp_comparison/imp_u_from_start/fort.451	generated run output
 479219	example/impurity/implementation-write-to-out/bccFe-u/fort.451	generated run output
+448084	tests/postproc/cases/	data, scripts or decks of retired tests (2 files)
 445896	example/impurity/u_imp_comparison/Fe_bulk_u/fort.1122	generated run output
 423811	example/impurity/u_imp_comparison/Fe_bulk_u/clust	generated run output
 423811	example/impurity/u_imp_comparison/imp_u_from_start/clust	generated run output
@@ -63,6 +69,7 @@
 133030	example/impurity/u_imp_comparison/Fe_bulk_u/fort.251	generated run output
 133030	example/impurity/u_imp_comparison/imp_u_from_start/fort.251	generated run output
 132341	example/impurity/implementation-write-to-out/bccFe-u/fort.251	generated run output
+93885	tests/scf/references/	data, scripts or decks of retired tests (80 files)
 82830	example/bulk/B2Fe/fort.125	generated run output
 82830	example/bulk/fccNiO/fort.125	generated run output
 82830	example/impurity/hcpCo-bulk-Fe-imp-dir/Co-host-Fe-imp/fort.125	generated run output
@@ -73,38 +80,91 @@
 82830	example/impurity/u_imp_comparison/imp_u_from_start/bulk.125	generated run output
 82830	example/impurity/u_imp_comparison/imp_u_from_start/fort.125	generated run output
 82533	example/impurity/implementation-write-to-out/bccFe-u/fort.125	generated run output
+57632	tests/benchmarks/scf_b1r.py	data, scripts or decks of retired tests (1 file)
+53745	tests/benchmarks/scf_b1r2.py	data, scripts or decks of retired tests (1 file)
+53636	tests/scf/cases/	data, scripts or decks of retired tests (17 files)
+51010	tests/benchmarks/accp0_real_material.f90	data, scripts or decks of retired tests (1 file)
 50670	example/impurity/implementation-write-to-out/bccFe/fort.1122	generated run output
+48602	tests/benchmarks/benchmark_harness.py	data, scripts or decks of retired tests (1 file)
+48349	tests/spin_response/baseline_cr/	data, scripts or decks of retired tests (4 files)
+48074	tests/spin_response/baseline_ni/	data, scripts or decks of retired tests (4 files)
+47804	tests/benchmarks/scf_b0c.py	data, scripts or decks of retired tests (1 file)
+46024	tests/unit/test_lda_u_hamiltonian.f90	data, scripts or decks of retired tests (1 file)
+38909	tests/gbt/rs_freeze/	data, scripts or decks of retired tests (8 files)
+36720	tests/benchmarks/kpm_g12_transport.py	data, scripts or decks of retired tests (1 file)
 33364	example/bulk/fccNiO/view.sbar	generated run output
+31080	tools/ldau_regression.py	data, scripts or decks of retired tests (1 file)
+27826	tests/benchmarks/accp0_real_material.py	data, scripts or decks of retired tests (1 file)
+27397	tests/cuda/rsrec_validate.py	data, scripts or decks of retired tests (1 file)
 27360	example/bulk/fccNiO/sbar	generated run output
+27235	tests/benchmarks/kpm_b1_report.py	data, scripts or decks of retired tests (1 file)
+24811	tests/benchmarks/accp0_supercell_fe.py	data, scripts or decks of retired tests (1 file)
 24173	example/impurity/u_imp_comparison/imp_u_from_start/u_imp_vs_u_bulk.pdf	generated run output
 23836	example/bulk/fccNiO/str.out	generated run output
+23680	tests/cuda/kpm_reference.py	data, scripts or decks of retired tests (1 file)
 23026	example/impurity/hcpCo-bulk-Fe-imp-dir/Co-host-Fe-imp/str.out	generated run output
 22828	example/impurity/hcpCo-bulk-Fe-imp-dir/Co-host-Fe-imp/view.sbar	generated run output
 22638	example/impurity/implementation-write-to-out/imp-u/imp-vs-bulk.pdf	generated run output
+21977	tests/unit/test_gbt_wp01_q0.f90	data, scripts or decks of retired tests (1 file)
+21519	tests/unit/test_spin_density.f90	data, scripts or decks of retired tests (1 file)
+21368	tests/benchmarks/accp1b_physical_scf.f90	data, scripts or decks of retired tests (1 file)
 20268	example/bulk/B2Fe/fort.1122	generated run output
+19824	tests/unit/test_lr_basis_augmentation.f90	data, scripts or decks of retired tests (1 file)
 18720	example/impurity/hcpCo-bulk-Fe-imp-dir/Co-host-Fe-imp/sbar	generated run output
 18588	example/impurity/hcpCo-bulk-Fe-imp-dir/Co-host-Fe-imp/projected-dos.pdf	generated run output
+18293	tests/unit/test_lr_rs_gf_representation.f90	data, scripts or decks of retired tests (1 file)
 16811	docs/validation/fixed_ldau/REMEDIATION_GATES.md	LDA+U campaign history (archive tag)
+16594	tests/scf/README.md	data, scripts or decks of retired tests (1 file)
 15568	example/impurity/implementation-write-to-out/bccFe-u/no_u_dos.pdf	generated run output
 15568	example/impurity/implementation-write-to-out/bccFe/no_u_dos.pdf	generated run output
 15497	example/impurity/hcpCo-bulk-Fe-imp-dir/Co-host-Fe-imp/dos.pdf	generated run output
+15219	tests/unit/test_fermi_surface_plot.py	data, scripts or decks of retired tests (1 file)
+14501	tests/unit/test_kspace_occupations.f90	data, scripts or decks of retired tests (1 file)
+14436	tests/benchmarks/README.md	data, scripts or decks of retired tests (1 file)
 14427	example/impurity/hcpCo-bulk-Fe-imp-dir/Co-host-Fe-imp/dos2.pdf	generated run output
 13566	docs/validation/fixed_ldau/PROJECTOR_CONTRACT.md	LDA+U campaign history (archive tag)
+13469	tests/validation/spin_response_cr/	data, scripts or decks of retired tests (5 files)
+13360	tests/unit/test_reciprocal_cuda_eigensolver.cpp	data, scripts or decks of retired tests (1 file)
 13170	example/impurity/implementation-write-to-out/imp-u/view.sbar	generated run output
 13170	example/impurity/u_imp_comparison/Fe_bulk_u/view.sbar	generated run output
 13170	example/impurity/u_imp_comparison/imp_u_from_start/view.sbar	generated run output
+12921	tests/unit/test_dresp03r_lmto_mapping.f90	data, scripts or decks of retired tests (1 file)
+12892	tests/benchmarks/reciprocal_crossover.f90	data, scripts or decks of retired tests (1 file)
 12832	docs/validation/fixed_ldau/PHASE0.md	LDA+U campaign history (archive tag)
+12572	tests/benchmarks/scf_b1.py	data, scripts or decks of retired tests (1 file)
 12442	example/impurity/implementation-write-to-out/bccFe/view.sbar	generated run output
 12351	example/impurity/implementation-write-to-out/bccFe-u/view.sbar	generated run output
+11759	tests/unit/test_reciprocal_cuda_lehmann.cpp	data, scripts or decks of retired tests (1 file)
+11740	tests/gbt/test_kspace_orthogonal_scf.py	data, scripts or decks of retired tests (1 file)
+11038	tests/validation/val02_reciprocal_scf.py	data, scripts or decks of retired tests (1 file)
+10891	tests/magnetic_scf/run_magnetic_scf_regression.py	data, scripts or decks of retired tests (1 file)
 10800	example/impurity/implementation-write-to-out/imp-u/sbar	generated run output
 10800	example/impurity/u_imp_comparison/Fe_bulk_u/sbar	generated run output
 10800	example/impurity/u_imp_comparison/imp_u_from_start/sbar	generated run output
+10734	tests/benchmarks/accp2_real_material.py	data, scripts or decks of retired tests (1 file)
+10527	tests/validation/val22_lr_radial_ground_state.py	data, scripts or decks of retired tests (1 file)
+9561	tests/postproc/references/	data, scripts or decks of retired tests (12 files)
+9231	tests/benchmarks/accp1b_physical_scf.py	data, scripts or decks of retired tests (1 file)
+9032	tests/spin_response/ni_fcc/	data, scripts or decks of retired tests (3 files)
 8541	example/impurity/implementation-write-to-out/imp-u/str.out	generated run output
 8541	example/impurity/u_imp_comparison/imp_u_from_start/str.out	generated run output
+8518	tests/validation/ldau_tensor_reference.py	data, scripts or decks of retired tests (1 file)
+8434	tests/xc_reconciliation/run_xc_lda_reconciliation.py	data, scripts or decks of retired tests (1 file)
+8342	tests/validation/val04_lda_u.py	data, scripts or decks of retired tests (1 file)
+8127	tools/run_rslmto_checked.py	data, scripts or decks of retired tests (1 file)
+7687	tests/unit/test_hubbard_soc_surface_insertion.f90	data, scripts or decks of retired tests (1 file)
+7686	tests/validation/val04_lda_u_inputs.py	data, scripts or decks of retired tests (1 file)
+7345	tests/unit/test_hubbard_soc_insertion.f90	data, scripts or decks of retired tests (1 file)
 7144	docs/validation/fixed_ldau/PHASE2.md	LDA+U campaign history (archive tag)
+7120	tests/validation/val09_reciprocal_variants.py	data, scripts or decks of retired tests (1 file)
+7008	tests/unit/test_gbt_structure.f90	data, scripts or decks of retired tests (1 file)
+7004	tests/spin_response/s3_supercell.py	data, scripts or decks of retired tests (1 file)
 6961	example/impurity/implementation-write-to-out/imp-u/Fe-bulk_out.nml	generated run output
 6961	example/impurity/implementation-write-to-out/imp-u/Fe-imp_out.nml	generated run output
+6937	tests/benchmarks/test_scf_b0c_contract.py	data, scripts or decks of retired tests (1 file)
 6924	example/impurity/u_imp_comparison/Fe_bulk_u/str.out	generated run output
+6863	tests/benchmarks/acc06_crossover.py	data, scripts or decks of retired tests (1 file)
+6834	tests/unit/test_gbt_frame_contract.f90	data, scripts or decks of retired tests (1 file)
 6806	example/surface/fccNi001/ES_out.nml	generated run output
 6775	example/surface/fccNi001/Ni-S_out.nml	generated run output
 6770	example/surface/fccNi001/Ni-S-1_out.nml	generated run output
@@ -121,28 +181,50 @@
 6666	example/impurity/hcpCo-bulk-Fe-imp-dir/Co-host-Fe-imp/Co1-bulk_out.nml	generated run output
 6665	example/impurity/hcpCo-bulk-Fe-imp-dir/Co-host-Fe-imp/Co2-bulk_out.nml	generated run output
 6661	example/impurity/implementation-write-to-out/bccFe/Fe_out.nml	generated run output
+6661	tests/postproc/README.md	data, scripts or decks of retired tests (1 file)
+6648	tests/benchmarks/kpm_g0_transport.py	data, scripts or decks of retired tests (1 file)
+6566	tests/cuda/test_plugin_surface.py	data, scripts or decks of retired tests (1 file)
+6546	tests/unit/test_gbt_constraint_covariance.f90	data, scripts or decks of retired tests (1 file)
+6417	tests/benchmarks/test_benchmark_harness.py	data, scripts or decks of retired tests (1 file)
+6266	tests/validation/val18_gbt_wp01_q0.py	data, scripts or decks of retired tests (1 file)
+6163	tests/unit/test_gbt_kspace_one_band.f90	data, scripts or decks of retired tests (1 file)
+6085	tests/benchmarks/test_kpm_b0c_contract.py	data, scripts or decks of retired tests (1 file)
+6058	tests/gbt/fixtures/	data, scripts or decks of retired tests (2 files)
+5948	tests/validation/acc13_kpm_cuda.py	data, scripts or decks of retired tests (1 file)
 5928	docs/validation/fixed_ldau/LOG_PARSER_INVENTORY.md	LDA+U campaign history (archive tag)
 5800	docs/validation/fixed_ldau/PROGRESS.md	LDA+U campaign history (archive tag)
+5743	tests/unit/test_gbt_wp07_constraint_energy.f90	data, scripts or decks of retired tests (1 file)
+5660	tests/unit/test_ldau_occupation_producers.f90	data, scripts or decks of retired tests (1 file)
 5611	docs/validation/fixed_ldau/PHASE3.md	LDA+U campaign history (archive tag)
+5610	tests/unit/test_kspace_eigenpair_export.py	data, scripts or decks of retired tests (1 file)
 5270	docs/validation/fixed_ldau/S0B_RESULTS.md	LDA+U campaign history (archive tag)
 4927	docs/validation/fixed_ldau/S0C_RESULTS.json	LDA+U campaign history (archive tag)
 4884	docs/validation/fixed_ldau/S0_AMENDMENT.md	LDA+U campaign history (archive tag)
 4769	docs/validation/fixed_ldau/periodic_operator_bccfe_common_09.json	LDA+U campaign history (archive tag)
 4377	docs/validation/fixed_ldau/PHASE1.md	LDA+U campaign history (archive tag)
+4276	tests/unit/test_magnetic_representation.f90	data, scripts or decks of retired tests (1 file)
 4138	example/impurity/implementation-write-to-out/bccFe/str.out	generated run output
 4113	example/impurity/implementation-write-to-out/bccFe-u/str.out	generated run output
+4099	tests/unit/test_auto_impurity_local_mode.f90	data, scripts or decks of retired tests (1 file)
 3962	docs/validation/fixed_ldau/TRACE_NEUTRALITY.md	LDA+U campaign history (archive tag)
 3961	docs/validation/fixed_ldau/PHASE4.md	LDA+U campaign history (archive tag)
+3902	tests/unit/test_lr_radial_ground_state.f90	data, scripts or decks of retired tests (1 file)
+3882	tests/unit/test_accp1_batched_source.py	data, scripts or decks of retired tests (1 file)
+3844	tests/gbt_wp01/cases/	data, scripts or decks of retired tests (2 files)
+3494	tests/regression/README.md	data, scripts or decks of retired tests (1 file)
 3400	example/bulk/bccFeCo/Co_out.nml	generated run output
+3395	tests/validation/spin_response_ni	data, scripts or decks of retired tests (1 file)
 3394	example/bulk/fccNiO/O_out.nml	generated run output
 3392	example/bulk/bccFeCo/Fe_out.nml	generated run output
 3391	example/band_structure/bccFe/Fe_out.nml	generated run output
 3391	example/density_of_states/bccFe/Fe_out.nml	generated run output
 3382	example/bulk/B2Fe/Fe-2_out.nml	generated run output
 3381	example/bulk/B2Fe/Fe-1_out.nml	generated run output
+3376	tests/benchmarks/manifest.json	data, scripts or decks of retired tests (1 file)
 3375	example/bulk/fccNiO/Ni_out.nml	generated run output
 3368	example/impurity/u_imp_comparison/imp_u_from_start/Fe_out.nml	generated run output
 3367	example/impurity/u_imp_comparison/Fe_bulk_u/Fe_out.nml	generated run output
+3306	tests/gbt/test_kspace_orthogonal.py	data, scripts or decks of retired tests (1 file)
 3298	example/surface/fccCu001/ES_out.nml	generated run output
 3298	example/surface/fccCu001/ES_scf.nml	generated run output
 3262	example/surface/fccCu001/Cu-S-1_scf.nml	generated run output
@@ -230,6 +312,7 @@
 3233	example/bulk/Mn3Sn/240/Mn2_scf.nml	generated run output
 3233	example/bulk/Mn3Sn/240/Mn6_out.nml	generated run output
 3233	example/bulk/Mn3Sn/240/Mn6_scf.nml	generated run output
+3233	tests/unit/test_ldau_fixed_u_residual_mpi.f90	data, scripts or decks of retired tests (1 file)
 3232	example/bulk/Mn3Sn/120/Mn2_out.nml	generated run output
 3232	example/bulk/Mn3Sn/120/Mn2_scf.nml	generated run output
 3232	example/bulk/Mn3Sn/120/Mn5_out.nml	generated run output
@@ -267,12 +350,26 @@
 3228	example/bulk/Mn3Sn/120/Sn2_scf.nml	generated run output
 3224	example/impurity/B2FeCo/Co_out.nml	generated run output
 3224	example/impurity/B2FeCo/Co_scf.nml	generated run output
+3217	tests/regression/test_regression.py	data, scripts or decks of retired tests (1 file)
 3144	docs/validation/fixed_ldau/S0C_RESULTS.md	LDA+U campaign history (archive tag)
+3142	tests/gbt/test_kspace_scsweep.py	data, scripts or decks of retired tests (1 file)
 2952	docs/validation/fixed_ldau/S0_RESULTS.md	LDA+U campaign history (archive tag)
+2896	tests/scf/gbt_rs_freeze.json	data, scripts or decks of retired tests (1 file)
+2895	tests/benchmarks/test_scf_b1r2_contract.py	data, scripts or decks of retired tests (1 file)
 2703	docs/validation/fixed_ldau/S0B_AMENDMENT.md	LDA+U campaign history (archive tag)
+2483	tests/unit/test_acc09_reciprocal_variants_source.py	data, scripts or decks of retired tests (1 file)
+2482	tests/regression/bccFe_chebyshev/	data, scripts or decks of retired tests (2 files)
+2472	tests/validation/spin_response_fe_soc	data, scripts or decks of retired tests (1 file)
+2359	tests/unit/test_lr_basis_radial.f90	data, scripts or decks of retired tests (1 file)
 2303	docs/validation/fixed_ldau/projector_multisite_frozen_h.json	LDA+U campaign history (archive tag)
+2231	tests/spin_response/omp_identity.py	data, scripts or decks of retired tests (1 file)
+2131	tests/gbt/run_rs_freeze.py	data, scripts or decks of retired tests (1 file)
+2063	tests/unit/test_lr_basis_angular.f90	data, scripts or decks of retired tests (1 file)
+1991	tests/unit/test_constraining_field_source.py	data, scripts or decks of retired tests (1 file)
 1782	example/bulk/B2Fe/report.out	generated run output
 1782	example/bulk/fccNiO/report.out	generated run output
+1590	tests/unit/test_acc10_lehmann_source.py	data, scripts or decks of retired tests (1 file)
+1572	tests/unit/test_acc04_arbitrary_k_source.py	data, scripts or decks of retired tests (1 file)
 1535	example/impurity/hcpCo-bulk-Fe-imp-dir/Co-host-Fe-imp/report.out	generated run output
 1535	example/impurity/implementation-write-to-out/bccFe/report.out	generated run output
 1535	example/impurity/implementation-write-to-out/imp-u/bulk.out	generated run output
@@ -280,15 +377,27 @@
 1535	example/impurity/u_imp_comparison/Fe_bulk_u/report.out	generated run output
 1535	example/impurity/u_imp_comparison/imp_u_from_start/bulk.out	generated run output
 1535	example/impurity/u_imp_comparison/imp_u_from_start/report.out	generated run output
+1503	tests/validation/val_gbt_convergence.py	data, scripts or decks of retired tests (1 file)
+1487	tests/gbt/test_kspace_ham_order_invalid.py	data, scripts or decks of retired tests (1 file)
+1470	tests/unit/test_acc11_resident_source.py	data, scripts or decks of retired tests (1 file)
+1354	tests/unit/test_reciprocal_cuda_lifecycle.cpp	data, scripts or decks of retired tests (1 file)
+1048	tests/magnetic_scf/README.md	data, scripts or decks of retired tests (1 file)
 982	example/bulk/B2Fe/ves.out	generated run output
 982	example/bulk/fccNiO/ves.out	generated run output
+902	tests/xc_reconciliation/README.md	data, scripts or decks of retired tests (1 file)
+833	tests/benchmarks/supercellFe_accp0_examples.json	data, scripts or decks of retired tests (1 file)
+779	tests/gbt_wp6_constraint/README.md	data, scripts or decks of retired tests (1 file)
 736	example/impurity/implementation-write-to-out/bccFe-u/ves.out	generated run output
 736	example/impurity/implementation-write-to-out/bccFe/ves.out	generated run output
 736	example/impurity/u_imp_comparison/Fe_bulk_u/ves.out	generated run output
+699	tests/gbt_wp01/README.md	data, scripts or decks of retired tests (1 file)
+543	tests/cuda/build_and_validate.sh	data, scripts or decks of retired tests (1 file)
 471	example/impurity/hcpCo-bulk-Fe-imp-dir/Co-host-Fe-imp/outnewclu	generated run output
 383	example/impurity/implementation-write-to-out/imp-u/outnewclu	generated run output
 383	example/impurity/u_imp_comparison/imp_u_from_start/outnewclu	generated run output
 361	example/impurity/B2FeCo/outnewclu	generated run output
+178	tests/benchmarks/run_scf_b1r2_all.sh	data, scripts or decks of retired tests (1 file)
+177	tests/benchmarks/run_scf_b1r_all.sh	data, scripts or decks of retired tests (1 file)
 80	example/impurity/implementation-write-to-out/bccFe/sbar	generated run output
 71	example/impurity/hcpCo-bulk-Fe-imp-dir/Co-host-Fe-imp/rm_all.sh	generated run output
 71	example/impurity/implementation-write-to-out/bccFe-u/rm_all.sh	generated run output
