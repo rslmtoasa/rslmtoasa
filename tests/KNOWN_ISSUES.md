@@ -26,6 +26,9 @@ are not tracked here; see `docs/DECISIONS.md`.
   `surf_soc0` agrees to 0.0.
 - **Verified:** the committed SOC-on snapshot (developer platform) is matched to 6e-10 (KS) and 2e-6 (RS `rs_soc_u2`) against the tolerance 1e-10, so
   `ks_soc_u2_x` has a `linux-x86_64` variant (`tests/ldau/references/ks_soc_u2_x.linux-x86_64.json`, written from the CI configuration with a recorded reason).
+- **Verified:** the stored references (`tests/ldau/references/`) are bound to the CI configuration (`-DENABLE_MARCH_NATIVE=OFF`; reference build `90f57c3` built the
+  same way). A `-march=native` build on this FMA CPU deviates from them: `noU_rs` 1.2e-6, `U_rs` 7.6e-9, `ks_soc_u2_x` 6.0e-10, against a tolerance of 1e-10;
+  `surf_soc0` agrees to 0.0. With the CI configuration the candidate matches the reference build to 0.0 on the no-U, `U_rs`, `U_imp` and `U_ks` rows.
 - **Not diagnosed:** whether the 1e-6 impurity difference is only the documented local-mode transient amplification (see "RS +U transient") or a platform
   effect of the BLAS used. Owner decision needed: platform tolerance, or a different row.
 

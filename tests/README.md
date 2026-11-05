@@ -69,7 +69,7 @@ Raw evidence of closed campaigns stays at the archive tags `archive/{fable_v4b,f
 ## Build notes
 
 - Configure with `-DRUN_UNIT_TESTS=ON -DRUN_EXAMPLE_TESTS=ON -DRUN_REG_TESTS=ON` (and `-DENABLE_LIBXC=ON`).
-- CI builds with `-DENABLE_MARCH_NATIVE=OFF`. With `-march=native` on a CPU with FMA, the bitwise sub-case of
+- CI builds with `-DENABLE_MARCH_NATIVE=OFF`, and the committed references (including `tests/ldau/references/`) are bound to that configuration; a `-march=native` build on FMA hardware can exceed the 1e-10 tolerance of the LDA+U rows (`KNOWN_ISSUES.md`). With `-march=native` on a CPU with FMA, the bitwise sub-case of
   `UnitLdaULocalMoments` (`spinor_frame_kernel`) can miss by 2e-16 (see `KNOWN_ISSUES.md`).
 - The MKL regression cases skip (exit 77) unless `-DENABLE_MKL_KERNELS=ON`.
 - GPU matrix runners: `run_gpu_matrix.sh`, `regression/run_gpu_matrix.py` (not registered with ctest).
