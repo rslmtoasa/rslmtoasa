@@ -45,7 +45,9 @@ for name,operator,geometry,n3 in [('charge_xx','charge','bulk',12),
     assert error<2e-6*max(scale,1e-100),(name,error,scale)
     orbitals=np.loadtxt(run/'response_orbitals_real.out')
     np.testing.assert_allclose(orbitals[:,1:].sum(axis=1),physical[:,1],rtol=2e-13,atol=1e-12)
-    typed=np.loadtxt(run/'response_type_1.out')
+    typed_files=list(run.glob('*_response.out'))
+    assert len(typed_files)==1
+    typed=np.loadtxt(typed_files[0])
     np.testing.assert_allclose(typed[:,0],physical[:,0],rtol=2e-14)
     # Different summation orders cancel near-zero components differently.
     assert np.max(np.abs(typed[:,1:]-physical[:,1:])) < 1e-12*max(scale,1e-100)

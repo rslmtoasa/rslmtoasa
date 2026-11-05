@@ -33,7 +33,7 @@ Legacy `cond_*.out` and individual atomic raw files retain their conventions:
 energy relative to EF in Ry; the legacy total is an arithmetic average over
 selected subspaces. Physical `response_total.out` instead reports their SUM,
 divided by the cell measure. Do not convert the legacy averaged total without
-restoring its number-of-subspaces factor. Individual `response_type_N.out`
+restoring its number-of-subspaces factor. Individual `<label>_response.out` (for example `Pt_response.out`, matching `Pt_cond.out`)
 files are additive atomic contributions with the SAME cell denominator.
 `response_orbitals_real.out` and `response_orbitals_imag.out` resolve the 18
 spin-orbitals. New energy columns are eV. `response_units.txt` records the cell
