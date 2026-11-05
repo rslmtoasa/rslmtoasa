@@ -3,8 +3,8 @@
  "description": "+U KS nsp=2 SOC held at zero against nsp=1",
  "kind": "soc0",
  "tolerance": 1e-09,
- "reason": "stored from the reference build 90f57c3 (reference binary of the former tools/ldau_regression.py)",
- "binary_sha256": "16bb567c7de93cc1101d2155968c263c02f73134508e5228e1143d0b9d0bce76",
+ "reason": "stored from the reference build 90f57c3 built with -DENABLE_MARCH_NATIVE=OFF (the CI configuration; reference binary of the former tools/ldau_regression.py)",
+ "binary_sha256": "bd44e48fa1428bcd29452d32d2bdbf16691e2b5f9d7de4d550949c579bf7e513",
  "date": "2026-11-05",
  "reference": {
   "diff": [
@@ -26,10 +26,10 @@
    2.351086
   ],
   "energy": [
-   -2541.85314327227,
-   -2541.865883224044,
-   -2541.866962860802,
-   -2541.860772069745
+   -2541.853143271898,
+   -2541.865883224404,
+   -2541.86696286094,
+   -2541.860772069972
   ]
  }
 }

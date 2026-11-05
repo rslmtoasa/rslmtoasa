@@ -3,15 +3,15 @@
  "description": "+U RS bulk bcc Fe nsp=1",
  "kind": "abs",
  "tolerance": 1e-10,
- "reason": "stored from the reference build 90f57c3 (reference binary of the former tools/ldau_regression.py)",
- "binary_sha256": "16bb567c7de93cc1101d2155968c263c02f73134508e5228e1143d0b9d0bce76",
+ "reason": "stored from the reference build 90f57c3 built with -DENABLE_MARCH_NATIVE=OFF (the CI configuration; reference binary of the former tools/ldau_regression.py)",
+ "binary_sha256": "bd44e48fa1428bcd29452d32d2bdbf16691e2b5f9d7de4d550949c579bf7e513",
  "date": "2026-11-05",
  "reference": {
   "diff": [
    0.0172568909,
-   0.0203304892,
-   0.0244291624,
-   0.0251439809
+   0.0203304856,
+   0.02442917,
+   0.025143988
   ],
   "fermi": [
    -0.00369,
