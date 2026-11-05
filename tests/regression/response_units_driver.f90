@@ -47,6 +47,9 @@ program response_units_driver
   lat%kk=7
   lat%iz=[1,1,1,1,1,1,2]
  end if
+ allocate(lat%symbolic_atoms(2))
+ lat%symbolic_atoms(1)%element%symbol='Pt1'
+ lat%symbolic_atoms(2)%element%symbol='Pt2'
  ctl%cond_calctype='per_type'; ctl%random_vec_num=2; ctl%cond_ll=4
  call c%restore_to_default()
  call c%build_from_file()

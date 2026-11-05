@@ -597,7 +597,8 @@ contains
                type_re = type_re + weights(it)*real(integrand_at(l,l,:,it))
                type_im = type_im + weights(it)*aimag(integrand_at(l,l,:,it))
             end do
-            write(filename,'(a,i0,a)') 'response_type_',it,'.out'
+            ! Use the same atomic label as the legacy <label>_cond.out files.
+            filename = trim(this%lattice%symbolic_atoms(it)%element%symbol) // '_response.out'
             open(newunit=type_unit,file=trim(filename),status='replace')
             write(type_unit,'(a)') '# E-Ef [eV], Re, Im; additive type contribution; units: '//trim(units)
             do i = 1, size(x)

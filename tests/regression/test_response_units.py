@@ -63,7 +63,7 @@ def test_output_pipeline(tmp_path,transport_executable,geometry,operator,pe,pl,r
     resolved=np.loadtxt(tmp_path/'response_orbitals_real.out')
     np.testing.assert_allclose(resolved[:,1:].sum(axis=1),physical[:,1],rtol=2e-14)
     # Each atomic subspace enters once, regardless of cluster populations.
-    types=[np.loadtxt(tmp_path/f'response_type_{i}.out') for i in (1,2)]
+    types=[np.loadtxt(tmp_path/f'Pt{i}_response.out') for i in (1,2)]
     np.testing.assert_allclose(types[0][:,1],1/measure*integral*conversion,rtol=3e-14,atol=1e-30)
     np.testing.assert_allclose(types[1][:,1],3/measure*integral*conversion,rtol=3e-14,atol=1e-30)
     cell=np.loadtxt(tmp_path/'cell_total.out')
@@ -134,5 +134,5 @@ def test_cell_sum_independent_of_cluster(tmp_path,transport_executable):
         second=tmp_path/(geometry+'-second')
         assert run(transport_executable,first,geometry).returncode==0
         assert run(transport_executable,second,geometry,replicas=4,open_sample=True).returncode==0
-        for name in ['units.txt','response_total.out','response_type_1.out','response_type_2.out']:
+        for name in ['units.txt','response_total.out','Pt1_response.out','Pt2_response.out']:
             assert (first/name).read_bytes()==(second/name).read_bytes()
