@@ -167,7 +167,7 @@ RS block recursion, fixture seed `tests/scf/cases/bulk/bccFe/Fe.nml` (sha256 `6d
 | E_F (Ry, 6 decimals) | -0.083263 | -0.083263 | equal | equal |
 | P diagonal blocks (dm sidecar) | | | 1.17e-7 | 1e-6 |
 
-GATE passes. For reference the RB2 accepted nsp=1 state (other seed and recipe) has d occupations 4.615579, 1.895454 and moment 2.558681 (`C1_RB_RESULTS.md`). The iteration-20 P diagonal blocks of both runs (and the iteration-150 ones) are in `tests/validation/fixed_ldau/data/fe_bcc_u2_local_p_diagonal_blocks.txt`; at iteration 20 the two runs differ by 3.95e-6, at iteration 150 by 1.17e-7.
+GATE passes. For reference the RB2 accepted nsp=1 state (other seed and recipe) has d occupations 4.615579, 1.895454 and moment 2.558681 (raw data: tag archive/fable_v4b_u-2026-11-05). The iteration-20 P diagonal blocks of both runs (and the iteration-150 ones) are in `tests/validation/fixed_ldau/data/fe_bcc_u2_local_p_diagonal_blocks.txt`; at iteration 20 the two runs differ by 3.95e-6, at iteration 150 by 1.17e-7.
 
 ## nsp=2 energy candidates and Hellmann-Feynman checks (S5; experimental, flag `hubbard_soc_experimental`, energy not routed)
 

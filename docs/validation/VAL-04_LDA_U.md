@@ -61,16 +61,16 @@ Earlier nsp=1 finite-step smokes, tensor references, and unit tests remain
 useful evidence for their specific layers, but they do not establish
 production-SCF convergence or close the energy/convergence blockers. The
 current acceptance ledger is
-[`fixed_ldau/REMEDIATION_GATES.md`](fixed_ldau/REMEDIATION_GATES.md); see also
-[`fixed_ldau/PHASE3.md`](fixed_ldau/PHASE3.md) for the unresolved energy
-identity and [`fixed_ldau/PROJECTOR_CONTRACT.md`](fixed_ldau/PROJECTOR_CONTRACT.md)
+[`fixed_ldau/VALIDATION_SUMMARY.md`](fixed_ldau/VALIDATION_SUMMARY.md); see also
+[`fixed_ldau/VALIDATION_SUMMARY.md`](fixed_ldau/VALIDATION_SUMMARY.md) for the unresolved energy
+identity and [`fixed_ldau/VALIDATION_SUMMARY.md`](fixed_ldau/VALIDATION_SUMMARY.md)
 for the production projector comparison status.
 
 ## Required evidence before promotion
 
 - The finite-H source-connected occupation-extraction probe and its measured
   Simpson/broadening error are documented in
-  [`fixed_ldau/PROJECTOR_CONTRACT.md`](fixed_ldau/PROJECTOR_CONTRACT.md). Gate P
+  [`fixed_ldau/VALIDATION_SUMMARY.md`](fixed_ldau/VALIDATION_SUMMARY.md). Gate P
   still requires a periodic physical LMTO operator through the real RS and KS
   assembly paths, site-map and radial-Ql relation checks, and MPI/restart
   agreement (Gate P / R02, R14).

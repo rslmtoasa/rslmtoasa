@@ -147,7 +147,7 @@ added Hubbard term. RD2 failed, and RD4 has no measured energy derivative, so
 no energy-routing or default change is supported. The RD5 no-U RS/KS byte
 identity checks passed; explicit-spectral identity and ``auto`` checks remain
 unrun. See
-``docs/validation/fixed_ldau/rs/C5_2_PART_D_RESULTS.md``.
+``docs/validation/fixed_ldau/VALIDATION_SUMMARY.md``.
 
 **Exchange interactions:**
 

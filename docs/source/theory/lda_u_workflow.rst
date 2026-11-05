@@ -140,7 +140,7 @@ clean-bulk eligibility and energy formula are unchanged. C5's numerical
 KS-host-to-RS-impurity equivalence for Ni remains unvalidated, and RD4 has no
 energy measurement: its optimized Release diagnostic has only been checked
 through one complete iteration. See the C5 records in
-``docs/validation/fixed_ldau/rs/C5_AMENDMENT.md`` and
+``docs/validation/fixed_ldau/VALIDATION_SUMMARY.md`` and
 ``C5_10_RESULTS.md``.
 
 C6 surface density-only mode
@@ -165,7 +165,7 @@ Surface Hubbard support is density-only. Surface energies exclude the Hubbard
 term; surface Hubbard-energy routing remains off. Surface density support is experimental. A Ni(001) probe showed a narrow-window
 non-finite/NaN projected-DOS observation; widening the energy window did not
 remove it. See the C6 records in
-``docs/validation/fixed_ldau/rs/C6_T0_RESULTS.md`` and
+``docs/validation/fixed_ldau/VALIDATION_SUMMARY.md`` and
 ``C6_AMENDMENT.md``.
 
 SOC+U for bulk (nsp=2)
@@ -353,7 +353,7 @@ same local correction and include ``E_Hub(P_OUT)`` in the physical total
 energy. The retained eligibility conditions are ``calctype='B'``, clean bulk
 (``nbulk=0`` and ``nrec=ntype``), fixed Liechtenstein U/J, scalar-collinear
 ``nsp=1``, ``lmax=2``, and disabled constraints. Accepted-endpoint RS route reproduction and unchanged-mode/no-U controls are
-recorded in ``docs/validation/fixed_ldau/rs/C4_RC3_RESULTS.md``; this is
+recorded in ``docs/validation/fixed_ldau/VALIDATION_SUMMARY.md``; this is
 route evidence, not a new ASA derivative-gate result. Explicit spectral selection remains
 spectral/non-adopted. Impurity/surface hosts, noncollinear states, nsp=2 outside the SOC+U bulk scope (next section), HOH,
 self-consistent U, intersite V, impurity U, and nonzero test fields remain

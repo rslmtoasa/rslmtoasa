@@ -1,1 +1,0 @@
-PASS response inventory requires every receipt hash; cached assembly exactly equals certified scalar assembly and caches clear per case
