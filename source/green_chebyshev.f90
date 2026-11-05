@@ -142,7 +142,7 @@ contains
       mu_local(:, :, :, 1:4) = this%recursion%mu_n(:, :, :, istart:istart + 3)
 
       gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
-      call gpu_backend%set_precision(merge(1, 0, trim(this%control%gpu_precision) == 'fp64'))
+      call gpu_backend%set_precision(this%recursion%gpu_precision_code())
 
       call gpu_backend%chebyshev_dos(mu_local, this%en%ene(1:nv), a, b, g0_local)
       this%g0(:, :, 1:nv, 1:4) = g0_local(:, :, :, 1:4)
@@ -301,7 +301,7 @@ contains
          end do
 
          gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
-         call gpu_backend%set_precision(merge(1, 0, trim(this%control%gpu_precision) == 'fp64'))
+         call gpu_backend%set_precision(this%recursion%gpu_precision_code())
 
          call gpu_backend%chebyshev_dos(this%recursion%mu_n(:, :, :, start_atom:end_atom), &
                                          this%en%ene(1:nv), a, b,                         &

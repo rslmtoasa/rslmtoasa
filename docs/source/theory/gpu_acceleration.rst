@@ -39,7 +39,7 @@ This defines ``USE_CUDA_PLUGIN`` and links the ``rsrec_cuda`` backend into
 Enabling the GPU at runtime
 ===========================
 
-Two ``&control`` keywords select the GPU path:
+Three ``&control`` keywords select the GPU path:
 
 .. list-table::
    :widths: 25 20 55
@@ -58,6 +58,9 @@ Two ``&control`` keywords select the GPU path:
      - ``'csr'``
      - Sparse storage / matvec strategy on the device. One of ``'csr'``,
        ``'bsr'``, ``'fft'``, ``'conv'`` (see below).
+   * - ``gpu_precision``
+     - ``'fp32'``
+     - Arithmetic of the GPU kernels, ``'fp32'`` or ``'fp64'`` (see below).
 
 Example:
 
@@ -83,6 +86,23 @@ Example:
 
 An unrecognized ``gpu_backend`` is not fatal: the run logs a warning and falls
 back to the current CPU recursion path.
+
+``gpu_precision``
+-----------------
+
+``gpu_precision`` sets the arithmetic of every GPU kernel: the Chebyshev
+moments, the stochastic and orbital moments, the block-Lanczos recursion and
+the DOS / Green-function reconstruction. The default ``'fp32'`` is the fast
+setting; ``'fp64'`` is meant for cross-checks. The run logs the precision in use
+(``GPU precision: ...``) when it uploads the Hamiltonian.
+
+- ``'fp64'`` is much slower on GPUs with reduced double-precision throughput
+  (for example RTX A-series cards, about 18 times for the conductivity moments
+  in one measurement) and needs more device memory.
+- The scalar Lanczos recursion always runs in fp64, whatever ``gpu_precision``
+  says.
+- ``cheb_backend = 'fast_dp'`` also gives fp64 for the GPU block-Lanczos
+  recursion, as before. The log line then says so.
 
 Which kernels are offloaded
 ===========================

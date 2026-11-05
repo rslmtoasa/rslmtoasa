@@ -5,8 +5,8 @@ contains
    !> @brief Dispatch Chebyshev moment generation to the configured CPU backend.
    !> @details Builds moments mu_n = <psi0|T_n((H-b)/a)|psi0> for the real-space
    !>          Chebyshev SCF and DOS workflows. The selector honors the requested
-   !>          fast, batched, MKL, or legacy backend, with fallbacks for HOH and
-   !>          combined ccor_2c/HOH cases that are not implemented in every kernel.
+   !>          fast, batched, MKL, or legacy backend, with a fallback to legacy for
+   !>          HOH on the BSR-based kernels.
    !> @param[inout] this Recursion object; may populate ccor operator work arrays.
    !> @param[in] psi0 Starting block state, stored site-major as (nb,nb,nsite).
    !> @param[in] lld Number of Chebyshev recursion steps requested.
@@ -37,15 +37,14 @@ contains
       if (this%hamiltonian%hoh .and. backend /= 'fast' .and. backend /= 'legacy') then
          backend = 'legacy'
       end if
-      if (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh .and. backend /= 'legacy') then
-         call g_logger%warning('ccor_2c with hoh is not supported by fast Chebyshev backends; falling back to legacy.', __FILE__, __LINE__)
-         backend = 'legacy'
-      end if
-      if (this%hamiltonian%ccor_2c .and. backend /= 'legacy') call ensure_ccor_operator_blocks(this)
+      ! With hoh, ccor_2c enters the fast kernel as an extra additive term and
+      ! is not folded into h, so the folded ee_ccor_work blocks are for no-hoh only.
+      if (this%hamiltonian%ccor_2c .and. .not. this%hamiltonian%hoh .and. backend /= 'legacy') &
+         call ensure_ccor_operator_blocks(this)
       msg = 'Chebyshev moment driver backend: '//backend
       !print *, msg
       call g_logger%info(msg, __FILE__, __LINE__)
-      if (this%hamiltonian%ccor_2c .and. backend /= 'legacy') then
+      if (this%hamiltonian%ccor_2c .and. .not. this%hamiltonian%hoh .and. backend /= 'legacy') then
          associate(ee_op => this%ee_ccor_work, hall_op => this%hall_ccor_work)
             call dispatch_cheb_backend(ee_op, hall_op)
          end associate
@@ -62,7 +61,14 @@ contains
 
          select case (backend)
          case ('fast')
-            if (this%hamiltonian%hoh) then
+            if (this%hamiltonian%hoh .and. this%hamiltonian%ccor_2c) then
+               call cheb_moments_fast(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
+                  this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
+                  nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &
+                  lld, a, b, mu, hoh=.true., eeo=this%hamiltonian%eeo, &
+                  hallo=this%hamiltonian%hallo, enim=this%hamiltonian%enim, &
+                  eecc=this%hamiltonian%eecc, hallcc=this%hamiltonian%hallcc)
+            else if (this%hamiltonian%hoh) then
                call cheb_moments_fast(psi0, this%hamiltonian%ee, this%hamiltonian%hall, &
                   this%hamiltonian%lsham, this%lattice%nn, this%lattice%iz, this%lattice%kk, &
                   nb, size(this%lattice%nn, 2), this%lattice%ntype, this%lattice%nmax, &

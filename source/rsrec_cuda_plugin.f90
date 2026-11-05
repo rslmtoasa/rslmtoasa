@@ -96,10 +96,10 @@ module rsrec_cuda_plugin_mod
          integer(c_int) :: rsrec_cuda_set_periodic_lattice
       end function rsrec_cuda_set_periodic_lattice
 
-      function rsrec_cuda_set_hamiltonian(ctx, ee, hall, lsham, nn, iz, eeo, hallo, enim) bind(C, name='rsrec_cuda_set_hamiltonian')
+      function rsrec_cuda_set_hamiltonian(ctx, ee, hall, lsham, nn, iz, eeo, hallo, enim, eecc, hallcc) bind(C, name='rsrec_cuda_set_hamiltonian')
          import :: c_int, c_ptr
          type(c_ptr), value :: ctx, ee, hall, lsham, nn, iz
-         type(c_ptr), value :: eeo, hallo, enim
+         type(c_ptr), value :: eeo, hallo, enim, eecc, hallcc
          integer(c_int) :: rsrec_cuda_set_hamiltonian
       end function rsrec_cuda_set_hamiltonian
 
@@ -389,7 +389,7 @@ contains
 #endif
    end subroutine set_periodic_lattice
 
-   subroutine set_hamiltonian(this, ee, hall, lsham, nn, iz, nmax, eeo, hallo, enim)
+   subroutine set_hamiltonian(this, ee, hall, lsham, nn, iz, nmax, eeo, hallo, enim, eecc, hallcc)
       class(rsrec_cuda_backend), intent(inout) :: this
       complex(rp), target, contiguous, intent(in) :: ee(:, :, :, :)
       complex(rp), target, contiguous, intent(in), optional :: hall(:, :, :, :)
@@ -402,8 +402,11 @@ contains
       complex(rp), target, contiguous, intent(in), optional :: eeo(:, :, :, :)
       complex(rp), target, contiguous, intent(in), optional :: hallo(:, :, :, :)
       complex(rp), target, contiguous, intent(in), optional :: enim(:, :, :)
+      ! ccor_2c blocks, applied to x in the hoh apply together with enim + lsham
+      complex(rp), target, contiguous, intent(in), optional :: eecc(:, :, :, :)
+      complex(rp), target, contiguous, intent(in), optional :: hallcc(:, :, :, :)
 #ifdef USE_CUDA_PLUGIN
-      type(c_ptr) :: hall_ptr, lsham_ptr, eeo_ptr, hallo_ptr, enim_ptr
+      type(c_ptr) :: hall_ptr, lsham_ptr, eeo_ptr, hallo_ptr, enim_ptr, eecc_ptr, hallcc_ptr
       integer(c_int) :: status
 
       call this%ensure_context(size(nn, 1), size(ee, 1), size(ee, 3), size(ee, 4), nmax)
@@ -417,12 +420,16 @@ contains
       if (present(hallo)) hallo_ptr = c_loc(hallo)
       enim_ptr = c_null_ptr
       if (present(enim)) enim_ptr = c_loc(enim)
+      eecc_ptr = c_null_ptr
+      if (present(eecc)) eecc_ptr = c_loc(eecc)
+      hallcc_ptr = c_null_ptr
+      if (present(hallcc)) hallcc_ptr = c_loc(hallcc)
       status = rsrec_cuda_set_hamiltonian(this%ctx, c_loc(ee), hall_ptr, &
-         lsham_ptr, c_loc(nn), c_loc(iz), eeo_ptr, hallo_ptr, enim_ptr)
+         lsham_ptr, c_loc(nn), c_loc(iz), eeo_ptr, hallo_ptr, enim_ptr, eecc_ptr, hallcc_ptr)
       call check_status(status, 'rsrec_cuda_set_hamiltonian')
 #else
       call this%ensure_context(size(nn, 1), size(ee, 1), size(ee, 3), size(ee, 4), nmax)
-      if (present(eeo) .or. present(hallo) .or. present(enim)) continue
+      if (present(eeo) .or. present(hallo) .or. present(enim) .or. present(eecc) .or. present(hallcc)) continue
 #endif
    end subroutine set_hamiltonian
 

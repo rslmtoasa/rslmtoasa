@@ -67,7 +67,6 @@ contains
       character(len=*), intent(in) :: feature
       logical, intent(in), optional :: require_nsp1
       logical, intent(in), optional :: allow_hoh
-      integer :: backend
       logical :: nsp1_only, hoh_ok
 
       gpu_plugin_ready = .false.
@@ -101,24 +100,12 @@ contains
          return
       end if
 
-      if (this%hamiltonian%ccor_2c .and. this%hamiltonian%hoh) then
-         call g_logger%warning('gpu_plugin does not support additive ccor_2c with hoh in '// &
-            trim(feature)//'. Falling back to current recursion path.', __FILE__, __LINE__)
-         return
-      end if
-
       if (nsp1_only .and. this%control%nsp /= 1) then
          call g_logger%warning('gpu_plugin scalar Lanczos path is restricted '// &
             'to nsp=1. Falling back to current recursion path.', __FILE__, __LINE__)
          return
       end if
 
-      backend = decode_gpu_backend(this%control%gpu_backend)
-      if (backend < 0) then
-         call g_logger%warning('Unknown gpu_backend='//trim(this%control%gpu_backend)// &
-            '. Falling back to current recursion path.', __FILE__, __LINE__)
-         return
-      end if
       if (gpu_periodic_backend(this)) then
          if (trim(feature) == 'chebyshev_orbital_mod()') then
             call g_logger%warning('gpu_backend='//trim(this%control%gpu_backend)// &
@@ -149,6 +136,20 @@ contains
       gpu_plugin_ready = .true.
    end function gpu_plugin_ready
 
+   !> @brief GPU arithmetic precision selected by the input: 0 = fp32, 1 = fp64.
+   !> @details See the interface in recursion.f90.
+   module function gpu_precision_code(this, block) result(prec)
+      class(recursion), intent(in) :: this
+      logical, intent(in), optional :: block
+      integer :: prec
+
+      prec = 0
+      if (trim(this%control%gpu_precision) == 'fp64') prec = 1
+      if (present(block)) then
+         if (block .and. trim(this%control%cheb_backend) == 'fast_dp') prec = 1
+      end if
+   end function gpu_precision_code
+
    !> @brief Ensure the CUDA backend has the current real-space Hamiltonian uploaded.
    !> @details Acquires the shared plugin context and transfers the Hamiltonian in
    !>          the layout required by the selected real-space GPU backend. The GPU
@@ -159,13 +160,25 @@ contains
    module subroutine gpu_plugin_upload_hamiltonian(this)
       class(recursion), intent(inout) :: this
       integer :: backend
+      character(len=128) :: msg
 
       if (this%hamiltonian%ccor_2c .and. .not. this%hamiltonian%hoh) call ensure_ccor_operator_blocks(this)
       backend = decode_gpu_backend(this%control%gpu_backend)
       this%gpu_backend => get_gpu_context(this%lattice%kk, nb, size(this%lattice%nn, 2), &
          this%lattice%ntype, this%lattice%nmax)
+      call this%gpu_backend%set_precision(this%gpu_precision_code())
+      msg = 'GPU precision: '//trim(this%control%gpu_precision)//' (gpu_precision)'
+      if (this%gpu_precision_code() == 0 .and. this%gpu_precision_code(block=.true.) == 1) &
+         msg = trim(msg)//'; block Lanczos fp64 (cheb_backend = fast_dp)'
+      call g_logger%info(msg, __FILE__, __LINE__)
       if (this%lattice%nmax > 0) then
-         if (this%hamiltonian%hoh) then
+         if (this%hamiltonian%hoh .and. this%hamiltonian%ccor_2c) then
+            call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
+               this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
+               this%lattice%iz, this%lattice%nmax, eeo=this%hamiltonian%eeo, &
+               hallo=this%hamiltonian%hallo, enim=this%hamiltonian%enim, &
+               eecc=this%hamiltonian%eecc, hallcc=this%hamiltonian%hallcc)
+         else if (this%hamiltonian%hoh) then
             call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
                this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &
                this%lattice%iz, this%lattice%nmax, eeo=this%hamiltonian%eeo, &
@@ -180,7 +193,13 @@ contains
                this%lattice%iz, this%lattice%nmax)
          end if
       else
-         if (this%hamiltonian%hoh) then
+         if (this%hamiltonian%hoh .and. this%hamiltonian%ccor_2c) then
+            call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
+               lsham=this%hamiltonian%lsham, nn=this%lattice%nn, &
+               iz=this%lattice%iz, nmax=this%lattice%nmax, &
+               eeo=this%hamiltonian%eeo, enim=this%hamiltonian%enim, &
+               eecc=this%hamiltonian%eecc)
+         else if (this%hamiltonian%hoh) then
             call this%gpu_backend%set_hamiltonian(this%hamiltonian%ee, &
                lsham=this%hamiltonian%lsham, nn=this%lattice%nn, &
                iz=this%lattice%iz, nmax=this%lattice%nmax, &

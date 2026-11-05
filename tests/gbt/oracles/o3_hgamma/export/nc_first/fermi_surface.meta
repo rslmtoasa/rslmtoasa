@@ -1,0 +1,67 @@
+# RSLMTO dense k-space Fermi-surface eigenpair export
+format = rslmto_kspace_eigenpairs_v1
+post_processing = fermi_surface
+binary_file = fermi_surface.bin
+binary_encoding = native-endian float64 stream
+array_order = Fortran_column_major
+energy_units = Ry
+k_coordinates = fractional_reciprocal_lattice_units
+scf_iteration = -1
+operator_generation = 1
+mpi_ranks = 1
+n_kpoints = 64
+n_bands = 18
+n_basis = 18
+n_sites = 1
+site_1_species = Fe
+basis_layout = site_major_spin_blocked
+k_mesh = 4 4 4
+k_offset =   0.0000000000000000E+00   0.0000000000000000E+00   0.0000000000000000E+00
+reciprocal_b1 =   0.0000000000000000E+00   6.2831853071795862E+00   6.2831853071795862E+00
+reciprocal_b2 =   6.2831853071795862E+00   0.0000000000000000E+00   6.2831853071795862E+00
+reciprocal_b3 =   6.2831853071795862E+00   6.2831853071795862E+00   0.0000000000000000E+00
+fermi_level =  -6.4331234651724495E-02
+canonical_band_energy =  -2.0014741039518960E+00
+k_weight_sum =   1.0000000000000000E+00
+array_1 = k_points shape=(3,n_kpoints) dtype=float64
+array_2 = k_weights shape=(n_kpoints) dtype=float64
+array_3 = eigenvalues shape=(n_bands,n_kpoints) dtype=float64
+array_4 = eigenvectors_real shape=(n_basis,n_bands,n_kpoints) dtype=float64
+array_5 = eigenvectors_imag shape=(n_basis,n_bands,n_kpoints) dtype=float64
+projection_weights = disabled
+spin_resolved_eigenpairs = enabled
+spin_resolved_binary_file = fermi_surface.spin.bin
+spin_resolved_layout = global_spin_blocks
+spin_resolved_spin_1 = global_up
+spin_resolved_spin_2 = global_down
+spin_resolved_n_spin = 2
+spin_resolved_n_bands = 9
+spin_resolved_n_basis = 9
+spin_resolved_h_offdiag_relative_max =   0.0000000000000000E+00
+spin_resolved_s_offdiag_relative_max =   0.0000000000000000E+00
+spin_resolved_block_tolerance =   1.0000000000000000E-10
+spin_array_1 = eigenvalues shape=(2,n_spin_bands,n_kpoints) dtype=float64
+spin_array_2 = eigenvectors_real shape=(2,n_spin_basis,n_spin_bands,n_kpoints) dtype=float64
+spin_array_3 = eigenvectors_imag shape=(2,n_spin_basis,n_spin_bands,n_kpoints) dtype=float64
+# Basis index map: basis_index site orbital_l orbital_m_index spin_index
+basis_index 1 1 0 1 1
+basis_index 2 1 1 2 1
+basis_index 3 1 1 3 1
+basis_index 4 1 1 4 1
+basis_index 5 1 2 5 1
+basis_index 6 1 2 6 1
+basis_index 7 1 2 7 1
+basis_index 8 1 2 8 1
+basis_index 9 1 2 9 1
+basis_index 10 1 0 1 2
+basis_index 11 1 1 2 2
+basis_index 12 1 1 3 2
+basis_index 13 1 1 4 2
+basis_index 14 1 2 5 2
+basis_index 15 1 2 6 2
+basis_index 16 1 2 7 2
+basis_index 17 1 2 8 2
+basis_index 18 1 2 9 2
+basis_site_block = 18
+basis_orbitals_per_spin = 9
+basis_lmax = 2

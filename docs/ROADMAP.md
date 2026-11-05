@@ -6,7 +6,7 @@ says where each status comes from.
 
 | ID | Title | Status | Evidence / plan |
 |---|---|---|---|
-| B1 | GBT fix + frozen magnons | Operator-level gates pass; G9 failed; converged small-q curvature not established. Single-sublattice frozen magnon validated; multi-sublattice acoustic branch open | `docs/DECISIONS.md` (GBT, GBT re-audit); [VAL-16](validation/VAL-16_GBT_SUPERCELL.md), [VAL-17](validation/VAL-17_GBT_HARMONIC_GOLDSTONE.md); `tests/KNOWN_ISSUES.md` |
+| B1 | GBT fix + frozen magnons | Operator-level gates pass; G9 failed; converged small-q curvature not established. Single-sublattice frozen magnon validated; multi-sublattice acoustic branch open | `docs/DECISIONS.md` (GBT, GBT re-audit); [VAL-16](validation/VAL-16_GBT_SUPERCELL.md), [VAL-17](validation/VAL-17_GBT_HARMONIC_GOLDSTONE.md); `tests/KNOWN_ISSUES.md`; restart spec `cleanup/gbt_kspace_restart_spec.md` (old tests at tag `gbt-campaign-archive-2026-10`) |
 | B2 | k-space Green functions, two backends | Done, both gates signed | [G-B2-1](validation/B2_GATE_G-B2-1.md), [G-B2-2](validation/B2_GATE_G-B2-2.md) |
 | B3 | Bloch spectral functions | Done; one unit test (`UnitBsfSumRule`), no example case or keyword page | — |
 | B4 | Batched GPU eigensolver | Partial: a CUDA reciprocal backend (batched Hermitian eigensolver, strict-Lehmann contraction) since 2026-08-18, behind `ENABLE_CUDA_RECIPROCAL` (off by default), with four GPU tests. Batched inversion and the response's χ⁰ sums not started; not audited on `fable_v4b` | [plan](roadmap/B4_gpu_kspace.md); `docs/DECISIONS.md` (ACC); `source/cuda/reciprocal_*` |

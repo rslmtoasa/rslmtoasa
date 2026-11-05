@@ -282,6 +282,88 @@
           { "file": "fort.50", "rows": [50, 100, 150], "cols": [1, 2, 3] }
         ]
       }
+    },
+    {
+      "name": "Example_exchange_bccFe_hoh_ccor_2c",
+      "case": "exchange/bccFe",
+      "timeout": 300,
+      "abs_tol": 1e-5,
+      "rel_tol": 1e-5,
+      "abs_tol": 1e-4,
+      "rel_tol": 1e-4,
+      "_note": "hoh with ccor_2c, block exchange (recur_b_ij), fp64 fast kernel, nsp = 1 (at nsp = 2 the hoh fast block route differs from legacy without ccor_2c, see tests/KNOWN_ISSUES.md); the reference was generated with the legacy kernels. Strux settings as in Example_density_of_states_bccFe_ccor_2c. ccor_elin set because the deck potential has VMT = 0, which makes Hcc vanish at the default E_lin = 0.",
+      "namelists": {
+        "lattice":     { "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
+        "control":     { "nsp": 1, "recur": "block", "lld": 20, "cheb_backend": "fast_dp" },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": true, "ccor_2c": true, "ccor_elin": -0.07 }
+      },
+      "checks": {
+        "text": [
+          { "file": "jij.out", "rows": [1, 2], "cols": [6] }
+        ]
+      }
+    },
+    {
+      "name": "Example_exchange_bccFe_chebyshev_hoh_ccor_2c",
+      "case": "exchange/bccFe",
+      "timeout": 300,
+      "abs_tol": 1e-5,
+      "rel_tol": 1e-5,
+      "abs_tol": 1e-4,
+      "rel_tol": 1e-4,
+      "_note": "hoh with ccor_2c, Chebyshev exchange (chebyshev_recur_ij); the reference was generated with the legacy kernels. Chebyshev window from bounds_algorithm.",
+      "namelists": {
+        "lattice":     { "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50, "cheb_backend": "fast" },
+                "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": true, "ccor_2c": true, "ccor_elin": -0.07, "bounds_algorithm": "both" }
+      },
+      "checks": {
+        "text": [
+          { "file": "jij.out", "rows": [1, 2], "cols": [6] }
+        ]
+      }
+    },
+    {
+      "name": "Example_conductivity_bccFe_hoh_ccor_2c",
+      "case": "exchange/bccFe",
+      "timeout": 300,
+      "abs_tol": 1e-6,
+      "rel_tol": 1e-6,
+      "_note": "hoh with ccor_2c, stochastic conductivity (compute_moments_stochastic) on the bcc Fe exchange deck with the fccPt conductivity keys; the reference was generated with the legacy kernels.",
+      "namelists": {
+        "calculation": { "post_processing": "conductivity" },
+        "lattice":     { "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50, "cond_ll": 50, "cond_type": "spin", "cond_calctype": "per_type", "cheb_backend": "fast" },
+                "self":        { "nstep": 1 },
+        "hamiltonian": { "v_alpha": [0, 1, 0], "v_beta": [1, 0, 0], "js_alpha": "z", "hoh": true, "ccor_2c": true, "ccor_elin": -0.07, "bounds_algorithm": "both" }
+      },
+      "checks": {
+        "text": [
+          { "file": "Fe_cond.out", "rows": [500, 1000, 1500], "cols": [2, 3] }
+        ]
+      }
+    },
+    {
+      "name": "Example_orbital_modern_bccFe_hoh_ccor_2c",
+      "case": "orbital/bccFe",
+      "timeout": 300,
+      "abs_tol": 1e-8,
+      "rel_tol": 1e-8,
+      "_note": "hoh with ccor_2c, orbital moments (chebyshev_orbital_mod) after a one-step Chebyshev SCF (the block route differs between fast and legacy at nsp = 2, see tests/KNOWN_ISSUES.md); rc shrunk to 12 so the legacy run stays near 2 minutes; the reference was generated with the legacy kernels.",
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 30, "cheb_backend": "fast" },
+        "self":        { "nstep": 1 },
+        "lattice":     { "rc": 12, "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
+        "energy":      { "channels_ldos": 200 },
+        "hamiltonian": { "hoh": true, "ccor_2c": true, "ccor_elin": -0.07, "bounds_algorithm": "both" }
+      },
+      "checks": {
+        "text": [
+          { "file": "fort.50", "rows": [50, 100, 150], "cols": [2, 3] }
+        ]
+      }
     }
   ]
 }

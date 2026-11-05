@@ -15,6 +15,13 @@ etot/ws_r/vmad between the two runs directly. This does not need or use the
 committed CPU references - it is a pairwise CPU/GPU check, not a regression
 check against history.
 
+A second pass checks gpu_precision = 'fp64' with two criteria: the fp64 GPU run
+must differ from the fp32 GPU run by at least --min-shift in etot (the setting
+took effect), and it must stay within --tol64 of the CPU legacy run (no gross
+error). The CPU legacy run is not a pure fp64 oracle: the Chebyshev DOS
+reconstruction on the CPU is single precision (cheb_green_fast), which limits
+the agreement to about 5e-8 in etot, so --tol64 is not a tight bound.
+
 Usage:
   run_gpu_matrix.py --binary build/bin/rslmto.x
 """
@@ -61,11 +68,12 @@ def setup_workdir(base_dir: Path, workdir: Path) -> None:
             path.unlink()
 
 
-def run_variant(binary: Path, tests_dir: Path, case: dict, workdir: Path, gpu: bool) -> dict:
+def run_variant(binary: Path, tests_dir: Path, case: dict, workdir: Path, gpu: bool, **control) -> dict:
     setup_workdir(tests_dir / case["base"], workdir)
     patch = dict(case["namelists"])
     patch["control"] = dict(patch.get("control", {}))
     patch["control"]["gpu_plugin"] = gpu
+    patch["control"].update(control)
     tmp_path = workdir / "input.nml.tmp"
     f90nml.patch(str(workdir / "input.nml"), patch, str(tmp_path))
     tmp_path.replace(workdir / "input.nml")
@@ -86,6 +94,8 @@ def main() -> int:
     parser.add_argument("--cases-json", default=None, help="Defaults to tests/regression/cases.json next to this script")
     parser.add_argument("--scratch-root", default=None, help="Scratch directory (default: temp dir)")
     parser.add_argument("--tol", type=float, default=1e-5, help="Absolute tolerance for CPU-vs-GPU etot/ws_r/vmad")
+    parser.add_argument("--tol64", type=float, default=1e-7, help="Absolute tolerance for GPU fp64 vs CPU legacy")
+    parser.add_argument("--min-shift", type=float, default=1e-9, help="Minimum etot change between GPU fp32 and fp64 runs")
     args = parser.parse_args()
 
     script_dir = Path(__file__).resolve().parent
@@ -125,6 +135,20 @@ def main() -> int:
             failures += 1
         detail = ", ".join(f"{k}={v:.3e}" for k, v in diffs.items())
         rows.append((name, status, detail))
+
+        try:
+            cpu64 = run_variant(binary, cases_json.parent, case, scratch / f"{name}_cpu64", gpu=False, cheb_backend="legacy")
+            gpu64 = run_variant(binary, cases_json.parent, case, scratch / f"{name}_gpu64", gpu=True, gpu_precision="fp64")
+        except Exception as exc:  # noqa: BLE001 - report and continue the matrix
+            rows.append((f"{name} [fp64]", "ERROR", str(exc)))
+            failures += 1
+            continue
+        shift = abs(gpu64["etot"] - gpu["etot"])
+        dev = max(abs(cpu64[k] - gpu64[k]) for k in ("etot", "ws_r", "vmad"))
+        status = "PASS" if shift >= args.min_shift and dev <= args.tol64 else "FAIL"
+        if status == "FAIL":
+            failures += 1
+        rows.append((f"{name} [fp64]", status, f"shift_vs_fp32={shift:.3e}, dev_vs_legacy={dev:.3e}"))
 
     print(f"{'Case':<40} {'Status':<7} Detail")
     print("-" * 80)

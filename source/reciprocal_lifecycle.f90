@@ -88,7 +88,6 @@ contains
       if (allocated(this%tetrahedron_volumes)) call g_safe_alloc%deallocate('reciprocal.tetrahedron_volumes', this%tetrahedron_volumes)
       if (allocated(this%ham_vec_type)) call g_safe_alloc%deallocate('reciprocal.ham_vec_type', this%ham_vec_type)
       if (allocated(this%ham_vec_type_direct)) call g_safe_alloc%deallocate('reciprocal.ham_vec_type_direct', this%ham_vec_type_direct)
-      if (allocated(this%mesh_cache_q)) deallocate(this%mesh_cache_q)
 #else
       if (allocated(this%k_points)) deallocate (this%k_points)
       if (allocated(this%k_weights)) deallocate (this%k_weights)
@@ -120,7 +119,6 @@ contains
       if (allocated(this%ham_vec_type_direct)) deallocate (this%ham_vec_type_direct)
       if (allocated(this%full_to_irred_k)) deallocate(this%full_to_irred_k)
       if (allocated(this%irred_to_full_k)) deallocate(this%irred_to_full_k)
-      if (allocated(this%mesh_cache_q)) deallocate(this%mesh_cache_q)
 #endif
    end subroutine destructor
 
@@ -153,16 +151,6 @@ contains
       this%cached_operator_generation = -1
       this%device_eigensystem_token = 0
       this%resident_lehmann_handoff_requested = .false.
-
-      ! WP8: full BZ stays the default/oracle for finite-q GBT (WP0). Opt-in
-      ! to ’little_group’ or ’little_group_common’ via &reciprocal.
-      this%q_symmetry_policy = 'full_bz'
-      this%mesh_cache_valid = .false.
-      this%mesh_cache_dims = [0, 0, 0]
-      this%mesh_cache_offset = [0.0_rp, 0.0_rp, 0.0_rp]
-      this%mesh_cache_lattice = 0.0_rp
-      this%mesh_cache_policy = ''
-      if (allocated(this%mesh_cache_q)) deallocate(this%mesh_cache_q)
 
    ! By default suppress internal verbose prints (can be enabled by user)
    this%suppress_internal_logs = .true.
@@ -327,7 +315,6 @@ contains
       strict_symmetry_checks = this%strict_symmetry_checks
       dump_symmetry_kmap = this%dump_symmetry_kmap
       tetra_symmetry_mode = this%tetra_symmetry_mode
-      q_symmetry_policy = this%q_symmetry_policy
       use_shift = .false.  ! Derived from k_offset
       n_energy_points = this%n_energy_points
       dos_energy_min = this%dos_energy_range(1)
@@ -390,16 +377,8 @@ contains
       this%tetra_symmetry_mode = lower(trim(tetra_symmetry_mode))
       if (this%tetra_symmetry_mode /= 'full_expand_ref' .and. &
           this%tetra_symmetry_mode /= 'irreducible_native') then
-         call g_logger%warning("reciprocal%build_from_file: tetra_symmetry_mode must be 'full_expand_ref' or 'irreducible_native'. Falling back to irreducible_native.", __FILE__, __LINE__)
-         this%tetra_symmetry_mode = 'irreducible_native'
-      end if
-      this%q_symmetry_policy = lower(trim(q_symmetry_policy))
-      if (this%q_symmetry_policy /= 'full_bz' .and. this%q_symmetry_policy /= 'little_group' .and. &
-          this%q_symmetry_policy /= 'little_group_common') then
-         call g_logger%warning("reciprocal%build_from_file: q_symmetry_policy must be 'full_bz', "// &
-                               "'little_group', or 'little_group_common'. Falling back to full_bz.", &
-                               __FILE__, __LINE__)
-         this%q_symmetry_policy = 'full_bz'
+         call g_logger%fatal("reciprocal%build_from_file: tetra_symmetry_mode='"//trim(this%tetra_symmetry_mode)// &
+                             "' is invalid; use 'full_expand_ref' or 'irreducible_native'.", __FILE__, __LINE__)
       end if
       this%n_energy_points = n_energy_points
       this%dos_energy_range = [dos_energy_min, dos_energy_max]
@@ -412,8 +391,8 @@ contains
       this%reciprocal_backend = lower(trim(reciprocal_backend))
       if (this%reciprocal_backend == 'cpu') this%reciprocal_backend = 'lapack'
       if (this%reciprocal_backend /= 'lapack' .and. this%reciprocal_backend /= 'cuda') then
-         call g_logger%warning("reciprocal%build_from_file: reciprocal_backend must be 'lapack' or 'cuda'. Falling back to lapack.", __FILE__, __LINE__)
-         this%reciprocal_backend = 'lapack'
+         call g_logger%fatal("reciprocal%build_from_file: reciprocal_backend='"//trim(this%reciprocal_backend)// &
+                             "' is invalid; use 'lapack' or 'cuda'.", __FILE__, __LINE__)
       end if
       this%kanpur_diagnostics = kanpur_diagnostics
       this%gamma_bounds_diagnostics = gamma_bounds_diagnostics
@@ -421,9 +400,8 @@ contains
       this%green_eta = green_eta
       this%green_backend = lower(trim(green_backend))
       if (this%green_backend /= 'lehmann' .and. this%green_backend /= 'dyson') then
-         call g_logger%warning("reciprocal%build_from_file: green_backend must be " // &
-            "'lehmann' or 'dyson'. Falling back to lehmann.", __FILE__, __LINE__)
-         this%green_backend = 'lehmann'
+         call g_logger%fatal("reciprocal%build_from_file: green_backend='"//trim(this%green_backend)// &
+                             "' is invalid; use 'lehmann' or 'dyson'.", __FILE__, __LINE__)
       end if
       this%write_eigenpair_projections = write_eigenpair_projections
       this%write_spin_resolved_eigenpairs = write_spin_resolved_eigenpairs
@@ -433,11 +411,11 @@ contains
          this%reciprocal_mode = 'generalized_overlap_proxy'
          call g_logger%warning("reciprocal_mode='generalized_overlap' is deprecated alias; using 'generalized_overlap_proxy'.", __FILE__, __LINE__)
       end if
-      if (this%reciprocal_mode /= 'ham_only' .and. &
-          this%reciprocal_mode /= 'generalized_overlap_proxy' .and. &
-          this%reciprocal_mode /= 'generalized_overlap_kanpur') then
-         call g_logger%warning("reciprocal_mode must be 'ham_only', 'generalized_overlap_proxy', or 'generalized_overlap_kanpur'. Falling back to ham_only.", __FILE__, __LINE__)
-         this%reciprocal_mode = 'ham_only'
+      if (this%reciprocal_mode == 'generalized_overlap_kanpur') &
+         call g_logger%fatal("reciprocal%build_from_file: reciprocal_mode='generalized_overlap_kanpur' is not implemented.", __FILE__, __LINE__)
+      if (this%reciprocal_mode /= 'ham_only' .and. this%reciprocal_mode /= 'generalized_overlap_proxy') then
+         call g_logger%fatal("reciprocal%build_from_file: reciprocal_mode='"//trim(this%reciprocal_mode)// &
+                             "' is invalid; use 'ham_only' or 'generalized_overlap_proxy'.", __FILE__, __LINE__)
       end if
 	      this%kspace_ham_order = lower(trim(kspace_ham_order))
 	      if (this%kspace_ham_order == 'proper') then
@@ -445,9 +423,8 @@ contains
 	         call g_logger%warning("kspace_ham_order='proper' is deprecated; using 'second'.", __FILE__, __LINE__)
 	      end if
 	      if (this%kspace_ham_order /= 'first' .and. this%kspace_ham_order /= 'second' .and. &
-	          this%kspace_ham_order /= 'auto') then
-	         call g_logger%warning("kspace_ham_order must be 'auto', 'first', 'second', or deprecated alias 'proper'. Falling back to auto.", __FILE__, __LINE__)
-	         this%kspace_ham_order = 'auto'
+	          this%kspace_ham_order /= 'orthogonal' .and. this%kspace_ham_order /= 'auto') then
+	         call g_logger%fatal("kspace_ham_order = '"//trim(this%kspace_ham_order)//"' is not one of 'auto', 'first', 'second', 'orthogonal'.", __FILE__, __LINE__)
 	      end if
 
       ! WP0: a finite-q spin spiral breaks the crystal symmetries used for an
@@ -494,7 +471,6 @@ contains
          call root_info('reciprocal%build_from_file: strict_symmetry_checks = false', __FILE__, __LINE__)
       end if
       call root_info('reciprocal%build_from_file: tetra_symmetry_mode = ' // trim(this%tetra_symmetry_mode), __FILE__, __LINE__)
-      call root_info('reciprocal%build_from_file: q_symmetry_policy = ' // trim(this%q_symmetry_policy), __FILE__, __LINE__)
       
       if (this%auto_kpath) then
          call root_info('reciprocal%build_from_file: Automatic k-path generation enabled', __FILE__, __LINE__)
@@ -563,15 +539,7 @@ contains
    !>          calculation.f90 sweep-level mesh calls only prepare a mesh this
    !>          routine must not silently discard. ’full_bz’ (default)
    !>          reproduces the original WP0 behaviour exactly: force the full
-   !>          chemical BZ every call. ’little_group’ delegates to
-   !>          ensure_kpoint_mesh, which is a no-op once the current q_ss’s
-   !>          mesh is already cached (set by the calculation.f90 per-q
-   !>          rebuild) and only rebuilds on an actual q change.
-   !>          ’little_group_common’ must never rebuild a mesh a sweep already
-   !>          proved valid for its whole q-list (WP8): if one is cached under
-   !>          that policy for the current mesh dims, it is left untouched;
-   !>          only a genuinely missing mesh (e.g. this routine invoked outside
-   !>          a sweep) falls back to the single current q_ss’s little group.
+   !>          chemical BZ every call.
    module subroutine force_full_bz_for_nonzero_q_gbt(this, context)
       class(reciprocal), intent(inout) :: this
       character(len=*), intent(in) :: context
@@ -584,21 +552,6 @@ contains
       ! A band path is not a BZ integration mesh.  Do not replace it here;
       ! the finite-q mesh callers below are forced through generate_mp_mesh.
       if (allocated(this%k_path)) return
-
-      select case (trim(this%q_symmetry_policy))
-      case ('little_group')
-         call this%ensure_kpoint_mesh(this%nk_mesh, sum(abs(this%k_offset)) > 1.0e-12_rp)
-         return
-      case ('little_group_common')
-         if (this%mesh_cache_valid .and. trim(this%mesh_cache_policy) == 'little_group_common' .and. &
-             allocated(this%k_points) .and. all(this%mesh_cache_dims == this%nk_mesh)) then
-            return   ! sweep already built (and owns) the common-subgroup mesh
-         end if
-         call root_info(trim(context)//': little_group_common has no pre-built sweep mesh; '// &
-                        'falling back to the current q_ss little group.', __FILE__, __LINE__)
-         call this%generate_little_group_kpoint_mesh(this%nk_mesh, sum(abs(this%k_offset)) > 1.0e-12_rp)
-         return
-      end select
 
       call root_info(trim(context)//': nonzero-q GBT rebuilding the full chemical BZ mesh.', __FILE__, __LINE__)
       call this%generate_mp_mesh()

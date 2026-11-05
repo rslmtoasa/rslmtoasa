@@ -2,6 +2,7 @@ submodule (reciprocal_mod) reciprocal_projection
 #ifdef USE_MPI
    use mpi
 #endif
+   use magnetic_representation_mod, only: gbt_single_q
    implicit none
 
 contains
@@ -215,6 +216,8 @@ end subroutine project_dos_orbitals_gaussian
 
       axis = [0.0_rp, 0.0_rp, 1.0_rp]
       atom_idx = this%lattice%nbulk + isite
+      ! gbt_single_q: the eigenvector spin basis is the site's local frame, whose majority axis is +z whatever potential%mom says
+      if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q) atom_idx = 0
       if (atom_idx >= 1 .and. atom_idx <= size(this%lattice%symbolic_atoms)) then
          if (sqrt(sum(this%lattice%symbolic_atoms(atom_idx)%constraint_target(:)**2)) > 1.0e-12_rp) then
             axis = this%lattice%symbolic_atoms(atom_idx)%constraint_target(:)
@@ -751,6 +754,7 @@ module subroutine calculate_band_moments(this)
    do isite = 1, this%n_sites
       reference(:, isite) = [0.0_rp, 0.0_rp, 1.0_rp]
       atom_idx = this%lattice%nbulk + isite
+      if (trim(this%hamiltonian%magnetic_representation) == gbt_single_q) atom_idx = 0   ! local frame: see get_site_spin_axis
       if (atom_idx >= 1 .and. atom_idx <= size(this%lattice%symbolic_atoms)) then
          if (sqrt(sum(this%lattice%symbolic_atoms(atom_idx)%constraint_target(:)**2)) > 1.0e-12_rp) then
             reference(:, isite) = this%lattice%symbolic_atoms(atom_idx)%constraint_target(:)

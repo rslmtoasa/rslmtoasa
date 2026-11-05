@@ -297,19 +297,23 @@ contains
          return
       end if
       index = phase_index(name)
-      if (index > 0 .and. index /= phase_misc .and. this%phase_active(index)) then
-         call system_clock(now)
-         this%phase_seconds(index) = this%phase_seconds(index) + real(now - this%phase_start(index), rp) / &
-            real(this%clock_rate, rp)
-         this%phase_active(index) = .false.
-         return
+      if (index > 0 .and. index /= phase_misc) then
+         if (this%phase_active(index)) then
+            call system_clock(now)
+            this%phase_seconds(index) = this%phase_seconds(index) + real(now - this%phase_start(index), rp) / &
+               real(this%clock_rate, rp)
+            this%phase_active(index) = .false.
+            return
+         end if
       end if
       index = detail_index(name)
-      if (index > 0 .and. this%detail_active(index)) then
-         call system_clock(now)
-         this%detail_seconds(index) = this%detail_seconds(index) + real(now - this%detail_start(index), rp) / &
-            real(this%clock_rate, rp)
-         this%detail_active(index) = .false.
+      if (index > 0) then
+         if (this%detail_active(index)) then
+            call system_clock(now)
+            this%detail_seconds(index) = this%detail_seconds(index) + real(now - this%detail_start(index), rp) / &
+               real(this%clock_rate, rp)
+            this%detail_active(index) = .false.
+         end if
       end if
    end subroutine kpm_profile_stop
 

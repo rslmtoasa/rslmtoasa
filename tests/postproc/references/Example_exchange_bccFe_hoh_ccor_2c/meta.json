@@ -1,0 +1,43 @@
+{
+  "name": "Example_exchange_bccFe_hoh_ccor_2c",
+  "case": "exchange/bccFe",
+  "timeout": 300,
+  "abs_tol": 0.0001,
+  "rel_tol": 0.0001,
+  "_note": "hoh with ccor_2c, block exchange (recur_b_ij), fp64 fast kernel, nsp = 1 (at nsp = 2 the hoh fast block route differs from legacy without ccor_2c, see tests/KNOWN_ISSUES.md); the reference was generated with the legacy kernels. Strux settings as in Example_density_of_states_bccFe_ccor_2c. ccor_elin set because the deck potential has VMT = 0, which makes Hcc vanish at the default E_lin = 0.",
+  "namelists": {
+    "lattice": {
+      "strux_backend": "strux_lib",
+      "screening": "fitted",
+      "strux_want_sdot": true
+    },
+    "control": {
+      "cheb_backend": "fast_dp",
+      "nsp": 1,
+      "recur": "block",
+      "lld": 20
+    },
+    "self": {
+      "nstep": 1
+    },
+    "hamiltonian": {
+      "hoh": true,
+      "ccor_2c": true,
+      "ccor_elin": -0.07
+    }
+  },
+  "checks": {
+    "text": [
+      {
+        "file": "jij.out",
+        "rows": [
+          1,
+          2
+        ],
+        "cols": [
+          6
+        ]
+      }
+    ]
+  }
+}

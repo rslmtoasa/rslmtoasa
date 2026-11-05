@@ -359,9 +359,9 @@ contains
 
       ! variables associated with the reading processes
       integer :: iostatus, funit
-      integer :: iostatus2, funit2, ncols, icol
-      integer, parameter :: constraints_max_sites = 4096
+      integer :: iostatus2, funit2
       character(len=sl) :: fname_
+      character(len=256) :: iomsg_
 
       include 'include_codes/namelists/control.f90'
       include 'include_codes/namelists/constraints.f90'
@@ -425,20 +425,8 @@ contains
       constraints_code_prefac = this%constraints_code_prefac
       constraints_diagnostics = this%constraints_diagnostics
       constraints_tolerance = this%constraints_tolerance
-      if (allocated(this%constraints_mom_ref)) then
-         allocate(constraints_mom_ref, mold=this%constraints_mom_ref)
-         constraints_mom_ref = this%constraints_mom_ref
-      else
-         allocate(constraints_mom_ref(1, 1))
-         constraints_mom_ref = 0.0_rp
-      end if
-      if (allocated(this%constraints_bfield)) then
-         allocate(constraints_bfield, mold=this%constraints_bfield)
-         constraints_bfield = this%constraints_bfield
-      else
-         allocate(constraints_bfield(1, 1))
-         constraints_bfield = 0.0_rp
-      end if
+      constraints_mom_ref = huge(1.0_rp)
+      constraints_bfield = huge(1.0_rp)
 
       open (newunit=funit, file=fname_, action='read', iostat=iostatus, status='old')
       if (iostatus /= 0) then
@@ -495,45 +483,18 @@ contains
       ! Read optional constraints namelist and move values into the control object
       open (newunit=funit2, file=fname_, action='read', iostat=iostatus2, status='old')
       if (iostatus2 == 0) then
-         ! constraints_mom_ref(:,i) = ... needs an array that already spans every site index; it is cut back to
-         ! the last nonzero column after the read (an all-zero array keeps the unset (1,1) form).
-         block
-            real(rp), allocatable :: wide(:, :)
-            allocate (wide(3, constraints_max_sites), source=0.0_rp)
-            if (allocated(constraints_mom_ref)) then
-               ncols = min(size(constraints_mom_ref, 2), constraints_max_sites)
-               wide(1:min(3, size(constraints_mom_ref, 1)), 1:ncols) = &
-                  constraints_mom_ref(1:min(3, size(constraints_mom_ref, 1)), 1:ncols)
-            end if
-            call move_alloc(wide, constraints_mom_ref)
-         end block
-         read (funit2, nml=constraints, iostat=iostatus2)
+         read (funit2, nml=constraints, iostat=iostatus2, iomsg=iomsg_)
          if (iostatus2 /= 0 .and. .not. IS_IOSTAT_END(iostatus2)) then
-            call g_logger%error('Error while reading constraints namelist', __FILE__, __LINE__)
+            call g_logger%fatal('Error while reading constraints namelist: iostat = '//fmt('I0', iostatus2)// &
+                                ', iomsg = '//trim(iomsg_), __FILE__, __LINE__)
          else
             this%constraints_enable = constraints_enable
             this%constraints_i_cons = constraints_i_cons
             this%constraints_code_prefac = constraints_code_prefac
             this%constraints_diagnostics = constraints_diagnostics
             this%constraints_tolerance = constraints_tolerance
-            if (allocated(constraints_mom_ref)) then
-               ncols = 0
-               do icol = 1, size(constraints_mom_ref, 2)
-                  if (any(constraints_mom_ref(:, icol) /= 0.0_rp)) ncols = icol
-               end do
-               if (allocated(this%constraints_mom_ref)) deallocate(this%constraints_mom_ref)
-               if (ncols == 0) then
-                  allocate(this%constraints_mom_ref(1, 1), source=0.0_rp)
-               else
-                  allocate(this%constraints_mom_ref(3, ncols))
-                  this%constraints_mom_ref = constraints_mom_ref(1:3, 1:ncols)
-               end if
-            end if
-            if (allocated(constraints_bfield)) then
-               if (allocated(this%constraints_bfield)) deallocate(this%constraints_bfield)
-               allocate(this%constraints_bfield(size(constraints_bfield,1), size(constraints_bfield,2)))
-               this%constraints_bfield = constraints_bfield
-            end if
+            call copy_set_columns(constraints_mom_ref, this%constraints_mom_ref)
+            call copy_set_columns(constraints_bfield, this%constraints_bfield)
          end if
          close (funit2)
       end if
@@ -563,6 +524,36 @@ contains
       ! check input
       call this%check_all()
    end subroutine build_from_file
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Copy the columns of a (3, n) namelist buffer that were set (not left at
+   !> huge) into dst, shaped (3, last set column). Unset entries become zero.
+   !> When nothing was set, dst keeps its value, or becomes a (1, 1) zero
+   !> array, which the self constructor reads as "not provided".
+   !---------------------------------------------------------------------------
+   subroutine copy_set_columns(buffer, dst)
+      real(rp), dimension(:, :), intent(in) :: buffer
+      real(rp), dimension(:, :), allocatable, intent(inout) :: dst
+
+      integer :: i, ncols
+
+      ncols = 0
+      do i = 1, size(buffer, 2)
+         if (any(buffer(:, i) /= huge(1.0_rp))) ncols = i
+      end do
+      if (ncols == 0) then
+         if (.not. allocated(dst)) then
+            allocate (dst(1, 1))
+            dst = 0.0_rp
+         end if
+         return
+      end if
+      if (allocated(dst)) deallocate (dst)
+      allocate (dst(3, ncols))
+      dst = merge(0.0_rp, buffer(:, :ncols), buffer(:, :ncols) == huge(1.0_rp))
+   end subroutine copy_set_columns
 
    !---------------------------------------------------------------------------
    ! DESCRIPTION:

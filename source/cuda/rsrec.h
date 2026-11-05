@@ -57,12 +57,17 @@ const char *rsrec_last_error(void);
  *                                 NULL to disable hoh (single-operator path)
  * hallo: (nb, nb, nnmax, nmax)    complex(rp)   impurity eeo (NULL if nmax==0)
  * enim : (nb, nb, ntype)          complex(rp)   on-site E_nu (NULL => zero)
+ * eecc : (nb, nb, nnmax, ntype)   complex(rp)   ccor_2c blocks (NULL => none)
+ * hallcc: (nb, nb, nnmax, nmax)   complex(rp)   impurity eecc (NULL if nmax==0)
  * When eeo != NULL the engine uses the two-sweep hoh apply
- *   H = ( h - eeo*h + (enim+lsham) - b ) / a  (fp64 block-ELL only).        */
+ *   H = ( h - eeo*h + (enim+lsham) - b ) / a  (fp64 block-ELL only).
+ * With eeo and eecc the on-site term becomes (eecc + enim + lsham)*x, the
+ * ccor_2c term being applied to x and not folded into h.                    */
 int rsrec_set_hamiltonian(rsrec_ctx *ctx, const void *ee, const void *hall,
                           const void *lsham, const int *nn, const int *iz,
                           const void *eeo, const void *hallo,
-                          const void *enim);
+                          const void *enim, const void *eecc,
+                          const void *hallcc);
 
 /* Velocity (or current) operators for the stochastic conductivity moments.
  * Same neighbour structure as ee, per-type, no lsham term:

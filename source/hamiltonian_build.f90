@@ -955,6 +955,10 @@ contains
       if (allocated(this%texture_moments)) deallocate(this%texture_moments)
       if (allocated(this%theta_ss_sublattice)) deallocate (this%theta_ss_sublattice)
       if (allocated(this%phi_ss_sublattice)) deallocate (this%phi_ss_sublattice)
+      if (allocated(this%gbt_chi)) deallocate (this%gbt_chi)
+      if (allocated(this%gbt_bfield)) deallocate (this%gbt_bfield)
+      this%gbt_residual = huge(1.0_rp)
+      if (allocated(this%gbt_ref_mom)) deallocate (this%gbt_ref_mom)
       this%js_alpha = 'z'
       this%jl_alpha = 'z'
       this%hubbard_experimental = .false.
@@ -1541,7 +1545,7 @@ contains
             obm0(m, m) = this%lattice%symbolic_atoms(ntype)%potential%obx0(m)
             obm1(m, m) = this%lattice%symbolic_atoms(ntype)%potential%obx1(m)
          end do
-         mom(:) = cmplx(this%lattice%symbolic_atoms(ntype)%potential%mom(:), 0.0d0)
+         mom(:) = cmplx(this%lattice%symbolic_atoms(ntype)%potential%mom(:), 0.0d0, kind=rp)
          do m = 1, norb
             do l = 1, norb
                this%obarm(m, l, ntype) = obm0(m, l) + obm1(m, l)*mom(3)
@@ -1584,7 +1588,7 @@ contains
             em0(m, m) = ex0(m)
             em1(m, m) = ex1(m)
          end do
-         mom(:) = cmplx(this%lattice%symbolic_atoms(ntype)%potential%mom(:), 0.0d0)
+         mom(:) = cmplx(this%lattice%symbolic_atoms(ntype)%potential%mom(:), 0.0d0, kind=rp)
          do m = 1, norb
             do l = 1, norb
                this%enim(m, l, ntype) = em0(m, l) + em1(m, l)*mom(3)
@@ -2671,7 +2675,7 @@ contains
    !> nevertheless a local spinor, so apply the same Pauli coefficient before
    !> the Cartesian-to-spherical conversion.  The term is onsite and carries no
    !> translational phase.
-   subroutine add_constraining_field_spin_block(this, atom_type, block)
+   module subroutine add_constraining_field_spin_block(this, atom_type, block)
       class(hamiltonian), intent(in) :: this
       integer, intent(in) :: atom_type
       complex(rp), intent(inout) :: block(nb, nb)

@@ -29,7 +29,7 @@ contains
 
    subroutine block_lanczos_fast(psi0, lld, a_b, b2_b, ee, hall, lsham, nn, iz, &
                                  kk, nb, nnmax, ntype, nmax, use_sp, &
-                                 hoh, eeo, hallo, enim)
+                                 hoh, eeo, hallo, enim, eecc, hallcc)
       integer, intent(in) :: lld, kk, nb, nnmax, ntype, nmax
       complex(rp), intent(in) :: psi0(nb, nb, kk)
       complex(rp), intent(out) :: a_b(nb, nb, lld), b2_b(nb, nb, lld)
@@ -39,13 +39,15 @@ contains
       logical, intent(in) :: use_sp, hoh
       complex(rp), intent(in) :: eeo(nb, nb, nnmax, ntype), hallo(nb, nb, nnmax, *)
       complex(rp), intent(in) :: enim(nb, nb, ntype)
+      ! ccor_2c blocks, added to the hoh apply as an extra term CC*psi (not part of h)
+      complex(rp), intent(in), optional :: eecc(nb, nb, nnmax, ntype), hallcc(nb, nb, nnmax, *)
 
       if (use_sp) then
          call block_lanczos_sp(psi0, lld, a_b, b2_b, ee, hall, lsham, nn, iz, &
-                               kk, nb, nnmax, ntype, nmax, hoh, eeo, hallo, enim)
+                               kk, nb, nnmax, ntype, nmax, hoh, eeo, hallo, enim, eecc, hallcc)
       else
          call block_lanczos_dp(psi0, lld, a_b, b2_b, ee, hall, lsham, nn, iz, &
-                               kk, nb, nnmax, ntype, nmax, hoh, eeo, hallo, enim)
+                               kk, nb, nnmax, ntype, nmax, hoh, eeo, hallo, enim, eecc, hallcc)
       end if
    end subroutine block_lanczos_fast
 
@@ -94,7 +96,7 @@ contains
    ! fp32 engine (atom-major blocks + gathered big-GEMM contractions)
    !===========================================================================
    subroutine block_lanczos_sp(psi0, lld, a_b, b2_b, ee, hall, lsham, nn, iz, &
-                               kk, nb, nnmax, ntype, nmax, hoh, eeo, hallo, enim)
+                               kk, nb, nnmax, ntype, nmax, hoh, eeo, hallo, enim, eecc, hallcc)
       integer, intent(in) :: lld, kk, nb, nnmax, ntype, nmax
       complex(rp), intent(in) :: psi0(nb, nb, kk)
       complex(rp), intent(out) :: a_b(nb, nb, lld), b2_b(nb, nb, lld)
@@ -104,9 +106,11 @@ contains
       logical, intent(in) :: hoh
       complex(rp), intent(in) :: eeo(nb, nb, nnmax, ntype), hallo(nb, nb, nnmax, *)
       complex(rp), intent(in) :: enim(nb, nb, ntype)
+      complex(rp), intent(in), optional :: eecc(nb, nb, nnmax, ntype), hallcc(nb, nb, nnmax, *)
       ! Folded fp32 operators (raw: no a,b scaling; lsham on shell-1 for he/ha)
       complex(sp), allocatable :: he(:, :, :, :), ha(:, :, :, :)
       complex(sp), allocatable :: oe(:, :, :, :), oa(:, :, :, :), ons(:, :, :)
+      complex(sp), allocatable :: ce(:, :, :, :), ca(:, :, :, :), cpsi(:, :, :)
       ! Atom-major Lanczos vectors and stacked active buffers
       complex(sp), allocatable :: psi(:, :, :), pmn(:, :, :), hpsi(:, :, :), wt(:, :, :)
       complex(sp), allocatable :: ps(:, :), hs(:, :), ms(:, :), psnew(:, :)
@@ -115,7 +119,10 @@ contains
       complex(sp), parameter :: cone = (1.0_sp, 0.0_sp), czero = (0.0_sp, 0.0_sp), cmone = (-1.0_sp, 0.0_sp)
       integer, allocatable :: izero(:), idum(:), irlist(:)
       integer :: irnum, k, l, t_, ll, n, m, lda
+      logical :: do_cc
       external :: cgemm
+
+      do_cc = hoh .and. present(eecc) .and. present(hallcc)
 
       lda = nb*kk
       ! --- fp32 folded operators ---------------------------------------------
@@ -143,6 +150,16 @@ contains
             oa = cmplx(real(hallo(:, :, :, 1:nmax), sp), aimag(hallo(:, :, :, 1:nmax)), sp)
          else
             allocate (oa(nb, nb, nnmax, 1))
+         end if
+      end if
+      if (do_cc) then
+         allocate (ce(nb, nb, nnmax, ntype), cpsi(nb, nb, kk))
+         ce = cmplx(real(eecc, sp), aimag(eecc), sp)
+         if (nmax > 0) then
+            allocate (ca(nb, nb, nnmax, nmax))
+            ca = cmplx(real(hallcc(:, :, :, 1:nmax), sp), aimag(hallcc(:, :, :, 1:nmax)), sp)
+         else
+            allocate (ca(nb, nb, nnmax, 1))
          end if
       end if
 
@@ -206,6 +223,7 @@ contains
 
       deallocate (he, ha, psi, pmn, hpsi, wt, ps, hs, ms, psnew, izero, idum, irlist)
       if (allocated(oe)) deallocate (oe, oa, ons)
+      if (allocated(cpsi)) deallocate (ce, ca, cpsi)
 
    contains
 
@@ -213,19 +231,26 @@ contains
       !> set. Mirrors hop_b (non-hoh) / hop_b_hoh (h-sweep then eeo-sweep).
       subroutine lc_matvec(y)
          complex(sp), intent(out) :: y(nb, nb, kk)
-         complex(sp) :: acc(nb, nb)
+         complex(sp) :: acc(nb, nb), acc2(nb, nb)
          integer :: kk_, s_, nbr, nr, t2, n
          y = czero
          ! --- sweep A: y = (ee+lsham) psi -----------------------------------
-         !$omp parallel do private(kk_, s_, nbr, nr, t2, acc) schedule(dynamic, 32)
+         !$omp parallel do private(kk_, s_, nbr, nr, t2, acc, acc2) schedule(dynamic, 32)
          do kk_ = 1, kk
             idum(kk_) = izero(kk_)
-            t2 = iz(kk_); nr = nn(kk_, 1); acc = czero
+            t2 = iz(kk_); nr = nn(kk_, 1); acc = czero; acc2 = czero
             if (izero(kk_) /= 0) then
                if (kk_ <= nmax) then
                   call cgemm('N', 'N', nb, nb, nb, cone, ha(:, :, 1, kk_), nb, psi(:, :, kk_), nb, cone, acc, nb)
                else
                   call cgemm('N', 'N', nb, nb, nb, cone, he(:, :, 1, t2), nb, psi(:, :, kk_), nb, cone, acc, nb)
+               end if
+            end if
+            if (do_cc .and. izero(kk_) /= 0) then
+               if (kk_ <= nmax) then
+                  call cgemm('N', 'N', nb, nb, nb, cone, ca(:, :, 1, kk_), nb, psi(:, :, kk_), nb, cone, acc2, nb)
+               else
+                  call cgemm('N', 'N', nb, nb, nb, cone, ce(:, :, 1, t2), nb, psi(:, :, kk_), nb, cone, acc2, nb)
                end if
             end if
             do s_ = 2, nr
@@ -236,10 +261,18 @@ contains
                   else
                      call cgemm('N', 'N', nb, nb, nb, cone, he(:, :, s_, t2), nb, psi(:, :, nbr), nb, cone, acc, nb)
                   end if
+                  if (do_cc) then
+                     if (kk_ <= nmax) then
+                        call cgemm('N', 'N', nb, nb, nb, cone, ca(:, :, s_, kk_), nb, psi(:, :, nbr), nb, cone, acc2, nb)
+                     else
+                        call cgemm('N', 'N', nb, nb, nb, cone, ce(:, :, s_, t2), nb, psi(:, :, nbr), nb, cone, acc2, nb)
+                     end if
+                  end if
                   idum(kk_) = 1
                end if
             end do
             y(:, :, kk_) = acc
+            if (do_cc) cpsi(:, :, kk_) = acc2
          end do
          !$omp end parallel do
          call rebuild_active()
@@ -279,6 +312,7 @@ contains
                acc = y(:, :, kk_) - wt(:, :, kk_)
                if (izero(kk_) /= 0) &
                   call cgemm('N', 'N', nb, nb, nb, cone, ons(:, :, t2), nb, psi(:, :, kk_), nb, cone, acc, nb)
+               if (do_cc) acc = acc + cpsi(:, :, kk_)
                y(:, :, kk_) = acc
             end do
             !$omp end parallel do
@@ -302,7 +336,7 @@ contains
    ! fp64 engine (same structure, raw rp operators)
    !===========================================================================
    subroutine block_lanczos_dp(psi0, lld, a_b, b2_b, ee, hall, lsham, nn, iz, &
-                               kk, nb, nnmax, ntype, nmax, hoh, eeo, hallo, enim)
+                               kk, nb, nnmax, ntype, nmax, hoh, eeo, hallo, enim, eecc, hallcc)
       integer, intent(in) :: lld, kk, nb, nnmax, ntype, nmax
       complex(rp), intent(in) :: psi0(nb, nb, kk)
       complex(rp), intent(out) :: a_b(nb, nb, lld), b2_b(nb, nb, lld)
@@ -312,15 +346,19 @@ contains
       logical, intent(in) :: hoh
       complex(rp), intent(in) :: eeo(nb, nb, nnmax, ntype), hallo(nb, nb, nnmax, *)
       complex(rp), intent(in) :: enim(nb, nb, ntype)
-      complex(rp), allocatable :: psi(:, :, :), pmn(:, :, :), hpsi(:, :, :), wt(:, :, :)
+      complex(rp), intent(in), optional :: eecc(nb, nb, nnmax, ntype), hallcc(nb, nb, nnmax, *)
+      complex(rp), allocatable :: psi(:, :, :), pmn(:, :, :), hpsi(:, :, :), wt(:, :, :), cpsi(:, :, :)
       complex(rp), allocatable :: ps(:, :), hs(:, :), ms(:, :), psnew(:, :)
       complex(rp) :: an(nb, nb), sumb(nb, nb), bmat(nb, nb), binv(nb, nb)
       complex(rp), parameter :: cone = (1.0_rp, 0.0_rp), czero = (0.0_rp, 0.0_rp), cmone = (-1.0_rp, 0.0_rp)
       integer, allocatable :: izero(:), idum(:), irlist(:)
       integer :: irnum, k, l, ll, n, m, lda
+      logical :: do_cc
       external :: zgemm
 
+      do_cc = hoh .and. present(eecc) .and. present(hallcc)
       lda = nb*kk
+      if (do_cc) allocate (cpsi(nb, nb, kk))
       allocate (psi(nb, nb, kk), pmn(nb, nb, kk), hpsi(nb, nb, kk), wt(nb, nb, kk))
       allocate (ps(lda, nb), hs(lda, nb), ms(lda, nb), psnew(lda, nb))
       allocate (izero(kk), idum(kk), irlist(kk))
@@ -371,18 +409,19 @@ contains
       b2_b(:, :, lld) = sumb
 
       deallocate (psi, pmn, hpsi, wt, ps, hs, ms, psnew, izero, idum, irlist)
+      if (allocated(cpsi)) deallocate (cpsi)
 
    contains
 
       subroutine lc_matvec_dp(y)
          complex(rp), intent(out) :: y(nb, nb, kk)
-         complex(rp) :: acc(nb, nb), locham(nb, nb)
+         complex(rp) :: acc(nb, nb), acc2(nb, nb), locham(nb, nb)
          integer :: kk_, s_, nbr, nr, t2, n
          y = czero
-         !$omp parallel do private(kk_, s_, nbr, nr, t2, acc, locham) schedule(dynamic, 32)
+         !$omp parallel do private(kk_, s_, nbr, nr, t2, acc, acc2, locham) schedule(dynamic, 32)
          do kk_ = 1, kk
             idum(kk_) = izero(kk_)
-            t2 = iz(kk_); nr = nn(kk_, 1); acc = czero
+            t2 = iz(kk_); nr = nn(kk_, 1); acc = czero; acc2 = czero
             if (izero(kk_) /= 0) then
                if (kk_ <= nmax) then
                   locham = hall(:, :, 1, kk_) + lsham(:, :, t2)
@@ -390,6 +429,13 @@ contains
                   locham = ee(:, :, 1, t2) + lsham(:, :, t2)
                end if
                call zgemm('N', 'N', nb, nb, nb, cone, locham, nb, psi(:, :, kk_), nb, cone, acc, nb)
+            end if
+            if (do_cc .and. izero(kk_) /= 0) then
+               if (kk_ <= nmax) then
+                  call zgemm('N', 'N', nb, nb, nb, cone, hallcc(:, :, 1, kk_), nb, psi(:, :, kk_), nb, cone, acc2, nb)
+               else
+                  call zgemm('N', 'N', nb, nb, nb, cone, eecc(:, :, 1, t2), nb, psi(:, :, kk_), nb, cone, acc2, nb)
+               end if
             end if
             do s_ = 2, nr
                nbr = nn(kk_, s_); if (nbr == 0) cycle
@@ -399,10 +445,18 @@ contains
                   else
                      call zgemm('N', 'N', nb, nb, nb, cone, ee(:, :, s_, t2), nb, psi(:, :, nbr), nb, cone, acc, nb)
                   end if
+                  if (do_cc) then
+                     if (kk_ <= nmax) then
+                        call zgemm('N', 'N', nb, nb, nb, cone, hallcc(:, :, s_, kk_), nb, psi(:, :, nbr), nb, cone, acc2, nb)
+                     else
+                        call zgemm('N', 'N', nb, nb, nb, cone, eecc(:, :, s_, t2), nb, psi(:, :, nbr), nb, cone, acc2, nb)
+                     end if
+                  end if
                   idum(kk_) = 1
                end if
             end do
             y(:, :, kk_) = acc
+            if (do_cc) cpsi(:, :, kk_) = acc2
          end do
          !$omp end parallel do
          call rebuild_active_dp()
@@ -441,6 +495,7 @@ contains
                acc = y(:, :, kk_) - wt(:, :, kk_)
                if (izero(kk_) /= 0) &
                   call zgemm('N', 'N', nb, nb, nb, cone, enim(:, :, t2) + lsham(:, :, t2), nb, psi(:, :, kk_), nb, cone, acc, nb)
+               if (do_cc) acc = acc + cpsi(:, :, kk_)
                y(:, :, kk_) = acc
             end do
             !$omp end parallel do

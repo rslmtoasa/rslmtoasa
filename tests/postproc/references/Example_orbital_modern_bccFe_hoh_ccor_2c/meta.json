@@ -1,0 +1,48 @@
+{
+  "name": "Example_orbital_modern_bccFe_hoh_ccor_2c",
+  "case": "orbital/bccFe",
+  "timeout": 300,
+  "_note": "hoh with ccor_2c, orbital moments (chebyshev_orbital_mod) after a one-step Chebyshev SCF (the block route differs between fast and legacy at nsp = 2, see tests/KNOWN_ISSUES.md); rc shrunk to 12 so the legacy run stays near 2 minutes; the reference was generated with the legacy kernels.",
+  "namelists": {
+    "lattice": {
+      "strux_backend": "strux_lib",
+      "rc": 12,
+      "screening": "fitted",
+      "strux_want_sdot": true
+    },
+    "control": {
+      "cheb_backend": "fast",
+      "nsp": 2,
+      "recur": "chebyshev",
+      "lld": 30
+    },
+    "self": {
+      "nstep": 1
+    },
+    "energy": {
+      "channels_ldos": 200
+    },
+    "hamiltonian": {
+      "hoh": true,
+      "ccor_2c": true,
+      "ccor_elin": -0.07,
+      "bounds_algorithm": "both"
+    }
+  },
+  "checks": {
+    "text": [
+      {
+        "file": "fort.50",
+        "rows": [
+          50,
+          100,
+          150
+        ],
+        "cols": [
+          2,
+          3
+        ]
+      }
+    ]
+  }
+}

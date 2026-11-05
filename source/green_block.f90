@@ -109,7 +109,7 @@ contains
       end do
 
       gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
-      call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
+      call gpu_backend%set_precision(this%recursion%gpu_precision_code())
 
       call gpu_backend%block_dos(this%recursion%a_b(:, :, :, istart:istart + na - 1), &
                                  this%recursion%b2_b(:, :, :, istart:istart + na - 1), &
@@ -327,7 +327,7 @@ contains
       allocate (g0_ef_all(nb, nb, 64, natoms))
 
       gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
-      call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
+      call gpu_backend%set_precision(this%recursion%gpu_precision_code())
 
       ! One device call: Gij at the Fermi energy for all (pair x combo) atoms
       ! and all 64 contour etas -> g0_ef_all(nb,nb,64,natoms).
@@ -478,7 +478,7 @@ contains
       end do
 
       gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
-      call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
+      call gpu_backend%set_precision(this%recursion%gpu_precision_code())
 
       call gpu_backend%block_dos(ab_loc, b2_loc, ainf_d, binf_d, &
                                  this%en%ene(1:nv), eta0, this%control%sym_term, g0_loc)
