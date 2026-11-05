@@ -81,7 +81,7 @@ reports this remainder separately. It must not be “fixed” by altering the
 double counting without a separately justified functional choice.
 
 The runnable oracle is
-[`spinor_functional_oracle.py`](../../../tests/validation/fixed_ldau/spinor_functional_oracle.py).
+[`spinor_functional_oracle.py`](../../../tests/ldau/oracles/spinor_functional_oracle.py).
 It constructs the d-shell tensor from the independent SymPy complex-harmonic
 reference, evaluates the full spinor second-quantized interaction, and checks
 the derivative by central differences along a Hermitian direction containing
@@ -93,7 +93,7 @@ and orbital basis relabeling with all tensor indices transformed together.
 Run with the validation Python environment:
 
 ```text
-/opt/homebrew/bin/python3.11 tests/validation/fixed_ldau/spinor_functional_oracle.py
+/opt/homebrew/bin/python3.11 tests/ldau/oracles/spinor_functional_oracle.py
 ```
 
 The recorded deterministic run (seed `20261014`, `U=2.3`, `J=0.41`,
@@ -145,4 +145,4 @@ is `i=(sigma-1)*5+(m+3)`. In the Hamiltonian it is row `(sigma-1)*spin_off + l*l
 are `V_dir(a s,b s)=sum_cd T_abcd n_dc` with `n=sum_s P_ss`, `V_x(a r,d s)=-sum_bc T_abcd P(b r,c s)`
 and the double-counting term above; `E_DC` equals `U/2 N(N-1) - J/2 [N(N/2-1) + |m|^2/2]`
 because `Tr(D^2)=(N^2+|m|^2)/2`. Tests: `tests/unit/test_hubbard_spinor.f90`, reference values from
-this oracle through `tests/validation/fixed_ldau/spinor_oracle_reference.py`.
+this oracle through `tests/ldau/oracles/spinor_oracle_reference.py`.

@@ -27,7 +27,7 @@ Hamiltonian row `(sigma-1)*spin_off + l*l + (m+l+1)`; for `l=2`, rows 5..9 (up) 
 
 ## Measured (S2)
 
-Frozen-H probe `tests/validation/fixed_ldau/projector_spinor_frozen_h.f90` (18x18 H: crystal field with complex orbital mixing, exchange splitting, xi L.S with xi=0.35, up-down coupling; exact eigenpairs from `zheev`, E_F in the widest gap; two k points, 6000 channels, eta=0.004):
+Frozen-H probe `projector_spinor_frozen_h.f90` (archive tag `archive/fable_v4b_u-2026-11-05`) (18x18 H: crystal field with complex orbital mixing, exchange splitting, xi L.S with xi=0.35, up-down coupling; exact eigenpairs from `zheev`, E_F in the widest gap; two k points, 6000 channels, eta=0.004):
 
 | check | measured | tolerance |
 |---|---|---|
@@ -167,11 +167,11 @@ RS block recursion, fixture seed `tests/scf/cases/bulk/bccFe/Fe.nml` (sha256 `6d
 | E_F (Ry, 6 decimals) | -0.083263 | -0.083263 | equal | equal |
 | P diagonal blocks (dm sidecar) | | | 1.17e-7 | 1e-6 |
 
-GATE passes. For reference the RB2 accepted nsp=1 state (other seed and recipe) has d occupations 4.615579, 1.895454 and moment 2.558681 (raw data: tag archive/fable_v4b_u-2026-11-05). The iteration-20 P diagonal blocks of both runs (and the iteration-150 ones) are in `tests/validation/fixed_ldau/data/fe_bcc_u2_local_p_diagonal_blocks.txt`; at iteration 20 the two runs differ by 3.95e-6, at iteration 150 by 1.17e-7.
+GATE passes. For reference the RB2 accepted nsp=1 state (other seed and recipe) has d occupations 4.615579, 1.895454 and moment 2.558681 (raw data: tag archive/fable_v4b_u-2026-11-05). The iteration-20 P diagonal blocks of both runs (and the iteration-150 ones) are in `data/fe_bcc_u2_local_p_diagonal_blocks.txt` (archive tag `archive/fable_v4b_u-2026-11-05`); at iteration 20 the two runs differ by 3.95e-6, at iteration 150 by 1.17e-7.
 
 ## nsp=2 energy candidates and Hellmann-Feynman checks (S5; experimental, flag `hubbard_soc_experimental`, energy not routed)
 
-Code: with the flag, `HUBBARD_MOMENT_ENERGY_SITE/TOTAL` take `E_int`, `E_DC`, `E_Hub` from `hubbard_spinor_functional` on the full 10x10 `ldm_spinor` (P_out) (`spinor_site_hubbard_energy`, `self.f90`); `candidate_b = E_phys + E_Hub` (local), `candidate_c = E_phys + E_Hub` (spectral), `_F` versions subtract T*S (KS). `physical_total_energy` is unchanged (`E_Hub_P_OUT` stays 0 at nsp=2). The W1 test operator is accepted at nsp=2 with the flag (`hamiltonian_build.f90`). Driver and analysis: `tests/validation/fixed_ldau/soc_u_hf.py`, `soc_u_fixed_p_derivative.f90`.
+Code: with the flag, `HUBBARD_MOMENT_ENERGY_SITE/TOTAL` take `E_int`, `E_DC`, `E_Hub` from `hubbard_spinor_functional` on the full 10x10 `ldm_spinor` (P_out) (`spinor_site_hubbard_energy`, `self.f90`); `candidate_b = E_phys + E_Hub` (local), `candidate_c = E_phys + E_Hub` (spectral), `_F` versions subtract T*S (KS). `physical_total_energy` is unchanged (`E_Hub_P_OUT` stays 0 at nsp=2). The W1 test operator is accepted at nsp=2 with the flag (`hamiltonian_build.f90`). Driver and analysis: `soc_u_hf.py` (archive tag `archive/fable_v4b_u-2026-11-05`), `soc_u_fixed_p_derivative.f90`.
 
 T1 SOC to 0 (KS, bcc Fe, 12x12x12, U=2 eV, J=0, local, both converged; nsp=2 with `soc_scale=0`, `fix_soc`; the nsp=1 partner is the converged S4 KS run `k_nsp1`, same code path, run with the S4 binary): candidate b -2541.862184127762 against -2541.862184127180 Ry, |delta E| 5.8e-10 (gate 1e-7); E_Hub 0.110479378744488 against 0.1104793787442344, |delta E_Hub| 2.5e-13 (gate 1e-9); candidate b_F differs by 5.8e-10. nsp=2 run: 40 steps, Diff 1.36e-8. Control (SOC on): candidate b_F of the SOC-on KS runs at U=1.95 and 2.05 eV averaged (-2541.862686138 Ry, midpoint of two runs, not a run at 2.0) differs from the `soc_scale=0` value (-2541.862322177) by -3.6e-4 Ry, far above the 1e-7 gate.
 

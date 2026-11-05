@@ -354,8 +354,8 @@ the analytic models A1-A5 (A5: antiferromagnet and ferrimagnet, global frame) an
 `tests/unit/spin_response_tolerances.f90`), and the LKAG + LSWT magnon curves
 `fe_lswt.dat` and `ni_lswt.dat` from the real-space `exchange.f90` (see
 [`EXCHANGE_VALIDATION_MAP.md`](validation/EXCHANGE_VALIDATION_MAP.md)); their
-small-q end is not converged in the J(r) cutoff. The decks are
-`tests/spin_response/fe_bcc`, `tests/spin_response/ni_fcc` and `tests/spin_response/cr_bcc`
+small-q end is not converged in the J(r) cutoff. The deck kept in the tree is
+`tests/spin_response/fe_bcc`; the Ni and Cr decks and their baselines are retired (archive tag `archive/fable_v4b-2026-11-05`)
 (two-atom simple-cubic cell, commensurate antiferromagnet, `nsp = 1`, opposite spin-channel moments; q in
 direct coordinates is Cartesian in 2 pi / a); the Stage 2 and 3a records are at tag `spin-response-stage3a`.
 
@@ -377,25 +377,28 @@ side belong in the reciprocal family, not in `green.f90`.
 
 ## 5. Testing map
 
-| Workflow | Suite / label | Case-file location |
+Every test has exactly one tier label (`quick`, `standard`, `validation`); see `tests/README.md`. All registrations are in
+`tests/register_tests.cmake`.
+
+| Workflow | Tier (label) | Location |
 |---|---|---|
-| Regression backend matrix (Chebyshev CPU backends × hoh × ccor_2c, block sp/dp) | `regression;backend` | `tests/regression/cases.json` |
-| Bulk/surface/impurity SCF, all recursion modes | `example;scf` | `tests/scf/cases.json` |
-| Exchange, conductivity, bands, DOS, orbital moments, PAOFLOW import | `example;postproc` | `tests/postproc/cases.json` |
-| Serial-vs-MPI consistency (representative subset) | `launch_serial` / `launch_mpi` | `"launch_modes": ["serial","mpi"]` field, either `cases.json` |
-| Quick tier (PR-fast subset; `ctest -L '^quick$'` before each commit) | `quick` | `"quick": true` field in either example `cases.json`; `quick` in the `labels` of a `tests/regression/cases.json` case; `LABELS` in `CMakeLists.txt` for unit and tooling tests |
-| MKL kernels (`mkl_batch`/`mkl_sparse`) | gated by `requires_cmake_option: ENABLE_MKL_KERNELS` | regression + `Example_bulk_bccFe_nsp2_chebyshev_mkl_batch` in `scf/cases.json` |
-| CUDA plugin | compile-only in CI (`cuda_compile` job); real-GPU consistency via `tests/run_gpu_matrix.sh` | n/a (manual, off-CI) |
-| Standalone Fortran unit tests | `unit` (+ topic labels), built with `-DRUN_UNIT_TESTS=ON` | `tests/unit/test_*.f90`, registered with `add_fortran_unit_test` in `CMakeLists.txt` |
-| Spin response: analytic kernels (A1-A3, E1, E3, E4), bcc-Fe components C1-C4 (incl. C4.3) and S2 | `unit;spin-response;quick` | `tests/unit/test_spin_response_*.f90`; the Fe programs run in the scratch deck made by `SpinResponseFeDriver` (`tests/spin_response/fe_scratch.py`) |
-| Spin response: channels s, p, d (`UnitSpinResponseChannelsKernel` synthetic; `UnitSpinResponseChannels` on the Fe scratch deck, needs `channel_d_rel` in `tolerances.nml`) | `unit;spin-response;quick` | `tests/unit/test_spin_response_channels*.f90`; the spd driver runs are made by `fe_scratch.py` |
-| Spin response: S3, three-atom bcc Fe cell against the one-atom cell (`SpinResponseS3`) | `unit;spin-response;quick` | `tests/spin_response/s3_supercell.py` |
-| Spin response: 1 against 4 OpenMP threads, byte-identical (`SpinResponseOmpIdentity`) | `unit;spin-response;quick` | `tests/spin_response/omp_identity.py` |
-| Spin response: nsp = 2 with xi = 0 byte-identical to nsp = 1; with the deck's xi different (`SpinResponseSocZeroIdentity`) | `unit;spin-response;quick` | `tests/spin_response/soc_zero_identity.py` |
-| Spin response: omega(q) = omega(-q) in Fe with SOC, 16^3, odd part of omega_RPA and omega_force below `inversion_odd_abs` (`SpinResponseInversionOdd`) | `unit;spin-response;quick` | `tests/spin_response/inversion_odd.py` |
-| Spin response: 24^3 reproduction against frozen outputs, Fe, Ni and Cr (`SpinResponseBaselineRepro`, `SpinResponseNiBaselineRepro`, `SpinResponseCrBaselineRepro`) | `regression;spin-response` | `tests/spin_response/baseline_repro.py`; frozen files in `tests/spin_response/baseline/`, `baseline_ni/` and `baseline_cr/` (`--freeze` rewrites them) |
-| Exchange energy integration at finite temperature (`UnitSimpsonFTemperature`) | `unit;quick` | `tests/unit/test_simpson_f_temperature.f90` |
-| Validation scripts | `validation` | `tests/validation/*.py` (spin response: `tests/validation/spin_response_ni/`, `tests/validation/spin_response_cr/`: `run_path.py`, `report_path.py`, `report_dynamic.py`, `weight_q.py`, `report_force.py`), records in `docs/validation/` |
+| Backend regression (Chebyshev fast / legacy / batched / MKL, block, Lanczos), compared with committed references | `standard` (`regression;backend`) | `tests/regression/cases.json` |
+| Route-agnostic estimator triads (recursion, Lehmann, Dyson) | `validation` (`triad`) | `tests/regression/triad_cases.json` |
+| Bulk/surface/impurity/interface SCF examples, one deck per physics case | `quick` or `standard` by runtime (`example;scf`) | `tests/scf/cases.json` |
+| Exchange, conductivity, bands, DOS, orbital moments, PAOFLOW import | `quick` or `standard` (`example;postproc`) | `tests/postproc/cases.json` |
+| Serial-vs-MPI consistency (representative subset) | as the case (`launch_serial` / `launch_mpi`) | `"launch_modes"` field of a case |
+| MKL kernels | gated by `requires_cmake_option: ENABLE_MKL_KERNELS` (skip, exit 77, without MKL) | regression case `diamondSi_sp_chebyshev_mkl_batch` |
+| CUDA plugin | compile-only in CI (`cuda_compile` job); real-GPU consistency via `tests/run_gpu_matrix.sh` | manual |
+| Unit oracles (core, Green function, electrostatics, structure constants, K-point workset, ...) | `quick` (`unit`) | `tests/unit/test_*.f90` |
+| XC: three executables (`UnitXcKernels`, `UnitXcGuards`, `UnitXcLibxc`) with sub-cases | `quick` (`xc`) | `tests/unit/test_xc_*.f90` |
+| LDA+U: tensor, spinor functional, local-moment kernels, projector frozen-H oracles | `quick` (`lda_u`) | `tests/unit/test_lda_u_tensor.f90`, `test_hubbard_spinor.f90`, `test_ldau_*.f90`; data and oracle generators in `tests/ldau/` |
+| LDA+U guards: nsp=3/4 with U, nsp=1 host, U-less host, tilted axis with block recursion, mixed axes, host-axis mismatch | `standard` (`LdaUGuards`) | `tests/ldau/test_guards.py` |
+| LDA+U stored-reference rows (five) | `standard`; one `validation` | `tests/ldau/reference_rows.py`, `tests/ldau/references/*.json` |
+| Spin response: kernel oracles A1-A5, R1 | `quick` (`UnitSpinResponseKernels`) | oracle `.nml` files are regenerated at test time (`tests/spin_response/with_oracles.py`) |
+| Spin response: bcc Fe and AF drivers, component checks, SOC = 0 identity, odd part, 24^3 baseline | `standard` | `tests/spin_response/` |
+| GBT: force-theorem, orthogonal H oracle, gauge at shifted k | `quick` (`gbt`) | `tests/unit/test_gbt_*.f90`, oracles in `tests/gbt/oracles/` |
+| GBT: antiparallel cell, commensurate equivalence, symmetry relations, constrained spiral SCF and its guards | `standard`, one `quick` (`gbt;kspace`) | `tests/gbt/test_kspace_*.py` |
+| Validation scripts | `validation` | `tests/validation/*.py` |
 
 **Adding a case:** see `tests/scf/README.md` / `tests/postproc/README.md` for
 the full case-file format. Short version: add an `input.nml` (+ any

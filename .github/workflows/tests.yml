@@ -3,12 +3,20 @@ name: Example tests
 # Runs directly from the checked-out branch. The test workflow builds its own
 # binary, so it does not depend on another workflow's artifacts or definition.
 on:
+  # Every push and pull request: build plus the quick tier.
   push:
   pull_request:
   schedule:
-    # 03:00 UTC nightly - full matrix (all labels, all cases) on Linux + macOS.
+    # 03:00 UTC nightly: quick and standard tiers on Linux + macOS.
     - cron: "0 3 * * *"
+  # Manual runs choose the tier; the validation tier only runs this way.
   workflow_dispatch:
+    inputs:
+      tier:
+        description: "Test tier to run"
+        type: choice
+        options: [quick, standard, validation]
+        default: quick
 
 concurrency:
   group: tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -135,70 +143,28 @@ jobs:
       # -----------------------------------------------------------------------
       # Run tests
       # -----------------------------------------------------------------------
-      - name: Run unit correctness tests ${{ matrix.icon }}
-        id: ctest_unit
-        # GitHub's macOS and Ubuntu runners expose fewer MPI slots than the
-        # four-rank parallel-context test intentionally exercises. This is a
-        # CI resource limit, not an oversubscription condition in the code.
-        # Linux uses Open MPI's legacy MCA setting; Homebrew Open MPI 5 uses
-        # the PRRTE mapping-policy spelling.
+      - name: Select test tier
+        id: tier
+        run: |
+          case "${{ github.event_name }}" in
+            schedule) echo "regex=^(quick|standard)$" >> "$GITHUB_OUTPUT" ;;
+            workflow_dispatch) echo "regex=^${{ github.event.inputs.tier }}$" >> "$GITHUB_OUTPUT" ;;
+            *) echo "regex=^quick$" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Run tests (tier ${{ steps.tier.outputs.regex }}) ${{ matrix.icon }}
+        id: ctest_run
+        # GitHub's runners expose fewer MPI slots than the four-rank parallel-context test exercises. This is a
+        # CI resource limit, not an oversubscription condition in the code. Linux uses Open MPI's legacy MCA
+        # setting; Homebrew Open MPI 5 uses the PRRTE mapping-policy spelling.
         env:
           OMPI_MCA_rmaps_base_oversubscribe: ${{ runner.os == 'Linux' && '1' || '' }}
           PRTE_MCA_mapby: "${{ runner.os == 'macOS' && ':oversubscribe' || '' }}"
-        run: |
-          ctest --test-dir build \
-            -L unit \
-            --output-on-failure \
-            --output-junit "${{ github.workspace }}/unit_results.xml" \
-            --parallel 1 \
-            -V 2>&1 | tee ctest_unit_output.txt
-          echo "ctest_exit=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
-        continue-on-error: true
-
-      - name: Run tooling tests ${{ matrix.icon }}
-        id: ctest_tooling
-        run: |
-          ctest --test-dir build \
-            -L tooling \
-            --output-on-failure \
-            --output-junit "${{ github.workspace }}/tooling_results.xml" \
-            --parallel 1 \
-            -V 2>&1 | tee ctest_tooling_output.txt
-          echo "ctest_exit=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
-        continue-on-error: true
-
-      - name: Run regression backend tests ${{ matrix.icon }}
-        id: ctest_backend
-        env:
-          # Apply OpenMP threading only to non-MPI runs; MPI remains pinned to 1 in run_binary.sh.
+          # OpenMP threading applies to non-MPI runs only; MPI stays pinned to 1 in run_binary.sh.
           RSLMTO_OMP_THREADS_SERIAL: "2"
         run: |
           ctest --test-dir build \
-            --label-regex "backend|triad" \
-            --output-on-failure \
-            --output-junit "${{ github.workspace }}/backend_results.xml" \
-            --parallel 1 \
-            -V 2>&1 | tee ctest_backend_output.txt
-          echo "ctest_exit=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
-        # Always proceed to summary and upload steps even on failure
-        continue-on-error: true
-
-      - name: Run example tests ${{ matrix.icon }}
-        id: ctest_example
-        env:
-          # Apply OpenMP threading only to non-MPI runs; MPI remains pinned to 1 in run_binary.sh.
-          RSLMTO_OMP_THREADS_SERIAL: "2"
-        run: |
-          # pull_request runs a small representative "quick" subset to keep PR
-          # turnaround under ~15 min; every other trigger (push, nightly
-          # schedule, manual dispatch) runs the full example matrix.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            LABEL_REGEX="quick"
-          else
-            LABEL_REGEX="example"
-          fi
-          ctest --test-dir build \
-            --label-regex "$LABEL_REGEX" \
+            --label-regex "${{ steps.tier.outputs.regex }}" \
             --output-on-failure \
             --output-junit "${{ github.workspace }}/results.xml" \
             --parallel 1 \
@@ -208,7 +174,7 @@ jobs:
         continue-on-error: true
 
       - name: Dump per-case runner logs on failure
-        if: steps.ctest_unit.outputs.ctest_exit != '0' || steps.ctest_tooling.outputs.ctest_exit != '0' || steps.ctest_backend.outputs.ctest_exit != '0' || steps.ctest_example.outputs.ctest_exit != '0'
+        if: steps.ctest_run.outputs.ctest_exit != '0'
         run: |
           echo "ctest failed; printing per-case testrun.log files"
           find build/Testing -type f -name testrun.log | sort | while read -r f; do
@@ -287,10 +253,7 @@ jobs:
               with open(summary_path, "a") as f:
                   f.write("\n".join(lines) + "\n")
 
-          write_section("Unit correctness tests", "unit_results.xml")
-          write_section("Tooling tests", "tooling_results.xml")
-          write_section("Regression backend tests", "backend_results.xml")
-          write_section("Example tests", "results.xml")
+          write_section("Tests", "results.xml")
           PYEOF
 
       # -----------------------------------------------------------------------
@@ -302,12 +265,6 @@ jobs:
         with:
           name: test_logs.${{ runner.os }}.${{ matrix.arch }}
           path: |
-            ctest_unit_output.txt
-            unit_results.xml
-            ctest_tooling_output.txt
-            tooling_results.xml
-            ctest_backend_output.txt
-            backend_results.xml
             ctest_output.txt
             results.xml
           if-no-files-found: ignore
@@ -316,7 +273,7 @@ jobs:
       # Propagate failure after summary and upload are done
       # -----------------------------------------------------------------------
       - name: Check test outcome
-        if: steps.ctest_unit.outputs.ctest_exit != '0' || steps.ctest_tooling.outputs.ctest_exit != '0' || steps.ctest_backend.outputs.ctest_exit != '0' || steps.ctest_example.outputs.ctest_exit != '0'
+        if: steps.ctest_run.outputs.ctest_exit != '0'
         run: |
           echo "Tests failed — see summary above for details."
           exit 1
@@ -377,7 +334,7 @@ jobs:
       - name: Run MKL regression + example cases
         run: |
           ctest --test-dir build \
-            -R "mkl_batch|mkl_sparse" \
+            -R "mkl_batch" \
             --output-on-failure \
             --parallel 1 \
             -V

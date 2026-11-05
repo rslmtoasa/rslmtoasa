@@ -279,7 +279,7 @@ U-carrying frozen host written at ``nsp=2`` in local mode with the spinor ``_dm`
 ``ldm_beta=0.3``, and the energy window checked against the U-shifted d band. The empty sphere carries no U. ``auto`` resolves to ``local``
 under the impurity host rule; ``nsp=3/4`` with U stays fatal and KS surfaces are not supported. Seed a surface from the converged
 ``nsp=1`` surface (zero spin coherences) or, for SOC on, expect the spin-orbit transient: a host converged without SOC moves when SOC is
-switched on (``ni_host_soc`` in ``tests/validation/fixed_ldau/decks``).
+switched on (``ni_host_soc`` in ``decks` (archive tag `archive/fable_v4b_u-2026-11-05`)`).
 
 Surface energies exclude the Hubbard term, so U enters them only through the density.
 
