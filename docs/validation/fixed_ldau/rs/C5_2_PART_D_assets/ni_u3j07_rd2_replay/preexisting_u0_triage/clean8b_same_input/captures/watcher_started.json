@@ -1,0 +1,30 @@
+{
+  "actual_argv": [
+    "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/collector/watch_trace_and_state.py",
+    "--run-id",
+    "c52_ni_u0_impurity_clean8b_same_input",
+    "--solver-pid-file",
+    "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/run/solver.pid",
+    "--run-dir",
+    "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/run",
+    "--state-file",
+    "Ni-imp_scf.nml",
+    "--output-dir",
+    "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/captures",
+    "--ready-file",
+    "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/run/watcher.ready"
+  ],
+  "manifest_path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/captures/trace_state_manifest.jsonl",
+  "output_dir": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/captures",
+  "ready_file": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/run/watcher.ready",
+  "record_type": "read_only_trace_watcher_start",
+  "run_dir": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/run",
+  "run_id": "c52_ni_u0_impurity_clean8b_same_input",
+  "solver_pid": null,
+  "solver_pid_file": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/run/solver.pid",
+  "started_local": "2026-10-21T13:00:28.259941+02:00",
+  "state_file": "Ni-imp_scf.nml",
+  "state_source": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/run/Ni-imp_scf.nml",
+  "trace_source": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/run/fixed_u_trace.csv",
+  "watcher_process_pid": 38991
+}

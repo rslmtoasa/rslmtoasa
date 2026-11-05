@@ -1,0 +1,176 @@
+{
+  "frozen_rd1_executable": {
+    "mode": "0o555",
+    "path": "/private/tmp/c5-rd1-frozen/4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f/rslmto.x",
+    "rd1_commit": "683eff937241a463d2dacb395485d6b7c0b43264",
+    "sha256": "4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f"
+  },
+  "head": "683eff937241a463d2dacb395485d6b7c0b43264",
+  "input": {
+    "C1_source_path": "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_seed_recovery/inputs/input.nml",
+    "C1_source_sha256": "4a268e5eddb779a01b858e2c13459ef55207d16ad4cbc4f9ed30b202d52395ac",
+    "all_other_C1_bytes_preserved_except_these_explicit_edits": true,
+    "candidate_path": "/private/tmp/c52-rd-ni-impurity-u3j07/immutable/input.nml",
+    "candidate_sha256": "c8566156f0e7479135dbeccadb05f4c4eef0f82892960096e2408e60262986bb",
+    "changes_from_C1": [
+      "rc 30\u219280",
+      "self.use_kspace=.false.",
+      "control.fresh_start=.false. explicitly (same as source default)",
+      "hubbard_u_impurity(1,3)=3.0 eV",
+      "hubbard_j_impurity(1,3)=0.7 eV",
+      "hubbard_u_potential_form=liechtenstein",
+      "hubbard_radial_moments=local"
+    ],
+    "run_path": "/private/tmp/c52-rd-ni-impurity-u3j07/run/input.nml",
+    "run_sha256": "c8566156f0e7479135dbeccadb05f4c4eef0f82892960096e2408e60262986bb"
+  },
+  "launch_plan": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "4",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "4",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "authorization_required": true,
+    "collector_path": "/private/tmp/c52-rd-ni-impurity-u3j07/collector/watch_trace_and_state.py",
+    "collector_readiness_before_exec": true,
+    "collector_sha256": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be",
+    "cwd": "/private/tmp/c52-rd-ni-impurity-u3j07/run",
+    "disk_floor_bytes": 1073741824,
+    "disk_guard_path": "/private/tmp/c52-rd-ni-impurity-u3j07/collector/disk_guard.sh",
+    "disk_guard_sha256": "3049362e51a3165866c73bb997667a0c74662fc673328085b2636c25dae74cdd",
+    "exact_command": "C52_RD_NI_I_U3J07_AUTHORIZED=1 /private/tmp/c52-rd-ni-impurity-u3j07/collector/launch_impurity.sh",
+    "expected_capture_completeness": "Each complete trace iteration requires six P_OUT ql rows (l0-2, spins1-2), six POST_SCF_RADIAL records ending etot_total, stable double-read trace and Ni-imp_scf.nml; match same-index Diff segment.",
+    "launch_wrapper_path": "/private/tmp/c52-rd-ni-impurity-u3j07/collector/launch_impurity.sh",
+    "launch_wrapper_sha256": "be24712bb31d6c25715bb8ce586b531c58b2c1d71c89415faf090221e0eac198",
+    "max_concurrent_solves": 1,
+    "not_authorized_yet": true,
+    "pid_tracking": "Bash3.2 parent $! captures watcher, solver and diskguard children; exact solver PID written before wait; foreground wrapper waits, writes exit code/lifecycle.",
+    "rekey_proof_script": "/private/tmp/c52-rd-ni-impurity-u3j07/collector/prove_host_rekey.py",
+    "rekey_proof_script_sha256": "d0a32c7d98d05b1cbae4ad53526009397135b9dd73c780577fbc28db686b734f",
+    "trace_mode": {
+      "RSLMTO_FIXED_U_TRACE": "run/fixed_u_trace.csv",
+      "a2_scan": false,
+      "capture_only": false,
+      "iteration_filter": 0,
+      "moments_only": true,
+      "ql_only": false,
+      "run_id": "rd_ni_i_u3j07_local_from_rs_bulk_u3_rc80"
+    }
+  },
+  "namelist_membership": {
+    "all_input_and_restart_groups_validated": true,
+    "checker_path": "/private/tmp/c52-c-private/fortran_namelist_schema.py",
+    "checker_sha256": "d8bea2b4825e443c81322d37e6b3ead324cde69fca32ef8096ddb9739c06e953",
+    "result_path": "/private/tmp/c52-rd-ni-impurity-u3j07/immutable/schema_validation.json",
+    "result_sha256": "135ab69bfba949c9cf59cd76288529d9658e832082586345f37f661962b1ca80",
+    "schema_source_commit": "683eff937241a463d2dacb395485d6b7c0b43264",
+    "schema_source_file_count": 20
+  },
+  "no_solver_launch": true,
+  "parsed_settings": {
+    "J_Ry_expected": 0.051449010006007496,
+    "J_eV": 0.7,
+    "U_Ry_expected": 0.2204957571686036,
+    "U_eV": 3.0,
+    "alat": 3.5234,
+    "beta": 0.1,
+    "calctype": "I",
+    "conv_thr": 1e-30,
+    "crystal_sym": "fcc",
+    "energy_window_Ry": [
+      -1.0,
+      0.5
+    ],
+    "fixed_EF_Ry": -0.061141,
+    "fresh_start": false,
+    "l_shell_index": 3,
+    "lld": 21,
+    "lmax_from_restart": 2,
+    "mixer": "broyden",
+    "nrec_dimension_index": 1,
+    "nsp": 1,
+    "nstep": 200,
+    "radial_hubbard_backend": "rs (preserved in endpoint state)",
+    "radial_mode": "local explicit Liechtenstein",
+    "rc": 80,
+    "recursion": "block",
+    "structure_constants_backend": "legacy (observed in accepted U3 bulk run, must be confirmed live)",
+    "use_kspace": false
+  },
+  "preflight_findings": {
+    "expected_startup": "No iostat errors; STRUCTB backend=legacy; restart loaded from Ni-bulk_out.nml and Ni-imp_out.nml; HUBBARD_RADIAL_MODE mode=local source=explicit use_kspace=.false. local_energy_adopted=.true.; mapped recursive target type2 and RD1 exact V capture enabled.",
+    "host_label_rekey": "PASS exact single-field replacement proof",
+    "restart_aliases": "PASS exact loader names selected when fresh_start=false",
+    "source_mapping": "static mapping supports recursion row1 to inclusion/type2; actual runtime mapping/startup remains required",
+    "source_schema": "PASS all eight namelist groups across candidate input, two restart aliases, and two element files"
+  },
+  "repository": "/Users/andersb/Jobb/rslmto_fable_v4b",
+  "restart_pair": {
+    "Ni-bulk_out_role": "derived host restart, exact one-field element.symbol re-key to Ni-bulk; proof file immutable/host_rekey_proof.json",
+    "Ni-imp_out_role": "exact accepted endpoint bytes; recursive impurity state, no label change",
+    "accepted_endpoint74_source": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/accepted_checkpoint_55_74/window55_74/rd_ni_u3_bulk_rc80_block_traceiter0074_Ni-imp_scf_bc3340a8ad20.nml",
+    "host_rekey_proof_sha256": "176f180a217ab7b3bffc4fa45a8e9116d85559c4cbce24ef5c8773eb519c9d8b",
+    "physical_payload_preserved": "all par values and element fields except symbol compare equal; reverse symbol replacement reproduces all source bytes",
+    "source_sha256": "bc3340a8ad20d2467eaeccd43929a659d4cfff2a9f28b748fb6554edc4ee3ac9"
+  },
+  "run_file_sha256": {
+    "Ni-bulk.nml": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+    "Ni-bulk_out.nml": "428dfff8800ca5064a1c91ff7ba1a47d412cfd33e5a7febb04703b89156bce8c",
+    "Ni-imp.nml": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+    "Ni-imp_out.nml": "bc3340a8ad20d2467eaeccd43929a659d4cfff2a9f28b748fb6554edc4ee3ac9",
+    "input.nml": "c8566156f0e7479135dbeccadb05f4c4eef0f82892960096e2408e60262986bb"
+  },
+  "run_id": "rd_ni_i_u3j07_local_from_rs_bulk_u3_rc80",
+  "run_paths": {
+    "captures": "/private/tmp/c52-rd-ni-impurity-u3j07/captures",
+    "immutable": "/private/tmp/c52-rd-ni-impurity-u3j07/immutable",
+    "root": "/private/tmp/c52-rd-ni-impurity-u3j07",
+    "run": "/private/tmp/c52-rd-ni-impurity-u3j07/run"
+  },
+  "schema": "c5_rd1_ni_local_impurity_preflight_v1",
+  "source_mapping": {
+    "C1_input_group_lattice": {
+      "nclu": 1,
+      "ntype_input": 2,
+      "type_labels": [
+        "Ni-bulk",
+        "Ni-imp"
+      ]
+    },
+    "U_J_input_index_semantics": "hamiltonian_build.f90 first dimension is recursive index i=1..nrec, second is l; use (1,3), then source maps recursion index\u2192irec(cluster_site)\u2192iz(cluster_site)=type2.",
+    "expected_mapping_runtime_check": "Capture/log must confirm sole recursive site maps through irec\u2192iz to type2 before any acceptance claim.",
+    "source_derived_structure": "fcc Ni bravais nbulk_bulk=1; newclu sets nrec=nclu=1 and inclusion type to 2; target is sole recursion index1.",
+    "source_files_sha256": {
+      "source/bands.f90": "0f130331ded7fea3d12edd2a716c04f1473855a9b89ccfbf70fdafa73a38724e",
+      "source/control.f90": "99a2d8ade20302d0aa8b05a8e4bf4b84b484713d9002ce3b7bbcb4b919243184",
+      "source/hamiltonian_build.f90": "75e16120e99b85004436a0a336e467504e8f22f295e29dd5c75943f74783c04f",
+      "source/lattice_cluster.f90": "203fb901b685f428a0d811766c0af6dcc4abc024aa5cde8689b8f7e9765a6bcb",
+      "source/lattice_strux.f90": "50a3c1270ad6b54025e503b99d89f5906a62f1e72b02b830ea83a971b390345d",
+      "source/symbolic_atom.f90": "852d1d3c56f8bd682aa3edeee8f4acacab66c52b7b9535004cf5d8cbfffe9eb6"
+    },
+    "source_lines": {
+      "RD1_mapping": "source/hamiltonian_build.f90:126-149,183-202",
+      "U_J_application": "source/hamiltonian_build.f90:633-665",
+      "newclu_mapping": "source/lattice_cluster.f90:901-905,935-947,1118-1124",
+      "restart_selection": "source/control.f90:245-248,598; source/lattice_strux.f90:196; source/symbolic_atom.f90:123-157"
+    }
+  },
+  "status": "PREPARED_FOR_AUDITOR_REVIEW_NO_SOLVER_LAUNCH",
+  "tracked_worktree_clean": true,
+  "workspace_status_observation": [
+    "?? docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_u0_ks_block_rc80_beta005_cont200_guard/",
+    "?? docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_u3_bulk_rc80_host/",
+    "?? docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_u3_ks_block_rc80_guard/",
+    "?? example/bulk/hcpCo-folder/hcpCo_ref/Co1_out.nml",
+    "?? example/bulk/hcpCo-folder/hcpCo_ref/Co1_scf.nml",
+    "?? example/bulk/hcpCo-folder/hcpCo_ref/Co2_out.nml",
+    "?? example/bulk/hcpCo-folder/hcpCo_ref/Co2_scf.nml",
+    "?? example/bulk/hcpCo-folder/hcpCo_ref/Conv/",
+    "?? example/bulk/hcpCo-folder/hcpCo_ref/out.scf",
+    "?? example/bulk/hcpCo-folder/hcpCo_ref/radial_ground_state_Co1_1.dat",
+    "?? example/bulk/hcpCo-folder/hcpCo_ref/radial_ground_state_Co2_2.dat"
+  ]
+}

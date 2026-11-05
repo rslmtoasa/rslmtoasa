@@ -1,0 +1,11 @@
+{
+  "record_type": "append_only_runtime_erratum",
+  "preflight_path": "../preflight.json",
+  "preflight_sha256": "82ac9c442b5a469ac28011a7f33f588f684605e898bab92888f6910a5cd2cb22",
+  "preflight_expected_startup_text": "local_energy_adopted=.true.",
+  "actual_runtime_log_path": "../run/testrun.log",
+  "actual_runtime_sha256": "ee2124e3e5069afefc60e9b7f54d8241e764e10dc8662a3d4b611f6bba0e7a6c",
+  "actual_startup_evidence": "HUBBARD_RADIAL_MODE mode=local source=explicit use_kspace=.false. local_energy_adopted=.false.",
+  "resolution": "Preserve original preflight unchanged. Actual run had local_energy_adopted=false; preflight expected_startup string was a stale metadata typo, not a runtime setting.",
+  "run_id": "rd_ni_i_u3j07_local_from_rs_bulk_u3_rc80"
+}

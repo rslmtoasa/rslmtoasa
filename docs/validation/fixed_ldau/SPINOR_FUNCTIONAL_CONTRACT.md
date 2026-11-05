@@ -133,3 +133,16 @@ expectation for `(up+i down)/sqrt(2)` under the documented basis convention.
 `build_lsham` constructs its SOC blocks from `Lx,Ly` directly and does not use
 `S_y`, so that path needs its own angular-momentum spectrum test. No sign was
 changed as part of this algebra-only oracle.
+
+## Production kernel and index map (S1)
+
+`source/hubbard_spinor.f90` implements this functional for one d shell on plain arrays
+(`hubbard_d_tensor`, `hubbard_spinor_functional`); no SCF code calls it. The compact spinor index
+is `i=(sigma-1)*5+(m+3)`. In the Hamiltonian it is row `(sigma-1)*spin_off + l*l + (m+l+1)` with
+`l=2` and `spin_off=norb`, the offsets used when `calculate_hubbard_u_potential_general` writes
+`hubbard_u_pot` (rows 5..9 up, `5+spin_off`..`9+spin_off` down). `P` is `ldm(l,spin,i,j)`
+(`psi_i conj(psi_j)`) and `V` is inserted into `H` unchanged, so `dE = Re Tr(V dP)`. The gradients
+are `V_dir(a s,b s)=sum_cd T_abcd n_dc` with `n=sum_s P_ss`, `V_x(a r,d s)=-sum_bc T_abcd P(b r,c s)`
+and the double-counting term above; `E_DC` equals `U/2 N(N-1) - J/2 [N(N/2-1) + |m|^2/2]`
+because `Tr(D^2)=(N^2+|m|^2)/2`. Tests: `tests/unit/test_hubbard_spinor.f90`, reference values from
+this oracle through `tests/validation/fixed_ldau/spinor_oracle_reference.py`.

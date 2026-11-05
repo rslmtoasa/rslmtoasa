@@ -1,0 +1,71 @@
+{
+  "binary": {
+    "path": "/private/tmp/c5-r1-frozen/rslmto.x",
+    "sha256": "710f91b3b3478cb8e4c89961edb6eca02e1fc72244a0c8061154604761898794"
+  },
+  "convergence": {
+    "conv_thr": 5e-09,
+    "exit_code": 0,
+    "reported_diff": 4.8e-09,
+    "step": 16
+  },
+  "endpoint_hashes": {
+    "Co1_out.nml": "96cc06673e03319375c68fdccde68298e44aeeb8225a54244a02b8411666548d",
+    "Co2_out.nml": "4e78fc3aac7024abfbf52852f4e3b0075ceb40230464d18684d1211d3611884f"
+  },
+  "endpoint_observables": {
+    "Co1": {
+      "d_ql_down_delta": -7.822526626455328e-09,
+      "d_ql_down_endpoint": 2.9149874131456204,
+      "d_ql_down_input": 2.914987420968147,
+      "d_ql_up_delta": -3.1665665645164154e-09,
+      "d_ql_up_endpoint": 4.589611155125427,
+      "d_ql_up_input": 4.589611158291993,
+      "etot_delta_Ry": -7.601556717418134e-09,
+      "etot_endpoint_Ry": -2783.115323603506,
+      "etot_input_Ry": -2783.1153235959046
+    },
+    "Co2": {
+      "d_ql_down_delta": -5.981247763742203e-08,
+      "d_ql_down_endpoint": 2.9149866130945705,
+      "d_ql_down_input": 2.914986672907048,
+      "d_ql_up_delta": 5.4935378024367765e-08,
+      "d_ql_up_endpoint": 4.589611562519217,
+      "d_ql_up_input": 4.589611507583839,
+      "etot_delta_Ry": 5.424226401373744e-09,
+      "etot_endpoint_Ry": -2783.1153238449288,
+      "etot_input_Ry": -2783.115323850353
+    }
+  },
+  "input_hashes": {
+    "Co1.nml": "19e93a01e37f1d4e6dd4568d25b7eaa935b146f1090e65992d249cadc85e45e4",
+    "Co2.nml": "18f2156ea75593d6adf562b713f2ebc3652233367fa9b3c6f0d4dbe8fa188b91",
+    "input.nml": "bd053da5f779f5f8f5cdd806f2d272e3e3dfc93c6abbe48d9282adc8831fc985",
+    "lattice.nml": "b99302fad18239e8d517399de913b3316c1bc812a6fcdecfbe68650e4f31dafa"
+  },
+  "interpretation": "d occupations are ql(1,l=2,isp), serialized as the third entry of ql(1,:,isp); atom moment values above are those explicitly reported by report.out at its displayed precision. No full occupation matrix comparison was made.",
+  "purpose": "Read-only endpoint comparison for the one-shot hcpCo bulk reference validation; descriptive values only, no new threshold or C5 gate.",
+  "raw_report_hashes": {
+    "endpoint_report.out": "701b1ee5ffc671a52ac4fe055c4832f99113b6e2634ad314b065999afa26c3d3",
+    "source_report.out": "9519d331329188576b520adf00285f92afd3816e73bfa9e20991edee0b18dff3"
+  },
+  "reported_total_observables": {
+    "atom_spin_moments_endpoint_report_precision": {
+      "Co1": 1.570083,
+      "Co2": 1.570084
+    },
+    "atom_spin_moments_input_report_precision": {
+      "Co1": 1.570084,
+      "Co2": 1.570084
+    },
+    "total_energy_delta_Ry": -2.1e-09,
+    "total_energy_endpoint_Ry": -5566.2306474484,
+    "total_energy_input_Ry": -5566.2306474463,
+    "total_spin_moment_delta": 3.57e-08,
+    "total_spin_moment_endpoint": 3.1401679405,
+    "total_spin_moment_input": 3.1401679048
+  },
+  "run_directory": "/private/tmp/c5-hcpco-reference/run",
+  "run_id": "C5-hcpCo-reference-validation-01",
+  "source_reference": "/Users/andersb/Jobb/rslmto_fable_v4b/example/bulk/hcpCo-folder/hcpCo_ref"
+}

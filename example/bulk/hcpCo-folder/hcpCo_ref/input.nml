@@ -1,0 +1,54 @@
+&calculation
+pre_processing = 'bravais'
+verbose = T
+/
+&lattice
+rc = 60 ! radius cut. We could think about setting a default
+alat = 2.471999903202706 ! lattice parapeter
+crystal_sym = 'hcp' ! options are bcc, fcc and hcp so far.
+wav = 1.3644350065222555
+ntype = 2
+ct(1) = 4.0
+ct(2) = 4.0
+!
+r2 = 16.0
+!
+pbc = .true.
+b1 = .true.
+b2 = .true.
+b3 = .true.
+n1 = 10
+n2 = 10
+n3 = 10
+strux_backend = 'strux_lib'
+/
+&atoms
+database = './'
+label(1) = 'Co1'
+label(2) = 'Co2'
+/
+&self
+nstep = 25
+conv_thr = 0.5e-8
+/
+&energy
+fermi = -0.032603
+energy_min = -1.0
+energy_max = 1.3
+channels_ldos = 2500
+/
+&control
+calctype = 'B'
+nsp = 1 ! type of calculation, nsp can be 1, 2, 3 or 4
+lld = 150
+recur = 'chebyshev'
+!!conv_method = 'dyson'
+!!gf_neighbors = 2
+/
+&mix
+beta = 0.15
+mixtype = 'broyden'
+!!pre_its = 5
+!!cycle_iter = 10
+/
+

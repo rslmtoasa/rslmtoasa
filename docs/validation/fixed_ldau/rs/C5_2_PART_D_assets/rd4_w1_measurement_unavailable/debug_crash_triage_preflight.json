@@ -1,0 +1,123 @@
+{
+  "schema": "rd4-w1-crash-triage-preflight-v1",
+  "status": "PREPARED_NOT_LAUNCHED_AWAITING_AUDIT",
+  "crash_run": {
+    "path": "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v6/lambda_0p0/run",
+    "solver_exit_code": 139,
+    "scf_trace_entries": 0,
+    "last_log_sha256": "8504fa16e384c02688c73a8d81a5653d52ec3dedb6e3eb8c133ed43ab4d4a004",
+    "crash_output_sha256": "8504fa16e384c02688c73a8d81a5653d52ec3dedb6e3eb8c133ed43ab4d4a004",
+    "empty_trace_manifest_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "debug_bounds_build": {
+    "source_tree_manifest_path": "/private/tmp/c52-rd4-w1-private/triage_001/SOURCE_TREE_MANIFEST.json",
+    "source_tree_manifest_sha256": "a5d100a13f74eb4ceac871a3f35d9f92dd80284da5d9e91d1716b2e62d5495e4",
+    "source_tree_file_count": 2547,
+    "source_tree_mismatches": 0,
+    "compiler": "/opt/homebrew/bin/gfortran",
+    "compiler_version": "GNU Fortran (Homebrew GCC 16.2.0) 16.2.0",
+    "build_type": "Debug",
+    "fortran_flags": "-ffree-line-length-0 -cpp -mtune=native -DCOLOR -fopenmp -DOpenMP_Fortran_FOUND -g -O0 -fbacktrace -fcheck=bounds plus CMake warning flags",
+    "cmake_configure_command": "cmake -S /private/tmp/c52-rd4-w1-build/source -B /private/tmp/c52-rd4-w1-build/build_debug_triage_bounds -DCMAKE_BUILD_TYPE=Debug -DCMAKE_Fortran_FLAGS_DEBUG='-g -O0 -fbacktrace -fcheck=bounds' -DRUN_UNIT_TESTS=OFF -DBUILD_TESTING=OFF",
+    "build_command": "cmake --build /private/tmp/c52-rd4-w1-build/build_debug_triage_bounds --target rslmto.x -j1",
+    "configure_exit_code": 0,
+    "build_exit_code": 0,
+    "binary_path": "/private/tmp/c52-rd4-w1-build/build_debug_triage_bounds/bin/rslmto.x",
+    "binary_bytes": 14862728,
+    "binary_sha256": "09add8a2e679681ad9914fa3a5bb0f6fd60fb0e66d4632ca28b21a85636ec1c0",
+    "build_cache_sha256": "1c31ae7d47886ffad6d1bd68da731adeae02d7a20296c97d69082d2247bf4ca7",
+    "flags_make_sha256": "a95a04c5e3e0c754a3dc392d9ae5b0b1f72287594fc214473227b81d12f28997",
+    "build_log_sha256": "d036c957193d81cce5a02a658cd972dacc3015ede081b55f35a99b2d80932b03",
+    "configure_log_sha256": "2ebc0528b11b60d5ccccec284cfa75e99bb8030fd67e8f14d13e9d3bb5756fbd",
+    "no_source_fix": true
+  },
+  "debug_run": {
+    "status": "NOT_RUN",
+    "run_directory": "/private/tmp/c52-rd4-w1-private/triage_001/debug_same_deck/run",
+    "input_files": [
+      {
+        "path": "/private/tmp/c52-rd4-w1-private/triage_001/debug_same_deck/run/input.nml",
+        "bytes": 1139,
+        "sha256": "1f63c85f66c328811d9c0ef99f3e82454491ec40dbffcffdff455ec48e26e14c"
+      },
+      {
+        "path": "/private/tmp/c52-rd4-w1-private/triage_001/debug_same_deck/run/Ni-bulk.nml",
+        "bytes": 6794,
+        "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac"
+      },
+      {
+        "path": "/private/tmp/c52-rd4-w1-private/triage_001/debug_same_deck/run/Ni-bulk_out.nml",
+        "bytes": 6796,
+        "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4"
+      },
+      {
+        "path": "/private/tmp/c52-rd4-w1-private/triage_001/debug_same_deck/run/Ni-imp.nml",
+        "bytes": 6793,
+        "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+      },
+      {
+        "path": "/private/tmp/c52-rd4-w1-private/triage_001/debug_same_deck/run/Ni-imp_out.nml",
+        "bytes": 6795,
+        "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+      }
+    ],
+    "command": "cd /private/tmp/c52-rd4-w1-private/triage_001/debug_same_deck/run && env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 /private/tmp/c52-rd4-w1-build/build_debug_triage_bounds/bin/rslmto.x > testrun.log 2>&1",
+    "captures_full_log_and_bounds_backtrace": true
+  },
+  "clean8b_run": {
+    "schema": "rd4-w1-clean8b-same-deck-preflight-v1",
+    "status": "NOT_RUN",
+    "role": "\u00a72.4 same-deck clean-8b comparison; no result yet",
+    "failed_deck_lambda_Ry": 0.0,
+    "explicit_U_J": "all zero in unchanged \u03bb0 input",
+    "run_input_source": "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v6/lambda_0p0/immutable",
+    "run_path": "/private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run",
+    "files": [
+      {
+        "path": "/private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run/input.nml",
+        "bytes": 1139,
+        "sha256": "1f63c85f66c328811d9c0ef99f3e82454491ec40dbffcffdff455ec48e26e14c"
+      },
+      {
+        "path": "/private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run/Ni-bulk.nml",
+        "bytes": 6794,
+        "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac"
+      },
+      {
+        "path": "/private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run/Ni-bulk_out.nml",
+        "bytes": 6796,
+        "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4"
+      },
+      {
+        "path": "/private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run/Ni-imp.nml",
+        "bytes": 6793,
+        "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+      },
+      {
+        "path": "/private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run/Ni-imp_out.nml",
+        "bytes": 6795,
+        "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+      }
+    ],
+    "clean8b_debug_binary": {
+      "path": "/private/tmp/rslmto-c2-crash-triage/fe_plus_seed_clean8b/rslmto.x",
+      "sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+      "prior_provenance": "/private/tmp/c4-a41-triage-clean8b/preflight.json",
+      "prior_provenance_sha256": "10ab98e2b30c9cd5c04f30045ca16f01c890e16722f809436ef9c676e8025891",
+      "prior_status": "PREFLIGHT_COMPLETE_NOT_LAUNCHED",
+      "baseline": "exact clean commit 8b8f7ef as documented in frozen prior triage"
+    },
+    "expected_limitation": "The exact input contains W1 namelist entries added after the clean8b source, so this run may terminate as invalid input before SCF; preserve and classify without editing the deck.",
+    "command": "cd /private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run && env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 /private/tmp/rslmto-c2-crash-triage/fe_plus_seed_clean8b/rslmto.x > testrun.log 2>&1",
+    "rejected_candidate": {
+      "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x",
+      "sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69",
+      "reason": "build provenance source commit 8a107432e3ca2e00c815c217d52e7aa2a8e30736 is a descendant of, not the exact clean baseline 8b8f7ef; excluded from comparator"
+    }
+  },
+  "history": {
+    "unsafe_fcheck_all_attempt": "configure warning noted repository skips compiler auto -fcheck=all under GNU16/macOS due descriptor corruption; initial unexecuted build interrupted and not used. The successful build uses targeted -fcheck=bounds.",
+    "no_diagnostic_execution_yet": true,
+    "no_later_lambda_authorized": true
+  }
+}

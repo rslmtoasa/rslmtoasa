@@ -10,10 +10,13 @@
 submodule (green_mod) green_chebyshev
 
    use chebyshev_fast_mod, only: cheb_green_fast, cheb_green_complex
-   use math_mod, only: i_unit, jackson_kernel, t_polynomial
+   use math_mod, only: i_unit, pi, jackson_kernel, t_polynomial, &
+                       hubbard_spectral_density_element, project_spectral_density_2x2
+   use basis_mod, only: norb, spin_off
    use mpi_mod, only: atoms_per_process, start_atom, end_atom, g2l_map
    use rsrec_cuda_plugin_mod, only: rsrec_cuda_backend, get_gpu_context, rsrec_cuda_plugin_compiled
    use logger_mod, only: g_logger
+   use string_mod, only: fmt
    implicit none
 
 contains
@@ -139,7 +142,7 @@ contains
       mu_local(:, :, :, 1:4) = this%recursion%mu_n(:, :, :, istart:istart + 3)
 
       gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
-      call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
+      call gpu_backend%set_precision(merge(1, 0, trim(this%control%gpu_precision) == 'fp64'))
 
       call gpu_backend%chebyshev_dos(mu_local, this%en%ene(1:nv), a, b, g0_local)
       this%g0(:, :, 1:nv, 1:4) = g0_local(:, :, :, 1:4)
@@ -298,11 +301,12 @@ contains
          end do
 
          gpu_backend => get_gpu_context(1, nb, 1, 1, 1)
-         call gpu_backend%set_precision(0)  ! 0=fp32 (fast), 1=fp64 (validation)
+         call gpu_backend%set_precision(merge(1, 0, trim(this%control%gpu_precision) == 'fp64'))
 
          call gpu_backend%chebyshev_dos(this%recursion%mu_n(:, :, :, start_atom:end_atom), &
                                          this%en%ene(1:nv), a, b,                         &
                                          this%g0(:, :, 1:nv, start_atom:end_atom))
+         call enforce_chebyshev_spectral_positivity(this, nv)
          return
       end if
 
@@ -326,6 +330,7 @@ contains
          end do
 
          deallocate (g0_local, mu_local)
+         call enforce_chebyshev_spectral_positivity(this, nv)
          return
       end if
 
@@ -373,5 +378,61 @@ contains
          !$omp end parallel do
       end do  ! End loop on self-consistent atoms
    end subroutine chebyshev_green_core
+
+   !> Restore the local spectral positivity required by the real-axis DOS
+   !> route.  The finite Jackson expansion is non-negative in exact arithmetic,
+   !> but a low-precision moment or GEMM path can make a tiny negative DOS.
+   !> Work in each orbital's spin block so the total DOS, spin-resolved DOS,
+   !> and the charge/moment integrations all consume the same physical density.
+   !> Eta-shifted and intersite Green functions are intentionally excluded.
+   subroutine enforce_chebyshev_spectral_positivity(this, nv)
+      class(green), intent(inout) :: this
+      integer, intent(in) :: nv
+      integer :: n_glob, n, ie, orbital, corrections
+      real(rp) :: a_uu, a_dd, a_uu_before, a_dd_before, max_adjustment
+      complex(rp) :: a_ud, a_ud_before, guu, gdd, gud, gdu, h_ud
+      logical :: corrected
+
+      corrections = 0
+      max_adjustment = 0.0_rp
+      do n_glob = start_atom, end_atom
+         n = g2l_map(n_glob)
+         do ie = 1, nv
+            do orbital = 1, norb
+               guu = this%g0(orbital, orbital, ie, n)
+               gdd = this%g0(orbital + spin_off, orbital + spin_off, ie, n)
+               gud = this%g0(orbital, orbital + spin_off, ie, n)
+               gdu = this%g0(orbital + spin_off, orbital, ie, n)
+
+               a_uu = -aimag(guu)/pi
+               a_dd = -aimag(gdd)/pi
+               a_ud = hubbard_spectral_density_element(gud, gdu)
+               a_uu_before = a_uu
+               a_dd_before = a_dd
+               a_ud_before = a_ud
+               call project_spectral_density_2x2(a_uu, a_ud, a_dd, corrected)
+               if (.not. corrected) cycle
+
+               corrections = corrections + 1
+               max_adjustment = max(max_adjustment, abs(a_uu - a_uu_before), &
+                                    abs(a_dd - a_dd_before), abs(a_ud - a_ud_before))
+
+               ! G = Hermitian(G) - i*pi*A.  Preserve the dispersive
+               ! Hermitian part and replace only the non-causal spectral part.
+               h_ud = 0.5_rp*(gud + conjg(gdu))
+               this%g0(orbital, orbital, ie, n) = cmplx(real(guu, rp), -pi*a_uu, rp)
+               this%g0(orbital + spin_off, orbital + spin_off, ie, n) = &
+                  cmplx(real(gdd, rp), -pi*a_dd, rp)
+               this%g0(orbital, orbital + spin_off, ie, n) = h_ud - i_unit*pi*a_ud
+               this%g0(orbital + spin_off, orbital, ie, n) = conjg(h_ud) - i_unit*pi*conjg(a_ud)
+            end do
+         end do
+      end do
+
+      if (corrections > 0) then
+         call g_logger%info('Chebyshev spectral positivity projection: local_blocks='// &
+            fmt('i0', corrections)//' max_adjustment='//fmt('e12.4', max_adjustment), __FILE__, __LINE__)
+      end if
+   end subroutine enforce_chebyshev_spectral_positivity
 
 end submodule green_chebyshev

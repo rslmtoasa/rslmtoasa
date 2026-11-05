@@ -1,0 +1,6 @@
+&potential
+ hubbard_radial_moments = 'local'
+ hubbard_backend = 'ks'
+ hubbard_u = 0.0, 0.0, 0.27929462574689784
+ hubbard_j = 0.0, 0.0, 0.0
+/

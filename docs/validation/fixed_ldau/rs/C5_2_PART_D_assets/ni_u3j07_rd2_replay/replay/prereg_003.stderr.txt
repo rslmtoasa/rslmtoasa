@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py", line 399, in <module>
+    main()
+  File "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py", line 392, in main
+    preregister(args)
+  File "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py", line 236, in preregister
+    need(int(qrow['site']) == 0 and int(qrow['type']) == TARGET_TYPE-1,
+  File "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py", line 49, in need
+    raise ValueError(message)
+ValueError: captured q0/c/q2 not bound to recursion site/type spin=1

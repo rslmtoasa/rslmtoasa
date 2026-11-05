@@ -1,0 +1,34 @@
+Test project /private/tmp/c4-postmerge-check
+    Start 40: UnitLdaUHamiltonian
+1/7 Test #40: UnitLdaUHamiltonian .................   Passed    0.69 sec
+    Start 41: UnitLdaUTensor
+2/7 Test #41: UnitLdaUTensor ......................   Passed    0.38 sec
+    Start 42: UnitLdaUOccupationProducers
+3/7 Test #42: UnitLdaUOccupationProducers .........   Passed    0.37 sec
+    Start 43: UnitLdaUProjectorCommonFrozenH
+4/7 Test #43: UnitLdaUProjectorCommonFrozenH ......   Passed    2.14 sec
+    Start 44: UnitLdaUProjectorMultisiteFrozenH
+5/7 Test #44: UnitLdaUProjectorMultisiteFrozenH ...   Passed    9.43 sec
+    Start 54: UnitLocalMomentsKernel
+6/7 Test #54: UnitLocalMomentsKernel ..............   Passed    0.29 sec
+    Start 55: UnitLocalMomentsSiteSwap
+7/7 Test #55: UnitLocalMomentsSiteSwap ............   Passed    0.29 sec
+
+100% tests passed out of 7
+
+Label Time Summary:
+frozen_h         =  11.57 sec*proc (2 tests)
+hamiltonian      =   0.69 sec*proc (1 test)
+hermiticity      =   0.37 sec*proc (1 test)
+lda_u            =  13.59 sec*proc (7 tests)
+local_moments    =   0.58 sec*proc (2 tests)
+mapping          =   0.29 sec*proc (1 test)
+multisite        =   9.43 sec*proc (1 test)
+occupation       =   0.37 sec*proc (1 test)
+oracle           =   0.58 sec*proc (2 tests)
+projector        =  11.57 sec*proc (2 tests)
+tensor           =   0.38 sec*proc (1 test)
+unit             =  13.59 sec*proc (7 tests)
+validation       =  11.57 sec*proc (2 tests)
+
+Total Test time (real) =  13.60 sec

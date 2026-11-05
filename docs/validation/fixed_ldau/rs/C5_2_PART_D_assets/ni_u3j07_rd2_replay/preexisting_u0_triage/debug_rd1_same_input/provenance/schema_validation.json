@@ -1,0 +1,80 @@
+{
+  "schema": "rd1_debug_namelist_schema_validation_v1",
+  "source_commit": "683eff937241a463d2dacb395485d6b7c0b43264",
+  "source_tree": "/private/tmp/c52-rd-ni-u0-triage/debug_build/source_tree",
+  "status": "PASS",
+  "validated_files": [
+    {
+      "groups": [
+        "element",
+        "par"
+      ],
+      "member_counts": {
+        "element": 9,
+        "par": 32
+      },
+      "path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/immutable/Ni-bulk.nml",
+      "schema_valid": true
+    },
+    {
+      "groups": [
+        "element",
+        "par"
+      ],
+      "member_counts": {
+        "element": 9,
+        "par": 32
+      },
+      "path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/immutable/Ni-bulk_out.nml",
+      "schema_valid": true
+    },
+    {
+      "groups": [
+        "element",
+        "par"
+      ],
+      "member_counts": {
+        "element": 9,
+        "par": 32
+      },
+      "path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/immutable/Ni-imp.nml",
+      "schema_valid": true
+    },
+    {
+      "groups": [
+        "element",
+        "par"
+      ],
+      "member_counts": {
+        "element": 9,
+        "par": 32
+      },
+      "path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/immutable/Ni-imp_out.nml",
+      "schema_valid": true
+    },
+    {
+      "groups": [
+        "atoms",
+        "calculation",
+        "control",
+        "energy",
+        "hamiltonian",
+        "lattice",
+        "mix",
+        "self"
+      ],
+      "member_counts": {
+        "atoms": 2,
+        "calculation": 2,
+        "control": 5,
+        "energy": 5,
+        "hamiltonian": 4,
+        "lattice": 13,
+        "mix": 2,
+        "self": 3
+      },
+      "path": "/private/tmp/c52-rd-ni-u0-triage/debug_rd1_same_input/immutable/input.nml",
+      "schema_valid": true
+    }
+  ]
+}

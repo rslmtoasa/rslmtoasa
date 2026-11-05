@@ -1,0 +1,282 @@
+{
+  "schema": "c5_3_ni_followup_preflight_v1",
+  "status": "PREPARED_ONLY_NOT_AUDITED_NOT_AUTHORIZED",
+  "run_id": "ni_u0_ks_block_rc80_beta005_cont200",
+  "repo": "/Users/andersb/Jobb/rslmto_fable_v4b",
+  "frozen_binary": {
+    "path": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x",
+    "sha256": "a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3",
+    "build_manifest_path": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/manifest.json",
+    "build_manifest_sha256": "b2f3ab5d26c439520bdfcbca16163877b2e36d7bb9c3af0448e6941327ae5158",
+    "source_commits": {
+      "B1_source_commit": "8a107432e3ca2e00c815c217d52e7aa2a8e30736",
+      "PartC_head": "0469135d935dd31fb6ce055d819cdb54811c52fa"
+    },
+    "source_manifest_sha256": "494a5dfc061320382a9b1eaced8a3dfb5625d4a4135d47625354a4ca80291900",
+    "build_manifest_source_manifest": {
+      "CMakeLists.txt": "6f4dbe61e45a7c42a5e4cc5ac2977059102f974fd20e0376ac9e2ee63c46d419",
+      "source/CMakeLists.txt": "38c03906064b587d6a40c99160f80bfe154dcbcacdbf677bceba1c969fefdc26",
+      "source/bands.f90": "ea924d76e09c534d33275e9e330d872e9351d14ba33629013d409784280838cc",
+      "source/mix.f90": "f75c1d98d57e8a114d188c28089ec3f565d5a64328679f50224618a0f6e202fd",
+      "source/self.f90": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+      "source/scf_guard.f90": "3f232e9cea4a84acfbe98b7636da0b02318253d5a21f776bb2763e607571c415",
+      "tests/unit/test_scf_b1_guard.f90": "d000c46c13e6eb503aa65487f6861928deb752ecc4c8cbdc1573a73364ba7434"
+    }
+  },
+  "source_changes": "No source edits; executable remains frozen B1 Release at the Part C commit. Current worktree RD1 changes are uncommitted and excluded.",
+  "continuation_parent": {
+    "run_id": "rd_ni_ks_u0_bulk_rc80_block",
+    "terminal_exit_code": 0,
+    "terminal_status": "normal exit at nstep100 cap; last same-loop Diff=0.0105018834 > conv_thr5e-9; not converged",
+    "terminal_input_path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80/immutable/input.nml",
+    "terminal_input_sha256": "e02dbde34cac88df91091b68398cc176e805147c5e266dc68bf3a6ef41e29b58",
+    "terminal_state_path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80/terminal_snapshot_001/Ni-imp_out.nml",
+    "terminal_state_sha256": "e9d8e08059285d937c011f7ed3530aaa1f9624a1168dd2b2db330b683a9c6967",
+    "terminal_snapshot_manifest_path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80/terminal_snapshot_001/snapshot_manifest.json",
+    "terminal_snapshot_manifest_sha256": "305583f91585ff428de4e2a44685e1b9a91b2a4ab1cacdecbc678f3ec7fa8981",
+    "terminal_process_absence_record_path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80/terminal_snapshot_001/process_absence_check_001.txt",
+    "terminal_process_absence_record_sha256": "fd5aeba0f3f35d4fc63d6fb4268d85af82e795f8ac63b7d57b2644972b9a0b27",
+    "historical_capture_ids": [
+      85,
+      97
+    ],
+    "historical_capture_is_sparse": true
+  },
+  "continuation_delta": {
+    "only_input_changes": {
+      "self.nstep": {
+        "parent": 100,
+        "continuation": 200
+      },
+      "mix.beta": {
+        "parent": 0.1,
+        "continuation": 0.05
+      }
+    },
+    "same_kmesh_tetrahedron_temperature_symmetry_occupation_mode_auto_EF_and_standard_conv_thr": true,
+    "no_RS_C1_threshold_claimed": true
+  },
+  "input": {
+    "immutable_path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/immutable/input.nml",
+    "immutable_sha256": "4c7290cd5dda0b3e3ca0a1fc3fb0a927abda0a8f26e985d8287ba60fb4e2d0e2",
+    "working_path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/run/input.nml",
+    "working_sha256": "4c7290cd5dda0b3e3ca0a1fc3fb0a927abda0a8f26e985d8287ba60fb4e2d0e2"
+  },
+  "restart": {
+    "source_path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80/terminal_snapshot_001/Ni-imp_out.nml",
+    "source_sha256": "e9d8e08059285d937c011f7ed3530aaa1f9624a1168dd2b2db330b683a9c6967",
+    "semantic": "exact final finite U0 KS bulk state at nstep100 cap; used as continuation restart",
+    "immutable_copy": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/immutable/Ni-imp_out.nml",
+    "working_copy": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/run/Ni-imp_out.nml",
+    "working_sha256": "e9d8e08059285d937c011f7ed3530aaa1f9624a1168dd2b2db330b683a9c6967",
+    "seeded_from_impurity": false
+  },
+  "element_file": {
+    "immutable_path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/immutable/Ni-imp.nml",
+    "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+    "working_path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/run/Ni-imp.nml",
+    "working_sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+  },
+  "recipe": {
+    "system": "fcc monatomic Ni bulk",
+    "calctype": "B",
+    "rc": 80,
+    "lld": 21,
+    "nsp": 1,
+    "lmax": 2,
+    "recursion": "block (RS component skipped by use_kspace true)",
+    "hubbard_U_J_eV": [
+      0,
+      0
+    ],
+    "hubbard_radial_moments": "local",
+    "input_energy_window_Ry": [
+      -1.0,
+      0.5
+    ],
+    "kspace": {
+      "mesh": [
+        12,
+        12,
+        12
+      ],
+      "offset": [
+        0,
+        0,
+        0
+      ],
+      "symmetry_reduction": true,
+      "time_reversal": true,
+      "shift": false,
+      "dos_method": "tetrahedron",
+      "temperature_K": 300,
+      "auto_find_fermi": true
+    },
+    "Fermi_semantics": "All parent controls retained byte-for-byte; input fermi/fix_fermi retained, while runtime reciprocal branch used canonical occupations and auto-updated EF, evidenced by parent log lines 63 and 6895.",
+    "mix": "Broyden beta .05",
+    "nstep": 200,
+    "conv_thr": 5e-09
+  },
+  "source_namelist_schema": {
+    "source_commit": "0469135d935dd31fb6ce055d819cdb54811c52fa",
+    "source_schema_path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/provenance/source_namelist_schema.json",
+    "source_schema_sha256": "ee1153c3011f96131a493ef5c1aa9ca3ad82b2b855f19809f1ba1809307b42ef",
+    "declared_group_count": 20,
+    "validated_decks": [
+      {
+        "path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/immutable/input.nml",
+        "groups": [
+          "atoms",
+          "calculation",
+          "control",
+          "energy",
+          "hamiltonian",
+          "lattice",
+          "mix",
+          "reciprocal",
+          "self"
+        ],
+        "member_counts": {
+          "atoms": 2,
+          "calculation": 2,
+          "control": 5,
+          "energy": 5,
+          "hamiltonian": 3,
+          "lattice": 11,
+          "mix": 2,
+          "reciprocal": 12,
+          "self": 3
+        },
+        "schema_valid": true
+      },
+      {
+        "path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/immutable/Ni-imp.nml",
+        "groups": [
+          "element",
+          "par"
+        ],
+        "member_counts": {
+          "element": 9,
+          "par": 32
+        },
+        "schema_valid": true
+      },
+      {
+        "path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/immutable/Ni-imp_out.nml",
+        "groups": [
+          "element",
+          "par"
+        ],
+        "member_counts": {
+          "element": 9,
+          "par": 32
+        },
+        "schema_valid": true
+      }
+    ],
+    "result": "PASS; no unknown group/member"
+  },
+  "collector": {
+    "path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/collector/watch_trace_and_state.py",
+    "sha256": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be",
+    "copied_from_parent": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80/collector/watch_trace_and_state.py",
+    "capture_status_parent": "sparse IDs85 and97; continuation capture will be observed, but no KS last20 acceptance gate applies"
+  },
+  "disk_guard": {
+    "path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/collector/disk_guard.sh",
+    "sha256": "3049362e51a3165866c73bb997667a0c74662fc673328085b2636c25dae74cdd",
+    "floor_bytes": 1073741824
+  },
+  "launch": {
+    "wrapper_path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/collector/launch_host.sh",
+    "wrapper_sha256": "efcc5620e020c342b6913c14b341c6fa07e51fbf084f09877e4815bd11990216",
+    "shell_syntax": "PASS bash -n",
+    "exact_command": "C52_RD_NI_KS_U0_BETA005_CONT200_AUTHORIZED=1 /private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/collector/launch_host.sh",
+    "authorization_env_required": true,
+    "process_tracking": "foreground wrapper records solver PID and waits; readiness collector and disk guard are separate PIDs",
+    "environment": {
+      "OMP_NUM_THREADS": "1",
+      "OMP_DYNAMIC": "FALSE",
+      "RSLMTO_OMP_THREADS_SERIAL": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "BLIS_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1"
+    }
+  },
+  "working_copy_writability": {
+    "input_nml": {
+      "sha256": "4c7290cd5dda0b3e3ca0a1fc3fb0a927abda0a8f26e985d8287ba60fb4e2d0e2",
+      "mode": "0644",
+      "writable": true
+    },
+    "Ni-imp_out.nml": {
+      "sha256": "e9d8e08059285d937c011f7ed3530aaa1f9624a1168dd2b2db330b683a9c6967",
+      "mode": "0644",
+      "writable": true
+    },
+    "Ni-imp.nml": {
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+      "mode": "0644",
+      "writable": true
+    }
+  },
+  "acceptance": {
+    "status": "NOT_MEASURED",
+    "criterion": "ordinary KS SCF convergence with unchanged conv_thr=5e-9; nstep=200 is continuation cap",
+    "no_rs_thresholds_applied": true
+  },
+  "runtime_precheck_required": {
+    "fresh_disk_free_bytes_min": 2684354560,
+    "disk_guard_floor_bytes": 1073741824,
+    "process_absence_targets": [
+      26521,
+      26893,
+      26841,
+      26894,
+      26522,
+      26911,
+      26885
+    ],
+    "must_reverify_before_authorized_launch": true
+  },
+  "source_file_hash_inventory": {
+    "source/include_codes/namelists/bounds.f90": "c9ccc51bdd7771b5e5faaffca3fde2ddc952cbae4cfa856f25373caa8a91ee98",
+    "source/include_codes/namelists/calculation.f90": "e19a3f4d88068e3348680da8a0e1dc0f042f990d88fab9e22c3b293755878f83",
+    "source/include_codes/namelists/charge.f90": "b3cd55ef98869541321da4ebbba1fae3c12ad3badcb85176bf71eefb74dbfeb3",
+    "source/include_codes/namelists/conductivity.f90": "c126dfddeb6236465b3f6f9d5ad6746ec5e8dfed8e41609a9f58413dc15c320b",
+    "source/include_codes/namelists/constraints.f90": "62b20b32ad6ee76bbaa7de5975905f6ff94a3f88454134d266a811556262f5df",
+    "source/include_codes/namelists/control.f90": "c7e1378884249a7b5befbc19400dfa7d752c64c8c1826ab07b08d87686c8e9d4",
+    "source/include_codes/namelists/dos.f90": "9dc1c281e9e5ba5624214f34c2de6cc538df9a63abc75812b07e0d99e0ae0dd3",
+    "source/include_codes/namelists/element.f90": "1462248357bd6cd20b4ba5eafd2408524b3e648949983a9001430dcc8adb352f",
+    "source/include_codes/namelists/energy.f90": "8b2a0e4537d1b12343c9d02327597fb75e17775dc9b87f363b22b57d5813c9c5",
+    "source/include_codes/namelists/frozen_magnon.f90": "776d27d533c630090a48aee0148167a9cfade37b3bfecfb875ab64b7d6244aca",
+    "source/include_codes/namelists/hamiltonian.f90": "ea9448c617daa5bc488d8fbd9ce559f6bde359bf0304dfbdc12347bc9c7a8e21",
+    "source/include_codes/namelists/kpath.f90": "ab66e960725a862a85e330b91c55f53becf1f21ee57f97e28cacda5b83fca59e",
+    "source/include_codes/namelists/lattice.f90": "75022560de1cb8a586a6b514029ac30ee6b2df4e971d137cf2c88eda27ab6da8",
+    "source/include_codes/namelists/mix.f90": "55cbab4f0796155f0eef8da73db46f52d60289eb83c4151c554e6a0dd4bf5b84",
+    "source/include_codes/namelists/potential.f90": "1705d05f7162543faacb90a91103b4457b1c8c861013b1ab80967e97f1a7847e",
+    "source/include_codes/namelists/reciprocal.f90": "514c4ac9292f8addc4042fe8216094594ea1bfe4c3ee467dc6688acbf6421159",
+    "source/include_codes/namelists/self.f90": "47787a34dabea3eeb2417bd1f9228cde5ce483391829b85f9597339f8c026c9c",
+    "source/include_codes/namelists/spin_dynamics.f90": "2130e2b4b87c7f8f33304288a0c1c2e2a9c6cea3b917870cb1d423cc5d7b69d2",
+    "source/include_codes/namelists/spin_response.f90": "6d03fa099a4d3ee981d03382e18ac704e25d8a721f5e56b0da0a957698f68094",
+    "source/include_codes/namelists/symbolic_atom.f90": "92d0373eae228fdf58f5fd1a44e64dcca34c19658bffaf24e834306b190dc42e"
+  },
+  "source_manifest_sha256": "494a5dfc061320382a9b1eaced8a3dfb5625d4a4135d47625354a4ca80291900",
+  "source_default_refs": {
+    "path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80/provenance/source_default_refs.json",
+    "sha256": "2aa3732dcf20967abb5dea0128eeb0de8dc88cfbbf00fead90794f1a345de2db"
+  },
+  "parser": {
+    "python": "/opt/homebrew/opt/python@3.11/bin/python3.11",
+    "f90nml": "1.4.4"
+  },
+  "prior_parent_raw_hashes": {
+    "log": "381fd985a42bda4d5091a89fa7532f123acbc16aac1f708c7743a1d9ab57cb90",
+    "trace": "394fa8ced8277e937382cb7553a1b7f261fa6e629f4faad0173434b2dcfaaae0",
+    "collector_manifest": "da3c55972513d617b5bfdbfecfb86adad0eab7973dda9f6e0eb470049b43d166",
+    "final_state": "e9d8e08059285d937c011f7ed3530aaa1f9624a1168dd2b2db330b683a9c6967",
+    "exit_code": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  }
+}

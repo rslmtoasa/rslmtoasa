@@ -1,0 +1,6 @@
+observed_local=2026-10-21T09:24:06+0200
+command_before=ps -p 26911 -o pid=,ppid=,stat=,etime=,command=
+26911 26522 R    12:41 /private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x
+ps_before_exit=0
+command_signal=kill -TERM 26911
+kill_exit=0

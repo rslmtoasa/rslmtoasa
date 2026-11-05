@@ -1,0 +1,55 @@
+{
+  "schema": "c5_8_results_v1",
+  "status": "FIXED_DIAGNOSTIC_CRASH; T2A_ACCEPTANCE_UNCOVERED",
+  "root_cause": {
+    "file": "source/self.f90",
+    "line": 1431,
+    "change": "pl_bands%control => this%control",
+    "faulting_read": "source/bands.f90:2254, this%control%nsp",
+    "fault_address": "0x14",
+    "scope": "fixed-U trace radial replay diagnostic setup; no physics formula change"
+  },
+  "short_invocations": {
+    "used": 11,
+    "budget": 12,
+    "summary": "6 initial/current/historical short observations, 3 current traced crashes, 1 historical traced natural convergence after watcher stop failure, 1 fixed W1 RD4 complete-first-iteration regression",
+    "historical_908074f": "INVALID_COMPARABILITY: strict provenance guard rejected legacy seed",
+    "historical_8b8f7ef_exact_trace": "watcher stop failed; natural convergence after three iterations"
+  },
+  "campaigns": {
+    "used": 1,
+    "budget": 3,
+    "T2a": "converged in 3 iterations; local/KS metadata written; acceptance unevaluated because only one rolling-final observation vs required 20",
+    "T2b": "not run",
+    "adoption": "none",
+    "merge": "not performed"
+  },
+  "fixed_current_release": {
+    "binary_sha256": "266e06035d59a1681850e0790bdf6bd04eabf3990d40d0622e17475b15c7c7ce",
+    "source_self_sha256": "4886c9e7eb5a3534e1e9435093490e5d26a9b3f0ad88c0dfe9dc64e037b2adab",
+    "ra2_fixtures": "13/13 PASS",
+    "no_u_identity": "RS 27/27 PASS; KS 24/24 PASS"
+  },
+  "rd4_diagnostic_regression": {
+    "binary_sha256": "d87479d402f959b2fe80975fdb8a25afa2a1794ecae1f58146b8c5f6cbf26f7e",
+    "source": "private C52/C54 W1 tree plus only the pointer fix; not current production branch",
+    "input_files_match_original_t4": true,
+    "preflight": "PASS",
+    "result": "first complete iteration captured; bounded SIGTERM exit 143; no crash through that iteration",
+    "trace_sha256": "589f60ccf4a720cbc9cb6a348cbb8cf32a5dc2602362cb0aafe49d99ec82ada3",
+    "energy_claim": "none"
+  },
+  "disk": {
+    "T2a_free_bytes_before": 11949113344,
+    "T2a_free_bytes_after": 11659476992,
+    "RD4_free_bytes_before": 10569363456,
+    "RD4_free_bytes_after": 10421338112,
+    "guard_floor_bytes": 1073741824
+  },
+  "raw_roots": [
+    "/private/tmp/c58-t2a-fixed-release",
+    "/private/tmp/c58-post-fix-fixtures",
+    "/private/tmp/c58-post-fix-identity",
+    "/private/tmp/c58-rd4-fixed-release-lambda0"
+  ]
+}

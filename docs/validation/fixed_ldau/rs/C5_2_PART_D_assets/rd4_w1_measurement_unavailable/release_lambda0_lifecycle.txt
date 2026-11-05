@@ -1,0 +1,6 @@
+launcher_pid=68647
+watcher_pid=68739
+solver_pid=68773
+OMP_NUM_THREADS=1
+RSLMTO_OMP_THREADS_SERIAL=1
+exit_code=139

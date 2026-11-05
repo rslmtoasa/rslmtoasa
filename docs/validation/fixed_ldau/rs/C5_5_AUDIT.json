@@ -1,0 +1,80 @@
+{
+  "schema": "c5_5_consolidated_audit_v1",
+  "date": "2026-10-21",
+  "repository_head": "ac74e87f1552213a07726e4b3317270c1ead2d01",
+  "campaign_budget": {
+    "clarification_reply": "Yes—three campaign runs; verification separate",
+    "attempts_used": 1,
+    "attempts_cap": 3,
+    "t1_campaign_attempts": 1,
+    "t2_solver_invocations": 0
+  },
+  "t1": {
+    "verdict": "PASS",
+    "mode_line_observed": "HUBBARD_RADIAL_MODE mode=local source=default use_kspace=.false. local_energy_adopted=.false.",
+    "mode_line_log_sha256": "d30e2b4fe74553b7dfc3c74ebef21558d921cb1f528ceeba9ad7c3806cc5d44f",
+    "preflight": "/private/tmp/c55-t1-ni-auto/preflight.json",
+    "preflight_sha256": "eb23da1fa40766a19927407f1b8f6b01e784f0d49a16e9af1f865cc826cfc9f7",
+    "acceptance_scan": "/private/tmp/c55-t1-ni-auto/acceptance_scan.json",
+    "accepted_window": [4, 23],
+    "same_loop_diff": 1.78e-8,
+    "spreads": {
+      "d_q_spin1": 1.940081198e-7,
+      "d_q_spin2": 1.178661817e-7,
+      "sphere_moment": 2.3691291473e-7
+    },
+    "component_errors_vs_rd3a": {
+      "d_q_spin1": 1.275531e-16,
+      "d_q_spin2": 1.2406e-16,
+      "sphere_moment": 2.3175594e-16
+    },
+    "u0_control_allowances": {
+      "d_q_spin1": 1.7917497610042687e-6,
+      "d_q_spin2": 1.6850840944826473e-6,
+      "sphere_moment": 5.857085200178247e-8
+    },
+    "endpoint_trace_sha256": "cdb9b4a8beadd4e35e3adf6ae500fd9d861b95074ec138fc59f035d1bbfc14f4",
+    "endpoint_state_sha256": "7ea1b7b8bd6e06be39816251a1de218a9009c39f2ad73d8fd25c52655476e60f"
+  },
+  "t2": {
+    "verdict": "BLOCKED_UNEVALUATED_BEFORE_LAUNCH",
+    "solver_invocations": 0,
+    "ks_proof": "docs/validation/fixed_ldau/evidence/a5_native_ks_local_u2_endpoint.md",
+    "accepted_host_files": [
+      {
+        "path": "/private/tmp/a5-priority-local-u2-ks/u2_local_standard/Fe_out.nml",
+        "sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+        "contains_u": true,
+        "mode_field": "absent"
+      },
+      {
+        "path": "/private/tmp/a5-priority-local-u2-ks/u2_local_standard/Fe_scf.nml",
+        "sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+        "contains_u": true,
+        "mode_field": "absent"
+      }
+    ],
+    "input_requests_local": true,
+    "candidate_resolution_from_missing_host_field": "spectral",
+    "evidence_type": "source-and-serialized-state prediction; no T2 model log",
+    "t2_gate": "not evaluated"
+  },
+  "candidate": {
+    "patch_sha256": "c2539abd50214ae9718daf431dc29e4f544238bf5c70105ed37b2473a01df4fd",
+    "source_tree": "/private/tmp/c55-candidate",
+    "binary_sha256": "2846c846857468666fa5389a283dbbe7b760621050f851c9d2e4046e240d6fed",
+    "unit": "UnitAutoImpurityLocalMode",
+    "unit_result_as_recorded": "PASS",
+    "adopted": false
+  },
+  "t3": "NOT_RUN",
+  "adoption": "NOT_ADOPTED",
+  "merge": "NOT_PERFORMED",
+  "disk_sample": {
+    "filesystem": "/private/tmp",
+    "available_kib": 6542404,
+    "cleanup_performed": false
+  },
+  "production_source_changes": false,
+  "user_owned_co_files_touched": false
+}

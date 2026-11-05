@@ -1,0 +1,219 @@
+{
+  "schema": "c5_6_t0_raw_run_deletion_ledger_v1",
+  "date": "2026-10-21",
+  "base_head": "dc63f5686ed2b790c8ec6ae3a256070e0d187a55",
+  "scope": "User-authorized closed RA4, C4 A41 triage, C5.2 Part A run directories, and archived RD2 raw capture only.",
+  "process_check": {
+    "command": "ps -axo pid,command filtered for rslmto.x and inventoried path patterns",
+    "result": "No matching solver process; escalation used after sandbox EPERM."
+  },
+  "evidence_commit": "dc63f5686ed2b790c8ec6ae3a256070e0d187a55",
+  "evidence": {
+    "C1_RA4_PROVENANCE.json": {
+      "repo_path": "docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json",
+      "git_blob": "0f62306915f67fc88912459fb486a27567f1056e",
+      "sha256_worktree": "322b7ce817273f0cf55fbf4c0ff4662b6a35f99b8e94180982e22734bb610dd9"
+    },
+    "C4_A41_PROVENANCE.json": {
+      "repo_path": "docs/validation/fixed_ldau/rs/C4_A41_PROVENANCE.json",
+      "git_blob": "d99110fe3c53a6d4e9397eefc477cf1a878bb49f",
+      "sha256_worktree": "96a5db02c4b27664726c63171a612ee3428e6a907682d6add8eddb7b06ae70b7"
+    },
+    "C5_2_PART_A_PROVENANCE.json": {
+      "repo_path": "docs/validation/fixed_ldau/rs/C5_2_PART_A_PROVENANCE.json",
+      "git_blob": "e28ff46aa4cba84379f4c24c53e8095071c0f93c",
+      "sha256_worktree": "66f07709dfaaa5580fda6b1c14815eb440b1ab54469c53c623ad76e6a5bca31b"
+    },
+    "RD2_PROVENANCE.json": {
+      "repo_path": "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_u3j07_rd2_replay/RD2_PROVENANCE.json",
+      "git_blob": "c008a8383af32500d4af3de63307c66540c8989f",
+      "sha256_worktree": "c93e74be71fcfd194a822c30c3a3430dd2cda976c3d405ef68fef8eb1766ffdd"
+    },
+    "RD2_SHA256SUMS": {
+      "repo_path": "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_u3j07_rd2_replay/SHA256SUMS",
+      "git_blob": "8bed26febdf690bafe74ec45455e2e8dcc70d6c0",
+      "sha256_worktree": "be4a9a909c254177ce99d784b44d0fdc9b9f537bbbfe34bd70d5899ada001b3c"
+    }
+  },
+  "rd2_archive_check": {
+    "path": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_u3j07_rd2_replay/capture/rd2_ni_u3j07_capture_run.tar.gz",
+    "sha256": "41a8df65e128acec39fe5db3a06699cc259a8ac8481e499cb6867413e5b7f2b3",
+    "expected_sha256": "41a8df65e128acec39fe5db3a06699cc259a8ac8481e499cb6867413e5b7f2b3",
+    "tar_listing_readable": true,
+    "required_entries_present": [
+      "records.csv",
+      "c2_hubbard_audit.dat"
+    ]
+  },
+  "deleted": [
+    {
+      "path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_no_u_seed",
+      "logical_bytes": 15086680,
+      "allocated_bytes": 15183872,
+      "evidence_binding": "C1_RA4_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_plus_u_seed",
+      "logical_bytes": 15088881,
+      "allocated_bytes": 15175680,
+      "evidence_binding": "C1_RA4_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/rslmto-c2-ra4-final/fe_uplus_imp_plus_u_seed_fallback_beta005",
+      "logical_bytes": 13132652,
+      "allocated_bytes": 13201408,
+      "evidence_binding": "C1_RA4_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_no_u_seed",
+      "logical_bytes": 12483989,
+      "allocated_bytes": 12537856,
+      "evidence_binding": "C1_RA4_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/rslmto-c2-ra4-final/ni_uplus_imp_plus_u_seed",
+      "logical_bytes": 13383252,
+      "allocated_bytes": 13451264,
+      "evidence_binding": "C1_RA4_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/rslmto-c2-ra4-safe-records/fe_uplus_imp_no_u_seed",
+      "logical_bytes": 9852682,
+      "allocated_bytes": 9908224,
+      "evidence_binding": "C1_RA4_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/rslmto-c2-ra4-safe-records/fe_uplus_imp_plus_u_seed",
+      "logical_bytes": 9589512,
+      "allocated_bytes": 9641984,
+      "evidence_binding": "C1_RA4_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed",
+      "logical_bytes": 8700851,
+      "allocated_bytes": 8749056,
+      "evidence_binding": "C1_RA4_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug",
+      "logical_bytes": 8819070,
+      "allocated_bytes": 8851456,
+      "evidence_binding": "C1_RA4_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql",
+      "logical_bytes": 11543228,
+      "allocated_bytes": 11620352,
+      "evidence_binding": "C1_RA4_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/rslmto-c2-ra4-safe-records/ni_uplus_imp_no_u_seed",
+      "logical_bytes": 8889505,
+      "allocated_bytes": 8937472,
+      "evidence_binding": "C1_RA4_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/rslmto-c2-ra4-safe-records/ni_uplus_imp_plus_u_seed",
+      "logical_bytes": 8545199,
+      "allocated_bytes": 8593408,
+      "evidence_binding": "C1_RA4_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100",
+      "logical_bytes": 6000321,
+      "allocated_bytes": 6074368,
+      "evidence_binding": "C4_A41_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001",
+      "logical_bytes": 13648132,
+      "allocated_bytes": 13721600,
+      "evidence_binding": "C4_A41_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075",
+      "logical_bytes": 13648248,
+      "allocated_bytes": 13725696,
+      "evidence_binding": "C4_A41_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/c4-a41-fe-u38j11-rc100",
+      "logical_bytes": 7255936,
+      "allocated_bytes": 7331840,
+      "evidence_binding": "C4_A41_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/c4-a41-triage-clean8b",
+      "logical_bytes": 11477889,
+      "allocated_bytes": 11522048,
+      "evidence_binding": "C4_A41_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/c4-a41-triage-clean8b-captured",
+      "logical_bytes": 11682169,
+      "allocated_bytes": 11735040,
+      "evidence_binding": "C4_A41_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/c4-a41-triage-clean8b-compatible",
+      "logical_bytes": 12807782,
+      "allocated_bytes": 12869632,
+      "evidence_binding": "C4_A41_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/c4-a41-triage-debug",
+      "logical_bytes": 5068426,
+      "allocated_bytes": 5120000,
+      "evidence_binding": "C4_A41_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed",
+      "logical_bytes": 12459948,
+      "allocated_bytes": 12517376,
+      "evidence_binding": "C4_A41_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/c52-partA/a2-runs/parent17732",
+      "logical_bytes": 3823012,
+      "allocated_bytes": 3887104,
+      "evidence_binding": "C5_2_PART_A_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/c52-partA/a2-runs/r1-2686",
+      "logical_bytes": 3823012,
+      "allocated_bytes": 3887104,
+      "evidence_binding": "C5_2_PART_A_PROVENANCE.json"
+    },
+    {
+      "path": "/private/tmp/c52-rd2-ni-u3j07-capture/run",
+      "logical_bytes": 12125445,
+      "allocated_bytes": 12210176,
+      "evidence_binding": "RD2_SHA256SUMS + RD2_PROVENANCE.json"
+    }
+  ],
+  "deleted_directory_count": 24,
+  "logical_bytes_removed": 248935821,
+  "allocated_bytes_reclaimed_estimate": 250454016,
+  "free_space_pre_df_k": "/dev/disk3s5   482797652 445033084   9046720    99% 4205685 90467200    4%   /System/Volumes/Data",
+  "free_space_post_df_k": "/dev/disk3s5   482797652 444790724   9289080    98% 4204973 92890800    4%   /System/Volumes/Data",
+  "protected_paths": [
+    "/private/tmp/a5-priority-local-u2-ks/u2_local_standard",
+    "/private/tmp/c52-rd-ni-u0-host",
+    "/private/tmp/c54-t3-ni-u0",
+    "/private/tmp/c55-t1-ni-auto",
+    "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf",
+    "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf-budget30",
+    "/private/tmp/c4-rs-j09-accepted-j08",
+    "/private/tmp/c52-rd2-ni-u3j07-capture (parent retained; only archived raw run/ deleted)",
+    "/Users/andersb/Jobb/rslmto_fable_v4b/example/bulk/hcpCo-folder/hcpCo_ref (untracked user files untouched)",
+    "/private/tmp/claude-501 and all GBT/unknown-owner/active-job paths"
+  ],
+  "not_deleted": [
+    "/private/tmp/c52-c2-stage (ambiguous subtree retained)",
+    "/private/tmp/c52-rd2-ni-u3j07-capture parent/provenance/immutable/analysis (retained)",
+    "/private/tmp/c4-a41-debug-build (build, not raw run)",
+    "all accepted host/checkpoint directories and all source/build copies"
+  ],
+  "free_space_delta_kib_observed": 242360,
+  "free_space_delta_note": "Observed df available-space increase during the cleanup window; external filesystem activity may contribute. Allocated-byte estimate is measured from inventoried directories."
+}

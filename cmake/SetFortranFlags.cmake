@@ -49,6 +49,18 @@ else()
 endif()
 
 #########################################################
+# gfortran >= 10 rejects MPI calls whose buffer type/rank differ between calls
+# when the MPI library's `mpi` module has no generic interfaces. Placed before
+# the early return so it also applies to re-configured build directories.
+#########################################################
+if(ENABLE_MPI AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU"
+   AND CMAKE_Fortran_COMPILER_VERSION VERSION_GREATER_EQUAL 10
+   AND NOT CMAKE_Fortran_FLAGS MATCHES "-fallow-argument-mismatch")
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fallow-argument-mismatch" CACHE STRING
+        "Set the CMAKE_Fortran_FLAGS flags" FORCE)
+endif()
+
+#########################################################
 # If the compiler flags have already been set, return now
 #########################################################
 #

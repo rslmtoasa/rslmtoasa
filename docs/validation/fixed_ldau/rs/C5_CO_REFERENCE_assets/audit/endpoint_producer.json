@@ -1,0 +1,71 @@
+{
+  "binary": {
+    "path": "/private/tmp/c5-hcpco-reference/frozen/e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0/rslmto.x",
+    "sha256": "e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0"
+  },
+  "convergence": {
+    "conv_thr": 5e-09,
+    "exit_code": 0,
+    "reported_diff": 4.8e-09,
+    "step": 25
+  },
+  "d_ql_spin_occupancies": {
+    "Co1": {
+      "d_ql_down_delta": -2.0419049562292457e-08,
+      "d_ql_down_endpoint": 2.9149874005490974,
+      "d_ql_down_input": 2.914987420968147,
+      "d_ql_up_delta": 3.9930566408941104e-08,
+      "d_ql_up_endpoint": 4.58961119822256,
+      "d_ql_up_input": 4.589611158291993,
+      "etot_delta_Ry": -4.045659807161428e-08,
+      "etot_endpoint_Ry": -2783.115323636361,
+      "etot_input_Ry": -2783.1153235959046
+    },
+    "Co2": {
+      "d_ql_down_delta": -1.009478913793771e-07,
+      "d_ql_down_endpoint": 2.914986571959157,
+      "d_ql_down_input": 2.914986672907048,
+      "d_ql_up_delta": 6.929258766774637e-08,
+      "d_ql_up_endpoint": 4.589611576876426,
+      "d_ql_up_input": 4.589611507583839,
+      "etot_delta_Ry": 2.662090992089361e-08,
+      "etot_endpoint_Ry": -2783.115323823732,
+      "etot_input_Ry": -2783.115323850353
+    }
+  },
+  "endpoint_hashes": {
+    "Co1_out.nml": "b154405e44f7f53a34c9f31f8d59fa85464d1e0ca24a1ce1d6fbdd35aeb57e31",
+    "Co2_out.nml": "60693c91e955066bf83646d4c9062a5a6931cd512128fcde6e91f7d79fac547d"
+  },
+  "input_hashes": {
+    "Co1.nml": "19e93a01e37f1d4e6dd4568d25b7eaa935b146f1090e65992d249cadc85e45e4",
+    "Co2.nml": "18f2156ea75593d6adf562b713f2ebc3652233367fa9b3c6f0d4dbe8fa188b91",
+    "input.nml": "bd053da5f779f5f8f5cdd806f2d272e3e3dfc93c6abbe48d9282adc8831fc985",
+    "lattice.nml": "b99302fad18239e8d517399de913b3316c1bc812a6fcdecfbe68650e4f31dafa"
+  },
+  "interpretation": "d occupancy is ql(1,l=2,isp), the third serialized component of ql(1,:,isp); report atom spin moments are retained at displayed six-decimal precision.",
+  "purpose": "Read-only descriptive comparison of producer-executable replay endpoint against supplied hcpCo reference potential inputs; no C5 gate/tolerance claimed.",
+  "report_deltas": {
+    "Co1_spin_moment_report_precision": 0.0,
+    "Co2_spin_moment_report_precision": 0.0,
+    "total_energy_Ry": -1.379976311000064e-08,
+    "total_spin_moment_z": 2.0739999984087376e-07
+  },
+  "report_endpoint": {
+    "Co1_spin_moment_report_precision": 1.570084,
+    "Co2_spin_moment_report_precision": 1.570084,
+    "total_energy_Ry": -5566.2306474601,
+    "total_spin_moment_z": 3.1401681122
+  },
+  "report_hashes": {
+    "endpoint": "a090c2d4af2110ed942a0af93eb9565e4b3650ac7ae26ca80a043a3067ed5fdd",
+    "source": "9519d331329188576b520adf00285f92afd3816e73bfa9e20991edee0b18dff3"
+  },
+  "report_input": {
+    "Co1_spin_moment_report_precision": 1.570084,
+    "Co2_spin_moment_report_precision": 1.570084,
+    "total_energy_Ry": -5566.2306474463,
+    "total_spin_moment_z": 3.1401679048
+  },
+  "run_id": "C5-hcpCo-reference-validation-producer-01"
+}

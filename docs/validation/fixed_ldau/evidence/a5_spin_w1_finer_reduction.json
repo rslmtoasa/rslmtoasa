@@ -1,0 +1,117 @@
+{
+  "coarse_historical_box": {
+    "coarse_result_sha256": "3d61a0c4e114d51a5acbf2039ff82ac711de08f6719856ad50a40b15307b61dd",
+    "historical_determinant_corner_range": [
+      -1.4687901251372653,
+      6.633622833542367
+    ],
+    "historical_identifiable": false,
+    "historical_primary_h_Ry": 0.0025
+  },
+  "fine_B_Ry_per_Ry": [
+    0.0012303437150915641,
+    -0.010426889358405855
+  ],
+  "fine_B_uncertainty": [
+    0.00010641185859777351,
+    0.0001510162177473313
+  ],
+  "fine_R_electron_per_Ry": [
+    [
+      -2.257132841591414,
+      1.7064421893792314
+    ],
+    [
+      1.6982743121605637,
+      -2.333528617648639
+    ]
+  ],
+  "fine_R_uncertainty": [
+    [
+      0.034921926913978246,
+      0.03769987951117566
+    ],
+    [
+      0.03547868288650129,
+      0.03854051831507851
+    ]
+  ],
+  "fine_adjacent_h_Ry": 0.00125,
+  "fine_determinant": 2.3690771442783767,
+  "fine_determinant_corner_range": [
+    2.076036067667534,
+    2.6621349550767976
+  ],
+  "fine_g_Ry_per_electron": [
+    0.006262639492446737,
+    0.009047980575641951
+  ],
+  "fine_g_linear_uncertainty": [
+    0.001163911226860428,
+    0.0011664643984842411
+  ],
+  "fine_identifiable_over_independent_box": true,
+  "fine_primary_h_Ry": 0.000625,
+  "fine_response_matrix_transpose": [
+    [
+      -2.257132841591414,
+      1.6982743121605637
+    ],
+    [
+      1.7064421893792314,
+      -2.333528617648639
+    ]
+  ],
+  "fine_results_path": "a5_spin_w1_finer_results.json",
+  "fine_results_summary_sha256": "317096c75caecea9c73be6a8c910af379ad1036a7d5eaa4b3ac9017ef64c0160",
+  "interpretation": "Supplementary finer-grid charge-only chain-rule allowances; original coarse uncertainty box remains unchanged and unresolved; no candidate a/b/c energies inspected; no adoption decision.",
+  "mode_budgets": {
+    "local": {
+      "N_ASA_first_order_uncertainty_Ry_per_eV": 0.0002336178810900269,
+      "N_ASA_independent_box_interval_Ry_per_eV": [
+        0.0010211494904291377,
+        0.0015530321237915974
+      ],
+      "N_ASA_nominal_Ry_per_eV": 0.0012519821658396775,
+      "dq_dU_electron_per_eV": [
+        0.0832734898,
+        -0.0807329673
+      ],
+      "dq_dU_uncertainty_electron_per_eV": [
+        0.0023906624,
+        0.0030449825
+      ],
+      "dq_method": "h=0.05 primary; h=0.10 versus h=0.05 measured step sensitivity",
+      "source_records_sha256": {
+        "u1.9": "1404714698c21df2cb6bba64f5a60bbaabb2d5dad099b3e7ebb0dba65aad8f16",
+        "u1.95": "bc70ebc2aa774eff1189378bdd2228d2d039d614908ba80b5cc4ed5625805cc5",
+        "u2.05": "7309cc7fede45a7463059e46849dbde076406f0fbead7e0ef6bdce44a901876c",
+        "u2.1": "976f1ca6d7759285afeaa739eb3d2aa749b43091322aa5e5bdc8d52ded925fe0"
+      }
+    },
+    "spectral": {
+      "N_ASA_first_order_uncertainty_Ry_per_eV": 0.00023734295143774896,
+      "N_ASA_independent_box_interval_Ry_per_eV": [
+        0.0007410955302392795,
+        0.001246220840476696
+      ],
+      "N_ASA_nominal_Ry_per_eV": 0.0009583249028330837,
+      "dq_dU_electron_per_eV": [
+        0.1078132344,
+        -0.0312920083
+      ],
+      "dq_dU_uncertainty_electron_per_eV": [
+        0.0063573538,
+        0.0039282897
+      ],
+      "dq_method": "h=0.05 primary; h=0.10 versus h=0.05 measured step sensitivity",
+      "source_records_sha256": {
+        "u1.9": "674574a334bd7ee192da53eda03882b2fa5efc006057a1cb78e435d01147fc36",
+        "u1.95": "f73f464f29baa9a4543a0e8777fe6329a35311b3f4c2579ba9dfaa8c6e50fe77",
+        "u2.05": "ed23d93fce310f2ef76fdad4db0bb0e72a849d4b91aa4b404866cbf6c52545b2",
+        "u2.1": "a18c96a4a3b8edb596853a55ad9493ac44b241dd09175e4ffb94a75735bd797a"
+      }
+    }
+  },
+  "schema": "A5.3-spin-W1-finer-grid-reduction-v1"
+}

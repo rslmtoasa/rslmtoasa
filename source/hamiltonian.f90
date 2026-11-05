@@ -43,6 +43,14 @@ module hamiltonian_mod
 
    private
 
+   integer, parameter, public :: rd1_vin_ok = 0
+   integer, parameter, public :: rd1_vin_not_recursion_site = 1
+   integer, parameter, public :: rd1_vin_duplicate = 2
+   integer, parameter, public :: rd1_vin_invalid_map = 3
+   integer, parameter, public :: rd1_vin_wrong_type = 4
+   integer, parameter, public :: rd1_vin_missing_or_stale = 5
+   integer, parameter, public :: rd1_vin_ineligible = 6
+
    !> Module´s main procedure
    type, public :: hamiltonian
       !> Charge
@@ -112,15 +120,25 @@ module hamiltonian_mod
       real(rp), dimension(:), allocatable :: theta_ss_sublattice, phi_ss_sublattice
       real(rp), dimension(:), allocatable :: velocity_scale
       character(len=16) :: hubbard_u_potential_form
+      logical :: hubbard_experimental = .false.
+      character(len=16) :: hubbard_log_level = 'summary'
+      !> Extract the full spinor d-shell P and M1 at nsp>=2 (diagnostic; not used by the Hamiltonian).
+      logical :: hubbard_spinor_dm_diagnostic = .false.
+      !> Experimental spinor fixed U at nsp=2 (bulk RS and KS, spectral radial moments).
+      logical :: hubbard_soc_experimental = .false.
       !> Radial band-moment convention: legacy spectral or local Hubbard-adjusted.
-      character(len=16) :: hubbard_radial_moments = 'spectral'
+      character(len=16) :: hubbard_radial_moments = 'auto'
       !> Explicit A4 test-only d-shell operator selector: none, w1, or w2.
       character(len=16) :: hubbard_test_operator = 'none'
       !> A4 external test-potential scale in Ry; ignored when selector is none.
       real(rp) :: hubbard_test_lambda = 0.0_rp
+      !> Test-only W probe spin: 0 both, 1 up, 2 down.
+      integer :: hubbard_test_spin = 0
       logical :: hubbard_test_operator_check = .false.
       !> Opt-in A4 repeat control: tighten both active fixed-U R05 tolerances 10x.
       logical :: fixed_u_test_tighten_r05 = .false.
+      !> A5-only HOH exception, validated in build_from_file for explicit U=J=0 W1/local runs.
+      logical :: fixed_u_test_allow_hoh_w1_u0 = .false.
       !> Sparse Real Space Hamiltonian (dense legacy format)
       complex(rp), dimension(:, :), allocatable :: h_sparse
       !> On-site potential correction for LDA+U (+J) in spin-orbital basis
@@ -137,6 +155,13 @@ module hamiltonian_mod
       !> Optional intersite Hubbard-V input and corresponding matrix correction
       real(rp), dimension(:, :, :, :), allocatable :: hubbard_v, hubbard_v_pot
       logical :: hubbard_v_check = .false.
+      !> Exact additive local Hubbard d-block captured at hall insertion for RD1.
+      complex(rp), dimension(:, :, :, :), allocatable :: rd1_vin_d
+      logical, dimension(:), allocatable :: rd1_vin_valid
+      integer, dimension(:), allocatable :: rd1_vin_cluster_site, rd1_vin_atom_type, rd1_vin_iteration
+      integer :: rd1_capture_iteration = 0
+      logical :: rd1_capture_enabled = .false.
+      logical :: rd1_capture_required = .false.
       !> Spectrum bounds for Chebyshev scaling
       type(bounds) :: bounds
       !> Hamiltonian export format: 'none', 'rs2pao', 'python'
@@ -175,6 +200,11 @@ module hamiltonian_mod
       procedure :: get_hubbard_test_operator
       procedure :: evaluate_hubbard_energy
       procedure :: calculate_hubbard_v_potential
+      procedure :: rd1_local_impurity_eligible
+      procedure :: begin_rd1_vin_capture
+      procedure :: get_rd1_recursion_site_type
+      procedure :: capture_rd1_vin_insertion
+      procedure :: get_rd1_vin_for_recursion
       procedure :: compute_hamiltonian_bounds
       final     :: destructor
    end type hamiltonian
@@ -410,6 +440,37 @@ module hamiltonian_mod
       integer :: it, ino, nr, nlim, m, i, j, ja, ji
 
    end subroutine build_locham
+
+   module function rd1_local_impurity_eligible(this) result(eligible)
+      class(hamiltonian), intent(in) :: this
+      logical :: eligible
+   end function rd1_local_impurity_eligible
+
+   module subroutine begin_rd1_vin_capture(this, iteration, enable_rs_capture)
+      class(hamiltonian), intent(inout) :: this
+      integer, intent(in) :: iteration
+      logical, intent(in), optional :: enable_rs_capture
+   end subroutine begin_rd1_vin_capture
+
+   module subroutine get_rd1_recursion_site_type(this, recursion_index, cluster_site, atom_type, status)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: recursion_index
+      integer, intent(out) :: cluster_site, atom_type, status
+   end subroutine get_rd1_recursion_site_type
+
+   module subroutine capture_rd1_vin_insertion(this, nlim, u_type, exact_operand, status)
+      class(hamiltonian), intent(inout) :: this
+      integer, intent(in) :: nlim, u_type
+      complex(rp), intent(in) :: exact_operand(:, :)
+      integer, intent(out) :: status
+   end subroutine capture_rd1_vin_insertion
+
+   module subroutine get_rd1_vin_for_recursion(this, recursion_index, iteration, vin_d, status)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: recursion_index, iteration
+      complex(rp), intent(out) :: vin_d(5, 5, 2)
+      integer, intent(out) :: status
+   end subroutine get_rd1_vin_for_recursion
 
    !> @brief Add two-centre combined-correction blocks to the bulk Hamiltonian.
    !> @details Builds CCOR contributions for each bulk atom type and neighbor

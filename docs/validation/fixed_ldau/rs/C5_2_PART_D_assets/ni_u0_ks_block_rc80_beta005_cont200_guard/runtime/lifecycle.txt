@@ -1,0 +1,9 @@
+launcher_pid=53019
+preexec_free_bytes=10581766144
+input_mode=644
+seed_mode=644
+element_mode=644
+all_working_files_writable=yes
+started_local=2026-10-21T09:28:30+0200
+exit_code=1
+ended_local=2026-10-21T09:28:44+0200

@@ -1,0 +1,41 @@
+{
+  "schema": "rd4-w1-execution-preflight-v5",
+  "status": "PREPARED_NOT_LAUNCHED_AWAITING_AUDIT",
+  "content_snapshot_sha256": "49f34478d2450223edfea4c66329f26c841ceeb7d86dd5cbafdbbfb5b94a6816",
+  "content_snapshot_path": "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v6/preflight.json",
+  "content_manifest_records": 51,
+  "content_manifest_mismatches": 0,
+  "build_unit_result_sha256": "53d0ced514ec3065de9fc35f344f8de060fdbe883c925c4da55434f807150765",
+  "build_unit_result_path": "/private/tmp/c52-rd4-w1-private/instrumentation_v1/BUILD_UNIT_RESULT.json",
+  "solver_sha256": "9b0b339bac638bcafcc572b7feebba601d42e72fb81d7ee8d37f5cb3cb1bfa54",
+  "solver_bytes": 5741912,
+  "archive_sha256": "60c6fb209a97be74260391db2ddbe8a25d8f5fe6a9c2f1d639ff861c288cbdc0",
+  "archive_bytes": 15856264,
+  "execution_launcher_path": "/private/tmp/c52-rd4-w1-build/w1_execution_v5/run_one_deck.sh",
+  "execution_launcher_sha256": "784e4e52a30a370ed6e48eaf3c1d722c3d2007533b2f9fd56bebecdca119d2d5",
+  "collector_watcher_sha256": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be",
+  "disk_guard_sha256": "3049362e51a3165866c73bb997667a0c74662fc673328085b2636c25dae74cdd",
+  "campaign_state_initial_sha256": "fc737dd851058288ff61758097221985ef31b61c1bcb893d72830c887b4b15c9",
+  "preserved_failed_attempt_ledger_sha256": "f679beae8a960b025138f387eb950d1c226206cda80f8125fe53b5dfc5d90a65",
+  "preserved_failed_attempt_count": 4,
+  "thread_caps": {
+    "OMP_NUM_THREADS": 1,
+    "RSLMTO_OMP_THREADS_SERIAL": 1,
+    "OMP_DYNAMIC": "FALSE",
+    "BLAS_family_threads": 1
+  },
+  "sequence": [
+    "lambda_0p0",
+    "lambda_0p0025",
+    "lambda_m0p0025",
+    "lambda_0p005",
+    "lambda_m0p005"
+  ],
+  "runs_per_invocation": 1,
+  "authorization_required": "C52_RD4_W1_AUTHORIZED=1 plus root exact lambda0-only authorization; currently absent",
+  "clean_runtime": "new v6 packet run dirs reconstructed only from immutable five input/seed files; exactly expected names, regular files, nonsymlinks",
+  "historical_attempts": "four attempts preserved; no changes; no solver retry authorized",
+  "acceptance": "\u00a72.1 raw same-loop Diff and complete 20-window P_OUT d-q0/moment spreads; freeze, auditor pass, then exact PID stop",
+  "no_scf_launch": true,
+  "launches": 0
+}

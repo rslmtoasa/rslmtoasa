@@ -1,0 +1,57 @@
+{
+  "existing_one_step_evidence": {
+    "RA1": {
+      "input_sha256": "70b2e352ac91a763babbd5e42c9c325f294820e67f11280aaa91360346c14f00",
+      "interpretation": "One-step energy-accounting fixture only; no convergence or accepted B2 endpoint claim.",
+      "one_step_output_Fe_out_sha256": "59a4a9a109b93df5303e7498c8e3c0d4d777f06e9f8de8694b055aa39fccca34",
+      "provenance_path": "docs/validation/fixed_ldau/rs/RA1_PROVENANCE.json",
+      "provenance_sha256": "e12c473b4cd9f3941102f9e96f06112d35832547f93e5357b3f6fa8d36471e41",
+      "raw_run_directory": "/tmp/rslmto-ra1-verified/impurity_one_step",
+      "result_path": "docs/validation/fixed_ldau/rs/RA1_RESULT.md",
+      "run_log_sha256": "0933999e8add74261d2836be159a4a12e2161bf816dd0e5a207923a0d3fe1f13"
+    },
+    "RA3": {
+      "input_sha256": "70b2e352ac91a763babbd5e42c9c325f294820e67f11280aaa91360346c14f00",
+      "interpretation": "nsp1 fixed-U one-step guard fixture; no accepted iterative endpoint/window.",
+      "one_step_output_Fe_out_sha256": "59a4a9a109b93df5303e7498c8e3c0d4d777f06e9f8de8694b055aa39fccca34",
+      "provenance_path": "docs/validation/fixed_ldau/rs/RA3_PROVENANCE.json",
+      "provenance_sha256": "a67ba67a98c286fb29b5c72c90a5a7fe2a88c95390ebfd4b6e152f315669ce66",
+      "raw_run_directory": "/tmp/rslmto-ra3-verified/nsp1_impurity",
+      "result_path": "docs/validation/fixed_ldau/rs/RA3_RESULT.md",
+      "run_log_sha256": "c5b838be6509833bbb6127adab2d34809e2284945419937ed92ee330d82885c7"
+    }
+  },
+  "finding": "No independently accepted/converged B2FeCo_nsp1 U>0 local or spectral endpoint, and no accepted fixed-U B2 restart, is represented in the reviewed C5/RA1/RA3 provenance/assets. The only identified B2-specific run outputs are the RA1/RA3 nstep=1 fixture results above. Any future B2 mode record would require a separately authorized, schema-validated recipe using an eligible non-atomic restart; it remains NOT_EVALUATED here.",
+  "fixture": {
+    "files": {
+      "Co.nml": "c4a4a7adc47cf4604061029adb62605b77f0ff719d89d92c69a7f2588835d6a1",
+      "Fe-imp.nml": "db1a3acc65c60e2020c06890e04e59bf41e95e228265251d09394e12feac48d6",
+      "Fe.nml": "d10bbc391334f1af0297ebe866bafd4d61bd39873b20e34b6b1bd7379be0c858",
+      "input.nml": "70b2e352ac91a763babbd5e42c9c325f294820e67f11280aaa91360346c14f00"
+    },
+    "input_readout": "B2 calctype=I, nsp=1, rc=60, lld=21, block, nstep=1, U_impurity(1,3)=2 eV, J_impurity=0; this is the checked-in one-step fixture recipe, not an accepted iterative endpoint.",
+    "path": "tests/scf/cases/impurity/B2FeCo_nsp1",
+    "tracked": true
+  },
+  "protocol_disposition": "C5.3 uncovered outcome: leave production/defaults unchanged; no fix/adoption and continue independent items. Do not substitute one-step fixture output as an accepted SCF restart or start from atomic inputs.",
+  "request": {
+    "C5_2_section": "Part D \u00a76; B2FeCo_nsp1 records only; RD3(d) Fe impurity in B2FeCo, U on impurity only, local versus spectral record moment and d occupations.",
+    "source_path": "docs/validation/fixed_ldau/rs/C5_AMENDMENT.md",
+    "source_sha256": "1472655b97fd43ecc0da1efdb82c2e0006f32f8292d61212d65fef4139e37363"
+  },
+  "schema": "c5_3_d_b2_feco_seed_inventory_v1",
+  "scope": "Read-only inventory of existing B2FeCo_nsp1 fixture and RA1/RA3 validation evidence before any new Part D B2 local/spectral record. No solver run or source/input edit was made.",
+  "searched_provenance": [
+    "docs/validation/fixed_ldau/rs/C5_2_PART_D_RESULTS.md",
+    "docs/validation/fixed_ldau/rs/C5_2_PART_D_PROVENANCE.json",
+    "docs/validation/fixed_ldau/rs/C5_2_PART_C_PROVENANCE.json",
+    "docs/validation/fixed_ldau/rs/C5_PART_III_RESULTS.md",
+    "docs/validation/fixed_ldau/rs/RA1_PROVENANCE.json",
+    "docs/validation/fixed_ldau/rs/RA3_PROVENANCE.json",
+    "docs/validation/fixed_ldau/rs/RA1_RESULT.md",
+    "docs/validation/fixed_ldau/rs/RA3_RESULT.md",
+    "docs/validation/fixed_ldau/rs/C5_2_PART_C_assets",
+    "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets"
+  ],
+  "status": "NO_ACCEPTED_B2_FECO_RESTART_FOUND_IN_REVIEWED_RECORDS; RECORD_NOT_EVALUATED"
+}

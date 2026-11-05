@@ -1,0 +1,98 @@
+{
+  "accepted_restart": {
+    "path": "docs/validation/fixed_ldau/rs/C5_2_PART_C_assets/C2History/U0_chebyshev/restart_seed_Fe_out.nml",
+    "sha256": "647e9df67510db0c133dd53975cece5f50b379e6e314542de336eec64575d327",
+    "status": "accepted Fe U0 bcc RC80 endpoint; B2a uses same hash. Seed is not modified."
+  },
+  "collector": {
+    "disk_guard.sh": {
+      "path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/collector/disk_guard.sh",
+      "sha256": "3049362e51a3165866c73bb997667a0c74662fc673328085b2636c25dae74cdd"
+    },
+    "launch_host.sh": {
+      "path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/collector/launch_host.sh",
+      "sha256": "966211d6616312479bf9ffbd871be62894e8df5fc1d5a49734bf6146e170a0c9"
+    },
+    "watch_trace_and_state.py": {
+      "path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/collector/watch_trace_and_state.py",
+      "sha256": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be"
+    }
+  },
+  "expected_runtime": {
+    "backend": "legacy",
+    "capture": "same-loop P_OUT ql + POST_SCF_RADIAL and paired Fe_scf state from iteration1; collector reports only complete captures",
+    "effective_J_eV": 1.1,
+    "effective_U_eV": 3.8,
+    "mode": "local",
+    "restart": "Fe_out.nml",
+    "threads": "OMP=1, RSLMTO_OMP_THREADS_SERIAL=1, all BLAS/NUMEXPR caps=1",
+    "use_kspace": false
+  },
+  "files_sha256": {
+    "collector/disk_guard.sh": "3049362e51a3165866c73bb997667a0c74662fc673328085b2636c25dae74cdd",
+    "collector/launch_host.sh": "966211d6616312479bf9ffbd871be62894e8df5fc1d5a49734bf6146e170a0c9",
+    "collector/watch_trace_and_state.py": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be",
+    "immutable/Fe.nml": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+    "immutable/Fe_out.nml": "647e9df67510db0c133dd53975cece5f50b379e6e314542de336eec64575d327",
+    "immutable/input.nml": "d9f9b142e69ac365c72c0ce7faac8da2ff867289436df27ca3810cc2ac739b8b",
+    "provenance/schema_validation.json": "dfd0c2925627238c633802c65832e68b4caf4f9a61a81cfcd29367c3ea9a165f",
+    "run/Fe.nml": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+    "run/Fe_out.nml": "647e9df67510db0c133dd53975cece5f50b379e6e314542de336eec64575d327",
+    "run/input.nml": "d9f9b142e69ac365c72c0ce7faac8da2ff867289436df27ca3810cc2ac739b8b"
+  },
+  "frozen_executable": {
+    "manifest_sha256": "b2f3ab5d26c439520bdfcbca16163877b2e36d7bb9c3af0448e6941327ae5158",
+    "path": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x",
+    "sha256": "a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3",
+    "source_manifest_sha256": "494a5dfc061320382a9b1eaced8a3dfb5625d4a4135d47625354a4ca80291900"
+  },
+  "launch_template": {
+    "command_template": "/private/tmp/c52-fe-u38-rs-bulk-preflight/collector/launch_host.sh",
+    "explicit_launch_authority_required": true,
+    "no_launch_authorized_by_this_preflight": true,
+    "requires_env": "C52_FE_U38_RS_AUTHORIZED=1"
+  },
+  "paths": {
+    "captures": "/private/tmp/c52-fe-u38-rs-bulk-preflight/captures",
+    "collector": "/private/tmp/c52-fe-u38-rs-bulk-preflight/collector",
+    "immutable/Fe.nml": "/private/tmp/c52-fe-u38-rs-bulk-preflight/immutable/Fe.nml",
+    "immutable/Fe_out.nml": "/private/tmp/c52-fe-u38-rs-bulk-preflight/immutable/Fe_out.nml",
+    "immutable/input.nml": "/private/tmp/c52-fe-u38-rs-bulk-preflight/immutable/input.nml",
+    "provenance/schema_validation.json": "/private/tmp/c52-fe-u38-rs-bulk-preflight/provenance/schema_validation.json",
+    "run/Fe.nml": "/private/tmp/c52-fe-u38-rs-bulk-preflight/run/Fe.nml",
+    "run/Fe_out.nml": "/private/tmp/c52-fe-u38-rs-bulk-preflight/run/Fe_out.nml",
+    "run/input.nml": "/private/tmp/c52-fe-u38-rs-bulk-preflight/run/input.nml"
+  },
+  "purpose": "Create an accepted same-material bcc Fe U=3.8 eV/J=1.1 eV RS bulk reference, then use that endpoint for same-recipe impurity RECORD only. This is a new U>0 bulk run restarted from accepted U=0 Fe RC80; no fresh atomic start or metadata surgery.",
+  "recipe": {
+    "acceptance": "unchanged RS \u00a72.1 thresholds; tight input conv_thr is capture/convergence aid, not an acceptance threshold",
+    "calctype": "B",
+    "continuations": "if unaccepted, +200 beta halved, then +200 Broyden beta .01 per protocol after separately audited decks",
+    "conv_thr_input": 1e-30,
+    "energy_window_Ry": [
+      -1.0,
+      0.5
+    ],
+    "fermi": "free EF; input initial seed -0.069252 Ry",
+    "hubbard_j_eV": 1.1,
+    "hubbard_u_eV": 3.8,
+    "lld": 21,
+    "lmax": 2,
+    "mix": "Broyden beta 0.01",
+    "mode": "local explicit input override; seed bytes unchanged",
+    "nsp": 1,
+    "nstep": 100,
+    "rc": 80,
+    "recursion": "block",
+    "structure": "bcc"
+  },
+  "run_id": "fe_u38_rs_bulk_rc80_block",
+  "schema": "c5_2_d_fe_u38_rs_block_preflight_v1",
+  "schema_validation": "PASS: all immutable and working namelist groups/members checked against current Fortran declarations; no unknown groups/members",
+  "seed_mapping": {
+    "loader_alias": "Fe_out.nml",
+    "run_label": "Fe",
+    "source_proof": "source/potential.f90 and symbolic_atom loader select *_out.nml when restart reload is enabled; all source startup checks remain required"
+  },
+  "status": "PREPARED_ONLY_NOT_AUTHORIZED"
+}

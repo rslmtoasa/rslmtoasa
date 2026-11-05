@@ -231,6 +231,15 @@ cmake ... \
 
 ## Tuning tolerances and OpenMP threads
 
+For RS/KS byte-identity checks, run both compared builds with a single thread and
+the same caps: `OMP_NUM_THREADS=1`, `OMP_DYNAMIC=FALSE`,
+`RSLMTO_OMP_THREADS_SERIAL=1`, and `OPENBLAS_NUM_THREADS=1`,
+`MKL_NUM_THREADS=1`, `VECLIB_MAXIMUM_THREADS=1`, `BLIS_NUM_THREADS=1`, and
+`NUMEXPR_NUM_THREADS=1`. The manifest's `omp_threads` value can override the
+serial wrapper setting, so verify the effective environment for each run.
+Multi-threaded runs remain available for SCF campaigns and records; compare
+their results as measurements, not bitwise identity checks.
+
 - **Global tolerances (configure-time)**: set `EXAMPLE_REF_ABS_TOL` and
   `EXAMPLE_REF_REL_TOL` at CMake configure time (examples above). These are
   passed to the test runner as the default comparison tolerances.

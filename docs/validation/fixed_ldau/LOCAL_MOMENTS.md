@@ -1297,3 +1297,168 @@ The execution provenance receipt
 records the 24 converged runs, inventory, and raw-response lineage. The prior
 dated checkpoint remains unchanged as a historical record; this section
 supersedes its pending W1 state only.
+
+## Protocol amendment A5 (verbatim)
+
+Protocol amendment A5 (user-approved; record verbatim; supersedes the A4.1
+stop rule and the pending h²-dominance proposal, which is rejected as moot).
+
+A5.0 Governance simplification (replaces the lock/version machinery for M2):
+  For each experiment, write ONE short preregistration containing:
+    - the physical prediction and its expected magnitude;
+    - the error budget, with order-of-magnitude justification;
+    - what each outcome implies for the decision.
+  Then run, report and interpret. Keep hashes for source, executable, inputs
+  and outputs only. No versioned tooling locks, exact-rational margins or
+  extractor bindings. Criteria that cannot change the decision are not
+  gated. A2.6 still applies: every tolerance names the decision it protects.
+
+A5.1 Reclassify W1 (both modes) as a conclusive measurement:
+    - the U=0 Hellmann–Feynman identity for a d-level shift is violated by
+      +0.29 % (spectral) and −0.14 % (local);
+    - the finite-difference error is negligible (≤5e-5 against a ≥9e-3 bias).
+  Record this as a property of the base ASA functional, not as an LDA+U
+  failure.
+
+A5.2 Diagnose the U=0 non-stationarity: three quick KS runs, each with
+  λ ∈ {0, ±0.005} Ry in local mode only:
+    (a) hoh=.true. at U=0 with W1, using a test-only bypass of the fixed-U
+        HOH guard. The bypass is allowed only when U=J=0 and only for the W
+        path. Prediction if the first-order Hamiltonian is the cause: the
+        deviation falls by about an order of magnitude.
+    (b) Temperature halved and doubled. Prediction if smearing is the cause:
+        the deviation scales as T².
+    (c) A denser k-mesh (16³→20³ or equivalent). Prediction if k-sampling is
+        the cause: the deviation changes.
+  Report the deviation against each control parameter, with a one-paragraph
+  interpretation. No production change.
+
+A5.3 Proceed to the M2.2 U/J test (KS) now, without waiting for A5.2:
+  - Error budget: the A5.1 base non-stationarity propagated to dE/dU. Use the
+    measured W1 gradient mismatch times the measured d-occupation response
+    dq0_s/dU, per spin.
+  - Decision rule:
+      c must miss by ≫ budget (predicted ≈ dt/dU);
+      b must agree within budget;
+      a is reported only. Make no a-versus-b claim unless their difference
+      exceeds the budget.
+  - If b passes and c fails: adopt local + b, labelled "valid to the ASA
+    base-functional accuracy measured in A5.1".
+
+A5.4 Run W2 now as the state-level complex-convention test only: the
+  transposed-P and conjugated-P frozen dual replays on the W2 state. Its
+  Hellmann–Feynman slope is reported, not gated.
+
+A5.5 A4.3 observables table: unchanged. Run it alongside A5.3.
+
+## A5.3 units clarification (verbatim)
+
+Question: A5.3 needs one units clarification. The recorded W1 mismatch is
+dF/dλ−q0 (dimensionless), so multiplying it directly by dq0_s/dU does not
+give Ry/eV. Approve interpreting “W1 gradient mismatch” as the residual
+energy gradient with respect to each spin’s d occupation (Ry/electron),
+inferred from spin-selective W1 charge responses, then multiplying by
+dq0_s/dU? That requires additional spin-selective W1 controls. The U/J setup
+and other A5 work will continue meanwhile.
+
+Answer: Approve the dimensionally consistent chain rule
+Preregistercharge-onlyassumption (discloseduserbeforeanswer),
+R_s,a=dq_s/dlambda_a,B_a=dF/dlambda_a−q_a, solveR^Tg=B,
+budgetΣ|g_s dq_s/dU|+measureduncertainty inRy/eV.
+Leadownsadditionalspin-selectiveW1probe runner/prereg andmainU/Jdata,
+diagnosticsownsnecessarytestspinselectorhookalongwithcurrentinstrumentation.
+Coordinateonebuildafterbothhooks, no additionaluserapproval.
+Don'twaitA5.2resultsbeforeU/J.
+
+Interpretation: the user approved the charge-only assumption and the
+spin-response chain rule. For spin-resolved occupations `q_s`, a test shift
+`lambda_a` applied selectively to spin `a` gives
+`R_s,a=dq_s/dlambda_a`; `B_a=dF/dlambda_a−q_a`. Solve `R^T g=B` for the
+residual energy gradients `g_s` in Ry/electron, then use the measured
+per-spin `dq_s/dU` to form the A5.3 allowance
+`sum_s |g_s dq_s/dU|` plus measured propagated uncertainty in Ry/eV. The
+previous A5.3 dimensional issue is resolved by this approval. The numeric
+allowance remains pending the spin-selective W1 measurements and will be
+preregistered before any U/J candidate comparison is inspected.
+
+### A5.1 W1 reclassification
+
+Under the user-approved A5.1 statement, the W1 U=0 mismatch is a conclusive
+measurement of the base ASA functional's non-stationarity: `+0.29%` in
+spectral mode and `−0.14%` in local mode. The finite-difference error is at
+most `5e-5`, against bias magnitude at least `9e-3`. This is not an
+LDA+U-specific failure. It supersedes the A4.1 `INCONCLUSIVE_STOP` status;
+the original A4 evidence and hashes remain unchanged.
+
+### A5.3/A5.5 preregistration and dimensional issue
+
+For the KS U/J response, the prediction is `dE_Hub/dU` at fixed captured
+`P(U=2 eV,J=0)` for the reference derivative, candidate c missing by about
+`dt/dU` (previous estimate `0.13 Ry/eV`), candidate b agreeing within the
+A5.3 base-functional allowance, and candidate a reported without a decision
+claim unless its difference from b exceeds that allowance. U values remain
+`1.6, 1.8, 1.9, 2.1, 2.2, 2.4 eV`; the J checks remain `J=0.5,0.9 eV` at
+`U=2 eV`. A4.3 uses paired spectral/local states at `(U,J)=(0,0),(2,0),
+(4,0),(2,0.9) eV`, with the unchanged observable definitions and explicit
+resolution of the `2.356→2.511 μB` comparison.
+
+The error budget uses the user-approved spin-response chain rule above.
+Numeric `g_s` values and their propagated uncertainties will be derived from
+spin-selective W1 probes, then multiplied by measured `dq_s/dU`. The prior
+aggregate W1 residuals `+0.0185609` spectral and `−0.00921488` local provide
+an order-`1e-2` occupation scale, but are not themselves the Ry/eV allowance.
+The allowance and its uncertainty must be preregistered before any candidate
+energy comparison is inspected.
+
+For A5.3, a one-sided/reversed sign of the candidate residual, candidate c
+agreeing within any subsequently valid allowance, or b failing a valid
+allowance each means stop without changing the default or physical-energy
+routing. If c misses by the predicted `dt/dU` and b passes the valid
+allowance, the user-approved A5.3 adoption rule applies. For A5.5, the
+observables are descriptive and do not independently gate energy adoption;
+they resolve whether the reported magnetic-moment difference survives
+identical integration and convergence definitions.
+
+## A4.4 current-stage status (2026-10-18)
+
+The native reciprocal KS M2.2/M2.3 numerical comparison passes at the
+user-approved scope label “valid to the ASA base-functional accuracy measured
+in A5.1.” The selected candidate is
+`b = F_local + E_Hub(P_OUT)`: local-mode base free energy plus the production
+Hubbard functional evaluated on the exact direct output density matrix. This
+is a scoped numerical result, not a claim that the radial `SUMEV` term has an
+exact universal double-counting identity. Candidate c is outside the
+registered allowance; candidate a is report-only, and no a-versus-b claim is
+made.
+
+At U=2 eV, J=0, the local b derivative is `+0.0550976939 Ry/eV` versus the
+direct-P production target `+0.0552396891 Ry/eV`; the residual
+`−0.0001419952 Ry/eV` lies within the fine-grid local ASA allowance
+`[0.00102115, 0.00155303] Ry/eV`. At J=0.5 and 0.9 eV, local b residuals are
+`−0.0003734601` and `+0.0001251389 Ry/eV`, within the respective registered
+allowances `[0.00118574,0.00174694]` and `[0.00117606,0.00258153] Ry/eV`.
+Spectral c is outside its registered allowance at U and both J centers. The
+complete values and provenance are linked in
+[the U result](evidence/a5_m22_u2_derivative_result.md),
+[the J result](evidence/a5_m23_j_derivative_result.md),
+[the preregistered allowance](evidence/a5_m22_numeric_allowance_preregistration.md),
+and [the A4.3 table](evidence/a4_3_like_for_like_observables.md).
+The earlier spectral-only J checkpoint remains unchanged; its “local not
+launched” status is historical and is superseded by the completed combined
+[local/spectral J result](evidence/a5_m23_j_derivative_result.md).
+
+The scoped A4.4 implementation, serial restart continuity, and matched
+serial/MPI reproducibility checks pass. The eligible route is ordinary native
+reciprocal KS (`use_kspace=.true.`, `calctype='B'`), clean bulk
+(`nbulk=0`, `nrec=ntype`), explicit fixed general Liechtenstein U/J,
+scalar-collinear `nsp=1`, `lmax=2`, and disabled constraints. SOC/noncollinear
+states, HOH, self-consistent U, intersite V, impurity U, impurity/surface
+hosts, and nonzero test fields are excluded. RS remains on its guarded
+spectral route until its own M1 and M2 pass. The serial controls, distinct matched serial/MPI pair, and RS spectral scope
+control are indexed in [A4.4 control evidence](evidence/a4_4_control_evidence_index.json);
+the matched pair is [archived separately](evidence/a4_4_matched_serial_mpi_repro.json). A paired
+constraints-enabled input selects spectral mode and leaves local energy
+unadopted before the expected zero-target setup fatal; this verifies the
+eligibility guard only, not a successful constrained SCF route
+([receipt](evidence/a4_4_constraints_guard_paired_enabled.json)). The earlier
+verbatim A4/A5 amendments and historical evidence above are unchanged.

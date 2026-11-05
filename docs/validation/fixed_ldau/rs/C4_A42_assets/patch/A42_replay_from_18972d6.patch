@@ -1,0 +1,493 @@
+--- a/source/self.f90
++++ b/source/self.f90
+@@ -4417,6 +4417,9 @@
+       real(rp) :: q0_d, center_d, q2_d, center_local, q2_local, t_local
+       integer :: moment_status, site_type
+       logical :: use_shifted_kmesh
++      character(len=1024) :: a42_swap_file, a42_line, a42_tag, a42_stop, a42_b_file, a42_p_file, a42_full_file
++      integer :: a42_status, a42_unit, a42_ios, a42_k, a42_i, a42_j, a42_b_unit, a42_b_ios, a42_p_unit, a42_p_ios, a42_l, a42_spin, a42_flat, a42_site, a42_full_unit, a42_full_ios, a42_n, a42_loaded_records
++      real(rp) :: a42_ar, a42_ai, a42_b2r, a42_b2i, a42_max_error
+    
+       if (rank == 0) call g_logger%info('Calculating the density of states and the new moment bands', __FILE__, __LINE__)
+       call g_timer%start('calculation-of-DOS')
+@@ -4648,6 +4651,26 @@
+          return
+       end if
+    
++      call get_environment_variable('RSLMTO_A42_FULL_CHAIN_FILE', a42_full_file, status=a42_status)
++      if (rank == 0 .and. a42_status == 0 .and. len_trim(a42_full_file) > 0) then
++         open(newunit=a42_full_unit,file=trim(a42_full_file),status='replace',action='write',iostat=a42_full_ios)
++         if (a42_full_ios /= 0) error stop 'A4.2 could not create full-chain capture'
++         write(a42_full_unit,'(a,8(1x,i0))') 'A42_SHAPE', lbound(this%recursion%a_b,1),ubound(this%recursion%a_b,1), &
++            lbound(this%recursion%a_b,2),ubound(this%recursion%a_b,2),lbound(this%recursion%a_b,3), &
++            ubound(this%recursion%a_b,3),lbound(this%recursion%a_b,4),ubound(this%recursion%a_b,4)
++         do a42_n=lbound(this%recursion%a_b,4),ubound(this%recursion%a_b,4)
++            do a42_k=lbound(this%recursion%a_b,3),ubound(this%recursion%a_b,3)
++               do a42_i=1,nb
++                  do a42_j=1,nb
++                     write(a42_full_unit,'(4(i0,1x),4(es26.17e3,1x))') a42_k-1,a42_n,a42_i,a42_j, &
++                        real(this%recursion%a_b(a42_i,a42_j,a42_k,a42_n),rp),aimag(this%recursion%a_b(a42_i,a42_j,a42_k,a42_n)), &
++                        real(this%recursion%b2_b(a42_i,a42_j,a42_k,a42_n),rp),aimag(this%recursion%b2_b(a42_i,a42_j,a42_k,a42_n))
++                  end do
++               end do
++            end do
++         end do
++         close(a42_full_unit)
++      end if
+       select case (this%control%recur)
+       case ('lanczos')
+          call g_scf_benchmark_profile%start_stage('P_rs_green_function')
+@@ -4660,6 +4683,51 @@
+       case ('block')
+          call g_scf_benchmark_profile%start_stage('P_rs_green_function')
+          call this%recursion%zsqr()
++         call get_environment_variable('RSLMTO_A42_EXACT_B_FILE', a42_b_file, status=a42_status)
++         if (a42_status == 0 .and. len_trim(a42_b_file) > 0) then
++            open(newunit=a42_b_unit, file=trim(a42_b_file), status='replace', action='write', iostat=a42_b_ios)
++            if (a42_b_ios /= 0) error stop 'A4.2 could not create exact-B capture'
++            write(a42_b_unit,'(a,8(1x,i0))') 'A42_SHAPE', lbound(this%recursion%b2_b,1),ubound(this%recursion%b2_b,1), &
++               lbound(this%recursion%b2_b,2),ubound(this%recursion%b2_b,2),lbound(this%recursion%b2_b,3), &
++               ubound(this%recursion%b2_b,3),lbound(this%recursion%b2_b,4),ubound(this%recursion%b2_b,4)
++            do a42_n=lbound(this%recursion%b2_b,4),ubound(this%recursion%b2_b,4)
++               do a42_k=lbound(this%recursion%b2_b,3),ubound(this%recursion%b2_b,3)
++                  do a42_i=1,nb
++                     do a42_j=1,nb
++                        write(a42_b_unit,'(4(i0,1x),2(es26.17e3,1x))') a42_k-1,a42_n,a42_i,a42_j, &
++                           real(this%recursion%b2_b(a42_i,a42_j,a42_k,a42_n),rp),aimag(this%recursion%b2_b(a42_i,a42_j,a42_k,a42_n))
++                     end do
++                  end do
++               end do
++            end do
++            close(a42_b_unit)
++         end if
++         call get_environment_variable('RSLMTO_A42_SWAP_FILE', a42_swap_file, status=a42_status)
++         if (a42_status == 0 .and. len_trim(a42_swap_file) > 0) then
++            open(newunit=a42_unit,file=trim(a42_swap_file),status='old',action='read',iostat=a42_ios)
++            if (a42_ios /= 0) error stop 'A4.2 could not open post-zsqr A/B swap file'
++            a42_loaded_records=0; a42_max_error=0.0_rp
++            do
++               read(a42_unit,'(A)',iostat=a42_ios) a42_line
++               if (a42_ios < 0) exit
++               if (a42_ios /= 0) error stop 'A4.2 failed reading post-zsqr A/B swap file'
++               if (index(adjustl(a42_line),'A42_AB ') /= 1) cycle
++               read(a42_line,*,iostat=a42_ios) a42_tag,a42_k,a42_n,a42_i,a42_j,a42_ar,a42_ai,a42_b2r,a42_b2i
++               if (a42_ios /= 0) error stop 'A4.2 malformed post-zsqr A/B row'
++               if (a42_k < lbound(this%recursion%a_b,3)-1 .or. a42_k > ubound(this%recursion%a_b,3)-1 .or. &
++                   a42_n < lbound(this%recursion%a_b,4) .or. a42_n > ubound(this%recursion%a_b,4) .or. &
++                   a42_i < 1 .or. a42_i > nb .or. a42_j < 1 .or. a42_j > nb) cycle
++               this%recursion%a_b(a42_i,a42_j,a42_k+1,a42_n)=cmplx(a42_ar,a42_ai,rp)
++               this%recursion%b2_b(a42_i,a42_j,a42_k+1,a42_n)=cmplx(a42_b2r,a42_b2i,rp)
++               a42_max_error=max(a42_max_error,abs(this%recursion%a_b(a42_i,a42_j,a42_k+1,a42_n)-cmplx(a42_ar,a42_ai,rp)), &
++                  abs(this%recursion%b2_b(a42_i,a42_j,a42_k+1,a42_n)-cmplx(a42_b2r,a42_b2i,rp)))
++               a42_loaded_records=a42_loaded_records+1
++            end do
++            close(a42_unit)
++            if (rank==0) call g_logger%info('A4.2 donor A/exact B records='//int2str(a42_loaded_records)// &
++               ' applied after zsqr; max memory readback error='//real2str(a42_max_error)// &
++               ' before native block_green (native recur=block).',__FILE__,__LINE__)
++         end if
+          call this%green%block_green()
+          call g_scf_benchmark_profile%stop_stage('P_rs_green_function')
+       end select
+@@ -4700,6 +4768,36 @@
+       end if
+       call g_scf_benchmark_profile%stop_stage('P_rs_density_build')
+       call this%mix%save_to('new')
++      call this%mix%save_ldm_to('new')
++      call get_environment_variable('RSLMTO_A42_POUT_FILE', a42_p_file, status=a42_status)
++      if (a42_status == 0 .and. len_trim(a42_p_file) > 0) then
++         open(newunit=a42_p_unit, file=trim(a42_p_file), status='replace', action='write', iostat=a42_p_ios)
++         if (a42_p_ios /= 0) error stop 'A4.2 could not create P_OUT capture'
++         do a42_site=1,size(this%mix%ldm_new,1)
++            do a42_l=1,size(this%mix%ldm_new,2)
++               do a42_spin=1,size(this%mix%ldm_new,3)
++                  do a42_flat=1,size(this%mix%ldm_new,4)
++                     write(a42_p_unit,'(4(i0,1x),2(es26.17e3,1x))') a42_site,a42_l,a42_spin,a42_flat, &
++                        real(this%mix%ldm_new(a42_site,a42_l,a42_spin,a42_flat),rp), &
++                        aimag(this%mix%ldm_new(a42_site,a42_l,a42_spin,a42_flat))
++                  end do
++               end do
++            end do
++         end do
++         write(a42_p_unit,'(a)') 'QL_NEW'
++         do a42_site=1,size(this%mix%qia_new,1)
++            do a42_flat=1,size(this%mix%qia_new,2)
++               write(a42_p_unit,'(2(i0,1x),es26.17e3)') a42_site,a42_flat,this%mix%qia_new(a42_site,a42_flat)
++            end do
++         end do
++         close(a42_p_unit)
++      end if
++      call get_environment_variable('RSLMTO_A42_STOP_AFTER_DOS', a42_stop, status=a42_status)
++      if (a42_status == 0 .and. trim(a42_stop) == '1') then
++         if (rank == 0) call g_logger%info('A4.2 offline replay stop after Green-function integration and P_OUT serialization; no potential update.', __FILE__, __LINE__)
++         call g_timer%stop('calculation-of-DOS')
++         stop 0
++      end if
+ 
+       !=========================================================================
+       !        CALCULATE l=1 DIPOLE CHARGE MOMENTS (B6, surface only)
+--- a/source/recursion_haydock.f90
++++ b/source/recursion_haydock.f90
+@@ -1,6 +1,221 @@
+ submodule(recursion_mod) recursion_haydock
+ 
++   logical, save :: c3_a3_started = .false.
++   logical, save :: c3_terminator_written = .false.
++
+ contains
++
++   logical function c3_audit_enabled()
++      character(len=16) :: value
++      integer :: status
++      value = ''
++      call get_environment_variable('RSLMTO_C3_A3_AUDIT', value, status=status)
++      c3_audit_enabled = status == 0 .and. trim(value) == '1'
++   end function c3_audit_enabled
++
++   subroutine c3_positive_sqrt_block(beta2, beta)
++      use basis_mod, only: nb
++      complex(rp), intent(in) :: beta2(nb,nb)
++      complex(rp), intent(out) :: beta(nb,nb)
++      complex(rp) :: eigvec(nb,nb), work(nb*nb), lam(nb,nb), temp(nb,nb)
++      real(rp) :: eigval(nb), rwork(3*nb-2)
++      integer :: info, i
++      eigvec = beta2
++      call zheev('v', 'u', nb, eigvec, nb, eigval, work, nb*nb, rwork, info)
++      if (info /= 0) then
++         beta = (0.0_rp, 0.0_rp)
++         return
++      end if
++      lam = (0.0_rp, 0.0_rp)
++      do i = 1, nb
++         lam(i,i) = cmplx(sqrt(max(0.0_rp, eigval(i))), kind=kind(0.0d0))
++      end do
++      call zgemm('n', 'n', nb, nb, nb, cone, eigvec, nb, lam, nb, czero, temp, nb)
++      call zgemm('n', 'c', nb, nb, nb, cone, temp, nb, eigvec, nb, czero, beta, nb)
++   end subroutine c3_positive_sqrt_block
++
++   subroutine c3_write_coefficients(this, site, original_lld, alpha, beta2)
++      use basis_mod, only: nb
++      class(recursion), intent(in) :: this
++      integer, intent(in) :: site, original_lld
++      complex(rp), intent(in) :: alpha(:,:,:), beta2(:,:,:)
++      character(len=1024) :: path
++      integer :: unit, status, k, ii, jj, i, j, itype
++      complex(rp) :: beta(nb,nb)
++      itype = this%lattice%iz(site)
++      path = 'c3_a3_coefficients.dat'
++      call get_environment_variable('RSLMTO_C3_A3_AUDIT_FILE', path, status=status)
++      if (status /= 0 .or. len_trim(path) == 0) path = 'c3_a3_coefficients.dat'
++      if (c3_a3_started) then
++         open(newunit=unit, file=trim(path), status='old', position='append', action='write', iostat=status)
++      else
++         open(newunit=unit, file=trim(path), status='replace', action='write', iostat=status)
++         c3_a3_started = .true.
++      end if
++      if (status /= 0) return
++      write(unit,'(a,1x,i0,1x,i0,1x,i0,1x,i0)') 'COEFF_META_BLOCK', site, itype, original_lld, size(alpha,3)
++      write(unit,'(a,1x,a,1x,a,1x,a)') 'UNITS', 'A=Ry', 'B=Ry', 'B2=Ry^2'
++      do k = 0, original_lld
++         call c3_positive_sqrt_block(beta2(:,:,k+1), beta)
++         do ii = 1, nb
++            i = ii
++            do jj = 1, nb
++               j = jj
++               write(unit,'(a,1x,i0,1x,i0,1x,i0,1x,i0,1x,i0,1x,4(es26.17e3,1x))') &
++                  'COEFF', site, itype, k, i, j, real(alpha(i,j,k+1),rp), aimag(alpha(i,j,k+1)), &
++                  real(beta(i,j),rp), aimag(beta(i,j))
++               write(unit,'(a,1x,i0,1x,i0,1x,i0,1x,i0,1x,i0,1x,2(es26.17e3,1x))') &
++                  'COEFF_B2', site, itype, k, i, j, real(beta2(i,j,k+1),rp), aimag(beta2(i,j,k+1))
++            end do
++         end do
++      end do
++      close(unit)
++   end subroutine c3_write_coefficients
++
++   subroutine c3_capture_extra_depth(this, site, actual_alpha, actual_beta2)
++      use iso_fortran_env, only: int64
++      use mpi_mod, only: rank
++      use basis_mod, only: nb
++      class(recursion), intent(inout) :: this
++      integer, intent(in) :: site
++      complex(rp), intent(in), optional :: actual_alpha(:,:,:), actual_beta2(:,:,:)
++      integer :: old_lld, ext_lld, i, j, ii, jj, n, alpha_count, beta2_count, itype
++      integer :: unit, io_status
++      real(rp) :: state_error, prefix_alpha_error, prefix_beta2_error
++      integer, dimension(10) :: dindex
++      character(len=1024) :: path
++      integer, allocatable :: old_izero(:), old_irlist(:)
++      integer :: old_irnum
++      complex(rp), allocatable :: old_psi(:, :, :), old_pmn(:, :, :), old_hpsi(:, :, :)
++      complex(rp), allocatable :: old_hohpsi(:, :, :), old_enupsi(:, :, :), old_socpsi(:, :, :)
++      complex(rp), allocatable :: old_atemp(:, :, :), old_b2temp(:, :, :)
++
++      if (.not. c3_audit_enabled() .or. rank /= 0) return
++      if (trim(this%control%recur) /= 'block' .or. this%control%gpu_plugin) return
++      if (site < 1 .or. site > this%lattice%kk) return
++      old_lld = this%control%lld
++      ext_lld = old_lld + 2
++      allocate(old_izero(lbound(this%izero,1):ubound(this%izero,1)), &
++               old_irlist(lbound(this%irlist,1):ubound(this%irlist,1)))
++      old_izero = this%izero; old_irlist = this%irlist; old_irnum = this%irnum
++      allocate(old_psi(size(this%psi_b,1),size(this%psi_b,2),size(this%psi_b,3)), &
++               old_pmn(size(this%pmn_b,1),size(this%pmn_b,2),size(this%pmn_b,3)), &
++               old_hpsi(size(this%hpsi,1),size(this%hpsi,2),size(this%hpsi,3)), &
++               old_hohpsi(size(this%hohpsi,1),size(this%hohpsi,2),size(this%hohpsi,3)), &
++               old_enupsi(size(this%enupsi,1),size(this%enupsi,2),size(this%enupsi,3)), &
++               old_socpsi(size(this%socpsi,1),size(this%socpsi,2),size(this%socpsi,3)), &
++               old_atemp(size(this%atemp_b,1),size(this%atemp_b,2),size(this%atemp_b,3)), &
++               old_b2temp(size(this%b2temp_b,1),size(this%b2temp_b,2),size(this%b2temp_b,3)))
++      old_psi=this%psi_b; old_pmn=this%pmn_b; old_hpsi=this%hpsi
++      old_hohpsi=this%hohpsi; old_enupsi=this%enupsi; old_socpsi=this%socpsi
++      old_atemp=this%atemp_b; old_b2temp=this%b2temp_b
++
++#ifdef USE_SAFE_ALLOC
++      call g_safe_alloc%deallocate('recursion.atemp_b', this%atemp_b)
++      call g_safe_alloc%deallocate('recursion.b2temp_b', this%b2temp_b)
++#else
++      deallocate(this%atemp_b, this%b2temp_b)
++#endif
++      this%control%lld = ext_lld
++#ifdef USE_SAFE_ALLOC
++      call g_safe_alloc%allocate('recursion.atemp_b', this%atemp_b, (/nb, nb, ext_lld/))
++      call g_safe_alloc%allocate('recursion.b2temp_b', this%b2temp_b, (/nb, nb, ext_lld/))
++#else
++      allocate(this%atemp_b(nb,nb,ext_lld), this%b2temp_b(nb,nb,ext_lld))
++#endif
++      this%atemp_b = (0.0_rp,0.0_rp); this%b2temp_b = (0.0_rp,0.0_rp)
++      this%psi_b = (0.0_rp,0.0_rp); this%pmn_b = (0.0_rp,0.0_rp)
++      this%hpsi = (0.0_rp,0.0_rp); this%hohpsi = (0.0_rp,0.0_rp)
++      this%enupsi = (0.0_rp,0.0_rp); this%socpsi = (0.0_rp,0.0_rp)
++      this%izero = 0; this%irlist = 0; this%irnum = 0
++      do i = 1, nb
++         this%psi_b(i,i,site) = (1.0_rp,0.0_rp)
++         this%b2temp_b(i,i,1) = (1.0_rp,0.0_rp)
++      end do
++      this%izero(site) = 1
++      call this%crecal_b()
++      ! Initialize the shared output (replace on the first capture) before
++      ! appending the production-prefix records below.
++      call c3_write_coefficients(this, site, old_lld, this%atemp_b, this%b2temp_b)
++      if (present(actual_alpha)) then
++         if (present(actual_beta2)) then
++            alpha_count = min(old_lld - 1, size(actual_alpha,3)) ! final production A slot is zero padding
++            beta2_count = min(old_lld, size(actual_beta2,3))     ! includes production B2_(lld-1)
++            prefix_alpha_error = 0.0_rp
++            prefix_beta2_error = 0.0_rp
++            if (alpha_count > 0) prefix_alpha_error = maxval(abs(this%atemp_b(:,:,1:alpha_count) - actual_alpha(:,:,1:alpha_count)))
++            if (beta2_count > 0) prefix_beta2_error = maxval(abs(this%b2temp_b(:,:,1:beta2_count) - actual_beta2(:,:,1:beta2_count)))
++            path = 'c3_a3_coefficients.dat'
++            call get_environment_variable('RSLMTO_C3_A3_AUDIT_FILE', path, status=io_status)
++            if (io_status /= 0 .or. len_trim(path) == 0) path = 'c3_a3_coefficients.dat'
++            open(newunit=unit, file=trim(path), status='old', position='append', action='write', iostat=io_status)
++            if (io_status == 0) then
++               itype = this%lattice%iz(site)
++               write(unit,'(a,1x,i0,1x,i0,1x,i0,1x,i0,1x,2(es26.17e3,1x))') &
++                  'PREFIX_COMPARE', site, itype, alpha_count, beta2_count, prefix_alpha_error, prefix_beta2_error
++                        do n = 0, min(size(actual_alpha,3),size(actual_beta2,3))-1
++                  do ii = 1, 10
++                     i = dindex(ii)
++                     do jj = 1, 10
++                        j = dindex(jj)
++                        write(unit,'(a,1x,i0,1x,i0,1x,i0,1x,i0,1x,i0,1x,4(es26.17e3,1x))') &
++                           'PROD_COEFF', site, itype, n, i, j, real(actual_alpha(i,j,n+1),rp), &
++                           aimag(actual_alpha(i,j,n+1)), real(actual_beta2(i,j,n+1),rp), aimag(actual_beta2(i,j,n+1))
++                     end do
++                  end do
++               end do
++               close(unit)
++            end if
++         end if
++      end if
++#ifdef USE_SAFE_ALLOC
++      call g_safe_alloc%deallocate('recursion.atemp_b', this%atemp_b)
++      call g_safe_alloc%deallocate('recursion.b2temp_b', this%b2temp_b)
++#else
++      deallocate(this%atemp_b, this%b2temp_b)
++#endif
++      this%control%lld = old_lld
++#ifdef USE_SAFE_ALLOC
++      call g_safe_alloc%allocate('recursion.atemp_b', this%atemp_b, (/nb, nb, old_lld/))
++      call g_safe_alloc%allocate('recursion.b2temp_b', this%b2temp_b, (/nb, nb, old_lld/))
++#else
++      allocate(this%atemp_b(nb,nb,old_lld), this%b2temp_b(nb,nb,old_lld))
++#endif
++      this%psi_b=old_psi; this%pmn_b=old_pmn; this%hpsi=old_hpsi
++      this%hohpsi=old_hohpsi; this%enupsi=old_enupsi; this%socpsi=old_socpsi
++      this%atemp_b=old_atemp; this%b2temp_b=old_b2temp
++      this%izero=old_izero; this%irlist=old_irlist; this%irnum=old_irnum
++      state_error = 0.0_rp
++      if (.not. all(transfer(this%psi_b, [0_int64], 2*size(this%psi_b)) == &
++                    transfer(old_psi, [0_int64], 2*size(old_psi)))) state_error = huge(1.0_rp)
++      if (.not. all(transfer(this%pmn_b, [0_int64], 2*size(this%pmn_b)) == &
++                    transfer(old_pmn, [0_int64], 2*size(old_pmn)))) state_error = huge(1.0_rp)
++      if (.not. all(transfer(this%hpsi, [0_int64], 2*size(this%hpsi)) == &
++                    transfer(old_hpsi, [0_int64], 2*size(old_hpsi)))) state_error = huge(1.0_rp)
++      if (.not. all(transfer(this%hohpsi, [0_int64], 2*size(this%hohpsi)) == &
++                    transfer(old_hohpsi, [0_int64], 2*size(old_hohpsi)))) state_error = huge(1.0_rp)
++      if (.not. all(transfer(this%enupsi, [0_int64], 2*size(this%enupsi)) == &
++                    transfer(old_enupsi, [0_int64], 2*size(old_enupsi)))) state_error = huge(1.0_rp)
++      if (.not. all(transfer(this%socpsi, [0_int64], 2*size(this%socpsi)) == &
++                    transfer(old_socpsi, [0_int64], 2*size(old_socpsi)))) state_error = huge(1.0_rp)
++      if (.not. all(transfer(this%atemp_b, [0_int64], 2*size(this%atemp_b)) == &
++                    transfer(old_atemp, [0_int64], 2*size(old_atemp)))) state_error = huge(1.0_rp)
++      if (.not. all(transfer(this%b2temp_b, [0_int64], 2*size(this%b2temp_b)) == &
++                    transfer(old_b2temp, [0_int64], 2*size(old_b2temp)))) state_error = huge(1.0_rp)
++      if (this%control%lld /= old_lld .or. this%irnum /= old_irnum .or. &
++          .not. all(this%izero == old_izero) .or. .not. all(this%irlist == old_irlist)) state_error = huge(1.0_rp)
++      path = 'c3_a3_coefficients.dat'
++      call get_environment_variable('RSLMTO_C3_A3_AUDIT_FILE', path, status=io_status)
++      if (io_status /= 0 .or. len_trim(path) == 0) path = 'c3_a3_coefficients.dat'
++      open(newunit=unit, file=trim(path), status='old', position='append', action='write', iostat=io_status)
++      if (io_status == 0) then
++         write(unit,'(a,1x,i0,1x,es26.17e3)') 'RESTORE_CHECK', site, state_error
++         close(unit)
++      end if
++      if (state_error /= 0.0_rp) call g_logger%fatal('C3 diagnostic recurrence failed to restore the solver state exactly.', &
++                                                       __FILE__, __LINE__)
++      deallocate(old_izero,old_irlist,old_psi,old_pmn,old_hpsi,old_hohpsi,old_enupsi,old_socpsi,old_atemp,old_b2temp)
++   end subroutine c3_capture_extra_depth
+ 
+    !> @brief Apply one block-Lanczos Hamiltonian hop with HOH correction.
+    !> @details Forms H|Psi_ll> for the block recursion using the two-sweep
+@@ -309,6 +524,13 @@
+                end do
+             end do
+          end do
++         if (.false. .and. c3_audit_enabled() .and. .not. c3_a3_started) then
++            do i = start_atom, end_atom
++               j = this%lattice%irec(i)
++               call c3_capture_extra_depth(this, j, this%a_b(:,:,:,i-start_atom+1), &
++                                           this%b2_b(:,:,:,i-start_atom+1))
++            end do
++         end if
+          return
+       end if
+ 
+@@ -351,6 +573,15 @@
+                end do
+             end do
+          end do
++         if (rank == 0) call c3_write_coefficients(this, this%lattice%irec(end_atom), llmax - 1, &
++            this%a_b(:,:,:,end_atom-start_atom+1), this%b2_b(:,:,:,end_atom-start_atom+1))
++         if (.false. .and. c3_audit_enabled() .and. .not. c3_a3_started) then
++            do i = start_atom, end_atom
++               j = this%lattice%irec(i)
++               call c3_capture_extra_depth(this, j, this%a_b(:,:,:,i-start_atom+1), &
++                                           this%b2_b(:,:,:,i-start_atom+1))
++            end do
++         end if
+          return
+       end if
+ 
+@@ -401,6 +632,13 @@
+             end do
+          end do
+       end do
++      if (.false. .and. c3_audit_enabled() .and. .not. c3_a3_started) then
++         do i = start_atom, end_atom
++            j = this%lattice%irec(i)
++            call c3_capture_extra_depth(this, j, this%a_b(:,:,:,i-start_atom+1), &
++                                        this%b2_b(:,:,:,i-start_atom+1))
++         end do
++      end if
+    end subroutine recur_b
+ 
+    !> @brief Advance the legacy block-Lanczos recurrence for one starting block.
+@@ -681,7 +919,11 @@
+       real(rp), dimension(ldim, ldim, na), intent(out) :: a_inf, b_inf
+       real(rp), dimension(na), intent(out) ::  a_inf0, b_inf0
+       !
+-      integer :: n, i, j, ll_t, k
++      integer :: n, i, j, ll_t, k, a42_unit, a42_ios, a42_n, a42_spin
++      integer :: a42_i, a42_j, a42_term_records
++      real(rp) :: a42_term_max_error
++      character(len=1024) :: a42_term_file, a42_line, a42_tag
++      real(rp) :: a42_alpha, a42_beta
+       complex(rp), dimension(ldim, ldim) :: MatIn, MatOut
+       real(rp), dimension(ldim, ldim, ll) :: Acoef_r, B2coef_r
+       real(rp) :: maxA, maxB, maxAinf, maxBinf, tmpval
+@@ -747,7 +989,83 @@
+          end do
+          b_inf0(n) = b_inf0(n)/ldim
+       end do
++      call get_environment_variable('RSLMTO_A42_TERM_FILE', a42_term_file, status=a42_ios)
++      if (a42_ios == 0 .and. len_trim(a42_term_file) > 0) then
++         open(newunit=a42_unit, file=trim(a42_term_file), status='old', action='read', iostat=a42_ios)
++         if (a42_ios /= 0) error stop 'A4.2 could not open block terminator file'
++         a42_term_records=0; a42_term_max_error=0.0_rp
++         do
++            read(a42_unit,'(A)',iostat=a42_ios) a42_line
++            if (a42_ios < 0) exit
++            if (a42_ios /= 0) error stop 'A4.2 failed reading block terminator file'
++            if (index(adjustl(a42_line),'TERM ') /= 1) cycle
++            read(a42_line,*,iostat=a42_ios) a42_tag,a42_n,a42_i,a42_j,a42_spin,a42_alpha,a42_beta
++            if (a42_ios /= 0) error stop 'A4.2 malformed block terminator row'
++            if (a42_n < 1 .or. a42_n > na .or. a42_i < 1 .or. a42_i > ldim .or. &
++                a42_j < 1 .or. a42_j > ldim) cycle
++            a_inf(a42_i,a42_j,a42_n)=a42_alpha
++            b_inf(a42_i,a42_j,a42_n)=a42_beta
++            a42_term_max_error=max(a42_term_max_error,abs(a_inf(a42_i,a42_j,a42_n)-a42_alpha), &
++               abs(b_inf(a42_i,a42_j,a42_n)-a42_beta))
++            a42_term_records=a42_term_records+1
++         end do
++         close(a42_unit)
++         call g_logger%info('A4.2 donor terminator rows='//int2str(a42_term_records)// &
++            ' applied inside get_terminf; max memory readback error='//real2str(a42_term_max_error)//'.',__FILE__,__LINE__)
++         do n=1,na
++            a_inf0(n)=sum([(a_inf(i,i,n),i=1,ldim)])/ldim
++            b_inf0(n)=sum([(b_inf(i,i,n),i=1,ldim)])/ldim
++         end do
++      end if
++      if (c3_audit_enabled() .and. .not. c3_terminator_written) then
++         call c3_write_terminator(this, na, ll, ldim, Acoef_b, B2coef_b, a_inf, b_inf, a_inf0, b_inf0)
++         c3_terminator_written = .true.
++      end if
+    end subroutine get_terminf
++
++   subroutine c3_write_terminator(this, na, ll, ldim, Acoef_b, B2coef_b, a_inf, b_inf, a_inf0, b_inf0)
++      use basis_mod, only: nb
++      use mpi_mod, only: rank
++      class(recursion), intent(in) :: this
++      integer, intent(in) :: na, ll, ldim
++      complex(rp), intent(in) :: Acoef_b(ldim,ldim,ll,na), B2coef_b(ldim,ldim,ll,na)
++      real(rp), intent(in) :: a_inf(ldim,ldim,na), b_inf(ldim,ldim,na)
++      real(rp), intent(in) :: a_inf0(na), b_inf0(na)
++      character(len=1024) :: path
++      integer :: unit, status, n, site, itype, ii, jj, i, j
++      complex(rp) :: beta(nb,nb)
++      if (rank /= 0) return
++      path = 'c3_a3_coefficients.dat'
++      call get_environment_variable('RSLMTO_C3_A3_AUDIT_FILE', path, status=status)
++      if (status /= 0 .or. len_trim(path) == 0) path = 'c3_a3_coefficients.dat'
++      open(newunit=unit, file=trim(path), status='unknown', position='append', action='write', iostat=status)
++      if (status /= 0) return
++      write(unit,'(a,3(1x,i0))') 'TERM_SHAPE', ldim, ll, na
++      write(unit,'(a,1x,a,1x,a,1x,a,1x,a,1x,a)') &
++         'TERM_UNITS', 'A_INF=Ry', 'B_INF=Ry', 'A_LLD=Ry', 'B_LLD=Ry', 'B2_LLD=Ry^2'
++      do n = 1, na
++         site = 0; itype = 0
++         if (n <= this%lattice%nrec) then
++            site = this%lattice%irec(n)
++            if (site >= 1 .and. site <= this%lattice%kk) itype = this%lattice%iz(site)
++         end if
++         write(unit,'(a,1x,i0,1x,i0,1x,i0,1x,i0)') 'TERM_META', n, site, itype, ll
++         call c3_positive_sqrt_block(B2coef_b(:,:,ll,n), beta)
++         do ii = 1, nb
++            i = ii
++            do jj = 1, nb
++               j = jj
++               write(unit,'(a,1x,i0,1x,i0,1x,i0,1x,i0,1x,8(es26.17e3,1x))') &
++                  'TERM', n, i, j, 1, a_inf(i,j,n), b_inf(i,j,n), &
++                  real(Acoef_b(i,j,ll,n),rp), aimag(Acoef_b(i,j,ll,n)), &
++                  real(beta(i,j),rp), aimag(beta(i,j)), &
++                  real(B2coef_b(i,j,ll,n),rp), aimag(B2coef_b(i,j,ll,n))
++            end do
++         end do
++         write(unit,'(a,1x,i0,1x,2(es26.17e3,1x))') 'TERM_AVG', n, a_inf0(n), b_inf0(n)
++      end do
++      close(unit)
++   end subroutine c3_write_terminator
+ 
+    !> @brief Precompute light-cone support maps for Chebyshev recursion levels.
+    !> @details Propagates the active-site mask one neighbor shell per level and

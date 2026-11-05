@@ -33,6 +33,7 @@ module mix_mod
 #endif
    use basis_mod, only: lmax_basis
    use math_mod, only: hubbard_density_diagnostics
+   use scf_guard_mod, only: guard_q0_capacity, guard_nonfinite_scalar
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 #ifdef USE_MPI
    use mpi, only: MPI_COMM_WORLD, MPI_DOUBLE_PRECISION, MPI_INTEGER, MPI_MAX, MPI_MIN, MPI_IN_PLACE, MPI_ALLREDUCE
@@ -98,6 +99,7 @@ module mix_mod
       procedure :: mixpq
       procedure :: save_ldm_to
       procedure :: mix_ldm_linear
+      procedure :: mix_ldm_spinor_linear
       procedure :: advance_fixed_u_convergence
       procedure :: mix_magnetic_moments
       final :: destructor
@@ -134,7 +136,8 @@ contains
       rv_abs = huge(1.0_rp); rv_rel = huge(1.0_rp)
       antiherm_p = huge(1.0_rp); antiherm_v = huge(1.0_rp)
       physical = .false.; worst_site = 0
-      if (nsite < 1 .or. nspin /= 2 .or. norb < 1) return
+      ! nspin=2: collinear spin blocks; nspin=1: one full spinor block per site (nsp=2 spinor U)
+      if (nsite < 1 .or. nspin < 1 .or. nspin > 2 .or. norb < 1) return
       if (size(p_out,1) /= nsite .or. size(v_in,1) /= nsite .or. size(v_out,1) /= nsite .or. &
           size(p_out,2) /= nspin .or. size(v_in,2) /= nspin .or. size(v_out,2) /= nspin .or. &
           size(p_out,3) /= norb .or. size(p_out,4) /= norb .or. &
@@ -448,11 +451,20 @@ contains
    !--------------------------------------------------------------------------
    !> @brief
    !> Save or restore QL/PL parameters to/from `this%qia` arrays.
-   subroutine save_to(this, whereto)
+   subroutine save_to(this, whereto, iteration, guard_collinear)
       use mpi_mod
       class(mix), intent(inout) :: this
       character(len=*), intent(in) :: whereto
-      integer :: it, I, lcount, qcols
+      integer, intent(in), optional :: iteration
+      logical, intent(in), optional :: guard_collinear
+      integer :: it, I, lcount, qcols, spin
+      integer :: iteration_value
+      logical :: guard_active
+
+      iteration_value = 0
+      guard_active = .false.
+      if (present(iteration)) iteration_value = iteration
+      if (present(guard_collinear)) guard_active = guard_collinear
 
       select case (trim(whereto))
       case ('new')
@@ -461,6 +473,13 @@ contains
             lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
             qcols = size(this%qia_new, 2)
             do I = 1, lcount
+               if (guard_active) then
+                  do spin = 1, 2
+                     call guard_nonfinite_scalar(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                        it, I - 1, spin, 'new q1', iteration_value, &
+                        this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(2, I - 1, spin))
+                  end do
+               end if
                if (I              <= qcols) this%qia_new(it, I             ) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 1)
                if (I +     lcount <= qcols) this%qia_new(it, I +     lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(1, I - 1, 2)
                if (I + 2 * lcount <= qcols) this%qia_new(it, I + 2 * lcount) = this%symbolic_atom(this%lattice%nbulk + it)%potential%ql(3, I - 1, 1)
@@ -474,6 +493,7 @@ contains
                end if
             end if
          end do
+         if (guard_active) call validate_packed_q(this, this%qia_new, iteration_value, 'new')
       case ('old')
          this%qia_old = 0.0_rp
          do it = 1, this%lattice%nrec
@@ -598,10 +618,12 @@ contains
    !> @param[in] old and new potential variables qia_old and qia_new, respectively.
    !> @return type(mix): qia, the mix potential variable.
    !---------------------------------------------------------------------------
-   subroutine mixpq(this, qia_old, qia_new)
+   subroutine mixpq(this, qia_old, qia_new, iteration, guard_collinear)
       use mpi_mod
       class(mix), intent(inout) :: this
       real(rp), dimension(:, :), intent(in) :: qia_old, qia_new
+      integer, intent(in), optional :: iteration
+      logical, intent(in), optional :: guard_collinear
       real(rp), allocatable :: qi_to(:, :), qi_tn(:, :) ! Local variables for broyden mixing
       real(rp) :: delta_atom
       integer :: ia ! Atom index
@@ -611,6 +633,13 @@ contains
       integer :: ncols
       real(rp) :: denom
       integer :: broy_width
+      integer :: iteration_value
+      logical :: guard_active
+
+      iteration_value = 0
+      guard_active = .false.
+      if (present(iteration)) iteration_value = iteration
+      if (present(guard_collinear)) guard_active = guard_collinear
 
       if (size(qia_old, 1) /= this%lattice%nrec .or. size(qia_new, 1) /= this%lattice%nrec) then
          call g_logger%fatal('mixpq received qia arrays with inconsistent atom count', __FILE__, __LINE__)
@@ -619,6 +648,11 @@ contains
          call g_logger%fatal('mixpq received qia arrays with inconsistent packed widths', __FILE__, __LINE__)
       end if
       broy_width = this%lattice%nrec*size(qia_old, 2)
+
+      if (guard_active) then
+         call validate_packed_q(this, qia_old, iteration_value, 'old')
+         call validate_packed_q(this, qia_new, iteration_value, 'new')
+      end if
 
       select case (trim(this%mixtype))
       case ('linear')
@@ -636,7 +670,9 @@ contains
          deallocate(qi_to, qi_tn)
       end select
       ! Safety: detect NaNs produced by mixing (e.g., in Broyden) and fallback
-      if (any(this%qia /= this%qia)) then
+      if (guard_active) then
+         call validate_packed_q(this, this%qia, iteration_value, 'mixed')
+      else if (any(this%qia /= this%qia)) then
          call g_logger%error('NaN detected in mixed qia — reverting to linear mix', __FILE__, __LINE__)
          this%qia(:, :) = (1.0d0 - this%beta)*qia_old(:, :) + this%beta*qia_new(:, :)
       end if
@@ -695,6 +731,41 @@ contains
       denom = max(1.0_rp, real(nb_slice)/2.0_rp)
       this%delta = sqrt(sum((this%qia_old(:, 1:nb_slice) - this%qia_new(:, 1:nb_slice))**2))/denom/this%lattice%nrec
    end subroutine mixpq
+
+   subroutine validate_packed_q(this, values, iteration, stage)
+      class(mix), intent(in) :: this
+      real(rp), intent(in) :: values(:, :)
+      integer, intent(in) :: iteration
+      character(len=*), intent(in) :: stage
+      integer :: it, lcount, l, spin, q0_col, q2_col, pl_col, qcols
+      character(len=48) :: field
+
+      do it = 1, this%lattice%nrec
+         lcount = min(this%symbolic_atom(this%lattice%nbulk + it)%potential%lmax, lmax_basis) + 1
+         qcols = size(values, 2)
+         do spin = 1, 2
+            do l = 0, lcount - 1
+               q0_col = l + 1 + (spin - 1)*lcount
+               q2_col = l + 1 + (spin + 1)*lcount
+               pl_col = l + 1 + (spin + 3)*lcount
+               if (q0_col <= qcols) then
+                  call guard_q0_capacity(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                     it, l, spin, iteration, values(it, q0_col))
+               end if
+               if (q2_col <= qcols) then
+                  field = trim(stage)//' q2'
+                  call guard_nonfinite_scalar(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                     it, l, spin, trim(field), iteration, values(it, q2_col))
+               end if
+               if (pl_col <= qcols) then
+                  field = trim(stage)//' PL'
+                  call guard_nonfinite_scalar(this%symbolic_atom(this%lattice%nbulk + it)%element%symbol, &
+                     it, l, spin, trim(field), iteration, values(it, pl_col))
+               end if
+            end do
+         end do
+      end do
+   end subroutine validate_packed_q
 
    subroutine save_ldm_to(this, whereto)
       class(mix), intent(inout) :: this
@@ -755,6 +826,33 @@ contains
       beta_loc = min(1.0_rp, max(0.0_rp, this%ldm_beta))
       this%ldm_mix(:, :, :, :) = (1.0_rp - beta_loc)*this%ldm_old(:, :, :, :) + beta_loc*this%ldm_new(:, :, :, :)
    end subroutine mix_ldm_linear
+   !> Linear mixing of the spinor d-shell P with ldm_beta: P_mix = beta*P_out + (1-beta)*P_prev. The history
+   !> starts from the mixed collinear ldm with zero spin coherences. P_out (ldm_spinor) is left unchanged.
+   subroutine mix_ldm_spinor_linear(this)
+      class(mix), intent(inout) :: this
+      real(rp) :: beta_loc
+      integer :: it, na, s, i, j
+
+      beta_loc = min(1.0_rp, max(0.0_rp, this%ldm_beta))
+      do it = 1, this%lattice%nrec
+         na = this%lattice%nbulk + it
+         if (.not. allocated(this%symbolic_atom(na)%potential%ldm_spinor)) cycle
+         if (.not. allocated(this%symbolic_atom(na)%potential%ldm_spinor_mix)) then
+            allocate (this%symbolic_atom(na)%potential%ldm_spinor_mix(10, 10))
+            this%symbolic_atom(na)%potential%ldm_spinor_mix = (0.0_rp, 0.0_rp)
+            do s = 1, 2
+               do i = 1, 5
+                  do j = 1, 5
+                     this%symbolic_atom(na)%potential%ldm_spinor_mix((s - 1)*5 + i, (s - 1)*5 + j) = &
+                        this%ldm_old(it, 3, s, (i - 1)*5 + j)
+                  end do
+               end do
+            end do
+         end if
+         this%symbolic_atom(na)%potential%ldm_spinor_mix = (1.0_rp - beta_loc)*this%symbolic_atom(na)%potential%ldm_spinor_mix &
+                                                           + beta_loc*this%symbolic_atom(na)%potential%ldm_spinor
+      end do
+   end subroutine mix_ldm_spinor_linear
    subroutine broydn(pmix, amix, reset, mu, f, fsq, imu, itr, fsqo, u, v, muo, fo, nmix)
       ! mix potentials with broydens jacobian updating method as
       ! implemented by g.p.srivastava, j. phys a 17, l317(1984),

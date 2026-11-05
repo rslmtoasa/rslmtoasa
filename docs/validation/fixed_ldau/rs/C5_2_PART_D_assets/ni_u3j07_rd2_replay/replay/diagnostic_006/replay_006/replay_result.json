@@ -1,0 +1,33 @@
+{
+  "adapter_exit_code": 0,
+  "adapter_exit_status_path": "/private/tmp/c52-rd2-private/diagnostic_006/replay_006/adapter.exit_code.txt",
+  "adapter_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "adapter_stdout_sha256": "cbabf55026d65ff7255e4ef7592befc3f5fd90db3a76f787d7ffc3620d9d3d48",
+  "authorization_sha256": "300e2df436e98e199cd4d8eec906ec2097d87d33f4191cb5bfd608139bfdf32f",
+  "effective_environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "first_formal_status": "GATE_MEASURED_FAIL",
+  "first_output_sha256": "49206e51fd5b8cd1bbab83d79dca7d47b74ef760725e8eff6fee3d616954c32e",
+  "first_payload_sha256": "78e8825610e1652f2407979322aa968fb3d3b888431226b78e31133ac082a829",
+  "first_report_sha256": "29539bcb06648f139719514e8b49b0c1d97efdd009ed8544f7e6e08ff1032153",
+  "formal_gates_identical": true,
+  "measurements_identical": true,
+  "one_replay_only": true,
+  "output_byte_identical": true,
+  "preflight_sha256": "137d1476f092c3e450c2aca67327efba058da0750f17a794fc798690a3e118fe",
+  "replay_formal_status": "GATE_MEASURED_FAIL",
+  "replay_output_sha256": "49206e51fd5b8cd1bbab83d79dca7d47b74ef760725e8eff6fee3d616954c32e",
+  "replay_payload_copy_sha256": "78e8825610e1652f2407979322aa968fb3d3b888431226b78e31133ac082a829",
+  "replay_report_sha256": "445189149f7a7fef2a96b7398d46f5b50f268623b4ea54e4dcda71567d04150f",
+  "schema": "c5-rd2-identical-debug-replay-result-v1",
+  "solver_launched": false,
+  "status": "EXACT_OUTPUT_AND_VERDICT_REPRODUCED"
+}

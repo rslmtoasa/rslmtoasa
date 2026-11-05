@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "source_candidate": "/private/tmp/c511-t2/run/input.nml",
+  "source_candidate_sha256": "e89477c0ea100bad84cdfe017d797da616459c3b54b9ba58f91062e59fe8b625",
+  "corrected_deck": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/rs/C5_12_assets/corrected_input.nml",
+  "corrected_sha256": "56fc09aa6de98cb9ec4eba247d25c647085db23c1cd3333e43a06238f874e427",
+  "only_changes": [
+    {
+      "line": 28,
+      "before": "fermi = -0.085152",
+      "after": "fermi = -0.082949627451487762"
+    },
+    {
+      "line": 29,
+      "before": "energy_min = -1.0",
+      "after": "energy_min = -0.997797627451487762"
+    },
+    {
+      "line": 30,
+      "before": "energy_max = 0.5",
+      "after": "energy_max = 0.502202372548512238"
+    }
+  ],
+  "energy_window_width_before_ry": 1.5,
+  "energy_window_width_after_ry": 1.5
+}

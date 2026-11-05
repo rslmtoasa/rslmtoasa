@@ -1,0 +1,107 @@
+{
+  "candidate": {
+    "build": "GNU Fortran 16.2.0 Release; OpenMP ON, MPI OFF, SPGLIB ON, MARCH_NATIVE ON",
+    "executable": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x",
+    "manifest": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/manifest.json",
+    "manifest_sha256": "b2f3ab5d26c439520bdfcbca16163877b2e36d7bb9c3af0448e6941327ae5158",
+    "mode": "0555",
+    "sha256": "a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3",
+    "source_base": "8c7251da74e7142df30cc4147d2a4f259badabf2"
+  },
+  "comparison_baseline": {
+    "baseline_audit": "C5.2 Part A A1 independently passed; same immutable initial snapshot, one-thread env; scientific outputs byte-identical.",
+    "baseline_binary": "/private/tmp/c5-clean8b-release-build/bin/rslmto.x",
+    "baseline_binary_sha256": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc",
+    "baseline_cmake_cache_sha256": "d1fae4609de8f500177931a5c4c9a56122396d5a889bb21c6fe106fa98e6295f",
+    "run1": "/private/tmp/c5-2-partA/a1_bccFe/run1",
+    "run2": "/private/tmp/c5-2-partA/a1_bccFe/run2"
+  },
+  "comparison_rule": "Compare the candidate scientific output bytes with A1 on the identical resolved deck and one-thread caps. Exclude only established runtime metadata: testrun.log and proven cpu_s/TIMER REPORT fields in str.out; preserve raw and parsed evidence. Scientific mismatch triggers C5.2 \u00a72.5(a) STOP; if pass, continue to KS identity.",
+  "environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "fixture": {
+    "Fe_seed_sha256": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+    "case": "Example_bulk_bccFe_nsp2_block",
+    "effective_expected": {
+      "J_eV": 0,
+      "U_eV": 0,
+      "backend": "STRUX strux_lib",
+      "beta": 0.01,
+      "mixtype": "broyden",
+      "nsp": 2,
+      "nstep": 1,
+      "radial_mode": "spectral",
+      "recursion": "block",
+      "use_kspace": false
+    },
+    "resolved_deck": {
+      "atoms": {
+        "database": "./",
+        "label": [
+          "Fe"
+        ]
+      },
+      "calculation": {
+        "pre_processing": "bravais",
+        "verbose": true
+      },
+      "control": {
+        "calctype": "B",
+        "cheb_backend": "legacy",
+        "lld": 20,
+        "nsp": 2,
+        "recur": "block"
+      },
+      "energy": {
+        "channels_ldos": 2500,
+        "energy_max": 0.8,
+        "energy_min": -2.0,
+        "fermi": -0.042265
+      },
+      "hamiltonian": {
+        "hoh": false
+      },
+      "lattice": {
+        "alat": 2.8612,
+        "crystal_sym": "bcc",
+        "ct": [
+          3.0
+        ],
+        "ntype": 1,
+        "r2": 9.0,
+        "rc": 80,
+        "strux_backend": "strux_lib",
+        "wav": 1.4088
+      },
+      "mix": {
+        "beta": 0.01,
+        "mixtype": "broyden"
+      },
+      "self": {
+        "nstep": 1
+      }
+    },
+    "resolved_input_sha256": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3"
+  },
+  "immutable_snapshot": "/private/tmp/c5-3-b2-prep/identity_rs/b1_candidate",
+  "initial_files_sha256": {
+    "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+    "input.nml": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3"
+  },
+  "launch": {
+    "command": "cd /private/tmp/c5-3-b-runs/rs_candidate && env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 /private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x > testrun.log 2>&1",
+    "expected_actual_process": "direct frozen executable child; capture $!, wait, record exit, verify process termination with targeted kill -0/ps"
+  },
+  "purpose": "Single-thread no-U identity check of frozen B1 candidate against the already audited A1 pair; this is run 1 of Part B cap 6.",
+  "run_directory": "/private/tmp/c5-3-b-runs/rs_candidate",
+  "run_id": "C5.3-B1-RS-candidate-vs-A1",
+  "status": "PREFLIGHT_PENDING_AUDITOR"
+}

@@ -1,0 +1,52 @@
+===========================================================================
+|                       Total Energy                                      |
+===========================================================================
+Physical DFT total energy of system:     -6074.3256072010
+Total energy of system:     -6074.3256072010
+Constraint penalty/controller energy (diagnostic only):         0.0000000000
+Constraint-field coupling <V_con> (band diagnostic only):         0.0000000000
+Constraint energy:              0.0000000000
+===========================================================================
+|                       Band Energy                                       |
+===========================================================================
+Band energy of system:    -0.0114426858
+===========================================================================
+|                     Spin moment                                         |
+===========================================================================
+Spin-moment frame: active calculation frame
+Total spin moment:     0.0000000000    0.0000000000    0.0000009358
+Spin moment of atom   1:  0.000000
+Spin moment projections of atom   1:  0.000000  0.000000 -0.000000
+Magnetic force on atom   1:        0.000000        0.000000        0.000000
+Spin moment of atom   2:  0.000001
+Spin moment projections of atom   2:  0.000000  0.000000  0.000001
+Magnetic force on atom   2:        0.000000        0.000000        0.000000
+===========================================================================
+|                     Orbital moment                                      |
+===========================================================================
+Total orbital moment:     0.0000052849    0.0000044652    0.0000001051
+Orbital moment of atom   1:  0.000000
+Orbital moment projections of atom   1: -0.000000  0.000000 -0.000000
+Orbital moment of atom   2:  0.000007
+Orbital moment projections of atom   2:  0.000005  0.000004  0.000000
+===========================================================================
+|                       Charge Transfer                                   |
+===========================================================================
+Occupation at atom   1:  0.196371
+Up orbital occupation at atom   1:  0.041999   0.039239   0.016947
+Down orbital occupation at atom   1:  0.041999   0.039239   0.016947
+Charge transfer at atom   1:  0.196371
+Occupation at atom   2: 10.068901
+Up orbital occupation at atom   2:  0.191025   0.577988   4.265438
+Down orbital occupation at atom   2:  0.191025   0.577988   4.265438
+Charge transfer at atom   2:  0.068901
+===========================================================================
+|                       Fermi Energy                                      |
+===========================================================================
+Fermi energy:  -0.061141
+===========================================================================
+|                             Log info                                     |
+===========================================================================
+Total RMS Diff:   0.386918
+RMS Diff of atom   1:  0.048183
+RMS Diff of atom   2:  0.772334

@@ -1,0 +1,141 @@
+{
+  "accepted_restart": {
+    "endpoint_role": "accepted fcc Ni U0 RS bulk host endpoint24, window5-24; used as state for both control host and recursion site",
+    "host_alias": "Ni-bulk_out.nml",
+    "host_alias_sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4",
+    "host_and_recursive_base": "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_u0_bulk_rc80_host/accepted/iter0024_state.nml.gz",
+    "mapping": "lattice ntype=2/nclu=1; inclusion is cluster type2; recursion ordinal row1 maps through irec to cluster type2; impurity U/J row1, l=3.",
+    "raw_sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a",
+    "recursive_alias": "Ni-imp_out.nml",
+    "recursive_alias_sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+  },
+  "collector": {
+    "disk_guard_path": "/private/tmp/c52-rd-ni-u0-imp-control/collector/disk_guard.sh",
+    "disk_guard_sha256": "3049362e51a3165866c73bb997667a0c74662fc673328085b2636c25dae74cdd",
+    "launcher_path": "/private/tmp/c52-rd-ni-u0-imp-control/collector/launch_impurity.sh",
+    "launcher_sha256": "402d2b292080c9a66965edac9599404fcf91b79d8f6c85efa15aefafcb58a407",
+    "readiness": "collector initializes manifest/start metadata and fsyncs ready marker before solver launch; copied from audited Ni launcher implementation",
+    "watcher_path": "/private/tmp/c52-rd-ni-u0-imp-control/collector/watch_trace_and_state.py",
+    "watcher_sha256": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be"
+  },
+  "current_head": "683eff937241a463d2dacb395485d6b7c0b43264",
+  "design": {
+    "acceptance": "same registered RS C1 thresholds as matched Ni RS U3 impurity run; no threshold change",
+    "calctype": "I",
+    "conv_thr_input": 1e-30,
+    "energy_window_Ry": [
+      -1.0,
+      0.5
+    ],
+    "explicit_U_J_eV": [
+      0.0,
+      0.0
+    ],
+    "fixed_EF_Ry": -0.061141,
+    "geometry": "fcc Ni impurity, one-recursion-site newclubulk",
+    "lld": 21,
+    "lmax": 2,
+    "mix": "Broyden beta .1",
+    "mode": "local explicit Liechtenstein",
+    "nsp": 1,
+    "nstep": 200,
+    "rc": 80,
+    "recursion": "block",
+    "use_kspace": false
+  },
+  "files_sha256": {
+    "analysis/prove_rekey.py": "0d278e70879662908e0fa3891f4dec1fa3d055b034802bd4e00f7c349e328945",
+    "collector/disk_guard.sh": "3049362e51a3165866c73bb997667a0c74662fc673328085b2636c25dae74cdd",
+    "collector/launch_impurity.sh": "402d2b292080c9a66965edac9599404fcf91b79d8f6c85efa15aefafcb58a407",
+    "collector/watch_trace_and_state.py": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be",
+    "immutable/Ni-bulk.nml": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+    "immutable/Ni-bulk_out.nml": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4",
+    "immutable/Ni-imp.nml": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+    "immutable/Ni-imp_out.nml": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a",
+    "immutable/host_rekey_proof.json": "eb145ef7b20bec42690111999f85da84b0a5e53b2ecf1cf05f63d736e5e9a688",
+    "immutable/input.nml": "008bce3b5160ef76b40201b2d03797db346da9eef9a07046b5150907b90538b7",
+    "immutable/schema_validation.json": "eb4f076b5fe9b0e8c9a6e6a6c2cecb86679fe650110bf8a41f7ab1b0251ffc45",
+    "run/Ni-bulk.nml": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+    "run/Ni-bulk_out.nml": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4",
+    "run/Ni-imp.nml": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+    "run/Ni-imp_out.nml": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a",
+    "run/input.nml": "008bce3b5160ef76b40201b2d03797db346da9eef9a07046b5150907b90538b7"
+  },
+  "frozen_executable": {
+    "build_provenance": {
+      "RD1_PROVENANCE_path": "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/RD1_unit_gate/RD1_PROVENANCE.json",
+      "RD1_PROVENANCE_sha256": "5cb639a0c30aa0ec67eb1513b98f98717c2f37a126a55c094850f6fae412f9c1",
+      "note": "Frozen 4bb executable path/hash is independently recorded; no nonexistent per-binary manifest path is asserted.",
+      "source_manifest_path": "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/RD1_unit_gate/RD1_SOURCE_MANIFEST.json",
+      "source_manifest_sha256": "b2e6726fe407689b42b033db6536b3053e2f742d2523c32ffe21ba18fd07af57"
+    },
+    "manifest_path": "/private/tmp/c5-rd1-frozen/4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f/manifest.json",
+    "path": "/private/tmp/c5-rd1-frozen/4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f/rslmto.x",
+    "sha256": "4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f"
+  },
+  "input": {
+    "immutable_path": "/private/tmp/c52-rd-ni-u0-imp-control/immutable/input.nml",
+    "immutable_sha256": "008bce3b5160ef76b40201b2d03797db346da9eef9a07046b5150907b90538b7",
+    "working_path": "/private/tmp/c52-rd-ni-u0-imp-control/run/input.nml",
+    "working_sha256": "008bce3b5160ef76b40201b2d03797db346da9eef9a07046b5150907b90538b7"
+  },
+  "launch": {
+    "authorization_required": true,
+    "capture": "six P_OUT ql keys, six POST_SCF_RADIAL rows ending etot_total and stable state each iteration; same-loop Diff linkage required",
+    "command_template": "C52_RD_NI_I_U0_CONTROL_AUTHORIZED=1 /private/tmp/c52-rd-ni-u0-imp-control/collector/launch_impurity.sh",
+    "disk_floor_bytes": 1073741824,
+    "env": {
+      "BLIS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "OMP_DYNAMIC": "FALSE",
+      "OMP_NUM_THREADS": "4",
+      "OPENBLAS_NUM_THREADS": "1",
+      "RSLMTO_OMP_THREADS_SERIAL": "4",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    },
+    "no_launch_authorized": true
+  },
+  "loader_alias_compatibility": {
+    "application": "source loader selects Ni-bulk_out.nml and Ni-imp_out.nml when fresh_start=false",
+    "path": "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_seed_recovery/provenance/loader_alias_compatibility.json",
+    "sha256": "d2478826d7936b19ea3a423bcd407ddacba1c77fa3ce4a87ee04a29ac0e6e3ba"
+  },
+  "purpose": "Matched Ni U=0 local impurity control for RD3(a) and the RD4/W1 base. This is a control RECORD, not a new accepted host.",
+  "repository": "/Users/andersb/Jobb/rslmto_fable_v4b",
+  "run_id": "rd_ni_i_u0_local_from_rs_bulk_u0_rc80",
+  "schema": "c5_3_rd_ni_u0_impurity_control_preflight_v1",
+  "source_mapping": {
+    "C1_input_group_lattice": {
+      "nclu": 1,
+      "ntype_input": 2,
+      "type_labels": [
+        "Ni-bulk",
+        "Ni-imp"
+      ]
+    },
+    "U_J_input_index_semantics": "hamiltonian_build.f90 first dimension is recursive index i=1..nrec, second is l; use (1,3), then source maps recursion index\u2192irec(cluster_site)\u2192iz(cluster_site)=type2.",
+    "expected_mapping_runtime_check": "Startup and captured runtime must confirm recursion ordinal1 maps through irec to inclusion cluster site2/type2; no campaign run has occurred.",
+    "source_derived_structure": "fcc Ni bravais nbulk_bulk=1; newclu sets nrec=nclu=1 and inclusion type to 2; target is sole recursion index1.",
+    "source_files_sha256": {
+      "source/bands.f90": "0f130331ded7fea3d12edd2a716c04f1473855a9b89ccfbf70fdafa73a38724e",
+      "source/control.f90": "99a2d8ade20302d0aa8b05a8e4bf4b84b484713d9002ce3b7bbcb4b919243184",
+      "source/hamiltonian_build.f90": "75e16120e99b85004436a0a336e467504e8f22f295e29dd5c75943f74783c04f",
+      "source/lattice_cluster.f90": "203fb901b685f428a0d811766c0af6dcc4abc024aa5cde8689b8f7e9765a6bcb",
+      "source/lattice_strux.f90": "50a3c1270ad6b54025e503b99d89f5906a62f1e72b02b830ea83a971b390345d",
+      "source/symbolic_atom.f90": "852d1d3c56f8bd682aa3edeee8f4acacab66c52b7b9535004cf5d8cbfffe9eb6"
+    },
+    "source_lines": {
+      "RD1_mapping": "source/hamiltonian_build.f90:126-149,183-202",
+      "U_J_application": "source/hamiltonian_build.f90:633-665",
+      "newclu_mapping": "source/lattice_cluster.f90:901-905,935-947,1118-1124",
+      "restart_selection": "source/control.f90:245-248,598; source/lattice_strux.f90:196; source/symbolic_atom.f90:123-157"
+    }
+  },
+  "source_provenance": {
+    "mapping_source": "current source checked by RD1 reviewer; same matched geometry mapping as U3 impurity deck",
+    "rekey_proof_path": "/private/tmp/c52-rd-ni-u0-imp-control/immutable/host_rekey_proof.json",
+    "schema_validation": "/private/tmp/c52-rd-ni-u0-imp-control/immutable/schema_validation.json"
+  },
+  "status": "PREPARED_ONLY_NOT_AUDITED_NOT_AUTHORIZED"
+}

@@ -1,0 +1,161 @@
+{
+  "record_type": "post_stop_live_run_snapshot_not_accepted_checkpoint",
+  "run_id": "c52_u0_clean8b_section24_triage",
+  "captured_local": "2026-10-21T08:40:52+02:00",
+  "stop_event": {
+    "signal": "SIGTERM",
+    "solver_pid": 8704,
+    "wrapper_pid": 8648,
+    "watcher_pid": 8672,
+    "disk_guard_pid": 8705,
+    "wrapper_exit_code": 143,
+    "session_output": "launch_triage.sh reports child PID 8704 Terminated: 15; foreground session ended"
+  },
+  "files": [
+    {
+      "name": "Fe_1_spinene.out",
+      "bytes": 163150,
+      "sha256": "709618546404b82ab06eeee811d6c2d007d22ea51363bc1d1868cb1214c2bb21"
+    },
+    {
+      "name": "Fe_dos.out",
+      "bytes": 163198,
+      "sha256": "1b249da76678d4459bf517881a0a706d9520233edd057e8cd1b2f90d89aa976f"
+    },
+    {
+      "name": "Fe_orbene.out",
+      "bytes": 163150,
+      "sha256": "c9a1756c41955fa11da1d0a2c48f37868cc1bb29340d0eed4f67de670c06c2fe"
+    },
+    {
+      "name": "Fe_orbital_dos.out",
+      "bytes": 765550,
+      "sha256": "5b066fe9d832cf4efa2a70bb49555b622a0f95e1fca26a2900053f9ccc6232d5"
+    },
+    {
+      "name": "Fe_out.nml",
+      "bytes": 10594,
+      "sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62"
+    },
+    {
+      "name": "Fe_scf.nml",
+      "bytes": 10537,
+      "sha256": "fc327d592867da8226211960e9123b6559c5b0ed5b31021739ebff885cd15895"
+    },
+    {
+      "name": "clust",
+      "bytes": 302207,
+      "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+    },
+    {
+      "name": "disk_guard.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "disk_guard.pid",
+      "bytes": 5,
+      "sha256": "5ed4cb89c152deb21e8fabdc8c60a4a46c6c4a181d0eb46cb303f1fab990c982"
+    },
+    {
+      "name": "exit_code.txt",
+      "bytes": 4,
+      "sha256": "9d9b18720961e9b4689fd763b85e7b6f36160ccd3a8a1c9ddc5103bb0f66c396"
+    },
+    {
+      "name": "fixed_u_trace.csv",
+      "bytes": 972152,
+      "sha256": "b38987e324bc5a4d1098412894498e7cfd19418725ff0b99b8df2fb43a4cec7f"
+    },
+    {
+      "name": "fort.800",
+      "bytes": 284845,
+      "sha256": "58cc4601e8bfa820acce8913603e162d3f0278a4d9d43ac09d50891abcbb3229"
+    },
+    {
+      "name": "fort.805",
+      "bytes": 613894,
+      "sha256": "22007191599a4cc2e7b738353c0c40dc300e5611e40ff5e3713ecc24277e10db"
+    },
+    {
+      "name": "input.nml",
+      "bytes": 757,
+      "sha256": "3996ff07f63991e4e7a0c69b4800da7784807c91b508f5141aaacee8ae2da493"
+    },
+    {
+      "name": "lifecycle.txt",
+      "bytes": 209,
+      "sha256": "0746f2cb61160c593e3ed48a734709c09f34d8214daa181e6f81bd94059f101a"
+    },
+    {
+      "name": "mad.mat",
+      "bytes": 16,
+      "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+    },
+    {
+      "name": "magneticdos.out",
+      "bytes": 283683,
+      "sha256": "09ac6008f167faeaaa825f1f38987b4cbddb547328d1326a8237cddfcba098c9"
+    },
+    {
+      "name": "map",
+      "bytes": 393312,
+      "sha256": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842"
+    },
+    {
+      "name": "sbar",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "solver.pid",
+      "bytes": 5,
+      "sha256": "647ce53a3b76e103ca1f74f7d390912d162360c44e295c9dca8de41b958c540c"
+    },
+    {
+      "name": "solver_pid.actual",
+      "bytes": 5,
+      "sha256": "647ce53a3b76e103ca1f74f7d390912d162360c44e295c9dca8de41b958c540c"
+    },
+    {
+      "name": "str.out",
+      "bytes": 6934,
+      "sha256": "fda4513e4a8033f3980d20d83e09d79b12fd9e0b732ea82d8c7d86d55148ff88"
+    },
+    {
+      "name": "testrun.log",
+      "bytes": 320744,
+      "sha256": "260bbd7e84e782054bc38522e16418eb10f7d2b495be41b98b403ffbd0a48f49"
+    },
+    {
+      "name": "totaldos.out",
+      "bytes": 82830,
+      "sha256": "936f50c0e332fd38d23e67f6a7adf314763dd0d63d571d0ea7e1af5dbca5cc86"
+    },
+    {
+      "name": "ves.out",
+      "bytes": 738,
+      "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+    },
+    {
+      "name": "view.sbar",
+      "bytes": 12460,
+      "sha256": "676f9811de3fb10ea2b7f2c37005e4d5ed481557424122f8adc26adc7dfe84af"
+    },
+    {
+      "name": "watcher.log",
+      "bytes": 149763,
+      "sha256": "ca55ca05c6c285a4add3bb29a9801f70c4e7ec2b7da5359ff451123e89e10166"
+    },
+    {
+      "name": "watcher.pid",
+      "bytes": 5,
+      "sha256": "11951fdf7a9c5f050cabd59e454750af75229e518e5dc353789afc2946ecddbf"
+    },
+    {
+      "name": "watcher.ready",
+      "bytes": 6,
+      "sha256": "ed1a545bb85e55816bbf9566b028b2a0bc456b88f49f6f266c0401048824194b"
+    }
+  ]
+}

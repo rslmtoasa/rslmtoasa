@@ -1,0 +1,37 @@
+{
+  "status": "PASS_SOURCE_SCHEMA",
+  "python": "/opt/homebrew/opt/python@3.11/bin/python3.11",
+  "f90nml": "1.4.4",
+  "source_commit": "0469135d935dd31fb6ce055d819cdb54811c52fa",
+  "schema_file": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/provenance/source_namelist_schema.json",
+  "schema_sha256": "ee1153c3011f96131a493ef5c1aa9ca3ad82b2b855f19809f1ba1809307b42ef",
+  "group_count_source": 20,
+  "validated_decks": {
+    "python": "/opt/homebrew/opt/python@3.11/bin/python3.11",
+    "f90nml": "1.4.4",
+    "groups": [
+      "atoms",
+      "calculation",
+      "control",
+      "energy",
+      "hamiltonian",
+      "lattice",
+      "mix",
+      "self"
+    ],
+    "member_counts": {
+      "calculation": 2,
+      "lattice": 11,
+      "atoms": 2,
+      "self": 3,
+      "energy": 5,
+      "control": 5,
+      "mix": 2,
+      "hamiltonian": 3
+    },
+    "unknown_groups": [],
+    "unknown_members": {},
+    "status": "PASS"
+  },
+  "no_unknown_group_or_member": true
+}

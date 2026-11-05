@@ -1,6 +1,65 @@
 # Fixed-U energy accounting evidence
 
-## Gate result
+## Current A4.4 status (KS scalar-collinear scope)
+
+The KS M2.2/M2.3 numerical comparison passes at the explicitly limited level
+“valid to the ASA base-functional accuracy measured in A5.1.” The selected
+candidate is **b = F_local + E_Hub(P_OUT)**: the local-mode base free energy
+plus production `evaluate_hubbard_energy` evaluated on the captured direct
+`P_OUT` matrix. At U=2 eV, J=0 and at J=0.5/0.9 eV, this derivative agrees
+with the fixed-P production Hubbard derivative within the preregistered
+charge-only ASA allowance. Candidate c lies outside that allowance; candidate
+a is report-only. No a-versus-b preference is claimed. The measured ranges
+and endpoint provenance are in [the U result](evidence/a5_m22_u2_derivative_result.md),
+[the J result](evidence/a5_m23_j_derivative_result.md), and the
+[A4.3 like-for-like table](evidence/a4_3_like_for_like_observables.md).
+
+This is a scoped numerical identity test, not a derivation of an exact general
+ASA energy functional. In particular, it does not establish the radial
+`SUMEV` double-count coefficient/sign for every backend or representation.
+The implemented route is limited to ordinary native reciprocal KS
+(`use_kspace=.true.`, `calctype='B'`) and qualifying clean-bulk RS
+(`use_kspace=.false.`, `calctype='B'`), with `nbulk=0`, `nrec=ntype`, explicit
+fixed general Liechtenstein U/J, scalar-collinear `nsp=1`, `lmax=2`, and
+disabled constraints. SOC/noncollinear, HOH, self-consistent U, intersite V,
+impurity U, impurity/surface hosts, and nonzero test fields are excluded. For
+clean-bulk RS, the C4 RC2 candidate gate passes at U=2 eV and J=0, 0.5, and
+0.9 eV under the amended occupation-response allowance; the independent
+arithmetic is in `rs/C4_RC2_RESULTS.md`. The reviewed B3 extension enables the
+same local correction for qualifying clean-bulk RS runs; explicit spectral
+selection remains spectral/non-adopted. The measured base ASA non-stationarity
+remains −0.14% in KS and −0.16% to −0.17% in RS; the RS gate does not claim
+stricter stationarity or a reduction in that residual.
+The scoped energy route and restart/serial-MPI checks pass. Individual serial route
+receipts, the distinct matched serial/MPI pair, and the RS spectral scope
+control are indexed in the [A4.4 control evidence](evidence/a4_4_control_evidence_index.json);
+the matched pair itself is [archived here](evidence/a4_4_matched_serial_mpi_repro.json).
+Constraints-enabled input reaches the spectral/non-adopted guard before its
+zero-target setup fatal; a successful constrained SCF route remains untested
+([paired guard receipts](evidence/a4_4_constraints_guard_paired_enabled.json),
+[positive control](evidence/a4_4_constraints_guard_paired_positive.json)).
+
+### B3 reviewed scope extension
+
+B3 removes the backend selector from the shared local-Hubbard eligibility
+predicate. The existing guards remain: fixed Liechtenstein U/J, scalar
+collinear `nsp=1`, `lmax=2`, `calctype='B'`, clean bulk (`nbulk=0`,
+`nrec=ntype`), and no constraints, SOC/noncollinearity, HOH,
+self-consistent U/V, impurity U, or nonzero test-operator field. Thus the
+automatic local route is available to both RS and native KS when those
+conditions hold. In either backend, local `E_Hub(P_OUT)` is included in the
+physical total energy. Explicit spectral selection remains spectral and does
+not adopt the local correction; impurity/surface and constrained cases remain
+outside this eligibility scope. This describes the reviewed implementation scope; accepted-endpoint route
+reproduction and unchanged-mode/no-U controls are recorded in
+[C4 RC3 results](rs/C4_RC3_RESULTS.md). This is not a new RS ASA
+derivative-gate verdict.
+
+## Gate result (historical pre-A5 status)
+
+The paragraph below records the earlier pre-A5 assessment and is superseded
+for the scoped KS path by the implementation and reproducibility results
+above. It remains relevant to the broader unvalidated functional and RS scope.
 
 The production energy-closure gate is **not established** for fixed Liechtenstein U/J in this implementation. No total-energy correction was added. The available source-connected captures validate the finite-H operator trace and the existing radial replay, but they do not derive the identity needed to place the fixed-U contribution in the current ASA radial total-energy functional.
 
@@ -82,3 +141,19 @@ Primary references checked for scope and conventions:
 - O. K. Andersen, O. Jepsen, and D. Glötzel, “Canonical description of the band structures of metals,” in *Highlights of Condensed-Matter Theory* (Varenna, 1985), [author-hosted notes](https://www2.fkf.mpg.de/andersen/users/jepsen/Varenna_1985.pdf). The notes separate solving the one-electron problem, constructing charge density, and evaluating total energy after self-consistency; they motivate checking the actual energy path rather than assuming an eigenvalue-sum identity.
 - R. W. Tank et al., “Improved LMTO-ASA methods part II: Total energy,” (1997), [author-hosted abstract](https://www2.fkf.mpg.de/andersen/docs/pub/abstract/and1997-25.html). This work addresses ASA total-energy accuracy by retaining nonspherical charge in electrostatic evaluation; it supports treating the spherical radial approximation as a relevant limitation, not a proof of a particular missing Hubbard term.
 - The [Questaal ASA documentation](https://www.questaal.org/docs/code/asaoverview/) describes the ASA band/atomic cycle as exchanging Q0/Q1/Q2 moments and potential parameters. This is supporting documentation, while the findings about this implementation above come from direct source tracing and the recorded production captures.
+
+## C5 impurity energy status
+
+C5 Stage RD has not adopted impurity energy routing. RD2 is a measured gate
+failure; its scalar-shift failure remains unresolved, and the separately
+proposed state-selection change is not adopted. RD4 is NOT MEASURED: the
+authorized W1 Release run exited 139 before a complete SCF iteration, so no
+``dE/dλ``, ``Tr(WP)``, residual, or energy-gate verdict exists. The bounded
+same-deck Debug run reached 36 loops without a bounds error; the clean8b
+binary rejected the deck before SCF as input-incompatible. Neither result
+establishes a fix or a pre-existing defect. Impurity Hubbard-energy routing
+remains off; no correction formula or tolerance has been added or changed.
+The no-U RS/KS identity checks passed; explicit-spectral identity remains
+unrun, and RD5 automatic adoption and merge remain blocked by RD2. See
+``rs/C5_2_PART_D_RESULTS.md`` and
+``rs/C5_2_PART_D_assets/rd4_w1_measurement_unavailable/README.md``.

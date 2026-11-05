@@ -1,0 +1,105 @@
+{
+  "schema": "c5-part-iii-provenance-v1",
+  "part": "III",
+  "status": "STOPPED_BEFORE_RD",
+  "stop_criterion": "C5 §2.5(a): matched no-U RS standard fixture scientific outputs fail byte identity",
+  "rd_status": {
+    "RD1": "NOT_STARTED_DUE_STOP_2_5_A",
+    "RD2": "NOT_STARTED_DUE_STOP_2_5_A",
+    "RD3": "NOT_STARTED_DUE_STOP_2_5_A",
+    "RD4": "NOT_STARTED_DUE_STOP_2_5_A",
+    "RD5": "NOT_STARTED_DUE_STOP_2_5_A"
+  },
+  "rd3_comparisons": {
+    "a": "NOT_RUN",
+    "a_prime": "NOT_RUN",
+    "b": "NOT_RUN",
+    "b_prime": "NOT_RUN",
+    "c": "NOT_RUN",
+    "d": "NOT_RUN"
+  },
+  "rd4_energy": {
+    "decision": "NOT_MEASURED",
+    "energy_adoption": "NONE"
+  },
+  "production_and_integration": {
+    "production_status": "UNCHANGED",
+    "source_fix": "Co cutoff-array sizing fix is on an unmerged work branch only",
+    "branch": "fix/ldau-rs-impurity",
+    "source_commit": "2686e4e29e4ae6e9661c0499ffe8b232c31eadf0",
+    "merge_sha": null
+  },
+  "r2_partial_diagnostic": {
+    "status": "UNACCEPTED_DIAGNOSTIC; no completed ladder or accepted R2 endpoint",
+    "run": "Fe rc=100, U=3.8 eV, J=1.1 eV, spectral RS Debug from accepted rc=80 C2 restart",
+    "pid": 5989,
+    "exit": 0,
+    "cap_steps": 102,
+    "last_wholly_finite_iteration": 101,
+    "first_captured_nan_iteration": 102,
+    "first_observed_nan_location": "line 5149 in radial RSEQ diagnostics (l2, spin 0, -50 Ry); root cause not proven",
+    "step_91_d_occupancy": {
+      "nup": 16.023219,
+      "ndn": 0.738851
+    },
+    "raw_paths_and_sha256": {
+      "capture_archive": {
+        "path": "docs/validation/fixed_ldau/rs/C5_R2_assets/raw/fe_rc100_debug_capture.tar.gz",
+        "sha256": "562192218c0ea716fb3a5ed96609470e2960a7bd6e3d151b2f2c808e6b7fb5f2"
+      },
+      "run_log": {
+        "path": "R2 raw capture run.log (in capture archive)",
+        "sha256": "b555321001272dfc41cfe965c217de33ce1da5e4953bea4732b2fe4fad7e633c"
+      },
+      "trace_csv": {
+        "path": "R2 raw capture trace.csv (in capture archive)",
+        "sha256": "65f4bb3f77eea9176590fd103228e17604d974a0f0ef706430238169e5c73a25"
+      },
+      "last_finite_checkpoint": {
+        "path": "Fe_r2_i101 checkpoint (in capture archive)",
+        "sha256": "67417783391ef6fd6b9e496c06e9bb1e16b16836d682a45ff12f1dc1117ba957"
+      },
+      "first_nan_snapshot": {
+        "path": "Fe_r2_i102 snapshot (in capture archive)",
+        "sha256": "f4024152835bde9292d9bf915a392e4da2c74e2f7ee73a0c4f16bdb0cd73b555"
+      },
+      "debug_build_record": {
+        "path": "docs/validation/fixed_ldau/rs/C5_R2_assets/build.txt",
+        "sha256": "9e063987fe0aab610163bab9b2ecc555a315bfad22ed68039d2c38f715acc9ae"
+      },
+      "source_manifest": {
+        "path": "docs/validation/fixed_ldau/rs/C5_R2_assets/source-manifest.sha256",
+        "sha256": "4a8de35c7629ccc708edda220c05e3094fad1b8c35ec9b3c062fc36716812045"
+      }
+    },
+    "command_record_path": "docs/validation/fixed_ldau/rs/C5_R2_assets/build.txt",
+    "first_d_shell_spin_occupancy_out_of_range": {
+      "iteration": 90,
+      "observed_following_step": 91,
+      "l": 2,
+      "spin": 1,
+      "nup": 16.023219,
+      "ndn": 0.738851
+    },
+    "raw_findings_audit": {
+      "path": "docs/validation/fixed_ldau/rs/C5_AUDIT.json",
+      "sha256": "0e7f4c078d2fca8374f29d8a63bed15889ed21442ce8142c3921e6a5409751a2",
+      "coverage": "C5 no-U identity audit and R2 diagnostic coverage/findings"
+    }
+  },
+  "supporting_records": {
+    "part_ii_results": {
+      "path": "docs/validation/fixed_ldau/rs/C5_PART_II_RESULTS.md",
+      "sha256": "95a9ce3a7437432e842f68accacfa5439eb7d163c59836d5ee74078be0793261"
+    },
+    "part_ii_provenance": {
+      "path": "docs/validation/fixed_ldau/rs/C5_PART_II_PROVENANCE.json",
+      "sha256": "dda694b0ed075d3a791a2fe007004538530fb7561bfb3021fa12ecabf0ddeb9f"
+    },
+    "amendment": {
+      "path": "docs/validation/fixed_ldau/rs/C5_AMENDMENT.md",
+      "sha256": "7e26a428c115cd49b67ab38942cfdd14b41f6fa590d5fd4d86c0b90e8abcbc2a"
+    }
+  },
+  "rd_commands": []
+}

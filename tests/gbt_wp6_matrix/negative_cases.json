@@ -30,7 +30,8 @@
         },
         "hamiltonian": {
           "hoh": false,
-          "theta_ss": 20.0
+          "theta_ss": 20.0,
+          "hubbard_experimental": true
         },
         "frozen_magnon": {
           "q_file": "q_pm.dat"

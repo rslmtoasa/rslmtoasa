@@ -1,0 +1,9 @@
+launcher_pid=8648
+preexec_free_bytes=14228860928
+input_mode=644
+Fe_out_mode=644
+input_writable=yes
+Fe_out_writable=yes
+started_local=2026-10-21T07:41:25+0200
+exit_code=143
+ended_local=2026-10-21T08:40:52+0200

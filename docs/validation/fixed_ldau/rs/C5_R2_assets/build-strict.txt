@@ -1,0 +1,7 @@
+Base source commit: 17732a72ac9b2ab668b4b8e2e7ae7e4223410911
+Build dir: /private/tmp/rslmto-c5-r2-debug-build
+CMake configuration: Debug (-g -O0 -fbacktrace -fcheck=bounds), OpenMP ON, MPI OFF, libXC OFF
+Build command: cmake --build /private/tmp/rslmto-c5-r2-debug-build -j 8
+Diagnostic executable SHA256: f412bc589a550587b645473bed986ef38eb517c8a566d3417da44fa0360d3e47
+Frozen production executable SHA256: e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0
+Source manifest SHA256: 84a1fb69d06e6b1bc01d50be8733899dc5f1ff1cde87329d69089c9526ac5218

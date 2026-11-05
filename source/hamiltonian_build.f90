@@ -8,6 +8,178 @@ submodule(hamiltonian_mod) hamiltonian_build
 
 contains
 
+   module function rd1_local_impurity_eligible(this) result(eligible)
+      class(hamiltonian), intent(in) :: this
+      logical :: eligible
+
+      eligible = .false.
+      if (.not. associated(this%control) .or. .not. associated(this%lattice)) return
+      eligible = (trim(this%control%calctype) == 'I' .or. trim(this%control%calctype) == 'S') .and. &
+         (this%hubbard_u_general_check .or. this%hubbard_u_impurity_check) .and. &
+         trim(this%hubbard_radial_moments) == 'local' .and. this%control%nsp == 1 .and. &
+         this%control%lmax == 2 .and. trim(this%hubbard_u_potential_form) == 'liechtenstein' .and. &
+         .not. this%control%has_soc() .and. .not. this%control%is_noncollinear() .and. &
+         .not. this%control%constraints_enable .and. .not. this%hoh .and. &
+         .not. this%hubbard_u_sc_check .and. .not. this%hubbard_v_check .and. &
+         .not. this%hubbard_test_operator_check .and. &
+         .not. this%fixed_u_test_allow_hoh_w1_u0
+   end function rd1_local_impurity_eligible
+
+   module subroutine begin_rd1_vin_capture(this, iteration, enable_rs_capture)
+      class(hamiltonian), intent(inout) :: this
+      integer, intent(in) :: iteration
+      logical, intent(in), optional :: enable_rs_capture
+      integer :: nrec
+      logical :: enable_capture
+
+      if (allocated(this%rd1_vin_d)) deallocate(this%rd1_vin_d)
+      if (allocated(this%rd1_vin_valid)) deallocate(this%rd1_vin_valid)
+      if (allocated(this%rd1_vin_cluster_site)) deallocate(this%rd1_vin_cluster_site)
+      if (allocated(this%rd1_vin_atom_type)) deallocate(this%rd1_vin_atom_type)
+      if (allocated(this%rd1_vin_iteration)) deallocate(this%rd1_vin_iteration)
+      this%rd1_capture_iteration = 0
+      this%rd1_capture_enabled = .false.
+      this%rd1_capture_required = .false.
+      enable_capture = .true.
+      if (present(enable_rs_capture)) enable_capture = enable_rs_capture
+      this%rd1_capture_required = enable_capture .and. this%rd1_local_impurity_eligible()
+      if (iteration <= 0 .or. .not. this%rd1_capture_required) return
+      this%rd1_capture_iteration = iteration
+      this%rd1_capture_enabled = .true.
+      if (.not. allocated(this%lattice%irec)) return
+      nrec = size(this%lattice%irec)
+      allocate(this%rd1_vin_d(5, 5, 2, nrec), this%rd1_vin_valid(nrec), &
+               this%rd1_vin_cluster_site(nrec), this%rd1_vin_atom_type(nrec), this%rd1_vin_iteration(nrec))
+      this%rd1_vin_d = cmplx(0.0_rp, 0.0_rp, rp)
+      this%rd1_vin_valid = .false.
+      this%rd1_vin_cluster_site = 0
+      this%rd1_vin_atom_type = 0
+      this%rd1_vin_iteration = 0
+   end subroutine begin_rd1_vin_capture
+
+   module subroutine get_rd1_recursion_site_type(this, recursion_index, cluster_site, atom_type, status)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: recursion_index
+      integer, intent(out) :: cluster_site, atom_type, status
+
+      cluster_site = 0
+      atom_type = 0
+      status = rd1_vin_invalid_map
+      if (.not. associated(this%lattice)) return
+      if (.not. allocated(this%lattice%irec) .or. .not. allocated(this%lattice%iz)) return
+      if (recursion_index < 1 .or. recursion_index > size(this%lattice%irec)) return
+      cluster_site = this%lattice%irec(recursion_index)
+      if (cluster_site < 1 .or. cluster_site > size(this%lattice%iz)) then
+         cluster_site = 0
+         return
+      end if
+      atom_type = this%lattice%iz(cluster_site)
+      if (atom_type < 1 .or. atom_type > this%lattice%ntype) then
+         cluster_site = 0
+         atom_type = 0
+         return
+      end if
+      status = rd1_vin_ok
+   end subroutine get_rd1_recursion_site_type
+
+   module subroutine capture_rd1_vin_insertion(this, nlim, u_type, exact_operand, status)
+      class(hamiltonian), intent(inout) :: this
+      integer, intent(in) :: nlim, u_type
+      complex(rp), intent(in) :: exact_operand(:, :)
+      integer, intent(out) :: status
+      integer :: ia, recursion_index, matches, mapped_type, mapped_cluster, map_status, spin, extract_status
+      complex(rp) :: operand_by_type(size(exact_operand, 1), size(exact_operand, 2), 1)
+      complex(rp) :: v_d(5, 5)
+
+      status = rd1_vin_ineligible
+      if (.not. this%rd1_local_impurity_eligible()) return
+      if (.not. this%rd1_capture_enabled .or. this%rd1_capture_iteration <= 0 .or. &
+          .not. allocated(this%rd1_vin_valid)) return
+      if (.not. associated(this%lattice) .or. .not. allocated(this%lattice%irec) .or. &
+          .not. allocated(this%lattice%iz)) then
+         status = rd1_vin_invalid_map
+         return
+      end if
+      if (nlim < 1 .or. nlim > size(this%lattice%iz) .or. u_type < 1 .or. &
+          u_type > size(this%hubbard_u_pot, 3)) then
+         status = rd1_vin_invalid_map
+         return
+      end if
+      if (size(exact_operand, 1) /= size(this%hubbard_u_pot, 1) .or. &
+          size(exact_operand, 2) /= size(this%hubbard_u_pot, 2)) then
+         status = rd1_vin_invalid_map
+         return
+      end if
+
+      matches = 0
+      recursion_index = 0
+      do ia = 1, size(this%lattice%irec)
+         if (this%lattice%irec(ia) == nlim) then
+            matches = matches + 1
+            recursion_index = ia
+         end if
+      end do
+      if (matches == 0) then
+         status = rd1_vin_not_recursion_site
+         return
+      else if (matches /= 1 .or. recursion_index > size(this%rd1_vin_valid)) then
+         status = rd1_vin_invalid_map
+         return
+      end if
+      call this%get_rd1_recursion_site_type(recursion_index, mapped_cluster, mapped_type, map_status)
+      if (map_status /= rd1_vin_ok .or. mapped_cluster /= nlim) then
+         status = rd1_vin_invalid_map
+         return
+      end if
+      if (mapped_type /= u_type) then
+         status = rd1_vin_wrong_type
+         return
+      end if
+      if (this%rd1_vin_valid(recursion_index)) then
+         status = rd1_vin_duplicate
+         return
+      end if
+
+      operand_by_type(:, :, 1) = exact_operand
+      do spin = 1, 2
+         call extract_hubbard_d_shell_potential(operand_by_type, 1, spin, spin_off, v_d, extract_status)
+         if (extract_status /= 0) then
+            status = rd1_vin_invalid_map
+            return
+         end if
+         this%rd1_vin_d(:, :, spin, recursion_index) = v_d
+      end do
+      this%rd1_vin_valid(recursion_index) = .true.
+      this%rd1_vin_cluster_site(recursion_index) = nlim
+      this%rd1_vin_atom_type(recursion_index) = mapped_type
+      this%rd1_vin_iteration(recursion_index) = this%rd1_capture_iteration
+      status = rd1_vin_ok
+   end subroutine capture_rd1_vin_insertion
+
+   module subroutine get_rd1_vin_for_recursion(this, recursion_index, iteration, vin_d, status)
+      class(hamiltonian), intent(in) :: this
+      integer, intent(in) :: recursion_index, iteration
+      complex(rp), intent(out) :: vin_d(5, 5, 2)
+      integer, intent(out) :: status
+      integer :: cluster_site, mapped_type, map_status
+
+      vin_d = cmplx(0.0_rp, 0.0_rp, rp)
+      status = rd1_vin_missing_or_stale
+      if (.not. this%rd1_local_impurity_eligible() .or. .not. this%rd1_capture_enabled .or. iteration <= 0) return
+      if (.not. allocated(this%rd1_vin_valid) .or. .not. allocated(this%rd1_vin_d) .or. &
+          .not. allocated(this%rd1_vin_cluster_site) .or. .not. allocated(this%rd1_vin_atom_type) .or. &
+          .not. allocated(this%rd1_vin_iteration)) return
+      if (recursion_index > size(this%rd1_vin_valid) .or. this%rd1_capture_iteration /= iteration) return
+      call this%get_rd1_recursion_site_type(recursion_index, cluster_site, mapped_type, map_status)
+      if (map_status /= rd1_vin_ok) return
+      if (.not. this%rd1_vin_valid(recursion_index) .or. &
+          this%rd1_vin_cluster_site(recursion_index) /= cluster_site .or. &
+          this%rd1_vin_atom_type(recursion_index) /= mapped_type .or. &
+          this%rd1_vin_iteration(recursion_index) /= iteration) return
+      vin_d = this%rd1_vin_d(:, :, :, recursion_index)
+      status = rd1_vin_ok
+   end subroutine get_rd1_vin_for_recursion
+
    !> @brief Construct a Hamiltonian object from an initialized charge object.
    !> @details Wires the Hamiltonian to charge, lattice, and control state, resets
    !>          all owned arrays/flags, then reads the &hamiltonian namelist. This
@@ -98,6 +270,11 @@ contains
       if (allocated(this%hubbard_v)) deallocate(this%hubbard_v)
       if (allocated(this%hubbard_v_pot)) deallocate(this%hubbard_v_pot)
 #endif
+      if (allocated(this%rd1_vin_d)) deallocate(this%rd1_vin_d)
+      if (allocated(this%rd1_vin_valid)) deallocate(this%rd1_vin_valid)
+      if (allocated(this%rd1_vin_cluster_site)) deallocate(this%rd1_vin_cluster_site)
+      if (allocated(this%rd1_vin_atom_type)) deallocate(this%rd1_vin_atom_type)
+      if (allocated(this%rd1_vin_iteration)) deallocate(this%rd1_vin_iteration)
    end subroutine destructor
 
    !> @brief Read the &hamiltonian namelist and install Hamiltonian options.
@@ -115,6 +292,7 @@ contains
       integer :: na
       real(rp) :: u_ev, j_ev
       integer :: ntype_nml, nrec_nml
+      integer :: hubbard_test_spin
       logical :: legacy_uj_present
       logical :: has_hubbard_general, has_legacy_uj, has_impurity_uj, has_hubbard_v, has_hubbard_u_sc
       character(len=1) :: orbch
@@ -139,11 +317,17 @@ contains
       js_alpha = this%js_alpha
       jl_alpha = this%jl_alpha
       call move_alloc(this%velocity_scale, velocity_scale)
+      hubbard_experimental = this%hubbard_experimental
+      hubbard_log_level = this%hubbard_log_level
+      hubbard_spinor_dm_diagnostic = this%hubbard_spinor_dm_diagnostic
+      hubbard_soc_experimental = this%hubbard_soc_experimental
       hubbard_u_potential_form = this%hubbard_u_potential_form
       hubbard_radial_moments = this%hubbard_radial_moments
       hubbard_test_operator = this%hubbard_test_operator
       hubbard_test_lambda = this%hubbard_test_lambda
+      hubbard_test_spin = this%hubbard_test_spin
       fixed_u_test_tighten_r05 = this%fixed_u_test_tighten_r05
+      fixed_u_test_allow_hoh_w1_u0 = .false.
       bounds_algorithm = this%bounds%algorithm
       bounds_scaling = this%bounds%scaling
       export = this%export
@@ -223,9 +407,10 @@ contains
          call g_logger%fatal("Invalid hubbard_u_potential_form. Use 'liechtenstein' or 'acbn0'.", __FILE__, __LINE__)
       end if
       this%hubbard_radial_moments = lower(trim(hubbard_radial_moments))
-      if (len_trim(this%hubbard_radial_moments) == 0) this%hubbard_radial_moments = 'spectral'
-      if (this%hubbard_radial_moments /= 'spectral' .and. this%hubbard_radial_moments /= 'local') then
-         call g_logger%fatal("Invalid hubbard_radial_moments. Use 'spectral' or 'local'.", __FILE__, __LINE__)
+      if (len_trim(this%hubbard_radial_moments) == 0) this%hubbard_radial_moments = 'auto'
+      if (this%hubbard_radial_moments /= 'spectral' .and. this%hubbard_radial_moments /= 'local' .and. &
+          this%hubbard_radial_moments /= 'auto') then
+         call g_logger%fatal("Invalid hubbard_radial_moments. Use 'auto', 'spectral', or 'local'.", __FILE__, __LINE__)
       end if
       this%hubbard_test_operator = lower(trim(hubbard_test_operator))
       if (len_trim(this%hubbard_test_operator) == 0) this%hubbard_test_operator = 'none'
@@ -237,16 +422,27 @@ contains
          call g_logger%fatal('hubbard_test_lambda must be finite and is given in Ry.', __FILE__, __LINE__)
       end if
       this%hubbard_test_lambda = hubbard_test_lambda
+      if (hubbard_test_spin < 0 .or. hubbard_test_spin > 2) then
+         call g_logger%fatal('hubbard_test_spin must be 0 (both), 1 (up), or 2 (down).', __FILE__, __LINE__)
+      end if
+      this%hubbard_test_spin = hubbard_test_spin
+      if (this%hubbard_test_spin /= 0 .and. this%hubbard_test_operator /= 'w1') then
+         call g_logger%fatal('hubbard_test_spin selection is available only for the W1 diagnostic operator.', &
+                             __FILE__, __LINE__)
+      end if
       this%fixed_u_test_tighten_r05 = fixed_u_test_tighten_r05
+      this%fixed_u_test_allow_hoh_w1_u0 = fixed_u_test_allow_hoh_w1_u0
       this%hubbard_test_operator_check = this%hubbard_test_operator /= 'none'
       if (.not. this%hubbard_test_operator_check .and. this%hubbard_test_lambda /= 0.0_rp) then
          call g_logger%fatal("hubbard_test_lambda requires hubbard_test_operator='w1' or 'w2'.", __FILE__, __LINE__)
       end if
       if (this%hubbard_test_operator_check) then
-         if (this%control%nsp /= 1 .or. this%control%lmax /= 2 .or. this%hoh .or. &
-             this%control%has_soc() .or. this%control%is_noncollinear()) then
-            call g_logger%fatal('A4 test operator requires scalar-collinear nsp=1, lmax=2, and hoh=.false..', &
-                                __FILE__, __LINE__)
+         if (.not. (this%control%nsp == 1 .or. this%control%nsp == 2) .or. &
+             this%control%lmax /= 2 .or. &
+             (this%hoh .and. .not. fixed_u_test_allow_hoh_w1_u0) .or. &
+             (this%control%has_soc() .and. this%control%nsp /= 2) .or. &
+             this%control%is_noncollinear()) then
+            call g_logger%fatal('A4 test operator requires nsp=1 or nsp=2, lmax=2, and hoh=.false..', __FILE__, __LINE__)
          end if
          if (trim(this%hubbard_u_potential_form) /= 'liechtenstein') then
             call g_logger%fatal('A4 test operator requires the fixed Liechtenstein basis convention.', __FILE__, __LINE__)
@@ -268,6 +464,18 @@ contains
       has_impurity_uj = any(hubbard_u_impurity /= hubbard_sentinel) .or. any(hubbard_j_impurity /= hubbard_sentinel)
       has_hubbard_v = any(hubbard_v /= hubbard_sentinel)
       has_hubbard_u_sc = any(hubbard_u_sc /= hubbard_sc_sentinel)
+
+      this%hubbard_experimental = hubbard_experimental
+      this%hubbard_spinor_dm_diagnostic = hubbard_spinor_dm_diagnostic
+      this%hubbard_soc_experimental = hubbard_soc_experimental
+      this%hubbard_log_level = lower(trim(hubbard_log_level))
+      if (len_trim(this%hubbard_log_level) == 0) this%hubbard_log_level = 'summary'
+      if (this%hubbard_log_level /= 'summary' .and. this%hubbard_log_level /= 'detailed' .and. this%hubbard_log_level /= 'debug') then
+         call g_logger%fatal("Invalid hubbard_log_level. Use 'summary', 'detailed', or 'debug'.", __FILE__, __LINE__)
+      end if
+      if ((trim(lower(hubbard_u_potential_form)) == 'acbn0' .or. has_hubbard_v) .and. .not. this%hubbard_experimental) then
+         call g_logger%fatal("ACBN0 and +V inputs are experimental; set hubbard_experimental = .true. in &hamiltonian to enable them.", __FILE__, __LINE__)
+      end if
 
       if (this%hubbard_test_operator_check) then
          if (has_legacy_uj .or. has_impurity_uj .or. has_hubbard_v .or. has_hubbard_u_sc) then
@@ -472,6 +680,13 @@ contains
          end if
       end do
 
+      ! SOC+U bulk is the default at nsp=2; the former opt-in flag is accepted and ignored. The internal field
+      ! marks "spinor U active" for the code below and the solvers.
+      if (hubbard_soc_experimental .and. rank == 0) &
+         call g_logger%info('hubbard_soc_experimental is a no-op: SOC+U bulk is now default.', __FILE__, __LINE__)
+      this%hubbard_soc_experimental = this%control%nsp == 2 .and. &
+         (this%hubbard_u_general_check .or. this%hubbard_test_operator_check)
+
       ! Self-consistent U and fixed U/J are mutually exclusive in this implementation.
       if (this%hubbard_u_sc_check .and. this%hubbard_u_general_check) then
          call g_logger%fatal('Both hubbard_u_sc and explicit hubbard_u/hubbard_j are set. Use only one mode.', __FILE__, __LINE__)
@@ -483,13 +698,14 @@ contains
             call g_logger%fatal("hubbard_radial_moments='local' requires an explicit fixed Liechtenstein U/J input; "// &
                'numeric U=J=0 is allowed and remains a no-op.', __FILE__, __LINE__)
          end if
-         if (this%control%nsp /= 1) then
-            call g_logger%fatal("hubbard_radial_moments='local' requires nsp=1.", __FILE__, __LINE__)
+         if (this%control%nsp /= 1 .and. .not. (this%hubbard_soc_experimental .and. this%control%nsp == 2)) then
+            call g_logger%fatal("hubbard_radial_moments='local' requires nsp=1 (nsp=2 only for bulk fixed U/J).", __FILE__, __LINE__)
          end if
-         if (this%control%has_soc() .or. this%control%is_noncollinear()) then
+         if ((this%control%has_soc() .and. .not. (this%hubbard_soc_experimental .and. this%control%nsp == 2)) .or. &
+             this%control%is_noncollinear()) then
             call g_logger%fatal("hubbard_radial_moments='local' does not support SOC or noncollinear spin.", __FILE__, __LINE__)
          end if
-         if (this%hoh) then
+         if (this%hoh .and. .not. fixed_u_test_allow_hoh_w1_u0) then
             call g_logger%fatal("hubbard_radial_moments='local' does not support hoh=.true..", __FILE__, __LINE__)
          end if
          if (this%control%lmax /= 2) then
@@ -504,6 +720,26 @@ contains
          if (this%hubbard_v_check) then
             call g_logger%fatal("hubbard_radial_moments='local' does not support intersite Hubbard V.", __FILE__, __LINE__)
          end if
+      end if
+
+      if (fixed_u_test_allow_hoh_w1_u0) then
+         if (.not. this%hoh .or. .not. this%hubbard_test_operator_check .or. &
+             trim(this%hubbard_test_operator) /= 'w1' .or. trim(this%hubbard_radial_moments) /= 'local' .or. &
+             .not. has_hubbard_general .or. has_legacy_uj .or. has_impurity_uj .or. &
+             this%hubbard_u_sc_check .or. this%hubbard_v_check .or. &
+             (abs(this%hubbard_test_lambda) > 1.0e-15_rp .and. &
+              abs(abs(this%hubbard_test_lambda) - 0.005_rp) > 1.0e-15_rp)) then
+            call g_logger%fatal('A5 HOH bypass is only valid for explicit general U=J=0 local W1 test runs.', &
+                                __FILE__, __LINE__)
+         end if
+         do i = 1, this%lattice%ntype
+            if (maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_u)) > 0.0_rp .or. &
+                maxval(abs(this%lattice%symbolic_atoms(i)%potential%hubbard_j)) > 0.0_rp) then
+               call g_logger%fatal('A5 HOH bypass requires exactly U=J=0 on every atom and shell.', __FILE__, __LINE__)
+            end if
+         end do
+         if (rank == 0) call g_logger%info('A5 test-only HOH guard bypass active for U=J=0 local W1 path.', &
+                                           __FILE__, __LINE__)
       end if
 
       ! The validated fixed-U implementation is collinear and orthogonal. The
@@ -527,23 +763,18 @@ contains
                end if
             end do
          end do
-         if (this%control%has_soc() .or. this%control%is_noncollinear()) then
+         if (.not. (this%hubbard_soc_experimental .and. this%control%nsp == 2) .and. &
+             (this%control%has_soc() .or. this%control%is_noncollinear())) then
             call g_logger%fatal('Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.', &
                                 __FILE__, __LINE__)
          end if
-         if (this%hoh) then
+         if (this%hoh .and. .not. fixed_u_test_allow_hoh_w1_u0) then
             call g_logger%fatal('Fixed-U LDA+U is unsupported with hoh=.true. (generalized-overlap Hamiltonian).', &
                                 __FILE__, __LINE__)
          end if
       end if
 
       if (rank == 0) then
-         if (this%hubbard_u_general_check .or. this%hubbard_u_sc_check .or. this%hubbard_v_check) then
-         call g_logger%info('HUBBARD summary: form='//trim(this%hubbard_u_potential_form)// &
-                            ' fixed_UJ='//merge('T', 'F', this%hubbard_u_general_check)// &
-                            ' sc_U='//merge('T', 'F', this%hubbard_u_sc_check)// &
-                            ' V='//merge('T', 'F', this%hubbard_v_check), __FILE__, __LINE__)
-         end if
          if (this%hubbard_test_operator_check) then
             call g_logger%info('HUBBARD test-only onsite operator='//trim(this%hubbard_test_operator)// &
                ' lambda_Ry='//fmt('e24.16', this%hubbard_test_lambda), __FILE__, __LINE__)
@@ -557,27 +788,6 @@ contains
                   __FILE__, __LINE__)
             end if
          end if
-      end if
-      if (this%hubbard_u_general_check) then
-         block
-            integer :: lch, nch
-            character(len=512) :: u_msg, j_msg
-            do i = 1, this%lattice%ntype
-               u_msg = ''
-               j_msg = ''
-               nch = size(this%lattice%symbolic_atoms(i)%potential%hubbard_u)
-               do lch = 1, nch
-                  u_msg = trim(u_msg)//' '//fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_u(lch))
-               end do
-               nch = size(this%lattice%symbolic_atoms(i)%potential%hubbard_j)
-               do lch = 1, nch
-                  j_msg = trim(j_msg)//' '//fmt('f10.6', this%lattice%symbolic_atoms(i)%potential%hubbard_j(lch))
-               end do
-               if (rank == 0) then
-                  call g_logger%info('HUBBARD fixed U/J type='//fmt('i4', i)//' [Ry] U='//trim(u_msg)//' J='//trim(j_msg), __FILE__, __LINE__)
-               end if
-            end do
-         end block
       end if
       if (this%hubbard_u_sc_check) then
          do i = 1, size(this%hubbard_u_sc, 1)
@@ -598,6 +808,15 @@ contains
    !> @param[inout] this Hamiltonian object to reset.
    module subroutine restore_to_default(this)
       class(hamiltonian) :: this
+
+      if (allocated(this%rd1_vin_d)) deallocate(this%rd1_vin_d)
+      if (allocated(this%rd1_vin_valid)) deallocate(this%rd1_vin_valid)
+      if (allocated(this%rd1_vin_cluster_site)) deallocate(this%rd1_vin_cluster_site)
+      if (allocated(this%rd1_vin_atom_type)) deallocate(this%rd1_vin_atom_type)
+      if (allocated(this%rd1_vin_iteration)) deallocate(this%rd1_vin_iteration)
+      this%rd1_capture_iteration = 0
+      this%rd1_capture_enabled = .false.
+      this%rd1_capture_required = .false.
 
 #ifdef USE_SAFE_ALLOC
       call g_safe_alloc%allocate('hamiltonian.lsham', this%lsham, (/nb, nb, this%charge%lattice%ntype/))
@@ -738,12 +957,20 @@ contains
       if (allocated(this%phi_ss_sublattice)) deallocate (this%phi_ss_sublattice)
       this%js_alpha = 'z'
       this%jl_alpha = 'z'
+      this%hubbard_experimental = .false.
+      this%hubbard_log_level = 'summary'
+      this%hubbard_spinor_dm_diagnostic = .false.
+      this%hubbard_soc_experimental = .false.
       this%hubbard_u_potential_form = 'liechtenstein'
-      this%hubbard_radial_moments = 'spectral'
+      ! Resolve the omitted-option sentinel only after the self namelist tells
+      ! us whether this calculation uses the reciprocal KS backend.
+      this%hubbard_radial_moments = 'auto'
       this%hubbard_test_operator = 'none'
       this%hubbard_test_lambda = 0.0_rp
+      this%hubbard_test_spin = 0
       this%hubbard_test_operator_check = .false.
       this%fixed_u_test_tighten_r05 = .false.
+      this%fixed_u_test_allow_hoh_w1_u0 = .false.
       this%hubbard_u_general_check = .false.
       this%hubbard_u_impurity_check = .false.
       this%hubbard_u_sc_check = .false.
@@ -1388,6 +1615,7 @@ contains
       ! Local variables
       integer :: i, j, k, l, m, n, itype, ino, ja, jo, ji, nr, ia
       integer :: ntype
+      integer :: rd1_status
 
       ! This is the single production rebuild boundary shared by recursion and
       ! reciprocal space. Advancing the generation invalidates every derived
@@ -1410,12 +1638,10 @@ contains
       end if
 
       if (this%hubbard_u_general_check) then
-         if (rank == 0) call g_logger%info('HUBBARD applying on-site +U correction to bulk Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_u_potential_general()
       end if
       call this%add_hubbard_test_operator()
       if (this%hubbard_v_check) then
-         if (rank == 0) call g_logger%info('HUBBARD applying inter-site +V correction to bulk Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_v_potential()
       end if
 
@@ -1452,6 +1678,18 @@ contains
                   this%ee(i, j, 1, ntype) = this%ee(i, j, 1, ntype) + this%hubbard_u_pot(i, j, ntype)
                end do
             end do
+            ! Surface recursion consumes the type-based ee Hamiltonian built
+            ! here (unlike impurities, it does not call build_locham). Capture
+            ! the exact operand at this insertion so RD1 uses the same V_in.
+            if (trim(this%control%calctype) == 'S' .and. this%rd1_capture_enabled .and. &
+                this%rd1_local_impurity_eligible()) then
+               call this%capture_rd1_vin_insertion(ia, ntype, this%hubbard_u_pot(:, :, ntype), rd1_status)
+               if (rd1_status /= rd1_vin_ok .and. rd1_status /= rd1_vin_not_recursion_site) then
+                  call g_logger%fatal('RD1 surface V-in capture failed: status='//fmt('i0', rd1_status)// &
+                     ' iteration='//fmt('i0', this%rd1_capture_iteration)//' cluster='//fmt('i0', ia)// &
+                     ' type='//fmt('i0', ntype), __FILE__, __LINE__)
+               end if
+            end if
          end if
          if (this%hubbard_v_check) then
             do m = 1, nr
@@ -1845,15 +2083,14 @@ contains
    module subroutine build_locham(this)
       class(hamiltonian), intent(inout) :: this
       ! Local variables
-      integer :: it, ino, nr, nlim, m, i, j, ja, ji
+      integer :: it, ino, nr, nlim, m, i, j, ja, ji, u_type
+      integer :: rd1_status
 
       if (this%hubbard_u_general_check) then
-         if (rank == 0) call g_logger%info('HUBBARD applying on-site +U correction to local Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_u_potential_general()
       end if
       call this%add_hubbard_test_operator()
       if (this%hubbard_v_check) then
-         if (rank == 0) call g_logger%info('HUBBARD applying inter-site +V correction to local Hamiltonian', __FILE__, __LINE__)
          call this%calculate_hubbard_v_potential()
       end if
 
@@ -1868,6 +2105,7 @@ contains
       do nlim = 1, this%charge%lattice%nmax
          nr = this%charge%lattice%nn(nlim, 1) ! Number of neighbours considered
          ino = this%charge%lattice%num(nlim)
+         u_type = this%charge%lattice%iz(nlim)
          call this%chbar_nc(nlim, nr, ino, nlim)
          call add_constraining_field_hmag(this, this%charge%lattice%iz(nlim))
          do m = 1, nr
@@ -1883,9 +2121,18 @@ contains
          if (this%hubbard_u_general_check .or. this%hubbard_test_operator_check) then
             do i = 1, nb
                do j = 1, nb
-                  this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + this%hubbard_u_pot(i, j, ino)
+                  this%hall(i, j, 1, nlim) = this%hall(i, j, 1, nlim) + &
+                     this%hubbard_u_pot(i, j, u_type)
                end do
             end do
+            if (this%rd1_capture_enabled .and. this%rd1_local_impurity_eligible()) then
+               call this%capture_rd1_vin_insertion(nlim, u_type, this%hubbard_u_pot(:, :, u_type), rd1_status)
+               if (rd1_status /= rd1_vin_ok .and. rd1_status /= rd1_vin_not_recursion_site) then
+                  call g_logger%fatal('RD1 exact V-in capture failed: status='//fmt('i0', rd1_status)// &
+                     ' iteration='//fmt('i0', this%rd1_capture_iteration)//' cluster='//fmt('i0', nlim)// &
+                     ' type='//fmt('i0', u_type), __FILE__, __LINE__)
+               end if
+            end if
          end if
          if (this%hubbard_v_check) then
             do m = 1, nr

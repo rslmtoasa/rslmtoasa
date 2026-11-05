@@ -1,0 +1,30 @@
+{
+  "actual_argv": [
+    "/private/tmp/c52-rd-ni-impurity-u3j07/collector/watch_trace_and_state.py",
+    "--run-id",
+    "rd_ni_i_u3j07_local_from_rs_bulk_u3_rc80",
+    "--solver-pid-file",
+    "/private/tmp/c52-rd-ni-impurity-u3j07/run/solver.pid",
+    "--run-dir",
+    "/private/tmp/c52-rd-ni-impurity-u3j07/run",
+    "--state-file",
+    "Ni-imp_scf.nml",
+    "--output-dir",
+    "/private/tmp/c52-rd-ni-impurity-u3j07/captures",
+    "--ready-file",
+    "/private/tmp/c52-rd-ni-impurity-u3j07/run/watcher.ready"
+  ],
+  "manifest_path": "/private/tmp/c52-rd-ni-impurity-u3j07/captures/trace_state_manifest.jsonl",
+  "output_dir": "/private/tmp/c52-rd-ni-impurity-u3j07/captures",
+  "ready_file": "/private/tmp/c52-rd-ni-impurity-u3j07/run/watcher.ready",
+  "record_type": "read_only_trace_watcher_start",
+  "run_dir": "/private/tmp/c52-rd-ni-impurity-u3j07/run",
+  "run_id": "rd_ni_i_u3j07_local_from_rs_bulk_u3_rc80",
+  "solver_pid": null,
+  "solver_pid_file": "/private/tmp/c52-rd-ni-impurity-u3j07/run/solver.pid",
+  "started_local": "2026-10-21T09:43:49.772757+02:00",
+  "state_file": "Ni-imp_scf.nml",
+  "state_source": "/private/tmp/c52-rd-ni-impurity-u3j07/run/Ni-imp_scf.nml",
+  "trace_source": "/private/tmp/c52-rd-ni-impurity-u3j07/run/fixed_u_trace.csv",
+  "watcher_process_pid": 74551
+}

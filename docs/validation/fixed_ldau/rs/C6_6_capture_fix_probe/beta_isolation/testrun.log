@@ -1,0 +1,122 @@
+[Oct 25 2026 17:40:00.801] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+[Oct 25 2026 17:40:02.786] [lattice_strux.f90:89]      [1m[32m<info> [0m[0mSTRUCTB structure-constants, backend=legacy
+[Oct 25 2026 17:40:04.234] [symbolic_atom.f90:189]     [1m[32m<info> [0m[0mSCF input provenance: fresh atomic starting potential from ./Ni-imp.nml
+[Oct 25 2026 17:40:04.235] [symbolic_atom.f90:189]     [1m[32m<info> [0m[0mSCF input provenance: fresh atomic starting potential from ./ES.nml
+[Oct 25 2026 17:40:04.236] [symbolic_atom.f90:189]     [1m[32m<info> [0m[0mSCF input provenance: fresh atomic starting potential from ./Ni-imp-S.nml
+[Oct 25 2026 17:40:04.273] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+[Oct 25 2026 17:40:05.307] [self.f90:3504]             [1m[32m<info> [0m[0mHUBBARD_RADIAL_MODE auto retained spectral: impurity is outside fixed Liechtenstein scalar d-shell scope
+[Oct 25 2026 17:40:05.309] [self.f90:3512]             [1m[32m<info> [0m[0mHUBBARD_RADIAL_MODE mode=spectral source=default use_kspace=.false. local_energy_adopted=.false.
+[Oct 25 2026 17:40:05.310] [self.f90:4488]             [1m[32m<info> [0m[0mPerform recursion at step 1
+[Oct 25 2026 17:40:05.329] [recursion_haydock.f90:326]  [1m[32m<info> [0m[0mFast block recursion on progress for atom 355
+[Oct 25 2026 17:40:15.897] [recursion_haydock.f90:326]  [1m[32m<info> [0m[0mFast block recursion on progress for atom 970
+[Oct 25 2026 17:40:29.274] [self.f90:4580]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 25 2026 17:40:33.375] [bands.f90:482]             [1m[32m<info> [0m[0mValence is:       10.000000
+[Oct 25 2026 17:40:33.381] [bands.f90:553]             [1m[32m<info> [0m[0mFixed Fermi energy: -0.061141
+[Oct 25 2026 17:40:33.579] [bands.f90:1780]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Oct 25 2026 17:40:33.579] [bands.f90:1790]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.000000
+[Oct 25 2026 17:40:33.676] [bands.f90:1780]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Oct 25 2026 17:40:33.676] [bands.f90:1790]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   0.000000
+[Oct 25 2026 17:40:33.864] [bands.f90:2151]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.000000   0.000000  -0.000000
+[Oct 25 2026 17:40:34.037] [bands.f90:2151]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.000000  -0.000000   0.000000
+[Oct 25 2026 17:40:34.041] [bands.f90:817]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long= -0.000000 |m_transverse|=  0.000000 torque=( -0.000000,  0.000000,  0.000000)
+[Oct 25 2026 17:40:34.042] [bands.f90:817]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  0.000000 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 25 2026 17:40:34.042] [self.f90:4282]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 25 2026 17:40:34.042] [mix.f90:712]               [1m[32m<info> [0m[0mValence at atom   1 is   0.000000
+[Oct 25 2026 17:40:34.042] [mix.f90:715]               [1m[32m<info> [0m[0mCharge transfer at atom    1:   0.348019   0.204874   0.143145
+[Oct 25 2026 17:40:34.042] [mix.f90:712]               [1m[32m<info> [0m[0mValence at atom   2 is  10.000000
+[Oct 25 2026 17:40:34.042] [mix.f90:715]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   1.505839   1.105643   0.400196
+[Oct 25 2026 17:40:34.043] [mix.f90:725]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.010133
+[Oct 25 2026 17:40:34.043] [mix.f90:725]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.030863
+[Oct 25 2026 17:40:34.045] [charge.f90:909]            [1m[32m<info> [0m[0mExcess charge to the next layer is  -1.310517
+[Oct 25 2026 17:40:34.046] [/Users/andersb/Jobb/rslmto_fable_v4b/source/charge.f90:911]  [1m[33m<warning> [0m[0mToo much charge in the external layer!
+[Oct 25 2026 17:40:34.046] [charge.f90:941]            [1m[32m<info> [0m[0msum1= 2.2440797054826566E-012 sumn= -14.883840675199391
+[Oct 25 2026 17:40:34.046] [charge.f90:946]            [1m[32m<info> [0m[0mvm1= 8.6243629648870564E-013 vmn= -5.7201018297547828
+[Oct 25 2026 17:40:34.046] [charge.f90:971]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=   0.204874 VMAD=   5.518255
+[Oct 25 2026 17:40:34.047] [charge.f90:971]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   1.105643 VMAD=   3.984313
+[Oct 25 2026 17:40:34.047] [self.f90:5244]             [1m[32m<info> [0m[0mES
+[Oct 25 2026 17:40:34.049] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 25 2026 17:40:34.052] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 25 2026 17:40:34.052] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 25 2026 17:40:34.053] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 25 2026 17:40:34.053] [self.f90:5330]             [1m[32m<info> [0m[0mXC functional: B-H 10.22361202621829521
+[Oct 25 2026 17:40:34.053] [self.f90:5409]             [1m[32m<info> [0m[0mF core check:0
+[Oct 25 2026 17:40:34.065] [self.f90:5244]             [1m[32m<info> [0m[0mNi-imp-S
+[Oct 25 2026 17:40:34.066] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 25 2026 17:40:34.066] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 25 2026 17:40:34.066] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 25 2026 17:40:34.066] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 25 2026 17:40:34.066] [self.f90:5330]             [1m[32m<info> [0m[0mXC functional: B-H 11.1813598060720756E-004
+[Oct 25 2026 17:40:34.066] [self.f90:5409]             [1m[32m<info> [0m[0mF core check:0
+[Oct 25 2026 17:40:34.164] [self.f90:4910]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 25 2026 17:40:34.165] [self.f90:4935]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom ES
+[Oct 25 2026 17:40:34.165] [self.f90:4935]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni-imp-S
+[Oct 25 2026 17:40:34.170] [self.f90:4354]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0162421175
+[Oct 25 2026 17:40:34.170] [self.f90:4488]             [1m[32m<info> [0m[0mPerform recursion at step 2
+[Oct 25 2026 17:40:34.183] [recursion_haydock.f90:326]  [1m[32m<info> [0m[0mFast block recursion on progress for atom 355
+[Oct 25 2026 17:40:47.279] [recursion_haydock.f90:326]  [1m[32m<info> [0m[0mFast block recursion on progress for atom 970
+[Oct 25 2026 17:40:59.988] [self.f90:4580]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 25 2026 17:41:04.654] [bands.f90:482]             [1m[32m<info> [0m[0mValence is:       10.000000
+[Oct 25 2026 17:41:04.661] [bands.f90:553]             [1m[32m<info> [0m[0mFixed Fermi energy: -0.061141
+[Oct 25 2026 17:41:04.844] [bands.f90:1780]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.000000
+[Oct 25 2026 17:41:04.845] [bands.f90:1790]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   0.000000
+[Oct 25 2026 17:41:04.911] [bands.f90:1780]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.000000
+[Oct 25 2026 17:41:04.911] [bands.f90:1790]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000  -0.000000
+[Oct 25 2026 17:41:05.078] [bands.f90:2151]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.000000  -0.000000   0.000000
+[Oct 25 2026 17:41:05.216] [bands.f90:2151]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.000003   0.000002   0.000000
+[Oct 25 2026 17:41:05.218] [bands.f90:817]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  0.000000 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 25 2026 17:41:05.219] [bands.f90:817]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long= -0.000000 |m_transverse|=  0.000000 torque=( -0.000000,  0.000000,  0.000000)
+[Oct 25 2026 17:41:05.219] [self.f90:4282]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 25 2026 17:41:05.219] [mix.f90:712]               [1m[32m<info> [0m[0mValence at atom   1 is   0.000000
+[Oct 25 2026 17:41:05.219] [mix.f90:715]               [1m[32m<info> [0m[0mCharge transfer at atom    1:   0.000011   0.204464  -0.204453
+[Oct 25 2026 17:41:05.219] [mix.f90:712]               [1m[32m<info> [0m[0mValence at atom   2 is  10.000000
+[Oct 25 2026 17:41:05.220] [mix.f90:715]               [1m[32m<info> [0m[0mCharge transfer at atom    2:  -9.969651   1.083493 -11.053144
+[Oct 25 2026 17:41:05.220] [mix.f90:725]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.048370
+[Oct 25 2026 17:41:05.220] [mix.f90:725]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.766152
+[Oct 25 2026 17:41:05.220] [charge.f90:909]            [1m[32m<info> [0m[0mExcess charge to the next layer is  -1.287957
+[Oct 25 2026 17:41:05.220] [/Users/andersb/Jobb/rslmto_fable_v4b/source/charge.f90:911]  [1m[33m<warning> [0m[0mToo much charge in the external layer!
+[Oct 25 2026 17:41:05.220] [charge.f90:941]            [1m[32m<info> [0m[0msum1= 2.2423696438605896E-012 sumn= -14.658233936890579
+[Oct 25 2026 17:41:05.220] [charge.f90:946]            [1m[32m<info> [0m[0mvm1= 8.6177909201931912E-013 vmn= -5.6333974941758918
+[Oct 25 2026 17:41:05.220] [charge.f90:971]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=   0.204464 VMAD=   5.432312
+[Oct 25 2026 17:41:05.221] [charge.f90:971]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   1.083493 VMAD=   3.918437
+[Oct 25 2026 17:41:05.221] [self.f90:5244]             [1m[32m<info> [0m[0mES
+[Oct 25 2026 17:41:05.221] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 25 2026 17:41:05.221] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 25 2026 17:41:05.221] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 25 2026 17:41:05.221] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 25 2026 17:41:05.221] [self.f90:5330]             [1m[32m<info> [0m[0mXC functional: B-H 10.22361202621829521
+[Oct 25 2026 17:41:05.221] [self.f90:5409]             [1m[32m<info> [0m[0mF core check:0
+[Oct 25 2026 17:41:05.239] [self.f90:5244]             [1m[32m<info> [0m[0mNi-imp-S
+[Oct 25 2026 17:41:05.239] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 25 2026 17:41:05.240] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 25 2026 17:41:05.240] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 25 2026 17:41:05.241] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 25 2026 17:41:05.241] [self.f90:5330]             [1m[32m<info> [0m[0mXC functional: B-H 11.1813598060720756E-004
+[Oct 25 2026 17:41:05.242] [self.f90:5409]             [1m[32m<info> [0m[0mF core check:0
+[Oct 25 2026 17:41:05.336] [self.f90:4910]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 25 2026 17:41:05.337] [self.f90:4935]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom ES
+[Oct 25 2026 17:41:05.337] [self.f90:4935]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni-imp-S
+[Oct 25 2026 17:41:05.345] [self.f90:4354]             [1m[32m<info> [0m[0mNot converged! Diff= 0.3838386972
+[Oct 25 2026 17:41:05.367] [bands.f90:2374]            [1m[32m<info> [0m[0mMagnetic field on atom   1 is        -0.000000        -0.000000        -0.000000
+[Oct 25 2026 17:41:05.367] [bands.f90:2375]            [1m[32m<info> [0m[0mMagnetic torque on atom   1 is         0.000000         0.000000         0.000000
+[Oct 25 2026 17:41:05.367] [bands.f90:2374]            [1m[32m<info> [0m[0mMagnetic field on atom   2 is         0.000000         0.000000        -0.000000
+[Oct 25 2026 17:41:05.369] [bands.f90:2375]            [1m[32m<info> [0m[0mMagnetic torque on atom   2 is        -0.000000         0.000000         0.000000
+[Oct 25 2026 17:41:05.369] [self.f90:4999]             [1m[32m<info> [0m[0mWriting calculation report to report.out
+[Oct 25 2026 17:41:05.399] [self.f90:5116]             [1m[32m<info> [0m[0mCalculation finished. Report printed in report.out
+------------------------------------------------------------- TIMER REPORT --------------------------------------------------------------
+  CATEGORY                              MEAN            MAX            MIN          TOTAL      TOTAL (%)         NCALLS   TOTAL NCALLS   
+  total                                    -              -              -        64.5983          100.0              1             12   
+  └─ Calculation                           -              -              -        64.5983          100.0              1             11   
+     ├─ Calculation*                       -              -              -         1.3366            2.1              -              1   
+     ├─ pre-processing                     -              -              -         3.2262            5.0              1              3   
+     │  ├─ pre-processing*                 -              -              -         1.3194            2.0              -              1   
+     │  ├─ build_data                      -              -              -         0.0000            0.0              1              1   
+     │  ├─ bravais                         -              -              -         0.3992            0.6              1              1   
+     │  └─ structb                         -              -              -         1.5076            2.3              1              1   
+     └─ self-consistency                   -              -              -        60.0355           92.9              1              6   
+        ├─ self-consistency*               -              -              -         0.0409            0.1              -              1   
+        ├─ recursion                 24.8818        25.8091        23.9546        49.7637           77.0              2              2   
+        ├─ calculation-of-DOS         4.9983         5.2285         4.7681         9.9965           15.5              2              2   
+        └─ atomic-scf                 0.1172         0.1178         0.1166         0.2344            0.4              2              2   
+----------------------------------------------------------------------------------------------------------------------------------------
+  * exclusive values to this label
+----------------------------------------------------------------------------------------------------------------------------------------

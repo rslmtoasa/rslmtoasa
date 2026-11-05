@@ -359,7 +359,8 @@ contains
 
       ! variables associated with the reading processes
       integer :: iostatus, funit
-      integer :: iostatus2, funit2
+      integer :: iostatus2, funit2, ncols, icol
+      integer, parameter :: constraints_max_sites = 4096
       character(len=sl) :: fname_
 
       include 'include_codes/namelists/control.f90'
@@ -494,6 +495,18 @@ contains
       ! Read optional constraints namelist and move values into the control object
       open (newunit=funit2, file=fname_, action='read', iostat=iostatus2, status='old')
       if (iostatus2 == 0) then
+         ! constraints_mom_ref(:,i) = ... needs an array that already spans every site index; it is cut back to
+         ! the last nonzero column after the read (an all-zero array keeps the unset (1,1) form).
+         block
+            real(rp), allocatable :: wide(:, :)
+            allocate (wide(3, constraints_max_sites), source=0.0_rp)
+            if (allocated(constraints_mom_ref)) then
+               ncols = min(size(constraints_mom_ref, 2), constraints_max_sites)
+               wide(1:min(3, size(constraints_mom_ref, 1)), 1:ncols) = &
+                  constraints_mom_ref(1:min(3, size(constraints_mom_ref, 1)), 1:ncols)
+            end if
+            call move_alloc(wide, constraints_mom_ref)
+         end block
          read (funit2, nml=constraints, iostat=iostatus2)
          if (iostatus2 /= 0 .and. .not. IS_IOSTAT_END(iostatus2)) then
             call g_logger%error('Error while reading constraints namelist', __FILE__, __LINE__)
@@ -504,9 +517,17 @@ contains
             this%constraints_diagnostics = constraints_diagnostics
             this%constraints_tolerance = constraints_tolerance
             if (allocated(constraints_mom_ref)) then
+               ncols = 0
+               do icol = 1, size(constraints_mom_ref, 2)
+                  if (any(constraints_mom_ref(:, icol) /= 0.0_rp)) ncols = icol
+               end do
                if (allocated(this%constraints_mom_ref)) deallocate(this%constraints_mom_ref)
-               allocate(this%constraints_mom_ref(size(constraints_mom_ref,1), size(constraints_mom_ref,2)))
-               this%constraints_mom_ref = constraints_mom_ref
+               if (ncols == 0) then
+                  allocate(this%constraints_mom_ref(1, 1), source=0.0_rp)
+               else
+                  allocate(this%constraints_mom_ref(3, ncols))
+                  this%constraints_mom_ref = constraints_mom_ref(1:3, 1:ncols)
+               end if
             end if
             if (allocated(constraints_bfield)) then
                if (allocated(this%constraints_bfield)) deallocate(this%constraints_bfield)

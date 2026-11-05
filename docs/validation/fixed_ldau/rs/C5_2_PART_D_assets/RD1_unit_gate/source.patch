@@ -1,0 +1,701 @@
+diff --git a/source/bands.f90 b/source/bands.f90
+index d762374..cd90ed3 100644
+--- a/source/bands.f90
++++ b/source/bands.f90
+@@ -909,6 +909,9 @@ contains
+       real(rp), allocatable :: pl_comm(:, :, :)
+       integer :: lcount_ldm, max_flat_ldm, local_flat
+       integer :: status_local, itype_local
++      integer :: cluster_site_local
++      logical :: rd1_use_vin_capture
++      complex(rp) :: rd1_vin_snapshot(5, 5, 2)
+       ! These diagnostic tolerances exceed observed finite-grid residuals
+       ! (about 1e-8 anti-Hermitian and <1e-4 eigen/trace drift) without hiding
+       ! material violations. Diagnostics never modify or project the LDM.
+@@ -1223,13 +1226,48 @@ contains
+       if (local_moments_active) then
+          if (.not. associated(m1_target)) call g_logger%fatal( &
+             'Local Hubbard radial moments require the current spectral M1 matrix.', __FILE__, __LINE__)
++         rd1_use_vin_capture = this%recursion%hamiltonian%rd1_local_impurity_eligible() .and. &
++            this%recursion%hamiltonian%rd1_capture_required
+          do na_glob = start_atom, end_atom
+             plusbulk = this%lattice%nbulk + na_glob
+-            itype_local = this%lattice%ib(na_glob)
++            if (rd1_use_vin_capture) then
++               call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
++                  cluster_site_local, itype_local, status_local)
++               if (status_local /= 0) then
++                  call g_logger%fatal('RD1 local correction has invalid mapped cluster site at iteration='// &
++                     fmt('i0', iteration_value)//' recursion='//fmt('i0', na_glob)// &
++                     ' cluster='//fmt('i0', cluster_site_local), __FILE__, __LINE__)
++               end if
++               call this%recursion%hamiltonian%get_rd1_vin_for_recursion(na_glob, iteration_value, &
++                  rd1_vin_snapshot, status_local)
++               if (status_local /= 0) call g_logger%fatal('RD1 exact V-in snapshot missing/stale: status='// &
++                  fmt('i0', status_local)//' iteration='//fmt('i0', iteration_value)// &
++                  ' recursion='//fmt('i0', na_glob)//' cluster='//fmt('i0', cluster_site_local)// &
++                  ' type='//fmt('i0', itype_local), __FILE__, __LINE__)
++            else if (this%control%calctype == 'I' .and. &
++                     this%recursion%hamiltonian%hubbard_test_operator_check) then
++               ! The non-adopted local W test still has a recursion-site
++               ! potential. Use its actual irec->iz map without broadening the
++               ! fixed-U RD1 capture eligibility or changing the test formula.
++               call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
++                  cluster_site_local, itype_local, status_local)
++               if (status_local /= 0) then
++                  call g_logger%fatal('Local impurity test operator has invalid recursion-site map: recursion='// &
++                     fmt('i0', na_glob)//' cluster='//fmt('i0', cluster_site_local), __FILE__, __LINE__)
++               end if
++            else
++               ! Preserve the legacy spectral and reciprocal paths outside the
++               ! narrowly enabled real-space impurity correction.
++               itype_local = this%lattice%ib(na_glob)
++            end if
+             do ispin = 1, 2
+-               call extract_hubbard_d_shell_potential(this%recursion%hamiltonian%hubbard_u_pot, &
+-                  itype_local, ispin, spin_off, v_d, status_local)
+-               if (status_local /= 0) call g_logger%fatal('Unable to map local d-shell Hubbard potential.', __FILE__, __LINE__)
++               if (rd1_use_vin_capture) then
++                  v_d = rd1_vin_snapshot(:, :, ispin)
++               else
++                  call extract_hubbard_d_shell_potential(this%recursion%hamiltonian%hubbard_u_pot, &
++                     itype_local, ispin, spin_off, v_d, status_local)
++                  if (status_local /= 0) call g_logger%fatal('Unable to map local d-shell Hubbard potential.', __FILE__, __LINE__)
++               end if
+                if (maxval(abs(v_d)) == 0.0_rp) cycle
+                q0_d = this%symbolic_atom(plusbulk)%potential%ql(1, 2, ispin)
+                center_d = this%symbolic_atom(plusbulk)%potential%gravity_center(3, ispin) + &
+diff --git a/source/hamiltonian.f90 b/source/hamiltonian.f90
+index e5745bb..b1aa98b 100644
+--- a/source/hamiltonian.f90
++++ b/source/hamiltonian.f90
+@@ -43,6 +43,14 @@ module hamiltonian_mod
+ 
+    private
+ 
++   integer, parameter, public :: rd1_vin_ok = 0
++   integer, parameter, public :: rd1_vin_not_recursion_site = 1
++   integer, parameter, public :: rd1_vin_duplicate = 2
++   integer, parameter, public :: rd1_vin_invalid_map = 3
++   integer, parameter, public :: rd1_vin_wrong_type = 4
++   integer, parameter, public :: rd1_vin_missing_or_stale = 5
++   integer, parameter, public :: rd1_vin_ineligible = 6
++
+    !> Module´s main procedure
+    type, public :: hamiltonian
+       !> Charge
+@@ -141,6 +149,13 @@ module hamiltonian_mod
+       !> Optional intersite Hubbard-V input and corresponding matrix correction
+       real(rp), dimension(:, :, :, :), allocatable :: hubbard_v, hubbard_v_pot
+       logical :: hubbard_v_check = .false.
++      !> Exact additive local Hubbard d-block captured at hall insertion for RD1.
++      complex(rp), dimension(:, :, :, :), allocatable :: rd1_vin_d
++      logical, dimension(:), allocatable :: rd1_vin_valid
++      integer, dimension(:), allocatable :: rd1_vin_cluster_site, rd1_vin_atom_type, rd1_vin_iteration
++      integer :: rd1_capture_iteration = 0
++      logical :: rd1_capture_enabled = .false.
++      logical :: rd1_capture_required = .false.
+       !> Spectrum bounds for Chebyshev scaling
+       type(bounds) :: bounds
+       !> Hamiltonian export format: 'none', 'rs2pao', 'python'
+@@ -179,6 +194,11 @@ module hamiltonian_mod
+       procedure :: get_hubbard_test_operator
+       procedure :: evaluate_hubbard_energy
+       procedure :: calculate_hubbard_v_potential
++      procedure :: rd1_local_impurity_eligible
++      procedure :: begin_rd1_vin_capture
++      procedure :: get_rd1_recursion_site_type
++      procedure :: capture_rd1_vin_insertion
++      procedure :: get_rd1_vin_for_recursion
+       procedure :: compute_hamiltonian_bounds
+       final     :: destructor
+    end type hamiltonian
+@@ -415,6 +435,37 @@ module hamiltonian_mod
+ 
+    end subroutine build_locham
+ 
++   module function rd1_local_impurity_eligible(this) result(eligible)
++      class(hamiltonian), intent(in) :: this
++      logical :: eligible
++   end function rd1_local_impurity_eligible
++
++   module subroutine begin_rd1_vin_capture(this, iteration, enable_rs_capture)
++      class(hamiltonian), intent(inout) :: this
++      integer, intent(in) :: iteration
++      logical, intent(in), optional :: enable_rs_capture
++   end subroutine begin_rd1_vin_capture
++
++   module subroutine get_rd1_recursion_site_type(this, recursion_index, cluster_site, atom_type, status)
++      class(hamiltonian), intent(in) :: this
++      integer, intent(in) :: recursion_index
++      integer, intent(out) :: cluster_site, atom_type, status
++   end subroutine get_rd1_recursion_site_type
++
++   module subroutine capture_rd1_vin_insertion(this, nlim, u_type, exact_operand, status)
++      class(hamiltonian), intent(inout) :: this
++      integer, intent(in) :: nlim, u_type
++      complex(rp), intent(in) :: exact_operand(:, :)
++      integer, intent(out) :: status
++   end subroutine capture_rd1_vin_insertion
++
++   module subroutine get_rd1_vin_for_recursion(this, recursion_index, iteration, vin_d, status)
++      class(hamiltonian), intent(in) :: this
++      integer, intent(in) :: recursion_index, iteration
++      complex(rp), intent(out) :: vin_d(5, 5, 2)
++      integer, intent(out) :: status
++   end subroutine get_rd1_vin_for_recursion
++
+    !> @brief Add two-centre combined-correction blocks to the bulk Hamiltonian.
+    !> @details Builds CCOR contributions for each bulk atom type and neighbor
+    !>          shell, using scalar or noncollinear pair-block helpers as required
+diff --git a/source/hamiltonian_build.f90 b/source/hamiltonian_build.f90
+index f57a93b..8e82479 100644
+--- a/source/hamiltonian_build.f90
++++ b/source/hamiltonian_build.f90
+@@ -74,6 +74,178 @@ contains
+       close(unit)
+    end subroutine c2_write_hubbard_insertion
+ 
++   module function rd1_local_impurity_eligible(this) result(eligible)
++      class(hamiltonian), intent(in) :: this
++      logical :: eligible
++
++      eligible = .false.
++      if (.not. associated(this%control) .or. .not. associated(this%lattice)) return
++      eligible = trim(this%control%calctype) == 'I' .and. &
++         (this%hubbard_u_general_check .or. this%hubbard_u_impurity_check) .and. &
++         trim(this%hubbard_radial_moments) == 'local' .and. this%control%nsp == 1 .and. &
++         this%control%lmax == 2 .and. trim(this%hubbard_u_potential_form) == 'liechtenstein' .and. &
++         .not. this%control%has_soc() .and. .not. this%control%is_noncollinear() .and. &
++         .not. this%control%constraints_enable .and. .not. this%hoh .and. &
++         .not. this%hubbard_u_sc_check .and. .not. this%hubbard_v_check .and. &
++         .not. this%hubbard_test_operator_check .and. &
++         .not. this%fixed_u_test_allow_hoh_w1_u0
++   end function rd1_local_impurity_eligible
++
++   module subroutine begin_rd1_vin_capture(this, iteration, enable_rs_capture)
++      class(hamiltonian), intent(inout) :: this
++      integer, intent(in) :: iteration
++      logical, intent(in), optional :: enable_rs_capture
++      integer :: nrec
++      logical :: enable_capture
++
++      if (allocated(this%rd1_vin_d)) deallocate(this%rd1_vin_d)
++      if (allocated(this%rd1_vin_valid)) deallocate(this%rd1_vin_valid)
++      if (allocated(this%rd1_vin_cluster_site)) deallocate(this%rd1_vin_cluster_site)
++      if (allocated(this%rd1_vin_atom_type)) deallocate(this%rd1_vin_atom_type)
++      if (allocated(this%rd1_vin_iteration)) deallocate(this%rd1_vin_iteration)
++      this%rd1_capture_iteration = 0
++      this%rd1_capture_enabled = .false.
++      this%rd1_capture_required = .false.
++      enable_capture = .true.
++      if (present(enable_rs_capture)) enable_capture = enable_rs_capture
++      this%rd1_capture_required = enable_capture .and. this%rd1_local_impurity_eligible()
++      if (iteration <= 0 .or. .not. this%rd1_capture_required) return
++      this%rd1_capture_iteration = iteration
++      this%rd1_capture_enabled = .true.
++      if (.not. allocated(this%lattice%irec)) return
++      nrec = size(this%lattice%irec)
++      allocate(this%rd1_vin_d(5, 5, 2, nrec), this%rd1_vin_valid(nrec), &
++               this%rd1_vin_cluster_site(nrec), this%rd1_vin_atom_type(nrec), this%rd1_vin_iteration(nrec))
++      this%rd1_vin_d = cmplx(0.0_rp, 0.0_rp, rp)
++      this%rd1_vin_valid = .false.
++      this%rd1_vin_cluster_site = 0
++      this%rd1_vin_atom_type = 0
++      this%rd1_vin_iteration = 0
++   end subroutine begin_rd1_vin_capture
++
++   module subroutine get_rd1_recursion_site_type(this, recursion_index, cluster_site, atom_type, status)
++      class(hamiltonian), intent(in) :: this
++      integer, intent(in) :: recursion_index
++      integer, intent(out) :: cluster_site, atom_type, status
++
++      cluster_site = 0
++      atom_type = 0
++      status = rd1_vin_invalid_map
++      if (.not. associated(this%lattice)) return
++      if (.not. allocated(this%lattice%irec) .or. .not. allocated(this%lattice%iz)) return
++      if (recursion_index < 1 .or. recursion_index > size(this%lattice%irec)) return
++      cluster_site = this%lattice%irec(recursion_index)
++      if (cluster_site < 1 .or. cluster_site > size(this%lattice%iz)) then
++         cluster_site = 0
++         return
++      end if
++      atom_type = this%lattice%iz(cluster_site)
++      if (atom_type < 1 .or. atom_type > this%lattice%ntype) then
++         cluster_site = 0
++         atom_type = 0
++         return
++      end if
++      status = rd1_vin_ok
++   end subroutine get_rd1_recursion_site_type
++
++   module subroutine capture_rd1_vin_insertion(this, nlim, u_type, exact_operand, status)
++      class(hamiltonian), intent(inout) :: this
++      integer, intent(in) :: nlim, u_type
++      complex(rp), intent(in) :: exact_operand(:, :)
++      integer, intent(out) :: status
++      integer :: ia, recursion_index, matches, mapped_type, mapped_cluster, map_status, spin, extract_status
++      complex(rp) :: operand_by_type(size(exact_operand, 1), size(exact_operand, 2), 1)
++      complex(rp) :: v_d(5, 5)
++
++      status = rd1_vin_ineligible
++      if (.not. this%rd1_local_impurity_eligible()) return
++      if (.not. this%rd1_capture_enabled .or. this%rd1_capture_iteration <= 0 .or. &
++          .not. allocated(this%rd1_vin_valid)) return
++      if (.not. associated(this%lattice) .or. .not. allocated(this%lattice%irec) .or. &
++          .not. allocated(this%lattice%iz)) then
++         status = rd1_vin_invalid_map
++         return
++      end if
++      if (nlim < 1 .or. nlim > size(this%lattice%iz) .or. u_type < 1 .or. &
++          u_type > size(this%hubbard_u_pot, 3)) then
++         status = rd1_vin_invalid_map
++         return
++      end if
++      if (size(exact_operand, 1) /= size(this%hubbard_u_pot, 1) .or. &
++          size(exact_operand, 2) /= size(this%hubbard_u_pot, 2)) then
++         status = rd1_vin_invalid_map
++         return
++      end if
++
++      matches = 0
++      recursion_index = 0
++      do ia = 1, size(this%lattice%irec)
++         if (this%lattice%irec(ia) == nlim) then
++            matches = matches + 1
++            recursion_index = ia
++         end if
++      end do
++      if (matches == 0) then
++         status = rd1_vin_not_recursion_site
++         return
++      else if (matches /= 1 .or. recursion_index > size(this%rd1_vin_valid)) then
++         status = rd1_vin_invalid_map
++         return
++      end if
++      call this%get_rd1_recursion_site_type(recursion_index, mapped_cluster, mapped_type, map_status)
++      if (map_status /= rd1_vin_ok .or. mapped_cluster /= nlim) then
++         status = rd1_vin_invalid_map
++         return
++      end if
++      if (mapped_type /= u_type) then
++         status = rd1_vin_wrong_type
++         return
++      end if
++      if (this%rd1_vin_valid(recursion_index)) then
++         status = rd1_vin_duplicate
++         return
++      end if
++
++      operand_by_type(:, :, 1) = exact_operand
++      do spin = 1, 2
++         call extract_hubbard_d_shell_potential(operand_by_type, 1, spin, spin_off, v_d, extract_status)
++         if (extract_status /= 0) then
++            status = rd1_vin_invalid_map
++            return
++         end if
++         this%rd1_vin_d(:, :, spin, recursion_index) = v_d
++      end do
++      this%rd1_vin_valid(recursion_index) = .true.
++      this%rd1_vin_cluster_site(recursion_index) = nlim
++      this%rd1_vin_atom_type(recursion_index) = mapped_type
++      this%rd1_vin_iteration(recursion_index) = this%rd1_capture_iteration
++      status = rd1_vin_ok
++   end subroutine capture_rd1_vin_insertion
++
++   module subroutine get_rd1_vin_for_recursion(this, recursion_index, iteration, vin_d, status)
++      class(hamiltonian), intent(in) :: this
++      integer, intent(in) :: recursion_index, iteration
++      complex(rp), intent(out) :: vin_d(5, 5, 2)
++      integer, intent(out) :: status
++      integer :: cluster_site, mapped_type, map_status
++
++      vin_d = cmplx(0.0_rp, 0.0_rp, rp)
++      status = rd1_vin_missing_or_stale
++      if (.not. this%rd1_local_impurity_eligible() .or. .not. this%rd1_capture_enabled .or. iteration <= 0) return
++      if (.not. allocated(this%rd1_vin_valid) .or. .not. allocated(this%rd1_vin_d) .or. &
++          .not. allocated(this%rd1_vin_cluster_site) .or. .not. allocated(this%rd1_vin_atom_type) .or. &
++          .not. allocated(this%rd1_vin_iteration)) return
++      if (recursion_index > size(this%rd1_vin_valid) .or. this%rd1_capture_iteration /= iteration) return
++      call this%get_rd1_recursion_site_type(recursion_index, cluster_site, mapped_type, map_status)
++      if (map_status /= rd1_vin_ok) return
++      if (.not. this%rd1_vin_valid(recursion_index) .or. &
++          this%rd1_vin_cluster_site(recursion_index) /= cluster_site .or. &
++          this%rd1_vin_atom_type(recursion_index) /= mapped_type .or. &
++          this%rd1_vin_iteration(recursion_index) /= iteration) return
++      vin_d = this%rd1_vin_d(:, :, :, recursion_index)
++      status = rd1_vin_ok
++   end subroutine get_rd1_vin_for_recursion
++
+    !> @brief Construct a Hamiltonian object from an initialized charge object.
+    !> @details Wires the Hamiltonian to charge, lattice, and control state, resets
+    !>          all owned arrays/flags, then reads the &hamiltonian namelist. This
+@@ -164,6 +336,11 @@ contains
+       if (allocated(this%hubbard_v)) deallocate(this%hubbard_v)
+       if (allocated(this%hubbard_v_pot)) deallocate(this%hubbard_v_pot)
+ #endif
++      if (allocated(this%rd1_vin_d)) deallocate(this%rd1_vin_d)
++      if (allocated(this%rd1_vin_valid)) deallocate(this%rd1_vin_valid)
++      if (allocated(this%rd1_vin_cluster_site)) deallocate(this%rd1_vin_cluster_site)
++      if (allocated(this%rd1_vin_atom_type)) deallocate(this%rd1_vin_atom_type)
++      if (allocated(this%rd1_vin_iteration)) deallocate(this%rd1_vin_iteration)
+    end subroutine destructor
+ 
+    !> @brief Read the &hamiltonian namelist and install Hamiltonian options.
+@@ -699,6 +876,15 @@ contains
+    module subroutine restore_to_default(this)
+       class(hamiltonian) :: this
+ 
++      if (allocated(this%rd1_vin_d)) deallocate(this%rd1_vin_d)
++      if (allocated(this%rd1_vin_valid)) deallocate(this%rd1_vin_valid)
++      if (allocated(this%rd1_vin_cluster_site)) deallocate(this%rd1_vin_cluster_site)
++      if (allocated(this%rd1_vin_atom_type)) deallocate(this%rd1_vin_atom_type)
++      if (allocated(this%rd1_vin_iteration)) deallocate(this%rd1_vin_iteration)
++      this%rd1_capture_iteration = 0
++      this%rd1_capture_enabled = .false.
++      this%rd1_capture_required = .false.
++
+ #ifdef USE_SAFE_ALLOC
+       call g_safe_alloc%allocate('hamiltonian.lsham', this%lsham, (/nb, nb, this%charge%lattice%ntype/))
+       call g_safe_alloc%allocate('hamiltonian.tmat', this%tmat, (/nb, nb, 3, this%charge%lattice%ntype/))
+@@ -1966,6 +2152,7 @@ contains
+       ! Local variables
+       integer :: it, ino, nr, nlim, m, i, j, ja, ji, u_type
+       integer :: c2_build_id
++      integer :: rd1_status
+       logical :: c2_audit_active
+       complex(rp) :: c2_block_before(nb, nb)
+ 
+@@ -2018,6 +2205,14 @@ contains
+                      this%hubbard_u_pot(i, j, u_type)
+                end do
+             end do
++            if (this%rd1_capture_enabled .and. this%rd1_local_impurity_eligible()) then
++               call this%capture_rd1_vin_insertion(nlim, u_type, this%hubbard_u_pot(:, :, u_type), rd1_status)
++               if (rd1_status /= rd1_vin_ok .and. rd1_status /= rd1_vin_not_recursion_site) then
++                  call g_logger%fatal('RD1 exact V-in capture failed: status='//fmt('i0', rd1_status)// &
++                     ' iteration='//fmt('i0', this%rd1_capture_iteration)//' cluster='//fmt('i0', nlim)// &
++                     ' type='//fmt('i0', u_type), __FILE__, __LINE__)
++               end if
++            end if
+             if (c2_audit_active .and. this%hubbard_u_general_check) then
+                call c2_write_hubbard_insertion(this, 'LOCAL_HALL', c2_build_id, nlim, u_type, c2_block_before, &
+                   this%hubbard_u_pot(:, :, u_type), this%hall(:, :, 1, nlim))
+diff --git a/source/self.f90 b/source/self.f90
+index fc37610..876458d 100644
+--- a/source/self.f90
++++ b/source/self.f90
+@@ -4345,6 +4345,10 @@ contains
+       else
+          call g_scf_benchmark_profile%start_stage('P_rs_hamiltonian_prepare')
+       end if
++
++      if (this%control%calctype == 'I') then
++         call this%hamiltonian%begin_rd1_vin_capture(iter, enable_rs_capture=.not. this%use_kspace)
++      end if
+    
+       select case (this%control%calctype)
+       case ('B')
+diff --git a/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90 b/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90
+index 19a7549..e90dcd3 100644
+--- a/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90
++++ b/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90
+@@ -9,15 +9,17 @@
+ ! included exactly once in H.
+ program projector_multisite_frozen_h
+    use precision_mod, only: rp
+-   use basis_mod, only: basis_init, nb, norb, lmax_basis
+-   use math_mod, only: init_math_operators, pi, simpson_m, hubbard_spectral_density_element
++   use basis_mod, only: basis_init, nb, norb, spin_off, lmax_basis
++   use math_mod, only: init_math_operators, pi, simpson_m, hubbard_spectral_density_element, &
++      correct_d_shell_moments, extract_hubbard_d_shell_potential
+    use logger_mod, only: g_logger
+    use mpi_mod, only: rank, numprocs, ierr, atoms_per_process, start_atom, end_atom, g2l_map, &
+                       get_mpi_variables, parallel_context, assignment(=)
+    use control_mod, only: control
+    use lattice_mod, only: lattice
+    use charge_mod, only: charge
+-   use hamiltonian_mod, only: hamiltonian
++   use hamiltonian_mod, only: hamiltonian, rd1_vin_ok, rd1_vin_not_recursion_site, rd1_vin_duplicate, &
++      rd1_vin_wrong_type, rd1_vin_missing_or_stale
+    use energy_mod, only: energy
+    use recursion_mod, only: recursion
+    use density_of_states_mod, only: dos
+@@ -216,6 +218,8 @@ program projector_multisite_frozen_h
+    end do
+    if (rs_m1_transpose_mismatch < tol_wrong_m1) failed = .true.
+ 
++   call test_rd1_recursive_vin_oracle()
++
+ #ifdef USE_MPI
+    call reduce_failure(failed)
+ #endif
+@@ -263,6 +267,267 @@ program projector_multisite_frozen_h
+ 
+ contains
+ 
++   subroutine test_rd1_recursive_vin_oracle()
++      integer :: nspinorb
++      integer :: spin_id, i, j, site_i, site_j, orb_i, orb_j, row_i, row_j, state
++      integer :: info, lwork, status, extract_status, drow(5)
++      integer :: global_i, global_j, host_type, recursive_type, mapped_cluster, mapped_type
++      complex(rp), allocatable :: spin_h(:,:), h_total(:,:), hbare(:,:)
++      complex(rp) :: p_d(5,5), m1_d(5,5), vin_d(5,5), host_vin(5,5)
++      complex(rp) :: captured(5,5,2), captured_valid(5,5,2), captured_probe(5,5,2), host_state_before(2,5,5)
++      complex(rp) :: work_query(1)
++      complex(rp), allocatable :: work(:), eigenvectors(:,:)
++      real(rp), allocatable :: eigenvalues(:), rwork(:)
++      real(rp) :: q0, center, q2, corrected_center, corrected_q2, t_value
++      real(rp) :: direct_center, direct_q2, wrong_center, wrong_q2, host_center_before
++      real(rp) :: oracle_error
++      integer :: saved_nrec, saved_nbulk
++      integer :: saved_nsp, saved_lmax
++      integer, allocatable :: saved_irec(:), saved_ib(:), saved_iz(:)
++      character :: saved_calctype
++      character(len=16) :: saved_radial_mode, saved_potential_form
++      character(len=16) :: saved_test_operator
++      logical :: saved_constraints, saved_general, saved_impurity, saved_sc, saved_v, saved_test, saved_hoh, saved_hoh_bypass
++      external :: zheev
++
++      nspinorb = nsites*norb
++      allocate(spin_h(nspinorb,nspinorb), h_total(nspinorb,nspinorb), hbare(nspinorb,nspinorb), &
++               eigenvalues(nspinorb), rwork(max(1,3*nspinorb-2)))
++      saved_nrec = lat%nrec
++      saved_nbulk = lat%nbulk
++      saved_nsp = ctl%nsp
++      saved_lmax = ctl%lmax
++      saved_calctype = ctl%calctype
++      saved_constraints = ctl%constraints_enable
++      saved_radial_mode = ham%hubbard_radial_moments
++      saved_potential_form = ham%hubbard_u_potential_form
++      saved_general = ham%hubbard_u_general_check
++      saved_impurity = ham%hubbard_u_impurity_check
++      saved_sc = ham%hubbard_u_sc_check
++      saved_v = ham%hubbard_v_check
++      saved_test = ham%hubbard_test_operator_check
++      saved_test_operator = ham%hubbard_test_operator
++      saved_hoh = ham%hoh
++      saved_hoh_bypass = ham%fixed_u_test_allow_hoh_w1_u0
++      saved_ib = lat%ib
++      saved_iz = lat%iz
++      if (allocated(lat%irec)) saved_irec = lat%irec
++      host_type = 1
++      recursive_type = 2
++      lat%nrec = 1
++      lat%nbulk = 1
++      if (allocated(lat%irec)) deallocate(lat%irec)
++      allocate(lat%irec(1))
++      lat%irec = [2]
++      ! Deliberately leave ib(1)=1 while irec(1)=2 and iz(2)=2.
++      lat%ib(1) = host_type
++      lat%iz(1) = host_type
++      lat%iz(2) = recursive_type
++      ctl%calctype = 'I'
++      ctl%nsp = 1
++      ctl%lmax = 2
++      ctl%constraints_enable = .false.
++      ham%hubbard_radial_moments = 'local'
++      ham%hubbard_u_potential_form = 'liechtenstein'
++      ham%hubbard_u_general_check = .true.
++      ham%hubbard_u_impurity_check = .false.
++      ham%hubbard_u_sc_check = .false.
++      ham%hubbard_v_check = .false.
++      ham%hubbard_test_operator_check = .false.
++      ham%fixed_u_test_allow_hoh_w1_u0 = .false.
++      ham%hoh = .false.
++      ham%hubbard_u_general_check = .false.
++      ham%hubbard_u_impurity_check = .true.
++      if (.not. ham%rd1_local_impurity_eligible()) failed = .true.
++      ham%hubbard_u_general_check = .true.
++      ham%hubbard_u_impurity_check = .false.
++      ham%hubbard_test_operator = 'w1'
++      ham%hubbard_test_operator_check = .true.
++      if (ham%rd1_local_impurity_eligible()) failed = .true.
++      call ham%get_rd1_recursion_site_type(1, mapped_cluster, mapped_type, status)
++      if (status /= rd1_vin_ok .or. mapped_cluster /= 2 .or. mapped_type /= recursive_type) failed = .true.
++      write(*,'(a,4(i0,1x))') 'RD1_CAPTURE map rec-index cluster type status=', 1, mapped_cluster, mapped_type, status
++      ham%hubbard_test_operator = saved_test_operator
++      ham%hubbard_test_operator_check = .false.
++      ham%hubbard_u_general_check = .true.
++      ham%hubbard_u_impurity_check = .true.
++
++      do spin_id = 1, 2
++         host_state_before(spin_id,:,:) = lat%symbolic_atoms(host_type)%potential%ldm(3, spin_id, 1:5, 1:5)
++      end do
++      host_center_before = lat%symbolic_atoms(host_type)%potential%gravity_center(3, 1)
++      call ham%begin_rd1_vin_capture(7, enable_rs_capture=.true.)
++      call ham%capture_rd1_vin_insertion(1, host_type, ham%hubbard_u_pot(:, :, host_type), status)
++      if (status /= rd1_vin_not_recursion_site) failed = .true.
++      call ham%capture_rd1_vin_insertion(2, host_type, ham%hubbard_u_pot(:, :, host_type), status)
++      if (status /= rd1_vin_wrong_type) failed = .true.
++      call ham%capture_rd1_vin_insertion(2, recursive_type, ham%hubbard_u_pot(:, :, recursive_type), status)
++      if (status /= rd1_vin_ok) failed = .true.
++      call ham%capture_rd1_vin_insertion(2, recursive_type, ham%hubbard_u_pot(:, :, recursive_type), status)
++      if (status /= rd1_vin_duplicate) failed = .true.
++      call ham%get_rd1_vin_for_recursion(1, 7, captured, status)
++      if (status /= rd1_vin_ok) failed = .true.
++      if (maxval(abs(captured(:, :, 1)-captured(:, :, 2))) <= 1.0e-5_rp) failed = .true.
++      captured_valid = captured
++      if (maxval(abs(captured_valid)) <= 1.0e-5_rp) failed = .true.
++      do spin_id = 1, 2
++         call extract_hubbard_d_shell_potential(ham%hubbard_u_pot, recursive_type, spin_id, &
++            spin_off, vin_d, extract_status)
++         if (extract_status /= 0 .or. maxval(abs(captured_valid(:, :, spin_id)-vin_d)) > 0.0_rp) failed = .true.
++         call extract_hubbard_d_shell_potential(ham%hubbard_u_pot, host_type, spin_id, &
++            spin_off, host_vin, extract_status)
++         if (extract_status /= 0 .or. maxval(abs(captured_valid(:, :, spin_id)-host_vin)) <= 1.0e-5_rp) failed = .true.
++      end do
++      if (maxval(abs(host_state_before-lat%symbolic_atoms(host_type)%potential%ldm(3, :, 1:5, 1:5))) > 0.0_rp .or. &
++          host_center_before /= lat%symbolic_atoms(host_type)%potential%gravity_center(3, 1)) failed = .true.
++      call ham%get_rd1_vin_for_recursion(1, 6, captured_probe, status)
++      if (status /= rd1_vin_missing_or_stale) failed = .true.
++
++      drow = [(norb + 4 + i, i=1,5)]
++      do spin_id = 1, 2
++         do site_i = 1, nsites
++            do orb_i = 1, norb
++               i = (site_i-1)*norb + orb_i
++               global_i = (site_i-1)*nb + (spin_id-1)*norb + orb_i
++               do site_j = 1, nsites
++                  do orb_j = 1, norb
++                     j = (site_j-1)*norb + orb_j
++                     global_j = (site_j-1)*nb + (spin_id-1)*norb + orb_j
++                     spin_h(i,j) = htarget(global_i,global_j)
++                  end do
++               end do
++            end do
++         end do
++         ! htarget is the finite two-site H with each type-specific V-in
++         ! included once; the recursive d block is the captured operand.
++         h_total = spin_h
++         call zheev('V', 'U', nspinorb, spin_h, nspinorb, eigenvalues, work_query, -1, rwork, info)
++         if (info /= 0) then
++            failed = .true.
++            cycle
++         end if
++         lwork = max(1, int(real(work_query(1), rp)))
++         allocate(work(lwork), eigenvectors(nspinorb,nspinorb))
++         call zheev('V', 'U', nspinorb, spin_h, nspinorb, eigenvalues, work, lwork, rwork, info)
++         if (info /= 0) then
++            failed = .true.
++            deallocate(work, eigenvectors)
++            cycle
++         end if
++         eigenvectors = spin_h
++         p_d = cmplx(0.0_rp,0.0_rp,rp)
++         m1_d = cmplx(0.0_rp,0.0_rp,rp)
++         q2 = 0.0_rp
++         direct_center = 0.0_rp
++         direct_q2 = 0.0_rp
++         do i = 1, 5
++            row_i = drow(i)
++            do j = 1, 5
++               row_j = drow(j)
++               do state = 1, nspinorb
++                  if (eigenvalues(state) >= ef) cycle
++                  p_d(i,j) = p_d(i,j) + eigenvectors(row_i,state)*conjg(eigenvectors(row_j,state))
++                  m1_d(i,j) = m1_d(i,j) + eigenvalues(state)* &
++                     eigenvectors(row_i,state)*conjg(eigenvectors(row_j,state))
++               end do
++            end do
++         end do
++         q0 = real(sum([(p_d(i,i),i=1,5)]),rp)
++         center = real(sum([(m1_d(i,i),i=1,5)]),rp)/q0
++         do state = 1, nspinorb
++            if (eigenvalues(state) >= ef) cycle
++            do i = 1, 5
++               row_i = drow(i)
++               q2 = q2 + abs(sum(h_total(row_i,:)*eigenvectors(:,state)) - &
++                  center*eigenvectors(row_i,state))**2
++            end do
++         end do
++         hbare = h_total
++         do i = 1, 5
++            do j = 1, 5
++               row_i = drow(i)
++               row_j = drow(j)
++               hbare(row_i,row_j) = hbare(row_i,row_j) - captured_valid(i,j,spin_id)
++            end do
++         end do
++         do state = 1, nspinorb
++            if (eigenvalues(state) >= ef) cycle
++            do i = 1, 5
++               row_i = drow(i)
++               direct_center = direct_center + real(conjg(eigenvectors(row_i,state))* &
++                  sum(hbare(row_i,:)*eigenvectors(:,state)),rp)
++            end do
++         end do
++         direct_center = direct_center/q0
++         do state = 1, nspinorb
++            if (eigenvalues(state) >= ef) cycle
++            do i = 1, 5
++               row_i = drow(i)
++               direct_q2 = direct_q2 + abs(sum(hbare(row_i,:)*eigenvectors(:,state)) - &
++                  direct_center*eigenvectors(row_i,state))**2
++            end do
++         end do
++         call correct_d_shell_moments(p_d, m1_d, captured_valid(:, :, spin_id), q0, center, q2, &
++            corrected_center, corrected_q2, t_value, status)
++         if (status /= 0) failed = .true.
++         oracle_error = max(abs(corrected_center-direct_center), abs(corrected_q2-direct_q2))
++         if (oracle_error > 1.0e-12_rp) failed = .true.
++         write(*,'(a,i0,1x,6(es24.16e3,1x))') &
++            'RD1_ORACLE spin production_center production_q2 direct_center direct_q2 abs_center_error abs_q2_error=', &
++            spin_id, corrected_center, corrected_q2, direct_center, direct_q2, &
++            abs(corrected_center-direct_center), abs(corrected_q2-direct_q2)
++
++         call extract_hubbard_d_shell_potential(ham%hubbard_u_pot, host_type, spin_id, &
++            spin_off, host_vin, extract_status)
++         if (extract_status /= 0) then
++            failed = .true.
++         else
++            call correct_d_shell_moments(p_d, m1_d, host_vin, q0, center, q2, &
++               wrong_center, wrong_q2, t_value, status)
++            if (status /= 0 .or. max(abs(wrong_center-direct_center),abs(wrong_q2-direct_q2)) <= 1.0e-12_rp) then
++               failed = .true.
++            end if
++         end if
++         write(*,'(a,2(i0,1x),4(es24.16e3,1x))') &
++            'RD1_ORACLE wrong_site spin status wrong_center wrong_q2 abs_center_error abs_q2_error=', &
++            spin_id, status, wrong_center, wrong_q2, abs(wrong_center-direct_center), abs(wrong_q2-direct_q2)
++         deallocate(work, eigenvectors)
++      end do
++
++      call ham%begin_rd1_vin_capture(8, enable_rs_capture=.true.)
++      call ham%get_rd1_vin_for_recursion(1, 8, captured_probe, status)
++      if (status /= rd1_vin_missing_or_stale) failed = .true.
++      call ham%begin_rd1_vin_capture(0, enable_rs_capture=.true.)
++      if (.not. ham%rd1_capture_required .or. ham%rd1_capture_enabled) failed = .true.
++      call ham%get_rd1_vin_for_recursion(1, 7, captured_probe, status)
++      if (status /= rd1_vin_missing_or_stale) failed = .true.
++      call ham%begin_rd1_vin_capture(0, enable_rs_capture=.false.)
++      if (allocated(lat%irec)) deallocate(lat%irec)
++      if (allocated(saved_irec)) then
++         allocate(lat%irec(size(saved_irec)))
++         lat%irec = saved_irec
++      end if
++      lat%ib = saved_ib
++      lat%iz = saved_iz
++      lat%nrec = saved_nrec
++      lat%nbulk = saved_nbulk
++      ctl%nsp = saved_nsp
++      ctl%lmax = saved_lmax
++      ctl%calctype = saved_calctype
++      ctl%constraints_enable = saved_constraints
++      ham%hubbard_radial_moments = saved_radial_mode
++      ham%hubbard_u_potential_form = saved_potential_form
++      ham%hubbard_u_general_check = saved_general
++      ham%hubbard_u_impurity_check = saved_impurity
++      ham%hubbard_u_sc_check = saved_sc
++      ham%hubbard_v_check = saved_v
++      ham%hubbard_test_operator_check = saved_test
++      ham%hubbard_test_operator = saved_test_operator
++      ham%hoh = saved_hoh
++      ham%fixed_u_test_allow_hoh_w1_u0 = saved_hoh_bypass
++      deallocate(spin_h, h_total, hbare, eigenvalues, rwork)
++   end subroutine test_rd1_recursive_vin_oracle
++
+    subroutine run_simpson_mesh_refinement(errors, m1_errors, finest_projector, finest_m1)
+       real(rp), intent(out) :: errors(4)
+       real(rp), intent(out) :: m1_errors(4)

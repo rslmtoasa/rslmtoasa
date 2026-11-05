@@ -1,0 +1,14 @@
+{
+  "head": "141b64461a0c5398ebbf5c2b7110a9342cf86d01",
+  "binding": "candidate source preserved before reverting uncommitted production implementation; C5.10 not adopted",
+  "files": {
+    "source/math.f90": "349550ee3fcd9d371d4dadd00d8f3db5f94e9cc77466e5a5c67c439bf5185249",
+    "source/self.f90": "9c3025d0cbdf3998030daae305a2ef4361720141fa0d73a48a58ad1ea5dec9c5",
+    "CMakeLists.txt": "384fb06c855fbb0814ad2fb2029c5aee684a17d43ca7c3ce2c082f5ebf32b344",
+    "docs/lda_u_workflow.rst": "ffedaa87cb8fda45a1cee11b92a5ee260b766f3230c9614a0c1a6d6db9399ccb",
+    "tests/KNOWN_ISSUES.md": "a142b8a24999618e8bbbc01c88a101590906fe7d43a689cbdae324be99da8fbf",
+    "tests/unit/test_auto_impurity_local_mode.f90": "9482957f9a962a796eff491a959433c04f12a87aa207cba118cc82b15682bfff",
+    "candidate_tracked.patch": "f774657a12086b5e140971eeaa86c4746fd703291b0cd285d2a16af55ad6a44f",
+    "candidate_unit.patch": "67ad9ef95ac0949fadc39cd7104ad26cccdad74b833d66729a7cdbbc721b5dec"
+  }
+}

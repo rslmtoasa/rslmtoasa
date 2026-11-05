@@ -1,4 +1,5 @@
 submodule(hamiltonian_mod) hamiltonian_hubbard
+   use hubbard_spinor_mod, only: hubbard_d_tensor, hubbard_spinor_functional
 
 contains
 
@@ -38,6 +39,7 @@ contains
       call this%get_hubbard_test_operator(operator)
       do itype = 1, size(this%hubbard_u_pot, 3)
          do spin = 1, 2
+            if (this%hubbard_test_spin /= 0 .and. this%hubbard_test_spin /= spin) cycle
             do i = 1, 5
                orbital_i = 4 + i + spin_off*(spin - 1)
                do j = 1, 5
@@ -184,7 +186,7 @@ contains
       real(rp) :: vdiag_up_avg, vdiag_dn_avg, vdiag_split
       real(rp), dimension(2, 7) :: occ_m
       real(rp), dimension(2, 7, 7) :: pbar
-      logical :: use_acbn0, emit_logs
+      logical :: use_acbn0, emit_logs, type_has_uj
       real(rp), dimension(this%lattice%ntype, 4) :: hub_u, hub_j
       real(rp), dimension(this%lattice%ntype, 4, 4) :: f
       complex(rp), dimension(this%lattice%ntype, 4, 2, 7, 7) :: ldm, hub_pot
@@ -199,6 +201,10 @@ contains
       real(rp) :: ldm_trace_up, ldm_trace_dn, ldm_max_abs, hup_max_abs
       real(rp) :: ql_occ_up, ql_occ_dn
       real(rp) :: imag_ldm_max
+      complex(rp) :: t_spinor(5, 5, 5, 5), p_spinor(10, 10), v_spinor(10, 10)
+      real(rp) :: e_int_s, e_dc_s, e_hub_s, u_spinor, j_spinor, axis_ref(3), axis_norm, axis_first(3)
+      logical :: have_axis
+      integer :: spin_row, spin_col, row_offset, col_offset
 
       ms(1)%val = [0]
       ms(2)%val = [-1, 0, 1]
@@ -226,6 +232,60 @@ contains
          potential_out = 0.0_rp
       else
          this%hubbard_u_pot(:, :, :) = 0.0_rp
+      end if
+
+      ! Experimental spinor fixed U (nsp=2, bulk): the full 10x10 d-shell V, including the up-down
+      ! blocks, from the spinor P; the build routines add hubbard_u_pot to the on-site block once.
+      if (this%hubbard_soc_experimental .and. this%control%nsp == 2 .and. .not. present(potential_out)) then
+         have_axis = .false.
+         do na = 1, this%lattice%ntype
+            u_spinor = this%lattice%symbolic_atoms(na)%potential%hubbard_u(3)
+            j_spinor = this%lattice%symbolic_atoms(na)%potential%hubbard_j(3)
+            if (abs(u_spinor) <= 1.0e-10_rp .and. abs(j_spinor) <= 1.0e-10_rp) cycle
+            ! nsp=2 is collinear: every correlated site's reference axis (constraint_target, else mom)
+            ! must lie on one line; n and -n are the same axis.
+            if (sqrt(sum(this%lattice%symbolic_atoms(na)%constraint_target(:)**2)) > 1.0e-12_rp) then
+               axis_ref = this%lattice%symbolic_atoms(na)%constraint_target(:)
+            else
+               axis_ref = this%lattice%symbolic_atoms(na)%potential%mom(:)
+            end if
+            axis_norm = sqrt(sum(axis_ref**2))
+            if (axis_norm > 1.0e-12_rp) then
+               axis_ref = axis_ref/axis_norm
+            else
+               axis_ref = [0.0_rp, 0.0_rp, 1.0_rp]
+            end if
+            if (.not. have_axis) then
+               axis_first = axis_ref
+               have_axis = .true.
+            else if (norm2(cross_product(axis_ref, axis_first)) > 1.0e-8_rp) then
+               call g_logger%fatal('SOC+U at nsp=2: the axis of site '//fmt('i0', na)//' differs from that of the other '// &
+                  'correlated sites. noncollinear: use nsp=3/4, not yet supported with U.', __FILE__, __LINE__)
+            end if
+            if (allocated(this%lattice%symbolic_atoms(na)%potential%ldm_spinor_mix)) then
+               p_spinor = this%lattice%symbolic_atoms(na)%potential%ldm_spinor_mix
+            else if (allocated(this%lattice%symbolic_atoms(na)%potential%ldm_spinor)) then
+               p_spinor = this%lattice%symbolic_atoms(na)%potential%ldm_spinor
+            else
+               ! before the first spinor extraction: the collinear density with zero spin coherences
+               p_spinor = (0.0_rp, 0.0_rp)
+               do ispin = 1, 2
+                  p_spinor((ispin - 1)*5 + 1:ispin*5, (ispin - 1)*5 + 1:ispin*5) = &
+                     this%lattice%symbolic_atoms(na)%potential%ldm(3, ispin, 1:5, 1:5)
+               end do
+            end if
+            call hubbard_d_tensor(u_spinor, j_spinor, t_spinor)
+            call hubbard_spinor_functional(t_spinor, u_spinor, j_spinor, p_spinor, e_int_s, e_dc_s, e_hub_s, v_spinor)
+            do spin_row = 1, 2
+               do spin_col = 1, 2
+                  row_offset = (spin_row - 1)*spin_off + 4
+                  col_offset = (spin_col - 1)*spin_off + 4
+                  this%hubbard_u_pot(row_offset + 1:row_offset + 5, col_offset + 1:col_offset + 5, na) = &
+                     v_spinor((spin_row - 1)*5 + 1:spin_row*5, (spin_col - 1)*5 + 1:spin_col*5)
+               end do
+            end do
+         end do
+         return
       end if
       hub_u(:, :) = 0.0_rp
       hub_j(:, :) = 0.0_rp
@@ -299,7 +359,7 @@ contains
                   ldm_max_abs = max(ldm_max_abs, abs(ldm(na, l, 2, i, j)))
                end do
             end do
-            if (rank == 0 .and. emit_logs) then
+            if (rank == 0 .and. emit_logs .and. this%hubbard_log_level /= 'summary') then
                call g_logger%info('HUBBARD_LDM type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
                   ' tr_up='//fmt('f10.6', ldm_trace_up)//' tr_dn='//fmt('f10.6', ldm_trace_dn)// &
                   ' maxabs='//fmt('es12.4', ldm_max_abs), __FILE__, __LINE__)
@@ -314,7 +374,7 @@ contains
                ql_occ_up = this%lattice%symbolic_atoms(na)%potential%ql(1, l - 1, 1)
                ql_occ_dn = this%lattice%symbolic_atoms(na)%potential%ql(1, l - 1, 2)
             end if
-            if (rank == 0 .and. emit_logs) then
+            if (rank == 0 .and. emit_logs .and. this%hubbard_log_level /= 'summary') then
                call g_logger%info('HUBBARD_QLCMP type='//fmt('i4', na)//' l='//fmt('i2', l - 1)// &
                   ' ql_up='//fmt('f10.6', ql_occ_up)//' ql_dn='//fmt('f10.6', ql_occ_dn)// &
                   ' ldm_up='//fmt('f10.6', ldm_trace_up)//' ldm_dn='//fmt('f10.6', ldm_trace_dn)// &
@@ -558,6 +618,7 @@ contains
       end do
 
       do na = 1, this%lattice%ntype
+         type_has_uj = any(abs(hub_u(na, :)) > 1.0e-10_rp) .or. any(abs(hub_j(na, :)) > 1.0e-10_rp)
          hup_max_abs = 0.0_rp
          do i = 1, nb
             do j = 1, nb
@@ -568,7 +629,8 @@ contains
                end if
             end do
          end do
-         if (rank == 0 .and. emit_logs) call g_logger%info('HUBBARD_POT type='//fmt('i4', na)//' maxabs='//fmt('es12.4', hup_max_abs), __FILE__, __LINE__)
+         if (rank == 0 .and. emit_logs .and. type_has_uj .and. this%hubbard_log_level /= 'summary') &
+            call g_logger%info('HUBBARD_POT type='//fmt('i4', na)//' maxabs='//fmt('es12.4', hup_max_abs), __FILE__, __LINE__)
       end do
 
       do na = 1, this%lattice%ntype

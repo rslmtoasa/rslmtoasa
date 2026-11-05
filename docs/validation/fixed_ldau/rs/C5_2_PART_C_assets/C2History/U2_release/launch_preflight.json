@@ -1,0 +1,127 @@
+{
+  "accepted_restart_source_path": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/accepted_endpoints/u2_j0/Fe_scf.nml",
+  "accepted_restart_source_sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+  "analysis_tools": {
+    "aggregate_invocation": "/opt/homebrew/opt/python@3.11/bin/python3.11 /private/tmp/c52-c2-stage/launch_u2_corrected/analysis/aggregate_trace_history_v3.py --run-id c2_u2_chebyshev --manifest /private/tmp/c52-c2-stage/launch_u2_corrected/snapshots_watcher/c2_u2_chebyshev/trace_state_manifest.jsonl --log /private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev/testrun.log --require-diff --output /private/tmp/c52-c2-stage/launch_u2_corrected/analysis/c2_u2_chebyshev_aggregate.csv",
+    "aggregate_script": "/private/tmp/c52-c2-stage/launch_u2_corrected/analysis/aggregate_trace_history_v3.py",
+    "aggregate_script_sha256": "676c169d57a8637cce33ce759fa0b13ff0119dc1478815ca6f6b1f1247937034",
+    "reporting_note": "Window comparison is descriptive; acceptance uses only registered C2 criteria. No C3/C2 decision inferred from staging.",
+    "window_invocation": "/opt/homebrew/opt/python@3.11/bin/python3.11 /private/tmp/c52-c2-stage/launch_u2_corrected/analysis/analyze_window.py --run-id c2_u2_chebyshev --iterations <20-explicit-ids> --aggregate /private/tmp/c52-c2-stage/launch_u2_corrected/analysis/c2_u2_chebyshev_aggregate.csv --aggregate-manifest /private/tmp/c52-c2-stage/launch_u2_corrected/analysis/c2_u2_chebyshev_aggregate.manifest.json --log /private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev/testrun.log --output /private/tmp/c52-c2-stage/launch_u2_corrected/analysis/c2_u2_chebyshev_window.json",
+    "window_script": "/private/tmp/c52-c2-stage/launch_u2_corrected/analysis/analyze_window.py",
+    "window_script_sha256": "2d66127475ebeb01e3864e52a42cd9d3de7c21d8e66281b734278096f4105db4"
+  },
+  "backend": "RS",
+  "correction": "Only use_kspace=.false. moved from undeclared &control to declared &self; all other input namelist values match the prior audited deck.",
+  "effective_settings": {
+    "beta": 0.005,
+    "calctype": "B",
+    "conv_thr_Ry": 1e-30,
+    "energy_window_Ry": [
+      -1.0,
+      1.3
+    ],
+    "fermi_fixed": false,
+    "fermi_initial_guess_Ry": -0.069252,
+    "hubbard_j_ev": 0.0,
+    "hubbard_radial_moments": "local",
+    "hubbard_u_ev": 2.0,
+    "lld": 150,
+    "mix": "broyden",
+    "nsp": 1,
+    "nstep": 100,
+    "rc": 80,
+    "recur": "chebyshev",
+    "use_kspace": false
+  },
+  "environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "4",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_FIXED_U_A2_SCAN": "0",
+    "RSLMTO_FIXED_U_RUN_ID": "c2_u2_chebyshev",
+    "RSLMTO_FIXED_U_TRACE": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev/fixed_u_trace.csv",
+    "RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY": "0",
+    "RSLMTO_FIXED_U_TRACE_ITERATION": "0",
+    "RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY": "1",
+    "RSLMTO_FIXED_U_TRACE_QL_ONLY": "0",
+    "RSLMTO_OMP_THREADS_SERIAL": "4",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "f90nml_version": "1.4.4",
+  "frozen_binary_path": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x",
+  "frozen_binary_sha256": "a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3",
+  "frozen_build_manifest_path": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/manifest.json",
+  "frozen_build_manifest_sha256": "b2f3ab5d26c439520bdfcbca16163877b2e36d7bb9c3af0448e6941327ae5158",
+  "input_path": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev/input.nml",
+  "input_sha256": "276eabe5a405848935179ce21eac25a59a01f6aa7316d8ecbe3dbfdd5ac17760",
+  "launch_allowed": false,
+  "launcher_path": "/private/tmp/c52-c2-stage/launch_u2_corrected/launch_one.sh",
+  "launcher_preflight": {
+    "pid_status": "Bash 3.2-compatible $! solver PID, wait status recorded to exit_code.txt; no BASHPID",
+    "readiness_before_exec": "launcher starts read-only watcher, waits up to 1000x0.1s for nonempty watcher.ready; early exit/timeout kills and waits watcher; rechecks binary/deck/restart SHA immediately before solver launch",
+    "readiness_validation": {
+      "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/readiness_smoke/smoke_results.json",
+      "result": "PASS in isolated harmless dummy harness: child exit7 propagated; early missing readiness exit82 cleaned watcher; bounded missing-readiness timeout exit83 cleaned watcher. No scientific executable invoked.",
+      "sha256": "203f5d1f2b77f1a6849a429b9ab6a1d95bfd8132f78868eaf4455abc3ea7c702"
+    }
+  },
+  "launcher_script_sha256": "0906d1f0f2cf0e9f8dcec8168df86299d83ca43a723cac060a5ae35c539a5d88",
+  "namelist_schema_validation": {
+    "groups": [
+      "atoms",
+      "calculation",
+      "control",
+      "energy",
+      "hamiltonian",
+      "lattice",
+      "mix",
+      "self"
+    ],
+    "member_counts": {
+      "atoms": 2,
+      "calculation": 2,
+      "control": 5,
+      "energy": 5,
+      "hamiltonian": 4,
+      "lattice": 7,
+      "mix": 2,
+      "self": 3
+    },
+    "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev/input.nml",
+    "schema_valid": true
+  },
+  "paired_controls_check": {
+    "path": "/private/tmp/c52-c2-stage/launch_u2_corrected/common_controls_check.json",
+    "result": "PASS; after removing only recur, all remaining U2 namelist groups/members compare equal",
+    "sha256": "8c024527e886f1af56cbae14a50b2882f9b00d0c4207bd8ce2eafdf8cd5142e8"
+  },
+  "python": "/opt/homebrew/opt/python@3.11/bin/python3.11",
+  "rd_planning_note_path": "/private/tmp/c52-c-private/RD_NI_U0_PLANNING_NOTE.json",
+  "rd_planning_note_sha256": "8640ad8cb36d9643dc73d93498c408ee5430ef5b80f48c9e3403623bef83183a",
+  "recurrence": "chebyshev",
+  "restart_path": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev/Fe_out.nml",
+  "restart_sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+  "run_id": "c2_u2_chebyshev",
+  "schema": "c52-c2-u2-corrected-launch-preflight-v1",
+  "schema_checker_path": "/private/tmp/c52-c-private/fortran_namelist_schema.py",
+  "schema_checker_sha256": "d8bea2b4825e443c81322d37e6b3ead324cde69fca32ef8096ddb9739c06e953",
+  "source_commit": "8a107432e3ca2e00c815c217d52e7aa2a8e30736",
+  "status": "PREPARED_NOT_LAUNCHED_REQUIRES_AUDIT_AND_ROOT_AUTHORIZATION",
+  "trace_watcher_path": "/private/tmp/c52-c2-stage/launch_u2_corrected/watch_trace_and_state.py",
+  "trace_watcher_sha256": "c08f8fd1fd97c5627962129439f6edd7564e779bd3b523bd06d8954a7ff5854f",
+  "tracked_source_sha256": {
+    "CMakeLists.txt": "6f4dbe61e45a7c42a5e4cc5ac2977059102f974fd20e0376ac9e2ee63c46d419",
+    "source/CMakeLists.txt": "38c03906064b587d6a40c99160f80bfe154dcbcacdbf677bceba1c969fefdc26",
+    "source/bands.f90": "ea924d76e09c534d33275e9e330d872e9351d14ba33629013d409784280838cc",
+    "source/mix.f90": "f75c1d98d57e8a114d188c28089ec3f565d5a64328679f50224618a0f6e202fd",
+    "source/scf_guard.f90": "3f232e9cea4a84acfbe98b7636da0b02318253d5a21f776bb2763e607571c415",
+    "source/self.f90": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+    "tests/unit/test_scf_b1_guard.f90": "d000c46c13e6eb503aa65487f6861928deb752ecc4c8cbdc1573a73364ba7434"
+  },
+  "unchanged_restart_bytes": true,
+  "watcher_path": "/private/tmp/c52-c2-stage/launch_u2_corrected/watch_one.sh",
+  "watcher_script_sha256": "ce2bcd1c11742a229fe02215798889cc603a34d87ae1102dc2e92c1a29ffb5cd"
+}

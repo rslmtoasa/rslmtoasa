@@ -1,0 +1,108 @@
+{
+  "J_eV": 0.0,
+  "KS_TS_finite": true,
+  "KS_entropy_finite": true,
+  "P_OUT_rows": 50,
+  "P_OUT_sha256": "102ad30496bc9867489658f4f13c8a009cf472fb69537dc92caf8c2e7561ff11",
+  "U_eV": 2.0,
+  "assets_sha256_pre_run": {
+    "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+    "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+    "map": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842",
+    "sbar": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "str.out": "2c09956a817b3703174b9327f683d1a8582f59bc6404f82a1db9c4d39b9727f9",
+    "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+    "view.sbar": "fa71fedbde65026e7b96178c733f1e3568c290b58891bde0ab99a3520bce7f1c"
+  },
+  "backend": "ks",
+  "binary_sha256": "3486220b5f38b7b3f0d2487a10c04c35504f8627bf875d15a426357aa234329d",
+  "case": "ks_explicit_spectral",
+  "constraints_enabled": false,
+  "direct_P_energy_helper": null,
+  "energy_helper_sha256": "757f72fd7b7e98df320b23a36d4d3d63f5d3efd042265cf027acc32e98d2b2ff",
+  "expected_local_energy_adopted": false,
+  "expected_resolved_mode": "spectral",
+  "fixed_UJ_fields_explicit": true,
+  "helper_minus_logged_E_Hub_Ry": null,
+  "input_sha256_pre_run": "b80a80d3c19141a0a8175cc24dbc6a4f681f99f319a31aa08c813e3b9a6e3822",
+  "local_energy_adopted": false,
+  "log_path": "/private/tmp/a5-a44-serial-controls-final/ks_explicit_spectral/stdout.log",
+  "mode_runtime_fields": {
+    "local_energy_adopted": ".false.",
+    "mode": "spectral",
+    "source": "explicit",
+    "use_kspace": ".true."
+  },
+  "native_kspace_runtime_marker": true,
+  "observed_resolved_mode": "spectral",
+  "requested_mode": "spectral",
+  "restart_sha256_pre_run": "b13d816769598d47ed8cb72b5b22dbd5ba29bf5f04cb4e530724c123289e9189",
+  "restart_source_sha256": "b13d816769598d47ed8cb72b5b22dbd5ba29bf5f04cb4e530724c123289e9189",
+  "returncode": 0,
+  "route_fields_raw": "E_int=  0.2746843326029219E+01 E_DC=  0.2638099355721363E+01 E_Hub=  0.1087439703078554E+00 E_Hub_P_OUT=  0.0000000000000000E+00 t_in_out= -0.2609697931120547E+00 t_U= -0.2609697931120547E+00 e_external=  0.0000000000000000E+00 t_total_actual_Vin= -0.2609697931120547E+00 base_physical_total_energy= -0.2542003849831559E+04 physical_total_energy= -0.2542003849831559E+04 candidate_a= -0.2541634136068139E+04 candidate_b=UNAVAILABLE candidate_c= -0.2541895105861251E+04 entropy=  0.9390326959407239E-01 TS=  0.1784260176081486E-03 candidate_a_F= -0.2541634314494157E+04 candidate_b_F=UNAVAILABLE candidate_c_F= -0.2541895284287269E+04 test_lambda_trace_wp=  0.0000000000000000E+00 test_F_local=UNAVAILABLE test_F_spectral= -0.2542004028257576E+04 candidate_status=PROVISIONAL_ONLY; unavailable candidates require the other radial representation",
+  "route_identity": {
+    "actual": "-2542.003849831559",
+    "base_field_matches_unmodified_site_ETOT": {
+      "actual": "-2542.003849831559",
+      "pass": true,
+      "residual": "0E-12",
+      "sum_operands": "-2542.003849831559",
+      "tolerance_ry": 7.275957614183426e-12
+    },
+    "candidate_energy_identities": {
+      "candidate_a": {
+        "actual": "-2541.634136068139",
+        "expected": "-2541.6341360681390899",
+        "label": "spectral candidate_a equals base ETOT - t + EHub",
+        "pass": true,
+        "residual": "8.99E-14",
+        "tolerance_ry": 7.275957614183426e-12
+      },
+      "candidate_a_F": {
+        "actual": "-2541.634314494157",
+        "expected": "-2541.6343144941566980486",
+        "label": "spectral candidate_a_F subtracts finite TS",
+        "pass": true,
+        "residual": "-3.019514E-13",
+        "tolerance_ry": 7.275957614183426e-12
+      },
+      "candidate_c": {
+        "actual": "-2541.895105861251",
+        "expected": "-2541.8951058612511446",
+        "label": "spectral candidate_c equals base ETOT + EHub",
+        "pass": true,
+        "residual": "1.446E-13",
+        "tolerance_ry": 7.275957614183426e-12
+      },
+      "candidate_c_F": {
+        "actual": "-2541.895284287269",
+        "expected": "-2541.8952842872687527486",
+        "label": "spectral candidate_c_F subtracts finite TS",
+        "pass": true,
+        "residual": "-2.472514E-13",
+        "tolerance_ry": 7.275957614183426e-12
+      }
+    },
+    "pass": true,
+    "residual": "0E-12",
+    "sum_operands": "-2542.003849831559",
+    "tolerance_ry": 7.275957614183426e-12
+  },
+  "runtime_output_sha256": {
+    "Fe_out.nml": "3c85c400f9f380811de98aca645096ebf27cf6a07b84e819f4521314f1b647ca",
+    "Fe_scf.nml": "3c85c400f9f380811de98aca645096ebf27cf6a07b84e819f4521314f1b647ca",
+    "records.csv": "cb3d06ea92da43241663a30ba6dba40f0e970c8dd5a12df69fcd69b7c7c85478",
+    "stdout.log": "2a32bf5facfd00a74e8808aad85bf73bdfdbc5b201f6020d13da63c4a944c84d"
+  },
+  "site_energy_fields_raw": "site=1 type=1 E_int=  0.2746843326029219E+01 E_DC=  0.2638099355721363E+01 E_Hub=  0.1087439703078554E+00 t_in_out= -0.2609697931120547E+00 t_U= -0.2609697931120547E+00 e_external=  0.0000000000000000E+00 t_total_actual_Vin= -0.2609697931120547E+00 direct_trace_check=  0.0000000000000000E+00 ETOT_selected= -0.2542003849831559E+04 candidate_a= -0.2541634136068139E+04 candidate_b=UNAVAILABLE candidate_c= -0.2541895105861251E+04 candidate_F=UNAVAILABLE_GLOBAL_TS_NOT_SITE_DECOMPOSABLE candidate_status=PROVISIONAL_ONLY",
+  "source_sha256": {
+    "source/hamiltonian.f90": "410e799d4c5001f8c39b26d80b5435b265ae987a146a4457aa793e1162a0e837",
+    "source/hamiltonian_build.f90": "3af313bca28fa7e62024229a103244ebe631d01938c68e73f29b6a3f7e498f9b",
+    "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+    "source/include_codes/namelists/hamiltonian.f90": "ea9448c617daa5bc488d8fbd9ce559f6bde359bf0304dfbdc12347bc9c7a8e21",
+    "source/self.f90": "077150f760c546b229d04542caf99f488534b94382dab5408781618e9ea5e81e"
+  },
+  "test_lambda_Ry": 0.0,
+  "trace_path": "/private/tmp/a5-a44-serial-controls-final/ks_explicit_spectral/records.csv",
+  "unmodified_site_ETOT_Ry": "-2542.003849831559"
+}

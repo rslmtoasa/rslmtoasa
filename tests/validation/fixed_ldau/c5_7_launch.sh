@@ -1,0 +1,6 @@
+#!/bin/bash
+set -euo pipefail
+export OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1
+export OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1
+export BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+exec "$(dirname "$0")/../../run_binary.sh" "$@"

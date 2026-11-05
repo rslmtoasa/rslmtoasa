@@ -1,0 +1,53 @@
+&calculation
+pre_processing = 'buildsurf'
+verbose = .true.
+/
+
+&lattice
+rc = 100
+alat = 3.5234
+crystal_sym = 'fcc'
+pbc = .true.
+b1 = .true.
+b2 = .true.
+b3 = .true.
+n1 = 32
+n2 = 32
+n3 = 32
+ntype = 7
+ct(1:7) = 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0
+r2 = 16.0
+wav = 1.37692
+surftype = '0 0 1'
+nlay = 6
+/
+
+&atoms
+database = './'
+label(1:7) = 'Ni', 'ES', 'Ni-S', 'Ni-S-1', 'Ni-S-2', 'Ni-S-3', 'Ni-S-4'
+/
+
+&self
+ws_all = .true.
+nstep = 15
+/
+
+&energy
+fermi = -0.061969
+energy_min = -1.0
+energy_max = 1.5
+channels_ldos = 2500
+fix_fermi = .true.
+/
+
+&control
+calctype = 'S'
+nsp = 1
+lld = 26
+recur = 'block'
+/
+
+&mix
+beta = 0.001
+mixtype = 'linear'
+/

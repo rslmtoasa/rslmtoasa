@@ -1,0 +1,80 @@
+{
+  "POST_SCF_RADIAL_count": 6,
+  "POST_SCF_RADIAL_last_kind": "etot_total",
+  "P_OUT_ql_count": 6,
+  "capture_local": "2026-10-21T07:38:53.661723+02:00",
+  "completion_marker_line_number_1based": 4724,
+  "copied_outputs": {
+    "Fe_scf.nml": {
+      "mtime_ns": 1792561133611518362,
+      "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/post_exit_iter100/Fe_scf.nml",
+      "sha256": "b5d3f2de5d844987a2cd3f91674e9d13ac79bd0b26b22bdf0b182d5d8f4d893c",
+      "size_bytes": 10589
+    },
+    "fixed_u_trace.csv": {
+      "mtime_ns": 1792561133598849329,
+      "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/post_exit_iter100/fixed_u_trace.csv",
+      "sha256": "46ea2d54ea92de9351af6c0c1745f20441b7c85fd62cc7ef69cec9f578863c94",
+      "size_bytes": 970805
+    }
+  },
+  "log_segment": {
+    "mtime_ns": 1792561133622779313,
+    "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/post_exit_iter100/step100_log_segment.txt",
+    "sha256": "8c384c1014b67fde90b7498dfd623efec92a9bf33d901aaa543aa64ecf8dbd35",
+    "size_bytes": 8640
+  },
+  "phase_note": "Trace rows are iteration-100 P_OUT fresh DOS ql and POST_SCF_RADIAL; Fe_scf.nml is the corresponding mixed P_MIX state. This is an explicit post-exit stable capture, not a watcher snapshot.",
+  "process_exit_code": 2,
+  "record_type": "post_exit_stable_capture_iteration100",
+  "run_exit_note": "Fortran runtime error opening readonly Fe_out.nml at symbolic_atom.f90:624; exit2. This capture does not reclassify the process as normal exit.",
+  "same_loop_diff_line": "[Oct 20 2026 23:29:05.190] [self.f90:4206]             \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mNot converged! Diff= 0.0000000221",
+  "solver_pid": 36518,
+  "source_after": {
+    "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/run/Fe_scf.nml": {
+      "mtime_ns": 1792531745188297334,
+      "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/run/Fe_scf.nml",
+      "sha256": "b5d3f2de5d844987a2cd3f91674e9d13ac79bd0b26b22bdf0b182d5d8f4d893c",
+      "size_bytes": 10589
+    },
+    "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/run/fixed_u_trace.csv": {
+      "mtime_ns": 1792531745188932936,
+      "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/run/fixed_u_trace.csv",
+      "sha256": "46ea2d54ea92de9351af6c0c1745f20441b7c85fd62cc7ef69cec9f578863c94",
+      "size_bytes": 970805
+    },
+    "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/run/testrun.log": {
+      "mtime_ns": 1792531745206076242,
+      "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/run/testrun.log",
+      "sha256": "97db325895cba493bde483c774f8beacd19229ce39115ffa0e4cc0e95bf213a6",
+      "size_bytes": 824596
+    }
+  },
+  "source_before": {
+    "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/run/Fe_scf.nml": {
+      "mtime_ns": 1792531745188297334,
+      "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/run/Fe_scf.nml",
+      "sha256": "b5d3f2de5d844987a2cd3f91674e9d13ac79bd0b26b22bdf0b182d5d8f4d893c",
+      "size_bytes": 10589
+    },
+    "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/run/fixed_u_trace.csv": {
+      "mtime_ns": 1792531745188932936,
+      "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/run/fixed_u_trace.csv",
+      "sha256": "46ea2d54ea92de9351af6c0c1745f20441b7c85fd62cc7ef69cec9f578863c94",
+      "size_bytes": 970805
+    },
+    "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/run/testrun.log": {
+      "mtime_ns": 1792531745206076242,
+      "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/run/testrun.log",
+      "sha256": "97db325895cba493bde483c774f8beacd19229ce39115ffa0e4cc0e95bf213a6",
+      "size_bytes": 824596
+    }
+  },
+  "source_stability_check": "trace, Fe_scf.nml, and full log SHA/size/mtime identical across two reads 200ms apart after process exit",
+  "trace_iteration": "100",
+  "trace_row_count": 4425,
+  "trace_run_ids": [
+    "c52_triage_debug_u2"
+  ],
+  "wrapper_exit_code": 2
+}

@@ -1,0 +1,82 @@
+{
+  "backend": "RS",
+  "capture_execution": {
+    "accepted_checkpoint_sha256": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+    "accepted_endpoint_lock_sha256": "d923078e644eaf7ada1926a53a4c92adf3d138e22ba8307ca87896d567cec1f5",
+    "capture_only": true,
+    "exit_code": 0,
+    "input_sha256": "03a6f0ed8e35f46ddfc05c466cdc4d895c9b4c2e532bdc1c85cdc8ac6ed77878",
+    "iteration": 1,
+    "run_id": "c3_fe_u2_cheb_fullcapture_i1",
+    "selected_phase": "P_OUT at outer iteration 1; radial replay rows from terminal LAST radial pass",
+    "solver_pid": 21749,
+    "wrapper_pid": 21701
+  },
+  "capture_only": true,
+  "csv_sha256": "d45cc08bc72752b167bf244fcf8ffeda8a9658e223a5321876d04f486f9722d4",
+  "executable_sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69",
+  "full_green_shape": {
+    "all_green_matrices_complete": true,
+    "basis_dimension_by_site": {
+      "0": 18
+    },
+    "energy_grid_points_by_site": {
+      "0": 999
+    },
+    "full_green_matrix_count": 999
+  },
+  "input_sha256": {
+    "accepted_checkpoint": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+    "capture_input": "03a6f0ed8e35f46ddfc05c466cdc4d895c9b4c2e532bdc1c85cdc8ac6ed77878"
+  },
+  "iteration": 1,
+  "lambda": 1.0,
+  "lmax": 2,
+  "moments_only": false,
+  "norb_per_spin": 9,
+  "notice": "Capture integrity only; no C3 scientific gate or Co U>0 admission asserted.",
+  "nsp": 1,
+  "observed_run_id_verified": true,
+  "ql_only": false,
+  "required_writer_row_kinds": [
+    "basis_map",
+    "green_function",
+    "ldm",
+    "ldm_m1",
+    "m0_carrier_control",
+    "m0_carrier_identity",
+    "m0_carrier_input",
+    "m0_carrier_local",
+    "m0_p_availability",
+    "m0_trace_consistency",
+    "m1_trace_consistency",
+    "pl_map_input",
+    "radial_replay_band_center",
+    "radial_replay_c",
+    "radial_replay_ec_seed",
+    "radial_replay_eigen_seed",
+    "radial_replay_eigenvalue",
+    "radial_replay_enu",
+    "radial_replay_gravity_center",
+    "radial_replay_mesh",
+    "radial_replay_nre",
+    "radial_replay_pl",
+    "radial_replay_pnu",
+    "radial_replay_ql",
+    "radial_replay_qpar",
+    "radial_replay_rho_core",
+    "radial_replay_rho_in",
+    "radial_replay_rho_out",
+    "radial_replay_srdel",
+    "radial_replay_sumec",
+    "radial_replay_sumev",
+    "radial_replay_v",
+    "radial_replay_wave",
+    "v_hub"
+  ],
+  "run_id": "c3_fe_u2_cheb_fullcapture_i1",
+  "schema": "rslmto-fixed-u-trace-v1",
+  "source_revision": null,
+  "source_sha": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+  "status": "SELECTED_ITERATION_CAPTURED"
+}

@@ -1,0 +1,80 @@
+{
+  "binary": "/private/tmp/c66-nolibxc-build/bin/rslmto.x",
+  "binary_sha256": "f27e6ac2873ee8c5583d284a0881540e0a59e1df562171c98632f385dbfa4e14",
+  "deck": "/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002/input.nml",
+  "deck_sha256": "20b3a595d4c99f8a45bacdee5594e3da60138695581e85f1b1cbd1ba84211eb9",
+  "guard": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/c5_7_launch.sh",
+  "guard_sha256": "dd5392b6617b484e75f66a120072859632c2cf3d17e76320923cbea7a2d31c62",
+  "host_ef_trace": "/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002/host_ef_trace.csv",
+  "host_ef_trace_sha256": "5cf0db91849e60289f67e8671628b187416eb5a781c8a1978eac0d6e497c51b3",
+  "launch": {
+    "log": "/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002/checked_launcher.log",
+    "returncode": 0,
+    "status": "COMPLETED"
+  },
+  "preflight_command": [
+    "/Users/andersb/Jobb/rslmto_fable_v4b/.venv/bin/python",
+    "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/rs/C5_4_PREFLIGHT.py",
+    "/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002",
+    "--deck",
+    "/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002/input.nml",
+    "--guard",
+    "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/c5_7_launch.sh",
+    "--restart",
+    "/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002/Ni-imp.nml",
+    "--host-ef-trace",
+    "/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002/host_ef_trace.csv"
+  ],
+  "preflight_python": "/Users/andersb/Jobb/rslmto_fable_v4b/.venv/bin/python",
+  "preflight_result": {
+    "available_orbital_channels": [
+      "d"
+    ],
+    "deck": "/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002/input.nml",
+    "fresh_run_dir": "/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002",
+    "host_ef_check": {
+      "delta_ry": 0.0,
+      "host_ef": -0.061141,
+      "host_ef_trace": "/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002/host_ef_trace.csv",
+      "input_fermi": -0.061141,
+      "status": "PASS",
+      "tolerance_ry": 1e-06
+    },
+    "recur": "block",
+    "restart_source": "/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002/Ni-imp.nml",
+    "schema_source": "/Users/andersb/Jobb/rslmto_fable_v4b",
+    "status": "PASS",
+    "thread_caps": {
+      "BLIS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "OMP_DYNAMIC": "FALSE",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "RSLMTO_OMP_THREADS_SERIAL": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    },
+    "unconsumed_groups": [],
+    "use_kspace": false,
+    "use_kspace_source": "source/self.f90:3952"
+  },
+  "preflight_returncode": 0,
+  "preflight_script": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/rs/C5_4_PREFLIGHT.py",
+  "preflight_stderr": "",
+  "preflight_stdout": "{\n  \"status\": \"PASS\",\n  \"deck\": \"/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002/input.nml\",\n  \"recur\": \"block\",\n  \"use_kspace\": false,\n  \"use_kspace_source\": \"source/self.f90:3952\",\n  \"unconsumed_groups\": [],\n  \"schema_source\": \"/Users/andersb/Jobb/rslmto_fable_v4b\",\n  \"restart_source\": \"/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002/Ni-imp.nml\",\n  \"host_ef_check\": {\n    \"status\": \"PASS\",\n    \"host_ef_trace\": \"/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002/host_ef_trace.csv\",\n    \"host_ef\": -0.061141,\n    \"input_fermi\": -0.061141,\n    \"delta_ry\": 0.0,\n    \"tolerance_ry\": 1e-06\n  },\n  \"available_orbital_channels\": [\n    \"d\"\n  ],\n  \"fresh_run_dir\": \"/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002\",\n  \"thread_caps\": {\n    \"OMP_NUM_THREADS\": \"1\",\n    \"OMP_DYNAMIC\": \"FALSE\",\n    \"RSLMTO_OMP_THREADS_SERIAL\": \"1\",\n    \"OPENBLAS_NUM_THREADS\": \"1\",\n    \"MKL_NUM_THREADS\": \"1\",\n    \"VECLIB_MAXIMUM_THREADS\": \"1\",\n    \"BLIS_NUM_THREADS\": \"1\",\n    \"NUMEXPR_NUM_THREADS\": \"1\"\n  }\n}\n",
+  "restart": "/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002/Ni-imp.nml",
+  "restart_sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a",
+  "run_dir": "/private/tmp/c66-ni-surface-beta-diagnostic/U0_beta002",
+  "schema": "run_rslmto_checked_v1",
+  "status": "RUN_COMPLETED",
+  "thread_caps": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  }
+}

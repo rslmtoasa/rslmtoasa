@@ -1,0 +1,174 @@
+UpdateCTestConfiguration  from :/private/tmp/c5-rd1-release-build/DartConfiguration.tcl
+Parse Config file:/private/tmp/c5-rd1-release-build/DartConfiguration.tcl
+Test project /private/tmp/c5-rd1-release-build
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 47
+    Start 47: UnitLdaUProjectorMultisiteFrozenH
+
+47: Test command: /private/tmp/c5-rd1-release-build/bin/UnitLdaUProjectorMultisiteFrozenH
+47: Working Directory: /private/tmp/c5-rd1-release-build
+47: Test timeout computed to be: 1500
+47: [Oct 21 2026 09:14:02.286] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+47: [Oct 21 2026 09:14:02.345] [hamiltonian_hubbard.f90:306]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   1 l= 2 tr_up=  1.475000 tr_dn=  1.565000 maxabs=  4.2300E-01
+47: [Oct 21 2026 09:14:02.345] [hamiltonian_hubbard.f90:310]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   1 l= 2 U=  0.250000 J=  0.040000 nup=  1.475000 ndn=  1.565000 ntot=  3.040000
+47: [Oct 21 2026 09:14:02.346] [hamiltonian_hubbard.f90:323]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   1 l= 2 ql_up=  0.000000 ql_dn=  0.000000 ldm_up=  1.475000 ldm_dn=  1.565000 d_up(ql-ldm)= -1.475000 d_dn(ql-ldm)= -1.565000
+47: [Oct 21 2026 09:14:02.347] [hamiltonian_hubbard.f90:306]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   2 l= 2 tr_up=  1.600000 tr_dn=  1.690000 maxabs=  4.4800E-01
+47: [Oct 21 2026 09:14:02.347] [hamiltonian_hubbard.f90:310]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   2 l= 2 U=  0.310000 J=  0.025000 nup=  1.600000 ndn=  1.690000 ntot=  3.290000
+47: [Oct 21 2026 09:14:02.348] [hamiltonian_hubbard.f90:323]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   2 l= 2 ql_up=  0.000000 ql_dn=  0.000000 ldm_up=  1.600000 ldm_dn=  1.690000 d_up(ql-ldm)= -1.600000 d_dn(ql-ldm)= -1.690000
+47: [Oct 21 2026 09:14:02.355] [hamiltonian_hubbard.f90:540]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   1 l= 2 avg_up=   0.043050 avg_dn=   0.039270 split(up-dn)=   0.003780
+47: [Oct 21 2026 09:14:02.367] [hamiltonian_hubbard.f90:540]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   2 l= 2 avg_up=   0.051300 avg_dn=   0.046170 split(up-dn)=   0.005130
+47: [Oct 21 2026 09:14:02.368] [hamiltonian_hubbard.f90:572]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  7.1453E-02
+47: [Oct 21 2026 09:14:02.368] [hamiltonian_hubbard.f90:572]  [1m[32m<info> [0m[0mHUBBARD_POT type=   2 maxabs=  8.5964E-02
+47: [Oct 21 2026 09:14:02.368] [reciprocal_projection.f9:811]  [1m[32m<info> [0m[0mcalculate_ldm_from_projected_dos: Computing LDM for LDA+U from k-space DOS
+47: [Oct 21 2026 09:14:02.368] [reciprocal_projection.f9:889]  [1m[32m<info> [0m[0mcalculate_ldm_from_eigenvectors: Computing site density matrices from eigenvectors
+47: [Oct 21 2026 09:14:02.369] [reciprocal_projection.f9:1006]  [1m[32m<info> [0m[0mcalculate_ldm_from_eigenvectors: DM diagnostics site=1, trace_tot=5.870704, trace_up=2.935352, trace_dn=2.935352, max_imag=0.19E-17, max_antiherm=0.14E-16
+47: [Oct 21 2026 09:14:02.369] [reciprocal_projection.f9:1006]  [1m[32m<info> [0m[0mcalculate_ldm_from_eigenvectors: DM diagnostics site=2, trace_tot=5.129296, trace_up=2.564648, trace_dn=2.564648, max_imag=0.41E-18, max_antiherm=0.17E-17
+47: [Oct 21 2026 09:14:02.369] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=1 l=0 spin=1 trace=1.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.369] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=1 l=0 spin=2 trace=1.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.369] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=1 l=1 spin=1 trace=3.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.369] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=1 l=1 spin=2 trace=3.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.370] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=1 l=2 spin=1 trace=1.870704 eig_min=-0.000000 eig_max=0.986088 max_antiherm=0.28E-16
+47: [Oct 21 2026 09:14:02.370] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=1 l=2 spin=2 trace=1.870704 eig_min=-0.000000 eig_max=0.986088 max_antiherm=0.28E-16
+47: [Oct 21 2026 09:14:02.370] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=2 l=0 spin=1 trace=1.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.370] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=2 l=0 spin=2 trace=1.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.370] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=2 l=1 spin=1 trace=3.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.371] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=2 l=1 spin=2 trace=3.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.371] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=2 l=2 spin=1 trace=1.129296 eig_min=0.000000 eig_max=0.987908 max_antiherm=0.35E-17
+47: [Oct 21 2026 09:14:02.372] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=2 l=2 spin=2 trace=1.129296 eig_min=0.000000 eig_max=0.987908 max_antiherm=0.35E-17
+47: [Oct 21 2026 09:14:02.374] [reciprocal_projection.f9:1099]  [1m[32m<info> [0m[0mcalculate_ldm_from_eigenvectors: Eigenvector-based site density matrix -> ldm complete
+47: [Oct 21 2026 09:14:02.391] [reciprocal_projection.f9:848]  [1m[32m<info> [0m[0mcalculate_ldm_from_projected_dos: LDM calculation complete
+47: [Oct 21 2026 09:14:02.407] [reciprocal_projection.f9:711]  [1m[32m<info> [0m[0mcalculate_band_moments: Starting calculation
+47: [Oct 21 2026 09:14:02.408] [reciprocal_projection.f9:715]  [1m[32m<info> [0m[0mcalculate_band_moments: DEBUG - this%auto_find_fermi = TRUE , this%total_electrons = 0.00000
+47: [Oct 21 2026 09:14:02.408] [reciprocal_projection.f9:717]  [1m[32m<info> [0m[0mcalculate_band_moments: DEBUG - Fermi level on entry = 0.000000 Ry
+47: [Oct 21 2026 09:14:02.409] [reciprocal_projection.f9:723]  [1m[32m<info> [0m[0mcalculate_band_moments: Recovered total_electrons from valence = -2.00000
+47: [Oct 21 2026 09:14:02.410] [reciprocal_projection.f9:734]  [1m[32m<info> [0m[0mcalculate_band_moments: Using canonical/fixed Fermi level = 0.00000 Ry
+47: [Oct 21 2026 09:14:02.410] [reciprocal_spin_density.:202]  [1m[32m<info> [0m[0mDENSITY_POLICY relaxed_reference atom   1 |m|=  0.000000 axis=(  0.000000,  0.000000,  1.000000)
+47: [Oct 21 2026 09:14:02.410] [reciprocal_spin_density.:202]  [1m[32m<info> [0m[0mDENSITY_POLICY relaxed_reference atom   2 |m|=  0.000000 axis=(  0.000000,  0.000000,  1.000000)
+47: [Oct 21 2026 09:14:02.411] [reciprocal_spin_density.:234]  [1m[32m<info> [0m[0mreciprocal%fill_band_moments_from_spin_density: band moments projected from the shared rotating-frame density (policy "relaxed_reference", electron count 22.000000).
+47: [Oct 21 2026 09:14:02.411] [reciprocal_projection.f9:771]  [1m[32m<info> [0m[0mcalculate_band_moments: site 1 projection axis = (0.00000, 0.00000, 1.00000)
+47: [Oct 21 2026 09:14:02.411] [reciprocal_projection.f9:771]  [1m[32m<info> [0m[0mcalculate_band_moments: site 2 projection axis = (0.00000, 0.00000, 1.00000)
+47: [Oct 21 2026 09:14:02.411] [reciprocal_projection.f9:788]  [1m[32m<info> [0m[0mcalculate_band_moments: Sum of all m0 moments = 22.00000, expected electrons = -2.00000
+47: [Oct 21 2026 09:14:02.412] [reciprocal_projection.f9:790]  [1m[32m<info> [0m[0mcalculate_band_moments: Completed
+47: [Oct 21 2026 09:14:02.412] [reciprocal_projection.f9:811]  [1m[32m<info> [0m[0mcalculate_ldm_from_projected_dos: Computing LDM for LDA+U from k-space DOS
+47: [Oct 21 2026 09:14:02.412] [reciprocal_projection.f9:889]  [1m[32m<info> [0m[0mcalculate_ldm_from_eigenvectors: Computing site density matrices from eigenvectors
+47: [Oct 21 2026 09:14:02.413] [reciprocal_projection.f9:1006]  [1m[32m<info> [0m[0mcalculate_ldm_from_eigenvectors: DM diagnostics site=1, trace_tot=5.870704, trace_up=2.935352, trace_dn=2.935352, max_imag=0.19E-17, max_antiherm=0.14E-16
+47: [Oct 21 2026 09:14:02.414] [reciprocal_projection.f9:1006]  [1m[32m<info> [0m[0mcalculate_ldm_from_eigenvectors: DM diagnostics site=2, trace_tot=5.129296, trace_up=2.564648, trace_dn=2.564648, max_imag=0.41E-18, max_antiherm=0.17E-17
+47: [Oct 21 2026 09:14:02.415] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=1 l=0 spin=1 trace=1.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.415] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=1 l=0 spin=2 trace=1.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.415] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=1 l=1 spin=1 trace=3.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.416] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=1 l=1 spin=2 trace=3.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.416] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=1 l=2 spin=1 trace=1.870704 eig_min=-0.000000 eig_max=0.986088 max_antiherm=0.28E-16
+47: [Oct 21 2026 09:14:02.416] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=1 l=2 spin=2 trace=1.870704 eig_min=-0.000000 eig_max=0.986088 max_antiherm=0.28E-16
+47: [Oct 21 2026 09:14:02.416] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=2 l=0 spin=1 trace=1.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.417] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=2 l=0 spin=2 trace=1.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.417] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=2 l=1 spin=1 trace=3.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.419] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=2 l=1 spin=2 trace=3.000000 eig_min=1.000000 eig_max=1.000000 max_antiherm=0.00E+00
+47: [Oct 21 2026 09:14:02.420] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=2 l=2 spin=1 trace=1.129296 eig_min=0.000000 eig_max=0.987908 max_antiherm=0.35E-17
+47: [Oct 21 2026 09:14:02.420] [reciprocal_projection.f9:1083]  [1m[32m<info> [0m[0mHUBBARD_LDM_KS_PHYSICALITY site=2 l=2 spin=2 trace=1.129296 eig_min=0.000000 eig_max=0.987908 max_antiherm=0.35E-17
+47: [Oct 21 2026 09:14:02.420] [reciprocal_projection.f9:1099]  [1m[32m<info> [0m[0mcalculate_ldm_from_eigenvectors: Eigenvector-based site density matrix -> ldm complete
+47: [Oct 21 2026 09:14:02.420] [reciprocal_projection.f9:848]  [1m[32m<info> [0m[0mcalculate_ldm_from_projected_dos: LDM calculation complete
+47: [Oct 21 2026 09:14:08.614] [bands.f90:2110]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is  -4.440209  -3.071528   0.192365
+47: [Oct 21 2026 09:14:09.331] [bands.f90:2110]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -3.754119  -0.246760  -0.188683
+47: [Oct 21 2026 09:14:09.344] [bands.f90:828]             [1m[32m<info> [0m[0mDENSITY_POLICY relaxed_reference atom   1 |m|=  0.003362 axis=(  0.000000,  0.000000,  1.000000)
+47: [Oct 21 2026 09:14:09.344] [bands.f90:828]             [1m[32m<info> [0m[0mDENSITY_POLICY relaxed_reference atom   2 |m|=  0.003324 axis=(  0.000000,  0.000000,  1.000000)
+47: [Oct 21 2026 09:14:09.360] [bands.f90:1140]            [1m[32m<info> [0m[0mHUBBARD_LDM_CHECK atom=   1 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:09.361] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   1 l= 0 ql_up=  0.998292 ql_dn=  0.998286 ldm_up=  0.998292 ldm_dn=  0.998286
+47: [Oct 21 2026 09:14:09.361] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 0 spin= 1 trace=  0.998292 eig_min=  0.998292 eig_max=  0.998292 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:09.361] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 0 spin= 2 trace=  0.998286 eig_min=  0.998286 eig_max=  0.998286 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:09.361] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   1 l= 1 ql_up=  2.993254 ql_dn=  2.993064 ldm_up=  2.993254 ldm_dn=  2.993064
+47: [Oct 21 2026 09:14:09.361] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 1 spin= 1 trace=  2.993254 eig_min=  0.997342 eig_max=  0.998087 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:09.361] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 1 spin= 2 trace=  2.993064 eig_min=  0.997236 eig_max=  0.998056 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:09.362] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   1 l= 2 ql_up=  1.872900 ql_dn=  1.869734 ldm_up=  1.872900 ldm_dn=  1.869734
+47: [Oct 21 2026 09:14:09.362] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 2 spin= 1 trace=  1.872900 eig_min=  0.002392 eig_max=  0.981487 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:09.362] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 2 spin= 2 trace=  1.869734 eig_min=  0.002221 eig_max=  0.980995 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:09.372] [bands.f90:1140]            [1m[32m<info> [0m[0mHUBBARD_LDM_CHECK atom=   2 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:09.372] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   2 l= 0 ql_up=  0.998272 ql_dn=  0.998262 ldm_up=  0.998272 ldm_dn=  0.998262
+47: [Oct 21 2026 09:14:09.372] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 0 spin= 1 trace=  0.998272 eig_min=  0.998272 eig_max=  0.998272 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:09.372] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 0 spin= 2 trace=  0.998262 eig_min=  0.998262 eig_max=  0.998262 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:09.372] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   2 l= 1 ql_up=  2.992619 ql_dn=  2.992357 ldm_up=  2.992619 ldm_dn=  2.992357
+47: [Oct 21 2026 09:14:09.373] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 1 spin= 1 trace=  2.992619 eig_min=  0.996985 eig_max=  0.997988 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:09.373] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 1 spin= 2 trace=  2.992357 eig_min=  0.996834 eig_max=  0.997949 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:09.373] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   2 l= 2 ql_up=  1.140144 ql_dn=  1.137092 ldm_up=  1.140144 ldm_dn=  1.137092
+47: [Oct 21 2026 09:14:09.373] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 2 spin= 1 trace=  1.140144 eig_min=  0.002287 eig_max=  0.982876 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:09.373] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 2 spin= 2 trace=  1.137092 eig_min=  0.002129 eig_max=  0.982299 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:15.452] [bands.f90:2110]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is  -4.440209   3.071528   0.192365
+47: [Oct 21 2026 09:14:16.249] [bands.f90:2110]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -3.754119   0.246760  -0.188683
+47: [Oct 21 2026 09:14:16.267] [bands.f90:828]             [1m[32m<info> [0m[0mDENSITY_POLICY relaxed_reference atom   1 |m|=  0.003362 axis=(  0.000000,  0.000000,  1.000000)
+47: [Oct 21 2026 09:14:16.267] [bands.f90:828]             [1m[32m<info> [0m[0mDENSITY_POLICY relaxed_reference atom   2 |m|=  0.003324 axis=(  0.000000,  0.000000,  1.000000)
+47: [Oct 21 2026 09:14:16.271] [bands.f90:1140]            [1m[32m<info> [0m[0mHUBBARD_LDM_CHECK atom=   1 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:16.272] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   1 l= 0 ql_up=  0.998292 ql_dn=  0.998286 ldm_up=  0.998292 ldm_dn=  0.998286
+47: [Oct 21 2026 09:14:16.274] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 0 spin= 1 trace=  0.998292 eig_min=  0.998292 eig_max=  0.998292 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:16.275] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 0 spin= 2 trace=  0.998286 eig_min=  0.998286 eig_max=  0.998286 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:16.277] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   1 l= 1 ql_up=  2.993254 ql_dn=  2.993064 ldm_up=  2.993254 ldm_dn=  2.993064
+47: [Oct 21 2026 09:14:16.277] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 1 spin= 1 trace=  2.993254 eig_min=  0.997342 eig_max=  0.998087 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:16.277] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 1 spin= 2 trace=  2.993064 eig_min=  0.997236 eig_max=  0.998056 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:16.278] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   1 l= 2 ql_up=  1.872900 ql_dn=  1.869734 ldm_up=  1.872900 ldm_dn=  1.869734
+47: [Oct 21 2026 09:14:16.278] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 2 spin= 1 trace=  1.872900 eig_min=  0.002392 eig_max=  0.981487 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:16.278] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 2 spin= 2 trace=  1.869734 eig_min=  0.002221 eig_max=  0.980995 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:16.287] [bands.f90:1140]            [1m[32m<info> [0m[0mHUBBARD_LDM_CHECK atom=   2 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:16.288] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   2 l= 0 ql_up=  0.998272 ql_dn=  0.998262 ldm_up=  0.998272 ldm_dn=  0.998262
+47: [Oct 21 2026 09:14:16.288] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 0 spin= 1 trace=  0.998272 eig_min=  0.998272 eig_max=  0.998272 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:16.289] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 0 spin= 2 trace=  0.998262 eig_min=  0.998262 eig_max=  0.998262 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:16.290] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   2 l= 1 ql_up=  2.992619 ql_dn=  2.992357 ldm_up=  2.992619 ldm_dn=  2.992357
+47: [Oct 21 2026 09:14:16.291] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 1 spin= 1 trace=  2.992619 eig_min=  0.996985 eig_max=  0.997988 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:16.292] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 1 spin= 2 trace=  2.992357 eig_min=  0.996834 eig_max=  0.997949 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:16.292] [bands.f90:1146]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   2 l= 2 ql_up=  1.140144 ql_dn=  1.137092 ldm_up=  1.140144 ldm_dn=  1.137092
+47: [Oct 21 2026 09:14:16.292] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 2 spin= 1 trace=  1.140144 eig_min=  0.002287 eig_max=  0.982876 max_antiherm=  0.0000E+00
+47: [Oct 21 2026 09:14:16.292] [bands.f90:1162]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   2 l= 2 spin= 2 trace=  1.137092 eig_min=  0.002129 eig_max=  0.982299 max_antiherm=  0.0000E+00
+47: RD1_CAPTURE map rec-index cluster type status=1 2 2 0
+47: RD1_ORACLE spin production_center production_q2 direct_center direct_q2 abs_center_error abs_q2_error=1 -2.6849740554969020E-001  2.1152255772529907E-003 -2.6849740554969048E-001  2.1152255772529998E-003  2.7755575615628914E-016  9.1072982488782372E-018
+47: RD1_ORACLE wrong_site spin status wrong_center wrong_q2 abs_center_error abs_q2_error=1 0 -2.8098741118705156E-001  1.7149171801236281E-003  1.2490005637361079E-002  4.0030839712937175E-004
+47: RD1_ORACLE spin production_center production_q2 direct_center direct_q2 abs_center_error abs_q2_error=2 -2.3340947371550536E-001  2.0361385152931795E-003 -2.3340947371550547E-001  2.0361385152931847E-003  1.1102230246251565E-016  5.2041704279304213E-018
+47: RD1_ORACLE wrong_site spin status wrong_center wrong_q2 abs_center_error abs_q2_error=2 0 -2.4724331646945846E-001  1.6519367534429917E-003  1.3833842753952996E-002  3.8420176185019299E-004
+47: KS max error vs exact frozen-H projector =   0.000000E+00
+47: site=1 KS error=  0.000000E+00 RS Lorentz error=  2.259199E-05 TrP(up+dn)=  3.742634E+00
+47: site=2 KS error=  0.000000E+00 RS Lorentz error=  2.300895E-05 TrP(up+dn)=  2.277237E+00
+47: RS max quadrature error vs finite-window Lorentz oracle =   2.300895E-05
+47: RS production vs 6000-point Simpson reference =   1.688306E-16
+47: KS M1 max error vs exact eigenpair sum [Ry] =   1.551584E-17
+47: RS M1 max error vs analytic finite-window Lorentz oracle [Ry] =   2.845306E-07
+47: RS M1 production vs 6000-point Simpson reference [Ry] =   5.594315E-17
+47: KS max |Tr(M1)-q0*c| [Ry] =   9.458255E-17
+47: RS max |Tr(M1)-q0*c| [Ry] =   1.075995E-15
+47: Lorentz-oracle Simpson error nchannels=750 =   5.704945E-02
+47: Lorentz M1 Simpson error nchannels=750 =   1.142377E-02
+47: Lorentz-oracle Simpson error nchannels=1500 =   6.516675E-03
+47: Lorentz M1 Simpson error nchannels=1500 =   2.147020E-03
+47: Lorentz-oracle Simpson error nchannels=3000 =   4.317598E-04
+47: Lorentz M1 Simpson error nchannels=3000 =   1.123802E-04
+47: Lorentz-oracle Simpson error nchannels=6000 =   2.300895E-05
+47: Lorentz M1 Simpson error nchannels=6000 =   2.845306E-07
+47: RS broadening/window difference vs sharp KS projector =   3.050803E-03
+47: max exact imaginary d coherence =   1.824082E-01
+47: max imaginary production V_U entry =   2.630476E-03
+47: max |(H0+V_U)-H| =   2.775558E-17
+47: max |H-H^dagger| =   3.925231E-17
+47: KS conjugation negative-control mismatch =   3.648164E-01
+47: RS transpose negative-control mismatch =   3.638043E-01
+47: KS M1 conjugation negative-control mismatch [Ry] =   6.986429E-02
+47: RS M1 transpose negative-control mismatch [Ry] =   7.042847E-02
+47: KS M1 site-swap negative-control mismatch [Ry] =   4.769028E-02
+47: RS M1 site-swap negative-control mismatch [Ry] =   4.763075E-02
+47: deliberate site-swap negative-control mismatch =   1.840838E-01
+47: projector_multisite_frozen_h: PASS
+1/1 Test #47: UnitLdaUProjectorMultisiteFrozenH ...   Passed   14.69 sec
+
+The following tests passed:
+	UnitLdaUProjectorMultisiteFrozenH
+
+100% tests passed out of 1
+
+Label Time Summary:
+frozen_h      =  14.69 sec*proc (1 test)
+lda_u         =  14.69 sec*proc (1 test)
+multisite     =  14.69 sec*proc (1 test)
+projector     =  14.69 sec*proc (1 test)
+unit          =  14.69 sec*proc (1 test)
+validation    =  14.69 sec*proc (1 test)
+
+Total Test time (real) =  14.70 sec

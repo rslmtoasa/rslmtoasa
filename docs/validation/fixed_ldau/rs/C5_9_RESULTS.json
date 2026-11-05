@@ -1,0 +1,67 @@
+{
+  "schema": "c5_9_results_v1",
+  "status": "T1B_EF_UNCOVERED_C53; T2B_NOT_RUN; RD4_SHORT_NO_CRASH_THROUGH_ITERATION_1",
+  "campaign_budget": {
+    "cap": 2,
+    "campaigns_used": 0,
+    "t2b": "NOT_RUN: T1(b) EF comparison uncovered",
+    "rd4_short_invocations": 1
+  },
+  "t1": {
+    "a_production_convergence": {
+      "status": "PASS",
+      "outer_diff": "2e-10",
+      "r05_physical_pv_streak": 3
+    },
+    "occupation_and_moment": {
+      "status": "PASS",
+      "accepted_seed_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+      "source_snapshot": "/private/tmp/c58-t2a-fixed-release/immutable/Fe_out.nml",
+      "accepted_source_directory_currently_empty": "/private/tmp/a5-priority-local-u2-ks/u2_local_standard",
+      "d_up": {"accepted": 4.5918251441998414, "regenerated": 4.5918251425922421, "abs_difference": 1.608e-9},
+      "d_down": {"accepted": 1.9298878344488828, "regenerated": 1.9298878376171982, "abs_difference": 3.168e-9},
+      "sphere_moment_muB_formula": "sum_l(q_l(up)-q_l(down))",
+      "sphere_moment_muB": {"accepted": 2.5107769269566074, "regenerated": 2.5107769208639206, "abs_difference": 6.093e-9}
+    },
+    "b_fermi_level": {
+      "status": "UNEVALUATED_UNCOVERED",
+      "regenerated_endpoint_ef_ry": -0.0829496275,
+      "accepted_endpoint_ef_ry": null,
+      "accepted_input_fermi_ry": -0.082950,
+      "input_fermi_delta_ry_not_endpoint_comparison": 3.725e-7,
+      "reason": "Committed accepted-endpoint proof has no EF; saved state files have no EF field; old raw endpoint directory is empty. No evidence proves the initial deck fermi was the accepted endpoint EF."
+    },
+    "c_written_mode_backend": {
+      "status": "PASS",
+      "Fe_scf_nml": {"hubbard_radial_moments": "local", "hubbard_backend": "ks"},
+      "Fe_out_nml": {"hubbard_radial_moments": "local", "hubbard_backend": "ks"},
+      "written_output_sha256": "2284194179736d2e6694dd40514b55578bdf2558e9826d5d7ba9d5c6cc13b4bd"
+    },
+    "disposition": "C5.3 item 2 uncovered; do not proceed to T2b/adoption/merge"
+  },
+  "rd4_short": {
+    "status": "NO_CRASH_THROUGH_ONE_COMPLETE_ITERATION",
+    "run_root": "/private/tmp/c59-rd4-lambda0-rerun",
+    "binary_sha256": "d87479d402f959b2fe80975fdb8a25afa2a1794ecae1f58146b8c5f6cbf26f7e",
+    "input_source": "/private/tmp/c58-rd4-fixed-release-lambda0/immutable",
+    "preflight": "PASS",
+    "external_stop_exit_code": 143,
+    "captured_iteration": 1,
+    "stable_double_read": true,
+    "P_OUT_ql_channels": 6,
+    "POST_SCF_RADIAL_channels": 6,
+    "trace_sha256": "fd6c7148c002f381ffd2ba41da236f781193e099028d4781fa09b500a14ad18f",
+    "paired_state_sha256": "88f9cd7409f9fbd6ae9730b590d2b4476dccb3f1faeb50c382c191ad23db4c40",
+    "energy_measurement": "NONE",
+    "disk": {
+      "start_bytes": 10472448000,
+      "minimum_periodic_bytes": 9255763968,
+      "launcher_end_bytes": 9253056512,
+      "post_df_available_kib": 9036116,
+      "floor_bytes": 1073741824
+    }
+  },
+  "production_adoption": "NOT_PERFORMED",
+  "merge": "NOT_PERFORMED",
+  "push": "NOT_PERFORMED"
+}

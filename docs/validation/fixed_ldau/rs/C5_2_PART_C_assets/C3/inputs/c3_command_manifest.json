@@ -1,0 +1,178 @@
+{
+  "accepted_checkpoint_sha256": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+  "accepted_endpoint_id": "c52_triage_debug_u2:trace99:window80-99",
+  "accepted_endpoint_lock_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/accepted_c2_u2_chebyshev_endpoint_lock.json",
+  "accepted_endpoint_lock_sha256": "d923078e644eaf7ada1926a53a4c92adf3d138e22ba8307ca87896d567cec1f5",
+  "adapter": {
+    "command_template": "/opt/homebrew/opt/python@3.11/bin/python3.11 /private/tmp/c52-c-private/c3_c2_adapter.py --capture <fresh-capture-dir> --lock <accepted-C2-U2-Chebyshev-endpoint-lock.json> --source /Users/andersb/Jobb/rslmto_fable_v4b/source/self.f90 --binary /private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x --driver /private/tmp/c52-c-private/helper-build/accepted_m03_replay_driver --mode baseline --output <fresh-capture-dir>/analysis/baseline.json",
+    "path": "/private/tmp/c52-c-private/c3_c2_adapter.py",
+    "sha256": "c0244025b492775f3b551f2c5a301e5bc7fe65c5af695d3af8c079b2f2a24696",
+    "test_path": "/private/tmp/c52-c-private/test_c3_c2_adapter.py",
+    "test_sha256": "8a7c3fb6ac870d1154d3031996befbad7c85ff9131b1fa451e760e35fff9737b"
+  },
+  "analysis_plan": {
+    "all_commands_require_explicit_capture_and_lock_paths": true,
+    "baseline_mode": "baseline",
+    "block_chebyshev_status": "NOT_EVALUATED; not a C3 prerequisite per root direction",
+    "c3_gate_only": [
+      "carrier ratio per spin in [0.99,1.01]",
+      "q2prime per spin >=0"
+    ],
+    "cases_mode": "cases",
+    "no_solver_launch_in_analysis_modes": true,
+    "preregister_mode": "preregister"
+  },
+  "capture_executable": {
+    "mode": "0555",
+    "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x",
+    "role": "same frozen source+binary identity as accepted endpoint producer; distinct build config Debug bounds checked",
+    "sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69"
+  },
+  "capture_phase": {
+    "capture_only_semantics": "No live replay equality result is established by CAPTURE_ONLY=1; run baseline replay separately through the C3 adapter.",
+    "radial_replay_rows": "Produced by the final LAST radial pass for iteration 1. Capture-only suppresses the independent replay verification but still writes radial replay input and output rows. These rows are kept phase-distinct from P_OUT.",
+    "selected_rows": "P_OUT rows at outer iteration 1 are fresh DOS outputs before mixing; includes full g0, ql, M1 and local potential/density data."
+  },
+  "driver_identity": {
+    "archive_path": "/private/tmp/c5-b1-guard-build-clean/source/librslmto.a",
+    "archive_sha256": "36725c2ae3ba7c07c74c17940d9047bf8a314431146782bdd4e09ecc0e5dcead",
+    "driver_binary_path": "/private/tmp/c52-c-private/helper-build/accepted_m03_replay_driver",
+    "driver_binary_sha256": "9e3f44379b8933d21eafb78e8008cbf0d44dd9b65a77140af2920c26713ac9d7",
+    "driver_source_path": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/accepted_m03_replay_driver.f90",
+    "driver_source_sha256": "124726aaab8f5937fa13be925969b67d4e647ee9c910596d58698ffb13e5476a",
+    "role": "B1 current-source Release helper archive/driver for deterministic off-line radial replay; distinct from C3 capture executable, both source-bound to same current HEAD.",
+    "source_build_manifest_path": "/private/tmp/c52-c-private/helper-build/source_build_manifest.json",
+    "source_build_manifest_sha256": "46c65c1ae8227370cb2be630754de8e6eda8422b84e7884ef69036ffd47bae17"
+  },
+  "endpoint_provenance": {
+    "accepted_checkpoint_sha256": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+    "capture_binary_same_as_producer": true,
+    "lock_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/accepted_c2_u2_chebyshev_endpoint_lock.json",
+    "lock_sha256": "d923078e644eaf7ada1926a53a4c92adf3d138e22ba8307ca87896d567cec1f5",
+    "producer_binary_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x",
+    "producer_binary_sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69"
+  },
+  "input_derivation": "Corrected U2 Chebyshev deck with only self.nstep changed 100 to 1; immutable endpoint and input originals retained under capture/immutable_inputs; mutable working Fe_out/input copies are 0644 writable.",
+  "input_template_path": "/private/tmp/c52-c2-stage/c3_full_capture_template/input.nml",
+  "input_template_sha256": "03a6f0ed8e35f46ddfc05c466cdc4d895c9b4c2e532bdc1c85cdc8ac6ed77878",
+  "launch": {
+    "binder_path": "/private/tmp/c52-c2-stage/c3_debug_capture_template/bind_accepted_endpoint.py",
+    "binder_sha256": "484d7848ad429b7c2d8c45f26ddb3008f91d23f5137e8b2a2b34e1939cd8f474",
+    "command": "C52_EXPLICIT_RUN_AUTHORIZED=1 /private/tmp/c52-c2-stage/c3_debug_capture_template/launch_capture.sh /private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/accepted_c2_u2_chebyshev_endpoint_lock.json <fresh-capture-dir>",
+    "safety": "The wrapper requires an explicit lock and fresh capture directory, binds and hashes the accepted checkpoint, captures wrapper PID and actual solver PID via $!, and writes wait exit code. Without explicit authorization it exits 77. Bash 3.2 syntax; no BASHPID.",
+    "template_wrapper_path": "/private/tmp/c52-c2-stage/c3_debug_capture_template/launch_capture.sh",
+    "wrapper_sha256": "a944bd17f8176bc2b7dc5971ded4d45cf8bd825e8189ea445d92b607c4f30e59"
+  },
+  "namelist_validation": {
+    "groups": [
+      "atoms",
+      "calculation",
+      "control",
+      "energy",
+      "hamiltonian",
+      "lattice",
+      "mix",
+      "self"
+    ],
+    "member_counts": {
+      "atoms": 2,
+      "calculation": 2,
+      "control": 5,
+      "energy": 5,
+      "hamiltonian": 4,
+      "lattice": 7,
+      "mix": 2,
+      "self": 3
+    },
+    "path": "/private/tmp/c52-c2-stage/c3_full_capture_template/input.nml",
+    "schema_valid": true
+  },
+  "no_result_claim": "Private C3 capture template bound to audited accepted Debug endpoint99; no capture launched, no C3 measurement/pass and no Co U>0 admission.",
+  "post_capture": {
+    "command": "/opt/homebrew/opt/python@3.11/bin/python3.11 /private/tmp/c52-c2-stage/c3_full_capture_template/finalize_capture.py --capture-dir <fresh-capture-dir>",
+    "finalizer_contract": "Requires natural solver exit 0 and closed PID; verifies exact run ID and selected iteration 1, finite CSV fields, expected writer row families, and full square Green matrices before writing the C3 manifest.",
+    "finalizer_path": "/private/tmp/c52-c2-stage/c3_full_capture_template/finalize_capture.py",
+    "finalizer_sha256": "7c22523fcf16b63446ccd334c59de2de2c9805b23175edff2cf52eab6301d397"
+  },
+  "schema": "c52-c3-full-capture-template-v1",
+  "source_identity": {
+    "binary_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x",
+    "binary_role": "same exact current-source bounds-checked Debug executable that produced accepted endpoint99; no Release-only criterion applies.",
+    "binary_sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69",
+    "math_source_path": "/Users/andersb/Jobb/rslmto_fable_v4b/source/math.f90",
+    "math_source_sha256": "e4bbcaecb2d8978fd3cc0d5e8b376285bd6b60aaa336a49a60911eaa7851b7ec",
+    "producer_build_manifest_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/debug_bounds_build_manifest.json",
+    "producer_build_manifest_sha256": "8f38624f52755a410534e24847cf31e0eca266bd9db1da27e9acb428aa394a32",
+    "repo_head": "8a107432e3ca2e00c815c217d52e7aa2a8e30736",
+    "source_self_path": "/Users/andersb/Jobb/rslmto_fable_v4b/source/self.f90",
+    "source_self_sha256": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107"
+  },
+  "status": "PRIVATE_VARIANT_READY_FOR_AUDIT_NOT_LAUNCHED",
+  "system": {
+    "backend": "RS",
+    "calctype": "B",
+    "j_ev": 0.0,
+    "lmax": 2,
+    "nsp": 1,
+    "radial_moments": "local",
+    "recurrence": "chebyshev",
+    "u_ev": 2.0,
+    "use_kspace": false
+  },
+  "trace_plan": {
+    "a2_scan": false,
+    "capture_only": true,
+    "flags_source": "C5.2/RB3 capture: source/self.f90:524-569; P_OUT trace writer 635-798; RS Green rows 2577-2631; radial capture 5368-5384; one-step deck follows existing RB3 input pattern.",
+    "lambda": 1.0,
+    "moments_only": false,
+    "ql_only": false,
+    "run_id": "c3_fe_u2_cheb_fullcapture_i1",
+    "selected_iteration": 1,
+    "trace_path_template": "<fresh-capture-dir>/records.csv"
+  },
+  "writer_row_contract": {
+    "adapter_required_kinds": [
+      "basis_map",
+      "green_function",
+      "radial_replay_mesh",
+      "radial_replay_v",
+      "radial_replay_rho_in",
+      "radial_replay_ec_seed",
+      "radial_replay_eigen_seed",
+      "radial_replay_ql",
+      "radial_replay_pl",
+      "pl_map_input",
+      "m0_carrier_input",
+      "m0_carrier_local",
+      "m0_carrier_control",
+      "ldm",
+      "ldm_m1",
+      "v_hub"
+    ],
+    "additional_current_writer_kinds": [
+      "ldm_availability",
+      "vin_availability",
+      "radial_moment",
+      "radial_parameter",
+      "m1_trace_consistency",
+      "radial_replay_rho_core",
+      "radial_replay_rho_out",
+      "radial_replay_sumec",
+      "radial_replay_sumev",
+      "radial_replay_wave",
+      "radial_replay_nre",
+      "radial_replay_eigenvalue",
+      "radial_replay_pnu",
+      "radial_replay_enu",
+      "radial_replay_gravity_center",
+      "radial_replay_band_center",
+      "radial_replay_c",
+      "radial_replay_qpar",
+      "radial_replay_srdel",
+      "m0_p_availability",
+      "m0_carrier_identity",
+      "m0_trace_consistency"
+    ],
+    "shape": "Full RS Green matrix for every captured energy point: all n\u00d7n pairs with a complete (l,m,spin) basis map. Record actual grid count; do not hardcode the older RB3 1531 point count. Replay dimensions are checked from captured rows (expected Fe spd NR495/core10/valence6)."
+  }
+}

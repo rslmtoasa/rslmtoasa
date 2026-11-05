@@ -1,0 +1,191 @@
+--- a/source/math.f90
++++ b/source/math.f90
+@@ -151,6 +151,7 @@
+    public :: correct_d_shell_moments
+    public :: extract_hubbard_d_shell_potential
+    public :: fixed_impurity_atom_carries_uj
++   public :: auto_impurity_local_host_eligible
+
+ contains
+
+@@ -306,6 +307,30 @@
+       real(rp), intent(in) :: u_row(:), j_row(:)
+       fixed_impurity_atom_carries_uj = any(abs(u_row) > 1.0e-10_rp) .or. any(abs(j_row) > 1.0e-10_rp)
+    end function fixed_impurity_atom_carries_uj
++
++   pure subroutine auto_impurity_local_host_eligible(scope_eligible, host_active, host_mode, eligible, reason)
++      logical, intent(in) :: scope_eligible, host_active(:)
++      character(len=*), intent(in) :: host_mode(:)
++      logical, intent(out) :: eligible
++      character(len=*), intent(out) :: reason
++      integer :: i
++
++      eligible = .false.
++      reason = 'impurity is outside fixed Liechtenstein scalar d-shell scope'
++      if (.not. scope_eligible) return
++      reason = 'no U-carrying host potential was found'
++      if (size(host_active) /= size(host_mode)) return
++      if (.not. any(host_active)) return
++      do i = 1, size(host_active)
++         if (.not. host_active(i)) cycle
++         if (trim(host_mode(i)) /= 'local') then
++            reason = 'at least one U-carrying host potential is spectral or has legacy provenance'
++            return
++         end if
++      end do
++      eligible = .true.
++      reason = 'all U-carrying host potentials record local moments'
++   end subroutine auto_impurity_local_host_eligible
+
+    !---------------------------------------------------------------------------
+    ! DESCRIPTION:
+--- a/source/self.f90
++++ b/source/self.f90
+@@ -413,6 +413,7 @@
+       procedure, private :: write_hubbard_moment_energy_diagnostics
+       procedure, private :: validate_hubbard_mode_provenance
+       procedure, private :: is_eligible_local_hubbard
++      procedure, private :: is_eligible_local_moments
+       procedure, private :: fixed_hubbard_energy_pout
+       procedure, private :: write_fixed_u_radial_replay_input
+       procedure, private :: write_fixed_u_radial_replay_output
+@@ -2364,6 +2365,64 @@
+           this%hamiltonian%hubbard_test_lambda == 0.0_rp)
+    end function is_eligible_local_hubbard
+
++   logical function is_eligible_local_moments(this, reason) result(eligible)
++      class(self), intent(in) :: this
++      character(len=*), intent(out), optional :: reason
++      integer :: ia, nactive
++      logical :: scope_eligible
++      logical, allocatable :: host_active(:)
++      character(len=16), allocatable :: host_mode(:)
++      character(len=128) :: local_reason
++
++      scope_eligible = (this%hamiltonian%hubbard_u_general_check .or. &
++         this%hamiltonian%hubbard_u_impurity_check) .and. &
++         trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein' .and. &
++         this%control%nsp == 1 .and. this%control%lmax == 2 .and. &
++         (this%control%calctype == 'B' .or. this%control%calctype == 'I') .and. &
++         .not. this%control%constraints_enable .and. &
++         .not. this%control%has_soc() .and. .not. this%control%is_noncollinear() .and. &
++         .not. this%hamiltonian%hoh .and. .not. this%hamiltonian%hubbard_u_sc_check .and. &
++         .not. this%hamiltonian%hubbard_v_check .and. &
++         .not. this%hamiltonian%hubbard_test_operator_check
++      eligible = .false.
++      local_reason = 'impurity is outside fixed Liechtenstein scalar d-shell scope'
++      if (.not. scope_eligible) then
++         if (present(reason)) reason = trim(local_reason)
++         return
++      end if
++      if (this%control%calctype == 'B') then
++         eligible = this%hamiltonian%hubbard_u_general_check .and. &
++            .not. this%hamiltonian%hubbard_u_impurity_check .and. &
++            this%lattice%nbulk == 0 .and. this%lattice%nrec == this%lattice%ntype
++         if (present(reason)) reason = 'existing fixed-U clean-bulk eligibility'
++         return
++      end if
++
++      nactive = 0
++      do ia = 1, size(this%symbolic_atom)
++         if (.not. allocated(this%symbolic_atom(ia)%potential%hubbard_u) .or. &
++             .not. allocated(this%symbolic_atom(ia)%potential%hubbard_j)) cycle
++         if (any(abs(this%symbolic_atom(ia)%potential%hubbard_u) > 1.0e-10_rp) .or. &
++             any(abs(this%symbolic_atom(ia)%potential%hubbard_j) > 1.0e-10_rp)) nactive = nactive + 1
++      end do
++      allocate(host_active(nactive), host_mode(nactive))
++      host_active = .true.
++      host_mode = 'spectral'
++      nactive = 0
++      do ia = 1, size(this%symbolic_atom)
++         if (.not. allocated(this%symbolic_atom(ia)%potential%hubbard_u) .or. &
++             .not. allocated(this%symbolic_atom(ia)%potential%hubbard_j)) cycle
++         if (.not. (any(abs(this%symbolic_atom(ia)%potential%hubbard_u) > 1.0e-10_rp) .or. &
++                    any(abs(this%symbolic_atom(ia)%potential%hubbard_j) > 1.0e-10_rp))) cycle
++         nactive = nactive + 1
++         if (.not. this%symbolic_atom(ia)%potential%hubbard_file_has_uj) cycle
++         if (len_trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments) > 0) &
++            host_mode(nactive) = trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments)
++      end do
++      call auto_impurity_local_host_eligible(scope_eligible, host_active, host_mode, eligible, local_reason)
++      if (present(reason)) reason = trim(local_reason)
++   end function is_eligible_local_moments
++
+    subroutine validate_hubbard_mode_provenance(this)
+       class(self), intent(inout) :: this
+       integer :: ia
+@@ -3181,6 +3240,7 @@
+       ! variables associated with the reading processes
+       integer :: iostatus, funit, i, k
+       logical :: radial_mode_defaulted, atomsc_control_active
++      character(len=128) :: radial_mode_reason
+       character(len=8) :: radial_mode_source
+
+       include 'include_codes/namelists/self.f90'
+@@ -3350,10 +3410,12 @@
+       this%use_kspace = use_kspace
+       radial_mode_defaulted = trim(this%hamiltonian%hubbard_radial_moments) == 'auto'
+       if (trim(this%hamiltonian%hubbard_radial_moments) == 'auto') then
+-         if (this%is_eligible_local_hubbard()) then
++         if (this%is_eligible_local_moments(radial_mode_reason)) then
+             this%hamiltonian%hubbard_radial_moments = 'local'
+          else
+             this%hamiltonian%hubbard_radial_moments = 'spectral'
++            if (rank == 0 .and. this%control%calctype == 'I') &
++               call g_logger%info('HUBBARD_RADIAL_MODE auto retained spectral: '//trim(radial_mode_reason), __FILE__, __LINE__)
+          end if
+       end if
+       radial_mode_source = 'explicit'
+--- /dev/null
++++ b/tests/unit/test_auto_impurity_local_mode.f90
+@@ -0,0 +1,39 @@
++program test_auto_impurity_local_mode
++   use math_mod, only: auto_impurity_local_host_eligible
++   implicit none
++   logical :: eligible
++   character(len=128) :: reason
++   logical :: active(3)
++   character(len=16) :: mode(3)
++
++   active = [.true., .true., .false.]
++   mode = ['local           ', 'local           ', 'spectral        ']
++   call auto_impurity_local_host_eligible(.true., active, mode, eligible, reason)
++   call check(eligible, 'all U-carrying host files local')
++
++   mode(2) = 'spectral'
++   call auto_impurity_local_host_eligible(.true., active, mode, eligible, reason)
++   call check(.not. eligible .and. index(reason, 'spectral') > 0, 'mixed host provenance retains spectral with reason')
++
++   mode(2) = ''
++   call auto_impurity_local_host_eligible(.true., active, mode, eligible, reason)
++   call check(.not. eligible .and. index(reason, 'spectral') > 0, 'legacy host provenance retains spectral with reason')
++
++   mode(2) = 'local'
++   call auto_impurity_local_host_eligible(.false., active, mode, eligible, reason)
++   call check(.not. eligible .and. index(reason, 'scope') > 0, 'guarded or unsupported scope remains ineligible')
++
++   active = .false.
++   call auto_impurity_local_host_eligible(.true., active, mode, eligible, reason)
++   call check(.not. eligible .and. index(reason, 'no U-carrying') > 0, 'no-U impurity keeps legacy spectral default')
++   write(*,'(a)') 'RESULT: PASS'
++contains
++   subroutine check(ok, label)
++      logical, intent(in) :: ok
++      character(len=*), intent(in) :: label
++      if (.not. ok) then
++         write(*,'(a)') 'FAIL: '//label
++         error stop 1
++      end if
++   end subroutine check
++end program test_auto_impurity_local_mode
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -802,6 +802,8 @@
+   add_fortran_unit_test(UnitLocalMomentsKernel ${TestDIR}/unit/test_local_moments_kernel.f90
+     ${TestDIR}/validation/fixed_ldau/data/a3_m14_reference_fixture.txt)
+   set_tests_properties(UnitLocalMomentsKernel PROPERTIES LABELS "unit;lda_u;local_moments;oracle")
++  add_fortran_unit_test(UnitAutoImpurityLocalMode ${TestDIR}/unit/test_auto_impurity_local_mode.f90)
++  set_tests_properties(UnitAutoImpurityLocalMode PROPERTIES LABELS "unit;lda_u;local_moments;resolver")
+   add_fortran_unit_test(UnitLocalMomentsSiteSwap ${TestDIR}/unit/test_local_moments_site_swap.f90
+     ${TestDIR}/validation/fixed_ldau/data/a3_m14_fresh_site_swap_reference.txt)
+   set_tests_properties(UnitLocalMomentsSiteSwap PROPERTIES LABELS "unit;lda_u;local_moments;oracle;mapping")

@@ -1,0 +1,9 @@
+{
+  "captured_entries": 0,
+  "ended_local": "2026-10-21T09:28:44.140004+02:00",
+  "manifest_path": "/private/tmp/c52-rd-ni-followups/ni_u0_ks_block_rc80_beta005_cont200/captures/trace_state_manifest.jsonl",
+  "record_type": "read_only_trace_watcher_stop",
+  "run_id": "rd_ni_ks_u0_bulk_rc80_beta005_cont200",
+  "solver_pid": 53078,
+  "stop_requested": false
+}

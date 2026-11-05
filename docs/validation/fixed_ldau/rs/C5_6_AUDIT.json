@@ -1,0 +1,83 @@
+{
+  "schema": "c5_6_final_batched_audit_v1",
+  "date": "2026-10-21",
+  "repository_head": "e67291fc1a09abc4a437285912ecc2b56da2459b",
+  "branch": "fix/ldau-rs-impurity",
+  "scope": "One final batched audit of C5.6 T0 and the sole T2a attempt; no campaign execution, source edits, retagging, cleanup, or merge.",
+  "budget": {
+    "c5_5_clarification": "Yes—three campaign runs; verification separate",
+    "c5_6_campaign_cap": 2,
+    "campaign_attempts_used": 1,
+    "campaign_attempts_remaining": 1,
+    "t2a_invocations": 1,
+    "t2b_invocations": 0,
+    "t2b_status": "NOT_RUN: T2a did not produce an accepted regenerated host",
+    "t3_t4": "STOPPED under the explicit C5.6 T2a/T2b failure branch"
+  },
+  "t0_deletion_audit": {
+    "verdict": "PASS_WITH_RECORDED_SCOPE",
+    "ledger": "C5_6_T0_DELETION_LEDGER.json",
+    "ledger_base_and_evidence_commit": "dc63f5686ed2b790c8ec6ae3a256070e0d187a55",
+    "deleted_directory_count": 24,
+    "allocated_bytes_reclaimed_estimate": 250454016,
+    "sum_of_recorded_allocated_bytes": 250454016,
+    "observed_available_space_delta_kib_during_cleanup": 242360,
+    "all_ledgered_deleted_paths_absent_at_audit": true,
+    "committed_evidence_git_blob_bindings_match": true,
+    "rd2_raw_archive_sha256": "41a8df65e128acec39fe5db3a06699cc259a8ac8481e499cb6867413e5b7f2b3",
+    "rd2_raw_archive_hash_matches_ledger_and_required_entries_were_recorded_readable": true,
+    "protected_accepted_and_reference_directories_present": [
+      "/private/tmp/a5-priority-local-u2-ks/u2_local_standard",
+      "/private/tmp/c52-rd-ni-u0-host",
+      "/private/tmp/c54-t3-ni-u0",
+      "/private/tmp/c55-t1-ni-auto",
+      "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf",
+      "/private/tmp/c4-b3-rs-u2-auto-accepted-fe-scf-budget30",
+      "/private/tmp/c4-rs-j09-accepted-j08"
+    ],
+    "user_co_files": "Existing untracked Co files remain visible in git status; no Co path was modified by the audit."
+  },
+  "t2a_audit": {
+    "verdict": "FAIL_BEFORE_SCF; KS_ACCEPTANCE_UNEVALUATED",
+    "result_record": "C5_6_RESULTS.json",
+    "run_record": "C5_6_T2A_PROVENANCE.json",
+    "human_report": "C5_6_T2A_RESULTS.md",
+    "raw_packet": "C5_6_T2A_assets/t2a_ks_u2_auto_failed_raw.tar.gz",
+    "raw_packet_sha256": "49c1562e95b419a6206fe1d816fc48f22b335dc3194d670bed386f7e417cdec4",
+    "raw_packet_hash_matches_result_record": true,
+    "solver_log_sha256": "788ffba610b7a7400cd0d0e975cbe51cca613df4048ff0ebefee26b7dbe2e5a6",
+    "binary_sha256": "4554ea2b10a29d35e455be34f7e97c7651aae43c859be00abd08c5a726fdc22e",
+    "source_tree_manifest_sha256": "212f92cd9ab968b01e0bb43116d457469449ea957dd06a9b76bc07fa1e7a3603",
+    "preflight": "PASS per recorded preflight; native bcc Fe KS recipe, exact accepted restart, parsed inputs, and single-thread caps recorded",
+    "restart_binding": "PASS; staged Fe_scf.nml and Fe_out.nml SHA256 both equal the protected accepted-state SHA256 bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+    "backend_and_mode": "Log reports HUBBARD_RADIAL_MODE mode=local source=default use_kspace=.true. local_energy_adopted=.true.; this establishes native KS and resolved local mode.",
+    "provenance_guard": "Source validator confirms a missing stored mode is interpreted as spectral and a mismatch is fatal. The raw runtime log shows the legacy warning followed by fatal file mode=spectral/run mode=local at source/self.f90:2392.",
+    "iterations": 0,
+    "scf_acceptance_metrics": "UNEVALUATED: no iteration, convergence, occupation or moment acceptance window exists.",
+    "new_host_metadata": "NONE: run restart files stayed byte-identical to the legacy inputs; no local/KS serialized host was produced.",
+    "failure_classification": "Existing provenance guard blocks regeneration from this accepted legacy restart as supplied. This audit does not infer that a retry or metadata retag would succeed and makes no source or input change.",
+    "owned_processes_exited": true,
+    "protected_original_checkpoint_unchanged": true,
+    "no_metadata_retagging_or_source_change": true
+  },
+  "disk": {
+    "t0_pre_available_kib": 9046720,
+    "t0_post_available_kib": 9289080,
+    "t0_observed_delta_kib": 242360,
+    "t2a_prelaunch_available_bytes": 7547469824,
+    "t2a_minimum_periodic_available_bytes": 7545163776,
+    "t2a_postrun_available_kib": 7316240,
+    "t2a_guard_floor_bytes": 1073741824,
+    "t2a_guard_triggered": false,
+    "audit_time_available_kib": 7223536,
+    "note": "Available space varied after T2a; the audit-time snapshot remains above the 1 GiB guard. Filesystem activity may be external."
+  },
+  "gates_and_followup": {
+    "t2a_gate": "FAIL; required accepted regenerated KS host was not obtained",
+    "t2b_gate": "NOT_RUN",
+    "t3_warning_unit_documentation_and_regressions": "NOT_APPLIED due to explicit failure stop. Existing warning does not establish the requested T3 wording or unit test.",
+    "merge": "NOT_PERFORMED; C5.6 stop branch applies",
+    "push": "NOT_PERFORMED",
+    "audit_actions": "Read-only audit plus creation of C5_6_AUDIT.json and C5_6_AUDIT.md only"
+  }
+}

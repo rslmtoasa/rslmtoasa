@@ -1,0 +1,391 @@
+{
+  "authorization_sha256": "300e2df436e98e199cd4d8eec906ec2097d87d33f4191cb5bfd608139bfdf32f",
+  "baseline_report_sha256": "dd6eb6919ae1673459afe8f636289b9fc010b02bdc11dbdfc34745f6ded0153f",
+  "binding_sha256": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668",
+  "driver_output_path": "/private/tmp/c52-rd2-private/diagnostic_006/replay_006/driver.output.csv",
+  "driver_output_sha256": "49206e51fd5b8cd1bbab83d79dca7d47b74ef760725e8eff6fee3d616954c32e",
+  "driver_sha256": "34b4456919a77513504ceddc9890dd3dac7d23c9fbe6f0bbbed50c0a6d112508",
+  "formal_gates": {
+    "all_rd2_gate_conditions_pass": false,
+    "carrier_ratio_each_spin_within_1_percent": true,
+    "measured_carrier_error_ry": 0.006152413372614851,
+    "q2_prime_nonnegative": true,
+    "scalar_control_within_registered_fit_allowance": false,
+    "sign_and_spin_swap_each_exceed_10x_carrier_error": false,
+    "wrong_control_separation_ry": {
+      "OPPOSITE_SPIN": 0.0061524133745932685,
+      "SIGN_WRONG": 1.3962656345471736
+    }
+  },
+  "measurements": {
+    "carrier": {
+      "absolute_error_ry": 0.006152413372614851,
+      "allowance_ry": 0.004553865505880194,
+      "delta_sumev_by_spin_ry": {
+        "1": -0.35587080444982866,
+        "2": -0.355870810748266
+      },
+      "errors_by_spin_ry": {
+        "1": 0.0030762052287575115,
+        "2": 0.0030762081438573396
+      },
+      "pass": false,
+      "signed_ratio_by_spin": {
+        "1": 0.9914299182168642,
+        "2": 0.9914299103155894
+      },
+      "true_trace_by_spin_ry": {
+        "1": -0.35894700967858617,
+        "2": -0.3589470188921233
+      }
+    },
+    "cases": {
+      "LOCAL_PL": {
+        "actual_l2_radial_charge_by_spin": {
+          "1": 4.738779895948553,
+          "2": 4.738779920220766
+        },
+        "actual_l2_radial_charge_total": 9.477559816169318,
+        "ev_by_state_ry": {
+          "0": -0.04199709432272665,
+          "1": 0.1128489838668227,
+          "2": 0.27535190568663026,
+          "3": -0.04199722082271772,
+          "4": 0.11284902208050866,
+          "5": 0.27535191403823317
+        },
+        "frozen_input_rho_casewise_components": {
+          "EKIN": 3087.773814439505,
+          "ETOT": -3036.745398405788,
+          "RHOEPS": -124.6937752631402,
+          "RHOMU": -164.71311718941482,
+          "RHOVH": -4668.203219767358,
+          "SUMEC": -1747.8798095402574,
+          "SUMEV": 2.737287022989622,
+          "UTOT": -5999.8254375821525,
+          "VNUCL": 261.8374162641767,
+          "ZVNUCL": -7331.447655396947
+        },
+        "output_rho_diagnostic_components": {
+          "EKIN": 3087.773814937371,
+          "ETOT": -3036.74539745643,
+          "RHOEPS": -124.69377521374594,
+          "RHOMU": -164.7131171239891,
+          "RHOVH": -4668.20322033065,
+          "SUMEC": -1747.8798095402574,
+          "SUMEV": 2.737287022989622,
+          "UTOT": -5999.825437180055,
+          "VNUCL": 261.83741621533784,
+          "ZVNUCL": -7331.44765402946
+        },
+        "sphere_charge_by_spin": {
+          "1": 14.571483913640622,
+          "2": 14.571484000415971
+        },
+        "sphere_spin_moment": -8.677534957257649e-08,
+        "sumec_by_spin_ry": {
+          "1": -873.9399047533387,
+          "2": -873.9399047869186
+        },
+        "sumev_by_spin_ry": {
+          "1": 1.3686434862060946,
+          "2": 1.3686435367835275
+        }
+      },
+      "OPPOSITE_SPIN": {
+        "actual_l2_radial_charge_by_spin": {
+          "1": 4.7387798959689595,
+          "2": 4.738779920231004
+        },
+        "actual_l2_radial_charge_total": 9.477559816199964,
+        "ev_by_state_ry": {
+          "0": -0.04199709432272665,
+          "1": 0.1128489838668227,
+          "2": 0.2753519065533297,
+          "3": -0.04199722082271772,
+          "4": 0.11284902208050866,
+          "5": 0.2753519131711163
+        },
+        "frozen_input_rho_casewise_components": {
+          "EKIN": 3087.773814439503,
+          "ETOT": -3036.7453984057897,
+          "RHOEPS": -124.6937752631402,
+          "RHOMU": -164.71311718941482,
+          "RHOVH": -4668.203219767358,
+          "SUMEC": -1747.8798095402574,
+          "SUMEV": 2.7372870229876436,
+          "UTOT": -5999.8254375821525,
+          "VNUCL": 261.8374162641767,
+          "ZVNUCL": -7331.447655396947
+        },
+        "output_rho_diagnostic_components": {
+          "EKIN": 3087.77381508539,
+          "ETOT": -3036.7453971291534,
+          "RHOEPS": -124.69377519675605,
+          "RHOMU": -164.71311710148157,
+          "RHOVH": -4668.203220501178,
+          "SUMEC": -1747.8798095402574,
+          "SUMEV": 2.7372870229876436,
+          "UTOT": -5999.825437017787,
+          "VNUCL": 261.837416197657,
+          "ZVNUCL": -7331.447653534396
+        },
+        "sphere_charge_by_spin": {
+          "1": 14.571483913661035,
+          "2": 14.571484000426222
+        },
+        "sphere_spin_moment": -8.676518703509828e-08,
+        "sumec_by_spin_ry": {
+          "1": -873.9399047533387,
+          "2": -873.9399047869186
+        },
+        "sumev_by_spin_ry": {
+          "1": 1.368643490313177,
+          "2": 1.3686435326744666
+        }
+      },
+      "RAW_PL": {
+        "actual_l2_radial_charge_by_spin": {
+          "1": 4.738774395660267,
+          "2": 4.738774419938557
+        },
+        "actual_l2_radial_charge_total": 9.477548815598823,
+        "ev_by_state_ry": {
+          "0": -0.04199709432272665,
+          "1": 0.1128489838668227,
+          "2": 0.2002540680651386,
+          "3": -0.04199722082271772,
+          "4": 0.11284902208050866,
+          "5": 0.2002540754721339
+        },
+        "frozen_input_rho_casewise_components": {
+          "EKIN": 3087.062072824307,
+          "ETOT": -3037.4571400209857,
+          "RHOEPS": -124.6937752631402,
+          "RHOMU": -164.71311718941482,
+          "RHOVH": -4668.203219767358,
+          "SUMEC": -1747.8798095402574,
+          "SUMEV": 2.0255454077915274,
+          "UTOT": -5999.8254375821525,
+          "VNUCL": 261.8374162641767,
+          "ZVNUCL": -7331.447655396947
+        },
+        "output_rho_diagnostic_components": {
+          "EKIN": 3097.860484837919,
+          "ETOT": -3013.7952627921154,
+          "RHOEPS": -123.48598399118929,
+          "RHOMU": -163.11326702774826,
+          "RHOVH": -4680.601481942636,
+          "SUMEC": -1747.8798095402574,
+          "SUMEV": 2.0255454077915274,
+          "UTOT": -5988.169763638845,
+          "VNUCL": 260.5620730476805,
+          "ZVNUCL": -7295.738045335053
+        },
+        "sphere_charge_by_spin": {
+          "1": 14.571478413352343,
+          "2": 14.571478500133768
+        },
+        "sphere_spin_moment": -8.678142471296724e-08,
+        "sumec_by_spin_ry": {
+          "1": -873.9399047533387,
+          "2": -873.9399047869186
+        },
+        "sumev_by_spin_ry": {
+          "1": 1.012772681756266,
+          "2": 1.0127727260352615
+        }
+      },
+      "SCALAR_V_PLUS_001": {
+        "actual_l2_radial_charge_by_spin": {
+          "1": 4.738773832513531,
+          "2": 4.7387738567612985
+        },
+        "actual_l2_radial_charge_total": 9.477547689274829,
+        "ev_by_state_ry": {
+          "0": -0.04199709432272665,
+          "1": 0.1128489838668227,
+          "2": 0.19053851154424245,
+          "3": -0.04199722082271772,
+          "4": 0.11284902208050866,
+          "5": 0.19053851892963433
+        },
+        "frozen_input_rho_casewise_components": {
+          "EKIN": 3086.969993397336,
+          "ETOT": -3037.5492194479566,
+          "RHOEPS": -124.6937752631402,
+          "RHOMU": -164.71311718941482,
+          "RHOVH": -4668.203219767358,
+          "SUMEC": -1747.8798095402574,
+          "SUMEV": 1.9334659808207748,
+          "UTOT": -5999.8254375821525,
+          "VNUCL": 261.8374162641767,
+          "ZVNUCL": -7331.447655396947
+        },
+        "output_rho_diagnostic_components": {
+          "EKIN": 3099.1981992688975,
+          "ETOT": -3010.7216916234697,
+          "RHOEPS": -123.32671527845183,
+          "RHOMU": -162.9023002034482,
+          "RHOVH": -4682.242242624886,
+          "SUMEC": -1747.8798095402574,
+          "SUMEV": 1.9334659808207748,
+          "UTOT": -5986.593175613915,
+          "VNUCL": 260.39086102153374,
+          "ZVNUCL": -7290.944108602945
+        },
+        "sphere_charge_by_spin": {
+          "1": 14.571477850205616,
+          "2": 14.571477936956502
+        },
+        "sphere_spin_moment": -8.675088558618427e-08,
+        "sumec_by_spin_ry": {
+          "1": -873.9399047533387,
+          "2": -873.9399047869186
+        },
+        "sumev_by_spin_ry": {
+          "1": 0.9667329684399449,
+          "2": 0.96673301238083
+        }
+      },
+      "SIGN_WRONG": {
+        "actual_l2_radial_charge_by_spin": {
+          "1": 4.738770777074817,
+          "2": 4.73877080132327
+        },
+        "actual_l2_radial_charge_total": 9.477541578398085,
+        "ev_by_state_ry": {
+          "0": -0.04199709432272665,
+          "1": 0.1128489838668227,
+          "2": 0.12867719298855856,
+          "3": -0.04199722082271772,
+          "4": 0.11284902208050866,
+          "5": 0.12867719939740738
+        },
+        "frozen_input_rho_casewise_components": {
+          "EKIN": 3086.3837012183303,
+          "ETOT": -3038.1355116269624,
+          "RHOEPS": -124.6937752631402,
+          "RHOMU": -164.71311718941482,
+          "RHOVH": -4668.203219767358,
+          "SUMEC": -1747.8798095402574,
+          "SUMEV": 1.3471738018150634,
+          "UTOT": -5999.8254375821525,
+          "VNUCL": 261.8374162641767,
+          "ZVNUCL": -7331.447655396947
+        },
+        "output_rho_diagnostic_components": {
+          "EKIN": 3107.704814716615,
+          "ETOT": -2990.918379671625,
+          "RHOEPS": -122.31381263550782,
+          "RHOMU": -161.5606088795979,
+          "RHOVH": -4692.67684157546,
+          "SUMEC": -1747.8798095402574,
+          "SUMEV": 1.3471738018150634,
+          "UTOT": -5976.309381752732,
+          "VNUCL": 259.2836400689288,
+          "ZVNUCL": -7259.941921930005
+        },
+        "sphere_charge_by_spin": {
+          "1": 14.57147479476689,
+          "2": 14.571474881518482
+        },
+        "sphere_spin_moment": -8.675159079984951e-08,
+        "sumec_by_spin_ry": {
+          "1": -873.9399047533387,
+          "2": -873.9399047869186
+        },
+        "sumev_by_spin_ry": {
+          "1": 0.6735868820013903,
+          "2": 0.6735869198136731
+        }
+      }
+    },
+    "gates": {
+      "all_required_gates_pass": false,
+      "carrier_literal_error_within_A_true": false,
+      "opposite_spin_control_detectable": true,
+      "opposite_spin_response_matches_registered_prediction": true,
+      "q2_local_nonnegative": true,
+      "scalar_deviation_from_vq0_within_A_scalar": false,
+      "sign_wrong_control_detectable": true,
+      "sign_wrong_response_matches_registered_prediction": false
+    },
+    "q2_local_min_ry2": 0.1378160027236608,
+    "scalar_plus_001": {
+      "absolute_deviation_from_v_sum_q0_ry": 0.002695820416586253,
+      "allowance_ry": 6.0242239503755855e-05,
+      "delta_sumev_by_spin_ry": {
+        "1": 0.04603971331632095,
+        "2": 0.04603971365443149
+      },
+      "deviation_from_residual_inclusive_prediction_by_spin_ry": {
+        "1": -0.001308763097587838,
+        "2": -0.0013318715797727074
+      },
+      "deviation_from_vq0_by_spin_ry": {
+        "1": -0.0013479100431388474,
+        "2": -0.0013479103734474057
+      },
+      "ideal_vq0_by_spin_ry": {
+        "1": 0.0473876233594598,
+        "2": 0.0473876240278789
+      },
+      "pass": false,
+      "q2_input_policy": "captured RAW q2 invariant under V=vI",
+      "residual_inclusive_prediction_by_spin_ry": {
+        "1": 0.04734847641390879,
+        "2": 0.0473715852342042
+      }
+    },
+    "wrong_controls": {
+      "OPPOSITE_SPIN": {
+        "absolute_separation_from_true_carrier_ry": 0.0061524133745932685,
+        "delta_sumev_by_spin_ry": {
+          "1": -0.3558708085569111,
+          "2": -0.3558708066392051
+        },
+        "detectability_allowance_A_true_ry": 0.004553865505880194,
+        "detectable": true,
+        "errors_by_spin_ry": {
+          "1": -0.0002390342546375046,
+          "2": 0.0018426385545347035
+        },
+        "fit_within_allowance": true,
+        "predicted_delta_by_spin_ry": {
+          "1": -0.3556317743022736,
+          "2": -0.3577134451937398
+        },
+        "relevant_allowance_ry": 0.004553865574973748,
+        "residual_inclusive_fit_error_ry": 0.0016036042998972544,
+        "true_carrier_total_ry": -0.7178940285707095
+      },
+      "SIGN_WRONG": {
+        "absolute_separation_from_true_carrier_ry": 1.3962656345471736,
+        "delta_sumev_by_spin_ry": {
+          "1": 0.3391857997548756,
+          "2": 0.33918580622158834
+        },
+        "detectability_allowance_A_true_ry": 0.004553865505880194,
+        "detectable": true,
+        "errors_by_spin_ry": {
+          "1": -0.016799783250001366,
+          "2": -0.01871087822759998
+        },
+        "fit_within_allowance": false,
+        "predicted_delta_by_spin_ry": {
+          "1": 0.355985583004877,
+          "2": 0.3578966844491883
+        },
+        "relevant_allowance_ry": 0.00401681761692226,
+        "residual_inclusive_fit_error_ry": 0.03551066147760129,
+        "true_carrier_total_ry": -0.7178940285707095
+      }
+    }
+  },
+  "prereg_report_sha256": "e6a4c4464603da4a965d8bd7a8dca842f8eb1cbd422c9f81a63670411fb84433",
+  "schema": "c5-rd2-measured-replay-cases-v1",
+  "status": "GATE_MEASURED_FAIL",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "8c387eb1abac913faa5ca51123b634bf98915d6a91759359162d4c54b925d030"
+}

@@ -48,8 +48,10 @@ module self_mod
    use electrostatics_multipole_mod, only: compute_dipole_moments
    use math_mod
    use precision_mod, only: rp
+   use hubbard_spinor_mod, only: hubbard_d_tensor, hubbard_spinor_functional
    use timer_mod, only: g_timer
    use scf_benchmark_profile_mod, only: g_scf_benchmark_profile
+   use scf_guard_mod, only: guard_q0_capacity
    use namelist_generator_mod, only: namelist_generator
       use cfd
       use Parameters
@@ -63,10 +65,13 @@ module self_mod
 
    ! Historical ATOMSC control predicates are kept as small pure procedures
    ! so the iteration policy can be tested independently of the physical
-   ! residual observables.  The thresholds are intentionally unchanged.
+   ! residual observables. Production defaults remain historical unless the
+   ! explicitly named test-only ATOMSC controls are supplied.
    public :: atomsc_solver_tolerance, atomsc_mixing_beta, atomsc_should_stop
+   public :: fixed_u_r05_targets, atomsc_inner_controls
    public :: vxc0sp_pbe_origin_derivatives
    public :: vxc0sp
+   public :: poiss0
    !> Deterministic audit hook used by LR-BASIS-00 tests.  It calls the live
    !> RSEQSR/PHDFSR machinery; it does not provide an alternative radial solver.
    public :: legacy_radial_fixture
@@ -85,12 +90,9 @@ module self_mod
    ! mode (and is not a channel-count field).
    integer, parameter, public :: RADIAL_XC_SPIN_CHANNELS = 2
    integer, parameter :: fixed_u_m0_a11_nshift = 8
-   integer, parameter :: fixed_u_m0_a2_nshift = 14
-   real(rp), parameter :: fixed_u_m0_a2_v(fixed_u_m0_a2_nshift) = &
+   real(rp), parameter :: fixed_u_m0_a11_v(fixed_u_m0_a11_nshift) = &
       [-2.0e-2_rp, -1.0e-2_rp, -5.0e-3_rp, -2.5e-3_rp, &
-        2.5e-3_rp,  5.0e-3_rp,  1.0e-2_rp,  2.0e-2_rp, &
-       -4.0e-2_rp, -8.0e-2_rp, -1.2e-1_rp, &
-        4.0e-2_rp,  8.0e-2_rp,  1.2e-1_rp]
+        2.5e-3_rp,  5.0e-3_rp,  1.0e-2_rp,  2.0e-2_rp]
 
    !> Module´s main structure
    type, public :: self
@@ -235,6 +237,15 @@ module self_mod
       !> Default: 0.5d-10.
       real(rp) :: conv_thr
 
+      ! Optional R05 fixed-U tolerances. Nonpositive values select backend defaults.
+      real(rp) :: r05_p_tolerance
+      real(rp) :: r05_v_tolerance
+
+      ! Test-only atomsc settings; all three must be supplied together.
+      real(rp) :: atomsc_test_tol
+      real(rp) :: atomsc_test_tolrsq
+      integer :: atomsc_test_inner_cap
+
       ! Constrains variables
 
       !> Freezes magnetic moment direction during nonlinear calculation. Default: false.
@@ -333,7 +344,8 @@ module self_mod
       real(rp), private :: fixed_u_trace_lambda = 1.0_rp
       logical, private :: fixed_u_trace_enabled = .false.
       logical, private :: fixed_u_trace_capture_only = .false.
-      logical, private :: fixed_u_trace_a2_scan_enabled = .false.
+      logical, private :: fixed_u_trace_moments_only = .false.
+      logical, private :: fixed_u_trace_ql_only = .false.
       integer, private :: fixed_u_trace_iteration = 0
       integer, private :: fixed_u_trace_selected_iteration = 0
       integer, private :: fixed_u_trace_current_site = -1
@@ -397,6 +409,13 @@ module self_mod
       procedure, private :: write_fixed_u_csv_row
       procedure, private :: write_fixed_u_total_energy
       procedure, private :: write_hubbard_moment_energy_diagnostics
+      procedure, private :: validate_hubbard_mode_provenance
+      procedure, private :: is_frozen_hubbard_host
+      procedure, private :: mark_frozen_hosts
+      procedure, private :: all_frozen_hubbard_hosts_local
+      procedure, private :: is_eligible_local_hubbard
+      procedure, private :: is_eligible_local_moments
+      procedure, private :: fixed_hubbard_energy_pout
       procedure, private :: write_fixed_u_radial_replay_input
       procedure, private :: write_fixed_u_radial_replay_output
       procedure, private :: verify_fixed_u_radial_replay
@@ -404,6 +423,7 @@ module self_mod
       procedure, private :: replay_fixed_u_m0_moments
       procedure, private :: update_fixed_u_residuals
       procedure, private :: write_fixed_u_rs_green
+      procedure, private :: write_hubbard_run_summary
       procedure, private :: atomsc
       procedure, private :: ftype
       procedure, private :: newrho
@@ -465,6 +485,109 @@ module self_mod
          character(len=*), intent(in) :: filename
       end subroutine write_kspace_scf_state_artifact
 
+      module subroutine initialize_fixed_u_trace(this)
+         class(self), intent(inout) :: this
+      end subroutine initialize_fixed_u_trace
+
+      module subroutine reset_fixed_u_trace(this)
+         class(self), intent(in) :: this
+      end subroutine reset_fixed_u_trace
+
+      module subroutine write_fixed_u_csv_row(this, unit, kind, iteration, stage, site, type_id, ell, spin, k, band, &
+                                              row, col, order, weight, energy_value, scalar, re, im)
+         class(self), intent(in) :: this
+         integer, intent(in) :: unit, iteration, site, type_id, ell, spin, k, band, row, col, order
+         character(len=*), intent(in) :: kind, stage
+         real(rp), intent(in) :: weight, energy_value, scalar, re, im
+      end subroutine write_fixed_u_csv_row
+
+      module subroutine write_fixed_u_trace(this, stage, m1_out, pl_diag_out)
+         class(self), intent(inout) :: this
+         character(len=*), intent(in) :: stage
+         complex(rp), intent(in), optional :: m1_out(:, :, :, :, :)
+         real(rp), intent(in), optional :: pl_diag_out(:, :, :, :)
+      end subroutine write_fixed_u_trace
+
+      module subroutine write_fixed_u_rs_bonds(this, unit)
+         class(self), intent(in) :: this
+         integer, intent(in) :: unit
+      end subroutine write_fixed_u_rs_bonds
+
+      module subroutine write_fixed_u_radial_trace(this, atom, isite, v, rofi, rho_in, rho_out)
+         class(self), intent(in) :: this
+         class(symbolic_atom), intent(in) :: atom
+         integer, intent(in) :: isite
+         real(rp), intent(in) :: v(:, :), rofi(:)
+         real(rp), intent(in) :: rho_in(:, :), rho_out(:, :)
+      end subroutine write_fixed_u_radial_trace
+
+      module subroutine write_fixed_u_radial_replay_input(this, atom, rofi, v, rho_in, pl, ql, ec_seed, ncore, tol, vhrmax, b_fsm, txc, hyperfine)
+         class(self), intent(in) :: this
+         class(symbolic_atom), intent(in) :: atom
+         real(rp), intent(in) :: rofi(:), v(:, :), rho_in(:, :), pl(:, :), ql(:, :, :), ec_seed(:), tol
+         integer, intent(in) :: ncore
+         real(rp), intent(in) :: vhrmax, b_fsm
+         integer, intent(in) :: txc
+         logical, intent(in) :: hyperfine
+      end subroutine write_fixed_u_radial_replay_input
+
+      module subroutine write_fixed_u_radial_replay_output(this, rho, sumec, sumev)
+         class(self), intent(in) :: this
+         real(rp), intent(in) :: rho(:, :), sumec(:), sumev(:)
+      end subroutine write_fixed_u_radial_replay_output
+
+      module subroutine verify_fixed_u_radial_replay(this, atom, z, lmax, a, b, nr, rofi_base, v_base, rofi, v, rho_in, rho_actual, vhrmax, b_fsm, rvh_actual, reps_actual, rmu_actual, vnucl_actual, pl, ql, sumec_actual, sumev_actual, ec_seed, ev_seed, ec_actual, ev_actual, ncore, nval, tol)
+         class(self), intent(inout) :: this
+         class(symbolic_atom), intent(in) :: atom
+         integer, intent(in) :: lmax, nr, ncore, nval
+         real(rp), intent(in) :: z, a, b, rofi_base(nr), v_base(nr, 2), rofi(nr), v(nr, 2)
+         real(rp), intent(in) :: rho_in(nr, 2), rho_actual(nr, 2), vhrmax, b_fsm
+         real(rp), intent(in) :: rvh_actual(2), reps_actual(2), rmu_actual(2), vnucl_actual
+         real(rp), intent(in) :: pl(lmax + 1, 2), ql(3, lmax + 1, 2), sumec_actual(2), sumev_actual(2)
+         real(rp), intent(in) :: ec_seed(:), ev_seed(:), ec_actual(:), ev_actual(:), tol
+      end subroutine verify_fixed_u_radial_replay
+
+      module subroutine snapshot_fixed_u_m0_moments(this, m1, pl_diag, vin)
+         class(self), intent(inout) :: this
+         complex(rp), intent(in) :: m1(:, :, :, :, :), vin(:, :, :)
+         real(rp), intent(in) :: pl_diag(:, :, :, :)
+      end subroutine snapshot_fixed_u_m0_moments
+
+      module subroutine replay_fixed_u_m0_moments(this, atom, z, lmax, a, b, nr, rofi, v, rho_in, rho_actual, pl_actual, ql_actual, ec_seed, ev_seed, ncore, nval, tol, rofi_base, v_base, vhrmax, b_fsm, rvh_actual, reps_actual, rmu_actual, vnucl_actual, sumec_actual, sumev_actual)
+         class(self), intent(inout) :: this
+         class(symbolic_atom), intent(in) :: atom
+         integer, intent(in) :: lmax, nr, ncore, nval
+         real(rp), intent(in) :: z, a, b, rofi(nr), v(nr, 2), rho_in(nr, 2), rho_actual(nr, 2)
+         real(rp), intent(in) :: rofi_base(nr), v_base(nr, 2), vhrmax, b_fsm
+         real(rp), intent(in) :: rvh_actual(2), reps_actual(2), rmu_actual(2), vnucl_actual
+         real(rp), intent(in) :: sumec_actual(2), sumev_actual(2)
+         real(rp), intent(in) :: pl_actual(lmax + 1, 2), ql_actual(3, lmax + 1, 2)
+         real(rp), intent(in) :: ec_seed(:), ev_seed(:), tol
+      end subroutine replay_fixed_u_m0_moments
+
+      module subroutine update_fixed_u_residuals(this)
+         class(self), intent(inout) :: this
+      end subroutine update_fixed_u_residuals
+
+      module subroutine write_fixed_u_total_energy(this)
+         class(self), intent(in) :: this
+      end subroutine write_fixed_u_total_energy
+
+      module subroutine write_fixed_u_kspace_trace(this, capture_spectrum)
+         class(self), intent(inout) :: this
+         logical, intent(in) :: capture_spectrum
+      end subroutine write_fixed_u_kspace_trace
+
+      module subroutine write_fixed_u_rs_green(this, unit)
+         class(self), intent(in) :: this
+         integer, intent(in) :: unit
+      end subroutine write_fixed_u_rs_green
+
+      module subroutine write_hubbard_run_summary(this, radial_mode_source, radial_mode_reason)
+         class(self), intent(in) :: this
+         character(len=*), intent(in) :: radial_mode_source, radial_mode_reason
+      end subroutine write_hubbard_run_summary
+
    end interface
 
    interface self
@@ -472,1512 +595,14 @@ module self_mod
    end interface self
 
 contains
-
-   subroutine initialize_fixed_u_trace(this)
-      class(self), intent(inout) :: this
-      character(len=1024) :: trace_path
-      character(len=128) :: trace_value
-      character(len=128) :: root_run_id
-      integer :: ios, unit, root_trace_enabled, root_selected_iteration, root_capture_only, root_a2_scan
-      real(rp) :: root_trace_lambda
-
-      this%fixed_u_trace_enabled = .false.
-      this%fixed_u_trace_filename = ''
-      this%fixed_u_trace_run_id = 'run'
-      this%fixed_u_trace_lambda = 1.0_rp
-      this%fixed_u_trace_selected_iteration = 0
-
-      ! Rank zero owns environment parsing and file creation.  Every rank
-      ! reaches the broadcasts below, including the no-trace and file-open
-      ! failure cases, so optional M1 paths cannot disagree across ranks.
-      root_trace_enabled = 0
-      root_selected_iteration = 0
-      root_capture_only = 0
-      root_a2_scan = 0
-      root_trace_lambda = 1.0_rp
-      root_run_id = 'run'
-      if (rank == 0) then
-         trace_path = ''
-         trace_value = ''
-         call get_environment_variable('RSLMTO_FIXED_U_TRACE', trace_path, status=ios)
-         if (ios == 0 .and. len_trim(trace_path) > 0 .and. &
-             this%control%nsp == 1 .and. this%control%lmax == 2 .and. .not. this%hamiltonian%hoh) then
-            ! Explicit trace opt-in also enables the M0 no-U reference.
-            ! Ordinary no-U runs still take the untouched path when the
-            ! environment variable is absent. Other Hubbard modes remain out.
-            if (this%hamiltonian%hubbard_u_general_check) then
-               if (trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein') root_trace_enabled = 1
-            else if (.not. (this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check .or. &
-                            this%hamiltonian%hubbard_u_impurity_check)) then
-               root_trace_enabled = 1
-            end if
-         end if
-
-         if (root_trace_enabled == 1) then
-            call get_environment_variable('RSLMTO_FIXED_U_RUN_ID', trace_value, status=ios)
-            if (ios == 0 .and. len_trim(trace_value) > 0) root_run_id = trim(trace_value)
-            call get_environment_variable('RSLMTO_FIXED_U_LAMBDA', trace_value, status=ios)
-            if (ios == 0 .and. len_trim(trace_value) > 0) then
-               read(trace_value, *, iostat=ios) root_trace_lambda
-               if (ios /= 0) root_trace_enabled = 0
-            end if
-            ! Zero selects rolling-last mode: replace the trace file at each
-            ! iteration start, leaving the last completed iteration on disk.
-            call get_environment_variable('RSLMTO_FIXED_U_TRACE_ITERATION', trace_value, status=ios)
-            if (ios == 0 .and. len_trim(trace_value) > 0) then
-               read(trace_value, *, iostat=ios) root_selected_iteration
-               if (ios /= 0 .or. root_selected_iteration < 0) root_trace_enabled = 0
-            end if
-            trace_value = ''
-            call get_environment_variable('RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY', trace_value, status=ios)
-            if (ios == 0 .and. (trim(trace_value) == '1' .or. trim(trace_value) == 'true')) root_capture_only = 1
-            trace_value = ''
-            call get_environment_variable('RSLMTO_FIXED_U_A2_SCAN', trace_value, status=ios)
-            if (ios == 0 .and. (trim(trace_value) == '1' .or. trim(trace_value) == 'true')) root_a2_scan = 1
-         end if
-
-         if (root_trace_enabled == 1) then
-            open(newunit=unit, file=trim(trace_path), status='replace', action='write', iostat=ios)
-            if (ios == 0) then
-               write(unit, '(a)', iostat=ios) &
-                  'kind,run_id,lambda,iteration,stage,site,type,l,spin,k,band,row,col,order,weight,energy,scalar,re,im'
-               close(unit, iostat=ios)
-            end if
-            if (ios == 0) then
-               this%fixed_u_trace_filename = trim(trace_path)
-            else
-               root_trace_enabled = 0
-               call g_logger%warning('Could not create RSLMTO_FIXED_U_TRACE output; trace disabled.', __FILE__, __LINE__)
-            end if
-         end if
-      end if
-
-#ifdef USE_MPI
-      call MPI_BCAST(root_trace_enabled, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-      call MPI_BCAST(root_selected_iteration, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-      call MPI_BCAST(root_capture_only, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-      call MPI_BCAST(root_a2_scan, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-      call MPI_BCAST(root_trace_lambda, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
-      call MPI_BCAST(root_run_id, len(root_run_id), MPI_CHARACTER, 0, MPI_COMM_WORLD, ierr)
-#endif
-      this%fixed_u_trace_enabled = root_trace_enabled == 1
-      this%fixed_u_trace_capture_only = root_capture_only == 1
-      this%fixed_u_trace_a2_scan_enabled = root_a2_scan == 1
-      this%fixed_u_trace_selected_iteration = root_selected_iteration
-      this%fixed_u_trace_lambda = root_trace_lambda
-      this%fixed_u_trace_run_id = root_run_id
-   end subroutine initialize_fixed_u_trace
-
-   subroutine reset_fixed_u_trace(this)
-      class(self), intent(in) :: this
-      integer :: unit, ios
-      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
-      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='replace', action='write', iostat=ios)
-      if (ios /= 0) return
-      write(unit, '(a)') 'kind,run_id,lambda,iteration,stage,site,type,l,spin,k,band,row,col,order,weight,energy,scalar,re,im'
-      close(unit)
-   end subroutine reset_fixed_u_trace
-
-   subroutine write_fixed_u_csv_row(this, unit, kind, iteration, stage, site, type_id, ell, spin, k, band, &
-                                    row, col, order, weight, energy_value, scalar, re, im)
-      class(self), intent(in) :: this
-      integer, intent(in) :: unit, iteration, site, type_id, ell, spin, k, band, row, col, order
-      character(len=*), intent(in) :: kind, stage
-      real(rp), intent(in) :: weight, energy_value, scalar, re, im
-      write(unit, '(a,",",a,",",es24.16,",",i0,",",a,",",9(i0,","),es24.16,",",es24.16,",",es24.16,",",es24.16,",",es24.16)') &
-         trim(kind), trim(this%fixed_u_trace_run_id), this%fixed_u_trace_lambda, iteration, trim(stage), &
-         site, type_id, ell, spin, k, band, row, col, order, weight, energy_value, scalar, re, im
-   end subroutine write_fixed_u_csv_row
-
-   subroutine write_fixed_u_trace(this, stage, m1_out, pl_diag_out)
-      class(self), intent(inout) :: this
-      character(len=*), intent(in) :: stage
-      complex(rp), intent(in), optional :: m1_out(:, :, :, :, :)
-      real(rp), intent(in), optional :: pl_diag_out(:, :, :, :)
-      integer :: unit, ios, ia, l, spin, i, j, site_type, plusbulk
-      complex(rp) :: z, m1_trace
-      real(rp) :: center, q0, q2
-
-      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
-      if (this%fixed_u_trace_selected_iteration > 0 .and. &
-          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) return
-      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
-           action='write', iostat=ios)
-      if (ios /= 0) return
-
-      call this%write_fixed_u_csv_row(unit, 'ldm_availability', this%fixed_u_trace_iteration, trim(stage), &
-         -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
-         merge(1.0_rp, 0.0_rp, this%hamiltonian%hubbard_u_general_check), 0.0_rp, 0.0_rp)
-      call this%write_fixed_u_csv_row(unit, 'vin_availability', this%fixed_u_trace_iteration, trim(stage), &
-         -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
-         merge(1.0_rp, 0.0_rp, allocated(this%hamiltonian%hubbard_u_pot)), 0.0_rp, 0.0_rp)
-
-      do ia = 1, this%lattice%nrec
-         plusbulk = this%lattice%nbulk + ia
-         do l = 0, this%symbolic_atom(plusbulk)%potential%lmax
-            do spin = 1, 2
-               center = this%symbolic_atom(plusbulk)%potential%gravity_center(l + 1, spin) + &
-                        this%symbolic_atom(plusbulk)%potential%vmad
-               if (present(pl_diag_out)) then
-                  if (l + 1 <= size(pl_diag_out, 2) .and. spin <= size(pl_diag_out, 3)) then
-                     do i = 1, min(6, size(pl_diag_out, 4))
-                        call this%write_fixed_u_csv_row(unit, 'pl_map_input', this%fixed_u_trace_iteration, &
-                           'CALCULATE_PL', ia - 1, this%lattice%iz(ia), l, spin, -1, -1, -1, -1, i - 1, &
-                           0.0_rp, 0.0_rp, pl_diag_out(ia, l + 1, spin, i), 0.0_rp, 0.0_rp)
-                     end do
-                  end if
-               end if
-               if (this%hamiltonian%hubbard_u_general_check) then
-                  do i = 1, 2*l + 1
-                     do j = 1, 2*l + 1
-                        z = this%symbolic_atom(plusbulk)%potential%ldm(l + 1, spin, i, j)
-                        call this%write_fixed_u_csv_row(unit, 'ldm', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
-                           this%lattice%iz(ia), l, spin, -1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
-                           real(z, rp), aimag(z))
-                     end do
-                  end do
-               end if
-               if (present(m1_out)) then
-                  if (l < size(m1_out, 2)) then
-                     m1_trace = (0.0_rp, 0.0_rp)
-                     do i = 1, min(2*l + 1, size(m1_out, 4))
-                        do j = 1, min(2*l + 1, size(m1_out, 5))
-                           z = m1_out(ia, l + 1, spin, i, j)
-                           if (i == j) m1_trace = m1_trace + z
-                           call this%write_fixed_u_csv_row(unit, 'ldm_m1', this%fixed_u_trace_iteration, 'M1_OUT', ia - 1, &
-                              this%lattice%iz(ia), l, spin, -1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
-                              real(z, rp), aimag(z))
-                        end do
-                     end do
-                     call this%write_fixed_u_csv_row(unit, 'm1_trace_consistency', &
-                        this%fixed_u_trace_iteration, 'M1_OUT', ia - 1, this%lattice%iz(ia), l, spin, &
-                        -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
-                        real(m1_trace, rp) - this%symbolic_atom(plusbulk)%potential%ql(1, l, spin)*center, &
-                        aimag(m1_trace), 0.0_rp)
-                  end if
-               end if
-            end do
-            do spin = 1, 2
-               center = this%symbolic_atom(plusbulk)%potential%gravity_center(l + 1, spin) + &
-                        this%symbolic_atom(plusbulk)%potential%vmad
-               q0 = this%symbolic_atom(plusbulk)%potential%ql(1, l, spin)
-               q2 = this%symbolic_atom(plusbulk)%potential%ql(3, l, spin)
-               call this%write_fixed_u_csv_row(unit, 'ql', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
-                  this%lattice%iz(ia), l, spin, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, q0, 0.0_rp, 0.0_rp)
-               call this%write_fixed_u_csv_row(unit, 'radial_moment', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
-                  this%lattice%iz(ia), l, spin, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, q0, 0.0_rp, 0.0_rp)
-               call this%write_fixed_u_csv_row(unit, 'radial_moment', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
-                  this%lattice%iz(ia), l, spin, -1, -1, -1, -1, 1, 0.0_rp, center, q0*center, 0.0_rp, 0.0_rp)
-               call this%write_fixed_u_csv_row(unit, 'radial_moment', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
-                  this%lattice%iz(ia), l, spin, -1, -1, -1, -1, 2, 0.0_rp, center**2 + q2, &
-                  q0*(center**2 + q2), 0.0_rp, 0.0_rp)
-               call this%write_fixed_u_csv_row(unit, 'radial_parameter', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
-                  this%lattice%iz(ia), l, spin, -1, -1, -1, -1, -1, 0.0_rp, &
-                  this%symbolic_atom(plusbulk)%potential%gravity_center(l + 1, spin), 0.0_rp, 0.0_rp, 0.0_rp)
-               call this%write_fixed_u_csv_row(unit, 'radial_parameter', this%fixed_u_trace_iteration, trim(stage), ia - 1, &
-                  this%lattice%iz(ia), l, spin, -1, -1, -1, -1, 3, 0.0_rp, 0.0_rp, q2, 0.0_rp, 0.0_rp)
-            end do
-         end do
-      end do
-
-      if (allocated(this%hamiltonian%hubbard_u_pot)) then
-         do site_type = 1, size(this%hamiltonian%hubbard_u_pot, 3)
-            do i = 1, size(this%hamiltonian%hubbard_u_pot, 1)
-               do j = 1, size(this%hamiltonian%hubbard_u_pot, 2)
-                  z = this%hamiltonian%hubbard_u_pot(i, j, site_type)
-                  call this%write_fixed_u_csv_row(unit, 'v_hub', this%fixed_u_trace_iteration, trim(stage), &
-                     -1, site_type, -1, 0, -1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
-                     real(z, rp), aimag(z))
-               end do
-            end do
-         end do
-      end if
-      if (allocated(this%hamiltonian%ee)) then
-         do site_type = 1, size(this%hamiltonian%ee, 4)
-            do i = 1, size(this%hamiltonian%ee, 1)
-               do j = 1, size(this%hamiltonian%ee, 2)
-                  z = this%hamiltonian%ee(i, j, 1, site_type)
-                  call this%write_fixed_u_csv_row(unit, 'h_total', this%fixed_u_trace_iteration, trim(stage), &
-                     -1, site_type, -1, 0, -1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
-                     real(z, rp), aimag(z))
-               end do
-            end do
-         end do
-      end if
-      if (stage == 'Pin_H' .and. allocated(this%hamiltonian%ee)) call this%write_fixed_u_rs_bonds(unit)
-      if (stage == 'P_OUT' .and. .not. this%use_kspace) call this%write_fixed_u_rs_green(unit)
-      close(unit)
-   end subroutine write_fixed_u_trace
-
-   subroutine write_fixed_u_rs_bonds(this, unit)
-      class(self), intent(in) :: this
-      integer, intent(in) :: unit
-      integer :: ntype, isite, ia, ja, jsite, ineigh, nr, i, j, coord
-      complex(rp) :: z
-      real(rp) :: r_direct(3)
-
-      ! Export fractional direct vectors without invoking clusba: clusba
-      ! updates lattice%sbarvec, so even a diagnostic trace must not call it.
-
-      do ntype = 1, this%lattice%ntype
-         ia = this%lattice%atlist(ntype)
-         nr = this%lattice%nn(ia, 1)
-         do ineigh = 1, nr
-            do i = 1, size(this%hamiltonian%ee, 1)
-               do j = 1, size(this%hamiltonian%ee, 2)
-                  z = this%hamiltonian%ee(i, j, ineigh, ntype)
-                  call this%write_fixed_u_csv_row(unit, 'rs_hopping', this%fixed_u_trace_iteration, 'RS_OPERATOR', &
-                     -1, ntype - 1, -1, -1, -1, ineigh - 1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
-                     real(z, rp), aimag(z))
-               end do
-            end do
-         end do
-      end do
-
-      do isite = 1, this%lattice%nrec
-         ntype = this%lattice%ib(isite)
-         ia = this%lattice%atlist(ntype)
-         nr = this%lattice%nn(ia, 1)
-         do ineigh = 1, nr
-            if (ineigh == 1) then
-               jsite = isite
-               r_direct = 0.0_rp
-            else
-               ja = this%lattice%nn(ia, ineigh)
-               if (ja < 1 .or. ja > this%lattice%kk) cycle
-               jsite = this%lattice%iz(ja)
-               if (jsite < 1 .or. jsite > this%lattice%nrec) cycle
-               if (this%lattice%a_cart_inv_ready) then
-                  r_direct = matmul(this%lattice%a_cart_inv, &
-                                    this%lattice%cr(:, ja) - this%lattice%cr(:, ia))
-               else
-                  r_direct = matmul(inverse_3x3(this%lattice%a), &
-                                    this%lattice%cr(:, ja) - this%lattice%cr(:, ia))
-               end if
-            end if
-            do coord = 1, 3
-               call this%write_fixed_u_csv_row(unit, 'rs_bond_map', this%fixed_u_trace_iteration, 'RS_OPERATOR', &
-                  isite - 1, ntype - 1, -1, -1, -1, ineigh - 1, -1, jsite - 1, coord - 1, 0.0_rp, &
-                  r_direct(coord), 0.0_rp, 0.0_rp, 0.0_rp)
-            end do
-         end do
-      end do
-   end subroutine write_fixed_u_rs_bonds
-
-   subroutine write_fixed_u_radial_trace(this, atom, isite, v, rofi, rho_in, rho_out)
-      class(self), intent(in) :: this
-      class(symbolic_atom), intent(in) :: atom
-      integer, intent(in) :: isite
-      real(rp), intent(in) :: v(:, :), rofi(:)
-      real(rp), intent(in) :: rho_in(:, :), rho_out(:, :)
-      integer :: unit, ios, ir, spin
-
-      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
-      if (this%fixed_u_trace_selected_iteration > 0 .and. &
-          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) return
-      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
-           action='write', iostat=ios)
-      if (ios /= 0) return
-      do ir = 1, size(rofi)
-         do spin = 1, size(v, 2)
-            call this%write_fixed_u_csv_row(unit, 'radial_v', this%fixed_u_trace_iteration, 'POST_ATOMSC', &
-               isite, this%lattice%iz(isite), -1, spin - 1, -1, -1, ir - 1, spin - 1, 0, 0.0_rp, &
-               rofi(ir), v(ir, spin), 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'radial_density_in', this%fixed_u_trace_iteration, 'POST_ATOMSC', &
-               isite, this%lattice%iz(isite), -1, spin - 1, -1, -1, ir - 1, spin - 1, 0, 0.0_rp, &
-               rofi(ir), rho_in(ir, spin), 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'radial_density_out', this%fixed_u_trace_iteration, 'POST_ATOMSC', &
-               isite, this%lattice%iz(isite), -1, spin - 1, -1, -1, ir - 1, spin - 1, 0, 0.0_rp, &
-               rofi(ir), rho_out(ir, spin), 0.0_rp, 0.0_rp)
-         end do
-      end do
-      call energy_row('sum_ev', atom%potential%SUMEV)
-      call energy_row('sum_ec', atom%potential%SUMEC)
-      call energy_row('ekin', atom%potential%EKIN)
-      call energy_row('utot', atom%potential%UTOT)
-      call energy_row('rhoeps', atom%potential%RHOEPS)
-      call energy_row('etot_site', atom%potential%ETOT)
-      close(unit)
-   contains
-      subroutine energy_row(label, energy_value)
-         character(len=*), intent(in) :: label
-         real(rp), intent(in) :: energy_value
-         call this%write_fixed_u_csv_row(unit, label, this%fixed_u_trace_iteration, 'POST_ATOMSC', &
-            isite, this%lattice%iz(isite), -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, energy_value, 0.0_rp, 0.0_rp)
-      end subroutine energy_row
-   end subroutine write_fixed_u_radial_trace
-
-   subroutine write_fixed_u_radial_replay_input(this, atom, rofi, v, rho_in, pl, ql, ec_seed, ncore, &
-                                               tol, vhrmax, b_fsm, txc, hyperfine)
-      class(self), intent(in) :: this
-      class(symbolic_atom), intent(in) :: atom
-      real(rp), intent(in) :: rofi(:), v(:, :), rho_in(:, :), pl(:, :), ql(:, :, :), ec_seed(:), tol
-      integer, intent(in) :: ncore
-      real(rp), intent(in) :: vhrmax, b_fsm
-      integer, intent(in) :: txc
-      logical, intent(in) :: hyperfine
-      integer :: unit, ios, ir, spin, ell, core_index
-
-      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
-      if (this%fixed_u_trace_selected_iteration > 0 .and. &
-          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) return
-      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
-           action='write', iostat=ios)
-      if (ios /= 0) return
-      call meta('radial_A', atom%A)
-      call meta('radial_B', atom%B())
-      call meta('radial_Z', atom%element%atomic_number)
-      call meta('radial_tolerance', tol)
-      call meta('radial_VHRMAX', vhrmax)
-      call meta('radial_B_fsm', b_fsm)
-      call meta('radial_txc', real(txc, rp))
-      call meta('radial_hyperfine', merge(1.0_rp, 0.0_rp, hyperfine))
-      call meta('radial_NR', real(size(rofi), rp))
-      call meta('radial_lmax', real(atom%potential%lmax, rp))
-      call meta('radial_nsp', real(size(v, 2), rp))
-      call meta('radial_f_core', real(atom%element%f_core, rp))
-      call meta('radial_replay_vmad', atom%potential%vmad)
-      do ir = 1, size(rofi)
-         do spin = 1, size(v, 2)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_mesh', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
-               this%fixed_u_trace_current_site - 1, -1, -1, spin - 1, -1, -1, ir - 1, spin - 1, 0, &
-               0.0_rp, rofi(ir), 0.0_rp, 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_v', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
-               this%fixed_u_trace_current_site - 1, -1, -1, spin - 1, -1, -1, ir - 1, spin - 1, 0, &
-               0.0_rp, rofi(ir), v(ir, spin), 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_rho_in', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
-               this%fixed_u_trace_current_site - 1, -1, -1, spin - 1, -1, -1, ir - 1, spin - 1, 0, &
-               0.0_rp, rofi(ir), rho_in(ir, spin), 0.0_rp, 0.0_rp)
-         end do
-      end do
-      do ell = 0, atom%potential%lmax
-         do spin = 1, size(pl, 2)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_pl', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
-               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
-               0.0_rp, 0.0_rp, pl(ell + 1, spin), 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_pnu', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
-               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
-               0.0_rp, 0.0_rp, atom%potential%pnu(ell, spin), 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_enu', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
-               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
-               0.0_rp, 0.0_rp, atom%potential%enu(ell, spin), 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_gravity_center', this%fixed_u_trace_iteration, &
-               'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
-               0.0_rp, 0.0_rp, atom%potential%gravity_center(ell + 1, spin), 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_band_center', this%fixed_u_trace_iteration, &
-               'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
-               0.0_rp, 0.0_rp, atom%potential%gravity_center(ell + 1, spin) + atom%potential%vmad, 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_c', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
-               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
-               0.0_rp, 0.0_rp, atom%potential%c(ell, spin), 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_qpar', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
-               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
-               0.0_rp, 0.0_rp, atom%potential%qpar(ell, spin), 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_srdel', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
-               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
-               0.0_rp, 0.0_rp, atom%potential%srdel(ell, spin), 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_ql', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
-               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 0, &
-               0.0_rp, 0.0_rp, ql(1, ell + 1, spin), 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_ql', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
-               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 1, &
-               0.0_rp, 0.0_rp, ql(2, ell + 1, spin), 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_ql', this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
-               this%fixed_u_trace_current_site - 1, -1, ell, spin - 1, -1, -1, ell, spin - 1, 2, &
-               0.0_rp, 0.0_rp, ql(3, ell + 1, spin), 0.0_rp, 0.0_rp)
-         end do
-      end do
-      if (size(ec_seed) < ncore) error stop 'fixed-U replay capture has incomplete core-energy seeds'
-      do core_index = 1, ncore
-         call this%write_fixed_u_csv_row(unit, 'radial_replay_ec_seed', this%fixed_u_trace_iteration, &
-            'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, -1, -1, -1, -1, core_index - 1, &
-            core_index - 1, -1, 0, 0.0_rp, 0.0_rp, ec_seed(core_index), 0.0_rp, 0.0_rp)
-      end do
-      close(unit)
-   contains
-      subroutine meta(kind, value)
-         character(len=*), intent(in) :: kind
-         real(rp), intent(in) :: value
-         call this%write_fixed_u_csv_row(unit, kind, this%fixed_u_trace_iteration, 'RADIAL_REPLAY', &
-            this%fixed_u_trace_current_site - 1, -1, -1, -1, -1, -1, -1, -1, 0, &
-            0.0_rp, 0.0_rp, value, 0.0_rp, 0.0_rp)
-      end subroutine meta
-   end subroutine write_fixed_u_radial_replay_input
-
-   subroutine write_fixed_u_radial_replay_output(this, rho, sumec, sumev)
-      class(self), intent(in) :: this
-      real(rp), intent(in) :: rho(:, :), sumec(:), sumev(:)
-      integer :: unit, ios, ir, spin
-
-      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
-      if (this%fixed_u_trace_selected_iteration > 0 .and. &
-          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) return
-      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
-           action='write', iostat=ios)
-      if (ios /= 0) return
-      do ir = 1, size(rho, 1)
-         do spin = 1, size(rho, 2)
-            call this%write_fixed_u_csv_row(unit, 'radial_replay_rho_out', this%fixed_u_trace_iteration, &
-               'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, -1, -1, spin - 1, -1, -1, &
-               ir - 1, spin - 1, 0, 0.0_rp, 0.0_rp, rho(ir, spin), 0.0_rp, 0.0_rp)
-         end do
-      end do
-      do spin = 1, size(rho, 2)
-         call this%write_fixed_u_csv_row(unit, 'radial_replay_sumec', this%fixed_u_trace_iteration, &
-            'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, -1, -1, spin - 1, -1, -1, &
-            -1, -1, 0, 0.0_rp, 0.0_rp, sumec(spin), 0.0_rp, 0.0_rp)
-         call this%write_fixed_u_csv_row(unit, 'radial_replay_sumev', this%fixed_u_trace_iteration, &
-            'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, -1, -1, spin - 1, -1, -1, &
-            -1, -1, 0, 0.0_rp, 0.0_rp, sumev(spin), 0.0_rp, 0.0_rp)
-      end do
-      close(unit)
-   end subroutine write_fixed_u_radial_replay_output
-
-      subroutine verify_fixed_u_radial_replay(this, atom, z, lmax, a, b, nr, rofi_base, v_base, rofi, v, rho_in, &
-                                           rho_actual, vhrmax, b_fsm, rvh_actual, reps_actual, rmu_actual, &
-                                           vnucl_actual, pl, ql, sumec_actual, sumev_actual, &
-                                           ec_seed, ev_seed, ec_actual, ev_actual, ncore, nval, tol)
-      class(self), intent(inout) :: this
-      class(symbolic_atom), intent(in) :: atom
-      integer, intent(in) :: lmax, nr, ncore, nval
-      real(rp), intent(in) :: z, a, b, rofi_base(nr), v_base(nr, 2), rofi(nr), v(nr, 2)
-      real(rp), intent(in) :: rho_in(nr, 2), rho_actual(nr, 2), vhrmax, b_fsm
-      real(rp), intent(in) :: rvh_actual(2), reps_actual(2), rmu_actual(2), vnucl_actual
-      real(rp), intent(in) :: pl(lmax + 1, 2), ql(3, lmax + 1, 2), sumec_actual(2), sumev_actual(2)
-      real(rp), intent(in) :: ec_seed(:), ev_seed(:), ec_actual(:), ev_actual(:), tol
-      type(self) :: replay_state
-      type(symbolic_atom) :: replay_atom
-      real(rp), allocatable :: rho_replay(:, :), sumec_replay(:), sumev_replay(:), ec_replay(:), ev_replay(:)
-      integer :: unit, ios
-      real(rp) :: rho_error, sumec_error, sumev_error, ev_error, ec_error
-
-      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
-      if (this%fixed_u_trace_selected_iteration > 0 .and. &
-          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) return
-      if (size(ec_seed) < ncore .or. size(ev_seed) < nval .or. size(ec_actual) < ncore .or. size(ev_actual) < nval) &
-         error stop 'verify_fixed_u_radial_replay: inconsistent seed/output sizes'
-
-      ! Repeat the unchanged production NEWRHO call against the exact accepted
-      ! atom and input arrays.  The independent scratch object and atom copy
-      ! keep this diagnostic replay from changing the live SCF state.
-      replay_atom = atom
-      replay_state%control => this%control
-      allocate(replay_state%vtn(nr, 2), replay_state%vzt(nr, 2), &
-               replay_state%fun2(nr, lmax + 1, 2), replay_state%phi_amp(nr, lmax + 1, 2))
-      replay_state%vtn = 0.0_rp
-      replay_state%vzt = 0.0_rp
-      replay_state%fun2 = 0.0_rp
-      replay_state%phi_amp = 0.0_rp
-      allocate(rho_replay(nr, 2), sumec_replay(2), sumev_replay(2), &
-               ec_replay(max(ncore, 1)), ev_replay(max(nval, 1)))
-      rho_replay = 0.0_rp
-      sumec_replay = 0.0_rp
-      sumev_replay = 0.0_rp
-      if (ncore > 0) ec_replay(1:ncore) = ec_seed(1:ncore)
-      if (nval > 0) ev_replay(1:nval) = ev_seed(1:nval)
-      call replay_state%newrho(replay_atom, z, lmax, a, b, nr, rofi, v, rho_replay, pl, ql, &
-                               sumec_replay, sumev_replay, ec_replay, ev_replay, tol, 2, 0)
-      rho_error = maxval(abs(rho_replay - rho_actual))
-      sumec_error = maxval(abs(sumec_replay - sumec_actual))
-      sumev_error = maxval(abs(sumev_replay - sumev_actual))
-      ev_error = 0.0_rp
-      ec_error = 0.0_rp
-      if (nval > 0) ev_error = maxval(abs(ev_replay(1:nval) - ev_actual(1:nval)))
-      if (ncore > 0) ec_error = maxval(abs(ec_replay(1:ncore) - ec_actual(1:ncore)))
-
-      deallocate(replay_state%vtn, replay_state%vzt, replay_state%fun2, replay_state%phi_amp)
-
-      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
-           action='write', iostat=ios)
-      if (ios == 0) then
-         call result('rho_max_abs', rho_error, 0)
-         call result('sumec_max_abs_ry', sumec_error, 1)
-         call result('sumev_max_abs_ry', sumev_error, 2)
-         call result('ec_max_abs_ry', ec_error, 3)
-         call result('ev_max_abs_ry', ev_error, 4)
-         close(unit)
-      end if
-      call this%replay_fixed_u_m0_moments(atom, z, lmax, a, b, nr, rofi, v, rho_in, rho_actual, &
-         pl, ql, ec_seed, ev_seed, ncore, nval, tol, rofi_base, v_base, vhrmax, b_fsm, &
-         rvh_actual, reps_actual, rmu_actual, vnucl_actual, sumec_actual, sumev_actual)
-   contains
-      subroutine result(label, value, result_index)
-         character(len=*), intent(in) :: label
-         real(rp), intent(in) :: value
-         integer, intent(in) :: result_index
-         call this%write_fixed_u_csv_row(unit, 'radial_replay_'//trim(label), this%fixed_u_trace_iteration, &
-            'RADIAL_REPLAY', this%fixed_u_trace_current_site - 1, -1, -1, -1, -1, -1, -1, -1, &
-            result_index, 0.0_rp, 0.0_rp, value, 0.0_rp, 0.0_rp)
-      end subroutine result
-   end subroutine verify_fixed_u_radial_replay
-
    ! Capture M0 replay operands from one immutable outer-SCF iteration.  This
    ! routine is diagnostic-only: it reads P, M1, the Hamiltonian V_in, ql and
    ! the exact calculate_pl call inputs, then stores only replay scalars and
    ! snapshots.  It never writes to a live potential or Hamiltonian field.
-   subroutine snapshot_fixed_u_m0_moments(this, m1, pl_diag, vin)
-      class(self), intent(inout) :: this
-      complex(rp), intent(in) :: m1(:, :, :, :, :), vin(:, :, :)
-      real(rp), intent(in) :: pl_diag(:, :, :, :)
-      complex(rp), allocatable :: density_override(:, :, :, :, :), vout(:, :, :)
-      integer :: ia, plusbulk, itype, spin, i, j, k, rowoff, norb_l, unit, ios
-      complex(rp) :: p_ij, t_complex, vm1_complex, v2p_complex, v2_ij, p_trace, m1_trace
-      real(rp), allocatable :: im_resid(:, :), p_trace_error(:, :), m1_trace_error(:, :)
-      real(rp) :: q0, center, q2, t, local_q2, t_vout, vm1_vout, v2_vout
-      real(rp) :: t_pt, vm1_pt, v2_pt
-      logical :: p_available
-
-      this%fixed_u_m0_snapshot_valid = .false.
-      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
-      if (this%fixed_u_trace_selected_iteration > 0 .and. &
-          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) return
-      if (size(m1, 1) /= this%lattice%nrec .or. size(pl_diag, 1) /= this%lattice%nrec .or. &
-          size(vin, 1) < nb .or. size(vin, 2) < nb) return
-      if (lmax_basis < 2) return
-
-      if (allocated(this%fixed_u_m0_q0)) deallocate(this%fixed_u_m0_q0)
-      if (allocated(this%fixed_u_m0_center)) deallocate(this%fixed_u_m0_center)
-      if (allocated(this%fixed_u_m0_q2)) deallocate(this%fixed_u_m0_q2)
-      if (allocated(this%fixed_u_m0_local_center)) deallocate(this%fixed_u_m0_local_center)
-      if (allocated(this%fixed_u_m0_local_q2)) deallocate(this%fixed_u_m0_local_q2)
-      if (allocated(this%fixed_u_m0_trvp)) deallocate(this%fixed_u_m0_trvp)
-      if (allocated(this%fixed_u_m0_vout_center)) deallocate(this%fixed_u_m0_vout_center)
-      if (allocated(this%fixed_u_m0_vout_q2)) deallocate(this%fixed_u_m0_vout_q2)
-      if (allocated(this%fixed_u_m0_pt_center)) deallocate(this%fixed_u_m0_pt_center)
-      if (allocated(this%fixed_u_m0_pt_q2)) deallocate(this%fixed_u_m0_pt_q2)
-      if (allocated(this%fixed_u_m0_t_vout)) deallocate(this%fixed_u_m0_t_vout)
-      if (allocated(this%fixed_u_m0_t_pt)) deallocate(this%fixed_u_m0_t_pt)
-      if (allocated(this%fixed_u_m0_ql)) deallocate(this%fixed_u_m0_ql)
-      if (allocated(this%fixed_u_m0_pl_diag)) deallocate(this%fixed_u_m0_pl_diag)
-      if (allocated(this%fixed_u_m0_vin)) deallocate(this%fixed_u_m0_vin)
-      allocate(this%fixed_u_m0_q0(this%lattice%nrec, 2), this%fixed_u_m0_center(this%lattice%nrec, 2), &
-               this%fixed_u_m0_q2(this%lattice%nrec, 2), this%fixed_u_m0_local_center(this%lattice%nrec, 2), &
-               this%fixed_u_m0_local_q2(this%lattice%nrec, 2), this%fixed_u_m0_trvp(this%lattice%nrec, 2), &
-               this%fixed_u_m0_vout_center(this%lattice%nrec, 2), this%fixed_u_m0_vout_q2(this%lattice%nrec, 2), &
-               this%fixed_u_m0_pt_center(this%lattice%nrec, 2), this%fixed_u_m0_pt_q2(this%lattice%nrec, 2), &
-               this%fixed_u_m0_t_vout(this%lattice%nrec, 2), this%fixed_u_m0_t_pt(this%lattice%nrec, 2), &
-               this%fixed_u_m0_ql(this%lattice%nrec, 3, lmax_basis + 1, 2), &
-               this%fixed_u_m0_pl_diag(this%lattice%nrec, lmax_basis + 1, 2, 6), &
-               this%fixed_u_m0_vin(size(vin, 1), size(vin, 2), size(vin, 3)))
-      this%fixed_u_m0_ql = 0.0_rp
-      this%fixed_u_m0_pl_diag = pl_diag
-      this%fixed_u_m0_vin = vin
-      this%fixed_u_m0_vout_center = 0.0_rp
-      this%fixed_u_m0_vout_q2 = 0.0_rp
-      this%fixed_u_m0_pt_center = 0.0_rp
-      this%fixed_u_m0_pt_q2 = 0.0_rp
-      this%fixed_u_m0_t_vout = 0.0_rp
-      this%fixed_u_m0_t_pt = 0.0_rp
-      allocate(im_resid(this%lattice%nrec, 2))
-      allocate(p_trace_error(this%lattice%nrec, 2), m1_trace_error(this%lattice%nrec, 2))
-      im_resid = 0.0_rp
-      p_trace_error = 0.0_rp
-      m1_trace_error = 0.0_rp
-      p_available = this%hamiltonian%hubbard_u_general_check .and. &
-                     allocated(this%symbolic_atom(this%lattice%nbulk + 1)%potential%ldm)
-      this%fixed_u_m0_p_available = p_available
-
-      ! Evaluate V(Pout) without changing the live Hamiltonian.  This is a
-      ! deliberately wrong-pairing control for the frozen radial replay.
-      allocate(density_override(this%lattice%ntype, 4, 2, 7, 7), vout(nb, nb, this%lattice%ntype))
-      density_override = (0.0_rp, 0.0_rp)
-      vout = (0.0_rp, 0.0_rp)
-      if (p_available) then
-         do ia = 1, this%lattice%nrec
-            plusbulk = this%lattice%nbulk + ia
-            itype = this%lattice%ib(ia)
-            do spin = 1, 2
-               do i = 1, 7
-                  do j = 1, 7
-                     density_override(itype, 3, spin, i, j) = &
-                        this%symbolic_atom(plusbulk)%potential%ldm(3, spin, i, j)
-                  end do
-               end do
-            end do
-         end do
-         call this%hamiltonian%calculate_hubbard_u_potential_general( &
-            density_override=density_override, potential_out=vout)
-      end if
-
-      do ia = 1, this%lattice%nrec
-         plusbulk = this%lattice%nbulk + ia
-         itype = this%lattice%ib(ia)
-         if (itype < 1 .or. itype > size(vin, 3)) return
-         do spin = 1, 2
-            do i = 1, 3
-               this%fixed_u_m0_ql(ia, i, 1:lmax_basis + 1, spin) = &
-                  this%symbolic_atom(plusbulk)%potential%ql(i, 0:lmax_basis, spin)
-            end do
-            q0 = this%symbolic_atom(plusbulk)%potential%ql(1, 2, spin)
-            center = this%symbolic_atom(plusbulk)%potential%gravity_center(3, spin) + &
-                     this%symbolic_atom(plusbulk)%potential%vmad
-            q2 = this%symbolic_atom(plusbulk)%potential%ql(3, 2, spin)
-            if (q0 <= tiny(1.0_rp)) then
-               this%fixed_u_m0_snapshot_valid = .false.
-               return
-            end if
-            this%fixed_u_m0_q0(ia, spin) = q0
-            this%fixed_u_m0_center(ia, spin) = center
-            this%fixed_u_m0_q2(ia, spin) = q2
-            t_complex = (0.0_rp, 0.0_rp)
-            vm1_complex = (0.0_rp, 0.0_rp)
-            v2p_complex = (0.0_rp, 0.0_rp)
-            p_trace = (0.0_rp, 0.0_rp)
-            m1_trace = (0.0_rp, 0.0_rp)
-            rowoff = 4 + spin_off*(spin - 1)
-            norb_l = 5
-            do i = 1, norb_l
-               m1_trace = m1_trace + m1(ia, 3, spin, i, i)
-            end do
-            if (p_available) then
-            do i = 1, norb_l
-               do j = 1, norb_l
-                  p_ij = this%symbolic_atom(plusbulk)%potential%ldm(3, spin, i, j)
-                  if (i == j) p_trace = p_trace + p_ij
-                  t_complex = t_complex + vin(rowoff + i, rowoff + j, itype)* &
-                     this%symbolic_atom(plusbulk)%potential%ldm(3, spin, j, i)
-                  vm1_complex = vm1_complex + vin(rowoff + i, rowoff + j, itype)* &
-                     (m1(ia, 3, spin, j, i) - center*this%symbolic_atom(plusbulk)%potential%ldm(3, spin, j, i))
-                  v2_ij = (0.0_rp, 0.0_rp)
-                  do k = 1, norb_l
-                     v2_ij = v2_ij + vin(rowoff + i, rowoff + k, itype)*vin(rowoff + k, rowoff + j, itype)
-                  end do
-                  v2p_complex = v2p_complex + v2_ij*this%symbolic_atom(plusbulk)%potential%ldm(3, spin, j, i)
-               end do
-            end do
-            end if
-            t = real(t_complex, rp)
-            local_q2 = q2 - 2.0_rp*real(vm1_complex, rp) + real(v2p_complex, rp) - t*t/q0
-            im_resid(ia, spin) = max(abs(aimag(t_complex)), abs(aimag(vm1_complex)), abs(aimag(v2p_complex)))
-            p_trace_error(ia, spin) = real(p_trace, rp) - q0
-            m1_trace_error(ia, spin) = real(m1_trace, rp) - q0*center
-            this%fixed_u_m0_trvp(ia, spin) = t
-            this%fixed_u_m0_local_center(ia, spin) = center - t/q0
-            this%fixed_u_m0_local_q2(ia, spin) = local_q2
-
-            t_vout = 0.0_rp
-            vm1_vout = 0.0_rp
-            v2_vout = 0.0_rp
-            t_pt = 0.0_rp
-            vm1_pt = 0.0_rp
-            v2_pt = 0.0_rp
-            if (p_available) then
-            do i = 1, norb_l
-               do j = 1, norb_l
-                  t_vout = t_vout + real(vout(rowoff+i, rowoff+j, itype)* &
-                     this%symbolic_atom(plusbulk)%potential%ldm(3, spin, j, i), rp)
-                  vm1_vout = vm1_vout + real(vout(rowoff+i, rowoff+j, itype)* &
-                     (m1(ia, 3, spin, j, i) - center*this%symbolic_atom(plusbulk)%potential%ldm(3, spin, j, i)), rp)
-                  t_pt = t_pt + real(vin(rowoff+i, rowoff+j, itype)* &
-                     this%symbolic_atom(plusbulk)%potential%ldm(3, spin, i, j), rp)
-                  vm1_pt = vm1_pt + real(vin(rowoff+i, rowoff+j, itype)* &
-                     (m1(ia, 3, spin, j, i) - center*this%symbolic_atom(plusbulk)%potential%ldm(3, spin, i, j)), rp)
-                  v2_ij = (0.0_rp, 0.0_rp)
-                  do k = 1, norb_l
-                     v2_ij = v2_ij + vout(rowoff+i, rowoff+k, itype)*vout(rowoff+k, rowoff+j, itype)
-                  end do
-                  v2_vout = v2_vout + real(v2_ij*this%symbolic_atom(plusbulk)%potential%ldm(3, spin, j, i), rp)
-                  v2_ij = (0.0_rp, 0.0_rp)
-                  do k = 1, norb_l
-                     v2_ij = v2_ij + vin(rowoff+i, rowoff+k, itype)*vin(rowoff+k, rowoff+j, itype)
-                  end do
-                  v2_pt = v2_pt + real(v2_ij*this%symbolic_atom(plusbulk)%potential%ldm(3, spin, i, j), rp)
-               end do
-            end do
-            end if
-            this%fixed_u_m0_vout_center(ia, spin) = center - t_vout/q0
-            this%fixed_u_m0_vout_q2(ia, spin) = q2 - 2.0_rp*vm1_vout + v2_vout - t_vout*t_vout/q0
-            this%fixed_u_m0_pt_center(ia, spin) = center - t_pt/q0
-            this%fixed_u_m0_pt_q2(ia, spin) = q2 - 2.0_rp*vm1_pt + v2_pt - t_pt*t_pt/q0
-            this%fixed_u_m0_t_vout(ia, spin) = t_vout
-            this%fixed_u_m0_t_pt(ia, spin) = t_pt
-         end do
-      end do
-      this%fixed_u_m0_snapshot_iteration = this%fixed_u_trace_iteration
-      this%fixed_u_m0_snapshot_valid = .true.
-
-      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
-           action='write', iostat=ios)
-      if (ios /= 0) return
-      do ia = 1, this%lattice%nrec
-         do spin = 1, 2
-            itype = this%lattice%ib(ia)
-            call this%write_fixed_u_csv_row(unit, 'm0_carrier_input', this%fixed_u_m0_snapshot_iteration, &
-               'FROZEN_REPLAY', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 0, 0.0_rp, &
-               this%fixed_u_m0_center(ia, spin), this%fixed_u_m0_q0(ia, spin), &
-               this%fixed_u_m0_q2(ia, spin), 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'm0_p_availability', this%fixed_u_m0_snapshot_iteration, &
-               'FROZEN_REPLAY', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 0, 0.0_rp, &
-               merge(1.0_rp, 0.0_rp, p_available), 0.0_rp, 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'm0_carrier_local', this%fixed_u_m0_snapshot_iteration, &
-               'FROZEN_REPLAY', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 1, &
-               this%fixed_u_m0_trvp(ia, spin), this%fixed_u_m0_local_center(ia, spin), &
-               this%fixed_u_m0_q0(ia, spin), this%fixed_u_m0_local_q2(ia, spin), 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'm0_carrier_control', this%fixed_u_m0_snapshot_iteration, &
-               'VOUT_CONTROL', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 0, 0.0_rp, &
-               this%fixed_u_m0_t_vout(ia, spin), this%fixed_u_m0_vout_center(ia, spin), &
-               this%fixed_u_m0_q0(ia, spin), this%fixed_u_m0_vout_q2(ia, spin))
-            call this%write_fixed_u_csv_row(unit, 'm0_carrier_control', this%fixed_u_m0_snapshot_iteration, &
-               'P_TRANSPOSE_CONTROL', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 0, 0.0_rp, &
-               this%fixed_u_m0_t_pt(ia, spin), this%fixed_u_m0_pt_center(ia, spin), &
-               this%fixed_u_m0_q0(ia, spin), this%fixed_u_m0_pt_q2(ia, spin))
-            call this%write_fixed_u_csv_row(unit, 'm0_carrier_identity', this%fixed_u_m0_snapshot_iteration, &
-               'FROZEN_REPLAY', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 2, &
-               0.0_rp, 0.0_rp, im_resid(ia, spin), 0.0_rp, 0.0_rp)
-            if (p_available) then
-               call this%write_fixed_u_csv_row(unit, 'm0_trace_consistency', this%fixed_u_m0_snapshot_iteration, &
-                  'FROZEN_REPLAY', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 0, &
-                  0.0_rp, 0.0_rp, p_trace_error(ia, spin), 0.0_rp, 0.0_rp)
-            else
-               call this%write_fixed_u_csv_row(unit, 'm0_p_trace_unavailable', &
-                  this%fixed_u_m0_snapshot_iteration, 'FROZEN_REPLAY', ia - 1, itype - 1, 2, spin, &
-                  -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp)
-            end if
-            call this%write_fixed_u_csv_row(unit, 'm0_trace_consistency', this%fixed_u_m0_snapshot_iteration, &
-               'FROZEN_REPLAY', ia - 1, itype - 1, 2, spin, -1, -1, -1, -1, 1, &
-               0.0_rp, 0.0_rp, m1_trace_error(ia, spin), 0.0_rp, 0.0_rp)
-         end do
-      end do
-      close(unit)
-      deallocate(im_resid, p_trace_error, m1_trace_error)
-      deallocate(density_override, vout)
-   end subroutine snapshot_fixed_u_m0_moments
-
    ! Replay the same accepted radial state twice with production PL inversion
    ! and NEWRHO: legacy spectral moments and the proposed local-potential
    ! moments.  All edits are made on independent atom/bands copies.  This is
    ! an opt-in M0 diagnostic and cannot feed any live SCF quantity.
-   subroutine replay_fixed_u_m0_moments(this, atom, z, lmax, a, b, nr, rofi, v, rho_in, rho_actual, &
-                                        pl_actual, ql_actual, ec_seed, ev_seed, ncore, nval, tol, &
-                                        rofi_base, v_base, vhrmax, b_fsm, rvh_actual, reps_actual, rmu_actual, &
-                                        vnucl_actual, sumec_actual, sumev_actual)
-      class(self), intent(inout) :: this
-      class(symbolic_atom), intent(in) :: atom
-      integer, intent(in) :: lmax, nr, ncore, nval
-      real(rp), intent(in) :: z, a, b, rofi(nr), v(nr, 2), rho_in(nr, 2), rho_actual(nr, 2)
-      real(rp), intent(in) :: rofi_base(nr), v_base(nr, 2), vhrmax, b_fsm
-      real(rp), intent(in) :: rvh_actual(2), reps_actual(2), rmu_actual(2), vnucl_actual
-      real(rp), intent(in) :: sumec_actual(2), sumev_actual(2)
-      real(rp), intent(in) :: pl_actual(lmax + 1, 2), ql_actual(3, lmax + 1, 2)
-      real(rp), intent(in) :: ec_seed(:), ev_seed(:), tol
-      type(bands) :: pl_bands
-      type(symbolic_atom), allocatable, target :: pl_atoms(:)
-      real(rp), allocatable :: ql_raw(:, :, :), ql_local(:, :, :), ql_vout(:, :, :), ql_pt(:, :, :)
-      real(rp), allocatable :: rho_case(:, :), sumec_case(:), sumev_case(:)
-      real(rp), allocatable :: ec_case(:), ev_case(:)
-      real(rp), allocatable :: pl_raw(:, :), pl_local(:, :), pl_a11(:, :, :)
-      real(rp), allocatable :: baseline_ev(:)
-      integer :: ia, plusbulk, l, spin, unit, ios, row, iv, nshift
-      real(rp) :: pl_reproduction_error, ql_vs_live_error, q2_min
-      real(rp) :: baseline_sumev(2), baseline_sumec(2)
-      real(rp) :: component_snapshot(10), actual_component(10), output_component(10)
-      real(rp) :: actual_rhovh, actual_rhomu
-      real(rp) :: actual_rhoeps, actual_zvnucl, actual_ekin, actual_utot, actual_etot
-      logical :: have_raw_energy
-
-      if (.not. this%fixed_u_m0_snapshot_valid) return
-      if (this%fixed_u_m0_snapshot_iteration /= this%fixed_u_trace_iteration) return
-      if (this%fixed_u_trace_current_site < 1 .or. this%fixed_u_trace_current_site > this%lattice%nrec) return
-      if (.not. allocated(this%fixed_u_m0_pl_diag) .or. .not. allocated(this%fixed_u_m0_ql)) return
-      if (size(ec_seed) < ncore .or. size(ev_seed) < nval) return
-
-      allocate(pl_atoms(size(this%symbolic_atom)))
-      pl_atoms = this%symbolic_atom
-      pl_bands%symbolic_atom => pl_atoms
-      pl_bands%lattice => this%lattice
-      call load_captured_pl_inputs(pl_atoms)
-      call pl_bands%calculate_pl()
-      allocate(pl_raw(lmax + 1, 2), pl_local(lmax + 1, 2))
-      ia = this%fixed_u_trace_current_site
-      plusbulk = this%lattice%nbulk + ia
-      do spin = 1, 2
-         do l = 0, lmax
-            pl_raw(l + 1, spin) = pl_atoms(plusbulk)%potential%pl(l, spin)
-         end do
-      end do
-
-      nshift = fixed_u_m0_a11_nshift
-      if (this%fixed_u_trace_a2_scan_enabled) nshift = fixed_u_m0_a2_nshift
-      allocate(pl_a11(lmax + 1, 2, nshift))
-      do iv = 1, nshift
-         pl_atoms = this%symbolic_atom
-         call load_captured_pl_inputs(pl_atoms)
-         do spin = 1, 2
-            pl_atoms(plusbulk)%potential%gravity_center(3, spin) = &
-               this%fixed_u_m0_pl_diag(ia, 3, spin, 1) - fixed_u_m0_a2_v(iv)
-         end do
-         call pl_bands%calculate_pl()
-         do spin = 1, 2
-            do l = 0, lmax
-               pl_a11(l + 1, spin, iv) = pl_atoms(plusbulk)%potential%pl(l, spin)
-            end do
-         end do
-      end do
-      pl_reproduction_error = maxval(abs(pl_raw - this%fixed_u_m0_pl_diag(ia, 1:lmax + 1, 1:2, 6)))
-
-      ! Reset the scratch atom to its independent copy of the accepted live
-      ! state, then restore the original calculate_pl inputs.  Only d-shell
-      ! gravity_center differs in this second call.
-      pl_atoms = this%symbolic_atom
-      call load_captured_pl_inputs(pl_atoms)
-      do spin = 1, 2
-         pl_atoms(plusbulk)%potential%gravity_center(3, spin) = &
-            this%fixed_u_m0_local_center(ia, spin) - pl_atoms(plusbulk)%potential%vmad
-      end do
-      call pl_bands%calculate_pl()
-      do spin = 1, 2
-         do l = 0, lmax
-            pl_local(l + 1, spin) = pl_atoms(plusbulk)%potential%pl(l, spin)
-         end do
-      end do
-
-      allocate(ql_raw(3, lmax + 1, 2), ql_local(3, lmax + 1, 2), &
-               ql_vout(3, lmax + 1, 2), ql_pt(3, lmax + 1, 2))
-      allocate(baseline_ev(max(nval, 1)))
-      baseline_ev = 0.0_rp
-      have_raw_energy = .false.
-      baseline_sumev = 0.0_rp
-      baseline_sumec = 0.0_rp
-      ql_raw = this%fixed_u_m0_ql(ia, :, 1:lmax + 1, :)
-      ql_local = ql_raw
-      ql_vout = ql_raw
-      ql_pt = ql_raw
-      do spin = 1, 2
-         ql_local(3, 3, spin) = this%fixed_u_m0_local_q2(ia, spin)
-         ql_vout(3, 3, spin) = this%fixed_u_m0_vout_q2(ia, spin)
-         ql_pt(3, 3, spin) = this%fixed_u_m0_pt_q2(ia, spin)
-      end do
-      ql_vs_live_error = maxval(abs(ql_raw - ql_actual))
-
-      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
-           action='write', iostat=ios)
-      if (ios == 0) then
-         call this%write_fixed_u_csv_row(unit, 'm0_replay_match', this%fixed_u_trace_iteration, 'FROZEN_INPUT', &
-            ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 0, 0.0_rp, &
-            pl_reproduction_error, ql_vs_live_error, 0.0_rp, 0.0_rp)
-         q2_min = minval(this%fixed_u_m0_local_q2(ia, :))
-         call this%write_fixed_u_csv_row(unit, 'm0_replay_q2_min', this%fixed_u_trace_iteration, 'LOCAL_PL', &
-            ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 0, 0.0_rp, q2_min, 0.0_rp, 0.0_rp, 0.0_rp)
-         close(unit)
-      end if
-
-      ! Replay the exact PL/QL supplied to this live NEWRHO call before using
-      ! the unmixed spectral q0/q2 values below.  This is the same-state
-      ! control for the copied radial solver; RAW_PL remains a separate
-      ! diagnostic because its moments are from the current spectral output.
-      call run_replay_case('LIVE_STATE', pl_actual, ql_actual)
-      call run_replay_case('RAW_PL', pl_raw, ql_raw)
-      do iv = 1, nshift
-         call run_replay_case(a11_case_name(iv), pl_a11(:, :, iv), ql_raw, fixed_u_m0_a2_v(iv), iv)
-      end do
-      if (minval(this%fixed_u_m0_local_q2(ia, :)) >= 0.0_rp) then
-         call run_replay_case('LOCAL_PL', pl_local, ql_local)
-      else
-         open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
-              action='write', iostat=ios)
-         if (ios == 0) then
-            call this%write_fixed_u_csv_row(unit, 'm0_replay_skipped', this%fixed_u_trace_iteration, 'LOCAL_PL', &
-               ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 0, 0.0_rp, &
-               minval(this%fixed_u_m0_local_q2(ia, :)), 0.0_rp, 0.0_rp, 0.0_rp)
-            close(unit)
-         end if
-      end if
-      if (this%fixed_u_m0_p_available .and. minval(this%fixed_u_m0_vout_q2(ia, :)) >= 0.0_rp) &
-         call run_replay_case('VOUT_CONTROL', pl_raw, ql_vout)
-      if (this%fixed_u_m0_p_available .and. minval(this%fixed_u_m0_pt_q2(ia, :)) >= 0.0_rp) &
-         call run_replay_case('P_TRANSPOSE_CONTROL', pl_raw, ql_pt)
-      nullify(pl_bands%symbolic_atom, pl_bands%lattice)
-      deallocate(pl_atoms, pl_raw, pl_local, pl_a11, ql_raw, ql_local, ql_vout, ql_pt, baseline_ev)
-   contains
-      function a11_case_name(shift_index) result(name)
-         integer, intent(in) :: shift_index
-         character(len=24) :: name
-         if (shift_index <= fixed_u_m0_a11_nshift) then
-            write(name, '("A1_SHIFT_",i2.2)') shift_index
-         else
-            write(name, '("A2_SHIFT_",i2.2)') shift_index
-         end if
-      end function a11_case_name
-
-      function a11_stage_name(case_name) result(name)
-         character(len=*), intent(in) :: case_name
-         character(len=24) :: name
-         name = case_name
-      end function a11_stage_name
-
-      logical function is_a11_shift_case(case_name)
-         character(len=*), intent(in) :: case_name
-         is_a11_shift_case = index(trim(case_name), 'A1_SHIFT_') == 1 .or. &
-                             index(trim(case_name), 'A2_SHIFT_') == 1
-      end function is_a11_shift_case
-
-      subroutine load_captured_pl_inputs(atoms)
-         type(symbolic_atom), intent(inout) :: atoms(:)
-         integer :: site, pb, shell, channel
-         do site = 1, this%lattice%nrec
-            pb = this%lattice%nbulk + site
-            do channel = 1, 2
-               do shell = 0, lmax
-                  atoms(pb)%potential%gravity_center(shell + 1, channel) = &
-                     this%fixed_u_m0_pl_diag(site, shell + 1, channel, 1)
-                  atoms(pb)%potential%c(shell, channel) = this%fixed_u_m0_pl_diag(site, shell + 1, channel, 2)
-                  atoms(pb)%potential%qpar(shell, channel) = this%fixed_u_m0_pl_diag(site, shell + 1, channel, 3)
-                  atoms(pb)%potential%srdel(shell, channel) = this%fixed_u_m0_pl_diag(site, shell + 1, channel, 4)
-                  atoms(pb)%potential%pl(shell, channel) = this%fixed_u_m0_pl_diag(site, shell + 1, channel, 5)
-               end do
-            end do
-         end do
-      end subroutine load_captured_pl_inputs
-
-      subroutine run_replay_case(case_name, pl_case, ql_case, a11_v, a11_index)
-         character(len=*), intent(in) :: case_name
-         real(rp), intent(in) :: pl_case(lmax + 1, 2), ql_case(3, lmax + 1, 2)
-         real(rp), intent(in), optional :: a11_v
-         integer, intent(in), optional :: a11_index
-         type(self) :: replay_state
-         type(symbolic_atom) :: replay_atom
-      type(xc) :: replay_xc
-      integer :: out_unit, out_ios, ir, channel, shell, moment, state_index, shift_index
-      real(rp) :: center_input, shift_value, ev_raw_spin(2), ev_case_spin(2)
-      real(rp) :: ev_raw_total, ev_case_total
-      real(rp) :: charge(2), drdi, wgt
-      logical :: a11_case
-         shift_value = 0.0_rp
-         shift_index = 0
-         if (present(a11_v)) shift_value = a11_v
-         if (present(a11_index)) shift_index = a11_index
-         a11_case = trim(case_name) == 'RAW_PL' .or. is_a11_shift_case(case_name)
-         allocate(rho_case(nr, 2), sumec_case(2), sumev_case(2), &
-                  ec_case(max(ncore, 1)), ev_case(max(nval, 1)))
-         allocate(replay_state%vtn(nr, 2), replay_state%vzt(nr, 2), &
-                  replay_state%fun2(nr, lmax + 1, 2), replay_state%phi_amp(nr, lmax + 1, 2))
-         replay_state%control => this%control
-         replay_state%magnetic_seed_active = this%magnetic_seed_active
-         replay_state%magnetic_seed_field = this%magnetic_seed_field
-         replay_state%vtn = 0.0_rp
-         replay_state%vzt = 0.0_rp
-         replay_state%fun2 = 0.0_rp
-         replay_state%phi_amp = 0.0_rp
-         rho_case = 0.0_rp
-         sumec_case = 0.0_rp
-         sumev_case = 0.0_rp
-         if (ncore > 0) ec_case(1:ncore) = ec_seed(1:ncore)
-         if (nval > 0) ev_case(1:nval) = ev_seed(1:nval)
-         replay_atom = atom
-         call replay_state%newrho(replay_atom, z, lmax, a, b, nr, rofi, v, rho_case, pl_case, ql_case, &
-                                  sumec_case, sumev_case, ec_case, ev_case, tol, 2, 0)
-         if (trim(case_name) == 'RAW_PL') then
-            baseline_sumev = sumev_case
-            baseline_sumec = sumec_case
-            if (nval > 0) baseline_ev(1:nval) = ev_case(1:nval)
-            have_raw_energy = .true.
-         end if
-         replay_xc = xc(this%lattice%control)
-         charge = 0.0_rp
-         do channel = 1, 2
-            do ir = 1, nr
-               wgt = 2.0_rp*(mod(ir + 1, 2) + 1)/3.0_rp
-               if (ir == 1 .or. ir == nr) wgt = 1.0_rp/3.0_rp
-               drdi = a*(rofi_base(ir) + b)
-               charge(channel) = charge(channel) + wgt*drdi*rho_case(ir, channel)
-            end do
-         end do
-         open(newunit=out_unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
-              action='write', iostat=out_ios)
-         if (out_ios == 0) then
-            ! Recompute both component sets on copied arrays and write them
-            ! only after the trace stream is open. ATOMSC evaluates the
-            ! actual electrostatic/XC terms on rho_in before NEWRHO; the
-            ! output-rho set is a separately labelled diagnostic functional.
-            call evaluate_frozen_components(this, replay_state, replay_xc, atom, z, a, b, nr, rofi_base, &
-               v_base, vhrmax, b_fsm, rho_in, sumec_case, sumev_case, out_unit, ia, &
-               'ATOMSC_INPUT', component_snapshot)
-            ! Use the VNUCL saved by the actual ATOMSC call-site, not an
-            ! inferred boundary value, for the direct production comparison.
-            actual_rhovh = sum(rvh_actual)
-            actual_rhomu = sum(rmu_actual)
-            actual_rhoeps = sum(reps_actual)
-            actual_zvnucl = -z*vnucl_actual
-            actual_ekin = sum(sumev_actual)+sum(sumec_actual)-actual_rhovh-actual_rhomu
-            actual_utot = 0.5_rp*(actual_rhovh+actual_zvnucl)
-            actual_etot = actual_ekin+actual_utot+actual_rhoeps
-            actual_component = [sum(sumev_actual), sum(sumec_actual), actual_rhovh, actual_rhomu, &
-                                vnucl_actual, actual_zvnucl, actual_ekin, actual_utot, actual_rhoeps, actual_etot]
-            call evaluate_frozen_components(this, replay_state, replay_xc, atom, z, a, b, nr, rofi_base, &
-               v_base, vhrmax, b_fsm, rho_case, sumec_case, sumev_case, out_unit, ia, &
-               'OUTPUT_RHO', output_component)
-            ! Emit the exact ATOMSC site-energy reconstruction residual. This
-            ! is a same-state replay check, not an energy correction.
-            do shell = 0, 9
-               call this%write_fixed_u_csv_row(out_unit, 'm0_replay_component_delta', &
-                  this%fixed_u_trace_iteration, trim(case_name), ia-1, this%lattice%ib(ia)-1, 2, -1, &
-                  -1, -1, -1, -1, shell, 0.0_rp, 0.0_rp, component_snapshot(shell+1)-actual_component(shell+1), &
-                  component_snapshot(shell+1), actual_component(shell+1))
-            end do
-            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_control', this%fixed_u_trace_iteration, &
-               trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 0, &
-               0.0_rp, a, z, 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_control', this%fixed_u_trace_iteration, &
-               trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 1, &
-               0.0_rp, b, tol, 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_control', this%fixed_u_trace_iteration, &
-               trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 2, &
-               0.0_rp, real(nr, rp), real(ncore, rp), real(nval, rp), 0.0_rp)
-            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_control', this%fixed_u_trace_iteration, &
-               trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 3, &
-               0.0_rp, shift_value, this%fixed_u_m0_trvp(ia, 1), &
-               this%fixed_u_m0_trvp(ia, 2), 0.0_rp)
-            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_control', this%fixed_u_trace_iteration, &
-               trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 4, &
-               0.0_rp, vhrmax, 0.0_rp, 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_control', this%fixed_u_trace_iteration, &
-               trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, -1, -1, -1, -1, -1, 5, &
-               0.0_rp, b_fsm, 0.0_rp, 0.0_rp, 0.0_rp)
-            ! Serialize the exact PL tuple passed to the production scratch
-            ! calculate_pl call and its returned PL for every shell/spin.
-            do channel = 1, 2
-               do shell = 0, lmax
-                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_radial_parameter', &
-                     this%fixed_u_trace_iteration, trim(case_name), ia - 1, this%lattice%ib(ia) - 1, &
-                     shell, channel, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
-                     atom%potential%c(shell, channel), 0.0_rp, 0.0_rp)
-                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_radial_parameter', &
-                     this%fixed_u_trace_iteration, trim(case_name), ia - 1, this%lattice%ib(ia) - 1, &
-                     shell, channel, -1, -1, -1, -1, 1, 0.0_rp, 0.0_rp, &
-                     atom%potential%qpar(shell, channel), 0.0_rp, 0.0_rp)
-                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_radial_parameter', &
-                     this%fixed_u_trace_iteration, trim(case_name), ia - 1, this%lattice%ib(ia) - 1, &
-                     shell, channel, -1, -1, -1, -1, 2, 0.0_rp, 0.0_rp, &
-                     atom%potential%srdel(shell, channel), 0.0_rp, 0.0_rp)
-                  center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 1)
-                  if (shell == 2) then
-                     select case (trim(case_name))
-                     case ('LOCAL_PL')
-                        center_input = this%fixed_u_m0_local_center(ia, channel) - atom%potential%vmad
-                     case ('VOUT_CONTROL')
-                        center_input = this%fixed_u_m0_vout_center(ia, channel) - atom%potential%vmad
-                     case ('P_TRANSPOSE_CONTROL')
-                        center_input = this%fixed_u_m0_pt_center(ia, channel) - atom%potential%vmad
-                     end select
-                     if (is_a11_shift_case(case_name)) &
-                        center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 1) - shift_value
-                  end if
-                  do moment = 0, 4
-                     select case (moment)
-                     case (0)
-                        center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 1)
-                        if (shell == 2) then
-                           select case (trim(case_name))
-                           case ('LOCAL_PL')
-                              center_input = this%fixed_u_m0_local_center(ia, channel) - atom%potential%vmad
-                           case ('VOUT_CONTROL')
-                              center_input = this%fixed_u_m0_vout_center(ia, channel) - atom%potential%vmad
-                           case ('P_TRANSPOSE_CONTROL')
-                              center_input = this%fixed_u_m0_pt_center(ia, channel) - atom%potential%vmad
-                           end select
-                           if (is_a11_shift_case(case_name)) &
-                              center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 1) - shift_value
-                        end if
-                     case (1)
-                        center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 2)
-                     case (2)
-                        center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 3)
-                     case (3)
-                        center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 4)
-                     case (4)
-                        center_input = this%fixed_u_m0_pl_diag(ia, shell + 1, channel, 5)
-                     end select
-                     call this%write_fixed_u_csv_row(out_unit, 'm0_replay_pl_input', this%fixed_u_trace_iteration, &
-                        trim(case_name), ia - 1, this%lattice%ib(ia) - 1, shell, channel, -1, -1, -1, -1, moment, &
-                        0.0_rp, 0.0_rp, center_input, 0.0_rp, 0.0_rp)
-                  end do
-                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_pl_return', this%fixed_u_trace_iteration, &
-                     trim(case_name), ia - 1, this%lattice%ib(ia) - 1, shell, channel, -1, -1, -1, -1, 0, &
-                     0.0_rp, 0.0_rp, pl_case(shell + 1, channel), 0.0_rp, 0.0_rp)
-                  do moment = 1, 3
-                     call this%write_fixed_u_csv_row(out_unit, 'm0_replay_ql_input', this%fixed_u_trace_iteration, &
-                        trim(case_name), ia - 1, this%lattice%ib(ia) - 1, shell, channel, -1, -1, -1, -1, moment - 1, &
-                        0.0_rp, 0.0_rp, ql_case(moment, shell + 1, channel), 0.0_rp, 0.0_rp)
-                  end do
-               end do
-            end do
-            ! Each case records the same immutable radial solver inputs. The
-            ! independent checker compares these rows exactly across cases.
-            do ir = 1, nr
-               call this%write_fixed_u_csv_row(out_unit, 'm0_replay_rofi', this%fixed_u_trace_iteration, &
-                  trim(case_name), ia - 1, this%lattice%ib(ia) - 1, -1, -1, -1, -1, ir - 1, -1, 0, &
-                  0.0_rp, 0.0_rp, rofi(ir), 0.0_rp, 0.0_rp)
-               do channel = 1, 2
-                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_v_input', this%fixed_u_trace_iteration, &
-                     trim(case_name), ia - 1, this%lattice%ib(ia) - 1, -1, channel, -1, -1, ir - 1, -1, 0, &
-                     0.0_rp, 0.0_rp, v(ir, channel), 0.0_rp, 0.0_rp)
-                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_rho_input', this%fixed_u_trace_iteration, &
-                     trim(case_name), ia - 1, this%lattice%ib(ia) - 1, -1, channel, -1, -1, ir - 1, -1, 0, &
-                     0.0_rp, 0.0_rp, rho_in(ir, channel), 0.0_rp, 0.0_rp)
-               end do
-            end do
-            do row = 1, ncore
-               call this%write_fixed_u_csv_row(out_unit, 'm0_replay_ec_seed', this%fixed_u_trace_iteration, &
-                  trim(case_name), ia - 1, this%lattice%ib(ia) - 1, -1, -1, -1, -1, row - 1, -1, 0, &
-                  0.0_rp, 0.0_rp, ec_seed(row), 0.0_rp, 0.0_rp)
-            end do
-            do row = 1, nval
-               call this%write_fixed_u_csv_row(out_unit, 'm0_replay_ev_seed', this%fixed_u_trace_iteration, &
-                  trim(case_name), ia - 1, this%lattice%ib(ia) - 1, -1, -1, -1, -1, row - 1, -1, 0, &
-                  0.0_rp, 0.0_rp, ev_seed(row), 0.0_rp, 0.0_rp)
-            end do
-            do channel = 1, 2
-               call this%write_fixed_u_csv_row(out_unit, 'm0_replay_energy', this%fixed_u_trace_iteration, &
-                  trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, channel, -1, -1, -1, -1, 0, &
-                  0.0_rp, sumec_case(channel), sumev_case(channel), 0.0_rp, 0.0_rp)
-               if (have_raw_energy) then
-                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_delta', this%fixed_u_trace_iteration, &
-                     trim(case_name), ia - 1, this%lattice%ib(ia) - 1, 2, channel, -1, -1, -1, -1, 0, &
-                     0.0_rp, sumec_case(channel)-baseline_sumec(channel), &
-                     sumev_case(channel)-baseline_sumev(channel), 0.0_rp, 0.0_rp)
-               end if
-            end do
-            if (a11_case) then
-               ev_raw_spin = 0.0_rp
-               ev_case_spin = 0.0_rp
-               ev_raw_total = 0.0_rp
-               ev_case_total = 0.0_rp
-               state_index = 0
-               do channel = 1, 2
-                  do shell = 0, lmax
-                     if (ql_case(1, shell + 1, channel) < 1.0e-5_rp) cycle
-                     state_index = state_index + 1
-                     if (state_index > nval) error stop 'A1 trace: NEWRHO EV ordering exceeds nval'
-                     ev_raw_spin(channel) = ev_raw_spin(channel) + baseline_ev(state_index)
-                     ev_case_spin(channel) = ev_case_spin(channel) + ev_case(state_index)
-                     call this%write_fixed_u_csv_row(out_unit, 'm0_a11_ev', this%fixed_u_trace_iteration, &
-                        a11_stage_name(case_name), ia-1, this%lattice%ib(ia)-1, shell, channel, -1, &
-                        state_index-1, -1, -1, shift_index, shift_value, baseline_ev(state_index), &
-                        ev_case(state_index), ev_case(state_index)-baseline_ev(state_index), 0.0_rp)
-                  end do
-                  call this%write_fixed_u_csv_row(out_unit, 'm0_a11_ev_sum', this%fixed_u_trace_iteration, &
-                     a11_stage_name(case_name), ia-1, this%lattice%ib(ia)-1, 2, channel, -1, -1, -1, -1, &
-                     shift_index, shift_value, ev_raw_spin(channel), ev_case_spin(channel), &
-                     ev_case_spin(channel)-ev_raw_spin(channel), 0.0_rp)
-                  ev_raw_total = ev_raw_total + ev_raw_spin(channel)
-                  ev_case_total = ev_case_total + ev_case_spin(channel)
-               end do
-               call this%write_fixed_u_csv_row(out_unit, 'm0_a11_ev_sum', this%fixed_u_trace_iteration, &
-                  a11_stage_name(case_name), ia-1, this%lattice%ib(ia)-1, 2, -1, -1, -1, -1, -1, &
-                  shift_index, shift_value, ev_raw_total, ev_case_total, ev_case_total-ev_raw_total, 0.0_rp)
-               do channel = 1, 2
-                  call this%write_fixed_u_csv_row(out_unit, 'm0_a11_case', this%fixed_u_trace_iteration, &
-                     a11_stage_name(case_name), ia-1, this%lattice%ib(ia)-1, 2, channel, -1, -1, -1, -1, &
-                     shift_index, shift_value, baseline_sumev(channel), sumev_case(channel), &
-                     this%fixed_u_m0_q0(ia, channel), this%fixed_u_m0_ql(ia, 3, 3, channel))
-                  call this%write_fixed_u_csv_row(out_unit, 'm0_a11_center', this%fixed_u_trace_iteration, &
-                     a11_stage_name(case_name), ia-1, this%lattice%ib(ia)-1, 2, channel, -1, -1, -1, -1, &
-                     shift_index, shift_value, this%fixed_u_m0_pl_diag(ia, 3, channel, 1), &
-                     this%fixed_u_m0_pl_diag(ia, 3, channel, 1)-shift_value, &
-                     pl_raw(3, channel), pl_case(3, channel))
-               end do
-               call this%write_fixed_u_csv_row(out_unit, 'm0_a11_case', this%fixed_u_trace_iteration, &
-                  a11_stage_name(case_name), ia-1, this%lattice%ib(ia)-1, 2, -1, -1, -1, -1, -1, &
-                  shift_index, shift_value, sum(baseline_sumev), sum(sumev_case), &
-                  sum(this%fixed_u_m0_q0(ia, :)), sum(this%fixed_u_m0_ql(ia, 3, 3, :)))
-               call this%write_fixed_u_csv_row(out_unit, 'm0_a11_complete', this%fixed_u_trace_iteration, &
-                  a11_stage_name(case_name), ia-1, this%lattice%ib(ia)-1, 2, -1, -1, -1, -1, -1, &
-                  shift_index, shift_value, real(nval, rp), 1.0_rp, 0.0_rp, 0.0_rp)
-            end if
-            ! NEWRHO returns rho/SUMEC/SUMEV, but the full ATOMSC ETOT
-            ! components are recomputed independently below from copied arrays.
-            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_radial_charge', &
-               this%fixed_u_trace_iteration, trim(case_name), ia - 1, this%lattice%ib(ia)-1, &
-               -1, 1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, charge(1), 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_radial_charge', &
-               this%fixed_u_trace_iteration, trim(case_name), ia - 1, this%lattice%ib(ia)-1, &
-               -1, 2, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, charge(2), 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_radial_charge', &
-               this%fixed_u_trace_iteration, trim(case_name), ia - 1, this%lattice%ib(ia)-1, &
-               -1, 0, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, charge(1)+charge(2), &
-               charge(1)-charge(2), 0.0_rp)
-            do ir = 1, nr
-               do channel = 1, 2
-                  call this%write_fixed_u_csv_row(out_unit, 'm0_replay_rho', this%fixed_u_trace_iteration, &
-                     trim(case_name), ia - 1, this%lattice%ib(ia) - 1, -1, channel, -1, -1, ir - 1, -1, 0, &
-                     0.0_rp, 0.0_rp, rho_case(ir, channel), 0.0_rp, 0.0_rp)
-               end do
-            end do
-            close(out_unit)
-         end if
-         deallocate(replay_state%vtn, replay_state%vzt, replay_state%fun2, replay_state%phi_amp)
-         deallocate(rho_case, sumec_case, sumev_case, ec_case, ev_case)
-      end subroutine run_replay_case
-
-      subroutine evaluate_frozen_components(this, replay_state, replay_xc, atom, z, a, b, nr, rofi_base, &
-                                            v_base, vhrmax, b_fsm, rho_sample, sumec_case, sumev_case, &
-                                            out_unit, site, component_stage, components)
-         class(self), intent(inout) :: this, replay_state
-         type(xc), intent(in) :: replay_xc
-         class(symbolic_atom), intent(in) :: atom
-         real(rp), intent(in) :: z, a, b, rofi_base(nr), v_base(nr,2), vhrmax, b_fsm
-         integer, intent(in) :: nr, out_unit, site
-         character(len=*), intent(in) :: component_stage
-         real(rp), intent(in) :: rho_sample(nr,2), sumec_case(2), sumev_case(2)
-         real(rp), intent(out) :: components(10)
-         integer :: isp, comp
-         real(rp) :: rhoeps_local, rhomu_local, rhovh_local, utot_local, ekin_local, etot_local
-         real(rp) :: vnucl_local, zvnucl_local, vsum_local, value_local
-         real(rp), allocatable :: rho_work(:,:), v_work(:,:), rofi_work(:)
-         real(rp) :: rvh_local(2), rho0_local(2), reps_local(2), rmu_local(2)
-
-         allocate(rho_work(nr,2), v_work(nr,2), rofi_work(nr))
-         rho_work = rho_sample
-         v_work = v_base
-         rofi_work = rofi_base
-         rvh_local = 0.0_rp
-         rho0_local = 0.0_rp
-         reps_local = 0.0_rp
-         rmu_local = 0.0_rp
-         vsum_local = 0.0_rp
-         call POISS0(z, a, b, rofi_work, rho_work, nr, vhrmax, v_work, rvh_local, vsum_local, 2)
-         vnucl_local = v_work(1,1)
-         zvnucl_local = -z*vnucl_local
-         call replay_state%VXC0SP(replay_xc, z, a, b, rofi_work, rho_sample, nr, v_work, &
-                                  rho0_local, reps_local, rmu_local, 2, b_fsm)
-         rhovh_local = sum(rvh_local)
-         rhoeps_local = sum(reps_local)
-         rhomu_local = sum(rmu_local)
-         utot_local = 0.5_rp*(rhovh_local + zvnucl_local)
-         ekin_local = sum(sumev_case) + sum(sumec_case) - rhovh_local - rhomu_local
-         etot_local = ekin_local + utot_local + rhoeps_local
-         components = [sum(sumev_case), sum(sumec_case), rhovh_local, rhomu_local, vnucl_local, &
-                       zvnucl_local, ekin_local, utot_local, rhoeps_local, etot_local]
-         do comp = 0, 9
-            value_local = components(comp+1)
-            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_energy_component', &
-               this%fixed_u_trace_iteration, trim(component_stage), site-1, this%lattice%ib(site)-1, &
-               2, -1, -1, -1, -1, -1, comp, 0.0_rp, 0.0_rp, value_local, 0.0_rp, 0.0_rp)
-         end do
-         do isp = 1, 2
-            call this%write_fixed_u_csv_row(out_unit, 'm0_replay_energy_component', &
-               this%fixed_u_trace_iteration, trim(component_stage), site-1, this%lattice%ib(site)-1, &
-               2, isp, -1, -1, -1, -1, 10, 0.0_rp, 0.0_rp, rvh_local(isp), 0.0_rp, 0.0_rp)
-         end do
-         deallocate(rho_work, v_work, rofi_work)
-      end subroutine evaluate_frozen_components
-   end subroutine replay_fixed_u_m0_moments
-
-   subroutine update_fixed_u_residuals(this)
-      class(self), intent(inout) :: this
-      complex(rp), allocatable :: density_override(:, :, :, :, :), vout(:, :, :)
-      complex(rp), allocatable :: p_in(:, :, :, :), p_out(:, :, :, :), v_in(:, :, :, :), v_out(:, :, :, :)
-      integer, allocatable :: site_for_type(:)
-      integer :: nsite, ntype, block, isite, itype, il, ispin, mmax, i, j, flat, orbital_i, orbital_j, worst_block
-      integer :: worst_l, worst_site, unit, ios
-      real(rp) :: rp_abs, rp_rel, rv_abs, rv_rel, antiherm_p, antiherm_v, u_value, j_value
-      real(rp) :: rp_target, rv_target
-      logical :: active, physical
-
-      this%fixed_u_residual_active = .false.
-      this%fixed_u_residual_converged = .false.
-      this%fixed_u_residual_physical = .false.
-      if (.not. this%hamiltonian%hubbard_u_general_check .or. &
-          trim(this%hamiltonian%hubbard_u_potential_form) /= 'liechtenstein' .or. &
-          this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
-         this%mix%fixed_u_stable_updates = 0
-         return
-      end if
-
-      nsite = this%lattice%nrec
-      ntype = this%lattice%ntype
-      if (nsite < 1 .or. ntype < 1) return
-      allocate(site_for_type(ntype))
-      site_for_type = 0
-      do isite = 1, nsite
-         itype = this%lattice%ib(isite)
-         if (itype >= 1 .and. itype <= ntype .and. site_for_type(itype) == 0) site_for_type(itype) = isite
-      end do
-
-      active = .false.
-      do itype = 1, ntype
-         do il = 1, 4
-            u_value = 0.0_rp
-            j_value = 0.0_rp
-            if (allocated(this%lattice%symbolic_atoms(itype)%potential%hubbard_u)) then
-               if (il <= size(this%lattice%symbolic_atoms(itype)%potential%hubbard_u)) &
-                  u_value = this%lattice%symbolic_atoms(itype)%potential%hubbard_u(il)
-            end if
-            if (allocated(this%lattice%symbolic_atoms(itype)%potential%hubbard_j)) then
-               if (il <= size(this%lattice%symbolic_atoms(itype)%potential%hubbard_j)) &
-                  j_value = this%lattice%symbolic_atoms(itype)%potential%hubbard_j(il)
-            end if
-            if (abs(u_value) > 1.0e-10_rp .or. abs(j_value) > 1.0e-10_rp) active = .true.
-         end do
-      end do
-      if (.not. active) then
-         this%mix%fixed_u_stable_updates = 0
-         return
-      end if
-      this%fixed_u_residual_active = .true.
-      if (.not. allocated(this%hamiltonian%hubbard_u_pot)) &
-         error stop 'active fixed-U residual: Hubbard potential is not allocated'
-
-      allocate(density_override(ntype, 4, 2, 7, 7), vout(nb, nb, ntype))
-      allocate(p_in(nsite*4, 2, 7, 7), p_out(nsite*4, 2, 7, 7), &
-               v_in(nsite*4, 2, 7, 7), v_out(nsite*4, 2, 7, 7))
-      density_override = 0.0_rp
-      vout = 0.0_rp
-      p_in = 0.0_rp
-      p_out = 0.0_rp
-      v_in = 0.0_rp
-      v_out = 0.0_rp
-
-      ! The production Hubbard operator is type-local. Use the same first
-      ! site-of-type density convention for its read-only Pout evaluation;
-      ! residuals below remain site-resolved using each site's own P matrices.
-      do itype = 1, ntype
-         isite = site_for_type(itype)
-         if (isite == 0) cycle
-         do il = 1, 4
-            mmax = 2*il - 1
-            do ispin = 1, 2
-               do i = 1, mmax
-                  do j = 1, mmax
-                     flat = (i - 1)*mmax + j
-                     density_override(itype, il, ispin, i, j) = this%mix%ldm_new(isite, il, ispin, flat)
-                  end do
-               end do
-            end do
-         end do
-      end do
-      call this%hamiltonian%calculate_hubbard_u_potential_general( &
-         density_override=density_override, potential_out=vout)
-
-      do isite = 1, nsite
-         itype = this%lattice%ib(isite)
-         do il = 1, 4
-            u_value = 0.0_rp
-            j_value = 0.0_rp
-            if (allocated(this%lattice%symbolic_atoms(itype)%potential%hubbard_u)) then
-               if (il <= size(this%lattice%symbolic_atoms(itype)%potential%hubbard_u)) &
-                  u_value = this%lattice%symbolic_atoms(itype)%potential%hubbard_u(il)
-            end if
-            if (allocated(this%lattice%symbolic_atoms(itype)%potential%hubbard_j)) then
-               if (il <= size(this%lattice%symbolic_atoms(itype)%potential%hubbard_j)) &
-                  j_value = this%lattice%symbolic_atoms(itype)%potential%hubbard_j(il)
-            end if
-            if (abs(u_value) <= 1.0e-10_rp .and. abs(j_value) <= 1.0e-10_rp) cycle
-            block = (il - 1)*nsite + isite
-            mmax = 2*il - 1
-            do ispin = 1, 2
-               do i = 1, mmax
-                  do j = 1, mmax
-                     flat = (i - 1)*mmax + j
-                     p_in(block, ispin, i, j) = this%mix%ldm_old(isite, il, ispin, flat)
-                     p_out(block, ispin, i, j) = this%mix%ldm_new(isite, il, ispin, flat)
-                     orbital_i = (il - 1)**2 + i + (ispin - 1)*spin_off
-                     orbital_j = (il - 1)**2 + j + (ispin - 1)*spin_off
-                     v_in(block, ispin, i, j) = this%hamiltonian%hubbard_u_pot(orbital_i, orbital_j, itype)
-                     v_out(block, ispin, i, j) = vout(orbital_i, orbital_j, itype)
-                  end do
-               end do
-            end do
-         end do
-      end do
-
-      call fixed_u_residual_metrics(p_in, p_out, v_in, v_out, rp_abs, rp_rel, rv_abs, rv_rel, &
-                                    physical, antiherm_p, antiherm_v, worst_block)
-      if (worst_block > 0) then
-         worst_site = mod(worst_block - 1, nsite) + 1
-         worst_l = (worst_block - 1)/nsite
-      else
-         worst_site = 0
-         worst_l = -1
-      end if
-      this%fixed_u_rp_abs = rp_abs
-      this%fixed_u_rp_rel = rp_rel
-      this%fixed_u_rv_abs = rv_abs
-      this%fixed_u_rv_rel = rv_rel
-      this%fixed_u_antiherm_p = antiherm_p
-      this%fixed_u_antiherm_v = antiherm_v
-      this%fixed_u_worst_site = worst_site
-      this%fixed_u_worst_l = worst_l
-      this%fixed_u_residual_physical = physical
-      rp_target = fixed_u_density_tolerance
-      rv_target = fixed_u_potential_tolerance
-      if (this%hamiltonian%fixed_u_test_tighten_r05) then
-         rp_target = fixed_u_test_tight_density_tolerance
-         rv_target = fixed_u_test_tight_potential_tolerance
-      end if
-      call this%mix%advance_fixed_u_convergence(rp_abs, rv_abs, physical, this%fixed_u_residual_converged, &
-                                                rp_target, rv_target)
-      if (rank == 0) then
-         call g_logger%info('FIXED_U_RESIDUAL rp_abs='//fmt('es12.4',rp_abs)//' rp_rel='//fmt('es12.4',rp_rel)// &
-            ' rv_abs_Ry='//fmt('es12.4',rv_abs)//' rv_rel='//fmt('es12.4',rv_rel)// &
-            ' target_rp='//fmt('es12.4',rp_target)//' target_rv_Ry='//fmt('es12.4',rv_target)// &
-            ' required_streak='//int2str(fixed_u_required_stable_updates)// &
-            ' antiherm_P='//fmt('es12.4',antiherm_p)//' antiherm_V='//fmt('es12.4',antiherm_v)// &
-            ' physical='//trim(log2str(physical))//' streak='//int2str(this%mix%fixed_u_stable_updates)// &
-            ' worst_site='//int2str(worst_site)//' l='//int2str(worst_l), __FILE__, __LINE__)
-      end if
-      if (this%fixed_u_trace_enabled .and. rank == 0) then
-         open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
-              action='write', iostat=ios)
-         if (ios == 0) then
-            call this%write_fixed_u_csv_row(unit, 'fixed_u_rp_abs', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
-               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, rp_abs, 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'fixed_u_rp_rel', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
-               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, rp_rel, 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'fixed_u_rv_abs_ry', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
-               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, rv_abs, 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'fixed_u_rv_rel', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
-               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, rv_rel, 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'fixed_u_rp_target', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
-               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, rp_target, 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'fixed_u_rv_target_ry', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
-               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, rv_target, 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'fixed_u_antiherm_p', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
-               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, antiherm_p, 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'fixed_u_antiherm_v', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
-               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, antiherm_v, 0.0_rp, 0.0_rp)
-            call this%write_fixed_u_csv_row(unit, 'fixed_u_physical', this%fixed_u_trace_iteration, 'SCF_CONVERGENCE', &
-               worst_site - 1, -1, worst_l, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, merge(1.0_rp,0.0_rp,physical), &
-               0.0_rp, 0.0_rp)
-            close(unit)
-         end if
-      end if
-      deallocate(site_for_type, density_override, vout, p_in, p_out, v_in, v_out)
-   end subroutine update_fixed_u_residuals
-
-   subroutine write_fixed_u_total_energy(this)
-      class(self), intent(in) :: this
-      integer :: unit, ios
-      real(rp) :: value
-
-      if (.not. this%fixed_u_trace_enabled .or. rank /= 0) return
-      if (this%fixed_u_trace_selected_iteration > 0 .and. &
-          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) return
-      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
-           action='write', iostat=ios)
-      if (ios /= 0) return
-      value = sum(this%symbolic_atom(:)%potential%sumev)
-      call total_row('sum_ev', value)
-      value = sum(this%symbolic_atom(:)%potential%sumec)
-      call total_row('sum_ec', value)
-      value = sum(this%symbolic_atom(:)%potential%ekin)
-      call total_row('ekin', value)
-      value = sum(this%symbolic_atom(:)%potential%utot)
-      call total_row('utot', value)
-      value = sum(this%symbolic_atom(:)%potential%rhoeps)
-      call total_row('rhoeps', value)
-      value = sum(this%symbolic_atom(:)%potential%etot)
-      call total_row('etot_total', value)
-      close(unit)
-   contains
-      subroutine total_row(label, energy_value)
-         character(len=*), intent(in) :: label
-         real(rp), intent(in) :: energy_value
-         call this%write_fixed_u_csv_row(unit, label, this%fixed_u_trace_iteration, 'POST_SCF_RADIAL', &
-            -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, energy_value, 0.0_rp, 0.0_rp)
-      end subroutine total_row
-   end subroutine write_fixed_u_total_energy
-
    !> Report provisional fixed-U energy diagnostics without modifying the
    !> physical total-energy field.  P_out is the unmixed density from this
    !> iteration; V_in is the operator actually held by the Hamiltonian.
@@ -1987,19 +612,22 @@ contains
       complex(rp) :: p_d(5, 5), v_d(5, 5)
       real(rp), allocatable :: e_int(:, :), e_dc(:, :), e_hub(:, :), tr_vp(:, :)
       real(rp) :: site_int, site_dc, site_hub, site_t, site_external, direct_t, etot_site
+      real(rp) :: nup_site, ndn_site
       real(rp) :: total_int, total_dc, total_hub, total_t, total_external, total_t_actual, value_a, value_b, value_c
       real(rp) :: entropy, ts, value_a_f, value_b_f, value_c_f
       real(rp) :: test_energy, test_f_local, test_f_spectral
+      real(rp) :: production_hub, base_physical_energy
       real(rp), allocatable :: local_weights(:)
       complex(rp) :: test_operator(5, 5)
       integer :: ik_global
       logical :: entropy_available
-      integer :: isite, itype, spin, i, j, flat, status, orbital_i, orbital_j
+      integer :: ia, plusbulk, itype, spin, i, j, flat, status, orbital_i, orbital_j
+      character(len=40) :: p_residual_text, v_residual_text
       character(len=64) :: candidate_a, candidate_b, candidate_c
       character(len=64) :: entropy_text, ts_text, candidate_a_f_text, candidate_b_f_text, candidate_c_f_text
       character(len=64) :: test_energy_text, test_f_local_text, test_f_spectral_text
 
-      if (.not. (this%hamiltonian%hubbard_u_general_check .or. &
+      if (.not. (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_impurity_check .or. &
                  this%hamiltonian%hubbard_test_operator_check)) return
       entropy = 0.0_rp
       ts = 0.0_rp
@@ -2032,6 +660,8 @@ contains
          end if
       end if
       if (rank /= 0) return
+      production_hub = this%fixed_hubbard_energy_pout()
+      base_physical_energy = this%physical_total_energy - production_hub
       test_operator = cmplx(0.0_rp, 0.0_rp, rp)
       if (this%hamiltonian%hubbard_test_operator_check) &
          call this%hamiltonian%get_hubbard_test_operator(test_operator)
@@ -2047,23 +677,39 @@ contains
       total_external = 0.0_rp
       total_t_actual = 0.0_rp
 
-      do isite = 1, this%lattice%nrec
-         itype = this%lattice%ib(isite)
+      do ia = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + ia
+         ! Recursive indices address cluster sites, while the energy
+         ! evaluator arrays are keyed by symbolic-atom type. In an impurity
+         ! cluster ib(ia) is a geometric representative index, not that type.
+         itype = plusbulk
+         if (.not. allocated(this%symbolic_atom(plusbulk)%potential%hubbard_u) .or. &
+             .not. allocated(this%symbolic_atom(plusbulk)%potential%hubbard_j)) cycle
+         if (size(this%symbolic_atom(plusbulk)%potential%hubbard_u) < 3 .or. &
+             size(this%symbolic_atom(plusbulk)%potential%hubbard_j) < 3) cycle
+         if (abs(this%symbolic_atom(plusbulk)%potential%hubbard_u(3)) <= 1.0e-10_rp .and. &
+             abs(this%symbolic_atom(plusbulk)%potential%hubbard_j(3)) <= 1.0e-10_rp .and. &
+             .not. this%hamiltonian%hubbard_test_operator_check) cycle
          density = cmplx(0.0_rp, 0.0_rp, rp)
          potential = cmplx(0.0_rp, 0.0_rp, rp)
+         p_d = cmplx(0.0_rp, 0.0_rp, rp)
+         v_d = cmplx(0.0_rp, 0.0_rp, rp)
          direct_t = 0.0_rp
          site_external = 0.0_rp
+         nup_site = 0.0_rp
+         ndn_site = 0.0_rp
          do spin = 1, 2
             do i = 1, 5
                orbital_i = 4 + i + spin_off*(spin - 1)
                do j = 1, 5
                   orbital_j = 4 + j + spin_off*(spin - 1)
                   flat = (i - 1)*5 + j
-                  p_d(i, j) = this%mix%ldm_new(isite, 3, spin, flat)
+                  p_d(i, j) = this%mix%ldm_new(ia, 3, spin, flat)
                   v_d(i, j) = this%hamiltonian%hubbard_u_pot(orbital_i, orbital_j, itype)
                   density(itype, 3, spin, i, j) = p_d(i, j)
                   potential(itype, 3, spin, i, j) = v_d(i, j)
-                  if (this%hamiltonian%hubbard_test_operator_check) &
+                  if (this%hamiltonian%hubbard_test_operator_check .and. &
+                      (this%hamiltonian%hubbard_test_spin == 0 .or. this%hamiltonian%hubbard_test_spin == spin)) &
                      potential(itype, 3, spin, i, j) = v_d(i, j) - &
                         this%hamiltonian%hubbard_test_lambda*test_operator(i, j)
                end do
@@ -2071,19 +717,33 @@ contains
             do i = 1, 5
                do j = 1, 5
                   direct_t = direct_t + real(v_d(i, j)*p_d(j, i), rp)
-                  if (this%hamiltonian%hubbard_test_operator_check) then
+                  if (this%hamiltonian%hubbard_test_operator_check .and. &
+                      (this%hamiltonian%hubbard_test_spin == 0 .or. this%hamiltonian%hubbard_test_spin == spin)) then
                      site_external = site_external + this%hamiltonian%hubbard_test_lambda * &
                         real(test_operator(i, j)*p_d(j, i), rp)
                   end if
                end do
             end do
+            if (spin == 1) then
+               nup_site = sum([(real(p_d(i, i), rp), i=1,5)])
+            else
+               ndn_site = sum([(real(p_d(i, i), rp), i=1,5)])
+            end if
          end do
          call this%hamiltonian%evaluate_hubbard_energy(density, potential, e_int, e_dc, e_hub, tr_vp)
          site_int = sum(e_int(itype, :))
          site_dc = sum(e_dc(itype, :))
          site_hub = sum(e_hub(itype, :))
          site_t = sum(tr_vp(itype, :))
-         etot_site = this%symbolic_atom(this%lattice%nbulk + isite)%potential%etot
+         if (this%hamiltonian%hubbard_soc_experimental .and. this%control%nsp == 2) &
+            call spinor_site_hubbard_energy(this%symbolic_atom(plusbulk)%potential, site_int, site_dc, site_hub)
+         etot_site = this%symbolic_atom(plusbulk)%potential%etot
+         p_residual_text = 'NA'
+         v_residual_text = 'NA'
+         if (this%fixed_u_residual_active) then
+            p_residual_text = trim(fmt('e12.4', this%fixed_u_rp_abs))
+            v_residual_text = trim(fmt('e12.4', this%fixed_u_rv_abs))
+         end if
          value_a = 0.0_rp
          value_b = 0.0_rp
          value_c = 0.0_rp
@@ -2099,7 +759,17 @@ contains
             value_b = etot_site + site_hub + site_external
             candidate_b = trim(fmt('e24.16', value_b))
          end if
-         call g_logger%info('HUBBARD_MOMENT_ENERGY_SITE site='//fmt('i0', isite)//' type='//fmt('i0', itype)// &
+         if (this%hamiltonian%hubbard_log_level == 'summary') then
+            call g_logger%info('HUBBARD_MOMENT_ENERGY_SITE site='//fmt('i0', ia)//' type='//fmt('i0', itype)// &
+               ' n_up='//fmt('f10.6', nup_site)//' n_dn='//fmt('f10.6', ndn_site)// &
+               ' moment='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%mtot)// &
+               ' E_Hub='//fmt('e12.4', site_hub)//' P_res='//trim(p_residual_text)//' V_res='//trim(v_residual_text), &
+               __FILE__, __LINE__)
+         else
+         call g_logger%info('HUBBARD_MOMENT_ENERGY_SITE site='//fmt('i0', ia)//' type='//fmt('i0', itype)// &
+            ' n_up='//fmt('f10.6', nup_site)//' n_dn='//fmt('f10.6', ndn_site)// &
+            ' moment='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%mtot)// &
+            ' P_res='//trim(p_residual_text)//' V_res='//trim(v_residual_text)// &
             ' E_int='//fmt('e24.16', site_int)//' E_DC='//fmt('e24.16', site_dc)// &
             ' E_Hub='//fmt('e24.16', site_hub)//' t_in_out='//fmt('e24.16', site_t)// &
             ' t_U='//fmt('e24.16', site_t)//' e_external='//fmt('e24.16', site_external)// &
@@ -2109,6 +779,7 @@ contains
             ' candidate_b='//trim(candidate_b)//' candidate_c='//trim(candidate_c)// &
             ' candidate_F=UNAVAILABLE_GLOBAL_TS_NOT_SITE_DECOMPOSABLE'// &
             ' candidate_status=PROVISIONAL_ONLY', __FILE__, __LINE__)
+         end if
          total_int = total_int + site_int
          total_dc = total_dc + site_dc
          total_hub = total_hub + site_hub
@@ -2132,7 +803,12 @@ contains
          value_a_f = value_a - ts
          value_c_f = value_c - ts
       else
-         value_b = this%physical_total_energy + total_hub + total_external
+         if (this%is_eligible_local_hubbard() .and. &
+             trim(this%hamiltonian%hubbard_radial_moments) == 'local') then
+            value_b = this%physical_total_energy + total_external
+         else
+            value_b = this%physical_total_energy + total_hub + total_external
+         end if
          candidate_b = trim(fmt('e24.16', value_b))
          value_b_f = value_b - ts
       end if
@@ -2163,8 +839,10 @@ contains
       end if
       call g_logger%info('HUBBARD_MOMENT_ENERGY_TOTAL E_int='//fmt('e24.16', total_int)// &
          ' E_DC='//fmt('e24.16', total_dc)//' E_Hub='//fmt('e24.16', total_hub)// &
+         ' E_Hub_P_OUT='//fmt('e24.16', production_hub)// &
          ' t_in_out='//fmt('e24.16', total_t)//' t_U='//fmt('e24.16', total_t)// &
          ' e_external='//fmt('e24.16', total_external)//' t_total_actual_Vin='//fmt('e24.16', total_t_actual)// &
+         ' base_physical_total_energy='//fmt('e24.16', base_physical_energy)// &
          ' physical_total_energy='// &
          fmt('e24.16', this%physical_total_energy)//' candidate_a='//trim(candidate_a)// &
          ' candidate_b='//trim(candidate_b)//' candidate_c='//trim(candidate_c)// &
@@ -2178,198 +856,325 @@ contains
       deallocate(density, potential, e_int, e_dc, e_hub, tr_vp)
    end subroutine write_hubbard_moment_energy_diagnostics
 
-   subroutine write_fixed_u_kspace_trace(this, capture_spectrum)
-      class(self), intent(inout) :: this
-      logical, intent(in) :: capture_spectrum
-      integer :: unit, ios, ik, ig, ib, i, j, n, nsite, nper_spin, base, m, spin, ell
-      real(rp) :: kt, occ
-      complex(rp) :: z
-
-      if (.not. this%fixed_u_trace_enabled) return
-      if (rank /= 0) return
-      if (this%fixed_u_trace_selected_iteration > 0 .and. &
-          this%fixed_u_trace_iteration /= this%fixed_u_trace_selected_iteration) then
-         call g_logger%warning('Fixed-U k-space trace skipped: selected iteration mismatch.', __FILE__, __LINE__)
-         return
-      end if
-      if (.not. allocated(this%reciprocal_scf_cache)) then
-         call g_logger%warning('Fixed-U k-space trace skipped: reciprocal cache is not allocated.', __FILE__, __LINE__)
-         return
-      end if
-      if (capture_spectrum .and. (.not. allocated(this%reciprocal_scf_cache%eigenvalues) .or. &
-          .not. allocated(this%reciprocal_scf_cache%eigenvectors))) then
-         call g_logger%warning('Fixed-U k-space spectrum trace skipped: eigenpairs are not allocated.', __FILE__, __LINE__)
-         return
-      end if
-      open(newunit=unit, file=trim(this%fixed_u_trace_filename), status='old', position='append', &
-           action='write', iostat=ios)
-      if (ios /= 0) return
-      kt = max(this%reciprocal_scf_cache%temperature*kB_Ry_per_K, 1.0e-10_rp)
-      if (allocated(this%reciprocal_scf_cache%hk_bulk)) then
-         n = size(this%reciprocal_scf_cache%hk_bulk, 1)
-      else if (allocated(this%reciprocal_scf_cache%eigenvectors)) then
-         n = size(this%reciprocal_scf_cache%eigenvectors, 1)
-      else
-         call g_logger%warning('Fixed-U k-space trace skipped: neither Hamiltonian nor eigenvectors are allocated.', &
-                               __FILE__, __LINE__)
-         close(unit)
-         return
-      end if
-      nsite = this%lattice%nrec
-      nper_spin = n/(2*nsite)
-      if (capture_spectrum) then
-         call this%write_fixed_u_csv_row(unit, 'fermi_level', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
-            -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
-            this%reciprocal_scf_cache%fermi_level, 0.0_rp, 0.0_rp)
-         call this%write_fixed_u_csv_row(unit, 'temperature_k', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
-            -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, &
-            this%reciprocal_scf_cache%temperature, 0.0_rp, 0.0_rp)
-         call this%write_fixed_u_csv_row(unit, 'temperature_ry', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
-            -1, -1, -1, -1, -1, -1, -1, -1, 0, 0.0_rp, 0.0_rp, kt, 0.0_rp, 0.0_rp)
-         do ik = 1, size(this%reciprocal_scf_cache%eigenvalues, 2)
-            ig = k_global_index(ik)
-            do ib = 1, size(this%reciprocal_scf_cache%eigenvalues, 1)
-               occ = fermi_dirac_occupation(this%reciprocal_scf_cache%eigenvalues(ib, ik), &
-                                            this%reciprocal_scf_cache%fermi_level, kt)
-               call this%write_fixed_u_csv_row(unit, 'eigenvalue', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
-                  -1, -1, -1, -1, ig - 1, ib - 1, -1, -1, 0, 0.0_rp, &
-                  this%reciprocal_scf_cache%eigenvalues(ib, ik), 0.0_rp, 0.0_rp, 0.0_rp)
-               call this%write_fixed_u_csv_row(unit, 'occupation', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
-                  -1, -1, -1, -1, ig - 1, ib - 1, -1, -1, 0, 0.0_rp, 0.0_rp, occ, 0.0_rp, 0.0_rp)
-               do i = 1, size(this%reciprocal_scf_cache%eigenvectors, 1)
-                  z = this%reciprocal_scf_cache%eigenvectors(i, ib, ik)
-                  call this%write_fixed_u_csv_row(unit, 'eigenvector', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
-                     -1, -1, -1, -1, ig - 1, ib - 1, i - 1, -1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
-                     real(z, rp), aimag(z))
-               end do
-            end do
-         end do
-      else
-      do ik = 1, size(this%reciprocal_scf_cache%hk_bulk, 3)
-         ig = ik
-         if (allocated(this%reciprocal_scf_cache%k_l2g_map)) then
-            if (ik <= size(this%reciprocal_scf_cache%k_l2g_map)) ig = this%reciprocal_scf_cache%k_l2g_map(ik)
-         end if
-         call write_k_header(ik)
-         do i = 1, n
-            do j = 1, n
-               z = this%reciprocal_scf_cache%hk_bulk(i, j, ik)
-               call this%write_fixed_u_csv_row(unit, 'h_total', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
-                  -1, -1, -1, -1, ig - 1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, real(z, rp), aimag(z))
-               if (allocated(this%reciprocal_scf_cache%sk_overlap)) then
-                  z = this%reciprocal_scf_cache%sk_overlap(i, j, ik)
-                  call this%write_fixed_u_csv_row(unit, 's_overlap', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
-                     -1, -1, -1, -1, ig - 1, -1, i - 1, j - 1, 0, 0.0_rp, 0.0_rp, 0.0_rp, &
-                     real(z, rp), aimag(z))
-               end if
-            end do
-         end do
-      end do
-      end if
-      ! Basis ordering is site-major, then spin-major, then l,m; for the
-      ! supported scalar-collinear spd layout, d orbitals are local indices 5:9.
-      if (capture_spectrum) then
-         do i = 1, nsite
-            do spin = 1, 2
-               base = (i - 1)*(2*nper_spin) + (spin - 1)*nper_spin
-               do ell = 0, int(sqrt(real(nper_spin, rp))) - 1
-                  do m = 0, 2*ell
-                     call this%write_fixed_u_csv_row(unit, 'basis_map', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
-                        i - 1, this%lattice%iz(i), ell, spin - 1, -1, -1, base + ell*ell + m, m - ell, 0, &
-                        0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp)
-                  end do
-               end do
-            end do
-         end do
-      end if
-      close(unit)
-   contains
-      subroutine write_k_header(k_local)
-         integer, intent(in) :: k_local
-         integer :: kg
-         kg = k_global_index(k_local)
-         if (allocated(this%reciprocal_scf_cache%k_points) .and. allocated(this%reciprocal_scf_cache%k_weights)) then
-            do i = 1, 3
-               call krow('k_coordinate', kg, i - 1, -1, 0.0_rp, 0.0_rp, &
-                         this%reciprocal_scf_cache%k_points(i, kg), 'fractional')
-            end do
-            call this%write_fixed_u_csv_row(unit, 'k_weight', this%fixed_u_trace_iteration, 'EIGENPAIRS', &
-               -1, -1, -1, -1, kg - 1, -1, -1, -1, 0, &
-               this%reciprocal_scf_cache%k_weights(kg), 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp)
-         end if
-      end subroutine write_k_header
-      integer function k_global_index(k_local)
-         integer, intent(in) :: k_local
-         k_global_index = k_local
-         if (allocated(this%reciprocal_scf_cache%k_l2g_map)) then
-            if (k_local <= size(this%reciprocal_scf_cache%k_l2g_map)) &
-               k_global_index = this%reciprocal_scf_cache%k_l2g_map(k_local)
-         end if
-      end function k_global_index
-      subroutine krow(kind, k_index, row, col, re, im, value, name)
-         integer, intent(in) :: k_index, row, col
-         character(len=*), intent(in) :: kind, name
-         real(rp), intent(in) :: re, im, value
-         call this%write_fixed_u_csv_row(unit, trim(kind), this%fixed_u_trace_iteration, 'EIGENPAIRS', &
-            -1, -1, -1, -1, k_index - 1, -1, row, col, 0, 0.0_rp, 0.0_rp, value, re, im)
-      end subroutine krow
-   end subroutine write_fixed_u_kspace_trace
-
-   subroutine write_fixed_u_rs_green(this, unit)
+   logical function is_eligible_local_hubbard(this) result(eligible)
       class(self), intent(in) :: this
-      integer, intent(in) :: unit
-      integer :: ia, iloc, ie, i, j, npts, nmat, orbital, ell, m, spin
-      real(rp), allocatable :: quadrature_weight(:)
-      real(rp) :: h, tail
-      complex(rp) :: z
 
-      if (.not. allocated(this%green%g0) .or. .not. allocated(this%en%ene)) return
-      npts = this%bands%nv1
-      if (npts < 3 .or. size(this%en%ene) < npts + 2) return
-      nmat = size(this%green%g0, 1)
-      allocate(quadrature_weight(size(this%en%ene)))
-      quadrature_weight = 0.0_rp
-      h = this%en%edel
-      do i = 2, npts - 1, 2
-         quadrature_weight(i - 1) = quadrature_weight(i - 1) + h/3.0_rp
-         quadrature_weight(i) = quadrature_weight(i) + 4.0_rp*h/3.0_rp
-         quadrature_weight(i + 1) = quadrature_weight(i + 1) + h/3.0_rp
-      end do
-      if (this%bands%e1 /= this%en%fermi) then
-         tail = (this%en%fermi - this%bands%e1)/6.0_rp
-         quadrature_weight(npts) = quadrature_weight(npts) + tail
-         quadrature_weight(npts + 1) = quadrature_weight(npts + 1) + 4.0_rp*tail
-         quadrature_weight(npts + 2) = quadrature_weight(npts + 2) + tail
+      eligible = this%hamiltonian%hubbard_u_general_check .and. &
+         trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein' .and. &
+         this%control%lmax == 2 .and. &
+         ((this%control%nsp == 1 .and. .not. this%control%has_soc()) .or. &
+          (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental)) .and. &
+         this%control%calctype == 'B' .and. &
+         this%lattice%nbulk == 0 .and. this%lattice%nrec == this%lattice%ntype .and. &
+         .not. this%control%constraints_enable .and. .not. this%control%is_noncollinear() .and. &
+         .not. this%hamiltonian%hoh .and. .not. this%hamiltonian%hubbard_u_sc_check .and. &
+         .not. this%hamiltonian%hubbard_v_check .and. .not. this%hamiltonian%hubbard_u_impurity_check .and. &
+         (.not. this%hamiltonian%hubbard_test_operator_check .or. &
+          this%hamiltonian%hubbard_test_lambda == 0.0_rp)
+   end function is_eligible_local_hubbard
+
+   logical function is_eligible_local_moments(this, reason) result(eligible)
+      class(self), intent(in) :: this
+      character(len=*), intent(out), optional :: reason
+      integer :: ia, ntype
+      logical :: scope_eligible, active
+      logical, allocatable :: host_active(:)
+      character(len=16), allocatable :: host_mode(:)
+      character(len=128) :: local_reason
+
+      if (this%control%calctype == 'B') then
+         eligible = this%is_eligible_local_hubbard()
+         local_reason = 'existing fixed-U clean-bulk eligibility'
+         if (.not. eligible) local_reason = 'bulk is outside existing fixed-U clean-bulk eligibility'
+         ! nsp=2 spinor U with a nonzero test operator: still local radial moments (the energy is not routed then).
+         if (.not. eligible .and. this%hamiltonian%hubbard_soc_experimental .and. this%control%nsp == 2 .and. &
+             this%hamiltonian%hubbard_u_general_check .and. this%control%lmax == 2 .and. .not. this%hamiltonian%hoh) then
+            eligible = .true.
+            local_reason = 'spinor fixed-U bulk (hubbard_soc_experimental)'
+         end if
+         if (present(reason)) reason = trim(local_reason)
+         return
       end if
 
-      do ia = start_atom, end_atom
-         iloc = g2l_map(ia)
-         if (iloc < 1 .or. iloc > size(this%green%g0, 4)) cycle
-         do i = 0, nmat - 1
-            orbital = mod(i, spin_off)
-            spin = i/spin_off
-            ell = int(sqrt(real(orbital, rp)))
-            m = orbital - ell*ell - ell
-            call this%write_fixed_u_csv_row(unit, 'basis_map', this%fixed_u_trace_iteration, 'RS_GREEN', ia - 1, &
-               this%lattice%iz(ia), ell, spin, -1, -1, i, m, 0, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp, 0.0_rp)
+      scope_eligible = (this%hamiltonian%hubbard_u_general_check .or. &
+         this%hamiltonian%hubbard_u_impurity_check) .and. &
+         trim(this%hamiltonian%hubbard_u_potential_form) == 'liechtenstein' .and. &
+         this%control%lmax == 2 .and. &
+         ((this%control%nsp == 1 .and. .not. this%control%has_soc() .and. &
+           (this%control%calctype == 'B' .or. this%control%calctype == 'I' .or. this%control%calctype == 'S')) .or. &
+          (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental .and. &
+           (this%control%calctype == 'I' .or. this%control%calctype == 'S'))) .and. &
+         .not. this%control%constraints_enable .and. .not. this%control%is_noncollinear() .and. &
+         .not. this%hamiltonian%hoh .and. .not. this%hamiltonian%hubbard_u_sc_check .and. &
+         .not. this%hamiltonian%hubbard_v_check .and. &
+         .not. this%hamiltonian%hubbard_test_operator_check
+
+      ntype = size(this%symbolic_atom)
+      allocate(host_active(ntype), host_mode(ntype))
+      host_active = .false.
+      host_mode = 'spectral'
+      do ia = 1, ntype
+         if (.not. this%is_frozen_hubbard_host(ia)) cycle
+         if (.not. allocated(this%symbolic_atom(ia)%potential%hubbard_u) .or. &
+             .not. allocated(this%symbolic_atom(ia)%potential%hubbard_j)) cycle
+         active = any(abs(this%symbolic_atom(ia)%potential%hubbard_u) > 1.0e-10_rp) .or. &
+                  any(abs(this%symbolic_atom(ia)%potential%hubbard_j) > 1.0e-10_rp)
+         if (.not. active) cycle
+         host_active(ia) = .true.
+         if (.not. this%symbolic_atom(ia)%potential%hubbard_file_has_uj) cycle
+         if (len_trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments) > 0) &
+            host_mode(ia) = trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments)
+      end do
+      call auto_impurity_local_host_eligible(scope_eligible, host_active, host_mode, eligible, local_reason)
+      if (present(reason)) reason = trim(local_reason)
+   end function is_eligible_local_moments
+
+   logical function is_frozen_hubbard_host(this, atom_type) result(frozen)
+      class(self), intent(in) :: this
+      integer, intent(in) :: atom_type
+      integer :: isite, cluster_site, mapped_type
+
+      frozen = .false.
+      if (this%control%calctype /= 'I' .and. this%control%calctype /= 'S') return
+      if (.not. allocated(this%lattice%irec) .or. .not. allocated(this%lattice%ib) .or. &
+          .not. allocated(this%lattice%iz)) then
+         call g_logger%fatal('Cannot classify fixed-U provenance without the SCF host/recursion ownership maps.', &
+            __FILE__, __LINE__)
+         return
+      end if
+      if (this%lattice%nrec > size(this%lattice%irec) .or. this%lattice%nbulk > size(this%lattice%ib)) then
+         call g_logger%fatal('Fixed-U SCF ownership map is shorter than lattice%nrec/nbulk.', __FILE__, __LINE__)
+         return
+      end if
+      ! The recursion ownership map is the same map consumed by the SCF
+      ! update: recursion index -> cluster site -> symbolic atom type.
+      do isite = 1, min(this%lattice%nrec, size(this%lattice%irec))
+         cluster_site = this%lattice%irec(isite)
+         if (cluster_site < 1 .or. cluster_site > size(this%lattice%iz)) then
+            call g_logger%fatal('Fixed-U recursion ownership map has an invalid cluster-site index.', __FILE__, __LINE__)
+            return
+         end if
+         mapped_type = this%lattice%iz(cluster_site)
+         if (mapped_type < 1 .or. mapped_type > size(this%symbolic_atom)) then
+            call g_logger%fatal('Fixed-U recursion ownership map has an invalid symbolic atom type.', __FILE__, __LINE__)
+            return
+         end if
+         if (mapped_type == atom_type) return
+      end do
+      ! A type is a frozen host only if the lattice host ownership table
+      ! contains it. Unreferenced symbolic types are not inferred as hosts.
+      do isite = 1, min(this%lattice%nbulk, size(this%lattice%ib))
+         cluster_site = this%lattice%ib(isite)
+         if (cluster_site < 1 .or. cluster_site > size(this%lattice%iz)) then
+            call g_logger%fatal('Fixed-U frozen-host ownership map has an invalid cluster-site index.', __FILE__, __LINE__)
+            return
+         end if
+         mapped_type = this%lattice%iz(cluster_site)
+         if (mapped_type < 1 .or. mapped_type > size(this%symbolic_atom)) then
+            call g_logger%fatal('Fixed-U frozen-host ownership map has an invalid symbolic atom type.', __FILE__, __LINE__)
+            return
+         end if
+         if (mapped_type == atom_type) then
+            frozen = .true.
+            return
+         end if
+      end do
+   end function is_frozen_hubbard_host
+
+   subroutine mark_frozen_hosts(this)
+      class(self), intent(inout) :: this
+      integer :: ia
+
+      do ia = 1, size(this%symbolic_atom)
+         this%symbolic_atom(ia)%potential%frozen_host = this%is_frozen_hubbard_host(ia)
+      end do
+   end subroutine mark_frozen_hosts
+
+   logical function all_frozen_hubbard_hosts_local(this) result(all_local)
+      class(self), intent(in) :: this
+      integer :: ia
+      logical :: active, found
+
+      all_local = .false.
+      found = .false.
+      do ia = 1, size(this%symbolic_atom)
+         if (.not. this%is_frozen_hubbard_host(ia)) cycle
+         if (.not. allocated(this%symbolic_atom(ia)%potential%hubbard_u) .or. &
+             .not. allocated(this%symbolic_atom(ia)%potential%hubbard_j)) cycle
+         active = any(abs(this%symbolic_atom(ia)%potential%hubbard_u) > 1.0e-10_rp) .or. &
+                  any(abs(this%symbolic_atom(ia)%potential%hubbard_j) > 1.0e-10_rp)
+         if (.not. active) cycle
+         found = .true.
+         if (.not. this%symbolic_atom(ia)%potential%hubbard_file_has_uj .or. &
+             trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments) /= 'local') return
+      end do
+      all_local = found
+   end function all_frozen_hubbard_hosts_local
+
+   subroutine validate_hubbard_mode_provenance(this)
+      class(self), intent(inout) :: this
+      integer :: ia, stored_nsp
+      logical :: active
+      logical :: frozen
+      character(len=16) :: stored_mode, backend
+      real(rp) :: run_axis(3), host_axis(3)
+
+      backend = 'rs'
+      if (this%use_kspace) backend = 'ks'
+      ! nsp=2 run axis: reference of the first U-carrying site that is not a frozen host (constraint_target, else mom).
+      run_axis = [0.0_rp, 0.0_rp, 1.0_rp]
+      do ia = 1, size(this%symbolic_atom)
+         if (.not. allocated(this%symbolic_atom(ia)%potential%hubbard_u) .or. &
+             .not. allocated(this%symbolic_atom(ia)%potential%hubbard_j)) cycle
+         if (.not. (any(abs(this%symbolic_atom(ia)%potential%hubbard_u) > 1.0e-10_rp) .or. &
+                    any(abs(this%symbolic_atom(ia)%potential%hubbard_j) > 1.0e-10_rp))) cycle
+         if (this%is_frozen_hubbard_host(ia)) cycle
+         if (norm2(this%symbolic_atom(ia)%constraint_target) > 1.0e-12_rp) then
+            run_axis = this%symbolic_atom(ia)%constraint_target/norm2(this%symbolic_atom(ia)%constraint_target)
+         else if (norm2(this%symbolic_atom(ia)%potential%mom) > 1.0e-12_rp) then
+            run_axis = this%symbolic_atom(ia)%potential%mom/norm2(this%symbolic_atom(ia)%potential%mom)
+         end if
+         exit
+      end do
+      do ia = 1, size(this%symbolic_atom)
+         if (.not. allocated(this%symbolic_atom(ia)%potential%hubbard_u) .or. &
+             .not. allocated(this%symbolic_atom(ia)%potential%hubbard_j)) cycle
+         active = any(abs(this%symbolic_atom(ia)%potential%hubbard_u) > 1.0e-10_rp) .or. &
+                  any(abs(this%symbolic_atom(ia)%potential%hubbard_j) > 1.0e-10_rp)
+         if (.not. active) cycle
+
+         frozen = this%is_frozen_hubbard_host(ia)
+
+         if (frozen) then
+            if (.not. this%symbolic_atom(ia)%potential%hubbard_file_has_uj) then
+               call g_logger%fatal('host '//trim(this%symbolic_atom(ia)%element%symbol)//' was converged without U; '// &
+                  'use a host converged at the same U, or remove U from that type', __FILE__, __LINE__)
+            end if
+            stored_nsp = this%symbolic_atom(ia)%potential%hubbard_nsp
+            if (stored_nsp == 0) then
+               stored_nsp = merge(2, 1, allocated(this%symbolic_atom(ia)%potential%ldm_spinor))
+               if (rank == 0) call g_logger%info('Potential for symbolic atom '//fmt('i0', ia)// &
+                  ' has no hubbard_nsp field; inferred nsp='//fmt('i0', stored_nsp)//' from its density-matrix file.', &
+                  __FILE__, __LINE__)
+            end if
+            if (stored_nsp /= this%control%nsp .or. &
+                (this%control%nsp == 2 .and. .not. allocated(this%symbolic_atom(ia)%potential%ldm_spinor))) then
+               call g_logger%fatal('Frozen U-carrying host (symbolic atom '//fmt('i0', ia)//') was written at nsp='// &
+                  fmt('i0', stored_nsp)//', run nsp='//fmt('i0', this%control%nsp)//'. Regenerate the host at nsp='// &
+                  fmt('i0', this%control%nsp)//'.', __FILE__, __LINE__)
+            end if
+            if (this%control%nsp == 2) then
+               host_axis = this%symbolic_atom(ia)%potential%hubbard_axis
+               if (norm2(host_axis) <= 1.0e-12_rp) then
+                  host_axis = [0.0_rp, 0.0_rp, 1.0_rp]
+                  if (rank == 0) call g_logger%info('Potential for symbolic atom '//fmt('i0', ia)// &
+                     ' has no hubbard_axis field; treating its axis as z.', __FILE__, __LINE__)
+               end if
+               if (norm2(cross_product(host_axis, run_axis)) > 1.0e-8_rp) then
+                  call g_logger%fatal('Frozen U-carrying host (symbolic atom '//fmt('i0', ia)//') was written along axis ('// &
+                     fmt('f8.5', host_axis(1))//','//fmt('f8.5', host_axis(2))//','//fmt('f8.5', host_axis(3))// &
+                     '), run axis ('//fmt('f8.5', run_axis(1))//','//fmt('f8.5', run_axis(2))//','// &
+                     fmt('f8.5', run_axis(3))//'). Regenerate the host along the run axis.', __FILE__, __LINE__)
+               end if
+            end if
+            stored_mode = trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments)
+            if (len_trim(stored_mode) == 0) then
+               stored_mode = 'spectral'
+               if (rank == 0) call g_logger%warning('Legacy U-carrying potential for symbolic atom '//fmt('i0', ia)// &
+                  ' has no hubbard_radial_moments field; its mode is unknown, treating it as spectral; '// &
+                  'restart the host once with the current version to record its mode.', __FILE__, __LINE__)
+            end if
+            if (this%symbolic_atom(ia)%potential%hubbard_file_has_uj .and. &
+                trim(stored_mode) /= trim(this%hamiltonian%hubbard_radial_moments)) then
+               call g_logger%fatal('Fixed-U potential moment-mode mismatch for symbolic atom '//fmt('i0', ia)// &
+                  ': file mode='//trim(stored_mode)//', run mode='//trim(this%hamiltonian%hubbard_radial_moments)// &
+                  '. Regenerate the host potential in the selected mode or select the matching mode.', __FILE__, __LINE__)
+            end if
+         end if
+
+         if (.not. frozen) then
+            stored_mode = trim(this%symbolic_atom(ia)%potential%hubbard_radial_moments)
+            if (len_trim(stored_mode) == 0) then
+               stored_mode = 'spectral'
+               if (rank == 0) call g_logger%info('restart seed in '//trim(stored_mode)//', run uses '// &
+                  trim(this%hamiltonian%hubbard_radial_moments)//'; seed will be rewritten', __FILE__, __LINE__)
+            else if (trim(stored_mode) /= trim(this%hamiltonian%hubbard_radial_moments) .and. rank == 0) then
+               call g_logger%info('restart seed in '//trim(stored_mode)//', run uses '// &
+                  trim(this%hamiltonian%hubbard_radial_moments)//'; seed will be rewritten', __FILE__, __LINE__)
+            end if
+         end if
+
+         if (.not. frozen) then
+            this%symbolic_atom(ia)%potential%hubbard_radial_moments = &
+               trim(this%hamiltonian%hubbard_radial_moments)
+            this%symbolic_atom(ia)%potential%hubbard_backend = trim(backend)
+            this%symbolic_atom(ia)%potential%hubbard_nsp = this%control%nsp
+         end if
+      end do
+      ! The RS block-recursion terminator is built in the global-z spin basis (KNOWN_ISSUES, S6b).
+      if (this%control%nsp == 2 .and. .not. this%use_kspace .and. trim(this%control%recur) /= 'chebyshev' .and. &
+          norm2(cross_product(run_axis, [0.0_rp, 0.0_rp, 1.0_rp])) > 1.0e-8_rp) then
+         call g_logger%fatal("tilted spin axis requires recur='chebyshev' in RS (block recursion is not spin-rotation "// &
+            "invariant, see KNOWN_ISSUES)", __FILE__, __LINE__)
+      end if
+   end subroutine validate_hubbard_mode_provenance
+
+   real(rp) function fixed_hubbard_energy_pout(this) result(total_hub)
+      class(self), intent(in) :: this
+      complex(rp), allocatable :: density(:, :, :, :, :), potential(:, :, :, :, :)
+      real(rp), allocatable :: e_int(:, :), e_dc(:, :), e_hub(:, :), tr_vp(:, :)
+      complex(rp) :: p_d, v_d
+      real(rp) :: e_int_s, e_dc_s, e_hub_s
+      integer :: isite, itype, spin, i, j, flat, orbital_i, orbital_j
+
+      total_hub = 0.0_rp
+      if (.not. this%is_eligible_local_hubbard()) return
+      if (trim(this%hamiltonian%hubbard_radial_moments) /= 'local') return
+
+      if (this%control%nsp == 2) then
+         ! Spinor d shell: the full 10x10 P_out of every site.
+         do isite = 1, this%lattice%nrec
+            call spinor_site_hubbard_energy(this%symbolic_atom(this%lattice%nbulk + isite)%potential, e_int_s, e_dc_s, e_hub_s)
+            total_hub = total_hub + e_hub_s
          end do
-         do ie = 1, npts + 2
-            do i = 1, nmat
-               do j = 1, nmat
-                  z = this%green%g0(i, j, ie, iloc)
-                  call this%write_fixed_u_csv_row(unit, 'green_function', this%fixed_u_trace_iteration, 'RS_GREEN', &
-                     ia - 1, this%lattice%iz(ia), -1, -1, ie - 1, -1, i - 1, j - 1, 0, &
-                     quadrature_weight(ie), this%en%ene(ie), 0.0_rp, real(z, rp), aimag(z))
+         return
+      end if
+      allocate(density(this%lattice%ntype, 4, 2, 7, 7), potential(this%lattice%ntype, 4, 2, 7, 7))
+      allocate(e_int(this%lattice%ntype, 4), e_dc(this%lattice%ntype, 4), &
+               e_hub(this%lattice%ntype, 4), tr_vp(this%lattice%ntype, 4))
+      do isite = 1, this%lattice%nrec
+         itype = this%lattice%ib(isite)
+         density = cmplx(0.0_rp, 0.0_rp, rp)
+         potential = cmplx(0.0_rp, 0.0_rp, rp)
+         do spin = 1, 2
+            do i = 1, 5
+               orbital_i = 4 + i + spin_off*(spin - 1)
+               do j = 1, 5
+                  orbital_j = 4 + j + spin_off*(spin - 1)
+                  flat = (i - 1)*5 + j ! P_out is the just-computed unmixed LDM in ldm_new.
+                  p_d = this%mix%ldm_new(isite, 3, spin, flat)
+                  v_d = this%hamiltonian%hubbard_u_pot(orbital_i, orbital_j, itype)
+                  density(itype, 3, spin, i, j) = p_d
+                  potential(itype, 3, spin, i, j) = v_d
                end do
             end do
-            call this%write_fixed_u_csv_row(unit, 'fermi_step', this%fixed_u_trace_iteration, 'RS_GREEN', &
-               ia - 1, this%lattice%iz(ia), -1, -1, ie - 1, -1, -1, -1, 0, quadrature_weight(ie), &
-               this%en%ene(ie), merge(1.0_rp, 0.0_rp, this%en%ene(ie) <= this%en%fermi), 0.0_rp, 0.0_rp)
          end do
+         call this%hamiltonian%evaluate_hubbard_energy(density, potential, e_int, e_dc, e_hub, tr_vp)
+         total_hub = total_hub + sum(e_hub(itype, :))
       end do
-      deallocate(quadrature_weight)
-   end subroutine write_fixed_u_rs_green
+      deallocate(density, potential, e_int, e_dc, e_hub, tr_vp)
+   end function fixed_hubbard_energy_pout
 
+   !> Spinor d-shell E_int, E_DC and E_Hub (Ry) of one site from the full 10x10 P_out held in ldm_spinor.
+   subroutine spinor_site_hubbard_energy(site, e_int, e_dc, e_hub)
+      type(potential), intent(in) :: site
+      real(rp), intent(out) :: e_int, e_dc, e_hub
+      complex(rp) :: t(5, 5, 5, 5), v10(10, 10)
+
+      if (.not. allocated(site%ldm_spinor)) error stop 'spinor Hubbard energy: the spinor density was not extracted'
+      call hubbard_d_tensor(site%hubbard_u(3), site%hubbard_j(3), t)
+      call hubbard_spinor_functional(t, site%hubbard_u(3), site%hubbard_j(3), site%ldm_spinor, e_int, e_dc, e_hub, v10)
+   end subroutine spinor_site_hubbard_energy
    !> @brief Generate one deterministic scalar-relativistic radial channel
    !>        through the unchanged production RSEQSR/PHDFSR routines.
    !>
@@ -2765,6 +1570,40 @@ contains
          rvh_spin = rvh_local
       end subroutine component_set
    end subroutine legacy_accepted_m03_components_fixture
+   pure subroutine fixed_u_r05_targets(use_kspace, p_override, v_override, test_tighten, p_target, v_target)
+      logical, intent(in) :: use_kspace, test_tighten
+      real(rp), intent(in) :: p_override, v_override
+      real(rp), intent(out) :: p_target, v_target
+
+      ! KS keeps its frozen 1e-7 defaults; RS uses the approved density
+      ! tolerance while retaining the same potential tolerance.
+      p_target = fixed_u_density_tolerance
+      v_target = fixed_u_potential_tolerance
+      if (.not. use_kspace) p_target = 5.0e-7_rp
+      if (p_override > 0.0_rp) p_target = p_override
+      if (v_override > 0.0_rp) v_target = v_override
+      if (test_tighten) then
+         p_target = fixed_u_test_tight_density_tolerance
+         v_target = fixed_u_test_tight_potential_tolerance
+      end if
+   end subroutine fixed_u_r05_targets
+
+   pure subroutine atomsc_inner_controls(test_tol, test_tolrsq, test_cap, tol, tolrsq, niter)
+      real(rp), intent(in) :: test_tol, test_tolrsq
+      integer, intent(in) :: test_cap
+      real(rp), intent(out) :: tol, tolrsq
+      integer, intent(out) :: niter
+
+      tol = 1.0e-6_rp
+      tolrsq = 1.0e-8_rp
+      niter = 80
+      if (test_cap > 0) then
+         tol = test_tol
+         tolrsq = test_tolrsq
+         niter = test_cap
+      end if
+   end subroutine atomsc_inner_controls
+
    pure function atomsc_solver_tolerance(iteration, drho_control, tolrsq) result(tolerance)
       integer, intent(in) :: iteration
       real(rp), intent(in) :: drho_control, tolrsq
@@ -2885,7 +1724,10 @@ contains
       class(self), intent(inout) :: this
 
       ! variables associated with the reading processes
-      integer :: iostatus, funit, i
+      integer :: iostatus, funit, i, k
+      logical :: radial_mode_defaulted, atomsc_control_active
+      character(len=128) :: radial_mode_reason
+      character(len=8) :: radial_mode_source
 
       include 'include_codes/namelists/self.f90'
 
@@ -2901,6 +1743,11 @@ contains
       init = this%init
       nstep = this%nstep
       conv_thr = this%conv_thr
+      r05_p_tolerance = this%r05_p_tolerance
+      r05_v_tolerance = this%r05_v_tolerance
+      atomsc_test_tol = this%atomsc_test_tol
+      atomsc_test_tolrsq = this%atomsc_test_tolrsq
+      atomsc_test_inner_cap = this%atomsc_test_inner_cap
       fix_soc = this%fix_soc
       soc_scale = this%soc_scale
       cold = this%cold
@@ -2995,6 +1842,36 @@ contains
       ! Convergence parameters
       this%conv_thr = conv_thr
       this%nstep = nstep
+      this%r05_p_tolerance = r05_p_tolerance
+      this%r05_v_tolerance = r05_v_tolerance
+      this%atomsc_test_tol = atomsc_test_tol
+      this%atomsc_test_tolrsq = atomsc_test_tolrsq
+      this%atomsc_test_inner_cap = atomsc_test_inner_cap
+      if (this%r05_p_tolerance > 0.0_rp .and. this%r05_p_tolerance > 1.0_rp) &
+         call g_logger%fatal('self%r05_p_tolerance must be in (0,1].', __FILE__, __LINE__)
+      if (this%r05_v_tolerance > 0.0_rp .and. this%r05_v_tolerance > 1.0_rp) &
+         call g_logger%fatal('self%r05_v_tolerance must be in (0,1] Ry.', __FILE__, __LINE__)
+      if ((this%atomsc_test_tol > 0.0_rp .or. this%atomsc_test_tolrsq > 0.0_rp .or. &
+           this%atomsc_test_inner_cap > 0) .and. &
+          (this%atomsc_test_tol <= 0.0_rp .or. this%atomsc_test_tolrsq <= 0.0_rp .or. &
+           this%atomsc_test_inner_cap < 2)) then
+         call g_logger%fatal('atomsc_test_tol, atomsc_test_tolrsq, and atomsc_test_inner_cap must be set together.', &
+                             __FILE__, __LINE__)
+      end if
+      if (this%atomsc_test_tol > 0.0_rp) then
+         if (use_kspace) call g_logger%fatal('atomsc test overrides are restricted to RS calculations.', __FILE__, __LINE__)
+         atomsc_control_active = .false.
+         do k = 1, size(this%symbolic_atom)
+            if (allocated(this%symbolic_atom(k)%potential%hubbard_u)) &
+               atomsc_control_active = atomsc_control_active .or. &
+                  any(abs(this%symbolic_atom(k)%potential%hubbard_u) > 1.0e-10_rp)
+            if (allocated(this%symbolic_atom(k)%potential%hubbard_j)) &
+               atomsc_control_active = atomsc_control_active .or. &
+                  any(abs(this%symbolic_atom(k)%potential%hubbard_j) > 1.0e-10_rp)
+         end do
+         if (atomsc_control_active) &
+            call g_logger%fatal('atomsc test overrides are restricted to U=J=0 controls.', __FILE__, __LINE__)
+      end if
 
       ! Constrains variables
       ! static magnetic momentum (non-linar calculation)
@@ -3017,6 +1894,20 @@ contains
       this%init = init
       this%cold = cold
       this%use_kspace = use_kspace
+      radial_mode_reason = 'n/a'
+      radial_mode_defaulted = trim(this%hamiltonian%hubbard_radial_moments) == 'auto'
+      if (trim(this%hamiltonian%hubbard_radial_moments) == 'auto') then
+         if (this%is_eligible_local_moments(radial_mode_reason)) then
+            this%hamiltonian%hubbard_radial_moments = 'local'
+         else
+            this%hamiltonian%hubbard_radial_moments = 'spectral'
+         end if
+      end if
+      radial_mode_source = 'explicit'
+      if (radial_mode_defaulted) radial_mode_source = 'default'
+      call this%mark_frozen_hosts()
+      call this%validate_hubbard_mode_provenance()
+      call this%write_hubbard_run_summary(radial_mode_source, radial_mode_reason)
       this%magnetic_seed_enable = magnetic_seed_enable
       this%magnetic_seed_steps = magnetic_seed_steps
       this%magnetic_seed_field = magnetic_seed_field
@@ -3428,6 +2319,11 @@ contains
       ! Convergence parameters
       this%conv_thr = 0.5d-8
       this%nstep = 1
+      this%r05_p_tolerance = -1.0_rp
+      this%r05_v_tolerance = -1.0_rp
+      this%atomsc_test_tol = 0.0_rp
+      this%atomsc_test_tolrsq = 0.0_rp
+      this%atomsc_test_inner_cap = 0
 
       ! Constrains variables
       ! static magnetic momentum (non-linar calculation)
@@ -3669,7 +2565,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine run(this)
       class(self), intent(inout) :: this
-      integer :: i, ia, plusbulk, niter
+      integer :: i, ia, plusbulk, niter, k
       real(rp), dimension(6) :: QSL
       real(rp), dimension(:), allocatable :: pot_arr
          complex(rp), allocatable :: fixed_u_m1(:, :, :, :, :)
@@ -3766,13 +2662,14 @@ contains
                allocate(fixed_u_vin(nb, nb, this%lattice%ntype))
                fixed_u_vin = (0.0_rp, 0.0_rp)
             end if
-            call run_dos(this, fixed_u_m1, fixed_u_pl_diag)
+            call run_dos(this, fixed_u_m1, fixed_u_pl_diag, i)
             call this%write_fixed_u_trace('P_OUT', fixed_u_m1, fixed_u_pl_diag)
-            call this%snapshot_fixed_u_m0_moments(fixed_u_m1, fixed_u_pl_diag, fixed_u_vin)
+            if (.not. this%fixed_u_trace_ql_only) &
+               call this%snapshot_fixed_u_m0_moments(fixed_u_m1, fixed_u_pl_diag, fixed_u_vin)
             deallocate(fixed_u_vin)
             deallocate(fixed_u_m1, fixed_u_pl_diag)
          else
-            call run_dos(this)
+            call run_dos(this, iteration=i)
             call this%write_fixed_u_trace('P_OUT')
          end if
    
@@ -3781,11 +2678,15 @@ contains
          !=========================================================================
          if (rank == 0) call g_logger%info('Mixtype is '//trim(this%mix%mixtype), __FILE__, __LINE__)
          call g_scf_benchmark_profile%start_stage('P_mixing')
-         call this%mix%mixpq(this%mix%qia_old, this%mix%qia_new) ! Mix qia_new with qia_old
+         call this%mix%mixpq(this%mix%qia_old, this%mix%qia_new, iteration=i, &
+                             guard_collinear=this%control%nsp == 1) ! Mix qia_new with qia_old
          if (this%hamiltonian%hubbard_u_general_check .or. this%hamiltonian%hubbard_u_sc_check .or. this%hamiltonian%hubbard_v_check) then
             call this%mix%save_ldm_to('new') ! Save freshly computed LDA+U density matrices.
             call this%update_fixed_u_residuals()
             call this%mix%mix_ldm_linear() ! Optional linear mixing controlled by mix%ldm_beta.
+            call this%mix%mix_ldm_spinor_linear() ! Same mixing for the spinor P that builds V at nsp>=2.
+         else if (this%hamiltonian%hubbard_test_operator_check) then
+            call this%mix%save_ldm_to('new') ! W1 at U=J=0: P_out for the logged Tr(W P) only.
          end if
          call g_scf_benchmark_profile%stop_stage('P_mixing')
    
@@ -3824,10 +2725,21 @@ contains
          !=========================================================================
          call g_scf_benchmark_profile%start_stage('P_scf_io')
          if (rank == 0) call update_fermi_in_input(this%en%fermi, this%control%fname)
+         if (rank == 0) then
+            do k = 1, size(this%lattice%symbolic_atoms)
+               this%lattice%symbolic_atoms(k)%potential%dm_iteration = i
+               if (len_trim(this%fixed_u_trace_run_id) > 0) then
+                  this%lattice%symbolic_atoms(k)%potential%dm_run_id = this%fixed_u_trace_run_id
+               else
+                  this%lattice%symbolic_atoms(k)%potential%dm_run_id = 'run'
+               end if
+            end do
+         end if
          if (rank == 0) call save_state_scf(this%lattice%symbolic_atoms(:))
          call g_scf_benchmark_profile%stop_stage('P_scf_io')
 
          this%physical_total_energy = sum(this%symbolic_atom(:)%potential%etot)
+         this%physical_total_energy = this%physical_total_energy + this%fixed_hubbard_energy_pout()
          call this%write_fixed_u_total_energy()
          call this%write_hubbard_moment_energy_diagnostics()
          call this%write_gbt_scf_diagnostics(i)
@@ -3895,7 +2807,7 @@ contains
       ! run_scf(), which is precisely the q-dependent ordinary-potential drift
       ! that corrected MFT must exclude.
       call run_recursion(this, iteration)
-      call run_dos(this)
+      call run_dos(this, iteration=iteration)
 
       max_drift = 0.0_rp
       do ia = 1, this%lattice%ntype
@@ -3991,6 +2903,10 @@ contains
       else
          call g_scf_benchmark_profile%start_stage('P_rs_hamiltonian_prepare')
       end if
+
+      if (this%control%calctype == 'I' .or. this%control%calctype == 'S') then
+         call this%hamiltonian%begin_rd1_vin_capture(iter, enable_rs_capture=.not. this%use_kspace)
+      end if
    
       select case (this%control%calctype)
       case ('B')
@@ -4052,19 +2968,26 @@ contains
    !=========================================================================
    !                   RUN DENSITY OF STATES CALCULATION
    !=========================================================================
-   subroutine run_dos(this, m1_out, pl_diag_out)
+   subroutine run_dos(this, m1_out, pl_diag_out, iteration)
       class(self), intent(inout) :: this
       complex(rp), intent(out), optional :: m1_out(:, :, :, :, :)
       real(rp), intent(out), optional :: pl_diag_out(:, :, :, :)
+      integer, intent(in), optional :: iteration
       integer :: ia, l, lmax_site, li, iorb, plusbulk
+      integer :: iteration_value, spin_check, l_check
       real(rp) :: q_up, q_dn, mz, mtot
       real(rp) :: reciprocal_h2d, reciprocal_solver, reciprocal_d2h, reciprocal_total
       real(rp), allocatable :: kspace_spin_mom(:,:)
       complex(rp), allocatable :: local_m1(:, :, :, :, :)
       complex(rp) :: p_d(5, 5), m1_d(5, 5), v_d(5, 5)
+      complex(rp) :: v_spinor(10, 10)
+      real(rp) :: q0_spin(2), c_spin(2), q2_spin(2), c_local_spin(2), q2_local_spin(2), t_local_spin(2)
       real(rp) :: q0_d, center_d, q2_d, center_local, q2_local, t_local
       integer :: moment_status, site_type
       logical :: use_shifted_kmesh
+
+      iteration_value = 0
+      if (present(iteration)) iteration_value = iteration
    
       if (rank == 0) call g_logger%info('Calculating the density of states and the new moment bands', __FILE__, __LINE__)
       call g_timer%start('calculation-of-DOS')
@@ -4130,6 +3053,21 @@ contains
          ! Capture the same eigenpairs after the canonical Fermi level has
          ! been updated for this spectrum; Hamiltonian capture remains above.
          call this%write_fixed_u_kspace_trace(.true.)
+         if (this%control%nsp == 1) then
+            do ia = 1, this%lattice%nrec
+               lmax_site = this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax
+               do l_check = 0, lmax_site
+                  do spin_check = 1, 2
+                     q0_d = 0.0_rp
+                     if (l_check < this%reciprocal_scf_cache%n_orb_types) then
+                        q0_d = this%reciprocal_scf_cache%band_moments(ia, l_check + 1, spin_check, 1)
+                     end if
+                     call guard_q0_capacity(this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol, &
+                        ia, l_check, spin_check, iteration_value, q0_d)
+                  end do
+               end do
+            end do
+         end if
          if (this%control%uses_spinor_representation()) then
             allocate(kspace_spin_mom(3, this%lattice%nrec))
             call g_scf_benchmark_profile%start_stage('P_charge_spin_accumulate')
@@ -4145,6 +3083,8 @@ contains
             allocate(local_m1(this%lattice%nrec, lmax_basis + 1, 2, 2*lmax_basis + 1, 2*lmax_basis + 1))
             call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos(this%lattice, &
                fixed_liechtenstein=.true., m1_out=local_m1)
+            if (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental) &
+               call this%reciprocal_scf_cache%calculate_spinor_dm(this%lattice)
             if (present(m1_out)) then
                m1_out(:, 1:size(local_m1, 2), 1:size(local_m1, 3), &
                   1:size(local_m1, 4), 1:size(local_m1, 5)) = local_m1
@@ -4172,6 +3112,32 @@ contains
                   this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 3)**2 * this%reciprocal_scf_cache%band_moments(ia, l + 1, 2, 1)
                if (l == 2 .and. allocated(local_m1)) then
                   site_type = this%lattice%ib(ia)
+                  if (this%control%nsp == 2 .and. this%hamiltonian%hubbard_soc_experimental) then
+                     ! nsp=2 spinor operator: both radial spin channels from the full 10x10 P, M1 and V_in.
+                     call extract_hubbard_d_spinor_potential(this%hamiltonian%hubbard_u_pot, site_type, spin_off, &
+                        v_spinor, moment_status)
+                     if (moment_status /= 0) call g_logger%fatal( &
+                        'Unable to map local d-shell spinor Hubbard potential in reciprocal path.', __FILE__, __LINE__)
+                     if (maxval(abs(v_spinor)) == 0.0_rp) cycle
+                     do li = 1, 2
+                        q0_spin(li) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(1, 2, li)
+                        c_spin(li) = this%reciprocal_scf_cache%band_moments(ia, 3, li, 2)
+                        q2_spin(li) = this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(3, 2, li)
+                     end do
+                     call correct_d_shell_moments_spinor(this%symbolic_atom(this%lattice%nbulk + ia)%potential%ldm_spinor, &
+                        this%symbolic_atom(this%lattice%nbulk + ia)%potential%m1_spinor, v_spinor, &
+                        this%symbolic_atom(this%lattice%nbulk + ia)%potential%hubbard_axis, q0_spin, c_spin, &
+                        q2_spin, c_local_spin, q2_local_spin, t_local_spin, moment_status)
+                     if (moment_status /= 0) call g_logger%fatal( &
+                        'Invalid local d-shell spinor Hubbard moment correction in reciprocal path; status='// &
+                        fmt('i0', moment_status), __FILE__, __LINE__)
+                     do li = 1, 2
+                        this%symbolic_atom(this%lattice%nbulk + ia)%potential%gravity_center(3, li) = &
+                           c_local_spin(li) - this%symbolic_atom(this%lattice%nbulk + ia)%potential%vmad
+                        this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(3, 2, li) = q2_local_spin(li)
+                     end do
+                     cycle
+                  end if
                   do li = 1, 2
                      q0_d = this%symbolic_atom(this%lattice%nbulk + ia)%potential%ql(1, 2, li)
                      center_d = this%reciprocal_scf_cache%band_moments(ia, 3, li, 2)
@@ -4252,9 +3218,9 @@ contains
 
          call this%apply_constraints()
          if (present(pl_diag_out)) then
-            call this%bands%calculate_pl(pl_diag_out)
+            call this%bands%calculate_pl(pl_diag_out, iteration_value)
          else
-            call this%bands%calculate_pl()
+            call this%bands%calculate_pl(iteration=iteration_value)
          end if
          this%en%fermi = this%reciprocal_scf_cache%fermi_level
          call g_scf_benchmark_profile%stop_stage('P_density_build')
@@ -4284,6 +3250,8 @@ contains
             call this%reciprocal_scf_cache%calculate_ldm_from_projected_dos( &
                this%lattice, m1_out=m1_out, m1_only=.true.)
          end if
+         if (this%control%nsp >= 2 .and. (this%hamiltonian%hubbard_spinor_dm_diagnostic .or. &
+             this%hamiltonian%hubbard_u_general_check)) call this%reciprocal_scf_cache%calculate_spinor_dm(this%lattice)
          call this%write_kspace_scf_dos_outputs(this%reciprocal_scf_cache)
 
          ! Canonical k-space EBAND is the projection-free occupied-eigenvalue
@@ -4291,7 +3259,7 @@ contains
          ! Projected m0*m1 remains a DOS diagnostic inside reciprocal_dos.
          this%bands%eband = this%reciprocal_scf_cache%canonical_band_energy
 
-         call this%mix%save_to('new')
+         call this%mix%save_to('new', iteration=iteration_value, guard_collinear=this%control%nsp == 1)
          call g_timer%stop('calculation-of-DOS')
          return
       end if
@@ -4342,12 +3310,12 @@ contains
       !=========================================================================
       call g_scf_benchmark_profile%start_stage('P_rs_density_build')
       if (present(m1_out) .or. present(pl_diag_out)) then
-         call this%bands%calculate_moments(m1_out=m1_out, pl_diag_out=pl_diag_out)
+         call this%bands%calculate_moments(m1_out=m1_out, pl_diag_out=pl_diag_out, iteration=iteration_value)
       else
-         call this%bands%calculate_moments()
+         call this%bands%calculate_moments(iteration=iteration_value)
       end if
       call g_scf_benchmark_profile%stop_stage('P_rs_density_build')
-      call this%mix%save_to('new')
+      call this%mix%save_to('new', iteration=iteration_value, guard_collinear=this%control%nsp == 1)
 
       !=========================================================================
       !        CALCULATE l=1 DIPOLE CHARGE MOMENTS (B6, surface only)
@@ -4479,6 +3447,7 @@ contains
          write (newunit, '(A)') '==========================================================================='
 !         write (newunit, ’(a,f20.10)’) ’Total energy of system: ’, sum(this%symbolic_atom(this%lattice%nbulk+1:this%lattice%ntype)%potential%etot)
          this%physical_total_energy = sum(this%symbolic_atom(:)%potential%etot)
+         this%physical_total_energy = this%physical_total_energy + this%fixed_hubbard_energy_pout()
          write (newunit, '(a,f20.10)') 'Physical DFT total energy of system: ', this%physical_total_energy
          ! Keep the historical key for downstream parsers, but make the
          ! physical meaning explicit through the dedicated line above.
@@ -4803,7 +3772,6 @@ contains
       call g_logger%info('XC functional: '//trim(xc_obj%TXCH)//' '//int2str(xc_obj%txc)//real2str(B), __FILE__, __LINE__)
 
       lmax = atom%potential%lmax
-      niter = 80
       qval(:) = 0
       atom%qc = 0
       ncore = 0
@@ -4812,6 +3780,8 @@ contains
       tol = 1.d-6
       tolrsq = 1.d-8
       beta = 0.3d0
+      call atomsc_inner_controls(this%atomsc_test_tol, this%atomsc_test_tolrsq, &
+         this%atomsc_test_inner_cap, tol, tolrsq, niter)
 
       ! Backward-compatible guard: legacy spd potential files promoted to lmax=3
       ! may not provide valid f-channel PL. Seed invalid channels from element
@@ -4989,7 +3959,9 @@ contains
                              n_radial_spin_channels, B_fsm)
          end if
          this%fixed_u_trace_capture_radial_state = LAST .and. this%fixed_u_trace_enabled .and. &
-            rank == 0 .and. (this%fixed_u_trace_selected_iteration <= 0 .or. &
+            rank == 0 .and. .not. this%fixed_u_trace_moments_only .and. &
+            .not. this%fixed_u_trace_ql_only .and. &
+            (this%fixed_u_trace_selected_iteration <= 0 .or. &
                              this%fixed_u_trace_iteration == this%fixed_u_trace_selected_iteration)
          if (this%fixed_u_trace_capture_radial_state) then
             if (ncore > 0) EC_SEED(1:ncore) = EC(1:ncore)

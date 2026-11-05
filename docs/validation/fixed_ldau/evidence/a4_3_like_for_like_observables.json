@@ -1,0 +1,1052 @@
+{
+  "cases": [
+    {
+      "A5_2_exact_match": {
+        "A5_2_run": "base_300K_12cubed_lambda_+0.000",
+        "P_matrix_sha256": "e23b5df92285b48cd76de4682635e8d15c924f21b3f8abb5d9c558328d02dae1",
+        "matched_to": "U0_J0_local and U0_J0_spectral direct P_OUT matrices byte-for-byte after canonical spin,row,column serialization"
+      },
+      "E_F_ry": -0.0676561476,
+      "P_eigenvalue_bounds_by_spin": {
+        "1": {
+          "hermiticity_max_abs": 4.4994390158148434e-18,
+          "max": 0.9462732571564437,
+          "min": 0.8163158328853081
+        },
+        "2": {
+          "hermiticity_max_abs": 1.0652286344670081e-17,
+          "max": 0.5124530849144493,
+          "min": 0.30981357732877984
+        }
+      },
+      "P_trace_by_spin": {
+        "1": 4.341494012968811,
+        "2": 2.1569864094009072
+      },
+      "P_trace_minus_q0_by_spin": {
+        "1": -2.6645352591003757e-14,
+        "2": 1.3322676295501878e-15
+      },
+      "case": "U0_J0_local",
+      "converged": true,
+      "d_center_by_spin_ry": {
+        "1": -0.23372952683802897,
+        "2": -0.21042973196485987
+      },
+      "d_center_exchange_splitting_up_minus_down_ry": -0.023299794873169105,
+      "d_q0_by_spin": {
+        "1": 4.3414940129688375,
+        "2": 2.156986409400906
+      },
+      "d_q0_total": 6.498480422369743,
+      "direct_P_production_evaluation": {
+        "J_eV": 0,
+        "P_input_path": "/private/tmp/a4_3_pout_inputs/U0_J0_local.txt",
+        "P_input_sha256": "1248886e5f1d602bc710a8277d8cd5110a10040682afabdb29035178c8defd27",
+        "U_eV": 0,
+        "capture_records_sha256": "d2fa022b405e4f8e043e8e5f7d5aed7866569e23999f5fe7131b0733cd10fb07",
+        "helper_stdout": "U_eV=  0.0000000000000000E+00 J_eV=  0.0000000000000000E+00 E_int_Ry=  0.0000000000000000E+00 E_DC_Ry=  0.0000000000000000E+00 E_Hub_Ry=  0.0000000000000000E+00 t_in_out_Ry=  0.0000000000000000E+00",
+        "iteration": 17,
+        "logger_deltas_Ry": {
+          "E_DC": 0.0,
+          "E_Hub": 0.0,
+          "E_int": 0.0
+        },
+        "values_Ry": {
+          "E_DC_Ry": 0.0,
+          "E_Hub_Ry": 0.0,
+          "E_int_Ry": 0.0
+        }
+      },
+      "direct_P_t_audit": {
+        "P_OUT_row_count": 50,
+        "Vin_row_count": 324,
+        "difference_Ry": 0.0,
+        "iteration": 17,
+        "path": "/private/tmp/a5-local-followup-ks/u0_local_standard",
+        "records_sha256": "d2fa022b405e4f8e043e8e5f7d5aed7866569e23999f5fe7131b0733cd10fb07",
+        "stdout_sha256": "082aac315cd76779fe704fa3b95fc19d174b5984256159b11d6f2bee2a416489",
+        "t_direct_Ry": 0.0,
+        "t_logged_Ry": 0.0
+      },
+      "energy_and_candidates": {
+        "E_DC": 0.0,
+        "E_Hub": 0.0,
+        "E_int": 0.0,
+        "TS": 8.74212886516745e-05,
+        "candidate_a": null,
+        "candidate_a_F": null,
+        "candidate_b": -2541.981914821411,
+        "candidate_b_F": -2541.9820022426998,
+        "candidate_c": null,
+        "candidate_c_F": null,
+        "entropy": 0.04600867601353956,
+        "physical_total_energy": -2541.981914821411,
+        "t_in_out": 0.0,
+        "test_F_local": -2541.9820022427,
+        "test_F_spectral": null
+      },
+      "hashes": {
+        "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+        "input_sha256": "4249e1dc2e56c6cf09332840453d8483457d507d66b95cd52db8eb938df85ef8",
+        "pre_run_input_sha256": "f5c9411e7a99f0a62c97bfd28892e3c60a5f7219dba7f09e6540e0d01ad2c963",
+        "records_sha256": "d2fa022b405e4f8e043e8e5f7d5aed7866569e23999f5fe7131b0733cd10fb07",
+        "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+        "source_sha256": {
+          "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+          "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+          "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+          "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+          "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+        },
+        "stdout_sha256": "082aac315cd76779fe704fa3b95fc19d174b5984256159b11d6f2bee2a416489"
+      },
+      "iteration": 17,
+      "logged_mode_specific_candidates": {
+        "candidate_a": null,
+        "candidate_a_F": null,
+        "candidate_b": -2541.981914821411,
+        "candidate_b_F": -2541.9820022427,
+        "candidate_c": null,
+        "candidate_c_F": null
+      },
+      "mode": "local",
+      "path": "/private/tmp/a5-local-followup-ks/u0_local_standard",
+      "r05": "NOT_APPLICABLE",
+      "r05_status": "NOT_APPLICABLE",
+      "residuals": {
+        "R05_physical": null,
+        "R05_streak": null,
+        "fixed_u_rp_abs": null,
+        "fixed_u_rv_abs_ry": null
+      },
+      "sphere_spin_moment_muB": 2.087188,
+      "status": "CONVERGED"
+    },
+    {
+      "E_F_ry": -0.0676561476,
+      "P_eigenvalue_bounds_by_spin": {
+        "1": {
+          "hermiticity_max_abs": 4.4994390158148434e-18,
+          "max": 0.9462732571564437,
+          "min": 0.8163158328853081
+        },
+        "2": {
+          "hermiticity_max_abs": 1.0652286344670081e-17,
+          "max": 0.5124530849144493,
+          "min": 0.30981357732877984
+        }
+      },
+      "P_trace_by_spin": {
+        "1": 4.341494012968811,
+        "2": 2.1569864094009072
+      },
+      "P_trace_minus_q0_by_spin": {
+        "1": -2.6645352591003757e-14,
+        "2": 1.3322676295501878e-15
+      },
+      "case": "U0_J0_spectral",
+      "converged": true,
+      "d_center_by_spin_ry": {
+        "1": -0.23372952683802897,
+        "2": -0.21042973196485987
+      },
+      "d_center_exchange_splitting_up_minus_down_ry": -0.023299794873169105,
+      "d_q0_by_spin": {
+        "1": 4.3414940129688375,
+        "2": 2.156986409400906
+      },
+      "d_q0_total": 6.498480422369743,
+      "direct_P_production_evaluation": {
+        "J_eV": 0,
+        "P_input_path": "/private/tmp/a4_3_pout_inputs/U0_J0_spectral.txt",
+        "P_input_sha256": "1248886e5f1d602bc710a8277d8cd5110a10040682afabdb29035178c8defd27",
+        "U_eV": 0,
+        "capture_records_sha256": "d2fa022b405e4f8e043e8e5f7d5aed7866569e23999f5fe7131b0733cd10fb07",
+        "helper_stdout": "U_eV=  0.0000000000000000E+00 J_eV=  0.0000000000000000E+00 E_int_Ry=  0.0000000000000000E+00 E_DC_Ry=  0.0000000000000000E+00 E_Hub_Ry=  0.0000000000000000E+00 t_in_out_Ry=  0.0000000000000000E+00",
+        "iteration": 17,
+        "logger_deltas_Ry": {
+          "E_DC": 0.0,
+          "E_Hub": 0.0,
+          "E_int": 0.0
+        },
+        "values_Ry": {
+          "E_DC_Ry": 0.0,
+          "E_Hub_Ry": 0.0,
+          "E_int_Ry": 0.0
+        }
+      },
+      "direct_P_t_audit": {
+        "P_OUT_row_count": 50,
+        "Vin_row_count": 324,
+        "difference_Ry": 0.0,
+        "iteration": 17,
+        "path": "/private/tmp/a5-local-followup-ks/u0_spectral_standard",
+        "records_sha256": "d2fa022b405e4f8e043e8e5f7d5aed7866569e23999f5fe7131b0733cd10fb07",
+        "stdout_sha256": "019d12b8f9ac6478a96d4daf37b1dfd81e84c1e8b77337478f53da25b5b126c5",
+        "t_direct_Ry": 0.0,
+        "t_logged_Ry": 0.0
+      },
+      "energy_and_candidates": {
+        "E_DC": 0.0,
+        "E_Hub": 0.0,
+        "E_int": 0.0,
+        "TS": 8.74212886516745e-05,
+        "candidate_a": -2541.981914821411,
+        "candidate_a_F": -2541.9820022426998,
+        "candidate_b": null,
+        "candidate_b_F": null,
+        "candidate_c": -2541.981914821411,
+        "candidate_c_F": -2541.9820022426998,
+        "entropy": 0.04600867601353956,
+        "physical_total_energy": -2541.981914821411,
+        "t_in_out": 0.0,
+        "test_F_local": null,
+        "test_F_spectral": -2541.9820022427
+      },
+      "hashes": {
+        "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+        "input_sha256": "17518f40b363b4c51516d23e3143b69a687709459020474c975b56dac794362c",
+        "pre_run_input_sha256": "6d548b309d7da3b50a8c75660f3c15935771e335cf481b638c7fe210f98403f9",
+        "records_sha256": "d2fa022b405e4f8e043e8e5f7d5aed7866569e23999f5fe7131b0733cd10fb07",
+        "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+        "source_sha256": {
+          "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+          "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+          "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+          "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+          "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+        },
+        "stdout_sha256": "019d12b8f9ac6478a96d4daf37b1dfd81e84c1e8b77337478f53da25b5b126c5"
+      },
+      "iteration": 17,
+      "logged_mode_specific_candidates": {
+        "candidate_a": -2541.981914821411,
+        "candidate_a_F": -2541.9820022427,
+        "candidate_b": null,
+        "candidate_b_F": null,
+        "candidate_c": -2541.981914821411,
+        "candidate_c_F": -2541.9820022427
+      },
+      "mode": "spectral",
+      "path": "/private/tmp/a5-local-followup-ks/u0_spectral_standard",
+      "r05": "NOT_APPLICABLE",
+      "r05_status": "NOT_APPLICABLE",
+      "residuals": {
+        "R05_physical": null,
+        "R05_streak": null,
+        "fixed_u_rp_abs": null,
+        "fixed_u_rv_abs_ry": null
+      },
+      "sphere_spin_moment_muB": 2.087188,
+      "status": "CONVERGED"
+    },
+    {
+      "E_F_ry": -0.082949628,
+      "P_eigenvalue_bounds_by_spin": {
+        "1": {
+          "hermiticity_max_abs": 2.995108501491206e-18,
+          "max": 0.9666079122110676,
+          "min": 0.8862031059669587
+        },
+        "2": {
+          "hermiticity_max_abs": 1.748276003132876e-18,
+          "max": 0.466757354803869,
+          "min": 0.26480788710350417
+        }
+      },
+      "P_trace_by_spin": {
+        "1": 4.591825142323009,
+        "2": 1.929887838618604
+      },
+      "P_trace_minus_q0_by_spin": {
+        "1": -1.1546319456101628e-14,
+        "2": 4.884981308350689e-15
+      },
+      "case": "U2_J0_local",
+      "converged": true,
+      "d_center_by_spin_ry": {
+        "1": -0.21405861410741944,
+        "2": -0.19220154862294075
+      },
+      "d_center_exchange_splitting_up_minus_down_ry": -0.021857065484478688,
+      "d_q0_by_spin": {
+        "1": 4.591825142323021,
+        "2": 1.9298878386185991
+      },
+      "d_q0_total": 6.52171298094162,
+      "direct_P_production_evaluation": {
+        "J_eV": 0,
+        "P_input_path": "/private/tmp/a4_3_pout_inputs/U2_J0_local.txt",
+        "P_input_sha256": "f76550d643fa22652b0cbdb589710f9b81e595483dbdccdacddd35fad1ee6be3",
+        "U_eV": 2,
+        "capture_records_sha256": "a4b1d904f39d035fc427b41405e184b4ac0bd492704f31b0b6b19cfa16396fc6",
+        "helper_stdout": "U_eV=  2.0000000000000000E+00 J_eV=  0.0000000000000000E+00 E_int_Ry=  2.7572389496380758E+00 E_DC_Ry=  2.6467595714534844E+00 E_Hub_Ry=  1.1047937818459141E-01 t_in_out_Ry=  0.0000000000000000E+00",
+        "iteration": 38,
+        "logger_deltas_Ry": {
+          "E_DC": 4.440892098500626e-16,
+          "E_Hub": 1.3877787807814457e-17,
+          "E_int": 0.0
+        },
+        "values_Ry": {
+          "E_DC_Ry": 2.6467595714534844,
+          "E_Hub_Ry": 0.11047937818459141,
+          "E_int_Ry": 2.757238949638076
+        }
+      },
+      "direct_P_t_audit": {
+        "P_OUT_row_count": 50,
+        "Vin_row_count": 324,
+        "difference_Ry": 5.551115123125783e-17,
+        "iteration": 38,
+        "path": "/private/tmp/a5-priority-local-u2-ks/u2_local_standard",
+        "records_sha256": "a4b1d904f39d035fc427b41405e184b4ac0bd492704f31b0b6b19cfa16396fc6",
+        "stdout_sha256": "ab6c91d7570183fcfe200d196994173f60e77474f244e2ddd185ef16e9b527db",
+        "t_direct_Ry": -0.25837792416287947,
+        "t_logged_Ry": -0.2583779241628795
+      },
+      "energy_and_candidates": {
+        "E_DC": 2.6467595714534844,
+        "E_Hub": 0.11047937818459141,
+        "E_int": 2.757238949638076,
+        "TS": 0.0001380487772188552,
+        "candidate_a": null,
+        "candidate_a_F": null,
+        "candidate_b": -2541.8621841266004,
+        "candidate_b_F": -2541.862322175378,
+        "candidate_c": null,
+        "candidate_c_F": null,
+        "entropy": 0.0726532582976967,
+        "physical_total_energy": -2541.972663504785,
+        "t_in_out": -0.25837792416287947,
+        "test_F_local": -2541.972801553562,
+        "test_F_spectral": null
+      },
+      "hashes": {
+        "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+        "input_sha256": "ca995150bd98768e40539857f164e8508eb0f5a49a5cdec2cf86e095acd372fb",
+        "pre_run_input_sha256": "7f0615d2ab190fe0c1db6fff46829be5e8944690d30c12653ace61bb6794c8c3",
+        "records_sha256": "a4b1d904f39d035fc427b41405e184b4ac0bd492704f31b0b6b19cfa16396fc6",
+        "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+        "source_sha256": {
+          "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+          "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+          "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+          "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+          "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+        },
+        "stdout_sha256": "ab6c91d7570183fcfe200d196994173f60e77474f244e2ddd185ef16e9b527db"
+      },
+      "iteration": 38,
+      "logged_mode_specific_candidates": {
+        "candidate_a": null,
+        "candidate_a_F": null,
+        "candidate_b": -2541.8621841266,
+        "candidate_b_F": -2541.862322175378,
+        "candidate_c": null,
+        "candidate_c_F": null
+      },
+      "mode": "local",
+      "path": "/private/tmp/a5-priority-local-u2-ks/u2_local_standard",
+      "r05": null,
+      "r05_status": "PASS",
+      "residuals": {
+        "R05_physical": true,
+        "R05_streak": 9,
+        "fixed_u_rp_abs": 7.8771208917891e-10,
+        "fixed_u_rv_abs_ry": 1.1579137556257825e-10
+      },
+      "sphere_spin_moment_muB": 2.510777,
+      "status": "CONVERGED_AND_R05_PHYSICAL"
+    },
+    {
+      "E_F_ry": -0.132576207,
+      "P_eigenvalue_bounds_by_spin": {
+        "1": {
+          "hermiticity_max_abs": 1.1763593571467723e-17,
+          "max": 0.960729828414634,
+          "min": 0.8687183999526067
+        },
+        "2": {
+          "hermiticity_max_abs": 4.391018798566293e-18,
+          "max": 0.5058360706443794,
+          "min": 0.28329618629240416
+        }
+      },
+      "P_trace_by_spin": {
+        "1": 4.52761485668709,
+        "2": 2.0841005845179437
+      },
+      "P_trace_minus_q0_by_spin": {
+        "1": -4.440892098500626e-14,
+        "2": -7.105427357601002e-15
+      },
+      "case": "U2_J0_spectral",
+      "converged": true,
+      "d_center_by_spin_ry": {
+        "1": -0.3247017860075404,
+        "2": -0.23573322544231134
+      },
+      "d_center_exchange_splitting_up_minus_down_ry": -0.08896856056522906,
+      "d_q0_by_spin": {
+        "1": 4.527614856687134,
+        "2": 2.0841005845179508
+      },
+      "d_q0_total": 6.611715441205085,
+      "direct_P_production_evaluation": {
+        "J_eV": 0,
+        "P_input_path": "/private/tmp/a4_3_pout_inputs/U2_J0_spectral.txt",
+        "P_input_sha256": "6e0cadc27adba9dd9649d9c115b8797f86a4565e1d668bad0fbd430697ae3110",
+        "U_eV": 2,
+        "capture_records_sha256": "e1fb95e7df9d45fdda8fce4cd154ede52d4618c707ced2891f077abbcd7d799f",
+        "helper_stdout": "U_eV=  2.0000000000000000E+00 J_eV=  0.0000000000000000E+00 E_int_Ry=  2.8426782408762494E+00 E_DC_Ry=  2.7270228501011475E+00 E_Hub_Ry=  1.1565539077510190E-01 t_in_out_Ry=  0.0000000000000000E+00",
+        "iteration": 47,
+        "logger_deltas_Ry": {
+          "E_DC": -4.440892098500626e-16,
+          "E_Hub": 0.0,
+          "E_int": 4.440892098500626e-16
+        },
+        "values_Ry": {
+          "E_DC_Ry": 2.7270228501011475,
+          "E_Hub_Ry": 0.1156553907751019,
+          "E_int_Ry": 2.8426782408762494
+        }
+      },
+      "direct_P_t_audit": {
+        "P_OUT_row_count": 50,
+        "Vin_row_count": 324,
+        "difference_Ry": -5.551115123125783e-17,
+        "iteration": 47,
+        "path": "/private/tmp/a5-priority-ks-main-grid/u2_spectral_standard",
+        "records_sha256": "e1fb95e7df9d45fdda8fce4cd154ede52d4618c707ced2891f077abbcd7d799f",
+        "stdout_sha256": "ebadbcad2cea7b2eab08c665a15cce8b6ba245ae356a71655ed430331b269d7b",
+        "t_direct_Ry": -0.25464095255463953,
+        "t_logged_Ry": -0.2546409525546395
+      },
+      "energy_and_candidates": {
+        "E_DC": 2.7270228501011475,
+        "E_Hub": 0.1156553907751019,
+        "E_int": 2.8426782408762494,
+        "TS": 0.000110506094309035,
+        "candidate_a": -2541.853517849994,
+        "candidate_a_F": -2541.8536283560884,
+        "candidate_b": null,
+        "candidate_b_F": null,
+        "candidate_c": -2542.108158802549,
+        "candidate_c_F": -2542.1082693086432,
+        "entropy": 0.05815790603183534,
+        "physical_total_energy": -2542.223814193324,
+        "t_in_out": -0.25464095255463953,
+        "test_F_local": null,
+        "test_F_spectral": -2542.223924699418
+      },
+      "hashes": {
+        "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+        "input_sha256": "dfea2c3abf5ade47580bc9d7919ba1a3371c71704cd1910ddc677b5a72fc42bb",
+        "pre_run_input_sha256": "1d7661194ab071ac32400bf5daeb6489b936151db653bfe5eb8a9b9808a12553",
+        "records_sha256": "e1fb95e7df9d45fdda8fce4cd154ede52d4618c707ced2891f077abbcd7d799f",
+        "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+        "source_sha256": {
+          "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+          "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+          "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+          "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+          "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+        },
+        "stdout_sha256": "ebadbcad2cea7b2eab08c665a15cce8b6ba245ae356a71655ed430331b269d7b"
+      },
+      "iteration": 47,
+      "logged_mode_specific_candidates": {
+        "candidate_a": -2541.853517849994,
+        "candidate_a_F": -2541.853628356088,
+        "candidate_b": null,
+        "candidate_b_F": null,
+        "candidate_c": -2542.108158802549,
+        "candidate_c_F": -2542.108269308643
+      },
+      "mode": "spectral",
+      "path": "/private/tmp/a5-priority-ks-main-grid/u2_spectral_standard",
+      "r05": "PASS",
+      "r05_status": "PASS",
+      "residuals": {
+        "R05_physical": true,
+        "R05_streak": 13,
+        "fixed_u_rp_abs": 1.106896475716513e-10,
+        "fixed_u_rv_abs_ry": 1.6270706094833523e-11
+      },
+      "sphere_spin_moment_muB": 2.356302,
+      "status": "CONVERGED"
+    },
+    {
+      "E_F_ry": -0.195172067,
+      "P_eigenvalue_bounds_by_spin": {
+        "1": {
+          "hermiticity_max_abs": 3.4287893704854078e-18,
+          "max": 0.9736790126287597,
+          "min": 0.9158263772090697
+        },
+        "2": {
+          "hermiticity_max_abs": 3.469446951953614e-18,
+          "max": 0.5330516623801225,
+          "min": 0.2264527320792522
+        }
+      },
+      "P_trace_by_spin": {
+        "1": 4.69483715688473,
+        "2": 2.052060451259286
+      },
+      "P_trace_minus_q0_by_spin": {
+        "1": 1.0391687510491465e-13,
+        "2": -2.842170943040401e-14
+      },
+      "case": "U4_J0_spectral",
+      "converged": true,
+      "d_center_by_spin_ry": {
+        "1": -0.43870095254281827,
+        "2": -0.2794111106062384
+      },
+      "d_center_exchange_splitting_up_minus_down_ry": -0.15928984193657986,
+      "d_q0_by_spin": {
+        "1": 4.694837156884626,
+        "2": 2.0520604512593144
+      },
+      "d_q0_total": 6.74689760814394,
+      "direct_P_production_evaluation": {
+        "J_eV": 0,
+        "P_input_path": "/private/tmp/a4_3_pout_inputs/U4_J0_spectral.txt",
+        "P_input_sha256": "6d898e2af20c405a08d81b3f075903d1328c138408206c945a1da9585c22fe55",
+        "U_eV": 4,
+        "capture_records_sha256": "c5785e2a35e9f3099ec786e5261a195db79c97a041759acfd3465e156bd44f9c",
+        "helper_stdout": "U_eV=  4.0000000000000000E+00 J_eV=  0.0000000000000000E+00 E_int_Ry=  5.9024241601577554E+00 E_DC_Ry=  5.6996285962168463E+00 E_Hub_Ry=  2.0279556394090914E-01 t_in_out_Ry=  0.0000000000000000E+00",
+        "iteration": 44,
+        "logger_deltas_Ry": {
+          "E_DC": 0.0,
+          "E_Hub": 2.7755575615628914e-17,
+          "E_int": 0.0
+        },
+        "values_Ry": {
+          "E_DC_Ry": 5.699628596216846,
+          "E_Hub_Ry": 0.20279556394090914,
+          "E_int_Ry": 5.902424160157755
+        }
+      },
+      "direct_P_t_audit": {
+        "P_OUT_row_count": 50,
+        "Vin_row_count": 324,
+        "difference_Ry": 0.0,
+        "iteration": 44,
+        "path": "/private/tmp/a5-m22m23-remaining-ks-grid/u4_spectral_standard",
+        "records_sha256": "c5785e2a35e9f3099ec786e5261a195db79c97a041759acfd3465e156bd44f9c",
+        "stdout_sha256": "1a10674b01f90f5fc88df0e7ff78bad9e1ad5796a0c74e75c112b21196794ddc",
+        "t_direct_Ry": -0.5861837356570819,
+        "t_logged_Ry": -0.5861837356570819
+      },
+      "energy_and_candidates": {
+        "E_DC": 5.699628596216846,
+        "E_Hub": 0.20279556394090914,
+        "E_int": 5.902424160157755,
+        "TS": 0.0001016953358277995,
+        "candidate_a": -2541.733643420123,
+        "candidate_a_F": -2541.7337451154585,
+        "candidate_b": null,
+        "candidate_b_F": null,
+        "candidate_c": -2542.31982715578,
+        "candidate_c_F": -2542.3199288511155,
+        "entropy": 0.05352091956493607,
+        "physical_total_energy": -2542.522622719721,
+        "t_in_out": -0.5861837356570819,
+        "test_F_local": null,
+        "test_F_spectral": -2542.522724415057
+      },
+      "hashes": {
+        "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+        "input_sha256": "10d7b204d7b6addacb71345eb3eb4ce8647f56efbe1b1b2e2189e4cc34e619cf",
+        "pre_run_input_sha256": "e1b74e6611f01c63e457f73e2d3768d9f2817d8d528a47679a044548e1a3bbc8",
+        "records_sha256": "c5785e2a35e9f3099ec786e5261a195db79c97a041759acfd3465e156bd44f9c",
+        "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+        "source_sha256": {
+          "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+          "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+          "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+          "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+          "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+        },
+        "stdout_sha256": "1a10674b01f90f5fc88df0e7ff78bad9e1ad5796a0c74e75c112b21196794ddc"
+      },
+      "iteration": 44,
+      "logged_mode_specific_candidates": {
+        "candidate_a": -2541.733643420123,
+        "candidate_a_F": -2541.733745115459,
+        "candidate_b": null,
+        "candidate_b_F": null,
+        "candidate_c": -2542.31982715578,
+        "candidate_c_F": -2542.319928851116
+      },
+      "mode": "spectral",
+      "path": "/private/tmp/a5-m22m23-remaining-ks-grid/u4_spectral_standard",
+      "r05": "PASS",
+      "r05_status": "PASS",
+      "residuals": {
+        "R05_physical": true,
+        "R05_streak": 12,
+        "fixed_u_rp_abs": 2.0649670314951765e-09,
+        "fixed_u_rv_abs_ry": 6.070891389822156e-10
+      },
+      "sphere_spin_moment_muB": 2.595476,
+      "status": "CONVERGED"
+    },
+    {
+      "E_F_ry": -0.107704413,
+      "P_eigenvalue_bounds_by_spin": {
+        "1": {
+          "hermiticity_max_abs": 5.1228552649940085e-18,
+          "max": 0.9592098792192401,
+          "min": 0.8170111216437129
+        },
+        "2": {
+          "hermiticity_max_abs": 4.363913744254155e-18,
+          "max": 0.5417210472542066,
+          "min": 0.27707718136432113
+        }
+      },
+      "P_trace_by_spin": {
+        "1": 4.369453123369617,
+        "2": 2.1793175044912596
+      },
+      "P_trace_minus_q0_by_spin": {
+        "1": -6.128431095930864e-14,
+        "2": 1.7763568394002505e-15
+      },
+      "case": "U2_J0.9_spectral",
+      "converged": true,
+      "d_center_by_spin_ry": {
+        "1": -0.2896623234309,
+        "2": -0.23551573270214507
+      },
+      "d_center_exchange_splitting_up_minus_down_ry": -0.05414659072875491,
+      "d_q0_by_spin": {
+        "1": 4.369453123369678,
+        "2": 2.179317504491258
+      },
+      "d_q0_total": 6.548770627860936,
+      "direct_P_production_evaluation": {
+        "J_eV": 0.9,
+        "P_input_path": "/private/tmp/a4_3_pout_inputs/U2_J0.9_spectral.txt",
+        "P_input_sha256": "c5e7b44e36e1d942f879178a20059b8e9ede2ba95b1dd63070be20584be302ec",
+        "U_eV": 2,
+        "capture_records_sha256": "9cab1afbd23957ae3eabdeff9b85702e92539ed3183d094d6a7384313ff4a848",
+        "helper_stdout": "U_eV=  2.0000000000000000E+00 J_eV=  9.0000000000000002E-01 E_int_Ry=  2.1607753647806405E+00 E_DC_Ry=  2.0988166080317141E+00 E_Hub_Ry=  6.1958756748926369E-02 t_in_out_Ry=  0.0000000000000000E+00",
+        "iteration": 46,
+        "logger_deltas_Ry": {
+          "E_DC": 0.0,
+          "E_Hub": 0.0,
+          "E_int": 4.440892098500626e-16
+        },
+        "values_Ry": {
+          "E_DC_Ry": 2.098816608031714,
+          "E_Hub_Ry": 0.06195875674892637,
+          "E_int_Ry": 2.1607753647806405
+        }
+      },
+      "direct_P_t_audit": {
+        "P_OUT_row_count": 50,
+        "Vin_row_count": 324,
+        "difference_Ry": -2.7755575615628914e-17,
+        "iteration": 46,
+        "path": "/private/tmp/a5-m22m23-remaining-ks-grid/u2_j0.9_spectral_standard",
+        "records_sha256": "9cab1afbd23957ae3eabdeff9b85702e92539ed3183d094d6a7384313ff4a848",
+        "stdout_sha256": "15db713d5b0b5876ec3038659a9fdb449fb39d5b1262a3e53c9e9b7a939a9cf4",
+        "t_direct_Ry": -0.14081144527820313,
+        "t_logged_Ry": -0.1408114452782031
+      },
+      "energy_and_candidates": {
+        "E_DC": 2.098816608031714,
+        "E_Hub": 0.06195875674892637,
+        "E_int": 2.1607753647806405,
+        "TS": 0.0001584706575886897,
+        "candidate_a": -2541.915732866613,
+        "candidate_a_F": -2541.9158913372703,
+        "candidate_b": null,
+        "candidate_b_F": null,
+        "candidate_c": -2542.0565443118912,
+        "candidate_c_F": -2542.0567027825487,
+        "entropy": 0.08340102571241303,
+        "physical_total_energy": -2542.11850306864,
+        "t_in_out": -0.14081144527820313,
+        "test_F_local": null,
+        "test_F_spectral": -2542.118661539297
+      },
+      "hashes": {
+        "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+        "input_sha256": "d27daeb6e221bfdecba76763bdbbd97be662b74f3815033b9c7d80a2fe0409d9",
+        "pre_run_input_sha256": "bc2e964f5acdefcfbda3b0549f6db39930eb58f7800f2543fac266f713df9a63",
+        "records_sha256": "9cab1afbd23957ae3eabdeff9b85702e92539ed3183d094d6a7384313ff4a848",
+        "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+        "source_sha256": {
+          "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+          "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+          "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+          "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+          "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+        },
+        "stdout_sha256": "15db713d5b0b5876ec3038659a9fdb449fb39d5b1262a3e53c9e9b7a939a9cf4"
+      },
+      "iteration": 46,
+      "logged_mode_specific_candidates": {
+        "candidate_a": -2541.915732866612,
+        "candidate_a_F": -2541.91589133727,
+        "candidate_b": null,
+        "candidate_b_F": null,
+        "candidate_c": -2542.056544311891,
+        "candidate_c_F": -2542.056702782548
+      },
+      "mode": "spectral",
+      "path": "/private/tmp/a5-m22m23-remaining-ks-grid/u2_j0.9_spectral_standard",
+      "r05": "PASS",
+      "r05_status": "PASS",
+      "residuals": {
+        "R05_physical": true,
+        "R05_streak": 10,
+        "fixed_u_rp_abs": 1.9532799769151395e-09,
+        "fixed_u_rv_abs_ry": 1.9511799592953173e-10
+      },
+      "sphere_spin_moment_muB": 2.090896,
+      "status": "CONVERGED"
+    },
+    {
+      "E_F_ry": -0.064038821,
+      "P_eigenvalue_bounds_by_spin": {
+        "1": {
+          "hermiticity_max_abs": 2.3513634615779377e-18,
+          "max": 0.9784465863692562,
+          "min": 0.9348241048991568
+        },
+        "2": {
+          "hermiticity_max_abs": 3.466058820164597e-18,
+          "max": 0.4211963156205854,
+          "min": 0.22878628924523345
+        }
+      },
+      "P_trace_by_spin": {
+        "1": 4.761365487435979,
+        "2": 1.7211614916496831
+      },
+      "P_trace_minus_q0_by_spin": {
+        "1": 2.1316282072803006e-14,
+        "2": 0.0
+      },
+      "case": "U4_J0_local",
+      "converged": true,
+      "d_center_by_spin_ry": {
+        "1": -0.21076273570608423,
+        "2": -0.19092951989135265
+      },
+      "d_center_exchange_splitting_up_minus_down_ry": -0.019833215814731575,
+      "d_q0_by_spin": {
+        "1": 4.761365487435958,
+        "2": 1.7211614916496831
+      },
+      "d_q0_total": 6.482526979085641,
+      "direct_P_production_evaluation": {
+        "J_eV": 0,
+        "P_input_path": "/private/tmp/a4_3_pout_inputs/U4_J0_local.txt",
+        "P_input_sha256": "0a7a5c8f46e12eb43be7ab7df58527d3d1bafe602687b500762ad68fb3e5e795",
+        "U_eV": 4,
+        "capture_records_sha256": "0c9857f50b906fcb354579a6b23289c476c12ce5ec5fd0ffa460e96a35aa99ee",
+        "helper_stdout": "U_eV=  4.0000000000000000E+00 J_eV=  0.0000000000000000E+00 E_int_Ry=  5.4168232707017010E+00 E_DC_Ry=  5.2243719425588395E+00 E_Hub_Ry=  1.9245132814286148E-01 t_in_out_Ry=  0.0000000000000000E+00",
+        "iteration": 39,
+        "logger_deltas_Ry": {
+          "E_DC": -8.881784197001252e-16,
+          "E_Hub": -2.7755575615628914e-17,
+          "E_int": 0.0
+        },
+        "values_Ry": {
+          "E_DC_Ry": 5.2243719425588395,
+          "E_Hub_Ry": 0.19245132814286148,
+          "E_int_Ry": 5.416823270701701
+        }
+      },
+      "direct_P_t_audit": {
+        "P_OUT_row_count": 50,
+        "Vin_row_count": 324,
+        "difference_Ry": 0.0,
+        "iteration": 39,
+        "path": "/private/tmp/a5-u4-local-beta005-continuation",
+        "records_sha256": "0c9857f50b906fcb354579a6b23289c476c12ce5ec5fd0ffa460e96a35aa99ee",
+        "stdout_sha256": "763e938caef3e810b33a8528db29c307503c7254137d4c6f651ba9f4fd520fec",
+        "t_direct_Ry": -0.568010473477897,
+        "t_logged_Ry": -0.568010473477897
+      },
+      "energy_and_candidates": {
+        "E_DC": 5.2243719425588395,
+        "E_Hub": 0.19245132814286148,
+        "E_int": 5.416823270701701,
+        "TS": 0.0002384709153808931,
+        "candidate_a": null,
+        "candidate_a_F": null,
+        "candidate_b": -2541.760441185038,
+        "candidate_b_F": -2541.7606796559535,
+        "candidate_c": null,
+        "candidate_c_F": null,
+        "entropy": 0.1255041106535046,
+        "physical_total_energy": -2541.952892513181,
+        "t_in_out": -0.568010473477897,
+        "test_F_local": -2541.953130984097,
+        "test_F_spectral": null
+      },
+      "hashes": {
+        "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+        "input_sha256": "dd97e67c82ee96dbc3a8b863bf00f2b85988c688c91450aa657253f1fdfa3ff4",
+        "pre_run_input_sha256": "995525c128871bc218ad64bf9b96c894bcda5256c639d798e4260e10d92ca32a",
+        "records_sha256": "0c9857f50b906fcb354579a6b23289c476c12ce5ec5fd0ffa460e96a35aa99ee",
+        "seed_input_sha256": "7f09f1126a432c21c0f438696e61f3564dcccf32d0ae59b7346a10cf12bcf40e",
+        "source_sha256": {
+          "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+          "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+          "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+          "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+          "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+        },
+        "stdout_sha256": "763e938caef3e810b33a8528db29c307503c7254137d4c6f651ba9f4fd520fec"
+      },
+      "iteration": 39,
+      "logged_mode_specific_candidates": {
+        "candidate_a": null,
+        "candidate_a_F": null,
+        "candidate_b": -2541.760441185038,
+        "candidate_b_F": -2541.760679655954,
+        "candidate_c": null,
+        "candidate_c_F": null
+      },
+      "mode": "local",
+      "path": "/private/tmp/a5-u4-local-beta005-continuation",
+      "r05": "15",
+      "r05_status": "PASS",
+      "residuals": {
+        "R05_physical": true,
+        "R05_streak": "15",
+        "fixed_u_rp_abs": 2.383468276256961e-10,
+        "fixed_u_rv_abs_ry": 7.007242383012212e-11
+      },
+      "sphere_spin_moment_muB": 2.829626,
+      "status": "CONVERGED"
+    },
+    {
+      "E_F_ry": -0.0805223301,
+      "P_eigenvalue_bounds_by_spin": {
+        "1": {
+          "hermiticity_max_abs": 6.2341624917916505e-18,
+          "max": 0.9663820575377271,
+          "min": 0.8340567322327331
+        },
+        "2": {
+          "hermiticity_max_abs": 3.2255014631443757e-18,
+          "max": 0.5050493186163434,
+          "min": 0.27129843816863164
+        }
+      },
+      "P_trace_by_spin": {
+        "1": 4.434934311773654,
+        "2": 2.057744832186292
+      },
+      "P_trace_minus_q0_by_spin": {
+        "1": -2.398081733190338e-14,
+        "2": -1.865174681370263e-14
+      },
+      "case": "U2_J0.9_local",
+      "converged": true,
+      "d_center_by_spin_ry": {
+        "1": -0.23123629834061815,
+        "2": -0.20771451284307077
+      },
+      "d_center_exchange_splitting_up_minus_down_ry": -0.02352178549754738,
+      "d_q0_by_spin": {
+        "1": 4.434934311773678,
+        "2": 2.0577448321863105
+      },
+      "d_q0_total": 6.492679143959989,
+      "direct_P_production_evaluation": {
+        "J_eV": 0.9,
+        "P_input_path": "/private/tmp/a4_3_pout_inputs/U2_J0.9_local.txt",
+        "P_input_sha256": "25935c84a6643286f69c181f981226a1a87641bf99e8f649b78b0a0c8f60af9d",
+        "U_eV": 2,
+        "capture_records_sha256": "cbaae0fd7fa8139910b9d85f8de02452f10912d975544a25891680871d871e4e",
+        "helper_stdout": "U_eV=  2.0000000000000000E+00 J_eV=  9.0000000000000002E-01 E_int_Ry=  2.1064341087214626E+00 E_DC_Ry=  2.0452876765112560E+00 E_Hub_Ry=  6.1146432210206658E-02 t_in_out_Ry=  0.0000000000000000E+00",
+        "iteration": 38,
+        "logger_deltas_Ry": {
+          "E_DC": 0.0,
+          "E_Hub": 0.0,
+          "E_int": -4.440892098500626e-16
+        },
+        "values_Ry": {
+          "E_DC_Ry": 2.045287676511256,
+          "E_Hub_Ry": 0.06114643221020666,
+          "E_int_Ry": 2.1064341087214626
+        }
+      },
+      "direct_P_t_audit": {
+        "P_OUT_row_count": 50,
+        "Vin_row_count": 324,
+        "difference_Ry": -2.7755575615628914e-17,
+        "iteration": 38,
+        "path": "/private/tmp/a5-local-followup-ks/u2_j0.9_local_standard",
+        "records_sha256": "cbaae0fd7fa8139910b9d85f8de02452f10912d975544a25891680871d871e4e",
+        "stdout_sha256": "3a5ad69341a3df2ca457bc3de821d7817d96e50747da5433e0d58606739fc3b2",
+        "t_direct_Ry": -0.14016863980246053,
+        "t_logged_Ry": -0.1401686398024605
+      },
+      "energy_and_candidates": {
+        "E_DC": 2.045287676511256,
+        "E_Hub": 0.06114643221020666,
+        "E_int": 2.1064341087214626,
+        "TS": 0.0001193761633340526,
+        "candidate_a": null,
+        "candidate_a_F": null,
+        "candidate_b": -2541.918419684274,
+        "candidate_b_F": -2541.918539060437,
+        "candidate_c": null,
+        "candidate_c_F": null,
+        "entropy": 0.06282610685893388,
+        "physical_total_energy": -2541.979566116484,
+        "t_in_out": -0.14016863980246053,
+        "test_F_local": -2541.979685492647,
+        "test_F_spectral": null
+      },
+      "hashes": {
+        "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+        "input_sha256": "ee6854573baf683609ae45080af678405f146ae2f37a7e21137db46b642bea13",
+        "pre_run_input_sha256": "37e944f34688a1fff4ddc6aeea2fdc8eec13a8d86e5f305639b1ea6a561b218f",
+        "records_sha256": "cbaae0fd7fa8139910b9d85f8de02452f10912d975544a25891680871d871e4e",
+        "seed_input_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+        "source_sha256": {
+          "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+          "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+          "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+          "source/include_codes/namelists/hamiltonian.f90": "afde6c79db8fe06d8d5bd61fbb90720ee4990c9337b6b4efc530da1297edfe70",
+          "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+        },
+        "stdout_sha256": "3a5ad69341a3df2ca457bc3de821d7817d96e50747da5433e0d58606739fc3b2"
+      },
+      "iteration": 38,
+      "logged_mode_specific_candidates": {
+        "candidate_a": null,
+        "candidate_a_F": null,
+        "candidate_b": -2541.918419684273,
+        "candidate_b_F": -2541.918539060437,
+        "candidate_c": null,
+        "candidate_c_F": null
+      },
+      "mode": "local",
+      "path": "/private/tmp/a5-local-followup-ks/u2_j0.9_local_standard",
+      "r05": "PASS",
+      "r05_status": "PASS",
+      "residuals": {
+        "R05_physical": true,
+        "R05_streak": 15,
+        "fixed_u_rp_abs": 1.409964762271173e-09,
+        "fixed_u_rv_abs_ry": 1.5922609353088097e-10
+      },
+      "sphere_spin_moment_muB": 2.245034,
+      "status": "CONVERGED"
+    }
+  ],
+  "definition": "Read-only extraction from existing finalized raw endpoints; no recalculation or candidate comparison.",
+  "direct_P_hubbard_audit_hash": "7b8fc88e911bc6dcebc59044e7ec791db4ffe2ad335b0720d1ebe99f2ce2770e",
+  "direct_P_hubbard_evaluator": {
+    "build_command": "/opt/homebrew/bin/gfortran -ffree-line-length-0 -cpp -mtune=native -DCOLOR -O3 -fbacktrace -g -I/private/tmp/a5-ks-release2/modules tests/validation/fixed_ldau/a4_3_pout_hubbard_evaluator.f90 -o /private/tmp/a4_3_pout_hubbard_evaluator -L/opt/homebrew/Cellar/spglib/2.8.0/lib -Wl,-rpath,/opt/homebrew/Cellar/spglib/2.8.0/lib /private/tmp/a5-ks-release2/source/librslmto.a -framework Accelerate -lm -ldl /opt/homebrew/Cellar/spglib/2.8.0/lib/libsymspg.dylib /private/tmp/a5-ks-release2/source/include_codes/abspinlib/libabspinlib.a /private/tmp/a5-ks-release2/source/include_codes/strux_lib/libstrux_lib.a -framework Accelerate -lm -ldl",
+    "helper_binary": "/private/tmp/a4_3_pout_hubbard_evaluator",
+    "helper_binary_sha256": "be69408ab263fbe1322825a1255d179532cff4662bf64594b12d7eccac4f931a",
+    "helper_source": "tests/validation/fixed_ldau/a4_3_pout_hubbard_evaluator.f90",
+    "helper_source_sha256": "b85e6ab758c5a8da30551518bc3bf4a97d07326aa52754b346c37fdda7dc023a",
+    "library_sha256": "cec169fc35a4e3de32f808a11053efcf88ccff6d736daaf3dccff51546807f0f",
+    "module_dir": "/private/tmp/a5-ks-release2/modules",
+    "schema": "a4_3_direct_pout_hubbard_evaluation_v1"
+  },
+  "direct_P_t_audit": {
+    "capture_contract": "Vin from records.csv kind=v_hub stage=P_OUT; P from kind=test_density_matrix stage=P_OUT; both selected at max P_OUT iteration. Spin d blocks use zero-based row/col indices 4..8 and 13..17, spin_off=9; 5x5 d shell per spin.",
+    "formula": "sum_spin,i,j real(Vin_d[i,j] * P_OUT_d[j,i])",
+    "max_abs_difference_Ry": 5.551115123125783e-17,
+    "path": "/private/tmp/a5-direct-p-t-audit.json",
+    "sha256": "a275bb4daaf325d9f6ca599432dd609084660fbfd0bb14022cf354e026405248"
+  },
+  "missing": [],
+  "paired_candidates": {
+    "U0_J0": {
+      "a_F_ry": -2541.9820022426998,
+      "a_energy_ry": -2541.981914821411,
+      "b_F_ry": -2541.9820022426998,
+      "b_energy_ry": -2541.981914821411,
+      "c_F_ry": -2541.9820022426998,
+      "c_energy_ry": -2541.981914821411,
+      "local_case": "U0_J0_local",
+      "source_formulae": {
+        "a": "F_spectral \u2212 t + E_Hub",
+        "b": "F_local + E_Hub",
+        "c": "F_spectral + E_Hub"
+      },
+      "spectral_case": "U0_J0_spectral",
+      "status": "COMPLETE"
+    },
+    "U2_J0": {
+      "a_F_ry": -2541.8536283560884,
+      "a_energy_ry": -2541.853517849994,
+      "b_F_ry": -2541.862322175378,
+      "b_energy_ry": -2541.8621841266004,
+      "c_F_ry": -2542.1082693086432,
+      "c_energy_ry": -2542.108158802549,
+      "local_case": "U2_J0_local",
+      "source_formulae": {
+        "a": "F_spectral \u2212 t + E_Hub",
+        "b": "F_local + E_Hub",
+        "c": "F_spectral + E_Hub"
+      },
+      "spectral_case": "U2_J0_spectral",
+      "status": "COMPLETE"
+    },
+    "U2_J0.9": {
+      "a_F_ry": -2541.9158913372703,
+      "a_energy_ry": -2541.915732866613,
+      "b_F_ry": -2541.918539060437,
+      "b_energy_ry": -2541.918419684274,
+      "c_F_ry": -2542.0567027825487,
+      "c_energy_ry": -2542.0565443118912,
+      "local_case": "U2_J0.9_local",
+      "source_formulae": {
+        "a": "F_spectral \u2212 t + E_Hub",
+        "b": "F_local + E_Hub",
+        "c": "F_spectral + E_Hub"
+      },
+      "spectral_case": "U2_J0.9_spectral",
+      "status": "COMPLETE"
+    },
+    "U4_J0": {
+      "a_F_ry": -2541.7337451154585,
+      "a_energy_ry": -2541.733643420123,
+      "b_F_ry": -2541.7606796559535,
+      "b_energy_ry": -2541.760441185038,
+      "c_F_ry": -2542.3199288511155,
+      "c_energy_ry": -2542.31982715578,
+      "local_case": "U4_J0_local",
+      "source_formulae": {
+        "a": "F_spectral \u2212 t + E_Hub",
+        "b": "F_local + E_Hub",
+        "c": "F_spectral + E_Hub"
+      },
+      "spectral_case": "U4_J0_spectral",
+      "status": "COMPLETE"
+    }
+  },
+  "protocol": {
+    "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+    "source": "Read-only postprocessing; no SCF runs or production source changes. Cases use the frozen native-KS executable, 300 K, 12^3 k mesh, conv_thr 1e-9. Most main-grid endpoints started from common near-converged seed SHA 25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5; accepted U4 local used the preserved prior local restart, as explicitly recorded per case. Fermi level is final reported EF. d q0 is P_OUT radial moment l=2 order 0, center is P_OUT l=2 order 1, splitting is center(up)-center(down); P bounds are eigenvalues of Hermitianized 5x5 P_OUT per spin. Candidates are mode-specific: spectral rows supply a and c, local rows supply b; paired candidate values combine only the registered mode-specific fields, without comparisons. The U0 local P matrix also exactly matches the previously reviewed A5.2 lambda=0 P matrix."
+  },
+  "status": "COMPLETE_A4.3_DESCRIPTIVE_EXTRACTION",
+  "superseded_attempts": [
+    {
+      "case": "U4_J0_local_capped",
+      "note": "Preserved prior attempt; superseded by accepted beta=.05 continuation.",
+      "path": "/private/tmp/a5-m22m23-remaining-ks-grid/u4_local_standard",
+      "status": "NONCONVERGED"
+    }
+  ]
+}

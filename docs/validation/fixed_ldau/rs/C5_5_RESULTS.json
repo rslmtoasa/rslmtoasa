@@ -1,0 +1,170 @@
+{
+  "schema": "c5_5_campaign_and_readiness_record_v1",
+  "date": "2026-10-21",
+  "status": "AUDITED_T1_PASS_T2_BLOCKED_PRELAUNCH_T3_NOT_RUN",
+  "sole_audit": {
+    "markdown": "C5_5_AUDIT.md",
+    "json": "C5_5_AUDIT.json",
+    "verdict": "T1 PASS; T2 BLOCKED/UNEVALUATED before launch; T3 NOT RUN; no adoption or merge"
+  },
+  "remaining_verification": [
+    "single-thread no-U identity",
+    "explicit-spectral identity",
+    "bulk regression",
+    "C5.2 §7 local merge and verification"
+  ],
+  "campaign_budget": {
+    "clarification_question": "Does the three-run cap cover the T1/T2 campaign attempts, with identity, unit, and §7 verification tracked separately?",
+    "clarification_reply": "Yes—three campaign runs; verification separate",
+    "campaign_attempts_used": 1,
+    "campaign_attempts_cap": 3,
+    "t1": "PASS; one campaign invocation",
+    "t2": "BLOCKED/UNEVALUATED; zero solver invocations",
+    "separate_candidate_unit_invocations": 2,
+    "production_adopted": false,
+    "merge_performed": false
+  },
+  "t1": {
+    "status": "PASS",
+    "run_dir": "/private/tmp/c55-t1-ni-auto/run",
+    "preflight": "/private/tmp/c55-t1-ni-auto/preflight.json",
+    "preflight_sha256": "eb23da1fa40766a19927407f1b8f6b01e784f0d49a16e9af1f865cc826cfc9f7",
+    "binary_sha256": "2846c846857468666fa5389a283dbbe7b760621050f851c9d2e4046e240d6fed",
+    "staged_input_sha256": "e77f2aa4d72d525865a621bdb963de040fa8f3382a96856e84e5dffdaf3cdb5a",
+    "original_explicit_local_input_sha256": "c8566156f0e7479135dbeccadb05f4c4eef0f82892960096e2408e60262986bb",
+    "bulk_atom_sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+    "impurity_atom_sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+    "host_state_sha256": "428dfff8800ca5064a1c91ff7ba1a47d412cfd33e5a7febb04703b89156bce8c",
+    "original_endpoint_state_sha256": "bc3340a8ad20d2467eaeccd43929a659d4cfff2a9f28b748fb6554edc4ee3ac9",
+    "mode_line": "HUBBARD_RADIAL_MODE mode=local source=default use_kspace=.false. local_energy_adopted=.false.",
+    "acceptance": {
+      "first_accepted_window": [
+        4,
+        23
+      ],
+      "endpoint_iteration": 23,
+      "same_loop_diff": "1.78E-8",
+      "d_q_spin1_spread": "1.940081198E-7",
+      "d_q_spin2_spread": "1.178661817E-7",
+      "sphere_moment_spread": "2.3691291473E-7",
+      "delta_impurity_minus_bulk": {
+        "d_q_spin1": "1.1550153801E-6",
+        "d_q_spin2": "1.0080399956E-6",
+        "sphere_moment": "-4.726366475E-8"
+      },
+      "accepted_rd3a_reference": {
+        "d_q_spin1": "1.1550153802275531E-6",
+        "d_q_spin2": "1.00803999547594E-6",
+        "sphere_moment": "-4.726366498175594E-8"
+      },
+      "absolute_comparison_errors": {
+        "d_q_spin1": "1.275531E-16",
+        "d_q_spin2": "1.2406E-16",
+        "sphere_moment": "2.3175594E-16"
+      },
+      "u0_control_tolerances": {
+        "d_q_spin1": "1.7917497610042687E-6",
+        "d_q_spin2": "1.6850840944826473E-6",
+        "sphere_moment": "5.857085200178247E-8"
+      }
+    },
+    "endpoint_trace_sha256": "cdb9b4a8beadd4e35e3adf6ae500fd9d861b95074ec138fc59f035d1bbfc14f4",
+    "endpoint_state_sha256": "7ea1b7b8bd6e06be39816251a1de218a9009c39f2ad73d8fd25c52655476e60f",
+    "full_trace_state_manifest_sha256": "34f1e620d0e1e87eceb367407ca323d0b924d1b17e07bf0e65337f3eb0d75896",
+    "captured_trace_state_pairs": 31,
+    "testrun_log_sha256": "d30e2b4fe74553b7dfc3c74ebef21558d921cb1f528ceeba9ad7c3806cc5d44f",
+    "raw_trace_sha256": "5da4736fee0465fe204994bff503af83894c1ba3f3966b646bb1126867c242f8",
+    "solver_exit_code": 143,
+    "stop": "authorized SIGTERM after first accepted checkpoint; watcher captured through iteration 31 and completed normally"
+  },
+  "t2": {
+    "status": "BLOCKED_UNEVALUATED_BEFORE_LAUNCH",
+    "solver_invocations": 0,
+    "accepted_ks_proof": "docs/validation/fixed_ldau/evidence/a5_native_ks_local_u2_endpoint.md",
+    "accepted_ks_proof_sha256": "525526942f864bfee22a8e0a708467e40522847ee92a26670104d3936c2f9a88",
+    "accepted_ks_host_dir": "/private/tmp/a5-priority-local-u2-ks/u2_local_standard",
+    "endpoint_verification_sha256": "e21914e74ae04c46f495ab0340f6bb13e76ee65970cb668054652a5f6a5662d8",
+    "accepted_source_hashes": {
+      "source/hamiltonian.f90": "db26fbc766f94c811ae641c0fe2dd918bb913be3fce92f4488b9af826ce29b2f",
+      "source/hamiltonian_build.f90": "e896d53d82560a0551cc44560191dda5a61a70418a6b75e5c6247c758cd7ca90",
+      "source/hamiltonian_hubbard.f90": "8dcab0b0fa467b0e8532877e3e7e00a96cef7e47dce38a4ac085dd26dada43ee",
+      "source/self.f90": "1c29e173c7ae0061f2a9087cc90fbe44db0a24000dfda183340a914d8e20a7ad"
+    },
+    "accepted_ks_binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+    "pre_run_input_sha256_from_endpoint_verification": "7f0615d2ab190fe0c1db6fff46829be5e8944690d30c12653ace61bb6794c8c3",
+    "pre_run_seed_sha256_from_endpoint_verification": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+    "current_raw_directory_input_sha256": "ca995150bd98768e40539857f164e8508eb0f5a49a5cdec2cf86e095acd372fb",
+    "raw_directory_input_observation": "Current raw input still explicitly contains local and use_kspace=true but differs from the immutable pre-run input hash retained by the verification record.",
+    "accepted_ks_fe_out_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+    "accepted_ks_fe_scf_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+    "saved_state_hubbard_u_ry": "0.14699717144573571",
+    "saved_state_hubbard_j_ry": "0.0",
+    "saved_state_mode_field": "absent",
+    "rs_u2_counterpart": {
+      "endpoint_lock": "docs/validation/fixed_ldau/rs/C5_2_PART_C_assets/C3/inputs/accepted_endpoint_lock.json",
+      "endpoint_lock_sha256": "d923078e644eaf7ada1926a53a4c92adf3d138e22ba8307ca87896d567cec1f5",
+      "deck_sha256": "276eabe5a405848935179ce21eac25a59a01f6aa7316d8ecbe3dbfdd5ac17760",
+      "state_sha256": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83e",
+      "recipe": "RS bulk U=2/J=0 local Chebyshev, rc=80; confirms matching radius only",
+      "same_u2_accepted_rs_impurity_recipe": "none found"
+    },
+    "candidate_resolution": {
+      "input_default": "auto",
+      "active_host_mode_from_saved_state": "legacy/missing field treated as spectral",
+      "predicted_result": "auto retains spectral; required local-mode gate cannot pass",
+      "measured_t2_model_log": false,
+      "basis": "unchanged candidate helper and provenance validator; no metadata modification or resolver relaxation"
+    },
+    "t2_staging": "fresh private inspection staging only; not launched and not accepted evidence"
+  },
+  "candidate": {
+    "patch": "C5_5_candidate.patch",
+    "patch_sha256": "0326ac847160419a7fd584b4617b854e9d6d66ab6dbd44805d64de4e4b1ebbc6",
+    "isolated_source_tree": "/private/tmp/c55-candidate",
+    "binary_sha256": "2846c846857468666fa5389a283dbbe7b760621050f851c9d2e4046e240d6fed",
+    "unit_test": "UnitAutoImpurityLocalMode",
+    "unit_test_sha256": "9b491239ff1868f3bf8a597a99f709afc00f00b0764f28746ebae6de6a6094a0",
+    "unit_cases": [
+      "all active hosts local",
+      "mixed local/spectral",
+      "empty legacy provenance",
+      "guarded scope",
+      "no-U fallback"
+    ],
+    "unit_result": "PASS",
+    "energy_i": "OFF",
+    "production_adopted": false
+  },
+  "disk_observations": [
+    {
+      "when": "T1 launcher preexec, 2026-10-21 22:09 local",
+      "free_bytes": 2394337280,
+      "minimum_floor_bytes": 1073741824,
+      "result": "above floor"
+    },
+    {
+      "when": "T2 prelaunch audit sample (df -Pk /private/tmp; solver not launched)",
+      "free_kib": 4130072,
+      "filesystem_total_kib": 482797652,
+      "result": "above C5.4 floor; T2 blocked on provenance, not disk"
+    },
+    {
+      "when": "after sole audit, before records commit (finalization sample via df -Pk /private/tmp)",
+      "free_kib": 7210944,
+      "filesystem_total_kib": 482797652,
+      "result": "no cleanup or compression; T2 remained blocked"
+    },
+    {
+      "when": "2026-10-21 20:17:39 UTC (during finalization; sampled via df -Pk /private/tmp)",
+      "free_kib": 4615192,
+      "filesystem_total_kib": 482797652,
+      "result": "no T2 solver launched; no cleanup or compression"
+    },
+    {
+      "when": "after initial scoped records commit, 2026-10-21 (df -Pk /private/tmp)",
+      "free_kib": 6627504,
+      "filesystem_total_kib": 482797652,
+      "result": "post-commit observation; no cleanup or compression"
+    }
+  ]
+}

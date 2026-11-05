@@ -13,6 +13,8 @@ Start here, then read:
   strategy, GPU coverage tiers.
 - **[`tests/KNOWN_ISSUES.md`](tests/KNOWN_ISSUES.md)** — bugs found via
   coverage work, deliberately left unfixed pending a dedicated task.
+- **[`docs/validation/fixed_ldau/TESTING_POLICY.md`](docs/validation/fixed_ldau/TESTING_POLICY.md)** — U + SOC runs: few-iteration
+  trajectories, no convergence studies.
 
 When a task names a spec file, that spec governs the task's technical
 content; this file governs how you work.

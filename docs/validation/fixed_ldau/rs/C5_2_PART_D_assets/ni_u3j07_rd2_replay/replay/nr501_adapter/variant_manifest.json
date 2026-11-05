@@ -1,0 +1,70 @@
+{
+  "build_invocation": {
+    "argv_source": "exact absolute compiler argv and cwd; stdout/stderr files bound",
+    "path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/build_invocation.json",
+    "sha256": "db2ab2c0fa00f9a1fbaddb0dc16d618fc2524ae3153eefa66089b6e07428775a"
+  },
+  "capture_radial_NR": 501,
+  "cmake_cache_sha256": "c1f6e9c6444be7d93add9232024612eedf2ff26cde14b051bac724b816b83435",
+  "compile_command": "/opt/homebrew/bin/gfortran -ffree-line-length-0 -cpp -mtune=native -DCOLOR -fopenmp -DOpenMP_Fortran_FOUND -O3 -fbacktrace -g -g -I/private/tmp/c5-b1-guard-build-clean/modules -I/opt/homebrew/Cellar/spglib/2.8.0/include /private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501.f90 -o /private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501 /private/tmp/c5-b1-guard-build-clean/source/librslmto.a -framework Accelerate -lm -ldl /opt/homebrew/Cellar/spglib/2.8.0/lib/libsymspg.dylib /private/tmp/c5-b1-guard-build-clean/source/include_codes/abspinlib/libabspinlib.a /private/tmp/c5-b1-guard-build-clean/source/include_codes/strux_lib/libstrux_lib.a -framework Accelerate -lm -ldl /opt/homebrew/Cellar/gcc/16.2.0/lib/gcc/current/libgomp.dylib",
+  "compile_command_template": "/opt/homebrew/bin/gfortran -ffree-line-length-0 -cpp -mtune=native -DCOLOR -fopenmp -DOpenMP_Fortran_FOUND -O3 -fbacktrace -g -g -I/private/tmp/c5-b1-guard-build-clean/modules -I/opt/homebrew/Cellar/spglib/2.8.0/include /private/tmp/c52-rd2-private/nr501_adapter/accepted_m03_replay_driver_nr501.f90 -o /private/tmp/c52-rd2-private/nr501_adapter/accepted_m03_replay_driver_nr501 /private/tmp/c5-b1-guard-build-clean/source/librslmto.a -framework Accelerate -lm -ldl /opt/homebrew/Cellar/spglib/2.8.0/lib/libsymspg.dylib /private/tmp/c5-b1-guard-build-clean/source/include_codes/abspinlib/libabspinlib.a /private/tmp/c5-b1-guard-build-clean/source/include_codes/strux_lib/libstrux_lib.a -framework Accelerate -lm -ldl /opt/homebrew/Cellar/gcc/16.2.0/lib/gcc/current/libgomp.dylib",
+  "compiler": "gfortran 16.2.0 (Apple/Homebrew)",
+  "derived_driver": {
+    "change": "single textual replacement in input-dimension guard: nr /= 495 -> nr /= 501",
+    "path": "/private/tmp/c52-rd2-private/nr501_adapter/accepted_m03_replay_driver_nr501.f90",
+    "sha256": "b4e0736474d6daeb741169cc66ba74190f94ba1a1bbf25e249faa69d730b34e1"
+  },
+  "derived_driver_binary": {
+    "mode": "0555",
+    "path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501",
+    "sha256": "34b4456919a77513504ceddc9890dd3dac7d23c9fbe6f0bbbed50c0a6d112508"
+  },
+  "derived_driver_build_log": {
+    "exit_code": 0,
+    "path": "/private/tmp/c52-rd2-private/nr501_adapter/build.log",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "derived_driver_source": {
+    "path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501.f90",
+    "sha256": "b4e0736474d6daeb741169cc66ba74190f94ba1a1bbf25e249faa69d730b34e1"
+  },
+  "derived_runner": {
+    "changes": "(495,2,10,6) -> (501,2,10,6); four radial extents range(495) -> range(nr); no formulas/tolerances changed",
+    "path": "/private/tmp/c52-rd2-private/nr501_adapter/rs_a3_m03_runner_nr501.py",
+    "sha256": "2ff698eb1d03ca793906c0efb016868089cc1d324b2d093d739100ebd9a6944b"
+  },
+  "driver_diff": "--- /Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/accepted_m03_replay_driver.f90\n+++ /private/tmp/c52-rd2-private/nr501_adapter/accepted_m03_replay_driver_nr501.f90\n@@ -19,7 +19,7 @@\n    open(newunit=uin, file=trim(input_path), status='old', action='read', iostat=ios)\n    if (ios /= 0) error stop 'cannot open M0.3 input'\n    read(uin, *, iostat=ios) lmax, nr, ncore, nval, ncase, fcore, txc\n-   if (ios /= 0 .or. lmax /= 2 .or. nr /= 495 .or. ncore < 1 .or. nval /= 6 .or. ncase < 1) error stop 'bad M0.3 dimensions'\n+   if (ios /= 0 .or. lmax /= 2 .or. nr /= 501 .or. ncore < 1 .or. nval /= 6 .or. ncase < 1) error stop 'bad M0.3 dimensions'\n    read(uin, *, iostat=ios) z, a, b, tol, vhrmax, b_fsm\n    if (ios /= 0) error stop 'bad M0.3 scalar controls'\n    allocate(rofi(nr), v(nr,2), ec_seed(ncore), ev_seed(nval), gc(3,2), c(3,2), qpar(3,2), srdel(3,2), &",
+  "flags_file_sha256": "0539978fb85b636f91ea64bb5429064bece78600bc990b9af68bfedf4ee35150",
+  "historical_ambiguous_build": {
+    "path": "/private/tmp/c52-rd2-private/nr501_adapter/accepted_m03_replay_driver_nr501",
+    "reason": "Initial private build produced before exact absolute-source invocation record; preserved, superseded by build_proven.",
+    "sha256": "b4c4f8e37f17261c7a24403310292ad9322021a8e9efaea57b277a9697a8ff0c"
+  },
+  "library": {
+    "path": "/private/tmp/c5-b1-guard-build-clean/source/librslmto.a",
+    "sha256": "36725c2ae3ba7c07c74c17940d9047bf8a314431146782bdd4e09ecc0e5dcead"
+  },
+  "linked_archive_sha256": "36725c2ae3ba7c07c74c17940d9047bf8a314431146782bdd4e09ecc0e5dcead",
+  "module_manifest_sha256": "570296046057ea9c8238350a7d596a76cffd71dde7101b2928cbebde106eb850",
+  "original_driver": {
+    "path": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/accepted_m03_replay_driver.f90",
+    "sha256": "124726aaab8f5937fa13be925969b67d4e647ee9c910596d58698ffb13e5476a"
+  },
+  "original_driver_binary": {
+    "path": "/private/tmp/c52-c-private/helper-build/accepted_m03_replay_driver",
+    "sha256": "9e3f44379b8933d21eafb78e8008cbf0d44dd9b65a77140af2920c26713ac9d7"
+  },
+  "original_runner": {
+    "path": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/rs_a3_m03_runner.py",
+    "sha256": "96c51a8e1e0b0809b35b7875a5c94b9be1e70e82180cb6693c13209fe9a0b515"
+  },
+  "purpose": "Exact NR=501 interface adaptation only; no physics formulas/tolerances/production source changed.",
+  "runner_diff": "--- /Users/andersb/Jobb/rslmto_fable_v4b/tests/validation/fixed_ldau/rs_a3_m03_runner.py\n+++ /private/tmp/c52-rd2-private/nr501_adapter/rs_a3_m03_runner_nr501.py\n@@ -138,7 +138,7 @@\n     nr, lmax = int(float(get('radial_NR'))), int(float(get('radial_lmax')))\n     ncore = len([r for r in rows if r['kind'] == 'radial_replay_ec_seed' and r['stage'] == 'RADIAL_REPLAY'])\n     nval = len([r for r in rows if r['kind'] == 'radial_replay_eigen_seed' and r['stage'] == 'RADIAL_REPLAY'])\n-    if (nr,lmax,ncore,nval) != (495,2,10,6):\n+    if (nr,lmax,ncore,nval) != (501,2,10,6):\n         raise ValueError(f'unsupported exact dimensions {nr,lmax,ncore,nval}')\n     return rows, manifest, it, nr, ncore, nval, csvp, mp\n \n@@ -321,8 +321,8 @@\n     checks['pass']=all(x['pass'] for x in checks.values() if isinstance(x,dict) and 'pass' in x)\n     params={k:float(one(rows,k,'RADIAL_REPLAY')['scalar']) for k in ('radial_A','radial_B')}\n     rofi=[float(r['energy']) for r in sorted([r for r in rows if r['kind']=='radial_replay_mesh' and int(r['spin'])==0],key=lambda r:int(r['row']))]\n-    full={s:radial_integral([case['rho'][(i,s)] for i in range(495)],rofi,params['radial_A'],params['radial_B']) for s in (1,2)}\n-    dcharge={s:radial_integral([case['d_rho'][(i,s)] for i in range(495)],rofi,params['radial_A'],params['radial_B']) for s in (1,2)}\n+    full={s:radial_integral([case['rho'][(i,s)] for i in range(len(rofi))],rofi,params['radial_A'],params['radial_B']) for s in (1,2)}\n+    dcharge={s:radial_integral([case['d_rho'][(i,s)] for i in range(len(rofi))],rofi,params['radial_A'],params['radial_B']) for s in (1,2)}\n     checks['LIVE_STATE_integrals']={'sphere_charge_by_spin':full,'sphere_spin_moment':full[1]-full[2],\n        'actual_l2_rho_contribution_charge_by_spin':dcharge,'actual_l2_rho_contribution_total':sum(dcharge.values()),\n        'method':'integrate NEWRHO-observed rho-after-minus-before l=2 with ATOMSC logarithmic Simpson metric'}\n@@ -351,7 +351,7 @@\n     params={k:float(one(rows,k,'RADIAL_REPLAY')['scalar']) for k in ('radial_A','radial_B')}\n     rofi=[float(r['energy']) for r in sorted([r for r in rows if r['kind']=='radial_replay_mesh' and int(r['spin'])==0],key=lambda r:int(r['row']))]\n     def integrate(case, field, spin):\n-        return radial_integral([case[field][(i,spin)] for i in range(495)],rofi,params['radial_A'],params['radial_B'])\n+        return radial_integral([case[field][(i,spin)] for i in range(len(rofi))],rofi,params['radial_A'],params['radial_B'])\n     record={}\n     component_names={1:'SUMEV',2:'SUMEC',3:'RHOVH',4:'RHOMU',5:'VNUCL',6:'ZVNUCL',\n                      7:'EKIN',8:'UTOT',9:'RHOEPS',10:'ETOT'}\n@@ -523,7 +523,7 @@\n     if set(cases)!=set(range(1,len(names)+1)): raise ValueError('incomplete RS A3 response cases')\n     params={k:float(one(rows,k,'RADIAL_REPLAY')['scalar']) for k in ('radial_A','radial_B')}\n     rofi=[float(r['energy']) for r in sorted([r for r in rows if r['kind']=='radial_replay_mesh' and int(r['spin'])==0],key=lambda r:int(r['row']))]\n-    def integ(case,field,sp): return radial_integral([case[field][(i,sp)] for i in range(495)],rofi,params['radial_A'],params['radial_B'])\n+    def integ(case,field,sp): return radial_integral([case[field][(i,sp)] for i in range(len(rofi))],rofi,params['radial_A'],params['radial_B'])\n     names_comp={1:'SUMEV',2:'SUMEC',3:'RHOVH',4:'RHOMU',5:'VNUCL',6:'ZVNUCL',7:'EKIN',8:'UTOT',9:'RHOEPS',10:'ETOT'}\n     rec={}\n     for name in names:",
+  "schema": "c5-rd2-private-nr501-harness-variant-v1",
+  "solver_link_file_sha256": "baf888a39a9a5673e6b7e60f57f3289e00c1a78048e1a2fdea8a58deb7f82332",
+  "source_build_manifest": {
+    "path": "/private/tmp/c52-c-private/helper-build/source_build_manifest.json",
+    "sha256": "46c65c1ae8227370cb2be630754de8e6eda8422b84e7884ef69036ffd47bae17"
+  },
+  "status": "PROVEN_PRIVATE_VARIANT_BUILT; NOT_EXECUTED"
+}

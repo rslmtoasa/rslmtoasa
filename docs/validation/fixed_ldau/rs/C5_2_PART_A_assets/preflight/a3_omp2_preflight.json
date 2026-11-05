@@ -1,0 +1,557 @@
+{
+  "manifest": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/scf/cases.json",
+  "manifest_sha256": "11c552255a7271c7da4512a77e1de9eea7f3176ee306e92b0cf2f199a1d7cbfc",
+  "test_runner": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/run_test.py",
+  "test_runner_sha256": "74c01a083aa2ab50d53ed7fd61e4fc3e114efdf274acbcffa053f233d8a556fb",
+  "run_binary_sha256": "5d8a62a4692811cf8fa53262592024048fd79c5e87d1dc6956b4bc45af8b0445",
+  "python": "/opt/homebrew/bin/python3.11",
+  "f90nml": "1.4.4",
+  "env": {
+    "OMP_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "RSLMTO audit variables": "unset",
+    "runner_inherited_RSLMTO_OMP_THREADS_SERIAL": "1"
+  },
+  "comparison_exclusions": [
+    "testrun.log (timestamps/source-line diagnostics only)"
+  ],
+  "comparison_rule": "all other scientific/result artifacts byte-for-byte; str.out only timing fields may differ and must be parsed",
+  "cases": {
+    "rs": {
+      "case_name": "Example_bulk_bccFe_nsp2_block",
+      "source_case": "bulk/bccFe",
+      "case_spec": {
+        "name": "Example_bulk_bccFe_nsp2_block",
+        "labels": [
+          "functional",
+          "rs",
+          "metallic",
+          "magnetic",
+          "basis_spd",
+          "block"
+        ],
+        "case": "bulk/bccFe",
+        "timeout": 300,
+        "omp_threads": 2,
+        "abs_tol": 1e-06,
+        "rel_tol": 1e-06,
+        "namelists": {
+          "lattice": {
+            "strux_backend": "strux_lib"
+          },
+          "control": {
+            "cheb_backend": "legacy",
+            "nsp": 2,
+            "recur": "block",
+            "lld": 20
+          },
+          "self": {
+            "nstep": 1
+          },
+          "hamiltonian": {
+            "hoh": false
+          }
+        },
+        "checks": {
+          "nml": [
+            {
+              "file": "Fe_out.nml",
+              "scalars": [
+                "etot",
+                "ws_r"
+              ],
+              "arrays": {
+                "mom": [
+                  3
+                ]
+              }
+            }
+          ],
+          "text": [
+            {
+              "file": "totaldos.out",
+              "rows": [
+                500,
+                1000,
+                1500
+              ],
+              "cols": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      },
+      "pristine_case_file_hashes": {
+        "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+        "input.nml": "07a60378796169e58d47f21ddff491ed9d686c59b8577066dfbfb243ccdaa22c"
+      },
+      "expected_use_kspace": false,
+      "runs": {
+        "clean8b_release": {
+          "workdir": "/private/tmp/c5-no-u-release/clean8b_release/rs",
+          "resolved_input_sha256": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3",
+          "resolved_input_size": 649,
+          "parsed_input": true,
+          "nstep": 1,
+          "use_kspace": false,
+          "seed_files": {
+            "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673"
+          },
+          "namelists": {
+            "Fe.nml": {
+              "sha256": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+              "groups": [
+                "element",
+                "par"
+              ]
+            },
+            "input.nml": {
+              "sha256": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3",
+              "groups": [
+                "calculation",
+                "lattice",
+                "atoms",
+                "self",
+                "energy",
+                "control",
+                "mix",
+                "hamiltonian"
+              ]
+            }
+          }
+        },
+        "fixed_release": {
+          "workdir": "/private/tmp/c5-no-u-release/fixed_release/rs",
+          "resolved_input_sha256": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3",
+          "resolved_input_size": 649,
+          "parsed_input": true,
+          "nstep": 1,
+          "use_kspace": false,
+          "seed_files": {
+            "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673"
+          },
+          "namelists": {
+            "Fe.nml": {
+              "sha256": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+              "groups": [
+                "element",
+                "par"
+              ]
+            },
+            "input.nml": {
+              "sha256": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3",
+              "groups": [
+                "calculation",
+                "lattice",
+                "atoms",
+                "self",
+                "energy",
+                "control",
+                "mix",
+                "hamiltonian"
+              ]
+            }
+          }
+        }
+      },
+      "expected_mode": "HUBBARD_RADIAL_MODE mode=spectral use_kspace=.false."
+    },
+    "ks": {
+      "case_name": "Example_k_space_scf_bccFe",
+      "source_case": "k_space_scf/bccFe",
+      "case_spec": {
+        "name": "Example_k_space_scf_bccFe",
+        "quick": true,
+        "labels": [
+          "functional",
+          "scf",
+          "kspace",
+          "magnetic",
+          "basis_spd",
+          "strux"
+        ],
+        "case": "k_space_scf/bccFe",
+        "timeout": 300,
+        "launch_modes": [
+          "serial",
+          "mpi"
+        ],
+        "mpi_procs": 2,
+        "mpi_rank_counts": [
+          1,
+          2,
+          4
+        ],
+        "namelists": {
+          "lattice": {
+            "strux_backend": "strux_lib"
+          },
+          "control": {
+            "cheb_backend": "legacy",
+            "nsp": 1,
+            "recur": "block",
+            "lld": 12
+          },
+          "self": {
+            "nstep": 1,
+            "use_kspace": true
+          },
+          "reciprocal": {
+            "nk1": 2,
+            "nk2": 2,
+            "nk3": 2,
+            "n_energy_points": 40,
+            "dos_method": "gaussian",
+            "gaussian_sigma": 0.01
+          },
+          "energy": {
+            "energy_min": -2.0,
+            "energy_max": 2.0
+          }
+        },
+        "checks": {
+          "nml": [
+            {
+              "file": "Fe_out.nml",
+              "scalars": [
+                "etot",
+                "ws_r",
+                "vmad"
+              ],
+              "arrays": {
+                "mom": [
+                  3
+                ],
+                "lmom": [
+                  3
+                ]
+              }
+            }
+          ],
+          "text": [
+            {
+              "file": "totaldos.out",
+              "rows": [
+                800,
+                1255,
+                1700
+              ],
+              "cols": [
+                1,
+                2
+              ]
+            }
+          ],
+          "log": [
+            {
+              "file": "testrun.log",
+              "patterns": {
+                "fermi_level": "Canonical k-space occupations: EF=\\s*([-+0-9.EeDd]+)",
+                "canonical_electron_count": "Canonical k-space occupations:.*? Ry, N=\\s*([-+0-9.EeDd]+)",
+                "canonical_band_energy": "Canonical k-space occupations:.*?EBAND=\\s*([-+0-9.EeDd]+)",
+                "dos_integral": "DOS integrates to\\s*([-+0-9.EeDd]+)",
+                "site_spin_moment": "Spin moment of atom\\s+1 is\\s+([-+0-9.EeDd]+)",
+                "site_valence": "Valence at atom\\s+1 is\\s+([-+0-9.EeDd]+)",
+                "site_charge_transfer_z": "Charge transfer at atom\\s+1:\\s+[-+0-9.EeDd]+\\s+[-+0-9.EeDd]+\\s+([-+0-9.EeDd]+)"
+              }
+            }
+          ]
+        },
+        "outputs": [
+          {
+            "file": "totaldos.out",
+            "min_lines": 50
+          },
+          {
+            "file": "magneticdos.out",
+            "min_lines": 51
+          },
+          {
+            "file": "report.out",
+            "min_lines": 10
+          },
+          {
+            "file": "minfo.out",
+            "min_lines": 1
+          },
+          {
+            "file": "linfo.out",
+            "min_lines": 1
+          }
+        ]
+      },
+      "pristine_case_file_hashes": {
+        "Fe.nml": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+        "input.nml": "db2b83c5525b19067128b6ac5ecd81f354109fb8797a8eef183dde3162b1e5bb"
+      },
+      "expected_use_kspace": true,
+      "runs": {
+        "clean8b_release": {
+          "workdir": "/private/tmp/c5-no-u-release/clean8b_release/ks",
+          "resolved_input_sha256": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01",
+          "resolved_input_size": 1998,
+          "parsed_input": true,
+          "nstep": 1,
+          "use_kspace": true,
+          "seed_files": {
+            "Fe.nml": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1"
+          },
+          "namelists": {
+            "Fe.nml": {
+              "sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+              "groups": [
+                "element",
+                "par"
+              ]
+            },
+            "input.nml": {
+              "sha256": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01",
+              "groups": [
+                "calculation",
+                "lattice",
+                "atoms",
+                "self",
+                "energy",
+                "reciprocal",
+                "symmetry",
+                "control",
+                "mix"
+              ]
+            }
+          }
+        },
+        "fixed_release": {
+          "workdir": "/private/tmp/c5-no-u-release/fixed_release/ks",
+          "resolved_input_sha256": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01",
+          "resolved_input_size": 1998,
+          "parsed_input": true,
+          "nstep": 1,
+          "use_kspace": true,
+          "seed_files": {
+            "Fe.nml": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1"
+          },
+          "namelists": {
+            "Fe.nml": {
+              "sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+              "groups": [
+                "element",
+                "par"
+              ]
+            },
+            "input.nml": {
+              "sha256": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01",
+              "groups": [
+                "calculation",
+                "lattice",
+                "atoms",
+                "self",
+                "energy",
+                "reciprocal",
+                "symmetry",
+                "control",
+                "mix"
+              ]
+            }
+          }
+        }
+      },
+      "expected_mode": "HUBBARD_RADIAL_MODE mode=spectral use_kspace=.true."
+    }
+  },
+  "source_commit_clean": "8b8f7ef7bfc026fd34a56b37a3ad3281fd0a6832",
+  "clean_source_archive": {
+    "path": "/private/tmp/c5-clean8b-source",
+    "tree_manifest_sha256": "a874cdb23ed5b7c6817961cbb52f29ec4ea8605c03270a8cf60f9c6aa22f8569",
+    "source_lattice_cluster_sha256": "05c47f8e7a7791b37510c3dbca296aef334540b59ce2fe305cb353fa45e01986"
+  },
+  "fixed_source": {
+    "commit_parent": "17732a7",
+    "source_lattice_cluster_sha256": "203fb901b685f428a0d811766c0af6dcc4abc024aa5cde8689b8f7e9765a6bcb"
+  },
+  "builds": {
+    "clean8b_release": {
+      "binary": "/private/tmp/c5-clean8b-release-build/bin/rslmto.x",
+      "sha256": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc",
+      "cmake_cache_sha256": "d1fae4609de8f500177931a5c4c9a56122396d5a889bb21c6fe106fa98e6295f",
+      "build_type": "Release",
+      "compiler": "GNU Fortran 16.2 /opt/homebrew/bin/gfortran",
+      "flags": "-O3 -fbacktrace -g -g; -ffree-line-length-0 -cpp -mtune=native",
+      "openmp": true,
+      "mpi": false,
+      "cuda_plugin": false,
+      "cuda_reciprocal": false,
+      "spglib": true,
+      "march_native": true,
+      "libxc": false
+    },
+    "fixed_release": {
+      "binary": "/private/tmp/c5-r1-frozen/rslmto.x",
+      "sha256": "710f91b3b3478cb8e4c89961edb6eca02e1fc72244a0c8061154604761898794",
+      "cmake_cache_sha256": "9ebc1a66d490311521605e4d01300af4d1791dc5846f7f4c15f268ab4a8a4874",
+      "build_type": "Release",
+      "compiler": "GNU Fortran 16.2 /opt/homebrew/bin/gfortran",
+      "flags": "-O3 -fbacktrace -g -g; -ffree-line-length-0 -cpp -mtune=native",
+      "openmp": true,
+      "mpi": false,
+      "cuda_plugin": false,
+      "cuda_reciprocal": false,
+      "spglib": true,
+      "march_native": true,
+      "libxc": false
+    }
+  },
+  "process_tracking": {
+    "runner": "/Users/andersb/Jobb/rslmto_fable_v4b/tests/run_test.py",
+    "solver_wrapper": "/private/tmp/c5-no-u-release/solver-wrapper.sh; wrapper records actual solver PID to per-run file, waits, returns exact child status",
+    "environment": "RSLMTO_BINARY=<frozen binary>; RSLMTO_PID_FILE=<run-dir>/solver.pid; OMP_NUM_THREADS=1; RSLMTO_OMP_THREADS_SERIAL=1 (RS runner overrides to manifest omp_threads=2); audit variables unset",
+    "working_directory": "runner launched from repository root; solver cwd is per-run scratch directory",
+    "effective_threads_by_case": {
+      "RS Example_bulk_bccFe_nsp2_block": 2,
+      "KS Example_k_space_scf_bccFe": 1
+    }
+  },
+  "planned_runs": {
+    "rs_clean8b_release": {
+      "argv": [
+        "/opt/homebrew/bin/python3.11",
+        "/Users/andersb/Jobb/rslmto_fable_v4b/tests/run_test.py",
+        "--binary",
+        "/private/tmp/c5-no-u-release/solver-wrapper.sh",
+        "--cases-json",
+        "/Users/andersb/Jobb/rslmto_fable_v4b/tests/scf/cases.json",
+        "--case-name",
+        "Example_bulk_bccFe_nsp2_block",
+        "--scratch-root",
+        "/private/tmp/c5-no-u-release/clean8b_release"
+      ],
+      "env": {
+        "RSLMTO_BINARY": "/private/tmp/c5-clean8b-release-build/bin/rslmto.x",
+        "RSLMTO_PID_FILE": "/private/tmp/c5-no-u-release/clean8b_release/rs/solver.pid",
+        "OMP_NUM_THREADS": "1 (runner wrapper overrides to 2 for solver)",
+        "RSLMTO_OMP_THREADS_SERIAL": "1 (runner run_binary() overrides to 2 for case)"
+      },
+      "runner_cwd": "/Users/andersb/Jobb/rslmto_fable_v4b",
+      "solver_cwd": "/private/tmp/c5-no-u-release/clean8b_release/rs",
+      "solver_pid_path": "/private/tmp/c5-no-u-release/clean8b_release/rs/solver.pid",
+      "resolved_input_sha256": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3",
+      "seed_file_hashes": {
+        "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673"
+      },
+      "expected_use_kspace": false,
+      "expected_backend_log": "HUBBARD_RADIAL_MODE mode=spectral use_kspace=.false.",
+      "case_manifest_omp_threads": 2,
+      "runner_passes_serial_omp_threads": 2,
+      "effective_solver_environment": {
+        "OMP_NUM_THREADS": "2",
+        "RSLMTO_OMP_THREADS_SERIAL": "2"
+      }
+    },
+    "rs_fixed_release": {
+      "argv": [
+        "/opt/homebrew/bin/python3.11",
+        "/Users/andersb/Jobb/rslmto_fable_v4b/tests/run_test.py",
+        "--binary",
+        "/private/tmp/c5-no-u-release/solver-wrapper.sh",
+        "--cases-json",
+        "/Users/andersb/Jobb/rslmto_fable_v4b/tests/scf/cases.json",
+        "--case-name",
+        "Example_bulk_bccFe_nsp2_block",
+        "--scratch-root",
+        "/private/tmp/c5-no-u-release/fixed_release"
+      ],
+      "env": {
+        "RSLMTO_BINARY": "/private/tmp/c5-r1-frozen/rslmto.x",
+        "RSLMTO_PID_FILE": "/private/tmp/c5-no-u-release/fixed_release/rs/solver.pid",
+        "OMP_NUM_THREADS": "1 (runner wrapper overrides to 2 for solver)",
+        "RSLMTO_OMP_THREADS_SERIAL": "1 (runner run_binary() overrides to 2 for case)"
+      },
+      "runner_cwd": "/Users/andersb/Jobb/rslmto_fable_v4b",
+      "solver_cwd": "/private/tmp/c5-no-u-release/fixed_release/rs",
+      "solver_pid_path": "/private/tmp/c5-no-u-release/fixed_release/rs/solver.pid",
+      "resolved_input_sha256": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3",
+      "seed_file_hashes": {
+        "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673"
+      },
+      "expected_use_kspace": false,
+      "expected_backend_log": "HUBBARD_RADIAL_MODE mode=spectral use_kspace=.false.",
+      "case_manifest_omp_threads": 2,
+      "runner_passes_serial_omp_threads": 2,
+      "effective_solver_environment": {
+        "OMP_NUM_THREADS": "2",
+        "RSLMTO_OMP_THREADS_SERIAL": "2"
+      }
+    },
+    "ks_clean8b_release": {
+      "argv": [
+        "/opt/homebrew/bin/python3.11",
+        "/Users/andersb/Jobb/rslmto_fable_v4b/tests/run_test.py",
+        "--binary",
+        "/private/tmp/c5-no-u-release/solver-wrapper.sh",
+        "--cases-json",
+        "/Users/andersb/Jobb/rslmto_fable_v4b/tests/scf/cases.json",
+        "--case-name",
+        "Example_k_space_scf_bccFe",
+        "--scratch-root",
+        "/private/tmp/c5-no-u-release/clean8b_release"
+      ],
+      "env": {
+        "RSLMTO_BINARY": "/private/tmp/c5-clean8b-release-build/bin/rslmto.x",
+        "RSLMTO_PID_FILE": "/private/tmp/c5-no-u-release/clean8b_release/ks/solver.pid",
+        "OMP_NUM_THREADS": "1 (runner wrapper overrides to 1 for solver)",
+        "RSLMTO_OMP_THREADS_SERIAL": "1 (inherited default; no case omp_threads override)"
+      },
+      "runner_cwd": "/Users/andersb/Jobb/rslmto_fable_v4b",
+      "solver_cwd": "/private/tmp/c5-no-u-release/clean8b_release/ks",
+      "solver_pid_path": "/private/tmp/c5-no-u-release/clean8b_release/ks/solver.pid",
+      "resolved_input_sha256": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01",
+      "seed_file_hashes": {
+        "Fe.nml": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1"
+      },
+      "expected_use_kspace": true,
+      "expected_backend_log": "HUBBARD_RADIAL_MODE mode=spectral use_kspace=.true.",
+      "case_manifest_omp_threads": null,
+      "runner_passes_serial_omp_threads": 1,
+      "effective_solver_environment": {
+        "OMP_NUM_THREADS": "1",
+        "RSLMTO_OMP_THREADS_SERIAL": "1"
+      }
+    },
+    "ks_fixed_release": {
+      "argv": [
+        "/opt/homebrew/bin/python3.11",
+        "/Users/andersb/Jobb/rslmto_fable_v4b/tests/run_test.py",
+        "--binary",
+        "/private/tmp/c5-no-u-release/solver-wrapper.sh",
+        "--cases-json",
+        "/Users/andersb/Jobb/rslmto_fable_v4b/tests/scf/cases.json",
+        "--case-name",
+        "Example_k_space_scf_bccFe",
+        "--scratch-root",
+        "/private/tmp/c5-no-u-release/fixed_release"
+      ],
+      "env": {
+        "RSLMTO_BINARY": "/private/tmp/c5-r1-frozen/rslmto.x",
+        "RSLMTO_PID_FILE": "/private/tmp/c5-no-u-release/fixed_release/ks/solver.pid",
+        "OMP_NUM_THREADS": "1 (runner wrapper overrides to 1 for solver)",
+        "RSLMTO_OMP_THREADS_SERIAL": "1 (inherited default; no case omp_threads override)"
+      },
+      "runner_cwd": "/Users/andersb/Jobb/rslmto_fable_v4b",
+      "solver_cwd": "/private/tmp/c5-no-u-release/fixed_release/ks",
+      "solver_pid_path": "/private/tmp/c5-no-u-release/fixed_release/ks/solver.pid",
+      "resolved_input_sha256": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01",
+      "seed_file_hashes": {
+        "Fe.nml": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1"
+      },
+      "expected_use_kspace": true,
+      "expected_backend_log": "HUBBARD_RADIAL_MODE mode=spectral use_kspace=.true.",
+      "case_manifest_omp_threads": null,
+      "runner_passes_serial_omp_threads": 1,
+      "effective_solver_environment": {
+        "OMP_NUM_THREADS": "1",
+        "RSLMTO_OMP_THREADS_SERIAL": "1"
+      }
+    }
+  }
+}

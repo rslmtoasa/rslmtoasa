@@ -1,0 +1,11 @@
+RS Chebyshev Ni(001) surface, calctype S, nsp=2 SOC on, U=0 (no U lines), z axis, nstep 5, fermi -0.062882 = E_F of the converged b0 host (ni_host_soc). The 5-step table below was run with the step-7 b0 host (E_F -0.063070). Seeds ES.nml, Ni-S.nml, Ni-S-1.nml are those of ni001_u0 (converged nsp=1 U=0 surface); Ni.nml is the converged b0 host. Same settings as ni001_u0.
+
+Per-step values from the log (mspin, |L| in muB):
+step  Diff       Ni-S: mspin    |L|       Ni-S-1: mspin   |L|       ES: mspin    |L|
+1     4.23e-4    0.694889  0.06535         0.642805  0.04042         0.007202  3.3e-4
+2     1.06e-4    0.685631  0.06459         0.638479  0.04025         0.007380  3.3e-4
+3     9.3e-5     0.686399  0.06466         0.638781  0.04026         0.007365  3.3e-4
+4     9.2e-5     0.686416  0.06466         0.638711  0.04025         0.007364  3.3e-4
+5     8.7e-5     0.686539  0.06469         0.638190  0.04022         0.007359  3.3e-4
+The U=0 moments and orbital moments are flat from step 2; Diff falls by a factor 4.0 from step 1 to 2 and then by 1.2 over steps 2-5 (same size as the host's own Diff, 9.1e-5 at step 7).
+Surface against bulk at step 5 (b0: |L| 0.04356): Ni-S 1.49, Ni-S-1 0.92. U enhancement of |L|, ni001_soc_u3 against this deck at step 5: Ni-S 1.69, Ni-S-1 1.22 (bulk, b1 against b0 at step 5: 1.42); the U=3 values are still rising at step 5.

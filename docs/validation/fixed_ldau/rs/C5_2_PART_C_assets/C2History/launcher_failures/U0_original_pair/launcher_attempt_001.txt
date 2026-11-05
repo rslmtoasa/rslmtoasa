@@ -1,0 +1,6 @@
+command: bash /private/tmp/c52-c2-stage/launch_u0/launch_pair.sh
+exec_command outer exit_code: 0 (background subshell failures did not propagate)
+captured output: warning: pyenv: cannot rehash: /Users/andersb/.pyenv/shims is not writable
+captured output: /private/tmp/c52-c2-stage/launch_u0/launch_pair.sh: line 10: BASHPID: unbound variable
+captured output repeated once for the second run subshell
+classification: pre-exec launcher failure; no solver binary invoked, no SCF steps, no solver run consumed

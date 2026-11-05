@@ -1,0 +1,487 @@
+{
+  "analysis": {
+    "green_comparison": {
+      "bulk_csv": "/private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/run/records.csv",
+      "bulk_energy_points": 1527,
+      "bulk_shape": {
+        "basis_dimension": 18,
+        "d_orbitals_per_spin": 5,
+        "energy_points": 1527,
+        "source_convention": "bands.f90 calculate_dos: dosial=-aimag(Gii)/pi"
+      },
+      "energy_grid_equal": false,
+      "impurity_csv": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/run/records.csv",
+      "impurity_energy_points": 1527,
+      "impurity_shape": {
+        "basis_dimension": 18,
+        "d_orbitals_per_spin": 5,
+        "energy_points": 1527,
+        "source_convention": "bands.f90 calculate_dos: dosial=-aimag(Gii)/pi"
+      },
+      "interpolation": "none",
+      "schema": "c52-fe-rd3-dldos-descriptive-v1",
+      "status": "NOT_COMPUTED_DIFFERENT_ENERGY_GRIDS"
+    },
+    "green_parser_sha256": "2507518b2e8f259aa29570a33adc3fe6f6e2e950583756266f0ae06499bd906a",
+    "green_result_sha256": "c6d30acfb6d1f312aa2dfbfedcdfeef650e48af7e7fcf11abf9f8053d4156230",
+    "orbital_dos_comparison": {
+      "baseline": {
+        "energy_relative_to_EF_range_Ry": [
+          "-0.91485",
+          "0.59079"
+        ],
+        "path": "bulk_u38_capture_i1/run/Fe_orbital_dos.out",
+        "rows": 2510,
+        "sha256": "b903951a8ce9dd3d490643aa6525b07b97b3b09734b1f5f19c6141be38d6a211"
+      },
+      "candidate": {
+        "energy_relative_to_EF_range_Ry": [
+          "-0.91485",
+          "0.59030"
+        ],
+        "path": "impurity_u38_capture_i1/run/Fe-imp_orbital_dos.out",
+        "rows": 2510,
+        "sha256": "75b57f215f7150bded092eda74dffb8ae23104289c2b768a740f4694ab532605"
+      },
+      "definition": "At each existing orbital-DOS grid point in [-1,0.5] Ry relative to that run's EF, sum the five l=2 orbitals separately for each spin and take the maximum absolute candidate-minus-baseline difference. No interpolation or acceptance tolerance.",
+      "energy_grid": {
+        "comparison": "not computed",
+        "equal": false,
+        "interpolation": "none",
+        "precision": "F16.5 emitted energy values; no matching energies are fabricated"
+      },
+      "first_row_difference": {
+        "baseline_energy_relative_to_EF_Ry": "-0.90584",
+        "candidate_energy_relative_to_EF_Ry": "-0.90585",
+        "candidate_minus_baseline_Ry": "-0.00001",
+        "row_index_zero_based": 15
+      },
+      "status": "NOT_COMPUTED_DIFFERENT_ENERGY_GRIDS"
+    },
+    "orbital_dos_result_sha256": "3c65f736dc69432cbf0e104278d0ac777371eb04384bbe58ac6087348cda132c",
+    "orbital_parser_sha256": "9232f7042bd75fa7c40ca15181c5040df83e4b4e97ab2c6cbe84b88326905030",
+    "synthetic_test_sha256": "82509e633a69a316e5cdde60bb48633be0f804326e5122682b33ab7c47213170"
+  },
+  "bulk_u38_capture_i1": {
+    "all_files": [
+      {
+        "bytes": 3232,
+        "name": "Fe.nml",
+        "sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1"
+      },
+      {
+        "bytes": 163150,
+        "name": "Fe_1_spinene.out",
+        "sha256": "e00ff9dc59b8d76e0704ab5d444cd5e67cc6b3038ba0337aff5e8dab5a422eb4"
+      },
+      {
+        "bytes": 163198,
+        "name": "Fe_dos.out",
+        "sha256": "a816d156ee04fc0b4b42b9c0427d9fb453ec389a38fbe024e0fd165e82d84490"
+      },
+      {
+        "bytes": 163150,
+        "name": "Fe_orbene.out",
+        "sha256": "8c0ec68a00e2bb6b32f7b8d7018414a737dfe825b8774ac71656a410b9813ca9"
+      },
+      {
+        "bytes": 765550,
+        "name": "Fe_orbital_dos.out",
+        "sha256": "b903951a8ce9dd3d490643aa6525b07b97b3b09734b1f5f19c6141be38d6a211"
+      },
+      {
+        "bytes": 363950,
+        "name": "Fe_orbquadene.out",
+        "sha256": "84344f9188721a6f12662cdf3f34a6ada1a92567d0bc236d59525e31cda03425"
+      },
+      {
+        "bytes": 10582,
+        "name": "Fe_out.nml",
+        "sha256": "f7c06101752becc4de936c10861639e00093d12b211e6834118f2f85eebb6e23"
+      },
+      {
+        "bytes": 10582,
+        "name": "Fe_scf.nml",
+        "sha256": "f7c06101752becc4de936c10861639e00093d12b211e6834118f2f85eebb6e23"
+      },
+      {
+        "bytes": 17,
+        "name": "angles_lmom.out",
+        "sha256": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08"
+      },
+      {
+        "bytes": 17,
+        "name": "angles_magmom.out",
+        "sha256": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08"
+      },
+      {
+        "bytes": 302207,
+        "name": "clust",
+        "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+      },
+      {
+        "bytes": 2,
+        "name": "exit_code.txt",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      {
+        "bytes": 287245,
+        "name": "fort.800",
+        "sha256": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6"
+      },
+      {
+        "bytes": 616366,
+        "name": "fort.805",
+        "sha256": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246"
+      },
+      {
+        "bytes": 572,
+        "name": "input.nml",
+        "sha256": "16f1c9a93058b40a1d42c4a07d3512565f9aec02a89949c7d7633455b89e01d7"
+      },
+      {
+        "bytes": 62,
+        "name": "lifecycle.txt",
+        "sha256": "ff1dc29c69032c7afa47b420ef2a72927ebe27fe8aeae75c118868e3b4ca62da"
+      },
+      {
+        "bytes": 68,
+        "name": "linfo.out",
+        "sha256": "ff95a6825ce5126a81035159ac544686a9068feaeb20acaed2a13868ab2b365a"
+      },
+      {
+        "bytes": 16,
+        "name": "mad.mat",
+        "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+      },
+      {
+        "bytes": 283683,
+        "name": "magneticdos.out",
+        "sha256": "f85abb61fa10e47183a8283411b4a495cf5ed91e0ec6d4885579c3aa44a96242"
+      },
+      {
+        "bytes": 406912,
+        "name": "map",
+        "sha256": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5"
+      },
+      {
+        "bytes": 65,
+        "name": "minfo.out",
+        "sha256": "4d1f291b039e34ce4a2a0e9ad6d7daed1d077f44615b25fd57fda12e9553c449"
+      },
+      {
+        "bytes": 141746,
+        "name": "radial_ground_state_Fe_1.dat",
+        "sha256": "c5dbe30db360d5e26816ce31722d96832af43cf9c9f3b5bf213e918fde783c2b"
+      },
+      {
+        "bytes": 127819466,
+        "name": "records.csv",
+        "sha256": "1fcba969caf91f5f3ad1c194fa2217a06e1d3cd1f226977d760e66641976add3"
+      },
+      {
+        "bytes": 2703,
+        "name": "report.out",
+        "sha256": "ef1a79a709dd6313956f80f99b5aa090d947af00d89e20f0e0056af5f73d4703"
+      },
+      {
+        "bytes": 10800,
+        "name": "sbar",
+        "sha256": "b32a32dc743416e6dad05612d8a4cb7b02bf76fa6eba705dc8555705dadf06c7"
+      },
+      {
+        "bytes": 6,
+        "name": "solver.pid",
+        "sha256": "f7acae06152a95c0005cb0bf81f444644f1c251e05fa6ae7907f8f609efc5e5c"
+      },
+      {
+        "bytes": 6934,
+        "name": "str.out",
+        "sha256": "fda4513e4a8033f3980d20d83e09d79b12fd9e0b732ea82d8c7d86d55148ff88"
+      },
+      {
+        "bytes": 12295,
+        "name": "testrun.log",
+        "sha256": "c798a6a1f0005a96102222d6257bebb298ec96b521df864fde1b367964f1096a"
+      },
+      {
+        "bytes": 82830,
+        "name": "totaldos.out",
+        "sha256": "f0ab26739faf06a6962cadc885328f601b03e5053e24065d9fecfb56b093a8b4"
+      },
+      {
+        "bytes": 738,
+        "name": "ves.out",
+        "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+      },
+      {
+        "bytes": 13350,
+        "name": "view.sbar",
+        "sha256": "57bfa6474db2fbb124cede64ad677d9a124023c40fa2222b6dc9b10ffcabd33e"
+      },
+      {
+        "bytes": 18,
+        "name": "wrapper.pid",
+        "sha256": "68eb20b32d21bc7a602e328153a5f401f2e54e9991cd813f4a07c77eb7d588b2"
+      }
+    ],
+    "exit_code": "0",
+    "lifecycle": "launch_time=2026-10-21T11:52:48Z\nsolver_pid=21940\nexit_code=0\n",
+    "orbital_dos_columns": 19,
+    "orbital_dos_file": "Fe_orbital_dos.out",
+    "orbital_dos_rows": 2510,
+    "orbital_dos_sha256": "b903951a8ce9dd3d490643aa6525b07b97b3b09734b1f5f19c6141be38d6a211",
+    "records_header": [
+      "kind",
+      "run_id",
+      "lambda",
+      "iteration",
+      "stage",
+      "site",
+      "type",
+      "l",
+      "spin",
+      "k",
+      "band",
+      "row",
+      "col",
+      "order",
+      "weight",
+      "energy",
+      "scalar",
+      "re",
+      "im"
+    ],
+    "records_rows": 529476,
+    "records_sha256": "1fcba969caf91f5f3ad1c194fa2217a06e1d3cd1f226977d760e66641976add3",
+    "run_dir": "/private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/run",
+    "solver_pid": "21940",
+    "wrapper_pid": "21657"
+  },
+  "comparison_cause": {
+    "bulk_derived_edel_Ry": "0.0006000954223081882656350741457",
+    "bulk_initial_fermi_Ry": "-0.069252",
+    "bulk_nint": "1551",
+    "conclusion": "Both high-precision occupied-domain Green and full-grid F16.5 orbital-DOS comparisons are NOT_COMPUTED because grids differ. No interpolation or acceptance threshold.",
+    "formula": "nominal edel=(energy_max-energy_min)/channels_ldos; nint((fermi_initial-energy_min)/edel); edel=(fermi_initial-energy_min)/nint((fermi_initial-energy_min)/edel)",
+    "green_first_grid_mismatch": {
+      "bulk_energy_Ry": "-0.99939990457769179",
+      "impurity_energy_Ry": "-0.99940009967213117",
+      "impurity_minus_bulk_Ry": "-1.9509443938E-7",
+      "index": 1
+    },
+    "impurity_derived_edel_Ry": "0.0005999003278688524590163934426",
+    "impurity_initial_fermi_Ry": "-0.085152",
+    "impurity_nint": "1525",
+    "nominal_edel_Ry": "0.0006",
+    "orbital_dos_first_grid_mismatch": {
+      "bulk_energy_relative_to_EF_Ry": "-0.90584",
+      "impurity_energy_relative_to_EF_Ry": "-0.90585",
+      "impurity_minus_bulk_Ry": "-0.00001",
+      "zero_based_row": 15
+    },
+    "source": "source/energy.f90:215-220",
+    "source_sha256": "dccbf63ee75a415be100cf92a0ae408b81f5bf49dd5e074413d1aec2e25f81da"
+  },
+  "impurity_u38_capture_i1": {
+    "all_files": [
+      {
+        "bytes": 3237,
+        "name": "Fe-bulk.nml",
+        "sha256": "30827a14531045ee4f6543ed8bf86b3a15f6af426adb33b32059bc033b436c5f"
+      },
+      {
+        "bytes": 10591,
+        "name": "Fe-bulk_out.nml",
+        "sha256": "1599d4f9da34163e2940396ce981f75124ba6ffb62fbf98a237d59c5e970e9e7"
+      },
+      {
+        "bytes": 10591,
+        "name": "Fe-bulk_scf.nml",
+        "sha256": "1599d4f9da34163e2940396ce981f75124ba6ffb62fbf98a237d59c5e970e9e7"
+      },
+      {
+        "bytes": 3236,
+        "name": "Fe-imp.nml",
+        "sha256": "376ad9793e29f02a0126c8964f68e1eeef7d7f63f2552cdcb113b447b65453b0"
+      },
+      {
+        "bytes": 163150,
+        "name": "Fe-imp_1_spinene.out",
+        "sha256": "72b3c035a8659c3364b31fd245003fb1cc6249b9a737b5bd0c83bd0f33dc0761"
+      },
+      {
+        "bytes": 163198,
+        "name": "Fe-imp_dos.out",
+        "sha256": "9c3f24a066ed04501c3abc487b9356fc8c7fbac5349833bb48e4cfb2d2d7bc38"
+      },
+      {
+        "bytes": 163150,
+        "name": "Fe-imp_orbene.out",
+        "sha256": "e1c21662ef62f4323773ebd21dc9db77aa3bfe8f058afe3b7596d0d4ca58d48d"
+      },
+      {
+        "bytes": 765550,
+        "name": "Fe-imp_orbital_dos.out",
+        "sha256": "75b57f215f7150bded092eda74dffb8ae23104289c2b768a740f4694ab532605"
+      },
+      {
+        "bytes": 10586,
+        "name": "Fe-imp_out.nml",
+        "sha256": "d62d4173badf8aeb3d4ae5e7ab615894d0c1178deecfd0f241104f264a089c6e"
+      },
+      {
+        "bytes": 10586,
+        "name": "Fe-imp_scf.nml",
+        "sha256": "d62d4173badf8aeb3d4ae5e7ab615894d0c1178deecfd0f241104f264a089c6e"
+      },
+      {
+        "bytes": 17,
+        "name": "angles_lmom.out",
+        "sha256": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08"
+      },
+      {
+        "bytes": 17,
+        "name": "angles_magmom.out",
+        "sha256": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08"
+      },
+      {
+        "bytes": 302207,
+        "name": "clust",
+        "sha256": "379a5201629b4010b34cd38b1ee67b34858fc2c3aa14997a8e44a8c6ac9209be"
+      },
+      {
+        "bytes": 2,
+        "name": "exit_code.txt",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      {
+        "bytes": 287245,
+        "name": "fort.800",
+        "sha256": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6"
+      },
+      {
+        "bytes": 616366,
+        "name": "fort.805",
+        "sha256": "984fe53dddbaf03ac59c2cec4cf801eb3310adff9707a9ab3a99d1f6be196fdd"
+      },
+      {
+        "bytes": 697,
+        "name": "input.nml",
+        "sha256": "0cf94b6ecd4c87f33855cab80868962128a43acc915212eb43a38daec721fbca"
+      },
+      {
+        "bytes": 62,
+        "name": "lifecycle.txt",
+        "sha256": "862c12b45189d901b269c902fb4ac2d672c729588fd440199fda91c9d266e9db"
+      },
+      {
+        "bytes": 68,
+        "name": "linfo.out",
+        "sha256": "5367ba53414138d5fc375a95d320e67fa6b25eacb74d5ea7e61d848ad9f659a6"
+      },
+      {
+        "bytes": 283683,
+        "name": "magneticdos.out",
+        "sha256": "db1fc40fe344cf0125c0085a71b0146828466484d9a96fad6cc7f7da21ae9f0b"
+      },
+      {
+        "bytes": 406912,
+        "name": "map",
+        "sha256": "22b93b3751e19797a587e0b7f6bbab83f85c742dd1129dcae17a2b81ad188976"
+      },
+      {
+        "bytes": 65,
+        "name": "minfo.out",
+        "sha256": "4d1f291b039e34ce4a2a0e9ad6d7daed1d077f44615b25fd57fda12e9553c449"
+      },
+      {
+        "bytes": 347,
+        "name": "outnewclu",
+        "sha256": "ab130ce8ef8daa4d8305a2aaa10f7c8676a1ffae99c5b862b5bd77f457a084f5"
+      },
+      {
+        "bytes": 141746,
+        "name": "radial_ground_state_Fe-imp_1.dat",
+        "sha256": "9ad38b8f9dace276c2468d1d5c30f1e9ea64d7fc6ddb93ca313b4767db11ed58"
+      },
+      {
+        "bytes": 128890792,
+        "name": "records.csv",
+        "sha256": "2ef41bb09c4d6f63921c982eeea4cfe7e47d22503c16b59b6db7fc7bac6e54b9"
+      },
+      {
+        "bytes": 2703,
+        "name": "report.out",
+        "sha256": "5e3dc17fb4696fb6ff8e38d6b5885569e2f328285682ca449b1561a1754b7735"
+      },
+      {
+        "bytes": 10800,
+        "name": "sbar",
+        "sha256": "0c99ae58442d4f698141da7eff03de5ca35ab39790955771fdc6fdf64edfa46b"
+      },
+      {
+        "bytes": 6,
+        "name": "solver.pid",
+        "sha256": "6bf9a9ea1d44da3ef35a26b41570ff5b007a59aad7d3283d8926d885bb571770"
+      },
+      {
+        "bytes": 8551,
+        "name": "str.out",
+        "sha256": "581b5710d8284a77d8edd6c41c63a778f390f6740097934167921347ef5a01c6"
+      },
+      {
+        "bytes": 16055,
+        "name": "testrun.log",
+        "sha256": "23b4f70dd06ad39dad81cffe0f6db217f044e7d4ad60037d2e2cadbfde02d486"
+      },
+      {
+        "bytes": 82830,
+        "name": "totaldos.out",
+        "sha256": "d40642d3061c485398dbd47b131d0afd38316a51f9221e3d3b16af7341a60ffa"
+      },
+      {
+        "bytes": 13350,
+        "name": "view.sbar",
+        "sha256": "9b2eb42bea76f2eab134f713bbb4f8e36839de95d5e9f1738000c7648d2c810a"
+      },
+      {
+        "bytes": 18,
+        "name": "wrapper.pid",
+        "sha256": "2e2c4104837b9589995f40a6b9b0f59bb7077ae230168e324b9cfb7d8ce2f948"
+      }
+    ],
+    "exit_code": "0",
+    "lifecycle": "launch_time=2026-10-21T11:52:48Z\nsolver_pid=21981\nexit_code=0\n",
+    "orbital_dos_columns": 19,
+    "orbital_dos_file": "Fe-imp_orbital_dos.out",
+    "orbital_dos_rows": 2510,
+    "orbital_dos_sha256": "75b57f215f7150bded092eda74dffb8ae23104289c2b768a740f4694ab532605",
+    "records_header": [
+      "kind",
+      "run_id",
+      "lambda",
+      "iteration",
+      "stage",
+      "site",
+      "type",
+      "l",
+      "spin",
+      "k",
+      "band",
+      "row",
+      "col",
+      "order",
+      "weight",
+      "energy",
+      "scalar",
+      "re",
+      "im"
+    ],
+    "records_rows": 536280,
+    "records_sha256": "2ef41bb09c4d6f63921c982eeea4cfe7e47d22503c16b59b6db7fc7bac6e54b9",
+    "run_dir": "/private/tmp/c52-fe-rd3-capture-preflight/impurity_u38_capture_i1/run",
+    "solver_pid": "21981",
+    "wrapper_pid": "21659"
+  }
+}

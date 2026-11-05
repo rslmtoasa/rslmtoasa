@@ -1,0 +1,18 @@
+{
+  "files": {
+    "tests/validation/fixed_ldau/accepted_m03_replay_driver.f90": {
+      "role": "source for distinct helper binary",
+      "sha256": "124726aaab8f5937fa13be925969b67d4e647ee9c910596d58698ffb13e5476a"
+    },
+    "tests/validation/fixed_ldau/rb3_capture_adapter.py": {
+      "role": "C3 adapter shared CSV schema/hash helpers",
+      "sha256": "b87eceaa1f3e730bb590d239c3461ef22344cd594ab493679385c87ff13748d7"
+    },
+    "tests/validation/fixed_ldau/rs_a3_m03_runner.py": {
+      "role": "C3 adapter replay driver input/output parsing",
+      "sha256": "96c51a8e1e0b0809b35b7875a5c94b9be1e70e82180cb6693c13209fe9a0b515"
+    }
+  },
+  "repo_commit": "8a107432e3ca2e00c815c217d52e7aa2a8e30736",
+  "schema": "c52-c3-tracked-dependency-references-v1"
+}

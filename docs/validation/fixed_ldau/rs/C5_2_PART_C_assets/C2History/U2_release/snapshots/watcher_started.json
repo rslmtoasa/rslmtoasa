@@ -1,0 +1,25 @@
+{
+  "Fe_scf_source": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev/Fe_scf.nml",
+  "actual_argv": [
+    "/private/tmp/c52-c2-stage/launch_u2_corrected/watch_trace_and_state_parameterized.py",
+    "--run-id",
+    "c2_u2_chebyshev",
+    "--solver-pid",
+    "58026",
+    "--run-dir",
+    "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev",
+    "--output-dir",
+    "/private/tmp/c52-c2-stage/launch_u2_corrected/snapshots_watcher/c2_u2_chebyshev_prospective_002",
+    "--poll-seconds",
+    "0.05"
+  ],
+  "manifest_path": "/private/tmp/c52-c2-stage/launch_u2_corrected/snapshots_watcher/c2_u2_chebyshev_prospective_002/trace_state_manifest.jsonl",
+  "output_dir": "/private/tmp/c52-c2-stage/launch_u2_corrected/snapshots_watcher/c2_u2_chebyshev_prospective_002",
+  "record_type": "parameterized_read_only_trace_watcher_start",
+  "run_dir": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev",
+  "run_id": "c2_u2_chebyshev",
+  "solver_pid": 58026,
+  "started_local": "2026-10-20T22:39:13.762777+02:00",
+  "trace_source": "/private/tmp/c52-c2-stage/launch_u2_corrected/c2_u2_chebyshev/fixed_u_trace.csv",
+  "watcher_process_pid": 63377
+}

@@ -1,0 +1,222 @@
+{
+  "schema": "c5_3_rd_ni_u3_ks_bulk_preflight_v1",
+  "status": "PREPARED_ONLY_NOT_AUDITED_NOT_AUTHORIZED",
+  "run_id": "rd_ni_u3_ks_bulk_rc80",
+  "repo": "/Users/andersb/Jobb/rslmto_fable_v4b",
+  "frozen_binary": {
+    "path": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x",
+    "sha256": "a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3",
+    "build_manifest_path": "/private/tmp/c52-rd-ni-followups/ni_u3_ks_block_rc80/provenance/frozen_binary_manifest.json",
+    "build_manifest_sha256": "b2f3ab5d26c439520bdfcbca16163877b2e36d7bb9c3af0448e6941327ae5158",
+    "source_commits": {
+      "frozen_source_commit": "0469135d935dd31fb6ce055d819cdb54811c52fa",
+      "current_RD1_commit": "683eff937241a463d2dacb395485d6b7c0b43264"
+    },
+    "source_manifest_sha256": "494a5dfc061320382a9b1eaced8a3dfb5625d4a4135d47625354a4ca80291900",
+    "note": "Frozen B1 Release binary; same executable that produced the accepted U3 RS bulk endpoint and prior KS U0 reference. RD1 bulk path unchanged."
+  },
+  "seed": {
+    "path": "immutable/Ni-imp_out.nml",
+    "sha256": "bc3340a8ad20d2467eaeccd43929a659d4cfff2a9f28b748fb6554edc4ee3ac9",
+    "origin": "accepted local RS Ni U3/J.7 bulk endpoint74, window55-74",
+    "accepted_endpoint": {
+      "sha256": "bc3340a8ad20d2467eaeccd43929a659d4cfff2a9f28b748fb6554edc4ee3ac9",
+      "candidate_record_sha256": "45ce2f7f6ac66e65d287073da5b19f9ba64d078227942f81e39e8396e0837470",
+      "preflight_sha256": "abaa612064429e19b30658dcf4bab6a518c07b49f6671f4de76c7000a5e00e1a"
+    },
+    "no_metadata_surgery": true
+  },
+  "input": {
+    "immutable_path": "immutable/input.nml",
+    "immutable_sha256": "4a9f5009f2d25becb20af6ae2fb7482c5372af96b282734fc06de2728eacc16d",
+    "working_path": "run/input.nml",
+    "working_sha256": "4a9f5009f2d25becb20af6ae2fb7482c5372af96b282734fc06de2728eacc16d"
+  },
+  "element": {
+    "immutable_path": "immutable/Ni-imp.nml",
+    "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+    "working_path": "run/Ni-imp.nml",
+    "working_sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+  },
+  "restart": {
+    "immutable_copy": "immutable/Ni-imp_out.nml",
+    "working_copy": "run/Ni-imp_out.nml",
+    "working_sha256": "bc3340a8ad20d2467eaeccd43929a659d4cfff2a9f28b748fb6554edc4ee3ac9",
+    "label": "Ni-imp_out.nml",
+    "source_is_accepted_RS_U3_local_bulk_endpoint": true
+  },
+  "recipe": {
+    "system": "fcc monatomic Ni bulk",
+    "calctype": "B",
+    "rc": 80,
+    "lld": 21,
+    "nsp": 1,
+    "lmax": 2,
+    "backend": "KS reciprocal SCF",
+    "use_kspace": true,
+    "hubbard_radial_moments": "local explicit",
+    "hubbard_U_J_eV": [
+      3.0,
+      0.7
+    ],
+    "input_energy_window_Ry": [
+      -1.0,
+      0.5
+    ],
+    "kmesh": [
+      12,
+      12,
+      12
+    ],
+    "offset": [
+      0,
+      0,
+      0
+    ],
+    "symmetry_reduction": true,
+    "time_reversal": true,
+    "dos_method": "tetrahedron",
+    "temperature_K": 300,
+    "auto_find_fermi": true,
+    "fermi_semantics": "energy fermi retained as starting value; reciprocal runtime uses canonical occupations and auto-updated EF, as prior KS logs demonstrate",
+    "mix": "Broyden beta .1",
+    "nstep": 100,
+    "conv_thr": 5e-09,
+    "control_values": {
+      "lattice": {
+        "rc": 80,
+        "alat": 3.5234,
+        "crystal_sym": "fcc",
+        "pbc": true,
+        "n1": 16,
+        "n2": 16,
+        "n3": 16,
+        "wav": 1.37692,
+        "ntype": 1,
+        "ct": [
+          4.0
+        ],
+        "r2": 16.0
+      },
+      "atoms": {
+        "database": "./",
+        "label": [
+          "Ni-imp"
+        ]
+      },
+      "self": {
+        "nstep": 100,
+        "conv_thr": 5e-09,
+        "use_kspace": true
+      },
+      "energy": {
+        "fermi": -0.061141,
+        "energy_min": -1.0,
+        "energy_max": 0.5,
+        "channels_ldos": 2500,
+        "fix_fermi": true
+      },
+      "control": {
+        "calctype": "B",
+        "nsp": 1,
+        "lld": 21,
+        "recur": "block",
+        "fresh_start": false
+      },
+      "mix": {
+        "beta": 0.1,
+        "mixtype": "broyden"
+      },
+      "hamiltonian": {
+        "hubbard_u_general": [
+          [
+            3.0
+          ]
+        ],
+        "hubbard_j_general": [
+          [
+            0.7
+          ]
+        ],
+        "hubbard_radial_moments": "local"
+      },
+      "reciprocal": {
+        "nk1": 12,
+        "nk2": 12,
+        "nk3": 12,
+        "k_offset_x": 0.0,
+        "k_offset_y": 0.0,
+        "k_offset_z": 0.0,
+        "use_symmetry_reduction": true,
+        "use_time_reversal": true,
+        "use_shift": false,
+        "dos_method": "tetrahedron",
+        "temperature": 300.0,
+        "auto_find_fermi": true
+      }
+    }
+  },
+  "comparison_note": "This KS U3 bulk is a backend-switch from the accepted local RS U3 bulk endpoint; U/J, local mode, cell, rc/lld, energy window and fixed setup are retained. No KS impurity is included. This is independent of the unaccepted KS U0 continuation.",
+  "terminal_rule": {
+    "status": "ordinary KS SCF convergence only when solver log reports convergence under conv_thr=5e-9; nstep100 is a cap",
+    "no_RS_last20_window_thresholds": true,
+    "no_acceptance_claim_until_audited": true
+  },
+  "trace_capture": {
+    "environment": "RSLMTO_FIXED_U_TRACE is enabled for raw P_OUT/POST-SCF trace diagnostics using the existing frozen diagnostic code; the prior KS run generated fixed_u_trace.csv but the RS pair watcher captured zero because Ni-imp_scf/trace were initially absent. This plan uses the solver log and final state as KS terminal evidence and archives the raw CSV if present; no per-iteration state-snapshot claim.",
+    "no_RS_window_gate": true
+  },
+  "schema_validation": {
+    "path": "provenance/schema_validation.json",
+    "sha256": "51a2a85fa362ff2542f0fe76f9b31d38f275c39c838bee72945b14f480a9d551",
+    "source_schema_sha256": "ee1153c3011f96131a493ef5c1aa9ca3ad82b2b855f19809f1ba1809307b42ef",
+    "group_count_source": 20,
+    "parser": "/opt/homebrew/opt/python@3.11/bin/python3.11 with f90nml1.4.4",
+    "result": "PASS_SOURCE_SCHEMA; all groups/members in input and restart files declared"
+  },
+  "launch": {
+    "wrapper_path": "collector/launch_host.sh",
+    "wrapper_sha256": "ccb3d8bac346380a1f0764c6b2d8d373dbc5662c4969466741c3249315207ba9",
+    "exact_command": "C52_RD_NI_U3_KS_AUTHORIZED=1 /private/tmp/c52-rd-ni-followups/ni_u3_ks_block_rc80/collector/launch_host.sh",
+    "authorization_env_required": true,
+    "runtime_process_tracking": "foreground wrapper records exact solver PID, waits, records exit; independent disk guard watches at 1GiB floor",
+    "environment": {
+      "OMP_NUM_THREADS": "1",
+      "OMP_DYNAMIC": "FALSE",
+      "RSLMTO_OMP_THREADS_SERIAL": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "BLIS_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1"
+    }
+  },
+  "disk_precheck_required": {
+    "minimum_available_bytes": 2684354560,
+    "guard_floor_bytes": 1073741824
+  },
+  "source_edits": "none; frozen B1 Release executable only; no builds or solvers launched",
+  "disk_guard": {
+    "path": "collector/disk_guard.sh",
+    "sha256": "3049362e51a3165866c73bb997667a0c74662fc673328085b2636c25dae74cdd",
+    "floor_bytes": 1073741824
+  },
+  "working_copy_writability": {
+    "input.nml": {
+      "sha256": "4a9f5009f2d25becb20af6ae2fb7482c5372af96b282734fc06de2728eacc16d",
+      "mode": "0644",
+      "writable": true
+    },
+    "Ni-imp_out.nml": {
+      "sha256": "bc3340a8ad20d2467eaeccd43929a659d4cfff2a9f28b748fb6554edc4ee3ac9",
+      "mode": "0644",
+      "writable": true
+    },
+    "Ni-imp.nml": {
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+      "mode": "0644",
+      "writable": true
+    }
+  },
+  "run_dir_status": "No solver launch has occurred; run contains only the three writable input copies. No solver/watcher/exit lifecycle files exist."
+}

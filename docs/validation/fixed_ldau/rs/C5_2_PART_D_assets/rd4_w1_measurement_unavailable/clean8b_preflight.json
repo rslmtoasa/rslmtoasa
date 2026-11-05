@@ -1,0 +1,50 @@
+{
+  "schema": "rd4-w1-clean8b-same-deck-preflight-v1",
+  "status": "PREPARED_NOT_LAUNCHED_AWAITING_AUDIT",
+  "role": "\u00a72.4 same-deck clean-8b comparison; no result yet",
+  "failed_deck_lambda_Ry": 0.0,
+  "explicit_U_J": "all zero in unchanged \u03bb0 input",
+  "run_input_source": "/private/tmp/c52-rd4-w1-build/w1_five_deck_preflight_v6/lambda_0p0/immutable",
+  "run_path": "/private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run",
+  "files": [
+    {
+      "path": "/private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run/input.nml",
+      "bytes": 1139,
+      "sha256": "1f63c85f66c328811d9c0ef99f3e82454491ec40dbffcffdff455ec48e26e14c"
+    },
+    {
+      "path": "/private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run/Ni-bulk.nml",
+      "bytes": 6794,
+      "sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac"
+    },
+    {
+      "path": "/private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run/Ni-bulk_out.nml",
+      "bytes": 6796,
+      "sha256": "736a3c4e8fd2e1cdc7550502c4788e1b9f0a031c06a44be2ee77a8fd5b1ac1c4"
+    },
+    {
+      "path": "/private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run/Ni-imp.nml",
+      "bytes": 6793,
+      "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+    },
+    {
+      "path": "/private/tmp/c52-rd4-w1-private/triage_001/clean8b_same_deck/run/Ni-imp_out.nml",
+      "bytes": 6795,
+      "sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a"
+    }
+  ],
+  "clean8b_debug_binary": {
+    "path": "/private/tmp/rslmto-c2-crash-triage/fe_plus_seed_clean8b/rslmto.x",
+    "sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+    "prior_provenance": "/private/tmp/c4-a41-triage-clean8b/preflight.json",
+    "prior_provenance_sha256": "10ab98e2b30c9cd5c04f30045ca16f01c890e16722f809436ef9c676e8025891",
+    "prior_status": "PREFLIGHT_COMPLETE_NOT_LAUNCHED",
+    "baseline": "exact clean commit 8b8f7ef as documented in frozen prior triage"
+  },
+  "expected_limitation": "unchanged W1 input contains impurity-test namelist additions unavailable in older clean8b source; if rejected before SCF, report INVALID_INPUT/INCOMPARABLE and do not edit input.",
+  "rejected_candidate": {
+    "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x",
+    "sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69",
+    "reason": "build provenance source commit 8a107432e3ca2e00c815c217d52e7aa2a8e30736 is a descendant of, not the exact clean baseline 8b8f7ef; excluded from comparator"
+  }
+}

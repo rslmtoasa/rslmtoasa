@@ -1,0 +1,34 @@
+{
+  "run_id": "ni_u0_imp_no_u_seed_debug_ql",
+  "classification": "Fresh corrected C2 RA4 Ni U=0 record restart with safe QL-only P_OUT trace; previous first launch was stopped before any crash because trace was omitted",
+  "run_dir": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql",
+  "source_attempt": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug",
+  "source_attempt_console_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "input_sha256": "4a268e5eddb779a01b858e2c13459ef55207d16ad4cbc4f9ed30b202d52395ac",
+  "binary": "/private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql/rslmto.x",
+  "binary_sha256": "b07a0139df32e1b4c3d6c4cdeb44f376b0b7443c18a4cf1ad6d5143f041b7bca",
+  "build": "baseline-matched Debug candidate, OpenMP ON, MPI/libXC OFF, QL_ONLY trace guard, one thread",
+  "source_hashes": {
+    "source/self.f90": "6c3d72cd5dbb6ddd3ffcdefb1700589040294e112204cf19c0649f2b2154de4d",
+    "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e"
+  },
+  "input_files_sha256": {
+    "Ni-bulk.nml": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+    "Ni-bulk_out.nml": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+    "Ni-imp.nml": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+  },
+  "host_and_seed": "Byte-exact frozen inputs from corrected accepted-endpoint Ni U=0 case.",
+  "thread_caps": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "trace": "RSLMTO_FIXED_U_TRACE_QL_ONLY=1; RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY=1; complete per-step P_OUT QL history; no legacy M0 replay",
+  "command": "cd /private/tmp/rslmto-c2-ra4-safe-records/ni_u0_imp_no_u_seed_debug_ql && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RSLMTO_FIXED_U_TRACE=$PWD/fixed_u_trace.csv RSLMTO_FIXED_U_TRACE_QL_ONLY=1 RSLMTO_FIXED_U_TRACE_MOMENTS_ONLY=1 RSLMTO_FIXED_U_RUN_ID=ni_u0_imp_no_u_seed_debug_ql ./rslmto.x > c2_console.log 2>&1",
+  "status": "ACCEPTED_STEP200",
+  "prepared_utc": "2026-10-19T08:54:08.378818+00:00",
+  "completed_utc": "2026-10-19T11:46:10.602513+00:00",
+  "console_sha256": "fe5e2faf5f5764993d146432ca20cc2521fe7564a493fec3a895385ea4bd0a43",
+  "trace_sha256": "7a0d563813f3844631a279013412b6ed2c732b9e86a1a955ae8681357f698fb7",
+  "final_impurity_potential_sha256": "addd6667159c9e4a5b6e4d3ff575143281877fb0b3c78832dccead1a34735e2d"
+}

@@ -1,0 +1,50 @@
+&calculation
+pre_processing = 'buildsurf'
+verbose = T
+/
+&lattice
+rc = 100 ! radius cut. We could think about setting a default
+alat = 3.52340
+crystal_sym = 'fcc' ! options are bcc, fcc and hcp so far.
+wav = 1.37692
+nlay = 2
+surftype = '0 0 1'
+ntype = 3
+ct(:) = 3*4.0d0
+r2 = 16.0d0
+/
+&atoms
+database = './'
+label(1) = 'Ni-imp'
+label(2) = 'ES'
+label(3) = 'Ni-imp-S'
+/
+&self
+ws_all = .true. ! ''
+nstep = 2
+conv_thr = 5.0d-8
+/
+&energy
+fermi = -0.061141000000
+energy_min = -1.0
+energy_max = 0.5
+channels_ldos = 2500
+fix_fermi = .true.
+/
+&control
+calctype = 'S'
+nsp = 1 ! type of calculation, nsp can be 1, 2, 3 or 4
+lld = 21
+recur = 'block'
+/
+&mix
+beta = 0.1
+mixtype = 'broyden'
+/
+
+&hamiltonian
+hubbard_u_general(1,3) = 0.0
+hubbard_j_general(1,3) = 0.0
+hubbard_u_general(3,3) = 0.0
+hubbard_j_general(3,3) = 0.0
+/

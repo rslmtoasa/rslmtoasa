@@ -1,0 +1,20 @@
+RS Chebyshev Ni(001) surface, calctype S, nsp=1 (collinear spin-polarised), U=0, lld=200, 2500 channels, fixed E_F -0.061969, beta 0.005 Broyden; frozen Ni host, SCF types ES, Ni-S (surface), Ni-S-1 (deepest SCF layer, below the surface layer).
+
+Files: input.nml; Ni.nml, ES.nml, Ni-S.nml, Ni-S-1.nml are the converged U=0 state (Ni is the frozen bulk host, unchanged). They are the U=0 reference and the seed of ni001_u3.
+
+Recipe: seeded from the *_out.nml of a 50-step block-recursion run of example/surface/fccNi001 (last Diff 1.4e-5), continued with this input (Chebyshev fast backend, nstep 200, conv_thr 1e-7), 3 MPI ranks x 2 OpenMP threads, Release build of the working tree at d77e8dbd (plus the uncommitted source/mix.f90 edit), ~64 s/step. Converged at step 67, Diff 9.68e-8. beta 0.05 was tried first from the same state: Diff 1.3e-7, 1.6e-6, 1.5e-5 (diverges), stopped.
+
+RS window on <label>_scf.nml ql(1,:,spin) over the last 20 steps (limits: d q0 spread per spin 5e-7, moment sum_l(q0up-q0dn) spread 1e-6):
+layer    d_up spread  d_dn spread  moment spread
+ES       1.79e-08     1.17e-07     1.07e-07
+Ni-S     4.70e-07     4.92e-07     9.11e-07
+Ni-S-1   4.58e-08     4.78e-08     2.57e-08
+
+Converged state, from ql(1,:,spin) (moment = sum_l q0up-q0dn, n_d = d q0up+q0dn):
+type     moment [muB]  n_d       n_d_up    n_d_dn
+Ni       0.674368      8.540250  4.629402  3.910847
+Ni-S     0.688932      8.580286  4.647103  3.933183
+Ni-S-1   0.640194      8.581251  4.631150  3.950101
+Deepest layer (Ni-S-1) minus host: moment -0.034174 muB, n_d +0.041001.
+
+Explicit U=J=0 in &hamiltonian does not enter the LDA+U path (hubbard_u_general_check needs U or J > 1e-10 Ry), so U=0 here is the plain LDA run. Wiring check of the surface U path as U->0 (reduced deck: nstep 1, lld 50, 500 channels, U on d of Ni, Ni-S, Ni-S-1, J=0, versus the same deck without U): etot shift of Ni-S 1.99e-7, 1.89e-6, 1.88e-5 Ry at U = 1e-4, 1e-3, 1e-2 eV (ratios 9.53, 9.95 per decade); Ni-S-1 1.46e-7, 1.61e-6, 1.61e-5 Ry. Wiring evidence only.

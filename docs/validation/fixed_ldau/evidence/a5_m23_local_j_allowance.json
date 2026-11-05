@@ -1,0 +1,131 @@
+{
+  "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+  "candidate_rows_inspected": false,
+  "centers": [
+    {
+      "N_ASA_independent_box_interval_Ry_per_eV": [
+        0.0011857365494368987,
+        0.0017469425898127995
+      ],
+      "N_ASA_nominal_Ry_per_eV": 0.0014306644163822047,
+      "case_records_sha256": {
+        "0.4": "e4adbe3be4e9c157c7585ba8f63f8244b8eba9199469005e006fae428dd21cd0",
+        "0.45": "dc7d6abd1407a6bcfd78ee04b0b9535635aeb361af2956d443b87de8c15143a0",
+        "0.55": "690ba52fbfc2afe9bdc2df41e30436721fcb159c43b4413fdfb3b845bc3527b6",
+        "0.6": "85ebcfd6a527f9a1672db6a028daa909f0d7094e6fd75b08a21034713684cba5"
+      },
+      "center_J_eV": 0.5,
+      "center_records_sha256": "4b1dd908309968703bd2f942db75e3fdaa1990b3907270eac004a1f6acf0d425",
+      "dq_dJ_h005_electron_per_eV": [
+        -0.1314168630859225,
+        0.06715840894737202
+      ],
+      "dq_dJ_h01_electron_per_eV": [
+        -0.13338579466765754,
+        0.07075764135493268
+      ],
+      "fixed_p_dEhub_dJ_Ry_per_eV_by_step": [
+        -0.06352068324102511,
+        -0.0635206832409363,
+        -0.0635206832419577
+      ],
+      "fixed_p_matrix_from_direct_P_OUT_sha256": "5ffcf4286e454d7b5e8476e75af7b8e1ed0b9ff21a8d16d87526cdc2c17aa5c5",
+      "production_fixed_p_target_output_sha256": "0e84c70024d793474c78a41867c72085879e9dc29361f71749b391a739faed70",
+      "q_h005_electron": {
+        "minus": [
+          4.473760901959479,
+          2.0366442356429055
+        ],
+        "plus": [
+          4.460619215650887,
+          2.0433600765376427
+        ]
+      },
+      "q_h01_electron": {
+        "minus": [
+          4.481802498158928,
+          2.0321871445595723
+        ],
+        "plus": [
+          4.455125339225397,
+          2.046338672830559
+        ]
+      },
+      "step_sensitivity_uncertainty": [
+        0.001968931581735056,
+        0.0035992324075606597
+      ],
+      "target_steps_eV": [
+        0.01,
+        0.005,
+        0.0025
+      ]
+    },
+    {
+      "N_ASA_independent_box_interval_Ry_per_eV": [
+        0.0011760565889865175,
+        0.0025815329702031974
+      ],
+      "N_ASA_nominal_Ry_per_eV": 0.0017803580315075094,
+      "case_records_sha256": {
+        "0.8": "cefdbedfdd343d321c6d37b8e59183c6d17b19e5d4c396870a1434084680f03f",
+        "0.85": "223c70a8972e73ea36192bcdf75eeb9fee3ae9907831f32d172f767feb36dfd7",
+        "0.95": "5f5aaf197fdc7d5cb386b5f4c2822c9457eb9036f91c6f66ab7673c04b555351",
+        "1.0": "f045010a5bf0327d6248c3d943f66149eb52e1d4960f5693f2fb22646b6cfe9d"
+      },
+      "center_J_eV": 0.9,
+      "center_records_sha256": "cbaae0fd7fa8139910b9d85f8de02452f10912d975544a25891680871d871e4e",
+      "dq_dJ_h005_electron_per_eV": [
+        -0.12709679556701658,
+        0.10879738434410147
+      ],
+      "dq_dJ_h01_electron_per_eV": [
+        -0.15328184283331936,
+        0.1366201705480452
+      ],
+      "fixed_p_dEhub_dJ_Ry_per_eV_by_step": [
+        -0.06480683082943361,
+        -0.06480683082945582,
+        -0.06480683082914496
+      ],
+      "fixed_p_matrix_from_direct_P_OUT_sha256": "568c5409f9faf218b0ef2acd1bd588cde50c0a281e04c15f5c9b618100a07cc8",
+      "production_fixed_p_target_output_sha256": "6905ea869e6635fcaf53e49ab95dfb4b08a8916235a8d0c604117625b754ef3c",
+      "q_h005_electron": {
+        "minus": [
+          4.4392105763296374,
+          2.054489790303009
+        ],
+        "plus": [
+          4.426500896772936,
+          2.065369528737419
+        ]
+      },
+      "q_h01_electron": {
+        "minus": [
+          4.4419589274499796,
+          2.0528971832894007
+        ],
+        "plus": [
+          4.411302558883316,
+          2.08022121739901
+        ]
+      },
+      "step_sensitivity_uncertainty": [
+        0.026185047266302774,
+        0.02782278620394374
+      ],
+      "target_steps_eV": [
+        0.01,
+        0.005,
+        0.0025
+      ]
+    }
+  ],
+  "common_seed_sha256": "25c1c8260d8996360812d978aec09986c4ec1e853c3cf17635e6c62b4c62fec5",
+  "local_followup_summary_sha256": "e7463ccb1417e4e9acce0157b6ab1e6bf19d1d993055e0bf9fc72035cf5c9a4d",
+  "production_fixed_p_driver_binary_sha256": "3c0d62b3666cd27c6064d4fd73c58358b05d27f11a2047a61ac12fa780ca417a",
+  "production_fixed_p_driver_source_sha256": "14290820cc388d6229d1991b34873e5a5e6818444dc8a5f7ffdfd9fcd94dbc0e",
+  "propagation": "independent componentwise B/R and dq step-sensitivity boxes through R^Tg=B and sum_s|g_s dq_s/dJ|; no statistical interpretation",
+  "schema": "A5.3-local-J-allowance-v1",
+  "spin_W1_fine_reduction_sha256": "8a8f40ca8c8c6d552c455c0b2a2abacc8bd5ed41b0caa6913a3357d1aff92759"
+}

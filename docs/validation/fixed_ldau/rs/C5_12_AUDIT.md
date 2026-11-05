@@ -1,0 +1,13 @@
+# C5.12 batched audit
+
+**Verdict: T0 mismatch; corrected T2 FAIL; stop without merge or push.** HEAD `3dd92bc50f31986fb70546003a196966bacf1554` is based on `01370313c8d6c81e6c73bc9c2a10a327155b1d55`. Both permitted SCF runs were used.
+
+T0 is consistent with the recorded C5.11 deck and accepted KS host endpoint: input Fermi `-0.085152 Ry`, host EF `-0.082949627451487762 Ry`, input-minus-host `-0.002202372548512238 Ry`. The original window `[-1.0, 0.5] Ry` is 1.5 Ry wide. The corrected deck uses Fermi `-0.082949627451487762 Ry` and bounds `[-0.997797627451487762, 0.502202372548512238] Ry`, also 1.5 Ry wide. A direct diff of the C5.11 input and corrected candidate confirms only those three energy values changed.
+
+The preflight change reads the unique `fermi_level` row from the host trace and rejects an input outside `1e-6 Ry`; the focused test contains a passing within-tolerance case and a failing outside-tolerance case. The result ledger records both cases passing. Run 1 and run 2 preflights each bind the input to the same host trace and show zero delta. The corrected input SHA matches both archived run inputs. The recorded local recipe remains `rc=80`, `ct=2*3.0d0`, U=2 eV, J=0 eV; both runs use the same frozen Release binary. Run 2's restart and copied restart hashes match the run 1 endpoint.
+
+Both launches returned 0 and completed 100 iterations within the two-run budget. Run 1's archive has 99 per-iteration trace CSVs (iterations 1–99); its launch record and log report return code 0. Run 2's archive has all 100 trace CSVs and paired state snapshots. The five complete, consecutive 20-iteration windows in run 2 are all recorded and fail at least one C5.1 acceptance limit. In the final window 81–100, max outer Diff is `5.71e-8` (limit `3e-8`), spin-1 d spread is `1.9525748e-7` (limit `5e-7`), spin-2 d spread is `8.2702855e-7` (limit `5e-7`), and sphere-moment spread is `7.6629247e-7 μB` (limit `1e-6 μB`). Diff and spin-2 spread fail. No 20-step window from the continuation passes.
+
+The C5.3 outcome remains uncovered and its criteria were not changed. T3/T4 were not entered after T2 failed; no merge or push is authorized. C5.11 documentation remains in place. The committed diff adds the C5.12 record and its EF preflight/test; it contains no solver or physics source changes. Capture archive hashes match the result JSON. JSON files parse and `git diff --check HEAD^ HEAD` passes. The worktree's pre-existing untracked Co reference outputs remain untouched; available disk space stayed above 10 GB during both runs.
+
+Audit scope was read-only aside from these two audit files. No build, solver run, cleanup, merge, or push was performed.

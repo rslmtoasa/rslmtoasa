@@ -1,0 +1,3 @@
+Control: user supplied noU deck and out.noU in /Users/andersb/Jobb/RS-utils/tmp/Cheb/fccNi_small/noU.
+Observed Fixed Fermi energy: -0.062420 Ry. Existing control used nstep=1 and reported Diff=7.71e-8.
+The U run uses the same frozen host, potential seeds, geometry, energy window, and Fermi level.

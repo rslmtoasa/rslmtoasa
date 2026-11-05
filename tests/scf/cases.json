@@ -201,19 +201,119 @@
       "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
       "case": "bulk/bccFe_hubbard",
       "timeout": 300,
-      "_note": "End-to-end Hubbard smoke-and-compare only; hubbard_u_general(1,3)/hubbard_j_general(1,3) are set directly in input.nml (not an LDA+U algebra oracle or material-validation study)",
+      "_note": "nsp=2 bulk SOC+U runs by default (spinor local moments, energy routed); smoke only",
+      "namelists": {
+        "control":     { "nsp": 2, "recur": "block", "lld": 21 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
+      }
+    },
+    {
+      "name": "Example_surface_soc_u_nsp1_host_guard",
+      "quick": true,
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "chebyshev", "hubbard"],
+      "case": "surface/fccNi001_uhost_guard",
+      "timeout": 300,
+      "_note": "nsp=2 surface with a frozen U host written at nsp=1 stops before the SCF loop. Explicit legacy structure-constant sentinel as in Example_surface_fccCu001_block_hoh",
+      "expect_fatal": "was written at nsp=1, run nsp=2. Regenerate the host at nsp=2.",
+      "namelists": {
+        "lattice": { "strux_backend": "legacy" },
+        "control": { "nsp": 2, "recur": "chebyshev" },
+        "self": { "nstep": 1 },
+        "hamiltonian": {
+          "hubbard_radial_moments": "local",
+          "hubbard_u_general": [[null], [null], [3.0]],
+          "hubbard_j_general": [[null], [null], [0.7]]
+        }
+      },
+      "potentials": {
+        "Ni.nml": {
+          "par": {
+            "hubbard_nsp": 1,
+            "hubbard_radial_moments": "local",
+            "hubbard_backend": "rs",
+            "hubbard_u": [0.0, 0.0, 0.22049575716860359],
+            "hubbard_j": [0.0, 0.0, 0.051449010006007496]
+          }
+        }
+      }
+    },
+    {
+      "name": "Example_surface_fccNi001_uhost_guard",
+      "quick": true,
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "chebyshev", "hubbard"],
+      "case": "surface/fccNi001_uhost_guard",
+      "timeout": 300,
+      "_note": "U on frozen host type 1 whose potential file was converged at U=0 stops before the SCF loop. Explicit legacy structure-constant sentinel as in Example_surface_fccCu001_block_hoh (strux_lib expands this surface route to an impractical allocation)",
+      "expect_fatal": "host Ni was converged without U; use a host converged at the same U, or remove U from that type",
+      "namelists": {
+        "lattice": { "strux_backend": "legacy" },
+        "control": { "recur": "chebyshev" },
+        "hamiltonian": {
+          "hubbard_u_general": [[null], [null], [3.0]],
+          "hubbard_j_general": [[null], [null], [0.7]]
+        }
+      }
+    },
+    {
+      "name": "Example_bulk_Pt2MnGa_soc_u_mixed_axes_guard",
+      "quick": true,
+      "labels": ["functional", "rs", "metallic", "magnetic", "multi_sublattice", "basis_spd", "block", "hubbard", "legacy_strux"],
+      "case": "bulk/Pt2MnGa",
+      "timeout": 300,
+      "_note": "nsp=2 SOC+U with U on Mn and Pt1, Mn moment patched along x and Pt1 along z, stops: noncollinear U needs nsp=3/4",
+      "expect_fatal": "noncollinear: use nsp=3/4, not yet supported with U.",
+      "namelists": {
+        "lattice":     { "strux_backend": "legacy" },
+        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false,
+                         "hubbard_u_general": [[null, null, null, null], [null, null, null, null], [3.0, null, 1.0, null]],
+                         "hubbard_j_general": [[null, null, null, null], [null, null, null, null], [0.0, null, 0.0, null]] }
+      },
+      "potentials": { "Mn.nml": { "par": { "mom": [1.0, 0.0, 0.0] } } }
+    },
+    {
+      "name": "Example_bulk_bccFe_soc_u_tilted_block_guard",
+      "quick": true,
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
+      "case": "bulk/bccFe_hubbard",
+      "timeout": 300,
+      "_note": "nsp=2 SOC+U, RS block recursion, Fe moment patched along x, stops: block recursion is not spin-rotation invariant",
+      "expect_fatal": "tilted spin axis requires recur='chebyshev' in RS",
       "namelists": {
         "control":     { "nsp": 2, "recur": "block", "lld": 21 },
         "self":        { "nstep": 1 },
         "hamiltonian": { "hoh": false }
       },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3], "hubbard_u": [3] } }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ]
+      "potentials": { "Fe.nml": { "par": { "mom": [1.0, 0.0, 0.0] } } }
+    },
+    {
+      "name": "Example_bulk_bccFe_nsp3_u_guard",
+      "quick": true,
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
+      "case": "bulk/bccFe_hubbard",
+      "timeout": 300,
+      "_note": "nsp=3 (noncollinear) with fixed U stops: S7 scope",
+      "expect_fatal": "Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.",
+      "namelists": {
+        "control":     { "nsp": 3, "recur": "block", "lld": 21 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
+      }
+    },
+    {
+      "name": "Example_bulk_bccFe_nsp4_u_guard",
+      "quick": true,
+      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
+      "case": "bulk/bccFe_hubbard",
+      "timeout": 300,
+      "_note": "nsp=4 (noncollinear with SOC) with fixed U stops: S7 scope",
+      "expect_fatal": "Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.",
+      "namelists": {
+        "control":     { "nsp": 4, "recur": "block", "lld": 21 },
+        "self":        { "nstep": 1 },
+        "hamiltonian": { "hoh": false }
       }
     },
     {

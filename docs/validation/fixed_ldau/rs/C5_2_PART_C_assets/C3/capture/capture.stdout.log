@@ -1,0 +1,79 @@
+[Oct 21 2026 07:45:35.166] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+[Oct 21 2026 07:45:37.363] [lattice_strux.f90:89]      [1m[32m<info> [0m[0mSTRUCTB structure-constants, backend=legacy
+[Oct 21 2026 07:45:38.398] [symbolic_atom.f90:187]     [1m[32m<info> [0m[0mSCF input provenance: restart loaded from ./Fe_out.nml
+[Oct 21 2026 07:45:38.398] [element.f90:92]            [1m[32m<info> [0m[0mReading element from previous result ./Fe_out.nml
+[Oct 21 2026 07:45:38.398] [potential.f90:189]         [1m[32m<info> [0m[0mReading potential from previous result ./Fe_out.nml
+[Oct 21 2026 07:45:38.469] [hamiltonian_build.f90:645]  [1m[32m<info> [0m[0mHUBBARD summary: form=liechtenstein fixed_UJ=T sc_U=F V=F
+[Oct 21 2026 07:45:38.469] [hamiltonian_build.f90:677]  [1m[32m<info> [0m[0mHUBBARD fixed U/J type=   1 [Ry] U=   0.000000   0.000000   0.146997 J=   0.000000   0.000000   0.000000
+[Oct 21 2026 07:45:38.933] [self.f90:3364]             [1m[32m<info> [0m[0mHUBBARD_RADIAL_MODE mode=local source=explicit use_kspace=.false. local_energy_adopted=.true.
+[Oct 21 2026 07:45:38.934] [self.f90:4340]             [1m[32m<info> [0m[0mPerform recursion at step 1
+[Oct 21 2026 07:45:38.935] [hamiltonian_build.f90:1527]  [1m[32m<info> [0m[0mHUBBARD applying on-site +U correction to bulk Hamiltonian
+[Oct 21 2026 07:45:38.935] [hamiltonian_hubbard.f90:306]  [1m[32m<info> [0m[0mHUBBARD_LDM type=   1 l= 2 tr_up=  4.610601 tr_dn=  1.902165 maxabs=  9.6567E-01
+[Oct 21 2026 07:45:38.935] [hamiltonian_hubbard.f90:310]  [1m[32m<info> [0m[0mHUBBARD_OCC type=   1 l= 2 U=  0.146997 J=  0.000000 nup=  4.610601 ndn=  1.902165 ntot=  6.512766
+[Oct 21 2026 07:45:38.935] [hamiltonian_hubbard.f90:323]  [1m[32m<info> [0m[0mHUBBARD_QLCMP type=   1 l= 2 ql_up=  4.610601 ql_dn=  1.902165 ldm_up=  4.610601 ldm_dn=  1.902165 d_up(ql-ldm)=  0.000000 d_dn(ql-ldm)= -0.000000
+[Oct 21 2026 07:45:38.936] [hamiltonian_hubbard.f90:540]  [1m[32m<info> [0m[0mHUBBARD_VDIAG type=   1 l= 2 avg_up=  -0.062050 avg_dn=   0.017576 split(up-dn)=  -0.079626
+[Oct 21 2026 07:45:38.936] [hamiltonian_hubbard.f90:572]  [1m[32m<info> [0m[0mHUBBARD_POT type=   1 maxabs=  6.8451E-02
+[Oct 21 2026 07:45:38.938] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 21 2026 07:45:38.938] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 21 2026 07:45:38.943] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 21 2026 07:46:08.678] [self.f90:4428]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 21 2026 07:46:08.691] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 21 2026 07:46:08.770] [bands.f90:482]             [1m[32m<info> [0m[0mValence is:        8.000000
+[Oct 21 2026 07:46:08.779] [bands.f90:547]             [1m[32m<info> [0m[0mFree Fermi energy: -0.082317
+[Oct 21 2026 07:46:09.257] [bands.f90:1701]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   2.551167
+[Oct 21 2026 07:46:09.257] [bands.f90:1711]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   2.551167
+[Oct 21 2026 07:46:09.660] [bands.f90:2072]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.000000  -0.000000   0.000000
+[Oct 21 2026 07:46:09.676] [bands.f90:817]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  2.551167 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 21 2026 07:46:09.700] [bands.f90:1137]            [1m[32m<info> [0m[0mHUBBARD_LDM_CHECK atom=   1 max_antiherm=  0.0000E+00
+[Oct 21 2026 07:46:09.701] [bands.f90:1143]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   1 l= 0 ql_up=  0.323270 ql_dn=  0.366981 ldm_up=  0.323270 ldm_dn=  0.366981
+[Oct 21 2026 07:46:09.701] [bands.f90:1159]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 0 spin= 1 trace=  0.323270 eig_min=  0.323270 eig_max=  0.323270 max_antiherm=  0.0000E+00
+[Oct 21 2026 07:46:09.702] [bands.f90:1159]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 0 spin= 2 trace=  0.366981 eig_min=  0.366981 eig_max=  0.366981 max_antiherm=  0.0000E+00
+[Oct 21 2026 07:46:09.702] [bands.f90:1143]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   1 l= 1 ql_up=  0.341711 ql_dn=  0.455265 ldm_up=  0.341711 ldm_dn=  0.455265
+[Oct 21 2026 07:46:09.702] [bands.f90:1159]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 1 spin= 1 trace=  0.341711 eig_min=  0.113902 eig_max=  0.113905 max_antiherm=  0.0000E+00
+[Oct 21 2026 07:46:09.702] [bands.f90:1159]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 1 spin= 2 trace=  0.455265 eig_min=  0.151755 eig_max=  0.151755 max_antiherm=  0.0000E+00
+[Oct 21 2026 07:46:09.703] [bands.f90:1143]            [1m[32m<info> [0m[0mHUBBARD_BANDCMP atom=   1 l= 2 ql_up=  4.610602 ql_dn=  1.902170 ldm_up=  4.610602 ldm_dn=  1.902170
+[Oct 21 2026 07:46:09.703] [bands.f90:1159]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 2 spin= 1 trace=  4.610602 eig_min=  0.893089 eig_max=  0.965665 max_antiherm=  0.0000E+00
+[Oct 21 2026 07:46:09.703] [bands.f90:1159]            [1m[32m<info> [0m[0mHUBBARD_LDM_PHYSICALITY atom=   1 l= 2 spin= 2 trace=  1.902170 eig_min=  0.265158 eig_max=  0.457286 max_antiherm=  0.0000E+00
+[Oct 21 2026 07:46:11.804] [self.f90:4134]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 21 2026 07:46:11.804] [mix.f90:712]               [1m[32m<info> [0m[0mValence at atom   1 is   8.000000
+[Oct 21 2026 07:46:11.805] [mix.f90:715]               [1m[32m<info> [0m[0mCharge transfer at atom    1:   0.000000   0.000000  -0.000000
+[Oct 21 2026 07:46:11.805] [mix.f90:725]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000001
+[Oct 21 2026 07:46:11.806] [self.f90:2069]             [1m[32m<info> [0m[0mFIXED_U_RESIDUAL rp_abs=  4.1323E-06 rp_rel=  1.8433E-06 rv_abs_Ry=  6.0743E-07 rv_rel=  6.0743E-07 target_rp=  5.0000E-07 target_rv_Ry=  1.0000E-07 required_streak=3 antiherm_P=  0.0000E+00 antiherm_V=  0.0000E+00 physical=.true. streak=0 worst_site=1 l=2
+[Oct 21 2026 07:46:11.806] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 21 2026 07:46:11.806] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=   0.000000 VMAD=  -0.000000
+[Oct 21 2026 07:46:11.809] [self.f90:5092]             [1m[32m<info> [0m[0mFe
+[Oct 21 2026 07:46:11.810] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 21 2026 07:46:11.810] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 21 2026 07:46:11.810] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 21 2026 07:46:11.810] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 21 2026 07:46:11.810] [self.f90:5178]             [1m[32m<info> [0m[0mXC functional: B-H 11.3628040930264786E-004
+[Oct 21 2026 07:46:11.810] [self.f90:5257]             [1m[32m<info> [0m[0mF core check:0
+[Oct 21 2026 07:46:12.354] [self.f90:4758]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 21 2026 07:46:12.354] [self.f90:4783]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Fe
+[Oct 21 2026 07:46:12.358] [self.f90:2274]             [1m[32m<info> [0m[0mHUBBARD_MOMENT_ENERGY_SITE site=1 type=1 E_int=  0.2748141900809458E+01 E_DC=  0.2638851265424107E+01 E_Hub=  0.1092906353853516E+00 t_in_out= -0.2600979504599853E+00 t_U= -0.2600979504599853E+00 e_external=  0.0000000000000000E+00 t_total_actual_Vin= -0.2600979504599853E+00 direct_trace_check=  0.0000000000000000E+00 ETOT_selected= -0.2541972730176753E+04 candidate_a=UNAVAILABLE candidate_b= -0.2541863439541368E+04 candidate_c=UNAVAILABLE candidate_F=UNAVAILABLE_GLOBAL_TS_NOT_SITE_DECOMPOSABLE candidate_status=PROVISIONAL_ONLY
+[Oct 21 2026 07:46:12.358] [self.f90:2347]             [1m[32m<info> [0m[0mHUBBARD_MOMENT_ENERGY_TOTAL E_int=  0.2748141900809458E+01 E_DC=  0.2638851265424107E+01 E_Hub=  0.1092906353853516E+00 E_Hub_P_OUT=  0.1092906353853516E+00 t_in_out= -0.2600979504599853E+00 t_U= -0.2600979504599853E+00 e_external=  0.0000000000000000E+00 t_total_actual_Vin= -0.2600979504599853E+00 base_physical_total_energy= -0.2541972730176753E+04 physical_total_energy= -0.2541863439541368E+04 candidate_a=UNAVAILABLE candidate_b= -0.2541863439541368E+04 candidate_c=UNAVAILABLE entropy=UNAVAILABLE_KS_ONLY TS=UNAVAILABLE_KS_ONLY candidate_a_F=UNAVAILABLE candidate_b_F=UNAVAILABLE candidate_c_F=UNAVAILABLE test_lambda_trace_wp=UNAVAILABLE test_F_local=UNAVAILABLE test_F_spectral=UNAVAILABLE candidate_status=PROVISIONAL_ONLY; unavailable candidates require the other radial representation
+[Oct 21 2026 07:46:12.358] [self.f90:4206]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000008161
+[Oct 21 2026 07:46:12.370] [bands.f90:2295]            [1m[32m<info> [0m[0mMagnetic field on atom   1 is        -0.000000        -0.000000    -65689.054331
+[Oct 21 2026 07:46:12.370] [bands.f90:2296]            [1m[32m<info> [0m[0mMagnetic torque on atom   1 is         0.000000         0.000000         0.000000
+[Oct 21 2026 07:46:12.370] [self.f90:4847]             [1m[32m<info> [0m[0mWriting calculation report to report.out
+[Oct 21 2026 07:46:12.376] [self.f90:4964]             [1m[32m<info> [0m[0mCalculation finished. Report printed in report.out
+[Oct 21 2026 07:46:13.178] [bands.f90:1964]            [1m[32m<info> [0m[0mOrbital quadrupoles of atom   1 Qxx Qyy Qzz Qxy Qyz Qzx =  13.556852  13.556863  13.556871   0.000009  -0.000004  -0.000007
+[Oct 21 2026 07:46:13.179] [bands.f90:1969]            [1m[32m<info> [0m[0mTraceless orbital quadrupoles of atom   1 Qx2y2 Q3z2r2 =  -0.000011   0.000027
+------------------------------------------------------------- TIMER REPORT --------------------------------------------------------------
+  CATEGORY                              MEAN            MAX            MIN          TOTAL      TOTAL (%)         NCALLS   TOTAL NCALLS   
+  total                                    -              -              -        38.0137          100.0              1              9   
+  └─ Calculation                           -              -              -        38.0137          100.0              1              8   
+     ├─ Calculation*                       -              -              -         1.5576            4.1              -              1   
+     ├─ pre-processing                     -              -              -         3.0315            8.0              1              3   
+     │  ├─ pre-processing*                 -              -              -         0.0643            0.2              -              1   
+     │  ├─ build_data                      -              -              -         0.0000            0.0              1              1   
+     │  ├─ bravais                         -              -              -         1.9079            5.0              1              1   
+     │  └─ structb                         -              -              -         1.0593            2.8              1              1   
+     └─ self-consistency                   -              -              -        33.4246           87.9              1              3   
+        ├─ self-consistency*               -              -              -         2.1287            5.6              -              1   
+        ├─ recursion                       -              -              -        29.7158           78.2              1              1   
+        ├─ calculation-of-DOS              -              -              -         1.0355            2.7              1              1   
+        └─ atomic-scf                      -              -              -         0.5446            1.4              1              1   
+----------------------------------------------------------------------------------------------------------------------------------------
+  * exclusive values to this label
+----------------------------------------------------------------------------------------------------------------------------------------

@@ -1,0 +1,228 @@
+{
+  "schema": "c5_3_ni_followup_preflight_draft_v1",
+  "status": "PREPARED_ONLY_NOT_AUDITED_NOT_AUTHORIZED",
+  "run_id": "ni_u3_rs_block_rc80",
+  "repo": "/Users/andersb/Jobb/rslmto_fable_v4b",
+  "frozen_binary": {
+    "path": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x",
+    "sha256": "a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3",
+    "build_manifest_path": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/manifest.json",
+    "build_manifest_sha256": "b2f3ab5d26c439520bdfcbca16163877b2e36d7bb9c3af0448e6941327ae5158",
+    "source_commits": {
+      "B1_source_commit": "8a107432e3ca2e00c815c217d52e7aa2a8e30736",
+      "PartC_head": "0469135d935dd31fb6ce055d819cdb54811c52fa"
+    },
+    "source_manifest_sha256": "494a5dfc061320382a9b1eaced8a3dfb5625d4a4135d47625354a4ca80291900",
+    "build_manifest_source_manifest": {
+      "CMakeLists.txt": "6f4dbe61e45a7c42a5e4cc5ac2977059102f974fd20e0376ac9e2ee63c46d419",
+      "source/CMakeLists.txt": "38c03906064b587d6a40c99160f80bfe154dcbcacdbf677bceba1c969fefdc26",
+      "source/bands.f90": "ea924d76e09c534d33275e9e330d872e9351d14ba33629013d409784280838cc",
+      "source/mix.f90": "f75c1d98d57e8a114d188c28089ec3f565d5a64328679f50224618a0f6e202fd",
+      "source/self.f90": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+      "source/scf_guard.f90": "3f232e9cea4a84acfbe98b7636da0b02318253d5a21f776bb2763e607571c415",
+      "tests/unit/test_scf_b1_guard.f90": "d000c46c13e6eb503aa65487f6861928deb752ecc4c8cbdc1573a73364ba7434"
+    }
+  },
+  "reference_worktree_source_changes_excluded": "RD1 changes in current worktree are uncommitted; frozen executable remains B1 source-bound. No solver/source changes by this task.",
+  "input": {
+    "immutable_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/immutable/input.nml",
+    "sha256": "c0722a059758b3d52387f918be640e34ed10f11fd0e9cab06cf5e10a6e0b79f2",
+    "working_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/run/input.nml",
+    "working_sha256": "c0722a059758b3d52387f918be640e34ed10f11fd0e9cab06cf5e10a6e0b79f2",
+    "source_schema_validation": [
+      {
+        "path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/immutable/input.nml",
+        "groups": [
+          "atoms",
+          "calculation",
+          "control",
+          "energy",
+          "hamiltonian",
+          "lattice",
+          "mix",
+          "self"
+        ],
+        "member_counts": {
+          "atoms": 2,
+          "calculation": 2,
+          "control": 5,
+          "energy": 5,
+          "hamiltonian": 3,
+          "lattice": 11,
+          "mix": 2,
+          "self": 3
+        },
+        "schema_valid": true
+      },
+      {
+        "path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/immutable/Ni-imp.nml",
+        "groups": [
+          "element",
+          "par"
+        ],
+        "member_counts": {
+          "element": 9,
+          "par": 32
+        },
+        "schema_valid": true
+      },
+      {
+        "path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/immutable/Ni-imp_out.nml",
+        "groups": [
+          "element",
+          "par"
+        ],
+        "member_counts": {
+          "element": 9,
+          "par": 32
+        },
+        "schema_valid": true
+      }
+    ]
+  },
+  "accepted_restart": {
+    "source_endpoint": "C5_2_PART_D_assets/ni_u0_bulk_rc80_host/accepted/iter0024_state.nml.gz",
+    "raw_sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a",
+    "used_as": "same-material U0 bulk endpoint restart for a new bulk variant",
+    "working_alias": "Ni-imp_out.nml",
+    "alias_sha256": "0213bf83b07bd82446f293bf19be8ba37b0a2bc816011d29f2c7e8d5c483738a",
+    "not_impurity_seed": true
+  },
+  "element_file": {
+    "sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+    "working_sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57"
+  },
+  "recipe": {
+    "system": "fcc Ni monatomic bulk",
+    "calctype": "B",
+    "rc": 80,
+    "lld": 21,
+    "nsp": 1,
+    "lmax": 2,
+    "recursion": "block",
+    "U_eV": 3,
+    "J_eV": 0.7,
+    "mode": "local explicit",
+    "energy_window_Ry": [
+      -1,
+      0.5
+    ],
+    "fixed_EF_input_Ry": -0.061141,
+    "mix": "Broyden beta .1",
+    "initial_nstep": 100,
+    "conv_thr_input": 1e-30
+  },
+  "ks_details": null,
+  "acceptance": {
+    "use_unchanged_RS_C1_thresholds": true,
+    "initial_cap": 100,
+    "continuation_if_needed": [
+      "+200 beta halved",
+      "+200 Broyden beta .01"
+    ]
+  },
+  "validated_at": {
+    "python": "/opt/homebrew/opt/python@3.11/bin/python3.11",
+    "f90nml": "1.4.4",
+    "schema_source_file_count": 20,
+    "validated_groups": {
+      "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/immutable/input.nml": [
+        "atoms",
+        "calculation",
+        "control",
+        "energy",
+        "hamiltonian",
+        "lattice",
+        "mix",
+        "self"
+      ],
+      "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/immutable/Ni-imp.nml": [
+        "element",
+        "par"
+      ],
+      "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/immutable/Ni-imp_out.nml": [
+        "element",
+        "par"
+      ]
+    }
+  },
+  "launch": {
+    "wrapper_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/collector/launch_host.sh",
+    "wrapper_sha256": "b356e86c307b21baa8e9b426a1ec14311271c7ff0e06ddb414d16dc4b7c894e7",
+    "collector_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/collector/watch_trace_and_state.py",
+    "collector_sha256": "a0a6a25944a63fb711aeaa5bc61b85060ec8d2f035ce7111b0a079c1673880be",
+    "disk_guard_path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/collector/disk_guard.sh",
+    "disk_guard_sha256": "3049362e51a3165866c73bb997667a0c74662fc673328085b2636c25dae74cdd",
+    "exact_wrapper_command": "C52_RD_NI_U3_AUTHORIZED=1 /private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/collector/launch_host.sh",
+    "run_id": "rd_ni_u3_bulk_rc80_block",
+    "authorization_required": true,
+    "environment": {
+      "OMP_NUM_THREADS": "1",
+      "OMP_DYNAMIC": "FALSE",
+      "RSLMTO_OMP_THREADS_SERIAL": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "BLIS_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1"
+    }
+  },
+  "schema_source_commit": "0469135d935dd31fb6ce055d819cdb54811c52fa",
+  "schema_source_files_sha256": {
+    "source/include_codes/namelists/bounds.f90": "c9ccc51bdd7771b5e5faaffca3fde2ddc952cbae4cfa856f25373caa8a91ee98",
+    "source/include_codes/namelists/calculation.f90": "e19a3f4d88068e3348680da8a0e1dc0f042f990d88fab9e22c3b293755878f83",
+    "source/include_codes/namelists/charge.f90": "b3cd55ef98869541321da4ebbba1fae3c12ad3badcb85176bf71eefb74dbfeb3",
+    "source/include_codes/namelists/conductivity.f90": "c126dfddeb6236465b3f6f9d5ad6746ec5e8dfed8e41609a9f58413dc15c320b",
+    "source/include_codes/namelists/constraints.f90": "62b20b32ad6ee76bbaa7de5975905f6ff94a3f88454134d266a811556262f5df",
+    "source/include_codes/namelists/control.f90": "c7e1378884249a7b5befbc19400dfa7d752c64c8c1826ab07b08d87686c8e9d4",
+    "source/include_codes/namelists/dos.f90": "9dc1c281e9e5ba5624214f34c2de6cc538df9a63abc75812b07e0d99e0ae0dd3",
+    "source/include_codes/namelists/element.f90": "1462248357bd6cd20b4ba5eafd2408524b3e648949983a9001430dcc8adb352f",
+    "source/include_codes/namelists/energy.f90": "8b2a0e4537d1b12343c9d02327597fb75e17775dc9b87f363b22b57d5813c9c5",
+    "source/include_codes/namelists/frozen_magnon.f90": "776d27d533c630090a48aee0148167a9cfade37b3bfecfb875ab64b7d6244aca",
+    "source/include_codes/namelists/hamiltonian.f90": "ea9448c617daa5bc488d8fbd9ce559f6bde359bf0304dfbdc12347bc9c7a8e21",
+    "source/include_codes/namelists/kpath.f90": "ab66e960725a862a85e330b91c55f53becf1f21ee57f97e28cacda5b83fca59e",
+    "source/include_codes/namelists/lattice.f90": "75022560de1cb8a586a6b514029ac30ee6b2df4e971d137cf2c88eda27ab6da8",
+    "source/include_codes/namelists/mix.f90": "55cbab4f0796155f0eef8da73db46f52d60289eb83c4151c554e6a0dd4bf5b84",
+    "source/include_codes/namelists/potential.f90": "1705d05f7162543faacb90a91103b4457b1c8c861013b1ab80967e97f1a7847e",
+    "source/include_codes/namelists/reciprocal.f90": "514c4ac9292f8addc4042fe8216094594ea1bfe4c3ee467dc6688acbf6421159",
+    "source/include_codes/namelists/self.f90": "47787a34dabea3eeb2417bd1f9228cde5ce483391829b85f9597339f8c026c9c",
+    "source/include_codes/namelists/spin_dynamics.f90": "2130e2b4b87c7f8f33304288a0c1c2e2a9c6cea3b917870cb1d423cc5d7b69d2",
+    "source/include_codes/namelists/spin_response.f90": "6d03fa099a4d3ee981d03382e18ac704e25d8a721f5e56b0da0a957698f68094",
+    "source/include_codes/namelists/symbolic_atom.f90": "92d0373eae228fdf58f5fd1a44e64dcca34c19658bffaf24e834306b190dc42e"
+  },
+  "schema_validation": {
+    "python": "/opt/homebrew/opt/python@3.11/bin/python3.11",
+    "f90nml": "1.4.4",
+    "groups": [
+      "atoms",
+      "calculation",
+      "control",
+      "energy",
+      "hamiltonian",
+      "lattice",
+      "mix",
+      "self"
+    ],
+    "member_counts": {
+      "calculation": 2,
+      "lattice": 11,
+      "atoms": 2,
+      "self": 3,
+      "energy": 5,
+      "control": 5,
+      "mix": 2,
+      "hamiltonian": 3
+    },
+    "unknown_groups": [],
+    "unknown_members": {},
+    "status": "PASS"
+  },
+  "kspace_source_default_refs": null,
+  "schema_source_asset": {
+    "path": "/private/tmp/c52-rd-ni-followups/ni_u3_rs_block_rc80/provenance/source_namelist_schema.json",
+    "sha256": "ee1153c3011f96131a493ef5c1aa9ca3ad82b2b855f19809f1ba1809307b42ef",
+    "declared_group_count": 20,
+    "declared_fortran_include_files": 20,
+    "source_commit": "0469135d935dd31fb6ce055d819cdb54811c52fa"
+  }
+}

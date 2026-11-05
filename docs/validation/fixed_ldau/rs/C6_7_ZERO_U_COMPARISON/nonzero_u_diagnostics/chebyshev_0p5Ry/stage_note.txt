@@ -1,0 +1,1 @@
+Staged from user fccNi_small noU deck. Local U=3/J=0.7 accepted RS Ni host potential copied to Ni/Ni-S/Ni-S-1 and re-keyed by symbol; ES seed retained. Fermi/window copied from accepted U host endpoint. conv_thr=1e-7 is the minimal relaxed diagnostic tolerance above the user-run noU Diff 7.71e-8. No SCF launched yet.

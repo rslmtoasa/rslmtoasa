@@ -1,0 +1,19 @@
+{
+  "schema": "c52-c3-baseline-execution-record-v1",
+  "scope": "Offline live-state baseline replay only; no scientific C3 carrier/q2 gate verdict.",
+  "executor": "/opt/homebrew/opt/python@3.11/bin/python3.11",
+  "working_directory": "/Users/andersb/Jobb/rslmto_fable_v4b",
+  "command": "/opt/homebrew/opt/python@3.11/bin/python3.11 /private/tmp/c52-c-private/c3_c2_adapter.py --capture /private/tmp/c52-c2-stage/c3_run_debug_i1 --lock /private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/accepted_c2_u2_chebyshev_endpoint_lock.json --source /Users/andersb/Jobb/rslmto_fable_v4b/source/self.f90 --binary /private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x --driver /private/tmp/c52-c-private/helper-build/accepted_m03_replay_driver --mode baseline --output /private/tmp/c52-c2-stage/c3_run_debug_i1/analysis/baseline.json",
+  "adapter_path": "/private/tmp/c52-c-private/c3_c2_adapter.py",
+  "adapter_sha256": "c0244025b492775f3b551f2c5a301e5bc7fe65c5af695d3af8c079b2f2a24696",
+  "lock_sha256": "d923078e644eaf7ada1926a53a4c92adf3d138e22ba8307ca87896d567cec1f5",
+  "capture_manifest_sha256": "aaadf126ced0950254955e92ce1895607386bc007b48ad979205001498a03568",
+  "capture_csv_sha256": "d45cc08bc72752b167bf244fcf8ffeda8a9658e223a5321876d04f486f9722d4",
+  "frozen_producer_binary_sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69",
+  "driver_sha256": "9e3f44379b8933d21eafb78e8008cbf0d44dd9b65a77140af2920c26713ac9d7",
+  "output_path": "/private/tmp/c52-c2-stage/c3_run_debug_i1/analysis/baseline.json",
+  "output_sha256": "4a1d500c506346bbf8bfbc23f79737b32ad3ba94114c900b7c36579e06b52b5d",
+  "output_status": "PASS_LIVE_STATE_BASELINE",
+  "driver_output_sha256": "0fe2d321c35d1d12733e6e45c3254c6c7b34d43d8aa6371ab6eceaac1c6d1490",
+  "scientific_gate_status": "NOT_EVALUATED"
+}

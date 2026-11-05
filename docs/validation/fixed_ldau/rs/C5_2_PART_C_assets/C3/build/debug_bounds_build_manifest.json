@@ -1,0 +1,71 @@
+{
+  "build_command": [
+    "cmake",
+    "--build",
+    "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/debug_bounds_build",
+    "--target",
+    "rslmto.x",
+    "--parallel",
+    "1"
+  ],
+  "build_exit_code": 0,
+  "effective_configuration": {
+    "blas_lapack": "Apple Accelerate",
+    "build_type": "Debug",
+    "compiler": "/opt/homebrew/bin/gfortran",
+    "compiler_version": "GNU Fortran (Homebrew GCC 16.2.0) 16.2.0",
+    "debug_flags": "-g -fcheck=bounds -ffpe-trap=invalid,zero,overflow -O0 -Wall -Wno-tabs -Wno-unused-variable -Wno-unused-dummy-argument -Wno-unused-function -Wno-unused-label -fbacktrace",
+    "global_flags": "-ffree-line-length-0 -cpp -mtune=native",
+    "march_native": "ON",
+    "mpi": "OFF",
+    "openmp": "ON",
+    "openmp_runtime": "/opt/homebrew/Cellar/gcc/16.2.0/lib/gcc/current/libgomp.dylib",
+    "spglib": "ON",
+    "spglib_path": "/opt/homebrew/Cellar/spglib/2.8.0/lib/libsymspg.dylib"
+  },
+  "executable": {
+    "build_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/debug_bounds_build/bin/rslmto.x",
+    "file_type": "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/debug_bounds_build/bin/rslmto.x: Mach-O 64-bit executable arm64",
+    "frozen_mode_octal": "0555",
+    "frozen_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x",
+    "frozen_sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69",
+    "sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69",
+    "size_bytes": 15246936
+  },
+  "generated_build_files": {
+    "CMakeCache.txt": {
+      "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/debug_bounds_build/CMakeCache.txt",
+      "sha256": "347a558d13e7aff984d33f9882e38b713fcc3e2f45f72072c3b74b2e2895c80e"
+    },
+    "executable_flags.make": {
+      "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/debug_bounds_build/CMakeFiles/rslmto.x.dir/flags.make",
+      "sha256": "481f79db62eee0167127af91e0a471786eb068f9392b5d2b6eef00de47529e85"
+    },
+    "executable_link.txt": {
+      "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/debug_bounds_build/CMakeFiles/rslmto.x.dir/link.txt",
+      "sha256": "4d72badacec3604f394fd3739667dc20d5d6ec917ec0281efb249b98955e59f0"
+    },
+    "library_flags.make": {
+      "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/debug_bounds_build/source/CMakeFiles/rslmto.dir/flags.make",
+      "sha256": "d7c34b1acb1dff9acfbbbba17504c5041c2d1d99eee6b78252ca7f8d3bb6eb0e"
+    },
+    "library_link.txt": {
+      "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/debug_bounds_build/source/CMakeFiles/rslmto.dir/link.txt",
+      "sha256": "b6829c280872c028083dde1a2fcac4f3a8ab91d1a135467a21cc14b5be081435"
+    }
+  },
+  "notes": [
+    "The initial no-g configure is preserved in history_debug_config_without_g and was not built.",
+    "No solver launched.",
+    "CMake warned that -F framework flags are passed to Fortran; compilation/link completed successfully."
+  ],
+  "repository_head": "8a107432e3ca2e00c815c217d52e7aa2a8e30736",
+  "schema": "c52-debug-bounds-build-manifest-v1",
+  "source_snapshot": {
+    "archive_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/source-8a107432e3ca2e00c815c217d52e7aa2a8e30736.tar",
+    "archive_sha256": "4c714648b7d7d83caa0e63f014a680c2b72fa69e797c816947ef1b8594572fcd",
+    "plan_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/debug_bounds_build_plan.json",
+    "plan_sha256": "f19d3c3d180a99cb66fe8091ff9be0a6cc505e4bbb212d8b72a4f990c155d37c"
+  },
+  "status": "BUILD_SUCCESS_NOT_YET_USED_FOR_SOLVER"
+}

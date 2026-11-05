@@ -1,0 +1,178 @@
+[Oct 25 2026 14:37:51.701] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+[Oct 25 2026 14:37:52.665] [lattice_strux.f90:89]      [1m[32m<info> [0m[0mSTRUCTB structure-constants, backend=legacy
+[Oct 25 2026 14:37:54.034] [symbolic_atom.f90:187]     [1m[32m<info> [0m[0mSCF input provenance: restart loaded from ./Ni_out.nml
+[Oct 25 2026 14:37:54.034] [element.f90:92]            [1m[32m<info> [0m[0mReading element from previous result ./Ni_out.nml
+[Oct 25 2026 14:37:54.035] [potential.f90:189]         [1m[32m<info> [0m[0mReading potential from previous result ./Ni_out.nml
+[Oct 25 2026 14:37:54.038] [symbolic_atom.f90:187]     [1m[32m<info> [0m[0mSCF input provenance: restart loaded from ./ES_out.nml
+[Oct 25 2026 14:37:54.038] [element.f90:92]            [1m[32m<info> [0m[0mReading element from previous result ./ES_out.nml
+[Oct 25 2026 14:37:54.043] [potential.f90:189]         [1m[32m<info> [0m[0mReading potential from previous result ./ES_out.nml
+[Oct 25 2026 14:37:54.043] [symbolic_atom.f90:187]     [1m[32m<info> [0m[0mSCF input provenance: restart loaded from ./Ni-S_out.nml
+[Oct 25 2026 14:37:54.043] [element.f90:92]            [1m[32m<info> [0m[0mReading element from previous result ./Ni-S_out.nml
+[Oct 25 2026 14:37:54.044] [potential.f90:189]         [1m[32m<info> [0m[0mReading potential from previous result ./Ni-S_out.nml
+[Oct 25 2026 14:37:54.044] [symbolic_atom.f90:187]     [1m[32m<info> [0m[0mSCF input provenance: restart loaded from ./Ni-S-1_out.nml
+[Oct 25 2026 14:37:54.044] [element.f90:92]            [1m[32m<info> [0m[0mReading element from previous result ./Ni-S-1_out.nml
+[Oct 25 2026 14:37:54.048] [potential.f90:189]         [1m[32m<info> [0m[0mReading potential from previous result ./Ni-S-1_out.nml
+[Oct 25 2026 14:37:54.048] [symbolic_atom.f90:187]     [1m[32m<info> [0m[0mSCF input provenance: restart loaded from ./Ni-S-2_out.nml
+[Oct 25 2026 14:37:54.048] [element.f90:92]            [1m[32m<info> [0m[0mReading element from previous result ./Ni-S-2_out.nml
+[Oct 25 2026 14:37:54.049] [potential.f90:189]         [1m[32m<info> [0m[0mReading potential from previous result ./Ni-S-2_out.nml
+[Oct 25 2026 14:37:54.049] [symbolic_atom.f90:187]     [1m[32m<info> [0m[0mSCF input provenance: restart loaded from ./Ni-S-3_out.nml
+[Oct 25 2026 14:37:54.049] [element.f90:92]            [1m[32m<info> [0m[0mReading element from previous result ./Ni-S-3_out.nml
+[Oct 25 2026 14:37:54.053] [potential.f90:189]         [1m[32m<info> [0m[0mReading potential from previous result ./Ni-S-3_out.nml
+[Oct 25 2026 14:37:54.053] [symbolic_atom.f90:187]     [1m[32m<info> [0m[0mSCF input provenance: restart loaded from ./Ni-S-4_out.nml
+[Oct 25 2026 14:37:54.053] [element.f90:92]            [1m[32m<info> [0m[0mReading element from previous result ./Ni-S-4_out.nml
+[Oct 25 2026 14:37:54.057] [potential.f90:189]         [1m[32m<info> [0m[0mReading potential from previous result ./Ni-S-4_out.nml
+[Oct 25 2026 14:37:54.078] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+[Oct 25 2026 14:37:54.897] [self.f90:3504]             [1m[32m<info> [0m[0mHUBBARD_RADIAL_MODE auto retained spectral: impurity is outside fixed Liechtenstein scalar d-shell scope
+[Oct 25 2026 14:37:54.897] [self.f90:3512]             [1m[32m<info> [0m[0mHUBBARD_RADIAL_MODE mode=spectral source=default use_kspace=.false. local_energy_adopted=.false.
+[Oct 25 2026 14:37:54.903] [self.f90:4488]             [1m[32m<info> [0m[0mPerform recursion at step 1
+[Oct 25 2026 14:37:54.935] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.500000]
+[Oct 25 2026 14:37:54.939] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 355
+[Oct 25 2026 14:37:54.950] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 25 2026 14:38:26.110] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 970
+[Oct 25 2026 14:38:26.126] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 25 2026 14:38:55.539] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1612
+[Oct 25 2026 14:38:55.544] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 25 2026 14:39:25.020] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2250
+[Oct 25 2026 14:39:25.030] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 25 2026 14:39:54.168] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2881
+[Oct 25 2026 14:39:54.174] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 25 2026 14:40:23.897] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 3496
+[Oct 25 2026 14:40:23.924] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 25 2026 14:40:53.484] [self.f90:4580]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 25 2026 14:40:53.504] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.500000]
+[Oct 25 2026 14:40:53.610] [bands.f90:482]             [1m[32m<info> [0m[0mValence is:       10.000000
+[Oct 25 2026 14:40:53.615] [bands.f90:553]             [1m[32m<info> [0m[0mFixed Fermi energy: -0.062420
+[Oct 25 2026 14:40:53.749] [bands.f90:1780]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   0.007319
+[Oct 25 2026 14:40:53.749] [bands.f90:1790]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000  -0.007319
+[Oct 25 2026 14:40:53.794] [bands.f90:1780]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   0.686926
+[Oct 25 2026 14:40:53.794] [bands.f90:1790]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   0.686926
+[Oct 25 2026 14:40:53.833] [bands.f90:1780]            [1m[32m<info> [0m[0mSpin moment of atom   3 is   0.639514
+[Oct 25 2026 14:40:53.833] [bands.f90:1790]            [1m[32m<info> [0m[0mSpin moment projections of atom   3 is   0.000000   0.000000   0.639514
+[Oct 25 2026 14:40:53.868] [bands.f90:1780]            [1m[32m<info> [0m[0mSpin moment of atom   4 is   0.705473
+[Oct 25 2026 14:40:53.868] [bands.f90:1790]            [1m[32m<info> [0m[0mSpin moment projections of atom   4 is   0.000000   0.000000   0.705473
+[Oct 25 2026 14:40:53.905] [bands.f90:1780]            [1m[32m<info> [0m[0mSpin moment of atom   5 is   0.682207
+[Oct 25 2026 14:40:53.905] [bands.f90:1790]            [1m[32m<info> [0m[0mSpin moment projections of atom   5 is   0.000000   0.000000   0.682207
+[Oct 25 2026 14:40:53.941] [bands.f90:1780]            [1m[32m<info> [0m[0mSpin moment of atom   6 is   0.690809
+[Oct 25 2026 14:40:53.941] [bands.f90:1790]            [1m[32m<info> [0m[0mSpin moment projections of atom   6 is   0.000000   0.000000   0.690809
+[Oct 25 2026 14:40:54.073] [bands.f90:2151]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.000000  -0.000000   0.000000
+[Oct 25 2026 14:40:54.145] [bands.f90:2151]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is   0.000000   0.000000   0.000000
+[Oct 25 2026 14:40:54.216] [bands.f90:2151]            [1m[32m<info> [0m[0mOrbital moment of atom   3 is   0.000000  -0.000000  -0.000000
+[Oct 25 2026 14:40:54.287] [bands.f90:2151]            [1m[32m<info> [0m[0mOrbital moment of atom   4 is  -0.000000   0.000000   0.000000
+[Oct 25 2026 14:40:54.358] [bands.f90:2151]            [1m[32m<info> [0m[0mOrbital moment of atom   5 is  -0.000000  -0.000000   0.000000
+[Oct 25 2026 14:40:54.429] [bands.f90:2151]            [1m[32m<info> [0m[0mOrbital moment of atom   6 is   0.000000  -0.000000  -0.000000
+[Oct 25 2026 14:40:54.434] [bands.f90:817]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long= -0.007319 |m_transverse|=  0.000000 torque=( -0.000000,  0.000000,  0.000000)
+[Oct 25 2026 14:40:54.434] [bands.f90:817]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  0.686926 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 25 2026 14:40:54.434] [bands.f90:817]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   3 m_long=  0.639514 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 25 2026 14:40:54.434] [bands.f90:817]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   4 m_long=  0.705473 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 25 2026 14:40:54.434] [bands.f90:817]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   5 m_long=  0.682207 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 25 2026 14:40:54.434] [bands.f90:817]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   6 m_long=  0.690809 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 25 2026 14:40:54.434] [self.f90:4282]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 25 2026 14:40:54.434] [mix.f90:712]               [1m[32m<info> [0m[0mValence at atom   1 is   0.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:715]               [1m[32m<info> [0m[0mCharge transfer at atom    1:   0.225357   0.225356   0.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:712]               [1m[32m<info> [0m[0mValence at atom   2 is  10.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:715]               [1m[32m<info> [0m[0mCharge transfer at atom    2:  -0.295406  -0.295406  -0.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:712]               [1m[32m<info> [0m[0mValence at atom   3 is  10.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:715]               [1m[32m<info> [0m[0mCharge transfer at atom    3:   0.079171   0.079170   0.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:712]               [1m[32m<info> [0m[0mValence at atom   4 is  10.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:715]               [1m[32m<info> [0m[0mCharge transfer at atom    4:  -0.009236  -0.009236   0.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:712]               [1m[32m<info> [0m[0mValence at atom   5 is  10.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:715]               [1m[32m<info> [0m[0mCharge transfer at atom    5:  -0.000032  -0.000030  -0.000001
+[Oct 25 2026 14:40:54.434] [mix.f90:712]               [1m[32m<info> [0m[0mValence at atom   6 is  10.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:715]               [1m[32m<info> [0m[0mCharge transfer at atom    6:   0.000000  -0.000002   0.000002
+[Oct 25 2026 14:40:54.434] [mix.f90:725]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:725]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:725]               [1m[32m<info> [0m[0mMoment diff for atom:   3 is   0.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:725]               [1m[32m<info> [0m[0mMoment diff for atom:   4 is   0.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:725]               [1m[32m<info> [0m[0mMoment diff for atom:   5 is   0.000000
+[Oct 25 2026 14:40:54.434] [mix.f90:725]               [1m[32m<info> [0m[0mMoment diff for atom:   6 is   0.000000
+[Oct 25 2026 14:40:54.434] [charge.f90:909]            [1m[32m<info> [0m[0mExcess charge to the next layer is   0.000147
+[Oct 25 2026 14:40:54.435] [charge.f90:941]            [1m[32m<info> [0m[0msum1= 2.6790376252793319E-012 sumn= -1.6109487794827173
+[Oct 25 2026 14:40:54.435] [charge.f90:946]            [1m[32m<info> [0m[0mvm1= 1.0295976930119162E-012 vmn= -0.61911379342529005
+[Oct 25 2026 14:40:54.435] [charge.f90:971]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=   0.225356 VMAD=   0.424200
+[Oct 25 2026 14:40:54.435] [charge.f90:971]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=  -0.295406 VMAD=   0.025454
+[Oct 25 2026 14:40:54.435] [charge.f90:971]            [1m[32m<info> [0m[0mClass    3 Chg. Transfer=   0.079170 VMAD=  -0.031991
+[Oct 25 2026 14:40:54.435] [charge.f90:971]            [1m[32m<info> [0m[0mClass    4 Chg. Transfer=  -0.009236 VMAD=   0.005187
+[Oct 25 2026 14:40:54.435] [charge.f90:971]            [1m[32m<info> [0m[0mClass    5 Chg. Transfer=  -0.000030 VMAD=  -0.000897
+[Oct 25 2026 14:40:54.435] [charge.f90:971]            [1m[32m<info> [0m[0mClass    6 Chg. Transfer=  -0.000002 VMAD=  -0.000560
+[Oct 25 2026 14:40:54.435] [self.f90:5244]             [1m[32m<info> [0m[0mES
+[Oct 25 2026 14:40:54.435] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 25 2026 14:40:54.435] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 25 2026 14:40:54.435] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 25 2026 14:40:54.435] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 25 2026 14:40:54.435] [self.f90:5330]             [1m[32m<info> [0m[0mXC functional: B-H 10.21800132585906698
+[Oct 25 2026 14:40:54.435] [self.f90:5409]             [1m[32m<info> [0m[0mF core check:0
+[Oct 25 2026 14:40:54.444] [self.f90:5244]             [1m[32m<info> [0m[0mNi-S
+[Oct 25 2026 14:40:54.444] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 25 2026 14:40:54.444] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 25 2026 14:40:54.444] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 25 2026 14:40:54.444] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 25 2026 14:40:54.444] [self.f90:5330]             [1m[32m<info> [0m[0mXC functional: B-H 11.1813598060720756E-004
+[Oct 25 2026 14:40:54.444] [self.f90:5409]             [1m[32m<info> [0m[0mF core check:0
+[Oct 25 2026 14:40:54.499] [self.f90:5244]             [1m[32m<info> [0m[0mNi-S-1
+[Oct 25 2026 14:40:54.499] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 25 2026 14:40:54.499] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 25 2026 14:40:54.499] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 25 2026 14:40:54.499] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 25 2026 14:40:54.499] [self.f90:5330]             [1m[32m<info> [0m[0mXC functional: B-H 11.1813598060720756E-004
+[Oct 25 2026 14:40:54.499] [self.f90:5409]             [1m[32m<info> [0m[0mF core check:0
+[Oct 25 2026 14:40:54.554] [self.f90:5244]             [1m[32m<info> [0m[0mNi-S-2
+[Oct 25 2026 14:40:54.554] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 25 2026 14:40:54.554] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 25 2026 14:40:54.554] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 25 2026 14:40:54.554] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 25 2026 14:40:54.554] [self.f90:5330]             [1m[32m<info> [0m[0mXC functional: B-H 11.1813598060720756E-004
+[Oct 25 2026 14:40:54.554] [self.f90:5409]             [1m[32m<info> [0m[0mF core check:0
+[Oct 25 2026 14:40:54.608] [self.f90:5244]             [1m[32m<info> [0m[0mNi-S-3
+[Oct 25 2026 14:40:54.608] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 25 2026 14:40:54.608] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 25 2026 14:40:54.608] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 25 2026 14:40:54.608] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 25 2026 14:40:54.608] [self.f90:5330]             [1m[32m<info> [0m[0mXC functional: B-H 11.1813598060720756E-004
+[Oct 25 2026 14:40:54.608] [self.f90:5409]             [1m[32m<info> [0m[0mF core check:0
+[Oct 25 2026 14:40:54.664] [self.f90:5244]             [1m[32m<info> [0m[0mNi-S-4
+[Oct 25 2026 14:40:54.664] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 25 2026 14:40:54.664] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 25 2026 14:40:54.664] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 25 2026 14:40:54.664] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 25 2026 14:40:54.664] [self.f90:5330]             [1m[32m<info> [0m[0mXC functional: B-H 11.1813598060720756E-004
+[Oct 25 2026 14:40:54.664] [self.f90:5409]             [1m[32m<info> [0m[0mF core check:0
+[Oct 25 2026 14:40:54.718] [self.f90:4910]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 25 2026 14:40:54.718] [self.f90:4935]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom ES
+[Oct 25 2026 14:40:54.718] [self.f90:4935]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni-S
+[Oct 25 2026 14:40:54.718] [self.f90:4935]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni-S-1
+[Oct 25 2026 14:40:54.718] [self.f90:4935]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni-S-2
+[Oct 25 2026 14:40:54.718] [self.f90:4935]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni-S-3
+[Oct 25 2026 14:40:54.718] [self.f90:4935]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Ni-S-4
+[Oct 25 2026 14:40:54.723] [self.f90:4354]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000668
+[Oct 25 2026 14:40:54.729] [bands.f90:2374]            [1m[32m<info> [0m[0mMagnetic field on atom   1 is         0.000000         0.000000         2.379293
+[Oct 25 2026 14:40:54.729] [bands.f90:2375]            [1m[32m<info> [0m[0mMagnetic torque on atom   1 is         0.000000         0.000000         0.000000
+[Oct 25 2026 14:40:54.729] [bands.f90:2374]            [1m[32m<info> [0m[0mMagnetic field on atom   2 is        -0.000000        -0.000000     -6306.707233
+[Oct 25 2026 14:40:54.729] [bands.f90:2375]            [1m[32m<info> [0m[0mMagnetic torque on atom   2 is         0.000000         0.000000         0.000000
+[Oct 25 2026 14:40:54.729] [bands.f90:2374]            [1m[32m<info> [0m[0mMagnetic field on atom   3 is        -0.000000        -0.000000     -5269.060712
+[Oct 25 2026 14:40:54.729] [bands.f90:2375]            [1m[32m<info> [0m[0mMagnetic torque on atom   3 is         0.000000         0.000000         0.000000
+[Oct 25 2026 14:40:54.729] [bands.f90:2374]            [1m[32m<info> [0m[0mMagnetic field on atom   4 is        -0.000000        -0.000000     -6822.375669
+[Oct 25 2026 14:40:54.729] [bands.f90:2375]            [1m[32m<info> [0m[0mMagnetic torque on atom   4 is         0.000000         0.000000         0.000000
+[Oct 25 2026 14:40:54.729] [bands.f90:2374]            [1m[32m<info> [0m[0mMagnetic field on atom   5 is        -0.000000        -0.000000     -6317.645318
+[Oct 25 2026 14:40:54.729] [bands.f90:2375]            [1m[32m<info> [0m[0mMagnetic torque on atom   5 is         0.000000         0.000000         0.000000
+[Oct 25 2026 14:40:54.729] [bands.f90:2374]            [1m[32m<info> [0m[0mMagnetic field on atom   6 is        -0.000000        -0.000000     -6481.586881
+[Oct 25 2026 14:40:54.729] [bands.f90:2375]            [1m[32m<info> [0m[0mMagnetic torque on atom   6 is         0.000000         0.000000         0.000000
+[Oct 25 2026 14:40:54.730] [self.f90:4999]             [1m[32m<info> [0m[0mWriting calculation report to report.out
+[Oct 25 2026 14:40:54.765] [self.f90:5116]             [1m[32m<info> [0m[0mCalculation finished. Report printed in report.out
+------------------------------------------------------------- TIMER REPORT --------------------------------------------------------------
+  CATEGORY                              MEAN            MAX            MIN          TOTAL      TOTAL (%)         NCALLS   TOTAL NCALLS   
+  total                                    -              -              -       183.0667          100.0              1              9   
+  └─ Calculation                           -              -              -       183.0667          100.0              1              8   
+     ├─ Calculation*                       -              -              -         1.1131            0.6              -              1   
+     ├─ pre-processing                     -              -              -         2.1289            1.2              1              3   
+     │  ├─ pre-processing*                 -              -              -         0.5100            0.3              -              1   
+     │  ├─ build_data                      -              -              -         0.0001            0.0              1              1   
+     │  ├─ bravais                         -              -              -         0.2063            0.1              1              1   
+     │  └─ structb                         -              -              -         1.4126            0.8              1              1   
+     └─ self-consistency                   -              -              -       179.8248           98.2              1              3   
+        ├─ self-consistency*               -              -              -         0.0115            0.0              -              1   
+        ├─ recursion                       -              -              -       178.5796           97.5              1              1   
+        ├─ calculation-of-DOS              -              -              -         0.9500            0.5              1              1   
+        └─ atomic-scf                      -              -              -         0.2836            0.2              1              1   
+----------------------------------------------------------------------------------------------------------------------------------------
+  * exclusive values to this label
+----------------------------------------------------------------------------------------------------------------------------------------

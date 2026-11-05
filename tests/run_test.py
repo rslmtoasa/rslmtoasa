@@ -47,12 +47,17 @@ Reference data is driven by a "checks" dict in cases.json:
         "tolerances": { "fermi_level": { "abs_tol": 1e-3 } }
       }
     ],
+    "log_patterns": [
+      { "file": "testrun.log", "must_match": "regex that must occur", "must_not_match": "regex that must not occur" }
+    ],
     "outputs": [
       { "file": "totaldos.out", "min_lines": 50 }
     ]
   }
 
 If a case has no "checks" key the test still runs as a smoke test.
+A case with "expect_fatal": "<message>" passes only if the binary exits non-zero and
+testrun.log contains that exact message; no other checks run.
 """
 
 from __future__ import annotations
@@ -121,11 +126,20 @@ def patch_input_nml(workdir: str, case: dict) -> None:
     os.replace(tmp_path, input_path)
 
 
+def patch_potentials(workdir: str, case: dict) -> None:
+    """Patch the scratch copies of potential files: {"Mn.nml": {"par": {"mom": [1, 0, 0]}}}."""
+    for name, patch in case.get("potentials", {}).items():
+        path = os.path.join(workdir, name)
+        f90nml.patch(path, patch, path + ".tmp")
+        os.replace(path + ".tmp", path)
+
+
 # ---------------------------------------------------------------------------
 # Binary invocation
 # ---------------------------------------------------------------------------
 
-def run_binary(binary: str, workdir: str, mpi_procs: int = 1, serial_omp_threads: int | None = None) -> None:
+def run_binary(binary: str, workdir: str, mpi_procs: int = 1, serial_omp_threads: int | None = None,
+               expect_fatal: str | None = None) -> None:
     run_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_binary.sh")
     # MSYS Python uses the native Windows process API, where the POSIX path
     # /bin/bash is not executable.  Resolve bash through its MSYS-provided
@@ -141,6 +155,15 @@ def run_binary(binary: str, workdir: str, mpi_procs: int = 1, serial_omp_threads
     if mpi_procs <= 1 and serial_omp_threads is not None:
         env["RSLMTO_OMP_THREADS_SERIAL"] = str(serial_omp_threads)
     result = subprocess.run(cmd, cwd=workdir, env=env)
+    if expect_fatal is not None:
+        log_path = os.path.join(workdir, "testrun.log")
+        content = open(log_path).read() if os.path.exists(log_path) else ""
+        if result.returncode != 0 and expect_fatal in content:
+            print(f"PASS: binary stopped with the expected fatal message: {expect_fatal}")
+            sys.exit(0)
+        print(f"ERROR: expected a non-zero exit with the fatal message '{expect_fatal}'; "
+              f"exit code {result.returncode}")
+        sys.exit(1)
     if result.returncode != 0:
         print(f"ERROR: binary returned non-zero exit code {result.returncode}")
         log_path = os.path.join(workdir, "testrun.log")
@@ -285,6 +308,17 @@ def check_log_assertions(workdir: str, case_name: str, assertions: list[dict]) -
                 f"actual={actual!r}, expected={expected!r}, tolerance={tolerance!r}"
             )
             sys.exit(1)
+
+
+def check_log_patterns(workdir: str, case_name: str, patterns: list[dict]) -> None:
+    """Each entry names a file and a regex that must (must_match) or must not (must_not_match) occur in it."""
+    for entry in patterns:
+        with open(os.path.join(workdir, entry["file"])) as fh:
+            text = re.sub(r"\x1b\[[0-9;]*m", "", fh.read())
+        for key, want in (("must_match", True), ("must_not_match", False)):
+            if key in entry and (re.search(entry[key], text) is not None) != want:
+                print(f"ERROR [{case_name}]: {entry['file']} {key} failed: {entry[key]}")
+                sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -659,6 +693,7 @@ def main() -> None:
 
     setup_scratch(case_dir, workdir, preserve_outputs=case.get("preserve_outputs", False))
     patch_input_nml(workdir, case)
+    patch_potentials(workdir, case)
     serial_omp = case.get("omp_threads", None)
     if args.mpi_procs is not None and args.mpi_procs < 1:
         parser.error("--mpi-procs must be a positive integer")
@@ -668,12 +703,13 @@ def main() -> None:
         args.mpi_procs if args.mpi_enabled and args.mpi_procs is not None else
         (case.get("mpi_procs", 1) if args.mpi_enabled else 1)
     )
-    run_binary(binary, workdir, mpi_procs, serial_omp)
+    run_binary(binary, workdir, mpi_procs, serial_omp, case.get("expect_fatal"))
     check_log(workdir, args.case_name)
     check_output_files(workdir, args.case_name, case.get("outputs", []))
     check_text_dimensions(workdir, args.case_name, case.get("checks", {}).get("dimensions", []))
     check_text_finite(workdir, args.case_name, case.get("checks", {}).get("finite", []))
     check_log_assertions(workdir, args.case_name, case.get("checks", {}).get("assertions", []))
+    check_log_patterns(workdir, args.case_name, case.get("checks", {}).get("log_patterns", []))
 
     if args.compare_ref:
         abs_tol = case.get("abs_tol", args.abs_tol)

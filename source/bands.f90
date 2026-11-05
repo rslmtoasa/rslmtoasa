@@ -32,6 +32,7 @@ module bands_mod
    use precision_mod, only: rp
    use math_mod
    use logger_mod, only: g_logger
+   use scf_guard_mod, only: guard_q0_capacity, guard_nonfinite_scalar
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
 #endif
@@ -115,6 +116,8 @@ module bands_mod
       procedure :: calculate_occupation_gauss_legendre
       procedure :: calculate_angles
       procedure :: calculate_hubbard_u_sc
+      procedure :: calculate_spinor_dm
+      procedure :: write_spinor_moments_trace
       !procedure :: calculate_conductivity_tensor
       procedure :: fermi
       procedure :: restore_to_default
@@ -860,13 +863,14 @@ contains
    !> @brief
    !> Calculates the moments m^(q), q = 0, 1 and 2
    !---------------------------------------------------------------------------
-   subroutine calculate_moments(this, m1_out, pl_diag_out)
+   subroutine calculate_moments(this, m1_out, pl_diag_out, iteration)
       use mpi_mod
       class(bands) :: this
       ! Optional diagnostic-only raw first spectral moment, shape
       ! (nrec,l+1,spin,m_a,m_b). It never feeds the radial moment path.
       complex(rp), intent(out), optional, target :: m1_out(:, :, :, :, :)
       real(rp), intent(out), optional :: pl_diag_out(:, :, :, :)
+      integer, intent(in), optional :: iteration
       ! Local variables
       integer :: i, j, l, m, o ! Orbital index
       integer :: na ! Atom index
@@ -880,13 +884,14 @@ contains
       integer :: nchan, nchan_spin
 
       real(rp), dimension(:), allocatable :: pot_arr
-      integer :: na_glob, pot_size
+      integer :: na_glob, pot_size, iteration_value, l_check, spin_check
       real(rp), dimension(:, :), allocatable :: T_comm
       real(rp), dimension(3, atoms_per_process) :: mom_prev
       logical :: hubbard_active
       integer :: li, iorb, jorb, jdim, ispin
       integer :: ncap_orb, ncap_trace
       integer :: nphys_warn
+      logical :: l_channel_carries_uj
       real(rp) :: occ_raw, ch_sum, scale_ch, ldm_val, max_herm
       real(rp) :: ldm_imag_val
       real(rp) :: ldm_trace, ldm_min_eig, ldm_max_eig, ldm_antiherm
@@ -901,17 +906,25 @@ contains
       real(rp), allocatable :: m1_comm_imag(:, :, :, :, :)
       complex(rp), pointer :: m1_target(:, :, :, :, :)
       complex(rp), allocatable, target :: m1_local(:, :, :, :, :)
-      complex(rp) :: p_d(5, 5), m1_d(5, 5), v_d(5, 5)
+      complex(rp) :: p_d(5, 5), m1_d(5, 5), v_d(5, 5), v_spinor(10, 10)
+      real(rp) :: q0_spin(2), c_spin(2), q2_spin(2), c_local_spin(2), q2_local_spin(2), t_local_spin(2)
+      logical :: spinor_local, spinor_flag
       real(rp) :: m1_real, m1_imag
       real(rp) :: q0_d, center_d, q2_d, center_local, q2_local, t_local
       real(rp), allocatable :: pl_comm(:, :, :)
       integer :: lcount_ldm, max_flat_ldm, local_flat
       integer :: status_local, itype_local
+      integer :: cluster_site_local
+      logical :: rd1_use_vin_capture, local_atom_carries_uj
+      complex(rp) :: rd1_vin_snapshot(5, 5, 2)
       ! These diagnostic tolerances exceed observed finite-grid residuals
       ! (about 1e-8 anti-Hermitian and <1e-4 eigen/trace drift) without hiding
       ! material violations. Diagnostics never modify or project the LDM.
       real(rp), parameter :: ldm_hermiticity_tol = 1.0e-6_rp
       real(rp), parameter :: ldm_occupation_tol = 1.0e-3_rp
+
+      iteration_value = 0
+      if (present(iteration)) iteration_value = iteration
 
       if (present(m1_out)) then
          if (size(m1_out, 1) /= this%lattice%nrec .or. size(m1_out, 2) < lmax_basis + 1 .or. &
@@ -1017,6 +1030,15 @@ contains
                this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(3, i - soff - 1, nsp) = 0.0_rp
             end if
          end do
+         if (this%control%nsp == 1) then
+            do l_check = 0, min(this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%lmax, lmax_basis)
+               do spin_check = 1, 2
+                  call guard_q0_capacity(this%symbolic_atom(this%lattice%nbulk + na_glob)%element%symbol, &
+                     na_glob, l_check, spin_check, iteration_value, &
+                     this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, l_check, spin_check))
+               end do
+            end do
+         end if
          ! if (this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%lmax >= 3) then
          !    call g_logger%info(’DEBUG:bands ql atom’//fmt(’i4’, na_glob)// &
          !                       ’ ql_s_up=’//fmt(’f10.6’, this%symbolic_atom(this%lattice%nbulk + na_glob)%potential%ql(1, 0, 1))// &
@@ -1039,6 +1061,14 @@ contains
          do na_glob = start_atom, end_atom
             na = g2l_map(na_glob)
             plusbulk = this%lattice%nbulk + na_glob
+            local_atom_carries_uj = .false.
+            if (allocated(this%symbolic_atom(plusbulk)%potential%hubbard_u)) then
+               local_atom_carries_uj = any(abs(this%symbolic_atom(plusbulk)%potential%hubbard_u) > 1.0e-10_rp)
+            end if
+            if (allocated(this%symbolic_atom(plusbulk)%potential%hubbard_j)) then
+               local_atom_carries_uj = local_atom_carries_uj .or. &
+                  any(abs(this%symbolic_atom(plusbulk)%potential%hubbard_j) > 1.0e-10_rp)
+            end if
             this%symbolic_atom(plusbulk)%potential%ldm(:, :, :, :) = 0.0_rp
             ncap_orb = 0
             ncap_trace = 0
@@ -1046,6 +1076,18 @@ contains
             do ispin = 1, 2
                soff = (ispin - 1)*spin_off
                do li = 0, min(3, lmax_basis)
+                  l_channel_carries_uj = .false.
+                  if (allocated(this%symbolic_atom(plusbulk)%potential%hubbard_u)) then
+                     if (li + 1 <= size(this%symbolic_atom(plusbulk)%potential%hubbard_u)) then
+                        l_channel_carries_uj = abs(this%symbolic_atom(plusbulk)%potential%hubbard_u(li + 1)) > 1.0e-10_rp
+                     end if
+                  end if
+                  if (allocated(this%symbolic_atom(plusbulk)%potential%hubbard_j)) then
+                     if (li + 1 <= size(this%symbolic_atom(plusbulk)%potential%hubbard_j)) then
+                        l_channel_carries_uj = l_channel_carries_uj .or. &
+                           abs(this%symbolic_atom(plusbulk)%potential%hubbard_j(li + 1)) > 1.0e-10_rp
+                     end if
+                  end if
                   jdim = 2*li + 1
                   occ_ch(:) = 0.0_rp
                   do iorb = li*li + 1, (li + 1)*(li + 1)
@@ -1081,7 +1123,8 @@ contains
                         occ_orb = max(0.0_rp, min(1.0_rp, occ_orb))
                         if (abs(occ_orb - occ_raw) > 1.0e-12_rp) ncap_orb = ncap_orb + 1
                         this%symbolic_atom(plusbulk)%potential%ldm(li + 1, ispin, iorb - li*li, iorb - li*li) = cmplx(occ_orb, 0.0_rp, rp)
-                     else if (occ_raw < -1.0e-3_rp .or. occ_raw > 1.0_rp + 1.0e-3_rp) then
+                     else if (l_channel_carries_uj .and. &
+                              (occ_raw < -1.0e-3_rp .or. occ_raw > 1.0_rp + 1.0e-3_rp)) then
                         ! Diagnose appreciable integration drift without projecting
                         ! the matrix back into a different density.
                         nphys_warn = nphys_warn + 1
@@ -1100,17 +1143,18 @@ contains
                   end if
                end do
             end do
-            if (rank == 0 .and. (ncap_orb > 0 .or. ncap_trace > 0)) then
+            if (rank == 0 .and. local_atom_carries_uj .and. (ncap_orb > 0 .or. ncap_trace > 0)) then
                call g_logger%warning('HUBBARD_LDM_CAP atom='//fmt('i4', na_glob)// &
                                      ' orb_caps='//fmt('i0', ncap_orb)// &
                                      ' trace_caps='//fmt('i0', ncap_trace), __FILE__, __LINE__)
             end if
-            if (rank == 0 .and. fixed_liechtenstein_active .and. nphys_warn > 0) then
+            if (rank == 0 .and. local_atom_carries_uj .and. fixed_liechtenstein_active .and. nphys_warn > 0 .and. &
+                this%recursion%hamiltonian%hubbard_log_level /= 'summary') then
                call g_logger%warning('HUBBARD_LDM_PHYSICALITY atom='//fmt('i4', na_glob)// &
                                      ' diagonal_out_of_range='//fmt('i0', nphys_warn)// &
                                      ' tolerance=1e-3 (values retained)', __FILE__, __LINE__)
             end if
-            if (rank == 0) then
+            if (rank == 0 .and. local_atom_carries_uj) then
                max_herm = 0.0_rp
                do li = 0, min(3, lmax_basis)
                   jdim = 2*li + 1
@@ -1121,7 +1165,14 @@ contains
                end do
                call g_logger%info('HUBBARD_LDM_CHECK atom='//fmt('i4', na_glob)// &
                                   ' max_antiherm='//fmt('e12.4', max_herm), __FILE__, __LINE__)
+               if (this%recursion%hamiltonian%hubbard_log_level /= 'summary') then
                do li = 0, min(3, lmax_basis)
+                  if (.not. allocated(this%symbolic_atom(plusbulk)%potential%hubbard_u) .or. &
+                      .not. allocated(this%symbolic_atom(plusbulk)%potential%hubbard_j)) cycle
+                  if (li + 1 > size(this%symbolic_atom(plusbulk)%potential%hubbard_u) .or. &
+                      li + 1 > size(this%symbolic_atom(plusbulk)%potential%hubbard_j)) cycle
+                  if (abs(this%symbolic_atom(plusbulk)%potential%hubbard_u(li + 1)) <= 1.0e-10_rp .and. &
+                      abs(this%symbolic_atom(plusbulk)%potential%hubbard_j(li + 1)) <= 1.0e-10_rp) cycle
                   call g_logger%info('HUBBARD_BANDCMP atom='//fmt('i4', na_glob)//' l='//fmt('i2', li)// &
                                      ' ql_up='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%ql(1, li, 1))// &
                                      ' ql_dn='//fmt('f10.6', this%symbolic_atom(plusbulk)%potential%ql(1, li, 2))// &
@@ -1154,6 +1205,7 @@ contains
                      end do
                   end if
                end do
+               end if
             end if
             call this%symbolic_atom(plusbulk)%potential%flatten_ldm()
          end do
@@ -1206,16 +1258,123 @@ contains
 #endif
       end if
 
+      spinor_flag = this%control%nsp == 2 .and. this%recursion%hamiltonian%hubbard_soc_experimental .and. lmax_basis >= 2
+      spinor_local = local_moments_active .and. spinor_flag
+      ! The spinor correction needs the current spinor P and M1 before the radial moments are mapped.
+      if (spinor_flag) call this%calculate_spinor_dm()
+
       if (local_moments_active) then
          if (.not. associated(m1_target)) call g_logger%fatal( &
             'Local Hubbard radial moments require the current spectral M1 matrix.', __FILE__, __LINE__)
+         rd1_use_vin_capture = this%recursion%hamiltonian%rd1_local_impurity_eligible() .and. &
+            this%recursion%hamiltonian%rd1_capture_required
          do na_glob = start_atom, end_atom
             plusbulk = this%lattice%nbulk + na_glob
-            itype_local = this%lattice%ib(na_glob)
+            ! Preserve the impurity path's historical early skip: an untreated
+            ! recursion atom may not have a meaningful legacy ib entry.
+            if (this%control%calctype == 'I' .and. &
+                .not. this%recursion%hamiltonian%hubbard_u_general_check .and. &
+                .not. this%recursion%hamiltonian%hubbard_u_sc_check .and. &
+                .not. this%recursion%hamiltonian%hubbard_test_operator_check .and. &
+                allocated(this%recursion%hamiltonian%hubbard_u_impurity) .and. &
+                allocated(this%recursion%hamiltonian%hubbard_j_impurity)) then
+               if (na_glob <= size(this%recursion%hamiltonian%hubbard_u_impurity, 1) .and. &
+                   na_glob <= size(this%recursion%hamiltonian%hubbard_j_impurity, 1)) then
+                  if (.not. fixed_impurity_atom_carries_uj( &
+                      this%recursion%hamiltonian%hubbard_u_impurity(na_glob, :), &
+                      this%recursion%hamiltonian%hubbard_j_impurity(na_glob, :))) cycle
+               end if
+            end if
+            if (rd1_use_vin_capture) then
+               call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
+                  cluster_site_local, itype_local, status_local)
+               if (status_local /= 0) then
+                  call g_logger%fatal('RD1 local correction has invalid mapped cluster site at iteration='// &
+                     fmt('i0', iteration_value)//' recursion='//fmt('i0', na_glob)// &
+                     ' cluster='//fmt('i0', cluster_site_local), __FILE__, __LINE__)
+               end if
+            else if ((this%control%calctype == 'I' .or. this%control%calctype == 'S') .and. &
+                     (this%recursion%hamiltonian%hubbard_test_operator_check .or. spinor_local)) then
+               call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
+                  cluster_site_local, itype_local, status_local)
+               if (status_local /= 0) then
+                  call g_logger%fatal('Local Hubbard test operator has invalid recursion-site map: recursion='// &
+                     fmt('i0', na_glob)//' cluster='//fmt('i0', cluster_site_local), __FILE__, __LINE__)
+               end if
+            else if (this%control%calctype == 'S' .and. local_moments_active) then
+               ! Surface recursion sites use irec -> iz; ib describes the
+               ! frozen host and is not the local potential type.
+               call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, &
+                  cluster_site_local, itype_local, status_local)
+               if (status_local /= 0) then
+                  call g_logger%fatal('Surface local correction has invalid recursion-site map: recursion='// &
+                     fmt('i0', na_glob)//' cluster='//fmt('i0', cluster_site_local), __FILE__, __LINE__)
+               end if
+            else
+               ! Preserve the legacy spectral and reciprocal paths outside the
+               ! narrowly enabled real-space impurity correction.
+               itype_local = this%lattice%ib(na_glob)
+            end if
+            ! A surface recursion layer can be an empty sphere or another
+            ! type with no U/J. Skip it before extracting a d-shell operator.
+            if (this%control%calctype == 'S' .and. local_moments_active) then
+               if (itype_local < 1 .or. itype_local > size(this%lattice%symbolic_atoms)) then
+                  call g_logger%fatal('Surface local correction has invalid symbolic atom type='// &
+                     fmt('i0', itype_local), __FILE__, __LINE__)
+               end if
+               local_atom_carries_uj = .false.
+               if (allocated(this%lattice%symbolic_atoms(itype_local)%potential%hubbard_u)) then
+                  local_atom_carries_uj = any(abs( &
+                     this%lattice%symbolic_atoms(itype_local)%potential%hubbard_u) > 1.0e-10_rp)
+               end if
+               if (allocated(this%lattice%symbolic_atoms(itype_local)%potential%hubbard_j)) then
+                  local_atom_carries_uj = local_atom_carries_uj .or. any(abs( &
+                     this%lattice%symbolic_atoms(itype_local)%potential%hubbard_j) > 1.0e-10_rp)
+               end if
+               if (.not. local_atom_carries_uj) cycle
+            end if
+            if (rd1_use_vin_capture) then
+               call this%recursion%hamiltonian%get_rd1_vin_for_recursion(na_glob, iteration_value, &
+                  rd1_vin_snapshot, status_local)
+               if (status_local /= 0) call g_logger%fatal('RD1 exact V-in snapshot missing/stale: status='// &
+                  fmt('i0', status_local)//' iteration='//fmt('i0', iteration_value)// &
+                  ' recursion='//fmt('i0', na_glob)//' cluster='//fmt('i0', cluster_site_local)// &
+                  ' type='//fmt('i0', itype_local), __FILE__, __LINE__)
+            end if
+            if (spinor_local) then
+               ! nsp=2 spinor operator: both radial spin channels from the full 10x10 P, M1 and V_in.
+               call extract_hubbard_d_spinor_potential(this%recursion%hamiltonian%hubbard_u_pot, &
+                  itype_local, spin_off, v_spinor, status_local)
+               if (status_local /= 0) call g_logger%fatal('Unable to map local d-shell spinor Hubbard potential.', &
+                  __FILE__, __LINE__)
+               if (maxval(abs(v_spinor)) == 0.0_rp) cycle
+               do ispin = 1, 2
+                  q0_spin(ispin) = this%symbolic_atom(plusbulk)%potential%ql(1, 2, ispin)
+                  c_spin(ispin) = this%symbolic_atom(plusbulk)%potential%gravity_center(3, ispin) + &
+                                  this%symbolic_atom(plusbulk)%potential%vmad
+                  q2_spin(ispin) = this%symbolic_atom(plusbulk)%potential%ql(3, 2, ispin)
+               end do
+               call correct_d_shell_moments_spinor(this%symbolic_atom(plusbulk)%potential%ldm_spinor, &
+                  this%symbolic_atom(plusbulk)%potential%m1_spinor, v_spinor, &
+                  this%symbolic_atom(plusbulk)%potential%hubbard_axis, q0_spin, c_spin, q2_spin, &
+                  c_local_spin, q2_local_spin, t_local_spin, status_local)
+               if (status_local /= 0) call g_logger%fatal('Invalid local d-shell spinor Hubbard moment correction; status='// &
+                  fmt('i0', status_local)//' type='//fmt('i0', itype_local)//' atom='//fmt('i0', na_glob), __FILE__, __LINE__)
+               do ispin = 1, 2
+                  this%symbolic_atom(plusbulk)%potential%gravity_center(3, ispin) = &
+                     c_local_spin(ispin) - this%symbolic_atom(plusbulk)%potential%vmad
+                  this%symbolic_atom(plusbulk)%potential%ql(3, 2, ispin) = q2_local_spin(ispin)
+               end do
+               cycle
+            end if
             do ispin = 1, 2
-               call extract_hubbard_d_shell_potential(this%recursion%hamiltonian%hubbard_u_pot, &
-                  itype_local, ispin, spin_off, v_d, status_local)
-               if (status_local /= 0) call g_logger%fatal('Unable to map local d-shell Hubbard potential.', __FILE__, __LINE__)
+               if (rd1_use_vin_capture) then
+                  v_d = rd1_vin_snapshot(:, :, ispin)
+               else
+                  call extract_hubbard_d_shell_potential(this%recursion%hamiltonian%hubbard_u_pot, &
+                     itype_local, ispin, spin_off, v_d, status_local)
+                  if (status_local /= 0) call g_logger%fatal('Unable to map local d-shell Hubbard potential.', __FILE__, __LINE__)
+               end if
                if (maxval(abs(v_d)) == 0.0_rp) cycle
                q0_d = this%symbolic_atom(plusbulk)%potential%ql(1, 2, ispin)
                center_d = this%symbolic_atom(plusbulk)%potential%gravity_center(3, ispin) + &
@@ -1235,11 +1394,17 @@ contains
          end do
       end if
 
+      if (spinor_flag) call this%write_spinor_moments_trace()
+
       if (present(pl_diag_out)) then
-         call this%calculate_pl(pl_diag_out)
+         call this%calculate_pl(pl_diag_out, iteration_value)
       else
-         call this%calculate_pl()
+         call this%calculate_pl(iteration=iteration_value)
       end if
+
+      if (this%control%nsp >= 2 .and. lmax_basis >= 2 .and. .not. spinor_flag .and. &
+          (this%recursion%hamiltonian%hubbard_spinor_dm_diagnostic .or. fixed_liechtenstein_active)) &
+         call this%calculate_spinor_dm()
 
       ! Transfer calculated moments across MPI ranks
 #ifdef USE_MPI
@@ -1324,6 +1489,120 @@ contains
       !end do
       !write(*,*) ´Total electrons s, p and d:´, sums, sump, sumd
    end subroutine calculate_moments
+
+   !> Full spinor d-shell P and M1 (index (sigma-1)*5+(m+3)) from the retarded Green function
+   !> A_ab = i(G_ab - G_ba^*)/(2 pi), with the integrator, mesh and Fermi endpoint of the collinear
+   !> P (weight power 0) and M1 (power 1). Stored in potential%ldm_spinor and potential%m1_spinor.
+   subroutine calculate_spinor_dm(this)
+      use mpi_mod
+      class(bands) :: this
+      complex(rp), dimension(this%en%channels_ldos + 10) :: spectral_value
+      real(rp), dimension(this%en%channels_ldos + 10) :: y, y_imag
+      real(rp), allocatable :: comm_real(:, :, :, :), comm_imag(:, :, :, :)
+      real(rp) :: p_real, p_imag, m1_real, m1_imag, axis(3)
+      character(len=400) :: line
+      integer :: na, na_glob, plusbulk, s, t, i, j, ie, row, col
+
+      allocate (comm_real(this%lattice%nrec, 10, 10, 2), comm_imag(this%lattice%nrec, 10, 10, 2))
+      comm_real = 0.0_rp
+      comm_imag = 0.0_rp
+      do na_glob = start_atom, end_atom
+         na = g2l_map(na_glob)
+         do s = 1, 2
+            do t = 1, 2
+               do i = 1, 5
+                  do j = 1, 5
+                     row = (s - 1)*spin_off + 4 + i
+                     col = (t - 1)*spin_off + 4 + j
+                     do ie = 1, size(spectral_value)
+                        spectral_value(ie) = hubbard_spectral_density_element( &
+                           this%green%g0(row, col, ie, na), this%green%g0(col, row, ie, na))
+                     end do
+                     y(:) = real(spectral_value, rp)
+                     y_imag(:) = aimag(spectral_value)
+                     p_real = 0.0_rp
+                     p_imag = 0.0_rp
+                     m1_real = 0.0_rp
+                     m1_imag = 0.0_rp
+                     call simpson_m(p_real, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 0, this%en%ene)
+                     call simpson_m(p_imag, this%en%edel, this%en%fermi, this%nv1, y_imag, this%e1, 0, this%en%ene)
+                     call simpson_m(m1_real, this%en%edel, this%en%fermi, this%nv1, y, this%e1, 1, this%en%ene)
+                     call simpson_m(m1_imag, this%en%edel, this%en%fermi, this%nv1, y_imag, this%e1, 1, this%en%ene)
+                     comm_real(na_glob, (s - 1)*5 + i, (t - 1)*5 + j, 1) = p_real
+                     comm_imag(na_glob, (s - 1)*5 + i, (t - 1)*5 + j, 1) = p_imag
+                     comm_real(na_glob, (s - 1)*5 + i, (t - 1)*5 + j, 2) = m1_real
+                     comm_imag(na_glob, (s - 1)*5 + i, (t - 1)*5 + j, 2) = m1_imag
+                  end do
+               end do
+            end do
+         end do
+      end do
+#ifdef USE_MPI
+      call MPI_ALLREDUCE(MPI_IN_PLACE, comm_real, size(comm_real), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE, comm_imag, size(comm_imag), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+#endif
+      do na_glob = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + na_glob
+         call this%rf_density%get_axis(na_glob, axis)
+         call this%symbolic_atom(plusbulk)%potential%set_hubbard_axis(axis, na_glob)
+         if (.not. allocated(this%symbolic_atom(plusbulk)%potential%ldm_spinor)) &
+            allocate (this%symbolic_atom(plusbulk)%potential%ldm_spinor(10, 10))
+         if (.not. allocated(this%symbolic_atom(plusbulk)%potential%m1_spinor)) &
+            allocate (this%symbolic_atom(plusbulk)%potential%m1_spinor(10, 10))
+         this%symbolic_atom(plusbulk)%potential%ldm_spinor = &
+            cmplx(comm_real(na_glob, :, :, 1), comm_imag(na_glob, :, :, 1), rp)
+         this%symbolic_atom(plusbulk)%potential%m1_spinor = &
+            cmplx(comm_real(na_glob, :, :, 2), comm_imag(na_glob, :, :, 2), rp)
+         if (rank == 0) then
+            call spinor_dm_summary(this%symbolic_atom(plusbulk)%potential%ldm_spinor, &
+               this%symbolic_atom(plusbulk)%potential%ql(1, 2, 1), this%symbolic_atom(plusbulk)%potential%ql(1, 2, 2), &
+               axis, this%recursion%hamiltonian%hubbard_log_level /= 'summary', line)
+            call g_logger%info('HUBBARD_SPINOR_DM backend=rs atom='//fmt('i4', na_glob)//' '//trim(line), __FILE__, __LINE__)
+         end if
+      end do
+      deallocate (comm_real, comm_imag)
+   end subroutine calculate_spinor_dm
+
+   !> Diagnostic dump (environment variable RSLMTO_SPINOR_TRACE = file): the spinor P, M1 and V_in of
+   !> every site and the d-shell q0, c, q2 per spin exactly as they enter calculate_pl (spectral values,
+   !> or the local-corrected ones after the spinor correction). Row format: label, i, j, re, im.
+   subroutine write_spinor_moments_trace(this)
+      class(bands) :: this
+      character(len=1024) :: path
+      complex(rp) :: v_spinor(10, 10)
+      integer :: unit, ios, na_glob, plusbulk, i, j, s, status, cluster_site, itype
+
+      call get_environment_variable('RSLMTO_SPINOR_TRACE', path, status=ios)
+      if (ios /= 0 .or. len_trim(path) == 0 .or. rank /= 0) return
+      open (newunit=unit, file=trim(path), status='replace', action='write', iostat=ios)
+      if (ios /= 0) return
+      do na_glob = 1, this%lattice%nrec
+         plusbulk = this%lattice%nbulk + na_glob
+         itype = this%lattice%ib(na_glob)
+         if (this%control%calctype == 'I' .or. this%control%calctype == 'S') &
+            call this%recursion%hamiltonian%get_rd1_recursion_site_type(na_glob, cluster_site, itype, status)
+         call extract_hubbard_d_spinor_potential(this%recursion%hamiltonian%hubbard_u_pot, &
+            itype, spin_off, v_spinor, status)
+         if (status /= 0) cycle
+         do i = 1, 10
+            do j = 1, 10
+               write (unit, '(a,2(1x,i0),2(1x,es26.17e3))') 'P', i, j, &
+                  real(this%symbolic_atom(plusbulk)%potential%ldm_spinor(i, j), rp), &
+                  aimag(this%symbolic_atom(plusbulk)%potential%ldm_spinor(i, j))
+               write (unit, '(a,2(1x,i0),2(1x,es26.17e3))') 'M1', i, j, &
+                  real(this%symbolic_atom(plusbulk)%potential%m1_spinor(i, j), rp), &
+                  aimag(this%symbolic_atom(plusbulk)%potential%m1_spinor(i, j))
+               write (unit, '(a,2(1x,i0),2(1x,es26.17e3))') 'V', i, j, real(v_spinor(i, j), rp), aimag(v_spinor(i, j))
+            end do
+         end do
+         do s = 1, 2
+            write (unit, '(a,1x,i0,3(1x,es26.17e3))') 'MOMENTS', s, this%symbolic_atom(plusbulk)%potential%ql(1, 2, s), &
+               this%symbolic_atom(plusbulk)%potential%gravity_center(3, s) + this%symbolic_atom(plusbulk)%potential%vmad, &
+               this%symbolic_atom(plusbulk)%potential%ql(3, 2, s)
+         end do
+      end do
+      close (unit)
+   end subroutine write_spinor_moments_trace
 
    subroutine calculate_moments_gauss_legendre(this)
       use mpi_mod
@@ -2147,15 +2426,17 @@ contains
       end do
    end subroutine calculate_projected_green
 
-   subroutine calculate_pl(this, diag_out)
+   subroutine calculate_pl(this, diag_out, iteration)
       use mpi_mod
       class(bands) :: this
       real(rp), intent(out), optional :: diag_out(:, :, :, :)
+      integer, intent(in), optional :: iteration
       ! Local variables
       integer :: i ! orbital index
       integer :: is ! spin channel index
       integer :: ia ! atom index
       integer :: plusbulk
+      integer :: iteration_value
       real(rp) :: rq, dnu, pli, delta2 ! Local variables
       real(rp) :: old_pl
       real(rp), allocatable :: diag_comm(:, :, :, :)
@@ -2170,12 +2451,20 @@ contains
 
       !integer :: ia_glob
 
+      iteration_value = 0
+      if (present(iteration)) iteration_value = iteration
+
       !do ia=1, this%lattice%nrec
       do ia = start_atom, end_atom
          !ia = g2l_map(ia_glob)
          plusbulk = this%lattice%nbulk + ia
          do is = 1, 2
             do i = 1, lmax_basis + 1
+               old_pl = this%symbolic_atom(plusbulk)%potential%pl(i - 1, is)
+               if (this%control%nsp == 1) then
+                  call guard_nonfinite_scalar(this%symbolic_atom(plusbulk)%element%symbol, ia, i - 1, is, &
+                     'input PL', iteration_value, old_pl)
+               end if
                rq = 1/this%symbolic_atom(plusbulk)%potential%qpar(i - 1, is)
                delta2 = this%symbolic_atom(plusbulk)%potential%srdel(i - 1, is)*this%symbolic_atom(plusbulk)%potential%srdel(i - 1, is)
                dnu = (i - 1.) + &
@@ -2183,8 +2472,11 @@ contains
                      (rq*(this%symbolic_atom(plusbulk)%potential%c(i - 1, is) - this%symbolic_atom(plusbulk)%potential%gravity_center(i, is))/2./(2*(i - 1) + 1.)/ &
                       (this%symbolic_atom(plusbulk)%potential%c(i - 1, is) - this%symbolic_atom(plusbulk)%potential%gravity_center(i, is) - delta2*rq) - 1.)
                pli = -atan(dnu)/pi + 0.5d0 + INT(this%symbolic_atom(plusbulk)%potential%pl(i - 1, is))
+               if (this%control%nsp == 1) then
+                  call guard_nonfinite_scalar(this%symbolic_atom(plusbulk)%element%symbol, ia, i - 1, is, &
+                     'PL', iteration_value, pli)
+               end if
                if (present(diag_out)) then
-                  old_pl = this%symbolic_atom(plusbulk)%potential%pl(i - 1, is)
                   diag_out(ia, i, is, 1) = this%symbolic_atom(plusbulk)%potential%gravity_center(i, is)
                   diag_out(ia, i, is, 2) = this%symbolic_atom(plusbulk)%potential%c(i - 1, is)
                   diag_out(ia, i, is, 3) = this%symbolic_atom(plusbulk)%potential%qpar(i - 1, is)

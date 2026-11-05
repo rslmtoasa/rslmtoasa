@@ -1,0 +1,173 @@
+{
+  "run_id": "c2_u0_block",
+  "classification": "B1 occupation-capacity guard terminated solver; preserve as C2 U0 record, no retry launched",
+  "solver_pid": "52846",
+  "wrapper_pid": "52844",
+  "exit_code": "1",
+  "guard": {
+    "iteration": 36,
+    "atom": "Fe",
+    "site": 1,
+    "channel": "s",
+    "l": 0,
+    "spin": 1,
+    "q0": "1.3221639993438128E+000",
+    "capacity": "1",
+    "allowed_max": "1.0000009999999999E+000",
+    "source_line": "source/scf_guard.f90:31"
+  },
+  "raw_log_snapshot": "/private/tmp/c52-c2-stage/launch_u0/crash_guard_block_iter36/testrun.log",
+  "raw_log_sha256": "eb5f8a39f63678316312637f52f67292e6a5dd466193341a634430a960fb019a",
+  "raw_log_bytes": 108617,
+  "run_directory_files": [
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/Fe_1_spinene.out",
+      "name": "Fe_1_spinene.out",
+      "bytes": 163150,
+      "sha256": "27701d5df4e507f18496b424fa6fee80c2024ed214c7c4fc9ab0a03437588dad"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/Fe_dos.out",
+      "name": "Fe_dos.out",
+      "bytes": 163198,
+      "sha256": "be82d04cd02c7b3260c35b43c2a50067bbaee572b51762f5734997fb555ffe31"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/Fe_orbene.out",
+      "name": "Fe_orbene.out",
+      "bytes": 163150,
+      "sha256": "589c8a3303c71e3696d58602715df205f35a3a08ec1e34757c0eaf5c7d775d8b"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/Fe_orbital_dos.out",
+      "name": "Fe_orbital_dos.out",
+      "bytes": 765550,
+      "sha256": "e5de9a65879160301b9330fb89042f905ad2ec796d8483d5f5f9a7a033d2a6b8"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/Fe_out.nml",
+      "name": "Fe_out.nml",
+      "bytes": 6771,
+      "sha256": "647e9df67510db0c133dd53975cece5f50b379e6e314542de336eec64575d327"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/Fe_scf.nml",
+      "name": "Fe_scf.nml",
+      "bytes": 6772,
+      "sha256": "460e4f08c24bc7993ca4530b9b4888185498aea376b928d0da61c3a90e2bed57"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/clust",
+      "name": "clust",
+      "bytes": 302207,
+      "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/exit_code.txt",
+      "name": "exit_code.txt",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/fixed_u_trace.csv",
+      "name": "fixed_u_trace.csv",
+      "bytes": 72720,
+      "sha256": "567faa21b1275a4f9f14d377c9ed144160085fd84900333bd64f2ff8a10c93ee"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/fort.800",
+      "name": "fort.800",
+      "bytes": 287245,
+      "sha256": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/fort.805",
+      "name": "fort.805",
+      "bytes": 616366,
+      "sha256": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/input.nml",
+      "name": "input.nml",
+      "bytes": 753,
+      "sha256": "ceedfd03e09b3a3d86787e60e7d13abfc821361e5aefdbf90255c83ba751a684"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/launch_preflight.json",
+      "name": "launch_preflight.json",
+      "bytes": 8038,
+      "sha256": "37244971d648f0692b0e7465dd76ec548c78fe582323c274a4ea45104a77598a"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/mad.mat",
+      "name": "mad.mat",
+      "bytes": 16,
+      "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/magneticdos.out",
+      "name": "magneticdos.out",
+      "bytes": 283683,
+      "sha256": "2977b99c6a7142566396a7d22ad1a2e3251908faf079a9604894080f20f6044d"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/map",
+      "name": "map",
+      "bytes": 406912,
+      "sha256": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/sbar",
+      "name": "sbar",
+      "bytes": 10800,
+      "sha256": "b32a32dc743416e6dad05612d8a4cb7b02bf76fa6eba705dc8555705dadf06c7"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/solver.pid",
+      "name": "solver.pid",
+      "bytes": 6,
+      "sha256": "8f4df50985bcb5b1529f3ae97e52dd5052ee4a9db42970caf81412724134d40a"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/str.out",
+      "name": "str.out",
+      "bytes": 6934,
+      "sha256": "fda4513e4a8033f3980d20d83e09d79b12fd9e0b732ea82d8c7d86d55148ff88"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/testrun.log",
+      "name": "testrun.log",
+      "bytes": 108617,
+      "sha256": "eb5f8a39f63678316312637f52f67292e6a5dd466193341a634430a960fb019a"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/totaldos.out",
+      "name": "totaldos.out",
+      "bytes": 82830,
+      "sha256": "71051baf90b5bd03b162eb2cd350d350ed7741348504712cde5d96072a9df735"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/ves.out",
+      "name": "ves.out",
+      "bytes": 738,
+      "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/view.sbar",
+      "name": "view.sbar",
+      "bytes": 13350,
+      "sha256": "57bfa6474db2fbb124cede64ad677d9a124023c40fa2222b6dc9b10ffcabd33e"
+    },
+    {
+      "path": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/wrapper.pid",
+      "name": "wrapper.pid",
+      "bytes": 6,
+      "sha256": "261473e472ba3d7b3ee174b1d62830c49da0924e5df15fd2ab84a3098096aed9"
+    }
+  ],
+  "captured_local": "2026-10-20T22:02:00.139721+02:00",
+  "source_preflight": "/private/tmp/c52-c2-stage/launch_u0/c2_u0_block/launch_preflight.json",
+  "launcher_script_sha256": "d7ba192dbf2c29959aec322c6be6f2e469e9690d2a38f677c690597d992a3703",
+  "binary_sha256": "a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3",
+  "process_status": "PID 52846 absent; wrapper recorded exit1; shared U0 Chebyshev remains running separately"
+}

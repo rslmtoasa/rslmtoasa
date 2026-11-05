@@ -1,0 +1,212 @@
+{
+  "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+  "driver_sha256": "c7cd56761af10d9b312a4f992519e44701af7d0edf1b4ac83006fecccb4f1af8",
+  "endpoint_source_sha256": "a6de0b535ac6fd9096191a86ae1873d61c0d47688f2a9548a524e25564fac1a4",
+  "hellmann_feynman_direct_trace_by_lambda": {
+    "+0.01": {
+      "capture_rounding_bound": 2e-15,
+      "tr_wp": 0.22061494682780927
+    },
+    "-0.01": {
+      "capture_rounding_bound": 2e-15,
+      "tr_wp": 0.3712457147703938
+    }
+  },
+  "hellmann_feynman_rounding_bound_scope": "Serialization of four nonzero matrix-contraction operands and trace scalar plus binary64 accumulation only; excludes endpoint and SCF sensitivity.",
+  "interpretation": "W2 complex-convention response matches frozen-state prediction within preregistered per-spin order-based allowances; no production/adoption gate.",
+  "pair_verifier_sha256": "116d57457ee1e6064daca27b79f3e54d1f1285b9f5826a58b6e8fcfae77d8e38",
+  "replay_source_sha256": "6b32dd2deffb4ce738a91d9f4b30535d3d546d96971b16f5c2d0104c0386abc3",
+  "runs": {
+    "minus": {
+      "capture_manifests": {
+        "full": {
+          "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+          "capture_restart_pre_sha256": "9080ce00c030b498affc0a398f3207043101f04b996c861bd4dd093ca5bfc3a6",
+          "converged_endpoint_restart_sha256": "9080ce00c030b498affc0a398f3207043101f04b996c861bd4dd093ca5bfc3a6",
+          "input_pre_sha256": "da00f45385e1a383b33678db4612862625d57b693196cff77ca09684df79bbc2",
+          "moments_only": false,
+          "records_bytes": 277942405,
+          "records_sha256": "2a487fae73514ba43f9559dc308f457534d1c7c38c8cc372323ac4697bc0aad2",
+          "stdout_sha256": "1051a4cdb81c9b48c92057d9225da785927ba5261f358b58ba2ce1c27101b072"
+        },
+        "moments": {
+          "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+          "capture_restart_pre_sha256": "9080ce00c030b498affc0a398f3207043101f04b996c861bd4dd093ca5bfc3a6",
+          "converged_endpoint_restart_sha256": "9080ce00c030b498affc0a398f3207043101f04b996c861bd4dd093ca5bfc3a6",
+          "input_pre_sha256": "da00f45385e1a383b33678db4612862625d57b693196cff77ca09684df79bbc2",
+          "moments_only": true,
+          "records_bytes": 963310,
+          "records_sha256": "3bee700a18b2789f8daa72c4f6f386962496c8449a804a3d5cc9b1d07726395f",
+          "stdout_sha256": "1e34b9ac629eaedae24a365d670aa57966e44f355833dcafcb334d43c8b692fc"
+        }
+      },
+      "control_result": {
+        "absolute_prediction_residual_ry": 1.2453953824806407e-08,
+        "driver_input_sha256": "783386c971e6a37009c6432fd3071cc5c4678f3245c554de25ee82bc6c055b8c",
+        "driver_output_sha256": "d839c312dcde44dd32af068468d7dc4b1320f9da70c5613d617ffde5874afb86",
+        "driver_sha256": "c7cd56761af10d9b312a4f992519e44701af7d0edf1b4ac83006fecccb4f1af8",
+        "joint_wrong_sumEV_by_spin_ry": {
+          "1": -1.2775086180910387,
+          "2": -0.718154312820738
+        },
+        "measured_native_minus_joint_wrong_ry": 0.001388120046531549,
+        "native_sumEV_by_spin_ry": {
+          "1": -1.2770461172492493,
+          "2": -0.717228693615996
+        },
+        "per_spin_admissibility": {
+          "1": {
+            "admissibility": "admissible",
+            "capture_precision": 4.095950498950882e-14,
+            "predicted_separation_ry": 0.0004625053609220017,
+            "radial_inversion_pair": 0.0,
+            "repeat_scatter": 0.0,
+            "roundoff": 1.818967420664067e-14,
+            "shift_dependent_center_and_q2_calibration": 3.53695111939608e-07,
+            "sum": 3.5369517108878716e-07
+          },
+          "2": {
+            "admissibility": "admissible",
+            "capture_precision": 3.2e-14,
+            "predicted_separation_ry": 0.0009256271395633722,
+            "radial_inversion_pair": 0.0,
+            "repeat_scatter": 0.0,
+            "roundoff": 1.4210854715202004e-14,
+            "shift_dependent_center_and_q2_calibration": 8.748911235772648e-08,
+            "sum": 8.748915856858119e-08
+          }
+        },
+        "predicted_native_minus_joint_wrong_ry": 0.0013881325004853739
+      },
+      "control_result_sha256": "7bf0e2240a75818585a1027f646cb7bf0bbc4e62565c6b4079c903b11b0fd9cf",
+      "lambda_ry": -0.01,
+      "merged_records_bytes": 277954593,
+      "merged_records_sha256": "ee23c6fc640bda4e9cf144ad00a7023e21e43c0c818a42ac9570dd8893c80926",
+      "pair_manifest_sha256": "e3f1fa958d6760433e1ba7d4890a21f2e500be215a58ca48d0d67d6a480bf121",
+      "prediction": {
+        "csv_sha256": "ee23c6fc640bda4e9cf144ad00a7023e21e43c0c818a42ac9570dd8893c80926",
+        "driver_sha256": "c7cd56761af10d9b312a4f992519e44701af7d0edf1b4ac83006fecccb4f1af8",
+        "per_spin_admissibility": {
+          "1": {
+            "admissibility": "admissible",
+            "capture_precision": 4.095950498950882e-14,
+            "predicted_separation_ry": 0.0004625053609220017,
+            "radial_inversion_pair": 0.0,
+            "repeat_scatter": 0.0,
+            "roundoff": 1.818967420664067e-14,
+            "shift_dependent_center_and_q2_calibration": 3.53695111939608e-07,
+            "sum": 3.5369517108878716e-07
+          },
+          "2": {
+            "admissibility": "admissible",
+            "capture_precision": 3.2e-14,
+            "predicted_separation_ry": 0.0009256271395633722,
+            "radial_inversion_pair": 0.0,
+            "repeat_scatter": 0.0,
+            "roundoff": 1.4210854715202004e-14,
+            "shift_dependent_center_and_q2_calibration": 8.748911235772648e-08,
+            "sum": 8.748915856858119e-08
+          }
+        },
+        "predicted_separation_ry": 0.0013881325004853739
+      },
+      "prediction_sha256": "145abb9c1f0aca170abb9785c3abc3676f349376b1b0bd7f2e8113fc47a57a33"
+    },
+    "plus": {
+      "capture_manifests": {
+        "full": {
+          "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+          "capture_restart_pre_sha256": "2efff96d370c10956043c2b2d31e0326f505b6c19f9722127bff80cb45cd035f",
+          "converged_endpoint_restart_sha256": "2efff96d370c10956043c2b2d31e0326f505b6c19f9722127bff80cb45cd035f",
+          "input_pre_sha256": "8bfd925ae5456b2376895b95ced973d5566a071eaef8fa7561fdaabbfe6d37a6",
+          "moments_only": false,
+          "records_bytes": 277942405,
+          "records_sha256": "0f302f026e9c1e0bc975f680be8118e8c710a75e77f646432e1c0c7215072255",
+          "stdout_sha256": "a129a4220eadead41122b841afcfae35df722eb4513534b4e77b0d16af2f1b33"
+        },
+        "moments": {
+          "binary_sha256": "52eb94c6e6f6ae12fca629a4eea1b30a6800e29736c9fdfdfd836538077f2225",
+          "capture_restart_pre_sha256": "2efff96d370c10956043c2b2d31e0326f505b6c19f9722127bff80cb45cd035f",
+          "converged_endpoint_restart_sha256": "2efff96d370c10956043c2b2d31e0326f505b6c19f9722127bff80cb45cd035f",
+          "input_pre_sha256": "8bfd925ae5456b2376895b95ced973d5566a071eaef8fa7561fdaabbfe6d37a6",
+          "moments_only": true,
+          "records_bytes": 963310,
+          "records_sha256": "df5ed30a4bb07862213c9742d3b8e46f9b9efb97a0da62a89e788a22b7d2d229",
+          "stdout_sha256": "3f8c4045a93c5b84e65afab04b323accf98eb78f6486c985a63848de380d9ee5"
+        }
+      },
+      "control_result": {
+        "absolute_prediction_residual_ry": 1.2414517957907989e-08,
+        "driver_input_sha256": "2bae2e8ed9c6aa04462bf1ad26447997c2a72b437f69e4d31f932c23e1563612",
+        "driver_output_sha256": "7a7ed42363ef64e82e2a8faab44afaee7c3f023b37dbf21d5ed1f3b717f28304",
+        "driver_sha256": "c7cd56761af10d9b312a4f992519e44701af7d0edf1b4ac83006fecccb4f1af8",
+        "joint_wrong_sumEV_by_spin_ry": {
+          "1": -1.28495114704932,
+          "2": -0.7197485737377892
+        },
+        "measured_native_minus_joint_wrong_ry": 0.0013887865077459871,
+        "native_sumEV_by_spin_ry": {
+          "1": -1.2844815780355183,
+          "2": -0.7188293562438448
+        },
+        "per_spin_admissibility": {
+          "1": {
+            "admissibility": "admissible",
+            "capture_precision": 4.102541508086969e-14,
+            "predicted_separation_ry": 0.0004695735826442289,
+            "radial_inversion_pair": 0.0,
+            "repeat_scatter": 0.0,
+            "roundoff": 1.8218944167034264e-14,
+            "shift_dependent_center_and_q2_calibration": 2.9493217183242104e-07,
+            "sum": 2.9493223107678026e-07
+          },
+          "2": {
+            "admissibility": "admissible",
+            "capture_precision": 3.2e-14,
+            "predicted_separation_ry": 0.0009192253396197161,
+            "radial_inversion_pair": 0.0,
+            "repeat_scatter": 0.0,
+            "roundoff": 1.4210854715202004e-14,
+            "shift_dependent_center_and_q2_calibration": 1.0876399948630796e-07,
+            "sum": 1.0876404569716267e-07
+          }
+        },
+        "predicted_native_minus_joint_wrong_ry": 0.001388798922263945
+      },
+      "control_result_sha256": "e4c8af252eb9d47fe5b7d8cc51c840f9670ab68ec6830008f20ff8f55d0546ff",
+      "lambda_ry": 0.01,
+      "merged_records_bytes": 277954593,
+      "merged_records_sha256": "18518aca5841a9d09acafaed44db2bae3e9e597777ca2dffc03092a906399ec0",
+      "pair_manifest_sha256": "c5057977b68f2b73bdd8fab036d230ef0ff821a6162b6763cec6f1a0606f447b",
+      "prediction": {
+        "csv_sha256": "18518aca5841a9d09acafaed44db2bae3e9e597777ca2dffc03092a906399ec0",
+        "driver_sha256": "c7cd56761af10d9b312a4f992519e44701af7d0edf1b4ac83006fecccb4f1af8",
+        "per_spin_admissibility": {
+          "1": {
+            "admissibility": "admissible",
+            "capture_precision": 4.102541508086969e-14,
+            "predicted_separation_ry": 0.0004695735826442289,
+            "radial_inversion_pair": 0.0,
+            "repeat_scatter": 0.0,
+            "roundoff": 1.8218944167034264e-14,
+            "shift_dependent_center_and_q2_calibration": 2.9493217183242104e-07,
+            "sum": 2.9493223107678026e-07
+          },
+          "2": {
+            "admissibility": "admissible",
+            "capture_precision": 3.2e-14,
+            "predicted_separation_ry": 0.0009192253396197161,
+            "radial_inversion_pair": 0.0,
+            "repeat_scatter": 0.0,
+            "roundoff": 1.4210854715202004e-14,
+            "shift_dependent_center_and_q2_calibration": 1.0876399948630796e-07,
+            "sum": 1.0876404569716267e-07
+          }
+        },
+        "predicted_separation_ry": 0.001388798922263945
+      },
+      "prediction_sha256": "0effea8f554c999f1f36b5ec1d35babe13b9ebb0d1001c3c646b91ee53e71b9e"
+    }
+  },
+  "status": "A5.4_W2_COMPLETED_STATE_LEVEL_DIAGNOSTIC"
+}

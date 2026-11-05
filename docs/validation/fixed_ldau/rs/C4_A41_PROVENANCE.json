@@ -1,0 +1,560 @@
+{
+  "objective": "C4 Part A Fe impurity \u00a72.4 triage, A4.1/A4.3 disposition, and matched-U0 beta continuation",
+  "evidence_note": "Raw evidence remains in the listed absolute run directories. Hashes are generated from exact bytes; all SCF ladders are terminal/frozen. Final matched-U0 bulk records reached 600 cumulative steps without C1 acceptance and are PROVISIONAL, records only.",
+  "accepted_seed": {
+    "path": "/private/tmp/rslmto-c2-requal/fe_uplus_bulk_requal/C2_checkpoint_candidate.nml",
+    "sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702",
+    "q_d_up_down": [
+      4.557606674800885,
+      2.0990288900613527
+    ]
+  },
+  "classification": "PRE-EXISTING ISSUE under \u00a72.4; no accepted A4.1 impurity endpoint and no energy ratio. A4.3 NEITHER after A4.2 found no evaluator inconsistency.",
+  "attempts": [
+    {
+      "name": "production_uplus",
+      "run_directory": "/private/tmp/c4-a41-fe-u38j11-rc100",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/preflight.json",
+          "bytes": 9899,
+          "sha256": "5d6c06c8af5b087efa40024ba224d73ba8a7fb66dbd1a116358007437ac2bcbe"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/console.log",
+          "bytes": 1299805,
+          "sha256": "417ad9697ac96ba7a1fdc74897e1486055bf6e35cac8946afd96f856c01d6dca"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fixed_u_trace.csv",
+          "bytes": 300804,
+          "sha256": "fb5035ba98baa4346236af33799ec4bafc6f1979750f039c4dc726e74032ea10"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fixed_u_trace_history.csv",
+          "bytes": 100,
+          "sha256": "a77e1ba2959e4f61c99760d0bd3824830358b2dab29913bf85413ba0c5f6021b"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/Fe_scf.nml",
+          "bytes": 10226,
+          "sha256": "f4024152835bde9292d9bf915a392e4da2c74e2f7ee73a0c4f16bdb0cd73b555"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fatal_capture/manifest.json",
+          "bytes": 3002,
+          "sha256": "a769799983a232c3bd119ee99b0aaedc9a5ab5e7ee77d5ba52ac5390033acaae"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fatal_capture/console.log",
+          "bytes": 1299805,
+          "sha256": "417ad9697ac96ba7a1fdc74897e1486055bf6e35cac8946afd96f856c01d6dca"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fatal_capture/fixed_u_trace.csv",
+          "bytes": 300804,
+          "sha256": "fb5035ba98baa4346236af33799ec4bafc6f1979750f039c4dc726e74032ea10"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fatal_capture/input.nml",
+          "bytes": 710,
+          "sha256": "9adf908396a5f0d0cb6d0866ec98ec40f630b868e79c483f667a4d9f0ee2f0c1"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fatal_capture/Fe_scf.nml",
+          "bytes": 10226,
+          "sha256": "f4024152835bde9292d9bf915a392e4da2c74e2f7ee73a0c4f16bdb0cd73b555"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fatal_capture/Fe_out.nml",
+          "bytes": 10584,
+          "sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/fatal_capture/preflight.json",
+          "bytes": 9899,
+          "sha256": "5d6c06c8af5b087efa40024ba224d73ba8a7fb66dbd1a116358007437ac2bcbe"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u38j11-rc100/debug_bgreen_preLU_site1_ie1.txt",
+          "bytes": 49128,
+          "sha256": "967e19b3a2a3ab6266c1856ee4f1a7b28235a6f25c08676a718658b3d093df65"
+        }
+      ],
+      "status": "PREFLIGHT_COMPLETE_NOT_LAUNCHED"
+    },
+    {
+      "name": "debug_bounds_rerun",
+      "run_directory": "/private/tmp/c4-a41-triage-debug",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-triage-debug/preflight.json",
+          "bytes": 1521,
+          "sha256": "6c6369fac5f4249ee4a725d6958f270b9c64cef6802c7c0db6b8616e3874d9c5"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-debug/console.log",
+          "bytes": 213293,
+          "sha256": "270c96e8493b702c496a5c029fbfdf9d93e23c08da08da20db0f922820f27b40"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-debug/fixed_u_trace.csv",
+          "bytes": 966380,
+          "sha256": "1199a33f746e9734547c3a687f7527ffa4053627defef86329095291f5cb8ec3"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-debug/fixed_u_trace_history.csv",
+          "bytes": 100,
+          "sha256": "a77e1ba2959e4f61c99760d0bd3824830358b2dab29913bf85413ba0c5f6021b"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-debug/Fe_scf.nml",
+          "bytes": 10585,
+          "sha256": "35945c48a7d98fe6b62dac937c3e38cc0acd0689e0e70a8ff4f5b070dc4e2935"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-debug/Fe_out.nml",
+          "bytes": 10584,
+          "sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-debug/input.nml",
+          "bytes": 710,
+          "sha256": "9adf908396a5f0d0cb6d0866ec98ec40f630b868e79c483f667a4d9f0ee2f0c1"
+        }
+      ],
+      "status": "PREFLIGHT_COMPLETE_NOT_LAUNCHED",
+      "binary_sha256": "bdae36d817cb5357a50dd6645489336d72ebbe6ceaf2a9c99a6ffcc54994243d"
+    },
+    {
+      "name": "clean8b_uncaptured_attempt",
+      "run_directory": "/private/tmp/c4-a41-triage-clean8b",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b/preflight.json",
+          "bytes": 1494,
+          "sha256": "10ab98e2b30c9cd5c04f30045ca16f01c890e16722f809436ef9c676e8025891"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b/console.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b/Fe_out.nml",
+          "bytes": 10584,
+          "sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b/input.nml",
+          "bytes": 710,
+          "sha256": "9adf908396a5f0d0cb6d0866ec98ec40f630b868e79c483f667a4d9f0ee2f0c1"
+        }
+      ],
+      "status": "PREFLIGHT_COMPLETE_NOT_LAUNCHED",
+      "binary_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd"
+    },
+    {
+      "name": "clean8b_captured_parser_attempt",
+      "run_directory": "/private/tmp/c4-a41-triage-clean8b-captured",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-captured/preflight.json",
+          "bytes": 1494,
+          "sha256": "10ab98e2b30c9cd5c04f30045ca16f01c890e16722f809436ef9c676e8025891"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-captured/launch_manifest.json",
+          "bytes": 3211,
+          "sha256": "e24ef809d69821ec316c9a8b8d9d4089aee3579638f07800c94d7aed0c612d0f"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-captured/console.log",
+          "bytes": 201067,
+          "sha256": "31ac40ec2b28d54477ea80fa1492f9af2427308f792731dc978fbf016b566c0d"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-captured/returncode.txt",
+          "bytes": 2,
+          "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-captured/Fe_out.nml",
+          "bytes": 10584,
+          "sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-captured/input.nml",
+          "bytes": 710,
+          "sha256": "9adf908396a5f0d0cb6d0866ec98ec40f630b868e79c483f667a4d9f0ee2f0c1"
+        }
+      ],
+      "status": "FAILED_NONFINITE_BEFORE_FIRST_COMPLETE_SCF_ITERATION",
+      "complete_outer_iterations": 0,
+      "returncode": 1,
+      "console_sha256": "31ac40ec2b28d54477ea80fa1492f9af2427308f792731dc978fbf016b566c0d",
+      "binary_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+      "input_initial_sha256": "9adf908396a5f0d0cb6d0866ec98ec40f630b868e79c483f667a4d9f0ee2f0c1",
+      "solver_pid": 95285
+    },
+    {
+      "name": "clean8b_metadata_compatible_uplus",
+      "run_directory": "/private/tmp/c4-a41-triage-clean8b-compatible",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/launch_manifest.json",
+          "bytes": 2121,
+          "sha256": "f70990f047bb61bfb1c83d95718224a679806361c52ad35e696834fb041d485d"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/compatibility_manifest.json",
+          "bytes": 1810,
+          "sha256": "ee9d98b6ac2e8c04763bd4a4d5899e9b096a3fd16bef59a032033817e1f901e7"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/preflight.json",
+          "bytes": 1494,
+          "sha256": "10ab98e2b30c9cd5c04f30045ca16f01c890e16722f809436ef9c676e8025891"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/console.log",
+          "bytes": 1266629,
+          "sha256": "3dfc7444c454c10059d0a31c8c112796bc883f8b6e75481618a9f4cb61ffee05"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/returncode.txt",
+          "bytes": 2,
+          "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/Fe_scf.nml",
+          "bytes": 10165,
+          "sha256": "42325f310649cefee8439eaaa5a42617f7641ecd831e9806b07671d4177c8831"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/Fe_out.nml",
+          "bytes": 10523,
+          "sha256": "8383518883f857721957b0387c94c7a66f17f6b5ca9d3e3b50b55424c0df0de9"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-clean8b-compatible/input.nml",
+          "bytes": 710,
+          "sha256": "9adf908396a5f0d0cb6d0866ec98ec40f630b868e79c483f667a4d9f0ee2f0c1"
+        }
+      ],
+      "status": "FINISHED_NONFINITE",
+      "complete_outer_iterations": 102,
+      "fatal_attempted_iteration": 103,
+      "returncode": 1,
+      "console_sha256": "3dfc7444c454c10059d0a31c8c112796bc883f8b6e75481618a9f4cb61ffee05",
+      "binary_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+      "actual_input_sha256": "9adf908396a5f0d0cb6d0866ec98ec40f630b868e79c483f667a4d9f0ee2f0c1",
+      "solver_pid": 1416,
+      "finished_at_local": "2026-10-20T08:10:07+02:00",
+      "failure": "Pre-LU Q NaN at energies 2501-2510; NaN mixed qia; Invalid PL before atomic core/valence setup at clean8b self.f90:4981"
+    },
+    {
+      "name": "same_deck_u0_triage",
+      "run_directory": "/private/tmp/c4-a41-triage-u0-from-uplus-seed",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/launch_manifest.json",
+          "bytes": 3386,
+          "sha256": "dda03f536a96b13a4a15297ac2f32add131ca5d6c9394775d4dd3884e93855a2"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/console.log",
+          "bytes": 582023,
+          "sha256": "4cd26a794322457704f6953c9d8c1eb7f2c9e05eda0b231649336f4b9f8f99b0"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/Fe_scf.nml",
+          "bytes": 9613,
+          "sha256": "89148faa3154e9b17c34307b33a8e320f4ab75aa350ec606799055dccfb1f2cb"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/Fe_out.nml",
+          "bytes": 10584,
+          "sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/input.nml",
+          "bytes": 710,
+          "sha256": "4cc2219e9aac0e36c561c9d6940930f43ecca082e991df0d6cd90b7a10166957"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/fixed_u_trace.csv",
+          "bytes": 266006,
+          "sha256": "72fde245652fc21272ee851e5ed4b9d7ed5fdfb45bb23446cfc5b75028993665"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/fixed_u_trace_history.csv",
+          "bytes": 100,
+          "sha256": "a77e1ba2959e4f61c99760d0bd3824830358b2dab29913bf85413ba0c5f6021b"
+        },
+        {
+          "path": "/private/tmp/c4-a41-triage-u0-from-uplus-seed/TRACE_ARCHIVE_MANIFEST.json",
+          "bytes": 3297,
+          "sha256": "423184bf604bb19d0b8b8459578503ca2c968da13121dc82c3edb3dcb89da144"
+        }
+      ],
+      "status": "FINISHED_NONFINITE",
+      "complete_outer_iterations": 34,
+      "fatal_attempted_iteration": 35,
+      "returncode": 1,
+      "console_sha256": "4cd26a794322457704f6953c9d8c1eb7f2c9e05eda0b231649336f4b9f8f99b0",
+      "trace_sha256": "72fde245652fc21272ee851e5ed4b9d7ed5fdfb45bb23446cfc5b75028993665",
+      "binary_sha256": "e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0",
+      "input_initial_sha256": "4cc2219e9aac0e36c561c9d6940930f43ecca082e991df0d6cd90b7a10166957",
+      "wrapper_pid": 7054,
+      "solver_pid": 7078,
+      "finished_at_local": "2026-10-20T08:05:46+02:00",
+      "failure": "Pre-LU Q contains NaN at energies 2507-2510; mixed qia NaN; Invalid PL before atomic core/valence setup at self.f90:5207"
+    },
+    {
+      "name": "matched_u0_beta015",
+      "run_directory": "/private/tmp/c4-a41-fe-u0-bulk-rc100",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/preflight.json",
+          "bytes": 1421,
+          "sha256": "334fa3de7f0b9d61a1c14f247fa9ed10a58503b6af6f6949d1d5bd0b86c1a492"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/console.log",
+          "bytes": 608298,
+          "sha256": "08f9e95e5e98227657f9abb01a788d59b84d866c6567492d4b2b53617efcc609"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/Fe_scf.nml",
+          "bytes": 6773,
+          "sha256": "8e4e0c49586b35109a420f30bbf53f65f51a1fc4ae302b68e340e849c1864128"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/Fe_out.nml",
+          "bytes": 6773,
+          "sha256": "8e4e0c49586b35109a420f30bbf53f65f51a1fc4ae302b68e340e849c1864128"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/input.nml",
+          "bytes": 581,
+          "sha256": "f3b30f3c70326ad8c76e0a3925eb490c9ba94e79b5077ef18c236198a663584a"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/fixed_u_trace.csv",
+          "bytes": 942710,
+          "sha256": "b7c115af5854ae41a6391c4d8d471a0a4e4e46448d451bff8740556fa732f0f5"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/fixed_u_trace_history.csv",
+          "bytes": 100,
+          "sha256": "a77e1ba2959e4f61c99760d0bd3824830358b2dab29913bf85413ba0c5f6021b"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100/TRACE_ARCHIVE_MANIFEST.json",
+          "bytes": 3243,
+          "sha256": "dacf70842c70f5bbdb95e5b2d3c0141a91fb035bb44c552636a0e801a4d58ae6"
+        }
+      ],
+      "status": "PREFLIGHT_COMPLETE_NOT_LAUNCHED"
+    },
+    {
+      "name": "matched_u0_beta0075_terminal",
+      "run_directory": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075/launch_manifest.json",
+          "bytes": 2325,
+          "sha256": "7dbce145bc784b1b306c7e9f8d13221f6a5abf58fb53155229311f3f777ff49f"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075/Fe_out.nml",
+          "bytes": 6773,
+          "sha256": "e583c237e8fa9f5bb30f9b700e54600a6cd56c70bc781c81024a70427caf14fa"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075/input.nml",
+          "bytes": 582,
+          "sha256": "75f404320f6998afd210b3bb5d49ad71f336b84ebd3015dc897bf1612b1979fd"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075/console.log",
+          "bytes": 608298,
+          "sha256": "625e0b5f7101a440a11efd12794f9033222b75d734a574794534fdc5be03c0fb"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075/Fe_scf.nml",
+          "bytes": 6773,
+          "sha256": "e583c237e8fa9f5bb30f9b700e54600a6cd56c70bc781c81024a70427caf14fa"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075/fixed_u_trace.csv",
+          "bytes": 980564,
+          "sha256": "337cf1f65b458a08461a9cbad5d6580268137c1e48be90fba506ed06011cc944"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075/fixed_u_trace_history.csv",
+          "bytes": 100,
+          "sha256": "a77e1ba2959e4f61c99760d0bd3824830358b2dab29913bf85413ba0c5f6021b"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075/report.out",
+          "bytes": 2703,
+          "sha256": "95421b948ef4a284bdf45f459b89bc0a06abe9149d7c932010e1b9e4c1f86f81"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075/TRACE_ARCHIVE_MANIFEST.json",
+          "bytes": 3297,
+          "sha256": "ba4354c2b30cb798b696cfad9211baa3b323f4e3ebf73fc0c0a00ace34243c60"
+        }
+      ],
+      "status": "FINISHED_STEP_CAP_CONTINUATION",
+      "binary_sha256": "e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0",
+      "input_initial_sha256": "75f404320f6998afd210b3bb5d49ad71f336b84ebd3015dc897bf1612b1979fd",
+      "seed_sha256": "8e4e0c49586b35109a420f30bbf53f65f51a1fc4ae302b68e340e849c1864128",
+      "wrapper_pid": 5998,
+      "solver_pid": 6049,
+      "status_at_capture": "RUNNING; dynamic outputs are a timestamped snapshot and will be refreshed at final continuation closure",
+      "complete_iterations_in_this_stage": 200,
+      "cumulative_complete_iterations": 400,
+      "latest_diff": 0.0018468205,
+      "state": "Finished normally after 200 rows; no C1 acceptance; proceeded to the required beta=.01 continuation.",
+      "terminal_evidence": {
+        "returncode": 0,
+        "calculation_finished_marker": true,
+        "captured_count": 0,
+        "all_matrix_checks_pass": false,
+        "trace_archive_path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta0075/TRACE_ARCHIVE_MANIFEST.json"
+      },
+      "terminal_summary": "200 complete rows; terminal Diff 0.0018468205; returncode 0; did not meet C1 acceptance; followed by beta=.01 stage."
+    },
+    {
+      "name": "matched_u0_beta001_terminal",
+      "run_directory": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001",
+      "files": [
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/clust",
+          "bytes": 423811,
+          "sha256": "4a7f118270dc9ec9fe7926a428669227e4e015719d2aa60d91786261f3b756af"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/mad.mat",
+          "bytes": 16,
+          "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/str.out",
+          "bytes": 6934,
+          "sha256": "1cf18d788e6355423e7c113ed5c26982f1943603a18a797fa453ebf2bb38076e"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/ves.out",
+          "bytes": 738,
+          "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/rslmto.x",
+          "bytes": 7609112,
+          "sha256": "e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/Fe.nml",
+          "bytes": 6773,
+          "sha256": "e583c237e8fa9f5bb30f9b700e54600a6cd56c70bc781c81024a70427caf14fa"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/input.nml",
+          "bytes": 580,
+          "sha256": "e6d21fd97fa329beccf04d161027f57656c1e8b4ecdeaed743dd93758171a760"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/console.log",
+          "bytes": 608298,
+          "sha256": "7b8c2c5814ea37fd3e16ad81d222f183eef59e89328bbd544b09e5627f68d007"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/fixed_u_trace.csv",
+          "bytes": 976358,
+          "sha256": "4ff3819d12b13558555c4957374896d698cba71727963f0785ca3cce21377459"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/fixed_u_trace_history.csv",
+          "bytes": 100,
+          "sha256": "a77e1ba2959e4f61c99760d0bd3824830358b2dab29913bf85413ba0c5f6021b"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/report.out",
+          "bytes": 2703,
+          "sha256": "873a10aa1ae399575d4fac2d3b920ac5f12caf12efa32dae2a52d903c453409b"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/TRACE_ARCHIVE_MANIFEST.json",
+          "bytes": 3289,
+          "sha256": "535b81f549479fac0c7d9e5f08f658e788be18f28939710fa9dcb89548b371af"
+        },
+        {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/launch_manifest.json",
+          "bytes": 6403,
+          "sha256": "f3b98e65c3a37e838251efc1813851f63590df939c53dcf00354cf539e1a01f8"
+        }
+      ],
+      "complete_iterations_in_this_stage": 200,
+      "cumulative_complete_iterations": 600,
+      "latest_diff": 0.0639971397,
+      "latest_attempted_iteration": 200,
+      "seed_sha256": "e583c237e8fa9f5bb30f9b700e54600a6cd56c70bc781c81024a70427caf14fa",
+      "input_initial_sha256": "e6d21fd97fa329beccf04d161027f57656c1e8b4ecdeaed743dd93758171a760",
+      "binary_sha256": "e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0",
+      "wrapper_pid": 37533,
+      "solver_pid": 37557,
+      "status": "FINISHED_STEP_CAP_PROVISIONAL_NO_C1",
+      "terminal_returncode": 0,
+      "C1_acceptance": "NOT_ACCEPTED; no accepted endpoint, captured_count=0, C1 threshold not met.",
+      "provisional_classification": "PROVISIONAL records-only at the prescribed cumulative 600-step cap.",
+      "owned_process_cleanup": {
+        "wrapper_pid": 37533,
+        "solver_pid": 37557,
+        "caffeinate_pid": 62693,
+        "all_verified_absent_after_run": true
+      },
+      "terminal_trace_manifest": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/TRACE_ARCHIVE_MANIFEST.json",
+      "terminal_outputs": {
+        "Fe_scf.nml": {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/Fe_scf.nml",
+          "bytes": 6784,
+          "sha256": "265aae27f2a2cdb2027c15c4332aeb5db4e69c9e360e406c2a5318e1962c441a"
+        },
+        "Fe_out.nml": {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/Fe_out.nml",
+          "bytes": 6784,
+          "sha256": "265aae27f2a2cdb2027c15c4332aeb5db4e69c9e360e406c2a5318e1962c441a"
+        },
+        "console.log": {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/console.log",
+          "bytes": 608298,
+          "sha256": "7b8c2c5814ea37fd3e16ad81d222f183eef59e89328bbd544b09e5627f68d007"
+        },
+        "fixed_u_trace.csv": {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/fixed_u_trace.csv",
+          "bytes": 976358,
+          "sha256": "4ff3819d12b13558555c4957374896d698cba71727963f0785ca3cce21377459"
+        },
+        "fixed_u_trace_history.csv": {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/fixed_u_trace_history.csv",
+          "bytes": 100,
+          "sha256": "a77e1ba2959e4f61c99760d0bd3824830358b2dab29913bf85413ba0c5f6021b"
+        },
+        "TRACE_ARCHIVE_MANIFEST.json": {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/TRACE_ARCHIVE_MANIFEST.json",
+          "bytes": 3289,
+          "sha256": "535b81f549479fac0c7d9e5f08f658e788be18f28939710fa9dcb89548b371af"
+        },
+        "launch_manifest.json": {
+          "path": "/private/tmp/c4-a41-fe-u0-bulk-rc100-beta001/launch_manifest.json",
+          "bytes": 6403,
+          "sha256": "f3b98e65c3a37e838251efc1813851f63590df939c53dcf00354cf539e1a01f8"
+        }
+      }
+    }
+  ]
+}

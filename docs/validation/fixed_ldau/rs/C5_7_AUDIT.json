@@ -1,0 +1,117 @@
+{
+  "schema": "c5_7_audit_v1",
+  "date": "2026-10-21",
+  "repository_head": "0526b579e27a3cf20b56fa438c038f7dfe0ca17b",
+  "overall_verdict": "FAIL_T2A_RUNTIME; T1 gates pass; adoption and merge not permitted",
+  "scope": "Independent final audit of C5.7 T1 provenance guard, no-U identity, and both T2a campaign invocations. No additional run or experiment performed.",
+  "checks": {
+    "branch_head": {
+      "status": "PASS",
+      "branch": "fix/ldau-rs-impurity",
+      "head": "0526b579e27a3cf20b56fa438c038f7dfe0ca17b"
+    },
+    "source_binding": {
+      "status": "PASS",
+      "fixed_binary_sha256": "07a94dd35208ed7ace3b3c729f7d122e5771924265035a57606f7b84a446ea10",
+      "source_self_f90_sha256": "33c33aa6d6a49a25dc0015e45a9a30143b83f5e9ebb5b4510485df1dab0240ba",
+      "t2a_source_manifest_sha256": "9d7c35869edd2571361f33e0480ddff1023f69755a0a6dc91c4a793af7562259",
+      "basis": "Current source/self.f90 and committed T2a source manifest hash to the recorded source digest; T2a packet binds source commit 0526b579e27a3cf20b56fa438c038f7dfe0ca17b and the fixed binary digest."
+    },
+    "t1_guard_ownership": {
+      "status": "PASS",
+      "basis": "Source code uses recursion lattice%irec indices mapped through lattice%iz to symbolic atom type, and frozen-host lattice%ib indices mapped through lattice%iz; validation and auto mode selection operate on the derived frozen-host ownership. Updated atoms receive mode/backend metadata; frozen host metadata is not rewritten."
+    },
+    "required_fixtures": {
+      "status": "PASS",
+      "fixture_count": 13,
+      "raw_logs_present_and_hash_matched": 13,
+      "required_cases": {
+        "bulk_legacy_seed_auto_local": "PASS; INFO conversion logged and output mode/backend rewritten",
+        "bulk_spectral_seed_auto_local": "PASS; INFO conversion logged and output mode/backend rewritten",
+        "impurity_frozen_local_forced_spectral": "PASS; fatal host mode mismatch",
+        "impurity_legacy_frozen_host": "PASS; legacy warning states unknown/treated as spectral/restart host; selected mode spectral",
+        "surface_frozen_host_mode_fatal": "PASS; frozen-host mismatch fatal",
+        "surface_recursion_local_to_spectral": "PASS; updated recursion seed INFO conversion and rewrite"
+      },
+      "basis": "C5_7_T1_FIXTURE_RESULTS.json log paths and SHA-256 values were checked against the actual logs; source mapping checked in committed source/self.f90. Fixture reports include written output hashes and scenario artifact hashes."
+    },
+    "no_u_identity": {
+      "status": "PASS",
+      "rs_artifacts_exact": 27,
+      "ks_artifacts_exact": 24,
+      "criterion": "Exact named artifact bytes, excluding testrun.log and preflight; only runtime cpu_s fields normalized in str.out.",
+      "basis": "C5_7_NO_U_IDENTITY.json reports no mismatches, return code zero, and single-thread caps for RS and KS."
+    },
+    "t2a_preflight_and_execution": {
+      "status": "PASS",
+      "attempts": [
+        {
+          "attempt": 1,
+          "preflight": "PASS",
+          "use_kspace": true,
+          "mode_resolution": "local; native KS default",
+          "updated_seed_info": "present",
+          "binary_sha256": "07a94dd35208ed7ace3b3c729f7d122e5771924265035a57606f7b84a446ea10",
+          "input_sha256": "1af5bcc4c3633f238043438e0aaa59575c8854f8fdbbd927af52f5660ae04083",
+          "exit_code": 139,
+          "raw_log_sha256": "abb7b4caf79782db24c74c1306dc35f0f93d3ccdbcc25fadda28b93b99b8e29b",
+          "trace_sha256": "209e2de76f96f1de60ec2134246df65e176475e2f6441df2d700e2561cc1b58d",
+          "trace_rows": 1219081,
+          "complete_outer_iteration": false,
+          "complete_POST_SCF_RADIAL_rows": 0,
+          "paired_state_captures": 0
+        },
+        {
+          "attempt": 2,
+          "preflight": "PASS",
+          "use_kspace": true,
+          "mode_resolution": "local; native KS default",
+          "updated_seed_info": "present",
+          "binary_sha256": "07a94dd35208ed7ace3b3c729f7d122e5771924265035a57606f7b84a446ea10",
+          "input_sha256": "1af5bcc4c3633f238043438e0aaa59575c8854f8fdbbd927af52f5660ae04083",
+          "exit_code": 139,
+          "raw_log_sha256": "101352cff9d94c7a191c0c9f4e2533808486177bd8e38f736cf60497538cbb9d",
+          "trace_sha256": "1782bda07d9c8fd365665ea873375e69f8efc609724b66b6a7035ca907b22813",
+          "trace_rows": 1219081,
+          "complete_outer_iteration": false,
+          "complete_POST_SCF_RADIAL_rows": 0,
+          "paired_state_captures": 0
+        }
+      ],
+      "basis": "Both archived raw logs show KS LDM calculation followed by mix.f90 charge-transfer output, then SIGSEGV with address-only backtrace. Raw preflight records show use_kspace=true and single-thread caps."
+    },
+    "t2a_checkpoint_and_acceptance": {
+      "status": "FAIL",
+      "classification": "Runtime segmentation fault before a complete SCF outer iteration; root cause unexplained.",
+      "acceptance": "UNEVALUATED",
+      "protected_accepted_checkpoint_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+      "both_run_Fe_scf_and_Fe_out_hashes_match_checkpoint": true,
+      "written_local_ks_provenance": "NONE; output files remained byte-identical to the accepted legacy checkpoint.",
+      "no_cause_or_preexisting_classification_claim": true
+    },
+    "disk_and_process_controls": {
+      "status": "PASS",
+      "free_space_floor_bytes": 1073741824,
+      "minimum_periodic_free_bytes": 13805854720,
+      "both_solver_exit_codes": [139, 139],
+      "owned_pid_termination": "Reported confirmed exited in the raw result packet; lifecycle records identify solver, watcher, and guard PIDs."
+    },
+    "campaign_budget_and_stop_rule": {
+      "status": "FAIL_PROTOCOL_DEVIATION_RECORDED",
+      "cap": 3,
+      "campaign_attempts_used": 2,
+      "attempt_2": "Fresh invocation from unchanged legacy accepted seed after attempt 1 left no complete state; it was not a registered continuation. The worker had launched it before the corrective stop instruction arrived.",
+      "attempt_3": "NOT RUN",
+      "T2b_T3_T4": "NOT RUN under the T2a failure stop rule"
+    }
+  },
+  "raw_packet": {
+    "path": "C5_7_T2A_assets/t2a_ks_fe_u2_auto_failed_raw.tar.gz",
+    "sha256": "2a1764877602a99de12966814f41a1734f79b7b034d66596e92f087dbba9a65a",
+    "contents_independently_inspected": "Both full run directories, preflight records, staged and immutable files, executable, logs, traces, watcher and disk guard captures, lifecycle and exit records.",
+    "source_manifest_sha256": "9d7c35869edd2571361f33e0480ddff1023f69755a0a6dc91c4a793af7562259"
+  },
+  "adoption": "NOT PERMITTED; there is no regenerated accepted KS host and KS acceptance is unevaluated.",
+  "merge": "NOT PERMITTED under the failure stop rule; T2b, T3, and T4 remain unrun.",
+  "scope_note": "No source changes, solver runs, cleanup, merge, or unrelated protocol review performed by this auditor."
+}

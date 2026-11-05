@@ -1,0 +1,263 @@
+{
+  "baseline_replay_integrity_checks": {
+    "EV": {
+      "max_abs": 1.3322676295501878e-15,
+      "pass": true,
+      "tolerance": 1e-08
+    },
+    "LIVE_STATE_integrals": {
+      "actual_l2_rho_contribution_charge_by_spin": {
+        "1": 4.610608546548238,
+        "2": 1.9021659294230981
+      },
+      "actual_l2_rho_contribution_total": 6.5127744759713355,
+      "method": "integrate NEWRHO-observed rho-after-minus-before l=2 with ATOMSC logarithmic Simpson metric",
+      "sphere_charge_by_spin": {
+        "1": 14.275595786090697,
+        "2": 11.724412422677531
+      },
+      "sphere_spin_moment": 2.551183363413166
+    },
+    "PL": {
+      "max_abs": 0.0,
+      "pass": true,
+      "tolerance": 1e-10
+    },
+    "RAW_PL_vs_LIVE_STATE_operands_diagnostic_only": {
+      "d_shell_pl": [
+        {
+          "difference": -1.6226013332953926e-07,
+          "live_pl": 3.887655359980909,
+          "p_out_calculate_pl": 3.887655197720776,
+          "spin": 1
+        },
+        {
+          "difference": -1.5441714986685895e-06,
+          "live_pl": 3.6518634959467016,
+          "p_out_calculate_pl": 3.651861951775203,
+          "spin": 2
+        }
+      ],
+      "d_shell_ql_q0_q2": [
+        {
+          "difference": 1.1286756489425898e-06,
+          "live_ql": 4.610600974090559,
+          "moment": 0,
+          "p_out_spectral": 4.610602102766208,
+          "spin": 1
+        },
+        {
+          "difference": -2.56782864103966e-07,
+          "live_ql": 0.04898169550895677,
+          "moment": 2,
+          "p_out_spectral": 0.04898143872609267,
+          "spin": 1
+        },
+        {
+          "difference": 4.771741870301938e-06,
+          "live_ql": 1.9021652943050211,
+          "moment": 0,
+          "p_out_spectral": 1.9021700660468914,
+          "spin": 2
+        },
+        {
+          "difference": -4.04117726315531e-07,
+          "live_ql": 0.011055742957067119,
+          "moment": 2,
+          "p_out_spectral": 0.011055338839340803,
+          "spin": 2
+        }
+      ],
+      "use": "Report mixing/operand gap; RAW_PL replay uses P_OUT moments while LIVE_STATE baseline uses captured actual PL/QL."
+    },
+    "SUMEC": {
+      "max_abs": 1.1368683772161603e-13,
+      "pass": true,
+      "tolerance": 1e-08
+    },
+    "SUMEV": {
+      "max_abs": 5.773159728050814e-15,
+      "pass": true,
+      "tolerance": 1e-08
+    },
+    "captured_ATOMSC_input_density_components": {
+      "ekin": {
+        "max_abs_ry": 9.094947017729282e-13,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "etot": {
+        "max_abs_ry": 9.094947017729282e-13,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "pass": true,
+      "rhoeps": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "rhomu": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "rhovh": {
+        "max_abs_ry": 4.547473508864641e-13,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "sumec": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "sumev": {
+        "max_abs_ry": 8.43769498715119e-15,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "utot": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "vnucl": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      },
+      "zvnucl": {
+        "max_abs_ry": 0.0,
+        "pass": true,
+        "tolerance_ry": 1e-08
+      }
+    },
+    "pass": true,
+    "rho": {
+      "max_abs": 2.5226043476322957e-11,
+      "pass": true,
+      "tolerance": 1e-10
+    }
+  },
+  "block_chebyshev_comparison_status": "NOT_EVALUATED: valid block U0 capacity guard prevented C2 numerical ratio; C3 carrier/q2-prime check proceeds independently under C5.3",
+  "c2_lock_sha256": "d923078e644eaf7ada1926a53a4c92adf3d138e22ba8307ca87896d567cec1f5",
+  "capture": {
+    "accepted_checkpoint_sha256": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+    "binary_sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69",
+    "capture_dir": "/private/tmp/c52-c2-stage/c3_run_debug_i1",
+    "csv_path": "/private/tmp/c52-c2-stage/c3_run_debug_i1/records.csv",
+    "csv_sha256": "d45cc08bc72752b167bf244fcf8ffeda8a9658e223a5321876d04f486f9722d4",
+    "driver_sha256": "9e3f44379b8933d21eafb78e8008cbf0d44dd9b65a77140af2920c26713ac9d7",
+    "green_shape": {
+      "all_green_matrices_complete": true,
+      "basis_dimension_by_site": {
+        "0": 18
+      },
+      "energy_grid_points_by_site": {
+        "0": 999
+      },
+      "full_green_matrix_count": 999
+    },
+    "iteration": 1,
+    "kind_counts": {
+      "basis_map": 18,
+      "ekin": 2,
+      "energy_component_ekin": 1,
+      "energy_component_etot": 1,
+      "energy_component_rhoeps": 1,
+      "energy_component_rhomu": 1,
+      "energy_component_rhovh": 1,
+      "energy_component_sumec": 1,
+      "energy_component_sumev": 1,
+      "energy_component_utot": 1,
+      "energy_component_vnucl": 1,
+      "energy_component_zvnucl": 1,
+      "etot_site": 1,
+      "etot_total": 1,
+      "fermi_step": 999,
+      "fixed_u_antiherm_p": 1,
+      "fixed_u_antiherm_v": 1,
+      "fixed_u_physical": 1,
+      "fixed_u_rp_abs": 1,
+      "fixed_u_rp_rel": 1,
+      "fixed_u_rp_target": 1,
+      "fixed_u_rv_abs_ry": 1,
+      "fixed_u_rv_rel": 1,
+      "fixed_u_rv_target_ry": 1,
+      "green_function": 323676,
+      "h_total": 972,
+      "ldm": 210,
+      "ldm_availability": 3,
+      "ldm_m1": 70,
+      "m0_carrier_control": 4,
+      "m0_carrier_identity": 2,
+      "m0_carrier_input": 2,
+      "m0_carrier_local": 2,
+      "m0_p_availability": 2,
+      "m0_trace_consistency": 4,
+      "m1_trace_consistency": 6,
+      "pl_map_input": 36,
+      "ql": 18,
+      "radial_A": 1,
+      "radial_B": 1,
+      "radial_B_fsm": 1,
+      "radial_NR": 1,
+      "radial_VHRMAX": 1,
+      "radial_Z": 1,
+      "radial_density_in": 990,
+      "radial_density_out": 990,
+      "radial_f_core": 1,
+      "radial_hyperfine": 1,
+      "radial_lmax": 1,
+      "radial_moment": 54,
+      "radial_nsp": 1,
+      "radial_parameter": 36,
+      "radial_replay_band_center": 6,
+      "radial_replay_c": 6,
+      "radial_replay_ec_seed": 10,
+      "radial_replay_eigen_seed": 6,
+      "radial_replay_eigenvalue": 6,
+      "radial_replay_enu": 6,
+      "radial_replay_gravity_center": 6,
+      "radial_replay_mesh": 990,
+      "radial_replay_nre": 6,
+      "radial_replay_pl": 6,
+      "radial_replay_pnu": 6,
+      "radial_replay_ql": 18,
+      "radial_replay_qpar": 6,
+      "radial_replay_rho_core": 990,
+      "radial_replay_rho_in": 990,
+      "radial_replay_rho_out": 990,
+      "radial_replay_srdel": 6,
+      "radial_replay_sumec": 2,
+      "radial_replay_sumev": 2,
+      "radial_replay_v": 990,
+      "radial_replay_vmad": 1,
+      "radial_replay_wave": 17820,
+      "radial_tolerance": 1,
+      "radial_txc": 1,
+      "radial_v": 990,
+      "rhoeps": 2,
+      "rs_bond_map": 45,
+      "rs_hopping": 4860,
+      "sum_ec": 2,
+      "sum_ev": 2,
+      "utot": 2,
+      "v_hub": 972,
+      "vin_availability": 3
+    },
+    "manifest_path": "/private/tmp/c52-c2-stage/c3_run_debug_i1/manifest.json",
+    "manifest_sha256": "aaadf126ced0950254955e92ce1895607386bc007b48ad979205001498a03568",
+    "row_count": 357876,
+    "run_id": "c3_fe_u2_cheb_fullcapture_i1",
+    "source_sha256": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107"
+  },
+  "driver_input_sha256": "6549a27f2dc590b873d49684036d07534ccfaf32b07b4b9faf31d08e426f9f79",
+  "driver_output_file_sha256": "0fe2d321c35d1d12733e6e45c3254c6c7b34d43d8aa6371ab6eceaac1c6d1490",
+  "driver_output_path": "/private/tmp/c52-c2-stage/c3_run_debug_i1/analysis/baseline.csv",
+  "driver_output_sha256": "0fe2d321c35d1d12733e6e45c3254c6c7b34d43d8aa6371ab6eceaac1c6d1490",
+  "driver_sha256": "9e3f44379b8933d21eafb78e8008cbf0d44dd9b65a77140af2920c26713ac9d7",
+  "schema": "rslmto-c5-c3-live-baseline-v1",
+  "status": "PASS_LIVE_STATE_BASELINE"
+}

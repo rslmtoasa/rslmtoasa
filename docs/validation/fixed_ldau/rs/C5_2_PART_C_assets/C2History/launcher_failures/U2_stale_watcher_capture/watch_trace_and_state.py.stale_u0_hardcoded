@@ -1,0 +1,38 @@
+import os,time,hashlib,pathlib,json,datetime,csv
+base=pathlib.Path('/private/tmp/c52-c2-stage/launch_u0'); out=base/'snapshots_watcher'; out.mkdir(exist_ok=True); manifest=out/'trace_state_manifest.jsonl'
+runs=[('c2_u0_block',52846),('c2_u0_chebyshev',52847)]
+seen={}
+def sha(b): return hashlib.sha256(b).hexdigest()
+while True:
+ alive=False
+ for rid,pid in runs:
+  try: os.kill(pid,0); alive=True
+  except ProcessLookupError: pass
+  except PermissionError: alive=True
+  src=base/rid/'fixed_u_trace.csv'; state=base/rid/'Fe_scf.nml'
+  try:
+   t1=src.read_bytes(); time.sleep(.01); t2=src.read_bytes(); s1=state.read_bytes(); time.sleep(.01); s2=state.read_bytes()
+   if not t1 or t1!=t2 or s1!=s2: continue
+   lines=t2.decode().splitlines()
+   if not lines or lines[0].startswith('kind,run_id,') is False: continue
+   rows=list(csv.DictReader(lines))
+   if not rows: continue
+   iters={r['iteration'].strip() for r in rows}; stages={r['stage'].strip() for r in rows}
+   if len(iters)!=1 or 'POST_SCF_RADIAL' not in stages: continue
+   post=[r for r in rows if r['stage']=='POST_SCF_RADIAL']
+   pql=[r for r in rows if r['stage']=='P_OUT' and r['kind']=='ql']
+   if len(post)!=6 or post[-1]['kind']!='etot_total' or len(pql)!=6: continue
+   iteration=next(iter(iters)); th=sha(t2); sh=sha(s2); key=(iteration,th,sh)
+   if seen.get(rid)==key: continue
+   stem=f'{rid}_traceiter{int(float(iteration)):04d}'
+   tdest=out/(stem+'_'+th[:12]+'.csv'); sdest=out/(stem+'_Fe_scf_'+sh[:12]+'.nml')
+   if not tdest.exists(): tdest.write_bytes(t2)
+   if not sdest.exists(): sdest.write_bytes(s2)
+   stat=state.stat()
+   rec={'run_id':rid,'trace_iteration':iteration,'trace_sha256':th,'trace_bytes':len(t2),'trace_snapshot':str(tdest),'trace_source':str(src),'Fe_scf_sha256':sh,'Fe_scf_bytes':len(s2),'Fe_scf_snapshot':str(sdest),'Fe_scf_source':str(state),'Fe_scf_source_mtime_ns':stat.st_mtime_ns,'captured_local':datetime.datetime.now().astimezone().isoformat(),'stable_double_reads':True,'post_scf_radial_count':len(post),'post_scf_radial_last_kind':post[-1]['kind'],'P_OUT_ql_count':len(pql),'P_OUT_ql_keys':sorted([f"l{r['l']}_spin{r['spin']}" for r in pql])}
+   with manifest.open('a') as f: f.write(json.dumps(rec,sort_keys=True)+'\n'); f.flush(); os.fsync(f.fileno())
+   seen[rid]=key; print(json.dumps(rec),flush=True)
+  except (OSError,UnicodeDecodeError,ValueError,KeyError): pass
+ if not alive: break
+ time.sleep(.05)
+print('watcher finished',flush=True)

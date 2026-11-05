@@ -1,0 +1,25 @@
+{
+  "attempt": "producer launcher setup failure before executable startup",
+  "launcher_pid": 89698,
+  "launcher_exit": 126,
+  "solver_started": false,
+  "cause": "frozen scratch producer copy had mode 0444 and was not executable",
+  "correction": "chmod only frozen scratch copy to 0555; content hash unchanged; repository executable untouched",
+  "frozen_copy_path": "/private/tmp/c5-hcpco-reference/frozen/e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0/rslmto.x",
+  "frozen_copy_sha256": "e42951341e6957bda6d7cd4d58df0e1a579e03072eb3484fd42b3cd0fa916dc0",
+  "frozen_copy_mode": "0555",
+  "preserved_attempt_files": {
+    "solver.pid": {
+      "path": "/private/tmp/c5-hcpco-reference/preexec_failure_producer/solver.pid",
+      "sha256": "8de0b7a53e90f0466337e937eed636b0c6b1d53cc32bc45e4f59d5ad0035fa4b"
+    },
+    "solver.exit": {
+      "path": "/private/tmp/c5-hcpco-reference/preexec_failure_producer/solver.exit",
+      "sha256": "703d2c10fa601276a4dd96193faed68902a642a44eb5b01b40d6fc8499e12822"
+    },
+    "out.scf": {
+      "path": "/private/tmp/c5-hcpco-reference/preexec_failure_producer/out.scf",
+      "sha256": "25cc7e229442d93a0626c9e645b8e2317643f4f3e42bceb107eaff9f2f6df6eb"
+    }
+  }
+}

@@ -601,6 +601,7 @@ module reciprocal_mod
       procedure :: calculate_adaptive_sigma
       procedure :: find_fermi_level_from_dos
       procedure :: calculate_ldm_from_projected_dos
+      procedure :: calculate_spinor_dm
       procedure :: integrate_dos_up_to_energy
       procedure :: calculate_gaussian_weight_single
       procedure :: write_dos_to_file
@@ -2309,6 +2310,13 @@ end function integrate_dos_up_to_energy
       integer :: idx_a, idx_b
 
    end subroutine calculate_ldm_from_eigenvectors
+
+   !> Full spinor d-shell P and M1 per site from the current eigenpairs (diagnostic, nsp>=2).
+   module subroutine calculate_spinor_dm(this, lattice_obj)
+      use lattice_mod
+      class(reciprocal), intent(inout) :: this
+      type(lattice), intent(inout) :: lattice_obj
+   end subroutine calculate_spinor_dm
 
    ! k-space Green’s-function engine (milestone B2, submodule reciprocal_green)
 

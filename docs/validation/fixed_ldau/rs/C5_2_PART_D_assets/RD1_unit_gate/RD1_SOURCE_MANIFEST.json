@@ -1,0 +1,27 @@
+{
+  "baseline_commit": "0469135d935dd31fb6ce055d819cdb54811c52fa",
+  "source_files": {
+    "source/hamiltonian.f90": {
+      "baseline_HEAD_sha256": "410e799d4c5001f8c39b26d80b5435b265ae987a146a4457aa793e1162a0e837",
+      "changed_worktree_sha256": "928434dd722b1faced7e3413de3e7c1f62188bf6225708e6223597ce0ad52bdc"
+    },
+    "source/hamiltonian_build.f90": {
+      "baseline_HEAD_sha256": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+      "changed_worktree_sha256": "75e16120e99b85004436a0a336e467504e8f22f295e29dd5c75943f74783c04f"
+    },
+    "source/self.f90": {
+      "baseline_HEAD_sha256": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+      "changed_worktree_sha256": "d8ca2650b871c051c4023298300c8727f2199260948f9cfdaf6faa516a9c3b02"
+    },
+    "source/bands.f90": {
+      "baseline_HEAD_sha256": "ea924d76e09c534d33275e9e330d872e9351d14ba33629013d409784280838cc",
+      "changed_worktree_sha256": "0f130331ded7fea3d12edd2a716c04f1473855a9b89ccfbf70fdafa73a38724e"
+    },
+    "tests/validation/fixed_ldau/projector_multisite_frozen_h.f90": {
+      "baseline_HEAD_sha256": "5d5d24c40e8505494ee57b116003a22bb9ce397e0140574d566a1fcb91b1891b",
+      "changed_worktree_sha256": "c63bf9f72b4682fd6c2d48f216d258466a80ec16c8dfd3f3cacdaf549d7e4dfb"
+    }
+  },
+  "five_file_patch_sha256": "25a6c519e1ae6f280d90261e00fa5ecc6871ffa0d1fc9289a8960aba0b26ab7b",
+  "scope": "Only the four production files and existing focused projector test are changed."
+}

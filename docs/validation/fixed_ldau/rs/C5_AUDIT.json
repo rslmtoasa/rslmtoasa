@@ -1,0 +1,367 @@
+{
+  "record": "C5 independent audit evidence",
+  "created_utc": "2026-10-20",
+  "auditor_role": "independent Luna auditor",
+  "no_u_standard_fixture_gate": {
+    "preflight": {
+      "path": "/private/tmp/c5-no-u-release/preflight.json",
+      "sha256": "61793302e19a3b790939f884aa695a5af0fdaee714b84beeee12fd6a11b64141"
+    },
+    "raw_output_hash_map": {
+      "path": "/private/tmp/c5-no-u-release/output_hashes.json",
+      "sha256": "54e5d5350c130ff9765a56338a9ceeb4cd384ca24e23b7d3827b557e21d708df"
+    },
+    "builds": {
+      "clean8b_release": {
+        "binary_sha256": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc",
+        "cmake_cache_sha256": "d1fae4609de8f500177931a5c4c9a56122396d5a889bb21c6fe106fa98e6295f"
+      },
+      "fixed_release": {
+        "binary_sha256": "710f91b3b3478cb8e4c89961edb6eca02e1fc72244a0c8061154604761898794",
+        "cmake_cache_sha256": "9ebc1a66d490311521605e4d01300af4d1791dc5846f7f4c15f268ab4a8a4874"
+      },
+      "shared_configuration": "Release; GNU Fortran 16.2 at /opt/homebrew/bin/gfortran; -O3 -fbacktrace -g -g -ffree-line-length-0 -cpp -mtune=native; OpenMP on; MPI/CUDA off; spglib on; MARCH_NATIVE on; libXC off."
+    },
+    "criteria": {
+      "no_u_identity": "byte identity for scientific/result artifacts; testrun.log excluded; str.out differences accepted only for parsed timing fields. solver.pid is a process-tracking sidecar, not a calculation artifact."
+    },
+    "cases": {
+      "RS": {
+        "canonical_name": "Example_bulk_bccFe_nsp2_block",
+        "fixture": "bulk/bccFe",
+        "resolved_input_sha256": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3",
+        "seed_sha256": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+        "live_backend": "strux_lib",
+        "live_mode": "spectral, use_kspace=.false.",
+        "output_file_count": 28,
+        "differing_app_files": [
+          "Fe_1_spinene.out",
+          "Fe_dos.out",
+          "Fe_orbene.out",
+          "Fe_orbital_dos.out",
+          "Fe_orbquadene.out",
+          "Fe_out.nml",
+          "Fe_scf.nml",
+          "magneticdos.out",
+          "radial_ground_state_Fe_1.dat",
+          "str.out",
+          "testrun.log"
+        ],
+        "scientific_differences": [
+          "Fe_1_spinene.out",
+          "Fe_dos.out",
+          "Fe_orbene.out",
+          "Fe_orbital_dos.out",
+          "Fe_orbquadene.out",
+          "Fe_out.nml",
+          "Fe_scf.nml",
+          "magneticdos.out",
+          "radial_ground_state_Fe_1.dat"
+        ],
+        "timing_log_differences": [
+          "str.out cpu_s and TIMER REPORT; normalized text equal",
+          "testrun.log timestamps/source diagnostics"
+        ],
+        "raw_sha_pairs": {
+          "Fe_1_spinene.out": {
+            "clean8b_release": "fedf53a0f77cfd542db4edb416ccaa7cc2273715fbefbc8127e224a04deb9d3d",
+            "fixed_release": "89101cc81a8c2be02d15d1e724281bb70157576599cf93f24b56b770840f73cd"
+          },
+          "Fe_dos.out": {
+            "clean8b_release": "e511562194835fe426e44b2e569401413b4a9203478a98f3236bae0ee31c88c8",
+            "fixed_release": "b13048e0156042506764eb21e235c1a9fda642148685dfb09e9d6a36e4ed0121"
+          },
+          "Fe_orbene.out": {
+            "clean8b_release": "582f996e4f731bf6db2e64af72b34ef5a6a2762fdaf43ca7547b29f1ac75f4f1",
+            "fixed_release": "e9a84b5817d5bd6208d4a6bbe1d199fa49a4a13a13dd7c2e977dbfbcbc9b7978"
+          },
+          "Fe_orbital_dos.out": {
+            "clean8b_release": "217523f520a39670420a4445c8e247e10fb886a0f46c571e80b3ff011efb5f8c",
+            "fixed_release": "ed3fc0e47a93c4320aa5e7304cbfcb0653eff0dac990b3dfa4fe04b8844b4354"
+          },
+          "Fe_orbquadene.out": {
+            "clean8b_release": "b0c781d336f534d8520fda5d5eaaf69e44d75ee52dfbdd193187190928f7de48",
+            "fixed_release": "7a3025c5a1c559e1dc9fbc3dc2c9af88f2ac3c8ab41ed19ee2d63c1c3533976f"
+          },
+          "Fe_out.nml": {
+            "clean8b_release": "2bbd31c22d3015ffcb5a0a876d86c2399313e2314b0e247dba2335512ad001bf",
+            "fixed_release": "3014171b18060dd7f36257d58fbdcaaa619eb24073faf84007e1667072a285c7"
+          },
+          "Fe_scf.nml": {
+            "clean8b_release": "2bbd31c22d3015ffcb5a0a876d86c2399313e2314b0e247dba2335512ad001bf",
+            "fixed_release": "3014171b18060dd7f36257d58fbdcaaa619eb24073faf84007e1667072a285c7"
+          },
+          "magneticdos.out": {
+            "clean8b_release": "1bbe0506ad55e83cc02afc01e3b9d97349bc2c8514cc7cd760455b3dd5d884d2",
+            "fixed_release": "4bfc18c16548249534fc6320af4e0eb5b672cdc106970ed96826072f90dceb50"
+          },
+          "radial_ground_state_Fe_1.dat": {
+            "clean8b_release": "8c5426ea60e8c8223a3c078e0770fd6543ff3238bfb1f3ec925172788e996505",
+            "fixed_release": "2bf966c3997127848364b893acee82404cc668eaca33776ebba37c82b60d9deb"
+          },
+          "solver.pid": {
+            "clean8b_release": "054ff70e07af57102517b303395206a6e1bb10ab3fafd1287d4f485afa398324",
+            "fixed_release": "5ed3a14ea487693b6ba340a45e9a9518a2a5de4f58460a784b5176359b4acb59"
+          },
+          "str.out": {
+            "clean8b_release": "d50341a34353300153dcbeaa5439401f780c9b64a707e5f81552b6106b63dc1e",
+            "fixed_release": "4eefdef1ffa8b0fa303956f467d05decde09e423b976d073c38044fd8ce8b957"
+          },
+          "testrun.log": {
+            "clean8b_release": "37915dca5b8883dfcf49ba6dcb72d960ca65db932741babbca4c6424188a0d45",
+            "fixed_release": "c5f0edec6a8ab9efbd5575108dbe83f599d5bdc176c0d4a780b9f5121481a50d"
+          }
+        },
+        "gate": "FAIL"
+      },
+      "KS": {
+        "canonical_name": "Example_k_space_scf_bccFe",
+        "fixture": "k_space_scf/bccFe",
+        "resolved_input_sha256": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01",
+        "seed_sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+        "live_backend": "strux_lib",
+        "live_mode": "spectral, use_kspace=.true.",
+        "output_file_count": 25,
+        "differing_app_files": [
+          "str.out",
+          "testrun.log"
+        ],
+        "scientific_differences": [],
+        "timing_log_differences": [
+          "str.out cpu_s and TIMER REPORT; normalized text equal",
+          "testrun.log timestamps/source diagnostics"
+        ],
+        "raw_sha_pairs": {
+          "solver.pid": {
+            "clean8b_release": "8d0e1ff101a72e3929f03e7c3a24fb13c8191e44384b3bb6b33621a67ea4df57",
+            "fixed_release": "68aadd4afb3866a13fc53497e844bb529236fbe0cc877eaa87ff4427ae1e86de"
+          },
+          "str.out": {
+            "clean8b_release": "7c5429da197b167f880e4b13e06c12c9e650d6c9b2540bd39a09bd05b875cd35",
+            "fixed_release": "382ad1baf3e5bb0606ca8822960395e8f27f8c773faa73ebbc7c6d32a3ebb9fd"
+          },
+          "testrun.log": {
+            "clean8b_release": "ae5b0676ba0ab0caeb601e42aa78440834a7d758ceb8469cc7ece6495c19505e",
+            "fixed_release": "8631d547017d27653e25d8501d4f8afae96436b3e9683b9a08bd45451cbfd73d"
+          }
+        },
+        "gate": "PASS"
+      }
+    },
+    "rs_arithmetic_example": {
+      "file": "Fe_out.nml",
+      "clean_sha256": "2bbd31c22d3015ffcb5a0a876d86c2399313e2314b0e247dba2335512ad001bf",
+      "fixed_sha256": "3014171b18060dd7f36257d58fbdcaaa619eb24073faf84007e1667072a285c7",
+      "lmom_x_clean": 4.470778365813479e-12,
+      "lmom_x_fixed": 4.472375552070866e-12,
+      "lmom_z_clean": 0.04239281064530442,
+      "lmom_z_fixed": 0.04239281064530575,
+      "other_differences": "gravity_center ~1e-16 and ql(3) ~1e-18; differing density propagates into spin/orbital DOS, magnetic DOS and radial-state outputs."
+    },
+    "same_candidate_repeat_signal": {
+      "earlier_run_tree": "/private/tmp/c5-no-u-identity",
+      "current_matched_tree": "/private/tmp/c5-no-u-release/fixed_release",
+      "identical_input_and_seed_hashes": true,
+      "earlier_full_preflight_available": false,
+      "rs_differing_common_files": [
+        "Fe_1_spinene.out",
+        "Fe_dos.out",
+        "Fe_orbene.out",
+        "Fe_orbital_dos.out",
+        "Fe_orbquadene.out",
+        "Fe_out.nml",
+        "Fe_scf.nml",
+        "magneticdos.out",
+        "radial_ground_state_Fe_1.dat",
+        "str.out",
+        "testrun.log",
+        "totaldos.out"
+      ],
+      "rs_count": 12,
+      "ks_differing_common_files": [
+        "str.out",
+        "testrun.log"
+      ],
+      "ks_count": 2,
+      "interpretation": "Suggests RS run-to-run variability in outputs from the fixed candidate and warrants a controlled determinism study; the earlier run lacks full effective-environment provenance, so this does not overturn the strict observed RS gate or authorize criteria changes.",
+      "rs_raw_sha_pairs": {
+        "Fe_1_spinene.out": {
+          "earlier_fixed_candidate": "3fbe642cca7bc68d0e8e9c7b51fe755e0913a31eecd4c3d8ecb26d84126d6550",
+          "matched_fixed_release": "89101cc81a8c2be02d15d1e724281bb70157576599cf93f24b56b770840f73cd"
+        },
+        "Fe_dos.out": {
+          "earlier_fixed_candidate": "53555055bf8dce5b39e4f8fd3e8098a6aef72e178e045a28df178b169919e0ac",
+          "matched_fixed_release": "b13048e0156042506764eb21e235c1a9fda642148685dfb09e9d6a36e4ed0121"
+        },
+        "Fe_orbene.out": {
+          "earlier_fixed_candidate": "ddc8a96173568cbc389bf2617c18d04a2959371d50cbbfc58dae51b200122c87",
+          "matched_fixed_release": "e9a84b5817d5bd6208d4a6bbe1d199fa49a4a13a13dd7c2e977dbfbcbc9b7978"
+        },
+        "Fe_orbital_dos.out": {
+          "earlier_fixed_candidate": "858a91d3011734cbc33feb655e7137ca99f914d778edfda6b724ed9e197cd92b",
+          "matched_fixed_release": "ed3fc0e47a93c4320aa5e7304cbfcb0653eff0dac990b3dfa4fe04b8844b4354"
+        },
+        "Fe_orbquadene.out": {
+          "earlier_fixed_candidate": "b6531f1a9049d5b18e3b43df42e174242940ee4075f1540ca62de4f5439cff15",
+          "matched_fixed_release": "7a3025c5a1c559e1dc9fbc3dc2c9af88f2ac3c8ab41ed19ee2d63c1c3533976f"
+        },
+        "Fe_out.nml": {
+          "earlier_fixed_candidate": "74af7ff8352ea61de8574487a9dce44c79976f4089fef3cdf901d978e3fa8b41",
+          "matched_fixed_release": "3014171b18060dd7f36257d58fbdcaaa619eb24073faf84007e1667072a285c7"
+        },
+        "Fe_scf.nml": {
+          "earlier_fixed_candidate": "74af7ff8352ea61de8574487a9dce44c79976f4089fef3cdf901d978e3fa8b41",
+          "matched_fixed_release": "3014171b18060dd7f36257d58fbdcaaa619eb24073faf84007e1667072a285c7"
+        },
+        "magneticdos.out": {
+          "earlier_fixed_candidate": "f8aab4147d1e462efa7cdbd470f5fa4797abff3748ff5032d71aa300d9d2a3cc",
+          "matched_fixed_release": "4bfc18c16548249534fc6320af4e0eb5b672cdc106970ed96826072f90dceb50"
+        },
+        "radial_ground_state_Fe_1.dat": {
+          "earlier_fixed_candidate": "1804e0f3d03eda3c002da79b26e1255c3ea5f0dd3be024e002f49deefb2e5622",
+          "matched_fixed_release": "2bf966c3997127848364b893acee82404cc668eaca33776ebba37c82b60d9deb"
+        },
+        "str.out": {
+          "earlier_fixed_candidate": "c7ec50ec7cde117b7ca03039d31d2ca92321ebeb8040e2818c56440b249b45e0",
+          "matched_fixed_release": "4eefdef1ffa8b0fa303956f467d05decde09e423b976d073c38044fd8ce8b957"
+        },
+        "testrun.log": {
+          "earlier_fixed_candidate": "67ef8f2b82501d83c6adeff94a5aa1ac1aa2734b2ff88ee29da29725ec338c86",
+          "matched_fixed_release": "c5f0edec6a8ab9efbd5575108dbe83f599d5bdc176c0d4a780b9f5121481a50d"
+        },
+        "totaldos.out": {
+          "earlier_fixed_candidate": "af4c3b5b204dfdc6e4086d1e4aee37de66ff0ec3df3723242d77a1a898c9cfbf",
+          "matched_fixed_release": "974862892a174e6f1ce28015cae1b2999c6d45ba2ad5531a6e75db57d593d86d"
+        }
+      },
+      "ks_raw_sha_pairs": {
+        "str.out": {
+          "earlier_fixed_candidate": "70cf215804164ca32c6c8b56fc860c4b10c8c6c254d7720c576209458945f04a",
+          "matched_fixed_release": "382ad1baf3e5bb0606ca8822960395e8f27f8c773faa73ebbc7c6d32a3ebb9fd"
+        },
+        "testrun.log": {
+          "earlier_fixed_candidate": "0bfd74ab7d3193f45df731a9beae44e7891ab55ec1dfa95cfcf64f34a9578bdb",
+          "matched_fixed_release": "8631d547017d27653e25d8501d4f8afae96436b3e9683b9a08bd45451cbfd73d"
+        }
+      }
+    }
+  },
+  "r2_capture_audit": {
+    "preflight": {
+      "path": "/private/tmp/rslmto-c5-r2-runs/fe_rc100_debug_capture/preflight.json",
+      "sha256": "cc7efd01ed08544e5b70452862aed7efbf1866eca3f5934b6568b14454d6ce27"
+    },
+    "run_log": {
+      "path": "/private/tmp/rslmto-c5-r2-runs/fe_rc100_debug_capture/run.log",
+      "sha256": "b555321001272dfc41cfe965c217de33ce1da5e4953bea4732b2fe4fad7e633c"
+    },
+    "trace": {
+      "path": "/private/tmp/rslmto-c5-r2-runs/fe_rc100_debug_capture/trace.csv",
+      "sha256": "65f4bb3f77eea9176590fd103228e17604d974a0f0ef706430238169e5c73a25",
+      "rows": 612,
+      "families": [
+        "ql"
+      ],
+      "stages": [
+        "P_OUT"
+      ]
+    },
+    "source_manifest_sha256": "4a8de35c7629ccc708edda220c05e3094fad1b8c35ec9b3c062fc36716812045",
+    "binary_sha256_running_image": "8aed8e6c69e5546ddc09bc5e4d843392dfad41506b2a151fad712475bbe0e987",
+    "restart_sha256": "6da6382729d905a28cdf3ae9689b1737dfff6840b7c79292dbb466b0d37bb702",
+    "preflight_summary": "Fe fixed-U/J U=3.8 eV J=1.1 eV; C4 rc100 deck; restart from accepted C2 rc80 checkpoint; RS; use_kspace false/absent; spectral; Broyden beta=.015; 102 steps; OMP/BLAS thread caps=1.",
+    "raw_findings": {
+      "first_d_shell_spin_occupancy_out_of_range": {
+        "iteration": 90,
+        "stage": "P_OUT",
+        "l": 2,
+        "spin": 1,
+        "ql": 16.023218979776722,
+        "physical_capacity": 5,
+        "corroborating_log": "HUBBARD_OCC nup=16.023219 ndn=0.738851; HUBBARD_LDM_OUT_OF_RANGE emitted."
+      },
+      "next_spin_overshoot": {
+        "iteration": 94,
+        "l": 2,
+        "spin": 2,
+        "ql": 5.167394717968493
+      },
+      "last_observed_occupancy_in_range_snapshot": {
+        "iteration": 89,
+        "sha256": "5a8f322ff85849cc8e3632f2a8d796a5ca0848a9e7eefe5f8ad3c9f83cff2148",
+        "no_NaN_or_Inf": true,
+        "accepted_RS_state": false
+      },
+      "last_wholly_finite_snapshot": {
+        "iteration": 101,
+        "sha256": "67417783391ef6fd6b9e496c06e9bb1e16b16836d682a45ff12f1dc1117ba957",
+        "accepted_RS_state": false
+      },
+      "first_snapshot_with_NaN": {
+        "iteration": 102,
+        "sha256": "f4024152835bde9292d9bf915a392e4da2c74e2f7ee73a0c4f16bdb0cd73b555",
+        "NaN_token_count": 27,
+        "fields": "center_band, width_band, shifted_band, obar, c, ppar, qpar, srdel, vl (spin/channel 1)."
+      },
+      "first_explicit_radial_NaN": "run.log line 5149: RSEQ diagnostic for l=2, channel 0, E=-50 reports NaN outputs; related bad-node records at lines 5149-5160.",
+      "marker_counts": {
+        "A_B2": 102,
+        "Q_MOMENTS": 102,
+        "MIXED_Q": 102,
+        "R2_FIRST_NONFINITE": 0,
+        "R2_OUT_OF_RANGE": 0
+      },
+      "snapshot_102_equals_terminal_files": {
+        "Fe_r2_i102_sha256": "f4024152835bde9292d9bf915a392e4da2c74e2f7ee73a0c4f16bdb0cd73b555",
+        "Fe_scf_sha256": "f4024152835bde9292d9bf915a392e4da2c74e2f7ee73a0c4f16bdb0cd73b555",
+        "Fe_out_sha256": "f4024152835bde9292d9bf915a392e4da2c74e2f7ee73a0c4f16bdb0cd73b555"
+      }
+    },
+    "diagnostic_coverage_limits": {
+      "A_B2": "Per-iteration finite markers exist (102); the running binary used B\u00b2 < -1e-12, so small negative B\u00b2 is not excluded. Strict <0 version was built only after this process started.",
+      "terminator": "Source includes non-finite checks for terminator A/B; no marker was emitted in this run.",
+      "calculate_pl": "Source includes finite input/output checks; no marker was emitted. CSV was QL-only and contains no PL family.",
+      "radial": "Runtime monitor covered v/rofi/rho0 only and missed derived radial quantities listed above; radial NaN appears in RSEQ diagnostics at line 5149.",
+      "ql_moments_mixed_q": "Per-iteration markers exist (102 each) but all-finite markers did not prevent the separate physically out-of-range occupation at iteration 90."
+    },
+    "run_status": "Completed at 102-step cap, not RS-accepted; endpoint is non-finite in radial derived fields and not a valid whole-state restart. No change-control variants launched after strict no-U STOP."
+  },
+  "tracked_process_liveness": {
+    "checks": [
+      {
+        "pid_file": "/private/tmp/rslmto-c5-r2-runs/fe_rc100_debug_capture/solver.pid",
+        "pid": "5989",
+        "kill_0_result": "absent"
+      },
+      {
+        "pid_file": "/private/tmp/c5-no-u-release/clean8b_release/Example_bulk_bccFe_nsp2_block/solver.pid",
+        "pid": "29116",
+        "kill_0_result": "absent"
+      },
+      {
+        "pid_file": "/private/tmp/c5-no-u-release/clean8b_release/Example_k_space_scf_bccFe/solver.pid",
+        "pid": "29307",
+        "kill_0_result": "absent"
+      },
+      {
+        "pid_file": "/private/tmp/c5-no-u-release/fixed_release/Example_bulk_bccFe_nsp2_block/solver.pid",
+        "pid": "29384",
+        "kill_0_result": "absent"
+      },
+      {
+        "pid_file": "/private/tmp/c5-no-u-release/fixed_release/Example_k_space_scf_bccFe/solver.pid",
+        "pid": "29580",
+        "kill_0_result": "absent"
+      }
+    ],
+    "system_process_listing": "ps/pgrep unavailable under sandbox/sysmon; every tracked solver PID was checked with kill -0."
+  },
+  "part_i_r1_gate": {
+    "verdict": "PASS",
+    "basis": "Debug reproducer confirms ctnew sizing defect (ntype=3 vs cutoff extent 50000); minimal extent-preserving fix and Debug regression CTest pass (metadata ntype=3,nrec=1,nbas=13).",
+    "raw_paths": [
+      "/private/tmp/c5-r1-repro-exact/debug-repro.log",
+      "/private/tmp/c5-r1-debug-build/Testing/validation/c5_hcp_co_cluster_setup/console.log"
+    ]
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "binary": {
+    "build_manifest": "/private/tmp/c52-c2-stage/crash_triage_preflight/build_plan/debug_bounds_build_manifest.json",
+    "build_manifest_sha256": "8f38624f52755a410534e24847cf31e0eca8422b84e7884ef69036ffd47bae17",
+    "mode": "0o555",
+    "path": "/private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x",
+    "role": "same Debug bounds-checked binary that produced accepted checkpoint99",
+    "sha256": "b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69"
+  },
+  "binding_smoke": {
+    "immutable_input_mode": "0444",
+    "immutable_restart_mode": "0444",
+    "launch_auth_refusal_exit": 77,
+    "launch_refusal_smoke_dir_created": false,
+    "mutable_input_mode": "0644 writable",
+    "mutable_restart_mode": "0644 writable",
+    "path": "/private/tmp/c52-c2-stage/c3_debug_capture_template/smoke_capture/capture_binding.json",
+    "sha256": "120af4920904b4fa1db466d8921a041fd793d6365e82d815a3044973d2c2794f",
+    "status": "BOUND_NOT_LAUNCHED"
+  },
+  "capture": {
+    "capture_deck": "/private/tmp/c52-c2-stage/c3_debug_capture_template/input.nml",
+    "capture_deck_sha256": "03a6f0ed8e35f46ddfc05c466cdc4d895c9b4c2e532bdc1c85cdc8ac6ed77878",
+    "capture_only": true,
+    "changes_from_corrected_u2_deck": {
+      "self.nstep": "100 -> 1"
+    },
+    "expected_capture_dir": "fresh directory, not created for execution",
+    "rows": "full g0 matrix, P_OUT ql/M1, local potential/density and radial replay rows; C3 adapter validates shape/finite values.",
+    "run_id": "c3_fe_u2_cheb_fullcapture_i1",
+    "scientific_settings": "Fe bcc RS bulk; nsp1/lmax2; U2/J0 local; Chebyshev; rc80/lld150; window[-1,1.3]; free EF; beta.005 Broyden; conv_thr1e-30; iteration1 capture-only trace; no formula/default changes"
+  },
+  "endpoint": {
+    "abs_moment_spread": 2.6941277814e-07,
+    "accepted_package": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/accepted_checkpoint_trace99_window80_99/accepted_checkpoint.json",
+    "accepted_package_sha256": "80defa530c3e94b286df1c66d97eae07ee1af71835349e86e37d9b41b217eb69",
+    "block_chebyshev_comparison": "NOT_EVALUATED; no C2 comparison gate is asserted as C3 prerequisite.",
+    "checkpoint": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0099_Fe_scf_c84c8e2b3200.nml",
+    "checkpoint_sha256": "c84c8e2b320007097aa2dd91043f1ce04abf08fade7a79001267daf39be4e83b",
+    "d_spin_spreads": [
+      1.05012008e-07,
+      1.206028603e-07
+    ],
+    "deck": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/immutable_inputs/input.nml",
+    "deck_sha256": "276eabe5a405848935179ce21eac25a59a01f6aa7316d8ecbe3dbfdd5ac17760",
+    "iteration": 99,
+    "outer_diff": 2.29e-08,
+    "run_id": "c52_triage_debug_u2",
+    "trace": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/snapshots/c52_triage_debug_u2_traceiter0099_98298a9075bf.csv",
+    "trace_sha256": "98298a9075bf83c7fe4f8049c8cc50949123d336819f82cc1406edb35212bbae",
+    "window": [
+      80,
+      99
+    ]
+  },
+  "environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "4",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "4",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "lock_path": "/private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/accepted_c2_u2_chebyshev_endpoint_lock.json",
+  "lock_sha256": "d923078e644eaf7ada1926a53a4c92adf3d138e22ba8307ca87896d567cec1f5",
+  "purpose": "One-step full C3 capture, bound to accepted current-source Debug U2 Chebyshev endpoint99; preserve source and binary identity between endpoint and capture.",
+  "replay_driver": {
+    "archive_path": "/private/tmp/c5-b1-guard-build-clean/source/librslmto.a",
+    "archive_sha256": "36725c2ae3ba7c07c74c17940d9047bf8a314431146782bdd4e09ecc0e5dcead",
+    "path": "/private/tmp/c52-c-private/helper-build/accepted_m03_replay_driver",
+    "role": "existing B1 current-source release replay helper; distinct binary, same source commit",
+    "sha256": "9e3f44379b8933d21eafb78e8008cbf0d44dd9b65a77140af2920c26713ac9d7"
+  },
+  "schema": "c52-c3-debug-endpoint-capture-preflight-v1",
+  "scope": "C3 preparation only; no solver launch, no C3 measurement/result/adoption; no repository/source changes.",
+  "scripts": {
+    "adapter": {
+      "command_template": "/opt/homebrew/opt/python@3.11/bin/python3.11 /private/tmp/c52-c-private/c3_c2_adapter.py --capture <fresh-capture-dir> --lock <accepted-C2-U2-Chebyshev-endpoint-lock.json> --source /Users/andersb/Jobb/rslmto_fable_v4b/source/self.f90 --binary /private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x --driver /private/tmp/c52-c-private/helper-build/accepted_m03_replay_driver --mode baseline --output <fresh-capture-dir>/analysis/baseline.json",
+      "path": "/private/tmp/c52-c-private/c3_c2_adapter.py",
+      "sha256": "c0244025b492775f3b551f2c5a301e5bc7fe65c5af695d3af8c079b2f2a24696",
+      "test_path": "/private/tmp/c52-c-private/test_c3_c2_adapter.py",
+      "test_sha256": "8a7c3fb6ac870d1154d3031996befbad7c85ff9131b1fa451e760e35fff9737b"
+    },
+    "binder": {
+      "path": "/private/tmp/c52-c2-stage/c3_debug_capture_template/bind_accepted_endpoint.py",
+      "sha256": "484d7848ad429b7c2d8c45f26ddb3008f91d23f5137e8b2a2b34e1939cd8f474"
+    },
+    "finalizer": {
+      "path": "/private/tmp/c52-c2-stage/c3_debug_capture_template/finalize_capture.py",
+      "sha256": "7c22523fcf16b63446ccd334c59de2de2c9805b23175edff2cf52eab6301d397"
+    },
+    "runner": {
+      "path": "/private/tmp/c52-c2-stage/c3_debug_capture_template/launch_capture.sh",
+      "sha256": "a944bd17f8176bc2b7dc5971ded4d45cf8bd825e8189ea445d92b607c4f30e59"
+    }
+  },
+  "source": {
+    "head": "8a107432e3ca2e00c815c217d52e7aa2a8e30736",
+    "math_sha256": "e4bbcaecb2d8978fd3cc0d5e8b376285bd6b60aaa336a49a60911eaa7851b7ec",
+    "self_sha256": "643d016aa4a8768a98dfdbd534463c9e941c9f2858f48b208577265735e69107",
+    "source_archive_sha256": "4c714648b7d7d83caa0e63f014a680c2b72fa69e797c816947ef1b8594572fcd"
+  },
+  "status": "PREPARED_ONLY_AWAITING_AUDITOR_AND_ROOT; NO_SOLVER_LAUNCHED"
+}

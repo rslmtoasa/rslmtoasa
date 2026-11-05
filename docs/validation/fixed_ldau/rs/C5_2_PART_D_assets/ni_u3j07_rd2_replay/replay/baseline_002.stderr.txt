@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py", line 399, in <module>
+    main()
+  File "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py", line 388, in main
+    need(sha(args.driver)==load_json(args.binding)['driver']['sha256'], 'driver does not match binding')
+  File "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py", line 49, in need
+    raise ValueError(message)
+ValueError: driver does not match binding

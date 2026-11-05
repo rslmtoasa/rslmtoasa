@@ -1,0 +1,404 @@
+--- a/source/hamiltonian.f90
++++ b/source/hamiltonian.f90
+@@ -50,6 +50,9 @@
+    integer, parameter, public :: rd1_vin_wrong_type = 4
+    integer, parameter, public :: rd1_vin_missing_or_stale = 5
+    integer, parameter, public :: rd1_vin_ineligible = 6
++   integer, parameter, public :: rd4_w1_scope_ok = 0
++   integer, parameter, public :: rd4_w1_scope_invalid_map = 1
++   integer, parameter, public :: rd4_w1_scope_shared_host_type = 2
+ 
+    !> Module´s main procedure
+    type, public :: hamiltonian
+@@ -129,6 +132,9 @@
+       !> Test-only W probe spin: 0 both, 1 up, 2 down.
+       integer :: hubbard_test_spin = 0
+       logical :: hubbard_test_operator_check = .false.
++      !> Opt-in RD4 diagnostic: restrict W1 to recursive impurity types only.
++      logical :: hubbard_test_impurity_only_w1 = .false.
++      logical :: rd4_w1_target_logged = .false.
+       !> Opt-in A4 repeat control: tighten both active fixed-U R05 tolerances 10x.
+       logical :: fixed_u_test_tighten_r05 = .false.
+       !> A5-only HOH exception, validated in build_from_file for explicit U=J=0 W1/local runs.
+@@ -192,6 +198,8 @@
+       procedure :: calculate_hubbard_u_potential_general
+       procedure :: add_hubbard_test_operator
+       procedure :: get_hubbard_test_operator
++      procedure :: get_rd4_w1_target_type_mask
++      procedure :: get_rd4_w1_recursion_type
+       procedure :: evaluate_hubbard_energy
+       procedure :: calculate_hubbard_v_potential
+       procedure :: rd1_local_impurity_eligible
+@@ -445,6 +453,18 @@
+       integer, intent(in) :: iteration
+       logical, intent(in), optional :: enable_rs_capture
+    end subroutine begin_rd1_vin_capture
++
++   module subroutine get_rd4_w1_target_type_mask(this, target_types, status)
++      class(hamiltonian), intent(in) :: this
++      logical, intent(out) :: target_types(:)
++      integer, intent(out) :: status
++   end subroutine get_rd4_w1_target_type_mask
++
++   module subroutine get_rd4_w1_recursion_type(this, recursion_index, cluster_site, atom_type, status)
++      class(hamiltonian), intent(in) :: this
++      integer, intent(in) :: recursion_index
++      integer, intent(out) :: cluster_site, atom_type, status
++   end subroutine get_rd4_w1_recursion_type
+ 
+    module subroutine get_rd1_recursion_site_type(this, recursion_index, cluster_site, atom_type, status)
+       class(hamiltonian), intent(in) :: this
+--- a/source/hamiltonian_build.f90
++++ b/source/hamiltonian_build.f90
+@@ -147,6 +147,66 @@
+       end if
+       status = rd1_vin_ok
+    end subroutine get_rd1_recursion_site_type
++
++   module subroutine get_rd4_w1_target_type_mask(this, target_types, status)
++      class(hamiltonian), intent(in) :: this
++      logical, intent(out) :: target_types(:)
++      integer, intent(out) :: status
++      integer :: ia, site, atom_type, mapped_site, map_status
++      logical :: is_recursive_site
++
++      target_types = .false.
++      status = rd4_w1_scope_invalid_map
++      if (.not. associated(this%lattice)) return
++      if (.not. allocated(this%lattice%irec) .or. .not. allocated(this%lattice%iz)) return
++      if (size(target_types) /= this%lattice%ntype .or. size(this%lattice%irec) < 1) return
++
++      do ia = 1, size(this%lattice%irec)
++         call this%get_rd1_recursion_site_type(ia, mapped_site, atom_type, map_status)
++         if (map_status /= rd1_vin_ok) return
++         target_types(atom_type) = .true.
++      end do
++
++      ! hubbard_u_pot is type-shared. A selected recursion type must not also
++      ! occur at a non-recursive host site, or the host would receive W1 too.
++      do site = 1, size(this%lattice%iz)
++         is_recursive_site = any(this%lattice%irec == site)
++         if (is_recursive_site) cycle
++         atom_type = this%lattice%iz(site)
++         if (atom_type < 1 .or. atom_type > size(target_types)) return
++         if (target_types(atom_type)) then
++            status = rd4_w1_scope_shared_host_type
++            return
++         end if
++      end do
++      status = rd4_w1_scope_ok
++   end subroutine get_rd4_w1_target_type_mask
++
++   module subroutine get_rd4_w1_recursion_type(this, recursion_index, cluster_site, atom_type, status)
++      class(hamiltonian), intent(in) :: this
++      integer, intent(in) :: recursion_index
++      integer, intent(out) :: cluster_site, atom_type, status
++      logical, allocatable :: target_types(:)
++      integer :: map_status
++
++      cluster_site = 0
++      atom_type = 0
++      status = rd4_w1_scope_invalid_map
++      if (.not. associated(this%lattice)) return
++      allocate(target_types(this%lattice%ntype))
++      call this%get_rd4_w1_target_type_mask(target_types, status)
++      if (status /= rd4_w1_scope_ok) return
++      call this%get_rd1_recursion_site_type(recursion_index, cluster_site, atom_type, map_status)
++      if (map_status /= rd1_vin_ok) then
++         status = rd4_w1_scope_invalid_map
++         return
++      end if
++      if (.not. target_types(atom_type)) then
++         status = rd4_w1_scope_invalid_map
++         return
++      end if
++      status = rd4_w1_scope_ok
++   end subroutine get_rd4_w1_recursion_type
+ 
+    module subroutine capture_rd1_vin_insertion(this, nlim, u_type, exact_operand, status)
+       class(hamiltonian), intent(inout) :: this
+@@ -359,6 +419,7 @@
+       real(rp) :: u_ev, j_ev
+       integer :: ntype_nml, nrec_nml
+       integer :: hubbard_test_spin
++      logical :: hubbard_test_impurity_only_w1
+       logical :: legacy_uj_present
+       logical :: has_hubbard_general, has_legacy_uj, has_impurity_uj, has_hubbard_v, has_hubbard_u_sc
+       character(len=1) :: orbch
+@@ -388,6 +449,7 @@
+       hubbard_test_operator = this%hubbard_test_operator
+       hubbard_test_lambda = this%hubbard_test_lambda
+       hubbard_test_spin = this%hubbard_test_spin
++      hubbard_test_impurity_only_w1 = this%hubbard_test_impurity_only_w1
+       fixed_u_test_tighten_r05 = this%fixed_u_test_tighten_r05
+       fixed_u_test_allow_hoh_w1_u0 = .false.
+       bounds_algorithm = this%bounds%algorithm
+@@ -488,6 +550,8 @@
+          call g_logger%fatal('hubbard_test_spin must be 0 (both), 1 (up), or 2 (down).', __FILE__, __LINE__)
+       end if
+       this%hubbard_test_spin = hubbard_test_spin
++      this%hubbard_test_impurity_only_w1 = hubbard_test_impurity_only_w1
++      this%rd4_w1_target_logged = .false.
+       if (this%hubbard_test_spin /= 0 .and. this%hubbard_test_operator /= 'w1') then
+          call g_logger%fatal('hubbard_test_spin selection is available only for the W1 diagnostic operator.', &
+                              __FILE__, __LINE__)
+@@ -495,6 +559,19 @@
+       this%fixed_u_test_tighten_r05 = fixed_u_test_tighten_r05
+       this%fixed_u_test_allow_hoh_w1_u0 = fixed_u_test_allow_hoh_w1_u0
+       this%hubbard_test_operator_check = this%hubbard_test_operator /= 'none'
++      if (this%hubbard_test_impurity_only_w1) then
++         if (.not. this%hubbard_test_operator_check .or. trim(this%hubbard_test_operator) /= 'w1') then
++            call g_logger%fatal("hubbard_test_impurity_only_w1 requires hubbard_test_operator='w1'.", __FILE__, __LINE__)
++         end if
++         if (this%control%calctype /= 'I' .or. this%control%nsp /= 1 .or. this%control%lmax /= 2 .or. &
++             this%control%has_soc() .or. this%control%is_noncollinear() .or. &
++             this%control%constraints_enable .or. this%hoh .or. &
++             trim(this%hubbard_radial_moments) /= 'local' .or. &
++             trim(this%hubbard_u_potential_form) /= 'liechtenstein' .or. this%fixed_u_test_allow_hoh_w1_u0) then
++            call g_logger%fatal('RD4 impurity-only W1 requires calctype I, local RS scalar nsp=1/lmax=2, '// &
++               'no HOH/SOC/noncollinearity/constraints.', __FILE__, __LINE__)
++         end if
++      end if
+       if (.not. this%hubbard_test_operator_check .and. this%hubbard_test_lambda /= 0.0_rp) then
+          call g_logger%fatal("hubbard_test_lambda requires hubbard_test_operator='w1' or 'w2'.", __FILE__, __LINE__)
+       end if
+@@ -525,6 +602,15 @@
+       has_impurity_uj = any(hubbard_u_impurity /= hubbard_sentinel) .or. any(hubbard_j_impurity /= hubbard_sentinel)
+       has_hubbard_v = any(hubbard_v /= hubbard_sentinel)
+       has_hubbard_u_sc = any(hubbard_u_sc /= hubbard_sc_sentinel)
++
++      if (this%hubbard_test_impurity_only_w1) then
++         if (.not. has_hubbard_general .or. any(hubbard_u_general == hubbard_sentinel) .or. &
++             any(hubbard_j_general == hubbard_sentinel) .or. any(hubbard_u_general /= 0.0_rp) .or. &
++             any(hubbard_j_general /= 0.0_rp)) then
++            call g_logger%fatal('RD4 impurity-only W1 requires explicit general U=J=0 for every type and shell.', &
++               __FILE__, __LINE__)
++         end if
++      end if
+ 
+       if (this%hubbard_test_operator_check) then
+          if (has_legacy_uj .or. has_impurity_uj .or. has_hubbard_v .or. has_hubbard_u_sc) then
+@@ -728,6 +814,16 @@
+             this%hubbard_u_general_check = .true.
+          end if
+       end do
++
++      if (this%hubbard_test_impurity_only_w1) then
++         do i = 1, this%lattice%ntype
++            if (any(this%lattice%symbolic_atoms(i)%potential%hubbard_u /= 0.0_rp) .or. &
++                any(this%lattice%symbolic_atoms(i)%potential%hubbard_j /= 0.0_rp)) then
++               call g_logger%fatal('RD4 impurity-only W1 requires effective U=J=0 on every type and shell.', &
++                  __FILE__, __LINE__)
++            end if
++         end do
++      end if
+ 
+       ! Self-consistent U and fixed U/J are mutually exclusive in this implementation.
+       if (this%hubbard_u_sc_check .and. this%hubbard_u_general_check) then
+@@ -1032,6 +1128,8 @@
+       this%hubbard_test_lambda = 0.0_rp
+       this%hubbard_test_spin = 0
+       this%hubbard_test_operator_check = .false.
++      this%hubbard_test_impurity_only_w1 = .false.
++      this%rd4_w1_target_logged = .false.
+       this%fixed_u_test_tighten_r05 = .false.
+       this%fixed_u_test_allow_hoh_w1_u0 = .false.
+       this%hubbard_u_general_check = .false.
+--- a/source/hamiltonian_hubbard.f90
++++ b/source/hamiltonian_hubbard.f90
+@@ -29,14 +29,39 @@
+       use basis_mod, only: spin_off
+       class(hamiltonian), intent(inout) :: this
+       complex(rp) :: operator(5, 5)
+-      integer :: itype, spin, i, j, orbital_i, orbital_j
++      integer :: itype, spin, i, j, orbital_i, orbital_j, scope_status
++      integer :: recursion_index, mapped_cluster, mapped_type, map_status
++      logical, allocatable :: target_types(:)
+ 
+       if (.not. this%hubbard_test_operator_check) return
+       if (.not. allocated(this%hubbard_u_pot)) &
+          call g_logger%fatal('A4 Hubbard test operator requires allocated hubbard_u_pot.', __FILE__, __LINE__)
+       if (.not. this%hubbard_u_general_check) this%hubbard_u_pot = cmplx(0.0_rp, 0.0_rp, rp)
+       call this%get_hubbard_test_operator(operator)
++      if (this%hubbard_test_impurity_only_w1) then
++         allocate(target_types(size(this%hubbard_u_pot, 3)))
++         call this%get_rd4_w1_target_type_mask(target_types, scope_status)
++         if (scope_status == rd4_w1_scope_shared_host_type) then
++            call g_logger%fatal('RD4 impurity-only W1 rejected: a selected atom type is shared by a non-recursive host site.', &
++               __FILE__, __LINE__)
++         else if (scope_status /= rd4_w1_scope_ok) then
++            call g_logger%fatal('RD4 impurity-only W1 rejected: invalid recursion-to-type map.', __FILE__, __LINE__)
++         end if
++         if (rank == 0 .and. .not. this%rd4_w1_target_logged) then
++            do recursion_index = 1, size(this%lattice%irec)
++               call this%get_rd1_recursion_site_type(recursion_index, mapped_cluster, mapped_type, map_status)
++               if (map_status /= rd1_vin_ok) &
++                  call g_logger%fatal('RD4 W1 logging found an invalid recursion-to-type map.', __FILE__, __LINE__)
++               call g_logger%info('RD4 impurity-only W1 map recursion='//int2str(recursion_index)// &
++                  ' cluster_site='//int2str(mapped_cluster)//' atom_type='//int2str(mapped_type), __FILE__, __LINE__)
++            end do
++            this%rd4_w1_target_logged = .true.
++         end if
++      end if
+       do itype = 1, size(this%hubbard_u_pot, 3)
++         if (this%hubbard_test_impurity_only_w1) then
++            if (.not. target_types(itype)) cycle
++         end if
+          do spin = 1, 2
+             if (this%hubbard_test_spin /= 0 .and. this%hubbard_test_spin /= spin) cycle
+             do i = 1, 5
+--- a/source/include_codes/namelists/hamiltonian.f90
++++ b/source/include_codes/namelists/hamiltonian.f90
+@@ -34,6 +34,7 @@
+ real(rp) :: hubbard_test_lambda
+ !> Test-only W probe spin: 0 both, 1 up, 2 down.
+ integer :: hubbard_test_spin
++logical :: hubbard_test_impurity_only_w1
+ logical :: fixed_u_test_tighten_r05
+ !> A5 test-only HOH control; valid only for explicit U=J=0, local W1 runs.
+ logical :: fixed_u_test_allow_hoh_w1_u0
+@@ -44,4 +45,5 @@
+         ccor_vmt_mode, ccor_debug, ccor_strict, uj_orb, hubbard_u, hubbard_j, hubbard_v, &
+         hubbard_u_sc, hubbard_u_impurity, hubbard_j_impurity, hubbard_u_general, hubbard_j_general, bounds_algorithm, bounds_scaling, &
+         hubbard_u_potential_form, hubbard_radial_moments, hubbard_test_operator, hubbard_test_lambda, hubbard_test_spin, &
++        hubbard_test_impurity_only_w1, &
+         fixed_u_test_tighten_r05, fixed_u_test_allow_hoh_w1_u0, export
+--- a/source/self.f90
++++ b/source/self.f90
+@@ -2148,6 +2148,7 @@
+       integer :: ik_global
+       logical :: entropy_available
+       integer :: ia, plusbulk, itype, spin, i, j, flat, status, orbital_i, orbital_j
++      integer :: mapped_cluster, mapped_type, map_status
+       character(len=64) :: candidate_a, candidate_b, candidate_c
+       character(len=64) :: entropy_text, ts_text, candidate_a_f_text, candidate_b_f_text, candidate_c_f_text
+       character(len=64) :: test_energy_text, test_f_local_text, test_f_spectral_text
+@@ -2207,7 +2208,14 @@
+          ! Recursive indices address cluster sites, while the energy
+          ! evaluator arrays are keyed by symbolic-atom type. In an impurity
+          ! cluster ib(ia) is a geometric representative index, not that type.
+-         itype = plusbulk
++         if (this%hamiltonian%hubbard_test_impurity_only_w1) then
++            call this%hamiltonian%get_rd4_w1_recursion_type(ia, mapped_cluster, mapped_type, map_status)
++            if (map_status /= rd4_w1_scope_ok) &
++               call g_logger%fatal('RD4 energy diagnostic found an invalid recursion-to-type map.', __FILE__, __LINE__)
++            itype = mapped_type
++         else
++            itype = plusbulk
++         end if
+          density = cmplx(0.0_rp, 0.0_rp, rp)
+          potential = cmplx(0.0_rp, 0.0_rp, rp)
+          p_d = cmplx(0.0_rp, 0.0_rp, rp)
+@@ -4337,6 +4345,10 @@
+       integer, intent(in) :: iter
+       integer :: ia
+    
++      if (this%hamiltonian%hubbard_test_impurity_only_w1 .and. this%use_kspace) then
++         call g_logger%fatal('RD4 impurity-only W1 is restricted to the real-space impurity recursion backend.', &
++            __FILE__, __LINE__)
++      end if
+       if (rank == 0) call g_logger%info('Perform recursion at step '//int2str(iter), __FILE__, __LINE__)
+       call g_timer%start('recursion')
+ 
+--- a/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90
++++ b/tests/validation/fixed_ldau/projector_multisite_frozen_h.f90
+@@ -19,7 +19,7 @@
+    use lattice_mod, only: lattice
+    use charge_mod, only: charge
+    use hamiltonian_mod, only: hamiltonian, rd1_vin_ok, rd1_vin_not_recursion_site, rd1_vin_duplicate, &
+-      rd1_vin_wrong_type, rd1_vin_missing_or_stale
++      rd1_vin_wrong_type, rd1_vin_missing_or_stale, rd4_w1_scope_ok, rd4_w1_scope_shared_host_type
+    use energy_mod, only: energy
+    use recursion_mod, only: recursion
+    use density_of_states_mod, only: dos
+@@ -271,23 +271,27 @@
+       integer :: nspinorb
+       integer :: spin_id, i, j, site_i, site_j, orb_i, orb_j, row_i, row_j, state
+       integer :: info, lwork, status, extract_status, drow(5)
+-      integer :: global_i, global_j, host_type, recursive_type, mapped_cluster, mapped_type
++      integer :: global_i, global_j, host_type, recursive_type, mapped_cluster, mapped_type, rd4_mapped_cluster, rd4_mapped_type
+       complex(rp), allocatable :: spin_h(:,:), h_total(:,:), hbare(:,:)
+       complex(rp) :: p_d(5,5), m1_d(5,5), vin_d(5,5), host_vin(5,5)
+       complex(rp) :: captured(5,5,2), captured_valid(5,5,2), captured_probe(5,5,2), host_state_before(2,5,5)
+       complex(rp) :: work_query(1)
+       complex(rp), allocatable :: work(:), eigenvectors(:,:)
++      complex(rp), allocatable :: hubbard_pot_before(:,:,:), hubbard_pot_expected(:,:,:)
+       real(rp), allocatable :: eigenvalues(:), rwork(:)
+       real(rp) :: q0, center, q2, corrected_center, corrected_q2, t_value
+       real(rp) :: direct_center, direct_q2, wrong_center, wrong_q2, host_center_before
+-      real(rp) :: oracle_error
++      real(rp) :: oracle_error, saved_test_lambda
+       integer :: saved_nrec, saved_nbulk
+       integer :: saved_nsp, saved_lmax
+       integer, allocatable :: saved_irec(:), saved_ib(:), saved_iz(:)
++      logical, allocatable :: rd4_target_types(:)
+       character :: saved_calctype
+       character(len=16) :: saved_radial_mode, saved_potential_form
+       character(len=16) :: saved_test_operator
+       logical :: saved_constraints, saved_general, saved_impurity, saved_sc, saved_v, saved_test, saved_hoh, saved_hoh_bypass
++      logical :: saved_rd4_impurity_only
++      integer :: saved_test_spin
+       external :: zheev
+ 
+       nspinorb = nsites*norb
+@@ -307,6 +311,9 @@
+       saved_v = ham%hubbard_v_check
+       saved_test = ham%hubbard_test_operator_check
+       saved_test_operator = ham%hubbard_test_operator
++      saved_test_lambda = ham%hubbard_test_lambda
++      saved_test_spin = ham%hubbard_test_spin
++      saved_rd4_impurity_only = ham%hubbard_test_impurity_only_w1
+       saved_hoh = ham%hoh
+       saved_hoh_bypass = ham%fixed_u_test_allow_hoh_w1_u0
+       saved_ib = lat%ib
+@@ -368,6 +375,50 @@
+       call ham%get_rd1_vin_for_recursion(1, 7, captured, status)
+       if (status /= rd1_vin_ok) failed = .true.
+       if (maxval(abs(captured(:, :, 1)-captured(:, :, 2))) <= 1.0e-5_rp) failed = .true.
++
++      if (ham%hubbard_test_impurity_only_w1) failed = .true.
++      ! RD4 production mapping/operator oracle: a deliberately permuted map
++      ! selects type 2 via irec(1)=2 -> iz(2)=2 while the frozen host is type 1.
++      ham%hubbard_test_operator = 'w1'
++      ham%hubbard_test_operator_check = .true.
++      ham%hubbard_test_impurity_only_w1 = .true.
++      ham%hubbard_test_lambda = 0.125_rp
++      ham%hubbard_test_spin = 0
++      allocate(rd4_target_types(lat%ntype))
++      allocate(hubbard_pot_before, mold=ham%hubbard_u_pot)
++      allocate(hubbard_pot_expected, mold=ham%hubbard_u_pot)
++      call ham%get_rd4_w1_target_type_mask(rd4_target_types, status)
++      if (status /= rd4_w1_scope_ok .or. any(rd4_target_types .neqv. [ .false., .true. ])) failed = .true.
++      ! This is the shared lookup called by the production energy diagnostic.
++      call ham%get_rd4_w1_recursion_type(1, rd4_mapped_cluster, rd4_mapped_type, status)
++      if (status /= rd4_w1_scope_ok .or. rd4_mapped_cluster /= 2 .or. rd4_mapped_type /= recursive_type) failed = .true.
++      hubbard_pot_before = ham%hubbard_u_pot
++      hubbard_pot_expected = hubbard_pot_before
++      do spin_id = 1, 2
++         do i = 1, 5
++            orb_i = 4 + i + spin_off*(spin_id - 1)
++            hubbard_pot_expected(orb_i,orb_i,recursive_type) = &
++               hubbard_pot_expected(orb_i,orb_i,recursive_type) + ham%hubbard_test_lambda
++         end do
++      end do
++      call ham%add_hubbard_test_operator()
++      if (any(ham%hubbard_u_pot(:, :, host_type) /= hubbard_pot_before(:, :, host_type))) failed = .true.
++      if (any(ham%hubbard_u_pot(:, :, recursive_type) /= hubbard_pot_expected(:, :, recursive_type))) failed = .true.
++      ! Negative control: a frozen non-recursive host sharing type 2 rejects.
++      lat%iz(1) = recursive_type
++      call ham%get_rd4_w1_target_type_mask(rd4_target_types, status)
++      if (status /= rd4_w1_scope_shared_host_type) failed = .true.
++      lat%iz(1) = host_type
++      ham%hubbard_test_impurity_only_w1 = .false.
++      ham%hubbard_test_operator_check = .false.
++      ham%hubbard_test_lambda = 0.0_rp
++      ham%rd4_w1_target_logged = .false.
++      ham%hubbard_test_operator = saved_test_operator
++      ham%hubbard_test_lambda = saved_test_lambda
++      ham%hubbard_test_spin = saved_test_spin
++      ham%hubbard_test_impurity_only_w1 = saved_rd4_impurity_only
++      ham%hubbard_u_pot = hubbard_pot_before
++      deallocate(rd4_target_types, hubbard_pot_before, hubbard_pot_expected)
+       captured_valid = captured
+       if (maxval(abs(captured_valid)) <= 1.0e-5_rp) failed = .true.
+       do spin_id = 1, 2

@@ -1,0 +1,55 @@
+{
+  "binding_sha256": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668",
+  "capture_csv_sha256": "b2ad9e75f0a471c8f6139d983951c2527692e3d9be9b0f1b30b317a3bd701a0d",
+  "records": [
+    {
+      "captured_local_calculate_pl_gc": 0.2753519396429291,
+      "captured_local_q2": 0.13781601632237034,
+      "corrected_center_formula": -0.42019093440178323,
+      "corrected_q2_formula": 0.13781601632237825,
+      "green_p1_p2_p3": [
+        4.7387623359459665,
+        -2.3501319835276977,
+        1.3032498601385687
+      ],
+      "later_atomsc_vmad_diagnostic_only": -0.6955428778838478,
+      "later_vmad_minus_pre": -3.839134676830724e-09,
+      "local_center_m0_including_vmad": -0.42019093440178407,
+      "local_replay_gc_after_shift": 0.2753519396429299,
+      "q0_Ptrace": 4.73876233594598,
+      "raw_center_M1_trace": -0.4959379299739783,
+      "raw_center_green": -0.49593792997397856,
+      "raw_q2_green": 0.13773026906220198,
+      "raw_replay_gc_excluding_vmad": 0.1996049440707346,
+      "same_phase_vmad_pre": -0.6955428740447132,
+      "spin": 1,
+      "vin_shift_x": -0.07574699557219534
+    },
+    {
+      "captured_local_calculate_pl_gc": 0.2753519483338046,
+      "captured_local_q2": 0.13781600272365435,
+      "corrected_center_formula": -0.420190925710908,
+      "corrected_q2_formula": 0.1378160027236608,
+      "green_p1_p2_p3": [
+        4.738762402787887,
+        -2.350131979643612,
+        1.303249826397049
+      ],
+      "later_atomsc_vmad_diagnostic_only": -0.6955428778838478,
+      "later_vmad_minus_pre": -3.839134676830724e-09,
+      "local_center_m0_including_vmad": -0.42019092571090855,
+      "local_replay_gc_after_shift": 0.27535194833380516,
+      "q0_Ptrace": 4.73876240278789,
+      "raw_center_M1_trace": -0.49593792215895677,
+      "raw_center_green": -0.4959379221589572,
+      "raw_q2_green": 0.13773025561327912,
+      "raw_replay_gc_excluding_vmad": 0.19960495188575594,
+      "same_phase_vmad_pre": -0.6955428740447132,
+      "spin": 2,
+      "vin_shift_x": -0.07574699644804919
+    }
+  ],
+  "schema": "rd2-green-raw-phase-proof-v2",
+  "source_phase": "P_OUT/m0 are post-local-correction; raw moments from Green/M1. Gravity-center slot excludes vmad; construct from same-phase CALCULATE_PL local gc plus (raw c - captured m0 local c), not later ATOMSC vmad.",
+  "vin_site_type": "LOCAL_HALL site/nlim1 type2 (Ni-imp); records site0; m0 type19 is lattice-ib writer metadata"
+}

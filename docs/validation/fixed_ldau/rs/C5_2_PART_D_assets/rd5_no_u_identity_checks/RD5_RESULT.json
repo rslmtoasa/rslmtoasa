@@ -1,0 +1,61 @@
+{
+  "audited_source_checksum_manifest": {
+    "entries": 122,
+    "path": "source_SHA256SUMS",
+    "sha256": "5896bbb3e961912b046e6df2fcca754ef36417841bde1e2712d75da4014917b6"
+  },
+  "auditor_verdict": "Independent raw output recomputation PASS; exact input/seed hashes, solver hashes, full thread caps, exit codes/PIDs and all 122 evidence checksums verified.",
+  "auto_mode": "NOT_RUN; adoption blocked by RD2 measured FAIL.",
+  "comparison_report": "comparison_report.json",
+  "comparison_report_sha256": "3e2271d61ec2a6956b11f5644c429805633f1c3663b326fbc6d5015c5f66f32b",
+  "energy_routing": "NOT_ADOPTED; RD4 remains NOT_MEASURED.",
+  "execution_record": "execution_record.json",
+  "execution_record_sha256": "a860dc3cc3410e343a5334af9d7c4a357c2957458b156094cf794c6a87c36245",
+  "explicit_spectral_behavior": "NOT_RETESTED under this two-comparison authorization; prior accepted RD3(d) spectral record remains a record, not an RD5 legacy-versus-revision identity result.",
+  "merge": "NOT_AUTHORIZED",
+  "preflight_path": "../rd5_unchanged_behavior_preflight.json",
+  "preflight_sha256": "29e3ec7a8b4c676cc7cb443d4dec34297bf7c10545571fa8c1602a4dc285aa6f",
+  "repository_artifact_scope": "Selected result/input files and complete output hash maps are packaged; full raw run directories/logs remain in /private/tmp/c52-rd5-no-u/.",
+  "results": {
+    "KS": {
+      "artifact_name_sets_equal": true,
+      "baseline": "ks_clean8b",
+      "byte_identity_pass": true,
+      "excluded": [
+        "testrun.log"
+      ],
+      "file_count_each": 25,
+      "input_files_identical": true,
+      "revision": "ks_rd1",
+      "scientific_mismatches_after_registered_exclusions": [],
+      "str_out_normalization": {
+        "str.out_runtime_only_cpu_s_equal": true,
+        "str_out_hashes": {
+          "baseline": "e128d88a2708b5f8927880117838d4b9e23e2942328befee836539271a09f0f2",
+          "revision": "dfcc82b7fa749261e03a962dd12c205406da7d2fbd8385d290f12b8e33ddfda1"
+        }
+      }
+    },
+    "RS": {
+      "artifact_name_sets_equal": true,
+      "baseline": "rs_clean8b",
+      "byte_identity_pass": true,
+      "excluded": [
+        "testrun.log"
+      ],
+      "file_count_each": 28,
+      "input_files_identical": true,
+      "revision": "rs_rd1",
+      "scientific_mismatches_after_registered_exclusions": [],
+      "str_out_normalization": {
+        "str.out_runtime_only_cpu_s_equal": true,
+        "str_out_hashes": {
+          "baseline": "095cefc88500a7dacc658cac88ccc0d8d336cccc2b26d472d2973ffdb26c820f",
+          "revision": "1a2c3fec0a98eb91700e101d60e956224a5b09994cc7a86382ed45e118449ab1"
+        }
+      }
+    }
+  },
+  "schema": "c5-rd5-no-u-identity-audited-results-v1",
+  "status": "NO_U_RS_KS_BYTE_IDENTITY_PASS; RD5_ADOPTION_BLOCKED_BY_RD2_FAIL"
+}

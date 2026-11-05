@@ -1,0 +1,70 @@
+{
+  "base_binary_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+  "current_binary_sha256": "6ec0e5820c711115570577ddf3b2ffe9fe8c9e222e6a50061fadf773cffc0041",
+  "base_binary": "/tmp/rslmto-ra-base-build/bin/rslmto.x",
+  "current_binary": "/tmp/rslmto-ra-current-build/bin/rslmto.x",
+  "source_commit": "8b8f7ef7bfc026fd34a56b37a3ad3281fd0a6832",
+  "files": {
+    "rs_base": {
+      "Fe_out.nml": "2f0db8de51a87245da12ccdec07194a096bcd0adb9f85514cbac19f768a7fbc0",
+      "Fe_scf.nml": "2f0db8de51a87245da12ccdec07194a096bcd0adb9f85514cbac19f768a7fbc0",
+      "Fe_dos.out": "6a3a15b200db44fed4bd7324dc0ed33aef1e52318620c7499204abbded67f896",
+      "Fe_orbital_dos.out": "0b7704b85d03587d4b57f3585eadf6ddaff4d3c8a49ee11b124d65d1c66103bd",
+      "totaldos.out": "57d8b7a783d1db7545519dea2eb9821f2ed1457ddb367c40472c3c24eca0a367",
+      "magneticdos.out": "7da43637dd80090c26a7117e552b4773d8062fdeba712dcb10c9b45f2cb68939"
+    },
+    "rs_current": {
+      "Fe_out.nml": "2f0db8de51a87245da12ccdec07194a096bcd0adb9f85514cbac19f768a7fbc0",
+      "Fe_scf.nml": "2f0db8de51a87245da12ccdec07194a096bcd0adb9f85514cbac19f768a7fbc0",
+      "Fe_dos.out": "6a3a15b200db44fed4bd7324dc0ed33aef1e52318620c7499204abbded67f896",
+      "Fe_orbital_dos.out": "0b7704b85d03587d4b57f3585eadf6ddaff4d3c8a49ee11b124d65d1c66103bd",
+      "totaldos.out": "57d8b7a783d1db7545519dea2eb9821f2ed1457ddb367c40472c3c24eca0a367",
+      "magneticdos.out": "7da43637dd80090c26a7117e552b4773d8062fdeba712dcb10c9b45f2cb68939"
+    },
+    "ks_base": {
+      "Fe_out.nml": "7de5fcc993a8d67ca4c7473bbe7e64cfa93255076541ce541f6a487fb7b02909",
+      "Fe_scf.nml": "7de5fcc993a8d67ca4c7473bbe7e64cfa93255076541ce541f6a487fb7b02909",
+      "totaldos.out": "48f66e90579ae6365f288b8b4442e6962eac1845cd3148d050d401b14bcd1bf9",
+      "magneticdos.out": "6681d3c9386ae263546824524a823bd7f05e53a67c6a0d79ba619abda54aa485"
+    },
+    "ks_current": {
+      "Fe_out.nml": "7de5fcc993a8d67ca4c7473bbe7e64cfa93255076541ce541f6a487fb7b02909",
+      "Fe_scf.nml": "7de5fcc993a8d67ca4c7473bbe7e64cfa93255076541ce541f6a487fb7b02909",
+      "totaldos.out": "48f66e90579ae6365f288b8b4442e6962eac1845cd3148d050d401b14bcd1bf9",
+      "magneticdos.out": "6681d3c9386ae263546824524a823bd7f05e53a67c6a0d79ba619abda54aa485"
+    }
+  },
+  "fresh_baseline_comparisons": {
+    "source_commit": "8b8f7ef7bfc026fd34a56b37a3ad3281fd0a6832",
+    "clean_baseline_binary": {
+      "label": "clean 8b8f7ef baseline",
+      "path": "/tmp/rslmto-ra-base-build/bin/rslmto.x",
+      "sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd"
+    },
+    "rb_candidate_binary": {
+      "label": "RB0/RB6/QL-history candidate",
+      "path": "/private/tmp/rslmto-rb-impl-build/bin/rslmto.x",
+      "sha256": "43f73070de890cab26ea96e386959c2fac2b567abe02d731e64cee0a799d7555"
+    },
+    "backend": "true KS; both input decks explicitly set use_kspace=.true. and logs confirmed use_kspace=.true.",
+    "case": "bcc Fe no-U, 4 SCF steps, serial OpenMP runner",
+    "run_command": "RSLMTO_OMP_THREADS_SERIAL=1 /bin/bash tests/run_binary.sh <binary>",
+    "run_directories": {
+      "rb_candidate": "/private/tmp/rslmto-rb0-ksfixed/new_kspace_no_u",
+      "clean_baseline": "/private/tmp/rslmto-rb0-ksfixed/clean_8b8f7ef_kspace_no_u_initial"
+    },
+    "prerun_input_sha256_both": "3f419e08f78dd47d968e5a201ba1834fd8670fbcad3a8a63852d70fce64eef32",
+    "seed_Fe_nml_sha256_both": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+    "outputs_byte_identical": true,
+    "output_sha256_both": {
+      "Fe_out.nml": "e864e48fd5d6ec5132416e0e5e70ba30999ce6460f341b4b577fc906b966e01c",
+      "Fe_scf.nml": "e864e48fd5d6ec5132416e0e5e70ba30999ce6460f341b4b577fc906b966e01c",
+      "totaldos.out": "b86895906548a1dc9ef1af5a18c095c72c91e7969b13757750aed663af570192",
+      "magneticdos.out": "d52be151e817e0979fde50ac794a960447b95b284891af28568215a52dece50b"
+    },
+    "history_match": "All four-step EF, N, dN, and Diff values matched. The comparison used fresh working directories and the same pre-run deck and seed bytes.",
+    "input_rewrite_note": "The executable rewrites the input deck's energy/fermi value in place during execution. Therefore prerun_input_sha256_both is the authoritative input identity; hashes of input.nml after a run are runtime-mutated artifacts.",
+    "result": "PASS: clean 8b8f7ef true-KS no-U outputs match RB candidate byte-for-byte."
+  },
+  "results": "Fresh true-KS no-U comparison against the clean 8b8f7ef baseline passes byte identity. The earlier rs_base/rs_current and ks_base/ks_current entries above are archived Oct-18 snapshots; the latter were not a true-KS run because their deck omitted use_kspace=.true."
+}

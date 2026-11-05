@@ -112,6 +112,22 @@ where:
 - Fast convergence (Chebyshev polynomials are optimal)
 - No explicit density matrix needed
 
+Spectral positivity
+-------------------
+
+The real-axis on-site Chebyshev reconstruction is regularized before DOS,
+Fermi-level, and radial charge/moment integrations. Each orbital's 2x2 spin
+spectral-density block is projected to be positive semidefinite: negative
+diagonal spectral weight is set to zero and spin coherence is reduced only
+when it exceeds the physical bound. This removes small negative-DOS artifacts
+from finite-order or reduced-precision paths while preserving the dispersive
+part of the Green function. The correction is reported in the run log.
+
+This regularization applies only to the local real-energy DOS route; complex-
+energy and intersite Green functions are not changed. A large or frequent
+correction indicates that the Chebyshev bounds/order should be checked. CUDA
+runs can also request ``gpu_precision = 'fp64'`` in ``&control``.
+
 Implementation in RS-LMTO
 =========================
 

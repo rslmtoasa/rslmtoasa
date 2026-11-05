@@ -1,0 +1,80 @@
+{
+  "adoption_authorized": false,
+  "checks": [
+    {
+      "baseline": {
+        "binary": "/private/tmp/c5-clean8b-release-build/bin/rslmto.x",
+        "files": {
+          "Fe.nml": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+          "input.nml": "4fc9af780c6e9a1addf739b97828d0c3a82dc6752d1fafd4ac5c81cf8b27b8f3"
+        },
+        "input_snapshot": "/private/tmp/c5-2-partA/a1_bccFe/source_snapshot",
+        "sha256": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc"
+      },
+      "command_template": "cd <fresh-run-dir>; cp /private/tmp/c5-2-partA/a1_bccFe/source_snapshot/{Fe.nml,input.nml} .; env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 <binary> > testrun.log 2>&1",
+      "expected": "Exit 0 on both; compare scientific artifact names and bytes to existing clean8b A1 run; only testrun.log and proven runtime metadata in str.out are excluded. Record complete output hash maps, exact PID/exit, and thread environment.",
+      "id": "no_u_rs_identity",
+      "revision": {
+        "binary": "/private/tmp/c5-rd1-frozen/4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f/rslmto.x",
+        "sha256": "4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f",
+        "source_base": "683eff937"
+      },
+      "status": "PREPARED_NOT_RUN"
+    },
+    {
+      "baseline": {
+        "binary": "/private/tmp/c5-clean8b-release-build/bin/rslmto.x",
+        "files": {
+          "Fe.nml": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+          "input.nml": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01"
+        },
+        "input_snapshot": "/private/tmp/c5-3-b2-prep/identity_ks/clean8b_baseline",
+        "sha256": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc"
+      },
+      "command_template": "cd <fresh-run-dir>; cp /private/tmp/c5-3-b2-prep/identity_ks/clean8b_baseline/{Fe.nml,input.nml} .; env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 <binary> > testrun.log 2>&1",
+      "expected": "Exit 0 on both; exact scientific output byte identity, with only testrun.log and established runtime metadata excluded. Preserve output hash maps and exact process/exit records.",
+      "id": "no_u_ks_identity",
+      "revision": {
+        "binary": "/private/tmp/c5-rd1-frozen/4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f/rslmto.x",
+        "sha256": "4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f",
+        "source_base": "683eff937"
+      },
+      "status": "PREPARED_NOT_RUN"
+    },
+    {
+      "expected": "Verify existing frozen record and endpoint-bound raw evidence hashes only; do not infer RD4 energy behavior. A clean8b W1 comparison is unavailable because the same deck is input-incompatible before SCF.",
+      "fixture_record": "docs/validation/fixed_ldau/rs/C5_2_PART_D_assets/ni_rd3_ni_record/RD3_NI_RECORD.json",
+      "id": "explicit_spectral_impurity",
+      "revision_binary_sha256": "4bb76cc2bbd251d95cdc434eec0348b9082069af2deeb4f4859f6d8056779a4f",
+      "spectral_endpoint_state_sha256": "d3d47850e7e8f35581ea402ac0d117d45fdd981719f346c9944bcf09f5b68c02",
+      "status": "EXISTING_ACCEPTED_RECORD_INTEGRITY_ONLY"
+    },
+    {
+      "expected": "The RS and KS bulk fixtures in the two identity checks exercise unchanged bulk behavior in both builds. No separate host campaign or replacement fixture.",
+      "id": "rs_ks_bulk_unchanged",
+      "status": "COVERED_BY_NO_U_RS_AND_KS_IDENTITY"
+    }
+  ],
+  "environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "execution_note": "Commands are templates bound to immutable existing fixture snapshots and frozen executables; output directories must be new and hash-recorded before any authorized launch. No command has been run under this record.",
+  "existing_preflight_refs": [
+    "docs/validation/fixed_ldau/rs/C5_2_PART_A_assets/preflight/a1_clean8b.json",
+    "docs/validation/fixed_ldau/rs/C5_2_PART_B_assets/identity/ks_clean8b_preflight.json",
+    "docs/validation/fixed_ldau/rs/C5_2_PART_B_assets/identity/ks_candidate_preflight.json"
+  ],
+  "identity_rule": "Use original no-U byte criterion: all scientific output names and bytes must match the clean8b baseline; exclude only testrun.log and already proven runtime-only fields. Any scientific mismatch is reported as a gate failure; do not normalize or waive it.",
+  "launches": 0,
+  "merge_authorized": false,
+  "rd2_status": "GATE_MEASURED_FAIL; scalar failure unresolved; no criteria or tolerances changed",
+  "schema": "c5-rd5-unchanged-behavior-preflight-v1",
+  "status": "FROZEN_PREPARED_NOT_RUN_ADOPTION_BLOCKED_BY_RD2_FAIL"
+}

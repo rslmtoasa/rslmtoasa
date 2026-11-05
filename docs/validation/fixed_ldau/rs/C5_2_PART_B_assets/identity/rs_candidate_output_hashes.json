@@ -1,0 +1,149 @@
+{
+  "artifact_names": [
+    "Fe.nml",
+    "Fe_1_spinene.out",
+    "Fe_dos.out",
+    "Fe_orbene.out",
+    "Fe_orbital_dos.out",
+    "Fe_orbquadene.out",
+    "Fe_out.nml",
+    "Fe_scf.nml",
+    "angles_lmom.out",
+    "angles_magmom.out",
+    "clust",
+    "fort.1122",
+    "fort.800",
+    "fort.805",
+    "input.nml",
+    "linfo.out",
+    "mad.mat",
+    "magneticdos.out",
+    "map",
+    "minfo.out",
+    "radial_ground_state_Fe_1.dat",
+    "report.out",
+    "sbar",
+    "str.out",
+    "totaldos.out",
+    "ves.out",
+    "view.sbar"
+  ],
+  "baseline_reference": "/private/tmp/c5-2-partA/a1_bccFe/run1",
+  "control": {
+    "exit_code": "0",
+    "pid": "79930",
+    "testrun_log_sha256": "96da336eff1223336c1d64feccef246ed5226ea6dc8356155144bfb7356ece87"
+  },
+  "files": {
+    "Fe.nml": {
+      "bytes": 3389,
+      "sha256": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673"
+    },
+    "Fe_1_spinene.out": {
+      "bytes": 163150,
+      "sha256": "b71948dcc9a0796fac9d3e17297ca7a1b04ae47bec91d1ccf0a6a5d938794c55"
+    },
+    "Fe_dos.out": {
+      "bytes": 163198,
+      "sha256": "392c6a59998dcbd862e9a7d8c3c19c7a10e7da01459a3205ab1b399bee6cd516"
+    },
+    "Fe_orbene.out": {
+      "bytes": 163150,
+      "sha256": "a4edf4c7e1f3554e5def660fa9d64faa35b103e881531e5b57b71373c7f8ff4a"
+    },
+    "Fe_orbital_dos.out": {
+      "bytes": 765550,
+      "sha256": "b4b45c2099f2404e878ac4de8eec5b93a73ae47fabbaaef2c50d287d2a744ec1"
+    },
+    "Fe_orbquadene.out": {
+      "bytes": 363950,
+      "sha256": "902179d3c970f44c9beefca8807adfab0cc8828e4f815c3b756994fc85af9690"
+    },
+    "Fe_out.nml": {
+      "bytes": 6770,
+      "sha256": "34e9a66f8a55dc8401020926e03d7f0b3e5886685800834a6b3b0ae92b750893"
+    },
+    "Fe_scf.nml": {
+      "bytes": 6770,
+      "sha256": "34e9a66f8a55dc8401020926e03d7f0b3e5886685800834a6b3b0ae92b750893"
+    },
+    "angles_lmom.out": {
+      "bytes": 17,
+      "sha256": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08"
+    },
+    "angles_magmom.out": {
+      "bytes": 17,
+      "sha256": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08"
+    },
+    "clust": {
+      "bytes": 302207,
+      "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+    },
+    "fort.1122": {
+      "bytes": 9684,
+      "sha256": "204bf912e35b9cc4900ff4b62f79d1046301e7f338e15ec2c4b8c026bef14241"
+    },
+    "fort.800": {
+      "bytes": 287245,
+      "sha256": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6"
+    },
+    "fort.805": {
+      "bytes": 616366,
+      "sha256": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246"
+    },
+    "input.nml": {
+      "bytes": 641,
+      "sha256": "45e28a6c2f2853949d4bf947e9916cd763a71e350d394bbd9e3810b729e0054d"
+    },
+    "linfo.out": {
+      "bytes": 68,
+      "sha256": "d2e68d490870e6e242859132f6547528de60ebeaee6a0229faafe013f8230e8b"
+    },
+    "mad.mat": {
+      "bytes": 16,
+      "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+    },
+    "magneticdos.out": {
+      "bytes": 283683,
+      "sha256": "76786f8c4ade58f074e081debea58fd43a81c5847585c9ab4c6df3f8c17cc532"
+    },
+    "map": {
+      "bytes": 406912,
+      "sha256": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5"
+    },
+    "minfo.out": {
+      "bytes": 65,
+      "sha256": "d4dd542d56da29b9cf78c75305641afaf875083053708aee4649277fcad13918"
+    },
+    "radial_ground_state_Fe_1.dat": {
+      "bytes": 141746,
+      "sha256": "38d55f1e2d3c0b4551717a57543741e1e4eb64ab5a643839a75cc7dbc8d7b427"
+    },
+    "report.out": {
+      "bytes": 2703,
+      "sha256": "b0c55570c8527f68b29ecb329a54c2b9c81a6ef0874f476aebb82f7c970bba8c"
+    },
+    "sbar": {
+      "bytes": 29160,
+      "sha256": "fc72279e46def961c6f129cd0f6d83769ee52bc84b4b819ab3f8dc3959a1a101"
+    },
+    "str.out": {
+      "bytes": 1496,
+      "sha256": "5eaa8741eeae42c6d544d2d78a62a53726a6ee2a1922f7b9c08ae19a2167fee1"
+    },
+    "totaldos.out": {
+      "bytes": 82830,
+      "sha256": "40fab1b121ae89bbaec8c4468a1cadd2851a17000c90468f4ee1bfe984d91131"
+    },
+    "ves.out": {
+      "bytes": 738,
+      "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+    },
+    "view.sbar": {
+      "bytes": 13350,
+      "sha256": "038e5ddd68645f3055bad2a8298c7a641800d6b0198208daa0d1b992d3f37153"
+    }
+  },
+  "matches_baseline_name_set": true,
+  "run_dir": "/private/tmp/c5-3-b-runs/rs_candidate"
+}

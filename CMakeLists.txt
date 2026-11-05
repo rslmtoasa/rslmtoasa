@@ -69,8 +69,32 @@ if (ENABLE_MKL_KERNELS OR ENABLE_CUDA_PLUGIN OR ENABLE_CUDA_RECIPROCAL)
 endif()
 
 if (ENABLE_CUDA_PLUGIN OR ENABLE_CUDA_RECIPROCAL)
+  # Let a CUDA build target the GPU present while it is configured.  This
+  # avoids carrying a stale architecture from a different machine (for
+  # example, sm_75 code falling back to PTX JIT on an Ada GPU).  Do not
+  # replace an explicit -DCMAKE_CUDA_ARCHITECTURES=... or CUDAARCHS choice:
+  # those are required for cross-compiles, headless build hosts, and
+  # distributable multi-architecture binaries.
+  #
+  # CMake added the `native` architecture selector in 3.24.  Retain the
+  # project's 3.19 minimum for CPU and older-CMake CUDA builds; on those
+  # versions the CUDA compiler's default remains in effect and we explain how
+  # to select an architecture explicitly.
+  if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES AND "$ENV{CUDAARCHS}" STREQUAL "")
+    if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
+      set(CMAKE_CUDA_ARCHITECTURES native CACHE STRING
+          "CUDA architectures to build for; use native to detect the configuration host GPU")
+      message(STATUS "CUDA architectures: native (detected from the configuration host GPU)")
+    else()
+      message(STATUS
+        "CMake ${CMAKE_VERSION} cannot auto-detect CUDA architectures; "
+        "set -DCMAKE_CUDA_ARCHITECTURES=<NN> when configuring CUDA builds")
+    endif()
+  endif()
+
   enable_language(CUDA)
   message(STATUS "Using CUDA compiler ${CMAKE_CUDA_COMPILER_ID} CUDA ${CMAKE_CUDA_COMPILER_VERSION}")
+  message(STATUS "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
   set(_cuda_toolkit_components cudart)
   if (ENABLE_CUDA_PLUGIN)
     list(APPEND _cuda_toolkit_components cusparse cufft cublas)
@@ -461,6 +485,46 @@ endforeach()
   set_tests_properties(Val04LdaUPhysics PROPERTIES
     LABELS "validation;lda_u;magnetic;kspace;known-failure" TIMEOUT 300)
 
+  add_test(NAME Val04RsEmbeddingProvenance
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/fixed_ldau/rs_embedding_ra2.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/rs_embedding_ra2")
+  set_tests_properties(Val04RsEmbeddingProvenance PROPERTIES
+    LABELS "validation;lda_u;rs;embedding;provenance" TIMEOUT 300)
+
+  add_test(NAME Val04RsFrozenHostFiles
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/fixed_ldau/frozen_host_files.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/frozen_host_files")
+  set_tests_properties(Val04RsFrozenHostFiles PROPERTIES
+    LABELS "functional;lda_u;rs;surface;embedding" TIMEOUT 1800)
+
+  add_executable(RsEmbeddingEnergyEvaluator ${TestDIR}/validation/fixed_ldau/a4_3_pout_hubbard_evaluator.f90)
+  target_link_libraries(RsEmbeddingEnergyEvaluator PRIVATE ${COMMON_LIBRARIES})
+  set_target_properties(RsEmbeddingEnergyEvaluator PROPERTIES LINKER_LANGUAGE "Fortran")
+  add_test(NAME Val04RsImpurityEnergyDiagnostic
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/fixed_ldau/rs_embedding_ra1.py"
+      "--binary" "${TestBinary}"
+      "--evaluator" "$<TARGET_FILE:RsEmbeddingEnergyEvaluator>"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/rs_embedding_ra1")
+  set_tests_properties(Val04RsImpurityEnergyDiagnostic PROPERTIES
+    LABELS "validation;lda_u;rs;impurity;diagnostics" TIMEOUT 300)
+
+  add_test(NAME Val04RsEmbeddingFixtures
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/fixed_ldau/rs_embedding_ra3.py"
+      "--binary" "${TestBinary}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/rs_embedding_ra3")
+  set_tests_properties(Val04RsEmbeddingFixtures PROPERTIES
+    LABELS "validation;lda_u;rs;impurity;fixtures;guards" TIMEOUT 300)
+
+  add_test(NAME Val04RsHcpCoClusterSetup
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/fixed_ldau/c5_hcp_co_cluster_setup.py"
+      "--binary" "${TestBinary}"
+      "--repo-root" "${CMAKE_SOURCE_DIR}"
+      "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/c5_hcp_co_cluster_setup")
+  set_tests_properties(Val04RsHcpCoClusterSetup PROPERTIES
+    LABELS "validation;rs;impurity;cluster" TIMEOUT 180)
+
   add_test(NAME Val05GreenConvergence
     COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/val05_green_convergence.py"
       "--binary" "${TestBinary}"
@@ -623,6 +687,16 @@ if (RUN_UNIT_TESTS)
   endfunction()
 
   add_fortran_unit_test(UnitBasisDimensions ${TestDIR}/unit/test_basis_dimensions.f90)
+  add_fortran_unit_test(UnitScfB1GuardCapacityRequiresFatal ${TestDIR}/unit/test_scf_b1_guard.f90 capacity)
+  set_tests_properties(UnitScfB1GuardCapacityRequiresFatal PROPERTIES
+    PASS_REGULAR_EXPRESSION "B1 occupation-capacity fatal.*site=3.*channel=d.*iteration=17.*q0=")
+  add_fortran_unit_test(UnitScfB1GuardWarningBoundary ${TestDIR}/unit/test_scf_b1_guard.f90 warning)
+  set_tests_properties(UnitScfB1GuardWarningBoundary PROPERTIES
+    PASS_REGULAR_EXPRESSION "B1 occupation-capacity warning.*site=3.*channel=d.*iteration=17.*q0=")
+  add_fortran_unit_test(UnitScfB1GuardNonfiniteRequiresFatal ${TestDIR}/unit/test_scf_b1_guard.f90 nonfinite)
+  set_tests_properties(UnitScfB1GuardNonfiniteRequiresFatal PROPERTIES
+    PASS_REGULAR_EXPRESSION "B1 non-finite guard.*site=2.*channel=p.*iteration=9.*field=new q1.*value=")
+  add_fortran_unit_test(UnitScfB1GuardBoundary ${TestDIR}/unit/test_scf_b1_guard.f90 boundary)
   set_tests_properties(UnitBasisDimensions PROPERTIES LABELS "unit;basis")
   add_fortran_unit_test(UnitLrBasisRadial ${TestDIR}/unit/test_lr_basis_radial.f90)
   set_tests_properties(UnitLrBasisRadial PROPERTIES LABELS "unit;lr-basis;radial;normalization;legacy-reference")
@@ -642,6 +716,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitXcSelectorSemantics PROPERTIES LABELS "unit;xc;selector;libxc")
   add_fortran_unit_test(UnitControlSpinSemantics ${TestDIR}/unit/test_control_spin_semantics.f90)
   set_tests_properties(UnitControlSpinSemantics PROPERTIES LABELS "unit;control;spin;semantics")
+  add_fortran_unit_test(UnitControlConstraintsRead ${TestDIR}/unit/test_control_constraints_read.f90)
+  set_tests_properties(UnitControlConstraintsRead PROPERTIES LABELS "unit;control;constraints;quick")
   add_fortran_unit_test(UnitXcUnknownSelectorRequiresFatal ${TestDIR}/unit/test_xc_unknown_selector_requires_fatal.f90)
   set_tests_properties(UnitXcUnknownSelectorRequiresFatal PROPERTIES
     LABELS "unit;xc;selector;negative;unsupported"
@@ -731,11 +807,20 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitLdaUHamiltonian ${TestDIR}/unit/test_lda_u_hamiltonian.f90)
   set_tests_properties(UnitLdaUHamiltonian PROPERTIES LABELS "unit;lda_u;hamiltonian")
   add_fortran_unit_test(UnitLdaUTensor ${TestDIR}/unit/test_lda_u_tensor.f90)
+  add_fortran_unit_test(UnitHubbardSpinorMoments ${TestDIR}/unit/test_hubbard_spinor_moments.f90)
+  set_tests_properties(UnitHubbardSpinorMoments PROPERTIES LABELS "unit;lda_u;spinor")
+  add_fortran_unit_test(UnitHubbardSpinor ${TestDIR}/unit/test_hubbard_spinor.f90
+    "${TestDIR}/validation/fixed_ldau/data/spinor_oracle_reference.txt")
+  set_tests_properties(UnitHubbardSpinor PROPERTIES LABELS "unit;lda_u;spinor")
   set_tests_properties(UnitLdaUTensor PROPERTIES LABELS "unit;lda_u;tensor")
   add_fortran_unit_test(UnitLdaUOccupationProducers ${TestDIR}/unit/test_ldau_occupation_producers.f90)
   set_tests_properties(UnitLdaUOccupationProducers PROPERTIES LABELS "unit;lda_u;occupation;hermiticity")
   add_fortran_unit_test(UnitLdaUProjectorCommonFrozenH ${TestDIR}/validation/fixed_ldau/projector_common_frozen_h.f90)
   set_tests_properties(UnitLdaUProjectorCommonFrozenH PROPERTIES LABELS "unit;validation;lda_u;projector;frozen_h")
+  add_fortran_unit_test(UnitLdaUProjectorSpinorFrozenH ${TestDIR}/validation/fixed_ldau/projector_spinor_frozen_h.f90)
+  set_tests_properties(UnitLdaUProjectorSpinorFrozenH PROPERTIES LABELS "unit;validation;lda_u;projector;spinor;frozen_h")
+  add_fortran_unit_test(UnitLdaUSpinorImpurityFrozenH ${TestDIR}/validation/fixed_ldau/projector_spinor_impurity_frozen_h.f90)
+  set_tests_properties(UnitLdaUSpinorImpurityFrozenH PROPERTIES LABELS "unit;validation;lda_u;projector;spinor;frozen_h")
   add_fortran_unit_test(UnitLdaUProjectorMultisiteFrozenH ${TestDIR}/validation/fixed_ldau/projector_multisite_frozen_h.f90)
   set_tests_properties(UnitLdaUProjectorMultisiteFrozenH PROPERTIES LABELS "unit;validation;lda_u;projector;multisite;frozen_h")
   if(ENABLE_MPI AND MPI_Fortran_FOUND)
@@ -752,6 +837,8 @@ if (RUN_UNIT_TESTS)
   set_tests_properties(UnitFermiDiracEntropy PROPERTIES LABELS "unit;thermodynamics;entropy;oracle")
   add_fortran_unit_test(UnitChebyshevGFOracle ${TestDIR}/unit/test_chebyshev_gf_oracle.f90)
   set_tests_properties(UnitChebyshevGFOracle PROPERTIES LABELS "unit;green;chebyshev;resolvent;oracle;convergence")
+  add_fortran_unit_test(UnitChebyshevSpectralPositivity ${TestDIR}/unit/test_chebyshev_spectral_positivity.f90)
+  set_tests_properties(UnitChebyshevSpectralPositivity PROPERTIES LABELS "unit;green;chebyshev;spectral;positivity")
   add_fortran_unit_test(UnitDysonEquivalence ${TestDIR}/unit/test_dyson_equivalence.f90)
   add_fortran_unit_test(UnitGammaSupercell ${TestDIR}/unit/test_gamma_supercell.f90)
   add_fortran_unit_test(UnitBsfSumRule ${TestDIR}/unit/test_bsf_sumrule.f90)
@@ -759,6 +846,11 @@ if (RUN_UNIT_TESTS)
   add_fortran_unit_test(UnitLocalMomentsKernel ${TestDIR}/unit/test_local_moments_kernel.f90
     ${TestDIR}/validation/fixed_ldau/data/a3_m14_reference_fixture.txt)
   set_tests_properties(UnitLocalMomentsKernel PROPERTIES LABELS "unit;lda_u;local_moments;oracle")
+  add_fortran_unit_test(UnitAutoImpurityLocalMode ${TestDIR}/unit/test_auto_impurity_local_mode.f90
+    ${TestDIR}/validation/fixed_ldau/fixtures/c5_impurity_auto_local/input.nml
+    ${TestDIR}/validation/fixed_ldau/fixtures/c5_impurity_auto_local/Fe-host_out.nml
+    ${TestDIR}/validation/fixed_ldau/fixtures/c5_surface_auto_local/input.nml)
+  set_tests_properties(UnitAutoImpurityLocalMode PROPERTIES LABELS "unit;lda_u;local_moments;resolver")
   add_fortran_unit_test(UnitLocalMomentsSiteSwap ${TestDIR}/unit/test_local_moments_site_swap.f90
     ${TestDIR}/validation/fixed_ldau/data/a3_m14_fresh_site_swap_reference.txt)
   set_tests_properties(UnitLocalMomentsSiteSwap PROPERTIES LABELS "unit;lda_u;local_moments;oracle;mapping")
@@ -805,6 +897,29 @@ if (RUN_UNIT_TESTS)
     set_tests_properties(${_t} PROPERTIES LABELS "unit;spin-response;quick"
       FIXTURES_REQUIRED SpinResponseFeScratch RESOURCE_LOCK SpinResponseFeScratch)
   endforeach()
+  # Spinor U insertion: scratch bcc-Fe nsp=2 deck with base and U inputs.
+  set(_soc_u_scratch "${CMAKE_BINARY_DIR}/Testing/validation/soc_u_insertion")
+  add_test(NAME LdaUSocInsertionScratch
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/fixed_ldau/soc_u_scratch.py"
+      "${TestDIR}/scf/cases/bulk/bccFe" "${_soc_u_scratch}")
+  set_tests_properties(LdaUSocInsertionScratch PROPERTIES
+    LABELS "lda_u;spinor" FIXTURES_SETUP LdaUSocInsertionScratch RESOURCE_LOCK LdaUSocInsertionScratch)
+  add_fortran_component_unit_test(UnitLdaUSocInsertion ${TestDIR}/unit/test_hubbard_soc_insertion.f90)
+  target_link_libraries(UnitLdaUSocInsertion SpinResponseFeState)
+  add_test(NAME UnitLdaUSocInsertion COMMAND UnitLdaUSocInsertion WORKING_DIRECTORY "${_soc_u_scratch}")
+  set_tests_properties(UnitLdaUSocInsertion PROPERTIES LABELS "unit;lda_u;spinor"
+    FIXTURES_REQUIRED LdaUSocInsertionScratch RESOURCE_LOCK LdaUSocInsertionScratch)
+  # Spinor U insertion, surface (calctype S): scratch Ni(001) nsp=2 deck with base and U inputs.
+  set(_soc_us_scratch "${CMAKE_BINARY_DIR}/Testing/validation/soc_u_surface_insertion")
+  add_test(NAME LdaUSocSurfaceInsertionScratch
+    COMMAND "${Python3_EXECUTABLE}" "${TestDIR}/validation/fixed_ldau/soc_u_surface_scratch.py"
+      "${TestDIR}/validation/fixed_ldau/decks/ni001_u3" "${_soc_us_scratch}")
+  set_tests_properties(LdaUSocSurfaceInsertionScratch PROPERTIES
+    LABELS "lda_u;spinor" FIXTURES_SETUP LdaUSocSurfaceInsertionScratch RESOURCE_LOCK LdaUSocSurfaceInsertionScratch)
+  add_fortran_component_unit_test(UnitLdaUSocSurfaceInsertion ${TestDIR}/unit/test_hubbard_soc_surface_insertion.f90)
+  add_test(NAME UnitLdaUSocSurfaceInsertion COMMAND UnitLdaUSocSurfaceInsertion WORKING_DIRECTORY "${_soc_us_scratch}")
+  set_tests_properties(UnitLdaUSocSurfaceInsertion PROPERTIES LABELS "unit;lda_u;spinor"
+    FIXTURES_REQUIRED LdaUSocSurfaceInsertionScratch RESOURCE_LOCK LdaUSocSurfaceInsertionScratch)
   # S2': two-atom bcc Fe cell with antiparallel moments, (up, down) against (down, up).
   set(_af_scratch "${CMAKE_BINARY_DIR}/Testing/spin_response/af")
   add_test(NAME SpinResponseAfDriver

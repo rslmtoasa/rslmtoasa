@@ -1,0 +1,36 @@
+{
+  "acceptance": "no accepted window reported yet; ID10\u201329 checked and failed; scan continues for each earliest qualifying window",
+  "capture_count": 35,
+  "captured_id_range": [
+    10,
+    44
+  ],
+  "clean_startup": true,
+  "latest_complete_trace_iteration": 44,
+  "latest_completed_diff": "0.0000004894",
+  "latest_logged_step_marker": "44",
+  "missing_before_first_capture": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "nonfinite_or_guard": false,
+  "observed_local": "2026-10-20T22:49:00.330180+02:00",
+  "record_type": "append_only_live_progress_status",
+  "run_id": "c2_u2_chebyshev",
+  "solver_command": "frozen a2112df3\u2026 rslmto.x",
+  "solver_pid": 58026,
+  "status": "RUNNING",
+  "testrun_log_sha256": "f9a02c17020822a50252d2e9e421d448d352bfcaf06f6115f1c3e3c7b0d9bcd0",
+  "trace_state_manifest_path": "/private/tmp/c52-c2-stage/launch_u2_corrected/snapshots_watcher/c2_u2_chebyshev_prospective_002/trace_state_manifest.jsonl",
+  "trace_state_manifest_sha256": "d2e918fbfd83d42d90059883c509e30568aa753149cb08b00d8c18b934555aa2",
+  "watcher_exec_session": 34452,
+  "watcher_pid": 63377,
+  "watcher_status": "foreground collector remains active; exact actual argv in watcher_started.json"
+}

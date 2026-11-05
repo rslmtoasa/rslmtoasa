@@ -1,0 +1,775 @@
+[Oct 20 2026 11:51:00.240] [basis.f90:110]             [1m[32m<info> [0m[0mBasis initialised: lmax=2 (spd )  norb=9  nb=18  spin_off=9  bdg=F
+ WARNING: hcp structure using as default c/a = 1.633
+[Oct 20 2026 11:51:00.556] [lattice_strux.f90:89]      [1m[32m<info> [0m[0mSTRUCTB structure-constants, backend=strux_lib
+[Oct 20 2026 11:51:00.557] [symbolic_atom.f90:187]     [1m[32m<info> [0m[0mSCF input provenance: restart loaded from ./Co1_out.nml
+[Oct 20 2026 11:51:00.557] [element.f90:92]            [1m[32m<info> [0m[0mReading element from previous result ./Co1_out.nml
+[Oct 20 2026 11:51:00.558] [potential.f90:189]         [1m[32m<info> [0m[0mReading potential from previous result ./Co1_out.nml
+[Oct 20 2026 11:51:00.558] [symbolic_atom.f90:187]     [1m[32m<info> [0m[0mSCF input provenance: restart loaded from ./Co2_out.nml
+[Oct 20 2026 11:51:00.558] [element.f90:92]            [1m[32m<info> [0m[0mReading element from previous result ./Co2_out.nml
+[Oct 20 2026 11:51:00.559] [potential.f90:189]         [1m[32m<info> [0m[0mReading potential from previous result ./Co2_out.nml
+[Oct 20 2026 11:51:00.559] [lattice_strux.f90:414]     [1m[32m<info> [0m[0mDEBUG_STRUX_DIAG effective_screening=default mode=2 auto=F
+[Oct 20 2026 11:51:04.012] [self.f90:3363]             [1m[32m<info> [0m[0mHUBBARD_RADIAL_MODE mode=spectral source=default use_kspace=.false. local_energy_adopted=.false.
+[Oct 20 2026 11:51:04.013] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 1
+[Oct 20 2026 11:51:04.016] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:51:04.016] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:51:04.017] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:51:16.745] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:51:16.745] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:51:29.643] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:51:29.645] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:51:29.678] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:51:29.681] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:51:29.757] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570083
+[Oct 20 2026 11:51:29.757] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570083
+[Oct 20 2026 11:51:29.790] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570084
+[Oct 20 2026 11:51:29.790] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:51:29.861] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:51:29.929] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is   0.000000   0.000000  -0.000000
+[Oct 20 2026 11:51:29.930] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570083 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:51:29.931] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:51:29.931] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:51:29.931] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:51:29.931] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:   0.000000  -0.000000   0.000000
+[Oct 20 2026 11:51:29.931] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:51:29.931] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:  -0.000000   0.000000  -0.000000
+[Oct 20 2026 11:51:29.931] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:51:29.931] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:51:29.932] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:51:29.932] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:51:29.932] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:51:29.932] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:51:29.933] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:51:29.933] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:51:29.933] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:51:29.933] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:51:29.933] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:51:29.933] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:51:29.989] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:51:29.990] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:51:29.990] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:51:29.990] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:51:29.990] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:51:29.990] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:51:29.990] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:51:30.045] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:51:30.045] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:51:30.045] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:51:30.047] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000079
+[Oct 20 2026 11:51:30.047] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 2
+[Oct 20 2026 11:51:30.049] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:51:30.049] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:51:30.050] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:51:43.815] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:51:43.822] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:51:56.332] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:51:56.337] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:51:56.372] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:51:56.375] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:51:56.447] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570083
+[Oct 20 2026 11:51:56.447] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570083
+[Oct 20 2026 11:51:56.479] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570084
+[Oct 20 2026 11:51:56.479] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:51:56.549] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.000000  -0.000000   0.000000
+[Oct 20 2026 11:51:56.614] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:51:56.616] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570083 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:51:56.616] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:51:56.616] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:51:56.616] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:51:56.616] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.000000  -0.000000  -0.000000
+[Oct 20 2026 11:51:56.616] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:51:56.616] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.000000   0.000000   0.000000
+[Oct 20 2026 11:51:56.616] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:51:56.616] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:51:56.617] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:51:56.617] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:51:56.617] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:51:56.617] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:51:56.617] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:51:56.617] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:51:56.617] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:51:56.617] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:51:56.617] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:51:56.618] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:51:56.670] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:51:56.671] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:51:56.671] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:51:56.671] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:51:56.671] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:51:56.671] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:51:56.671] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:51:56.724] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:51:56.724] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:51:56.724] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:51:56.727] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000061
+[Oct 20 2026 11:51:56.727] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 3
+[Oct 20 2026 11:51:56.729] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:51:56.729] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:51:56.729] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:52:09.178] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:52:09.179] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:52:22.812] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:52:22.816] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:52:22.852] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:52:22.855] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:52:22.928] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570084
+[Oct 20 2026 11:52:22.928] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:52:22.962] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570084
+[Oct 20 2026 11:52:22.963] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:52:23.035] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.000000  -0.000000   0.000000
+[Oct 20 2026 11:52:23.103] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.000000   0.000000  -0.000000
+[Oct 20 2026 11:52:23.104] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:52:23.104] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:52:23.104] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:52:23.105] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:52:23.105] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.000000  -0.000000  -0.000000
+[Oct 20 2026 11:52:23.105] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:52:23.105] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.000000   0.000000   0.000000
+[Oct 20 2026 11:52:23.105] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:52:23.105] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:52:23.105] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:52:23.106] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:52:23.106] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:52:23.106] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:52:23.106] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:52:23.106] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:52:23.106] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:52:23.106] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:52:23.106] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:52:23.106] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:52:23.162] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:52:23.162] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:52:23.162] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:52:23.162] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:52:23.162] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:52:23.162] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:52:23.162] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:52:23.216] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:52:23.216] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:52:23.217] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:52:23.219] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000093
+[Oct 20 2026 11:52:23.219] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 4
+[Oct 20 2026 11:52:23.224] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:52:23.224] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:52:23.225] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:52:36.424] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:52:36.424] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:52:49.272] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:52:49.281] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:52:49.325] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:52:49.328] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:52:49.478] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570083
+[Oct 20 2026 11:52:49.478] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570083
+[Oct 20 2026 11:52:49.513] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570084
+[Oct 20 2026 11:52:49.513] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:52:49.585] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:52:49.652] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.000000   0.000000  -0.000000
+[Oct 20 2026 11:52:49.653] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570083 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:52:49.654] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:52:49.654] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:52:49.654] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:52:49.654] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.000000  -0.000000  -0.000000
+[Oct 20 2026 11:52:49.654] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:52:49.654] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.000000   0.000000   0.000000
+[Oct 20 2026 11:52:49.654] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:52:49.654] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:52:49.654] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:52:49.655] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:52:49.655] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:52:49.655] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:52:49.655] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:52:49.655] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:52:49.655] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:52:49.655] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:52:49.655] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:52:49.655] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:52:49.709] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:52:49.709] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:52:49.709] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:52:49.710] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:52:49.710] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:52:49.710] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:52:49.710] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:52:49.763] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:52:49.763] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:52:49.763] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:52:49.766] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000090
+[Oct 20 2026 11:52:49.766] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 5
+[Oct 20 2026 11:52:49.768] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:52:49.768] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:52:49.770] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:53:02.364] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:53:02.365] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:53:14.932] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:53:14.932] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:53:14.959] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:53:14.962] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:53:15.029] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570083
+[Oct 20 2026 11:53:15.029] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570083
+[Oct 20 2026 11:53:15.061] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570084
+[Oct 20 2026 11:53:15.061] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:53:15.129] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is  -0.000000  -0.000000  -0.000000
+[Oct 20 2026 11:53:15.195] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is   0.000000  -0.000000  -0.000000
+[Oct 20 2026 11:53:15.196] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570083 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:53:15.196] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:53:15.196] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:53:15.196] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:53:15.196] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:53:15.196] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:53:15.196] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.000000   0.000000  -0.000000
+[Oct 20 2026 11:53:15.196] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:53:15.197] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:53:15.197] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:53:15.197] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:53:15.197] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:53:15.197] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:53:15.197] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:53:15.197] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:53:15.197] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:53:15.198] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:53:15.198] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:53:15.198] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:53:15.250] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:53:15.251] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:53:15.251] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:53:15.251] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:53:15.251] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:53:15.251] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:53:15.251] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:53:15.304] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:53:15.304] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:53:15.304] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:53:15.307] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000055
+[Oct 20 2026 11:53:15.307] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 6
+[Oct 20 2026 11:53:15.308] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:53:15.308] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:53:15.309] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:53:28.558] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:53:28.560] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:53:41.376] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:53:41.383] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:53:41.422] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:53:41.425] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:53:41.497] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570083
+[Oct 20 2026 11:53:41.497] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570083
+[Oct 20 2026 11:53:41.530] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570084
+[Oct 20 2026 11:53:41.530] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:53:41.603] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.000000  -0.000000  -0.000000
+[Oct 20 2026 11:53:41.668] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is   0.000000  -0.000000   0.000000
+[Oct 20 2026 11:53:41.669] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570083 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:53:41.669] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:53:41.669] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:53:41.669] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:53:41.669] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:53:41.670] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:53:41.670] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.000000   0.000000  -0.000000
+[Oct 20 2026 11:53:41.670] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:53:41.670] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:53:41.670] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:53:41.670] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:53:41.670] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:53:41.670] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:53:41.671] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:53:41.671] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:53:41.671] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:53:41.671] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:53:41.671] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:53:41.671] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:53:41.724] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:53:41.725] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:53:41.725] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:53:41.725] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:53:41.725] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:53:41.725] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:53:41.725] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:53:41.778] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:53:41.778] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:53:41.778] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:53:41.781] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000086
+[Oct 20 2026 11:53:41.781] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 7
+[Oct 20 2026 11:53:41.783] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:53:41.783] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:53:41.785] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:53:54.725] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:53:54.726] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:54:07.047] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:54:07.049] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:54:07.080] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:54:07.082] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:54:07.165] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570083
+[Oct 20 2026 11:54:07.166] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570083
+[Oct 20 2026 11:54:07.198] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570084
+[Oct 20 2026 11:54:07.198] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:54:07.270] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:54:07.336] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:54:07.337] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570083 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:54:07.337] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:54:07.337] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:54:07.337] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:54:07.337] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:54:07.338] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:54:07.338] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.000000   0.000000  -0.000000
+[Oct 20 2026 11:54:07.338] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:54:07.338] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:54:07.338] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:54:07.338] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:54:07.338] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:54:07.338] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:54:07.339] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:54:07.339] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:54:07.339] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:54:07.339] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:54:07.339] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:54:07.339] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:54:07.392] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:54:07.393] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:54:07.393] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:54:07.393] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:54:07.393] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:54:07.393] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:54:07.393] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:54:07.446] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:54:07.446] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:54:07.446] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:54:07.449] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000084
+[Oct 20 2026 11:54:07.449] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 8
+[Oct 20 2026 11:54:07.451] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:54:07.451] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:54:07.451] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:54:20.476] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:54:20.477] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:54:33.685] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:54:33.688] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:54:33.718] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:54:33.722] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:54:33.791] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570084
+[Oct 20 2026 11:54:33.792] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:54:33.823] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570084
+[Oct 20 2026 11:54:33.824] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:54:33.895] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.000000  -0.000000  -0.000000
+[Oct 20 2026 11:54:33.961] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.000000   0.000000   0.000000
+[Oct 20 2026 11:54:33.962] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:54:33.962] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:54:33.962] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:54:33.962] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:54:33.962] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.000000  -0.000000  -0.000000
+[Oct 20 2026 11:54:33.963] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:54:33.963] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.000000   0.000000   0.000000
+[Oct 20 2026 11:54:33.963] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:54:33.963] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:54:33.963] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:54:33.963] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:54:33.963] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:54:33.963] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:54:33.964] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:54:33.964] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:54:33.964] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:54:33.964] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:54:33.964] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:54:33.964] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:54:34.017] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:54:34.017] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:54:34.017] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:54:34.017] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:54:34.017] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:54:34.017] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:54:34.017] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:54:34.070] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:54:34.070] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:54:34.070] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:54:34.073] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000055
+[Oct 20 2026 11:54:34.073] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 9
+[Oct 20 2026 11:54:34.075] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:54:34.075] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:54:34.076] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:54:47.136] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:54:47.138] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:54:59.836] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:54:59.841] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:54:59.915] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:54:59.918] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:54:59.985] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570083
+[Oct 20 2026 11:54:59.986] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570083
+[Oct 20 2026 11:55:00.017] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570084
+[Oct 20 2026 11:55:00.017] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:55:00.091] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:55:00.157] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is   0.000000   0.000000  -0.000000
+[Oct 20 2026 11:55:00.158] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570083 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:55:00.158] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:55:00.158] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:55:00.159] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:55:00.159] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:   0.000000  -0.000000   0.000000
+[Oct 20 2026 11:55:00.159] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:55:00.159] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:  -0.000000   0.000000  -0.000000
+[Oct 20 2026 11:55:00.159] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:55:00.159] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:55:00.159] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:55:00.159] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:55:00.160] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:55:00.160] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:55:00.160] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:55:00.160] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:55:00.160] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:55:00.160] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:55:00.160] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:55:00.160] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:55:00.214] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:55:00.214] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:55:00.214] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:55:00.214] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:55:00.214] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:55:00.214] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:55:00.214] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:55:00.268] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:55:00.268] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:55:00.269] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:55:00.271] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000065
+[Oct 20 2026 11:55:00.271] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 10
+[Oct 20 2026 11:55:00.273] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:55:00.273] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:55:00.274] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:55:13.273] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:55:13.274] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:55:26.166] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:55:26.185] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:55:26.223] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:55:26.227] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:55:26.301] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570084
+[Oct 20 2026 11:55:26.301] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:55:26.334] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570084
+[Oct 20 2026 11:55:26.334] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:55:26.422] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.000000  -0.000000   0.000000
+[Oct 20 2026 11:55:26.489] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.000000  -0.000000  -0.000000
+[Oct 20 2026 11:55:26.491] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:55:26.491] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:55:26.491] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:55:26.491] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:55:26.491] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:   0.000000  -0.000000   0.000000
+[Oct 20 2026 11:55:26.491] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:55:26.491] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:  -0.000000   0.000000  -0.000000
+[Oct 20 2026 11:55:26.491] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:55:26.491] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:55:26.492] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:55:26.492] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:55:26.492] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:55:26.492] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:55:26.492] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:55:26.492] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:55:26.492] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:55:26.493] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:55:26.493] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:55:26.493] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:55:26.548] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:55:26.548] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:55:26.548] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:55:26.548] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:55:26.548] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:55:26.549] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:55:26.549] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:55:26.604] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:55:26.605] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:55:26.605] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:55:26.607] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000075
+[Oct 20 2026 11:55:26.608] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 11
+[Oct 20 2026 11:55:26.616] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:55:26.616] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:55:26.618] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:55:40.470] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:55:40.472] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:55:53.487] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:55:53.492] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:55:53.527] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:55:53.529] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:55:53.603] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570084
+[Oct 20 2026 11:55:53.604] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:55:53.636] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570085
+[Oct 20 2026 11:55:53.637] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570085
+[Oct 20 2026 11:55:53.709] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:55:53.776] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:55:53.778] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:55:53.778] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570085 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:55:53.779] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:55:53.779] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:55:53.779] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.000000  -0.000000  -0.000000
+[Oct 20 2026 11:55:53.779] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:55:53.779] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.000000   0.000000   0.000000
+[Oct 20 2026 11:55:53.780] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:55:53.780] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:55:53.780] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:55:53.780] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:55:53.780] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:55:53.780] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:55:53.781] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:55:53.781] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:55:53.782] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:55:53.782] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:55:53.782] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:55:53.782] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:55:53.838] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:55:53.839] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:55:53.839] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:55:53.839] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:55:53.839] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:55:53.839] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:55:53.839] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:55:53.893] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:55:53.893] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:55:53.893] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:55:53.896] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000086
+[Oct 20 2026 11:55:53.896] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 12
+[Oct 20 2026 11:55:53.898] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:55:53.898] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:55:53.899] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:56:13.598] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:56:13.599] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:56:29.017] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:56:29.065] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:56:29.187] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:56:29.197] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:56:29.311] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570083
+[Oct 20 2026 11:56:29.311] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570083
+[Oct 20 2026 11:56:29.348] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570085
+[Oct 20 2026 11:56:29.348] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570085
+[Oct 20 2026 11:56:29.437] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.000000  -0.000000   0.000000
+[Oct 20 2026 11:56:29.507] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.000000   0.000000  -0.000000
+[Oct 20 2026 11:56:29.509] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570083 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:56:29.509] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570085 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:56:29.509] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:56:29.509] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:56:29.510] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.000000  -0.000000  -0.000000
+[Oct 20 2026 11:56:29.510] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:56:29.510] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.000000   0.000000   0.000000
+[Oct 20 2026 11:56:29.510] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:56:29.510] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:56:29.511] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:56:29.511] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:56:29.511] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:56:29.511] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:56:29.511] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:56:29.512] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:56:29.512] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:56:29.512] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:56:29.512] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:56:29.512] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:56:29.568] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:56:29.568] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:56:29.568] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:56:29.568] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:56:29.569] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:56:29.569] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:56:29.569] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:56:29.624] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:56:29.625] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:56:29.625] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:56:29.628] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000067
+[Oct 20 2026 11:56:29.628] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 13
+[Oct 20 2026 11:56:29.630] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:56:29.630] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:56:29.631] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:56:43.273] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:56:43.274] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:56:56.797] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:56:56.803] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:56:56.840] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:56:56.844] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:56:56.920] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570084
+[Oct 20 2026 11:56:56.920] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:56:56.953] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570085
+[Oct 20 2026 11:56:56.953] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570085
+[Oct 20 2026 11:56:57.031] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.000000   0.000000   0.000000
+[Oct 20 2026 11:56:57.100] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:56:57.102] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:56:57.102] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570085 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:56:57.102] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:56:57.102] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:56:57.102] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:   0.000000  -0.000000   0.000000
+[Oct 20 2026 11:56:57.102] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:56:57.102] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:  -0.000000   0.000000  -0.000000
+[Oct 20 2026 11:56:57.102] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:56:57.102] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:56:57.103] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:56:57.103] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:56:57.103] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:56:57.103] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:56:57.103] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:56:57.103] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:56:57.103] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:56:57.103] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:56:57.104] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:56:57.104] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:56:57.160] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:56:57.161] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:56:57.161] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:56:57.161] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:56:57.161] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:56:57.161] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:56:57.161] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:56:57.216] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:56:57.217] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:56:57.217] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:56:57.218] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000069
+[Oct 20 2026 11:56:57.218] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 14
+[Oct 20 2026 11:56:57.221] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:56:57.221] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:56:57.221] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:57:10.205] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:57:10.205] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:57:23.390] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:57:23.391] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:57:23.421] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:57:23.424] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:57:23.508] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570084
+[Oct 20 2026 11:57:23.508] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:57:23.542] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570084
+[Oct 20 2026 11:57:23.542] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:57:23.614] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.000000   0.000000   0.000000
+[Oct 20 2026 11:57:23.683] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.000000   0.000000  -0.000000
+[Oct 20 2026 11:57:23.684] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:57:23.684] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:57:23.684] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:57:23.685] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:57:23.685] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.000000  -0.000000  -0.000000
+[Oct 20 2026 11:57:23.685] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:57:23.685] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.000000   0.000000   0.000000
+[Oct 20 2026 11:57:23.685] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:57:23.685] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:57:23.685] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:57:23.685] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:57:23.686] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:57:23.686] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:57:23.686] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:57:23.686] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:57:23.686] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:57:23.686] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:57:23.686] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:57:23.686] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:57:23.742] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:57:23.743] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:57:23.743] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:57:23.743] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:57:23.743] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:57:23.743] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:57:23.743] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:57:23.807] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:57:23.807] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:57:23.808] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:57:23.810] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000106
+[Oct 20 2026 11:57:23.810] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 15
+[Oct 20 2026 11:57:23.811] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:57:23.811] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:57:23.812] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:57:36.963] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:57:36.963] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:57:50.063] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:57:50.067] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:57:50.101] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:57:50.104] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:57:50.177] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570084
+[Oct 20 2026 11:57:50.177] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:57:50.208] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570084
+[Oct 20 2026 11:57:50.209] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:57:50.280] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is  -0.000000   0.000000   0.000000
+[Oct 20 2026 11:57:50.345] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.000000   0.000000  -0.000000
+[Oct 20 2026 11:57:50.346] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:57:50.346] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:57:50.347] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:57:50.347] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:57:50.347] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.000000  -0.000000  -0.000000
+[Oct 20 2026 11:57:50.347] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:57:50.347] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.000000   0.000000   0.000000
+[Oct 20 2026 11:57:50.347] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:57:50.347] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:57:50.347] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:57:50.348] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:57:50.348] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:57:50.348] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:57:50.348] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:57:50.348] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:57:50.348] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:57:50.348] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:57:50.348] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:57:50.348] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:57:50.402] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:57:50.402] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:57:50.402] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:57:50.402] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:57:50.402] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:57:50.402] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:57:50.402] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:57:50.457] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:57:50.457] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:57:50.457] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:57:50.459] [self.f90:4204]             [1m[32m<info> [0m[0mNot converged! Diff= 0.0000000061
+[Oct 20 2026 11:57:50.460] [self.f90:4338]             [1m[32m<info> [0m[0mPerform recursion at step 16
+[Oct 20 2026 11:57:50.462] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:57:50.462] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 1
+[Oct 20 2026 11:57:50.463] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:58:02.971] [recursion_chebyshev.f90:788]  [1m[32m<info> [0m[0mChebyshev recursion on progress for atom 2
+[Oct 20 2026 11:58:02.972] [recursion_chebyshev.f90:47]  [1m[32m<info> [0m[0mChebyshev moment driver backend: fast
+[Oct 20 2026 11:58:17.494] [self.f90:4421]             [1m[32m<info> [0m[0mCalculating the density of states and the new moment bands
+[Oct 20 2026 11:58:17.500] [recursion_chebyshev.f90:189]  [1m[32m<info> [0m[0mChebyshev Hamiltonian bounds from energy namelist window [   -1.000000,    1.300000]
+[Oct 20 2026 11:58:17.565] [bands.f90:481]             [1m[32m<info> [0m[0mValence is:       18.000000
+[Oct 20 2026 11:58:17.569] [bands.f90:546]             [1m[32m<info> [0m[0mFree Fermi energy: -0.032603
+[Oct 20 2026 11:58:17.662] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   1 is   1.570083
+[Oct 20 2026 11:58:17.662] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   1 is   0.000000   0.000000   1.570083
+[Oct 20 2026 11:58:17.703] [bands.f90:1687]            [1m[32m<info> [0m[0mSpin moment of atom   2 is   1.570084
+[Oct 20 2026 11:58:17.703] [bands.f90:1697]            [1m[32m<info> [0m[0mSpin moment projections of atom   2 is   0.000000   0.000000   1.570084
+[Oct 20 2026 11:58:17.808] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   1 is   0.000000  -0.000000  -0.000000
+[Oct 20 2026 11:58:17.899] [bands.f90:2058]            [1m[32m<info> [0m[0mOrbital moment of atom   2 is  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:58:17.901] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   1 m_long=  1.570083 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:58:17.901] [bands.f90:816]             [1m[32m<info> [0m[0mDENSITY_POLICY constrained_spiral atom   2 m_long=  1.570084 |m_transverse|=  0.000000 torque=(  0.000000,  0.000000,  0.000000)
+[Oct 20 2026 11:58:17.901] [self.f90:4133]             [1m[32m<info> [0m[0mMixtype is broyden
+[Oct 20 2026 11:58:17.902] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   1 is   9.000000
+[Oct 20 2026 11:58:17.902] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    1:  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:58:17.902] [mix.f90:678]               [1m[32m<info> [0m[0mValence at atom   2 is   9.000000
+[Oct 20 2026 11:58:17.902] [mix.f90:681]               [1m[32m<info> [0m[0mCharge transfer at atom    2:   0.000000   0.000000  -0.000000
+[Oct 20 2026 11:58:17.902] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   1 is   0.000000
+[Oct 20 2026 11:58:17.903] [mix.f90:691]               [1m[32m<info> [0m[0mMoment diff for atom:   2 is   0.000000
+[Oct 20 2026 11:58:17.903] [charge.f90:714]            [1m[32m<info> [0m[0mExcess charge   0.000000
+[Oct 20 2026 11:58:17.903] [charge.f90:725]            [1m[32m<info> [0m[0mClass    1 Chg. Transfer=  -0.000000 VMAD=  -0.000000
+[Oct 20 2026 11:58:17.903] [charge.f90:725]            [1m[32m<info> [0m[0mClass    2 Chg. Transfer=   0.000000 VMAD=   0.000000
+[Oct 20 2026 11:58:17.903] [self.f90:5070]             [1m[32m<info> [0m[0mCo1
+[Oct 20 2026 11:58:17.904] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:58:17.904] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:58:17.904] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:58:17.904] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:58:17.904] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:58:17.904] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:58:17.979] [self.f90:5070]             [1m[32m<info> [0m[0mCo2
+[Oct 20 2026 11:58:17.979] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 20 2026 11:58:17.979] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 20 2026 11:58:17.980] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 20 2026 11:58:17.980] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)
+[Oct 20 2026 11:58:17.980] [self.f90:5156]             [1m[32m<info> [0m[0mXC functional: B-H 11.2681539903972380E-004
+[Oct 20 2026 11:58:17.980] [self.f90:5235]             [1m[32m<info> [0m[0mF core check:0
+[Oct 20 2026 11:58:18.052] [self.f90:4736]             [1m[32m<info> [0m[0mAtomic SFC done for all atoms
+[Oct 20 2026 11:58:18.052] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co1
+[Oct 20 2026 11:58:18.052] [self.f90:4761]             [1m[32m<info> [0m[0mFrom orthogonal to TB basis for atom Co2
+[Oct 20 2026 11:58:18.055] [self.f90:4196]             [1m[32m<info> [0m[0mConverged!0.0000000048
+[Oct 20 2026 11:58:18.056] [bands.f90:2268]            [1m[32m<info> [0m[0mMagnetic field on atom   1 is        -0.000000        -0.000000    -34697.903289
+[Oct 20 2026 11:58:18.056] [bands.f90:2269]            [1m[32m<info> [0m[0mMagnetic torque on atom   1 is         0.000000         0.000000         0.000000
+[Oct 20 2026 11:58:18.056] [bands.f90:2268]            [1m[32m<info> [0m[0mMagnetic field on atom   2 is        -0.000000        -0.000000    -34697.961522
+[Oct 20 2026 11:58:18.056] [bands.f90:2269]            [1m[32m<info> [0m[0mMagnetic torque on atom   2 is         0.000000         0.000000         0.000000
+[Oct 20 2026 11:58:18.056] [self.f90:4825]             [1m[32m<info> [0m[0mWriting calculation report to report.out
+[Oct 20 2026 11:58:18.066] [self.f90:4942]             [1m[32m<info> [0m[0mCalculation finished. Report printed in report.out
+[Oct 20 2026 11:58:18.286] [bands.f90:1950]            [1m[32m<info> [0m[0mOrbital quadrupoles of atom   1 Qxx Qyy Qzz Qxy Qyz Qzx =  15.541970  15.541970  15.555962   0.000000   0.000000   0.000000
+[Oct 20 2026 11:58:18.286] [bands.f90:1955]            [1m[32m<info> [0m[0mTraceless orbital quadrupoles of atom   1 Qx2y2 Q3z2r2 =  -0.000000   0.027985
+[Oct 20 2026 11:58:18.450] [bands.f90:1950]            [1m[32m<info> [0m[0mOrbital quadrupoles of atom   2 Qxx Qyy Qzz Qxy Qyz Qzx =  15.541968  15.541968  15.555963  -0.000000  -0.000000   0.000000
+[Oct 20 2026 11:58:18.451] [bands.f90:1955]            [1m[32m<info> [0m[0mTraceless orbital quadrupoles of atom   2 Qx2y2 Q3z2r2 =  -0.000000   0.027990
+------------------------------------------------------------- TIMER REPORT --------------------------------------------------------------
+  CATEGORY                              MEAN            MAX            MIN          TOTAL      TOTAL (%)         NCALLS   TOTAL NCALLS   
+  total                                    -              -              -       438.2125          100.0              1             54   
+  └─ Calculation                           -              -              -       438.2125          100.0              1             53   
+     ├─ Calculation*                       -              -              -         0.7237            0.2              -              1   
+     ├─ pre-processing                     -              -              -         3.4465            0.8              1              3   
+     │  ├─ pre-processing*                 -              -              -         0.0040            0.0              -              1   
+     │  ├─ build_data                      -              -              -         0.0000            0.0              1              1   
+     │  ├─ bravais                         -              -              -         0.1326            0.0              1              1   
+     │  └─ structb                         -              -              -         3.3099            0.8              1              1   
+     └─ self-consistency                   -              -              -       434.0422           99.0              1             48   
+        ├─ self-consistency*               -              -              -         0.0688            0.0              -              1   
+        ├─ recursion                 26.6920        35.1210        25.1654       427.0716           97.5             16             16   
+        ├─ calculation-of-DOS         0.3180         0.4916         0.2642         5.0874            1.2             16             16   
+        └─ atomic-scf                 0.1134         0.1493         0.1070         1.8144            0.4             16             16   
+----------------------------------------------------------------------------------------------------------------------------------------
+  * exclusive values to this label
+----------------------------------------------------------------------------------------------------------------------------------------

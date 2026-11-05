@@ -1,0 +1,1 @@
+Diagnostic copy of c67 nonzero-U wide-window deck. Only recur changed chebyshev -> block to isolate recursion path. Fresh run directory; local U host potentials and ES seed restaged. No SCF launched yet.

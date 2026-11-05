@@ -1,0 +1,44 @@
+{
+  "run_id": "ni_u0_imp_no_u_seed_debug_ql",
+  "status": "ACCEPTED",
+  "classification": "RA4 matched fcc Ni U=0 impurity record from no-U seed, C1 RS-accepted by external criteria at the configured step cap; solver used 1e-30 convergence threshold so external C1 status controls",
+  "binary_sha256": "b07a0139df32e1b4c3d6c4cdeb44f376b0b7443c18a4cf1ad6d5143f041b7bca",
+  "input_sha256": "4a268e5eddb779a01b858e2c13459ef55207d16ad4cbc4f9ed30b202d52395ac",
+  "initial_input_sha256": "4a268e5eddb779a01b858e2c13459ef55207d16ad4cbc4f9ed30b202d52395ac",
+  "host_sha256": "7385d1f467c336795f71bfa1a8dff292cd3ec500bc00a9182324c060ab2563ac",
+  "impurity_seed_sha256": "4824dcfb4e01db54fa0ca1e4fe34b31cc398e05382463807504c21b3c5c18d57",
+  "impurity_final_potential_sha256": "addd6667159c9e4a5b6e4d3ff575143281877fb0b3c78832dccead1a34735e2d",
+  "console_sha256": "fe5e2faf5f5764993d146432ca20cc2521fe7564a493fec3a895385ea4bd0a43",
+  "trace_sha256": "7a0d563813f3844631a279013412b6ed2c732b9e86a1a955ae8681357f698fb7",
+  "completed_iterations": 200,
+  "final_outer_diff": 1.52e-08,
+  "last20_iterations": [
+    181,
+    200
+  ],
+  "last20_d_occupation_up_spread": 1.5948614784377924e-07,
+  "last20_d_occupation_down_spread": 7.839479465587829e-08,
+  "last20_sphere_moment_spread_muB": 3.8588745299161786e-07,
+  "c1_limits": {
+    "outer_Diff_max": 3e-08,
+    "d_occupation_spread_max": 5e-07,
+    "sphere_moment_spread_muB_max": 1e-06
+  },
+  "c1_pass": true,
+  "trace": {
+    "kind": "QL_ONLY",
+    "stage": "P_OUT",
+    "rows_per_iteration": 6,
+    "covers_iterations": [
+      1,
+      200
+    ],
+    "physics_unchanged": true
+  },
+  "completion": "normal process exit 0 at step cap 200; output files Ni-imp_out.nml and Ni-imp_scf.nml are byte-identical",
+  "source_at_build": {
+    "source/self.f90": "6c3d72cd5dbb6ddd3ffcdefb1700589040294e112204cf19c0649f2b2154de4d",
+    "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e"
+  },
+  "note": "This U=0 run has zero stored U/J arrays and zero explicit impurity U/J; the changed active-U residual mapping is not entered. The later D3 residual-map repair is for active-U impurity cases."
+}

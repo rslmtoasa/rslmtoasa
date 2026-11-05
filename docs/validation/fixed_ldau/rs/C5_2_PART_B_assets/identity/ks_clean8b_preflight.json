@@ -1,0 +1,120 @@
+{
+  "binary": {
+    "cmake_cache_sha256": "d1fae4609de8f500177931a5c4c9a56122396d5a889bb21c6fe106fa98e6295f",
+    "config": "GNU Fortran 16.2.0 Release; OpenMP ON, MPI OFF, SPGLIB ON, MARCH_NATIVE ON",
+    "mode": "0755",
+    "path": "/private/tmp/c5-clean8b-release-build/bin/rslmto.x",
+    "sha256": "2817a1dcdf922c60d7bfcebffbc8ca1b1e17bfdc889f9a685946fbee59119dfc",
+    "source": "clean baseline 8b8f7ef"
+  },
+  "comparison_rule": "This is the clean8b KS baseline. After launch, compare candidate KS against this exact same resolved initial deck under the same one-thread caps. Exact byte identity for scientific artifacts; allow only established testrun.log and documented runtime fields in str.out. A scientific difference is handled under C5.2 \u00a72.5(a).",
+  "environment": {
+    "BLIS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "RSLMTO_OMP_THREADS_SERIAL": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "fixture": {
+    "Fe_seed_sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+    "canonical_case_source": "tests/scf/cases/k_space_scf/bccFe",
+    "case": "Example_k_space_scf_bccFe",
+    "cases_json_sha256": "11c552255a7271c7da4512a77e1de9eea7f3176ee306e92b0cf2f199a1d7cbfc",
+    "expected": {
+      "J_eV": 0,
+      "U_eV": 0,
+      "backend": "STRUX strux_lib",
+      "beta": 0.1,
+      "mixtype": "broyden",
+      "nsp": 1,
+      "nstep": 1,
+      "radial_mode": "spectral",
+      "recursion": "block",
+      "use_kspace": true
+    },
+    "pristine_input_sha256": "db2b83c5525b19067128b6ac5ecd81f354109fb8797a8eef183dde3162b1e5bb",
+    "resolved_deck": {
+      "atoms": {
+        "database": "./",
+        "label": [
+          "Fe"
+        ]
+      },
+      "calculation": {
+        "pre_processing": "bravais",
+        "verbose": true
+      },
+      "control": {
+        "calctype": "B",
+        "cheb_backend": "legacy",
+        "lld": 12,
+        "nsp": 1,
+        "recur": "block"
+      },
+      "energy": {
+        "channels_ldos": 2500,
+        "energy_max": 2.0,
+        "energy_min": -2.0,
+        "fermi": -0.06917
+      },
+      "lattice": {
+        "alat": 2.8612,
+        "crystal_sym": "bcc",
+        "ct": [
+          4.0
+        ],
+        "ntype": 1,
+        "r2": 16.0,
+        "rc": 80,
+        "strux_backend": "strux_lib",
+        "wav": 1.4088
+      },
+      "mix": {
+        "beta": 0.1,
+        "mixtype": "broyden"
+      },
+      "reciprocal": {
+        "auto_find_fermi": false,
+        "dos_energy_max": 1.0,
+        "dos_energy_min": -1.5,
+        "dos_method": "gaussian",
+        "gaussian_sigma": 0.01,
+        "k_offset_x": 0.0,
+        "k_offset_y": 0.0,
+        "k_offset_z": 0.0,
+        "n_energy_points": 40,
+        "nk1": 2,
+        "nk2": 2,
+        "nk3": 2,
+        "temperature": 300.0,
+        "use_shift": false,
+        "use_symmetry_reduction": false,
+        "use_time_reversal": true
+      },
+      "self": {
+        "nstep": 1,
+        "use_kspace": true
+      },
+      "symmetry": {
+        "use_symmetry_reduction": true
+      }
+    },
+    "resolved_input_sha256": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01"
+  },
+  "immutable_snapshot": "/private/tmp/c5-3-b2-prep/identity_ks/clean8b_baseline",
+  "initial_files_sha256": {
+    "Fe.nml": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+    "input.nml": "591397c57814873accdc38a532d1f71643db9114ac69dc2569beaeeb0716ff01"
+  },
+  "launch": {
+    "command": "cd /private/tmp/c5-3-b-runs/ks_clean8b && env OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE RSLMTO_OMP_THREADS_SERIAL=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 /private/tmp/c5-clean8b-release-build/bin/rslmto.x > testrun.log 2>&1",
+    "process_tracking": "direct executable child; capture PID, wait/exit code, targeted process-gone verification"
+  },
+  "purpose": "Single-thread clean8b baseline for KS identity against frozen B1 candidate; run 2 of Part B cap 6.",
+  "run_directory": "/private/tmp/c5-3-b-runs/ks_clean8b",
+  "run_id": "C5.3-B1-KS-clean8b-baseline",
+  "status": "PREFLIGHT_PENDING_AUDITOR"
+}

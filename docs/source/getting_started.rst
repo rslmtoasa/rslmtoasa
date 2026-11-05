@@ -107,6 +107,28 @@ Key CMake Options
 
 For GPU acceleration via the CUDA plugin, see :ref:`theory/gpu_acceleration`.
 
+CUDA architecture selection
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When either CUDA backend is enabled, CMake 3.24 or newer builds for the GPU
+detected on the host that runs configuration (``CMAKE_CUDA_ARCHITECTURES=native``).
+This avoids reusing device code compiled for a different GPU generation.
+
+An explicit architecture always takes precedence and is needed when the build
+host has no available GPU, when cross-compiling, or when distributing one
+binary to machines with different GPU generations.  For example, an Ada GPU
+uses compute capability 8.9:
+
+.. code-block:: bash
+
+   cmake -DENABLE_CUDA_PLUGIN=ON -DCMAKE_CUDA_ARCHITECTURES=89 ..
+
+Use a semicolon-separated list for a multi-architecture binary (quote it to
+prevent shell interpretation), for example ``-DCMAKE_CUDA_ARCHITECTURES="75;89"``.
+The ``CUDAARCHS`` environment variable may also be used.  With CMake versions
+older than 3.24, set one of these explicit values because ``native`` is not
+available.
+
 Compile
 -------
 

@@ -1,0 +1,24 @@
+{
+  "groups": [
+    "atoms",
+    "calculation",
+    "control",
+    "energy",
+    "hamiltonian",
+    "lattice",
+    "mix",
+    "self"
+  ],
+  "member_counts": {
+    "atoms": 2,
+    "calculation": 2,
+    "control": 5,
+    "energy": 4,
+    "hamiltonian": 3,
+    "lattice": 7,
+    "mix": 2,
+    "self": 3
+  },
+  "path": "/private/tmp/c52-fe-rd3-capture-preflight/bulk_u38_capture_i1/immutable/input.nml",
+  "schema_valid": true
+}

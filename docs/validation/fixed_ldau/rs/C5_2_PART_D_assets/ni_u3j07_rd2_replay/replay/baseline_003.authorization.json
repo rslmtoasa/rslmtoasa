@@ -1,0 +1,18 @@
+{
+  "adapter_path": "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py",
+  "adapter_sha256": "c129441983ab35a6fd773f3094b458aa1cc1f30f777c15c05b14385903b2ad8c",
+  "authorization_basis": {
+    "auditor": "Static review cleared exact NR501 adapter/harness binding; current refreshed derivative status preserves required structural status.",
+    "root": "Standing baseline authorization for exact final plan; smoke requested before baseline invocation."
+  },
+  "binding_path": "/private/tmp/c52-rd2-private/vin_binding_nr501.json",
+  "binding_sha256": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668",
+  "driver_path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501",
+  "driver_sha256": "34b4456919a77513504ceddc9890dd3dac7d23c9fbe6f0bbbed50c0a6d112508",
+  "mode": "baseline",
+  "plan_path": "/private/tmp/c52-rd2-private/rd2_replay_plan.json",
+  "plan_sha256": "07825affe00aafd01e3d840ef6728ff27be579ffde03d86f21ed204e5179c79c",
+  "schema": "c5-rd2-explicit-mode-authorization-v1",
+  "scope": "One frozen radial-helper raw-state baseline only. This authorization permits the non-launch preflight smoke and, after it is recorded, the planned baseline helper run; it does not authorize preregistration, case replay, or an SCF solver.",
+  "status": "ROOT_AND_AUDITOR_CLEARED"
+}

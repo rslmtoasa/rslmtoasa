@@ -1,0 +1,93 @@
+{
+  "schema": "c5_12_batched_audit_v1",
+  "date": "2026-10-22",
+  "head": "3dd92bc50f31986fb70546003a196966bacf1554",
+  "base": "01370313c8d6c81e6c73bc9c2a10a327155b1d55",
+  "branch": "fix/ldau-impurity-auto",
+  "verdict": "T0_MISMATCH_CORRECTED_T2_FAIL_NO_MERGE",
+  "budget": {
+    "scf_runs_used": 2,
+    "scf_runs_max": 2,
+    "merge": false,
+    "push": false
+  },
+  "t0": {
+    "status": "MISMATCH",
+    "input_fermi_ry": -0.085152,
+    "host_ef_ry": -0.082949627451487762,
+    "input_minus_host_ef_ry": -0.002202372548512238,
+    "original_window_ry": [-1.0, 0.5],
+    "original_window_width_ry": 1.5,
+    "corrected_fermi_ry": -0.082949627451487762,
+    "corrected_window_ry": [-0.997797627451487762, 0.502202372548512238],
+    "corrected_window_width_ry": 1.5
+  },
+  "t1a": {
+    "status": "PASS",
+    "direct_deck_diff_only_energy_values": ["fermi", "energy_min", "energy_max"],
+    "preflight_host_ef_tolerance_ry": 1e-6,
+    "run1_preflight": "PASS",
+    "run2_preflight": "PASS",
+    "focused_test_cases": "PASS_2_CASES_RECORDED",
+    "focused_test_contents": ["within-tolerance pass", "outside-tolerance rejection"]
+  },
+  "recipe": {
+    "mode": "explicit local",
+    "rc": 80,
+    "ct_per_type": "2*3.0d0",
+    "U_eV": 2.0,
+    "J_eV": 0.0,
+    "binary_sha256": "535909c7687e45fa501715ee7e65e9ba4766194e75d563094ac18e4529fa92ee",
+    "host_potential_sha256": "2284194179736d2e6694dd40514b55578bdf2558e9826d5d7ba9d5c6cc13b4bd"
+  },
+  "t2": {
+    "status": "FAIL_NO_ACCEPTED_WINDOW_WITHIN_TWO_RUNS",
+    "run1": {
+      "returncode": 0,
+      "completed_iterations": 100,
+      "preflight": "PASS",
+      "archive": "docs/validation/fixed_ldau/rs/C5_12_assets/T2_run1_full_capture.tar.gz",
+      "archive_sha256": "a16734d56715dad141ec7d2cedd39b77f352c31937c4286b6b16efe4b1187af3",
+      "trace_csv_count": 99,
+      "captured_trace_iterations": [1, 99]
+    },
+    "run2": {
+      "returncode": 0,
+      "completed_iterations": 100,
+      "preflight": "PASS",
+      "restart_from_run1_endpoint": true,
+      "restart_source_sha256_matches_copy": true,
+      "archive": "docs/validation/fixed_ldau/rs/C5_12_assets/T2_run2_full_capture.tar.gz",
+      "archive_sha256": "3e7d0f4fa41ede719ca55b4b5b7c97308e73ea2a04f9371475d0e193c17b5892",
+      "trace_csv_count": 100,
+      "evaluated_complete_20_step_windows": 5,
+      "all_evaluated_windows_accepted": false,
+      "final_window_81_100": {
+        "max_outer_Diff": 5.71e-8,
+        "max_outer_Diff_limit": 3e-8,
+        "d_spread_spin1": 1.9525747685378292e-7,
+        "d_spread_spin1_limit": 5e-7,
+        "d_spread_spin2": 8.270285476452699e-7,
+        "d_spread_spin2_limit": 5e-7,
+        "sphere_moment_spread_muB": 7.662924716989039e-7,
+        "sphere_moment_spread_muB_limit": 1e-6,
+        "accepted": false
+      }
+    },
+    "disk_free_min_run1_bytes": 10587815936,
+    "disk_free_min_run2_bytes": 10350182400
+  },
+  "t3": {"status": "NOT_RUN_T2_FAILED", "c5_11_documentation_retained": true},
+  "t4": {"status": "NOT_RUN_T2_FAILED", "merge": false, "push": false},
+  "uncovered": "C5.3 outcome remains unchanged and not adopted",
+  "audit_validation": {
+    "results_and_asset_json_parse": true,
+    "deck_diff_verified": true,
+    "capture_archive_hashes_match": true,
+    "capture_manifests_inspected": true,
+    "diff_check": "PASS",
+    "source_or_solver_actions": false,
+    "merge_or_push": false
+  },
+  "worktree_observation": "Pre-existing untracked Co reference outputs remain untouched."
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "c5_3_ni_ks_continuation_terminal_v1",
+  "run_id": "rd_ni_ks_u0_bulk_rc80_beta005_cont200",
+  "preflight_path": "provenance/preflight.json",
+  "preflight_sha256": "506069af6f99ff51cef654def23ae96b4e23592789e58c772e03d3b8f5b24c01",
+  "status": "FINITE_B1_OCCUPATION_CAPACITY_GUARD_STOP_NOT_CONVERGED",
+  "exit_code": 1,
+  "solver_pid": 53078,
+  "wrapper_pid": 53019,
+  "watcher_pid": 53064,
+  "disk_guard_pid": 53079,
+  "terminal_local": "2026-10-21T09:28:44+02:00",
+  "guard": {
+    "source": "source/scf_guard.f90:31",
+    "atom": "Ni-imp",
+    "site": 1,
+    "channel": "d",
+    "l": 2,
+    "spin": 2,
+    "iteration": 14,
+    "q0": 5.6050891341706501,
+    "capacity": 5,
+    "allowed_max": 5.0000010000000001,
+    "classification": "finite occupation-capacity guard event; not nonfinite and not convergence"
+  },
+  "process_absence_path": "runtime/process_absence_after_guard_001.txt",
+  "process_absence_sha256": "d61959b4023a0cc586b5f4c7e536847da3000fd150b5ac25511c4a24443082db",
+  "capture_limitation": "Watcher captured zero entries; its log records FileNotFound for fixed_u_trace.csv and Ni-imp_scf.nml before collector stop. This is a capture limitation, not a scientific acceptance criterion.",
+  "input_note": "Immutable input retains preflight hash. Runtime input was solver-rewritten in the fermi field only; both files are preserved separately.",
+  "retry": "No retry or criteria change performed."
+}

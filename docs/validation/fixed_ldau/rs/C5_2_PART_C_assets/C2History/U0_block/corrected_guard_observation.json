@@ -1,0 +1,28 @@
+{
+  "schema": "c5_2_u0_block_guard_event_v1",
+  "classification": "corrected valid U0 block run; controlled finite capacity-guard termination",
+  "raw_run_dir": "/private/tmp/c52-c2-stage/launch_u0_corrected/c2_u0_block",
+  "input_sha256": "7bb0d4786b3787e29280df9a486e487d674d44614658fcd05a49a65b34dfefe4",
+  "restart_seed_sha256": "647e9df67510db0c133dd53975cece5f50b379e6e314542de336eec64575d327",
+  "binary_sha256": "a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3",
+  "raw_log_path": "/private/tmp/c52-c2-stage/launch_u0_corrected/c2_u0_block/testrun.log",
+  "raw_log_sha256": "4d0c47bcc5f3f81da056c2c88741f7cc4ef811204b105425d4a2740850fa2f55",
+  "guard_log_line": 875,
+  "guard_log_text": "[Oct 20 2026 22:28:36.831] [/Users/andersb/Jobb/rslmto_fable_v4b/source/scf_guard.f90:31]  \u001b[1m\u001b[31m<fatal> \u001b[0m\u001b[0mB1 occupation-capacity guard: atom=Fe site=1                        channel=s l=0                        spin=1                        iteration=36                                               q0=1.3221639993438128E+000 capacity=1                        allowed_max=1.0000009999999999E+000",
+  "guard": {
+    "iteration": 36,
+    "atom": "Fe",
+    "site": 1,
+    "channel": "s",
+    "l": 0,
+    "spin": 1,
+    "q0": "1.3221639993438128E+000",
+    "capacity": "1",
+    "allowed_max": "1.0000009999999999E+000",
+    "source": "source/scf_guard.f90:31"
+  },
+  "solver_exit_code": "1",
+  "trace_sha256": "567faa21b1275a4f9f14d377c9ed144160085fd84900333bd64f2ff8a10c93ee",
+  "saved_Fe_scf_sha256": "460e4f08c24bc7993ca4530b9b4888185498aea376b928d0da61c3a90e2bed57",
+  "diagnostic_scope": "The guard caught a finite q0 above the registered per-spin capacity and stopped before continuation. This is not a cross-method C2 acceptance comparison."
+}

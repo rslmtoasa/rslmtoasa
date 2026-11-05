@@ -1,0 +1,4 @@
+[Oct 21 2026 07:51:11.369] [xc.f90:1370]               [1m[32m<info> [0m[0mXC selector: TXC=1
+[Oct 21 2026 07:51:11.373] [xc.f90:1371]               [1m[32m<info> [0m[0mXC backend: legacy RS-LMTO
+[Oct 21 2026 07:51:11.373] [xc.f90:1372]               [1m[32m<info> [0m[0mXC functional: Barth-Hedin
+[Oct 21 2026 07:51:11.373] [xc.f90:1374]               [1m[32m<info> [0m[0mXC libXC mapping quality: REFERENCE_EQUIVALENT (reference only; not selected)

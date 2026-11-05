@@ -1,0 +1,152 @@
+{
+  "base_payload_sha256": "78e8825610e1652f2407979322aa968fb3d3b888431226b78e31133ac082a829",
+  "binding_sha256": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668",
+  "carrier_error_ry": 0.006152413372614851,
+  "carrier_ratio_pass": true,
+  "carrier_ratio_per_spin": {
+    "1": 0.9914299182168642,
+    "2": 0.9914299103155894
+  },
+  "controls": {
+    "OPPOSITE_SPIN": {
+      "classification": "NULL",
+      "measured_separation_ry": 0.0061524133745932685,
+      "predicted_separation_ry": 3.3306690738754696e-16,
+      "threshold_10x_carrier_error_ry": 0.06152413372614851
+    },
+    "SIGN_WRONG": {
+      "classification": "ADMISSIBLE_PASS",
+      "measured_separation_ry": 1.3962656345471736,
+      "predicted_separation_ry": 1.435788057141419,
+      "threshold_10x_carrier_error_ry": 0.06152413372614851
+    }
+  },
+  "driver_sha256": "34b4456919a77513504ceddc9890dd3dac7d23c9fbe6f0bbbed50c0a6d112508",
+  "historical_RD2_FAIL_superseded": true,
+  "offline_only": true,
+  "preflight_path": "/Users/andersb/Jobb/rslmto_fable_v4b/docs/validation/fixed_ldau/rs/C5_4_PREFLIGHT.py",
+  "preflight_sha256": "d35ffdfac80a6fdcc2922bd4d91e450199a85a17f5df2527a93a4de598ce18ce",
+  "q2prime_nonnegative_pass": true,
+  "q2prime_per_spin_ry2": [
+    0.13781601632237825,
+    0.1378160027236608
+  ],
+  "scalar_fit": {
+    "D0_ry": 5.056500278044496e-06,
+    "allowance_ry": 0.0027005574991376038,
+    "coefficients_ascending_by_power": {
+      "1": [
+        -1.1456345554617198e-07,
+        -0.11923080385456424,
+        -1.4979736220498785,
+        -5.530370070950012
+      ],
+      "2": [
+        -1.1456343586730928e-07,
+        -0.11923083733191735,
+        -1.4979735749872913,
+        -5.530370328663216
+      ]
+    },
+    "data": {
+      "1": {
+        "-0.0025": {
+          "delta_sumev_ry": -0.011558127296851461,
+          "r_ry": 0.0002887785430134883
+        },
+        "-0.005": {
+          "delta_sumev_ry": -0.023134500684189208,
+          "r_ry": 0.0005593109955406919
+        },
+        "-0.01": {
+          "delta_sumev_ry": -0.04633985548607589,
+          "r_ry": 0.0010477678733839119
+        },
+        "-0.02": {
+          "delta_sumev_ry": -0.0929456552954111,
+          "r_ry": 0.0018295914235084976
+        },
+        "0.0025": {
+          "delta_sumev_ry": 0.011539358465221472,
+          "r_ry": -0.00030754737464347773
+        },
+        "0.005": {
+          "delta_sumev_ry": 0.02305943331708815,
+          "r_ry": -0.0006343783626417479
+        },
+        "0.01": {
+          "delta_sumev_ry": 0.04603971331632095,
+          "r_ry": -0.0013479100431388474
+        },
+        "0.02": {
+          "delta_sumev_ry": 0.09174712018282472,
+          "r_ry": -0.003028126536094883
+        }
+      },
+      "2": {
+        "-0.0025": {
+          "delta_sumev_ry": -0.011558127379937222,
+          "r_ry": 0.00028877862703250226
+        },
+        "-0.005": {
+          "delta_sumev_ry": -0.02313450084978208,
+          "r_ry": 0.0005593111641573681
+        },
+        "-0.01": {
+          "delta_sumev_ry": -0.04633985581474187,
+          "r_ry": 0.0010477682131370264
+        },
+        "-0.02": {
+          "delta_sumev_ry": -0.09294565594179516,
+          "r_ry": 0.0018295921139626359
+        },
+        "0.0025": {
+          "delta_sumev_ry": 0.011539358548927403,
+          "r_ry": -0.0003075474580423211
+        },
+        "0.005": {
+          "delta_sumev_ry": 0.02305943348508721,
+          "r_ry": -0.0006343785288522377
+        },
+        "0.01": {
+          "delta_sumev_ry": 0.04603971365443149,
+          "r_ry": -0.0013479103734474057
+        },
+        "0.02": {
+          "delta_sumev_ry": 0.09174712086689929,
+          "r_ry": -0.0030281271888585037
+        }
+      }
+    },
+    "fitted_residual_by_spin_ry": {
+      "1": -0.0013477503342771264,
+      "2": -0.0013477506645824331
+    },
+    "measured_deviation_from_existing_same_state_plus001_ry": 0.002695820416586253,
+    "method": "A2.2 cubic least-squares r(v)=\u03a3a_j v^j on these eight signed points, per Ni state/spin",
+    "pass": true,
+    "scalar_control_v_ry": 0.01,
+    "v_ry": [
+      -0.02,
+      -0.01,
+      -0.005,
+      -0.0025,
+      0.0025,
+      0.005,
+      0.01,
+      0.02
+    ]
+  },
+  "scan_driver_output_sha256": "7d5db2f06d8bb0fa6c1cdd710d851472e98f14c90d99688f8ec673b9a1e82bc6",
+  "scan_payload_sha256": "46d061cf16a3541e77571df55a13d0a3587382186d537077cdd5e8e617286d8c",
+  "scf_solver_invocations": 0,
+  "schema": "c5-4-rd2-ni-scalar-scan-v1",
+  "sign_control_reuse": {
+    "byte_identical": true,
+    "case": "SIGN_WRONG in frozen five-case replay",
+    "case_report_sha256": "29539bcb06648f139719514e8b49b0c1d97efdd009ed8544f7e6e08ff1032153",
+    "identical_replay_report_sha256": "445189149f7a7fef2a96b7398d46f5b50f268623b4ea54e4dcda71567d04150f",
+    "identical_replay_status": "EXACT_OUTPUT_AND_VERDICT_REPRODUCED"
+  },
+  "status": "PASS"
+}

@@ -1,0 +1,107 @@
+{
+  "checks": [
+    {
+      "groups": [
+        "atoms",
+        "calculation",
+        "control",
+        "energy",
+        "hamiltonian",
+        "lattice",
+        "mix",
+        "self"
+      ],
+      "member_counts": {
+        "atoms": 2,
+        "calculation": 2,
+        "control": 5,
+        "energy": 4,
+        "hamiltonian": 3,
+        "lattice": 7,
+        "mix": 2,
+        "self": 3
+      },
+      "path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/immutable/input.nml",
+      "schema_valid": true
+    },
+    {
+      "groups": [
+        "element",
+        "par"
+      ],
+      "member_counts": {
+        "element": 8,
+        "par": 27
+      },
+      "path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/immutable/Fe.nml",
+      "schema_valid": true
+    },
+    {
+      "groups": [
+        "element",
+        "par"
+      ],
+      "member_counts": {
+        "element": 9,
+        "par": 32
+      },
+      "path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/immutable/Fe_out.nml",
+      "schema_valid": true
+    },
+    {
+      "groups": [
+        "atoms",
+        "calculation",
+        "control",
+        "energy",
+        "hamiltonian",
+        "lattice",
+        "mix",
+        "self"
+      ],
+      "member_counts": {
+        "atoms": 2,
+        "calculation": 2,
+        "control": 5,
+        "energy": 4,
+        "hamiltonian": 3,
+        "lattice": 7,
+        "mix": 2,
+        "self": 3
+      },
+      "path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/run/input.nml",
+      "schema_valid": true
+    },
+    {
+      "groups": [
+        "element",
+        "par"
+      ],
+      "member_counts": {
+        "element": 8,
+        "par": 27
+      },
+      "path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/run/Fe.nml",
+      "schema_valid": true
+    },
+    {
+      "groups": [
+        "element",
+        "par"
+      ],
+      "member_counts": {
+        "element": 9,
+        "par": 32
+      },
+      "path": "/private/tmp/c52-fe-u38-rs-bulk-preflight/run/Fe_out.nml",
+      "schema_valid": true
+    }
+  ],
+  "f90nml_version": "1.4.4",
+  "parser": "/opt/homebrew/opt/python@3.11/bin/python3.11",
+  "result": "PASS",
+  "schema": "c5_2_d_fe_rs_source_schema_validation_v1",
+  "source_root": "/Users/andersb/Jobb/rslmto_fable_v4b",
+  "validator": "/private/tmp/c52-c-private/fortran_namelist_schema.py",
+  "validator_sha256": "d8bea2b4825e443c81322d37e6b3ead324cde69fca32ef8096ddb9739c06e953"
+}

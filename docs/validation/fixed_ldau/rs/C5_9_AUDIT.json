@@ -1,0 +1,41 @@
+{
+  "schema": "c5_9_audit_v1",
+  "verdict": "T1A_T1C_OCCUPATION_MOMENT_PASS; T1B_EF_UNEVALUATED_UNCOVERED; C53_STOP",
+  "t1": {
+    "a_production_convergence": "PASS: exit 0; production log outer Diff 2e-10; R05 physical P/V streak 3",
+    "occupation_moment": {
+      "status": "PASS",
+      "accepted_state_sha256": "bb647254a5612f53d00e2745026c2cde32511f4363a1c7c3a1331d06573ead6b",
+      "absolute_differences": {"d_up": 1.608e-9, "d_down": 3.168e-9, "sphere_moment_muB": 6.093e-9},
+      "tolerance": 1e-6
+    },
+    "b_fermi": {
+      "status": "UNEVALUATED_UNCOVERED",
+      "regenerated_ef_ry": -0.0829496275,
+      "accepted_endpoint_ef_ry": null,
+      "accepted_input_fermi_ry": -0.082950,
+      "input_delta_ry_not_endpoint_comparison": 3.725e-7,
+      "reason": "Accepted endpoint proof/state has no EF; initial deck value is not accepted-endpoint evidence."
+    },
+    "c_written_mode_backend": {
+      "status": "PASS",
+      "Fe_scf_and_Fe_out": "local/ks",
+      "written_outputs_sha256": "2284194179736d2e6694dd40514b55578bdf2558e9826d5d7ba9d5c6cc13b4bd"
+    }
+  },
+  "rd4_short": {
+    "status": "NO_CRASH_THROUGH_ONE_COMPLETE_ITERATION",
+    "preflight": "PASS",
+    "capture": "stable complete iteration-1 trace/state; P_OUT and post-radial channel counts 6",
+    "stop": "external SIGTERM; exit 143",
+    "energy_measurement": "NONE",
+    "disk_min_periodic_bytes": 9255763968,
+    "disk_launcher_end_bytes": 9253056512,
+    "disk_floor_bytes": 1073741824
+  },
+  "campaign_runs_used": 0,
+  "rd4_short_invocations": 1,
+  "disposition": "Do not run T2b, adopt production candidate, or merge under C5.3 item 2.",
+  "material_corrections": "None; T1(b) is uncovered, not a numerical fail.",
+  "audit_side_effects": {"solver": false, "build": false, "cleanup": false, "merge": false}
+}

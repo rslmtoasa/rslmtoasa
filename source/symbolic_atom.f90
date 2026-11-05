@@ -621,11 +621,13 @@ contains
          call this%element%print_state_formatted(unit=unit)
          call this%potential%print_state_formatted(unit=unit)
       else if (present(file)) then
+         call this%potential%write_density_matrix_file(this%element%symbol)
          open (newunit=newunit, file=file, action='write')
          call this%element%print_state_formatted(unit=newunit)
          call this%potential%print_state_formatted(unit=newunit)
          close (newunit)
       else
+         call this%potential%write_density_matrix_file(this%element%symbol)
          call this%element%print_state_formatted()
          call this%potential%print_state_formatted()
       end if

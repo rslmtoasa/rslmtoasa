@@ -1,0 +1,102 @@
+{
+  "schema": "clean8b_namelist_schema_validation_v1",
+  "source_commit": "8b8f7ef7bfc026fd34a56b37a3ad3281fd0a6832",
+  "source_groups": [
+    "atoms",
+    "bounds",
+    "calculation",
+    "charge",
+    "conductivity",
+    "constraints",
+    "control",
+    "dos",
+    "element",
+    "energy",
+    "frozen_magnon",
+    "hamiltonian",
+    "kpath",
+    "lattice",
+    "mix",
+    "par",
+    "reciprocal",
+    "sd",
+    "self",
+    "spin_response"
+  ],
+  "source_snapshot_path": "/private/tmp/c52-ni-clean8b-source-8b8f7ef",
+  "status": "PASS",
+  "validated_files": [
+    {
+      "groups": [
+        "element",
+        "par"
+      ],
+      "member_counts": {
+        "element": 9,
+        "par": 32
+      },
+      "path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/immutable/Ni-bulk.nml",
+      "schema_valid": true
+    },
+    {
+      "groups": [
+        "element",
+        "par"
+      ],
+      "member_counts": {
+        "element": 9,
+        "par": 32
+      },
+      "path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/immutable/Ni-bulk_out.nml",
+      "schema_valid": true
+    },
+    {
+      "groups": [
+        "element",
+        "par"
+      ],
+      "member_counts": {
+        "element": 9,
+        "par": 32
+      },
+      "path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/immutable/Ni-imp.nml",
+      "schema_valid": true
+    },
+    {
+      "groups": [
+        "element",
+        "par"
+      ],
+      "member_counts": {
+        "element": 9,
+        "par": 32
+      },
+      "path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/immutable/Ni-imp_out.nml",
+      "schema_valid": true
+    },
+    {
+      "groups": [
+        "atoms",
+        "calculation",
+        "control",
+        "energy",
+        "hamiltonian",
+        "lattice",
+        "mix",
+        "self"
+      ],
+      "member_counts": {
+        "atoms": 2,
+        "calculation": 2,
+        "control": 5,
+        "energy": 5,
+        "hamiltonian": 4,
+        "lattice": 13,
+        "mix": 2,
+        "self": 3
+      },
+      "path": "/private/tmp/c52-rd-ni-u0-triage/clean8b_same_input/immutable/input.nml",
+      "schema_valid": true
+    }
+  ]
+}

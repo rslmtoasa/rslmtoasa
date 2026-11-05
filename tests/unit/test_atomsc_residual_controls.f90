@@ -2,7 +2,8 @@
 ! historical ATOMSC solver, mixing, or termination decisions.
 program test_atomsc_residual_controls
    use precision_mod, only: rp
-   use self_mod, only: atomsc_solver_tolerance, atomsc_mixing_beta, atomsc_should_stop
+   use self_mod, only: atomsc_solver_tolerance, atomsc_mixing_beta, atomsc_should_stop, &
+      fixed_u_r05_targets, atomsc_inner_controls
    implicit none
 
    real(rp), parameter :: tolrsq = 1.0e-8_rp, beta = 0.3_rp, tol = 1.0e-6_rp
@@ -10,6 +11,8 @@ program test_atomsc_residual_controls
    real(rp), parameter :: drdi(4) = [1.0_rp, 2.0_rp, 3.0_rp, 4.0_rp]
    real(rp), parameter :: density_delta(4) = [1.0_rp, -0.5_rp, 0.25_rp, -0.1_rp]
    real(rp) :: drho_control, drho_integrated, solver_lo, solver_hi, beta_lo, beta_hi
+   real(rp) :: p_target, v_target, tol_override, tolrsq_override
+   integer :: inner_cap
    logical :: stop_lo, stop_hi, failed
 
    failed = .false.
@@ -42,6 +45,32 @@ program test_atomsc_residual_controls
    call require(.not. atomsc_should_stop(2, 80, tol, tol), 'termination threshold is strict at DRHO=1e-6')
    call require(atomsc_should_stop(2, 80, tol - 1.0e-12_rp, tol), 'termination threshold stops below DRHO=1e-6')
    call require(atomsc_should_stop(79, 80, 100.0_rp, tol), 'historical final-iteration stop is retained')
+
+   ! RB0 keeps KS defaults while selecting the approved RS P target; explicit
+   ! overrides and the legacy test-tight setting remain deterministic.
+   call fixed_u_r05_targets(.true., -1.0_rp, -1.0_rp, .false., p_target, v_target)
+   call require_close(p_target, 1.0e-7_rp, 'KS R05 P default remains unchanged')
+   call require_close(v_target, 1.0e-7_rp, 'KS R05 V default remains unchanged')
+   call fixed_u_r05_targets(.false., -1.0_rp, -1.0_rp, .false., p_target, v_target)
+   call require_close(p_target, 5.0e-7_rp, 'RS R05 P default uses approved target')
+   call require_close(v_target, 1.0e-7_rp, 'RS R05 V default remains 1e-7 Ry')
+   call fixed_u_r05_targets(.false., 2.0e-6_rp, 3.0e-6_rp, .false., p_target, v_target)
+   call require_close(p_target, 2.0e-6_rp, 'R05 P input override is honored')
+   call require_close(v_target, 3.0e-6_rp, 'R05 V input override is honored')
+   call fixed_u_r05_targets(.false., -1.0_rp, -1.0_rp, .true., p_target, v_target)
+   call require_close(p_target, 1.0e-8_rp, 'existing A4 test-tight P target retained')
+   call require_close(v_target, 1.0e-8_rp, 'existing A4 test-tight V target retained')
+
+   ! RB6 test controls leave the historical inner solve untouched by default
+   ! and permit the registered 200-step tighter control when explicitly set.
+   call atomsc_inner_controls(0.0_rp, 0.0_rp, 0, tol_override, tolrsq_override, inner_cap)
+   call require_close(tol_override, 1.0e-6_rp, 'atomsc default termination tolerance unchanged')
+   call require_close(tolrsq_override, 1.0e-8_rp, 'atomsc default radial tolerance unchanged')
+   call require(inner_cap == 80, 'atomsc default iteration cap unchanged')
+   call atomsc_inner_controls(1.0e-8_rp, 1.0e-10_rp, 200, tol_override, tolrsq_override, inner_cap)
+   call require_close(tol_override, 1.0e-8_rp, 'atomsc test termination override selected')
+   call require_close(tolrsq_override, 1.0e-10_rp, 'atomsc test radial override selected')
+   call require(inner_cap == 200, 'atomsc test inner cap selected')
 
    if (failed) then
       write (*, '(a)') 'RESULT: FAIL'

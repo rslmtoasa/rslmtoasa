@@ -1,0 +1,1727 @@
+{
+  "c1_stop": {
+    "basis": "C1 section 5(c): code crash in supported configuration",
+    "effect": "Historical C1 stop event only. User-approved C2 triage superseded the stop: Co lattice-fix SIGTRAP reproduced on clean 8b8f7ef and was classified PRE-EXISTING; C2 substituted fcc Ni for RA4. RB0-RB4 subsequently passed, and RB5/RB6 records are complete.",
+    "observed": [
+      "Audited Co lattice-fix +U-seed run raised SIGTRAP before SCF.",
+      "Co U=3/J=0.7 impurity run from a no-U seed was SIGKILLed (path: co_u3j07_imp_no_u_seed_latticefix_initial)."
+    ],
+    "resume_condition": "Satisfied: C2 RA4/D3 prerequisites and final binary identity checks were completed before RB execution."
+  },
+  "c2_status": {
+    "crash_triage": "C1 Co SIGTRAP classified PRE-EXISTING under C2 \u00a71; Co dropped under \u00a72.",
+    "ra4": "RA4 accepted endpoints and D3 RECORD are complete; canonical RA4 sidecar records all measurements.",
+    "rb": "RB0-RB4 PASS; RB5 records complete with one documented beta-continuation deviation; RB6 records complete with C2-pre-existing NaN and indeterminate plateau comparison.",
+    "status": "ACTIVE"
+  },
+  "clean_baseline": {
+    "binary": "/tmp/rslmto-ra-base-build/bin/rslmto.x",
+    "binary_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+    "label": "clean commit 8b8f7ef"
+  },
+  "gate_status": {
+    "RB0": {
+      "Fe_RS_U3.8_production_convergence_outer_conv_thr_3e-8": "PASS; production converged at continuation 1 step 3 (outer Diff 2.49e-8), R05 streak 3, joined C1 state accepted.",
+      "KS_defaults_unchanged": "PASS, matched true-KS fixed-U outputs and histories",
+      "clean_baseline_no_U_identity": "PASS; direct final-source RS and true-KS default-off byte identity against clean 8b8f7ef is recorded under post_ed6_capture_helpers_default_off_identity.",
+      "namelist_adjustable_r05_targets_and_RS_defaults_5e-7_1e-7_streak3": "PASS, source/unit verified"
+    },
+    "RB1": {
+      "KS_fixed_U_unchanged": "PASS; true-KS U=3.8/J=1.1 active-U result files match pre-RB comparator",
+      "explicit_U_equals_J_equals_zero": "PASS; candidate outputs match pinned pre-RB outputs",
+      "explicit_local_U_equals_J_equals_zero_no_op": "PASS; local U=J=0 result files match spectral U=J=0",
+      "no_U": "PASS; RS no-U physical output set matches clean 8b8f7ef.",
+      "spectral_U_positive": "PASS; U=2/J=0 candidate outputs match pinned pre-RB outputs (RB0 stopping-rule tolerance difference only)"
+    },
+    "RB2": {
+      "accepted_endpoint_manifest_path": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/RB2_ACCEPTED_ENDPOINTS.json",
+      "accepted_endpoint_manifest_sha256": "1aaffe2e6a288b242ebcb4bc992fb1109c6a7f1ed06bb3886ba5dfbbc3ed70b0",
+      "binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+      "cases": {
+        "u2_j0": {
+          "accepted_iteration": 32,
+          "frozen_dir": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/accepted_endpoints/u2_j0",
+          "frozen_files_sha256": {
+            "Fe.nml": "64f34f2862db71e1e05ba9526e720eb02938385711a22fc028b7a5fafdf0820a",
+            "Fe_dos.out": "174b99c0466739867d3a9fc7c39feb6619566571028b92b7eae4d002f31bdc7a",
+            "Fe_scf.nml": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+            "c1_current_only_acceptance.json": "c22e2322ab11dbb0369969f1f604890216606d18286650e35728e4db2d2e1956",
+            "fixed_u_trace.csv": "8895b510bb31782ffbbebd14a546a4d42e655fd8de566c40ba7dfe8289fdf2f1",
+            "input.nml": "11e9608f634e9d5f9c87488b228e45d151b744bed372d9f811f737298049a6ee",
+            "input_source.nml": "2b4e5b7a249a9ed4df54df1c9956d5c0487d5e15b0afeead2a923c5f2fea642d",
+            "magneticdos.out": "3f04e34b0612ee43aeeba2de02ae174658e40d66465690d3050d0846959f0b01",
+            "testrun.log": "79fb8b705fc437c4ccfd4ef3aefcb503127f2c03c271df707311c90aeb1c5de3",
+            "totaldos.out": "6ef50d88dccf06bd62bb5cd3ffc3a07ddeaeb36eb655c9bdd72ff5ca6c70cb14"
+          },
+          "initial_input_sha256": "11e9608f634e9d5f9c87488b228e45d151b744bed372d9f811f737298049a6ee",
+          "initial_seed_sha256": "64f34f2862db71e1e05ba9526e720eb02938385711a22fc028b7a5fafdf0820a",
+          "last20_spread_d_down": 1.0699791896939814e-07,
+          "last20_spread_d_up": 1.2935791726675916e-07,
+          "last20_spread_sphere_moment_muB": 2.1765095725712058e-07,
+          "run_dir": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/u2_j0_cont_beta005_from10_trace",
+          "terminal_diff": 2e-08
+        },
+        "u2_j09": {
+          "accepted_iteration": 32,
+          "frozen_dir": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/accepted_endpoints/u2_j09",
+          "frozen_files_sha256": {
+            "Fe.nml": "c1bd4a1009002ce2c254beda446e547d2adb8f94c709c723fa542fc984a33ac0",
+            "Fe_dos.out": "4e2c9b87afb2510f26215775d959f4b4a455c8d617676d7c83eda7398365a238",
+            "Fe_scf.nml": "a1e2b9240b8063bc2c31ffa25ef19aee40a3999b60cc60282e069b4038bb9cd0",
+            "c1_current_only_acceptance.json": "b4343e52fd8d8e30cbe1a91074c06a644657be44d638364877a248c62d6844c3",
+            "fixed_u_trace.csv": "ff9e674404155435e383780472a4ab6dba670897c99940d053af538aa26a32e8",
+            "input.nml": "366e08c9cf846e0c779c6dd012bd60e2511f4d55199838c70fe6c72fce164d80",
+            "input_source.nml": "2b4e5b7a249a9ed4df54df1c9956d5c0487d5e15b0afeead2a923c5f2fea642d",
+            "magneticdos.out": "6fc3afd55895decfb500519b92fb01fdf2896eb750991d643ddc18ba7a213fd5",
+            "testrun.log": "447129aafbb6452f5676c335cb4c74ad762b154c81ea2b436e8503fb86cff06e",
+            "totaldos.out": "076d61a1f7d6b9bb8a3722a487fda8020e60f78a11fe533f9bda3741a97966b5"
+          },
+          "initial_input_sha256": "366e08c9cf846e0c779c6dd012bd60e2511f4d55199838c70fe6c72fce164d80",
+          "initial_seed_sha256": "c1bd4a1009002ce2c254beda446e547d2adb8f94c709c723fa542fc984a33ac0",
+          "last20_spread_d_down": 1.8844447158272715e-07,
+          "last20_spread_d_up": 1.6582940620679665e-07,
+          "last20_spread_sphere_moment_muB": 3.411697329092078e-07,
+          "run_dir": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/u2_j09_cont_beta005_from10_trace",
+          "terminal_diff": 1.96e-08
+        }
+      },
+      "protocol_cap_accounting": {
+        "maximum_total": 200,
+        "original_malformed_attempt_completed": 6,
+        "resumed_traced_run_cap": 183,
+        "retry1_completed": 10,
+        "retry1_partial_step_reserved": 1
+      },
+      "source_hamiltonian_build_sha256": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+      "source_self_sha256": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823",
+      "verdict": "PASS for all three local-mode bcc Fe RS cases under C1 outer Diff and joined/current last-20 occupation/moment criteria; P/V residuals logged only."
+    },
+    "RB3": {
+      "accepted_endpoint_dir": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/accepted_endpoints/u2_j0",
+      "accepted_input_sha256": "11e9608f634e9d5f9c87488b228e45d151b744bed372d9f811f737298049a6ee",
+      "accepted_seed_Fe_scf_sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+      "baseline_path": "/private/tmp/rslmto-c1-rb-prep/RB3_capture/baseline.json",
+      "baseline_sha256": "c5716b70d941efb18e119f5500430310d86a7ce6cd571246d42f43e292f5ecde",
+      "capture_binary_path": "/private/tmp/rslmto-rb3-capture-bounds-build/bin/rslmto.x",
+      "capture_binary_sha256": "68abefd5e008f406f6c9e3230ac846a4ef0696b7b420ebbb7e30b814e55efea1",
+      "capture_dir": "/private/tmp/rslmto-c1-rb-prep/RB3_capture/u2_j0_full_capture1",
+      "capture_join": {
+        "C1_RS_accepted": true,
+        "current_capture_iteration": 1,
+        "d_down_spread": 1.0699791896939814e-07,
+        "d_up_spread": 1.2935791726675916e-07,
+        "diff": 1.95e-08,
+        "previous_source": "RB2 U2/J0 complete P_OUT/Diff steps 14\u201332",
+        "sphere_moment_spread_muB": 1.9530999306738295e-07,
+        "window_n": 20
+      },
+      "capture_log_sha256": "cf575d77d8162d60eb67fcadd3bef9b03b7b60c096425bd2c59def2d1c146cce",
+      "capture_manifest_sha256": "96334a610d7a39518b7a8d00d98e8505ef2520e19e71b327163628cb43d6d2a7",
+      "capture_only": true,
+      "capture_source_self_sha256": "ed6de38c2412bb98db77fec12079e31cd9eeac06b5e3287769e211b608f8eb15",
+      "cases_csv_sha256": "12cd931cb25523a3e6a778c61eedb20dd98345c02cc76e95a74ac752b24e95f1",
+      "cases_path": "/private/tmp/rslmto-c1-rb-prep/RB3_capture/cases.json",
+      "cases_sha256": "8f220c89df7b7ef2716273d58899d9a47b05dd8e2fc95bee63df54c6c1f089f5",
+      "exit_status": 0,
+      "gate_metrics": {
+        "carrier_ratio_spin1": 0.9932187896658891,
+        "carrier_ratio_spin2": 0.9997574777997361,
+        "measured_carrier_error_Ry": 0.00194623143352185,
+        "opposite_spin_separation_Ry": 0.23032719785398298,
+        "q2_prime_min_Ry2": 0.010994205495596649,
+        "scalar_abs_deviation_Ry": 1.0603373100936953e-05,
+        "scalar_allowance_Ry": 6.024223950375587e-05,
+        "sign_wrong_separation_Ry": 0.5198642192990239
+      },
+      "lock_path": "/private/tmp/rslmto-c1-rb-prep/RB3_capture/lock/rb3_capture_lock.json",
+      "lock_sha256": "8f8f97f7a8dafe8b44061b6dfe7a60b674fc19df0a4169e0069becf203c916f5",
+      "non_gate_note": "Legacy A3 diagnostic carrier_literal_error_within_A_true=false; it is outside the C1 amended gate set and is reported transparently, not treated as a C1 gate.",
+      "preregistration_path": "/private/tmp/rslmto-c1-rb-prep/RB3_capture/preregistration.json",
+      "preregistration_sha256": "d8858bcdcf4b6883ccd0f62daef7870c892a6544cfa5c209c5129d8018a1b42e",
+      "production_binary_path": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+      "production_binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+      "production_source_limit": "The raw d983 self.f90 source snapshot was unavailable; the production identity is bound to the immutable accepted RB2 manifest and verified binary hash. Capture used the separate diagnostic-only trace-helper build below.",
+      "production_source_sha256": {
+        "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+        "source/self.f90": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823"
+      },
+      "ql_only": false,
+      "rb2_endpoint_manifest_path": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/RB2_ACCEPTED_ENDPOINTS.json",
+      "rb2_endpoint_manifest_sha256": "1aaffe2e6a288b242ebcb4bc992fb1109c6a7f1ed06bb3886ba5dfbbc3ed70b0",
+      "trace_rows": 530776,
+      "trace_sha256": "ab23dd22c7a07f9481fb0aca7240e0c9c56cc2294df53eb135041a803c6eb7b3",
+      "verdict": "PASS"
+    },
+    "RB4": {
+      "accepted_checkpoint_sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+      "accepted_endpoint_manifest_path": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/RB2_ACCEPTED_ENDPOINTS.json",
+      "accepted_endpoint_manifest_sha256": "1aaffe2e6a288b242ebcb4bc992fb1109c6a7f1ed06bb3886ba5dfbbc3ed70b0",
+      "analyzer": {
+        "accepts_only_contiguous_trailing_P_OUT_without_Diff_as_incomplete": "true",
+        "interior_mismatch_remains_error": true,
+        "path": "tests/validation/fixed_ldau/analyze_rb4_prefix.py",
+        "sha256": "bf1df3d069277309ecc8df57cdffe3e189ce85fe7b16a301753c14349df328d9"
+      },
+      "case": "RS local-mode bcc Fe U=2/J=0 eV restart from C1-accepted RB2 endpoint",
+      "common_settings": {
+        "J_eV": 0.0,
+        "MKL_NUM_THREADS": 1,
+        "OMP_NUM_THREADS": 1,
+        "OPENBLAS_NUM_THREADS": 1,
+        "U_eV": 2.0,
+        "VECLIB_MAXIMUM_THREADS": 1,
+        "backend": "RS (use_kspace=.false.)",
+        "beta": 0.005,
+        "conv_thr": 1e-12,
+        "mode": "local",
+        "nstep": 10,
+        "trace": "QL_ONLY=1; P_OUT six rows per iteration"
+      },
+      "input_prerun_sha256": "f746a113ccdd824cfe9ea8ac767db7e85d173b4f10b8cfb02dfdbd88bae897cc",
+      "joined_prefix_C1": {
+        "earliest_qualifying_restart_steps_k": 1,
+        "k10_also_passes": true,
+        "k10_diff": 2.44e-08,
+        "k10_window_d_down_spread": 1.6071783837112719e-07,
+        "k10_window_d_up_spread": 1.390907149456666e-07,
+        "k10_window_moment_spread_muB": 2.9260044431822507e-07,
+        "same_joined_metrics_for_mpi": true,
+        "serial_diff": 1.95e-08,
+        "serial_window_d_down_spread": 1.0699791896939814e-07,
+        "serial_window_d_up_spread": 1.2935791726675916e-07,
+        "serial_window_moment_spread_muB": 2.1765095725712058e-07,
+        "within_10_steps": true
+      },
+      "mpi2": {
+        "binary": "/private/tmp/rslmto-rb-mpi-build/bin/rslmto.x",
+        "binary_sha256": "4f9bdc873c49110511e488a3d54030dee909d92b217e0c8493e0746bc440c839",
+        "dir": "/private/tmp/rslmto-c1-rb-prep/RB4_restart_final/mpi2/run_actual",
+        "exit_status": 0,
+        "final_Fe_nml_sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+        "final_Fe_scf_sha256": "56b407afc067dd163fd32c7efe70a8d0b3fb3b23dcad7b122d04bfe8e1cf2083",
+        "log_sha256": "94c0c6e4a4dc7f23d8d92c6b82f136ecb75c13f6f6e0818e482d03f46d5690e0",
+        "mpi": "Open MPI 5.0.11; `mpirun -np 2`",
+        "prefix_analysis_path": "/private/tmp/rslmto-c1-rb-prep/RB4_restart_final/mpi2/run_actual/RB4_prefix_analysis.json",
+        "prefix_analysis_sha256": "6068885b5e52d8c14ff9b5733d8662b51a77033154d80510c38281658e66f083",
+        "trace_rows": 61,
+        "trace_sha256": "e9682382a27e9518938b0baeed09c9711e0cd0ced4541b94f2e73fe2601e466d"
+      },
+      "note": "The accepted prior run contains a trailing complete P_OUT trace for step 33 but no Diff; that interrupted iteration is excluded. The RB4 analyzer was updated to ignore only this unpaired trailing suffix. All 10 restart iterations are complete.",
+      "serial": {
+        "binary": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+        "binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+        "dir": "/private/tmp/rslmto-c1-rb-prep/RB4_restart_final/serial/run_actual",
+        "exit_status": 0,
+        "final_Fe_nml_sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+        "final_Fe_scf_sha256": "56b407afc067dd163fd32c7efe70a8d0b3fb3b23dcad7b122d04bfe8e1cf2083",
+        "log_sha256": "c8553e6aed30424f99634a89d586380974fbc711552f5be49c06475b5a903146",
+        "prefix_analysis_path": "/private/tmp/rslmto-c1-rb-prep/RB4_restart_final/serial/run_actual/RB4_prefix_analysis.json",
+        "prefix_analysis_sha256": "1cc0726864b8daa5b9cf806bc0164608755a34f930afc30ddb5bb8914e01a992",
+        "trace_rows": 61,
+        "trace_sha256": "e9682382a27e9518938b0baeed09c9711e0cd0ced4541b94f2e73fe2601e466d"
+      },
+      "serial_mpi_agreement": {
+        "d_occupation_max_abs": 0.0,
+        "full_ql_trace_byte_identical": true,
+        "same_10_iterations": true,
+        "tolerance": 1e-10
+      },
+      "source_sha256": {
+        "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+        "source/self.f90": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823"
+      },
+      "verdict": "PASS"
+    },
+    "RB5": "RECORDS_COMPLETE; four true-KS comparisons, including one U0 same-beta continuation procedure deviation; no new pass/fail criterion.",
+    "RB6": "RECORDS_COMPLETE; both Co U0 default/tight records reproduce pre-existing NaN; no plateau conclusion.",
+    "clean_baseline_no_U_identity": "PASS; final matched Debug RS and true-KS default-off pairs against clean 8b8f7ef; formal RS case also in RB1."
+  },
+  "known_scope": {
+    "completed_non_gate_checks": [
+      "UnitAtomscResidualControls passed; covers backend defaults, overrides, test tightening and test-only ATOMSC controls.",
+      "UnitLdaUHamiltonian passed."
+    ],
+    "no_claims": "RB0-RB4 formal gates passed. RB5 and RB6 are descriptive records; RB6 does not support a plateau conclusion.",
+    "not_run": "No formal RB gates remain unrun. No later stage was performed."
+  },
+  "post_c2_matched_debug_identity": {
+    "build_match": "GNU Fortran 16.2, Debug, OpenMP ON, MPI OFF, same CMake/compiler flags; one OpenMP thread",
+    "candidate_binary": {
+      "path": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+      "sha256": "b07a0139df32e1b4c3d6c4cdeb44f376b0b7443c18a4cf1ad6d5143f041b7bca"
+    },
+    "cases": {
+      "RS": {
+        "backend": "RS; both decks explicitly use_kspace=.false.; both logs confirm",
+        "compared_result_files_byte_identical": true,
+        "only_nonidentical_file": "testrun.log (timestamps/source line diagnostics)",
+        "prerun_input_sha256_both": "137139701852c498bd7dd5e88631c9a53f0eb3b93ceb751e8f1467faddf4339e",
+        "run_dirs": {
+          "candidate": "/private/tmp/rslmto-c2-newdeck-debug-identity/rs_candidate",
+          "clean": "/private/tmp/rslmto-c2-newdeck-debug-identity/rs_clean"
+        },
+        "seed_Fe_nml_sha256_both": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673"
+      },
+      "true_KS": {
+        "backend": "KS; both decks explicitly use_kspace=.true.; both logs confirm",
+        "compared_result_files_byte_identical": true,
+        "only_nonidentical_file": "testrun.log (timestamps/source line diagnostics)",
+        "prerun_input_sha256_both": "e2271cc450513313fb45bfec4bbac12233f996bf9a9e4c401d5e3090edb40338",
+        "run_dirs": {
+          "candidate": "/private/tmp/rslmto-c2-newdeck-debug-identity/ks_candidate",
+          "clean": "/private/tmp/rslmto-c2-newdeck-debug-identity/ks_clean"
+        },
+        "seed_Fe_nml_sha256_both": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673"
+      }
+    },
+    "classification": "The former output differences were caused by comparing Release -O3 candidate to Debug clean baseline. On exact matched Debug builds, both RS and true-KS cases are byte-identical; no C1 no-U source break is present.",
+    "clean_8b8f7ef_binary": {
+      "path": "/private/tmp/rslmto-ra-base-build/bin/rslmto.x",
+      "sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd"
+    },
+    "environment": "RSLMTO_FIXED_U_* and C2 audit variables unset; identical runtime environment",
+    "scope": "One-step bcc Fe U=J=0 RS and true-KS reruns for the exact decks/seeds used in the earlier mismatched Release-vs-Debug check",
+    "source_self_sha256": "6c3d72cd5dbb6ddd3ffcdefb1700589040294e112204cf19c0649f2b2154de4d",
+    "verdict": "PASS; exact pre-run decks/seeds and Debug build configuration matched; earlier Release-vs-Debug comparison is invalid and is not a source-regression result"
+  },
+  "post_c2_residual_mapping_final_debug_identity": {
+    "candidate_binary": {
+      "build": "GNU Fortran 16.2 Debug, OpenMP ON, MPI OFF; matched clean baseline flags",
+      "path": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+      "sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37"
+    },
+    "cases": {
+      "RS": {
+        "backend": "RS; clean and candidate logs report use_kspace=.false.",
+        "byte_identical": true,
+        "byte_identical_count": 26,
+        "candidate_dir": "/private/tmp/rslmto-c2-final-mapped-debug-identity2/rs",
+        "clean_dir": "/private/tmp/rslmto-c2-final-debug-identity/rs_clean",
+        "compared_output_files": 26,
+        "prerun_input_sha256_both": "ef7fa72282cb2ec8519a48f0e1f63b6d4d1fe98bb94edfedccd133cedc590150",
+        "seed_Fe_nml_sha256_both": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673"
+      },
+      "true_KS": {
+        "backend": "true KS; both decks explicitly use_kspace=.true.; clean/candidate logs confirm reciprocal SCF branch and 4 iterations",
+        "byte_identical_count": 23,
+        "candidate_dir": "/private/tmp/rslmto-c2-final-mapped-debug-identity2/ks",
+        "clean_dir": "/private/tmp/rslmto-c2-final-debug-identity/ks_clean",
+        "compared_output_files": 24,
+        "physical_result_files_identical": true,
+        "prerun_input_sha256_both": "9d81281e48913647d7356c849b5f0ddde3fc4d62682574e66a530ff1fbe6e85d",
+        "seed_Fe_nml_sha256_both": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+        "timing_only_difference": {
+          "fields": [
+            "STRUX result cpu_s",
+            "STRUX done cpu_s"
+          ],
+          "file": "str.out",
+          "no_physics_data_difference": true
+        }
+      }
+    },
+    "classification": "PASS; final residual-mapping source has no default-off no-U identity regression. The sole true-KS output difference is wall/CPU timing text in str.out.",
+    "clean_baseline_binary": {
+      "label": "clean commit 8b8f7ef",
+      "path": "/private/tmp/rslmto-ra-base-build/bin/rslmto.x",
+      "sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd"
+    },
+    "formal_rb_gate": "No; implementation sanity only.",
+    "runner": "RSLMTO_OMP_THREADS_SERIAL=1 /bin/bash tests/run_binary.sh <binary>; all RSLMTO_FIXED_U_* trace/audit variables unset",
+    "runtime_input_rewrite_note": "Input files were hashed before launch; executable rewrites input.nml in place.",
+    "source": {
+      "change_scope": "Residual diagnostic type mapping now resolves recursion site through irec -> iz with allocation/range checks; no operator formula changed.",
+      "hamiltonian_build_f90_sha256": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+      "self_f90_sha256": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823"
+    }
+  },
+  "post_c2_type_index_fix_default_off_identity_sanity": {
+    "cases": {
+      "RS": {
+        "backend": "RS; both runtime logs report use_kspace=.false.",
+        "output_sha256_both": {
+          "Fe_dos.out": "35fc218dd4412a973941adc862350f5b24d04e3c91c09b326d397ef1e76e53b6",
+          "Fe_orbital_dos.out": "5bde40e124ac2a824e568157da81ba7ebb9a6212739f71e28ff80ba3bd8138a0",
+          "Fe_out.nml": "9a872401ca233b8b4fba64bac01fe2a04b3c421a68f7f5b2f89787e3aac78412",
+          "Fe_scf.nml": "9a872401ca233b8b4fba64bac01fe2a04b3c421a68f7f5b2f89787e3aac78412",
+          "magneticdos.out": "89224afc2bc6ace9302d93c718a76309fdd0ab7caaf5928e3fb60d77935e3539",
+          "totaldos.out": "fc0f8b05d5ac13955a33e4f1f94d2b7d83d84360af8a66d44a4aa2538ff41565"
+        },
+        "outputs_byte_identical": true,
+        "prerun_input_sha256_both": "ef7fa72282cb2ec8519a48f0e1f63b6d4d1fe98bb94edfedccd133cedc590150",
+        "run_dirs": {
+          "c2_fixed": "/private/tmp/rslmto-c2-no-u-identity-rs-postfix/c2_fixed",
+          "clean_8b8f7ef": "/private/tmp/rslmto-c2-no-u-identity-rs-postfix/clean_8b8f7ef"
+        },
+        "seed_Fe_nml_sha256_both": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673"
+      },
+      "true_KS": {
+        "backend": "true KS; both input decks explicitly use_kspace=.true. and logs confirm it",
+        "output_sha256_both": {
+          "Fe_out.nml": "e864e48fd5d6ec5132416e0e5e70ba30999ce6460f341b4b577fc906b966e01c",
+          "Fe_scf.nml": "e864e48fd5d6ec5132416e0e5e70ba30999ce6460f341b4b577fc906b966e01c",
+          "magneticdos.out": "d52be151e817e0979fde50ac794a960447b95b284891af28568215a52dece50b",
+          "totaldos.out": "b86895906548a1dc9ef1af5a18c095c72c91e7969b13757750aed663af570192"
+        },
+        "outputs_byte_identical": true,
+        "prerun_input_sha256_both": "9d81281e48913647d7356c849b5f0ddde3fc4d62682574e66a530ff1fbe6e85d",
+        "run_dirs": {
+          "c2_fixed": "/private/tmp/rslmto-c2-no-u-identity-postfix/c2_fixed",
+          "clean_8b8f7ef": "/private/tmp/rslmto-c2-no-u-identity-postfix/clean_8b8f7ef"
+        },
+        "seed_Fe_nml_sha256_both": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1"
+      }
+    },
+    "clean_baseline_binary": {
+      "path": "/private/tmp/rslmto-ra-base-build/bin/rslmto.x",
+      "sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd"
+    },
+    "environment": "Default-off C2 audit and C1 trace variables unset; one serial OpenMP thread",
+    "fixed_candidate_binary": {
+      "path": "/private/tmp/rslmto-c2-instrument-build/bin/rslmto.x",
+      "sha256": "edf3d9d067268633978c8ab657453140d8d9f58235f890f514a177c72976fc03"
+    },
+    "fixed_candidate_hamiltonian_build_source_sha256": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+    "result": "PASS for exact output identity in both RS and true-KS. The C2 change affects active local Hubbard insertion only; no-U defaults-off sanity remains byte-identical.",
+    "runner": "RSLMTO_OMP_THREADS_SERIAL=1 /bin/bash tests/run_binary.sh <binary>",
+    "runtime_input_rewrite_note": "The executable rewrites input.nml in place during the run; the recorded prerun deck and seed hashes establish identity.",
+    "scope": "One-step bcc Fe U=J=0 RS and true-KS runs; exact clean 8b8f7ef baseline compared to the C2 type-index-fix candidate",
+    "verdict": "PASS, implementation sanity only; not entry into any formal RB gate"
+  },
+  "post_ed6_capture_helpers_default_off_identity": {
+    "candidate_binary": {
+      "build": "GNU Fortran 16.2 Debug, OpenMP ON, MPI OFF; matched clean-baseline build configuration; one thread",
+      "path": "/private/tmp/rslmto-c2-ed6-identity-debug-build/bin/rslmto.x",
+      "sha256": "bab5f7408f20192c575ea09be5501445f38f29bc2d34680da41daf733c96b2bf"
+    },
+    "candidate_source_sha256": {
+      "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+      "source/self.f90": "ed6de38c2412bb98db77fec12079e31cd9eeac06b5e3287769e211b608f8eb15"
+    },
+    "cases": {
+      "KS": {
+        "backend": "true KS; runtime log confirms use_kspace=.true.",
+        "candidate_dir": "/private/tmp/rslmto-c2-ed6-identity-run/ks/ed6_candidate",
+        "clean8b_dir": "/private/tmp/rslmto-c2-ed6-identity-run/ks/clean8b",
+        "different_files": {
+          "c1_console.log": {
+            "clean8b": "44cf5f46e833f07814808cd14ff0ba677c8f00abe5c2ef3f65c023f7f5136434",
+            "ed6_candidate": "7714f611aaf3cbfb33acaf5d7e25a70d73cfd134b4942ae4ff79e5ae2d4cae67"
+          },
+          "str.out": {
+            "clean8b": "b32704e2c9851a5a2891da351d83330bc380f5e6f4694ebe82280e857b824d5c",
+            "ed6_candidate": "a3295806ac601e6959c2cb0bb7433bc51d388568abad796e5cfee4b26e57bdf4"
+          }
+        },
+        "files_each_side": 25,
+        "physical_outputs_byte_identical": true,
+        "prerun_input_sha256": "9d81281e48913647d7356c849b5f0ddde3fc4d62682574e66a530ff1fbe6e85d",
+        "prerun_seed_sha256": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+        "result": "PASS; physical outputs identical; str.out differs only in CPU-time text fields",
+        "same_pre_run_input_seed": true
+      },
+      "RS": {
+        "backend": "RS; runtime log confirms use_kspace=.false.",
+        "candidate_dir": "/private/tmp/rslmto-c2-ed6-identity-run/rs/ed6_candidate",
+        "clean8b_dir": "/private/tmp/rslmto-c2-ed6-identity-run/rs/clean8b",
+        "different_files": {
+          "c1_console.log": {
+            "clean8b": "bba69889c3ef6d0d19e7997fe630a0b68496ebf443ef207d19b6fd1c6fa5c117",
+            "ed6_candidate": "4f8e2bb09558844d8eb019645422dd0933f853b096fbfffb7ebef7974562c506"
+          }
+        },
+        "files_each_side": 27,
+        "physical_outputs_byte_identical": true,
+        "prerun_input_sha256": "ef7fa72282cb2ec8519a48f0e1f63b6d4d1fe98bb94edfedccd133cedc590150",
+        "prerun_seed_sha256": "6ded298a3512b920211a8761b05a191a76402d3c985080380034cdff42596673",
+        "result": "PASS; only runtime log differs",
+        "same_pre_run_input_seed": true
+      }
+    },
+    "classification": "Final-source default-off sanity identity check; not an extra formal C1 gate.",
+    "clean_baseline_binary": {
+      "path": "/private/tmp/rslmto-ra-base-build/bin/rslmto.x",
+      "sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+      "source_commit": "8b8f7ef"
+    },
+    "trace_environment": "All RSLMTO_FIXED_U_TRACE* variables unset; default-off behavior exercised.",
+    "verdict": "PASS: default-off final-ed6 build preserves no-U scientific outputs versus clean 8b8f7ef for matched RS and true-KS fixtures."
+  },
+  "post_mapping_debug_mpi_binary": {
+    "build": "GNU Fortran 16.2 Debug, OpenMP ON, MPI ON; use only with matched Debug serial executable for RB4",
+    "path": "/private/tmp/rslmto-rb-mpi-build/bin/rslmto.x",
+    "sha256": "4f9bdc873c49110511e488a3d54030dee909d92b217e0c8493e0746bc440c839",
+    "source_self_sha256": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823"
+  },
+  "pre_rb_binary": {
+    "binary": "/tmp/rslmto-ra-current-build/bin/rslmto.x",
+    "binary_sha256": "6ec0e5820c711115570577ddf3b2ffe9fe8c9e222e6a50061fadf773cffc0041",
+    "label": "pre-RB executable used for fixed-U KS control"
+  },
+  "prepared_not_launched": {
+    "RB0_input_sha256": "1ee47879b317d3d460cf6069cbb696456d7cde5499ec568c21292b5e735b0592",
+    "RB0_production_dir": "/private/tmp/rslmto-c1-rb-prep/Fe_U38J11_RS_prod",
+    "RB0_seed_note": "selected RA4-owner C1-accepted U=0 Fe bulk QL-history endpoint; serialized U and J arrays are zero; restart seed copied byte-for-byte",
+    "RB0_seed_sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c",
+    "RB3_capture_adapter": {
+      "command": "python3 -m py_compile tests/validation/fixed_ldau/rb3_capture_adapter.py; python3 tests/validation/fixed_ldau/rb3_capture_adapter.py --help",
+      "contract": "Requires a pre-response accepted RB2 lock and recomputes C1 RS acceptance from outer Diff <=3e-8, last-20 per-spin d-occupation spread <=5e-7 and sphere-moment spread <=1e-6 muB. Optional R05 residual evidence is logged only. It verifies exact source/binary/deck/seed hashes, full CAPTURE_ONLY=1 with QL_ONLY disabled, selected accepted iteration, carrier/control and radial replay rows, current replay driver, and locked RS A2.2 fit.",
+      "execution_modes": "Historical preparation contract. The ordered baseline, preregistration, capture, and response cases were subsequently executed; RB3 PASS details are in gate_status.RB3.",
+      "fit_path": "docs/validation/fixed_ldau/evidence/a3_rs_a22_scalar_fit_results.json",
+      "fit_sha256": "0f0b543f81f53bc1c7fdfc46d3b404adef1ca455b8366a90e87154afd2b0987c",
+      "path": "tests/validation/fixed_ldau/rb3_capture_adapter.py",
+      "sha256": "607555dea1f9c3297d8aad09878a6be54bc5750095cb3f1bbaf58e50b4b87aaa",
+      "status": "COMPLETED; PASS; see gate_status.RB3."
+    },
+    "RB3_capture_contract": "COMPLETED; RB3 passed from the frozen accepted RB2 U2/J0 state. Capture used a separate bounds-validated diagnostic trace build, explicitly distinguished from production build/source.",
+    "RB3_driver_build": {
+      "binary": "/private/tmp/rslmto-rb3-final/accepted_m03_replay_driver",
+      "binary_sha256": "e3cb6af947ef15a2e934b07a252d5e622367d760f2e6d2fcea0dc21dfd180513",
+      "compile": "/opt/homebrew/bin/gfortran -ffree-line-length-0 -cpp -mtune=native -DCOLOR -fopenmp -DOpenMP_Fortran_FOUND -O3 -fbacktrace -g -g -I/private/tmp/rslmto-c2-qlonly-release-build/modules tests/validation/fixed_ldau/accepted_m03_replay_driver.f90 -o /private/tmp/rslmto-rb3-final/accepted_m03_replay_driver /private/tmp/rslmto-c2-qlonly-release-build/source/librslmto.a plus the exact CMake link dependencies (Accelerate, spglib, abspinlib, strux_lib, libgomp).",
+      "linked_candidate_library": "/private/tmp/rslmto-c2-qlonly-release-build/source/librslmto.a",
+      "linked_candidate_library_sha256": "f1bed03b923138259f57ffb9dc95fbde719c8b59500887a5674d15afe9c9f96e",
+      "linked_executable_sha256": "0c98514f85c23e8122f9564359785bff5ed56a35db16b3d2c39147397364b513",
+      "purpose": "Frozen production replay fixture driver for the newly registered RB3 capture; run only after C1-accepted RB2 capture and preregistration.",
+      "source": "tests/validation/fixed_ldau/accepted_m03_replay_driver.f90",
+      "source_self_sha256": "6c3d72cd5dbb6ddd3ffcdefb1700589040294e112204cf19c0649f2b2154de4d",
+      "source_sha256": "124726aaab8f5937fa13be925969b67d4e647ee9c910596d58698ffb13e5476a",
+      "status": "BUILD_PASS_FINAL_RELEASE_LIBRARY; no response executed"
+    },
+    "RB3_driver_build_final_mapped_debug": {
+      "binary": "/private/tmp/rslmto-c2-qlonly-debug-build/accepted_m03_replay_driver",
+      "binary_sha256": "e3e1b3794452fd9cc8dc12bb0266a68a4a2add31e0fc4a3e1c50ab80ef59467b",
+      "compile": "GNU Fortran 16.2 Debug, OpenMP ON, linked against final mapped Debug librslmto.a with same dependencies as CMake executable",
+      "linked_candidate_library": "/private/tmp/rslmto-c2-qlonly-debug-build/source/librslmto.a",
+      "linked_candidate_library_sha256": "646b0a495bd28c7a2927bb594093197c8029de15a89a1d6d2dca39521775a637",
+      "source_self_sha256": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823",
+      "source_sha256": "124726aaab8f5937fa13be925969b67d4e647ee9c910596d58698ffb13e5476a",
+      "status": "BUILD_PASS_FINAL_MAPPED_DEBUG_LIBRARY; no response executed"
+    },
+    "RB3_driver_build_historical": {
+      "binary": "/private/tmp/rslmto-c1-rb-prep/accepted_m03_replay_driver_c1",
+      "binary_sha256": "d4f4f96ed1e3374b81433b7314c457adccef8a68e7bf90f3c792b5ffb94f6e37",
+      "compile": "gfortran -ffree-line-length-0 -fopenmp -I/private/tmp/rslmto-rb-impl-build/modules tests/validation/fixed_ldau/accepted_m03_replay_driver.f90 -o /private/tmp/rslmto-c1-rb-prep/accepted_m03_replay_driver_c1 [same candidate library and dependencies as CMake rslmto.x link line]",
+      "linked_candidate_library_sha256": "26197ed74378ca8360a09f28193d7e1cfeb3131c452b1b35be554d95c19358ed",
+      "purpose": "preparation for RB3 frozen radial replay from eventual accepted RB2 capture; bind this driver hash in lock before response",
+      "source": "tests/validation/fixed_ldau/accepted_m03_replay_driver.f90",
+      "source_sha256": "124726aaab8f5937fa13be925969b67d4e647ee9c910596d58698ffb13e5476a",
+      "status": "SUPERSEDED; linked pre-final library, not for formal RB3"
+    },
+    "caveats": [
+      "RB4 awaits accepted RB2 U=2/J=0 local Fe_out.nml seed. (historical preparation note; superseded by the completed formal execution record).",
+      "RB3 full capture must be collected with capture-only mode, not QL-only mode, on the accepted RB2 U2 state; bind the capture to C1 binary/source and A2.2 RS fit. (historical preparation note; superseded by the completed formal execution record).",
+      "RB3 driver/capture adapter must bind the final accepted RB2 capture, full CAPTURE_ONLY mode, and the locked RS A2.2 fit before RB3 execution. (historical preparation note; superseded by the completed formal execution record)."
+    ],
+    "counts": {
+      "RB1_decks": 8,
+      "RB2_decks": 3,
+      "RB4_restart_templates": 2,
+      "RB5_decks": 8,
+      "RB6_runs": 2
+    },
+    "deck_audit": {
+      "Fe_input_decks_checked": 21,
+      "RB6_Co_runs_checked": 2,
+      "RB6_input_and_seed_files_checked": 6,
+      "command": "Python read-only manifest walk: SHA256 every staged input/seed; verify nsp=1 for Fe decks; compare Co RB6 input/Co1/Co2 hashes.",
+      "mismatches": 0,
+      "result": "PASS; independent SHA recheck of every staged input and seed manifest entry"
+    },
+    "generator_path": "/private/tmp/rslmto-c1-rb-prep/prepare_rb_templates.py",
+    "generator_sha256": "2d15a0fdffb23e2138b95d65fa247b261e6d29c2195b14be10f9df35f1168f7d",
+    "manifest_path": "/private/tmp/rslmto-c1-rb-prep/RB_PREPARATION_MANIFEST.json",
+    "manifest_sha256": "683c0cfaae37dd7a941a63ac22ceac3ad2cc71f261a281e400a8e4ab7ceaf270",
+    "selected_accepted_u0_fe_seed_sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c",
+    "status": "HISTORICAL_PRE-RB_PREPARATION_SNAPSHOT; superseded by the formal execution records under gate_status and rb5_formal_records/rb6_formal_records.",
+    "template_generator_sha256": "2d15a0fdffb23e2138b95d65fa247b261e6d29c2195b14be10f9df35f1168f7d",
+    "template_manifest_sha256": "69a4932b6d411828e57452f9503f30f62ba871621f3359d36eb113d28cea1bf7"
+  },
+  "protocol": {
+    "amendment": "docs/validation/fixed_ldau/rs/C1_AMENDMENT.md",
+    "source_commit": "8b8f7ef7bfc026fd34a56b37a3ad3281fd0a6832"
+  },
+  "rb0_formal_production": {
+    "C1_joined_acceptance": {
+      "RS_accepted": true,
+      "analyzer": "/private/tmp/rslmto-ra4-frozen/analyze_c1_joined.py",
+      "analyzer_sha256": "ec80cc6ca5ac2fd8e80e32fd3b2dd79e89a0f7845419f8f386054d513f4dfd26",
+      "d_down": 2.099028779432828,
+      "d_up": 4.557606765436814,
+      "joined_window_n": 20,
+      "last20_spread_d_down": 2.9377915744532856e-07,
+      "last20_spread_d_up": 1.8848741145660597e-07,
+      "last20_spread_sphere_moment_muB": 5.188177327752896e-07,
+      "result_path": "/private/tmp/rslmto-c1-rb-prep/Fe_U38J11_RS_prod_cont_beta005/c1_joined_acceptance.json",
+      "result_sha256": "a1e67683100f7e8b3a1439ac6becf13406cee37f43b28132498a4f3e9b178dd7",
+      "sphere_moment_muB": 2.3900698298609035,
+      "terminal_Diff": 2.49e-08,
+      "window": "previous iterations 84\u2013100 plus continuation iterations 1\u20133"
+    },
+    "continuation_1": {
+      "changed_from_prior_cap": [
+        "nstep 100\u2192200",
+        "beta 0.01\u21920.005"
+      ],
+      "completed_iterations": 3,
+      "exit_code": 0,
+      "final_Fe_out_sha256": "018b0541d33d8b4c0dbb46782d07d991c90417e155bef9c146f0a281783d0b56",
+      "input_sha256_pre_run": "e2e16934a65e319da872a245bbe5d9776179be12a25670a4080eaccb65caa1b8",
+      "production_Converged_marker": true,
+      "restart_Fe_nml_sha256": "50258e4c2a93bc234b9fb83f3cdfa288a11597bcc379c732a869db399f754982",
+      "restart_source": "initial-cap terminal Fe_out.nml, copied byte-for-byte",
+      "run_dir": "/private/tmp/rslmto-c1-rb-prep/Fe_U38J11_RS_prod_cont_beta005",
+      "run_log_sha256": "540c5f674c5e886b27ddab8d14f2d7e7e30e5224b3d4173b1e19f5278fa19fa0",
+      "terminal_R05": {
+        "rp_abs": 5.6615e-08,
+        "rv_abs_Ry": 1.39e-08,
+        "streak": 3
+      },
+      "terminal_outer_Diff": 2.49e-08
+    },
+    "final_binary": {
+      "build": "GNU Fortran 16.2 Debug, OpenMP ON, MPI OFF; one thread",
+      "path": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+      "sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+      "source_sha256": {
+        "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+        "source/self.f90": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823"
+      }
+    },
+    "initial_cap": {
+      "completed_iterations": 100,
+      "exit_code": 0,
+      "input_sha256_pre_run": "1ee47879b317d3d460cf6069cbb696456d7cde5499ec568c21292b5e735b0592",
+      "outcome": "Registered cap reached; outer Diff narrowly above 3e-8, so continuation 1 was required.",
+      "production_Converged_marker": false,
+      "run_dir": "/private/tmp/rslmto-c1-rb-prep/Fe_U38J11_RS_prod",
+      "run_log_sha256": "8b891637c9e3338f6de7d56788cea508b5af944aa7af3caf2334e10e1c370749",
+      "seed_Fe_nml_sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c",
+      "terminal_R05": {
+        "rp_abs": 2.24e-07,
+        "rv_abs_Ry": 5.6088e-08,
+        "streak": 36
+      },
+      "terminal_outer_Diff": 3.22e-08
+    },
+    "purpose": "Fe U=3.8 eV/J=1.1 eV RS bulk production-convergence gate; accepted state uses registered first continuation.",
+    "thread_caps": {
+      "BLIS_NUM_THREADS": 1,
+      "MKL_NUM_THREADS": 1,
+      "NUMEXPR_NUM_THREADS": 1,
+      "OMP_NUM_THREADS": 1,
+      "OMP_THREAD_LIMIT": 1,
+      "OPENBLAS_NUM_THREADS": 1,
+      "VECLIB_MAXIMUM_THREADS": 1
+    },
+    "trace_contract": "RSLMTO_FIXED_U_TRACE_QL_ONLY=1 recorded P_OUT QL history; gbt_scf_diagnostics.dat supplied per-iteration d occupations and sphere-moment history.",
+    "verdict": "PASS"
+  },
+  "rb0_ks_fixed_u_unchanged_gate": {
+    "backend": "KS, explicit use_kspace=.true.; confirmed in both runtime logs",
+    "baseline_label": "pre-RB executable",
+    "case": "bcc Fe, U=3.8 eV, J=1.1 eV, nstep=4",
+    "commands": [
+      "cd /private/tmp/rslmto-rb0-ksfixed/old_kspace && RSLMTO_OMP_THREADS_SERIAL=1 /bin/bash /Users/andersb/Jobb/rslmto_fable_v4b/tests/run_binary.sh /tmp/rslmto-ra-current-build/bin/rslmto.x",
+      "cd /private/tmp/rslmto-rb0-ksfixed/new_kspace && RSLMTO_OMP_THREADS_SERIAL=1 /bin/bash /Users/andersb/Jobb/rslmto_fable_v4b/tests/run_binary.sh /private/tmp/rslmto-rb-impl-build/bin/rslmto.x"
+    ],
+    "complete_output_set": {
+      "20_generated_artifacts_byte_identical_sha256_both": {
+        "Fe_out.nml": "f06fb8eaa58f982cebabb51a7160395a2bc441e16b4bf9069d7d3321e34d4773",
+        "Fe_scf.nml": "f06fb8eaa58f982cebabb51a7160395a2bc441e16b4bf9069d7d3321e34d4773",
+        "angles_lmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "angles_magmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "band_moments.dat": "160985ea7cb2c0083e7b3d7c2b2d35de3e4aae49bb7ae7c26d18c4cfa3a7da82",
+        "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "density_of_states.dat": "b2cb97eb260b183591273aaea166428350d7d55233f39ffd7737ef1c4166a34a",
+        "fort.800": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6",
+        "fort.805": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246",
+        "linfo.out": "d2e68d490870e6e242859132f6547528de60ebeaee6a0229faafe013f8230e8b",
+        "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "magneticdos.out": "a86d65317d1ba2ea5152796b6a9e10dc7a46641ce34a5d73ff7d56244b2323fb",
+        "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+        "minfo.out": "4d1f291b039e34ce4a2a0e9ad6d7daed1d077f44615b25fd57fda12e9553c449",
+        "projected_dos.dat": "a7f85b42b0d711cf30d54b34147fed4db404ed7117f58131a621f6106ca10a56",
+        "radial_ground_state_Fe_1.dat": "a303d77965f12838bed9dbb3e6b07b6f00bf6ff71b6019ff29c5cd8bd4427e57",
+        "report.out": "987b333ccb658aa5d9cf18f3bb05e456641ea4a5243f07a304f5ba96fb25dbcd",
+        "sbar": "98138c1970a987cf41cf7f190eb37d7ef24517afa52acf61d766106c8aceaf4f",
+        "totaldos.out": "b9cd84e8b7244fd5ac79c1c72a3d641f8f82fb7498fdeb729c3a9c16d442fd31",
+        "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "view.sbar": "aa98816aadfa0cb91e5a32ad8e0c99a9e5dc1df5672eb6fb8e5185afdf3d63f0"
+      },
+      "each_run_directory_had_25_files": true,
+      "nonidentical_nonresult_files": {
+        "str.out": {
+          "difference": "only STRUX cpu_s timing value differs",
+          "pre_rb_sha256": "09176628c6a68767b49c6ea64878022b09ef0404c61499b105cc7e57ad03bc4a",
+          "rb_candidate_sha256": "292194ffde2bc6b6922f49b6db4648422d81190d7ee02f465ffc2021ee7cdf61"
+        },
+        "testrun.log": {
+          "difference": "timestamps and source line numbers; residual and four-step outer-Diff histories match",
+          "pre_rb_sha256": "ab27746fa60bd8bee42096738d5832eef8036d8d1e0c8e6052cc8f11e52d85f1",
+          "rb_candidate_sha256": "4aff7c7346595b3b1c7568e28941261c5d4abff3c8de01696901cc5093a43261"
+        }
+      }
+    },
+    "history": "Both binaries logged target_rp=target_rv=1e-7 and identical residual and outer-Diff values across four iterations.",
+    "output_sha256_both": {
+      "Fe_out.nml": "f06fb8eaa58f982cebabb51a7160395a2bc441e16b4bf9069d7d3321e34d4773",
+      "Fe_scf.nml": "f06fb8eaa58f982cebabb51a7160395a2bc441e16b4bf9069d7d3321e34d4773",
+      "magneticdos.out": "a86d65317d1ba2ea5152796b6a9e10dc7a46641ce34a5d73ff7d56244b2323fb",
+      "totaldos.out": "b9cd84e8b7244fd5ac79c1c72a3d641f8f82fb7498fdeb729c3a9c16d442fd31"
+    },
+    "outputs_byte_identical": true,
+    "pre_run_input_sha256_both": "3e0cb64cb356dc7d087c646eba4dd14e1f3d041d22fafca2c67ddc021103253c",
+    "rb_candidate_label": "RB candidate",
+    "run_dirs": {
+      "pre_rb": "/private/tmp/rslmto-rb0-ksfixed/old_kspace",
+      "rb_candidate": "/private/tmp/rslmto-rb0-ksfixed/new_kspace"
+    },
+    "run_log_sha256": {
+      "pre_rb": "ab27746fa60bd8bee42096738d5832eef8036d8d1e0c8e6052cc8f11e52d85f1",
+      "rb_candidate": "4aff7c7346595b3b1c7568e28941261c5d4abff3c8de01696901cc5093a43261"
+    },
+    "seed_Fe_nml_sha256_both": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+    "verdict": "PASS"
+  },
+  "rb0_no_u_clean_baseline_gate": {
+    "backend": "KS, explicit use_kspace=.true.; confirmed in both runtime logs",
+    "case": "bcc Fe, U=J=0, nstep=4",
+    "commands": [
+      "cd /private/tmp/rslmto-rb0-ksfixed/new_kspace_no_u && RSLMTO_OMP_THREADS_SERIAL=1 /bin/bash /Users/andersb/Jobb/rslmto_fable_v4b/tests/run_binary.sh /private/tmp/rslmto-rb-impl-build/bin/rslmto.x",
+      "cd /private/tmp/rslmto-rb0-ksfixed/clean_8b8f7ef_kspace_no_u_initial && RSLMTO_OMP_THREADS_SERIAL=1 /bin/bash /Users/andersb/Jobb/rslmto_fable_v4b/tests/run_binary.sh /tmp/rslmto-ra-base-build/bin/rslmto.x"
+    ],
+    "complete_output_set": {
+      "21_generated_artifacts_byte_identical_sha256_both": {
+        "Fe_out.nml": "e864e48fd5d6ec5132416e0e5e70ba30999ce6460f341b4b577fc906b966e01c",
+        "Fe_scf.nml": "e864e48fd5d6ec5132416e0e5e70ba30999ce6460f341b4b577fc906b966e01c",
+        "angles_lmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "angles_magmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+        "band_moments.dat": "227b00f317e844552c94b5bdf1528f7988a306a133923d610a36961671393cac",
+        "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+        "density_of_states.dat": "d3ae956cb3125b180824d622b0f02c6e32e5857bdce258cd2e1d913d752ce46a",
+        "fort.800": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6",
+        "fort.805": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246",
+        "linfo.out": "d2e68d490870e6e242859132f6547528de60ebeaee6a0229faafe013f8230e8b",
+        "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+        "magneticdos.out": "d52be151e817e0979fde50ac794a960447b95b284891af28568215a52dece50b",
+        "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+        "minfo.out": "4d1f291b039e34ce4a2a0e9ad6d7daed1d077f44615b25fd57fda12e9553c449",
+        "projected_dos.dat": "8adc5c1f29b0cb1dbbf3c6b55312e43a38415250b44380e58314748a61572afb",
+        "radial_ground_state_Fe_1.dat": "73306dcf54de754f505507327e352793b118d18a18358737ac87935c3caec01d",
+        "report.out": "7f18a15a675edb30a219bea53f4c43ed110f0dc7585215e44a0e8150e8ed6cf9",
+        "sbar": "98138c1970a987cf41cf7f190eb37d7ef24517afa52acf61d766106c8aceaf4f",
+        "totaldos.out": "b86895906548a1dc9ef1af5a18c095c72c91e7969b13757750aed663af570192",
+        "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+        "view.sbar": "aa98816aadfa0cb91e5a32ad8e0c99a9e5dc1df5672eb6fb8e5185afdf3d63f0"
+      },
+      "each_run_directory_had_25_files": true,
+      "nonidentical_nonresult_files": {
+        "str.out": {
+          "clean_baseline_sha256": "9df0730464634e3c1a42327766d8277a6515445ee7b13400df9663d4590610af",
+          "difference": "only STRUX cpu_s timing value differs",
+          "rb_candidate_sha256": "75575a13d4603d77bac813744c688340d0551289ca885231a9345fb95507fbb0"
+        },
+        "testrun.log": {
+          "clean_baseline_sha256": "d61f3b4f53042ed8a58fbeb64c7d4aaef60305b631714aeb7d1ed7469cd5cea6",
+          "difference": "timestamps and source line numbers; semantic four-step histories match",
+          "rb_candidate_sha256": "836d2957f119a32735c164a890c3ff8e19301fe83c3b8b26103dcdf17bf12eaf"
+        }
+      }
+    },
+    "history": "Four-step EF, N, dN, and outer Diff values match.",
+    "note": "The executable rewrites energy/fermi in input.nml during execution. Pre-run input hashes above identify the actual matched inputs; post-run input hashes are runtime-mutated.",
+    "output_sha256_both": {
+      "Fe_out.nml": "e864e48fd5d6ec5132416e0e5e70ba30999ce6460f341b4b577fc906b966e01c",
+      "Fe_scf.nml": "e864e48fd5d6ec5132416e0e5e70ba30999ce6460f341b4b577fc906b966e01c",
+      "magneticdos.out": "d52be151e817e0979fde50ac794a960447b95b284891af28568215a52dece50b",
+      "totaldos.out": "b86895906548a1dc9ef1af5a18c095c72c91e7969b13757750aed663af570192"
+    },
+    "outputs_byte_identical": true,
+    "pre_run_input_sha256_both": "3f419e08f78dd47d968e5a201ba1834fd8670fbcad3a8a63852d70fce64eef32",
+    "run_dirs": {
+      "clean_8b8f7ef": "/private/tmp/rslmto-rb0-ksfixed/clean_8b8f7ef_kspace_no_u_initial",
+      "rb_candidate": "/private/tmp/rslmto-rb0-ksfixed/new_kspace_no_u"
+    },
+    "run_log_sha256": {
+      "clean_8b8f7ef": "d61f3b4f53042ed8a58fbeb64c7d4aaef60305b631714aeb7d1ed7469cd5cea6",
+      "rb_candidate": "836d2957f119a32735c164a890c3ff8e19301fe83c3b8b26103dcdf17bf12eaf"
+    },
+    "seed_Fe_nml_sha256_both": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1",
+    "verdict": "PASS"
+  },
+  "rb1_formal_identity": {
+    "binary_configuration": "Matched GNU Fortran 16.2 Debug, OpenMP ON, MPI OFF; final candidate and pre-RB binaries. Runs capped to one OpenMP thread.",
+    "candidate_binary": {
+      "path": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+      "sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+      "source_self_f90_sha256": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823"
+    },
+    "cases": {
+      "explicit_U0_J0_spectral": {
+        "J_eV": 0,
+        "U_eV": 0,
+        "backend": "RS",
+        "candidate_binary": {
+          "path": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+          "sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37"
+        },
+        "candidate_testrun_log_sha256": "30d9b9e8b5d55c2573796f37da886f7658f5d8c9e769dfb6fcd26b172512933a",
+        "command": "RSLMTO_OMP_THREADS_SERIAL=1 /bin/bash tests/run_binary.sh <binary>",
+        "compared_result_file_count": 24,
+        "comparison_binary": {
+          "path": "/tmp/rslmto-ra-current-build/bin/rslmto.x",
+          "sha256": "6ec0e5820c711115570577ddf3b2ffe9fe8c9e222e6a50061fadf773cffc0041"
+        },
+        "comparison_testrun_log_sha256": "d3b23ddbd112e60c1d31c7d0870bfbda4567cb2c2455677819c2a6551dbb367b",
+        "exit_code_both": 0,
+        "mode": "spectral",
+        "nonidentical_files": [
+          "testrun.log"
+        ],
+        "nstep": 4,
+        "pre_run_input_sha256": "635fef06cccae1245cf0b85966e8c67b9918415c15a40066255a7b08fad8abf6",
+        "result_files_byte_identical": true,
+        "result_output_sha256_candidate": {
+          "Fe_1_spinene.out": "8fa2eda6ad4fa1fe19bde233294776e0d6ca186cd54593c39155b50fcee88a39",
+          "Fe_dos.out": "4e0a88310f0f12f08efff83a0d6719873519f95634ee0eee58784fac90556f8c",
+          "Fe_orbene.out": "bbefc4ca78ee2446aa1c0c6bb92817de3a1a15c02698186de33fc5fe6254b37b",
+          "Fe_orbital_dos.out": "76d0b618293d8978baa8eed4415ac2260dbad1ce9ce50cf506bc9ed70d2f3777",
+          "Fe_orbquadene.out": "5f5d88fa5025f2dc9af939559e5bbf2bd98c083eb88e974932bc26637625cf2a",
+          "Fe_out.nml": "abbca873d97dc9f4821d43dfe427c261cc699533923074409a5b125616442101",
+          "Fe_scf.nml": "abbca873d97dc9f4821d43dfe427c261cc699533923074409a5b125616442101",
+          "angles_lmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+          "angles_magmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+          "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+          "fort.800": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6",
+          "fort.805": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246",
+          "linfo.out": "9a678724ae4a77d9de9b133982a7004145a5ea389f012c4f834771f0eab01c70",
+          "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+          "magneticdos.out": "76daa56c016530fb089c235083a569ded3377f54bf8fae68091948d249123654",
+          "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+          "minfo.out": "4d1f291b039e34ce4a2a0e9ad6d7daed1d077f44615b25fd57fda12e9553c449",
+          "radial_ground_state_Fe_1.dat": "1666663c8f9121a9e65f82ad8fcd09a36a01353d1ffe33579981312bdb71dd4a",
+          "report.out": "f987491dc010430140f4788f09939098fe8fed59147d413f839aa26139c77cfb",
+          "sbar": "87d0395c7537bd90c253eff48b8ced94e6bb49644ecdd251d4c0e986ab6aad87",
+          "str.out": "fda4513e4a8033f3980d20d83e09d79b12fd9e0b732ea82d8c7d86d55148ff88",
+          "totaldos.out": "1d1cb80f346384b6c2fda4f2568b4563955dd30601686704d77ecce9dee0e396",
+          "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+          "view.sbar": "a7e2558f9fd5cb643e2cba271be818ea051b56a5119fb0edf2367692ec08bc19"
+        },
+        "run_dirs": {
+          "candidate": "/private/tmp/rslmto-c1-rb-prep/RB1_identity/explicit_u0_spectral/candidate",
+          "comparison": "/private/tmp/rslmto-c1-rb-prep/RB1_identity/explicit_u0_spectral/preRB"
+        },
+        "seed_Fe_nml_sha256_both": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c"
+      },
+      "explicit_local_U0_J0_noop_vs_spectral": {
+        "J_eV": 0,
+        "U_eV": 0,
+        "backend": "RS",
+        "candidate_binary": {
+          "path": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+          "sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37"
+        },
+        "candidate_testrun_log_sha256": "aa15ec863d49a50512dc5af13baaef5bbe9ac94b9f4f59a657406c3b26c15e0b",
+        "command": "RSLMTO_OMP_THREADS_SERIAL=1 /bin/bash tests/run_binary.sh <binary>",
+        "compared_result_file_count": 24,
+        "comparison_binary": {
+          "path": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+          "sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37"
+        },
+        "comparison_testrun_log_sha256": "9ff913709c94b2c58a2120dc1b22e1b8f112a06e8ac4540cbb367ca03935df5e",
+        "exit_code_both": 0,
+        "mode": "local U0 vs spectral U0",
+        "nonidentical_files": [
+          "input.nml",
+          "testrun.log"
+        ],
+        "nstep": 4,
+        "pre_run_input_sha256": "2d5d9efa1c6cf3e4ecf537a7d89bbc7910f8778ca882fbe56b57a48d8975c52a / 635fef06cccae1245cf0b85966e8c67b9918415c15a40066255a7b08fad8abf6",
+        "result_files_byte_identical": true,
+        "result_output_sha256_candidate": {
+          "Fe_1_spinene.out": "8fa2eda6ad4fa1fe19bde233294776e0d6ca186cd54593c39155b50fcee88a39",
+          "Fe_dos.out": "4e0a88310f0f12f08efff83a0d6719873519f95634ee0eee58784fac90556f8c",
+          "Fe_orbene.out": "bbefc4ca78ee2446aa1c0c6bb92817de3a1a15c02698186de33fc5fe6254b37b",
+          "Fe_orbital_dos.out": "76d0b618293d8978baa8eed4415ac2260dbad1ce9ce50cf506bc9ed70d2f3777",
+          "Fe_orbquadene.out": "5f5d88fa5025f2dc9af939559e5bbf2bd98c083eb88e974932bc26637625cf2a",
+          "Fe_out.nml": "abbca873d97dc9f4821d43dfe427c261cc699533923074409a5b125616442101",
+          "Fe_scf.nml": "abbca873d97dc9f4821d43dfe427c261cc699533923074409a5b125616442101",
+          "angles_lmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+          "angles_magmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+          "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+          "fort.800": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6",
+          "fort.805": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246",
+          "linfo.out": "9a678724ae4a77d9de9b133982a7004145a5ea389f012c4f834771f0eab01c70",
+          "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+          "magneticdos.out": "76daa56c016530fb089c235083a569ded3377f54bf8fae68091948d249123654",
+          "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+          "minfo.out": "4d1f291b039e34ce4a2a0e9ad6d7daed1d077f44615b25fd57fda12e9553c449",
+          "radial_ground_state_Fe_1.dat": "1666663c8f9121a9e65f82ad8fcd09a36a01353d1ffe33579981312bdb71dd4a",
+          "report.out": "f987491dc010430140f4788f09939098fe8fed59147d413f839aa26139c77cfb",
+          "sbar": "87d0395c7537bd90c253eff48b8ced94e6bb49644ecdd251d4c0e986ab6aad87",
+          "str.out": "fda4513e4a8033f3980d20d83e09d79b12fd9e0b732ea82d8c7d86d55148ff88",
+          "totaldos.out": "1d1cb80f346384b6c2fda4f2568b4563955dd30601686704d77ecce9dee0e396",
+          "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+          "view.sbar": "a7e2558f9fd5cb643e2cba271be818ea051b56a5119fb0edf2367692ec08bc19"
+        },
+        "run_dirs": {
+          "candidate": "/private/tmp/rslmto-c1-rb-prep/RB1_identity/local_u0_noop/local",
+          "comparison": "/private/tmp/rslmto-c1-rb-prep/RB1_identity/local_u0_noop/spectral"
+        },
+        "seed_Fe_nml_sha256_both": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c"
+      },
+      "no_U_RS_vs_clean_8b": {
+        "J_eV": null,
+        "U_eV": null,
+        "backend": "RS",
+        "candidate_binary": {
+          "path": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+          "sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37"
+        },
+        "candidate_testrun_log_sha256": "02d0231833aeb6ba60f143a2b81cc4cb9d527e8cea1422efe3abed7a335322aa",
+        "command": "RSLMTO_OMP_THREADS_SERIAL=1 /bin/bash tests/run_binary.sh <binary>",
+        "compared_result_file_count": 24,
+        "comparison_binary": {
+          "path": "/private/tmp/rslmto-ra-base-build/bin/rslmto.x",
+          "sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd"
+        },
+        "comparison_testrun_log_sha256": "c8c711b165bea81973ee082fb87bbfd8c58e1ee91a9b6882bc2456b07ef92cef",
+        "exit_code_both": 0,
+        "mode": null,
+        "nonidentical_files": [
+          "testrun.log"
+        ],
+        "nstep": 4,
+        "pre_run_input_sha256": "e6afa722bc204936042ad2773d4a8023f50b8e60fed9909a1acbb0985aa3693a",
+        "result_files_byte_identical": true,
+        "result_output_sha256_candidate": {
+          "Fe_1_spinene.out": "8fa2eda6ad4fa1fe19bde233294776e0d6ca186cd54593c39155b50fcee88a39",
+          "Fe_dos.out": "4e0a88310f0f12f08efff83a0d6719873519f95634ee0eee58784fac90556f8c",
+          "Fe_orbene.out": "bbefc4ca78ee2446aa1c0c6bb92817de3a1a15c02698186de33fc5fe6254b37b",
+          "Fe_orbital_dos.out": "76d0b618293d8978baa8eed4415ac2260dbad1ce9ce50cf506bc9ed70d2f3777",
+          "Fe_orbquadene.out": "5f5d88fa5025f2dc9af939559e5bbf2bd98c083eb88e974932bc26637625cf2a",
+          "Fe_out.nml": "abbca873d97dc9f4821d43dfe427c261cc699533923074409a5b125616442101",
+          "Fe_scf.nml": "abbca873d97dc9f4821d43dfe427c261cc699533923074409a5b125616442101",
+          "angles_lmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+          "angles_magmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+          "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+          "fort.800": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6",
+          "fort.805": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246",
+          "linfo.out": "9a678724ae4a77d9de9b133982a7004145a5ea389f012c4f834771f0eab01c70",
+          "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+          "magneticdos.out": "76daa56c016530fb089c235083a569ded3377f54bf8fae68091948d249123654",
+          "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+          "minfo.out": "4d1f291b039e34ce4a2a0e9ad6d7daed1d077f44615b25fd57fda12e9553c449",
+          "radial_ground_state_Fe_1.dat": "1666663c8f9121a9e65f82ad8fcd09a36a01353d1ffe33579981312bdb71dd4a",
+          "report.out": "f987491dc010430140f4788f09939098fe8fed59147d413f839aa26139c77cfb",
+          "sbar": "87d0395c7537bd90c253eff48b8ced94e6bb49644ecdd251d4c0e986ab6aad87",
+          "str.out": "fda4513e4a8033f3980d20d83e09d79b12fd9e0b732ea82d8c7d86d55148ff88",
+          "totaldos.out": "1d1cb80f346384b6c2fda4f2568b4563955dd30601686704d77ecce9dee0e396",
+          "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+          "view.sbar": "a7e2558f9fd5cb643e2cba271be818ea051b56a5119fb0edf2367692ec08bc19"
+        },
+        "run_dirs": {
+          "candidate": "/private/tmp/rslmto-c1-rb-prep/RB1_identity/no_u_RS/candidate",
+          "comparison": "/private/tmp/rslmto-c1-rb-prep/RB1_identity/no_u_RS/clean8b"
+        },
+        "seed_Fe_nml_sha256_both": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c"
+      },
+      "spectral_U2_J0_vs_preRB": {
+        "J_eV": 0,
+        "U_eV": 2,
+        "backend": "RS",
+        "candidate_binary": {
+          "path": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+          "sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37"
+        },
+        "candidate_testrun_log_sha256": "3d004eeac8d66d2b43cd141371f670a9157d9e79daedd716b202166cfe9976a1",
+        "command": "RSLMTO_OMP_THREADS_SERIAL=1 /bin/bash tests/run_binary.sh <binary>",
+        "compared_result_file_count": 24,
+        "comparison_binary": {
+          "path": "/tmp/rslmto-ra-current-build/bin/rslmto.x",
+          "sha256": "6ec0e5820c711115570577ddf3b2ffe9fe8c9e222e6a50061fadf773cffc0041"
+        },
+        "comparison_testrun_log_sha256": "190146785b57b424103dd76068e969f8ac5d259a302f236160697803aaa04f2e",
+        "exit_code_both": 0,
+        "mode": "spectral",
+        "nonidentical_files": [
+          "testrun.log"
+        ],
+        "nstep": 4,
+        "pre_run_input_sha256": "f87d1712fe864cc4460a785585a5995e225f0bc62b3f1c680ca11ef6bf628472",
+        "result_files_byte_identical": true,
+        "result_output_sha256_candidate": {
+          "Fe_1_spinene.out": "02299fa39a06b4787e822c35fe3b226e49587a8ea13329a2056c2d73b5be3fd1",
+          "Fe_dos.out": "6b25abe5b69df8685ee81d15f0ad69da369491e565b0c9003975d49fe9869b11",
+          "Fe_orbene.out": "daf43edd38ea13418b0c6114ab30eeb9775ec13d5c94aa07ae03f7e34a2359fa",
+          "Fe_orbital_dos.out": "cb5981f7877abf8f009899d60a10f651612d4279c8f788c942de7915c9d318db",
+          "Fe_orbquadene.out": "51a5aec7ccea7d01b376816adb3da9f917668a84d4b849120e52492427e39846",
+          "Fe_out.nml": "07aba97317a4a010c72c9e6fa0f28652b238577050b07580cb6ea026da6efcfe",
+          "Fe_scf.nml": "07aba97317a4a010c72c9e6fa0f28652b238577050b07580cb6ea026da6efcfe",
+          "angles_lmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+          "angles_magmom.out": "17c12a60f2c3848f8b8e34af79475d65f7c9e0188843ff72c88457f3ec8fdb08",
+          "clust": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311",
+          "fort.800": "83d24414c04a57b07433fdfd992d6be4f5454c01f879aeeb65882d70a3661ef6",
+          "fort.805": "582b18c86e0f75ddc82a3f48f0994e6a42c3c1ff981069c86ff0a9fcf74da246",
+          "linfo.out": "6e9d423e5680481ce46144da41d3f102d82d3065786502a7133f5cb2432e4973",
+          "mad.mat": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22",
+          "magneticdos.out": "0fbd462a2549607d58327da6cad80c052354d80146b45b88b91587412ba2713a",
+          "map": "2da411eafe3e096a067b9107973ad9bb65e6c6fe2a7b4355afa229b98e0c9ab5",
+          "minfo.out": "4d1f291b039e34ce4a2a0e9ad6d7daed1d077f44615b25fd57fda12e9553c449",
+          "radial_ground_state_Fe_1.dat": "3b778a477c55e61dbe6976fde0d4849ce522388dc3bc76e05e57b8edfbdd217e",
+          "report.out": "4588af06a9f94b148b98e5c3ef13bddc98f7b7996be808a3fa0bdbdaf60d460f",
+          "sbar": "87d0395c7537bd90c253eff48b8ced94e6bb49644ecdd251d4c0e986ab6aad87",
+          "str.out": "fda4513e4a8033f3980d20d83e09d79b12fd9e0b732ea82d8c7d86d55148ff88",
+          "totaldos.out": "ae6e2a6043805fde8e2fa671463ff83abed4b911a1aba1fbcbf571bd3329dd97",
+          "ves.out": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782",
+          "view.sbar": "a7e2558f9fd5cb643e2cba271be818ea051b56a5119fb0edf2367692ec08bc19"
+        },
+        "run_dirs": {
+          "candidate": "/private/tmp/rslmto-c1-rb-prep/RB1_identity/spectral_u2/candidate",
+          "comparison": "/private/tmp/rslmto-c1-rb-prep/RB1_identity/spectral_u2/preRB"
+        },
+        "seed_Fe_nml_sha256_both": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c"
+      },
+      "true_KS_fixed_U38_J11_active_U": {
+        "J_eV": 1.1,
+        "U_eV": 3.8,
+        "backend": "true KS, both runtime logs confirm use_kspace=.true.",
+        "candidate_binary": {
+          "path": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+          "sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37"
+        },
+        "candidate_testrun_log_sha256": "203efc7751c13d984612fb04eae0a1bac47f30ff88d7adb174d878e85cabb105",
+        "classification": "All physical result files match. str.out differs only in timing text; testrun.log differs in timestamps/source-line diagnostics.",
+        "command": "RSLMTO_OMP_THREADS_SERIAL=1 /bin/bash tests/run_binary.sh <binary>",
+        "compared_result_file_count": 22,
+        "comparison_binary": {
+          "path": "/tmp/rslmto-ra-current-build/bin/rslmto.x",
+          "sha256": "6ec0e5820c711115570577ddf3b2ffe9fe8c9e222e6a50061fadf773cffc0041"
+        },
+        "comparison_testrun_log_sha256": "0a440dab36252d884a4e26a825f64a329f24e5dcf91c8c9688ebb452fad9b61f",
+        "exit_code_both": 0,
+        "mode": "spectral/local default as staged",
+        "nonidentical_files": [
+          "str.out",
+          "testrun.log"
+        ],
+        "nstep": 4,
+        "pre_run_input_sha256_both": "86d401b5559fd6a6bda61b607b67ab57a84b3c1d8d13297207ee1df08a048d98",
+        "result_files_byte_identical": false,
+        "run_dirs": {
+          "candidate": "/private/tmp/rslmto-c1-rb-prep/RB1_identity/ks_fixed_u_final/candidate",
+          "comparison": "/private/tmp/rslmto-c1-rb-prep/RB1_identity/ks_fixed_u_final/preRB"
+        },
+        "seed_Fe_nml_sha256_both": "fcbf9541ca8c60940f9662246fc7acb841a44b7832b141241e32e8fa9caa7df1"
+      }
+    },
+    "clean_8b_binary": {
+      "label": "clean commit 8b8f7ef",
+      "path": "/private/tmp/rslmto-ra-base-build/bin/rslmto.x",
+      "sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd"
+    },
+    "pre_rb_binary": {
+      "label": "pinned pre-RB Debug comparator",
+      "path": "/tmp/rslmto-ra-current-build/bin/rslmto.x",
+      "sha256": "6ec0e5820c711115570577ddf3b2ffe9fe8c9e222e6a50061fadf773cffc0041"
+    },
+    "verdict": "PASS"
+  },
+  "rb3_capture_helper_bounds_triage": {
+    "classification": "PRE-EXISTING / diagnostic-only bounds failure: exact clean 8b physical deck/seed already fails in iteration 1 with nonfinite qia/PL; this trace helper failure is not a production SCF verdict.",
+    "clean_8b_same_physical": {
+      "binary_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+      "host_sha256": "5803721506fc5d5acd2d8fa15628cb2b2a816f8ce883c2258e6226ce1564daf3",
+      "impurity_seed_sha256": "72b23e80a7e95ffacc292f2a09ac5ac4729cebb2f529d8a88600f41f918056f0",
+      "input_sha256": "c125e82d54746392c07ca8f7a4b4bb5183edafc403dd2cae2d1a4f9272c4f312",
+      "result": "Same physical deck/seed exits on iteration 1 with nonfinite qia/PL; clean-baseline PRE-EXISTING ISSUE under C2.",
+      "run_dir": "/private/tmp/rslmto-c2-rb3-bonds-triage/clean8b_same_physical"
+    },
+    "command_effective_u0": "cd /private/tmp/rslmto-c2-rb3-bonds-triage/debug_bounds_U0_final && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RSLMTO_FIXED_U_TRACE=$PWD/fixed_u_trace.csv RSLMTO_FIXED_U_TRACE_CAPTURE_ONLY=1 RSLMTO_FIXED_U_RUN_ID=rb3_bonds_U0 ./rslmto.x > triage.log 2>&1",
+    "corrected_capture_bounds_smokes": {
+      "binary_sha256": "68abefd5e008f406f6c9e3230ac846a4ef0696b7b420ebbb7e30b814e55efea1",
+      "bulk_local": {
+        "result": "One-step CAPTURE_ONLY completed with bounds checking; full diagnostic rows emitted.",
+        "run_dir": "/private/tmp/rslmto-rb3-capture-bounds-build/smoke_bulk_local_final",
+        "trace_sha256": "5ea97a23f3b92038e2ef70a17762ea0be2b35acb08b5488c0f65a19a8deb9196"
+      },
+      "impurity_active_u": {
+        "result": "One-step CAPTURE_ONLY completed with bounds checking after diagnostic-only type-index/shell-extent fixes.",
+        "run_dir": "/private/tmp/rslmto-rb3-capture-bounds-build/smoke_impurity_active_u2",
+        "trace_sha256": "cd1a29a8edfc0554b2243f2f8f9056c2b9c7602b0521f6dcecbed2582ee304af"
+      },
+      "source_self_sha256": "ed6de38c2412bb98db77fec12079e31cd9eeac06b5e3287769e211b608f8eb15"
+    },
+    "effective_u0_debug_bounds": {
+      "binary_sha256": "68abefd5e008f406f6c9e3230ac846a4ef0696b7b420ebbb7e30b814e55efea1",
+      "console_sha256": "2a7dd69747aee99dfcf5f8a6f0079f3cbfed7fd6e335708677b36d9f2022d0d5",
+      "host_sha256": "e6b95b856e2cc65495eb7165fc7fa82395b41b5540e2b6aca05d7b39a92db6a8",
+      "impurity_seed_sha256": "4d762bcc34ecb72b35d2e467592b4c713a50ebf2399c9df6e7f1497ce7f6a255",
+      "input_sha256": "7d124b70fe6f363635baacbc28f89f3335f669bf71819d35b880b96b508afa7d",
+      "result": "Explicit U=J=0 one-step Debug/bounds companion exited 0; host and impurity potential arrays are zero. Confirms bounds path can be exercised in zero-U mode; not a production acceptance result.",
+      "run_dir": "/private/tmp/rslmto-c2-rb3-bonds-triage/debug_bounds_U0_explicit"
+    },
+    "effective_u0_debug_bounds_initial_no_explicit_block": {
+      "binary_sha256": "68abefd5e008f406f6c9e3230ac846a4ef0696b7b420ebbb7e30b814e55efea1",
+      "input_sha256": "64d034c8b5da514f4dd6cdb10089bd45169c06f332698cfe99cf483f90e95252",
+      "log_sha256": "d6161156442b65952e406829971d394a9e1ee4520d48375cbbf78818af0fa894",
+      "run_dir": "/private/tmp/rslmto-c2-rb3-bonds-triage/debug_bounds_U0_final",
+      "status": "Superseded by explicit-U=J=0 rerun above; exited 0."
+    },
+    "failed_run": {
+      "binary_sha256": "UNVERIFIED: launch manifest declares a1505001\u20267379, while preserved run-dir executable is 0c98514f\u2026b513; do not attribute either as verified launched executable.",
+      "declared_binary_sha256": "a1505001090dff1b6c63c71e15fe6adcd16769aaca8911212052450737eb7379",
+      "host_sha256": "5803721506fc5d5acd2d8fa15628cb2b2a816f8ce883c2258e6226ce1564daf3",
+      "impurity_seed_sha256": "72b23e80a7e95ffacc292f2a09ac5ac4729cebb2f529d8a88600f41f918056f0",
+      "input_sha256": "c125e82d54746392c07ca8f7a4b4bb5183edafc403dd2cae2d1a4f9272c4f312",
+      "log_sha256": "5296f17d8067f2c1fc8a2bceef6fe4293c5c38f0be84274a6849b5dca38d8b33",
+      "preserved_run_directory_copy_sha256": "0c98514f85c23e8122f9564359785bff5ed56a35db16b3d2c39147397364b513",
+      "result": "SIGABRT bounds failure in diagnostic capture helper; no production SCF verdict.",
+      "run_dir": "/private/tmp/rslmto-rb3-capture-bounds-build/smoke_impurity_active_u",
+      "runtime_failure": "Fortran bounds error at self.f90:828: atlist index 16 exceeds upper bound 2; no production SCF verdict."
+    },
+    "issue": "Debug/bounds capture run of supported Fe active-U impurity deck failed in write_fixed_u_rs_bonds at self.f90:828 when atlist(ib(isite)) indexed physical cluster atom 16 into an extent of 2."
+  },
+  "rb3_formal_gate": {
+    "accepted_endpoint_dir": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/accepted_endpoints/u2_j0",
+    "accepted_input_sha256": "11e9608f634e9d5f9c87488b228e45d151b744bed372d9f811f737298049a6ee",
+    "accepted_seed_Fe_scf_sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+    "baseline_path": "/private/tmp/rslmto-c1-rb-prep/RB3_capture/baseline.json",
+    "baseline_sha256": "c5716b70d941efb18e119f5500430310d86a7ce6cd571246d42f43e292f5ecde",
+    "capture_binary_path": "/private/tmp/rslmto-rb3-capture-bounds-build/bin/rslmto.x",
+    "capture_binary_sha256": "68abefd5e008f406f6c9e3230ac846a4ef0696b7b420ebbb7e30b814e55efea1",
+    "capture_dir": "/private/tmp/rslmto-c1-rb-prep/RB3_capture/u2_j0_full_capture1",
+    "capture_join": {
+      "C1_RS_accepted": true,
+      "current_capture_iteration": 1,
+      "d_down_spread": 1.0699791896939814e-07,
+      "d_up_spread": 1.2935791726675916e-07,
+      "diff": 1.95e-08,
+      "previous_source": "RB2 U2/J0 complete P_OUT/Diff steps 14\u201332",
+      "sphere_moment_spread_muB": 1.9530999306738295e-07,
+      "window_n": 20
+    },
+    "capture_log_sha256": "cf575d77d8162d60eb67fcadd3bef9b03b7b60c096425bd2c59def2d1c146cce",
+    "capture_manifest_sha256": "96334a610d7a39518b7a8d00d98e8505ef2520e19e71b327163628cb43d6d2a7",
+    "capture_only": true,
+    "capture_source_self_sha256": "ed6de38c2412bb98db77fec12079e31cd9eeac06b5e3287769e211b608f8eb15",
+    "cases_csv_sha256": "12cd931cb25523a3e6a778c61eedb20dd98345c02cc76e95a74ac752b24e95f1",
+    "cases_path": "/private/tmp/rslmto-c1-rb-prep/RB3_capture/cases.json",
+    "cases_sha256": "8f220c89df7b7ef2716273d58899d9a47b05dd8e2fc95bee63df54c6c1f089f5",
+    "exit_status": 0,
+    "gate_metrics": {
+      "carrier_ratio_spin1": 0.9932187896658891,
+      "carrier_ratio_spin2": 0.9997574777997361,
+      "measured_carrier_error_Ry": 0.00194623143352185,
+      "opposite_spin_separation_Ry": 0.23032719785398298,
+      "q2_prime_min_Ry2": 0.010994205495596649,
+      "scalar_abs_deviation_Ry": 1.0603373100936953e-05,
+      "scalar_allowance_Ry": 6.024223950375587e-05,
+      "sign_wrong_separation_Ry": 0.5198642192990239
+    },
+    "lock_path": "/private/tmp/rslmto-c1-rb-prep/RB3_capture/lock/rb3_capture_lock.json",
+    "lock_sha256": "8f8f97f7a8dafe8b44061b6dfe7a60b674fc19df0a4169e0069becf203c916f5",
+    "non_gate_note": "Legacy A3 diagnostic carrier_literal_error_within_A_true=false; it is outside the C1 amended gate set and is reported transparently, not treated as a C1 gate.",
+    "preregistration_path": "/private/tmp/rslmto-c1-rb-prep/RB3_capture/preregistration.json",
+    "preregistration_sha256": "d8858bcdcf4b6883ccd0f62daef7870c892a6544cfa5c209c5129d8018a1b42e",
+    "production_binary_path": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+    "production_binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+    "production_source_limit": "The raw d983 self.f90 source snapshot was unavailable; the production identity is bound to the immutable accepted RB2 manifest and verified binary hash. Capture used the separate diagnostic-only trace-helper build below.",
+    "production_source_sha256": {
+      "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+      "source/self.f90": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823"
+    },
+    "ql_only": false,
+    "rb2_endpoint_manifest_path": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/RB2_ACCEPTED_ENDPOINTS.json",
+    "rb2_endpoint_manifest_sha256": "1aaffe2e6a288b242ebcb4bc992fb1109c6a7f1ed06bb3886ba5dfbbc3ed70b0",
+    "trace_rows": 530776,
+    "trace_sha256": "ab23dd22c7a07f9481fb0aca7240e0c9c56cc2294df53eb135041a803c6eb7b3",
+    "verdict": "PASS"
+  },
+  "rb4_formal_gate": {
+    "accepted_checkpoint_sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+    "accepted_endpoint_manifest_path": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/RB2_ACCEPTED_ENDPOINTS.json",
+    "accepted_endpoint_manifest_sha256": "1aaffe2e6a288b242ebcb4bc992fb1109c6a7f1ed06bb3886ba5dfbbc3ed70b0",
+    "analyzer": {
+      "accepts_only_contiguous_trailing_P_OUT_without_Diff_as_incomplete": "true",
+      "interior_mismatch_remains_error": true,
+      "path": "tests/validation/fixed_ldau/analyze_rb4_prefix.py",
+      "sha256": "bf1df3d069277309ecc8df57cdffe3e189ce85fe7b16a301753c14349df328d9"
+    },
+    "case": "RS local-mode bcc Fe U=2/J=0 eV restart from C1-accepted RB2 endpoint",
+    "common_settings": {
+      "J_eV": 0.0,
+      "MKL_NUM_THREADS": 1,
+      "OMP_NUM_THREADS": 1,
+      "OPENBLAS_NUM_THREADS": 1,
+      "U_eV": 2.0,
+      "VECLIB_MAXIMUM_THREADS": 1,
+      "backend": "RS (use_kspace=.false.)",
+      "beta": 0.005,
+      "conv_thr": 1e-12,
+      "mode": "local",
+      "nstep": 10,
+      "trace": "QL_ONLY=1; P_OUT six rows per iteration"
+    },
+    "input_prerun_sha256": "f746a113ccdd824cfe9ea8ac767db7e85d173b4f10b8cfb02dfdbd88bae897cc",
+    "joined_prefix_C1": {
+      "earliest_qualifying_restart_steps_k": 1,
+      "k10_also_passes": true,
+      "k10_diff": 2.44e-08,
+      "k10_window_d_down_spread": 1.6071783837112719e-07,
+      "k10_window_d_up_spread": 1.390907149456666e-07,
+      "k10_window_moment_spread_muB": 2.9260044431822507e-07,
+      "same_joined_metrics_for_mpi": true,
+      "serial_diff": 1.95e-08,
+      "serial_window_d_down_spread": 1.0699791896939814e-07,
+      "serial_window_d_up_spread": 1.2935791726675916e-07,
+      "serial_window_moment_spread_muB": 2.1765095725712058e-07,
+      "within_10_steps": true
+    },
+    "mpi2": {
+      "binary": "/private/tmp/rslmto-rb-mpi-build/bin/rslmto.x",
+      "binary_sha256": "4f9bdc873c49110511e488a3d54030dee909d92b217e0c8493e0746bc440c839",
+      "dir": "/private/tmp/rslmto-c1-rb-prep/RB4_restart_final/mpi2/run_actual",
+      "exit_status": 0,
+      "final_Fe_nml_sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+      "final_Fe_scf_sha256": "56b407afc067dd163fd32c7efe70a8d0b3fb3b23dcad7b122d04bfe8e1cf2083",
+      "log_sha256": "94c0c6e4a4dc7f23d8d92c6b82f136ecb75c13f6f6e0818e482d03f46d5690e0",
+      "mpi": "Open MPI 5.0.11; `mpirun -np 2`",
+      "prefix_analysis_path": "/private/tmp/rslmto-c1-rb-prep/RB4_restart_final/mpi2/run_actual/RB4_prefix_analysis.json",
+      "prefix_analysis_sha256": "6068885b5e52d8c14ff9b5733d8662b51a77033154d80510c38281658e66f083",
+      "trace_rows": 61,
+      "trace_sha256": "e9682382a27e9518938b0baeed09c9711e0cd0ced4541b94f2e73fe2601e466d"
+    },
+    "note": "The accepted prior run contains a trailing complete P_OUT trace for step 33 but no Diff; that interrupted iteration is excluded. The RB4 analyzer was updated to ignore only this unpaired trailing suffix. All 10 restart iterations are complete.",
+    "serial": {
+      "binary": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+      "binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+      "dir": "/private/tmp/rslmto-c1-rb-prep/RB4_restart_final/serial/run_actual",
+      "exit_status": 0,
+      "final_Fe_nml_sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+      "final_Fe_scf_sha256": "56b407afc067dd163fd32c7efe70a8d0b3fb3b23dcad7b122d04bfe8e1cf2083",
+      "log_sha256": "c8553e6aed30424f99634a89d586380974fbc711552f5be49c06475b5a903146",
+      "prefix_analysis_path": "/private/tmp/rslmto-c1-rb-prep/RB4_restart_final/serial/run_actual/RB4_prefix_analysis.json",
+      "prefix_analysis_sha256": "1cc0726864b8daa5b9cf806bc0164608755a34f930afc30ddb5bb8914e01a992",
+      "trace_rows": 61,
+      "trace_sha256": "e9682382a27e9518938b0baeed09c9711e0cd0ced4541b94f2e73fe2601e466d"
+    },
+    "serial_mpi_agreement": {
+      "d_occupation_max_abs": 0.0,
+      "full_ql_trace_byte_identical": true,
+      "same_10_iterations": true,
+      "tolerance": 1e-10
+    },
+    "source_sha256": {
+      "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+      "source/self.f90": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823"
+    },
+    "verdict": "PASS"
+  },
+  "rb4_mpi_build": {
+    "binary": "/private/tmp/rslmto-rb-mpi-build/bin/rslmto.x",
+    "binary_sha256": "140f6b87ea176b23361a07ee7afb4357d9d54f98e47654864ca0ee9234e5cf70",
+    "build_dir": "/private/tmp/rslmto-rb-mpi-build",
+    "build_type": "Debug",
+    "cmake_options": {
+      "CMAKE_BUILD_TYPE": "Debug",
+      "CMAKE_Fortran_COMPILER": "/opt/homebrew/bin/mpif90",
+      "ENABLE_LIBXC": false,
+      "ENABLE_MPI": true
+    },
+    "command": "cmake --build /private/tmp/rslmto-rb-mpi-build --target rslmto.x -j4",
+    "compiler": "GNU Fortran 16.2 via /opt/homebrew/bin/mpif90",
+    "mpi": "Open MPI 5.0.11; MPI Fortran 3.1",
+    "note": "Use the matched Debug serial candidate b07a0139... for the serial-vs-two-rank RB4 comparison; do not compare the Release 0c98514... binary against this Debug MPI executable.",
+    "source_sha256": {
+      "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+      "source/self.f90": "6c3d72cd5dbb6ddd3ffcdefb1700589040294e112204cf19c0649f2b2154de4d"
+    },
+    "status": "BUILD_PASS_FINAL_SOURCE; no RB4 run launched"
+  },
+  "rb5_formal_records": {
+    "candidate_binary": {
+      "path": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+      "sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37"
+    },
+    "common_setup": "Four true-KS cases (runtime HUBBARD_RADIAL_MODE confirms use_kspace=.true.), local mode, nsp=1; each seeded from its matching C1-accepted RS state. QL_ONLY trace used for central P_OUT occupations. OMP/BLAS/MKL/VECLIB thread caps 1.",
+    "comparison_phase": "Same phase on both backends: final complete P_OUT trace at accepted terminal iteration, bulk site=0. RS iteration counts U0/U2J0/U4/U2J0.9=21/32/76/32; true-KS=79/183/59/183. Moment is sum_{l=0..2}(QL_up-QL_down), \u03bcB.",
+    "comparison_phase_trace_hashes": {
+      "RS": {
+        "u0_j0": {
+          "iteration": 21,
+          "path": "/private/tmp/rslmto-ra4-frozen/c1_trace_qlhistory_smoke_compact/fixed_u_trace.csv",
+          "sha256": "d40f67c00e245ea9f68838372c4490a883309f754053b6ed52162d29ae67243f"
+        },
+        "u2_j0": {
+          "iteration": 32,
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/accepted_endpoints/u2_j0/fixed_u_trace.csv",
+          "sha256": "8895b510bb31782ffbbebd14a546a4d42e655fd8de566c40ba7dfe8289fdf2f1"
+        },
+        "u2_j09": {
+          "iteration": 32,
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/accepted_endpoints/u2_j09/fixed_u_trace.csv",
+          "sha256": "ff9e674404155435e383780472a4ab6dba670897c99940d053af538aa26a32e8"
+        },
+        "u4_j0": {
+          "iteration": 76,
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/u4_j0/fixed_u_trace.csv",
+          "sha256": "e14ac43a6983ac216ae76b63200c06f4b8b329ef44c74f1b33f96e52167b21f5"
+        }
+      },
+      "true_KS": {
+        "u0_j0": {
+          "iteration": 79,
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u0_j0/KS/run_trueks_cont_from21/fixed_u_trace.csv",
+          "sha256": "2eb5101fc5ab3d963030798aac386fd2b4fcd538ffde6e3e8605ce7d14257751"
+        },
+        "u2_j0": {
+          "iteration": 183,
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u2_j0/KS/run_trueks_accepted_rs_seed/fixed_u_trace.csv",
+          "sha256": "39cdca01b2777dc3374b3ebd766a58f166f6fb196e0709e3adbbb155eeb68918"
+        },
+        "u2_j09": {
+          "iteration": 183,
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u2_j09/KS/run_trueks_accepted_rs_seed/fixed_u_trace.csv",
+          "sha256": "8edeab15606144a6c7106c1b2da0c8e2f64887bf1aaa7c483a7325384fd1473d"
+        },
+        "u4_j0": {
+          "iteration": 59,
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u4_j0/KS/run_trueks_accepted_rs_seed/fixed_u_trace.csv",
+          "sha256": "535e72d45326f96c3da2d82207b97276b4f792695032e314874e51debd5207e8"
+        }
+      }
+    },
+    "comparison_units": "occupations are central QL P_OUT; moment is sum_l(QL_up-QL_down), muB; shifts are true-KS minus corresponding accepted RS.",
+    "difference_in_differences_vs_u0": {
+      "definition": "For each U>0 case, difference-in-differences: [true-KS minus matching RS] at this U minus [true-KS minus RS] at U=0, using terminal complete P_OUT QL values on both sides.",
+      "difference_in_differences_by_case": {
+        "u2_j0": {
+          "d_down": -0.05742361170760635,
+          "d_up": 0.04518686652867743,
+          "moment_muB": 0.08858350700011108
+        },
+        "u2_j09": {
+          "d_down": -0.14239274665541046,
+          "d_up": 0.13438917385156746,
+          "moment_muB": 0.2681703048596522
+        },
+        "u4_j0": {
+          "d_down": -0.06967679307531238,
+          "d_up": 0.05445169473156142,
+          "moment_muB": 0.12356368943206686
+        }
+      },
+      "u0_delta_KS_minus_RS": {
+        "d_down": 0.05465422718598845,
+        "d_up": -0.04801416512510048,
+        "moment_muB": -0.10033957750963296
+      }
+    },
+    "excluded_wrong_backend_attempt": {
+      "actual_backend": "RS (runtime log use_kspace=.false.)",
+      "completed_iterations": 19,
+      "exit_status": 130,
+      "path": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u0_j0/KS/run_accepted_rs_state",
+      "status": "Excluded, preregistered correction explains use_kspace was originally placed in wrong namelist."
+    },
+    "preregistration_path": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/RB5_PREREGISTRATION.json",
+    "preregistration_sha256": "c438310b56b221317f36ff2085dfa0e35b2671973dbfe4e196e00c1ca54be611",
+    "records": {
+      "u0_j0": {
+        "accepted_rs_central_ql": {
+          "d_down": 2.14994095818039,
+          "d_up": 4.3491997462671375,
+          "moment_muB": 2.103828477208676
+        },
+        "accepted_rs_seed_sha256": "372137f56dc30d6941b9645124754807317c3a22666a69956d3ef10dad1dd47c",
+        "backend": "true KS",
+        "central_ql": {
+          "d_down": 2.2045951853663786,
+          "d_up": 4.301185581142037,
+          "moment_muB": 2.003488899699043
+        },
+        "continuation_input_sha256": "51b585501bdf203d5469d93b217fc085b911512167201e8ecefcf24646123b8f",
+        "continuation_manifest_sha256": "cc5f4678c52c9b7d1f3cfe1a83fe0545951effd469d589cc5b00ce4b63a4442b",
+        "continuation_seed_sha256": "8ffb5f92d459ca771600831ba53b2d269e40faa1b7a977a1b425d8c5ab73c6d2",
+        "continuation_steps": 79,
+        "delta_KS_minus_RS": {
+          "d_down": 0.05465422718598845,
+          "d_up": -0.04801416512510048,
+          "moment_muB": -0.10033957750963296
+        },
+        "fermi_ry": -0.0670204618,
+        "final_scf_sha256": "cf6aecf367c651b56846913fcdaa5d80f25e1f7de4bee5268fd4c43d4bf2f2f2",
+        "initial_input_sha256": "db2b15c3d29a35dd48fc42ff17fe28805faaaab32604c0139e5f0b5ba1fd0527",
+        "initial_run_dir": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u0_j0/KS/run_trueks_accepted_rs_seed",
+        "initial_steps": 21,
+        "initial_trace_sha256": "e1bf0ea4b2947c2696cccc86dd497daaed61869c2bf7a691c271cf1fc3c2475a",
+        "iterations_initial_plus_continuation": 100,
+        "j_ev": 0,
+        "last20_window": "continuation iterations 60-79",
+        "log_sha256": "d73298675f3ef7adc53b2a932dcf6e3db61ce7be0178908d33ab03552d3f462b",
+        "ql_last20_spread": {
+          "d_down": 3.5496050543315505e-11,
+          "d_up": 7.464340257001822e-11,
+          "moment_muB": 6.774403260578765e-11
+        },
+        "rs_terminal_pout_trace": {
+          "accepted_run_dir": "/private/tmp/rslmto-ra4-frozen/c1_trace_qlhistory_smoke_compact",
+          "complete_with_accepted_Diff": true,
+          "iteration": 21,
+          "path": "/private/tmp/rslmto-ra4-frozen/c1_trace_qlhistory_smoke_compact/fixed_u_trace.csv",
+          "sha256": "d40f67c00e245ea9f68838372c4490a883309f754053b6ed52162d29ae67243f",
+          "site": 0,
+          "stage": "P_OUT"
+        },
+        "run_dir": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u0_j0/KS/run_trueks_cont_from21",
+        "status": "C1-like terminal20 window and Diff pass; cap reached. Procedure deviation: continuation kept beta=0.05 instead of prescribed beta-halving after initial unaccepted 21-step cap; no more U0 runs.",
+        "terminal_diff": 0.0,
+        "trace_sha256": "2eb5101fc5ab3d963030798aac386fd2b4fcd538ffde6e3e8605ce7d14257751",
+        "trueks_terminal_pout_trace": {
+          "complete_with_diff": true,
+          "iteration": 79,
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u0_j0/KS/run_trueks_cont_from21/fixed_u_trace.csv",
+          "run_dir": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u0_j0/KS/run_trueks_cont_from21",
+          "sha256": "2eb5101fc5ab3d963030798aac386fd2b4fcd538ffde6e3e8605ce7d14257751",
+          "site": 0,
+          "stage": "P_OUT"
+        },
+        "u_ev": 0
+      },
+      "u2_j0": {
+        "accepted_rs_central_ql": {
+          "d_down": 1.8954541065424726,
+          "d_up": 4.615579015256091,
+          "moment_muB": 2.5586814053069054
+        },
+        "accepted_rs_seed_sha256": "610fa1e694f2d72bffd057eee8c3c33d46a088b0d9a9dacdbaa5f64aa995ca62",
+        "backend": "true KS",
+        "central_ql": {
+          "d_down": 1.8926847220208547,
+          "d_up": 4.612751716659668,
+          "moment_muB": 2.5469253347973835
+        },
+        "delta_KS_minus_RS": {
+          "d_down": -0.0027693845216179014,
+          "d_up": -0.0028272985964230557,
+          "moment_muB": -0.011756070509521876
+        },
+        "fermi_ry": -0.0880836123,
+        "final_scf_sha256": "1d3a15d8b401cd694edbb8385a590242b36db35c599aea9520379346077ad8d8",
+        "input_sha256": "529e9dd4a239f922de1999eae38bd7a79887d7097c98e47849011fc67ce5b9d2",
+        "iterations": 183,
+        "j_ev": 0,
+        "last20_window": "164-183",
+        "log_sha256": "b2ea7f9f9f1ee2488b3f9a9510a7c5656752c103544682afcc40af2fd87269e2",
+        "ql_last20_spread": {
+          "d_down": 5.774491995680364e-11,
+          "d_up": 8.595701928015842e-11,
+          "moment_muB": 2.7075230946138618e-11
+        },
+        "rs_terminal_pout_trace": {
+          "accepted_run_dir": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/accepted_endpoints/u2_j0",
+          "complete_with_accepted_Diff": true,
+          "iteration": 32,
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/accepted_endpoints/u2_j0/fixed_u_trace.csv",
+          "sha256": "8895b510bb31782ffbbebd14a546a4d42e655fd8de566c40ba7dfe8289fdf2f1",
+          "site": 0,
+          "stage": "P_OUT"
+        },
+        "run_dir": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u2_j0/KS/run_trueks_accepted_rs_seed",
+        "status": "Reached 183-step cap; final Diff formatted 0.0 and terminal20 QL stable; no Converged marker.",
+        "terminal_diff_printed": 0.0,
+        "trace_sha256": "39cdca01b2777dc3374b3ebd766a58f166f6fb196e0709e3adbbb155eeb68918",
+        "trueks_terminal_pout_trace": {
+          "complete_with_diff": true,
+          "iteration": 183,
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u2_j0/KS/run_trueks_accepted_rs_seed/fixed_u_trace.csv",
+          "run_dir": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u2_j0/KS/run_trueks_accepted_rs_seed",
+          "sha256": "39cdca01b2777dc3374b3ebd766a58f166f6fb196e0709e3adbbb155eeb68918",
+          "site": 0,
+          "stage": "P_OUT"
+        },
+        "u_ev": 2
+      },
+      "u2_j09": {
+        "accepted_rs_central_ql": {
+          "d_down": 2.0871455391872473,
+          "d_up": 4.413633223317772,
+          "moment_muB": 2.1987447147629537
+        },
+        "accepted_rs_seed_sha256": "a1e2b9240b8063bc2c31ffa25ef19aee40a3999b60cc60282e069b4038bb9cd0",
+        "backend": "true KS",
+        "central_ql": {
+          "d_down": 1.9994070197178253,
+          "d_up": 4.500008232044239,
+          "moment_muB": 2.366575442112973
+        },
+        "delta_KS_minus_RS": {
+          "d_down": -0.08773851946942202,
+          "d_up": 0.08637500872646697,
+          "moment_muB": 0.16783072735001925
+        },
+        "fermi_ry": -0.0848278769,
+        "final_scf_sha256": "b849e59bb5e2a2027a8208df887c98f4ef0635e0885abaddea61a949263a692e",
+        "input_sha256": "85e32c9a1d56392f49292e287e4814cf3803c9c86e97a564400b4a9c361f95af",
+        "iterations": 183,
+        "j_ev": 0.9,
+        "last20_window": "164-183",
+        "log_sha256": "edfdb50a71bb193231b3eaa2af8f83b5699921fe5b478acfdc7ec54c4e74875a",
+        "ql_last20_spread": {
+          "d_down": 3.977351781259131e-11,
+          "d_up": 1.0618439461040907e-10,
+          "moment_muB": 5.0591975053748683e-11
+        },
+        "rs_terminal_pout_trace": {
+          "accepted_run_dir": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/accepted_endpoints/u2_j09",
+          "complete_with_accepted_Diff": true,
+          "iteration": 32,
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/accepted_endpoints/u2_j09/fixed_u_trace.csv",
+          "sha256": "ff9e674404155435e383780472a4ab6dba670897c99940d053af538aa26a32e8",
+          "site": 0,
+          "stage": "P_OUT"
+        },
+        "run_dir": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u2_j09/KS/run_trueks_accepted_rs_seed",
+        "status": "Reached 183-step cap; final Diff formatted 0.0 and terminal20 QL stable; no Converged marker.",
+        "terminal_diff_printed": 0.0,
+        "trace_sha256": "8edeab15606144a6c7106c1b2da0c8e2f64887bf1aaa7c483a7325384fd1473d",
+        "trueks_terminal_pout_trace": {
+          "complete_with_diff": true,
+          "iteration": 183,
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u2_j09/KS/run_trueks_accepted_rs_seed/fixed_u_trace.csv",
+          "run_dir": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u2_j09/KS/run_trueks_accepted_rs_seed",
+          "sha256": "8edeab15606144a6c7106c1b2da0c8e2f64887bf1aaa7c483a7325384fd1473d",
+          "site": 0,
+          "stage": "P_OUT"
+        },
+        "u_ev": 2
+      },
+      "u4_j0": {
+        "accepted_rs_central_ql": {
+          "d_down": 1.7437354306644597,
+          "d_up": 4.746882500712365,
+          "moment_muB": 2.785369539502865
+        },
+        "accepted_rs_seed_sha256": "020cf104bde504ddb50fee4d99896dffd0ce2bfbf1fba4cd0112f1a34ecdf0f5",
+        "backend": "true KS",
+        "central_ql": {
+          "d_down": 1.7287128647751357,
+          "d_up": 4.753320030318826,
+          "moment_muB": 2.8085936514252987
+        },
+        "converged_marker": true,
+        "delta_KS_minus_RS": {
+          "d_down": -0.015022565889323936,
+          "d_up": 0.006437529606460934,
+          "moment_muB": 0.0232241119224339
+        },
+        "fermi_ry": -0.0688016021,
+        "final_scf_sha256": "0bf53cbf866d749c934b833d18d812aa7f005136ce03d777e6b9a24c2541d7cb",
+        "input_sha256": "1c5538d2f821a81d650262ba7a3426638274b625ca54a2a3010fec3bb09c1fbb",
+        "iterations": 59,
+        "j_ev": 0,
+        "last20_window": "40-59",
+        "log_sha256": "513976b817170ecc675a28a0590891d6124791f44ea0477ed3742200c7ce1014",
+        "ql_last20_spread": {
+          "d_down": 1.0525938387573319e-07,
+          "d_up": 9.128974198802098e-08,
+          "moment_muB": 6.591394097199554e-11
+        },
+        "rs_terminal_pout_trace": {
+          "accepted_run_dir": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/u4_j0",
+          "complete_with_accepted_Diff": true,
+          "iteration": 76,
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB2_Fe_local/u4_j0/fixed_u_trace.csv",
+          "sha256": "e14ac43a6983ac216ae76b63200c06f4b8b329ef44c74f1b33f96e52167b21f5",
+          "site": 0,
+          "stage": "P_OUT"
+        },
+        "run_dir": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u4_j0/KS/run_trueks_accepted_rs_seed",
+        "status": "Converged at step 59.",
+        "terminal_diff": 2.7e-09,
+        "trace_sha256": "535e72d45326f96c3da2d82207b97276b4f792695032e314874e51debd5207e8",
+        "trueks_terminal_pout_trace": {
+          "complete_with_diff": true,
+          "iteration": 59,
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u4_j0/KS/run_trueks_accepted_rs_seed/fixed_u_trace.csv",
+          "run_dir": "/private/tmp/rslmto-c1-rb-prep/RB5_RSKS_local/u4_j0/KS/run_trueks_accepted_rs_seed",
+          "sha256": "535e72d45326f96c3da2d82207b97276b4f792695032e314874e51debd5207e8",
+          "site": 0,
+          "stage": "P_OUT"
+        },
+        "u_ev": 4
+      }
+    },
+    "source_sha256": {
+      "source/hamiltonian_build.f90": "74fb0b29108c6dd893efda6494d96100497aefd5821cf6f450d256ee308f8b6e",
+      "source/self.f90": "d983115355e1f83770a1c19aac757efbcf9e299e15681ae0cdd4f4dd5da80823"
+    },
+    "status": "RECORDS_COMPLETE; descriptive RS-to-true-KS comparison, no additional acceptance threshold.",
+    "u0_procedure_deviation": "The U0 continuation remained beta=0.05 rather than halving beta following the unaccepted 21-step initial cap. It is reported as a deviation; no criterion was invented and no additional SCF run is authorized."
+  },
+  "rb6_formal_records": {
+    "c2_triage": {
+      "c2_triage_order": [
+        "Debug/bounds attempt",
+        "clean 8b same physical deck",
+        "explicit U=J=0 Debug/bounds replay (pre-SCF izp bound failure)",
+        "original RB6 default/tight runs were also effective U=J=0 and reproduced the Co1 NaN."
+      ],
+      "classification": "PRE-EXISTING ISSUE under C2 \u00a71: clean 8b reproduces the same nonfinite failure, and the explicit-U=0 Debug replay plus both original effective-U=0 records corroborate the inherited hcp setup/runtime failures. The explicit-U=0 bounds replay fails before SCF at lattice_lifecycle.f90:845; the two registered RB6 SCF records fail later on NaN qia / invalid PL Co1. The RB6 plateau comparison is limited to the identical transient outer-Diff sequence before NaN; no tighter-inner reduction was observed before NaN. No further RB6 runs.",
+      "clean_8b": {
+        "Co1_sha256": "b167e717e94414171b700cacff6dc935225823aadf0382dafa45dc2d908cada3",
+        "Co2_sha256": "95367dd2cbcb805d522daa3941ce4ff05e04989654a43126d7824943bdbdfabd",
+        "binary": "/private/tmp/rslmto-ra-base-build/bin/rslmto.x",
+        "binary_sha256": "8307387ecead3893f63b5348cb84a75ce1bd886becdec088e0bfa7b5e895e9fd",
+        "input_sha256": "3d8e0ce132d0e22b5619e66c355a5fee05d7f93dd1641f75045ea936016720df",
+        "log_sha256": "f596f433c404392d4aec0f7d61a400119ac278eef4b7fe9f9e64603007ab1698",
+        "path": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/c2_triage_default/clean8b",
+        "result": "Same physical U=0 deck and seed exited 1 with NaN mixed qia then Invalid PL (NaN) for atom Co1, lmax2, l0, spin1."
+      },
+      "debug_bounds": {
+        "Co1_sha256": "b167e717e94414171b700cacff6dc935225823aadf0382dafa45dc2d908cada3",
+        "Co2_sha256": "95367dd2cbcb805d522daa3941ce4ff05e04989654a43126d7824943bdbdfabd",
+        "binary": "/private/tmp/rslmto-rb3-capture-bounds-build/bin/rslmto.x",
+        "binary_sha256": "68abefd5e008f406f6c9e3230ac846a4ef0696b7b420ebbb7e30b814e55efea1",
+        "input_sha256": "6072543f2cddf2a9a167f5774fc2bfd6425e31fa1421077bdf2ce24e8a4d1842",
+        "log_sha256": "0b4b2967396461e4a66fefc254798e50c4eb7042bc5cca54c29b5eab5ddc0b39",
+        "path": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/c2_triage_default/debug_bounds",
+        "result": "Bounds runtime failed before SCF in lattice_lifecycle.f90:845: array bound mismatch this%izp dimension (50000/2) during hcp bravais setup."
+      },
+      "effective_U_J": "Both decks contain no Hubbard U/J inputs; Co1/Co2 seed potentials contain no stored hubbard_u/j arrays, so effective U=J=0.",
+      "interpretation_limit": "The Debug/bounds setup failure occurred earlier in hcp lattice initialization, so it does not localize the later NaN cause. The records are not evidence of a converged outer plateau.",
+      "original_rb6_budget": "Exactly two record runs were launched (default and tight); both exited on the same Co1 PL NaN. No retries or replacements.",
+      "original_two_runs": {
+        "default": {
+          "Co1_sha256": "b167e717e94414171b700cacff6dc935225823aadf0382dafa45dc2d908cada3",
+          "Co2_sha256": "95367dd2cbcb805d522daa3941ce4ff05e04989654a43126d7824943bdbdfabd",
+          "binary": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+          "binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+          "diff_markers_before_failure": 19,
+          "input_source_sha256": "6072543f2cddf2a9a167f5774fc2bfd6425e31fa1421077bdf2ce24e8a4d1842",
+          "last_outer_diff": 0.1321778518,
+          "log_sha256": "26beb14837e45e9ec37c9feea0dee3babdfdb01005ffdafdb7167dd1749f98bf",
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/default/run_actual",
+          "result": "Exit 1 on NaN qia / invalid PL Co1 lmax=2, l=0, spin=1; no plateau reduction observed; exactly one of the two registered runs.",
+          "runtime_input_sha256": "3d8e0ce132d0e22b5619e66c355a5fee05d7f93dd1641f75045ea936016720df",
+          "trace_sha256": "ae786cd12f2c2efa7e00fc4f47d43103aac3b4282cea82afb89ce58587de129c"
+        },
+        "tight": {
+          "Co1_sha256": "b167e717e94414171b700cacff6dc935225823aadf0382dafa45dc2d908cada3",
+          "Co2_sha256": "95367dd2cbcb805d522daa3941ce4ff05e04989654a43126d7824943bdbdfabd",
+          "binary": "/private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x",
+          "binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+          "diff_markers_before_failure": 19,
+          "input_source_sha256": "d83ce0f6db7c9baf96fc860557e0516eae62edebaf210cfa1e01097db92da650",
+          "last_outer_diff": 0.1321778518,
+          "log_sha256": "7f36a8a938ae795d8de769dca40f7e3b7619acc930ae14bac26bac8e4b6a44d5",
+          "path": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/tight/run_actual",
+          "result": "Exit 1 on NaN qia / invalid PL Co1 lmax=2, l=0, spin=1; no plateau reduction observed; exactly one of the two registered runs.",
+          "runtime_input_sha256": "5d39cd4bd1195fcc820dcf182e267cc401fe5253a4a993127157e64d8896cc86",
+          "trace_sha256": "ae786cd12f2c2efa7e00fc4f47d43103aac3b4282cea82afb89ce58587de129c"
+        }
+      },
+      "status": "C2_PREEXISTING_NONFINITE_CONFIRMED",
+      "u0_debug_replay": {
+        "Co1_sha256": "b167e717e94414171b700cacff6dc935225823aadf0382dafa45dc2d908cada3",
+        "Co2_sha256": "95367dd2cbcb805d522daa3941ce4ff05e04989654a43126d7824943bdbdfabd",
+        "binary": "/private/tmp/rslmto-rb3-capture-bounds-build/bin/rslmto.x",
+        "binary_sha256": "68abefd5e008f406f6c9e3230ac846a4ef0696b7b420ebbb7e30b814e55efea1",
+        "command": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 /private/tmp/rslmto-rb3-capture-bounds-build/bin/rslmto.x",
+        "exit_code": 2,
+        "input_sha256": "6072543f2cddf2a9a167f5774fc2bfd6425e31fa1421077bdf2ce24e8a4d1842",
+        "log_path": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/c2_triage_default/u0_debug/c2_triage_u0_debug.log",
+        "log_sha256": "519e66723aa99e780ad90e2e145b9c3b089cf653e465f0fdff81221443f4a5d4",
+        "path": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/c2_triage_default/u0_debug",
+        "result": "Explicit U=J=0 replay failed before SCF at source/lattice_lifecycle.f90:845 with the hcp this%izp (50000/2) array-bound mismatch; this reproduces the same setup failure as the Debug/bounds triage. The two registered RB6 runs independently remained the actual U=0 SCF NaN evidence.",
+        "status": "PREEXISTING_BOUNDS_FAILURE_REPRODUCED"
+      }
+    },
+    "c2_triage_path": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/RB6_C2_TRIAGE_RESULTS.json",
+    "c2_triage_sha256": "9e4fa181d56d9e0f558d1c45a947ea1d5b536091722be611e6f7a2ae791e08c7",
+    "interpretation": "Exactly two registered SCF records (default and tight); each has 19 completed Diff markers, identical histories within 1e-10, then NaN mixed qia/Invalid PL for Co1. Clean 8b and explicit effective-U=J=0 Debug reproduce the issue; classify as pre-existing under C2. Bounds replay fails earlier in hcp setup. No plateau reduction observed before failure, so tight-tolerance plateau comparison is indeterminate. No additional runs.",
+    "preregistration_path": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/RB6_PREREGISTRATION.json",
+    "preregistration_sha256": "f1b57b11a2a6847f7b85f3724f333a4d680486cadcd10e47029f25319aea2335",
+    "runs": {
+      "default": {
+        "Co1_sha256": "b167e717e94414171b700cacff6dc935225823aadf0382dafa45dc2d908cada3",
+        "Co2_sha256": "95367dd2cbcb805d522daa3941ce4ff05e04989654a43126d7824943bdbdfabd",
+        "binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+        "command": "cd /private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/default/run_actual && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 RSLMTO_FIXED_U_TRACE=$PWD/fixed_u_trace.csv RSLMTO_FIXED_U_TRACE_QL_ONLY=1 RSLMTO_FIXED_U_RUN_ID=rb6_default /private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x > c1_console.log 2>&1",
+        "completed_outer_diff_records": 19,
+        "exit_code": 1,
+        "input_sha256": "6072543f2cddf2a9a167f5774fc2bfd6425e31fa1421077bdf2ce24e8a4d1842",
+        "input_source_sha256": "6072543f2cddf2a9a167f5774fc2bfd6425e31fa1421077bdf2ce24e8a4d1842",
+        "last_outer_diff_before_failure": 0.1321778518,
+        "result": "NaN mixed qia and Invalid PL (NaN), Co1 lmax=2 l=0 spin=1; no plateau reduction before failure. This was one of exactly two registered SCF attempts.",
+        "run_dir": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/default/run_actual",
+        "run_log_path": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/default/run_actual/c1_console.log",
+        "run_log_sha256": "26beb14837e45e9ec37c9feea0dee3babdfdb01005ffdafdb7167dd1749f98bf",
+        "runtime_input_sha256": "3d8e0ce132d0e22b5619e66c355a5fee05d7f93dd1641f75045ea936016720df",
+        "trace_path": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/default/run_actual/fixed_u_trace.csv",
+        "trace_sha256": "ae786cd12f2c2efa7e00fc4f47d43103aac3b4282cea82afb89ce58587de129c"
+      },
+      "tight": {
+        "Co1_sha256": "b167e717e94414171b700cacff6dc935225823aadf0382dafa45dc2d908cada3",
+        "Co2_sha256": "95367dd2cbcb805d522daa3941ce4ff05e04989654a43126d7824943bdbdfabd",
+        "binary_sha256": "7cbb3d5a76cc580dff40769c521ac0eadebb2a38df28ce296f228e78a47c3c37",
+        "command": "cd /private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/tight/run_actual && OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 RSLMTO_FIXED_U_TRACE=$PWD/fixed_u_trace.csv RSLMTO_FIXED_U_TRACE_QL_ONLY=1 RSLMTO_FIXED_U_RUN_ID=rb6_tight /private/tmp/rslmto-c2-qlonly-debug-build/bin/rslmto.x > c1_console.log 2>&1",
+        "completed_outer_diff_records": 19,
+        "exit_code": 1,
+        "input_sha256": "d83ce0f6db7c9baf96fc860557e0516eae62edebaf210cfa1e01097db92da650",
+        "input_source_sha256": "d83ce0f6db7c9baf96fc860557e0516eae62edebaf210cfa1e01097db92da650",
+        "last_outer_diff_before_failure": 0.1321778518,
+        "result": "NaN mixed qia and Invalid PL (NaN), Co1 lmax=2 l=0 spin=1; no plateau reduction before failure. This was one of exactly two registered SCF attempts.",
+        "run_dir": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/tight/run_actual",
+        "run_log_path": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/tight/run_actual/c1_console.log",
+        "run_log_sha256": "7f36a8a938ae795d8de769dca40f7e3b7619acc930ae14bac26bac8e4b6a44d5",
+        "runtime_input_sha256": "5d39cd4bd1195fcc820dcf182e267cc401fe5253a4a993127157e64d8896cc86",
+        "trace_path": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/tight/run_actual/fixed_u_trace.csv",
+        "trace_sha256": "ae786cd12f2c2efa7e00fc4f47d43103aac3b4282cea82afb89ce58587de129c"
+      }
+    },
+    "status": "RECORDS_COMPLETE; C2 pre-existing nonfinite failure reproduced; no plateau conclusion.",
+    "u0_debug_explicit_path": "/private/tmp/rslmto-c1-rb-prep/RB6_Co_U0_two_runs/c2_triage_default/u0_debug/C2_triage.json",
+    "u0_debug_explicit_sha256": "7c94d304b466f2a3aafd223a3bdab06ac7f17b96056fffcde4c3705b196f2352"
+  },
+  "rb_candidate": {
+    "binary": "/private/tmp/rslmto-rb-impl-build/bin/rslmto.x",
+    "binary_sha256": "43f73070de890cab26ea96e386959c2fac2b567abe02d731e64cee0a799d7555",
+    "build_dir": "/private/tmp/rslmto-rb-impl-build",
+    "build_type": "Debug",
+    "fortran_compiler": "/opt/homebrew/bin/gfortran (GNU Fortran 16.2)",
+    "libxc": false,
+    "mpi": false,
+    "openmp": true,
+    "source_sha256": {
+      "source/include_codes/namelists/potential.f90": "1705d05f7162543faacb90a91103b4457b1c8c861013b1ab80967e97f1a7847e",
+      "source/include_codes/namelists/self.f90": "47787a34dabea3eeb2417bd1f9228cde5ce483391829b85f9597339f8c026c9c",
+      "source/mix.f90": "b1b91e583220c92a611a5b4762cba943d13f6ccb4e8127828184b3bc32b57b00",
+      "source/potential.f90": "368fb1e7602b72bf12a806a303a2d6ed111e1dc4eb94cb154264366306497c2e",
+      "source/self.f90": "aa82116669fc322622f4db856de606035a4b454a1030ec8ed112d9433d189b73",
+      "tests/unit/test_atomsc_residual_controls.f90": "ad3388ade145ded96d5eac0539cf4e142892aec36b1353862d49429b2deaba9a"
+    }
+  },
+  "runner": {
+    "command_template": "RSLMTO_OMP_THREADS_SERIAL=1 /bin/bash tests/run_binary.sh <binary>",
+    "path": "tests/run_binary.sh",
+    "sha256": "5d8a62a4692811cf8fa53262592024048fd79c5e87d1dc6956b4bc45af8b0445"
+  },
+  "stage": "C1-RB",
+  "status": "C2-active; RB0-RB4 PASS; RB5 records complete; RB6 records complete with pre-existing nonfinite failure and indeterminate plateau comparison.",
+  "test_evidence": {
+    "binaries": {
+      "UnitAtomscResidualControls": {
+        "path": "/private/tmp/rslmto-rb-impl-build/bin/UnitAtomscResidualControls",
+        "sha256": "2b2a30d7adc6b5c1b62439daa9e0f4c22f26eddc02f5c73ee6053c440fa23248"
+      },
+      "UnitLdaUHamiltonian": {
+        "path": "/private/tmp/rslmto-rb-impl-build/bin/UnitLdaUHamiltonian",
+        "sha256": "04bc0bd3064a3dfe4236c99b2c190df55e03d7fc8ac08eec6ab9f321ee30ed5b"
+      }
+    },
+    "command": "ctest --test-dir /private/tmp/rslmto-rb-impl-build -R 'UnitAtomscResidualControls|UnitLdaUHamiltonian' --output-on-failure",
+    "result": "PASS; 2/2 tests"
+  }
+}

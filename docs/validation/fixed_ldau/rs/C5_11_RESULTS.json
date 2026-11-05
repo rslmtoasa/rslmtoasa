@@ -1,0 +1,63 @@
+{
+  "schema": "c5_11_auto_impurity_local_results_v1",
+  "date": "2026-10-22",
+  "base_commit": "b04bcba47375",
+  "branch": "fix/ldau-impurity-auto",
+  "disposition": "T1_PASS_T2_FAIL_NO_MERGE",
+  "budget": {"scf_runs_used": 2, "scf_runs_max": 2, "push": false, "merge": false},
+  "t1": {
+    "status": "PASS",
+    "candidate_patch": "docs/validation/fixed_ldau/rs/C5_10_AUTO_CANDIDATE.patch",
+    "build": {"type": "Release", "build_dir": "/private/tmp/c511-release-build", "binary": "/private/tmp/c511-release-build/bin/rslmto.x", "binary_sha256": "535909c7687e45fa501715ee7e65e9ba4766194e75d563094ac18e4529fa92ee"},
+    "unit_fixture": {"test": "UnitAutoImpurityLocalMode", "status": "PASS", "fixture_dir": "tests/validation/fixed_ldau/fixtures/c5_impurity_auto_local"},
+    "guard_fixtures": {"status": "PASS", "count": 13, "evidence_dir": "/private/tmp/c511-guard-fixtures-v2", "python": "/Users/andersb/envs/p311/bin/python3", "c5_4_preflight": true},
+    "no_u_identity": {
+      "status": "PASS",
+      "thread_caps": {"OMP_NUM_THREADS": "1", "OMP_DYNAMIC": "FALSE", "RSLMTO_OMP_THREADS_SERIAL": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "VECLIB_MAXIMUM_THREADS": "1", "BLIS_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1"},
+      "RS": {"matched_artifacts": "27/27", "evidence_dir": "/private/tmp/c511-identity/rs"},
+      "KS": {"matched_artifacts": "24/24", "evidence_dir": "/private/tmp/c511-identity/ks"}
+    },
+    "rd3a_ni_auto": {"status": "PASS_REUSED_PRIOR_EVIDENCE", "source": "docs/validation/fixed_ldau/rs/C5_5_RESULTS.json", "resolved_mode": "local", "window": [4, 23], "note": "Existing accepted Ni auto case; no extra SCF run."}
+  },
+  "t2": {
+    "status": "FAIL_NO_ACCEPTED_WINDOW_WITHIN_TWO_RUNS",
+    "source_recipe": "/private/tmp/c52-fe-u38-impurity-record/local/immutable/input.nml",
+    "source_input_sha256": "02d50cdaee840bcfcd9790974408ac4e9a89bb6de58fa881c5d7337635796250",
+    "candidate_input_sha256": "e89477c0ea100bad84cdfe017d797da616459c3b54b9ba58f91062e59fe8b625",
+    "only_namelist_changes": [
+      {"from": "hubbard_u_impurity(1,3) = 3.8", "to": "hubbard_u_impurity(1,3) = 2.0"},
+      {"from": "hubbard_j_impurity(1,3) = 1.1", "to": "hubbard_j_impurity(1,3) = 0.0"}
+    ],
+    "input_diff_check": {"status": "PASS", "evidence": "/private/tmp/c511-t2/offline_check.json", "sha256": "9bd2712a2a545456f57a21986588ca1487ad967af767a905f11c267a4a2661dd", "fortran_runtime_mapping": "PASS U(1,3)=2, J(1,3)=0; mode=local"},
+    "host": {"path": "/private/tmp/c58-t2a-fixed-release/run/Fe_out.nml", "sha256": "2284194179736d2e6694dd40514b55578bdf2558e9826d5d7ba9d5c6cc13b4bd", "stored_mode": "local", "backend": "ks", "U_eV": 2.0, "J_eV": 0.0},
+    "geometry": {"status": "PASS_OFFLINE", "rc": 80, "ct_per_type": "2*3.0d0", "neighbor_indices": [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], "source": "/private/tmp/c52-fe-u38-impurity-record/local/run/outnewclu", "sha256": "ab130ce8ef8daa4d8305a2aaa10f7c8676a1ffae99c5b862b5bd77f457a084f5"},
+    "run1": {"path": "/private/tmp/c511-t2/run", "c5_4_preflight": "PASS", "preflight_sha256": "c8e04f2a3997ba151b3989f12acde8d619584ac0b3460f6f48e84125de5e7a7f", "binary_sha256": "535909c7687e45fa501715ee7e65e9ba4766194e75d563094ac18e4529fa92ee", "returncode": -15, "last_complete_iteration": 26, "terminal": "unexplained SIGTERM; cause unknown", "mode_line": "HUBBARD_RADIAL_MODE mode=local source=explicit use_kspace=.false. local_energy_adopted=.false.", "provenance_error": false, "trace_limitation": "rolling latest iteration only; no 20-window claim"},
+    "run2": {
+      "path": "/private/tmp/c511-t2/run2",
+      "c5_4_preflight": "PASS",
+      "preflight_sha256": "60d37505b4ee3e2d26b5fe6e0e0dbc08e0a377861262167549b9d00fbfcfbf1b",
+      "launch_record_sha256": "077f3f2dedd66d47fa1e4e8c201ba09f63dfdbe19531ae372f801a17183b125e",
+      "returncode": 0,
+      "completed_iterations": 100,
+      "restart_seed": {"source": "run1 Fe-imp_scf.nml copied as run2 Fe-imp_out.nml", "sha256_before_launch": "21f42d5e7e1b7f4f3fd5f4dbee8fa295ff9bd4ff7c0b187da17c27c14fb4c390", "same_as_run1_checkpoint": true},
+      "restart_endpoint_sha256": "997edbe35292564fd4ce00ee700c6c80a9dc3190518caf04aa2928a8f29273f7",
+      "mode_line": "HUBBARD_RADIAL_MODE mode=local source=explicit use_kspace=.false. local_energy_adopted=.false.",
+      "provenance_error": false,
+      "thread_caps": {"OMP_NUM_THREADS": "1", "OMP_DYNAMIC": "FALSE", "RSLMTO_OMP_THREADS_SERIAL": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "VECLIB_MAXIMUM_THREADS": "1", "BLIS_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1"},
+      "disk_free_bytes_min": 10677051392,
+      "captured_iterations": [1, 100],
+      "capture_manifest": "/private/tmp/c511-t2/run2/captures/trace_state_manifest.jsonl",
+      "capture_manifest_sha256": "44f0eb8c5f7d279ec8cec5b7cc816ae447b3ee7764c1d87c087f99da0ccd9cc2",
+      "first_window_archive": "docs/validation/fixed_ldau/rs/C5_11_T2_window_001_020.tar.gz",
+      "first_window_archive_sha256": "c9e8646020e99a893c30b027b7152aba610dc03ed750823ab473fde36cf64e59",
+      "acceptance_limits_from_C1_RA4": {"outer_Diff_max": 3e-8, "d_occupation_spread_max": 5e-7, "sphere_moment_spread_muB_max": 1e-6},
+      "first_complete_window_1_20": {"max_outer_Diff": 0.0099732404, "d_occupation_spread_spin1": 0.03762326150659767, "d_occupation_spread_spin2": 0.11979680900624423, "sphere_moment_spread_muB": 0.09344173201708239, "accepted": false},
+      "final_window_81_100": {"max_outer_Diff": 2.53324e-5, "d_occupation_spread_spin1": 5.6243225048824286e-5, "d_occupation_spread_spin2": 0.00020401982850781764, "sphere_moment_spread_muB": 0.00022580770327040867, "accepted": false},
+      "no_accepted_20_window_in_iterations": [1, 100],
+      "endpoint_impurity_minus_KS_bulk": {"d_spin1": 0.01512936867143111, "d_spin2": -0.027610433764281073, "sphere_moment_muB": 0.03685165959938441, "endpoint_not_accepted": true}
+    }
+  },
+  "t3": {"status": "DONE", "theory_guide": "docs/source/theory/lda_u_workflow.rst", "known_issues": "tests/KNOWN_ISSUES.md", "required_energy_phrase": "impurity energies exclude the Hubbard term", "open_issues_preserved": ["KS-local host to RS impurity numerical equivalence for Ni", "RD4 energy unmeasured and optimized-build crash/longer-run behavior"]},
+  "t4": {"status": "NOT_RUN_T2_FAILED", "merge": false, "push": false},
+  "uncovered": "C5.3 item 2 remains not adopted."
+}

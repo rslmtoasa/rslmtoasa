@@ -1,0 +1,16 @@
+C3 preregistration failed attempt 001 (adapter schema self-check)
+This record transcribes the first failed invocation captured in the tool output; no solver or case replay ran.
+Command:
+/opt/homebrew/opt/python@3.11/bin/python3.11 /private/tmp/c52-c-private/c3_c2_adapter.py --capture /private/tmp/c52-c2-stage/c3_run_debug_i1 --lock /private/tmp/c52-c2-stage/crash_triage_preflight/launch_debug_u2/accepted_c2_u2_chebyshev_endpoint_lock.json --source /Users/andersb/Jobb/rslmto_fable_v4b/source/self.f90 --binary /private/tmp/c52-c2-stage/crash_triage_preflight/frozen/debug_bounds/b8b00eff0f1a4c3b0536006f7593c53e229cac7f0c77cbfed29126125af26b69/rslmto.x --driver /private/tmp/c52-c-private/helper-build/accepted_m03_replay_driver --mode preregister --baseline-report /private/tmp/c52-c2-stage/c3_run_debug_i1/analysis/baseline.json --output /private/tmp/c52-c2-stage/c3_run_debug_i1/analysis/preregistration.json
+Exit code: 1
+Captured stderr:
+Traceback (most recent call last):
+  File "/private/tmp/c52-c-private/c3_c2_adapter.py", line 389, in <module>
+    main()
+  File "/private/tmp/c52-c-private/c3_c2_adapter.py", line 332, in main
+    require(baseline.get('status') == 'PASS_LIVE_STATE_BASELINE' and
+  File "/private/tmp/c52-c-private/c3_c2_adapter.py", line 45, in require
+    raise ValueError(msg)
+ValueError: LIVE_STATE baseline is not passing or not bound to this capture/driver
+
+Cause: preregistration looked for capture CSV/manifest hashes at the top level of baseline JSON, but the baseline writer nests them under `capture`; adapter fix subsequently passed tests and preregistration.

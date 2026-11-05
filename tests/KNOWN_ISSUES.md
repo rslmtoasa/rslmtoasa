@@ -1823,3 +1823,240 @@ campaign remain outside the established scope.
 - **Likely cause (read, not tested):** `source/symmetry.f90` passes `lattice%iz(i)` to spglib as the species, and the two sites carry different type labels, so spglib sees two species.
 - **Consequence:** the log reports the symmetry of the labelled structure, so differently labelled types of one element count as different species. Check physical inversion
   with spglib and element labels.
+
+## [RESOLVED ON WORK BRANCH; ACCEPTED BY C5.3] hcp Co impurity setup — bounds violation before SCF
+
+- **Symptom:** the Debug build reports `source/lattice_cluster.f90:996`, dimension mismatch 3 vs 50000. The clean-baseline run exits SIGKILL before SCF. The same setup error occurs at U=0, so it is not LDA+U.
+- **Resolution on this branch:** `newclu` sizes its scaled cutoff copy to the full `this%ct` extent. The Debug regression completes cluster setup with `ntype=3`, `nbas=13`, and `nrec=1`; the C5 R1 setup GATE passes. C5.3 accepts R1 without restriction; the local merge remains scheduled after Parts B–D.
+- **Evidence:** the hcp-Co deck is [`co_hcp_lattice.nml`](../docs/validation/fixed_ldau/rs/RA4_assets/prerun_inputs/co_hcp_lattice.nml); see the [C1 Co triage records](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json), [C1 RA4 results](../docs/validation/fixed_ldau/rs/C1_RA4_RESULTS.md), and [R1 cluster-sizing regression](validation/fixed_ldau/c5_hcp_co_cluster_setup.py).
+- **Follow-up:** C5.3 closed Part A after matched one-thread baseline, parent, and R1 outputs were byte-identical. See the [Part A results](../docs/validation/fixed_ldau/rs/C5_2_PART_A_RESULTS.md).
+
+## [OPEN] Co bulk U=0 non-finite
+
+- The RB6 records become non-finite after about 19–40 iterations, and the failure reproduces on `8b8f7ef`.
+- C5 Part B also ran the fixed Co block deck to its nstep=25 cap: it remained finite, exited normally, and ended at Diff=0.0054412342 Ry with only 19 valid checkpoints. The result was unaccepted; the user directed that the six-run cap remain fixed, the continuation ladder be omitted, and no adoption occur. This cap-limited run does not establish that the earlier non-finite behavior is generally absent, so the issue remains OPEN.
+- See the [RB6 results](../docs/validation/fixed_ldau/rs/C1_RB_RESULTS.md), [RB6 provenance](../docs/validation/fixed_ldau/rs/C1_RB_PROVENANCE.json), and [C5.2 Part B record](../docs/validation/fixed_ldau/rs/C5_2_PART_B_RESULTS.md).
+
+## [OPEN, low priority] Fe U>0 embedding offset
+
+- An Fe impurity in an Fe host at U=3.8 eV, J=1.1 eV differs from RS bulk by −6.6×10⁻³ μB, about 735× the U=0 control. The Hubbard operators, Fermi level and Green's-function evaluation are identical; the recursion coefficients differ.
+- The probable cause is the cluster recipe mismatch: rc=80 for bulk and rc=100 for the impurity. The matched-cluster test is blocked by entry 4. Ni does not show the effect.
+- C5 R2 did not produce an RS-accepted rc=100 bulk reference or update the impurity-to-bulk ratio; this entry remains OPEN.
+- See the [C1 RA4 results](../docs/validation/fixed_ldau/rs/C1_RA4_RESULTS.md) and [C1 RA4 provenance](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json).
+
+## [OPEN] RS rc=100 runs non-finite or non-converging
+
+- The Fe rc=100 impurity-style deck becomes non-finite after 102 iterations at U>0 and 34 at U=0. The rc=100 U=0 bulk is not accepted after 600 steps. These failures reproduce on `8b8f7ef`.
+- C5 R2 captured one Debug Fe U>0 trajectory from the accepted rc=80 endpoint. The d-spin occupation first exceeded its five-state capacity at iteration 90 (`ql=16.023218979776722`); iteration 102 was the first snapshot with NaNs, with the first observed radial RSEQ NaN in the log at `l=2`, channel 0, `E=-50 Ry`. Snapshot 101 was wholly finite but already followed the occupation violation and was not accepted. This localizes an observed trajectory failure but does not establish its root cause.
+- C5.3 B1 now stops collinear `nsp=1` SCF when active q0 exceeds the per-spin `2l+1` capacity by more than 1e-6, and rejects non-finite active mixed-q/PL or new q1 values; the [B1 regression tests](../docs/validation/fixed_ldau/rs/C5_2_PART_B_RESULTS.md) cover the guard and allowed boundary. This guard changes no physics arithmetic or defaults.
+- The C5 B2(a) Fe rc=100 Chebyshev run reached an accepted step59 endpoint (Diff=1.40e-8 Ry; d-spin ql spreads 2.0146e-7 and 4.0140e-7). Twenty printed physical moment values matched at F10.6, bounding the true spread by <=1e-6 μB without claiming zero. The worker intentionally stopped after preserving this endpoint; later in-progress outputs were not used. This does not identify why earlier block runs became non-finite or establish a general safe range.
+- Fe rc=140 runs are INVALID_SETUP and are not part of this entry.
+- See the [C4 A4.1 results](../docs/validation/fixed_ldau/rs/C4_A41_RESULTS.md), [C4 A4.1 provenance](../docs/validation/fixed_ldau/rs/C4_A41_PROVENANCE.json), [C1 RA4 provenance](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json), and [C5.2 Part B results](../docs/validation/fixed_ldau/rs/C5_2_PART_B_RESULTS.md) and [provenance](../docs/validation/fixed_ldau/rs/C5_2_PART_B_PROVENANCE.json).
+
+## [INFORMATIONAL] RS/KS identity checks and thread counts
+
+RS/KS results are not bitwise reproducible across thread counts (reduction order, ~1e-15 relative). Use single-thread runs for identity checks.
+
+## [OPEN, 2026-10-21] Ni impurity W1 lambda-zero SIGSEGV in optimized builds
+
+- **Symptom:** the same frozen Ni lambda=0 W1 deck exits with SIGSEGV during the first recursion in Release and RelWithDebInfo. The RelWithDebInfo run reaches the d-shell physicality diagnostics for l=1, spin=2, then reports only three raw address frames; no complete SCF trace or endpoint is produced.
+- **Evidence:** the fresh RelWithDebInfo replay, exact input hashes, source/build provenance, preflight and raw log are recorded in [`C5_4_T4_RD4.json`](../docs/validation/fixed_ldau/rs/C5_4_T4_RD4.json). The prior Debug bounds run passed 36 loops without a bounds error or backtrace; this does not identify the optimized-build crash cause.
+- **C5.8 update:** the current Release trace crash was localized to an unassociated `pl_bands%control` read in fixed-U replay (`source/self.f90` replay setup called `calculate_pl`, which reads `this%control%nsp` at `source/bands.f90:2254`; the fault address was `0x14`). Binding the replay object's control pointer fixes that diagnostic path. The fixed current Release T2a campaign completed three iterations. A separate Release regression using the exact private C52/C54 W1 source plus only this pointer binding captured the first complete lambda-zero iteration and was externally stopped; it did not crash through that iteration. This is a bounded diagnostic regression, not an RD4 energy measurement or proof of longer-run behavior.
+- **C5.9 bounded rerun:** the exact Release lambda-zero deck on the pointer-fixed W1 source captured one complete stable iteration and was externally stopped; no crash occurred through that iteration. No RD4 energy was measured, and longer-run behavior remains untested.
+- **Disposition:** OPEN for RD4 energy/longer-run behavior; impurity energy routing remains off and no diagnostic energy term is adopted. The C5.8 cause and bounded regression are recorded in [`C5_8_RESULTS.md`](../docs/validation/fixed_ldau/rs/C5_8_RESULTS.md) and [`C5_8_RESULTS.json`](../docs/validation/fixed_ldau/rs/C5_8_RESULTS.json).
+
+## [CLOSED, 2026-10-26] Ni magnetic host collapses from supplied magnetic bulk seeds in S0b
+
+- The user-supplied Chebyshev/`rc=60` bulk references are magnetic: no-U `0.670705 μB`, explicit U=J=0 `0.670705 μB`, and U=4/J=1 eV `0.808656 μB`. Using the explicit-zero-U potential as the seed for the requested RS fcc block-recursion/`rc=80` U=0 host produced an RS-accepted endpoint with P_OUT q0-derived moment `7.5853e-8 μB` (saved post-mix state ql moment `1.6378e-9 μB`). Restarting from that endpoint with U=3/J=0.7 and `auto` (resolved to `local`) produced an RS-accepted endpoint with P_OUT q0-derived moment `1.3419e-8 μB` (saved post-mix state ql moment `4.8535e-9 μB`). Both are below the `0.4 μB` gate. RD2 and RD3(a) were not run because the S0b stop condition was met.
+- Recheck the magnetic host workflow before treating Ni impurity results as representative. Evidence and uncovered checks: [`S0B_RESULTS.md`](../docs/validation/fixed_ldau/S0B_RESULTS.md); corrected run artifacts are under `/private/tmp/s0b_ni_t1a_userseed` and `/private/tmp/s0b_ni_t1b_userseed`.
+- **S0c update (2026-10-26):** the earlier RD2/RD3(a)/`auto` Ni gates ran on effectively non-magnetic block-recursion Ni; they are consistency tests, not tests of the spin-dependent correction. The user's own Chebyshev bulk deck (`RS-utils/tmp/Cheb/fccNi`, rc=60, lld=150, nsp=1, restarted from the user's `Ni_out.nml`, only `nstep` changed) gives a magnetic host: U=0 stopped at its convergence test after 18 steps, Diff `7.5e-9`, moment `0.670705 μB` (the user's value). Restarting that state with U=3/J=0.7 eV and `auto` (resolved to `local`) converged at step 76, Diff `5.0e-9`, moment `0.786506 μB`, d occupations `4.719841/3.869480` (up/down), E_F `-0.077760 Ry`, E_Hub `0.09116 Ry`. Occupation and moment values are logged to six decimals, so the 20-step spreads (`0`, `0`, `1e-6 μB`) are at that resolution, and the U=0 run had 18 iterations in its window. RD2 and RD3(a) on this host remain unrun. Artifacts: `/private/tmp/claude-501/-Users-andersb-Jobb-rslmto-fable-v4b/b0f6a48b-9da8-44de-95c6-39f047c59377/scratchpad/t2/`.
+- **S0d full-precision window (2026-10-26):** both hosts were continued 25 steps from their converged endpoints (`conv_thr = 1.0e-30` added so the run does not stop at its convergence test; otherwise unchanged) and the per-iteration `Ni_scf.nml` was snapshotted (23 snapshots each). Spreads over the last 20 snapshots, from the potential-file `ql(1,:,spin)`: U=0 d occupation up/down 6.7e-8 / 5.1e-8, moment (sum over l of up minus down) 4.9e-8 muB; U=3/J=0.7 d occupation 8.4e-8 / 4.5e-8, moment 1.15e-7 muB. Outer Diff 1.5e-8 and 6.6e-9 (maxima over the window 2.8e-8 and 1.8e-8). Values: U=0 d up 4.627454, d down 3.913194, moment 0.670705 muB; U=3 d up 4.719841, d down 3.869480, moment 0.786506 muB. Both meet the acceptance thresholds (3e-8, 5e-7, 1e-6) and exceed 0.4 muB. The sum-over-l moment reproduces the logged moment to six decimals. RD2 and RD3(a) on this host remain unrun: no Chebyshev Ni impurity deck path was supplied, so the entry stays OPEN.
+- **S0d impurity runs (RD3(a), 2026-10-26):** the user's `example/impurity/fccNi` deck needed `calctype = 'I'` (see the `calctype='B'` entry below); otherwise copied, changing `nstep`, `conv_thr = 1.0e-30`, fermi and the host file. Hosts: the converged T2 U=0 (E_F -0.063509) and U=3/J=0.7 (E_F -0.077760) Ni endpoints; impurity seed `Ni-imp.nml` unchanged (fresh atomic); local mode; U=3 impurity via `hubbard_u_impurity(1,3)=3.0`, `hubbard_j_impurity(1,3)=0.7` (the zero `hubbard_u_general` lines removed for that run). U=0 impurity: 60 steps, final Diff 6.0e-9 (window maximum 3.06e-8), spreads over the last 20 `Ni-imp_scf.nml` snapshots d up 5.9e-8, d down 9.6e-8, moment 9.1e-8 muB. U=3 impurity: not accepted at 60 steps (Diff 7.3e-8, spreads about 2e-5); accepted after one ladder step (200 steps, beta 0.05): Diff 5.2e-9 (window maximum 1.08e-8), spreads 4.6e-9, 5.8e-9, 2.7e-8. Impurity minus bulk (d up, d down, moment): U=0 +1.271e-3, -2.725e-3, +3.648e-3; U=3 +6.86e-4, -1.857e-3, +2.104e-3; ratios U=3/U=0 0.54, 0.68, 0.58 against the 10x gate: **PASS**. Impurity moments 0.674353 (U=0) and 0.788610 muB (U=3).
+- **RD2-lite on the converged U=3 impurity:** Tr(P) - q0 = 3.6e-15 and -1.3e-15. The same-call identity Tr(M1) = q0*c fails as written: -0.35430 (up) and -0.18924 (down) against 1e-10. The residuals equal Tr(V_in P) = -0.354295377766329 and -0.189235375606283 to 9e-16 and 3e-16, the same behaviour as the Chebyshev bulk case (stored centre already carries the local correction). The diagnostic's local-mode `local_q2` column (-1.05e-2 up, +1.91e-2 down) subtracts that shift twice and is not interpreted. The carrier check from local and spectral single-step replays was not run (needs new tooling). This entry stays OPEN: RD3(a) passes on the magnetic host, RD2 is incomplete pending a decision on the identity criterion.
+- **Closed (S0f):** RD3(a) passed on the magnetic Chebyshev host (ratios 0.54, 0.68, 0.58) and RD2 passed as the same-call identity with the local-mode form plus the production c'/q2' check above (residuals 1e-15, 1e-17).
+
+## [OPEN, 2026-10-22] KS-local host to RS impurity numerical equivalence for Ni
+
+- The production `auto` rule selects local impurity density moments only when every U-carrying frozen host potential records local mode. The rule supports both RS-local and KS-local hosts; it does not establish numerical equivalence between those workflows.
+- No accepted Ni KS host is available, so the KS-host-to-RS-impurity Ni comparison remains unvalidated. The C5 Fe smoke run does not close this Ni-specific issue.
+- Impurity Hubbard energy remains excluded; RD4 energy is unmeasured. See `docs/validation/fixed_ldau/rs/C5_10_RESULTS.md`.
+
+## [EXPERIMENTAL, OPEN, 2026-10-22] Surface LDA+U: Ni baseline and local-density physicality
+
+- Surface LDA+U remains experimental. Ni(001) probes observed a narrow-window projected-DOS/NaN failure; widening the energy window to 1.5 Ry did not change it.
+
+- C6.4 fixes the surface recursion-site to cluster-site to type mapping for the local-moment
+  correction. Its T1 identity (RS 27/27, KS 24/24), 13 guard fixtures, impurity/surface auto
+  fixture, and frozen-plus-recursive-site oracle all pass. In the Ni(001) RS-local U=3/J=0.7
+  smoke run, auto selected `mode=local` without a provenance error, but the moment routine stopped
+  on a negative rotating-frame density eigenvalue at site 2, l=0 (`lambda_min=-3.15867e-6`)
+  before C5.13 convergence. The final Diff and 20-step spread criteria were not met.
+- The C6.4 U=0 Ni control launch failed at iteration 8 on a non-finite guard for the ES site's
+  `PL` field. That launch missed its required C5.4 preflight and is recorded only as a failed
+  diagnostic attempt, not valid baseline evidence. Neither attempt provides converged layer
+  occupations/moments or a U-dependent surface-minus-bulk comparison. T3 Cu KS-host validation
+  was not run after the T2 smoke gate failed.
+- Surface Hubbard-energy routing remains OFF; no surface energy claim or comparison is made. See
+  `docs/validation/fixed_ldau/rs/C6_4_RESULTS.md`.
+- The user supplied a six-layer no-U Ni(001) snapshot, but its candidate manifest has only one
+  Diff record (6.68e-8), no matching preflight, and host metadata E_F (-0.061969 Ry) inconsistent
+  with the surface deck/log (-0.062420 Ry); it does not satisfy the reference condition.
+- **Latest checked probe (2026-10-25):** current-tip T1 passed (RS 27/27, KS 24/24, guards
+  13/13, auto fixtures 1/1, multisite oracle 1/1). In the copied two-layer Ni(001) fixture,
+  U=3/J=0.7 auto selected local with no provenance error. The two-step Diffs were
+  0.0163260002 and 0.3869175281, failing the user-approved <=5e-8 response gate. The U=0
+  control Diffs were 0.0162421175 and 0.3840255893. Layer occupations/moments and checked
+  preflights are recorded in `docs/validation/fixed_ldau/rs/C6_6_SURFACE_PROBE_RESULTS.md`.
+  These short probes do not establish converged surface observables or an accepted no-U surface
+  reference.
+- **Capture-path correction (2026-10-25):** investigation found that surface recursion initialized
+  exact RD1 `V_in` capture neither at the `S` recursion entry nor at the `build_bulkham` `ee`
+  insertion used by surfaces. Both omissions are fixed on the work branch. The checked rerun now
+  completes and consumes the current-iteration surface operand, but its final Diff is unchanged
+  (`0.3869175281`) and the <=5e-8 two-step gate still fails. The U=0 control also fails with
+  Diff `0.3840255893`; the large Diff is therefore not isolated to the LDA+U correction. A checked
+  U=0 diagnostic lowering beta from 0.1 to the fixture's 0.002 leaves step-2 Diff at 0.3838386972
+  and retains the external-layer charge warning. The failure arises during the surface
+  charge/density response from the bulk-potential seed and is not fixed by beta reduction; later
+  convergence remains unevaluated. See `docs/validation/fixed_ldau/rs/C6_6_CAPTURE_FIX_RESULTS.md`
+  and its archived preflight-bound evidence.
+- **User Ni(001) zero-U comparison (2026-10-25):** the user-run no-U deck and explicit U=J=0 deck
+  produce identical physical output for their one-step runs, so the zero-U deck-equivalence gate
+  passes independently of convergence. Both report Diff `7.71e-8`; this does not test nonzero U.
+  The user states that the `5e-8` threshold is unsuitable for these surface probes and should be
+  raised; a replacement value remains unspecified. These outputs had no C6.5 preflight record and
+  are documented as a zero-U comparison, not checked smoke evidence. Follow-up checked U=3/J=0.7
+  diagnostics selected local mode, but Chebyshev runs produced NaN projected DOS / `g0` and stopped
+  at the local moment correction. Widening the energy window from `0.5` to `1.5` Ry did not change
+  the failure. A block-recursion diagnostic was interrupted after it stopped producing output and
+  is inconclusive. A later user Ni U=4/J=1 probe completed one widened-window step (Diff 0.0232231)
+  but step 2 again produced NaNs and the status-5 local-moment fatal. The user-supplied magnetic
+  `Ni_out.nml` was not used as the bulk regeneration seed; the symmetric accepted Ni seed yielded
+  very small moments. A type-4-off attempt was invalid because the copied restart potential itself
+  embedded U/J. The zero-U equivalence gate is closed; the nonzero-U response remains OPEN. See
+  `docs/validation/fixed_ldau/rs/C6_7_ZERO_U_COMPARISON/RESULTS.md` and
+  `docs/validation/fixed_ldau/rs/C6_8_NI_U4J1_PROBE/RESULTS.md`.
+- C6 stopped after the failed RS smoke gate; Cu T3 and workflow documentation/merge remain
+  unrun. Surface Hubbard-energy routing remains OFF. C6.5's checked launcher is mandatory for
+  campaign runs.
+- **Update (2026-11-04):** collinear Ni(001) U=3/J=0.7 on types 1, 3, 4 with a U=3 bulk host ran 200 steps, Diff 3.5e-6 (first below 5e-6 at step 179; RS window not met, spreads 1e-6 to 3e-5); taken as converged at conv_thr 5e-6 by the user. Moments 0.768/0.713 muB (Ni-S/Ni-S-1) vs U=0 0.689/0.640; tables in `tests/validation/fixed_ldau/decks/ni001_u3/README`.
+- Before 11a3b32c, embedded runs rewrote frozen host dm headers (hash mismatch on rerun).
+
+## [CLOSED, 2026-10-22] Impurity auto mode with local U-carrying hosts
+
+- For `calctype='I'`, `auto` now selects local impurity density moments when every U-carrying frozen host potential records local mode, including decks that supply `hubbard_u_impurity`/`hubbard_j_impurity`. The focused fixture verifies this path has no provenance error; the existing RD3(a) Ni auto case continues to resolve local.
+- This closes the mode-selection issue only. The C5.12 Fe smoke run, rejudged under C5.13 workflow thresholds, passed convergence, provenance, and explicit-local mode checks; it did not exercise `auto`. The separate OPEN KS-local-host to RS-impurity numerical-equivalence issue for Ni remains open. Impurity Hubbard energy routing remains off; RD4 energy remains unmeasured.
+- Evidence: `docs/validation/fixed_ldau/rs/C5_13_RESULTS.md`; the auto impurity-U fixture and prior RD3(a) Ni auto case are recorded in `C5_11_RESULTS.md`.
+
+## [CLOSED, 2026-10-26] Chebyshev recursion with fixed U: validated for collinear bulk and impurity
+
+- **Verified (source audit):** with `recur='chebyshev'` the SCF fills the full on-site `g0(i,j)` from `mu_n(nb,nb,...)`, whose starting states are identity blocks on the recursion site (`recursion_chebyshev.f90:chebyshev_recur`). `P` and the energy-weighted matrix read that same `g0` (`bands.f90`). No random vectors enter; `RSLMTO_KPM_RANDOM_SEED` is used only in the transport code (`recursion_transport.f90`). No guard was added.
+- **Measured (T1(b), bcc Fe rc=80, nsp=1, local, J=0, window -1.0 to 1.3 Ry, 2500 points, 60 steps each from the C5.2 accepted Chebyshev states; block lld=21, Chebyshev lld=150, beta 0.005):** Chebyshev minus block.
+
+| quantity | U=0 | U=2 eV | ratio U=2/U=0 |
+|---|---|---|---|
+| d occupation up | 3.31e-3 | -4.98e-3 | 1.5 |
+| d occupation down | -4.64e-3 | 6.71e-3 | 1.4 |
+| sphere moment (μB) | 8.27e-3 | -7.53e-3 | 0.91 |
+| E_F (Ry) | 2.7e-5 | 9.75e-4 | 36 |
+| E_Hub (Ry) | n/a (zero at U=0) | 5e-4 (0.1093 vs 0.1088) | n/a |
+
+  The gate (U=2 difference at most 10x the U=0 difference) fails on E_F. The block arms ended at Diff 3.1e-8 (U=0) and 1.3e-8 (U=2), last-20 maxima 4.9e-8 and 1.5e-7; the Chebyshev arms at 1.1e-8 and 2.0e-8. Occupations and moments are logged to six decimals, so the acceptance spreads are not resolved, and U=0 d occupations are taken from the final `ql`. The E_F offset is about one energy-grid spacing (2.3 Ry/2500 = 9.2e-4 Ry); that is a guess and was not tested.
+- **Not run:** T1(c) frozen local-versus-spectral replay. The existing C3 pipeline is bound to a frozen Debug binary and private `/private/tmp/c52-c2-stage` artifacts. The C5.2 Part C record of a replay on an accepted Chebyshev U=2 state (carrier ratios 0.99325 and 0.99976, q2' 0.01367 and 0.01129 Ry^2) predates S0 and is not new evidence. Chebyshev stays unvalidated for fixed U.
+- **S0d criteria (same Fe states):** (a) E_F: |dE_F(U=2)| = 9.75e-4 Ry against 2 x the energy-mesh spacing 2 x 9.2e-4 = 1.84e-3 Ry (spacing 2.3 Ry/2500 before the grid is aligned to E_F; 9.195e-4 and 9.204e-4 for the two arms): **PASS**, 0.53 of the limit. (b) E_Hub(U=2): 0.1092905 (Chebyshev) against 0.1088446 (block), relative difference 4.10e-3 against 1e-2: **PASS**. (c) Same-call identity on a 1-iteration traced Chebyshev U=2 local run from the converged state: Tr(P) - q0 = 1.8e-15 and 4.4e-16 (up, down), but Tr(M1) - q0*c = -0.28702 (up) and +0.026921 (down) against 1e-10: **FAIL as written**. The residuals equal Tr(V_in P) = -0.28701905535309258 and +0.026921001548042802 to 1.3e-15 and 2.4e-16. The same state in `spectral` mode gives Tr(M1) - q0*c = 1.3e-15 and -2.4e-16: the identity holds when the stored centre is unshifted. In `local` mode the stored `gravity_center` already has the LDA correction (c - t/q0), so the diagnostic compares Tr(M1) with a shifted centre. That reading is consistent with the numbers, not separately proven. Chebyshev is therefore not declared validated under the S0d rule. Consequence for the diagnostic: in local mode its `local_center`/`local_q2` columns subtract t a second time. Proposal (not done): evaluate the identity against `c + t/q0` in local mode, a few lines in `ldau_diagnostics.f90`. Artifacts: `scratchpad/t1/fe_cheb_U2_trace` and `fe_cheb_U2_trace_spectral`.
+- **S0f decision (user-approved) and measurements:** in local mode the same-call identity is Tr(M1) = q0*(c' + t/q0), with c' the stored corrected centre and t = Tr(V_in P). Residuals: Chebyshev bulk U=2 (S0c T1(c) trace) -1.3e-15 (up) and 2.4e-16 (down) after removing t; Ni U=3/J=0.7 impurity (RD2-lite trace) -8.8e-16 and -3.1e-16; on the S0f traces -1.1e-15 and -1.1e-16. Both recorded as PASS; Chebyshev is validated for fixed U in collinear bulk and impurity runs. The diagnostic now compares against c' + t/q0 in local mode and reports the stored q2' instead of correcting it again (`ldau_diagnostics.f90`); the d-channel `m1_trace_consistency` row is not written in local mode (`m0_trace_consistency` carries the identity). The in-run formula recomputation needs the spectral c and q2, which exist only in a spectral run; the cross-run check below covers it.
+- **Production q2 check (S0f T3):** two one-step traced runs from the same converged U=3/J=0.7 Ni impurity restart, one spectral and one local (the spectral run needed the frozen host's mode field and sidecar hash restamped to `spectral`; data unchanged). The first-iteration P, M1 and V_in are bit-identical between the runs (max difference 0.0). Spin up/down: stored c' - (c_spec - t/q0) = 0.0 and 0.0 (limit 1e-12); stored q2' - [q2_spec - 2 Tr(V M1c) + Tr(V^2 P) - t^2/q0] = 1.4e-17 and -1.4e-17 (limit 1e-10), with t, Tr(V M1c) and Tr(V^2 P) evaluated in Python from the traced matrices. The q2 shift being tested is 5.4e-5 (up) and 2.2e-3 (down). Negative control with the opposite spin's V: c' and q2' differ by 2.9e-2/-3.1e-3 (up) and -2.6e-2/2.2e-3 (down); a P-transposed control is null because P is real-symmetric here. Artifacts: `scratchpad/t3/s0f_loc`, `s0f_spec`, `verify_s0f.py`, `s0f_verify.json`.
+
+## [CLOSED, 2026-10-26] Tests failing at both `90f57c3` and the S0 merge
+
+- `Val04RsImpurityEnergyDiagnostic` (`rs_embedding_ra1.py`): the reported and independently evaluated impurity energies differ by 1.24e-12 Ry against a 1e-12 tolerance. The original script with the `90f57c3` binary gives identical numbers, so it is not caused by S0. Tolerance not touched.
+- `Example_bulk_bccFe_nsp2_hubbard` (quick tier): fatal "Fixed-U LDA+U currently requires collinear scalar-spin input" for an `nsp=2` deck. The `90f57c3` binary stops with the same fatal.
+
+## [OPEN, 2026-10-26] `calctype='B'` with an impurity cluster stops in the local Hubbard correction even at U=0
+
+- **Verified:** the user's Ni impurity deck (`example/impurity/fccNi`, `pre_processing='newclubulk'`, two types, Chebyshev, `hubbard_radial_moments='local'`, all U/J zero) with `calctype='B'` stops with "Unable to map local d-shell Hubbard potential" (`bands.f90`, `extract_hubbard_d_shell_potential`) after the first recursion. The log shows a freely solved E_F of +0.002069 Ry against the host's -0.0635. The same deck with only `calctype='I'` runs (preflight host-E_F check passed; one step gave an impurity moment of 0.682485 muB, Diff 1.66e-3). The stop reproduces with a converged magnetic U=0 host in place of the example's `Ni_out.nml`, so it does not depend on the host file.
+- **Not verified:** the cause. The code path for `B` uses `itype_local = ib(na_glob)`, the geometric representative index, which can exceed the number of Hubbard types; this matches the symptom but was not instrumented.
+- **Proposal (not done):** a fatal at input time for `calctype='B'` with an impurity-cluster pre-processing, or skipping the correction when no atom carries U/J. About 10 lines.
+
+## [OPEN, 2026-10-26] `soc_scale` rescales only the restart SOC strength; `xi` is recomputed every iteration
+
+- **Verified:** `soc_scale` multiplies `xi_p` and `xi_d` once when `&self` is read (`self.f90:1787`). After each atomic SFC the same arrays and `rac` are recomputed from the radial potential unless `fix_soc = .true.` (`self.f90:5711`). Converged bcc Fe KS states with nsp=2 `soc_scale=0` and `soc_scale=1` (U=2/J=0) agree to 1e-8 in the d occupations (4.526370207 against 4.526370198); with `fix_soc = .true.` and `soc_scale=0` nsp=2 equals nsp=1 (KS: exactly at U=0, 9e-10 at U=2; RS: identically over 200 iterations). Without `fix_soc`, `soc_scale=0` removes SOC only in iteration 1.
+- **Effect on records:** the S3 and S3.1 nsp=2 versus nsp=1 comparisons without `fix_soc` measured the real SOC effect (converged moment from `ql`, nsp=2 minus nsp=1: RS +2.3e-4 at U=0 and -5.5e-3 at U=2; KS -2.8e-4 and -2.35e-3), not a spinor-path difference.
+- **Proposal (not done):** document that `soc_scale=0` needs `fix_soc`, or apply `soc_scale` after the recomputation. About 3 lines.
+
+
+## [OPEN, 2026-10-26] RS local-mode +U transient amplifies 1e-13 seed perturbations
+
+- **Verified:** bcc Fe, RS block, nsp=1, U=2 eV, J=0, `hubbard_radial_moments='local'`, beta 0.01 Broyden, fixture seed, 20 steps. Changing one seed occupation by a relative 1e-13 changes the logged Diff by 7.3e-9 at iteration 3, 6.3e-8 at iteration 12 and 1.1e-6 at iteration 20, and the logged spin moment by up to 7e-6. The trajectory has large steps (E_F -0.103 Ry to -0.071 Ry at iteration 7).
+- **Consequence:** two implementations that differ at roundoff level cannot be required to agree to 1e-10 over the first 20 iterations of this run; the nsp=2 spinor run stays identical to nsp=1 through iteration 11 (see `SPINOR_DM_CONTRACT.md`). Converged KS states agree to 1e-9.
+- **Not diagnosed:** which step of the SCF cycle amplifies (suspect the discrete Fermi-level grid search); the converged states of the nsp=1 +U RS run stall at Diff about 2e-6 with beta 0.01.
+
+## [CLOSED, 2026-10-27] `e_external` and `test_lambda_trace_wp` are 0 for W1 runs with U=J=0
+
+- **Verified:** bcc Fe, KS nsp=1, `hubbard_u_general(1,3)=0`, `hubbard_j_general(1,3)=0`, `hubbard_radial_moments='local'`, `hubbard_test_operator='w1'`, lambda 0.005, 3 steps: `HUBBARD_MOMENT_ENERGY_TOTAL` prints `e_external=0` and `n_up=n_dn=0` in the site line, with the `90f57c3` binary and the current one. `hubbard_u_general_check` is false at U=J=0, and `save_ldm_to('new')` is guarded by it (`self.f90`), so `ldm_new` stays zero.
+- **Not verified:** how the earlier W1 U=0 campaign obtained its `Tr(W P)` (the A5 harness may have used other decks or its own P_OUT capture).
+- **Fixed (S5b):** `ldm_new` is saved for W1 runs at U=J=0 (log only); KS nsp=2 `e_external` 0.0324621 = 0.005 x Tr(W P). The S5 records used the workaround below.
+- **Workaround used (S5):** `Tr(W P)` from the d occupations `ql` of the same run (`soc_u_hf.py`). **Proposal (not done):** include `hubbard_test_operator_check` in the two `save_ldm_to` guards. About 2 lines, but it changes nsp=1 behaviour for W1 runs and was not tested.
+
+## [OPEN, 2026-10-27] SOC+U bulk adoption: untested corners
+
+- **Not tested:** the RS J derivative at nsp=2; k-space meshes other than 12x12x12 and materials other than bcc Fe; multi-site cells; nsp=2 with U on more than one shell.
+- **Verified:** the RS U = 2.05 eV Hellmann-Feynman run ended at Diff 1.57e-6 after 150 steps (beta 0.005; the recorded RS local-mode transient). The remaining RS runs ended at Diff at most 1.9e-8.
+- **Unchanged limits:** calctype S with U at nsp=2 (calctype I: see S6 below) and nsp=3/4 with U stop with a fatal. Lifted in S6b: density_policy other than constrained_spiral, a constraint_target, a non-z reference axis (see the S6b entries below).
+
+## [CLOSED, 2026-10-30] `ldm_beta` had no effect at nsp>=2 (S6)
+
+- **Verified:** at nsp=2 V is built from the spinor P (`ldm_spinor`, P_out), not from the mixed collinear ldm. Host-seeded Ni impurity runs with and without `ldm_beta = 0.3` (SOC on and SOC->0, U=3/J=0.7) gave identical Diff series in every printed digit.
+- **Fixed:** `mix_ldm_spinor_linear` mixes the 10x10 P with `ldm_beta` (history seeded from the mixed ldm, zero coherences); V reads the mixed P. Default `ldm_beta=1`: one step from the same restart with the old and new binary gave byte-identical outputs (31 files, logs excepted). The sidecar still writes P_out for the spin-off-diagonal blocks.
+- **Test:** RS bcc Fe, nsp=2 `soc_scale=0`/`fix_soc` against nsp=1, `ldm_beta=0.3`, 4 iterations: max delta 0.0 with the fix, 1.56e-1 without (old binary); P_up,dn 0.
+
+## [OPEN, 2026-10-30] SOC+U impurity at nsp=2: records and untriaged findings (S6)
+
+- **Oscillation without damping:** Ni (RS Chebyshev, local) U=3/J=0.7 impurity runs at beta 0.05 and `ldm_beta=1` oscillated (Diff 1e-4 to 7e-2 over 200 steps) at nsp=1 (r2), SOC->0 (r6) and SOC on (r8). Host-seeded SOC on runs without effective damping ended at Diff 4.7e-2. With `ldm_beta=0.3`: nsp=1 reached last-20 max Diff 2.6e-8, SOC on 1.0e-8 (spreads <= 1.0e-8); SOC->0 4.2e-8. The nsp=1 oscillation at `ldm_beta=1` is not diagnosed.
+- **Adoption numbers (impurity minus bulk, U=3 against U=0):** d up 6.9e-4 / 1.3e-3, d down -1.9e-3 / -2.8e-3, moment 2.1e-3 / 3.7e-3 muB, orbital moment -1.8e-4 / -1.1e-4 muB (ratios 0.53, 0.67, 0.57, 1.59; limit 10). The U=0 runs write no spinor sidecar; the P_up,dn block difference at U=0 was bounded from the logged `max_up_dn` (9.575e-3 bulk, 9.618e-3 impurity: difference of maxima 4.3e-5, a lower bound on the block difference); U=3 block difference 2.4e-5.
+- **Cross-run identity (one-step traces from the converged U=3 impurity):** stored c'/q2' minus the spinor formulas 0.0 and 0.0 on both spins; dropping the off-diagonal V blocks changes c' by 1.4e-5 and 1.8e-5 and q2' by 8.6e-5 and 9.1e-5 (|V_up,dn| max 2.9e-3).
+- **KS-host smoke (bcc Fe nsp=2, U=2/J=0, RS impurity, `auto`):** resolves to local, no provenance or nsp error. Not met: after 100 steps final Diff 1.3e-7 (`ldm_beta=1`) and 2.5e-6 (`ldm_beta=0.3`), 20-step spreads 5e-5 to 1e-4 (limits 1e-7, 1e-5). Spin moment 2.5442 muB. The first attempt, seeded from a +U Fe-imp file, diverged to NaN; the host-seeded runs did not.
+- **Regression impurity soc0 rows (tolerance 1e-7):** impurity local-mode +U transient amplifies roundoff-level differences between the nsp=2 (10x10) and nsp=1 (5x5) paths over 4 steps (measured 7.15e-9 RS host, 3.97e-8 KS host; iteration 1 agrees to 8.19e-11 on the KS host). Targeted defects produce 1e-2 to 1e-1 differences. Cause of the amplification not diagnosed.
+- **Seed label:** the element `symbol` in the impurity seed file names the output files; a seed copied from the host must be relabelled.
+
+## [CLOSED, 2026-11-01] nsp=2 SOC+U local-moment correction used swapped spin channels for an axis along -z (S6b)
+
+- **Verified (code reading at `e5d68b66`, unit control):** before S6b, nsp=2 SOC+U with any site axis along -z applied the local-moment correction to swapped spin channels. The radial channels (`ql`, `gravity_center`) are resolved along the site axis, while `correct_d_shell_moments_spinor` used the global-z blocks as Pi_s; the S3 frame guard checked only |x| and |y| of the axis, so -z passed it. Unit control in `UnitHubbardSpinorMoments` ((f) "-n site with the +n projectors"): 2.4 against a tolerance of 1e-13.
+- **Fixed in S6b:** the kernel takes the site axis n and projects with Pi_+-(n) = (1 +- n.sigma)/2.
+
+## [CLOSED, 2026-11-01] `&constraints` ignored `constraints_mom_ref` (S6b)
+
+- **Behaviour change:** `constraints_mom_ref` was previously ignored (the read failed, the log showed `Error while reading constraints namelist`, and the target fell back to `mom0`). Inputs that set it change behaviour: the value is now read.
+- **Verified (before the fix):** Pt2MnGa (4 sites) and KS bcc Fe (1 site), `constraints_mom_ref(:,i) = ...` (and the component form of the documentation example): the same error, constraints off, exit 0; without the key a fresh KS run stops with `Constraint target for site 1 has zero length` (`mom0` is zero there).
+- **Cause (read from `control.f90`):** the array was pre-sized (1,1), so any index beyond (1,1) was out of range. It is now sized (3, 4096) before the read and cut to the last nonzero column; an all-zero array keeps the unset (1,1) form that `self.f90` tests for.
+- **Test:** `UnitControlConstraintsRead` (three sites, component form, unset): 0.0 difference between the written and the read values; on the old `control.f90` two of the three cases fail.
+- **Not fixed (same pattern, not tested):** `constraints_bfield` is pre-sized the same way. A zero field is valid there, so the trailing-column cut used for `constraints_mom_ref` does not apply. Proposal: size it (3, 4096) and cut at `nrec` known to `self.f90`.
+
+## [OPEN, 2026-11-01] RS block recursion at nsp=2 is not invariant under spin-axis rotation (S6b, cause open)
+
+- **Statement:** RS block recursion at nsp=2 is not invariant under spin-axis rotation, even at U=0 and SOC->0 (iteration-1 dE_F 3e-4 Ry, dmoment 1.8e-4). Chebyshev: ~1e-7. Cause open. A termination in the global-z spin basis was suspected; the symmetric terminator (`sym_term`) does not restore invariance (converged differences 1e-5 to 1e-4, below), so that suspicion is not supported by it. Proposed: a separate non-LDA+U task. This affects every RS SOC user with a non-z magnetisation, not only LDA+U.
+- **Verified (U=0, no Hubbard code involved):** bcc Fe `bulk/bccFe`, nsp=2, `soc_scale=0` with `fix_soc`, seed `Fe.nml` with `mom` along z and along x, iteration 1. Block recursion (lld 21): Diff 3.10e-5 against 1.07e-4, E_F -0.069252 against -0.068955 Ry, spin moment 2.103974 against 2.103790 muB. Chebyshev (lld 100): Diff 7.004175e-4 against 7.005169e-4; E_F and moment equal in all printed digits.
+- **`sym_term = .true.` (existing flag; the CPU block terminator then uses one scalar a_diag, b_diag from the spin trace of the s element for every orbital) does not resolve it:** same runs, iteration 1: E_F -0.069026 (z), -0.069018 (x), -0.069020 ([111]); moment 2.101357, 2.101398, 2.101374. The x-against-z difference falls to 8e-6 Ry and 4.1e-5 muB (from 3.0e-4 and 1.8e-4), but it does not reach the Chebyshev level, and the z result itself moves by 2.3e-4 Ry and 2.6e-3 muB against the default terminator. The flag only reduces the iteration-1 gap and does not reach the Chebyshev level.
+- **`sym_term = .true.`, converged (U=0, SOC->0, block lld 21, z against x, `bulk/bccFe_hubbard` recipe, conv_thr 1e-8, 64 and 69 iterations):** E_F -0.068999 (z), -0.068975 (x); spin moment 2.099999, 2.10006; |dE_F| 2.4e-5 Ry, |dmoment| 6.1e-5 muB, |d d_up| 9.6e-5, |d d_dn| 5.0e-5 (along n), |d etot| 5.1e-5 Ry. The gap grows from iteration 1 (8e-6 Ry, 4.1e-5 muB) to convergence and stays 2 to 3 orders above the Chebyshev level (<= 1e-7). Invariance is not restored, so the cause is not identified.
+- **Verified (U=2/J=0, local, block, 200 steps, `bulk/bccFe_hubbard`):** iteration-1 Diff differs by 3.5e-5; converged spin moment by 1.1e-2 muB, d up by 5.5e-3. The deck's collinear `ldm` seed is polarised along z and was not rotated for the x run (my setup; a suspect for part of this).
+- **Contrast:** the KS solver gives z, x, [111] and -z within 1e-9 in energy and occupations (S6b T2(c)).
+- **Handling in S6b:** nsp=2 U runs with a tilted spin axis (RS, `recur` other than `chebyshev`) stop with a fatal; KS and Chebyshev are accepted.
+
+## [OPEN, 2026-11-01] Constraint controller diverges in a KS nsp=2 bcc Fe smoke; S6b T2(e) not met (untriaged)
+
+- **Verified:** KS bcc Fe (`k_space_scf/bccFe`, 12^3 full mesh, nsp=2, SOC on), `&constraints` with `constraints_enable`, `constraints_mom_ref(:,1) = 1,0,0`, seed `mom` along x. The target is read and the resolved axis is x (`projection axis = (1,0,0)`, no frame guard fires). With `constraints_i_cons = 3` and with `= 5` the RMS angle error grows (3e-6, 2e-4, 1.7e-2, 0.9), the moment runs away (2.4 to 8.0 muB) and the run stops at iteration 13 with `reciprocal backend: LAPACK eigensolver failed`. The same deck at U=0 (no Hubbard code active) stops the same way at iteration 13; a second deck with seed `mom` along z and target x stops at iteration 4.
+- **Not verified:** whether the deck is wrong. It is hand-built, and the only constraint deck in the repository (`example/bulk/bccFe/input_frozen_magnon_constrained.nml`) is an nsp=4 frozen-magnon run, so no known-good nsp=2 constraint deck exists to compare. Two attempts were made (`i_cons` 3 and 5), then stopped.
+- **Consequence:** the S6b constraint-target path (target read, axis resolved, V and the local-moment correction built along it) is exercised only up to the divergence; there is no converged constraint-target run.
+
+## [SHORT-RUN RECORD, 2026-11-04] nsp=2 surface LDA+U (S6c): no converged surface state, SOC-on surface not at a fixed point after 5 steps
+
+- Verified: operator insertion and local-moment mapping for the surface layout (SPINOR_DM_CONTRACT.md, "nsp=2 surfaces (S6c results)"); nsp=2 SOC->0 surface equals the nsp=1 surface at iteration 1 and over 4 reduced steps when the host numbers are the same.
+- Verified, short runs only (5 steps from the nsp=1 seeds, hosts not converged: b0 and b1 stopped at step 7, Diff 9.1e-5 and 7.8e-5): at U=3 the surface orbital moment keeps rising (Ni-S 0.066 -> 0.109 muB, increments falling by about 0.88 per step) and Diff stays at 1.2e-4 to 1.9e-4; the b1 bulk host shows the same slow rise. Not measured: where it saturates, converged surface-versus-bulk values, the converged SOC->0 surface against the converged nsp=1 surface, the surface anisotropy.
+- Convergence floor of the nsp=1 surfaces: ni001_u3 oscillates at Diff about 4e-6 (200 steps, deck README); no nsp=2 surface was run to its floor.
+- The x-axis host from the collinear z-frame seed (mom=x, soc_scale=0) was stopped at step 10: Diff 2.6e-4 at step 5, then 2.4e-3 at step 10 while the moment rose 0.695 -> 0.7465 muB with a z component of 0.04 to 0.05 muB left; cause not diagnosed (seed frame is a suspect). The tilted-axis check uses an exactly rotated z host instead (rotate_spin_frame.py).
+- b2 (SOC->0 host) differs from the nsp=1 U=3 host by 1.8e-8 (gravity_center); iteration 1 of the surface then differs from the nsp=1 run by 1.0e-9 in Diff and 2.5e-10 in ql. With the nsp=1 host rebuilt from b2 the difference is 0 (Diff) and 6.9e-18 (ql). etot of Ni-S-1 differs by 1.2e-8 to 1.9e-8 Ry in both comparisons (not diagnosed).
+- **Tier 2 run, flagged (S6c close-out, 2026-11-04):** 20 steps from the step-5 state of the SOC-on U=3 surface (decks/ni001_soc_u3/README, host not converged): Diff rises 1.50e-4 -> 2.25e-4 over steps 1-13 and has two excursions (4.18e-4 at step 15, 2.35e-4 at step 20, with jumps of 1.6e-2 and 1.1e-2 in n_d of one layer). The Ni-S orbital moment rises 0.117 -> 0.173 muB without saturating (increment 1.0e-3 per step at step 20). No non-finite values. Not diagnosed; the SOC-on U=3 surface is not shown to be at, or approaching, a fixed point. Converged surface physics is not demonstrated; correctness rests on the operator and local-moment oracles and the iteration-1 / 4-step equivalence rows.
+- Policy: `docs/validation/fixed_ldau/TESTING_POLICY.md` (few-iteration trajectories; rotated seeds for tilted axes).
+- **Tier 2 repeated with converged bulk hosts (S6c close-out 2, 2026-11-04):** hosts b0 (U=0) and b1 (U=3/J=0.7), SOC on, converged to Diff 9.9e-9 (34 iterations) and 7.9e-9 (59 iterations); b1 orbital moment 0.07511 muB (not the ~0.078 expected), E_F -0.076843. With the converged b1 host the 20-step surface continuation (same step-5 seed, ldm_beta 0.3) still shows Diff rising 1.22e-4 -> 2.08e-4 over steps 2-16 (increments falling to 0), then a jump at step 17 (Ni-S n_d +1.1e-2, mspin -9.3e-3), then Diff 1.2e-4 at step 20; the Ni-S orbital moment 0.118 -> 0.175 muB with increments 6.7e-3 (step 2) -> 1.6e-3 (step 16) per step. The same kind of jump occurred at step 15 with the unconverged host.
+- **J=0 diagnostic (one 20-step run, layers at U=3/J=0, converged host kept at J=0.7: host-J mismatch, no J=0 host exists):** the drift is not removed. Diff 9.3e-3 -> 1.0e-3 (large transient from removing J on the layers), Ni-S orbital moment 0.093 -> 0.191 muB, still rising by 1.3e-3 per step at step 17, and a jump (Ni-S n_d -4.8e-2, mspin +3.5e-2) at step 18. Not attributable to J. **Recorded as an undiagnosed surface SCF instability**: jump at step 15, 17, 18 in the three runs; not investigated further in S6c. The orbital-moment approach is slow, and whether Diff stays bounded beyond 20 steps is not known.
+- **Hypothesis for the recurring excursion (not tested):** the excursion recurs at iteration ~15-18 in all three runs (unconverged host, converged host, J=0), which suggests mixing-history mechanics (Broyden history length or reset, occupation-matrix mixing window) rather than physics. First diagnostic step for a future task: read the mixer's history and reset logic; then sweep the history length or ldm_beta.

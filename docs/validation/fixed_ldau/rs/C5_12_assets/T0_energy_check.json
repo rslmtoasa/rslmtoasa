@@ -1,0 +1,29 @@
+{
+  "schema": "c5_12_t0_fermi_window_check_v1",
+  "source_deck": "/private/tmp/c511-t2/run/input.nml",
+  "source_deck_sha256": "e89477c0ea100bad84cdfe017d797da616459c3b54b9ba58f91062e59fe8b625",
+  "c5_11_run1_input": "/private/tmp/c511-t2/run/input.nml",
+  "c5_11_run1_input_sha256": "e89477c0ea100bad84cdfe017d797da616459c3b54b9ba58f91062e59fe8b625",
+  "c5_11_continuation_input": "/private/tmp/c511-t2/run2/input.nml",
+  "c5_11_continuation_input_sha256": "e89477c0ea100bad84cdfe017d797da616459c3b54b9ba58f91062e59fe8b625",
+  "run1_vs_continuation_energy_identical": true,
+  "host_ef_trace": "/private/tmp/c58-t2a-fixed-release/run/fixed_u_trace.csv",
+  "host_ef_trace_sha256": "e58bbba679aeb07f9bd5ed7b791e65028256c23031c3a9fb98a606b79cec3d02",
+  "host_ef_ry": -0.08294962745148776,
+  "c5_11_energy_ry": {
+    "fermi": -0.085152,
+    "energy_min": -1.0,
+    "energy_max": 0.5
+  },
+  "c5_11_window_width_ry": 1.5,
+  "c5_11_input_minus_host_ef_ry": -0.002202372548512238,
+  "required_shift_ry": 0.002202372548512238,
+  "corrected_energy_ry": {
+    "fermi": -0.08294962745148776,
+    "energy_min": -0.9977976274514878,
+    "energy_max": 0.5022023725485122
+  },
+  "corrected_window_width_ry": 1.5,
+  "recipe_source_deck": "/private/tmp/c52-fe-u38-impurity-record/local/immutable/input.nml",
+  "recipe_source_deck_sha256": "02d50cdaee840bcfcd9790974408ac4e9a89bb6de58fa881c5d7337635796250"
+}

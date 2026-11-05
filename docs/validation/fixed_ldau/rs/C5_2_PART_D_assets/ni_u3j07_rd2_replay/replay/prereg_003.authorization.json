@@ -1,0 +1,19 @@
+{
+  "adapter_path": "/private/tmp/c52-rd2-private/nr501_adapter/rd2_replay_adapter_nr501.py",
+  "adapter_sha256": "c129441983ab35a6fd773f3094b458aa1cc1f30f777c15c05b14385903b2ad8c",
+  "authorization_basis": {
+    "auditor": "NR501 setup smoke/baseline chain was reviewed; baseline report is PASS and sent for independent raw review.",
+    "root": "Root authorized preregistration after baseline PASS; response cases remain separately gated."
+  },
+  "baseline_report_sha256": "dd6eb6919ae1673459afe8f636289b9fc010b02bdc11dbdfc34745f6ded0153f",
+  "binding_path": "/private/tmp/c52-rd2-private/vin_binding_nr501.json",
+  "binding_sha256": "431e072a2a42d4591fd5ee5977211f45ee3ff115c93b6d6549480c26000a6668",
+  "driver_path": "/private/tmp/c52-rd2-private/nr501_adapter/build_proven/accepted_m03_replay_driver_nr501",
+  "driver_sha256": "34b4456919a77513504ceddc9890dd3dac7d23c9fbe6f0bbbed50c0a6d112508",
+  "mode": "preregister",
+  "plan_path": "/private/tmp/c52-rd2-private/rd2_replay_plan.json",
+  "plan_sha256": "07825affe00aafd01e3d840ef6728ff27be579ffde03d86f21ed204e5179c79c",
+  "schema": "c5-rd2-explicit-mode-authorization-v1",
+  "scope": "Prepare the preregistered RD2 operand and allowance calculations only after the passing raw-state baseline. No response-case driver execution or SCF solver.",
+  "status": "ROOT_AND_AUDITOR_CLEARED"
+}

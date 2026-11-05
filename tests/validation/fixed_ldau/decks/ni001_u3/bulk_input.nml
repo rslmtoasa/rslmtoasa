@@ -1,0 +1,44 @@
+&calculation
+pre_processing = 'bravais'
+verbose = T
+/
+&lattice
+rc = 100
+alat = 3.5234
+crystal_sym = 'fcc'
+ntype = 1
+ct(:) = 4.0
+r2 = 16.0
+wav = 1.37692
+/
+&atoms
+database = './'
+label(1) = 'Ni'
+/
+&self
+nstep = 300
+conv_thr = 1.0e-8
+/
+&energy
+fermi = -0.076743
+energy_min = -1.0
+energy_max = 1.5
+channels_ldos = 2500
+/
+&control
+calctype = 'B'
+nsp = 1
+lld = 200
+recur = 'chebyshev'
+/
+&mix
+beta = 0.05
+ldm_beta = 0.3
+mixtype = 'broyden'
+/
+&hamiltonian
+hubbard_radial_moments = 'local'
+hubbard_log_level = 'detailed'
+hubbard_u_general(1,3) = 3.0
+hubbard_j_general(1,3) = 0.7
+/

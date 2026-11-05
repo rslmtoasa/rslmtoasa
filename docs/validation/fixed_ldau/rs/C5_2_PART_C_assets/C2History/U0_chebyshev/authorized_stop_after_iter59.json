@@ -1,0 +1,117 @@
+{
+  "accepted_candidate_checkpoint_sha256": "53d732697da2a8e79163b0180a4dbad2e30274bde52c3ebea791c63d3f871b56",
+  "accepted_candidate_path": "/private/tmp/c52-c2-stage/launch_u0_corrected/accepted_candidate_iter0059",
+  "last_log_line": "[Oct 20 2026 22:34:45.709] [recursion_chebyshev.f90:788]  \u001b[1m\u001b[32m<info> \u001b[0m\u001b[0mChebyshev recursion on progress for atom 1",
+  "last_logged_iteration_context": "step 81 had begun; termination occurred after the immutable accepted candidate at step59 had been frozen; later live state is not substituted for the accepted candidate",
+  "log_mtime_local": "2026-10-20T22:34:45.709357+02:00",
+  "post_signal_ps_verification": "targeted escalated ps after signal returned header only; PIDs 6570,6571,6572,6573,6574,6575,6118,6119,47192,47223 absent",
+  "pre_signal_verified_process": {
+    "command": "/private/tmp/c5-b1-frozen/a2112df3224a376c280ec5398eebeb68b6984f68dfef1138dc9b5d40432298d3/rslmto.x",
+    "parent_wrapper_pid": 6574,
+    "pid": 6575,
+    "state": "R"
+  },
+  "reason": "root authorized intentional termination after auditor accepted immutable iteration-59 C2 U0 Chebyshev checkpoint",
+  "record_type": "authorized_owned_solver_termination",
+  "run_output_files": {
+    "Fe_1_spinene.out": {
+      "bytes": 163150,
+      "sha256": "4c5c92a8745c06a0db3049d8b263a31f5f035678e5ebd11cbbd206e2aaa85f92"
+    },
+    "Fe_dos.out": {
+      "bytes": 163198,
+      "sha256": "0348a7548609674250316bc18ac0c2dac7859a14524073d1d5d595e6155912b7"
+    },
+    "Fe_orbene.out": {
+      "bytes": 163150,
+      "sha256": "e5a185766e5b6a841a7da3d755abc06368b6c7b4b819eccc0364ce938178d461"
+    },
+    "Fe_orbital_dos.out": {
+      "bytes": 765550,
+      "sha256": "09f97e57d518eb37db514e5c0572949942726bf75949c84185d82c1560f349b4"
+    },
+    "Fe_out.nml": {
+      "bytes": 6771,
+      "sha256": "647e9df67510db0c133dd53975cece5f50b379e6e314542de336eec64575d327"
+    },
+    "Fe_scf.nml": {
+      "bytes": 6767,
+      "sha256": "f12c45f656e4094b325bd28d26fbcb8995dde6c7e163d35e9699f132b4ff58b1"
+    },
+    "clust": {
+      "bytes": 302207,
+      "sha256": "0c42fac7d7529df9a5b8dfc1ece7e85344ff762f8499fa2083c198e45c2b6311"
+    },
+    "exit_code.txt": {
+      "bytes": 4,
+      "sha256": "9d9b18720961e9b4689fd763b85e7b6f36160ccd3a8a1c9ddc5103bb0f66c396"
+    },
+    "fixed_u_trace.csv": {
+      "bytes": 904856,
+      "sha256": "419ec6a3d4a8a32257e2bb3671f9960371e7a81fa99587205963efa32edde24f"
+    },
+    "fort.800": {
+      "bytes": 284845,
+      "sha256": "58cc4601e8bfa820acce8913603e162d3f0278a4d9d43ac09d50891abcbb3229"
+    },
+    "fort.805": {
+      "bytes": 613894,
+      "sha256": "22007191599a4cc2e7b738353c0c40dc300e5611e40ff5e3713ecc24277e10db"
+    },
+    "input.nml": {
+      "bytes": 757,
+      "sha256": "3996ff07f63991e4e7a0c69b4800da7784807c91b508f5141aaacee8ae2da493"
+    },
+    "launch_preflight.json": {
+      "bytes": 4296,
+      "sha256": "977ffc3d85d44c91853e2f4d1b5ce2ebcb1b185cff8ed5fbccca5f763c1cf781"
+    },
+    "mad.mat": {
+      "bytes": 16,
+      "sha256": "2f6aea3c93d99efbf6cb3dac1dbdf3b6bc98e0846e99fce36035fe7f10311d22"
+    },
+    "magneticdos.out": {
+      "bytes": 283683,
+      "sha256": "90b7f1b6fd606004b4f359f36fbc2d5273421616a02ae990a07790cf1187a2f8"
+    },
+    "map": {
+      "bytes": 393312,
+      "sha256": "0f2eab14eb783d00c432ab9d772380d4e7c11f6830d675243dfebfd278d50842"
+    },
+    "sbar": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "solver.pid": {
+      "bytes": 5,
+      "sha256": "8938e7e47af05578246dc8dba8e9010f2ac386b9d9952f0b2fe9637e99982d90"
+    },
+    "str.out": {
+      "bytes": 6934,
+      "sha256": "fda4513e4a8033f3980d20d83e09d79b12fd9e0b732ea82d8c7d86d55148ff88"
+    },
+    "testrun.log": {
+      "bytes": 279068,
+      "sha256": "13140ef1ac8df029f7eeafffb9b5638cfd0cec69e56ec44dc47f824d894044e3"
+    },
+    "totaldos.out": {
+      "bytes": 82830,
+      "sha256": "8a5c2acb63ceaa6b466acbc4a2c5b0c6e36d954adce05eaf5f0903593b8db7c4"
+    },
+    "ves.out": {
+      "bytes": 738,
+      "sha256": "405c74c3473247cca6639d34c49508d770655ae17b22f049a9f692efff92b782"
+    },
+    "view.sbar": {
+      "bytes": 12460,
+      "sha256": "2ed5b82de9633c0321013936fac1c95de9c7d53441af1af3b4f068a20cddf673"
+    },
+    "wrapper.pid": {
+      "bytes": 5,
+      "sha256": "24e5454957a3355c8b46f145bc31833ec9a18d34bd3f13cc8790497ff554c278"
+    }
+  },
+  "signal": "SIGTERM",
+  "solver_exit_status_file": "143",
+  "wrapper_exit_code": 143
+}
