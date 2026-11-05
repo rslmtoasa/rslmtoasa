@@ -1,6 +1,6 @@
 ! spin_response channels s, p, d on bcc Fe, from the scratch deck of fe_scratch.py (which also ran the spd driver files).
 ! Usage: <oracle directory>. Per-channel occupations vs band_moments, E1 summed over channels, spd with U on d only vs d only.
-program test_spin_response_channels
+subroutine test_spin_response_channels
    use precision_mod, only: rp
    use math_mod, only: pi
    use control_mod, only: control
@@ -28,7 +28,7 @@ program test_spin_response_channels
    real(rp) :: x, q0, cen, n_ref, m_ref, dev(4)
    integer :: l, s, nw, iw, i
 
-   call get_command_argument(1, dir)
+   call get_command_argument(2, dir)
    if (len_trim(dir) == 0) error stop 'usage: test_spin_response_channels <oracle directory>'
    call read_tolerances(trim(dir))
    call require('channel_d_rel', channel_d_rel)
@@ -107,4 +107,4 @@ contains
       x = buf(1:n)
    end function eig_column
 
-end program test_spin_response_channels
+end subroutine test_spin_response_channels

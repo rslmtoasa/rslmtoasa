@@ -1,98 +1,141 @@
 {
-  "_description": "Test case matrix for example post-processing tests. Single source of truth — CMakeLists reads this file. Optional manifest defaults are recursively merged into each case's 'namelists' before applying the f90nml patch.",
+  "_description": "Test case matrix for example post-processing tests. Single source of truth \u2014 CMakeLists reads this file. Optional manifest defaults are recursively merged into each case's 'namelists' before applying the f90nml patch.",
   "defaults": {
     "namelists": {
-      "lattice": { "strux_backend": "strux_lib" },
-      "control": { "cheb_backend": "legacy" }
+      "lattice": {
+        "strux_backend": "strux_lib"
+      },
+      "control": {
+        "cheb_backend": "legacy"
+      }
     }
   },
   "cases": [
     {
       "name": "Example_exchange_bccFe",
-      "quick": true,
-      "labels": ["functional", "rs", "magnetic", "basis_spd", "exchange"],
+      "labels": [
+        "functional",
+        "rs",
+        "magnetic",
+        "basis_spd",
+        "exchange"
+      ],
       "case": "exchange/bccFe",
       "timeout": 300,
       "omp_threads": 2,
-      "abs_tol": 1e-4,
-      "rel_tol": 1e-4,
+      "abs_tol": 0.0001,
+      "rel_tol": 0.0001,
       "namelists": {
-        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
+        "control": {
+          "nsp": 2,
+          "recur": "block",
+          "lld": 20
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false
+        }
       },
       "checks": {
         "text": [
-          { "file": "jij.out", "rows": [1, 2], "cols": [6, 7] },
-          { "file": "dij.out", "rows": [1, 2], "cols": [6, 7, 8] }
+          {
+            "file": "jij.out",
+            "rows": [
+              1,
+              2
+            ],
+            "cols": [
+              6,
+              7
+            ]
+          },
+          {
+            "file": "dij.out",
+            "rows": [
+              1,
+              2
+            ],
+            "cols": [
+              6,
+              7,
+              8
+            ]
+          }
         ]
-      }
-    },
-    {
-      "name": "Example_exchange_bccFe_hoh",
-      "case": "exchange/bccFe",
-      "timeout": 300,
-      "abs_tol": 1e-4,
-      "rel_tol": 1e-4,
-      "namelists": {
-        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true }
       },
-      "checks": {
-        "text": [
-          { "file": "jij.out", "rows": [1, 2], "cols": [6, 7] },
-          { "file": "dij.out", "rows": [1, 2], "cols": [6, 7, 8] }
-        ]
-      }
+      "tier": "standard"
     },
     {
       "name": "Example_exchange_conductivity_fccPt",
-      "labels": ["legacy_strux", "conductivity"],
+      "labels": [
+        "legacy_strux",
+        "conductivity"
+      ],
       "case": "conductivity/fccPt",
       "timeout": 600,
       "_note": "Explicit legacy structure-constant sentinel: this PBC conductivity fixture makes the strux_lib periodic solve impractically large.",
       "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 100, "cheb_backend": "legacy" },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
+        "lattice": {
+          "strux_backend": "legacy"
+        },
+        "control": {
+          "nsp": 2,
+          "recur": "chebyshev",
+          "lld": 100,
+          "cheb_backend": "legacy"
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false
+        }
       },
       "checks": {
         "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] },
-          { "file": "Pt_cond.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
+          {
+            "file": "totaldos.out",
+            "rows": [
+              500,
+              1000,
+              1500
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          },
+          {
+            "file": "Pt_cond.out",
+            "rows": [
+              500,
+              1000,
+              1500
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          }
         ]
-      }
-    },
-    {
-      "name": "Example_exchange_conductivity_fccPt_hoh",
-      "labels": ["legacy_strux", "conductivity"],
-      "case": "conductivity/fccPt",
-      "timeout": 600,
-      "_note": "Explicit legacy structure-constant sentinel: this PBC conductivity fixture makes the strux_lib periodic solve impractically large.",
-      "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50, "cheb_backend": "legacy" },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true }
       },
-      "checks": {
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] },
-          { "file": "Pt_cond.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ]
-      }
+      "tier": "standard"
     },
     {
       "name": "Example_band_structure_bccFe",
-      "quick": true,
-      "labels": ["kspace", "bands"],
+      "labels": [
+        "kspace",
+        "bands"
+      ],
       "case": "band_structure/bccFe",
       "timeout": 300,
       "preserve_outputs": true,
       "namelists": {
-        "self": { "nstep": 1 },
+        "self": {
+          "nstep": 1
+        },
         "reciprocal": {
           "nk1": 2,
           "nk2": 2,
@@ -100,53 +143,139 @@
           "n_energy_points": 40,
           "suppress_internal_logs": true
         },
-        "control": { "nsp": 1, "recur": "block", "lld": 12 }
+        "control": {
+          "nsp": 1,
+          "recur": "block",
+          "lld": 12
+        }
       },
       "checks": {
         "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r", "vmad"] }
+          {
+            "file": "Fe_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r",
+              "vmad"
+            ]
+          }
         ],
         "dimensions": [
-          { "file": "band_structure.dat", "data_rows": 201, "data_columns": 19 },
-          { "file": "band_structure_kpath.dat", "data_rows": 201, "data_columns": 4 }
+          {
+            "file": "band_structure.dat",
+            "data_rows": 201,
+            "data_columns": 19
+          },
+          {
+            "file": "band_structure_kpath.dat",
+            "data_rows": 201,
+            "data_columns": 4
+          }
         ],
         "text": [
-          { "file": "band_structure.dat", "rows": [7, 8, 47],
-            "cols": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] }
+          {
+            "file": "band_structure.dat",
+            "rows": [
+              7,
+              8,
+              47
+            ],
+            "cols": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19
+            ]
+          }
         ]
       },
       "outputs": [
-        { "file": "band_structure.dat", "min_lines": 207 },
-        { "file": "band_structure_kpath.dat", "min_lines": 204 }
-      ]
+        {
+          "file": "band_structure.dat",
+          "min_lines": 207
+        },
+        {
+          "file": "band_structure_kpath.dat",
+          "min_lines": 204
+        }
+      ],
+      "tier": "quick"
     },
     {
       "name": "Example_density_of_states_bccFe",
-      "quick": true,
-      "labels": ["functional", "kspace", "dos", "basis_spd", "scalar_relativistic"],
+      "labels": [
+        "functional",
+        "kspace",
+        "dos",
+        "basis_spd",
+        "scalar_relativistic"
+      ],
       "case": "density_of_states/bccFe",
       "timeout": 300,
       "preserve_outputs": true,
       "_note": "Minimal 2x2x2 reciprocal Gaussian DOS fixture. The test pins the actual dos_kspace.dat rows and finite-window DOS diagnostics; its Gaussian broadening/window convention is distinct from the tetrahedron state-count contract.",
       "namelists": {
-        "self": { "nstep": 1 },
+        "self": {
+          "nstep": 1
+        },
         "reciprocal": {
           "nk1": 2,
           "nk2": 2,
           "nk3": 2,
           "n_energy_points": 40
         },
-        "control": { "nsp": 1, "recur": "block", "lld": 12 }
+        "control": {
+          "nsp": 1,
+          "recur": "block",
+          "lld": 12
+        }
       },
       "checks": {
         "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r", "vmad"] }
+          {
+            "file": "Fe_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r",
+              "vmad"
+            ]
+          }
         ],
         "dimensions": [
-          { "file": "dos_kspace.dat", "data_rows": 40, "data_columns": 2 }
+          {
+            "file": "dos_kspace.dat",
+            "data_rows": 40,
+            "data_columns": 2
+          }
         ],
         "text": [
-          { "file": "dos_kspace.dat", "rows": [15, 21, 30], "cols": [1, 2] }
+          {
+            "file": "dos_kspace.dat",
+            "rows": [
+              15,
+              21,
+              30
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          }
         ],
         "log": [
           {
@@ -162,75 +291,178 @@
         ]
       },
       "outputs": [
-        { "file": "dos_kspace.dat", "min_lines": 48 }
-      ]
+        {
+          "file": "dos_kspace.dat",
+          "min_lines": 48
+        }
+      ],
+      "tier": "quick"
     },
     {
       "name": "Example_density_of_states_bccFe_ccor_2c",
-      "labels": ["kspace", "dos", "ccor"],
+      "labels": [
+        "kspace",
+        "dos",
+        "ccor"
+      ],
       "case": "density_of_states/bccFe",
       "timeout": 300,
       "preserve_outputs": true,
       "_note": "ccor_2c requires derivative structure constants; use the supported strux_lib fitted-screening/Sdot mode from example/bulk/bccFe/CCOR.",
       "namelists": {
-        "self":        { "nstep": 1 },
-        "reciprocal":  { "nk1": 2, "nk2": 2, "nk3": 2, "n_energy_points": 40 },
-        "lattice":     { "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
-        "control":     { "nsp": 1, "recur": "block", "lld": 12 },
-        "hamiltonian": { "ccor_2c": true }
+        "self": {
+          "nstep": 1
+        },
+        "reciprocal": {
+          "nk1": 2,
+          "nk2": 2,
+          "nk3": 2,
+          "n_energy_points": 40
+        },
+        "lattice": {
+          "strux_backend": "strux_lib",
+          "screening": "fitted",
+          "strux_want_sdot": true
+        },
+        "control": {
+          "nsp": 1,
+          "recur": "block",
+          "lld": 12
+        },
+        "hamiltonian": {
+          "ccor_2c": true
+        }
       },
       "checks": {
         "dimensions": [
-          { "file": "dos_kspace.dat", "data_rows": 40, "data_columns": 2 }
+          {
+            "file": "dos_kspace.dat",
+            "data_rows": 40,
+            "data_columns": 2
+          }
         ],
         "text": [
-          { "file": "dos_kspace.dat", "rows": [15, 21, 30], "cols": [1, 2] }
+          {
+            "file": "dos_kspace.dat",
+            "rows": [
+              15,
+              21,
+              30
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          }
         ]
       },
       "outputs": [
-        { "file": "dos_kspace.dat", "min_lines": 48 }
-      ]
+        {
+          "file": "dos_kspace.dat",
+          "min_lines": 48
+        }
+      ],
+      "tier": "quick"
     },
     {
       "name": "Example_density_of_states_bccFe_reciprocal_hoh",
-      "labels": ["kspace", "dos", "hoh"],
+      "labels": [
+        "kspace",
+        "dos",
+        "hoh"
+      ],
       "case": "density_of_states/bccFe",
       "timeout": 300,
       "preserve_outputs": true,
       "_note": "k-space DOS with hoh=.true. (reciprocal-mode hoh); checks dos_kspace.dat, see ccor_2c sibling case note",
       "namelists": {
-        "self":        { "nstep": 1 },
-        "reciprocal":  { "nk1": 2, "nk2": 2, "nk3": 2, "n_energy_points": 40 },
-        "control":     { "nsp": 1, "recur": "block", "lld": 12 },
-        "hamiltonian": { "hoh": true }
+        "self": {
+          "nstep": 1
+        },
+        "reciprocal": {
+          "nk1": 2,
+          "nk2": 2,
+          "nk3": 2,
+          "n_energy_points": 40
+        },
+        "control": {
+          "nsp": 1,
+          "recur": "block",
+          "lld": 12
+        },
+        "hamiltonian": {
+          "hoh": true
+        }
       },
       "checks": {
         "dimensions": [
-          { "file": "dos_kspace.dat", "data_rows": 40, "data_columns": 2 }
+          {
+            "file": "dos_kspace.dat",
+            "data_rows": 40,
+            "data_columns": 2
+          }
         ],
         "text": [
-          { "file": "dos_kspace.dat", "rows": [15, 21, 30], "cols": [1, 2] }
+          {
+            "file": "dos_kspace.dat",
+            "rows": [
+              15,
+              21,
+              30
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          }
         ]
       },
       "outputs": [
-        { "file": "dos_kspace.dat", "min_lines": 48 }
-      ]
+        {
+          "file": "dos_kspace.dat",
+          "min_lines": 48
+        }
+      ],
+      "tier": "quick"
     },
     {
       "name": "Example_paoflow2rs_bccFe",
-      "quick": true,
       "case": "paoflow/bccFe",
       "timeout": 300,
       "_note": "paoham.dat committed as test data; provenance in tests/postproc/README.md",
       "namelists": {
-        "control":     { "nsp": 2, "recur": "block", "lld": 21 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
+        "control": {
+          "nsp": 2,
+          "recur": "block",
+          "lld": 21
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false
+        }
       },
       "checks": {
         "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
+          {
+            "file": "totaldos.out",
+            "rows": [
+              500,
+              1000,
+              1500
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          }
         ]
+      },
+      "labels": [],
+      "tier": "quick",
+      "shared_files": {
+        "paoham.dat": "paoflow/paoham.dat"
       }
     },
     {
@@ -239,31 +471,89 @@
       "timeout": 300,
       "_note": "paoham.dat committed as test data; provenance in tests/postproc/README.md",
       "namelists": {
-        "control": { "nsp": 2, "recur": "block", "lld": 21 },
-        "self":    { "nstep": 1 }
+        "control": {
+          "nsp": 2,
+          "recur": "block",
+          "lld": 21
+        },
+        "self": {
+          "nstep": 1
+        }
       },
       "checks": {
         "text": [
-          { "file": "jij.out", "rows": [1, 2], "cols": [6, 7] },
-          { "file": "dij.out", "rows": [1, 2], "cols": [6, 7, 8] }
+          {
+            "file": "jij.out",
+            "rows": [
+              1,
+              2
+            ],
+            "cols": [
+              6,
+              7
+            ]
+          },
+          {
+            "file": "dij.out",
+            "rows": [
+              1,
+              2
+            ],
+            "cols": [
+              6,
+              7,
+              8
+            ]
+          }
         ]
+      },
+      "labels": [],
+      "tier": "standard",
+      "shared_files": {
+        "paoham.dat": "paoflow/paoham.dat"
       }
     },
     {
       "name": "Example_paoflow_conductivity_p2rs_bccFe",
-      "labels": ["conductivity"],
+      "labels": [
+        "conductivity"
+      ],
       "case": "paoflow/bccFe_conductivity",
       "timeout": 300,
       "_note": "paoham.dat committed as test data; provenance in tests/postproc/README.md",
       "namelists": {
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 30, "cond_ll": 30 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
+        "control": {
+          "nsp": 2,
+          "recur": "chebyshev",
+          "lld": 30,
+          "cond_ll": 30
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false
+        }
       },
       "checks": {
         "text": [
-          { "file": "Fe_cond.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
+          {
+            "file": "Fe_cond.out",
+            "rows": [
+              500,
+              1000,
+              1500
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          }
         ]
+      },
+      "tier": "quick",
+      "shared_files": {
+        "paoham.dat": "paoflow/paoham.dat"
       }
     },
     {
@@ -272,98 +562,40 @@
       "timeout": 900,
       "_note": "rc shrunk to 20 (from the usual 80) - chebyshev_orbital_mod loops over every cluster atom, so cluster size dominates runtime",
       "namelists": {
-        "control": { "nsp": 2, "recur": "block", "lld": 20 },
-        "self":    { "nstep": 1 },
-        "lattice": { "rc": 20 },
-        "energy":  { "channels_ldos": 200 }
+        "control": {
+          "nsp": 2,
+          "recur": "block",
+          "lld": 20
+        },
+        "self": {
+          "nstep": 1
+        },
+        "lattice": {
+          "rc": 20
+        },
+        "energy": {
+          "channels_ldos": 200
+        }
       },
       "checks": {
         "text": [
-          { "file": "fort.50", "rows": [50, 100, 150], "cols": [1, 2, 3] }
+          {
+            "file": "fort.50",
+            "rows": [
+              50,
+              100,
+              150
+            ],
+            "cols": [
+              1,
+              2,
+              3
+            ]
+          }
         ]
-      }
-    },
-    {
-      "name": "Example_exchange_bccFe_hoh_ccor_2c",
-      "case": "exchange/bccFe",
-      "timeout": 300,
-      "abs_tol": 1e-5,
-      "rel_tol": 1e-5,
-      "abs_tol": 1e-4,
-      "rel_tol": 1e-4,
-      "_note": "hoh with ccor_2c, block exchange (recur_b_ij), fp64 fast kernel, nsp = 1 (at nsp = 2 the hoh fast block route differs from legacy without ccor_2c, see tests/KNOWN_ISSUES.md); the reference was generated with the legacy kernels. Strux settings as in Example_density_of_states_bccFe_ccor_2c. ccor_elin set because the deck potential has VMT = 0, which makes Hcc vanish at the default E_lin = 0.",
-      "namelists": {
-        "lattice":     { "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
-        "control":     { "nsp": 1, "recur": "block", "lld": 20, "cheb_backend": "fast_dp" },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true, "ccor_2c": true, "ccor_elin": -0.07 }
       },
-      "checks": {
-        "text": [
-          { "file": "jij.out", "rows": [1, 2], "cols": [6] }
-        ]
-      }
-    },
-    {
-      "name": "Example_exchange_bccFe_chebyshev_hoh_ccor_2c",
-      "case": "exchange/bccFe",
-      "timeout": 300,
-      "abs_tol": 1e-5,
-      "rel_tol": 1e-5,
-      "abs_tol": 1e-4,
-      "rel_tol": 1e-4,
-      "_note": "hoh with ccor_2c, Chebyshev exchange (chebyshev_recur_ij); the reference was generated with the legacy kernels. Chebyshev window from bounds_algorithm.",
-      "namelists": {
-        "lattice":     { "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50, "cheb_backend": "fast" },
-                "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true, "ccor_2c": true, "ccor_elin": -0.07, "bounds_algorithm": "both" }
-      },
-      "checks": {
-        "text": [
-          { "file": "jij.out", "rows": [1, 2], "cols": [6] }
-        ]
-      }
-    },
-    {
-      "name": "Example_conductivity_bccFe_hoh_ccor_2c",
-      "case": "exchange/bccFe",
-      "timeout": 300,
-      "abs_tol": 1e-6,
-      "rel_tol": 1e-6,
-      "_note": "hoh with ccor_2c, stochastic conductivity (compute_moments_stochastic) on the bcc Fe exchange deck with the fccPt conductivity keys; the reference was generated with the legacy kernels.",
-      "namelists": {
-        "calculation": { "post_processing": "conductivity" },
-        "lattice":     { "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50, "cond_ll": 50, "cond_type": "spin", "cond_calctype": "per_type", "cheb_backend": "fast" },
-                "self":        { "nstep": 1 },
-        "hamiltonian": { "v_alpha": [0, 1, 0], "v_beta": [1, 0, 0], "js_alpha": "z", "hoh": true, "ccor_2c": true, "ccor_elin": -0.07, "bounds_algorithm": "both" }
-      },
-      "checks": {
-        "text": [
-          { "file": "Fe_cond.out", "rows": [500, 1000, 1500], "cols": [2, 3] }
-        ]
-      }
-    },
-    {
-      "name": "Example_orbital_modern_bccFe_hoh_ccor_2c",
-      "case": "orbital/bccFe",
-      "timeout": 300,
-      "abs_tol": 1e-8,
-      "rel_tol": 1e-8,
-      "_note": "hoh with ccor_2c, orbital moments (chebyshev_orbital_mod) after a one-step Chebyshev SCF (the block route differs between fast and legacy at nsp = 2, see tests/KNOWN_ISSUES.md); rc shrunk to 12 so the legacy run stays near 2 minutes; the reference was generated with the legacy kernels.",
-      "namelists": {
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 30, "cheb_backend": "fast" },
-        "self":        { "nstep": 1 },
-        "lattice":     { "rc": 12, "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
-        "energy":      { "channels_ldos": 200 },
-        "hamiltonian": { "hoh": true, "ccor_2c": true, "ccor_elin": -0.07, "bounds_algorithm": "both" }
-      },
-      "checks": {
-        "text": [
-          { "file": "fort.50", "rows": [50, 100, 150], "cols": [2, 3] }
-        ]
-      }
+      "labels": [],
+      "tier": "standard"
     }
   ]
 }

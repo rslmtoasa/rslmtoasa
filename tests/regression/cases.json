@@ -2,7 +2,9 @@
   "_description": "Regression backend matrix. Optional manifest defaults are recursively merged into each case's 'namelists' before patching the base input.nml. Backend-only Chebyshev rows use the shared diamond-Si sp fixture; magnetic and composition-specific rows remain on Fe.",
   "defaults": {
     "namelists": {
-      "lattice": { "strux_backend": "strux_lib" }
+      "lattice": {
+        "strux_backend": "strux_lib"
+      }
     }
   },
   "cases": [
@@ -10,177 +12,152 @@
       "name": "diamondSi_sp_chebyshev_fast",
       "base": "../scf/cases/bulk/diamondSi",
       "output_file": "Si1_out.nml",
-      "labels": ["validation", "functional", "rs", "chebyshev", "basis_sp", "nonmagnetic", "quick"],
+      "labels": [
+        "functional",
+        "rs",
+        "chebyshev",
+        "basis_sp",
+        "nonmagnetic"
+      ],
       "timeout": 300,
       "namelists": {
-        "control": { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "fast", "lld": 200 },
-        "hamiltonian": { "hoh": false, "ccor_2c": false }
-      }
+        "control": {
+          "nsp": 1,
+          "lmax": 1,
+          "recur": "chebyshev",
+          "cheb_backend": "fast",
+          "lld": 200
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "ccor_2c": false
+        }
+      },
+      "tier": "standard"
     },
     {
       "name": "diamondSi_sp_chebyshev_batched",
       "base": "../scf/cases/bulk/diamondSi",
       "output_file": "Si1_out.nml",
-      "labels": ["functional", "rs", "chebyshev", "basis_sp", "nonmagnetic"],
+      "labels": [
+        "functional",
+        "rs",
+        "chebyshev",
+        "basis_sp",
+        "nonmagnetic"
+      ],
       "timeout": 300,
       "namelists": {
-        "control": { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "batched", "lld": 200 },
-        "hamiltonian": { "hoh": false, "ccor_2c": false }
-      }
+        "control": {
+          "nsp": 1,
+          "lmax": 1,
+          "recur": "chebyshev",
+          "cheb_backend": "batched",
+          "lld": 200
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "ccor_2c": false
+        }
+      },
+      "tier": "standard"
     },
     {
       "name": "diamondSi_sp_chebyshev_mkl_batch",
       "base": "../scf/cases/bulk/diamondSi",
       "output_file": "Si1_out.nml",
-      "labels": ["functional", "rs", "chebyshev", "basis_sp", "nonmagnetic"],
+      "labels": [
+        "functional",
+        "rs",
+        "chebyshev",
+        "basis_sp",
+        "nonmagnetic"
+      ],
       "timeout": 300,
       "requires_cmake_option": "ENABLE_MKL_KERNELS",
       "namelists": {
-        "control": { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "mkl_batch", "lld": 200 },
-        "hamiltonian": { "hoh": false, "ccor_2c": false }
-      }
-    },
-    {
-      "name": "diamondSi_sp_chebyshev_mkl_sparse",
-      "base": "../scf/cases/bulk/diamondSi",
-      "output_file": "Si1_out.nml",
-      "labels": ["functional", "rs", "chebyshev", "basis_sp", "nonmagnetic"],
-      "timeout": 300,
-      "requires_cmake_option": "ENABLE_MKL_KERNELS",
-      "namelists": {
-        "control": { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "mkl_sparse", "lld": 200 },
-        "hamiltonian": { "hoh": false, "ccor_2c": false }
-      }
+        "control": {
+          "nsp": 1,
+          "lmax": 1,
+          "recur": "chebyshev",
+          "cheb_backend": "mkl_batch",
+          "lld": 200
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "ccor_2c": false
+        }
+      },
+      "tier": "standard"
     },
     {
       "name": "diamondSi_sp_chebyshev_legacy",
       "base": "../scf/cases/bulk/diamondSi",
       "output_file": "Si1_out.nml",
-      "labels": ["functional", "rs", "chebyshev", "basis_sp", "nonmagnetic"],
+      "labels": [
+        "functional",
+        "rs",
+        "chebyshev",
+        "basis_sp",
+        "nonmagnetic"
+      ],
       "timeout": 300,
       "namelists": {
-        "control": { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "legacy", "lld": 200 },
-        "hamiltonian": { "hoh": false, "ccor_2c": false }
-      }
-    },
-    {
-      "name": "bccFe_chebyshev_fast_hoh",
-      "base": "bccFe_chebyshev",
-      "labels": ["chebyshev", "basis_spd", "magnetic", "hoh"],
-      "timeout": 300,
-      "abs_tol": 5e-6,
-      "namelists": {
-        "control": { "recur": "chebyshev", "cheb_backend": "fast", "lld": 30 },
-        "energy": { "energy_min": -3.0, "energy_max": 1.8 },
-        "hamiltonian": { "hoh": true, "ccor_2c": false }
-      }
-    },
-    {
-      "name": "bccFe_chebyshev_legacy_hoh",
-      "base": "bccFe_chebyshev",
-      "labels": ["chebyshev", "basis_spd", "magnetic", "hoh"],
-      "timeout": 300,
-      "namelists": {
-        "control": { "recur": "chebyshev", "cheb_backend": "legacy", "lld": 50 },
-        "energy": { "energy_min": -3.0, "energy_max": 1.8 },
-        "hamiltonian": { "hoh": true, "ccor_2c": false }
-      }
-    },
-    {
-      "name": "bccFe_chebyshev_fast_ccor_2c",
-      "base": "bccFe_chebyshev",
-      "labels": ["chebyshev", "basis_spd", "magnetic", "ccor"],
-      "_note": "ccor_2c requires derivative structure constants; use the supported strux_lib fitted-screening/Sdot mode from example/bulk/bccFe/CCOR.",
-      "timeout": 300,
-      "namelists": {
-        "lattice": { "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
-        "control": { "recur": "chebyshev", "cheb_backend": "fast", "lld": 30 },
-        "hamiltonian": { "hoh": false, "ccor_2c": true }
-      }
-    },
-    {
-      "name": "bccFe_chebyshev_fast_hoh_ccor_2c",
-      "base": "bccFe_chebyshev",
-      "labels": ["chebyshev", "basis_spd", "magnetic", "hoh", "ccor"],
-      "_note": "hoh with ccor_2c; the reference was generated with the legacy kernels. Strux settings as in bccFe_chebyshev_fast_ccor_2c.",
-      "timeout": 300,
-      "abs_tol": 1e-6,
-      "namelists": {
-        "lattice": { "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
-        "control": { "recur": "chebyshev", "cheb_backend": "fast", "lld": 30 },
-        "hamiltonian": { "hoh": true, "ccor_2c": true }
-      }
-    },
-    {
-      "name": "bccFe_block_fast_sp_hoh_ccor_2c",
-      "base": "bccFe_block",
-      "labels": ["block", "hoh", "ccor"],
-      "_note": "hoh with ccor_2c; the reference was generated with the legacy kernels. Strux settings as in bccFe_chebyshev_fast_ccor_2c.",
-      "timeout": 300,
-      "abs_tol": 2e-7,
-      "namelists": {
-        "lattice": { "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
-        "control": { "recur": "block", "cheb_backend": "fast", "lld": 16 },
-        "hamiltonian": { "hoh": true, "ccor_2c": true }
-      }
-    },
-    {
-      "name": "bccFe_block_fast_dp_hoh_ccor_2c",
-      "base": "bccFe_block",
-      "labels": ["block", "hoh", "ccor"],
-      "_note": "hoh with ccor_2c; the reference was generated with the legacy kernels. Strux settings as in bccFe_chebyshev_fast_ccor_2c.",
-      "timeout": 300,
-      "abs_tol": 1e-8,
-      "namelists": {
-        "lattice": { "strux_backend": "strux_lib", "screening": "fitted", "strux_want_sdot": true },
-        "control": { "recur": "block", "cheb_backend": "fast_dp", "lld": 16 },
-        "hamiltonian": { "hoh": true, "ccor_2c": true }
-      }
-    },
-    {
-      "name": "bccFe_block_fast_sp",
-      "base": "bccFe_block",
-      "labels": ["legacy_strux"],
-      "_note": "Explicit legacy structure-constant sentinel; the normal regression default is strux_lib.",
-      "timeout": 300,
-      "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control": { "recur": "block", "cheb_backend": "fast", "lld": 16 },
-        "hamiltonian": { "hoh": false, "ccor_2c": false }
-      }
+        "control": {
+          "nsp": 1,
+          "lmax": 1,
+          "recur": "chebyshev",
+          "cheb_backend": "legacy",
+          "lld": 200
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "ccor_2c": false
+        }
+      },
+      "tier": "standard"
     },
     {
       "name": "bccFe_block_fast_dp",
       "base": "bccFe_block",
       "timeout": 300,
       "namelists": {
-        "control": { "recur": "block", "cheb_backend": "fast_dp", "lld": 16 },
-        "hamiltonian": { "hoh": false, "ccor_2c": false }
-      }
-    },
-    {
-      "name": "bccFe_chebyshev_fast_sp",
-      "base": "bccFe_chebyshev",
-      "labels": ["chebyshev", "legacy_strux"],
-      "_note": "Settings of the former legacy Chebyshev deck test (legacy structure constants, no HOH, lld 50, deck energy window).",
-      "timeout": 300,
-      "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control": { "recur": "chebyshev", "cheb_backend": "fast", "lld": 50 },
-        "hamiltonian": { "hoh": false, "ccor_2c": false }
-      }
+        "control": {
+          "recur": "block",
+          "cheb_backend": "fast_dp",
+          "lld": 16
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "ccor_2c": false
+        }
+      },
+      "labels": [],
+      "tier": "standard"
     },
     {
       "name": "bccFe_lanczos",
       "base": "bccFe_lanczos",
-      "labels": ["lanczos", "legacy_strux"],
+      "labels": [
+        "lanczos",
+        "legacy_strux"
+      ],
       "_note": "Settings of the former legacy Lanczos deck test (legacy structure constants, no HOH, lld 16, deck energy window).",
       "timeout": 300,
       "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control": { "recur": "lanczos", "lld": 16 },
-        "hamiltonian": { "hoh": false, "ccor_2c": false }
-      }
+        "lattice": {
+          "strux_backend": "legacy"
+        },
+        "control": {
+          "recur": "lanczos",
+          "lld": 16
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "ccor_2c": false
+        }
+      },
+      "tier": "standard"
     }
   ]
 }

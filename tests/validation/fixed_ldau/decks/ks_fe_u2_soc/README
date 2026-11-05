@@ -1,1 +1,0 @@
-KS bcc Fe nsp=2, U=2/J=0, local, SOC on, full 12^3 mesh: seed tests/scf/cases/k_space_scf/bccFe/Fe.nml with mom set to the axis (z, x, [111]) in Fe.nml; S6b T2(g) and the KS Fe host for nsp=2 impurities.

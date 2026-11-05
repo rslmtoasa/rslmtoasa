@@ -1,286 +1,113 @@
-name,labels,runtime_s,family,reads
-Regression_diamondSi_sp_chebyshev_fast,backend;basis_sp;chebyshev;functional;nonmagnetic;quick;regression;rs;strux;validation,15.90,backend regression,
-Regression_diamondSi_sp_chebyshev_batched,backend;basis_sp;chebyshev;functional;nonmagnetic;regression;rs;strux,23.08,backend regression,
-Regression_diamondSi_sp_chebyshev_mkl_batch,backend;basis_sp;chebyshev;functional;nonmagnetic;regression;rs;strux,0.05,backend regression,
-Regression_diamondSi_sp_chebyshev_mkl_sparse,backend;basis_sp;chebyshev;functional;nonmagnetic;regression;rs;strux,0.04,backend regression,
-Regression_diamondSi_sp_chebyshev_legacy,backend;basis_sp;chebyshev;functional;nonmagnetic;regression;rs;strux,20.65,backend regression,
-Regression_bccFe_chebyshev_fast_hoh,backend;basis_spd;chebyshev;functional;hoh;magnetic;regression;strux,23.87,backend regression,
-Regression_bccFe_chebyshev_legacy_hoh,backend;basis_spd;chebyshev;functional;hoh;magnetic;regression;strux,53.48,backend regression,
-Regression_bccFe_chebyshev_fast_ccor_2c,backend;basis_spd;ccor;chebyshev;functional;magnetic;regression;strux,20.15,backend regression,
-Regression_bccFe_chebyshev_fast_hoh_ccor_2c,backend;basis_spd;ccor;chebyshev;functional;hoh;magnetic;regression;strux,32.05,backend regression,
-Regression_bccFe_block_fast_sp_hoh_ccor_2c,backend;block;ccor;functional;hoh;regression;strux,23.10,backend regression,
-Regression_bccFe_block_fast_dp_hoh_ccor_2c,backend;block;ccor;functional;hoh;regression;strux,13.36,backend regression,
-Regression_bccFe_block_fast_sp,backend;functional;legacy_strux;regression,5.85,backend regression,
-Regression_bccFe_block_fast_dp,backend;functional;regression;strux,6.63,backend regression,
-Regression_bccFe_chebyshev_fast_sp,backend;chebyshev;functional;legacy_strux;regression,20.37,backend regression,
-Regression_bccFe_lanczos,backend;functional;lanczos;legacy_strux;regression,13.69,backend regression,
-Triad_triad_bccFe_jij,functional;regression;triad,56.56,backend regression,
-Triad_triad_bccFe_sigma,functional;regression;triad,44.28,backend regression,
-Triad_triad_bccFe_damping,functional;regression;triad,34.13,backend regression,
-Val04LdaUPhysics,known-failure;kspace;lda_u;magnetic;validation,0.00,LDA+U,
-Val04RsEmbeddingProvenance,embedding;lda_u;provenance;rs;validation,0.18,LDA+U,
-Val04RsFrozenHostFiles,embedding;functional;lda_u;rs;surface,186.76,LDA+U,
-Val04RsImpurityEnergyDiagnostic,diagnostics;impurity;lda_u;rs;validation,8.73,LDA+U,
-Val04RsEmbeddingFixtures,fixtures;guards;impurity;lda_u;rs;validation,38.97,LDA+U,
-Val04RsHcpCoClusterSetup,cluster;impurity;rs;validation,180.01,LDA+U,
-Val05GreenConvergence,convergence;dyson;functional;green;kspace;lehmann;rs;validation,156.88,validation,
-Val07ExchangeFormulations,exchange;functional;magnetic;multisite;tensor;validation,26.20,validation,
-Val08DampingInertia,convergence;damping;exchange;functional;inertia;magnetic;validation,49.03,validation,
-Val09KuboBastinTransport,conductivity;convergence;functional;kpm;orbital_transport;spin_transport;tensor;transport;validation,258.99,validation,
-Val12LmtoFieldsTorques,constraints;functional;known-failure;lmto;magnetic;soc;spin_dynamics;torque;validation,27.03,validation,
-Val13AbInitioSpinDynamics,abinitio;convergence;functional;magnetic;spin_dynamics;trajectory;validation,170.18,validation,
-Val15MultilayerVacuumElectrostatics,convergence;electrostatics;functional;green;vacuum;validation,128.51,validation,
-Val18GbtWp01Q0BccFe,functional;gbt;kspace;magnetic;q0;validation;wp01,17.36,GBT,
-Val22LrRadialGroundState,functional;ground-state;lr-01;magnetic;radial;validation,5.86,validation,
-Val22LrRadialGroundStateLibxc,functional;ground-state;libxc;lr-01;magnetic;radial;validation,5.99,validation,
-UnitBasisDimensions,basis;unit,0.00,unit core,
-UnitScfB1GuardCapacityRequiresFatal,unit,0.12,unit core,
-UnitScfB1GuardWarningBoundary,unit,0.00,unit core,
-UnitScfB1GuardNonfiniteRequiresFatal,unit,0.12,unit core,
-UnitScfB1GuardBoundary,unit,0.00,unit core,
-UnitLrBasisRadial,legacy-reference;lr-basis;normalization;radial;unit,0.01,unit core,
-UnitLrRadialGroundState,ground-state;lr-01;magnetic;radial;unit,0.00,unit core,
-UnitLrBasisAngular,angular;lr-basis;representation;spdf-guard;unit,0.01,unit core,
-UnitLrBasisAugmentation,density;hoh;lr-basis;production;unit,0.02,unit core,
-UnitDresp03rLmtoMapping,dresp-03r;lkag;lmto;representation-audit;rotation-vertex;unit,0.01,unit core,
-UnitGreenLifecycle,green;lifecycle;unit,0.01,unit core,
-UnitLrRsGfRepresentation,bridge;green;lr-rep;representation;screening;unit,0.01,unit core,
-UnitXcSelectorSemantics,libxc;selector;unit;xc,0.01,XC,
-UnitControlSpinSemantics,control;semantics;spin;unit,0.01,unit core,
-UnitControlConstraintsRead,constraints;control;quick;unit,0.01,unit core,
-UnitXcUnknownSelectorRequiresFatal,negative;selector;unit;unsupported;xc,0.16,XC,
-UnitXcLdaLegacyKernel,lda;legacy;polarization;unit;xc,0.01,XC,
-UnitXcLegacyUnpolarizedDensity,legacy;semantics;spin;unit;xc,0.01,XC,
-UnitXcLegacyPolarizedRequiresFatal,legacy;negative;spin;unit;xc,0.15,XC,
-UnitXcLegacyPolarizedPzRequiresFatal,legacy;negative;pz;spin;unit;xc,0.15,XC,
-UnitXcLegacyPolarizationTolerance,legacy;spin;tolerance;unit;xc,0.01,XC,
-UnitXcLegacyPolarizationTolerance_txc6_case0,accepted;legacy;spin;tolerance;unit;xc,0.01,XC,
-UnitXcLegacyPolarizationTolerance_txc6_case1,accepted;legacy;spin;tolerance;unit;xc,0.01,XC,
-UnitXcLegacyPolarizationTolerance_txc6_case2,accepted;legacy;spin;tolerance;unit;xc,0.01,XC,
-UnitXcLegacyPolarizationTolerance_txc6_case6,accepted;legacy;spin;tolerance;unit;xc,0.01,XC,
-UnitXcLegacyPolarizationTolerance_txc6_case7,accepted;legacy;spin;tolerance;unit;xc,0.01,XC,
-UnitXcLegacyPolarizationTolerance_txc6_case8,accepted;legacy;spin;tolerance;unit;xc,0.01,XC,
-UnitXcLegacyPolarizationTolerance_txc6_case3,legacy;negative;spin;tolerance;unit;xc,0.16,XC,
-UnitXcLegacyPolarizationTolerance_txc6_case4,legacy;negative;spin;tolerance;unit;xc,0.15,XC,
-UnitXcLegacyPolarizationTolerance_txc6_case5,legacy;negative;spin;tolerance;unit;xc,0.11,XC,
-UnitXcLegacyPolarizationTolerance_txc7_case0,accepted;legacy;spin;tolerance;unit;xc,0.00,XC,
-UnitXcLegacyPolarizationTolerance_txc7_case1,accepted;legacy;spin;tolerance;unit;xc,0.00,XC,
-UnitXcLegacyPolarizationTolerance_txc7_case2,accepted;legacy;spin;tolerance;unit;xc,0.00,XC,
-UnitXcLegacyPolarizationTolerance_txc7_case6,accepted;legacy;spin;tolerance;unit;xc,0.00,XC,
-UnitXcLegacyPolarizationTolerance_txc7_case7,accepted;legacy;spin;tolerance;unit;xc,0.00,XC,
-UnitXcLegacyPolarizationTolerance_txc7_case8,accepted;legacy;spin;tolerance;unit;xc,0.00,XC,
-UnitXcLegacyPolarizationTolerance_txc7_case3,legacy;negative;spin;tolerance;unit;xc,0.12,XC,
-UnitXcLegacyPolarizationTolerance_txc7_case4,legacy;negative;spin;tolerance;unit;xc,0.13,XC,
-UnitXcLegacyPolarizationTolerance_txc7_case5,legacy;negative;spin;tolerance;unit;xc,0.11,XC,
-UnitRadialGga,derivatives;gga;radial;unit;xc,0.00,XC,
-UnitLegacyPbeGga,gga;legacy;pbe;spin-scaling;unit;xc,0.01,XC,
-UnitVxc0spGgaOrigin,gga;legacy;origin;production-path;unit;xc,0.01,XC,
-UnitAtomscResidualControls,atomsc;control;residual;scf;unit;xc,0.01,XC,
-UnitLibxcXcBaseline,libxc;unit;xc,0.01,XC,
-UnitLibxcGgaRadial,functional-derivative;gga;libxc;radial;unit;xc,0.02,XC,
-UnitLibxcProductionContract,contract;floor;libxc;lifecycle;selector;spin;unit;units;xc,0.01,XC,
-UnitXcUnsupportedFamilyRequiresFatal,libxc;negative;selector;unit;unsupported-family;xc,0.14,XC,
-UnitXcCapabilityRequiresFatal,capability;libxc;negative;selector;unit;xc,0.16,XC,
-UnitXcKineticRequiresFatal,kinetic;libxc;negative;selector;unit;xc,0.15,XC,
-UnitXcWrongDimensionalityRequiresFatal,dimensionality;libxc;negative;selector;unit;xc,0.15,XC,
-UnitXcMissingVxcRequiresFatal,derivative;libxc;negative;selector;unit;xc,0.14,XC,
-UnitXcCompositionSemantics,composition;libxc;semantics;spin;unit;xc,0.01,XC,
-UnitPbeGgaComparison,comparison;gga;libxc;pbe;unit;xc,0.01,XC,
-UnitXcLdaReconciliation,libxc;reconciliation;unit;xc,0.02,XC,
-UnitLdaUHamiltonian,hamiltonian;lda_u;unit,0.08,LDA+U,
-UnitLdaUTensor,lda_u;tensor;unit,0.02,LDA+U,
-UnitHubbardSpinorMoments,lda_u;spinor;unit,0.16,LDA+U,
-UnitHubbardSpinor,lda_u;spinor;unit,0.03,LDA+U,
-UnitLdaUOccupationProducers,hermiticity;lda_u;occupation;unit,0.01,LDA+U,
-UnitLdaUProjectorCommonFrozenH,frozen_h;lda_u;projector;unit;validation,1.32,LDA+U,
-UnitLdaUProjectorSpinorFrozenH,frozen_h;lda_u;projector;spinor;unit;validation,2.53,LDA+U,
-UnitLdaUSpinorImpurityFrozenH,frozen_h;lda_u;projector;spinor;unit;validation,3.77,LDA+U,
-UnitLdaUProjectorMultisiteFrozenH,frozen_h;lda_u;multisite;projector;unit;validation,7.34,LDA+U,
-UnitLehmannChain,quick;unit,0.01,unit core,
-UnitSimpsonFTemperature,quick;unit,0.01,unit core,
-UnitKspaceGFValidation,green;kspace;lehmann;resolvent;unit;validation,0.02,unit core,
-UnitFermiDiracEntropy,entropy;oracle;thermodynamics;unit,0.01,unit core,
-UnitChebyshevGFOracle,chebyshev;convergence;green;oracle;resolvent;unit,0.01,unit core,
-UnitChebyshevSpectralPositivity,chebyshev;green;positivity;spectral;unit,0.00,unit core,
-UnitDysonEquivalence,unit,0.01,unit core,
-UnitGammaSupercell,unit,0.00,unit core,
-UnitBsfSumRule,unit,0.03,unit core,
-UnitMomentKernel,unit,0.00,unit core,
-UnitLocalMomentsKernel,lda_u;local_moments;oracle;unit,0.01,LDA+U,
-UnitAutoImpurityLocalMode,lda_u;local_moments;resolver;unit,0.01,LDA+U,
-UnitLocalMomentsSiteSwap,lda_u;local_moments;mapping;oracle;unit,0.01,LDA+U,
-UnitSpinResponseKernels,quick;spin-response;unit,0.66,spin response,
-UnitSpinResponseChannelsKernel,quick;spin-response;unit,0.04,spin response,
-UnitSpinResponseA4,quick;spin-response;unit,0.26,spin response,
-UnitSpinResponseA5,quick;spin-response;unit,0.64,spin response,
-UnitSpinResponseR1,quick;spin-response;unit,0.01,spin response,
-SpinResponseFeDriver,quick;spin-response,140.34,spin response,
-UnitSpinResponseC1,quick;spin-response;unit,13.32,spin response,
-UnitSpinResponseC2,quick;spin-response;unit,60.33,spin response,
-UnitSpinResponseC3,quick;spin-response;unit,46.56,spin response,
-UnitSpinResponseS2,quick;spin-response;unit,16.34,spin response,
-UnitSpinResponseChannels,quick;spin-response;unit,10.40,spin response,
-UnitSpinResponseRadial,quick;spin-response;unit,8.28,spin response,
-LdaUSocInsertionScratch,lda_u;spinor,0.04,LDA+U,
-UnitLdaUSocInsertion,lda_u;spinor;unit,4.10,LDA+U,
-LdaUSocSurfaceInsertionScratch,lda_u;spinor,0.03,LDA+U,
-UnitLdaUSocSurfaceInsertion,lda_u;spinor;unit,8.64,LDA+U,
-SpinResponseAfDriver,quick;spin-response,26.51,spin response,
-UnitSpinResponseS2Af,quick;spin-response;unit,63.06,spin response,
-SpinResponseS3,quick;spin-response;unit,58.37,spin response,
-SpinResponseOmpIdentity,quick;spin-response;unit,10.83,spin response,
-SpinResponseSocZeroIdentity,quick;spin-response;unit,31.81,spin response,
-SpinResponseInversionOdd,quick;spin-response;unit,18.46,spin response,
-SpinResponseBaselineRepro,regression;spin-response,44.79,spin response,
-SpinResponseNiBaselineRepro,regression;spin-response,70.81,spin response,
-SpinResponseCrBaselineRepro,regression;spin-response,129.99,spin response,
-UnitKpmTransport,conductivity;kpm;orbital_transport;spin_transport;transport;unit,0.01,unit core,
-UnitMadl2dExhGuard,unit,0.01,unit core,
-UnitMadelungConventions,unit,0.00,unit core,
-UnitRegionRegistry,unit,0.00,unit core,
-UnitInterfaceAlignmentOracle,unit,0.00,unit core,
-UnitVacuumLead,unit,0.02,unit core,
-UnitVacuumRegionWiring,unit,0.01,unit core,
-UnitAlignmentSolver,unit,0.00,unit core,
-UnitKspaceOccupations,gbt;quick;unit;wp2;wp5,0.04,GBT,
-UnitParallelContext,mpi;parallel_context;unit,0.00,unit core,
-UnitKpointWorkset,quick;unit,0.00,unit core,
-UnitKpointWorksetReducedReject,contract;finite-q;reciprocal;unit;workset,0.17,unit core,
-UnitParallelContext_cuda_override,device-mapping;mpi;parallel_context;unit,0.00,unit core,
-UnitArbitraryKEigenpairs,quick;unit,0.11,unit core,
-Acc04ArbitraryKSource,arbitrary-k;cuda;reciprocal;source-contract;unit,0.03,unit core,
-Acc09ReciprocalVariantsSource,cuda;reciprocal;source-contract;unit;variants,0.02,unit core,
-AccP1ReciprocalBatchedSource,batched;cuda;reciprocal;source-contract;unit,0.02,unit core,
-ScfB0cBenchmarkContract,benchmark;contract;cpu;gpu;scf;unit,0.06,unit core,
-Acc10LehmannSource,cuda;green;lehmann;reciprocal;source-contract;unit,0.02,unit core,
-Acc11ResidentSource,cuda;lehmann;reciprocal;residency;source-contract;unit,0.03,unit core,
-UnitMagneticRepresentation,gbt;unit;wp3,0.00,GBT,
-UnitGbtStructure,gbt;unit;wp4,0.00,GBT,
-UnitGbtKspaceOneBand,R1;gbt;kspace;unit,0.01,GBT,
-UnitGbtKspaceForceTheorem,R11;R7;R8;gbt;quick;unit,1.72,GBT,
-UnitGbtKspaceHorth,C1;R2;gbt;kspace;quick;unit,0.02,GBT,
-UnitGbtFrameContract,density;frame;gbt;unit;wp05,0.00,GBT,
-UnitGbtWp01Q0,gbt;q0;unit;wp01,0.01,GBT,
-UnitGbtWp02GaugeShiftedK,gauge;gbt;hermiticity;shifted-k;unit;wp02,0.01,GBT,
-UnitStructureConstantsBackends,legacy_strux;structure_constants;strux;unit,3.22,unit core,
-UnitSpinDensity,density;gbt;unit;wp7,0.02,GBT,
-UnitAbspinlibIntegrators,convergence;physics;sd;spin_integrators;validation,3.17,validation,
-UnitConstrainingField,constraints;physics;unit,0.01,unit core,
-UnitGbtConstraintCovariance,constraints;covariance;gbt;unit;wp06,0.00,GBT,
-UnitGbtWp07ConstraintEnergy,constraints;energy;gbt;unit;wp07,0.00,GBT,
-UnitConstrainingFieldSource,constraints;source-contract;unit,0.06,unit core,
-CudaPluginSurface,coverage;cuda;gpu;source-contract;unit,0.11,unit core,
-UnitManifestDefaults,manifest;tooling,0.05,unit core,
-BenchmarkHarnessSchema,benchmark;performance;tooling,0.45,unit core,
-SpinResponseIsolation,quick;spin-response;tooling,0.04,spin response,
-Example_bulk_diamondSi_sp_chebyshev,basis_sp;chebyshev;example;functional;nonmagnetic;rs;scf;strux,11.86,SCF example,
-Example_bulk_bccFe_nsp2_block_hoh,basis_spd;block;example;functional;hoh;magnetic;metallic;quick;rs;scf;strux,7.82,SCF example,
-Example_bulk_bccFe_sd_smoke,basis_spd;block;example;functional;magnetic;quick;scf;sd;strux,19.27,SCF example,
-Example_bulk_bccFe_nsp2_block,basis_spd;block;example;functional;magnetic;metallic;rs;scf;strux,7.08,SCF example,
-Example_bulk_bccFe_nsp2_chebyshev_hoh,chebyshev;example;functional;scf;strux,37.35,SCF example,
-Example_bulk_bccFe_nsp2_chebyshev,chebyshev;example;functional;quick;scf;strux,20.92,SCF example,
-Example_bulk_bccFe_nsp2_lanczos_hoh,basis_spd;example;functional;hoh;lanczos;magnetic;metallic;rs;scf;strux,16.11,SCF example,
-Example_bulk_bccFe_nsp2_lanczos,basis_spd;example;functional;lanczos;magnetic;metallic;rs;scf;strux,9.38,SCF example,
-Example_bulk_bccFe_nsp2_hubbard,basis_spd;block;example;functional;hubbard;magnetic;metallic;rs;scf;strux,0.00,LDA+U,
-Example_surface_soc_u_nsp1_host_guard,basis_spd;chebyshev;example;functional;hubbard;legacy_strux;magnetic;metallic;quick;rs;scf,5.55,LDA+U,
-Example_surface_fccNi001_uhost_guard,basis_spd;chebyshev;example;functional;hubbard;legacy_strux;magnetic;metallic;quick;rs;scf,5.57,LDA+U,
-Example_bulk_Pt2MnGa_soc_u_mixed_axes_guard,basis_spd;block;chebyshev;example;functional;hubbard;legacy_strux;magnetic;metallic;multi_sublattice;quick;rs;scf,7.38,LDA+U,
-Example_bulk_bccFe_soc_u_tilted_block_guard,basis_spd;block;example;functional;hubbard;magnetic;metallic;quick;rs;scf;strux,2.47,LDA+U,
-Example_bulk_bccFe_nsp3_u_guard,basis_spd;block;example;functional;hubbard;magnetic;metallic;quick;rs;scf;strux,1.47,LDA+U,
-Example_bulk_bccFe_nsp4_u_guard,basis_spd;block;example;functional;hubbard;magnetic;metallic;quick;rs;scf;strux,1.52,LDA+U,
-Example_bulk_bccFe_nsp3_block_hoh,basis_spd;block;example;functional;hoh;magnetic;metallic;rs;scf;strux,10.78,SCF example,
-Example_bulk_bccFe_nsp3_block,basis_spd;block;example;functional;magnetic;metallic;rs;scf;strux,6.49,SCF example,
-Example_bulk_bccFe_nsp3_chebyshev_hoh,chebyshev;example;functional;scf;strux,41.43,SCF example,
-Example_bulk_bccFe_nsp3_chebyshev,chebyshev;example;functional;scf;strux,21.64,SCF example,
-Example_bulk_bccFe_nsp4_block_hoh,basis_spd;block;example;functional;hoh;magnetic;metallic;rs;scf;strux,12.03,SCF example,
-Example_bulk_bccFe_nsp4_block,basis_spd;block;example;functional;magnetic;metallic;rs;scf;strux,5.60,SCF example,
-Example_bulk_bccFe_nsp4_chebyshev_hoh,chebyshev;example;functional;scf;strux,38.72,SCF example,
-Example_bulk_bccFe_nsp4_chebyshev,chebyshev;example;functional;scf;strux,19.13,SCF example,
-Example_bulk_bccFe_nsp4_block_spiral_qplus,basis_spd;block;example;functional;gbt;magnetic;metallic;rs;scf;strux,4.81,GBT,
-Example_bulk_bccFe_nsp4_block_spiral_qminus,basis_spd;block;example;functional;gbt;magnetic;metallic;rs;scf;strux,5.51,GBT,
-Example_frozen_magnon_bccFe_auto,basis_spd;block;example;frozen_magnon;functional;magnetic;metallic;rs;scf;strux,24.75,SCF example,
-Example_frozen_magnon_bccFe_auto_scf,basis_spd;block;example;frozen_magnon;functional;magnetic;metallic;rs;scf;strux,25.12,SCF example,
-Example_bulk_bccFe_export_rs2pao,basis_spd;block;example;export;functional;magnetic;metallic;rs;scf;strux,4.94,SCF example,
-Example_bulk_bccFe_export_python,basis_spd;block;example;export;functional;magnetic;metallic;rs;scf;strux,5.17,SCF example,
-Example_surface_fccCu001_block_hoh,basis_spd;block;example;functional;hoh;launch_serial;legacy_strux;metallic;quick;rs;scf,25.92,SCF example,
-Example_impurity_B2FeCo_block_hoh,basis_spd;block;example;functional;hoh;launch_serial;legacy_strux;magnetic;metallic;multi_sublattice;quick;rs;scf,7.28,SCF example,
-Example_bulk_Pt2MnGa_block,basis_spd;block;example;functional;launch_serial;legacy_strux;magnetic;metallic;multi_sublattice;rs;scf,18.07,SCF example,
-Example_bulk_Pt2MnGa_chebyshev_hoh,basis_spd;chebyshev;example;functional;hoh;launch_serial;legacy_strux;magnetic;metallic;multi_sublattice;rs;scf,58.62,SCF example,
-Example_bulk_Pt2MnGa_chebyshev,basis_spd;chebyshev;example;functional;legacy_strux;magnetic;metallic;multi_sublattice;rs;scf,59.87,SCF example,
-Example_k_space_scf_bccFe,basis_spd;block;example;functional;kspace;launch_serial;magnetic;quick;scf;strux,3.67,SCF example,
-Example_k_space_scf_diamondSi_sp,basis_sp;block;example;functional;kspace;launch_serial;mpi;nonmagnetic;quick;scf;strux,1.61,SCF example,
-Example_k_space_scf_diamondSi_sp_tetrahedron,basis_sp;block;dos;example;functional;kspace;launch_serial;nonmagnetic;quick;scf;strux;tetrahedron,1.30,SCF example,
-Example_k_space_scf_bccFe_spd_magnetic,basis_spd;block;example;functional;kspace;launch_serial;magnetic;mpi;quick;scf;strux,3.89,SCF example,
-Example_bulk_fccCu_chebyshev,chebyshev;example;functional;scf;strux,25.06,SCF example,
-Example_impurity_B2FeCo_sd_smoke,block;example;functional;impurity;legacy_strux;magnetic;scf;sd,22.09,SCF example,
-Example_impurity_fccCu_chebyshev,chebyshev;example;functional;legacy_strux;scf,28.61,SCF example,
-Example_interface_fccCu001_chebyshev,chebyshev;example;functional;legacy_strux;scf,25.77,SCF example,
-Example_interface_fccCu111_chebyshev,chebyshev;example;functional;legacy_strux;scf,26.19,SCF example,
-Example_exchange_bccFe,basis_spd;block;example;exchange;functional;magnetic;postproc;quick;rs;strux,31.70,SCF example,
-Example_exchange_bccFe_hoh,block;example;functional;postproc;strux,54.18,SCF example,
-Example_exchange_conductivity_fccPt,chebyshev;conductivity;example;functional;legacy_strux;postproc,88.92,SCF example,
-Example_exchange_conductivity_fccPt_hoh,chebyshev;conductivity;example;functional;legacy_strux;postproc,131.60,SCF example,
-Example_band_structure_bccFe,bands;block;example;functional;kspace;postproc;quick;strux,2.98,SCF example,
-Example_density_of_states_bccFe,basis_spd;block;dos;example;functional;kspace;postproc;quick;scalar_relativistic;strux,3.52,SCF example,
-Example_density_of_states_bccFe_ccor_2c,block;ccor;dos;example;functional;kspace;postproc;strux,3.88,SCF example,
-Example_density_of_states_bccFe_reciprocal_hoh,block;dos;example;functional;hoh;kspace;postproc;strux,2.67,SCF example,
-Example_paoflow2rs_bccFe,block;example;functional;postproc;quick;strux,5.41,SCF example,
-Example_paoflow_exchange_p2rs_bccFe,block;example;functional;postproc;strux,23.97,SCF example,
-Example_paoflow_conductivity_p2rs_bccFe,chebyshev;conductivity;example;functional;postproc;strux,1.46,SCF example,
-Example_orbital_modern_bccFe,block;example;functional;postproc;strux,275.80,SCF example,
-Example_exchange_bccFe_hoh_ccor_2c,block;example;functional;postproc;strux,69.42,SCF example,
-Example_exchange_bccFe_chebyshev_hoh_ccor_2c,chebyshev;example;functional;postproc;strux,125.58,SCF example,
-Example_conductivity_bccFe_hoh_ccor_2c,chebyshev;example;functional;postproc;strux,58.07,SCF example,
-Example_orbital_modern_bccFe_hoh_ccor_2c,chebyshev;example;functional;postproc;strux,143.50,SCF example,
-AppGbtKspaceRsFreeze,functional;gbt;rs,49.40,GBT,
-AppGbtKspaceGauge,functional;gbt;kspace,201.36,GBT,
-AppGbtKspaceGaugeCcor,functional;gbt;kspace,173.18,GBT,
-AppGbtKspaceAntiparallel,functional;gbt;kspace,45.73,GBT,
-AppGbtKspaceCommensurate,functional;gbt;kspace,177.00,GBT,
-AppGbtKspaceCommensurateSecondOrder,functional;gbt;kspace,167.45,GBT,
-AppGbtKspaceCommensurateCcor,functional;gbt;kspace,225.10,GBT,
-AppGbtKspaceCommensurateCcorSecondOrder,functional;gbt;kspace,205.56,GBT,
-AppGbtKspaceNio_r2,functional;gbt;kspace,156.23,GBT,
-AppGbtKspaceNio_i2,functional;gbt;kspace,611.37,GBT,
-AppGbtKspaceNio_guard,functional;gbt;kspace,7.90,GBT,
-AppGbtKspaceGaugeOrthogonal,functional;gbt;kspace,65.53,GBT,
-AppGbtKspaceNio_r2_orthogonal,functional;gbt;kspace,59.83,GBT,
-AppKspaceOrthogonalScf_rotation,functional;gbt;kspace,155.55,GBT,
-AppKspaceOrthogonalScf_collinear,functional;gbt;kspace,51.86,GBT,
-AppKspaceOrthogonalScf_afm,functional;gbt;kspace,178.91,GBT,
-AppKspaceOrthogonalScf_moments,functional;gbt;kspace,22.57,GBT,
-AppKspaceOrthogonalScf_guards,functional;gbt;kspace,22.26,GBT,
-AppGbtKspaceSymmetry,functional;gbt;kspace,11.80,GBT,
-AppGbtKspaceOrthogonal,functional;gbt;kspace,68.84,GBT,
-AppGbtKspaceScSweep,functional;gbt;kspace,101.66,GBT,
-AppGbtKspaceHamOrderInvalid,functional;gbt;kspace,13.47,GBT,
-AppGbtKspaceScSpiral_identity,functional;gbt;kspace,64.46,GBT,
-AppGbtKspaceScSpiral_identity_orthogonal,functional;gbt;kspace,60.37,GBT,
-AppGbtKspaceScSpiral_identity_ccor,functional;gbt;kspace,79.76,GBT,
-AppGbtKspaceScSpiral_identity_ccor_second,functional;gbt;kspace,95.06,GBT,
-AppGbtKspaceScSpiral_converge,functional;gbt;kspace,42.16,GBT,
-AppGbtKspaceScSpiral_converge_orthogonal,functional;gbt;kspace,46.71,GBT,
-AppGbtKspaceScSpiral_chi,functional;gbt;kspace,39.84,GBT,
-AppGbtKspaceScSpiral_chi_orthogonal,functional;gbt;kspace,56.40,GBT,
-AppGbtKspaceScSpiral_symmetry,functional;gbt;kspace,133.94,GBT,
-AppGbtKspaceScSpiral_symmetry_orthogonal,functional;gbt;kspace,133.94,GBT,
-AppGbtKspaceScSpiral_guards,functional;gbt;kspace,5.91,GBT,
-AppGbtKspaceScSpiralAfm_identity,functional;gbt;kspace,278.51,GBT,
-AppGbtKspaceScSpiralAfm_identity_second,functional;gbt;kspace,571.15,GBT,
-AppGbtKspaceScSpiralAfm_identity_orthogonal,functional;gbt;kspace,307.46,GBT,
-AppGbtKspaceScSpiralAfm_rotation,functional;gbt;kspace,364.74,GBT,
-AppGbtKspaceScSpiralAfm_restart,functional;gbt;kspace,170.71,GBT,
-AppGbtKspaceScSpiralB2,functional;gbt;kspace,351.83,GBT,
-AppGbtKspaceScSpiralB2_orthogonal,functional;gbt;kspace,316.18,GBT,
-AppGbtKspaceScSpiralI3_fe_L4_first,functional;gbt;kspace,1033.54,GBT,tests;tests/gbt;tests/gbt/fixtures/bccFe_sc2/lattice.nml;tests/gbt/fixtures/bccFe_super_q025/lattice.nml;tests/gbt/gbt_app_common.py;tests/gbt/oracles/tolerances.nml;tests/gbt/test_kspace_scspiral_i3.py;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml
-AppGbtKspaceScSpiralI3_fe_L3_first,functional;gbt;kspace,667.19,GBT,tests;tests/gbt;tests/gbt/fixtures/bccFe_sc2/lattice.nml;tests/gbt/fixtures/bccFe_super_q033/lattice.nml;tests/gbt/gbt_app_common.py;tests/gbt/oracles/tolerances.nml;tests/gbt/test_kspace_scspiral_i3.py;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml
-AppGbtKspaceScSpiralI3_fe_L4_second,functional;gbt;kspace,468.28,GBT,
-AppGbtKspaceScSpiralI3Ccor_fe_L4_first,functional;gbt;kspace,1089.28,GBT,tests;tests/gbt;tests/gbt/fixtures/bccFe_sc2/lattice.nml;tests/gbt/fixtures/bccFe_super_q025/lattice.nml;tests/gbt/gbt_app_common.py;tests/gbt/oracles/tolerances.nml;tests/gbt/test_kspace_scspiral_i3.py;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml
-AppGbtKspaceScSpiralI3Ccor_fe_L4_second,functional;gbt;kspace,908.97,GBT,
-AppConstraintsNamelistMom,constraints;functional;quick,4.14,SCF example,
-AppConstraintsNamelistMalformed,constraints;functional;quick,0.17,SCF example,
-ValGbtHarmonic,gbt;validation,1024.74,GBT,
-ValGbtConvergence,gbt;validation,1268.93,GBT,
-AppPeriodicNcRotation,functional;noncollinear,57.30,SCF example,
-Example_si_chebyshev_kspace_dos_equivalence,basis_sp;chebyshev;equivalence;example;functional;kspace;nonmagnetic;quick;rs;scf;strux,8.92,SCF example,
-Val03LibxcScfEquivalence,equivalence;functional;libxc;magnetic;nonmagnetic;scf;strux;validation,21.12,validation,
+name,tier,labels,runtime_s,family,reads
+CheckTestData,quick,tooling,0.04,unit core,tests/check_test_data.py
+Regression_diamondSi_sp_chebyshev_fast,standard,backend;basis_sp;chebyshev;functional;nonmagnetic;regression;rs;strux,16.40,backend regression,tests;tests/manifest_defaults.py;tests/regression;tests/regression/cases.json;tests/regression/references;tests/regression/references/diamondSi_sp_chebyshev_fast.nml;tests/regression/run_matrix.py;tests/scf/cases/bulk/diamondSi;tests/scf/cases/bulk/diamondSi/README.md;tests/scf/cases/bulk/diamondSi/Si1.nml;tests/scf/cases/bulk/diamondSi/Si2.nml;tests/scf/cases/bulk/diamondSi/input.nml;tests/scf/cases/bulk/diamondSi/lattice.nml
+Regression_diamondSi_sp_chebyshev_batched,standard,backend;basis_sp;chebyshev;functional;nonmagnetic;regression;rs;strux,26.63,backend regression,tests;tests/manifest_defaults.py;tests/regression;tests/regression/cases.json;tests/regression/references;tests/regression/references/diamondSi_sp_chebyshev_batched.nml;tests/regression/run_matrix.py;tests/scf/cases/bulk/diamondSi;tests/scf/cases/bulk/diamondSi/README.md;tests/scf/cases/bulk/diamondSi/Si1.nml;tests/scf/cases/bulk/diamondSi/Si2.nml;tests/scf/cases/bulk/diamondSi/input.nml;tests/scf/cases/bulk/diamondSi/lattice.nml
+Regression_diamondSi_sp_chebyshev_mkl_batch,standard,backend;basis_sp;chebyshev;functional;nonmagnetic;regression;rs;strux,0.11,backend regression,tests;tests/manifest_defaults.py;tests/regression;tests/regression/cases.json;tests/regression/run_matrix.py
+Regression_diamondSi_sp_chebyshev_legacy,standard,backend;basis_sp;chebyshev;functional;nonmagnetic;regression;rs;strux,27.77,backend regression,tests;tests/manifest_defaults.py;tests/regression;tests/regression/cases.json;tests/regression/references;tests/regression/references/diamondSi_sp_chebyshev_legacy.nml;tests/regression/run_matrix.py;tests/scf/cases/bulk/diamondSi;tests/scf/cases/bulk/diamondSi/README.md;tests/scf/cases/bulk/diamondSi/Si1.nml;tests/scf/cases/bulk/diamondSi/Si2.nml;tests/scf/cases/bulk/diamondSi/input.nml;tests/scf/cases/bulk/diamondSi/lattice.nml
+Regression_bccFe_block_fast_dp,standard,backend;functional;regression;strux,14.79,backend regression,tests;tests/manifest_defaults.py;tests/regression;tests/regression/bccFe_block;tests/regression/bccFe_block/Fe.nml;tests/regression/bccFe_block/input.nml;tests/regression/cases.json;tests/regression/references;tests/regression/references/bccFe_block_fast_dp.nml;tests/regression/run_matrix.py
+Regression_bccFe_lanczos,standard,backend;functional;lanczos;legacy_strux;regression,11.16,backend regression,tests;tests/manifest_defaults.py;tests/regression;tests/regression/bccFe_lanczos;tests/regression/bccFe_lanczos/Fe.nml;tests/regression/bccFe_lanczos/input.nml;tests/regression/bccFe_lanczos/input_second_order.nml;tests/regression/bccFe_lanczos/ref.nml;tests/regression/cases.json;tests/regression/references;tests/regression/references/bccFe_lanczos.nml;tests/regression/run_matrix.py
+Triad_triad_bccFe_jij,validation,functional;regression;triad,56.56,backend regression,tests;tests/manifest_defaults.py;tests/regression;tests/regression/references_triad;tests/regression/references_triad/triad_bccFe_jij.json;tests/regression/run_triad.py;tests/regression/triad_bccFe_exchange;tests/regression/triad_bccFe_exchange/Fe.nml;tests/regression/triad_bccFe_exchange/input.nml;tests/regression/triad_cases.json
+Triad_triad_bccFe_sigma,validation,functional;regression;triad,44.28,backend regression,tests;tests/manifest_defaults.py;tests/regression;tests/regression/references_triad;tests/regression/references_triad/triad_bccFe_sigma.json;tests/regression/run_triad.py;tests/regression/triad_bccFe_conductivity;tests/regression/triad_bccFe_conductivity/Fe.nml;tests/regression/triad_bccFe_conductivity/Fe_scf.nml;tests/regression/triad_bccFe_conductivity/input.nml;tests/regression/triad_cases.json
+Triad_triad_bccFe_damping,validation,functional;regression;triad,34.13,backend regression,tests;tests/manifest_defaults.py;tests/regression;tests/regression/references_triad;tests/regression/references_triad/triad_bccFe_damping.json;tests/regression/run_triad.py;tests/regression/triad_bccFe_damping;tests/regression/triad_bccFe_damping/Fe.nml;tests/regression/triad_bccFe_damping/input.nml;tests/regression/triad_cases.json
+Val05GreenConvergence,validation,functional;green,156.88,validation,tests;tests/regression/triad_bccFe_exchange;tests/regression/triad_bccFe_exchange/Fe.nml;tests/regression/triad_bccFe_exchange/input.nml;tests/run_binary.sh;tests/validation;tests/validation/val05_green_convergence.py
+Val07ExchangeFormulations,validation,exchange;functional,26.20,validation,tests;tests/postproc/cases/exchange/bccFe;tests/postproc/cases/exchange/bccFe/Fe.nml;tests/postproc/cases/exchange/bccFe/input.nml;tests/run_binary.sh;tests/validation;tests/validation/val07_exchange_formulations.py
+Val08DampingInertia,validation,damping;functional,49.03,validation,tests;tests/regression/triad_bccFe_damping;tests/regression/triad_bccFe_damping/Fe.nml;tests/regression/triad_bccFe_damping/input.nml;tests/run_binary.sh;tests/validation;tests/validation/val08_damping_inertia.py
+Val09KuboBastinTransport,validation,conductivity;functional,258.99,validation,tests;tests/postproc/cases/conductivity/fccPt;tests/postproc/cases/conductivity/fccPt/Pt.nml;tests/postproc/cases/conductivity/fccPt/input.nml;tests/regression/triad_bccFe_conductivity;tests/regression/triad_bccFe_conductivity/Fe.nml;tests/regression/triad_bccFe_conductivity/Fe_scf.nml;tests/regression/triad_bccFe_conductivity/input.nml;tests/run_binary.sh;tests/validation;tests/validation/val09_kubo_bastin_transport.py
+Val12LmtoFieldsTorques,validation,functional;torque,27.03,validation,tests;tests/run_binary.sh;tests/scf/cases/bulk/bccFe;tests/scf/cases/bulk/bccFe/Fe.nml;tests/scf/cases/bulk/bccFe/input.nml;tests/validation;tests/validation/val12_lmto_fields_torques.py
+Val13AbInitioSpinDynamics,validation,functional;spin_dynamics,170.18,validation,tests;tests/run_binary.sh;tests/scf/cases/bulk/bccFe;tests/scf/cases/bulk/bccFe/Fe.nml;tests/scf/cases/bulk/bccFe/input.nml;tests/validation;tests/validation/val13_abinitio_spin_dynamics.py
+Val15MultilayerVacuumElectrostatics,validation,electrostatics;functional,128.51,validation,example/interface/fccCu111_Avac/Vac.nml;example/interface/fccCu111_Avac/input.nml;example/surface/fccCu001;example/surface/fccCu001/Cu-S-1.nml;example/surface/fccCu001/Cu-S-2.nml;example/surface/fccCu001/Cu-S-3.nml;example/surface/fccCu001/Cu-S-4.nml;example/surface/fccCu001/Cu-S.nml;example/surface/fccCu001/Cu.nml;example/surface/fccCu001/ES.nml;example/surface/fccCu001/input.nml;tests;tests/run_binary.sh;tests/validation;tests/validation/val15_multilayer_vacuum.py
+UnitBasisDimensions,quick,unit,0.01,unit core,
+UnitScfB1GuardCapacityRequiresFatal,quick,unit,0.12,unit core,
+UnitScfB1GuardWarningBoundary,quick,unit,0.00,unit core,
+UnitScfB1GuardNonfiniteRequiresFatal,quick,unit,0.11,unit core,
+UnitScfB1GuardBoundary,quick,unit,0.00,unit core,
+UnitGreenLifecycle,quick,green;unit,0.01,unit core,
+UnitControlSpinSemantics,quick,control;spin;unit,0.01,unit core,
+UnitControlConstraintsRead,quick,constraints;control;unit,0.01,unit core,
+UnitLehmannChain,quick,unit,0.00,unit core,
+UnitSimpsonFTemperature,quick,unit,0.00,unit core,
+UnitKspaceGFValidation,quick,green;kspace;unit,0.02,unit core,
+UnitFermiDiracEntropy,quick,thermodynamics;unit,0.01,unit core,
+UnitChebyshevGFOracle,quick,chebyshev;green;unit,0.01,unit core,
+UnitChebyshevSpectralPositivity,quick,chebyshev;green;unit,0.00,unit core,
+UnitDysonEquivalence,quick,green;unit,0.01,unit core,
+UnitGammaSupercell,quick,unit,0.01,unit core,
+UnitBsfSumRule,quick,unit,0.04,unit core,
+UnitMomentKernel,quick,unit,0.00,unit core,
+UnitKpmTransport,quick,kpm;transport;unit,0.01,unit core,
+UnitMadl2dExhGuard,quick,electrostatics;unit,0.01,unit core,source/charge_madelung_2d.f90
+UnitMadelungConventions,quick,electrostatics;unit,0.00,unit core,
+UnitRegionRegistry,quick,electrostatics;unit,0.00,unit core,
+UnitInterfaceAlignmentOracle,quick,electrostatics;unit,0.00,unit core,
+UnitVacuumLead,quick,electrostatics;unit,0.02,unit core,
+UnitVacuumRegionWiring,quick,electrostatics;unit,0.00,unit core,
+UnitAlignmentSolver,quick,electrostatics;unit,0.00,unit core,
+UnitParallelContext,quick,mpi;parallel_context;unit,0.01,unit core,
+UnitParallelContext_cuda_override,quick,mpi;parallel_context;unit,0.01,unit core,
+UnitKpointWorkset,quick,reciprocal;unit,0.01,unit core,
+UnitKpointWorksetReducedReject,quick,reciprocal;unit,0.21,unit core,
+UnitArbitraryKEigenpairs,quick,reciprocal;unit,0.06,unit core,
+UnitStructureConstantsBackends,quick,strux;unit,14.47,unit core,tests/scf/cases/bulk/bccFe/Fe.nml
+UnitAbspinlibIntegrators,quick,spin_integrators;unit,4.78,unit core,
+UnitConstrainingField,quick,constraints;unit,0.01,unit core,
+UnitXcKernels,quick,unit;xc,0.13,XC,
+UnitXcGuards,quick,negative;unit;xc,2.30,XC,
+UnitXcLibxc,quick,libxc;unit;xc,0.76,XC,
+UnitLdaUTensor,quick,lda_u;unit,0.01,LDA+U,
+UnitHubbardSpinor,quick,lda_u;unit,0.02,LDA+U,tests/ldau;tests/ldau/data/spinor_oracle_reference.txt
+UnitLdaULocalMoments,quick,lda_u;unit,0.65,LDA+U,tests/ldau;tests/ldau/data/a3_m14_fresh_site_swap_reference.txt;tests/ldau/data/a3_m14_reference_fixture.txt
+UnitLdaUProjectorFrozenH,quick,lda_u;projector;unit,10.03,LDA+U,
+LdaUGuards,standard,guards;lda_u,34.93,LDA+U,tests;tests/ldau;tests/ldau/guard_helpers.py;tests/ldau/test_guards.py;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/bulk/Pt2MnGa;tests/scf/cases/bulk/Pt2MnGa/Ga.nml;tests/scf/cases/bulk/Pt2MnGa/Mn.nml;tests/scf/cases/bulk/Pt2MnGa/Pt1.nml;tests/scf/cases/bulk/Pt2MnGa/Pt2.nml;tests/scf/cases/bulk/Pt2MnGa/input.nml;tests/scf/cases/bulk/Pt2MnGa/lattice.nml;tests/scf/cases/bulk/bccFe_hubbard;tests/scf/cases/bulk/bccFe_hubbard/Fe.nml;tests/scf/cases/bulk/bccFe_hubbard/input.nml;tests/scf/cases/impurity/B2FeCo_nsp1;tests/scf/cases/impurity/B2FeCo_nsp1/Co.nml;tests/scf/cases/impurity/B2FeCo_nsp1/Fe-imp.nml;tests/scf/cases/impurity/B2FeCo_nsp1/Fe.nml;tests/scf/cases/impurity/B2FeCo_nsp1/input.nml;tests/scf/cases/k_space_scf/bccFe;tests/scf/cases/k_space_scf/bccFe/Fe.nml;tests/scf/cases/k_space_scf/bccFe/input.nml;tests/scf/cases/surface/fccNi001_uhost_guard;tests/scf/cases/surface/fccNi001_uhost_guard/ES.nml;tests/scf/cases/surface/fccNi001_uhost_guard/Ni-S-1.nml;tests/scf/cases/surface/fccNi001_uhost_guard/Ni-S.nml;tests/scf/cases/surface/fccNi001_uhost_guard/Ni.nml;tests/scf/cases/surface/fccNi001_uhost_guard/input.nml
+LdaURefRsBulkNsp1U,standard,lda_u;regression,15.72,LDA+U,tests;tests/ldau;tests/ldau/reference_rows.py;tests/ldau/references/U_rs.json;tests/scf/cases/bulk/bccFe_hubbard_nsp1;tests/scf/cases/bulk/bccFe_hubbard_nsp1/Fe.nml;tests/scf/cases/bulk/bccFe_hubbard_nsp1/input.nml
+LdaURefKsBulkNsp2SocUTilted,standard,lda_u;regression,7.56,LDA+U,tests;tests/ldau;tests/ldau/reference_rows.py;tests/ldau/references/ks_soc_u2_x.linux-x86_64.json;tests/scf/cases/k_space_scf/bccFe;tests/scf/cases/k_space_scf/bccFe/Fe.nml;tests/scf/cases/k_space_scf/bccFe/input.nml
+LdaURefRsImpurityNsp2,validation,lda_u;regression,0.00,LDA+U,tests;tests/ldau;tests/ldau/reference_rows.py;tests/scf/cases/bulk/bccFe_hubbard;tests/scf/cases/bulk/bccFe_hubbard/Fe.nml;tests/scf/cases/bulk/bccFe_hubbard/input.nml;tests/scf/cases/bulk/bccFe_hubbard_nsp1;tests/scf/cases/bulk/bccFe_hubbard_nsp1/Fe.nml;tests/scf/cases/bulk/bccFe_hubbard_nsp1/input.nml;tests/scf/cases/impurity/B2FeCo_nsp1;tests/scf/cases/impurity/B2FeCo_nsp1/Co.nml;tests/scf/cases/impurity/B2FeCo_nsp1/Fe-imp.nml;tests/scf/cases/impurity/B2FeCo_nsp1/Fe.nml;tests/scf/cases/impurity/B2FeCo_nsp1/input.nml
+LdaURefSurfaceNsp2Soc0,standard,lda_u;regression,389.65,LDA+U,tests;tests/ldau;tests/ldau/decks/ni001_soc_u3;tests/ldau/decks/ni001_soc_u3/ES.nml;tests/ldau/decks/ni001_soc_u3/Ni-S-1.nml;tests/ldau/decks/ni001_soc_u3/Ni-S-1_dm.nml;tests/ldau/decks/ni001_soc_u3/Ni-S.nml;tests/ldau/decks/ni001_soc_u3/Ni-S_dm.nml;tests/ldau/decks/ni001_soc_u3/README;tests/ldau/decks/ni001_soc_u3/host_soc;tests/ldau/decks/ni001_soc_u3/host_soc/Ni.nml;tests/ldau/decks/ni001_soc_u3/host_soc/Ni_dm.nml;tests/ldau/decks/ni001_soc_u3/host_soc0;tests/ldau/decks/ni001_soc_u3/host_soc0/Ni.nml;tests/ldau/decks/ni001_soc_u3/host_soc0/Ni_dm.nml;tests/ldau/decks/ni001_soc_u3/input.nml;tests/ldau/reference_rows.py
+LdaURefNoUKeyOutputs,standard,lda_u;regression,14.90,LDA+U,tests;tests/ldau;tests/ldau/reference_rows.py;tests/ldau/references/noU_rs.json;tests/scf/cases/bulk/bccFe;tests/scf/cases/bulk/bccFe/Fe.nml;tests/scf/cases/bulk/bccFe/input.nml
+UnitSpinResponseKernels,quick,spin-response;unit,5.66,spin response,tests;tests/spin_response;tests/spin_response/oracles;tests/spin_response/oracles/README.md;tests/spin_response/oracles/cr_lswt.dat;tests/spin_response/oracles/fe_lswt.dat;tests/spin_response/oracles/lswt_inputs;tests/spin_response/oracles/lswt_inputs/ams.rs_expor.dat;tests/spin_response/oracles/lswt_inputs/jfile;tests/spin_response/oracles/lswt_inputs/qfile.kpath;tests/spin_response/oracles/lswt_inputs_cr;tests/spin_response/oracles/lswt_inputs_cr/ams.bccCr_AF.dat;tests/spin_response/oracles/lswt_inputs_cr/jfile;tests/spin_response/oracles/lswt_inputs_cr/momfile;tests/spin_response/oracles/lswt_inputs_cr/qfile.kpath;tests/spin_response/oracles/make_cr_lswt.py;tests/spin_response/oracles/make_fe_lswt.py;tests/spin_response/oracles/make_references.py;tests/spin_response/oracles/make_references_3d.py;tests/spin_response/oracles/make_references_nc.py;tests/spin_response/oracles/ni_lswt.dat;tests/spin_response/oracles/tolerances.nml;tests/spin_response/with_oracles.py
+SpinResponseFeDriver,standard,spin-response,81.20,spin response,tests;tests/spin_response;tests/spin_response/fe_bcc;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml;tests/spin_response/fe_scratch.py
+SpinResponseAfDriver,standard,spin-response,25.20,spin response,tests;tests/spin_response;tests/spin_response/af_scratch.py;tests/spin_response/fe_bcc;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml
+UnitSpinResponseDriven,standard,spin-response;unit,222.73,spin response,tests;tests/spin_response;tests/spin_response/af_scratch.py;tests/spin_response/fe_bcc;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml;tests/spin_response/fe_scratch.py;tests/spin_response/oracles;tests/spin_response/oracles/README.md;tests/spin_response/oracles/cr_lswt.dat;tests/spin_response/oracles/fe_lswt.dat;tests/spin_response/oracles/lswt_inputs;tests/spin_response/oracles/lswt_inputs/ams.rs_expor.dat;tests/spin_response/oracles/lswt_inputs/jfile;tests/spin_response/oracles/lswt_inputs/qfile.kpath;tests/spin_response/oracles/lswt_inputs_cr;tests/spin_response/oracles/lswt_inputs_cr/ams.bccCr_AF.dat;tests/spin_response/oracles/lswt_inputs_cr/jfile;tests/spin_response/oracles/lswt_inputs_cr/momfile;tests/spin_response/oracles/lswt_inputs_cr/qfile.kpath;tests/spin_response/oracles/make_cr_lswt.py;tests/spin_response/oracles/make_fe_lswt.py;tests/spin_response/oracles/make_references.py;tests/spin_response/oracles/make_references_3d.py;tests/spin_response/oracles/make_references_nc.py;tests/spin_response/oracles/ni_lswt.dat;tests/spin_response/oracles/tolerances.nml;tests/spin_response/with_oracles.py
+SpinResponseSocZeroIdentity,standard,spin-response,36.95,spin response,tests;tests/spin_response;tests/spin_response/fe_bcc;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml;tests/spin_response/soc_zero_identity.py
+SpinResponseInversionOdd,standard,spin-response,19.75,spin response,tests;tests/spin_response;tests/spin_response/fe_bcc;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml;tests/spin_response/inversion_odd.py;tests/spin_response/oracles/tolerances.nml
+SpinResponseBaselineRepro,standard,regression;spin-response,57.32,spin response,tests;tests/spin_response;tests/spin_response/baseline/spin_response_q001.dat;tests/spin_response/baseline/spin_response_q002.dat;tests/spin_response/baseline/spin_response_q003.dat;tests/spin_response/baseline/spin_response_state.dat;tests/spin_response/baseline_repro.py;tests/spin_response/fe_bcc;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml;tests/spin_response/oracles/tolerances.nml
+SpinResponseIsolation,quick,spin-response;tooling,0.04,spin response,source;source/spin_response.f90;tests/spin_response_isolation.cmake
+UnitGbtKspaceForceTheorem,quick,gbt;unit,2.14,GBT,tests/gbt/oracles/o1_one_band.nml;tests/gbt/oracles/o2_force_theorem.nml;tests/gbt/oracles/tolerances.nml
+UnitGbtKspaceHorth,quick,gbt;unit,0.02,GBT,tests/gbt/oracles/o3_hgamma/o3_fe_bcc.nml;tests/gbt/oracles/tolerances.nml
+UnitGbtWp02GaugeShiftedK,quick,gbt;unit,0.01,GBT,
+UnitManifestDefaults,quick,manifest;tooling,0.04,unit core,tests;tests/manifest_defaults.py;tests/unit;tests/unit/test_manifest_defaults.py
+Example_bulk_bccFe_nsp2_block_hoh,quick,basis_spd;block;example;functional;hoh;magnetic;metallic;rs;scf;strux,7.82,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/bulk/bccFe;tests/scf/cases/bulk/bccFe/Fe.nml;tests/scf/cases/bulk/bccFe/input.nml;tests/scf/references/Example_bulk_bccFe_nsp2_block_hoh/ref.json
+Example_bulk_bccFe_sd_smoke,standard,basis_spd;block;example;functional;magnetic;scf;sd;strux,15.00,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/bulk/bccFe;tests/scf/cases/bulk/bccFe/Fe.nml;tests/scf/cases/bulk/bccFe/input.nml
+Example_bulk_bccFe_nsp3_block,quick,basis_spd;block;example;functional;magnetic;metallic;rs;scf;strux,5.53,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/bulk/bccFe;tests/scf/cases/bulk/bccFe/Fe.nml;tests/scf/cases/bulk/bccFe/input.nml;tests/scf/references/Example_bulk_bccFe_nsp3_block/ref.json
+Example_bulk_bccFe_nsp4_block,quick,basis_spd;block;example;functional;magnetic;metallic;rs;scf;strux,7.21,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/bulk/bccFe;tests/scf/cases/bulk/bccFe/Fe.nml;tests/scf/cases/bulk/bccFe/input.nml;tests/scf/references/Example_bulk_bccFe_nsp4_block/ref.json
+Example_frozen_magnon_bccFe_auto,standard,basis_spd;block;example;frozen_magnon;functional;magnetic;metallic;rs;scf;strux,23.18,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/frozen_magnon/bccFe_auto;tests/scf/cases/frozen_magnon/bccFe_auto/Fe.nml;tests/scf/cases/frozen_magnon/bccFe_auto/input.nml;tests/scf/cases/frozen_magnon/bccFe_auto/q0_only.dat;tests/scf/cases/frozen_magnon/bccFe_auto/q_points.dat;tests/scf/references/Example_frozen_magnon_bccFe_auto/ref.json
+Example_frozen_magnon_bccFe_auto_scf,standard,basis_spd;block;example;frozen_magnon;functional;magnetic;metallic;rs;scf;strux,28.58,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/frozen_magnon/bccFe_auto_scf;tests/scf/cases/frozen_magnon/bccFe_auto_scf/Fe.nml;tests/scf/cases/frozen_magnon/bccFe_auto_scf/input.nml;tests/scf/cases/frozen_magnon/bccFe_auto_scf/q_points.dat;tests/scf/references/Example_frozen_magnon_bccFe_auto_scf/ref.json
+Example_bulk_bccFe_export_rs2pao,quick,basis_spd;block;example;export;functional;magnetic;metallic;rs;scf;strux,6.02,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/bulk/bccFe;tests/scf/cases/bulk/bccFe/Fe.nml;tests/scf/cases/bulk/bccFe/input.nml;tests/scf/references/Example_bulk_bccFe_export_rs2pao/ref.json
+Example_bulk_bccFe_export_python,quick,basis_spd;block;example;export;functional;magnetic;metallic;rs;scf;strux,5.50,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/bulk/bccFe;tests/scf/cases/bulk/bccFe/Fe.nml;tests/scf/cases/bulk/bccFe/input.nml;tests/scf/references/Example_bulk_bccFe_export_python/ref.json
+Example_surface_fccCu001_block_hoh,standard,basis_spd;block;example;functional;hoh;launch_serial;legacy_strux;metallic;rs;scf,27.40,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/surface/fccCu001;tests/scf/cases/surface/fccCu001/Cu-S.nml;tests/scf/cases/surface/fccCu001/Cu.nml;tests/scf/cases/surface/fccCu001/ES.nml;tests/scf/cases/surface/fccCu001/input.nml;tests/scf/references/Example_surface_fccCu001_block_hoh/ref.json
+Example_impurity_B2FeCo_block_hoh,quick,basis_spd;block;example;functional;hoh;launch_serial;legacy_strux;magnetic;metallic;multi_sublattice;rs;scf,6.80,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/impurity/B2FeCo;tests/scf/cases/impurity/B2FeCo/Co.nml;tests/scf/cases/impurity/B2FeCo/Fe-imp.nml;tests/scf/cases/impurity/B2FeCo/Fe.nml;tests/scf/cases/impurity/B2FeCo/input.nml;tests/scf/references/Example_impurity_B2FeCo_block_hoh/ref.json
+Example_bulk_Pt2MnGa_block,standard,basis_spd;block;example;functional;launch_serial;legacy_strux;magnetic;metallic;multi_sublattice;rs;scf,19.78,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/bulk/Pt2MnGa;tests/scf/cases/bulk/Pt2MnGa/Ga.nml;tests/scf/cases/bulk/Pt2MnGa/Mn.nml;tests/scf/cases/bulk/Pt2MnGa/Pt1.nml;tests/scf/cases/bulk/Pt2MnGa/Pt2.nml;tests/scf/cases/bulk/Pt2MnGa/input.nml;tests/scf/cases/bulk/Pt2MnGa/lattice.nml;tests/scf/references/Example_bulk_Pt2MnGa_block/ref.json
+Example_k_space_scf_bccFe,quick,basis_spd;block;example;functional;kspace;launch_serial;magnetic;scf;strux,3.28,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/k_space_scf/bccFe;tests/scf/cases/k_space_scf/bccFe/Fe.nml;tests/scf/cases/k_space_scf/bccFe/input.nml;tests/scf/references/Example_k_space_scf_bccFe/ref.json
+Example_k_space_scf_diamondSi_sp,quick,basis_sp;block;example;functional;kspace;launch_serial;mpi;nonmagnetic;scf;strux,1.41,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/bulk/diamondSi;tests/scf/cases/bulk/diamondSi/README.md;tests/scf/cases/bulk/diamondSi/Si1.nml;tests/scf/cases/bulk/diamondSi/Si2.nml;tests/scf/cases/bulk/diamondSi/input.nml;tests/scf/cases/bulk/diamondSi/lattice.nml;tests/scf/references/Example_k_space_scf_diamondSi_sp/ref.json
+Example_k_space_scf_diamondSi_sp_tetrahedron,quick,basis_sp;block;dos;example;functional;kspace;launch_serial;nonmagnetic;scf;strux;tetrahedron,1.26,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/bulk/diamondSi;tests/scf/cases/bulk/diamondSi/README.md;tests/scf/cases/bulk/diamondSi/Si1.nml;tests/scf/cases/bulk/diamondSi/Si2.nml;tests/scf/cases/bulk/diamondSi/input.nml;tests/scf/cases/bulk/diamondSi/lattice.nml;tests/scf/references/Example_k_space_scf_diamondSi_sp_tetrahedron/ref.json
+Example_k_space_scf_bccFe_spd_magnetic,quick,basis_spd;block;example;functional;kspace;launch_serial;magnetic;mpi;scf;strux,3.38,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/k_space_scf/bccFe;tests/scf/cases/k_space_scf/bccFe/Fe.nml;tests/scf/cases/k_space_scf/bccFe/input.nml;tests/scf/references/Example_k_space_scf_bccFe_spd_magnetic/ref.json
+Example_interface_fccCu111_chebyshev,standard,chebyshev;example;functional;legacy_strux;scf,20.78,SCF example,tests;tests/manifest_defaults.py;tests/run_binary.sh;tests/run_test.py;tests/scf/cases.json;tests/scf/cases/interface/fccCu111;tests/scf/cases/interface/fccCu111/A.nml;tests/scf/cases/interface/fccCu111/Ac1.nml;tests/scf/cases/interface/fccCu111/B.nml;tests/scf/cases/interface/fccCu111/input.nml;tests/scf/references/Example_interface_fccCu111_chebyshev/ref.json
+Example_exchange_bccFe,standard,basis_spd;block;example;exchange;functional;magnetic;postproc;rs;strux,23.82,SCF example,tests;tests/manifest_defaults.py;tests/postproc/cases.json;tests/postproc/cases/exchange/bccFe;tests/postproc/cases/exchange/bccFe/Fe.nml;tests/postproc/cases/exchange/bccFe/input.nml;tests/postproc/references/Example_exchange_bccFe/ref.json;tests/run_binary.sh;tests/run_test.py
+Example_exchange_conductivity_fccPt,standard,chebyshev;conductivity;example;functional;legacy_strux;postproc,89.92,SCF example,tests;tests/manifest_defaults.py;tests/postproc/cases.json;tests/postproc/cases/conductivity/fccPt;tests/postproc/cases/conductivity/fccPt/Pt.nml;tests/postproc/cases/conductivity/fccPt/input.nml;tests/postproc/references/Example_exchange_conductivity_fccPt/ref.json;tests/run_binary.sh;tests/run_test.py
+Example_band_structure_bccFe,quick,bands;block;example;functional;kspace;postproc;strux,2.81,SCF example,tests;tests/manifest_defaults.py;tests/postproc/cases.json;tests/postproc/cases/band_structure/bccFe;tests/postproc/cases/band_structure/bccFe/Fe.nml;tests/postproc/cases/band_structure/bccFe/Fe_out.nml;tests/postproc/cases/band_structure/bccFe/input.nml;tests/postproc/cases/band_structure/bccFe/lattice.nml;tests/postproc/references/Example_band_structure_bccFe/ref.json;tests/run_binary.sh;tests/run_test.py
+Example_density_of_states_bccFe,quick,basis_spd;block;dos;example;functional;kspace;postproc;scalar_relativistic;strux,3.02,SCF example,tests;tests/manifest_defaults.py;tests/postproc/cases.json;tests/postproc/cases/density_of_states/bccFe;tests/postproc/cases/density_of_states/bccFe/Fe.nml;tests/postproc/cases/density_of_states/bccFe/Fe_out.nml;tests/postproc/cases/density_of_states/bccFe/input.nml;tests/postproc/cases/density_of_states/bccFe/lattice.nml;tests/postproc/references/Example_density_of_states_bccFe/ref.json;tests/run_binary.sh;tests/run_test.py
+Example_density_of_states_bccFe_ccor_2c,quick,block;ccor;dos;example;functional;kspace;postproc;strux,3.53,SCF example,tests;tests/manifest_defaults.py;tests/postproc/cases.json;tests/postproc/cases/density_of_states/bccFe;tests/postproc/cases/density_of_states/bccFe/Fe.nml;tests/postproc/cases/density_of_states/bccFe/Fe_out.nml;tests/postproc/cases/density_of_states/bccFe/input.nml;tests/postproc/cases/density_of_states/bccFe/lattice.nml;tests/postproc/references/Example_density_of_states_bccFe_ccor_2c/ref.json;tests/run_binary.sh;tests/run_test.py
+Example_density_of_states_bccFe_reciprocal_hoh,quick,block;dos;example;functional;hoh;kspace;postproc;strux,2.89,SCF example,tests;tests/manifest_defaults.py;tests/postproc/cases.json;tests/postproc/cases/density_of_states/bccFe;tests/postproc/cases/density_of_states/bccFe/Fe.nml;tests/postproc/cases/density_of_states/bccFe/Fe_out.nml;tests/postproc/cases/density_of_states/bccFe/input.nml;tests/postproc/cases/density_of_states/bccFe/lattice.nml;tests/postproc/references/Example_density_of_states_bccFe_reciprocal_hoh/ref.json;tests/run_binary.sh;tests/run_test.py
+Example_paoflow2rs_bccFe,quick,block;example;functional;postproc;strux,5.60,SCF example,tests;tests/manifest_defaults.py;tests/postproc/cases.json;tests/postproc/cases/paoflow/bccFe;tests/postproc/cases/paoflow/bccFe/Fe.nml;tests/postproc/cases/paoflow/bccFe/input.nml;tests/postproc/references/Example_paoflow2rs_bccFe/ref.json;tests/run_binary.sh;tests/run_test.py
+Example_paoflow_exchange_p2rs_bccFe,standard,block;example;functional;postproc;strux,24.31,SCF example,tests;tests/manifest_defaults.py;tests/postproc/cases.json;tests/postproc/cases/paoflow/bccFe_exchange;tests/postproc/cases/paoflow/bccFe_exchange/Fe.nml;tests/postproc/cases/paoflow/bccFe_exchange/input.nml;tests/postproc/references/Example_paoflow_exchange_p2rs_bccFe/ref.json;tests/run_binary.sh;tests/run_test.py
+Example_paoflow_conductivity_p2rs_bccFe,quick,chebyshev;conductivity;example;functional;postproc;strux,1.47,SCF example,tests;tests/manifest_defaults.py;tests/postproc/cases.json;tests/postproc/cases/paoflow/bccFe_conductivity;tests/postproc/cases/paoflow/bccFe_conductivity/Fe.nml;tests/postproc/cases/paoflow/bccFe_conductivity/input.nml;tests/postproc/references/Example_paoflow_conductivity_p2rs_bccFe/ref.json;tests/run_binary.sh;tests/run_test.py
+Example_orbital_modern_bccFe,standard,block;example;functional;postproc;strux,293.71,SCF example,tests;tests/manifest_defaults.py;tests/postproc/cases.json;tests/postproc/cases/orbital/bccFe;tests/postproc/cases/orbital/bccFe/Fe.nml;tests/postproc/cases/orbital/bccFe/input.nml;tests/postproc/references/Example_orbital_modern_bccFe/ref.json;tests/run_binary.sh;tests/run_test.py
+AppGbtKspaceAntiparallel,standard,functional;gbt;kspace,60.21,GBT,tests;tests/gbt;tests/gbt/gbt_app_common.py;tests/gbt/oracles/tolerances.nml;tests/gbt/test_kspace_antiparallel.py;tests/spin_response/cr_bcc;tests/spin_response/cr_bcc/Cr1.nml;tests/spin_response/cr_bcc/Cr2.nml;tests/spin_response/cr_bcc/input.nml;tests/spin_response/cr_bcc/lattice.nml
+AppGbtKspaceCommensurate,standard,functional;gbt;kspace,213.99,GBT,tests;tests/gbt;tests/gbt/fixtures/bccFe_sc2/lattice.nml;tests/gbt/fixtures/bccFe_super_q033/lattice.nml;tests/gbt/fixtures/bccFe_super_q050/lattice.nml;tests/gbt/gbt_app_common.py;tests/gbt/oracles/tolerances.nml;tests/gbt/test_kspace_commensurate.py;tests/spin_response/cr_bcc;tests/spin_response/cr_bcc/Cr1.nml;tests/spin_response/cr_bcc/Cr2.nml;tests/spin_response/cr_bcc/input.nml;tests/spin_response/cr_bcc/lattice.nml;tests/spin_response/fe_bcc/Fe.nml
+AppGbtKspaceSymmetry,standard,functional;gbt;kspace,10.06,GBT,tests;tests/gbt;tests/gbt/gbt_app_common.py;tests/gbt/oracles/tolerances.nml;tests/gbt/test_kspace_symmetry.py;tests/spin_response/fe_bcc;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml
+AppGbtKspaceScSpiral_converge,standard,functional;gbt;kspace,93.50,GBT,tests;tests/gbt;tests/gbt/gbt_app_common.py;tests/gbt/oracles/tolerances.nml;tests/gbt/test_kspace_scspiral.py;tests/spin_response/fe_bcc;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml
+AppGbtKspaceScSpiral_guards,quick,functional;gbt;kspace,6.80,GBT,tests;tests/gbt;tests/gbt/gbt_app_common.py;tests/gbt/test_kspace_scspiral.py;tests/spin_response/fe_bcc;tests/spin_response/fe_bcc/Fe.nml;tests/spin_response/fe_bcc/input.nml
+AppConstraintsNamelistMom,quick,constraints;functional,3.78,SCF example,example/bulk/bccFe/Fe.nml;tests;tests/constraints;tests/constraints/test_constraints_namelist.py
+AppConstraintsNamelistMalformed,quick,constraints;functional,0.15,SCF example,example/bulk/bccFe/Fe.nml;tests;tests/constraints;tests/constraints/test_constraints_namelist.py
+AppPeriodicNcRotation,standard,functional;noncollinear,52.78,SCF example,tests;tests/gbt;tests/gbt/fixtures/bccFe_prim/lattice.nml;tests/gbt/gbt_app_common.py;tests/gbt/oracles/tolerances.nml;tests/noncollinear;tests/noncollinear/test_periodic_nc_rotation.py;tests/spin_response/cr_bcc;tests/spin_response/cr_bcc/Cr1.nml;tests/spin_response/cr_bcc/Cr2.nml;tests/spin_response/cr_bcc/input.nml;tests/spin_response/cr_bcc/lattice.nml;tests/spin_response/fe_bcc/Fe.nml
+Example_si_chebyshev_kspace_dos_equivalence,quick,chebyshev;equivalence;example;functional;kspace;rs;scf,9.23,SCF example,tests;tests/run_binary.sh;tests/scf;tests/scf/cases;tests/scf/cases/bulk;tests/scf/cases/bulk/diamondSi;tests/scf/cases/bulk/diamondSi/README.md;tests/scf/cases/bulk/diamondSi/Si1.nml;tests/scf/cases/bulk/diamondSi/Si2.nml;tests/scf/cases/bulk/diamondSi/input.nml;tests/scf/cases/bulk/diamondSi/lattice.nml;tests/scf/test_si_dos_equivalence.py
+Val03LibxcScfEquivalence,validation,equivalence;functional;libxc;scf,21.12,validation,tests;tests/run_binary.sh;tests/scf/cases/bulk/diamondSi;tests/scf/cases/bulk/diamondSi/README.md;tests/scf/cases/bulk/diamondSi/Si1.nml;tests/scf/cases/bulk/diamondSi/Si2.nml;tests/scf/cases/bulk/diamondSi/input.nml;tests/scf/cases/bulk/diamondSi/lattice.nml;tests/scf/cases/k_space_scf/bccFe;tests/scf/cases/k_space_scf/bccFe/Fe.nml;tests/scf/cases/k_space_scf/bccFe/input.nml;tests/validation;tests/validation/val03_libxc_scf.py

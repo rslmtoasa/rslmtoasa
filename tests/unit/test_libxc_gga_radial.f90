@@ -1,5 +1,5 @@
 ! XCR-03: libXC GGA channel, radial-flux, and functional-derivative tests.
-program test_libxc_gga_radial
+subroutine test_libxc_gga_radial
    use iso_c_binding, only: c_size_t
    use precision_mod, only: rp
    use control_mod, only: control
@@ -208,4 +208,4 @@ contains
       end if
    end subroutine require
 
-end program test_libxc_gga_radial
+end subroutine test_libxc_gga_radial

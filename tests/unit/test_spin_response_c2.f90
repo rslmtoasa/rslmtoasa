@@ -5,7 +5,7 @@
 !>          already run post_processing='spin_response': test_spin_response_c2 <oracle directory>.
 !>          Tolerances come from <dir>/tolerances.nml.
 !------------------------------------------------------------------------------
-program test_spin_response_c2
+subroutine test_spin_response_c2
    use precision_mod, only: rp
    use control_mod, only: control
    use lattice_mod, only: lattice
@@ -30,7 +30,7 @@ program test_spin_response_c2
    real(rp) :: enu(2), p(2), x, q0, cen, w, n_juelich(2), dmax
    integer :: nk, first, last, s
 
-   call get_command_argument(1, dir)
+   call get_command_argument(2, dir)
    if (len_trim(dir) == 0) error stop 'usage: test_spin_response_c2 <oracle directory>'
    call read_tolerances(trim(dir))
    call build_fe_state(.false., control_obj, lattice_obj, charge_obj, energy_obj, ham)
@@ -139,4 +139,4 @@ contains
       call report('driver: M_juelich vs in-process, relative', abs(m_juelich - sr%moment(1))/abs(m_juelich), moment_rel)
    end subroutine compare_driver_state
 
-end program test_spin_response_c2
+end subroutine test_spin_response_c2

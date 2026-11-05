@@ -1,6 +1,6 @@
 ! XCF-08: TXC=6 and TXC=7 are unpolarized-only, but an equal two-channel
 ! density is valid even in the spin-capable global mode nsp=1.
-program test_xc_legacy_unpolarized_density
+subroutine test_xc_legacy_unpolarized_density
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use precision_mod, only: rp
    use control_mod, only: control
@@ -53,4 +53,4 @@ contains
       end if
    end subroutine require
 
-end program test_xc_legacy_unpolarized_density
+end subroutine test_xc_legacy_unpolarized_density

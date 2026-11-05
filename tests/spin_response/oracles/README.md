@@ -1,6 +1,8 @@
 # spin_response oracles
 
 Developer-owned reference data for the `spin_response` module (B11).
+
+The reference `.nml` files (A1-A5, R1) are **not committed**: `tests/spin_response/with_oracles.py` runs the three generators below into a scratch copy of this directory at test time (about 3 s) and passes that copy to the unit tests. To inspect them, run `python3 make_references.py OUTDIR` (and `make_references_3d.py`, `make_references_nc.py`).
 Read-only to AI sessions (CLAUDE.md, "Verification integrity").
 
 | File | Content |
@@ -23,9 +25,7 @@ Read-only to AI sessions (CLAUDE.md, "Verification integrity").
 | `a5_af.nml` | A5: self-consistent two-sublattice antiferromagnet (1-D chain, half filling, insulating); degenerate up/down band pairs randomly mixed |
 | `a5_ferri.nml` | A5: self-consistent metallic ferrimagnet (1.8 electrons per cell, net moment +0.2) |
 
-Regenerate with `python3 make_references.py tests/spin_response/oracles`
-from the repository root. All self-checks must report `ok`. Commit the
-generator, the three `.nml` files and `tolerances.nml` together.
+Run the generators as above; all self-checks must report `ok`. Commit the generators and `tolerances.nml`, not the generated `.nml` files.
 
 What each model anchors (details in the generator's docstring):
 

@@ -16,7 +16,7 @@
 !>          bands at k+q; they are filled with the k values, which cannot matter
 !>          because their T vanishes.
 !------------------------------------------------------------------------------
-program test_spin_response_kernels
+subroutine test_spin_response_kernels
    use precision_mod, only: rp
    use spin_response_mod, only: accumulate_chi0, u_juelich, solve_dyson, &
                                 spectral_trace, pole_estimates, interaction_values, adiabatic_frequencies
@@ -28,7 +28,7 @@ program test_spin_response_kernels
    logical :: failed
 
    failed = .false.
-   call get_command_argument(1, dir)
+   call get_command_argument(2, dir)
    if (len_trim(dir) == 0) error stop 'usage: test_spin_response_kernels <oracle directory>'
    call read_tolerance_file(trim(dir))
    call require('a1_rel', a1_rel)
@@ -431,4 +431,4 @@ contains
       call report('E3 A3 chi = chi0 at U = 0, worst of all Q', w_e3, dyson_u0_rel)
    end subroutine test_a3
 
-end program test_spin_response_kernels
+end subroutine test_spin_response_kernels

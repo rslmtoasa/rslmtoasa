@@ -1,7 +1,7 @@
 name,action,tier,reason
 Regression_diamondSi_sp_chebyshev_fast,keep,standard,backend family: chebyshev (fast kernel)
 Regression_diamondSi_sp_chebyshev_batched,keep,standard,backend family: chebyshev (batched kernel)
-Regression_diamondSi_sp_chebyshev_mkl_batch,keep,quick,backend family: chebyshev (MKL kernels; skips without MKL)
+Regression_diamondSi_sp_chebyshev_mkl_batch,keep,standard,backend family: chebyshev (MKL kernels; skips without MKL)
 Regression_diamondSi_sp_chebyshev_mkl_sparse,retire,,backend variant (precision/hoh/ccor) of a retained family
 Regression_diamondSi_sp_chebyshev_legacy,keep,standard,backend family: chebyshev (legacy kernel)
 Regression_bccFe_chebyshev_fast_hoh,retire,,backend variant (precision/hoh/ccor) of a retained family
@@ -11,7 +11,7 @@ Regression_bccFe_chebyshev_fast_hoh_ccor_2c,retire,,backend variant (precision/h
 Regression_bccFe_block_fast_sp_hoh_ccor_2c,retire,,backend variant (precision/hoh/ccor) of a retained family
 Regression_bccFe_block_fast_dp_hoh_ccor_2c,retire,,backend variant (precision/hoh/ccor) of a retained family
 Regression_bccFe_block_fast_sp,retire,,backend variant (precision/hoh/ccor) of a retained family
-Regression_bccFe_block_fast_dp,keep,quick,backend family: block recursion
+Regression_bccFe_block_fast_dp,keep,standard,backend family: block recursion
 Regression_bccFe_chebyshev_fast_sp,retire,,backend variant (precision/hoh/ccor) of a retained family
 Regression_bccFe_lanczos,keep,standard,backend family: lanczos recursion
 Triad_triad_bccFe_jij,keep,validation,"three-backend post-processing comparison, unique"
@@ -31,21 +31,21 @@ Val12LmtoFieldsTorques,keep,validation,validation study
 Val13AbInitioSpinDynamics,keep,validation,validation study
 Val15MultilayerVacuumElectrostatics,keep,validation,validation study
 Val18GbtWp01Q0BccFe,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
-Val22LrRadialGroundState,keep,validation,validation study
-Val22LrRadialGroundStateLibxc,keep,validation,validation study
+Val22LrRadialGroundState,retire,,linear-response campaign test (code removed from fable_v4b; archive tag lr-campaign-archive-2026-10)
+Val22LrRadialGroundStateLibxc,retire,,linear-response campaign test (code removed from fable_v4b; archive tag lr-campaign-archive-2026-10)
 UnitBasisDimensions,keep,quick,unit core
 UnitScfB1GuardCapacityRequiresFatal,keep,quick,unit core
 UnitScfB1GuardWarningBoundary,keep,quick,unit core
 UnitScfB1GuardNonfiniteRequiresFatal,keep,quick,unit core
 UnitScfB1GuardBoundary,keep,quick,unit core
-UnitLrBasisRadial,keep,quick,unit core
-UnitLrRadialGroundState,keep,quick,unit core
-UnitLrBasisAngular,keep,quick,unit core
-UnitLrBasisAugmentation,keep,quick,unit core
-UnitDresp03rLmtoMapping,keep,quick,unit core
+UnitLrBasisRadial,retire,,linear-response campaign test (code removed from fable_v4b; archive tag lr-campaign-archive-2026-10)
+UnitLrRadialGroundState,retire,,linear-response campaign test (code removed from fable_v4b; archive tag lr-campaign-archive-2026-10)
+UnitLrBasisAngular,retire,,linear-response campaign test (code removed from fable_v4b; archive tag lr-campaign-archive-2026-10)
+UnitLrBasisAugmentation,retire,,linear-response campaign test (code removed from fable_v4b; archive tag lr-campaign-archive-2026-10)
+UnitDresp03rLmtoMapping,retire,,linear-response campaign test (code removed from fable_v4b; archive tag lr-campaign-archive-2026-10)
 UnitGreenLifecycle,keep,quick,unit core
-UnitLrRsGfRepresentation,keep,quick,unit core
-UnitXcSelectorSemantics,consolidate-into-UnitXcLibxc,quick,libxc path
+UnitLrRsGfRepresentation,retire,,linear-response campaign test (code removed from fable_v4b; archive tag lr-campaign-archive-2026-10)
+UnitXcSelectorSemantics,consolidate-into-UnitXcKernels,quick,built-in XC kernel
 UnitControlSpinSemantics,keep,quick,unit core
 UnitControlConstraintsRead,keep,quick,unit core
 UnitXcUnknownSelectorRequiresFatal,consolidate-into-UnitXcGuards,quick,fatal-path check
@@ -79,11 +79,11 @@ UnitAtomscResidualControls,consolidate-into-UnitXcKernels,quick,built-in XC kern
 UnitLibxcXcBaseline,consolidate-into-UnitXcLibxc,quick,libxc path
 UnitLibxcGgaRadial,consolidate-into-UnitXcLibxc,quick,libxc path
 UnitLibxcProductionContract,consolidate-into-UnitXcLibxc,quick,libxc path
-UnitXcUnsupportedFamilyRequiresFatal,consolidate-into-UnitXcGuards,quick,fatal-path check
-UnitXcCapabilityRequiresFatal,consolidate-into-UnitXcGuards,quick,fatal-path check
-UnitXcKineticRequiresFatal,consolidate-into-UnitXcGuards,quick,fatal-path check
-UnitXcWrongDimensionalityRequiresFatal,consolidate-into-UnitXcGuards,quick,fatal-path check
-UnitXcMissingVxcRequiresFatal,consolidate-into-UnitXcGuards,quick,fatal-path check
+UnitXcUnsupportedFamilyRequiresFatal,consolidate-into-UnitXcLibxc,quick,libxc fatal path
+UnitXcCapabilityRequiresFatal,consolidate-into-UnitXcLibxc,quick,libxc fatal path
+UnitXcKineticRequiresFatal,consolidate-into-UnitXcLibxc,quick,libxc fatal path
+UnitXcWrongDimensionalityRequiresFatal,consolidate-into-UnitXcLibxc,quick,libxc fatal path
+UnitXcMissingVxcRequiresFatal,consolidate-into-UnitXcLibxc,quick,libxc fatal path
 UnitXcCompositionSemantics,consolidate-into-UnitXcLibxc,quick,libxc path
 UnitPbeGgaComparison,consolidate-into-UnitXcLibxc,quick,libxc path
 UnitXcLdaReconciliation,consolidate-into-UnitXcLibxc,quick,libxc path
@@ -108,25 +108,25 @@ UnitBsfSumRule,keep,quick,unit core
 UnitMomentKernel,keep,quick,unit core
 UnitLocalMomentsKernel,consolidate-into-UnitLdaULocalMoments,quick,"local-moment kernel, collinear"
 UnitAutoImpurityLocalMode,retire,,"LDA+U cap of 10: covered by the oracles, guard test or stored-reference rows"
-UnitLocalMomentsSiteSwap,retire,,"LDA+U cap of 10: covered by the oracles, guard test or stored-reference rows"
+UnitLocalMomentsSiteSwap,consolidate-into-UnitLdaULocalMoments,quick,local-moment host-site mapping
 UnitSpinResponseKernels,consolidate-into-UnitSpinResponseKernels,quick,driver-free kernel oracle
 UnitSpinResponseChannelsKernel,consolidate-into-UnitSpinResponseKernels,quick,driver-free kernel oracle
 UnitSpinResponseA4,consolidate-into-UnitSpinResponseKernels,quick,driver-free kernel oracle
 UnitSpinResponseA5,consolidate-into-UnitSpinResponseKernels,quick,driver-free kernel oracle
 UnitSpinResponseR1,consolidate-into-UnitSpinResponseKernels,quick,driver-free kernel oracle
 SpinResponseFeDriver,keep,standard,bcc Fe driver; fixture for UnitSpinResponseDriver
-UnitSpinResponseC1,consolidate-into-UnitSpinResponseDriver,standard,oracle check on driver output
-UnitSpinResponseC2,consolidate-into-UnitSpinResponseDriver,standard,oracle check on driver output
-UnitSpinResponseC3,consolidate-into-UnitSpinResponseDriver,standard,oracle check on driver output
-UnitSpinResponseS2,consolidate-into-UnitSpinResponseDriver,standard,oracle check on driver output
-UnitSpinResponseChannels,consolidate-into-UnitSpinResponseDriver,standard,oracle check on driver output
-UnitSpinResponseRadial,consolidate-into-UnitSpinResponseDriver,standard,oracle check on driver output
+UnitSpinResponseC1,consolidate-into-UnitSpinResponseDriven,standard,oracle check on driver output
+UnitSpinResponseC2,consolidate-into-UnitSpinResponseDriven,standard,oracle check on driver output
+UnitSpinResponseC3,consolidate-into-UnitSpinResponseDriven,standard,oracle check on driver output
+UnitSpinResponseS2,consolidate-into-UnitSpinResponseDriven,standard,oracle check on driver output
+UnitSpinResponseChannels,consolidate-into-UnitSpinResponseDriven,standard,oracle check on driver output
+UnitSpinResponseRadial,consolidate-into-UnitSpinResponseDriven,standard,oracle check on driver output
 LdaUSocInsertionScratch,retire,,"LDA+U cap of 10: covered by the oracles, guard test or stored-reference rows"
 UnitLdaUSocInsertion,retire,,"LDA+U cap of 10: covered by the oracles, guard test or stored-reference rows"
 LdaUSocSurfaceInsertionScratch,retire,,"LDA+U cap of 10: covered by the oracles, guard test or stored-reference rows"
 UnitLdaUSocSurfaceInsertion,retire,,"LDA+U cap of 10: covered by the oracles, guard test or stored-reference rows"
 SpinResponseAfDriver,keep,standard,AF driver; fixture for UnitSpinResponseDriver (S2Af)
-UnitSpinResponseS2Af,consolidate-into-UnitSpinResponseDriver,standard,oracle check on driver output
+UnitSpinResponseS2Af,consolidate-into-UnitSpinResponseDriven,standard,oracle check on driver output
 SpinResponseS3,retire,,spin-response cap of 8
 SpinResponseOmpIdentity,retire,,spin-response cap of 8
 SpinResponseSocZeroIdentity,keep,standard,SOC -> 0 identity
@@ -157,19 +157,19 @@ Acc11ResidentSource,retire,,source-grep acceptance check (campaign history)
 UnitMagneticRepresentation,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 UnitGbtStructure,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 UnitGbtKspaceOneBand,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
-UnitGbtKspaceForceTheorem,keep,quick,"energy/frozen-spin reference: force theorem against oracle (R7, R8, R11)"
-UnitGbtKspaceHorth,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
+UnitGbtKspaceForceTheorem,keep,quick,"energy / force-theorem oracle (R7, R8, R11)"
+UnitGbtKspaceHorth,keep,quick,"exact-ASA orthogonal Hamiltonian oracle (R2, C1)"
 UnitGbtFrameContract,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 UnitGbtWp01Q0,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
-UnitGbtWp02GaugeShiftedK,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
+UnitGbtWp02GaugeShiftedK,keep,quick,gauge invariance and Hermiticity at shifted k
 UnitStructureConstantsBackends,keep,quick,unit core
 UnitSpinDensity,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
-UnitAbspinlibIntegrators,keep,validation,validation study
+UnitAbspinlibIntegrators,keep,quick,spin-integrator oracle (3 s)
 UnitConstrainingField,keep,quick,unit core
 UnitGbtConstraintCovariance,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 UnitGbtWp07ConstraintEnergy,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 UnitConstrainingFieldSource,retire,,source-grep check
-CudaPluginSurface,keep,quick,unit core
+CudaPluginSurface,retire,,source-grep check of the CUDA plugin (campaign history)
 UnitManifestDefaults,keep,quick,unit core
 BenchmarkHarnessSchema,retire,,benchmark harness schema (performance tooling)
 SpinResponseIsolation,keep,quick,"module isolation check (tooling, 0 s)"
@@ -196,7 +196,7 @@ Example_bulk_bccFe_nsp4_block_hoh,retire,,variant of a retained example (backend
 Example_bulk_bccFe_nsp4_block,keep,quick,bulk bcc Fe nsp=4
 Example_bulk_bccFe_nsp4_chebyshev_hoh,retire,,variant of a retained example (backend/hoh/ccor_2c/nsp duplicate)
 Example_bulk_bccFe_nsp4_chebyshev,retire,,variant of a retained example (backend/hoh/ccor_2c/nsp duplicate)
-Example_bulk_bccFe_nsp4_block_spiral_qplus,keep,quick,"real-space spiral route (replaces AppGbtKspaceRsFreeze, which compares at tolerance 0)"
+Example_bulk_bccFe_nsp4_block_spiral_qplus,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 Example_bulk_bccFe_nsp4_block_spiral_qminus,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 Example_frozen_magnon_bccFe_auto,keep,standard,frozen magnon (auto)
 Example_frozen_magnon_bccFe_auto_scf,keep,standard,frozen magnon (scf mode)
@@ -243,7 +243,7 @@ AppGbtKspaceCommensurateCcorSecondOrder,retire,,GBT cap of 8: feature covered by
 AppGbtKspaceNio_r2,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 AppGbtKspaceNio_i2,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 AppGbtKspaceNio_guard,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
-AppGbtKspaceGaugeOrthogonal,keep,standard,"gauge invariance R2 (theta=0 block-diagonal, k -+ q/2); fastest gauge variant"
+AppGbtKspaceGaugeOrthogonal,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 AppGbtKspaceNio_r2_orthogonal,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 AppKspaceOrthogonalScf_rotation,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 AppKspaceOrthogonalScf_collinear,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
@@ -258,7 +258,7 @@ AppGbtKspaceScSpiral_identity,retire,,GBT cap of 8: feature covered by a retaine
 AppGbtKspaceScSpiral_identity_orthogonal,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 AppGbtKspaceScSpiral_identity_ccor,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 AppGbtKspaceScSpiral_identity_ccor_second,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
-AppGbtKspaceScSpiral_converge,keep,standard,constrained one-site spiral SCF converges (k-space GBT SCF path)
+AppGbtKspaceScSpiral_converge,keep,standard,constrained one-site spiral SCF converges (frozen-spin energy reference)
 AppGbtKspaceScSpiral_converge_orthogonal,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 AppGbtKspaceScSpiral_chi,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
 AppGbtKspaceScSpiral_chi_orthogonal,retire,,GBT cap of 8: feature covered by a retained GBT test or campaign history
@@ -284,3 +284,9 @@ ValGbtConvergence,retire,,GBT cap of 8: feature covered by a retained GBT test o
 AppPeriodicNcRotation,keep,standard,periodic non-collinear rotation
 Example_si_chebyshev_kspace_dos_equivalence,keep,quick,RS chebyshev vs k-space DOS
 Val03LibxcScfEquivalence,keep,validation,validation study
+CheckTestData,new,quick,every path read by a registered test exists (tests/test_inventory.csv)
+LdaURefRsBulkNsp1U,new,standard,stored reference: RS bulk nsp=1 +U against the reference build 90f57c3
+LdaURefKsBulkNsp2SocUTilted,new,standard,"stored reference: KS bulk nsp=2 SOC+U, tilted axis, against the committed snapshot (linux-x86_64 variant)"
+LdaURefRsImpurityNsp2,new,validation,"stored row: RS impurity nsp=2, SOC = 0 against nsp=1; exceeds the developer tolerance on Linux (KNOWN_ISSUES.md)"
+LdaURefSurfaceNsp2Soc0,new,standard,stored row: surface nsp=2 SOC -> 0 against nsp=1 (iteration 1 and 4 steps)
+LdaURefNoUKeyOutputs,new,standard,stored reference: no-U RS bcc Fe key outputs against the reference build 90f57c3

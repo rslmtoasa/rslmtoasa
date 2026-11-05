@@ -7,7 +7,7 @@
 !>          Matrix kernel of the oracle = the exchange matrix I entering (1 + chi0 I) chi = chi0, Delta = I m.
 !>          Relative error: max|x - ref|/max|ref|, on complex values for arrays.
 !------------------------------------------------------------------------------
-program test_spin_response_a4
+subroutine test_spin_response_a4
    use precision_mod, only: rp
    use spin_response_mod, only: accumulate_chi0, solve_dyson
    use spin_response_tolerances_mod
@@ -31,7 +31,7 @@ program test_spin_response_a4
    real(rp) :: ctrl(2), mom(2), chi0s(2, 2)
    logical :: failed
 
-   call get_command_argument(1, dir)
+   call get_command_argument(2, dir)
    if (len_trim(dir) == 0) error stop 'usage: test_spin_response_a4 <oracle directory>'
    call read_tolerance_file(trim(dir))
    call require('a4_rel', a4_rel)
@@ -100,4 +100,4 @@ contains
       if (.not. measured <= tol) failed = .true.
    end subroutine report
 
-end program test_spin_response_a4
+end subroutine test_spin_response_a4

@@ -4,7 +4,7 @@
 ! production legacy XCPOT routine and the production libXC wrapper directly;
 ! it does not contain a second implementation of either functional.  The two
 ! routes are checked independently against their own reference values.
-program test_libxc_xc_baseline
+subroutine test_libxc_xc_baseline
    use precision_mod, only: rp
    use control_mod, only: control
    use logger_mod, only: g_logger
@@ -144,4 +144,4 @@ contains
       end if
    end subroutine require
 
-end program test_libxc_xc_baseline
+end subroutine test_libxc_xc_baseline

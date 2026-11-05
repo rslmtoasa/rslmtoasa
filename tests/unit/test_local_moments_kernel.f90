@@ -1,4 +1,4 @@
-program test_local_moments_kernel
+subroutine test_local_moments_kernel
    use precision_mod, only: rp
    use math_mod, only: correct_d_shell_moments, extract_hubbard_d_shell_potential, fixed_impurity_atom_carries_uj
    implicit none
@@ -17,7 +17,7 @@ program test_local_moments_kernel
    logical :: failed
 
    failed = .false.
-   call get_command_argument(1, path)
+   call get_command_argument(2, path)
    if (len_trim(path) == 0) error stop 'fixture path required'
    open(newunit=unit, file=trim(path), status='old', action='read', iostat=ios)
    if (ios /= 0) error stop 'cannot open fixture'
@@ -180,4 +180,4 @@ contains
          failed=.true.
       end if
    end subroutine
-end program test_local_moments_kernel
+end subroutine test_local_moments_kernel

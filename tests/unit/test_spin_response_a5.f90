@@ -8,7 +8,7 @@
 !>          Relative error: max|x - ref|/max|ref|, on complex values for arrays. The af q = 0 group has no omega_adiabatic
 !>          (Omega is a Jordan block there), so it is not compared.
 !------------------------------------------------------------------------------
-program test_spin_response_a5
+subroutine test_spin_response_a5
    use precision_mod, only: rp
    use spin_response_mod, only: accumulate_chi0, solve_dyson, u_juelich, adiabatic_frequencies
    use spin_response_tolerances_mod
@@ -38,7 +38,7 @@ program test_spin_response_a5
    character(len=3) :: tag
    logical :: failed
 
-   call get_command_argument(1, dir)
+   call get_command_argument(2, dir)
    if (len_trim(dir) == 0) error stop 'usage: test_spin_response_a5 <oracle directory>'
    call read_tolerance_file(trim(dir))
    call require('a5_rel', a5_rel)
@@ -157,4 +157,4 @@ contains
       ev = [(a + d)/2.0_rp - r, (a + d)/2.0_rp + r]
    end function sorted_eigenvalues
 
-end program test_spin_response_a5
+end subroutine test_spin_response_a5

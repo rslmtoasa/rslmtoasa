@@ -1,5 +1,5 @@
 ! XCR-03: compare the legacy and libXC PBE radial potentials on one mesh.
-program test_pbe_gga_comparison
+subroutine test_pbe_gga_comparison
    use precision_mod, only: rp
    use control_mod, only: control
    use logger_mod, only: g_logger
@@ -109,4 +109,4 @@ contains
       end if
    end subroutine require
 
-end program test_pbe_gga_comparison
+end subroutine test_pbe_gga_comparison

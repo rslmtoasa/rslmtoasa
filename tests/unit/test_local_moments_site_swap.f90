@@ -1,4 +1,4 @@
-program test_local_moments_site_swap
+subroutine test_local_moments_site_swap
    use precision_mod, only: rp
    use math_mod, only: correct_d_shell_moments
    implicit none
@@ -11,7 +11,7 @@ program test_local_moments_site_swap
    complex(rp) :: p(5,5),m1(5,5),vin(5,5),vwrong(5,5)
    logical :: failed
    failed=.false.
-   call get_command_argument(1,fixture)
+   call get_command_argument(3,fixture)
    if (len_trim(fixture)==0) error stop 'fixture path required'
    open(newunit=u,file=trim(fixture),status='old',action='read',iostat=ios)
    if (ios /= 0) error stop 'cannot open fresh held-P site-swap fixture'
@@ -66,4 +66,4 @@ contains
          end do
       end do
    end subroutine
-end program test_local_moments_site_swap
+end subroutine test_local_moments_site_swap

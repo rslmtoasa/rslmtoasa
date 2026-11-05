@@ -1,6 +1,6 @@
 ! Focused regression tests for the legacy spin-LDA kernel edge cases found by
 ! the XCR-01 fixed-density audit.
-program test_xc_lda_legacy_kernel
+subroutine test_xc_lda_legacy_kernel
    use precision_mod, only: rp
    use control_mod, only: control
    use logger_mod, only: g_logger
@@ -165,4 +165,4 @@ contains
       endif
    end subroutine require_close
 
-end program test_xc_lda_legacy_kernel
+end subroutine test_xc_lda_legacy_kernel

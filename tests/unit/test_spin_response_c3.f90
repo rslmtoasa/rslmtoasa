@@ -5,7 +5,7 @@
 !>          has run (see fe_scratch.py): test_spin_response_c3 <oracle directory>. The in-process state is
 !>          built from input_driver.nml, so the q list, omega grid and eta are the driver's.
 !------------------------------------------------------------------------------
-program test_spin_response_c3
+subroutine test_spin_response_c3
    use precision_mod, only: rp
    use math_mod, only: pi
    use control_mod, only: control
@@ -31,7 +31,7 @@ program test_spin_response_c3
    real(rp) :: mref, q(3), eta, w, dev, qs(3, 2)
    integer :: nw, iw, i
 
-   call get_command_argument(1, dir)
+   call get_command_argument(2, dir)
    if (len_trim(dir) == 0) error stop 'usage: test_spin_response_c3 <oracle directory>'
    call read_tolerances(trim(dir))
    call require('s1_rel', s1_rel)
@@ -261,4 +261,4 @@ contains
       call report('driver: tr chi0 file vs in-process, q #2, max|a-b|/max|b|', ref_dev, moment_rel)
    end subroutine driver_files
 
-end program test_spin_response_c3
+end subroutine test_spin_response_c3

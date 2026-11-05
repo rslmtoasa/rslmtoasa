@@ -6,7 +6,7 @@
 !>          The Simpson weights are formed here from (a, b): dr/di = a (r + b), weights 1/3, 4/3, 2/3, ..., 1/3.
 !>          Case 2 has m = 0 on a mesh point.
 !------------------------------------------------------------------------------
-program test_spin_response_r1
+subroutine test_spin_response_r1
    use precision_mod, only: rp
    use spin_response_mod, only: radial_kernel_matrix
    use spin_response_tolerances_mod
@@ -24,7 +24,7 @@ program test_spin_response_r1
    namelist /r1_case/ icase, r0, r0_on_mesh_point, k_at_r0_limit, m_of_r, dv_of_r
    namelist /r1_expected/ kernel_exact, kernel_simpson_reference, simpson_max_rel_error
 
-   call get_command_argument(1, dir)
+   call get_command_argument(2, dir)
    if (len_trim(dir) == 0) error stop 'usage: test_spin_response_r1 <oracle directory>'
    call read_tolerance_file(trim(dir))
    call require('r1_rel', r1_rel)
@@ -57,4 +57,4 @@ program test_spin_response_r1
    end do
    if (failed) error stop 1
    write (*, '(a)') 'RESULT: PASS'
-end program test_spin_response_r1
+end subroutine test_spin_response_r1

@@ -4,7 +4,7 @@
 !> @details Usage, from a scratch copy of tests/spin_response/fe_bcc:
 !>          test_spin_response_c1 <oracle directory>. Tolerances come from <dir>/tolerances.nml.
 !------------------------------------------------------------------------------
-program test_spin_response_c1
+subroutine test_spin_response_c1
    use precision_mod, only: rp
    use control_mod, only: control
    use lattice_mod, only: lattice
@@ -29,7 +29,7 @@ program test_spin_response_c1
    real(rp) :: q(3), n_ref, eband, dmax, dshift
    integer :: nk, first, last, ik, m
 
-   call get_command_argument(1, dir)
+   call get_command_argument(2, dir)
    if (len_trim(dir) == 0) error stop 'usage: test_spin_response_c1 <oracle directory>'
    call read_tolerances(trim(dir))
    call build_fe_state(.false., control_obj, lattice_obj, charge_obj, energy_obj, ham)
@@ -106,4 +106,4 @@ contains
       error stop 'mesh_index: k+q is not a mesh point'
    end function mesh_index
 
-end program test_spin_response_c1
+end subroutine test_spin_response_c1

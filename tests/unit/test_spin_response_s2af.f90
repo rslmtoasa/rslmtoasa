@@ -8,7 +8,7 @@
 !>          choose the same one it is the sublattice-exchange symmetry. The total moment is zero up to round-off,
 !>          so spin_swapped is decided by round-off; both flags are printed.
 !------------------------------------------------------------------------------
-program test_spin_response_s2af
+subroutine test_spin_response_s2af
    use precision_mod, only: rp
    use control_mod, only: control
    use lattice_mod, only: lattice
@@ -34,7 +34,7 @@ program test_spin_response_s2af
    complex(rp) :: tr0_x(nw), tr0_y(nw), tr_x(nw), tr_y(nw)
    integer :: iw
 
-   call get_command_argument(1, dir)
+   call get_command_argument(2, dir)
    if (len_trim(dir) == 0) error stop 'usage: test_spin_response_s2af <oracle directory>'
    call read_tolerances(trim(dir))
    call require('s2_rel', s2_rel)
@@ -88,4 +88,4 @@ program test_spin_response_s2af
    call check('S2p non-vacuity: one adiabatic frequency of each sign', wad_x(1) < 0.0_rp .and. wad_x(2) > 0.0_rp)
    call finish()
 
-end program test_spin_response_s2af
+end subroutine test_spin_response_s2af

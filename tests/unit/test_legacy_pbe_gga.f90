@@ -1,5 +1,5 @@
 ! XCR-03: fixed-density gradient audit for the legacy PBE route.
-program test_legacy_pbe_gga
+subroutine test_legacy_pbe_gga
    use precision_mod, only: rp
    use control_mod, only: control
    use logger_mod, only: g_logger
@@ -150,4 +150,4 @@ contains
       end if
    end subroutine require
 
-end program test_legacy_pbe_gga
+end subroutine test_legacy_pbe_gga

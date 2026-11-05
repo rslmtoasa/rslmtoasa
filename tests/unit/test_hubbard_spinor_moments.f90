@@ -6,7 +6,7 @@
 ! against the S4 z-block loop (bitwise), n against the z kernel on spin-rotated inputs, global covariance,
 ! and a +n / -n site pair; (g) the d-shell orbital moment Tr(P L.n) against the closed form for a|m=2> + b|m=1>. The finite-H comparison with the
 ! direct definition of c' and q2' is in projector_spinor_frozen_h.f90. Every control must exceed its tolerance.
-program test_hubbard_spinor_moments
+subroutine test_hubbard_spinor_moments
    use precision_mod, only: rp
    use math_mod, only: correct_d_shell_moments, correct_d_shell_moments_spinor, init_math_operators, spinor_orbital_moment
    use basis_mod, only: basis_init
@@ -443,4 +443,4 @@ contains
       call check('(g) control, transposed P', worst_t, 1.0e-13_rp, .true.)
    end subroutine test_orbital_moment
 
-end program test_hubbard_spinor_moments
+end subroutine test_hubbard_spinor_moments

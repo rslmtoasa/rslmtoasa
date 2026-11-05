@@ -692,6 +692,10 @@ def main() -> None:
     workdir = os.path.join(args.scratch_root, scratch_name)
 
     setup_scratch(case_dir, workdir, preserve_outputs=case.get("preserve_outputs", False))
+    # Inputs shared by several cases are committed once: {"shared_files": {"paoham.dat": "paoflow/paoham.dat"}}
+    # copies cases/<value> into the scratch directory as <key>.
+    for name, shared in case.get("shared_files", {}).items():
+        shutil.copy2(os.path.join(cases_dir, shared), os.path.join(workdir, name))
     patch_input_nml(workdir, case)
     patch_potentials(workdir, case)
     serial_omp = case.get("omp_threads", None)

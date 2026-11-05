@@ -1,6 +1,6 @@
 ! XCF-09: the TXC=6/7 density guard is relative to the supplied total
 ! density. Exercise both sides of the documented 1e-10 tolerance.
-program test_xc_legacy_polarization_tolerance
+subroutine test_xc_legacy_polarization_tolerance(selector_in, case_in)
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use precision_mod, only: rp
    use control_mod, only: control
@@ -8,17 +8,15 @@ program test_xc_legacy_polarization_tolerance
    use xc_mod, only: xc, LEGACY_UNPOLARIZED_REL_TOL
    implicit none
 
-   integer :: selector, case_id, ios
-   character(len=32) :: selector_text, case_text
+   integer, intent(in) :: selector_in, case_in
+   integer :: selector, case_id
    logical :: failed
 
    call g_logger%init()
    failed = .false.
 
-   call get_command_argument(1, selector_text)
-   call get_command_argument(2, case_text)
-   if (len_trim(selector_text) == 0 .and. len_trim(case_text) == 0) then
-      ! The default run covers all accepted density cases.
+   if (case_in < 0) then
+      ! All accepted density cases.
       do selector = 6, 7
          do case_id = 0, 2
             call check_accepted(selector, case_id)
@@ -28,10 +26,8 @@ program test_xc_legacy_polarization_tolerance
          end do
       end do
    else
-      read (selector_text, *, iostat=ios) selector
-      if (ios /= 0) error stop 'missing or invalid TXC selector argument'
-      read (case_text, *, iostat=ios) case_id
-      if (ios /= 0) error stop 'missing or invalid tolerance case argument'
+      selector = selector_in
+      case_id = case_in
       if (case_id <= 2 .or. (case_id >= 6 .and. case_id <= 8)) then
          call check_accepted(selector, case_id)
       else
@@ -153,4 +149,4 @@ contains
       end if
    end subroutine require
 
-end program test_xc_legacy_polarization_tolerance
+end subroutine test_xc_legacy_polarization_tolerance

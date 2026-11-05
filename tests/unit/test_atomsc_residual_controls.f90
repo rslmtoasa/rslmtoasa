@@ -1,6 +1,6 @@
 ! XCF-05: the physical integrated residual is observable but cannot drive
 ! historical ATOMSC solver, mixing, or termination decisions.
-program test_atomsc_residual_controls
+subroutine test_atomsc_residual_controls
    use precision_mod, only: rp
    use self_mod, only: atomsc_solver_tolerance, atomsc_mixing_beta, atomsc_should_stop, &
       fixed_u_r05_targets, atomsc_inner_controls
@@ -98,4 +98,4 @@ contains
       end if
    end subroutine require
 
-end program test_atomsc_residual_controls
+end subroutine test_atomsc_residual_controls

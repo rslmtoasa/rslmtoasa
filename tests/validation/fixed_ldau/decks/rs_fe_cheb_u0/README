@@ -1,1 +1,0 @@
-RS Chebyshev bcc Fe nsp=2, U=0, soc_scale=0 with fix_soc, z/x pair for the S6b RS floor baseline: seed tests/scf/cases/bulk/bccFe_hubbard/Fe.nml with mom set to the axis (z or x) in Fe.nml.

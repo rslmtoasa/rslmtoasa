@@ -1,5 +1,5 @@
 ! XCF-05: exercise the legacy VXC0SP -> PBEGGA origin contract.
-program test_vxc0sp_gga_origin
+subroutine test_vxc0sp_gga_origin
    use precision_mod, only: rp
    use control_mod, only: control
    use logger_mod, only: g_logger
@@ -141,4 +141,4 @@ contains
       end if
    end subroutine require
 
-end program test_vxc0sp_gga_origin
+end subroutine test_vxc0sp_gga_origin

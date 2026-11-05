@@ -1,1 +1,0 @@
-RS block recursion (lld 21) with sym_term, bcc Fe nsp=2, U=0, soc_scale=0 with fix_soc, z/x pair, S6b KNOWN_ISSUES block-recursion record: seed tests/scf/cases/bulk/bccFe_hubbard/Fe.nml with mom set to the axis (z or x) in Fe.nml.

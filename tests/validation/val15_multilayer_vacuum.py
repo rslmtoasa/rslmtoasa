@@ -87,10 +87,10 @@ def make_interface_case(root: Path, scratch: Path, buffer_width: int, nstep: int
     workdir.mkdir(parents=True, exist_ok=True)
     source = root / "example/surface/fccCu001"
     vacuum = root / "example/interface/fccCu111_Avac/Vac.nml"
-    shutil.copyfile(source / "Cu_out.nml", workdir / "A.nml")
-    shutil.copyfile(source / "ES_out.nml", workdir / "Ac1.nml")
-    shutil.copyfile(source / "Cu-S_out.nml", workdir / "Ac2.nml")
-    shutil.copyfile(source / "Cu-S-1_out.nml", workdir / "Ac3.nml")
+    shutil.copyfile(source / "Cu.nml", workdir / "A.nml")
+    shutil.copyfile(source / "ES.nml", workdir / "Ac1.nml")
+    shutil.copyfile(source / "Cu-S.nml", workdir / "Ac2.nml")
+    shutil.copyfile(source / "Cu-S-1.nml", workdir / "Ac3.nml")
     shutil.copyfile(vacuum, workdir / "Vac.nml")
     shutil.copyfile(root / "example/interface/fccCu111_Avac/input.nml", workdir / "input.nml")
     replace_input(workdir / "input.nml", {

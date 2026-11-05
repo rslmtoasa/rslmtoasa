@@ -1,5 +1,5 @@
 ! Focused tests for the TXC and native libXC-ID namespaces.
-program test_xc_selector_semantics
+subroutine test_xc_selector_semantics
    use control_mod, only: control
    use logger_mod, only: g_logger
    use xc_mod, only: xc
@@ -114,4 +114,4 @@ contains
       endif
    end subroutine require
 
-end program test_xc_selector_semantics
+end subroutine test_xc_selector_semantics

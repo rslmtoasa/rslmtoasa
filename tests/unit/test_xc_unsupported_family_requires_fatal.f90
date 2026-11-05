@@ -1,5 +1,5 @@
 ! Negative XCF-06 test: native MGGA SCAN must fail during XC construction.
-program test_xc_unsupported_family_requires_fatal
+subroutine test_xc_unsupported_family_requires_fatal
    use control_mod, only: control
    use logger_mod, only: g_logger
    use xc_mod, only: xc
@@ -16,4 +16,4 @@ program test_xc_unsupported_family_requires_fatal
 
    write (*, '(a)') 'UNEXPECTED: unsupported MGGA functional was accepted'
    error stop 1
-end program test_xc_unsupported_family_requires_fatal
+end subroutine test_xc_unsupported_family_requires_fatal

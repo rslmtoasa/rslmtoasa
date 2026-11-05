@@ -8,7 +8,7 @@
 !>          through the response (alsda_kernel, prepare, interaction): lambda must be > 0 and the q = 0 Goldstone
 !>          Rayleigh eigenvalue of 1 + chi0 U along M must have magnitude < 1 (bounds fixed before the first measurement).
 !------------------------------------------------------------------------------
-program test_spin_response_radial
+subroutine test_spin_response_radial
    use precision_mod, only: rp
    use math_mod, only: pi
    use control_mod, only: control
@@ -33,7 +33,7 @@ program test_spin_response_radial
    real(rp), allocatable :: r(:), wq(:), m(:), dv(:), enu(:, :), g_up(:, :), g_dn(:, :), s_up(:, :), s_dn(:, :), gfac_up(:, :), gfac_dn(:, :)
    real(rp) :: moment
 
-   call get_command_argument(1, dir)
+   call get_command_argument(2, dir)
    if (len_trim(dir) == 0) error stop 'usage: test_spin_response_radial <oracle directory>'
    call read_tolerances(trim(dir))
    call require('radial_moment_rel', radial_moment_rel)
@@ -62,4 +62,4 @@ program test_spin_response_radial
    call check('ALSDA kernel on Fe: lambda > 0', sr%kernel_lambda > 0.0_rp)
    call check('ALSDA kernel on Fe: |Goldstone eigenvalue| < 1', abs(sr%kernel_goldstone_eig) < 1.0_rp)
    call finish()
-end program test_spin_response_radial
+end subroutine test_spin_response_radial

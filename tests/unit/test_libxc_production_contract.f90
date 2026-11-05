@@ -3,7 +3,7 @@
 ! The checks in this executable deliberately use fixed analytic densities and
 ! independently initialized libXC objects.  No material calculation is an
 ! acceptance oracle for this interface.
-program test_libxc_production_contract
+subroutine test_libxc_production_contract
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use iso_c_binding, only: c_size_t
    use precision_mod, only: rp
@@ -565,4 +565,4 @@ contains
       write (text, '(i0)') value
    end function int_string
 
-end program test_libxc_production_contract
+end subroutine test_libxc_production_contract

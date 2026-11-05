@@ -6,11 +6,16 @@
       "base": "triad_bccFe_exchange",
       "observable": "jij",
       "timeout": 900,
-      "lehmann_dyson_tol": 1.0e-5,
-      "recursion_vs_lehmann_ratio": [0.35, 1.15],
-      "golden_rtol": 1.0e-2,
-      "golden_atol": 1.0e-4,
-      "_note": "J_ij(1st-NN),(2nd-NN) at 12^3, eta=0.02. recursion~=2x lehmann on 1st-NN (broadening artifact, NOT normalization; B2.6). lehmann==dyson is the tight pin."
+      "lehmann_dyson_tol": 1e-05,
+      "recursion_vs_lehmann_ratio": [
+        0.35,
+        1.15
+      ],
+      "golden_rtol": 0.01,
+      "golden_atol": 0.0001,
+      "_note": "J_ij(1st-NN),(2nd-NN) at 12^3, eta=0.02. recursion~=2x lehmann on 1st-NN (broadening artifact, NOT normalization; B2.6). lehmann==dyson is the tight pin.",
+      "labels": [],
+      "tier": "validation"
     },
     {
       "name": "triad_bccFe_sigma",
@@ -18,22 +23,32 @@
       "observable": "sigma",
       "fermi": -0.069099,
       "timeout": 900,
-      "lehmann_dyson_tol": 1.0e-6,
-      "recursion_vs_lehmann_ratio": [0.97, 1.03],
-      "golden_rtol": 1.0e-2,
-      "golden_atol": 1.0e-4,
-      "_note": "Diagonal sigma_xx near E_F at 6^3, cond_ll=30. Exact k-space moments match the recursion moments to ~0.15% (tight envelope). lehmann==dyson bit-identical (same Sigma=0 eigenpair moment path)."
+      "lehmann_dyson_tol": 1e-06,
+      "recursion_vs_lehmann_ratio": [
+        0.97,
+        1.03
+      ],
+      "golden_rtol": 0.01,
+      "golden_atol": 0.0001,
+      "_note": "Diagonal sigma_xx near E_F at 6^3, cond_ll=30. Exact k-space moments match the recursion moments to ~0.15% (tight envelope). lehmann==dyson bit-identical (same Sigma=0 eigenpair moment path).",
+      "labels": [],
+      "tier": "validation"
     },
     {
       "name": "triad_bccFe_damping",
       "base": "triad_bccFe_damping",
       "observable": "alpha",
       "timeout": 900,
-      "lehmann_dyson_tol": 1.0e-5,
-      "recursion_vs_lehmann_ratio": [1.4, 2.4],
-      "golden_rtol": 1.0e-2,
-      "golden_atol": 1.0e-4,
-      "_note": "On-site Gilbert damping alpha=0.5(alpha_xx+alpha_yy) on bcc Fe with SOC (Fe.nml xi_p/xi_d), 12^3, eta=0.02, hoh=T on all routes (like-for-like SOC in G: second-order H(k)+L.S for k-space, real-space L.S for recursion). energy_max is widened so the Chebyshev route's moments don't diverge. lehmann==dyson is the tight Sigma=0 pin; lehmann~=1.9x recursion is the broadening/k-mesh band (like J_ij, not a normalization diff)."
+      "lehmann_dyson_tol": 1e-05,
+      "recursion_vs_lehmann_ratio": [
+        1.4,
+        2.4
+      ],
+      "golden_rtol": 0.01,
+      "golden_atol": 0.0001,
+      "_note": "On-site Gilbert damping alpha=0.5(alpha_xx+alpha_yy) on bcc Fe with SOC (Fe.nml xi_p/xi_d), 12^3, eta=0.02, hoh=T on all routes (like-for-like SOC in G: second-order H(k)+L.S for k-space, real-space L.S for recursion). energy_max is widened so the Chebyshev route's moments don't diverge. lehmann==dyson is the tight Sigma=0 pin; lehmann~=1.9x recursion is the broadening/k-mesh band (like J_ij, not a normalization diff).",
+      "labels": [],
+      "tier": "validation"
     }
   ]
 }

@@ -1,0 +1,29 @@
+{
+ "row": "U_rs",
+ "description": "+U RS bulk bcc Fe nsp=1",
+ "kind": "abs",
+ "tolerance": 1e-10,
+ "reason": "stored from the reference build 90f57c3 (reference binary of the former tools/ldau_regression.py)",
+ "binary_sha256": "16bb567c7de93cc1101d2155968c263c02f73134508e5228e1143d0b9d0bce76",
+ "date": "2026-11-05",
+ "reference": {
+  "diff": [
+   0.0172568909,
+   0.0203304892,
+   0.0244291624,
+   0.0251439809
+  ],
+  "fermi": [
+   -0.00369,
+   -0.098361,
+   -0.103252,
+   -0.103581
+  ],
+  "spin_moment": [
+   2.101203,
+   2.307835,
+   2.354314,
+   2.365375
+  ]
+ }
+}

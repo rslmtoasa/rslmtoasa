@@ -1,2274 +1,361 @@
 # Known issues
 
-Bugs found during other work and recorded here rather than fixed in place.
-The file started as the Phase 2 coverage log; it is now where any session
-records a real finding it was not asked to fix (see "Scope discipline" in
-`CLAUDE.md`). Each entry is a candidate for a future bug-fix task and should
-separate what was verified from what is suspected.
-
+Bugs found during other work and recorded here rather than fixed in place (see "Scope
+discipline" in `CLAUDE.md`). This file keeps open items only. Each entry is a candidate
+for a future bug-fix task and separates what was verified from what is suspected.
+Entries that were fixed, resolved or superseded were dropped; they are recoverable from
+the archive tags `archive/fable_v4b-2026-11-05`, `archive/fable_v4b_u-2026-11-05`,
+`archive/fable_v4b_gbt-2026-11-05` and `archive/main-2026-11-05`. Campaign evidence for
+fixed-U LDA+U is summarised in `docs/validation/fixed_ldau/VALIDATION_SUMMARY.md`.
 Issues in the linear-response code removed in Stage 0b (`lr-campaign-archive-2026-10`)
-are not tracked here; see the closing entry in `docs/DECISIONS.md`.
+are not tracked here; see `docs/DECISIONS.md`.
 
-## Stage 0 baseline findings — 2026-10-03
+## Reference and tolerance questions
 
-- **Verified:** running `ctest -L regression` modifies tracked files
-  `tests/regression/bccFe_{block,chebyshev,lanczos}/input.nml` (the `fermi`
-  value is rewritten in the source tree). Later runs then start from the
-  rewritten input; `git checkout tests/regression` restores it. Not diagnosed
-  further. Fixed for `Lanczos`, `Block` and `Chebyshev` in `cf9049d` (they now
-  run on copies under `<build>/Testing/legacy/`). Stale untracked outputs from
-  earlier runs remain in `tests/regression/bccFe_*/`.
-- **Verified:** on a local Release, serial (`ENABLE_MPI=OFF`,
-  `ENABLE_MARCH_NATIVE=OFF`), gfortran/macOS arm64 build with
-  `RUN_REG/EXAMPLE/UNIT_TESTS=ON`, nine tests fail from a clean tree:
-  `Lanczos`, `Regression_bccFe_chebyshev_{fast_hoh,legacy_hoh,fast_ccor_2c}`,
-  `Regression_bccFe_block_fast_{sp,dp}`, `Triad_triad_bccFe_jij`,
-  `Example_bulk_diamondSi_sp_chebyshev`, `Example_frozen_magnon_bccFe`.
-  Reported values are identical before and after the Stage 0 commits (e.g.
-  Lanczos etot -2541.981428001375 vs reference -2541.9814164004365, tolerance
-  1e-6). Cause not triaged; this local build configuration is a suspect.
-- **Observed:** under `ctest -j4` `Example_orbital_modern_bccFe` (about 480 s
-  serial), `Example_exchange_bccFe_hoh` and
-  `Example_exchange_conductivity_fccPt_hoh` timed out at the 600-900 s
-  limits; all three pass serially.
+### Bitwise sub-case of `UnitLdaULocalMoments` fails with `-march=native` on FMA hardware — 2026-11-05
+- **Verified:** sub-case `spinor_frame_kernel` (`test_hubbard_spinor_moments.f90`, check "(f) n = z vs the S4 z-block loop (bitwise)") gives
+  2.2e-16 against 0 on x86_64 Linux, gfortran 13, OpenBLAS, `-DENABLE_MARCH_NATIVE=ON`. It gives 0.0 with `-DENABLE_MARCH_NATIVE=OFF` (the CI
+  configuration, `.github/workflows/tests.yml`). The failure is the same on the unmodified `fable_v4c` (`9a87c09`) as test `UnitHubbardSpinorMoments`.
+- **Suspected, not diagnosed:** fused multiply-add contraction in two production routines (`correct_d_shell_moments_spinor` and the S4 z-block
+  loop) that sum in the same order but contract differently. The check is not loosened.
 
-## CI cleanup — 2026-10-03
+### LDA+U stored-reference rows: tolerances were set on the developer platform — 2026-11-05
+- **Verified (x86_64 Linux, gfortran 13, OpenBLAS, 4 steps, single thread):** `imp_rs_soc0` (RS-host impurity, nsp=2 with SOC = 0 against nsp=1) differs by
+  1.0e-6 in the 4-step signature against the tolerance 1e-7 (iteration 1: 0.0 native, 1.6e-8 CI configuration against 1e-9); the KS-host row
+  `imp_ks_soc0` gives 1.7e-7 (native) and 5.1e-8 (CI configuration). `LdaURefRsImpurityNsp2` is therefore tier `validation`. The surface row
+  `surf_soc0` agrees to 0.0.
+- **Verified:** the committed SOC-on snapshot (developer platform) is matched to 6e-10 (KS) and 2e-6 (RS `rs_soc_u2`) against the tolerance 1e-10, so
+  `ks_soc_u2_x` has a `linux-x86_64` variant (`tests/ldau/references/ks_soc_u2_x.linux-x86_64.json`, written from the CI configuration with a recorded reason).
+- **Not diagnosed:** whether the 1e-6 impurity difference is only the documented local-mode transient amplification (see "RS +U transient") or a platform
+  effect of the BLAS used. Owner decision needed: platform tolerance, or a different row.
 
-Failures reported by GitHub CI (ubuntu-latest, macos-14 and the CUDA-plugin
-job) on `fable_v4b`. Tests are disabled or removed to get a green branch; no
-reference or tolerance was changed and none of the causes was diagnosed.
+### Long examples time out under `ctest -j4` — 2026-10-03
+- **Observed:** `Example_orbital_modern_bccFe` (about 480 s serial), `Example_exchange_bccFe_hoh` and `Example_exchange_conductivity_fccPt_hoh` hit
+  their 600-900 s limits under `ctest -j4`; serially they finish within the limits. Not investigated.
 
-- **Resolved 2026-10-04 (see "Reference regeneration" and "Diamond Si
-  comparison reduced to scalars" below).** `Example_bulk_diamondSi_sp_chebyshev` failed on ubuntu-latest
-  and macos-14 (`DISABLED TRUE` in `CMakeLists.txt`). The case, its
-  references and the `tests/benchmarks/manifest.json` entry are unchanged;
-  delete the `set_tests_properties` line to re-enable it.
+### Example-suite etot tolerance is 5.8e-4 to 0.37 Ry — 2026-10-04
+- **Verified:** `_check_value` in `tests/run_test.py` fails a value only when both `abs_tol` and `rel_tol` are exceeded, so for etot of order 1e3 Ry
+  the effective tolerance is `rel_tol * max(abs(ref), 1)`. Of 50 example cases in `tests/scf/cases.json` and `tests/postproc/cases.json`, 34 compare
+  etot and all 34 are looser than 1e-5 Ry (diamond Si 5.8e-4, Fe cases 2.5e-3 to 2.5e-2, `Pt2MnGa` 0.37).
+- **Consequence:** etot shifts of 5.8e-6 to 1.9e-5 Ry, which the `Regression_*` matrix detects (absolute 1e-6), are invisible to every example case. A
+  reference shifted by +2e-6 passes.
+- **Proposal, not done:** per-quantity absolute etot tolerances chosen from measured run-to-run and platform spread (or compare with "or" instead of
+  "and"). The `Regression_*` and Triad tests use their own rules and are not affected.
 
-- **Removed:** `Example_frozen_magnon_bccFe` (case entry in
-  `tests/scf/cases.json` and `tests/scf/references/Example_frozen_magnon_bccFe/`;
-  failed on ubuntu-latest and macos-14). The deck `tests/scf/cases/frozen_magnon/bccFe`
-  stays: the `gbt_wp6*` fixtures use it. `_auto` and `_auto_scf` are unchanged.
-  The reference is at an earlier commit.
-
-- **Resolved 2026-10-04 (see "Reference regeneration" below):** the five `Regression_bccFe_*` tests
-  (`chebyshev_{fast_hoh,legacy_hoh,fast_ccor_2c}`, `block_fast_{sp,dp}`)
-  failed in the CUDA-plugin job (`ctest --label-regex backend`, CPU
-  regression subset). They are the same five that fail in the local Release
-  build (Stage 0 baseline above; values under Stage 0c below), so the cause
-  is probably not CUDA. Undiagnosed. Revisit with the CUDA work: the
-  decision on tolerances or references is the developer's. Delete the
-  `set_tests_properties` block in `CMakeLists.txt` to re-enable them.
-
-- **Retired 2026-10-04 (Block and Chebyshev now `Regression_bccFe_block_fast_sp` and
-  `_chebyshev_fast_sp`; Lanczos has no tight etot test, see "Chebyshev ported to
-  `run_matrix`"):** the legacy `Lanczos`, `Block` and `Chebyshev` tests
-  (`tests/regression/bccFe_*/oneliner.sh`). `Block` and `Chebyshev` tested
-  `$?` after an `rm -f` and reported Passed whatever pytest returned; the exit
-  status is now pytest's. Measured on the local Release build at `ff6a0f4`
-  (tolerance 1e-6, first failing key `etot`): `Lanczos` -2541.981428001375 vs
-  ref -2541.9814164004365; `Block` -2541.981441241257 vs ref
-  -2541.9814353440934; `Chebyshev` -2541.9961781405345 vs ref
-  -2541.9961692623647. `Lanczos` already failed with its unchanged script.
-  Cause not diagnosed. Delete the `set_tests_properties(Lanczos Block Chebyshev`
-  line in `CMakeLists.txt` to re-enable them.
-
-## Triage of the disabled and failing tests — 2026-10-04
-
-Decks fixed from `b7641c9` (tracked files only), same decks and extraction
-script for both binaries. Binaries: `8d7c1f0` and `b7641c9` (source of `HEAD`),
-both Release, gfortran 16, Accelerate, `ENABLE_OPENMP=ON`, `ENABLE_MPI=OFF`,
-clean builds, same cmake options. Each runner's own environment: no
-`OMP_NUM_THREADS` set for the regression, legacy and Triad decks (8 cores),
-`OMP_NUM_THREADS=1` for the diamond-Si deck. `Example_frozen_magnon_bccFe` was
-not triaged (functionality not present).
-
-**Measured**
-
-- Repeat spread (two runs, same binary, HEAD and 8d7c1f0): 0 in every
-  compared quantity of every test, all printed digits.
-- HEAD differs from 8d7c1f0 in every test, by more than the spread. `etot` is
-  from the output namelist; `ws_r` is equal in every test; `vmad` (~-2.9e-11)
-  differs by at most 4e-15.
-
-| test | quantity | reference | 8d7c1f0 | HEAD | abs(HEAD-ref) | abs(HEAD-8d7c1f0) |
-|---|---|---|---|---|---|---|
-| Lanczos | etot | -2541.9814164004365 | -2541.981415926556 | -2541.981428001375 | 1.16e-05 | 1.21e-05 |
-| Block | etot | -2541.9814353440934 | -2541.9814351702867 | -2541.981441241257 | 5.9e-06 | 6.07e-06 |
-| Chebyshev | etot | -2541.9961692623647 | -2541.9961688004687 | -2541.9961781405345 | 8.88e-06 | 9.34e-06 |
-| bccFe_block_fast_sp | etot | -2541.9814351458645 | -2541.9814351702867 | -2541.981441241257 | 6.1e-06 | 6.07e-06 |
-| bccFe_block_fast_dp | etot | -2541.981505927682 | -2541.981505927699 | -2541.981511800883 | 5.87e-06 | 5.87e-06 |
-| bccFe_chebyshev_fast_hoh | etot | -2542.0860390634602 | -2542.086039602591 | -2542.086053814766 | 1.48e-05 | 1.42e-05 |
-| bccFe_chebyshev_legacy_hoh | etot | -2542.025386518904 | -2542.0253865185596 | -2542.0253954864515 | 8.97e-06 | 8.97e-06 |
-| bccFe_chebyshev_fast_ccor_2c | etot | -2542.069511937913 | -2542.0695118492704 | -2542.069525395814 | 1.35e-05 | 1.35e-05 |
-| diamondSi_sp_chebyshev | etot | -578.41075489445 | -578.4107548928741 | -578.4107548896744 | 4.78e-09 | 3.2e-09 |
-| diamondSi_sp_chebyshev | fermi_level | 0.018694 | 0.018764 | 0.018879 | 1.85e-04 | 1.15e-04 |
-| Triad jij, recursion | J[1_335] | 0.5078764970774016 | 0.5078764970774016 | 0.51193556388878 | 4.06e-03 | 4.06e-03 |
-| Triad jij, recursion | J[1_336] | 0.38619343738405454 | 0.38619343738405437 | 0.3862753386481105 | 8.19e-05 | 8.19e-05 |
-| Triad jij, lehmann | J[1_335] | 0.25473806601203197 | 0.25473806601203197 | 0.2576117354971107 | 2.87e-03 | 2.87e-03 |
-| Triad jij, lehmann | J[1_336] | 0.3132323415067655 | 0.3132323415067656 | 0.3132707226769755 | 3.84e-05 | 3.84e-05 |
-| Triad jij, dyson | J[1_335] | 0.25473806601290155 | 0.25473806601290155 | 0.25761173549797944 | 2.87e-03 | 2.87e-03 |
-| Triad jij, dyson | J[1_336] | 0.3132323415068143 | 0.3132323415068142 | 0.3132707226770232 | 3.84e-05 | 3.84e-05 |
-
-- Diamond Si, other compared quantities: `ws_r`, `lmax` equal; the largest
-  differences are `Si1_dos.out` column 1 (energy, rows 100-1900) at 1.2e-4
-  (HEAD - 8d7c1f0) and 1.9e-4 (HEAD - ref), and `totaldos.out[500,2]` at 4e-5.
-  The 8d7c1f0 binary exits with status 2 on this deck after "Calculation
-  finished"; HEAD exits 0. The fixture did not exist at 8d7c1f0 (added
-  2026-08-13); the deck was not edited.
-- 8d7c1f0 reproduces the references closely but not to all digits: `etot` within
-  5.4e-7 for the bccFe etot tests, and the Triad golden to 1e-16. The Triad golden was last regenerated in
-  `2a6ec10` (2026-07-23), before 8d7c1f0 (2026-08-09).
-- `block_fast_sp` - `block_fast_dp` at HEAD: `etot` 7.05596e-05, `ws_r` 0,
-  `vmad` 4.2e-15. At 8d7c1f0: `etot` 7.0757e-05 (-2541.9814351702867 vs
-  -2541.981505927699).
-- Diamond reference provenance (`meta.macos-arm64.json`): git `4c58bef`,
-  macOS-14.8.7 arm64, gfortran 16.1.0, `ENABLE_MPI=ON`, `serial_omp_threads` 2,
-  profile runner-native. The local runs here are serial OMP 1, MPI off.
-
-**Class (all ten tests): HEAD differs from 8d7c1f0 by more than the spread.**
-First changing commit, `git bisect run` with a clean build at every step,
-threshold 1e-9 on the extracted value against the 8d7c1f0 binary:
-
-- Triad (all three routes, J[1_335] and J[1_336]): `5967fbb` "Prepare final SCF
-  performance closure", 2026-08-24. It changes `cmake/SetFortranFlags.cmake`
-  (removes the trailing `-O0` that GNU Release builds had) plus
-  `tests/benchmarks/` files; 6 files, +1391 -211, no `source/` change. J[1_335]
-  (recursion) at `5967fbb` 0.5119356124258077, at HEAD 0.51193556388878.
-- `bccFe_block_fast_sp` etot: `80390cc` "Reconcile legacy LDA XC kernels against
-  fixed-density references", 2026-08-30; 14 files, +1294 -857, including
-  `source/xc.f90` (+43). `etot` just before it (`2285360`, with the `5967fbb`
-  flag change already in) differs from 8d7c1f0 by 1.21e-10; at `80390cc` by
-  5.78e-06.
-- Not judged whether either change was correct.
-
-**Not measured / suspected**
-
-- The other seven etot tests and diamond Si were not bisected. That they follow
-  the `80390cc` shift (etot differences 5.9e-6 to 1.5e-5, same size as
-  `block_fast_sp`) is a guess.
-- That the `-O0` removal itself, and not something else in `5967fbb`, moves the
-  Triad J_ij was not tested (no HEAD build with `-O0`). That a 3e-3 shift in
-  J_ij with an `etot` shift below 1.2e-10 points at an optimization-sensitive
-  step (floating-point order or an undefined behaviour) is a guess.
-- Proposal, about 1 build and 3 runs: build HEAD with `-O0` appended to the
-  Release flags and rerun the Triad deck.
-- A first Triad bisect with an incremental build directory gave wrong values at
-  8d7c1f0 itself (a clean build of the same commit reproduced 8d7c1f0 exactly)
-  and was discarded; incremental builds across commits are not reliable here.
-
-## Triad J_ij change when the trailing `-O0` is removed — 2026-10-04
-
-Runs the open proposal of the Triage entry above. All builds are clean builds
-of `8424ac7` in a scratch directory, gfortran 16.2, Accelerate, OpenMP on, MPI
-off, Release (`-O3 -fbacktrace -g -g`). The extra flags are appended last on
-every compile line through a compiler wrapper; no repo file was changed. One
-copy of `tests/regression/triad_bccFe_exchange` for every run, no
-`OMP_NUM_THREADS`. The deck runs no SCF: `Fe.nml` supplies the potential
-parameters and `run.log` has no `etot` line.
-
-**Measured**
-
-- History: the trailing `-O0` was added for GNU Release in `1355a50`
-  (2026-06-10, "Belem25 strux ldau kspace nc (#6)", 169 files) with the
-  comment "force conservative optimization in RELEASE to match stable runtime
-  behavior observed in DEBUG for strux/SPDF workflows". The same commit added
-  the "unroll/inline are disabled for GNU release builds due numerical-instability
-  regressions in LMTO47 screening" comment. No text in `docs/` or this file
-  explains either beyond those comments. `5967fbb` (2026-08-24) removed it.
-- Flag ladder (J[1_335] / J[1_336]; all three routes shift together):
-
-| build | recursion | lehmann | dyson |
-|---|---|---|---|
-| committed reference | 0.5078764970774016 / 0.38619343738405454 | 0.25473806601203197 / 0.3132323415067655 | 0.25473806601290155 / 0.3132323415068143 |
-| default (`-O3`) | 0.51193556388878003 / 0.38627533864811048 | 0.25761173549711069 / 0.31327072267697548 | 0.25761173549797944 / 0.31327072267702322 |
-| + final `-O0` | 0.50787644866406478 / 0.38619347852930186 | 0.25473803020801450 / 0.31323237536981313 | 0.25473803020888586 / 0.31323237536986204 |
-| + final `-O1` | 0.50787644866406478 / 0.38619347852930180 | 0.25473803020801461 / 0.31323237536981313 | 0.25473803020888625 / 0.31323237536986226 |
-| + final `-O2` | 0.51193556388878003 / 0.38627533864811026 | 0.25761173549711042 / 0.31327072267697620 | 0.25761173549797906 / 0.31327072267702311 |
-| `-O2 -ffp-contract=off` | 0.50787644866406478 / 0.38619347852930180 | 0.25473803020801461 / 0.31323237536981313 | 0.25473803020888625 / 0.31323237536986226 |
-
-  `-O3` is the default level, so no separate `-O3` build was made. `-O0` is
-  4.8e-8 / 4.1e-8 (recursion), 3.6e-8 / 3.4e-8 (lehmann, dyson) from the
-  reference; the default is 4.1e-3 / 8.2e-5 and 2.9e-3 / 3.8e-5. Default
-  minus `-O0` is +1.1% (lehmann J[1_335]) and +0.80% (recursion J[1_335]).
-- It is one step, not gradual: `-O0` and `-O1` give identical `sbar` and
-  `jij.out` as printed and run-log J within 3.9e-16, `-O2` and `-O3` likewise
-  (J within 7.2e-16), and the whole change is between `-O1` and `-O2`. `-O2 -ffp-contract=off` reproduces the
-  `-O0` J values to 3.9e-16 and its `sbar` bit for bit. So the difference is
-  floating-point contraction (fused multiply-add), not an undefined behaviour.
-- First differing intermediate, default vs `-O0`: `str.out`, `mad.mat`,
-  `ves.out`, `clust`, `map`, `fort.99/800/805` are bit-identical. `sbar`
-  (unformatted, 135 records of 9 doubles) differs in 1042 of 1215 values, max
-  abs 1.1e-15, max relative to the largest value of its record 2.6e-14. The
-  next differences are in `jij*.out`, `aij*.out`, `dij*.out`. The potential
-  parameters and the Fermi level are inputs here, not outputs, so they were not
-  compared. Nothing else the run writes lies between `sbar` and J.
-- Conditioning probe, `-O0` build, `lattice%alat` 2.86120 (used directly: it
-  changes `sbar` by max 2.0e-11 and 2.0e-8 relative to the largest value of
-  its record for 1e-12 and 1e-9) perturbed by 1e-12 and 1e-9 relative,
-  |dJ/J|/|dx/x| for J[1_335] / J[1_336]:
-  lehmann 22.7 / 10.9 and 22.8 / 10.9; dyson 22.7 / 10.9 and 22.8 / 10.9
-  (linear, the two sizes agree); recursion 5.1e4 / 1.2e5 at 1e-12 and 18.8 /
-  189 at 1e-9 (not linear: recursion has a response of about 5e-8 relative that
-  does not scale with the perturbation). A `sbar` change of 2.6e-14 therefore
-  moves lehmann and dyson J by about 1e-13 relative through the smooth
-  response, not by 1%.
-- Undefined-behaviour checks (`-g -fbacktrace -fcheck=all -finit-real=snan
-  -finit-integer=-2147483647 -ffpe-trap=invalid,zero,overflow`, forced here
-  although cmake skips `-fcheck=all` for GNU 16 on macOS), at `-O2` and `-O0`:
-  recursion and dyson run to the end with no trap and no check failure, and J
-  equals the `-O2` and `-O0` rows above. The lehmann route stops with an FP
-  trap (SIGILL) at both levels, in Accelerate `ZLADIV` called from `ZLARFG`,
-  `ZHETD2`, `ZHETRD`, `ZHEEV`, from `reciprocal_backend.f90:805`,
-  `reciprocal_bands.f90:112`, `reciprocal_green.f90:212` (`fill_green_lehmann`),
-  with the divisor +Inf. It is inside the library and may be intentional
-  scaling; lehmann code after that point was not checked for traps. Default
-  build with `-fsanitize=address,undefined`: no report on any route, J equals
-  the default row to 1e-15. valgrind does not run on macOS arm64; the sanitizer
-  does not instrument Accelerate.
-- Source bisect (`-O0` for a file subset, all other files at `-O3`, J of all
-  three routes compared with the two rows above, 6 builds): the 56 files that
-  every route uses before its own part (`array` ... `xc_radial`) reproduce
-  `-O0`; the 41 others were not needed. Of the 56: first 28 reproduce `-O0`;
-  first 14 do not; files 15-21 reproduce; `hamiltonian`, `hamiltonian_build`,
-  `hamiltonian_ccor` do not; `exchange.f90` alone does not. Left:
-  `energy.f90`, `exchange_dynamics.f90`, `globals.f90`, or `exchange.f90`
-  together with one of them. In the subset builds that reproduce `-O0` the
-  recursion J[1_335] is 0.50787642319, 2.6e-8 from the `-O0` value, which is
-  inside the recursion response above.
-- `sbar` is excluded as the cause. In bisect builds b11, b13, b14 and b15
-  `lattice_strux.f90` is compiled at `-O3`, and their `sbar` is bit-identical
-  to the default build's (1042 of 1215 values differ from `-O0`, max 1.1e-15).
-  Builds b11 and b13 still give the `-O0` J for lehmann and dyson to 1e-15
-  (recursion within the 2.6e-8 above). With all 56 files at `-O0` (b10) `sbar`
-  equals the `-O0` one.
-- Energy mesh (`energy.f90:209-211`, `nint((fermi - energy_min)/edel)`):
-  scratch builds (not committed, a `write` after line 211) at `-O0` and at
-  the default level, recursion and lehmann runs, J equal to the rows above.
-  Printed with 17 digits, identical in both builds in every `e_mesh` call
-  (1 call in the recursion run, 2 in the lehmann run): fermi
-  -6.92910000000000054e-2, energy_min -1.19999999999999996, ratio
-  `(fermi - energy_min)/edel` before the rescale 141.338624999999979, `enpt`
-  141, rescaled `edel` 8.01921276595744630e-3. The ratio is 0.16 from the
-  nearest `nint` boundary, so a one-ulp change cannot flip `nint` here. That
-  hypothesis is rejected for this deck.
-- Not on this deck's path: `globals.f90` has no executable code (a constant and
-  a `data` table); `exchange_dynamics.f90` holds only
-  `calculate_gilbert_damping` and `calculate_moment_of_inertia`, called under
-  `do_damping` / `do_inertia`, which the deck does not set.
-- A Linux x86-64 build was not available (the Docker daemon is not running, no
-  push was allowed), so the deck was not run on that platform.
-- Input fermi shifted (`-O0` build, recursion J[1_335]; lehmann and dyson move
-  together): every `simpson_f` call in `exchange.f90` passes `T = 0`, so
-  `kBT = 1.0e-15`. `e_mesh` takes the input fermi directly (printed `fermi` in
-  `e_mesh` equals the input to the last digit for +-1e-15). J[1_335] at fermi
-  -0.069291 + shift: 0 (base) 0.507876449; +1e-15 0.518693882; +2e-15
-  0.507876449 (base value again, to 5e-14); +5e-15 0.518693882; +1e-14
-  0.509229539; -1e-15 0.518693882. Lehmann J[1_335] 0.254738030 (base),
-  0.262396329 (+1e-15, +5e-15, -1e-15), 0.255695963 (+1e-14); all three routes
-  and J[1_336] shift likewise (+3.0% for lehmann J[1_335] at +-1e-15).
-- Grid point nearest fermi, printed from `simpson_f` in scratch builds (not
-  committed; a `write` in `math.f90`), 134 calls per run with `EF = fermi`,
-  always `j = 142 = enpt + 1`: residual `ene(j) - fermi` and
-  `fermifun(ene(j), fermi, 1e-15)` are +1.38777878078144568e-17 and
-  0.49653060872957211 at `-O0`; -2.77555756156289135e-17 and 0.50693844847743652
-  at the default level. Those builds give the same J as the rows above. For the
-  shifted-fermi runs the residual is -9.714e-17 (f 0.524267) at +-1e-15 and
-  +5e-15, +1.388e-17 (f 0.496531) at +2e-15, and exactly 0 (f 0.5) at +1e-14.
-  Each residual is a multiple of 1.388e-17, the spacing of doubles near 0.069.
-- J is an affine function of that one Fermi factor. Seven runs (the five
-  shifts, base `-O0`, base default), J against f(ene(142)): recursion J[1_335]
-  slope 0.39001, max deviation from the line 2.2e-8; recursion J[1_336] slope
-  0.00787, 7.8e-9; lehmann J[1_335] slope 0.27611, 1.9e-13; lehmann J[1_336]
-  slope 0.00368, 1.2e-15. The default build's and the `-O0` build's J both lie
-  on the line. So the whole `-O0` to default change in J[1_335] and J[1_336],
-  on all three routes, is accounted for by the change in f(ene(142)) from
-  0.49653 to 0.50694 (a difference of 0.0104).
-- The previous prediction that the two Fermi factors differ by about 0.05 or
-  more did not hold: the measured difference is 0.0104, because the residuals
-  are 1e-17 (one to seven spacings of doubles near 0.069), not 1e-16. The
-  smaller difference is nevertheless enough to give the measured J change.
-
-**Fix applied — `2cb6f55`**
-
-- `source/exchange.f90`: the 24 `simpson_f` calls that passed `this%en%fermi`
-  now pass `this%en%ene(this%en%enpt + 1)`, the grid point `e_mesh` places on
-  E_F (as `bands.f90` and `recursion_transport.f90` already do with
-  `en%ene(ie)`). The call at line 984 (`en%ene(nv)`) and the commented-out one
-  at line 1394 are unchanged; the file has 26 lines with `simpson_f`, not 26
-  calls with fermi. `simpson_f` and `e_mesh` are untouched; 24 lines changed.
-  `en%fermi` is assigned only in `bands.f90:1321` (followed by `e_mesh`),
-  `self.f90:1905` and `self_reciprocal.f90:61` (SCF), so on the exchange
-  post-processing path `ene(enpt + 1)` is the grid point on the current fermi.
-- Triad deck after the fix, `-O0` / default build, J[1_335] and J[1_336]:
-  lehmann 0.25569596271709405 / 0.25569596271709499 and
-  0.31324515821581550 / 0.31324515821581528; dyson 0.25569596271796491 /
-  0.25569596271796469 and 0.31324515821586379 / 0.31324515821586429; recursion
-  0.50922953903584689 / 0.50922951351970158 and 0.38622076917617809 /
-  0.38622076011797762. Relative `-O0` vs default difference: lehmann 3.7e-15 and
-  7.1e-16, dyson 8.7e-16 and 1.6e-15, **recursion 5.0e-8 and 2.3e-8**. The
-  recursion difference is above the 1e-12 that was asked for and is of the size
-  of the recursion response measured above (about 5e-8); it was not diagnosed.
-  Lehmann J[1_335] is 0.25570 to 5 digits, as predicted from the line at f = 0.5.
-- `-O0` build, input fermi shifted by +1e-15, +2e-15, +5e-15, -1e-15: the largest
-  relative change from the unshifted run is 5.2e-13 (lehmann J[1_335]); recursion
-  3.5e-13, dyson 5.0e-13. No jump.
-- Against the committed Triad reference the fixed lehmann J[1_335] is +0.38%
-  (0.255696 vs 0.254738) and recursion J[1_335] +0.27% (0.509230 vs 0.507876).
-  `Triad_triad_bccFe_jij` (`golden_rtol` 1e-2, `golden_atol` 1e-4) passed in the
-  full run below. No reference, tolerance or disabled test was changed.
-- Quick tier (`ctest -L '^quick$'`, serial Release, `ENABLE_MARCH_NATIVE=OFF`,
-  `RUN_REG/EXAMPLE/UNIT_TESTS=ON`): 21 of 21 passed.
-- Full run, same configuration, serial `ctest -j1`, clean builds of the parent
-  (`5d92b0e`) and of the fix, 179 tests of which 9 disabled and 2 skipped in
-  both: the parent fails 6 (`Triad_triad_bccFe_jij`, `UnitStructureConstantsBackends`,
-  `Val04LdaUPhysics`, `Val12LmtoFieldsTorques`, `Val16GbtCommensurateSupercells`,
-  `Val17GbtHarmonicGoldstone`); the fix fails 5, the same without
-  `Triad_triad_bccFe_jij`. No other test changed status. For the five common
-  failures the ctest output is line-for-line identical apart from times and
-  backtrace addresses.
-
-**Open accuracy question (not measured)**
-
-- `enpt` is 141, so the grid point on E_F is index 142. `simpson_f` sums panels
-  (I-1, I, I+1) for I = 2, 4, ..., so index 142 is the centre of a panel
-  (weight 4h/3) and the integral ends at the centre of a panel, with f = 0.5
-  exactly at that point. With an even `enpt` the point would instead be the
-  boundary of two panels. Whether the value, with E_F placed this way and
-  `T = 0`, is an accurate estimate of the integral up to E_F, and how it
-  depends on the parity of `enpt` or on `channels_ldos`, was not measured.
-- The fixed J moved from the earlier default value by +0.4% (lehmann J[1_335]
-  0.257612 before, 0.255696 after); the residual-dependent value is no longer
-  possible, but neither value is known to be the correct J.
-- Passing tests other than the Triad were compared by status only, not by their
-  printed values.
-
-**Not measured / suspected**
-
-- Which file produces the different residual (no longer needed for J after
-  `2cb6f55`). Suspected, not tested: the
-  expression `energy_min + edel*i` (`energy.f90:214`, together with the rescale
-  of `edel` on line 211) contracted to FMA at `-O2`. The bisect is consistent
-  with it: b13 reproduces `-O0`, b14 (`hamiltonian*`) and b15 (`exchange.f90`)
-  do not, and what b13 has that those two lack is `energy.f90`,
-  `exchange_dynamics.f90` and `globals.f90`, of which the last two are not
-  executed or hold no code. `energy.f90` at `-O0` alone with the rest at
-  default was not built, and the residual was not printed for those subset
-  builds. The residual, not the line, is what was measured.
-- Whether the shared cause is the `T = 0` Fermi factor in `simpson_f` or the
-  placement of `fermi` on a grid point (`e_mesh` rescales `edel` so that it
-  does) was not separated; both are present in every run.
-- The 4.8e-8 distance of `-O0` from the committed reference is not explained
-  (the Triad golden was last regenerated in `2a6ec10`); it was measured before
-  `2cb6f55`.
-- The eight regression tests of the Triage entry were not rebuilt with
-  `-ffp-contract=off`, and not checked for the same grid-point dependence.
-
-## Recursion reproducibility floor and five open failures — 2026-10-04
-
-**Recursion floor.** The recursion route's J_ij (Triad, bcc Fe) reproduces only
-to about 5e-8 relative. Recorded in the entry above: the `lattice%alat` probe
-gives |dJ/J| = 5.1e-8 at a 1e-12 perturbation and 1.9e-8 at 1e-9 (J[1_335];
-J[1_336] 1.2e-7 and 1.9e-7, ratio times perturbation), and `-O0` vs default
-differ by 5.0e-8 (J[1_335]) and 2.3e-8 (J[1_336]). Lehmann and dyson stay at
-1e-15 in the same comparisons. The size does not scale with the perturbation,
-so it is a noise floor (rounding) and not a discontinuity in J. Its source in
-the recursion was not diagnosed. A check on recursion J tighter than about 1e-6
-relative would be below this floor.
-
-Builds for the five entries: clean builds of `a9531bb` in a short scratch path,
-Release, gfortran 16.2, Accelerate, OpenMP on, MPI off,
-`ENABLE_MARCH_NATIVE=OFF`, `RUN_REG/EXAMPLE/UNIT_TESTS=ON`, no
-`OMP_NUM_THREADS`. Each test was run alone with `ctest -R`. CI: `tests.yml`
-runs `-L unit`, `-L tooling`, `-L backend`, `-L example` (`-L quick` on pull
-requests); `binaries.yml` (ubuntu-latest, macos-14, `RUN_REG_TESTS=ON`,
-MPI on, job `continue-on-error`) runs an unfiltered `ctest`.
-
-- **`UnitStructureConstantsBackends`** (labels `unit;structure_constants;strux;legacy_strux`).
-  CI: selected by `tests.yml -L unit`. **Not reproduced.** It passes standalone
-  in four builds: default, `-O0`, `-O2 -ffp-contract=off` (source in
-  `/tmp/rs/h`) and default with the repo as source; `ctest -L unit -j1` passes
-  91 of 91. sp Sbar max 1.4024e-08 (tolerance 2e-8), relative 7.0387e-09 (1e-8)
-  in all four. The failure listed in the entry above was not captured. One
-  failure was observed, in a build whose source path was 150 characters: the
-  deck database path is truncated (`lst_path_to_file` is `character(len=sl)`
-  with `sl = 132`, `string.f90:44`, `element.f90:73`; the logged path ends at
-  `.../tests/scf/cases`), then `element.f90:157` "Error while reading
-  namelist", `iostatus = 21`, `ERROR STOP`. Suspected, not verified, that the
-  earlier full-run failures came from a long scratch path.
-  **Resolved 2026-10-04 (path length).** Paths now use `pl = 1024`
-  (`string.f90`) in `path_join` (it calls `join`, whose output dummy is now
-  `len=*`), `lst_path_to_file` in `element.f90` and `potential.f90`, the
-  `database` namelist variable, and `path`, `directory`, `filename`,
-  `path_parts`, `source_path` and the `GLOBAL_DATABASE_FOLDER` constructor
-  type-spec in `symbolic_atom.f90`; `sl` stays 132. From a source tree whose
-  database path is 210 characters the unit test stops with `ERROR STOP` before
-  the change and passes after (sp Sbar max 1.4024e-08, relative 7.0387e-09). A
-  first try with `sl = 1024` was discarded: it widened the `&element` and `&par`
-  header lines of written namelists from 133 to 1025 characters. With `pl`, 462 of
-  506 non-log output files of 18 decks are byte-identical to the pre-change
-  binary, including the namelist headers; the other 44 (33 with values, 11 only
-  in `cpu_s` timing lines of `str.out`) also differ between two runs of the
-  pre-change binary, e.g. `Fe_out.nml` of `nsp2_block_hoh` by 2.4e-10 between
-  the two old runs and 1.1e-9 between old and new, and `linfo.out` of the Si
-  legacy deck by 0.30 and 0.46.
-- **`Val04LdaUPhysics`** (`validation;lda_u;magnetic;kspace;known-failure`; 103 s). CI:
-  `binaries.yml` only. First failing check: "stored occupation matrix is
-  Hermitian", required `ldm_hermiticity_residual < 1.0e-7`. The script prints no
-  value; computed from `Fe_out.nml` with the script's expression: u2 6.09e-08,
-  u4 1.083e-07, u2_convergence 3.57e-08. The u4 deck fails.
-- **`Val12LmtoFieldsTorques`** (`validation;functional;magnetic;spin_dynamics;lmto;torque;constraints;soc;known-failure`;
-  18 s). CI: `binaries.yml` only. First failing check: "SOC-free global rotation
-  changed the torque invariant by 8.281e-03 T", required `< 5.0e-3`.
-- **`Val16GbtCommensurateSupercells`** (`validation;functional;magnetic;supercell;commensurate;convergence;known-failure`;
-  340 s of a 14400 s timeout). CI: `binaries.yml` only. First failing check, in
-  the first case (`q050`): "current-kernel reference did not converge", i.e.
-  `Converged!` is absent from the log of the `nstep = 100` reference supercell
-  run. No numeric value is printed. ROADMAP B1 lists "G9 failed; converged
-  small-q curvature not established".
-- **`Val17GbtHarmonicGoldstone`** (`validation;functional;magnetic;gbt;kspace;goldstone;convergence;known-failure`;
-  219 s of a 14400 s timeout). CI: `binaries.yml` only. Five gates fail. First:
-  "theta=5 canonical occupation: N=8.00686367, max|dN|=6.906e-03", required
-  `|N-8| < 1e-8` and `max|dN| < 1e-7`; the same at theta 10, 15 and 20 (N
-  8.00673299, 8.00650223, 8.00614767); and "DeltaE(theta) ~ sin^2(theta) after
-  physical gauge subtraction: relative spread=10.39%", required `< 5%`. The
-  entry "VAL-17 follow-up, 2026-08-16" below reports the cone-angle gates
-  passing; the two were not reconciled. ROADMAP B1 as for Val16.
-
-## Reference regeneration — 2026-10-04
-
-Regenerated on the developer's instruction after the Triage and Triad entries
-above. No tolerance was changed. Lanczos, Block and Chebyshev (the legacy
-decks, `Fe.nml.ref`) were not regenerated and stay disabled: no tool writes
-those references, and their `80390cc` step is 95.2%, 95.3% and 155% of the
-`8d7c1f0` to HEAD change.
-
-**Provenance (all references below).** Source tree `d44cde7` (code identical to
-`a9531bb`, only `KNOWN_ISSUES.md` differs), with the edits of this commit.
-macOS-26.7.1 arm64 (Apple M1), GNU Fortran (Homebrew GCC) 16.2.0, Open MPI
-5.0.11, Accelerate, cmake with the `tests.yml` configure line (Release,
-`-O3 -fbacktrace -g -g`, `ENABLE_MPI=ON`, `ENABLE_MARCH_NATIVE=OFF`, OpenMP on).
-Threads: diamond Si `serial_omp_threads` 2, `mpi_omp_threads` 1 (as recorded
-by the tool in `meta.macos-arm64.json`); regression decks and the Triad golden
-with `OMP_NUM_THREADS` unset (8 cores), because `run_matrix.py` and
-`run_triad.py` call the binary directly and record nothing.
-
-**XC attribution before regeneration.** Clean builds of `80390cc^` and
-`80390cc`, MPI off, fixed decks from `b7641c9`. All eight decks pass their old
-references at `80390cc^` and fail at `80390cc`. etot step `80390cc^` to
-`80390cc` as a fraction of the `8d7c1f0` to HEAD change: chebyshev_fast_hoh
-1.0000 (-1.421e-5), chebyshev_legacy_hoh 1.0000 (-8.968e-6),
-chebyshev_fast_ccor_2c 0.9995 (-1.354e-5), block_fast_dp 1.0001 (-5.874e-6),
-block_fast_sp 0.952 (-5.779e-6 of -6.071e-6), Block 0.952, Chebyshev 0.953
-(-8.903e-6 of -9.340e-6), Lanczos 1.554 (-1.877e-5 of -1.207e-5).
-
-- **`Regression_bccFe_*` (5 tests), re-enabled.** `run_matrix.py --gen-ref`
-  (no `generate_ci_references.py` path exists for `tests/regression/cases.json`).
-  etot change against the old reference: chebyshev_fast_hoh -1.475e-5,
-  chebyshev_legacy_hoh -8.968e-6, chebyshev_fast_ccor_2c -1.346e-5,
-  block_fast_dp -5.873e-6, block_fast_sp -6.095e-6; `ws_r` unchanged, `vmad`
-  within 4.3e-15. **Unexplained:** for `block_fast_sp`, `80390cc` accounts for
-  5.78e-6 of the 6.07e-6 change from `8d7c1f0`; the remaining 2.9e-7 (the same
-  remainder appears for Block, 2.9e-7, and Chebyshev, 4.4e-7) comes from
-  commits after `80390cc` and was not attributed.
-- **`Example_bulk_diamondSi_sp_chebyshev`, re-enabled on arm64 macOS only
-  (superseded the same day by "Diamond Si comparison reduced to scalars").**
-  The comparison now omits the `fermi_level` log check and `Si1_dos.out`
-  column 1 (energy minus the computed E_F, written after the Fermi update,
-  `bands.f90:570-577`). `totaldos.out` column 1 is kept: it is the energy minus
-  the input `fermi`, written before the update (`bands.f90:522-526`), so it is
-  fixed by the deck. With the new checks, 19 values remain. Against both
-  `ref.json` and `ref.macos-arm64.json` exactly one is outside tolerance:
-  `totaldos.out` row 500 column 2, run 7.87982, both references 7.87978,
-  difference 4.0e-5 (tolerance 1.1e-5); etot differs by 9.7e-10 (`ref.json`)
-  and 4.8e-9 (macOS), `vmad` by 1e-14. So the output of this Mac was written to
-  `ref.macos-arm64.json` and `meta.macos-arm64.json` with
-  `generate_ci_references.py --profile runner-native` (the Linux profile needs
-  `env/openmpi.sh` paths), through a scratch references directory; `ref.json`
-  and `meta.json` were not touched. `ref.json` still holds `fermi_level` and
-  `Si1_dos.out` column 1, which the run no longer produces, so on Linux (and
-  Intel macOS) the test would report them missing: `CMakeLists.txt` keeps it
-  disabled except on arm64 macOS. The previous macOS variant was generated on
-  a macos-14 runner (macOS 14.8.7, gfortran 16.1.0, commit `4c58bef`); that
-  the macos-14 CI job reproduces the values written here (macOS 26.7.1,
-  gfortran 16.2.0) was not measured.
-- **`Triad_triad_bccFe_jij` golden.** `run_triad.py --gen-ref`, which writes
-  values only. Relative change against the old golden: recursion J[1_335]
-  +2.664e-3, J[1_336] +7.075e-5; lehmann and dyson J[1_335] +3.760e-3,
-  J[1_336] +4.092e-5. The values equal the post-fix values of the entry above
-  to the printed digits. The recursion values carry the reproducibility floor
-  of about 5e-8 recorded above. The other two Triad goldens were not touched.
-- **Check after regeneration.** The five regression tests, the diamond Si test
-  and the Triad test pass in the generating build (`ctest -R`, 7 of 7). That
-  is by construction for the build that wrote the references; the independent
-  evidence is that the old references failed against the same output (etot
-  differences 5.9e-6 to 1.5e-5 against tolerance 1e-6, diamond Si
-  `totaldos.out[500,2]` above) and the full run below, in a separate MPI-off
-  build.
-- **Full run** (`ctest -j1`, clean MPI-off Release build of the working tree,
-  `ENABLE_MARCH_NATIVE=OFF`, `RUN_REG/EXAMPLE/UNIT_TESTS=ON`, `OMP_NUM_THREADS`
-  unset, 3337 s): 179 tests, 5 not run (`Lanczos`, `Block`, `Chebyshev`
-  disabled; the two `mkl` Si regressions skipped), 4 fail: `Val04LdaUPhysics`,
-  `Val12LmtoFieldsTorques`, `Val16GbtCommensurateSupercells`,
-  `Val17GbtHarmonicGoldstone`, with the same first failing messages as in the
-  entry above. Against the previous full run (5 failures, 9 disabled, 2
-  skipped): the five `Regression_bccFe_*` and the diamond Si test, disabled
-  before, pass; the Triad tests pass; `UnitStructureConstantsBackends`, which
-  failed in the previous run, passes (no source change; this build is in a
-  short path, see the entry above). The five regression tests pass in this
-  MPI-off build against references written by the MPI-on build.
-
-## Diamond Si comparison reduced to scalars — 2026-10-04
-
-`totaldos.out` holds `ene(i) - fermi` and `dtot(i)` on the `e_mesh` grid
-(`bands.f90:522-526`, `energy.f90:209-215`). `e_mesh` rescales the spacing,
-`edel = (fermi - energy_min) / nint((fermi - energy_min) / edel)`, and sets
-`ene(i) = energy_min + edel*i`, so every fixed-row DOS value of the
-real-space route depends on `fermi`, which is not well defined for an
-insulator (at `8d7c1f0` it already differed from the reference by 7e-5 while
-etot agreed to 1.6e-9). `Si1_dos.out` is written on the same grid.
-
-- **Changed.** `Example_bulk_diamondSi_sp_chebyshev` compares only the
-  `Si1_out.nml` scalars `lmax`, `etot`, `ws_r`, `vmad`. The `text` and `log`
-  blocks were removed from the case's checks and from `ref.json` (key removal
-  only: `compare_ref` iterates the keys of the reference; the scalar values are
-  byte-identical, `meta.json` still lists the old checks). `ref.macos-arm64.json`
-  and `meta.macos-arm64.json` were deleted and the `CMakeLists.txt` condition
-  that kept the test disabled off arm64 macOS was removed.
-- **Measured** (CI MPI-on build and a separate MPI-off build give the same
-  numbers; tolerance `abs_tol` 1e-6, `rel_tol` 1e-6, a value fails only when
-  both are exceeded, the relative one scaled by `max(abs(ref), 1)`): lmax 0,
-  etot 9.693e-10, ws_r 0, vmad 9.548e-15 from `ref.json` (written 2026-08 by a
-  different build). Linux was not run.
-- **The etot check is loose.** Because of the "and", the effective etot
-  tolerance is `rel_tol * 578.4 = 5.8e-4`. A copy of the reference with etot
-  shifted by +2e-6 still passes; +1e-3 fails (diff 1.000e-3, rel 1.729e-6).
-  The 1e-5 shifts seen in the regression decks of the Reference regeneration
-  entry would not fail this test. The same rule applies to every SCF case
-  compared by `run_test.py`. Proposal, not done: compare with "or".
-- **Other cases on this deck** (not changed): `Example_bulk_diamondSi_sp_chebyshev_mkl_batch`
-  (`ENABLE_MKL_KERNELS`) compares fixed-row `totaldos.out` rows 100, 500, 1000,
-  1500, 1900, columns 1 and 2, and no `fermi_level`;
-  `Example_k_space_scf_diamondSi_sp` compares `totaldos.out` rows 60, 105, 150
-  (columns 1, 2) and `fermi_level` (`Canonical k-space occupations: EF=`);
-  `Example_k_space_scf_diamondSi_sp_tetrahedron` compares `totaldos.out` rows
-  100, 1000, 1900 (columns 1, 2) and `fermi_level`;
-  `Example_si_chebyshev_kspace_dos_equivalence` rebuilds absolute energies from
-  the reported Fermi levels of both routes. The five `Regression_diamondSi_*`
-  cases compare only `etot`, `ws_r`, `vmad` of `Si1_out.nml`.
-
-## Example-suite etot tolerance is 5.8e-4 to 0.37 Ry — 2026-10-04
-
-`_check_value` in `tests/run_test.py` fails a value only when both limits are
-exceeded: `abs_diff > abs_tol` and `abs_diff / max(abs(ref), 1) > rel_tol`. For
-etot of order 1e3 Ry the relative limit decides, so the effective tolerance is
-`max(abs_tol, rel_tol * max(abs(etot ref), 1))`. CMake passes `abs_tol` 1e-4 and
-`rel_tol` 1e-5 (`EXAMPLE_REF_ABS_TOL`, `EXAMPLE_REF_REL_TOL`); a case may set
-its own, and several set 1e-6 for both.
-
-- **Measured** from `tests/scf/cases.json` and `tests/postproc/cases.json` with
-  the committed references: 50 example cases, 34 compare etot, 16 do not
-  (`sd_smoke` x2, `frozen_magnon_bccFe_auto` and `_auto_scf`, the two exports,
-  the four exchange and conductivity cases, `density_of_states_bccFe_ccor_2c`
-  and `_reciprocal_hoh`, the three paoflow cases, `orbital_modern_bccFe`). All
-  34 are looser than 1e-5 Ry:
-  - cases with 1e-6 / 1e-6 (seven): diamond Si 5.8e-4, `bccFe_nsp2_block` and
-    `_hoh` 2.5e-3, the four fcc Cu Chebyshev cases 3.3e-3;
-  - CMake defaults: three diamond Si cases 5.8e-3, nineteen Fe cases 2.5e-2,
-    `B2FeCo` 2.8e-2, `surface_fccCu001` 3.3e-2, three `Pt2MnGa` cases 0.37.
-- **Consequence, measured on one case.** For `Example_bulk_diamondSi_sp_chebyshev`
-  a reference with etot shifted by +2e-6 passes and +1e-3 fails (rel 1.729e-6).
-  The etot shifts of 5.8e-6 to 1.9e-5 Ry of the `80390cc` XC change, which the
-  `Regression_bccFe_*` tests detect (absolute 1e-6), are below the effective
-  tolerance of every example case that compares etot.
-- **Not covered by this finding:** the `Regression_*` matrix (`run_matrix.py`)
-  and the Triad tests use their own rules (absolute 1e-6, 5e-6 for one case, and
+### Triad J_ij and the recursion noise floor — 2026-10-04
+- **Verified:** the recursion-route J_ij of the Triad deck (bcc Fe) reproduces only to about 5e-8 relative: a `lattice%alat` perturbation of 1e-12
+  gives |dJ/J| = 5.1e-8 (J[1_335]), `-O0` against default differs by 5.0e-8 and 2.3e-8; lehmann and dyson agree at 1e-15. It does not scale with the
+  perturbation, so it is rounding noise. Its source in the recursion is not diagnosed. A check on recursion J tighter than about 1e-6 relative would
+  be below this floor.
+- **Open accuracy question (not measured):** after the `simpson_f` Fermi-level fix (`source/exchange.f90` now passes the grid point `en%ene(enpt +
+  1)`), with `enpt` = 141 the E_F point is the centre of a Simpson panel, with f = 0.5 there. Whether the integral up to E_F is accurate, and how it
+  depends on the parity of `enpt` or on `channels_ldos`, was not measured. The fixed lehmann J[1_335] moved +0.4% (0.257612 to 0.255696); neither
+  value is known to be the correct J.
+- **Suspected, not tested:** the original residual dependence came from `energy_min + edel*i` (`source/energy.f90:214`) contracted to FMA at `-O2`;
+  the regression tests were not rebuilt with `-ffp-contract=off`. Tests: `tests/regression/triad_bccFe_exchange` (`Triad_triad_bccFe_jij`,
   `golden_rtol` 1e-2).
-- **Proposal, not done, a separate task:** per-quantity absolute tolerances for
-  etot in the example manifests, with the values chosen from the measured
-  run-to-run and platform spread of each case rather than from the current
-  relative limit.
-
-## Chebyshev ported to `run_matrix`, Lanczos shift not understood — 2026-10-04
-
-**`Regression_bccFe_chebyshev_fast_sp` added** (`tests/regression/cases.json`):
-the former legacy Chebyshev deck test as a matrix case: legacy structure
-constants, `cheb_backend` `fast`, `lld` 50, no HOH, deck energy window. It
-reproduced the deck's etot to the last printed digit at `80390cc^`, `80390cc`
-and HEAD in a scratch manifest. Reference `references/bccFe_chebyshev_fast_sp.nml`
-from `run_matrix.py --gen-ref`, which records no provenance: source tree
-`45ebc81` plus the case entry, clean CI-equivalent build in a new directory
-(`tests.yml` configure line: Release `-O3 -fbacktrace -g -g`, `ENABLE_MPI=ON`,
-`ENABLE_MARCH_NATIVE=OFF`), macOS-26.7.1 arm64 (Apple M1), GNU Fortran (Homebrew
-GCC) 16.2.0, Open MPI 5.0.11, Accelerate, `OMP_NUM_THREADS=2` (the value
-`generate_ci_references.py` uses for serial runs). etot -2541.9961781405345,
-`ws_r` 2.6622, `vmad` -2.91479588148913e-11; the same etot with 8 threads. The
-test passes in that build and in the MPI-off build. The old deck reference
-(`Fe.nml.ref`, -2541.9961692623647) fails against this output by 8.9e-6.
-
-**Remainders attributed.** Between `80390cc` and HEAD the Chebyshev etot moves
-by a further -4.4e-7 and the Block etot by -2.9e-7 (Reference regeneration
-entry above, "not attributed"). Both occur at `2cae269` (clean builds of it and
-its parent `68e15f2`, scratch): Chebyshev -4.371e-7, Block -2.923e-7.
-
-**Lanczos not ported; no covering test.** Bisect of `80390cc..HEAD` (239 commits,
-clean builds, good = etot within 3.3e-6 of -2541.9814346948), nine probes
-(the five good probes up to `68e15f2` give -2541.9814346945, `2cae269` and the
-three later probes give -2541.9814280014):
-the first commit past the threshold is `2cae269`, "Repair DRESP-03TG screening
-representation consistency" (2026-09-18; `lattice.f90` +11, `lattice_strux.f90`
-+40 -5, `lr_lmto_turek_gf.f90` +8 -3, three docs, two unit tests). From its diff
-(not tested further): `dbar1` now publishes the legacy MICHA alpha table on the
-symbolic atom's potential as `screening_alpha`, and the hard-coded `q` factors
-in the legacy structure routine are replaced by the same table. That is a
-linear-response change, not a change of the Lanczos recursion, and why Lanczos
-moves by +6.693e-6 while Block and Chebyshev move by 3e-7 and 4e-7 was not
-diagnosed. The bisect assumes a single transition between its two endpoints.
-The legacy `Lanczos` test was already disabled and is retired in a following
-commit, so there is no tight etot test of Lanczos until the shift is understood;
-the only Lanczos tests left are `Example_bulk_bccFe_nsp2_lanczos` and `_hoh`,
-whose effective etot tolerance is 2.5e-2 Ry. A matrix case
-for it (`bccFe_lanczos`, `base` `bccFe_lanczos`, legacy structure constants,
-`lld` 16, no HOH) reproduced the deck to the last printed digit in a scratch
-manifest; it is not committed and no reference was written.
-
-## `Regression_bccFe_lanczos` added; alpha tables open decision — 2026-10-05
-
-**Case.** `bccFe_lanczos` in `tests/regression/cases.json` (labels `lanczos`,
-`legacy_strux`; base `bccFe_lanczos`; legacy structure constants, `recur`
-`lanczos`, `lld` 16, no HOH, deck energy window). Default tolerance 1e-6 Ry on
-`etot`, `ws_r`, `vmad`. Reference `references/bccFe_lanczos.nml` from
-`run_matrix.py --gen-ref`, which records no provenance.
-
-**Provenance.** Source tree `56d4b18` (`source/`, `CMakeLists.txt`, `cmake/` and
-`tests/regression/` identical to `b879d70`, which adds only
-`tests/spin_response/oracles/`) plus the case entry. Fresh build directory,
-`tests.yml` configure line (`ENABLE_MPI=ON`, `ENABLE_MARCH_NATIVE=OFF`,
-`RUN_REG/EXAMPLE/UNIT_TESTS=ON`; build type defaults to Release,
-`-O3 -fbacktrace -g -g`, `-ffree-line-length-0 -cpp -mtune=native`, OpenMP on).
-macOS-26.7.1 arm64 (Apple M1), GNU Fortran (Homebrew GCC 16.2.0) 16.2.0, Open MPI
-5.0.11, `OMP_NUM_THREADS=2`, binary run directly (no `mpirun`).
-etot -2541.9814280013752, `ws_r` 2.6621999999999999, `vmad`
--2.9146902078538659E-011. The same etot results from the `ENABLE_MPI=OFF` build
-(same flags otherwise) and from the scratch builds of `2cae269` and HEAD.
-Linux/CI was not run; the earlier Lanczos deck differed from its old reference by
-1.16e-5 on this platform, so cross-platform agreement at 1e-6 is not known.
-
-**Attribution (this case, scratch builds of each commit, MPI off, Release,
-`OMP_NUM_THREADS=2`).**
-
-| step | etot (Ry) | change (Ry) |
-|---|---|---|
-| `8d7c1f0` | -2541.981415926556 | n/a |
-| `2285360` (`80390cc^`) | -2541.981415926646 | -9.0e-11 |
-| `80390cc` (XC potential fix) | -2541.981434694839 | -1.8768193e-5 |
-| `68e15f2` (`2cae269^`) | -2541.9814346944827 | +3.6e-10 |
-| `2cae269` (legacy screening alpha consistent between `micha` and `predls`) | -2541.981428001375 | +6.6931077e-6 |
-| HEAD | -2541.981428001375 | 0 |
-
-`8d7c1f0` to HEAD: -1.2074819e-5 Ry. `ws_r` is 2.6622 throughout; `vmad` is
--2.9149015551243944e-11 until `2cae269` and -2.914690207853866e-11 after. The
-other commits between `8d7c1f0` and HEAD were not run, so the changes between
-the sampled commits are attributed to the sampled steps by difference only.
-
-**Checks.** `Regression_bccFe_lanczos` passes in the ENABLE_MPI=ON and
-ENABLE_MPI=OFF builds. With the reference etot replaced by the `2285360` value
-(-2541.981415926646) it fails in both (`etot: run=-2.541981428001e+03
-ref=-2.541981415927e+03`). `ctest -L '^quick$'`, MPI-on build: 21 of 21 passed.
-`ctest -L lanczos` also selects `Example_bulk_bccFe_nsp2_lanczos` and `_hoh`.
-
-**Open decision for the developer: three alpha tables.** Nothing was changed.
-- `legacy_micha_alpha(0:3) = [0.3485, 0.05303, 0.010714, 0.00337]`
-  (`lattice.f90:52`), read by `micha` (times 2) and by `predls` through
-  `potential%screening_alpha` on the legacy path since `2cae269`.
-- `default_screening_alpha_values(4) = [0.3485, 0.0530, 0.0107, 0.00674]`
-  (`lattice.f90:48`), read by the `strux_lib` path. The s, p and d entries are the
-  legacy values rounded to four digits. `0.00674` has no source in this
-  repository's history before `1355a50` and none in `~/Jobb/strux_lib`; it is
-  2 x 0.00337, the legacy f value, while the other three are not scaled by 2. The
-  vendored `strux_tb.f90` default has `0.00535` for l=3.
-- `qm_canonical = [.348485, .053030, .010714]` (`math.f90:110`), what `predls`
-  used on the legacy path before `2cae269`, and still uses when
-  `potential%screening_alpha` is not allocated or has the wrong size. A fourth
-  table, `qm_lmto47` (`math.f90:112`), has no reader in `source/`.
-
-Which table each backend should use, and what the l=3 value should be, is not
-decided here.
-
-## `2cae269` screening constants and k-space SCF attribution — 2026-10-05
-
-Report-only task; no source or reference changed. Six clean builds (scratch
-worktrees, Release `-O3`, `ENABLE_MPI=OFF`, `ENABLE_OPENMP=ON`,
-`ENABLE_MARCH_NATIVE=OFF`, `ENABLE_LIBXC=OFF`, GNU Fortran 16.2.0, macOS arm64),
-serial, `OMP_NUM_THREADS=2`. Decks frozen once from HEAD (Lanczos deck
-`tests/regression/bccFe_lanczos` plus `strux_backend`; k-space deck
-`tests/scf/cases/k_space_scf/bccFe` patched with the `Example_k_space_scf_bccFe`
-`cases.json` namelists, `cheb_backend='legacy'` included) and run unchanged at
-every commit.
-
-**Measured, 2cae269 and the constants (code reading plus four runs).**
-- The old `q(1:4)` in `micha` were `0.3485d0, 0.05303d0, 0.010714d0, 0.00337d0`
-  times `fak = 2.d0` (`lattice_strux.f90` at `68e15f2`, lines 1121-1126). They
-  are now `q = fak * legacy_micha_alpha` (`lattice_strux.f90:1161`) with
-  `legacy_micha_alpha(0:3) = [0.3485, 0.05303, 0.010714, 0.00337]`
-  (`lattice.f90:52`). Same values, same double precision. Legacy `sbar`,
-  `str.out` and `mad.mat` of the Lanczos run are byte-identical at both commits.
-- What changed is the new call at `lattice_strux.f90:980`
-  (`publish_legacy_screening_alpha`, defined at `:1026`), which allocates and
-  fills `potential%screening_alpha(0:lmax)` on the legacy path. Before `2cae269`
-  that array was unallocated on the legacy path (only the strux path wrote it,
-  `lattice_strux.f90:496-512`). Readers of `potential%screening_alpha`:
-  `symbolic_atom.f90:289-292` (`predls`: replaces `qm`, otherwise
-  `qm_canonical = [.348485, .053030, .010714]`, `math.f90:110`) and
-  `hamiltonian_ccor.f90:496-499` (`ccor_2c`: `a`, otherwise `lattice%alpha`).
-  The `predls` read is the one that consumes it in the Lanczos deck: `qm(1)` goes
-  from 0.348485 to 0.3485.
-- strux_lib does not use `legacy_micha_alpha` or the `micha` constants. For
-  `screening='default'` `build_strux_inputs` takes `default_screening_alpha`
-  (`lattice_strux.f90:147-157, 276-278`), i.e. `default_screening_alpha_values`
-  (`lattice.f90:48`), passes it as `alpha_in`, and `lattice_strux.f90:496-512`
-  stores the returned alpha on `potential%screening_alpha`, which `predls` reads.
-- Lanczos deck, etot / ws_r / vmad (Ry, Bohr, Ry):
-
-| commit | backend | etot | ws_r | vmad |
-|---|---|---|---|---|
-| 68e15f2 | legacy | -2541.9814346944827 | 2.6621999999999999 | -2.9149015551243944E-011 |
-| 68e15f2 | strux_lib | -2541.9814871509634 | 2.6621999999999999 | -2.9147958814891301E-011 |
-| 2cae269 | legacy | -2541.9814280013752 | 2.6621999999999999 | -2.9146902078538659E-011 |
-| 2cae269 | strux_lib | -2541.9814871509634 | 2.6621999999999999 | -2.9147958814891301E-011 |
-
-  legacy minus strux_lib: at `68e15f2` etot +5.24564807e-5, ws_r 0, vmad
-  -1.0567e-15; at `2cae269` etot +5.91495882e-5, ws_r 0, vmad +1.0567e-15.
-  `2cae269` minus `68e15f2`: legacy etot +6.6931075e-6, vmad +2.1135e-15;
-  strux_lib bitwise unchanged. The legacy `Fe_out.nml` differences are in
-  `center_band`, `width_band`, `obar`, `sumev`, `etot` and related, as from a
-  changed `predls` input. This reproduces the +6.693e-6 of the bisect entry
-  above and locates it in the `qm` read, not in `micha`.
-
-**Measured, `default_screening_alpha_values` history (`git log -S`).**
-`0.3485/0.0530/0.0107` first appear in this repository in `1355a50` (2026-06-10,
-"Belem25 strux ldau kspace nc (#6)") as `default_values` in
-`default_screening_alpha`, together with a vendored `strux_tb.f90` whose
-`alpha_default(0:3) = [0.3485, 0.0530, 0.0107, 0.00535]`. `0.00674` first appears
-in the same commit, with no earlier source in this repository. In
-`~/Jobb/strux_lib` (git) `0.00535` appears from `68d8cb1` (2026-04-01) and
-`0.00674` appears in no commit. The function moved into a submodule in
-`cbb5345` and the array to module scope in `28960f1`, values unchanged. `0.00674 = 2 x 0.00337`, the legacy
-f value; the s, p and d entries equal the legacy values (0.3485, 0.05303,
-0.010714) to the digits written, not 2 x them. Not judged.
-
-**Measured, k-space SCF (`Example_k_space_scf_bccFe` deck).** HEAD run twice:
-every output file and every non-timer log line is bitwise identical (spread 0).
-Total moment and total spin/orbital sums are not printed (one site); `mom` is the
-spin-direction vector in `Fe_out.nml`, `lmom` the orbital vector, and the log
-prints the spin moment magnitude to six digits.
-
-| commit | etot (Ry) | sumev (Ry) | EF (Ry) | EBAND canonical / total-DOS (Ry) | mom | lmom | site spin moment (log) |
-|---|---|---|---|---|---|---|---|
-| 8d7c1f0 | -2541.9851076104051 | -2.1548754918547557 | -4.63779468E-02 | -1.89229630 / -1.88789559 | 0, 0, 1 | 5.4116592892976252E-011, 1.1849457112928430E-010, 4.1701665769999438E-002 | 2.002214 |
-| 2285360 (80390cc^) | -2541.9851076099048 | -2.1548754920117972 | same | same | same | same | same |
-| 80390cc | -2541.9851146569986 | -2.1557726554065626 | same | same | same | same | same |
-| 06407da (HEAD) | -2541.9851146574883 | -2.1557726552882808 | same | same | same | same | same |
-
-  etot steps: `8d7c1f0` to `2285360` +5.0e-10; `2285360` to `80390cc` -7.0470938e-6
-  (one commit, "Reconcile legacy LDA XC kernels against fixed-density
-  references"); `80390cc` to HEAD -4.9e-10. Both HEAD-minus-`80390cc` differences
-  (etot 4.9e-10 Ry, moments 0) are below the 1e-8 trigger, so no bisect was run.
-  HEAD etot is 7.047e-6 below `Example_k_space_scf_bccFe/ref.json`
-  (-2541.985107610496); `8d7c1f0` is within 9.1e-11 of it. `vmad` is
-  -6.1290708e-13 at `8d7c1f0` and -6.1185035e-13 from `2285360` on. `mom`, `lmom`,
-  EF and EBAND print identically at all four commits.
-- `8d7c1f0` ends with SIGBUS in both of two runs, after
-  `From orthogonal to TB basis for atom Fe` (`self.f90:1295` there); the other three
-  commits run to completion. `Fe_out.nml` of the two runs is byte-identical and
-  matches the reference to 9.1e-11; whether it was written before the fault was
-  not checked.
-
-**Suspected, not diagnosed.**
-- The -7.047e-6 step is localized to one commit (measured) but its mechanism is
-  inferred from the commit title only. The reference was probably generated
-  before it; not checked.
-- The SIGBUS at `8d7c1f0` may be specific to this Release build; not
-  investigated. This local build configuration is a suspect.
-- `ccor_2c` reads `potential%screening_alpha` too, so a legacy-backend deck with
-  `ccor_2c` would see `a` change at `2cae269` (from 0 or `lattice%alpha` to the
-  table). From code reading only; no such run was made.
-
-## Stage 0c measurements — 2026-10-03
-
-Local Release, serial, gfortran/macOS arm64 build at `dbb6380`. The full
-regression and example suites were **not** re-run in Stage 0c, so the nine
-baseline failures above were not compared as a set. Measured individually:
-
-- **Verified:** `Lanczos`, `Regression_bccFe_block_fast_sp` and
-  `Regression_bccFe_chebyshev_fast_hoh` still fail. The other six baseline
-  failures were not re-run.
-- **Verified:** `Regression_bccFe_block_fast_sp` etot run -2541.981441241,
-  ref -2541.981435146 (abs 6.1e-6, rel 2.4e-9); `Regression_bccFe_chebyshev_fast_hoh`
-  etot run -2542.086053815, ref -2542.086039063 (abs 1.5e-5, rel 5.8e-9).
-  Default tolerance 1e-6. The runner stops at the first failing key; other
-  keys were not seen. Not diagnosed; platform/BLAS summation order is a guess.
-  Left out of the `quick` tier. Whether to loosen the tolerance is the
-  developer's decision.
-- **Verified:** the legacy `Block` and `Chebyshev` scripts
-  (`tests/regression/bccFe_{block,chebyshev}/oneliner.sh`) test `$?` after an
-  `rm -f`, so they exit 0 whatever pytest reports. Run with pytest's status:
-  `Block` etot -2541.981441241 vs ref -2541.9814353441, `Chebyshev` etot
-  -2541.996178141 vs ref -2541.996169262 (tolerance 1e-6): both would fail.
-  `cf9049d` kept the old exit behaviour, so they still report Passed.
-  Proposal: test pytest's status (about 2 lines per script), which turns both
-  red until the references or tolerances are decided.
-- **Verified:** `ctest -L '^quick$'` passes 21/21 in 255.8 s.
-
-## Phase-II closure audit — 2026-08-17
-
-- **Resolved evidence retained:** the Phase-II compact campaigns pass for the
-  scoped VAL-04 onsite collinear LDA+U, VAL-05 Lehmann/Dyson Green-function,
-  VAL-07 exchange tensor, VAL-08 damping/inertia, VAL-09 Kubo-Bastin transport,
-  VAL-12 field/torque, VAL-13 one-site spin-dynamics, VAL-15 multilayer vacuum,
-  and VAL-17 GBT harmonic/Goldstone contracts.
-  Their material, mesh, broadening, and representation boundaries remain in
-  the feature ledger; a passing campaign does not close those limitations.
-- **Retained unresolved VAL-16 defect:** the current-head q=1/2
-  commensurate-supercell campaign did not converge its regenerated explicit
-  supercell reference within 100 steps, so no GBT/supercell comparison is
-  closed by this audit. The earlier VAL-16 report remains historical evidence
-  only; the convergence failure has not been diagnosed or relaxed by changing
-  tolerances.
-- **Retained unresolved scientific defects:** GBT small-\(q\) stiffness remains
-  mesh-sensitive (the 12³-to-16³ shift is about 55%). TDDFT evidence is
-  intentionally absent after the clean-room purge.
-- **Explicit support limitations:** GBT+SOC, GBT local-cluster/impurity,
-  GBT intersite Hubbard-V, noncollinear/SOC onsite U/J, vacuum GF/self-energy,
-  and the four-region `A | vacuum-gap | B` layout are not silently promoted;
-  they remain documented as Development or unavailable combinations in
-  `docs/DECISIONS.md`.
-- **Audit-only build issue:** the first VAL-04/05 invocation used a stale
-  `build-rf-serial` executable and missed diagnostics that are present in the
-  current source. Rebuilding current HEAD made both campaigns pass. This was
-  a validation-environment issue, not a newly diagnosed production defect.
-
-## RF-01 GNU debug baseline and ifx diagnostic test issues
-
-- **GNU Fortran 13.3.0 and 14.2.0, verified on 2026-08-11:** the original
-  Debug setting `-fcheck=all` compiles the static library but fails while
-  linking `rslmto.x` and several unit executables. The linker reports
-  compiler-generated symbols such as `is_recursive.67.5`, `is_recursive.58.5`,
-  and `is_recursive.903.25` from `control.f90`, `element.f90`, and
-  `potential.f90`.
-- **Resolution:** the GNU Debug configuration now uses
-  `-fcheck=all,no-recursion`. This preserves bounds, DO-loop, memory, and
-  pointer checks while excluding the faulty recursion instrumentation. A clean
-  GNU 14.2.0 Debug build links the main executable and every unit executable.
-- **Resolved diagnostic-unit blockers, verified on 2026-08-11:**
-  `UnitDysonEquivalence` now masks only the divide-by-zero exception generated
-  internally by oneMKL `zheev`, clearing that library status flag before
-  restoring the caller's FPE mode. The two missing WP6 Python tests have been
-  restored as independent algebra/source-contract oracles. With GNU 14.2.0 and
-  `-fcheck=all,no-recursion -ffpe-trap=invalid,zero,overflow -finit-real=snan`,
-  `ctest -L unit` passes 40/40.
-- **Reproduction:** configure the project's GNU Debug build, then run both
-  `cmake --build build-rf-debug --parallel` and
-  `ctest --test-dir build-rf-debug -L unit --output-on-failure`. The GNU
-  configuration adds `-fcheck=all,no-recursion`; the ifx configuration uses
-  `-check all -traceback -fpe0 -init=snan`. Both build cleanly. Those
-  diagnostic repairs modified no reference files.
-- **Impact:** the GNU Release/OpenMP build with the same source and CUDA
-  disabled builds successfully; focused reciprocal tests and the complete
-  Debug unit suite pass in the GNU 14 configuration.
-- **Found:** RF-01 baseline characterization, before production changes.
-
-## [RESOLVED 2026-08-12, fixture repair] `Example_k_space_scf_bccFe` exercised recursion, not k-space SCF
-
-- **Symptom:** despite its name and reciprocal namelist values, the case never
-  set `self%use_kspace=.true.`. Its log therefore reported
-  `Perform recursion` and the reciprocal SCF branch in `self%run_dos` was not
-  reached.
-- **Fix applied:** the manifest and reference metadata now explicitly set
-  `self.use_kspace=true`. The regenerated contract pins the canonical Fermi
-  level, electron count, band energy, site valence/charge/spin moment, DOS
-  state count, three DOS samples, and stable output-namelist moments. The
-  reference runner now supports named scalar extraction from `testrun.log`.
-- **Validation:** GNU 14.2.0 / oneMKL Release passes the case with 19 checked
-  values and logs `run_dos: use_kspace=.true.`.
-
-## [RESOLVED 2026-08-14, STAB-03] K-space tetrahedron DOS value integral differed from its cumulative state count
-
-- **Symptom:** on the repaired bcc-Fe k-space fixture, the cumulative
-  tetrahedron count reported all 18 states over `[-2,2] Ry`, while the sampled
-  DOS integral omitted several states. The Si/sp reproducer likewise exposed
-  the mismatch when flat band--tetrahedron combinations were present.
-- **Root cause:** the cumulative tetrahedron path correctly represented a
-  constant band on a tetrahedron as a unit step, but the DOS path skipped every
-  contribution whose energy denominators were degenerate. Each such contribution
-  is a delta-function DOS, not zero DOS.
-- **Fix:** the producing tetrahedron DOS and projected-DOS paths now place a
-  grid delta with the exact trapezoidal mass of the tetrahedron weight for a
-  flat/within-grid-resolution band. No final-DOS scaling factor is applied.
-- **Validation:** the 4x4x4 Si/sp test has 16 represented states, raw k-weight
-  sum 1, canonical count 8, cumulative count 16, DOS integral 15.998235 on its
-  2001-point grid, and `N(E_F)=8.000000`. The residual difference from 16 is
-  ordinary finite-grid quadrature of the regular (non-singular) pieces.
-
-## [RESOLVED 2026-08-13, STAB-02] `recur = 'lanczos'` + `nsp = 2` produced non-finite DOS and `lmom`
-
-- **Root cause:** the scalar Lanczos `hop` implementation had only a
-  `control%nsp = 1` branch. For nsp=2 it left the Hamiltonian action at zero;
-  apart from the seed norm, the scalar alpha and beta-squared coefficients
-  therefore remained zero. The DOS
-  path then reached the zero-width termination guard, producing an
-  identically zero spectrum on the current build (and the historical
-  layout-dependent NaN symptom before that guard).
-- **Fix:** the nsp=2 scalar route now applies the full spinor Hamiltonian,
-  including onsite `l.s` and CCOR terms, and mirrors the Block route's two
-  `h - H O H + e_nu + l.s` sweeps when HOH is enabled.
-- **Test impact:** both nsp=2 Lanczos fixtures now assert finite sampled DOS
-  values and all three `lmom` components. The nsp=1 Lanczos and nsp=2
-  Block/Chebyshev neighbouring paths remain covered.
-
-## [RESOLVED 2026-07-23, commit 8b42928] Exchange `J_ij` NaN — `simpson_f` out-of-bounds read
-
-- **Was filed as:** "Lehmann first-order exchange: latent uninitialized-local NaN
-  in `J_ij` (layout-sensitive)", found during B5.3 (2026-07-16). **The
-  uninitialized-local diagnosis was wrong** — see the actual root cause below.
-- **Symptom (as observed):** `post_processing='exchange'` + `gf_route='lehmann'`
-  (or `'dyson'`) could produce `J_ij = NaN` under `-O3`, presenting as a
-  heisenbug: clean under `-O0`/`-finit-real=snan`/`-fcheck`, and clean under `-O3`
-  until an unrelated `calculation`-type layout change (the B5.3 `do_damping`
-  `logical`) flipped it to NaN.
-- **Actual root cause:** a **one-element out-of-bounds heap read in
-  `math.f90::simpson_f`**, not an uninitialized local, and **not**
-  Lehmann-specific — it was latent in the recursion route too, masked by heap
-  layout. The Fermi/dFermi branches declared their arrays `dimension(NPTS+10)`
-  and looped `I = 2, NPTS+9, 2`, reading index `NPTS+10`. Callers pass arrays of
-  length `en%channels_ldos+10`, but `NPTS = en%nv1 = channels_ldos+1` (every real
-  input has even `channels_ldos`), so the true extent is `NPTS+9` and the loop
-  read one element past the end of every integrand and of `en%ene`. The garbage
-  byte read as a NaN bit-pattern under some heap layouts and as a finite/near-zero
-  value under others — hence the layout sensitivity and the false "uninitialized"
-  signature. `-finit-real=snan`/`-fcheck=bounds` miss it because the read is legal
-  against the callee's *declared* `NPTS+10` dummy; only past the *actual*
-  allocation. Valgrind on Linux `-O3` pinned it: *"Invalid read of size 8 at
-  math.f90:1128 … 0 bytes after a block of size 2480"* (= 310 doubles =
-  `channels_ldos+10`), origins `energy.f90::e_mesh` and the `exchange` integrand
-  allocations.
-- **Fix:** declare the `simpson_f` dummies `dimension(NPTS+9)` (the true extent)
-  and cap the Fermi/dFermi loops at `NPTS+8`, so the last index read is `NPTS+9`
-  (in bounds). Drops one Simpson triple whose Fermi weight is ~0; integrals shift
-  only ~1e-6 (recursion `J_ij` 1_335: 0.5078779 → 0.5078765; lehmann/dyson move at
-  machine epsilon; the B5.2 σ triad is unchanged to 6 dp). The `triad_bccFe_jij`
-  golden was regenerated on the fixed build; `triad_bccFe_sigma` was unchanged.
-- **Confirmed:** on the Linux `-O3` + `pad_dummy` trigger layout (where it
-  originally NaN'd), `valgrind --track-origins=yes` went from 1509 errors / 37
-  contexts to **1 error / 1 context** — the sole remainder being the unrelated
-  pre-existing `clusba` read at `lattice_strux.f90:889` (a separate issue). On
-  gfortran-13 the pre-fix and post-fix recursion values are identical, confirming
-  the result no longer depends on the out-of-bounds byte.
-- **Unblocks:** the deferred B5.3 `do_damping` wiring + Gilbert-damping α triad
-  (`docs/validation/B5.3_gilbert_damping_audit.md`) can now re-land — the layout
-  perturbation that re-triggered the NaN no longer does.
-
-## [VAL-17 follow-up, 2026-08-16] Current GBT cone-angle and FeCo Gamma gates pass; small-q mesh convergence remains open
-
-- The bcc-Fe reciprocal cone sweep now satisfies the direct same-q invariant:
-  DeltaE = E(q,theta)-E(q,0) is proportional to sin2(theta) over 5–20
-  degrees with a 1.49% omega spread. The old fixed-Gamma subtraction failure
-  was a finite-k q-only gauge offset amplified by 1/sin2(theta).
-- The current reciprocal FeCo run gives an acoustic Gamma value of 6.48e-15
-  Ry with an in-phase Fe/Co eigenvector. The independent RS run gives a zero
-  acoustic candidate of -4.16e-17 Ry with the same in-phase character. No
-  diagonal shift was applied.
-- The same-q reference is now used only on reciprocal GBT MFT probes and is
-  written alongside the raw observable in frozen_magnon_diagnostics.dat. The
-  real-space subtraction remains unchanged.
-- The fine-mesh small-q values are internally quadratic at 12^3 and 16^3,
-  but the inferred stiffness changes by about 55% between those meshes. Keep
-  the material stiffness and broad multi-sublattice maturity claim open until
-  denser/shifted meshes and an independent finite-q reference are added.
-
-## `frozen_magnon` `branch_mode = 'auto'`: multi-sublattice acoustic magnon not gapless at Γ — historical pre-VAL-17 finding; current Gamma gate remeasured clean
-
-- **WP9 update (2026-08-07), real-space route:** re-measured on the current
-  `fable_v2_gbt_v2` architecture (post WP1–WP8), two-sublattice bcc FeCo
-  (`example/bulk/bccFeCo`, `nsp=3`, `recur='block'`, `lld=21`,
-  `strux_backend='strux_lib'`), `branch_mode='auto'`, `mode='mft'`,
-  `theta_probe=20°`, real-space recursion (`&self` does not set
-  `use_kspace`, so this is the RS route, not the k-space route the original
-  finding below was measured on). Reference SCF: two inequivalent moments
-  1.976 μB (Fe) / 1.657 μB (Co), `Total RMS Diff = 7.8e-4` (not fully
-  converged to `conv_thr`, but stable and non-oscillating once seeded from a
-  seperately-converged starting potential — see
-  `tests/regression/wp9_validation/multisublattice_goldstone/`). Measured
-  `omega(Γ)`, acoustic branch: **`-2.15e-22 Ry`** — zero to numerical noise,
-  not the ~0.28 Ry violation below. The eigenvector at Γ has both
-  sublattices in phase (amplitudes 0.7375/0.6753, both phase −π), exactly
-  the uniform-rotation pattern a true acoustic mode requires; the optical
-  branch (finite gap, `omega(Γ)=7.04e-3 Ry`) has them out of phase, as
-  expected. Small-q growth (`omega` at q3=0.02/0.05: `1.18e-5`/`7.87e-5` Ry)
-  is smooth and roughly quadratic, not flat. This is real, measured evidence
-  (ran the binary, read `frozen_magnon_branches.dat`/`_modes.dat` directly),
-  not inferred — but it is **one system, one route, one theta_probe**, and
-  does **not** by itself confirm the k-space route (where the original
-  ~0.28 Ry number below was measured) is also fixed; that was not re-tested
-  in this task. Do not treat this as a full resolution of the entry below
-  without re-checking k-space. Plausible explanation for the improvement:
-  WP3's explicit `theta_ss_sublattice`/`phi_ss_sublattice` plumbing (see
-  `source/calculation.f90::post_processing_frozen_magnon_auto`,
-  `set_reference_sublattice_angles`) looks materially different from, and
-  more careful than, what finding K5 (referenced below) describes for the
-  pre-WP1 code this entry was originally written against — read directly,
-  not inferred from the old prose.
-- **Original symptom (pre-WP1, k-space route, NOT re-verified against
-  current HEAD):** the multi-sublattice magnon branches from
-  `post_processing_frozen_magnon_auto` (`&frozen_magnon branch_mode = 'auto'`,
-  `calculation.f90`) do not reproduce the Goldstone theorem for systems with
-  **inequivalent** magnetic sublattices: the acoustic branch has a finite
-  `omega(Γ)` (~0.28 Ry on a two-sublattice bcc FeCo k-space test) instead of
-  going to zero, and the dispersion is nearly flat.
-- **Scope:** the **single-sublattice** limit is correct — `omega(Γ) ≈ 0`
-  (naturally, not enforced) with a clean quadratic dispersion, on the
-  real-space recursion path. The failure is specific to ≥2 inequivalent
-  sublattices; it appears on the k-space path (the only one exercised so far
-  for multi-sublattice).
-- **Method (for reference):** the auto-branch implements the direct GBT
-  frozen-magnon method (Essenberger et al., PRB 84, 174425 (2011), Eq. 26;
-  Sandratskii, Carva & Silkin, PRB 111, 184436 (2025)): the magnon matrix is
-  the second derivative of the frozen-magnon energy surface w.r.t. sublattice
-  cone angles, evaluated with the magnetic force theorem (band energy at the
-  fixed reference potential), and the magnon energies are the eigenvalues of
-  the real symmetric matrix `√(M_μM_ν)·Re[J̃_μν^q]`. This construction gives a
-  gapless acoustic mode at Γ **iff** the band energy is invariant under a
-  global (uniform) spin rotation.
-- **Likely root cause:** the reciprocal band-energy evaluation
-  (`reciprocal%calculate_band_energy_from_moments`, via
-  `build_kspace_hamiltonian`/`diagonalize_hamiltonian`) is not exactly
-  invariant under a uniform rotation of all sublattice moments — suspected
-  contributors are the per-probe Fermi-level re-determination
-  (`auto_find_fermi = .true.`) shifting the band-energy zero, or a
-  moment-projection term in the band-energy sum. Diagnostic not yet run:
-  compare `E_ref` against the uniform-tilt pair energy `E_{12}(Γ)` (should be
-  equal), and run the same case on the real-space recursion path to isolate
-  k-space vs. general.
-- **Test impact:** `tests/scf/cases.json` `Example_frozen_magnon_bccFe_auto`
-  and `_auto_scf` are single-sublattice smoke cases only (no committed
-  reference); they exercise the code path but do not pin multi-sublattice
-  values. The plain acoustic `Example_frozen_magnon_bccFe` (single-branch
-  flat-spiral sweep) is unaffected and is the validated `frozen_magnon`
-  deliverable.
-- **Status before VAL-17:** partially re-measured and not closed. The current
-  reciprocal Gamma gate is now closed by VAL-17; the remaining open item is
-  finite-q stiffness convergence, and the multi-branch spectrum remains the
-  validation target for the B11 clean-room response redevelopment for the
-  general (non-collinear-reference) case. See
-  `docs/DECISIONS.md` (T5) and commit `d86fe42`.
-
-## `processing = 'sd'` (spin dynamics) workflow orchestration
-
-- **Resolved in STAB-05:** `calculation%processing_sd()` now reuses the
-  selected normal preprocessing route through the concrete shared stack
-  helper. Bulk, surface, bulk-host impurity, surface-host impurity, and
-  layered/interface routes no longer enter a hard-coded surface/impurity
-  sequence. The duplicate solver-stack construction was removed.
-- **Coverage:**
-  `Example_bulk_bccFe_sd_smoke` runs one production SD step and checks only
-  that the trajectory is emitted. This is an execution smoke test, not
-  physical validation.
-- **Resolved in VAL-13:** the deterministic bulk loop now uses the production
-  abspinlib Depondt predictor/corrector with electronic refreshes around the
-  predictor and corrected moment. `Val13AbInitioSpinDynamics` validates the
-  scoped one-site zero-torque limit; `Example_bulk_bccFe_sd_smoke` remains the
-  quick execution guard.
-- **Resolved in VAL-13:** the impurity magnetic-moment output layer no longer
-  passes a blank site metadata value into an output filename. It uses a
-  deterministic `atom<N>` fallback and checks the open operation, retaining
-  the magnetic-moment output generically. `Example_impurity_B2FeCo_sd_smoke`
-  now exercises the production path and requires `Fe_1_spinene.out`.
-- **Scope limitation:** a current-head serial run of the ordinary B2FeCo deck
-  did not reproduce the historical crash after the STAB-05 stack repair, and
-  MPI launch reproduction was unavailable in the restricted environment.
-  Broader impurity and multi-site dynamics remain unvalidated; see
-  `docs/validation/VAL-13_AB_INITIO_SPIN_DYNAMICS.md`.
-
-## `calctype = 'L'` (111) site DOS deviated ~2e-3 from the identity control; **RESOLVED in VAL-14**
-
-- **Historical symptom:** in the cross-calctype fcc Cu oracle (see
-  `tests/scf/README.md`, "Cross-calctype oracle"), a single Cu layer treated
-  as an interface between Cu regions must reproduce bulk fcc Cu, because every
-  region is the same material starting from the same parameter set with
-  `vmad ~ 0`. The (001) layered case is the identity control and the (111)
-  case historically deviated by **2.05e-3** at row 1200 (E = 0.686, near the
-  d-band peak), against a peak DOS of 48.3.
-  `Example_interface_fccCu001_chebyshev` vs
-  `Example_interface_fccCu111_chebyshev`.
-- **Not the cause:** the TB-LMTO Hamiltonian. Instrumenting `build_bulkham`
-  and `build_locham` with a geometry-keyed dump (per-neighbour displacement
-  vector plus the hopping block's Frobenius norm, matched across calctypes by
-  vector rather than by neighbour index) shows the on-site block and all 19
-  fcc neighbour hoppings **bit-identical** across `B`/`I`/`L`. `etot` also
-  agrees to ~1e-8 Ry and `ws_r` exactly, for both orientations.
-- **Therefore:** the residual is downstream of the Hamiltonian, and is
-  specific to the 111 surface normal. Candidates not yet investigated: the
-  layer ladder / `zstep` determination in `build_interface_full` for a
-  non-cubic normal (`dx,dy,dz` are transformed for hcp/111 cases before the
-  layer scan), the resulting selected-cluster boundary, or the
-  representative-site choice interacting with 111's different in-plane
-  periodicity.
-- **Deliberately captured, not tolerated away:** the committed reference pins
-  the current 111 values, so any change to this residual shows up as a test
-  failure rather than passing silently. Do not widen `abs_tol`/`rel_tol` to
-  make the two orientations agree.
-- **Found:** B7.5 (`calctype='L'` wiring, commit `97f1e0e`). The earlier
-  validation used 001 only and reported agreement at print precision; the 111
-  deviation surfaced when both orientations were added to the suite.
-
-- **Resolved in VAL-14:** the first downstream divergence was the layered
-  cluster selection. `build_interface_full` used a fixed z ladder that clipped
-  valid sites from the source cluster for oblique normals: Cu(001) retained
-  4096 sites, while Cu(111) retained 4056. The ladder now derives its bounds
-  from the projected source-cluster geometry while retaining the existing
-  safety margin and layer numbering. The generic mapping restores 4096 sites,
-  the complete `nn` map, and exact Cu(111) ≡ Cu(001) DOS at the pinned mesh.
-  No Miller-index special case or DOS rescaling was added. Interface
-  electrostatics remains on the existing `calctype='L'` path; the separate
-  charge-row alignment issue below remains open.
-
-## `calctype = 'L'`: raising `&charge nlay_a/nlay_b` breaks the alignment fixed point
-
-- **Symptom:** in the `A | A` identity geometry (`example/interface/fccCu111_AA`,
-  two frozen Cu regions around one active Cu layer, all from the same converged
-  parameter set), the alignment solver must converge to `V(B) = 0`. Raising the
-  **`&charge`** row counts breaks that; raising the **`&lattice`** layer counts
-  does not. Single-variable runs, 5 iterations each:
-
-  | `&lattice nlay_a/nlay_b` | `&charge nlay_a/nlay_b` | converged `V(B)` | identity |
-  | --- | --- | --- | --- |
-  | 1 / 1 | 1 / 1 | `0.000000` Ry | holds |
-  | 4 / 4 | 1 / 1 | `0.000000` Ry | holds |
-  | 1 / 1 | 4 / 4 | `-0.4498` Ry | broken |
-
-- **The two knobs are different, and only one is the buffer width.**
-  `&lattice nlay_a/nlay_b` count **atomic layers** and are the correct way to
-  widen the frozen buffer — that is what `build_interface_full` bins sites into
-  (`lattice_cluster.f90:576-624`), and widening it is harmless.
-  `&charge nlay_a/nlay_b` count **rows of the synthetic 2D Madelung stack**,
-  whose size is a fixed constant (`this%nbas = max(49, ...)`,
-  `lattice_cluster.f90:709`) deliberately decoupled from the physical layer
-  count so `set2d`'s NLAMA/NLAMB split stays balanced.
-  `build_interface_registry` computes `nlay_active = nbas - nlay_a - nlay_b`
-  over those rows (`charge.f90:1711`), so raising them relabels *interior*
-  Madelung rows — rows carrying real deviation charge — as frozen boundary and
-  moves the deep probe onto a charged row.
-- **Consequence for users:** widen the frozen buffer with `&lattice`, and leave
-  `&charge nlay_a/nlay_b` at 1 unless the Madelung row partition is genuinely
-  what you mean to change. The source comments at `lattice.f90:320-331` already
-  state that the two are deliberately separate (LAYERS vs SITES); the trap is
-  that the names are identical.
-- **Still open:** the `align_regions` "widen the active zone" drift warning
-  fires even in the `&lattice`-widened runs where the identity holds exactly, so
-  it is noisier than its wording implies. Whether the deep-probe drift threshold
-  should be recalibrated is a B7.7 question (G-B7-3 revisits the tolerances).
-- **Found:** B7.6 (examples and documentation). Documented for users in
-  `docs/source/user_guide/examples/interface_fcccu111.rst`.
-
-## `calctype = 'L'`: no vacuum region, and `vacuum_lead` has no caller
-
-**RESOLVED for `A | vacuum`** (B7.6 wiring). `&lattice region_b_kind = 'vacuum'`
-now makes region B a vacuum region: `build_from_interface` takes a `kind_b`
-argument, `build_interface_registry` passes `region_kind_vacuum`, and
-`refresh_vacuum_region` generates the frozen parameters per run and regenerates
-them each iteration at the solved vacuum level. Example:
-`example/interface/fccCu111_Avac`.
-
-**Still open:** `A | vacuum-gap | B`. That needs a genuine four-region layout
-(`lead_a | active-vacuum | active | lead_b`) and a rework of the type-block
-arithmetic in `build_interface_full`, which still hardcodes three regions.
-
-- **Original symptom:** two of the four geometries B7 §1.2 scopes for the
-  layered path — `A | vacuum` and `A | vacuum-gap | B` — could not be
-  constructed.
-- **Original cause (no vacuum region):** `region_registry_build_from_interface`
-  hardcoded kinds `lead_a`, `active`, `lead_b`; nothing on the `buildinterface`
-  route could assign `region_kind_vacuum`.
-- **Original cause (generator unwired):** `source/vacuum_lead.f90` was a tested
-  component with no consumer — its only mention outside its own file and
-  `CMakeLists.txt` was a comment in `self.f90:263`.
-- **Found:** B7.6 (examples and documentation).
-
-## `calctype = 'L'`: interface electrostatics were identically zero — **FIXED**
-
-**RESOLVED.** Three separate index-space bugs made `Q`, `P`, `step` and every
-deep probe come out exactly zero for every layered run. All three are fixed;
-this entry is kept because the failure mode is instructive and because the
-committed `tests/scf` interface references were generated while it was active.
-
-1. **Active charge written to a frozen row.** `interfacepot` conflated two
-   index spaces: `atomrec` (1..nrec, the active TYPE counter — indexes `dq`,
-   `chargetrf_type`, `symbolic_atom(nbulk+.)`) and the Madelung ROW (1..nbas,
-   which is what `tdq`/`tq10`/`vm` and every registry array are indexed by).
-   The active zone starts at row `nlay_a+1`, so writing to `tdq(atomrec)` put
-   the charge on region A's frozen boundary row. `compensation_sites` then
-   returned `ideep_lo` = that same row and subtracted the whole residual from
-   it — exact cancellation, `tdq ≡ 0`, `vm ≡ 0`. Fixed with an explicit
-   `irow = nlay_a + atomrec` in both the charge loop and the write-back.
-2. **`boundary_nef` used the same wrong mapping** (`nbulk + isite` with
-   `isite` a Madelung row), which is out of range for a boundary row. It
-   returned 0 for *both* sides, so the N(E_F) compensation weighting collapsed
-   to the 50/50 fallback and **vacuum silently received half the compensation
-   charge** — exactly what B7 §1.5 warns about ("compensation placed there
-   does not perturb the work function, it SETS it"). Now reads the registry's
-   per-site reference type.
-3. **`reference_type` was filled by cycling active-type values across all
-   rows**, so frozen boundary rows carried no valid type — which is what made
-   (2) silent. Now assigned per region: region A's types on its rows, region
-   B's (or the single vacuum type) on its rows, `chargetrf_type` on active rows.
-
-**Also added: the active zone is now centred in the Madelung stack by default.**
-The active charge occupies rows `nlay_a+1 .. nlay_a+nlay`, and the deep probes
-are the extreme frozen rows either side. An off-centre split puts one probe
-adjacent to the charge and the other ~`nbas` rows away, so the solver correctly
-reports a nonzero `V_B` for a physically symmetric cell. Measured on
-fccCu111_AA (nbas=49, one active layer): `&charge` 1/1 → `V(B) = -0.0109` Ry;
-centred 24/24 → exactly 0. Leaving `&charge nlay_a/nlay_b` unset now derives
-`(nbas - nlay)/2` either side and logs the choice. Explicit values still win.
-
-**Why it hid:** the shipped oracle is the `A | A` identity, whose *correct*
-answer is exactly zero for all five reported quantities — a spuriously zero
-result is indistinguishable from a right one. B7 §5.3 anticipated precisely
-this and specifies the real oracle as A-against-A-with-a-rigid-offset; the
-shipped example did not honour that.
-
-**Verification after the fix:**
-
-| case | Q | P | step | V(B / vacuum) |
-| --- | --- | --- | --- | --- |
-| `A \| A` identity | 0 | 0 | 0 | 0 |
-| `A \| vacuum` | 0 | -1.12e-2 | -0.0949 Ry | +0.0949 Ry |
-
-The identity still holds exactly; the surface now produces a real dipole
-barrier where it previously produced none. **Buffer-width convergence** (`&lattice nlay_a`/`nlay_b`, fcc Cu(111)):
-
-| buffer | step |
-| --- | --- |
-| 1 / 1 | -0.0949 Ry |
-| 2 / 2 | -0.0977 Ry |
-| 4 / 4 | -0.0977 Ry |
-
-Converged by width 2 and stable to five digits at width 4 — the barrier is a
-real converged quantity, not a buffer artefact.
-
-Cross-check against the independent one-sided `buildsurf` route on the same
-system: `buildsurf` gives `vmad1 = vm1 - vbulk = -0.1236` Ry against the
-interface route's converged `-0.0977` Ry — same sign and magnitude, ~21%
-apart. The two probe different points of the same profile (`buildsurf` uses
-rows 1 and `nbas`; the interface route uses the frozen-region extremes), so
-exact agreement is not expected, but closing that gap is a B7.7 item.
-
-**Consequence for the committed references:** `tests/scf` interface cases pass
-unchanged because they pin DOS and moments, not electrostatic quantities. Any
-future reference regeneration will capture genuinely different `vmad` values.
-
-- **Found:** B7.6 (vacuum-lead wiring), while checking why the generated vacuum
-  lead produced no measurable dipole barrier.
-
-
-## [MAPPING RESOLVED 2026-08-16; CONVERGENCE OPEN] `calctype = 'L'`: `A | vacuum` multilayer electrostatics
-
-- **Historical symptom:** with `&lattice nlay = 3` (three active layers) on the
-  `A | vacuum` geometry, the reported potential step and the active atoms'
-  `vmad` come out physically impossible — hundreds of Rydberg:
-
-  | case, `nlay = 3` | step | `vmad`, active layers 1 / 2 / 3 |
-  | --- | --- | --- |
-  | `A \| A` metallic | `0.0002` Ry | `-1.6e-4`, `-1.8e-3`, `-4e-15` |
-  | `A \| vacuum` | **`-334` Ry** | **`167`, `56`, `0.38`** |
-
-  The metallic three-layer case is sane, so whatever this is, it involves the
-  vacuum region specifically. At `nlay = 1` both geometries are well behaved
-  (`A | vacuum` gives a converged `step = -0.0977` Ry).
-- **Deck audit:** the old decks were hand-built by editing `ntype`, `ct(:)` and
-  labels, so they were not evidence. VAL-15 now constructs the mapping from
-  the existing `example/surface/fccCu001` buildsurf path and verifies
-  `Cu → A`, `ES → Ac1`, `Cu-S → Ac2`, `Cu-S-1 → Ac3`, plus the runtime
-  `chargetrf_type = [1, 1, 1]` mapping.
-- **Root cause:** `build_interface_full` assigned the upper active layers to
-  the vacuum frozen type on the `A | vacuum` path. The resulting metal/vacuum
-  reference charge entered compensation, the Madelung kernel, and alignment as
-  if it were a local active-layer deviation. The vacuum path now references
-  all active layers to region A, matching `buildsurf`.
-- **Compensation audit:** with the centered 49-row synthetic stack, rows 23
-  and 27 are the innermost frozen sites; vacuum has zero N(E_F) weight, so the
-  compensation weights are `1.0 / 0.0` and `Q=0`.
-- **Residual numerical behavior:** the undamped three-layer alignment/vacuum
-  feedback can still oscillate or grow from a bad initial offset. The existing
-  internal `vmix` control is now exposed in `&charge`; VAL-15 uses `vmix=0.2`
-  and records finite potential/profile and buffer evidence. The physical
-  vacuum-onset warning remains intentional.
-- **Evidence:** [VAL-15 multilayer vacuum report](../docs/validation/VAL-15_MULTILAYER_VACUUM_ELECTROSTATICS.md)
-  and the registered `Val15MultilayerVacuumElectrostatics` validation.
-- **Scope:** `A | vacuum-gap | B` remains unavailable; the current
-  three-region registry does not express a four-region geometry.
-
-## [RESOLVED 2026-08-16] Magnetic constraining field was a no-op
-
-The following records the pre-VAL-10 defect. It is closed for the scoped RS,
-reciprocal/KS, and onsite GBT paths by the implementation and tests described
-after the historical notes.
-
-- **Symptom:** none visible to the user — the mechanism silently does
-  nothing. `constraints_enable = .true.` (with `constraints_i_cons`,
-  `constraints_mom_ref`, `constraints_bfield`, etc.) runs without error and
-  produces ordinary unconstrained SCF output.
-- **Root cause, verified by reading the code:** both call sites of
-  `cfd::constrain` (`source/self.f90:1082-1102`, inside `run_dos`'s real-space
-  SCF branch, and `source/exchange.f90:1475-1497`, inside
-  `calculate_exchange`) allocate local `mom_in`/`mom_ref`/`bfield`, call
-  `constrain(mom_in, mom_ref, bfield, nrec)` (`source/include_codes/abspinlib/constrain.f90:60-234`),
-  then immediately `deallocate` all three without ever writing `bfield` back
-  into `potential%mom`, any Hamiltonian array (`ee`/`hall`), or
-  `this%control%constraints_bfield`. The constraint energy `etcon` computed
-  inside `constrain` (e.g. `constrain.f90:89,96,149`) is a plain local
-  `real(dblprec)`, never returned, never logged, and never added to the total
-  energy. A user-supplied `constraints_bfield` seed is also discarded: both
-  call sites zero-initialize `bfield(:, ia_loc) = 0.0_dblprec` immediately
-  before calling `constrain`, so any namelist value never reaches it.
-- **Scope:** this is independent of the Generalized Bloch Theorem work —
-  the mechanism is equally inert under `periodic_nc`, `explicit_texture`, and
-  `gbt_single_q`. There is currently no Hamiltonian/energy term for any
-  representation mode to gauge or gate.
-- **Also noted while reading `constrain.f90`, unrelated to the above:** for
-  `constraints_i_cons` 2 and 3, the local accumulator `etcon` is read
-  (`etcon = etcon + ...`) inside the `do na` loop (`constrain.f90:89,96`)
-  with no `etcon = 0.0_dblprec` initialization beforehand — a latent
-  uninitialized-read, though moot for now since `etcon` is discarded anyway.
-- **Found:** WP6c (GBT audit of Hubbard/constraints/velocity/torque/SOC
-  terms), while checking what frame the constraining field uses. Not fixed
-  here — wiring it up is a real feature-completion task (decide the target
-  frame, thread `bfield` into the potential/Hamiltonian, add the energy term,
-  fix the `constraints_bfield` seed discard, fix the `etcon` initialization),
-  estimated at least one dedicated task, not a WP6c-sized fix.
-
-VAL-10 now establishes the frame/sign contract in
-`docs/source/theory/constraining_fields.rst`, preserves the seed, returns and
-reports initialized penalty energy, and inserts the updated Ry-valued field
-once into the onsite `m=1` Hamiltonian block shared by RS and reciprocal
-assembly. `UnitConstrainingField` covers aligned/canted limits, seed retention,
-finite-difference penalty consistency, and SOC-free global spin rotation;
-`UnitConstrainingFieldSource` guards the physical insertion and single-owner
-boundary. SOC constrained dynamics and a converged material constrained-SCF
-campaign remain outside the established scope.
-
-## [RESOLVED 2026-08-11, fixture repair] Five `tests/scf/cases.json` GBT fixtures fatal on `strux_backend='legacy'` (pre-existing, not a WP6c regression)
-
-- **Former symptom:** `Example_bulk_bccFe_nsp4_block_spiral_qplus`,
-  `Example_bulk_bccFe_nsp4_block_spiral_qminus`, `Example_frozen_magnon_bccFe`,
-  `Example_frozen_magnon_bccFe_auto`, and `Example_frozen_magnon_bccFe_auto_scf`
-  all abort with `gbt_single_q requires strux_backend='strux_lib'; the legacy
-  backend is unsupported.` (`hamiltonian_build.f90::build_gbt_bulkham`)
-  instead of producing output to compare against their reference.
-- **Root cause, verified:** `calculation.f90:1836` and `:1977`
-  unconditionally set `hamiltonian_obj%magnetic_representation = gbt_single_q`
-  for the bulk-spiral (`q_ss`/`theta_ss` active) and `frozen_magnon`
-  post-processing workflows. `lattice%strux_backend` defaults to `'legacy'`
-  (`lattice_lifecycle.f90:404,654,920`) unless a case's namelist explicitly
-  sets `strux_backend='strux_lib'`. These five `tests/scf/cases.json` entries
-  do not set it, so every run through these workflows now hits the WP4
-  legacy-backend guard (`hamiltonian_build.f90`) before producing any
-  Hamiltonian.
-- **Confirmed pre-existing, not introduced by WP6c:** reproduces identically,
-  same fatal, same line, on the pre-WP6c commit `0188a6a` with no source
-  changes (checked via `git stash` + rebuild before diagnosing this). WP6a
-  and WP6b's own gate evidence only reports `ctest -L unit` pass counts
-  (18/18, 19/19) — the SCF example suite (`ctest -L scf`) does not appear to
-  have been run as part of closing those gates, so this breakage was not
-  caught then either. It predates WP6c and is unrelated to the
-  Hubbard-U/V/constraints/velocity/torque/SOC terms WP6c actually audited.
-- **Two more `tests/scf/cases.json` failures are separate and older still:**
-  `Example_bulk_bccFe_nsp2_block`/`_hoh` fail a single `totaldos.out` row by
-  ~4-6e-5 (rel ~2e-6) — this matches the pre-existing gfortran-13 DOS
-  tolerance delta already recorded in `docs/DECISIONS.md`, not a
-  new issue.
-- **Fix applied:** every fixture now sets
-  `lattice.strux_backend='strux_lib'` and `strux_want_sdot=.false.`. The two
-  direct spiral cases also set `magnetic_representation='gbt_single_q'` and
-  `nsp=3`; all frozen-magnon cases set `nsp=3`, because GBT with SOC (`nsp=4`)
-  is unsupported. Golden outputs were regenerated from a clean GNU 14.2.0 /
-  oneMKL Release build and reviewed. The five corrected CTest cases pass,
-  including 15 checked MFT values and 21 checked values in each auto branch.
-- **Found:** WP6c, while running the full `ctest -L scf` suite as required by
-  the project's rule 1 regression gate before/after every task.
-
-## [RESOLVED 2026-08-11, fixture repair] `nsp4_block_spiral_qplus`/`_qminus` never enable GBT (diagnosed)
-
-- **Symptom:** both cases fail on `Fe_out.nml:mom[3]`, `run = 1.000000e+00`
-  against `ref = 6.856242e-09`. The converged moment is `+z` where the
-  reference has it in-plane, as a `theta_ss = 90` cone should be.
-- **Cause (diagnosed 2026-08-06, WP7):** the two `tests/scf/cases.json`
-  entries set `hamiltonian.q_ss = (0,0,±0.05)` and `theta_ss = 90.0` but
-  **never set `magnetic_representation`**. Since WP3/WP5 made the
-  representation explicit, it defaults to `periodic_nc`, under which `q_ss` is
-  stored and never read — so both cases have been converging an ordinary
-  collinear ferromagnet along `+z`. `mom[3] = 1.0` is exactly that. There is
-  no spiral in these runs and there has not been one since the representation
-  split landed. They also set `nsp = 4`, i.e. SOC on, which GBT rejects
-  outright.
-- **How it surfaced:** the WP7 input guard
-  (`validate_spiral_keys_are_consumed`, `hamiltonian_build.f90`) now makes this
-  fatal, so the failure mode changed from a silent wrong value to an explicit
-  rejection naming the missing key. The committed reference `mom[3] ≈ 6.9e-9`
-  presumably dates from when the spiral was enabled implicitly (via
-  `gbt_kspace` or the absolute-position branch), both since deleted.
-- **Fix applied:** both cases now select `gbt_single_q`, use `nsp=3`, and
-  select `strux_lib`. The regenerated plus/minus total energies differ by
-  only `6.86e-9 Ry`, restoring the intended even-in-q regression signal.
-- **Found:** WP7, answering "does GBT functionally work?".
-
-## [RESOLVED 2026-08-07, test-fixture bug] `magnetic_representation = 'gbt_single_q'` decks must set `mom` to the collinear-rotating-frame convention `(0,0,±1)`, never to the physical cone direction — WP9's commensurate-supercell decks got this backwards
-
-- **Root cause, fully traced (2026-08-07):** in `gbt_single_q` (for a
-  `hoh=.false.` deck — the WP9 decks below never call `build_obarm`/
-  `build_enim` at all, confirmed empirically, see below), the bond Hamiltonian
-  (`gbt_contract_collinear`, driven by `gbt_endpoint_angles`) and the on-site
-  correction are built **entirely** from `theta_ss`/`phi_ss_sublattice` plus
-  the *sign* of `potential%mom(3)` (a binary up/down-sublattice selector,
-  `source/hamiltonian_build.f90:1619`) — `potential%mom(1)`/`mom(2)` and the
-  magnitude of `mom(3)` never enter the Hamiltonian construction at all.
-  *But* `ql`'s up/down decomposition — what every moment readout (including
-  the mixing/SCF-convergence machinery) is built on — separately **projects
-  the density onto `potential%mom` as its quantization axis**. So for
-  `gbt_single_q`, `mom` must always be set in the code's internal
-  collinear-rotating-frame convention (nominally `(0,0,1)`, i.e. "+z always
-  means the rotating-frame reference," exactly what the already-validated
-  `tests/regression/wp8_littlegroup/base/Fe.nml` does even at
-  `theta_ss=90`) — **not** pre-rotated to the physical lab-frame cone
-  direction `m₀=(sinθ,0,cosθ)`. The WP9 decks below (ported from the older,
-  pre-representation-split `3fd21c0` fixture, where that convention may have
-  been different) set `mom=(1,0,0)` for `theta_ss=90`, i.e. physically
-  pre-rotated — wrong for the current architecture.
-- **Direct proof:** with the wrong `mom=(1,0,0)`, the physical density is
-  unaffected (`source/bands.f90`'s `DENSITY_POLICY` diagnostic, which is
-  independent of `mom`, reads `m_long=0.000000 |m_transverse|=2.395328` —
-  the moment is present, magnitude ≈2.395 μB, matching the supercell almost
-  exactly) but `ql`'s `mom`-projected up/down split reads that as ≈0 (a
-  z-pointing vector projected onto x). Editing only `mom` from `(1,0,0)` to
-  `(0,0,1)` on an otherwise byte-identical deck reproduces the **exact same**
-  `DENSITY_POLICY` physics (confirming the Hamiltonian truly doesn't depend
-  on `mom`'s value) but now `ql` correctly reads ≈2.395 μB, matching
-  `DENSITY_POLICY`'s `m_long`.
-- **Fix applied:** `mom(:) = 0.0d0, 0.0d0, 1.0d0` in all six `gbt_single_q`
-  decks (`gbt_supercell/{q050,q033}/gbt{,_scf,_constrained}/Fe.nml`). Effect,
-  re-running the registered `WP9CommensurateSupercell_*` ctests:
-
-  | case | moment gap before | moment gap after | eband gap (unaffected — frame-invariant) |
-  | --- | --- | --- | --- |
-  | q050 MFT | 2.396 μB | **5.78e-4 μB** (~4100x better) | 7.19e-4 Ry (unchanged) |
-  | q033 MFT | ~2.33 μB | **6.38e-3 μB** (~360x better) | 5.98e-3 Ry (unchanged) |
-  | q050 SCF | already ~1.3e-3 μB | unchanged (already correctly axis-aligned once mixing converges) | 2.73e-4 Ry (unchanged, **now the sole remaining failure**) |
-
-  All four `WP9CommensurateSupercell_*` cases still **FAIL** their derived
-  tolerances — but now on the band-energy residual alone, not the moment
-  direction. That residual is real, smaller, and separate; see below.
-- **Historical residual, resolved and re-scoped by VAL-16:** a band-energy
-  gap of 7.2e-4–6.0e-3 Ry/atom was measured when the MFT leg reused the
-  `3fd21c0` potential. Refreshing the explicit q=1/2 and q=1/3 states with the
-  current executable and using those outputs on both sides reduced the gaps
-  to 6.25e-5 and 2.28e-4 Ry/atom, respectively. The stale-potential
-  hypothesis is therefore confirmed as the source of the large historical
-  residual. The remaining small residual is an operator-level limitation of
-  the unmatched finite real-space clusters: primitive-bcc and custom
-  commensurate-supercell bases produce different finite pair/structure-
-  constant truncations before diagonalization. See `docs/validation/VAL-16_GBT_SUPERCELL.md`.
-- **Time-reversal checked and ruled out as a contributor to this specific
-  finding** (WP9 integrator, 2026-08-07, prompted by a question about
-  local/global axis handling): `force_full_bz_for_nonzero_q_gbt`
-  (`source/reciprocal_lifecycle.f90:526`) unconditionally forces both
-  `use_symmetry_reduction` and `use_time_reversal` to `.false.` for any
-  nonzero-q `gbt_single_q` k-space build, regardless of the namelist;
-  confirmed by log inspection (`"nonzero-q GBT rebuilding the full chemical
-  BZ mesh"`, full unreduced mesh point count). Not relevant to this
-  real-space-route battery in the first place, but checked because the same
-  question applies to Battery B (see the Gamma-H sweep entry below).
-- **What I verified vs. guessed:** the `mom`/`ql`/`DENSITY_POLICY` mechanism
-  above is directly verified by reading `gbt_endpoint_angles`,
-  `gbt_contract_collinear`'s call site in `build_gbt_bulkham`, and the `hoh`
-  default (`source/hamiltonian_build.f90:559`, confirms `build_obarm`/
-  `build_enim` are dead code for these `hoh`-unset decks), plus the
-  before/after `mom` experiment run directly. VAL-16 additionally compared
-  current-kernel refreshed potentials and isolated the remaining finite-cluster
-  operator mismatch before the eigenvalue/energy stage.
-- **Original symptom, verified directly (build_13 binary, current `fable_v2_gbt_v2`
-  HEAD, bcc Fe, `alat=2.8612`, `nsp=3`, `recur='block'`, `lld=16`,
-  `strux_backend='strux_lib'`, single-atom cell, `magnetic_representation=
-  'gbt_single_q'`, starting potential carried over unmodified from the WP9
-  `_b1r5_reference` decks (commit `3fd21c0`, a materially different, older
-  GBT kernel)):
-  - **Frozen-potential evaluation (`nstep=1`, `beta=1.0`, `magbeta=0`, the
-    force-theorem convention):** at `q_ss=(0,0,0.5)`, `theta_ss=90°`, the
-    output `Fe_out.nml` has `ql(1,:,1)` within ~1e-8 of `ql(1,:,2)` (up ≈
-    down), i.e. the moment reads as ≈0 rather than the ≈2.4 μB the paired
-    explicit supercell converges to (see the WP9 battery report for the
-    supercell numbers). Band energy differs by only ~7e-4 Ry/atom, i.e. the
-    scalar/energy channel is close but the magnetic channel reads as absent.
-  - **At `q_ss=0, theta_ss=0`** (a literal collinear FM, which per
-    `docs/DECISIONS.md` "must remain
-    bit-identical to today's collinear/noncollinear-FM output"), the same
-    frozen-potential, `nstep=1` evaluation gives `ql(1,:,1)`
-    **bit-identical** to `ql(1,:,2)` under `gbt_single_q`, versus a real
-    ≈1.209 μB moment under `magnetic_representation='periodic_nc'` on the
-    otherwise-identical deck (band energy differs by only ~1.3e-4 Ry:
-    `-2.3429851382` gbt vs `-2.3428537567` periodic_nc).
-  - **Full SCF from the same starting potential** (`nstep=25`,
-    `mixtype='broyden'`, `beta=0.15`, `magbeta` at its default of 1.0) at
-    `q_ss=(0,0,0.5)`, `theta_ss=90°` converges smoothly (monotone decreasing
-    mixing residual, no charge-conservation warnings) to a **real** moment of
-    ≈2.253 μB and `eband=-1.9926859349` Ry — close to, but not matching, the
-    supercell's ≈2.4 μB. This is a much smaller gap than the frozen-potential
-    evaluation shows, which points at the *stale, foreign-kernel starting
-    potential* rather than the Hamiltonian construction itself as (at least
-    part of) the explanation for the `nstep=1` near-zero reading.
-  - **The same full-SCF recipe at `q_ss=0, theta_ss=0`, by contrast,
-    diverges**: `mix.f90` logs "too much charge in the external atom!",
-    charge transfer of `-8.0`, and the run ends at a degenerate state
-    (`Band energy of system: 0.0000000000`, moment "considered induced").
-    This was **not** cross-checked against `periodic_nc` under the same
-    full-SCF recipe, so whether this specific divergence is `gbt_single_q`-
-    specific or a starting-point/mixing-schedule artifact common to both
-    representations is unknown.
-- **What I verified vs. what I am guessing:** all six numbers above are
-  measured (ran the binary, read `report.out`/`Fe_out.nml`/the run log), not
-  inferred. What I am guessing: that the frozen `3fd21c0` potential is
-  simply not self-consistent under the current kernel's contraction (a
-  starting-point mismatch) rather than the moment-zeroing being a permanent
-  property of `gbt_single_q` regardless of input — the SCF-recovers-most-
-  of-it observation supports this reading but I did not trace it to a
-  specific line in `source/hamiltonian_build.f90`/`source/gbt_structure.f90`
-  (`build_gbt_bulkham`, `gbt_contract_collinear`, `gbt_endpoint_angles`) or
-  rule out `self.f90`'s potential-parameter orthogonalization step
-  (off-limits per repo rule 5) as a contributor. I also did not diagnose the
-  `q=0` SCF divergence at all — it surfaced from an extra side-experiment
-  beyond the assigned task and is reported here only because it is a real,
-  reproducible symptom, not because I understand it.
-- **Impact (superseded by the fix above, kept for the historical trail):**
-  before the `mom` fix, the MFT leg looked like it was destroying the
-  moment entirely; it was not — the fixture was reading the density's
-  projection onto the wrong axis. The `q=0, theta_ss=0` full-SCF divergence
-  noted above was **not reproduced** by a later, independent q=0 control
-  (see the follow-up note two paragraphs up in git history / superseded
-  text) using a fresh (non-carried-over) starting potential, which converged
-  cleanly and matched `periodic_nc` — pointing at the foreign starting
-  potential, not `gbt_single_q` itself, consistent with the current
-  understanding above.
-- **VAL-16 follow-up:** the current-kernel regeneration campaign is now
-  `tests/validation/val16_gbt_supercell.py`. It requires a fresh current-code
-  SCF convergence before running separate MFT and SCF comparisons and does
-  not apply an energy offset. Exact band-energy equality is not claimed for
-  the existing unmatched finite real-space clusters; a matched-operator or
-  periodic/k-space construction is the remaining future scope.
-- **Found:** WP9 Battery A (commensurate-supercell known-answer test), while
-  porting the `3fd21c0` supercell decks to the current architecture; root
-  cause traced by the WP9 integrator the same day after a targeted question
-  about local-vs-global axis handling.
-
-## [VAL-17 follow-up, 2026-08-16] Reciprocal cone-angle failure resolved by same-q gauge subtraction
-
-- The current bcc-Fe nk=12 sweep gives omega =
-  4.2993e-4, 4.3153e-4, 4.3387e-4, and 4.3636e-4 Ry for theta =
-  5,10,15,20 degrees, respectively. The primitive same-q DeltaE/sin2(theta)
-  invariant has a 1.49% spread.
-- The raw fixed-Gamma subtraction still reproduces the historical angle
-  dependence, so the result is not a hidden empirical theta rescaling. The
-  diagnosed cause is the finite-k q-only GBT gauge offset, not BZ reduction,
-  moment normalization, frame rotation, or electron-count loss.
-- The historical symptom below is retained as an audit trail. The remaining
-  open issue is mesh convergence of the resulting stiffness, recorded in the
-  VAL-17 report.
-
-## `frozen_magnon` k-space cone-angle (theta_ss) scaling is not theta-independent, by a large margin — historical pre-VAL-17 symptom
-
-- **Symptom, verified directly** (bcc Fe, WP9 Battery B,
-  `tests/regression/wp9_validation/gammaH_sweep/base_cone/`, k-space route,
-  `nk=12`, fixed small `q_ss=(0,0,0.05)`, `theta_ss` swept 5/10/15/20
-  degrees, `omega(q) = 4[E(q)-E(0)]/(M sin^2 theta)`): `omega` measures
-  `-6.417e-3, -1.293e-3, -3.426e-4, -8.270e-6` Ry respectively — a **~776x**
-  spread across the window, decreasing monotonically as theta grows, rather
-  than the flat line the harmonic-regime self-diagnostic
-  (`docs/DECISIONS.md`) predicts.
-- **Time-reversal/BZ-reduction checked and ruled out:** confirmed by direct
-  log inspection that `force_full_bz_for_nonzero_q_gbt` correctly forces the
-  full, unreduced k-mesh (no time-reversal, no spatial symmetry reduction)
-  for every one of these nonzero-q builds, regardless of the deck's
-  `use_symmetry_reduction`/`use_time_reversal` namelist settings — so an
-  under-reduced or over-reduced BZ integral is not the explanation.
-- **Not diagnosed further:** a naive noise-amplification argument (fixed
-  absolute noise in the band-energy difference, divided by `sin^2(theta)`)
-  predicts only a ~15x range across 5-20 degrees, an order of magnitude
-  short of the measured 776x — so simple additive Fermi-search/DOS noise
-  does not by itself explain the spread. Whether the noise itself grows at
-  small theta (a smaller induced-moment signal proportionally noisier
-  against the same DOS/mesh discretization) or something else is at play is
-  unknown.
-- **Impact:** the code cannot currently be trusted to report a stable
-  small-cone spin-stiffness estimate — the answer depends heavily, and
-  unphysically, on which small test angle is chosen.
-- **Found:** WP9 Battery B (bcc-Fe Gamma-H frozen-magnon sweep).
-
-## `frozen_magnon` k-space EBAND mesh refinement is mildly non-monotonic at some q
-
-- **Symptom, verified directly** (same deck as above, `q_ss=(0,0,0.5)`,
-  `nk=8/12/16`): `eband` = `-1.98668388, -1.98714329, -1.98785909` Ry — the
-  refinement step **grows** from `nk=8->12` (4.59e-4 Ry) to `nk=12->16`
-  (7.16e-4 Ry) instead of shrinking. At `q_ss=(0,0,1.0)` (H) the same sweep
-  is well-behaved (step shrinks `5.72e-4 -> 5.25e-4` Ry). Both steps are the
-  same order of magnitude and well inside the overall spread
-  (1.175e-3 Ry) — not a divergence, just non-monotonic.
-- **Not diagnosed:** plausibly ordinary tetrahedron-integration
-  discretization noise at that particular q-point rather than anything
-  systematic, but not investigated.
-- **Found:** WP9 Battery B, while reworking the battery to a k-space-only
-  design (RS route dropped per Anders: long-wavelength spirals can have real
-  numerical problems from real-space cluster truncation/PBC artifacts).
-
-## RESOLVED — `strux_backend='strux_lib'` badly broke a `crystal_sym='file'` custom-lattice supercell
-
-- **Symptom, verified directly** (same bcc-Fe 4-atom `q_ss=(0,0,0.5)`
-  explicit supercell deck as the entry above, `periodic_nc`, `crystal_sym=
-  'file'`, hand-built `lattice.nml`, `nstep=1` force theorem): with the
-  default `strux_backend='legacy'`, all four (translationally-equivalent-
-  by-construction) sites converge to charge `8.0000000-8.0000010` e and
-  moment `2.3959047-2.3959059` mu_B (agreeing to ~1e-6, as expected for
-  equivalent sites). Adding `strux_backend='strux_lib'` to the same deck
-  (otherwise byte-identical) gives charge `7.972040` e (site 1) vs
-  `8.347495` e (site 2) — charge not even close to conserved per site,
-  breaking translational equivalence outright — and moment `2.112684` vs
-  `2.452723` mu_B, a ~15% site-to-site spread. Band energy also moves by a
-  large amount (`eband_total = -7.1317212193` vs `-7.9268686408` legacy,
-  ~0.20 Ry/atom).
-- **What was verified:** the original numbers were measured from both
-  `report.out`/`Fe*_out.nml`. VAL-01 then located the first divergence in the
-  producer `Sbar` blocks: non-PBC custom files were incorrectly sent through
-  the periodic primitive-cell solve, while legacy screened the finite cluster.
-- **Historical impact:** before VAL-01, `legacy` was the only trusted backend
-  for the WP9 commensurate-supercell battery's `super/`-side `periodic_nc`
-  decks; the disagreement was far beyond numerical noise.
-- **Found:** WP9 Battery A, checking empirically (as instructed) whether
-  the `super/` side benefits from `strux_backend='strux_lib'` for a clean
-  backend-matched comparison against the `gbt/` side.
-- **Resolution (VAL-01):** the non-PBC custom-file path now gives strux a
-  finite local solve around each representative, using the already-built
-  cluster and a non-interacting auxiliary cell. Equivalent local solves are
-  put in a canonical coordinate order before producer assembly. The periodic
-  primitive-cell path is unchanged. The q050 functional reproducer now
-  completes with four moments `2.395895-2.395896` mu_B and zero excess charge;
-  the direct structure-constant contract covers the producer path.
-
-## spin_response Stage 1b — 2026-10-05
-
-- **Verified:** the Boltzmann constant `kB_Ry_per_K = 6.3336814e-6_rp` is declared
-  locally nine times: `reciprocal.f90` (2), `reciprocal_dos.f90` (4),
-  `reciprocal_occupations.f90`, `reciprocal_spin_density.f90`, `self_reciprocal.f90`.
-  `reciprocal_mod` now also exports one public copy (used by `spin_response`); the
-  local ones were left in place and shadow it. Proposal: one definition, remove the
-  nine copies (about 10 lines, no value change).
-- **Verified (Stage 3b):** `math.f90` holds a tenth value, `0.633362019d-5` (now the module constant
-  `kB_simpson_f`, used by `simpson_f`), which differs from `6.3336814e-6` by a relative 9.7e-6. The two
-  values were not unified, because `simpson_f` is on the bit-identical exchange path. Proposal: one value
-  for all, a 1e-5 relative change in kT at finite T and none at T = 0.
-
-## RESOLVED — spin_response, multi-site cells: k+q folded by a reciprocal vector needs a site-dependent Bloch phase — 2026-10-06
-
-- **Verified (before the fix):** with `run` generalised to nsite > 1, a two-atom sc cell of bcc Fe
-  (6x6x6 mesh) and the one-atom cell in the basis (1,0,0), (0,1,0), (1/2,1/2,1/2) (6x6x12 mesh) gave the
-  same E_F (7e-12 apart), the same U_Juelich on both sites (1.3e-12 relative) and
-  tr chi0^sc(q) = chi0(q) + chi0(q+Q), Q = (1,0,0), to 2e-11 at q = (0, 1/3, 0) and (0, 1/6, 0), but tr chi and
-  min |eig(I + chi0 U)| differed by 2.1 and 0.17 (xi = 1/3), 0.65 and 0.10 (xi = 1/6). At q = 0 (no wrap) all three
-  agreed (tr chi 4e-10). One site is unaffected.
-- **Cause (read in the code):** `kpoint_workset%shifted` and the assembly (`kfold` in `reciprocal_fourier.f90`) wrap k+q by
-  an integer vector G, while H(k) takes the phases exp(i 2 pi k.(r_j - r_i)) from the neighbour minus centre vectors
-  (`clusba`, `angle`/`phase` lines, block h(i, j) += ee*phase). For several sites H(k_folded) = D H(k+q) D^+,
-  D = diag(exp(2 pi i G.tau_i)), so the eigenvectors at k+q lacked the factor exp(-2 pi i G.tau_i).
-- **Fix:** `spin_response%eigenpairs_chunk` multiplies site i by exp(-2 pi i G.(tau_i - tau_1)), G = k + q - k_folded
-  (site 1 is the reference, so one site is bit-identical). Measured after the fix: two-atom cell tr chi 2.6e-9 and
-  min |eig| 5.6e-10 at xi = 1/3; three-atom cell (S3) at most 5.7e-13 over tr chi0, tr chi, min |eig| and U per site.
-- **Note:** with two atoms every site offset is half a lattice vector, so the phase is +-1 and its sign cannot be
-  tested; S3 uses three atoms for that reason.
-
-## spin_response dispersion file, found in Stage 3a — 2026-10-07
-
-- **Verified:** when a q has no peak or crossing, `<prefix>_dispersion.dat` rows run `n/a` into the previous number
-  (`2.19599654E-01n/a`), so a plain whitespace split gives six columns. Seen with `n_omega = 1` (every row). The format is
-  `(7es16.8,2a24)` with left-justified `character(len=24)` texts; the file is not among the frozen baseline files.
-- **Proposal:** a leading `1x` in front of the two `a24` items, one line in `run`; not applied. The Stage 3a scripts
-  parse the file by replacing `n/a` with ` n/a`.
-
-## spin_response 3d, radial data at r = 0 — 2026-10-11
-
-- **Verified (bcc Fe deck, `lmtst` re-run on a copy of the site):** `radial_ground_state` holds `vxc_up(1) = vxc_down(1) = 0`
-  at the first mesh point (r = 0) while `n_up(1) - n_down(1) = -0.8069` bohr^-3 (`density_origin`,
-  `radial_ground_state.f90:257`); at the second point r = 2.75e-6 bohr, dV = 1.544e-3 Ry and m = -0.7875 bohr^-3. dV/m is
-  therefore 0 at r = 0, not its limit. `radial_kernel_matrix` starts every sum at the second mesh point.
-- **Verified:** the Fe core integrates to 9.000 electrons per spin (`core_weighted_up`, `core_weighted_down`), so the sphere
-  integral of n_up - n_dn is the same with and without the core density.
-
-## spin_response 3d, experimental ALSDA kernel: known gaps and measured outcome — 2026-10-11
-
-- **Verified (bcc Fe, 12^3 deck, kernel 'alsda', method juelich; lambda is 1.195 unmutated):** the projector arithmetic of
-  `site_radial_data` has no check with an independent expected value. Taking x from the opposite spin's E_nu moves lambda to 1.362
-  (+14 %); flipping the sign of x moves it to 1.675 (+40 %); both pass every test. Core left out of m moves lambda to 1.1897
-  (-0.45 %) and passes every test (the core integrates to 9.000 electrons per spin, so the sphere integral of m cannot see it).
-- **Verified:** a transposed or conjugated vertex in `accumulate_chi0` passes A4 (its T_a T_b* is real, so chi0 is symmetric); no
-  gauge-invariant test can see a transposition.
-- **Measured outcome (24^3 and 60^3, bcc Fe and fcc Ni, scripts not committed):** with channels spd, one lambda along M leaves the
-  q = 0 mode gapped (smallest eigenvalue of 1 + chi0 U: -3.3e-3 Juelich, -2.1e-2 Mills at 24^3; 0 for d only). Fe at 60^3 has
-  delta_q < 0 for 'alsda_scaled' spd at xi = 0.10, 0.75, 0.80 (Juelich) and at all five q tried (Mills; -0.022 to -0.112), against
-  delta_q > 0 at all five for the default kernel (0.0048 to 0.0448). Ni along Gamma-L has delta_q > 0 everywhere.
-- **Not pursued:** per-channel scaling or any other kernel change.
-
-## NC-0a probes: local_axis with SOC, global-frame recursion, deep recursion at nsp = 4 — 2026-10-11
-
-- **Verified (bcc Fe, `tests/scf/cases/bulk/bccFe` deck, nsp = 4, `hoh = F`, `recur = 'block'`, `nstep = 1`, the same input
-  potential in every run, values from `report.out`):** the concern that `local_axis` leaves `lsham` unrotated
-  (`rotate_to_local_axis`, `hamiltonian_build.f90:2047`, does not list it) is refuted by the numbers. With `xi_p`, `xi_d` x 50
-  (|L| about 1.2 mu_B) at lld 21, E(moment direction) - E(z): [110] +6.98e-4 Ry with `local_axis = F` and +6.92e-4 Ry with T;
-  [111] +2.27e-3 Ry (F) and +2.30e-3 Ry (T). T against F: band energy 6e-6 and 3.4e-5 Ry, |L| 1.5e-4 and 1.4e-4 mu_B, |m| 4e-4
-  and 1.5e-4 mu_B ([110] and [111]). Unrotated SOC would make the T results independent of the direction. The mechanism was
-  not investigated. At the real strengths (x 1) the anisotropy of cubic Fe (about 1e-7 Ry) is below the noise below and
-  could not be resolved.
-- **Verified:** global-frame recursion (`local_axis = F`) is not rotation invariant even without SOC (`xi` = 0). Moment along x or
-  [110] against z at lld 13, 17, 21, 25: band energy difference +2.3e-4, +1.6e-4, -4.8e-5, -1.9e-5 Ry (sign changes with lld), |m| up to
-  3.3e-3 mu_B. With `local_axis = T` the same runs reproduce z to at most 6e-6 Ry (below 1e-6 for lld >= 21). Anisotropy
-  energies therefore need `local_axis = T`; the global-frame error exceeds the physical anisotropy by two or more orders.
-- **Verified:** block recursion at nsp = 4 breaks down at large lld. No SOC, moment along z: band energy -1.99755 Ry and |m|
-  2.104 mu_B at lld 21, -1.99197 Ry and 2.087 mu_B at lld 31, -2.09432 Ry and 1.776 mu_B at lld 41. Consistent with the lld <= 28
-  bound recorded for GBT (`docs/DECISIONS.md`, GBT entry); the cause was not diagnosed.
-- **Verified:** `example/exchange/bccFe_kspace_green/Fe.nml` has no `xi_p`, `xi_d`, so nsp = 2, 3 and 4 give byte-identical
-  `kspace_green_c1.dat` there: that deck has no SOC in either route.
-
-## spin_response.f90 is past the spec's 1,000-line guideline — 2026-10-12
-
-- **Verified:** `source/spin_response.f90` has 1146 lines (`wc -l`); the restart spec says to split into a submodule only if it passes about 1,000
-  lines. It was already 1078 before NC-1. The developer decided not to split it now. **Proposal, not applied:** move the pure kernels
-  (`accumulate_chi0`, `u_juelich`, `solve_dyson`, `adiabatic_frequencies`, ...) into a submodule or sibling module; about 600 lines move, no
-  logic changes.
-
-## spin_response, bcc Cr antiferromagnet (`cr_bcc`) — 2026-10-13
-
-- **Verified (32^3, `eta` = 2e-3 Ry, omega -0.06 to 0.06 Ry in 241 points, 94 q along Gamma-X-M-Gamma-R-X|M-R,
-  `tests/validation/spin_response_cr/report_dynamic.py`):** the omega > 0 maximum of tr L is the last grid point (0.06 Ry) for 68 of
-  the 94 q. On Gamma-X at q = 1/32 ... 5/32 it is interior, at 0.0105, 0.0250, 0.0365, 0.0460, 0.0550 Ry, i.e. 1.37 to 1.92 times the
-  static adiabatic w+ of the same q (0.0077 to 0.0286 Ry); at q = 1/4 tr L rises to the edge with no feature at w+ = 0.0357 Ry. Only tr L
-  was examined, not the rows of chi.
-- **Not diagnosed, suspects only:** the window and `eta` (eta is comparable to w+ at small q); what a trace over rows of opposite moment
-  means in the global frame; Stoner damping of the Cr modes; w+ not being a pole of the dynamic chi. One run, one eta.
-- **Verified:** `spin_swapped` is decided by the sign of the total d moment, which is +5e-14 to +2.5e-13 mu_B here (24^3, 32^3, 64^3;
-  `T` in all, and byte-identical q files for Debug and Release). A flip on another compiler would change the signs in `_state.dat` and
-  fail `SpinResponseCrBaselineRepro`. Not tried on another compiler or CPU.
-- **Proposal, not applied:** a dynamic run with a wider window and several `eta`, about 20 lines in `tests/validation/spin_response_cr/`.
-- **Resolved (`tests/spin_response/oracles/make_cr_lswt.py`):** the UppASD `jfile` holds J of a ferromagnetic reference state, so for
-  the antiferromagnet J_12 and J_21 have the opposite sign to the script's global-frame convention. The script now converts J_ab to
-  s_a s_b J_ab; on the 113-point UppASD qfile it reproduces `ams.bccCr_AF.out` to 2.2e-7 meV (70.2 meV before the conversion).
-  `oracles/cr_lswt.dat` (98 q, steps of 1/32) was written by it.
-- **Verified (ungraded, `oracles/cr_lswt.dat`):** the response's positive adiabatic frequency over the LSWT omega_plus, 93 q with
-  LSWT > 1 meV: 1.626 to 2.374, median 1.727 at 32^3; 1.625 to 2.370, median 1.728 at 64^3. Examples (LSWT / response 32^3, meV):
-  (1/32,0,0) 44.0 / 104.6; (1/4,0,0) 268.7 / 486.0; X 326.1 / 554.9; (1/2,1/2,0) 295.1 / 486.4; R 318.6 / 576.4. The small-q end of
-  LSWT is not converged in the J(r) cutoff (as for Fe). Cause not diagnosed; the response moment is 0.857 mu_B (Juelich) against 0.8945
-  in the LSWT, which does not account for the ratio. See the force-theorem measurement at the end of this entry.
-- **Measured for the normalization question (32^3, `tests/validation/spin_response_cr/weight_q.py`, `report_path.py`):** omega_ad / omega_LSWT
-  is 1.626 to 1.810, median 1.700 (spread 10.8 %) over the 72 q with largest component >= 1/4; 1.717 to 2.000 (median 1.775) for
-  1/8 < q < 1/4; 1.812 to 2.374 (median 2.112) for q <= 1/8, where the LSWT is unconverged. Equivalent moment M_LSWT omega_LSWT / omega_ad:
-  0.384, 0.401, 0.425 mu_B at q = 1/16, 3/32, 1/8 (median 0.526 for the 72 q), against 0.857 (Juelich) and 0.8945 (LSWT).
-- **Measured:** the Fe-style pole weight W = pi eta tr L(omega_p) is not defined here. At q = 0 tr L is zero by antisymmetry in omega
-  (2e-10), and at q = 1/16 (3/32, 1/8) it falls from 2.66 to 1.25 (2.00 to 0.92, 1.26 to 0.45) for eta = 2e-3, 1e-3, 5e-4 Ry, the peak
-  FWHM being 3.5 to 9.5 mRy, much wider than eta. The integral of tr L over 0.008 to 0.07 Ry is stable to 5 % in eta: 5.8 to 6.1, 4.1 to 4.3,
-  3.2 to 3.3 at q = 1/16, 3/32, 1/8 (5.97, 4.23, 3.25 at eta = 1e-3, i.e. 6.96, 4.93, 3.79 M_J), roughly 0.4 / q. LSWT from the
-  oracle gives one sublattice weight M u^2 = 2.22, 1.70, 1.44 M and a net M (u^2 - v^2) = M. The integral includes any continuum weight
-  in the window, and tr L does not resolve the two rows. The tr L peak is at 1.62 to 1.83 times omega_ad and 3.80, 3.95, 3.83 times
-  omega_LSWT at these three q.
-- **Measured, force-theorem route (2026-10-13, 32^3, `report_force.py`; `_adiabatic.dat` column `omega_force` = N U (I + chi0 U), same static chi0
-  as Omega_RPA):** for the 84 q with largest cubic-equivalent component >= 1/8, Omega_force / LSWT is 0.968 to 1.087 (median 0.987), 84 of 84 inside
-  0.75 to 1.3; Omega_RPA / LSWT is 1.626 to 2.104 (median 1.716); Omega_RPA / Omega_force is 1.651 to 1.935 (median 1.744). For the 9 q below 1/8:
-  Omega_force / LSWT 0.993 to 1.209, Omega_RPA / Omega_force 1.889 to 1.964. On Gamma-X, Omega_RPA / Omega_force is 1.9637, 1.9594, 1.9503, 1.9352 at
-  q = 1/32 ... 4/32, against 1/sqrt(1 - lambda_u) = 1.9657 with lambda_u = 0.74121 (= 2 + U tr chi0(0,0), U_1 = U_2 to 5e-12). The same ratio
-  for the A5 antiferromagnet is 1.40922, 1.40952, 1.41073 at q, 2q, 4q against 1.40911 (lambda_u = 0.49637). The factor of about 1.7 between
-  Omega_RPA and the LSWT is therefore the ratio of two routes built from one chi0; the force-theorem route is within 0.968 to 1.087 of the
-  LSWT for q >= 1/8. The dynamic tr L peak (1.62 to 1.83 times Omega_RPA at q = 1/16 to 1/8) was not examined further.
-- **Deferred, open:** site-resolved spectral output (L per row, not only tr L) is not written; the q files carry traces. If it is ever added it
-  goes in a new file, not in the frozen q files.
-
-## spin_response NC-2, cubic bcc Fe null test (Gate 1) — 2026-10-14
-
-- **Measured** (`tests/validation/spin_response_fe_soc/gate1_cubic_fe.py`, `fe_bcc` deck with nsp = 2, DB `xi_p` and `xi_d` scaled, K = U m0/m, Gamma-centred N^3 mesh,
-  q = 0, omega = 0, eta = 0, one run each): omega_adiabatic = -8.02e-6 Ry (12^3), -2.414e-5 (24^3), -2.117e-5 (36^3), -2.321e-5 (48^3) at the deck's xi.
-  xi scaled by 1, 1/2, 1/4 (24^3): -2.414e-5, -6.055e-6, -1.516e-6 Ry, log-slopes 1.995 and 1.998; at 12^3 with 1/8 also: 1.998, 1.993, 1.997. omega_force
-  (N K (I + chi0 K)) differs from omega_adiabatic by 1e-6 to 1.5e-4 relative (relative to omega_adiabatic) in every run.
-- **Expected from symmetry (not from the code):** cubic anisotropy is fourth order in xi, with K_1 of bcc Fe about 1e-10 Ry per atom, so the gap should fall as xi^4 and be
-  far below 1e-8 Ry. The measured gap is negative, falls as xi^2 and is about 2e-5 Ry.
-- **Toy confirmation (numpy, scratch, not committed; one-site spherical d shell, true gap 0, Delta = 0.157 Ry, N = 6.25, kT = 1.9 mRy, xi = 4.5e-3 Ry):** vertex and
-  moment built from amplitudes scaled per spin, U fitted by Goldstone at xi = 0, K = U m0/m(xi). Complete vertex (c = 1): gap -2.6e-17 Ry. Constant c_up/c_dn = 1 + a:
-  gap +2.0e-6, +7.7e-6, +1.84e-5, +3.43e-5, +6.71e-5 Ry for a = 0.005, 0.02, 0.05, 0.1, 0.23; gap is zero at a = 0; slopes in xi (a = 0.1, xi = 0.00225 to 0.009) 1.96, 1.98;
-  gap / (Delta dm / M) = -1.5 a to leading order (dm = -5.7e-3 to -7.1e-3). Energy-dependent factors (1 + (e - enu)(ef - enu)p)/sqrt(1 + (ef - enu)^2 p) with the Fe `enu`, `ppar` of
-  `fe_bcc/Fe.nml` (toy m_Juelich / m_plain = 0.939, Fe baseline m_Juelich / m_Mills = 0.938): gap -7.1e-5 Ry at xi = 4.5e-3 (dm = -2.0e-3; Delta dm / M = -8.3e-5), negative as in Gate 1;
-  slope 1.97 and 1.90 at xi = 5e-4 to 2e-3, 1.68 and 1.44 at 2.25e-3 to 9e-3. The toy atom has no bandwidth, so its dm is larger than a solid's. Same mechanism as Gate 1
-  (a nonzero, xi^2, spin-asymmetry-driven gap in a system whose gap is zero); the amplitude is about 3 times the Gate 1 value (-2.3e-5 Ry), and this is not a fit to it.
-  The W/M = 1.23 asymmetry has no defined mapping onto c_up/c_dn; the Fe `enu`, `ppar` and the Fe moment ratio were used instead.
-- **Outcome:** SOC runs print a warning (driver): the q = 0 gap carries an O(xi^2) bias from the projected vertex. NC-2 stops here as a negative result; the S1 code stays.
-- **Suspects before the toy (suspect 1 is the one the toy supports; 2 to 4 were not examined):** (1) the Juelich factor multiplies the up and down components of a band with different (enu, p), so the d-projected vertex is not
-  covariant under a global spin rotation; (2) the K = U m0/m prescription (derived and checked only on a one-site numpy model with a complete vertex, where it gives
-  4e-17 on a spherical atom); (3) the on-site L.S of the first-order k-space H in this basis; (4) my deck handling (xi edited in the DB copy). Only the
-  xi = 0 identity (`SpinResponseSocZeroIdentity`) checks the setup.
-
-## Symmetry log cannot be used to check physical inversion — 2026-10-14
-
-- **Measured:** a two-atom simple-cubic cell with both atoms Fe (type labels 1 and 2 in `lattice.nml`) and the second atom at (1/2 + 0.05, 1/2, 1/2) a: the log line
-  `initialize_symmetry: Detected space group` printed P4mm (#99) (no inversion); at displacement 0 it printed Pm-3m (#221). spglib 2.7.0 (python, symprec 1e-5) with the element
-  labels Fe, Fe gives P4/nmm (#129) with inversion (-I) among the 16 operations at 0.05 a, and Im-3m (#229) at 0. The measured response at 0.05 a has omega(q) = omega(-q) to 1e-16 Ry,
-  as inversion requires.
-- **Likely cause (read, not tested):** `source/symmetry.f90` passes `lattice%iz(i)` to spglib as the species, and the two sites carry different type labels, so spglib sees two species.
-- **Consequence:** the log reports the symmetry of the labelled structure, so differently labelled types of one element count as different species. Check physical inversion
-  with spglib and element labels.
-
-## [RESOLVED ON WORK BRANCH; ACCEPTED BY C5.3] hcp Co impurity setup — bounds violation before SCF
-
-- **Symptom:** the Debug build reports `source/lattice_cluster.f90:996`, dimension mismatch 3 vs 50000. The clean-baseline run exits SIGKILL before SCF. The same setup error occurs at U=0, so it is not LDA+U.
-- **Resolution on this branch:** `newclu` sizes its scaled cutoff copy to the full `this%ct` extent. The Debug regression completes cluster setup with `ntype=3`, `nbas=13`, and `nrec=1`; the C5 R1 setup GATE passes. C5.3 accepts R1 without restriction; the local merge remains scheduled after Parts B–D.
-- **Evidence:** the hcp-Co deck is [`co_hcp_lattice.nml`](../docs/validation/fixed_ldau/rs/RA4_assets/prerun_inputs/co_hcp_lattice.nml); see the [C1 Co triage records](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json), [C1 RA4 results](../docs/validation/fixed_ldau/rs/C1_RA4_RESULTS.md), and [R1 cluster-sizing regression](validation/fixed_ldau/c5_hcp_co_cluster_setup.py).
-- **Follow-up:** C5.3 closed Part A after matched one-thread baseline, parent, and R1 outputs were byte-identical. See the [Part A results](../docs/validation/fixed_ldau/rs/C5_2_PART_A_RESULTS.md).
-
-## [OPEN] Co bulk U=0 non-finite
-
-- The RB6 records become non-finite after about 19–40 iterations, and the failure reproduces on `8b8f7ef`.
-- C5 Part B also ran the fixed Co block deck to its nstep=25 cap: it remained finite, exited normally, and ended at Diff=0.0054412342 Ry with only 19 valid checkpoints. The result was unaccepted; the user directed that the six-run cap remain fixed, the continuation ladder be omitted, and no adoption occur. This cap-limited run does not establish that the earlier non-finite behavior is generally absent, so the issue remains OPEN.
-- See the [RB6 results](../docs/validation/fixed_ldau/rs/C1_RB_RESULTS.md), [RB6 provenance](../docs/validation/fixed_ldau/rs/C1_RB_PROVENANCE.json), and [C5.2 Part B record](../docs/validation/fixed_ldau/rs/C5_2_PART_B_RESULTS.md).
-
-## [OPEN, low priority] Fe U>0 embedding offset
-
-- An Fe impurity in an Fe host at U=3.8 eV, J=1.1 eV differs from RS bulk by −6.6×10⁻³ μB, about 735× the U=0 control. The Hubbard operators, Fermi level and Green's-function evaluation are identical; the recursion coefficients differ.
-- The probable cause is the cluster recipe mismatch: rc=80 for bulk and rc=100 for the impurity. The matched-cluster test is blocked by entry 4. Ni does not show the effect.
-- C5 R2 did not produce an RS-accepted rc=100 bulk reference or update the impurity-to-bulk ratio; this entry remains OPEN.
-- See the [C1 RA4 results](../docs/validation/fixed_ldau/rs/C1_RA4_RESULTS.md) and [C1 RA4 provenance](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json).
-
-## [OPEN] RS rc=100 runs non-finite or non-converging
-
-- The Fe rc=100 impurity-style deck becomes non-finite after 102 iterations at U>0 and 34 at U=0. The rc=100 U=0 bulk is not accepted after 600 steps. These failures reproduce on `8b8f7ef`.
-- C5 R2 captured one Debug Fe U>0 trajectory from the accepted rc=80 endpoint. The d-spin occupation first exceeded its five-state capacity at iteration 90 (`ql=16.023218979776722`); iteration 102 was the first snapshot with NaNs, with the first observed radial RSEQ NaN in the log at `l=2`, channel 0, `E=-50 Ry`. Snapshot 101 was wholly finite but already followed the occupation violation and was not accepted. This localizes an observed trajectory failure but does not establish its root cause.
-- C5.3 B1 now stops collinear `nsp=1` SCF when active q0 exceeds the per-spin `2l+1` capacity by more than 1e-6, and rejects non-finite active mixed-q/PL or new q1 values; the [B1 regression tests](../docs/validation/fixed_ldau/rs/C5_2_PART_B_RESULTS.md) cover the guard and allowed boundary. This guard changes no physics arithmetic or defaults.
-- The C5 B2(a) Fe rc=100 Chebyshev run reached an accepted step59 endpoint (Diff=1.40e-8 Ry; d-spin ql spreads 2.0146e-7 and 4.0140e-7). Twenty printed physical moment values matched at F10.6, bounding the true spread by <=1e-6 μB without claiming zero. The worker intentionally stopped after preserving this endpoint; later in-progress outputs were not used. This does not identify why earlier block runs became non-finite or establish a general safe range.
-- Fe rc=140 runs are INVALID_SETUP and are not part of this entry.
-- See the [C4 A4.1 results](../docs/validation/fixed_ldau/rs/C4_A41_RESULTS.md), [C4 A4.1 provenance](../docs/validation/fixed_ldau/rs/C4_A41_PROVENANCE.json), [C1 RA4 provenance](../docs/validation/fixed_ldau/rs/C1_RA4_PROVENANCE.json), and [C5.2 Part B results](../docs/validation/fixed_ldau/rs/C5_2_PART_B_RESULTS.md) and [provenance](../docs/validation/fixed_ldau/rs/C5_2_PART_B_PROVENANCE.json).
-
-## [INFORMATIONAL] RS/KS identity checks and thread counts
-
-RS/KS results are not bitwise reproducible across thread counts (reduction order, ~1e-15 relative). Use single-thread runs for identity checks.
-
-## [OPEN, 2026-10-21] Ni impurity W1 lambda-zero SIGSEGV in optimized builds
-
-- **Symptom:** the same frozen Ni lambda=0 W1 deck exits with SIGSEGV during the first recursion in Release and RelWithDebInfo. The RelWithDebInfo run reaches the d-shell physicality diagnostics for l=1, spin=2, then reports only three raw address frames; no complete SCF trace or endpoint is produced.
-- **Evidence:** the fresh RelWithDebInfo replay, exact input hashes, source/build provenance, preflight and raw log are recorded in [`C5_4_T4_RD4.json`](../docs/validation/fixed_ldau/rs/C5_4_T4_RD4.json). The prior Debug bounds run passed 36 loops without a bounds error or backtrace; this does not identify the optimized-build crash cause.
-- **C5.8 update:** the current Release trace crash was localized to an unassociated `pl_bands%control` read in fixed-U replay (`source/self.f90` replay setup called `calculate_pl`, which reads `this%control%nsp` at `source/bands.f90:2254`; the fault address was `0x14`). Binding the replay object's control pointer fixes that diagnostic path. The fixed current Release T2a campaign completed three iterations. A separate Release regression using the exact private C52/C54 W1 source plus only this pointer binding captured the first complete lambda-zero iteration and was externally stopped; it did not crash through that iteration. This is a bounded diagnostic regression, not an RD4 energy measurement or proof of longer-run behavior.
-- **C5.9 bounded rerun:** the exact Release lambda-zero deck on the pointer-fixed W1 source captured one complete stable iteration and was externally stopped; no crash occurred through that iteration. No RD4 energy was measured, and longer-run behavior remains untested.
-- **Disposition:** OPEN for RD4 energy/longer-run behavior; impurity energy routing remains off and no diagnostic energy term is adopted. The C5.8 cause and bounded regression are recorded in [`C5_8_RESULTS.md`](../docs/validation/fixed_ldau/rs/C5_8_RESULTS.md) and [`C5_8_RESULTS.json`](../docs/validation/fixed_ldau/rs/C5_8_RESULTS.json).
-
-## [CLOSED, 2026-10-26] Ni magnetic host collapses from supplied magnetic bulk seeds in S0b
-
-- The user-supplied Chebyshev/`rc=60` bulk references are magnetic: no-U `0.670705 μB`, explicit U=J=0 `0.670705 μB`, and U=4/J=1 eV `0.808656 μB`. Using the explicit-zero-U potential as the seed for the requested RS fcc block-recursion/`rc=80` U=0 host produced an RS-accepted endpoint with P_OUT q0-derived moment `7.5853e-8 μB` (saved post-mix state ql moment `1.6378e-9 μB`). Restarting from that endpoint with U=3/J=0.7 and `auto` (resolved to `local`) produced an RS-accepted endpoint with P_OUT q0-derived moment `1.3419e-8 μB` (saved post-mix state ql moment `4.8535e-9 μB`). Both are below the `0.4 μB` gate. RD2 and RD3(a) were not run because the S0b stop condition was met.
-- Recheck the magnetic host workflow before treating Ni impurity results as representative. Evidence and uncovered checks: [`S0B_RESULTS.md`](../docs/validation/fixed_ldau/S0B_RESULTS.md); corrected run artifacts are under `/private/tmp/s0b_ni_t1a_userseed` and `/private/tmp/s0b_ni_t1b_userseed`.
-- **S0c update (2026-10-26):** the earlier RD2/RD3(a)/`auto` Ni gates ran on effectively non-magnetic block-recursion Ni; they are consistency tests, not tests of the spin-dependent correction. The user's own Chebyshev bulk deck (`RS-utils/tmp/Cheb/fccNi`, rc=60, lld=150, nsp=1, restarted from the user's `Ni_out.nml`, only `nstep` changed) gives a magnetic host: U=0 stopped at its convergence test after 18 steps, Diff `7.5e-9`, moment `0.670705 μB` (the user's value). Restarting that state with U=3/J=0.7 eV and `auto` (resolved to `local`) converged at step 76, Diff `5.0e-9`, moment `0.786506 μB`, d occupations `4.719841/3.869480` (up/down), E_F `-0.077760 Ry`, E_Hub `0.09116 Ry`. Occupation and moment values are logged to six decimals, so the 20-step spreads (`0`, `0`, `1e-6 μB`) are at that resolution, and the U=0 run had 18 iterations in its window. RD2 and RD3(a) on this host remain unrun. Artifacts: `/private/tmp/claude-501/-Users-andersb-Jobb-rslmto-fable-v4b/b0f6a48b-9da8-44de-95c6-39f047c59377/scratchpad/t2/`.
-- **S0d full-precision window (2026-10-26):** both hosts were continued 25 steps from their converged endpoints (`conv_thr = 1.0e-30` added so the run does not stop at its convergence test; otherwise unchanged) and the per-iteration `Ni_scf.nml` was snapshotted (23 snapshots each). Spreads over the last 20 snapshots, from the potential-file `ql(1,:,spin)`: U=0 d occupation up/down 6.7e-8 / 5.1e-8, moment (sum over l of up minus down) 4.9e-8 muB; U=3/J=0.7 d occupation 8.4e-8 / 4.5e-8, moment 1.15e-7 muB. Outer Diff 1.5e-8 and 6.6e-9 (maxima over the window 2.8e-8 and 1.8e-8). Values: U=0 d up 4.627454, d down 3.913194, moment 0.670705 muB; U=3 d up 4.719841, d down 3.869480, moment 0.786506 muB. Both meet the acceptance thresholds (3e-8, 5e-7, 1e-6) and exceed 0.4 muB. The sum-over-l moment reproduces the logged moment to six decimals. RD2 and RD3(a) on this host remain unrun: no Chebyshev Ni impurity deck path was supplied, so the entry stays OPEN.
-- **S0d impurity runs (RD3(a), 2026-10-26):** the user's `example/impurity/fccNi` deck needed `calctype = 'I'` (see the `calctype='B'` entry below); otherwise copied, changing `nstep`, `conv_thr = 1.0e-30`, fermi and the host file. Hosts: the converged T2 U=0 (E_F -0.063509) and U=3/J=0.7 (E_F -0.077760) Ni endpoints; impurity seed `Ni-imp.nml` unchanged (fresh atomic); local mode; U=3 impurity via `hubbard_u_impurity(1,3)=3.0`, `hubbard_j_impurity(1,3)=0.7` (the zero `hubbard_u_general` lines removed for that run). U=0 impurity: 60 steps, final Diff 6.0e-9 (window maximum 3.06e-8), spreads over the last 20 `Ni-imp_scf.nml` snapshots d up 5.9e-8, d down 9.6e-8, moment 9.1e-8 muB. U=3 impurity: not accepted at 60 steps (Diff 7.3e-8, spreads about 2e-5); accepted after one ladder step (200 steps, beta 0.05): Diff 5.2e-9 (window maximum 1.08e-8), spreads 4.6e-9, 5.8e-9, 2.7e-8. Impurity minus bulk (d up, d down, moment): U=0 +1.271e-3, -2.725e-3, +3.648e-3; U=3 +6.86e-4, -1.857e-3, +2.104e-3; ratios U=3/U=0 0.54, 0.68, 0.58 against the 10x gate: **PASS**. Impurity moments 0.674353 (U=0) and 0.788610 muB (U=3).
-- **RD2-lite on the converged U=3 impurity:** Tr(P) - q0 = 3.6e-15 and -1.3e-15. The same-call identity Tr(M1) = q0*c fails as written: -0.35430 (up) and -0.18924 (down) against 1e-10. The residuals equal Tr(V_in P) = -0.354295377766329 and -0.189235375606283 to 9e-16 and 3e-16, the same behaviour as the Chebyshev bulk case (stored centre already carries the local correction). The diagnostic's local-mode `local_q2` column (-1.05e-2 up, +1.91e-2 down) subtracts that shift twice and is not interpreted. The carrier check from local and spectral single-step replays was not run (needs new tooling). This entry stays OPEN: RD3(a) passes on the magnetic host, RD2 is incomplete pending a decision on the identity criterion.
-- **Closed (S0f):** RD3(a) passed on the magnetic Chebyshev host (ratios 0.54, 0.68, 0.58) and RD2 passed as the same-call identity with the local-mode form plus the production c'/q2' check above (residuals 1e-15, 1e-17).
-
-## [OPEN, 2026-10-22] KS-local host to RS impurity numerical equivalence for Ni
-
-- The production `auto` rule selects local impurity density moments only when every U-carrying frozen host potential records local mode. The rule supports both RS-local and KS-local hosts; it does not establish numerical equivalence between those workflows.
-- No accepted Ni KS host is available, so the KS-host-to-RS-impurity Ni comparison remains unvalidated. The C5 Fe smoke run does not close this Ni-specific issue.
-- Impurity Hubbard energy remains excluded; RD4 energy is unmeasured. See `docs/validation/fixed_ldau/rs/C5_10_RESULTS.md`.
-
-## [EXPERIMENTAL, OPEN, 2026-10-22] Surface LDA+U: Ni baseline and local-density physicality
-
-- Surface LDA+U remains experimental. Ni(001) probes observed a narrow-window projected-DOS/NaN failure; widening the energy window to 1.5 Ry did not change it.
-
-- C6.4 fixes the surface recursion-site to cluster-site to type mapping for the local-moment
-  correction. Its T1 identity (RS 27/27, KS 24/24), 13 guard fixtures, impurity/surface auto
-  fixture, and frozen-plus-recursive-site oracle all pass. In the Ni(001) RS-local U=3/J=0.7
-  smoke run, auto selected `mode=local` without a provenance error, but the moment routine stopped
-  on a negative rotating-frame density eigenvalue at site 2, l=0 (`lambda_min=-3.15867e-6`)
-  before C5.13 convergence. The final Diff and 20-step spread criteria were not met.
-- The C6.4 U=0 Ni control launch failed at iteration 8 on a non-finite guard for the ES site's
-  `PL` field. That launch missed its required C5.4 preflight and is recorded only as a failed
-  diagnostic attempt, not valid baseline evidence. Neither attempt provides converged layer
-  occupations/moments or a U-dependent surface-minus-bulk comparison. T3 Cu KS-host validation
-  was not run after the T2 smoke gate failed.
-- Surface Hubbard-energy routing remains OFF; no surface energy claim or comparison is made. See
-  `docs/validation/fixed_ldau/rs/C6_4_RESULTS.md`.
-- The user supplied a six-layer no-U Ni(001) snapshot, but its candidate manifest has only one
-  Diff record (6.68e-8), no matching preflight, and host metadata E_F (-0.061969 Ry) inconsistent
-  with the surface deck/log (-0.062420 Ry); it does not satisfy the reference condition.
-- **Latest checked probe (2026-10-25):** current-tip T1 passed (RS 27/27, KS 24/24, guards
-  13/13, auto fixtures 1/1, multisite oracle 1/1). In the copied two-layer Ni(001) fixture,
-  U=3/J=0.7 auto selected local with no provenance error. The two-step Diffs were
-  0.0163260002 and 0.3869175281, failing the user-approved <=5e-8 response gate. The U=0
-  control Diffs were 0.0162421175 and 0.3840255893. Layer occupations/moments and checked
-  preflights are recorded in `docs/validation/fixed_ldau/rs/C6_6_SURFACE_PROBE_RESULTS.md`.
-  These short probes do not establish converged surface observables or an accepted no-U surface
-  reference.
-- **Capture-path correction (2026-10-25):** investigation found that surface recursion initialized
-  exact RD1 `V_in` capture neither at the `S` recursion entry nor at the `build_bulkham` `ee`
-  insertion used by surfaces. Both omissions are fixed on the work branch. The checked rerun now
-  completes and consumes the current-iteration surface operand, but its final Diff is unchanged
-  (`0.3869175281`) and the <=5e-8 two-step gate still fails. The U=0 control also fails with
-  Diff `0.3840255893`; the large Diff is therefore not isolated to the LDA+U correction. A checked
-  U=0 diagnostic lowering beta from 0.1 to the fixture's 0.002 leaves step-2 Diff at 0.3838386972
-  and retains the external-layer charge warning. The failure arises during the surface
-  charge/density response from the bulk-potential seed and is not fixed by beta reduction; later
-  convergence remains unevaluated. See `docs/validation/fixed_ldau/rs/C6_6_CAPTURE_FIX_RESULTS.md`
-  and its archived preflight-bound evidence.
-- **User Ni(001) zero-U comparison (2026-10-25):** the user-run no-U deck and explicit U=J=0 deck
-  produce identical physical output for their one-step runs, so the zero-U deck-equivalence gate
-  passes independently of convergence. Both report Diff `7.71e-8`; this does not test nonzero U.
-  The user states that the `5e-8` threshold is unsuitable for these surface probes and should be
-  raised; a replacement value remains unspecified. These outputs had no C6.5 preflight record and
-  are documented as a zero-U comparison, not checked smoke evidence. Follow-up checked U=3/J=0.7
-  diagnostics selected local mode, but Chebyshev runs produced NaN projected DOS / `g0` and stopped
-  at the local moment correction. Widening the energy window from `0.5` to `1.5` Ry did not change
-  the failure. A block-recursion diagnostic was interrupted after it stopped producing output and
-  is inconclusive. A later user Ni U=4/J=1 probe completed one widened-window step (Diff 0.0232231)
-  but step 2 again produced NaNs and the status-5 local-moment fatal. The user-supplied magnetic
-  `Ni_out.nml` was not used as the bulk regeneration seed; the symmetric accepted Ni seed yielded
-  very small moments. A type-4-off attempt was invalid because the copied restart potential itself
-  embedded U/J. The zero-U equivalence gate is closed; the nonzero-U response remains OPEN. See
-  `docs/validation/fixed_ldau/rs/C6_7_ZERO_U_COMPARISON/RESULTS.md` and
-  `docs/validation/fixed_ldau/rs/C6_8_NI_U4J1_PROBE/RESULTS.md`.
-- C6 stopped after the failed RS smoke gate; Cu T3 and workflow documentation/merge remain
-  unrun. Surface Hubbard-energy routing remains OFF. C6.5's checked launcher is mandatory for
-  campaign runs.
-- **Update (2026-11-04):** collinear Ni(001) U=3/J=0.7 on types 1, 3, 4 with a U=3 bulk host ran 200 steps, Diff 3.5e-6 (first below 5e-6 at step 179; RS window not met, spreads 1e-6 to 3e-5); taken as converged at conv_thr 5e-6 by the user. Moments 0.768/0.713 muB (Ni-S/Ni-S-1) vs U=0 0.689/0.640; tables in `tests/validation/fixed_ldau/decks/ni001_u3/README`.
-- Before 11a3b32c, embedded runs rewrote frozen host dm headers (hash mismatch on rerun).
-
-## [CLOSED, 2026-10-22] Impurity auto mode with local U-carrying hosts
-
-- For `calctype='I'`, `auto` now selects local impurity density moments when every U-carrying frozen host potential records local mode, including decks that supply `hubbard_u_impurity`/`hubbard_j_impurity`. The focused fixture verifies this path has no provenance error; the existing RD3(a) Ni auto case continues to resolve local.
-- This closes the mode-selection issue only. The C5.12 Fe smoke run, rejudged under C5.13 workflow thresholds, passed convergence, provenance, and explicit-local mode checks; it did not exercise `auto`. The separate OPEN KS-local-host to RS-impurity numerical-equivalence issue for Ni remains open. Impurity Hubbard energy routing remains off; RD4 energy remains unmeasured.
-- Evidence: `docs/validation/fixed_ldau/rs/C5_13_RESULTS.md`; the auto impurity-U fixture and prior RD3(a) Ni auto case are recorded in `C5_11_RESULTS.md`.
-
-## [CLOSED, 2026-10-26] Chebyshev recursion with fixed U: validated for collinear bulk and impurity
-
-- **Verified (source audit):** with `recur='chebyshev'` the SCF fills the full on-site `g0(i,j)` from `mu_n(nb,nb,...)`, whose starting states are identity blocks on the recursion site (`recursion_chebyshev.f90:chebyshev_recur`). `P` and the energy-weighted matrix read that same `g0` (`bands.f90`). No random vectors enter; `RSLMTO_KPM_RANDOM_SEED` is used only in the transport code (`recursion_transport.f90`). No guard was added.
-- **Measured (T1(b), bcc Fe rc=80, nsp=1, local, J=0, window -1.0 to 1.3 Ry, 2500 points, 60 steps each from the C5.2 accepted Chebyshev states; block lld=21, Chebyshev lld=150, beta 0.005):** Chebyshev minus block.
-
-| quantity | U=0 | U=2 eV | ratio U=2/U=0 |
-|---|---|---|---|
-| d occupation up | 3.31e-3 | -4.98e-3 | 1.5 |
-| d occupation down | -4.64e-3 | 6.71e-3 | 1.4 |
-| sphere moment (μB) | 8.27e-3 | -7.53e-3 | 0.91 |
-| E_F (Ry) | 2.7e-5 | 9.75e-4 | 36 |
-| E_Hub (Ry) | n/a (zero at U=0) | 5e-4 (0.1093 vs 0.1088) | n/a |
-
-  The gate (U=2 difference at most 10x the U=0 difference) fails on E_F. The block arms ended at Diff 3.1e-8 (U=0) and 1.3e-8 (U=2), last-20 maxima 4.9e-8 and 1.5e-7; the Chebyshev arms at 1.1e-8 and 2.0e-8. Occupations and moments are logged to six decimals, so the acceptance spreads are not resolved, and U=0 d occupations are taken from the final `ql`. The E_F offset is about one energy-grid spacing (2.3 Ry/2500 = 9.2e-4 Ry); that is a guess and was not tested.
-- **Not run:** T1(c) frozen local-versus-spectral replay. The existing C3 pipeline is bound to a frozen Debug binary and private `/private/tmp/c52-c2-stage` artifacts. The C5.2 Part C record of a replay on an accepted Chebyshev U=2 state (carrier ratios 0.99325 and 0.99976, q2' 0.01367 and 0.01129 Ry^2) predates S0 and is not new evidence. Chebyshev stays unvalidated for fixed U.
-- **S0d criteria (same Fe states):** (a) E_F: |dE_F(U=2)| = 9.75e-4 Ry against 2 x the energy-mesh spacing 2 x 9.2e-4 = 1.84e-3 Ry (spacing 2.3 Ry/2500 before the grid is aligned to E_F; 9.195e-4 and 9.204e-4 for the two arms): **PASS**, 0.53 of the limit. (b) E_Hub(U=2): 0.1092905 (Chebyshev) against 0.1088446 (block), relative difference 4.10e-3 against 1e-2: **PASS**. (c) Same-call identity on a 1-iteration traced Chebyshev U=2 local run from the converged state: Tr(P) - q0 = 1.8e-15 and 4.4e-16 (up, down), but Tr(M1) - q0*c = -0.28702 (up) and +0.026921 (down) against 1e-10: **FAIL as written**. The residuals equal Tr(V_in P) = -0.28701905535309258 and +0.026921001548042802 to 1.3e-15 and 2.4e-16. The same state in `spectral` mode gives Tr(M1) - q0*c = 1.3e-15 and -2.4e-16: the identity holds when the stored centre is unshifted. In `local` mode the stored `gravity_center` already has the LDA correction (c - t/q0), so the diagnostic compares Tr(M1) with a shifted centre. That reading is consistent with the numbers, not separately proven. Chebyshev is therefore not declared validated under the S0d rule. Consequence for the diagnostic: in local mode its `local_center`/`local_q2` columns subtract t a second time. Proposal (not done): evaluate the identity against `c + t/q0` in local mode, a few lines in `ldau_diagnostics.f90`. Artifacts: `scratchpad/t1/fe_cheb_U2_trace` and `fe_cheb_U2_trace_spectral`.
-- **S0f decision (user-approved) and measurements:** in local mode the same-call identity is Tr(M1) = q0*(c' + t/q0), with c' the stored corrected centre and t = Tr(V_in P). Residuals: Chebyshev bulk U=2 (S0c T1(c) trace) -1.3e-15 (up) and 2.4e-16 (down) after removing t; Ni U=3/J=0.7 impurity (RD2-lite trace) -8.8e-16 and -3.1e-16; on the S0f traces -1.1e-15 and -1.1e-16. Both recorded as PASS; Chebyshev is validated for fixed U in collinear bulk and impurity runs. The diagnostic now compares against c' + t/q0 in local mode and reports the stored q2' instead of correcting it again (`ldau_diagnostics.f90`); the d-channel `m1_trace_consistency` row is not written in local mode (`m0_trace_consistency` carries the identity). The in-run formula recomputation needs the spectral c and q2, which exist only in a spectral run; the cross-run check below covers it.
-- **Production q2 check (S0f T3):** two one-step traced runs from the same converged U=3/J=0.7 Ni impurity restart, one spectral and one local (the spectral run needed the frozen host's mode field and sidecar hash restamped to `spectral`; data unchanged). The first-iteration P, M1 and V_in are bit-identical between the runs (max difference 0.0). Spin up/down: stored c' - (c_spec - t/q0) = 0.0 and 0.0 (limit 1e-12); stored q2' - [q2_spec - 2 Tr(V M1c) + Tr(V^2 P) - t^2/q0] = 1.4e-17 and -1.4e-17 (limit 1e-10), with t, Tr(V M1c) and Tr(V^2 P) evaluated in Python from the traced matrices. The q2 shift being tested is 5.4e-5 (up) and 2.2e-3 (down). Negative control with the opposite spin's V: c' and q2' differ by 2.9e-2/-3.1e-3 (up) and -2.6e-2/2.2e-3 (down); a P-transposed control is null because P is real-symmetric here. Artifacts: `scratchpad/t3/s0f_loc`, `s0f_spec`, `verify_s0f.py`, `s0f_verify.json`.
-
-## [CLOSED, 2026-10-26] Tests failing at both `90f57c3` and the S0 merge
-
-- `Val04RsImpurityEnergyDiagnostic` (`rs_embedding_ra1.py`): the reported and independently evaluated impurity energies differ by 1.24e-12 Ry against a 1e-12 tolerance. The original script with the `90f57c3` binary gives identical numbers, so it is not caused by S0. Tolerance not touched.
-- `Example_bulk_bccFe_nsp2_hubbard` (quick tier): fatal "Fixed-U LDA+U currently requires collinear scalar-spin input" for an `nsp=2` deck. The `90f57c3` binary stops with the same fatal.
-
-## [OPEN, 2026-10-26] `calctype='B'` with an impurity cluster stops in the local Hubbard correction even at U=0
-
-- **Verified:** the user's Ni impurity deck (`example/impurity/fccNi`, `pre_processing='newclubulk'`, two types, Chebyshev, `hubbard_radial_moments='local'`, all U/J zero) with `calctype='B'` stops with "Unable to map local d-shell Hubbard potential" (`bands.f90`, `extract_hubbard_d_shell_potential`) after the first recursion. The log shows a freely solved E_F of +0.002069 Ry against the host's -0.0635. The same deck with only `calctype='I'` runs (preflight host-E_F check passed; one step gave an impurity moment of 0.682485 muB, Diff 1.66e-3). The stop reproduces with a converged magnetic U=0 host in place of the example's `Ni_out.nml`, so it does not depend on the host file.
-- **Not verified:** the cause. The code path for `B` uses `itype_local = ib(na_glob)`, the geometric representative index, which can exceed the number of Hubbard types; this matches the symptom but was not instrumented.
-- **Proposal (not done):** a fatal at input time for `calctype='B'` with an impurity-cluster pre-processing, or skipping the correction when no atom carries U/J. About 10 lines.
-
-## [OPEN, 2026-10-26] `soc_scale` rescales only the restart SOC strength; `xi` is recomputed every iteration
-
-- **Verified:** `soc_scale` multiplies `xi_p` and `xi_d` once when `&self` is read (`self.f90:1787`). After each atomic SFC the same arrays and `rac` are recomputed from the radial potential unless `fix_soc = .true.` (`self.f90:5711`). Converged bcc Fe KS states with nsp=2 `soc_scale=0` and `soc_scale=1` (U=2/J=0) agree to 1e-8 in the d occupations (4.526370207 against 4.526370198); with `fix_soc = .true.` and `soc_scale=0` nsp=2 equals nsp=1 (KS: exactly at U=0, 9e-10 at U=2; RS: identically over 200 iterations). Without `fix_soc`, `soc_scale=0` removes SOC only in iteration 1.
-- **Effect on records:** the S3 and S3.1 nsp=2 versus nsp=1 comparisons without `fix_soc` measured the real SOC effect (converged moment from `ql`, nsp=2 minus nsp=1: RS +2.3e-4 at U=0 and -5.5e-3 at U=2; KS -2.8e-4 and -2.35e-3), not a spinor-path difference.
-- **Proposal (not done):** document that `soc_scale=0` needs `fix_soc`, or apply `soc_scale` after the recomputation. About 3 lines.
-
-
-## [OPEN, 2026-10-26] RS local-mode +U transient amplifies 1e-13 seed perturbations
-
-- **Verified:** bcc Fe, RS block, nsp=1, U=2 eV, J=0, `hubbard_radial_moments='local'`, beta 0.01 Broyden, fixture seed, 20 steps. Changing one seed occupation by a relative 1e-13 changes the logged Diff by 7.3e-9 at iteration 3, 6.3e-8 at iteration 12 and 1.1e-6 at iteration 20, and the logged spin moment by up to 7e-6. The trajectory has large steps (E_F -0.103 Ry to -0.071 Ry at iteration 7).
-- **Consequence:** two implementations that differ at roundoff level cannot be required to agree to 1e-10 over the first 20 iterations of this run; the nsp=2 spinor run stays identical to nsp=1 through iteration 11 (see `SPINOR_DM_CONTRACT.md`). Converged KS states agree to 1e-9.
-- **Not diagnosed:** which step of the SCF cycle amplifies (suspect the discrete Fermi-level grid search); the converged states of the nsp=1 +U RS run stall at Diff about 2e-6 with beta 0.01.
-
-## [CLOSED, 2026-10-27] `e_external` and `test_lambda_trace_wp` are 0 for W1 runs with U=J=0
-
-- **Verified:** bcc Fe, KS nsp=1, `hubbard_u_general(1,3)=0`, `hubbard_j_general(1,3)=0`, `hubbard_radial_moments='local'`, `hubbard_test_operator='w1'`, lambda 0.005, 3 steps: `HUBBARD_MOMENT_ENERGY_TOTAL` prints `e_external=0` and `n_up=n_dn=0` in the site line, with the `90f57c3` binary and the current one. `hubbard_u_general_check` is false at U=J=0, and `save_ldm_to('new')` is guarded by it (`self.f90`), so `ldm_new` stays zero.
-- **Not verified:** how the earlier W1 U=0 campaign obtained its `Tr(W P)` (the A5 harness may have used other decks or its own P_OUT capture).
-- **Fixed (S5b):** `ldm_new` is saved for W1 runs at U=J=0 (log only); KS nsp=2 `e_external` 0.0324621 = 0.005 x Tr(W P). The S5 records used the workaround below.
-- **Workaround used (S5):** `Tr(W P)` from the d occupations `ql` of the same run (`soc_u_hf.py`). **Proposal (not done):** include `hubbard_test_operator_check` in the two `save_ldm_to` guards. About 2 lines, but it changes nsp=1 behaviour for W1 runs and was not tested.
-
-## [OPEN, 2026-10-27] SOC+U bulk adoption: untested corners
-
-- **Not tested:** the RS J derivative at nsp=2; k-space meshes other than 12x12x12 and materials other than bcc Fe; multi-site cells; nsp=2 with U on more than one shell.
-- **Verified:** the RS U = 2.05 eV Hellmann-Feynman run ended at Diff 1.57e-6 after 150 steps (beta 0.005; the recorded RS local-mode transient). The remaining RS runs ended at Diff at most 1.9e-8.
-- **Unchanged limits:** calctype S with U at nsp=2 (calctype I: see S6 below) and nsp=3/4 with U stop with a fatal. Lifted in S6b: density_policy other than constrained_spiral, a constraint_target, a non-z reference axis (see the S6b entries below).
-
-## [CLOSED, 2026-10-30] `ldm_beta` had no effect at nsp>=2 (S6)
-
-- **Verified:** at nsp=2 V is built from the spinor P (`ldm_spinor`, P_out), not from the mixed collinear ldm. Host-seeded Ni impurity runs with and without `ldm_beta = 0.3` (SOC on and SOC->0, U=3/J=0.7) gave identical Diff series in every printed digit.
-- **Fixed:** `mix_ldm_spinor_linear` mixes the 10x10 P with `ldm_beta` (history seeded from the mixed ldm, zero coherences); V reads the mixed P. Default `ldm_beta=1`: one step from the same restart with the old and new binary gave byte-identical outputs (31 files, logs excepted). The sidecar still writes P_out for the spin-off-diagonal blocks.
-- **Test:** RS bcc Fe, nsp=2 `soc_scale=0`/`fix_soc` against nsp=1, `ldm_beta=0.3`, 4 iterations: max delta 0.0 with the fix, 1.56e-1 without (old binary); P_up,dn 0.
-
-## [OPEN, 2026-10-30] SOC+U impurity at nsp=2: records and untriaged findings (S6)
-
-- **Oscillation without damping:** Ni (RS Chebyshev, local) U=3/J=0.7 impurity runs at beta 0.05 and `ldm_beta=1` oscillated (Diff 1e-4 to 7e-2 over 200 steps) at nsp=1 (r2), SOC->0 (r6) and SOC on (r8). Host-seeded SOC on runs without effective damping ended at Diff 4.7e-2. With `ldm_beta=0.3`: nsp=1 reached last-20 max Diff 2.6e-8, SOC on 1.0e-8 (spreads <= 1.0e-8); SOC->0 4.2e-8. The nsp=1 oscillation at `ldm_beta=1` is not diagnosed.
-- **Adoption numbers (impurity minus bulk, U=3 against U=0):** d up 6.9e-4 / 1.3e-3, d down -1.9e-3 / -2.8e-3, moment 2.1e-3 / 3.7e-3 muB, orbital moment -1.8e-4 / -1.1e-4 muB (ratios 0.53, 0.67, 0.57, 1.59; limit 10). The U=0 runs write no spinor sidecar; the P_up,dn block difference at U=0 was bounded from the logged `max_up_dn` (9.575e-3 bulk, 9.618e-3 impurity: difference of maxima 4.3e-5, a lower bound on the block difference); U=3 block difference 2.4e-5.
-- **Cross-run identity (one-step traces from the converged U=3 impurity):** stored c'/q2' minus the spinor formulas 0.0 and 0.0 on both spins; dropping the off-diagonal V blocks changes c' by 1.4e-5 and 1.8e-5 and q2' by 8.6e-5 and 9.1e-5 (|V_up,dn| max 2.9e-3).
-- **KS-host smoke (bcc Fe nsp=2, U=2/J=0, RS impurity, `auto`):** resolves to local, no provenance or nsp error. Not met: after 100 steps final Diff 1.3e-7 (`ldm_beta=1`) and 2.5e-6 (`ldm_beta=0.3`), 20-step spreads 5e-5 to 1e-4 (limits 1e-7, 1e-5). Spin moment 2.5442 muB. The first attempt, seeded from a +U Fe-imp file, diverged to NaN; the host-seeded runs did not.
-- **Regression impurity soc0 rows (tolerance 1e-7):** impurity local-mode +U transient amplifies roundoff-level differences between the nsp=2 (10x10) and nsp=1 (5x5) paths over 4 steps (measured 7.15e-9 RS host, 3.97e-8 KS host; iteration 1 agrees to 8.19e-11 on the KS host). Targeted defects produce 1e-2 to 1e-1 differences. Cause of the amplification not diagnosed.
-- **Seed label:** the element `symbol` in the impurity seed file names the output files; a seed copied from the host must be relabelled.
-
-## [CLOSED, 2026-11-01] nsp=2 SOC+U local-moment correction used swapped spin channels for an axis along -z (S6b)
-
-- **Verified (code reading at `e5d68b66`, unit control):** before S6b, nsp=2 SOC+U with any site axis along -z applied the local-moment correction to swapped spin channels. The radial channels (`ql`, `gravity_center`) are resolved along the site axis, while `correct_d_shell_moments_spinor` used the global-z blocks as Pi_s; the S3 frame guard checked only |x| and |y| of the axis, so -z passed it. Unit control in `UnitHubbardSpinorMoments` ((f) "-n site with the +n projectors"): 2.4 against a tolerance of 1e-13.
-- **Fixed in S6b:** the kernel takes the site axis n and projects with Pi_+-(n) = (1 +- n.sigma)/2.
-
-## [CLOSED, 2026-11-01] `&constraints` ignored `constraints_mom_ref` (S6b)
-
-- **Behaviour change:** `constraints_mom_ref` was previously ignored (the read failed, the log showed `Error while reading constraints namelist`, and the target fell back to `mom0`). Inputs that set it change behaviour: the value is now read.
-- **Verified (before the fix):** Pt2MnGa (4 sites) and KS bcc Fe (1 site), `constraints_mom_ref(:,i) = ...` (and the component form of the documentation example): the same error, constraints off, exit 0; without the key a fresh KS run stops with `Constraint target for site 1 has zero length` (`mom0` is zero there).
-- **Cause (read from `control.f90`):** the array was pre-sized (1,1), so any index beyond (1,1) was out of range. It is now sized (3, 4096) before the read and cut to the last nonzero column; an all-zero array keeps the unset (1,1) form that `self.f90` tests for.
-- **Test:** `UnitControlConstraintsRead` (three sites, component form, unset): 0.0 difference between the written and the read values; on the old `control.f90` two of the three cases fail.
-- **Not fixed (same pattern, not tested):** `constraints_bfield` is pre-sized the same way. A zero field is valid there, so the trailing-column cut used for `constraints_mom_ref` does not apply. Proposal: size it (3, 4096) and cut at `nrec` known to `self.f90`.
-
-## [OPEN, 2026-11-01] RS block recursion at nsp=2 is not invariant under spin-axis rotation (S6b, cause open)
-
-- **Statement:** RS block recursion at nsp=2 is not invariant under spin-axis rotation, even at U=0 and SOC->0 (iteration-1 dE_F 3e-4 Ry, dmoment 1.8e-4). Chebyshev: ~1e-7. Cause open. A termination in the global-z spin basis was suspected; the symmetric terminator (`sym_term`) does not restore invariance (converged differences 1e-5 to 1e-4, below), so that suspicion is not supported by it. Proposed: a separate non-LDA+U task. This affects every RS SOC user with a non-z magnetisation, not only LDA+U.
-- **Verified (U=0, no Hubbard code involved):** bcc Fe `bulk/bccFe`, nsp=2, `soc_scale=0` with `fix_soc`, seed `Fe.nml` with `mom` along z and along x, iteration 1. Block recursion (lld 21): Diff 3.10e-5 against 1.07e-4, E_F -0.069252 against -0.068955 Ry, spin moment 2.103974 against 2.103790 muB. Chebyshev (lld 100): Diff 7.004175e-4 against 7.005169e-4; E_F and moment equal in all printed digits.
-- **`sym_term = .true.` (existing flag; the CPU block terminator then uses one scalar a_diag, b_diag from the spin trace of the s element for every orbital) does not resolve it:** same runs, iteration 1: E_F -0.069026 (z), -0.069018 (x), -0.069020 ([111]); moment 2.101357, 2.101398, 2.101374. The x-against-z difference falls to 8e-6 Ry and 4.1e-5 muB (from 3.0e-4 and 1.8e-4), but it does not reach the Chebyshev level, and the z result itself moves by 2.3e-4 Ry and 2.6e-3 muB against the default terminator. The flag only reduces the iteration-1 gap and does not reach the Chebyshev level.
-- **`sym_term = .true.`, converged (U=0, SOC->0, block lld 21, z against x, `bulk/bccFe_hubbard` recipe, conv_thr 1e-8, 64 and 69 iterations):** E_F -0.068999 (z), -0.068975 (x); spin moment 2.099999, 2.10006; |dE_F| 2.4e-5 Ry, |dmoment| 6.1e-5 muB, |d d_up| 9.6e-5, |d d_dn| 5.0e-5 (along n), |d etot| 5.1e-5 Ry. The gap grows from iteration 1 (8e-6 Ry, 4.1e-5 muB) to convergence and stays 2 to 3 orders above the Chebyshev level (<= 1e-7). Invariance is not restored, so the cause is not identified.
-- **Verified (U=2/J=0, local, block, 200 steps, `bulk/bccFe_hubbard`):** iteration-1 Diff differs by 3.5e-5; converged spin moment by 1.1e-2 muB, d up by 5.5e-3. The deck's collinear `ldm` seed is polarised along z and was not rotated for the x run (my setup; a suspect for part of this).
-- **Contrast:** the KS solver gives z, x, [111] and -z within 1e-9 in energy and occupations (S6b T2(c)).
-- **Handling in S6b:** nsp=2 U runs with a tilted spin axis (RS, `recur` other than `chebyshev`) stop with a fatal; KS and Chebyshev are accepted.
-
-## [OPEN, 2026-11-01] Constraint controller diverges in a KS nsp=2 bcc Fe smoke; S6b T2(e) not met (untriaged)
-
-- **Verified:** KS bcc Fe (`k_space_scf/bccFe`, 12^3 full mesh, nsp=2, SOC on), `&constraints` with `constraints_enable`, `constraints_mom_ref(:,1) = 1,0,0`, seed `mom` along x. The target is read and the resolved axis is x (`projection axis = (1,0,0)`, no frame guard fires). With `constraints_i_cons = 3` and with `= 5` the RMS angle error grows (3e-6, 2e-4, 1.7e-2, 0.9), the moment runs away (2.4 to 8.0 muB) and the run stops at iteration 13 with `reciprocal backend: LAPACK eigensolver failed`. The same deck at U=0 (no Hubbard code active) stops the same way at iteration 13; a second deck with seed `mom` along z and target x stops at iteration 4.
-- **Not verified:** whether the deck is wrong. It is hand-built, and the only constraint deck in the repository (`example/bulk/bccFe/input_frozen_magnon_constrained.nml`) is an nsp=4 frozen-magnon run, so no known-good nsp=2 constraint deck exists to compare. Two attempts were made (`i_cons` 3 and 5), then stopped.
-- **Consequence:** the S6b constraint-target path (target read, axis resolved, V and the local-moment correction built along it) is exercised only up to the divergence; there is no converged constraint-target run.
-
-## [SHORT-RUN RECORD, 2026-11-04] nsp=2 surface LDA+U (S6c): no converged surface state, SOC-on surface not at a fixed point after 5 steps
-
-- Verified: operator insertion and local-moment mapping for the surface layout (SPINOR_DM_CONTRACT.md, "nsp=2 surfaces (S6c results)"); nsp=2 SOC->0 surface equals the nsp=1 surface at iteration 1 and over 4 reduced steps when the host numbers are the same.
-- Verified, short runs only (5 steps from the nsp=1 seeds, hosts not converged: b0 and b1 stopped at step 7, Diff 9.1e-5 and 7.8e-5): at U=3 the surface orbital moment keeps rising (Ni-S 0.066 -> 0.109 muB, increments falling by about 0.88 per step) and Diff stays at 1.2e-4 to 1.9e-4; the b1 bulk host shows the same slow rise. Not measured: where it saturates, converged surface-versus-bulk values, the converged SOC->0 surface against the converged nsp=1 surface, the surface anisotropy.
-- Convergence floor of the nsp=1 surfaces: ni001_u3 oscillates at Diff about 4e-6 (200 steps, deck README); no nsp=2 surface was run to its floor.
-- The x-axis host from the collinear z-frame seed (mom=x, soc_scale=0) was stopped at step 10: Diff 2.6e-4 at step 5, then 2.4e-3 at step 10 while the moment rose 0.695 -> 0.7465 muB with a z component of 0.04 to 0.05 muB left; cause not diagnosed (seed frame is a suspect). The tilted-axis check uses an exactly rotated z host instead (rotate_spin_frame.py).
-- b2 (SOC->0 host) differs from the nsp=1 U=3 host by 1.8e-8 (gravity_center); iteration 1 of the surface then differs from the nsp=1 run by 1.0e-9 in Diff and 2.5e-10 in ql. With the nsp=1 host rebuilt from b2 the difference is 0 (Diff) and 6.9e-18 (ql). etot of Ni-S-1 differs by 1.2e-8 to 1.9e-8 Ry in both comparisons (not diagnosed).
-- **Tier 2 run, flagged (S6c close-out, 2026-11-04):** 20 steps from the step-5 state of the SOC-on U=3 surface (decks/ni001_soc_u3/README, host not converged): Diff rises 1.50e-4 -> 2.25e-4 over steps 1-13 and has two excursions (4.18e-4 at step 15, 2.35e-4 at step 20, with jumps of 1.6e-2 and 1.1e-2 in n_d of one layer). The Ni-S orbital moment rises 0.117 -> 0.173 muB without saturating (increment 1.0e-3 per step at step 20). No non-finite values. Not diagnosed; the SOC-on U=3 surface is not shown to be at, or approaching, a fixed point. Converged surface physics is not demonstrated; correctness rests on the operator and local-moment oracles and the iteration-1 / 4-step equivalence rows.
-- Policy: `docs/validation/fixed_ldau/TESTING_POLICY.md` (few-iteration trajectories; rotated seeds for tilted axes).
-- **Tier 2 repeated with converged bulk hosts (S6c close-out 2, 2026-11-04):** hosts b0 (U=0) and b1 (U=3/J=0.7), SOC on, converged to Diff 9.9e-9 (34 iterations) and 7.9e-9 (59 iterations); b1 orbital moment 0.07511 muB (not the ~0.078 expected), E_F -0.076843. With the converged b1 host the 20-step surface continuation (same step-5 seed, ldm_beta 0.3) still shows Diff rising 1.22e-4 -> 2.08e-4 over steps 2-16 (increments falling to 0), then a jump at step 17 (Ni-S n_d +1.1e-2, mspin -9.3e-3), then Diff 1.2e-4 at step 20; the Ni-S orbital moment 0.118 -> 0.175 muB with increments 6.7e-3 (step 2) -> 1.6e-3 (step 16) per step. The same kind of jump occurred at step 15 with the unconverged host.
-- **J=0 diagnostic (one 20-step run, layers at U=3/J=0, converged host kept at J=0.7: host-J mismatch, no J=0 host exists):** the drift is not removed. Diff 9.3e-3 -> 1.0e-3 (large transient from removing J on the layers), Ni-S orbital moment 0.093 -> 0.191 muB, still rising by 1.3e-3 per step at step 17, and a jump (Ni-S n_d -4.8e-2, mspin +3.5e-2) at step 18. Not attributable to J. **Recorded as an undiagnosed surface SCF instability**: jump at step 15, 17, 18 in the three runs; not investigated further in S6c. The orbital-moment approach is slow, and whether Diff stays bounded beyond 20 steps is not known.
-- **Hypothesis for the recurring excursion (not tested):** the excursion recurs at iteration ~15-18 in all three runs (unconverged host, converged host, J=0), which suggests mixing-history mechanics (Broyden history length or reset, occupation-matrix mixing window) rather than physics. First diagnostic step for a future task: read the mixer's history and reset logic; then sweep the history length or ldm_beta.
-## GBT: suspected double sign flip for sites with `mom(3) < 0` (F1) — 2026-10-17
-
-Found by reading, not by running. Not diagnosed; the real-space GBT route is frozen for the restart (`cleanup/gbt_kspace_restart_spec.md`).
-
-- **Read in the source (verified by reading):** `gbt_endpoint_angles` (`source/hamiltonian_build.f90:1814`) sets `axis_sign = -1` when `potential%mom(3) < 0`, and in the same branch returns `theta = pi - theta_ss`, `phi = pi`. `build_gbt_bulkham` passes that angle pair to `gbt_endpoint_link` (frame rotation) and `axis_sign` to `gbt_contract_collinear` and to the onsite term `cx0 +/- sign*cx1` (`:1607-1640`). In `gbt_contract_collinear` (`source/gbt_structure.f90:245`) the sign swaps which of `wx0 +/- wx1` multiplies the lab spin-up and spin-down rows. `set_probe_angles` (`source/calculation.f90:1806`) uses the same pattern: `theta -> pi - theta_probe`, `phi -> phi + pi` when `ref_theta > pi/2`.
-- **Algebra (by hand, not run):** at `theta_ss = 0` the frame for such a site is a pi rotation, which exchanges the local spin-up and spin-down channels, and `axis_sign = -1` exchanges the `wx0 +/- wx1` and `cx0 +/- cx1` assignment a second time. If `wx1`/`cx1` of that site are stored as for a majority-up site, the two exchanges cancel and the site's majority channel ends up on lab spin-up, i.e. parallel to a `mom(3) > 0` site instead of antiparallel.
-- **Not checked (guess):** whether the stored `wx1`/`cx1` of a `mom(3) < 0` site already follow a majority-first or a lab-spin convention. That decides whether the two flips cancel or are one intended flip. No test covers this branch: `UnitGbtWp01Q0` always passes sign = +1.
-- **Suspect in my own setup:** none yet; nothing was run.
-- **Diagnostic (spec slice D1, not yet run):** `tests/spin_response/cr_bcc` (two antiparallel sites), q = 0, theta = 0, one fixed-potential iteration each in (a) `periodic_nc` k-space, (b) `gbt_single_q` through the shared-`ee` k-space route, (c) `gbt_single_q` through real-space recursion; report the largest eigenvalue difference between (a) and (b) at five k-points, and the sign of each site moment in all three. Append the measured numbers here. Proposal only: the fix is parked until the developer unfreezes the route.
-- **Measured (D1, 2026-10-18; binary `build_gbt_c1/bin/rslmto.x` at 957c31e; scratch copies of `tests/spin_response/cr_bcc`, deck not modified in place):** `nsp = 3`, `hoh = .false.`, `strux_lib`, `q_ss = 0`, `theta_ss = 0`, `use_kspace` for (a) `periodic_nc` and (b) `gbt_single_q`, real-space `recur = 'block'` for (c). Deck A: `Cr1.nml` as committed (`mom(3) = +1`), `Cr2.nml` = `Cr1.nml` relabelled with `mom = (0,0,-1)`. Control, deck B: the committed `Cr1.nml`/`Cr2.nml` (they hold swapped spin channels, `mom(3) = +1` on both).
-  - **Eigenvalues** (frozen potential, `post_processing = 'fermi_surface'`, 4x4x4 Gamma-centred mesh, 36 bands sorted per k, k in direct coordinates). Deck A, max |E_a - E_b|: (0,0,0) 4.163e-2 Ry; (1/4,0,0) 3.451e-2; (1/4,1/4,0) 4.164e-2; (1/4,1/4,1/4) 3.163e-2; (1/2,1/4,0) 3.194e-2; max over these five 4.164e-2, over all 64 k 4.187e-2. Fermi level solved by the run: 1.194e-3 Ry (a), -9.943e-3 Ry (b).
-  - **Controls (same five k):** deck B, (a) vs (b): 2.7e-15 Ry (all 64 k: 2.8e-15). Deck A (a) vs deck B (a): 1.1e-12 Ry (all 64 k: 1.4e-12), so `periodic_nc` gives the same bands for both ways of writing the antiferromagnet; only `gbt_single_q` differs between them (deck A (b) vs deck B (b): 4.164e-2 Ry).
-  - **Site moments after one iteration** (SCF mesh 8x8x8 for (a), (b); real space for (c); `m_long` from the DENSITY_POLICY log line, mu_B; lab-z = `m_long` x z of the printed projection axis, which for deck A is +1 on site 1 and -1 on site 2, and +1 on both for deck B; the axis is not printed for (c)): deck A, (a) m_long -0.884256 / -0.884256, lab-z -0.884 / +0.884; (b) -0.207109 / -0.207109, lab-z -0.207 / +0.207; (c) -0.192343 / -0.192343, printed projection z -0.192343 / +0.192343. Deck B, (a) -0.884256 / +0.884256; (b) -0.884256 / +0.884256; (c) -0.877880 / +0.877880. `minfo.out` direction of atom 1 / 2 is -1 / +1 in all six runs; total spin moment z is 0 to 5e-7 in all six.
-  - **Reading (measured vs not):** the signs do not separate the runs; the magnitudes and the eigenvalues do. With `mom(3) < 0` on a site, `gbt_single_q` gives bands 4.2e-2 Ry away from `periodic_nc` and a moment about 4.3 times smaller (0.207 and 0.192 against 0.884 mu_B), while the same antiferromagnet written with swapped channels and `mom(3) = +1` agrees to 2.7e-15 Ry. This is what F1 predicts, but the cause (the double flip) was not traced, and the claim that the moments are parallel in the lab frame was not measured. Deck A is hand-built; deck B and the `periodic_nc` control are the known-good references. One mesh, one potential, one run each; the (c) route is a different solver, so only its sign and rough size are comparable.
-
-## GBT: second-order onsite C differs between real-space `gbt_single_q` and the collinear route — 2026-10-18
-
-Found by reading while planning the k-space GBT path (spec K0); not run, not fixed. The real-space GBT route is frozen for the restart.
-
-- **Read (verified by reading):** with `hoh = .true.` the collinear/`periodic_nc` pair builder passes `cex0/cex1` as the onsite term (`ham0m_nc`, `source/hamiltonian_build.f90:1993-1994`) and the second-order operator adds `enim` = `cx - cex` per spin channel (`build_enim`, `:1337`). `build_gbt_bulkham` adds `cx0 +/- sign*cx1` onsite (`:1641-1646`) with no `hoh` condition, then calls `build_obarm` and `build_enim` and builds `eeo = ee*obarm` from that `ee` (`:1696-1713`).
-- **Consequence if the reading is right (algebra, not run):** with `hoh = .true.` the onsite part of `h` in `gbt_single_q` is `cx` where the collinear route has `cex`. The first-order onsite term of `h + enim` is then `2 cx - cex` instead of `cx`, and `h O h` is built from a different `h`. At q = 0, theta = 0 the two routes would differ by the on-site `enim` (`cx - cex`) in `h`.
-- **Not checked:** no run compares `gbt_single_q` with `periodic_nc` at `hoh = .true.`; the k-space GBT decks used so far have `hoh = .false.`. The meaning of `cex` (taken here as C minus the E_nu term) was read from the usage, not from documentation. The deleted WP6 numpy tests are at tag `gbt-campaign-archive-2026-10` and were not consulted.
-- **How the restart treats it:** the k-space path (K3) follows the collinear route (`cex` in `h`, `enim` added); `AppGbtKspaceGauge` at second order against `periodic_nc` decides. If the real-space GBT path is wrong, that is a frozen-code defect and needs a separate developer decision.
-
-## RESOLVED 2026-10-18 — `periodic_nc` second order: `build_obarm`/`build_enim` rounded `mom` to single precision
-
-Found during slice K3 of the GBT restart (AppGbtKspaceCommensurate). Fixed by adding `kind=rp` to the two `cmplx` calls (task FIX-CMPLX); the measurements below are from before the fix, the last bullet gives the values after it.
-
-- **Cause (measured by patching, then reverting):** `build_obarm` (`source/hamiltonian_build.f90:1317`) and `build_enim` (`:1360`) assign `cmplx(potential%mom(:), 0.0d0)` with no `kind`, which returns a default-kind (single precision) complex, so each component of `mom` carries a relative error up to about 6e-8 into the second-order operator (`obarm`, `enim`). Components that are exactly representable in single precision (0, +-1/2, +-1) are unaffected. With `kind=rp` added on both lines (scratch, not committed), the global-rotation change below falls from 1e-9 to 4.7e-15 Ry for theta = 10, 30, 45, 60. The first-order bond blocks take `mom` as a double and are unaffected.
-- **Measured (scratch decks from `tests/gbt`, `post_processing = 'fermi_surface'`, nsp = 3, `periodic_nc`, bcc Fe supercell `tests/gbt/fixtures/bccFe_super_q050`, four types with the `tests/spin_response/fe_bcc` potential, all moments parallel along (sin th, 0, cos th), 2x2x2 mesh):** max |E(th) - E(0)| with `hoh = .true.` is 1.7e-9 (th = 10), 3.0e-11 (20), 9.9e-10 (30), 1.3e-9 (45), 9.9e-10 (60), 9.9e-10 (75) and 3.8e-15 Ry (90); with `hoh = .false.` at most 2.8e-15 Ry. The moment as held after reading is |m| - 1 = 0 with angle error 0.0 deg (`Fe1_out.nml` after one iteration), and writing the moments with 17 significant digits left the th = 30 value unchanged (9.896e-10), so the deck precision is not the cause. The single-precision rounding error of the components is 1.6e-8 (th = 30), 1.2e-8 (45), 2.3e-8 (10).
-- **GBT k-space path, same rotation** (`gbt_single_q`, two-site cell, q = 0, 4x4x4 mesh, th = 30 and 90 against 0): at most 2.7e-15 Ry in both orders.
-- **Effect on K3:** AppGbtKspaceCommensurate (supercell `periodic_nc` against folded GBT eigenvalues; S-block precondition 4.3e-14 and 7.1e-14) gives 3.3e-15 Ry or better at first order for q = (0,0,1/2) and (0,0,1/3), th = 90 and 30. At second order: 5.6e-15 (q = 1/2, th = 90), 1.1e-9 (q = 1/2, th = 30), 5.8e-10 (q = 1/3, th = 90) and 1.2e-9 Ry (q = 1/3, th = 30), against the proposed `eig_identity_ry` = 1e-10. The failing cases are those that need a moment component that is not a single-precision number. Before the fix `AppGbtKspaceCommensurateSecondOrder` carried the label known-failure and pointed here. Tolerances were not changed.
-- **Fix applied (FIX-CMPLX, 2 lines):** `kind=rp` added to the `cmplx` calls at `hamiltonian_build.f90:1317` and `:1360`. `build_gbt_bulkham` calls the same two routines, so real-space `gbt_single_q` with `hoh = .true.` changes for moments with components that are not single-precision numbers; cases with moment components exactly representable in single precision (+-z, +-x) are unchanged. No reference was regenerated.
-- **After the fix (same decks, the `kind=rp` build):** `AppGbtKspaceCommensurateSecondOrder` gives 5.6e-15 (q = 1/2, th = 90), 6.2e-15 (q = 1/2, th = 30), 5.3e-15 (q = 1/3, th = 90) and 5.6e-15 Ry (q = 1/3, th = 30), against the earlier 5.6e-15, 1.1e-9, 5.8e-10 and 1.2e-9, with `eig_identity_ry` = 1e-10; its known-failure label is removed. The global rotation of the `periodic_nc` supercell at second order, th = 10 to 60, was 4.7e-15 Ry or less in the patch experiment above.
-
-## `cmplx` without `kind` rounds double-precision arguments to single precision in four places — 2026-10-18
-
-Found while fixing the same defect in `build_obarm`/`build_enim` (task FIX-CMPLX); found by reading, not run, not fixed. A search of `source/` found 14 `cmplx(` calls without a kind argument; four of them pass double-precision arguments, so the result carries single-precision rounding (relative error up to about 6e-8) before it is stored in a double-precision variable.
-
-| location | arguments | effect (by reading) |
-|---|---|---|
-| `source/bands.f90:1366` | `cmplx(0.0_rp, res)`, `res` is `real(rp)` | the imaginary part `eta` of a Gauss-Legendre node in `calculate_moments_gauss_legendre` is rounded to single precision |
-| `source/bands.f90:1444` | same | same, in `calculate_occupation_gauss_legendre` |
-| `source/green_block.f90:214` | same | same, in `calculate_intersite_gf_core` |
-| `source/hamiltonian_paoflow_io.f90:236` | `cmplx(dumre, dumcmplx)`, both `real(rp)` | legacy PAOFLOW reader: hopping values rounded to single precision before the division by 13.605703976 |
-
-The other ten calls are harmless: `hamiltonian_paoflow_io.f90:135` takes default-real data that were already single precision; `hamiltonian_build.f90:1191, 1193, 1217, 1267, 1269, 1312 (x2), 1351 (x2)` pass 0.0 or 0.5, which single precision holds exactly.
-
-Not measured: the size of the effect on any test or reference. Fixing these changes numbers at about the 1e-8 relative level in the real-space Green-function quadrature and the PAOFLOW import, so it needs its own task with the changed reference values listed for the developer's approval. Not touched in the GBT branch.
-
-## `Example_bulk_bccFe_nsp2_hubbard` stops at the Fixed-U guard — 2026-10-18
-
-Found in the quick tier (Release, no `-march=native`) while doing K5. The run stops after about 1 s with `Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported` (`source/hamiltonian_build.f90:532`). It fails the same way on a clean checkout of c7c1fe1, so it is not caused by K5. Not triaged: whether the deck (nsp = 2) or the guard is wrong is not known.
-
-Update 2026-10-26 (Debug build, `-fcheck=all`). Verified: `Val04LdaUPhysics` stops at the same guard, because `val04_lda_u.py:46` rewrites `nsp = 1` to `nsp = 2` and `has_soc()` is true for `nsp = 2`; the guard was added in 37a52f8d (2026-10-14), after both tests, and `has_soc` is from 7682dbe3 (2026-08-31). Verified in a scratch copy of the example deck with `nsp = 1` and nothing else changed: the guard passes and the run then aborts in `update_fixed_u_residuals` (`source/self.f90:1843`), "Index '4' of dimension 2 of array 'this%mix%_data%ldm_new' above upper bound 3". Not checked: whether a Release build runs past that line, whether `ldm_new` is sized too small or the loop runs too far, Val04 at `nsp = 1`. `self.f90` is off-limits, so this is not fixed.
-
-Both tests are disabled in `CMakeLists.txt` (`DISABLED TRUE`, 2026-10-26) so that CI passes; re-enable them when the guard is resolved. Proposal: none for now. Either the two tests move to `nsp = 1` after the `self.f90:1843` bound is triaged and the example's references are regenerated, or the guard is extended to collinear `nsp = 2` once an independent spinor-basis oracle exists; both are the developer's decision.
-
-## Real-space LKAG exchange does not converge toward exact ASA with Hamiltonian order (bcc Fe, fixed potential) — 2026-10-22
-
-Measured in diagnostic D7b / oracle O3 (2026-10-22). `tests/spin_response/fe_bcc` potential, zero SCF steps. J(0) − J(q) in mRy at q = (0.125, −0.125, 0.125) / (0.25, −0.25, 0.25):
-
-| route | setting | J(0) − J(q) q1 / q2 [mRy] |
-|---|---|---|
-| exact rigid rotation of the ASA potential (oracle O3, `tests/gbt/oracles/o3_hgamma`, R8 self-check 1e-5) | 96³, 300 K | 3.82 / 11.01 |
-| real-space recursion LKAG (`recur = 'block'`, `lld = 31`, 2000 points, window −1.0 to 0.5 Ry, T = 0, 46 shells to 5a) | `hoh = .false.` | 2.26 / 6.82 |
-| same | `hoh = .true.` | 4.54 / 15.64 |
-| k-space GBT force theorem | first order, 96³, 300 K | 3.35 / 9.64 |
-| same | second order | 3.60 / 10.20 |
-
-J_01 from the recursion route is 0.755 mRy with `hoh = .false.` and 2.175 mRy with `hoh = .true.`. Not yet matched between the routes: temperature (T = 0 against 300 K), energy window, recursion terminator, and the 5a cutoff (about 1% at the second q per the `fe_lswt.dat` header). Status: observed, not diagnosed; a separate, non-GBT investigation.
-
-## `tests/spin_response/oracles/fe_lswt.dat` is not reproducible from the repository — 2026-10-22
-
-Measured in diagnostic D7b / oracle O3 (2026-10-22). `make_fe_lswt.py` only converts UppASD AMS output; it does not drive the code. The Hamiltonian order, temperature, energy window and `nsp` of the exchange run behind the file are not recorded. With the recorded settings (`lld = 31`, 2000 energy points) and `hoh = .false.`, the real-space recursion route gives J_01 = 0.755 mRy against 0.838 mRy in the file (max shell deviation 0.083 mRy, at shell 1; D7b). The other settings in that run were taken from `tests/spin_response/fe_bcc` (`nsp = 1`, window −1.0 to 0.5 Ry, T = 0).
-
-## `constraints_mom_ref` cannot be set from the namelist, so a constrained `branch_mode = 'auto'` deck stops in the `self` constructor — 2026-10-20
-
-Found in K6 while trying to show the new k-space fatal in `post_processing_frozen_magnon_auto`. Measured: with `&constraints` as in `docs/source/keywords/constraints.rst` (`constraints_mom_ref(1,1)`, `(2,1)`, `(3,1)`), the run logs `Error while reading constraints namelist` (`source/control.f90:499`) and continues with constraints off; `constraints_mom_ref = 0, 0, 1` gives the same error. With the key absent, `example/bulk/bccFe` (`branch_mode = 'auto'`, `mode = 'mft'`, constraints on, with and without `use_kspace`) stops at `Constraint target for site 1 has zero length` (`source/self.f90:3132`). So the new fatal in `_auto` was not reached by any deck I could build. Diagnosed (task FIX-CONSTRAINTS-NML): `constraints_mom_ref` and `constraints_bfield` are allocatable in the `constraints` namelist (`source/include_codes/namelists/constraints.f90:5-6`). A namelist read cannot allocate or resize an allocatable; it only accepts indices inside the current shape. `build_from_file` allocates them as (1,1) at `source/control.f90:431` and `:438` before the read at `:497`, so `constraints_mom_ref(2,1)` and `(3,1)`, and the list form `= 0, 0, 1`, are out of range. A standalone program with the same declaration (allocated (1,1), the documented `&constraints` text from `docs/source/keywords/constraints.rst:36-38`) returns `iostat = 5010`, `iomsg = Index 1 out of range for namelist variable m`; allocated (3,1) or (3,4) it reads with `iostat = 0`. `control.f90:499` only logs the error, so the run continues with constraints off. On `example/bulk/bccFe` with `Fe.nml` (zero `mom0`), `constraints_mom_ref` absent gives the `self.f90:3132` fatal; present (documented syntax) gives the `control.f90:499` error.
-
-## Fast block Lanczos with `hoh` appears to count `lsham` twice and passes it through the eeo sweep — 2026-10-20
-
-Found while reading `haydock_fast.f90` for the hoh+ccor_2c work. Read only, not run.
-
-- **Read:** legacy `hop_b_hoh` (`recursion_haydock.f90`) builds `h psi` from `ee`/`hall` alone, applies `lsham` separately (`socpsi`), forms `eeo (h psi)` from the bare `h psi`, and returns `h psi - eeo (h psi) + enim psi + lsham psi`.
-- **Read:** `block_lanczos_sp` folds `lsham` into the shell-1 block of `he`/`ha`, so the sweep-A result already contains `lsham psi` and the eeo sweep acts on it, then the hoh combine adds `lsham psi` again through `ons = enim + lsham`. `block_lanczos_dp` does the same (`locham = ee + lsham`, then `enim + lsham` in the combine).
-- **Consequence if the reading is right (algebra, not run):** with `hoh = .true.` and a nonzero `lsham` the fast block operator differs from the legacy one by `lsham psi - eeo (lsham psi)`.
-- **Not checked:** no run compares the two with a nonzero `lsham`. `lsham` is zero unless the spin-orbit build fills it, and the bccFe decks used for the fast-vs-legacy comparisons (`bccFe_block_fast_*_hoh_ccor_2c`, nsp = 1) have `lsham = 0`, so they cannot show it. Whether the nsp = 3/4 block hoh examples use a nonzero `lsham` was not checked.
-- **Proposal, not started:** a one-case fast-vs-legacy comparison with SOC on and `hoh = .true.`; if it differs, remove the shell-1 fold from the hoh branch of the two kernels (about 10 lines).
-- **Measured (2026-10-20, binary at `010b4c6`, one OpenMP thread, `hoh = .true.`, `ccor_2c = .false.`):** block intersite exchange on `tests/postproc/cases/exchange/bccFe` (`recur = 'block'`, `lld = 20`), J of the first two shells (`jij.out`, column 6):
-
-  | `nsp` | legacy | fast (fp32) | `fast_dp` |
-  |---|---|---|---|
-  | 2 | 1.919232, 0.371056 | 1.908953, 0.369334 | 1.908952, 0.369334 |
-  | 1 | 1.933942, 0.379545 | not run | 1.933942, 0.379545 |
-
-  The fp32 and fp64 fast routes agree with each other, so the 0.5 % difference at `nsp = 2` is not a precision effect. The one-step SCF of `tests/postproc/cases/orbital/bccFe` (`recur = 'block'`, `nsp = 2`, `rc = 12`) gives `etot` -2541.9809924013 (legacy) against -2541.9810543937 (fast), a difference of 6.2e-5 Ry.
-- **Not isolated:** the agreement at `nsp = 1` and the difference at `nsp = 2` fit the `lsham` reading above, but `nsp = 2` differs from `nsp = 1` in more than `lsham`, and no run switched `lsham` off at `nsp = 2`. The cause is untested.
-- **Consequence for the hoh+ccor_2c cases:** `Example_exchange_bccFe_hoh_ccor_2c` uses `nsp = 1`, and `Example_orbital_modern_bccFe_hoh_ccor_2c` uses a Chebyshev SCF step, so that fast-versus-legacy comparisons are not affected by this difference.
-
-## `SpinResponseOmpIdentity` fails in the CUDA/MKL build `build_gpu` — 2026-10-21
-
-Found while running the quick tier on the CUDA binary for the hoh+ccor_2c GPU work. **Measured:** `tests/spin_response/omp_identity.py` on `tests/spin_response/fe_bcc` reports `files differing between 1 and 4 threads: ['spin_response_q001.dat', 'spin_response_q002.dat', 'spin_response_state.dat']` with the CUDA build (`ENABLE_CUDA_PLUGIN=ON`, `ENABLE_MKL_KERNELS=ON`) both before and after the hoh+ccor_2c GPU change (binaries built at `1b8cf33` and `0ab6989`), and `none` with the CPU-only build at the same sources. All other quick-tier tests pass on the CUDA build (42 of 43).
-
-**Not diagnosed.** The spin response is a k-space path that does not use the real-space or CUDA code. Suspects, none tested: the MKL threading of the CUDA build, and my own setup: the binary is linked to MKL 2026.2 while `LD_LIBRARY_PATH` pointed at 2026.1, so I prepended `/opt/intel/oneapi/mkl/2026.2/lib` by hand, and `build_gpu` was configured with `/bin/python3`, which lacks `f90nml`, so I set `Python3_EXECUTABLE` in its cache.
-
-## The CPU Chebyshev DOS reconstruction is single precision for every `cheb_backend`, so `legacy` is not an fp64 oracle for the SCF energy — 2026-10-21
-
-Found while adding the `gpu_precision = 'fp64'` pass to `tests/regression/run_gpu_matrix.py`.
-
-- **Read:** `chebyshev_green_core` (`green_chebyshev.f90`) reconstructs the DOS on the CPU with `cheb_green_fast`, which is single precision, in every branch without `eta`; `cheb_backend` is not consulted there. With `gpu_plugin = .true.` and no resident transport moments the same stage runs on the GPU and now follows `gpu_precision`.
-- **Measured (2026-10-21, `build_gpu` at `f2bc31c`, one SCF step):** `|etot(GPU fp64) - etot(CPU legacy)|` is 9.5e-10 (diamond Si case) and 5.8e-9 (`bccFe_chebyshev_fast_hoh`), but 2.6e-8 (`bccFe_chebyshev_legacy_hoh`), 2.3e-8 (`bccFe_chebyshev_fast_hoh_ccor_2c`) and 5.0e-8 (`bccFe_chebyshev_fast_sp`). For comparison `|etot(GPU fp32) - etot(CPU legacy)|` is 4.9e-8 (Si), 1.1e-6, 5.6e-7, 2.2e-7 and 3.5e-9. Running the GPU fp64 case with `cheb_backend = 'legacy'` gave the same numbers to the printed digits.
-- **Not verified:** that the remaining 2e-8 to 5e-8 comes from the CPU reconstruction in the legacy run. It is the explanation the code reading suggests; no run replaced that reconstruction by a double-precision one. Varying the window (-3.0 to 1.8) or `lld` (100) for `bccFe_chebyshev_fast_sp` changed the fp64 residual (4.2e-8, 2.8e-9) and the fp32 one (1.1e-6, 4.7e-7) without a pattern I could explain.
-- **Consequence:** the fp64 rows of `run_gpu_matrix.py` use two criteria (the fp64 run differs from the fp32 run by at least 1e-9, and stays within 1e-7 of legacy) instead of a tight comparison with legacy. They cannot detect an fp64 kernel error smaller than about 5e-8 in `etot`.
-
-## k-space GBT constrained spiral: the constrain.f90 controller diverges, S9 does not match, two unit tests miss `scf_identity_ry` — 2026-10-20
-
-Found in SC2 (bcc Fe, `fe_bcc` potential, 16^3, 300 K, first order, q = (0,0.25,0) 2pi/alat, theta_ss = 30 deg). Measured:
-- With `H += +B.sigma` and the `constrain` controller (`i_cons = 3`, lambda = 10, no key), m_perp goes 3.0e-4 -> 0.035 -> 2.8 -> 8.0 muB in three iterations and the eigensolver then fails; with `H -= B.sigma` it overshoots by the same factor. At fixed potential the response is chi = dm_perp/dB = -24.5 (xx), -24.9 (yy), 0 (xy, yx) muB/Ry (b = 1e-4 Ry). The loop gain lambda*chi/M is about 100. The k-space GBT path therefore replaces the controller by a Newton step with the measured chi (`update_gbt_constraint_field`, `source/self_reciprocal.f90`); `constrain.f90` is unchanged for every other route. Not checked: whether the real-space and `periodic_nc` k-space routes have the same gain (an SC0 `periodic_nc` k-space run with a target 20 deg off the potential axis diverged; that deck was hand-built).
-- S9, dE/dtheta = -M B^x (derived in the SC1 plan): explained by D-S9 (2026-10-22, developer accepted H1). The relation does not hold in this scheme, and the table below shows by how much. Measured (bcc Fe, `fe_bcc` potential, 16^3, 300 K, first order, q = (0.125,-0.125,0.125) direct, h = 1 deg central difference, binary of `f9e5e73`; SC2 first found 9.49e-4, 2.316e-3, 3.053e-3, 3.281e-3 Ry/rad):
-
-  | theta | dE/dtheta SCF (Ry/rad) | dOmega/dtheta, force theorem (Ry/rad) | M (muB) | B^x (Ry) | -M B^x (Ry/rad) |
-  | --- | --- | --- | --- | --- | --- |
-  | 15 deg | 9.486e-4 | 1.025e-3 | 2.12999 | 3.172e-4 | -6.757e-4 |
-  | 30 deg | 2.318e-3 | 2.279e-3 | 2.11609 | 3.320e-4 | -7.026e-4 |
-  | 45 deg | 3.053e-3 | 3.001e-3 | 2.11711 | 1.686e-4 | -3.569e-4 |
-  | 60 deg | 3.286e-3 | 2.973e-3 | 2.14177 | -5.64e-5 | +1.207e-4 |
-
-  The force theorem is `frozen_magnon` (first order) on the converged theta = 0 potential, Omega at fixed mu = -0.068155 Ry, against the SCF at fixed N. Zero-field theta = 30 deg SCF (constraints off): E = -2541.9807268637 Ry against -2541.9807253147 Ry with the field, 15 iterations, m_x = 8.158e-3 muB (tilt 0.2209 deg), written `mom` stays (0, 0, 1). At that potential chi_xx = -24.575 and chi_yy = -24.97 muB/Ry, -m_x/chi_xx = 3.3195e-4 Ry against B = 3.3204e-4 Ry in the constrained SCF, and dOmega/dtheta = 2.194e-3 Ry/rad. Relations, with H = H_0(theta; V projected on the local axis) + b sigma_x in the local frame: (1) dOmega_band/db = m_x, so the converged field is B* = -m_x(theta, 0)/chi_xx, the field that cancels the m_perp the projected potential leaves; (2) E(constrained) - E(zero field) = +1.549e-6 Ry measured, against +(1/2)|chi_xx| B*^2 = 1.35e-6 Ry (the band energy is stationary in b at B*, a maximum because chi < 0); (3) because of that stationarity dE/dtheta = <dH/dtheta> at fixed V and B* (the frame/link torque), independent of B* and dB*/dtheta, and the SCF finite difference differs from the force-theorem value above by 8%, 1.7%, 1.7% and 10% at 15, 30, 45 and 60 deg. The direction is held by the projection (`spin_density.f90:272-282`, `mix_magnetic_state` in `self.f90`); its multiplier is the transverse exchange field the projection removes, lambda = -(1/M) dE/dtheta = -1.04e-3 Ry at 30 deg, against B* = +3.32e-4 Ry. The code does not compute or print lambda or dE/dtheta; the `torque` columns of `constraint_diagnostics.dat` and the `DENSITY_POLICY` torque are dimensionless reference-times-moment cross products. Not measured: the split of dE/dtheta into onsite and bond (spin-dependent W) parts, which needs a commutator expectation.
-- `source/self.f90:3209` (`write_gbt_scf_diagnostics`) forms the transverse moment as the square root of a difference of squares, so near convergence it carries a cancellation error: 4.03e-8 muB against 4.17e-8 muB for the component itself (theta = 30 deg, last iteration). It feeds only `gbt_scf_diagnostics.dat`, not the controller. Not fixed (`self.f90` is off-limits).
-- `f103c5d` added `scf_identity_ry` to `tests/gbt/oracles/tolerances.nml`; `UnitGbtKspaceForceTheorem` and `UnitGbtKspaceHorth` declared the `gbt_tolerances` namelist without it and stopped with `Cannot match namelist object name scf_identity_ry`. Fixed by declaring the key (and `scf_moment_mub`) in both tests.
-
-## Explicit-supercell SCF diverges at the default mixing; Cr flat spirals collapse to non-magnetic on `cr_bcc` — 2026-10-20
-
-Found in SC4 (bcc Fe, `fe_bcc` potential, first order, 300 K). Measured:
-- The collinear `periodic_nc`-free SCF (`nsp = 1`) of the 8-atom supercell `tests/gbt/fixtures/bccFe_super_q025` with `&mix` `beta = 0.1`, `mixtype = 'broyden'` falls to a SCF difference of 1e-5 after about 10 iterations, then grows by a factor of about 4 per iteration to 0.17; the moment collapses from 2.10 to about 0 muB and E_F reaches -0.32 Ry (4x4x2 and 8x8x4 meshes). `beta = 0.05` with `mixtype = 'linear'` does not converge, and `beta = 0.05` Broyden diverges for the non-collinear supercell. `beta = 0.02` Broyden converges (4x4x2 mesh, collinear: 60 iterations; non-collinear: about 160 iterations at about 4% per iteration). The CsCl cell converges at the default beta. Untriaged; suspects: the Broyden history with 2L equivalent sites, charge sloshing on the larger cell. `tests/gbt/test_kspace_scspiral_i3.py` uses `beta = 0.02`.
-- Cr (`tests/spin_response/cr_bcc`, 2.95 Angstrom, antiferromagnetic CsCl cell): the flat spiral at q = (0,0,1/4) 2pi/alat on the 8x8x16 mesh converges to |m| = 0 on both sites (GBT and supercell), and on the 4x4x8 mesh even the collinear AFM state collapses to 6e-4 muB. The I3 identity then holds trivially, so the Cr I3 cases are not registered; they wait for the developer's expanded Cr deck (D5).
-
-## `ccor_vmt_mode = 'pair_surface'`: the ordinary `periodic_nc` route gives different eigenvalues for the mirrored and the B1 encoding of the same NiO deck — 2026-10-22
-
-Found in the `AppGbtKspaceNio` R2 check (CCOR on the k-space GBT path). The AFM-II NiO deck (`example/bulk/fccNiO/AF`, copied to `tests/gbt/fixtures/nio_af`) stores the down-spin Ni as `Nid` with `mom = +z` and the spin-1 channel holding the minority values (mirrored). `Nid_B1.nml` (made by `make_nid_b1.py`) swaps every spin-indexed field and flips `vrmax(2)`, with `mom = -z`. Measured, `periodic_nc` with `nsp = 3`, 4x4x4 mesh, `ccor_2c`, fixed potentials, max |E(mirrored) - E(B1)| over all k and bands:
-
-| `ccor_vmt_mode` | first order | second order |
-| --- | --- | --- |
-| `surface_scalar` | 5.0e-15 Ry | 1.0e-14 Ry |
-| `pair_surface` | 1.42e-03 Ry | 1.43e-03 Ry |
-
-The k-space GBT route with the B1 file matches `periodic_nc` with the same B1 file to 1e-14 Ry in both modes (q = 0, theta = 0), so the difference is in the ordinary route and is shared by it. Not diagnosed. Suspect, from reading `hamiltonian_ccor.f90`: `ccor_vmt_pair_surface` averages `vrmax` index by index over the two endpoint types (`vi`, `vj` at `:598-603`) before the moment orientation is applied (`ccor_lambda_components`, `:661-673`); the average is then not invariant under the spin-swapped encoding of a site. Which encoding is the intended one is the developer's decision. The k-space GBT glue refuses `ccor_vmt_mode = 'pair_surface'` (the channel-wise pair average is not defined for rotated local frames), so `AppGbtKspaceNio` runs `surface_scalar` only. The same index-wise average sits in `build_ccor_pair_block_gbt` (`:210-215`) and was not run for the real-space GBT route.
-
-## I3 with `ccor_2c` at second order needs a tighter SCF criterion — 2026-10-22
-
-Found registering `AppGbtKspaceScSpiralI3Ccor_fe_L4_second` (bcc Fe, `fe_bcc` potential, `hoh = .true.`, `ccor_2c`, `screening = 'fitted'`, 4x4x8 CsCl-cell and 4x4x2 supercell meshes, CI configuration). With the default `conv_thr` (5e-9) the test's own precondition, two collinear `nsp = 1` SCFs of the CsCl cell and of the 8-atom supercell, gave |dE/atom| = 1.390e-07 Ry and |dE_F| = 4.6e-08 Ry against `scf_identity_ry` = 1e-07 although both runs reported `Converged!` (SCF differences 4.4e-09 and 4.6e-09). With `conv_thr = 5e-10` in those decks it gives 3.3e-09 and 0 Ry, and the case passes (|dE/atom| = 2.3e-08 Ry). At first order the default criterion was enough (5.8e-08 and 3.4e-08 Ry). So the residual was the SCF stopping criterion, not a difference between the cells.
-
-Update 2026-11-04: `AppGbtKspaceScSpiralI3Ccor_fe_L4_first` is enabled again. Measured in the CI configuration (Release, MPI on, no `-march=native`; clean Open MPI and OpenBLAS environment): with the default `conv_thr` and no `OMP_NUM_THREADS` it failed the precondition in 211 s, |dE/atom| = 1.841e-07 Ry, |dE_F| = 4.100e-08 Ry (tolerance 1.0e-07). With `conv_thr = 1e-9` in its decks and `OMP_NUM_THREADS=1` it passed in 638 s: precondition |dE/atom| = 2.442e-08 Ry, |dE_F| = 5.000e-09 Ry; GBT against supercell |dE/atom| = 2.793e-08 Ry, |dE_F| = 3.000e-09 Ry, max |d m_par| = 2.888e-08 muB, max |d m_perp| = 2.980e-08 muB (tolerances 1.0e-07, 1.0e-06), both SCFs converged. One run each; the effect of `conv_thr` and of the thread count was not separated. The stall (Diff at about 6e-10, 300 steps) seen at `conv_thr = 5e-10` in the Debug `-O0 -fcheck=all` build was not reproduced at 1e-9 here and was not run at 5e-10 in this build.
-
-## k-space `'orthogonal'` SCF of AFM NiO without CCOR collapses and ends in a LAPACK failure — 2026-10-22
-
-Found probing the `'orthogonal'` SCF on `tests/gbt/fixtures/nio_af` (collinear `nsp = 1`, 6x6x6 mesh, 300 K deck default, `txc = 1`, no `hoh`, no `ccor_2c`, start from the deck potentials). With the deck's `beta = 0.1` the SCF difference runs 0.23, 0.50, 1.2, 3.4 and the run stops in the third iteration with `reciprocal backend: LAPACK eigensolver failed`; first-iteration Ni moment 1.53 muB (the CCOR SCF at second order gives 0.795 muB). With `beta = 0.02` Broyden the Ni moment falls 1.53, 1.37, 1.11, 0.72, 0.28, 0.05, 0.02, 0.004 muB over eight iterations, then the difference grows again and the same LAPACK failure follows. Untriaged. Not known: whether the collapse is the physics of the exact-ASA Hamiltonian without CCOR for NiO, a poor start, or the mixing; and what makes the eigenproblem non-finite after the collapse. Not tried: other starts, other meshes. Fe converges with `'orthogonal'` (see the report of the OR task). The NiO check of `'orthogonal'` is therefore the fixed-potential `AppGbtKspaceNio_r2_orthogonal`; an NiO `'orthogonal'` SCF waits for CCOR with `'orthogonal'`.
-
-## nsp = 1 AFM with `mom = -z` in a potential file collapses the moment — 2026-10-21
-
-Observation while writing `AppKspaceOrthogonalScf_afm`; existing collinear behaviour, not triaged, not fixed.
-
-Verified (12^3 mesh, tests/spin_response/cr_bcc as the nsp = 1 deck, one converged SCF per row, CI build, hoh off):
-
-| Cr1.nml mom | Cr2.nml mom | kspace_ham_order | E [Ry] | E_F [Ry] | site moments [muB] |
-|---|---|---|---|---|---|
-| +z (as shipped) | +z (as shipped) | orthogonal | -4195.4954991779 | -0.0092139615 | 0.919776, 0.919776 |
-| -z | +z | orthogonal | -4195.4943368659 | -0.0130560952 | 0, 0 |
-| -z | +z | first | -4195.5016632209 | -0.0165993972 | 0, 0 |
-
-Only `mom` of Cr1.nml was edited; channel 1 of Cr1 holds the minority values, so -z is the lab orientation that file describes. The nsp = 1 SCF leaves `mom` at +z in both written potentials. The collapse is the same at first order and 'orthogonal', so it is not specific to the new path.
-
-Suspected, not checked: other code reads `mom(3)` in the nsp = 1 path (`hamiltonian_build.f90:1324` and `1367` obarm/enim, `1824`; `calculation.f90:1412` and `1584`), which would swap spin channels of a mirrored file. The deck was hand-edited and only this one deck was run, so the deck is a live suspect.
-
-Proposal: none needed for the tests, since nsp = 1 AFM is encoded by mirrored potentials with `mom = +z` (as the NiO `Nid` fixture); a check or a documented convention would be a separate task.
-
-## `AppGbtKspaceRsFreeze` fails at round-off level in the full run of feat/gbt-scspiral at cecc48a — 2026-10-25
-
-Full run `ctest -LE 'validation|performance'` in `build/` (RelWithDebInfo, `ENABLE_MARCH_NATIVE=ON`), 240 tests, 8908 s: 2 skipped (`Regression_diamondSi_sp_chebyshev_mkl_batch`, `_mkl_sparse`), 2 failed. `Example_bulk_bccFe_nsp2_hubbard` is the Fixed-U guard entry above (2026-10-18). `AppGbtKspaceRsFreeze` fails on four decks; the test compares printed digits with tolerance 0 against references generated at C5, so any difference fails it. Measured (from `LastTest.log`):
-
-- `Example_bulk_bccFe_nsp4_block_spiral_qplus`, 6 of 281 values: `etot` |diff| 1.8e-10 (rel 7.2e-14), `sumec` 2.2e-10, `sumev` 7.9e-11 (rel 4.0e-11), `utot` 1.8e-10, `ekin` 2.3e-11, `rhoeps` 2.9e-11.
-- `Example_bulk_bccFe_nsp4_block_spiral_qminus`, the same 6 values: `etot` 9.5e-10 (rel 3.7e-13), `sumev` 2.8e-10 (rel 1.4e-10), `utot` 8.9e-10, others 1e-10 to 5e-10.
-- `Example_frozen_magnon_bccFe_auto` and `_auto_scf`, 3 of 45 values each, `frozen_magnon_branches.dat` column 5: row 12 run 2.100e-14 against ref 3.500e-15; row 13 |diff| 1.2e-10 on 4.598e-5 (rel 1.2e-10); row 14 |diff| 1.0e-11 on 1.231e-3.
-
-Resolved 2026-11-04 as a build-configuration effect (Linux). The committed references were `ref.macos-arm64.json` only, so the test skipped on Linux. `ref.linux-x86_64.json` for the four decks was generated at 957c31ef (Release, MPI on, no `-march=native`; GCC 13.3.0, Open MPI 4.1.6, OpenBLAS, i9-11900). `AppGbtKspaceRsFreeze` at 2a76677b in the same configuration passes against them (38.5 s), so on Linux the code change from 957c31ef to 2a76677b does not move the real-space route. A fresh RelWithDebInfo `-march=native` MPI build (same compiler, MPI and BLAS) at 9beda10d fails against the same references (38.3 s): qplus and qminus 93 of 281 values each, `auto` and `auto_scf` 3 of 45 each. `Fe_out.nml` values: qplus `etot` |diff| 2.501e-10 (rel 9.8e-14), `sumec` 2.487e-10, `sumev` 1.112e-10 (rel 5.6e-11), `utot` 2.547e-10, `ekin` 3.9e-11, `rhoeps` 3.5e-11; qminus `etot` 4.366e-10, `sumec` 1.664e-10, `sumev` 1.239e-10 (rel 6.2e-11), `utot` 3.729e-10, `ekin` 2.2e-11. `frozen_magnon_branches.dat` column 5, rows 12 to 14 in both frozen decks: |diff| 3.3e-14, 4.52e-11 (on 4.598e-5), 1.0e-11 (on 1.231e-3). The same quantities, at the same size, as in the 2026-10-25 failure. Differences from that record: each spiral deck also lists 86 `gbt_bonds.out` values with |diff| up to 3.1e-15, which the 2026-10-25 listing does not include (not checked whether it was omitted there or did not differ), and the row 12 values differ (run -1.225e-14 here). The original `build/` has since been reconfigured, so its BLAS and MPI are not known. Against the arm64 references (`RSLMTO_REFERENCE_VARIANT=macos-arm64`) the Linux Release build fails with the same six values at 1e-10 (`etot` |diff| 2.424e-10), so equal flags on another platform do not reproduce the references either. macOS was not re-run in the CI configuration (no Mac available).
-
-## `write_strux_block` indexed `sbar` with a cluster atom index; strux_lib surface decks crashed in `buildsurf` — 2026-10-25
-
-Symptom: `pre_processing = 'buildsurf'`, `strux_backend = 'strux_lib'`, non-periodic `crystal_sym = 'file'` (deck `RS_references/Surface/Cheb/bccFe110_strux`) stops after `DEBUG_STRUX_DIAG` in `write_strux_block`, `lattice_strux.f90:748`, called from `structb_strux_local`.
-
-Measured on the unfixed source:
-
-- Debug build (`-fcheck=all`): `Index '2167' of dimension 4 of array 'this%sbar' above upper bound of 1`. The 4th index is `ia`, the cluster atom index passed by the call sites; the upper bound is `ntot` = 1.
-- RelWithDebInfo build (`-O2 -g -march=native`): SIGSEGV with `write_strux_block` in the backtrace.
-
-Cause (read from the code, matches the measured index): the three call sites passed `ia = iu(ii)` where `write_strux_block` expects the type index `ii` of `sbar(:,:,:,ii)`. For bulk cells `ia <= ntot`, so the read stayed in bounds and wrote the block of type `ia` to units 13/15/16.
-
-Fix: `write_strux_block(this, nl2, m, ii, iclus, jclus)`; `ii` indexes `sbar`/`sdot`, `iclus` is only the ICLUS label.
-
-After the fix (RelWithDebInfo): the same deck passes `structb` and enters SCF; stopped by hand at SCF step 10 after 580 s, no error in the log. `view.sbar` of that run prints `ICLUS= 2167`. Bulk strux_lib decks (82 test directories from `ctest -L '^quick$'` plus `-L strux`): `sbar`, `view.sbar`, `sdot`, `view.sdot` and `str.out` (cpu_s lines excluded) byte-identical before and after.
-
-Separate, measured, not fixed: `buildsurf` decks with a named `crystal_sym` (`example/surface/fccCu001` with `strux_backend = 'strux_lib'` added, and `RS_references/Surface/Cheb/bccFe110_glob_strux`, `crystal_sym = 'bcc'`) fail in `salph1_lmto47_direct` (`strux_lmto47_mode.f90:455`) with `Error allocating 611648968392 bytes` (fcc, 68 s) and `104367839688 bytes` (bcc, 17 s), Debug build.
-
-- They never reach `write_strux_block`: the local branch of `structb_strux` is gated on `crystal_sym == 'file'`, so `crystal_sym = 'fcc'/'bcc'` takes the periodic `strux_compute` branch (`lattice_strux.f90:448`).
-- gdb at that call, bccFe110_glob_strux: `nbas` = 49, `nspec` = 1, `ips` all 1, `pos(:, 1:6)` and `pos(:, 45:49)` all (0, 0, 0). `build_surf_full` sets `this%nbas = 49` (`lattice_cluster.f90:306`) while `this%crd` holds only the one-atom bulk cell (`lattice_lifecycle.f90:695`), so strux receives 49 atoms at the origin of the bulk cell.
-- Allocation sizes: 611648968392 / 8 = 276507^2 = 9 x 30723 x 9, and 30723 = 49 x 627; 104367839688 / 8 = 114219^2, and 114219 = 9 x 12691 with 12691 = 49 x 259. The per-center counts 627 (fcc, 12 Angstrom cutoff) and 259 (bcc, 9 Angstrom) match the number of lattice points inside the solve sphere of the bulk cell (4/3 pi R^3 n: about 613 and 261), which I estimated by hand, not computed.
-- The Mac SIGKILL (exit 137) of the fccCu001 deck is probably the same allocation; not checked.
-
-Fix: `structb_strux` takes the local branch when `.not. pbc` and (`crystal_sym == 'file'` or `calctype == 'S'`) (`finite_cluster`, `lattice_strux.f90`). After the change both decks pass `structb` and enter SCF (Debug build, `-fcheck=all`: no bounds error; RelWithDebInfo for the bcc deck): `STRUX local solve center= 1 nbas=259` (bccFe110_glob_strux) and `627` (fccCu001), equal to the per-center counts above; both runs stopped by hand in SCF. Legacy backend on the same bccFe110_glob deck, `view.sbar`, 14 blocks: headers identical, max |strux_lib - legacy| = 1.5e-3 (on-site 3.0921 against 3.0927). The existing `crystal_sym = 'file'` pair (`RS_references/Surface/Cheb/bccFe110` legacy `view.sbar` against `bccFe110_strux` after this change, 13 blocks): max |diff| = 1.1e-2 (on-site 3.944 against 3.9455). Bulk strux_lib decks: the 82 test directories above are byte-identical to the unfixed run.
-
-Not checked: multi-element surfaces and interfaces. The local branch reads the species of each cluster atom from `this%izp(1:kk)`, which `build_surf_full` does not fill per cluster atom (`this%iz` holds the types); both decks above are single-species. `calctype = 'I'` was not tried.
+
+### Lanczos etot shift at `2cae269`, three screening-alpha tables — 2026-10-05
+- **Verified:** the legacy Lanczos deck etot moves +6.693e-6 Ry at `2cae269` ("Repair DRESP-03TG screening representation consistency"); Block and
+  Chebyshev move 3e-7 and 4e-7; strux_lib is bitwise unchanged. Located in the `qm` read of `predls` (`source/symbolic_atom.f90`): `micha` constants
+  are unchanged, but `potential%screening_alpha` is now filled on the legacy path, so `qm(1)` goes from 0.348485 to 0.3485. Why Lanczos moves ten
+  times more than Block/Chebyshev is not diagnosed. `Regression_bccFe_lanczos` pins the current value (reference regenerated, no provenance recorded);
+  cross-platform agreement at 1e-6 is not known.
+- **Open decision, three alpha tables:** `legacy_micha_alpha = [0.3485, 0.05303, 0.010714, 0.00337]` (`source/lattice.f90:52`),
+  `default_screening_alpha_values = [0.3485, 0.0530, 0.0107, 0.00674]` (`lattice.f90:48`, used by strux_lib; 0.00674 = 2 x 0.00337 has no source in
+  the repository history before `1355a50`; the vendored `strux_tb.f90` has 0.00535), and `qm_canonical = [.348485, .053030, .010714]`
+  (`source/math.f90:110`, used when `screening_alpha` is unallocated). `qm_lmto47` (`math.f90:112`) has no reader. Which table each backend should
+  use, and the l=3 value, is not decided.
+- **Suspected, from code reading only:** `ccor_2c` also reads `potential%screening_alpha` (`source/hamiltonian_ccor.f90:496-499`), so a legacy-backend
+  `ccor_2c` deck changed at `2cae269`.
+- **Related, not diagnosed:** the k-space SCF reference `Example_k_space_scf_bccFe/ref.json` is 7.047e-6 Ry above the current etot; the step localizes
+  to the commit "Reconcile legacy LDA XC kernels against fixed-density references" (mechanism inferred from the title only).
+
+### Four validation scripts fail in the CI full run — 2026-10-04
+- **Verified (last full run, 4 of 179 failing):** `Val04LdaUPhysics` (Hermiticity residual of the stored occupation matrix 1.08e-7 against 1e-7 for
+  the u4 deck; later also stops at the Fixed-U guard, see below), `Val12LmtoFieldsTorques` (SOC-free global rotation changes the torque invariant by
+  8.281e-03 T against 5.0e-3), `Val16GbtCommensurateSupercells` (the `nstep = 100` reference supercell run does not reach `Converged!`; script
+  retired, archive tag) and `Val17GbtHarmonicGoldstone` (`tests/validation/val_gbt_harmonic.py`: canonical occupation N = 8.0069 against `|N-8| <
+  1e-8`, and sin^2(theta) spread 10.39% against 5%). A later cone-angle remeasurement gives a 1.49% spread, so the Val17 status is not reconciled.
+- **Not diagnosed.** Scripts in `tests/validation/` (`val04_lda_u.py`, `val12_lmto_fields_torques.py`).
+
+## Fixed-potential and frozen-magnon (GBT) findings
+
+### Small-q GBT stiffness is mesh sensitive; multi-sublattice k-space not re-tested — 2026-08-16
+- **Verified:** the fine-mesh small-q frozen-magnon energies are quadratic in q at 12^3 and 16^3, but the inferred stiffness changes by about 55%
+  between those meshes. The material stiffness and the multi-sublattice maturity claim stay open until denser or shifted meshes and an independent
+  finite-q reference exist.
+- **Verified:** the reciprocal FeCo acoustic Gamma value is 6.48e-15 Ry (real-space route -4.16e-17 Ry, in-phase eigenvectors; two-sublattice bcc
+  FeCo, `branch_mode = 'auto'`). The original ~0.28 Ry violation was measured on the pre-WP1 k-space route and was not re-checked for every system;
+  one system, one theta_probe.
+- **Test impact:** `Example_frozen_magnon_bccFe_auto` and `_auto_scf` are single-sublattice smoke cases only; they pin no multi-sublattice values.
+  `GBT+SOC`, GBT local-cluster/impurity and GBT intersite Hubbard-V are unsupported combinations (`docs/DECISIONS.md`).
+
+### k-space EBAND mesh refinement is mildly non-monotonic at some q — 2026-08
+- **Verified (bcc Fe, `q_ss = (0,0,0.5)`, nk = 8/12/16):** `eband` = -1.98668388, -1.98714329, -1.98785909 Ry; the step grows (4.59e-4 then 7.16e-4
+  Ry). At H the same sweep shrinks. Not diagnosed; plausibly tetrahedron discretization noise.
+
+### GBT: suspected double sign flip for sites with `mom(3) < 0` (F1) — 2026-10-17
+- **Read in the source:** `gbt_endpoint_angles` (`source/hamiltonian_build.f90`) sets `axis_sign = -1` and returns `theta = pi - theta_ss`, `phi = pi`
+  when `potential%mom(3) < 0`; the two flips may cancel or be one intended flip, depending on the stored `wx1`/`cx1` convention. Not traced.
+- **Measured (AFM bcc Cr, `nsp = 3`, q = 0, one iteration):** with `mom(3) < 0` on a site, `gbt_single_q` bands are 4.2e-2 Ry from `periodic_nc` and
+  the moment is about 4.3 times smaller (0.207 against 0.884 muB); the same antiferromagnet with swapped channels and `mom(3) = +1` agrees to 2.7e-15
+  Ry. Real-space GBT is frozen for the restart.
+
+### GBT: second-order onsite C differs between real-space `gbt_single_q` and the collinear route — 2026-10-18
+- **Read, not run:** with `hoh = .true.` the collinear pair builder passes `cex` as the onsite term and adds `enim = cx - cex`, while `gbt_single_q`
+  builds `h` from `cx`, so the first-order onsite term would be `2 cx - cex` (`source/hamiltonian_build.f90`, around lines 1993-1994). No run compares
+  the two at `hoh = .true.`. The k-space path follows the collinear route; `test_kspace_commensurate.py` at second order is the check.
+
+### `cmplx` without `kind` rounds double-precision arguments to single in four places — 2026-10-18
+- **Read, not run:** `source/bands.f90:1366` and `:1444` (`cmplx(0.0_rp, res)`, Gauss-Legendre nodes), `source/green_block.f90:214`,
+  `source/hamiltonian_paoflow_io.f90:236` (PAOFLOW hoppings). Expected size about 1e-8 relative in the real-space Green-function quadrature. Not
+  measured; fixing changes reference values.
+
+### Real-space LKAG exchange does not follow the full-ASA reference with Hamiltonian order — 2026-10-22
+- **Measured (bcc Fe, `fe_bcc` potential, zero SCF steps), J(0)-J(q) at q1 / q2 [mRy]:** rigid rotation oracle 3.82 / 11.01; recursion `hoh = .false.`
+  2.26 / 6.82; recursion `hoh = .true.` 4.54 / 15.64; k-space GBT first order 3.35 / 9.64, second order 3.60 / 10.20. J_01 from recursion 0.755 (`hoh`
+  off) and 2.175 mRy (`hoh` on). Not matched between routes: temperature (0 against 300 K), energy window, terminator, 5a cutoff (about 1%).
+
+### `tests/spin_response/oracles/fe_lswt.dat` is not reproducible from the repository — 2026-10-22
+- **Verified:** `make_fe_lswt.py` only converts UppASD output; the Hamiltonian order, temperature, window and `nsp` of the run behind the file are not
+  recorded.
+
+### k-space GBT constrained spiral: controller diverges, S9 relation does not hold — 2026-10-20
+- **Measured (bcc Fe, 16^3, 300 K, first order, q = (0,0.25,0), theta_ss = 30 deg):** with the `constrain.f90` controller (`i_cons = 3`, lambda = 10),
+  m_perp goes 3.0e-4 -> 0.035 -> 2.8 -> 8.0 muB in three iterations and the eigensolver fails; the other sign overshoots equally.
+- **Verified:** dE/dtheta = -M B^x does not hold in this scheme (SCF dE/dtheta 2.318e-3 Ry/rad at 30 deg against -M B^x = -7.026e-4; the force theorem
+  gives 2.279e-3). The transverse moment in `write_gbt_scf_diagnostics` (`source/self.f90`) is a square root of a difference of squares and carries
+  cancellation error near convergence (4.03e-8 against 4.17e-8 muB).
+
+### Explicit-supercell SCF diverges at default mixing; Cr flat spirals collapse — 2026-10-20
+- **Measured:** collinear `nsp = 1` SCF of the 8-atom bcc Fe supercell (`tests/gbt/fixtures`, `beta = 0.1`, Broyden) drops to Diff 1e-5 after about 10
+  iterations, then grows. For `tests/spin_response/cr_bcc` (2.95 A, AFM) the flat spiral at q = (0,0,1/4) on 8x8x16 converges to |m| = 0 on both sites
+  (GBT and supercell); on 4x4x8 even the collinear AFM state collapses. Not diagnosed.
+
+### `ccor_vmt_mode = 'pair_surface'` is not invariant under the spin-swapped encoding — 2026-10-22
+- **Measured (AFM-II NiO, `periodic_nc`, `nsp = 3`, 4x4x4, `ccor_2c`, fixed potentials):** max |E(mirrored) - E(B1)| is 1.42e-3 Ry (first order) and
+  1.43e-3 Ry (second order) for `pair_surface`, against 5e-15 and 1e-14 Ry for `surface_scalar`. The k-space GBT route with the B1 file matches
+  `periodic_nc` to 1e-14 Ry, so the difference is in the ordinary route.
+- **Suspected, from reading:** `ccor_vmt_pair_surface` (`source/hamiltonian_ccor.f90:598-603`) averages `vrmax` index by index before the moment
+  orientation is applied (`:661-673`); the same average is in `build_ccor_pair_block_gbt` (`:210-215`), not run. The k-space GBT glue refuses
+  `pair_surface`. Which encoding is intended is a developer decision. Test retired; archive tag.
+
+### I3 with `ccor_2c` needs a tighter SCF criterion — 2026-10-22
+- **Measured:** with the default `conv_thr` (5e-9) the two collinear SCFs of the CsCl cell and the 8-atom supercell differ by |dE/atom| = 1.39e-7 Ry
+  (limit 1e-7) at second order although both report `Converged!`; `conv_thr = 5e-10` gives 3.3e-9. First order needed `conv_thr = 1e-9` and
+  `OMP_NUM_THREADS=1` (1.84e-7 Ry before). The effect of `conv_thr` and of the thread count was not separated; a stall at Diff about 6e-10 in a Debug
+  `-O0 -fcheck=all` build was not reproduced. Test: `test_kspace_scspiral.py` family; the I3 script is retired (archive tag).
+
+### k-space `'orthogonal'` SCF of AFM NiO without CCOR collapses, then LAPACK fails — 2026-10-22
+- **Measured (NiO AFM fixture, `nsp = 1`, 6x6x6, 300 K, no `hoh`, no `ccor_2c`):** with `beta = 0.1` the SCF difference runs 0.23, 0.50, 1.2, 3.4 and
+  `LAPACK eigensolver failed` follows in iteration 3; with `beta = 0.02` Broyden the Ni moment falls 1.53 -> 0.004 muB in eight iterations, then the
+  same failure. Untriaged: physics of the full-ASA Hamiltonian without CCOR, the start, or the mixing. Fe converges. An NiO `'orthogonal'` SCF waits
+  for CCOR with `'orthogonal'`.
+
+### `nsp = 1` AFM with `mom = -z` in a potential file collapses the moment — 2026-10-21
+- **Verified (12^3, `tests/spin_response/cr_bcc` as an `nsp = 1` deck):** `Cr1.nml` with `mom = -z` gives site moments 0, 0 (E = -4195.4943 Ry)
+  against 0.919776 for the shipped `+z`; the same collapse at first order and `'orthogonal'`.
+- **Suspected, not checked:** other code reads `mom(3)` in the `nsp = 1` path (`source/hamiltonian_build.f90`, obarm/enim lines;
+  `source/calculation.f90`), swapping the channels of a mirrored file. Convention: `nsp = 1` AFM is encoded by mirrored potentials with `mom = +z`.
+
+## Recursion, Green-function and GPU findings
+
+### Fast block Lanczos with `hoh` appears to count `lsham` twice — 2026-10-20
+- **Read, not run:** `block_lanczos_sp` folds `lsham` into the shell-1 block of `he`/`ha`, so the eeo sweep acts on it and the hoh combine adds `lsham
+  psi` again (`ons = enim + lsham`); legacy `hop_b_hoh` applies `lsham` once and outside the sweep. The operators would differ by `lsham psi - eeo
+  (lsham psi)`.
+- **Measured (block exchange, `tests/postproc/cases/exchange/bccFe`, `hoh`, `lld = 20`):** J of the first two shells at `nsp = 2` is 1.919232,
+  0.371056 (legacy) against 1.908953, 0.369334 (fast, fp32 and `fast_dp` agree, so not precision); at `nsp = 1` legacy and `fast_dp` agree (1.933942).
+  Cause untested: `nsp = 2` differs from `nsp = 1` in more than `lsham`.
+- **Proposal, not started:** one fast-versus-legacy case with SOC on and `hoh = .true.`; if it differs, remove the shell-1 fold from the hoh branch of
+  the two kernels (about 10 lines).
+
+### RS block recursion at `nsp = 2` is not invariant under spin-axis rotation — 2026-11-01
+- **Verified (bcc Fe, U=0, `soc_scale=0` with `fix_soc`, `mom` along z and along x, iteration 1):** block recursion (lld 21) differs, dE_F 3e-4 Ry,
+  dmoment 1.8e-4 muB; Chebyshev about 1e-7; the KS solver agrees within 1e-9. `sym_term = .true.` does not resolve it (converged E_F -0.068999 z,
+  -0.068975 x; moment 2.099999 and 2.10006). With U=2/J=0 local mode the converged moment differs by 1.1e-2 muB. Cause open; a termination in the
+  global frame is a suspect.
+- **Handling:** `nsp = 2` U runs with a tilted spin axis (RS, `recur` other than `chebyshev`) stop with a fatal. Related: global-frame recursion
+  (`local_axis = F`) is not rotation invariant even without SOC (band energy +2.3e-4 Ry at lld 13, -1.9e-5 at lld 25); `local_axis = T` reproduces z
+  to 6e-6 Ry. Block recursion at `nsp = 4` breaks down at large lld (|m| 2.104, 2.087, 1.776 muB at lld 21, 31, 41), consistent with the lld <= 28
+  bound in `docs/DECISIONS.md`; cause not diagnosed.
+
+### CPU Chebyshev DOS reconstruction is single precision for every `cheb_backend` — 2026-10-21
+- **Read:** `chebyshev_green_core` (`source/green_chebyshev.f90`) reconstructs the DOS on the CPU with `cheb_green_fast` (single precision) in every
+  branch without `eta`; `cheb_backend` is not consulted. So `legacy` is not an fp64 oracle for the SCF energy.
+- **Measured (one SCF step):** |etot(GPU fp64) - etot(CPU legacy)| is 9.5e-10 (diamond Si), 5.8e-9 (`bccFe_chebyshev_fast_hoh`) but 2.6e-8
+  (`bccFe_chebyshev_legacy_hoh`) and 2.3e-8 (`_fast_hoh_ccor_2c`). That the 2e-8 to 5e-8 comes from the CPU reconstruction was not verified. The fp64
+  rows of `tests/regression/run_gpu_matrix.py` therefore use two loose criteria and cannot detect an fp64 kernel error below about 1e-7.
+
+### `SpinResponseOmpIdentity` fails in the CUDA/MKL build — 2026-10-21
+- **Measured:** `tests/spin_response/omp_identity.py` on `fe_bcc` reports differing `spin_response_q*.dat` files between 1 and 4 threads in the
+  `build_gpu` binary. Not diagnosed; suspects: MKL threading of the CUDA build, and a library mismatch in that setup (binary linked to MKL 2026.2,
+  `LD_LIBRARY_PATH` at 2026.1).
+
+## Layered (`calctype = 'L'`) and surface findings
+
+### Raising `&charge nlay_a/nlay_b` breaks the alignment fixed point — standing trap
+- **Verified (`example/interface/fccCu111_AA`, 5 iterations):** `&lattice nlay_a/nlay_b` 4/4 keeps `V(B) = 0.000000` Ry; `&charge nlay_a/nlay_b` 4/4
+  gives `V(B) = -0.4498` Ry. `&charge` counts rows of the synthetic 2D Madelung stack (fixed size `max(49, ...)`, `source/lattice_cluster.f90:709`),
+  so raising it relabels charged interior rows as frozen (`source/charge.f90:1711`). Widen the buffer with `&lattice` and keep `&charge` at 1.
+- **Open:** the `align_regions` "widen the active zone" drift warning also fires in runs where the identity holds; whether the deep-probe drift
+  threshold needs recalibration is open.
+
+### `A | vacuum` and `A | vacuum-gap | B` — 2026-08-16
+- **Open:** `A | vacuum-gap | B` needs a four-region layout and a rework of the type-block arithmetic in `build_interface_full`, which hardcodes three
+  regions; unavailable.
+- **Residual, `A | vacuum` at `nlay = 3`:** the undamped alignment/vacuum feedback can still oscillate or grow from a bad initial offset; `vmix` is
+  exposed in `&charge` (0.2 used in the multilayer test); the vacuum-onset warning is intentional. Example: `example/interface/fccCu111_Avac`.
+
+### `processing = 'sd'` workflow scope — 2026-08
+- **Limitation:** `Example_bulk_bccFe_sd_smoke` is an execution smoke test only. Broader impurity and multi-site spin dynamics are untested; MPI
+  launch of the B2FeCo deck was not reproduced.
+
+### `write_strux_block` / `buildsurf` with `strux_lib`: multi-species surfaces unchecked — 2026-10-25
+- **Not checked:** the local branch of `structb_strux` (`source/lattice_strux.f90`) reads the species of each cluster atom from `this%izp(1:kk)`,
+  which `build_surf_full` does not fill per cluster atom (`this%iz` holds the types). Single-species surface decks run; multi-element surfaces and
+  interfaces were not run.
+
+### `constraints_bfield` is pre-sized like the former `constraints_mom_ref` — 2026-11-01
+- **Not tested:** `source/control.f90` pre-sized `constraints_mom_ref` (1,1), which made indexed input fail; that array was fixed.
+  `constraints_bfield` has the same pattern. A zero field is valid there, so the trailing-column cut used for `constraints_mom_ref` does not apply.
+
+## spin_response
+
+### kB defined ten times — 2026-10-05
+- **Verified:** `kB_Ry_per_K = 6.3336814e-6_rp` is declared locally nine times (`source/reciprocal.f90`, `reciprocal_dos.f90`,
+  `reciprocal_occupations.f90`, `reciprocal_spin_density.f90`, `self_reciprocal.f90`), and `math.f90` holds `0.633362019d-5` (`kB_simpson_f`), a
+  relative 9.7e-6 different; not unified because `simpson_f` is on the bit-identical exchange path. Proposal: one definition (about 10 lines; a 1e-5
+  relative change in kT at finite T).
+
+### `<prefix>_dispersion.dat` rows run `n/a` into the previous number — 2026-10-07
+- **Verified:** with no peak or crossing, rows read `2.19599654E-01n/a` (format `(7es16.8,2a24)` with left-justified texts); seen for every row with
+  `n_omega = 1`. Proposal: a leading `1x` before the two `a24` items (one line in `run`); not applied.
+
+### Radial data at r = 0 — 2026-10-11
+- **Verified (bcc Fe):** `radial_ground_state` holds `vxc_up(1) = vxc_down(1) = 0` at r = 0 while `n_up(1) - n_down(1) = -0.8069` bohr^-3
+  (`source/radial_ground_state.f90:257`), so dV/m is 0 there, not its limit; `radial_kernel_matrix` starts every sum at the second point.
+
+### Experimental ALSDA kernel: gaps in the checks — 2026-10-11
+- **Verified (bcc Fe, 12^3, `alsda`, Juelich, lambda 1.195):** the projector arithmetic of `site_radial_data` has no independent check: x from the
+  opposite spin moves lambda to 1.362 (+14%), flipping the sign of x to 1.675 (+40%), core left out of m to 1.1897; all pass. A transposed or
+  conjugated vertex in `accumulate_chi0` passes A4.
+- **Measured (24^3 and 60^3, scripts not committed):** the q = 0 mode stays gapped with spd (smallest eigenvalue of 1 + chi0 U -3.3e-3 Juelich,
+  -2.1e-2 Mills at 24^3); Fe at 60^3 has delta_q < 0 for `alsda_scaled` spd at several xi (-0.022 to -0.112 for Mills). Per-channel scaling not
+  pursued.
+
+### `source/spin_response.f90` is past the 1,000-line guideline — 2026-10-12
+- **Verified:** 1187 lines now (1146 when recorded). The developer decided not to split now. Proposal: move the pure kernels (`accumulate_chi0`,
+  `u_juelich`, `solve_dyson`, `adiabatic_frequencies`) to a submodule (about 600 lines).
+
+### bcc Cr antiferromagnet: response frequencies 1.6 to 2.4 times LSWT — 2026-10-13
+- **Measured (32^3, `tests/validation/spin_response_cr`, 94 q):** the adiabatic frequency over the LSWT `omega_plus` of `oracles/cr_lswt.dat` is 1.626
+  to 2.374 (median 1.727; 64^3 the same); the force-theorem route is within 0.968 to 1.087 of LSWT for q >= 1/8, and Omega_RPA / Omega_force equals
+  1/sqrt(1 - lambda_u) = 1.9657 on Gamma-X. So the factor is the ratio of two routes built from one chi0. Cause of the route ratio not diagnosed; the
+  dynamic tr L peak (1.6 to 1.8 times Omega_RPA) and its maximum at the window edge for 68 of 94 q (eta = 2e-3 Ry, window +-0.06 Ry) were not
+  examined; the Fe-style pole weight is not defined here.
+- **Verified:** `spin_swapped` follows the sign of the total d moment, +5e-14 to +2.5e-13 muB here; a flip on another compiler would change
+  `_state.dat` and fail `SpinResponseCrBaselineRepro`.
+- **Deferred:** site-resolved spectral output (L per row) is not written. Proposal: a dynamic run with a wider window and several `eta` (about 20
+  lines).
+
+### SOC gap in cubic bcc Fe carries an O(xi^2) bias (NC-2, Gate 1) — 2026-10-14
+- **Measured (`tests/validation/spin_response_fe_soc`, `nsp = 2`, q = 0, omega = 0):** omega_adiabatic -8.0e-6 (12^3) to -2.3e-5 Ry (48^3), scaling as
+  xi^2 (log-slope 1.995, 1.998); symmetry expects fourth order (K_1 about 1e-10 Ry) and a gap below 1e-8 Ry. SOC runs print a warning.
+- **Suspects:** (1) the Juelich factor multiplies up and down components with different (enu, p) (a one-site toy with per-spin vertex scaling
+  reproduces the sign and xi^2 slope); (2) the `K = U m0/m` prescription; (3) on-site L.S of the first-order k-space H; (4) deck handling. Only the xi
+  = 0 identity (`SpinResponseSocZeroIdentity`) checks the setup.
+
+### Symmetry log cannot check physical inversion — 2026-10-14
+- **Measured:** two Fe atoms with different type labels, second atom at (1/2 + 0.05, 1/2, 1/2): the log prints P4mm (#99) (no inversion) while spglib
+  with element labels gives P4/nmm (#129) with inversion; omega(q) = omega(-q) to 1e-16 Ry. Likely cause (read): `source/symmetry.f90` passes
+  `lattice%iz(i)` as the species. Check inversion with spglib and element labels.
+
+## Fixed-U LDA+U (RS and KS)
+
+Evidence and run history: `docs/validation/fixed_ldau/VALIDATION_SUMMARY.md`; older records in
+the archive tags.
+
+### `Example_bulk_bccFe_nsp2_hubbard` stops at the Fixed-U guard — 2026-10-18
+- **Verified:** the run stops with "Fixed-U LDA+U currently requires collinear scalar-spin input" (`source/hamiltonian_build.f90:768`);
+  `Val04LdaUPhysics` stops at the same guard (its script rewrites `nsp = 1` to `nsp = 2`). In a scratch copy with `nsp = 1` the guard passes and the
+  run aborts in `update_fixed_u_residuals` (`source/self.f90:1843`), "Index '4' of dimension 2 of array `this%mix%_data%ldm_new` above upper bound 3".
+  Not checked: Release behaviour, Val04 at `nsp = 1`.
+- Both tests were disabled (`DISABLED TRUE`, 2026-10-26). Either they move to `nsp = 1` after the bound is triaged, or the guard is extended once a
+  spinor-basis oracle exists; developer decision.
+
+### Co bulk U=0 non-finite — OPEN
+- **Verified:** RS records of the fixed Co bulk deck become non-finite after about 19-40 iterations at U=0; reproduces on `8b8f7ef`. A fixed Co block
+  deck run to its `nstep = 25` cap stayed finite and ended at Diff = 0.0054412342 Ry with 19 valid checkpoints (not accepted). Cause not diagnosed.
+
+### Fe U>0 embedding offset — OPEN, low priority
+- **Verified:** an Fe impurity in an Fe host at U=3.8 eV, J=1.1 eV differs from RS bulk by -6.6e-3 muB, about 735 times the U=0 control, with
+  identical Hubbard operators, Fermi level and Green's-function evaluation. Ni does not show it.
+- **Probable cause (not tested):** cluster mismatch, rc=80 for bulk against rc=100 for the impurity; the matched test is blocked by the rc=100 entry
+  below.
+
+### RS rc=100 runs non-finite or non-converging — OPEN
+- **Verified:** the Fe rc=100 impurity-style deck becomes non-finite after 102 iterations at U>0 and 34 at U=0; the rc=100 U=0 bulk is not accepted
+  after 600 steps; reproduces on `8b8f7ef`. In a Debug trajectory the d-spin occupation exceeded its five-state capacity at iteration 90 (`ql =
+  16.0232`). Collinear `nsp = 1` SCF now stops when q0 exceeds `2l+1` per spin by more than 1e-6 and rejects non-finite mixed values. A Chebyshev
+  rc=100 run reached Diff 1.40e-8 Ry. Fe rc=140 decks are invalid setups and not part of this entry.
+- **Note:** RS/KS results are not bitwise reproducible across thread counts (about 1e-15 relative); use one thread for identity checks.
+
+### Ni impurity W1 lambda-zero SIGSEGV in optimized builds — 2026-10-21
+- **Verified:** the frozen Ni lambda=0 W1 deck exits SIGSEGV in the first recursion in Release and RelWithDebInfo; the Debug bounds run passed 36
+  loops. One cause was found: an unassociated `pl_bands%control` read in fixed-U replay (`source/self.f90` replay setup, `source/bands.f90:2254`).
+  After binding the pointer, one complete iteration ran in Release without a crash.
+- **Open:** longer-run behaviour and impurity energy (RD4) are untested; impurity energy routing stays off.
+
+### KS-local host to RS impurity equivalence for Ni — 2026-10-22
+- **Not established:** `auto` selects local impurity moments only when every U-carrying frozen host records local mode, for RS-local and KS-local
+  hosts. No accepted Ni KS host exists, so the Ni KS-host-to-RS-impurity comparison is untested. Impurity Hubbard energy is excluded.
+
+### Surface LDA+U (experimental): Ni baseline and local-density physicality — 2026-10-22
+- **Verified:** Ni(001) U=3/J=0.7 probes with local mode stop on NaN projected DOS / `g0` or on a negative rotating-frame density eigenvalue (site 2,
+  l=0, `lambda_min = -3.16e-6`); widening the window from 0.5 to 1.5 Ry does not change it. Two-step Diffs on a two-layer fixture are 0.0163 and 0.387
+  (U=3) against 0.0162 and 0.384 (U=0), so the large Diff is not isolated to LDA+U; it arises in the surface charge response from the bulk-potential
+  seed and is not fixed by lowering beta.
+- **Update 2026-11-04:** collinear Ni(001) U=3/J=0.7 (types 1, 3, 4, U=3 bulk host) ran 200 steps to Diff 3.5e-6 (first below 5e-6 at step 179;
+  spreads 1e-6 to 3e-5); no accepted no-U surface reference exists. Surface Hubbard-energy routing stays off.
+- **nsp=2 surface (S6c), short runs only:** the SOC->0 surface equals the `nsp = 1` surface at iteration 1; with SOC on, the orbital moment keeps
+  rising (Ni-S 0.066 -> 0.109 muB in 5 steps) and a 20-step Tier 2 run shows a Diff excursion near iteration 15-18 in three runs (unconverged host,
+  converged host, J=0); a mixing-history cause is a hypothesis, not tested. No `nsp = 2` surface was run to its convergence floor.
+
+### `calctype='B'` with an impurity cluster stops in the local Hubbard correction at U=0 — 2026-10-26
+- **Verified:** the Ni impurity deck (`pre_processing='newclubulk'`, two types, Chebyshev, `hubbard_radial_moments='local'`, all U/J zero) with
+  `calctype='B'` stops with a fatal in the local Hubbard correction. **Not verified:** the cause; the `B` path uses `itype_local = ib(na_glob)`, which
+  can exceed the number of Hubbard types.
+- **Proposal (not done):** a fatal at input time, or skip the correction when no atom carries U/J (about 10 lines).
+
+### `soc_scale` rescales only the restart SOC strength — 2026-10-26
+- **Verified:** `soc_scale` multiplies `xi_p` and `xi_d` once at `&self` read (`source/self.f90:1787`); after each atomic SFC they are recomputed from
+  the radial potential unless `fix_soc = .true.`. So `soc_scale=0` needs `fix_soc`. Proposal: document it, or apply `soc_scale` after the
+  recomputation (about 3 lines).
+
+### RS local-mode +U transient amplifies 1e-13 seed perturbations — 2026-10-26
+- **Verified (bcc Fe, RS block, `nsp = 1`, U=2 eV, J=0, local, beta 0.01 Broyden, 20 steps):** a 1e-13 relative change in one seed occupation changes
+  the logged Diff substantially, so two implementations that differ at round-off cannot be required to agree to 1e-10 over the first 20 iterations.
+  Converged `nsp = 1` +U RS runs stall at Diff about 2e-6 with beta 0.01.
+- **Not diagnosed:** which step amplifies (suspect the discrete Fermi-level grid search).
+
+### SOC+U bulk adoption: untested corners — 2026-10-27
+- **Not tested:** RS J derivative at `nsp = 2`; k-space meshes other than 12^3 and materials other than bcc Fe; multi-site cells; `nsp = 2` with U on
+  more than one shell. The RS U=2.05 eV Hellmann-Feynman run ended at Diff 1.57e-6 after 150 steps (the transient above).
+- **Unchanged limits:** `calctype S` with U at `nsp = 2`, and `nsp = 3/4` with U, stop with a fatal.
+
+### SOC+U impurity at `nsp = 2`: untriaged findings — 2026-10-30
+- **Verified:** Ni (RS Chebyshev, local) U=3/J=0.7 impurity runs at beta 0.05 and `ldm_beta=1` oscillate (Diff 1e-4 to 7e-2 over 200 steps) at `nsp =
+  1`, SOC->0 and SOC on; they need damping. The KS-host smoke (bcc Fe `nsp = 2`, U=2/J=0, `auto` resolves to local) ended at Diff 1.3e-7
+  (`ldm_beta=1`) and 2.5e-6 (`ldm_beta=0.3`) after 100 steps; the 20-step spread criterion was not met. The impurity local-mode transient amplifies
+  round-off between the `nsp = 2` (10x10) and `nsp = 1` (5x5) paths over 4 steps (7.15e-9 measured against a 1e-7 row tolerance).
+- **Note:** the element `symbol` in the impurity seed names the output files; relabel a copied seed.
+
+### Constraint controller diverges in a KS `nsp = 2` bcc Fe smoke (untriaged) — 2026-11-01
+- **Verified:** KS bcc Fe (`k_space_scf/bccFe`, 12^3, `nsp = 2`, SOC on) with `&constraints`, `constraints_enable`, `constraints_mom_ref(:,1) =
+  1,0,0`, seed `mom` along x: the target is read and resolved, then the controller diverges.
+- **Not verified:** whether the hand-built deck is wrong; the only constraint deck in the repository
+  (`example/bulk/bccFe/input_frozen_magnon_constrained.nml`) is an `nsp = 4` frozen-magnon run. So there is no converged constraint-target result for
+  the S6b path.
+

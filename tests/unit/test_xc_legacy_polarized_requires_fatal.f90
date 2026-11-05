@@ -1,5 +1,5 @@
 ! XCF-08 negative test driver for the unpolarized-only legacy kernels.
-program test_xc_legacy_polarized_requires_fatal
+subroutine test_xc_legacy_polarized_requires_fatal(selector)
    use precision_mod, only: rp
    use control_mod, only: control
    use logger_mod, only: g_logger
@@ -10,17 +10,9 @@ program test_xc_legacy_polarized_requires_fatal
    type(xc) :: functional
    real(rp), parameter :: zero(2) = 0.0_rp
    real(rp) :: energy, v_down, v_up
-   character(len=32) :: selector_text
-   integer :: selector, ios
+   integer, intent(in) :: selector
 
    call g_logger%init()
-   selector = 6
-   call get_command_argument(1, selector_text)
-   if (len_trim(selector_text) > 0) then
-      read (selector_text, *, iostat=ios) selector
-      if (ios /= 0) error stop 'invalid legacy TXC selector argument'
-   end if
-
    call ctl%restore_to_default()
    ctl%nsp = 1
    ctl%txc = selector
@@ -30,4 +22,4 @@ program test_xc_legacy_polarized_requires_fatal
 
    write (*, '(a,i0)') 'UNEXPECTED: polarized density accepted by TXC=', selector
    error stop 1
-end program test_xc_legacy_polarized_requires_fatal
+end subroutine test_xc_legacy_polarized_requires_fatal

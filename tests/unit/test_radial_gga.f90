@@ -1,5 +1,5 @@
 ! XCR-03: authoritative contract tests for the logarithmic radial derivative.
-program test_radial_gga
+subroutine test_radial_gga
    use precision_mod, only: rp
    use xc_radial_mod, only: radgra, radial_flux_divergence
    implicit none
@@ -146,4 +146,4 @@ contains
       end if
    end subroutine require
 
-end program test_radial_gga
+end subroutine test_radial_gga

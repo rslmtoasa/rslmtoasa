@@ -13,7 +13,7 @@
 ! The source of truth for the density convention is kept here next to the
 ! driver: densities are electrons/bohr^3, rs is in bohr, and the libXC
 ! Hartree results are converted by the production wrapper to Rydberg.
-program test_xc_lda_reconciliation
+subroutine test_xc_lda_reconciliation
    use precision_mod, only: rp
    use control_mod, only: control
    use logger_mod, only: g_logger
@@ -54,7 +54,7 @@ program test_xc_lda_reconciliation
    real(rp) :: libxc_exc, libxc_vup, libxc_vdn
    character(len=64) :: status, classification
 
-   call get_command_argument(1, output_dir)
+   output_dir = ''
    if (len_trim(output_dir) == 0) output_dir = '.'
 
    call g_logger%init()
@@ -417,4 +417,4 @@ contains
       value = abs(first - second)/max(abs(first), abs(second), 1.0e-30_rp)
    end function relative_difference
 
-end program test_xc_lda_reconciliation
+end subroutine test_xc_lda_reconciliation

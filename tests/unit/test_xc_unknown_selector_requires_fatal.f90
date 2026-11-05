@@ -1,6 +1,6 @@
 ! XCF-07: unknown legacy selectors must fail during XC construction for every
 ! spin mode instead of falling through to the Barth-Hedin implementation.
-program test_xc_unknown_selector_requires_fatal
+subroutine test_xc_unknown_selector_requires_fatal
    use control_mod, only: control
    use logger_mod, only: g_logger
    use xc_mod, only: xc
@@ -17,4 +17,4 @@ program test_xc_unknown_selector_requires_fatal
 
    write (*, '(a)') 'UNEXPECTED: unknown legacy selector was accepted'
    error stop 1
-end program test_xc_unknown_selector_requires_fatal
+end subroutine test_xc_unknown_selector_requires_fatal

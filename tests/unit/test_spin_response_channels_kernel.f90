@@ -2,7 +2,7 @@
 ! (band 1 at k, band 2 at k+q; the others have an exactly zero spin factor), against chi0_ij = w df T_i conj(T_j)/(w + de + i eta)
 ! written here: ordinary values, a vertex of 1e-100 and df = 1e-30 (a threshold on either would drop the pair), 41 omega
 ! (blocks of 32 and 9). Then the offsets of channels p and f on two sites at nb = 32.
-program test_spin_response_channels_kernel
+subroutine test_spin_response_channels_kernel
    use precision_mod, only: rp
    use basis_mod, only: basis_init
    use spin_response_mod, only: accumulate_chi0, channel_amplitudes_coefficient
@@ -15,7 +15,7 @@ program test_spin_response_channels_kernel
    complex(rp), allocatable :: a(:, :, :, :, :)
    integer :: c, i, j, mu, iw, ic, s, l
 
-   call get_command_argument(1, dir)
+   call get_command_argument(2, dir)
    call read_tolerance_file(trim(dir))
    call require('a1_rel', a1_rel)
    om = [(0.4_rp*(iw - 1)/40, iw=1, 41)]
@@ -57,4 +57,4 @@ program test_spin_response_channels_kernel
    write (*, '(a,l2)') 'offsets, channels p and f, two sites, nb = 32: ', ok
    if (.not. ok) error stop 1
    write (*, '(a)') 'RESULT: PASS'
-end program test_spin_response_channels_kernel
+end subroutine test_spin_response_channels_kernel

@@ -1,1 +1,0 @@
-KS bcc Fe nsp=2, no U, SOC on, hubbard_spinor_dm_diagnostic, full 12^3 mesh: seed tests/scf/cases/k_space_scf/bccFe/Fe.nml with mom set to the axis (z, x, [111]) in Fe.nml; S6b T2(g).

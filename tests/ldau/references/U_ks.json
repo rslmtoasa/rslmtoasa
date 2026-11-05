@@ -1,0 +1,29 @@
+{
+ "row": "U_ks",
+ "description": "+U KS bcc Fe nsp=1, U=2 J=0.5",
+ "kind": "abs",
+ "tolerance": 1e-10,
+ "reason": "stored from the reference build 90f57c3 (reference binary of the former tools/ldau_regression.py)",
+ "binary_sha256": "16bb567c7de93cc1101d2155968c263c02f73134508e5228e1143d0b9d0bce76",
+ "date": "2026-11-05",
+ "reference": {
+  "diff": [
+   0.0131170056,
+   0.0153771322,
+   0.0155420418,
+   0.0141338558
+  ],
+  "fermi": [
+   -0.0191,
+   -0.09028,
+   -0.09241,
+   -0.09161
+  ],
+  "spin_moment": [
+   2.10403,
+   2.245935,
+   2.259206,
+   2.260625
+  ]
+ }
+}

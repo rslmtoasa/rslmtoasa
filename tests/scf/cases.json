@@ -1,229 +1,167 @@
 {
-  "_description": "Test case matrix for example SCF tests. Single source of truth — CMakeLists reads this file. Optional manifest defaults are recursively merged into each case's 'namelists' before applying the f90nml patch.",
+  "_description": "Test case matrix for example SCF tests. Single source of truth \u2014 CMakeLists reads this file. Optional manifest defaults are recursively merged into each case's 'namelists' before applying the f90nml patch.",
   "defaults": {
     "namelists": {
-      "lattice": { "strux_backend": "strux_lib" },
-      "control": { "cheb_backend": "legacy" }
+      "lattice": {
+        "strux_backend": "strux_lib"
+      },
+      "control": {
+        "cheb_backend": "legacy"
+      }
     }
   },
   "cases": [
     {
-      "name": "Example_bulk_diamondSi_sp_chebyshev",
-      "labels": ["functional", "scf", "rs", "chebyshev", "basis_sp", "nonmagnetic", "strux"],
-      "case": "bulk/diamondSi",
-      "timeout": 300,
-      "abs_tol": 1e-6,
-      "rel_tol": 1e-6,
-      "_note": "TEST-06/07: deterministic nonmagnetic diamond-Si sp fixture. Explicit strux_lib, periodic 12x12x12 Bravais geometry, one SCF step, 200 Chebyshev moments. The 12^3 replication is retained for a stable DOS shape and remains a lean backend fixture; runtime/reference provenance is recorded in the fixture README. This is not a converged Si benchmark and is intentionally not quick.",
-      "namelists": {
-        "lattice":    { "strux_backend": "strux_lib" },
-        "control":    { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "legacy", "lld": 200 },
-        "self":       { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Si1_out.nml", "scalars": ["lmax", "etot", "ws_r", "vmad"] }
-        ]
-      },
-      "outputs": [
-        { "file": "totaldos.out", "min_lines": 100 },
-        { "file": "Si1_dos.out", "min_lines": 100 }
-      ]
-    },
-    {
       "name": "Example_bulk_bccFe_nsp2_block_hoh",
-      "quick": true,
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hoh"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "basis_spd",
+        "block",
+        "hoh"
+      ],
       "case": "bulk/bccFe",
       "timeout": 300,
       "omp_threads": 2,
-      "abs_tol": 1e-6,
-      "rel_tol": 1e-6,
+      "abs_tol": 1e-06,
+      "rel_tol": 1e-06,
       "namelists": {
-        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true }
+        "control": {
+          "nsp": 2,
+          "recur": "block",
+          "lld": 20
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": true
+        }
       },
       "checks": {
         "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
+          {
+            "file": "Fe_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r"
+            ],
+            "arrays": {
+              "mom": [
+                3
+              ]
+            }
+          }
         ],
         "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
+          {
+            "file": "totaldos.out",
+            "rows": [
+              500,
+              1000,
+              1500
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          }
         ]
-      }
+      },
+      "tier": "quick"
     },
     {
       "name": "Example_bulk_bccFe_sd_smoke",
-      "quick": true,
-      "labels": ["functional", "sd", "magnetic", "basis_spd", "block"],
+      "labels": [
+        "functional",
+        "sd",
+        "magnetic",
+        "basis_spd",
+        "block"
+      ],
       "case": "bulk/bccFe",
       "timeout": 300,
       "omp_threads": 2,
       "namelists": {
-        "calculation": { "processing": "sd" },
-        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false },
-        "sd":          { "asd_step": 1, "dt": 0.001 }
+        "calculation": {
+          "processing": "sd"
+        },
+        "control": {
+          "nsp": 2,
+          "recur": "block",
+          "lld": 20
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false
+        },
+        "sd": {
+          "asd_step": 1,
+          "dt": 0.001
+        }
       },
       "outputs": [
-        { "file": "output.lammpstrj", "min_lines": 10 }
-      ]
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp2_block",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block"],
-      "case": "bulk/bccFe",
-      "timeout": 300,
-      "omp_threads": 2,
-      "abs_tol": 1e-6,
-      "rel_tol": 1e-6,
-      "namelists": {
-        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ]
-      }
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp2_chebyshev_hoh",
-      "case": "bulk/bccFe",
-      "timeout": 600,
-      "namelists": {
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 100 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true },
-        "energy":      { "energy_min": -3.0, "energy_max": 1.8 }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ]
-      }
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp2_chebyshev",
-      "quick": true,
-      "case": "bulk/bccFe",
-      "timeout": 600,
-      "namelists": {
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 100 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ]
-      }
-    },
-    {
-      "name": "Example_bulk_diamondSi_sp_chebyshev_mkl_batch",
-      "labels": ["functional", "scf", "rs", "chebyshev", "basis_sp", "nonmagnetic", "strux"],
-      "case": "bulk/diamondSi",
-      "timeout": 600,
-      "requires_cmake_option": "ENABLE_MKL_KERNELS",
-      "_note": "TEST-07: backend-only MKL batch coverage uses the canonical diamond-Si sp fixture; reference provenance is recorded in the fixture README.",
-      "namelists": {
-        "control":     { "nsp": 1, "lmax": 1, "recur": "chebyshev", "cheb_backend": "mkl_batch", "lld": 200 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Si1_out.nml", "scalars": ["lmax", "etot", "ws_r", "vmad"] }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [100, 500, 1000, 1500, 1900], "cols": [1, 2] }
-        ]
-      },
-      "outputs": [
-        { "file": "totaldos.out", "min_lines": 100 },
-        { "file": "Si1_dos.out", "min_lines": 100 }
-      ]
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp2_lanczos_hoh",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "lanczos", "hoh"],
-      "case": "bulk/bccFe",
-      "timeout": 300,
-      "namelists": {
-        "control":     { "nsp": 2, "recur": "lanczos", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3], "lmom": [1, 2, 3] } }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ]
-      }
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp2_lanczos",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "lanczos"],
-      "case": "bulk/bccFe",
-      "timeout": 300,
-      "namelists": {
-        "control":     { "nsp": 2, "recur": "lanczos", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3], "lmom": [1, 2, 3] } }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ]
-      }
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp2_hubbard",
-      "quick": false,
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
-      "case": "bulk/bccFe_hubbard",
-      "timeout": 300,
-      "_note": "nsp=2 bulk SOC+U runs by default (spinor local moments, energy routed); smoke only",
-      "namelists": {
-        "control":     { "nsp": 2, "recur": "block", "lld": 21 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
-      }
+        {
+          "file": "output.lammpstrj",
+          "min_lines": 10
+        }
+      ],
+      "tier": "standard"
     },
     {
       "name": "Example_surface_soc_u_nsp1_host_guard",
-      "quick": true,
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "chebyshev", "hubbard"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "basis_spd",
+        "chebyshev",
+        "hubbard"
+      ],
       "case": "surface/fccNi001_uhost_guard",
       "timeout": 300,
       "_note": "nsp=2 surface with a frozen U host written at nsp=1 stops before the SCF loop. Explicit legacy structure-constant sentinel as in Example_surface_fccCu001_block_hoh",
       "expect_fatal": "was written at nsp=1, run nsp=2. Regenerate the host at nsp=2.",
       "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control": { "nsp": 2, "recur": "chebyshev" },
-        "self": { "nstep": 1 },
+        "lattice": {
+          "strux_backend": "legacy"
+        },
+        "control": {
+          "nsp": 2,
+          "recur": "chebyshev"
+        },
+        "self": {
+          "nstep": 1
+        },
         "hamiltonian": {
           "hubbard_radial_moments": "local",
-          "hubbard_u_general": [[null], [null], [3.0]],
-          "hubbard_j_general": [[null], [null], [0.7]]
+          "hubbard_u_general": [
+            [
+              null
+            ],
+            [
+              null
+            ],
+            [
+              3.0
+            ]
+          ],
+          "hubbard_j_general": [
+            [
+              null
+            ],
+            [
+              null
+            ],
+            [
+              0.7
+            ]
+          ]
         }
       },
       "potentials": {
@@ -232,470 +170,800 @@
             "hubbard_nsp": 1,
             "hubbard_radial_moments": "local",
             "hubbard_backend": "rs",
-            "hubbard_u": [0.0, 0.0, 0.22049575716860359],
-            "hubbard_j": [0.0, 0.0, 0.051449010006007496]
+            "hubbard_u": [
+              0.0,
+              0.0,
+              0.2204957571686036
+            ],
+            "hubbard_j": [
+              0.0,
+              0.0,
+              0.051449010006007496
+            ]
           }
         }
-      }
+      },
+      "group": "ldau_guards"
     },
     {
       "name": "Example_surface_fccNi001_uhost_guard",
-      "quick": true,
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "chebyshev", "hubbard"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "basis_spd",
+        "chebyshev",
+        "hubbard"
+      ],
       "case": "surface/fccNi001_uhost_guard",
       "timeout": 300,
       "_note": "U on frozen host type 1 whose potential file was converged at U=0 stops before the SCF loop. Explicit legacy structure-constant sentinel as in Example_surface_fccCu001_block_hoh (strux_lib expands this surface route to an impractical allocation)",
       "expect_fatal": "host Ni was converged without U; use a host converged at the same U, or remove U from that type",
       "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control": { "recur": "chebyshev" },
+        "lattice": {
+          "strux_backend": "legacy"
+        },
+        "control": {
+          "recur": "chebyshev"
+        },
         "hamiltonian": {
-          "hubbard_u_general": [[null], [null], [3.0]],
-          "hubbard_j_general": [[null], [null], [0.7]]
+          "hubbard_u_general": [
+            [
+              null
+            ],
+            [
+              null
+            ],
+            [
+              3.0
+            ]
+          ],
+          "hubbard_j_general": [
+            [
+              null
+            ],
+            [
+              null
+            ],
+            [
+              0.7
+            ]
+          ]
         }
-      }
+      },
+      "group": "ldau_guards"
     },
     {
       "name": "Example_bulk_Pt2MnGa_soc_u_mixed_axes_guard",
-      "quick": true,
-      "labels": ["functional", "rs", "metallic", "magnetic", "multi_sublattice", "basis_spd", "block", "hubbard", "legacy_strux"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "multi_sublattice",
+        "basis_spd",
+        "block",
+        "hubbard",
+        "legacy_strux"
+      ],
       "case": "bulk/Pt2MnGa",
       "timeout": 300,
       "_note": "nsp=2 SOC+U with U on Mn and Pt1, Mn moment patched along x and Pt1 along z, stops: noncollinear U needs nsp=3/4",
       "expect_fatal": "noncollinear: use nsp=3/4, not yet supported with U.",
       "namelists": {
-        "lattice":     { "strux_backend": "legacy" },
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false,
-                         "hubbard_u_general": [[null, null, null, null], [null, null, null, null], [3.0, null, 1.0, null]],
-                         "hubbard_j_general": [[null, null, null, null], [null, null, null, null], [0.0, null, 0.0, null]] }
+        "lattice": {
+          "strux_backend": "legacy"
+        },
+        "control": {
+          "nsp": 2,
+          "recur": "chebyshev",
+          "lld": 50
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "hubbard_u_general": [
+            [
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              3.0,
+              null,
+              1.0,
+              null
+            ]
+          ],
+          "hubbard_j_general": [
+            [
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              0.0,
+              null,
+              0.0,
+              null
+            ]
+          ]
+        }
       },
-      "potentials": { "Mn.nml": { "par": { "mom": [1.0, 0.0, 0.0] } } }
+      "potentials": {
+        "Mn.nml": {
+          "par": {
+            "mom": [
+              1.0,
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      "group": "ldau_guards"
     },
     {
       "name": "Example_bulk_bccFe_soc_u_tilted_block_guard",
-      "quick": true,
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "basis_spd",
+        "block",
+        "hubbard"
+      ],
       "case": "bulk/bccFe_hubbard",
       "timeout": 300,
       "_note": "nsp=2 SOC+U, RS block recursion, Fe moment patched along x, stops: block recursion is not spin-rotation invariant",
       "expect_fatal": "tilted spin axis requires recur='chebyshev' in RS",
       "namelists": {
-        "control":     { "nsp": 2, "recur": "block", "lld": 21 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
+        "control": {
+          "nsp": 2,
+          "recur": "block",
+          "lld": 21
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false
+        }
       },
-      "potentials": { "Fe.nml": { "par": { "mom": [1.0, 0.0, 0.0] } } }
+      "potentials": {
+        "Fe.nml": {
+          "par": {
+            "mom": [
+              1.0,
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      "group": "ldau_guards"
     },
     {
       "name": "Example_bulk_bccFe_nsp3_u_guard",
-      "quick": true,
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "basis_spd",
+        "block",
+        "hubbard"
+      ],
       "case": "bulk/bccFe_hubbard",
       "timeout": 300,
       "_note": "nsp=3 (noncollinear) with fixed U stops: S7 scope",
       "expect_fatal": "Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.",
       "namelists": {
-        "control":     { "nsp": 3, "recur": "block", "lld": 21 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
-      }
+        "control": {
+          "nsp": 3,
+          "recur": "block",
+          "lld": 21
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false
+        }
+      },
+      "group": "ldau_guards"
     },
     {
       "name": "Example_bulk_bccFe_nsp4_u_guard",
-      "quick": true,
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hubbard"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "basis_spd",
+        "block",
+        "hubbard"
+      ],
       "case": "bulk/bccFe_hubbard",
       "timeout": 300,
       "_note": "nsp=4 (noncollinear with SOC) with fixed U stops: S7 scope",
       "expect_fatal": "Fixed-U LDA+U currently requires collinear scalar-spin input; SOC and noncollinear spinors are unsupported.",
       "namelists": {
-        "control":     { "nsp": 4, "recur": "block", "lld": 21 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
-      }
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp3_block_hoh",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hoh"],
-      "case": "bulk/bccFe",
-      "timeout": 300,
-      "namelists": {
-        "control":     { "nsp": 3, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true }
+        "control": {
+          "nsp": 4,
+          "recur": "block",
+          "lld": 21
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false
+        }
       },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ]
-      }
+      "group": "ldau_guards"
     },
     {
       "name": "Example_bulk_bccFe_nsp3_block",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "basis_spd",
+        "block"
+      ],
       "case": "bulk/bccFe",
       "timeout": 300,
       "namelists": {
-        "control":     { "nsp": 3, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
+        "control": {
+          "nsp": 3,
+          "recur": "block",
+          "lld": 20
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false
+        }
       },
       "checks": {
         "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
+          {
+            "file": "Fe_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r"
+            ],
+            "arrays": {
+              "mom": [
+                3
+              ]
+            }
+          }
         ],
         "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
+          {
+            "file": "totaldos.out",
+            "rows": [
+              500,
+              1000,
+              1500
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          }
         ]
-      }
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp3_chebyshev_hoh",
-      "case": "bulk/bccFe",
-      "timeout": 600,
-      "namelists": {
-        "control":     { "nsp": 3, "recur": "chebyshev", "lld": 100 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true },
-        "energy":      { "energy_min": -3.0, "energy_max": 1.8 }
       },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ]
-      }
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp3_chebyshev",
-      "case": "bulk/bccFe",
-      "timeout": 600,
-      "namelists": {
-        "control":     { "nsp": 3, "recur": "chebyshev", "lld": 100 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ]
-      }
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp4_block_hoh",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "hoh"],
-      "case": "bulk/bccFe",
-      "timeout": 300,
-      "namelists": {
-        "control":     { "nsp": 4, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ]
-      }
+      "tier": "quick"
     },
     {
       "name": "Example_bulk_bccFe_nsp4_block",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "basis_spd",
+        "block"
+      ],
       "case": "bulk/bccFe",
       "timeout": 300,
       "namelists": {
-        "control":     { "nsp": 4, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
+        "control": {
+          "nsp": 4,
+          "recur": "block",
+          "lld": 20
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false
+        }
       },
       "checks": {
         "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
+          {
+            "file": "Fe_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r"
+            ],
+            "arrays": {
+              "mom": [
+                3
+              ]
+            }
+          }
         ],
         "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
+          {
+            "file": "totaldos.out",
+            "rows": [
+              500,
+              1000,
+              1500
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          }
         ]
-      }
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp4_chebyshev_hoh",
-      "case": "bulk/bccFe",
-      "timeout": 600,
-      "namelists": {
-        "control":     { "nsp": 4, "recur": "chebyshev", "lld": 100 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true },
-        "energy":      { "energy_min": -3.0, "energy_max": 1.8 }
       },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ]
-      }
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp4_chebyshev",
-      "case": "bulk/bccFe",
-      "timeout": 600,
-      "namelists": {
-        "control":     { "nsp": 4, "recur": "chebyshev", "lld": 100 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
-        ],
-        "text": [
-          { "file": "totaldos.out", "rows": [500, 1000, 1500], "cols": [1, 2] }
-        ]
-      }
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp4_block_spiral_qplus",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "gbt"],
-      "case": "bulk/bccFe",
-      "timeout": 300,
-      "_note": "B1 GBT fix regression: cone spiral (theta_ss=90 deg) at q_ss=(0,0,+0.05) [units: 2*pi/alat, degrees]. Paired with _qminus to pin E(q)=E(-q); see docs/DECISIONS.md.",
-      "namelists": {
-        "lattice":     { "strux_backend": "strux_lib", "strux_want_sdot": false },
-        "control":     { "nsp": 3, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false, "magnetic_representation": "gbt_single_q",
-                           "q_ss": [0.0, 0.0, 0.05], "theta_ss": 90.0 }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
-        ]
-      }
-    },
-    {
-      "name": "Example_bulk_bccFe_nsp4_block_spiral_qminus",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "gbt"],
-      "case": "bulk/bccFe",
-      "timeout": 300,
-      "_note": "B1 GBT fix regression: cone spiral (theta_ss=90 deg) at q_ss=(0,0,-0.05) [units: 2*pi/alat, degrees]. Paired with _qplus to pin E(q)=E(-q); see docs/DECISIONS.md.",
-      "namelists": {
-        "lattice":     { "strux_backend": "strux_lib", "strux_want_sdot": false },
-        "control":     { "nsp": 3, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false, "magnetic_representation": "gbt_single_q",
-                           "q_ss": [0.0, 0.0, -0.05], "theta_ss": 90.0 }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
-        ]
-      }
+      "tier": "quick"
     },
     {
       "name": "Example_frozen_magnon_bccFe_auto",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "frozen_magnon"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "basis_spd",
+        "block",
+        "frozen_magnon"
+      ],
       "case": "frozen_magnon/bccFe_auto",
       "timeout": 300,
       "_note": "Auto-branch frozen_magnon MFT smoke test on single-sublattice bccFe. Checks branch and eigenvector output files.",
       "namelists": {
-        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
-        "control": { "nsp": 3, "recur": "block" }
+        "lattice": {
+          "strux_backend": "strux_lib",
+          "strux_want_sdot": false
+        },
+        "control": {
+          "nsp": 3,
+          "recur": "block"
+        }
       },
       "checks": {
         "text": [
-          { "file": "frozen_magnon_branches.dat", "rows": [12, 13, 14], "cols": [3, 4, 5] },
-          { "file": "frozen_magnon_modes.dat", "rows": [9, 10, 11], "cols": [3, 4, 7, 8] }
+          {
+            "file": "frozen_magnon_branches.dat",
+            "rows": [
+              12,
+              13,
+              14
+            ],
+            "cols": [
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "file": "frozen_magnon_modes.dat",
+            "rows": [
+              9,
+              10,
+              11
+            ],
+            "cols": [
+              3,
+              4,
+              7,
+              8
+            ]
+          }
         ]
-      }
+      },
+      "tier": "standard"
     },
     {
       "name": "Example_frozen_magnon_bccFe_auto_scf",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "frozen_magnon"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "basis_spd",
+        "block",
+        "frozen_magnon"
+      ],
       "case": "frozen_magnon/bccFe_auto_scf",
       "timeout": 300,
       "_note": "Auto-branch frozen_magnon SCF smoke test on single-sublattice bccFe. Checks total-energy branch and eigenvector output files.",
       "namelists": {
-        "lattice": { "strux_backend": "strux_lib", "strux_want_sdot": false },
-        "control": { "nsp": 3, "recur": "block" }
+        "lattice": {
+          "strux_backend": "strux_lib",
+          "strux_want_sdot": false
+        },
+        "control": {
+          "nsp": 3,
+          "recur": "block"
+        }
       },
       "checks": {
         "text": [
-          { "file": "frozen_magnon_branches.dat", "rows": [12, 13, 14], "cols": [3, 4, 5] },
-          { "file": "frozen_magnon_modes.dat", "rows": [9, 10, 11], "cols": [3, 4, 7, 8] }
+          {
+            "file": "frozen_magnon_branches.dat",
+            "rows": [
+              12,
+              13,
+              14
+            ],
+            "cols": [
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "file": "frozen_magnon_modes.dat",
+            "rows": [
+              9,
+              10,
+              11
+            ],
+            "cols": [
+              3,
+              4,
+              7,
+              8
+            ]
+          }
         ]
-      }
+      },
+      "tier": "standard"
     },
     {
       "name": "Example_bulk_bccFe_export_rs2pao",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "export"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "basis_spd",
+        "block",
+        "export"
+      ],
       "case": "bulk/bccFe",
       "timeout": 300,
       "_note": "smoke test for hamiltonian%export select-case (calculation.f90 pre_processing_bravais) - checks the exported file exists and parses",
       "namelists": {
-        "control":     { "nsp": 2, "recur": "block", "lld": 21 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false, "export": "rs2pao" }
+        "control": {
+          "nsp": 2,
+          "recur": "block",
+          "lld": 21
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "export": "rs2pao"
+        }
       },
       "checks": {
         "text": [
-          { "file": "rs2paoham.dat", "rows": [1], "cols": [6, 7] }
+          {
+            "file": "rs2paoham.dat",
+            "rows": [
+              1
+            ],
+            "cols": [
+              6,
+              7
+            ]
+          }
         ]
-      }
+      },
+      "tier": "quick"
     },
     {
       "name": "Example_bulk_bccFe_export_python",
-      "labels": ["functional", "rs", "metallic", "magnetic", "basis_spd", "block", "export"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "basis_spd",
+        "block",
+        "export"
+      ],
       "case": "bulk/bccFe",
       "timeout": 300,
       "_note": "smoke test for hamiltonian%export select-case (calculation.f90 pre_processing_bravais) - checks the exported file exists and parses",
       "namelists": {
-        "control":     { "nsp": 2, "recur": "block", "lld": 21 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false, "export": "python" }
+        "control": {
+          "nsp": 2,
+          "recur": "block",
+          "lld": 21
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false,
+          "export": "python"
+        }
       },
       "checks": {
         "text": [
-          { "file": "rs_tb_paoham.dat", "rows": [1], "cols": [6, 7] }
+          {
+            "file": "rs_tb_paoham.dat",
+            "rows": [
+              1
+            ],
+            "cols": [
+              6,
+              7
+            ]
+          }
         ]
-      }
+      },
+      "tier": "quick"
     },
     {
       "name": "Example_surface_fccCu001_block_hoh",
-      "quick": true,
-      "labels": ["functional", "rs", "metallic", "basis_spd", "block", "hoh", "legacy_strux"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "basis_spd",
+        "block",
+        "hoh",
+        "legacy_strux"
+      ],
       "case": "surface/fccCu001",
       "timeout": 300,
       "_note": "Explicit legacy structure-constant sentinel: strux_lib's periodic solve expands this surface route to an impractical allocation.",
       "mpi_procs": 2,
-      "launch_modes": ["serial", "mpi"],
+      "launch_modes": [
+        "serial",
+        "mpi"
+      ],
       "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true }
+        "lattice": {
+          "strux_backend": "legacy"
+        },
+        "control": {
+          "nsp": 2,
+          "recur": "block",
+          "lld": 20
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": true
+        }
       },
       "checks": {
         "nml": [
-          { "file": "Cu_out.nml",   "scalars": ["etot", "ws_r"] },
-          { "file": "Cu-S_out.nml", "scalars": ["etot", "ws_r"] }
+          {
+            "file": "Cu_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r"
+            ]
+          },
+          {
+            "file": "Cu-S_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r"
+            ]
+          }
         ]
-      }
+      },
+      "tier": "standard"
     },
     {
       "name": "Example_impurity_B2FeCo_block_hoh",
-      "quick": true,
-      "labels": ["functional", "rs", "metallic", "magnetic", "multi_sublattice", "basis_spd", "block", "hoh", "legacy_strux"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "multi_sublattice",
+        "basis_spd",
+        "block",
+        "hoh",
+        "legacy_strux"
+      ],
       "case": "impurity/B2FeCo",
       "timeout": 300,
       "_note": "Explicit legacy structure-constant sentinel: strux_lib's impurity solve requests an impractical allocation for this route.",
       "mpi_procs": 2,
-      "launch_modes": ["serial", "mpi"],
+      "launch_modes": [
+        "serial",
+        "mpi"
+      ],
       "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true }
+        "lattice": {
+          "strux_backend": "legacy"
+        },
+        "control": {
+          "nsp": 2,
+          "recur": "block",
+          "lld": 20
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": true
+        }
       },
       "checks": {
         "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } },
-          { "file": "Co_out.nml", "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } }
+          {
+            "file": "Fe_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r"
+            ],
+            "arrays": {
+              "mom": [
+                3
+              ]
+            }
+          },
+          {
+            "file": "Co_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r"
+            ],
+            "arrays": {
+              "mom": [
+                3
+              ]
+            }
+          }
         ]
-      }
+      },
+      "tier": "quick"
     },
     {
       "name": "Example_bulk_Pt2MnGa_block",
-      "labels": ["functional", "rs", "metallic", "magnetic", "multi_sublattice", "basis_spd", "block", "legacy_strux"],
+      "labels": [
+        "functional",
+        "rs",
+        "metallic",
+        "magnetic",
+        "multi_sublattice",
+        "basis_spd",
+        "block",
+        "legacy_strux"
+      ],
       "case": "bulk/Pt2MnGa",
       "timeout": 300,
       "_note": "Explicit legacy structure-constant sentinel: strux_lib currently breaks this crystal_sym=file custom lattice (see tests/KNOWN_ISSUES.md).",
       "mpi_procs": 4,
-      "launch_modes": ["serial", "mpi"],
+      "launch_modes": [
+        "serial",
+        "mpi"
+      ],
       "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control":     { "nsp": 2, "recur": "block", "lld": 20 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
+        "lattice": {
+          "strux_backend": "legacy"
+        },
+        "control": {
+          "nsp": 2,
+          "recur": "block",
+          "lld": 20
+        },
+        "self": {
+          "nstep": 1
+        },
+        "hamiltonian": {
+          "hoh": false
+        }
       },
       "checks": {
         "nml": [
-          { "file": "Pt1_out.nml", "scalars": ["etot", "ws_r"] },
-          { "file": "Pt2_out.nml", "scalars": ["etot", "ws_r"] },
-          { "file": "Mn_out.nml",  "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } },
-          { "file": "Ga_out.nml",  "scalars": ["etot", "ws_r"] }
+          {
+            "file": "Pt1_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r"
+            ]
+          },
+          {
+            "file": "Pt2_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r"
+            ]
+          },
+          {
+            "file": "Mn_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r"
+            ],
+            "arrays": {
+              "mom": [
+                3
+              ]
+            }
+          },
+          {
+            "file": "Ga_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r"
+            ]
+          }
         ]
-      }
-    },
-    {
-      "name": "Example_bulk_Pt2MnGa_chebyshev_hoh",
-      "labels": ["functional", "rs", "metallic", "magnetic", "multi_sublattice", "basis_spd", "chebyshev", "hoh", "legacy_strux"],
-      "case": "bulk/Pt2MnGa",
-      "timeout": 600,
-      "_note": "Explicit legacy structure-constant sentinel: strux_lib currently breaks this crystal_sym=file custom lattice (see tests/KNOWN_ISSUES.md).",
-      "mpi_procs": 4,
-      "launch_modes": ["serial", "mpi"],
-      "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 50  },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": true }
       },
-      "checks": {
-        "nml": [
-          { "file": "Pt1_out.nml", "scalars": ["etot", "ws_r"] },
-          { "file": "Pt2_out.nml", "scalars": ["etot", "ws_r"] },
-          { "file": "Mn_out.nml",  "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } },
-          { "file": "Ga_out.nml",  "scalars": ["etot", "ws_r"] }
-        ]
-      }
-    },
-    {
-      "name": "Example_bulk_Pt2MnGa_chebyshev",
-      "labels": ["functional", "rs", "metallic", "magnetic", "multi_sublattice", "basis_spd", "chebyshev", "legacy_strux"],
-      "case": "bulk/Pt2MnGa",
-      "timeout": 600,
-      "_note": "Explicit legacy structure-constant sentinel: strux_lib currently breaks this crystal_sym=file custom lattice (see tests/KNOWN_ISSUES.md).",
-      "mpi_procs": 4,
-      "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control":     { "nsp": 2, "recur": "chebyshev", "lld": 100 },
-        "self":        { "nstep": 1 },
-        "hamiltonian": { "hoh": false }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Pt1_out.nml", "scalars": ["etot", "ws_r"] },
-          { "file": "Pt2_out.nml", "scalars": ["etot", "ws_r"] },
-          { "file": "Mn_out.nml",  "scalars": ["etot", "ws_r"], "arrays": { "mom": [3] } },
-          { "file": "Ga_out.nml",  "scalars": ["etot", "ws_r"] }
-        ]
-      }
+      "tier": "standard"
     },
     {
       "name": "Example_k_space_scf_bccFe",
-      "quick": true,
-      "labels": ["functional", "scf", "kspace", "magnetic", "basis_spd", "strux"],
+      "labels": [
+        "functional",
+        "scf",
+        "kspace",
+        "magnetic",
+        "basis_spd",
+        "strux"
+      ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": ["serial", "mpi"],
+      "launch_modes": [
+        "serial",
+        "mpi"
+      ],
       "mpi_procs": 2,
-      "mpi_rank_counts": [1, 2, 4],
+      "mpi_rank_counts": [
+        1,
+        2,
+        4
+      ],
       "namelists": {
-        "lattice": { "strux_backend": "strux_lib" },
-        "self": { "nstep": 1, "use_kspace": true },
+        "lattice": {
+          "strux_backend": "strux_lib"
+        },
+        "self": {
+          "nstep": 1,
+          "use_kspace": true
+        },
         "reciprocal": {
           "nk1": 2,
           "nk2": 2,
@@ -704,16 +972,48 @@
           "dos_method": "gaussian",
           "gaussian_sigma": 0.01
         },
-        "energy": { "energy_min": -2.0, "energy_max": 2.0 },
-        "control": { "nsp": 1, "recur": "block", "lld": 12 }
+        "energy": {
+          "energy_min": -2.0,
+          "energy_max": 2.0
+        },
+        "control": {
+          "nsp": 1,
+          "recur": "block",
+          "lld": 12
+        }
       },
       "checks": {
         "nml": [
-          { "file": "Fe_out.nml", "scalars": ["etot", "ws_r", "vmad"],
-            "arrays": { "mom": [3], "lmom": [3] } }
+          {
+            "file": "Fe_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r",
+              "vmad"
+            ],
+            "arrays": {
+              "mom": [
+                3
+              ],
+              "lmom": [
+                3
+              ]
+            }
+          }
         ],
         "text": [
-          { "file": "totaldos.out", "rows": [800, 1255, 1700], "cols": [1, 2] }
+          {
+            "file": "totaldos.out",
+            "rows": [
+              800,
+              1255,
+              1700
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          }
         ],
         "log": [
           {
@@ -731,26 +1031,59 @@
         ]
       },
       "outputs": [
-        { "file": "totaldos.out", "min_lines": 50 },
-        { "file": "magneticdos.out", "min_lines": 51 },
-        { "file": "report.out", "min_lines": 10 },
-        { "file": "minfo.out", "min_lines": 1 },
-        { "file": "linfo.out", "min_lines": 1 }
-      ]
+        {
+          "file": "totaldos.out",
+          "min_lines": 50
+        },
+        {
+          "file": "magneticdos.out",
+          "min_lines": 51
+        },
+        {
+          "file": "report.out",
+          "min_lines": 10
+        },
+        {
+          "file": "minfo.out",
+          "min_lines": 1
+        },
+        {
+          "file": "linfo.out",
+          "min_lines": 1
+        }
+      ],
+      "tier": "quick"
     },
     {
       "name": "Example_k_space_scf_diamondSi_sp",
-      "quick": true,
-      "labels": ["functional", "scf", "kspace", "basis_sp", "nonmagnetic", "strux", "mpi"],
+      "labels": [
+        "functional",
+        "scf",
+        "kspace",
+        "basis_sp",
+        "nonmagnetic",
+        "strux",
+        "mpi"
+      ],
       "case": "bulk/diamondSi",
       "timeout": 300,
-      "launch_modes": ["serial", "mpi"],
+      "launch_modes": [
+        "serial",
+        "mpi"
+      ],
       "mpi_procs": 2,
-      "mpi_rank_counts": [2],
+      "mpi_rank_counts": [
+        2
+      ],
       "_note": "TEST-09: canonical diamond-Si sp k-space SCF fixture. This is a functional baseline, not a converged material-physics result. It uses the shared Si/sp physical fixture, a full 2x2x2 Gamma-centered mesh, Gaussian DOS with sigma=0.01 Ry, one SCF step, and a compact 200-point DOS grid.",
       "namelists": {
-        "lattice": { "strux_backend": "strux_lib" },
-        "self": { "nstep": 1, "use_kspace": true },
+        "lattice": {
+          "strux_backend": "strux_lib"
+        },
+        "self": {
+          "nstep": 1,
+          "use_kspace": true
+        },
         "reciprocal": {
           "nk1": 2,
           "nk2": 2,
@@ -762,16 +1095,52 @@
           "dos_method": "gaussian",
           "gaussian_sigma": 0.01
         },
-        "energy": { "channels_ldos": 200, "energy_min": -1.5, "energy_max": 1.0 },
-        "control": { "nsp": 1, "lmax": 1, "recur": "block", "lld": 12 }
+        "energy": {
+          "channels_ldos": 200,
+          "energy_min": -1.5,
+          "energy_max": 1.0
+        },
+        "control": {
+          "nsp": 1,
+          "lmax": 1,
+          "recur": "block",
+          "lld": 12
+        }
       },
       "checks": {
         "nml": [
-          { "file": "Si1_out.nml", "scalars": ["lmax", "etot", "ws_r", "vmad"] },
-          { "file": "Si2_out.nml", "scalars": ["lmax", "etot", "ws_r", "vmad"] }
+          {
+            "file": "Si1_out.nml",
+            "scalars": [
+              "lmax",
+              "etot",
+              "ws_r",
+              "vmad"
+            ]
+          },
+          {
+            "file": "Si2_out.nml",
+            "scalars": [
+              "lmax",
+              "etot",
+              "ws_r",
+              "vmad"
+            ]
+          }
         ],
         "text": [
-          { "file": "totaldos.out", "rows": [60, 105, 150], "cols": [1, 2] }
+          {
+            "file": "totaldos.out",
+            "rows": [
+              60,
+              105,
+              150
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          }
         ],
         "log": [
           {
@@ -798,26 +1167,60 @@
         ]
       },
       "outputs": [
-        { "file": "totaldos.out", "min_lines": 200 },
-        { "file": "magneticdos.out", "min_lines": 201 },
-        { "file": "report.out", "min_lines": 10 },
-        { "file": "minfo.out", "min_lines": 1 },
-        { "file": "linfo.out", "min_lines": 1 }
-      ]
+        {
+          "file": "totaldos.out",
+          "min_lines": 200
+        },
+        {
+          "file": "magneticdos.out",
+          "min_lines": 201
+        },
+        {
+          "file": "report.out",
+          "min_lines": 10
+        },
+        {
+          "file": "minfo.out",
+          "min_lines": 1
+        },
+        {
+          "file": "linfo.out",
+          "min_lines": 1
+        }
+      ],
+      "tier": "quick"
     },
     {
       "name": "Example_k_space_scf_diamondSi_sp_tetrahedron",
-      "quick": true,
-      "labels": ["functional", "scf", "kspace", "dos", "tetrahedron", "basis_sp", "nonmagnetic", "strux"],
+      "labels": [
+        "functional",
+        "scf",
+        "kspace",
+        "dos",
+        "tetrahedron",
+        "basis_sp",
+        "nonmagnetic",
+        "strux"
+      ],
       "case": "bulk/diamondSi",
       "timeout": 300,
-      "launch_modes": ["serial", "mpi"],
+      "launch_modes": [
+        "serial",
+        "mpi"
+      ],
       "mpi_procs": 2,
-      "mpi_rank_counts": [2],
+      "mpi_rank_counts": [
+        2
+      ],
       "_note": "STAB-03: full 4x4x4 reciprocal Si/sp mesh with linear tetrahedron DOS. The explicit state-count and occupied-count assertions cover the singular flat-tetrahedron contributions as well as finite sampled DOS output.",
       "namelists": {
-        "lattice": { "strux_backend": "strux_lib" },
-        "self": { "nstep": 1, "use_kspace": true },
+        "lattice": {
+          "strux_backend": "strux_lib"
+        },
+        "self": {
+          "nstep": 1,
+          "use_kspace": true
+        },
         "reciprocal": {
           "nk1": 4,
           "nk2": 4,
@@ -829,30 +1232,114 @@
           "dos_method": "tetrahedron",
           "gaussian_sigma": 0.01
         },
-        "energy": { "channels_ldos": 2001, "energy_min": -1.5, "energy_max": 1.0 },
-        "control": { "nsp": 1, "lmax": 1, "recur": "block", "lld": 12 },
-        "hamiltonian": { "hoh": false }
+        "energy": {
+          "channels_ldos": 2001,
+          "energy_min": -1.5,
+          "energy_max": 1.0
+        },
+        "control": {
+          "nsp": 1,
+          "lmax": 1,
+          "recur": "block",
+          "lld": 12
+        },
+        "hamiltonian": {
+          "hoh": false
+        }
       },
       "checks": {
         "nml": [
-          { "file": "Si1_out.nml", "scalars": ["lmax", "etot", "ws_r", "vmad"] },
-          { "file": "Si2_out.nml", "scalars": ["lmax", "etot", "ws_r", "vmad"] }
+          {
+            "file": "Si1_out.nml",
+            "scalars": [
+              "lmax",
+              "etot",
+              "ws_r",
+              "vmad"
+            ]
+          },
+          {
+            "file": "Si2_out.nml",
+            "scalars": [
+              "lmax",
+              "etot",
+              "ws_r",
+              "vmad"
+            ]
+          }
         ],
         "text": [
-          { "file": "totaldos.out", "rows": [100, 1000, 1900], "cols": [1, 2] }
+          {
+            "file": "totaldos.out",
+            "rows": [
+              100,
+              1000,
+              1900
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          }
         ],
         "finite": [
-          { "file": "totaldos.out", "cols": [1, 2] }
+          {
+            "file": "totaldos.out",
+            "cols": [
+              1,
+              2
+            ]
+          }
         ],
         "assertions": [
-          { "file": "testrun.log", "pattern": "Canonical k-space occupations:.*?N=\\s*([-+0-9.EeDd]+)", "value": 8.0, "abs_tol": 1.0e-10 },
-          { "file": "testrun.log", "pattern": "Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)", "value": 1.0, "abs_tol": 1.0e-10 },
-          { "file": "testrun.log", "pattern": "calculate_dos_tetrahedron: DOS integral =\\s*([-+0-9.EeDd]+)", "value": 16.0, "abs_tol": 0.05 },
-          { "file": "testrun.log", "pattern": "calculate_dos_tetrahedron: DOS integral =.*?N\\(Emax\\)-N\\(Emin\\) =\\s*([-+0-9.EeDd]+)", "value": 16.0, "abs_tol": 1.0e-10 },
-          { "file": "testrun.log", "pattern": "calculate_dos_tetrahedron: DOS integral =.*?expected states =\\s*([-+0-9.EeDd]+)", "value": 16.0, "abs_tol": 1.0e-10 },
-          { "file": "testrun.log", "pattern": "calculate_dos_tetrahedron: N\\(E_F=.*?\\) =\\s*([-+0-9.EeDd]+)", "value": 8.0, "abs_tol": 0.02 },
-          { "file": "testrun.log", "pattern": "k-space energy cross-checks:.*?DOS N=\\s*([-+0-9.EeDd]+)", "value": 8.0, "abs_tol": 0.02 },
-          { "file": "testrun.log", "pattern": "k-space energy cross-checks:.*?deltaN=\\s*([-+0-9.EeDd]+)", "value": 0.0, "abs_tol": 0.02 }
+          {
+            "file": "testrun.log",
+            "pattern": "Canonical k-space occupations:.*?N=\\s*([-+0-9.EeDd]+)",
+            "value": 8.0,
+            "abs_tol": 1e-10
+          },
+          {
+            "file": "testrun.log",
+            "pattern": "Canonical k-space occupations:.*?weight_sum\\(raw\\)=\\s*([-+0-9.EeDd]+)",
+            "value": 1.0,
+            "abs_tol": 1e-10
+          },
+          {
+            "file": "testrun.log",
+            "pattern": "calculate_dos_tetrahedron: DOS integral =\\s*([-+0-9.EeDd]+)",
+            "value": 16.0,
+            "abs_tol": 0.05
+          },
+          {
+            "file": "testrun.log",
+            "pattern": "calculate_dos_tetrahedron: DOS integral =.*?N\\(Emax\\)-N\\(Emin\\) =\\s*([-+0-9.EeDd]+)",
+            "value": 16.0,
+            "abs_tol": 1e-10
+          },
+          {
+            "file": "testrun.log",
+            "pattern": "calculate_dos_tetrahedron: DOS integral =.*?expected states =\\s*([-+0-9.EeDd]+)",
+            "value": 16.0,
+            "abs_tol": 1e-10
+          },
+          {
+            "file": "testrun.log",
+            "pattern": "calculate_dos_tetrahedron: N\\(E_F=.*?\\) =\\s*([-+0-9.EeDd]+)",
+            "value": 8.0,
+            "abs_tol": 0.02
+          },
+          {
+            "file": "testrun.log",
+            "pattern": "k-space energy cross-checks:.*?DOS N=\\s*([-+0-9.EeDd]+)",
+            "value": 8.0,
+            "abs_tol": 0.02
+          },
+          {
+            "file": "testrun.log",
+            "pattern": "k-space energy cross-checks:.*?deltaN=\\s*([-+0-9.EeDd]+)",
+            "value": 0.0,
+            "abs_tol": 0.02
+          }
         ],
         "log": [
           {
@@ -873,26 +1360,59 @@
         ]
       },
       "outputs": [
-        { "file": "totaldos.out", "min_lines": 2001 },
-        { "file": "magneticdos.out", "min_lines": 2002 },
-        { "file": "report.out", "min_lines": 10 },
-        { "file": "minfo.out", "min_lines": 1 },
-        { "file": "linfo.out", "min_lines": 1 }
-      ]
+        {
+          "file": "totaldos.out",
+          "min_lines": 2001
+        },
+        {
+          "file": "magneticdos.out",
+          "min_lines": 2002
+        },
+        {
+          "file": "report.out",
+          "min_lines": 10
+        },
+        {
+          "file": "minfo.out",
+          "min_lines": 1
+        },
+        {
+          "file": "linfo.out",
+          "min_lines": 1
+        }
+      ],
+      "tier": "quick"
     },
     {
       "name": "Example_k_space_scf_bccFe_spd_magnetic",
-      "quick": true,
-      "labels": ["functional", "scf", "kspace", "basis_spd", "magnetic", "strux", "mpi"],
+      "labels": [
+        "functional",
+        "scf",
+        "kspace",
+        "basis_spd",
+        "magnetic",
+        "strux",
+        "mpi"
+      ],
       "case": "k_space_scf/bccFe",
       "timeout": 300,
-      "launch_modes": ["serial", "mpi"],
+      "launch_modes": [
+        "serial",
+        "mpi"
+      ],
       "mpi_procs": 2,
-      "mpi_rank_counts": [2],
+      "mpi_rank_counts": [
+        2
+      ],
       "_note": "TEST-09: canonical bcc-Fe spd collinear-magnetic k-space SCF fixture. This is a functional baseline, not a converged material-physics result. It uses a full 2x2x2 Gamma-centered mesh, Gaussian DOS with sigma=0.01 Ry, one SCF step, and a compact 200-point DOS grid.",
       "namelists": {
-        "lattice": { "strux_backend": "strux_lib" },
-        "self": { "nstep": 1, "use_kspace": true },
+        "lattice": {
+          "strux_backend": "strux_lib"
+        },
+        "self": {
+          "nstep": 1,
+          "use_kspace": true
+        },
         "reciprocal": {
           "nk1": 2,
           "nk2": 2,
@@ -904,16 +1424,51 @@
           "dos_method": "gaussian",
           "gaussian_sigma": 0.01
         },
-        "energy": { "channels_ldos": 200, "energy_min": -2.0, "energy_max": 2.0 },
-        "control": { "nsp": 2, "lmax": 2, "recur": "block", "lld": 12 }
+        "energy": {
+          "channels_ldos": 200,
+          "energy_min": -2.0,
+          "energy_max": 2.0
+        },
+        "control": {
+          "nsp": 2,
+          "lmax": 2,
+          "recur": "block",
+          "lld": 12
+        }
       },
       "checks": {
         "nml": [
-          { "file": "Fe_out.nml", "scalars": ["lmax", "etot", "ws_r", "vmad"],
-            "arrays": { "mom": [3], "lmom": [3] } }
+          {
+            "file": "Fe_out.nml",
+            "scalars": [
+              "lmax",
+              "etot",
+              "ws_r",
+              "vmad"
+            ],
+            "arrays": {
+              "mom": [
+                3
+              ],
+              "lmom": [
+                3
+              ]
+            }
+          }
         ],
         "text": [
-          { "file": "totaldos.out", "rows": [60, 105, 150], "cols": [1, 2] }
+          {
+            "file": "totaldos.out",
+            "rows": [
+              60,
+              105,
+              150
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          }
         ],
         "log": [
           {
@@ -938,125 +1493,92 @@
         ]
       },
       "outputs": [
-        { "file": "totaldos.out", "min_lines": 200 },
-        { "file": "magneticdos.out", "min_lines": 201 },
-        { "file": "report.out", "min_lines": 10 },
-        { "file": "minfo.out", "min_lines": 1 },
-        { "file": "linfo.out", "min_lines": 1 }
-      ]
-    },
-    {
-      "name": "Example_bulk_fccCu_chebyshev",
-      "case": "bulk/fccCu",
-      "timeout": 600,
-      "omp_threads": 2,
-      "abs_tol": 1e-6,
-      "rel_tol": 1e-6,
-      "namelists": {
-        "control": { "recur": "chebyshev" },
-        "self":    { "nstep": 1 }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Cu_out.nml", "scalars": ["etot", "ws_r", "vmad"] }
-        ],
-        "text": [
-          { "file": "Cu_dos.out", "rows": [400, 800, 1200, 1600], "cols": [1, 2] },
-          { "file": "totaldos.out", "rows": [400, 800, 1200, 1600], "cols": [1, 2] }
-        ]
-      }
-    },
-    {
-      "name": "Example_impurity_B2FeCo_sd_smoke",
-      "labels": ["functional", "sd", "magnetic", "impurity", "legacy_strux"],
-      "case": "impurity/B2FeCo",
-      "timeout": 600,
-      "omp_threads": 2,
-      "_note": "Production-path impurity SD smoke. The magnetic-moment output is part of the contract; this is not a physics invariant campaign.",
-      "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "calculation": { "processing": "sd" },
-        "control": { "nsp": 2, "recur": "block", "lld": 20 },
-        "self": { "nstep": 1 },
-        "hamiltonian": { "hoh": false },
-        "sd": { "asd_step": 1, "dt": 0.001, "alpha": 0.0, "sd_temp": 0.0 }
-      },
-      "outputs": [
-        { "file": "output.lammpstrj", "min_lines": 10 },
-        { "file": "Fe_1_spinene.out", "min_lines": 100 }
-      ]
-    },
-    {
-      "name": "Example_impurity_fccCu_chebyshev",
-      "labels": ["legacy_strux"],
-      "case": "impurity/fccCu",
-      "timeout": 600,
-      "_note": "Explicit legacy structure-constant sentinel: strux_lib's impurity solve requests an impractical allocation for this route.",
-      "omp_threads": 2,
-      "abs_tol": 1e-6,
-      "rel_tol": 1e-6,
-      "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control": { "recur": "chebyshev" },
-        "self":    { "nstep": 1 }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Ac1_out.nml", "scalars": ["etot", "ws_r", "vmad"] }
-        ],
-        "text": [
-          { "file": "Ac1_dos.out", "rows": [400, 800, 1200, 1600], "cols": [1, 2] },
-          { "file": "totaldos.out", "rows": [400, 800, 1200, 1600], "cols": [1, 2] }
-        ]
-      }
-    },
-    {
-      "name": "Example_interface_fccCu001_chebyshev",
-      "labels": ["legacy_strux"],
-      "case": "interface/fccCu001",
-      "timeout": 900,
-      "_note": "Explicit legacy structure-constant sentinel: strux_lib's custom interface solve requests an impractical allocation for this route.",
-      "omp_threads": 2,
-      "abs_tol": 1e-6,
-      "rel_tol": 1e-6,
-      "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control": { "recur": "chebyshev" },
-        "self":    { "nstep": 1 }
-      },
-      "checks": {
-        "nml": [
-          { "file": "Ac1_out.nml", "scalars": ["etot", "ws_r", "vmad"] }
-        ],
-        "text": [
-          { "file": "Ac1_dos.out", "rows": [400, 800, 1200, 1600], "cols": [1, 2] },
-          { "file": "totaldos.out", "rows": [400, 800, 1200, 1600], "cols": [1, 2] }
-        ]
-      }
+        {
+          "file": "totaldos.out",
+          "min_lines": 200
+        },
+        {
+          "file": "magneticdos.out",
+          "min_lines": 201
+        },
+        {
+          "file": "report.out",
+          "min_lines": 10
+        },
+        {
+          "file": "minfo.out",
+          "min_lines": 1
+        },
+        {
+          "file": "linfo.out",
+          "min_lines": 1
+        }
+      ],
+      "tier": "quick"
     },
     {
       "name": "Example_interface_fccCu111_chebyshev",
-      "labels": ["legacy_strux"],
+      "labels": [
+        "legacy_strux"
+      ],
       "case": "interface/fccCu111",
       "timeout": 900,
       "_note": "Explicit legacy structure-constant sentinel: strux_lib's custom interface solve requests an impractical allocation for this route.",
       "omp_threads": 2,
-      "abs_tol": 1e-6,
-      "rel_tol": 1e-6,
+      "abs_tol": 1e-06,
+      "rel_tol": 1e-06,
       "namelists": {
-        "lattice": { "strux_backend": "legacy" },
-        "control": { "recur": "chebyshev" },
-        "self":    { "nstep": 1 }
+        "lattice": {
+          "strux_backend": "legacy"
+        },
+        "control": {
+          "recur": "chebyshev"
+        },
+        "self": {
+          "nstep": 1
+        }
       },
       "checks": {
         "nml": [
-          { "file": "Ac1_out.nml", "scalars": ["etot", "ws_r", "vmad"] }
+          {
+            "file": "Ac1_out.nml",
+            "scalars": [
+              "etot",
+              "ws_r",
+              "vmad"
+            ]
+          }
         ],
         "text": [
-          { "file": "Ac1_dos.out", "rows": [400, 800, 1200, 1600], "cols": [1, 2] },
-          { "file": "totaldos.out", "rows": [400, 800, 1200, 1600], "cols": [1, 2] }
+          {
+            "file": "Ac1_dos.out",
+            "rows": [
+              400,
+              800,
+              1200,
+              1600
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          },
+          {
+            "file": "totaldos.out",
+            "rows": [
+              400,
+              800,
+              1200,
+              1600
+            ],
+            "cols": [
+              1,
+              2
+            ]
+          }
         ]
-      }
+      },
+      "tier": "standard"
     }
   ]
 }

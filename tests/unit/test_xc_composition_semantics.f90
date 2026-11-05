@@ -1,6 +1,6 @@
 ! XCF-08: direct components and explicit compositions remain exact and are
 ! never completed by silently adding a partner.
-program test_xc_composition_semantics
+subroutine test_xc_composition_semantics
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use iso_c_binding, only: c_size_t
    use precision_mod, only: rp
@@ -149,4 +149,4 @@ contains
       end if
    end subroutine require_close
 
-end program test_xc_composition_semantics
+end subroutine test_xc_composition_semantics

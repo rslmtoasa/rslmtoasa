@@ -6,7 +6,7 @@
 !>          index of every (l, spin) potential parameter (reverse_spin), so it is the normal state with the spin
 !>          labels exchanged and needs no second SCF.
 !------------------------------------------------------------------------------
-program test_spin_response_s2
+subroutine test_spin_response_s2
    use precision_mod, only: rp
    use control_mod, only: control
    use lattice_mod, only: lattice
@@ -31,7 +31,7 @@ program test_spin_response_s2
    complex(rp) :: chi0(1, 1, nw), chi(1, 1, nw), chi0_rev(1, 1, nw), chi_rev(1, 1, nw)
    integer :: iw
 
-   call get_command_argument(1, dir)
+   call get_command_argument(2, dir)
    if (len_trim(dir) == 0) error stop 'usage: test_spin_response_s2 <oracle directory>'
    call read_tolerances(trim(dir))
    call require('s2_rel', s2_rel)
@@ -69,4 +69,4 @@ program test_spin_response_s2
               maxval(abs(chi(1, 1, :) - chi0(1, 1, :)))/maxval(abs(chi0(1, 1, :))) > 1.0e-3_rp)
    call finish()
 
-end program test_spin_response_s2
+end subroutine test_spin_response_s2
