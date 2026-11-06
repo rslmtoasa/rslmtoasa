@@ -816,13 +816,119 @@ contains
       end select
    end subroutine apply_kubo_operator
 
+   !> @brief True when every bulk site has the neighbor types and bond vectors of the representative site of its type.
+   !> @details The fast kernel stores bond and operator blocks per atom type, built from atlist(type).
+   logical function bonds_follow_type(this)
+      class(recursion), intent(in) :: this
+      integer :: k, m, j, jr, t, ia
+
+      bonds_follow_type = .true.
+      do k = 1, this%lattice%kk
+         t = this%lattice%iz(k)
+         ia = this%lattice%atlist(t)
+         if (this%lattice%nn(k, 1) > this%lattice%nn(ia, 1)) bonds_follow_type = .false.
+         if (.not. bonds_follow_type) return
+         do m = 2, this%lattice%nn(k, 1)
+            j = this%lattice%nn(k, m)
+            if (j == 0) cycle
+            jr = this%lattice%nn(ia, m)
+            if (jr == 0) bonds_follow_type = .false.
+            if (.not. bonds_follow_type) return
+            if (this%lattice%iz(j) /= this%lattice%iz(jr)) bonds_follow_type = .false.
+            if (maxval(abs(this%transport_bond(:, m, k) - this%transport_bond(:, m, ia))) > 1.0e-8_rp) bonds_follow_type = .false.
+            if (.not. bonds_follow_type) return
+         end do
+      end do
+   end function bonds_follow_type
+
+   !> @brief True for the torques, which the kernel does not apply with hoh (they need the hoh Hamiltonian action).
+   logical function needs_hoh_sweeps(kind)
+      character(len=*), intent(in) :: kind
+      needs_hoh_sweeps = kind == 'spin_torque' .or. kind == 'orbital_torque'
+   end function needs_hoh_sweeps
+
+   !> @brief Reason why the fast kernel cannot run the configured transport; blank when it can.
+   function fast_kernel_obstacle(this) result(reason)
+      class(recursion), intent(in) :: this
+      character(len=64) :: reason
+
+      reason = ' '
+      if (this%hamiltonian%ccor_2c) then
+         reason = 'ccor_2c'
+      else if (this%lattice%nmax /= 0) then
+         reason = 'impurity sites'
+      else if (size(this%hamiltonian%ee, 3) /= size(this%lattice%nn, 2)) then
+         reason = 'hopping blocks and neighbor map differ in size'
+      else if (this%hamiltonian%hoh .and. (needs_hoh_sweeps(this%transport_kind_a) .or. needs_hoh_sweeps(this%transport_kind_b))) then
+         reason = 'hoh with torque operators'
+      else if (.not. bonds_follow_type(this)) then
+         reason = 'bonds differ between sites of one atom type'
+      end if
+   end function fast_kernel_obstacle
+
+   !> @brief Per-type blocks v (and vo = v*obarm for the hoh velocity) of one Kubo operator, as the fast kernel applies them.
+   !> @details Same operators as kubo_operator_vec_matmul, written as sum over neighbor slots of a block times psi:
+   !>          charge -i d.dir ee, current (q V + V q)/2, local q, torques -i[q, H_part], soc torque -i[q, lsham] (slot 1 is on-site).
+   !>          With hoh a current keeps the velocity blocks of the charge: the kernel applies q around the hoh velocity.
+   subroutine kernel_operator_blocks(this, kind, q, direction, weighted, v, vo)
+      class(recursion), intent(in) :: this
+      character(len=*), intent(in) :: kind
+      complex(rp), intent(in) :: q(:, :)
+      real(rp), intent(in) :: direction(3)
+      logical, intent(in) :: weighted
+      complex(rp), intent(out) :: v(:, :, :, :), vo(:, :, :, :)
+      complex(rp), parameter :: minus_i = (0.0_rp, -1.0_rp)
+      complex(rp) :: vel(nb, nb), blk(nb, nb)
+      real(rp) :: scale
+      integer :: t, ia, m, j
+
+      v = czero
+      vo = czero
+      do t = 1, this%lattice%ntype
+         ia = this%lattice%atlist(t)
+         select case (kind)
+         case ('local')
+            v(:, :, 1, t) = q
+         case ('soc_torque')
+            blk = this%hamiltonian%lsham(:, :, t)
+            v(:, :, 1, t) = minus_i*(matmul(q, blk) - matmul(blk, q))
+         case ('spin_torque', 'orbital_torque')
+            do m = 1, this%lattice%nn(ia, 1)
+               if (m > 1) then
+                  if (this%lattice%nn(ia, m) == 0) cycle
+               end if
+               blk = this%hamiltonian%ee(:, :, m, t)
+               if (m == 1 .and. kind == 'orbital_torque') blk = blk + this%hamiltonian%lsham(:, :, t)
+               v(:, :, m, t) = minus_i*(matmul(q, blk) - matmul(blk, q))
+            end do
+         case ('charge', 'current')
+            do m = 2, this%lattice%nn(ia, 1)
+               j = this%lattice%nn(ia, m)
+               if (j == 0) cycle
+               scale = 1.0_rp
+               if (weighted) scale = max(this%hamiltonian%velocity_scale(t), this%hamiltonian%velocity_scale(this%lattice%iz(j)))
+               vel = cmplx(0.0_rp, -scale*dot_product(direction, this%transport_bond(:, m, ia)), rp)*this%hamiltonian%ee(:, :, m, t)
+               if (kind == 'charge' .or. this%hamiltonian%hoh) then
+                  v(:, :, m, t) = vel
+                  if (this%hamiltonian%hoh) vo(:, :, m, t) = matmul(vel, this%hamiltonian%obarm(:, :, this%lattice%iz(j)))
+               else
+                  v(:, :, m, t) = 0.5_rp*(matmul(q, vel) + matmul(vel, q))
+               end if
+            end do
+         case default
+            call g_logger%fatal('Invalid Kubo response kind: '//trim(kind), __FILE__, __LINE__)
+         end select
+      end do
+   end subroutine kernel_operator_blocks
+
    !> @brief Compute two-index stochastic Chebyshev moments for transport.
    !> @details Builds mu_nm_stochastic = <r|T_m(H) v_a T_n(H) v_b|r> for charge,
    !>          spin, orbital, accumulation, and torque conductivity routes. The
    !>          starting states are either representative atom types or random
    !>          vectors, selected by control%cond_calctype.
    !> @param[inout] this Recursion object; allocates and fills mu_nm_stochastic.
-   !> @note The operators are applied matrix-free (setup_kubo_operators); GPU requests are fatal until the kernels return.
+   !> @note control%transport_backend selects the matrix-free loops ('legacy') or the single-precision kernel ('fast_sp'); the
+   !>       kernel falls back to the loops, with a warning, for setups it does not cover. 'fast_dp' and 'gpu' are fatal.
    module subroutine compute_moments_stochastic(this)
       class(recursion), intent(inout) :: this
       ! Local variables
@@ -833,8 +939,10 @@ contains
       complex(rp), dimension(nb, nb) :: dum
       complex(rp), dimension(:, :, :), allocatable :: psiref, w0, w1, w2, right_vec, v0, v1, v2
       complex(rp), dimension(:, :, :, :), allocatable :: left_vec, work
+      complex(rp), dimension(:, :, :, :), allocatable :: kernel_v_a, kernel_v_b, kernel_vo_a, kernel_vo_b
       real(rp) :: a, b, rng, emin_win, emax_win
-      logical :: deterministic_random_seed
+      logical :: deterministic_random_seed, use_fast
+      character(len=64) :: obstacle
       character(len=64) :: random_seed_text
 
       lmax = lmax_basis
@@ -847,12 +955,13 @@ contains
       a = (emax_win - emin_win)/(2 - 0.3)
       b = (emax_win + emin_win)/2.0_rp
 
-      ! Transport applies the operators matrix-free (setup_kubo_operators), whatever
-      ! cheb_backend says. The fast CPU and CUDA kernels return with the backend switch.
       if (gpu_plugin_ready(this, 'compute_moments_stochastic()', allow_hoh=.true.)) &
          call g_logger%fatal('GPU transport moments are not available with the Kubo operators yet', __FILE__, __LINE__)
-      if (trim(this%control%cheb_backend) /= 'legacy') &
-         call g_logger%info('Transport moments use the matrix-free Kubo operators for every cheb_backend', __FILE__, __LINE__)
+      select case (trim(this%control%transport_backend))
+      case ('fast_dp', 'gpu')
+         call g_logger%fatal('control%transport_backend = '//trim(this%control%transport_backend)// &
+                             ' is not available yet', __FILE__, __LINE__)
+      end select
 
       select case(this%control%cond_calctype)
       case('per_type')
@@ -927,6 +1036,26 @@ contains
 
       call g_kpm_profile%start('P_operator_setup')
       call this%setup_kubo_operators(this%control%linear_out, this%control%linear_in)
+      use_fast = .false.
+      if (trim(this%control%transport_backend) == 'fast_sp') then
+         obstacle = fast_kernel_obstacle(this)
+         if (len_trim(obstacle) == 0) then
+            use_fast = .true.
+            allocate(kernel_v_a(nb, nb, size(this%lattice%nn, 2), this%lattice%ntype), kernel_v_b(nb, nb, size(this%lattice%nn, 2), this%lattice%ntype), &
+                     kernel_vo_a(nb, nb, size(this%lattice%nn, 2), this%lattice%ntype), kernel_vo_b(nb, nb, size(this%lattice%nn, 2), this%lattice%ntype))
+            call kernel_operator_blocks(this, this%transport_kind_a, this%transport_q_a, this%transport_dir_a, .false., kernel_v_a, kernel_vo_a)
+            call kernel_operator_blocks(this, this%transport_kind_b, this%transport_q_b, this%transport_dir_b, .true., kernel_v_b, kernel_vo_b)
+            call cheb_fast_reset_cache()
+            call g_kpm_profile%configure('cpu_fast', 'fp32', &
+               merge('cpu_cblas', 'cpu_blas ', trim(this%control%cpu_reconstruction_precision) == 'fp32'), &
+               merge('fp32', 'fp64', trim(this%control%cpu_reconstruction_precision) == 'fp32'), &
+               trim(this%control%cond_calctype), matrix_dimension, nnz, this%control%cond_ll, &
+               this%control%lld, loop_over)
+         else
+            call g_logger%warning('transport_backend = fast_sp is not available for this setup ('//trim(obstacle)// &
+                                  '); using the legacy loops', __FILE__, __LINE__)
+         end if
+      end if
       call g_kpm_profile%stop('P_operator_setup')
 
       do i = 1, loop_over
@@ -972,6 +1101,22 @@ contains
          call g_kpm_profile%stop('P_trace_setup')
 
          call g_kpm_profile%start('P_moments_total')
+
+         if (use_fast) then
+            call cheb_moments_stochastic_fast(psiref, this%hamiltonian%ee, this%hamiltonian%hall, this%hamiltonian%lsham, &
+               this%lattice%nn, this%lattice%iz, this%lattice%kk, nb, size(this%lattice%nn, 2), this%lattice%ntype, &
+               this%lattice%nmax, this%control%cond_ll, a, b, this%mu_nm_stochastic(:, :, :, :, i), this%hamiltonian%hoh, &
+               this%hamiltonian%eeo, this%hamiltonian%hallo, this%hamiltonian%enim, &
+               kernel_v_a, kernel_v_b, kernel_vo_a, kernel_vo_b, &
+               this%transport_kind_a == 'charge' .or. (this%transport_kind_a == 'current' .and. this%hamiltonian%hoh), &
+               this%transport_kind_b == 'charge' .or. (this%transport_kind_b == 'current' .and. this%hamiltonian%hoh), &
+               this%transport_kind_a == 'current' .and. this%hamiltonian%hoh, &
+               this%transport_kind_b == 'current' .and. this%hamiltonian%hoh, &
+               this%transport_q_a, this%transport_q_b)
+            call g_kpm_profile%note_trace_batch(1)
+            call g_kpm_profile%stop('P_moments_total')
+            cycle
+         end if
 
          ! Computing the left vector <r|Tm(H)
          do m=1, this%control%cond_ll
@@ -1039,6 +1184,7 @@ contains
       end do
 
       deallocate(psiref, w0, w1, w2, right_vec, v0, v1, v2, left_vec, work)
+      if (use_fast) deallocate(kernel_v_a, kernel_v_b, kernel_vo_a, kernel_vo_b)
 
    end subroutine compute_moments_stochastic
 

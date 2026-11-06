@@ -605,6 +605,28 @@ linear_out
 
 **See also:** :ref:`reference/conductivity_module`
 
+transport_backend
+-----------------
+
+**Type:** Character string
+
+**Purpose:** Engine that computes the stochastic Chebyshev moments of the
+conductivity (``linear_out``/``linear_in`` transport). Independent of ``cheb_backend``.
+
+**Allowed values:**
+
+- ``'legacy'``: matrix-free double-precision loops (all operators, ``hoh``,
+  ``ccor_2c``, impurity sites).
+- ``'fast_sp'``: single-precision CPU kernel with bond and operator blocks indexed by atom type.
+  Runs every ``linear_in``/``linear_out`` operator, with or without ``hoh``, except ``spin_torque`` and
+  ``orbital_torque`` with ``hoh``. The other cases (``ccor_2c``, impurity sites, bond vectors that differ
+  between sites of one atom type) run ``'legacy'`` and write one warning to the log.
+- ``'fast_dp'``, ``'gpu'``: reserved; fatal at run time.
+
+**Default:** ``'legacy'``
+
+**Related code:** ``source/recursion_transport.f90``, ``source/chebyshev_fast.f90``
+
 cond_calctype
 -------------
 
