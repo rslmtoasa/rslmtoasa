@@ -122,17 +122,13 @@ SOC+U calculation. Any production claim still requires SOC-off covariance
 and `xi -> 0` limits, direct `j=l±1/2` checks, and actual SOC+U RS/KS tests
 after the radial/XC and convergence contracts are closed.
 
-There is also a separate spin-operator sign discrepancy to resolve before
-using transverse spin observables as SOC validation. `math.f90` documents
-standard `sigma_y=[[0,-i],[i,0]]` in up/down order, but assigns the opposite
-offdiagonal signs. These matrices are consumed directly as operators in
-spin-current anticommutators and spin-accumulation setup
-(`hamiltonian_build.f90`, `build_realspace_spin_operators`; and
-`recursion_transport.f90`). Therefore the source-level `S_y` has the opposite
-expectation for `(up+i down)/sqrt(2)` under the documented basis convention.
-`build_lsham` constructs its SOC blocks from `Lx,Ly` directly and does not use
-`S_y`, so that path needs its own angular-momentum spectrum test. No sign was
-changed as part of this algebra-only oracle.
+`S_y` in `math.f90` had the opposite off-diagonal signs to the documented standard
+`sigma_y=[[0,-i],[i,0]]` in up/down order ([S_x, S_y] = -i S_z). On `main_rc` it now has
+the documented sign, as on `main`, so that `main`'s transport tests (dense NumPy
+spin operators) apply; [S_x, S_y] = +i S_z is checked in `UnitKpmTransport`. The only consumer is
+`select_spin_operator` (`hamiltonian_build.f90`), i.e. the `pol_alpha = 'y'` spin operators of the
+Kubo transport. `build_lsham` constructs its SOC blocks from `Lx,Ly` directly and does not use
+`S_y`, so that path still needs its own angular-momentum spectrum test.
 
 ## Production kernel and index map (S1)
 
