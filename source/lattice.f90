@@ -1368,7 +1368,8 @@ module lattice_mod
    !> @param[in] i_atom First atom index.
    !> @param[in] j_atom Second atom index.
    !> @param[out] cdiff Minimum-image displacement from i_atom to j_atom.
-   module subroutine f_wrap_coord_diff(this,Natom,coord,i_atom,j_atom,cdiff)
+   !> @param[out] ambiguous Optional; true if another image is equally short. The chosen image is unchanged.
+   module subroutine f_wrap_coord_diff(this,Natom,coord,i_atom,j_atom,cdiff,ambiguous)
       implicit none
       class(lattice), intent(inout) :: this
       integer, intent(in) :: Natom
@@ -1376,6 +1377,8 @@ module lattice_mod
       integer, intent(in) :: i_atom
       integer, intent(in) :: j_atom
       real(rp), dimension(3), intent(out) :: cdiff
+      logical, intent(out), optional :: ambiguous
+      real(rp) :: tolerance
       !
       real(rp), dimension(3) :: odiff, oshift, mdiff
       integer :: x,y,z

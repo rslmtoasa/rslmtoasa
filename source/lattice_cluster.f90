@@ -1500,7 +1500,7 @@ contains
    !> @param[in] i_atom First atom index.
    !> @param[in] j_atom Second atom index.
    !> @param[out] cdiff Minimum-image displacement from i_atom to j_atom.
-   module subroutine f_wrap_coord_diff(this,Natom,coord,i_atom,j_atom,cdiff)
+   module subroutine f_wrap_coord_diff(this,Natom,coord,i_atom,j_atom,cdiff,ambiguous)
       implicit none
       class(lattice), intent(inout) :: this
       integer, intent(in) :: Natom
@@ -1508,6 +1508,8 @@ contains
       integer, intent(in) :: i_atom
       integer, intent(in) :: j_atom
       real(rp), dimension(3), intent(out) :: cdiff
+      logical, intent(out), optional :: ambiguous
+      real(rp) :: tolerance
       !
       real(rp), dimension(3) :: odiff, oshift, mdiff
       integer :: x,y,z
@@ -1541,6 +1543,21 @@ contains
          end do
       end do
       cdiff=mdiff
+      if (present(ambiguous)) then
+         ambiguous = .false.
+         tolerance = 128*spacing(1.0_rp)*max(1.0_rp, sum(mdiff**2))
+         do z=zmin,zmax
+            do y=ymin,ymax
+               do x=xmin,xmax
+                  oshift = odiff + x*(this%n1)*this%a(:, 1)*this%alat &
+                                 + y*(this%n2)*this%a(:, 2)*this%alat &
+                                 + z*(this%n3)*this%a(:, 3)*this%alat
+                  if (abs(sum(oshift**2)-sum(mdiff**2)) <= tolerance .and. &
+                      sum((oshift-mdiff)**2) > tolerance) ambiguous = .true.
+               end do
+            end do
+         end do
+      end if
       return
       !
    end subroutine f_wrap_coord_diff
