@@ -75,6 +75,9 @@ def main():
         text = path.read_text()
         needle = '      call recursion_obj%compute_moments_stochastic()'
         assert needle in text
+        # The conductivity driver of the slim layout calls the moments under `if (rec_moments)`.
+        guarded = '      if (rec_moments) call recursion_obj%compute_moments_stochastic()'
+        text = text.replace(guarded, '      if (rec_moments) then\n' + TIMER + '\n      end if')
         path.write_text(text.replace(needle,TIMER))
         if version == 'fixed':
             path = src/'source/recursion_transport.f90'
