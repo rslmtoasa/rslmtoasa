@@ -49,7 +49,8 @@ module conductivity_mod
    implicit none
 
    private
-   public :: gamma_mu_reference, gamma_mu_blas, gamma_mu_cblas, pack_gamma_mu_diagonal, response_operator_units
+   public :: gamma_mu_reference, gamma_mu_blas, gamma_mu_cblas, pack_gamma_mu_diagonal, &
+      conductivity_integral, response_operator_units
 
    type, public :: conductivity
       !> Control
@@ -778,8 +779,7 @@ contains
             end do
          end if
          ! Convert the same integrated traces to labeled physical units after the raw output is written.
-         call this%write_physical_response(integrated_l_real, integrated_l_im, wscale, a, b, &
-            integrated_type_l_real, integrated_type_l_im)
+         call this%write_physical_response(integrand, integrand_at, wscale, a, b)
       end if
       call g_kpm_profile%stop('P_output_io')
 
@@ -926,20 +926,34 @@ contains
    end subroutine response_normalization
 
    !---------------------------------------------------------------------------
-   ! Write explicitly labeled responses separately from the bare cond_* files.
-   ! The integrated traces of calculate_conductivity_tensor are weighted and
-   ! converted here. Constants use the existing positive-e Bastin convention:
-   ! no silent Hall sign change. Multipoles are angular powers (q0=hbar**rank),
-   ! not electric position multipoles. All nb spin-orbitals are traced: no
-   ! degeneracy factor.
+   ! Zero-temperature Fermi-weighted Simpson integral of y over x up to index
+   ! upper (the same weights as simpson_f at the grid-point Fermi edge). Single
+   ! evaluation of integrate_fermi_batch, kept for the response fixtures.
    !---------------------------------------------------------------------------
-   subroutine write_physical_response(this, integrated_l_real, integrated_l_im, x, a, b, &
-                                      integrated_type_l_real, integrated_type_l_im)
+   function conductivity_integral(y, x, upper) result(value)
+      real(rp), intent(in) :: y(:), x(:)
+      integer, intent(in) :: upper
+      real(rp) :: value
+      real(rp) :: integrated(size(x), 1)
+
+      if (size(y) /= size(x) .or. size(x) < 3 .or. upper < 1 .or. upper > size(x)) then
+         call g_logger%fatal('Invalid conductivity integration bounds', __FILE__, __LINE__)
+      end if
+      call integrate_fermi_batch(x, reshape(y, [size(y), 1]), integrated)
+      value = integrated(upper, 1)
+   end function conductivity_integral
+
+   !---------------------------------------------------------------------------
+   ! Write explicitly labeled responses separately from the bare cond_* files.
+   ! Constants use the existing positive-e Bastin convention: no silent Hall
+   ! sign change. Multipoles are angular powers (q0=hbar**rank), not electric
+   ! position multipoles. All nb spin-orbitals are traced: no degeneracy factor.
+   !---------------------------------------------------------------------------
+   subroutine write_physical_response(this, integrand, integrand_at, x, a, b)
       class(conductivity), intent(in) :: this
-      real(rp), intent(in) :: integrated_l_real(:, :), integrated_l_im(:, :)
+      complex(rp), intent(in) :: integrand(:, :, :), integrand_at(:, :, :, :)
       real(rp), intent(in) :: x(:), a, b
-      real(rp), intent(in), optional :: integrated_type_l_real(:, :, :), integrated_type_l_im(:, :, :)
-      real(rp), allocatable :: weights(:), re(:, :), im(:, :)
+      real(rp), allocatable :: weights(:), y(:, :), integrated(:, :), type_y(:, :), type_integrated(:, :)
       real(rp) :: conversion, energy, dir_a(3), dir_b(3)
       integer :: ntrace, it, l, i, info, total, orbital_re, orbital_im, type_unit
       integer :: pe, pl, rank, pie, pil, ri
@@ -949,29 +963,36 @@ contains
       ntrace = this%lattice%ntype
       if (trim(this%control%cond_calctype) == 'random_vec') ntrace = this%control%random_vec_num
       if (ntrace < 1) call g_logger%fatal('Response trace count must be positive', __FILE__, __LINE__)
-      allocate(weights(ntrace), re(nb, size(x)), im(nb, size(x)))
+      allocate(weights(ntrace), y(size(x), 2*nb), integrated(size(x), 2*nb), type_y(size(x), 2), type_integrated(size(x), 2))
       call this%response_normalization(weights, conversion, units)
-      re = 0.0_rp
-      im = 0.0_rp
+      y = 0.0_rp
       if (trim(this%control%cond_calctype) == 'per_type') then
          do it = 1, ntrace
-            re = re + weights(it)*integrated_type_l_real(:, :, it)
-            im = im + weights(it)*integrated_type_l_im(:, :, it)
+            type_y = 0.0_rp
+            do l = 1, nb
+               y(:, l) = y(:, l) + weights(it)*real(integrand_at(l, l, :, it))
+               y(:, nb + l) = y(:, nb + l) + weights(it)*aimag(integrand_at(l, l, :, it))
+               type_y(:, 1) = type_y(:, 1) + weights(it)*real(integrand_at(l, l, :, it))
+               type_y(:, 2) = type_y(:, 2) + weights(it)*aimag(integrand_at(l, l, :, it))
+            end do
+            call integrate_fermi_batch(x, type_y, type_integrated)
             ! Use the same atomic label as the legacy <label>_cond.out files.
             filename = trim(this%lattice%symbolic_atoms(it)%element%symbol) // '_response.out'
             open(newunit=type_unit, file=trim(filename), status='replace')
             write(type_unit, '(a)') '# E-Ef [eV], Re, Im; additive type contribution; units: '//trim(units)
             do i = 1, size(x)
                write(type_unit, '(3es25.16)') (a*x(i)+b-this%en%fermi)*ry2ev, &
-                  conversion*weights(it)*sum(integrated_type_l_real(:, i, it)), &
-                  conversion*weights(it)*sum(integrated_type_l_im(:, i, it))
+                  conversion*type_integrated(i, 1), conversion*type_integrated(i, 2)
             end do
             close(type_unit)
          end do
       else
-         re = weights(1)*integrated_l_real
-         im = weights(1)*integrated_l_im
+         do l = 1, nb
+            y(:, l) = weights(1)*real(integrand(l, l, :))
+            y(:, nb + l) = weights(1)*aimag(integrand(l, l, :))
+         end do
       end if
+      call integrate_fermi_batch(x, y, integrated)
       dir_a = this%recursion%hamiltonian%v_alpha/norm2(this%recursion%hamiltonian%v_alpha)
       dir_b = this%recursion%hamiltonian%v_beta/norm2(this%recursion%hamiltonian%v_beta)
       open(newunit=info, file='response_units.txt', status='replace')
@@ -1005,9 +1026,9 @@ contains
       write(orbital_im, '(a)') '# E-Ef [eV], spin-orbital contributions; units: '//trim(units)
       do i = 1, size(x)
          energy = (a*x(i)+b-this%en%fermi)*ry2ev
-         write(total, '(3es25.16)') energy, conversion*sum(re(:, i)), conversion*sum(im(:, i))
-         write(orbital_re, '(*(es25.16))') energy, conversion*re(:, i)
-         write(orbital_im, '(*(es25.16))') energy, conversion*im(:, i)
+         write(total, '(3es25.16)') energy, conversion*sum(integrated(i, 1:nb)), conversion*sum(integrated(i, nb+1:2*nb))
+         write(orbital_re, '(*(es25.16))') energy, conversion*integrated(i, 1:nb)
+         write(orbital_im, '(*(es25.16))') energy, conversion*integrated(i, nb+1:2*nb)
       end do
       close(total)
       close(orbital_re)
