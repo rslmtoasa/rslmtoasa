@@ -50,6 +50,7 @@ module hamiltonian_mod
    integer, parameter, public :: rd1_vin_wrong_type = 4
    integer, parameter, public :: rd1_vin_missing_or_stale = 5
    integer, parameter, public :: rd1_vin_ineligible = 6
+   public :: select_spin_operator, select_orbital_operator, select_quadrupole_operator, select_octupole_operator
 
    !> Module´s main procedure
    type, public :: hamiltonian
@@ -1223,6 +1224,30 @@ module hamiltonian_mod
    
    end subroutine rs_neighbor_lattice_index
 
+
+   !> @brief Select the spin operator S_x, S_y or S_z from a polarization label.
+   module subroutine select_spin_operator(pol, S_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(nb, nb), intent(out) :: S_op
+   end subroutine select_spin_operator
+
+   !> @brief Select the orbital operator L_x, L_y or L_z from a polarization label.
+   module subroutine select_orbital_operator(pol, L_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(nb, nb), intent(out) :: L_op
+   end subroutine select_orbital_operator
+
+   !> @brief Select an orbital quadrupole / OAP operator from a component label.
+   module subroutine select_quadrupole_operator(pol, Q_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(nb, nb), intent(out) :: Q_op
+   end subroutine select_quadrupole_operator
+
+   !> @brief Select a pure rank-three orbital octupole from a component label.
+   module subroutine select_octupole_operator(pol, O_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(nb, nb), intent(out) :: O_op
+   end subroutine select_octupole_operator
    end interface
 
 end module hamiltonian_mod

@@ -2704,4 +2704,286 @@ contains
       end do
    end subroutine add_constraining_field_spin_block
 
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Select spin operator S_x, S_y, or S_z from a polarization label.
+   !---------------------------------------------------------------------------
+   module subroutine select_spin_operator(pol, S_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(nb, nb), intent(out) :: S_op
+
+      S_op(:, :) = (0.0_rp, 0.0_rp)
+
+      select case(trim(pol))
+      case('x')
+         S_op(:, :) = S_x(:, :)
+      case('y')
+         S_op(:, :) = S_y(:, :)
+      case('z')
+         S_op(:, :) = S_z(:, :)
+      case default
+         call g_logger%fatal('Invalid spin polarization: '//trim(pol), __FILE__, __LINE__)
+      end select
+
+   end subroutine select_spin_operator
+
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Select orbital operator L_x, L_y, or L_z from a polarization label.
+   !> The math_mod matrices are transformed from Cartesian to spherical basis.
+   !---------------------------------------------------------------------------
+   module subroutine select_orbital_operator(pol, L_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(nb, nb), intent(out) :: L_op
+
+      complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
+
+      mLx(:, :) = L_x(:, :)
+      mLy(:, :) = L_y(:, :)
+      mLz(:, :) = L_z(:, :)
+
+      call hcpx(mLx, 'cart2sph')
+      call hcpx(mLy, 'cart2sph')
+      call hcpx(mLz, 'cart2sph')
+
+      L_op(:, :) = (0.0_rp, 0.0_rp)
+
+      select case(trim(pol))
+      case('x')
+         L_op(1:norb, 1:norb) = mLx(:, :)
+         L_op(spin_off+1:nb, spin_off+1:nb)  = mLx(:, :)
+      case('y')
+         L_op(1:norb, 1:norb) = mLy(:, :)
+         L_op(spin_off+1:nb, spin_off+1:nb)  = mLy(:, :)
+      case('z')
+         L_op(1:norb, 1:norb) = mLz(:, :)
+         L_op(spin_off+1:nb, spin_off+1:nb)  = mLz(:, :)
+      case default
+         call g_logger%fatal('Invalid orbital polarization: '//trim(pol), __FILE__, __LINE__)
+      end select
+
+   end subroutine select_orbital_operator
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Select orbital quadrupole / OAP operator from a component label.
+   !>
+   !> Definitions:
+   !>   Qxx = Lx^2 - L^2/3
+   !>   Qyy = Ly^2 - L^2/3
+   !>   Qzz = Lz^2 - L^2/3
+   !>   Qxy = 1/2 {Lx,Ly}
+   !>   Qyz = 1/2 {Ly,Lz}
+   !>   Qzx = 1/2 {Lz,Lx}
+   !>   Qx2y2  = (Qxx - Qyy)/2
+   !>   Q3z2r2 = (2 Qzz - Qxx - Qyy)/2
+   !>
+   !> L^2 = Lx^2 + Ly^2 + Lz^2. Matrices use hbar = 1; the
+   !> physical quadrupoles are angular-momentum bilinears divided by hbar.
+   !> The diagonal Cartesian components now form a traceless tensor.
+   !> Both accumulation and current builders use this selector.
+   !>
+   !> The math_mod L matrices are transformed from Cartesian to spherical basis
+   !> before forming products, exactly as done for orbital accumulation/current.
+   !---------------------------------------------------------------------------
+   module subroutine select_quadrupole_operator(pol, Q_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(nb, nb), intent(out) :: Q_op
+
+      complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
+      complex(rp), dimension(norb, norb) :: Q9
+      complex(rp), dimension(norb, norb) :: Lx2, Ly2, Lz2, L2
+
+      mLx(:, :) = L_x(:, :)
+      mLy(:, :) = L_y(:, :)
+      mLz(:, :) = L_z(:, :)
+
+      call hcpx(mLx, 'cart2sph')
+      call hcpx(mLy, 'cart2sph')
+      call hcpx(mLz, 'cart2sph')
+
+      Lx2 = matmul(mLx, mLx)
+      Ly2 = matmul(mLy, mLy)
+      Lz2 = matmul(mLz, mLz)
+      L2 = Lx2 + Ly2 + Lz2
+
+      Q9(:, :) = (0.0_rp, 0.0_rp)
+
+      select case(trim(pol))
+
+      case('Qxx', 'qxx', 'xx')
+         Q9 = Lx2 - L2 / 3.0_rp
+
+      case('Qyy', 'qyy', 'yy')
+         Q9 = Ly2 - L2 / 3.0_rp
+
+      case('Qzz', 'qzz', 'zz')
+         Q9 = Lz2 - L2 / 3.0_rp
+
+      case('Qxy', 'qxy', 'xy')
+         Q9 = 0.5_rp * (matmul(mLx, mLy) + matmul(mLy, mLx))
+
+      case('Qyz', 'qyz', 'yz')
+         Q9 = 0.5_rp * (matmul(mLy, mLz) + matmul(mLz, mLy))
+
+      case('Qzx', 'qzx', 'zx', 'Qxz', 'qxz', 'xz')
+         Q9 = 0.5_rp * (matmul(mLz, mLx) + matmul(mLx, mLz))
+
+      case('Qx2y2', 'qx2y2', 'x2y2')
+         Q9 = 0.5_rp * (Lx2 - Ly2)
+
+      case('Q3z2r2', 'q3z2r2', '3z2r2')
+         Q9 = 0.5_rp * (2.0_rp * Lz2 - Lx2 - Ly2)
+
+      case default
+         call g_logger%fatal('Invalid quadrupole component: '//trim(pol), __FILE__, __LINE__)
+
+      end select
+
+      ! Clean tiny numerical anti-Hermitian noise.
+      Q9 = 0.5_rp * (Q9 + transpose(conjg(Q9)))
+
+      Q_op(:, :) = (0.0_rp, 0.0_rp)
+
+      ! spin-up block
+      Q_op(1:norb, 1:norb) = Q9(:, :)
+
+      ! spin-down block
+      Q_op(spin_off+1:nb, spin_off+1:nb) = Q9(:, :)
+
+   end subroutine select_quadrupole_operator
+
+   !---------------------------------------------------------------------------
+   ! DESCRIPTION:
+   !> @brief
+   !> Select a local orbital octupole, in hbar = 1 units.
+   !> Oabb (a /= b) = {La,Lb^2}/2 - {La,L^2}/10 - La/10.
+   !> These seven pure rank-three components include fully symmetrized Oxyz.
+   !> Oa5b2r2 is an alias of Oabb, with the SAME normalization (no factor 5).
+   !> Explicit Ma3b2r2 labels retain the old mixed dipole/octupole observable.
+   !> Old Oa3b2r2 labels are rejected to prevent silent reinterpretation.
+   !> Physical operators in angular-momentum units are these matrices times hbar.
+   !---------------------------------------------------------------------------
+   module subroutine select_octupole_operator(pol, O_op)
+      character(len=*), intent(in) :: pol
+      complex(rp), dimension(nb, nb), intent(out) :: O_op
+
+      complex(rp), dimension(norb, norb) :: mLx, mLy, mLz
+      complex(rp), dimension(norb, norb) :: Lx2, Ly2, Lz2, L2, O9
+
+      mLx(:, :) = L_x(:, :)
+      mLy(:, :) = L_y(:, :)
+      mLz(:, :) = L_z(:, :)
+
+      call hcpx(mLx, 'cart2sph')
+      call hcpx(mLy, 'cart2sph')
+      call hcpx(mLz, 'cart2sph')
+
+      Lx2 = matmul(mLx, mLx)
+      Ly2 = matmul(mLy, mLy)
+      Lz2 = matmul(mLz, mLz)
+      L2  = Lx2 + Ly2 + Lz2
+
+      O9(:, :) = (0.0_rp, 0.0_rp)
+
+      select case(trim(pol))
+
+      case('Oxyz', 'oxyz', 'xyz')
+         O9 = ( &
+              matmul(matmul(mLx, mLy), mLz) &
+            + matmul(matmul(mLx, mLz), mLy) &
+            + matmul(matmul(mLy, mLx), mLz) &
+            + matmul(matmul(mLy, mLz), mLx) &
+            + matmul(matmul(mLz, mLx), mLy) &
+            + matmul(matmul(mLz, mLy), mLx) ) / 6.0_rp
+
+      case('Oxyy', 'oxyy', 'xyy', 'Ox5y2r2', 'ox5y2r2')
+         O9 = 0.5_rp * (matmul(mLx, Ly2) + matmul(Ly2, mLx)) &
+            - (matmul(mLx, L2) + matmul(L2, mLx)) / 10.0_rp - mLx / 10.0_rp
+
+      case('Mx3y2r2', 'mx3y2r2')
+         O9 = 0.5_rp * (matmul(mLx, Ly2) + matmul(Ly2, mLx)) &
+            - (matmul(mLx, L2) + matmul(L2, mLx)) / 6.0_rp
+
+      case('Oyzz', 'oyzz', 'yzz', 'Oy5z2r2', 'oy5z2r2')
+         O9 = 0.5_rp * (matmul(mLy, Lz2) + matmul(Lz2, mLy)) &
+            - (matmul(mLy, L2) + matmul(L2, mLy)) / 10.0_rp - mLy / 10.0_rp
+
+      case('My3z2r2', 'my3z2r2')
+         O9 = 0.5_rp * (matmul(mLy, Lz2) + matmul(Lz2, mLy)) &
+            - (matmul(mLy, L2) + matmul(L2, mLy)) / 6.0_rp
+
+      case('Ozxx', 'ozxx', 'zxx', 'Oz5x2r2', 'oz5x2r2')
+         O9 = 0.5_rp * (matmul(mLz, Lx2) + matmul(Lx2, mLz)) &
+            - (matmul(mLz, L2) + matmul(L2, mLz)) / 10.0_rp - mLz / 10.0_rp
+
+      case('Mz3x2r2', 'mz3x2r2')
+         O9 = 0.5_rp * (matmul(mLz, Lx2) + matmul(Lx2, mLz)) &
+            - (matmul(mLz, L2) + matmul(L2, mLz)) / 6.0_rp
+
+      case('Oxzz', 'oxzz', 'xzz', 'Ox5z2r2', 'ox5z2r2')
+         O9 = 0.5_rp * (matmul(mLx, Lz2) + matmul(Lz2, mLx)) &
+            - (matmul(mLx, L2) + matmul(L2, mLx)) / 10.0_rp - mLx / 10.0_rp
+
+      case('Mx3z2r2', 'mx3z2r2')
+         O9 = 0.5_rp * (matmul(mLx, Lz2) + matmul(Lz2, mLx)) &
+            - (matmul(mLx, L2) + matmul(L2, mLx)) / 6.0_rp
+
+      case('Oyxx', 'oyxx', 'yxx', 'Oy5x2r2', 'oy5x2r2')
+         O9 = 0.5_rp * (matmul(mLy, Lx2) + matmul(Lx2, mLy)) &
+            - (matmul(mLy, L2) + matmul(L2, mLy)) / 10.0_rp - mLy / 10.0_rp
+
+      case('My3x2r2', 'my3x2r2')
+         O9 = 0.5_rp * (matmul(mLy, Lx2) + matmul(Lx2, mLy)) &
+            - (matmul(mLy, L2) + matmul(L2, mLy)) / 6.0_rp
+
+      case('Ozyy', 'ozyy', 'zyy', 'Oz5y2r2', 'oz5y2r2')
+         O9 = 0.5_rp * (matmul(mLz, Ly2) + matmul(Ly2, mLz)) &
+            - (matmul(mLz, L2) + matmul(L2, mLz)) / 10.0_rp - mLz / 10.0_rp
+
+      case('Mz3y2r2', 'mz3y2r2')
+         O9 = 0.5_rp * (matmul(mLz, Ly2) + matmul(Ly2, mLz)) &
+            - (matmul(mLz, L2) + matmul(L2, mLz)) / 6.0_rp
+
+      case('Ox3y2r2', 'ox3y2r2')
+         call g_logger%fatal('Ambiguous legacy component: use Oxyy for pure rank three or Mx3y2r2 for the old mixed operator', &
+                             __FILE__, __LINE__)
+
+      case('Oy3z2r2', 'oy3z2r2')
+         call g_logger%fatal('Ambiguous legacy component: use Oyzz for pure rank three or My3z2r2 for the old mixed operator', &
+                             __FILE__, __LINE__)
+
+      case('Oz3x2r2', 'oz3x2r2')
+         call g_logger%fatal('Ambiguous legacy component: use Ozxx for pure rank three or Mz3x2r2 for the old mixed operator', &
+                             __FILE__, __LINE__)
+
+      case('Ox3z2r2', 'ox3z2r2')
+         call g_logger%fatal('Ambiguous legacy component: use Oxzz for pure rank three or Mx3z2r2 for the old mixed operator', &
+                             __FILE__, __LINE__)
+
+      case('Oy3x2r2', 'oy3x2r2')
+         call g_logger%fatal('Ambiguous legacy component: use Oyxx for pure rank three or My3x2r2 for the old mixed operator', &
+                             __FILE__, __LINE__)
+
+      case('Oz3y2r2', 'oz3y2r2')
+         call g_logger%fatal('Ambiguous legacy component: use Ozyy for pure rank three or Mz3y2r2 for the old mixed operator', &
+                             __FILE__, __LINE__)
+
+      case default
+         call g_logger%fatal('Invalid octupole component: '//trim(pol), __FILE__, __LINE__)
+
+      end select
+
+      O9 = 0.5_rp * (O9 + transpose(conjg(O9)))
+
+      O_op(:, :) = (0.0_rp, 0.0_rp)
+      O_op(1:norb, 1:norb) = O9(:, :)
+      O_op(spin_off+1:nb, spin_off+1:nb) = O9(:, :)
+
+   end subroutine select_octupole_operator
+
 end submodule hamiltonian_build
