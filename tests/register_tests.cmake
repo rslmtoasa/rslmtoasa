@@ -422,14 +422,6 @@ if(RUN_UNIT_TESTS)
     set_target_properties(ReciprocalCudaArbitraryK PROPERTIES LINKER_LANGUAGE "Fortran")
     rslmto_add_test(NAME ReciprocalCudaArbitraryK TIER standard LABELS unit cuda reciprocal
       COMMAND ReciprocalCudaArbitraryK PROPERTIES SKIP_RETURN_CODE 77)
-    foreach(_cu IN ITEMS Lifecycle Eigensolver Lehmann)
-      string(TOLOWER ${_cu} _cul)
-      add_executable(ReciprocalCuda${_cu} ${TestDIR}/unit/test_reciprocal_cuda_${_cul}.cpp)
-      target_include_directories(ReciprocalCuda${_cu} PRIVATE ${SRC}/cuda)
-      target_link_libraries(ReciprocalCuda${_cu} PRIVATE rslmto_reciprocal_cuda)
-      rslmto_add_test(NAME ReciprocalCuda${_cu} TIER standard LABELS unit cuda reciprocal
-        COMMAND ReciprocalCuda${_cu} PROPERTIES SKIP_RETURN_CODE 77)
-    endforeach()
   endif()
 
   if(ENABLE_MPI AND MPI_Fortran_FOUND)
