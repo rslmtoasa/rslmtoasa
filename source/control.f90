@@ -604,7 +604,7 @@ contains
       this%linear_in = 'charge'
       this%linear_out = 'charge'
       this%cond_calctype = 'per_type'
-      this%density_policy = 'constrained_spiral'
+      this%density_policy = 'relaxed_reference'
       this%gbt_scf_diagnostics = .false.
       this%fresh_start = .false.
       ! default constraints settings

@@ -5,6 +5,7 @@ submodule(hamiltonian_mod) hamiltonian_build
    use gbt_structure_mod, only: gbt_endpoint_link, gbt_lift_orbital_block, gbt_contract_collinear, &
                                 gbt_reference_moment_is_collinear
    use lmto_magnetic_tangent_mod, only: lmto_bond_value
+   use spin_density_mod, only: sd_constrained_spiral, sd_relaxed_reference
 
 contains
 
@@ -393,6 +394,14 @@ contains
          call g_logger%fatal("Invalid magnetic_representation. Use 'periodic_nc', 'gbt_single_q', or 'explicit_texture'.", &
                              __FILE__, __LINE__)
       end select
+      ! GBT needs a fixed rotating-frame reference axis, which the relaxed policy does not keep.
+      if (trim(this%magnetic_representation) == gbt_single_q .and. associated(this%control)) then
+         if (trim(this%control%density_policy) == sd_relaxed_reference) then
+            call g_logger%warning("gbt_single_q needs a fixed reference axis: density_policy set to 'constrained_spiral'.", &
+                                  __FILE__, __LINE__)
+            this%control%density_policy = sd_constrained_spiral
+         end if
+      end if
       this%pol_alpha = pol_alpha(:len(this%pol_alpha))
       this%pol_beta = pol_beta(:len(this%pol_beta))
       this%hubbard_u_potential_form = lower(trim(hubbard_u_potential_form))

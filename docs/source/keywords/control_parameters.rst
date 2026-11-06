@@ -824,7 +824,7 @@ density_policy (WP7)
 
 **Type:** String
 
-**Default:** ``'constrained_spiral'``
+**Default:** ``'relaxed_reference'``
 
 **Allowed values:** ``'constrained_spiral'``, ``'relaxed_reference'``
 
@@ -840,9 +840,12 @@ afterwards, against the axis this policy resolves.
   ``m . ref`` are mixed; the transverse density ``m - (m . ref) ref`` and the
   torque ``ref x m`` are reported per site as the constraint residual
   (``DENSITY_POLICY`` log lines) rather than absorbed.
-- ``'relaxed_reference'`` -- the full rotating-frame Cartesian moment is mixed
-  and the per-sublattice reference axis follows it, while the single-q ansatz
-  is retained. The transverse residual and torque vanish identically.
+- ``'relaxed_reference'`` -- the moment direction is mixed with ``&mix`` ``magbeta``,
+  ``mom = (1 - magbeta) mom_old + magbeta mom_measured``, as in the main branch;
+  ``magbeta = 0`` keeps the axes fixed. The real-space density is projected on
+  that mixed ``mom``, which is not replaced by the measured axis.
+  ``magbeta`` is ignored by ``'constrained_spiral'``. ``gbt_single_q`` needs a
+  fixed axis and switches to ``'constrained_spiral'`` with a warning.
 
 **Example:**
 
