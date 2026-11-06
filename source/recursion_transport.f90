@@ -842,7 +842,8 @@ contains
 
       ! General procedures
       call resolve_chebyshev_window(this, emin_win, emax_win)
-      a = (emax_win - emin_win)/(2 - 0.3_rp)
+      ! Same scaling constant as calculate_gamma_nm, so that moments and reconstruction agree.
+      a = (emax_win - emin_win)/(2 - 0.3)
       b = (emax_win + emin_win)/2.0_rp
 
       ! Transport applies the operators matrix-free (setup_kubo_operators), whatever
