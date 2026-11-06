@@ -3796,7 +3796,7 @@ contains
       nr = size(rofi)
       B_fsm = 0.0_rp
       if (this%lattice%control%do_comom .and. .not. atom%force_nonmagnetic) B_fsm = -atom%mag_cfield(3)
-      if (this%magnetic_seed_active .and. .not. atom%force_nonmagnetic) B_fsm = B_fsm + this%magnetic_seed_field
+      if (this%magnetic_seed_active) B_fsm = B_fsm + this%magnetic_seed_field
       xc_obj = xc(this%lattice%control)
       b = atom%B()
 
