@@ -49,7 +49,7 @@ module conductivity_mod
    implicit none
 
    private
-   public :: gamma_mu_reference, gamma_mu_blas, gamma_mu_cblas, pack_gamma_mu_diagonal
+   public :: gamma_mu_reference, gamma_mu_blas, gamma_mu_cblas, pack_gamma_mu_diagonal, response_operator_units
 
    type, public :: conductivity
       !> Control
@@ -67,6 +67,10 @@ module conductivity_mod
       integer :: ll_cond
       !> Pre factor Gamma_nm for the conductivity tensor calculation
       complex(rp), dimension(:, :, :), allocatable :: gamma_nm
+      !> Unit-cell volume (Angstrom^3) or in-plane area (Angstrom^2).
+      !> A positive measure overrides the cell measure, not the cluster measure.
+      character(len=16) :: response_geometry = 'bulk'
+      real(rp) :: response_measure = 0.0_rp
 
    contains
       ! Destructor
@@ -76,6 +80,8 @@ module conductivity_mod
       procedure :: restore_to_default
       procedure :: calculate_gamma_nm
       procedure :: calculate_conductivity_tensor
+      procedure :: response_normalization
+      procedure :: write_physical_response
    end type
   
    interface conductivity
@@ -285,6 +291,8 @@ contains
       include 'include_codes/namelists/conductivity.f90'
 
       ll_cond = this%ll_cond
+      response_geometry = this%response_geometry
+      response_measure = this%response_measure
 
       ! Reading
       open (newunit=funit, file=this%control%fname, action='read', iostat=iostatus, status='old')
@@ -294,18 +302,21 @@ contains
 
       read (funit, nml=conductivity, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist', __FILE__, __LINE__)
-         call g_logger%error('iostatus = '//int2str(iostatus), __FILE__, __LINE__)
+         call g_logger%fatal('Error while reading conductivity namelist; iostatus = '//int2str(iostatus), __FILE__, __LINE__)
       end if
       close (funit)
 
       this%ll_cond = ll_cond
+      this%response_geometry = response_geometry
+      this%response_measure = response_measure
    end subroutine build_from_file   
 
    subroutine restore_to_default(this)
       class(conductivity), intent(inout) :: this
 
       this%ll_cond = 200
+      this%response_geometry = 'bulk'
+      this%response_measure = 0.0_rp
    end subroutine restore_to_default
 
    !*************************************************************************
@@ -370,6 +381,8 @@ contains
       b = (this%en%energy_max + this%en%energy_min)/2
 
       wscale(:) = (this%en%ene(:) - b)/a
+      if (this%control%cond_ll < 2 .or. any(abs(wscale) >= 1.0_rp)) &
+         call g_logger%fatal('Conductivity requires cond_ll>=2 and all scaled energies inside (-1,1)', __FILE__, __LINE__)
       acos_x(:) = acos(wscale(:))
       sqrt_term(:) = sqrt(1.0_rp - wscale(:)**2)
 
@@ -441,6 +454,8 @@ contains
       a_sp = real((this%en%energy_max - this%en%energy_min)/(2.0_rp - 0.3_rp), real32)
       b_sp = real((this%en%energy_max + this%en%energy_min)/2.0_rp, real32)
       wscale(:) = real((this%en%ene(:) - real(b_sp, rp))/real(a_sp, rp), real32)
+      if (this%control%cond_ll < 2 .or. any(abs(wscale) >= 1.0_real32)) &
+         call g_logger%fatal('Conductivity requires cond_ll>=2 and all scaled energies inside (-1,1)', __FILE__, __LINE__)
       acos_x(:) = acos(wscale(:))
       sqrt_term(:) = sqrt(1.0_real32 - wscale(:)**2)
       do i = 1, m_cond
@@ -762,6 +777,9 @@ contains
                close(400+ntype)
             end do
          end if
+         ! Convert the same integrated traces to labeled physical units after the raw output is written.
+         call this%write_physical_response(integrated_l_real, integrated_l_im, wscale, a, b, &
+            integrated_type_l_real, integrated_type_l_im)
       end if
       call g_kpm_profile%stop('P_output_io')
 
@@ -776,5 +794,224 @@ contains
       if (allocated(mu_diag)) deallocate(mu_diag, gamma_mu)
       if (allocated(gamma_sp)) deallocate(gamma_sp, mu_diag_sp, gamma_mu_sp)
    end subroutine calculate_conductivity_tensor
+
+   ! Bare matrices carry Ry**power_e * Angstrom**power_l. The rank labels
+   ! the physical observable q0=hbar**rank, not an extra factor in the matrix.
+   ! Charge is a velocity here; e is restored exactly once at output.
+   subroutine response_operator_units(name, power_e, power_l, rank)
+      character(len=*), intent(in) :: name
+      integer, intent(out) :: power_e, power_l, rank
+      power_e = 1
+      power_l = 1
+      rank = 0
+      select case(trim(name))
+      case('charge')
+         return
+      case('spin','orbital','spin_accumulation','orbital_accumulation', &
+           'spin_torque','orbital_torque','spin_soc_torque','soc_spin_torque')
+         rank = 1
+      case('quadrupole','oap','quadrupole_accumulation','oap_accumulation')
+         rank = 2
+      case('octupole','octupole_current','octupole_accumulation')
+         rank = 3
+      case default
+         call g_logger%fatal('Unknown response operator units: '//trim(name), __FILE__, __LINE__)
+      end select
+      if (index(name,'accumulation') > 0) then
+         power_e = 0
+         power_l = 0
+      else if (index(name,'torque') > 0) then
+         power_l = 0
+      end if
+   end subroutine response_operator_units
+
+   !---------------------------------------------------------------------------
+   ! The per_type traces are the selected unit-cell atomic subspaces. Sum
+   ! them once each; cluster populations and replication counts do not enter.
+   ! response_measure overrides the CELL volume (Angstrom^3) or area
+   ! (Angstrom^2). Zero derives it from the lattice vectors and alat.
+   !---------------------------------------------------------------------------
+   subroutine response_normalization(this, weights, conversion, unit_label)
+      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+      class(conductivity), intent(in) :: this
+      real(rp), intent(out) :: weights(:), conversion
+      character(len=*), intent(out) :: unit_label
+      real(rp) :: measure, density_si, area
+      integer :: it, pe, pl, rank, pie, pil, ri, ndim
+      character(len=32) :: qlabel
+
+      if (this%lattice%kk <= 0) call g_logger%fatal('Empty response sample', __FILE__, __LINE__)
+      measure = this%response_measure
+      if (.not. ieee_is_finite(measure) .or. measure < 0) then
+         call g_logger%fatal('response_measure must be finite and nonnegative', __FILE__, __LINE__)
+      end if
+      select case(trim(this%response_geometry))
+      case('bulk')
+         ndim = 3
+      case('sheet')
+         ndim = 2
+
+      case default
+         call g_logger%fatal('response_geometry must be bulk or sheet', __FILE__, __LINE__)
+      end select
+      if (measure == 0) then
+         area = norm2(cross_product(this%lattice%a(:,1),this%lattice%a(:,2)))*this%lattice%alat**2
+         if (ndim == 2) then
+            measure = area
+         else
+            measure = abs(dot_product(this%lattice%a(:,3),cross_product(this%lattice%a(:,1), &
+                          this%lattice%a(:,2))))*this%lattice%alat**3
+         end if
+      end if
+      if (.not. ieee_is_finite(measure) .or. measure <= 0) then
+         call g_logger%fatal('Response volume/area must be positive; select sheet for a planar cell', __FILE__, __LINE__)
+      end if
+      select case(trim(this%control%cond_calctype))
+      case('per_type')
+         if (size(weights) /= this%lattice%ntype) call g_logger%fatal('Response type weight size', __FILE__, __LINE__)
+         do it = 1, size(weights)
+            weights(it) = 1.0_rp/measure
+         end do
+      case('random_vec')
+         if (size(weights) /= this%control%random_vec_num) call g_logger%fatal('Response random weight size', __FILE__, __LINE__)
+         ! Preserve the legacy average over normalized random seeds. This is
+         ! a separate estimator; no cluster-size correction belongs in a
+         ! units-only patch. Its trace normalization needs a separate audit.
+         weights = 1.0_rp/(measure*size(weights))
+      case default
+         call g_logger%fatal('Unknown response trace estimator', __FILE__, __LINE__)
+      end select
+
+      call response_operator_units(this%control%linear_out, pe, pl, rank)
+      call response_operator_units(this%control%linear_in, pie, pil, ri)
+      ! An arbitrary input operator has no implicitly defined electric field.
+      ! Preserve this useful generalized response, but do not label it S/cm.
+      if (trim(this%control%linear_in) /= 'charge') then
+         conversion = 1.0_rp
+         write(unit_label,'(a,i0,a,i0,a,a)') 'raw Ry^',pe+pie-2,' Angstrom^',pl+pil, &
+               ' / normalization_measure; geometry=',trim(this%response_geometry)
+         return
+      end if
+      write(qlabel,'(a,i0)') 'hbar^',rank
+      ! Physical factors are absorbed in the NAMED unit for angular powers.
+      ! This avoids tiny hbar^2/hbar^3 numbers and preserves their dimensions.
+      if (pl == 1) then
+         select case(ndim)
+         case(3)
+            conversion = e_const**2/hbar_const*1.0e8_rp
+            unit_label = 'S/cm'
+            if (rank > 0) unit_label = '('//trim(qlabel)//'/e) S/cm'
+         case(2)
+            conversion = 2*pi
+            unit_label = 'e^2/h'
+            if (rank > 0) unit_label = '('//trim(qlabel)//') e/h'
+         end select
+      else
+         ! Accumulations keep 1/Ry; torques contain [H,Q]/hbar, so replace Ry
+         ! by hbar. Density weights above use Angstrom^ndim, hence 10^(10*ndim).
+         density_si = 10.0_rp**(10*ndim)
+         conversion = e_const*1.0e-10_rp/ry2joule*density_si
+         unit_label = trim(qlabel)//' / (V/m)'
+         if (pe == 1) then
+            conversion = e_const*1.0e-10_rp/hbar_const*density_si
+            unit_label = '('//trim(qlabel)//'/s) / (V/m)'
+         end if
+         select case(ndim)
+         case(3)
+            unit_label = trim(unit_label)//' per m^3'
+         case(2)
+            unit_label = trim(unit_label)//' per m^2'
+         end select
+      end if
+   end subroutine response_normalization
+
+   !---------------------------------------------------------------------------
+   ! Write explicitly labeled responses separately from the bare cond_* files.
+   ! The integrated traces of calculate_conductivity_tensor are weighted and
+   ! converted here. Constants use the existing positive-e Bastin convention:
+   ! no silent Hall sign change. Multipoles are angular powers (q0=hbar**rank),
+   ! not electric position multipoles. All nb spin-orbitals are traced: no
+   ! degeneracy factor.
+   !---------------------------------------------------------------------------
+   subroutine write_physical_response(this, integrated_l_real, integrated_l_im, x, a, b, &
+                                      integrated_type_l_real, integrated_type_l_im)
+      class(conductivity), intent(in) :: this
+      real(rp), intent(in) :: integrated_l_real(:, :), integrated_l_im(:, :)
+      real(rp), intent(in) :: x(:), a, b
+      real(rp), intent(in), optional :: integrated_type_l_real(:, :, :), integrated_type_l_im(:, :, :)
+      real(rp), allocatable :: weights(:), re(:, :), im(:, :)
+      real(rp) :: conversion, energy, dir_a(3), dir_b(3)
+      integer :: ntrace, it, l, i, info, total, orbital_re, orbital_im, type_unit
+      integer :: pe, pl, rank, pie, pil, ri
+      character(len=160) :: units
+      character(len=80) :: filename
+
+      ntrace = this%lattice%ntype
+      if (trim(this%control%cond_calctype) == 'random_vec') ntrace = this%control%random_vec_num
+      if (ntrace < 1) call g_logger%fatal('Response trace count must be positive', __FILE__, __LINE__)
+      allocate(weights(ntrace), re(nb, size(x)), im(nb, size(x)))
+      call this%response_normalization(weights, conversion, units)
+      re = 0.0_rp
+      im = 0.0_rp
+      if (trim(this%control%cond_calctype) == 'per_type') then
+         do it = 1, ntrace
+            re = re + weights(it)*integrated_type_l_real(:, :, it)
+            im = im + weights(it)*integrated_type_l_im(:, :, it)
+            ! Use the same atomic label as the legacy <label>_cond.out files.
+            filename = trim(this%lattice%symbolic_atoms(it)%element%symbol) // '_response.out'
+            open(newunit=type_unit, file=trim(filename), status='replace')
+            write(type_unit, '(a)') '# E-Ef [eV], Re, Im; additive type contribution; units: '//trim(units)
+            do i = 1, size(x)
+               write(type_unit, '(3es25.16)') (a*x(i)+b-this%en%fermi)*ry2ev, &
+                  conversion*weights(it)*sum(integrated_type_l_real(:, i, it)), &
+                  conversion*weights(it)*sum(integrated_type_l_im(:, i, it))
+            end do
+            close(type_unit)
+         end do
+      else
+         re = weights(1)*integrated_l_real
+         im = weights(1)*integrated_l_im
+      end if
+      dir_a = this%recursion%hamiltonian%v_alpha/norm2(this%recursion%hamiltonian%v_alpha)
+      dir_b = this%recursion%hamiltonian%v_beta/norm2(this%recursion%hamiltonian%v_beta)
+      open(newunit=info, file='response_units.txt', status='replace')
+      call response_operator_units(this%control%linear_out, pe, pl, rank)
+      call response_operator_units(this%control%linear_in, pie, pil, ri)
+      write(info, '(a,i0,a,i0)') 'raw kernel units = Ry^', pe+pie-2, ' Angstrom^', pl+pil
+      write(info, '(a)') 'linear_in = '//trim(this%control%linear_in)
+      write(info, '(a)') 'linear_out = '//trim(this%control%linear_out)
+      write(info, '(a)') 'geometry = '//trim(this%response_geometry)
+      write(info, '(a)') 'units = '//trim(units)
+      write(info, '(a)') 'energy column = E-Ef in eV; raw cond_* energy remains Ry'
+      write(info, '(a)') 'multipoles = angular powers q0=hbar^rank; spin matrix already sigma/2'
+      write(info, '(a)') 'sign = existing positive-e Bastin convention; no additional sign flip'
+      write(info, '(a)') 'per_type = sum of selected unit-cell atomic-subspace traces, once each'
+      write(info, '(a)') 'random_vec = legacy seed average retained; cell-trace equivalence not established'
+      write(info, '(a)') 'raw cond_* = bare kernels; historical unweighted type average, no volume or constants'
+      write(info, '(a,es25.16)') 'cell_measure (Angstrom^3 or Angstrom^2) = ', &
+                                    1.0_rp/(weights(1)*merge(1, ntrace, this%control%cond_calctype == 'per_type'))
+      write(info, '(a,3es25.16)') 'output direction = ', dir_a
+      write(info, '(a,3es25.16)') 'input direction = ', dir_b
+      write(info, '(a)') 'pol_alpha = '//trim(this%recursion%hamiltonian%pol_alpha)
+      write(info, '(a)') 'pol_beta = '//trim(this%recursion%hamiltonian%pol_beta)
+      write(info, '(a,es25.16)') 'output conversion = ', conversion
+      write(info, '(a,*(es25.16,1x))') 'trace weights = ', weights
+      close(info)
+      open(newunit=total, file='response_total.out', status='replace')
+      open(newunit=orbital_re, file='response_orbitals_real.out', status='replace')
+      open(newunit=orbital_im, file='response_orbitals_imag.out', status='replace')
+      write(total, '(a)') '# E-Ef [eV], Re, Im; units: '//trim(units)
+      write(orbital_re, '(a)') '# E-Ef [eV], spin-orbital contributions; units: '//trim(units)
+      write(orbital_im, '(a)') '# E-Ef [eV], spin-orbital contributions; units: '//trim(units)
+      do i = 1, size(x)
+         energy = (a*x(i)+b-this%en%fermi)*ry2ev
+         write(total, '(3es25.16)') energy, conversion*sum(re(:, i)), conversion*sum(im(:, i))
+         write(orbital_re, '(*(es25.16))') energy, conversion*re(:, i)
+         write(orbital_im, '(*(es25.16))') energy, conversion*im(:, i)
+      end do
+      close(total)
+      close(orbital_re)
+      close(orbital_im)
+   end subroutine write_physical_response
 
 end module conductivity_mod
