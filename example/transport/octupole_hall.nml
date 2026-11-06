@@ -1,0 +1,15 @@
+! Response-settings fragment: merge into a full material input, no duplicate groups.
+! Measures J_y^(Oxyy) driven by E_x. Requires the common conductivity repairs
+! documented in docs/octupole_response.md before quantitative use.
+&control
+ linear_in = 'charge'
+ linear_out = 'octupole'
+ cond_calctype = 'per_type'
+ cond_ll = 250
+/
+&hamiltonian
+ hoh = .false.
+ v_alpha = 0, 1, 0
+ v_beta = 1, 0, 0
+ pol_alpha = 'Oxyy'
+/

@@ -750,10 +750,9 @@ contains
          S_x(i, i + spin_off)       = cmplx(0.5_rp, 0.0_rp, kind=rp)
          S_x(i + spin_off, i)       = cmplx(0.5_rp, 0.0_rp, kind=rp)
          ! S_y: off-diagonal (I_norb ⊗ σ_y) / 2
-         ! σ_y = [[0,-i],[i,0]]  →  S_y(up,dn) = -i/2,  S_y(dn,up) = +i/2
-         ! (matches the original column-major parameter definition)
-         S_y(i, i + spin_off)       = cmplx(0.0_rp,  0.5_rp, kind=rp)
-         S_y(i + spin_off, i)       = cmplx(0.0_rp, -0.5_rp, kind=rp)
+         ! σ_y = [[0,-i],[i,0]]  →  S_y(up,dn) = -i/2,  S_y(dn,up) = +i/2, so [S_x, S_y] = +i S_z
+         S_y(i, i + spin_off)       = cmplx(0.0_rp, -0.5_rp, kind=rp)
+         S_y(i + spin_off, i)       = cmplx(0.0_rp,  0.5_rp, kind=rp)
       end do
 
    end subroutine init_math_operators

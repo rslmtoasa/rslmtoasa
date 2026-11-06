@@ -1,0 +1,14 @@
+! Response-settings fragment: merge into a full material input, no duplicate groups.
+! Local Oxyz response to E_x. See docs/octupole_response.md for limitations.
+&control
+ linear_in = 'charge'
+ linear_out = 'octupole_accumulation'
+ cond_calctype = 'per_type'
+ cond_ll = 250
+/
+&hamiltonian
+ hoh = .false.
+ v_alpha = 1, 0, 0
+ v_beta = 1, 0, 0
+ pol_alpha = 'Oxyz'
+/

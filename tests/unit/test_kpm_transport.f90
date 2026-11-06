@@ -116,7 +116,7 @@ contains
 
    ! Would catch: a wrong polarization mapping (x/y/z swapped or sign-flipped), a non-Hermitian or
    ! spin-mixing selector. Expected values are the closed forms S_z = diag(+1/2, -1/2) and
-   ! |[S_x, S_y]| = |S_z| written here (hbar = 1).
+   ! [S_x, S_y] = i S_z written here (hbar = 1).
    subroutine test_spin_operator()
       complex(rp), dimension(nb, nb) :: sx, sy, sz, sz_exact
       integer :: i
@@ -130,11 +130,8 @@ contains
          sz_exact(i + spin_off, i + spin_off) = cmplx(-0.5_rp, 0.0_rp, rp)
       end do
       call require(maxval(abs(sz - sz_exact)) < tolerance, 'spin operator z is diag(+1/2, -1/2)')
-      ! The sign of S_y in math_mod is opposite to sigma_y/2 ([S_x, S_y] = -i S_z, tests/KNOWN_ISSUES.md), so
-      ! only |[S_x, S_y]| = |S_z| is pinned here.
-      call require(min(maxval(abs(matmul(sx, sy) - matmul(sy, sx) - i_unit*sz)), &
-                       maxval(abs(matmul(sx, sy) - matmul(sy, sx) + i_unit*sz))) < tolerance, &
-         'spin operators satisfy [S_x, S_y] = +-i S_z')
+      call require(maxval(abs(matmul(sx, sy) - matmul(sy, sx) - i_unit*sz)) < tolerance, &
+         'spin operators satisfy [S_x, S_y] = i S_z')
       call require(hermiticity_error(sx) < tolerance .and. hermiticity_error(sy) < tolerance, &
          'spin operators are Hermitian')
       call require(maxval(abs(current_block(sz, ham%v_a(:, :, 3, 1)) - &
