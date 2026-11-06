@@ -140,6 +140,17 @@ if(ENABLE_MPI)
     find_package(MPI REQUIRED COMPONENTS Fortran)
 endif(ENABLE_MPI)
 
+# The source uses default-width BLAS/LAPACK integer arguments (and the MKL kernels use c_int).
+# Avoid silently changing all Fortran integers (including MPI arguments) to eight bytes.
+if(BLA_VENDOR MATCHES "ilp" OR BLA_SIZEOF_INTEGER STREQUAL "8")
+    message(FATAL_ERROR "Use LP64 BLAS/LAPACK, e.g. -DBLA_VENDOR=Intel10_64lp")
+endif()
+if(BLA_VENDOR MATCHES "^Intel" AND DEFINED ENV{MKL_IL})
+    if(NOT "$ENV{MKL_IL}" STREQUAL "lp64")
+        message(FATAL_ERROR "This build requires MKL_IL=lp64 (or unset MKL_IL)")
+    endif()
+endif()
+
 if(ENABLE_SPGLIB)
     # Try to find spglib using pkg-config first
     find_package(PkgConfig QUIET)
@@ -243,49 +254,11 @@ if(LAPACK95_FOUND)
   set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DLAPACK95_FOUND")
 endif()
 
-# MKL machine dependent settings
-if (BLAS_FOUND AND BLAS95_FOUND)
-  if (BLA_VENDOR MATCHES "^Intel")
-    set(HAVE_INTEL_MKL TRUE)
-    if(NOT DEFINED ENV{MKL_IL})
-      set(ENV{MKL_IL} ilp64)
-    elseif(NOT $ENV{MKL_IL} STREQUAL lp64 OR NOT $ENV{MKL_IL} STREQUAL ilp64)
-      message(FATAL_ERROR "Invalid option for MKL_IL")
-    endif()
-
-    if(NOT EXISTS "$ENV{MKLROOT}/include")
-      set(ENV{MKLROOT} "$ENV{MKLROOT}/mkl")
-    endif()
-
-    if ($ENV{MKL_IL} STREQUAL lp64)
-      set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -m64 -I$ENV{MKLROOT}/include -I$ENV{MKLROOT}/include/intel64/lp64")
-    endif()
-
-    if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-      if ($ENV{MKL_IL} STREQUAL ilp64)
-        set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -m64 -fdefault-integer-8 -I$ENV{MKLROOT}/include -I$ENV{MKLROOT}/include/intel64/ilp64")
-      endif()
-    endif()
-
-    if (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
-      if ($ENV{MKL_IL} STREQUAL ilp64)
-        set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -m64 -i8 -I$ENV{MKLROOT}/include -I$ENV{MKLROOT}/include/intel64/ilp64")
-      endif()
-      if (APPLE)
-        set(MKL_LIBRARY_DIRS "$ENV{MKLROOT}/lib")
-        find_library(MKL_CORE mkl_core.a HINTS ${MKL_LIBRARY_DIRS})
-        find_library(MKL_COMPILER mkl_intel_$ENV{MKL_IL}.a HINTS ${MKL_LIBRARY_DIRS})
-        find_library(MKL_THREADING mkl_intel_thread.a HINTS ${MKL_LIBRARY_DIRS})
-      endif()
-      if (UNIX AND NOT APPLE)
-        set(MKL_LIBRARY_DIRS "$ENV{MKLROOT}/lib/intel64")
-        find_library(MKL_CORE libmkl_core.a HINTS ${MKL_LIBRARY_DIRS})
-        find_library(MKL_COMPILER libmkl_intel_$ENV{MKL_IL}.a HINTS ${MKL_LIBRARY_DIRS})
-        find_library(MKL_THREADING libmkl_intel_thread.a HINTS ${MKL_LIBRARY_DIRS})
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-intel -Wl,--start-group ${MKL_CORE} ${MKL_COMPILER} ${MKL_THREADING} -Wl,--end-group")
-      endif()
-    endif()
-  endif()
+# FindBLAS/FindLAPACK supply the selected MKL link dependencies for both Intel (ifort) and
+# IntelLLVM (ifx). Do not override them with hard-coded archive paths, global -i8 flags, or
+# CMAKE_EXE_LINKER_FLAGS. The MKL include paths of the optional kernels are set in source/CMakeLists.txt.
+if (BLAS_FOUND AND BLAS95_FOUND AND BLA_VENDOR MATCHES "^Intel")
+  set(HAVE_INTEL_MKL TRUE)
 endif()
 
 if (ENABLE_MKL_KERNELS)
@@ -316,7 +289,7 @@ if(NOT ENABLE_FUSED_RECIPROCAL)
 endif()
 
 # Linking with Libraries
-set(COMMON_LIBRARIES ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACK95_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
+set(COMMON_LIBRARIES ${PROJECT_NAME} ${BLAS95_LIBRARIES} ${LAPACK_LIBRARIES} ${BLAS_LIBRARIES} ${LAPACK95_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
 
 # Add spglib if enabled
 if(ENABLE_SPGLIB AND SPGLIB_FOUND)
