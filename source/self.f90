@@ -23,7 +23,7 @@ module self_mod
 
    use mpi_mod
    use symbolic_atom_mod, only: symbolic_atom, save_state_scf
-   use potential_mod, only: potential
+   use potential_mod, only: potential, average_spin_channels
    use logger_mod, only: g_logger
 #ifdef USE_SAFE_ALLOC
    use safe_alloc_mod, only: g_safe_alloc
@@ -169,6 +169,8 @@ module self_mod
       !>
       !> Default: true for all kind of calculations. If false, the user may provide the final lines of old format self file in a different file.
       logical :: all_inequivalent
+      !> One charge-preserving nonmagnetic constraint per SCF atom.
+      logical, allocatable :: force_nonmagnetic(:)
 
       ! Calculation type dependents
       !TODO: lack description
@@ -1686,6 +1688,7 @@ contains
    !---------------------------------------------------------------------------
    subroutine destructor(this)
       type(self) :: this
+      if (allocated(this%force_nonmagnetic)) deallocate(this%force_nonmagnetic)
 #ifdef USE_SAFE_ALLOC
       if (allocated(this%ws)) call g_safe_alloc%deallocate('self.ws', this%ws)
       if (allocated(this%mixmag)) call g_safe_alloc%deallocate('self.mixmag', this%mixmag)
@@ -1755,6 +1758,7 @@ contains
       magnetic_seed_enable = this%magnetic_seed_enable
       magnetic_seed_steps = this%magnetic_seed_steps
       magnetic_seed_field = this%magnetic_seed_field
+      force_nonmagnetic = this%force_nonmagnetic
 
       call move_alloc(this%ws, ws)
       call move_alloc(this%mixmag, mixmag)
@@ -1795,6 +1799,17 @@ contains
          call g_logger%error('iostatus = '//int2str(iostatus), __FILE__, __LINE__)
       end if
       close (funit)
+
+      ! Every rank reads the same flags; potential MPI buffers stay numeric.
+      call move_alloc(force_nonmagnetic, this%force_nonmagnetic)
+      do i = 1, this%lattice%nrec
+         this%symbolic_atom(this%lattice%nbulk + i)%force_nonmagnetic = this%force_nonmagnetic(i)
+         call this%symbolic_atom(this%lattice%nbulk + i)%enforce_nonmagnetic()
+         if (rank == 0 .and. this%force_nonmagnetic(i)) then
+            call g_logger%info('Forced nonmagnetic SCF atom '//int2str(i)//' ('// &
+               trim(this%symbolic_atom(this%lattice%nbulk + i)%element%symbol)//')', __FILE__, __LINE__)
+         end if
+      end do
 
       ! Setting user values
 
@@ -2293,6 +2308,9 @@ contains
       ! Control variables
       ! if false force to read the original self file
       this%all_inequivalent = .true.
+      if (allocated(this%force_nonmagnetic)) deallocate(this%force_nonmagnetic)
+      allocate(this%force_nonmagnetic(this%lattice%nrec))
+      this%force_nonmagnetic = .false.
 
       ! Wigner Seitz Radius
       this%ws_all = .true.
@@ -2476,6 +2494,7 @@ contains
       magnetic_seed_enable = this%magnetic_seed_enable
       magnetic_seed_steps = this%magnetic_seed_steps
       magnetic_seed_field = this%magnetic_seed_field
+      force_nonmagnetic = this%force_nonmagnetic
 
       ! 1d allocatable
 
@@ -2531,6 +2550,7 @@ contains
       magnetic_seed_enable = this%magnetic_seed_enable
       magnetic_seed_steps = this%magnetic_seed_steps
       magnetic_seed_field = this%magnetic_seed_field
+      force_nonmagnetic = this%force_nonmagnetic
       ! 1d allocatable
 
       if (allocated(this%ws)) then
@@ -3376,6 +3396,7 @@ contains
       do ia = 1, this%lattice%nrec
          if (rank == 0) call g_logger%info('From orthogonal to TB basis for atom '//this%symbolic_atom(this%lattice%nbulk + ia)%element%symbol, __FILE__, __LINE__)
          call this%symbolic_atom(this%lattice%nbulk + ia)%predls(this%lattice%wav*ang2au)
+         if (this%force_nonmagnetic(ia)) call this%symbolic_atom(this%lattice%nbulk + ia)%build_pot()
       end do
    
       call g_timer%stop('atomic-scf')
@@ -3504,6 +3525,13 @@ contains
             write (newunit, '(a,i4,a,*(f10.6,1x))') 'Up orbital occupation at atom', ia, ':', this%mix%qia(ia, 1:nb_slice)
             write (newunit, '(a,i4,a,*(f10.6,1x))') 'Down orbital occupation at atom', ia, ':', this%mix%qia(ia, nb_slice+1:2*nb_slice)
             write (newunit, '(a,i4,a,f10.6)') 'Charge transfer at atom', ia, ':', this%charge%dq(ia)
+            if (this%force_nonmagnetic(ia)) then
+               associate(p => this%symbolic_atom(this%lattice%nbulk + ia)%potential)
+                  write(newunit, '(a,i4,a,6es24.15)') 'Nonmagnetic check atom', ia, ':', &
+                     sum(p%ql(1, :, 1) - p%ql(1, :, 2)), maxval(abs(p%cx1)), maxval(abs(p%wx1)), &
+                     maxval(abs(p%cex1)), maxval(abs(p%obx1)), norm2(p%mom0)
+               end associate
+            end if
          end do
          !===========================================================================
          !                           Fermi Energy
@@ -3546,7 +3574,7 @@ contains
       end if
 
       ! Print angle betweens magnetic and orbital moments
-      call this%bands%calculate_angles(magmom, lmom)
+      if (rank == 0) call this%bands%calculate_angles(magmom, lmom)
 
       ! Print hyperfine structure
       if (this%control%hyperfine) then
@@ -3755,7 +3783,9 @@ contains
       ! two for a scalar-relativistic collinear global mode (control%nsp=1).
       n_radial_spin_channels = RADIAL_XC_SPIN_CHANNELS
       lmax = atom%potential%lmax
+      call atom%enforce_nonmagnetic()
       rho_in = atom%rho0(n_radial_spin_channels)
+      if (atom%force_nonmagnetic) call average_spin_channels(rho_in)
 
       allocate (v, mold=rho_in)
       allocate (rho, mold=rho_in)
@@ -3764,8 +3794,9 @@ contains
       if (allocated(this%phi_amp)) this%phi_amp(:, :, :) = 0.0_rp
 
       nr = size(rofi)
-      B_fsm = merge(-atom%mag_cfield(3), real(0.0, rp), this%lattice%control%do_comom)
-      if (this%magnetic_seed_active) B_fsm = B_fsm + this%magnetic_seed_field
+      B_fsm = 0.0_rp
+      if (this%lattice%control%do_comom .and. .not. atom%force_nonmagnetic) B_fsm = -atom%mag_cfield(3)
+      if (this%magnetic_seed_active .and. .not. atom%force_nonmagnetic) B_fsm = B_fsm + this%magnetic_seed_field
       xc_obj = xc(this%lattice%control)
       b = atom%B()
 
@@ -3945,6 +3976,7 @@ contains
             v_trace_base = v
             rofi_trace_base = rofi
          end if
+         if (atom%force_nonmagnetic) call average_spin_channels(rho_in)
          call POISS0(atom%element%atomic_number, atom%a, b, rofi, rho_in, NR, VHRMAX, V, RVH, VSUM, n_radial_spin_channels)
          VNUCL = V(1, 1)
          !call VXC0SP_old(atom%element%atomic_number, atom%a, B, rofi, rho_in, NR, V, RHO0, REPS, RMU, NSP)
@@ -3971,6 +4003,7 @@ contains
                                                         xc_obj%txc, this%lattice%control%hyperfine)
          end if
          call this%NEWRHO(atom, atom%element%atomic_number, lmax, atom%a, b, nr, rofi, v, rho, atom%potential%PL, atom%potential%QL, SEC, SEV, EC, EV, TL, n_radial_spin_channels, IPR1)
+         if (atom%force_nonmagnetic) call average_spin_channels(rho)
          if (this%fixed_u_trace_capture_radial_state) then
             call this%write_fixed_u_radial_replay_output(rho, SEC, SEV)
             if (.not. this%fixed_u_trace_capture_only) then
@@ -4006,6 +4039,7 @@ contains
                SUM = SUM + WGT*DRDI*RHO(IR, ISP)
             end do
          end do
+         if (atom%force_nonmagnetic) call average_spin_channels(rho_in)
          if (LAST) then
             call atom%radial_ground_state%mark_accepted(ITER, DRHO_CONTROL)
          end if

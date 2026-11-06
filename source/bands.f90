@@ -1401,6 +1401,10 @@ contains
       else
          call this%calculate_pl(iteration=iteration_value)
       end if
+      ! Project before MPI transfer and before any SCF mixing/history is saved.
+      do na_glob = start_atom, end_atom
+         call this%symbolic_atom(this%lattice%nbulk + na_glob)%enforce_nonmagnetic()
+      end do
 
       if (this%control%nsp >= 2 .and. lmax_basis >= 2 .and. .not. spinor_flag .and. &
           (this%recursion%hamiltonian%hubbard_spinor_dm_diagnostic .or. fixed_liechtenstein_active)) &
@@ -1962,6 +1966,9 @@ contains
          this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(1) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mx/this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot
          this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(2) = this%symbolic_atom(this%lattice%nbulk + na)%potential%my/this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot
          this%symbolic_atom(this%lattice%nbulk + na)%potential%mom(3) = this%symbolic_atom(this%lattice%nbulk + na)%potential%mz/this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot
+
+         if (this%symbolic_atom(this%lattice%nbulk + na)%force_nonmagnetic) &
+            call this%symbolic_atom(this%lattice%nbulk + na)%potential%clear_spin_moment()
 
          call g_logger%info('Spin moment of atom'//fmt('i4', na)//' is '//fmt('f10.6', this%symbolic_atom(this%lattice%nbulk + na)%potential%mtot), __FILE__, __LINE__)
          mx = this%symbolic_atom(this%lattice%nbulk + na)%potential%mx
@@ -2669,13 +2676,19 @@ contains
                dot_prod = dot_product(magmom(i, :), magmom(j, :))
                mag_a = sqrt(sum(magmom(i, :)**2))
                mag_b = sqrt(sum(magmom(j, :)**2))
-               angles_magmom(i, j) = acos(dot_prod / (mag_a * mag_b + 1.0e-15)) ! Add small value to avoid division by zero
+               ! Zero denotes an undefined angle when either moment vanishes.
+               angles_magmom(i, j) = 0.0_rp
+               if (mag_a > 0.0_rp .and. mag_b > 0.0_rp) &
+                  angles_magmom(i, j) = acos(max(-1.0_rp, min(1.0_rp, dot_prod / (mag_a * mag_b))))
    
                ! Calculate the angle between orbital moments
                dot_prod = dot_product(lmom(i, :), lmom(j, :))
                mag_a = sqrt(sum(lmom(i, :)**2))
                mag_b = sqrt(sum(lmom(j, :)**2))
-               angles_lmom(i, j) = acos(dot_prod / (mag_a * mag_b + 1.0e-15)) ! Add small value to avoid division by zero
+               ! Zero denotes an undefined angle when either moment vanishes.
+               angles_lmom(i, j) = 0.0_rp
+               if (mag_a > 0.0_rp .and. mag_b > 0.0_rp) &
+                  angles_lmom(i, j) = acos(max(-1.0_rp, min(1.0_rp, dot_prod / (mag_a * mag_b))))
             else
                ! Set the diagonal to zero since the angle between the same vectors is undefined
                angles_magmom(i, j) = 0.0_rp

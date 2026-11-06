@@ -11,6 +11,7 @@ real(rp) :: atomsc_test_tol, atomsc_test_tolrsq
 integer :: atomsc_test_inner_cap
 real(rp) :: magnetic_seed_field !< Temporary B_fsm seed in the existing Ry convention.
 real(rp), dimension(:), allocatable :: ws, mixmag
+logical, allocatable :: force_nonmagnetic(:)
 logical :: cold !< Cold start: perform ASA to extract potential parameters.
 
 namelist /self/ ws_all, all_inequivalent, &
@@ -18,4 +19,4 @@ namelist /self/ ws_all, all_inequivalent, &
    rigid_band, rb, nstep, init, soc_scale, use_kspace, &
    conv_thr, ws, mixmag, fix_soc , cold, &
    r05_p_tolerance, r05_v_tolerance, atomsc_test_tol, atomsc_test_tolrsq, atomsc_test_inner_cap, &
-   magnetic_seed_enable, magnetic_seed_steps, magnetic_seed_field
+   magnetic_seed_enable, magnetic_seed_steps, magnetic_seed_field, force_nonmagnetic

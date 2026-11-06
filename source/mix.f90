@@ -466,6 +466,10 @@ contains
       if (present(iteration)) iteration_value = iteration
       if (present(guard_collinear)) guard_active = guard_collinear
 
+      do it = 1, this%lattice%nrec
+         if (this%symbolic_atom(this%lattice%nbulk + it)%force_nonmagnetic) &
+            call this%symbolic_atom(this%lattice%nbulk + it)%potential%symmetrize_band_moments()
+      end do
       select case (trim(whereto))
       case ('new')
          this%qia_new = 0.0_rp
@@ -572,7 +576,11 @@ contains
       integer :: ia ! Self-consistent atom index
 
       ! Calculate the mixed magnetic moments
-      do ia = 1, this%lattice%nrec 
+      do ia = 1, this%lattice%nrec
+         if (this%symbolic_atom(this%lattice%nbulk + ia)%force_nonmagnetic) then
+            mag_mix(ia, :) = [0.0_rp, 0.0_rp, 1.0_rp]
+            cycle
+         end if
          if (mtot(ia + this%lattice%nbulk) < 0.5d0) then
             this%is_induced(ia) = .true.
             !this%magbeta(ia) = 0.0d0
@@ -626,7 +634,7 @@ contains
       logical, intent(in), optional :: guard_collinear
       real(rp), allocatable :: qi_to(:, :), qi_tn(:, :) ! Local variables for broyden mixing
       real(rp) :: delta_atom
-      integer :: ia ! Atom index
+      integer :: ia, pair, lo ! Atom index and packed spin-pair index
       logical :: reset
       real(rp) :: Bnorm
       integer :: nb_slice, lcount, occ_cols, packed_cols
@@ -702,6 +710,17 @@ contains
       !       call g_logger%info(’mixpq diagnostics atom ’//fmt(’i4’, ia)//’: qia_mixed=’//trim(msg), __FILE__, __LINE__)
       !    end do
       ! end if
+      ! Also project mixer output, protecting against accumulated roundoff.
+      ! Packed layout: six blocks of lcount columns, spin pairs (up, down) = (1,2), (3,4), (5,6).
+      do ia = 1, this%lattice%nrec
+         if (.not. this%symbolic_atom(this%lattice%nbulk + ia)%force_nonmagnetic) cycle
+         lcount = min(this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax, lmax_basis) + 1
+         do pair = 0, 2
+            lo = 2*pair*lcount
+            this%qia(ia, lo + 1:lo + lcount) = 0.5_rp*(this%qia(ia, lo + 1:lo + lcount) + this%qia(ia, lo + lcount + 1:lo + 2*lcount))
+            this%qia(ia, lo + lcount + 1:lo + 2*lcount) = this%qia(ia, lo + 1:lo + lcount)
+         end do
+      end do
       this%charge%dq(:) = 0.0d0
       do ia = 1, this%lattice%nrec
          lcount = min(this%symbolic_atom(this%lattice%nbulk + ia)%potential%lmax, lmax_basis) + 1

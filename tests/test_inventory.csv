@@ -25,6 +25,7 @@ UnitGreenLifecycle,quick,green;unit,0.01,unit core,
 UnitControlSpinSemantics,quick,control;spin;unit,0.01,unit core,
 UnitControlConstraintsRead,quick,constraints;control;unit,0.01,unit core,
 UnitLehmannChain,quick,unit,0.00,unit core,
+UnitNonmagneticProjection,quick,force_nonmagnetic;unit,0.00,unit core,
 UnitSimpsonFTemperature,quick,unit,0.00,unit core,
 UnitKspaceGFValidation,quick,green;kspace;unit,0.02,unit core,
 UnitFermiDiracEntropy,quick,thermodynamics;unit,0.01,unit core,
@@ -111,3 +112,5 @@ AppConstraintsNamelistMalformed,quick,constraints;functional,0.15,SCF example,ex
 AppPeriodicNcRotation,standard,functional;noncollinear,52.78,SCF example,tests;tests/gbt;tests/gbt/fixtures/bccFe_prim/lattice.nml;tests/gbt/gbt_app_common.py;tests/gbt/oracles/tolerances.nml;tests/noncollinear;tests/noncollinear/test_periodic_nc_rotation.py;tests/spin_response/cr_bcc;tests/spin_response/cr_bcc/Cr1.nml;tests/spin_response/cr_bcc/Cr2.nml;tests/spin_response/cr_bcc/input.nml;tests/spin_response/cr_bcc/lattice.nml;tests/spin_response/fe_bcc/Fe.nml
 Example_si_chebyshev_kspace_dos_equivalence,quick,chebyshev;equivalence;example;functional;kspace;rs;scf,9.23,SCF example,tests;tests/run_binary.sh;tests/scf;tests/scf/cases;tests/scf/cases/bulk;tests/scf/cases/bulk/diamondSi;tests/scf/cases/bulk/diamondSi/README.md;tests/scf/cases/bulk/diamondSi/Si1.nml;tests/scf/cases/bulk/diamondSi/Si2.nml;tests/scf/cases/bulk/diamondSi/input.nml;tests/scf/cases/bulk/diamondSi/lattice.nml;tests/scf/test_si_dos_equivalence.py
 Val03LibxcScfEquivalence,validation,equivalence;functional;libxc;scf,21.12,validation,tests;tests/run_binary.sh;tests/scf/cases/bulk/diamondSi;tests/scf/cases/bulk/diamondSi/README.md;tests/scf/cases/bulk/diamondSi/Si1.nml;tests/scf/cases/bulk/diamondSi/Si2.nml;tests/scf/cases/bulk/diamondSi/input.nml;tests/scf/cases/bulk/diamondSi/lattice.nml;tests/scf/cases/k_space_scf/bccFe;tests/scf/cases/k_space_scf/bccFe/Fe.nml;tests/scf/cases/k_space_scf/bccFe/input.nml;tests/validation;tests/validation/val03_libxc_scf.py
+Nonmagnetic_SCF_nsp1,standard,force_nonmagnetic;functional,12.07,unit core,tests;tests/nonmagnetic;tests/nonmagnetic/run_scf.py;tests/scf/cases/impurity/B2FeCo;tests/scf/cases/impurity/B2FeCo/Co.nml;tests/scf/cases/impurity/B2FeCo/Fe.nml;tests/scf/cases/impurity/B2FeCo/input.nml
+Nonmagnetic_SCF_nsp4,standard,force_nonmagnetic;functional,12.41,unit core,tests;tests/nonmagnetic;tests/nonmagnetic/run_scf.py;tests/scf/cases/impurity/B2FeCo;tests/scf/cases/impurity/B2FeCo/Co.nml;tests/scf/cases/impurity/B2FeCo/Fe.nml;tests/scf/cases/impurity/B2FeCo/input.nml

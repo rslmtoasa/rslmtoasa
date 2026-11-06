@@ -170,6 +170,19 @@ if(RUN_REG_TESTS)
       COMMAND "${PY}" "${TestDIR}/validation/${_vscript}" "--binary" "${TestBinary}"
         "--scratch-root" "${CMAKE_BINARY_DIR}/Testing/validation/${_vscratch}")
   endforeach()
+
+  # Per-atom forced nonmagnetic SCF (Fe magnetic, Co constrained; default flags equal all-false flags).
+  foreach(_nsp IN ITEMS 1 4)
+    rslmto_add_test(NAME Nonmagnetic_SCF_nsp${_nsp} TIER standard TIMEOUT 720 LABELS functional force_nonmagnetic
+      COMMAND "${PY}" "${TestDIR}/nonmagnetic/run_scf.py" "--binary" "${TestBinary}"
+        "--workdir" "${CMAKE_BINARY_DIR}/Testing/nonmagnetic/nsp${_nsp}" "--nsp" "${_nsp}")
+  endforeach()
+  if(ENABLE_MPI)
+    rslmto_add_test(NAME Nonmagnetic_SCF_MPI TIER standard TIMEOUT 720 LABELS functional force_nonmagnetic mpi
+      COMMAND "${PY}" "${TestDIR}/nonmagnetic/run_scf.py" "--binary" "${TestBinary}"
+        "--workdir" "${CMAKE_BINARY_DIR}/Testing/nonmagnetic/mpi" "--nsp" "4"
+        "--mpi-exec" "${MPIEXEC_EXECUTABLE}" "--ranks" "2")
+  endif()
 endif()
 
 ##############################################################################################
@@ -230,6 +243,7 @@ if(RUN_UNIT_TESTS)
     endif()
   endforeach()
   add_fortran_unit_test(UnitGreenLifecycle quick SOURCES ${TestDIR}/unit/test_green_lifecycle.f90 LABELS green)
+  add_fortran_unit_test(UnitNonmagneticProjection quick SOURCES ${TestDIR}/unit/test_nonmagnetic_projection.f90 LABELS force_nonmagnetic)
   add_fortran_unit_test(UnitControlSpinSemantics quick SOURCES ${TestDIR}/unit/test_control_spin_semantics.f90 LABELS control spin)
   add_fortran_unit_test(UnitControlConstraintsRead quick SOURCES ${TestDIR}/unit/test_control_constraints_read.f90 LABELS control constraints)
   add_fortran_unit_test(UnitLehmannChain quick SOURCES ${TestDIR}/unit/test_lehmann_chain.f90)
