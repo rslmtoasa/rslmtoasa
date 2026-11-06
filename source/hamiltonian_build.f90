@@ -1404,7 +1404,7 @@ contains
       ! Local variables
       integer :: i, j, k
       complex(rp) :: prefac, sg
-      real(rp) :: soc_p, soc_d
+      real(rp) :: soc_p, soc_d, xi_p1, xi_p2, xi_d1, xi_d2
       complex(rp), dimension(2) :: rac
       complex(rp), dimension(norb, norb) :: Lx, Ly, Lz
       real(rp) :: lz_loc
@@ -1422,8 +1422,19 @@ contains
       this%lsham(:, :, :) = cmplx(0.0d0, 0.0d0)
       do k = 1, this%charge%lattice%ntype
          sg = cmplx(0.5d0, 0.0d0)
-         soc_p = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_p(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_p(2))
-         soc_d = sqrt(this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)*this%charge%lattice%symbolic_atoms(k)%potential%xi_d(2))
+         xi_p1 = this%charge%lattice%symbolic_atoms(k)%potential%xi_p(1)
+         xi_p2 = this%charge%lattice%symbolic_atoms(k)%potential%xi_p(2)
+         xi_d1 = this%charge%lattice%symbolic_atoms(k)%potential%xi_d(1)
+         xi_d2 = this%charge%lattice%symbolic_atoms(k)%potential%xi_d(2)
+         ! The two SOC parameters of one orbital channel must have the same sign.
+         if (xi_p1*xi_p2 < 0.0_rp) call g_logger%fatal('build_lsham: xi_p(1) and xi_p(2) must have the same sign', __FILE__, __LINE__)
+         if (xi_d1*xi_d2 < 0.0_rp) call g_logger%fatal('build_lsham: xi_d(1) and xi_d(2) must have the same sign', __FILE__, __LINE__)
+         ! Signed geometric mean: (+a,+b) -> +sqrt(a*b), (-a,-b) -> -sqrt(a*b)
+         soc_p = sign(sqrt(abs(xi_p1*xi_p2)), xi_p1)
+         soc_d = sign(sqrt(abs(xi_d1*xi_d2)), xi_d1)
+         ! The orbital-polarization square roots below are unchanged and give NaN for negative xi_d.
+         if (this%orb_pol .and. xi_d1 < 0.0_rp) &
+            call g_logger%warning('build_lsham: negative xi_d with orb_pol=.true.; rac/lz_loc square roots may produce NaN', __FILE__, __LINE__)
          ! For f-orbitals, use a scaling based on d if not explicitly available
          ! Set soc_f to small value (f-orbital spin-orbit is typically weak)
          ! real soc_f = 0.0_rp  ! f-orbital s-o coupling (for future enhancement)
