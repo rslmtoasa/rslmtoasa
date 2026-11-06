@@ -30,7 +30,8 @@ nstep = 1
 &hamiltonian
 v_alpha = 0, 1, 0
 v_beta =  1, 0, 0
-js_alpha = 'z'
+pol_alpha = 'z'
+pol_beta = 'z'
 hoh = false
 /
 &energy
@@ -45,7 +46,8 @@ nsp = 2
 cond_ll = 30
 lld = 30
 recur = 'chebyshev'
-cond_type = 'spin'
+linear_in = 'charge'
+linear_out = 'spin'
 cond_calctype = 'per_type'
 /
 &mix

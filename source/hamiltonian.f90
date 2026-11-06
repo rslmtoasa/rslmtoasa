@@ -114,7 +114,8 @@ module hamiltonian_mod
       complex(rp), dimension(:, :, :), allocatable :: enim_glob
       !> Velocity operators
       complex(rp), dimension(:, :, :, :), allocatable :: v_a, v_b, js_a, jl_a, vo_a, vo_b, jso_a, jlo_a
-      character(len=10) :: js_alpha, jl_alpha
+      !> Spin/orbital/multipole polarization of the output (pol_alpha) and input (pol_beta) transport operators
+      character(len=10) :: pol_alpha, pol_beta
       real(rp), dimension(3) :: v_alpha, v_beta, q_ss
       real(rp) :: theta_ss
       real(rp), dimension(:), allocatable :: theta_ss_sublattice, phi_ss_sublattice

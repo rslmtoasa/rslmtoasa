@@ -147,7 +147,6 @@ Alphabetical Listing (All Parameters)
 - ``compensation_profile`` - Charge-compensation weighting for interface electrostatics (B7)
 - ``cond_calctype`` - Conductivity sub-type
 - ``cond_ll`` - Conductivity Chebyshev cutoff (in &control)
-- ``cond_type`` - Conductivity formulation
 - ``conca``, ``concb`` - Alloy concentrations
 - ``constraints_bfield`` - Initial constraining field values per atom
 - ``constraints_code_prefac`` - Scaling prefactor for constraining field
@@ -203,6 +202,7 @@ Alphabetical Listing (All Parameters)
 
 **L**
 
+- ``linear_in``, ``linear_out`` - Linear-response input and output operators (in &control)
 - ``ll_cond`` - Conductivity Chebyshev cutoff (in &conductivity)
 - ``lld`` - Recursion cutoff for d electrons
 - ``llsp`` - Recursion cutoff for s/p electrons

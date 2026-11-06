@@ -52,7 +52,8 @@ nsp = 2
 cond_ll = 30
 lld = 150
 recur = 'chebyshev'
-cond_type = 'charge'
+linear_in = 'charge'
+linear_out = 'charge'
 cond_calctype = 'per_type'
 /
 &reciprocal

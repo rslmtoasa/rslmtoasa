@@ -53,7 +53,8 @@ Input File: input.nml
    &hamiltonian
    v_alpha = 0, 1, 0              ! Charge current (y)
    v_beta = 1, 0, 0               ! Electric field (x)
-   js_alpha = 'z'                 ! Spin current (z)
+   pol_alpha = 'z'                 ! Spin current (z)
+   pol_beta = 'z'
    /
    
    &energy
@@ -69,7 +70,8 @@ Input File: input.nml
    cond_ll = 500
    recur = 'chebyshev'
    lld = 150
-   cond_type = 'orb'              ! ← Orbital contribution
+   linear_in = 'charge'
+   linear_out = 'orbital'             ! Orbital contribution
    /
    
    &mix

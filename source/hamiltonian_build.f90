@@ -314,8 +314,8 @@ contains
       q_ss(:) = this%q_ss(:)
       theta_ss = this%theta_ss
       magnetic_representation = this%magnetic_representation
-      js_alpha = this%js_alpha
-      jl_alpha = this%jl_alpha
+      pol_alpha = this%pol_alpha
+      pol_beta = this%pol_beta
       call move_alloc(this%velocity_scale, velocity_scale)
       hubbard_experimental = this%hubbard_experimental
       hubbard_log_level = this%hubbard_log_level
@@ -400,8 +400,8 @@ contains
          call g_logger%fatal("Invalid magnetic_representation. Use 'periodic_nc', 'gbt_single_q', or 'explicit_texture'.", &
                              __FILE__, __LINE__)
       end select
-      this%js_alpha = js_alpha(:len(this%js_alpha))
-      this%jl_alpha = jl_alpha(:len(this%jl_alpha))
+      this%pol_alpha = pol_alpha(:len(this%pol_alpha))
+      this%pol_beta = pol_beta(:len(this%pol_beta))
       this%hubbard_u_potential_form = lower(trim(hubbard_u_potential_form))
       if (this%hubbard_u_potential_form /= 'liechtenstein' .and. this%hubbard_u_potential_form /= 'acbn0') then
          call g_logger%fatal("Invalid hubbard_u_potential_form. Use 'liechtenstein' or 'acbn0'.", __FILE__, __LINE__)
@@ -959,8 +959,8 @@ contains
       if (allocated(this%gbt_bfield)) deallocate (this%gbt_bfield)
       this%gbt_residual = huge(1.0_rp)
       if (allocated(this%gbt_ref_mom)) deallocate (this%gbt_ref_mom)
-      this%js_alpha = 'z'
-      this%jl_alpha = 'z'
+      this%pol_alpha = 'z'
+      this%pol_beta = 'z'
       this%hubbard_experimental = .false.
       this%hubbard_log_level = 'summary'
       this%hubbard_spinor_dm_diagnostic = .false.
@@ -1017,7 +1017,7 @@ contains
       call hcpx(mLz, 'cart2sph')
    
       ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
-      select case (this%jl_alpha)   ! or whichever variable holds 'x','y','z'
+      select case (this%pol_alpha)
       case ('x')
          L_op(1:norb, 1:norb) = mLx(:, :)
          L_op(norb+1:nb, norb+1:nb) = mLx(:, :)
@@ -1089,7 +1089,7 @@ contains
       this%js_a(:, :, :, :) = (0.0_rp, 0.0_rp)
       this%jso_a(:, :, :, :) = (0.0_rp, 0.0_rp)
       
-      select case(this%js_alpha)
+      select case(this%pol_alpha)
       
       case('z')
          S_op = S_z
@@ -1159,7 +1159,7 @@ contains
       ! current rather than a covariant, gauged one. Fail before the caller
       ! spends any recursion/conductivity work on it.
       if (trim(this%magnetic_representation) == gbt_single_q) then
-         call g_logger%fatal('gbt_single_q with cond_type=spin_torque is unsupported: '// &
+         call g_logger%fatal('gbt_single_q with linear_out=spin_torque is unsupported: '// &
                               'the exchange-splitting bond array hxc is not built under GBT.', &
                               __FILE__, __LINE__)
       end if
@@ -1174,7 +1174,7 @@ contains
       this%js_a(:, :, :, :) = (0.0_rp, 0.0_rp)
       this%jso_a(:, :, :, :) = (0.0_rp, 0.0_rp)
 
-      select case(this%js_alpha)
+      select case(this%pol_alpha)
 
       case('z')
          S_op = S_z
@@ -1274,7 +1274,7 @@ contains
       call hcpx(mLz, 'cart2sph')
 
       ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
-      select case (this%jl_alpha)   ! or whichever variable holds 'x','y','z'
+      select case (this%pol_alpha)
       case ('x')
          L_op(1:norb, 1:norb) = mLx(:, :)
          L_op(norb+1:nb, norb+1:nb) = mLx(:, :)

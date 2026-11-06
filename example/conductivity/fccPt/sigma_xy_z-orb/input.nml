@@ -29,7 +29,8 @@ nstep = 100
 &hamiltonian
 v_alpha = 0, 1, 0
 v_beta =  1, 0, 0
-jl_alpha = 'z'
+pol_alpha = 'z'
+pol_beta = 'z'
 /
 &energy
 fermi = -0.089509
@@ -43,7 +44,8 @@ nsp = 2  ! type of calculation, nsp can be 1, 2, 3 or 4
 cond_ll = 500
 lld = 150
 recur = 'chebyshev'
-cond_type = 'orbital'
+linear_in = 'charge'
+linear_out = 'orbital'
 cond_calctype = 'per_type'
 /
 &mix

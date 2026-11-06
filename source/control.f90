@@ -208,12 +208,10 @@ module control_mod
       !> Default: 200
       integer :: cond_ll
 
-      !> Type of conductivity to be calculated
+      !> Linear-response input (linear_in) and output (linear_out) operators
       !>
-      !> Type of conductivity to be calculated
-      !>
-      !> Allowed values: 'charge', 'spin' and 'orbital'. Default: 'charge'
-      character(len=30) :: cond_type, linear_in, linear_out
+      !> Allowed values: 'charge', 'spin' and 'orbital' (plus accumulation and torque variants for linear_out). Default: 'charge'
+      character(len=30) :: linear_in, linear_out
 
       !> Calculation type of the conductivity tensor
       !> 
@@ -412,7 +410,6 @@ contains
       cpu_reconstruction_precision = this%cpu_reconstruction_precision
       random_vec_num = this%random_vec_num
       cond_ll = this%cond_ll
-      cond_type = this%cond_type
       linear_in = this%linear_in
       linear_out = this%linear_out
       cond_calctype = this%cond_calctype
@@ -435,8 +432,7 @@ contains
 
       read (funit, nml=control, iostat=iostatus)
       if (iostatus /= 0 .and. .not. IS_IOSTAT_END(iostatus)) then
-         call g_logger%error('Error while reading namelist")', __FILE__, __LINE__)
-         call g_logger%error('iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
+         call g_logger%fatal('Invalid &control namelist; iostatus = '//fmt('I0', iostatus), __FILE__, __LINE__)
       end if
       close (funit)
 
@@ -472,7 +468,6 @@ contains
       this%cpu_reconstruction_precision = cpu_reconstruction_precision(:len(this%cpu_reconstruction_precision))
       this%random_vec_num = random_vec_num
       this%cond_ll = cond_ll
-      this%cond_type = cond_type(:len(this%cond_type))
       this%linear_in = linear_in(:len(this%linear_in))
       this%linear_out = linear_out(:len(this%linear_out))
       this%cond_calctype = cond_calctype(:len(this%cond_calctype))
@@ -601,7 +596,6 @@ contains
       this%sym_term = .false.
       this%random_vec_num = 1
       this%cond_ll = 200
-      this%cond_type = 'charge'
       this%linear_in = 'charge'
       this%linear_out = 'charge'
       this%cond_calctype = 'per_type'

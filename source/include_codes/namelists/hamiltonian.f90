@@ -1,5 +1,5 @@
 logical :: hoh, local_axis, orb_pol, v_a, v_b
-character(len=20) :: js_alpha, jl_alpha
+character(len=20) :: pol_alpha, pol_beta
 real(rp), dimension(3) :: v_alpha, v_beta
 ! Generalized Bloch theorem spin-spiral input units in this namelist:
 ! - q_ss is given in Cartesian units of 2*pi/alat (q_ss=0.5 along a simple
@@ -44,7 +44,7 @@ logical :: fixed_u_test_allow_hoh_w1_u0
 real(rp) :: bounds_scaling
 character(len=16) :: export
 
-namelist /hamiltonian/ hoh, local_axis, orb_pol, v_alpha, v_beta, js_alpha, jl_alpha, velocity_scale, q_ss, theta_ss, magnetic_representation, ccor_2c, ccor_elin, &
+namelist /hamiltonian/ hoh, local_axis, orb_pol, v_alpha, v_beta, pol_alpha, pol_beta, velocity_scale, q_ss, theta_ss, magnetic_representation, ccor_2c, ccor_elin, &
         ccor_vmt_mode, ccor_debug, ccor_strict, uj_orb, hubbard_u, hubbard_j, hubbard_v, &
         hubbard_u_sc, hubbard_u_impurity, hubbard_j_impurity, hubbard_u_general, hubbard_j_general, bounds_algorithm, bounds_scaling, &
         hubbard_experimental, hubbard_log_level, hubbard_spinor_dm_diagnostic, hubbard_soc_experimental, hubbard_u_potential_form, hubbard_radial_moments, hubbard_test_operator, hubbard_test_lambda, hubbard_test_spin, &

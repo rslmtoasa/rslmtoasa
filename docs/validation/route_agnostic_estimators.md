@@ -83,7 +83,7 @@ direct measurement of the KPM error on the same crystal.
 **Scope pins.** Compare a **diagonal** component (σ_xx, `v_alpha == v_beta`): the
 off-diagonal anomalous-Hall σ_xy is a symmetry-forced zero without SOC and is pure
 coarse-mesh noise — not a route-agnostic observable. Exact generator scope:
-`cond_type='charge'`, `cond_calctype='per_type'`, first-order H(k)/S=I; `dyson` ≡
+`linear_out='charge'`, `cond_calctype='per_type'`, first-order H(k)/S=I; `dyson` ≡
 `lehmann` (Σ=0 eigenpair path). Σ≠0 transport needs vertex corrections (B8) and is
 out of scope.
 

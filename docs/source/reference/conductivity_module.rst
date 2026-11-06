@@ -562,7 +562,7 @@ conductivity tensor calculation.
 - ``ll_cond`` in this namelist takes precedence over ``cond_ll`` in
   ``&control``; either can be used.
 
-**See also:** ``cond_ll``, ``cond_type``, ``cond_calctype`` in
+**See also:** ``cond_ll``, ``linear_in``, ``linear_out``, ``cond_calctype`` in
 :ref:`keywords/control_parameters`.
 
 Input Parameters

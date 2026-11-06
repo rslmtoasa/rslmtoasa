@@ -27,7 +27,7 @@
 !> residual max|mu_exact - mu_rec| is the direct KPM error bound (B5.1 acceptance).
 !>
 !> Scope / preconditions (B5.1):
-!>   * cond_type = ’charge’ and cond_calctype = ’per_type’. The other velocity
+!>   * linear_in = linear_out = ’charge’ and cond_calctype = ’per_type’. The other velocity
 !>     flavors (spin/orbital/torque) and the random-vector stochastic reference
 !>     are the recursion route’s domain; the exact k-space generator resolves
 !>     moments per atom type from the on-site cell block.
@@ -65,10 +65,10 @@ contains
       complex(rp), allocatable :: va_k(:, :, :), vb_k(:, :, :)
 
       ! --- Scope guards (B5.1): charge / per_type only. --------------------------
-      if (trim(this%lattice%control%cond_type) /= 'charge') then
+      if (trim(this%lattice%control%linear_in) /= 'charge' .or. trim(this%lattice%control%linear_out) /= 'charge') then
          call g_logger%fatal('reciprocal%fill_moments: exact k-space moments are ' // &
-            'implemented for cond_type="charge" only (got "' // &
-            trim(this%lattice%control%cond_type) // '").', __FILE__, __LINE__)
+            'implemented for linear_in = linear_out = "charge" only (got "' // &
+            trim(this%lattice%control%linear_in) // '", "' // trim(this%lattice%control%linear_out) // '").', __FILE__, __LINE__)
       end if
       if (trim(this%lattice%control%cond_calctype) /= 'per_type') then
          call g_logger%fatal('reciprocal%fill_moments: exact k-space moments require ' // &

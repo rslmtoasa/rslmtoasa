@@ -9,7 +9,7 @@ on a CPU developer checkout.
 
 The exact reciprocal moment route is exercised only for charge.  The current
 implementation explicitly scopes ``reciprocal%fill_moments`` to
-``cond_type='charge'``; spin/orbital results therefore are not compared with
+``linear_out='charge'``; spin/orbital results therefore are not compared with
 it because that would compare different or unavailable observables.
 """
 
@@ -44,11 +44,11 @@ def patch_case(base: Path, workdir: Path, *, cond_type: str, va: list[int],
         "calculation": {"gf_route": route},
         "lattice": {"rc": rc, "n1": replication, "n2": replication,
                     "n3": replication, "strux_backend": "legacy"},
-        "hamiltonian": {"v_alpha": va, "v_beta": vb, "js_alpha": "z",
-                        "jl_alpha": "z", "hoh": False},
+        "hamiltonian": {"v_alpha": va, "v_beta": vb, "pol_alpha": "z",
+                        "pol_beta": "z", "hoh": False},
         "energy": {"fermi": fermi, "energy_min": energy_min,
                     "energy_max": energy_max, "channels_ldos": channels},
-        "control": {"cond_ll": cond_ll, "cond_type": cond_type,
+        "control": {"cond_ll": cond_ll, "linear_in": "charge", "linear_out": cond_type,
                      "cond_calctype": cond_calctype, "random_vec_num": random_vec_num,
                      "gpu_stochastic_block": gpu_stochastic_block,
                      "cheb_backend": cheb_backend,
@@ -283,8 +283,8 @@ def main() -> int:
                       "gpu_backend": args.gpu_backend if args.gpu_plugin else None},
         "operator_conventions": {
             "charge": "v_a/b(R) = (1/i) (direction dot (r_i-r_j) alat) H_ij(R), with optional velocity_scale on v_b",
-            "spin": "J^s_a = 1/2 {S_z, v_a}; js_alpha selects S_z here",
-            "orbital": "J^L_a = 1/2 {L_z, v_a}; jl_alpha selects L_z here",
+            "spin": "J^s_a = 1/2 {S_z, v_a}; pol_alpha selects S_z here",
+            "orbital": "J^L_a = 1/2 {L_z, v_a}; pol_alpha selects L_z here",
             "tensor": "each scalar output is the production Kubo contraction for v_alpha (first operator) and v_beta (second operator), sampled at the row nearest E-E_F=0",
             "units": "the current estimator uses the internal Ry/alat convention and factor 16/(pi DeltaE^2); e^2/hbar and volume conversion are not applied, so no S/cm or hbar/e S/cm numerical comparison is claimed",
         },

@@ -27,8 +27,8 @@ The production operators are:
 | Observable | Production definition in this campaign |
 |---|---|
 | charge | \(v_{a/b}(R)=(1/i)[\hat d_{a/b}\cdot(r_i-r_j)\,a_{lat}]H_{ij}(R)\); `velocity_scale` can multiply \(v_b\) |
-| spin | \(J^z_a=\frac12\{S_z,v_a\}\), from `js_alpha='z'` |
-| orbital | \(J^L_a=\frac12\{L_z,v_a\}\), from `jl_alpha='z'` |
+| spin | \(J^z_a=\frac12\{S_z,v_a\}\), from `pol_alpha='z'` |
+| orbital | \(J^L_a=\frac12\{L_z,v_a\}\), from `pol_alpha='z'` |
 
 The first tensor direction is `v_alpha` and the second is `v_beta`; reversing
 either direction must reverse the reported scalar. The implementation uses a
@@ -86,7 +86,7 @@ reported as physical spectral sensitivity, not forced into a false agreement.
 ## Exact/eigenpair cross-representation check
 
 The exact reciprocal moment implementation is explicitly limited to
-`cond_type='charge'` and `cond_calctype='per_type'`. It is therefore compared
+`linear_out='charge'` and `cond_calctype='per_type'`. It is therefore compared
 only with charge recursion, using the existing small bcc-Fe conductivity
 fixture and the same charge operator. At \(E_F\), `cond_ll=30`, and a 6³
 reciprocal mesh:

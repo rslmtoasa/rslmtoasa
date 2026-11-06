@@ -49,7 +49,8 @@ nsp = 2
 lld = 250
 recur = 'chebyshev'
 cond_ll = 500
-cond_type = 'orbital'
+linear_in = 'charge'
+linear_out = 'orbital'
 cond_calctype = 'per_type'
 /
 &mix
@@ -60,5 +61,6 @@ mixtype = 'broyden'
 hoh = .false.
 v_alpha = 1, 0, 0 
 v_beta = 0, 0, 1
-jl_alpha = 'y'
+pol_alpha = 'y'
+pol_beta = 'y'
 /

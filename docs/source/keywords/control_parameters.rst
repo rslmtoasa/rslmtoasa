@@ -576,16 +576,30 @@ effective field driving the ASD simulation.
 
 - Only meaningful when ``do_asd = .true.``.
 
-cond_type
+linear_in
 ---------
 
 **Type:** Character string
 
-**Purpose:** Selects the formulation of the conductivity tensor calculation
+**Purpose:** Operator of the linear-response input (the perturbation)
 
-**Allowed values:** ``'kubo'``, ``'kubo-bastin'``
+**Allowed values:** ``'charge'`` (the only value supported at present)
 
-**Default:** ``'kubo-bastin'``
+**Default:** ``'charge'``
+
+**Related code:** ``source/recursion_transport.f90``
+
+linear_out
+----------
+
+**Type:** Character string
+
+**Purpose:** Operator of the linear-response output (the measured response)
+
+**Allowed values:** ``'charge'``, ``'spin'``, ``'orbital'``, ``'spin_accumulation'``,
+``'orbital_accumulation'``, ``'spin_torque'``, ``'orbital_torque'``
+
+**Default:** ``'charge'``
 
 **Related code:** ``source/conductivity.f90``
 

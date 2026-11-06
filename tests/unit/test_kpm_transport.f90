@@ -82,8 +82,8 @@ contains
       ham%lattice => lat
       ham%control => ctl
       ham%hoh = .false.
-      ham%js_alpha = 'z'
-      ham%jl_alpha = 'z'
+      ham%pol_alpha = 'z'
+      ham%pol_beta = 'z'
       ham%v_alpha = [1.0_rp, 0.0_rp, 0.0_rp]
       ham%v_beta = ham%v_alpha
 

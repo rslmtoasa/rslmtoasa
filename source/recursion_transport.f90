@@ -566,7 +566,9 @@ contains
       call this%hamiltonian%build_realspace_velocity_operators()
 
       ! Check the type of conductivity
-      select case(this%control%cond_type)
+      if (trim(this%control%linear_in) /= 'charge') &
+         call g_logger%fatal('linear_in = '//trim(this%control%linear_in)//' is not supported yet; use charge', __FILE__, __LINE__)
+      select case(this%control%linear_out)
       case ('charge')
          ! Redundant, but just testing
          this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%v_a(:, :, :, :)
@@ -580,7 +582,7 @@ contains
          this%hamiltonian%v_a(:, :, :, :) = this%hamiltonian%jl_a(:, :, :, :)
          this%hamiltonian%vo_a(:, :, :, :) = this%hamiltonian%jlo_a(:, :, :, :)
       case('spin_accumulation')
-         select case(this%hamiltonian%js_alpha)
+         select case(this%hamiltonian%pol_alpha)
          case('z')
             S_op = S_z
          case('x')
@@ -613,7 +615,7 @@ contains
          call hcpx(mLz, 'cart2sph') 
             
          ! Pick which orbital operator L_x, L_y, or L_z based on some user choice
-         select case (this%hamiltonian%jl_alpha)   ! or whichever variable holds 'x','y','z'
+         select case (this%hamiltonian%pol_alpha)
          case ('x')
             L_op(1:norb, 1:norb) = mLx(:, :)
             L_op(norb+1:nb, norb+1:nb) = mLx(:, :)

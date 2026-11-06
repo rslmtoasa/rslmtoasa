@@ -151,8 +151,8 @@ Spin-spiral / non-collinear
      ``post_processing='frozen_magnon'`` selects ``'gbt_single_q'`` itself and
      is unaffected.
 - ``v_alpha`` / ``v_beta`` (real(3)) — quantization-axis vectors.
-- ``js_alpha`` / ``jl_alpha`` (character, default ``'z'``) — spin / orbital
-  projection axes.
+- ``pol_alpha`` / ``pol_beta`` (character, default ``'z'``) — spin, orbital or
+  multipole component of the linear-response output / input operator.
 
 Both solvers consume the same linked real-space operator; reciprocal space
 always uses the ordinary Fourier transform. The old ``gbt_kspace`` input

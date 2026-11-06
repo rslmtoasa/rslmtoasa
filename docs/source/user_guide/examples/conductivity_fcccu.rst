@@ -65,7 +65,8 @@ Input File: input.nml
    &hamiltonian
    v_alpha = 0, 1, 0              ! ← Current direction (y)
    v_beta = 1, 0, 0               ! ← Field direction (x)
-   js_alpha = 'z'                 ! ← Spin current (z)
+   pol_alpha = 'z'                 ! ← Spin current (z)
+   pol_beta = 'z'
    /
    
    &energy
@@ -81,7 +82,8 @@ Input File: input.nml
    cond_ll = 500                  ! ← Chebyshev expansion order
    recur = 'chebyshev'            ! ← Use Chebyshev recursion
    lld = 150
-   cond_type = 'spin'             ! ← Spin contribution
+   linear_in = 'charge'
+   linear_out = 'spin'             ! Spin contribution
    cond_calctype = 'per_type'     ! ← Per-atom-type resolution
    /
    
@@ -94,7 +96,7 @@ Critical Conductivity Parameters
 ---------------------------------
 
 - ``cond_ll = 500``: Chebyshev expansion order (higher -> better resolution, but slower)
-- ``cond_type = 'spin'`` or ``'orb'``: Calculate spin or orbital contribution
+- ``linear_out = 'spin'`` or ``'orbital'``: Calculate spin or orbital contribution (``linear_in = 'charge'``)
 - ``cond_calctype = 'per_type'``: Atom-type resolved conductivity
 - ``v_alpha, v_beta``: Velocity operator directions for tensor component σ_αβ
 - ``b1 = b2 = b3 = .false.``: **Open boundaries required** for conductivity
@@ -203,4 +205,4 @@ See Also
 - :doc:`conductivity_fccpt` - Spin Hall effect in Pt
 - :doc:`conductivity_bccfe` - Anomalous Hall effect in Fe
 - :doc:`../../reference/conductivity_module` - Conductivity calculation details
-- :doc:`../../keywords/control_parameters` - cond_ll, cond_type parameters
+- :doc:`../../keywords/control_parameters` - cond_ll, linear_in, linear_out parameters

@@ -49,7 +49,8 @@ nsp = 2
 lld = 250
 recur = 'chebyshev'
 cond_ll = 500
-cond_type = 'spin'
+linear_in = 'charge'
+linear_out = 'spin'
 cond_calctype = 'per_type'
 /
 &mix
@@ -60,5 +61,6 @@ mixtype = 'broyden'
 hoh = .false.
 v_alpha = 0, 0, 1 
 v_beta = 0, 1, 0
-js_alpha = 'x'
+pol_alpha = 'x'
+pol_beta = 'x'
 /
