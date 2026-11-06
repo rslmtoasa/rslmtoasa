@@ -15,6 +15,7 @@ add_library(${PROJECT_NAME} STATIC
     face.F90
     globals.f90
     green.f90
+    gf_audit_io.f90
     hamiltonian.f90
     lattice.f90
     # lists.f90
