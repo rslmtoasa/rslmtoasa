@@ -26,8 +26,9 @@ contains
       backend = trim(this%control%cheb_backend)
 
       ! 'fast_dp' is the fp64 selector for the block (Haydock) fast kernels; the
-      ! Chebyshev fast kernel is single precision only, so treat it as 'fast'.
-      if (backend == 'fast_dp') backend = 'fast'
+      ! Chebyshev fast kernel is single precision only, so 'fast_dp' runs the
+      ! double-precision loops of 'legacy'.
+      if (backend == 'fast_dp') backend = 'legacy'
 
       ! The orthogonalisation (hoh) term is now supported natively by the 'fast'
       ! kernel via a genuine two-sweep apply (h*x then eeo*(h*x)), mirroring the

@@ -593,7 +593,7 @@ contains
       this%gpu_precision = 'fp32'
       this%gpu_moment_download = .false.
       this%gpu_stochastic_block = 1
-      this%cheb_backend = 'fast'
+      this%cheb_backend = 'fast_dp'
       this%transport_backend = 'legacy'
       this%cpu_reconstruction_precision = 'fp64'
       this%fname = ''

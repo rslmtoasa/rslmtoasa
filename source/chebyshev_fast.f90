@@ -28,7 +28,7 @@ module chebyshev_fast_mod
    private
    public :: cheb_moments_fast, cheb_moments_fast_batched
    public :: cheb_moments_fast_mkl_batch, cheb_moments_fast_mkl_sparse
-   public :: cheb_green_fast, cheb_green_complex, cheb_fast_reset_cache
+   public :: cheb_green_fast, cheb_green_dp, cheb_green_complex, cheb_fast_reset_cache
    public :: cheb_moments_stochastic_fast, cheb_moments_orbital_fast
    integer, parameter :: sp = selected_real_kind(6, 37)
    integer, parameter :: rp = selected_real_kind(15, 307)
@@ -1447,6 +1447,41 @@ contains
       end do
       deallocate (g0_atom, mu_sp, F)
    end subroutine cheb_green_fast
+
+   !> Double-precision counterpart of cheb_green_fast: the same Jackson-damped sum, evaluated with zgemm.
+   subroutine cheb_green_dp(mu, nb, n_mom, natoms, ene, nv, a, b, g0)
+      integer, intent(in) :: nb, n_mom, natoms, nv
+      complex(rp), intent(in) :: mu(nb, nb, n_mom, natoms)
+      real(rp), intent(in) :: ene(nv), a, b
+      complex(rp), intent(out) :: g0(nb, nb, nv, natoms)
+      complex(rp), allocatable :: F(:, :)
+      complex(rp), parameter :: cone = (1.0_rp, 0.0_rp), czero = (0.0_rp, 0.0_rp)
+      real(rp) :: th, thl, gj, cc, pref, ang, cot
+      integer :: i, ie, n, bb
+
+      allocate (F(n_mom, nv))
+      cot = cos(pi/(n_mom + 1.0_rp))/sin(pi/(n_mom + 1.0_rp))
+      !$omp parallel do private(ie, i, th, thl, gj, cc, pref, ang) schedule(static)
+      do ie = 1, nv
+         th = acos((ene(ie) - b)/a)
+         pref = 1.0_rp/sqrt(a*a - (ene(ie) - b)**2)
+         do i = 1, n_mom                       ! i-1 = Chebyshev order
+            thl = pi*real(i - 1, rp)/(n_mom + 1.0_rp)
+            gj = ((n_mom - (i - 1) + 1)*cos(thl) + sin(thl)*cot) &
+                 /(n_mom + 1.0_rp)             ! Jackson, bands.f90 convention
+            cc = merge(1.0_rp, 2.0_rp, i == 1)
+            ang = real(i - 1, rp)*th           ! (-i) e^{-i ang}
+            F(i, ie) = cmplx(gj*cc*pref, 0.0_rp, rp)*cmplx(-sin(ang), -cos(ang), rp)
+         end do
+      end do
+      !$omp end parallel do
+
+      bb = nb*nb
+      do n = 1, natoms
+         call zgemm('N', 'N', bb, nv, n_mom, cone, mu(:, :, :, n), bb, F, n_mom, czero, g0(:, :, :, n), bb)
+      end do
+      deallocate (F)
+   end subroutine cheb_green_dp
 
    !> @brief Reconstruct one complex-energy Chebyshev Green function.
    !> @details This is the complex-energy counterpart of `cheb_green_fast` and

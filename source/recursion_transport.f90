@@ -1706,7 +1706,7 @@ contains
          end if
 
          ! Fast CPU orbital kernel (single precision, hoh-aware).
-         if (trim(this%control%cheb_backend) /= 'legacy') then
+         if (trim(this%control%cheb_backend) /= 'legacy' .and. trim(this%control%cheb_backend) /= 'fast_dp') then
             if (this%hamiltonian%hoh .and. this%hamiltonian%ccor_2c) then
                call cheb_moments_orbital_fast(left_vec, psiref, this%hamiltonian%ee, &
                   this%hamiltonian%hall, this%hamiltonian%lsham, this%lattice%nn, &

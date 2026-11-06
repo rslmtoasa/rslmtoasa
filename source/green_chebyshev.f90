@@ -9,7 +9,7 @@
 
 submodule (green_mod) green_chebyshev
 
-   use chebyshev_fast_mod, only: cheb_green_fast, cheb_green_complex
+   use chebyshev_fast_mod, only: cheb_green_fast, cheb_green_dp, cheb_green_complex
    use math_mod, only: i_unit, pi, jackson_kernel, t_polynomial, &
                        hubbard_spectral_density_element, project_spectral_density_2x2
    use basis_mod, only: norb, spin_off
@@ -322,7 +322,12 @@ contains
             mu_local(:, :, :, n) = this%recursion%mu_n(:, :, :, n)
          end do
 
-         call cheb_green_fast(mu_local, nb, size(mu_local, 3), n_local, this%en%ene(1:nv), nv, a, b, g0_local)
+         ! fast_dp (default) and legacy reconstruct in double precision; the other backends keep fp32.
+         if (trim(this%control%cheb_backend) == 'fast_dp' .or. trim(this%control%cheb_backend) == 'legacy') then
+            call cheb_green_dp(mu_local, nb, size(mu_local, 3), n_local, this%en%ene(1:nv), nv, a, b, g0_local)
+         else
+            call cheb_green_fast(mu_local, nb, size(mu_local, 3), n_local, this%en%ene(1:nv), nv, a, b, g0_local)
+         end if
 
          do n_glob = start_atom, end_atom
             n = g2l_map(n_glob)

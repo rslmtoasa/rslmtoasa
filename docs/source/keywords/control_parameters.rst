@@ -605,6 +605,25 @@ linear_out
 
 **See also:** :ref:`reference/conductivity_module`
 
+cheb_backend
+------------
+
+**Type:** Character string
+
+**Purpose:** CPU engine of the Chebyshev DOS moments and, with the Haydock block recursion, of the fast kernels.
+
+**Allowed values:** ``'fast_dp'``, ``'fast'``, ``'legacy'``, ``'batched'``, ``'mkl_batch'``, ``'mkl_sparse'``
+
+**Default:** ``'fast_dp'``
+
+**Notes:**
+
+- ``'fast_dp'`` and ``'legacy'``: double-precision Chebyshev moments (the matrix-free loops) and double-precision
+  DOS reconstruction. ``'fast_dp'`` also selects the fp64 block-Lanczos kernel.
+- ``'fast'`` and the other fast backends: single-precision moments and reconstruction (about 1e-7 relative);
+  the single-precision rounding breaks exact symmetries such as zero transverse moments.
+- The transport moments use ``transport_backend`` instead.
+
 transport_backend
 -----------------
 
