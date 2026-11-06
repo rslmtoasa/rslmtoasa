@@ -671,7 +671,8 @@ contains
          if (nr >= 2) then
             do ineigh = 2, nr ! Loop in the neighbouring
                nnmap = this%lattice%nn(k, ineigh)
-               if (nnmap /= 0 .and. this%izero(nnmap) /= 0) then
+               if (nnmap == 0) cycle
+               if (this%izero(nnmap) /= 0) then
                   if (this%hamiltonian%ccor_2c) then
                      call zgemm('n', 'n', nb, nrhs, nb, cone, this%hamiltonian%ee(:, :, ineigh, ih) + this%hamiltonian%eecc(:, :, ineigh, ih), nb, psi_in(:, :, nnmap), nb, cone, psi_out(:, :, k), nb)
                   else

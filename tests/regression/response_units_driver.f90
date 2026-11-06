@@ -73,13 +73,14 @@ program response_units_driver
   end do
  end do
  close(u)
- ! Compare directly with the unmodified production integrator on 11 valid
- ! points (NPTS=1 means NPTS+10=11), including all endpoint parities.
+ ! Compare directly with the production integrator on 10 valid points (simpson_f
+ ! with NPTS=1 spans NPTS+9=10 points and its last panel ends at NPTS+8=9), including
+ ! all endpoint parities.
  open(newunit=u,file='legacy_comparison.txt',status='replace')
  y=1+2*x+3*x*x
- do i=1,11
-  call simpson_f(reference,x(:11),x(i),1,y(:11),.true.,.false.,0.0_rp)
-  write(u,'(2es25.16)') reference,conductivity_integral(y,x,i)
+ do i=1,10
+  call simpson_f(reference,x(:10),x(i),1,y(:10),.true.,.false.,0.0_rp)
+  write(u,'(2es25.16)') reference,conductivity_integral(y(:10),x(:10),i)
  end do
  close(u)
  en%channels_ldos=2; en%nv1=3; en%energy_min=-1.5_rp; en%energy_max=1.9_rp; en%fermi=.1_rp

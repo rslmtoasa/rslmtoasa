@@ -346,6 +346,18 @@ INSTALL(TARGETS ${PROJECT_BINARY} RUNTIME DESTINATION bin)
 ##############################################################################################
 include(${CMAKE_SOURCE_DIR}/tests/register_tests.cmake)
 
+# Dense-reference fixture runners of the transport operators: link the same production modules and libraries.
+# Built explicitly by tests/regression/test_hoh_transport.py, not by default.
+if(BUILD_TESTING)
+  add_executable(transport_operator_test EXCLUDE_FROM_ALL tests/regression/transport_driver.f90)
+  target_include_directories(transport_operator_test PRIVATE ${fortran_module_directory})
+  get_target_property(transport_test_libraries ${PROJECT_BINARY} LINK_LIBRARIES)
+  target_link_libraries(transport_operator_test PRIVATE ${transport_test_libraries})
+  add_executable(response_units_test EXCLUDE_FROM_ALL tests/regression/response_units_driver.f90)
+  target_include_directories(response_units_test PRIVATE ${fortran_module_directory})
+  target_link_libraries(response_units_test PRIVATE ${transport_test_libraries})
+endif()
+
 ## ADD Cpack
 ##############################################################################################
 # Include CPack
