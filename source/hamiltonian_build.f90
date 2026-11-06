@@ -286,7 +286,6 @@ contains
       integer :: na
       real(rp) :: u_ev, j_ev
       integer :: ntype_nml, nrec_nml
-      integer :: hubbard_test_spin
       logical :: legacy_uj_present
       logical :: has_hubbard_general, has_legacy_uj, has_impurity_uj, has_hubbard_v, has_hubbard_u_sc
       character(len=1) :: orbch
